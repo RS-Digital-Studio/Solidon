@@ -127,6 +127,14 @@ class PlacementHost(Protocol):
 
     def take_placement(self, values: Mapping[str, Any]) -> None: ...
 
+    preview_required: bool
+    """Ob Übernehmen erst nach der aktuell angezeigten Vorschau erlaubt ist."""
+    preview_check: Callable[[], bool] | None
+
+    def block_apply(self, reason: str | None) -> None: ...
+
+    def can_accept(self) -> bool: ...
+
     def accept(self) -> None: ...
 
     def show(self) -> None: ...
@@ -160,6 +168,8 @@ class QuietHost(QObject):
     values_stand_elsewhere = True
     """Sie stehen im Merkmalfenster — deshalb gibt es ihn überhaupt."""
 
+    preview_required = False
+
     def __init__(
         self,
         values: Mapping[str, Any],
@@ -171,6 +181,8 @@ class QuietHost(QObject):
         super().__init__(parent)
         self._values = dict(values)
         self._accepted = accepted
+        self._blocked_reason: str | None = None
+        self.preview_check: Callable[[], bool] | None = None
         self._known = frozenset(known) if known is not None else None
         """Welche Namen die Operation kennt — oder ``None`` für alle.
 
@@ -189,16 +201,30 @@ class QuietHost(QObject):
     def take_placement(self, values: Mapping[str, Any]) -> None:
         """Ort und Maße zurück in den Träger — und die Runde ist gemeldet.
 
-        Dieselbe Zusage wie beim Dialog: Wer schreibt, löst ``valuesChanged``
-        aus; daran hängen Vorschau und Maßlinien. **Und dieselbe Grenze:**
+        Geänderte Werte lösen ``valuesChanged`` aus; daran hängen Vorschau
+        und Maßlinien. Identische Werte lassen die Vorschaufreigabe stehen.
+        **Und dieselbe Grenze:**
         Was die Operation nicht kennt, kommt nicht herein (:attr:`_known`).
         """
-        self._values.update(
+        accepted = (
             values
             if self._known is None
             else {name: value for name, value in values.items() if name in self._known}
         )
+        updated = {**self._values, **accepted}
+        if updated == self._values:
+            return
+        self._values = updated
         self.valuesChanged.emit()
+
+    def block_apply(self, reason: str | None) -> None:
+        """Übernahme sperren oder freigeben; die Vorschau verwaltet das Fenster."""
+        self._blocked_reason = reason
+
+    def can_accept(self) -> bool:
+        """Ob der Träger die aktuellen Werte übernehmen darf."""
+        current = self.preview_check is None or self.preview_check()
+        return current and self._blocked_reason is None
 
     def accept(self) -> None:
         """Die Platzierung ist übernommen — was daraus wird, weiß der Rückruf.
@@ -207,6 +233,8 @@ class QuietHost(QObject):
         die Operation legt an, wer ihn gebaut hat. Ohne diese Trennung wäre er
         eine zweite Stelle, an der Schritte entstehen (Regel 2).
         """
+        if not self.can_accept():
+            return
         self._accepted(self.values())
         # Dieselbe Zahl, die ein angenommener `QDialog` sendet — wer an
         # `finished` hängt, soll den Träger nicht am Code erkennen müssen.
@@ -789,6 +817,32 @@ class PlacementFlow(QObject):
         """
         self.dialog.show_placement_hint(on)
 
+    def show_preview_base(self) -> bool:
+        """Die vollständige Ergebnisszene zeigen, den historischen Eingang behalten.
+
+        Die Endvorschau vergleicht mit dem aktuellen Ergebnis einschließlich
+        späterer Körper. Flächentreffer und Maße bleiben dagegen auf den
+        Eingang vor dem bearbeiteten Schritt bezogen. Erst ``sceneApplied``
+        bestätigt eine gegebenenfalls im Arbeiter vorbereitete Grundszene.
+        """
+        if not self.active or self._change_op is None:
+            return True
+        if self._result is None or not self.session.result_current:
+            return False
+        if self._showing_input:
+            self._showing_input = False
+            self.viewport.show_scene(self.session.last_result)
+        return bool(self.viewport.is_scene_applied(self.session.last_result))
+
+    def _display_ready(self) -> bool:
+        """Ob die gerade angeforderte Platzierungsansicht wirklich dargestellt ist."""
+        result = (
+            self.session.last_result
+            if self._change_op is not None and not self._showing_input
+            else self._result
+        )
+        return self._result is not None and self.viewport.is_scene_applied(result)
+
     def back(self) -> None:
         """Escape behält alle Werte, übernimmt aber keinen Schritt.
 
@@ -1047,6 +1101,18 @@ class PlacementFlow(QObject):
     def _next_surface(self) -> None:
         if self._surface_busy or self._pending is None or not self.active:
             return
+        if self._change_op is not None and self._result is not None:
+            if not self._showing_input and self.session.result_current:
+                # Zellnummern der Endvorschau gehören nicht zum historischen
+                # Eingang. Den Treffer erst nach dessen Darstellung lesen.
+                self._showing_input = True
+                self.window._clear_preview()
+                self.viewport.show_scene(self._result)
+                return
+            if self.session.result_current and not self._display_ready():
+                # Die Flächengeste bleibt bis sceneApplied erhalten; eine
+                # Übernahme wird hier weder vorgemerkt noch ausgelöst.
+                return
         if not self.session.result_current or not self.viewport.is_scene_applied(self._result):
             self._pending = None
             self._invalid(tr("Die Oberfläche wird noch vorbereitet. Einen Moment warten."))
@@ -1598,7 +1664,8 @@ class PlacementFlow(QObject):
                 self._request_tool()
             elif self._accept_pending and self.active:
                 self._accept_pending = False
-                self.accept()
+                if not self.dialog.preview_required:
+                    self.accept()
 
         self.session.placement_async(compute, done, lambda _detail: done(None))
 
@@ -1762,7 +1829,7 @@ class PlacementFlow(QObject):
         if (
             not self.active
             or not self.session.result_current
-            or not self.viewport.is_scene_applied(self._result)
+            or not self._display_ready()
             or self._surface is None
         ):
             return
@@ -1770,7 +1837,11 @@ class PlacementFlow(QObject):
             # Der Knopf im Merkmalfenster bleibt erreichbar, während eine
             # neue Maßangabe ihr Werkzeug vorbereitet. Sein Klick gehört dem
             # fertigen Werkzeug; Abbruch und neuere Eingaben löschen ihn.
-            self._accept_pending = self.dialog.values_stand_elsewhere and self._distance_valid
+            self._accept_pending = (
+                self.dialog.values_stand_elsewhere
+                and self._distance_valid
+                and not self.dialog.preview_required
+            )
             return
         if self._tool is None or self._tool_context is None or not self._accept.isEnabled():
             return
@@ -1784,6 +1855,10 @@ class PlacementFlow(QObject):
             self._begin_depth()
             return
         if not self._set_values():
+            return
+        # Die endgültigen Werte können gerade eine neue Vorschau angefordert
+        # haben. Ihre Sperre wird geprüft, bevor die Platzierung verschwindet.
+        if not self.dialog.can_accept():
             return
         self._stop()
         self.dialog.accept()
@@ -2166,9 +2241,10 @@ class PlacementFlow(QObject):
 
     def _scene_applied(self) -> None:
         """Erst der tatsächlich gezeichnete Eingang erlaubt ein neues Ziel."""
-        if self.active and self.viewport.is_scene_applied(self._result):
+        if self.active and self._display_ready():
             self._note.setText(tr("Klicken: platzieren · Abstand ändern: Maßfeld · Esc: zurück"))
-            self._next_surface()
+            if self._change_op is None or self._showing_input:
+                self._next_surface()
             self.redraw()
 
     def _document_changed(self) -> None:
@@ -2284,7 +2360,7 @@ class PlacementFlow(QObject):
             surface is not None
             and renderer is not None
             and self.session.result_current
-            and self.viewport.is_scene_applied(self._result)
+            and self._display_ready()
         )
         tool_valid = valid and self._tool_context is not None and not self._tool_busy
         # **Gefragt wird das vorbereitete Werkzeug, nicht der gezeichnete

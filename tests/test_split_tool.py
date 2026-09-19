@@ -79,13 +79,33 @@ def test_the_button_waits_for_a_finished_line(qt_app: QApplication) -> None:
 
     assert not bar.apply.isEnabled(), "ohne Linie gibt es nichts zu trennen"
     assert not bar.clear.isEnabled(), "und nichts zu löschen"
+    initial_apply = bar.apply.toolTip()
+    initial_clear = bar.clear.toolTip()
+    assert "fängt die Trennlinie an" in initial_apply
+    assert "Noch kein Punkt" in initial_clear
+    for button in (bar.apply, bar.clear):
+        assert button.statusTip() == button.accessibleDescription() == button.toolTip()
 
     bar.show_points(1)
     assert not bar.apply.isEnabled()
     assert bar.clear.isEnabled(), "ein halber Anfang lässt sich verwerfen"
+    assert "Zweiten Punkt" in bar.apply.toolTip()
+    assert "Verwirft" in bar.clear.toolTip()
+    for button in (bar.apply, bar.clear):
+        assert button.statusTip() == button.accessibleDescription() == button.toolTip()
 
     bar.show_points(POINTS_NEEDED)
     assert bar.apply.isEnabled()
+    assert "Die Linie steht" in bar.apply.toolTip()
+    for button in (bar.apply, bar.clear):
+        assert button.statusTip() == button.accessibleDescription() == button.toolTip()
+
+    bar.reset()
+    assert not bar.apply.isEnabled() and not bar.clear.isEnabled()
+    assert bar.apply.toolTip() == initial_apply
+    assert bar.clear.toolTip() == initial_clear
+    for button in (bar.apply, bar.clear):
+        assert button.statusTip() == button.accessibleDescription() == button.toolTip()
 
 
 def test_the_pin_count_goes_with_its_checkbox(qt_app: QApplication) -> None:

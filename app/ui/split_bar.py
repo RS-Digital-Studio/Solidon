@@ -166,6 +166,7 @@ class SplitBar(QWidget):
         layout.setSpacing(TIGHT)
         layout.addWidget(self.state)
         layout.addLayout(controls)
+        self.show_points(0)
 
     def _follow_connection(self, wanted: bool) -> None:
         """Die Stiftzahl gehört zum Haken und verschwindet mit ihm.
@@ -180,9 +181,19 @@ class SplitBar(QWidget):
 
     def show_points(self, points: int) -> None:
         """Wie viele Punkte gesetzt sind — der einzige Zustand dieser Leiste."""
-        self.state.setText(state_text(points))
+        text = state_text(points)
+        self.state.setText(text)
         self.apply.setEnabled(points >= POINTS_NEEDED)
         self.clear.setEnabled(points > 0)
+        clear_text = (
+            tr("Verwirft die gesetzten Punkte. Danach eine neue Trennlinie beginnen.")
+            if points > 0
+            else tr("Noch kein Punkt gesetzt. Erst die Trennlinie beginnen.")
+        )
+        for button, description in ((self.apply, text), (self.clear, clear_text)):
+            button.setToolTip(description)
+            button.setStatusTip(description)
+            button.setAccessibleDescription(description)
 
     def values(self) -> dict[str, int | str]:
         """Die Parameter, die nicht aus der Linie kommen."""

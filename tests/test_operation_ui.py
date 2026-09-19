@@ -238,7 +238,9 @@ def test_pocket_variant_uses_selected_input_in_preview_and_commit(
     window.object_tree.select_object(selected)
     captured = {}
     drafts = []
-    monkeypatch.setattr(window, "_wire_preview", lambda dialog, make: captured.update(make=make))
+    monkeypatch.setattr(
+        window, "_wire_preview", lambda dialog, make, **kwargs: captured.update(make=make)
+    )
     monkeypatch.setattr(
         window.session, "apply", lambda title, proposed, **kwargs: drafts.extend(proposed)
     )
@@ -480,7 +482,18 @@ def test_a_filled_in_value_is_not_hidden_behind_the_advanced_box(qt_app: QApplic
     assert dialog.values()["depth"] == pytest.approx(4.0)
 
 
-def test_a_direction_from_the_click_stays_behind_the_flap(qt_app: QApplication) -> None:
+@pytest.mark.parametrize(
+    "initial, selected",
+    [
+        ("drill_hole", "drill_hole"),
+        ("drill_brep_hole", "drill_brep_hole"),
+        ("drill_hole", "drill_brep_hole"),
+        ("drill_brep_hole", "drill_hole"),
+    ],
+)
+def test_a_direction_from_the_click_stays_behind_the_flap(
+    qt_app: QApplication, initial: str, selected: str
+) -> None:
     """Die Normale der angeklickten Fläche entscheidet nichts, was vorn stünde.
 
     Gemessen am 14.09.2026 an *Bohrung setzen* mit zugeklappter Klappe: An der
@@ -492,24 +505,136 @@ def test_a_direction_from_the_click_stays_behind_the_flap(qt_app: QApplication) 
     (§2.4): die Position. Richtung und Achse bleiben hinten — und gelten
     trotzdem.
     """
-    spec = REGISTRY.get("drill_hole")
+    spec = REGISTRY.get(initial)
     faces = {
         "top": {"x": 5.0, "y": 6.0, "z": 10.0, "nx": 0.0, "ny": 0.0, "nz": 1.0},
         "left": {"x": -20.0, "y": 6.0, "z": 4.0, "nx": -1.0, "ny": 0.0, "nz": 0.0, "axis": "x"},
         "front": {"x": 5.0, "y": -15.0, "z": 4.0, "nx": 0.0, "ny": -1.0, "nz": 0.0, "axis": "y"},
+        "top-centre": {"x": 0.0, "y": 0.0, "z": 10.0, "nx": 0.0, "ny": 0.0, "nz": 1.0},
+        "left-centre": {
+            "x": -20.0,
+            "y": 0.0,
+            "z": 0.0,
+            "nx": -1.0,
+            "ny": 0.0,
+            "nz": 0.0,
+            "axis": "x",
+        },
+        "front-centre": {
+            "x": 0.0,
+            "y": -15.0,
+            "z": 0.0,
+            "nx": 0.0,
+            "ny": -1.0,
+            "nz": 0.0,
+            "axis": "y",
+        },
     }
     fronts: dict[str, frozenset[str]] = {}
     for face, given in faces.items():
         dialog = OperationDialog(spec, [], None, values=given)
-        front = frozenset(name for name, form in dialog._rows.items() if form is dialog._front)
-        assert not front & {"nx", "ny", "nz", "axis"}, f"{face}: {sorted(front)}"
-        assert {"x", "y", "z"} <= front, f"{face}: die Position bleibt vorn"
-        values = dialog.values()
-        for name in ("nx", "ny", "nz"):
-            assert values[name] == pytest.approx(given[name]), f"{face}: {name} gilt weiter"
-        assert values["axis"] == given.get("axis", "z")
-        fronts[face] = front
+        try:
+            if initial != selected:
+                dialog.switch_variant(REGISTRY.get(selected))
+            front = frozenset(name for name, form in dialog._rows.items() if form is dialog._front)
+            assert not front & {"nx", "ny", "nz", "axis"}, f"{face}: {sorted(front)}"
+            assert {"x", "y", "z"} <= front, f"{face}: die Position bleibt vorn"
+            assert len(front) <= 8, f"{face}: die Vorderseite überschreitet §35"
+            values = dialog.values()
+            for name in ("x", "y", "z", "nx", "ny", "nz"):
+                assert values[name] == pytest.approx(given[name]), f"{face}: {name} gilt weiter"
+            assert values["axis"] == given.get("axis", "z")
+            fronts[face] = front
+        finally:
+            dialog.close()
+            dialog.deleteLater()
     assert len(set(fronts.values())) == 1, f"der Dialog sieht an jeder Fläche gleich aus: {fronts}"
+
+
+def test_a_default_position_stays_together_behind_the_flap(qt_app: QApplication) -> None:
+    """Ein wieder geöffneter Vorgabestand holt auch beim Zwilling keine Koordinate nach vorn."""
+    spec = REGISTRY.get("drill_hole")
+    dialog = OperationDialog(spec, [], values=spec.params().as_dict())
+    try:
+        for name in ("drill_hole", "drill_brep_hole", "drill_hole"):
+            dialog.switch_variant(REGISTRY.get(name))
+            assert all(dialog._rows[axis] is dialog._advanced_form for axis in ("x", "y", "z"))
+    finally:
+        dialog.close()
+        dialog.deleteLater()
+
+
+@pytest.mark.parametrize("point", [(0.0, 0.0, 10.0), (5.0, 6.0, 10.0)])
+def test_a_full_part_dialog_keeps_the_whole_position_behind_the_flap(
+    qt_app: QApplication, point: tuple[float, float, float]
+) -> None:
+    """Sieben Bausteinmaße lassen keinen Platz für drei zusätzliche Positionsfelder."""
+    spec = REGISTRY.get("insert_wall_mount")
+    given = dict(zip(("x", "y", "z"), point, strict=True))
+    given.update(nx=0.0, ny=0.0, nz=1.0)
+    dialog = OperationDialog(spec, [], values=given)
+    try:
+        front = {name for name, form in dialog._rows.items() if form is dialog._front}
+        assert front == {"width", "height", "thickness", "size", "holes", "lip", "at_feature"}
+        assert len(front) <= 8
+        for axis, value in zip(("x", "y", "z"), point, strict=True):
+            assert dialog._rows[axis] is dialog._advanced_form
+            assert dialog.values()[axis] == pytest.approx(value)
+    finally:
+        dialog.close()
+        dialog.deleteLater()
+
+
+def test_a_part_placement_keeps_its_group_when_dimensions_own_the_usual_names(
+    qt_app: QApplication,
+) -> None:
+    """Eigene Rezeptmaße verdrängen weder Position noch Richtung aus ihrer Gruppe."""
+    from dataclasses import replace
+
+    from app.core.knowledge.parts import PARTS
+    from app.core.knowledge.parts.ops import build_params, placement_fields
+    from app.core.registry import op_params, param
+    from app.core.types import BaseParams
+
+    @op_params
+    class DimensionParams(BaseParams):
+        """Fachmaße belegen Namen, die sonst zur Platzierung gehören."""
+
+        x: float = param(title="Breite", default=30.0)
+        axis: float = param(title="Höhe", default=12.0)
+        nx: float = param(title="Tiefe", default=8.0)
+
+    part = replace(PARTS.get("wall_mount"), name="mapped_position", params=DimensionParams)
+    schema = build_params(part)
+    spec = replace(REGISTRY.get("insert_wall_mount"), name="insert_mapped_position", params=schema)
+    placed = placement_fields(schema)
+    given = {
+        placed["x"]: 0.0,
+        placed["y"]: 0.0,
+        placed["z"]: 10.0,
+        placed["nx"]: 0.0,
+        placed["ny"]: -1.0,
+        placed["nz"]: 0.0,
+        placed["axis"]: "y",
+    }
+    dialog = OperationDialog(spec, [], values=given)
+    try:
+        for variant in (spec, replace(spec, name="insert_mapped_position_variant")):
+            dialog.switch_variant(variant)
+            front = {name for name, form in dialog._rows.items() if form is dialog._front}
+            assert {placed[axis] for axis in ("x", "y", "z")} <= front
+            assert not front & {placed[axis] for axis in ("nx", "ny", "nz", "axis")}
+            assert {"x", "axis", "nx"} <= front
+            assert len(front) <= 8
+            values = dialog.values()
+            assert values["x"] == pytest.approx(30.0)
+            assert values["axis"] == pytest.approx(12.0)
+            assert values["nx"] == pytest.approx(8.0)
+            for name, value in given.items():
+                assert values[name] == (value if isinstance(value, str) else pytest.approx(value))
+    finally:
+        dialog.close()
+        dialog.deleteLater()
 
 
 def test_no_required_parameter_hides_behind_the_advanced_box() -> None:
@@ -4010,6 +4135,455 @@ def test_a_bore_without_a_standard_size_offers_the_sizes_it_asks_about(
         f"die Antworten auf die eigene Frage fehlen im Hinweis: {gezeigt[0]!r}"
     )
     assert echt is not None
+
+
+@pytest.fixture
+def deferred_exact_preview(window: MainWindow, monkeypatch: pytest.MonkeyPatch):
+    """Echter exakter Eingang, getrennt zustellbare Rechnung und Bildaufbereitung."""
+    pytest.importorskip("OCP")
+    window.session.start_new()
+    assert window.session.wait_for_idle()
+    window.session.history.apply(
+        "Exakter Eingang",
+        [OperationDraft(op="create_brep_box", params={"width": 40, "depth": 30, "height": 10})],
+    )
+    window.session.evaluate_now()
+    assert window.session.last_result.complete
+    identifier = next(iter(window.session.last_result.scene.objects))
+    window.object_tree.select_object(identifier)
+    requests: list[Any] = []
+    shown: dict[str, Any] = {"difference": None, "rendered": None}
+
+    def request(then, drafts=None, **kwargs):
+        requests.append((then, tuple(drafts or ()), kwargs))
+
+    def display(difference):
+        shown["difference"] = difference
+
+    monkeypatch.setattr(window.session, "preview_async", request)
+    monkeypatch.setattr(window.viewport, "show_difference", display)
+    monkeypatch.setattr(
+        window.viewport, "is_scene_applied", lambda result: result is window.session.last_result
+    )
+    monkeypatch.setattr(
+        window.viewport,
+        "is_difference_applied",
+        lambda difference: (
+            difference is not None
+            and difference is shown["difference"]
+            and difference is shown["rendered"]
+        ),
+    )
+    return window, requests, shown
+
+
+def _exact_difference(window: MainWindow):
+    """Der vollständige Nachherkörper ist unabhängig vom Vergleichsvolumen vorhanden."""
+    from app.core.geom.difference import Difference, SceneDifference
+
+    body = next(iter(window.session.last_result.scene.objects.values()))
+    return SceneDifference(entries={body.id: Difference(object_id=body.id, result=body)})
+
+
+def _render_exact_preview(window: MainWindow, shown: dict[str, Any], difference: Any) -> None:
+    """Die getrennte Ansichtsantwort tritt erst nach der Rechenantwort ein."""
+    shown["rendered"] = difference
+    window.viewport.differenceApplied.emit(difference)
+
+
+def test_exact_apply_waits_for_the_displayed_result(deferred_exact_preview, monkeypatch):
+    """Früher Knopf und frühes Return schreiben auch nach der Rechnung noch nichts."""
+    window, requests, shown = deferred_exact_preview
+    applied = []
+    monkeypatch.setattr(
+        window.session, "apply", lambda title, drafts, **kw: applied.append((drafts, kw)) or True
+    )
+    window.run_operation(REGISTRY.get("translate_object"), {"dx": 3.0})
+    dialog = window._op_dialog
+    assert dialog is not None and dialog.preview_required
+    assert not dialog._accept_button.isEnabled()
+    dialog._accept_button.click()
+    dialog.accept()
+    assert not applied and window._op_dialog is dialog
+
+    difference = _exact_difference(window)
+    requests[-1][0](difference)
+    assert not dialog._accept_button.isEnabled(), "Die Ansichtsaufbereitung fehlt noch."
+    _render_exact_preview(window, shown, difference)
+    assert dialog._accept_button.isEnabled()
+    checked = requests[-1][1]
+    dialog._accept_button.click()
+    assert len(applied) == 1 and tuple(applied[0][0]) == checked
+
+
+def test_changed_values_revoke_exact_approval_before_the_timer(deferred_exact_preview):
+    """Alte Rechnung und altes Bild dürfen neuere Zahlen nicht freigeben."""
+    window, requests, shown = deferred_exact_preview
+    window.run_operation(REGISTRY.get("translate_object"), {"dx": 1.0})
+    dialog = window._op_dialog
+    first = requests[-1][0]
+    first_approval = window._preview_approval
+    dialog.take_placement({"dx": 2.0})
+    assert window._preview_approval is not first_approval
+    assert not dialog._accept_button.isEnabled()
+    obsolete = _exact_difference(window)
+    first(obsolete)
+    _render_exact_preview(window, shown, obsolete)
+    assert shown["difference"] is None and not dialog.can_accept()
+    current = window._preview_approval
+    latest = _exact_difference(window)
+    requests[-1][0](latest)
+    _render_exact_preview(window, shown, latest)
+    assert dialog.can_accept()
+    dialog.valuesChanged.emit()
+    assert window._preview_approval is current and dialog.can_accept()
+    dialog.reject()
+
+
+def test_mutated_document_keeps_the_exact_editor_open(deferred_exact_preview, monkeypatch):
+    """Auch eine Änderung desselben Document-Objekts entwertet den Übernahmeknopf."""
+    from app.core.types import Parameter
+
+    window, requests, shown = deferred_exact_preview
+    applied = []
+    monkeypatch.setattr(window.session, "apply", lambda *args, **kw: applied.append(args))
+    window.run_operation(REGISTRY.get("translate_object"), {"dx": 2.0})
+    dialog = window._op_dialog
+    difference = _exact_difference(window)
+    requests[-1][0](difference)
+    _render_exact_preview(window, shown, difference)
+    assert dialog.can_accept()
+    document = window.session.project.document
+    document.parameters["probe"] = Parameter(name="probe", value=2.0)
+    dialog._accept_button.click()
+    assert window.session.project.document is document
+    assert window._op_dialog is dialog and not applied
+    assert dialog.values()["dx"] == pytest.approx(2.0)
+    assert not dialog._accept_button.isEnabled() and len(requests) == 2
+    dialog.reject()
+
+
+def test_rejected_exact_editor_cannot_release_its_successor(deferred_exact_preview):
+    """Weder eine verspätete Rechnung noch ein spätes Render-Signal gehört dem Nachfolger."""
+    window, requests, shown = deferred_exact_preview
+    window.run_operation(REGISTRY.get("translate_object"), {"dx": 1.0})
+    first = requests[-1][0]
+    window._op_dialog.reject()
+    window.run_operation(REGISTRY.get("translate_object"), {"dx": 4.0})
+    successor = window._op_dialog
+    old = _exact_difference(window)
+    first(old)
+    _render_exact_preview(window, shown, old)
+    assert shown["difference"] is None
+    assert not successor.can_accept()
+    successor.reject()
+
+
+@pytest.mark.parametrize("result_present", [True, False])
+def test_incomplete_comparison_requires_only_the_complete_result(
+    deferred_exact_preview, result_present
+):
+    """Ein vollständiger Körper darf trotz fehlender Differenzfarben übernommen werden."""
+    from app.core.types import Finding
+
+    window, requests, shown = deferred_exact_preview
+    window.run_operation(REGISTRY.get("translate_object"), {"dx": 1.0})
+    dialog = window._op_dialog
+    difference = _exact_difference(window)
+    entry = next(iter(difference.entries.values()))
+    entry.findings.append(Finding(code="difference.incomplete", severity="info", message="Teil"))
+    if not result_present:
+        entry.result = None
+    requests[-1][0](difference)
+    _render_exact_preview(window, shown, difference)
+    assert dialog.can_accept() is result_present
+    if not result_present:
+        assert "Werte" in dialog._accept_button.toolTip()
+    dialog.reject()
+
+
+@pytest.mark.parametrize("failure", ["none", "worker", "renderer"])
+def test_missing_exact_preview_never_releases_apply(deferred_exact_preview, failure):
+    """Rechnung, Ergebnis und Bildaufbereitung haben je einen sichtbaren Fehlerweg."""
+    window, requests, shown = deferred_exact_preview
+    window.run_operation(REGISTRY.get("translate_object"), {"dx": 1.0})
+    dialog = window._op_dialog
+    if failure == "none":
+        requests[-1][0](None)
+    elif failure == "worker":
+        requests[-1][2]["failed"]("Fehler")
+    else:
+        difference = _exact_difference(window)
+        requests[-1][0](difference)
+        window.viewport.differenceFailed.emit(difference, "Fehler")
+        _render_exact_preview(window, shown, difference)
+    assert not dialog.can_accept() and window._op_dialog is dialog
+    assert dialog._accept_button.toolTip()
+    dialog.reject()
+
+
+def test_parameterless_mixed_boolean_opens_the_normal_preview_editor(
+    deferred_exact_preview, monkeypatch
+):
+    """Abziehen mit einem Netzoperand wartet im vorhandenen nichtmodalen Editor."""
+    window, requests, shown = deferred_exact_preview
+    window.session.history.apply("Netzoperand", [OperationDraft(op="create_box")])
+    window.session.evaluate_now()
+    identifiers = tuple(window.session.last_result.scene.objects)
+    for index, identifier in enumerate(identifiers):
+        window.object_tree.select_object(identifier, add=index > 0)
+    applied = []
+    monkeypatch.setattr(window.session, "apply", lambda *args, **kw: applied.append(args))
+    window.run_operation(REGISTRY.get("difference_objects"))
+    dialog = window._op_dialog
+    assert dialog is not None and not dialog.isModal()
+    assert requests[-1][1][0].inputs == identifiers
+    assert any("Betroffene Körper" in label.text() for label in dialog.findChildren(QLabel))
+    dialog._accept_button.click()
+    assert not applied
+    difference = _exact_difference(window)
+    requests[-1][0](difference)
+    _render_exact_preview(window, shown, difference)
+    dialog._accept_button.click()
+    assert len(applied) == 1
+
+
+def test_historical_twin_uses_original_exact_output_even_after_a_mesh_step(
+    deferred_exact_preview, monkeypatch
+):
+    """Ein späteres Netz verdeckt nicht die exakte Herkunft des geänderten Erzeugers."""
+    from PySide6.QtWidgets import QCheckBox
+
+    window, requests, _shown = deferred_exact_preview
+    original = window.session.last_result
+    identifier = next(iter(original.scene.objects))
+    window.session.history.apply(
+        "Spätere Vernetzung", [OperationDraft(op="brep_to_mesh", inputs=(identifier,))]
+    )
+    window.session.evaluate_now()
+    prefixes = []
+    monkeypatch.setattr(
+        window.session, "placement_before", lambda step, then, failed: prefixes.append((step, then))
+    )
+    window.edit_operation(1)
+    dialog = window._op_dialog
+    exact = next(box for box in dialog.findChildren(QCheckBox) if box.isChecked())
+    exact.setChecked(False)
+    dialog.accept()
+    assert window._op_dialog is dialog and not dialog.can_accept()
+    assert prefixes[-1][0] == 2, "Der Erzeuger muss einschließlich seines Ergebnisses zählen."
+    prefixes[-1][1](original)
+    assert window._preview_approval.required is True
+    assert requests[-1][2]["change_op"] == 1
+    assert requests[-1][2]["change_name"] == "create_box"
+    assert not requests[-1][1]
+    dialog.reject()
+
+
+def test_menu_dimension_bindings_preview_the_same_document_change(window, monkeypatch):
+    """Projektparameter und ihre Ausdrücke sind schon Teil des geprüften Menüauftrags."""
+    requests, applied = [], []
+    monkeypatch.setattr(
+        window.session,
+        "preview_async",
+        lambda then, drafts=None, **kwargs: requests.append((tuple(drafts or ()), kwargs)),
+    )
+    monkeypatch.setattr(
+        window.session, "apply", lambda title, drafts, **kwargs: applied.append((drafts, kwargs))
+    )
+    window.run_operation(REGISTRY.get("create_box"))
+    dialog = window._op_dialog
+    dialog._naming.setChecked(True)
+    order = dialog.preview_order()
+    window._request_order_preview(window._preview_approval)
+    assert order.changes is not None and requests[-1][1]["changes"] == order.changes
+    assert any(str(value).startswith("=@") for value in order.drafts[0].params.values())
+    dialog._accept_button.click()
+    assert tuple(applied[-1][0]) == requests[-1][0]
+    assert applied[-1][1]["changes"] == requests[-1][1]["changes"]
+
+
+@pytest.mark.parametrize("rendering", ["small", "delayed", "failed"])
+def test_real_exact_preview_is_released_by_the_actual_viewport_render(
+    window: MainWindow, qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, rendering: str
+) -> None:
+    """Normale Session-Vorschau und tatsächliches Zeichnen lösen die Freigabe aus."""
+    from threading import Event
+
+    from app.ui import viewport as module
+
+    pytest.importorskip("OCP")
+    window.session.start_new()
+    assert window.session.wait_for_idle()
+    window.session.history.apply("Quader", [OperationDraft(op="create_brep_box")])
+    window.session.evaluate_now()
+    body = next(iter(window.session.last_result.scene.objects))
+    window.object_tree.select_object(body)
+    qt_app.processEvents()
+    assert window.viewport.renderer is not None
+    assert window.viewport.is_scene_applied(window.session.last_result)
+    entered, release = Event(), Event()
+    original = module._SceneMeshWorker.work
+
+    def held(worker):
+        entered.set()
+        assert release.wait(10)
+        if rendering == "failed":
+            worker.crashed.emit("Die Aufbereitung wurde für diesen Fehlerfall abgebrochen.")
+        else:
+            original(worker)
+
+    if rendering != "small":
+        monkeypatch.setattr(module, "DISPLAY_DECIMATION_ABOVE", 0)
+        monkeypatch.setattr(module._SceneMeshWorker, "work", held)
+    worker = None
+    try:
+        window.run_operation(REGISTRY.get("translate_object"), {"dx": 3.0})
+        dialog = window._op_dialog
+        assert dialog is not None and not dialog._accept_button.isEnabled()
+        assert window.session.wait_for_idle(10000)
+        qt_app.processEvents()
+        if rendering != "small":
+            worker = window.viewport._difference_worker
+            assert worker is not None and entered.wait(5)
+            assert not dialog.can_accept()
+            release.set()
+            assert worker.wait(10000)
+            qt_app.processEvents()
+        assert dialog.can_accept() is (rendering != "failed")
+        assert window.viewport.is_difference_applied(window.viewport.difference) is (
+            rendering != "failed"
+        )
+        dialog.reject()
+    finally:
+        release.set()
+        if worker is not None:
+            worker.wait(10000)
+
+
+def _add_exact_holes(window: MainWindow) -> tuple[str, list[Any]]:
+    """Zwei echte Bohrungen liefern den Gruppen- und Langlochfällen gültige Merkmale."""
+    identifier = next(iter(window.session.last_result.scene.objects))
+    window.session.history.apply(
+        "Zwei Bohrungen",
+        [
+            OperationDraft(
+                op="drill_brep_hole",
+                inputs=(identifier,),
+                params={"diameter": 4.0, "x": x, "y": 0.0, "z": 10.0, "compensate": False},
+            )
+            for x in (-8.0, 8.0)
+        ],
+    )
+    window.session.evaluate_now()
+    assert window.session.last_result.complete
+    body = window.session.last_result.scene.objects[identifier]
+    holes = [feature for feature in body.features.values() if feature.kind == "hole"]
+    assert len(holes) >= 2
+    window.object_tree.select_object(identifier)
+    window.object_tree.select_feature(holes[0].id)
+    return identifier, holes
+
+
+def test_exact_group_scope_previews_and_commits_the_same_members(
+    deferred_exact_preview, monkeypatch
+):
+    """Der Gruppenhaken entwertet die Einzelvorschau und prüft jeden eigenen Mittelpunkt."""
+    window, requests, shown = deferred_exact_preview
+    _add_exact_holes(window)
+    panel = window.feature_panel
+    key = next(key for key, entry in panel._runs.items() if entry.op == "move_feature")
+    panel._arm(key)
+    window._preview_feature_change()
+    single = _exact_difference(window)
+    requests[-1][0](single)
+    _render_exact_preview(window, shown, single)
+    assert panel.can_accept()
+    panel._every.setChecked(True)
+    assert not panel._apply.isEnabled()
+    _render_exact_preview(window, shown, single)
+    assert not panel.can_accept()
+    window._preview_feature_change()
+    checked = requests[-1][1]
+    assert len(checked) >= 2
+    assert len({draft.params["at_feature"] for draft in checked}) == len(checked)
+    assert len({draft.params["x"] for draft in checked}) >= 2
+    group = _exact_difference(window)
+    requests[-1][0](group)
+    _render_exact_preview(window, shown, group)
+    applied = []
+    monkeypatch.setattr(
+        window.session, "apply", lambda title, drafts, **kw: applied.append((tuple(drafts), kw))
+    )
+    panel._apply.click()
+    assert len(applied) == 1 and applied[0][0] == checked
+    assert applied[0][1]["bundle"] is True
+
+
+def test_existing_slot_previews_the_original_step_and_preserves_its_other_values(
+    deferred_exact_preview, monkeypatch
+):
+    """Ein zweites Langloch darf weder in der Vorschau noch beim Übernehmen entstehen."""
+    window, requests, shown = deferred_exact_preview
+    identifier, holes = _add_exact_holes(window)
+    before = window.session.last_result
+    window.session.history.apply(
+        "Langloch",
+        [
+            OperationDraft(
+                op="slot_hole",
+                inputs=(identifier,),
+                params={"at_feature": holes[0].id, "slot_length": 10.0, "slot_angle": 0.0},
+            )
+        ],
+    )
+    window.session.evaluate_now()
+    assert window.session.last_result.complete
+    step = window.session.project.document.ops[-1]
+    body = window.session.last_result.scene.objects[identifier]
+    slot = next(feature for feature in body.features.values() if feature.kind == "slot")
+    window.object_tree.select_object(identifier)
+    window.object_tree.select_feature(slot.id)
+    monkeypatch.setattr(window.session, "placement_before", lambda op, then, failed: then(before))
+    panel = window.feature_panel
+    assert panel.take_values("slot_hole", {"slot_length": 14.0})
+    window._preview_feature_change()
+    assert not requests[-1][1]
+    assert requests[-1][2]["change_op"] == step.id
+    assert requests[-1][2]["change_values"] == {"slot_length": 14.0}
+    difference = _exact_difference(window)
+    requests[-1][0](difference)
+    _render_exact_preview(window, shown, difference)
+    changed = []
+    monkeypatch.setattr(
+        window.session, "change_params", lambda op, params: changed.append((op, params)) or True
+    )
+    monkeypatch.setattr(window.viewport, "slot_drag_waits", lambda: False)
+    panel._apply.click()
+    assert changed == [(step.id, {"slot_length": 14.0})]
+
+
+def test_new_conversion_finding_requires_the_displayed_result(window, monkeypatch):
+    """Ein Auftrag kann seinen exakten Eingang erst innerhalb der Draftliste erzeugen."""
+    from app.core.types import Finding
+    from app.ui.main_window import _PreviewOrder
+
+    requests = []
+    monkeypatch.setattr(
+        window.session, "preview_async", lambda then, drafts=None, **kwargs: requests.append(then)
+    )
+    monkeypatch.setattr(window.viewport, "is_difference_applied", lambda difference: False)
+    order = _PreviewOrder(drafts=(OperationDraft(op="create_box"),))
+    approval = window._set_preview_order(window.feature_panel, order)
+    assert approval.required is False
+    window._request_order_preview(approval)
+    difference = _exact_difference(window)
+    difference.findings = (
+        Finding(code="evaluate.exact_became_mesh", severity="info", message="Vernetzt"),
+    )
+    requests[-1](difference)
+    assert approval.required is True and not approval.displayed
+    assert not window.feature_panel._apply.isEnabled()
 
 
 # --- Was die Vorschau sagt, wenn sie nur die Hälfte rechnen konnte (§18.7) -------

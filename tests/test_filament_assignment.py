@@ -51,6 +51,49 @@ def test_no_selection_keeps_inventory_reachable(picker: QuickFilamentPicker) -> 
     assert picker.clear_button.isHidden()
 
 
+def test_pending_assignment_keeps_choice_and_cancel_available(picker: QuickFilamentPicker) -> None:
+    """Nur die sichtbare Vorschau darf übernommen werden; Abbrechen bleibt offen."""
+    picker.set_context([_body("part", "Teil")])
+    accepted: list[bool] = []
+    cancelled: list[bool] = []
+    picker.stage_preview(lambda: accepted.append(True), lambda: cancelled.append(True))
+    reason = "Die aktuelle Vorschau abwarten und das Ergebnis prüfen."
+    picker.block_apply(reason)
+    assert picker.picker.isEnabled() and picker.cancel_button.isEnabled()
+    assert not picker.apply_button.isHidden() and not picker.can_accept()
+    assert picker.apply_button.toolTip() == reason
+    assert picker.apply_button.statusTip() == reason
+    assert picker.apply_button.accessibleDescription() == reason
+    picker.apply_button.click()
+    picker.accept()
+    assert not accepted
+    picker.block_apply(None)
+    picker.preview_check = lambda: False
+    picker.apply_button.click()
+    assert not accepted
+    picker.preview_check = None
+    picker.apply_button.click()
+    assert accepted == [True]
+    picker.cancel_button.click()
+    assert cancelled == [True]
+    assert picker.apply_button.isHidden() and picker.cancel_button.isHidden()
+    picker.accept()
+    assert accepted == [True]
+
+
+def test_context_change_discards_pending_filament_assignment(picker: QuickFilamentPicker) -> None:
+    """Ein fremder Körper darf die vorbereitete Spulenwahl nicht erben."""
+    original = _body("first", "Erster")
+    picker.set_context([original])
+    cancelled: list[bool] = []
+    picker.stage_preview(lambda: pytest.fail("stale assignment"), lambda: cancelled.append(True))
+    picker.set_context([original])
+    assert not cancelled and not picker.apply_button.isHidden()
+    picker.set_context([_body("second", "Zweiter")])
+    assert cancelled == [True] and picker.apply_button.isHidden()
+    picker.accept()
+
+
 def test_inventory_error_is_visible_and_repaired_file_refreshes_choices(
     picker: QuickFilamentPicker,
 ) -> None:
@@ -166,14 +209,66 @@ def test_partial_assignment_does_not_claim_the_whole_body_is_assigned(
     assert "Mehrere Filamente" in picker.picker.currentText()
 
 
-def test_mixed_body_and_face_selection_names_the_actual_scope(picker: QuickFilamentPicker) -> None:
+@pytest.mark.parametrize("bodies", [1, 2])
+@pytest.mark.parametrize("faces", [1, 2])
+def test_mixed_body_and_face_selection_names_the_actual_scope(
+    picker: QuickFilamentPicker, bodies: int, faces: int
+) -> None:
     """Eine Flächenwahl an B darf die vollständige Zuweisung an Körper A nicht verschweigen."""
     picker.set_context(
-        [_body("whole", "Ganz"), _body("partial", "Teilweise")],
-        selected_features=(("partial", "top"), ("partial", "side")),
+        [
+            *[_body(f"whole-{index}", "Ganz") for index in range(bodies)],
+            _body("partial", "Teilweise"),
+        ],
+        selected_features=tuple(("partial", face) for face in ("top", "side")[:faces]),
     )
-    assert picker.scope.text() == "Ganze Körper: 1. Gewählte Flächen: 2."
+    body_text = "Ganzer Körper: 1." if bodies == 1 else "Ganze Körper: 2."
+    face_text = "Gewählte Fläche: 1." if faces == 1 else "Gewählte Flächen: 2."
+    assert picker.scope.text() == f"{body_text} {face_text}"
     assert picker.picker.currentText() == "Filament für die Auswahl"
+
+
+@pytest.mark.parametrize("count", [1, 2])
+def test_body_selection_uses_the_right_number(picker: QuickFilamentPicker, count: int) -> None:
+    """Der Wirkungsbereich nennt einen Körper in der Einzahl."""
+    picker.set_context([_body(f"body-{index}", "Körper") for index in range(count)])
+    assert picker.scope.text() == (
+        "Die Zuweisung betrifft den gewählten Körper."
+        if count == 1
+        else "Die Zuweisung betrifft 2 gewählte Körper."
+    )
+
+
+@pytest.mark.parametrize("count", [1, 2])
+@pytest.mark.parametrize("part", [False, True])
+def test_face_and_part_selection_use_the_right_number(
+    picker: QuickFilamentPicker, count: int, part: bool
+) -> None:
+    """Ein Baustein bleibt als Ganzes benannt, einzelne Flächen bleiben eine Teilauswahl."""
+    picker.set_context(
+        [_body("partial", "Teilweise")],
+        selected_features=tuple(("partial", face) for face in ("top", "side")[:count]),
+        part=part,
+    )
+    if part:
+        assert picker.picker.currentText() == "Filament für den Baustein wählen"
+        assert picker.scope.text() == (
+            "Die Zuweisung gilt dem ganzen Baustein: eine Fläche."
+            if count == 1
+            else "Die Zuweisung gilt dem ganzen Baustein: 2 Flächen."
+        )
+    else:
+        assert picker.picker.currentText() == (
+            "Filament für die gewählte Fläche wählen"
+            if count == 1
+            else "Filament für die gewählten Flächen wählen"
+        )
+        assert picker.scope.text() == (
+            "Die Zuweisung betrifft nur die gewählte Fläche."
+            if count == 1
+            else "Die Zuweisung betrifft 2 gewählte Flächen."
+        )
+    assert picker.picker.toolTip() == picker.picker.currentText()
 
 
 def test_refresh_and_context_do_not_emit_assignment(picker: QuickFilamentPicker) -> None:

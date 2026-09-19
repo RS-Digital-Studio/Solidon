@@ -65,7 +65,7 @@ from app.core.scene import (
     foreign,
     orphans,
 )
-from app.core.scene.evaluate import evaluate
+from app.core.scene.evaluate import conversion_finding, evaluate
 from app.core.scene.history import change_for
 from app.core.scene.project import (
     Project,
@@ -107,6 +107,7 @@ from app.core.types import (
     SourceKind,
     SourceOrigin,
     Transaction,
+    kind_of,
 )
 from app.core.units import is_close
 from app.i18n import TranslatableText, _, tr
@@ -526,9 +527,9 @@ def _triangles_of(scene: Any) -> int:
 def _coarse_drafts(scene: Any) -> list[OperationDraft]:
     """Welche Körper vor der Vorschau verkleinert werden — und womit.
 
-    Gefragt wird nach Dreiecken, nicht nach der Bauart: Ein exakter Körper
-    trägt keine und bleibt damit von selbst außen vor, und *Dreiecke
-    verringern* könnte mit ihm ohnehin nichts anfangen.
+    Nur Netze werden vergröbert. Ein exakter Körper besitzt ebenfalls eine
+    Tessellierung für die Anzeige; ihre Größe rechtfertigt keine Umwandlung
+    des Eingabekörpers vor der eigentlichen Vorschau.
     """
     if scene is None:
         return []
@@ -537,7 +538,8 @@ def _coarse_drafts(scene: Any) -> list[OperationDraft]:
             op="decimate_mesh", params={"triangles": COARSE_PREVIEW_TARGET}, inputs=(object_id,)
         )
         for object_id, entry in scene.objects.items()
-        if int(getattr(entry.mesh, "triangle_count", 0)) > COARSE_PREVIEW_ABOVE
+        if kind_of(entry.mesh) == "mesh"
+        and int(getattr(entry.mesh, "triangle_count", 0)) > COARSE_PREVIEW_ABOVE
     ]
 
 
@@ -2299,6 +2301,8 @@ class Session(QObject):
         *,
         change_op: int | None = None,
         change_values: dict[str, Any] | None = None,
+        change_name: str | None = None,
+        changes: DocumentChange | None = None,
         explained: Any = None,
         coarse: Any = None,
         advised: Any = None,
@@ -2340,6 +2344,8 @@ class Session(QObject):
                 list(drafts or []),
                 change_op=change_op,
                 change_values=change_values,
+                change_name=change_name,
+                changes=changes,
                 cancelled=cancel,
                 coarsened=(
                     None
@@ -2839,7 +2845,7 @@ class Session(QObject):
         )
         proposal = agent.propose(request)
         preview = ProposalPreview(proposal=proposal)
-        if proposal.drafts:
+        if proposal.creates_something:
             preview.scene, preview.difference = self._preview_of(proposal)
         return preview
 
@@ -2848,7 +2854,10 @@ class Session(QObject):
         Entwurfsqualität.
         """
         return self.preview_scene(
-            list(proposal.drafts), origin=proposal.origin, ask=self.ask_from_worker
+            list(proposal.drafts),
+            origin=proposal.origin,
+            ask=self.ask_from_worker,
+            changes=agent_apply.changes_for(proposal, self.project.document),
         )
 
     def preview_scene(
@@ -2859,6 +2868,8 @@ class Session(QObject):
         ask: Any = None,
         change_op: int | None = None,
         change_values: dict[str, Any] | None = None,
+        change_name: str | None = None,
+        changes: DocumentChange | None = None,
         cancelled: Any = None,
     ) -> tuple[Any, SceneDifference | None]:
         """Wonach die Szene aussähe — die eine Vorschau für Agent und Dialog.
@@ -2866,7 +2877,9 @@ class Session(QObject):
         Auf einer Kopie des Dokuments, in Entwurfsqualität; der Cache trägt
         alle Schritte, die schon gerechnet sind. ``change_op`` mit
         ``change_values`` zeigt statt neuer Schritte eine geänderte Operation
-        des Stapels (§15.4). Ohne ``ask`` hält eine Rückfrage die Vorschau an,
+        des Stapels (§15.4). ``change_name`` verwendet dabei dieselbe
+        Zwillingsumschaltung wie die spätere Übernahme. Ohne ``ask`` hält eine
+        Rückfrage die Vorschau an,
         statt mitten ins Tippen ein Fenster zu stellen — was eine Frage
         braucht, hat keine stille Vorschau.
         """
@@ -2876,6 +2889,8 @@ class Session(QObject):
             ask=ask,
             change_op=change_op,
             change_values=change_values,
+            change_name=change_name,
+            changes=changes,
             cancelled=cancelled,
         )
         return scene, difference
@@ -2888,6 +2903,8 @@ class Session(QObject):
         ask: Any = None,
         change_op: int | None = None,
         change_values: dict[str, Any] | None = None,
+        change_name: str | None = None,
+        changes: DocumentChange | None = None,
         cancelled: Any = None,
         coarsened: Any = None,
         counselled: Any = None,
@@ -2928,16 +2945,32 @@ class Session(QObject):
             # Zeile in fünf Sprachen für nichts.
             reduced = tuple(History(working).apply(_("Vorschau"), coarse).ops)
         if change_op is not None:
-            History(working).change_params(change_op, dict(change_values or {}))
-            previewed: tuple[OpId, ...] = (change_op,)
+            history = History(working)
+            if change_name is None:
+                history.change_params(change_op, dict(change_values or {}))
+            else:
+                history.change_kernel(change_op, change_name, dict(change_values or {}))
+            changed_index = next(
+                index for index, entry in enumerate(working.ops) if entry.id == change_op
+            )
+            previewed: tuple[OpId, ...] = tuple(entry.id for entry in working.ops[changed_index:])
         else:
             transaction = History(working).apply(
-                _("Vorschau"), drafts, origin=origin or Origin(by="user")
+                _("Vorschau"), drafts, origin=origin or Origin(by="user"), changes=changes
             )
             previewed = tuple(transaction.ops)
+        preview_profile = self.profile
+        if changes is not None:
+            preview_profile = profiles.for_process(
+                profiles.make_profile(
+                    working.printer or profiles.DEFAULT_PRINTER,
+                    working.material or profiles.DEFAULT_MATERIAL,
+                ),
+                working.print_settings,
+            )
         result = evaluate(
             working,
-            self.profile,
+            preview_profile,
             quality="draft",
             sources=ProjectSources(self.project, base_dir=self.base_dir),
             ask=ask or _no_questions,
@@ -2961,6 +2994,8 @@ class Session(QObject):
                 ask=ask,
                 change_op=change_op,
                 change_values=change_values,
+                change_name=change_name,
+                changes=changes,
                 cancelled=cancelled,
                 counselled=counselled,
             )
@@ -2995,6 +3030,8 @@ class Session(QObject):
                     ask=ask,
                     change_op=change_op,
                     change_values=change_values,
+                    change_name=change_name,
+                    changes=changes,
                     cancelled=cancelled,
                     counselled=counselled,
                 )
@@ -3005,6 +3042,31 @@ class Session(QObject):
             difference.findings = tuple(
                 finding for finding in result.scene.report.findings if finding.op_id in previewed
             )
+            if change_op is not None and change_name is not None and before is not None:
+                # Ein Erzeuger hat keinen exakten Eingang. Sein Wechsel zum
+                # Netz-Zwilling wird erst zwischen den beiden Dokumentständen
+                # sichtbar und muss trotzdem vor dem Übernehmen benannt werden.
+                changed = next(entry for entry in working.ops if entry.id == change_op)
+                covered = {
+                    finding.object_id
+                    for finding in difference.findings
+                    if finding.converts_exact_body
+                }
+                for object_id in changed.outputs:
+                    previous = before.objects.get(object_id)
+                    following = result.scene.objects.get(object_id)
+                    if (
+                        previous is not None
+                        and following is not None
+                        and previous.kind == "brep"
+                        and following.kind == "mesh"
+                        and object_id not in covered
+                    ):
+                        difference.findings += (
+                            conversion_finding(
+                                changed, REGISTRY.get(changed.op).title, previous, (object_id,)
+                            ),
+                        )
         # **Eine leere Vorschau mit einer Warnung ist keine leere Vorschau.**
         # *Textur in Filamente* an einem Körper ohne Farbinformation läuft
         # durch, ändert nichts und meldet als Befund, warum — und der Befund

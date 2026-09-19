@@ -33,8 +33,9 @@ from app.core.activation import Activation
 from app.core.errors import AppError
 from app.core.geom.mesh import MeshData, face_components
 from app.core.registry import MENU_GROUPS as MENU_GROUPS
+from app.core.registry import REGISTRY
 from app.core.registry import group_title as group_title
-from app.core.types import Feature, FeatureId, SceneObject
+from app.core.types import Feature, FeatureId, Finding, SceneObject
 from app.core.units import (
     DEGREE_UNIT,
     LengthUnit,
@@ -1627,6 +1628,41 @@ def spoiled_the_exact_body(result: Any) -> str:
     return ""
 
 
+def exact_conversion_lines(
+    findings: Sequence[Finding], object_names: Mapping[str, str] | None = None
+) -> tuple[str, ...]:
+    """Erklärt erlaubte Umwandlungen vor der Übernahme, einmal je Eingang und Schritt."""
+    names = object_names or {}
+    detailed = {
+        (finding.op_id, finding.object_id)
+        for finding in findings
+        if finding.code == "evaluate.exact_became_mesh"
+    }
+    seen = set()
+    lines = []
+    for finding in findings:
+        if not finding.converts_exact_body:
+            continue
+        if finding.code == "brep.converted" and (finding.op_id, finding.object_id) in detailed:
+            continue
+        source = str(finding.values.get("input_object") or finding.object_id or "")
+        key = (finding.op_id, source)
+        if key in seen:
+            continue
+        seen.add(key)
+        name = str(finding.values.get("input_name") or names.get(source) or tr("Körper"))
+        operation = str(finding.values.get("op") or "")
+        title = str(REGISTRY.get(operation).title) if REGISTRY.has(operation) else tr("Umwandeln")
+        lines.append(
+            tr(
+                "„{operation}“ wandelt „{object}“ in ein Dreiecksmodell um. Flächen und Kanten "
+                "bleiben bearbeitbar; Rundungen bestehen danach aus geraden Teilstücken. "
+                "Rückgängig stellt den vorherigen Körper wieder her."
+            ).format(operation=title, object=name)
+        )
+    return tuple(lines)
+
+
 def kind_requirement(spec: Any, kinds: Sequence[str], spoiled_by: str = "") -> str | None:
     """Warum diese Operation auf dieser Auswahl nicht geht — oder ``None``.
 
@@ -1661,8 +1697,8 @@ def kind_requirement(spec: Any, kinds: Sequence[str], spoiled_by: str = "") -> s
         # niemand ausführen kann, ist schlechter als keiner.
         return str(
             tr(
-                "„{step}“ hat die einzeln bearbeitbaren Flächen und Kanten in feste "
-                "Dreiecke umgewandelt. Dieses Werkzeug muss im Verlauf davor stehen. "
+                "„{step}“ hat den Körper in ein Dreiecksmodell umgewandelt. Dieses Werkzeug "
+                "braucht echte Kurven und muss im Verlauf davor stehen. "
                 "Nimm die Schritte ab dort zurück, wende das Werkzeug an und setze den "
                 "Rest danach neu."
             )
@@ -1674,7 +1710,7 @@ def kind_requirement(spec: Any, kinds: Sequence[str], spoiled_by: str = "") -> s
     # des Schritts, wenn man ihn im Verlauf wieder öffnet.
     return str(
         tr(
-            "Dieses Werkzeug braucht einzeln bearbeitbare Flächen und Kanten. Aktiviere "
+            "Dieses Werkzeug braucht einen Körper mit echten Kurven. Aktiviere "
             "dafür im Dialog der Grundform „Flächen und Kanten später bearbeiten“ — "
             "auch nachträglich über den Schritt im Verlauf. Eine STEP-Datei bringt "
             "diese Flächen und Kanten ebenfalls mit."

@@ -455,6 +455,128 @@ def test_a_failed_acceptance_shows_the_error_and_keeps_the_proposal(
     assert window._proposal is preview, "der Vorschlag bleibt stehen"
 
 
+@pytest.mark.parametrize("created_in_proposal", [False, True])
+def test_converting_proposal_waits_for_current_render_and_applies_once(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch, created_in_proposal: bool
+) -> None:
+    """Auch ein erst vorgeschlagener exakter Körper wartet auf das sichtbare Ergebnis."""
+    from app.core.agent.proposal import Proposal
+    from app.core.scene.history import OperationDraft
+    from app.core.types import Parameter
+
+    session = window.session
+    target = "obj_2"
+    create = OperationDraft(op="create_brep_box", params={}, outputs=(target,))
+    if not created_in_proposal:
+        assert session.apply("Exakter Körper", [create])
+        assert session.wait_for_idle(30_000)
+    proposal = Proposal(request="Als Dreiecksmodell bearbeiten")
+    proposal.parameters["test_width"] = Parameter(name="test_width", value=12.0, unit="mm")
+    if created_in_proposal:
+        proposal.drafts.append(create)
+    proposal.drafts.append(OperationDraft(op="brep_to_mesh", inputs=(target,), params={}))
+    scene, difference = session._preview_of(proposal)
+    assert difference is not None
+    proposal.findings.extend(difference.findings)
+    assert any(finding.converts_exact_body for finding in proposal.findings)
+    preview = ProposalPreview(proposal=proposal, scene=scene, difference=difference)
+    before = len(session.project.document.ops)
+    rendered = False
+    monkeypatch.setattr(window.viewport, "is_difference_applied", lambda _difference: rendered)
+
+    window._on_proposal(preview)
+    assert window._proposal is preview, "conversion must not be auto-accepted"
+    assert not window.chat.accept_button.isEnabled()
+    window._on_proposal_accepted()
+    assert len(session.project.document.ops) == before
+    assert "test_width" not in session.project.document.parameters
+    assert session.wait_for_idle(30_000)
+    approval = window._preview_approval
+    assert approval is not None and approval.required and approval.presentation_ready
+    assert not approval.displayed
+    assert not window.chat.accept_button.isEnabled()
+    assert window.chat.discard_button.isEnabled()
+
+    rendered = True
+    window.viewport.differenceApplied.emit(approval.difference)
+    assert approval.displayed
+    assert window.chat.accept_button.isEnabled()
+    assert len(session.project.document.ops) == before, "early click is not replayed"
+    window.chat.accept_button.click()
+    assert session.wait_for_idle(30_000)
+    assert window._proposal is None
+    assert len(session.project.document.ops) == before + len(proposal.drafts)
+    assert session.project.document.parameters["test_width"].value == pytest.approx(12.0)
+    assert session.last_result.scene.objects[target].kind == "mesh"
+    window._on_proposal_accepted()
+    assert len(session.project.document.ops) == before + len(proposal.drafts)
+    session.undo()
+    assert session.wait_for_idle(30_000)
+    assert "test_width" not in session.project.document.parameters
+    if created_in_proposal:
+        assert target not in session.last_result.scene.objects
+    else:
+        assert session.last_result.scene.objects[target].kind == "brep"
+
+
+@pytest.mark.parametrize("finish", ["discard", "new_project"])
+def test_converting_proposal_invalidates_document_change_and_discard(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch, finish: str
+) -> None:
+    """Alte Renderantworten dürfen weder neue Hauptmaße noch Verwerfen überholen."""
+    from app.core.agent.proposal import Proposal
+    from app.core.scene.history import OperationDraft
+    from app.core.types import Parameter
+
+    session = window.session
+    assert session.add_parameter(Parameter(name="body_width", value=20.0, unit="mm"))
+    assert session.wait_for_idle(30_000)
+    assert session.apply(
+        "Exakter Körper",
+        [OperationDraft(op="create_brep_box", params={"width": "@body_width"})],
+    )
+    assert session.wait_for_idle(30_000)
+    target = session.project.document.ops[-1].outputs[0]
+    proposal = Proposal(request="Dreiecksmodell")
+    proposal.drafts.append(OperationDraft(op="brep_to_mesh", inputs=(target,), params={}))
+    scene, difference = session._preview_of(proposal)
+    assert difference is not None
+    proposal.findings.extend(difference.findings)
+    assert any(finding.converts_exact_body for finding in proposal.findings)
+    preview = ProposalPreview(proposal=proposal, scene=scene, difference=difference)
+    monkeypatch.setattr(window.viewport, "is_difference_applied", lambda _difference: True)
+    window._on_proposal(preview)
+    assert session.wait_for_idle(30_000)
+    old = window._preview_approval
+    assert old is not None and old.displayed
+    before = len(session.project.document.ops)
+    assert session.change_parameter("body_width", 30.0)
+    assert not window.chat.accept_button.isEnabled()
+    window.viewport.differenceApplied.emit(old.difference)
+    window._on_proposal_accepted()
+    assert len(session.project.document.ops) == before
+    assert session.wait_for_idle(30_000)
+    fresh = window._preview_approval
+    assert fresh is not None and fresh is not old and fresh.displayed
+    assert fresh.result.scene.objects[target].mesh.bounds.size[0] == pytest.approx(30.0)
+    assert len(session.project.document.ops) == before
+    if finish == "discard":
+        window.chat.discard_button.click()
+    else:
+        session.start_new()
+    assert session.wait_for_idle(30_000)
+    window.viewport.differenceApplied.emit(fresh.difference)
+    window._on_proposal_accepted()
+    assert window._proposal is None
+    assert window._preview_approval is None
+    if finish == "discard":
+        assert len(session.project.document.ops) == before
+        assert session.last_result.scene.objects[target].kind == "brep"
+    else:
+        assert not session.project.document.ops
+        assert not session.last_result.scene.objects
+
+
 def test_an_answer_only_turn_needs_no_decision(window: MainWindow) -> None:
     """Regel 19 im Geist: ein reiner Auskunftszug bekommt keine
     Übernehmen/Verwerfen-Leiste über „Keine Änderung" — er wird sofort

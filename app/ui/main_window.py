@@ -249,6 +249,7 @@ from app.ui.labels import (
     demo_line,
     display_unit,
     edge_label,
+    exact_conversion_lines,
     feature_label,
     feature_requirement,
     kind_requirement,
@@ -1612,6 +1613,38 @@ class _DiscardedSketch:
     steps: int
 
 
+@dataclass(frozen=True, slots=True)
+class _PreviewOrder:
+    """Derselbe vorbereitete Auftrag für Vorschau und Übernehmen."""
+
+    drafts: tuple[OperationDraft, ...] = ()
+    change_op: int | None = None
+    change_values: Mapping[str, Any] | None = None
+    change_name: str | None = None
+    bundle: bool = False
+    changes: DocumentChange | None = None
+
+
+@dataclass(slots=True)
+class _PreviewApproval:
+    """Eine Freigabe gehört einem Editor, Auftrag und unveränderten Dokumentstand."""
+
+    owner: Any
+    revision: int
+    order: _PreviewOrder
+    document: Any
+    document_state: Any
+    result: Any
+    selection: tuple[Any, ...]
+    required: bool | None
+    displayed: bool = False
+    requested: bool = False
+    problem: str = ""
+    difference: Any = None
+    presentation_ready: bool = False
+    after_shown: Callable[[Any], None] | None = None
+
+
 class MainWindow(QMainWindow):
     """Fenster, Menüs und die Verdrahtung zwischen Sitzung und Panels."""
 
@@ -1971,6 +2004,11 @@ class MainWindow(QMainWindow):
         self._feature_preview.setInterval(300)
         self._feature_preview.timeout.connect(self._preview_feature_change)
         self._feature_pending: tuple[str, dict[str, Any]] | None = None
+        self._preview_approval: _PreviewApproval | None = None
+        self._preview_revision = 0
+        self._preview_block_reason: str | None = None
+        self._preview_prefix: tuple[int, int, int, Any] | None = None
+        self._preview_prefix_result: Any = None
         # **Und sie sagt, dass sie rechnet** (§2.8: bis 0,2 s nichts, danach
         # eine Rückmeldung). Ein Aushöhlen über einem großen Netz braucht
         # Sekunden; solange stand das alte Bild unter dem alten Band, und ein
@@ -2018,6 +2056,7 @@ class MainWindow(QMainWindow):
         anwendungsweiten Ereignisfilter für die Leertaste stehen; der Kommentar
         in ``_show_start_screen`` beschreibt genau diesen Zustand als behoben."""
         self.feature_panel.valuesChanged.connect(self._on_feature_values_changed)
+        self.feature_panel.preview_check = self._feature_preview_can_apply
         self.feature_panel.operationRequestedForEach.connect(self._apply_to_each_feature)
         # Derselbe Katalog wie aus dem Objektbaum — ein zweiter Weg dorthin,
         # kein zweiter Katalog.
@@ -2052,6 +2091,9 @@ class MainWindow(QMainWindow):
         left_layout.addStretch(1)
 
         self.viewport = Viewport(self)
+        self.viewport.differenceApplied.connect(self._preview_rendered)
+        self.viewport.differenceFailed.connect(self._preview_render_failed)
+        self.viewport.sceneApplied.connect(self._preview_base_ready)
         # Die 3D-Maus fährt dieselbe Kamera — eine zweite Hand, kein Modus
         # (Konzept 3D-Maus). Gesucht wird das Gerät ab dem ersten Anzeigen —
         # vorher gibt es keine Kamera, die es fahren könnte.
@@ -2324,6 +2366,8 @@ class MainWindow(QMainWindow):
         # Zahl aus dem Feld, und in Zoll wäre der Ring ein Fünfundzwanzigstel
         # des Pinsels.
         self.sculpt_bar.radius.valueChangedMm.connect(self.viewport.set_brush_radius)
+        self.sculpt_bar.radius.valueChangedMm.connect(self._refresh_sculpt_refinement)
+        self.sculpt_bar.symmetry.currentIndexChanged.connect(self._refresh_sculpt_preview)
 
         # Der Skeletteditor, dieselbe Bauart: eine Leiste neben der
         # Werkzeugzeile, ein Zustand im Fenster, eine Operation am Ende.
@@ -5952,9 +5996,11 @@ class MainWindow(QMainWindow):
             self.session.set_print_settings(settings)
         return settings
 
-    def _spool_change(self, entry: filaments.CatalogueFilament) -> DocumentChange:
+    def _spool_change(
+        self, entry: filaments.CatalogueFilament, *, prepare: bool = False
+    ) -> DocumentChange:
         """Die physische Wahl gehört zum selben Undo wie ihre Filamentzuweisung."""
-        settings = self._inventory_settings()
+        settings = self.effective_print_settings() if prepare else self._inventory_settings()
         return change_for(
             self.session.project.document,
             spool_bindings=with_spool(settings, spool_slot(entry), entry.identifier).spool_bindings,
@@ -6142,6 +6188,51 @@ class MainWindow(QMainWindow):
             return
         current = self._current_inventory_spool(entry)
         if current is None:
+            return
+        if any(result.scene.objects[draft.inputs[0]].kind == "brep" for draft in drafts):
+            owner = self.quick_filament
+            order = _PreviewOrder(
+                drafts=tuple(drafts), changes=self._spool_change(current, prepare=True)
+            )
+            window_ref = weakref.ref(self)
+
+            def cancel() -> None:
+                window = window_ref()
+                if window is None:
+                    return
+                approval = window._preview_approval
+                if approval is not None and approval.owner is window.quick_filament:
+                    window._clear_preview()
+
+            def accept() -> None:
+                window = window_ref()
+                if window is None:
+                    return
+                picker = window.quick_filament
+                if not window._preview_can_apply(picker, order):
+                    return
+                if window._current_inventory_spool(current) is None:
+                    picker.cancel_preview()
+                    return
+                picker.finish_preview()
+                window._clear_preview()
+                # Die Projektkennung entsteht erst beim Schreiben. Die
+                # Vorschau einschließlich Abbrechen verändert das Dokument nie.
+                window._inventory_settings()
+                window.session.apply(
+                    _("Filament zuweisen"), list(order.drafts), changes=order.changes
+                )
+
+            def current_preview() -> bool:
+                window = window_ref()
+                return window is not None and window._preview_can_apply(
+                    window.quick_filament, order
+                )
+
+            owner.stage_preview(accept, cancel)
+            owner.preview_check = current_preview
+            approval = self._set_preview_order(owner, order)
+            self._request_order_preview(approval)
             return
         self.session.apply(_("Filament zuweisen"), drafts, changes=self._spool_change(current))
 
@@ -9283,6 +9374,8 @@ class MainWindow(QMainWindow):
         self.sketch_bar.setVisible(False)
         self.statusBar().clearMessage()
         self._update_actions()
+        if keep and target and not text:
+            self.announce(tr("Die Zeichnung ist leer. Es wurde nichts übernommen."))
         if keep and text:
             if target:
                 values: dict[str, Any] = {parameter or _sketch_param(target): text}
@@ -9375,6 +9468,40 @@ class MainWindow(QMainWindow):
             return ""
         return tr("Das Netz ist für diesen Pinsel zu grob — erst gleichmäßig vernetzen.")
 
+    def _sculpt_refinement_order(self) -> _PreviewOrder:
+        """Die zum aktuellen Pinsel passende Vernetzung einmal vorbereiten."""
+        if self._sculpt_target is None:
+            return _PreviewOrder()
+        edge = self.sculpt_bar.radius.value_mm() / (BRUSH_TO_EDGE * 1.25)
+        finest = next(
+            entry.minimum or 0.0
+            for entry in REGISTRY.get("remesh_uniform").params.spec()
+            if entry.name == "edge"
+        )
+        return _PreviewOrder(
+            drafts=(
+                OperationDraft(
+                    op="remesh_uniform",
+                    inputs=(self._sculpt_target,),
+                    outputs=(self._sculpt_target,),
+                    params={"edge": max(finest, edge)},
+                ),
+            )
+        )
+
+    def _refresh_sculpt_refinement(self, _radius: float) -> None:
+        """Ein neuer Pinselradius entwertet eine bereits angeforderte Vernetzung."""
+        approval = self._preview_approval
+        if (
+            self._sculpt_target is not None
+            and approval is not None
+            and approval.owner is self.sculpt_bar.refine
+        ):
+            approval = self._set_preview_order(
+                self.sculpt_bar.refine, self._sculpt_refinement_order()
+            )
+            self._request_order_preview(approval)
+
     def refine_for_sculpt(self) -> None:
         """Das Netz so fein machen, dass der eingestellte Pinsel greift.
 
@@ -9391,27 +9518,15 @@ class MainWindow(QMainWindow):
         """
         if self._sculpt_target is None:
             return
-        edge = self.sculpt_bar.radius.value_mm() / (BRUSH_TO_EDGE * 1.25)
         # Der feinste Wert, den die Operation annimmt, steht in ihrem Schema
         # und nicht hier: der kleinste Pinsel (0,1 mm) rechnet sich sonst auf
         # eine Kante, die sie ablehnt — eine Sackgasse hinter einem Knopf, der
         # aus einer Sackgasse herausführen soll.
-        finest = next(
-            entry.minimum or 0.0
-            for entry in REGISTRY.get("remesh_uniform").params.spec()
-            if entry.name == "edge"
-        )
-        self.session.apply(
-            tr("Dreiecke angleichen"),
-            [
-                OperationDraft(
-                    op="remesh_uniform",
-                    inputs=(self._sculpt_target,),
-                    outputs=(self._sculpt_target,),
-                    params={"edge": max(finest, edge)},
-                )
-            ],
-        )
+        order = self._sculpt_refinement_order()
+        if not self._preview_can_apply(self.sculpt_bar.refine, order):
+            return
+        self._clear_preview()
+        self.session.apply(tr("Dreiecke angleichen"), list(order.drafts))
 
     def _on_sculpt(self, point: Any) -> None:
         """Ein Klick im Viewport wird ein Zug.
@@ -9445,6 +9560,30 @@ class MainWindow(QMainWindow):
         self._show_sculpt_preview(mesh)
         self._sculpt_check.start()
 
+    def _sculpt_order(self) -> _PreviewOrder:
+        """Gesammelte Gesten und aktuelle Symmetrie bilden den gemeinsamen Auftrag."""
+        if self._sculpt_target is None or not self._sculpt_strokes:
+            return _PreviewOrder()
+        return _PreviewOrder(
+            drafts=(
+                OperationDraft(
+                    op="sculpt_strokes",
+                    inputs=(self._sculpt_target,),
+                    params={
+                        "strokes": strokes_to_text(self._sculpt_strokes),
+                        "symmetry": self.sculpt_bar.plane(),
+                    },
+                ),
+            )
+        )
+
+    def _refresh_sculpt_preview(self, _index: int) -> None:
+        """Die Symmetrie gilt auch den vorhandenen Zügen und braucht deren neue Vorschau."""
+        if self._sculpt_target is not None:
+            mesh = self._sculpt_mesh(self._sculpt_target)
+            if mesh is not None:
+                self._show_sculpt_preview(mesh)
+
     def _show_sculpt_preview(self, mesh: MeshData) -> None:
         """Was der Zug bewirkt, sofort — und was er kostet, daneben.
 
@@ -9459,6 +9598,17 @@ class MainWindow(QMainWindow):
         self.sculpt_bar.show_warning(self._sculpt_resolution_hint(mesh), refinable=True)
         if self._sculpt_target is None:
             return
+        order = self._sculpt_order()
+        if order.drafts and self._order_has_exact_inputs(order, self.session.last_result):
+            approval = self._set_preview_order(self.sculpt_bar.done, order)
+            self._request_order_preview(approval)
+            return
+        previous = self._preview_approval
+        if previous is not None and previous.owner in (
+            self.sculpt_bar.done,
+            self.sculpt_bar.refine,
+        ):
+            self._clear_preview()
         plane = SYMMETRY_BITS.get(self.sculpt_bar.plane(), 0)
         shown = [replace(s, symmetry=s.symmetry | plane) for s in strokes] if plane else strokes
         self.viewport.show_preview_mesh(self._sculpt_target, apply_strokes(mesh, shown))
@@ -9586,6 +9736,10 @@ class MainWindow(QMainWindow):
             # Züge und meldete einen Wert außerhalb seines Bereichs.
             self.announce(tr("Der geformte Körper ist nicht mehr da — die Sitzung bleibt offen."))
             return
+        order = self._sculpt_order()
+        if order.drafts and not self._preview_can_apply(self.sculpt_bar.done, order):
+            return
+        self._clear_preview()
         self._sculpt_target = None
         self._sculpt_strokes = []
         self._sculpt_check.stop()
@@ -9599,19 +9753,7 @@ class MainWindow(QMainWindow):
             # Eine Sitzung ohne Zug hinterlässt nichts. Ein leerer Schritt im
             # Verlauf wäre Rauschen an genau der Stelle, an der man sucht.
             return
-        self.session.apply(
-            _("Formen"),
-            [
-                OperationDraft(
-                    op="sculpt_strokes",
-                    inputs=(target,),
-                    params={
-                        "strokes": strokes_to_text(strokes),
-                        "symmetry": self.sculpt_bar.plane(),
-                    },
-                )
-            ],
-        )
+        self.session.apply(_("Formen"), list(order.drafts))
 
     # --- Skelettsitzung (§25, Konzept P16 §7.5) ---------------------------------
 
@@ -10275,65 +10417,96 @@ class MainWindow(QMainWindow):
             values.update({"x": float(place[0]), "y": float(place[1]), "z": float(place[2])})
         self._feature_step("slot_hole", feature_id, values)
 
-    def _feature_step(self, op: str, feature_id: str, params: dict[str, Any]) -> None:
-        """Ein Zug, eine Transaktion — dieselbe Zusage wie am Körpergriff.
+    def _commit_preview_order(self, order: _PreviewOrder) -> bool:
+        """Genau den bereits vorbereiteten Auftrag in einer Transaktion schreiben."""
+        if order.change_op is not None:
+            values = dict(order.change_values or {})
+            if order.change_name is not None:
+                self.session.change_kernel(order.change_op, order.change_name, values)
+                return self.session.history.operation(order.change_op).op == order.change_name
+            return self.session.change_params(order.change_op, values)
+        if not order.drafts:
+            return False
+        return bool(
+            self.session.apply(
+                REGISTRY.get(order.drafts[0].op).title,
+                list(order.drafts),
+                bundle=order.bundle,
+                changes=order.changes,
+            )
+        )
 
-        **Die Operation wird gegen das Register geprüft.** Die Ansicht sendet
-        nur, wo eine Griff-Operation gilt; steht sie hier trotzdem nicht im
-        Register, geschieht nichts, statt dass das Fenster mit einer
-        unbekannten Operation abbricht.
-        """
+    def _preview_direct_order(self, order: _PreviewOrder, commit: Callable[[], object]) -> bool:
+        """Eine Geste mit tatsächlicher Vernetzung endet im bestehenden Bearbeitungsdialog."""
+        if order.change_op is None and not self._order_has_exact_inputs(
+            order, self.session.last_result
+        ):
+            return False
+        approval = self._set_preview_order(self, order)
+
+        def reviewed(difference: Any) -> None:
+            """Erhaltene exakte Körper bleiben direkt; die sichtbare Vernetzung wartet."""
+            if not self._preview_is_current(approval):
+                return
+            converts = any(
+                finding.converts_exact_body for finding in getattr(difference, "findings", ())
+            )
+            if converts:
+                if order.change_op is not None:
+                    self.edit_operation(order.change_op, given=order.change_values)
+                elif len(order.drafts) == 1:
+                    draft = order.drafts[0]
+                    self.run_operation(REGISTRY.get(draft.op), given=draft.params)
+                return
+            self._clear_preview()
+            commit()
+
+        approval.after_shown = reviewed
+        self._request_order_preview(approval)
+        return True
+
+    def _feature_step(self, op: str, feature_id: str, params: dict[str, Any]) -> None:
+        """Eine Geste bleibt ein Auftrag; eine Vernetzung wird vor ihrer Übernahme gezeigt."""
         selected = self.object_tree.selected()
         if selected is None or not REGISTRY.has(op):
             return
-        # **Nach einer Geste im Bild stehen die Maße wieder da.** Der Merker
-        # verhindert, dass die Platzierung nach ihrer *eigenen* Übernahme neu
-        # anspringt; ein Zug am Griff ist etwas anderes, und danach will man
-        # sehen, wo das Merkmal jetzt sitzt (Robert, 10.09.2026: „wenn ich
-        # jetzt etwas im viewport verschiebe und zum langloch mach fehlen die
-        # maße").
-        #
-        # **Und der abgelaufene Maßdialog geht mit.** Den Merker zu löschen
-        # genügte nicht: Jede Operation beendet die laufende Platzierung
-        # (`PlacementFlow._scene_changed` ruft `back()`), und ihr Dialog bleibt
-        # stehen — mit den Zahlen von vorher. Der Selbststart sah dann genau
-        # diesen toten Dialog und trat zurück, also blieb es bei einer Ansicht
-        # ohne Maße und veralteten Werten daneben. Gemessen am 11.09.2026:
-        # nach *Merkmal verschieben* `flow.active = False`, Maßlinien
-        # verborgen, Dialog sichtbar mit X 25,00 gegen 29,90 im Merkmalfenster
-        # (Robert: „wenn ich das langloch zieh, fehlen die Maße zu den kanten",
-        # „werte im dialog und in der rechten merkmalleiste doppelt").
-        self._drop_stale_measures()
-        if op == "slot_hole" and self._change_slot_step(feature_id, params):
+        order = self._prepare_slot_change(feature_id, params) if op == "slot_hole" else None
+        if order is None:
+            order = _PreviewOrder(
+                drafts=(
+                    OperationDraft(
+                        op=op,
+                        inputs=(selected,),
+                        params={"at_feature": feature_id, **params},
+                    ),
+                )
+            )
+        elif not order.change_values:
+            self.announce(tr("Das Langloch steht schon so, wie es eingetragen ist."))
             return
-        draft = OperationDraft(
-            op=op, inputs=(selected,), params={"at_feature": feature_id, **params}
-        )
-        self.session.apply(REGISTRY.get(op).title, [draft])
 
-    def _change_slot_step(self, feature_id: str, params: Mapping[str, Any]) -> bool:
-        """Ein Langloch, das ein Schritt gezogen hat, ändert **diesen** Schritt.
+        def commit() -> None:
+            """Der Abschluss räumt seine Maße erst nach der Vorschaufreigabe ab."""
+            self._drop_stale_measures()
+            self._commit_preview_order(order)
 
-        Dieselbe Regel wie beim Baustein (:meth:`_change_part_step`, §21.2):
-        Was aus einem Schritt kam, meint den Schritt. Bis zum 15.09.2026 legte
-        jedes Übernehmen an einem Langloch einen weiteren ``slot_hole``-Schritt
-        obenauf — beim Drehen schnitt der ein zweites Langloch quer über das
-        erste (Robert: „habe ich 2 langlöcher"). Jetzt bekommt der Schritt, der
-        das Langloch aus der Bohrung gezogen hat, den neuen Winkel, die neue
-        Länge oder die neue Stelle, und rechnet von der Bohrung aus neu — ein
-        Langloch, kein Kreuz, und kein Schritt mehr im Verlauf.
+        approval = self._preview_approval
+        if (
+            approval is not None
+            and approval.owner in (self.feature_panel, self._quiet_host)
+            and approval.order == order
+            and self._preview_can_apply(approval.owner, order)
+        ):
+            self._drop_feature_preview()
+            commit()
+            return
+        if not self._preview_direct_order(order, commit):
+            commit()
 
-        **Geschrieben wird nur, was sich geändert hat.** Das Merkmalfenster
-        belegt die Felder mit den **gemessenen** Werten, und die tragen die
-        Toleranz des Schnitts (18,00 eingetragen, 18,02 gemessen); wer sie
-        ungesehen zurückschriebe, ließe das Loch mit jedem Übernehmen um zwei
-        Hundertstel wachsen. Ein Feld, das noch auf seinem Messwert steht, hat
-        niemand angefasst — es bleibt, was im Schritt steht.
-
-        Gibt zurück, ob der Schritt geändert wurde; ``False`` heißt: kein
-        Schritt (ein erkanntes Langloch aus einer Datei), der Aufrufer legt
-        einen neuen an — und der Kern schließt dort die alte Richtung selbst.
-        """
+    def _prepare_slot_change(
+        self, feature_id: str, params: Mapping[str, Any]
+    ) -> _PreviewOrder | None:
+        """Gemessene, unveränderte Werte bleiben im ursprünglichen Langlochschritt."""
         from app.core.geom.prepare_ops import slot_angle_of
 
         object_id = self.object_tree.selected()
@@ -10341,7 +10514,7 @@ class MainWindow(QMainWindow):
         entry = result.scene.objects.get(object_id) if result and object_id else None
         feature = entry.features.get(feature_id) if entry is not None else None
         if feature is None or feature.kind != "slot":
-            return False
+            return None
         step = next(
             (
                 entry
@@ -10351,11 +10524,11 @@ class MainWindow(QMainWindow):
             None,
         )
         if step is None:
-            return False
+            return None
         axis = feature.params.get("axis")
         centre = feature.params.get("centre")
         if axis is None or centre is None:
-            return False
+            return None
         measured: dict[str, float] = {
             "slot_length": float(feature.params.get("length") or 0.0),
             "slot_angle": slot_angle_of(feature, (float(axis[0]), float(axis[1]), float(axis[2]))),
@@ -10368,10 +10541,21 @@ class MainWindow(QMainWindow):
             value = params.get(name)
             if isinstance(value, int | float) and abs(float(value) - was) > EPS_DISPLAY:
                 changed[name] = float(value)
-        if not changed:
+        return _PreviewOrder(change_op=int(step.id), change_values=changed)
+
+    def _change_slot_step(self, feature_id: str, params: Mapping[str, Any]) -> bool:
+        """Vorschau und Übernahme korrigieren denselben ursprünglichen Langlochschritt."""
+        order = self._prepare_slot_change(feature_id, params)
+        if order is None:
+            return False
+        if not order.change_values:
             self.announce(tr("Das Langloch steht schon so, wie es eingetragen ist."))
             return True
-        self.session.change_params(int(step.id), changed)
+        owner = self._quiet_host or self.feature_panel
+        if self._preview_can_apply(owner, order):
+            self._drop_feature_preview()
+            assert order.change_op is not None
+            self.session.change_params(order.change_op, dict(order.change_values))
         return True
 
     def _on_face_dragged(self, feature_id: str, distance: float) -> None:
@@ -10748,7 +10932,7 @@ class MainWindow(QMainWindow):
                 }
             )
         if values:
-            self._change_part_step(int(operation.id), values)
+            self._change_part_step(int(operation.id), values, from_gesture=True)
         return True
 
     def _resolved_placement(self, params: Mapping[str, Any]) -> dict[str, Any]:
@@ -10869,7 +11053,9 @@ class MainWindow(QMainWindow):
                 {"dx": steps.offset[0], "dy": steps.offset[1], "dz": steps.offset[2]},
             )
             if single is not None:
-                self.session.apply(REGISTRY.get(str(single.op)).title, [single])
+                order = _PreviewOrder(drafts=(single,))
+                if not self._preview_direct_order(order, lambda: self._commit_preview_order(order)):
+                    self._commit_preview_order(order)
                 return
             # Ein Draft je Körper, alle in einem ``apply`` — weiter genau eine
             # Transaktion, und ein Strg+Z nimmt den ganzen Zug zurück.
@@ -11733,6 +11919,8 @@ class MainWindow(QMainWindow):
         Übernommen-Leiste mit dem Weg zurück — ein Klick, derselbe Effekt
         wie vorher zwei.
         """
+        if self._proposal is not None:
+            self._clear_proposal()
         if preview.proposal.findings:
             # Die Befunde des Zugs — Verweigerung, Abschneiden, Prüfungen nach
             # jeder Op — hatten keinen Anzeigeweg: Sie standen am Vorschlag
@@ -11777,18 +11965,83 @@ class MainWindow(QMainWindow):
                 return
         self._proposal = preview
         self.chat.show_proposal(preview)
+        project = self.session.project
+
+        def changed(*_args: Any) -> None:
+            """Ein Vorschlag bleibt an sein Projekt und dessen aktuellen Stand gebunden."""
+            if self._proposal is not preview:
+                return
+            if self.session.project is not project:
+                self._clear_proposal()
+                return
+            self._show_pending_proposal()
+
+        self._proposal_changed: Callable[..., None] | None = changed
+        self.session.projectChanged.connect(changed)
+        self.session.sceneChanged.connect(changed)
+        self._show_pending_proposal()
+        self._focus_chat()
+
+    def _show_pending_proposal(self) -> _PreviewApproval | None:
+        """Chat und wiederhergestelltes Vorschauband verwenden denselben Auftrag."""
+        preview = self._proposal
+        if preview is None:
+            return None
+        order = _PreviewOrder(
+            drafts=tuple(preview.proposal.drafts),
+            changes=agent_apply.changes_for(preview.proposal, self.session.project.document),
+        )
+        converts = any(
+            finding.converts_exact_body
+            for finding in (
+                *preview.proposal.findings,
+                *getattr(preview.difference, "findings", ()),
+            )
+        )
+        if converts or self._order_has_exact_inputs(order, self.session.last_result):
+            approval = self._set_preview_order(self.chat.accept_button, order)
+            # Auch eine Projektparameteränderung ohne neue Draft-Eingänge kann
+            # einen vorhandenen exakten Schritt tatsächlich vernetzen.
+            approval.required = True
+
+            def shown(difference: Any) -> None:
+                if self._proposal is not preview:
+                    return
+                preview.difference = difference
+                self.chat.show_proposal(preview)
+                self.viewport.mark_preview(
+                    self._conversion_preview_note(
+                        tr("Vorschlag — noch nicht übernommen"),
+                        getattr(difference, "findings", ()),
+                    ),
+                    tr("Leertaste halten: vorher"),
+                )
+
+            approval.after_shown = shown
+            self._refresh_preview_block()
+            if not approval.requested:
+                self._request_order_preview(approval)
+            return approval
+        self.chat.accept_button.setEnabled(True)
         if preview.difference is not None:
             self.viewport.show_difference(preview.difference)
             self.viewport.mark_preview(
-                tr("Vorschlag — noch nicht übernommen"),
+                self._conversion_preview_note(
+                    tr("Vorschlag — noch nicht übernommen"), preview.proposal.findings
+                ),
                 tr("Leertaste halten: vorher"),
             )
-        self._focus_chat()
+        return None
 
     def _on_proposal_accepted(self) -> None:
         if self._proposal is None:
             return
         try:
+            approval = self._show_pending_proposal()
+            if approval is not None and not self._preview_can_apply(
+                self.chat.accept_button, approval.order
+            ):
+                return
             self.session.accept_proposal(self._proposal)
         except AppError as error:
             # ``ValidationError(history_moved)`` landete auf stderr, und der
@@ -11833,6 +12086,19 @@ class MainWindow(QMainWindow):
 
     def _clear_proposal(self) -> None:
         self._proposal = None
+        changed = getattr(self, "_proposal_changed", None)
+        if changed is not None:
+            self.session.projectChanged.disconnect(changed)
+            self.session.sceneChanged.disconnect(changed)
+            self._proposal_changed = None
+        approval = self._preview_approval
+        if approval is not None and approval.owner is self.chat.accept_button:
+            self._forget_preview_approval()
+            self.session.cancel_preview()
+        self.chat.accept_button.setEnabled(True)
+        self.chat.accept_button.setToolTip("")
+        self.chat.accept_button.setStatusTip("")
+        self.chat.accept_button.setAccessibleDescription("")
         self.chat.show_proposal(None)
         self.viewport.show_difference(None)
         self.viewport.mark_preview("")
@@ -12049,6 +12315,7 @@ class MainWindow(QMainWindow):
         self.feature_dock.forget_dismissal()
         self.feature_panel.show_edge(key, title)
         self.feature_dock.reveal()
+        self._start_feature_preview()
         # **Und die Karte rechts erfährt davon** — dieselbe Zeile wie bei der
         # Merkmalsauswahl (`_on_feature_selected`) und aus demselben Grund:
         # `selected_feature_kind` meldet an einer Kante `"edge"`, aber nur,
@@ -12391,6 +12658,7 @@ class MainWindow(QMainWindow):
                 textures, certain=certain, parameter_values=self._parameter_values()
             )
             self.feature_dock.reveal()
+            self._start_feature_preview()
             return
         # **Was aus einem Baustein kam, meint den Baustein.** Ein Schlüsselloch
         # bringt zwölf Merkmale mit — zwei Bohrungen, zehn Verrundungen und die
@@ -12402,6 +12670,7 @@ class MainWindow(QMainWindow):
             if textures:
                 self.feature_panel.offer_texture_steps(textures, self._parameter_values())
             self.feature_dock.reveal()
+            self._start_feature_preview()
             return
         self.feature_panel.show_feature(
             feature_id,
@@ -12414,6 +12683,7 @@ class MainWindow(QMainWindow):
         if textures:
             self.feature_panel.offer_texture_steps(textures, self._parameter_values())
         self.feature_dock.reveal()
+        self._start_feature_preview()
         resume = self._measures_to_resume == feature_id
         # Ein anderes Merkmal löscht den Merker ebenso: Er gilt der Handlung,
         # aus der er kam, und nicht der nächsten Auswahl.
@@ -12498,7 +12768,9 @@ class MainWindow(QMainWindow):
         self._drop_feature_preview()
         self.edit_operation(step)
 
-    def _change_part_step(self, step: int, params: dict[str, Any]) -> None:
+    def _change_part_step(
+        self, step: int, params: dict[str, Any], *, from_gesture: bool = False
+    ) -> None:
         """Neue Werte in den Schritt schreiben, der diesen Baustein gesetzt hat.
 
         Nur die genannten Werte: Das Panel zeigt je Handlung einen Ausschnitt —
@@ -12509,6 +12781,21 @@ class MainWindow(QMainWindow):
         operation = next((entry for entry in document.ops if entry.id == step), None)
         if operation is None:
             return
+        order = _PreviewOrder(change_op=step, change_values={**operation.params, **params})
+        if from_gesture:
+
+            def commit() -> None:
+                """Auch ein direkter Bausteingriff behält die Auswahl erst nach dem Schreiben."""
+                if self._commit_preview_order(order):
+                    self._part_to_keep = int(step)
+
+            if self._preview_direct_order(order, commit):
+                return
+            commit()
+            return
+        if not self._preview_can_apply(self._quiet_host or self.feature_panel, order):
+            return
+        self._drop_feature_preview()
         # Der Merker erst, wenn die Änderung steht: Lehnt der Verlauf ab
         # (abgelaufene Demo, ungültiger Wert), kommt keine Auswertung, und ein
         # stehender Merker zöge die Auswahl bei der nächsten beliebigen auf
@@ -12585,6 +12872,7 @@ class MainWindow(QMainWindow):
         if part is not None:
             self.feature_panel.show_part(*part, parameter_values=self._parameter_values())
             self.feature_dock.reveal()
+            self._start_feature_preview()
             return
         if len(chosen) != 2:
             if len(chosen) > 2:
@@ -12735,24 +13023,13 @@ class MainWindow(QMainWindow):
             )
         self._on_features_selected(list(self.object_tree.selected_features()))
 
-    def _apply_to_each_feature(
-        self, op: str, params: dict[str, Any], feature_ids: list[str]
-    ) -> None:
-        """Dieselbe Handlung für mehrere gleichartige Merkmale — **eine**
-        Transaktion (Regel 16).
-
-        Ein Draft je Merkmal, alle in einem ``apply``: Ein Strg+Z nimmt sie
-        zusammen zurück, weil es eine Handlung war. Sechs einzelne Aufrufe wären
-        sechs Schritte im Verlauf und sechs Undos für einen Handgriff.
-
-        **Das Maß reist, die Stelle nicht.** Die Werte des Fensters tragen bei
-        einer Bohrung auch x, y, z, und dieselbe Stelle an jedes Mitglied legte
-        alle übereinander (Robert, 16.09.2026); :func:`params_for_members`
-        gibt jedem seine eigene Mitte und reicht nur einen Versatz weiter.
-        """
+    def _prepare_group_order(
+        self, op: str, params: Mapping[str, Any], feature_ids: Sequence[str]
+    ) -> _PreviewOrder | None:
+        """Alle Gruppenmitglieder bekommen dieselben Maße und ihre eigene Stelle."""
         selected = self.object_tree.selected()
         if selected is None or not REGISTRY.has(op) or not feature_ids:
-            return
+            return None
         from app.core.perceive.relations import alike_for_action, params_for_members
 
         result = self.session.last_result
@@ -12769,6 +13046,20 @@ class MainWindow(QMainWindow):
             or set(feature_ids) != {member.target for member in group.members}
             or len(feature_ids) != len(group.members)
         ):
+            return None
+        each = params_for_members(params, picked, feature_ids, body.features if body else {})
+        drafts = [
+            OperationDraft(op=op, inputs=(selected,), params=each[feature_id])
+            for feature_id in feature_ids
+        ]
+        return _PreviewOrder(drafts=tuple(drafts), bundle=True)
+
+    def _apply_to_each_feature(
+        self, op: str, params: dict[str, Any], feature_ids: list[str]
+    ) -> None:
+        """Das ganze sichtbare Gruppenangebot wird in einer Transaktion übernommen."""
+        order = self._prepare_group_order(op, params, feature_ids)
+        if order is None:
             self.announce(
                 tr(
                     "Die Merkmalsgruppe hat sich geändert. Wählen Sie das Merkmal erneut "
@@ -12776,13 +13067,47 @@ class MainWindow(QMainWindow):
                 )
             )
             return
-        each = params_for_members(params, picked, feature_ids, body.features if body else {})
-        drafts = [
-            OperationDraft(op=op, inputs=(selected,), params=each[feature_id])
-            for feature_id in feature_ids
-        ]
+        if not self._preview_can_apply(self.feature_panel, order):
+            return
         self._drop_feature_preview()
-        self.session.apply(REGISTRY.get(op).title, drafts, bundle=True)
+        self.session.apply(REGISTRY.get(op).title, list(order.drafts), bundle=True)
+
+    def _prepare_feature_order(self, op: str, params: Mapping[str, Any]) -> _PreviewOrder | None:
+        """Baustein, Langloch, Gruppe und neuer Auftrag teilen Vorschau und Commit."""
+        step = self.feature_panel.shown_part_step()
+        if step is not None:
+            operation = self.session.history.operation(step)
+            return _PreviewOrder(change_op=step, change_values={**operation.params, **params})
+        members = self.feature_panel.preview_targets(op)
+        if members:
+            return self._prepare_group_order(op, params, members)
+        selected = self.object_tree.selected()
+        if selected is None or not REGISTRY.has(op):
+            return None
+        feature_id = str(params.get("at_feature") or "")
+        if op == "slot_hole" and feature_id:
+            changed = self._prepare_slot_change(feature_id, params)
+            if changed is not None:
+                return changed
+        return _PreviewOrder(
+            drafts=(OperationDraft(op=op, inputs=(selected,), params=dict(params)),)
+        )
+
+    def _feature_preview_can_apply(self) -> bool:
+        """Auch ohne vorherige Wertmeldung die tatsächlich aktive Handlung prüfen."""
+        entered = self.feature_panel.preview_values()
+        if entered is None:
+            return True
+        order = self._prepare_feature_order(*entered)
+        return order is not None and self._preview_can_apply(
+            self._quiet_host or self.feature_panel, order
+        )
+
+    def _start_feature_preview(self) -> None:
+        """Erst nach dem vollständigen Aufbau der Karte ihre erste Vorschau beginnen."""
+        entered = self.feature_panel.preview_values()
+        if entered is not None:
+            self._on_feature_values_changed(*entered)
 
     def _drop_feature_preview(self) -> None:
         """Die wartende Vorschau des Merkmalsfensters fällt.
@@ -12814,6 +13139,7 @@ class MainWindow(QMainWindow):
             self._feature_pending is None
             and not self._feature_preview.isActive()
             and not self._preview_shown
+            and self._preview_approval is None
         ):
             # **Nichts zu tun, und das ist der Normalfall.** Seit dieser Abbau
             # am Dokumentwechsel hängt, läuft er bei jedem Anwenden, jedem Undo
@@ -12840,6 +13166,13 @@ class MainWindow(QMainWindow):
         verzögert: Wer 16 tippt, tippt zuerst 1, und eine Boolesche über das
         ganze Teil je Tastendruck macht das Feld unbenutzbar.
         """
+        self._end_changed_quiet_placement()
+        previous = self._preview_approval
+        order = self._prepare_feature_order(op, params)
+        if order is not None:
+            approval = self._set_preview_order(self._quiet_host or self.feature_panel, order)
+        else:
+            approval = None
         # **Der Umriss im Bild folgt der Zahl im Feld** (§21.1). Beim
         # Langlochzug stand er in einer eigenen Leiste und folgte deren
         # Feldern; die ist gefallen, und die Felder stehen jetzt rechts.
@@ -12849,20 +13182,19 @@ class MainWindow(QMainWindow):
             self.viewport.reshape_slot(
                 float(params.get("slot_length") or 0.0), float(params.get("slot_angle") or 0.0)
             )
-        self._end_changed_quiet_placement()
         flow, host = self._quiet_placement, self._quiet_host
         if flow is not None and flow.active:
             flow.cancel_pending_accept()
         if flow is not None and flow.active and host is not None and flow.spec_of().name == op:
-            previous = host.values()
+            previous_values = host.values()
             axes = ("x", "y", "z")
             has_position = all(
                 isinstance(params.get(axis), int | float)
-                and isinstance(previous.get(axis), int | float)
+                and isinstance(previous_values.get(axis), int | float)
                 for axis in axes
             )
             moved = has_position and any(
-                not is_close(float(params[axis]), float(previous[axis])) for axis in axes
+                not is_close(float(params[axis]), float(previous_values[axis])) for axis in axes
             )
             if moved and not flow.move_to(
                 tuple(float(params[axis]) for axis in axes), on_plane_only=True
@@ -12871,50 +13203,24 @@ class MainWindow(QMainWindow):
                 # gilt die normale Vorschau mit den eingegebenen Werten.
                 self.end_quiet_placement()
             else:
-                self._drop_feature_preview()
                 host.take_placement(params)
                 return
         self._feature_pending = (op, dict(params))
-        self._feature_preview.start()
+        if approval is not previous:
+            self._feature_preview.start()
 
     def _preview_feature_change(self) -> None:
-        """Rechnet die gemerkte Änderung und legt sie ins Bild (§18.7).
-
-        **Über denselben Weg wie der Operationsdialog**: `preview_async` rechnet
-        im Arbeiter, eine jüngere Anfrage ersetzt die wartende, und gezeigt wird
-        nur das Jüngste. Was hier entsteht, ist eine Vorschau und kein
-        Dokumentzustand (Regel 2) — im Verlauf steht erst etwas, wenn der Knopf
-        gedrückt wird.
-        """
-        merkposten = self._feature_pending
-        if merkposten is None:
+        """Der tatsächliche Übernahmeauftrag läuft durch denselben Freigabepfad wie im Menü."""
+        pending = self._feature_pending
+        if pending is None:
             return
-        op, params = merkposten
-        # **Ein Baustein wird vorgeschaut, wie er geändert wird.** Aus denselben
-        # Werten einen Draft zu bauen legte einen *zweiten* daneben: Beim Drehen
-        # an der Schraubengröße erschien ein weiteres Schlüsselloch an der
-        # Vorgabelage, weil dem Draft Ort und Ansatzpunkt fehlen. Denselben
-        # Unterschied macht der Knopf schon (``stepChangeRequested``); die
-        # Vorschau ging noch den alten Weg.
-        step = self.feature_panel.shown_part_step()
-        if step is not None:
-            self._preview_busy.start()
-            self.session.preview_async(
-                self._show_preview,
-                change_op=step,
-                change_values=params,
-                explained=self._preview_explained,
-            )
+        op, params = pending
+        order = self._prepare_feature_order(op, params)
+        if order is None:
             return
-        selected = self.object_tree.selected()
-        if selected is None or not REGISTRY.has(op):
-            return
-        self._preview_busy.start()
-        self.session.preview_async(
-            self._show_preview,
-            [OperationDraft(op=op, inputs=(selected,), params=params)],
-            explained=self._preview_explained,
-        )
+        owner = self._quiet_host or self.feature_panel
+        approval = self._set_preview_order(owner, order)
+        self._request_order_preview(approval)
 
     def _apply_from_feature_panel(self, op: str, params: dict[str, Any]) -> None:
         """Eine geänderte Zahl im Merkmal-Panel wird ein Schritt im Verlauf.
@@ -12960,6 +13266,9 @@ class MainWindow(QMainWindow):
         # (`apply_slot_drag`), und eine inzwischen gewechselte Auswahl meint
         # ein anderes Loch.
         if op == "slot_hole" and self.viewport.slot_drag_waits():
+            order = self._prepare_feature_order(op, params)
+            if order is None or not self._preview_can_apply(self.feature_panel, order):
+                return
             # Die Stelle kommt aus den Feldern rechts — dort landet der Zug am
             # Bewegungsgriff ebenso wie eine getippte Zahl.
             place = (
@@ -13067,15 +13376,19 @@ class MainWindow(QMainWindow):
         if object_id is None:
             self.announce(_needs_objects(0))
             return
+        order = self._prepare_feature_order(op, params)
+        if order is None or not self._preview_can_apply(
+            self._quiet_host or self.feature_panel, order
+        ):
+            return
         self._drop_feature_preview()
         # **Ein Langloch aus einem Schritt ändert den Schritt** — derselbe
         # Vorrang wie in :meth:`_feature_step`, für den Weg über die Felder
         # rechts und die stille Platzierung.
-        feature_id = str(params.get("at_feature") or "")
-        if op == "slot_hole" and feature_id and self._change_slot_step(feature_id, params):
+        if order.change_op is not None:
+            self.session.change_params(order.change_op, dict(order.change_values or {}))
             return
-        draft = OperationDraft(op=op, inputs=(object_id,), params=dict(params))
-        self.session.apply(REGISTRY.get(op).title, [draft])
+        self.session.apply(REGISTRY.get(op).title, list(order.drafts), bundle=order.bundle)
 
     def _place_from_feature_panel(self, op: str, params: dict[str, Any]) -> None:
         """Dieselbe Handlung, aber im Bild eingestellt (§18.5).
@@ -13135,6 +13448,13 @@ class MainWindow(QMainWindow):
             apply_placement,
             known=[field.name for field in spec.params.spec()],
         )
+
+        def current_preview() -> bool:
+            """Die endgültigen Platzierungswerte müssen noch denselben Auftrag bilden."""
+            order = self._prepare_feature_order(op, host.values())
+            return order is not None and self._preview_can_apply(host, order)
+
+        host.preview_check = current_preview
         flow = PlacementFlow(host, self, lambda: spec, lambda: (object_id,))
         self._quiet_host = host
         self._quiet_placement = flow
@@ -13143,6 +13463,13 @@ class MainWindow(QMainWindow):
         def show_values() -> None:
             if self._quiet_host is host:
                 self.feature_panel.take_values(op, host.values(), arm=False)
+                order = self._prepare_feature_order(op, host.values())
+                if order is not None:
+                    previous = self._preview_approval
+                    approval = self._set_preview_order(host, order)
+                    self._feature_pending = (op, dict(host.values()))
+                    if approval is not previous:
+                        self._feature_preview.start()
 
         host.valuesChanged.connect(show_values)
         flow.start()
@@ -13151,6 +13478,7 @@ class MainWindow(QMainWindow):
             # eine leere Platzierung wäre ein Zustand ohne Ausgang.
             self.end_quiet_placement()
             return
+        show_values()
         self.feature_panel.set_measuring(True)
 
     def _end_changed_quiet_placement(self) -> None:
@@ -13168,6 +13496,8 @@ class MainWindow(QMainWindow):
         Übernehmen. Wer die Auswahl wechselt, ein Projekt öffnet oder dieselbe
         Handlung noch einmal anstößt, räumt sie deshalb hier ab.
         """
+        if self._preview_approval is not None and self._preview_approval.owner is self._quiet_host:
+            self._forget_preview_approval()
         flow, self._quiet_placement = self._quiet_placement, None
         self._quiet_host = None
         self._quiet_target = None
@@ -13398,6 +13728,10 @@ class MainWindow(QMainWindow):
             if inputs and not spec.takes_whole_scene
             else ""
         )
+        if not note and inputs and not spec.params.spec():
+            note = tr("Betroffene Körper: {names}").format(
+                names=", ".join(self._object_names().get(entry, entry) for entry in inputs)
+            )
         # Der gemessene Durchmesser gehört in den Dialog: Die Anwendung kennt
         # ihn und sagt ihn, statt wortlos eine Größe vorzuschlagen, die nicht
         # dazu passt. Formuliert im Kern (bore_advice), gezeigt hier — und nur
@@ -13443,6 +13777,22 @@ class MainWindow(QMainWindow):
         def remember_spool(entry: filaments.CatalogueFilament | None) -> None:
             nonlocal chosen_spool
             chosen_spool = entry
+            dialog.valuesChanged.emit()
+
+        def matches_spool(params: Mapping[str, Any]) -> bool:
+            """Eine geänderte Filamentbeschreibung darf keine fremde Lagerbindung behalten."""
+            return (
+                chosen_spool is not None
+                and all(
+                    str(params.get(key, "")).strip() == value
+                    for key, value in (
+                        ("name", chosen_spool.name),
+                        ("material_type", chosen_spool.material_type),
+                        ("slicer_profile", chosen_spool.slicer_profile),
+                    )
+                )
+                and str(params.get("colour", "")).split() == list(chosen_spool.colours)
+            )
 
         def run(params: Mapping[str, Any], naming: DocumentChange | None = None) -> None:
             if spec.name in LID_OPS and inputs:
@@ -13472,15 +13822,7 @@ class MainWindow(QMainWindow):
             )
             changes = naming
             if chosen_spool is not None and spec.name in {"assign_slot", "paint_slot"}:
-                matches = all(
-                    str(params.get(key, "")).strip() == value
-                    for key, value in (
-                        ("name", chosen_spool.name),
-                        ("material_type", chosen_spool.material_type),
-                        ("slicer_profile", chosen_spool.slicer_profile),
-                    )
-                ) and str(params.get("colour", "")).split() == list(chosen_spool.colours)
-                if matches:
+                if matches_spool(params):
                     current = self._current_inventory_spool(chosen_spool)
                     if current is None:
                         return
@@ -13494,7 +13836,10 @@ class MainWindow(QMainWindow):
             if spec.name == "split_pinned" and len(operations) > count_before:
                 self._queue_split_reveal(operations[-1].outputs)
 
-        if spec.params.spec():
+        if spec.params.spec() or self._order_has_exact_inputs(
+            _PreviewOrder(drafts=(OperationDraft(op=spec.name, inputs=inputs, params=values),)),
+            result,
+        ):
             # Zusammengelegte Zwillinge (MENU_TWINS): derselbe Dialog trägt
             # hinten einen Umschalter, und erst er entscheidet, welche der
             # beiden Ops rechnet — Mesh oder exakter Kern. Die Parameter
@@ -13648,74 +13993,78 @@ class MainWindow(QMainWindow):
                 # exakten Zylinder).
                 exact.toggled.connect(lambda: dialog.switch_variant(chosen_spec()))
                 exact.toggled.connect(dialog.valuesChanged)
+
             # §18.7: der Dialog zeigt, was er täte, während getippt wird —
             # dieselbe Differenzansicht wie beim Agentenvorschlag.
+            def prepare_menu(entered: Mapping[str, Any]) -> _PreviewOrder:
+                """Namen, Gruppe, Platzierungsziel und Lagerbindung gehören zur Vorschau."""
+                picked = chosen_spec()
+                flow = dialog.placement_flow
+                params, changes = self._named_dimensions(
+                    picked, fitted(entered), dialog.names_dimensions()
+                )
+                targets = (
+                    ((flow.target,),)
+                    if flow is not None and flow.target and picked.consumes == 1
+                    else tuple((body,) for body in on_bodies)
+                    if on_bodies
+                    else (chosen_inputs(),)
+                )
+                if (
+                    chosen_spool is not None
+                    and picked.name in {"assign_slot", "paint_slot"}
+                    and matches_spool(params)
+                ):
+                    changes = self._spool_change(chosen_spool, prepare=True)
+                return _PreviewOrder(
+                    drafts=tuple(
+                        OperationDraft(
+                            op=picked.name, inputs=target, params=params, seed=dialog_seed
+                        )
+                        for target in targets
+                    ),
+                    bundle=bool(on_bodies),
+                    changes=changes,
+                )
+
             self._wire_preview(
                 dialog,
-                lambda entered: (
-                    [
-                        OperationDraft(
-                            op=chosen_spec().name,
-                            inputs=(body,),
-                            params=fitted(entered),
-                            seed=dialog_seed,
-                        )
-                        for body in on_bodies
-                    ]
-                    if on_bodies
-                    else [
-                        OperationDraft(
-                            op=chosen_spec().name,
-                            inputs=chosen_inputs(),
-                            params=fitted(entered),
-                            seed=dialog_seed,
-                        )
-                    ]
-                ),
+                lambda entered: list(prepare_menu(entered).drafts),
+                order_of=prepare_menu,
             )
             dialog.place_beside(self.viewport)
 
             def run_chosen() -> None:
+                """Den sichtbar geprüften Auftrag mit derselben Vorbereitung übernehmen."""
                 picked = chosen_spec()
-                flow = dialog.placement_flow
-                if flow is not None and flow.target and picked.consumes == 1:
-                    self.session.apply(
-                        picked.title,
-                        [
-                            OperationDraft(
-                                op=picked.name,
-                                inputs=(flow.target,),
-                                params=fitted(dialog.values()),
-                                seed=dialog_seed,
-                            )
-                        ],
+                order = prepare_menu(dialog.values())
+                if picked.name in LID_OPS and order.drafts[0].inputs:
+                    applied = self.session.create_lid(
+                        order.drafts[0].inputs[0], dict(order.drafts[0].params), op=picked.name
                     )
+                    self.report.add_findings(applied.findings)
                     return
-                entered, named = self._named_dimensions(
-                    picked, fitted(dialog.values()), dialog.names_dimensions()
-                )
-                if picked is spec:
-                    run(entered, named)
-                    return
-                self.session.apply(
-                    picked.title,
-                    [
-                        OperationDraft(
-                            op=picked.name,
-                            inputs=chosen_inputs(),
-                            params=entered,
-                            seed=dialog_seed,
+                if chosen_spool is not None and picked.name in {"assign_slot", "paint_slot"}:
+                    if matches_spool(order.drafts[0].params):
+                        if self._current_inventory_spool(chosen_spool) is None:
+                            return
+                        self._inventory_settings()
+                    else:
+                        self.announce(
+                            tr(
+                                "Die geänderten Filamentangaben werden ohne "
+                                "Lagerbindung übernommen."
+                            )
                         )
-                    ],
-                    changes=named,
-                )
+                count_before = len(self.session.project.document.ops)
+                self._commit_preview_order(order)
+                operations = self.session.project.document.ops
+                if picked.name == "split_pinned" and len(operations) > count_before:
+                    self._queue_split_reveal(operations[-1].outputs)
 
             self._open_operation_dialog(dialog, run_chosen)
             return
-        # Ohne Parameter gibt es nichts zu fragen, und ein Fenster mit nur „OK"
-        # wäre die Bestätigung vor einer rücknehmbaren Handlung, die Regel 19
-        # verbietet. Entfernen, Vereinigen, Abziehen — alle laufen sofort, und
-        # alle nimmt ein Undo zurück.
+        # Ohne Felder und ohne exakten Eingang bleibt die unmittelbare Handlung erhalten.
         run(values)
 
     # --- Fernsteuerung über MCP (Konzept P15 §7 Etappe 9, D19) ------------------
@@ -14050,7 +14399,7 @@ class MainWindow(QMainWindow):
             dialog.switch_variant(chosen_spec())
         # Auch beim Korrigieren zeigt die Vorschau den Zweig, wie er würde —
         # gerechnet als geänderte Operation, nicht als neuer Schritt (§15.4).
-        self._wire_preview(dialog, None, change_op=op_id, spec_of=chosen_spec)
+        self._wire_preview(dialog, None, change_op=op_id, spec_of=chosen_spec, values_of=fitted)
         dialog.place_beside(self.viewport)
 
         def apply_change() -> None:
@@ -14161,6 +14510,10 @@ class MainWindow(QMainWindow):
                 dialog.reject()
 
         def finished(code: int) -> None:
+            prepared = getattr(dialog, "preview_order", None)
+            accepted = code == QDialog.DialogCode.Accepted and (
+                prepared is None or self._preview_can_apply(dialog, prepared())
+            )
             self.session.projectChanged.disconnect(project_changed)
             self._op_dialog = None
             self.viewport.set_feature_gizmo_blocked(False)
@@ -14168,7 +14521,7 @@ class MainWindow(QMainWindow):
             # eine Navigation und keine Antwort (§18.5).
             self.viewport.set_direct_picking(False)
             self._clear_preview()
-            if code == QDialog.DialogCode.Accepted and self.session.project is project:
+            if accepted and self.session.project is project:
                 on_accept()
 
         self.session.projectChanged.connect(project_changed)
@@ -14260,6 +14613,370 @@ class MainWindow(QMainWindow):
 
         field.choiceRequested.connect(choose)
 
+    def _preview_selection(self) -> tuple[Any, ...]:
+        """Die gesamte Auswahl gehört zur Vorschau, der Gruppenauftrag zu ihren Drafts."""
+        return (self.object_tree.selected_objects(), self.object_tree.selected_features())
+
+    def _preview_is_current(self, approval: _PreviewApproval) -> bool:
+        """Keine verspätete Antwort darf einen anderen Auftrag oder Dokumentstand freigeben."""
+        return (
+            self._preview_approval is approval
+            and approval.revision == self._preview_revision
+            and self.session.project.document is approval.document
+            and self.session.project.document == approval.document_state
+            and self.session.last_result is approval.result
+            and self.session.result_current
+            and not self.session.busy
+            and self._preview_selection() == approval.selection
+        )
+
+    def _order_has_exact_inputs(self, order: _PreviewOrder, result: Any) -> bool:
+        """Die tatsächlichen Körper entscheiden, nicht die Anforderung des Registers."""
+        from app.core.brep.kernel import Solid
+
+        if result is None:
+            return False
+        if order.change_op is not None:
+            operation = self.session.history.operation(order.change_op)
+            identifiers = set(operation.inputs)
+            if REGISTRY.get(order.change_name or operation.op).takes_whole_scene:
+                identifiers.update(result.scene.objects)
+            if order.change_name is not None and order.change_name != operation.op:
+                identifiers.update(operation.outputs)
+        else:
+            identifiers = {body for draft in order.drafts for body in draft.inputs}
+            if any(REGISTRY.get(draft.op).takes_whole_scene for draft in order.drafts):
+                identifiers.update(result.scene.objects)
+        return any(
+            identifier in identifiers and isinstance(entry.mesh, Solid)
+            for identifier, entry in result.scene.objects.items()
+        )
+
+    def _preview_prefix_step(self, order: _PreviewOrder) -> int:
+        """Beim Kernwechsel gehört auch das ursprüngliche Erzeugerergebnis zum Bezug."""
+        assert order.change_op is not None
+        operation = self.session.history.operation(order.change_op)
+        changed_kind = order.change_name is not None and order.change_name != operation.op
+        return order.change_op + int(changed_kind)
+
+    def _set_preview_order(self, owner: Any, order: _PreviewOrder) -> _PreviewApproval:
+        """Schon beim Wertwechsel sperren; identische Werte behalten ihre Freigabe."""
+        previous = self._preview_approval
+        if (
+            previous is not None
+            and previous.owner is owner
+            and previous.order == order
+            and self._preview_is_current(previous)
+        ):
+            return previous
+        if previous is not None and previous.owner is not owner:
+            block = getattr(previous.owner, "block_apply", None)
+            if block is not None:
+                block(None)
+            elif isinstance(previous.owner, QPushButton):
+                previous.owner.setEnabled(True)
+                previous.owner.setToolTip("")
+                previous.owner.setStatusTip("")
+                previous.owner.setAccessibleDescription("")
+            previous.owner.preview_required = False
+        self.session.cancel_preview()
+        self._preview_revision += 1
+        document = self.session.project.document
+        approval = _PreviewApproval(
+            owner=owner,
+            revision=self._preview_revision,
+            order=deepcopy(order),
+            document=document,
+            document_state=deepcopy(document),
+            result=self.session.last_result,
+            selection=self._preview_selection(),
+            required=(
+                None
+                if order.change_op is not None
+                else self._order_has_exact_inputs(order, self.session.last_result)
+            ),
+        )
+        self._preview_approval = approval
+        self._preview_block_reason = None
+        self._preview_reason = ""
+        self._refresh_preview_block()
+        return approval
+
+    def _refresh_preview_block(self) -> None:
+        """Wartende Freigabe und fachlicher Sperrgrund bleiben getrennte Zustände."""
+        approval = self._preview_approval
+        owner: Any = approval.owner if approval is not None else self._op_dialog
+        reason = self._preview_block_reason
+        if approval is not None:
+            owner.preview_required = approval.required is not False
+            if approval.required is not False and not approval.displayed:
+                reason = approval.problem or tr(
+                    "Die aktuelle Vorschau abwarten und das Ergebnis prüfen."
+                )
+            elif approval.problem:
+                reason = approval.problem
+        block = getattr(owner, "block_apply", None)
+        if block is not None:
+            block(reason)
+        elif isinstance(owner, QPushButton):
+            owner.setEnabled(reason is None)
+            owner.setToolTip(reason or "")
+            owner.setStatusTip(reason or "")
+            owner.setAccessibleDescription(reason or "")
+        if owner is not None and owner is self._quiet_host:
+            self.feature_panel.block_apply(reason)
+
+    def _preview_can_apply(self, owner: Any, order: _PreviewOrder) -> bool:
+        """Vor dem Abräumen und Schreiben genau den sichtbar geprüften Auftrag verlangen."""
+        approval = self._set_preview_order(owner, order)
+        if not self._preview_is_current(approval):
+            return False
+        if approval.required is False:
+            return not self._preview_block_reason and not approval.problem
+        if approval.displayed and not approval.problem:
+            if self.viewport.is_difference_applied(approval.difference):
+                return True
+            approval.displayed = False
+        if not approval.requested:
+            self._request_order_preview(approval)
+        self._refresh_preview_block()
+        return False
+
+    def _request_order_preview(self, approval: _PreviewApproval) -> None:
+        """Ein gemeinsamer Antwortpfad für Dialog, Merkmalkarte und stille Platzierung."""
+        if not self._preview_is_current(approval):
+            return
+        approval.requested = True
+        order = approval.order
+        if order.change_op is not None and approval.required is None:
+            key = (
+                id(approval.document),
+                id(approval.result),
+                self._preview_prefix_step(order),
+                approval.document_state,
+            )
+            if self._preview_prefix == key:
+                if self._preview_prefix_result is None:
+                    return
+                self._finish_preview_prefix(approval, self._preview_prefix_result)
+                return
+            self._preview_prefix = key
+            self._preview_prefix_result = None
+
+            def before_ready(before: Any) -> None:
+                """Ein Eingangszustand darf mehreren Revisionen desselben Schritts dienen."""
+                if self._preview_prefix != key:
+                    return
+                self._preview_prefix_result = before
+                current = self._preview_approval
+                if (
+                    current is not None
+                    and current.order.change_op is not None
+                    and self._preview_is_current(current)
+                    and (
+                        id(current.document),
+                        id(current.result),
+                        self._preview_prefix_step(current.order),
+                        current.document_state,
+                    )
+                    == key
+                ):
+                    self._finish_preview_prefix(current, before)
+
+            self.session.placement_before(key[2], before_ready, lambda _detail: before_ready(False))
+            return
+        self._preview_busy.start()
+        if order.change_op is not None:
+            name = order.change_name or self.session.history.operation(order.change_op).op
+        else:
+            name = order.drafts[0].op if order.drafts else ""
+        self._preview_effect = REGISTRY.get(name).unchanged_effect if name else ""
+
+        def still(callback: Any) -> Any:
+            """Auch Nebenmeldungen tragen denselben Eigentümer und dieselbe Revision."""
+
+            def receive(value: Any) -> None:
+                if self._preview_is_current(approval):
+                    callback(value)
+
+            return receive
+
+        def failed(_detail: Any) -> None:
+            """Ein fehlendes Ergebnis bleibt gesperrt und nennt den nächsten Handgriff."""
+            reason = tr(
+                "Die Vorschau konnte nicht berechnet werden. Ändern Sie die Werte "
+                "oder öffnen Sie die Bearbeitung erneut."
+            )
+            if approval.required is not False:
+                approval.problem = reason
+            self._preview_explained(reason)
+            self._refresh_preview_block()
+
+        def explained(reason: str) -> None:
+            """Eine fachliche Absage kann ein nachgereichtes leeres Bild nicht aufheben."""
+            if approval.required is not False:
+                approval.problem = reason
+            self._preview_explained(reason)
+            self._refresh_preview_block()
+
+        def shown(difference: Any) -> None:
+            """Erst das Ergebnis darstellen, danach denselben Auftrag freigeben."""
+            if difference is None:
+                if approval.required is not False:
+                    failed(None)
+                else:
+                    self._show_preview(None)
+                return
+            findings = [
+                *getattr(difference, "findings", ()),
+                *(
+                    finding
+                    for entry in getattr(difference, "entries", {}).values()
+                    for finding in entry.findings
+                ),
+            ]
+            if any(finding.converts_exact_body for finding in findings):
+                approval.required = True
+            incomplete = any(finding.severity == "error" for finding in findings)
+            missing_result = any(
+                identifier not in getattr(difference, "deleted", ())
+                and entry.result is None
+                and (
+                    entry.changed
+                    or entry.retriangulated is not None
+                    or any(finding.code == "difference.incomplete" for finding in entry.findings)
+                )
+                for identifier, entry in getattr(difference, "entries", {}).items()
+            )
+            if (incomplete or missing_result) and approval.required is not False:
+                approval.problem = tr(
+                    "Die Vorschau ist unvollständig. Ändern Sie die Werte "
+                    "oder öffnen Sie die Bearbeitung erneut."
+                )
+            approval.difference = difference
+            self._present_order_preview(approval)
+
+        kwargs: dict[str, Any] = {
+            "explained": still(explained),
+            "coarse": still(self._preview_coarse),
+            "advised": still(self._preview_advised),
+            "failed": still(failed),
+        }
+        if order.changes is not None:
+            kwargs["changes"] = order.changes
+        if order.change_op is not None:
+            kwargs.update(change_op=order.change_op, change_values=dict(order.change_values or {}))
+            if order.change_name is not None:
+                kwargs["change_name"] = order.change_name
+            self.session.preview_async(still(shown), **kwargs)
+        else:
+            self.session.preview_async(still(shown), list(order.drafts), **kwargs)
+
+    def _preview_base_ready(self) -> None:
+        """Eine historische Platzierung wartet auf die vollständige Grundszene."""
+        approval = self._preview_approval
+        if approval is not None and approval.difference is not None:
+            self._present_order_preview(approval)
+
+    def _present_order_preview(self, approval: _PreviewApproval) -> None:
+        """Vollständiges Ergebnis und Auskunft vor der Freigabe gemeinsam darstellen."""
+        if approval.presentation_ready or not self._preview_is_current(approval):
+            return
+        flow = (
+            self._quiet_placement
+            if approval.owner is self._quiet_host
+            else getattr(approval.owner, "placement_flow", None)
+        )
+        if (
+            flow is not None
+            and flow.active
+            and approval.order.change_op is not None
+            and not flow.show_preview_base()
+        ):
+            return
+        if approval.presentation_ready or not self._preview_is_current(approval):
+            return
+        if approval.required is not False and self.viewport.analysis_map is not None:
+            self.viewport.set_analysis_map(None, None)
+        if approval.required is not False and not self.viewport.is_scene_applied(approval.result):
+            return
+        self._show_preview(approval.difference)
+        if not self._preview_is_current(approval):
+            return
+        approval.presentation_ready = True
+        self._preview_rendered(approval.difference)
+        self._refresh_preview_block()
+
+    def _preview_rendered(self, difference: Any) -> None:
+        """Eine Arbeiterantwort allein ist noch kein sichtbares Ergebnis."""
+        approval = self._preview_approval
+        if (
+            approval is None
+            or approval.displayed
+            or not approval.presentation_ready
+            or approval.problem
+            or approval.difference is not difference
+            or not self._preview_is_current(approval)
+            or not self.viewport.is_difference_applied(difference)
+        ):
+            return
+        approval.displayed = True
+        self._refresh_preview_block()
+        if approval.after_shown is not None:
+            approval.after_shown(difference)
+
+    def _preview_render_failed(self, difference: Any, _detail: str) -> None:
+        """Ein fehlendes Vorschaubild verlangt neue Werte statt einer blinden Übernahme."""
+        approval = self._preview_approval
+        if (
+            approval is None
+            or approval.difference is not difference
+            or not self._preview_is_current(approval)
+        ):
+            return
+        approval.displayed = False
+        approval.problem = tr(
+            "Vorschau nicht verfügbar — ändern Sie einen Wert, um sie erneut zu berechnen."
+        )
+        self._refresh_preview_block()
+
+    def _finish_preview_prefix(self, approval: _PreviewApproval, before: Any) -> None:
+        """Die genaue Eingabe entscheidet über die Pflicht, auch hinter späteren Netzschritten."""
+        if before is False or not before.complete:
+            approval.problem = tr(
+                "Der Eingangszustand ist nicht vollständig. Korrigieren Sie zuerst "
+                "den angehaltenen Schritt im Verlauf."
+            )
+            self._preview_explained(approval.problem)
+            self._refresh_preview_block()
+            return
+        approval.required = self._order_has_exact_inputs(approval.order, before)
+        self._refresh_preview_block()
+        if approval.requested:
+            self._request_order_preview(approval)
+
+    def _forget_preview_approval(self) -> None:
+        """Eine verschwundene Vorschau kann keinen späteren Auftrag mehr freigeben."""
+        approval, self._preview_approval = self._preview_approval, None
+        self._preview_revision += 1
+        self._preview_block_reason = None
+        if approval is not None:
+            block = getattr(approval.owner, "block_apply", None)
+            if block is not None:
+                block(
+                    tr("Die aktuelle Vorschau abwarten und das Ergebnis prüfen.")
+                    if approval.owner.preview_required
+                    and getattr(approval.owner, "preview_check", None)
+                    else None
+                )
+            elif isinstance(approval.owner, QPushButton):
+                approval.owner.setEnabled(True)
+                approval.owner.setToolTip("")
+                approval.owner.setStatusTip("")
+                approval.owner.setAccessibleDescription("")
+            if approval.owner is self._quiet_host:
+                self.feature_panel.block_apply(None)
+
     def _wire_preview(
         self,
         dialog: OperationDialog,
@@ -14267,13 +14984,13 @@ class MainWindow(QMainWindow):
         *,
         change_op: int | None = None,
         spec_of: Callable[[], OperationSpec] | None = None,
+        values_of: Callable[[Mapping[str, Any]], Mapping[str, Any]] | None = None,
+        order_of: Callable[[Mapping[str, Any]], _PreviewOrder] | None = None,
     ) -> None:
-        """Verbindet einen Operationsdialog mit der Live-Vorschau (§18.7).
-
-        Entprellt: dreißig Klicks auf den Drehknopf sind eine Rechnung, nicht
-        dreißig. Die erste Vorschau läuft sofort — auch die Vorgaben sind eine
-        Aussage darüber, was gleich passiert.
-        """
+        """Sofort entwerten, entprellt rechnen und erst die gezeigte Revision freigeben."""
+        if self._op_dialog is not None and self._op_dialog is not dialog:
+            self._op_dialog.reject()
+        self._drop_feature_preview()
         timer = QTimer(dialog)
         timer.setSingleShot(True)
         timer.setInterval(300)
@@ -14284,49 +15001,60 @@ class MainWindow(QMainWindow):
         if isinstance(seal_field, SealPathField):
             dialog.seal_flow = SealFlow(self, dialog, change_op=change_op)
 
-        def request() -> None:
-            placement_flow = getattr(dialog, "placement_flow", None)
-            if placement_flow is not None and placement_flow.active:
-                return
-            if isinstance(seal_field, SealPathField) and not seal_field.valid:
-                self._clear_preview()
-                return
-            entered = dialog.values()
-            self._preview_busy.start()
+        def prepared() -> _PreviewOrder:
+            """Die endgültige Filterung und der Platzierungsbezug gelten an beiden Enden."""
+            if order_of is not None:
+                return order_of(dialog.values())
+            entered = dict(values_of(dialog.values()) if values_of else dialog.values())
             if change_op is not None:
-                self._preview_effect = (
-                    spec_of() if spec_of is not None else dialog.spec
-                ).unchanged_effect
-                self.session.preview_async(
-                    self._show_preview,
+                name = (spec_of() if spec_of is not None else dialog.spec).name
+                original = self.session.history.operation(change_op).op
+                return _PreviewOrder(
                     change_op=change_op,
                     change_values=entered,
-                    explained=self._preview_explained,
-                    coarse=self._preview_coarse,
-                    advised=self._preview_advised,
+                    change_name=name if name != original else None,
                 )
-            else:
-                drafts = drafts_of(entered)
-                # **Welche Operation gerade vorgeschaut wird, entscheidet den
-                # Satz über einer leeren Differenz** (§18.7). „Am Volumen
-                # ändert sich nichts" ist bei einer Prüfung wahr und leer: Sie
-                # ändert nie etwas, ihr Ergebnis steht im Prüfbericht. Was
-                # stattdessen gilt, sagt das Register
-                # (``OperationSpec.unchanged_effect``) und keine Namensliste
-                # hier — beim dritten Prüfwerkzeug schwiege die.
-                self._preview_effect = (
-                    REGISTRY.get(drafts[0].op) if drafts else dialog.spec
-                ).unchanged_effect
-                self.session.preview_async(
-                    self._show_preview,
-                    drafts,
-                    explained=self._preview_explained,
-                    coarse=self._preview_coarse,
-                    advised=self._preview_advised,
-                )
+            drafts = tuple(drafts_of(entered))
+            flow = dialog.placement_flow
+            if (
+                flow is not None
+                and flow.target
+                and drafts
+                and REGISTRY.get(drafts[0].op).consumes == 1
+            ):
+                drafts = (replace(drafts[0], inputs=(flow.target,)),)
+            return _PreviewOrder(drafts=drafts)
+
+        dialog.preview_order = prepared
+        dialog.preview_check = lambda: self._preview_can_apply(dialog, prepared())
+
+        def request() -> None:
+            approval = self._set_preview_order(dialog, prepared())
+            if isinstance(seal_field, SealPathField) and not seal_field.valid:
+                return
+            flow = dialog.placement_flow
+            if flow is not None and flow.active and approval.required is False:
+                return
+            self._request_order_preview(approval)
+
+        def changed(*_ignored: Any) -> None:
+            """Der alte Knopf wird vor den dreihundert Millisekunden ungültig."""
+            previous = self._preview_approval
+            approval = self._set_preview_order(dialog, prepared())
+            if approval is not previous:
+                timer.start()
 
         timer.timeout.connect(request)
-        dialog.valuesChanged.connect(lambda: timer.start())
+        dialog.valuesChanged.connect(changed)
+        self.session.sceneChanged.connect(changed)
+
+        def finished(_code: int) -> None:
+            """Ein geschlossener Editor verfolgt keine späteren Szenen mehr."""
+            timer.stop()
+            self.session.sceneChanged.disconnect(changed)
+            dialog.preview_check = None
+
+        dialog.finished.connect(finished)
         from app.ui.placement_flow import PlacementFlow
 
         def placement_spec() -> OperationSpec:
@@ -14448,7 +15176,15 @@ class MainWindow(QMainWindow):
         )
         if warnings:
             note = "\n".join((note, *warnings))
+        note = self._conversion_preview_note(note, getattr(difference, "findings", ()))
         self.viewport.mark_preview(note, tr("Leertaste halten: vorher") if shown else "")
+
+    def _conversion_preview_note(self, title: str, findings: Sequence[Finding]) -> str:
+        """Dialog, Merkmalkarte und Agent erklären dieselbe tatsächliche Bauartänderung."""
+        names = (
+            self.session.last_result.object_names if self.session.last_result is not None else {}
+        )
+        return "\n".join((title, *exact_conversion_lines(findings, names)))
 
     def _preview_coarse(self, triangles: int) -> None:
         """Merkt, dass diese Vorschau auf einer verkleinerten Kopie läuft.
@@ -14488,10 +15224,8 @@ class MainWindow(QMainWindow):
         Über ``getattr``, damit ein Dialog ohne den Haken (und jedes Doppel im
         Test) unverändert weiterläuft.
         """
-        dialog = self._op_dialog
-        block = getattr(dialog, "block_apply", None)
-        if block is not None:
-            block(reason)
+        self._preview_block_reason = reason
+        self._refresh_preview_block()
 
     def _preview_explained(self, reason: str) -> None:
         """Warum es keine Vorschau gibt — der Satz aus dem Kern, im Band.
@@ -14535,6 +15269,9 @@ class MainWindow(QMainWindow):
         dessen Ende keine Vorschau mehr stehen darf; :meth:`_drop_feature_preview`
         ruft sie ebenfalls.
         """
+        self._forget_preview_approval()
+        self._preview_prefix = None
+        self._preview_prefix_result = None
         self._preview_shown = False
         self._preview_busy.stop()
         self._preview_reason = ""
@@ -14546,14 +15283,10 @@ class MainWindow(QMainWindow):
         self._preview_effect = ""
         self._preview_action = ""
         self.session.cancel_preview()
-        pending = self._proposal.difference if self._proposal is not None else None
-        self.viewport.show_difference(pending)
-        # Ein wartender Vorschlag ist auch noch nicht übernommen — nur sagt er
-        # es anders: über ihn entscheidet der Chat, nicht ein Dialog.
-        self.viewport.mark_preview(
-            tr("Vorschlag — noch nicht übernommen") if pending is not None else "",
-            tr("Leertaste halten: vorher") if pending is not None else "",
-        )
+        self.viewport.show_difference(None)
+        self.viewport.mark_preview("")
+        # Auch nach einem anderen Editor gilt die aktuelle sichtbare Freigabe.
+        self._show_pending_proposal()
 
     def _object_names(self) -> dict[str, str]:
         """Kennung auf Name, wie die Dialoge die Szene sehen.
@@ -15947,7 +16680,9 @@ class MainWindow(QMainWindow):
         # Zug ihr — sonst wie bisher dem ganzen Teil.
         single = self.feature_draft(op, params)
         if single is not None:
-            self.session.apply(REGISTRY.get(str(single.op)).title, [single])
+            order = _PreviewOrder(drafts=(single,))
+            if not self._preview_direct_order(order, lambda: self._commit_preview_order(order)):
+                self._commit_preview_order(order)
             return
         chosen = self.inputs_for_transform(op)
         if not chosen:

@@ -49,6 +49,38 @@ wenn gleichzeitig Material hinzukommt und wegfällt.
 
 ## Vorschau und Auswahl
 
+`Session` rechnet historische Werteänderungen und Zwillingswechsel über
+dieselben `History`-Methoden wie die Übernahme. Ihre Vorschau enthält auch
+die Befunde der neu gerechneten Folgeschritte. Beim Umschalten eines
+Erzeugers ergänzt der Vergleich beider Dokumentstände einen tatsächlich
+verlorenen exakten Körper; ein Erzeuger selbst hat keinen Eingang, aus dem
+der Auswerter diesen Verlust ableiten könnte. Exakte Eingänge werden für
+eine schnelle Vorschau nicht durch vorgeschaltete Netzreduktion ersetzt.
+Agentenvorschauen verwenden dieselbe `DocumentChange` wie die Annahme:
+neue Parameter, Passungen und Druckwerte werden auf der Arbeitskopie
+angewandt. Auch ein Vorschlag, der ausschließlich ein vorhandenes Hauptmaß
+ändert, erhält eine Vorschau der dadurch veränderten Geometrie.
+
+`labels.exact_conversion_lines()` formuliert die Wirkung vor der Übernahme
+gemeinsam für Operationsvorschau und wartenden Agentenvorschlag. Der
+Prüfbericht erhält Operation, damaligen Körpernamen, Ausgaben und Rückweg
+aus dem Kernbefund. Informationsstufe bedeutet hier keine automatische
+Annahme. Beide Körperarten behalten gleichwertige Namen im Objektbaum;
+ihre Kurzhilfe erklärt die Darstellung von Rundungen.
+
+`FeaturePanel` und Platzierungsträger trennen `block_apply(reason)` von der
+Dokumentsperre: Vorschauwartezeit sperrt nur Übernehmen, Felder und Abbrechen
+bleiben zugänglich. `can_accept()` wird auch nach Texteingabe und nach den
+endgültigen Platzierungswerten geprüft. Ein geschützter früher Klick wird
+nicht nachträglich ausgeführt; identische Platzierungswerte lösen keine
+erneute Änderung aus. Die Revision und der geprüfte Auftrag gehören dem
+Hauptfenster, die Träger halten keine zweite Vorschauverwaltung.
+Auch Chat-Übernehmen und die Rückkehr zu einem wartenden Vorschlag nach
+einem anderen Editor verwenden diesen Auftrag. Konvertierungsbefunde
+erzwingen die Freigabe selbst dann, wenn der exakte Körper erst innerhalb
+des Vorschlags entsteht. Dokumentänderung, Projektwechsel und Verwerfen
+entwerten sie; ein früher Klick wird nie nachgeholt.
+
 `seal_dialog.py` sammelt Dichtweg, Trägerfläche, bestätigte Öffnung und optionale
 Gegenfläche als einen zusammengehörigen Parameterblock. Der Feldtext zeigt
 nur den gewählten Weg; Kontursignaturen sind unsichtbare Daten. Zeichnen
@@ -74,6 +106,9 @@ des Zeichenpanels. Die anschließende Operationswahl liest `needed_inputs`:
 Schnittwerkzeuge erklären einen fehlenden Körper und übernehmen einen bereits
 gefundenen Körper in dieselbe Auswahl wie andere Operationswege.
 Die Liste bricht Beschreibungen bei Größenänderungen um und scrollt nur senkrecht.
+Eine leer abgeschlossene zielgebundene Zeichnung meldet über `announce`, dass
+nichts übernommen wurde. Verwerfen und der freie Abschluss behalten ihre
+eigenen Rückwege.
 
 Ausdrücklich erforderliche Materialrollen beginnen ohne Auswahl und sperren
 Übernehmen mit dem jeweiligen Feldtitel. Optionale Materialfelder behalten
@@ -788,6 +823,10 @@ Zahlen ohne neuen Verlaufsschritt. Beim Bearbeiten eines historischen Schritts
 liefert `Session.placement_before()` dessen tatsächlichen Eingang. Auch ein
 fehlerhafter Schritt bleibt damit korrigierbar. `result_current` und
 `Viewport.is_scene_applied()` sperren Ziele bis zur aktuellen sichtbaren Szene.
+Der historische Eingang bleibt der Bezug für Auswahl und Maße. Die vollständige
+Endvorschau fordert über `show_preview_base()` die aktuelle Ergebnisszene an
+und wartet auf `sceneApplied`. Eine erneute Flächensuche entwertet die
+Vorschaufreigabe und stellt zuerst den historischen Eingang wieder dar.
 Maßfelder erhalten ihre Float64-Werte und werden gemeinsam außerhalb der
 tatsächlich sichtbaren `OverlayHost`-Karten angeordnet; Verbindungslinien halten
 verschobene Felder ihren Maßpfeilen zugeordnet.
@@ -945,6 +984,12 @@ Operation ersetzen einander nicht. Bestehende Zeichnungen behalten ihre Ebene.
 Freistehende Prüfkörper benutzen im Katalog `creation_name()` und brauchen
 keinen Träger. Gemischte Bausteine zeigen `PlacementTool.addition` zusätzlich
 zum Schnittkörper, mit gemeinsamer Platzierung und gemeinsamem Abbau.
+
+Der Operationsdialog verwendet beim Erstaufbau und Variantenwechsel dieselbe
+Promotion über `_promoted_fields`. Entschiedene Positionen kommen anhand von
+`placement_fields` stets als vollständige XYZ-Gruppe nach vorn. Würden dadurch
+mehr als acht Felder vorn stehen, bleibt die ganze Gruppe hinten; Fachparameter
+behalten ihre Seite. Vorbelegte Richtungswerte ändern ihre Schemaseite nicht.
 
 | Datei | Besonderheit |
 |---|---|

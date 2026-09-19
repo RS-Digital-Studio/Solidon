@@ -5073,21 +5073,29 @@ def test_the_tree_names_the_step_a_body_came_from(window: MainWindow) -> None:
     assert "Modell laden" in tip, tip
 
 
-def test_the_tree_explains_editability_without_cad_vocabulary(window: MainWindow) -> None:
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+def test_the_tree_explains_editability_without_cad_vocabulary(
+    window: MainWindow, kind: str
+) -> None:
     """Die Körperart nennt die Folge, nicht den Namen des Rechenkerns."""
-    window.session.import_model(MESHES / "cube_clean.stl")
+    window.session.apply(
+        "Werkstück",
+        [
+            OperationDraft(
+                op="create_brep_box" if kind == "brep" else "create_box",
+                params={"name": "Werkstück"},
+            )
+        ],
+    )
     window.session.wait_for_idle()
     result = window.session.evaluate_now()
-    body = dataclasses.replace(result.scene.objects["obj_1"], name="Werkstück", kind="brep")
-    scene = dataclasses.replace(result.scene, objects={"obj_1": body})
-
-    window.object_tree.show_scene(
-        dataclasses.replace(result, scene=scene), window.session.project.document
-    )
+    assert result.scene.objects["obj_1"].kind == kind
+    window.object_tree.show_scene(result, window.session.project.document)
 
     item = window.object_tree.tree.topLevelItem(0)
-    assert "weiter bearbeitbar" in item.text(0)
-    assert "Flächen und Kanten einzeln bearbeitbar" in item.toolTip(0)
+    assert item.text(0) == "Werkstück"
+    assert "Flächen und Kanten bearbeitbar" in item.toolTip(0)
+    assert ("echte Kurven" if kind == "brep" else "geraden Teilstücken") in item.toolTip(0)
     customer_text = f"{item.text(0)} {item.toolTip(0)}".casefold()
     assert "b-rep" not in customer_text
     assert "exakt" not in customer_text
@@ -18023,3 +18031,266 @@ def test_hiding_from_a_feature_row_names_the_body(window: MainWindow) -> None:
     # Menütext, nicht den Abbau; die Auswahl geht deshalb vorher weg.
     window.object_tree.select_object(None)
     QApplication.processEvents()
+
+
+@pytest.mark.parametrize("operation", ["brep_to_mesh", "union_objects"])
+def test_exact_conversion_is_shown_before_apply_even_without_volume_change(window, operation):
+    """Das Band nennt die wirkliche Bauartänderung, während das Dokument unverändert bleibt."""
+    window.session.apply(
+        "Zwei Körper",
+        [
+            OperationDraft(op="create_box", params={"name": "Netz", "width": 40.0}),
+            OperationDraft(op="create_brep_box", params={"name": "Werkzeug", "x": 10.0}),
+        ],
+    )
+    assert window.session.wait_for_idle()
+    before = window.session.last_result
+    inputs = ("obj_2",) if operation == "brep_to_mesh" else ("obj_1", "obj_2")
+    _scene, difference, reason = window.session._preview_outcome(
+        [OperationDraft(op=operation, inputs=inputs)]
+    )
+    assert difference is not None
+    assert not reason
+    window._show_preview(difference)
+    text = window.viewport.banner.note.text()
+    assert str(REGISTRY.get(operation).title) in text
+    assert "Werkzeug" in text
+    assert "wandelt" in text and "Dreiecksmodell" in text
+    assert "bleiben bearbeitbar" in text
+    assert "Rückgängig" in text
+    assert text.count("wandelt") == 1
+    assert window.session.last_result is before
+    assert window.session.last_result.scene.objects["obj_2"].kind == "brep"
+    assert len(window.session.project.document.ops) == 2
+    window._clear_preview()
+
+
+def test_an_exact_body_keeps_its_kind_when_the_preview_triangle_limit_is_low(session, monkeypatch):
+    """Viele Anzeigedreiecke machen den exakten Eingabekörper nicht zum groben Netz."""
+    from app.ui import session as session_module
+
+    session.apply("Rundkörper", [OperationDraft(op="create_brep_cylinder")])
+    assert session.wait_for_idle()
+    before = session.last_result
+    monkeypatch.setattr(session_module, "COARSE_PREVIEW_ABOVE", 1)
+    assert session_module._coarse_drafts(before.scene) == []
+    coarse = []
+    scene, difference, reason = session._preview_outcome(
+        [OperationDraft(op="scale_object", inputs=("obj_1",), params={"factor": 2.0})],
+        coarsened=coarse.append,
+    )
+    assert scene.objects["obj_1"].kind == "brep"
+    assert difference is not None
+    assert not reason
+    assert coarse == []
+    assert session.last_result is before
+    assert not any(f.converts_exact_body for f in difference.findings)
+
+
+def test_editing_a_step_includes_conversion_information_from_its_suffix(session):
+    """Die spätere Umwandlung gehört zum Ergebnis der geänderten früheren Operation."""
+    session.apply(
+        "Körper und Folgeänderung",
+        [
+            OperationDraft(op="create_brep_box"),
+            OperationDraft(op="translate_object", inputs=("obj_1",), params={"dx": 5.0}),
+            OperationDraft(op="brep_to_mesh", inputs=("obj_1",)),
+        ],
+    )
+    assert session.wait_for_idle()
+    before = session.last_result
+    scene, difference, reason = session._preview_outcome(
+        [], change_op=2, change_values={"dx": 10.0}
+    )
+    assert difference is not None
+    assert not reason
+    assert scene.objects["obj_1"].kind == "mesh"
+    converted = [f for f in difference.findings if f.code == "evaluate.exact_became_mesh"]
+    assert len(converted) == 1
+    assert converted[0].op_id == 3
+    assert converted[0].values["input_object"] == "obj_1"
+    assert session.last_result is before
+
+
+@pytest.mark.parametrize(
+    "original,target,kind",
+    [("create_brep_box", "create_box", "mesh"), ("create_box", "create_brep_box", "brep")],
+)
+def test_a_history_preview_uses_the_chosen_twin_without_changing_the_document(
+    session, original, target, kind
+):
+    """Synchroner und asynchroner Vorschauweg rechnen den gewählten Zwilling samt Folgeschritt."""
+    import copy
+
+    values = {"width": 40.0, "depth": 30.0, "height": 20.0, "name": "Grundkörper"}
+    session.apply(
+        "Körper mit Folgebewegung",
+        [
+            OperationDraft(op=original, params=values),
+            OperationDraft(op="translate_object", inputs=("obj_1",), params={"dx": 10.0}),
+        ],
+    )
+    assert session.wait_for_idle()
+    document_before = copy.deepcopy(session.project.document)
+    result_before = session.last_result
+    selected_values = {**values, "width": 50.0}
+    scene, difference, reason = session._preview_outcome(
+        [], change_op=1, change_name=target, change_values=selected_values
+    )
+    assert not reason
+    assert difference is not None
+    assert scene.objects["obj_1"].kind == kind
+    assert scene.objects["obj_1"].mesh.volume == pytest.approx(30000.0)
+    assert scene.objects["obj_1"].mesh.bounds.size == pytest.approx((50.0, 30.0, 20.0))
+    assert scene.objects["obj_1"].mesh.bounds.centre[0] == pytest.approx(10.0)
+    converted = [f for f in difference.findings if f.converts_exact_body]
+    assert len(converted) == (1 if kind == "mesh" else 0)
+    if converted:
+        assert converted[0].values["op"] == target
+        assert converted[0].values["input_name"] == "Grundkörper"
+        assert converted[0].op_id == 1
+
+    shown, reasons, failures = [], [], []
+    session.preview_async(
+        shown.append,
+        change_op=1,
+        change_name=target,
+        change_values=selected_values,
+        explained=reasons.append,
+        failed=failures.append,
+    )
+    assert session.wait_for_idle()
+    assert not failures and not reasons
+    assert len(shown) == 1 and shown[0] is not None
+    assert shown[0].added_volume == pytest.approx(6000.0, abs=1e-4)
+    assert sum(f.converts_exact_body for f in shown[0].findings) == len(converted)
+    assert session.project.document == document_before
+    assert session.last_result is result_before
+    assert session.project.document.ops[0].op == original
+
+
+def test_an_agent_preview_uses_new_parameters_and_the_proposed_print_target(session):
+    """Neue Maße und Druckwerte gelten schon in derselben Vorschau wie die Operation."""
+    import copy
+
+    from app.core.backends.llm import Reply, ToolCall
+    from tests.scripted_backend import ScriptedBackend
+
+    session.apply(
+        "Grundkörper",
+        [
+            OperationDraft(
+                op="create_brep_box", params={"width": 20.0, "depth": 10.0, "height": 8.0}
+            )
+        ],
+    )
+    assert session.wait_for_idle()
+    before = copy.deepcopy(session.project.document)
+    result_before = session.last_result
+    material = "petg" if before.material != "petg" else "pla"
+    backend = ScriptedBackend(
+        answers=[
+            Reply(
+                tool_calls=(
+                    ToolCall(
+                        id="1",
+                        name="add_parameter",
+                        arguments={
+                            "name": "factor",
+                            "value": 2.0,
+                            "unit": "",
+                        },
+                    ),
+                )
+            ),
+            Reply(
+                tool_calls=(
+                    ToolCall(
+                        id="2",
+                        name="set_print_target",
+                        arguments={
+                            "printer": "centauri-carbon-2",
+                            "material": material,
+                        },
+                    ),
+                )
+            ),
+            Reply(
+                tool_calls=(
+                    ToolCall(
+                        id="3",
+                        name="scale_object",
+                        arguments={
+                            "objects": ["obj_1"],
+                            "factor": "=@factor",
+                        },
+                    ),
+                )
+            ),
+            Reply(text="Der Körper ist doppelt so groß."),
+        ]
+    )
+
+    preview = session.run_proposal("Verdopple den Körper mit einem Hauptmaß.", backend)
+
+    assert preview.proposal.invalid_calls == 0
+    assert preview.difference is not None
+    assert preview.scene.objects["obj_1"].kind == "brep"
+    assert preview.scene.objects["obj_1"].mesh.bounds.size == pytest.approx((40.0, 20.0, 16.0))
+    assert preview.scene.parameters["factor"].value == pytest.approx(2.0)
+    assert preview.scene.profile.material.id == material
+    assert session.project.document == before
+    assert session.last_result is result_before
+
+    transaction = session.accept_proposal(preview)
+    assert transaction is not None
+    assert session.wait_for_idle()
+    assert len(session.project.document.transactions) == len(before.transactions) + 1
+    assert session.project.document.material == material
+    assert session.last_result.scene.objects["obj_1"].mesh.bounds.size == pytest.approx(
+        preview.scene.objects["obj_1"].mesh.bounds.size
+    )
+    assert session.undo() is not None
+    assert session.wait_for_idle()
+    assert session.project.document.parameters == before.parameters
+    assert session.project.document.material == before.material
+    assert session.project.document.ops == before.ops
+
+
+def test_an_agent_parameter_change_has_a_preview_without_new_operations(session):
+    """Ein geändertes Hauptmaß bewegt vorhandene Geometrie auch ohne neuen Operationsschritt."""
+    from app.core.backends.llm import Reply, ToolCall
+    from tests.scripted_backend import ScriptedBackend
+
+    assert session.add_parameter(Parameter(name="width", value=20.0))
+    session.apply(
+        "Grundkörper", [OperationDraft(op="create_brep_box", params={"width": "=@width"})]
+    )
+    assert session.wait_for_idle()
+    result_before = session.last_result
+    backend = ScriptedBackend(
+        answers=[
+            Reply(
+                tool_calls=(
+                    ToolCall(
+                        id="1",
+                        name="set_parameter",
+                        arguments={
+                            "name": "width",
+                            "value": 30.0,
+                        },
+                    ),
+                )
+            ),
+            Reply(text="Die Breite beträgt 30 mm."),
+        ]
+    )
+
+    preview = session.run_proposal("Ändere das Hauptmaß auf 30 mm.", backend)
+
+    assert preview.proposal.invalid_calls == 0
+    assert not preview.proposal.drafts
+    assert preview.difference is not None
+    assert preview.scene.objects["obj_1"].mesh.bounds.size[0] == pytest.approx(30.0)
+    assert session.project.document.parameters["width"].value == pytest.approx(20.0)
+    assert session.last_result is result_before

@@ -471,6 +471,119 @@ def test_a_locked_panel_says_why_before_anyone_clicks(qt_app: QApplication) -> N
     assert panel._apply.toolTip() == panel._armed_title.text(), "wieder der Titel der Handlung"
 
 
+def test_preview_block_keeps_fields_and_cancel_available(qt_app: QApplication) -> None:
+    """Die Vorschau sperrt nur Übernehmen und überlebt Feld- und Sperrwechsel."""
+    identifier, feature = a_hole()
+    panel = FeaturePanel()
+    panel.show_feature(identifier, feature)
+    panel.set_measuring(True)
+    requested: list[Any] = []
+    cancelled: list[bool] = []
+    panel.operationRequested.connect(lambda *args: requested.append(args))
+    panel.cancelRequested.connect(lambda: cancelled.append(True))
+    spin = next(
+        field
+        for field in panel.findChildren(LengthSpin)
+        if "Bohrung ändern" in field.accessibleName() and "Durchmesser" in field.accessibleName()
+    )
+    reason = "Die Vorschau wird berechnet. Bitte das Ergebnis abwarten."
+    panel.block_apply(reason)
+    spin.set_value_mm(6.0)
+    panel.set_locked("Die Kette hält an Schritt 2 an.")
+    panel.set_locked("")
+
+    assert spin.isEnabled() and panel._cancel.isEnabled() and panel._in_view.isEnabled()
+    assert panel._cancel.isVisibleTo(panel)
+    assert not panel.can_accept() and not panel._apply.isEnabled()
+    assert panel._apply.toolTip() == reason
+    assert panel._apply.statusTip() == reason
+    assert panel._apply.accessibleDescription() == reason
+    assert panel._lock_note.isVisibleTo(panel) and panel._lock_note.text() == reason
+    panel._apply.click()
+    panel._run_armed()
+    assert not requested
+    panel._cancel.click()
+    assert cancelled == [True]
+
+    panel.block_apply(None)
+    assert panel.can_accept() and panel._apply.isEnabled()
+    assert panel._apply.toolTip() == panel._armed_title.text()
+    assert not panel._lock_note.isVisibleTo(panel)
+    panel.preview_check = lambda: False
+    panel._apply.click()
+    assert not requested
+    panel.preview_check = None
+    panel._apply.click()
+    assert len(requested) == 1
+    assert requested[0][0] == "resize_hole"
+    assert requested[0][1]["diameter"] == pytest.approx(6.0)
+
+
+def test_changed_handling_invalidates_preview_without_editing_a_value(qt_app: QApplication) -> None:
+    """Auch ein Fokuswechsel braucht die Vorschau seiner eigenen Handlung."""
+    identifier, feature = a_hole()
+    panel = FeaturePanel()
+    mesh = plate()
+    panel.show_feature(identifier, feature, features=features.detect(mesh), mesh=mesh)
+    resize = next(key for key, entry in panel._runs.items() if entry.op == "resize_hole")
+    move = next(key for key, entry in panel._runs.items() if entry.op == "move_feature")
+    panel._arm(resize)
+    panel._every.setChecked(True)
+    previews: list[Any] = []
+
+    def preview(op: str, params: dict[str, Any]) -> None:
+        previews.append((op, params, panel.preview_targets(op), panel._armed_title.text()))
+        panel.block_apply("Die Vorschau wird berechnet. Bitte das Ergebnis abwarten.")
+
+    panel.valuesChanged.connect(preview)
+    panel._arm(move)
+    assert len(previews) == 1
+    assert previews[0][0] == "move_feature"
+    assert previews[0][1]["at_feature"] == identifier
+    assert previews[0][2][0] == identifier
+    assert previews[0][3] == "Merkmal verschieben"
+    assert not panel.can_accept()
+    panel._arm(move)
+    assert len(previews) == 1
+
+
+def test_return_rechecks_preview_permission_after_interpreting_text(qt_app: QApplication) -> None:
+    """Enter schreibt den Text fest und darf dabei keine alte Freigabe verwenden."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    identifier, feature = a_hole()
+    panel = FeaturePanel()
+    panel.show_feature(identifier, feature)
+    requested: list[Any] = []
+    changed: list[Any] = []
+    panel.operationRequested.connect(lambda *args: requested.append(args))
+
+    def changed_values(op: str, values: dict[str, Any]) -> None:
+        changed.append((op, values))
+        panel.block_apply("Die Vorschau wird berechnet. Bitte das Ergebnis abwarten.")
+
+    panel.valuesChanged.connect(changed_values)
+    spin = next(
+        field
+        for field in panel.findChildren(LengthSpin)
+        if "Bohrung ändern" in field.accessibleName() and "Durchmesser" in field.accessibleName()
+    )
+    spin.setKeyboardTracking(False)
+    editor = spin.lineEdit()
+    assert editor is not None
+    editor.setText("6")
+    assert not changed and panel.can_accept()
+    QTest.keyClick(editor, Qt.Key.Key_Return)
+
+    assert changed and changed[-1][1]["diameter"] == pytest.approx(6.0)
+    assert not requested and not panel.can_accept()
+    panel.block_apply(None)
+    QTest.keyClick(editor, Qt.Key.Key_Return)
+    assert len(requested) == 1
+    assert requested[0][1]["diameter"] == pytest.approx(6.0)
+
+
 def test_a_locked_panel_stays_locked_when_the_next_feature_is_shown(
     qt_app: QApplication,
 ) -> None:
@@ -1397,17 +1510,33 @@ def test_the_all_alike_box_names_every_sibling(qt_app: QApplication) -> None:
     )
     panel._arm(schluessel)
     assert panel._every.isVisibleTo(panel), "die Bohrung hat gleichartige Geschwister"
+    previews: list[Any] = []
+
+    def preview(op: str, params: dict[str, Any]) -> None:
+        previews.append((op, params, panel.preview_targets(op)))
+        panel.block_apply("Die Vorschau wird berechnet. Bitte das Ergebnis abwarten.")
+
+    panel.valuesChanged.connect(preview)
+    assert panel.preview_targets("move_feature") == ()
     panel._every.setChecked(True)
+    assert len(previews) == 1 and not panel.can_accept()
+    panel._apply.click()
+    assert not fuer_alle and not einzeln
+    panel.block_apply(None)
     panel._apply.click()
 
     assert not einzeln, "gesetzt heißt: nicht nur dieses eine"
     assert fuer_alle, "die Sammelhandlung wurde nicht gemeldet"
-    op, _params, ids = fuer_alle[-1]
+    op, params, ids = fuer_alle[-1]
+    assert previews[-1] == (op, params, tuple(ids))
     from app.core.perceive.relations import alike_for_action
 
     group = alike_for_action(op, identifier, available, mesh)
     assert ids[0] == identifier
     assert set(ids) == {member.target for member in group.members}
+    panel._every.setChecked(False)
+    assert len(previews) == 2 and previews[-1][2] == ()
+    assert not panel.can_accept()
 
 
 def spread(panel: FeaturePanel, scroller: QScrollArea, height: int) -> int:

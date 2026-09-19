@@ -54,6 +54,40 @@ def bone(
     window._on_bone_point(tail)
 
 
+def test_exact_armature_gestures_reach_the_guarded_operation_dialog(window: MainWindow) -> None:
+    """Skelett zeichnen übergibt erst an den Editor, dessen Vorschau die Konvertierung zeigt."""
+    from app.core.brep.kernel import available
+    from app.core.scene.history import OperationDraft
+
+    if not available():
+        pytest.skip("OpenCASCADE is an optional dependency")
+    assert window.session.apply(
+        "Quader",
+        [OperationDraft("create_brep_box", params={"width": 20.0, "depth": 20.0, "height": 20.0})],
+    )
+    assert window.session.wait_for_idle(30_000)
+    identifier = next(iter(window.session.last_result.scene.objects))
+    window.object_tree.select_object(identifier)
+    window.start_armature(identifier)
+    bone(window, (10.0, 10.0, 0.0), (10.0, 10.0, 20.0))
+    before = len(window.session.project.document.ops)
+    window.finish_armature()
+    dialog = window._op_dialog
+    assert dialog is not None and dialog.spec.name == "pose_armature"
+    bones = armature_from_text(str(dialog.values()["armature"]))
+    assert len(bones) == 1 and bones[0].tail == (10.0, 10.0, 20.0)
+    dialog.accept()
+    assert len(window.session.project.document.ops) == before
+    assert window.session.wait_for_idle(30_000)
+    assert window._preview_approval.displayed
+    assert "geraden Teilstücken" in window.viewport._preview_note
+    assert len(window.session.project.document.ops) == before
+    dialog.accept()
+    assert window.session.wait_for_idle(30_000)
+    assert window.session.last_result.scene.objects[identifier].kind == "mesh"
+    assert window.session.project.document.ops[-1].op == "pose_armature"
+
+
 # --- hinein und heraus ----------------------------------------------------------
 
 

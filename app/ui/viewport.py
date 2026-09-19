@@ -3720,6 +3720,10 @@ class Viewport(QWidget):
     """Die Ansichtsaufbereitung brach ab; die letzte gültige Ansicht bleibt."""
     sceneApplied = Signal()
     """Die neue Szene ist übernommen; abhängige Regler können ihre Grenzen lesen."""
+    differenceApplied = Signal(object)
+    """Diese vollständige Vorschau wurde aufbereitet und dem Renderer übergeben."""
+    differenceFailed = Signal(object, str)
+    """Die Aufbereitung dieser Vorschau scheiterte; eine Übernahme bleibt gesperrt."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -4315,6 +4319,7 @@ class Viewport(QWidget):
         self._difference_meshes: dict[str, Any] | None = None
         self._difference_display_cache: dict[str, Any] = {}
         self._difference_pending = False
+        self._displayed_difference: Any = None
         self._difference_failed = False
         self._difference_uncapped = False
         self._preview_note = ""
@@ -6162,6 +6167,9 @@ class Viewport(QWidget):
         self._order_by_depth()
         self._layout_feature_labels()
         self.renderer.render()
+        if self._difference_is_ready():
+            self._displayed_difference = self._difference
+            self.differenceApplied.emit(self._difference)
 
     def _slot_colours(self, mesh: Any, entry: Any, face_count: int) -> CellColours | None:
         """Die Zellfarben eines Körpers — aus seinen Materialslots oder aus der
@@ -10502,6 +10510,22 @@ class Viewport(QWidget):
     def difference(self) -> Any | None:
         return self._difference
 
+    def is_difference_applied(self, difference: Any) -> bool:
+        """Nur das vollständige sichtbare Ergebnis kann eine Übernahme freigeben."""
+        return difference is self._displayed_difference and self._difference_is_ready()
+
+    def _difference_is_ready(self) -> bool:
+        """Die aktuelle Darstellung enthält alle aufbereiteten Vorschaukörper."""
+        return (
+            self._difference is not None
+            and self.renderer is not None
+            and self._difference_meshes is not None
+            and not self._difference_pending
+            and not self._difference_failed
+            and not self._difference_held
+            and self._map is None
+        )
+
     def mark_preview(self, note: str, hint: str = "", *, changes: bool = True) -> None:
         """Sagt im Bild, dass die gezeigte Änderung noch nicht übernommen ist.
 
@@ -10569,6 +10593,7 @@ class Viewport(QWidget):
             self._scene_leash.retire(previous)
             self._difference_worker = None
         self._difference_meshes = None
+        self._displayed_difference = None
         self._difference_pending = False
         self._difference_failed = False
         self._difference_uncapped = False
@@ -10648,6 +10673,7 @@ class Viewport(QWidget):
         self._difference_failed = True
         _log.warning("preview preparation: %s", detail)
         self._refresh_preview_banner()
+        self.differenceFailed.emit(self._difference, detail)
 
     def _difference_worker_done(self, worker: _SceneMeshWorker) -> None:
         """Den ausgelaufenen Vorschauaufbereiter identitätssicher freigeben."""

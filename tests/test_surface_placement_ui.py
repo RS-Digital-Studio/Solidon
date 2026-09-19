@@ -896,6 +896,84 @@ def test_edit_uses_the_input_before_later_transforms(flow: Any) -> None:
     assert viewport.result is final
 
 
+def test_historical_placement_switches_between_input_and_complete_preview(
+    flow: Any, monkeypatch: Any
+) -> None:
+    """Spätere Körper bleiben im Ergebnis; neue Treffer warten auf den Originaleingang."""
+    controller, session, viewport, dialog = flow
+    object_id = controller.inputs_of()[0]
+    assert session.apply(
+        "Bohrung", [OperationDraft(op="drill_hole", inputs=(object_id,), params={})]
+    )
+    assert session.wait_for_idle(30_000)
+    drill = session.project.document.ops[-1]
+    assert session.apply("Späterer Körper", [OperationDraft(op="create_brep_box", params={})])
+    assert session.wait_for_idle(30_000)
+    final = session.last_result
+    controller._change_op = drill.id
+    controller.start()
+    assert session.wait_for_idle(30_000)
+    prefix = controller._result
+    assert set(prefix.scene.objects) == {object_id}
+    assert len(final.scene.objects) == 2
+    _point(controller, session)
+    assert controller._surface is not None
+    steps = len(session.project.document.ops)
+    shown = []
+    apply_scene = viewport.show_scene
+    monkeypatch.setattr(viewport, "show_scene", shown.append)
+
+    assert not controller.show_preview_base()
+    assert shown == [final]
+    assert controller._result is prefix
+    controller.redraw()
+    assert not controller._accept.isEnabled()
+    controller.accept()
+    assert controller.active
+    assert len(session.project.document.ops) == steps
+    assert not controller.show_preview_base()
+    assert shown == [final], "do not restart pending scene preparation"
+
+    apply_scene(final)
+    assert controller.show_preview_base()
+    assert viewport.result is final
+    assert set(viewport.result.scene.objects) == set(final.scene.objects)
+    assert controller._result is prefix
+    controller.redraw()
+    assert controller._accept.isEnabled()
+    checked = []
+    monkeypatch.setattr(dialog, "can_accept", lambda: checked.append(True) or False)
+    monkeypatch.setattr(controller, "deepens", lambda: False)
+    controller.accept()
+    assert checked == [True], "the complete scene must reach the current preview guard"
+    assert controller.active
+
+    hits = []
+    hit = viewport.placement_hit
+    monkeypatch.setattr(
+        viewport, "placement_hit", lambda x, y: hits.append(viewport.result) or hit(x, y)
+    )
+    controller._pending = (320, 240, False)
+    controller._next_surface()
+    assert shown == [final, prefix]
+    assert not hits
+    assert controller._pending is not None
+    controller._next_surface()
+    assert shown == [final, prefix]
+    assert not hits
+    apply_scene(prefix)
+    assert session.wait_for_idle(30_000)
+    assert hits == [prefix], "never use final-scene cell indices for the historical input"
+    assert controller._surface is not None
+    assert controller._result is prefix
+    assert len(session.project.document.ops) == steps
+
+    monkeypatch.setattr(viewport, "show_scene", apply_scene)
+    controller.back()
+    assert viewport.result is final
+    assert not controller.active
+
+
 def test_an_invalid_historical_step_can_be_placed_again(flow: Any) -> None:
     """Die fertige Auswertung darf fehlerhaft sein, ihr gesunder Eingang bleibt bearbeitbar."""
     controller, session, viewport, _dialog = flow
@@ -1952,7 +2030,43 @@ def test_the_button_shows_the_answer_it_no_longer_holds(flow: Any) -> None:
         controller.dispose()
 
 
-def test_the_flow_runs_on_a_host_without_a_window(qt_app: QApplication) -> None:
+def test_quiet_host_keeps_permission_for_identical_known_values(qt_app: QApplication) -> None:
+    """Nur echte Wertänderungen verwerfen die Freigabe; gesperrt endet nichts."""
+    from app.ui.placement_flow import QuietHost
+
+    accepted: list[Any] = []
+    finished: list[int] = []
+    changes: list[Any] = []
+    host = QuietHost({"diameter": 5.0}, accepted.append, known={"diameter"})
+    host.finished.connect(finished.append)
+
+    def changed() -> None:
+        changes.append(host.values())
+        host.block_apply("Die Vorschau wird berechnet. Bitte das Ergebnis abwarten.")
+
+    host.valuesChanged.connect(changed)
+    host.take_placement({"diameter": 6.0, "nx": 1.0})
+    assert changes == [{"diameter": 6.0}]
+    assert not host.can_accept()
+    host.accept()
+    assert not accepted and not finished
+    host.block_apply(None)
+    host.take_placement({"diameter": 6.0, "nx": 0.0})
+    assert changes == [{"diameter": 6.0}]
+    assert host.can_accept()
+    host.preview_check = lambda: False
+    host.accept()
+    assert not accepted and not finished
+    host.preview_check = None
+    host.accept()
+    assert accepted == [{"diameter": 6.0}]
+    assert finished == [1]
+
+
+@pytest.mark.parametrize("preview_required", [False, True], ids=["mesh", "protected-preview"])
+def test_the_flow_runs_on_a_host_without_a_window(
+    qt_app: QApplication, preview_required: bool
+) -> None:
     """Dieselbe Platzierung, nur ohne Dialog darunter.
 
     `PlacementFlow` hing an einem `OperationDialog`: Er war sein Qt-Elternteil,
@@ -1985,6 +2099,13 @@ def test_the_flow_runs_on_a_host_without_a_window(qt_app: QApplication) -> None:
         spec = REGISTRY.get("drill_hole")
 
         host = QuietHost({"diameter": 5.0, "depth": 4.0}, übernommen.append)
+        host.preview_required = preview_required
+        if preview_required:
+            host.valuesChanged.connect(
+                lambda: host.block_apply(
+                    "Die Vorschau wird berechnet. Bitte das Ergebnis abwarten."
+                )
+            )
         assert isinstance(host, PlacementHost), "der Träger erfüllt den Vertrag"
         assert not host.isVisible(), "und zeigt nie ein Fenster"
 
@@ -2006,9 +2127,21 @@ def test_the_flow_runs_on_a_host_without_a_window(qt_app: QApplication) -> None:
 
         controller._deepening = True
         controller._depth_set = True
+        host.take_placement({"diameter": 6.0})
+        assert controller._tool_busy, "die neue Größe wird noch vorbereitet"
         controller.accept()
+        assert controller._accept_pending is not preview_required
+        assert session.wait_for_idle(30_000)
+        if preview_required:
+            assert not übernommen and controller.active
+            surface = controller._surface
+            controller.accept()
+            assert not übernommen and controller.active and controller._surface is surface
+            host.block_apply(None)
+            controller.accept()
         assert übernommen, "das Übernehmen erreicht den Rückruf"
-        assert übernommen[-1]["diameter"] == pytest.approx(5.0)
+        assert übernommen[-1]["diameter"] == pytest.approx(6.0)
+        assert not controller.active
     finally:
         if controller is not None:
             controller.dispose()

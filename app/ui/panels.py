@@ -1523,9 +1523,9 @@ class ObjectTree(QWidget):
             # CAD-Wissen voraus und lassen das Dreiecksmodell wie die
             # schlechtere Wahl aussehen.
             kind = (
-                tr("Flächen und Kanten einzeln bearbeitbar")
+                tr("Flächen und Kanten bearbeitbar; Rundungen als echte Kurven")
                 if entry.kind == "brep"
-                else tr("Einzelne Flächen und Kanten nicht bearbeitbar")
+                else tr("Flächen und Kanten bearbeitbar; Rundungen aus geraden Teilstücken")
             )
             tip = f"{object_id} · {kind} · {entry.mesh.triangle_count} {tr('Dreiecke')} · {state}"
             if entry.material:
@@ -1545,10 +1545,6 @@ class ObjectTree(QWidget):
             definitions = slots_for_object(entry)
             occupied = set(used_slots(mesh))
             self._show_filament(item, tuple(slot for slot in definitions if slot.index in occupied))
-            if entry.kind == "brep":
-                # Die ausführliche Folge steht im Tooltip; im schmalen Baum
-                # muss die zweite Kodierung vollständig lesbar bleiben.
-                item.setText(0, f"{entry.name}  ·  {tr('weiter bearbeitbar')}")
             if object_id in self._hidden:
                 # Zeichen und Wort: eine ausgegraute Zeile allein wäre Farbe als
                 # einzige Kodierung (Regel 18).
@@ -4699,6 +4695,7 @@ class _Handling:
     run: Callable[[], None]
     op: str
     members: int
+    values: Callable[[], dict[str, Any]]
     take: Callable[[Mapping[str, Any]], None] | None = None
     """Werte von außen in die Felder dieser Handlung schreiben.
 
@@ -4916,6 +4913,8 @@ class FeaturePanel(QWidget):
 
         Gesetzt vom Fenster über :meth:`set_locked`, aus derselben Auskunft,
         mit der es Menü, Werkzeugzeile und Befehlspalette sperrt."""
+        self._apply_blocked_reason: str | None = None
+        self.preview_check: Callable[[], bool] | None = None
         # **Die Reihenfolge ist eine Aussage:** Titel, der Weg ins Bild, der
         # Haken, das Übernehmen, das Verwerfen. Der Haken gehört unmittelbar
         # über den Knopf, dessen Umfang er ändert — ein Knopf dazwischen machte
@@ -4943,6 +4942,7 @@ class FeaturePanel(QWidget):
         below.addWidget(self._in_view)
         self._every = QCheckBox("", self._footer)
         self._every.setVisible(False)
+        self._every.toggled.connect(self._group_changed)
         below.addWidget(self._every)
         self._apply = make_primary(QPushButton(tr("Übernehmen"), self._footer))
         self._apply.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
@@ -5377,6 +5377,8 @@ class FeaturePanel(QWidget):
         self._rows.insertWidget(self._rows.count() - 1, details)
         self._built.append(details)
         self._settle_apply()
+        if (entered := self.preview_values()) is not None:
+            self.valuesChanged.emit(*entered)
 
     def show_edge(self, key: str, title: str) -> None:
         """Was sich an dieser **Kante** tun lässt — verrunden und fasen.
@@ -5578,6 +5580,49 @@ class FeaturePanel(QWidget):
         self._locked = reason
         self._settle_lock()
 
+    def block_apply(self, reason: str | None) -> None:
+        """Sperrt nur Übernehmen; Werte und Abbrechen bleiben erreichbar."""
+        self._apply_blocked_reason = reason
+        self._settle_apply_block()
+
+    def can_accept(self) -> bool:
+        """Ob die aktuelle Handlung mit den aktuellen Werten übernommen werden darf."""
+        if self._locked or not self._apply_stands() or self._armed not in self._runs:
+            return False
+        current = self.preview_check is None or self.preview_check()
+        return current and self._apply_allowed()
+
+    def preview_values(self) -> tuple[str, dict[str, Any]] | None:
+        """Die aktive Handlung aus derselben Wertequelle wie ihre Übernahme lesen."""
+        entry = self._runs.get(self._armed or "")
+        if entry is None or entry.op == "None":
+            return None
+        return entry.op, entry.values()
+
+    def _apply_allowed(self) -> bool:
+        """Die lokalen Sperren ohne erneuten Aufruf des Vorschauverwalters prüfen."""
+        return (
+            not self._locked
+            and self._apply_blocked_reason is None
+            and self._apply_stands()
+            and self._armed in self._runs
+        )
+
+    def _settle_apply_block(self) -> None:
+        """Hält Sperrgrund und Auskunft am gemeinsamen Übernehmen zusammen."""
+        reason = self._locked or self._apply_blocked_reason
+        self._apply.setEnabled(self._apply_allowed())
+        self._lock_note.setText(reason or "")
+        self._lock_note.setVisible(bool(reason) and bool(self._built))
+        if reason is not None:
+            self._apply.setToolTip(reason)
+            self._apply.setStatusTip(reason)
+            self._apply.setAccessibleDescription(reason)
+        elif (entry := self._runs.get(self._armed or "")) is not None:
+            self._apply.setToolTip(entry.title)
+            self._apply.setStatusTip(f"{entry.title} — {entry.reason}")
+            self._apply.setAccessibleDescription(entry.reason)
+
     def _settle_lock(self) -> None:
         """Sperrt oder gibt frei, was der gemeldete Grund gerade zulässt.
 
@@ -5619,6 +5664,8 @@ class FeaturePanel(QWidget):
         self._settle_in_view()
         if self._armed is not None:
             self._arm(self._armed)
+        else:
+            self._settle_apply_block()
 
     def _build_action(self, action: Any) -> QWidget:
         """Eine Handlung: Titel, ihre Felder untereinander, dann ihr Knopf.
@@ -5855,6 +5902,7 @@ class FeaturePanel(QWidget):
             in_view=in_view if step is None and _leads_into_the_view(op_name) else None,
             op=op_name,
             members=members,
+            values=lambda: self._values(entries, widgets, fixed),
         )
         if not entries:
             button = QPushButton(str(action.title), box)
@@ -6082,16 +6130,14 @@ class FeaturePanel(QWidget):
         entry = self._runs.get(key)
         if entry is None:
             return
+        changed = self._armed is not None and self._armed != key
         self._armed = key
         self._armed_title.setText(entry.title)
         self._armed_title.show()
         # **Der Titel steht am Knopf, nur nicht auf ihm.** Ein Bildschirmleser
         # liest den zugänglichen Namen, und „Übernehmen" allein sagte dort
         # nicht, was übernommen wird (§19.1).
-        self._apply.setStatusTip(f"{entry.title} — {entry.reason}")
-        self._apply.setToolTip(entry.title)
         self._apply.setAccessibleName(entry.title)
-        self._apply.setAccessibleDescription(entry.reason)
         self._apply.setVisible(True)
         applies_to_all = entry.members > 1
         if applies_to_all:
@@ -6105,8 +6151,12 @@ class FeaturePanel(QWidget):
             # **Ein Haken, der nicht gilt, wird auch nicht gehalten.** Sonst
             # stünde er ausgeblendet auf „an" und griffe wieder, sobald jemand
             # eine Handlung mit Gruppe anfasst.
-            self._every.setChecked(False)
+            with QSignalBlocker(self._every):
+                self._every.setChecked(False)
         self._every.setVisible(applies_to_all)
+        self._settle_apply_block()
+        if changed and entry.op != "None":
+            self.valuesChanged.emit(entry.op, entry.values())
 
     def take_values(self, op: str, values: Mapping[str, Any], *, arm: bool = True) -> bool:
         """Vorgeschlagene Zahlen in die Felder dieser Handlung — und sie scharf.
@@ -6135,6 +6185,10 @@ class FeaturePanel(QWidget):
 
     def _run_armed(self) -> None:
         """Führt aus, was der Knopf unten gerade meint."""
+        # interpretText im Tastaturweg kann synchron eine neue Vorschau
+        # auslösen und damit die vorherige Freigabe zurücknehmen.
+        if not self.can_accept():
+            return
         entry = self._runs.get(self._armed or "")
         if entry is not None:
             entry.run()
@@ -6202,6 +6256,24 @@ class FeaturePanel(QWidget):
         """
         if self._into_view is not None:
             self._into_view()
+
+    def _group_changed(self, _checked: bool) -> None:
+        """Ein geänderter Umfang braucht dieselbe Vorschau wie geänderte Maße."""
+        entry = self._runs.get(self._armed or "")
+        if entry is not None and entry.op != "None":
+            self.valuesChanged.emit(entry.op, entry.values())
+
+    def preview_targets(self, op: str) -> tuple[str, ...]:
+        """Ziele der Sammelhandlung, gewähltes zuerst; leer bei Einzelanwendung."""
+        every = self._every_for(op)
+        group = self._groups.get(op)
+        if every is None or not every.isChecked() or group is None or self._feature_id is None:
+            return ()
+        targets = [member.target for member in group.members]
+        if self._feature_id in targets:
+            targets.remove(self._feature_id)
+            targets.insert(0, self._feature_id)
+        return tuple(targets)
 
     def _every_for(self, op: str) -> QCheckBox | None:
         """Der Haken unten — aber nur, wenn diese Handlung eine Gruppe hat.
@@ -6428,14 +6500,10 @@ class FeaturePanel(QWidget):
         """
         params = self._values(fields, widgets, fixed)
         if every is not None and every.isChecked() and self._feature_id is not None:
-            group = self._groups.get(op)
-            if group is None:
+            targets = self.preview_targets(op)
+            if not targets:
                 return
-            targets = [member.target for member in group.members]
-            if self._feature_id in targets:
-                targets.remove(self._feature_id)
-                targets.insert(0, self._feature_id)
-            self.operationRequestedForEach.emit(op, params, targets)
+            self.operationRequestedForEach.emit(op, params, list(targets))
             return
         self.operationRequested.emit(op, params)
 

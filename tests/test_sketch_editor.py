@@ -1027,7 +1027,10 @@ def test_a_sketch_operation_opens_the_mode_not_a_dialog(qt_app: QApplication) ->
         window.deleteLater()
 
 
-def test_leaving_the_sketch_mode_empty_starts_no_operation(qt_app: QApplication) -> None:
+@pytest.mark.parametrize("keep", [True, False])
+def test_leaving_the_sketch_mode_empty_starts_no_operation(
+    qt_app: QApplication, keep: bool
+) -> None:
     """Wer nichts gezeichnet hat, hat nichts gemeint.
 
     Ohne das öffnete jedes versehentliche Escape einen Operationsdialog auf
@@ -1040,9 +1043,18 @@ def test_leaving_the_sketch_mode_empty_starts_no_operation(qt_app: QApplication)
     window = MainWindow(Session(), UiSettings())
     try:
         window.start_sketch("sketch_extrude")
-        window.finish_sketch(keep=True)
+        if keep:
+            assert window.sketch_finish_button.menu() is None
+            window.sketch_finish_button.click()
+        else:
+            window._escape()
         assert not window.sketching()
         assert not window.session.history.transactions, "nichts gezeichnet, nichts angewandt"
+        message = "Die Zeichnung ist leer. Es wurde nichts übernommen."
+        if keep:
+            assert window.status_message.text() == message
+        else:
+            assert window.status_message.text() != message
     finally:
         window.deleteLater()
 

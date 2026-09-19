@@ -74,6 +74,9 @@ if TYPE_CHECKING:
 
 _SEAL_PATH_COMPANIONS = frozenset({"support_feature", "opening_signature", "counterface"})
 
+#: Die kurze Vorderseite bleibt innerhalb der acht Felder aus Bauplan §35.
+_MAX_FRONT_FIELDS = 8
+
 #: Werte unterhalb dieser Größenordnung werden feiner angezeigt. Eine Toleranz
 #: von 0,075 mm wurde bei zwei Nachkommastellen beim Öffnen des Dialogs zu 0,08
 #: — eine stille Änderung an einer Zahl, die jemand gemessen hat.
@@ -1286,10 +1289,43 @@ def direction_fields(spec: OperationSpec) -> frozenset[str]:
 
     Die Namen der Normalen kennt das Register (:func:`normal_fields_of` — ein
     Rezept mit eigenem ``nx`` nennt sie ``surface_nx`` …); ``axis`` ist der
-    Rückfall, den die Operation nimmt, solange die drei null sind. Der Dialog
-    fragt hier, welche vorbelegten Werte er **nicht** nach vorn holt.
+    Rückfall, den die Operation nimmt, solange die drei null sind. Auch sie
+    kann bei einem Rezept umbenannt sein. Der Dialog fragt hier, welche
+    vorbelegten Werte er **nicht** nach vorn holt.
     """
-    return frozenset(normal_fields_of(spec)) | {"axis"}
+    from app.core.knowledge.parts.ops import placement_fields
+
+    return frozenset(normal_fields_of(spec)) | {placement_fields(spec.params)["axis"]}
+
+
+def _promoted_fields(spec: OperationSpec, given: Mapping[str, Any]) -> frozenset[str]:
+    """Entschiedene Werte nach vorn holen, eine Position immer als vollständige Gruppe."""
+    from app.core.knowledge.parts.ops import placement_fields
+
+    entries = spec.params.spec()
+    direction = direction_fields(spec)
+    promoted = {
+        entry.name
+        for entry in entries
+        if entry.name in given
+        and given[entry.name] != entry.default
+        and entry.name not in direction
+    }
+    placed = placement_fields(spec.params)
+    coordinates = {placed.get(axis, axis) for axis in ("x", "y", "z")}
+    if coordinates <= {entry.name for entry in entries} and coordinates & promoted:
+        front = {
+            entry.name
+            for entry in entries
+            if entry.placement == "front" or entry.kind == "armature" or entry.name in promoted
+        }
+        # Die Fachparameter behalten ihren Platz. Reicht die Vorderseite nicht
+        # für die ganze Position, bleiben auch deren entschiedene Werte hinten.
+        if len(front | coordinates) <= _MAX_FRONT_FIELDS:
+            promoted.update(coordinates)
+        else:
+            promoted.difference_update(coordinates)
+    return frozenset(promoted)
 
 
 class OperationDialog(QDialog):
@@ -1316,6 +1352,9 @@ class OperationDialog(QDialog):
 
     placement_flow: PlacementFlow | None = None
     seal_flow: SealFlow | None = None
+    preview_required = False
+    preview_order: Callable[[], Any] | None = None
+    preview_check: Callable[[], bool] | None = None
 
     def __init__(
         self,
@@ -1440,7 +1479,7 @@ class OperationDialog(QDialog):
         self._advanced_form = advanced
         self._rows: dict[str, QFormLayout] = {}
         """Welches Formular das Feld trägt; ein Variantenwechsel ersetzt sein Schema."""
-        direction = direction_fields(spec)
+        promoted = _promoted_fields(spec, given)
         for entry in spec.params.spec():
             if spec.name == "create_seal" and entry.name in _SEAL_PATH_COMPANIONS:
                 continue
@@ -1481,11 +1520,7 @@ class OperationDialog(QDialog):
             # eines Vektors tippt niemand von Hand, und ihre zwei Geschwister
             # blieben hinten. Richtung und Achse bleiben, wo das Schema sie
             # hinlegt; der Wert gilt trotzdem.
-            decided = (
-                entry.name in given
-                and given[entry.name] != entry.default
-                and entry.name not in direction
-            )
+            decided = entry.name in promoted
             target = (
                 front
                 if entry.placement == "front" or isinstance(editor, ArmatureField) or decided
@@ -1626,6 +1661,7 @@ class OperationDialog(QDialog):
                 ),
             )
             self._naming = naming
+            naming.toggled.connect(self.valuesChanged)
 
         if extra is not None:
             # **Vorn, nicht hinten.** Der Haken stand unter „Weitere
@@ -1802,13 +1838,14 @@ class OperationDialog(QDialog):
         button.setStatusTip(reason)
         button.setAccessibleDescription(reason)
 
-    def accept(self) -> None:
-        """Erst anwenden, wenn jede nachgereichte Quelle wirklich feststeht."""
-
+    def can_accept(self) -> bool:
+        """Alle Eingaben und die Freigabe derselben Vorschau erneut prüfen."""
+        for editor in (*self.findChildren(QSpinBox), *self.findChildren(QDoubleSpinBox)):
+            editor.interpretText()
         if any(field.pending for field in self._source_fields) or any(
             filament.pending for filament in self._filament_fields
         ):
-            return
+            return False
         if any(
             isinstance(
                 editor,
@@ -1817,14 +1854,20 @@ class OperationDialog(QDialog):
             and not editor.valid
             for editor in self._editors.values()
         ):
-            return
-        if (
+            return False
+        preview_ready = self.preview_check is None or self.preview_check()
+        return not (
             self._target_missing()
             or self._missing_sketch()
             or self._missing_material()
             or self._texture_face_missing()
             or self._blocked_reason is not None
-        ):
+            or not preview_ready
+        )
+
+    def accept(self) -> None:
+        """Erst anwenden, wenn jede nachgereichte Quelle wirklich feststeht."""
+        if not self.can_accept():
             return
         super().accept()
 
@@ -2612,6 +2655,7 @@ class OperationDialog(QDialog):
             self._rows.clear()
             self.spec = spec
             self._feature_focus = ""
+            promoted = _promoted_fields(spec, given)
             for entry in spec.params.spec():
                 if spec.name == "create_seal" and entry.name in _SEAL_PATH_COMPANIONS:
                     continue
@@ -2622,8 +2666,12 @@ class OperationDialog(QDialog):
                 self._watch(editor)
                 if entry.kind in ("feature", "features") or entry.targets_feature:
                     editor.installEventFilter(self)
-                decided = entry.name in given and given[entry.name] != entry.default
-                form = self._front if entry.placement == "front" or decided else self._advanced_form
+                decided = entry.name in promoted
+                form = (
+                    self._front
+                    if entry.placement == "front" or isinstance(editor, ArmatureField) or decided
+                    else self._advanced_form
+                )
                 # Der Artwähler bleibt nach den Feldern, nicht zwischen ihnen.
                 if form is self._front:
                     form.insertRow(

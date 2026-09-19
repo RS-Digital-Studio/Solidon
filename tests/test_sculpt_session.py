@@ -54,6 +54,83 @@ def with_a_body(window: MainWindow) -> str:
 # --- hinein und heraus ----------------------------------------------------------
 
 
+@pytest.fixture
+def exact_body(window: MainWindow) -> str:
+    """Ein unvernetzter Quader für die tatsächlichen Konvertierungswege."""
+    from app.core.brep.kernel import available
+    from app.core.scene.history import OperationDraft
+
+    if not available():
+        pytest.skip("OpenCASCADE is an optional dependency")
+    assert window.session.apply(
+        "Quader",
+        [OperationDraft("create_brep_box", params={"width": 20.0, "depth": 20.0, "height": 20.0})],
+    )
+    assert window.session.wait_for_idle(30_000)
+    identifier = next(iter(window.session.last_result.scene.objects))
+    window.object_tree.select_object(identifier)
+    return identifier
+
+
+def test_exact_sculpt_requires_the_latest_strokes_and_symmetry_before_finishing(
+    window: MainWindow, exact_body: str
+) -> None:
+    """Frühes Fertig schließt nichts; neue Gesten entwerten die alte Vorschau sofort."""
+    window.start_sculpt(exact_body)
+    before = len(window.session.project.document.ops)
+    window._on_sculpt((20.0, 20.0, 20.0))
+    first = window._preview_approval
+    assert first is not None and first.owner is window.sculpt_bar.done
+    assert not window.sculpt_bar.done.isEnabled()
+    window.finish_sculpt()
+    assert window.sculpting() and len(window.session.project.document.ops) == before
+    window._on_sculpt((0.0, 0.0, 20.0))
+    window.sculpt_bar.symmetry.setCurrentIndex(1)
+    latest = window._preview_approval
+    assert latest is not first and not window.sculpt_bar.done.isEnabled()
+    assert window.session.wait_for_idle(30_000)
+    assert latest.displayed and window.sculpt_bar.done.isEnabled()
+    assert window.sculpting() and len(window.session.project.document.ops) == before
+    assert "geraden Teilstücken" in window.viewport._preview_note
+    prepared = latest.order.drafts[0]
+    assert len(strokes_from_text(prepared.params["strokes"])) == 2
+    assert prepared.params["symmetry"] == "x"
+    window.sculpt_bar.done.click()
+    assert window.session.wait_for_idle(30_000)
+    assert not window.sculpting()
+    assert window.session.project.document.ops[-1].params == prepared.params
+    assert window.session.last_result.scene.objects[exact_body].kind == "mesh"
+    window.session.undo()
+    assert window.session.wait_for_idle(30_000)
+    assert window.session.last_result.scene.objects[exact_body].kind == "brep"
+
+
+def test_exact_refinement_waits_for_the_current_brush_without_auto_applying(
+    window: MainWindow, exact_body: str
+) -> None:
+    """Die bestehende Vernetzungshandlung übernimmt nur ihren zuletzt geprüften Radius."""
+    window.start_sculpt(exact_body)
+    before = len(window.session.project.document.ops)
+    window.refine_for_sculpt()
+    first = window._preview_approval
+    assert first is not None and first.owner is window.sculpt_bar.refine
+    first_edge = first.order.drafts[0].params["edge"]
+    window.refine_for_sculpt()
+    assert len(window.session.project.document.ops) == before
+    window.sculpt_bar.radius.set_value_mm(8.0)
+    latest = window._preview_approval
+    assert latest is not first and latest.order.drafts[0].params["edge"] > first_edge
+    assert not window.sculpt_bar.refine.isEnabled()
+    assert window.session.wait_for_idle(30_000)
+    assert latest.displayed and window.sculpt_bar.refine.isEnabled()
+    assert len(window.session.project.document.ops) == before
+    window.sculpt_bar.refine.click()
+    assert window.session.wait_for_idle(30_000)
+    assert window.sculpting()
+    assert window.session.project.document.ops[-1].params == latest.order.drafts[0].params
+    assert window.session.last_result.scene.objects[exact_body].kind == "mesh"
+
+
 def test_the_session_needs_something_to_sculpt(window: MainWindow) -> None:
     """Ohne Objekt kein Pinsel — und ein Satz dazu statt einer stillen
     Nichtreaktion."""

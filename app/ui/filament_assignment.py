@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from PySide6.QtCore import QSignalBlocker, Qt, Signal
 from PySide6.QtWidgets import QComboBox, QLabel, QPushButton, QVBoxLayout, QWidget
 
@@ -22,7 +24,7 @@ from app.ui.filament_picker import (
     swatch,
 )
 from app.ui.leash import weak_slot
-from app.ui.style import TIGHT, set_level
+from app.ui.style import TIGHT, make_danger, make_primary, set_level
 
 
 class QuickFilamentPicker(QWidget):
@@ -31,12 +33,17 @@ class QuickFilamentPicker(QWidget):
     spoolChosen = Signal(object)
     inventoryRequested = Signal()
     clearRequested = Signal()
+    preview_required = False
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._objects: list[SceneObject] = []
         self._selected_features: tuple[tuple[str, str], ...] = ()
         self._part = False
+        self._apply_pending: Callable[[], None] | None = None
+        self._cancel_pending: Callable[[], None] | None = None
+        self._blocked_reason: str | None = None
+        self.preview_check: Callable[[], bool] | None = None
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(TIGHT)
@@ -56,6 +63,14 @@ class QuickFilamentPicker(QWidget):
         self.notice = ErrorNotice(self)
         self.notice.hide()
         layout.addWidget(self.notice)
+        self.apply_button = make_primary(QPushButton(tr("Übernehmen"), self))
+        self.apply_button.clicked.connect(self.accept)
+        self.apply_button.hide()
+        layout.addWidget(self.apply_button)
+        self.cancel_button = make_danger(QPushButton(tr("Abbrechen"), self))
+        self.cancel_button.clicked.connect(self.cancel_preview)
+        self.cancel_button.hide()
+        layout.addWidget(self.cancel_button)
         self.clear_button = QPushButton(tr("Filament entfernen"), self)
         self.clear_button.clicked.connect(self.clearRequested)
         layout.addWidget(self.clear_button)
@@ -78,10 +93,63 @@ class QuickFilamentPicker(QWidget):
         niemand gewählt hat (Robert, 16.09.2026: „wo stelle ich von der
         Versteifungsrippe insgesamt das filament ein?").
         """
+        if (
+            tuple(id(obj) for obj in objects) != tuple(id(obj) for obj in self._objects)
+            or selected_features != self._selected_features
+            or part != self._part
+        ):
+            self.cancel_preview()
         self._objects = list(objects)
         self._selected_features = selected_features
         self._part = part
         self.refresh()
+
+    def stage_preview(self, apply: Callable[[], None], cancel: Callable[[], None]) -> None:
+        """Eine vorbereitete Zuweisung bleibt im vorhandenen Wähler zur Übernahme."""
+        self.cancel_preview()
+        self._apply_pending = apply
+        self._cancel_pending = cancel
+        self.apply_button.show()
+        self.cancel_button.show()
+        self.block_apply(self._blocked_reason)
+
+    def block_apply(self, reason: str | None) -> None:
+        """Nur Übernehmen sperren; Spulenwahl und Abbrechen bleiben frei."""
+        self._blocked_reason = reason
+        self.apply_button.setEnabled(self._apply_pending is not None and reason is None)
+        explanation = reason if reason is not None else str(tr("Filament zuweisen"))
+        self.apply_button.setToolTip(explanation)
+        self.apply_button.setStatusTip(explanation)
+        self.apply_button.setAccessibleDescription(explanation)
+
+    def can_accept(self) -> bool:
+        """Ob der vorbereitete Auftrag freigegeben ist."""
+        if self._apply_pending is None:
+            return False
+        current = self.preview_check is None or self.preview_check()
+        return current and self._blocked_reason is None
+
+    def accept(self) -> None:
+        """Den Auftrag übernehmen; seine Aktualität prüft das Hauptfenster erneut."""
+        if self.can_accept() and self._apply_pending is not None:
+            self._apply_pending()
+
+    def finish_preview(self) -> None:
+        """Die Bedienstelle nach erfolgreicher Übernahme leeren."""
+        self._apply_pending = None
+        self._cancel_pending = None
+        self._blocked_reason = None
+        self.preview_check = None
+        self.preview_required = False
+        self.apply_button.hide()
+        self.cancel_button.hide()
+
+    def cancel_preview(self) -> None:
+        """Auswahlwechsel oder Abbrechen verwirft nur die wartende Zuweisung."""
+        cancel = self._cancel_pending
+        self.finish_preview()
+        if cancel is not None:
+            cancel()
 
     def refresh(self) -> None:
         """Neue Lagerwerte stehen sofort zur Wahl, die Szene bleibt dabei unverändert."""
@@ -95,19 +163,33 @@ class QuickFilamentPicker(QWidget):
             current = tr("Körper wählen, um ein Filament zuzuweisen")
             scope = tr("Das Filamentlager ist auch ohne Auswahl erreichbar.")
         elif self._selected_features:
-            current = tr("Filament für die gewählte Fläche wählen")
             owners = {owner for owner, _feature in self._selected_features}
             bodies = sum(obj.id not in owners for obj in self._objects)
             faces = len(self._selected_features)
+            current = (
+                tr("Filament für die gewählte Fläche wählen")
+                if faces == 1
+                else tr("Filament für die gewählten Flächen wählen")
+            )
             if bodies:
                 current = tr("Filament für die Auswahl")
-                scope = tr("Ganze Körper: {bodies}. Gewählte Flächen: {faces}.").format(
-                    bodies=bodies, faces=faces
-                )
+                body_text = (
+                    tr("Ganzer Körper: {count}.") if bodies == 1 else tr("Ganze Körper: {count}.")
+                ).format(count=bodies)
+                face_text = (
+                    tr("Gewählte Fläche: {count}.")
+                    if faces == 1
+                    else tr("Gewählte Flächen: {count}.")
+                ).format(count=faces)
+                scope = f"{body_text} {face_text}"
             elif self._part:
                 current = tr("Filament für den Baustein wählen")
-                scope = tr("Die Zuweisung gilt dem ganzen Baustein: {count} Flächen.").format(
-                    count=faces
+                scope = (
+                    tr("Die Zuweisung gilt dem ganzen Baustein: eine Fläche.")
+                    if faces == 1
+                    else tr("Die Zuweisung gilt dem ganzen Baustein: {count} Flächen.").format(
+                        count=faces
+                    )
                 )
             else:
                 scope = (
@@ -133,8 +215,12 @@ class QuickFilamentPicker(QWidget):
                 current = tr("Noch kein Filament zugewiesen")
             else:
                 current = tr("Mehrere Filamente in der Auswahl")
-            scope = tr("Die Zuweisung betrifft {count} gewählte Körper.").format(
-                count=len(self._objects)
+            scope = (
+                tr("Die Zuweisung betrifft den gewählten Körper.")
+                if len(self._objects) == 1
+                else tr("Die Zuweisung betrifft {count} gewählte Körper.").format(
+                    count=len(self._objects)
+                )
             )
         self.scope.setText(scope)
         try:
@@ -199,6 +285,7 @@ class QuickFilamentPicker(QWidget):
 
     def _chosen(self, index: int) -> None:
         """Nur eine ausdrückliche Wahl einer noch aktiven Spule wird weitergereicht."""
+        self.cancel_preview()
         identifier = str(self.picker.itemData(index) or "")
         if not identifier or not self._objects:
             return

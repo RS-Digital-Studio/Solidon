@@ -301,6 +301,96 @@ def test_quick_assignment_is_one_transaction_and_keeps_the_spool(qt_app, invento
     assert not session.project.document.print_settings.spool_bindings
 
 
+@pytest.mark.parametrize("scope", ["body", "two-faces"])
+def test_exact_quick_assignment_previews_then_commits_the_same_spool_and_scope(
+    qt_app, inventory, scope
+):
+    """Vorschau, Abbruch und Übernahme halten Körperart, Flächen und Lagerbindung zusammen."""
+    from copy import deepcopy
+
+    from app.core.brep.kernel import available
+    from app.core.scene.history import OperationDraft
+    from app.ui.session import Session
+
+    if not available():
+        pytest.skip("OpenCASCADE is an optional dependency")
+    window = main_window.MainWindow(Session(), UiSettings())
+    try:
+        assert window.session.apply(
+            "Quader",
+            [
+                OperationDraft(
+                    "create_brep_box", params={"width": 40.0, "depth": 30.0, "height": 20.0}
+                )
+            ],
+        )
+        assert window.session.wait_for_idle(30_000)
+        result = window.session.last_result
+        assert result is not None and result.complete
+        identifier, body = next(iter(result.scene.objects.items()))
+        assert body.kind == "brep"
+        if scope == "body":
+            window.object_tree.select_object(identifier)
+            expected_op, count = "assign_slot", 1
+        else:
+            faces = [feature.id for feature in body.features.values() if feature.face_indices][:2]
+            assert len(faces) == 2
+            window.object_tree.select_features([(identifier, face) for face in faces])
+            expected_op, count = "paint_slot", 2
+        qt_app.processEvents()
+        picker = window.quick_filament
+        picker.refresh()
+        row = picker.picker.findData(inventory.identifier)
+        assert row > 0
+        before = deepcopy(window.session.project.document)
+        for cancel in (True, False):
+            picker.picker.setCurrentIndex(row)
+            picker.picker.activated.emit(row)
+            assert not picker.can_accept() and not picker.apply_button.isHidden()
+            picker.apply_button.click()
+            assert window.session.project.document == before
+            assert window.session.wait_for_idle(30_000)
+            qt_app.processEvents()
+            approval = window._preview_approval
+            assert approval is not None and approval.owner is picker and approval.displayed
+            assert len(approval.order.drafts) == count
+            assert all(draft.op == expected_op for draft in approval.order.drafts)
+            assert all(draft.inputs == (identifier,) for draft in approval.order.drafts)
+            assert "geraden Teilstücken" in window.viewport._preview_note
+            assert window.session.project.document == before
+            assert picker.can_accept()
+            if cancel:
+                picker.cancel_button.click()
+                assert window.session.project.document == before
+                assert window._preview_approval is None
+                assert picker.apply_button.isHidden()
+                continue
+            prepared = approval.order
+            picker.apply_button.click()
+            assert window.session.wait_for_idle(30_000)
+            transaction = window.session.project.document.transactions[-1]
+            assert transaction.changes == prepared.changes
+            written = window.session.history.operations[-count:]
+            assert [(step.op, step.inputs, step.params) for step in written] == [
+                (draft.op, draft.inputs, draft.params) for draft in prepared.drafts
+            ]
+        changed = window.session.last_result.scene.objects[identifier]
+        assert changed.kind == "mesh"
+        assert any(slot.name == inventory.name for slot in changed.material_slots)
+        assert window.session.project.document.print_settings.spool_bindings[
+            0
+        ].spool_identifier == (inventory.identifier)
+        window.session.undo()
+        assert window.session.wait_for_idle(30_000)
+        assert window.session.last_result.scene.objects[identifier].kind == "brep"
+        assert not window.session.project.document.print_settings.spool_bindings
+        assert filaments.get(inventory.identifier).remaining_grams == pytest.approx(100.0)
+        assert not filaments.bookings()
+    finally:
+        window.quick_filament.cancel_preview()
+        window.release()
+
+
 def test_quick_removal_clears_mixed_scope_in_one_undo(qt_app, inventory):
     """Ein ganzer Körper und eine Fläche verlieren ihr Filament gemeinsam, der Rest bleibt."""
     from app.core.scene.history import OperationDraft
