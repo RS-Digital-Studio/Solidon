@@ -2188,8 +2188,10 @@ def back_onto_bed(
     Strecke, die den Körper wieder ganz auf die Fläche bringt (das kann
     :func:`placement_offset` bereits, es sortiert seine Kandidaten nach
     Entfernung). Wer ein Teil zwei Millimeter über den Rand zieht, bekommt es um
-    zwei Millimeter zurück und nicht quer über die Platte gelegt. Erst wenn
-    dort ein anderer Körper steht, wird neu eingeordnet.
+    zwei Millimeter zurück und nicht quer über die Platte gelegt. Steht an der
+    kürzesten Stelle ein anderer Körper, wird stattdessen neu eingeordnet —
+    **das gilt aber nur dem Weg zurück**, nicht einer Überschneidung an sich
+    (der Absatz am Ende sagt, warum).
 
     **Und nur auf der eigenen Platte.** ``others`` sind die Körper, die diese
     Platte teilen; um sie herum wird gesucht. Ein Plattenwechsel hinter dem
@@ -2217,8 +2219,7 @@ def back_onto_bed(
     """
     area = printable_area(profile.printer)
     body = as_mesh_data(mesh)
-    inside = fits_xy(body, area)
-    if inside:
+    if fits_xy(body, area):
         return (0.0, 0.0, 0.0), []
 
     nudge = placement_offset(body, profile.printer)
@@ -2261,13 +2262,12 @@ def back_onto_bed(
         Finding(
             code="transform.rearranged_on_bed",
             severity="info",
-            message=(
-                _("Der Körper überschnitt sich mit einem anderen Teil und wurde neu eingeordnet.")
-                if inside
-                else _(
-                    "Der Körper passte an seiner Stelle nicht mehr auf die "
-                    "Druckfläche und wurde neu eingeordnet."
-                )
+            # Nur ein Grund, seit die Überschneidung keinen mehr abgibt: Wer
+            # hier ankommt, lag außerhalb der Fläche — innerhalb kehrt die
+            # Funktion oben um.
+            message=_(
+                "Der Körper passte an seiner Stelle nicht mehr auf die "
+                "Druckfläche und wurde neu eingeordnet."
             ),
         )
     ]

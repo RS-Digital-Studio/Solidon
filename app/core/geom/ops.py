@@ -122,8 +122,8 @@ def _keeping_on_bed() -> Any:
         default=False,
         placement="advanced",
         doc=_(
-            "Bringt die Bewegung den Körper über den Rand der Druckfläche "
-            "oder in ein anderes Teil, wird er "
+            "Bringt die Bewegung den Körper über den Rand der Druckfläche, "
+            "wird er "
             "zurückgeholt — so wenig wie möglich, und wenn dort ein anderer steht, "
             "an die nächste freie Stelle. Ein Zug am Griff setzt das von selbst: "
             "Wer zieht, zeigt auf einen Platz. Getippte Werte führt Solidon aus, "
@@ -135,7 +135,13 @@ def _keeping_on_bed() -> Any:
 def _held_on_bed(
     ctx: OpContext, source: SceneObject, moved: Any, matrix: Any
 ) -> tuple[Any, Any, list[Finding]]:
-    """Hält bewegte Körper auf der Druckfläche und frei von Überschneidungen (§29).
+    """Hält bewegte Körper auf der Druckfläche (§29).
+
+    **Und nur dort.** Bis zum 18.09.2026 hielt diese Bindung zwei
+    Bedingungen — innerhalb der Fläche *und* ohne Überschneidung —, und
+    damit war das Zusammenschieben zweier Teile über den Griff nicht mehr
+    zu machen. Zwei Körper am selben Ort sind eine Absicht; ein Körper
+    neben dem Bett ist es nie.
 
     **Warum eine Regel und nicht ein Befund** (Robert, 12.09.2026: „das ist
     aber zu kompliziert für den Kunden, wie können wir das automatisieren?").

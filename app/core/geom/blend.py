@@ -2,9 +2,17 @@
 
 Die gewöhnliche Vereinigung stößt zwei Oberflächen aneinander und lässt in
 jeder Innenecke eine scharfe Kehle stehen. Gedruckt ist genau dort die
-Sollbruchstelle, und mit keinem Werkzeug dieser Anwendung war sie zu
-erreichen: Ein Pinsel kommt nicht an eine Innenkante, und eine Verrundung auf
-Mesh-Kanten steht nicht ohne Grund auf der Nicht-bauen-Liste.
+Sollbruchstelle.
+
+**Verrunden erreicht sie inzwischen** — der Vorbehalt „Verrundungen auf
+Mesh-Kanten" ist am 10.09.2026 gefallen, und die Naht ist ein gewöhnlicher
+Kantenzug: An einer Platte mit aufgesetzter Rippe kommen aus ``edges_of``
+24 Züge, vier davon konkav. Es ist trotzdem etwas anderes. Eine Verrundung
+legt einen festen Radius an eine **gewählte** Kante, nachdem die Vereinigung
+schon gerechnet ist; sie kennt nur noch das Ergebnis. Diese Operation lässt
+den Übergang aus **beiden** Körpern zugleich entstehen — niemand wählt eine
+Kante, und wo die Naht keine saubere Linie hergibt, gibt es trotzdem einen
+Übergang.
 
 Deshalb rechnet diese Operation anders als alle anderen booleschen. Statt
 Flächen zu schneiden legt sie beide Körper als **Abstandsfeld** auf ein
