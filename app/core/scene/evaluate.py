@@ -49,12 +49,14 @@ from app.core.perceive.features import (
 from app.core.perceive.local import FEATURE_LIMIT_TRIANGLES as FEATURE_LIMIT_TRIANGLES
 from app.core.perceive.local import rigid_transform
 from app.core.perceive.matching import (
+    FeatureTransform,
     apply_mapping,
     fingerprint,
     match,
     moved_features,
     question_for,
     resolve,
+    transformed_features,
 )
 from app.core.perceive.relations import thinnest_sleeve
 from app.core.registry import REGISTRY, OperationSpec, Registry, needed_inputs, validate
@@ -62,7 +64,7 @@ from app.core.scene.cache import CachedResult, ResultCache
 from app.core.scene.cancel import NeverCancelled
 from app.core.scene.fits import active_fits
 from app.core.scene.fits import check as check_fits
-from app.core.scene.hashing import object_hash, operation_hash
+from app.core.scene.hashing import digest, object_hash, operation_hash
 from app.core.scene.orphans import feature_ref_of_sketch
 from app.core.scene.orphans import references as feature_references
 from app.core.scene.parameter_usage import ParameterUse, parameter_uses
@@ -1120,6 +1122,19 @@ def _shift_between(before: BoundingBox, now: BoundingBox) -> Transform | None:
     )
 
 
+def _inherited_features(
+    features: Mapping[FeatureId, Feature], previous: Mapping[FeatureId, Feature]
+) -> dict[FeatureId, Feature]:
+    """Unveränderte Einträge erkennen, auch mit JSON-Listen aus dem Plattencache."""
+    return {
+        name: feature
+        for name, feature in features.items()
+        if (older := previous.get(name)) is not None
+        and dataclasses.replace(feature, params=older.params) == older
+        and digest(feature.params) == digest(older.params)
+    }
+
+
 def _carried_along(
     entry: SceneObject,
     previous: Mapping[FeatureId, Feature],
@@ -1157,14 +1172,15 @@ def _carried_along(
     meldet keine Operation beides, und diese Bedingung sorgt dafür, dass es
     auch dann stimmt, wenn eine es täte.
     """
-    if not entry.features or dict(entry.features) != dict(previous):
-        return entry
     matrix = transform
     if matrix is None and previous_bounds is not None:
         matrix = _shift_between(previous_bounds, entry.mesh.bounds)
     if matrix is None or not rigid_transform(matrix):
         return entry
-    return dataclasses.replace(entry, features=moved_features(dict(entry.features), matrix))
+    inherited = _inherited_features(entry.features, previous)
+    return dataclasses.replace(
+        entry, features={**entry.features, **moved_features(inherited, matrix)}
+    )
 
 
 def _with_feature_reservations(
@@ -1253,7 +1269,7 @@ def _with_features(
         return _carried_along(entry, previous, transform, previous_bounds)
     local_only = mesh.triangle_count > FEATURE_LIMIT_TRIANGLES
     if local_only:
-        from app.core.perceive.local import detect_known, transformed_searches
+        from app.core.perceive.local import detect_known
 
         findings.append(
             Finding(
@@ -1288,75 +1304,56 @@ def _with_features(
     # wurde, hieße „neu" nur „endlich sichtbar".
     knew_features = bool(previous)
 
+    # Ausdrücklich ausgegebene Merkmale stehen bereits im Ergebnisraum.
+    # Nur unverändert geerbte Einträge folgen der gemeldeten Bewegung.
+    feature_movement = transform
+    if feature_movement is None and previous_bounds is not None:
+        feature_movement = _shift_between(previous_bounds, mesh.bounds)
+    inherited = _inherited_features(entry.features, previous)
+    transformed = (
+        transformed_features(
+            previous, feature_movement, mesh=mesh if transform is not None else None
+        )
+        if feature_movement is not None
+        else FeatureTransform(dict(previous), frozenset(previous))
+    )
+    output_features = dict(entry.features)
+    if feature_movement is not None:
+        output_features = {
+            name: feature for name, feature in output_features.items() if name not in inherited
+        }
+        output_features.update(
+            (name, transformed.candidates[name]) for name in inherited if name in transformed.exact
+        )
+    if transform is not None:
+        # Eine reine Transformation belegt auch unsichtbare Bausteinmerkmale.
+        # Ihre Zuordnung läuft zusammen mit den deklarierten Merkmalen, damit
+        # eine nun mögliche Erkennung keinen zweiten Namen daneben erzeugt.
+        output_features = {
+            **{
+                name: feature
+                for name, feature in transformed.candidates.items()
+                if name in transformed.exact and feature.provenance == "generated"
+            },
+            **output_features,
+        }
+
     declared = {
         name: (
             feature
             if feature.created_by is not None
             else dataclasses.replace(feature, created_by=operation.id)
         )
-        for name, feature in entry.features.items()
+        for name, feature in output_features.items()
         if feature.provenance == "generated"
     }
-    if declared:
-        # **Auch ohne gemeldete Matrix kann der Körper verschoben worden sein.**
-        # `arrange_bed` setzt jeden Körper einzeln aufs Bett und meldet deshalb
-        # keine gemeinsame Matrix; `place_on_bed` ebenso. Die benannten
-        # Merkmale blieben dabei liegen, wo sie erzeugt wurden — gemessen am
-        # elften Beispiel: Körper bei x -120 bis -50, `lid_cavity` bei x 0,3.
-        #
-        # Der Kunde merkt es an der schlimmsten Stelle: Ein Klick auf eine
-        # Warnung fliegt die Kamera an den alten Ort, also **vom Körper weg
-        # ins Leere**. Für verwaiste Merkmale gab es dazu längst eine
-        # Sonderbehandlung (weiter unten, `arranged_rigidly`); für die
-        # benannten fehlte sie. **Eine Sonderbehandlung, die nur die halbe
-        # Menge kennt, ist ein Fehler mit gutem Gewissen** — sie sieht aus wie
-        # eine geprüfte Entscheidung, und genau deshalb sieht dort niemand ein
-        # zweites Mal hin.
-        #
-        # Erkannt wird die Bewegung an ihrer Signatur statt am Namen der
-        # Operation: Gleiche Ausdehnung in allen drei Achsen, anderer
-        # Mittelpunkt — das ist eine Verschiebung und sonst nichts. So gilt es
-        # auch für die nächste Operation, die schiebt, ohne es zu melden.
-        # **Ein eigener Name, nachgezählt und nicht geraten.** `movement` und
-        # `carried` sind in dieser Funktion beide schon vergeben — zwei
-        # Bindungen desselben Namens sind für mypy ein Fehler und für einen
-        # Leser eine Falle, und ich habe hier zweimal danebengegriffen, bevor
-        # ich zählte.
-        rigid_shift: Transform | None = transform
-        if rigid_shift is None and previous_bounds is not None:
-            rigid_shift = _shift_between(previous_bounds, mesh.bounds)
-        if rigid_shift is not None:
-            declared = (
-                transformed_searches(declared, rigid_shift)
-                if local_only
-                else moved_features(declared, rigid_shift)
-            )
-
     watch.raise_if_cancelled()
     if say is not None:
         say(str(_("Merkmale erkennen")))
     if local_only:
-        query_previous = previous
-        query_outputs = entry.features
-        if transform is not None:
-            query_previous = transformed_searches(previous, transform)
-            query_outputs = transformed_searches(entry.features, transform)
-        elif previous_bounds is not None and _same_size(previous_bounds, mesh.bounds):
-            shift = tuple(
-                now - old
-                for now, old in zip(mesh.bounds.centre, previous_bounds.centre, strict=True)
-            )
-            local_movement: Transform = (
-                (1.0, 0.0, 0.0, shift[0]),
-                (0.0, 1.0, 0.0, shift[1]),
-                (0.0, 0.0, 1.0, shift[2]),
-                (0.0, 0.0, 0.0, 1.0),
-            )
-            query_previous = moved_features(previous, local_movement)
-            query_outputs = moved_features(entry.features, local_movement)
         detected = detect_known(
             mesh,
-            {**query_previous, **query_outputs},
+            {**transformed.candidates, **output_features},
             check_cancelled=watch.raise_if_cancelled,
         )
     else:
@@ -1434,7 +1431,11 @@ def _with_features(
                 values={"features": len(detected), "limit": FEATURE_LIMIT_COUNT},
             )
         )
-        return entry
+        return (
+            dataclasses.replace(entry, features=output_features)
+            if feature_movement is not None
+            else entry
+        )
 
     # **Was die Erkennung hier nicht sieht, wird später nicht an ihr gemessen.**
     # Ein Baustein benennt seine Bohrungen beim Bauen; ``detect`` findet sie
@@ -1465,9 +1466,9 @@ def _with_features(
                 and (
                     feature.params.get("open")
                     or (
-                        local_only
-                        and transform is not None
-                        and not rigid_transform(transform)
+                        feature_movement is not None
+                        and name in inherited
+                        and name not in transformed.exact
                         and feature.recognised
                     )
                 )
@@ -1540,12 +1541,14 @@ def _with_features(
     # Ein gedrehter Körper sieht für einen Positionsvergleich aus wie ein
     # anderer Körper. Die Operation weiß, was sie gedreht hat — also werden die
     # alten Merkmale erst mitgenommen und dann verglichen (§21.2).
-    if transform is not None:
-        previous = (
-            transformed_searches(previous, transform)
-            if local_only
-            else moved_features(previous, transform)
-        )
+    previous = {
+        **transformed.candidates,
+        **{
+            name: feature
+            for name, feature in output_features.items()
+            if feature.provenance == "detected"
+        },
+    }
 
     # **Ein erzeugtes Merkmal, das die Operation nicht selbst wieder ausgibt,
     # wird mitgenommen — nicht vergessen.** Hier stand bis zum 22.08.2026, dass
@@ -1573,7 +1576,10 @@ def _with_features(
     # Unterscheidung „Gewinde reist mit, Bohrung nicht" hinge daran, ob zufällig
     # eine andere Art denselben Namen trägt.
     checked = {
-        name: f for name, f in carried.items() if f.kind in DETECTABLE_KINDS and f.recognised
+        name: f
+        for name, f in carried.items()
+        if (f.kind in DETECTABLE_KINDS and f.recognised)
+        or (transform is not None and name not in transformed.exact)
     }
     # Und was sie nicht sieht, reist ungeprüft mit. Ein Gewinde ist der Fall:
     # es entsteht in einem Baustein, ``detect`` kennt die Art nicht, und geprüft
@@ -1624,6 +1630,7 @@ def _with_features(
         feature
         for feature in (*declared.values(), *unchecked.values(), *checked.values())
         if feature.kind == "thread"
+        and (transform is None or feature.id in transformed.exact or feature.id in declared)
     )
     if threads:
         detected = {
@@ -1636,29 +1643,13 @@ def _with_features(
         return dataclasses.replace(entry, features={**detected, **unchecked, **declared})
 
     centre = mesh.bounds.centre
-    # In welchem Bezugspunkt die alten Merkmale gelesen werden, hängt daran, was
-    # die Operation getan hat — und es gibt genau zwei Fälle.
-    #
-    # **Verschoben.** Der Hüllquader ist gleich groß und liegt woanders. Dann
-    # ist jedes Merkmal mitgewandert, und beide Seiten werden in ihrem eigenen
-    # Bezugspunkt gelesen. *Auf dem Bett anordnen* ist das: es schiebt jedes
-    # Objekt einzeln und kann darum keine gemeinsame Transformation nachreichen.
-    #
-    # **Umgebaut.** Der Körper hat eine andere Ausdehnung, weil etwas dazukam
-    # oder wegging. Dann steht er im Raum, wo er stand, und beide Seiten werden
-    # in *demselben* Bezugspunkt gelesen. Der eigene wäre hier falsch: ein
-    # aufgesetzter Baustein hebt den Schwerpunkt, und die Grundfläche, die sich
-    # nie bewegt hat, läge auf einmal sieben Millimeter tiefer als vorher.
-    moved = (
-        transform is None
-        and previous_bounds is not None
-        and _same_size(previous_bounds, mesh.bounds)
-    )
-    old_centre = previous_bounds.centre if moved and previous_bounds is not None else centre
+    # Beide Karten stehen jetzt im Ergebnisraum, auch bei Mehrkörper-Ops mit
+    # selbst nachgeführten Merkmalen und bei einer aus den Hüllen erkannten
+    # Verschiebung. Eine zweite Schwerpunktkorrektur wäre eine zweite Bewegung.
     watch.raise_if_cancelled()
     if say is not None:
         say(str(_("Merkmale zuordnen")))
-    matched = match(previous, detected, centre, mesh.bounds.diagonal, old_centre=old_centre)
+    matched = match(previous, detected, centre, mesh.bounds.diagonal)
 
     saved = operation.matches
     for old_id, candidates in matched.ambiguous.items():
@@ -1707,35 +1698,16 @@ def _with_features(
                 )
             )
 
-    # Eine gemeldete starre Matrix ist ein stärkerer Beleg als eine erneute
-    # Messung am Dreiecksnetz: Verschieben, Drehen und Spiegeln können kein
-    # Merkmal geometrisch entfernen. Für ``arrange_bed`` gilt dasselbe, nur
-    # trägt dort jeder Körper seinen eigenen Versatz und deshalb keine
-    # gemeinsame Matrix im Ergebnis. Die Erkennung kann an ihren Grenzwerten
-    # trotzdem anders runden — bei der CC2-Werkzeugbox verschwanden nach dem
-    # Anordnen zwei Verrundungen und drei Kugelflächen nur aus der Messung. In
-    # diesem Fall reist das bereits bekannte Merkmal mit der bekannten
-    # Bewegung weiter, statt dem Kunden einen Verlust zu melden, den die
-    # Operation unmöglich verursacht haben kann.
+    # Eine bekannte Abbildung kann mehr belegen als die erneute Erkennung.
+    # Das gilt nur für weiterhin exakt beschreibbare Merkmale; der Kandidat
+    # einer elliptisch verzerrten Bohrung darf hier niemals zur Zusage werden.
     rigid_orphans: dict[str, Feature] = {}
-    arranged_rigidly = operation.op == "arrange_bed" and moved and previous_bounds is not None
+    arranged_rigidly = operation.op == "arrange_bed" and feature_movement is not None
     for old_id in matched.orphaned:
         old_feature = previous.get(old_id)
         if (
-            (transform is not None and (not local_only or rigid_transform(transform)))
-            or arranged_rigidly
+            (transform is not None and old_id in transformed.exact) or arranged_rigidly
         ) and old_feature is not None:
-            if arranged_rigidly and previous_bounds is not None:
-                shift = tuple(
-                    now - before for now, before in zip(centre, previous_bounds.centre, strict=True)
-                )
-                movement: Transform = (
-                    (1.0, 0.0, 0.0, shift[0]),
-                    (0.0, 1.0, 0.0, shift[1]),
-                    (0.0, 0.0, 1.0, shift[2]),
-                    (0.0, 0.0, 0.0, 1.0),
-                )
-                old_feature = moved_features({old_id: old_feature}, movement)[old_id]
             rigid_orphans[old_id] = old_feature
             continue
         # Was außerhalb des neuen Körpers liegt, ist nicht verlorengegangen —
@@ -1743,7 +1715,7 @@ def _with_features(
         # Ein Prüfstück schneidet 22 mm aus einem 70er Gehäuse: acht Merkmale
         # bleiben draußen, und acht Warnungen darüber sind acht Warnungen über
         # eine gelungene Operation.
-        if _outside(old_feature, mesh.bounds, moved):
+        if _outside(old_feature, mesh.bounds, False):
             continue
 
         # Ein verschwundener Defekt ist kein Verlust, sondern das Ziel. Eine

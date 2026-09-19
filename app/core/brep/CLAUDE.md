@@ -3,6 +3,11 @@
 Boundary Representation über OpenCASCADE, **neben** dem Mesh-Kern, nicht an
 seiner Stelle (§30).
 
+`ops.thread_exact` benennt die Händigkeit seiner Wendel mit `handedness="right"`.
+Der Nachweis liegt im Erzeuger `profiles.threaded_rod`: Auf der Zylinderfläche
+steigen Winkel und Höhe gemeinsam. Die Angabe gehört zum erzeugten Merkmal,
+nicht zu einer Vorgabe für erkannte Importformen; Spiegelungen führen sie nach.
+
 ## Eigentum an der nativen Form
 
 `Solid` übernimmt beim Eintritt eine eigene Kopie von Topologie und Geometrie

@@ -42,6 +42,7 @@ def test_the_exact_thread_declares_its_unchanged_dimensions(exact_thread: SceneO
     assert thread.params["centre"] == pytest.approx((0.0, 0.0, LENGTH / 2.0), abs=1e-12, rel=0.0)
     assert thread.params["axis"] == pytest.approx((0.0, 0.0, 1.0), abs=EPS_GEOM, rel=0.0)
     assert thread.params["internal"] is False
+    assert thread.params["handedness"] == "right"
     assert exact_thread.kind == "brep"
     assert isinstance(exact_thread.mesh, Solid)
     assert exact_thread.mesh.bounds.minimum[2] == pytest.approx(0.0, abs=EPS_GEOM, rel=0.0)

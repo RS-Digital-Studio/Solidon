@@ -128,6 +128,22 @@ bestehenden ID-, Mehrdeutigkeits- und Erzeugerverträgen. Cachekompatibilität
 läuft über den bestehenden Versionsschlüssel der Auswertung, ohne Migration
 von Dokumentgeometrie oder alten Operationsparametern.
 
+`matching.transformed_features` liefert die gemeinsame maßbewusste Auskunft
+für globale und lokale Zuordnung: Suchkandidaten sowie die Teilmenge `exact`,
+deren Formbeschreibung nach der Abbildung weiter gilt. Nur diese Teilmenge
+darf ohne neue Messung erhalten bleiben. Normalen folgen der invers-transponierten
+Matrix, Richtungsvektoren der linearen Matrix; Spiegelungen kehren eine bekannte
+Gewindehändigkeit um. Gleichförmige Maßstäbe skalieren Längen, Flächen und Volumen
+mit ihrer jeweiligen Dimension. Achsweise Skalierung erhält Kreisbohrungen nur
+bei belegter gleicher radialer Dehnung und orthogonaler Achse. Zusätzliche
+Kreismaße an einer ebenen Passungsfläche sind dabei ebenfalls Formzusagen.
+
+`void.centre` und `void.size` beschreiben die Welt-AABB der Hohlraumschale.
+Bei beliebigen Drehungen werden diese Werte aus den vorhandenen Originalflächen
+am transformierten Netz neu gemessen; die gedrehte alte AABB ist nur eine
+Suchhülle. Ungültige Gewindekandidaten dürfen keine anderen Merkmale als
+vermeintliche Gewindeflanken unterdrücken.
+
 ## Zwei Fragen, zwei Dateien
 
 `features.py` beantwortet **„was ist das hier"**, `relations.py` die Frage

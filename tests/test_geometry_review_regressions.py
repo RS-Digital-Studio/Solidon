@@ -1119,3 +1119,462 @@ def test_unexpected_cavity_answer_does_not_silently_remove_one_section() -> None
 
     with pytest.raises(InternalError):
         _asked_about_sections(SimpleNamespace(ask=lambda *_: "unexpected"), [])
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+@pytest.mark.parametrize("quality", ["draft", "fine"])
+@pytest.mark.parametrize("change", ["mirror", "uniform", "anisotropic", "fit"])
+def test_p0_box_transforms_keep_six_current_faces(document, profile, kind, quality, change):
+    """Sechs benannte Seiten behalten nach jeder Transformation ihre wirklichen Maße."""
+    from app.core.scene import History, OperationDraft, evaluate
+
+    if kind == "brep":
+        pytest.importorskip("OCP")
+    load_operations()
+    history = History(document)
+    history.apply(
+        "Asymmetrischer Quader",
+        [
+            OperationDraft(
+                op="create_brep_box" if kind == "brep" else "create_box",
+                params={
+                    "width": 10.0,
+                    "depth": 6.0,
+                    "height": 4.0,
+                    "x": 17.0,
+                    "y": -9.0,
+                    "z": 11.0,
+                },
+            )
+        ],
+    )
+    initial = evaluate(document, profile, quality=quality)
+    assert initial.complete
+    original = initial.scene.objects["obj_1"]
+    assert len(original.features) == 6
+    assert all(feature.kind == "face" for feature in original.features.values())
+    sides = {}
+    for name, feature in original.features.items():
+        normal = np.asarray(feature.params["normal"])
+        axis = int(np.argmax(np.abs(normal)))
+        side = 1 if normal[axis] > 0 else -1
+        sides[name] = (axis, side)
+    assert set(sides.values()) == {(axis, side) for axis in range(3) for side in (-1, 1)}
+
+    def assert_faces(entry, factors):
+        # Die Konstruktion setzt die Unterseite bei Z=11: die Mitte liegt bei Z=13.
+        centre = np.array((17.0, -9.0, 13.0)) * factors
+        size = np.array((10.0, 6.0, 4.0)) * np.abs(factors)
+        assert entry.mesh.bounds.centre == pytest.approx(centre, abs=1e-6)
+        assert entry.mesh.bounds.size == pytest.approx(size, abs=1e-6)
+        assert entry.mesh.volume == pytest.approx(float(np.prod(size)), abs=1e-5)
+        assert len(entry.features) == 6
+        assert set(entry.features) == set(sides)
+        for name, (axis, side) in sides.items():
+            feature = entry.features[name]
+            normal = np.zeros(3)
+            normal[axis] = side * np.sign(factors[axis])
+            place = centre + normal * size / 2.0
+            area = float(np.prod(np.delete(size, axis)))
+            assert feature.kind == "face"
+            assert feature.params["centre"] == pytest.approx(place, abs=1e-6)
+            assert feature.params["normal"] == pytest.approx(normal, abs=1e-6)
+            assert feature.params["area"] == pytest.approx(area, abs=1e-5)
+            assert feature.created_by == original.features[name].created_by
+            assert feature.provenance == original.features[name].provenance
+            assert feature.recognised == original.features[name].recognised
+            assert feature.face_indices
+
+    assert_faces(original, (1.0, 1.0, 1.0))
+    op, params, factors = {
+        "mirror": ("mirror_object", {"axis": "x", "about": "origin"}, (-1.0, 1.0, 1.0)),
+        "uniform": ("scale_object", {"factor": 2.0, "about": "origin"}, (2.0, 2.0, 2.0)),
+        "anisotropic": (
+            "scale_object",
+            {"fx": 2.0, "fy": 1.0, "fz": 1.0, "about": "origin"},
+            (2.0, 1.0, 1.0),
+        ),
+        "fit": ("fit_to_size", {"largest": 20.0, "about": "origin"}, (2.0, 2.0, 2.0)),
+    }[change]
+    history.apply("Transformieren", [OperationDraft(op=op, inputs=("obj_1",), params=params)])
+    transformed = evaluate(document, profile, quality=quality)
+    assert transformed.complete
+    assert_faces(transformed.scene.objects["obj_1"], factors)
+    if change == "mirror":
+        assert transformed.scene.objects["obj_1"].kind == kind
+        history.apply("Zurückspiegeln", [OperationDraft(op=op, inputs=("obj_1",), params=params)])
+        restored = evaluate(document, profile, quality=quality)
+        assert restored.complete
+        assert_faces(restored.scene.objects["obj_1"], (1.0, 1.0, 1.0))
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+@pytest.mark.parametrize("mode", ["linear", "circular"])
+def test_p0_pattern_copies_keep_all_six_feature_locations(document, profile, kind, mode):
+    """Jede Kopie führt die Namen, Maße und tatsächlichen Orte aller sechs Seiten mit."""
+    from app.core.scene import History, OperationDraft, evaluate
+
+    if kind == "brep":
+        pytest.importorskip("OCP")
+    load_operations()
+    history = History(document)
+    history.apply(
+        "Asymmetrischer Quader",
+        [
+            OperationDraft(
+                op="create_brep_box" if kind == "brep" else "create_box",
+                params={
+                    "width": 10.0,
+                    "depth": 6.0,
+                    "height": 4.0,
+                    "x": 17.0,
+                    "y": -9.0,
+                    "z": 11.0,
+                },
+            )
+        ],
+    )
+    before = evaluate(document, profile)
+    assert before.complete
+    original = before.scene.objects["obj_1"]
+    assert len(original.features) == 6
+    assert all(feature.kind == "face" for feature in original.features.values())
+    history.apply(
+        "Vier Kopien",
+        [
+            OperationDraft(
+                op="pattern",
+                inputs=("obj_1",),
+                params={"kind": mode, "count": 4, "spacing": 20.0, "dx": 0.0, "dy": 1.0},
+            )
+        ],
+    )
+    after = evaluate(document, profile)
+    assert after.complete
+    assert len(after.scene.objects) == 4
+
+    def turn(value, index):
+        x, y, z = value
+        return ((x, y, z), (-y, x, z), (-x, -y, z), (y, -x, z))[index]
+
+    for index, entry in enumerate(after.scene.objects.values()):
+        centre = (
+            (17.0, -9.0 + 20.0 * index, 13.0)
+            if mode == "linear"
+            else turn((17.0, -9.0, 13.0), index)
+        )
+        assert entry.mesh.bounds.centre == pytest.approx(centre, abs=1e-6)
+        assert entry.mesh.volume == pytest.approx(10.0 * 6.0 * 4.0, abs=1e-5)
+        assert entry.kind == kind
+        assert len(entry.features) == 6
+        assert set(entry.features) == set(original.features)
+        for name, old in original.features.items():
+            current = entry.features[name]
+            axis = int(np.argmax(np.abs(old.params["normal"])))
+            initial_normal = np.zeros(3)
+            initial_normal[axis] = np.sign(old.params["normal"][axis])
+            x, y, z = np.array((17.0, -9.0, 13.0)) + initial_normal * (5.0, 3.0, 2.0)
+            place = (x, y + 20.0 * index, z) if mode == "linear" else turn((x, y, z), index)
+            normal = initial_normal if mode == "linear" else turn(initial_normal, index)
+            assert current.kind == "face"
+            assert current.params["centre"] == pytest.approx(place, abs=1e-6)
+            assert current.params["normal"] == pytest.approx(normal, abs=1e-6)
+            assert current.params["area"] == pytest.approx((24.0, 40.0, 60.0)[axis], abs=1e-5)
+            assert current.created_by == old.created_by
+            assert current.provenance == old.provenance
+            assert current.recognised == old.recognised
+            assert current.face_indices
+            assert name in entry.reserved_feature_ids
+
+
+@pytest.mark.parametrize("replay", ["warm", "disk", "reopen", "undo_redo"])
+def test_p0_scaled_mesh_faces_survive_cache_project_and_history(profile, tmp_path, replay):
+    """Nachspielen einer Transformation erhält aktuelle Maße und die ursprünglichen Namen."""
+    from app.core.geom.mesh import MeshCodec
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.cache import DiskCache, ResultCache
+    from app.core.scene.project import ProjectSources, load, new_project, save
+
+    load_operations()
+    project = new_project(profile.printer.id, profile.material.id)
+    history = History(project.document)
+    history.apply(
+        "Asymmetrischer Quader",
+        [
+            OperationDraft(
+                op="create_box",
+                params={
+                    "width": 10.0,
+                    "depth": 6.0,
+                    "height": 4.0,
+                    "x": 17.0,
+                    "y": -9.0,
+                    "z": 11.0,
+                },
+            )
+        ],
+    )
+    source = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert source.complete
+    original = source.scene.objects["obj_1"]
+    assert len(original.features) == 6
+    assert all(feature.kind == "face" for feature in original.features.values())
+    history.apply(
+        "Spiegeln und skalieren",
+        [
+            OperationDraft(
+                op="mirror_object", inputs=("obj_1",), params={"axis": "x", "about": "origin"}
+            ),
+            OperationDraft(
+                op="mirror_object", inputs=("obj_1",), params={"axis": "x", "about": "origin"}
+            ),
+            OperationDraft(
+                op="scale_object", inputs=("obj_1",), params={"factor": 2.0, "about": "origin"}
+            ),
+        ],
+    )
+    directory = tmp_path / "cache"
+    cache = ResultCache(disk=DiskCache(MeshCodec(), directory=directory))
+    first = evaluate(project.document, profile, sources=ProjectSources(project), cache=cache)
+    assert first.complete
+    if replay == "disk":
+        cache = ResultCache(disk=DiskCache(MeshCodec(), directory=directory))
+    elif replay in {"reopen", "undo_redo"}:
+        project = load(save(project, tmp_path / "transformierter-quader.p3d"))
+        cache = None
+        if replay == "undo_redo":
+            history = History(project.document)
+            history.undo()
+            undone = evaluate(project.document, profile, sources=ProjectSources(project))
+            assert undone.complete
+            restored = undone.scene.objects["obj_1"]
+            assert restored.mesh.bounds.size == pytest.approx((10.0, 6.0, 4.0), abs=1e-6)
+            assert restored.mesh.bounds.centre == pytest.approx((17.0, -9.0, 13.0), abs=1e-6)
+            assert restored.features == original.features
+            history.redo()
+    result = evaluate(project.document, profile, sources=ProjectSources(project), cache=cache)
+    assert result.complete
+    if replay == "warm":
+        assert cache.statistics.hits >= 4
+        assert cache.statistics.disk_hits == 0
+    elif replay == "disk":
+        assert cache.statistics.disk_hits >= 4
+    final = result.scene.objects["obj_1"]
+    assert final.mesh.bounds.centre == pytest.approx((34.0, -18.0, 26.0), abs=1e-6)
+    assert final.mesh.bounds.size == pytest.approx((20.0, 12.0, 8.0), abs=1e-6)
+    assert final.mesh.volume == pytest.approx(20.0 * 12.0 * 8.0, abs=1e-5)
+    assert len(final.features) == 6
+    assert set(final.features) == set(original.features)
+    for name, old in original.features.items():
+        feature = final.features[name]
+        axis = int(np.argmax(np.abs(old.params["normal"])))
+        assert feature.kind == "face"
+        assert feature.params["centre"] == pytest.approx(
+            np.asarray(old.params["centre"]) * 2.0, abs=1e-6
+        )
+        assert feature.params["normal"] == pytest.approx(old.params["normal"], abs=1e-6)
+        assert feature.params["area"] == pytest.approx((96.0, 160.0, 240.0)[axis], abs=1e-5)
+        assert feature.created_by == old.created_by
+        assert feature.provenance == old.provenance
+        assert feature.face_indices
+        assert name in final.reserved_feature_ids
+
+
+def test_p0_multiple_orientations_keep_existing_mesh_feature_names(document, profile, monkeypatch):
+    """Zwei eigene Drehungen führen auch erkannte Merkmale vorhandener Objektkennungen mit."""
+    from types import SimpleNamespace
+
+    from app.core.geom import prepare_ops
+    from app.core.scene import History, OperationDraft, evaluate
+
+    load_operations()
+    history = History(document)
+    history.apply(
+        "Zwei stehende Quader",
+        [
+            OperationDraft(
+                op="create_box", params={"width": 4.0, "depth": 6.0, "height": 10.0, "x": x}
+            )
+            for x in (17.0, 57.0)
+        ],
+    )
+    before = evaluate(document, profile)
+    assert before.complete
+    assert len(before.scene.objects) == 2
+    assert all(len(entry.features) == 6 for entry in before.scene.objects.values())
+    # Nur die Auswahl der günstigen Lage ist festgelegt. Die echte Operation
+    # bewegt beide Körper selbst und meldet ausdrücklich keine gemeinsame Matrix.
+    matrices = iter(
+        (
+            ((1, 0, 0, 0), (0, 0, -1, 5), (0, 1, 0, 3), (0, 0, 0, 1)),
+            ((0, 0, 1, 52), (0, 1, 0, 0), (-1, 0, 0, 59), (0, 0, 0, 1)),
+        )
+    )
+    monkeypatch.setattr(
+        prepare_ops,
+        "orient_for_print",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            transform=np.asarray(next(matrices), dtype=float), findings=[]
+        ),
+    )
+    history.apply(
+        "Gemeinsam hinlegen",
+        [
+            OperationDraft(
+                op="orient_for_print",
+                inputs=("obj_1", "obj_2"),
+                params={"thorough": False, "arrange": False},
+            )
+        ],
+    )
+    after = evaluate(document, profile)
+    assert after.complete
+    expected = (
+        ("obj_1", (17.0, 0.0, 3.0), (4.0, 10.0, 6.0)),
+        ("obj_2", (57.0, 0.0, 2.0), (10.0, 6.0, 4.0)),
+    )
+    for index, (identifier, centre, size) in enumerate(expected):
+        entry = after.scene.objects[identifier]
+        original = before.scene.objects[identifier]
+        assert entry.mesh.bounds.centre == pytest.approx(centre, abs=1e-6)
+        assert entry.mesh.bounds.size == pytest.approx(size, abs=1e-6)
+        assert set(entry.features) == set(original.features)
+        for name, old in original.features.items():
+            x, y, z = old.params["normal"]
+            normal = (x, -z, y) if index == 0 else (z, y, -x)
+            axis = int(np.argmax(np.abs((x, y, z))))
+            current = entry.features[name]
+            assert current.params["normal"] == pytest.approx(normal, abs=1e-6)
+            assert current.params["centre"] == pytest.approx(
+                np.asarray(centre) + np.asarray(normal) * np.asarray(size) / 2.0, abs=1e-6
+            )
+            assert current.params["area"] == pytest.approx((60.0, 40.0, 24.0)[axis], abs=1e-5)
+            assert current.created_by == old.created_by
+            assert current.provenance == old.provenance
+
+
+def test_p0_deformed_thread_does_not_hide_a_real_spherical_surface(monkeypatch):
+    """Ein ungültiger Gewinde-Suchkandidat darf echte neu erkannte Oberflächen nicht entfernen."""
+    from app.core.knowledge.parts.build import thread
+    from app.core.knowledge.parts.shapes import thread_body
+    from app.core.scene.evaluate import _with_features
+    from app.core.types import Feature, Operation, SceneObject
+
+    threaded = thread_body(6.0, 1.0, 8.0)
+    ellipsoid = trimesh.creation.icosphere(radius=0.3, subdivisions=2)
+    ellipsoid.vertices[:, 0] *= 2.0
+    ellipsoid.apply_translation((6.0, 0.0, 4.0))
+    source = MeshData.of(trimesh.util.concatenate((threaded.raw, ellipsoid)))
+    changed = source.raw.copy()
+    changed.vertices[:, 0] *= 0.5
+    moved = MeshData.of(changed)
+    identifier, known = thread("made_thread", 6.0, 1.0, (0.0, 0.0, 4.0), length=8.0)
+    known = replace(known, created_by=2)
+    previous = {identifier: known}
+    sphere_faces = tuple(range(threaded.triangle_count, moved.triangle_count))
+    sphere_points = moved.raw.triangles[list(sphere_faces)].reshape(-1, 3)
+    # Die vorher abseits liegende Ellipsoidfläche ist nach X/2 eine echte
+    # Kugel. Sie liegt zugleich innerhalb der VERALTETEN Gewindehülle.
+    assert np.linalg.norm(sphere_points - (3.0, 0.0, 4.0), axis=1) == pytest.approx(0.3, abs=1e-10)
+    assert np.hypot(sphere_points[:, 0], sphere_points[:, 1]).min() > 2.0
+    assert np.hypot(sphere_points[:, 0], sphere_points[:, 1]).max() < 3.5
+    measured = Feature(
+        id="sphere_probe",
+        kind="sphere",
+        provenance="detected",
+        params={"centre": (3.0, 0.0, 4.0), "diameter": 0.6},
+        face_indices=sphere_faces,
+    )
+    # Die Messung selbst wird hier nicht geprüft, sondern die nachfolgende
+    # Unterdrückung. Ihre Fläche ist durch die unabhängige Radiusprobe belegt.
+    evaluation = importlib.import_module("app.core.scene.evaluate")
+    monkeypatch.setattr(evaluation, "detect", lambda *_args, **_kwargs: {measured.id: measured})
+    findings = []
+    result = _with_features(
+        SceneObject("obj_1", "Gewinde mit Außenfläche", moved, features=previous),
+        previous,
+        Operation(
+            id=3, op="scale_object", inputs=("obj_1",), outputs=("obj_1",), params={"fx": 0.5}
+        ),
+        lambda _question, choices: choices[0],
+        findings,
+        ((0.5, 0.0, 0.0, 0.0), (0.0, 1.0, 0.0, 0.0), (0.0, 0.0, 1.0, 0.0), (0.0, 0.0, 0.0, 1.0)),
+        source.bounds,
+        referenced={identifier},
+    )
+    assert identifier not in result.features
+    assert any(finding.code == "perceive.generated_lost" for finding in findings)
+    assert measured.id in result.features
+    assert result.features[measured.id].params["diameter"] == pytest.approx(0.6)
+    assert result.features[measured.id].face_indices == sphere_faces
+
+
+@pytest.mark.parametrize("recognition", ["global", "budget", "local"])
+def test_p0_rotated_tetrahedral_void_keeps_measured_bounds(monkeypatch, recognition):
+    """Die Hülle eines gedrehten Tetraeders ist nicht die gedrehte alte Quaderhülle."""
+    from app.core.perceive.features import detect_voids
+    from app.core.perceive.matching import transformed_features
+    from app.core.scene.evaluate import _with_features
+    from app.core.types import Operation, SceneObject
+
+    outer = trimesh.creation.box(extents=(30.0, 30.0, 30.0))
+    outer.apply_translation((0.0, 0.0, 10.0))
+    tetrahedron = trimesh.Trimesh(
+        vertices=((2.0, 3.0, 4.0), (8.0, 3.0, 4.0), (2.0, 7.0, 4.0), (2.0, 3.0, 6.0)),
+        faces=((0, 2, 1), (0, 1, 3), (0, 3, 2), (1, 2, 3)),
+        process=False,
+    )
+    assert tetrahedron.volume == pytest.approx(6.0 * 4.0 * 2.0 / 6.0)
+    tetrahedron.invert()
+    source = MeshData.of(trimesh.util.concatenate((outer, tetrahedron)))
+    found = detect_voids(source)
+    assert len(found) == 1
+    known = replace(found[0], params={**found[0].params, "local_search_radius": 100.0})
+    assert known.params["size"] == pytest.approx((6.0, 4.0, 2.0))
+    assert known.params["centre"] == pytest.approx((5.0, 5.0, 5.0))
+    previous = {known.id: known}
+    sine = math.sqrt(0.5)
+    changed = source.raw.copy()
+    points = np.asarray(source.raw.vertices)
+    changed.vertices = np.column_stack(
+        ((points[:, 0] - points[:, 1]) * sine, (points[:, 0] + points[:, 1]) * sine, points[:, 2])
+    )
+    moved = MeshData.of(changed)
+    transform = (
+        (sine, -sine, 0.0, 0.0),
+        (sine, sine, 0.0, 0.0),
+        (0.0, 0.0, 1.0, 0.0),
+        (0.0, 0.0, 0.0, 1.0),
+    )
+    assert known.id not in transformed_features(previous, transform).exact
+    evaluation = importlib.import_module("app.core.scene.evaluate")
+    if recognition == "budget":
+        monkeypatch.setattr(evaluation, "FEATURE_LIMIT_COUNT", 1)
+    elif recognition == "local":
+        monkeypatch.setattr(evaluation, "FEATURE_LIMIT_TRIANGLES", 1)
+    findings = []
+    result = _with_features(
+        SceneObject("obj_1", "Tetraeder im Material", moved, features=previous),
+        previous,
+        Operation(
+            id=2,
+            op="rotate_object",
+            inputs=("obj_1",),
+            outputs=("obj_1",),
+            params={"axis": "z", "angle": 45.0},
+        ),
+        lambda _question, choices: choices[0],
+        findings,
+        transform,
+        source.bounds,
+    )
+    if recognition == "budget":
+        assert any(finding.code == "perceive.too_many" for finding in findings)
+    elif recognition == "local":
+        assert any(finding.code == "perceive.too_large" for finding in findings)
+    current = result.features[known.id]
+    assert current.kind == "void"
+    assert current.params["size"] == pytest.approx((10.0 * sine, 6.0 * sine, 2.0), abs=1e-6)
+    assert current.params["centre"] == pytest.approx((0.0, 8.0 * sine, 5.0), abs=1e-6)
+    assert current.params["volume"] == pytest.approx(8.0, abs=1e-5)
+    assert current.face_indices

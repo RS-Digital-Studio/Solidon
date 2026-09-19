@@ -39,6 +39,49 @@ from app.core.types import Feature
 INVENTED = ("hole", "pin", "cone", "sphere", "torus", "fillet")
 
 
+def test_named_thread_handedness_follows_the_real_helix_and_its_mirror() -> None:
+    """Ein Viertelgang steigt rechtsherum; Spiegeln kehrt Geometrie und Merkmalauskunft um."""
+    from dataclasses import replace
+
+    import numpy as np
+
+    from app.core.geom.ops import as_transform
+    from app.core.geom.transform import apply, scaling
+    from app.core.knowledge.parts.build import thread
+    from app.core.knowledge.parts.shapes import thread_body
+    from app.core.perceive.matching import moved_features
+    from app.core.scene.fits import pair_problem
+
+    mesh = thread_body(6.0, 1.0, 4.0)
+    identifier, feature = thread("thread_1", 6.0, 1.0, (0.0, 0.0, 2.0), length=4.0)
+    # Zwei unabhängige Sollpunkte am Kamm: Vierteldrehung und ein Viertel
+    # Steigung auseinander, ohne den Erkenner als sein eigenes Orakel zu verwenden.
+    points = np.asarray(((3.0, 0.0, 0.25), (0.0, 3.0, 0.5)))
+    indices = [
+        int(np.argmin(np.linalg.norm(mesh.raw.vertices - point, axis=1))) for point in points
+    ]
+    measured = np.asarray(mesh.raw.vertices)[indices]
+    assert measured == pytest.approx(points, abs=1e-10)
+    assert np.cross(measured[0], measured[1])[2] > 0.0
+    assert feature.params["handedness"] == "right"
+    inner = replace(feature, params={**feature.params, "internal": True})
+    assert pair_problem("thread", feature, inner) is None
+
+    reflection = scaling((-1.0, 1.0, 1.0), (0.0, 0.0, 0.0))
+    mirrored = apply(mesh, reflection)
+    mirrored_points = np.asarray(mirrored.raw.vertices)[indices]
+    assert mirrored_points == pytest.approx(
+        np.asarray(((-3.0, 0.0, 0.25), (0.0, 3.0, 0.5))), abs=1e-10
+    )
+    assert np.cross(mirrored_points[0], mirrored_points[1])[2] < 0.0
+    carried = moved_features({identifier: feature}, as_transform(reflection))
+    assert carried[identifier].params["handedness"] == "left"
+    assert carried[identifier].params["pitch"] == pytest.approx(1.0)
+    assert pair_problem("thread", carried[identifier], inner) is not None
+    mirrored_inner = moved_features({identifier: inner}, as_transform(reflection))[identifier]
+    assert pair_problem("thread", carried[identifier], mirrored_inner) is None
+
+
 def _with_thread(
     size: str,
     length: float,

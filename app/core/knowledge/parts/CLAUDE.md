@@ -5,6 +5,12 @@ Geprüfte, parametrische Teile, die der Agent und der Nutzer zusammensetzen
 
 Die Regeln stehen in `.claude/rules/bausteine.md`.
 
+`build.thread` beschreibt die rechtsgängige Geometrie aus `shapes.thread_body`
+mit `handedness="right"`: Winkel und Höhe wachsen gemeinsam. Innenwerkzeug,
+Schraube und Mutter verschieben oder beschneiden diese Wendel, ohne ihren
+Drehsinn zu ändern. Eine Spiegelung führt die Angabe über den gemeinsamen
+Merkmaltransformationsweg nach; ein unbekanntes Importgewinde erhält keine Vorgabe.
+
 ## Eigene Lizenz — MIT
 
 **Dieses Verzeichnis steht unter MIT**, anders als der Rest der Anwendung;

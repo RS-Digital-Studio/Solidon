@@ -5,6 +5,14 @@ Was gerade offen ist und wie daraus Geometrie wird (§12–§16).
 Regeln: `.claude/rules/operationen.md`, für die Projektdatei zusätzlich
 `.claude/rules/dateiformat.md`.
 
+`fits.pair_problem`, die angebotenen Passungsarten und die spätere Prüfung
+verwenden denselben Vertrag: Ein Gewindepaar braucht bekannte gleiche
+`handedness` (`right` oder `left`) zusätzlich zu Innen-/Außenrolle und
+Steigung. Fehlende Angaben bleiben unbekannt, auch wenn sie auf beiden Seiten
+fehlen. Unterschiedliche Drehrichtungen erzeugen einen Befund mit Rückweg
+über Gegenstückwahl oder Rücknahme der Spiegelung. Die aktuelle Wendelerkennung
+liefert keinen Links-/Rechtsnachweis; ihr Steigungswert allein genügt dafür nicht.
+
 `placement.seat_of` prüft beide Mündungen einer erkannten Bohrung. Bei
 Bohrung und Langloch muss die Flächennormale vom Hohlraum weg zeigen; der
 Sacklochboden ist deshalb keine Trägerfläche. `mouth_outline` gewinnt den
@@ -228,6 +236,15 @@ weiter: Ohne verlässliche Auskunft darf keine Leeranzeige „ungenutzt“ behau
 Lineare und kreisförmige Muster bewegen Kopien über `moved_body`. Eine starre
 Bewegung erhält einen exakten Körper; die Kopie bleibt anschließend im
 B-Rep-Kern bearbeitbar.
+
+Muster führen die Merkmale je Kopie im Ergebnisraum mit, ohne gemeinsame
+Transformationsmatrix. Bei Einzelausgaben folgt nur ein unverändert geerbtes
+Merkmal der gemeldeten Matrix. `_inherited_features` vergleicht dafür alle
+Feature-Felder und die kanonischen Parameterwerte; JSON-Listen aus dem
+Plattencache und gleichwertige Tupel gelten gleich. Ausdrücklich neu berechnete
+Merkmale werden nicht nochmals transformiert. Die globale und lokale
+Zuordnung lesen dieselbe maßbewusste Transformationsauskunft; auch bei
+überschrittenem Merkmalsbudget dürfen keine ungeprüften alten Maße zurückkehren.
 
 ## Grenzen
 

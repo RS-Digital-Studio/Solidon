@@ -942,6 +942,119 @@ def test_mirroring_keeps_the_pin_that_an_operation_made() -> None:
     assert result.features["op3.pin_1"].provenance == "generated"
 
 
+@pytest.mark.parametrize("recognised", [True, False])
+@pytest.mark.parametrize("declared", [True, False])
+@pytest.mark.parametrize("local", [True, False])
+@pytest.mark.parametrize("factors", [(2.0, 2.0, 2.0), (1.0, 1.0, 2.0), (2.0, 1.0, 1.0)])
+def test_scaling_generated_bores_keeps_only_current_circular_measures(
+    recognised: bool,
+    declared: bool,
+    local: bool,
+    factors: tuple[float, float, float],
+    monkeypatch,
+) -> None:
+    """Erzeuger und Name bleiben; aus einem Kreis wird bei Querstreckung eine Ellipse."""
+    from app.core.geom.ops import as_transform
+    from app.core.geom.transform import scaling
+    from app.core.scene.evaluate import _with_features
+    from app.core.types import Operation, SceneObject
+
+    if local:
+        import importlib
+
+        monkeypatch.setattr(
+            importlib.import_module("app.core.scene.evaluate"), "FEATURE_LIMIT_TRIANGLES", 1
+        )
+    mesh = one_hole_plate()
+    bore = next(iter(holes_of(mesh).values()))
+    named = replace(
+        bore, id="made_bore", provenance="generated", recognised=recognised, created_by=2
+    )
+    previous = {named.id: named}
+    matrix = scaling(factors)
+    entry = SceneObject(
+        id="obj_1", name="Platte", mesh=apply(mesh, matrix), features=previous if declared else {}
+    )
+    operation = Operation(id=4, op="scale_object", inputs=("obj_1",), outputs=("obj_1",), params={})
+    findings = []
+    result = _with_features(
+        entry,
+        previous,
+        operation,
+        lambda q, c: c[0],
+        findings,
+        as_transform(matrix),
+        referenced={named.id},
+    )
+    if factors[0] != factors[1]:
+        assert named.id not in result.features, "an ellipse cannot keep the old circular bore"
+        assert any(f.code == "perceive.generated_lost" for f in findings)
+        return
+    current = result.features[named.id]
+    assert current.provenance == "generated"
+    assert current.created_by == 2
+    assert current.params["diameter"] == pytest.approx(bore.params["diameter"] * factors[0])
+    assert current.params["depth"] == pytest.approx(bore.params["depth"] * factors[2])
+    assert len([f for f in result.features.values() if f.kind == "hole"]) == 1
+
+
+def test_affine_feature_normals_follow_the_plane_and_opening() -> None:
+    """Scherung und Achsskalierung: Flächennormalen stehen weiter senkrecht auf der Fläche."""
+    from app.core.geom.ops import as_transform
+    from app.core.perceive.matching import transformed_features
+
+    normal = tuple(np.array((1.0, 1.0, 0.0)) / np.sqrt(2.0))
+    feature = Feature(
+        id="seat",
+        kind="face",
+        provenance="generated",
+        created_by=3,
+        params={
+            "centre": (1.0, 2.0, 3.0),
+            "normal": normal,
+            "area": np.sqrt(2.0),
+            "opening_normal": normal,
+            "profile_clamp_y": (0.0, 0.0, 1.0),
+        },
+    )
+    matrix = np.array(
+        ((2.0, 0.0, 0.0, 7.0), (1.0, 1.0, 0.0, -4.0), (0.0, 0.0, 3.0, 2.0), (0.0, 0.0, 0.0, 1.0))
+    )
+    result = transformed_features({feature.id: feature}, as_transform(matrix))
+    moved = result.candidates[feature.id]
+    # Die ursprünglichen Kanten (1,-1,0) und (0,0,1) werden zu (2,0,0) und (0,0,3).
+    for key in ("normal", "opening_normal"):
+        assert moved.params[key] == pytest.approx((0.0, 1.0, 0.0), abs=1e-12)
+    assert moved.params["area"] == pytest.approx(6.0)
+    assert moved.params["centre"] == pytest.approx((9.0, -1.0, 11.0))
+    assert moved.params["profile_clamp_y"] == pytest.approx((0.0, 0.0, 1.0))
+    assert feature.id in result.exact
+    assert feature.params["normal"] == normal
+    assert feature.params["centre"] == (1.0, 2.0, 3.0)
+
+
+def test_anisotropic_face_diameter_is_not_an_exact_circular_fit() -> None:
+    """Ein ebener Deckelsitz bleibt eben, sein Kreis wird bei Querstreckung elliptisch."""
+    from app.core.geom.ops import as_transform
+    from app.core.geom.transform import scaling
+    from app.core.perceive.matching import transformed_features
+
+    feature = Feature(
+        id="neck",
+        kind="face",
+        provenance="generated",
+        params={
+            "centre": (0.0, 0.0, 0.0),
+            "normal": (0.0, 0.0, 1.0),
+            "area": 100.0,
+            "diameter": 10.0,
+            "fit_role": "outer",
+        },
+    )
+    result = transformed_features({feature.id: feature}, as_transform(scaling((2.0, 1.0, 1.0))))
+    assert feature.id not in result.exact
+
+
 def test_apply_mapping_keeps_every_field_of_a_feature() -> None:
     """``apply_mapping`` baute ein frisches ``Feature`` aus fünf von sieben
     Feldern — ``created_by`` und ``recognised`` fielen still weg.

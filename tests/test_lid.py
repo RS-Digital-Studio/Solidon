@@ -326,6 +326,8 @@ def test_the_threaded_neck_keeps_the_container_open_and_names_both_threads(
     )
     assert not container.features[NECK_THREAD_FEATURE].params["internal"]
     assert lid.features[CAP_THREAD_FEATURE].params["internal"]
+    assert container.features[NECK_THREAD_FEATURE].params["handedness"] == "right"
+    assert lid.features[CAP_THREAD_FEATURE].params["handedness"] == "right"
 
 
 def test_the_lid_stands_on_its_open_end(profile: Profile) -> None:

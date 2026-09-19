@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -31,6 +31,9 @@ from app.core.deferred import linear_sum_assignment
 from app.core.log import get_logger
 from app.core.types import Feature, FeatureId, Transform, Vec3
 from app.core.units import EPS_GEOM
+
+if TYPE_CHECKING:
+    from app.core.geom.mesh import MeshData
 
 _log = get_logger(__name__)
 
@@ -488,14 +491,12 @@ def resolve(
 def moved_features(
     features: dict[FeatureId, Feature], transform: Transform
 ) -> dict[FeatureId, Feature]:
-    """Nimmt Merkmale entlang einer starren Bewegung mit, die die Operation
-    gemeldet hat (§21.2).
+    """Führt Orte und Richtungen mit (§21.2), bei Spiegelung auch die Händigkeit.
 
-    Angefasst wird nur, was im Raum lebt: der Punkt, an dem ein Merkmal sitzt,
-    und die Richtung, in die es zeigt. Ein Durchmesser bewegt sich nicht, und
-    eine Fläche ist kein Ort. Ohne das verwaiste eine Drehung jedes Merkmal am
-    Körper — nicht weil es verschwunden wäre, sondern weil es jetzt woanders
-    ist.
+    Formmaße bleiben hier unverändert. Für einen Maßstab oder eine Scherung
+    liefert ``transformed_features`` zusätzlich die Maßänderung und deren
+    Gültigkeit. Normalen folgen auch dort der invers-transponierten Matrix,
+    Richtungen der gewöhnlichen linearen Abbildung.
     """
     matrix = np.asarray(transform, dtype=float)
     turn = matrix[:3, :3]
@@ -509,11 +510,20 @@ def moved_features(
                 params[key] = (float(carried[0]), float(carried[1]), float(carried[2]))
         for key in ("axis", "normal", "direction", "opening_normal", "profile_clamp_y"):
             if key in params:
-                direction = turn @ np.asarray(params[key], dtype=float)
+                original = np.asarray(params[key], dtype=float)
+                direction = (
+                    np.linalg.solve(turn.T, original)
+                    if key in {"normal", "opening_normal"}
+                    else turn @ original
+                )
                 length = float(np.linalg.norm(direction))
                 if length > EPS_GEOM:
                     direction = direction / length
                 params[key] = (float(direction[0]), float(direction[1]), float(direction[2]))
+        if feature.kind == "thread" and float(np.linalg.det(turn)) < 0.0:
+            handedness = params.get("handedness")
+            if handedness in {"right", "left"}:
+                params["handedness"] = "left" if handedness == "right" else "right"
         # replace und nicht ein frisches Feature: Der Aufbau von Hand
         # nannte fünf der sieben Felder, und die zwei fehlenden fielen bei
         # jedem Verschieben still weg. created_by ist der Eintrag „diesen
@@ -524,3 +534,129 @@ def moved_features(
         # dazukommt, reist jetzt von selbst mit.
         moved[identifier] = replace(feature, params=params)
     return moved
+
+
+@dataclass(frozen=True, slots=True)
+class FeatureTransform:
+    """Suchkandidaten und die Teilmenge mit weiterhin gültigen Formmaßen."""
+
+    candidates: dict[FeatureId, Feature]
+    exact: frozenset[FeatureId]
+
+
+def transformed_features(
+    features: Mapping[FeatureId, Feature], transform: Transform, *, mesh: MeshData | None = None
+) -> FeatureTransform:
+    """Maße einmal für globale und örtliche Zuordnung nachführen.
+
+    Eine affine Abbildung erhält nicht jede Formart: Ein elliptisch verzerrtes
+    Loch bleibt Suchkandidat, aber keine belegte Kreisbohrung. ``exact`` nennt
+    nur Merkmale, deren vorhandene Beschreibung die neue Form weiter trägt.
+    ``mesh`` ist gegebenenfalls das bereits transformierte Netz mit derselben
+    Flächennummerierung; an ihm lässt sich die Hohlraumhülle erneut messen.
+    """
+    from app.core.geom.transform import is_rigid
+
+    matrix = np.asarray(transform, dtype=float)
+    linear = matrix[:3, :3]
+    factors = np.linalg.svd(linear, compute_uv=False)
+    uniform = bool(np.allclose(factors, factors[0], rtol=0.0, atol=EPS_GEOM))
+    rigid = is_rigid(matrix)
+    result = moved_features(dict(features), transform)
+    exact: set[FeatureId] = set()
+    lengths = (
+        "diameter",
+        "depth",
+        "length",
+        "radius",
+        "tube_diameter",
+        "ring_diameter",
+        "pitch",
+        "width",
+        "height",
+        "travel",
+        "residual",
+    )
+    for name, feature in result.items():
+        params = dict(feature.params)
+        valid = rigid or uniform
+        if "local_search_radius" in params:
+            params["local_search_radius"] *= float(factors[0])
+        if uniform:
+            for key in lengths:
+                if key in params:
+                    params[key] *= float(factors[0])
+            if "size" in params:
+                params["size"] = tuple(float(value) * float(factors[0]) for value in params["size"])
+            if "area" in params:
+                params["area"] *= float(factors[0]) ** 2
+            if "volume" in params:
+                params["volume"] *= float(factors[0]) ** 3
+        elif feature.kind in {"hole", "pin"}:
+            axis = np.asarray(features[name].params["axis"], dtype=float)
+            axis = axis / np.linalg.norm(axis)
+            _u, _s, vectors = np.linalg.svd(axis.reshape(1, 3))
+            radial = linear @ vectors[1:].T
+            radial_factors = np.linalg.svd(radial, compute_uv=False)
+            along = linear @ axis
+            valid = bool(
+                np.allclose(radial_factors, radial_factors[0], rtol=0.0, atol=EPS_GEOM)
+                and (np.abs(along @ radial) <= EPS_GEOM).all()
+            )
+            if valid:
+                radial_scale = float(radial_factors[0])
+                axial_scale = float(np.linalg.norm(along))
+                for key in ("diameter", "radius"):
+                    if key in params:
+                        params[key] *= radial_scale
+                for key in ("depth", "length"):
+                    if key in params:
+                        params[key] *= axial_scale
+                if "area" in params:
+                    params["area"] *= radial_scale * axial_scale
+                if "volume" in params:
+                    params["volume"] *= radial_scale**2 * axial_scale
+                valid = not any(
+                    key in params
+                    for key in (*lengths, "size")
+                    if key not in {"diameter", "radius", "depth", "length", "residual"}
+                )
+        elif feature.kind == "face":
+            normal = np.asarray(features[name].params["normal"], dtype=float)
+            normal = normal / np.linalg.norm(normal)
+            factor = abs(float(np.linalg.det(linear))) * float(
+                np.linalg.norm(np.linalg.solve(linear.T, normal))
+            )
+            if "area" in params:
+                params["area"] *= factor
+            valid = not any(
+                key in params for key in (*lengths, "size", "volume") if key != "residual"
+            )
+        if not uniform:
+            # Ein gemessener Fitfehler lässt sich bei verschiedenen Maßstäben
+            # ohne seine Messpunkte nicht als neuer Messwert ausgeben.
+            params.pop("residual", None)
+        if feature.kind == "void":
+            # Größe und Mitte des Hohlraums bezeichnen seine Welt-AABB.
+            # Die gedrehte alte Hülle umschließt die neue nur konservativ.
+            nonzero = np.abs(linear) > EPS_GEOM
+            aligned = bool((nonzero.sum(axis=0) == 1).all() and (nonzero.sum(axis=1) == 1).all())
+            valid = aligned
+            if "volume" in params:
+                params["volume"] = features[name].params["volume"] * abs(
+                    float(np.linalg.det(linear))
+                )
+            if "size" in params:
+                params["size"] = tuple(
+                    float(value) for value in np.abs(linear) @ features[name].params["size"]
+                )
+            if not aligned and mesh is not None and feature.face_indices:
+                vertices = mesh.raw.vertices[mesh.raw.faces[list(feature.face_indices)].ravel()]
+                low, high = vertices.min(axis=0), vertices.max(axis=0)
+                params["centre"] = tuple(float(value) for value in (low + high) / 2.0)
+                params["size"] = tuple(float(value) for value in high - low)
+                valid = True
+        result[name] = replace(feature, params=params)
+        if valid:
+            exact.add(name)
+    return FeatureTransform(result, frozenset(exact))

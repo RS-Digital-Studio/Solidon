@@ -14,7 +14,7 @@ from app.core.deferred import trimesh
 from app.core.errors import CANCEL, CORRECT_INPUT, ValidationError
 from app.core.geom.mesh import MeshData, face_components
 from app.core.perceive import features as detection
-from app.core.perceive.matching import match, moved_features
+from app.core.perceive.matching import match, transformed_features
 from app.core.perceive.relations import cavity_chains
 from app.core.types import Feature, FeatureId, Transform, Vec3, is_a_cavity
 from app.core.units import EPS_GEOM, match_tolerance, weld_tolerance
@@ -439,63 +439,15 @@ def features_in_region(
 def transformed_searches(
     features: Mapping[FeatureId, Feature], transform: Transform
 ) -> dict[FeatureId, Feature]:
-    """Belegte Suchkugeln konservativ mitnehmen, bekannte Formmaße nur exakt ändern."""
-    matrix = np.asarray(transform, dtype=float)[:3, :3]
-    factors = np.linalg.svd(matrix, compute_uv=False)
-    uniform = bool(np.allclose(factors, factors[0], rtol=0.0, atol=EPS_GEOM))
-    result = moved_features(dict(features), transform)
-    for name, feature in result.items():
-        params = dict(feature.params)
-        if "local_search_radius" in params:
-            params["local_search_radius"] *= float(factors[0])
-        if uniform:
-            for key in (
-                "diameter",
-                "depth",
-                "length",
-                "radius",
-                "tube_diameter",
-                "ring_diameter",
-                "pitch",
-                "width",
-                "height",
-            ):
-                if key in params:
-                    params[key] *= float(factors[0])
-            if "area" in params:
-                params["area"] *= float(factors[0]) ** 2
-            if "volume" in params:
-                params["volume"] *= float(factors[0]) ** 3
-        elif feature.kind in {"hole", "pin"}:
-            # Verschiedene Achsfaktoren können einen Kreis erhalten, z. B.
-            # beim Verlängern in Z. Eine Ellipse erhält kein Kreis-Sollmaß.
-            axis = np.asarray(features[name].params["axis"], dtype=float)
-            _u, _s, vectors = np.linalg.svd(axis.reshape(1, 3))
-            radial = matrix @ vectors[1:].T
-            radial_factors = np.linalg.svd(radial, compute_uv=False)
-            along = matrix @ axis
-            if (
-                np.allclose(radial_factors, radial_factors[0], rtol=0.0, atol=EPS_GEOM)
-                and (np.abs(along @ radial) <= EPS_GEOM).all()
-            ):
-                params["diameter"] *= float(radial_factors[0])
-                if "depth" in params:
-                    params["depth"] *= float(np.linalg.norm(along))
-        if feature.kind == "face":
-            normal = np.asarray(features[name].params["normal"], dtype=float)
-            transformed = np.linalg.solve(matrix.T, normal)
-            norm = float(np.linalg.norm(transformed))
-            params["normal"] = tuple(float(value) for value in transformed / norm)
-            if not uniform and "area" in params:
-                params["area"] *= abs(float(np.linalg.det(matrix))) * norm
-        result[name] = replace(feature, params=params)
-    return result
+    """Suchkugeln und Maßkandidaten aus derselben Auskunft wie die globale Zuordnung."""
+    return transformed_features(features, transform).candidates
 
 
 def rigid_transform(transform: Transform) -> bool:
     """Nur eine starre Bewegung erlaubt ungeprüftes Mitnehmen unveränderter Maße."""
-    matrix = np.asarray(transform, dtype=float)[:3, :3]
-    return bool(np.allclose(matrix.T @ matrix, np.eye(3), rtol=0.0, atol=EPS_GEOM))
+    from app.core.geom.transform import is_rigid
+
+    return is_rigid(np.asarray(transform, dtype=float))
 
 
 def _query_is_complete(

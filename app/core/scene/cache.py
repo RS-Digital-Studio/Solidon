@@ -67,7 +67,7 @@ DEFAULT_DISK_BUDGET_BYTES: Final = 2 * 1024 * 1024 * 1024
 #: Maßgeänderte Sackböden müssen mit ihrer vollständigen Fläche neu zugeordnet werden.
 #: Ein Materialslot trägt seit dem 19.09.2026 seine weiteren Farben
 #: (``extra_colours``); ein alter Eintrag ohne sie ist kein gültiger Stand.
-CACHE_FORMAT_VERSION: Final = 9
+CACHE_FORMAT_VERSION: Final = 10
 
 
 @dataclass(frozen=True, slots=True)

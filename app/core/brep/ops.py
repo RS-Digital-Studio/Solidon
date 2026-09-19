@@ -400,6 +400,8 @@ def thread_exact(ctx: OpContext) -> OpResult:
         params={
             "diameter": params.diameter,
             "pitch": params.pitch,
+            # profiles.threaded_rod folgt (Winkel, Höhe) = (2π, Steigung).
+            "handedness": "right",
             "length": params.length,
             "centre": centre,
             "axis": axis,

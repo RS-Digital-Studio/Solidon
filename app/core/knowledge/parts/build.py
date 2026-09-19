@@ -130,6 +130,9 @@ def thread(
         params={
             "diameter": round(diameter, 4),
             "pitch": round(pitch, 4),
+            # thread_body lässt Winkel und Höhe gemeinsam wachsen; auch
+            # Innenwerkzeuge, Schraube und Mutter behalten diesen rechten Gang.
+            "handedness": "right",
             "centre": centre,
             "axis": axis,
             "internal": internal,

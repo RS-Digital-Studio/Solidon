@@ -5535,6 +5535,7 @@ def test_a_named_thread_says_how_long_its_helix_is() -> None:
         threads = [f for f in built.features.values() if f.kind == "thread"]
         assert threads, f"{name} nennt sein Gewinde nicht"
         for feature in threads:
+            assert feature.params["handedness"] == "right"
             length = float(feature.params.get("length", 0.0))
             centre = feature.params["centre"]
             assert length == pytest.approx(erwartet), (

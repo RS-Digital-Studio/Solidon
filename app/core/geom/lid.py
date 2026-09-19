@@ -895,6 +895,7 @@ def screw_lid(ctx: OpContext) -> OpResult:
         params={
             "diameter": round(major, 4),
             "pitch": round(params.pitch, 4),
+            "handedness": "right",
             "centre": (centre_x, centre_y, z + params.height / 2.0),
             "axis": (0.0, 0.0, 1.0),
             "internal": False,
@@ -907,6 +908,7 @@ def screw_lid(ctx: OpContext) -> OpResult:
         params={
             "diameter": round(major, 4),
             "pitch": round(params.pitch, 4),
+            "handedness": "right",
             "centre": (0.0, 0.0, params.height / 2.0),
             "axis": (0.0, 0.0, 1.0),
             "internal": True,

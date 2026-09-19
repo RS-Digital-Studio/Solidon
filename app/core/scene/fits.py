@@ -137,6 +137,18 @@ def _pair_problem(
                 "Die Gewindesteigungen unterscheiden sich. Beide Gewinde auf dieselbe "
                 "Steigung ändern."
             )
+        first_hand = first.params.get("handedness")
+        second_hand = second.params.get("handedness")
+        if first_hand not in ("right", "left") or second_hand not in ("right", "left"):
+            return "fit.not_measurable", _(
+                "Die Drehrichtung eines Gewindes ist nicht bekannt. Zwei Gewinde mit "
+                "bekannter gleicher Drehrichtung wählen."
+            )
+        if first_hand != second_hand:
+            return "fit.handedness_mismatch", _(
+                "Ein Rechtsgewinde und ein Linksgewinde greifen nicht ineinander. "
+                "Ein Gegenstück mit derselben Drehrichtung wählen oder die Spiegelung zurücknehmen."
+            )
     return None
 
 

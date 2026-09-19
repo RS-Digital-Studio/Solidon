@@ -323,6 +323,100 @@ def test_a_typed_value_becomes_a_step_in_the_history(window: MainWindow) -> None
     assert ops[-1] == "translate_object", f"letzter Schritt: {ops[-1]}"
 
 
+@pytest.mark.parametrize("source_op", ["create_box", "create_brep_box"], ids=["mesh", "brep"])
+def test_typed_scaling_updates_selected_face_measures_and_undo_redo(
+    window: MainWindow, source_op: str
+) -> None:
+    """Getippte 200 Prozent erreichen Fläche, Auswahlkarte und Rückweg auf beiden Kernen."""
+    from PySide6.QtWidgets import QLabel, QScrollArea
+
+    from app.core.brep.kernel import available
+    from app.core.scene.history import OperationDraft
+    from app.ui.labels import area
+
+    if source_op == "create_brep_box" and not available():
+        pytest.skip("OpenCASCADE is an optional dependency")
+
+    window.resize(1500, 950)
+    window.show()
+    QApplication.processEvents()
+    assert window.session.apply(
+        "Quader",
+        [
+            OperationDraft(
+                op=source_op,
+                params={"width": 40.0, "depth": 30.0, "height": 20.0},
+            )
+        ],
+    )
+    assert window.session.wait_for_idle()
+    initial = window.session.last_result
+    assert initial is not None and initial.complete
+    assert len(initial.scene.objects) == 1
+    object_id = next(iter(initial.scene.objects))
+    window._on_scene(initial)
+    window.object_tree.select_object(object_id)
+    transactions_before = len(window.session.project.document.transactions)
+
+    window.transform_bar.role_buttons["scale"].click()
+    window.transform_bar.factor.setValue(200.0)
+    QTest.keyClick(window.transform_bar.factor.lineEdit(), Qt.Key.Key_Return)
+    assert window.session.wait_for_idle()
+
+    document = window.session.project.document
+    assert len(document.transactions) == transactions_before + 1
+    assert document.ops[-1].op == "scale_object"
+    assert document.ops[-1].params["factor"] == pytest.approx(2.0)
+
+    def assert_current_faces(factor: float) -> None:
+        """Analytische Quadermaße und die wirklich gewählte Fläche zusammen prüfen."""
+        result = window.session.last_result
+        assert result is not None and result.complete
+        entry = result.scene.objects[object_id]
+        assert entry.mesh.bounds.size == pytest.approx(
+            (40.0 * factor, 30.0 * factor, 20.0 * factor)
+        )
+        faces = [feature for feature in entry.features.values() if feature.kind == "face"]
+        assert len(faces) == 6
+        assert sorted(float(face.params["area"]) for face in faces) == pytest.approx(
+            [value * factor**2 for value in (600.0, 600.0, 800.0, 800.0, 1200.0, 1200.0)]
+        )
+        upper = [
+            face for face in faces if tuple(face.params["normal"]) == pytest.approx((0.0, 0.0, 1.0))
+        ]
+        assert len(upper) == 1
+        window.object_tree.select_object(object_id)
+        window.object_tree.select_feature(object_id, upper[0].id)
+        assert window.feature_panel._feature_id == upper[0].id
+        # Die Auswahl baut ihre Zeilen neu. Im bereits sichtbaren Fenster
+        # stellt Qt neue Kinder erst mit den Layout-/Show-Ereignissen dar.
+        QApplication.processEvents()
+        assert window.feature_dock.isVisibleTo(window)
+        scroller = window.feature_dock.findChild(QScrollArea)
+        assert scroller is not None
+        expected_measure = area(1200.0 * factor**2)
+        visible_measures = []
+        for label in window.feature_dock.findChildren(QLabel):
+            if (
+                expected_measure in label.text()
+                and scroller.isAncestorOf(label)
+                and label.isVisibleTo(window.feature_dock)
+            ):
+                bounds = label.rect()
+                bounds.moveTopLeft(label.mapTo(scroller.viewport(), bounds.topLeft()))
+                if scroller.viewport().rect().contains(bounds):
+                    visible_measures.append(label.text())
+        assert visible_measures, "das Maß muss im sichtbaren Rollbereich der Auswahlkarte stehen"
+
+    assert_current_faces(2.0)
+    window.session.undo()
+    assert window.session.wait_for_idle()
+    assert_current_faces(1.0)
+    window.session.redo()
+    assert window.session.wait_for_idle()
+    assert_current_faces(2.0)
+
+
 def test_leaving_a_field_applies_nothing(window: MainWindow) -> None:
     """Einen getippten Wert stehen lassen und weggehen bewegt **nichts**.
 

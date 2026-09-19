@@ -467,12 +467,76 @@ def _thread_pair(profile: Profile) -> Scene:
     for entry, internal in zip(scene.objects.values(), (True, False), strict=True):
         entry.features = {
             key: replace(
-                value, kind="thread", params={**value.params, "internal": internal, "pitch": 1.0}
+                value,
+                kind="thread",
+                params={
+                    **value.params,
+                    "internal": internal,
+                    "pitch": 1.0,
+                    "handedness": "right",
+                },
             )
             for key, value in entry.features.items()
         }
     scene.fits.append(replace(clearance_fit(), kind="thread"))
     return scene
+
+
+@pytest.mark.parametrize("handedness", [None, "", "unknown", "left"])
+def test_thread_fit_requires_known_matching_handedness(
+    profile: Profile, handedness: str | None
+) -> None:
+    """Fehlender Drehsinn oder nur ein gespiegelter Gang darf keine passende Verbindung melden."""
+    scene = _thread_pair(profile)
+    outer = scene.objects["obj_2"].features["pin_1"]
+    params = dict(outer.params)
+    if handedness is None:
+        params.pop("handedness")
+    else:
+        params["handedness"] = handedness
+    scene.objects["obj_2"].features["pin_1"] = replace(outer, params=params)
+    first = scene.objects["obj_1"].features["hole_1"]
+    second = scene.objects["obj_2"].features["pin_1"]
+
+    findings = fit_check.check(scene, profile)
+
+    assert len(findings) == 1
+    expected = "fit.handedness_mismatch" if handedness == "left" else "fit.not_measurable"
+    assert findings[0].code == expected
+    assert findings[0].object_id == "obj_1"
+    assert findings[0].feature_ids == ("hole_1",)
+    assert fit_check.pair_problem("thread", first, second) is not None
+    assert not fit_check.pair_kinds(first, second)
+
+
+def test_two_threads_without_handedness_are_not_a_verified_fit(profile: Profile) -> None:
+    """Zwei fehlende Angaben sind kein Nachweis gleicher Drehrichtung."""
+    scene = _thread_pair(profile)
+    for entry in scene.objects.values():
+        entry.features = {
+            key: replace(
+                feature,
+                params={
+                    name: value for name, value in feature.params.items() if name != "handedness"
+                },
+            )
+            for key, feature in entry.features.items()
+        }
+    findings = fit_check.check(scene, profile)
+    assert len(findings) == 1
+    assert findings[0].code == "fit.not_measurable"
+
+
+@pytest.mark.parametrize("handedness", ["right", "left"])
+def test_thread_fit_accepts_either_matching_handedness(profile: Profile, handedness: str) -> None:
+    """Zwei gleichgängige Gewinde passen unabhängig von rechts oder links zusammen."""
+    scene = _thread_pair(profile)
+    for entry in scene.objects.values():
+        entry.features = {
+            key: replace(feature, params={**feature.params, "handedness": handedness})
+            for key, feature in entry.features.items()
+        }
+    assert not fit_check.check(scene, profile)
 
 
 def test_threads_need_opposite_roles_and_the_same_pitch(profile: Profile) -> None:
