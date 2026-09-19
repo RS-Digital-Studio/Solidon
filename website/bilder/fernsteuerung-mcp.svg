@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" width="1200" height="800">
+<defs>
+<linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0" stop-color="#212f46"/>
+<stop offset="1" stop-color="#121a2c"/>
+</linearGradient>
+</defs>
+<rect width="1200" height="800" fill="url(#bg)"/>
+<!-- Ein Rechner: beide Fenster stehen auf demselben Bildschirm. -->
+<rect x="60" y="88" width="1080" height="604" rx="28" fill="#161a22" fill-opacity="0.55" stroke="#98a0ab" stroke-width="3"/>
+<path d="M540 692 L660 692 L692 742 L508 742 Z" fill="#3a4048"/>
+<rect x="420" y="742" width="360" height="14" rx="7" fill="#3a4048"/>
+<!-- Links: das zweite Programm — Eingaben, ein abgesetzter Befehl, die Antwort. -->
+<rect x="110" y="150" width="400" height="480" rx="14" fill="#22262c" stroke="#3a4048" stroke-width="2"/>
+<circle cx="136" cy="178" r="6" fill="#3a4048"/>
+<circle cx="158" cy="178" r="6" fill="#3a4048"/>
+<circle cx="180" cy="178" r="6" fill="#3a4048"/>
+<path d="M110 202 H510" stroke="#3a4048" stroke-width="2"/>
+<rect x="140" y="236" width="220" height="14" rx="7" fill="#98a0ab" fill-opacity="0.55"/>
+<rect x="140" y="266" width="300" height="14" rx="7" fill="#98a0ab" fill-opacity="0.55"/>
+<rect x="140" y="296" width="180" height="14" rx="7" fill="#98a0ab" fill-opacity="0.55"/>
+<path d="M140 344 l10 10 -10 10" fill="none" stroke="#e08b4e" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="166" y="346" width="250" height="16" rx="8" fill="#e08b4e"/>
+<path d="M140 428 l8 8 16 -18" fill="none" stroke="#e08b4e" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="176" y="420" width="200" height="14" rx="7" fill="#98a0ab" fill-opacity="0.55"/>
+<rect x="176" y="448" width="150" height="14" rx="7" fill="#98a0ab" fill-opacity="0.55"/>
+<rect x="140" y="520" width="12" height="18" fill="#e6e9ee" fill-opacity="0.8"/>
+<!-- Die Leitung: hin als Aufruf, zurück als Antwort — und nie über den Bildschirmrand hinaus. -->
+<path d="M528 372 H656" fill="none" stroke="#e6e9ee" stroke-width="4" stroke-linecap="round"/>
+<path d="M654 358 L684 372 L654 386 Z" fill="#e6e9ee"/>
+<path d="M672 420 H546" fill="none" stroke="#98a0ab" stroke-width="3" stroke-linecap="round" stroke-dasharray="8 9"/>
+<path d="M548 408 L520 420 L548 432 Z" fill="#98a0ab"/>
+<!-- Rechts: das Solidon-Fenster — Objektbaum, ein bearbeiteter Körper, der Verlauf. -->
+<rect x="690" y="150" width="400" height="480" rx="14" fill="#22262c" stroke="#3a4048" stroke-width="2"/>
+<circle cx="716" cy="178" r="6" fill="#3a4048"/>
+<circle cx="738" cy="178" r="6" fill="#3a4048"/>
+<circle cx="760" cy="178" r="6" fill="#3a4048"/>
+<path d="M690 202 H1090" stroke="#3a4048" stroke-width="2"/>
+<rect x="712" y="228" width="90" height="10" rx="5" fill="#98a0ab" fill-opacity="0.5"/>
+<rect x="724" y="250" width="70" height="10" rx="5" fill="#98a0ab" fill-opacity="0.5"/>
+<rect x="724" y="272" width="80" height="10" rx="5" fill="#98a0ab" fill-opacity="0.5"/>
+<rect x="712" y="294" width="60" height="10" rx="5" fill="#98a0ab" fill-opacity="0.5"/>
+<path d="M888 298 L946 327 L888 356 L830 327 Z" fill="#cfd4db" stroke="#8b929b" stroke-width="1.2" stroke-linejoin="round"/>
+<path d="M830 327 L888 356 L888 426 L830 397 Z" fill="#9aa2ad" stroke="#8b929b" stroke-width="1.2" stroke-linejoin="round"/>
+<path d="M888 356 L946 327 L946 397 L888 426 Z" fill="#b3bbc5" stroke="#8b929b" stroke-width="1.2" stroke-linejoin="round"/>
+<ellipse cx="888" cy="327" rx="15" ry="7.5" fill="#22262c" stroke="#8b929b" stroke-width="1.2"/>
+<rect x="970" y="222" width="98" height="28" rx="6" fill="#2b3038" stroke="#3a4048" stroke-width="1.2"/>
+<rect x="984" y="232" width="60" height="8" rx="4" fill="#98a0ab" fill-opacity="0.6"/>
+<rect x="970" y="258" width="98" height="28" rx="6" fill="#2b3038" stroke="#3a4048" stroke-width="1.2"/>
+<rect x="984" y="268" width="44" height="8" rx="4" fill="#98a0ab" fill-opacity="0.6"/>
+<rect x="970" y="294" width="98" height="28" rx="6" fill="#2b3038" stroke="#3a4048" stroke-width="1.2"/>
+<rect x="984" y="304" width="52" height="8" rx="4" fill="#98a0ab" fill-opacity="0.6"/>
+<rect x="970" y="330" width="98" height="28" rx="6" fill="#e08b4e" fill-opacity="0.22" stroke="#e08b4e" stroke-width="1.6"/>
+<rect x="984" y="340" width="66" height="8" rx="4" fill="#e08b4e"/>
+<path d="M1008 392 h30 a16 16 0 0 1 0 32 h-16" fill="none" stroke="#e08b4e" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M1020 380 l-12 12 12 12" fill="none" stroke="#e08b4e" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="712" y="590" width="356" height="12" rx="6" fill="#98a0ab" fill-opacity="0.3"/>
+</svg>

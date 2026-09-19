@@ -407,6 +407,12 @@ ein — `main-window.png`, `report.png`, `catalog.png`, `op-dialog.png` und
 `start-screen.png`, je Sprache aus dem eigenen Ordner. Erzeugt werden sie von
 `tools/make_figures.py`; wer dort einen Namen ändert, ändert ihn hier mit.
 `tests/test_website.py` prüft jeden Verweis beider Seiten auf Existenz.
+Die übrigen Belege (`bilder/beleg-*.png`) schneidet `tools/make_web_images.py`
+je Sprache; der Lagerbeleg `beleg-filamentlager*.png` zeigt Beispielspulen aus
+einem Kindprozess mit eigenen Nutzerverzeichnissen, nie Roberts echtes Lager.
+Die Karte zur Fernsteuerung (`#mcp` auf der Funktionsseite) trägt in allen
+sechs Fassungen dieselbe gezeichnete `bilder/fernsteuerung-mcp.svg` — ohne
+Text im Bild, damit sie sprachneutral bleibt.
 
 **Die Startseite führt Zahlen aus dem Register.** In der Leiste unter dem
 Aufmacher stehen die Anzahl der Operationen, der Bausteine, der Normteilmaße,

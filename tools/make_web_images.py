@@ -22,12 +22,19 @@ Deutsch in eine Zeile passt, braucht auf Französisch zwei.
 Dieselben zwei Fallen wie bei ``make_figures.py``, aus denselben Gründen: Es
 läuft **nicht** offscreen (dort hat Qt hier keine Schriften), und es ist kein
 Testlauf — die Suite prüft, dass die Dateien da sind, nicht wie sie aussehen.
+
+**Ein Motiv läuft in einem eigenen Prozess:** das Regal des Filamentlagers
+(``beleg-filamentlager``). Es legt Spulen an und bucht Verbrauch, und das
+geschieht in umgebogenen Nutzerverzeichnissen — siehe :func:`take_inventory`.
+Die übrigen Motive lesen Roberts Profil nur; dieses hätte es beschrieben.
 """
 
 from __future__ import annotations
 
 import os
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -486,6 +493,285 @@ def take_windows(app: QApplication, language: str) -> list[Path]:
     return written
 
 
+#: Wie groß das Regal des Filamentlagers aufgenommen wird — **vier Spalten,
+#: zwei Regalbretter, kein Rollbalken.**
+#:
+#: Die Spaltenzahl rechnet das Regal selbst (``InventoryView._shelf_columns``:
+#: eine Karte ist 236 Punkte breit, dazu der Abstand), und sie kippt bei 1260
+#: Punkten Fensterbreite auf fünf. Sechs Spulen in fünf Spalten lassen zwei
+#: Fünftel des Bildes leer; in vier stehen sie als volles Brett und halbes
+#: Brett. Die Höhe ist gemessen: Zwei Bretter mit Überschrift brauchen 638
+#: Punkte im Rollbereich, und der bekommt die Fensterhöhe minus Kopf, Suche,
+#: Knopfzeile und Einstellungen. Bei 852 passt es ohne Rollbalken — und der
+#: Lauf prüft das, statt es anzunehmen: Ein Regal, dessen zweites Brett unten
+#: angeschnitten ist, sähe aus wie ein Fehler der Anwendung.
+INVENTORY_VIEW = (1256, 852)
+
+#: Die Karte auf der Startseite zeigt ihr Bild in 3:2 (``.feature-card img``,
+#: ``aspect-ratio: 3 / 2``), wie die gerenderten Funktionsbilder. Ein Bild in
+#: einem anderen Verhältnis bekäme dort Balken in der Kartenfarbe — im hellen
+#: Thema weiße Streifen neben einer dunklen Oberfläche. Das Regal wird
+#: deshalb auf ein 3:2-Blatt in seiner eigenen Fenstergrundfarbe gelegt: elf
+#: Punkte je Seite, vom Rand des Regals nicht zu unterscheiden.
+INVENTORY_RATIO = 1.5
+
+#: Die Nutzerverzeichnisse, die der Kindprozess des Lagerbelegs umbiegt —
+#: dieselben sechs wie ``tests/conftest.py`` (§38). ``HOME`` ist für macOS
+#: dabei, wo jede Auflösung über ``Path.home()`` läuft; unter Windows ist der
+#: Eintrag folgenlos.
+ISOLATED_VARIABLES = (
+    "APPDATA",
+    "LOCALAPPDATA",
+    "HOME",
+    "XDG_DATA_HOME",
+    "XDG_CONFIG_HOME",
+    "XDG_CACHE_HOME",
+)
+
+#: Woran das Kind erkennt, dass es isoliert läuft. Der Elternprozess setzt die
+#: Variable auf den Temp-Ordner; das Kind weigert sich ohne sie — von Hand
+#: gestartet stünde es sonst vor Roberts echtem Lager.
+ROOM_VARIABLE = "SOLIDON_WEB_IMAGES_ROOM"
+
+#: Sechs Spulen, die ein Regal glaubwürdig machen — je Sprache die Namen, die
+#: ein Kunde in dieser Sprache tippen würde; Materialart und Farbe sind
+#: überall dieselben. Zwei Lagerorte, damit das Regal seine Gruppierung
+#: zeigt; eine Spule mit drei Farben, eine unter der Warnschwelle, eine voll,
+#: eine mit gebuchtem Verbrauch (die Restmenge kommt dann aus dem Journal,
+#: nicht aus einer getippten Zahl). Die Reihenfolge der Namen: Silk,
+#: Schwarz matt, PETG, ASA, TPU, PA-CF — ``SAMPLE_STOCK`` liest sie so.
+SAMPLE_NAMES: dict[str, tuple[str, ...]] = {
+    "de": (
+        "PLA Silk Regenbogen",
+        "PLA Schwarz matt",
+        "PETG Transparent Blau",
+        "ASA Hellgrau",
+        "TPU 95A Rot",
+        "PA-CF Schwarz",
+    ),
+    "en": (
+        "PLA Silk Rainbow",
+        "PLA Matte Black",
+        "PETG Translucent Blue",
+        "ASA Light Grey",
+        "TPU 95A Red",
+        "PA-CF Black",
+    ),
+    "es": (
+        "PLA Seda Arcoíris",
+        "PLA Negro mate",
+        "PETG Azul translúcido",
+        "ASA Gris claro",
+        "TPU 95A Rojo",
+        "PA-CF Negro",
+    ),
+    "fr": (
+        "PLA Soie Arc-en-ciel",
+        "PLA Noir mat",
+        "PETG Bleu translucide",
+        "ASA Gris clair",
+        "TPU 95A Rouge",
+        "PA-CF Noir",
+    ),
+    "it": (
+        "PLA Silk Arcobaleno",
+        "PLA Nero opaco",
+        "PETG Blu trasparente",
+        "ASA Grigio chiaro",
+        "TPU 95A Rosso",
+        "PA-CF Nero",
+    ),
+    "pt": (
+        "PLA Silk Arco-íris",
+        "PLA Preto fosco",
+        "PETG Azul translúcido",
+        "ASA Cinzento-claro",
+        "TPU 95A Vermelho",
+        "PA-CF Preto",
+    ),
+}
+
+#: Die zwei Lagerorte und die zwei Projektnamen der Buchungen, je Sprache.
+#: Die Projektnamen stehen nur im Buchungsverlauf der Spule — im Regal sieht
+#: man von ihnen die Restmenge, die sie hinterlassen.
+#:
+#: **Der Ort der vier Spulen sortiert vor dem der zwei.** Das Regal ordnet
+#: seine Bretter nach dem Namen des Orts; steht das halbe Brett oben, liest
+#: sich das Bild von der Lücke her. Deshalb heißt der Schrank, wo „Regal"
+#: hinter „Trockenbox" fiele — die Wörter sind das, was ein Kunde in seiner
+#: Sprache in das Feld tippt, keine Übersetzung voneinander.
+SAMPLE_PLACES: dict[str, tuple[str, str, str, str]] = {
+    "de": ("Regal Werkstatt", "Trockenbox", "Halter Lochwand", "Vorratsdose"),
+    "en": ("Bench shelf", "Dry box", "Pegboard holder", "Storage jar"),
+    "es": ("Armario del taller", "Caja seca", "Soporte para panel", "Bote de almacenaje"),
+    "fr": ("Armoire de l'atelier", "Boîte sèche", "Support pour panneau", "Bocal de rangement"),
+    "it": ("Armadio officina", "Dry box", "Supporto per pannello", "Barattolo"),
+    "pt": ("Armário da oficina", "Caixa seca", "Suporte para painel", "Frasco de arrumação"),
+}
+
+#: Materialart, erste Farbe, weitere Farben, Lagerort (0 = Regal, 1 =
+#: Trockenbox), Nennfüllung, Restmenge — in der Reihenfolge von
+#: :data:`SAMPLE_NAMES`. Die schwarze PLA-Spule beginnt voll; was ihr fehlt,
+#: buchen die zwei Druckvorgänge in :func:`_stock_the_shelf`.
+SAMPLE_STOCK: tuple[tuple[str, str, tuple[str, ...], int, float, float], ...] = (
+    ("PLA", "#e0483c", ("#f2b134", "#2f7fd6"), 0, 1000.0, 1000.0),
+    ("PLA", "#2b2b2e", (), 0, 1000.0, 1000.0),
+    ("PETG", "#3a8fd9", (), 0, 1000.0, 70.0),
+    ("ASA", "#b8bcc2", (), 0, 1000.0, 760.0),
+    ("TPU", "#c8342b", (), 1, 500.0, 410.0),
+    ("PA-CF", "#1f2124", (), 1, 500.0, 500.0),
+)
+
+#: Die zwei Buchungen auf der schwarzen Spule: Gramm aus dem G-Code, wie die
+#: Slicer-Übergabe sie liefert (§29). Zusammen 387,6 g — die Karte zeigt
+#: danach 612,4 g, gerechnet vom Journal.
+SAMPLE_BOOKINGS = (187.6, 200.0)
+
+
+def take_inventory(language: str) -> Path:
+    """Das Regal des Filamentlagers mit Beispielspulen — im eigenen Prozess.
+
+    **Warum ein Kindprozess.** Das Regal liest und schreibt ``filaments.json``
+    unter ``%APPDATA%`` — Roberts echtes Lager. Die übrigen Motive dieser
+    Datei lesen nur; dieses legt Spulen an und bucht Verbrauch, und das darf
+    das echte Lager nicht einmal streifen. Umgebogen werden die
+    Nutzerverzeichnisse deshalb **in der Umgebung des Kindes**, also vor
+    dessen erstem Import: Im eigenen Prozess käme jede Umbiegung nach
+    ``import app`` zu spät, weil ``filaments`` den Pfad über einen lokal
+    gebundenen Namen auflöst (Gedächtnis: ``config-dir-hat-keinen-schalter``,
+    zweimal zugeschnappt). Dieselbe Bauart wie ``make_feature_images.py``, ein
+    Prozess je Motiv mit eigenen Konfigurationsverzeichnissen.
+    """
+    target = named("beleg-filamentlager", language)
+    with tempfile.TemporaryDirectory(prefix="solidon-web-lager-") as room:
+        environment = dict(os.environ)
+        for name in ISOLATED_VARIABLES:
+            environment[name] = room
+        environment[ROOM_VARIABLE] = room
+        environment.pop("QT_QPA_PLATFORM", None)
+        run = subprocess.run(
+            [sys.executable, str(Path(__file__).resolve()), "--lager", language],
+            env=environment,
+            check=False,
+        )
+    if run.returncode != 0 or not target.is_file():
+        raise SystemExit(
+            f"Der Lagerbeleg für {language!r} ist nicht entstanden "
+            f"(Kindprozess endete mit {run.returncode})"
+        )
+    return target
+
+
+def _stock_the_shelf(language: str) -> None:
+    """Sechs Spulen anlegen und auf einer davon zwei Drucke buchen.
+
+    Über die Kern-API und nicht über eine hingeschriebene ``filaments.json``:
+    So läuft jede Zeile durch dieselbe Prüfung wie eine Eingabe im Dialog, und
+    die Restmenge der gebuchten Spule ist gerechnet, nicht getippt.
+    """
+    from app.core.knowledge import filaments
+
+    names = SAMPLE_NAMES.get(language, SAMPLE_NAMES["de"])
+    shelf, box, first_print, second_print = SAMPLE_PLACES.get(language, SAMPLE_PLACES["de"])
+    saved = []
+    for name, (material, colour, extra, place, nominal, remaining) in zip(
+        names, SAMPLE_STOCK, strict=True
+    ):
+        saved.append(
+            filaments.save(
+                filaments.CatalogueFilament(
+                    name,
+                    colour,
+                    material,
+                    location=(shelf, box)[place],
+                    spool_grams=nominal,
+                    remaining_grams=remaining,
+                    extra_colours=extra,
+                    bought_on="2026-08-14",
+                    price=24.9,
+                    currency="EUR",
+                )
+            )
+        )
+    black = saved[1]
+    for number, (grams, project) in enumerate(
+        zip(SAMPLE_BOOKINGS, (first_print, second_print), strict=True), start=1
+    ):
+        filaments.book(
+            f"web-print-{number}",
+            f"web-plate-{number}",
+            [
+                filaments.BookingPosition(
+                    black.identifier, grams, "gcode", stock_revision=black.stock_revision
+                )
+            ],
+            project_name=project,
+        )
+
+
+def _inventory_child(language: str) -> int:
+    """Die Kindseite von :func:`take_inventory`: Regal bauen, füllen, ablegen."""
+    from app.core.paths import user_config_dir
+
+    room = os.environ.get(ROOM_VARIABLE)
+    if not room or not str(user_config_dir()).startswith(room):
+        raise SystemExit(
+            "Der Lagerbeleg läuft nur isoliert — über take_inventory(), nie von Hand: "
+            f"{user_config_dir()} ist Roberts echtes Profil."
+        )
+
+    from app.ui.app import install_qt_translations
+    from app.ui.filament_inventory import InventoryView
+    from app.ui.theme import apply_theme
+
+    app = QApplication.instance() or QApplication([])
+    assert isinstance(app, QApplication)
+    apply_theme(app, "dark")
+    install_catalog(language, read_catalog(language))
+    set_language(language)
+    install_qt_translations(app, language)
+
+    _stock_the_shelf(language)
+
+    view = InventoryView()
+    view.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
+    view.resize(*INVENTORY_VIEW)
+    # Nach Lagerort gruppiert: zwei Bretter, „Regal" und „Trockenbox". Nach
+    # Material wären es fünf Überschriften für sechs Spulen.
+    view.grouping.setCurrentIndex(view.grouping.findData("location"))
+    view.show()
+    settle(20)
+    view.refresh()
+    settle(20)
+
+    expected = len(SAMPLE_STOCK)
+    if len(view.cards) != expected:
+        raise SystemExit(f"Das Regal zeigt {len(view.cards)} Spulen statt {expected}")
+    if view.page_scroll.verticalScrollBar().maximum() > 0:
+        raise SystemExit(
+            "Das Regal braucht einen Rollbalken — die Höhe in INVENTORY_VIEW reicht "
+            "für zwei Bretter nicht mehr"
+        )
+
+    shot = view.grab().toImage()
+    width = max(shot.width(), round(shot.height() * INVENTORY_RATIO))
+    sheet = QImage(width, shot.height(), QImage.Format.Format_RGB32)
+    # Die Grundfarbe aus dem Bild selbst, wie in ``stack``: Der Rand des
+    # Regals ist die Fensterfarbe des Themas, und eine getippte wäre beim
+    # nächsten Themenwechsel falsch.
+    sheet.fill(shot.pixelColor(0, 0))
+    painter = QPainter(sheet)
+    painter.drawImage(QPoint((width - shot.width()) // 2, 0), shot)
+    painter.end()
+    view.release()
+    view.close()
+
+    target = named("beleg-filamentlager", language)
+    if not sheet.save(str(target)):
+        _explode(target)
+    return 0
+
+
 def take_transformation() -> tuple[Path, Path]:
     """Das Vorher/Nachher für den Beweis-Teil der Startseite (WD3, M10).
 
@@ -576,6 +862,13 @@ def take_transformation() -> tuple[Path, Path]:
 def main() -> int:
     os.environ.pop("QT_QPA_PLATFORM", None)
 
+    # Die Kindseite des Lagerbelegs: ein Prozess, eine Sprache, eigene
+    # Nutzerverzeichnisse — gestartet von ``take_inventory``, nicht von Hand.
+    if sys.argv[1:2] == ["--lager"]:
+        if len(sys.argv) != 3:
+            raise SystemExit("--lager braucht genau eine Sprache, etwa: --lager de")
+        return _inventory_child(sys.argv[2])
+
     from app.ui.app import install_qt_translations
     from app.ui.theme import apply_theme
 
@@ -601,6 +894,7 @@ def main() -> int:
         motive = (
             take_parts(language),
             *take_windows(app, language),
+            take_inventory(language),
         )
         if language == SOURCE_LANGUAGE:
             # Das Verwandlungspaar trägt keinen Text und entsteht deshalb

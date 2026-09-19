@@ -552,6 +552,38 @@
         </figure>
       </div>
 
+      <div class="showcase flip" id="filamentlager">
+        <div>
+          <span class="kicker">Inventário de filamentos</span>
+          <h3>O que resta na bobina está no inventário — não na memória</h3>
+          <p>Cada bobina é um registo: nome, tipo de material, até quatro
+          cores, local, carga nominal e quantidade restante, além da data de
+          compra, da data de abertura e do preço. Duas bobinas iguais continuam
+          a ser dois registos, cada um com o seu próprio stock. Se já tem os
+          filamentos configurados no slicer, importa-os de lá — de forma
+          deliberada, não automática.</p>
+          <p>No projeto atribui uma bobina a corpos inteiros ou a faces
+          concretas; o cabeçalho indica o que a cena transporta nesse momento.
+          Após a entrega ao slicer, o Solidon3D propõe descontar o consumo —
+          como estimativa ou como planeado no G-code, cada quantidade com a
+          sua origem. Se pergunta, se nunca desconta ou se o faz sem perguntar,
+          define-o no inventário.</p>
+          <p class="note">O histórico de lançamentos mostra cada impressão e
+          retira-a quando pedir. <b>Apagar aqui significa arquivar</b> — com
+          «Mostrar bobinas arquivadas» uma bobina regressa com o seu
+          identificador e o seu histórico.</p>
+        </div>
+        <figure class="shot">
+          <div class="stage">
+            <a href="../bilder/beleg-filamentlager-pt.png?v=860b6a7c"><img src="../bilder/beleg-filamentlager-pt.png?v=860b6a7c" width="1278" height="852" loading="lazy" decoding="async"
+                 alt="O inventário de filamentos: seis bobinas nas duas prateleiras «Armário da oficina» e «Caixa seca», cada uma com a bobina desenhada, o tipo de material, a quantidade restante em gramas e o local — uma bobina com três cores, outra com a indicação «Pouco filamento»; por cima, o campo de pesquisa, o agrupamento e o botão «Criar bobina manualmente»"></a>
+          </div>
+          <figcaption>A prateleira, agrupada por local: a quantidade restante
+          vê-se como enrolamento e como número, uma bobina está abaixo do
+          limiar de aviso e outra tem três cores.</figcaption>
+        </figure>
+      </div>
+
       <div class="showcase flip" id="every-number-a-formula">
         <div>
           <span class="kicker">Cada número uma fórmula</span>
@@ -636,6 +668,37 @@
             </g>
           </svg>
           <figcaption>A proposta não muda nada até ser aplicada — e então como um todo.</figcaption>
+        </figure>
+      </div>
+
+      <div class="showcase flip" id="mcp">
+        <div>
+          <span class="kicker">Comando à distância</span>
+          <h3>O Claude Code comanda o Solidon3D — com as mesmas operações</h3>
+          <p>O Solidon3D tem um servidor MCP integrado. Um segundo programa no
+          mesmo computador — Claude Code, um editor, um script — chama com ele
+          exatamente as operações que também estão na seleção à direita e no
+          menu. As ferramentas vêm do mesmo registo que o menu e o chat, com os
+          mesmos parâmetros, limites e predefinições que a caixa de diálogo
+          mostra.</p>
+          <p>A interface tem condições, cada uma com o seu teste:
+          <b>Desligada por predefinição</b> — o interruptor está nas
+          definições, juntamente com a porta. <b>Só 127.0.0.1</b>, verificado
+          na ligação e em cada pedido; a partir de outro computador não é
+          alcançável. <b>Nenhum caminho de ficheiro nem código-fonte vindo de
+          fora</b> — ambos são recusados antes de qualquer cálculo. <b>Cada
+          chamada remota que altera algo é uma transação</b> no histórico,
+          com a indicação de que veio de fora — e Ctrl+Z retira-a.</p>
+          <p class="note">O cliente regista o Solidon3D como servidor, por
+          predefinição em <code>http://127.0.0.1:8787/mcp</code>. Que
+          ferramentas existem diz o <a href="/pt/manual.html#remote">manual</a>:
+          <b>cada operação é uma.</b></p>
+        </div>
+        <figure class="shot">
+          <img class="feature-model" src="../bilder/fernsteuerung-mcp.svg?v=59326321" width="1200" height="800" loading="lazy" decoding="async"
+               alt="Esquema: duas janelas lado a lado num mesmo ecrã — à esquerda um segundo programa com um comando enviado, à direita o Solidon3D com um corpo furado e um passo do histórico realçado com uma seta de anular. Uma linha liga as duas sem sair do ecrã.">
+          <figcaption>Chamada e resposta ficam no próprio computador; o passo
+          está no histórico e pode ser retirado.</figcaption>
         </figure>
       </div>
 
@@ -736,7 +799,7 @@
         individuais, converter cores de texturas existentes em filamentos e exportar
         um 3MF a cores. A impressora, as atribuições de filamentos e os perfis
         adequados ficam ligados no projeto; o stock de filamentos é gerido entre
-        todos os projetos.</p></div>
+        todos os projetos no <a href="#filamentlager">inventário de filamentos</a>.</p></div>
         </details>
         <details class="tool-card" id="druckvorbereitung" data-operations="arrange_bed check_collisions orient_for_print place_on_bed">
           <summary>Organizar a placa e verificar a impressão</summary>
@@ -790,7 +853,8 @@
         Code</summary>
           <div class="tool-content"><p>Um segundo programa chama as mesmas operações que os menus:
         desligado por predefinição, só no próprio computador, e cada chamada
-        remota é uma transação que um Desfazer retira.</p></div>
+        remota é uma transação que um Desfazer retira.
+        <a href="#mcp">O que a interface pode fazer e o que não</a>.</p></div>
         </details>
       </div>
       <p>Os campos, valores predefinidos e limites estão na <a

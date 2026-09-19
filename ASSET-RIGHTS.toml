@@ -256,6 +256,21 @@ platforms = ["web"]
 status = "cleared"
 
 [[asset]]
+pattern = "website/bilder/beleg-filamentlager*.png"
+art = "image"
+creator = "Robert Schneider; erzeugt durch die Solidon-Werkzeugkette"
+rights_holder = "RS Digital"
+source = "Bildschirmaufnahme des eigenen Filamentlagers mit Beispielspulen in isolierten Nutzerverzeichnissen"
+license = "LicenseRef-Solidon-Proprietary"
+generator = "tools/make_web_images.py"
+inputs = ["app/ui", "app/core/knowledge/filaments.py", "erfundene Beispielspulen ohne Nutzerdaten"]
+derivative_status = "generated_from_own_sources"
+evidence = ["website/CLAUDE.md", "tools/make_web_images.py"]
+redistribution_right = "confirmed_on_website"
+platforms = ["web"]
+status = "cleared"
+
+[[asset]]
 pattern = "website/bilder/beleg-skizze*.png"
 art = "image"
 creator = "Robert Schneider; erzeugt durch die Solidon-Werkzeugkette"
@@ -296,6 +311,21 @@ generator = "tools/make_feature_images.py"
 inputs = ["registrierte Solidon-Operationen", "eigene parametrisierte Grundformen", "Solidon-Renderer"]
 derivative_status = "generated_from_own_sources"
 evidence = ["tools/make_feature_images.py", "tools/CLAUDE.md", "LICENSE"]
+redistribution_right = "confirmed_on_website"
+platforms = ["web"]
+status = "cleared"
+
+[[asset]]
+pattern = "website/bilder/fernsteuerung-mcp.svg"
+art = "image"
+creator = "Robert Schneider"
+rights_holder = "RS Digital"
+source = "Von Hand gezeichnetes, textfreies Schema der MCP-Fernsteuerung: zwei Fenster auf einem Bildschirm, eine Leitung dazwischen, ein rücknehmbarer Verlaufsschritt"
+license = "LicenseRef-Solidon-Proprietary"
+generator = "none"
+inputs = ["von Robert Schneider entworfene Vektorgeometrie"]
+derivative_status = "original"
+evidence = ["LICENSE", "website/CLAUDE.md"]
 redistribution_right = "confirmed_on_website"
 platforms = ["web"]
 status = "cleared"

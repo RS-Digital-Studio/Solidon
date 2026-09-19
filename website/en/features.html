@@ -542,6 +542,38 @@
         </figure>
       </div>
 
+      <div class="showcase flip" id="filamentlager">
+        <div>
+          <span class="kicker">Filament inventory</span>
+          <h3>What is left on the spool lives in the inventory — not in your head</h3>
+          <p>Every spool is an entry: name, material type, up to four colours,
+          storage location, nominal fill and remaining amount, plus purchase
+          and opening date and the price. Two identical spools stay two
+          entries, each with its own stock. If your filaments are already set
+          up in the slicer, you import them from there — deliberately, not
+          automatically.</p>
+          <p>In the project you assign a spool to whole bodies or individual
+          faces; the header names what the scene currently carries. After the
+          slicer handover, Solidon3D offers to book the consumption — as an
+          estimate or as planned in the G-code, every amount with its origin.
+          Whether it asks, never books or books without asking is set in the
+          inventory.</p>
+          <p class="note">The booking history shows every print and takes it
+          back on request. <b>Deleting means archiving here</b> — under “Show
+          archived spools” a spool comes back with its identifier and
+          history.</p>
+        </div>
+        <figure class="shot">
+          <div class="stage">
+            <a href="../bilder/beleg-filamentlager-en.png?v=e5296035"><img src="../bilder/beleg-filamentlager-en.png?v=e5296035" width="1278" height="852" loading="lazy" decoding="async"
+                 alt="The filament inventory: six spools on the two shelves “Bench shelf” and “Dry box”, each with a drawn spool, material type, remaining amount in grams and storage location — one spool with three colours, one marked “Low filament”; above them the search field, the grouping and the button “Add spool manually”"></a>
+          </div>
+          <figcaption>The shelf, grouped by storage location: the remaining
+          amount shows as a coil and as a number, one spool is below the
+          warning threshold, one carries three colours.</figcaption>
+        </figure>
+      </div>
+
       <div class="showcase flip" id="every-number-a-formula">
         <div>
           <span class="kicker">Every number a formula</span>
@@ -624,6 +656,36 @@
             </g>
           </svg>
           <figcaption>The proposal changes nothing until it is applied — and then as a whole.</figcaption>
+        </figure>
+      </div>
+
+      <div class="showcase flip" id="mcp">
+        <div>
+          <span class="kicker">Remote control</span>
+          <h3>Claude Code operates Solidon3D — through the same operations</h3>
+          <p>Solidon3D has a built-in MCP server. A second program on the same
+          machine — Claude Code, an editor, a script — uses it to call exactly
+          the operations that also stand in the selection on the right and in
+          the menu. The tools come from the same registry as menu and chat,
+          with the same parameters, limits and defaults the dialog shows.</p>
+          <p>The interface has conditions, each with a test: <b>Off by
+          default</b> — the switch is in the settings, together with the port.
+          <b>127.0.0.1 only</b>, checked at the binding and on every request;
+          it cannot be reached from another machine. <b>No file path and no
+          source code from outside</b> — both are rejected before anything is
+          computed. <b>Every remote call that changes something is one
+          transaction</b> in the history, marked as having come from outside —
+          and Ctrl+Z takes it back.</p>
+          <p class="note">The client registers Solidon3D as a server, by
+          default at <code>http://127.0.0.1:8787/mcp</code>. Which tools exist
+          is in the <a href="/en/manual.html#remote">manual</a>: <b>every
+          operation is one.</b></p>
+        </div>
+        <figure class="shot">
+          <img class="feature-model" src="../bilder/fernsteuerung-mcp.svg?v=59326321" width="1200" height="800" loading="lazy" decoding="async"
+               alt="Diagram: two windows side by side on one screen — on the left a second program with a command sent, on the right Solidon3D with a drilled body and a highlighted history step with an undo arrow. A line connects the two without leaving the screen.">
+          <figcaption>Call and answer stay on your own machine; the step is in
+          the history and can be taken back.</figcaption>
         </figure>
       </div>
 
@@ -719,7 +781,8 @@
         separate solid. Assign filaments to whole parts or individual faces, convert
         existing texture colours into filaments and export a coloured 3MF. The
         printer, filament assignments and matching profiles stay linked in the
-        project; your filament stock is managed across projects.</p></div>
+        project; your filament stock is managed across projects in the
+        <a href="#filamentlager">filament inventory</a>.</p></div>
         </details>
         <details class="tool-card" id="druckvorbereitung" data-operations="arrange_bed check_collisions orient_for_print place_on_bed">
           <summary>Arrange the plate and check the print</summary>
@@ -770,7 +833,8 @@
           <summary>Remote-controllable via MCP — including from Claude Code</summary>
           <div class="tool-content"><p>A second program calls the same operations as the menus: off by
         default, your own machine only, and every remote call is one
-        transaction that a single undo takes back.</p></div>
+        transaction that a single undo takes back.
+        <a href="#mcp">What the interface may do and what it may not</a>.</p></div>
         </details>
       </div>
       <p>Individual fields, defaults and limits are listed in the <a

@@ -552,6 +552,38 @@
         </figure>
       </div>
 
+      <div class="showcase flip" id="filamentlager">
+        <div>
+          <span class="kicker">Inventario de filamentos</span>
+          <h3>Lo que queda en la bobina está en el inventario — no en la memoria</h3>
+          <p>Cada bobina es una entrada: nombre, tipo de material, hasta cuatro
+          colores, ubicación, carga nominal y cantidad restante, además de la
+          fecha de compra, la de apertura y el precio. Dos bobinas iguales
+          siguen siendo dos entradas, cada una con sus propias existencias. Si
+          ya tienes tus filamentos configurados en el slicer, los importas desde
+          allí — de forma deliberada, no automática.</p>
+          <p>En el proyecto asignas una bobina a cuerpos enteros o a caras
+          concretas; la cabecera indica qué lleva la escena en ese momento.
+          Tras la entrega al slicer, Solidon3D propone descontar el consumo —
+          como estimación o según lo planificado en el G-code, cada cantidad
+          con su origen. Si pregunta, si no descuenta nunca o si lo hace sin
+          preguntar lo decides en el inventario.</p>
+          <p class="note">El historial de apuntes muestra cada impresión y la
+          retira si lo pides. <b>Borrar aquí significa archivar</b> — con
+          «Mostrar bobinas archivadas» una bobina vuelve con su identificador y
+          su historial.</p>
+        </div>
+        <figure class="shot">
+          <div class="stage">
+            <a href="../bilder/beleg-filamentlager-es.png?v=4dbcf117"><img src="../bilder/beleg-filamentlager-es.png?v=4dbcf117" width="1278" height="852" loading="lazy" decoding="async"
+                 alt="El inventario de filamentos: seis bobinas en los dos estantes «Armario del taller» y «Caja seca», cada una con la bobina dibujada, el tipo de material, la cantidad restante en gramos y la ubicación — una bobina con tres colores, otra con la marca «Poco filamento»; encima, el campo de búsqueda, la agrupación y el botón «Crear bobina manualmente»"></a>
+          </div>
+          <figcaption>El estante, agrupado por ubicación: la cantidad restante
+          se ve como bobinado y como cifra, una bobina está por debajo del
+          umbral de aviso y otra lleva tres colores.</figcaption>
+        </figure>
+      </div>
+
       <div class="showcase flip" id="every-number-a-formula">
         <div>
           <span class="kicker">Cada número una fórmula</span>
@@ -637,6 +669,37 @@
             </g>
           </svg>
           <figcaption>La propuesta no cambia nada hasta que se aplica — y entonces, como un todo.</figcaption>
+        </figure>
+      </div>
+
+      <div class="showcase flip" id="mcp">
+        <div>
+          <span class="kicker">Control remoto</span>
+          <h3>Claude Code maneja Solidon3D — con las mismas operaciones</h3>
+          <p>Solidon3D lleva integrado un servidor MCP. Un segundo programa en el
+          mismo ordenador — Claude Code, un editor, un script — llama con él
+          exactamente a las operaciones que también están en la selección de la
+          derecha y en el menú. Las herramientas salen del mismo registro que el
+          menú y el chat, con los mismos parámetros, límites y valores
+          predeterminados que muestra el diálogo.</p>
+          <p>La interfaz tiene condiciones, cada una con su prueba:
+          <b>Desactivada de serie</b> — el interruptor está en los ajustes,
+          junto con el puerto. <b>Solo 127.0.0.1</b>, comprobado en el enlace y
+          en cada petición; desde otro ordenador no es accesible. <b>Ninguna
+          ruta de archivo ni código fuente desde fuera</b> — ambos se rechazan
+          antes de calcular nada. <b>Cada llamada remota que cambia algo es una
+          transacción</b> en el historial, con la marca de que vino de fuera —
+          y Ctrl+Z la retira.</p>
+          <p class="note">El cliente registra Solidon3D como servidor, de serie en
+          <code>http://127.0.0.1:8787/mcp</code>. Qué herramientas existen lo
+          dice el <a href="/es/manual.html#remote">manual</a>: <b>cada
+          operación es una.</b></p>
+        </div>
+        <figure class="shot">
+          <img class="feature-model" src="../bilder/fernsteuerung-mcp.svg?v=59326321" width="1200" height="800" loading="lazy" decoding="async"
+               alt="Esquema: dos ventanas una junto a otra en una misma pantalla — a la izquierda un segundo programa con una orden enviada, a la derecha Solidon3D con un cuerpo taladrado y un paso del historial resaltado con una flecha de deshacer. Una línea une ambas sin salir de la pantalla.">
+          <figcaption>Llamada y respuesta se quedan en el propio ordenador; el
+          paso está en el historial y se puede retirar.</figcaption>
         </figure>
       </div>
 
@@ -739,7 +802,8 @@
         individuales, convierte colores de texturas existentes en filamentos y
         exporta un 3MF en color. La impresora, las asignaciones de filamentos y los
         perfiles adecuados siguen vinculados en el proyecto; el inventario de
-        filamentos se gestiona entre proyectos.</p></div>
+        filamentos se gestiona entre proyectos en el
+        <a href="#filamentlager">inventario de filamentos</a>.</p></div>
         </details>
         <details class="tool-card" id="druckvorbereitung" data-operations="arrange_bed check_collisions orient_for_print place_on_bed">
           <summary>Distribuir la placa y comprobar la impresión</summary>
@@ -793,7 +857,8 @@
           <summary>Manejable a distancia por MCP — también desde Claude Code</summary>
           <div class="tool-content"><p>Un segundo programa llama a las mismas operaciones que los menús:
         desactivado de serie, solo en el propio ordenador, y cada llamada
-        remota es una transacción que un deshacer retira.</p></div>
+        remota es una transacción que un deshacer retira.
+        <a href="#mcp">Qué puede hacer la interfaz y qué no</a>.</p></div>
         </details>
       </div>
       <p>Los campos, valores predeterminados y límites están en la <a

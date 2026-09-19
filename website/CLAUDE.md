@@ -16,7 +16,7 @@ Hier steht nur, was beim **Arbeiten** daran zusätzlich gilt.
 | `eula.html`, `agb.html`, `widerruf.html` | `tools/make_legal.py` |
 | `robots.txt`, `sitemap.xml`, `llms.txt` | `tools/make_seo.py` |
 | `icon.svg` | `tools/make_icon.py` |
-| `bilder/beleg-*.png` | `tools/make_web_images.py` |
+| `bilder/beleg-*.png` | `tools/make_web_images.py` — `beleg-filamentlager*.png` entsteht darin in einem Kindprozess mit eigenen Nutzerverzeichnissen (Beispielspulen, nie Roberts Lager) |
 | `bilder/feature-*.webp` | `tools/make_feature_images.py`, ein nativer Prozess je Motiv |
 | `bilder/weg{1,2,3,4}-*.(mp4|png|webm)` | `tools/make_video.py` |
 | `dl/` | `tools/make_download.py` |
@@ -24,7 +24,8 @@ Hier steht nur, was beim **Arbeiten** daran zusätzlich gilt.
 Von Hand: `index.html`, `funktionen.html`, `ki-modelle.html`, `style.css`,
 `site.js`, `.htaccess`, die Rechtstext-**Quellen** im Wurzelverzeichnis
 (`EULA.md`, `AGB.md`, `WIDERRUF.md`, `DATENSCHUTZ.md`), die Schaustücke in
-`bilder/` — und **`impressum.html`**.
+`bilder/`, die gezeichnete `bilder/fernsteuerung-mcp.svg` (textfrei, eine
+Datei für alle sechs Sprachen) — und **`impressum.html`**.
 
 `datenschutz.html` und `impressum.html` standen bis zum 30.08.2026 in
 **keiner** der beiden Listen, und das Börsen-Konzept hat sich darauf

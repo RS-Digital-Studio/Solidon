@@ -553,6 +553,38 @@
         </figure>
       </div>
 
+      <div class="showcase flip" id="filamentlager">
+        <div>
+          <span class="kicker">Filamentlager</span>
+          <h3>Was noch auf der Spule ist, steht im Lager — nicht im Kopf</h3>
+          <p>Jede Spule ist ein Eintrag: Name, Materialart, bis zu vier
+          Farben, Lagerort, Nennfüllung und Restmenge, dazu Kauf- und
+          Öffnungsdatum und der Preis. Zwei gleiche Spulen bleiben zwei
+          Einträge mit je eigenem Bestand. Wer seine Filamente schon im
+          Slicer eingerichtet hat, übernimmt sie von dort — bewusst, nicht
+          automatisch.</p>
+          <p>Im Projekt weist du eine Spule ganzen Körpern oder einzelnen
+          Flächen zu; die Kopfzeile nennt, was die Szene gerade trägt. Nach
+          der Slicer-Übergabe bietet Solidon3D an, den Verbrauch abzubuchen —
+          als Schätzung oder aus dem G-Code geplant, jede Menge mit ihrer
+          Herkunft. Ob gefragt, nie oder ohne Rückfrage gebucht wird, stellst
+          du im Lager ein.</p>
+          <p class="note">Der Buchungsverlauf zeigt jeden Druck und nimmt ihn
+          auf Wunsch zurück. <b>Löschen heißt hier archivieren</b> — unter
+          „Archivierte Spulen anzeigen“ kommt eine Spule samt Kennung und
+          Verlauf zurück.</p>
+        </div>
+        <figure class="shot">
+          <div class="stage">
+            <a href="bilder/beleg-filamentlager.png?v=e0e99784"><img src="bilder/beleg-filamentlager.png?v=e0e99784" width="1278" height="852" loading="lazy" decoding="async"
+                 alt="Das Filamentlager: sechs Spulen auf zwei Regalbrettern „Regal Werkstatt“ und „Trockenbox“, jede mit gezeichneter Spule, Materialart, Restmenge in Gramm und Lagerort — eine Spule mit drei Farben, eine mit dem Vermerk „Wenig Filament“; darüber Suchfeld, Gruppierung und der Knopf „Spule von Hand anlegen“"></a>
+          </div>
+          <figcaption>Das Regal, nach Lagerort gruppiert: Die Restmenge steht
+          als Wickel und als Zahl da, eine Spule liegt unter der Warnschwelle,
+          eine trägt drei Farben.</figcaption>
+        </figure>
+      </div>
+
       <div class="showcase flip" id="jede-zahl-eine-formel">
         <div>
           <span class="kicker">Jede Zahl eine Formel</span>
@@ -637,6 +669,38 @@
             </g>
           </svg>
           <figcaption>Der Vorschlag ändert nichts, bis er übernommen ist — und dann als Ganzes.</figcaption>
+        </figure>
+      </div>
+
+      <div class="showcase flip" id="mcp">
+        <div>
+          <span class="kicker">Fernsteuerung</span>
+          <h3>Claude Code bedient Solidon3D — über dieselben Operationen</h3>
+          <p>Solidon3D hat einen eingebauten MCP-Server. Ein zweites Programm
+          auf demselben Rechner — Claude Code, ein Editor, ein Skript — ruft
+          damit genau die Operationen auf, die auch rechts in der Auswahl und
+          im Menü stehen. Die Werkzeuge kommen aus demselben Register wie Menü
+          und Chat, mit denselben Parametern, Grenzen und Vorgaben, die auch
+          der Dialog zeigt.</p>
+          <p>Die Schnittstelle hat Auflagen, jede mit Test: <b>Standardmäßig
+          aus</b> — der Schalter steht in den Einstellungen, zusammen mit dem
+          Port. <b>Nur 127.0.0.1</b>, geprüft an der Bindung und an jeder
+          Anfrage; von einem anderen Rechner ist sie nicht erreichbar. <b>Kein
+          Dateipfad und kein Quelltext von außen</b> — beides wird abgewiesen,
+          bevor gerechnet wird. <b>Jeder Fernaufruf, der etwas ändert, ist eine
+          Transaktion</b> im Verlauf, mit dem Vermerk, dass sie von außen kam —
+          und Strg+Z nimmt sie zurück.</p>
+          <p class="note">Die Gegenstelle trägt Solidon3D als Server ein,
+          standardmäßig unter <code>http://127.0.0.1:8787/mcp</code>. Welche
+          Werkzeuge es gibt, steht im
+          <a href="/handbuch.html#remote">Handbuch</a>: <b>jede Operation ist
+          eines.</b></p>
+        </div>
+        <figure class="shot">
+          <img class="feature-model" src="bilder/fernsteuerung-mcp.svg?v=59326321" width="1200" height="800" loading="lazy" decoding="async"
+               alt="Schema: Auf einem Bildschirm stehen zwei Fenster nebeneinander — links ein zweites Programm mit einem abgesetzten Befehl, rechts Solidon3D mit einem gebohrten Körper und einem markierten Verlaufsschritt samt Rückgängig-Pfeil. Eine Leitung verbindet beide, ohne den Bildschirm zu verlassen.">
+          <figcaption>Aufruf und Antwort bleiben auf dem eigenen Rechner; der
+          Schritt steht im Verlauf und lässt sich zurücknehmen.</figcaption>
         </figure>
       </div>
 
@@ -736,7 +800,8 @@
         ganzen Teilen oder einzelnen Flächen zuweisen, vorhandene Texturfarben
         in Filamente umrechnen und als farbige 3MF ausgeben. Drucker,
         Filamentzuweisungen und passende Profile bleiben im Projekt verbunden;
-        deinen Filamentbestand verwaltest du projektübergreifend.</p></div>
+        deinen Filamentbestand verwaltest du projektübergreifend im
+        <a href="#filamentlager">Filamentlager</a>.</p></div>
         </details>
         <details class="tool-card" id="druckvorbereitung" data-operations="arrange_bed check_collisions orient_for_print place_on_bed">
           <summary>Platte belegen und Druck prüfen</summary>
@@ -790,7 +855,8 @@
           <div class="tool-content"><p>Ein
         zweites Programm ruft dieselben Operationen auf wie die Menüs:
         standardmäßig aus, nur auf dem eigenen Rechner, und jeder
-        Fernaufruf ist eine Transaktion, die ein Undo zurücknimmt.</p></div>
+        Fernaufruf ist eine Transaktion, die ein Undo zurücknimmt.
+        <a href="#mcp">Was die Schnittstelle darf und was nicht</a>.</p></div>
         </details>
       </div>
       <p>Die einzelnen Felder, Vorgaben und Grenzen stehen in der

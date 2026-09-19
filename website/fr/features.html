@@ -554,6 +554,38 @@
         </figure>
       </div>
 
+      <div class="showcase flip" id="filamentlager">
+        <div>
+          <span class="kicker">Stock de filament</span>
+          <h3>Ce qu’il reste sur la bobine est dans le stock — pas dans votre tête</h3>
+          <p>Chaque bobine est une entrée&nbsp;: nom, type de matériau, jusqu’à
+          quatre couleurs, emplacement, charge nominale et quantité restante,
+          plus la date d’achat, la date d’ouverture et le prix. Deux bobines
+          identiques restent deux entrées, chacune avec son propre stock. Si
+          vos filaments sont déjà configurés dans le slicer, vous les importez
+          de là — délibérément, pas automatiquement.</p>
+          <p>Dans le projet, vous affectez une bobine à des corps entiers ou à
+          des faces précises&nbsp;; l’en-tête indique ce que porte la scène à cet
+          instant. Après la remise au slicer, Solidon3D propose de déduire la
+          consommation — en estimation ou telle que planifiée dans le G-code,
+          chaque quantité avec son origine. Demander, ne jamais déduire ou
+          déduire sans demander&nbsp;: cela se règle dans le stock.</p>
+          <p class="note">L’historique des écritures montre chaque impression et
+          la retire sur demande. <b>Supprimer signifie ici archiver</b> — sous
+          « Afficher les bobines archivées », une bobine revient avec son
+          identifiant et son historique.</p>
+        </div>
+        <figure class="shot">
+          <div class="stage">
+            <a href="../bilder/beleg-filamentlager-fr.png?v=e24a1fb9"><img src="../bilder/beleg-filamentlager-fr.png?v=e24a1fb9" width="1278" height="852" loading="lazy" decoding="async"
+                 alt="Le stock de filament : six bobines sur les deux étagères « Armoire de l'atelier » et « Boîte sèche », chacune avec la bobine dessinée, le type de matériau, la quantité restante en grammes et l’emplacement — une bobine avec trois couleurs, une autre marquée « Peu de filament » ; au-dessus, le champ de recherche, le regroupement et le bouton « Ajouter une bobine manuellement »"></a>
+          </div>
+          <figcaption>L’étagère, regroupée par emplacement&nbsp;: la quantité
+          restante apparaît comme enroulement et comme chiffre, une bobine est
+          sous le seuil d’alerte, une autre porte trois couleurs.</figcaption>
+        </figure>
+      </div>
+
       <div class="showcase flip" id="every-number-a-formula">
         <div>
           <span class="kicker">Chaque chiffre une formule</span>
@@ -640,6 +672,38 @@
             </g>
           </svg>
           <figcaption>La proposition ne change rien tant qu'elle n'est pas appliquée — et alors d'un bloc.</figcaption>
+        </figure>
+      </div>
+
+      <div class="showcase flip" id="mcp">
+        <div>
+          <span class="kicker">Pilotage à distance</span>
+          <h3>Claude Code pilote Solidon3D — avec les mêmes opérations</h3>
+          <p>Solidon3D intègre un serveur MCP. Un second programme sur la même
+          machine — Claude Code, un éditeur, un script — appelle par lui
+          exactement les opérations qui figurent aussi dans la sélection à
+          droite et dans le menu. Les outils viennent du même registre que le
+          menu et le chat, avec les mêmes paramètres, limites et valeurs par
+          défaut que montre la boîte de dialogue.</p>
+          <p>L’interface a des conditions, chacune avec son test&nbsp;:
+          <b>Désactivée par défaut</b> — l’interrupteur est dans les
+          paramètres, avec le port. <b>127.0.0.1 seulement</b>, vérifié à la
+          liaison et à chaque requête&nbsp;; depuis une autre machine, elle est
+          inaccessible. <b>Aucun chemin de fichier ni code source venu de
+          l’extérieur</b> — les deux sont refusés avant tout calcul.
+          <b>Chaque appel distant qui modifie quelque chose est une
+          transaction</b> de l’historique, marquée comme venue de l’extérieur —
+          et Ctrl+Z la retire.</p>
+          <p class="note">Le client enregistre Solidon3D comme serveur, par défaut
+          à l’adresse <code>http://127.0.0.1:8787/mcp</code>. Les outils
+          disponibles sont dans le <a href="/fr/manual.html#remote">manuel</a>&nbsp;:
+          <b>chaque opération en est un.</b></p>
+        </div>
+        <figure class="shot">
+          <img class="feature-model" src="../bilder/fernsteuerung-mcp.svg?v=59326321" width="1200" height="800" loading="lazy" decoding="async"
+               alt="Schéma : deux fenêtres côte à côte sur un même écran — à gauche un second programme avec une commande envoyée, à droite Solidon3D avec un corps percé et une étape de l’historique surlignée, accompagnée d’une flèche d’annulation. Une ligne relie les deux sans quitter l’écran.">
+          <figcaption>Appel et réponse restent sur votre machine&nbsp;; l’étape
+          figure dans l’historique et peut être retirée.</figcaption>
         </figure>
       </div>
 
@@ -742,7 +806,8 @@
         pièces entières ou à des faces, convertir les couleurs des textures
         existantes en filaments et exporter un 3MF en couleur. L’imprimante, les
         affectations de filaments et les profils adaptés restent liés dans le projet
-        ; le stock de filaments est géré pour l’ensemble des projets.</p></div>
+        ; le stock de filaments est géré pour l’ensemble des projets dans le
+        <a href="#filamentlager">stock de filament</a>.</p></div>
         </details>
         <details class="tool-card" id="druckvorbereitung" data-operations="arrange_bed check_collisions orient_for_print place_on_bed">
           <summary>Disposer le plateau et vérifier l’impression</summary>
@@ -797,7 +862,8 @@
           <summary>Pilotable à distance via MCP — y compris depuis Claude Code</summary>
           <div class="tool-content"><p>Un deuxième programme appelle les mêmes opérations que les
         menus&nbsp;: désactivé par défaut, sur votre machine seulement, et
-        chaque appel distant est une transaction qu'un Annuler retire.</p></div>
+        chaque appel distant est une transaction qu'un Annuler retire.
+        <a href="#mcp">Ce que l’interface peut faire et ce qu’elle ne peut pas</a>.</p></div>
         </details>
       </div>
       <p>Les champs, valeurs par défaut et limites figurent dans la <a
