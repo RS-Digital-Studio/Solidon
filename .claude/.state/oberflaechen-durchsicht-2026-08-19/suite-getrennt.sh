@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Die Suite so fahren, wie die CI sie fährt: je Fensterdatei ein eigener Prozess.
+# Reguläres Tor ohne Fenster und Leistung; --release nimmt die Fenster dazu.
+# Leistungsprüfungen bleiben dem getrennten Release-Lauf vorbehalten.
 #
 # In einem Prozess baut die Suite über siebenhundert VTK-Fenster nacheinander
 # auf, und irgendwann reißt eine Grenze — eine Zugriffsverletzung ohne Zeile,
@@ -41,6 +42,18 @@ if [ -z "${SUITE_WURZEL:-}" ]; then
 fi
 trap 'rm -f "$SUITE_KOPIE"' EXIT
 cd "$SUITE_WURZEL" || exit 1
+
+RELEASE=0
+for option in "$@"; do
+  case "$option" in
+    --release) RELEASE=1 ;;
+    --help|-h)
+      echo "Aufruf: suite-getrennt.sh [--release]"
+      echo "Standard: ohne Fenster und Leistung. --release: zusätzlich Fensterdateien."
+      exit 0 ;;
+    *) echo "Unbekannte Option: $option. Verwende --help." >&2; exit 2 ;;
+  esac
+done
 
 # **Der Interpreter, auch wenn er nicht hier liegt.** Ein eigener Arbeitsbaum
 # (`claude --worktree`) hat keine `.venv` — sie ist per `.gitignore` draußen und
@@ -273,6 +286,11 @@ trap 'rm -f "$protokoll"' EXIT
 
 # Direkt in die Datei schreiben und den Prozessstatus vor jeder Ausgabe sichern.
 # -u hält die Fortschrittszeichen im laufenden Protokoll aktuell.
+if [ "$RELEASE" -eq 0 ]; then
+  echo "Reguläres Tor: Fensterdateien und Leistungsprüfungen bleiben bis zum Release zurückgestellt."
+else
+  echo "Release-Tor: Fensterdateien laufen mit; Leistungsprüfungen folgen getrennt."
+fi
 echo "=== der Rest in einem Zug (-n $KERNE) ==="
 PYTHONIOENCODING=utf-8 "$PY" -u -m pytest -q -m "not performance" $ignores -n "$KERNE" > "$protokoll" 2>&1
 status=$?
@@ -288,6 +306,10 @@ if [ -z "$sammelgruppe" ]; then
 elif zaehlt_als_fehler "$status" "$protokoll"; then
   fails=$((fails + 1))
   schlecht="$schlecht rest-in-einem-zug(Exit:$status)"
+fi
+
+if [ "$RELEASE" -eq 0 ]; then
+  windowed=""
 fi
 
 #: Wie viele Tests eine Portion höchstens umfasst.

@@ -190,7 +190,7 @@ def test_native_crash_text_is_not_mistaken_for_failed_test_markers(tmp_path: Pat
 
 
 def fake_suite(
-    tmp_path: Path, *, queue_only: bool = False, **options: str
+    tmp_path: Path, *, queue_only: bool = False, release: bool = False, **options: str
 ) -> subprocess.CompletedProcess[str]:
     """Die echte Torsteuerung mit einem schnellen Interpreter-Doppel ausführen.
 
@@ -200,6 +200,7 @@ def fake_suite(
     wrapper = tmp_path / "fakepython.sh"
     wrapper.write_text(
         """#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$SUITE_WURZEL/calls.txt"
 case "$*" in
   *list_windowed_tests.py*)
     printf '%s\n' 'tests/test_fake.py'
@@ -216,6 +217,10 @@ for argument in "$@"; do
   case "$argument" in *::*) count=$((count + 1));; esac
 done
 if [ "$count" -eq 0 ]; then
+  if [ "${FAKE_EMPTY_CORE:-0}" -eq 1 ]; then
+    printf 'no tests ran in 0.01s\n'
+    exit 5
+  fi
   printf '1 passed in 0.01s\n'
   exit 0
 fi
@@ -265,7 +270,7 @@ printf '\n%s passed in 0.01s\n' "$count"
             newline="\n",
         )
     return subprocess.run(
-        [BASH or "bash", str(script)],
+        [BASH or "bash", str(script), *(["--release"] if release else [])],
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -297,11 +302,23 @@ def test_a_portion_that_never_runs_stops_at_the_floor(tmp_path: Path) -> None:
     assert result.returncode == 1, output
 
 
-def test_a_clean_stub_suite_has_a_successful_process_exit(tmp_path: Path) -> None:
+@pytest.mark.parametrize("release", [False, True])
+def test_a_clean_stub_suite_has_a_successful_process_exit(tmp_path: Path, release: bool) -> None:
     """Alle erfolgreichen Teilprozesse ergeben auch einen erfolgreichen Torprozess."""
-    result = fake_suite(tmp_path, FAKE_LIMIT="6")
+    result = fake_suite(tmp_path, release=release, FAKE_LIMIT="6")
     assert result.returncode == 0, result.stdout + result.stderr
     assert "Läufe mit Fehler: 0" in result.stdout
+    calls = (tmp_path / "calls.txt").read_text(encoding="utf-8")
+    assert "--ignore=tests/test_fake.py" in calls
+    assert ("--collect-only" in calls) is release
+    assert ("tests/test_fake.py::test_0" in calls) is release
+    assert "not performance" in calls
+
+
+def test_an_empty_core_collection_cannot_pass_the_regular_gate(tmp_path: Path) -> None:
+    result = fake_suite(tmp_path, FAKE_EMPTY_CORE="1")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "NICHT-GELAUFEN" in result.stdout
 
 
 def test_a_failed_windowed_collection_does_not_run_the_core_group(tmp_path: Path) -> None:
@@ -314,7 +331,7 @@ def test_a_failed_windowed_collection_does_not_run_the_core_group(tmp_path: Path
 
 def test_a_failed_node_collection_is_not_run_as_a_partial_list(tmp_path: Path) -> None:
     """Ein Sammelfehler mit einigen gültigen Namen bleibt ein Befund."""
-    result = fake_suite(tmp_path, FAKE_COLLECT_EXIT="2")
+    result = fake_suite(tmp_path, release=True, FAKE_COLLECT_EXIT="2")
     assert result.returncode == 1, result.stdout + result.stderr
     assert "Sammlung,Exit:2" in result.stdout
     assert "--> Teil" not in result.stdout

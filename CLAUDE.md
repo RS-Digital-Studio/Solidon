@@ -52,15 +52,17 @@ Beide Editoren setzen für ihre Unterprozesse `PYTHONUTF8=1`, damit auch unter
 Windows umgeleitete Ausgaben und Hook-Nachrichten echte Umlaute behalten.
 
 ```
-.venv\Scripts\python.exe -m pytest -q
+bash .claude/.state/oberflaechen-durchsicht-2026-08-19/suite-getrennt.sh
 .venv\Scripts\python.exe -m ruff check .
 .venv\Scripts\python.exe -m ruff format --check .
 .venv\Scripts\python.exe -m mypy
 ```
 
-Diese vier sind zusammen das Tor: rot heißt nicht fertig. `/pruefen` fasst sie
-zusammen — **vor dem Commit**, nicht nach jedem Schritt. Je Schritt laufen nur
-die Tests der berührten Dateien (Entscheidung Robert, 02.09.2026):
+Diese vier sind zusammen das Entwicklungstor: Kernsammlung ohne Fensterdateien
+und Leistung, Ruff, Formatierung und mypy. `/pruefen` fasst sie zusammen —
+**vor dem Commit**, nicht nach jedem Schritt. Je Schritt laufen nur die
+betroffenen Kern- und statischen Tests. **Fensterdateien und Leistungsprüfungen
+laufen ausschließlich beim Release**, auch nicht als betroffene Teilmenge:
 
 ```
 .venv\Scripts\python.exe tools/affected_tests.py                      # geändert + neu gegenüber HEAD
@@ -68,32 +70,36 @@ die Tests der berührten Dateien (Entscheidung Robert, 02.09.2026):
 .venv\Scripts\python.exe tools/affected_tests.py --run                 # fahren, Exit-Code direkt gelesen
 ```
 
-`--why` nennt je Testdatei den Grund, `--split` zeigt die Aufrufe
-(Fensterdateien einzeln). **Ohne Argumente nimmt es alle ungestageten
+`--why` nennt je Testdatei den Grund, `--split` zeigt die regulären Aufrufe.
+Fensterdateien und Leistung bleiben bis zum Release zurückgestellt;
+`--release` schaltet die getrennten Fensterläufe hinzu. **Ohne Argumente nimmt es alle ungestageten
 Änderungen im Baum**; wer nur bestimmte meint, nennt sie. Bei Änderungen an `i18n`, `types.py`, `errors.py`
 oder `log.py` meldet es „das ist die Suite" — dann direkt `/pruefen`.
 
 **`pytest -q` am Stück kommt seit dem 16.08.2026 nicht mehr durch.** Rund 22
 Minuten, dann ein nativer Abriss bei über 3 GB, ohne Ergebniszeile — die Suite
 baut in einem Prozess über siebenhundert Fenster mit Ansicht nacheinander auf,
-und irgendwann reißt eine Grenze. Gefahren wird sie deshalb wie in der CI: **ein
-Prozess je Fensterdatei**, alles übrige in einem Zug. Dazu kommen die
-Leistungstests, die der geteilte Lauf mit `-m "not performance"` ausdrücklich
-auslässt:
+und irgendwann reißt eine Grenze. Das Entwicklungstor lässt diese Dateien
+vollständig aus. **Beim Release** laufen sie mit `--release` in getrennten
+Prozessen; die Leistungsprüfung folgt separat auf der Referenzmaschine:
 
 ```
-bash .claude/.state/oberflaechen-durchsicht-2026-08-19/suite-getrennt.sh
-.venv\Scripts\python.exe -m pytest -q -m performance   # was dabei fehlt (§31)
+bash .claude/.state/oberflaechen-durchsicht-2026-08-19/suite-getrennt.sh --release
+.venv\Scripts\python.exe -m pytest -q -m performance   # ausschließlich beim Release (§31)
 ```
 
 Das Skript sucht die Fensterdateien selbst (`tools/list_windowed_tests.py` liest
-den Fixture-Graphen: jede Datei mit einem `qt_app`-Test), eine neue braucht
-also keinen Eintrag. Es liegt unter `.claude/.state/` und ist
+den Fixture-Graphen und den Marker `windowed`). Jede Datei mit einem `qt_app`-
+oder `windowed`-Test gehört zur Fenstergruppe. Tests, die ein Fenster im
+Unterprozess öffnen, tragen `@pytest.mark.windowed`; eine gesonderte Dateiliste
+wird nicht gepflegt. Das Skript liegt unter `.claude/.state/` und ist
 seit dem 22.08.2026 eingecheckt — vorher schloss `.gitignore` den ganzen Ordner
 aus, und ein frischer Klon hatte damit den einzigen Weg nicht, auf dem das Tor
 durchläuft.
 
-Erst beides zusammen mit ruff, `ruff format --check` und mypy ist das Tor.
+Erst beide Release-Läufe zusammen mit ruff, `ruff format --check` und mypy
+belegen das vollständige Release-Tor. Ein Entwicklungstor behauptet keine
+Fenster- oder Leistungsabnahme.
 
 Drei Fallen dabei, alle drei am 22.08.2026 einmal zugeschnappt — die erste in einer zweiten Gestalt am 24.08.2026 noch einmal:
 
@@ -135,9 +141,8 @@ Drei Fallen dabei, alle drei am 22.08.2026 einmal zugeschnappt — die erste in 
 Weiteres:
 
 ```
-.venv\Scripts\python.exe -m pytest tests/test_parts.py -q      # eine Datei
-.venv\Scripts\python.exe -m pytest -q -m "not slow"             # ohne die langen
-.venv\Scripts\python.exe -m pytest -q -m performance            # Budget §31
+.venv\Scripts\python.exe tools/affected_tests.py tests/test_parts.py --run  # betroffene reguläre Tests
+.venv\Scripts\python.exe -m pytest -q -m performance            # nur Release, Budget §31
 .venv\Scripts\python.exe -m app.ui.app                          # Anwendung starten
 .venv\Scripts\python.exe -m app.cli.main --help                 # Kommandozeile
 .venv\Scripts\python.exe tools/run_agent_suite.py               # kostet Geld, kein Testlauf

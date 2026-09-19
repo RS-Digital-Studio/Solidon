@@ -69,7 +69,8 @@ jede Datei am tatsächlich gewählten Ziel bytegenau geprüft.
 
 **Messen und Prüfen** (keines davon ist ein Testlauf)
 
-`run_suite_isolated.py` (je Testdatei ein Prozess) · `run_agent_suite.py`
+`run_suite_isolated.py` (je Testdatei ein Prozess; Fensterdateien nur mit
+`--release`, Leistung stets getrennt beim Release) · `run_agent_suite.py`
 (39 Referenzanfragen, **kostet Geld**) · `run_model_suite.py` (die Kette über
 echte Modelle) · `run_ui_audit.py` (der ganze Bestand durch die laufende
 Oberfläche) · `check_local_model.py` (ruft ein lokales Modell die Werkzeuge
@@ -79,7 +80,9 @@ wirklich auf?) · `measure_local_model.py` (**wie lange** braucht es dafür — 
 Vorratsschlüssel zuordnen, Käufer im externen Schlüsselarchiv finden,
 Serverzustand lesen und Geräteplätze verwalten) ·
 `qt_trace.py` (pytest-Erweiterung für die Jagd auf den Abriss beim Aufräumen) ·
-`list_windowed_tests.py` (Fensterdateien aus Pytests aufgelöstem Fixture-Graphen) ·
+`list_windowed_tests.py` (Fensterdateien aus Pytests aufgelöstem Fixture-Graphen
+oder dem Marker `windowed` für Fenster außerhalb der `qt_app`-Fixture,
+insbesondere in Kindprozessen) ·
 `twin_scan.py` (doppelte Stellen und Zwillinge in einem Baum: sieben Fragen von
 Konstanten über wortgleiche und strukturgleiche Körper bis zu Kommentaren, die
 eine Kopie zugeben — **welche Klasse ein Fund hat, entscheidet der Code**, die
@@ -94,7 +97,11 @@ die Vollständigkeit der Karten; die Durchsichten liegen in `.claude/audits/`) �
 `affected_tests.py` (welche Testdateien eine Änderung berührt — aus dem
 Importgraphen über `app/`, `tools/` und `tests/`, dazu die Baumleser und die
 Tests, die eine geänderte Textdatei beim Namen nennen; `--why`, `--split`,
-`--run`; die Fenstertrennung kommt von `list_windowed_tests`) ·
+`--run`; reine Auswahl und `--why` nennen alle betroffenen Dateien,
+`--split` und `--run` nehmen Fensterdateien erst mit `--release` auf und lassen
+Leistung stets draußen. `list_windowed_tests` liefert aus derselben Sammlung
+die Fenstergruppe und die übrigen Dateien mit nicht-performance Tests;
+ausschließlich abgewählte Leistungstests lösen keinen leeren pytest-Lauf aus) ·
 `count_new_windows.py` (welche Fenster während eines Befehls aufgehen — Klasse,
 Titel, Prozess; die Sichtprüfung aus RM-100 als Messung, zwanzig Abtastungen je
 Sekunde über `EnumWindows`, Exit 1 bei einem neuen Konsolenfenster) ·

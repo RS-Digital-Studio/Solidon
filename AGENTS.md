@@ -184,11 +184,16 @@ Dialoge.
 - **Kleine Schritte, und je Schritt nur die betroffenen Tests.** Nach jedem
   Schritt laufen die Tests der Dateien, die er berührt
   (`tools/affected_tests.py` leitet sie aus dem Importgraphen ab); die
-  vollständige Suite mit ruff, format und mypy ist das Tor **vor dem Commit**,
+  Kernsammlung ohne Fensterdateien und Leistung mit ruff, format und mypy ist
+  das Tor **vor dem Commit**,
   nicht der Takt der Arbeit (Entscheidung Robert, 02.09.2026 — an dem Tag
   gingen Stunden für Läufe drauf, die nichts über die Änderung sagten). Ein
   Schritt, der seine Tests rot lässt, wird nicht auf den
-  nächsten gestapelt.
+  nächsten gestapelt. **Fensterdateien und Leistungsprüfungen laufen
+  ausschließlich beim Release**, auch nicht als betroffene Teilmenge nach
+  einem Entwicklungsschritt. Sie bleiben Teil der Release-Abnahme; ein
+  bestandener Entwicklungslauf ersetzt diesen Nachweis nicht. `/pruefen`
+  beschreibt beide Umfänge, `--release` wählt ausdrücklich den Release-Lauf.
 - **Bilder und Handbuch nur beim Release — und nur, was sich geändert hat.**
   Bildschirmfotos, Website-Bilder, Handbuch und PDFs werden vor einem Release
   erzeugt, nicht nach jedem Schritt; und dort nur die Sprachen und Bilder,

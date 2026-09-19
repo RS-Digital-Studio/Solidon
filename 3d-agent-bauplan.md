@@ -270,9 +270,12 @@ Kriterium; Eindeutigkeit und maschinelle Abnahme sind es.
 - **Tests sind die Definition von fertig.** Für jede Geometrieoperation
   existiert ein Test mit festem Eingangs-Mesh (§34) und erwarteten Kennzahlen.
 - **Kleine Schritte.** Nach jedem Schritt laufen die von der Änderung
-  betroffenen Tests. Das vollständige Tor aus getrennter Suite, Leistung,
-  Ruff, Formatierung und mypy gehört vor den Commit; der verbindliche Ablauf
-  steht in `AGENTS.md` und dem Skill `/pruefen`.
+  betroffenen Kern- und statischen Tests. Vor dem Commit laufen die
+  Kernsammlung ohne Fensterdateien und Leistung, Ruff, Formatierung und mypy.
+  Fensterdateien und Leistungsprüfungen gehören ausschließlich zum Release,
+  auch nicht als Teilmenge zwischen Entwicklungsschritten. Der verbindliche
+  Ablauf steht in `AGENTS.md` und dem Skill `/pruefen`; dessen `--release`
+  fordert die vollständige Release-Abnahme an.
 - **Verbote sind Prüfungen, keine Absichten.** Jede harte Regel aus
   `AGENTS.md` hat einen Test.
 - **Verträge zuerst.** Bei jedem neuen Modul steht die Signatur aus §9 fest,

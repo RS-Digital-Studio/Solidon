@@ -54,7 +54,8 @@ betroffenen Aufrufer und Menü-/Agenteneinstiege bestimmen.
 ## Abschluss
 
 Für Geometrie-Nachweise `.agents/skills/geometry-review/SKILL.md` verwenden. `.agents/skills/pruefen/SKILL.md` mit den
-betroffenen Dateien ausführen; das vollständige Tor erst vor einem Commit.
+betroffenen Dateien ausführen; das Entwicklungstor vor einem Commit.
+Fensterdateien und Leistungstests laufen ausschließlich beim Release.
 Danach melden: Name, Kategorie, Parameter, welche Tests sie decken,
 und ob die Oberfläche etwas braucht (Auswahlfenster am Merkmal, Kürzel,
 Katalogeintrag). Ist die Op im Bauplan-Katalog noch nicht genannt, sag das —

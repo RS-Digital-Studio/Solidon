@@ -22,6 +22,9 @@
 # Der tägliche Push läuft nur auf Ubuntu; die volle Matrix mit beiden Macs und
 # die Paketierung laufen bei Tags und beim Handstart (workflow_dispatch).
 # Mit tests_only prüft der Handstart alle vier Paketplattformen ohne Paketbau.
+# Fensterdateien bleiben Tags und manuellen Paketbauten vorbehalten; reine
+# Prüfläufe lassen sie aus. Leistung wird beim Release auf der lokalen
+# Referenzmaschine gemessen.
 #
 # Die Begründung dafür hat sich am 14.08.2026 geändert. Hier stand, das
 # Repository sei privat und private Minuten seien gezählt — macOS zehnfach,
@@ -75,6 +78,8 @@ jobs:
     # Lauf wie ein langsamer aussieht. Sechzig Minuten sind das Dreifache des
     # Normalen: Wer sie reißt, hat einen Hänger, keinen langen Lauf.
     timeout-minutes: 60
+    env:
+      RELEASE_CHECK: ${{ inputs.tests_only != true && (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch') }}
     strategy:
       fail-fast: false
       matrix:
@@ -150,14 +155,13 @@ jobs:
       - name: Tests
         # Die Kern- und Fensterverträge laufen getrennt; jedes Nichtnull-Ergebnis
         # sperrt das Paket. Fensterdateien werden über den Fixture-Graphen gefunden
-        # und im Folgeschritt je Prozess geprüft. Linux bekommt Xvfb für den
-        # nativen Renderer-Smoke; allgemeine Qt-Verträge bleiben offscreen.
-        # Leistungsbudgets gelten auf der lokalen Referenzmaschine (§31).
+        # und ausschließlich beim Release je Prozess geprüft. Eigene
+        # Fensterprozesse tragen den Marker windowed und werden mit ausgeschlossen.
+        # Leistungsbudgets gelten nur beim Release auf der lokalen Referenzmaschine (§31).
         shell: bash
         env:
-          # Die Fensterverträge setzen offscreen voraus. test_render_factory
-          # prüft daneben verbindlich einen nativen Qt+pygfx-Prozess;
-          # unter Linux erbt dieser DISPLAY aus dem Xvfb-Aufruf.
+          # Rendererprüfungen ohne Fenster bleiben offscreen möglich.
+          # Native Qt-Fensterwege laufen im gesonderten Release-Schritt.
           QT_QPA_PLATFORM: offscreen
         run: |
           set -euo pipefail
@@ -184,15 +188,25 @@ jobs:
           # Die früheren Vollbereichsläufe der Bausteine sind aus der Suite
           # entfernt. Ihre verbleibenden Geometrie- und Vertragsprüfungen
           # gehören wie die anderen Kernfälle in dieses Tor.
-          # Die Druckdialogdatei läuft vorgezogen vollständig in einem
-          # eigenen Prozess; die übrigen Fensterdateien folgen im nächsten
-          # Schritt. conftest baut die Qt-Objekte nach jedem Test geordnet ab.
-          # Die zusätzliche Prozessgrenze gilt für jede Fensterdatei.
-          run -n auto -m "not performance and not rendered" $ignores --ignore=tests/test_print_settings_ui.py
-          run -m "not performance and not rendered" tests/test_print_settings_ui.py
+          run -n auto -m "not performance and not rendered" $ignores
 
-          # Die Fenstergruppe läuft anschließend verbindlich je Datei in
-          # einem eigenen Prozess, auch auf Windows und macOS.
+      - name: Plattformübergreifende Fensterverträge (Release)
+        # Druckdialog und native Rendererprozesse behalten ihre bisherige
+        # Plattformabnahme beim Release; reguläre Prüfläufe lassen sie aus.
+        if: env.RELEASE_CHECK == 'true'
+        shell: bash
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          set -euo pipefail
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            run() { xvfb-run -a --server-args="-screen 0 1920x1080x24" python -m pytest -q "$@"; }
+          else
+            run() { python -m pytest -q "$@"; }
+          fi
+          for file in tests/test_print_settings_ui.py tests/test_render_factory.py; do
+            run -m "not performance and not rendered" "$file"
+          done
 
       - name: Fensterdateien
         # Ein Prozess je Datei schützt die Lebensdauergrenze. Ein roter
@@ -214,10 +228,10 @@ jobs:
         # dort grün wurde, kam die Gruppe auf ARM zum ersten Mal überhaupt
         # dran und meldete acht Befunde derselben Art — Breiten, Spalten,
         # Kürzelbeschriftungen, dazu die Lebensdauerfamilie. Sie ist also auf
-        # **keinem** Unix abnahmefähig, nicht nur auf Linux. Sie läuft dort,
-        # wo sie grün ist; jede Sitzung mit Bildschirm fährt sie ohnehin vor
-        # dem Commit.
-        if: runner.os == 'Windows'
+        # **keinem** Unix abnahmefähig, nicht nur auf Linux. Die übrige
+        # Fenstergruppe läuft deshalb beim Release auf Windows; auf der
+        # lokalen Referenzmaschine gehört sie ebenfalls erst zum Release.
+        if: runner.os == 'Windows' && env.RELEASE_CHECK == 'true'
         shell: bash
         env:
           QT_QPA_PLATFORM: offscreen
@@ -244,7 +258,9 @@ jobs:
           geprueft=0
           rot=""
           for file in $windowed; do
-            if [ "$file" = "tests/test_print_settings_ui.py" ]; then continue; fi
+            case "$file" in
+              tests/test_print_settings_ui.py|tests/test_render_factory.py) continue ;;
+            esac
             geprueft=$((geprueft + 1))
             if run -m "not performance and not rendered" "$file"; then
               gruen=$((gruen + 1))
@@ -254,7 +270,7 @@ jobs:
           done
           echo "### Fensterdateien ($RUNNER_OS)" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "Grün: $gruen von $geprueft (Druckdialog im vorherigen Schritt)" >> "$GITHUB_STEP_SUMMARY"
+          echo "Grün: $gruen von $geprueft (Druckdialog und Renderer im vorherigen Schritt)" >> "$GITHUB_STEP_SUMMARY"
           if [ -n "$rot" ]; then
             echo "" >> "$GITHUB_STEP_SUMMARY"
             echo "Nicht grün (Datei mit Exit-Code):$rot" >> "$GITHUB_STEP_SUMMARY"
@@ -1395,8 +1411,9 @@ jobs:
       - name: Tests
         env:
           QT_QPA_PLATFORM: offscreen
-        # Auch neue Abhängigkeitsversionen müssen die Fensterverträge halten.
-        # Jede Fensterdatei erhält denselben eigenen Prozess wie im Bautor.
+        # Der Versionswächter prüft reguläre Verträge. Fensterdateien und
+        # Leistungsprüfungen bleiben dem Release vorbehalten.
+        shell: bash
         run: |
           set -euo pipefail
           # Wie lokal in suite-getrennt.sh: die Fenstergruppe aus Pytests
@@ -1411,11 +1428,4 @@ jobs:
           ignores=""
           for file in $windowed; do ignores="$ignores --ignore=$file"; done
           run() { xvfb-run -a --server-args="-screen 0 1920x1080x24" python -m pytest -q "$@"; }
-          # Dieselbe Trennung wie im Suite-Job: Die Druckdialogdatei läuft
-          # vorgezogen für sich; die Fenstergruppe unten lässt sie aus.
-          run -n auto -m "not performance and not rendered" $ignores --ignore=tests/test_print_settings_ui.py
-          run -m "not performance and not rendered" tests/test_print_settings_ui.py
-          for file in $windowed; do
-            if [ "$file" = "tests/test_print_settings_ui.py" ]; then continue; fi
-            run -m "not performance and not rendered" "$file"
-          done
+          run -n auto -m "not performance and not rendered" $ignores

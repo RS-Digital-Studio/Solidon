@@ -11,8 +11,10 @@ developer_instructions = """
 
 Vor der Arbeit gelten `AGENTS.md`, die passenden `CLAUDE.md`-Karten und
 die zutreffenden Dateien unter `.claude/rules/`. Der vollständige Prüfweg
-steht in `.agents/skills/pruefen/SKILL.md`; zwischen Änderungen laufen die betroffenen Tests,
-vor dem Commit das getrennte Tor.
+steht in `.agents/skills/pruefen/SKILL.md`; zwischen Änderungen laufen die betroffenen Kerntests,
+vor dem Commit das Entwicklungstor mit Kernsammlung, Ruff, Format und mypy.
+Fensterdateien und Leistungsprüfungen laufen ausschließlich beim Release
+über `/pruefen --release`.
 
 Der technische Prüfstand und der Nachweis der Nutzungsrechte werden getrennt
 belegt. Für rechtliche Vorprüfungen gilt `.agents/skills/legal-review/SKILL.md`; ein Lizenztest ist
@@ -38,7 +40,7 @@ Gespräch auf Deutsch. **Bezeichner englisch, Docstrings und Kommentare deutsch.
 
 `packaging/solidon3d.spec` mit PyInstaller. Vor dem Bauen:
 
-Das vollständige getrennte Tor nach `.agents/skills/pruefen/SKILL.md` ausführen. Beispielprojekte
+Beim Release das vollständige Release-Tor nach `/pruefen --release` ausführen. Beispielprojekte
 über `tools/make_examples.py` erzeugen, wenn ihre Quellen geändert wurden.
 
 Eine Installationsdatei aus einer roten Suite ist schlimmer als keine. Die

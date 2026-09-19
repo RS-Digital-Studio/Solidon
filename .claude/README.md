@@ -15,7 +15,7 @@ wiederholt — wo etwas anderswo steht, steht hier der Verweis.
 | `skills/` | Die Befehle (`/pruefen`, `/liefern`, …) | **Quelle.** `.agents/skills/` entsteht aus derselben Datei, ebenfalls über `tools/sync_agents.py` |
 | `memory/` | Die Erfahrungen dieses Projekts, eine Datei je Fakt, dazu `MEMORY.md` als Index | Quelle. Den Index schreibt `tools/memory_index.py` |
 | `hooks/` | `solidon3d_hooks.py` — ein Skript für beide Editoren | Quelle. Die Einstiege stehen in `settings.json` und `.codex/hooks.json` |
-| `.state/` | Ein Ordner je Durchsicht: Messskripte, Rohfunde, Auftragstexte, meist ein `README.md`. Hier liegt auch `oberflaechen-durchsicht-2026-08-19/suite-getrennt.sh` — der einzige Weg, auf dem das Tor durchläuft | Quelle |
+| `.state/` | Ein Ordner je Durchsicht: Messskripte, Rohfunde, Auftragstexte, meist ein `README.md`. Hier liegt auch `oberflaechen-durchsicht-2026-08-19/suite-getrennt.sh` — Kernsammlung im Standardlauf, Fensterdateien nur beim Release mit `--release`; der gesamte Prüfweg steht in `/pruefen` | Quelle |
 | `audits/` | Datierte Durchsichten der Unterlagen selbst — nicht des Codes | Quelle |
 | `settings.json` | Rechte, Hooks, Umgebung, Plugins | Quelle |
 | `launch.json` | Startprofil für das Vorschaufenster | Quelle |

@@ -1,4 +1,4 @@
-"""Die eine Baustelle des Renderers (§18): Wache und Aufbau, ohne Fenster."""
+"""Die Renderer-Fabrik (§18): Wache, Aufbau und ausdrücklich markierte native Fensterwege."""
 
 from __future__ import annotations
 
@@ -169,6 +169,7 @@ def test_the_factory_builds_pygfx_without_a_window() -> None:
 
 
 @pytest.mark.skipif(GFX_MISSING is not None, reason=f"pygfx: {GFX_MISSING}")
+@pytest.mark.windowed
 def test_native_qt_canvas_draws_and_releases_its_renderer() -> None:
     """Ein eigener Prozess prüft den echten Qt-Fensterweg neben den Offscreen-Verträgen."""
     platform = {"win32": "windows", "darwin": "cocoa"}.get(sys.platform, "xcb")
@@ -321,6 +322,7 @@ _XVFB_TEARS = pytest.mark.xfail(
 
 
 @pytest.mark.skipif(GFX_MISSING is not None, reason=f"pygfx: {GFX_MISSING}")
+@pytest.mark.windowed
 @pytest.mark.parametrize(
     "scale",
     [pytest.param(1, marks=_XVFB_TEARS), pytest.param(2, marks=_XVFB_TEARS)],

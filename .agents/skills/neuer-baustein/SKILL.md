@@ -61,8 +61,9 @@ eine Boolesche Differenz allein belegen keine passende Verbindung.
 ## Abschluss
 
 `.agents/skills/pruefen/SKILL.md` mit den betroffenen Dateien, insbesondere `tests/test_parts.py`
-und `tests/test_parts_catalog.py`, ausführen. Das vollständige Tor ist vor
-einem Commit nötig, kein zweiter Lauf nach jedem Schritt. Melden: Name,
+und `tests/test_parts_catalog.py`, ausführen. Das Entwicklungstor ist vor
+einem Commit nötig, kein zweiter Lauf nach jedem Schritt. Fensterdateien und
+Leistungstests laufen ausschließlich beim Release. Melden: Name,
 Parameter, Features, tatsächlicher Bereichslauf mit Profil und Ergebnis,
 seine Abdeckung, ob `parts_version` steigen musste, und ob der Katalogeintrag mit
 Vorschaubild vorhanden ist.

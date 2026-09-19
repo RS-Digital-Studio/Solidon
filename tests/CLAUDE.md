@@ -49,8 +49,8 @@ Rundungsmerkmale, während echte regelmäßige Vielecke Bezugskanten behalten.
 
 ## Die Fahrweise steht einmal — in `CLAUDE.md`
 
-Wie die Suite gefahren wird — ein Prozess je Fensterdatei, der Rest in einem
-Zug, die Leistungstests eigens, `/pruefen` als Tor vor dem Commit und
+Wie die Suite gefahren wird — Kernsammlung vor dem Commit, Fensterdateien und
+Leistungsprüfungen ausschließlich beim Release, `/pruefen` für beide Umfänge und
 `tools/affected_tests.py` je Schritt — steht mit Befehlen und den drei Fallen
 beim Lesen des Ergebnisses im Abschnitt **Befehle** von `CLAUDE.md` im
 Projekt-Root. Bis zum 14.09.2026 stand derselbe Text hier ein zweites Mal,

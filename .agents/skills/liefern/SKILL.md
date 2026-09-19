@@ -18,7 +18,9 @@ vorhandenen automatischen Push-Hook dann für diesen Prozess mit
 `SOLIDON_KEIN_PUSH=1` unterdrücken. Eine bereits ausdrücklich erteilte
 Push-Freigabe bleibt gültig. Keine neue Nachfrage für autorisierte Schritte.
 
-Vor dem Commit gilt das vollständige Tor über `.agents/skills/pruefen/SKILL.md`. Ein passender
+Vor dem Commit gilt das Entwicklungstor über `.agents/skills/pruefen/SKILL.md`: Kernsammlung ohne
+Fensterdateien und Leistung, Ruff, Formatierung und mypy. Fensterdateien und
+Leistungsprüfungen gehören ausschließlich zum Release. Ein passender
 bereits grüner Lauf muss nicht wiederholt werden; relevante Änderungen seit
 dem Nachweis vorher prüfen. Einen Fehllauf mit Ursache und Stand benennen.
 

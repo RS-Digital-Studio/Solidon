@@ -30,10 +30,11 @@ jeden Test.
 berührt; das Tor sagt, ob der Stand *insgesamt* trägt. Vor dem Commit läuft
 ``/pruefen``, hier läuft, was dazwischen schnell Auskunft gibt.
 
-**Fensterdateien fahren einzeln.** Die Auswahl teilt sich wie
-``suite-getrennt.sh``: Dateien, die über ihren Fixture-Graphen ein Qt-Fenster
-bauen (``list_windowed_tests.collect_windowed``), bekommen je einen eigenen
-Prozess, der Rest läuft in einem Zug.
+**Fenster und Leistung nur beim Release.** Die reine Auswahl nennt weiter
+alle betroffenen Dateien. ``--run`` und ``--split`` stellen Fensterdateien
+zurück; erst ``--release`` nimmt sie als eigene Prozesse dazu. Die Trennung
+liest den Fixture-Graphen wie ``suite-getrennt.sh``. Leistungsprüfungen laufen
+auch beim Release separat und niemals über dieses Werkzeug.
 """
 
 from __future__ import annotations
@@ -302,26 +303,29 @@ def affected(
 
 
 def split_windowed(files: Iterable[Path]) -> tuple[list[Path], list[Path]]:
-    """Fensterdateien getrennt vom Rest — über denselben Weg wie das Tor."""
-    from tools.list_windowed_tests import collect_windowed
+    """Nicht-Leistungstests nach Fensterbedarf teilen, ohne sie auszuführen."""
+    from tools.list_windowed_tests import collect_test_groups
 
     ordered = sorted(files)
     if not ordered:
         return [], []
-    windowed = set(collect_windowed(ordered, confcutdir=ROOT))
-    return [path for path in ordered if path in windowed], [
-        path for path in ordered if path not in windowed
-    ]
+    windowed, plain = collect_test_groups(ordered, confcutdir=ROOT)
+    return list(windowed), list(plain)
 
 
-def commands(files: Iterable[Path]) -> list[list[str]]:
-    """Die Aufrufe, die die Auswahl fahren — je Fensterdatei einer."""
+def commands(files: Iterable[Path], *, release: bool = False) -> list[list[str]]:
+    """Die regulären Aufrufe; nur beim Release kommt je Fensterdatei einer dazu."""
     windowed, plain = split_windowed(files)
+    return _commands(windowed, plain, release=release)
+
+
+def _commands(windowed: list[Path], plain: list[Path], *, release: bool) -> list[list[str]]:
     base = [str(PYTHON), "-m", "pytest", "-q", "-m", "not performance", "-p", "no:cacheprovider"]
     lines: list[list[str]] = []
     if plain:
         lines.append([*base, *(str(path.relative_to(ROOT).as_posix()) for path in plain)])
-    lines.extend([*base, str(path.relative_to(ROOT).as_posix())] for path in windowed)
+    if release:
+        lines.extend([*base, str(path.relative_to(ROOT).as_posix())] for path in windowed)
     return lines
 
 
@@ -330,8 +334,8 @@ def run(lines: list[list[str]]) -> int:
 
     Nicht durch eine Pipeline und nicht hinter einem ``echo`` — ``CLAUDE.md``
     führt beide Fallen; hier kommt der Code aus ``returncode``, bevor
-    irgendetwas anderes läuft. Ein Riss beim Abbau nach vollständiger
-    Zusammenfassung zählt nicht als rot (derselbe Maßstab wie im Tor).
+    irgendetwas anderes läuft. Auch ein Riss beim Abbau nach vollständiger
+    Zusammenfassung bleibt ein Fehler (derselbe Maßstab wie im Tor).
     """
     failed = 0
     for arguments in lines:
@@ -348,8 +352,7 @@ def run(lines: list[list[str]]) -> int:
             ),
             "",
         )
-        clean = summary and not re.search(r"\d+ (failed|error)", summary)
-        status = "grün" if finished.returncode == 0 or clean else "ROT"
+        status = "grün" if finished.returncode == 0 else "ROT"
         if status == "ROT":
             failed += 1
             print(output)
@@ -363,6 +366,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--run", action="store_true", help="die Auswahl gleich fahren")
     parser.add_argument("--split", action="store_true", help="die Aufrufe zeigen, nicht fahren")
     parser.add_argument("--why", action="store_true", help="je Datei den Grund nennen")
+    parser.add_argument(
+        "--release", action="store_true", help="beim Release auch Fensterdateien fahren"
+    )
     arguments = parser.parse_args(argv)
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
@@ -388,15 +394,24 @@ def main(argv: list[str] | None = None) -> int:
             f"{len(files)} von {total} Testdateien — das ist die Suite. "
             "Fahr sie als Tor (/pruefen), nicht als Auswahl."
         )
-    if arguments.split:
-        print()
-        for arguments_line in commands(files):
-            print(" ".join(arguments_line[3:]))
-        return 0
-    if not arguments.run:
+    if not arguments.run and not arguments.split:
         return 0
     print()
-    return run(commands(files))
+    windowed, plain = split_windowed(files)
+    deferred = files - set(plain) - (set(windowed) if arguments.release else set())
+    if deferred:
+        print("Zurückgestellt: Fensterdateien nur mit --release; Leistung separat beim Release.")
+        for path in sorted(deferred):
+            print(f"  {path.relative_to(ROOT).as_posix()}")
+    lines = _commands(windowed, plain, release=arguments.release)
+    if not lines:
+        print("Keine regulären Tests ausgewählt; kein Testlauf gestartet.")
+        return 0
+    if arguments.split:
+        for arguments_line in lines:
+            print(" ".join(arguments_line[3:]))
+        return 0
+    return run(lines)
 
 
 if __name__ == "__main__":

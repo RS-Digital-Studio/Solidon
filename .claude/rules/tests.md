@@ -11,6 +11,20 @@ Jede harte Regel aus `AGENTS.md` hat einen Test. Ein Verstoß ist ein roter
 Lauf, keine Geschmacksfrage — also ist die Suite die eigentliche Version des
 Regelwerks.
 
+## Entwicklung und Release
+
+Nach Entwicklungsschritten laufen nur betroffene Kern- und statische Tests.
+Vor regulären Commits gehören die Kernsammlung ohne Fensterdateien und
+Leistung sowie Ruff, Formatierung und mypy zum Entwicklungstor.
+**Fensterdateien und Leistungsprüfungen laufen ausschließlich beim Release**,
+auch nicht als gezielte Teilmenge während der Entwicklung. Die Fenstergruppe
+wird über Pytests Fixture-Graphen (`qt_app`) und den Marker `windowed` erkannt.
+Tests, die ein Fenster in einem Unterprozess öffnen, tragen ausdrücklich
+`@pytest.mark.windowed`. Schon ein solcher Test stellt die gesamte Datei bis
+zum Release zurück. Dort wird sie getrennt ausgeführt; Leistung folgt separat.
+`/pruefen --release` beschreibt den
+vollständigen Umfang. Ein grüner Entwicklungslauf ist kein Release-Nachweis.
+
 ## Was wo geprüft wird
 
 | Datei | Prüft |
@@ -963,9 +977,11 @@ das Tor prüft beides.
 nicht das Gefühl:** `tools/affected_tests.py` liest, wer ein geändertes
 Modul mittelbar importiert, wer den Baum liest (`rglob`, `walk_packages`)
 und wer eine geänderte Nicht-Python-Datei beim Namen nennt — `--why` nennt
-je Datei den Grund, `--split` die Aufrufe (Fensterdateien einzeln), `--run`
-fährt sie. Die Auswahl ist das Werkzeug *zwischen* den Schritten; das Tor vor
-dem Commit bleibt `/pruefen`. Eine Änderung an `types.py` oder `errors.py`
+je Datei den Grund, `--split` die regulären Aufrufe, `--run` fährt sie ohne
+Fensterdateien und Leistung. Nur beim Release schaltet `--release` die
+Fenstergruppe hinzu; die Leistungsprüfung bleibt ein eigener Release-Lauf.
+Die Auswahl ist das Werkzeug *zwischen* den Schritten; das Entwicklungstor
+vor dem Commit bleibt `/pruefen`. Eine Änderung an `types.py` oder `errors.py`
 berührt über den Graphen fast alles, und das Werkzeug sagt das dann auch.
 
 ## Eine Fremdmeldung ist ein Zeitpunkt, keine Ursache

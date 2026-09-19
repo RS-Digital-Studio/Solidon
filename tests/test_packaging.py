@@ -406,7 +406,7 @@ def test_a_tests_only_dispatch_excludes_every_packaging_and_signing_job() -> Non
     covered = set()
     for name, section in zip(sections[1::2], sections[2::2], strict=True):
         if name in {"suite", "latest"}:
-            assert "inputs.tests_only" not in section
+            assert not re.search(r"^    if:.*inputs\.tests_only", section, flags=re.MULTILINE)
             continue
         covered.add(name)
         condition = re.search(r"^    if: (.+)(?:\n      .+)*", section, flags=re.MULTILINE)
@@ -467,32 +467,70 @@ def test_linux_endpoint_jobs_install_and_check_the_required_php_extensions(job: 
     assert "extension_loaded" in script and "throw new" in script
 
 
-@pytest.mark.parametrize("job", ["suite", "latest"])
-def test_each_ci_window_file_is_executed_exactly_once(tmp_path: Path, job: str) -> None:
-    """Der vorgezogene Druckdialog darf in der anschließenden Fenstergruppe nicht doppelt laufen."""
+def test_ci_window_steps_use_the_package_release_condition() -> None:
+    """main, PR, Zeitplan und tests_only dürfen keine Fensterprüfungen freigeben."""
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    suite = workflow.split("\n  suite:\n", 1)[1].split("\n  package:\n", 1)[0]
+    package = workflow.split("\n  package:\n", 1)[1]
+    package_condition = re.search(r"^    if: (.+)$", package, flags=re.MULTILINE).group(1)
+    release_condition = re.search(r"RELEASE_CHECK: \$\{\{ (.+) \}\}", suite).group(1)
+    assert (
+        release_condition
+        == package_condition
+        == (
+            "inputs.tests_only != true && "
+            "(startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch')"
+        )
+    )
+
+
+@pytest.mark.parametrize("job, release", [("suite", False), ("suite", True), ("latest", False)])
+@pytest.mark.parametrize("platform", ["Linux", "Windows", "macOS"])
+def test_each_ci_window_file_is_executed_only_at_release_and_once(
+    tmp_path: Path, job: str, release: bool, platform: str
+) -> None:
+    """Echte CI-Blöcke bewahren Releasegrenze und bestehende Plattformausnahmen."""
     import textwrap
 
     section = WORKFLOW.read_text(encoding="utf-8").split(f"\n  {job}:\n", 1)[1]
     section = re.split(r"^  [a-z][a-z0-9-]*:\n", section, maxsplit=1, flags=re.MULTILINE)[0]
     steps = [section.split("      - name: Tests\n", 1)[1].split("\n      - name:", 1)[0]]
     if job == "suite":
-        steps.append(section.split("      - name: Fensterdateien\n", 1)[1])
+        print_step = section.split(
+            "      - name: Plattformübergreifende Fensterverträge (Release)\n", 1
+        )[1].split("\n      - name:", 1)[0]
+        window_step = section.split("      - name: Fensterdateien\n", 1)[1]
+        print_conditions = [
+            line.strip() for line in print_step.splitlines() if line.strip().startswith("if:")
+        ]
+        window_conditions = [
+            line.strip() for line in window_step.splitlines() if line.strip().startswith("if:")
+        ]
+        assert print_conditions == ["if: env.RELEASE_CHECK == 'true'"]
+        assert window_conditions == ["if: runner.os == 'Windows' && env.RELEASE_CHECK == 'true'"]
+        if release:
+            steps.append(print_step)
+            if platform == "Windows":
+                steps.append(window_step)
     script = "\n".join(textwrap.dedent(step.split("        run: |\n", 1)[1]) for step in steps)
     shell = _workflow_shell()
     if shell is None:
         pytest.skip("ohne bash lässt sich der CI-Block nicht ausführen")
     fake_python = """
+printf '%s\n' "$*" >> "$ALL_CALLS"
 if [ "$1" = "tools/list_windowed_tests.py" ]; then
-  printf 'tests/test_print_settings_ui.py\r\ntests/test_fake.py\r\n'
+  printf 'tests/test_print_settings_ui.py\r\ntests/test_render_factory.py\r\ntests/test_fake.py\r\n'
   exit 0
 fi
 for argument in "$@"; do
   case "$argument" in
-    tests/test_print_settings_ui.py|tests/test_fake.py) printf '%s\n' "$argument" >> "$CALLS" ;;
+    tests/test_print_settings_ui.py|tests/test_render_factory.py|tests/test_fake.py)
+      printf '%s\n' "$argument" >> "$CALLS" ;;
   esac
 done
 """
     calls = tmp_path / "calls.txt"
+    calls.touch()
     result = subprocess.run(
         [shell, "-c", script],
         env=dict(
@@ -504,8 +542,9 @@ done
                     os.environ.get("PATH", ""),
                 )
             ),
-            RUNNER_OS="Linux",
+            RUNNER_OS=platform,
             CALLS=calls.as_posix(),
+            ALL_CALLS=(tmp_path / "all-calls.txt").as_posix(),
             GITHUB_STEP_SUMMARY=(tmp_path / "summary.md").as_posix(),
         ),
         capture_output=True,
@@ -513,10 +552,18 @@ done
         timeout=30,
     )
     assert result.returncode == 0, result.stdout + result.stderr
-    assert sorted(calls.read_text(encoding="utf-8").splitlines()) == [
-        "tests/test_fake.py",
-        "tests/test_print_settings_ui.py",
-    ]
+    expected = []
+    if release:
+        expected.extend(["tests/test_print_settings_ui.py", "tests/test_render_factory.py"])
+        if platform == "Windows":
+            expected.append("tests/test_fake.py")
+    assert sorted(calls.read_text(encoding="utf-8").splitlines()) == sorted(expected)
+    all_calls = (tmp_path / "all-calls.txt").read_text(encoding="utf-8").splitlines()
+    core_call = next(line for line in all_calls if "-n auto" in line)
+    assert "--ignore=tests/test_fake.py" in core_call
+    assert "--ignore=tests/test_print_settings_ui.py" in core_call
+    assert "--ignore=tests/test_render_factory.py" in core_call
+    assert all("not performance" in line for line in all_calls if "-m pytest" in line)
 
 
 def test_every_linux_ci_path_that_uses_pygfx_has_a_vulkan_adapter() -> None:
@@ -561,14 +608,11 @@ def test_window_failures_block_the_package_on_every_platform(
     workflow = WORKFLOW.read_text(encoding="utf-8")
     step = workflow.split("      - name: Fensterdateien\n", 1)[1].split("\n  package:", 1)[0]
     assert "continue-on-error" not in step
-    # **Windows und macOS dürfen die Fenster nicht auslassen** — Linux ist seit
-    # dem 08.09.2026 ausgesetzt (Entscheidung Robert), weil dort acht Tests die
-    # Schriftmetrik der Umgebung mitmessen; die Begründung steht im Schritt
-    # selbst und die Befunde in `ROADMAP.md`. Geprüft wird deshalb nicht mehr
-    # „kein `if`", sondern **genau dieses eine**: Ein zweites, das eine weitere
-    # Plattform ausnimmt, macht den Lauf wieder rot.
+    # Die bestehende Windows-Grenze bleibt erhalten, ergänzt um Release.
+    # Der Shellblock wird darunter auf allen drei Systemlagen geprüft, ohne
+    # die ausgesetzten Plattformen dadurch im echten Workflow freizugeben.
     conditions = [line.strip() for line in step.splitlines() if line.strip().startswith("if:")]
-    assert conditions in ([], ["if: runner.os == 'Windows'"]), conditions
+    assert conditions == ["if: runner.os == 'Windows' && env.RELEASE_CHECK == 'true'"]
     assert "shell: bash" in step
     script = textwrap.dedent(step.split("        run: |\n", 1)[1])
     shell = _workflow_shell()
@@ -658,8 +702,7 @@ exit 0
         timeout=30,
     )
     assert done.returncode == exit_code, done.stdout + done.stderr
-    expected = (3 if job == "latest" else 2) if exit_code == 0 else 1
-    assert len(calls.read_text(encoding="utf-8").splitlines()) == expected
+    assert len(calls.read_text(encoding="utf-8").splitlines()) == 1
 
 
 def test_the_customer_package_builds_the_fast_slice_core() -> None:
@@ -844,6 +887,9 @@ def test_the_workflow_finds_every_file_that_builds_a_window() -> None:
     ).stdout.split()
     windowed = {Path(entry).name for entry in listed}
     assert windowed, "das Werkzeug nennt keine einzige Fensterdatei"
+    assert "test_render_factory.py" in windowed, (
+        "native Renderer-Kindprozesse fehlen trotz windowed-Marker in der Fenstergruppe"
+    )
 
     # ``Plotter`` stand hier bis zum 06.09.2026 mit: PyVistas Klasse, die der
     # Viewport hielt. Sie ist mit dem VTK-Renderer gegangen, und ein Name, den

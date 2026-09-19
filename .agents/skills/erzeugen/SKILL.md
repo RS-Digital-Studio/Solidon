@@ -84,7 +84,10 @@ Produktentscheidung. Ein reiner Diagnosebau ist keine neue Veröffentlichung.
 bezeichnet den ausgelieferten Stand und wird erst aus den richtigen fertigen
 Paketen erzeugt und nach deren Upload veröffentlicht.
 
-Vor dem Paketbau gilt das vollständige Tor über `.agents/skills/pruefen/SKILL.md`. Die CI ist der
+Vor dem Paketbau gilt das vollständige Release-Tor über `/pruefen --release`,
+einschließlich getrennter Fensterdateien und anschließender Leistungsprüfung.
+Diese beiden Prüfgruppen laufen ausschließlich beim Release; ein grünes
+Entwicklungstor genügt hier nicht. Die CI ist der
 reguläre Bauweg: `.github/workflows/build.yml` bestimmt Trigger, Plattformen,
 Abhängigkeiten und die getrennten Signier- und Prüfjobs. Vor einem beauftragten
 Tag oder Handstart den konkreten Commit und Versionsstand feststellen. Kein

@@ -1,6 +1,9 @@
 """Die Suite fahren, je Testdatei ein Prozess.
 
-    python tools/run_suite_isolated.py [muster …]
+    python tools/run_suite_isolated.py [--release] [muster …]
+
+Fensterdateien laufen ausschließlich mit ``--release``. Leistungsprüfungen
+bleiben auch dann dem getrennten Release-Lauf vorbehalten.
 
 **Wofür das da ist.** Ein Absturz reißt die Suite seit Tagen sporadisch ab —
 eine Zugriffsverletzung ohne Traceback, die Roadmap führt ihn als offenen
@@ -32,6 +35,7 @@ darum steht dieses Werkzeug hier.
 
 from __future__ import annotations
 
+import argparse
 import subprocess
 import sys
 import time
@@ -40,8 +44,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 PYTHON = Path(sys.executable)
 
-#: Wie lange eine einzelne Datei laufen darf. Großzügig: ``test_performance``
-#: misst gegen das Budget aus §31 und braucht seine Zeit.
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+#: Wie lange eine einzelne Datei einschließlich ihres Abbaus laufen darf.
 BUDGET_SECONDS = 900
 
 if hasattr(sys.stdout, "reconfigure"):
@@ -65,11 +71,31 @@ def counted(output: str) -> int:
     return 0
 
 
-def main() -> int:
-    files = chosen_files(tuple(sys.argv[1:]))
+def main(argv: list[str] | None = None) -> int:
+    from tools.affected_tests import split_windowed
+
+    parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    parser.add_argument("patterns", nargs="*", help="Dateinamensmuster; leer: alle Testdateien")
+    parser.add_argument(
+        "--release", action="store_true", help="beim Release auch Fensterdateien fahren"
+    )
+    arguments = parser.parse_args(argv)
+    files = chosen_files(tuple(arguments.patterns))
     if not files:
         print("Keine Testdatei passt auf das Muster.")
         return 1
+
+    windowed, plain = split_windowed(files)
+    selected = sorted([*plain, *(windowed if arguments.release else [])])
+    deferred = set(files) - set(selected)
+    if deferred:
+        print("Zurückgestellt: Fensterdateien nur mit --release; Leistung separat beim Release.")
+        for path in sorted(deferred):
+            print(f"  {path.name}")
+    if not selected:
+        print("Keine regulären Tests ausgewählt; kein Testlauf gestartet.")
+        return 0
+    files = selected
 
     print(f"{len(files)} Testdateien, je ein Prozess")
     failed: list[tuple[str, str]] = []
@@ -79,7 +105,7 @@ def main() -> int:
     for path in files:
         try:
             finished = subprocess.run(
-                [str(PYTHON), "-m", "pytest", "-q", str(path)],
+                [str(PYTHON), "-m", "pytest", "-q", "-m", "not performance", str(path)],
                 capture_output=True,
                 text=True,
                 cwd=ROOT,

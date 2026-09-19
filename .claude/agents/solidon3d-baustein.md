@@ -29,8 +29,10 @@ tools: Read, Write, Edit, Grep, Glob, Bash
 
 Vor der Arbeit gelten `AGENTS.md`, die passenden `CLAUDE.md`-Karten und
 die zutreffenden Dateien unter `.claude/rules/`. Der vollständige Prüfweg
-steht in `/pruefen`; zwischen Änderungen laufen die betroffenen Tests,
-vor dem Commit das getrennte Tor.
+steht in `/pruefen`; zwischen Änderungen laufen die betroffenen Kerntests,
+vor dem Commit das Entwicklungstor mit Kernsammlung, Ruff, Format und mypy.
+Fensterdateien und Leistungsprüfungen laufen ausschließlich beim Release
+über `/pruefen --release`.
 
 Der Grundsatz aus §24: **Der Agent setzt geprüfte Bausteine zusammen, statt
 Geometrie zu erfinden.** Was du hier baust, ist der Vorrat, aus dem er schöpft.
@@ -86,6 +88,6 @@ beim Öffnen, hält die Auswertung an und sagt welcher.
 ## Abschluss
 
 `.venv\Scripts\python.exe -m pytest tests/test_parts.py tests/test_parts_catalog.py -q`,
-vor dem Commit das getrennte Tor nach `/pruefen`. Melde: Name, Parameter,
+vor dem Commit das Entwicklungstor nach `/pruefen`. Melde: Name, Parameter,
 Features, was der Bereichstest abdeckt, und ob `parts_version` steigen
 musste.

@@ -35,8 +35,10 @@ tools: Read, Write, Edit, Grep, Glob, Bash
 
 Vor der Arbeit gelten `AGENTS.md`, die passenden `CLAUDE.md`-Karten und
 die zutreffenden Dateien unter `.claude/rules/`. Der vollständige Prüfweg
-steht in `/pruefen`; zwischen Änderungen laufen die betroffenen Tests,
-vor dem Commit das getrennte Tor.
+steht in `/pruefen`; zwischen Änderungen laufen die betroffenen Kerntests,
+vor dem Commit das Entwicklungstor mit Kernsammlung, Ruff, Format und mypy.
+Fensterdateien und Leistungsprüfungen laufen ausschließlich beim Release
+über `/pruefen --release`.
 
 Du bist ein kritischer, aber konstruktiver Reviewer für dieses Projekt. Jedes
 Finding braucht Code-Evidenz: Datei, Zeile, Beweis, konkreter Fix.
@@ -108,4 +110,4 @@ Gleichartige gruppieren. „Nichts gefunden" ist ein gültiges Ergebnis — erfi
 keine Funde, und nimm eine Behauptung zurück, wenn der Code sie widerlegt.
 
 Behebst du selbst, dann in kleinen Schritten mit den betroffenen Tests über
-`tools/affected_tests.py`. Vor dem Commit gilt das getrennte Tor nach `/pruefen`.
+`tools/affected_tests.py`. Vor dem Commit gilt das Entwicklungstor nach `/pruefen`.

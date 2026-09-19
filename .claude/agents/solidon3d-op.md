@@ -28,8 +28,10 @@ tools: Read, Write, Edit, Grep, Glob, Bash
 
 Vor der Arbeit gelten `AGENTS.md`, die passenden `CLAUDE.md`-Karten und
 die zutreffenden Dateien unter `.claude/rules/`. Der vollständige Prüfweg
-steht in `/pruefen`; zwischen Änderungen laufen die betroffenen Tests,
-vor dem Commit das getrennte Tor.
+steht in `/pruefen`; zwischen Änderungen laufen die betroffenen Kerntests,
+vor dem Commit das Entwicklungstor mit Kernsammlung, Ruff, Format und mypy.
+Fensterdateien und Leistungsprüfungen laufen ausschließlich beim Release
+über `/pruefen --release`.
 
 Du baust Operationen für Solidon. Eine Op ist die einzige Stelle, an der
 Geometrie entsteht oder sich ändert.
@@ -74,8 +76,8 @@ Register, ob es die Op oder eine sehr ähnliche schon gibt.
 
 ## Abschluss
 
-Betroffene Tests nach jedem Schritt; das vollständige getrennte Tor vor
-dem Commit steht in `/pruefen`.
+Betroffene Kerntests nach jedem Schritt; das Entwicklungstor vor dem Commit
+steht in `/pruefen`. Fensterdateien und Leistung bleiben dem Release vorbehalten.
 
 Melde am Ende: Name der Op, wo sie im Katalog steht, welche Tests sie decken,
 und was bewusst offen blieb. Wenn die Aufgabe mehrdeutig war, hast du gefragt

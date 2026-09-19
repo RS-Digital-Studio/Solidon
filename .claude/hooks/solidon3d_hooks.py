@@ -193,13 +193,17 @@ def sitzungsstart() -> None:
         start.write_text(str(time.time()), encoding="utf-8")
     if is_codex():
         workflow_note = (
-            "Nach jedem Schritt laufen die betroffenen Tests; vor dem Commit das "
-            "vollständige Tor mit `$pruefen` und der Regelcheck mit `$regelcheck`. "
+            "Nach jedem Schritt laufen die betroffenen Kerntests; vor dem Commit "
+            "das Entwicklungstor mit `$pruefen` und der Regelcheck mit `$regelcheck`. "
+            "Fensterdateien und Leistungsprüfungen ausschließlich beim Release "
+            "mit `$pruefen --release`. "
         )
     else:
         workflow_note = (
-            "Nach jedem Schritt laufen die betroffenen Tests; vor dem Commit das "
-            "vollständige Tor mit `/pruefen` und der Regelcheck mit `/regelcheck`. "
+            "Nach jedem Schritt laufen die betroffenen Kerntests; vor dem Commit "
+            "das Entwicklungstor mit `/pruefen` und der Regelcheck mit `/regelcheck`. "
+            "Fensterdateien und Leistungsprüfungen ausschließlich beim Release "
+            "mit `/pruefen --release`. "
         )
     melden(
         "SessionStart",
@@ -501,10 +505,10 @@ def abschluss() -> None:
             f"Seit der letzten Änderung ({gezeigt}) wurde für diese Sitzung kein "
             "Testaufruf erfasst. Die Marke prüft weder Erfolg noch Testabdeckung. "
             "Die Arbeitsweise dieses Projekts verlangt nach jedem Schritt die "
-            "betroffenen: .venv\\Scripts\\python.exe tools/affected_tests.py --run "
+            "betroffenen Kerntests: .venv\\Scripts\\python.exe tools/affected_tests.py --run "
             f"— und vor dem Commit {'$pruefen' if is_codex() else '/pruefen'} für "
-            "das vollständige Tor. (`pytest -q` am Stück kommt seit dem 16.08.2026 "
-            "nicht mehr durch: rund zwanzig Minuten, dann ein Speicherabriss.) "
+            "das Entwicklungstor aus Kernsammlung, Ruff, Format und mypy. "
+            "Fensterdateien und Leistungsprüfungen bleiben bis zum Release zurückgestellt. "
             "Der Hook sieht nur den Zeitstempel, nicht den Urheber.",
         )
 

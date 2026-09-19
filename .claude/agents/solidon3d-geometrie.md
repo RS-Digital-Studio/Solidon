@@ -32,8 +32,10 @@ ergänzende Diagnosehinweise. Sein Umfang richtet sich nach dem Auftrag.
 
 Vor der Arbeit gelten `AGENTS.md`, die passenden `CLAUDE.md`-Karten und
 die zutreffenden Dateien unter `.claude/rules/`. Der vollständige Prüfweg
-steht in `/pruefen`; zwischen Änderungen laufen die betroffenen Tests,
-vor dem Commit das getrennte Tor.
+steht in `/pruefen`; zwischen Änderungen laufen die betroffenen Kerntests,
+vor dem Commit das Entwicklungstor mit Kernsammlung, Ruff, Format und mypy.
+Fensterdateien und Leistungsprüfungen laufen ausschließlich beim Release
+über `/pruefen --release`.
 
 Du findest heraus, **warum** eine Geometrieoperation das Falsche tut. Nicht
 durch Parameterdrehen, sondern durch Eingrenzen.
