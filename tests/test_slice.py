@@ -8,6 +8,7 @@ festnageln statt auf ein Gefühl.
 from __future__ import annotations
 
 import math
+from itertools import pairwise
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -225,6 +226,92 @@ def test_the_support_volume_does_not_depend_on_the_layer_height() -> None:
     assert fine == pytest.approx(coarse, rel=0.1), (
         f"{fine:.0f} mm³ bei 0,2 mm gegen {coarse:.0f} mm³ bei 0,4 mm"
     )
+
+
+def test_the_support_volume_can_be_left_out_where_nobody_reads_it() -> None:
+    """``support_volume=False`` lässt die Säulen aus und meldet null — die
+    Schichten selbst bleiben dieselben. Die Druckvorschläge nehmen den Weg;
+    an einem Gitterbecher waren die Säulen ein Drittel ihrer Wartezeit."""
+    body = place_on_bed(mushroom())
+
+    full = slice_body(body, 0.2)
+    lean = slice_body(body, 0.2, support_volume=False)
+
+    assert full.support_volume == pytest.approx(MUSHROOM_SUPPORT, rel=0.05)
+    assert lean.support_volume == 0.0
+    assert len(lean.layers) == len(full.layers)
+    assert [layer.overhang_area for layer in lean.layers] == [
+        layer.overhang_area for layer in full.layers
+    ], "Überhänge werden weiter gemessen — nur die Säulen darunter nicht"
+    assert lean.first_layer_area == full.first_layer_area
+
+
+def test_a_layer_that_looks_like_the_one_below_is_measured_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Gleiche Schicht, gleiche Zahlen (19.09.2026).
+
+    Der Pilz ist zweimal prismatisch — Stiel und Hut —, und jede seiner
+    Schichten kostete die volle Breiten- und Brückensuche. Gemessen wird jetzt,
+    wo sich etwas ändert; die übrigen bekommen die Zahlen ihrer Vorgängerin.
+    Die Probe: dieselben Zahlen wie ohne die Abkürzung, Schicht für Schicht,
+    und deutlich weniger Messungen.
+    """
+    body = place_on_bed(mushroom())
+    counted: list[int] = []
+    measured = analysis._measure
+
+    def counting(*args, **kwargs):
+        counted.append(1)
+        return measured(*args, **kwargs)
+
+    monkeypatch.setattr(analysis, "_measure", counting)
+    quick = slice_body(body, 0.2)
+    measurements = len(counted)
+
+    monkeypatch.setattr(analysis, "_same_layer", lambda shape, previous: False)
+    counted.clear()
+    plain = slice_body(body, 0.2)
+
+    assert len(counted) == len(plain.layers), "ohne Abkürzung wird jede Schicht gemessen"
+    assert measurements < len(plain.layers) // 4, (
+        f"{measurements} Messungen für {len(plain.layers)} Schichten — zwei Absätze, ein Übergang"
+    )
+    assert [layer.z for layer in quick.layers] == [layer.z for layer in plain.layers]
+    for mine, theirs in zip(quick.layers, plain.layers, strict=True):
+        assert mine.area == pytest.approx(theirs.area)
+        assert mine.overhang_area == pytest.approx(theirs.overhang_area, abs=1e-6)
+        assert mine.min_width == pytest.approx(theirs.min_width)
+        assert mine.bridge_width == pytest.approx(theirs.bridge_width)
+        assert len(mine.islands) == len(theirs.islands)
+    assert quick.support_volume == pytest.approx(plain.support_volume, rel=1e-6)
+
+
+def test_a_drafted_wall_is_not_the_same_layer_twice() -> None:
+    """Eine Formschräge verschiebt die Wand je Schicht — das ist keine
+    Wiederholung, auch wenn Fläche und Umfang sich kaum ändern."""
+    cone = trimesh.creation.cone(radius=20.0, height=40.0, sections=64)
+    body = place_on_bed(MeshData.of(cone))
+    low, high = body.bounds.minimum[2], body.bounds.maximum[2]
+    heights = np.arange(low + 0.1, high, 0.2)
+    sections, _contours = analysis._cross_sections(body, heights, capture_contours=True)
+    pairs = [
+        (one, two)
+        for one, two in pairwise(sections)
+        if one is not None and two is not None and not one.is_empty and not two.is_empty
+    ]
+    assert pairs
+    assert not any(analysis._same_layer(two, one) for one, two in pairs)
+
+    box = place_on_bed(MeshData.of(trimesh.creation.box((20.0, 10.0, 8.0))))
+    sections, _contours = analysis._cross_sections(
+        box, np.arange(0.1, 8.0, 0.2), capture_contours=True
+    )
+    assert all(
+        analysis._same_layer(two, one)
+        for one, two in pairwise(sections)
+        if one is not None and two is not None
+    ), "die senkrechte Wand trifft jede Ebene an denselben Kanten"
 
 
 def test_the_support_volume_stops_at_the_material_below() -> None:

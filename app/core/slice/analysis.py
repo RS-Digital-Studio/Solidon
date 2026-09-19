@@ -57,6 +57,13 @@ else:
 #: Der kleinste Überhang, der nicht bloß Vernetzungsrauschen ist.
 OVERHANG_MARGIN = 0.05
 
+#: Ab welchem Abstand zweier aufeinanderfolgender Schnitte sie nicht mehr
+#: dieselbe Schicht sind. Ein Millionstel Millimeter: Senkrechte Wände treffen
+#: jede Ebene an denselben Kanten und liefern dieselben Eckpunkte bis auf das
+#: Rundungsrauschen der Schnittrechnung; eine Formschräge von einem Zehntel
+#: Grad verschiebt die Wand je Schicht um Tausendstel und fällt heraus.
+SAME_LAYER_TOLERANCE = EPS_GEOM
+
 #: Schritte der binären Suche nach der kleinsten Strukturbreite. Sechs
 #: Halbierungen einer ohnehin engen Klammer lassen unter zwei Prozent übrig.
 WIDTH_STEPS = 6
@@ -121,8 +128,16 @@ PARALLEL_FROM = 40
 #: 200 Kandidaten auf dieser Maschine ans gemessene Minimum. Die vollständige
 #: Analyse hat nach den Abkürzungen darunter kleinere Aufträge; dort sind zehn
 #: schneller (Median 291 statt 304 ms bei exakt 200 000 Dreiecken).
+#:
+#: **Sechs statt zehn für die vollständige Messung** (19.09.2026). Schwere
+#: Schichten vertragen weniger Nachbarn: Ein Gitterbecher mit 94 990 Dreiecken
+#: und Schichten aus 7 000 Punkten brauchte mit 10 Arbeitern 11,4 s, mit 6 10,0,
+#: mit 4 9,3 — während die glatte Kugel mit 327 680 Dreiecken mit 4 Arbeitern
+#: 176 ms brauchte, mit 6 und 10 gleichermaßen 139. Sechs verliert an beiden
+#: Enden am wenigsten; den wirklichen Engpass hinter der Sättigung kennt
+#: weiterhin niemand (RM, 16.09.2026).
 MAX_WORKERS = 16
-FULL_WORKERS = 10
+FULL_WORKERS = 6
 
 #: Ab dieser Zahl Stützflächen ist der Aufbau eines räumlichen Index billiger
 #: als ein vektorisierter GEOS-Test gegen jede einzelne. An 59 Kugelschichten
@@ -162,8 +177,17 @@ def slice_body(
     overhang_angle: float | None = None,
     bridge_from: float | None = None,
     cancelled: CancelToken | None = None,
+    support_volume: bool = True,
 ) -> SliceResult:
     """Schneidet den Körper in Schichten und misst jede (§22.1, §22.2).
+
+    ``support_volume=False`` lässt die Stützsäulen aus (:func:`_support_volume`)
+    und meldet null: Die Druckvorschläge lesen sie nicht, und an einem
+    Gitterbecher mit 94 990 Dreiecken waren die Säulen 6,7 der 20 Sekunden,
+    die der Druckdialog auf seine Vorschläge wartete (19.09.2026). Wer die Zahl
+    braucht — Schätzung, Orientierungssuche, Analysekarte —, lässt den
+    Schalter stehen; eine Null ist dort keine Aussage über den Körper, sondern
+    eine über den Aufrufer, und sie steht deshalb nur da, wo niemand sie liest.
 
     ``detail="support"`` misst nur, was die Stützen brauchen: Überhänge,
     Inseln und die Flächen. Die Orientierungssuche ruft das zweihundertmal auf
@@ -276,8 +300,16 @@ def slice_body(
         bridge_from=span,
         cancelled=cancelled,
     )
-    support = _support_volume(
-        sections, measured, layer_height, first_layer_height=first_layer_height, cancelled=cancelled
+    support = (
+        _support_volume(
+            sections,
+            measured,
+            layer_height,
+            first_layer_height=first_layer_height,
+            cancelled=cancelled,
+        )
+        if support_volume
+        else 0.0
     )
 
     for z, shape, metrics, contours in zip(
@@ -467,6 +499,52 @@ def _above_material(
     return kept
 
 
+def _same_layer(shape: ShapelyPolygon, previous: ShapelyPolygon) -> bool:
+    """Ob zwei aufeinanderfolgende Schnitte dieselbe Fläche sind.
+
+    Drei billige Fragen zuerst — Fläche, Umfang, Hüllbox —, dann der Vergleich
+    der Ecken: Beide Konturen werden von Punkten befreit, die auf einer
+    Geraden liegen (die Diagonale einer senkrechten Wand schneidet jede Ebene
+    woanders, die Wand selbst nicht), kanonisch geordnet und Punkt für Punkt
+    verglichen. Kein Puffer, keine Boolesche Operation: Die Frage kostet einen
+    Bruchteil dessen, was sie spart.
+    """
+    tolerance = SAME_LAYER_TOLERANCE
+    if abs(float(shape.area) - float(previous.area)) > tolerance * max(1.0, float(shape.area)):
+        return False
+    if abs(float(shape.length) - float(previous.length)) > tolerance * max(
+        1.0, float(shape.length)
+    ):
+        return False
+    if any(
+        abs(mine - theirs) > tolerance
+        for mine, theirs in zip(shape.bounds, previous.bounds, strict=True)
+    ):
+        return False
+    mine = shapely.normalize(shape.simplify(tolerance))
+    theirs = shapely.normalize(previous.simplify(tolerance))
+    return bool(shapely.equals_exact(mine, theirs, tolerance=tolerance))
+
+
+def _repeated(source: LayerMetrics, shape: ShapelyPolygon) -> LayerMetrics:
+    """Die Zahlen einer Schicht, die genauso aussieht wie die darunter.
+
+    Gegen eine identische Schicht darunter gibt es keinen Überhang, keine
+    Insel und keine Brücke — ``shape.difference(shape.buffer(reach))`` ist
+    leer, und genau das rechnete :func:`_measure` aus. Die Strukturbreite und
+    die Konturzahl hängen nur an der Fläche selbst und sind die der Quelle.
+    """
+    return LayerMetrics(
+        z=0.0,
+        area=float(shape.area),
+        overhang_area=0.0,
+        island_area=0.0,
+        min_width=source.min_width,
+        bridge_width=0.0,
+        contour_count=source.contour_count,
+    )
+
+
 def _measure_all(
     sections: list[ShapelyPolygon | None],
     layer_height: float,
@@ -478,6 +556,16 @@ def _measure_all(
     cancelled: CancelToken | None = None,
 ) -> list[LayerMetrics | None]:
     """Misst jede Schicht, auf so vielen Threads wie die Maschine hat.
+
+    **Und jede nur einmal, solange sie dieselbe bleibt.** Ein Gehäuse, ein
+    Organizer, ein Kabelkanal sind über weite Strecken senkrecht: Schnitt für
+    Schnitt dieselbe Fläche, und jede davon kostete die volle Messung —
+    Breitensuche und Brückensuche aus lauter Puffern. Gemessen am 19.09.2026
+    an einem Gitterbecher mit 94 990 Dreiecken und 476 Schichten: 19,8 s für
+    die Vorschläge im Druckdialog (Befund Robert: „Vorschläge beim Slicen
+    dauern ewig"). Eine Schicht, die :func:`_same_layer` ihrer Vorgängerin
+    gleicht, bekommt deren Zahlen (:func:`_repeated`); gemessen wird nur, wo
+    sich etwas ändert.
 
     Das ist einen Absatz wert. Eine Schicht wird gegen die darunter gemessen,
     die Schleife *sieht* also sequenziell aus — aber das Paar ist alles, was
@@ -500,19 +588,37 @@ def _measure_all(
     from concurrent.futures import ThreadPoolExecutor
 
     jobs: list[tuple[int, ShapelyPolygon, ShapelyPolygon | None, bool]] = []
+    # Schicht → die gemessene Schicht, deren Zahlen sie übernimmt.
+    repeats: dict[int, int] = {}
     previous: ShapelyPolygon | None = None
+    source = -1
     on_plate = True
     for index, shape in enumerate(sections):
         if shape is None or shape.is_empty:
             previous = None
             continue
-        jobs.append((index, shape, previous, on_plate))
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        if previous is not None and source >= 0 and _same_layer(shape, previous):
+            repeats[index] = source
+        else:
+            jobs.append((index, shape, previous, on_plate))
+            source = index
         previous = shape
         on_plate = False
 
     results: list[LayerMetrics | None] = [None] * len(sections)
     if not jobs:
         return results
+
+    def copied() -> list[LayerMetrics | None]:
+        for index, origin in repeats.items():
+            measured = results[origin]
+            shape = sections[index]
+            if measured is not None and shape is not None:
+                results[index] = _repeated(measured, shape)
+        return results
+
     if len(jobs) < PARALLEL_FROM:
         for index, shape, below, plate in jobs:
             if cancelled is not None:
@@ -521,7 +627,7 @@ def _measure_all(
             results[index] = _measure(
                 shape, below, plate, step, detail, overhang_factor, bridge_from
             )
-        return results
+        return copied()
 
     def one(job: tuple[int, ShapelyPolygon, ShapelyPolygon | None, bool]) -> None:
         if cancelled is not None:
@@ -559,7 +665,7 @@ def _measure_all(
             for start in range(0, len(jobs), workers):
                 cancelled.raise_if_cancelled()
                 list(pool.map(one, jobs[start : start + workers]))
-    return results
+    return copied()
 
 
 def _workers(limit: int) -> int:
@@ -1423,28 +1529,67 @@ def _supported_span(shape: ShapelyPolygon, supported: ShapelyPolygon) -> float:
     Es bleibt eine geometrische Schätzung, keine Slicer-Bahnplanung. Ohne
     eine beidseitig getragene Richtung gilt die Diagonale als konservatives
     Maß des freien Bereichs, niemals seine möglicherweise winzige Breite.
+
+    **Gleiche Richtungen werden in einem Zug zusammengelegt**, nicht jede
+    gegen jede vorige. Eine organische Fläche aus einem feinen Netz hat
+    tausende Kanten: An einer Drachenfigur mit 2,3 Mio. Dreiecken hatte der
+    freie Bereich einer Schicht 3 188 Ecken, der paarweise Vergleich kostete
+    für diese eine Schicht 24 s und für den Körper 120 s — die Druckvorschläge
+    warteten siebeneinhalb Minuten (Befund Robert, 19.09.2026). Sortiert nach
+    Winkel ist dieselbe Menge in einem Durchlauf da; je Bündel bleibt wie
+    zuvor die Kante, die in der Kontur zuerst kommt.
     """
     anchored = supported.buffer(EPS_GEOM)
     if anchored.covers(shape.boundary):
         return spanning_width(shape)
+    # Tausende Bahnenden fragen dieselbe Fläche: vorbereitet antwortet sie
+    # über ihren Index statt über die ganze Kontur.
+    shapely.prepare(anchored)
 
     corners = np.asarray(shape.exterior.coords, dtype=float)
-    directions: list[Any] = []
-    for edge in np.diff(corners, axis=0):
-        length = float(np.linalg.norm(edge))
-        if length <= EPS_GEOM:
-            continue
-        unit = edge / length
-        for direction in (unit, np.array([-unit[1], unit[0]])):
-            if not any(
-                abs(float(np.dot(direction, prior))) >= 1.0 - EPS_GEOM for prior in directions
-            ):
-                directions.append(direction)
+    edges = np.diff(corners, axis=0)
+    lengths = np.linalg.norm(edges, axis=1)
+    units = edges[lengths > EPS_GEOM] / lengths[lengths > EPS_GEOM, None]
+    if not len(units):
+        return _across(shape)
+    # Kante und Normale, in Konturreihenfolge: erst die Kante, dann ihre Normale.
+    candidates = np.empty((2 * len(units), 2), dtype=float)
+    candidates[0::2] = units
+    candidates[1::2] = np.stack((-units[:, 1], units[:, 0]), axis=1)
+    # Richtung und Gegenrichtung sind dieselbe Bahn: der Winkel modulo pi.
+    # Als eine Richtung gilt, was der frühere Vergleich |cos| >= 1 - EPS
+    # zusammenlegte — gut ein Tausendstel Bogenmaß; der Kreis schließt sich
+    # bei pi, die letzte und die erste können dasselbe Bündel sein.
+    angles = np.mod(np.arctan2(candidates[:, 1], candidates[:, 0]), math.pi)
+    order = np.argsort(angles, kind="stable")
+    apart = math.acos(1.0 - EPS_GEOM)
+    bundles: list[list[int]] = [[int(order[0])]]
+    for index in order[1:]:
+        if angles[index] - angles[bundles[-1][-1]] > apart:
+            bundles.append([int(index)])
+        else:
+            bundles[-1].append(int(index))
+    if len(bundles) > 1 and angles[bundles[0][0]] + math.pi - angles[bundles[-1][-1]] <= apart:
+        bundles[0].extend(bundles.pop())
+    directions: list[Any] = [candidates[min(bundle)] for bundle in sorted(bundles, key=min)]
 
+    # **Die Bänder kommen aus der vereinfachten Kontur**, die Schnitte gehen
+    # durch die echte. Zwischen zwei projizierten Ecken bleibt die Topologie
+    # der Bahnen gleich, und zwei Ecken, die ein hundertstel Millimeter
+    # auseinanderliegen (Vernetzungsrauschen einer Rundung), teilen kein Band,
+    # das ein Drucker noch auflöste. An der Drachenfigur waren es 778 Bänder
+    # je Richtung, also 2 334 Schnittbahnen — 22 s für eine Schicht.
+    band_corners = np.asarray(_simplified(shape).exterior.coords, dtype=float)
+    # Alle Kanten der Fläche, Außenring und Löcher, für die Abtastzeilen.
+    rings = [np.asarray(shape.exterior.coords, dtype=float)] + [
+        np.asarray(ring.coords, dtype=float) for ring in shape.interiors
+    ]
+    heads = np.concatenate([ring[:-1] for ring in rings])
+    tails = np.concatenate([ring[1:] for ring in rings])
     best = _across(shape)
     for direction in directions:
         normal = np.array([-direction[1], direction[0]])
-        levels = np.unique(corners @ normal)
+        levels = np.unique(band_corners @ normal)
         lower, upper = levels[:-1], levels[1:]
         keep = upper - lower > EPS_GEOM
         lower, upper = lower[keep], upper[keep]
@@ -1452,28 +1597,85 @@ def _supported_span(shape: ShapelyPolygon, supported: ShapelyPolygon) -> float:
             continue
         inset = np.minimum(EPS_GEOM, (upper - lower) / 4.0)
         positions = np.concatenate((lower + inset, (lower + upper) / 2.0, upper - inset))
-        along = corners @ direction
         # Die zentrale Bandmitte gehört ohnehin zum vollständigen Satz.
         # Trägt bereits diese Bahn nicht, kann die Richtung nichts gewinnen.
         # An einer offenen Halbscheibe entfallen so hunderttausende Schnitte,
         # ohne eine Richtung zusätzlich anzunehmen oder auszuschließen.
         middle = len(lower) + len(lower) // 2
         for samples in (positions[middle : middle + 1], positions):
-            starts = samples[:, None] * normal + (along.min() - best) * direction
-            ends = samples[:, None] * normal + (along.max() + best) * direction
-            cuts = shapely.get_parts(
-                shapely.intersection(shape, shapely.linestrings(np.stack((starts, ends), axis=1)))
-            )
-            cuts = cuts[(shapely.get_type_id(cuts) == 1) & (shapely.length(cuts) > EPS_GEOM)]
-            if not len(cuts):
+            cuts = _cuts_along(heads, tails, direction, normal, samples)
+            if cuts is None:
                 break
-            if not np.all(shapely.covers(anchored, shapely.get_point(cuts, 0))) or not np.all(
-                shapely.covers(anchored, shapely.get_point(cuts, -1))
+            starts, ends, lengths = cuts
+            if not np.all(shapely.covers(anchored, shapely.points(starts))) or not np.all(
+                shapely.covers(anchored, shapely.points(ends))
             ):
                 break
         else:
-            best = min(best, float(shapely.length(cuts).max()))
+            best = min(best, float(lengths.max()))
     return best
+
+
+def _cuts_along(
+    heads: np.ndarray,
+    tails: np.ndarray,
+    direction: np.ndarray,
+    normal: np.ndarray,
+    positions: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray] | None:
+    """Die Stücke der Geraden ``direction`` durch die Fläche, je Abtastlage.
+
+    Was ``shapely.intersection(shape, line)`` liefert, nur ohne Overlay: Eine
+    Gerade quer zur Normalen schneidet die Kanten der Fläche, und zwischen
+    je zwei Schnittpunkten in Laufrichtung liegt abwechselnd Material und
+    Luft — die Paritätsregel, für Außenring und Löcher zusammen. Die Lagen
+    kommen aus den Bandmitten und -rändern, liegen also nie genau auf einer
+    Ecke oder entlang einer Kante; die Reihenfolge der Schnittpunkte ist
+    damit eindeutig.
+
+    Warum nicht GEOS: Das Overlay knotet je Aufruf die ganze Kontur neu, und
+    an einer Drachenschicht mit 4 700 Ecken kostete jede der 3 600 Bahnen
+    2,5 ms — 9,7 s für eine Schicht. Hier sind es Feldoperationen über die
+    Kanten, für alle Lagen einer Richtung auf einmal.
+
+    Zurück kommen Anfangs- und Endpunkte aller Stücke länger als ``EPS_GEOM``
+    und ihre Längen — oder ``None``, wenn es keine gibt.
+    """
+    across_head = heads @ normal
+    across_tail = tails @ normal
+    along_head = heads @ direction
+    along_tail = tails @ direction
+    # Kanten, die eine Lage kreuzen (echt, nicht berührend): je Lage eine Spalte.
+    crossing = (across_head[:, None] - positions[None, :]) * (
+        across_tail[:, None] - positions[None, :]
+    ) < 0.0
+    if not crossing.any():
+        return None
+    span = across_tail - across_head
+    starts: list[np.ndarray] = []
+    ends: list[np.ndarray] = []
+    lengths: list[np.ndarray] = []
+    for column, position in enumerate(positions):
+        hit = np.nonzero(crossing[:, column])[0]
+        if len(hit) < 2:
+            continue
+        share = (position - across_head[hit]) / span[hit]
+        along = np.sort(along_head[hit] + share * (along_tail[hit] - along_head[hit]))
+        if len(along) % 2:
+            # Ein ungerades Kreuzen gibt es an einer gültigen Fläche nur durch
+            # Rundung genau an einer Ecke; das letzte Stück hätte kein Ende.
+            along = along[:-1]
+        first, second = along[0::2], along[1::2]
+        long_enough = second - first > EPS_GEOM
+        if not long_enough.any():
+            continue
+        first, second = first[long_enough], second[long_enough]
+        starts.append(position * normal + first[:, None] * direction)
+        ends.append(position * normal + second[:, None] * direction)
+        lengths.append(second - first)
+    if not lengths:
+        return None
+    return np.concatenate(starts), np.concatenate(ends), np.concatenate(lengths)
 
 
 def _bridge_width(

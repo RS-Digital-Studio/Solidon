@@ -76,6 +76,30 @@ Die Analysekarten reichen ihr Abbruch- und Budgetsignal über `solid_field`
 auch in diesen Schnittweg. Das Füllen des Voxelfelds prüft es vor jedem
 Querschnitt und vor der Rückgabe; ein abgebrochenes Feld wird nicht veröffentlicht.
 
+**Wo die Zeit hingeht, und was dagegen steht** (gemessen 19.09.2026, Befund
+Robert „Vorschläge beim Slicen dauern ewig"). Drei Stellen, drei Antworten:
+
+- **Gleiche Schicht, gleiche Zahlen.** `_measure_all` misst eine Schicht nur,
+  wenn sie ihrer Vorgängerin nicht gleicht (`_same_layer`: Fläche, Umfang,
+  Hüllbox, dann die kanonisch geordneten Ecken ohne Kollineare); gleiche
+  bekommen die Zahlen der Quelle (`_repeated`) — kein Überhang, keine Insel,
+  keine Brücke gegen eine identische Schicht darunter. Hilft prismatischen
+  Körpern; ein Gitterbecher oder eine Figur ändert sich je Schicht.
+- **Spannweiten ohne Overlay.** `_supported_span` bündelt gleiche Richtungen
+  über den Winkel in einem Zug (nicht jede gegen jede vorige), nimmt die
+  Bänder aus der vereinfachten Kontur und schneidet die Bahnen als
+  Abtastzeile in numpy (`_cuts_along`, Paritätsregel über alle Ringe) statt
+  mit `shapely.intersection`. Drachenfigur, 2,3 Mio. Dreiecke: 120 s → 7,6 s
+  für die Brücken aller Schichten, dieselben Zahlen.
+- **Säulen nur, wo sie jemand liest.** `slice_body(support_volume=False)`
+  lässt `_support_volume` aus; die Druckvorschläge nehmen den Weg, und der
+  Druckdialog behält den letzten gemessenen Stand in der Sitzung
+  (`Session.remember_analyses`), damit ein zweites Öffnen nicht wieder
+  schneidet.
+
+Die Arbeiterzahl der vollständigen Messung steht bei sechs (`FULL_WORKERS`);
+die Messreihe dazu steht an der Konstante.
+
 ## Grenzen
 
 `slice_body(overhang_angle=...)` erhält den zulässigen Winkel gegen die

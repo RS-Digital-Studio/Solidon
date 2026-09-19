@@ -147,6 +147,15 @@ Plattenwahl oder Schichtraster, wird der frühere Auftrag abgelöst. Beim
 Schließen bricht der Dialog seine Analyse kooperativ ab und hält ihre Arbeiter
 bis zum vollständigen Ende, bevor er selbst freigegeben wird.
 
+**Und was er gemessen hat, überlebt ihn.** Der Dialog wird bei jedem Öffnen
+neu gebaut; bis zum 19.09.2026 schnitt er jeden Körper jedes Mal neu — an
+einer Figur mit 2,3 Mio. Dreiecken siebeneinhalb Minuten (Befund Robert:
+„Vorschläge beim Slicen dauern ewig"). Die Sitzung hält den letzten Stand
+(`Session.remember_analyses`, Schlüssel ohne den Ergebniszähler, die Netze
+werden dazu festgehalten); ein zweites Öffnen über dieselben Körper und
+Schichten misst nichts mehr. Die Vorschläge lassen außerdem die Stützsäulen
+aus (`slice_body(support_volume=False)`) — sie lesen sie nicht.
+
 **Und die Suche nach den Slicern gehört dazu** (`_SlicerWorker`, 13.09.2026).
 `discover.find_programs("slicer", …)` geht PATH, Registry, Flatpak, die
 üblichen Installationsordner und AppImages ab; gemessen auf einer Maschine mit

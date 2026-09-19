@@ -865,6 +865,10 @@ class Session(QObject):
         Zeile, irgendwann später."""
         self._preview_generation = 0
         self._project_generation = 0
+        self._analysis_memory: tuple[tuple[Any, ...], tuple[object, ...], dict[str, Any]] | None = (
+            None
+        )
+        """Die zuletzt im Druckdialog gemessenen Schichten (:meth:`remember_analyses`)."""
         self.result_generation = 0
         """Zählt jedes neue ``last_result``. Wer wissen will, ob seit seinem
         Blick eine andere Auswertung kam, vergleicht diese Zahl — nicht
@@ -2705,6 +2709,26 @@ class Session(QObject):
         self.result_current = True
         self.sceneChanged.emit(result)
         return result
+
+    def remember_analyses(
+        self, key: tuple[Any, ...], meshes: Sequence[object], results: Mapping[str, Any]
+    ) -> None:
+        """Gemessene Schichten über das Fenster hinaus behalten.
+
+        Der Druckdialog wird bei jedem Öffnen neu gebaut und schnitt bis zum
+        19.09.2026 jeden Körper jedes Mal neu — Sekunden bis Minuten für
+        dieselben Netze (Befund Robert: „Vorschläge beim Slicen dauern ewig").
+        Genau **ein** Stand wird gehalten, der letzte; die Netze dazu auch,
+        damit ihre Adressen im Schlüssel nicht an ein neues Netz vergeben
+        werden, solange der Eintrag lebt.
+        """
+        self._analysis_memory = (tuple(key), tuple(meshes), dict(results))
+
+    def remembered_analyses(self, key: tuple[Any, ...]) -> dict[str, Any]:
+        """Die gemerkten Schichten zu diesem Schlüssel — oder nichts."""
+        if self._analysis_memory is None or self._analysis_memory[0] != tuple(key):
+            return {}
+        return dict(self._analysis_memory[2])
 
     def cancel(self) -> None:
         """Der eine Knopf hält beides an, was gerade laufen kann (§2.8).
