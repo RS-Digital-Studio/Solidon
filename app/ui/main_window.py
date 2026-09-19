@@ -489,7 +489,29 @@ def _asks_for_the_part(window: MainWindow) -> Callable[[Feature], bool]:
 
     def asks(feature: Feature) -> bool:
         found = ref()
-        return found is not None and found.part_step_of(feature) is not None
+        if found is None:
+            return False
+        part = found.part_step_of(feature)
+        if part is None:
+            return False
+        # **Und der Schritt muss eine Lage kennen.** Die Frage entscheidet,
+        # ob am Merkmal der Bewegungsgriff des Bausteins hängt statt des
+        # Press/Pull seiner Fläche — und wer ihn bekommt, dessen Zug muss
+        # ankommen. ``_move_the_part`` verlangt ``x/y/z`` am Schritt; ohne
+        # diese Zeile fiel der Zug auf ``move_feature`` zurück: ein Schritt,
+        # den die Auswertung sofort anhält, mit einer Absage über Flächen, die
+        # niemand angefordert hat. Schlimmer als der Befund, der die Sache
+        # angestoßen hat (Regel 17, gemessen 18.09.2026).
+        #
+        # **Die Regel gilt weiter als ihr Anlass.** Der Organizer hat sie
+        # ausgelöst (seine Trennwände folgen den Fachmaßen), aber gemessen
+        # sind es **vier** der 49 Schritte, die hier ankommen: dazu
+        # ``create_lid``, ``screw_lid`` und ``replace_profile_liners``. Für
+        # sie gilt dasselbe und aus demselben Grund — ein Deckel entsteht an
+        # seiner Öffnung und hat keine eigene Stelle, die ein Zug ändern
+        # könnte.
+        names = {parameter.name for parameter in part[1].params.spec()}
+        return {"x", "y", "z"} <= names
 
     return asks
 
@@ -4248,8 +4270,35 @@ class MainWindow(QMainWindow):
         # Bohrung deshalb schon keine Filamentspalte. Er tritt jetzt ganz
         # beiseite, statt vier Zeilen zu füllen, die nichts tun — sichtbar
         # bleibt er auf der Körperstufe und an jeder gewählten Fläche.
-        self.quick_filament.setVisible(not chosen_features or bool(chosen_faces))
+        #
+        # **Und ohne jede Auswahl ebenso.** Sein leerer Zustand („Körper
+        # wählen, um ein Filament zuzuweisen") war nie zu sehen, solange die
+        # Karte ohne Auswahl ganz verschwand; seit sie für den Weg zu den
+        # Bausteinen stehen bleibt (18.09.2026), stand er darüber — drei
+        # Blöcke über denselben Zustand, gemessen am gebauten Fenster:
+        # „Nichts gewählt", „Das Filamentlager ist auch ohne Auswahl
+        # erreichbar." und „Wählen Sie einen Körper oder eine Fläche".
+        # Der letzte ist die Antwort; das Lager steht in der Kopfzeile und
+        # im Menü.
+        # **Und an einer Kante ebenso.** Sie steht in keiner Baumzeile — der
+        # Kantenklick setzt die Baumauswahl sogar auf den Körper zurück —, und
+        # damit sagen ``chosen_features`` und ``chosen_faces`` nichts über sie.
+        # Der Wähler stand deshalb unter dem Satz „Was sich hier tun lässt,
+        # steht oben bei den Maßen" und bot eine Zuweisung an, die dem ganzen
+        # Körper gilt und nicht der Kante (Befund der Durchsicht, 18.09.2026).
+        on_an_edge = self.selected_feature_kind() == "edge"
+        self.quick_filament.setVisible(
+            bool(selected_ids or chosen_features)
+            and not on_an_edge
+            and (not chosen_features or bool(chosen_faces))
+        )
         self.quick_filament.setEnabled(not locked and not gesturing and halted is None)
+        # **Und ohne jede Auswahl schweigt das Merkmalfenster.** Die Karte
+        # darunter sagt denselben Zustand samt dem Weg zu den Bausteinen; der
+        # Satz hier wäre der dritte über dieselbe Sache (gemessen am gebauten
+        # Fenster, 18.09.2026). Mit gewähltem Körper bleibt er — dort trägt die
+        # Karte Handlungen, und er sagt, wie man an die Maße kommt.
+        self.feature_panel.say_nothing_is_chosen(bool(selected_ids or chosen_features))
         self._hide_dead_menus()
 
     def _hide_dead_menus(self) -> None:
@@ -11997,6 +12046,17 @@ class MainWindow(QMainWindow):
         self.feature_dock.forget_dismissal()
         self.feature_panel.show_edge(key, title)
         self.feature_dock.reveal()
+        # **Und die Karte rechts erfährt davon** — dieselbe Zeile wie bei der
+        # Merkmalsauswahl (`_on_feature_selected`) und aus demselben Grund:
+        # `selected_feature_kind` meldet an einer Kante `"edge"`, aber nur,
+        # wenn jemand fragt. Der Kantenklick emittiert `edgePicked`, nicht
+        # `objectPicked` — der Körper ist längst gewählt —, und ohne diesen
+        # Aufruf blieb die Karte auf ihrem letzten Stand: An der angeklickten
+        # Kante standen weiter Aushöhlen, Auf dem Bett anordnen und Teilen,
+        # bis irgendeine spätere Geste sie beiläufig aufräumte (gemessen am
+        # gebauten Fenster, 18.09.2026 — der Fix von diesem Tag war ohne diese
+        # Zeile im Fenster nicht zu sehen).
+        self._update_actions()
 
     def _on_feature_picked(self, feature_id: str, add: bool = False) -> None:
         """Ein Klick in der Ansicht wählt das Merkmal auch im Baum aus (§18.5).
@@ -12473,7 +12533,9 @@ class MainWindow(QMainWindow):
         Ein **erkanntes** Merkmal trägt keine Provenienz und kommt nie durch;
         das ist richtig, denn zu ihm gibt es keinen Schritt zum Ändern.
         """
-        return part_step_of(getattr(feature, "created_by", None), self.session.project.document)
+        return part_step_of(
+            getattr(feature, "created_by", None), self.session.project.document, feature
+        )
 
     def _one_cavity(self, entry: Any, first: Feature, second: Feature) -> bool:
         """Ob diese zwei Merkmale derselbe Hohlraum sind — Bohrung und Senkung.

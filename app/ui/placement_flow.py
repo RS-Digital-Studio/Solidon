@@ -99,6 +99,13 @@ class PlacementHost(Protocol):
     sind der Rückweg aus der Platzierung (:meth:`PlacementFlow.back`), und
     wer sie wegließe, müsste ihn an vier Stellen mit Fallunterscheidungen
     pflastern.
+
+    **Aus demselben Grund steht `show_placement_hint` hier** und nicht hinter
+    einem `getattr`. Nur der Dialog trägt den Satz; der stille Träger
+    beantwortet die Frage leer. Eine Frage nach der Methode statt nach dem
+    Vertrag sieht aus wie Vorsicht und ist eine Lücke: Sie geht an mypy
+    vorbei, und ein Tippfehler im Namen bliebe für immer still (Fund der
+    Durchsicht, 18.09.2026).
     """
 
     surfaceRequested: Any
@@ -129,6 +136,8 @@ class PlacementHost(Protocol):
     def activateWindow(self) -> None: ...  # noqa: N802 — Qt-Name
 
     def isVisible(self) -> bool: ...  # noqa: N802 — Qt-Name
+
+    def show_placement_hint(self, on: bool) -> None: ...
 
 
 class QuietHost(QObject):
@@ -216,6 +225,10 @@ class QuietHost(QObject):
 
     def isVisible(self) -> bool:  # noqa: N802 — Qt-Name
         return False
+
+    def show_placement_hint(self, on: bool) -> None:
+        """Kein Fenster, kein Satz — die Werte stehen rechts im Merkmalfenster."""
+        return None
 
 
 #: Ab welcher Neigung eine Fläche als „nach oben" gilt, wenn ein Baustein von
@@ -715,6 +728,9 @@ class PlacementFlow(QObject):
         if self._disposed or not self.can_place():
             return
         self.active = True
+        # Der Satz im Dialog gilt der laufenden Platzierung, nicht dem
+        # Registereintrag (siehe `OperationDialog.show_placement_hint`).
+        self._tell_the_host_we_aim(True)
         self._epoch += 1
         self._result = self.session.last_result if self._change_op is None else None
         self._frozen = False
@@ -762,6 +778,17 @@ class PlacementFlow(QObject):
             self.session.placement_before(self._change_op, ready, lambda _detail: ready(None))
         self.redraw()
 
+    def _tell_the_host_we_aim(self, on: bool) -> None:
+        """Dem Träger sagen, ob gerade im Bild gezielt wird.
+
+        Nur der Operationsdialog trägt den Satz; der stille Träger am
+        gewählten Merkmal (`QuietHost`) hat kein Fenster und beantwortet die
+        Frage leer. Beide stehen im Vertrag (:class:`PlacementHost`) — ein
+        `getattr` stand hier und sah aus wie Vorsicht: Es ging an mypy vorbei,
+        und ein Tippfehler im Namen wäre nie aufgefallen.
+        """
+        self.dialog.show_placement_hint(on)
+
     def back(self) -> None:
         """Escape behält alle Werte, übernimmt aber keinen Schritt.
 
@@ -781,6 +808,7 @@ class PlacementFlow(QObject):
 
     def _stop(self) -> None:
         self.active = False
+        self._tell_the_host_we_aim(False)
         self._epoch += 1
         self._serial += 1
         self._pending = None

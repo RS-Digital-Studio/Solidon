@@ -15,6 +15,26 @@ gli stessi punti nello stesso ordine (`tests/test_changelog.py`).
 `tools/make_download.py` ne prende la sezione della versione corrente e la
 scrive in `website/version.json`.
 
+## 0.4.4
+
+### Modificare
+
+- Lo sformo raggiunge ora tutte le facce verticali, anche quelle strette, e funziona sui modelli importati.
+- La fusione morbida lascia facce laterali lisce invece di bordi sfilacciati.
+
+### Selezionare e usare
+
+- Uno spigolo selezionato mostra solo le azioni che agiscono su uno spigolo.
+- Senza selezione resta visibile la via verso i blocchi.
+- Il campo di ricerca compare solo dove ci sia qualcosa da trovare.
+- Un divisorio dell’organizer porta al suo editor degli scomparti invece che alle azioni della sua faccia.
+- La finestra per collocare un foro dice che il punto si sceglie nella vista.
+
+### Spostare e verificare
+
+- Due corpi si possono spingere uno dentro l’altro per unirli o fonderli dolcemente. Viene riportato indietro solo ciò che finisce fuori dal piano.
+- Se un accoppiamento rimanda a una caratteristica che non esiste più, un pulsante porta alla cronologia.
+
 ## 0.4.3
 
 ### Riconoscimento e modifica

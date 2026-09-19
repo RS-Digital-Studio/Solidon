@@ -2349,3 +2349,69 @@ def test_a_bound_part_still_offers_moving_and_removing(qt_app: QApplication) -> 
         assert params["x"] == pytest.approx(-20.0)
     finally:
         panel.deleteLater()
+
+
+def test_a_divider_leads_to_the_organizer_not_to_its_face(qt_app: QApplication) -> None:
+    """Wer eine Trennwand anklickt, hat den Organizer gemeint.
+
+    **Befund Robert, 18.09.2026:** „Baustein verschieben bei Trennwand
+    organizer keine Wirkung" und „organiser über Baustein komplett samt
+    Trennwände erstellen über organiser editor, falls es einen gibt keine
+    Ahnung wie man hinkommt". Ein Organizer bringt je Fach und je Trennwand
+    Merkmale mit; an einer Trennwandfläche standen die Handlungen einer
+    Fläche — Bohren, Tasche, Fläche versetzen. Keine davon meint die
+    Trennwand, und ihre Lage steht in keinem Parameter: Sie folgt aus den
+    Fachmaßen, und die ändert der Fächereditor.
+
+    Dieselbe Regel wie beim Baustein, nur über :data:`SPEAKS_FOR_ITS_FEATURES`
+    statt über die Kategorie — der Organizer steht unter ``primitive``, weil
+    er aus eigenen Maßen entsteht.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.knowledge import profiles
+    from app.core.perceive.actions import part_actions
+    from app.core.scene import History, OperationDraft
+    from app.core.scene.evaluate import evaluate
+    from app.core.scene.project import new_project
+    from app.i18n import _
+    from app.ui.panels import part_step_of
+
+    load_operations()
+    project = new_project("centauri-carbon-2", "petg")
+    document = project.document
+    History(document).apply(_("Organizer"), [OperationDraft(op="create_organizer", params={})])
+    scene = evaluate(document, profiles.make_profile("centauri-carbon-2", "petg")).scene
+    body = next(iter(scene.objects.values()))
+
+    divider = next(
+        name
+        for name, feature in body.features.items()
+        if feature.params.get("organizer_role") == "divider"
+    )
+    # **Das Merkmal gehört zur Frage**, nicht nur sein Schritt: Beim Baustein
+    # spricht der ganze Schritt für jedes seiner Merkmale, beim Organizer nur
+    # für die Rollen in :data:`SPEAKS_FOR_ITS_FEATURES` — ``organizer_base``
+    # und die Böden behalten ihre eigenen Flächenhandlungen.
+    step = part_step_of(body.features[divider].created_by, document, body.features[divider])
+    assert step is not None, "eine Trennwand führt zu ihrem Schritt"
+
+    floor = next(
+        (
+            feature
+            for feature in body.features.values()
+            if feature.params.get("organizer_role") == "floor"
+        ),
+        None,
+    )
+    assert floor is not None, "die Voraussetzung: der Organizer hat auch Böden"
+    assert part_step_of(floor.created_by, document, floor) is None, (
+        "ein Boden ist eine Fläche und führt nicht zum Fächereditor"
+    )
+
+    actions = part_actions(*step)
+    measures = next(action for action in actions if action.fields)
+    assert {field.name for field in measures.fields} == {"width", "depth", "height"}
+    assert not any(field.name == "layout" for field in measures.fields), (
+        "eine Fachaufteilung ist kein Zahlenfeld"
+    )
+    assert measures.elsewhere, "und der Weg zu ihr steht daneben"

@@ -2608,3 +2608,45 @@ def test_a_drag_at_the_chosen_hole_pulls_the_slot_instead_of_moving_the_body(
         window.end_quiet_placement()
         QApplication.processEvents()
         window.release()
+
+
+def test_the_dialog_learns_from_the_flow_when_it_is_aiming(flow: Any) -> None:
+    """Der Satz kommt und geht mit der Platzierung — durchs Fenster gemessen.
+
+    „Bohrung setzen sollte doch über den Viewport gehen, wenn das
+    dialogfenster da ist, keine Info dass es über den Viewport geht" (Robert,
+    18.09.2026). Der Satz steht seither im Dialog, **und nur solange wirklich
+    gezielt wird**: Beim Ändern eines bestehenden Schritts ist die Stelle
+    längst gewählt, und ein Dialog, der dann zum Klicken auffordert, schickt
+    den Kunden auf eine Geste, die es dort nicht gibt.
+
+    Wer das an ``show_placement_hint`` allein prüft, prüft die Hälfte, die
+    nicht ausfallen kann: Die andere ist die **Meldung** des Flusses. Sie
+    stillzulegen blieb bis zum 18.09.2026 in 793 Tests unbemerkt (Fund der
+    zweiten Durchsicht) — deshalb geht dieser Test über ``start`` und
+    ``back`` und nicht über die Methode.
+    """
+    original, session, viewport, _dialog = flow
+    original.dispose()
+    object_id = original.inputs_of()[0]
+    spec = REGISTRY.get("drill_hole")
+    dialog = OperationDialog(spec, {object_id: "Würfel"})
+    window = SimpleNamespace(
+        viewport=viewport, session=session, _clear_preview=session.cancel_preview
+    )
+    controller = PlacementFlow(dialog, window, lambda: spec, lambda: (object_id,))
+    try:
+        # ``isHidden`` und nicht ``isVisible``: Das Fenster wird nie gezeigt.
+        assert dialog._placement_hint.isHidden(), "vor dem Zielen sagt er nichts"
+
+        controller.start()
+        assert session.wait_for_idle(30_000)
+        assert not dialog._placement_hint.isHidden(), (
+            "solange gezielt wird, sagt der Dialog, wo die Stelle herkommt"
+        )
+
+        controller.back()
+        assert dialog._placement_hint.isHidden(), "und danach wieder nicht"
+    finally:
+        controller.dispose()
+        dialog.deleteLater()

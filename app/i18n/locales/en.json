@@ -1543,7 +1543,7 @@
   "Die Statuszeile ist die eigentliche Auskunft: was noch frei ist, wandert beim nächsten Zug.": "The status line is the real answer: whatever is still free will move on the next drag.",
   "Die Stege sind mindestens halb so dick wie ihre Zelle — daraus wird ein Vollkörper mit mehr Dreiecken statt einer Füllung.": "The struts are at least half as thick as their cell — that makes a solid body with more triangles, not a lattice.",
   "Die Steigung ist für diesen Durchmesser zu groß — es bliebe kaum ein Kern.": "The pitch is too coarse for this diameter — barely any core would be left.",
-  "Die Stelle wählen Sie im Bild: Klicken Sie auf die Fläche, auf die es soll.": "Pick the spot in the view: click the face it should sit on.",
+  "Die Stelle wählen Sie im Bild — klicken Sie sie am Modell an.": "Pick the spot in the view — click it on the model.",
   "Die Stützkarte braucht für dieses Modell zu lange.": "The support map takes too long for this model.",
   "Die Stützkarte wurde nach {seconds} Sekunden beendet.": "The support map was stopped after {seconds} seconds.",
   "Die Szene ist leer — ein Baustein wird auf einen Körper gesetzt. Lesen Sie zuerst ein Modell ein oder legen Sie einen Grundkörper an.": "The scene is empty — a part is placed onto a body. Load a model first, or create a base shape.",

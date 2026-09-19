@@ -15,6 +15,26 @@ carry the same points in the same order (`tests/test_changelog.py`).
 `tools/make_download.py` takes the section for the current version and writes
 it into `website/version.json`.
 
+## 0.4.4
+
+### Editing
+
+- Draft angles now reach every upright side, including the narrow ones, and work on imported models.
+- Soft merging leaves smooth side faces instead of frayed edges.
+
+### Selecting and operating
+
+- A picked edge now shows only the actions that do something to an edge.
+- With nothing selected, the way to the building blocks stays visible.
+- The search box only appears where there is something to find.
+- A divider in an organizer leads to its compartment editor instead of to the actions of its face.
+- The dialogue for placing a hole says that you pick the spot in the view.
+
+### Moving and checking
+
+- Two bodies can be pushed into each other to unite or softly merge them. Only what ends up beside the build area is brought back.
+- When a fit points at a feature that no longer exists, a button leads into the history.
+
 ## 0.4.3
 
 ### Recognition and editing

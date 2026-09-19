@@ -40,6 +40,26 @@ wieder heraus (Entscheidung Robert). Wo ein Nutzen bleibt, der ohne den
 Mechanismus auskommt — „die Meldung nennt den wirklichen Grund“ —, steht der
 Nutzen da und sonst nichts.
 
+## 0.4.4
+
+### Bearbeiten
+
+- Die Formschräge stellt alle senkrechten Seiten an, auch die schmalen, und kommt mit eingelesenen Modellen zurecht.
+- Weich verschmelzen hinterlässt glatte Seitenflächen statt ausgefranster Kanten.
+
+### Auswählen und Bedienen
+
+- Eine angeklickte Kante zeigt nur noch die Handlungen, die an einer Kante etwas bewirken.
+- Ohne Auswahl bleibt der Weg zu den Bausteinen sichtbar.
+- Das Suchfeld steht nur dort, wo es etwas zu finden gibt.
+- Eine Trennwand im Organizer führt zu ihrem Fächereditor statt zu den Handlungen ihrer Fläche.
+- Der Dialog zum Setzen einer Bohrung sagt, dass Sie die Stelle im Bild anklicken.
+
+### Bewegen und Prüfen
+
+- Zwei Körper lassen sich ineinanderschieben, um sie zu vereinigen oder weich zu verschmelzen. Zurückgeholt wird nur, was neben der Druckfläche landet.
+- Verweist eine Passung auf ein Merkmal, das es nicht mehr gibt, führt ein Knopf in den Verlauf.
+
 ## 0.4.3
 
 ### Erkennen und Bearbeiten

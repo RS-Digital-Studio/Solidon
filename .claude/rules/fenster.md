@@ -44,12 +44,35 @@ brauchen keinen Körper; bei den übrigen sagt der Katalog selbst, was fehlt.
 Die Operationsliste bleibt weg — sie gilt einer Auswahl, und die gibt es
 nicht.
 
+**Und darüber schweigt das Merkmalfenster.** Sein leerer Zustand ist ein
+Satz und keine leere Fläche — richtig, solange er etwas sagt, das sonst
+niemand sagt. Ohne jede Auswahl stand er über „Nichts gewählt" und „Wählen
+Sie einen Körper oder eine Fläche — Bausteine gehen auch so": derselbe
+Zustand, dreimal, und nur die Karte nennt dabei den Weg zu den Bausteinen.
+`FeaturePanel.say_nothing_is_chosen` nimmt ihn weg, solange gar nichts
+gewählt ist; mit gewähltem Körper kommt er zurück, denn dort trägt die Karte
+Handlungen und er sagt, wie man an die Maße kommt.
+
 **Und eine Karte ohne Liste lädt nicht zum Durchsuchen ein.** Das Suchfeld
 stand fest im Layout und war immer sichtbar; an einer Auswahl mit leerer
 Karte — einem Langloch, einer Kante — versprach es etwas zu finden, wo es
 nichts gibt (Befund Robert, 18.09.2026). Es verschwindet mit der Liste, und
 ein Satz nennt, wo die Handlungen dieser Auswahl stehen. Wer **sucht** und
 nichts findet, behält es: Dort ist das Feld die Ursache und der Weg zurück.
+
+Beide Leeren setzen dieselben drei Sichtbarkeiten, und sie tun es an **einer**
+Stelle (`SelectionOperationsPanel._only_this_sentence`) — zwei Stellen, die
+dasselbe verbergen, setzen es beim nächsten Nachbessern abwechselnd.
+
+**Und der Filament-Schnellwähler gehört nicht in die leere Karte.** Er hat
+einen eigenen leeren Zustand („Das Filamentlager ist auch ohne Auswahl
+erreichbar."), und der war nie zu sehen, solange die Karte ganz verschwand.
+Seit sie bleibt, stünden drei Blöcke über demselben Zustand: die Kopfzeile
+„Nichts gewählt", sein Satz und der Satz, der die Antwort trägt. Er tritt
+beiseite (`MainWindow._update_actions`), das Lager steht in der Kopfzeile und
+im Menü. **Wer eine Karte für einen Zustand öffnet, den es vorher nicht gab,
+sieht nach, welche leeren Zustände darin dadurch zum ersten Mal sichtbar
+werden.**
 
 **Eine gewählte Kante ist eine Stufe für sich** (Befund Robert, 18.09.2026:
 „bei einer kante zu viele optionen die sinnlos bei kanten sind"). Sie ist
@@ -168,6 +191,22 @@ Keine davon meint die Trennwand, und ihre **Lage steht in keinem Parameter**
 — sie folgt aus den Fachmaßen, und die ändert der Fächereditor.
 `panels.SPEAKS_FOR_ITS_FEATURES` nennt ihn namentlich; eine zweite Kategorie
 zöge Menüort und Katalogkachel mit, und beides soll bleiben.
+
+**Und der Name allein entscheidet dort nicht.** Anders als bei einem Baustein
+spricht der Schritt nicht für **jedes** seiner Merkmale: Der Eintrag nennt
+neben der Operation die **Rollen**, für die er gilt (`divider`), und
+`part_step_of` fragt sie am Merkmal (`organizer_role`). Fachböden und
+Innenboden behalten damit ihre Flächenhandlungen — an ihnen ist eine Bohrung
+oder eine Tasche eine sinnvolle Geste, an einer Trennwand nicht.
+
+**Der Griff folgt einer zweiten Frage: Kennt der Schritt eine Lage?** Ein
+Organizer führt kein `x/y/z` — seine Trennwände folgen den Fachmaßen —, und
+ein Zug an seinem Merkmal fiele sonst auf `move_feature` zurück, das die
+Auswertung sofort anhält. `MainWindow._asks_for_the_part` verlangt deshalb
+`x/y/z` am Schritt, und das trifft gemessen vier der 49 Schritte, die hier
+ankommen (die Kategorie `parts` und was in `SPEAKS_FOR_ITS_FEATURES` steht):
+den Organizer, beide Deckel und die Profil-Einlagen. Dort bleibt der Griff
+der der Fläche.
 
 **Und was kein Zahlenfeld werden kann, bekommt seinen Weg statt zu
 verschwinden.** Eine Fachaufteilung ist ein Sammelparameter mit eigenem

@@ -5689,6 +5689,51 @@ def test_a_part_offers_its_own_actions_not_those_of_a_face() -> None:
     assert removing.op is None, "es startet keine Operation, es nimmt den Schritt"
 
 
+def test_only_a_collected_value_from_the_front_gets_a_way_of_its_own() -> None:
+    """Genannt wird, was vorn stand — nicht jeder Sammelparameter.
+
+    Was das Merkmalfenster nicht als Zahlenfeld zeigen kann, bekommt einen
+    Knopf in den vollen Dialog (``FeatureAction.elsewhere``). Die Auswahl
+    dafür muss dieselbe sein wie bei den Maßen daneben: **Vorderseite.**
+
+    Gemessen am 18.09.2026: ``insert_profile_clamp_liner`` führt **zwei**
+    Zeichnungen — ``counter_sketch`` vorn und ``outer_sketch`` hinter der
+    Klappe. Ungefiltert hieß der Knopf „Gegenkontur, Vorhandene Außenkontur
+    ändern …" und versprach damit einen Weg zu einem Wert, der im
+    Merkmalfenster nie ein Feld hatte.
+
+    Die Gegenprobe steht daneben: ``create_organizer`` führt seine
+    Fachaufteilung **vorn**, und die bleibt.
+    """
+    from types import SimpleNamespace
+
+    from app.core.bootstrap import load_operations
+    from app.core.perceive.actions import COLLECTED_KINDS, part_actions
+
+    load_operations()
+
+    spec = REGISTRY.get("insert_profile_clamp_liner")
+    collected = {
+        entry.name: entry.placement for entry in spec.params.spec() if entry.kind in COLLECTED_KINDS
+    }
+    assert collected == {"counter_sketch": "front", "outer_sketch": "advanced"}, (
+        "die Voraussetzung: einer vorn, einer hinter der Klappe"
+    )
+
+    step = SimpleNamespace(id=2, op="insert_profile_clamp_liner", params={})
+    measures = next(action for action in part_actions(step, spec) if action.fields)
+    assert [str(title) for title in measures.elsewhere] == ["Gegenkontur"], (
+        "die Außenkontur steht hinter der Klappe und bekommt keinen Knopf"
+    )
+
+    organizer = REGISTRY.get("create_organizer")
+    step = SimpleNamespace(id=2, op="create_organizer", params={})
+    measures = next(action for action in part_actions(step, organizer) if action.fields)
+    assert [str(title) for title in measures.elsewhere] == ["Fachaufteilung"], (
+        "und was vorn steht, behält seinen Weg"
+    )
+
+
 def test_only_a_part_step_answers_for_its_features() -> None:
     """Was kein Baustein ist, behält seine eigenen Handlungen.
 

@@ -20,6 +20,7 @@ import pytest
 
 pytest.importorskip("PySide6")
 
+from PySide6 import QtWidgets
 from PySide6.QtCore import QEvent, QLocale, QPoint, Qt
 from PySide6.QtGui import QAction, QCloseEvent, QContextMenuEvent, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
@@ -5637,8 +5638,28 @@ def test_selected_bodies_reveal_their_operations_in_the_window_on_the_right(
     # damit der einzige sichtbare Zugang zum Katalog; drei der
     # siebenundzwanzig Bausteine stehen frei und brauchen keinen Körper.
     assert not panel.isHidden()
-    assert not panel.search.isVisible(), "ohne Auswahl gibt es nichts zu durchsuchen"
-    assert not any(button.isVisible() for button in panel._buttons.values())
+    # ``isHidden`` und nicht ``isVisible``: Die Fixture zeigt das Fenster nie,
+    # und offscreen meldet ``isVisible`` dann für **jedes** Widget False — die
+    # zwei Zeilen waren bis zum 18.09.2026 trivial wahr (Regel in
+    # ``oberflaeche.md``, gemessen in der zweiten Durchsicht).
+    assert panel.search.isHidden(), "ohne Auswahl gibt es nichts zu durchsuchen"
+    # ``isVisibleTo(panel)`` und nicht ``isHidden()``: Die Knöpfe stecken in
+    # ihren Abschnitten, und versteckt ist der **Abschnitt** — das Widget
+    # selbst meldet ``isHidden() == False``. Gefragt ist „würde es erscheinen,
+    # wenn die Karte erschiene".
+    assert not any(button.isVisibleTo(panel) for button in panel._buttons.values())
+    # **Und der Filament-Schnellwähler steht dort nicht.** Sein leerer
+    # Zustand („Das Filamentlager ist auch ohne Auswahl erreichbar.") war nie
+    # zu sehen, solange die Karte ganz verschwand; seit sie bleibt, stünden
+    # drei Blöcke über demselben Zustand — die Kopfzeile, sein Satz und der
+    # Satz, der die Antwort trägt. Das Lager steht in der Kopfzeile und im
+    # Menü.
+    assert window.quick_filament.isHidden(), "ohne Auswahl gibt es nichts zu färben"
+    # **Und das Merkmalfenster darüber schweigt.** Sein leerer Satz („Kein
+    # Merkmal gewählt. Klicken Sie …") sagt dasselbe wie die zwei Zeilen der
+    # Karte, nur ohne den Weg zu den Bausteinen — drei Sätze über einen
+    # Zustand (gemessen am gebauten Fenster, 18.09.2026).
+    assert window.feature_panel._empty.isHidden(), "die Karte darunter sagt es schon"
     assert window.feature_dock.isAncestorOf(panel), "die Handlungen wohnen im Fenster rechts"
     assert window.feature_dock.isAncestorOf(window.feature_panel), "und die Maße darüber"
     assert window.right.parentWidget() is window.right_card
@@ -5892,6 +5913,131 @@ def test_a_chosen_hole_puts_its_own_actions_in_front(window: MainWindow) -> None
     assert vorn() == set(QUICK_BODY), "ohne Merkmal zählt wieder die Menge"
 
 
+def test_a_divider_of_an_organizer_answers_as_the_organizer(window: MainWindow) -> None:
+    """Wer eine Trennwand anfasst, hat den Organizer gemeint — im ganzen Fenster.
+
+    **Befund Robert, 18.09.2026:** „Baustein verschieben bei Trennwand
+    organizer keine Wirkung." Ein Organizer bringt je Fach und je Trennwand
+    Merkmale mit; an einer Trennwandfläche standen die Handlungen einer
+    Fläche, und ein Zug am Griff wurde ein ``move_feature`` auf sie.
+
+    Drei Stellen lösen das zusammen ein, und keine davon war durchs Fenster
+    geprüft (Funde 1 und 2 der zweiten Durchsicht):
+
+    * Das Merkmalfenster zeigt die Handlungen des **Schritts**
+      (``part_step_of`` mit dem Merkmal, damit die Rollenregel greift), und
+      die Karte darunter bleibt leer.
+    * Der Weg zur Fachaufteilung steht als eigener Knopf dabei — sie ist ein
+      Sammelparameter und kann kein Zahlenfeld werden.
+    * Der **Griff** bleibt der der Fläche: ``_asks_for_the_part`` verlangt
+      ``x/y/z`` am Schritt, und ein Organizer hat sie nicht. Ohne diese Frage
+      hielte die Auswertung nach dem ersten Zug an.
+    """
+    from app.core.scene import OperationDraft
+
+    window.session.apply("Organizer", [OperationDraft(op="create_organizer", params={})])
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    window._on_scene(result)
+
+    body = next(iter(result.scene.objects.values()))
+    divider = next(
+        (
+            name
+            for name, entry in body.features.items()
+            if entry.params.get("organizer_role") == "divider"
+        ),
+        None,
+    )
+    assert divider is not None, "die Voraussetzung: der Organizer hat Trennwände"
+
+    # **Über den Baum, wie der Kunde klickt.** ``Viewport.select_feature``
+    # ist die Anzeige; die Karte hängt an der Baumauswahl, und genau die Kette
+    # soll hier ankommen.
+    window.object_tree.select_feature(body.id, divider)
+    QApplication.processEvents()
+
+    # **Das Merkmalfenster spricht für den Schritt, die Karte schweigt.**
+    assert window.selection_operations.isHidden(), (
+        "an einer Trennwand gelten die Handlungen des Bausteins, nicht die der Fläche"
+    )
+    titles = {
+        button.property("operationTitle") or button.text()
+        for button in window.feature_panel.findChildren(QtWidgets.QPushButton)
+        if not button.isHidden()
+    }
+    assert any("Fachaufteilung" in str(title) for title in titles), (
+        f"der Weg zum Fächereditor fehlt: {sorted(str(title) for title in titles)}"
+    )
+
+    # **Und der Griff bleibt der der Fläche.** Ein Organizer kennt keine Lage;
+    # wer ihm den Bausteingriff gäbe, ließe den Zug in einem angehaltenen
+    # Schritt enden.
+    feature = body.features[divider]
+    assert not window.viewport.moves_as_a_part(feature), (
+        "der Schritt kennt kein x/y/z — der Zug hätte kein Ziel"
+    )
+    assert window.session.last_result is not None
+    assert window.session.last_result.complete, "und die Auswertung steht"
+
+
+def test_a_chosen_edge_reaches_the_panel_as_its_own_level(window: MainWindow) -> None:
+    """Der Kantenklick muss beim Panel als eigene Stufe ankommen (Testart „Anschluss").
+
+    Dass die Karte an einer Kante leer bleibt, steht in
+    ``test_selection_operations.py`` — der Test setzt ``feature_kind="edge"``
+    aber selbst und umgeht damit die Kette, um die es geht. Die hängt an
+    ``MainWindow.selected_feature_kind``: Der Kantenklick setzt die
+    Baumauswahl auf den **Körper** zurück, und ohne die Frage nach
+    ``Viewport.has_a_chosen_edge`` meldet sie „kein Merkmal" — an der Kante
+    stünden dann wieder die zweiundvierzig Körperknöpfe.
+
+    Gemessen über eine Mutationsprobe am 18.09.2026: Ohne diesen Test bleibt
+    genau diese Zeile ungeprüft.
+    """
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    object_id = next(iter(result.scene.objects))
+    panel = window.selection_operations
+
+    window.object_tree.select_object(object_id)
+    QApplication.processEvents()
+    assert window.selected_feature_kind() is None, "am Körper gibt es keine Art"
+    # ``isHidden`` und nicht ``isVisible``: Qt lügt vor dem Anzeigen, und
+    # offscreen wird nie etwas angezeigt (Regel in ``oberflaeche.md``).
+    assert any(not button.isHidden() for button in panel._buttons.values()), (
+        "die Voraussetzung: am Körper steht etwas"
+    )
+
+    # Eine echte Kante dieses Körpers — derselbe Schlüssel, den der Klick im
+    # Bild liefert und den ``fillet_edges`` unter ``edges="named"`` liest.
+    from app.core.geom import edges as mesh_edges
+    from app.core.geom.mesh import as_mesh_data
+
+    body = result.scene.objects[object_id]
+    key = mesh_edges.edge_key(next(iter(mesh_edges.edges_of(as_mesh_data(body.mesh)))))
+    # **Derselbe Zweischritt wie `Viewport._edge_click`: erst setzen, dann
+    # melden — und nicht `_update_actions` von Hand.** Die erste Fassung
+    # dieses Tests rief die Auffrischung selbst und umging damit genau das
+    # Glied, um das es geht: `_on_edge_picked` rief sie nicht, und im Fenster
+    # blieb die Karte auf ihrem letzten Stand (gemessen am gebauten Fenster).
+    window.viewport.select_edge(object_id, key)
+    window.viewport.edgePicked.emit(object_id, key)
+    QApplication.processEvents()
+
+    assert window.selected_feature_kind() == "edge", "die Kante ist eine Stufe für sich"
+    assert all(button.isHidden() for button in panel._buttons.values()), (
+        "und an ihr steht keine Körperoperation"
+    )
+    # **Auch der Filament-Schnellwähler nicht.** Er sitzt in derselben Karte,
+    # und seine Bedingung fragt nach Merkmalen und Flächen — eine Kante steht
+    # in keiner Baumzeile, also stand er unter dem Satz „Was sich hier tun
+    # lässt, steht oben bei den Maßen" und bot eine Zuweisung an, die dem
+    # ganzen Körper gilt (Fund der zweiten Durchsicht, 18.09.2026).
+    assert window.quick_filament.isHidden(), "an einer Kante gibt es nichts zu färben"
+
+
 def test_the_window_hands_the_panel_its_level_and_its_name(window: MainWindow) -> None:
     """Testart „Anschluss" zu P5: Stufe und Name kommen wirklich an.
 
@@ -5911,6 +6057,11 @@ def test_the_window_hands_the_panel_its_level_and_its_name(window: MainWindow) -
     window.object_tree.select_object(object_id)
     QApplication.processEvents()
     assert panel.summary.text() == entry.name, "am Körper steht sein Name, nicht seine Zahl"
+    # **Und mit Auswahl kommt der Satz zurück.** Dort trägt die Karte
+    # Handlungen, und er ist die richtige Auskunft: wie man an die Maße kommt.
+    assert not window.feature_panel._empty.isHidden(), (
+        "am Körper sagt er, wie man zu einem Merkmal kommt"
+    )
     assert panel.chosen_level() == "", "und die Stufe ist die des Körpers"
     assert not panel._buttons["arrange_bed"].isHidden()
 
@@ -17856,3 +18007,10 @@ def test_hiding_from_a_feature_row_names_the_body(window: MainWindow) -> None:
     texts = [action.text() for action in menu.actions()]
     menu.deleteLater()
     assert tr("Ausblenden") in texts, texts
+    # Dieselbe Aufräumfamilie wie einen Test darüber (RM-021): Ein Fenster,
+    # das mit dieser Auswahl in den Abbau der Suite geht, reißt dort mit
+    # Exit 127 nach grünen Zusicherungen — dreimal von drei, am unveränderten
+    # HEAD genauso (19.09.2026, Teil 10 von test_ui.py). Der Test prüft den
+    # Menütext, nicht den Abbau; die Auswahl geht deshalb vorher weg.
+    window.object_tree.select_object(None)
+    QApplication.processEvents()

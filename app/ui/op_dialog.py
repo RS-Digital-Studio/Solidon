@@ -1292,20 +1292,6 @@ def direction_fields(spec: OperationSpec) -> frozenset[str]:
     return frozenset(normal_fields_of(spec)) | {"axis"}
 
 
-def _aims_in_the_view(spec: OperationSpec) -> bool:
-    """Ob diese Operation ihre Stelle im Bild bekommt, sobald der Dialog aufgeht.
-
-    Dieselben zwei Fragen, die :func:`placement_flow.starts_by_itself` und
-    :func:`placement.supports_surface_placement` stellen — gefragt und nicht
-    aufgezählt, damit eine neue platzierte Operation den Satz von selbst
-    bekommt. Der Fluss ist hier nicht zu importieren (er importiert diesen
-    Dialog), die fachliche Auskunft steht ohnehin im Kern.
-    """
-    from app.core.scene.placement import supports_surface_placement
-
-    return supports_surface_placement(spec) and (spec.consumes != 0 or spec.takes_whole_scene)
-
-
 class OperationDialog(QDialog):
     """Ein Dialog für eine Operation, gebaut aus ihrem Schema."""
 
@@ -1590,12 +1576,21 @@ class OperationDialog(QDialog):
         # sucht ein Feld für die Stelle und findet keines — sie steht in
         # ``x/y/z`` hinter der Klappe, und dorthin gehört sie auch.
         placed = QLabel(
-            tr("Die Stelle wählen Sie im Bild: Klicken Sie auf die Fläche, auf die es soll."),
+            tr("Die Stelle wählen Sie im Bild — klicken Sie sie am Modell an."),
             self,
         )
         placed.setWordWrap(True)
         set_level(placed, "caption")
-        placed.setVisible(_aims_in_the_view(spec))
+        # **Sichtbar wird er erst, wenn die Platzierung wirklich läuft.** Ob
+        # sie das tut, weiß allein der Fluss: Er startet nicht beim **Ändern**
+        # eines Schritts (dort ist die Stelle längst gewählt, und wer den
+        # Durchmesser nachbessert, will kein Fadenkreuz — `placement_flow`
+        # sagt es in eigenen Worten) und nicht ohne setzbaren Körper. Am
+        # Registereintrag allein gemessen stand der Satz auch dort, und ein
+        # Dialog, der zum Klicken auffordert, während nichts zu klicken ist,
+        # ist schlechter als keiner (gemessen 18.09.2026).
+        placed.setVisible(False)
+        self._placement_hint = placed
         layout.addWidget(placed)
         self._filament_notice = ErrorNotice(self)
         self._filament_notice.hide()
@@ -1870,6 +1865,16 @@ class OperationDialog(QDialog):
             return False
         entered = self.values()
         return entered.get("coverage") == "whole_face" and not entered.get("face")
+
+    def show_placement_hint(self, on: bool) -> None:
+        """Den Satz „Die Stelle wählen Sie im Bild" zeigen oder wegnehmen.
+
+        Gerufen vom :class:`~app.ui.placement_flow.PlacementFlow`, wenn er
+        anfängt und wenn er aufhört. Er ist die einzige Stelle, die es weiß:
+        Das Register sagt, ob eine Operation platziert *werden kann*, nicht ob
+        sie es gerade *tut*.
+        """
+        self._placement_hint.setVisible(bool(on))
 
     def block_apply(self, reason: str | None) -> None:
         """Den Übernehmen-Knopf von außen sperren — mit Grund — oder freigeben.

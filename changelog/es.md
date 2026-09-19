@@ -16,6 +16,26 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 `tools/make_download.py` toma el apartado de la versión actual y lo escribe en
 `website/version.json`.
 
+## 0.4.4
+
+### Editar
+
+- El ángulo de desmoldeo alcanza ahora todas las caras verticales, también las estrechas, y funciona en modelos importados.
+- La fusión suave deja caras laterales lisas en lugar de bordes deshilachados.
+
+### Seleccionar y manejar
+
+- Una arista seleccionada muestra solo las acciones que hacen algo en una arista.
+- Sin selección, el camino a los bloques sigue visible.
+- El campo de búsqueda solo aparece donde hay algo que encontrar.
+- Un tabique del organizador lleva a su editor de compartimentos en lugar de a las acciones de su cara.
+- El diálogo para colocar un taladro indica que el punto se elige en la vista.
+
+### Mover y comprobar
+
+- Dos cuerpos pueden empujarse uno dentro de otro para unirlos o fusionarlos suavemente. Solo se devuelve lo que queda fuera del área de impresión.
+- Si un ajuste apunta a una característica que ya no existe, un botón lleva al historial.
+
 ## 0.4.3
 
 ### Reconocimiento y edición

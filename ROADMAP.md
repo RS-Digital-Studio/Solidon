@@ -54,6 +54,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-017 — Nutfedermaße an realen Aluminiumprofilen prüfen](#rm-017) | Geometrie, Erkennung und Druckvorbereitung | Zwei benannte Aluminiumprofile nachmessen und Passung prüfen |
 | [RM-022 — Nachbau als Operationsfolge](#rm-022) | Geometrie, Erkennung und Druckvorbereitung | Beschlossen am 17.09.; nach Veröffentlichung von 0.4.3: geprüfter Nachbau hinter dem Import gemäß CAD-Konzept §§8, 13.5 |
 | [RM-188 — CAD-Parität und einfache vollständige Kundenwege](#rm-188) | Geometrie, Erkennung und Druckvorbereitung | Beschlossene Stufen nach Veröffentlichung von 0.4.3; zuerst Maß-/Referenznachführung, Erkennung und fachliche Parität absichern |
+| [RM-189 — Eine Passung verliert ihr Merkmal, und der Fall ist nicht nachgestellt](#rm-189) | Geometrie, Erkennung und Druckvorbereitung | Der Befund trägt seit dem 18.09.2026 einen Weg; die Ursache fehlt — die Schrittfolge von Robert holen oder einen Weg im Korpus finden, der ihn herstellt |
 | [RM-024 — Gespeicherte Zuordnungsantworten im echten Konfliktfall abnehmen](#rm-024) | Geometrie, Erkennung und Druckvorbereitung | Der Rundlauf steht; gemessen fehlt ein Korpuskörper, dessen erneute Erkennung wirklich mehrdeutig wird |
 | [RM-041 — Innenraum importierter entlüfteter Hohlkörper klären](#rm-041) | Geometrie, Erkennung und Druckvorbereitung | Schätzweg oder dokumentierte Grenze des Innenraums entscheiden |
 | [RM-042 — Leistungsgrenze der Merkmalserkennung bis eine Million Dreiecke klären](#rm-042) | Geometrie, Erkennung und Druckvorbereitung | Großen Korpus messen und belegte Erkennungsgrenze mit §31 abgleichen |
@@ -1324,6 +1325,37 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Konkrete neue Abhängigkeiten bleiben auszuwählen; kein pauschaler Einbau
   aller Alternativen und keine Sprachenmigration beschlossen. Die alten
   Tageswerte sind als Planungsgrundlage zurückgezogen (Konzept §12).
+
+<a id="rm-189"></a>
+
+- [ ] **RM-189 — Eine Passung verliert ihr Merkmal, und der Fall ist nicht
+  nachgestellt.** Robert, 18.09.2026: „Fehler: Eine Passung verweist auf ein
+  Merkmal, das es nicht mehr gibt: eine Operation danach hat den Körper neu
+  gebaut und benannte Merkmale überstehen das nicht, alles sollte korrekt
+  übernommen werden.“
+
+  **Was getan ist:** Der Befund `fit.missing_feature` endete ohne Weg nach
+  vorn — Regel 17. Er trägt jetzt *Verlauf zeigen* (`FINDING_ACTIONS` in
+  `app/ui/panels.py`), damit der Kunde den Schritt findet, der den Körper neu
+  gebaut hat.
+
+  **Was offen ist: die Ursache.** Der Fall ließ sich am 18.09.2026 nicht
+  herstellen; §21.2 und `SceneObject.reserved_feature_ids` sagen zu, dass eine
+  vergebene Kennung reserviert bleibt und die Zuordnung sie wiederfindet. Eine
+  Handlung an einem Befund ist die Antwort auf sein Auftreten, nicht auf seinen
+  Grund — solange niemand den Weg kennt, ist nicht entschieden, ob die
+  Zuordnung ihn verliert oder die Reservierung.
+
+  Nächster Schritt: die Schrittfolge bei Robert erfragen (welche Operation
+  stand zwischen Passung und Befund) oder einen Weg im Korpus suchen, der die
+  Kennung wirklich fallen lässt — dabei zuerst die Operationen prüfen, die den
+  Körper vollständig neu vernetzen (Voxelstufe der Rückfallkette, *Dreiecke
+  angleichen*, *Neu vernetzen*).
+
+  Abnahme: ein Projekt aus `tests/data/projects/`, das den Befund erzeugt,
+  dazu die belegte Antwort, ob die Kennung erhalten bleiben muss oder ob der
+  Verlust richtig und nur zu erklären ist. Erst danach steht fest, ob der Weg
+  über die Handlung genügt.
 
 ## Bedienung und Darstellung
 <a id="rm-070"></a>

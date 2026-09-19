@@ -159,6 +159,15 @@ das Panel in der Overlay-Spalte lag, teilte ``MainWindow._fit_right_column``
 diese Spalte zwischen ihm und dem Prüfbericht, und beide Untergrenzen mussten
 gegeneinander stehen. Jetzt liegt es im Fenster rechts, das rollt — eine
 Untergrenze genügt, und eine Obergrenze braucht es gar nicht mehr.
+
+**Und sie gilt dem vollen Zustand, nicht jedem.** Seit dem 18.09.2026 hat die
+Karte zwei leere Gestalten, in denen Suche und Liste fehlen: ohne Auswahl
+(Hauptaktionen weg, Katalogknopf und ein Satz) und an einer Auswahl, deren
+Handlungen oben im Merkmalfenster stehen — ein Langloch, eine Kante. Dort
+reserviert die Zahl mehr, als dasteht. Das ist Absicht und kein Rest: Eine
+Untergrenze, die mit dem Inhalt schwankte, ließe die Karte bei jedem
+Auswahlwechsel springen, und der Raum darunter kostet nichts — die Spalte
+rollt, und was frei bleibt, zeigt das Modell.
 """
 
 
@@ -780,12 +789,9 @@ class SelectionOperationsPanel(QWidget):
         self._lay_out_quick(())
         self.summary.setText(tr("Nichts gewählt"))
         self.catalog_button.setVisible(True)
-        self.search.setVisible(False)
-        self.scroller.setVisible(False)
-        self._nothing.setText(
+        self._only_this_sentence(
             tr("Wählen Sie einen Körper oder eine Fläche — Bausteine gehen auch so.")
         )
-        self._nothing.setVisible(True)
 
     def _say_there_is_nothing(self, found: int, searching: bool) -> None:
         """Die leere Liste sagt, warum sie leer ist — und lädt nicht zum Suchen ein.
@@ -801,16 +807,34 @@ class SelectionOperationsPanel(QWidget):
         darunter leer ist und leer bleibt, stellt eine Frage, auf die es
         keine Antwort gibt (Befund Robert, 18.09.2026).
         """
-        self.search.setVisible(found > 0 or searching)
-        self.scroller.setVisible(found > 0)
         if found > 0:
+            self.search.setVisible(True)
+            self.scroller.setVisible(True)
             self._nothing.setVisible(False)
             return
-        self._nothing.setText(
-            tr("Kein Treffer — versuchen Sie ein anderes Wort.")
-            if searching
-            else tr("Was sich hier tun lässt, steht oben bei den Maßen.")
-        )
+        if searching:
+            # Wer sucht, behält sein Feld: Dort ist es die Ursache der leeren
+            # Liste und zugleich der Weg zurück.
+            self.search.setVisible(True)
+            self.scroller.setVisible(False)
+            self._nothing.setText(tr("Kein Treffer — versuchen Sie ein anderes Wort."))
+            self._nothing.setVisible(True)
+            return
+        self._only_this_sentence(tr("Was sich hier tun lässt, steht oben bei den Maßen."))
+
+    def _only_this_sentence(self, text: str) -> None:
+        """Statt Suchfeld und Liste steht ein Satz da — an **einer** Stelle.
+
+        Zwei Leeren enden hier: keine Auswahl und eine Auswahl, deren
+        Handlungen oben im Merkmalfenster stehen. Sie sagen Verschiedenes und
+        verbergen dasselbe, und wer beides getrennt setzt, setzt es beim
+        nächsten Nachbessern abwechselnd — dieselbe Falle, die
+        :meth:`_empty_but_for_the_catalogue` schon bei den Hauptaktionen
+        beschreibt.
+        """
+        self.search.setVisible(False)
+        self.scroller.setVisible(False)
+        self._nothing.setText(text)
         self._nothing.setVisible(True)
 
     def _folded_by_a_click(self, title: str) -> None:

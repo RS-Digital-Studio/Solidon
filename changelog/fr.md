@@ -16,6 +16,26 @@ portent les mêmes points dans le même ordre (`tests/test_changelog.py`).
 `tools/make_download.py` en tire la section de la version courante et l'écrit
 dans `website/version.json`.
 
+## 0.4.4
+
+### Modifier
+
+- La dépouille atteint désormais toutes les faces verticales, même les plus étroites, et fonctionne sur les modèles importés.
+- La fusion douce laisse des faces latérales lisses au lieu d’arêtes effilochées.
+
+### Sélectionner et utiliser
+
+- Une arête sélectionnée n’affiche plus que les actions qui agissent sur une arête.
+- Sans sélection, le chemin vers les blocs reste visible.
+- Le champ de recherche n’apparaît que là où il y a quelque chose à trouver.
+- Une cloison de l’organiseur mène à son éditeur de compartiments plutôt qu’aux actions de sa face.
+- La boîte de dialogue pour placer un perçage indique que le point se choisit dans la vue.
+
+### Déplacer et vérifier
+
+- Deux corps peuvent être poussés l’un dans l’autre pour les réunir ou les fusionner en douceur. Seul ce qui sort du plateau est ramené.
+- Si un ajustement renvoie à une entité qui n’existe plus, un bouton mène à l’historique.
+
 ## 0.4.3
 
 ### Reconnaissance et modification

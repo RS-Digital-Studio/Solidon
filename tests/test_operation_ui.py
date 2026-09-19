@@ -4509,3 +4509,40 @@ def test_hollowing_an_open_body_does_not_offer_apply(qt_app: QApplication) -> No
         dialog.reject()
         window.close()
         window.release()
+
+
+def test_the_hint_to_aim_in_the_view_belongs_to_the_running_placement(
+    qt_app: QApplication,
+) -> None:
+    """Der Satz steht, solange gezielt wird — und sonst nicht.
+
+    **Befund Robert, 18.09.2026:** „Bohrung setzen sollte doch über den
+    Viewport gehen, wenn das dialogfenster da ist, keine Info dass es über den
+    Viewport geht". Die erste Fassung las die Antwort aus dem Register — und
+    zeigte den Satz damit auch beim **Ändern** eines Schritts, wo die
+    Platzierung ausdrücklich nicht startet (`placement_flow`: „Dort ist die
+    Stelle längst gewählt, und wer den Durchmesser nachbessert, will kein
+    Fadenkreuz"). Ein Dialog, der zum Klicken auffordert, während nichts zu
+    klicken ist, ist schlechter als keiner.
+
+    Ob eine Operation platziert werden **kann**, sagt das Register; ob sie es
+    gerade **tut**, weiß allein der Fluss. Er sagt es über
+    `show_placement_hint`.
+    """
+    from app.core.bootstrap import load_operations
+
+    load_operations()
+    dialog = OperationDialog(REGISTRY.get("drill_hole"), {}, None)
+    try:
+        assert not dialog._placement_hint.isVisibleTo(dialog), (
+            "vor dem Start wird nicht zum Klicken aufgefordert"
+        )
+
+        dialog.show_placement_hint(True)
+        assert dialog._placement_hint.isVisibleTo(dialog)
+        assert "im Bild" in dialog._placement_hint.text()
+
+        dialog.show_placement_hint(False)
+        assert not dialog._placement_hint.isVisibleTo(dialog), "und Escape nimmt ihn zurück"
+    finally:
+        dialog.deleteLater()

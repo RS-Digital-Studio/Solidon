@@ -1543,7 +1543,7 @@
   "Die Statuszeile ist die eigentliche Auskunft: was noch frei ist, wandert beim nächsten Zug.": "La barre d'état est la véritable réponse : ce qui est encore libre se déplacera au prochain glissement.",
   "Die Stege sind mindestens halb so dick wie ihre Zelle — daraus wird ein Vollkörper mit mehr Dreiecken statt einer Füllung.": "Les nervures sont au moins aussi épaisses que la moitié de leur cellule — cela donne un corps plein avec plus de triangles au lieu d'un remplissage.",
   "Die Steigung ist für diesen Durchmesser zu groß — es bliebe kaum ein Kern.": "Le pas est trop grand pour ce diamètre — il ne resterait presque pas de noyau.",
-  "Die Stelle wählen Sie im Bild: Klicken Sie auf die Fläche, auf die es soll.": "Choisissez l'emplacement dans la vue : cliquez sur la face concernée.",
+  "Die Stelle wählen Sie im Bild — klicken Sie sie am Modell an.": "Choisissez l'emplacement dans la vue — cliquez dessus sur le modèle.",
   "Die Stützkarte braucht für dieses Modell zu lange.": "La carte des supports prend trop de temps pour ce modèle.",
   "Die Stützkarte wurde nach {seconds} Sekunden beendet.": "La carte des supports a été arrêtée après {seconds} secondes.",
   "Die Szene ist leer — ein Baustein wird auf einen Körper gesetzt. Lesen Sie zuerst ein Modell ein oder legen Sie einen Grundkörper an.": "La scène est vide — un bloc se pose sur un corps. Chargez d'abord un modèle ou créez un corps de base.",

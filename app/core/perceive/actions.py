@@ -1021,10 +1021,17 @@ def part_actions(operation: Any, spec: Any) -> list[FeatureAction]:
         and name not in placement_params
         and entry.kind not in COLLECTED_KINDS
     )
+    # **Und genannt wird nur, was vorn stand.** ``measures`` filtert
+    # ``placement == "front"``, diese Zeile tat es nicht — am
+    # Profilklemmen-Einleger hieß der Knopf „Gegenkontur, Vorhandene
+    # Außenkontur ändern …", obwohl die zweite hinter der Klappe steht und im
+    # Merkmalfenster nie ein Feld hatte.
     collected = tuple(
         name
         for name, entry in schema.items()
-        if entry.kind in COLLECTED_KINDS and name not in placement_params
+        if entry.kind in COLLECTED_KINDS
+        and entry.placement == "front"
+        and name not in placement_params
     )
     placement = tuple(name for name in ("x", "y", "z") if name in schema)
 

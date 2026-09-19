@@ -874,14 +874,31 @@ _STEP_ROLE = Qt.ItemDataRole.UserRole + 2
 #: bei Trennwand organizer keine Wirkung" und „keine Ahnung wie man
 #: hinkommt").
 #:
-#: Ein Name und keine zweite Kategorie: Der Organizer ist heute die einzige
-#: Operation außerhalb von ``parts``, die benannte Merkmale in dieser Zahl
-#: erzeugt. Kommt eine zweite dazu, steht sie hier daneben; eine eigene
-#: Kategorie zöge Menüort und Katalogkachel mit, und beides soll bleiben.
-SPEAKS_FOR_ITS_FEATURES: Final = frozenset({"create_organizer"})
+#: **Und die Ausnahme gilt der Rolle, nicht dem Schritt.** Der erste Anlauf
+#: nannte nur den Operationsnamen — und traf damit **alle** vierunddreißig
+#: Merkmale mit Provenienz: die vierundzwanzig Trennwände, aber auch die neun
+#: Fachböden und den Innenboden, mit 26 674 mm² die größte Fläche des Teils.
+#: Genau die sind Arbeitsflächen: Auf sie setzt man einen Baustein, dort bohrt
+#: man, dort liegt Filament. Gemessen am gebauten Fenster verloren sie alle
+#: acht Listenoperationen, die drei Hauptaktionen, den Bausteinkatalog und die
+#: Filamentzuweisung — ohne Ersatzweg, denn die vier Operationsmenüs sind am
+#: 11.09.2026 in diese Karte gewandert. Ein Fix, der mehr wegnimmt als er
+#: behebt, ist keiner.
+#:
+#: Ein Name und eine Rolle, keine zweite Kategorie: Der Organizer ist heute
+#: die einzige Operation außerhalb von ``parts``, die benannte Merkmale in
+#: dieser Zahl erzeugt. Eine eigene Kategorie zöge Menüort und Katalogkachel
+#: mit, und beides soll bleiben.
+SPEAKS_FOR_ITS_FEATURES: Final[dict[str, frozenset[str]]] = {
+    "create_organizer": frozenset({"divider"}),
+}
 
 
-def part_step_of(created_by: int | None, document: Document | None) -> tuple[Any, Any] | None:
+def part_step_of(
+    created_by: int | None,
+    document: Document | None,
+    feature: Feature | None = None,
+) -> tuple[Any, Any] | None:
     """Der Schritt und sein Registereintrag, wenn er einen **Baustein** setzte.
 
     Sonst ``None``. Gefragt wird über die Kategorie ``parts`` und nicht über
@@ -889,8 +906,10 @@ def part_step_of(created_by: int | None, document: Document | None) -> tuple[Any
     Provenienz und ist kein Baustein, und ein Namensmuster wie ``insert_*``
     schwiege beim nächsten der siebenundzwanzig.
 
-    **Dazu die namentliche Ausnahme** :data:`SPEAKS_FOR_ITS_FEATURES`, und
-    ihre Begründung steht dort.
+    **Dazu die Ausnahme** :data:`SPEAKS_FOR_ITS_FEATURES`, und sie braucht das
+    **Merkmal**: Sie gilt einer Rolle, nicht dem ganzen Schritt. Ohne
+    ``feature`` gibt es keine Rolle zu prüfen, und dann gilt sie nicht — der
+    Objektbaum fragt so und gruppiert deshalb weiter nur echte Bausteine.
 
     **Zwei Stellen fragen das, und sie fragen es hier.** Der Objektbaum
     gruppiert danach (:func:`_part_group`), und das Fenster entscheidet danach,
@@ -907,8 +926,13 @@ def part_step_of(created_by: int | None, document: Document | None) -> tuple[Any
             spec = REGISTRY.get(entry.op)
         except AppError:
             return None
-        speaks = spec.category == "parts" or spec.name in SPEAKS_FOR_ITS_FEATURES
-        return (entry, spec) if speaks else None
+        if spec.category == "parts":
+            return (entry, spec)
+        rollen = SPEAKS_FOR_ITS_FEATURES.get(spec.name)
+        if rollen is None or feature is None:
+            return None
+        rolle = str(feature.params.get("organizer_role", ""))
+        return (entry, spec) if rolle in rollen else None
     return None
 
 
@@ -4838,6 +4862,8 @@ class FeaturePanel(QWidget):
         self._empty.setWordWrap(True)
         fit_wrapped(self._empty)
         self._rows.addWidget(self._empty)
+        self._say_nothing_is_chosen = True
+        """Ob der leere Satz stehen darf — das Fenster entscheidet es."""
         # **Der Restplatz gehört nach unten, nicht zwischen die Handlungen.**
         # Das Panel steckt in einem Rollbereich mit ``setWidgetResizable``, wird
         # also auf dessen Höhe gezogen. Ohne diese Dehnung verteilt Qt den
@@ -5021,7 +5047,24 @@ class FeaturePanel(QWidget):
         self._lock_note.setVisible(False)
         self._every.setVisible(False)
         self._every.setChecked(False)
-        self._empty.setVisible(True)
+        self._empty.setVisible(self._say_nothing_is_chosen)
+
+    def say_nothing_is_chosen(self, on: bool) -> None:
+        """Ob der leere Zustand seinen Satz trägt — oder die Karte ihn trägt.
+
+        Ohne **jede** Auswahl steht unter diesem Fenster die Handlungskarte
+        mit „Nichts gewählt" und „Wählen Sie einen Körper oder eine Fläche —
+        Bausteine gehen auch so." Der Satz hier sagte dasselbe ein drittes
+        Mal, nur ohne den Weg zu den Bausteinen, der der Grund ist, warum die
+        Karte seit dem 18.09.2026 überhaupt stehen bleibt.
+
+        Bei gewähltem **Körper** bleibt er: Dort trägt die Karte die
+        Körperhandlungen, und er ist die richtige Auskunft darüber, wie man an
+        die Maße kommt.
+        """
+        self._say_nothing_is_chosen = on
+        if self._feature_id is None and self._part_operation is None:
+            self._empty.setVisible(on)
 
     def show_feature(
         self,

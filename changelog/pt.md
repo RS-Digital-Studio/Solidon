@@ -15,6 +15,26 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 `tools/make_download.py` retira daqui a secção da versão atual e escreve-a em
 `website/version.json`.
 
+## 0.4.4
+
+### Editar
+
+- O ângulo de saída alcança agora todas as faces verticais, mesmo as estreitas, e funciona em modelos importados.
+- A fusão suave deixa faces laterais lisas em vez de arestas desfiadas.
+
+### Selecionar e utilizar
+
+- Uma aresta selecionada mostra apenas as ações que atuam numa aresta.
+- Sem seleção, o caminho para os blocos continua visível.
+- O campo de pesquisa só aparece onde há algo para encontrar.
+- Uma divisória do organizador leva ao seu editor de compartimentos em vez das ações da sua face.
+- A janela para colocar um furo indica que o ponto se escolhe na vista.
+
+### Mover e verificar
+
+- Dois corpos podem ser empurrados um contra o outro para os unir ou fundir suavemente. Só é trazido de volta o que fica fora da área de impressão.
+- Se um ajuste aponta para uma característica que já não existe, um botão leva ao histórico.
+
 ## 0.4.3
 
 ### Reconhecimento e edição
