@@ -13,18 +13,26 @@ import math
 import pathlib
 from typing import Any
 
+import numpy as np
 import pytest
 import trimesh
 
 from app.core.bootstrap import load_operations
 from app.core.errors import GeometryError, OperationCancelled
+from app.core.geom import faces
 from app.core.geom.boolean import boolean
-from app.core.geom.faces import draft_vertical, push_face
+from app.core.geom.faces import (
+    SAME_PLANE_ENOUGH,
+    _upright_faces,
+    draft_vertical,
+    push_face,
+)
 from app.core.geom.mesh import MeshData
-from app.core.perceive.features import detect
+from app.core.perceive.features import _one_body, detect
 from app.core.registry import REGISTRY
 from app.core.scene.cancel import NeverCancelled
 from app.core.types import Feature, OpContext, OpResult, Profile, Scene, SceneObject
+from app.core.units import EPS_GEOM
 
 CORPUS = pathlib.Path(__file__).parent / "data" / "meshes"
 WIDTH, DEPTH, HEIGHT = 40.0, 30.0, 20.0
@@ -257,6 +265,177 @@ def test_the_draft_reaches_every_wall_not_just_the_recognised_ones() -> None:
     assert float(highest[:, 1].max()) == pytest.approx(2.5 - slope * 0.5, abs=1e-6)
     assert shaped.bounds[0][0] == pytest.approx(-4.0, abs=1e-6), "unten bleibt jedes Maß"
     assert shaped.bounds[0][1] == pytest.approx(-2.5, abs=1e-6)
+
+
+def _inner_rings(body: MeshData, height: float) -> list[Any]:
+    """Die inneren Konturen eines waagerechten Schnitts — der Rand einer Bohrung.
+
+    Das Maß einer einzelnen Kontur hängt daran, wie man es nimmt (mittlerer
+    Durchmesser, größte Sehne, Hüllspanne); ihre **Zahl** hängt an nichts. Der
+    Außenumriss fällt über seine Ausdehnung heraus.
+    """
+    section = body.raw.section(plane_origin=(0.0, 0.0, height), plane_normal=(0.0, 0.0, 1.0))
+    assert section is not None, f"bei z = {height} schneidet nichts"
+    rings = []
+    for entity in section.entities:
+        points = section.vertices[entity.points][:, :2]
+        span = float(np.linalg.norm(points.max(axis=0) - points.min(axis=0)))
+        if span < 50.0:
+            rings.append(entity)
+    return rings
+
+
+def test_the_facets_of_a_bore_do_not_become_walls() -> None:
+    """Die Grenze, ohne die die Ergänzung die Operation bricht.
+
+    Ein facettierter Bohrungsmantel besteht aus lauter ebenen senkrechten
+    Streifen, die kein Merkmal beansprucht. An ``plate_countersunk.stl`` sind
+    das **48** freie Gruppen zu vier erkannten Wänden, und jede bekäme einen
+    Keil.
+
+    **Was dabei kaputtgeht, sagt keine Kennzahl.** Der Körper bleibt
+    geschlossen, die Kette bleibt auf Stufe ``welded``, und das Volumen geht
+    von 18635,703 auf 18622,288 mm³ — dreizehn Kubikmillimeter. Zerlegt wird
+    die **Bohrung**: Ihr Rand bei z = 1 mm kommt statt als eine Kontur als 22
+    zurück, acht davon ohne Ausdehnung. Der Test misst deshalb den Rand und
+    nicht das Volumen.
+
+    (Der frühere Wortlaut sagte, die Rückfallkette falle bis zur Voxelstufe
+    durch. Das stimmte, bevor die Ergänzung Nullnormalen und gewölbte Gruppen
+    aussortierte; heute rechnet sie durch — die schlechtere Lage, weil man dem
+    Ergebnis nichts ansieht.)
+
+    **Der Zylindertest darunter fängt das nicht**, und das ist der Grund für
+    diesen hier: Dort ist der Mantel *ein* erkanntes Merkmal, es bleibt also
+    gar keine Gruppe frei, und die Grenze kommt nie zum Zug (gemessen über
+    eine Mutationsprobe am 18.09.2026).
+    """
+    plate = MeshData.of(trimesh.load_mesh(str(CORPUS / "plate_countersunk.stl")))
+    walls = _upright_faces(plate)
+    assert len(walls) == 4, f"nur die vier Außenwände, gefunden: {len(walls)}"
+
+    shaped = draft_vertical(plate, DRAFT).mesh
+
+    assert shaped.raw.is_watertight
+    assert shaped.raw.volume < plate.raw.volume, "und angestellt ist er auch"
+    assert len(_inner_rings(shaped, 1.0)) == 1, "und die Bohrung ist eine Kontur geblieben"
+
+
+def test_a_degenerate_triangle_is_no_upright_wall() -> None:
+    """Ein Dreieck ohne Fläche hat keine Richtung — und ist keine Wand.
+
+    Ein entartetes Dreieck trägt in ``trimesh`` die Normale ``[0, 0, 0]``, und
+    deren Z-Anteil ist null: Ohne Prüfung gilt es als senkrecht, der Keil
+    darüber hat die Dicke null, und die Rückfallkette fällt durch alle vier
+    Stufen. Gemessen an ``degenerate.stl``: 8 Wände statt 6, davon zwei mit
+    Nullnormale, und statt 7190,772 mm³ kam ``BooleanFailedError``.
+
+    Der Merkmalsweg daneben hat die Prüfung seit je (:func:`face_normal`
+    wirft bei Länge null); der ergänzte Weg hatte sie nicht.
+
+    **Und der Fall ist keiner am Rand:** ``ingest.loader`` behält entartete
+    Dreiecke ausdrücklich, wenn ihr Entfernen ein geschlossenes Netz aufrisse
+    — der dort festgehaltene Messfall ist eine erzeugte Datei mit 221 138
+    Dreiecken und zwölf entarteten. Also genau das, was Solidon selbst baut.
+    """
+    body = MeshData.of(trimesh.load_mesh(str(CORPUS / "degenerate.stl")))
+    walls = _upright_faces(body)
+
+    assert len(walls) == 6, "die Voraussetzung: sechs senkrechte Wände"
+    for triangles, normal in walls:
+        direction = np.asarray(normal, dtype=float)
+        # **``isfinite`` und nicht nur die Länge.** Die Ebenheitsprüfung
+        # daneben verwirft einen Nullvektor ohnehin (sein Skalarprodukt ist
+        # null, und der Abstand zu eins reißt ``SAME_PLANE_ENOUGH``) — die eine Gestalt,
+        # die sie durchlässt, ist ``0/0``: ``nan > 0,02`` ist falsch. Ohne
+        # diese Zeile bewacht der Test seine Nachbarin statt seiner Sperre
+        # (gemessen 18.09.2026).
+        assert np.isfinite(direction).all(), f"eine Wand ohne Zahl ({len(triangles)} Dreiecke)"
+        length = float(np.linalg.norm(direction))
+        assert length > EPS_GEOM, f"eine Wand ohne Richtung ({len(triangles)} Dreiecke)"
+
+    shaped = draft_vertical(body, DRAFT).mesh
+    assert shaped.raw.is_watertight
+    # Die Zahl aus dem Docstring, gemessen und nicht nur genannt. Ohne die
+    # Ergänzung sind es drei Wände und 7385,755 mm³ — eine Zusicherung auf
+    # ``> 0.0`` hätte beide Zustände durchgelassen.
+    assert shaped.raw.volume == pytest.approx(7190.772, abs=0.001)
+
+
+def test_the_limit_counts_what_it_guesses_not_what_it_knows(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Die Grenze gilt der Ergänzung, nicht der Summe.
+
+    Ein Teil mit vielen **erkannten** senkrechten Flächen bekam sonst keine
+    einzige Ergänzung: Gemessen an einem Kundenmodell (Kumiko-Organizer,
+    25 erkannte Wände und 12 ebene Kandidaten mit 0,0 Grad Abweichung) wurde
+    alles verworfen — also genau bei den Teilen nichts behoben, an denen
+    Roberts Befund entsteht.
+
+    Der Docstring der Konstante beschreibt seit je die Ergänzung („über die
+    Merkmalserkennung hinaus"); der Code begrenzte die Summe.
+
+    **Die Grenze wird für diesen Test gesenkt, und das ist der Prüfling
+    selbst.** Der Unterschied zwischen beiden Zählungen zeigt sich nur an
+    einer Grenze, die **zwischen** Summe und Ergänzung liegt, und die hat im
+    Korpus keine Datei von sich aus: Wo viel zu ergänzen ist, reißt die
+    Ergänzung allein schon zwölf (``generated_figure.stl`` 94,
+    ``plate_countersunk.stl`` 48, ``plate_chamfer_and_taper.stl`` 28), und wo
+    viel erkannt ist, gibt es nichts zu ergänzen (``oversized.stl``: zehn
+    erkannte, null frei). An ``plate_cm.stl`` — dem Stück aus Roberts Befund —
+    sind es zwei erkannte und zwei ergänzte; bei einer Grenze von drei reißt
+    die Summe, die Ergänzung nicht (alle Zahlen gemessen 18.09.2026).
+    """
+    plate = MeshData.of(trimesh.load_mesh(str(CORPUS / "plate_cm.stl")))
+    recognised = [
+        entry
+        for entry in detect(plate).values()
+        if entry.kind == "face" and abs(entry.params["normal"][2]) <= 0.1
+    ]
+    assert len(recognised) == 2, "die Voraussetzung dieses Korpusstücks"
+
+    monkeypatch.setattr(faces, "MOST_WALLS_TO_GUESS", len(recognised) + 1)
+    walls = _upright_faces(plate)
+
+    assert len(walls) > len(recognised), (
+        "die ebenen Kandidaten kommen dazu, obwohl zwei Wände schon erkannt sind"
+    )
+    assert len(walls) == 4, "und es sind alle vier senkrechten Wände des Quaders"
+
+
+def test_a_guessed_wall_is_flat_all_over_and_not_only_at_its_first_triangle(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Und eine geratene Wand ist überall eben, nicht nur am ersten Dreieck.
+
+    ``trimesh.facets`` gruppiert über einen Krümmungsradius, nicht über einen
+    Winkel: Eine gewölbte Fläche kommt als **eine** Gruppe zurück, und deren
+    erstes Dreieck steht zufällig senkrecht oder nicht. An
+    ``generated_figure.stl`` sind zwei solche Gruppen — 180 Grad Spanne, also
+    Dreiecke, die in die Gegenrichtung zeigen. Ein Keil darüber ist kein Keil.
+
+    **Die Grenze wird dafür angehoben, und das ist Absicht.** Sie fängt die
+    Gruppen dieser Datei heute vorher ab (94 Kandidaten gegen zwölf), und
+    damit stünde die Ebenheitsprüfung ohne Wächter da — der Docstring der
+    Funktion nennt genau das: „Dass das heute nicht aufschlägt, liegt an der
+    Erkennung und an der Grenze — beides Zufall, keine Zusage." Gemessen mit
+    angehobener Grenze: 94 Wände mit null Abweichung gegen 96 mit 2,0.
+    """
+    body = MeshData.of(trimesh.load_mesh(str(CORPUS / "generated_figure.stl")))
+    welded = _one_body(body).raw
+    monkeypatch.setattr(faces, "MOST_WALLS_TO_GUESS", 10_000)
+
+    walls = _upright_faces(body)
+
+    assert len(walls) > 12, "die Voraussetzung: diese Datei hat viele Kandidaten"
+    for triangles, normal in walls:
+        spread = float(
+            np.abs(welded.face_normals[np.asarray(triangles, dtype=int)] @ normal - 1.0).max()
+        )
+        assert spread <= SAME_PLANE_ENOUGH, (
+            f"eine Wand aus {len(triangles)} Dreiecken mit {spread:.4f} Abweichung"
+        )
 
 
 def test_a_cylinder_is_not_mistaken_for_a_stack_of_walls() -> None:

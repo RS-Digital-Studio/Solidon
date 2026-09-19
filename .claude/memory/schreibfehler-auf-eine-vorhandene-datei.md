@@ -98,6 +98,10 @@ Nach einem Abbruch war die Datei sofort exklusiv öffenbar — der Halter war al
 der eigene Lauf. Dieselbe Probe zwischen den beiden Lesern hätte beide auf
 einmal gezeigt, statt den zweiten auf die nächste Sprache zu verschieben.
 
+**Nachtrag 18.09.2026 — ein gescheitertes Zurückstellen lässt die Mutation stehen.** Ein Mutationsskript schreibt die verschlechterte Fassung, fährt den Test und stellt im `finally` das Original zurück. Genau dieses Zurückschreiben traf `OSError 22` — mitten in einer Sitzung, in der ein Hintergrund-Agent dieselben Dateien las. Was blieb: die **absichtlich kaputte** Fassung im Arbeitsbaum, unter einer Ausgabe, die `GEFANGEN` sagte und damit Erfolg meldete. Der Traceback stand darunter, nicht darüber.
+
+Eine Mutationsprobe ist deshalb die gefährlichste Sorte Schreibvorgang, die es gibt: Ihr Fehlschlag hinterlässt nicht einen alten Stand, sondern einen bewusst falschen. Das `finally` bekommt dieselbe Wiederholung wie jedes andere Schreiben — **und danach eine Gegenprobe am Inhalt**, nicht am Exit-Code: Steht der Anker des Originals wieder da? Wer sie auslässt, committet eine Mutation.
+
 **Nachtrag 12.09.2026 — der Riss kommt auch direkt nach `git add`.** Wer eine
 Datei für einen Teil-Commit umschreibt, `git add` ruft und sie dann
 zurückschreibt, trifft beim Zurückschreiben regelmäßig `OSError 22`: `git add`

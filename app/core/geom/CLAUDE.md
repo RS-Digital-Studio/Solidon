@@ -611,14 +611,31 @@ gekrümmten Nachbarwand darf keine Ersatzebene für einen Füllkörper werden.
 **Und die Formschräge holt ihre Wände selbst.** Die Merkmalserkennung
 beantwortet „was kann der Kunde anklicken" und verwirft kleine Flächen; an
 einem Quader von 8 auf 5 auf 0,5 mm sind die beiden schmalen Wände 2,5 mm²
-groß und damit kein Merkmal — angestellt wurden vier von sechs Flächen.
-`_walls_no_feature_claims` ergänzt, was kein Merkmal beansprucht, bis zur
-Grenze `MOST_WALLS_TO_GUESS`; darüber ist die Ergänzung unzuverlässig, weil
-ein facettierter Bohrungsmantel aus lauter ebenen senkrechten Streifen
-besteht. Ein nicht geschlossenes Netz wird vorher angehalten
-(`_must_be_closed`, mit der Frage, die Stufe 2 der Rückfallkette stellt): Die
-Keile gehen als Differenz hinein, und auf der Voxelstufe kam von 4000 mm³
-noch 101 zurück.
+groß und damit kein Merkmal — angestellt wurden zwei der vier senkrechten
+Wände.
+`_walls_no_feature_claims` ergänzt, was kein Merkmal beansprucht. Drei
+Bedingungen stehen davor, und jede hat ihren gemessenen Grund:
+
+- **Eine Richtung muss es geben.** Ein entartetes Dreieck trägt die Normale
+  `[0, 0, 0]`, und deren Z-Anteil ist null — ungeprüft gilt es als senkrecht,
+  der Keil darüber hat die Dicke null.
+- **Die ganze Gruppe muss eben sein, nicht nur ihr erstes Dreieck.**
+  `trimesh.facets` gruppiert über einen Krümmungsradius und nicht über einen
+  Winkel: Eine Kugel mit 327 680 Dreiecken kommt als **eine** Gruppe zurück.
+- **Und gezählt wird die Ergänzung, nicht die Summe** (`MOST_WALLS_TO_GUESS`).
+  Ein Teil mit vielen erkannten senkrechten Flächen bekam sonst keine
+  einzige — also nichts behoben, wo der Befund entsteht.
+
+Was die Grenze verhindert, ist gemessen und **nicht** ein Abbruch: An
+`plate_countersunk.stl` stehen 48 Mantelstreifen zu vier erkannten Wänden,
+und jeden anzustellen zerlegt die Bohrung — ihr Rand bei z = 1 mm kommt statt
+als **eine** Kontur als 22 zurück, acht davon ohne Ausdehnung, während
+Volumen, Dichtheit und Rückfallstufe unauffällig bleiben. Wer die Grenze
+anhebt, prüft die Ränder.
+
+Ein nicht geschlossenes Netz wird vorher angehalten (`_must_be_closed`, mit
+der Frage, die Stufe 2 der Rückfallkette stellt): Die Keile gehen als
+Differenz hinein, und auf der Voxelstufe kam von 4000 mm³ noch 101 zurück.
 
 `faces.py` — die **Flächen** eines Netzes bearbeiten, Gegenstück zu `edges.py`:
 *Fläche versetzen* und die *Formschräge*. Über der gewählten Fläche entsteht ein

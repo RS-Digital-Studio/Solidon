@@ -59,24 +59,36 @@ UPRIGHT_ENOUGH = 0.1
 #: Die Obergrenze der Formschräge, wie im exakten Kern.
 MAX_DRAFT_DEGREES = 30.0
 
-#: Bis zu wie vielen senkrechten Wänden die Formschräge ihre Wandliste über die
-#: Merkmalserkennung hinaus ergänzt.
+#: Wie viele senkrechte Wände die Formschräge über die Merkmalserkennung
+#: hinaus ergänzt — gezählt werden die **ergänzten**, nicht die Summe.
 #:
 #: Die Erkennung beantwortet „was kann der Kunde anklicken" und verwirft dabei
 #: kleine Flächen (``MIN_FACE_AREA``, ``BROAD_FACE_SHARE``). Für diese
 #: Operation ist das die falsche Frage — an ``plate_cm.stl``, einem Quader von
 #: 8 auf 5 auf 0,5, sind die beiden schmalen Wände 2,5 mm² groß und damit kein
-#: Merkmal; die Formschräge stellte vier von sechs Flächen an (Befund Robert,
-#: 18.09.2026).
+#: Merkmal. Die Erkennung findet damit vier der sechs Flächen, davon zwei
+#: senkrechte — und genau die zwei stellte die Formschräge an (Befund
+#: Robert, 18.09.2026: „ganzes Modell gewählt nur 2 seiten verändern sich").
 #:
 #: **Ergänzt wird trotzdem nicht unbegrenzt**, und die Grenze ist gemessen: Ein
 #: facettierter Bohrungsmantel besteht aus lauter ebenen senkrechten Streifen,
-#: die kein Merkmal beansprucht. An ``plate_countersunk.stl`` kämen damit 128
-#: Wände zu vier dazu, und die Keile darüber überlappen sich so, dass die
-#: Rückfallkette bis zur Voxelstufe durchfällt und **dort** aufgibt — statt
-#: eines angestellten Quaders gab es gar nichts. Zwölf ist der gröbste
-#: Zylinder, den noch jemand als Vieleck zeichnet; darüber ist die Ergänzung
-#: unzuverlässig, und dann bleibt es bei der Erkennung, die dafür gebaut ist.
+#: die kein Merkmal beansprucht. An ``plate_countersunk.stl`` sind das 48
+#: Streifen zu vier erkannten Wänden, und jeden davon anzustellen zerlegt die
+#: Bohrung: Ihr Rand bei z = 1 mm kommt statt als **eine** Kontur als
+#: **22** zurück, acht davon ohne Ausdehnung (gemessen 18.09.2026).
+#:
+#: **Und keine Kennzahl verrät es.** Der Körper bleibt geschlossen, die Kette
+#: bleibt auf Stufe ``welded``, und das Volumen geht von 18635,703 auf
+#: 18622,288 mm³ — dreizehn Kubikmillimeter, also nichts, was auffiele. Wer
+#: die Grenze anhebt, prüft deshalb die **Ränder** und nicht das Volumen.
+#: (Der frühere Vermerk hier sagte, die Rückfallkette falle bis zur Voxelstufe
+#: durch und gebe dort auf. Das stimmte, bevor die Ergänzung Nullnormalen und
+#: gewölbte Gruppen aussortierte; heute rechnet sie durch und liefert einen
+#: Körper, dem man das Falsche nicht ansieht — die schlechtere Lage.)
+#:
+#: Zwölf ist der gröbste Zylinder, den noch jemand als Vieleck zeichnet;
+#: darüber ist die Ergänzung unzuverlässig, und dann bleibt es bei der
+#: Erkennung, die dafür gebaut ist.
 MOST_WALLS_TO_GUESS = 12
 
 
@@ -365,7 +377,7 @@ def _upright_faces(mesh: MeshData) -> list[tuple[list[int], np.ndarray]]:
         if abs(float(normal[2])) > UPRIGHT_ENOUGH:
             continue
         found.append(([int(index) for index in feature.face_indices], normal))
-    return found + _walls_no_feature_claims(mesh, features, len(found))
+    return found + _walls_no_feature_claims(mesh, features)
 
 
 def _must_be_closed(mesh: MeshData) -> None:
@@ -384,10 +396,21 @@ def _must_be_closed(mesh: MeshData) -> None:
     verschweißt und entnadelt trägt es, und die Formschräge lief dort immer
     schon. Die Probe am rohen Netz hätte es abgewiesen — eine Sperre, die den
     Normalfall trifft, ist keine Sperre, sondern ein neuer Fehler.
+
+    **Gefragt wird in der Reihenfolge, in der die Antworten billiger sind.**
+    Ein dichtes Netz sagt das über einen Cache, den ``trimesh`` ohnehin führt;
+    verschweißt wird erst, wenn es das nicht tut. Die erste Fassung rechnete
+    beides immer und kostete an ``dense_1m.stl`` 0,87 Sekunden für eine
+    Antwort, die vorher schon dastand — vor einer Operation, die an demselben
+    Netz ohnehin absagt (§2.8).
     """
+    if mesh.is_watertight:
+        return
     welded, _gone = merge_vertices(mesh)
+    if welded.is_watertight:
+        return
     cleaned, _dropped = remove_degenerate_faces(welded)
-    if mesh.is_watertight or welded.is_watertight or cleaned.is_watertight:
+    if cleaned.is_watertight:
         return
     raise GeometryError(
         detail=_(
@@ -401,36 +424,85 @@ def _must_be_closed(mesh: MeshData) -> None:
 def _walls_no_feature_claims(
     mesh: MeshData,
     features: dict[str, Feature],
-    recognised: int,
 ) -> list[tuple[list[int], np.ndarray]]:
     """Die ebenen senkrechten Flächen, die kein erkanntes Merkmal beansprucht.
 
-    Gesucht wird über ``facets`` — zusammenhängende koplanare Dreiecksgruppen —
-    am **verschweißten** Netz: Eine STL schreibt jedes Dreieck mit eigenen
-    Ecken, und ungeschweißt hat sie null Nachbarschaften und null Facetten
-    (:func:`perceive.features._one_body` beschreibt denselben Fall). Die
-    Dreiecksnummern bleiben dabei dieselben, daran hängen die Merkmalsnummern.
+    Gesucht wird über ``facets`` am **verschweißten** Netz: Eine STL schreibt
+    jedes Dreieck mit eigenen Ecken, und ungeschweißt hat sie null
+    Nachbarschaften und null Facetten (:func:`perceive.features._one_body`
+    beschreibt denselben Fall). Die Dreiecksnummern bleiben dabei dieselben,
+    daran hängen die Merkmalsnummern.
 
     Beansprucht heißt: von **irgendeinem** Merkmal, nicht nur von einer Fläche.
     Der Mantel einer erkannten Bohrung gehört ihr, auch wenn er keine Ebene
-    ist — was hier übrig bleibt, hat die Erkennung gar nicht gesehen.
+    ist — was hier übrig bleibt, hat die Erkennung gar nicht gesehen. (Wie
+    viel das ist, hängt am Netz: An ``plate_holes.stl`` bleibt nichts übrig,
+    an ``plate_countersunk.stl`` findet die Erkennung keine Bohrung, und dort
+    fängt die Grenze die 48 Mantelstreifen ab.)
+
+    **Und ``facets`` ist keine Ebenheitsprüfung**, auch wenn der Name danach
+    klingt: ``trimesh`` gruppiert über einen Krümmungsradius, nicht über einen
+    Winkel — je feiner ein gewölbtes Netz, desto eher gilt es als **eine**
+    Facette. Gemessen: eine Kugel mit 327 680 Dreiecken kommt als **eine**
+    Gruppe mit 180 Grad Normalenabweichung zurück, ``dense_1m.stl`` ebenso.
+    Ihr erstes Dreieck steht dort zufällig fast senkrecht, und ohne die
+    Nachprüfung unten wäre eine ganze Kugel eine Wand. Dass das heute nicht
+    aufschlägt, liegt an der Erkennung und an der Grenze — beides Zufall,
+    keine Zusage.
+
+    **Ein Dreieck ohne Fläche hat keine Richtung.** Seine Normale ist
+    ``[0, 0, 0]``, und deren Z-Anteil ist null: ungeprüft gilt es als
+    senkrecht, der Keil darüber hat die Dicke null, und die Rückfallkette
+    fällt durch alle vier Stufen. An ``degenerate.stl`` kamen so acht Wände
+    statt sechs und ``BooleanFailedError`` statt 7190,772 mm³. Der
+    Merkmalsweg hat die Prüfung seit je (:func:`face_normal`).
+
+    **Und die zwei Sperren decken diesen Fall auf zwei Wegen** — wer eine
+    davon anfasst, misst deshalb leicht das Falsche. Gemessen am 18.09.2026
+    an ``degenerate.stl``: Fällt die Ebenheitsprüfung weg, ändert sich nichts
+    (6 Wände, 7190,772 mm³); fällt diese Prüfung weg, kommen acht Wände und
+    der Abbruch. Ersetzt man sie dagegen durch ein stilles ``max(länge, eps)``,
+    bleibt ein **Nullvektor** stehen, und den verwirft die Ebenheitsprüfung
+    ihrerseits — sein Skalarprodukt ist null. Die eine Gestalt, die durch
+    beide fällt, ist ``0/0``: ``nan`` ist nie größer als eine Schranke.
     """
     from app.core.perceive.features import _one_body
 
     body = _one_body(mesh).raw
-    claimed = {int(index) for entry in features.values() for index in (entry.face_indices or ())}
+    count = len(body.faces)
+    # Belegt und gruppiert als Masken und nicht als Mengen: An ``dense_1m.stl``
+    # kostete die Buchhaltung über 1 310 720 Dreiecke 140 der 170 ms — für
+    # eine einzige Facettengruppe, die die Ebenheitsprüfung danach verwirft.
+    claimed = np.zeros(count, dtype=bool)
+    for entry in features.values():
+        if entry.face_indices:
+            claimed[np.asarray(entry.face_indices, dtype=int)] = True
     groups = [np.asarray(group, dtype=int) for group in body.facets]
-    grouped = {int(index) for group in groups for index in group}
-    groups += [np.array([index]) for index in range(len(body.faces)) if index not in grouped]
+    grouped = np.zeros(count, dtype=bool)
+    for group in groups:
+        grouped[group] = True
+    groups += [np.array([index]) for index in np.flatnonzero(~grouped)]
 
     guessed: list[tuple[list[int], np.ndarray]] = []
     for group in groups:
-        if any(int(index) in claimed for index in group):
+        if bool(claimed[group].any()):
             continue
         normal = np.asarray(body.face_normals[group[0]], dtype=float)
+        length = float(np.linalg.norm(normal))
+        if length <= EPS_GEOM:
+            continue
+        normal = normal / length
         if abs(float(normal[2])) > UPRIGHT_ENOUGH:
             continue
+        # Die Gruppe selbst muss eben sein, nicht nur ihr erstes Dreieck.
+        if float(np.abs(body.face_normals[group] @ normal - 1.0).max()) > SAME_PLANE_ENOUGH:
+            continue
         guessed.append(([int(index) for index in group], normal))
-        if recognised + len(guessed) > MOST_WALLS_TO_GUESS:
+        # **Gezählt wird, was geraten wird** — nicht die Summe mit den
+        # erkannten. Ein Teil mit vielen erkannten senkrechten Flächen bekam
+        # sonst keine einzige Ergänzung: An einem Kundenmodell (25 erkannte
+        # Wände, 12 ebene Kandidaten mit null Grad Abweichung) wurde alles
+        # verworfen, also genau dort nichts behoben, wo der Befund entsteht.
+        if len(guessed) > MOST_WALLS_TO_GUESS:
             return []
     return guessed

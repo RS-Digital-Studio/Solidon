@@ -109,3 +109,15 @@ Eingabedateien und nicht an der Zahl der Tests. Ein Zweig ohne eine Datei, die
 ihn erreicht, ist ungeprüft, gleich wie viele Tests daneben grün sind.
 
 Verwandt: [[voraussetzung-im-namen-statt-hergestellt]], [[testprojekt-trifft-den-fall-nicht]].
+
+**Und die vierte Ursache, 18.09.2026: eine Nachbarsperre deckt mit — und wie man die eine entfernt, entscheidet, was man misst.** In `geom/faces.py` stehen zwei Prüfungen übereinander: Nullnormale und Ebenheit der Gruppe. Gemessen an `degenerate.stl`, je einzeln entfernt:
+
+| Mutation | Ergebnis |
+|---|---|
+| `normal / length` ohne die `if`-Zeile | 8 Wände, zwei davon `nan`, `BooleanFailedError` — **gefangen** |
+| `normal / max(length, eps)` | 6 Wände, unverändert — **durch** |
+| Ebenheitsprüfung ganz weg | 6 Wände, unverändert |
+
+Die zweite Zeile sieht aus wie eine Testlücke und ist keine: Sie behebt den Fehler **anders** — der erhaltene Nullvektor fällt der Ebenheitsprüfung zum Opfer, weil sein Skalarprodukt null ist. Ein Review-Agent, der genau diese Gestalt wählte, berichtete daraufhin die Sperre als unbewacht — richtig gemessen, falsch geschlossen.
+
+**Wer eine Sperre mutiert, schreibt die Gestalt hin, die ein Mensch schriebe, der die Zeile löscht** — nicht die, die den Fall nebenbei weiter abdeckt. Und wo zwei Prüfungen denselben Fall auf zwei Wegen decken, gehört das in den Docstring: Sonst misst der Nächste dieselbe Verwirrung noch einmal.
