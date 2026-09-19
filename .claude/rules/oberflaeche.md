@@ -88,7 +88,7 @@ ins Nichts. Dasselbe gilt für Algorithmennamen (`gyroid`, `arachne`).
 
 **Jedes Feld sagt, was es tut — und zwar alle.** Das gilt an zwei Orten: Die
 sechsundfünfzig Felder der Druckeinstellungen tragen je einen `note`-Satz, die
-1197 Parameter der 132 Operationen ihren `doc`-Satz aus dem Register. Beide Male
+1198 Parameter der 132 Operationen ihren `doc`-Satz aus dem Register. Beide Male
 hängt er an **beiden** Hälften der Zeile — wer eine Zeile nicht versteht, zeigt
 auf das unverständliche Wort und nicht auf den Kasten daneben. In den
 Druckeinstellungen setzt `_editor` ihn am Eingabefeld und `_label` an der
@@ -128,7 +128,16 @@ Wörter, wo ein Wort nichts zeigt: die Texturmuster tragen ihre Kachel aus
 `figures.texture_tile`, erkannt an den Werten des Feldes und nicht an seinem
 Namen. Ein Fehler endet nie mit „fehlgeschlagen": erst was nicht ging, dann
 warum, dann was jetzt möglich ist, als anklickbare Handlungen (§2.7). Kein
-Stapelabzug im Nutzerdialog.
+Stapelabzug im Nutzerdialog. **Und keine Adresse aus dem Code:** `field` und
+`constraint` einer `ValidationError` sagen dem Programm, welches Feld und
+welche Regel; dem Kunden sagen sie nichts („Feld: bought_on / Bedingung:
+format" unter einem Satz, der längst vom Datum spricht — Lagerdurchsicht
+19.09.2026). `spoken_values` lässt sie weg; die Übersetzung der Adresse ist
+der Cursor im Feld (`NewFilamentDialog.focus_field`). Titel und Detail stehen
+in zwei Zeilen (`problem_text`), nie als „Titel.: Detail". Und wer eine
+Handlung im Satz nennt („Laden Sie den Stand neu"), bietet genau sie als
+Knopf an — `RELOAD`, nicht *Eingabe korrigieren*, das an dieser Eingabe
+nichts ändern könnte.
 
 **Ein Wort, das nur ein Konstrukteur kennt, steht nicht dort, wo ein Neuling es
 lesen muss.** Gemessen am 14.09.2026 über alle Oberflächentexte

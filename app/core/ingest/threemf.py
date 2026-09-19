@@ -45,7 +45,7 @@ from app.core.errors import (
 from app.core.geom import transform
 from app.core.geom.mesh import MeshData
 from app.core.log import get_logger
-from app.core.types import Finding, MaterialSlot, ProgressFn, SolverInfo
+from app.core.types import MAX_FILAMENT_COLOURS, Finding, MaterialSlot, ProgressFn, SolverInfo
 from app.i18n import TranslatableText, _
 
 _log = get_logger(__name__)
@@ -222,6 +222,13 @@ def _native_materials(container: zipfile.ZipFile, model: ET.Element) -> _NativeM
     titles = values.get("filament_settings_id", [])
     if not isinstance(colours, list) or not all(isinstance(c, str) for c in colours):
         raise _unsupported_materials(_("Ungültige Filamentfarbliste"))
+    # Ein mehrfarbiges Filament der Orca-Familie: alle Farben in einer
+    # Zeichenkette, durch Leerzeichen getrennt, die erste steht zugleich in
+    # ``filament_colour``. Die weiteren wandern in den Slot, damit eine
+    # Bambu-Datei ihr zweifarbiges Seidenfilament auf dem Rückweg behält.
+    multi = values.get("filament_multi_colour", [])
+    if not isinstance(multi, list):
+        multi = []
     result.palette = tuple(
         MaterialSlot(
             index=index,
@@ -236,6 +243,7 @@ def _native_materials(container: zipfile.ZipFile, model: ET.Element) -> _NativeM
             material_type=str(kinds[index]).strip('"')
             if isinstance(kinds, list) and index < len(kinds)
             else None,
+            extra_colours=_extra_colours(multi[index]) if index < len(multi) else (),
         )
         for index in range(max(len(colours), len(standard)))
     )
@@ -1993,6 +2001,29 @@ def _materials_in(model: ET.Element) -> dict[str, list[tuple[str, tuple[float, f
             for entry in group.findall(f"{{{CORE_NAMESPACE}}}base")
         ]
     return {key: value for key, value in found.items() if value}
+
+
+def _extra_colours(text: object) -> tuple[tuple[float, float, float], ...]:
+    """Die zweite bis vierte Farbe aus ``filament_multi_colour`` — ohne die erste.
+
+    Höchstens :data:`app.core.types.MAX_FILAMENT_COLOURS` insgesamt; eine
+    Datei, die mehr nennt, ist kein Grund anzuhalten, nur einer, den Rest
+    stehen zu lassen. Was keine Farbe ist, fällt weg statt auf die Vorgabe zu
+    fallen — sonst trüge ein Filament eine zweite Farbe, die nie dastand.
+    """
+    if not isinstance(text, str):
+        return ()
+    valid: list[str] = []
+    for part in text.split():
+        digits = part.lstrip("#")
+        if len(digits) not in (6, 8):
+            continue
+        try:
+            int(digits[:6], 16)
+        except ValueError:
+            continue
+        valid.append(part)
+    return tuple(_rgb(part) for part in valid[1:MAX_FILAMENT_COLOURS])
 
 
 def _rgb(text: str | None) -> tuple[float, float, float]:

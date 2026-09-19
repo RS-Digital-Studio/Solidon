@@ -145,6 +145,31 @@ def test_native_part_tool_overrides_parent_and_keeps_its_palette() -> None:
     assert part.slots[0].material_type == "TPU"
 
 
+def test_a_multi_colour_filament_of_the_orca_family_comes_in_whole() -> None:
+    """Bambu Studio führt ein mehrfarbiges Filament als ``filament_multi_colour``
+    — alle Farben in einer Zeichenkette, die erste zugleich in
+    ``filament_colour``. Die weiteren landen im Slot, damit die Datei auf dem
+    Rückweg dasselbe Filament zeigt; was keine Farbe ist, fällt weg, und mehr
+    als vier werden nicht erfunden."""
+    payload = _changed(
+        _native(paint="8", part_override=False),
+        {
+            writer.PROJECT_SETTINGS_PATH: json.dumps(
+                {
+                    "filament_colour": ["#FF0000", "#0000FF"],
+                    "filament_multi_colour": ["#FF0000 #00FF00 kaputt #FFFF00 #00FFFF", "#0000FF"],
+                    "filament_colour_type": ["1", "1"],
+                }
+            ).encode()
+        },
+    )
+    part = reader.read_objects(payload)[0]
+    first, second = part.slots
+    assert first.colour == (1.0, 0.0, 0.0)
+    assert first.extra_colours == ((0.0, 1.0, 0.0), (1.0, 1.0, 0.0), (0.0, 1.0, 1.0))
+    assert second.extra_colours == (), "eine Farbe ist keine Mehrfarbigkeit"
+
+
 @pytest.mark.parametrize("prusa", [False, True])
 def test_native_face_paint_overrides_object_tool(prusa: bool) -> None:
     part = reader.read_objects(_native(paint="8", prusa=prusa, part_override=False))[0]

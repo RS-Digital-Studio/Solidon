@@ -6259,6 +6259,15 @@ def test_every_offered_error_action_does_something(window: MainWindow) -> None:
         # keine Operation; unhandled_advice zeigt beide Schritte als Text.
         "split_by_filament",
         "split_filament_files",
+        # Die drei gelten dem Filamentlager und hängen an dessen Fehlerkarten:
+        # ``reload`` am Revisionskonflikt (`InventoryView._rejected`),
+        # ``restore_backup`` und ``set_aside_file`` an der unlesbaren Datei
+        # (`InventoryView._read_handlers`, `FilamentPanel._read_handlers`).
+        # Wie ``retry`` sind sie verdrahtet, wo der Fehler entsteht — das
+        # Hauptfenster hat weder die Datei noch den Dialog dazu.
+        "reload",
+        "restore_backup",
+        "set_aside_file",
     }
 
     for name, value in vars(errors).items():

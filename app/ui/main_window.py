@@ -233,7 +233,7 @@ from app.ui.dialogs import (
 )
 from app.ui.explode_bar import ExplodeBar
 from app.ui.facts import PrintFacts
-from app.ui.filament_picker import CatalogueWrites, FilamentPanel, spool_slot
+from app.ui.filament_picker import CatalogueWrites, FilamentPanel, colours_of, spool_slot
 from app.ui.filament_usage import UsageNotice
 from app.ui.generate_dialog import IMAGE_SUFFIXES, GenerateDialog, image_filter
 from app.ui.header import HeaderBar, header_stylesheet
@@ -6121,7 +6121,10 @@ class MainWindow(QMainWindow):
             params = {
                 "slot": slot_index,
                 "name": entry.name,
-                "colour": entry.colour,
+                # Alle Farben der Spule, nicht nur die erste: Das Feld der
+                # Operation nimmt sie mit Leerzeichen, und die Orca-Familie
+                # bekommt sie so als mehrfarbiges Filament.
+                "colour": colours_of(entry),
                 "material_type": entry.material_type,
                 "slicer_profile": entry.slicer_profile,
             }
@@ -13469,18 +13472,14 @@ class MainWindow(QMainWindow):
             )
             changes = naming
             if chosen_spool is not None and spec.name in {"assign_slot", "paint_slot"}:
-                matches = (
-                    all(
-                        str(params.get(key, "")).strip() == value
-                        for key, value in (
-                            ("name", chosen_spool.name),
-                            ("material_type", chosen_spool.material_type),
-                            ("slicer_profile", chosen_spool.slicer_profile),
-                        )
+                matches = all(
+                    str(params.get(key, "")).strip() == value
+                    for key, value in (
+                        ("name", chosen_spool.name),
+                        ("material_type", chosen_spool.material_type),
+                        ("slicer_profile", chosen_spool.slicer_profile),
                     )
-                    and str(params.get("colour", "")).strip().casefold()
-                    == chosen_spool.colour.casefold()
-                )
+                ) and str(params.get("colour", "")).split() == list(chosen_spool.colours)
                 if matches:
                     current = self._current_inventory_spool(chosen_spool)
                     if current is None:

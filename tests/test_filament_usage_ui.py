@@ -139,6 +139,38 @@ def test_renamed_spool_still_uses_its_explicit_automatic_binding() -> None:
     assert _remaining(entry) == pytest.approx(458)
 
 
+def test_automatic_booking_after_a_reversal_books_a_new_operation() -> None:
+    """Fehldruck, Rücknahme im Lager, dieselbe Vorbereitung noch einmal: ein eigener Vorgang.
+
+    Befund 19.09.2026: Die zweite Ausgabe fand unter der alten Kennung den
+    zurückgenommenen Vorgang mit denselben Positionen, bekam ihn unverändert
+    zurück und meldete „Buchung ansehen" — abgezogen war nichts.
+    """
+    entry = _spool()
+    request = _request(entry)
+    notice = UsageNotice(UiSettings(inventory_booking_mode="auto"))
+    notice.offer(request)
+    _wait(notice)
+    (first,) = filaments.bookings()
+    assert _remaining(entry) == pytest.approx(458)
+    filaments.reverse_booking(first.operation_id)
+    assert _remaining(entry) == pytest.approx(500)
+    again = UsageNotice(UiSettings(inventory_booking_mode="auto"))
+    again.offer(request)
+    _wait(again)
+    assert _remaining(entry) == pytest.approx(458)
+    active = [one for one in filaments.bookings() if not one.reversed_at]
+    assert len(active) == 1 and active[0].operation_id != first.operation_id
+    assert again.review.text() == "Buchung ansehen …"
+    # Und erneut zurückgenommen bleibt die Anzeige ehrlich: nichts ist gebucht.
+    filaments.reverse_booking(active[0].operation_id)
+    third = UsageNotice(UiSettings(inventory_booking_mode="auto"))
+    third.offer(request)
+    _wait(third)
+    assert _remaining(entry) == pytest.approx(458)
+    assert len([one for one in filaments.bookings() if not one.reversed_at]) == 1
+
+
 def test_dismissed_dialog_keeps_stock_unchanged() -> None:
     entry = _spool()
     dialog = _dialog(_request(entry))

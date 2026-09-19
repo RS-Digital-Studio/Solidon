@@ -34,7 +34,15 @@ from app.core.knowledge import filaments
 from app.core.scene.hashing import digest
 from app.i18n import source_text, tr
 from app.ui.dialogs import ErrorNotice, problem_text
-from app.ui.filament_picker import NewFilamentDialog, hex_of, spool_label, swatch
+from app.ui.filament_picker import (
+    NewFilamentDialog,
+    colours_of,
+    hex_of,
+    slot_colours,
+    spool_label,
+    spool_labels,
+    swatch,
+)
 from app.ui.labels import NumberSpin, local_timestamp, localised
 from app.ui.leash import RELEASE_RETRY_MS, Worker, WorkerLeash, weak_slot
 from app.ui.settings import UiSettings
@@ -226,6 +234,10 @@ class UsageDialog(QDialog):
         layout.addWidget(intro)
         self.operation = QComboBox(self)
         self.operation.setAccessibleName(tr("Druckvorgang"))
+        operation_label = QLabel(tr("Druckvorgang"), self)
+        operation_label.setBuddy(self.operation)
+        set_level(operation_label, "caption")
+        layout.addWidget(operation_label)
         layout.addWidget(self.operation)
         self.content = QWidget(self)
         form = QVBoxLayout(self.content)
@@ -248,7 +260,9 @@ class UsageDialog(QDialog):
             row.setSpacing(NORMAL)
             heading = QHBoxLayout()
             marker = QLabel(card)
-            marker.setPixmap(swatch(hex_of(line.slot.colour)).pixmap(NORMAL * 3, NORMAL * 3))
+            marker.setPixmap(
+                swatch(slot_colours(int(line.slot.index), line.slot)).pixmap(NORMAL * 3, NORMAL * 3)
+            )
             name = QLabel(str(line.slot.name) or tr("Ohne Filamentzuweisung"), card)
             name.setTextFormat(Qt.TextFormat.PlainText)
             name.setWordWrap(True)
@@ -434,8 +448,8 @@ class UsageDialog(QDialog):
                     entry.identifier,
                 ),
             )
-            for entry in ordered:
-                choice.addItem(swatch(entry.colour), spool_label(entry), entry.identifier)
+            for entry, shown in zip(ordered, spool_labels(ordered), strict=True):
+                choice.addItem(swatch(colours_of(entry)), shown, entry.identifier)
                 choice.setItemData(
                     choice.count() - 1, spool_label(entry), Qt.ItemDataRole.ToolTipRole
                 )
@@ -814,6 +828,23 @@ def _preferred_request(previous: UsageRequest | None, current: UsageRequest) -> 
     )
 
 
+def _reversed_count(request: UsageRequest) -> int:
+    """Wie oft dieser Fingerabdruck schon gebucht und zurückgenommen wurde.
+
+    Jeder Druck danach ist ein eigener Vorgang und braucht eine eigene
+    Kennung: Mit der alten fände ``book`` den zurückgenommenen Vorgang mit
+    denselben Positionen, gäbe ihn unverändert zurück — und nichts wäre
+    abgezogen, während die Anzeige „Buchung ansehen" sagte (Befund
+    19.09.2026, Modus „Ohne Rückfrage buchen": Fehldruck, Rücknahme im
+    Lager, dieselbe Vorbereitung noch einmal ausgegeben).
+    """
+    return sum(
+        1
+        for booking in filaments.read_snapshot().bookings()
+        if booking.fingerprint == request.fingerprint and booking.reversed_at
+    )
+
+
 def _auto_book(request: UsageRequest) -> filaments.InventoryBooking | None:
     """Nur vorhandene Bindungen, vollständige Mengen und sichere Bestände buchen von selbst."""
     existing = _previous(request)
@@ -849,14 +880,22 @@ def _auto_book(request: UsageRequest) -> filaments.InventoryBooking | None:
                 filament_key=_line_key(line),
             )
         )
-    return filaments.book(
+    reversed_before = _reversed_count(request)
+    booking = filaments.book(
         existing[0].operation_id
         if existing
-        else digest("automatic_filament_usage", request.fingerprint),
+        else digest(
+            "automatic_filament_usage",
+            request.fingerprint,
+            *([reversed_before] if reversed_before else []),
+        ),
         request.fingerprint,
         positions,
         project_name=request.project_name,
     )
+    # Ein zurückgenommener Vorgang ist keine Buchung — wer ihn zurückbekommt,
+    # hat nichts abgezogen und darf es nicht als gebucht führen.
+    return None if booking.reversed_at else booking
 
 
 class UsageNotice(QWidget):
@@ -916,7 +955,8 @@ class UsageNotice(QWidget):
         else:
             self.choice.setItemText(existing, label)
         if request.lines:
-            self.choice.setItemIcon(existing, swatch(hex_of(request.lines[0].slot.colour)))
+            first = request.lines[0].slot
+            self.choice.setItemIcon(existing, swatch(slot_colours(int(first.index), first)))
         self.choice.setCurrentIndex(existing)
         self.show()
         if (
@@ -942,7 +982,7 @@ class UsageNotice(QWidget):
 
     def _completed(self, result: object) -> None:
         self._active = ""
-        if result is not None:
+        if result is not None and not cast(filaments.InventoryBooking, result).reversed_at:
             key = cast(filaments.InventoryBooking, result).fingerprint
             self._booked.add(key)
             self._declined.discard(key)

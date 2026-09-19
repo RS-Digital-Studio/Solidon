@@ -14,6 +14,7 @@ import json
 import math
 import os
 import re
+import shutil
 import sys
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
@@ -25,15 +26,28 @@ from types import MappingProxyType
 from typing import Any, BinaryIO, Final, Literal
 from uuid import uuid4
 
-from app.core.errors import CANCEL, RETRY, FileWriteError, InternalError, ValidationError
+from app.core.errors import (
+    CANCEL,
+    RELOAD,
+    RESTORE_BACKUP,
+    RETRY,
+    SET_ASIDE_FILE,
+    FileWriteError,
+    InternalError,
+    ValidationError,
+)
 from app.core.log import get_logger
 from app.core.paths import ensure_dir, user_config_dir
+from app.core.types import MAX_FILAMENT_COLOURS
 from app.i18n import _, sort_key
 
 _log = get_logger(__name__)
 CATALOGUE_FILE: Final = "filaments.json"
 FORMAT_VERSION: Final = 1
 _COLOUR_PATTERN: Final = re.compile(r"^#[0-9a-fA-F]{6}$")
+#: So viele Farben trägt ein Filament höchstens — die Zahl steht bei den
+#: Typen (``MAX_FILAMENT_COLOURS``), damit auch das Einlesen sie kennt.
+MAX_COLOURS: Final = MAX_FILAMENT_COLOURS
 _LOCK_TIMEOUT_SECONDS: Final = 10.0
 _LOCK_RETRY_SECONDS: Final = 0.05
 BookingSource = Literal["internal", "gcode", "manual"]
@@ -45,6 +59,7 @@ class CatalogueFilament:
 
     name: str
     colour: str
+    """Die erste Farbe, ``#rrggbb`` — für jeden Weg, der genau eine kennt."""
     material_type: str = ""
     slicer_profile: str = ""
     identifier: str = ""
@@ -62,6 +77,21 @@ class CatalogueFilament:
     """Schützt eine geöffnete Bearbeitung vor späteren Änderungen."""
     stock_revision: int = 0
     """Die letzte Bestandsfeststellung; Buchungen erhöhen nur revision."""
+    extra_colours: tuple[str, ...] = ()
+    """Die zweite bis vierte Farbe eines mehrfarbigen Filaments, ``#rrggbb``.
+
+    Ein zweifarbiges Seidenfilament oder eine Spule mit vier Abschnitten ist
+    **eine** Spule mit einer Materialart und einem Bestand — nur ihre Farbe
+    ist keine. Die erste Farbe bleibt :attr:`colour`, damit jeder Weg, der
+    genau eine Farbe kennt (Ansicht, STL, PrusaSlicer, Cura), sie unverändert
+    bekommt; hier stehen die weiteren, in der Reihenfolge auf der Spule. Die
+    Orca-Familie nimmt alle (``filament_multi_colour``).
+    """
+
+    @property
+    def colours(self) -> tuple[str, ...]:
+        """Alle Farben in Spulenreihenfolge, die erste voran."""
+        return (self.colour, *self.extra_colours)
 
 
 @dataclass(frozen=True, slots=True)
@@ -256,20 +286,39 @@ def _validated(entry: CatalogueFilament) -> CatalogueFilament:
             value=entry.colour,
             constraint="colour",
         )
+    # Aus der Datei kommt eine Liste, aus dem Dialog ein Tupel — geprüft wird
+    # beides gleich, gespeichert wird das Tupel.
+    extra = entry.extra_colours
+    if not isinstance(extra, (list, tuple)) or any(not isinstance(one, str) for one in extra):
+        raise ValidationError(field="extra_colours", constraint="format")
+    if len(extra) >= MAX_COLOURS:
+        raise ValidationError(
+            title=_("So viele Farben hat kein Filament."),
+            field="extra_colours",
+            detail=_("Ein Filament hat höchstens vier Farben."),
+            value=len(extra) + 1,
+            constraint="range",
+            values={"most": MAX_COLOURS},
+        )
+    for one in extra:
+        if not _COLOUR_PATTERN.fullmatch(one):
+            raise ValidationError(
+                title=_("Diese Farbe lässt sich nicht lesen."),
+                field="extra_colours",
+                detail=_("Eine Filamentfarbe ist sechsstellig: #RRGGBB, etwa #d02020."),
+                value=one,
+                constraint="colour",
+            )
     for name in ("remaining_grams", "price", "diameter_mm", "spool_grams"):
         _amount(getattr(entry, name), name, positive=name in ("diameter_mm", "spool_grams"))
     for name in ("opened_on", "bought_on"):
         value = getattr(entry, name)
-        if value:
-            try:
-                if date.fromisoformat(value).isoformat() != value:
-                    raise ValueError(value)
-            except ValueError as problem:
-                raise ValidationError(
-                    field=name,
-                    constraint="format",
-                    detail=_("Wählen Sie ein gültiges Datum aus."),
-                ) from problem
+        if value and not valid_date(value):
+            raise ValidationError(
+                field=name,
+                constraint="format",
+                detail=_("Wählen Sie ein gültiges Datum aus."),
+            )
     currency = entry.currency.strip().upper()
     if (entry.price is not None and not currency) or (
         currency and not re.fullmatch(r"[A-Z]{3}", currency)
@@ -288,11 +337,26 @@ def _validated(entry: CatalogueFilament) -> CatalogueFilament:
         entry,
         name=entry.name.strip(),
         colour=entry.colour.lower(),
+        extra_colours=tuple(one.lower() for one in extra),
         material_type=entry.material_type.strip(),
         slicer_profile=profile_name(entry.slicer_profile),
         location=entry.location.strip(),
         currency=currency,
     )
+
+
+def valid_date(value: str) -> bool:
+    """Ein Datum, wie das Lager es speichert: JJJJ-MM-TT und sonst nichts.
+
+    Dialog und Kern prüfen mit derselben Funktion. ``date.fromisoformat``
+    allein ließ „20260905" und „2026-W36-5" durch; der Kern wies die Spule
+    dann ab, als der Dialog schon zu war, und mit ihm gingen Name, Lagerort
+    und Bestand verloren (Befund 19.09.2026).
+    """
+    try:
+        return date.fromisoformat(value).isoformat() == value
+    except ValueError:
+        return False
 
 
 def _same_amount(left: float | None, right: float | None) -> bool:
@@ -470,6 +534,10 @@ def _decode_inventory(data: Any) -> _Inventory:
             or type(data.get("format_version")) is not int
             or data["format_version"] != FORMAT_VERSION
         ):
+            if isinstance(data, dict) and (
+                type(data.get("format_version")) is int and data["format_version"] > FORMAT_VERSION
+            ):
+                raise _too_new()
             raise ValueError("format_version")
         state = _Inventory(identifier=data["inventory_identifier"])
         if not isinstance(state.identifier, str) or not state.identifier:
@@ -511,8 +579,32 @@ def _decode_inventory(data: Any) -> _Inventory:
             elif not _same_amount(entry.remaining_grams, remaining):
                 raise ValueError("remaining_grams")
         return state
-    except (ValueError, TypeError, KeyError, AttributeError, ValidationError) as problem:
+    except ValidationError as problem:
+        if problem.constraint == "too_new":
+            raise
         raise _unreadable() from problem
+    except (ValueError, TypeError, KeyError, AttributeError) as problem:
+        raise _unreadable() from problem
+
+
+def backup_path() -> Path:
+    """Der Stand vor dem letzten Schreiben — von der Anwendung selbst abgelegt."""
+    target = catalogue_path()
+    return target.with_name(target.name + ".bak")
+
+
+def _too_new() -> ValidationError:
+    """Eine Datei aus einer neueren Version ist nicht beschädigt — sie ist nur jünger."""
+    return ValidationError(
+        title=_("Das Filamentlager stammt aus einer neueren Version von Solidon."),
+        field="catalogue",
+        constraint="too_new",
+        suggestions=(RETRY, CANCEL),
+        detail=_(
+            "Die Datei bleibt unverändert. Aktualisieren Sie Solidon, "
+            "um dieses Lager weiter zu benutzen."
+        ),
+    )
 
 
 def _unreadable() -> ValidationError:
@@ -528,15 +620,93 @@ def _unreadable() -> ValidationError:
     trug. Der Satz nennt den Weg (Sicherung zurückspielen); danach ist genau
     dieser Knopf die Fortsetzung (Regel 17).
     """
+    # **Die Sicherung gibt es**, seit ``_write`` sie anlegt — und der Knopf
+    # dazu steht nur, wenn sie da ist. Wer keine hat, legt die Datei beiseite
+    # und beginnt leer; „prüfen Sie die Datei" bleibt der dritte Weg.
+    has_backup = backup_path().is_file()
     return ValidationError(
+        title=_("Das Filamentlager lässt sich nicht lesen."),
         field="catalogue",
         constraint="unreadable",
-        suggestions=(RETRY, CANCEL),
-        detail=_(
-            "Das Filamentlager lässt sich nicht lesen. Die Datei bleibt unverändert. "
-            "Stellen Sie eine Sicherung wieder her oder prüfen Sie die Datei filaments.json."
+        suggestions=(
+            *((RESTORE_BACKUP,) if has_backup else ()),
+            SET_ASIDE_FILE,
+            RETRY,
+            CANCEL,
+        ),
+        detail=(
+            _(
+                "Die Datei bleibt unverändert. Holen Sie den letzten lesbaren Stand "
+                "zurück oder legen Sie die Datei filaments.json beiseite."
+            )
+            if has_backup
+            else _(
+                "Die Datei bleibt unverändert. Legen Sie die Datei filaments.json "
+                "beiseite oder stellen Sie eine eigene Sicherung wieder her."
+            )
         ),
     )
+
+
+def _set_aside(target: Path) -> Path:
+    """Die unlesbare Datei umbenennen, mit Zeitstempel, ohne etwas zu löschen."""
+    stamp = datetime.now(UTC).strftime("%Y-%m-%dT%H-%M-%S")
+    aside = target.with_name(f"{target.name}.damaged-{stamp}")
+    number = 1
+    while aside.exists():
+        number += 1
+        aside = target.with_name(f"{target.name}.damaged-{stamp}-{number}")
+    target.replace(aside)
+    return aside
+
+
+def set_aside_unreadable() -> Path | None:
+    """Die beschädigte Lagerdatei beiseitelegen; danach beginnt das Lager leer.
+
+    Nur eine Datei, die wirklich nicht lesbar ist, wird umbenannt — ein
+    zweiter Klick auf einen inzwischen heilen Stand darf ihn nicht wegräumen.
+    """
+    with _catalogue_lock():
+        target = catalogue_path()
+        if not target.exists():
+            return None
+        try:
+            _read()
+        except ValidationError:
+            _log.warning("filament inventory set aside as unreadable: %s", target)
+            return _set_aside(target)
+        return None
+
+
+def restore_backup() -> Path:
+    """Den Stand vor dem letzten Schreiben zurückholen; die beschädigte Datei bleibt daneben."""
+    with _catalogue_lock():
+        target = catalogue_path()
+        backup = backup_path()
+        if not backup.is_file():
+            raise ValidationError(
+                title=_("Es gibt keinen früheren Stand."),
+                field="catalogue",
+                constraint="missing",
+                suggestions=(SET_ASIDE_FILE, CANCEL),
+                detail=_("Legen Sie die Datei filaments.json beiseite und beginnen Sie leer."),
+            )
+        # Erst prüfen, dann tauschen: Eine Sicherung, die selbst nicht lesbar
+        # ist, ersetzt nichts.
+        _decode_inventory(json.loads(backup.read_text(encoding="utf-8")))
+        if target.exists():
+            try:
+                _read()
+            except ValidationError:
+                _set_aside(target)
+        scratch = target.with_name(target.name + ".tmp")
+        shutil.copyfile(backup, scratch)
+        try:
+            _replace_snapshot(scratch, target)
+        finally:
+            scratch.unlink(missing_ok=True)
+        _log.warning("filament inventory restored from %s", backup)
+        return target
 
 
 def _write(state: _Inventory) -> None:
@@ -555,6 +725,12 @@ def _write(state: _Inventory) -> None:
             json.dump(data, stream, ensure_ascii=False, indent=2, allow_nan=False)
             stream.flush()
             os.fsync(stream.fileno())
+        # Der Stand, der gleich ersetzt wird, ist der letzte lesbare — die
+        # Transaktion hat ihn eben gelesen. Er bleibt als ``.bak`` liegen,
+        # damit „Stellen Sie eine Sicherung wieder her" keine Sicherung
+        # voraussetzt, die nur hat, wer selbst eine machte (R2, 19.09.2026).
+        if target.exists():
+            shutil.copyfile(target, backup_path())
         _replace_snapshot(scratch, target)
     finally:
         scratch.unlink(missing_ok=True)
@@ -798,11 +974,16 @@ def _save(state: _Inventory, entry: CatalogueFilament) -> CatalogueFilament:
     if entry.identifier:
         current = _required(state, entry.identifier)
         if entry.revision != current.revision:
+            # Regel 17: Der Satz sagt „neu laden", also ist das auch die
+            # angebotene Handlung — nicht „Eingabe korrigieren", das an
+            # dieser Eingabe nichts ändern könnte.
             raise ValidationError(
+                title=_("Die Spule wurde inzwischen geändert."),
                 field="revision",
                 constraint="conflict",
+                suggestions=(RELOAD, CANCEL),
                 detail=_(
-                    "Die Spule wurde inzwischen geändert. Laden Sie ihren aktuellen Stand neu."
+                    "Laden Sie ihren aktuellen Stand neu und ändern Sie sie dann noch einmal."
                 ),
             )
         counted = not _same_amount(entry.remaining_grams, current.remaining_grams)
@@ -923,8 +1104,47 @@ def remember(
         return _save(state, entry)
 
 
+def _same_slicer_spools(state: _Inventory, entry: CatalogueFilament) -> list[CatalogueFilament]:
+    """Die Spulen, die eine Übernahme aus dem Slicer schon einmal angelegt hat.
+
+    **Der Name allein reicht nicht** (Regel 21; Befund 19.09.2026): Eine
+    Handspule „Generic PLA" in Schwarz, PLA, 700 g in „Box A" wurde von der
+    Übernahme eines „Generic PLA" in Weiß, PLA-CF überschrieben — danach war
+    dieselbe Spule weiß, ein anderes Material und trug ein Profil. Gleich ist
+    eine Spule, wenn Profil und Farbe übereinstimmen (die Kennung, die der
+    Slicer selbst führt) oder ohne Profil Name, Farbe und Materialart
+    zugleich. Alles andere ist eine andere Spule und wird eine.
+    """
+    profile = entry.slicer_profile.casefold()
+    colour = entry.colour.casefold()
+    return [
+        spool
+        for spool in state.spools.values()
+        if not spool.archived
+        and (
+            (
+                profile
+                and (spool.slicer_profile.casefold(), spool.colour.casefold()) == (profile, colour)
+            )
+            or (
+                not profile
+                and not spool.slicer_profile
+                and spool.name == entry.name
+                and spool.colour.casefold() == colour
+                and spool.material_type.casefold() == entry.material_type.casefold()
+            )
+        )
+    ]
+
+
 def synchronise(entries: list[CatalogueFilament]) -> tuple[CatalogueFilament, ...]:
-    """Explizite Profilübernahme; eindeutige Alteinträge werden ohne Mengenverlust erneuert."""
+    """Explizite Profilübernahme; eindeutige Alteinträge werden ohne Mengenverlust erneuert.
+
+    Eine gleichnamige Spule mit anderer Farbe oder Materialart bleibt, wie
+    sie ist, und die Übernahme legt daneben eine neue an; mehrere gleiche
+    Spulen gelten als schon vorhanden. Abgewiesen wird nichts — eine
+    Mehrdeutigkeit bei einer Spule hielt sonst die ganze Liste auf.
+    """
     with _transaction() as state:
         for supplied in entries:
             if not supplied.name.strip() or not _COLOUR_PATTERN.fullmatch(supplied.colour):
@@ -932,11 +1152,14 @@ def synchronise(entries: list[CatalogueFilament]) -> tuple[CatalogueFilament, ..
             entry = _validated(
                 replace(supplied, slicer_profile=_catalogue_profile_name(supplied.slicer_profile))
             )
-            current = (
-                _required(state, entry.identifier)
-                if entry.identifier
-                else _legacy_match(state, entry.name, entry.slicer_profile, entry.colour)
-            )
+            current: CatalogueFilament | None
+            if entry.identifier:
+                current = _required(state, entry.identifier)
+            else:
+                same = _same_slicer_spools(state, entry)
+                if len(same) > 1:
+                    continue
+                current = same[0] if same else None
             if current is not None:
                 entry = replace(
                     current,
@@ -1081,10 +1304,11 @@ def _check_counts(state: _Inventory, booking: InventoryBooking) -> None:
     for position in booking.positions:
         if _required(state, position.spool_identifier).stock_revision != position.stock_revision:
             raise ValidationError(
+                title=_("Der Bestand wurde danach neu festgestellt."),
                 field="remaining_grams",
                 constraint="stock_conflict",
                 detail=_(
-                    "Der Bestand wurde danach neu festgestellt. Prüfen Sie den aktuellen Bestand. "
+                    "Prüfen Sie den aktuellen Bestand. "
                     "Eine Rücknahme muss diesen neueren Stand ausdrücklich erhalten."
                 ),
             )
@@ -1276,6 +1500,34 @@ def reverse_booking(operation_id: str, *, preserve_newer_counts: bool = False) -
         booking = replace(
             previous, reversed_at=now, updated_at=now, preserved_counts=tuple(preserved)
         )
+        state.journal[operation_id] = booking
+        _refresh_stock(
+            state,
+            {position.spool_identifier for position in booking.positions},
+            allow_unverified_stock=True,
+        )
+        return booking
+
+
+def restore_booking(operation_id: str) -> InventoryBooking:
+    """Macht eine Rücknahme rückgängig: der Vorgang zählt wieder, das Journal bleibt vollständig.
+
+    Bis zum 19.09.2026 war die Rücknahme der einzige Klick im Lager ohne
+    Rückweg — nach einem Neustart gar keiner. Regel 19 verzichtet auf die
+    Nachfrage nur vor Rücknehmbarem; also wird die Rücknahme rücknehmbar,
+    und der Knopf bleibt ein Klick. Eine jüngere Bestandsfeststellung sperrt
+    das genauso wie die Rücknahme selbst (``stock_conflict``): Der Vorgang
+    käme sonst von einem Bestand ab, den jemand danach gezählt hat.
+    """
+    with _transaction() as state:
+        if operation_id not in state.journal:
+            raise ValidationError(field="operation_id", constraint="missing")
+        previous = state.journal[operation_id]
+        if not previous.reversed_at:
+            return previous
+        _check_counts(state, previous)
+        now = datetime.now(UTC).isoformat()
+        booking = replace(previous, reversed_at="", updated_at=now, preserved_counts=())
         state.journal[operation_id] = booking
         _refresh_stock(
             state,

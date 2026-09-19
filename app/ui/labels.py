@@ -16,7 +16,17 @@ from typing import Any, Final, Literal
 
 from PySide6.QtCore import QDate, QDateTime, QEvent, QLocale, QObject, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QShowEvent, QValidator
-from PySide6.QtWidgets import QCheckBox, QComboBox, QDoubleSpinBox, QSlider, QStyle, QWidget
+from PySide6.QtWidgets import (
+    QCheckBox,
+    QComboBox,
+    QDateEdit,
+    QDoubleSpinBox,
+    QHBoxLayout,
+    QSlider,
+    QStyle,
+    QToolButton,
+    QWidget,
+)
 
 from app.core import figures
 from app.core.activation import Activation
@@ -2196,6 +2206,133 @@ def calendar_date(value: date | None) -> str:
     # Sprache; nur ``dddd`` samt anschließender Trennung fällt weg.
     without_weekday = pattern.replace("dddd", "").lstrip(" ,")
     return locale.toString(QDate(value.year, value.month, value.day), without_weekday)
+
+
+def calendar_day(value: str) -> str:
+    """Ein gespeicherter ISO-Tag (JJJJ-MM-TT) als Kalendertag der Anzeigesprache.
+
+    Leer heißt unbekannt und wird auch so genannt — die Detailseite des
+    Lagers schreibt keine leere Zelle neben „Gekauft am".
+    """
+    if not value:
+        return tr("Unbekannt")
+    try:
+        return calendar_date(date.fromisoformat(value))
+    except ValueError:
+        return value
+
+
+class _DateEditor(QDateEdit):
+    """Ein Datumsfeld, in das man vom Sonderwert „Unbekannt" aus einfach lostippen kann.
+
+    Gemessen am 19.09.2026: Zeigt ein ``QDateEdit`` seinen Sonderwerttext,
+    hängt es getippte Ziffern hinten an — „Unbekannt05092026" — und behält
+    das Minimum. Die erste Ziffer setzt deshalb erst ein Datum (heute) und
+    wählt den ersten Abschnitt; danach tippt sich das Feld wie gewohnt und
+    springt nach zwei Ziffern weiter. Ein getipptes Trennzeichen zwischen den
+    Abschnitten wechselt den Abschnitt, statt in ihm zu landen.
+    """
+
+    _advanced_by_digit = False
+
+    def keyPressEvent(self, event: Any) -> None:  # noqa: N802 - Qt-Name
+        text = event.text()
+        if text.isdigit():
+            if self.date() == self.minimumDate():
+                # Der 1. Januar, nicht heute: Ein Tag wird vor dem Monat
+                # getippt, und ein „31" in einem Monat mit dreißig Tagen
+                # würde still zum „30" (gemessen: 31.12.2024 → 30.12.2024).
+                self.setDate(QDate(QDate.currentDate().year(), 1, 1))
+                self.setCurrentSectionIndex(0)
+                self.setSelectedSection(self.currentSection())
+            before = self.currentSectionIndex()
+            super().keyPressEvent(event)
+            # Zwei Ziffern springen von selbst weiter; ein danach getipptes
+            # Trennzeichen darf nicht noch einmal springen.
+            self._advanced_by_digit = self.currentSectionIndex() != before
+            return
+        if text in (".", ",", "/", "-") and self.date() != self.minimumDate():
+            if not self._advanced_by_digit and self.currentSectionIndex() < self.sectionCount() - 1:
+                # Eine einzelne Ziffer („7.3.2025"): erst den Abschnitt
+                # abschließen, dann weiter — sonst verfällt die Ziffer.
+                self.interpretText()
+                self.setCurrentSectionIndex(self.currentSectionIndex() + 1)
+                self.setSelectedSection(self.currentSection())
+            self._advanced_by_digit = False
+            event.accept()
+            return
+        self._advanced_by_digit = False
+        super().keyPressEvent(event)
+
+
+class DateField(QWidget):
+    """Ein freiwilliges Datum: Kalender in der Anzeigesprache, „Unbekannt" als eigener Wert.
+
+    Bis zum 19.09.2026 war das ein Textfeld mit dem Platzhalter „JJJJ-MM-TT";
+    ein deutscher Kunde tippte „05.09.2026" und wurde abgewiesen. Hier tippt
+    er in der Reihenfolge seiner Sprache oder klickt im Kalender; gespeichert
+    wird weiter ISO, denn die Datei kennt eine Schreibweise. ``text()`` und
+    ``setText()`` sprechen ISO, damit Dialog und Kern dieselbe Prüfung
+    teilen (``filaments.valid_date``) und der Rest des Dialogs unverändert
+    bleibt. Der Knopf daneben setzt zurück auf „Unbekannt" — ein Datumsfeld
+    hat keine Löschtaste, und bis zum Minimum zu drehen ist kein Weg.
+    """
+
+    textChanged = Signal(str)  # Qt-Signalname wie bei QLineEdit
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
+        self.editor = _DateEditor(self)
+        self.editor.setCalendarPopup(True)
+        locale = QLocale(get_language())
+        self.editor.setLocale(locale)
+        pattern = locale.dateFormat(QLocale.FormatType.ShortFormat)
+        if "yyyy" not in pattern:
+            pattern = pattern.replace("yy", "yyyy")
+        self.editor.setDisplayFormat(pattern)
+        self.editor.setMinimumDate(QDate(1970, 1, 1))
+        self.editor.setMaximumDate(QDate(2099, 12, 31))
+        self.editor.setSpecialValueText(tr("Unbekannt"))
+        self.editor.setDate(self.editor.minimumDate())
+        self.editor.dateChanged.connect(self._changed)
+        layout.addWidget(self.editor, 1)
+        self.clear_button = QToolButton(self)
+        self.clear_button.setText(tr("Unbekannt"))
+        self.clear_button.setToolTip(tr("Das Datum wieder auf Unbekannt setzen."))
+        self.clear_button.setAccessibleDescription(self.clear_button.toolTip())
+        self.clear_button.clicked.connect(self.clear)
+        layout.addWidget(self.clear_button)
+        self.setFocusProxy(self.editor)
+        self._show_clear_state()
+
+    def text(self) -> str:
+        """Der Tag als ISO-Text, leer für unbekannt — was der Kern speichert."""
+        chosen = self.editor.date()
+        if chosen == self.editor.minimumDate():
+            return ""
+        return chosen.toString(Qt.DateFormat.ISODate)
+
+    def setText(self, value: str) -> None:  # noqa: N802 - Gegenstück zu QLineEdit.setText
+        """Einen gespeicherten ISO-Tag übernehmen; alles andere bleibt unbekannt."""
+        parsed = QDate.fromString(value.strip(), Qt.DateFormat.ISODate) if value else QDate()
+        self.editor.setDate(parsed if parsed.isValid() else self.editor.minimumDate())
+
+    def clear(self) -> None:
+        self.editor.setDate(self.editor.minimumDate())
+
+    def setPlaceholderText(self, text: str) -> None:  # noqa: N802 - Gegenstück zu QLineEdit
+        """Ein Datumsfeld zeigt „Unbekannt" statt eines Platzhalters; der Satz wird Kurzhilfe."""
+        self.editor.setToolTip(text)
+
+    def _changed(self, _date: QDate) -> None:
+        self._show_clear_state()
+        self.textChanged.emit(self.text())
+
+    def _show_clear_state(self) -> None:
+        self.clear_button.setEnabled(bool(self.text()))
 
 
 def deadline_date(state: Activation) -> str:

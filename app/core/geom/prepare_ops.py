@@ -7726,6 +7726,103 @@ def _share_of(progress: ProgressFn | None, number: int, total: int) -> ProgressF
     return share
 
 
+#: Derselbe Umschalter an beiden Anordnungen, mit demselben Satz — wer ihn an
+#: einer Stelle liest, soll ihn an der anderen wiedererkennen. Was er tut,
+#: entscheidet der Drucker mit (:func:`_filament_groups`).
+BY_MATERIAL_DOC = _(
+    "Legt Teile aus verschiedenen Filamenten auf verschiedene Platten. "
+    "Eine Düse spült bei jedem Wechsel; hat der Drucker genug Düsen für alle "
+    "Filamente, bleibt alles zusammen."
+)
+
+
+def _filament_groups(ctx: OpContext, objects: Sequence[SceneObject]) -> dict[str, int] | None:
+    """Welches Teil zu welchem Filament gehört — oder ``None``, wenn der Drucker
+    die Trennung nicht braucht (Entscheidung Robert, 19.09.2026: „kein
+    Reinigen, wenn der Drucker nicht mehr Düsen hat").
+
+    Eine Düse mit Wechselstation spült bei jedem Filamentwechsel, und zwei
+    Filamente auf einer Platte kosten das je gemeinsamer Schicht. Zwei Düsen
+    drucken zwei Filamente ohne Spülgang: Erst wenn mehr Filamente auf dem
+    Bett liegen, als der Drucker Düsen hat (:attr:`PrinterProfile.nozzles`),
+    lohnt sich eine Platte je Filament. Ein Teil, das selbst mehrere
+    Filamente trägt, bleibt ohnehin zusammen (``plates_by_material``).
+    """
+    from app.core.export.writer import plates_by_material
+
+    groups = plates_by_material(list(objects))
+    if len(set(groups.values())) <= max(1, ctx.profile.printer.nozzles):
+        return None
+    return groups
+
+
+def _arranged_in_filament_groups(
+    ctx: OpContext,
+    objects: Sequence[SceneObject],
+    groups: Mapping[str, int],
+    spacing: float,
+    plates: int,
+    occupied: Sequence[tuple[MeshData, int]] = (),
+) -> Arrangement:
+    """Erst nach Filament gruppieren, dann jede Gruppe für sich anordnen.
+
+    Den Vorschlag rechnet :func:`app.core.export.writer.plates_by_material`
+    schon lange — er war nur von nirgends aus erreichbar. Hier ist er eine
+    Handlung, und zwar dieselbe für *Auf dem Bett anordnen* und *Druckoptimal
+    ausrichten*: dieselbe Handlung mit einer anderen Vorgabe, wer neben wem
+    liegt.
+
+    Jede Gruppe bekommt ihre eigenen Platten, hintereinander weg. Die Grenze
+    aus ``plates`` gilt dabei für die ganze Szene, nicht je Gruppe — sonst
+    hätte ein Projekt mit drei Filamenten unversehens dreimal so viele
+    Platten, wie jemand eingestellt hat. ``occupied`` sind Körper, die liegen
+    bleiben und ihren Platz belegen (ein gespeicherter Auftrag von gestern
+    trägt seine damalige Teilmenge); sie stehen jeder Gruppe im Weg.
+    """
+    order: list[int] = []
+    for entry in objects:
+        group = groups[entry.id]
+        if group not in order:
+            order.append(group)
+
+    meshes: dict[str, MeshData] = {}
+    assigned: dict[str, int] = {}
+    findings: list[Finding] = []
+    next_plate = 0
+
+    for group in order:
+        members = [entry for entry in objects if groups[entry.id] == group]
+        # Sind die Platten aufgebraucht, teilt sich diese Gruppe die letzte mit
+        # der vorigen — dieselbe Regel, die `arrange_on_bed` innerhalb einer
+        # Gruppe befolgt: die letzte Platte nimmt den Rest, und der Bericht
+        # sagt, dass sie übervoll ist. Ein Teil, das still aus der Anordnung
+        # fiele, wäre ein Teil, das nie gedruckt wird.
+        start = min(next_plate, plates - 1)
+        arranged = arrange_on_bed(
+            [as_mesh_data(entry.mesh) for entry in members],
+            ctx.profile,
+            spacing,
+            plates - start,
+            # Mit Kennungen: Der Bauraum-Befund soll den Körper beim Namen
+            # nennen, nicht beim laufenden Index (Roberts Foto, 30.08.2026).
+            object_ids=[entry.id for entry in members],
+            # Die belegten Plätze in der Zählung dieser Gruppe: Was auf der
+            # Szenenplatte ``start + k`` steht, steht für sie auf Platte ``k``.
+            occupied=[(mesh, plate - start) for mesh, plate in occupied if plate >= start],
+        )
+        findings.extend(arranged.findings)
+        for entry, mesh, plate in zip(members, arranged.meshes, arranged.plates, strict=True):
+            meshes[entry.id] = mesh
+            assigned[entry.id] = start + plate
+        next_plate = start + arranged.plate_count
+
+    return Arrangement(
+        meshes=[meshes[entry.id] for entry in objects],
+        plates=[assigned[entry.id] for entry in objects],
+        findings=findings,
+    )
+
+
 @op_params
 class OrientParams(BaseParams):
     thorough: bool = param(
@@ -7773,6 +7870,12 @@ class OrientParams(BaseParams):
         maximum=MAX_PLATES,
         placement="advanced",
         doc=_("Passt nicht alles auf eine Platte, wandert der Rest auf die nächste."),
+        depends_on=("arrange", (True,)),
+    )
+    by_material: bool = param(
+        title=_("Nach Filament trennen"),
+        default=True,
+        doc=BY_MATERIAL_DOC,
         depends_on=("arrange", (True,)),
     )
 
@@ -7982,14 +8085,25 @@ def _laid_out_after_turning(
         for key, other in ctx.scene.objects.items()
         if key not in chosen
     ]
-    arrangement = arrange_on_bed(
-        [as_mesh_data(entry.mesh) for entry in turned],
-        ctx.profile,
-        params.spacing,
-        params.plates,
-        object_ids=[entry.id for entry in turned],
-        occupied=standing,
-    )
+    # **Und je Filament eine Platte, wo der Drucker sonst spülen müsste**
+    # (Robert, 19.09.2026: „Druckoptimal ausrichten mehrere Filamente über
+    # Platten aufteilen, kein Reinigen wenn Drucker nicht mehr Düsen"). Es ist
+    # dieselbe Regel wie bei *Auf dem Bett anordnen*, und sie fragt den
+    # Drucker: Mit genug Düsen bleibt alles zusammen.
+    groups = _filament_groups(ctx, turned) if params.by_material else None
+    if groups is not None:
+        arrangement = _arranged_in_filament_groups(
+            ctx, turned, groups, params.spacing, params.plates, occupied=standing
+        )
+    else:
+        arrangement = arrange_on_bed(
+            [as_mesh_data(entry.mesh) for entry in turned],
+            ctx.profile,
+            params.spacing,
+            params.plates,
+            object_ids=[entry.id for entry in turned],
+            occupied=standing,
+        )
     findings.extend(arrangement.findings)
     for plate in range(arrangement.plate_count):
         together = [
@@ -8055,70 +8169,12 @@ class ArrangeParams(BaseParams):
     )
     by_material: bool = param(
         title=_("Nach Filament trennen"),
-        default=False,
-        doc=_(
-            "Legt Teile aus verschiedenen Filamenten auf verschiedene Platten. "
-            "Zwei Filamente auf einer Platte kosten je gemeinsamer Schicht "
-            "einen Wechsel samt Spülgang."
-        ),
-    )
-
-
-def _arranged_by_material(ctx: OpContext, params: ArrangeParams) -> Arrangement:
-    """Erst nach Filament gruppieren, dann jede Gruppe für sich anordnen.
-
-    Den Vorschlag rechnet :func:`app.core.export.writer.plates_by_material`
-    schon lange — er war nur von nirgends aus erreichbar. Hier wird er zu einer
-    Handlung, und zwar als Umschalter an der bestehenden Operation statt als
-    zweite daneben: es ist dieselbe Handlung mit einer anderen Vorgabe, wer
-    neben wem liegt.
-
-    Jede Gruppe bekommt ihre eigenen Platten, hintereinander weg. Die Grenze
-    aus ``plates`` gilt dabei für die ganze Szene, nicht je Gruppe — sonst
-    hätte ein Projekt mit drei Filamenten unversehens dreimal so viele
-    Platten, wie jemand eingestellt hat.
-    """
-    from app.core.export.writer import plates_by_material
-
-    groups = plates_by_material(list(ctx.inputs))
-    order: list[int] = []
-    for entry in ctx.inputs:
-        group = groups[entry.id]
-        if group not in order:
-            order.append(group)
-
-    meshes: dict[str, MeshData] = {}
-    assigned: dict[str, int] = {}
-    findings: list[Finding] = []
-    next_plate = 0
-
-    for group in order:
-        members = [entry for entry in ctx.inputs if groups[entry.id] == group]
-        # Sind die Platten aufgebraucht, teilt sich diese Gruppe die letzte mit
-        # der vorigen — dieselbe Regel, die `arrange_on_bed` innerhalb einer
-        # Gruppe befolgt: die letzte Platte nimmt den Rest, und der Bericht
-        # sagt, dass sie übervoll ist. Ein Teil, das still aus der Anordnung
-        # fiele, wäre ein Teil, das nie gedruckt wird.
-        start = min(next_plate, params.plates - 1)
-        arranged = arrange_on_bed(
-            [as_mesh_data(entry.mesh) for entry in members],
-            ctx.profile,
-            params.spacing,
-            params.plates - start,
-            # Mit Kennungen: Der Bauraum-Befund soll den Körper beim Namen
-            # nennen, nicht beim laufenden Index (Roberts Foto, 30.08.2026).
-            object_ids=[entry.id for entry in members],
-        )
-        findings.extend(arranged.findings)
-        for entry, mesh, plate in zip(members, arranged.meshes, arranged.plates, strict=True):
-            meshes[entry.id] = mesh
-            assigned[entry.id] = start + plate
-        next_plate = start + arranged.plate_count
-
-    return Arrangement(
-        meshes=[meshes[entry.id] for entry in ctx.inputs],
-        plates=[assigned[entry.id] for entry in ctx.inputs],
-        findings=findings,
+        # **An, nicht aus** (Entscheidung Robert, 19.09.2026): Die Vorgabe soll
+        # das druckbare Ergebnis sein, und ob die Trennung überhaupt nötig
+        # ist, entscheidet der Drucker (``_filament_groups``) — mit einem
+        # Filament oder genug Düsen ändert der Schalter nichts.
+        default=True,
+        doc=BY_MATERIAL_DOC,
     )
 
 
@@ -8136,8 +8192,11 @@ def _arranged_by_material(ctx: OpContext, params: ArrangeParams) -> Arrangement:
 def arrange_bed(ctx: OpContext) -> OpResult:
     params = cast(ArrangeParams, ctx.params)
     meshes = [as_mesh_data(entry.mesh) for entry in ctx.inputs]
-    if params.by_material:
-        result = _arranged_by_material(ctx, params)
+    groups = _filament_groups(ctx, ctx.inputs) if params.by_material else None
+    if groups is not None:
+        result = _arranged_in_filament_groups(
+            ctx, ctx.inputs, groups, params.spacing, params.plates
+        )
     else:
         result = arrange_on_bed(
             meshes,

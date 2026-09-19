@@ -2312,10 +2312,10 @@ def _hands_on_the_whole_set(branches: Iterable[ast.AST], holder: str) -> bool:
     """Gibt dieser Zweig den ganzen Parametersatz an eine Funktion weiter?
 
     Dann endet die Einsicht an der Funktionsgrenze, und ein Wert, der von hier
-    aus übergangen aussieht, wird dort gelesen: ``arrange_bed`` tut das mit
-    ``_arranged_by_material(ctx, params)`` und liest sein ``spacing`` erst
-    darin. Ohne diese Ausnahme meldete die Prüfung einen Fund, den es nicht
-    gibt — und eine Prüfung, die das tut, wird abgeschaltet.
+    aus übergangen aussieht, wird dort gelesen: ``orient_for_print`` tut das
+    mit ``_laid_out_after_turning(ctx, params, …)`` und liest ``spacing`` und
+    ``plates`` erst darin. Ohne diese Ausnahme meldete die Prüfung einen Fund,
+    den es nicht gibt — und eine Prüfung, die das tut, wird abgeschaltet.
     """
     for branch in branches:
         for sub in ast.walk(branch):

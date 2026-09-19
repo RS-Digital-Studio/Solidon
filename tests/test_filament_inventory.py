@@ -172,6 +172,93 @@ def test_metadata_edit_preserves_the_consumption_baseline() -> None:
     assert current(first).location == "Andere Schublade"
 
 
+def test_a_reversal_can_be_undone_and_the_journal_keeps_everything() -> None:
+    """Rücknahme rückgängig: derselbe Vorgang zählt wieder, ohne zweiten Journaleintrag (B2)."""
+    first = spool()
+    filaments.book("print", "geometry", [position(first, 120)])
+    filaments.reverse_booking("print")
+    assert current(first).remaining_grams == pytest.approx(500)
+    restored = filaments.restore_booking("print")
+    assert not restored.reversed_at
+    assert current(first).remaining_grams == pytest.approx(380)
+    assert len(filaments.bookings()) == 1
+    # Noch einmal ist wirkungslos, und eine nie zurückgenommene Buchung auch.
+    assert filaments.restore_booking("print") == restored
+    assert filaments.restore_booking("print").reversed_at == ""
+    filaments.reverse_booking("print")
+    assert current(first).remaining_grams == pytest.approx(500)
+
+
+def test_restoring_a_reversal_after_a_newer_count_is_refused() -> None:
+    """Wer danach gezählt hat, behält seine Zahl — wie bei der Rücknahme selbst."""
+    first = spool()
+    filaments.book("print", "geometry", [position(first, 120)])
+    filaments.reverse_booking("print")
+    filaments.set_remaining(first.identifier, 450)
+    with pytest.raises(ValidationError) as refused:
+        filaments.restore_booking("print")
+    assert refused.value.constraint == "stock_conflict"
+    assert current(first).remaining_grams == pytest.approx(450)
+    with pytest.raises(ValidationError):
+        filaments.restore_booking("missing")
+
+
+def test_every_write_keeps_the_previous_readable_state_as_backup() -> None:
+    """Die Anwendung legt die Sicherung selbst an — der Stand vor dem letzten Schreiben (R2)."""
+    first = spool()
+    assert not filaments.backup_path().exists(), "vor dem ersten Stand gibt es keinen davor"
+    filaments.save(replace(current(first), location="Kiste"))
+    assert filaments.backup_path().is_file()
+    filaments.catalogue_path().write_text("{kaputt", encoding="utf-8")
+    with pytest.raises(ValidationError) as refused:
+        filaments.catalogue()
+    assert refused.value.constraint == "unreadable"
+    assert [action.id for action in refused.value.suggestions][:2] == [
+        "restore_backup",
+        "set_aside_file",
+    ]
+    filaments.restore_backup()
+    (restored,) = filaments.catalogue()
+    assert restored.identifier == first.identifier
+    assert restored.location == "", "zurück kommt der Stand vor dem letzten Schreiben"
+    damaged = list(filaments.catalogue_path().parent.glob("filaments.json.damaged-*"))
+    assert len(damaged) == 1 and damaged[0].read_text(encoding="utf-8") == "{kaputt"
+
+
+def test_setting_aside_an_unreadable_file_starts_empty_and_keeps_the_file() -> None:
+    spool()
+    filaments.catalogue_path().write_text("{kaputt", encoding="utf-8")
+    aside = filaments.set_aside_unreadable()
+    assert aside is not None and aside.read_text(encoding="utf-8") == "{kaputt"
+    assert filaments.catalogue() == ()
+    # Ein heiler Stand wird nie beiseitegelegt.
+    spool()
+    assert filaments.set_aside_unreadable() is None
+    assert len(filaments.catalogue()) == 1
+
+
+def test_restoring_without_a_backup_names_the_other_way() -> None:
+    spool()
+    filaments.catalogue_path().write_text("{kaputt", encoding="utf-8")
+    with pytest.raises(ValidationError) as refused:
+        filaments.restore_backup()
+    assert refused.value.constraint == "missing"
+    assert refused.value.suggestions[0].id == "set_aside_file"
+
+
+def test_a_file_from_a_newer_version_is_not_called_damaged() -> None:
+    filaments.catalogue_path().write_text(
+        '{"format_version": 99, "inventory_identifier": "x", "spools": [], "bookings": [], '
+        '"stock_counts": {}}',
+        encoding="utf-8",
+    )
+    with pytest.raises(ValidationError) as refused:
+        filaments.catalogue()
+    assert refused.value.constraint == "too_new"
+    assert "neueren Version" in str(refused.value.title)
+    assert filaments.set_aside_unreadable() is not None, "beiseite geht trotzdem"
+
+
 def test_synchronise_preserves_metadata_stock_and_identity() -> None:
     first = filaments.save(
         filaments.CatalogueFilament(
@@ -202,11 +289,61 @@ def test_legacy_name_operations_reject_duplicate_labels() -> None:
     for action in (
         lambda: filaments.remember("PETG Rot", "#eeeeee"),
         lambda: filaments.forget("PETG Rot"),
-        lambda: filaments.synchronise([filaments.CatalogueFilament("PETG Rot", "#eeeeee")]),
     ):
         with pytest.raises(ValidationError) as raised:
             action()
         assert raised.value.constraint == "ambiguous"
+    assert len(filaments.catalogue()) == 2
+
+
+def test_synchronise_adds_a_same_named_spool_of_another_colour_instead_of_refusing() -> None:
+    """Zwei gleichnamige Handspulen halten die Übernahme nicht mehr auf (F4, 19.09.2026)."""
+    spool()
+    spool()
+    filaments.synchronise(
+        [
+            filaments.CatalogueFilament("PETG Rot", "#eeeeee"),
+            filaments.CatalogueFilament("ASA Grau", "#808080", "ASA", "ASA @System"),
+        ]
+    )
+    names = sorted(entry.name for entry in filaments.catalogue())
+    assert names == ["ASA Grau", "PETG Rot", "PETG Rot", "PETG Rot"]
+    assert all(
+        entry.remaining_grams == pytest.approx(500)
+        for entry in filaments.catalogue()
+        if entry.colour == "#d02020"
+    )
+
+
+def test_synchronise_never_repaints_a_hand_spool_with_the_same_name() -> None:
+    """Handspule Schwarz/PLA/700 g bleibt; der Slicer-Fund Weiß/PLA-CF wird eine zweite (F4)."""
+    hand = filaments.save(
+        filaments.CatalogueFilament(
+            "Generic PLA", "#101010", "PLA", remaining_grams=700, location="Box A"
+        )
+    )
+    filaments.synchronise(
+        [filaments.CatalogueFilament("Generic PLA", "#f5f5f5", "PLA-CF", "Generic PLA @System")]
+    )
+    kept = current(hand)
+    assert (kept.colour, kept.material_type, kept.slicer_profile, kept.location) == (
+        "#101010",
+        "PLA",
+        "",
+        "Box A",
+    )
+    assert kept.remaining_grams == pytest.approx(700)
+    others = [entry for entry in filaments.catalogue() if entry.identifier != hand.identifier]
+    assert len(others) == 1
+    assert (others[0].colour, others[0].material_type, others[0].remaining_grams) == (
+        "#f5f5f5",
+        "PLA-CF",
+        None,
+    )
+    # Dieselbe Slicer-Spule noch einmal: keine dritte.
+    filaments.synchronise(
+        [filaments.CatalogueFilament("Generic PLA", "#f5f5f5", "PLA-CF", "Generic PLA @System")]
+    )
     assert len(filaments.catalogue()) == 2
 
 

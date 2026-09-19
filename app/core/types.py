@@ -381,6 +381,14 @@ def is_a_cavity(feature: Feature) -> bool:
 MAX_SLOTS = 8
 
 
+#: So viele Farben trägt ein Filament höchstens (Entscheidung Robert,
+#: 19.09.2026: „Filament mehrfarbig, bis 4-farbig"). Die Slicer der
+#: Orca-Familie zeigen dieselbe Zahl in ihrem Farbfeld. Hier und nicht im
+#: Lager, weil Einlesen und Export die Zahl brauchen und ``ingest`` das
+#: Wissen nicht importieren darf (Paketkarte).
+MAX_FILAMENT_COLOURS: Final = 4
+
+
 @dataclass(frozen=True, slots=True)
 class MaterialSlot:
     """Ein Filamentslot eines Objekts (§20)."""
@@ -407,6 +415,15 @@ class MaterialSlot:
     """Name des Herstellerprofils im Slicer, niemals ein Dateipfad."""
     material_type: str | None = None
     """Materialart in der Schreibweise des Slicers, etwa ``PETG``."""
+    extra_colours: tuple[tuple[float, float, float], ...] = ()
+    """Die zweite bis vierte Farbe eines mehrfarbigen Filaments (§20).
+
+    :attr:`colour` bleibt die erste und damit das, was Ansicht, STL,
+    PrusaSlicer und Cura bekommen — sie kennen je Filament eine Farbe. Die
+    Orca-Familie kennt alle (``filament_multi_colour``), und die 3MF trägt
+    sie dorthin. Nicht Teil der Slotidentität: Zwei Spulen mit demselben Namen
+    und derselben ersten Farbe sind dieselbe Spule.
+    """
 
 
 @dataclass(slots=True)
@@ -533,6 +550,15 @@ class PrinterProfile:
     """
     printable_height: float | None = None
     """Z-Obergrenze ab Bett; ohne Angabe gilt die nominelle Bauraumhöhe."""
+    nozzles: int = 1
+    """Wie viele Düsen der Drucker zugleich führt.
+
+    Eine Düse mit Wechselstation (AMS, CFS) zählt als **eine**: Sie spült bei
+    jedem Filamentwechsel, und genau das entscheidet, ob *Auf dem Bett
+    anordnen* und *Druckoptimal ausrichten* die Filamente auf eigene Platten
+    legen (§29). Zwei Düsen (IDEX, H2D) drucken zwei Filamente ohne Spülgang,
+    ein Werkzeugwechsler mit fünf Köpfen fünf.
+    """
 
 
 @dataclass(frozen=True, slots=True)

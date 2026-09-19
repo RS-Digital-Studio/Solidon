@@ -24,16 +24,32 @@ it into `website/version.json`.
 
 ### Selecting and operating
 
+- A spool in the filament inventory can have up to four colours. Bambu Studio, OrcaSlicer and ElegooSlicer receive all colours, other slicers the first.
 - A picked edge now shows only the actions that do something to an edge.
 - With nothing selected, the way to the building blocks stays visible.
 - The search box only appears where there is something to find.
 - A divider in an organizer leads to its compartment editor instead of to the actions of its face.
 - The dialogue for placing a hole says that you pick the spot in the view.
+- In the “Generate model” dialogue the description field keeps its height even when the note about the missing add-on program appears.
 
 ### Moving and checking
 
+- Print suggestions arrive much faster: a figure with 2.3 million triangles in seconds instead of minutes, and opening the print dialogue a second time does not measure again.
+- An imported spool of another material type that no part used made the slicer abort without a word. Now every spool on a plate gets a complete profile.
+- If the slicer has no vendor profile for your material type, the print dialogue says so and uses Solidon’s values — instead of a profile for another material.
 - Two bodies can be pushed into each other to unite or softly merge them. Only what ends up beside the build area is brought back.
 - When a fit points at a feature that no longer exists, a button leads into the history.
+- Orient for printing and Arrange on the bed put parts of different filaments on their own plates so one nozzle does not keep purging. Enter several nozzles in the print dialogue.
+
+### Filament inventory
+
+- A reversal in the consumption history can be undone again — with the same button.
+- Changing only a spool’s name or location no longer counts as a new stock count; its records stay reversible.
+- After a reversal, “Record without asking” really records a repeated print instead of merely saying “recorded”.
+- Purchase and opening dates have a calendar in your language. A rejected spool returns to the dialogue instead of vanishing.
+- Importing from the slicer adds a same-named spool of another colour instead of recolouring your hand-entered one.
+- If the inventory file cannot be read, one button brings back the last state — Solidon saves it itself on every write.
+- The detail page names remaining amount, purchase date and price; the eight-character ID only appears where two spools share a name.
 
 ## 0.4.3
 

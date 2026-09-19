@@ -37,6 +37,7 @@ from PySide6.QtGui import (
     QKeyEvent,
     QKeySequence,
     QPainter,
+    QPainterPath,
     QPen,
     QPixmap,
 )
@@ -1087,6 +1088,11 @@ def filament_chip(colour: str, assigned: bool, widget: QWidget) -> QIcon:
     Wer Farben nicht unterscheidet, sieht am Gefülltsein trotzdem, ob hier
     etwas entschieden wurde.
     """
+    # Ein mehrfarbiges Filament kommt als Feldwert mit Leerzeichen an
+    # (``filament_picker.slot_colours``): die erste Farbe trägt Rand und
+    # Füllung, die weiteren stehen als senkrechte Streifen darin.
+    colours = colour.split() or [colour]
+    colour = colours[0]
     scale = widget.devicePixelRatioF() or 1.0
     side = int(FILAMENT_CHIP * scale)
     image = QPixmap(side, side)
@@ -1100,11 +1106,17 @@ def filament_chip(colour: str, assigned: bool, widget: QWidget) -> QIcon:
         painter.setPen(pen)
         painter.setBrush(QColor(colour) if assigned else Qt.BrushStyle.NoBrush)
         inset = 1.5 * scale
-        painter.drawRoundedRect(
-            QRectF(inset, inset, side - 2 * inset, side - 2 * inset),
-            2.0 * scale,
-            2.0 * scale,
-        )
+        chip = QRectF(inset, inset, side - 2 * inset, side - 2 * inset)
+        painter.drawRoundedRect(chip, 2.0 * scale, 2.0 * scale)
+        if assigned and len(colours) > 1:
+            clip = QPainterPath()
+            clip.addRoundedRect(chip, 2.0 * scale, 2.0 * scale)
+            painter.setClipPath(clip)
+            painter.setPen(Qt.PenStyle.NoPen)
+            for number, one in enumerate(colours):
+                left = chip.left() + chip.width() * number / len(colours)
+                right = chip.left() + chip.width() * (number + 1) / len(colours)
+                painter.fillRect(QRectF(left, chip.top(), right - left, chip.height()), QColor(one))
     finally:
         painter.end()
     return QIcon(image)
@@ -1793,11 +1805,11 @@ class ObjectTree(QWidget):
         dieser Fläche durch. Ohne Belegung gilt die Farbe des Teils — das ist
         der Normalfall nach jedem Import und keine fehlende Angabe.
         """
-        from app.ui.filament_picker import shown_colour, unpainted_colour
+        from app.ui.filament_picker import slot_colours, unpainted_colour
 
         if slots:
             slot = slots[0]
-            colour = shown_colour(int(slot.index), slot.colour)
+            colour = slot_colours(int(slot.index), slot)
             name = str(slot.name).strip() or str(slot.material_type or "")
             assigned = True
         else:

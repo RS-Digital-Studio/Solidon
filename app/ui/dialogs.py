@@ -2680,12 +2680,27 @@ def spoken_values(error: AppError) -> list[str]:
 
     Nicht der rohe Schlüssel: ``value_line`` setzt Beschriftung, Einheit und
     das Dezimaltrennzeichen der Anzeigesprache (Regel 20, §13).
+
+    **``field`` und ``constraint`` bleiben draußen.** Jede ``ValidationError``
+    trägt beide als Werte mit, aber sie sind Adressen für den Code — welches
+    Feld, welche Regel —, keine Angaben für den, der davorsitzt: „Feld:
+    bought_on / Bedingung: format" unter einem Satz, der längst sagt, dass
+    das Datum nicht stimmt (Lagerdurchsicht 19.09.2026). Der Dialog setzt den
+    Cursor ins Feld; das ist die Übersetzung der Adresse.
     """
     return [
         value_line(key, value)
         for key, value in error.values.items()
-        if value is not None and value != "" and value != [] and value != {}
+        if key not in _ADDRESSES
+        and value is not None
+        and value != ""
+        and value != []
+        and value != {}
     ]
+
+
+#: Werte einer ``ValidationError``, die dem Code gelten und nicht dem Kunden.
+_ADDRESSES = frozenset({"field", "constraint"})
 
 
 def problem_text(
@@ -2694,9 +2709,13 @@ def problem_text(
     """Ein eingebetteter Fehler bewahrt Angaben und nicht ausführbare Vorschläge."""
     if not isinstance(problem, AppError):
         return str(problem)
-    return "\n".join(
-        [str(problem), *spoken_values(problem), *unhandled_advice(problem, handlers or {})]
-    )
+    # Titel und Detail in zwei Zeilen — ``str(problem)`` hängt sie mit „: "
+    # aneinander, und ein Titel, der mit einem Punkt endet, liest sich dann
+    # als „verwendbar.: Wählen Sie …".
+    head = [str(problem.title)]
+    if problem.detail:
+        head.append(str(problem.detail))
+    return "\n".join([*head, *spoken_values(problem), *unhandled_advice(problem, handlers or {})])
 
 
 class ErrorNotice(QWidget):

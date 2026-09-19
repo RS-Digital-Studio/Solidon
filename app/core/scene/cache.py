@@ -65,7 +65,9 @@ DEFAULT_DISK_BUDGET_BYTES: Final = 2 * 1024 * 1024 * 1024
 #: Lokale Merkmale und transformierte Suchumfänge sowie gerichtete B-Rep-
 #: Gewinde benötigen ebenfalls frische Geometrie- und Merkmalsauskünfte.
 #: Maßgeänderte Sackböden müssen mit ihrer vollständigen Fläche neu zugeordnet werden.
-CACHE_FORMAT_VERSION: Final = 8
+#: Ein Materialslot trägt seit dem 19.09.2026 seine weiteren Farben
+#: (``extra_colours``); ein alter Eintrag ohne sie ist kein gültiger Stand.
+CACHE_FORMAT_VERSION: Final = 9
 
 
 @dataclass(frozen=True, slots=True)
@@ -394,6 +396,7 @@ def _slot_to_data(slot: MaterialSlot) -> dict[str, Any]:
         "colour": list(slot.colour) if slot.colour else None,
         "material": slot.material,
         "material_type": slot.material_type,
+        "extra_colours": [list(one) for one in slot.extra_colours],
     }
 
 
@@ -405,6 +408,9 @@ def _slot_from_data(data: dict[str, Any]) -> MaterialSlot:
         colour=(colour[0], colour[1], colour[2]) if colour else None,
         material=data.get("material"),
         material_type=data.get("material_type"),
+        extra_colours=tuple(
+            (one[0], one[1], one[2]) for one in data.get("extra_colours", ()) if one
+        ),
     )
 
 

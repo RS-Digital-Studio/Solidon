@@ -219,7 +219,32 @@ gespeicherte Lagerhandlungen werden weiterhin vollständig ausgeführt.
 Die Rücknahmeausnahme bei jüngerer Bestandsfeststellung bleibt an Spule und
 Vorgang gebunden. Ein Wechsel von Detail, Regal, Filter oder Journalauswahl
 verwirft das Angebot; verspätete Konflikte öffnen es nicht in einer anderen
-Ansicht. Eingereihte Rücknahmen bewahren ihren ursprünglichen Zielkontext.
+Ansicht — **gezeigt wird die Absage trotzdem**, mit dem Namen der Spule
+davor, denn ein Klick, der nichts bewirkte, darf nicht stumm bleiben.
+Eingereihte Rücknahmen bewahren ihren ursprünglichen Zielkontext. Der
+Rücknahmeknopf hat zwei Richtungen: auf einem zurückgenommenen Vorgang heißt
+er „Rücknahme rückgängig machen" und ruft `restore_booking` — deshalb
+braucht die Rücknahme keine Nachfrage (Regel 19). Im Detail verschwinden
+„Lager verlassen" und „Spule von Hand anlegen" aus dem Kopf; Esc geht
+denselben Weg wie der jeweilige Zurück-Knopf (`_escape`). Die Detailseite
+nennt Restmenge, Kauf- und Öffnungsdatum und Preis als Fakten
+(`calendar_day` für gespeicherte ISO-Tage). Ohne eine einzige Spule stehen
+Satz und beide Wege mittig (`empty_panel`), Suche, Gruppierung und der
+Importknopf unten sind ausgeblendet; eine Suche ohne Treffer behält die
+Suchleiste. Die Zusammenfassung zählt Archivierte getrennt.
+
+Weist der Kern eine Spule aus dem Dialog an einem Feld ab, öffnet
+`InventoryView._rejected` den Dialog mit derselben Eingabe erneut
+(`retry_entry` an `_run`, `NewFilamentDialog.focus_field`) — Name, Lagerort
+und Bestand gehen mit der Abweisung nicht verloren; Konflikte und die
+unlesbare Datei sind davon ausgenommen. Datumsfelder sind `DateField`
+(`labels.py`): Kalender in der Anzeigesprache, „Unbekannt" als eigener Wert,
+lostippen ab „Unbekannt" mit oder ohne Trennzeichen, gespeichert ISO.
+Sichtbare Spulenzeilen tragen die achtstellige Kennung nur, wo zwei sonst
+gleich hießen (`spool_labels`); Kurzhilfe und zugängliche Beschreibung
+tragen sie immer (`spool_label`). Der Spulenname auf der Karte bekommt zwei
+Zeilen, bevor er in der Mitte gekürzt wird (`name_lines`); die Schraffur
+des Wickels heißt „Bestand unbekannt" und nichts anderes (`coil_fill`).
 
 `FilamentField` und `FilamentPanel` schreiben über `CatalogueWrites` außerhalb
 des Qt-Hauptthreads. Die Steuerung gehört dem obersten Fenster und hält
@@ -229,8 +254,12 @@ die Aufträge vor dem Schließen ab. Operationsdialoge berücksichtigen den
 `pending`-Zustand des Filamentfelds auch bei direktem `accept()`.
 
 Lesefehler im Lager bewahren die letzte gültige Ansicht und zeigen den
-fachlichen Sicherungs- oder Wiederholungsweg. Unerwartete Ausnahmen werden
-protokolliert und als interner Fehler kenntlich gemacht.
+fachlichen Sicherungs- oder Wiederholungsweg — als Knöpfe
+(`_read_handlers` in `InventoryView` und `FilamentPanel`: `restore_backup`,
+`set_aside_file`, `retry`), nicht als Rat. Unerwartete Ausnahmen werden protokolliert und als interner Fehler
+kenntlich gemacht. `problem_text` setzt Titel und Detail in zwei Zeilen und
+`spoken_values` lässt `field` und `constraint` weg: Das sind Adressen für
+den Code, keine Angaben für den Kunden.
 `ErrorNotice` bewahrt Angaben und Vorschläge auch in eingebetteten Anzeigen.
 Nur örtlich verdrahtete Wiederholungs- oder Korrekturhandlungen verändern das
 Lager oder die Auswahl; bestätigte Schreibaufträge behalten ihre ursprünglichen

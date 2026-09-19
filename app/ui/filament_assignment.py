@@ -13,7 +13,14 @@ from app.core.knowledge import filaments
 from app.core.types import SceneObject
 from app.i18n import tr
 from app.ui.dialogs import ErrorNotice
-from app.ui.filament_picker import hex_of, spool_label, spool_slot, swatch
+from app.ui.filament_picker import (
+    colours_of,
+    slot_colours,
+    spool_label,
+    spool_labels,
+    spool_slot,
+    swatch,
+)
 from app.ui.leash import weak_slot
 from app.ui.style import TIGHT, set_level
 
@@ -143,11 +150,11 @@ class QuickFilamentPicker(QWidget):
             self.picker.clear()
             self.picker.addItem(current, "")
             if self._objects and not self._selected_features and len(keys) == 1 and all_assigned:
-                self.picker.setItemIcon(0, swatch(hex_of(slots[0].colour)))
+                self.picker.setItemIcon(0, swatch(slot_colours(int(slots[0].index), slots[0])))
             self.picker.setToolTip(current)
-            for entry in entries:
+            for entry, shown in zip(entries, spool_labels(entries), strict=True):
                 label = spool_label(entry)
-                self.picker.addItem(swatch(entry.colour), label, entry.identifier)
+                self.picker.addItem(swatch(colours_of(entry)), shown, entry.identifier)
                 row = self.picker.count() - 1
                 self.picker.setItemData(row, label, Qt.ItemDataRole.ToolTipRole)
                 self.picker.setItemData(row, label, Qt.ItemDataRole.AccessibleDescriptionRole)

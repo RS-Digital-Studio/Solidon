@@ -272,6 +272,54 @@ def test_clear_unknown_feature_is_an_actionable_rejection(profile: Profile) -> N
 # --- Die Füllung: was sie färbt -------------------------------------------------
 
 
+def test_the_colour_field_takes_up_to_four_colours() -> None:
+    """``#RRGGBB #RRGGBB``: dieselbe Schreibweise wie die Orca-Familie, damit
+    der Wert ohne Umrechnung hinausgeht. Die erste ist die Farbe des Slots,
+    die weiteren stehen in ``extra_colours``; leer bleibt leer."""
+    from app.core.errors import ValidationError
+    from app.core.geom.colour_ops import colour_from, colours_from
+
+    assert colours_from("") == ()
+    assert colour_from("") is None
+    assert colours_from("#ff0000") == ((1.0, 0.0, 0.0),)
+    assert colours_from("#ff0000 #0000ff  #00ff00") == (
+        (1.0, 0.0, 0.0),
+        (0.0, 0.0, 1.0),
+        (0.0, 1.0, 0.0),
+    )
+    assert colour_from("#ff0000 #0000ff") == (1.0, 0.0, 0.0), "die erste ist die Farbe"
+    with pytest.raises(ValidationError) as too_many:
+        colours_from("#ff0000 #0000ff #00ff00 #ffff00 #00ffff")
+    assert too_many.value.constraint == "range"
+    with pytest.raises(ValidationError) as wrong:
+        colours_from("#ff0000 rot")
+    assert wrong.value.constraint == "format"
+
+
+def test_assigning_a_filament_with_several_colours_keeps_them_on_the_slot(
+    profile: Profile,
+) -> None:
+    """*Filament zuweisen* und *Filament auf eine Fläche* tragen alle Farben
+    in den Slot — sonst käme im Export nur die erste an."""
+    body = SceneObject(id="obj_1", name="Teil", mesh=plate())
+    result = run("assign_slot", body, profile, slot=1, name="Silk Dual", colour="#ff0000 #0000ff")
+    slot = result.outputs[0].material_slots[-1]
+    assert slot.colour == (1.0, 0.0, 0.0)
+    assert slot.extra_colours == ((0.0, 0.0, 1.0),)
+
+    painted = run(
+        "paint_slot",
+        _with_top_face(body, (0, 1)),
+        profile,
+        slot=2,
+        at_feature="face_1",
+        colour="#00ff00 #ff00ff #000000",
+    )
+    face_slot = painted.outputs[0].material_slots[-1]
+    assert face_slot.index == 2
+    assert face_slot.extra_colours == ((1.0, 0.0, 1.0), (0.0, 0.0, 0.0))
+
+
 def test_filling_paints_the_face_and_nothing_else() -> None:
     """Der Punkt der ganzen Sache: Die Grenze kommt aus der Erkennung.
 

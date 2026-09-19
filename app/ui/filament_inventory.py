@@ -18,7 +18,16 @@ from PySide6.QtCore import (
     QTimer,
     Signal,
 )
-from PySide6.QtGui import QColor, QFontMetrics, QKeyEvent, QLinearGradient, QPainter, QPen
+from PySide6.QtGui import (
+    QColor,
+    QFontMetrics,
+    QKeyEvent,
+    QKeySequence,
+    QLinearGradient,
+    QPainter,
+    QPen,
+    QShortcut,
+)
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -49,14 +58,16 @@ from app.i18n import tr
 from app.ui.dialogs import ErrorNotice
 from app.ui.filament_picker import (
     NewFilamentDialog,
+    colours_of,
     configured_spools,
     removal_hint,
     spool_label,
+    spool_labels,
     stock_label,
     swatch,
 )
 from app.ui.icons import icon
-from app.ui.labels import NumberSpin, local_timestamp, localised
+from app.ui.labels import NumberSpin, calendar_day, local_timestamp, localised
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash, stop_watching_the_dying, weak_slot
 from app.ui.panels import collapsible
 from app.ui.style import NORMAL, WIDE, make_primary, set_level
@@ -124,13 +135,7 @@ def paint_spool(
     painter.setPen(QPen(rim, 1))
     painter.setBrush(flange)
     painter.drawEllipse(centre, radius, radius)
-    remaining, nominal = entry.remaining_grams, entry.spool_grams
-    known = remaining is not None and (remaining <= 0 or (nominal is not None and nominal > 0))
-    ratio = (
-        (min(1.0, remaining / nominal) if nominal and remaining is not None else 0.0)
-        if known
-        else 0.7
-    )
+    known, ratio = coil_fill(entry)
     coil = radius * (0.3 + 0.56 * ratio**0.5)
     colour = QColor(entry.colour)
     winding = QLinearGradient(centre - QPointF(coil, coil), centre + QPointF(coil, coil))
@@ -140,6 +145,23 @@ def paint_spool(
     painter.setBrush(winding)
     painter.setPen(QPen(colour.darker(125), 1))
     painter.drawEllipse(centre, coil, coil)
+    # **Mehrere Farben als Sektoren des Wickels**, in Spulenreihenfolge im
+    # Uhrzeigersinn ab oben — so sieht eine mehrfarbige Spule von vorn aus.
+    # Die erste Farbe behält ihren Verlauf darunter; die übrigen liegen als
+    # Tortenstücke darüber, damit auch ein zweifarbiges Filament auf einen
+    # Blick von einem einfarbigen zu unterscheiden ist (Regel 18: dazu nennt
+    # das Etikett die Zahl der Farben).
+    if entry.extra_colours:
+        colours = entry.colours
+        span = 360 * 16 // len(colours)
+        painter.setPen(Qt.PenStyle.NoPen)
+        box = QRectF(centre.x() - coil, centre.y() - coil, 2 * coil, 2 * coil)
+        for number, one in enumerate(colours[1:], start=1):
+            painter.setBrush(QColor(one))
+            painter.drawPie(box, 90 * 16 - number * span, -span)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.setPen(QPen(colour.darker(125), 1))
+        painter.drawEllipse(centre, coil, coil)
     if not known:
         painter.setPen(QPen(rim, 1))
         painter.setBrush(Qt.BrushStyle.BDiagPattern)
@@ -159,6 +181,38 @@ def paint_spool(
     painter.setBrush(background.darker(140))
     painter.drawEllipse(centre, radius * 0.12, radius * 0.12)
     painter.restore()
+
+
+def coil_fill(entry: filaments.CatalogueFilament) -> tuple[bool, float]:
+    """Ob der Bestand bekannt ist, und wie voll der Wickel gezeichnet wird.
+
+    Die Schraffur heißt „Bestand unbekannt" — und nur das (Regel 18). Ein
+    bekannter Rest ohne Nennfüllung bekommt einen Wickel fester Größe: Wie
+    voll die Spule ist, weiß niemand; wie viel drauf ist, schon.
+    """
+    remaining, nominal = entry.remaining_grams, entry.spool_grams
+    if remaining is None:
+        return False, 0.7
+    if remaining <= 0:
+        return True, 0.0
+    if nominal is not None and nominal > 0:
+        return True, min(1.0, remaining / nominal)
+    return True, 0.7
+
+
+def name_lines(name: str, metrics: QFontMetrics, width: int) -> list[str]:
+    """Ein Spulenname auf höchstens zwei Zeilen, die zweite in der Mitte gekürzt."""
+    if metrics.horizontalAdvance(name) <= width:
+        return [name]
+    words = name.split()
+    first: list[str] = []
+    while words and metrics.horizontalAdvance(" ".join([*first, words[0]])) <= width:
+        first.append(words.pop(0))
+    if not first:
+        # Ein einzelnes Wort, breiter als die Karte: eine Zeile, mittig gekürzt.
+        return [metrics.elidedText(name, Qt.TextElideMode.ElideMiddle, width)]
+    rest = " ".join(words)
+    return [" ".join(first), metrics.elidedText(rest, Qt.TextElideMode.ElideMiddle, width)]
 
 
 class SpoolCard(QPushButton):
@@ -244,9 +298,18 @@ class SpoolCard(QPushButton):
         painter.setFont(font)
         y = 144
         height = painter.fontMetrics().height()
+        width = self.width() - 32
+        # **Der Name bricht um, bevor er gekürzt wird.** Zwei Polymaker-Spulen
+        # in verschiedenen Farben lasen sich mit „…" am Ende gleich; das
+        # Unterscheidende steht bei langen Namen hinten. Zwei Zeilen fassen
+        # die meisten, und was dann noch übersteht, verliert die Mitte.
+        for line in name_lines(self.entry.name, painter.fontMetrics(), width):
+            font.setBold(True)
+            painter.setFont(font)
+            painter.drawText(QRectF(16, y, width, height + 5), Qt.AlignmentFlag.AlignHCenter, line)
+            y += height + 5
         for index, text in enumerate(
             (
-                self.entry.name,
                 self.entry.material_type or tr("Unbekannt"),
                 stock_label(self.entry),
                 self.entry.location or tr("Ohne Lagerort"),
@@ -255,14 +318,12 @@ class SpoolCard(QPushButton):
         ):
             if not text:
                 continue
-            font.setBold(index in (0, 2))
+            font.setBold(index == 1)
             painter.setFont(font)
             painter.drawText(
-                QRectF(16, y, self.width() - 32, height + 5),
+                QRectF(16, y, width, height + 5),
                 Qt.AlignmentFlag.AlignHCenter,
-                painter.fontMetrics().elidedText(
-                    text, Qt.TextElideMode.ElideRight, self.width() - 32
-                ),
+                painter.fontMetrics().elidedText(text, Qt.TextElideMode.ElideRight, width),
             )
             y += height + 5
         status = (
@@ -310,8 +371,8 @@ class SlicerSpoolDialog(QDialog):
         layout.addWidget(hint)
         self.list = QListWidget(self)
         self.list.setAccessibleName(tr("Im Slicer eingerichtete Filamente"))
-        for index, entry in enumerate(entries):
-            item = QListWidgetItem(swatch(entry.colour), spool_label(entry), self.list)
+        for index, (entry, shown) in enumerate(zip(entries, spool_labels(entries), strict=True)):
+            item = QListWidgetItem(swatch(colours_of(entry)), shown, self.list)
             item.setData(Qt.ItemDataRole.UserRole, index)
             item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
             item.setCheckState(Qt.CheckState.Unchecked)
@@ -363,9 +424,11 @@ class InventoryView(QWidget):
                 Callable[[object], None],
                 tuple[str, str] | None,
                 CancelSignal | None,
+                filaments.CatalogueFilament | None,
             ]
         ] = deque()
         self._reverse_target: tuple[str, str] | None = None
+        self._retry_entry: filaments.CatalogueFilament | None = None
         self._keep_count_target: tuple[str, str] | None = None
         self._wait_cursor = QTimer(self)
         self._wait_cursor.setSingleShot(True)
@@ -378,7 +441,8 @@ class InventoryView(QWidget):
         outer.setContentsMargins(WIDE, NORMAL, WIDE, NORMAL)
         outer.setSpacing(NORMAL)
         header = QGridLayout()
-        self.back_button = QPushButton(tr("Zurück"), self)
+        self.back_button = QPushButton(tr("Lager verlassen"), self)
+        self.back_button.setToolTip(tr("Zurück zum Projekt oder zur Startseite."))
         self.back_button.clicked.connect(self.backRequested)
         header.addWidget(self.back_button, 0, 0, alignment=Qt.AlignmentFlag.AlignLeft)
         title = QLabel(tr("Filamentlager"), self)
@@ -401,7 +465,9 @@ class InventoryView(QWidget):
         layout = QVBoxLayout(shelf)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(NORMAL)
-        filters = QHBoxLayout()
+        self.filters = QWidget(shelf)
+        filters = QHBoxLayout(self.filters)
+        filters.setContentsMargins(0, 0, 0, 0)
         self.search = QLineEdit(shelf)
         self.search.setPlaceholderText(tr("Spulen nach Name, Typ oder Lagerort suchen"))
         self.search.setAccessibleName(tr("Spulen suchen"))
@@ -417,11 +483,14 @@ class InventoryView(QWidget):
         self.archived = QCheckBox(tr("Archivierte Spulen anzeigen"), shelf)
         self.archived.toggled.connect(self.refresh)
         filters.addWidget(self.archived)
-        layout.addLayout(filters)
+        layout.addWidget(self.filters)
         settings_area = QWidget(shelf)
         settings_layout = QVBoxLayout(settings_area)
         self.booking_mode = QComboBox(settings_area)
         self.booking_mode.setAccessibleName(tr("Bestand nach der Ausgabe buchen"))
+        booking_label = QLabel(tr("Nach einer Ausgabe an den Slicer buchen"), settings_area)
+        booking_label.setBuddy(self.booking_mode)
+        settings_layout.addWidget(booking_label)
         self.booking_mode.addItem(tr("Nachfragen"), userData="ask")
         self.booking_mode.addItem(tr("Nie buchen"), userData="never")
         self.booking_mode.addItem(tr("Ohne Rückfrage buchen"), userData="auto")
@@ -450,17 +519,41 @@ class InventoryView(QWidget):
         settings_panel = collapsible(tr("Lager-Einstellungen"), settings_area, open_now=False)
         self.import_button = QPushButton(tr("Aus dem Slicer übernehmen"), shelf)
         self.import_button.clicked.connect(self._import)
+        # **Der Leerzustand ist ein Ort, kein Satz über der Leere.** Vorher
+        # stand er unter der Suchleiste, ein Knopf oben rechts, der andere
+        # unten links und dazwischen sechshundert Bildpunkte nichts.
+        self.empty_panel = QWidget(shelf)
+        empty_layout = QVBoxLayout(self.empty_panel)
+        empty_layout.setContentsMargins(WIDE, WIDE * 2, WIDE, WIDE * 2)
+        empty_layout.setSpacing(NORMAL)
+        empty_layout.addStretch(1)
         self.empty = QLabel(
             tr(
                 "Ihr Regal ist noch leer. Eine Spule von Hand anlegen "
                 "oder bewusst aus dem Slicer übernehmen."
             ),
-            shelf,
+            self.empty_panel,
         )
         self.empty.setWordWrap(True)
         self.empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.empty.setContentsMargins(WIDE, WIDE * 2, WIDE, WIDE * 2)
-        layout.addWidget(self.empty)
+        empty_layout.addWidget(self.empty)
+        self.empty_actions = QWidget(self.empty_panel)
+        empty_buttons = QHBoxLayout(self.empty_actions)
+        empty_buttons.setContentsMargins(0, 0, 0, 0)
+        empty_buttons.setSpacing(NORMAL)
+        empty_buttons.addStretch(1)
+        self.empty_add_button = QPushButton(tr("Spule von Hand anlegen"), self.empty_actions)
+        self.empty_add_button.setIcon(icon("add", self.empty_add_button))
+        self.empty_add_button.clicked.connect(self._add)
+        make_primary(self.empty_add_button)
+        empty_buttons.addWidget(self.empty_add_button)
+        self.empty_import_button = QPushButton(tr("Aus dem Slicer übernehmen"), self.empty_actions)
+        self.empty_import_button.clicked.connect(self._import)
+        empty_buttons.addWidget(self.empty_import_button)
+        empty_buttons.addStretch(1)
+        empty_layout.addWidget(self.empty_actions)
+        empty_layout.addStretch(1)
+        layout.addWidget(self.empty_panel, 1)
         self.page_scroll = QScrollArea(shelf)
         self.page_scroll.setWidgetResizable(True)
         self.page_scroll.setFrameShape(QFrame.Shape.NoFrame)
@@ -512,7 +605,18 @@ class InventoryView(QWidget):
         self.cancel_button.clicked.connect(self._cancel)
         self.cancel_button.hide()
         outer.addWidget(self.cancel_button)
+        escape = QShortcut(QKeySequence(QKeySequence.StandardKey.Cancel), self)
+        escape.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+        escape.activated.connect(self._escape)
+        self.setFocusProxy(self.search)
         self.refresh()
+
+    def _escape(self) -> None:
+        """Esc geht denselben Weg wie der jeweilige Zurück-Knopf."""
+        if self.pages.currentIndex() == 1:
+            self.show_shelf()
+        else:
+            self.backRequested.emit()
 
     def set_booking_mode(self, mode: str) -> None:
         """Die gespeicherte Vorgabe zeigt sich ohne erneutes Speichersignal."""
@@ -534,13 +638,27 @@ class InventoryView(QWidget):
         self._refill()
         self.lowStockThresholdChanged.emit(percent)
 
+    def _read_handlers(self) -> dict[str, Callable[[AppError], None]]:
+        """Was gegen eine unlesbare Lagerdatei hilft — als Knöpfe, nicht als Rat."""
+        return {
+            "retry": weak_slot(self, InventoryView.refresh),
+            "restore_backup": weak_slot(self, InventoryView._restore_backup),
+            "set_aside_file": weak_slot(self, InventoryView._set_aside_file),
+        }
+
+    def _restore_backup(self, *_args: object) -> None:
+        self._run(filaments.restore_backup, self._saved)
+
+    def _set_aside_file(self, *_args: object) -> None:
+        self._run(filaments.set_aside_unreadable, self._saved)
+
     def refresh(self, *_args: object) -> None:
         """Lagerdaten neu lesen, ohne gespeicherte Projektwerte anzufassen."""
         try:
             self._entries = filaments.catalogue(include_archived=self.archived.isChecked())
         except AppError as problem:
             self._failed("")
-            self.message.set_error(problem, {"retry": weak_slot(self, InventoryView.refresh)})
+            self.message.set_error(problem, self._read_handlers())
             return
         except Exception as problem:
             _log.exception("filament inventory could not be read")
@@ -548,16 +666,20 @@ class InventoryView(QWidget):
             self.message.set_error(InternalError(detail=f"{type(problem).__name__}: {problem}"))
             return
         self.message.clear()
-        count = len(self._entries)
-        self.summary.setText(
+        active = sum(1 for entry in self._entries if not entry.archived)
+        archived = len(self._entries) - active
+        summary = (
             tr("Noch keine Spule eingetragen")
-            if count == 0
+            if active == 0
             else (
                 tr("Eine Spule im Lager")
-                if count == 1
-                else tr("{count} Spulen im Lager").format(count=count)
+                if active == 1
+                else tr("{count} Spulen im Lager").format(count=active)
             )
         )
+        if archived:
+            summary = tr("{summary}, {count} archiviert").format(summary=summary, count=archived)
+        self.summary.setText(summary)
         self.retry_button.hide()
         self._refill()
         if self._selected_id:
@@ -614,7 +736,14 @@ class InventoryView(QWidget):
                     card.setFocus(Qt.FocusReason.OtherFocusReason)
             row += (len(group_entries) + columns - 1) // columns
         self.grid.setRowStretch(row, 1)
-        self.empty.setVisible(not entries)
+        self.empty_panel.setVisible(not entries)
+        self.page_scroll.setVisible(bool(entries))
+        # Ohne eine einzige Spule gibt es nichts zu suchen und zu gruppieren;
+        # die zwei Wege stehen dann mittig unter dem Satz. Eine Suche ohne
+        # Treffer behält die Suchleiste — sie ist der Weg zurück.
+        self.filters.setVisible(bool(self._entries))
+        self.import_button.setVisible(bool(self._entries))
+        self.empty_actions.setVisible(not self._entries)
         self.empty.setText(
             tr("Keine Spule passt zur Suche. Suchfeld leeren oder eine Spule anlegen.")
             if self._entries
@@ -678,7 +807,7 @@ class InventoryView(QWidget):
             snapshot = filaments.read_snapshot()
         except AppError as problem:
             self._failed("")
-            self.message.set_error(problem, {"retry": weak_slot(self, InventoryView.refresh)})
+            self.message.set_error(problem, self._read_handlers())
             return
         entry = snapshot.spools.get(identifier)
         if entry is None:
@@ -694,6 +823,8 @@ class InventoryView(QWidget):
         back = QPushButton(tr("Zurück zum Regal"), self.detail)
         back.clicked.connect(self.show_shelf)
         self.detail_layout.addWidget(back, alignment=Qt.AlignmentFlag.AlignLeft)
+        self.back_button.hide()
+        self.add_button.hide()
         overview = QWidget(self.detail)
         overview_layout = QHBoxLayout(overview)
         overview_layout.setContentsMargins(0, 0, 0, 0)
@@ -718,6 +849,7 @@ class InventoryView(QWidget):
         facts = QGridLayout()
         for row, (label, value) in enumerate(
             (
+                (tr("Restmenge"), stock_label(entry)),
                 (tr("Lagerort"), entry.location or tr("Ohne Lagerort")),
                 (
                     tr("Nennfüllung"),
@@ -729,6 +861,14 @@ class InventoryView(QWidget):
                     tr("Durchmesser"),
                     f"{localised(f'{entry.diameter_mm:g}')} {tr('mm')}"
                     if entry.diameter_mm
+                    else tr("Unbekannt"),
+                ),
+                (tr("Gekauft am"), calendar_day(entry.bought_on)),
+                (tr("Geöffnet am"), calendar_day(entry.opened_on)),
+                (
+                    tr("Spulenpreis"),
+                    f"{localised(f'{entry.price:.2f}')} {entry.currency}"
+                    if entry.price is not None
                     else tr("Unbekannt"),
                 ),
             )
@@ -782,6 +922,7 @@ class InventoryView(QWidget):
         self.reverse_button = QPushButton(tr("Gewählten Vorgang zurücknehmen"), self.detail)
         self.reverse_button.clicked.connect(self._reverse)
         self.detail_layout.addWidget(self.reverse_button, alignment=Qt.AlignmentFlag.AlignLeft)
+        self._describe_reverse_button(False)
         self._fill_history(entry, snapshot.bookings(identifier))
         self.pages.setCurrentIndex(1)
 
@@ -846,14 +987,41 @@ class InventoryView(QWidget):
             self._keep_count_target
         ):
             self._clear_stock_conflict()
-        self.reverse_button.setEnabled(
-            row >= 0 and not bool(self.history.item(row).data(int(Qt.ItemDataRole.UserRole) + 1))
+        reversed_row = row >= 0 and bool(
+            self.history.item(row).data(int(Qt.ItemDataRole.UserRole) + 1)
         )
+        self.reverse_button.setEnabled(row >= 0)
+        self._describe_reverse_button(reversed_row)
+
+    def _describe_reverse_button(self, reversed_row: bool) -> None:
+        """Ein Knopf, zwei Richtungen: zurücknehmen — oder die Rücknahme rückgängig machen.
+
+        Regel 19 verlangt keine Nachfrage, weil es den Rückweg gibt; der Satz
+        am Knopf sagt ihn, damit ihn niemand suchen muss.
+        """
+        self.reverse_button.setText(
+            tr("Rücknahme rückgängig machen")
+            if reversed_row
+            else tr("Gewählten Vorgang zurücknehmen")
+        )
+        hint = (
+            tr("Der Vorgang zählt wieder für alle beteiligten Spulen.")
+            if reversed_row
+            else tr(
+                "Nimmt den gesamten Druckvorgang mit allen beteiligten Spulen zurück. "
+                "Rückgängig geht es am selben Knopf."
+            )
+        )
+        self.reverse_button.setToolTip(hint)
+        self.reverse_button.setStatusTip(hint)
+        self.reverse_button.setAccessibleDescription(hint)
 
     def show_shelf(self) -> None:
         self._clear_stock_conflict()
         self._selected_id = ""
         self.pages.setCurrentIndex(0)
+        self.back_button.show()
+        self.add_button.show()
 
     def release(self, timeout_ms: int = WAIT_TIMEOUT_MS) -> None:
         """Die gemeinsame Aufräumstelle wartet auf noch laufende Lageränderungen."""
@@ -870,21 +1038,22 @@ class InventoryView(QWidget):
         )
 
     def _add(self) -> None:
-        dialog = NewFilamentDialog(self)
-        try:
-            if dialog.exec() == QDialog.DialogCode.Accepted:
-                self._run(partial(filaments.save, dialog.entry()), self._saved)
-        finally:
-            dialog.deleteLater()
+        self._open_dialog(None)
 
     def _edit(self) -> None:
         entry = self._selected_entry()
-        if entry is None:
-            return
+        if entry is not None:
+            self._open_dialog(entry)
+
+    def _open_dialog(self, entry: filaments.CatalogueFilament | None, field: str = "") -> None:
+        """Anlegen und Ändern in einem Weg; ``field`` setzt den Cursor auf eine Abweisung."""
         dialog = NewFilamentDialog(self, entry=entry)
+        if field:
+            dialog.focus_field(field)
         try:
             if dialog.exec() == QDialog.DialogCode.Accepted:
-                self._run(partial(filaments.save, dialog.entry()), self._saved)
+                candidate = dialog.entry()
+                self._run(partial(filaments.save, candidate), self._saved, retry_entry=candidate)
         finally:
             dialog.deleteLater()
 
@@ -915,15 +1084,19 @@ class InventoryView(QWidget):
             return filaments.get(self._selected_id)
         except AppError as problem:
             self._failed("")
-            self.message.set_error(problem, {"retry": weak_slot(self, InventoryView.refresh)})
+            self.message.set_error(problem, self._read_handlers())
             return None
 
     def _reverse(self) -> None:
         item = self.history.currentItem()
         if item is not None:
             identifier = str(item.data(Qt.ItemDataRole.UserRole))
+            reversed_row = bool(item.data(int(Qt.ItemDataRole.UserRole) + 1))
             self._run(
-                partial(filaments.reverse_booking, identifier),
+                partial(
+                    filaments.restore_booking if reversed_row else filaments.reverse_booking,
+                    identifier,
+                ),
                 self._saved,
                 reverse_target=(self._selected_id, identifier),
             )
@@ -966,7 +1139,7 @@ class InventoryView(QWidget):
         if not entries:
             self.message.setText(
                 tr(
-                    "Kein Slicer-Profil gefunden. Unter Datei → Einstellungen einen Slicer "
+                    "Kein Slicer-Profil gefunden. Unter Bearbeiten → Einstellungen einen Slicer "
                     "einrichten oder eine Spule von Hand anlegen."
                 )
             )
@@ -986,16 +1159,24 @@ class InventoryView(QWidget):
         *,
         reverse_target: tuple[str, str] | None = None,
         cancelled: CancelSignal | None = None,
+        retry_entry: filaments.CatalogueFilament | None = None,
     ) -> None:
-        """Bestätigte Eingaben bleiben bis zu ihrer Ausführung in Reihenfolge erhalten."""
-        self._pending_actions.append((action, callback, reverse_target, cancelled))
+        """Bestätigte Eingaben bleiben bis zu ihrer Ausführung in Reihenfolge erhalten.
+
+        ``retry_entry`` ist die Spule aus dem Dialog: Weist der Kern sie an
+        einem Feld ab, öffnet sich der Dialog damit erneut, statt dass Name,
+        Lagerort und Bestand mit der Abweisung verschwinden.
+        """
+        self._pending_actions.append((action, callback, reverse_target, cancelled, retry_entry))
         self._start_next()
 
     def _start_next(self) -> None:
         """Schreiben und Suchen halten die letzte gültige Ansicht sichtbar."""
         if self._worker is not None or not self._pending_actions:
             return
-        action, callback, self._reverse_target, cancelled = self._pending_actions.popleft()
+        action, callback, self._reverse_target, cancelled, self._retry_entry = (
+            self._pending_actions.popleft()
+        )
         self._callback = callback
         self._clear_stock_conflict()
         worker = _InventoryWork(action, cancelled=cancelled)
@@ -1061,15 +1242,42 @@ class InventoryView(QWidget):
         if self._take_callback() is None:
             return
         target = self._reverse_target
-        if target is not None and not self._matches_reverse_target(target):
-            self._start_next()
-            return
+        # Die Absage wird immer gezeigt — wer inzwischen ins Regal gewechselt
+        # ist, erfährt sonst nichts von einem Klick, der nicht wirkte. Nur das
+        # Angebot „mit aktuellem Bestand" gilt dem Vorgang in der Ansicht.
         self._failed("")
-        self.message.set_error(problem)
-        if isinstance(problem, ValidationError) and problem.constraint == "stock_conflict":
+        self.message.set_error(problem, {"reload": weak_slot(self, InventoryView.refresh)})
+        if target is not None and not self._matches_reverse_target(target):
+            # Die Ansicht zeigt inzwischen etwas anderes: Der Satz nennt die
+            # Spule, der die Absage gilt, sonst liest man ihn am falschen Ort.
+            try:
+                spool = filaments.get(target[0])
+            except AppError:
+                spool = None
+            if spool is not None:
+                self.message.label.setText(
+                    tr("{spool}: {text}").format(spool=spool.name, text=self.message.label.text())
+                )
+        if (
+            isinstance(problem, ValidationError)
+            and problem.constraint == "stock_conflict"
+            and target is not None
+            and self._matches_reverse_target(target)
+        ):
             self._keep_count_target = target
         self.keep_count_button.setVisible(self._keep_count_target is not None)
+        rejected = self._retry_entry
+        self._retry_entry = None
         self._start_next()
+        if (
+            rejected is not None
+            and isinstance(problem, ValidationError)
+            and problem.constraint not in ("conflict", "stock_conflict", "unreadable")
+            and problem.field
+        ):
+            # Die Eingabe steht wieder da, der Cursor im genannten Feld; der
+            # Satz mit dem Grund bleibt darunter stehen, bis es gespeichert ist.
+            self._open_dialog(rejected, problem.field)
 
     def _cancel(self) -> None:
         if self._worker is None or self._callback != self._choose_import:

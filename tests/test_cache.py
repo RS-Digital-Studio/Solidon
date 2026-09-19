@@ -1012,7 +1012,12 @@ def test_a_translatable_slot_name_does_not_drop_the_whole_entry(tmp_path: Path) 
         name=TranslatableText("Lettern"),
         mesh=FakeMesh(triangles=42),  # type: ignore[arg-type]
         material_slots=[
-            MaterialSlot(index=1, name=TranslatableText("Weiß"), colour=(1.0, 1.0, 1.0))
+            MaterialSlot(
+                index=1,
+                name=TranslatableText("Weiß"),
+                colour=(1.0, 1.0, 1.0),
+                extra_colours=((0.0, 0.0, 1.0),),
+            )
         ],
     )
 
@@ -1027,6 +1032,7 @@ def test_a_translatable_slot_name_does_not_drop_the_whole_entry(tmp_path: Path) 
     assert slot.name == TranslatableText("Weiß"), "der Slotname überlebt den Rundlauf"
     assert isinstance(slot.name, TranslatableText), "und zwar als Message-ID, nicht als Text"
     assert slot.colour == (1.0, 1.0, 1.0), "und die Farbe daneben ebenso"
+    assert slot.extra_colours == ((0.0, 0.0, 1.0),), "und die zweite Farbe eines Mehrfarbfilaments"
 
     # In der Datei steht die ID, nicht ihre Übersetzung — sonst hieße der Slot
     # nach einem Sprachwechsel weiter „Weiß". Dasselbe prüft

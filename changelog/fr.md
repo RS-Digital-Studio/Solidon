@@ -25,16 +25,32 @@ dans `website/version.json`.
 
 ### Sélectionner et utiliser
 
+- Une bobine du stock de filaments peut avoir jusqu’à quatre couleurs. Bambu Studio, OrcaSlicer et ElegooSlicer reçoivent toutes les couleurs, les autres slicers la première.
 - Une arête sélectionnée n’affiche plus que les actions qui agissent sur une arête.
 - Sans sélection, le chemin vers les blocs reste visible.
 - Le champ de recherche n’apparaît que là où il y a quelque chose à trouver.
 - Une cloison de l’organiseur mène à son éditeur de compartiments plutôt qu’aux actions de sa face.
 - La boîte de dialogue pour placer un perçage indique que le point se choisit dans la vue.
+- Dans la boîte de dialogue « Générer un modèle », le champ de description garde sa hauteur même quand l’avis sur le programme complémentaire manquant apparaît.
 
 ### Déplacer et vérifier
 
+- Les suggestions d’impression arrivent bien plus vite : 2,3 millions de triangles en secondes au lieu de minutes, et rouvrir la boîte de dialogue d’impression ne remesure pas.
+- Une bobine importée d’un autre type de matériau qu’aucune pièce n’utilisait arrêtait le slicer sans un mot. Désormais chaque bobine d’un plateau reçoit un profil complet.
+- Si le slicer n’a pas de profil fabricant pour votre type de matériau, la boîte de dialogue d’impression le dit et prend les valeurs de Solidon, pas un profil d’un autre matériau.
 - Deux corps peuvent être poussés l’un dans l’autre pour les réunir ou les fusionner en douceur. Seul ce qui sort du plateau est ramené.
 - Si un ajustement renvoie à une entité qui n’existe plus, un bouton mène à l’historique.
+- Orienter pour l’impression et Disposer sur le plateau séparent les filaments par plateau, pour qu’une buse ne purge pas sans cesse. Plusieurs buses se déclarent dans la boîte de dialogue d’impression.
+
+### Stock de filament
+
+- Une annulation dans l’historique des consommations peut être annulée à son tour, avec le même bouton.
+- Modifier seulement le nom ou l’emplacement d’une bobine ne compte plus comme un nouveau relevé ; ses enregistrements restent annulables.
+- Après une annulation, « Enregistrer sans demander » enregistre vraiment une nouvelle impression au lieu de dire seulement « enregistré ».
+- Les dates d’achat et d’ouverture ont un calendrier dans votre langue. Une bobine refusée revient dans la boîte de dialogue au lieu de disparaître.
+- L’import depuis le slicer crée une nouvelle bobine si le nom est identique mais la couleur différente, au lieu de recolorer la vôtre.
+- Si le fichier du stock ne se lit plus, un bouton rappelle le dernier état : Solidon le sauvegarde lui-même à chaque écriture.
+- La page de détail indique reste, date d’achat et prix ; l’identifiant à huit caractères n’apparaît que si deux bobines portent le même nom.
 
 ## 0.4.3
 

@@ -98,7 +98,7 @@ from app.core.units import DEGREE_UNIT, is_close
 from app.i18n import TranslatableText, _, format_decimal, tr
 from app.ui.dialogs import handlers_of, licence_lock_line, show_error
 from app.ui.facts import duration, mass
-from app.ui.filament_picker import SWATCH_PIXELS, shown_colour, swatch
+from app.ui.filament_picker import SWATCH_PIXELS, slot_colours, swatch
 from app.ui.filament_usage import UsageNotice
 from app.ui.header import filament_names
 from app.ui.labels import (
@@ -1299,7 +1299,7 @@ class FilamentOverrideDialog(QDialog):
         # skaliert (§19.3): eine feste Zahl wäre bei der nächsten Schriftgröße
         # wieder zu klein.
         edge = swatch_size(title)
-        colour.setPixmap(swatch(shown_colour(int(slot.index), slot.colour)).pixmap(edge, edge))
+        colour.setPixmap(swatch(slot_colours(int(slot.index), slot)).pixmap(edge, edge))
         colour.setAccessibleName(tr("Filamentfarbe"))
         heading_layout.addWidget(colour)
         heading_layout.addWidget(title, 1)
@@ -1825,6 +1825,9 @@ class _AdviceWorker(Worker):
                     overhang_angle=angle,
                     bridge_from=wall,
                     cancelled=self.cancelled,
+                    # Die Vorschläge lesen keine Stützsäulen; an einem
+                    # Gitterbecher waren sie ein Drittel der Wartezeit.
+                    support_volume=False,
                 )
             results[body.id] = (angle, wall, result)
             for slot, material_profile, effective in processes:
@@ -2583,6 +2586,24 @@ class PrintSettingsDialog(QDialog):
         # käme darüber 0,0157 als Düsendurchmesser an.
         self.nozzle.valueChangedMm.connect(self._nozzle_changed)
 
+        # **Und wie viele Düsen** — die Zahl entscheidet, ob *Auf dem Bett
+        # anordnen* und *Druckoptimal ausrichten* jedes Filament auf eine
+        # eigene Platte legen: Eine Düse spült bei jedem Wechsel, zwei drucken
+        # zwei Filamente ohne Spülgang (Entscheidung Robert, 19.09.2026). Sie
+        # gehört wie der Durchmesser zum Drucker und wird in dessen Profil
+        # abgelegt; die Tabelle führt jedes Gerät mit einer.
+        self.nozzle_count = QSpinBox(self)
+        self.nozzle_count.setRange(1, 8)
+        self.nozzle_count.setAccessibleName(tr("Düsen"))
+        self.nozzle_count.setToolTip(
+            tr(
+                "Wie viele Düsen der Drucker zugleich führt. Eine Wechselstation zählt "
+                "nicht dazu — sie spült bei jedem Filamentwechsel."
+            )
+        )
+        self._show_nozzle_count()
+        self.nozzle_count.valueChanged.connect(self._nozzle_count_changed)
+
         # **Das Material wird hier nicht mehr gewählt, sondern berichtet.**
         # Es kommt aus der Spule (``profiles.for_object``), und eine zweite
         # Wahl daneben hieße, etwas einzustellen, was das Filament schon sagt —
@@ -2638,6 +2659,8 @@ class PrintSettingsDialog(QDialog):
         # vorgelesen wird der ``accessibleName``.
         nozzle_label = QLabel(tr("Düse ⌀"), self)
         nozzle_label.setBuddy(self.nozzle)
+        nozzle_count_label = QLabel(tr("Düsen"), self)
+        nozzle_count_label.setBuddy(self.nozzle_count)
         filament_label = QLabel(tr("Filamente"), self)
         filament_label.setBuddy(self.material_link)
 
@@ -2657,6 +2680,10 @@ class PrintSettingsDialog(QDialog):
         # vermeiden sollen (``test_print_settings_ui`` misst ihn nach).
         head.addWidget(nozzle_label, 2, 0)
         head.addWidget(self.nozzle, 2, 1)
+        # Rechts neben dem Durchmesser, in derselben Zeile: Beides ist die
+        # Düse, und die zwei Spalten daneben waren frei.
+        head.addWidget(nozzle_count_label, 2, 2, Qt.AlignmentFlag.AlignRight)
+        head.addWidget(self.nozzle_count, 2, 3, Qt.AlignmentFlag.AlignLeft)
         head.addWidget(filament_label, 3, 0)
         head.addWidget(self.material_state, 3, 1, 1, 2)
         head.addWidget(self.material_link, 3, 3)
@@ -2749,6 +2776,25 @@ class PrintSettingsDialog(QDialog):
         finally:
             self.nozzle.blockSignals(blocked)
 
+    def _show_nozzle_count(self) -> None:
+        """Die Düsenzahl des gewählten Druckers ins Feld, ohne sie als Änderung zu lesen."""
+        entry = profiles.printer(str(self.printer_choice.currentData()))
+        blocked = self.nozzle_count.blockSignals(True)
+        try:
+            self.nozzle_count.setValue(entry.nozzles)
+        finally:
+            self.nozzle_count.blockSignals(blocked)
+
+    def _nozzle_count_changed(self, value: int) -> None:
+        """Dieselbe Regel wie beim Durchmesser: Die Zahl gehört zum Drucker und
+        wird in seinem Profil abgelegt — wer zwei Düsen hat, hat sie auch
+        morgen noch. Danach rechnet die Szene neu, denn die Anordnung hängt daran."""
+        entry = profiles.printer(str(self.printer_choice.currentData()))
+        if entry.nozzles == value:
+            return
+        profiles.save_printer(replace(entry, nozzles=value))
+        self._scene_profile_changed()
+
     def _nozzle_changed(self, value: float) -> None:
         """Eine andere Düse ist eine Änderung **am Drucker**, nicht am Projekt.
 
@@ -2817,6 +2863,7 @@ class PrintSettingsDialog(QDialog):
         # des vorigen. Ohne diese Zeile stünde im Feld weiter 0,6, während
         # der neu gewählte Drucker mit 0,4 rechnet.
         self._show_nozzle()
+        self._show_nozzle_count()
         settings = self._resolved(self.settings.quality)
         for path, value in chosen.items():
             settings = print_settings.with_path(settings, path, value)
@@ -3935,13 +3982,42 @@ class PrintSettingsDialog(QDialog):
                 (entry for entry in fitting if entry.title(tr("eigenes")) == wanted), None
             )
         if chosen is None:
+            wanted_type = slicer_keys.filament_type(material)
             preferred = slicer_profiles.match_filament(
-                self._profiles,
-                machine,
-                slicer_keys.filament_type(material),
-                self._profile_roots(),
+                self._profiles, machine, wanted_type, self._profile_roots()
             )
-            chosen = preferred if preferred is not None else fitting[0]
+            if preferred is None:
+                # **Nie ein Profil anderer Materialart** (Regel 21). Hier stand
+                # ``fitting[0]``, und das war bei Creality Print für ein
+                # PLA-Projekt „Elegoo Generic ABS" — der alphabetisch erste
+                # Herstellereintrag, gemessen am 19.09.2026: Ohne Maschine
+                # findet ``match_filament`` nichts, und der Rückfall nahm den
+                # ersten Namen, der zum Hersteller passt, unabhängig vom Typ.
+                # Solidons Temperaturen liegen zwar darüber, Kammer, Lüfter
+                # und Startsequenz eines ABS-Profils aber nicht.
+                indexes: slicer_profiles.ProfileIndexes = {}
+                preferred = next(
+                    (
+                        entry
+                        for entry in fitting
+                        if slicer_profiles.type_of(
+                            entry, self._profile_roots(), indexes=indexes
+                        ).casefold()
+                        == wanted_type.casefold()
+                    ),
+                    None,
+                )
+            if preferred is None:
+                self._forget_filament_profile()
+                self.filament_shown.setText(
+                    tr(
+                        "Kein Filamentprofil dieser Materialart im Bestand — "
+                        "die Werte kommen aus Solidon."
+                    )
+                )
+                fill_slot_choices(-1)
+                return
+            chosen = preferred
         self._remember_filament_profile(chosen)
 
         # Dieselbe Liste in jede Slot-Zeile. Vorbelegt mit dem, was das Projekt
@@ -4012,9 +4088,7 @@ class PrintSettingsDialog(QDialog):
             label.setToolTip(tr("Die Farbe, in der dieses Filament in der Ansicht steht."))
             colour = QLabel(self.slicer_inner)
             colour.setPixmap(
-                swatch(shown_colour(int(slot.index), slot.colour)).pixmap(
-                    SWATCH_PIXELS, SWATCH_PIXELS
-                )
+                swatch(slot_colours(int(slot.index), slot)).pixmap(SWATCH_PIXELS, SWATCH_PIXELS)
             )
             row = QWidget(self.slicer_inner)
             # Die Zeile ist jetzt zweiteilig (Farbfeld, Text). Ihr Name steht
@@ -5162,6 +5236,22 @@ class PrintSettingsDialog(QDialog):
             self.settings.layers.first_layer_height,
         )
 
+    def _memory_key(self) -> tuple[Any, ...]:
+        """Wofür gemessene Schichten über das Fenster hinaus gelten.
+
+        Dasselbe wie :meth:`_analysis_context` ohne den Ergebniszähler: Der
+        zählt jede Auswertung, auch eine, die keinen Körper anfasst (eine
+        Filamentzuweisung, ein Parameter, der woanders wirkt). Dass eine
+        Netzadresse nicht inzwischen an ein anderes Netz vergeben wurde,
+        sichert die Sitzung, indem sie die Netze zum Gedächtnis festhält.
+        """
+        return (
+            id(self.session.project.document),
+            tuple((body.id, id(body.mesh)) for body in self._plate_bodies()),
+            self.settings.layers.layer_height,
+            self.settings.layers.first_layer_height,
+        )
+
     def _advice_context(self) -> tuple[Any, ...]:
         """Alle Eingaben, die einen angezeigten und übernehmbaren Rat bestimmen."""
         return (
@@ -5229,7 +5319,15 @@ class PrintSettingsDialog(QDialog):
             if chosen
         }
         analysis_context = self._analysis_context()
-        previous = self._body_analyses if analysis_context == self._analysed_context else {}
+        # Erst der eigene Stand, dann der der Sitzung: Der Dialog wird bei
+        # jedem Öffnen neu gebaut, die Körper sind meist dieselben — und die
+        # Schichtanalyse eines großen Körpers kostet Sekunden bis Minuten
+        # (Befund Robert, 19.09.2026: „Vorschläge beim Slicen dauern ewig").
+        previous = (
+            self._body_analyses
+            if analysis_context == self._analysed_context
+            else self.session.remembered_analyses(self._memory_key())
+        )
         worker = _AdviceWorker(
             tuple(self._plate_bodies()),
             self.settings,
@@ -5279,6 +5377,9 @@ class PrintSettingsDialog(QDialog):
         ):
             return
         self._body_analyses = results
+        self.session.remember_analyses(
+            self._memory_key(), [body.mesh for body in self._plate_bodies()], results
+        )
         self.slice_result = next(iter(results.values()))[2] if len(results) == 1 else None
         self._analysed_context = analysis_context
         self._advice_entries = entries

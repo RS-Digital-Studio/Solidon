@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 
 from app.core.knowledge import filaments
@@ -262,9 +263,15 @@ def test_operation_dialog_forwards_spool_outside_parameters(
     assert field is not None
     seen: list[object] = []
     dialog.spoolChosen.connect(seen.append)
+    # Die Zeile trägt keine Kennung, solange nur eine Spule so heißt (T3);
+    # die Kurzhilfe trägt sie weiter.
     row = next(
-        index for index in range(field.count()) if entry.identifier[:8] in field.itemText(index)
+        index
+        for index in range(field.count())
+        if entry.identifier[:8] in str(field.itemData(index, Qt.ItemDataRole.ToolTipRole) or "")
+        or field.itemText(index).startswith("Spule ·")
     )
+    assert entry.identifier[:8] not in field.itemText(row)
     field.setCurrentIndex(row)
     field._chosen(row)
     assert seen == [entry]

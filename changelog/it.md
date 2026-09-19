@@ -24,16 +24,32 @@ scrive in `website/version.json`.
 
 ### Selezionare e usare
 
+- Una bobina nel magazzino filamenti può avere fino a quattro colori. Bambu Studio, OrcaSlicer ed ElegooSlicer ricevono tutti i colori, gli altri slicer il primo.
 - Uno spigolo selezionato mostra solo le azioni che agiscono su uno spigolo.
 - Senza selezione resta visibile la via verso i blocchi.
 - Il campo di ricerca compare solo dove ci sia qualcosa da trovare.
 - Un divisorio dell’organizer porta al suo editor degli scomparti invece che alle azioni della sua faccia.
 - La finestra per collocare un foro dice che il punto si sceglie nella vista.
+- Nella finestra «Genera modello» il campo della descrizione mantiene la sua altezza anche quando compare l’avviso sul programma aggiuntivo mancante.
 
 ### Spostare e verificare
 
+- I suggerimenti di stampa arrivano molto più in fretta: una figura da 2,3 milioni di triangoli in secondi invece di minuti, e una seconda apertura della finestra di stampa non misura di nuovo.
+- Una bobina importata di un altro tipo di materiale che nessun pezzo usava chiudeva lo slicer senza una parola. Ora ogni bobina di un piano riceve un profilo completo.
+- Se lo slicer non ha un profilo del produttore per il tuo tipo di materiale, la finestra di stampa lo dice e usa i valori di Solidon, non un profilo di un altro materiale.
 - Due corpi si possono spingere uno dentro l’altro per unirli o fonderli dolcemente. Viene riportato indietro solo ciò che finisce fuori dal piano.
 - Se un accoppiamento rimanda a una caratteristica che non esiste più, un pulsante porta alla cronologia.
+- Orienta per la stampa e Disponi sul piano mettono i pezzi di filamenti diversi su piani propri, così un ugello non spurga di continuo. Più ugelli si indicano nella finestra di stampa.
+
+### Magazzino filamenti
+
+- Un annullamento nella cronologia dei movimenti si può ripristinare, con lo stesso pulsante.
+- Cambiare solo nome o posizione di una bobina non conta più come nuovo conteggio; le sue registrazioni restano annullabili.
+- Dopo un annullamento, «Registra senza chiedere» registra davvero una nuova stampa invece di dire solo «registrato».
+- Le date di acquisto e apertura hanno un calendario nella tua lingua. Una bobina rifiutata torna nella finestra invece di sparire.
+- L’importazione dallo slicer crea una bobina nuova se il nome è uguale e il colore diverso, invece di ricolorare la tua.
+- Se il file del magazzino non si legge, un pulsante recupera l’ultimo stato: Solidon lo salva da solo a ogni scrittura.
+- La pagina di dettaglio mostra resto, data di acquisto e prezzo; il codice a otto caratteri compare solo se due bobine hanno lo stesso nome.
 
 ## 0.4.3
 

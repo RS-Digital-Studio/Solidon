@@ -20,7 +20,7 @@ import dataclasses
 from typing import cast
 
 from app.core.errors import ValidationError
-from app.core.geom.colour_ops import colour_from, merged_slots
+from app.core.geom.colour_ops import colour_from, colours_from, merged_slots
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.knowledge.filaments import profile_name
 from app.core.log import get_logger
@@ -230,6 +230,7 @@ def paint_slot(ctx: OpContext) -> OpResult:
         else {entry.index: entry for entry in previous_slots}.get(params.slot)
     )
     chosen = colour_from(params.colour)
+    chosen_extra = colours_from(params.colour)[1:]
     slots = merged_slots(
         list(previous_slots),
         [
@@ -246,6 +247,9 @@ def paint_slot(ctx: OpContext) -> OpResult:
                 colour=chosen
                 if chosen is not None
                 else (existing.colour if existing is not None else None),
+                extra_colours=chosen_extra
+                if chosen is not None
+                else (existing.extra_colours if existing is not None else ()),
                 material=profile_name(params.slicer_profile)
                 or (existing.material if existing is not None else None),
                 material_type=params.material_type

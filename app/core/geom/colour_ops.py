@@ -16,7 +16,7 @@ from app.core.errors import ValidationError
 from app.core.geom.attributes import counts, with_slot
 from app.core.geom.mesh import as_mesh_data
 from app.core.geom.texture import to_slots
-from app.core.knowledge.filaments import profile_name
+from app.core.knowledge.filaments import MAX_COLOURS, profile_name
 from app.core.log import get_logger
 from app.core.registry import op_params, param, register_op
 from app.core.types import MAX_SLOTS, BaseParams, Finding, MaterialSlot, OpContext, OpResult
@@ -45,7 +45,10 @@ class AssignSlotParams(BaseParams):
     colour: str = param(
         title=_("Farbe"),
         default="",
-        doc=_("Anzeigefarbe als #RRGGBB. Nur zur Ansicht — gedruckt wird, was eingelegt ist."),
+        doc=_(
+            "Anzeigefarbe als #RRGGBB, bei mehrfarbigem Filament bis zu vier durch "
+            "Leerzeichen getrennt. Nur zur Ansicht — gedruckt wird, was eingelegt ist."
+        ),
     )
     material_type: str = param(
         title=_("Typ"),
@@ -85,6 +88,7 @@ def assign_slot(ctx: OpContext) -> OpResult:
         # aufgelöst.
         name=params.name or _("Slot {number}", number=params.slot),
         colour=colour_from(params.colour),
+        extra_colours=colours_from(params.colour)[1:],
         material=profile_name(params.slicer_profile) or None,
         material_type=params.material_type or None,
     )
@@ -235,22 +239,52 @@ def colour_from(text: str) -> tuple[float, float, float] | None:
     Zwei Umrechnungen für ein Format wären zwei Gelegenheiten,
     auseinanderzulaufen — und die Fehlermeldung soll in beiden Fällen
     derselbe Satz sein.
+
+    Ein mehrfarbiges Filament steht im selben Feld mit Leerzeichen dazwischen
+    (``#RRGGBB #RRGGBB``); hier kommt die **erste** Farbe zurück, alle liefert
+    :func:`colours_from`.
     """
-    if not text:
-        return None
-    match = _HEX.match(text.strip())
-    if match is None:
+    colours = colours_from(text)
+    return colours[0] if colours else None
+
+
+def colours_from(text: str) -> tuple[tuple[float, float, float], ...]:
+    """Alle Farben eines Filaments, in der Reihenfolge des Feldes (§20).
+
+    Bis zu :data:`MAX_COLOURS`, durch Leerzeichen getrennt — dieselbe Schreibweise,
+    in der die Orca-Familie ihr ``filament_multi_colour`` führt, damit der
+    Wert ohne Umrechnung hinausgeht. Leer heißt: keine Farbe, nicht Schwarz.
+    """
+    if not text or not text.strip():
+        return ()
+    parts = text.split()
+    if len(parts) > MAX_COLOURS:
         raise ValidationError(
             field="colour",
-            detail=_("Die Farbe wird als #RRGGBB angegeben."),
+            title=_("So viele Farben hat kein Filament."),
+            detail=_("Ein Filament hat höchstens vier Farben."),
             value=text,
-            constraint="format",
+            constraint="range",
+            values={"most": MAX_COLOURS},
         )
-    digits = match.group(1)
-    return cast(
-        "tuple[float, float, float]",
-        tuple(int(digits[start : start + 2], 16) / 255.0 for start in (0, 2, 4)),
-    )
+    found: list[tuple[float, float, float]] = []
+    for part in parts:
+        match = _HEX.match(part)
+        if match is None:
+            raise ValidationError(
+                field="colour",
+                detail=_("Die Farbe wird als #RRGGBB angegeben."),
+                value=text,
+                constraint="format",
+            )
+        digits = match.group(1)
+        found.append(
+            cast(
+                "tuple[float, float, float]",
+                tuple(int(digits[start : start + 2], 16) / 255.0 for start in (0, 2, 4)),
+            )
+        )
+    return tuple(found)
 
 
 @op_params

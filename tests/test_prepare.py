@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import math
 from pathlib import Path
 
@@ -1444,6 +1445,85 @@ def test_arranging_by_material_respects_the_plate_limit(
     assert result.complete
     benutzt = {entry.plate for entry in result.scene.objects.values()}
     assert max(benutzt) <= 1, f"höchstens zwei Platten, benutzt wurden {sorted(benutzt)}"
+
+
+def _with_slot(history: History, name: str, slot: int) -> None:
+    history.apply(
+        _("Material"),
+        [OperationDraft(op="assign_slot", inputs=(name,), outputs=(name,), params={"slot": slot})],
+    )
+
+
+def test_arranging_keeps_the_filaments_apart_without_being_asked(
+    document: Document, profile: Profile
+) -> None:
+    """Die Vorgabe ist das druckbare Ergebnis (Entscheidung Robert, 19.09.2026:
+    „kein Reinigen, wenn der Drucker nicht mehr Düsen hat").
+
+    Der Umschalter stand auf Aus, und wer ihn nicht kannte, bekam zwei
+    Filamente auf einer Platte — je gemeinsamer Schicht ein Wechsel samt
+    Spülgang. Der Centauri hat eine Düse; zwei Filamente sind eines zu viel.
+    """
+    project, history = loaded(document, count=2)
+    _with_slot(history, "obj_2", 1)
+    history.apply(
+        _("Anordnen"),
+        [OperationDraft(op="arrange_bed", inputs=("obj_1", "obj_2"), params={})],
+    )
+
+    result = evaluate(document, profile, sources=ProjectSources(project))
+
+    assert result.complete
+    assert profile.printer.nozzles == 1, "die Voraussetzung: eine Düse"
+    plates = {name: entry.plate for name, entry in result.scene.objects.items()}
+    assert plates["obj_1"] != plates["obj_2"], "zwei Filamente, zwei Platten — ungefragt"
+
+
+def test_a_printer_with_enough_nozzles_keeps_the_filaments_together(
+    document: Document, profile: Profile
+) -> None:
+    """Zwei Düsen drucken zwei Filamente ohne Spülgang — dann trennt nichts.
+
+    Der Schalter bleibt an; entschieden wird am Drucker (``PrinterProfile.nozzles``).
+    """
+    project, history = loaded(document, count=2)
+    _with_slot(history, "obj_2", 1)
+    history.apply(
+        _("Anordnen"),
+        [OperationDraft(op="arrange_bed", inputs=("obj_1", "obj_2"), params={"by_material": True})],
+    )
+    two_nozzles = dataclasses.replace(
+        profile, printer=dataclasses.replace(profile.printer, nozzles=2)
+    )
+
+    result = evaluate(document, two_nozzles, sources=ProjectSources(project))
+
+    assert result.complete
+    plates = {entry.plate for entry in result.scene.objects.values()}
+    assert plates == {0}, f"mit zwei Düsen bleibt alles auf einer Platte, nicht {plates}"
+
+
+def test_three_filaments_on_two_nozzles_are_still_kept_apart(
+    document: Document, profile: Profile
+) -> None:
+    """Die Grenze ist die Düsenzahl, nicht „mehr als eine": Drei Filamente auf
+    zwei Düsen spülen wieder."""
+    project, history = loaded(document, count=3)
+    for name, slot in (("obj_2", 1), ("obj_3", 2)):
+        _with_slot(history, name, slot)
+    history.apply(
+        _("Anordnen"),
+        [OperationDraft(op="arrange_bed", inputs=("obj_1", "obj_2", "obj_3"), params={})],
+    )
+    two_nozzles = dataclasses.replace(
+        profile, printer=dataclasses.replace(profile.printer, nozzles=2)
+    )
+
+    result = evaluate(document, two_nozzles, sources=ProjectSources(project))
+
+    assert result.complete
+    plates = {name: entry.plate for name, entry in result.scene.objects.items()}
+    assert len(set(plates.values())) == 3, f"drei Filamente, drei Platten, nicht {plates}"
 
 
 def test_the_preparation_operations_are_registered_completely() -> None:

@@ -25,16 +25,32 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 
 ### Seleccionar y manejar
 
+- Una bobina del inventario de filamentos puede tener hasta cuatro colores. Bambu Studio, OrcaSlicer y ElegooSlicer reciben todos los colores; los demás slicers, el primero.
 - Una arista seleccionada muestra solo las acciones que hacen algo en una arista.
 - Sin selección, el camino a los bloques sigue visible.
 - El campo de búsqueda solo aparece donde hay algo que encontrar.
 - Un tabique del organizador lleva a su editor de compartimentos en lugar de a las acciones de su cara.
 - El diálogo para colocar un taladro indica que el punto se elige en la vista.
+- En el diálogo «Generar modelo», el campo de descripción conserva su altura aunque aparezca el aviso sobre el programa adicional que falta.
 
 ### Mover y comprobar
 
+- Las sugerencias de impresión llegan mucho más rápido: una figura de 2,3 millones de triángulos en segundos en lugar de minutos, y abrir el diálogo de impresión por segunda vez no vuelve a medir.
+- Una bobina importada de otro tipo de material que ninguna pieza usaba cerraba el slicer sin decir nada. Ahora cada bobina de una placa recibe un perfil completo.
+- Si el slicer no tiene un perfil del fabricante para su tipo de material, el diálogo de impresión lo dice y usa los valores de Solidon, no un perfil de otro material.
 - Dos cuerpos pueden empujarse uno dentro de otro para unirlos o fusionarlos suavemente. Solo se devuelve lo que queda fuera del área de impresión.
 - Si un ajuste apunta a una característica que ya no existe, un botón lleva al historial.
+- Orientar para imprimir y Organizar sobre la cama ponen piezas de distintos filamentos en placas propias, para que una boquilla no purgue sin parar. Varias boquillas se indican al imprimir.
+
+### Inventario de filamentos
+
+- Una anulación en el historial de movimientos se puede revertir de nuevo, con el mismo botón.
+- Cambiar solo el nombre o la ubicación de una bobina ya no cuenta como nuevo recuento; sus registros siguen siendo anulables.
+- Tras una anulación, «Registrar sin preguntar» registra de verdad una nueva impresión en vez de decir solo «registrado».
+- Las fechas de compra y apertura tienen un calendario en su idioma. Una bobina rechazada vuelve al diálogo en vez de desaparecer.
+- La importación desde el slicer crea una bobina nueva si tiene el mismo nombre y otro color, en vez de recolorear la suya.
+- Si el archivo del inventario no se puede leer, un botón recupera el último estado: Solidon lo guarda solo en cada escritura.
+- La página de detalle muestra cantidad restante, fecha de compra y precio; el código de ocho caracteres solo aparece si dos bobinas se llaman igual.
 
 ## 0.4.3
 

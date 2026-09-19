@@ -40,6 +40,31 @@ def test_a_colour_from_the_document_becomes_a_hex_value() -> None:
     assert hex_of(None) == "", "keine Farbe ist keine Farbe, nicht Schwarz"
 
 
+def test_the_panel_offers_the_backup_and_setting_aside_as_buttons(qt_app, tmp_path, monkeypatch):
+    """Zurückholen und Beiseitelegen sind auch im Filamentbereich Knöpfe, nicht nur im Lager."""
+    from dataclasses import replace
+
+    from app.ui.filament_picker import FilamentPanel
+
+    path = tmp_path / "filaments.json"
+    monkeypatch.setattr(filaments, "catalogue_path", lambda: path)
+    first = filaments.save(filaments.CatalogueFilament("Spule", "#112233"))
+    filaments.save(replace(first, location="Kiste"))
+    path.write_text("{kaputt", encoding="utf-8")
+    panel = FilamentPanel()
+    try:
+        buttons = {button.text(): button for button in panel.hint._buttons}
+        assert "Letzten lesbaren Stand zurückholen" in buttons
+        assert "Beschädigte Datei beiseitelegen" in buttons
+        buttons["Letzten lesbaren Stand zurückholen"].click()
+        _wait_for_catalogue(panel)
+        assert [entry.identifier for entry in filaments.catalogue()] == [first.identifier]
+        assert any("Spule" in panel.list.item(row).text() for row in range(panel.list.count()))
+    finally:
+        panel.close()
+        panel.deleteLater()
+
+
 def test_broken_inventory_keeps_project_choice_and_reports_error(qt_app, tmp_path, monkeypatch):
     """Vorwahl und Panel zeigen Lesefehler, Projektfilamente bleiben erhalten."""
     from app.ui.filament_picker import FilamentPanel
@@ -159,6 +184,70 @@ def test_the_catalogue_is_offered_and_carries_name_and_colour(
         "die ganze Filamentidentität muss weitergehen"
     )
     assert field.currentData() == 1, "die erste freie Nummer, nicht die Null"
+
+
+def test_a_spool_with_several_colours_goes_whole_into_the_field(
+    qt_app: QApplication, tmp_path, monkeypatch
+) -> None:
+    """Robert, 19.09.2026: „Filament mehrfarbig (bis 4-farbig)".
+
+    Der Wähler gibt alle Farben als **einen** Feldwert weiter — dieselbe
+    Schreibweise, die *Filament zuweisen* annimmt — und zeichnet sie als
+    Streifen: links die erste, rechts die letzte (Regel 18: dazu nennt das
+    Etikett den Namen, die Farbe steht nie allein).
+    """
+    from app.ui.filament_picker import SWATCH_PIXELS, colours_of
+
+    monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "filaments.json")
+    saved = filaments.save(
+        filaments.CatalogueFilament(
+            name="Silk Dual", colour="#ff0000", extra_colours=("#0000ff",), material_type="PLA"
+        )
+    )
+    assert colours_of(saved) == "#ff0000 #0000ff"
+
+    field = FilamentField(0)
+    position = next(row for row in range(field.count()) if "Silk Dual" in field.itemText(row))
+    seen: list[str] = []
+    field.filamentChosen.connect(lambda name, colour, kind, profile: seen.append(colour))
+    field.setCurrentIndex(position)
+    field._chosen(position)
+    assert seen == ["#ff0000 #0000ff"], "beide Farben gehen in das Feld der Operation"
+
+    image = field.itemIcon(position).pixmap(SWATCH_PIXELS, SWATCH_PIXELS).toImage()
+    left = image.pixelColor(1, SWATCH_PIXELS // 2).name()
+    right = image.pixelColor(SWATCH_PIXELS - 2, SWATCH_PIXELS // 2).name()
+    assert (left, right) == ("#ff0000", "#0000ff"), f"Streifen in Spulenreihenfolge: {left} {right}"
+
+
+def test_the_filament_dialog_takes_up_to_four_colours(qt_app: QApplication) -> None:
+    """Je Farbe ein Knopf; hinzufügen und entfernen ohne Nachfrage (Regel 19),
+    und bei vier verschwindet der Weg zu einer fünften."""
+    from app.ui.filament_picker import NewFilamentDialog
+
+    dialog = NewFilamentDialog(name="Rainbow", colour="#ff0000 #00ff00")
+    assert [button.text() for button in dialog.colour_buttons] == ["#ff0000", "#00ff00"]
+    assert dialog.colour.text() == "#ff0000", "``colour`` ist weiter der erste Knopf"
+    assert dialog.filament()[1] == "#ff0000 #00ff00"
+
+    entry = dialog.entry()
+    assert entry.colour == "#ff0000"
+    assert entry.extra_colours == ("#00ff00",)
+
+    dialog._colours.append("#0000ff")
+    dialog._colours.append("#ffff00")
+    dialog._show_colours()
+    assert len(dialog.colour_buttons) == filaments.MAX_COLOURS
+    assert dialog.add_colour.isHidden(), "bei vier gibt es keine fünfte"
+    assert not dialog.remove_colour.isHidden()
+
+    dialog._remove_colour()
+    dialog._remove_colour()
+    dialog._remove_colour()
+    assert dialog.filament()[1] == "#ff0000"
+    assert dialog.remove_colour.isHidden(), "die letzte Farbe bleibt"
+    assert not dialog.add_colour.isHidden()
+    dialog.deleteLater()
 
 
 def test_a_catalogue_filament_does_not_take_slot_zero(
@@ -582,6 +671,8 @@ def test_rack_context_delete_selects_the_clicked_row(qt_app, tmp_path, monkeypat
         assert filaments.get(second.identifier).archived
         assert not filaments.get(first.identifier).archived
         assert not panel.delete_button.isEnabled()
+        # Nach dem Löschen steht der Rückweg da (B3, 19.09.2026).
+        assert "Archivierte Spulen anzeigen" in panel.hint.text()
     finally:
         panel.close()
         panel.deleteLater()

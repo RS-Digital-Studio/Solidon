@@ -55,6 +55,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-022 — Nachbau als Operationsfolge](#rm-022) | Geometrie, Erkennung und Druckvorbereitung | Beschlossen am 17.09.; nach Veröffentlichung von 0.4.3: geprüfter Nachbau hinter dem Import gemäß CAD-Konzept §§8, 13.5 |
 | [RM-188 — CAD-Parität und einfache vollständige Kundenwege](#rm-188) | Geometrie, Erkennung und Druckvorbereitung | Beschlossene Stufen nach Veröffentlichung von 0.4.3; zuerst Maß-/Referenznachführung, Erkennung und fachliche Parität absichern |
 | [RM-189 — Eine Passung verliert ihr Merkmal, und der Fall ist nicht nachgestellt](#rm-189) | Geometrie, Erkennung und Druckvorbereitung | Der Befund trägt seit dem 18.09.2026 einen Weg; die Ursache fehlt — die Schrittfolge von Robert holen oder einen Weg im Korpus finden, der ihn herstellt |
+| [RM-190 — Druckoptimal ausrichten dreht einen Körper nicht, und der Fall ist nicht nachgestellt](#rm-190) | Geometrie, Erkennung und Druckvorbereitung | Zwölf Körper aus Korpus, Downloads und Roberts Regal drehen richtig; den Körper und die Schrittfolge von Robert holen, an denen die Suche stehen bleibt |
+| [RM-191 — PrusaSlicer verbraucht für dieselbe Übergabe ein Drittel mehr Material](#rm-191) | Geometrie, Erkennung und Druckvorbereitung | Die neun Platten des Regals je Slicer gegen die Prusa-Ausgabe aufschlüsseln: Stützen, Wände oder Füllung — und die Übergabe der Prusa-Schlüssel danach ergänzen |
 | [RM-024 — Gespeicherte Zuordnungsantworten im echten Konfliktfall abnehmen](#rm-024) | Geometrie, Erkennung und Druckvorbereitung | Der Rundlauf steht; gemessen fehlt ein Korpuskörper, dessen erneute Erkennung wirklich mehrdeutig wird |
 | [RM-041 — Innenraum importierter entlüfteter Hohlkörper klären](#rm-041) | Geometrie, Erkennung und Druckvorbereitung | Schätzweg oder dokumentierte Grenze des Innenraums entscheiden |
 | [RM-042 — Leistungsgrenze der Merkmalserkennung bis eine Million Dreiecke klären](#rm-042) | Geometrie, Erkennung und Druckvorbereitung | Großen Korpus messen und belegte Erkennungsgrenze mit §31 abgleichen |
@@ -138,6 +140,13 @@ Physische Spulen, Regal, bewusster Import, Schnellauswahl und rücknehmbare
 Verbrauchsbuchungen sind angeschlossen. [Review und Nachweis zu RM-146](ROADMAP-ARCHIV.md#rm-146).
 Das anschließende [Gestaltungs- und Gesamtreview](konzepte/review-filamente-2026-09.md)
 behandelt Abwahl, Herstellerprofile, Buchungskorrekturen und die weiteren Anschlüsse.
+Eine Spule trägt bis zu vier Farben. Die Durchsicht vom 19.09.2026 (vier
+Fehler, vier Regelverstöße, neun Bedienmängel, sieben Textmängel) ist
+vollständig behoben: Eine Bearbeitung der Angaben zählt nicht mehr als
+Bestandsfeststellung, eine automatische Buchung nach einer Rücknahme bucht
+wirklich, eine abgewiesene Spule kommt in den Dialog zurück, die Übernahme aus
+dem Slicer überschreibt keine Handspule, Rücknahmen sind rücknehmbar, das Lager
+sichert seinen letzten lesbaren Stand selbst, Datumsfelder haben einen Kalender.
 
 ## P0 — Skelett
 
@@ -1356,6 +1365,54 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   dazu die belegte Antwort, ob die Kennung erhalten bleiben muss oder ob der
   Verlust richtig und nur zu erklären ist. Erst danach steht fest, ob der Weg
   über die Handlung genügt.
+
+<a id="rm-190"></a>
+
+- [ ] **RM-190 — Druckoptimal ausrichten dreht einen Körper nicht, und der Fall
+  ist nicht nachgestellt.** Robert, 19.09.2026: „Druckoptimal ausrichten:
+  Körper wird nicht gedreht, um keine Stützen notwendig zu machen.“
+
+  **Was gemessen ist:** Am 19.09.2026 drehte die Suche (`orient_for_print`,
+  gründlich, wie der Dialog sie fährt) alle geprüften Körper auf die Lage mit
+  dem kleinsten Überhang — neun gebaute Formen (Winkel, Haken, T-Stück,
+  Pilz, schräger Quader u. a.), die Kumiko-Dateien und die Figur mit 2,3
+  Millionen Dreiecken aus den Downloads sowie Roberts Regal mit zwanzig
+  Körpern, auch nach einem vorherigen *Drehen*. Ein Körper, der schon optimal
+  liegt, bleibt liegen und meldet es; das ist kein Fehler. Nur die schnelle
+  Vorauswahl (`thorough=False`) wählt an Winkel und Haken eine schlechtere
+  Lage — sie ist nicht die Vorgabe des Dialogs.
+
+  **Was offen ist:** der Körper und die Schrittfolge, an denen Robert es
+  gesehen hat. Solange die fehlen, ist nicht entschieden, ob die Suche eine
+  Lage übersieht (Kandidatenmenge, Toleranz gegen Rundungen), ob sie eine
+  Lage wegen Bettgröße oder Haftfläche verwirft, oder ob der Körper
+  ausgerichtet war und nur die Meldung fehlte.
+
+  Nächster Schritt: Projektdatei oder Körper von Robert holen und den
+  Dialogweg daran fahren; das Ergebnis wird ein Test gegen den Korpus, gleich
+  in welche Richtung er ausfällt.
+
+<a id="rm-191"></a>
+
+- [ ] **RM-191 — PrusaSlicer verbraucht für dieselbe Übergabe ein Drittel mehr
+  Material.** Gemessen am 19.09.2026 an den neun Platten von Roberts Regal
+  (Elegoo Centauri Carbon 2, PLA): ElegooSlicer 26 h und 408 g, OrcaSlicer
+  404 g, PrusaSlicer 52 h und 555 g — mit denselben Solidon-Werten für Wände,
+  Füllung, Stützen und Temperaturen (`slicer_keys.py` übersetzt sie je
+  Slicer). Alle drei liefen durch; der Unterschied ist kein Fehler des
+  Laufs, aber einer, den ein Kunde am Drucker merkt.
+
+  Offen ist die Ursache: Stützen (Prusa erzeugt sie anders und dichter),
+  eine Prusa-Vorgabe, die Solidon nicht überschreibt (Wandzahl je Schicht,
+  Deckschichten, Stützdichte, Schürze), oder ein Schlüssel, den die
+  Übersetzung für den Prusa-Zweig nicht kennt.
+
+  Nächster Schritt: eine Platte je Slicer schneiden und die G-Code-Kennzahlen
+  nebeneinanderlegen (Stützvolumen, Wandlänge, Füllung aus den
+  Slicer-Kommentaren); jeden Prusa-Schlüssel, der den Unterschied trägt, in
+  `slicer_keys.py` ergänzen und die Gegenprobe (`slicer.filament_differs`)
+  darauf ansetzen. Abnahme: Prusa liegt bei Zeit und Material innerhalb von
+  zehn Prozent der Orca-Familie für dieselbe Platte.
 
 ## Bedienung und Darstellung
 <a id="rm-070"></a>

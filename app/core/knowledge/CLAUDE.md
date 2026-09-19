@@ -98,9 +98,29 @@ Zwischenspeicher müssen die wirksamen Grenzen berücksichtigen.
 `filaments.save` speichert eine Spule nach Kennung; eine leere Kennung legt
 ein neues Exemplar an. Namen dürfen mehrfach vorkommen. Bearbeitungen behalten
 die gelesene `revision`, damit ein offener Dialog keinen jüngeren Verbrauch
-zurückschreibt. Archivieren erhält Kennung und Verlauf. Die alten Namenswege
-`remember`, `synchronise` und `forget` bearbeiten nur eindeutige Treffer;
-sie raten bei zwei gleichen Etiketten keine physische Spule.
+zurückschreibt; ein Konflikt trägt `RELOAD` als Handlung. Eine geänderte
+`remaining_grams` ist eine Bestandsfeststellung (`stock_revision` springt) —
+deshalb gibt der Spulendialog den gespeicherten Wert unverändert zurück,
+solange niemand den Bestandsblock angefasst hat: Seine Anzeige rundet auf
+eine Nachkommastelle, und die Rundung zählte sonst als Zählung und sperrte
+jede Rücknahme. Archivieren erhält Kennung und Verlauf. Die alten Namenswege
+`remember` und `forget` bearbeiten nur eindeutige Treffer; sie raten bei zwei
+gleichen Etiketten keine physische Spule. `synchronise` (Übernahme aus dem
+Slicer) erkennt eine schon übernommene Spule an **Profil und Farbe**, ohne
+Profil an Name, Farbe und Materialart zugleich (`_same_slicer_spools`); alles
+andere wird eine neue Spule mit unbekannter Menge, und eine Mehrdeutigkeit
+hält die übrige Liste nicht auf. Eine Handspule gleichen Namens wird nie
+umgefärbt (Regel 21). `valid_date` ist die eine Datumsprüfung für Kern und
+Dialog. `reverse_booking` hat mit `restore_booking` ein Gegenstück: Der
+Vorgang zählt wieder, das Journal bleibt vollständig, eine jüngere
+Bestandsfeststellung sperrt beide gleich.
+
+**Eine Spule trägt bis zu vier Farben** (`MAX_COLOURS`, Entscheidung Robert,
+19.09.2026): `colour` bleibt die erste — für jeden Weg, der genau eine kennt —,
+`extra_colours` die weiteren, `colours` alle in Spulenreihenfolge. Derselbe
+Schnitt zieht sich durch: `MaterialSlot.extra_colours`, der Parameter `colour`
+von *Filament zuweisen* mit Leerzeichen dazwischen, `filament_multi_colour`
+in der Orca-Familie; PrusaSlicer, Cura, STL und die Ansicht bekommen die erste.
 
 Spulen, letzte Bestandsfeststellungen und Buchungen stehen gemeinsam in der
 versionierten `filaments.json`. Schreibendes Lesen, Prüfen und atomarer Dateitausch
@@ -120,11 +140,17 @@ FAT32, exFAT, eine Netzfreigabe ohne diese SMB-Fähigkeit, Windows vor 1709 —
 tauscht `_replace_snapshot` gewöhnlich aus; dort verlangt der Austausch eine
 freie Zieldatei, und ein gleichzeitiger Leser ergibt einen wiederholbaren
 Schreibfehler statt eines dauerhaft gesperrten Lagers. Jeder Schreibweg
-verweigert das Überschreiben einer beschädigten oder neueren Datei. Ein
-Lesefehler trägt `RETRY` als Handlung und nicht den Vorschlag einer
-`ValidationError`: Zu korrigieren ist hier kein Feld in einem Dialog, sondern
-eine Datei — der Satz nennt die Sicherung, und danach ist genau der
-Wiederholungsknopf die Fortsetzung.
+verweigert das Überschreiben einer beschädigten oder neueren Datei; eine
+neuere trägt `too_new` und sagt es (die Datei ist nicht kaputt, nur jünger).
+`_write` legt den Stand, den es ersetzt, als `filaments.json.bak` daneben
+(`backup_path`) — den letzten lesbaren, denn die Transaktion hat ihn eben
+gelesen. Ein Lesefehler bietet deshalb Handlungen, keinen Rat:
+`RESTORE_BACKUP` (`restore_backup`: prüft die Sicherung, legt die
+beschädigte Datei als `filaments.json.damaged-<Zeit>` beiseite, tauscht
+atomar) steht nur, wenn die Sicherung da ist; `SET_ASIDE_FILE`
+(`set_aside_unreadable`: benennt um, das Lager beginnt leer, ein heiler
+Stand wird nie weggeräumt) immer; `RETRY` danach. Nicht den Vorschlag einer
+`ValidationError`: Zu korrigieren ist hier kein Feld in einem Dialog.
 
 `book` nimmt einen ganzen Vorgang an. Seine Kennung macht Zustellungen
 idempotent; ein gleicher Fingerabdruck mit neuer Vorgangskennung bedeutet

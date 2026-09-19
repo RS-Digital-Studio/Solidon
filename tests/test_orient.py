@@ -532,6 +532,74 @@ def test_orienting_everything_leaves_the_bed_in_the_middle(
     )
 
 
+def test_orienting_lays_each_filament_on_its_own_plate(
+    document: Document, profile: Profile
+) -> None:
+    """Robert, 19.09.2026: „Druckoptimal ausrichten mehrere Filamente über
+    Platten aufteilen, kein Reinigen wenn Drucker nicht mehr Düsen."
+
+    Dieselbe Regel wie bei *Auf dem Bett anordnen*, am selben Drucker mit
+    einer Düse: Zwei Filamente bekommen zwei Platten. Ausgeschaltet bleibt es
+    beim Verband auf einer.
+    """
+    project = new_project("centauri-carbon-2", "petg")
+    project.document = document
+    for number in (1, 2):
+        source = f"src_{number}"
+        document.sources[source] = Source(
+            id=source, kind="import", path=f"sources/{number}_plate_holes.stl", sha256=""
+        )
+        project.sources[source] = (MESHES / "plate_holes.stl").read_bytes()
+    history = History(document)
+    history.apply(
+        _("Laden"),
+        [
+            OperationDraft(op="load", params={"source": "src_1", "unit": "mm"}),
+            OperationDraft(op="load", params={"source": "src_2", "unit": "mm"}),
+        ],
+    )
+    history.apply(
+        _("Material"),
+        [
+            OperationDraft(
+                op="assign_slot", inputs=("obj_2",), outputs=("obj_2",), params={"slot": 1}
+            )
+        ],
+    )
+    history.apply(
+        _("Ausrichten"),
+        [
+            OperationDraft(
+                op="orient_for_print",
+                inputs=("obj_1", "obj_2"),
+                params={"thorough": False},
+            )
+        ],
+    )
+
+    result = evaluate(document, profile, sources=ProjectSources(project))
+
+    assert result.complete, result.stopped_at
+    plates = {name: entry.plate for name, entry in result.scene.objects.items()}
+    assert plates["obj_1"] != plates["obj_2"], f"zwei Filamente, zwei Platten — {plates}"
+
+    history.apply(
+        _("Ausrichten"),
+        [
+            OperationDraft(
+                op="orient_for_print",
+                inputs=("obj_1", "obj_2"),
+                params={"thorough": False, "by_material": False},
+            )
+        ],
+    )
+    together = evaluate(document, profile, sources=ProjectSources(project))
+    assert together.complete, together.stopped_at
+    assert {entry.plate for entry in together.scene.objects.values()} == {0}, (
+        "ausgeschaltet bleibt der Verband auf einer Platte"
+    )
+
+
 def test_a_body_that_was_not_chosen_keeps_its_place(document: Document, profile: Profile) -> None:
     """Wer nicht Eingang ist, wird nicht bewegt — und sein Platz bleibt belegt.
 

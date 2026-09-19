@@ -42,6 +42,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QPushButton,
+    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
@@ -333,6 +334,19 @@ class FirstRunDialog(QDialog):
         self.printer_nozzle.setSuffix(" " + tr("mm"))
         self.printer_nozzle.setValue(template.nozzle_diameter)
         custom_form.addRow(tr("Düse"), self.printer_nozzle)
+        # Wie viele davon: Eine Düse mit Wechselstation spült bei jedem
+        # Filamentwechsel, und danach richtet sich, ob Filamente auf eigene
+        # Platten kommen. Der Druckdialog führt dasselbe Feld.
+        self.printer_nozzles = QSpinBox(self.custom_printer)
+        self.printer_nozzles.setRange(1, 8)
+        self.printer_nozzles.setValue(template.nozzles)
+        self.printer_nozzles.setToolTip(
+            tr(
+                "Wie viele Düsen der Drucker zugleich führt. Eine Wechselstation zählt "
+                "nicht dazu — sie spült bei jedem Filamentwechsel."
+            )
+        )
+        custom_form.addRow(tr("Düsen"), self.printer_nozzles)
         self.custom_printer.hide()
 
         basics = QGroupBox(tr("Grundlagen"), self)
@@ -755,6 +769,7 @@ class FirstRunDialog(QDialog):
             title=name,
             build_volume=(width, depth, height),
             nozzle_diameter=nozzle,
+            nozzles=self.printer_nozzles.value(),
             layer_height=min(template.layer_height, nozzle / 2),
             extrusion_width=nozzle * template.extrusion_width / template.nozzle_diameter,
         )

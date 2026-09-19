@@ -6,6 +6,10 @@
 # abgeleitet.
 #
 # Alle Längen in Millimetern. extrusion_width ist ohne Angabe Düse * 1,05.
+# nozzles zählt die Düsen, die zugleich drucken — ohne Angabe eine. Eine
+# Wechselstation (AMS, CFS) macht daraus keine zweite: Sie spült bei jedem
+# Filamentwechsel. Wer einen Prusa XL mit mehreren Köpfen oder einen IDEX
+# fährt, trägt die Zahl in seinem eigenen Profil ein (Druckdialog, „Düsen").
 # Konturen: XY relativ zur nominellen Bettmitte; Z ab Bett. Ohne Kontur gilt
 # das nominale Rechteck. Brim-/Skirt-Ränder gehören zum Auftrag, nicht hierher.
 

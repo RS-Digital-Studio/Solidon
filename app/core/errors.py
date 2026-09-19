@@ -26,6 +26,15 @@ from app.i18n import TranslatableText, _
 
 CANCEL = Action("cancel", _("Abbrechen"))
 RETRY = Action("retry", _("Erneut versuchen"), primary=True)
+#: Für einen Stand, den ein anderes Fenster inzwischen geändert hat: erst
+#: neu lesen, dann noch einmal ändern. „Erneut versuchen" hieße, dieselbe
+#: veraltete Eingabe noch einmal zu schicken.
+RELOAD = Action("reload", _("Aktuellen Stand neu laden"), primary=True)
+#: Die zwei Auswege aus einer unlesbaren Lagerdatei: den Stand vor dem
+#: letzten Schreiben zurückholen (die Anwendung legt ihn selbst ab) oder die
+#: beschädigte Datei umbenennen und mit einem leeren Lager weiterarbeiten.
+RESTORE_BACKUP = Action("restore_backup", _("Letzten lesbaren Stand zurückholen"), primary=True)
+SET_ASIDE_FILE = Action("set_aside_file", _("Beschädigte Datei beiseitelegen"))
 SHOW_DETAILS = Action("show_details", _("Details anzeigen"))
 CORRECT_INPUT = Action("correct_input", _("Eingabe korrigieren"), primary=True)
 USE_SUGGESTED_NAME = Action("use_suggested_name", _("Freien Namen verwenden"), primary=True)

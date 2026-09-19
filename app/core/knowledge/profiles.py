@@ -92,6 +92,9 @@ def _printer_from_table(identifier: str, table: Mapping[str, Any], source: Path)
         printable_area=contour,
         bed_exclusions=exclusions,
         printable_height=height_limit,
+        # Weniger als eine Düse druckt nichts; eine fehlende Angabe heißt
+        # eine — das ist der Bestand der Tabelle und der übliche Drucker.
+        nozzles=max(1, int(table.get("nozzles", 1))),
     )
     printable_area(result)
     printable_height(result)

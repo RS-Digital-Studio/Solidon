@@ -121,6 +121,58 @@ def test_a_colour_that_is_no_colour_stops_with_advice(own_catalogue: Path) -> No
     assert filaments.catalogue() == (), "abgelehnt heißt: nichts geschrieben"
 
 
+def test_a_filament_may_carry_up_to_four_colours(own_catalogue: Path) -> None:
+    """Robert, 19.09.2026: „Filament mehrfarbig (bis 4-farbig) nicht erstellbar
+    im Filamentlager."
+
+    Ein zweifarbiges Seidenfilament ist eine Spule mit einem Bestand; nur die
+    Farbe ist keine. Die erste bleibt ``colour`` — für jeden Weg, der genau
+    eine kennt —, die weiteren stehen in ``extra_colours``; ``colours`` nennt
+    alle in Spulenreihenfolge, und die Datei bringt sie unverändert zurück.
+    """
+    saved = filaments.save(
+        filaments.CatalogueFilament(
+            name="PLA Silk Dual",
+            colour="#D02020",
+            extra_colours=("#2020D0",),
+            material_type="PLA",
+        )
+    )
+    assert saved.colours == ("#d02020", "#2020d0"), "kleingeschrieben wie die erste"
+
+    back = filaments.get(saved.identifier)
+    assert back is not None
+    assert back.extra_colours == ("#2020d0",), "die Datei trägt die zweite Farbe"
+    assert back.colour == "#d02020", "und die erste bleibt die erste"
+
+    four = filaments.save(
+        filaments.CatalogueFilament(
+            name="PLA Rainbow",
+            colour="#ff0000",
+            extra_colours=("#00ff00", "#0000ff", "#ffff00"),
+        )
+    )
+    assert len(four.colours) == filaments.MAX_COLOURS
+
+    with pytest.raises(ValidationError) as refused:
+        filaments.save(
+            filaments.CatalogueFilament(
+                name="Zu viele",
+                colour="#ff0000",
+                extra_colours=("#00ff00", "#0000ff", "#ffff00", "#00ffff"),
+            )
+        )
+    assert refused.value.field == "extra_colours"
+    assert refused.value.suggestions, "Regel 17: auch die fünfte Farbe endet mit einem Weg"
+    with pytest.raises(ValidationError):
+        filaments.save(
+            filaments.CatalogueFilament(name="Kaputt", colour="#ff0000", extra_colours=("blau",))
+        )
+    assert {entry.name for entry in filaments.catalogue()} == {"PLA Silk Dual", "PLA Rainbow"}, (
+        "abgelehnt heißt: nichts geschrieben"
+    )
+
+
 @pytest.mark.parametrize(
     "profile",
     (

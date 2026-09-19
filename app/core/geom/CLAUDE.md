@@ -559,6 +559,15 @@ auseinander (Entscheidung Robert, 10.09.2026). Ohne Migration, weil die
 Änderung die Lage berichtigt und keine Maße umdeutet — Bauplan §29 führt die
 Begründung.
 
+**Und beide Anordnungen trennen nach Filament, wo der Drucker sonst spült**
+(`by_material`, Vorgabe An — Entscheidung Robert, 19.09.2026). Ob die Trennung
+nötig ist, fragt `_filament_groups` den Drucker: `PrinterProfile.nozzles`
+zählt die Düsen, eine Wechselstation nicht; getrennt wird erst, wenn mehr
+Filamente auf dem Bett liegen als Düsen. Den Gruppenweg selbst gibt es einmal
+(`_arranged_in_filament_groups`), für *Auf dem Bett anordnen* und für das
+Hinlegen nach dem Ausrichten — dort mit den liegengebliebenen Körpern als
+`occupied`, in der Zählung der jeweiligen Gruppe.
+
 **Und was sie nicht meldet, nimmt sie selbst mit.** Bei einem einzigen Körper
 meldet die Operation ihre Matrix, und `scene.evaluate` führt die Merkmale
 damit nach; bei mehreren hat jeder seine eigene, eine davon zu melden wäre

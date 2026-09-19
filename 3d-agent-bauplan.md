@@ -2091,6 +2091,17 @@ Der Mindestabstand gilt zwischen den Körpern; notwendige Plattenhaftungen
 werden zusätzlich berücksichtigt. Der Bauraum und die Zahl verfügbarer Platten
 sind Grenzen der Anordnung.
 
+**Je Filament eine Platte, wo der Drucker sonst spült** (Entscheidung Robert,
+19.09.2026: „Druckoptimal ausrichten mehrere Filamente über Platten aufteilen,
+kein Reinigen wenn Drucker nicht mehr Düsen"). Beide Anordnungen legen Teile
+verschiedener Filamente auf verschiedene Platten, und zwar von sich aus — der
+Umschalter *Nach Filament trennen* steht auf An. Ob die Trennung nötig ist,
+entscheidet der Drucker: Sein Profil führt die Zahl seiner Düsen (`nozzles`,
+ohne Angabe eine; eine Wechselstation zählt nicht dazu), und getrennt wird
+erst, wenn mehr Filamente auf dem Bett liegen, als Düsen da sind. Ein Teil,
+das selbst mehrere Filamente trägt, bleibt zusammen. Die Plattengrenze gilt
+dabei der Szene, nicht je Gruppe.
+
 Nicht untergebrachte Körper bleiben im Ergebnis mit einem Befund erhalten;
 sie werden nie stillschweigend weggelassen. Eine Änderung des Packverfahrens
 wird an denselben Referenzteilen auf Plattenzahl, Kollisionsfreiheit,

@@ -98,7 +98,24 @@ aus dem allgemeinen Filamentprofil des Projekts.
 Orca-Filamentprofile tragen je Spule `filament_shrink`: ohne Herstellerwert
 den neutralen Slicerstandard `100%`, vorhandene Herstellerwerte bleiben stehen.
 Die vollständige Liste ist auch für lokale Spulen nötig, da Bambu sie beim
-Schneiden ungeprüft je Filament indiziert.
+Schneiden ungeprüft je Filament indiziert. Aus demselben Grund tragen alle
+Filamentprofile eines Laufs **dieselben Schlüssel** (`_with_equal_keys`):
+Eine Spule anderen Typs erbt das Herstellerprofil nicht und käme mit einem
+Drittel der Schlüssel; die Orca-Familie indiziert dann ins Leere und reißt
+ohne Meldung (`0xC0000409`). Was einem Profil fehlt, kommt aus dem ersten
+Profil des Laufs, das den Schlüssel führt — nur Startsequenzen, Lüfter- und
+Vorschubwerte, denn Temperaturen, Kühlung und Materialwerte schreibt
+`_orca_filament` ohnehin je Spule.
+
+Ein mehrfarbiges Filament (`MaterialSlot.extra_colours`) geht an die
+Orca-Familie als `filament_multi_colour` — alle Farben in einer Zeichenkette
+mit Leerzeichen, die erste zugleich in `filament_colour` — und
+`filament_colour_type` „1" (Abschnitte, kein Verlauf). Die zwei Schlüssel
+stehen nur, wo eine Spule mehrere Farben hat; in der Projektdatei dann für
+jede Spule der Platte, weil dort je Extruder eine Liste steht. Beide gehören
+zu `_RECOMPUTED`: Der G-Code führt sie nicht. `ingest/threemf.py` liest
+denselben Schlüssel zurück. Prusa und Cura kennen eine Farbe je Filament und
+bekommen die erste.
 
 `SlicerConfig.written` hält die tatsächlich ausgegebenen Sollwerte, auch
 Listen je Werkzeug. Die G-Code-Gegenprobe vergleicht diese Werte vollständig

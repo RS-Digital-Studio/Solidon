@@ -26,7 +26,7 @@ from app.i18n import _
 _log = get_logger(__name__)
 
 #: Aktuelle Version von ``project.json``.
-FORMAT_VERSION: Final = 25
+FORMAT_VERSION: Final = 26
 
 
 @dataclass(frozen=True, slots=True)
@@ -602,6 +602,22 @@ def _keep_raw_import_coordinates(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def _allow_several_filament_colours(data: dict[str, Any]) -> dict[str, Any]:
+    """25 → 26: Ein Filament darf mehrere Farben tragen (§20, 19.09.2026).
+
+    Der Parameter ``colour`` von *Filament zuweisen* und *Filament auf eine
+    Fläche* nimmt seither bis zu vier Farben, durch Leerzeichen getrennt —
+    dieselbe Schreibweise, in der die Orca-Familie ein mehrfarbiges Filament
+    führt. An einer älteren Datei ist nichts umzuschreiben: Eine Farbe ist
+    weiterhin eine Farbe. Die Stufe steht trotzdem, und zwar für die andere
+    Richtung: Ein älteres Programm, das eine Datei mit zwei Farben öffnete,
+    hielte mitten in der Auswertung mit „Die Farbe wird als #RRGGBB
+    angegeben" an — als wäre die Eingabe falsch. Mit der Versionsgrenze sagt
+    es stattdessen, was gilt: Die Datei ist neuer, ein Update öffnet sie.
+    """
+    return data
+
+
 #: Alle bekannten Schritte, älteste zuerst.
 MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=1, to_version=2, apply=_add_chat),
@@ -628,6 +644,7 @@ MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=22, to_version=23, apply=_remember_the_export),
     Step(from_version=23, to_version=24, apply=_add_protected_faces),
     Step(from_version=24, to_version=25, apply=_keep_raw_import_coordinates),
+    Step(from_version=25, to_version=26, apply=_allow_several_filament_colours),
 )
 
 

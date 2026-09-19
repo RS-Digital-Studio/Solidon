@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+from functools import partial
 from pathlib import Path
 from threading import Event
 from time import monotonic
@@ -95,7 +97,10 @@ def test_late_stock_conflict_does_not_reopen_exception_on_another_spool(inventor
         released.set()
         _wait_for_action(inventory)
     assert inventory.keep_count_button.isHidden()
-    assert not inventory.message.text()
+    # Die Absage geht nicht verloren (B6), sie nennt nur ihre Spule — das
+    # Angebot „mit aktuellem Bestand" bleibt an der Ansicht gebunden.
+    assert inventory.message.text().startswith("Erste: ")
+    assert "neu festgestellt" in inventory.message.text()
     assert all(not booking.reversed_at for booking in filaments.bookings())
 
 
@@ -258,6 +263,124 @@ def test_damaged_inventory_between_detail_and_edit_keeps_explanation(inventory):
     assert not inventory.retry_button.isHidden()
 
 
+def test_the_hatching_means_unknown_and_nothing_else() -> None:
+    """Bekannter Rest ohne Nennfüllung: kein Schraffur-„unbekannt" neben „300 g übrig" (R3)."""
+    from app.ui.filament_inventory import coil_fill
+
+    assert coil_fill(filaments.CatalogueFilament("A", "#111111")) == (False, 0.7)
+    assert coil_fill(filaments.CatalogueFilament("A", "#111111", remaining_grams=300)) == (
+        True,
+        0.7,
+    )
+    known, ratio = coil_fill(
+        filaments.CatalogueFilament("A", "#111111", remaining_grams=250, spool_grams=1000)
+    )
+    assert known and ratio == pytest.approx(0.25)
+    assert coil_fill(filaments.CatalogueFilament("A", "#111111", remaining_grams=0)) == (True, 0.0)
+
+
+def test_long_names_wrap_before_they_are_cut_in_the_middle(qt_app: QApplication) -> None:
+    """Zwei Polymaker-Spulen verschiedener Farbe bleiben am Namen unterscheidbar (R4)."""
+    from PySide6.QtGui import QFontMetrics
+
+    from app.ui.filament_inventory import name_lines
+
+    metrics = QFontMetrics(qt_app.font())
+    width = metrics.horizontalAdvance("Polymaker PolyTerra PLA")
+    assert name_lines("PLA Rot", metrics, width) == ["PLA Rot"]
+    lines = name_lines("Polymaker PolyTerra PLA Matte Rot", metrics, width)
+    assert len(lines) == 2 and lines[0].startswith("Polymaker") and lines[1].endswith("Rot")
+    lines = name_lines("Polymaker PolyTerra PLA Matte Lavendel Himmelblau Metallic", metrics, width)
+    assert len(lines) == 2 and lines[1].endswith("Metallic") and "…" in lines[1]
+    (single,) = name_lines("EinWortOhneJedeLückeDasVielZuLangIst", metrics, width)
+    assert "…" in single and single.endswith("Ist")
+
+
+def test_detail_hides_the_outer_back_and_escape_walks_back(inventory: InventoryView) -> None:
+    """Im Detail gibt es einen Zurück-Knopf, und Esc geht denselben Weg (B4, B9)."""
+    entry = filaments.save(filaments.CatalogueFilament("Spule", "#123456"))
+    inventory.show()
+    left: list[bool] = []
+    inventory.backRequested.connect(lambda: left.append(True))
+    assert not inventory.back_button.isHidden()
+    inventory.show_spool(entry.identifier)
+    assert inventory.back_button.isHidden()
+    assert inventory.add_button.isHidden()
+    inventory._escape()
+    assert inventory.pages.currentIndex() == 0
+    assert not inventory.back_button.isHidden()
+    assert left == []
+    inventory._escape()
+    assert left == [True]
+    inventory.close()
+
+
+def test_detail_names_stock_dates_and_price_as_facts(inventory: InventoryView) -> None:
+    """Preis, Kauf- und Öffnungsdatum stehen auf der Detailseite, nicht nur im Dialog (B5)."""
+    from PySide6.QtWidgets import QLabel
+
+    entry = filaments.save(
+        filaments.CatalogueFilament(
+            "Spule",
+            "#123456",
+            remaining_grams=321.5,
+            bought_on="2026-09-05",
+            price=24.9,
+            currency="EUR",
+        )
+    )
+    inventory.show_spool(entry.identifier)
+    texts = [label.text() for label in inventory.detail.findChildren(QLabel)]
+    assert "Restmenge" in texts and "321,5 g übrig" in texts
+    assert "Gekauft am" in texts and any("2026" in text and "September" in text for text in texts)
+    assert "Geöffnet am" in texts and "Unbekannt" in texts
+    assert "Spulenpreis" in texts and "24,90 EUR" in texts
+
+
+def test_empty_shelf_puts_both_ways_in_the_middle_and_hides_the_filters(
+    inventory: InventoryView,
+) -> None:
+    """Ohne eine Spule gibt es nichts zu suchen; die zwei Wege stehen beim Satz (B8)."""
+    inventory.show()
+    assert inventory.filters.isHidden()
+    assert not inventory.empty_actions.isHidden()
+    assert inventory.import_button.isHidden()
+    assert inventory.empty_add_button.isEnabled() and inventory.empty_import_button.isEnabled()
+    filaments.save(filaments.CatalogueFilament("Spule", "#123456"))
+    inventory.refresh()
+    assert not inventory.filters.isHidden()
+    assert inventory.empty_panel.isHidden()
+    assert not inventory.import_button.isHidden()
+    inventory.search.setText("gibt es nicht")
+    assert not inventory.empty_panel.isHidden()
+    assert inventory.empty_actions.isHidden(), "eine Suche ohne Treffer behält die Suchleiste"
+    assert not inventory.filters.isHidden()
+    inventory.close()
+
+
+def test_summary_counts_archived_spools_separately(inventory: InventoryView) -> None:
+    """„3 Spulen im Lager" zählte Archivierte mit (T4)."""
+    for name in ("Eine", "Zwei", "Drei"):
+        filaments.save(filaments.CatalogueFilament(name, "#123456"))
+    filaments.archive(filaments.catalogue()[0].identifier)
+    inventory.archived.setChecked(True)
+    inventory.refresh()
+    assert inventory.summary.text() == "2 Spulen im Lager, 1 archiviert"
+    inventory.archived.setChecked(False)
+    inventory.refresh()
+    assert inventory.summary.text() == "2 Spulen im Lager"
+
+
+def test_booking_mode_has_a_visible_label(inventory: InventoryView) -> None:
+    """Die Combobox „Nachfragen" sagt, wonach (B1)."""
+    from PySide6.QtWidgets import QLabel
+
+    labels = [
+        label for label in inventory.findChildren(QLabel) if label.buddy() is inventory.booking_mode
+    ]
+    assert [label.text() for label in labels] == ["Nach einer Ausgabe an den Slicer buchen"]
+
+
 def test_unknown_is_preserved_when_edit_dialog_opens(qt_app: QApplication) -> None:
     """Öffnen und unverändertes Speichern machen aus unbekannt weder leer noch voll."""
     entry = filaments.CatalogueFilament("Altspule", "#112233", identifier="old")
@@ -268,6 +391,48 @@ def test_unknown_is_preserved_when_edit_dialog_opens(qt_app: QApplication) -> No
     assert not dialog.stock_slider.isEnabled()
     assert "unbekannt" in dialog.stock_hint.text()
     assert dialog.entry().identifier == "old"
+
+
+def test_editing_only_the_label_keeps_the_exact_stock_and_the_reversal(inventory) -> None:
+    """Die Anzeige rundet auf eine Nachkommastelle; gespeichert wird nicht die Rundung.
+
+    Befund 19.09.2026: Rest 49,34 g, „Angaben ändern" ohne Berührung des
+    Bestands → der Dialog gab 49,3 zurück, der Kern zählte das als neue
+    Bestandsfeststellung, und die Rücknahme der Buchung war gesperrt.
+    """
+    entry = filaments.save(filaments.CatalogueFilament("PETG Rot", "#d02020", remaining_grams=1000))
+    filaments.book("op-1", "geometry", [filaments.BookingPosition(entry.identifier, 950.66)])
+    stored = filaments.get(entry.identifier)
+    assert stored is not None
+    assert stored.remaining_grams == pytest.approx(49.34)
+    dialog = NewFilamentDialog(entry=stored)
+    dialog.location.setText("Regal 2")
+    edited = dialog.entry()
+    assert edited.remaining_grams == pytest.approx(49.34)
+    saved = filaments.save(edited)
+    assert saved.stock_revision == stored.stock_revision
+    assert saved.location == "Regal 2"
+    filaments.reverse_booking("op-1")
+    restored = filaments.get(entry.identifier)
+    assert restored is not None
+    assert restored.remaining_grams == pytest.approx(1000)
+    # Ein Griff an den Bestand zählt weiterhin als Feststellung.
+    dialog = NewFilamentDialog(entry=restored)
+    dialog.remaining.setValue(980)
+    counted = filaments.save(dialog.entry())
+    assert counted.stock_revision == restored.stock_revision + 1
+    assert counted.remaining_grams == pytest.approx(980)
+
+
+def test_full_spool_button_counts_even_when_the_number_stays(inventory) -> None:
+    """„Als volle Spule eintragen" ist eine Bestandsfeststellung, auch bei gleicher Zahl."""
+    entry = filaments.save(
+        filaments.CatalogueFilament("PLA", "#111111", remaining_grams=1000, spool_grams=1000)
+    )
+    dialog = NewFilamentDialog(entry=entry)
+    dialog.full_spool_button.click()
+    assert dialog.entry().remaining_grams == pytest.approx(1000)
+    assert dialog._stock_edited
 
 
 def test_slider_and_grams_edit_the_same_value(qt_app: QApplication) -> None:
@@ -297,14 +462,127 @@ def test_optional_price_keeps_currency_and_zero(qt_app: QApplication) -> None:
 
 
 def test_invalid_date_is_explained_before_saving(qt_app: QApplication) -> None:
-    """Datumsfelder speichern weder erfundene Daten noch sprachabhängige Werte."""
+    """Datumsfelder speichern weder erfundene Daten noch sprachabhängige Werte.
+
+    Seit dem Kalenderfeld (B7, 19.09.2026) lässt sich ein erfundenes Datum
+    gar nicht mehr eintragen: Es bleibt „Unbekannt", und gespeichert wird
+    ISO — gleich, in welcher Sprache getippt wurde.
+    """
     dialog = NewFilamentDialog(name="Spule")
     dialog.bought_on.setText("2026-02-30")
-    assert not dialog._ok_button.isEnabled()
-    assert "Datum" in dialog.validation.text()
+    assert dialog._ok_button.isEnabled()
+    assert dialog.entry().bought_on == ""
+    assert dialog.bought_on.editor.text() == "Unbekannt"
     dialog.bought_on.setText("2026-02-28")
     assert dialog._ok_button.isEnabled()
     assert dialog.entry().bought_on == "2026-02-28"
+    assert dialog.bought_on.clear_button.isEnabled()
+    dialog.bought_on.clear_button.click()
+    assert dialog.entry().bought_on == ""
+
+
+def test_the_date_is_typed_in_the_language_of_the_app(qt_app: QApplication) -> None:
+    """Ein deutscher Kunde tippt 05.09.2026 — und genau das nimmt das Feld (B7)."""
+    from PySide6.QtTest import QTest
+
+    from app.i18n import get_language, set_language
+
+    before = get_language()
+    set_language("de")
+    try:
+        dialog = NewFilamentDialog(name="Spule")
+        dialog.show()
+        assert dialog.focus_field("bought_on")
+        assert dialog.bought_on.editor.displayFormat() == "dd.MM.yyyy"
+        assert dialog.bought_on.editor.text() == "Unbekannt"
+        # Lostippen ab „Unbekannt", mit oder ohne Punkte, auch einstellig.
+        for typed, expected in (
+            ("05092026", "2026-09-05"),
+            ("31.12.2024", "2024-12-31"),
+            ("7.3.2025", "2025-03-07"),
+        ):
+            dialog.bought_on.clear()
+            QTest.keyClicks(dialog.bought_on.editor, typed)
+            assert dialog.entry().bought_on == expected, typed
+        dialog.close()
+    finally:
+        set_language(before)
+
+
+@pytest.mark.parametrize("text", ["20260905", "2026-W36-5", "05.09.2026", "2026-2-3"])
+def test_dialog_rejects_every_date_form_the_core_rejects(qt_app: QApplication, text: str) -> None:
+    """Was der Dialog speichert, nimmt der Kern an — dieselbe Prüfung an beiden Stellen."""
+    dialog = NewFilamentDialog(name="Spule")
+    dialog.bought_on.setText(text)
+    assert dialog.entry().bought_on == ""
+    assert filaments.valid_date(dialog.entry().bought_on or "2026-09-05")
+    assert not filaments.valid_date(text)
+    with pytest.raises(ValidationError) as rejected:
+        filaments.save(filaments.CatalogueFilament("Spule", "#112233", bought_on=text))
+    assert rejected.value.field == "bought_on"
+
+
+def test_rejected_spool_comes_back_into_the_dialog(inventory, monkeypatch) -> None:
+    """Weist der Kern ein Feld ab, steht die Eingabe wieder da — nichts geht verloren.
+
+    Befund 19.09.2026: Dialog zu, unten der Grund, das Regal leer, und Name,
+    Lagerort und Bestand waren weg.
+    """
+    reopened: list[tuple[object, str]] = []
+
+    def capture(self):
+        reopened.append((self._entry, self.focusWidget() is self.bought_on.editor))
+        return QDialog.DialogCode.Rejected
+
+    monkeypatch.setattr(NewFilamentDialog, "exec", capture)
+    candidate = filaments.CatalogueFilament(
+        "PETG Rot", "#d02020", location="Regal 2", remaining_grams=750, bought_on="20260905"
+    )
+    inventory._run(partial(filaments.save, candidate), inventory._saved, retry_entry=candidate)
+    _wait_for_action(inventory)
+    assert reopened and reopened[0] == (candidate, True)
+    assert "bought_on" in inventory.message.text() or "Datum" in inventory.message.text()
+    assert filaments.catalogue() == ()
+
+
+def test_focus_field_opens_the_details_for_a_date(qt_app: QApplication) -> None:
+    dialog = NewFilamentDialog(name="Spule")
+    dialog.show()
+    assert not dialog.more.isVisible()
+    assert dialog.focus_field("bought_on")
+    assert dialog.more.isVisible()
+    assert dialog.focusWidget() is dialog.bought_on.editor
+    assert not dialog.focus_field("revision")
+    dialog.close()
+
+
+def test_revision_conflict_offers_to_reload(inventory) -> None:
+    """Der Satz sagt „neu laden" — und genau das ist der Knopf (Regel 17)."""
+    entry = filaments.save(filaments.CatalogueFilament("Spule", "#112233"))
+    filaments.save(replace(entry, location="Kiste"))
+    stale = replace(entry, location="Schrank")
+    inventory._run(partial(filaments.save, stale), inventory._saved, retry_entry=stale)
+    _wait_for_action(inventory)
+    labels = [button.text() for button in inventory.message._buttons]
+    assert "Aktuellen Stand neu laden" in labels
+    assert "Eingabe korrigieren" not in inventory.message.text()
+    current = filaments.get(entry.identifier)
+    assert current is not None and current.location == "Kiste"
+
+
+def test_title_and_button_agree_on_creating_and_editing(qt_app: QApplication) -> None:
+    """Ein Neueintrag, der abgewiesen zurückkommt, bleibt ein Anlegen — Titel wie Knopf."""
+    fresh = NewFilamentDialog(entry=filaments.CatalogueFilament("Neu", "#112233"))
+    assert fresh.windowTitle() == "Neues Filament"
+    assert fresh._ok_button.text() == "Spule anlegen"
+    named = NewFilamentDialog(name="Vorbelegt")
+    assert named.windowTitle() == "Neues Filament"
+    assert named._ok_button.text() == "Spule anlegen"
+    existing = NewFilamentDialog(
+        entry=filaments.CatalogueFilament("Alt", "#112233", identifier="x")
+    )
+    assert existing.windowTitle() == "Filament ändern"
+    assert existing._ok_button.text() == "Spule speichern"
 
 
 def test_same_labels_remain_individually_selectable(inventory: InventoryView) -> None:
@@ -556,7 +834,17 @@ def test_journal_shows_source_correction_and_reverses_entire_operation(
     assert filaments.get(second.identifier).remaining_grams == pytest.approx(300)
     assert "Zurückgenommen" in inventory.history.item(0).text()
     inventory.history.setCurrentRow(0)
-    assert not inventory.reverse_button.isEnabled()
+    # Die Rücknahme ist rücknehmbar (B2): derselbe Knopf, anderer Satz.
+    assert inventory.reverse_button.isEnabled()
+    assert inventory.reverse_button.text() == "Rücknahme rückgängig machen"
+    inventory.reverse_button.click()
+    _wait_for_action(inventory)
+    assert filaments.get(first.identifier).remaining_grams == pytest.approx(175)
+    assert filaments.get(second.identifier).remaining_grams == pytest.approx(265)
+    assert "Zurückgenommen" not in inventory.history.item(0).text()
+    assert len(filaments.bookings()) == 1
+    inventory.history.setCurrentRow(0)
+    assert inventory.reverse_button.text() == "Gewählten Vorgang zurücknehmen"
 
 
 def test_newer_stock_count_is_not_overwritten_by_reverse(inventory: InventoryView) -> None:
@@ -739,14 +1027,47 @@ def test_unreadable_inventory_keeps_the_recovery_explanation(inventory: Inventor
         filaments.catalogue()
     assert RETRY in caught.value.suggestions, "der Lesefehler trägt seine eigene Handlung"
     inventory.refresh()
-    assert inventory.message.text().startswith(str(caught.value))
-    assert "Feld: catalogue" in inventory.message.text()
-    assert "Bedingung: unreadable" in inventory.message.text()
+    assert inventory.message.text().startswith(str(caught.value.title))
+    # Feld und Bedingung sind Adressen für den Code, keine Angaben für den
+    # Kunden — sie stehen nicht mehr unter dem Satz (T2, 19.09.2026).
+    assert "Feld:" not in inventory.message.text()
+    assert "Bedingung:" not in inventory.message.text()
+    assert ".:" not in inventory.message.text()
     assert "Sicherung" in inventory.message.text()
     offered = [button.text() for button in inventory.message.findChildren(QPushButton)]
     assert str(RETRY.label) in offered, f"kein ausführbarer Rückweg, nur {offered}"
     assert inventory._entries == saved and saved[0].identifier == entry.identifier
     assert not inventory.retry_button.isHidden()
+
+
+def test_unreadable_inventory_offers_the_backup_as_a_button(inventory: InventoryView) -> None:
+    """Die Sicherung, die die Anwendung selbst anlegt, ist ein Klick entfernt (R2)."""
+    entry = filaments.save(filaments.CatalogueFilament("Vorhanden", "#123456"))
+    filaments.save(replace(entry, location="Kiste"))
+    filaments.catalogue_path().write_text("{kaputt", encoding="utf-8")
+    inventory.refresh()
+    buttons = {button.text(): button for button in inventory.message._buttons}
+    assert "Letzten lesbaren Stand zurückholen" in buttons
+    assert "Beschädigte Datei beiseitelegen" in buttons
+    buttons["Letzten lesbaren Stand zurückholen"].click()
+    _wait_for_action(inventory)
+    assert not inventory.message.text()
+    assert [card.entry.identifier for card in inventory.cards] == [entry.identifier]
+    assert inventory.cards[0].entry.location == ""
+
+
+def test_unreadable_inventory_can_be_set_aside_from_the_shelf(inventory: InventoryView) -> None:
+    filaments.save(filaments.CatalogueFilament("Vorhanden", "#123456"))
+    filaments.catalogue_path().write_text("{kaputt", encoding="utf-8")
+    inventory.refresh()
+    buttons = {button.text(): button for button in inventory.message._buttons}
+    assert "Letzten lesbaren Stand zurückholen" not in buttons, "ohne Sicherung kein Knopf dafür"
+    buttons["Beschädigte Datei beiseitelegen"].click()
+    _wait_for_action(inventory)
+    assert not inventory.message.text()
+    assert inventory.cards == []
+    assert "leer" in inventory.empty.text()
+    assert list(filaments.catalogue_path().parent.glob("filaments.json.damaged-*"))
 
 
 def test_unexpected_inventory_read_error_is_reported_and_logged(
@@ -760,9 +1081,11 @@ def test_unexpected_inventory_read_error_is_reported_and_logged(
 
     monkeypatch.setattr(filaments, "catalogue", broken)
     inventory.refresh()
-    assert inventory.message.text().startswith(
-        str(InternalError(detail="RuntimeError: inventory-read-probe"))
-    )
+    shown = inventory.message.text().splitlines()
+    assert shown[:2] == [
+        str(InternalError.default_title),
+        "RuntimeError: inventory-read-probe",
+    ]
     assert str(REPORT_ERROR.label) in inventory.message.text()
     assert str(SHOW_DETAILS.label) in inventory.message.text()
     assert "inventory-read-probe" in caplog.text

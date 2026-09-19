@@ -3697,6 +3697,107 @@ def _filament_profile(directory: Path, name: str, **werte: object) -> Path:
     return datei
 
 
+def test_every_filament_profile_of_a_run_carries_the_same_keys(tmp_path: Path) -> None:
+    """Befund Robert, 19.09.2026: „beim Öffnen im Slicer Fehler".
+
+    Sein Regal aus einer Bambu-3MF trug neben der PLA-Spule aus dem Lager einen
+    deklarierten PETG-Slot ohne eigenes Profil. Die PLA-Spule erbte das
+    Herstellerprofil des Laufs mit seinen 65 Schlüsseln, die PETG-Spule kam
+    mit Solidons 34 — und der ElegooSlicer brach mit 0xC0000409 ab, ohne ein
+    Wort. Jedes Filamentprofil eines Laufs trägt jetzt dieselben Schlüssel;
+    was Solidon selbst setzt, bleibt dabei je Spule das eigene.
+    """
+    from app.core.types import MaterialSlot
+
+    house = _filament_profile(
+        tmp_path,
+        "Haus PLA",
+        nozzle_temperature=["215"],
+        filament_start_gcode=["; Haus PLA start"],
+        pressure_advance=["0.03"],
+        filament_vendor=["Haus"],
+    )
+    profile = profiles.make_profile()
+    settings = print_settings.resolve(profile)
+    setup = handover.SlicerSetup(
+        executable=Path("elegoo-slicer.exe"), flavour="orca", base_filament=str(house)
+    )
+    foreign = MaterialSlot(index=0, name="SUNLU PETG @BBL A1", material_type="PETG")
+    local = MaterialSlot(index=1, name="PLAOrange", material_type="PLA")
+
+    config = handover.write_config(settings, profile, setup, tmp_path, [foreign, local])
+
+    petg, pla = (json.loads(f.read_text(encoding="utf-8")) for f in config.filaments)
+    assert set(petg) == set(pla), (
+        f"ungleiche Schlüssel: nur PETG {sorted(set(petg) - set(pla))}, "
+        f"nur PLA {sorted(set(pla) - set(petg))}"
+    )
+    assert petg["nozzle_temperature"] != pla["nozzle_temperature"], (
+        "jede Spule fährt weiter ihre eigene Temperatur"
+    )
+    assert petg["filament_type"] == ["PETG"] and pla["filament_type"] == ["PLA"]
+    assert pla["filament_start_gcode"] == ["; Haus PLA start"], "die PLA-Spule erbt den Hersteller"
+    assert petg["filament_start_gcode"] == ["; Haus PLA start"], (
+        "was Solidon nicht setzt, kommt aus dem Nachbarprofil statt zu fehlen"
+    )
+
+
+def test_a_filament_with_several_colours_reaches_the_orca_family_whole(tmp_path: Path) -> None:
+    """Die Orca-Familie kennt mehrfarbiges Filament: ``filament_multi_colour``
+    trägt alle Farben durch Leerzeichen getrennt, ``filament_colour_type``
+    „1" die Abschnitte, ``filament_colour`` weiter die erste (§20).
+
+    Geschrieben nur, wo es mehrere sind — und in der Projektdatei dann für
+    jede Spule der Platte, denn dort ist es eine Liste je Extruder.
+    """
+    from app.core.types import MaterialSlot
+
+    pla = _filament_profile(tmp_path, "Haus PLA", nozzle_temperature=["210"])
+    profile = profiles.make_profile()
+    settings = print_settings.resolve(profile)
+    setup = handover.SlicerSetup(executable=Path("orca-slicer.exe"), flavour="orca")
+    dual = MaterialSlot(
+        index=0,
+        name="Silk Dual",
+        colour=(1.0, 0.0, 0.0),
+        extra_colours=((0.0, 0.0, 1.0),),
+        material=str(pla),
+    )
+    plain = MaterialSlot(index=1, name="Weiß", colour=(1.0, 1.0, 1.0), material=str(pla))
+
+    config = handover.write_config(settings, profile, setup, tmp_path, [dual, plain])
+    erste, zweite = (json.loads(f.read_text(encoding="utf-8")) for f in config.filaments)
+    assert erste["filament_colour"] == ["#FF0000"], "die erste Farbe bleibt die Farbe"
+    assert erste["filament_multi_colour"] == ["#FF0000 #0000FF"]
+    assert erste["filament_colour_type"] == ["1"]
+    # Im selben Lauf führt auch die einfarbige Spule die Schlüssel — mit ihrer
+    # eigenen Farbe, denn alle Filamentprofile eines Laufs tragen dieselben
+    # Schlüssel (``_with_equal_keys``); allein bleibt sie ohne.
+    assert zweite["filament_multi_colour"] == ["#FFFFFF"]
+    assert zweite["filament_colour_type"] == ["1"]
+    (tmp_path / "allein").mkdir()
+    alone = handover.write_config(settings, profile, setup, tmp_path / "allein", [plain])
+    only = json.loads(alone.filaments[0].read_text(encoding="utf-8"))
+    assert "filament_multi_colour" not in only, "einfarbig allein bekommt die Schlüssel nicht"
+
+    document = handover.project_settings(settings, profile, setup, slots=[dual, plain])
+    assert document["filament_colour"] == ["#FF0000", "#FFFFFF"]
+    assert document["filament_multi_colour"] == ["#FF0000 #0000FF", "#FFFFFF"], (
+        "in der Projektdatei führt jede Spule den Schlüssel — eine Liste je Extruder"
+    )
+    assert document["filament_colour_type"] == ["1", "1"]
+
+    only_plain = handover.project_settings(settings, profile, setup, slots=[plain])
+    assert "filament_multi_colour" not in only_plain
+
+    prusa = handover.SlicerSetup(executable=Path("prusa-slicer-console.exe"), flavour="prusa")
+    (tmp_path / "prusa").mkdir()
+    written = handover.write_config(settings, profile, prusa, tmp_path / "prusa", [dual]).written
+    assert "filament_multi_colour" not in written and "filament_colour_type" not in written, (
+        "PrusaSlicer kennt eine Farbe je Filament — die Mehrfarbschlüssel gehen nur an Orca"
+    )
+
+
 def test_project_settings_keep_profile_wide_lists_flat(tmp_path: Path) -> None:
     """Profil-Metadaten und Vektoren sind keine zweite Extruderliste.
 

@@ -34,6 +34,7 @@ from app.core.export import handover
 from app.core.export.slicer_profiles import SlicerProfile
 from app.core.knowledge import print_settings, profiles
 from app.core.slice import gcode
+from app.core.slice.analysis import total_overhang
 from app.core.types import Feature, MaterialSlot, Profile, SceneObject, SlotOverride
 from app.i18n import tr
 from app.ui.print_settings_dialog import (
@@ -4772,6 +4773,52 @@ def test_without_a_machine_profile_the_printers_own_vendor_narrows_the_filaments
         assert all(entry.name.casefold().startswith(first) for entry in found)
 
 
+def test_the_vendor_fallback_never_binds_a_filament_of_another_material(
+    qt_app: QApplication, session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Regel 21, gemessen am 19.09.2026 mit Creality Print: Für ein PLA-Projekt
+    auf dem Centauri fand sich keine Maschine, der Herstellerfilter lieferte
+    „Elegoo Generic ABS" als ersten Namen, und der wurde das Filament des
+    Laufs. Ohne Profil derselben Materialart bleibt die Zeile leer und sagt
+    es; mit einem passenden nimmt sie das — nicht das alphabetisch erste.
+    """
+    from app.core.export import slicer_profiles as sp
+    from app.ui.print_settings_dialog import PrintSettingsDialog
+
+    printers = profiles.printer_profiles()
+    elegoo = next(key for key, entry in printers.items() if entry.vendor == "Elegoo")
+    session.project.document.printer = elegoo
+    session.project.document.material = "pla"
+    dialog = PrintSettingsDialog(session, UiSettings())
+    abs_profile = sp.SlicerProfile(
+        path=Path("Elegoo Generic ABS.json"),
+        name="Elegoo Generic ABS",
+        kind="filament",
+        filament_type="ABS",
+    )
+    petg_profile = sp.SlicerProfile(
+        path=Path("Elegoo Generic PETG.json"),
+        name="Elegoo Generic PETG",
+        kind="filament",
+        filament_type="PETG",
+    )
+    pla_profile = sp.SlicerProfile(
+        path=Path("Elegoo Generic PLA.json"),
+        name="Elegoo Generic PLA",
+        kind="filament",
+        filament_type="PLA",
+    )
+
+    dialog._profiles = [abs_profile, petg_profile]
+    dialog._fill_filaments(None)
+    assert dialog._filament_profile == "", "kein PLA-Profil im Bestand — dann keines"
+    assert "Materialart" in dialog.filament_shown.text()
+
+    dialog._profiles = [abs_profile, petg_profile, pla_profile]
+    dialog._fill_filaments(None)
+    assert dialog._filament_profile == str(pla_profile.path), "das Profil derselben Materialart"
+
+
 def test_the_printer_list_shows_the_printer_you_actually_have(
     qt_app: QApplication, session: Session
 ) -> None:
@@ -5148,11 +5195,16 @@ def test_print_advice_restarts_for_actual_layers_and_rejects_cancelled_results(q
     release = threading.Event()
     calls = []
 
-    def measure(mesh, height, *, first_layer_height, overhang_angle, bridge_from, cancelled):
+    def measure(
+        mesh, height, *, first_layer_height, overhang_angle, bridge_from, cancelled, support_volume
+    ):
         # ``bridge_from`` ausdrücklich in der Signatur und nicht in ``**kwargs``:
         # Die Attrappe soll rot werden, wenn der Dialog die Zahl nicht mehr
         # hereingibt — sie kommt seit RM-097 aus dem Material.
         assert bridge_from > 0.0
+        # Und die Säulen bleiben aus: Die Vorschläge lesen sie nicht, und an
+        # einem Gitterbecher waren sie ein Drittel der Wartezeit (19.09.2026).
+        assert support_volume is False
         calls.append((height, first_layer_height, threading.get_ident()))
         if len(calls) == 1:
             entered.set()
@@ -5178,6 +5230,56 @@ def test_print_advice_restarts_for_actual_layers_and_rejects_cancelled_results(q
     dialog._editors["infill.density"].setValue(28)
     _wait_for_print_advice(dialog, qt_app)
     assert len(calls) == 2, "eine Fülldichteänderung verlangt keine neue Schichtgeometrie"
+
+
+def test_print_advice_remembers_measured_layers_across_dialogs(qt_app, monkeypatch):
+    """Befund Robert, 19.09.2026: „Vorschläge beim Slicen dauern ewig."
+
+    Der Dialog wird bei jedem Öffnen neu gebaut und schnitt jeden Körper
+    jedes Mal neu. Die Sitzung behält jetzt den letzten gemessenen Stand; ein
+    zweiter Dialog über dieselben Körper und Schichten fragt die Geometrie
+    nicht noch einmal. Ein anderes Netz oder eine andere Schichthöhe schon.
+    """
+    from types import SimpleNamespace
+
+    from app.core.types import SliceResult
+    from app.ui import print_settings_dialog as module
+
+    calls: list[tuple[float, float]] = []
+
+    def measure(mesh, height, *, first_layer_height, **_rest):
+        calls.append((height, first_layer_height))
+        return SliceResult(layers=(), support_volume=0, first_layer_area=100)
+
+    monkeypatch.setattr(module, "slice_body", measure)
+    cube = _print_advice_cube()
+    first = _print_advice_dialog(qt_app, [cube])
+    session = first.session
+    first._start_advice()
+    _wait_for_print_advice(first, qt_app)
+    assert len(calls) == 1, "der erste Dialog misst"
+    first.close()
+    qt_app.processEvents()
+
+    second = PrintSettingsDialog(session, UiSettings())
+    assert second.wait_for_slicers()
+    second._start_advice()
+    _wait_for_print_advice(second, qt_app)
+    assert len(calls) == 1, "der zweite Dialog bekommt die Schichten aus der Sitzung"
+    assert second._body_analyses, "und hat sie als seinen Stand"
+    second.close()
+    qt_app.processEvents()
+
+    # Ein anderes Netz unter derselben Kennung ist ein anderer Körper.
+    other = _print_advice_cube()
+    session.last_result = SimpleNamespace(scene=SimpleNamespace(objects={other.id: other}))
+    third = PrintSettingsDialog(session, UiSettings())
+    assert third.wait_for_slicers()
+    third._start_advice()
+    _wait_for_print_advice(third, qt_app)
+    assert len(calls) == 2, "ein neues Netz wird gemessen"
+    third.close()
+    qt_app.processEvents()
 
 
 def test_accepted_material_advice_preserves_the_effective_filament_group(qt_app):
@@ -5576,7 +5678,10 @@ def test_print_advice_reanalyses_when_line_width_invalidates_the_overhang_calibr
     _wait_for_print_advice(dialog, qt_app)
     calibrated = dialog.slice_result
     assert calibrated is not None
-    assert calibrated.support_volume == pytest.approx(0.0, abs=1e-6)
+    # Am Überhang gemessen, nicht am Stützvolumen: Die Vorschläge lassen die
+    # Stützsäulen seit dem 19.09.2026 aus (``support_volume=False``), die
+    # Überhangflächen je Schicht messen sie weiter — und die folgen dem Winkel.
+    assert total_overhang(calibrated) == pytest.approx(0.0, abs=1e-6)
     assert calls[0][0] == pytest.approx(60.0)
     dialog._editors["infill.density"].setValue(28)
     _wait_for_print_advice(dialog, qt_app)
@@ -5585,7 +5690,7 @@ def test_print_advice_reanalyses_when_line_width_invalidates_the_overhang_calibr
     _wait_for_print_advice(dialog, qt_app)
     assert [angle for angle, _thread in calls] == pytest.approx([60.0, 45.0])
     assert all(worker_thread != threading.get_ident() for _angle, worker_thread in calls)
-    assert dialog.slice_result.support_volume > calibrated.support_volume
+    assert total_overhang(dialog.slice_result) > total_overhang(calibrated)
 
 
 @pytest.mark.parametrize("change", ["material", "printer", "mixed_materials"])
@@ -5623,7 +5728,9 @@ def test_print_advice_rechecks_the_strictest_slot_calibration_when_reusing_geome
     assert len(results) == 2
     assert repeated[body.id][0] == pytest.approx(45.0)
     assert repeated[body.id][2] is not initial
-    assert repeated[body.id][2].support_volume > initial.support_volume
+    assert total_overhang(repeated[body.id][2]) > total_overhang(initial), (
+        "ein strengerer Winkel sieht mehr Überhang — die Säulen darunter lassen die Vorschläge aus"
+    )
     assert repeated[body.id][1] > 0.0 and first_wall > 0.0, (
         "die Brückenbreite steht neben dem Winkel im Schlüssel (RM-097)"
     )

@@ -1364,7 +1364,7 @@ def write_config(
         # (:func:`project_settings`) tragen die Nummern des ganzen Auftrags.
         written: list[Path] = []
         filament_documents: list[dict[str, object]] = []
-        for index, slot in enumerate(slots or (MaterialSlot(index=0, name=""),)):
+        for slot in slots or (MaterialSlot(index=0, name=""),):
             own = replace(setup, base_filament=slot.material) if slot.material else setup
             # Je Slot seine eigenen Werte: Temperaturen, Kühlung,
             # Rückzug und Materialkennwerte dürfen sich unterscheiden,
@@ -1373,8 +1373,14 @@ def write_config(
             # noch einmal gerechnet und nicht die von oben genommen.
             mine = settings_for_slot(settings, profile, slot, setup)
             part = split if mine is settings else by_section(mine, setup.flavour)
+            filament_documents.append(
+                _orca_filament(part.get("filament", {}), mine, profile, own, slot)
+            )
+        # **Erst angleichen, dann schreiben.** Die Orca-Familie indiziert jeden
+        # Filamentschlüssel je Filament, ungeprüft; fehlt einer in einem der
+        # geladenen Profile, reißt der Lauf (:func:`_with_equal_keys`).
+        for index, document in enumerate(_with_equal_keys(filament_documents)):
             path = directory / f"solidon_filament_{index}.json"
-            document = _orca_filament(part.get("filament", {}), mine, profile, own, slot)
             path.write_text(
                 json.dumps(
                     document,
@@ -1384,7 +1390,6 @@ def write_config(
                 encoding="utf-8",
             )
             written.append(path)
-            filament_documents.append(document)
         expected = dict(split.get("process", {}))
         firmware = machine_document.get("gcode_flavor")
         if isinstance(firmware, str):
@@ -1417,6 +1422,71 @@ def write_config(
         encoding="utf-8",
     )
     return SlicerConfig(process=target, written=flat)
+
+
+#: Schlüssel, die eine Spule aus sich selbst ergänzt und nie vom Nachbarn
+#: nimmt: Die Farben einer anderen Spule wären eine falsche Aussage über
+#: diese. Ein einfarbiges Filament neben einem mehrfarbigen führt seine eine
+#: Farbe als ``filament_multi_colour`` — so schreibt es auch Bambu Studio.
+_OWN_FILLS: Final[dict[str, Callable[[Mapping[str, object]], object]]] = {
+    "filament_multi_colour": lambda document: (
+        [str(first[0])]
+        if isinstance(first := document.get("filament_colour"), list) and first
+        else [""]
+    ),
+    "filament_colour_type": lambda document: ["1"],
+}
+
+
+def _with_equal_keys(documents: list[dict[str, object]]) -> list[dict[str, object]]:
+    """Dieselben Schlüssel in jedem Filamentprofil eines Laufs.
+
+    **Der Anlass** (Befund Robert, 19.09.2026, „beim Öffnen im Slicer Fehler"):
+    Sein Regal aus einer Bambu-3MF trug auf Platte 1 einen deklarierten Slot
+    „SUNLU PETG @BBL A1", den kein Dreieck benutzte, neben der PLA-Spule aus
+    dem Lager. Die PLA-Spule erbte das Herstellerprofil des Laufs (Elegoo PLA
+    @ECC2, 65 Schlüssel); die PETG-Spule anderen Typs erbt es mit Absicht
+    nicht (:func:`_orca_filament`) und kam mit Solidons 34 Schlüsseln. Der
+    ElegooSlicer brach mit ``0xC0000409`` ab, ohne ein Wort — Zustandszeile:
+    „Der Slicer ist beim Verarbeiten der Übergabe abgestürzt". Gemessen an
+    sechs Varianten derselben Platte: ohne Herstellerprofil lief es, mit nur
+    der benutzten Spule lief es, mit zwei ungleichen Profilen riss es — die
+    Orca-Familie legt die Werte aller geladenen Filamente in Vektoren je
+    Schlüssel und indiziert sie mit der Filamentnummer, ungeprüft.
+
+    Was fehlt, kommt aus dem ersten Profil des Laufs, das den Schlüssel führt.
+    Das trifft nur, was Solidon **nicht** selbst setzt — Temperaturen, Kühlung,
+    Rückzug und Materialwerte stehen in jedem Dokument, denn die schreibt
+    :func:`_orca_filament` für jede Spule aus ihren eigenen Werten. Übrig
+    bleiben Startsequenzen, Lüfterschwellen, Druckvorschub und der Hersteller:
+    Werte, die der Slicer sonst aus seiner Vorgabe nähme — und eine Vorgabe
+    aus demselben Lauf ist näher an ihr als ein Abbruch ohne Meldung.
+    """
+    if len(documents) < 2:
+        return documents
+    keys: list[str] = []
+    for document in documents:
+        keys.extend(key for key in document if key not in keys)
+    filled: list[dict[str, object]] = []
+    for document in documents:
+        complete = dict(document)
+        for key in keys:
+            if key in complete:
+                continue
+            own = _OWN_FILLS.get(key)
+            if own is not None:
+                complete[key] = own(complete)
+                continue
+            source = next(entry for entry in documents if key in entry)
+            complete[key] = source[key]
+        if len(complete) != len(document):
+            _log.info(
+                "filament profile %s takes %d missing keys from its neighbours",
+                document.get("name", "?"),
+                len(complete) - len(document),
+            )
+        filled.append(complete)
+    return filled
 
 
 def project_settings(
@@ -1502,6 +1572,11 @@ def project_settings(
         )
         slot_values = by_section(mine, setup.flavour).get("filament", {})
         filament_documents.append(_orca_filament(slot_values, mine, profile, own, slot))
+
+    # Dieselben Schlüssel in jedem Filament — wie bei den Profildateien des
+    # Konsolenlaufs, und aus demselben Grund (:func:`_with_equal_keys`); die
+    # Mehrfarbschlüssel nimmt jede Spule dabei aus sich selbst.
+    filament_documents = _with_equal_keys(filament_documents)
 
     filament_keys = sorted(
         set().union(*(set(entry) - slicer_profiles.DESCRIBING_KEYS for entry in filament_documents))
@@ -1824,8 +1899,20 @@ def _orca_filament(
     # schwarzem Gehäuse sind zwei Spulen, und beide bekämen sonst die eine
     # Farbe aus den Druckeinstellungen.
     if slot is not None and slot.colour is not None:
-        red, green, blue = (round(channel * 255) for channel in slot.colour)
-        document["filament_colour"] = [f"#{red:02X}{green:02X}{blue:02X}"]
+        document["filament_colour"] = [_hex(slot.colour)]
+        # **Und alle Farben, wo es mehrere sind.** Die Orca-Familie führt ein
+        # mehrfarbiges Filament als ``filament_multi_colour`` — alle Farben in
+        # einer Zeichenkette, durch Leerzeichen getrennt, die erste zugleich
+        # in ``filament_colour`` — und ``filament_colour_type`` „1" für
+        # Abschnitte (im Gegensatz zum Verlauf „0"). Geschrieben nur, wo es
+        # etwas zu sagen gibt: Ein einfarbiges Filament bekommt die Schlüssel
+        # nicht, und ein Slicer, der sie nicht kennt, bekommt sie so nur von
+        # jemandem, der ein solches Filament wirklich eingelegt hat (§20).
+        if slot.extra_colours:
+            document["filament_multi_colour"] = [
+                " ".join(_hex(one) for one in (slot.colour, *slot.extra_colours))
+            ]
+            document["filament_colour_type"] = ["1"]
     if slot is not None and slot.name:
         document["name"] = f"Solidon {slot.name}"
     # Aus dem Dokument, nicht aus ``values``: bei einem Slot mit eigenem
@@ -1833,6 +1920,12 @@ def _orca_filament(
     # Temperatur bekommen, die auch sonst gilt — PLA bei 60, nicht bei den 80
     # des Projektmaterials.
     return _with_every_plate(document, _plate_source(document, values))
+
+
+def _hex(colour: tuple[float, float, float]) -> str:
+    """Drei Anteile 0…1 als ``#RRGGBB``, wie die Slicer eine Farbe schreiben."""
+    red, green, blue = (round(channel * 255) for channel in colour)
+    return f"#{red:02X}{green:02X}{blue:02X}"
 
 
 def _plate_source(document: Mapping[str, object], values: Mapping[str, str]) -> dict[str, str]:
@@ -3204,6 +3297,10 @@ def open_in_slicer(model: Path, setup: SlicerSetup) -> None:
 _RECOMPUTED: Final = frozenset(
     {
         "filament_colour",
+        # Die zwei Mehrfarbschlüssel sind Anzeige, kein Druckwert: Der G-Code
+        # führt sie nicht, und eine Gegenprobe fände dort nie etwas.
+        "filament_multi_colour",
+        "filament_colour_type",
         "nozzle_diameter",
         "bed_shape",
         "first_layer_speed",

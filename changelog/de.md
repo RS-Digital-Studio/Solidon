@@ -49,16 +49,32 @@ Nutzen da und sonst nichts.
 
 ### Auswählen und Bedienen
 
+- Eine Spule im Filamentlager kann bis zu vier Farben haben. Bambu Studio, OrcaSlicer und ElegooSlicer bekommen alle Farben, andere Slicer die erste.
 - Eine angeklickte Kante zeigt nur noch die Handlungen, die an einer Kante etwas bewirken.
 - Ohne Auswahl bleibt der Weg zu den Bausteinen sichtbar.
 - Das Suchfeld steht nur dort, wo es etwas zu finden gibt.
 - Eine Trennwand im Organizer führt zu ihrem Fächereditor statt zu den Handlungen ihrer Fläche.
 - Der Dialog zum Setzen einer Bohrung sagt, dass Sie die Stelle im Bild anklicken.
+- Im Dialog „Modell erzeugen“ behält das Beschreibungsfeld seine Höhe, auch wenn der Hinweis zum fehlenden Zusatzprogramm erscheint.
 
 ### Bewegen und Prüfen
 
+- Die Druckvorschläge kommen deutlich schneller: eine Figur mit 2,3 Millionen Dreiecken in Sekunden statt Minuten, und ein zweites Öffnen des Druckdialogs misst nicht noch einmal.
+- Eine eingelesene Spule anderer Materialart, die kein Teil benutzt, ließ den Slicer ohne ein Wort abbrechen. Jetzt bekommt jede Spule einer Platte ein vollständiges Profil.
+- Hat der Slicer kein Herstellerprofil für Ihre Materialart, sagt der Druckdialog das und nimmt Solidons Werte — statt eines Profils für ein anderes Material.
 - Zwei Körper lassen sich ineinanderschieben, um sie zu vereinigen oder weich zu verschmelzen. Zurückgeholt wird nur, was neben der Druckfläche landet.
 - Verweist eine Passung auf ein Merkmal, das es nicht mehr gibt, führt ein Knopf in den Verlauf.
+- Druckoptimal ausrichten und Auf dem Bett anordnen legen Teile verschiedener Filamente auf eigene Platten, damit eine Düse nicht ständig spült. Mehrere Düsen tragen Sie im Druckdialog ein.
+
+### Filamentlager
+
+- Eine Rücknahme im Buchungsverlauf lässt sich wieder rückgängig machen — am selben Knopf.
+- Wer an einer Spule nur Name oder Lagerort ändert, stellt keinen neuen Bestand fest; ihre Buchungen bleiben rücknehmbar.
+- Nach einer Rücknahme bucht „Ohne Rückfrage buchen“ einen erneuten Druck wirklich, statt nur „gebucht“ zu sagen.
+- Kauf- und Öffnungsdatum haben einen Kalender in Ihrer Sprache. Eine abgewiesene Spule kommt in den Dialog zurück, statt zu verschwinden.
+- Die Übernahme aus dem Slicer legt eine gleichnamige Spule anderer Farbe neu an, statt Ihre Handspule umzufärben.
+- Lässt sich die Lagerdatei nicht lesen, holt ein Knopf den letzten Stand zurück — Solidon sichert ihn bei jedem Speichern selbst.
+- Die Detailseite nennt Restmenge, Kaufdatum und Preis; die achtstellige Kennung steht nur noch dort, wo zwei Spulen gleich heißen.
 
 ## 0.4.3
 

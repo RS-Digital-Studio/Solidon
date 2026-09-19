@@ -749,7 +749,9 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "Ohne bekannte Restmenge steht dort *Unbekannt*. Die Schnellauswahl bei den "
             "gewählten Körpern weist eine Spule direkt zu; an gewählten Flächen betrifft "
             "sie nur diese Flächen. Änderungen im Lager überschreiben keine gespeicherten "
-            "Projektfarben oder Druckwerte.\n\n"
+            "Projektfarben oder Druckwerte. Eine Spule kann bis zu vier Farben tragen: Die "
+            "erste ist ihre Farbe im Bild, alle kommen bei Bambu Studio, OrcaSlicer und "
+            "ElegooSlicer an.\n\n"
             "Beides sieht der Verlauf genauso wie einen Menüeintrag: dieselben "
             "Operationen, dasselbe Undo, dieselbe Möglichkeit, es sich anders zu "
             "überlegen.\n\n"
@@ -1441,9 +1443,11 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "Fehlende Einzelmengen bleiben unbekannt, bis Sie sie eintragen oder slicen. "
             "Eine spätere G-Code-Angabe korrigiert den bereits gebuchten Druck. "
             "*Noch einmal gedruckt* bucht einen weiteren Druck ausdrücklich. "
-            "Im Filamentlager zeigt der Verbrauchsverlauf jede Buchung und bietet ihre "
-            "Rücknahme an. Unter den Lager-Einstellungen stehen *nie*, *fragen* und "
-            "*ohne Rückfrage buchen* zur Wahl; anfangs wird gefragt."
+            "Im Filamentlager zeigt der *Buchungsverlauf* jeder Spule jede Buchung; "
+            "*Gewählten Vorgang zurücknehmen* nimmt einen Druck zurück, und derselbe Knopf "
+            "macht die Rücknahme wieder rückgängig. Unter den *Lager-Einstellungen* steht, "
+            "was nach einer Ausgabe an den Slicer geschieht: *Nachfragen*, *Nie buchen* oder "
+            "*Ohne Rückfrage buchen*; anfangs wird nachgefragt."
         ),
     ),
     Page(
