@@ -275,6 +275,43 @@ def test_the_missing_generator_comes_with_the_way_to_one(qt_app: QApplication) -
     qt_app.processEvents()
 
 
+def test_the_answer_without_a_generator_does_not_squash_the_fields(qt_app: QApplication) -> None:
+    """Der lange Satz nach der Antwort presste das Beschreibungsfeld zusammen.
+
+    Befund Robert, 19.09.2026: Nach der Suche ohne Fund hatte das Feld
+    „Beschreibung" noch 11 von 26 Punkten Höhe. Ein umbrochenes ``QLabel``
+    meldet der Layoutrechnung eine Zeile, der Dialog blieb auf seiner
+    Aufmachgröße stehen, und der Fehlbetrag kam aus den Nachbarn. Der Satz
+    ist jetzt ein ``WrappedNote`` und fordert seine Höhe ein; das Fenster
+    wächst einen Ereignisdurchlauf später mit.
+    """
+    dialog = GenerateDialog(backend=ScriptedMeshBackend())
+    try:
+        dialog.show()
+        qt_app.processEvents()
+        before = dialog.prompt.height()
+        wait_for_readiness(dialog, qt_app)
+        # Zwei Zeitgeber mit null Millisekunden hintereinander: erst pinnt
+        # der Satz seine Höhe, dann wächst das Fenster.
+        for _ in range(6):
+            qt_app.processEvents()
+        assert dialog.state.text(), "die Antwort steht da"
+        wanted = dialog.state.heightForWidth(dialog.state.width())
+        assert dialog.state.height() >= wanted, "der Satz hat die Höhe, die er braucht"
+        assert dialog.prompt.height() >= before, (
+            f"das Beschreibungsfeld hat {dialog.prompt.height()} statt {before} Punkte"
+        )
+        assert dialog.prompt.height() >= dialog.prompt.minimumSizeHint().height()
+        assert not dialog.prompt.geometry().intersects(dialog.picture.geometry()), (
+            "und der Knopf darunter liegt nicht über dem Feld"
+        )
+    finally:
+        dialog.wait_for_workers()
+        dialog.close()
+        dialog.deleteLater()
+    qt_app.processEvents()
+
+
 def test_the_dialog_can_be_asked_to_let_go_of_its_worker(qt_app: QApplication) -> None:
     """Es gibt zwei Wege, einen Dialog loszuwerden: schließen und wegräumen.
 

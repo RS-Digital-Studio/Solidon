@@ -19,7 +19,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Final
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import QTimer, Signal
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
@@ -48,7 +48,7 @@ from app.ui.labels import UNEXPECTED_CRASH, volume
 from app.ui.leash import DIALOG_WAIT_MS, WAIT_TIMEOUT_MS, Worker, WorkerLeash
 from app.ui.panels import collapsible
 from app.ui.settings import UiSettings, load_settings
-from app.ui.style import make_primary
+from app.ui.style import WrappedNote, make_primary
 
 _log = get_logger(__name__)
 
@@ -338,8 +338,12 @@ class GenerateDialog(QDialog):
 
         self.advanced = collapsible(tr("Weitere Einstellungen"), advanced, open_now=False)
 
-        self.state = QLabel(self)
-        self.state.setWordWrap(True)
+        # Ein Satz, der wächst — und das Fenster mit ihm: Nach der Antwort
+        # „kein ComfyUI" wurde der lange Hinweis aus dem Beschreibungsfeld
+        # gepresst, 11 von 26 Punkten blieben (Befund Robert, 19.09.2026).
+        # Warum ein QLabel das nicht von allein kann, steht an ``WrappedNote``.
+        self.state = WrappedNote(self)
+        self.state.grown.connect(self._grow_soon)
         # **Keine Zahl im Balken.** Sie steht mittig, und der Rand der
         # Füllung wandert darunter hindurch: bei 45 % lag sie halb auf
         # Bernstein und halb auf der Spur, ab 60 % ganz auf Bernstein — mit
@@ -464,6 +468,32 @@ class GenerateDialog(QDialog):
         worker.finished.connect(lambda done=worker: self._readiness_finished(done))
         self._readiness_worker = worker
         self._leash.start(worker)
+
+    def _grow_soon(self) -> None:
+        """Einen Ereignisdurchlauf später — unmittelbar nach dem Pinnen der
+        Mindesthöhe kam dieselbe Rechnung am gebauten Dialog gequetscht zurück,
+        einen Durchlauf später stimmt sie (dieselbe Bauart wie im Erststart)."""
+        QTimer.singleShot(0, self, self._grow_to_content)
+
+    def _grow_to_content(self) -> None:
+        """Das Fenster nimmt die Höhe, die sein Inhalt jetzt braucht.
+
+        Gerufen, sobald der Hinweis eine neue Mindesthöhe gepinnt hat. Nur
+        nach oben: Wer den Dialog von Hand größer gezogen hat, behält das.
+        """
+        layout = self.layout()
+        if layout is None:
+            return
+        # Ungültig machen, bevor gemessen wird: Der Satz hat seine Mindesthöhe
+        # gerade erst gepinnt, und die Rechnung darunter hielt sonst den alten
+        # Stand — gemessen blieb das Feld nach dem Wachsen gequetscht, bis
+        # irgendetwas anderes das Layout anstieß.
+        layout.invalidate()
+        wanted = self.sizeHint().height()
+        if layout.hasHeightForWidth():
+            wanted = max(wanted, layout.totalHeightForWidth(self.width()))
+        self.resize(self.width(), max(self.height(), wanted))
+        layout.activate()
 
     def _readiness_done(self, workflow: str, found: object, choices: object) -> None:
         """Nur die Antwort für den noch sichtbaren Text- oder Bildweg nehmen."""

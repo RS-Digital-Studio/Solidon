@@ -29,8 +29,8 @@ from __future__ import annotations
 
 from typing import Final
 
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QFont
+from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtGui import QFont, QResizeEvent
 from PySide6.QtWidgets import (
     QApplication,
     QLabel,
@@ -159,6 +159,53 @@ def set_role(widget: QLabel, role: str, text: str) -> None:
     spoken = tr(encoding.label_key) if encoding is not None else tr("Erledigt")
     widget.setAccessibleDescription(f"{spoken}: {text}")
     _repolish(widget)
+
+
+class WrappedNote(QLabel):
+    """Ein umbrochener Satz, der die Höhe einfordert, die er wirklich braucht.
+
+    Ein ``QLabel`` mit Zeilenumbruch meldet der Layoutrechnung als Mindesthöhe
+    **eine** Zeile; was er wirklich braucht, sagt erst ``heightForWidth``, und
+    das fragt ein Dialog für seine eigene Mindestgröße nicht. Wächst der Satz
+    nach dem Öffnen — eine Prüfung ist fertig, eine Absage kommt an —, bleibt
+    das Fenster auf seiner Aufmachgröße stehen, und der Fehlbetrag wird aus den
+    Nachbarn gepresst. Gemessen am Erzeugen-Dialog (Befund Robert, 19.09.2026):
+    Nach der Antwort „kein ComfyUI" stand der lange Satz da, und das
+    Beschreibungsfeld darüber hatte noch 11 von 26 Punkten Höhe.
+
+    Derselbe Fall wie beim Erststart (``first_run._grow_to_content``), nur an
+    der Quelle: Der Satz pinnt seine Mindesthöhe selbst, sobald er einen neuen
+    Text oder eine neue Breite hat, und sagt es über :attr:`grown` weiter,
+    damit das Fenster nachwächst. Über einen Zeitgeber, nicht sofort — direkt
+    nach ``setText`` meldet ``heightForWidth`` noch den alten Stand.
+    """
+
+    grown = Signal()
+    """Die Mindesthöhe hat sich geändert; wer den Satz zeigt, wächst mit."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setWordWrap(True)
+
+    def setText(self, text: str) -> None:  # noqa: N802 — Qt gibt den Namen
+        super().setText(text)
+        QTimer.singleShot(0, self, self.claim_height)
+
+    def resizeEvent(self, event: QResizeEvent) -> None:  # noqa: N802 — Qt gibt den Namen
+        super().resizeEvent(event)
+        # Schmaler heißt mehr Zeilen, breiter weniger: Die gepinnte Höhe
+        # gehört zur Breite, an der sie gemessen wurde.
+        self.claim_height()
+
+    def claim_height(self) -> None:
+        """Die Mindesthöhe auf das setzen, was der Satz in dieser Breite braucht."""
+        if self.width() <= 0:
+            return
+        wanted = self.heightForWidth(self.width()) if self.text() else 0
+        if wanted == self.minimumHeight():
+            return
+        self.setMinimumHeight(max(wanted, 0))
+        self.grown.emit()
 
 
 def make_primary(button: QPushButton) -> QPushButton:
