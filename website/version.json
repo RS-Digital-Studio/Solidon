@@ -1,388 +1,454 @@
 {
-  "version": "0.4.3",
+  "version": "0.4.4",
   "url": "https://solidon3d.de/",
   "notes": "",
   "packages": {
     "windows": {
-      "file": "Solidon3D-Setup-0.4.3.exe",
-      "url": "https://solidon3d.de/dl/Solidon3D-Setup-0.4.3.exe",
-      "size": 171368649,
-      "sha256": "c98cddd761d743779f1bc0d675d20c9cfda4ec063addc64286d2aee65d7c4344"
+      "file": "Solidon3D-Setup-0.4.4.exe",
+      "url": "https://solidon3d.de/dl/Solidon3D-Setup-0.4.4.exe",
+      "size": 171282441,
+      "sha256": "3c7407ae01e5883166e7edbf0b1722c7f8092bf38e5a39eb22f42083eeed0511"
     },
     "linux": {
-      "file": "Solidon3D-0.4.3-x86_64.flatpak",
-      "url": "https://solidon3d.de/dl/Solidon3D-0.4.3-x86_64.flatpak",
-      "size": 203440600,
-      "sha256": "9dbb0ffed51b77640f698f823ee977c5819fe7cf8ce5c39a44bed9d67e05b4cb"
+      "file": "Solidon3D-0.4.4-x86_64.flatpak",
+      "url": "https://solidon3d.de/dl/Solidon3D-0.4.4-x86_64.flatpak",
+      "size": 203496232,
+      "sha256": "2d76b35d5d932daeda6a53a957fc57f4585fc75307d127da46334d6104fb9990"
     },
     "macos-arm64": {
-      "file": "Solidon3D-0.4.3-macos-arm64.pkg",
-      "url": "https://solidon3d.de/dl/Solidon3D-0.4.3-macos-arm64.pkg",
-      "size": 215569185,
-      "sha256": "c4447d154113559a4995ca1408c64f323e808a26322b3d0b707e8525935b7532"
+      "file": "Solidon3D-0.4.4-macos-arm64.pkg",
+      "url": "https://solidon3d.de/dl/Solidon3D-0.4.4-macos-arm64.pkg",
+      "size": 215487722,
+      "sha256": "2945345c7bf59e420c27f2bbfffb92b4c33fcd979006554b14f6dc8651bba756"
     },
     "macos-x86_64": {
-      "file": "Solidon3D-0.4.3-macos-x86_64.pkg",
-      "url": "https://solidon3d.de/dl/Solidon3D-0.4.3-macos-x86_64.pkg",
-      "size": 237785321,
-      "sha256": "8622400aabb308e8b0f03b2df9c31d03689ec636b81ac43c2ba1daf8ca06edc8"
+      "file": "Solidon3D-0.4.4-macos-x86_64.pkg",
+      "url": "https://solidon3d.de/dl/Solidon3D-0.4.4-macos-x86_64.pkg",
+      "size": 237721031,
+      "sha256": "6ee9897586384a597013fe6b2ba961ca81fcf7f43f3250cd01f8b9876d31660f"
     }
   },
   "changes": {
     "de": [
-      "Flache Sackbohrungen, kleine Funktionsflächen und kurze Gewinde werden zuverlässiger erkannt. Die Böden der Magnettaschen gehören zu ihren Bohrungen.",
-      "Bohrungen lassen sich samt Senkung und Einlauf maßhaltig ändern. Auch nach einer größeren Durchmesseränderung bleibt der Sackboden zugeordnet.",
-      "An großen Netzen können Sie Merkmale gezielt an einer Stelle erkennen und sofort bearbeiten. Erkennung und Änderung lassen sich gemeinsam zurücknehmen.",
-      "Auswahl und Vorschau zeigen den vollständigen Körper. Konturen und Beschriftungen machen die gewählte Stelle deutlich; unveränderte Schrift bleibt ohne orange Flecken.",
-      "Kanten lassen sich an jedem Körper anklicken und verrunden oder fasen — auch an eingelesenen Modellen.",
-      "Bohrungen, Zylinder und Rundungen entstehen auf Windows, macOS und Linux aus denselben Punkten. Ein Projekt wird auf jedem Rechner gleich erkannt und gleich bearbeitet.",
-      "Organizer erhalten gebundene Fachmaße, einzeln änderbare Trennwände und wiederholte Fächer. Wanne, Rand, Boden und Fuß ergänzen die Bausteinbibliothek.",
-      "Loch-, Langloch- und Wabenfelder folgen einem gezeichneten Bereich. Freizuhaltende Flächen, Randabstände und Mindeststege bleiben berücksichtigt.",
-      "Profilklemmen entstehen aus zwei Schalen und zwei passenden Einlagen. Runde, ovale und gezeichnete Gegenprofile sind möglich; die Einlagen lassen sich später austauschen.",
-      "Eine geschlossene Zeichnung oder gewählte Öffnung erzeugt Dichtnut und separate Dichtung. Material, Querschnitt und Überstand sind einstellbar; Restwände werden geprüft.",
-      "Oberflächenmuster reichen bis zum Flächenrand und lassen Bohrungen frei. Vorhandene Muster lassen sich direkt über die Auswahl weiterbearbeiten.",
-      "Abschneiden behält eine Seite einer Ebene und schließt die Schnittfläche — für glatte Rückwände und Wände auf einer Höhe. Rundungen neben leicht schrägen Wänden lassen sich wieder ändern.",
-      "SVG- und DXF-Konturen wählen Sie vor dem Erzeugen sichtbar aus. GLB- und GLTF-Dateien kommen mit ihren richtigen Maßen und ihrer richtigen Ausrichtung an.",
-      "Projektmaße bleiben bis in Bausteinskizzen und Platzierungsvorschauen wirksam. Beim Einpassen berücksichtigt die Ansicht alle sichtbaren Druckplatten.",
-      "Filamente lassen sich aus dem Regal entfernen. Die ersten Schritte beginnen beim Slicer; Rückmeldungen öffnen schnell und bereiten ihre Anhänge im Hintergrund vor.",
-      "Entf an einer Fläche entfernt den Körper und sagt es; Strg+Z holt ihn zurück. Bei flachem Blick folgt ein gezogener Körper dem Zeiger, und die gewählte Fläche bleibt beim ersten Klick der Skizze.",
-      "Der lokale Chat bekommt ein größeres Fenster und kürzt Ihre Anfrage nicht mehr.",
-      "Der Düsendurchmesser lässt sich am Drucker einstellen. Die Übergabe wählt dann die passende Maschine im Slicer, auch wenn dort eine andere Düse eingestellt ist.",
-      "Reparieren schließt Modelle, die sich an einer Kante selbst berühren, statt sie weiter aufzureißen."
+      "Die Formschräge stellt alle senkrechten Seiten an, auch die schmalen, und kommt mit eingelesenen Modellen zurecht.",
+      "Weich verschmelzen hinterlässt glatte Seitenflächen statt ausgefranster Kanten.",
+      "Eine Spule im Filamentlager kann bis zu vier Farben haben. Bambu Studio, OrcaSlicer und ElegooSlicer bekommen alle Farben, andere Slicer die erste.",
+      "Eine angeklickte Kante zeigt nur noch die Handlungen, die an einer Kante etwas bewirken.",
+      "Ohne Auswahl bleibt der Weg zu den Bausteinen sichtbar.",
+      "Das Suchfeld steht nur dort, wo es etwas zu finden gibt.",
+      "Eine Trennwand im Organizer führt zu ihrem Fächereditor statt zu den Handlungen ihrer Fläche.",
+      "Der Dialog zum Setzen einer Bohrung sagt, dass Sie die Stelle im Bild anklicken.",
+      "Im Dialog „Modell erzeugen“ behält das Beschreibungsfeld seine Höhe, auch wenn der Hinweis zum fehlenden Zusatzprogramm erscheint.",
+      "Die Druckvorschläge kommen deutlich schneller: eine Figur mit 2,3 Millionen Dreiecken in Sekunden statt Minuten, und ein zweites Öffnen des Druckdialogs misst nicht noch einmal.",
+      "Eine eingelesene Spule anderer Materialart, die kein Teil benutzt, ließ den Slicer ohne ein Wort abbrechen. Jetzt bekommt jede Spule einer Platte ein vollständiges Profil.",
+      "Hat der Slicer kein Herstellerprofil für Ihre Materialart, sagt der Druckdialog das und nimmt Solidons Werte — statt eines Profils für ein anderes Material.",
+      "Zwei Körper lassen sich ineinanderschieben, um sie zu vereinigen oder weich zu verschmelzen. Zurückgeholt wird nur, was neben der Druckfläche landet.",
+      "Verweist eine Passung auf ein Merkmal, das es nicht mehr gibt, führt ein Knopf in den Verlauf.",
+      "Druckoptimal ausrichten und Auf dem Bett anordnen legen Teile verschiedener Filamente auf eigene Platten, damit eine Düse nicht ständig spült. Mehrere Düsen tragen Sie im Druckdialog ein.",
+      "Eine Rücknahme im Buchungsverlauf lässt sich wieder rückgängig machen — am selben Knopf.",
+      "Wer an einer Spule nur Name oder Lagerort ändert, stellt keinen neuen Bestand fest; ihre Buchungen bleiben rücknehmbar.",
+      "Nach einer Rücknahme bucht „Ohne Rückfrage buchen“ einen erneuten Druck wirklich, statt nur „gebucht“ zu sagen.",
+      "Kauf- und Öffnungsdatum haben einen Kalender in Ihrer Sprache. Eine abgewiesene Spule kommt in den Dialog zurück, statt zu verschwinden.",
+      "Die Übernahme aus dem Slicer legt eine gleichnamige Spule anderer Farbe neu an, statt Ihre Handspule umzufärben.",
+      "Lässt sich die Lagerdatei nicht lesen, holt ein Knopf den letzten Stand zurück — Solidon sichert ihn bei jedem Speichern selbst.",
+      "Die Detailseite nennt Restmenge, Kaufdatum und Preis; die achtstellige Kennung steht nur noch dort, wo zwei Spulen gleich heißen."
     ],
     "en": [
-      "Shallow blind holes, small functional faces and short threads are recognised more reliably. Magnet-pocket floors belong to their bores.",
-      "Resize bores together with their countersinks and entrances while preserving the intended dimensions. Blind-hole floors stay associated even after larger diameter changes.",
-      "Recognise features at a chosen spot on large meshes and edit them immediately. Recognition and editing can be undone together.",
-      "Selection and preview show the complete body. Outlines and labels identify the selected area; unchanged lettering stays free of orange patches.",
-      "Edges can be picked on any body and rounded or chamfered — on imported models too.",
-      "Bores, cylinders and roundings are built from the same points on Windows, macOS and Linux. A project is recognised and edited the same way on every machine.",
-      "Organisers gain linked compartment dimensions, individually editable dividers and repeated cells. Tray, rim, floor and foot parts extend the library.",
-      "Hole, slot and honeycomb fields follow a drawn region. Keep-out areas, edge margins and minimum webs are respected.",
-      "Profile clamps comprise two shells and two fitted liners. Round, oval and drawn mating profiles are supported; liners can be replaced later.",
-      "A closed drawing or selected opening creates a seal groove and a separate gasket. Choose materials, cross-section and protrusion; remaining walls are checked.",
-      "Surface patterns reach the face boundary and leave bores clear. Existing patterns can be edited directly through the selection panel.",
-      "Cut away keeps one side of a plane and closes the cut face — for flat back walls and walls at one height. Fillets next to slightly slanted walls can be edited again.",
-      "Select SVG and DXF contours visually before creating a body. GLB and GLTF files retain their correct dimensions and orientation.",
-      "Project dimensions remain effective in part sketches and placement previews. Fit to view includes every visible build plate.",
-      "Filaments can be removed from the shelf. First steps start with the slicer; feedback opens quickly and prepares attachments in the background.",
-      "Delete on a face removes the body and says so; Ctrl+Z brings it back. In a flat view a dragged body follows the pointer, and the chosen face survives the first click of a sketch.",
-      "The local chat gets a larger window and no longer truncates your request.",
-      "The nozzle diameter can be set on the printer. The handover then picks the matching machine in the slicer, even if a different nozzle is selected there.",
-      "Repair closes models that touch themselves along an edge instead of tearing them open further."
+      "Draft angles now reach every upright side, including the narrow ones, and work on imported models.",
+      "Soft merging leaves smooth side faces instead of frayed edges.",
+      "A spool in the filament inventory can have up to four colours. Bambu Studio, OrcaSlicer and ElegooSlicer receive all colours, other slicers the first.",
+      "A picked edge now shows only the actions that do something to an edge.",
+      "With nothing selected, the way to the building blocks stays visible.",
+      "The search box only appears where there is something to find.",
+      "A divider in an organizer leads to its compartment editor instead of to the actions of its face.",
+      "The dialogue for placing a hole says that you pick the spot in the view.",
+      "In the “Generate model” dialogue the description field keeps its height even when the note about the missing add-on program appears.",
+      "Print suggestions arrive much faster: a figure with 2.3 million triangles in seconds instead of minutes, and opening the print dialogue a second time does not measure again.",
+      "An imported spool of another material type that no part used made the slicer abort without a word. Now every spool on a plate gets a complete profile.",
+      "If the slicer has no vendor profile for your material type, the print dialogue says so and uses Solidon’s values — instead of a profile for another material.",
+      "Two bodies can be pushed into each other to unite or softly merge them. Only what ends up beside the build area is brought back.",
+      "When a fit points at a feature that no longer exists, a button leads into the history.",
+      "Orient for printing and Arrange on the bed put parts of different filaments on their own plates so one nozzle does not keep purging. Enter several nozzles in the print dialogue.",
+      "A reversal in the consumption history can be undone again — with the same button.",
+      "Changing only a spool’s name or location no longer counts as a new stock count; its records stay reversible.",
+      "After a reversal, “Record without asking” really records a repeated print instead of merely saying “recorded”.",
+      "Purchase and opening dates have a calendar in your language. A rejected spool returns to the dialogue instead of vanishing.",
+      "Importing from the slicer adds a same-named spool of another colour instead of recolouring your hand-entered one.",
+      "If the inventory file cannot be read, one button brings back the last state — Solidon saves it itself on every write.",
+      "The detail page names remaining amount, purchase date and price; the eight-character ID only appears where two spools share a name."
     ],
     "es": [
-      "Se reconocen mejor los taladros ciegos poco profundos, las caras pequeñas y las roscas cortas. Los fondos de los alojamientos para imanes pertenecen a sus taladros.",
-      "Cambie el diámetro junto con el avellanado y la entrada conservando las medidas previstas. El fondo sigue asociado incluso tras cambios grandes de diámetro.",
-      "Reconozca elementos en un punto elegido de una malla grande y edítelos al instante. El reconocimiento y el cambio se deshacen juntos.",
-      "La selección y la vista previa muestran el cuerpo completo. Contornos y etiquetas identifican la zona elegida; las letras sin cambios no muestran manchas naranjas.",
-      "Las aristas se pueden seleccionar en cualquier cuerpo y redondear o achaflanar, también en modelos importados.",
-      "Los taladros, cilindros y redondeos se construyen con los mismos puntos en Windows, macOS y Linux. Un proyecto se reconoce y se edita igual en cualquier equipo.",
-      "Los organizadores admiten medidas vinculadas, divisores editables por separado y celdas repetidas. Bandeja, borde, fondo y pie amplían la biblioteca.",
-      "Los campos de agujeros, ranuras y hexágonos siguen una región dibujada. Se respetan las zonas reservadas, los márgenes y los puentes mínimos.",
-      "Las abrazaderas de perfil constan de dos carcasas y dos insertos ajustados. Admiten perfiles redondos, ovalados o dibujados; los insertos pueden sustituirse después.",
-      "Un dibujo cerrado o una abertura elegida crea una ranura de sellado y una junta separada. Puede elegir materiales, sección y saliente; se comprueban las paredes restantes.",
-      "Los patrones superficiales llegan al borde de la cara y dejan libres los taladros. Puede editar los patrones existentes desde el panel de selección.",
-      "Recortar conserva un lado de un plano y cierra la cara de corte: para paredes traseras lisas y paredes a una misma altura. Los redondeos junto a paredes algo inclinadas vuelven a poder editarse.",
-      "Seleccione visualmente los contornos SVG y DXF antes de crear el cuerpo. Los archivos GLB y GLTF conservan sus medidas y orientación correctas.",
-      "Las medidas del proyecto siguen actuando en los bocetos de piezas y sus vistas previas de colocación. El encuadre incluye todas las placas de impresión visibles.",
-      "Puede quitar filamentos de la estantería. Los primeros pasos empiezan por el laminador; los comentarios se abren rápido y preparan sus adjuntos en segundo plano.",
-      "Supr sobre una cara elimina el cuerpo y lo indica; Ctrl+Z lo recupera. Con una vista rasante, un cuerpo arrastrado sigue al puntero, y la cara elegida se mantiene en el primer clic del boceto.",
-      "El chat local recibe una ventana mayor y ya no recorta su solicitud.",
-      "El diámetro de la boquilla se ajusta en la impresora. La entrega elige entonces la máquina adecuada en el slicer, aunque allí esté seleccionada otra boquilla.",
-      "Reparar cierra los modelos que se tocan a sí mismos en una arista, en lugar de abrirlos más."
+      "El ángulo de desmoldeo alcanza ahora todas las caras verticales, también las estrechas, y funciona en modelos importados.",
+      "La fusión suave deja caras laterales lisas en lugar de bordes deshilachados.",
+      "Una bobina del inventario de filamentos puede tener hasta cuatro colores. Bambu Studio, OrcaSlicer y ElegooSlicer reciben todos los colores; los demás slicers, el primero.",
+      "Una arista seleccionada muestra solo las acciones que hacen algo en una arista.",
+      "Sin selección, el camino a los bloques sigue visible.",
+      "El campo de búsqueda solo aparece donde hay algo que encontrar.",
+      "Un tabique del organizador lleva a su editor de compartimentos en lugar de a las acciones de su cara.",
+      "El diálogo para colocar un taladro indica que el punto se elige en la vista.",
+      "En el diálogo «Generar modelo», el campo de descripción conserva su altura aunque aparezca el aviso sobre el programa adicional que falta.",
+      "Las sugerencias de impresión llegan mucho más rápido: una figura de 2,3 millones de triángulos en segundos en lugar de minutos, y abrir el diálogo de impresión por segunda vez no vuelve a medir.",
+      "Una bobina importada de otro tipo de material que ninguna pieza usaba cerraba el slicer sin decir nada. Ahora cada bobina de una placa recibe un perfil completo.",
+      "Si el slicer no tiene un perfil del fabricante para su tipo de material, el diálogo de impresión lo dice y usa los valores de Solidon, no un perfil de otro material.",
+      "Dos cuerpos pueden empujarse uno dentro de otro para unirlos o fusionarlos suavemente. Solo se devuelve lo que queda fuera del área de impresión.",
+      "Si un ajuste apunta a una característica que ya no existe, un botón lleva al historial.",
+      "Orientar para imprimir y Organizar sobre la cama ponen piezas de distintos filamentos en placas propias, para que una boquilla no purgue sin parar. Varias boquillas se indican al imprimir.",
+      "Una anulación en el historial de movimientos se puede revertir de nuevo, con el mismo botón.",
+      "Cambiar solo el nombre o la ubicación de una bobina ya no cuenta como nuevo recuento; sus registros siguen siendo anulables.",
+      "Tras una anulación, «Registrar sin preguntar» registra de verdad una nueva impresión en vez de decir solo «registrado».",
+      "Las fechas de compra y apertura tienen un calendario en su idioma. Una bobina rechazada vuelve al diálogo en vez de desaparecer.",
+      "La importación desde el slicer crea una bobina nueva si tiene el mismo nombre y otro color, en vez de recolorear la suya.",
+      "Si el archivo del inventario no se puede leer, un botón recupera el último estado: Solidon lo guarda solo en cada escritura.",
+      "La página de detalle muestra cantidad restante, fecha de compra y precio; el código de ocho caracteres solo aparece si dos bobinas se llaman igual."
     ],
     "fr": [
-      "Les perçages borgnes peu profonds, les petites faces et les filetages courts sont mieux reconnus. Les fonds des logements pour aimants appartiennent à leurs perçages.",
-      "Modifiez un perçage avec sa fraisure et son entrée en conservant les cotes prévues. Le fond reste associé même après un changement important de diamètre.",
-      "Reconnaissez des éléments à un endroit choisi sur un grand maillage et modifiez-les aussitôt. La reconnaissance et la modification s’annulent ensemble.",
-      "La sélection et l’aperçu montrent le corps complet. Contours et étiquettes identifient la zone choisie ; les lettres inchangées restent sans taches orange.",
-      "Les arêtes se sélectionnent sur n'importe quel corps et s'arrondissent ou se chanfreinent — aussi sur les modèles importés.",
-      "Les perçages, cylindres et arrondis sont construits à partir des mêmes points sur Windows, macOS et Linux. Un projet est reconnu et modifié de la même façon sur chaque machine.",
-      "Les organisateurs proposent des cotes liées, des cloisons modifiables séparément et des cases répétées. Bac, bordure, fond et pied enrichissent la bibliothèque.",
-      "Les champs de trous, de lumières et d’hexagones suivent une zone dessinée. Zones réservées, marges et épaisseurs minimales entre ouvertures sont respectées.",
-      "Les colliers de profil comprennent deux coques et deux inserts ajustés. Les profils ronds, ovales ou dessinés sont possibles ; les inserts restent remplaçables.",
-      "Un dessin fermé ou une ouverture choisie crée une rainure et un joint séparé. Matériaux, section et dépassement sont réglables ; les parois restantes sont vérifiées.",
-      "Les motifs de surface atteignent le bord des faces et laissent les perçages libres. Les motifs existants se modifient directement depuis le panneau de sélection.",
-      "Découper garde un côté d’un plan et ferme la face de coupe — pour des parois arrière planes et des parois à la même hauteur. Les congés le long de parois légèrement inclinées se modifient de nouveau.",
-      "Choisissez visuellement les contours SVG et DXF avant de créer le corps. Les fichiers GLB et GLTF conservent leurs dimensions et leur orientation correctes.",
-      "Les cotes du projet restent actives dans les esquisses de pièces et les aperçus de placement. Le cadrage inclut tous les plateaux d’impression visibles.",
-      "Les filaments peuvent être retirés de l’étagère. Les premiers pas commencent par le trancheur ; les retours s’ouvrent vite et préparent les pièces jointes en arrière-plan.",
-      "Suppr sur une face retire le corps et le dit ; Ctrl+Z le ramène. En vue rasante, un corps déplacé suit le pointeur, et la face choisie reste au premier clic de l’esquisse.",
-      "Le chat local reçoit une fenêtre plus grande et ne tronque plus votre demande.",
-      "Le diamètre de la buse se règle sur l'imprimante. Le transfert choisit alors la machine correspondante dans le slicer, même si une autre buse y est sélectionnée.",
-      "La réparation referme les modèles qui se touchent le long d'une arête au lieu de les ouvrir davantage."
+      "La dépouille atteint désormais toutes les faces verticales, même les plus étroites, et fonctionne sur les modèles importés.",
+      "La fusion douce laisse des faces latérales lisses au lieu d’arêtes effilochées.",
+      "Une bobine du stock de filaments peut avoir jusqu’à quatre couleurs. Bambu Studio, OrcaSlicer et ElegooSlicer reçoivent toutes les couleurs, les autres slicers la première.",
+      "Une arête sélectionnée n’affiche plus que les actions qui agissent sur une arête.",
+      "Sans sélection, le chemin vers les blocs reste visible.",
+      "Le champ de recherche n’apparaît que là où il y a quelque chose à trouver.",
+      "Une cloison de l’organiseur mène à son éditeur de compartiments plutôt qu’aux actions de sa face.",
+      "La boîte de dialogue pour placer un perçage indique que le point se choisit dans la vue.",
+      "Dans la boîte de dialogue « Générer un modèle », le champ de description garde sa hauteur même quand l’avis sur le programme complémentaire manquant apparaît.",
+      "Les suggestions d’impression arrivent bien plus vite : 2,3 millions de triangles en secondes au lieu de minutes, et rouvrir la boîte de dialogue d’impression ne remesure pas.",
+      "Une bobine importée d’un autre type de matériau qu’aucune pièce n’utilisait arrêtait le slicer sans un mot. Désormais chaque bobine d’un plateau reçoit un profil complet.",
+      "Si le slicer n’a pas de profil fabricant pour votre type de matériau, la boîte de dialogue d’impression le dit et prend les valeurs de Solidon, pas un profil d’un autre matériau.",
+      "Deux corps peuvent être poussés l’un dans l’autre pour les réunir ou les fusionner en douceur. Seul ce qui sort du plateau est ramené.",
+      "Si un ajustement renvoie à une entité qui n’existe plus, un bouton mène à l’historique.",
+      "Orienter pour l’impression et Disposer sur le plateau séparent les filaments par plateau, pour qu’une buse ne purge pas sans cesse. Plusieurs buses se déclarent dans la boîte de dialogue d’impression.",
+      "Une annulation dans l’historique des consommations peut être annulée à son tour, avec le même bouton.",
+      "Modifier seulement le nom ou l’emplacement d’une bobine ne compte plus comme un nouveau relevé ; ses enregistrements restent annulables.",
+      "Après une annulation, « Enregistrer sans demander » enregistre vraiment une nouvelle impression au lieu de dire seulement « enregistré ».",
+      "Les dates d’achat et d’ouverture ont un calendrier dans votre langue. Une bobine refusée revient dans la boîte de dialogue au lieu de disparaître.",
+      "L’import depuis le slicer crée une nouvelle bobine si le nom est identique mais la couleur différente, au lieu de recolorer la vôtre.",
+      "Si le fichier du stock ne se lit plus, un bouton rappelle le dernier état : Solidon le sauvegarde lui-même à chaque écriture.",
+      "La page de détail indique reste, date d’achat et prix ; l’identifiant à huit caractères n’apparaît que si deux bobines portent le même nom."
     ],
     "it": [
-      "Fori ciechi poco profondi, piccole superfici funzionali e filettature corte vengono riconosciuti meglio. I fondi delle sedi per magneti appartengono ai rispettivi fori.",
-      "Modifichi i fori insieme a svasature e imbocchi mantenendo le misure previste. Il fondo resta associato anche dopo variazioni importanti del diametro.",
-      "Riconosca gli elementi in un punto scelto di una mesh grande e li modifichi subito. Riconoscimento e modifica si annullano insieme.",
-      "Selezione e anteprima mostrano il corpo completo. Contorni ed etichette identificano la zona scelta; le scritte invariate restano prive di macchie arancioni.",
-      "Gli spigoli si possono selezionare su qualsiasi corpo e raccordare o smussare, anche sui modelli importati.",
-      "Fori, cilindri e raccordi nascono dagli stessi punti su Windows, macOS e Linux. Un progetto viene riconosciuto e modificato allo stesso modo su ogni computer.",
-      "Gli organizer offrono misure collegate, divisori modificabili singolarmente e celle ripetute. Vaschetta, bordo, fondo e piedino ampliano la libreria.",
-      "I campi di fori, asole ed esagoni seguono una regione disegnata. Rispettano le zone riservate, i margini e i ponti minimi.",
-      "I morsetti per profili comprendono due gusci e due inserti su misura. Sono ammessi profili rotondi, ovali e disegnati; gli inserti possono essere sostituiti in seguito.",
-      "Un disegno chiuso o un’apertura scelta crea una scanalatura e una guarnizione separata. Materiali, sezione e sporgenza sono regolabili; le pareti residue vengono verificate.",
-      "I motivi superficiali raggiungono il bordo delle facce e lasciano liberi i fori. I motivi esistenti si modificano direttamente dal pannello di selezione.",
-      "Tagliare via conserva un lato di un piano e chiude la faccia di taglio: per pareti posteriori lisce e pareti alla stessa altezza. I raccordi accanto a pareti un po’ inclinate tornano modificabili.",
-      "Scelga visivamente i contorni SVG e DXF prima di creare il corpo. I file GLB e GLTF conservano dimensioni e orientamento corretti.",
-      "Le misure del progetto restano attive negli schizzi dei componenti e nelle anteprime di posizionamento. L’inquadratura comprende tutti i piatti di stampa visibili.",
-      "I filamenti possono essere rimossi dallo scaffale. I primi passi iniziano dallo slicer; i commenti si aprono rapidamente e preparano gli allegati in background.",
-      "Canc su una faccia rimuove il corpo e lo dice; Ctrl+Z lo riporta. In vista radente un corpo trascinato segue il puntatore, e la faccia scelta resta al primo clic dello schizzo.",
-      "La chat locale riceve una finestra più grande e non accorcia più la richiesta.",
-      "Il diametro dell'ugello si imposta sulla stampante. Il trasferimento sceglie poi la macchina giusta nello slicer, anche se lì è selezionato un altro ugello.",
-      "La riparazione chiude i modelli che si toccano lungo uno spigolo invece di aprirli ulteriormente."
+      "Lo sformo raggiunge ora tutte le facce verticali, anche quelle strette, e funziona sui modelli importati.",
+      "La fusione morbida lascia facce laterali lisce invece di bordi sfilacciati.",
+      "Una bobina nel magazzino filamenti può avere fino a quattro colori. Bambu Studio, OrcaSlicer ed ElegooSlicer ricevono tutti i colori, gli altri slicer il primo.",
+      "Uno spigolo selezionato mostra solo le azioni che agiscono su uno spigolo.",
+      "Senza selezione resta visibile la via verso i blocchi.",
+      "Il campo di ricerca compare solo dove ci sia qualcosa da trovare.",
+      "Un divisorio dell’organizer porta al suo editor degli scomparti invece che alle azioni della sua faccia.",
+      "La finestra per collocare un foro dice che il punto si sceglie nella vista.",
+      "Nella finestra «Genera modello» il campo della descrizione mantiene la sua altezza anche quando compare l’avviso sul programma aggiuntivo mancante.",
+      "I suggerimenti di stampa arrivano molto più in fretta: una figura da 2,3 milioni di triangoli in secondi invece di minuti, e una seconda apertura della finestra di stampa non misura di nuovo.",
+      "Una bobina importata di un altro tipo di materiale che nessun pezzo usava chiudeva lo slicer senza una parola. Ora ogni bobina di un piano riceve un profilo completo.",
+      "Se lo slicer non ha un profilo del produttore per il tuo tipo di materiale, la finestra di stampa lo dice e usa i valori di Solidon, non un profilo di un altro materiale.",
+      "Due corpi si possono spingere uno dentro l’altro per unirli o fonderli dolcemente. Viene riportato indietro solo ciò che finisce fuori dal piano.",
+      "Se un accoppiamento rimanda a una caratteristica che non esiste più, un pulsante porta alla cronologia.",
+      "Orienta per la stampa e Disponi sul piano mettono i pezzi di filamenti diversi su piani propri, così un ugello non spurga di continuo. Più ugelli si indicano nella finestra di stampa.",
+      "Un annullamento nella cronologia dei movimenti si può ripristinare, con lo stesso pulsante.",
+      "Cambiare solo nome o posizione di una bobina non conta più come nuovo conteggio; le sue registrazioni restano annullabili.",
+      "Dopo un annullamento, «Registra senza chiedere» registra davvero una nuova stampa invece di dire solo «registrato».",
+      "Le date di acquisto e apertura hanno un calendario nella tua lingua. Una bobina rifiutata torna nella finestra invece di sparire.",
+      "L’importazione dallo slicer crea una bobina nuova se il nome è uguale e il colore diverso, invece di ricolorare la tua.",
+      "Se il file del magazzino non si legge, un pulsante recupera l’ultimo stato: Solidon lo salva da solo a ogni scrittura.",
+      "La pagina di dettaglio mostra resto, data di acquisto e prezzo; il codice a otto caratteri compare solo se due bobine hanno lo stesso nome."
     ],
     "pt": [
-      "Furos cegos pouco profundos, pequenas faces funcionais e roscas curtas são reconhecidos melhor. Os fundos dos alojamentos para ímanes pertencem aos respetivos furos.",
-      "Altere os furos com os seus escareados e entradas, mantendo as medidas previstas. O fundo continua associado mesmo após grandes alterações do diâmetro.",
-      "Reconheça elementos num ponto escolhido de uma malha grande e edite-os de imediato. O reconhecimento e a alteração podem ser desfeitos em conjunto.",
-      "A seleção e a pré-visualização mostram o corpo completo. Contornos e etiquetas identificam a zona escolhida; as letras inalteradas ficam sem manchas laranja.",
-      "As arestas podem ser selecionadas em qualquer corpo e arredondadas ou chanfradas, também em modelos importados.",
-      "Os furos, cilindros e arredondamentos nascem dos mesmos pontos no Windows, macOS e Linux. Um projeto é reconhecido e editado da mesma forma em qualquer computador.",
-      "Os organizadores permitem medidas ligadas, divisórias editáveis individualmente e células repetidas. Tabuleiro, rebordo, fundo e pé ampliam a biblioteca.",
-      "Os campos de furos, rasgos e hexágonos seguem uma região desenhada. Respeitam áreas reservadas, margens e pontes mínimas.",
-      "As abraçadeiras de perfil incluem duas carcaças e dois insertos ajustados. Admitem perfis redondos, ovais ou desenhados; os insertos podem ser substituídos depois.",
-      "Um desenho fechado ou uma abertura escolhida cria uma ranhura e uma junta separada. Pode ajustar materiais, secção e saliência; as paredes restantes são verificadas.",
-      "Os padrões de superfície chegam ao limite da face e deixam os furos livres. Os padrões existentes podem ser editados diretamente no painel de seleção.",
-      "Cortar fora mantém um lado de um plano e fecha a face de corte — para paredes traseiras lisas e paredes à mesma altura. Os boleados junto a paredes ligeiramente inclinadas voltam a poder editar-se.",
-      "Escolha visualmente os contornos SVG e DXF antes de criar o corpo. Os ficheiros GLB e GLTF mantêm as dimensões e a orientação corretas.",
-      "As medidas do projeto continuam ativas nos esboços das peças e nas pré-visualizações de colocação. O enquadramento inclui todas as placas de impressão visíveis.",
-      "Pode remover filamentos da estante. Os primeiros passos começam pelo laminador; os comentários abrem rapidamente e preparam os anexos em segundo plano.",
-      "Delete numa face remove o corpo e diz-o; Ctrl+Z traz o corpo de volta. Numa vista rasante, um corpo arrastado segue o ponteiro, e a face escolhida mantém-se no primeiro clique do esboço.",
-      "O chat local recebe uma janela maior e já não encurta o seu pedido.",
-      "O diâmetro do bico define-se na impressora. A transferência escolhe então a máquina correta no slicer, mesmo que aí esteja selecionado outro bico.",
-      "A reparação fecha os modelos que se tocam ao longo de uma aresta em vez de os abrir ainda mais."
+      "O ângulo de saída alcança agora todas as faces verticais, mesmo as estreitas, e funciona em modelos importados.",
+      "A fusão suave deixa faces laterais lisas em vez de arestas desfiadas.",
+      "Uma bobina no inventário de filamentos pode ter até quatro cores. Bambu Studio, OrcaSlicer e ElegooSlicer recebem todas as cores, os outros slicers a primeira.",
+      "Uma aresta selecionada mostra apenas as ações que atuam numa aresta.",
+      "Sem seleção, o caminho para os blocos continua visível.",
+      "O campo de pesquisa só aparece onde há algo para encontrar.",
+      "Uma divisória do organizador leva ao seu editor de compartimentos em vez das ações da sua face.",
+      "A janela para colocar um furo indica que o ponto se escolhe na vista.",
+      "Na janela «Gerar modelo», o campo de descrição mantém a sua altura mesmo quando aparece o aviso sobre o programa adicional em falta.",
+      "As sugestões de impressão chegam muito mais depressa: uma figura com 2,3 milhões de triângulos em segundos em vez de minutos, e abrir a janela de impressão uma segunda vez não volta a medir.",
+      "Uma bobina importada de outro tipo de material que nenhuma peça usava fechava o slicer sem uma palavra. Agora cada bobina de uma placa recebe um perfil completo.",
+      "Se o slicer não tiver um perfil do fabricante para o seu tipo de material, a janela de impressão di-lo e usa os valores do Solidon, não um perfil de outro material.",
+      "Dois corpos podem ser empurrados um contra o outro para os unir ou fundir suavemente. Só é trazido de volta o que fica fora da área de impressão.",
+      "Se um ajuste aponta para uma característica que já não existe, um botão leva ao histórico.",
+      "Orientar para impressão e Dispor na mesa colocam peças de filamentos diferentes em placas próprias, para que um bico não purgue sem parar. Vários bicos indicam-se na janela de impressão.",
+      "Uma anulação no histórico de movimentos pode ser revertida de novo, com o mesmo botão.",
+      "Alterar apenas o nome ou o local de uma bobina já não conta como nova contagem; os seus registos continuam anuláveis.",
+      "Após uma anulação, «Registar sem perguntar» regista mesmo uma nova impressão em vez de dizer apenas «registado».",
+      "As datas de compra e abertura têm um calendário na sua língua. Uma bobina recusada volta à janela em vez de desaparecer.",
+      "A importação do slicer cria uma bobina nova se o nome for igual e a cor diferente, em vez de recolorir a sua.",
+      "Se o ficheiro do inventário não se conseguir ler, um botão recupera o último estado: o Solidon guarda-o sozinho a cada gravação.",
+      "A página de detalhe mostra resto, data de compra e preço; o código de oito caracteres só aparece se duas bobinas tiverem o mesmo nome."
     ]
   },
   "notes_by_language": {
-    "de": "Organizer mit gebundenen Fachmaßen, Profilklemmen und Dichtnuten aus einer Zeichnung. Kanten lassen sich an jedem Körper verrunden — auch an eingelesenen Modellen. Bohrungen und Rundungen entstehen auf Windows, macOS und Linux aus denselben Punkten, ein Projekt wird also überall gleich erkannt und bearbeitet. Die Demo bleibt vollständig und ohne Schlüssel bis zum 30.10.2026.",
-    "en": "Organisers with linked compartment sizes, profile clamps and sealing grooves from a drawing. Edges can be rounded on any body — imported models included. Bores and roundings are built from the same points on Windows, macOS and Linux, so a project is recognised and edited the same way everywhere. The demo stays complete and needs no key, until 30 October 2026.",
-    "es": "Organizadores con medidas de compartimento vinculadas, abrazaderas de perfil y ranuras de junta a partir de un dibujo. Las aristas se pueden redondear en cualquier cuerpo, también en modelos importados. Los taladros y redondeos se construyen con los mismos puntos en Windows, macOS y Linux, así que un proyecto se reconoce y se edita igual en todas partes. La demo sigue completa y sin clave, hasta el 30 de octubre de 2026.",
-    "fr": "Des organiseurs aux dimensions de casiers liées, des colliers de profilé et des gorges de joint à partir d’un dessin. Les arêtes s’arrondissent sur n’importe quel corps — modèles importés compris. Les perçages et arrondis sont construits à partir des mêmes points sur Windows, macOS et Linux : un projet est donc reconnu et modifié de la même façon partout. La démo reste complète et sans clé, jusqu’au 30 octobre 2026.",
-    "it": "Organizer con misure degli scomparti collegate, morsetti per profili e gole di tenuta da un disegno. Gli spigoli si raccordano su qualsiasi corpo, anche sui modelli importati. Fori e raccordi nascono dagli stessi punti su Windows, macOS e Linux, quindi un progetto viene riconosciuto e modificato allo stesso modo dappertutto. La demo resta completa e senza chiave, fino al 30 ottobre 2026.",
-    "pt": "Organizadores com medidas de compartimento ligadas, braçadeiras de perfil e ranhuras de vedação a partir de um desenho. As arestas podem ser arredondadas em qualquer corpo, também em modelos importados. Os furos e arredondamentos nascem dos mesmos pontos no Windows, macOS e Linux, pelo que um projeto é reconhecido e editado da mesma forma em todo o lado. A demo continua completa e sem chave, até 30 de outubro de 2026."
+    "de": "Ein Filamentlager, das mitrechnet: Spulen mit bis zu vier Farben, Buchungen nach jeder Slicer-Übergabe, Rücknahmen, die sich rückgängig machen lassen, und ein Kalender für die Daten. Druckoptimal ausrichten legt Teile verschiedener Filamente auf eigene Platten, wenn Ihr Drucker nur eine Düse hat. Die Druckvorschläge kommen in Sekunden statt Minuten, und eine unbenutzte Fremdspule lässt den Slicer nicht mehr abstürzen. Die Demo bleibt vollständig und ohne Schlüssel bis zum 30.10.2026.",
+    "en": "A filament inventory that keeps count: spools with up to four colours, records after every handover to the slicer, reversals that can be undone, and a calendar for the dates. Orient for printing puts parts of different filaments on their own plates when your printer has a single nozzle. Print suggestions arrive in seconds instead of minutes, and an unused foreign spool no longer crashes the slicer. The demo stays complete and needs no key, until 30 October 2026.",
+    "es": "Un inventario de filamentos que lleva la cuenta: bobinas con hasta cuatro colores, registros tras cada entrega al slicer, anulaciones que se pueden revertir y un calendario para las fechas. Orientar para imprimir coloca las piezas de distintos filamentos en placas propias cuando su impresora tiene una sola boquilla. Las sugerencias de impresión llegan en segundos en lugar de minutos, y una bobina ajena sin usar ya no hace que el slicer se cierre. La demo sigue completa y sin clave, hasta el 30 de octubre de 2026.",
+    "fr": "Un stock de filament qui tient les comptes : des bobines jusqu’à quatre couleurs, des enregistrements après chaque remise au slicer, des annulations réversibles et un calendrier pour les dates. Orienter pour l’impression place les pièces de filaments différents sur des plateaux distincts quand votre imprimante n’a qu’une buse. Les suggestions d’impression arrivent en secondes au lieu de minutes, et une bobine étrangère inutilisée ne fait plus planter le slicer. La démo reste complète et sans clé, jusqu’au 30 octobre 2026.",
+    "it": "Un magazzino filamenti che tiene i conti: bobine fino a quattro colori, registrazioni dopo ogni consegna allo slicer, annullamenti reversibili e un calendario per le date. Orienta per la stampa mette i pezzi di filamenti diversi su piani propri quando la stampante ha un solo ugello. I suggerimenti di stampa arrivano in secondi invece che in minuti, e una bobina estranea inutilizzata non fa più chiudere lo slicer. La demo resta completa e senza chiave, fino al 30 ottobre 2026.",
+    "pt": "Um inventário de filamentos que faz as contas: bobinas com até quatro cores, registos após cada entrega ao slicer, anulações reversíveis e um calendário para as datas. Orientar para impressão coloca peças de filamentos diferentes em placas próprias quando a sua impressora tem um único bico. As sugestões de impressão chegam em segundos em vez de minutos, e uma bobina alheia não utilizada já não faz o slicer fechar. A demo continua completa e sem chave, até 30 de outubro de 2026."
   },
   "groups": {
     "de": [
       {
-        "title": "Erkennen und Bearbeiten",
+        "title": "Bearbeiten",
         "points": [
-          "Flache Sackbohrungen, kleine Funktionsflächen und kurze Gewinde werden zuverlässiger erkannt. Die Böden der Magnettaschen gehören zu ihren Bohrungen.",
-          "Bohrungen lassen sich samt Senkung und Einlauf maßhaltig ändern. Auch nach einer größeren Durchmesseränderung bleibt der Sackboden zugeordnet.",
-          "An großen Netzen können Sie Merkmale gezielt an einer Stelle erkennen und sofort bearbeiten. Erkennung und Änderung lassen sich gemeinsam zurücknehmen.",
-          "Auswahl und Vorschau zeigen den vollständigen Körper. Konturen und Beschriftungen machen die gewählte Stelle deutlich; unveränderte Schrift bleibt ohne orange Flecken.",
-          "Kanten lassen sich an jedem Körper anklicken und verrunden oder fasen — auch an eingelesenen Modellen.",
-          "Bohrungen, Zylinder und Rundungen entstehen auf Windows, macOS und Linux aus denselben Punkten. Ein Projekt wird auf jedem Rechner gleich erkannt und gleich bearbeitet."
+          "Die Formschräge stellt alle senkrechten Seiten an, auch die schmalen, und kommt mit eingelesenen Modellen zurecht.",
+          "Weich verschmelzen hinterlässt glatte Seitenflächen statt ausgefranster Kanten."
         ]
       },
       {
-        "title": "Konstruieren",
+        "title": "Auswählen und Bedienen",
         "points": [
-          "Organizer erhalten gebundene Fachmaße, einzeln änderbare Trennwände und wiederholte Fächer. Wanne, Rand, Boden und Fuß ergänzen die Bausteinbibliothek.",
-          "Loch-, Langloch- und Wabenfelder folgen einem gezeichneten Bereich. Freizuhaltende Flächen, Randabstände und Mindeststege bleiben berücksichtigt.",
-          "Profilklemmen entstehen aus zwei Schalen und zwei passenden Einlagen. Runde, ovale und gezeichnete Gegenprofile sind möglich; die Einlagen lassen sich später austauschen.",
-          "Eine geschlossene Zeichnung oder gewählte Öffnung erzeugt Dichtnut und separate Dichtung. Material, Querschnitt und Überstand sind einstellbar; Restwände werden geprüft.",
-          "Oberflächenmuster reichen bis zum Flächenrand und lassen Bohrungen frei. Vorhandene Muster lassen sich direkt über die Auswahl weiterbearbeiten.",
-          "Abschneiden behält eine Seite einer Ebene und schließt die Schnittfläche — für glatte Rückwände und Wände auf einer Höhe. Rundungen neben leicht schrägen Wänden lassen sich wieder ändern."
+          "Eine Spule im Filamentlager kann bis zu vier Farben haben. Bambu Studio, OrcaSlicer und ElegooSlicer bekommen alle Farben, andere Slicer die erste.",
+          "Eine angeklickte Kante zeigt nur noch die Handlungen, die an einer Kante etwas bewirken.",
+          "Ohne Auswahl bleibt der Weg zu den Bausteinen sichtbar.",
+          "Das Suchfeld steht nur dort, wo es etwas zu finden gibt.",
+          "Eine Trennwand im Organizer führt zu ihrem Fächereditor statt zu den Handlungen ihrer Fläche.",
+          "Der Dialog zum Setzen einer Bohrung sagt, dass Sie die Stelle im Bild anklicken.",
+          "Im Dialog „Modell erzeugen“ behält das Beschreibungsfeld seine Höhe, auch wenn der Hinweis zum fehlenden Zusatzprogramm erscheint."
         ]
       },
       {
-        "title": "Einlesen und Bedienen",
+        "title": "Bewegen und Prüfen",
         "points": [
-          "SVG- und DXF-Konturen wählen Sie vor dem Erzeugen sichtbar aus. GLB- und GLTF-Dateien kommen mit ihren richtigen Maßen und ihrer richtigen Ausrichtung an.",
-          "Projektmaße bleiben bis in Bausteinskizzen und Platzierungsvorschauen wirksam. Beim Einpassen berücksichtigt die Ansicht alle sichtbaren Druckplatten.",
-          "Filamente lassen sich aus dem Regal entfernen. Die ersten Schritte beginnen beim Slicer; Rückmeldungen öffnen schnell und bereiten ihre Anhänge im Hintergrund vor.",
-          "Entf an einer Fläche entfernt den Körper und sagt es; Strg+Z holt ihn zurück. Bei flachem Blick folgt ein gezogener Körper dem Zeiger, und die gewählte Fläche bleibt beim ersten Klick der Skizze.",
-          "Der lokale Chat bekommt ein größeres Fenster und kürzt Ihre Anfrage nicht mehr.",
-          "Der Düsendurchmesser lässt sich am Drucker einstellen. Die Übergabe wählt dann die passende Maschine im Slicer, auch wenn dort eine andere Düse eingestellt ist.",
-          "Reparieren schließt Modelle, die sich an einer Kante selbst berühren, statt sie weiter aufzureißen."
+          "Die Druckvorschläge kommen deutlich schneller: eine Figur mit 2,3 Millionen Dreiecken in Sekunden statt Minuten, und ein zweites Öffnen des Druckdialogs misst nicht noch einmal.",
+          "Eine eingelesene Spule anderer Materialart, die kein Teil benutzt, ließ den Slicer ohne ein Wort abbrechen. Jetzt bekommt jede Spule einer Platte ein vollständiges Profil.",
+          "Hat der Slicer kein Herstellerprofil für Ihre Materialart, sagt der Druckdialog das und nimmt Solidons Werte — statt eines Profils für ein anderes Material.",
+          "Zwei Körper lassen sich ineinanderschieben, um sie zu vereinigen oder weich zu verschmelzen. Zurückgeholt wird nur, was neben der Druckfläche landet.",
+          "Verweist eine Passung auf ein Merkmal, das es nicht mehr gibt, führt ein Knopf in den Verlauf.",
+          "Druckoptimal ausrichten und Auf dem Bett anordnen legen Teile verschiedener Filamente auf eigene Platten, damit eine Düse nicht ständig spült. Mehrere Düsen tragen Sie im Druckdialog ein."
+        ]
+      },
+      {
+        "title": "Filamentlager",
+        "points": [
+          "Eine Rücknahme im Buchungsverlauf lässt sich wieder rückgängig machen — am selben Knopf.",
+          "Wer an einer Spule nur Name oder Lagerort ändert, stellt keinen neuen Bestand fest; ihre Buchungen bleiben rücknehmbar.",
+          "Nach einer Rücknahme bucht „Ohne Rückfrage buchen“ einen erneuten Druck wirklich, statt nur „gebucht“ zu sagen.",
+          "Kauf- und Öffnungsdatum haben einen Kalender in Ihrer Sprache. Eine abgewiesene Spule kommt in den Dialog zurück, statt zu verschwinden.",
+          "Die Übernahme aus dem Slicer legt eine gleichnamige Spule anderer Farbe neu an, statt Ihre Handspule umzufärben.",
+          "Lässt sich die Lagerdatei nicht lesen, holt ein Knopf den letzten Stand zurück — Solidon sichert ihn bei jedem Speichern selbst.",
+          "Die Detailseite nennt Restmenge, Kaufdatum und Preis; die achtstellige Kennung steht nur noch dort, wo zwei Spulen gleich heißen."
         ]
       }
     ],
     "en": [
       {
-        "title": "Recognition and editing",
+        "title": "Editing",
         "points": [
-          "Shallow blind holes, small functional faces and short threads are recognised more reliably. Magnet-pocket floors belong to their bores.",
-          "Resize bores together with their countersinks and entrances while preserving the intended dimensions. Blind-hole floors stay associated even after larger diameter changes.",
-          "Recognise features at a chosen spot on large meshes and edit them immediately. Recognition and editing can be undone together.",
-          "Selection and preview show the complete body. Outlines and labels identify the selected area; unchanged lettering stays free of orange patches.",
-          "Edges can be picked on any body and rounded or chamfered — on imported models too.",
-          "Bores, cylinders and roundings are built from the same points on Windows, macOS and Linux. A project is recognised and edited the same way on every machine."
+          "Draft angles now reach every upright side, including the narrow ones, and work on imported models.",
+          "Soft merging leaves smooth side faces instead of frayed edges."
         ]
       },
       {
-        "title": "Construction",
+        "title": "Selecting and operating",
         "points": [
-          "Organisers gain linked compartment dimensions, individually editable dividers and repeated cells. Tray, rim, floor and foot parts extend the library.",
-          "Hole, slot and honeycomb fields follow a drawn region. Keep-out areas, edge margins and minimum webs are respected.",
-          "Profile clamps comprise two shells and two fitted liners. Round, oval and drawn mating profiles are supported; liners can be replaced later.",
-          "A closed drawing or selected opening creates a seal groove and a separate gasket. Choose materials, cross-section and protrusion; remaining walls are checked.",
-          "Surface patterns reach the face boundary and leave bores clear. Existing patterns can be edited directly through the selection panel.",
-          "Cut away keeps one side of a plane and closes the cut face — for flat back walls and walls at one height. Fillets next to slightly slanted walls can be edited again."
+          "A spool in the filament inventory can have up to four colours. Bambu Studio, OrcaSlicer and ElegooSlicer receive all colours, other slicers the first.",
+          "A picked edge now shows only the actions that do something to an edge.",
+          "With nothing selected, the way to the building blocks stays visible.",
+          "The search box only appears where there is something to find.",
+          "A divider in an organizer leads to its compartment editor instead of to the actions of its face.",
+          "The dialogue for placing a hole says that you pick the spot in the view.",
+          "In the “Generate model” dialogue the description field keeps its height even when the note about the missing add-on program appears."
         ]
       },
       {
-        "title": "Import and use",
+        "title": "Moving and checking",
         "points": [
-          "Select SVG and DXF contours visually before creating a body. GLB and GLTF files retain their correct dimensions and orientation.",
-          "Project dimensions remain effective in part sketches and placement previews. Fit to view includes every visible build plate.",
-          "Filaments can be removed from the shelf. First steps start with the slicer; feedback opens quickly and prepares attachments in the background.",
-          "Delete on a face removes the body and says so; Ctrl+Z brings it back. In a flat view a dragged body follows the pointer, and the chosen face survives the first click of a sketch.",
-          "The local chat gets a larger window and no longer truncates your request.",
-          "The nozzle diameter can be set on the printer. The handover then picks the matching machine in the slicer, even if a different nozzle is selected there.",
-          "Repair closes models that touch themselves along an edge instead of tearing them open further."
+          "Print suggestions arrive much faster: a figure with 2.3 million triangles in seconds instead of minutes, and opening the print dialogue a second time does not measure again.",
+          "An imported spool of another material type that no part used made the slicer abort without a word. Now every spool on a plate gets a complete profile.",
+          "If the slicer has no vendor profile for your material type, the print dialogue says so and uses Solidon’s values — instead of a profile for another material.",
+          "Two bodies can be pushed into each other to unite or softly merge them. Only what ends up beside the build area is brought back.",
+          "When a fit points at a feature that no longer exists, a button leads into the history.",
+          "Orient for printing and Arrange on the bed put parts of different filaments on their own plates so one nozzle does not keep purging. Enter several nozzles in the print dialogue."
+        ]
+      },
+      {
+        "title": "Filament inventory",
+        "points": [
+          "A reversal in the consumption history can be undone again — with the same button.",
+          "Changing only a spool’s name or location no longer counts as a new stock count; its records stay reversible.",
+          "After a reversal, “Record without asking” really records a repeated print instead of merely saying “recorded”.",
+          "Purchase and opening dates have a calendar in your language. A rejected spool returns to the dialogue instead of vanishing.",
+          "Importing from the slicer adds a same-named spool of another colour instead of recolouring your hand-entered one.",
+          "If the inventory file cannot be read, one button brings back the last state — Solidon saves it itself on every write.",
+          "The detail page names remaining amount, purchase date and price; the eight-character ID only appears where two spools share a name."
         ]
       }
     ],
     "es": [
       {
-        "title": "Reconocimiento y edición",
+        "title": "Editar",
         "points": [
-          "Se reconocen mejor los taladros ciegos poco profundos, las caras pequeñas y las roscas cortas. Los fondos de los alojamientos para imanes pertenecen a sus taladros.",
-          "Cambie el diámetro junto con el avellanado y la entrada conservando las medidas previstas. El fondo sigue asociado incluso tras cambios grandes de diámetro.",
-          "Reconozca elementos en un punto elegido de una malla grande y edítelos al instante. El reconocimiento y el cambio se deshacen juntos.",
-          "La selección y la vista previa muestran el cuerpo completo. Contornos y etiquetas identifican la zona elegida; las letras sin cambios no muestran manchas naranjas.",
-          "Las aristas se pueden seleccionar en cualquier cuerpo y redondear o achaflanar, también en modelos importados.",
-          "Los taladros, cilindros y redondeos se construyen con los mismos puntos en Windows, macOS y Linux. Un proyecto se reconoce y se edita igual en cualquier equipo."
+          "El ángulo de desmoldeo alcanza ahora todas las caras verticales, también las estrechas, y funciona en modelos importados.",
+          "La fusión suave deja caras laterales lisas en lugar de bordes deshilachados."
         ]
       },
       {
-        "title": "Construcción",
+        "title": "Seleccionar y manejar",
         "points": [
-          "Los organizadores admiten medidas vinculadas, divisores editables por separado y celdas repetidas. Bandeja, borde, fondo y pie amplían la biblioteca.",
-          "Los campos de agujeros, ranuras y hexágonos siguen una región dibujada. Se respetan las zonas reservadas, los márgenes y los puentes mínimos.",
-          "Las abrazaderas de perfil constan de dos carcasas y dos insertos ajustados. Admiten perfiles redondos, ovalados o dibujados; los insertos pueden sustituirse después.",
-          "Un dibujo cerrado o una abertura elegida crea una ranura de sellado y una junta separada. Puede elegir materiales, sección y saliente; se comprueban las paredes restantes.",
-          "Los patrones superficiales llegan al borde de la cara y dejan libres los taladros. Puede editar los patrones existentes desde el panel de selección.",
-          "Recortar conserva un lado de un plano y cierra la cara de corte: para paredes traseras lisas y paredes a una misma altura. Los redondeos junto a paredes algo inclinadas vuelven a poder editarse."
+          "Una bobina del inventario de filamentos puede tener hasta cuatro colores. Bambu Studio, OrcaSlicer y ElegooSlicer reciben todos los colores; los demás slicers, el primero.",
+          "Una arista seleccionada muestra solo las acciones que hacen algo en una arista.",
+          "Sin selección, el camino a los bloques sigue visible.",
+          "El campo de búsqueda solo aparece donde hay algo que encontrar.",
+          "Un tabique del organizador lleva a su editor de compartimentos en lugar de a las acciones de su cara.",
+          "El diálogo para colocar un taladro indica que el punto se elige en la vista.",
+          "En el diálogo «Generar modelo», el campo de descripción conserva su altura aunque aparezca el aviso sobre el programa adicional que falta."
         ]
       },
       {
-        "title": "Importación y manejo",
+        "title": "Mover y comprobar",
         "points": [
-          "Seleccione visualmente los contornos SVG y DXF antes de crear el cuerpo. Los archivos GLB y GLTF conservan sus medidas y orientación correctas.",
-          "Las medidas del proyecto siguen actuando en los bocetos de piezas y sus vistas previas de colocación. El encuadre incluye todas las placas de impresión visibles.",
-          "Puede quitar filamentos de la estantería. Los primeros pasos empiezan por el laminador; los comentarios se abren rápido y preparan sus adjuntos en segundo plano.",
-          "Supr sobre una cara elimina el cuerpo y lo indica; Ctrl+Z lo recupera. Con una vista rasante, un cuerpo arrastrado sigue al puntero, y la cara elegida se mantiene en el primer clic del boceto.",
-          "El chat local recibe una ventana mayor y ya no recorta su solicitud.",
-          "El diámetro de la boquilla se ajusta en la impresora. La entrega elige entonces la máquina adecuada en el slicer, aunque allí esté seleccionada otra boquilla.",
-          "Reparar cierra los modelos que se tocan a sí mismos en una arista, en lugar de abrirlos más."
+          "Las sugerencias de impresión llegan mucho más rápido: una figura de 2,3 millones de triángulos en segundos en lugar de minutos, y abrir el diálogo de impresión por segunda vez no vuelve a medir.",
+          "Una bobina importada de otro tipo de material que ninguna pieza usaba cerraba el slicer sin decir nada. Ahora cada bobina de una placa recibe un perfil completo.",
+          "Si el slicer no tiene un perfil del fabricante para su tipo de material, el diálogo de impresión lo dice y usa los valores de Solidon, no un perfil de otro material.",
+          "Dos cuerpos pueden empujarse uno dentro de otro para unirlos o fusionarlos suavemente. Solo se devuelve lo que queda fuera del área de impresión.",
+          "Si un ajuste apunta a una característica que ya no existe, un botón lleva al historial.",
+          "Orientar para imprimir y Organizar sobre la cama ponen piezas de distintos filamentos en placas propias, para que una boquilla no purgue sin parar. Varias boquillas se indican al imprimir."
+        ]
+      },
+      {
+        "title": "Inventario de filamentos",
+        "points": [
+          "Una anulación en el historial de movimientos se puede revertir de nuevo, con el mismo botón.",
+          "Cambiar solo el nombre o la ubicación de una bobina ya no cuenta como nuevo recuento; sus registros siguen siendo anulables.",
+          "Tras una anulación, «Registrar sin preguntar» registra de verdad una nueva impresión en vez de decir solo «registrado».",
+          "Las fechas de compra y apertura tienen un calendario en su idioma. Una bobina rechazada vuelve al diálogo en vez de desaparecer.",
+          "La importación desde el slicer crea una bobina nueva si tiene el mismo nombre y otro color, en vez de recolorear la suya.",
+          "Si el archivo del inventario no se puede leer, un botón recupera el último estado: Solidon lo guarda solo en cada escritura.",
+          "La página de detalle muestra cantidad restante, fecha de compra y precio; el código de ocho caracteres solo aparece si dos bobinas se llaman igual."
         ]
       }
     ],
     "fr": [
       {
-        "title": "Reconnaissance et modification",
+        "title": "Modifier",
         "points": [
-          "Les perçages borgnes peu profonds, les petites faces et les filetages courts sont mieux reconnus. Les fonds des logements pour aimants appartiennent à leurs perçages.",
-          "Modifiez un perçage avec sa fraisure et son entrée en conservant les cotes prévues. Le fond reste associé même après un changement important de diamètre.",
-          "Reconnaissez des éléments à un endroit choisi sur un grand maillage et modifiez-les aussitôt. La reconnaissance et la modification s’annulent ensemble.",
-          "La sélection et l’aperçu montrent le corps complet. Contours et étiquettes identifient la zone choisie ; les lettres inchangées restent sans taches orange.",
-          "Les arêtes se sélectionnent sur n'importe quel corps et s'arrondissent ou se chanfreinent — aussi sur les modèles importés.",
-          "Les perçages, cylindres et arrondis sont construits à partir des mêmes points sur Windows, macOS et Linux. Un projet est reconnu et modifié de la même façon sur chaque machine."
+          "La dépouille atteint désormais toutes les faces verticales, même les plus étroites, et fonctionne sur les modèles importés.",
+          "La fusion douce laisse des faces latérales lisses au lieu d’arêtes effilochées."
         ]
       },
       {
-        "title": "Construction",
+        "title": "Sélectionner et utiliser",
         "points": [
-          "Les organisateurs proposent des cotes liées, des cloisons modifiables séparément et des cases répétées. Bac, bordure, fond et pied enrichissent la bibliothèque.",
-          "Les champs de trous, de lumières et d’hexagones suivent une zone dessinée. Zones réservées, marges et épaisseurs minimales entre ouvertures sont respectées.",
-          "Les colliers de profil comprennent deux coques et deux inserts ajustés. Les profils ronds, ovales ou dessinés sont possibles ; les inserts restent remplaçables.",
-          "Un dessin fermé ou une ouverture choisie crée une rainure et un joint séparé. Matériaux, section et dépassement sont réglables ; les parois restantes sont vérifiées.",
-          "Les motifs de surface atteignent le bord des faces et laissent les perçages libres. Les motifs existants se modifient directement depuis le panneau de sélection.",
-          "Découper garde un côté d’un plan et ferme la face de coupe — pour des parois arrière planes et des parois à la même hauteur. Les congés le long de parois légèrement inclinées se modifient de nouveau."
+          "Une bobine du stock de filaments peut avoir jusqu’à quatre couleurs. Bambu Studio, OrcaSlicer et ElegooSlicer reçoivent toutes les couleurs, les autres slicers la première.",
+          "Une arête sélectionnée n’affiche plus que les actions qui agissent sur une arête.",
+          "Sans sélection, le chemin vers les blocs reste visible.",
+          "Le champ de recherche n’apparaît que là où il y a quelque chose à trouver.",
+          "Une cloison de l’organiseur mène à son éditeur de compartiments plutôt qu’aux actions de sa face.",
+          "La boîte de dialogue pour placer un perçage indique que le point se choisit dans la vue.",
+          "Dans la boîte de dialogue « Générer un modèle », le champ de description garde sa hauteur même quand l’avis sur le programme complémentaire manquant apparaît."
         ]
       },
       {
-        "title": "Importation et utilisation",
+        "title": "Déplacer et vérifier",
         "points": [
-          "Choisissez visuellement les contours SVG et DXF avant de créer le corps. Les fichiers GLB et GLTF conservent leurs dimensions et leur orientation correctes.",
-          "Les cotes du projet restent actives dans les esquisses de pièces et les aperçus de placement. Le cadrage inclut tous les plateaux d’impression visibles.",
-          "Les filaments peuvent être retirés de l’étagère. Les premiers pas commencent par le trancheur ; les retours s’ouvrent vite et préparent les pièces jointes en arrière-plan.",
-          "Suppr sur une face retire le corps et le dit ; Ctrl+Z le ramène. En vue rasante, un corps déplacé suit le pointeur, et la face choisie reste au premier clic de l’esquisse.",
-          "Le chat local reçoit une fenêtre plus grande et ne tronque plus votre demande.",
-          "Le diamètre de la buse se règle sur l'imprimante. Le transfert choisit alors la machine correspondante dans le slicer, même si une autre buse y est sélectionnée.",
-          "La réparation referme les modèles qui se touchent le long d'une arête au lieu de les ouvrir davantage."
+          "Les suggestions d’impression arrivent bien plus vite : 2,3 millions de triangles en secondes au lieu de minutes, et rouvrir la boîte de dialogue d’impression ne remesure pas.",
+          "Une bobine importée d’un autre type de matériau qu’aucune pièce n’utilisait arrêtait le slicer sans un mot. Désormais chaque bobine d’un plateau reçoit un profil complet.",
+          "Si le slicer n’a pas de profil fabricant pour votre type de matériau, la boîte de dialogue d’impression le dit et prend les valeurs de Solidon, pas un profil d’un autre matériau.",
+          "Deux corps peuvent être poussés l’un dans l’autre pour les réunir ou les fusionner en douceur. Seul ce qui sort du plateau est ramené.",
+          "Si un ajustement renvoie à une entité qui n’existe plus, un bouton mène à l’historique.",
+          "Orienter pour l’impression et Disposer sur le plateau séparent les filaments par plateau, pour qu’une buse ne purge pas sans cesse. Plusieurs buses se déclarent dans la boîte de dialogue d’impression."
+        ]
+      },
+      {
+        "title": "Stock de filament",
+        "points": [
+          "Une annulation dans l’historique des consommations peut être annulée à son tour, avec le même bouton.",
+          "Modifier seulement le nom ou l’emplacement d’une bobine ne compte plus comme un nouveau relevé ; ses enregistrements restent annulables.",
+          "Après une annulation, « Enregistrer sans demander » enregistre vraiment une nouvelle impression au lieu de dire seulement « enregistré ».",
+          "Les dates d’achat et d’ouverture ont un calendrier dans votre langue. Une bobine refusée revient dans la boîte de dialogue au lieu de disparaître.",
+          "L’import depuis le slicer crée une nouvelle bobine si le nom est identique mais la couleur différente, au lieu de recolorer la vôtre.",
+          "Si le fichier du stock ne se lit plus, un bouton rappelle le dernier état : Solidon le sauvegarde lui-même à chaque écriture.",
+          "La page de détail indique reste, date d’achat et prix ; l’identifiant à huit caractères n’apparaît que si deux bobines portent le même nom."
         ]
       }
     ],
     "it": [
       {
-        "title": "Riconoscimento e modifica",
+        "title": "Modificare",
         "points": [
-          "Fori ciechi poco profondi, piccole superfici funzionali e filettature corte vengono riconosciuti meglio. I fondi delle sedi per magneti appartengono ai rispettivi fori.",
-          "Modifichi i fori insieme a svasature e imbocchi mantenendo le misure previste. Il fondo resta associato anche dopo variazioni importanti del diametro.",
-          "Riconosca gli elementi in un punto scelto di una mesh grande e li modifichi subito. Riconoscimento e modifica si annullano insieme.",
-          "Selezione e anteprima mostrano il corpo completo. Contorni ed etichette identificano la zona scelta; le scritte invariate restano prive di macchie arancioni.",
-          "Gli spigoli si possono selezionare su qualsiasi corpo e raccordare o smussare, anche sui modelli importati.",
-          "Fori, cilindri e raccordi nascono dagli stessi punti su Windows, macOS e Linux. Un progetto viene riconosciuto e modificato allo stesso modo su ogni computer."
+          "Lo sformo raggiunge ora tutte le facce verticali, anche quelle strette, e funziona sui modelli importati.",
+          "La fusione morbida lascia facce laterali lisce invece di bordi sfilacciati."
         ]
       },
       {
-        "title": "Costruzione",
+        "title": "Selezionare e usare",
         "points": [
-          "Gli organizer offrono misure collegate, divisori modificabili singolarmente e celle ripetute. Vaschetta, bordo, fondo e piedino ampliano la libreria.",
-          "I campi di fori, asole ed esagoni seguono una regione disegnata. Rispettano le zone riservate, i margini e i ponti minimi.",
-          "I morsetti per profili comprendono due gusci e due inserti su misura. Sono ammessi profili rotondi, ovali e disegnati; gli inserti possono essere sostituiti in seguito.",
-          "Un disegno chiuso o un’apertura scelta crea una scanalatura e una guarnizione separata. Materiali, sezione e sporgenza sono regolabili; le pareti residue vengono verificate.",
-          "I motivi superficiali raggiungono il bordo delle facce e lasciano liberi i fori. I motivi esistenti si modificano direttamente dal pannello di selezione.",
-          "Tagliare via conserva un lato di un piano e chiude la faccia di taglio: per pareti posteriori lisce e pareti alla stessa altezza. I raccordi accanto a pareti un po’ inclinate tornano modificabili."
+          "Una bobina nel magazzino filamenti può avere fino a quattro colori. Bambu Studio, OrcaSlicer ed ElegooSlicer ricevono tutti i colori, gli altri slicer il primo.",
+          "Uno spigolo selezionato mostra solo le azioni che agiscono su uno spigolo.",
+          "Senza selezione resta visibile la via verso i blocchi.",
+          "Il campo di ricerca compare solo dove ci sia qualcosa da trovare.",
+          "Un divisorio dell’organizer porta al suo editor degli scomparti invece che alle azioni della sua faccia.",
+          "La finestra per collocare un foro dice che il punto si sceglie nella vista.",
+          "Nella finestra «Genera modello» il campo della descrizione mantiene la sua altezza anche quando compare l’avviso sul programma aggiuntivo mancante."
         ]
       },
       {
-        "title": "Importazione e uso",
+        "title": "Spostare e verificare",
         "points": [
-          "Scelga visivamente i contorni SVG e DXF prima di creare il corpo. I file GLB e GLTF conservano dimensioni e orientamento corretti.",
-          "Le misure del progetto restano attive negli schizzi dei componenti e nelle anteprime di posizionamento. L’inquadratura comprende tutti i piatti di stampa visibili.",
-          "I filamenti possono essere rimossi dallo scaffale. I primi passi iniziano dallo slicer; i commenti si aprono rapidamente e preparano gli allegati in background.",
-          "Canc su una faccia rimuove il corpo e lo dice; Ctrl+Z lo riporta. In vista radente un corpo trascinato segue il puntatore, e la faccia scelta resta al primo clic dello schizzo.",
-          "La chat locale riceve una finestra più grande e non accorcia più la richiesta.",
-          "Il diametro dell'ugello si imposta sulla stampante. Il trasferimento sceglie poi la macchina giusta nello slicer, anche se lì è selezionato un altro ugello.",
-          "La riparazione chiude i modelli che si toccano lungo uno spigolo invece di aprirli ulteriormente."
+          "I suggerimenti di stampa arrivano molto più in fretta: una figura da 2,3 milioni di triangoli in secondi invece di minuti, e una seconda apertura della finestra di stampa non misura di nuovo.",
+          "Una bobina importata di un altro tipo di materiale che nessun pezzo usava chiudeva lo slicer senza una parola. Ora ogni bobina di un piano riceve un profilo completo.",
+          "Se lo slicer non ha un profilo del produttore per il tuo tipo di materiale, la finestra di stampa lo dice e usa i valori di Solidon, non un profilo di un altro materiale.",
+          "Due corpi si possono spingere uno dentro l’altro per unirli o fonderli dolcemente. Viene riportato indietro solo ciò che finisce fuori dal piano.",
+          "Se un accoppiamento rimanda a una caratteristica che non esiste più, un pulsante porta alla cronologia.",
+          "Orienta per la stampa e Disponi sul piano mettono i pezzi di filamenti diversi su piani propri, così un ugello non spurga di continuo. Più ugelli si indicano nella finestra di stampa."
+        ]
+      },
+      {
+        "title": "Magazzino filamenti",
+        "points": [
+          "Un annullamento nella cronologia dei movimenti si può ripristinare, con lo stesso pulsante.",
+          "Cambiare solo nome o posizione di una bobina non conta più come nuovo conteggio; le sue registrazioni restano annullabili.",
+          "Dopo un annullamento, «Registra senza chiedere» registra davvero una nuova stampa invece di dire solo «registrato».",
+          "Le date di acquisto e apertura hanno un calendario nella tua lingua. Una bobina rifiutata torna nella finestra invece di sparire.",
+          "L’importazione dallo slicer crea una bobina nuova se il nome è uguale e il colore diverso, invece di ricolorare la tua.",
+          "Se il file del magazzino non si legge, un pulsante recupera l’ultimo stato: Solidon lo salva da solo a ogni scrittura.",
+          "La pagina di dettaglio mostra resto, data di acquisto e prezzo; il codice a otto caratteri compare solo se due bobine hanno lo stesso nome."
         ]
       }
     ],
     "pt": [
       {
-        "title": "Reconhecimento e edição",
+        "title": "Editar",
         "points": [
-          "Furos cegos pouco profundos, pequenas faces funcionais e roscas curtas são reconhecidos melhor. Os fundos dos alojamentos para ímanes pertencem aos respetivos furos.",
-          "Altere os furos com os seus escareados e entradas, mantendo as medidas previstas. O fundo continua associado mesmo após grandes alterações do diâmetro.",
-          "Reconheça elementos num ponto escolhido de uma malha grande e edite-os de imediato. O reconhecimento e a alteração podem ser desfeitos em conjunto.",
-          "A seleção e a pré-visualização mostram o corpo completo. Contornos e etiquetas identificam a zona escolhida; as letras inalteradas ficam sem manchas laranja.",
-          "As arestas podem ser selecionadas em qualquer corpo e arredondadas ou chanfradas, também em modelos importados.",
-          "Os furos, cilindros e arredondamentos nascem dos mesmos pontos no Windows, macOS e Linux. Um projeto é reconhecido e editado da mesma forma em qualquer computador."
+          "O ângulo de saída alcança agora todas as faces verticais, mesmo as estreitas, e funciona em modelos importados.",
+          "A fusão suave deixa faces laterais lisas em vez de arestas desfiadas."
         ]
       },
       {
-        "title": "Construção",
+        "title": "Selecionar e utilizar",
         "points": [
-          "Os organizadores permitem medidas ligadas, divisórias editáveis individualmente e células repetidas. Tabuleiro, rebordo, fundo e pé ampliam a biblioteca.",
-          "Os campos de furos, rasgos e hexágonos seguem uma região desenhada. Respeitam áreas reservadas, margens e pontes mínimas.",
-          "As abraçadeiras de perfil incluem duas carcaças e dois insertos ajustados. Admitem perfis redondos, ovais ou desenhados; os insertos podem ser substituídos depois.",
-          "Um desenho fechado ou uma abertura escolhida cria uma ranhura e uma junta separada. Pode ajustar materiais, secção e saliência; as paredes restantes são verificadas.",
-          "Os padrões de superfície chegam ao limite da face e deixam os furos livres. Os padrões existentes podem ser editados diretamente no painel de seleção.",
-          "Cortar fora mantém um lado de um plano e fecha a face de corte — para paredes traseiras lisas e paredes à mesma altura. Os boleados junto a paredes ligeiramente inclinadas voltam a poder editar-se."
+          "Uma bobina no inventário de filamentos pode ter até quatro cores. Bambu Studio, OrcaSlicer e ElegooSlicer recebem todas as cores, os outros slicers a primeira.",
+          "Uma aresta selecionada mostra apenas as ações que atuam numa aresta.",
+          "Sem seleção, o caminho para os blocos continua visível.",
+          "O campo de pesquisa só aparece onde há algo para encontrar.",
+          "Uma divisória do organizador leva ao seu editor de compartimentos em vez das ações da sua face.",
+          "A janela para colocar um furo indica que o ponto se escolhe na vista.",
+          "Na janela «Gerar modelo», o campo de descrição mantém a sua altura mesmo quando aparece o aviso sobre o programa adicional em falta."
         ]
       },
       {
-        "title": "Importação e utilização",
+        "title": "Mover e verificar",
         "points": [
-          "Escolha visualmente os contornos SVG e DXF antes de criar o corpo. Os ficheiros GLB e GLTF mantêm as dimensões e a orientação corretas.",
-          "As medidas do projeto continuam ativas nos esboços das peças e nas pré-visualizações de colocação. O enquadramento inclui todas as placas de impressão visíveis.",
-          "Pode remover filamentos da estante. Os primeiros passos começam pelo laminador; os comentários abrem rapidamente e preparam os anexos em segundo plano.",
-          "Delete numa face remove o corpo e diz-o; Ctrl+Z traz o corpo de volta. Numa vista rasante, um corpo arrastado segue o ponteiro, e a face escolhida mantém-se no primeiro clique do esboço.",
-          "O chat local recebe uma janela maior e já não encurta o seu pedido.",
-          "O diâmetro do bico define-se na impressora. A transferência escolhe então a máquina correta no slicer, mesmo que aí esteja selecionado outro bico.",
-          "A reparação fecha os modelos que se tocam ao longo de uma aresta em vez de os abrir ainda mais."
+          "As sugestões de impressão chegam muito mais depressa: uma figura com 2,3 milhões de triângulos em segundos em vez de minutos, e abrir a janela de impressão uma segunda vez não volta a medir.",
+          "Uma bobina importada de outro tipo de material que nenhuma peça usava fechava o slicer sem uma palavra. Agora cada bobina de uma placa recebe um perfil completo.",
+          "Se o slicer não tiver um perfil do fabricante para o seu tipo de material, a janela de impressão di-lo e usa os valores do Solidon, não um perfil de outro material.",
+          "Dois corpos podem ser empurrados um contra o outro para os unir ou fundir suavemente. Só é trazido de volta o que fica fora da área de impressão.",
+          "Se um ajuste aponta para uma característica que já não existe, um botão leva ao histórico.",
+          "Orientar para impressão e Dispor na mesa colocam peças de filamentos diferentes em placas próprias, para que um bico não purgue sem parar. Vários bicos indicam-se na janela de impressão."
+        ]
+      },
+      {
+        "title": "Inventário de filamentos",
+        "points": [
+          "Uma anulação no histórico de movimentos pode ser revertida de novo, com o mesmo botão.",
+          "Alterar apenas o nome ou o local de uma bobina já não conta como nova contagem; os seus registos continuam anuláveis.",
+          "Após uma anulação, «Registar sem perguntar» regista mesmo uma nova impressão em vez de dizer apenas «registado».",
+          "As datas de compra e abertura têm um calendário na sua língua. Uma bobina recusada volta à janela em vez de desaparecer.",
+          "A importação do slicer cria uma bobina nova se o nome for igual e a cor diferente, em vez de recolorir a sua.",
+          "Se o ficheiro do inventário não se conseguir ler, um botão recupera o último estado: o Solidon guarda-o sozinho a cada gravação.",
+          "A página de detalhe mostra resto, data de compra e preço; o código de oito caracteres só aparece se duas bobinas tiverem o mesmo nome."
         ]
       }
     ]
   },
-  "changes_total": 19,
-  "notes_version": "0.4.3",
-  "signature": "b3f82ac3eb1dd241779959fbbe8a81f8fb36b81001ef7e23bda1f14841cd9b620d5942f41d4146374699326841806e281935cc8239a278903ba324dcf1532105"
+  "changes_total": 22,
+  "notes_version": "0.4.4",
+  "signature": "044993c9d281685fbd5f8e4dc1460195a316880371af5f2b1d2ce359586aede9adc59922b08a058c459e753790effc6507f5efa319d3e010911f58c1ef973608"
 }
