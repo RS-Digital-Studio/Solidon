@@ -52,7 +52,8 @@ def auto_acceptable(proposal: Proposal, registry: Registry | None = None) -> boo
     vor rücknehmbaren Handlungen" — vier enge Bedingungen entscheiden:
     ausschließlich umkehrbare Operationen, nichts, was fremden Quelltext
     ausführt, keine Warnungen oder Fehler in den Befunden, keine Rückfrage und
-    kein angehaltener Lauf. Parameter, Passungen und das Druckziel sind
+    kein angehaltener Lauf. Eine Umwandlung exakter Geometrie bleibt vor der
+    Übernahme im normalen Vorschlagsband sichtbar. Parameter, Passungen und das Druckziel sind
     unschädlich: sie reisen als ``DocumentChange``, ein Undo nimmt sie mit.
 
     **Die zweite Bedingung fragte nach dem Namen** und verglich mit
@@ -68,7 +69,9 @@ def auto_acceptable(proposal: Proposal, registry: Registry | None = None) -> boo
     source = registry or REGISTRY
     if proposal.empty or proposal.questions or proposal.stopped or proposal.undo_of:
         return False
-    if any(finding.severity != "info" for finding in proposal.findings):
+    if any(
+        finding.severity != "info" or finding.converts_exact_body for finding in proposal.findings
+    ):
         return False
     for draft in proposal.drafts:
         if runs_foreign_source(draft.op):
@@ -97,16 +100,7 @@ def accept(proposal: Proposal, history: History) -> Transaction | None:
     # wird, nicht aus der Arbeitskopie, auf welcher der Agent gerechnet hat:
     # zwischen Vorschlag und Annahme liegt eine Entscheidung des Nutzers, und
     # in der Zeit kann sich etwas geändert haben.
-    changes: DocumentChange | None = None
-    if proposal.parameters or proposal.fits or proposal.print_target:
-        printer, material = proposal.print_target or (None, None)
-        changes = change_for(
-            document,
-            parameters=proposal.parameters or None,
-            fits=[*document.fits, *proposal.fits] if proposal.fits else None,
-            printer=printer,
-            material=material,
-        )
+    changes = changes_for(proposal, document)
 
     transaction: Transaction | None = None
     if proposal.drafts:
@@ -119,6 +113,20 @@ def accept(proposal: Proposal, history: History) -> Transaction | None:
     record(document, proposal, transaction)
     _log.info("proposal accepted as %s", transaction.id if transaction else "no transaction")
     return transaction
+
+
+def changes_for(proposal: Proposal, document: Document) -> DocumentChange | None:
+    """Projektangaben für Vorschau und Annahme aus demselben aktuellen Dokument vorbereiten."""
+    if not (proposal.parameters or proposal.fits or proposal.print_target):
+        return None
+    printer, material = proposal.print_target or (None, None)
+    return change_for(
+        document,
+        parameters=proposal.parameters or None,
+        fits=[*document.fits, *proposal.fits] if proposal.fits else None,
+        printer=printer,
+        material=material,
+    )
 
 
 def _refuse_shifted_numbering(proposal: Proposal, history: History) -> None:

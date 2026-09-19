@@ -564,10 +564,6 @@ def _evaluate(
             stopped_at = operation.id
             break
 
-        # Welcher Art die Eingänge waren, bevor sie verschwinden — gleich
-        # darunter wird gefragt, ob aus einem exakten Körper ein Netz wurde.
-        kind_before = {entry: objects[entry].kind for entry in operation.inputs if entry in objects}
-
         # Die gesamte Ausgabe wird vorbereitet. Eine noch offene Zuordnung
         # darf weder einen Eingang verbrauchen noch einen Teil der Ergebnisse
         # in den letzten vollständigen Szenenzustand übernehmen (§15.3/15.6).
@@ -588,31 +584,6 @@ def _evaluate(
             # einem exakten Teil gibt Dreiecke zurück, und der Objektbaum muss
             # das sagen.
             kind_after = kind_of(produced_object.mesh)
-            # Der Weg von exakt zu Netz steht jederzeit offen und ist keine
-            # Störung — aber er ist eine Einbahnstraße, und bisher ging man
-            # sie, ohne es zu merken. „Aushöhlen" auf einem exakten Quader
-            # liefert Dreiecke zurück; drei Schritte später lehnt „Tasche
-            # schneiden" ab, und der Satz „hier liegt ein Netz" steht dann
-            # neben einer Operation, die nichts dafür kann.
-            was_kind = kind_before.get(
-                operation.inputs[index] if index < len(operation.inputs) else ""
-            )
-            if was_kind is None and operation.inputs:
-                was_kind = kind_before.get(operation.inputs[0])
-            if was_kind == "brep" and kind_after == "mesh":
-                from app.core.brep.ops import CONVERTED_NOTICE
-
-                findings.append(
-                    Finding(
-                        code="evaluate.exact_became_mesh",
-                        severity="info",
-                        message=CONVERTED_NOTICE,
-                        values={"op": operation.op, "object": object_id},
-                        object_id=object_id,
-                        op_id=operation.id,
-                        source="internal",
-                    )
-                )
             placed = dataclasses.replace(
                 produced_object,
                 id=object_id,
@@ -687,6 +658,10 @@ def _evaluate(
         if stopped_at is not None:
             break
 
+        conversions = _conversion_findings(
+            operation, spec.title, inputs, prepared_objects, result.objects
+        )
+        findings.extend(conversions)
         for entry in operation.inputs:
             if entry not in operation.outputs:
                 objects.pop(entry, None)
@@ -707,6 +682,7 @@ def _evaluate(
         # nicht die Aufgabe (Regel 21). Ein Befund, der seine Kennung selbst
         # mitbringt, behält sie.
         lone = operation.outputs[0] if len(operation.outputs) == 1 else None
+        converted_sources = {entry.values["input_object"] for entry in conversions}
         current_findings = [
             dataclasses.replace(
                 entry,
@@ -718,6 +694,11 @@ def _evaluate(
                 ),
             )
             for entry in result.findings
+            # Der direkte Op-Aufruf erhält weiter seinen Befund. Im Stapel
+            # ersetzt ihn die vollständige Aussage mit Operation und Herkunft.
+            if not (
+                entry.code == "brep.converted" and (entry.object_id or lone) in converted_sources
+            )
         ]
         findings.extend(current_findings)
         # Sobald die Hälften erfolgreich auf dem Druckbett angeordnet sind,
@@ -854,6 +835,84 @@ SETTLED_BY: Final[dict[str, frozenset[str]]] = {
     # erledigter Rat kostet mehr Vertrauen, als er nützt.
     "ingest.very_large": frozenset({"mesh.deviation"}),
 }
+
+
+def _conversion_findings(
+    operation: Operation,
+    title: TranslatableText | str,
+    inputs: Sequence[SceneObject],
+    outputs: Mapping[ObjectId, SceneObject],
+    raw_outputs: Sequence[SceneObject],
+) -> list[Finding]:
+    """Benennt verlorene exakte Eingänge anhand der vollständigen Ergebniszuordnung.
+
+    Die noch nicht umbenannten Ausgaben tragen die Eingangskennung weiter;
+    neue Deckel und Dichtungen tragen keine fremde Herkunft. Bei vollständig
+    vernetzten Ausgaben gehören auch verbrauchte exakte Werkzeuge zum Befund.
+    Eine gemischte Mehrfachausgabe ohne eindeutigen Nachfolger wird keinem
+    beliebigen Körper zugeschrieben.
+    """
+    mesh_outputs = tuple(name for name, entry in outputs.items() if entry.kind == "mesh")
+    if not mesh_outputs:
+        return []
+    findings = []
+    for source in inputs:
+        if kind_of(source.mesh) != "brep":
+            continue
+        descendants = tuple(
+            name
+            for name, entry in zip(operation.outputs, raw_outputs, strict=True)
+            if entry.id == source.id
+        )
+        successor = outputs.get(source.id)
+        targets: tuple[ObjectId, ...]
+        if descendants:
+            targets = tuple(name for name in descendants if name in mesh_outputs)
+            if not targets:
+                continue
+        elif successor is not None:
+            if successor.kind != "mesh":
+                continue
+            targets = (source.id,)
+        elif len(mesh_outputs) == len(outputs):
+            targets = mesh_outputs
+        else:
+            continue
+        findings.append(conversion_finding(operation, title, source, targets))
+    return findings
+
+
+def conversion_finding(
+    operation: Operation,
+    title: TranslatableText | str,
+    source: SceneObject,
+    targets: Sequence[ObjectId],
+) -> Finding:
+    """Eine belegte Vernetzung, auch beim Vergleich zweier Varianten desselben Schritts."""
+    object_id = targets[0]
+    return Finding(
+        code="evaluate.exact_became_mesh",
+        severity="info",
+        message=_(
+            "„{operation}“ hat „{object}“ in ein Dreiecksmodell umgewandelt. "
+            "Flächen und Kanten bleiben bearbeitbar; Rundungen bestehen jetzt "
+            "aus geraden Teilstücken. Rückgängig stellt den vorherigen Körper "
+            "wieder her.",
+            operation=title,
+            object=source.name,
+        ),
+        values={
+            "op": operation.op,
+            "step": operation.id,
+            "object": object_id,
+            "outputs": " ".join(targets),
+            "input_object": source.id,
+            "input_name": str(source.name),
+        },
+        object_id=object_id,
+        op_id=operation.id,
+        source="internal",
+    )
 
 
 def _by_name(finding: Finding, produced: Mapping[str, ObjectId | None]) -> ObjectId | None:

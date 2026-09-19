@@ -383,6 +383,21 @@ Operation 1224, 1226 und 1228 Dreiecke an demselben Körper)
 `transform.py` · `ops.py` (Kategorie „Transformation") · `align.py` (Merkmale
 in Flucht bringen)
 
+`transform.moved_object` führt Körper und Merkmale gemeinsam in den
+Ergebnisraum. Transformationen, Muster, Druckausrichtung und Anordnung
+verwenden denselben Weg. Ein exakter Körper bleibt auch bei ungleichmäßiger
+Skalierung exakt; sein Anker kommt aus den nativen Grenzen. Die Historie des
+nativen Builders ordnet vollständige alte Topologieflächen den neuen Flächen
+zu, deren aktuelle Dreiecke anschließend die Auswahl tragen. Teilmengen einer
+nativen Fläche werden bei neuer Tessellierung nicht still erweitert.
+`perceive.matching.transformed_features` führt die belegten Maße nach;
+eine zum elliptischen Querschnitt verzerrte Kreisfläche behält kein altes
+Kreismaß. Eine zusätzliche Bettkorrektur durchläuft denselben Weg erneut.
+Der Abbruch aus `OpContext.cancelled` reist bis in die native Maßprüfung und
+deren begrenzte Python-Integration. Eine Unterbrechung bleibt
+`OperationCancelled`; sie wird weder als Geometriefehler noch als Anlass
+für einen weiteren Integrationsweg behandelt.
+
 **Körper erzeugen und formen**
 
 `primitive_ops.py` (Quader, Zylinder, Kegel oder Kegelstumpf, Kugel und Ring;

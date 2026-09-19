@@ -44,6 +44,22 @@ apply.py      annehmen oder verwerfen — beides vollständig
 
 ## Er bekommt keine Sonderwege
 
+`apply.auto_acceptable()` behandelt eine belegte Umwandlung exakter Körper
+als bewusste Übernahme, auch wenn der Befund nur Informationsstufe trägt.
+`Finding.converts_exact_body` ist die gemeinsame fachliche Erkennung. Der
+Vorschlag bleibt mit seiner Vorschau offen; seine manuelle Annahme bleibt
+genau eine Transaktion und wird durch ein Undo vollständig zurückgenommen.
+`checks.check()` reicht neu entstandene Konvertierungsbefunde bis an die
+Werkzeugantwort und den Vorschlag weiter. Bereits vor dem Zug vorhandene
+Umwandlungen sperren keinen späteren, unabhängigen Vorschlag.
+`apply.changes_for()` bereitet Parameter, Passungen und Druckziel für
+Vorschau und Annahme aus dem jeweils aktuellen Dokument vor.
+Endet ein Zug mit ungeprüften Projektangaben, wertet `AgentSession` die
+Arbeitskopie abschließend aus. Ein reiner Hauptmaß-, Passungs- oder
+Druckzielwechsel erhält damit dieselben Befunde vor der automatischen
+Übernahme wie ein Operationsschritt. Hat ein späterer Schritt diese Werte
+bereits geprüft, entfällt die doppelte Rechnung.
+
 Die Werkzeuge des Agenten kommen aus `registry.tool_schemas()` — **derselben
 Quelle** wie Menü und Kommandozeile. Eine Operation, die der Agent kann und
 der Nutzer nicht, gibt es nicht; und ein Werkzeug, das an einer Op vorbei

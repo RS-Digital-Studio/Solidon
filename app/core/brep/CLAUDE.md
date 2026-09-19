@@ -46,6 +46,67 @@ Exakte Bounds bleiben eine Float64-Antwort aus `AddOptimal` ohne Triangulation
 und Formtoleranz; Zeichenwege sollen dafür keinen nativen Aufruf je Frame
 auslösen. Ein Bounds-Cache ersetzt keinen Eigentumsvertrag.
 
+`edit.transformed_with_faces` erhält exakte Geometrie auch bei Maßstab,
+Spiegelung und Scherung. Ähnlichkeiten verwenden `gp_Trsf`, allgemeine affine
+Matrizen `gp_GTrsf`: `gp_Trsf.SetValues` orthogonalisiert sonst die Eingabe.
+Die Matrix muss endlich, affin und numerisch umkehrbar sein. Körperzahl,
+Geschlossenheit, native Gültigkeit und das mit der Determinante skalierte
+Volumen müssen nach dem Schritt weiter stimmen. Eine Identität baut nichts neu.
+
+Die Flächenzuordnung verkettet `ModifiedShape` des Transformationsbuilders mit
+der tatsächlichen Kopie des Ergebnis-Solids. `Solid._copied_faces` hält dafür
+ein unveränderliches Indextupel außerhalb des Caches; eine neue Qualität startet
+weiter mit kaltem Cache. `faces_of_triangles` ist die geprüfte inverse Zuordnung
+zu `triangles_of_face` und weist negative oder fremde Dreiecksindices zurück.
+Weder Besuchsreihenfolge noch alte Dreiecksindices ersetzen diese Zuordnung.
+
+`properties.py` liefert unveränderliche `MassProperties` für Körpermaße und
+Merkmalsauskunft gemeinsam. Analytische Flächen bleiben im nativen Standardweg.
+Das gilt auch für ihre BSpline-Trimmkurven: unabhängige polynomiale
+Green-Integrale prüfen Fläche und Schwerpunkt bei ungleichmäßigen Knoten und
+Innenlöchern. Jeder native Weg prüft seinen gemeldeten Integrationsfehler
+sowie endliche, nicht negative Maße; Schwerpunkt und berechnete Trägheit
+müssen ebenfalls endlich sein. Native Ausnahmen tragen denselben Rückweg.
+NURBS-Volumen und Schwerpunkt entstehen über den Divergenzsatz auf den
+ursprünglichen Flächen. Derselbe begrenzte Weg übernimmt, wenn die native
+Standardintegration eines analytischen Körpers keine belastbare Fehlerschätzung
+liefert. Der native GK-Weg mit Schwerpunktrechnung kann selbst ohne
+Trägheitsrechnung nicht terminieren und lässt innere V-Knotenspannen aus;
+eine kleine gemeldete Unsicherheit ist dort kein ausreichender Nachweis.
+Volumenträgheit wird ausdrücklich als nicht berechnet geführt und ist keine
+öffentliche Körperauskunft.
+Alle Beiträge teilen einen Ursprung und berücksichtigen gerichtete innere
+Wände sowie gemeinsame Flächen mehrerer Körper.
+
+Transformationswege reichen ihren optionalen `CancelToken` über
+`Solid._properties` bis in die Integrationsrechnung. Er wird vor der Arbeit,
+an Flächen-/Knotengrenzen und an jedem UV-Quadraturpunkt geprüft. Auch ein
+Cachetreffer muss einen bereits verlangten Abbruch beachten; vor dem Speichern
+einer vollständigen Kennzahl wird erneut geprüft. `OperationCancelled` bleibt
+über native Fehler- und Integrationsrückfälle unverändert erhalten. Der Token
+gehört dem Aufruf und wird weder an der Form noch im Cache gespeichert.
+Ein einzelner nativer OCCT-Aufruf wird vor und nach seinem Lauf geprüft;
+die Python-Quadratur braucht keinen Abschluss einer ganzen Fläche abzuwarten.
+
+NURBS-Flächen werden zunächst auf privaten Kopien an Knotenspannen unterteilt.
+Fläche, Schwerpunkt und Flächenträgheit müssen gemeinsam konvergieren.
+`ShapeFix_ComposeShell` braucht einen expliziten `ShapeBuild_ReShape`-Kontext;
+die Arbeitskopie wird nach Aufbau der 3D-Kurven und `SameParameter` auf native
+Gültigkeit geprüft. Konvergieren schwierige Trimmungen dort nicht, integriert
+der gemeinsame Rückfall entlang ihrer ursprünglichen UV-Randkurven. Der
+Umlaufsinn innerer Drähte zieht Löcher ab; native Ableitungen, Knotenspannen,
+innere und äußere Quadraturfehler sowie ein begrenztes Auswertungsbudget
+bestimmen den Nachweis. Scheitert er, wird keine geratene Kennzahl gecacht.
+Die veröffentlichte Form und ihre Triangulation werden dabei nie geändert.
+Die Knoten der gerichteten Trimmkurven kommen aus `LKnots`: `GetTKnots` lässt
+sie in OCCT 8 an analytischen Trägerflächen aus, selbst wenn ihre Randkurve
+eine BSpline ist. Rechengenauigkeit und feste Arbeitsgrenze sind unabhängig;
+viele Trimmkurvenabschnitte erhöhen den Bedarf schon ohne Verfeinerung.
+Innere V-Knoten werden mit den gerichteten UV-Randkurven nativ geschnitten
+(`Geom2dInt_GInter`); die resultierenden Kurvenparameter teilen auch sehr
+schmale Flächenabschnitte ausdrücklich ab. Die Konditionierung über den
+nativen Hüllquader setzt kein bereits verlässlich gerechnetes Maß voraus.
+
 Planare Merkmalsnormalen folgen der Orientierung der B-Rep-Fläche:
 `TopAbs_REVERSED` kehrt die Trägerebenennormale um. Damit verwenden
 Auswahlrahmen, Taschen und Ziehen dieselbe nach außen gerichtete Normale.
@@ -194,6 +255,11 @@ bricht die Zuordnung ab, statt eine andere Fläche zu bearbeiten.
 Mindestens halbe Zylinderwände tragen `radial=True`. `radial_rounding` baut
 den Zwischenkörper aus einer privaten Kopie der begrenzten Mantelfläche und
 prüft die gesamte Volumenänderung mit `geom.edges.validate_radial_change`.
+`BRepLib.OrientClosedSolid` richtet dabei die Materialseite der privaten
+Builder-Ausgabe vor ihrer Übernahme in `Solid` aus. Ein nicht orientierbarer
+oder ungültiger Zwischenkörper bleibt ein Geometriefehler mit Handlungsvorschlag.
+Veröffentlichte Körper werden weder umorientiert noch durch einen Absolutbetrag
+ihres Volumens still berichtigt.
 Innen und außen ergeben sich aus Flächenorientierung und Händigkeit des
 Zylinderrahmens gemeinsam. Die Achse eines offenen Rings kann auf beiden
 Seiten außerhalb des Materials liegen und genügt für diese Unterscheidung
@@ -283,6 +349,7 @@ Anwendung gegen die installierte Bindung.
 | `ops.py` | Die B-Rep-Operationen im Register (§25, §10) — **ohne** Verrunden und Fase, die stehen in `geom/edge_ops.py` |
 | `edit.py` | Einen Körper formen |
 | `features.py` | Merkmale aus der Topologie (§30, §21) |
+| `properties.py` | Gemeinsame native Integrale mit geprüftem Rückfall für getrimmte NURBS (§30, §11) |
 | `step.py` | STEP hinein und hinaus |
 
 ## Grenzen

@@ -22,7 +22,13 @@ from dataclasses import dataclass, replace
 from typing import Any, Literal, cast
 
 from app.core.brep.kernel import DEFLECTION, Solid, boolean_builder, require
-from app.core.errors import CANCEL, CORRECT_INPUT, PROGRAMMING_ERRORS, GeometryError
+from app.core.errors import (
+    CANCEL,
+    CORRECT_INPUT,
+    PROGRAMMING_ERRORS,
+    GeometryError,
+    OperationCancelled,
+)
 from app.core.geom.edges import EDGE_CHOICES as SHARED_EDGE_CHOICES
 from app.core.geom.edges import EdgeChoice as SharedEdgeChoice
 from app.core.geom.edges import choose as choose_by_place
@@ -30,7 +36,7 @@ from app.core.geom.edges import named_edges as edges_named
 from app.core.geom.edges import wanted as edges_wanted
 from app.core.geom.section import SectionPlane
 from app.core.log import get_logger
-from app.core.types import PlaneFrame, Point2, Transform, Vec3
+from app.core.types import CancelToken, PlaneFrame, Point2, Transform, Vec3
 from app.core.units import EPS_DISPLAY, EPS_GEOM, is_close
 from app.i18n import _
 
@@ -922,42 +928,153 @@ def _oriented_cylinder(origin: Vec3, direction: Vec3, radius: float, height: flo
     return Solid(BRepPrimAPI_MakeCylinder(frame, radius, height).Shape())
 
 
-def transformed(solid: Solid, matrix: Transform) -> Solid:
-    """Eine starre Bewegung — Drehung und Verschiebung — exakt auf den Körper.
+def transformed(solid: Solid, matrix: Transform, *, cancelled: CancelToken | None = None) -> Solid:
+    """Transformiert den exakten Körper; die Variante daneben führt Flächen mit."""
+    return transformed_with_faces(solid, matrix, cancelled=cancelled)[0]
 
-    Dieselbe Matrix, die der Netz-Zwilling auf seine Dreiecke legt
-    (``primitive_ops.placement_transform``), damit ein Umschalten zwischen
-    den Kernen (``MENU_TWINS``) den Körper an derselben Stelle lässt.
-    ``gp_Trsf`` nimmt nur starre Bewegungen an; eine Matrix mit Scherung oder
-    Maßstab weist OpenCASCADE zurück, und das ist richtig so — ein B-Rep
-    bleibt nur unter starren Bewegungen exakt. Die Einheitsmatrix lässt den
-    Körper, wie er ist, ohne eine Bewegung anzulegen.
+
+def _invalid_transform(*, result: bool = False) -> GeometryError:
+    """Nennt ungültige Eingaben und nicht belegbare native Ergebnisse getrennt."""
+    return GeometryError(
+        detail=_(
+            "Der exakte Körper lässt sich mit dieser Änderung nicht gültig erhalten. "
+            "Verkleinern Sie die Änderung oder wählen Sie eine andere Ausgangsform."
+        )
+        if result
+        else _(
+            "Diese Transformation ist nicht endlich und umkehrbar. "
+            "Prüfen Sie Maßstab und Richtung der Änderung."
+        ),
+        suggestions=(CORRECT_INPUT, CANCEL),
+    )
+
+
+def transformed_with_faces(
+    solid: Solid, matrix: Transform, *, cancelled: CancelToken | None = None
+) -> tuple[Solid, tuple[int, ...]]:
+    """Affine Geometrie und belegte Zuordnung alter zu final besessenen Flächen.
+
+    ``gp_Trsf.SetValues`` orthogonalisiert seine Eingabe. Nur eine Ähnlichkeit
+    darf deshalb diesen Weg nehmen; Scherung und anisotroper Maßstab verwenden
+    ``gp_GTrsf``. Die Flächenkarte wird durch beide Builder und die abschließende
+    Solid-Kopie verkettet, nie aus deren Besuchsreihenfolge geraten.
     """
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
     require()
-    from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
-    from OCP.gp import gp_Trsf
+    import numpy as np
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_GTransform, BRepBuilderAPI_Transform
+    from OCP.BRepCheck import BRepCheck_Analyzer
+    from OCP.collections import IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher as ShapeMap
+    from OCP.gp import gp_GTrsf, gp_Mat, gp_Trsf, gp_XYZ
+    from OCP.TopAbs import TopAbs_FACE
+    from OCP.TopExp import TopExp
 
-    cells = [float(value) for row in matrix[:3] for value in row[:4]]
-    identity = [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0]
-    if all(is_close(cell, wanted) for cell, wanted in zip(cells, identity, strict=True)):
-        return solid
-    transform = gp_Trsf()
-    transform.SetValues(*cells)
-    return solid.replacing(BRepBuilderAPI_Transform(solid.shape, transform, False).Shape())
+    from app.core.brep.properties import INTEGRAL_RELATIVE_ERROR
+
+    try:
+        values = np.asarray(matrix, dtype=np.float64)
+    except (TypeError, ValueError) as problem:
+        raise _invalid_transform() from problem
+    # Nur Rundungsrauschen der 4x4-Matrix, keine Längen-/Fertigungstoleranz.
+    roundoff = 64.0 * np.finfo(np.float64).eps
+    if (
+        values.shape != (4, 4)
+        or not np.isfinite(values).all()
+        or not np.allclose(values[3], (0.0, 0.0, 0.0, 1.0), atol=roundoff, rtol=0.0)
+    ):
+        raise _invalid_transform()
+    linear = values[:3, :3]
+    singular_values = np.linalg.svd(linear, compute_uv=False)
+    determinant = float(np.linalg.det(linear))
+    if (
+        singular_values[-1] <= singular_values[0] * roundoff
+        or not math.isfinite(determinant)
+        or abs(determinant) <= 0.0
+    ):
+        raise _invalid_transform()
+    if np.allclose(values, np.eye(4), atol=roundoff, rtol=0.0):
+        return solid, tuple(range(len(solid._copied_faces)))
+    try:
+        if (
+            solid.solid_count < 1
+            or not solid.is_closed
+            or not BRepCheck_Analyzer(solid.shape).IsValid()
+        ):
+            raise _invalid_transform(result=True)
+        expected_volume = solid._properties("volume", cancelled=cancelled).mass * abs(determinant)
+        gram = linear.T @ linear
+        squared_scale = float(np.trace(gram) / 3.0)
+        builder: Any
+        if np.allclose(gram, np.eye(3) * squared_scale, atol=roundoff * squared_scale, rtol=0.0):
+            transform = gp_Trsf()
+            transform.SetValues(*(float(value) for value in values[:3].flat))
+            builder = BRepBuilderAPI_Transform(solid.shape, transform, False)
+        else:
+            general = gp_GTrsf(
+                gp_Mat(*(float(value) for value in linear.flat)),
+                gp_XYZ(*(float(value) for value in values[:3, 3])),
+            )
+            builder = BRepBuilderAPI_GTransform(solid.shape, general, True)
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        if not builder.IsDone() or builder.Shape().IsNull():
+            raise _invalid_transform(result=True)
+        shape = builder.Shape()
+        if not BRepCheck_Analyzer(shape).IsValid():
+            raise _invalid_transform(result=True)
+        result = solid.replacing(shape)
+        if (
+            result.solid_count != solid.solid_count
+            or not result.is_closed
+            or expected_volume <= 0.0
+            or not math.isfinite(expected_volume)
+            or not math.isclose(
+                result._properties("volume", cancelled=cancelled).mass,
+                expected_volume,
+                rel_tol=2.0 * INTEGRAL_RELATIVE_ERROR,
+                abs_tol=0.0,
+            )
+        ):
+            raise _invalid_transform(result=True)
+        source_faces, target_faces = ShapeMap(), ShapeMap()
+        TopExp.MapShapes_s(solid.shape, TopAbs_FACE, source_faces)
+        TopExp.MapShapes_s(shape, TopAbs_FACE, target_faces)
+        mapping = []
+        for index in range(1, source_faces.Extent() + 1):
+            if cancelled is not None:
+                cancelled.raise_if_cancelled()
+            # ModifiedShape verkettet bei GTransform auch die NURBS-Konvertierung.
+            # Modified liefert in OCCT 8 bei diesem Builder eine leere Liste.
+            changed = builder.ModifiedShape(source_faces.FindKey(index))
+            target = int(target_faces.FindIndex(changed)) - 1
+            if target < 0 or target >= len(result._copied_faces):
+                raise _invalid_transform(result=True)
+            mapping.append(result._copied_faces[target])
+        if sorted(mapping) != list(range(target_faces.Extent())):
+            raise _invalid_transform(result=True)
+        return result, tuple(mapping)
+    except OperationCancelled:
+        raise
+    except PROGRAMMING_ERRORS:
+        raise
+    except GeometryError:
+        raise
+    except Exception as problem:
+        raise _invalid_transform(result=True) from problem
 
 
 def moved(solid: Solid, offset: Vec3) -> Solid:
-    """Verschiebt einen Körper. Starre Bewegungen bleiben auf einem B-Rep exakt."""
-    require()
-    from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
-    from OCP.gp import gp_Trsf, gp_Vec
-
-    transform = gp_Trsf()
-    transform.SetTranslation(gp_Vec(offset[0], offset[1], offset[2]))
-    # Die Translation ändert nur die Location. Der neue Solid übernimmt
-    # anschließend die eigene Geometrie; hier noch einmal tief zu kopieren
-    # wäre dieselbe Kopie zweimal.
-    return solid.replacing(BRepBuilderAPI_Transform(solid.shape, transform, False).Shape())
+    """Verschiebt über denselben geprüften Transformationsvertrag."""
+    return transformed(
+        solid,
+        (
+            (1.0, 0.0, 0.0, offset[0]),
+            (0.0, 1.0, 0.0, offset[1]),
+            (0.0, 0.0, 1.0, offset[2]),
+            (0.0, 0.0, 0.0, 1.0),
+        ),
+    )
 
 
 def unround(solid: Solid, centre: Vec3, radius: float) -> Solid:
@@ -1074,9 +1191,11 @@ def radial_rounding(solid: Solid, centre: Vec3, radius: float, wanted: float) ->
     from OCP.BRepBuilderAPI import BRepBuilderAPI_Copy
     from OCP.BRepCheck import BRepCheck_Analyzer
     from OCP.BRepGProp import BRepGProp
+    from OCP.BRepLib import BRepLib
     from OCP.BRepOffsetAPI import BRepOffsetAPI_MakeThickSolid
     from OCP.GProp import GProp_GProps
-    from OCP.TopAbs import TopAbs_REVERSED
+    from OCP.TopAbs import TopAbs_REVERSED, TopAbs_SOLID
+    from OCP.TopoDS import TopoDS
 
     from app.core.geom.edges import validate_radial_change
 
@@ -1091,20 +1210,37 @@ def radial_rounding(solid: Solid, centre: Vec3, radius: float, wanted: float) ->
     inward = (face.Orientation() == TopAbs_REVERSED) == surface.Cylinder().Position().Direct()
     actual = float(surface.Cylinder().Radius())
     offset = (actual - wanted) if inward else (wanted - actual)
-    private = BRepBuilderAPI_Copy(face, True, False).Shape()
-    builder = BRepOffsetAPI_MakeThickSolid()
-    builder.MakeThickSolidBySimple(private, offset)
-    if not builder.IsDone() or not BRepCheck_Analyzer(builder.Shape()).IsValid():
+    try:
+        private = BRepBuilderAPI_Copy(face, True, False).Shape()
+        builder = BRepOffsetAPI_MakeThickSolid()
+        builder.MakeThickSolidBySimple(private, offset)
+        if not builder.IsDone():
+            raise ValueError("Radial offset did not produce a shape")
+        shape = builder.Shape()
+        if shape.ShapeType() != TopAbs_SOLID or not BRepCheck_Analyzer(shape).IsValid():
+            raise ValueError("Radial offset did not produce a valid solid")
+        skin_shape = TopoDS.Solid(shape)
+        # Die Materialseite gehört zum privaten Aufbau. Veröffentlichte Maße
+        # dürfen keine negative Orientierung durch einen Absolutbetrag verdecken.
+        if (
+            not BRepLib.OrientClosedSolid_s(skin_shape)
+            or skin_shape.IsNull()
+            or not BRepCheck_Analyzer(skin_shape).IsValid()
+        ):
+            raise ValueError("Radial offset has no valid closed orientation")
+    except OperationCancelled:
+        raise
+    except PROGRAMMING_ERRORS:
+        raise
+    except Exception as problem:
         raise GeometryError(
             detail=_(
                 "Diese Zylinderfläche lässt sich innerhalb ihrer Ränder nicht versetzen. "
                 "Wählen Sie einen kleineren Unterschied zum bisherigen Radius."
             ),
             suggestions=(CORRECT_INPUT, CANCEL),
-        )
-    skin = Solid(builder.Shape())
-    if skin.volume < 0.0:
-        skin = skin.replacing(skin.shape.Reversed())
+        ) from problem
+    skin = Solid(skin_shape)
     props = GProp_GProps()
     BRepGProp.SurfaceProperties_s(skin.shape, props)
     subtracted = (wanted > actual) == inward

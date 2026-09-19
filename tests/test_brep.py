@@ -38,6 +38,568 @@ def block() -> Solid:
     return edit.box(WIDTH, DEPTH, HEIGHT)
 
 
+def _native_affine_shape(source: Solid, diagonal: tuple[float, float, float]) -> Solid:
+    """Unabhängige Eingabe: native NURBS-Form ohne Solidons Transformationsweg."""
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_GTransform
+    from OCP.gp import gp_GTrsf, gp_Mat, gp_XYZ
+
+    x, y, z = diagonal
+    transform = gp_GTrsf(gp_Mat(x, 0.0, 0.0, 0.0, y, 0.0, 0.0, 0.0, z), gp_XYZ(7.0, -3.0, 5.0))
+    return Solid(BRepBuilderAPI_GTransform(source.shape, transform, True).Shape())
+
+
+@pytest.mark.parametrize("original_trims", [False, True])
+def test_affine_cylinder_integrals_keep_the_ellipse_and_its_location(
+    monkeypatch: pytest.MonkeyPatch, original_trims: bool
+) -> None:
+    """Ein rationaler Ellipsenmantel braucht Integration über seine Knotenspannen."""
+    import numpy as np
+    from scipy.integrate import quad
+    from scipy.special import ellipe
+
+    from app.core.brep import properties
+
+    if original_trims:
+        monkeypatch.setattr(properties, "_SUBDIVISIONS", ())
+
+    solid = _native_affine_shape(edit.cylinder(6.0, 8.0), (2.0, 1.0, 0.5))
+    assert solid.is_closed and solid.solid_count == 1
+    assert solid.volume == pytest.approx(72.0 * math.pi, rel=1e-10)
+    expected_area = 36.0 * math.pi + 96.0 * ellipe(0.75)
+    assert solid.area == pytest.approx(expected_area, rel=1e-10)
+    for kind in ("volume", "surface"):
+        assert solid._properties(kind).centre == pytest.approx((7.0, -3.0, 7.0), abs=1e-8)
+    assert solid._properties("volume").inertia is None
+    perimeter = 24.0 * ellipe(0.75)
+    radial_y = quad(
+        lambda angle: (
+            math.sin(angle) ** 2
+            * math.sqrt(36.0 * math.sin(angle) ** 2 + 9.0 * math.cos(angle) ** 2)
+        ),
+        0.0,
+        math.tau,
+        epsabs=1e-11,
+        epsrel=1e-11,
+    )[0]
+    radial_x = perimeter - radial_y
+    cap = 18.0 * math.pi
+    expected = np.diag(
+        (
+            cap * (9.0 + 16.0) / 2.0 + 36.0 * radial_y + 64.0 / 12.0 * perimeter,
+            cap * (36.0 + 16.0) / 2.0 + 144.0 * radial_x + 64.0 / 12.0 * perimeter,
+            cap * 45.0 / 2.0 + 144.0 * radial_x + 36.0 * radial_y,
+        )
+    )
+    assert np.asarray(solid._properties("surface").inertia) == pytest.approx(expected, abs=1e-7)
+
+
+@pytest.mark.parametrize("original_trims", [False, True])
+def test_affine_oblate_sphere_surface_is_not_a_coarse_quadrature(
+    monkeypatch: pytest.MonkeyPatch, original_trims: bool
+) -> None:
+    """Die geschlossene Sphäroidformel prüft rationalen U- und V-Verlauf."""
+    from app.core.brep import properties
+
+    if original_trims:
+        monkeypatch.setattr(properties, "_SUBDIVISIONS", ())
+    solid = _native_affine_shape(Solid(BRepPrimAPI_MakeSphere(3.0).Shape()), (2.0, 2.0, 1.0))
+    eccentricity = math.sqrt(0.75)
+    area = 72.0 * math.pi * (1.0 + 0.25 / eccentricity * math.atanh(eccentricity))
+    assert solid.volume == pytest.approx(144.0 * math.pi, rel=1e-10)
+    assert solid.area == pytest.approx(area, rel=1e-10)
+    assert solid._properties("volume").centre == pytest.approx((7.0, -3.0, 5.0), abs=1e-8)
+    assert solid._properties("surface").centre == pytest.approx((7.0, -3.0, 5.0), abs=1e-8)
+
+
+@pytest.mark.parametrize("original_trims", [False, True])
+def test_affine_trimmed_faces_keep_the_hole_area_and_surface_centre(
+    monkeypatch: pytest.MonkeyPatch, original_trims: bool
+) -> None:
+    """Eine versetzte Bohrung trimmt die Deckflächen; ihre Löcher dürfen nicht mitmessen."""
+    from scipy.special import ellipe
+
+    from app.core.brep import properties
+
+    if original_trims:
+        monkeypatch.setattr(properties, "_SUBDIVISIONS", ())
+
+    source = edit.bore(edit.box(20.0, 16.0, 8.0), position=(3.0, 1.0, 8.0), axis="z", diameter=4.0)
+    solid = _native_affine_shape(source, (2.0, 1.0, 0.5))
+    hole_area = 8.0 * math.pi
+    mantle_area = 64.0 * ellipe(0.75)
+    area = 2.0 * (640.0 - hole_area) + 2.0 * (40.0 + 16.0) * 4.0 + mantle_area
+    assert solid.volume == pytest.approx(2560.0 - 32.0 * math.pi, rel=1e-10)
+    void_fraction = 32.0 * math.pi / (2560.0 - 32.0 * math.pi)
+    assert solid._properties("volume").centre == pytest.approx(
+        (7.0 - 6.0 * void_fraction, -3.0 - void_fraction, 7.0), abs=1e-8
+    )
+    assert solid.area == pytest.approx(area, rel=1e-10)
+    removed_surface = 2.0 * hole_area
+    centre = solid._properties("surface").centre
+    offset = (mantle_area - removed_surface) / area
+    assert centre == pytest.approx((7.0 + 6.0 * offset, -3.0 + offset, 7.0), abs=1e-8)
+
+
+@pytest.mark.parametrize(
+    "linear",
+    [
+        ((2.0, 0.0, 0.0), (0.0, 2.0, 0.0), (0.0, 0.0, 2.0)),
+        ((-1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0)),
+        ((2.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 0.5)),
+        ((1.0, 0.3, 0.0), (0.0, 1.0, 0.2), (0.0, 0.0, 1.0)),
+        ((0.0, -2.0, 0.0), (2.0, 0.0, 0.0), (0.0, 0.0, 2.0)),
+        ((-2.0, -0.3, 0.0), (0.0, 1.0, 0.2), (0.0, 0.0, 0.5)),
+    ],
+)
+def test_affine_transform_maps_each_face_into_the_final_owned_solid(linear) -> None:
+    """Unsymmetrische Flächen und Translation entlarven eine erfundene Indexzuordnung."""
+    import numpy as np
+    from OCP.BRepCheck import BRepCheck_Analyzer
+    from OCP.BRepGProp import BRepGProp
+    from OCP.GProp import GProp_GProps
+
+    source = edit.box(10.0, 8.0, 6.0)
+    matrix = tuple((*row, offset) for row, offset in zip(linear, (7.0, -3.0, 5.0), strict=True))
+    result, mapping = edit.transformed_with_faces(source, (*matrix, (0.0, 0.0, 0.0, 1.0)))
+    affine = np.asarray(linear)
+    determinant = float(np.linalg.det(affine))
+    assert result is not source
+    assert BRepCheck_Analyzer(result.shape).IsValid()
+    assert result.is_closed and result.solid_count == 1
+    assert result.volume == pytest.approx(480.0 * abs(determinant), rel=1e-10)
+    assert sorted(mapping) == list(range(6))
+    for index, target in enumerate(mapping):
+        before = GProp_GProps()
+        after = GProp_GProps()
+        BRepGProp.SurfaceProperties_s(source.faces()[index], before)
+        BRepGProp.SurfaceProperties_s(result.faces()[target], after, 1e-12)
+        old = before.CentreOfMass()
+        new = after.CentreOfMass()
+        expected = affine @ np.array((old.X(), old.Y(), old.Z())) + (7.0, -3.0, 5.0)
+        assert (new.X(), new.Y(), new.Z()) == pytest.approx(expected, abs=1e-8)
+        assert all(not result.faces()[target].IsPartner(face) for face in source.faces())
+    assert source.bounds.minimum == pytest.approx((-5.0, -4.0, 0.0), abs=EPS_GEOM)
+
+
+@pytest.mark.parametrize("change", ["nan", "infinite", "singular", "projective", "ragged"])
+def test_invalid_affine_transforms_stop_with_an_action(change: str) -> None:
+    """Ungültige Matrizen dürfen weder orthogonalisiert noch teilweise gelesen werden."""
+    import numpy as np
+
+    matrix = np.eye(4)
+    if change == "nan":
+        matrix[0, 0] = math.nan
+    elif change == "infinite":
+        matrix[2, 3] = math.inf
+    elif change == "singular":
+        matrix[1, 1] = 0.0
+    elif change == "projective":
+        matrix[3, 1] = 0.2
+    else:
+        matrix = matrix[:3, :3]
+    with pytest.raises(GeometryError) as failure:
+        edit.transformed(edit.box(10.0, 8.0, 6.0), matrix)
+    assert failure.value.suggestions
+
+
+@pytest.mark.parametrize("original_trims", [False, True])
+def test_a_trimmed_bezier_paraboloid_keeps_its_inner_circle(
+    monkeypatch: pytest.MonkeyPatch, original_trims: bool
+) -> None:
+    """z=x²+y² auf einem Kreisring hat eine unabhängige geschlossene Flächenformel."""
+    from OCP.BRepBuilderAPI import (
+        BRepBuilderAPI_MakeEdge,
+        BRepBuilderAPI_MakeFace,
+        BRepBuilderAPI_MakeWire,
+    )
+    from OCP.BRepCheck import BRepCheck_Analyzer
+    from OCP.BRepLib import BRepLib
+    from OCP.collections import Array2_gp_Pnt
+    from OCP.Geom import Geom_BezierSurface
+    from OCP.Geom2d import Geom2d_Circle
+    from OCP.gp import gp_Ax2d, gp_Dir2d, gp_Pnt, gp_Pnt2d
+    from OCP.TopoDS import TopoDS
+
+    from app.core.brep import properties
+
+    poles = Array2_gp_Pnt(1, 3, 1, 3)
+    heights = (1.0, -1.0, 1.0)
+    for i in range(3):
+        for j in range(3):
+            poles.SetValue(i + 1, j + 1, gp_Pnt(i - 1.0, j - 1.0, heights[i] + heights[j]))
+    surface = Geom_BezierSurface(poles)
+
+    def rim(radius: float):
+        """Ein echter Kreis als Trimmkurve auf der unveränderten Bézier-Fläche."""
+        circle = Geom2d_Circle(gp_Ax2d(gp_Pnt2d(0.5, 0.5), gp_Dir2d(1.0, 0.0)), radius)
+        return BRepBuilderAPI_MakeWire(BRepBuilderAPI_MakeEdge(circle, surface).Edge()).Wire()
+
+    builder = BRepBuilderAPI_MakeFace(surface, rim(0.5), True)
+    builder.Add(TopoDS.Wire(rim(0.25).Reversed()))
+    face = builder.Face()
+    BRepLib.BuildCurves3d_s(face)
+    assert BRepCheck_Analyzer(face).IsValid()
+    if original_trims:
+        monkeypatch.setattr(properties, "_SUBDIVISIONS", ())
+    result = properties.properties(face, "surface")
+    area = math.pi / 6.0 * (5.0**1.5 - 2.0**1.5)
+    moment_z = 2.0 * math.pi * ((5.0**2.5 - 2.0**2.5) / 80.0 - (5.0**1.5 - 2.0**1.5) / 48.0)
+    assert result.mass == pytest.approx(area, rel=1e-9)
+    assert result.centre == pytest.approx((0.0, 0.0, moment_z / area), abs=1e-9)
+
+
+@pytest.mark.parametrize("knots", [(0.0, 1.0, 2.0, 3.0, 4.0), (0.0, 0.001, 0.21, 0.9, 1.0)])
+def test_a_planar_bspline_boundary_keeps_its_exact_green_moments(knots) -> None:
+    """Eine analytische Ebene mit BSpline-Rand und Kreisloch hat unabhängige Polynomintegrale."""
+    from numpy.polynomial import Polynomial
+    from OCP.BRepBuilderAPI import (
+        BRepBuilderAPI_MakeEdge,
+        BRepBuilderAPI_MakeFace,
+        BRepBuilderAPI_MakeWire,
+    )
+    from OCP.BRepCheck import BRepCheck_Analyzer
+    from OCP.collections import Array1_double, Array1_gp_Pnt, Array1_int
+    from OCP.Geom import Geom_BSplineCurve
+    from OCP.gp import gp_Ax2, gp_Circ, gp_Dir, gp_Pln, gp_Pnt
+    from OCP.TopoDS import TopoDS
+
+    from app.core.brep import properties
+
+    points = (
+        (0.0, 0.0),
+        (2.0, -1.0),
+        (6.0, -1.0),
+        (8.0, 0.0),
+        (10.0, 2.0),
+        (10.0, 6.0),
+        (8.0, 8.0),
+        (6.0, 10.0),
+        (2.0, 10.0),
+        (0.0, 8.0),
+        (-1.0, 6.0),
+        (-1.0, 2.0),
+        (0.0, 0.0),
+    )
+    poles = Array1_gp_Pnt(1, len(points))
+    parameters = Array1_double(1, len(knots))
+    multiplicities = Array1_int(1, len(knots))
+    for index, (x, y) in enumerate(points, 1):
+        poles.SetValue(index, gp_Pnt(x, y, 0.0))
+    for index, value in enumerate(knots, 1):
+        parameters.SetValue(index, value)
+        multiplicities.SetValue(index, 4 if index in (1, len(knots)) else 3)
+    curve = Geom_BSplineCurve(poles, parameters, multiplicities, 3, False)
+    outer = BRepBuilderAPI_MakeWire(BRepBuilderAPI_MakeEdge(curve).Edge()).Wire()
+    builder = BRepBuilderAPI_MakeFace(gp_Pln(gp_Pnt(), gp_Dir(0.0, 0.0, 1.0)), outer, True)
+    circle = gp_Circ(gp_Ax2(gp_Pnt(3.0, 4.0, 0.0), gp_Dir(0.0, 0.0, 1.0)), 1.0)
+    inner = BRepBuilderAPI_MakeWire(BRepBuilderAPI_MakeEdge(circle).Edge()).Wire()
+    builder.Add(TopoDS.Wire(inner.Reversed()))
+    face = builder.Face()
+    assert BRepCheck_Analyzer(face).IsValid()
+    t = Polynomial((0.0, 1.0))
+    basis = ((1.0 - t) ** 3, 3.0 * t * (1.0 - t) ** 2, 3.0 * t**2 * (1.0 - t), t**3)
+    area, moment_x, moment_y = -math.pi, -3.0 * math.pi, -4.0 * math.pi
+    for start in range(0, 12, 3):
+        x = sum(points[start + index][0] * value for index, value in enumerate(basis))
+        y = sum(points[start + index][1] * value for index, value in enumerate(basis))
+        area += ((x * y.deriv() - y * x.deriv()).integ())(1.0) / 2.0
+        moment_x += ((x**2 * y.deriv()).integ())(1.0) / 2.0
+        moment_y -= ((y**2 * x.deriv()).integ())(1.0) / 2.0
+    result = properties.properties(face, "surface")
+    assert result.mass == pytest.approx(area, rel=1e-10)
+    assert result.centre == pytest.approx((moment_x / area, moment_y / area, 0.0), abs=1e-9)
+
+
+def _ridged_surface_face():
+    """Ein Zacken aus ebenen Streifen, zusammen als eine gültige BSpline-Fläche."""
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace
+    from OCP.collections import Array1_double, Array1_int, Array2_gp_Pnt
+    from OCP.Geom import Geom_BSplineSurface
+    from OCP.gp import gp_Pnt
+
+    positions = (0.0, 0.2, 0.20001, 0.20002, 1.0)
+    poles = Array2_gp_Pnt(1, 2, 1, 5)
+    u_knots, u_mults = Array1_double(1, 2), Array1_int(1, 2)
+    v_knots, v_mults = Array1_double(1, 5), Array1_int(1, 5)
+    for index, u in enumerate((0.0, 1.0), 1):
+        u_knots.SetValue(index, u)
+        u_mults.SetValue(index, 2)
+        for j, v in enumerate(positions, 1):
+            poles.SetValue(index, j, gp_Pnt(u, v, 2.0 if j == 3 else 1.0))
+    for index, v in enumerate(positions, 1):
+        v_knots.SetValue(index, v)
+        v_mults.SetValue(index, 2 if index in (1, 5) else 1)
+    surface = Geom_BSplineSurface(poles, u_knots, v_knots, u_mults, v_mults, 1, 1, False, False)
+    return BRepBuilderAPI_MakeFace(surface, 1e-9).Face()
+
+
+@pytest.mark.parametrize("original_trims", [False, True])
+def test_a_narrow_surface_span_is_never_missed_by_the_quadrature(
+    monkeypatch: pytest.MonkeyPatch, original_trims: bool
+) -> None:
+    """Die Summe vier ebener Rechtecke widerlegt eine scheinbar fehlerfreie Unterabtastung."""
+    from OCP.BRepCheck import BRepCheck_Analyzer
+
+    from app.core.brep import properties
+
+    face = _ridged_surface_face()
+    assert BRepCheck_Analyzer(face).IsValid()
+    if original_trims:
+        monkeypatch.setattr(properties, "_SUBDIVISIONS", ())
+    sloping_area = 2.0 * math.sqrt(1.0 + 1e-10)
+    flat_area = 1.0 - 2e-5
+    expected_area = flat_area + sloping_area
+    expected_y = (0.5 - 0.20001 * 2e-5 + 0.20001 * sloping_area) / expected_area
+    expected_z = (flat_area + 1.5 * sloping_area) / expected_area
+    result = properties.properties(face, "surface")
+    assert result.mass == pytest.approx(expected_area, rel=1e-10)
+    assert result.centre == pytest.approx((0.5, expected_y, expected_z), abs=1e-9)
+
+
+def test_a_narrow_solid_span_keeps_its_volume_and_centre() -> None:
+    """Ein Dreieckssteg zählt auch bei scheinbar kleinem GK-Fehler vollständig zum Prisma."""
+    from OCP.BRepAdaptor import BRepAdaptor_Surface
+    from OCP.BRepBuilderAPI import (
+        BRepBuilderAPI_MakeEdge,
+        BRepBuilderAPI_MakeFace,
+        BRepBuilderAPI_MakePolygon,
+        BRepBuilderAPI_MakeSolid,
+        BRepBuilderAPI_MakeWire,
+        BRepBuilderAPI_Sewing,
+    )
+    from OCP.BRepCheck import BRepCheck_Analyzer
+    from OCP.gp import gp_Pnt
+    from OCP.TopoDS import TopoDS
+
+    top = _ridged_surface_face()
+    surface = BRepAdaptor_Surface(top).BSpline()
+
+    def polygon(points):
+        """Eine gerichtete ebene Außenwand des bekannten Prismas."""
+        builder = BRepBuilderAPI_MakePolygon()
+        for point in points:
+            builder.Add(gp_Pnt(*point))
+        builder.Close()
+        return BRepBuilderAPI_MakeFace(builder.Wire()).Face()
+
+    def side(x: float):
+        """Die gesamte gebrochene Oberkante bleibt eine BSpline-Kante der Seitenwand."""
+        builder = BRepBuilderAPI_MakeWire()
+        builder.Add(BRepBuilderAPI_MakeEdge(gp_Pnt(x, 0.0, 0.0), gp_Pnt(x, 0.0, 1.0)).Edge())
+        builder.Add(BRepBuilderAPI_MakeEdge(surface.UIso(x)).Edge())
+        builder.Add(BRepBuilderAPI_MakeEdge(gp_Pnt(x, 1.0, 1.0), gp_Pnt(x, 1.0, 0.0)).Edge())
+        builder.Add(BRepBuilderAPI_MakeEdge(gp_Pnt(x, 1.0, 0.0), gp_Pnt(x, 0.0, 0.0)).Edge())
+        return BRepBuilderAPI_MakeFace(builder.Wire()).Face()
+
+    sewing = BRepBuilderAPI_Sewing(1e-9)
+    sewing.Add(top)
+    sewing.Add(side(0.0))
+    sewing.Add(side(1.0).Reversed())
+    sewing.Add(polygon([(0.0, 0.0, 0.0), (0.0, 1.0, 0.0), (1.0, 1.0, 0.0), (1.0, 0.0, 0.0)]))
+    sewing.Add(polygon([(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (1.0, 0.0, 1.0), (0.0, 0.0, 1.0)]))
+    sewing.Add(polygon([(1.0, 1.0, 0.0), (0.0, 1.0, 0.0), (0.0, 1.0, 1.0), (1.0, 1.0, 1.0)]))
+    sewing.Perform()
+    solid = Solid(BRepBuilderAPI_MakeSolid(TopoDS.Shell(sewing.SewedShape())).Shape())
+    assert BRepCheck_Analyzer(solid.shape).IsValid()
+    assert solid.is_closed and solid.solid_count == 1
+    assert solid.volume == pytest.approx(1.00001, rel=1e-10)
+    assert solid.area == pytest.approx(8.0000000001, rel=1e-10)
+    expected_y = (0.5 + 1e-5 * 0.20001) / 1.00001
+    expected_z = (0.5 + 1e-5 * 4.0 / 3.0) / 1.00001
+    assert solid._properties("volume").centre == pytest.approx(
+        (0.5, expected_y, expected_z), abs=1e-9
+    )
+
+
+def test_an_exhausted_surface_integral_stops_without_a_cached_guess(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Der begrenzte Rückfall darf eine nicht gerechnete Zahl nicht als Maß ablegen."""
+    from app.core.brep import properties
+
+    solid = _native_affine_shape(edit.cylinder(6.0, 8.0), (2.0, 1.0, 0.5))
+    monkeypatch.setattr(properties, "_SUBDIVISIONS", ())
+    monkeypatch.setattr(properties, "_MAX_EVALUATIONS", 0)
+    with pytest.raises(GeometryError) as failure:
+        _ = solid.area
+    assert failure.value.suggestions
+    assert "surface" not in solid._cache
+
+
+@pytest.mark.parametrize("reported_error", [-1.0, 1.0, math.nan, math.inf])
+def test_an_unresolved_volume_quadrature_is_not_cached(
+    monkeypatch: pytest.MonkeyPatch, reported_error: float
+) -> None:
+    """Eine ungültige oder zu große Quadraturfehlerschätzung darf keine Kennzahl liefern."""
+    from scipy import integrate
+
+    solid = _native_affine_shape(edit.cylinder(6.0, 8.0), (2.0, 1.0, 0.5))
+    original = integrate.quad_vec
+
+    def uncertain(*args, **kwargs):
+        """Rechnet die echten Momente und beschädigt ausschließlich den Fehlernachweis."""
+        result, _, info = original(*args, **kwargs)
+        return result, reported_error, info
+
+    monkeypatch.setattr(integrate, "quad_vec", uncertain)
+    with pytest.raises(GeometryError) as failure:
+        _ = solid.volume
+    assert failure.value.suggestions
+    assert "volume" not in solid._cache
+
+
+def test_an_affine_rotated_open_round_bore_retains_its_exact_volume() -> None:
+    """Die Schwerpunktintegration dieser gültigen NURBS-Form darf nicht nativ hängen."""
+    import numpy as np
+
+    from app.core.geom.transform import rotation
+
+    source = edit.cut_bore(
+        edit.box(40.0, 30.0, 10.0),
+        position=(19.0, 0.0, 8.0),
+        direction=(0.0, 0.0, 1.0),
+        diameter=6.0,
+        depth=4.0,
+    )
+    matrix = np.diag((2.0, 1.0, 0.5, 1.0)) @ rotation("x", 37.0) @ rotation("z", 23.0)
+    result = edit.transformed(source, matrix)
+    removed_area = 9.0 * (math.pi - math.acos(1.0 / 3.0)) + math.sqrt(8.0)
+    assert result.is_closed and result.solid_count == 1
+    assert result.volume == pytest.approx(12000.0 - 4.0 * removed_area, rel=1e-10)
+
+
+@pytest.mark.parametrize("kind", ["surface", "volume"])
+@pytest.mark.parametrize("reported_error", [-1.0, 1.0, math.nan, math.inf])
+def test_an_unresolved_analytic_integral_is_not_cached(
+    monkeypatch: pytest.MonkeyPatch, kind: str, reported_error: float
+) -> None:
+    """Auch analytische Trägerflächen dürfen ihre gemeldete Rechengrenze nicht übergehen."""
+    from OCP.BRepGProp import BRepGProp
+
+    from app.core.brep import properties
+
+    solid = edit.box(10.0, 8.0, 6.0)
+    method = "SurfaceProperties_s" if kind == "surface" else "VolumeProperties_s"
+    monkeypatch.setattr(BRepGProp, method, lambda *args: reported_error)
+    monkeypatch.setattr(properties, "_MAX_EVALUATIONS", 0)
+    with pytest.raises(GeometryError) as failure:
+        _ = solid.area if kind == "surface" else solid.volume
+    assert failure.value.suggestions
+    assert kind not in solid._cache
+
+
+@pytest.mark.parametrize("mass", [-1.0, math.nan, math.inf])
+def test_invalid_native_measures_never_reach_the_cache(
+    monkeypatch: pytest.MonkeyPatch, mass: float
+) -> None:
+    """Nach ungültiger nativer Zahl wird nur ein neu berechnetes, richtiges Maß gecacht."""
+    from OCP.GProp import GProp_GProps
+
+    solid = edit.box(10.0, 8.0, 6.0)
+    monkeypatch.setattr(GProp_GProps, "Mass", lambda self: mass)
+    assert solid.area == pytest.approx(376.0, rel=1e-10)
+    assert solid._properties("surface").mass == pytest.approx(376.0, rel=1e-10)
+
+
+def test_the_volume_integral_keeps_reflection_and_separate_bodies() -> None:
+    """Gerichtete Flüsse müssen Volumen und gewichteten Schwerpunkt gemeinsam erhalten."""
+    from OCP.BRep import BRep_Builder
+    from OCP.TopoDS import TopoDS_Compound
+
+    builder = BRep_Builder()
+    shape = TopoDS_Compound()
+    builder.MakeCompound(shape)
+    builder.Add(shape, edit.cylinder(6.0, 8.0).shape)
+    builder.Add(shape, edit.moved(edit.cylinder(4.0, 6.0), (20.0, 4.0, 1.0)).shape)
+    solid = _native_affine_shape(Solid(shape), (-2.0, 1.0, 0.5))
+    assert solid.solid_count == 2 and solid.is_closed
+    assert solid.volume == pytest.approx(96.0 * math.pi, rel=1e-10)
+    assert solid._properties("volume").centre == pytest.approx((-3.0, -2.0, 7.0), abs=1e-8)
+
+
+def test_affine_transformation_preserves_the_analytic_cylinder_when_possible() -> None:
+    """Gleichförmiger Maßstab, Spiegelung und Drehung brauchen keine NURBS-Konvertierung."""
+    from OCP.BRepAdaptor import BRepAdaptor_Surface
+    from OCP.GeomAbs import GeomAbs_Cylinder, GeomAbs_Plane
+
+    result, mapping = edit.transformed_with_faces(
+        edit.cylinder(6.0, 8.0),
+        ((0.0, 2.0, 0.0, 7.0), (2.0, 0.0, 0.0, -3.0), (0.0, 0.0, 2.0, 5.0), (0.0, 0.0, 0.0, 1.0)),
+    )
+    kinds = [BRepAdaptor_Surface(face).GetType() for face in result.faces()]
+    assert kinds.count(GeomAbs_Cylinder) == 1
+    assert kinds.count(GeomAbs_Plane) == 2
+    assert sorted(mapping) == [0, 1, 2]
+    assert result.volume == pytest.approx(576.0 * math.pi, rel=1e-10)
+
+
+def test_affine_transformation_keeps_two_separate_solids() -> None:
+    """Ein affiner Schritt darf getrennte Körper weder vereinen noch einen verlieren."""
+    from OCP.BRep import BRep_Builder
+    from OCP.TopoDS import TopoDS_Compound
+
+    shape = TopoDS_Compound()
+    builder = BRep_Builder()
+    builder.MakeCompound(shape)
+    builder.Add(shape, edit.box(10.0, 8.0, 6.0).shape)
+    builder.Add(shape, edit.moved(edit.box(4.0, 2.0, 3.0), (20.0, 0.0, 0.0)).shape)
+    result, mapping = edit.transformed_with_faces(
+        Solid(shape),
+        ((2.0, 0.2, 0.0, 7.0), (0.0, 1.0, 0.0, -3.0), (0.0, 0.0, 0.5, 5.0), (0.0, 0.0, 0.0, 1.0)),
+    )
+    assert result.solid_count == 2 and result.is_closed
+    assert result.volume == pytest.approx(504.0, rel=1e-10)
+    assert sorted(mapping) == list(range(12))
+
+
+def test_affine_translation_does_not_round_a_small_motion_away() -> None:
+    """Eine Längentoleranz ist keine Identitätsprüfung einer Transformationsmatrix."""
+    result = edit.moved(edit.box(10.0, 8.0, 6.0), (0.0, 0.0, 1e-7))
+    assert result.bounds.minimum[2] == pytest.approx(1e-7, abs=1e-12)
+
+
+@pytest.mark.parametrize(
+    "failure_kind", ["not_done", "wrong_volume", "open_face", "missing_mapping"]
+)
+def test_an_unproven_native_transform_never_returns_a_new_solid(
+    monkeypatch: pytest.MonkeyPatch, failure_kind: str
+) -> None:
+    """Gültige Eingaben reichen nicht: Builder-Abschluss, Körper und Zuordnung zählen."""
+    from OCP import BRepBuilderAPI
+
+    source = edit.box(10.0, 8.0, 6.0)
+    unrelated = edit.box(11.0, 8.0, 6.0)
+    real_builder = BRepBuilderAPI.BRepBuilderAPI_Transform
+
+    class IncompleteBuilder:
+        """Ein echter Builder mit gezielt beschädigtem Ergebnisvertrag."""
+
+        def __init__(self, *args):
+            self.builder = real_builder(*args)
+
+        def IsDone(self):  # noqa: N802
+            return failure_kind != "not_done" and self.builder.IsDone()
+
+        def Shape(self):  # noqa: N802
+            if failure_kind == "wrong_volume":
+                return unrelated.shape
+            if failure_kind == "open_face":
+                return unrelated.faces()[0]
+            return self.builder.Shape()
+
+        def ModifiedShape(self, shape):  # noqa: N802
+            if failure_kind == "missing_mapping":
+                return unrelated.faces()[0]
+            return self.builder.ModifiedShape(shape)
+
+    monkeypatch.setattr(BRepBuilderAPI, "BRepBuilderAPI_Transform", IncompleteBuilder)
+    with pytest.raises(GeometryError) as failure:
+        edit.moved(source, (7.0, -3.0, 5.0))
+    assert failure.value.suggestions
+    assert source.volume == pytest.approx(480.0, rel=1e-10)
+    assert source.bounds.minimum == pytest.approx((-5.0, -4.0, 0.0), abs=EPS_GEOM)
+
+
 # --- exactness ------------------------------------------------------------------
 
 
@@ -1666,13 +2228,8 @@ def test_a_rigid_move_leaves_an_exact_body_exact(op: str, params: dict[str, obje
     )
 
 
-def test_a_scaled_body_becomes_a_mesh_and_says_so() -> None:
-    """Skalieren ist keine starre Bewegung — der Körper wird ein Netz, und das ist richtig.
-
-    Ein ungleichmäßiger Maßstab macht aus einem Zylinder eine Fläche, die
-    kein Zylinder mehr ist; OpenCASCADE weist solche Matrizen zurück. Der
-    Befund der Auswertung sagt es dem Nutzer.
-    """
+def test_a_scaled_body_stays_exact_without_a_conversion_notice() -> None:
+    """Skalieren erhält den exakten Körper und meldet keine erfolgte Vernetzung."""
     from app.core.knowledge.profiles import make_profile
     from app.core.scene import History, OperationDraft, evaluate
     from app.core.scene.project import ProjectSources, new_project
@@ -1694,9 +2251,13 @@ def test_a_scaled_body_becomes_a_mesh_and_says_so() -> None:
     )
     result = evaluate(document, profile, sources=ProjectSources(project))
 
+    assert result.complete
     after = next(iter(result.scene.objects.values()))
-    assert after.kind == "mesh"
-    assert "evaluate.exact_became_mesh" in {f.code for f in result.scene.report.findings}
+    assert after.kind == "brep"
+    assert isinstance(after.mesh, Solid)
+    assert after.mesh.bounds.size == pytest.approx((44.0, 33.0, 22.0))
+    assert after.mesh.volume == pytest.approx(44.0 * 33.0 * 22.0)
+    assert "evaluate.exact_became_mesh" not in {f.code for f in result.scene.report.findings}
 
 
 def _hollow_box(wall: float = 3.0) -> Solid:

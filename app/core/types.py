@@ -1112,6 +1112,11 @@ class Finding:
     suggestions: tuple[Action, ...] = ()
     """Konkrete Auswege, wenn der Befund aus einer Ausnahme entstand (§2.7)."""
 
+    @property
+    def converts_exact_body(self) -> bool:
+        """Ob eine erlaubte Bauartänderung vor der Übernahme sichtbar sein muss."""
+        return self.code in ("evaluate.exact_became_mesh", "brep.converted")
+
 
 @dataclass(frozen=True, slots=True)
 class Report:

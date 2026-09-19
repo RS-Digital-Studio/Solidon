@@ -28,6 +28,7 @@ import math
 from typing import Any
 
 from app.core.brep.kernel import Solid
+from app.core.brep.properties import properties
 from app.core.log import get_logger
 from app.core.types import Feature, FeatureId, FeatureKind, Vec3
 from app.core.units import EPS_DISPLAY, EPS_GEOM, match_tolerance, positive_axis
@@ -487,28 +488,28 @@ def _describe(
 ) -> tuple[FeatureKind, dict[str, Any]] | None:
     """Was diese Fläche ist, im Vokabular von §21."""
     from OCP.BRepAdaptor import BRepAdaptor_Surface
-    from OCP.BRepGProp import BRepGProp
     from OCP.GeomAbs import GeomAbs_Cone, GeomAbs_Cylinder, GeomAbs_Plane, GeomAbs_Sphere
-    from OCP.GProp import GProp_GProps
+    from OCP.gp import gp_Pnt
     from OCP.TopAbs import TopAbs_REVERSED
 
     surface = BRepAdaptor_Surface(face)
-    props = GProp_GProps()
-    BRepGProp.SurfaceProperties_s(face, props)
-    area = float(props.Mass())
+    kind = surface.GetType()
+    if kind not in (GeomAbs_Plane, GeomAbs_Cylinder, GeomAbs_Cone, GeomAbs_Sphere):
+        return None
+    props = properties(face, "surface")
+    area = props.mass
     if area <= EPS_GEOM:
         return None
-    centre = props.CentreOfMass()
-    middle: Vec3 = (centre.X(), centre.Y(), centre.Z())
+    middle = props.centre
+    centre = gp_Pnt(*middle)
 
-    kind = surface.GetType()
     if kind == GeomAbs_Plane:
         plane = surface.Plane()
         normal = plane.Axis().Direction()
         if face.Orientation() == TopAbs_REVERSED:
             normal.Reverse()
         return "face", {
-            "area": round(area, 4),
+            "area": area,
             "centre": middle,
             "normal": (normal.X(), normal.Y(), normal.Z()),
         }

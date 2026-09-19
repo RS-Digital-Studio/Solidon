@@ -88,7 +88,7 @@ from app.core.geom.prepare import (
     split_findings,
 )
 from app.core.geom.section import AXIS_NORMALS, SectionPlane, cut
-from app.core.geom.transform import Axis, moved_body, place_on_bed, translation
+from app.core.geom.transform import Axis, moved_object, place_on_bed, translation
 from app.core.knowledge.profiles import analysis_limits, for_object, material
 from app.core.registry import VARIABLE, op_params, param, play_param, register_op
 from app.core.slice.orientation import DEFAULT_CANDIDATES, search
@@ -7944,7 +7944,7 @@ def orient_for_print_op(ctx: OpContext) -> OpResult:
                 # **Gedreht wird der echte Körper, nicht das Urteil.**
                 # ``search`` arbeitet auf Dreiecken; ein exakter Körper käme
                 # als Netz zurück, und danach ist kein Verrunden mehr möglich.
-                # Dieselbe Matrix legt ``moved_body`` exakt auf den Eingang.
+                # ``moved_object`` führt mit derselben Matrix auch die Merkmale nach.
                 matrix = found.transform
                 findings.extend(found.findings)
             else:
@@ -7955,7 +7955,7 @@ def orient_for_print_op(ctx: OpContext) -> OpResult:
                 findings.extend(result.findings)
         except NoFittingOrientationError as refusal:
             raise _the_way_out_of(refusal, mesh, entry, ctx) from None
-        outputs.append(dataclasses.replace(entry, mesh=moved_body(entry.mesh, matrix)))
+        outputs.append(moved_object(entry, matrix, cancelled=ctx.cancelled))
         matrices.append(matrix)
         last_matrix = matrix
 
@@ -7969,29 +7969,6 @@ def orient_for_print_op(ctx: OpContext) -> OpResult:
         matrices = [shift @ matrix for shift, matrix in zip(shifts, matrices, strict=True)]
         if matrices:
             last_matrix = matrices[-1]
-
-    # **Und was nicht gemeldet wird, nimmt die Operation selbst mit.** Die
-    # Auswertung führt die Merkmale eines Körpers entlang der gemeldeten Matrix
-    # nach (``scene.evaluate._carried_along``); wo keine gemeldet wird, kann sie
-    # es nicht, und eine Drehung ließe die Merkmale liegen: Gemessen am
-    # 17.09.2026 wanderte ein exakter Körper von 20x20x40 auf 40x20x20, seine
-    # sechs Flächen behielten (0, 0, 1) und (0, 0, -1). Am Netz trifft es die
-    # benannten Merkmale eines Bausteins, die keine Neuerkennung nachzieht.
-    #
-    # **Genau dann, und nicht immer.** Bei einem einzigen Körper meldet die
-    # Operation ihre Matrix, und die Auswertung bewegt damit selbst — beides
-    # zusammen wäre eine Drehung zu viel.
-    if len(outputs) > 1:
-        from app.core.perceive.matching import moved_features
-
-        outputs = [
-            dataclasses.replace(
-                entry, features=moved_features(dict(entry.features), as_transform(matrix))
-            )
-            if entry.features
-            else entry
-            for entry, matrix in zip(outputs, matrices, strict=True)
-        ]
 
     # **Die Bewegung wird nur bei einem einzigen Körper gemeldet.** Sie ist die
     # Auskunft für Vorschau und Gizmo, und die kennt genau eine Matrix; bei
@@ -8130,7 +8107,9 @@ def _laid_out_after_turning(
                 mesh.bounds.minimum[2] - entry.mesh.bounds.minimum[2],
             )
         )
-        laid.append(dataclasses.replace(entry, mesh=moved_body(entry.mesh, step), plate=plate))
+        laid.append(
+            dataclasses.replace(moved_object(entry, step, cancelled=ctx.cancelled), plate=plate)
+        )
         shifts.append(step)
     return laid, shifts
 
@@ -8254,11 +8233,10 @@ def arrange_bed(ctx: OpContext) -> OpResult:
             # Dreiecken und gibt verschobene Netze zurück; ein exakter Körper
             # käme so als Netz heraus, und danach ist kein Verrunden mehr
             # möglich. Das Anordnen verschiebt nur — der Versatz steht in den
-            # Hüllquadern, und ``moved_body`` legt ihn exakt auf den Eingang.
+            # Hüllquadern; ``moved_object`` führt Körper und Merkmale gemeinsam nach.
             dataclasses.replace(
-                entry,
-                mesh=moved_body(
-                    entry.mesh,
+                moved_object(
+                    entry,
                     translation(
                         (
                             mesh.bounds.minimum[0] - entry.mesh.bounds.minimum[0],
@@ -8266,6 +8244,7 @@ def arrange_bed(ctx: OpContext) -> OpResult:
                             mesh.bounds.minimum[2] - entry.mesh.bounds.minimum[2],
                         )
                     ),
+                    cancelled=ctx.cancelled,
                 ),
                 plate=plate,
             )

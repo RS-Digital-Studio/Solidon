@@ -19,13 +19,15 @@ und der Rest der Anwendung bleibt unberührt (§36).
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
+from operator import index as integer_index
 from typing import Any, cast
 
-from app.core.errors import CANCEL, INSTALL_MISSING, AppError
+from app.core.errors import CANCEL, INSTALL_MISSING, AppError, InternalError, ValidationError
 from app.core.geom.mesh import MeshData
 from app.core.log import get_logger
-from app.core.types import BoundingBox
+from app.core.types import BoundingBox, CancelToken
 from app.core.units import MAX_FACET_ANGLE, MAX_FACET_SAG, is_close
 from app.i18n import _
 
@@ -140,11 +142,28 @@ def _quieten() -> None:
 _quiet = False
 
 
-def copy_shape(shape: Any) -> Any:
-    """Eigene Topologie und Geometrie, ohne eine fremde Vernetzung zu übernehmen."""
+def copy_shape(shape: Any) -> tuple[Any, tuple[int, ...]]:
+    """Eigene Geometrie und die belegte Zuordnung ihrer nativen Quellflächen."""
     from OCP.BRepBuilderAPI import BRepBuilderAPI_Copy
+    from OCP.collections import IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher as ShapeMap
+    from OCP.TopAbs import TopAbs_FACE
+    from OCP.TopExp import TopExp
 
-    return BRepBuilderAPI_Copy(shape, True, False).Shape()
+    builder = BRepBuilderAPI_Copy(shape, True, False)
+    copied = builder.Shape()
+    source_faces, target_faces = ShapeMap(), ShapeMap()
+    TopExp.MapShapes_s(shape, TopAbs_FACE, source_faces)
+    TopExp.MapShapes_s(copied, TopAbs_FACE, target_faces)
+    mapping = tuple(
+        int(target_faces.FindIndex(builder.ModifiedShape(source_faces.FindKey(index)))) - 1
+        for index in range(1, source_faces.Extent() + 1)
+    )
+    if sorted(mapping) != list(range(target_faces.Extent())):
+        raise InternalError(
+            detail="copy_shape returned an incomplete native face mapping",
+            values={"source_faces": source_faces.Extent(), "target_faces": target_faces.Extent()},
+        )
+    return copied, mapping
 
 
 def boolean_builder(kind: str, first: Any, second: Any, *, tolerance: float | None = None) -> Any:
@@ -184,21 +203,24 @@ class Solid:
     """``TopoDS_Shape``. Absichtlich lose typisiert — die Anbindung ist optional."""
     deflection: float = DEFLECTION
     _cache: dict[str, Any] = field(default_factory=dict, init=False, compare=False, repr=False)
+    _copied_faces: tuple[int, ...] = field(init=False, compare=False, repr=False)
 
     def __post_init__(self) -> None:
         """Übernimmt eine eigene Form; die übergebene bleibt Eigentum des Aufrufers."""
-        object.__setattr__(self, "shape", copy_shape(self.shape))
+        shape, mapping = copy_shape(self.shape)
+        object.__setattr__(self, "shape", shape)
+        object.__setattr__(self, "_copied_faces", mapping)
 
     # --- die exakten Antworten --------------------------------------------------
 
     @property
     def volume(self) -> float:
         """Aus dem Kern, nicht aus den Dreiecken — das ist der ganze Punkt."""
-        return float(self._properties("volume").Mass())
+        return float(self._properties("volume").mass)
 
     @property
     def area(self) -> float:
-        return float(self._properties("surface").Mass())
+        return float(self._properties("surface").mass)
 
     @property
     def is_closed(self) -> bool:
@@ -287,6 +309,30 @@ class Solid:
             return ()
         return tuple(int(index) for index in np.flatnonzero(source == face_index))
 
+    def faces_of_triangles(self, indices: Sequence[int]) -> tuple[int, ...]:
+        """Eindeutige native Flächen einer gültigen Dreiecksauswahl, aufsteigend."""
+        import numpy as np
+
+        try:
+            selected = tuple(integer_index(value) for value in indices)
+        except TypeError as problem:
+            raise ValidationError(
+                detail=_("Die Dreiecksauswahl ist ungültig. Wählen Sie die Fläche erneut.")
+            ) from problem
+        if not selected:
+            return ()
+        source = np.asarray(self.raw.face_attributes.get(_FACE_ATTRIBUTE, ()), dtype=np.int64)
+        if any(index < 0 or index >= self.triangle_count for index in selected):
+            raise ValidationError(
+                detail=_("Die Dreiecksauswahl ist ungültig. Wählen Sie die Fläche erneut.")
+            )
+        if len(source) != self.triangle_count:
+            raise InternalError(
+                detail="the tessellation has no complete native face mapping",
+                values={"mapped_triangles": len(source), "triangles": self.triangle_count},
+            )
+        return tuple(int(index) for index in np.unique(source[list(selected)]))
+
     @property
     def vertex_count(self) -> int:
         return self.mesh.vertex_count
@@ -358,18 +404,19 @@ class Solid:
 
     # --- inside ------------------------------------------------------------------
 
-    def _properties(self, kind: str) -> Any:
+    def _properties(self, kind: str, *, cancelled: CancelToken | None = None) -> Any:
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
         cached = self._cache.get(kind)
         if cached is not None:
             return cached
-        from OCP.BRepGProp import BRepGProp
-        from OCP.GProp import GProp_GProps
+        from app.core.brep.properties import properties
 
-        props = GProp_GProps()
-        if kind == "volume":
-            BRepGProp.VolumeProperties_s(self.shape, props)
-        else:
-            BRepGProp.SurfaceProperties_s(self.shape, props)
+        props = properties(
+            self.shape, "volume" if kind == "volume" else "surface", cancelled=cancelled
+        )
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
         self._cache[kind] = props
         return props
 

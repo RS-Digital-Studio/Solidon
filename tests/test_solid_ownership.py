@@ -88,6 +88,140 @@ def test_replacing_quality_never_inherits_a_mesh_or_property_cache() -> None:
     assert not finer.shape.IsPartner(original.shape)
 
 
+def test_identity_affine_transform_keeps_the_solid_and_its_face_numbers() -> None:
+    """Die Identität braucht keine neue native Form oder neue Vernetzung."""
+    source = edit.box(10.0, 8.0, 6.0)
+    result, mapping = edit.transformed_with_faces(source, np.eye(4))
+    assert result is source
+    assert mapping == tuple(range(6))
+    assert not source._cache
+
+
+@pytest.mark.parametrize("entry", [edit.transformed, edit.transformed_with_faces])
+def test_cancellation_precedes_even_an_identity_transform(entry: Any) -> None:
+    """Ein schon abgebrochener Auftrag baut und prüft keine neue native Form."""
+    from app.core.errors import OperationCancelled
+    from app.core.scene.cancel import CancelSignal
+
+    source = edit.box(10.0, 8.0, 6.0)
+    cancelled = CancelSignal()
+    cancelled.cancel()
+    with pytest.raises(OperationCancelled):
+        entry(source, np.eye(4), cancelled=cancelled)
+    assert not source._cache
+
+
+@pytest.mark.parametrize("kind", ["volume", "surface"])
+def test_cancellation_is_checked_before_a_cached_native_measure(kind: str) -> None:
+    """Auch ein Cachetreffer darf einen abgebrochenen Auftrag nicht fortsetzen."""
+    from app.core.errors import OperationCancelled
+    from app.core.scene.cancel import CancelSignal
+
+    source = edit.box(10.0, 8.0, 6.0)
+    cached = source._properties(kind)
+    cancelled = CancelSignal()
+    cancelled.cancel()
+    with pytest.raises(OperationCancelled):
+        source._properties(kind, cancelled=cancelled)
+    assert source._cache[kind] is cached
+
+
+@pytest.mark.parametrize("route", ["volume", "surface", "transform"])
+def test_cancellation_during_native_quadrature_keeps_source_and_cache(
+    monkeypatch: pytest.MonkeyPatch, route: str
+) -> None:
+    """Abbruch zwischen echten Quadraturpunkten bleibt Abbruch; ein späterer Lauf gelingt."""
+    import math
+
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_NurbsConvert
+    from scipy.integrate import quad_vec
+
+    from app.core.errors import OperationCancelled
+    from app.core.scene.cancel import CancelSignal
+
+    source = edit.cylinder(6.0, 8.0)
+    if route != "transform":
+        source = Solid(BRepBuilderAPI_NurbsConvert(source.shape, True).Shape())
+    else:
+        assert source.volume == pytest.approx(72.0 * math.pi, rel=1e-9)
+        assert source.is_closed and source.solid_count == 1
+    before = source.bounds, _triangulations(source), dict(source._cache)
+    cancelled = CancelSignal()
+    visited = 0
+
+    def interrupting_quadrature(function: Any, *args: Any, **kwargs: Any) -> Any:
+        """Das Signal kommt nach einem wirklich berechneten Integrationspunkt."""
+
+        def point_then_cancel(value: float) -> Any:
+            nonlocal visited
+            result = function(value)
+            visited += 1
+            cancelled.cancel()
+            return result
+
+        return quad_vec(point_then_cancel, *args, **kwargs)
+
+    def unavailable_patches(*args: Any, **kwargs: Any) -> Any:
+        """Auch der Rückfall einer nicht aufteilbaren Fläche muss abbrechen können."""
+        raise ValueError("unavailable private patches")
+
+    matrix = np.diag((2.0, 1.0, 0.5, 1.0))
+    with monkeypatch.context() as probe:
+        probe.setattr("scipy.integrate.quad_vec", interrupting_quadrature)
+        if route == "surface":
+            probe.setattr("app.core.brep.properties._spanned_surface", unavailable_patches)
+        with pytest.raises(OperationCancelled):
+            if route == "transform":
+                edit.transformed_with_faces(source, matrix, cancelled=cancelled)
+            else:
+                source._properties(route, cancelled=cancelled)
+    assert visited > 0
+    assert source.bounds == before[0]
+    assert _triangulations(source) == before[1]
+    assert source._cache.keys() == before[2].keys()
+    assert all(source._cache[key] is value for key, value in before[2].items())
+
+    cancelled.reset()
+    if route == "transform":
+        result = edit.transformed(source, matrix, cancelled=cancelled)
+        assert result.volume == pytest.approx(72.0 * math.pi, rel=1e-9)
+        assert not result.shape.IsPartner(source.shape)
+    else:
+        expected = (72.0 if route == "volume" else 66.0) * math.pi
+        assert source._properties(route, cancelled=cancelled).mass == pytest.approx(
+            expected, rel=1e-9
+        )
+    assert source.bounds == before[0]
+    assert _triangulations(source) == before[1]
+
+
+def test_affine_integrals_do_not_modify_source_or_owned_triangulations() -> None:
+    """Teilflächen für Integrale sind Arbeitskopien, keine neue Szenentopologie."""
+    source = edit.cylinder(6.0, 8.0)
+    result = edit.transformed(source, np.diag((2.0, 1.0, 0.5, 1.0)))
+    before = _triangulations(source), _triangulations(result)
+    assert result.area > 0.0 and result.volume > 0.0
+    assert (_triangulations(source), _triangulations(result)) == before
+    assert result.face_count == source.face_count == 3
+
+
+@pytest.mark.parametrize("length", [8.0, 12.0])
+def test_the_surface_integral_keeps_complex_trimmed_thread_flanks_unchanged(length: float) -> None:
+    """Eine nicht konvergierende Patch-Zerlegung blockiert keine gültige Gewindefläche."""
+    source = profiles.threaded_rod(10.0, 1.5, length)
+    before = source.bounds, source.volume, source.face_count, _triangulations(source)
+    before_mesh = source._cache.get("mesh")
+    area = source.area
+    assert np.isfinite(area) and area > 0.0
+    cached = source._properties("surface")
+    assert source._properties("surface") is cached
+    assert source.bounds.minimum == pytest.approx(before[0].minimum, abs=EPS_GEOM)
+    assert source.bounds.maximum == pytest.approx(before[0].maximum, abs=EPS_GEOM)
+    assert source.volume == pytest.approx(before[1], abs=EPS_GEOM)
+    assert (source.face_count, _triangulations(source)) == before[2:]
+    assert source._cache.get("mesh") is before_mesh
+
+
 def test_tessellation_never_populates_the_original_faces() -> None:
     """Auch zwei aufeinanderfolgende Feinheiten arbeiten nur an privaten Formen."""
     solid = edit.cylinder(12.0, 8.0)
@@ -118,6 +252,29 @@ def test_private_tessellation_keeps_original_face_indices() -> None:
     assert set.union(*groups) == set(range(solid.triangle_count))
     assert sum(map(len, groups)) == solid.triangle_count
     assert all(entry == (0, 0) for entry in _triangulations(solid))
+
+
+def test_native_faces_can_be_found_from_their_tessellation_triangles() -> None:
+    """Die inverse Zuordnung entdoppelt Flächen, ohne die Auswahl zu verbreitern."""
+    solid = edit.cylinder(6.0, 8.0)
+    groups = [solid.triangles_of_face(index) for index in range(solid.face_count)]
+    assert all(groups)
+    assert solid.faces_of_triangles(()) == ()
+    for index, triangles in enumerate(groups):
+        assert solid.faces_of_triangles(triangles) == (index,)
+    assert solid.faces_of_triangles((groups[2][0], groups[0][0], groups[2][0])) == (0, 2)
+
+
+@pytest.mark.parametrize("choice", ["negative", "past_end", "fractional"])
+def test_invalid_triangle_selection_never_addresses_a_different_face(choice: str) -> None:
+    """Negative NumPy-Indices dürfen nicht heimlich eine andere Fläche auswählen."""
+    from app.core.errors import AppError
+
+    solid = edit.cylinder(6.0, 8.0)
+    index = {"negative": -1, "past_end": solid.triangle_count, "fractional": 0.5}[choice]
+    with pytest.raises(AppError) as failure:
+        solid.faces_of_triangles((index,))
+    assert failure.value.suggestions
 
 
 @pytest.mark.parametrize("kind", ["union", "difference", "intersection"])

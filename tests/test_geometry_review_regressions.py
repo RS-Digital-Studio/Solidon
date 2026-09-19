@@ -20,6 +20,64 @@ from app.core.sketch.shapes import rectangle
 from app.core.types import Sketch, SketchConstraint, SketchElement
 
 
+@pytest.mark.parametrize(
+    "operation,params",
+    [
+        ("translate_object", {"dx": 3.0}),
+        ("rotate_object", {"angle": 30.0}),
+        ("scale_object", {"fx": 2.0, "fy": 3.0, "fz": 1.0}),
+        ("fit_to_size", {"largest": 60.0}),
+        ("mirror_object", {"axis": "x"}),
+        ("place_on_bed", {}),
+        ("pattern", {"count": 2}),
+        ("create_brep_box", {}),
+        ("create_brep_cylinder", {}),
+        ("thread_exact", {"diameter": 10.0, "pitch": 1.5, "length": 8.0}),
+    ],
+)
+def test_exact_transform_operations_forward_cancellation_to_native_work(
+    profile, monkeypatch, operation, params
+):
+    """Abbrechen erreicht die native Maßrechnung, nicht erst den folgenden Operationsschritt."""
+    from app.core.brep import edit
+    from app.core.errors import OperationCancelled
+    from app.core.registry import REGISTRY
+    from app.core.scene.cancel import CancelSignal
+    from app.core.types import OpContext, Scene, SceneObject
+
+    pytest.importorskip("OCP")
+    load_operations()
+    source = SceneObject(
+        id="obj_1", name="Grundkörper", mesh=edit.box(20.0, 16.0, 10.0), kind="brep"
+    )
+    token = CancelSignal()
+    reached = []
+
+    def native(_solid, _matrix, *, cancelled=None):
+        assert cancelled is token
+        reached.append(cancelled)
+        token.cancel()
+        cancelled.raise_if_cancelled()
+
+    monkeypatch.setattr(edit, "transformed_with_faces", native)
+    spec = REGISTRY.get(operation)
+    context = OpContext(
+        scene=Scene(objects={source.id: source}),
+        inputs=[] if spec.consumes == 0 else [source],
+        params=spec.params(**params),
+        profile=profile,
+        quality="fine",
+        seed=None,
+        progress=lambda _fraction, _text: None,
+        ask=lambda _question, choices: choices[0],
+        cancelled=token,
+    )
+    with pytest.raises(OperationCancelled):
+        spec.fn(context)
+    assert reached == [token]
+    assert source.mesh.bounds.size == pytest.approx((20.0, 16.0, 10.0))
+
+
 @pytest.fixture
 def review_run(profile):
     """Ruft die echte Operation mit dem isolierten Druckprofil auf."""
@@ -1184,6 +1242,11 @@ def test_p0_box_transforms_keep_six_current_faces(document, profile, kind, quali
             assert feature.provenance == original.features[name].provenance
             assert feature.recognised == original.features[name].recognised
             assert feature.face_indices
+            # Die Auswahl muss dieselbe Seite zeigen wie ihre Maße. Gerade ein
+            # exakter Körper kann nach einer Transformation anders tesselliert sein.
+            raw = entry.mesh.raw
+            selected = raw.vertices[raw.faces[list(feature.face_indices)]]
+            assert selected[:, :, axis] == pytest.approx(place[axis], abs=1e-6)
 
     assert_faces(original, (1.0, 1.0, 1.0))
     op, params, factors = {
@@ -1199,9 +1262,9 @@ def test_p0_box_transforms_keep_six_current_faces(document, profile, kind, quali
     history.apply("Transformieren", [OperationDraft(op=op, inputs=("obj_1",), params=params)])
     transformed = evaluate(document, profile, quality=quality)
     assert transformed.complete
+    assert transformed.scene.objects["obj_1"].kind == kind
     assert_faces(transformed.scene.objects["obj_1"], factors)
     if change == "mirror":
-        assert transformed.scene.objects["obj_1"].kind == kind
         history.apply("Zurückspiegeln", [OperationDraft(op=op, inputs=("obj_1",), params=params)])
         restored = evaluate(document, profile, quality=quality)
         assert restored.complete
@@ -1578,3 +1641,411 @@ def test_p0_rotated_tetrahedral_void_keeps_measured_bounds(monkeypatch, recognit
     assert current.params["centre"] == pytest.approx((0.0, 8.0 * sine, 5.0), abs=1e-6)
     assert current.params["volume"] == pytest.approx(8.0, abs=1e-5)
     assert current.face_indices
+
+
+@pytest.mark.parametrize("operation", ["scale_object", "fit_to_size"])
+@pytest.mark.parametrize("quality", ["draft", "fine"])
+@pytest.mark.parametrize("replay", ["warm", "reopen", "undo_redo"])
+def test_p21_exact_round_selection_survives_retessellation(
+    profile, tmp_path, operation, quality, replay
+):
+    """Neue Manteldreiecke behalten Namen, Maße und Auswahl auch beim Nachspielen."""
+    import math
+
+    from app.core.brep.kernel import Solid
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.cache import ResultCache
+    from app.core.scene.project import ProjectSources, load, new_project, save
+
+    pytest.importorskip("OCP")
+    load_operations()
+    project = new_project(profile.printer.id, profile.material.id)
+    history = History(project.document)
+    history.apply(
+        "Rundkörper",
+        [
+            OperationDraft(
+                op="create_brep_cylinder",
+                params={"diameter": 6.0, "height": 8.0, "x": 13.0, "y": -7.0, "z": 5.0},
+            )
+        ],
+    )
+    before = evaluate(project.document, profile, quality=quality)
+    assert before.complete
+    original = before.scene.objects["obj_1"]
+    assert len(original.features) == 3
+    original_triangles = original.mesh.triangle_count
+    params = {
+        "about": "origin",
+        **({"factor": 4.0} if operation == "scale_object" else {"largest": 32.0}),
+    }
+    history.apply("Vergrößern", [OperationDraft(op=operation, inputs=("obj_1",), params=params)])
+    cache = ResultCache()
+    first = evaluate(project.document, profile, cache=cache, quality=quality)
+    assert first.complete
+    if replay != "warm":
+        project = load(save(project, tmp_path / "rundkoerper.p3d"))
+        cache = ResultCache()
+        if replay == "undo_redo":
+            history = History(project.document)
+            history.undo()
+            undone = evaluate(project.document, profile, quality=quality)
+            assert undone.complete
+            restored = undone.scene.objects["obj_1"]
+            assert restored.kind == "brep"
+            assert restored.mesh.bounds.size == pytest.approx((6.0, 6.0, 8.0), abs=1e-6)
+            assert set(restored.features) == set(original.features)
+            history.redo()
+    result = evaluate(
+        project.document, profile, sources=ProjectSources(project), cache=cache, quality=quality
+    )
+    assert result.complete
+    if replay == "warm":
+        assert cache.statistics.hits >= 2
+        assert cache.statistics.disk_hits == 0
+    final = result.scene.objects["obj_1"]
+    assert final.kind == "brep"
+    assert isinstance(final.mesh, Solid)
+    assert final.mesh.is_closed
+    assert final.mesh.solid_count == 1
+    assert final.mesh.volume == pytest.approx(math.pi * 12.0**2 * 32.0, abs=1e-7)
+    assert final.mesh.bounds.centre == pytest.approx((52.0, -28.0, 36.0), abs=1e-6)
+    assert final.mesh.bounds.size == pytest.approx((24.0, 24.0, 32.0), abs=1e-6)
+    assert final.mesh.triangle_count > original_triangles
+    assert set(final.features) == set(original.features)
+    assert not any(f.code == "evaluate.exact_became_mesh" for f in result.scene.report.findings)
+
+    raw = final.mesh.raw
+    for name, feature in final.features.items():
+        assert feature.created_by == original.features[name].created_by
+        assert feature.provenance == original.features[name].provenance
+        assert feature.face_indices
+        points = raw.vertices[raw.faces[list(feature.face_indices)]].reshape(-1, 3)
+        if feature.kind == "pin":
+            assert feature.params["diameter"] == pytest.approx(24.0, abs=1e-8)
+            assert feature.params["centre"] == pytest.approx((52.0, -28.0, 36.0), abs=1e-6)
+            assert np.linalg.norm(points[:, :2] - (52.0, -28.0), axis=1) == pytest.approx(
+                12.0, abs=1e-6
+            )
+        else:
+            assert feature.kind == "face"
+            height = 52.0 if feature.params["normal"][2] > 0 else 20.0
+            assert feature.params["area"] == pytest.approx(math.pi * 12.0**2, abs=1e-7)
+            assert points[:, 2] == pytest.approx(height, abs=1e-6)
+    assert original.mesh.bounds.size == pytest.approx((6.0, 6.0, 8.0), abs=1e-6)
+    assert original.mesh.triangle_count == original_triangles
+
+
+def test_p02_split_conversion_names_both_descendants(document, profile):
+    """Eine behaltene Kennung unterschlägt nicht den zweiten vernetzten Teilkörper."""
+    from app.core.scene import OperationDraft, evaluate
+    from app.core.scene.cache import ResultCache
+
+    pytest.importorskip("OCP")
+    history = _p21_boolean_history(document, ("brep", "brep"))
+    history.change_params(document.ops[1].id, {"x": 100.0})
+    history.apply(
+        "Zwei getrennte Volumen",
+        [OperationDraft(op="union_objects", inputs=("obj_1", "obj_2"))],
+    )
+    before = evaluate(document, profile, quality="fine")
+    assert before.complete
+    assert before.scene.objects["obj_1"].kind == "brep"
+    assert before.scene.objects["obj_1"].mesh.component_count == 2
+    history.apply(
+        "In Einzelteile zerlegen",
+        [OperationDraft(op="split_bodies", inputs=("obj_1",), params={"count": 2})],
+    )
+    cache = ResultCache()
+    for _ in range(2):
+        result = evaluate(document, profile, cache=cache, quality="fine")
+        assert result.complete, result.scene.report.findings
+        assert set(result.scene.objects) == {"obj_1", "obj_3"}
+        assert all(entry.kind == "mesh" for entry in result.scene.objects.values())
+        assert sorted(
+            entry.mesh.volume for entry in result.scene.objects.values()
+        ) == pytest.approx((8000.0, 24000.0), abs=1e-6)
+        notices = [
+            f for f in result.scene.report.findings if f.code == "evaluate.exact_became_mesh"
+        ]
+        assert len(notices) == 1
+        assert notices[0].values["input_object"] == "obj_1"
+        assert notices[0].values["outputs"] == "obj_1 obj_3"
+
+
+def _p21_boolean_history(document, kinds, third=None):
+    """Analytische Quader mit belegtem Überlappungsvolumen in den echten Verlauf setzen."""
+    from app.core.scene import History, OperationDraft
+
+    load_operations()
+    dimensions = [
+        {"width": 40.0, "depth": 30.0, "height": 20.0},
+        {"width": 20.0, "depth": 20.0, "height": 20.0, "x": 20.0},
+    ]
+    if third is not None:
+        dimensions.append(third)
+    assert len(kinds) == len(dimensions)
+    history = History(document)
+    history.apply(
+        "Überlappende Quader",
+        [
+            OperationDraft(
+                op="create_brep_box" if kind == "brep" else "create_box",
+                params={**size, "name": chr(ord("A") + index)},
+            )
+            for index, (kind, size) in enumerate(zip(kinds, dimensions, strict=True))
+        ],
+    )
+    return history
+
+
+@pytest.mark.parametrize(
+    ("kinds", "expected_kind"),
+    [
+        (("mesh", "mesh"), "mesh"),
+        (("mesh", "brep"), "mesh"),
+        (("brep", "mesh"), "mesh"),
+        (("brep", "brep"), "brep"),
+    ],
+)
+@pytest.mark.parametrize("quality", ["draft", "fine"])
+@pytest.mark.parametrize(
+    ("op", "reverse", "expected_volume", "expected_bounds"),
+    [
+        ("union_objects", False, 28000.0, ((-20.0, -15.0, 0.0), (30.0, 15.0, 20.0))),
+        ("subtract_objects", False, 20000.0, ((-20.0, -15.0, 0.0), (20.0, 15.0, 20.0))),
+        ("subtract_objects", True, 4000.0, ((20.0, -10.0, 0.0), (30.0, 10.0, 20.0))),
+        ("intersect_objects", False, 4000.0, ((10.0, -10.0, 0.0), (20.0, 10.0, 20.0))),
+    ],
+)
+def test_p21_boolean_kind_matrix(
+    document, profile, kinds, expected_kind, quality, op, reverse, expected_volume, expected_bounds
+):
+    """Beide Auswahlreihenfolgen rechnen wirklich und erhalten das erklärte Ergebnis."""
+    from app.core.brep.kernel import Solid
+    from app.core.scene import OperationDraft, evaluate
+    from app.core.scene.cache import ResultCache
+
+    pytest.importorskip("OCP")
+    history = _p21_boolean_history(document, kinds)
+    inputs = ("obj_2", "obj_1") if reverse else ("obj_1", "obj_2")
+    history.apply("Boolesche Änderung", [OperationDraft(op=op, inputs=inputs)])
+    cache = ResultCache()
+    for _ in range(2):
+        result = evaluate(document, profile, quality=quality, cache=cache)
+        assert result.complete, result.scene.report.findings
+        assert set(result.scene.objects) == {inputs[0]}
+        final = result.scene.objects[inputs[0]]
+        assert final.name == ("B" if reverse else "A")
+        assert final.kind == expected_kind
+        assert isinstance(final.mesh, Solid if expected_kind == "brep" else MeshData)
+        assert final.mesh.is_watertight
+        assert final.mesh.component_count == 1
+        assert final.mesh.volume == pytest.approx(expected_volume, abs=1e-6)
+        assert final.mesh.bounds.minimum == pytest.approx(expected_bounds[0], abs=1e-6)
+        assert final.mesh.bounds.maximum == pytest.approx(expected_bounds[1], abs=1e-6)
+    assert cache.statistics.hits >= 3
+
+
+@pytest.mark.parametrize(
+    "kinds",
+    [(a, b, c) for a in ("mesh", "brep") for b in ("mesh", "brep") for c in ("mesh", "brep")],
+)
+@pytest.mark.parametrize(
+    ("op", "third", "expected_volume"),
+    [
+        ("union_objects", {"width": 20.0, "depth": 10.0, "height": 20.0, "x": 30.0}, 30000.0),
+        ("subtract_objects", {"width": 10.0, "depth": 10.0, "height": 20.0, "x": -10.0}, 18000.0),
+        ("intersect_objects", {"width": 10.0, "depth": 10.0, "height": 20.0, "x": 20.0}, 1000.0),
+    ],
+)
+def test_p21_boolean_third_input_changes_the_result(
+    document, profile, kinds, op, third, expected_volume
+):
+    """Der dritte Körper verändert das Ergebnis in jeder Kombination der beiden Kerne."""
+    from app.core.brep.kernel import Solid
+    from app.core.scene import OperationDraft, evaluate
+
+    pytest.importorskip("OCP")
+    history = _p21_boolean_history(document, kinds, third)
+    history.apply("Drei Körper", [OperationDraft(op=op, inputs=("obj_1", "obj_2", "obj_3"))])
+    result = evaluate(document, profile, quality="fine")
+    assert result.complete, result.scene.report.findings
+    assert set(result.scene.objects) == {"obj_1"}
+    final = result.scene.objects["obj_1"]
+    expected_kind = "brep" if kinds == ("brep", "brep", "brep") else "mesh"
+    assert final.kind == expected_kind
+    assert isinstance(final.mesh, Solid if expected_kind == "brep" else MeshData)
+    assert final.mesh.is_watertight
+    assert final.mesh.component_count == 1
+    assert final.mesh.volume == pytest.approx(expected_volume, abs=1e-6)
+
+
+@pytest.mark.parametrize("kinds", [(a, b) for a in ("mesh", "brep") for b in ("mesh", "brep")])
+@pytest.mark.parametrize("quality", ["draft", "fine"])
+def test_p21_blended_union_states_and_measures_its_raster(document, profile, kinds, quality):
+    """Der vierte Boolesche Weg bleibt als Rasterverfahren kenntlich und verändert die Kehle."""
+    from app.core.scene import OperationDraft, evaluate
+
+    pytest.importorskip("OCP")
+    history = _p21_boolean_history(document, kinds)
+    volumes = []
+    for radius in (0.0, 4.0):
+        history.apply(
+            "Weicher Übergang",
+            [
+                OperationDraft(
+                    op="blend_union", inputs=("obj_1", "obj_2"), params={"radius": radius}
+                )
+            ],
+        )
+        result = evaluate(document, profile, quality=quality)
+        assert result.complete, result.scene.report.findings
+        assert set(result.scene.objects) == {"obj_1"}
+        final = result.scene.objects["obj_1"]
+        assert final.kind == "mesh"
+        assert isinstance(final.mesh, MeshData)
+        assert final.mesh.is_watertight
+        assert final.mesh.component_count == 1
+        raster = [f for f in result.scene.report.findings if f.code == "blend.rastered"]
+        assert len(raster) == 1
+        assert raster[0].values["radius_mm"] == radius
+        grid = raster[0].values["grid_mm"]
+        assert grid > 0.0
+        assert np.all(
+            np.asarray(final.mesh.bounds.minimum) >= np.array((-20.0, -15.0, 0.0)) - radius - grid
+        )
+        assert np.all(
+            np.asarray(final.mesh.bounds.maximum) <= np.array((30.0, 15.0, 20.0)) + radius + grid
+        )
+        volumes.append(final.mesh.volume)
+        history.undo()
+    assert volumes[0] == pytest.approx(28000.0, rel=0.015)
+    assert volumes[1] > volumes[0] + 20.0
+
+
+@pytest.mark.parametrize("kinds", [(a, b) for a in ("mesh", "brep") for b in ("mesh", "brep")])
+@pytest.mark.parametrize(
+    "op", ["union_objects", "subtract_objects", "intersect_objects", "blend_union"]
+)
+def test_p02_boolean_conversion_names_every_exact_input(document, profile, kinds, op):
+    """Auch das zweite exakte Werkzeug erhält seinen eigenen, eindeutigen Umwandlungsbefund."""
+    from app.core.registry import REGISTRY
+    from app.core.scene import OperationDraft, evaluate
+    from app.core.scene.cache import ResultCache
+
+    pytest.importorskip("OCP")
+    history = _p21_boolean_history(document, kinds)
+    history.apply("Boolesche Änderung", [OperationDraft(op=op, inputs=("obj_1", "obj_2"))])
+    cache = ResultCache()
+    expected = (
+        {
+            f"obj_{index}": chr(ord("A") + index - 1)
+            for index, kind in enumerate(kinds, 1)
+            if kind == "brep"
+        }
+        if op == "blend_union" or kinds != ("brep", "brep")
+        else {}
+    )
+    for _ in range(2):
+        result = evaluate(document, profile, quality="fine", cache=cache)
+        assert result.complete, result.scene.report.findings
+        notices = [
+            f for f in result.scene.report.findings if f.code == "evaluate.exact_became_mesh"
+        ]
+        assert len(notices) == len(expected)
+        assert {
+            f.values.get("input_object"): f.values.get("input_name") for f in notices
+        } == expected
+        assert all(f.object_id == "obj_1" and f.values["object"] == "obj_1" for f in notices)
+        assert all(f.op_id == document.ops[-1].id and f.values["op"] == op for f in notices)
+        assert all(f.severity == "info" for f in notices)
+        assert all(str(REGISTRY.get(op).title) in str(f.message) for f in notices)
+        assert all(str(f.values["input_name"]) in str(f.message) for f in notices)
+        assert all("Rückgängig" in str(f.message) for f in notices)
+
+
+@pytest.mark.parametrize("kinds", [(a, b) for a in ("mesh", "brep") for b in ("mesh", "brep")])
+@pytest.mark.parametrize("op", ["subtract_objects", "intersect_objects"])
+def test_p21_empty_boolean_preserves_both_inputs(document, profile, kinds, op):
+    """Leere Ergebnisse halten mit Handlungsvorschlag an und verbrauchen keinen Körper."""
+    from app.core.scene import OperationDraft, evaluate
+
+    pytest.importorskip("OCP")
+    history = _p21_boolean_history(document, kinds)
+    history.change_params(
+        document.ops[1].id,
+        {
+            "width": 100.0,
+            "depth": 100.0,
+            "height": 100.0,
+            "x": 0.0 if op == "subtract_objects" else 200.0,
+        },
+    )
+    initial = evaluate(document, profile, quality="fine")
+    assert initial.complete
+    history.apply("Leeres Ergebnis", [OperationDraft(op=op, inputs=("obj_1", "obj_2"))])
+    result = evaluate(document, profile, quality="fine")
+    assert not result.complete
+    assert result.stopped_at == document.ops[-1].id
+    assert set(result.scene.objects) == {"obj_1", "obj_2"}
+    for name, original in initial.scene.objects.items():
+        final = result.scene.objects[name]
+        assert final.kind == original.kind
+        assert final.mesh.volume == pytest.approx(original.mesh.volume, abs=1e-6)
+        assert final.mesh.bounds == original.mesh.bounds
+    errors = [f for f in result.scene.report.findings if f.severity == "error"]
+    assert len(errors) == 1
+    assert errors[0].suggestions
+    assert not any(f.code == "evaluate.exact_became_mesh" for f in result.scene.report.findings)
+
+
+def test_p02_explicit_conversion_has_one_complete_notice(document, profile):
+    """Die Auswertung ergänzt den direkten Kernbefund, ohne die Aussage zu verdoppeln."""
+    from app.core.registry import REGISTRY
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.cache import ResultCache
+
+    pytest.importorskip("OCP")
+    history = History(document)
+    history.apply(
+        "Grundkörper und Umwandlung",
+        [
+            OperationDraft(op="create_brep_box", params={"name": "Gehäuse"}),
+            OperationDraft(op="brep_to_mesh", inputs=("obj_1",)),
+        ],
+    )
+    cache = ResultCache()
+    for _ in range(2):
+        result = evaluate(document, profile, cache=cache)
+        assert result.complete
+        notices = [f for f in result.scene.report.findings if f.converts_exact_body]
+        assert len(notices) == 1
+        assert notices[0].values["input_object"] == "obj_1"
+        assert notices[0].op_id == 2
+        text = str(notices[0].message)
+        assert str(REGISTRY.get("brep_to_mesh").title) in text
+        assert "Gehäuse" in text and "Rückgängig" in text
+        assert "bleiben bearbeitbar" in text
+
+
+def test_p21_an_unchanged_exact_body_keeps_a_partial_surface_feature():
+    """Ein unveränderter Vorschauwert verlangt keine neue Flächenzuordnung."""
+    import dataclasses
+
+    from app.core.brep.edit import box
+    from app.core.brep.features import features_of
+    from app.core.geom.transform import moved_object
+    from app.core.types import SceneObject
+
+    pytest.importorskip("OCP")
+    solid = box(20.0, 16.0, 10.0)
+    full = next(feature for feature in features_of(solid).values() if feature.kind == "face")
+    partial = dataclasses.replace(full, id="selected_region", face_indices=full.face_indices[:1])
+    source = SceneObject(
+        id="obj_1", name="Teilfläche", mesh=solid, kind="brep", features={partial.id: partial}
+    )
+    result = moved_object(source, np.eye(4))
+    assert result.mesh is source.mesh
+    assert result.features == source.features
+    assert source.features[partial.id].face_indices == full.face_indices[:1]

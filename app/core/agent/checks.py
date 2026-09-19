@@ -87,7 +87,14 @@ def check(result: EvaluationResult, before: Scene | None = None) -> list[Finding
     findings.extend(
         finding
         for finding in scene.report.findings
-        if finding.code in PASSED_THROUGH and finding not in reasons
+        if (
+            finding.code in PASSED_THROUGH
+            or (
+                finding.converts_exact_body
+                and (before is None or finding not in before.report.findings)
+            )
+        )
+        and finding not in reasons
     )
     return findings
 

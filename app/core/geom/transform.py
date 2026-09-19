@@ -20,7 +20,7 @@ import numpy as np
 
 from app.core.deferred import trimesh
 from app.core.geom.mesh import MeshData, as_mesh_data
-from app.core.types import Mesh, Transform, Vec3
+from app.core.types import CancelToken, Mesh, SceneObject, Transform, Vec3
 from app.core.units import EPS_DISPLAY, EPS_GEOM
 
 Axis = Literal["x", "y", "z"]
@@ -35,7 +35,7 @@ AXIS_VECTORS: dict[Axis, Vec3] = {
 }
 
 
-def anchor_point(mesh: MeshData, anchor: Anchor) -> Vec3:
+def anchor_point(mesh: Mesh, anchor: Anchor) -> Vec3:
     """Der Fixpunkt einer Transformation."""
     bounds = mesh.bounds
     if anchor == "origin":
@@ -137,9 +137,8 @@ def apply(mesh: MeshData, matrix: np.ndarray) -> MeshData:
 def is_rigid(matrix: np.ndarray) -> bool:
     """Ob die Matrix eine starre Bewegung ist — Drehung, Spiegelung, Verschiebung.
 
-    Nur solche Matrizen lässt OpenCASCADE auf einen exakten Körper los, und
-    nur unter ihnen bleibt er exakt: Eine Scherung oder ein ungleichmäßiger
-    Maßstab verbiegt Zylinder zu Ellipsen, die kein Zylinder mehr sind.
+    Solche Matrizen bewahren auch Längen und Winkel. Eine achsweise Skalierung
+    kann ebenfalls exakt rechnen, verändert aber die Form der Merkmale.
     Geprüft wird die obere 3x3 auf Orthonormalität; die Spiegelung
     (Determinante -1) gehört dazu, ``mirror_object`` ist eine.
     """
@@ -153,7 +152,7 @@ def is_rigid(matrix: np.ndarray) -> bool:
     return bool(np.allclose(product, np.eye(3), atol=EPS_GEOM, rtol=0.0))
 
 
-def moved_body(mesh: Mesh, matrix: np.ndarray) -> Mesh:
+def moved_body(mesh: Mesh, matrix: np.ndarray, *, cancelled: CancelToken | None = None) -> Mesh:
     """Bewegt einen Körper und behält dabei seine Darstellung.
 
     **Der Unterschied zu :func:`apply` ist der Rückweg.** ``apply`` arbeitet
@@ -167,20 +166,84 @@ def moved_body(mesh: Mesh, matrix: np.ndarray) -> Mesh:
     danach ausgegraut im Menü mit dem Hinweis, man möge die Schritte
     zurücknehmen. Die Bewegung war der ganze Grund.
 
-    Ohne B-Rep-Kern, bei einer nicht starren Matrix oder bei einem Körper, der
-    ohnehin ein Netz ist, bleibt es beim alten Weg.
+    Der native Kern verarbeitet auch Skalierungen und allgemeine affine
+    Matrizen. Nur ein bereits vernetzter Körper wird über Dreiecke bewegt.
     """
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
     if isinstance(mesh, MeshData):
         return apply(mesh, matrix)
-    if is_rigid(matrix):
-        from app.core.brep import edit
-        from app.core.brep.kernel import Solid, available
+    from app.core.brep import edit
+    from app.core.brep.kernel import Solid
 
-        if available() and isinstance(mesh, Solid):
-            rows = np.asarray(matrix, dtype=float)
-            cells = cast(Transform, tuple(tuple(float(value) for value in row) for row in rows))
-            return edit.transformed(mesh, cells)
+    if isinstance(mesh, Solid):
+        rows = np.asarray(matrix, dtype=float)
+        cells = cast(Transform, tuple(tuple(float(value) for value in row) for row in rows))
+        return edit.transformed(mesh, cells, cancelled=cancelled)
     return apply(as_mesh_data(mesh), matrix)
+
+
+def moved_object(
+    source: SceneObject, matrix: np.ndarray, *, cancelled: CancelToken | None = None
+) -> SceneObject:
+    """Bewegt Körper und Merkmale gemeinsam in den Ergebnisraum.
+
+    Beim exakten Körper verbindet die Builder-Zuordnung die ursprünglichen
+    Topologieflächen mit den neuen Dreiecken. Eine Teilmenge einer Fläche
+    wird dabei nicht heimlich zur gesamten Fläche erweitert.
+    """
+    from app.core.brep import edit
+    from app.core.brep.kernel import Solid
+    from app.core.errors import CANCEL, CORRECT_INPUT, GeometryError
+    from app.core.perceive.matching import transformed_features
+    from app.i18n import _
+
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+    cells = cast(Transform, tuple(tuple(float(value) for value in row) for row in matrix))
+    features = dict(source.features)
+    body: Mesh
+    if isinstance(source.mesh, Solid):
+        solid, face_map = edit.transformed_with_faces(source.mesh, cells, cancelled=cancelled)
+        if solid is source.mesh:
+            return source
+        body = solid
+        for name, feature in features.items():
+            if cancelled is not None:
+                cancelled.raise_if_cancelled()
+            if not feature.face_indices:
+                continue
+            selected = set(feature.face_indices)
+            native_faces = source.mesh.faces_of_triangles(feature.face_indices)
+            complete = {
+                index for face in native_faces for index in source.mesh.triangles_of_face(face)
+            }
+            if selected != complete:
+                raise GeometryError(
+                    _("Diese Teilauswahl lässt sich beim Verformen nicht eindeutig nachführen."),
+                    detail=_("Wähle vollständige Flächen aus und wiederhole die Änderung."),
+                    suggestions=(CORRECT_INPUT, CANCEL),
+                )
+            features[name] = replace(
+                feature,
+                face_indices=tuple(
+                    sorted(
+                        index
+                        for face in native_faces
+                        for index in solid.triangles_of_face(face_map[face])
+                    )
+                ),
+            )
+    else:
+        body = moved_body(source.mesh, matrix, cancelled=cancelled)
+    mapped = transformed_features(features, cells, mesh=as_mesh_data(body))
+    return replace(
+        source,
+        mesh=body,
+        features={
+            name: feature for name, feature in mapped.candidates.items() if name in mapped.exact
+        },
+    )
 
 
 def place_on_bed(mesh: MeshData) -> MeshData:

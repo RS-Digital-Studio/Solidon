@@ -145,7 +145,6 @@ LAZY: Final[frozenset[tuple[str, str]]] = frozenset(
         ("knowledge", "perceive"),
         ("knowledge", "sketch"),
         ("registry", "knowledge"),
-        ("scene", "brep"),
         ("scene", "organizer"),
     }
 )

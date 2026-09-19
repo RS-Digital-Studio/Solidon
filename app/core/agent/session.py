@@ -360,6 +360,7 @@ class AgentSession:
         # ist die abgerechnete und gehört dem Deckel. Sie steht als lokale
         # Größe, weil sie nur bis zum Ende dieses Zuges gilt.
         spent = 0
+        pending_document_check = False
         while True:
             if self.cancelled is not None:
                 self.cancelled.raise_if_cancelled()
@@ -434,7 +435,14 @@ class AgentSession:
             for call in reply.tool_calls:
                 proposal.tool_calls += 1
                 self._progress(proposal.steps, self._label_for(call.name))
+                previous_scene = scene
                 answer, scene = self._run(call, proposal, working, history, scene)
+                if call.name in (ADD_PARAMETER, SET_PARAMETER, ADD_FIT, SET_PRINT_TARGET):
+                    pending_document_check = True
+                elif scene is not previous_scene:
+                    # Eine Operation hat auch die davor gesammelten
+                    # Projektangaben ausgewertet und geprüft.
+                    pending_document_check = False
                 messages.append(Message(role="tool", tool_call_id=call.id, content=answer))
 
             if proposal.steps >= self.max_steps:
@@ -443,6 +451,17 @@ class AgentSession:
             if spent >= self.max_tokens:
                 proposal.stopped = "tokens"
                 break
+
+        if pending_document_check and proposal.creates_something:
+            # Hauptmaße, Passungen und Druckwerte können vorhandene Körper
+            # verändern, ohne einen neuen Operationsschritt anzulegen. Auch
+            # der letzte solche Auftrag braucht vor Autoübernahme Befunde.
+            final_result = self._evaluate(working)
+            proposal.findings.extend(
+                finding
+                for finding in checks.check(final_result, scene)
+                if finding not in proposal.findings
+            )
 
         _log.info(
             "proposal with %d operations after %d steps", len(proposal.drafts), proposal.steps

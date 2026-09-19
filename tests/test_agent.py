@@ -2372,3 +2372,137 @@ def test_malformed_objects_cannot_become_an_unrequested_default_creation(profile
     assert proposal.invalid_calls == 1
     assert not proposal.drafts
     assert proposal.answer == "Bitte wiederholen."
+
+
+@pytest.mark.parametrize("operation", ["brep_to_mesh", "scale_object"])
+def test_exact_conversion_waits_for_the_existing_proposal_acceptance(profile, operation):
+    """Eine Bauartänderung bleibt ein Vorschlag; maßliche Änderungen dürfen automatisch laufen."""
+    import copy
+
+    from app.core.agent.apply import accept, auto_acceptable
+    from app.core.agent.proposal import Proposal
+    from app.core.bootstrap import load_operations
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.project import new_project
+
+    pytest.importorskip("OCP")
+    load_operations()
+    project = new_project(profile.printer.id, profile.material.id)
+    history = History(project.document)
+    history.apply("Exakter Quader", [OperationDraft(op="create_brep_box")])
+    draft = OperationDraft(op=operation, inputs=("obj_1",))
+    preview_document = copy.deepcopy(project.document)
+    History(preview_document).apply("Vorschau", [draft])
+    result = evaluate(preview_document, profile, quality="fine")
+    assert result.complete
+    proposal = Proposal(request="Den Körper ändern")
+    proposal.drafts.append(draft)
+    proposal.findings.extend(result.scene.report.findings)
+    assert auto_acceptable(proposal) is (operation == "scale_object")
+    assert len(project.document.ops) == 1
+    transaction = accept(proposal, history)
+    assert transaction is not None
+    assert len(project.document.ops) == 2
+    history.undo()
+    restored = evaluate(project.document, profile, quality="fine")
+    assert restored.complete
+    assert restored.scene.objects["obj_1"].kind == "brep"
+
+
+def test_a_real_agent_turn_keeps_new_conversions_in_the_pending_proposal(profile):
+    """Der Werkzeugweg reicht neue Umwandlungen weiter; alte bleiben beim alten Zug."""
+    pytest.importorskip("OCP")
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    history.apply(
+        "Exakter Körper", [OperationDraft(op="create_brep_box", params={"name": "Gehäuse"})]
+    )
+    agent = session(
+        project,
+        profile,
+        [
+            Reply(
+                tool_calls=(
+                    ToolCall(id="1", name="brep_to_mesh", arguments={"objects": ["obj_1"]}),
+                )
+            ),
+            Reply(
+                tool_calls=(
+                    ToolCall(
+                        id="2", name="translate_object", arguments={"objects": ["obj_1"], "dx": 3.0}
+                    ),
+                )
+            ),
+            Reply(text="Umwandlung vorbereitet."),
+        ],
+    )
+    proposal = agent.propose("Umwandeln und verschieben")
+    assert [draft.op for draft in proposal.drafts] == ["brep_to_mesh", "translate_object"]
+    converted = [finding for finding in proposal.findings if finding.converts_exact_body]
+    assert len(converted) == 1
+    assert converted[0].values["input_name"] == "Gehäuse"
+    assert not agent_apply.auto_acceptable(proposal)
+    assert len(project.document.ops) == 1
+    assert any("Dreiecksmodell" in message.content for message in agent.backend.seen[1])
+    transaction = agent_apply.accept(proposal, history)
+    assert transaction is not None and len(transaction.ops) == 2
+
+    following = session(
+        project,
+        profile,
+        [
+            Reply(
+                tool_calls=(
+                    ToolCall(
+                        id="3", name="translate_object", arguments={"objects": ["obj_1"], "dy": 2.0}
+                    ),
+                )
+            ),
+            Reply(text="Verschiebung vorbereitet."),
+        ],
+    ).propose("Weiter verschieben")
+    assert len(following.drafts) == 1
+    assert not any(finding.converts_exact_body for finding in following.findings)
+    assert agent_apply.auto_acceptable(following)
+    history.undo()
+    restored = evaluate(project.document, profile)
+    assert restored.complete and restored.scene.objects["obj_1"].kind == "brep"
+
+
+@pytest.mark.parametrize("width,acceptable", [(30.0, True), (-1.0, False)])
+def test_parameter_only_proposals_are_checked_before_automatic_acceptance(
+    profile, width, acceptable
+):
+    """Eine reine Maßänderung muss ihre vorhandene Geometrie durch dieselbe Prüfung bringen."""
+    from app.core.types import Parameter
+
+    project = new_project("centauri-carbon-2", "petg")
+    project.document.parameters["width"] = Parameter(name="width", value=20.0)
+    History(project.document).apply(
+        "Grundkörper", [OperationDraft(op="create_box", params={"width": "=@width"})]
+    )
+    proposal = session(
+        project,
+        profile,
+        [
+            Reply(
+                tool_calls=(
+                    ToolCall(
+                        id="1",
+                        name="set_parameter",
+                        arguments={
+                            "name": "width",
+                            "value": width,
+                        },
+                    ),
+                )
+            ),
+            Reply(text="Maßänderung vorbereitet."),
+        ],
+    ).propose("Ändere die Breite.")
+
+    assert not proposal.drafts
+    assert proposal.parameters["width"].value == pytest.approx(width)
+    assert agent_apply.auto_acceptable(proposal) is acceptable
+    assert any(finding.code == "agent.stopped" for finding in proposal.findings) is not acceptable
+    assert project.document.parameters["width"].value == pytest.approx(20.0)

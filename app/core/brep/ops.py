@@ -116,7 +116,9 @@ def create_brep_box(ctx: OpContext) -> OpResult:
     # Dieselbe Lage wie beim Netz-Zwilling: Position und Richtung sind
     # Felder beider Dialoge, und der Haken zwischen den Kernen behält sie.
     solid = edit.transformed(
-        edit.box(params.width, params.depth, params.height), placement_transform(params)
+        edit.box(params.width, params.depth, params.height),
+        placement_transform(params),
+        cancelled=ctx.cancelled,
     )
     return OpResult(outputs=[_object(params.name or str(_("Quader")), solid)])
 
@@ -166,7 +168,9 @@ def create_brep_cylinder(ctx: OpContext) -> OpResult:
     params = cast(BrepCylinderParams, ctx.params)
     require()
     solid = edit.transformed(
-        edit.cylinder(params.diameter, params.height), placement_transform(params)
+        edit.cylinder(params.diameter, params.height),
+        placement_transform(params),
+        cancelled=ctx.cancelled,
     )
     return OpResult(outputs=[_object(params.name or str(_("Zylinder")), solid)])
 
@@ -372,7 +376,9 @@ def thread_exact(ctx: OpContext) -> OpResult:
     placement = placement_transform(params)
     matrix = np.asarray(placement, dtype=float)
     solid = edit.transformed(
-        profiles.threaded_rod(params.diameter, params.pitch, params.length), placement
+        profiles.threaded_rod(params.diameter, params.pitch, params.length),
+        placement,
+        cancelled=ctx.cancelled,
     )
     entry = _object(params.name or str(_("Gewindebolzen")), solid)
     # Der Erzeuger kennt den Gang genau; die analytischen Einzelflächen allein

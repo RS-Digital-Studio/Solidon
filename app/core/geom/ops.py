@@ -28,7 +28,7 @@ from app.core.geom.transform import (
     Axis,
     anchor_point,
     apply,
-    moved_body,
+    moved_object,
     rotation,
     scaling,
     translation,
@@ -133,8 +133,8 @@ def _keeping_on_bed() -> Any:
 
 
 def _held_on_bed(
-    ctx: OpContext, source: SceneObject, moved: Any, matrix: Any
-) -> tuple[Any, Any, list[Finding]]:
+    ctx: OpContext, source: SceneObject, moved: SceneObject, matrix: Any
+) -> tuple[SceneObject, Any, list[Finding]]:
     """Hält bewegte Körper auf der Druckfläche (§29).
 
     **Und nur dort.** Bis zum 18.09.2026 hielt diese Bindung zwei
@@ -186,11 +186,11 @@ def _held_on_bed(
         for key, other in ctx.scene.objects.items()
         if key != source.id and other.plate == source.plate
     ]
-    offset, findings = back_onto_bed(moved, others, ctx.profile)
+    offset, findings = back_onto_bed(moved.mesh, others, ctx.profile)
     if max(abs(value) for value in offset) <= EPS_GEOM:
         return moved, matrix, findings
     correction = translation(offset)
-    return moved_body(moved, correction), correction @ matrix, findings
+    return moved_object(moved, correction, cancelled=ctx.cancelled), correction @ matrix, findings
 
 
 @op_params
@@ -301,12 +301,10 @@ def translate_object(ctx: OpContext) -> OpResult:
     params = cast(TranslateParams, ctx.params)
     source = ctx.inputs[0]
     matrix = translation((params.dx, params.dy, params.dz))
-    # ``moved_body`` statt ``apply``: Ein exakter Körper übersteht eine
-    # Verschiebung als exakter Körper, und Verrunden bleibt danach möglich.
-    moved = moved_body(source.mesh, matrix)
+    moved = moved_object(source, matrix, cancelled=ctx.cancelled)
     moved, matrix, held = _held_on_bed(ctx, source, moved, matrix)
     return OpResult(
-        outputs=[dataclasses.replace(source, mesh=moved)],
+        outputs=[moved],
         transform=as_transform(matrix),
         findings=[*_stood_still(matrix), *held],
     )
@@ -383,14 +381,12 @@ def rotate_object(ctx: OpContext) -> OpResult:
     source = ctx.inputs[0]
     # Ein genannter Punkt schlägt den Anker aus dem eigenen Netz — nur so
     # drehen mehrere Körper um dieselbe Stelle statt jeder um sich selbst.
-    pivot = named_pivot(params) or anchor_point(
-        as_mesh_data(source.mesh), cast(Anchor, params.about)
-    )
+    pivot = named_pivot(params) or anchor_point(source.mesh, cast(Anchor, params.about))
     matrix = rotation(cast(Axis, params.axis), params.angle, pivot)
-    turned = moved_body(source.mesh, matrix)
+    turned = moved_object(source, matrix, cancelled=ctx.cancelled)
     turned, matrix, held = _held_on_bed(ctx, source, turned, matrix)
     return OpResult(
-        outputs=[dataclasses.replace(source, mesh=turned)],
+        outputs=[turned],
         transform=as_transform(matrix),
         findings=[*_stood_still(matrix), *held],
     )
@@ -474,7 +470,7 @@ class ScaleParams(BaseParams):
 
 @register_op(
     name="scale_object",
-    cache_version="2",
+    cache_version="3",
     title=_("Skalieren"),
     category="transform",
     params=ScaleParams,
@@ -495,18 +491,16 @@ def scale_object(ctx: OpContext) -> OpResult:
         params.fy or params.factor,
         params.fz or params.factor,
     )
-    pivot = named_pivot(params) or anchor_point(
-        as_mesh_data(source.mesh), cast(Anchor, params.about)
-    )
+    pivot = named_pivot(params) or anchor_point(source.mesh, cast(Anchor, params.about))
     matrix = scaling(factors, pivot)
-    scaled = apply(as_mesh_data(source.mesh), matrix)
+    scaled = moved_object(source, matrix, cancelled=ctx.cancelled)
     scaled, matrix, held = _held_on_bed(ctx, source, scaled, matrix)
     return OpResult(
-        outputs=[dataclasses.replace(source, mesh=scaled)],
+        outputs=[scaled],
         transform=as_transform(matrix),
         findings=[
             *_stood_still(matrix),
-            *_too_small_to_print(scaled, ctx.profile),
+            *_too_small_to_print(scaled.mesh, ctx.profile),
             *held,
         ],
     )
@@ -533,6 +527,7 @@ class FitToSizeParams(BaseParams):
 
 @register_op(
     name="fit_to_size",
+    cache_version="2",
     title=_("Auf Maß bringen"),
     category="transform",
     params=FitToSizeParams,
@@ -553,7 +548,7 @@ def fit_to_size(ctx: OpContext) -> OpResult:
     """
     params = cast(FitToSizeParams, ctx.params)
     source = ctx.inputs[0]
-    body = as_mesh_data(source.mesh)
+    body = source.mesh
     current = max(body.bounds.size)
     if current <= EPS_GEOM:
         raise GeometryError(
@@ -564,9 +559,9 @@ def fit_to_size(ctx: OpContext) -> OpResult:
     factor = params.largest / current
     pivot = anchor_point(body, cast(Anchor, params.about))
     matrix = scaling((factor, factor, factor), pivot)
-    fitted = apply(body, matrix)
+    fitted = moved_object(source, matrix, cancelled=ctx.cancelled)
     return OpResult(
-        outputs=[dataclasses.replace(source, mesh=fitted)],
+        outputs=[fitted],
         transform=as_transform(matrix),
         findings=[
             Finding(
@@ -576,7 +571,7 @@ def fit_to_size(ctx: OpContext) -> OpResult:
                 values={"from_mm": round(current, 3), "to_mm": params.largest},
                 source="internal",
             ),
-            *_too_small_to_print(fitted, ctx.profile),
+            *_too_small_to_print(fitted.mesh, ctx.profile),
         ],
     )
 
@@ -620,13 +615,12 @@ def mirror_object(ctx: OpContext) -> OpResult:
     der Test misst danach das Volumen, denn „das macht schon irgendwer" ist
     kein Versprechen.
 
-    Die Merkmale reisen unverändert mit der Ausgabe. Die Auswertung führt sie
-    anhand der Matrix nach, auch bei exakten Körpern ohne Netzerkennung.
-    Namen und Erzeuger bleiben erhalten; gerichtete Angaben werden gespiegelt.
+    Die Merkmale reisen mit ihren tatsächlichen Ergebnisflächen. Namen und
+    Erzeuger bleiben erhalten; gerichtete Angaben werden gespiegelt.
     """
     params = cast(MirrorParams, ctx.params)
     source = ctx.inputs[0]
-    mesh = as_mesh_data(source.mesh)
+    mesh = source.mesh
 
     factors = [1.0, 1.0, 1.0]
     factors["xyz".index(params.axis)] = -1.0
@@ -634,7 +628,7 @@ def mirror_object(ctx: OpContext) -> OpResult:
     matrix = scaling((factors[0], factors[1], factors[2]), pivot)
 
     return OpResult(
-        outputs=[dataclasses.replace(source, mesh=moved_body(source.mesh, matrix))],
+        outputs=[moved_object(source, matrix, cancelled=ctx.cancelled)],
         transform=as_transform(matrix),
     )
 
@@ -773,7 +767,9 @@ def _boolean_op(ctx: OpContext, kind: BooleanKind, seed: int | None) -> OpResult
     - Eine **leere Schnittmenge** ist kein Kettenfehler, sondern eine Tatsache:
       die gewählten Körper treffen sich nicht. ``allow_empty`` hält die Kette davon
       ab, das viermal bis zur Voxelstufe zu bestätigen, und der Grund wird
-      genannt statt „das Werkzeug deckt ihn vollständig ab".
+      genannt statt „das Werkzeug deckt ihn vollständig ab". Ebenso ist
+      vollständiges Abziehen eine gültige Leerauskunft des Kerns; eine
+      gestörte Ersatzgeometrie darf daraus keine dünne Resthaut erzeugen.
     - **Vereinigung und Differenz, die nichts bewirken**, sagen es über
       ``without_effect`` — ein Abzugskörper neben dem Teil oder ein Körper, der
       schon ganz im anderen steckt, ließ sonst einen Schritt im Verlauf und ein
@@ -841,12 +837,12 @@ def _boolean_op(ctx: OpContext, kind: BooleanKind, seed: int | None) -> OpResult
         bodies,
         quality=ctx.quality,
         seed=seed,
-        allow_empty=kind == "intersection",
+        allow_empty=kind in ("intersection", "difference"),
         cancelled=ctx.cancelled,
     )
     findings = list(outcome.findings)
-    if kind == "intersection":
-        if outcome.mesh.triangle_count == 0:
+    if outcome.mesh.triangle_count == 0:
+        if kind == "intersection":
             raise GeometryError(
                 _("Die Körper haben keinen gemeinsamen Bereich."),
                 detail=_(
@@ -855,7 +851,12 @@ def _boolean_op(ctx: OpContext, kind: BooleanKind, seed: int | None) -> OpResult
                 ),
                 suggestions=(CORRECT_INPUT, CANCEL),
             )
-    else:
+        raise GeometryError(
+            title=NOTHING_LEFT_TITLE,
+            detail=NOTHING_LEFT_DETAIL,
+            suggestions=(CORRECT_INPUT, CANCEL),
+        )
+    if kind != "intersection":
         nothing = without_effect(bodies[0], outcome.mesh, kind, ctx.profile)
         if nothing is not None:
             findings.append(nothing)
@@ -905,6 +906,7 @@ def union_objects(ctx: OpContext) -> OpResult:
 
 @register_op(
     name="subtract_objects",
+    cache_version="2",
     title=_("Abziehen"),
     category="boolean",
     params=BooleanParams,
@@ -972,7 +974,7 @@ def place_object_on_bed(ctx: OpContext) -> OpResult:
     source = ctx.inputs[0]
     matrix = translation((0.0, 0.0, -source.mesh.bounds.minimum[2]))
     return OpResult(
-        outputs=[dataclasses.replace(source, mesh=moved_body(source.mesh, matrix))],
+        outputs=[moved_object(source, matrix, cancelled=ctx.cancelled)],
         transform=as_transform(matrix),
     )
 

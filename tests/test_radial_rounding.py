@@ -131,6 +131,44 @@ def test_an_open_cylinder_changes_only_its_inner_radius(
     assert np.array_equal(as_mesh_data(source.mesh).raw.vertices, source_vertices)
 
 
+@pytest.mark.parametrize("failure_mode", ["unorientable", "exception", "invalid"])
+def test_an_unorientable_radial_skin_is_rejected_before_publication(
+    monkeypatch: pytest.MonkeyPatch, profile: Profile, failure_mode: str
+) -> None:
+    """Eine ungeklärte Materialseite bleibt ein Fehler, ohne Quelle oder Cache umzuschreiben."""
+    pytest.importorskip("OCP")
+    from OCP.BRepLib import BRepLib
+
+    source = _clip("brep")
+    vertices = np.array(as_mesh_data(source.mesh).raw.vertices, copy=True)
+    volume = source.mesh.volume
+    cached = dict(source.mesh._cache)
+
+    def unresolved(solid: Any) -> bool:
+        """Deckt Ablehnung, native Ausnahme und einen unbrauchbaren Rückgabekörper ab."""
+        if failure_mode == "exception":
+            raise RuntimeError("native orientation failure")
+        if failure_mode == "invalid":
+            solid.Nullify()
+            return True
+        return False
+
+    with monkeypatch.context() as isolated:
+        isolated.setattr(BRepLib, "OrientClosedSolid_s", unresolved)
+        with pytest.raises(GeometryError, match="innerhalb ihrer Ränder") as failure:
+            _resize(source, 13.0, profile)
+
+    assert failure.value.suggestions
+    assert source.mesh._cache.keys() == cached.keys()
+    assert all(source.mesh._cache[key] is value for key, value in cached.items())
+    assert source.mesh.volume == pytest.approx(volume, abs=0.000001)
+    assert np.array_equal(as_mesh_data(source.mesh).raw.vertices, vertices)
+    result = _resize(source, 13.0, profile)
+    assert result.mesh.volume == pytest.approx(
+        17.0 * math.radians(184.0) * (16.0**2 - 13.0**2) / 2.0, abs=0.001
+    )
+
+
 @pytest.mark.parametrize("kind", ["mesh", "brep"])
 def test_a_cylindrical_side_wall_has_no_sharp_corner_to_restore(
     kind: str, profile: Profile

@@ -60,6 +60,15 @@ für ältere Schritte, sowohl bei einzelnen Kennungen als auch bei Listen.
 
 ## Der Kreislauf
 
+Darstellungswechsel werden erst nach vollständig vorbereiteten Ausgaben
+gemeldet. Die unveränderten Eingangskennungen der rohen Ergebnisse belegen
+die Nachfolger; neue Deckel oder Dichtungen gelten dadurch nicht als Verlust
+ihres erhaltenen Trägers. Werden alle Ausgaben vernetzt, erhalten auch
+verbrauchte exakte Werkzeuge einen eigenen Befund. Er nennt Eingangskennung,
+damaligen Namen, betroffene Ausgaben und Operation. Die vollständige Aussage
+ersetzt den allgemeinen Befund eines direkten Op-Aufrufs; bei einem Halt
+entsteht keine Erfolgsmeldung über eine nicht übernommene Konvertierung.
+
 Namenlose Wiederherstellungen besitzen eine Sitzungstoken-Kennung und eine
 vom Betriebssystem gehaltene Eigentumssperre. Solange deren Sitzung lebt,
 bietet `unsaved_recoveries()` sie anderen Sitzungen nicht an; auch allgemeines
@@ -233,9 +242,10 @@ Skizzen und Stellungen verwenden `nested_references(strict=True)`. Dessen
 Sammler parsen ihren Text einmal und reichen unlesbare Inhalte als Fehler
 weiter: Ohne verlässliche Auskunft darf keine Leeranzeige „ungenutzt“ behaupten.
 
-Lineare und kreisförmige Muster bewegen Kopien über `moved_body`. Eine starre
-Bewegung erhält einen exakten Körper; die Kopie bleibt anschließend im
-B-Rep-Kern bearbeitbar.
+Lineare und kreisförmige Muster bewegen Kopien über `transform.moved_object`.
+Der gemeinsame Weg erhält Körperart, native Flächenzuordnung und die
+Merkmale im Ergebnisraum; die Kopie bleibt anschließend im selben Kern
+bearbeitbar. Die unveränderte erste Kopie benötigt keine Transformation.
 
 Muster führen die Merkmale je Kopie im Ergebnisraum mit, ohne gemeinsame
 Transformationsmatrix. Bei Einzelausgaben folgt nur ein unverändert geerbtes
@@ -265,12 +275,12 @@ prüft `detect_known` bereits belegte Merkmale örtlich am vollständigen Netz.
 **Ein exakter Körper wird nicht neu erkannt.** Die Erkennung misst an
 Dreiecken; ein `Solid` hat keine, seine Merkmale liest
 `brep.features.features_of` aus der Topologie, und zwar in der Operation, die
-ihn baut. Wer ihn nur bewegt, reicht die Merkmale durch —
-`evaluate._carried_along` nimmt sie dann entlang der gemeldeten starren Matrix
-mit (`perceive.matching.moved_features`), oder entlang der reinen
-Verschiebung, die `_shift_between` aus zwei Hüllquadern abliest. Neu gerechnet
-wird nichts: Eine starre Bewegung ändert nur Ort und Richtung, nicht Maß und
-nicht Name.
+ihn baut. `transform.moved_object` berechnet bei einer Transformation bereits
+die aktuellen Merkmalsmaße und ordnet ihre Dreiecksauswahl über die native
+Flächenhistorie neu zu. Unverändert geerbte Merkmale anderer Operationen
+führt `evaluate._carried_along` anhand der gemeldeten Matrix nach, oder anhand
+der reinen Verschiebung, die `_shift_between` aus zwei Hüllquadern abliest.
+Schon ausdrücklich nachgeführte Merkmale werden nicht nochmals bewegt.
 
 Bedingte Passungen speichern `when_positive=(operation_id, parameter_name)`.
 Ihre Prüfung verlangt das zugehörige Dokument; fehlt es beim Aufruf, ist
