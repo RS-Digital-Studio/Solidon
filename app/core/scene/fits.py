@@ -134,7 +134,14 @@ def _pair_problem(
     if kind == "thread":
         first_pitch, second_pitch = _positive(first, "pitch"), _positive(second, "pitch")
         assert first_pitch is not None and second_pitch is not None
-        if abs(first_pitch - second_pitch) > EPS_GEOM:
+        # **Zwei gemessene Steigungen sind auf ihre Unsicherheit gleich, nicht
+        # auf ``EPS_GEOM``** (B5, P2.5). Der exakte Leser nennt seine
+        # Wendelabweichung, der Netzweg sucht im Raster von 0,01, ein Erzeuger
+        # weiß es genau: 0,99 am Netz gegen 1,0000 am exakten Körper ist
+        # dieselbe Steigung, 1,25 gegen 1,0 nicht.
+        if abs(first_pitch - second_pitch) > (
+            _pitch_uncertainty(first) + _pitch_uncertainty(second) + EPS_GEOM
+        ):
             return "fit.pitch_mismatch", _(
                 "Die Gewindesteigungen unterscheiden sich. Beide Gewinde auf dieselbe "
                 "Steigung ändern."
@@ -152,6 +159,24 @@ def _pair_problem(
                 "Ein Gegenstück mit derselben Drehrichtung wählen oder die Spiegelung zurücknehmen."
             )
     return None
+
+
+def _pitch_uncertainty(feature: Feature) -> float:
+    """Wie genau die Steigung dieses Gewindes bekannt ist — je nach Herkunft.
+
+    Ein gemessenes Gewinde des exakten Kerns trägt seine Wendelabweichung
+    (``uncertainty``); der Netzweg kennt sie nicht und sucht die Steigung im
+    Raster ``helix.PITCH_STEP`` — eine Rasterstufe ist seine Unsicherheit; ein
+    erzeugtes Gewinde (``parameter``) ist so genau wie seine Zahl.
+    """
+    stated = feature.params.get("uncertainty")
+    if isinstance(stated, int | float) and math.isfinite(stated) and stated >= 0.0:
+        return float(stated)
+    if feature.measure_sources.get("pitch") == "fit":
+        from app.core.perceive.helix import PITCH_STEP
+
+        return float(PITCH_STEP)
+    return 0.0
 
 
 def pair_kinds(first: Feature, second: Feature) -> tuple[FitKind, ...]:

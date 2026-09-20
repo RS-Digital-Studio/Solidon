@@ -8,6 +8,14 @@ Der Nachweis liegt im Erzeuger `profiles.threaded_rod`: Auf der Zylinderfläche
 steigen Winkel und Höhe gemeinsam. Die Angabe gehört zum erzeugten Merkmal,
 nicht zu einer Vorgabe für erkannte Importformen; Spiegelungen führen sie nach.
 
+**Und ein Bolzen ohne Gang ist keiner** (P2.5, B3): `threaded_rod` lieferte an
+neun von 23 Rasterlängen — jeder halbzahligen Umlaufzahl — den nackten Kern
+zurück, gültig, geschlossen, ein Stück, ohne Meldung; `thread_exact` mit Länge
+2,5 und Steigung 1 erzeugte einen glatten Bolzen. Jede Stufe der Vereinigung
+verlangt seither ein Volumen über dem Kern (`_is_sound_rod(at_least=)`); was
+den Gang verliert, gilt nicht als gelungen, und am Ende steht die Absage mit
+Vorschlägen. Die Fixture der exakten Gewindetests war selbst so ein Bolzen.
+
 ## Eigentum an der nativen Form
 
 `Solid` übernimmt beim Eintritt eine eigene Kopie von Topologie und Geometrie

@@ -20,7 +20,10 @@ pytestmark = pytest.mark.skipif(not available(), reason="OpenCASCADE is an optio
 
 DIAMETER = 6.123456789
 PITCH = 1.23456789
-LENGTH = 4.3456789
+# **Nicht 4,3456789**: Mit 3,52 Umläufen verlor die Vereinigung den Gang still, und
+# die Fixture war fünf Wochen lang ein glatter Bolzen — die Zusicherung
+# ``core < volume`` hielt um ein Rundungsrauschen (B3, P2.5). 4,0 mm trägt ihn.
+LENGTH = 4.0
 
 
 @pytest.fixture(scope="module")
@@ -46,7 +49,10 @@ def test_the_exact_thread_declares_its_unchanged_dimensions(exact_thread: SceneO
     assert exact_thread.kind == "brep"
     assert isinstance(exact_thread.mesh, Solid)
     assert exact_thread.mesh.bounds.minimum[2] == pytest.approx(0.0, abs=EPS_GEOM, rel=0.0)
-    assert exact_thread.mesh.bounds.maximum[2] == pytest.approx(LENGTH, abs=EPS_GEOM, rel=0.0)
+    # Der Gang wird mit Überstand gebaut und an der Länge beschnitten; die
+    # Fuzzy-Vereinigung lässt am oberen Ende wenige Mikrometer stehen. Die
+    # Genauigkeit auf EPS_GEOM galt einem Bolzen ohne Gang (B3, P2.5).
+    assert exact_thread.mesh.bounds.maximum[2] == pytest.approx(LENGTH, abs=1e-5, rel=0.0)
     # Die vorhandene ISO-Profilhöhe ist 0,6134 P; ein wirklicher Außengang
     # liegt zwischen dem Kernzylinder und dem Zylinder über seinen Spitzen.
     core = math.pi * (DIAMETER / 2.0 - 0.6134 * PITCH) ** 2 * LENGTH
@@ -89,3 +95,23 @@ def test_the_named_exact_thread_uses_the_existing_transform_contract(
     assert thread.params["pitch"] == pytest.approx(PITCH, abs=1e-12, rel=0.0)
     assert thread.params["length"] == pytest.approx(LENGTH, abs=1e-12, rel=0.0)
     assert thread.face_indices == exact_thread.features["thread_1"].face_indices
+
+
+def test_a_rod_that_would_lose_its_ridge_says_so_instead_of_coming_out_smooth() -> None:
+    """M6 x 1 mit Länge 2,5: bis zum 20.09.2026 ein glatter Bolzen ohne Meldung (B3, P2.5).
+
+    Die Vereinigung von Kern und Gang lieferte an neun von 23 Rasterlängen den
+    nackten Kern zurück — gültig, geschlossen, ein Stück. Jetzt gilt ein
+    Bolzen erst als gelungen, wenn sein Volumen über dem Kern liegt; sonst
+    steht am Ende die Absage mit Vorschlägen, nie ein Bolzen ohne Gang.
+    """
+    from app.core.brep import profiles
+    from app.core.errors import GeometryError
+
+    core = math.pi * (3.0 - 0.6134) ** 2 * 2.5
+    try:
+        rod = profiles.threaded_rod(6.0, 1.0, 2.5)
+    except GeometryError as refusal:
+        assert refusal.suggestions, "Regel 17: eine Absage nennt, was jetzt möglich ist"
+        return
+    assert rod.volume > core * 1.01, "ein Bolzen ohne Gang ist kein Bolzen"

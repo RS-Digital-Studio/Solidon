@@ -180,7 +180,9 @@ def test_pitch_search_keeps_its_workspace_bounded() -> None:
     offset = np.column_stack((3.0 * np.cos(angle), 3.0 * np.sin(angle), along))
     tracemalloc.start()
     try:
-        pitch, concentration, _sharpness = _best_pitch(offset, np.array([0.0, 0.0, 1.0]), along)
+        pitch, concentration, _sharpness, handedness = _best_pitch(
+            offset, np.array([0.0, 0.0, 1.0]), along
+        )
         _current, peak = tracemalloc.get_traced_memory()
     finally:
         tracemalloc.stop()
@@ -188,6 +190,7 @@ def test_pitch_search_keeps_its_workspace_bounded() -> None:
     assert pitch == pytest.approx(1.25, abs=0.005)
     assert concentration == pytest.approx(1.0, abs=1e-12)
     assert peak < 32 * 1024 * 1024, f"pitch workspace used {peak / 1024**2:.1f} MiB"
+    assert handedness == "right"
 
 
 def test_cancellation_inside_pitch_search_leaves_no_recognition_cache(
@@ -237,6 +240,26 @@ def test_an_imported_bolt_names_its_pitch(size: str, length: float, pitch: float
     assert helix.pitch == pytest.approx(pitch, abs=0.02)
     assert not helix.internal
     assert helix.turns >= 5.0
+
+
+def test_a_mirrored_bolt_is_measured_left_handed() -> None:
+    """Die Spiegelung desselben Bolzens ist ein Linksgewinde — und wird als eines gemessen (B1).
+
+    Bis zum 20.09.2026 setzte die Konzentration den Rechtsgang voraus: Die
+    Spiegelung ergab null Wendeln, der Netz-Zwilling eines Linksgewindes
+    sagte „kein Gewinde", während der exakte Leser es maß.
+    """
+    mesh = _bolt("M6")
+    right = _only(find_helices(mesh))
+    assert right.handedness == "right"
+    mirrored = mesh.raw.copy()
+    mirrored.apply_transform(np.diag([1.0, -1.0, 1.0, 1.0]))
+    left = _only(find_helices(MeshData(raw=mirrored)))
+    assert left.handedness == "left"
+    assert left.pitch == pytest.approx(right.pitch, abs=1e-9)
+    assert left.internal is right.internal
+    assert left.diameter == pytest.approx(right.diameter, abs=1e-6)
+    assert left.turns == pytest.approx(right.turns, abs=0.05)
 
 
 @pytest.mark.parametrize(("size", "core", "pitch"), [("M5", 4.2, 0.8), ("M8", 6.8, 1.25)])

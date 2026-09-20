@@ -525,11 +525,19 @@ def _feature_line(feature_id: str, feature: Feature) -> str:
     if feature.kind == "thread":
         # Steigung dazu, denn sie macht das Gewinde: Ø6 mit 1,0 ist M6, Ø6 mit
         # 0,75 ist M6 fein, und in das eine passt die Schraube des anderen nicht.
+        # Händigkeit und Gangzahl dazu, seit beide Kerne sie messen (P2.5): Ein
+        # Linksgewinde greift in kein Rechtsgewinde, und ein zweigängiges hat
+        # den doppelten Vorschub — der Agent soll beides wissen, mit Quelle.
         shape = tr("Innengewinde") if params.get("internal") else tr("Außengewinde")
         axis = _vector_measure(feature, "axis", _axis_name)
+        starts = (
+            f", {tr('Gangzahl')} {_measure(feature, 'starts', format_value=lambda v: f'{v:.0f}')}"
+            if "starts" in params
+            else ""
+        )
         return (
             f"{feature_id}  {shape} {_measure(feature, 'diameter', prefix='Ø ')}, "
-            f"{tr('Steigung')} {_measure(feature, 'pitch')}, "
+            f"{tr('Steigung')} {_measure(feature, 'pitch')}, {_handedness(feature)}{starts}, "
             f"{tr('Achse')} {axis}{at}"
         )
     if feature.kind == "sphere":
@@ -599,6 +607,23 @@ def _feature_line(feature_id: str, feature: Feature) -> str:
     # noch nicht gibt. Dann ist eine englische Zeile besser als ein Absturz
     # mitten im Steckbrief.
     return f"{feature_id}  {feature.kind}{at}"  # type: ignore[unreachable]
+
+
+def _handedness(feature: Feature) -> str:
+    """``rechtsgängig``, ``linksgängig`` — oder dass es niemand gemessen hat.
+
+    Die Händigkeit ist ein Wort, kein Maß; ``measure_status`` liest nur Zahlen.
+    Ihre Quelle trägt sie trotzdem (``measure_sources``): gemessen am exakten
+    Körper oder am Netz, oder eine Vorgabe des Erzeugers — und die wird wie bei
+    jedem Maß dazugesagt.
+    """
+    handedness = feature.params.get("handedness")
+    if handedness not in ("right", "left"):
+        return str(tr("Drehrichtung nicht gemessen"))
+    word = str(tr("rechtsgängig") if handedness == "right" else tr("linksgängig"))
+    if feature.measure_sources.get("handedness") == "parameter":
+        return f"{word} ({tr('Vorgabemaß')})"
+    return word
 
 
 def _vector_measure(

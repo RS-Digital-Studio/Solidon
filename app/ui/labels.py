@@ -2213,7 +2213,16 @@ def feature_measure(feature: Feature) -> str:
     if feature.kind == "pin":
         return measure_text(feature, "diameter", prefix="Ø")
     if feature.kind == "thread":
-        return _measure_group(feature, (("diameter", "Ø", length), ("pitch", "", length)), " × ")
+        text = _measure_group(feature, (("diameter", "Ø", length), ("pitch", "", length)), " × ")
+        # **Was vom Üblichen abweicht, steht dabei** (P2.5): Ein Linksgewinde und
+        # ein mehrgängiges nennen es — ein rechtsgängiges, eingängiges nicht,
+        # sonst trüge jede Zeile zwei Wörter, die nichts unterscheiden.
+        if feature.params.get("handedness") == "left":
+            text = f"{text} · {tr('linksgängig')}"
+        starts = feature.params.get("starts")
+        if isinstance(starts, int) and not isinstance(starts, bool) and starts > 1:
+            text = f"{text} · {tr('Gangzahl')} {starts}"
+        return text
     # **Das Volumen und kein Durchmesser.** Ein Einschluss hat keine Form, die
     # eine Länge beschriebe — er ist, was ein Negativkörper hinterlassen hat,
     # und das kann ein Zylinder sein oder sonst etwas. Was der Kunde wissen

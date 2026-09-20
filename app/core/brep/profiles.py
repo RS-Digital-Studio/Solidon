@@ -706,7 +706,7 @@ def threaded_rod(major: float, pitch: float, length: float) -> Solid:
     # Vereinigung.
     if not _is_sound_rod(trimmed):
         _log.info("thread rod: the trimmed ridge is already unsound (%s)", _rod_state(trimmed))
-    rod = _joined_rod(core, trimmed, major, pitch)
+    rod = _joined_rod(core, trimmed, major, pitch, at_least=core.volume)
     # Die Feinheit gilt dem Ergebnis, und sie wird am Ende gesetzt: Jede
     # Zwischenstufe damit zu vernetzen wäre Arbeit für Dreiecke, die niemand
     # sieht.
@@ -766,8 +766,19 @@ ROD_FUZZ_RATIOS: Final = (1e-4, 1e-3, 1e-2)
 ROD_SEW_SHARE: Final = 0.01
 
 
-def _joined_rod(core: Solid, ridge: Solid, major: float, pitch: float) -> Solid:
+def _joined_rod(
+    core: Solid, ridge: Solid, major: float, pitch: float, *, at_least: float = 0.0
+) -> Solid:
     """Kern und Gang zusammenfügen — in Stufen, wie die Boolesche Kette (§17.2).
+
+    **Und ein Bolzen ohne Gang ist keiner** (B3, P2.5): An neun von 23
+    Rasterlängen — jeder halbzahligen Umlaufzahl, dazu M8 x 1,25 mit Länge 8 —
+    lieferte die Vereinigung den nackten Kern zurück, gültig, geschlossen, ein
+    Stück, und keine Stufe merkte es: Geschlossen und einteilig ist der Kern
+    allein auch. ``at_least`` ist das Volumen des Kerns; was nicht darüber
+    liegt, hat den Gang verloren und gilt nicht als gelungen — die nächste
+    Stufe versucht es, und am Ende steht die Absage statt eines glatten
+    Bolzens (``thread_exact`` mit Länge 2,5 und Steigung 1 erzeugte einen).
 
     Der Reihe nach: die feine Vereinigung, dann das Vernähen des Ergebnisses,
     dann eine gröbere Vereinigung. Jede Stufe wird nur betreten, wenn die
@@ -786,11 +797,11 @@ def _joined_rod(core: Solid, ridge: Solid, major: float, pitch: float) -> Solid:
     Prozess stirbt ohne Zeile.
     """
     solid = _fuzzy_boolean("union", core, ridge)
-    if _is_sound_rod(solid):
+    if _is_sound_rod(solid, at_least=at_least):
         return solid
     _log.info("thread rod: fine union did not close (%s)", _rod_state(solid))
     sewn = _sewn(solid)
-    if _is_sound_rod(sewn):
+    if _is_sound_rod(sewn, at_least=at_least):
         return sewn
     _log.info("thread rod: sewing did not close it either (%s)", _rod_state(sewn))
     # Zweiter Anlauf mit einer Naht-Toleranz, die zur Steigung passt: Auf dem
@@ -799,7 +810,7 @@ def _joined_rod(core: Solid, ridge: Solid, major: float, pitch: float) -> Solid:
     # Hundertstel Millimeter — genug für eine Naht, zu wenig, um eine Flanke
     # zu verrücken.
     widened = _sewn(solid, tolerance=pitch * ROD_SEW_SHARE)
-    if _is_sound_rod(widened):
+    if _is_sound_rod(widened, at_least=at_least):
         return widened
     _log.info("thread rod: sewing with tolerance did not close it (%s)", _rod_state(widened))
     sewn = widened
@@ -812,7 +823,7 @@ def _joined_rod(core: Solid, ridge: Solid, major: float, pitch: float) -> Solid:
             # kommt, sagt `_checked_rod` es mit Vorschlägen statt mit dem
             # nackten Fehlschlag einer Booleschen Operation.
             continue
-        if _is_sound_rod(coarse):
+        if _is_sound_rod(coarse, at_least=at_least):
             return coarse
         # **Auch die grobe Stufe wird genäht.** Das Vernähen stand bisher nur
         # hinter der feinen Vereinigung, und damit fiel die gröbere durch,
@@ -821,7 +832,7 @@ def _joined_rod(core: Solid, ridge: Solid, major: float, pitch: float) -> Solid:
         # jede Stufe lieferte etwas, keine lieferte etwas Geschlossenes, und
         # die Absage kam für ein Gewinde, das rechnerisch in Ordnung war.
         mended = _sewn(coarse)
-        if _is_sound_rod(mended):
+        if _is_sound_rod(mended, at_least=at_least):
             return mended
         _log.info(
             "thread rod: coarse union at %.4f mm did not close (%s), sewn (%s)",
@@ -830,10 +841,10 @@ def _joined_rod(core: Solid, ridge: Solid, major: float, pitch: float) -> Solid:
             _rod_state(mended),
         )
         sewn = mended
-    return _checked_rod(sewn, major, pitch)
+    return _checked_rod(sewn, major, pitch, at_least=at_least)
 
 
-def _checked_rod(solid: Solid, major: float, pitch: float) -> Solid:
+def _checked_rod(solid: Solid, major: float, pitch: float, *, at_least: float = 0.0) -> Solid:
     """Nachsehen, was die Vereinigung von Kern und Gang wirklich ergeben hat.
 
     Sie gelingt nicht bei jeder Kombination, und das Schema verspricht mehr,
@@ -852,9 +863,9 @@ def _checked_rod(solid: Solid, major: float, pitch: float) -> Solid:
     Fläche, es näht. Erst wenn auch das nichts hilft, ist die Kombination
     wirklich keine.
     """
-    if not _is_sound_rod(solid):
+    if not _is_sound_rod(solid, at_least=at_least):
         solid = _sewn(solid)
-    if not _is_sound_rod(solid):
+    if not _is_sound_rod(solid, at_least=at_least):
         _log.warning("thread rod refused: d=%.2f pitch=%.2f (%s)", major, pitch, _rod_state(solid))
         raise GeometryError(
             detail=_(
@@ -871,9 +882,13 @@ def _checked_rod(solid: Solid, major: float, pitch: float) -> Solid:
     return solid
 
 
-def _is_sound_rod(solid: Solid) -> bool:
-    """Ob dieser Bolzen etwas ist, das man weiterreichen kann: Volumen,
-    geschlossen, ein Stück.
+def _is_sound_rod(solid: Solid, *, at_least: float = 0.0) -> bool:
+    """Ob dieser Bolzen etwas ist, das man weiterreichen kann: Volumen über
+    ``at_least``, geschlossen, ein Stück.
+
+    ``at_least`` ist das Volumen des Kerns, wenn Kern und Gang vereinigt
+    werden: Ein Ergebnis, das nicht darüber liegt, hat den Gang still
+    verloren (B3, P2.5). Für den Gang allein bleibt die Grenze null.
 
     **Gefragt wird der Körper, nicht sein Netz.** Hier standen
     ``is_watertight`` und ``component_count``, und beide beantworten die Frage
@@ -884,7 +899,11 @@ def _is_sound_rod(solid: Solid) -> bool:
     Ob die Dreiecke dicht sind, ist eine eigene Frage — sie gehört zum
     STL-Export und nicht zu der, ob die Vereinigung geklappt hat.
     """
-    return solid.volume > EPS_GEOM and solid.is_closed and solid.solid_count == 1
+    return (
+        solid.volume > max(EPS_GEOM, at_least + EPS_GEOM)
+        and solid.is_closed
+        and solid.solid_count == 1
+    )
 
 
 def _rod_state(solid: Solid) -> str:

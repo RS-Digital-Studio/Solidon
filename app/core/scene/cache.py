@@ -90,7 +90,11 @@ DEFAULT_DISK_BUDGET_BYTES: Final = 2 * 1024 * 1024 * 1024
 #: Belegte Übergänge alter Merkmale (``continuations``) gehören zum Ergebnis:
 #: Ein älterer Eintrag ohne das Feld kennt keinen Beleg und wird neu gerechnet,
 #: statt dass ein warmer Treffer einen Bezug still für verloren erklärt.
-CACHE_FORMAT_VERSION: Final = 21
+#: 22 (20.09.2026, P2.5): ein gemessenes Gewinde trägt Händigkeit, Gangzahl,
+#: Vorschub, Kamm- und Grundradius und seine Wendelabweichung — ein Eintrag
+#: ohne sie sagt dem Steckbrief „Drehrichtung nicht gemessen“ über ein
+#: Gewinde, das längst gemessen ist.
+CACHE_FORMAT_VERSION: Final = 22
 
 
 @dataclass(frozen=True, slots=True)

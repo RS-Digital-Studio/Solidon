@@ -130,8 +130,13 @@ verwenden denselben Vertrag: Ein Gewindepaar braucht bekannte gleiche
 `handedness` (`right` oder `left`) zusätzlich zu Innen-/Außenrolle und
 Steigung. Fehlende Angaben bleiben unbekannt, auch wenn sie auf beiden Seiten
 fehlen. Unterschiedliche Drehrichtungen erzeugen einen Befund mit Rückweg
-über Gegenstückwahl oder Rücknahme der Spiegelung. Die aktuelle Wendelerkennung
-liefert keinen Links-/Rechtsnachweis; ihr Steigungswert allein genügt dafür nicht.
+über Gegenstückwahl oder Rücknahme der Spiegelung. Seit P2.5 messen beide
+Kerne die Händigkeit (`helix.Helix.handedness`, `brep.thread`); ein Gewinde
+ohne sie sagt weiter „nicht gemessen“, nicht „stimmt nicht überein“. Und
+zwei gemessene Steigungen sind auf ihre **Unsicherheit** gleich, nicht auf
+`EPS_GEOM` (`_pitch_uncertainty`): die Wendelabweichung des exakten Lesers,
+eine Rasterstufe `PITCH_STEP` am Netz, null bei einem Erzeuger — 0,99 am
+Netz gegen 1,0000 am exakten Körper ist dieselbe Steigung.
 
 `placement.seat_of` prüft beide Mündungen einer erkannten Bohrung. Bei
 Bohrung und Langloch muss die Flächennormale vom Hohlraum weg zeigen; der

@@ -148,6 +148,14 @@ Hauptachsen; konstantes Radiusband, mindestens zwei volle Umläufe,
 punktweise Wendelabweichung und Gangtiefe müssen gemeinsam passen. Die
 bisherige Spektrumsprüfung bleibt für lange Gewinde erhalten.
 
+**Und die Konzentration kennt beide Vorzeichen** (P2.5, B1): `_best_pitch`
+rechnet `z - p·θ/2π` und `z + p·θ/2π` in derselben rechtshändigen Basis, in
+der auch `brep.thread` misst, und gibt die Richtung mit dem höheren Gipfel
+als `Helix.handedness` zurück; das erkannte Gewinde trägt sie als Maß mit
+Quelle `fit`. Bis dahin setzte die Rechnung den Rechtsgang voraus, und die
+Spiegelung desselben Bolzens ergab null Wendeln. Die Gangzahl kennt das Netz
+weiter nicht — ein Vielfaches der Steigung konzentriert nicht.
+
 Geschlossene Langlöcher beziehen ihre Breite aus dem Abstand der geprüften
 ebenen Flanken. Offene Langlöcher übernehmen Kreisradius und Achse aus
 demselben geprüften `CylinderFit`; ein zweiter Kreisfit über Flanken- oder

@@ -1144,6 +1144,7 @@ def _threads_instead_of_phantoms(
                 "centre": "fit",
                 "axis": "fit",
                 "length": "facets",
+                "handedness": "fit",
             },
             params={
                 "diameter": round(helix.diameter, 4),
@@ -1152,6 +1153,10 @@ def _threads_instead_of_phantoms(
                 "axis": helix.axis,
                 "internal": helix.internal,
                 "length": round(helix.length, 4),
+                # Die Händigkeit kennt das Netz seit B1 (P2.5); die Gangzahl
+                # kennt es nicht — ein Vielfaches der Steigung konzentriert
+                # nicht, und ohne Kanten je Wendel bleibt sie ungemessen.
+                "handedness": helix.handedness,
             },
             face_indices=helix.face_indices,
         )

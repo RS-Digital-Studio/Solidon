@@ -189,6 +189,14 @@ class Helix:
     internal: bool
     """Ob das Material **außerhalb** des Kamms liegt — dann ein Innengewinde."""
     face_indices: tuple[int, ...]
+    handedness: str = "right"
+    """``right`` oder ``left`` — gemessen am Vorzeichen der Konzentration (B1, P2.5).
+
+    Bis zum 20.09.2026 setzte die Konzentration ``z - p·θ/2π`` den Rechtsgang
+    voraus: Die Spiegelung desselben Bolzens ergab **null** Wendeln, und der
+    Netz-Zwilling eines Linksgewindes sagte „kein Gewinde“, während der
+    exakte es maß.
+    """
 
     @property
     def diameter(self) -> float:
@@ -359,10 +367,13 @@ def _resolved_crest(
         np.einsum("ij,ij->i", edge_across[:, 0], edge_across[:, 1]),
     )
     rise = along[edges[:, 1]] - along[edges[:, 0]]
+    # **Steigen und Drehen gehören zusammen — in beide Richtungen.** Eine
+    # Rechtswendel steigt mit dem Winkel, eine Linkswendel gegen ihn; beide
+    # sind Kammkanten, keine Kante mit Höhe ohne Drehung ist es (B1).
     on_crest = (
         (abs(radii[edges] - radius) <= MAX_FACET_SAG).all(axis=1)
         & (abs(angle) > EPS_GEOM)
-        & (rise * angle > EPS_GEOM)
+        & (abs(rise * angle) > EPS_GEOM)
     )
     kept = edges[on_crest]
     if len(kept) < MIN_CHAIN_EDGES:
@@ -376,7 +387,7 @@ def _resolved_crest(
             check_cancelled()
         points = relative[indices]
         heights = along[indices]
-        pitch, concentration, sharpness = _best_pitch(
+        pitch, concentration, sharpness, handedness = _best_pitch(
             points, axis, heights, check_cancelled=check_cancelled
         )
         low, high = float(heights.min()), float(heights.max())
@@ -388,7 +399,8 @@ def _resolved_crest(
 
         first, second = _plane_basis(axis)
         theta = np.arctan2(points @ second, points @ first)
-        phase = heights * (2.0 * math.pi / pitch) - theta
+        turn = 1.0 if handedness == "right" else -1.0
+        phase = heights * (2.0 * math.pi / pitch) - turn * theta
         mean_phase = math.atan2(float(np.sin(phase).mean()), float(np.cos(phase).mean()))
         error = np.abs(np.angle(np.exp(1j * (phase - mean_phase)))) * pitch / (2.0 * math.pi)
         if concentration < MIN_CONCENTRATION or float(error.max()) > MAX_FACET_SAG:
@@ -414,6 +426,7 @@ def _resolved_crest(
             face_indices=_faces_in(
                 body, centre, axis, low - pitch, high + pitch, crest, depth, internal
             ),
+            handedness=handedness,
         )
         if best is None or result.length > best.length:
             best = result
@@ -439,7 +452,7 @@ def _helix_of(
     if mean_radius <= 0.0 or float(radius.std()) / mean_radius > CREST_SPREAD_LIMIT:
         return None
 
-    pitch, concentration, sharpness = _best_pitch(
+    pitch, concentration, sharpness, handedness = _best_pitch(
         offset, axis, along, check_cancelled=check_cancelled
     )
     if concentration < MIN_CONCENTRATION or sharpness < MIN_SHARPNESS:
@@ -471,6 +484,7 @@ def _helix_of(
         face_indices=_faces_in(
             body, centre, axis, low - pitch, high + pitch, crest, depth, internal
         ),
+        handedness=handedness,
     )
 
 
@@ -480,13 +494,21 @@ def _best_pitch(
     along: NDArray[np.float64],
     *,
     check_cancelled: Callable[[], None] | None = None,
-) -> tuple[float, float, float]:
-    """Der Grundton der Konzentration, und wie sehr er heraussticht.
+) -> tuple[float, float, float, str]:
+    """Der Grundton der Konzentration, wie sehr er heraussticht — und in welche Richtung.
 
-    Gibt Steigung, Konzentration und Schärfe zurück — letztere als Gipfel
-    geteilt durch den Median über den ganzen Bereich. Gewählt wird der
-    **größte** Gipfel, der :data:`HARMONIC_SHARE` des höchsten erreicht; die
-    Begründung steht dort.
+    Gibt Steigung, Konzentration, Schärfe und Händigkeit zurück — die Schärfe
+    als Gipfel geteilt durch den Median über den ganzen Bereich. Gewählt wird
+    der **größte** Gipfel, der :data:`HARMONIC_SHARE` des höchsten erreicht;
+    die Begründung steht dort.
+
+    **Beide Vorzeichen** (B1, P2.5): Eine Rechtswendel konzentriert bei
+    ``z - p·θ/2π``, eine Linkswendel bei ``z + p·θ/2π`` — in derselben
+    rechtshändigen Basis (erste, zweite, Achse), in der auch der exakte Leser
+    misst. Gerechnet wird beides, und es gilt die Richtung mit dem höheren
+    Gipfel; die andere ist an einer echten Wendel Rauschen. Vorher setzte die
+    Rechnung den Rechtsgang voraus, und die Spiegelung desselben Bolzens ergab
+    null Wendeln.
     """
     helper = np.array([1.0, 0.0, 0.0]) if abs(axis[0]) < 0.9 else np.array([0.0, 1.0, 0.0])
     first = np.cross(axis, helper)
@@ -495,30 +517,37 @@ def _best_pitch(
     angle = np.arctan2(offset @ second, offset @ first)
 
     pitches = np.arange(PITCH_RANGE[0], PITCH_RANGE[1] + PITCH_STEP, PITCH_STEP)
-    strength = np.empty(len(pitches), dtype=float)
     rows = max(1, PITCH_BLOCK_VALUES // len(along))
-    for start in range(0, len(pitches), rows):
+    chosen: tuple[float, float, float, str] | None = None
+    for sign, handedness in ((1.0, "right"), (-1.0, "left")):
+        strength = np.empty(len(pitches), dtype=float)
+        for start in range(0, len(pitches), rows):
+            if check_cancelled is not None:
+                check_cancelled()
+            block = pitches[start : start + rows]
+            rest = (
+                along[None, :] - sign * block[:, None] * angle[None, :] / (2 * math.pi)
+            ) % block[:, None]
+            phase = 2 * math.pi * rest / block[:, None]
+            strength[start : start + len(block)] = np.hypot(
+                np.cos(phase).mean(axis=1), np.sin(phase).mean(axis=1)
+            )
         if check_cancelled is not None:
             check_cancelled()
-        block = pitches[start : start + rows]
-        rest = (along[None, :] - block[:, None] * angle[None, :] / (2 * math.pi)) % block[:, None]
-        phase = 2 * math.pi * rest / block[:, None]
-        strength[start : start + len(block)] = np.hypot(
-            np.cos(phase).mean(axis=1), np.sin(phase).mean(axis=1)
-        )
-    if check_cancelled is not None:
-        check_cancelled()
 
-    highest = float(strength.max())
-    rises = np.r_[True, strength[1:] >= strength[:-1]]
-    falls = np.r_[strength[:-1] >= strength[1:], True]
-    candidates = np.flatnonzero(rises & falls & (strength >= HARMONIC_SHARE * highest))
-    best = int(candidates[-1]) if len(candidates) else int(strength.argmax())
+        highest = float(strength.max())
+        rises = np.r_[True, strength[1:] >= strength[:-1]]
+        falls = np.r_[strength[:-1] >= strength[1:], True]
+        candidates = np.flatnonzero(rises & falls & (strength >= HARMONIC_SHARE * highest))
+        best = int(candidates[-1]) if len(candidates) else int(strength.argmax())
 
-    background = float(np.median(strength))
-    peak = float(strength[best])
-    sharpness = peak / background if background > 1e-9 else float("inf")
-    return float(pitches[best]), peak, sharpness
+        background = float(np.median(strength))
+        peak = float(strength[best])
+        sharpness = peak / background if background > 1e-9 else float("inf")
+        if chosen is None or peak > chosen[1]:
+            chosen = (float(pitches[best]), peak, sharpness, handedness)
+    assert chosen is not None
+    return chosen
 
 
 def _groove(
