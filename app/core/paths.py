@@ -13,7 +13,7 @@ import os
 import sys
 from contextlib import suppress
 from pathlib import Path
-from typing import Any
+from typing import Any, BinaryIO
 
 from app.branding import APP_NAME, APP_VENDOR, APP_VERSION
 
@@ -244,6 +244,16 @@ def ensure_dir(path: Path) -> Path:
     """Legt ein Verzeichnis samt Eltern an und gibt es zurück."""
     path.mkdir(parents=True, exist_ok=True)
     return path
+
+
+def lock_file(stream: BinaryIO) -> None:
+    """Belegt eine Lebensdauersperre ohne Warten; das Schließen gibt sie frei."""
+    stream.seek(0)
+    if os.name == "nt":
+        _windows_msvcrt.locking(stream.fileno(), _windows_msvcrt.LK_NBLCK, 1)
+    else:
+        module = importlib.import_module("fcntl")
+        module.flock(stream.fileno(), module.LOCK_EX | module.LOCK_NB)
 
 
 def opened_path(descriptor: int) -> Path | None:

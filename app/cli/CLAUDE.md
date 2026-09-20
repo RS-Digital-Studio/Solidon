@@ -19,7 +19,15 @@ die Oberfläche und der Agent, die dieselbe Quelle lesen, wissen nichts davon.
 
 | Datei | Rolle |
 |---|---|
+| `__init__.py` | Der konfigurierte Skripteinstieg `launch()` richtet den Prozessschutz vor dem Laden der Kommandozeile ein |
 | `main.py` | Der Einstieg. Argumentbaum, Projekt öffnen, auswerten, Befunde und Bericht ausgeben |
+
+Skripteinstieg und `python -m app.cli.main` installieren denselben idempotenten
+Absturzschutz vor den schweren Kernimports. Ein normaler Modulimport ändert
+keine Prozesshooks. Unbehandelte Python- und Threadfehler sowie der letzte
+Fehlerfang im CLI-Befehl verwenden `report.exception_report()`; auch ein
+Fehler beim Schreiben des Berichts lässt die ursprüngliche Diagnose und den
+Fehlerausgang erhalten. Qt wird für den Bericht nicht geladen.
 
 Die festen Befehle daneben — `ops`, `docs`, `profiles`, `new`, `info`,
 `import`, `run`, `undo`, `export` — sind die, die kein Register erzeugen kann,

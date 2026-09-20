@@ -137,7 +137,7 @@ dev = [
 ]
 
 [project.scripts]
-solidon3d = "app.cli.main:main"
+solidon3d = "app.cli:launch"
 
 [tool.setuptools.packages.find]
 include = ["app*"]

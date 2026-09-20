@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import dataclasses
 import hashlib
-import importlib
 import json
 import math
 import os
@@ -50,7 +49,7 @@ from app.core.ingest.loader import (
 from app.core.knowledge.parts import check as part_check
 from app.core.knowledge.parts import recipe as part_recipes
 from app.core.log import get_logger
-from app.core.paths import ensure_dir, opened_path, user_data_dir
+from app.core.paths import ensure_dir, lock_file, opened_path, user_data_dir
 from app.core.scene.gathered import GATHERED_DIR, externalise, gathered_path, inline, references
 from app.core.scene.migrations import FORMAT_VERSION, migrate
 from app.core.scene.serialise import (
@@ -62,12 +61,6 @@ from app.core.scene.serialise import (
 )
 from app.core.types import Document, Finding, Report, Source, SourceId
 from app.i18n import TranslatableText, _
-
-_windows_msvcrt: Any = None
-if os.name == "nt":
-    import msvcrt as _native_msvcrt
-
-    _windows_msvcrt = _native_msvcrt
 
 _log = get_logger(__name__)
 
@@ -1691,12 +1684,7 @@ def recovery_token_of(candidate: Path) -> str | None:
 
 def _lock_recovery(stream: BinaryIO) -> None:
     """Belegt die Lebensdauersperre ohne Warten; das Schließen gibt sie frei."""
-    stream.seek(0)
-    if os.name == "nt":
-        _windows_msvcrt.locking(stream.fileno(), _windows_msvcrt.LK_NBLCK, 1)
-    else:
-        module = importlib.import_module("fcntl")
-        module.flock(stream.fileno(), module.LOCK_EX | module.LOCK_NB)
+    lock_file(stream)
 
 
 def claim_recovery(token: str) -> BinaryIO:

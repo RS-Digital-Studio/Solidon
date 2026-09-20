@@ -18,7 +18,6 @@ ohne die Leitung auskommen, die gerade nicht wollte.
 
 from __future__ import annotations
 
-import traceback
 from contextlib import suppress
 from copy import deepcopy
 from pathlib import Path
@@ -330,7 +329,7 @@ class SupportDialog(QDialog):
         self._session_data: bytes | None = None
         self._session_description = ""
         self._session_worker: _SessionWorker | None = None
-        self._log_data: bytes | None = None
+        self._logs: tuple[tuple[str, bytes], ...] | None = None
         self._closed = False
         self._worker: _SendWorker | None = None
         self._leash = WorkerLeash(self)
@@ -341,7 +340,7 @@ class SupportDialog(QDialog):
         self._mail_portal_path = ""
         self._mail_portal_watcher: QDBusPendingCallWatcher | None = None
 
-        self.detail = detail or ("".join(traceback.format_exception(error)) if error else "")
+        self.detail = detail or (reports.exception_report(error).traceback if error else "")
 
         self.setWindowTitle(tr("Fehlerbericht") if kind == KIND_CRASH else tr("Rückmeldung senden"))
         self.setMinimumWidth(620)
@@ -447,6 +446,10 @@ class SupportDialog(QDialog):
         self.with_log = QCheckBox(
             tr("Protokoll anhängen — es kann Dateipfade Ihres Rechners enthalten"), self
         )
+        self.with_log.setToolTip(
+            tr("Vorhandene Absturzprotokolle werden ebenfalls angezeigt und angehängt.")
+        )
+        self.with_log.setAccessibleDescription(self.with_log.toolTip())
         self.with_log.setChecked(True)
 
         for box in (self.with_shot, self.with_session, self.with_log):
@@ -538,18 +541,24 @@ class SupportDialog(QDialog):
             if data:
                 found.append(support.Attachment("sitzung.p3d", data, self._session_description))
         if self.with_log.isChecked():
-            if self._log_data is None:
+            if self._logs is None:
                 try:
-                    self._log_data = log_tail()
+                    self._logs = reports.diagnostic_attachments(
+                        normal=log_tail(), directory=log_path().parent
+                    )
                 except OSError as problem:
                     _log.warning("log could not be attached: %s", problem)
                     self.state.setText(
                         tr("Das Protokoll ließ sich nicht anhängen — der Rest geht trotzdem.")
                     )
-                    self._log_data = b""
-            data = self._log_data
-            if data:
-                found.append(support.Attachment("protokoll.txt", data, tr("Die letzten Zeilen")))
+                    self._logs = ()
+            for name, data in self._logs:
+                description = (
+                    tr("Die letzten Zeilen")
+                    if name == "protokoll.txt"
+                    else tr("Lokale Absturzprotokolle ohne lokale Variablen oder Projektgeometrie")
+                )
+                found.append(support.Attachment(name, data, description))
         return found
 
     def _session_note(self) -> str:

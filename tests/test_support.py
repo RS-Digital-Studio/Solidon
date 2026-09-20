@@ -524,3 +524,323 @@ def test_two_reports_in_the_same_second_get_two_folders(tmp_path: Path) -> None:
         second / "bericht.txt"
     ).read_text(encoding="utf-8")
     assert "erster" in (first / "bericht.txt").read_text(encoding="utf-8")
+
+
+def test_an_exception_report_keeps_the_cause_without_source_or_local_values() -> None:
+    """Automatische Diagnose sammelt den Stapel, keine Variablen oder Quellzeilen."""
+    private_local = "DIESE_LOKALE_VARIABLE_REIST_NICHT_MIT"
+    try:
+        try:
+            raise ValueError("Authorization: Bearer verborgen")
+        except ValueError as cause:
+            raise RuntimeError("https://person:passwort@example.org/a?token=geheim") from cause
+    except RuntimeError as problem:
+        report = report_module.exception_report(problem, context="CLI")
+
+    assert private_local not in report.traceback
+    assert "raise RuntimeError" not in report.traceback
+    assert "raise ValueError" not in report.traceback
+    assert "test_an_exception_report_keeps_the_cause" in report.traceback
+    assert "ValueError" in report.traceback and "RuntimeError" in report.traceback
+    for secret in ("verborgen", "person", "passwort", "geheim"):
+        assert secret not in report.traceback + report.detail
+    assert not report.include_project and not report.digest
+
+
+def _crash_child(
+    tmp_path: Path, body: str, *, installed: bool = True
+) -> subprocess.CompletedProcess[str]:
+    """Ein echter kopfloser Prozess mit vollständig getrenntem Nutzerprofil."""
+    import os
+    import sys
+    import textwrap
+
+    environment = dict(os.environ)
+    for key in ("APPDATA", "LOCALAPPDATA", "HOME", "XDG_DATA_HOME", "XDG_CONFIG_HOME"):
+        environment[key] = str(tmp_path)
+    environment["PYTHONUTF8"] = "1"
+    setup = """
+import os
+import sys
+from pathlib import Path
+from app.core.log import install_crash_logging
+if os.name == "nt":
+    import ctypes
+    ctypes.windll.kernel32.SetErrorMode(0x0001 | 0x0002)
+"""
+    if installed:
+        setup += """
+capture = install_crash_logging()
+assert capture is not None
+print(capture, flush=True)
+"""
+    return subprocess.run(
+        [sys.executable, "-c", setup + textwrap.dedent(body)],
+        cwd=Path(__file__).resolve().parent.parent,
+        env=environment,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=30,
+    )
+
+
+@pytest.mark.parametrize("threaded", [False, True])
+def test_unhandled_exceptions_reach_the_local_report_from_a_real_process(
+    tmp_path: Path, threaded: bool
+) -> None:
+    """Hauptfaden und normale Python-Fäden teilen denselben redigierten Bericht."""
+    body = """
+def fail():
+    private_local = "LOKALE_GEOMETRIE_BLEIBT_PRIVAT"
+    raise RuntimeError("Authorization: Bearer verborgen")
+"""
+    body += (
+        "import threading\nworker = threading.Thread(target=fail)\nworker.start()\nworker.join()\n"
+        if threaded
+        else "fail()\n"
+    )
+    done = _crash_child(tmp_path, body)
+    assert done.returncode == (0 if threaded else 1), done.stderr
+    raw = Path(done.stdout.splitlines()[0]).read_text(encoding="utf-8")
+    assert "RuntimeError" in raw and "fail" in raw
+    assert "verborgen" not in raw + done.stderr
+    reports = list(tmp_path.rglob("bericht.txt"))
+    assert len(reports) == 1
+    written = reports[0].read_text(encoding="utf-8")
+    assert "RuntimeError" in written and "fail" in written
+    assert "verborgen" not in written and "LOKALE_GEOMETRIE_BLEIBT_PRIVAT" not in written
+    assert not list(reports[0].parent.glob("*.p3d"))
+
+
+def test_a_broken_report_writer_does_not_replace_the_original_exception(tmp_path: Path) -> None:
+    done = _crash_child(
+        tmp_path,
+        """
+from app.core import report
+def refuse(*args, **kwargs):
+    raise OSError("Berichtsordner schreibgeschützt")
+report.write = refuse
+raise RuntimeError("ursprünglicher Fehler")
+""",
+    )
+    assert done.returncode == 1
+    raw = Path(done.stdout.splitlines()[0]).read_text(encoding="utf-8")
+    assert "RuntimeError: ursprünglicher Fehler" in raw
+    assert "ursprünglicher Fehler" in done.stderr
+    assert "Berichtsordner schreibgeschützt" in done.stderr
+
+
+def test_a_native_crash_still_writes_after_logging_has_shut_down(tmp_path: Path) -> None:
+    """Der eigene Deskriptor überlebt den normalen Logger und den Python-Abbau."""
+    done = _crash_child(
+        tmp_path,
+        """
+import atexit
+import faulthandler
+import logging
+def crash_at_shutdown():
+    logging.shutdown()
+    faulthandler._sigsegv()
+atexit.register(crash_at_shutdown)
+""",
+    )
+    assert done.returncode != 0
+    raw = Path(done.stdout.splitlines()[0]).read_text(encoding="utf-8", errors="replace")
+    assert "crash_at_shutdown" in raw
+    assert "Fatal Python error" in raw or "Windows fatal exception" in raw
+
+
+def test_repeated_installation_uses_one_file_and_leaves_clean_runs_empty(tmp_path: Path) -> None:
+    done = _crash_child(
+        tmp_path,
+        """
+assert install_crash_logging() == capture
+assert "PySide6" not in sys.modules
+""",
+    )
+    assert done.returncode == 0, done.stderr
+    target = Path(done.stdout.splitlines()[0])
+    assert target.read_bytes() == b""
+    assert list(target.parent.glob("crash-*.log")) == [target]
+
+
+def test_diagnostic_versions_never_import_a_native_package(tmp_path: Path) -> None:
+    done = _crash_child(
+        tmp_path,
+        """
+from app.core import report
+import importlib.abc
+class RefuseNative(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname.split('.')[0] in report.REPORTED_PACKAGES:
+            raise AssertionError('Die Diagnose darf kein natives Paket importieren')
+sys.meta_path.insert(0, RefuseNative())
+versions = report.environment()
+assert versions['python'] and versions['app']
+assert all(name not in sys.modules for name in report.REPORTED_PACKAGES)
+""",
+    )
+    assert done.returncode == 0, done.stderr
+    assert Path(done.stdout.splitlines()[0]).read_bytes() == b""
+
+
+def test_crash_attachments_are_redacted_bounded_and_frozen(tmp_path: Path) -> None:
+    recent = tmp_path / "crash-20260920T120000-0.4.4-123-0000000000000001.log"
+    empty = tmp_path / "crash-20260920T130000-0.4.4-123-0000000000000002.log"
+    ignored = tmp_path / "crash-mein-eigener-text.log"
+    empty.write_bytes(b"")
+    ignored.write_text("nicht automatisch anhängen", encoding="utf-8")
+    recent.write_text(
+        ("alter Eintrag\n" * 100_000) + "RuntimeError: Authorization: Bearer geheim\n",
+        encoding="utf-8",
+    )
+    frozen = report_module.diagnostic_attachments(normal=b"normal", directory=tmp_path)
+    attached = dict(frozen)
+    raw = attached["absturzprotokoll.txt"]
+    assert len(raw) <= report_module.LOG_TAIL_MAX_BYTES
+    assert b"RuntimeError" in raw and b"geheim" not in raw
+    assert "gekürzt" in raw.decode("utf-8")
+    assert empty.name.encode() not in raw and ignored.read_bytes() not in raw
+    recent.write_text("geänderter Stand", encoding="utf-8")
+    assert dict(frozen)["absturzprotokoll.txt"] == raw
+    assert attached["protokoll.txt"] == b"normal"
+
+
+def test_a_partial_crash_line_cannot_lose_the_secret_prefix(tmp_path: Path) -> None:
+    recent = tmp_path / "crash-20260920T120000-0.4.4-123-0000000000000001.log"
+    recent.write_text(
+        "Authorization: Bearer " + "zugangsdaten" * 150_000 + "\nletzter vollständiger Eintrag\n",
+        encoding="utf-8",
+    )
+    text = report_module.crash_tail(tmp_path).decode("utf-8")
+    assert "zugangsdaten" not in text
+    assert "letzter vollständiger Eintrag" in text and "gekürzt" in text
+
+
+def test_crash_retention_keeps_live_files_and_bounds_only_automatic_reports(tmp_path: Path) -> None:
+    """Ein zweiter Prozess darf weder den offenen Deskriptor noch bewusste Berichte löschen."""
+    done = _crash_child(
+        tmp_path,
+        """
+from app.core import log, report
+for number in range(8):
+    old = capture.parent / f'crash-2000010{number + 1}T120000-0.4.4-123-{number:016x}.log'
+    old.write_text(f'alter Absturz {number}', encoding='utf-8')
+    automatic = old.with_suffix('') / 'bericht-20000101-120000'
+    automatic.mkdir(parents=True)
+    (automatic / 'bericht.txt').write_text('automatisch', encoding='utf-8')
+empty = capture.parent / 'crash-20000101T010000-0.4.4-123-0000000000000020.log'
+empty.write_bytes(b'')
+manual = capture.parent / 'meine-diagnose.txt'
+manual.write_text('behalten', encoding='utf-8')
+import subprocess
+probe = subprocess.run(
+    [sys.executable, '-c',
+     'from app.core.log import install_crash_logging; install_crash_logging()'],
+    check=True,
+)
+assert capture.exists() and capture.read_bytes() == b''
+old = [path for path in log.crash_paths(capture.parent) if path.name.startswith('crash-2000')]
+assert len(old) == 5
+assert not empty.exists()
+assert manual.read_text(encoding='utf-8') == 'behalten'
+for number in range(8):
+    try:
+        raise RuntimeError(f'Fehler {number}')
+    except RuntimeError as problem:
+        sys.excepthook(type(problem), problem, problem.__traceback__)
+folders = list(capture.with_suffix('').glob('bericht-*'))
+assert len(folders) == 5
+assert 'Fehler 7' in capture.read_text(encoding='utf-8')
+""",
+    )
+    assert done.returncode == 0, done.stderr
+
+
+def test_a_broken_exception_message_is_still_reported(tmp_path: Path) -> None:
+    done = _crash_child(
+        tmp_path,
+        """
+class UnreadableError(Exception):
+    def __str__(self):
+        raise ValueError('nicht darstellbar')
+raise UnreadableError()
+""",
+    )
+    assert done.returncode == 1
+    assert "UnreadableError" in Path(done.stdout.splitlines()[0]).read_text(encoding="utf-8")
+    assert "Error in sys.excepthook" not in done.stderr
+
+
+def test_system_exit_in_a_thread_is_not_recorded_as_a_crash(tmp_path: Path) -> None:
+    done = _crash_child(
+        tmp_path,
+        """
+import threading
+worker = threading.Thread(target=lambda: sys.exit(2))
+worker.start()
+worker.join()
+""",
+    )
+    assert done.returncode == 0, done.stderr
+    assert Path(done.stdout.splitlines()[0]).read_bytes() == b""
+
+
+@pytest.mark.parametrize("failure", ["open", "enable", "after_enable"])
+def test_failed_crash_setup_removes_only_its_own_new_files(tmp_path: Path, failure: str) -> None:
+    done = _crash_child(
+        tmp_path,
+        f"""
+from app.core import log
+from app.core.paths import user_log_dir
+folder = user_log_dir()
+folder.mkdir(parents=True)
+unrelated = folder / 'meine-datei.lock'
+unrelated.write_text('behalten', encoding='utf-8')
+original_open = os.open
+original_enable = log.faulthandler.enable
+def refused_open(path, *args, **kwargs):
+    if str(path).endswith('.log'):
+        raise OSError('schreibgeschützt')
+    return original_open(path, *args, **kwargs)
+def refused_enable(*args, **kwargs):
+    if {failure!r} == 'after_enable':
+        original_enable(*args, **kwargs)
+    raise RuntimeError('Handler nicht verfügbar')
+if {failure!r} == 'open':
+    log.os.open = refused_open
+else:
+    log.faulthandler.enable = refused_enable
+assert install_crash_logging() is None
+if {failure!r} != 'open':
+    assert not log.faulthandler.is_enabled()
+assert list(folder.iterdir()) == [unrelated]
+raise ValueError('ursprünglicher Fehler')
+""",
+        installed=False,
+    )
+    assert done.returncode == 1
+    assert "ursprünglicher Fehler" in done.stderr
+    assert "Error in sys.excepthook" not in done.stderr
+
+
+def test_nested_exception_groups_have_one_shared_construction_budget() -> None:
+    from app.core import log
+
+    visited: list[bool] = []
+
+    class CountedError(Exception):
+        def __str__(self) -> str:
+            visited.append(True)
+            return "begrenzter Fehlertext"
+
+    error = ExceptionGroup(
+        "viele Fehler",
+        [ExceptionGroup("ein Zweig", [CountedError() for _ in range(20)]) for _ in range(20)],
+    )
+    text = log.exception_text(error)
+    assert 0 < len(visited) <= 100
+    assert "ExceptionGroup" in text and "CountedError" in text
+    assert "…" in text
+    assert len(text) <= 2 * 1024 * 1024

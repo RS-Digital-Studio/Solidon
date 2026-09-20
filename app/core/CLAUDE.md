@@ -66,6 +66,23 @@ heraus nachinstallieren, §36) · `network.py` (CA-Satz für macOS und Pakete oh
 `tools.py` (externe Programme) · `log.py`
 (lokales Protokoll, §33.2)
 
+`log.install_crash_logging()` wird ausdrücklich beim Prozessstart aufgerufen,
+nicht beim Modulimport. `faulthandler` hält einen eigenen rohen Deskriptor bis
+zum Prozessende; Logger-Rotation, Qt-Ende und Python-Abbau schließen ihn nicht.
+Unbehandelte Haupt- und Nebenfadenfehler benutzen mit der CLI denselben
+redigierten Bericht aus `report.exception_report()`, ohne Quellzeilen oder
+lokale Variablen. Versionsauskunft liest geladene Module und Paketmetadaten,
+ohne im Fehlerpfad native Bibliotheken nachzuladen.
+
+Absturzdateien liegen unter den lokalen Protokollen. `paths.lock_file()` ist
+die gemeinsame Lebensdauersperre für Wiederherstellung und Absturzprotokoll:
+fünf beendete Läufe bleiben erhalten, lebende Prozesse bleiben unangetastet.
+Leere beendete Dateien werden entfernt und sind kein Absturznachweis. Die
+automatischen Berichte bleiben je Lauf auf fünf begrenzt; bewusst abgelegte
+Berichte werden nicht aufgeräumt. `report.diagnostic_attachments()` erzeugt
+einen begrenzten, unveränderlichen Schnappschuss aus normalem Protokoll und
+vorhandenen Absturzstapeln. Versand bleibt ausschließlich eine Nutzerhandlung.
+
 Die Programmsuche bietet dieselben Quellen in Einzahl und Mehrzahl:
 Windows-App-Paths, Flatpak-Exporte, Installationsordner, AppImages und den
 Host-PATH. `find_programs()` sammelt jede passende Installation, während

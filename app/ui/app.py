@@ -12,6 +12,10 @@ from __future__ import annotations
 # und das gebaute Paket startet diese Datei als Skript — dann wäre ``app.ui``
 # erst hinter ``PySide6`` an der Reihe. Der Block darunter ist ein eigener.
 import app.ui  # noqa: F401
+from app.core.log import install_crash_logging
+
+if __name__ == "__main__":
+    install_crash_logging()
 
 # isort: split
 
@@ -391,6 +395,7 @@ class _LanguageSwitch(QObject):
 
 
 def main(argv: list[str] | None = None) -> int:
+    install_crash_logging()
     # Vor dem ersten möglichen HTTPS-Aufruf: Im macOS-Paket zeigen OpenSSLs
     # Vorgabepfade sonst auf die Python-Installation des Bauservers. Der
     # mitgelieferte CA-Satz gilt für Update, Support und Aktivierung gemeinsam.

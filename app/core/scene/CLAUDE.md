@@ -74,6 +74,8 @@ vom Betriebssystem gehaltene Eigentumssperre. Solange deren Sitzung lebt,
 bietet `unsaved_recoveries()` sie anderen Sitzungen nicht an; auch allgemeines
 Verwerfen löscht sie nicht. Der eigene Sitzungstoken erlaubt das Aufräumen.
 Prozessende gibt die Sperre frei, auch wenn keine Aufräumfunktion mehr läuft.
+Das gemeinsame Primitiv `paths.lock_file()` trägt auch die Lebensdauersperre
+des Absturzprotokolls; `_lock_recovery()` bleibt der bisherige Projekteinstieg.
 
 Beim Prüfen verlorener Referenzen benennt `pending_references()` den gerade
 anstehenden Schritt. Historisch bereits verbrauchte und erst später erzeugte

@@ -1340,6 +1340,103 @@ def test_support_keeps_the_previewed_log_for_sending(
         dialog.close()
 
 
+@pytest.mark.parametrize("initially_empty", [False, True])
+@pytest.mark.parametrize("finish", ["send", "folder"])
+def test_support_freezes_crash_attachments_for_sending_and_folder(
+    qt_app: QApplication,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    initially_empty: bool,
+    finish: str,
+) -> None:
+    """Auch ein leerer Absturzanhang wächst nach der sichtbaren Vorschau nicht nach."""
+    from app.ui import support_dialog
+
+    ordinary = tmp_path / "app.log"
+    ordinary.write_bytes(b"angezeigtes Protokoll")
+    crash = tmp_path / "crash-20260920T120000-0.4.4-123-0000000000000001.log"
+    crash.write_bytes(b"" if initially_empty else b"angezeigter Absturz")
+    monkeypatch.setattr(support_dialog, "log_path", lambda: ordinary)
+    monkeypatch.setattr(reports, "user_data_dir", lambda: tmp_path / "reports")
+    monkeypatch.setattr(support_dialog.QDesktopServices, "openUrl", lambda url: True)
+    sent: list[bytes] = []
+    dialog = SupportDialog(
+        message="Fehler",
+        sender=lambda url, content_type, body: sent.append(body) or {"ok": True},
+    )
+    try:
+        frozen = {entry.name: entry.data for entry in dialog.ticket().attachments}
+        assert ("absturzprotokoll.txt" in frozen) is not initially_empty
+        if not initially_empty:
+            assert "angezeigter Absturz" in dialog.preview.toPlainText()
+        ordinary.write_bytes(b"heimlich erneuertes Protokoll")
+        crash.write_bytes(b"heimlich erneuerter Absturz")
+        dialog.with_log.setChecked(False)
+        dialog.with_log.setChecked(True)
+        dialog.message.setPlainText("Neue Beschreibung")
+        assert {entry.name: entry.data for entry in dialog.ticket().attachments} == frozen
+        if finish == "send":
+            dialog._start()
+            assert dialog._worker is not None and dialog._worker.wait(5000)
+            qt_app.processEvents()
+            assert sent and b"heimlich" not in sent[0]
+            for data in frozen.values():
+                assert data in sent[0]
+        else:
+            assert dialog._write_folder() and dialog.written is not None
+            for name, data in frozen.items():
+                assert (dialog.written / name).read_bytes() == data
+            assert (dialog.written / "absturzprotokoll.txt").exists() is not initially_empty
+    finally:
+        dialog.release()
+        dialog.close()
+
+
+@pytest.mark.parametrize("entry", ["module", "package_script"])
+def test_desktop_entry_captures_errors_before_the_first_qt_import(
+    tmp_path: Path, entry: str
+) -> None:
+    """Der Modul- und der PyInstaller-Skripteinstieg richten die Diagnose vor Qt ein."""
+    import os
+    import subprocess
+    import sys
+
+    root = Path(__file__).resolve().parent.parent
+    environment = dict(os.environ)
+    for key in ("APPDATA", "LOCALAPPDATA", "HOME", "XDG_DATA_HOME", "XDG_CONFIG_HOME"):
+        environment[key] = str(tmp_path)
+    environment["PYTHONUTF8"] = "1"
+    source = """
+import importlib.abc
+import runpy
+import sys
+class RefuseQt(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname == 'PySide6':
+            raise RuntimeError('Qt konnte nicht geladen werden')
+sys.meta_path.insert(0, RefuseQt())
+"""
+    source += (
+        "runpy.run_module('app.ui.app', run_name='__main__')"
+        if entry == "module"
+        else "runpy.run_path('app/ui/app.py', run_name='__main__')"
+    )
+    done = subprocess.run(
+        [sys.executable, "-c", source],
+        cwd=root,
+        env=environment,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=30,
+    )
+    assert done.returncode == 1, done.stderr
+    captures = list(tmp_path.rglob("crash-*.log"))
+    assert len(captures) == 1
+    assert "Qt konnte nicht geladen werden" in captures[0].read_text(encoding="utf-8")
+    assert len(list(tmp_path.rglob("bericht.txt"))) == 1
+
+
 @pytest.mark.parametrize("finish", ["ready", "untick", "close", "failure"])
 def test_preparing_a_support_session_keeps_the_dialog_responsive(
     qt_app: QApplication, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, finish: str

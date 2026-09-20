@@ -12,6 +12,13 @@ einem Dialog und einer Statusleiste umsetzt.
 
 from __future__ import annotations
 
+from app.core.log import install_crash_logging
+
+if __name__ == "__main__":
+    install_crash_logging()
+
+# isort: split
+
 import argparse
 import difflib
 import sys
@@ -811,6 +818,7 @@ def _install_language() -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    install_crash_logging()
     _speak_utf8()
     _install_language()
     if _demo_is_over():
@@ -868,23 +876,16 @@ def main(argv: list[str] | None = None) -> int:
         # Ein Stapelabzug ist keine Antwort an einen Kunden (Regel 17): ein
         # Satz, der Grund, und der Bericht als Ordner — geschrieben wie im
         # Fenster, gesendet wird nichts (§37.2).
-        import traceback
-
         from app.core.errors import InternalError
-        from app.core.report import ErrorReport, write
+        from app.core.report import exception_report, write
 
+        report = exception_report(problem, context="CLI")
         print(file=sys.stderr)
         print(str(InternalError.default_title), file=sys.stderr)
-        print(f"  {type(problem).__name__}: {problem}", file=sys.stderr)
+        print(f"  {type(problem).__name__}: {report.detail}", file=sys.stderr)
         try:
-            folder = write(
-                ErrorReport(
-                    summary=f"CLI: {type(problem).__name__}",
-                    detail=str(problem),
-                    traceback=traceback.format_exc(),
-                )
-            )
-        except OSError as denied:
+            folder = write(report)
+        except Exception as denied:
             # **Das letzte Netz bekommt kein Loch.** Ein ``pass`` hier hieß:
             # ein Satz, ein Grund — und dann nichts, was jemand tun kann
             # (Regel 17). Wer den Bericht nicht schreiben kann, hat trotzdem
@@ -892,7 +893,11 @@ def main(argv: list[str] | None = None) -> int:
             # dieser Ausgabe.
             from app.core.paths import user_log_dir
 
-            print(f"  {tr('Der Fehlerbericht ließ sich nicht ablegen')}: {denied}", file=sys.stderr)
+            print(
+                f"  {tr('Der Fehlerbericht ließ sich nicht ablegen')}: "
+                f"{exception_report(denied).detail}",
+                file=sys.stderr,
+            )
             print(f"  - {tr('Das Protokoll liegt hier')}: {user_log_dir()}", file=sys.stderr)
             print(
                 f"  - {tr('Damit hilft der Support weiter')}: {SUPPORT_ADDRESS}",

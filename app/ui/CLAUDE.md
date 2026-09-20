@@ -499,6 +499,18 @@ Hauptfenster, §2.5) · `splash.py` · `first_run.py` (der erste Start) ·
 `start_screen.py` (die ersten fünf Minuten, §2.3) · `header.py` (Projektname,
 Druckerwechsel und die tatsächlich in der Szene verwendeten Filamente)
 
+Der Modul- und der Paketstart in `app.py` richten den gemeinsamen lokalen
+Absturzschutz vor dem ersten Qt-Import ein. Ein bloßer Import installiert
+keine Prozesshooks; der programmatische `main()`-Aufruf ergänzt denselben
+idempotenten Start. Qt-Arbeiter behalten ihren vorhandenen Fehlerweg, ohne
+einen zweiten Bericht über den Prozessschutz auszulösen.
+
+Der Supportdialog hält normale Protokollzeilen und vorhandene Absturzstapel
+als gemeinsamen Schnappschuss aus `report.diagnostic_attachments()` fest.
+Vorschau, Versand und Ablage benutzen genau diese Bytes, auch nach Abwahl
+und erneutem Anhaken und auch bei anfangs leeren Dateien. Der Nutzer sieht
+die Anhänge vor dem Senden; ein Absturz löst keinen Versand aus.
+
 **Brücke zum Kern**
 
 `session.py` (§7, §15.6) · `leash.py` (die Halteleine für Arbeiter-Threads — und für Ereignisfilter,

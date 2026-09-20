@@ -16,6 +16,12 @@ from app.core.scene.project import load
 MESHES = Path(__file__).parent / "data" / "meshes"
 
 
+@pytest.fixture(autouse=True)
+def keep_command_unit_tests_inside_the_test_process(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Prozessweite Hooks prüfen die echten Unterprozesse; Befehlstests ändern pytest nicht."""
+    monkeypatch.setattr("app.cli.main.install_crash_logging", lambda: None)
+
+
 def test_every_operation_is_reachable_from_the_command_line(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -761,3 +767,87 @@ def test_scad_numeric_values_are_not_reinterpreted_as_boolean(raw: str) -> None:
     value = _as_value(raw)
     assert type(value) is int
     assert value == int(raw)
+
+
+def _entry_process(tmp_path: Path, entry: str, *, fail_import: bool = False):
+    """Fährt den echten Moduleinstieg oder den konfigurierten Skriptaufruf kopflos."""
+    import os
+    import subprocess
+    import sys
+    import tomllib
+
+    root = Path(__file__).resolve().parent.parent
+    environment = dict(os.environ)
+    for key in ("APPDATA", "LOCALAPPDATA", "HOME", "XDG_DATA_HOME", "XDG_CONFIG_HOME"):
+        environment[key] = str(tmp_path)
+    environment["PYTHONUTF8"] = "1"
+    environment["PYTHONPATH"] = str(tmp_path) + os.pathsep + str(root)
+    startup = """
+import atexit
+import sys
+atexit.register(lambda: print('HEADLESS=' + str('PySide6' not in sys.modules), flush=True))
+"""
+    if fail_import:
+        startup += """
+import importlib.abc
+class RefuseImport(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname == 'app.core.activation':
+            raise RuntimeError('Authorization: Bearer beim_laden_geheim')
+sys.meta_path.insert(0, RefuseImport())
+"""
+    (tmp_path / "sitecustomize.py").write_text(startup, encoding="utf-8")
+    if entry == "module":
+        arguments = ["-m", "app.cli.main", "ops"]
+    elif entry == "script":
+        configured = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
+        module, function = configured["project"]["scripts"]["solidon3d"].split(":")
+        arguments = [
+            "-c",
+            f"from {module} import {function}; raise SystemExit({function}())",
+            "ops",
+        ]
+    else:
+        arguments = [
+            "-c",
+            "import sys, threading; "
+            "before=(sys.excepthook,threading.excepthook); "
+            "import app.cli, app.cli.main; "
+            "assert before == (sys.excepthook,threading.excepthook)",
+        ]
+    return subprocess.run(
+        [sys.executable, *arguments],
+        cwd=root,
+        env=environment,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=45,
+    )
+
+
+@pytest.mark.parametrize("entry", ["module", "script"])
+@pytest.mark.parametrize("fail_import", [False, True])
+def test_both_cli_entries_capture_early_failures_without_loading_qt(
+    tmp_path: Path, entry: str, fail_import: bool
+) -> None:
+    done = _entry_process(tmp_path, entry, fail_import=fail_import)
+    assert done.returncode == (1 if fail_import else 0), done.stdout + done.stderr
+    assert "HEADLESS=True" in done.stdout
+    captures = list(tmp_path.rglob("crash-*.log"))
+    assert len(captures) == 1
+    written = captures[0].read_text(encoding="utf-8")
+    if fail_import:
+        assert "RuntimeError" in written and "find_spec" in written
+        assert "beim_laden_geheim" not in written + done.stderr
+        assert len(list(tmp_path.rglob("bericht.txt"))) == 1
+    else:
+        assert written == ""
+        assert "create_box" in done.stdout
+
+
+def test_importing_cli_modules_does_not_install_process_hooks(tmp_path: Path) -> None:
+    done = _entry_process(tmp_path, "import")
+    assert done.returncode == 0, done.stderr
+    assert "HEADLESS=True" in done.stdout
+    assert not list(tmp_path.rglob("crash-*.log"))

@@ -22,10 +22,11 @@ import sys
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
+from types import TracebackType
 from typing import Final
 
 from app.branding import APP_NAME, APP_VERSION, ENVIRONMENT_PREFIX
-from app.core.log import get_logger, log_path
+from app.core.log import crash_paths, exception_text, get_logger, log_path, redact
 from app.core.paths import ensure_dir, user_data_dir
 from app.i18n import _, get_language, tr
 
@@ -78,6 +79,22 @@ class ErrorReport:
         return self.include_project
 
 
+def exception_report(
+    error: BaseException, *, traceback: TracebackType | None = None, context: str = ""
+) -> ErrorReport:
+    """Gemeinsame redigierte Diagnose für CLI und unbehandelte Prozessfehler."""
+    try:
+        detail = redact(error)
+    except Exception:
+        detail = "<Ausnahmetext nicht lesbar>"
+    name = redact(type(error).__name__)
+    return ErrorReport(
+        summary=f"{redact(context)}: {name}" if context else name,
+        detail=detail,
+        traceback=exception_text(error, traceback),
+    )
+
+
 #: Die Bibliotheken, deren Fassung ein Bericht nennt. Reihenfolge wie im Text.
 REPORTED_PACKAGES: Final = ("trimesh", "manifold3d", "numpy", "scipy", "shapely", "PySide6")
 
@@ -115,13 +132,11 @@ def _version_of(name: str) -> str:
     die Funktion sammelt nur Dateien *innerhalb* des Paketverzeichnisses, und
     von 24 beziehungsweise 495 Einträgen trägt keiner eine ``dist-info``.
     """
-    import importlib
     import importlib.metadata as metadata
 
-    try:
-        module = importlib.import_module(name)
-    except Exception:  # pragma: no cover - ein fehlendes Paket ist der Normalfall dieses Zweigs
-        module = None
+    # Ein Fehler beim Laden eines nativen Pakets darf nicht denselben Import
+    # nochmals auslösen. Geladene Module bewahren ihre Fassung auch im Paket.
+    module = sys.modules.get(name)
     if module is not None:
         runtime = getattr(module, "__version__", "")
         if isinstance(runtime, str) and runtime:
@@ -303,6 +318,55 @@ def log_tail(source: Path | None = None) -> bytes:
 
 def _copy_log(target: Path) -> None:
     """Ordnerbericht und Versand enthalten denselben begrenzten Protokollausschnitt."""
-    data = log_tail()
-    if data:
-        (target / "protokoll.txt").write_bytes(data)
+    for name, data in diagnostic_attachments():
+        (target / name).write_bytes(data)
+
+
+def crash_tail(directory: Path | None = None) -> bytes:
+    """Begrenzt vorhandene Absturzstapel; ein leerer sauberer Lauf reist nicht mit."""
+    remaining = LOG_TAIL_MAX_BYTES
+    sections: list[str] = []
+    for path in crash_paths(directory):
+        if remaining <= 0:
+            break
+        try:
+            with path.open("rb") as stream:
+                size = stream.seek(0, 2)
+                if not size:
+                    continue
+                stream.seek(max(0, size - remaining))
+                raw = stream.read(remaining)
+        except FileNotFoundError:
+            continue
+        if size > remaining:
+            # Ein angeschnittener Wert könnte sein Kennwort-Präfix verloren
+            # haben und wäre dann nicht mehr zuverlässig redigierbar.
+            raw = raw.partition(b"\n")[2]
+        text = "\n".join(
+            redact(line) for line in raw.decode("utf-8", errors="replace").splitlines()
+        )
+        heading = f"--- {path.name} ---\n"
+        if size > remaining:
+            heading += str(_("Das Absturzprotokoll wurde auf die letzten Einträge gekürzt.")) + "\n"
+        prefix = heading.encode("utf-8")
+        budget = remaining - len(prefix)
+        if budget <= 0:
+            break
+        content = (text + "\n").encode("utf-8")
+        section = prefix + content[-budget:]
+        sections.append(section.decode("utf-8", errors="ignore"))
+        remaining -= len(section)
+    return "".join(sections).encode("utf-8")
+
+
+def diagnostic_attachments(
+    *, normal: bytes | None = None, directory: Path | None = None
+) -> tuple[tuple[str, bytes], ...]:
+    """Ein unveränderlicher Schnappschuss für Vorschau, Ablage und bewussten Versand."""
+    ordinary = normal if normal is not None else log_tail()
+    crashes = crash_tail(directory)
+    return tuple(
+        (name, data)
+        for name, data in (("protokoll.txt", ordinary), ("absturzprotokoll.txt", crashes))
+        if data
+    )
