@@ -50,9 +50,13 @@ Paket bedeuten:
   Änderung an Abhängigkeiten, Hooks, `hiddenimports`, `datas`, `binaries`
   oder `excludes` muss jede Zielplattform nativ bauen — der Vorschautest
   reicht nicht.
-- **Ändert sich eine der Lizenz-Grenzdateien, wird das Manifest neu
-  gebaut**, nicht der rote Test weggedrückt: `test_packaging` meldet dann
-  „dein lokales Manifest ist alt", nicht „Repository kaputt".
+- **Vor dem Paketieren müssen Lizenzmanifest und Prüfmodul die aktuellen
+  Grenzdateien abdecken.** Nach einer Änderung wird dieses Paar für den
+  Paketbau gemeinsam neu erzeugt; ein altes Manifest wird weder passend
+  geschrieben noch seine Prüfung umgangen. Entwicklungstests prüfen den
+  echten Manifestprüfer mit isolierten aktuellen und manipulierten Manifesten
+  gegen die tatsächlichen Grenzdateien. Sie laufen auch ohne lokalen Build
+  und verändern kein vorhandenes Release-Artefakt.
 - **Eine Abhängigkeitsrechnung darf sagen, dass etwas fehlt — nie, dass
   etwas weg darf.** Was aus dem Paket entfernt wird (Systembibliotheken des
   Linux-Grundbestands, die GPL-Terminalmodule), wird **benannt** und

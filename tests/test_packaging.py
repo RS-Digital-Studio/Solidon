@@ -1786,46 +1786,45 @@ def test_the_linux_installer_registers_the_type() -> None:
     assert "/app/share/mime/packages/" in manifest
 
 
-def test_a_manifest_that_no_longer_covers_the_boundary_files_stops_the_build() -> None:
+@pytest.mark.parametrize("fault", ["changed", "missing"])
+def test_a_manifest_that_no_longer_covers_the_boundary_files_stops_the_build(
+    tmp_path: Path, fault: str
+) -> None:
     """Ein Paket, das startet und in dem nichts geht, darf nicht entstehen.
 
-    Das Manifest deckt die vier Grenzdateien aus §2 C und wird beim Übersetzen
-    des Prüfmoduls signiert. Ändert danach jemand eine davon und lässt nur
-    PyInstaller neu laufen, ist die Auslieferung gesperrt: Ändern, Exportieren,
-    Slicen und Chat — alles zu, und von außen sieht das Paket tadellos aus.
-
-    Genau das ist am 20.08.2026 passiert und erst im Protokoll einer
-    Testinstallation aufgefallen. Geprüft wird gegen ein Manifest mit einer
-    verstellten Prüfsumme; das echte muss zugleich sauber durchgehen, sonst
-    prüfte dieser Test nur seine eigene Attrappe.
+    Der echte Bauvorabcheck vergleicht Prüfsummen der aktuellen Grenzdateien.
+    Seine Testdaten werden unabhängig aus deren wirklichen Bytes erzeugt;
+    ein vorhandenes altes Release-Manifest ist dafür weder nötig noch gültig.
+    Die Signatur prüft separat ``test_licence_build``. Hier wird kein Schlüssel
+    erzeugt und weder der Checker noch seine Grenzdateiauskunft ersetzt.
     """
-    import json
+    import hashlib
 
+    from app.core.activation import integrity
     from tools import make_installer
 
-    real = ROOT / "packaging" / "build" / "licence.manifest"
-    if not real.is_file():
-        import pytest
+    files = {
+        name: hashlib.sha256((ROOT / "app" / name).read_bytes()).hexdigest()
+        for name in integrity.BOUNDARY_FILES
+    }
+    assert files, "ohne Grenzdateien wäre die Prüfung leer"
+    current = tmp_path / "current.manifest"
+    current.write_text(json.dumps({"files": files}), encoding="utf-8")
+    assert make_installer.manifest_reason(current) == ""
 
-        pytest.skip("kein gebautes Prüfmodul — nichts zu vergleichen")
-
-    assert make_installer.manifest_reason(real) == "", (
-        "das eingecheckte Manifest passt nicht zu den Grenzdateien — "
-        "python tools/build_licence_module.py"
-    )
-
-    import tempfile
-
-    signed = json.loads(real.read_text(encoding="utf-8"))
-    name = next(iter(signed["files"]))
-    signed["files"][name] = "0" * 64
-    with tempfile.TemporaryDirectory() as scratch:
-        fake = Path(scratch) / "licence.manifest"
-        fake.write_text(json.dumps(signed), encoding="utf-8")
-        reason = make_installer.manifest_reason(fake)
-
-    assert name in reason, f"die verstellte Datei wird nicht genannt: {reason!r}"
-    assert "build_licence_module" in reason, "ohne den Weg zurück ist es eine Absage"
+    manipulated = tmp_path / "manipulated.manifest"
+    for name in files:
+        corrupted = dict(files)
+        if fault == "changed":
+            # Ein wirklich anderes Bit, unabhängig vom aktuellen Dateiinhalt.
+            corrupted[name] = f"{int(files[name][0], 16) ^ 1:x}" + files[name][1:]
+        else:
+            del corrupted[name]
+        manipulated.write_text(json.dumps({"files": corrupted}), encoding="utf-8")
+        reason = make_installer.manifest_reason(manipulated)
+        assert name in reason, f"die verstellte Datei wird nicht genannt: {reason!r}"
+        assert all(other not in reason for other in files if other != name), reason
+        assert "build_licence_module" in reason, "ohne den Weg zurück ist es eine Absage"
 
 
 def test_the_linux_installer_never_deletes_a_shared_directory(tmp_path: Path) -> None:
