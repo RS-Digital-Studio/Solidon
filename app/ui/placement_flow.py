@@ -36,6 +36,7 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import (
     QApplication,
+    QComboBox,
     QDialog,
     QFrame,
     QHBoxLayout,
@@ -391,6 +392,8 @@ class _Dimensions(QWidget):
         super().__init__(parent)
         self.lines: list[tuple[QPointF, QPointF]] = []
         self.leaders: list[tuple[QPointF, QPointF]] = []
+        self.references: list[tuple[QPointF, QPointF]] = []
+        self.extensions: list[tuple[QPointF, QPointF]] = []
         #: Der Umriss, mit dem das Werkzeug die Oberfläche trifft — ein
         #: geschlossener Zug in Bildkoordinaten. Bei einer Bohrung der Kreis
         #: ihrer Mündung (Befund Robert, 09.09.2026: „es reicht mir, wenn ich
@@ -438,7 +441,7 @@ class _Dimensions(QWidget):
         """
         strokes = QPainterPath()
         ink = QPainterPath()
-        for start, end in (*self.lines, *self.leaders):
+        for start, end in (*self.lines, *self.leaders, *self.references, *self.extensions):
             strokes.moveTo(start)
             strokes.lineTo(end)
         stroker = QPainterPathStroker()
@@ -492,6 +495,15 @@ class _Dimensions(QWidget):
         colour = self.palette().text().color()
         backdrop = self.palette().window().color()
         painter.fillRect(self.rect(), backdrop)
+        for segments, style in (
+            (self.references, Qt.PenStyle.SolidLine),
+            (self.extensions, Qt.PenStyle.DashLine),
+        ):
+            for start, end in segments:
+                painter.setPen(QPen(backdrop, 4.0))
+                painter.drawLine(start, end)
+                painter.setPen(QPen(colour, 2.0, style))
+                painter.drawLine(start, end)
         if len(self.outline) >= 3 and self.outline_colour is not None:
             ring = QPolygonF(self.outline)
             # Dieselbe Unterlage wie bei den Maßlinien: Der Umriss liegt auf
@@ -761,6 +773,33 @@ class PlacementFlow(QObject):
             self._watch_field(field)
             field.valueChangedMm.connect(self._centre_changed)
             field.hide()
+        self._reference_pick: int | None = None
+        self._held_references: tuple[placement.EdgeReference, ...] | None = None
+        self._held_centre = ""
+        self._reference_message = ""
+        self._reference_boxes: list[QWidget] = []
+        self._reference_choices: list[QComboBox] = []
+        for index, reference_field in enumerate((*self._measures, self._centre)):
+            box = QWidget(self.viewport)
+            layout = QHBoxLayout(box)
+            layout.setContentsMargins(0, 0, 0, 0)
+            layout.setSpacing(SPACE)
+            layout.addWidget(reference_field)
+            choice = QComboBox(box)
+            choice.setObjectName(f"placement_reference_{index + 1}")
+            choice.setAccessibleName(tr("Bezug für Maß {number} ändern").format(number=index + 1))
+            choice.setToolTip(
+                tr("Bezug ändern erhält die Position. Eine dauerhafte Bindung entsteht nicht.")
+            )
+            choice.setMaxVisibleItems(8)
+            choice.activated.connect(
+                lambda selected, slot=index: self._reference_selected(slot, selected)
+            )
+            layout.addWidget(choice)
+            self._reference_boxes.append(box)
+            self._reference_choices.append(choice)
+            self._watch(choice)
+            box.hide()
         self._timer = QTimer(self)
         self._timer.setSingleShot(True)
         self._timer.setInterval(16)
@@ -900,6 +939,7 @@ class PlacementFlow(QObject):
                 )
             )
             and self._distance_valid
+            and self._reference_pick is None
             and self.session.result_current
             and self._display_ready()
             and begun
@@ -921,8 +961,10 @@ class PlacementFlow(QObject):
             if self._measure_without_surface
             else ""
         )
-        self._measure_note.setText(reason or information)
-        self._measure_note.setVisible((bool(reason) and begun) or bool(information))
+        self._measure_note.setText(reason or self._reference_message or information)
+        self._measure_note.setVisible(
+            (bool(reason) and begun) or bool(self._reference_message) or bool(information)
+        )
 
     def _size_measure_fields(self, room: QRect) -> None:
         """Die Fachgruppe bleibt im freien Bildraum; bei Platzmangel rollt ihr Inhalt."""
@@ -1191,6 +1233,9 @@ class PlacementFlow(QObject):
 
     def _stop(self) -> None:
         self.active = False
+        self._reference_pick = None
+        self._held_references = None
+        self._held_centre = ""
         self._tell_the_host_we_aim(False)
         self._epoch += 1
         self._serial += 1
@@ -1287,11 +1332,10 @@ class PlacementFlow(QObject):
         return (
             self._bar,
             self._canvas,
-            self._centre,
             self._depth_measure,
             self._rest,
             self._measure_box,
-            *self._measures,
+            *self._reference_boxes,
             *self._centre_measures,
         )
 
@@ -1299,6 +1343,14 @@ class PlacementFlow(QObject):
         """Linksklick gehört der Platzierung, alle Kameragesten bleiben frei."""
         if not self.active or self.viewport.slot_drag_waits():
             return False
+        if self._reference_pick is not None:
+            if event.kind == "press" and event.button == "left":
+                self._pressed_at = (event.x, event.y)
+                return True
+            if event.kind == "release" and event.button == "left" and self._barely_moved(event):
+                self._pick_reference(event.x, event.y)
+                return True
+            return event.kind == "move" and not event.buttons
         if self._seated_at_feature:
             # **Die Stelle steht am Merkmal, nicht am Zeiger** — aber nur die
             # freie Bewegung gehört dieser Zusage. Ein Zug mit gedrückter
@@ -1555,6 +1607,8 @@ class PlacementFlow(QObject):
         mesh = for_a_worker(entry.mesh)
         values = dict(self.dialog.values())
         parameters = dict(self.session.project.document.parameters)
+        references = self._held_references
+        centre_id = self._held_centre
 
         def compute() -> Any:
             resolved = expressions.resolve_params(values, expressions.resolve(parameters))
@@ -1562,7 +1616,7 @@ class PlacementFlow(QObject):
             if seat is None:
                 return None
             prepared, mouth = seat
-            return prepared, placement.at_point(prepared, mouth)
+            return prepared, placement.at_point(prepared, mouth, references=references)
 
         def done(value: Any) -> None:
             if not isValid(self) or self._disposed or not self.active or stamp != self._serial:
@@ -1576,7 +1630,13 @@ class PlacementFlow(QObject):
             self._prepared_mesh = entry.mesh
             self._patch_faces = frozenset(self._surface.face_indices)
             self._object_id = entry.id
-            self._centre_id = self._surface.centres[0].feature_id if self._surface.centres else ""
+            self._centre_id = (
+                centre_id
+                if references is not None
+                else self._surface.centres[0].feature_id
+                if self._surface.centres
+                else ""
+            )
             self._seated_at_feature = True
             self._distance_valid = True
             self._settle()
@@ -1951,6 +2011,9 @@ class PlacementFlow(QObject):
                 if historical_measures:
                     # Eine neue Tiefe verschiebt bei Mittenanker die Mündung.
                     # Bis der aktuelle Sitz belegt ist, steht keine alte Hilfe.
+                    if self._surface is not None:
+                        self._held_references = self._surface.edges
+                        self._held_centre = self._centre_id
                     self._serial += 1
                     self._surface = None
                     self._prepared = None
@@ -2080,7 +2143,163 @@ class PlacementFlow(QObject):
 
         self.session.placement_async(compute, done, lambda _detail: done(None))
 
+    def _reference_options(self, index: int) -> None:
+        """Tastatur und Modellwahl verwenden dieselben belegten Referenzen."""
+        if self._surface is None or self._prepared is None:
+            return
+        choice = self._reference_choices[index]
+        entries = (
+            [(identifier, "centre") for identifier, _ in self._prepared.centres]
+            if index == 2
+            else [(edge.id, edge.kind) for edge in self._prepared.edges]
+        )
+        if [choice.itemData(row) for row in range(2, choice.count())] == entries:
+            return
+        with QSignalBlocker(choice):
+            choice.clear()
+            choice.addItem(tr("Bezug ändern"), None)
+            choice.addItem(tr("Im Modell wählen"), "pick")
+            for number, (identifier, kind) in enumerate(entries, 1):
+                choice.addItem(self._reference_name(kind, number), (identifier, kind))
+            choice.setCurrentIndex(0)
+
+    @staticmethod
+    def _reference_name(kind: str, number: int) -> str:
+        names = {
+            "outer": tr("Außenkante {number}"),
+            "inner": tr("Innenkante {number}"),
+            "axis": tr("Achse {number}"),
+            "centre": tr("Mitte {number}"),
+        }
+        return names[kind].format(number=number)
+
+    def _reference_selected(self, index: int, selected: int) -> None:
+        """Eine bewusste Wahl ändert nur den Bezug, niemals die Geometrie."""
+        choice = self._reference_choices[index]
+        data = choice.itemData(selected)
+        choice.setCurrentIndex(0)
+        if data is None or self._surface is None or self._prepared is None:
+            return
+        self._begin_edit()
+        self._accept_pending = False
+        if data == "pick":
+            self._pending = None
+            self._serial += 1
+            self._reference_pick = index
+            self._reference_message = tr(
+                "Auf den gewünschten Bezug dieser Fläche klicken "
+                "oder ihn im Feld Bezug ändern wählen."
+            )
+            self._show_input_for_edit()
+            self.redraw()
+            return
+        self._choose_reference(index, *data)
+
+    def _choose_reference(self, index: int, identifier: str, kind: str) -> None:
+        if self._surface is None or self._prepared is None:
+            return
+        try:
+            if kind == "centre":
+                if not any(centre.feature_id == identifier for centre in self._surface.centres):
+                    return
+                self._centre_id = identifier
+            else:
+                self._surface = placement.with_reference(
+                    self._prepared, self._surface, index, identifier
+                )
+        except ValidationError:
+            self._reference_message = tr(
+                "Diese Bezüge fehlen oder liegen zu parallel. "
+                "Wählen Sie über Bezug ändern eine andere Kante oder Mitte."
+            )
+            self.redraw()
+            return
+        self._reference_pick = None
+        self._reference_message = tr("Bezug geändert; die Position bleibt unverändert.")
+        self._frozen = True
+        self._pending = None
+        self._serial += 1
+        self.redraw()
+        # Der historische Eingangswechsel hat die vorige Anzeige entwertet.
+        # Derselbe unveränderte Wertauftrag fordert wieder seine volle Vorschau.
+        self.dialog.valuesChanged.emit()
+
+    def _pick_reference(self, x: int, y: int) -> None:
+        """Nur die sichtbare ursprüngliche Trägerfläche ist ein zulässiger Treffer."""
+        if self._reference_pick is None or self._prepared is None or not self._display_ready():
+            return
+        hit = self.viewport.placement_hit(x, y)
+        if hit is None:
+            return
+        object_id, point, cell, ray = hit
+        if object_id != self._object_id or (
+            ray is None and cell not in self._prepared.face_indices
+        ):
+            self._reference_message = tr(
+                "Auf den gewünschten Bezug dieser Fläche klicken "
+                "oder ihn im Feld Bezug ändern wählen."
+            )
+            self.redraw()
+            return
+        index = self._reference_pick
+        prepared = self._prepared
+        distance = SNAP_PIXELS * self._millimetres_per_pixel()
+        if ray is None:
+            self._reference_hit_ready(
+                index, placement.reference_candidates(prepared, point, distance)
+            )
+            return
+        entry = self._result.scene.objects.get(object_id)
+        if entry is None:
+            return
+        mesh = for_a_worker(entry.mesh)
+        clip_planes = tuple(plane for plane in self.viewport._section_planes() if plane is not None)
+        self._serial += 1
+        stamp = self._serial
+
+        def compute() -> Any:
+            original = placement.original_surface_hit(mesh, *ray, clip_planes=clip_planes)
+            return (
+                ()
+                if original is None
+                else placement.reference_candidates(prepared, original[1], distance, ray=ray)
+            )
+
+        def done(candidates: Any) -> None:
+            if (
+                isValid(self)
+                and not self._disposed
+                and self.active
+                and stamp == self._serial
+                and self._reference_pick == index
+            ):
+                self._reference_hit_ready(index, candidates)
+
+        self.session.placement_async(compute, done, lambda _detail: done(()))
+
+    def _reference_hit_ready(self, index: int, candidates: tuple[tuple[str, str], ...]) -> None:
+        """Eine belegte Modellwahl abschließen, niemals den Maßentwurf übernehmen."""
+        candidates = tuple(
+            (identifier, kind)
+            for identifier, kind in candidates
+            if (kind == "centre") == (index == 2)
+        )
+        if len(candidates) == 1:
+            self._choose_reference(index, *candidates[0])
+        else:
+            # Kein nächster Kandidat gewinnt eine Gleichlage. Die vorhandene
+            # Auswahlliste bleibt vollständig und ohne zusätzlichen Dialog.
+            self._reference_message = tr(
+                "Hier ist kein eindeutiger Bezug getroffen. "
+                "Näher heranzoomen oder im Feld Bezug ändern auswählen."
+            )
+            self._reference_choices[index].setFocus()
+            self._reference_choices[index].showPopup()
+            self.redraw()
+
     def _distance_changed(self, _value: float) -> None:
+        self._reference_message = ""
+        self._reference_pick = None
         self._accept_pending = False
         if not self.active or self._surface is None or len(self._surface.edges) < 2:
             return
@@ -2110,6 +2329,8 @@ class PlacementFlow(QObject):
     def _centre_changed(self, _value: float) -> None:
         """Beide signierten Maße halten dieselbe gewählte Mitte als Bezug."""
         self._accept_pending = False
+        self._reference_message = ""
+        self._reference_pick = None
         if not self.active or self._surface is None or not self._centre_id:
             return
         try:
@@ -2169,7 +2390,9 @@ class PlacementFlow(QObject):
         levelled = given - float(np.dot(given - origin, normal)) * normal
         try:
             changed = placement.at_point(
-                self._prepared, (float(levelled[0]), float(levelled[1]), float(levelled[2]))
+                self._prepared,
+                (float(levelled[0]), float(levelled[1]), float(levelled[2])),
+                references=self._surface.edges,
             )
         except ValidationError, ValueError, ArithmeticError:
             return False
@@ -2246,7 +2469,12 @@ class PlacementFlow(QObject):
     def _accept_values(self, *, allow_pending: bool) -> None:
         """Ein früher Tastendruck wird unter keinen Umständen nachgeholt."""
         self._accept_pending = False
-        if self._disposed or not self.active or not self._interpret_active_fields():
+        if (
+            self._disposed
+            or not self.active
+            or self._reference_pick is not None
+            or not self._interpret_active_fields()
+        ):
             return
         if (
             not self.active
@@ -2727,6 +2955,17 @@ class PlacementFlow(QObject):
                 # Platzierung die wirkliche Geometrie statt eines Zwischenstands.
                 QTimer.singleShot(0, self.redraw)
                 return False
+            if (
+                watched in self._reference_choices
+                and isinstance(event, QKeyEvent)
+                and event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter)
+            ):
+                if event.type() == QEvent.Type.ShortcutOverride:
+                    event.accept()
+                    return True
+                if event.type() == QEvent.Type.KeyPress:
+                    watched.showPopup()
+                    return True
             if isinstance(event, QKeyEvent) and event.key() in (
                 Qt.Key.Key_Escape,
                 Qt.Key.Key_Return,
@@ -2863,13 +3102,19 @@ class PlacementFlow(QObject):
         self._accept.setEnabled(tool_valid and self._distance_valid)
         self._canvas.lines = []
         self._canvas.leaders = []
+        self._canvas.references = []
+        self._canvas.extensions = []
         self._canvas.outline = []
         # **Jede Stufe zeigt ihr eigenes Maß.** Die Kantenabstände gehören der
         # Fläche, auf der gesetzt wird — in der Tiefenstufe ist die entschieden,
         # und dort steht die Tiefe an ihrer Stelle.
         for index, field in enumerate(self._measures):
             field.setVisible(local_visible and not self._deepening and index < len(surface.edges))
+            self._reference_boxes[index].setVisible(
+                local_visible and not self._deepening and index < len(surface.edges)
+            )
         self._centre.hide()
+        self._reference_boxes[2].hide()
         for field in self._centre_measures:
             field.setVisible(local_visible and not self._deepening and bool(self._centre_id))
         self._depth_measure.setVisible(local_visible and self._deepening)
@@ -3028,16 +3273,28 @@ class PlacementFlow(QObject):
             self._rest.hide()
 
         for index, edge in enumerate(surface.edges[:2]):
+            self._canvas.references.append((screen(edge.start), screen(edge.end)))
+            extension = placement.reference_extension(edge, surface.point)
+            if extension is not None:
+                self._canvas.extensions.append((screen(extension[0]), screen(extension[1])))
             foot = point - np.asarray(edge.inward, dtype=np.float64) * edge.distance
             start, end = screen(tuple(foot)), screen(surface.point)
             self._canvas.lines.append((start, end))
             field = self._measures[index]
+            number = next(
+                number
+                for number, reference in enumerate(self._prepared.edges, 1)
+                if reference.id == edge.id
+            )
+            field.setPrefix(self._reference_name(edge.kind, number) + ": ")
             if not self._keep_field_text(field):
                 with QSignalBlocker(field):
                     bound = max(self._prepared_mesh.bounds.diagonal, abs(edge.distance), 1.0)
                     field.set_range_mm(-bound, bound)
                     field.set_value_mm(edge.distance)
-            place(field, start, end)
+            self._reference_options(index)
+            field.setToolTip(tr("Signierter Abstand der Zielmitte zum Bezug; kein Wandabstand."))
+            place(self._reference_boxes[index], start, end)
         centre = next(
             (entry for entry in surface.centres if entry.feature_id == self._centre_id), None
         )
@@ -3061,7 +3318,9 @@ class PlacementFlow(QObject):
                     feature=name, distance=length(centre.distance)
                 )
             )
-            place(self._centre, screen(centre.point), screen(centre.point))
+            self._reference_options(2)
+            self._centre.show()
+            place(self._reference_boxes[2], screen(centre.point), screen(centre.point))
         # Der Platz für die Maßfelder ist der Raum **über** der Leiste, seit
         # sie unten mittig steht. Vorher lag sie oben und der Raum darunter;
         # wer nur die Leiste verschiebt und diese Rechnung stehen lässt, drückt

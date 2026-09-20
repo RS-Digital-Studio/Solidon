@@ -3,6 +3,19 @@
 PySide6. Darf `app.core` benutzen, die Gegenrichtung ist verboten (§8). Die
 Oberfläche rechnet keine Geometrie und ändert keine — **sie ruft Ops auf.**
 
+`PlacementFlow` bietet den Wechsel echter Kanten, Mitten und belegter Achsen
+direkt an den vorhandenen Maßfeldern an. Tastaturliste und Modellklick nutzen
+dieselbe `PreparedSurface`; die Liste bleibt vollständig und zeigt höchstens
+acht Zeilen gleichzeitig. Fremde Körper und andere Flächen sind kein Treffer,
+Mehrdeutigkeit führt zur bestehenden Liste. Der Referenzwechsel hält den
+Zielpunkt fest; ein späterer Zug behält die gewählten Bezüge und Vorzeichen.
+Durchgezogene Bezugslinie, gestrichelte nötige Verlängerung und benanntes
+Maßfeld erklären den signierten Abstand zur Zielmitte, keinen Wandabstand.
+Enter in der Liste öffnet die Auswahl; während einer Modellbezugsauswahl
+wird keine Übernahme vorgemerkt. Escape verwirft über den gemeinsamen Editor.
+Die numerischen Operationswerte bleiben der einzige gespeicherte Auftrag;
+eine dauerhafte Kantenassoziation wird nicht behauptet (§18.11, §19).
+
 Die Regeln dieses Gebiets stehen in `.claude/rules/` und laden sich selbst —
 **vier Dateien, je nachdem, was man anfasst:**
 

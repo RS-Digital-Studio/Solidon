@@ -340,6 +340,79 @@ def _place(controller: PlacementFlow, session: Session) -> None:
         assert session.wait_for_idle(30_000)
 
 
+def test_reference_choice_changes_no_position_and_keeps_the_selected_edge_on_drag(flow):
+    """Der vorhandene Maßeditor bindet Auswahl, Zug und Zahlen an denselben realen Rand."""
+    controller, session, viewport, dialog = flow
+    controller.start()
+    _point(controller, session)
+    before = dict(dialog.values())
+    document = session.project.document
+    surface = controller._surface
+    edge = next(
+        edge
+        for edge in controller._prepared.edges
+        if np.dot(edge.inward, surface.edges[0].inward) < -0.9
+    )
+    choice = controller._reference_choices[0]
+    row = next(row for row in range(choice.count()) if choice.itemData(row) == (edge.id, edge.kind))
+    choice.activated.emit(row)
+    assert controller._surface.point == surface.point
+    assert dialog.values() == before
+    assert session.project.document is document
+    target = np.asarray(surface.point) + np.asarray(edge.inward)
+    assert controller.move_to(tuple(target))
+    assert controller._surface.edges[0].id == edge.id
+    controller.redraw()
+    assert controller._reference_boxes[0].isVisibleTo(viewport)
+    assert controller._canvas.references
+    assert "Außenkante" in controller._measures[0].prefix()
+
+
+def test_reference_pick_rejects_foreign_body_and_early_enter_never_commits(flow):
+    """Der Referenzklick verbraucht weder eine fremde Auswahl noch ein frühes Übernehmen."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    controller, session, viewport, dialog = flow
+    controller.start()
+    _point(controller, session)
+    before = dict(dialog.values())
+    document = session.project.document
+    original = controller._surface
+    controller._reference_choices[0].activated.emit(1)
+    assert controller._reference_pick == 0
+    object_id, point, cell, ray = viewport.hit
+    viewport.hit = "foreign_body", point, cell, ray
+    controller._pick_reference(320, 240)
+    QTest.keyClick(viewport, Qt.Key.Key_Return)
+    assert controller.active and not controller._accept_pending
+    assert controller._surface is original
+    assert dialog.values() == before
+    assert session.project.document is document
+    viewport.hit = object_id, point, cell, ray
+    QTest.keyClick(viewport, Qt.Key.Key_Escape)
+    assert not controller.active
+    assert controller._reference_pick is None
+    assert session.project.document is document
+
+
+def test_reference_list_enter_opens_choices_instead_of_accepting_the_operation(flow):
+    """Die erreichbare Tastaturliste besitzt ihren Enter; der Entwurf bleibt stehen."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    controller, session, _viewport, _dialog = flow
+    controller.start()
+    _point(controller, session)
+    choice = controller._reference_choices[0]
+    document = session.project.document
+    QTest.keyClick(choice, Qt.Key.Key_Return)
+    assert choice.view().isVisible()
+    assert controller.active
+    assert session.project.document is document
+    choice.hidePopup()
+
+
 def test_the_placement_worker_returns_in_the_qt_thread(qt_app: QApplication) -> None:
     session = Session()
     threads: list[Any] = []

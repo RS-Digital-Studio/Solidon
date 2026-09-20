@@ -21,6 +21,20 @@ Die Nachbarschaft exakter Originalkanten nutzt den privaten Trimesh-Cache
 als Beschleunigung. Fehlt dessen Lese- oder Schreibschnittstelle, bleibt
 dieselbe Berechnung ohne Cache verfügbar; echte Spalten bleiben offen.
 
+Die Platzierungsbezüge sind vergänglich und gehören zu genau einer
+`PreparedSurface`: `with_reference` prüft Kennung **und** unveränderte
+Geometrie, `at_point(references=...)` hält diese Auswahl beim Zug fest.
+Außenkanten haben Vorrang vor inneren Kanten; belegte Langlochrichtungen
+liefern zusätzliche Achsen, Bohrungen und Zapfen ihre tatsächlichen Mitten.
+`MAX_REFERENCE_CONDITION` begrenzt die dimensionslose Verstärkung auf zehn
+Anzeigeschritte. Das ist eine Bediengrenze, keine geometrische Unsicherheit
+oder Fertigungstoleranz. Dicht kreisförmige Konturen liefern keine Geraden,
+auch ohne globales Lochmerkmal; daraus entstehen keine erfundenen Mitten.
+`seat_of` füllt ausschließlich die eigene Öffnung, andere Ausschnitte und
+Bezüge bleiben bestehen. Gespeichert werden weiterhin Operationswerte,
+keine `edge_0`-Bindung; dauerhafte Assoziativität gehört zum separaten
+Referenzvertrag (§13, §18.11).
+
 `placement.original_surface_hit` prüft Originaldreiecke blockweise und
 abbrechbar. `geom.mesh.ray_hits` liefert Abstand und Dreiecksindex gemeinsam;
 ein zusätzlicher räumlicher Suchindex ist dafür unnötig. Der nächste zulässige

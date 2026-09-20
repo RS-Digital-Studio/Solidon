@@ -625,6 +625,7 @@ class EdgeReference:
     end: Vec3
     inward: Vec3
     distance: float = 0.0
+    kind: str = "outer"
 
 
 @dataclass(frozen=True, slots=True)
@@ -864,7 +865,7 @@ def _straight_boundary(
 ) -> list[tuple[np.ndarray, np.ndarray]]:
     """Kollineare Randstücke vereinen; Kreisfacetten sind keine geraden Bezugskanten."""
     points = np.asarray(coords, dtype=np.float64)[:-1]
-    if len(points) >= 8 and (round_points or round_circles):
+    if len(points) >= 8:
         local = points - points.mean(axis=0)
         solution = np.linalg.lstsq(
             np.column_stack((local * 2.0, np.ones(len(local)))),
@@ -876,13 +877,33 @@ def _straight_boundary(
             from scipy.spatial import cKDTree
 
             centre, radius = solution[:2] + points.mean(axis=0), float(radii.mean())
-            if any(
-                np.linalg.norm(centre - known_centre) <= EPS_GEOM
-                and abs(radius - known_radius) <= EPS_GEOM
-                for known_centre, known_radius in round_circles
-            ) or any(
-                np.max(cKDTree(known_points).query(points)[0]) <= EPS_GEOM
-                for known_points in round_points
+            # Ein dicht kreisförmiger Ring belegt keine unabhängigen Geraden,
+            # auch wenn die globale Lochanalyse dieses kleine Loch nicht kennt.
+            # Daraus entsteht ausdrücklich weder Lochmerkmal noch Mittenbezug.
+            from app.core.units import MAX_FACET_ANGLE
+
+            radial = points - centre
+            lengths = np.linalg.norm(radial, axis=1)
+            dense_circle = radius > EPS_GEOM and bool(np.all(lengths > EPS_GEOM))
+            if dense_circle:
+                radial /= lengths[:, None]
+                dense_circle = bool(
+                    np.all(
+                        np.sum(radial * np.roll(radial, -1, axis=0), axis=1)
+                        >= np.cos(MAX_FACET_ANGLE)
+                    )
+                )
+            if (
+                dense_circle
+                or any(
+                    np.linalg.norm(centre - known_centre) <= EPS_GEOM
+                    and abs(radius - known_radius) <= EPS_GEOM
+                    for known_centre, known_radius in round_circles
+                )
+                or any(
+                    np.max(cKDTree(known_points).query(points)[0]) <= EPS_GEOM
+                    for known_points in round_points
+                )
             ):
                 return []
     keep = []
@@ -960,7 +981,7 @@ def prepare_surface(
                             float(feature.params["diameter"]) / 2.0,
                         )
                     )
-        for ring in (area.exterior, *area.interiors):
+        for ring_index, ring in enumerate((area.exterior, *area.interiors)):
             for start, end in _straight_boundary(ring.coords, round_points, round_circles):
                 direction = end - start
                 direction /= np.linalg.norm(direction)
@@ -977,6 +998,7 @@ def prepare_surface(
                         to_world(frame, _vec2(start)),
                         to_world(frame, _vec2(end)),
                         _vec(vector),
+                        kind="outer" if ring_index == 0 else "inner",
                     )
                 )
     centres = []
@@ -985,7 +1007,7 @@ def prepare_surface(
             vec3_or_none(feature.params.get("centre")),
             vec3_or_none(feature.params.get("axis")),
         )
-        if feature.kind != "hole" or centre is None or axis is None:
+        if feature.kind not in {"hole", "pin", "slot"} or centre is None or axis is None:
             continue
         vector = np.asarray(axis, dtype=np.float64)
         length = float(np.linalg.norm(vector))
@@ -1006,6 +1028,30 @@ def prepare_surface(
         point2 = to_plane(frame, projected)
         if area.envelope.covers(Point(point2)):
             centres.append((feature.id, projected))
+            direction = vec3_or_none(feature.params.get("direction"))
+            feature_length = feature.params.get("length")
+            if (
+                feature.kind == "slot"
+                and direction is not None
+                and isinstance(feature_length, int | float)
+            ):
+                along = np.asarray(direction, dtype=np.float64)
+                span = float(np.linalg.norm(along))
+                if (
+                    span > EPS_GEOM
+                    and abs(float(along @ frame.normal)) <= EPS_GEOM * span
+                    and feature_length > EPS_GEOM
+                ):
+                    along /= span
+                    references.append(
+                        EdgeReference(
+                            f"axis_{feature.id}",
+                            _vec(np.asarray(projected) - along * feature_length / 2.0),
+                            _vec(np.asarray(projected) + along * feature_length / 2.0),
+                            _vec(np.cross(frame.normal, along)),
+                            kind="axis",
+                        )
+                    )
     prepare(area)
     return PreparedSurface(frame, planar, indices, tuple(references), tuple(centres), area)
 
@@ -1175,22 +1221,31 @@ def _seat_at(
             continue
         area = prepared.area
         if not isinstance(area, Polygon) or not area.interiors:
-            return prepared, mouth
+            return replace(prepared, centres=_others(prepared, feature)), mouth
         # **Und die Kanten der eigenen Öffnung zählen nicht mit.** Ein Langloch
         # hat zwei gerade Flanken, und die sind vom Merkmal aus die nächsten
         # Bezugskanten überhaupt: Gemessen an einer Platte 60 x 40 mit einem
         # Langloch Ø 6 auf 20 kamen minus 3,00 und minus 3,30 zurück, also seine eigene
         # halbe Breite. Gefragt ist der Abstand zum **Rand des Teils**; was in
         # einer Aussparung liegt, ist keine Antwort darauf.
-        outer = Polygon(area.exterior)
-        border = outer.exterior
+        point = Point(to_plane(prepared.frame, mouth))
+        own = [ring for ring in area.interiors if Polygon(ring).covers(point)]
+        if len(own) != 1:
+            continue
+        border = own[0]
+        available = Polygon(area.exterior, [ring for ring in area.interiors if ring != border])
         edges = tuple(
             edge
             for edge in prepared.edges
-            if border.distance(Point(to_plane(prepared.frame, edge.start))) <= EPS_GEOM
-            and border.distance(Point(to_plane(prepared.frame, edge.end))) <= EPS_GEOM
+            if edge.id != f"axis_{feature.id}"
+            and not (
+                border.distance(Point(to_plane(prepared.frame, edge.start))) <= EPS_GEOM
+                and border.distance(Point(to_plane(prepared.frame, edge.end))) <= EPS_GEOM
+            )
         )
-        return replace(prepared, area=outer, edges=edges, centres=_others(prepared, feature)), mouth
+        return replace(
+            prepared, area=available, edges=edges, centres=_others(prepared, feature)
+        ), mouth
     return None
 
 
@@ -1219,8 +1274,146 @@ def _vec2(values: Any) -> Point2:
     return (float(values[0]), float(values[1]))
 
 
-def at_point(prepared: PreparedSurface, point: Vec3) -> SurfacePlacement:
-    """Ein bereits belegter Originalpunkt und die nächsten unabhängigen Maße."""
+#: Bediengrenze: Ein Anzeigeschritt darf durch das Bezugspaar höchstens um
+#: Faktor zehn verstärkt werden. Das ist keine Unsicherheit der Originalfläche
+#: und keine Fertigungstoleranz. Die dimensionslose Kondition bleibt beim
+#: Drehen und Skalieren gleich; schlechtere Paare brauchen einen anderen Bezug.
+MAX_REFERENCE_CONDITION: Final = 10.0
+
+
+def _reference_rows(frame: PlaneFrame, edges: Sequence[EdgeReference]) -> np.ndarray:
+    return np.asarray(
+        [(np.dot(edge.inward, frame.x_axis), np.dot(edge.inward, frame.y_axis)) for edge in edges],
+        dtype=np.float64,
+    )
+
+
+def _independent(frame: PlaneFrame, edges: Sequence[EdgeReference]) -> bool:
+    return (
+        len(edges) < 2
+        or float(np.linalg.cond(_reference_rows(frame, edges))) <= MAX_REFERENCE_CONDITION
+    )
+
+
+def _reference_error() -> ValidationError:
+    return _reject(
+        "references",
+        tr(
+            "Diese Bezüge fehlen oder liegen zu parallel. "
+            "Wählen Sie über Bezug ändern eine andere Kante oder Mitte."
+        ),
+    )
+
+
+def _checked_references(prepared: PreparedSurface, edges: Sequence[EdgeReference]) -> None:
+    """Vergängliche Kennungen gelten nur mit unveränderter belegter Geometrie."""
+    available = {edge.id: edge for edge in prepared.edges}
+    if len(edges) > 2 or len({edge.id for edge in edges}) != len(edges):
+        raise _reference_error()
+    for edge in edges:
+        original = available.get(edge.id)
+        if original is None or any(
+            not np.allclose(old, new, atol=EPS_GEOM, rtol=0.0)
+            for old, new in (
+                (original.start, edge.start),
+                (original.end, edge.end),
+                (original.inward, edge.inward),
+            )
+        ):
+            raise _reference_error()
+    if not _independent(prepared.frame, edges):
+        raise _reference_error()
+
+
+def with_reference(
+    prepared: PreparedSurface, surface: SurfacePlacement, index: int, edge_id: str
+) -> SurfacePlacement:
+    """Einen echten Bezug ausdrücklich ersetzen; Punkt und anderer Bezug bleiben stehen."""
+    if index not in (0, 1) or index > len(surface.edges):
+        raise _reference_error()
+    edge = next((edge for edge in prepared.edges if edge.id == edge_id), None)
+    if edge is None:
+        raise _reference_error()
+    edges = list(surface.edges)
+    if index == len(edges):
+        edges.append(edge)
+    else:
+        edges[index] = edge
+    return at_point(prepared, surface.point, references=edges)
+
+
+def reference_candidates(
+    prepared: PreparedSurface,
+    point: Vec3,
+    maximum_distance: float,
+    *,
+    ray: tuple[Vec3, Vec3] | None = None,
+) -> tuple[tuple[str, str], ...]:
+    """Alle nahen echten Bezüge liefern; gleiche Nähe entscheidet niemals heimlich.
+
+    Der Aufrufer belegt zuvor den ersten sichtbaren Originaltreffer dieses Körpers.
+    Ein Strahl darf die Trägerfläche von vorn vor diesem Treffer schneiden:
+    So bleibt eine Öffnungsmitte vor ihrem Sacklochboden wählbar, eine
+    verdeckte oder abgewandte Ebene aber nicht. Der Fangradius kommt
+    aus Bildpunkten, die Abstandsrechnung aus der unveränderten Originalfläche.
+    Mitten und Achsen dürfen innerhalb ihrer eigenen Öffnung liegen.
+    """
+    if not np.isfinite(point).all() or not np.isfinite(maximum_distance) or maximum_distance <= 0.0:
+        return ()
+    query = np.asarray(point, dtype=np.float64)
+    normal = np.asarray(prepared.frame.normal)
+    if ray is not None:
+        origin, direction = (np.asarray(vector, dtype=np.float64) for vector in ray)
+        denominator = float(direction @ normal)
+        span = float(np.linalg.norm(direction))
+        if (
+            not np.isfinite(origin).all()
+            or not np.isfinite(direction).all()
+            or denominator >= -EPS_GEOM * span
+        ):
+            return ()
+        amount = float((np.asarray(prepared.frame.origin) - origin) @ normal) / denominator
+        hit_amount = float((query - origin) @ direction) / float(direction @ direction)
+        if amount < 0.0 or amount > hit_amount + EPS_GEOM / span:
+            return ()
+        query = origin + amount * direction
+    elif abs(float((query - prepared.frame.origin) @ normal)) > EPS_GEOM:
+        return ()
+    found: list[tuple[float, str, str]] = []
+    for edge in prepared.edges:
+        start, end = np.asarray(edge.start), np.asarray(edge.end)
+        step = end - start
+        square = float(step @ step)
+        if square <= EPS_GEOM * EPS_GEOM:
+            continue
+        foot = start + np.clip(np.dot(query - start, step) / square, 0.0, 1.0) * step
+        distance = float(np.linalg.norm(query - foot))
+        if distance <= maximum_distance:
+            found.append((distance, edge.id, edge.kind))
+    for identifier, centre in prepared.centres:
+        distance = float(np.linalg.norm(query - centre))
+        if distance <= maximum_distance:
+            found.append((distance, identifier, "centre"))
+    return tuple((identifier, kind) for _, identifier, kind in sorted(found))
+
+
+def reference_extension(edge: EdgeReference, point: Vec3) -> tuple[Vec3, Vec3] | None:
+    """Nur den nötigen Verlängerungsabschnitt zum Lotfuß ausweisen."""
+    start, end = np.asarray(edge.start), np.asarray(edge.end)
+    step = end - start
+    square = float(step @ step)
+    if square <= EPS_GEOM * EPS_GEOM:
+        return None
+    share = float(np.dot(np.asarray(point) - start, step) / square)
+    if 0.0 <= share <= 1.0:
+        return None
+    return (_vec(start if share < 0.0 else end), _vec(start + share * step))
+
+
+def at_point(
+    prepared: PreparedSurface, point: Vec3, *, references: Sequence[EdgeReference] | None = None
+) -> SurfacePlacement:
+    """Originalpunkt mit bevorzugten Außenkanten oder ausdrücklich festgehaltenen Bezügen."""
     from shapely.geometry import Point
 
     from app.core.sketch.planes import to_plane
@@ -1248,17 +1441,23 @@ def at_point(prepared: PreparedSurface, point: Vec3) -> SurfacePlacement:
         distance = float(np.linalg.norm(np.asarray(point) - (start + share * step)))
         ranked.append(
             (
-                distance,
+                ({"outer": 0, "inner": 1, "axis": 2}[edge.kind], distance),
                 edge.id,
                 replace(edge, distance=float(np.dot(np.asarray(point) - start, edge.inward))),
             )
         )
     chosen: list[EdgeReference] = []
     for _, _, edge in sorted(ranked, key=lambda item: (item[0], item[1])):
-        if not chosen or abs(float(np.dot(edge.inward, chosen[0].inward))) < 1.0 - EPS_GEOM:
+        if _independent(prepared.frame, [*chosen, edge]):
             chosen.append(edge)
         if len(chosen) == 2:
             break
+    if references is not None:
+        _checked_references(prepared, references)
+        chosen = [
+            replace(edge, distance=float(np.dot(np.asarray(point) - edge.start, edge.inward)))
+            for edge in references
+        ]
     centres = []
     for feature_id, centre in prepared.centres:
         difference = np.asarray(point) - centre
@@ -1293,6 +1492,7 @@ def point_with_distances(
             ),
         )
     frame = prepared.frame
+    _checked_references(prepared, placement.edges)
     rows, offsets = [], []
     for edge, distance in zip(placement.edges, distances, strict=True):
         rows.append((np.dot(edge.inward, frame.x_axis), np.dot(edge.inward, frame.y_axis)))
@@ -1323,7 +1523,10 @@ def point_with_centre(
     if (
         not prepared.planar
         or reference is None
-        or not any(identifier == centre_id for identifier, _ in prepared.centres)
+        or not any(
+            identifier == centre_id and np.allclose(point, reference.point, atol=EPS_GEOM, rtol=0.0)
+            for identifier, point in prepared.centres
+        )
         or not np.isfinite(offset).all()
     ):
         raise _reject(
@@ -1335,7 +1538,7 @@ def point_with_centre(
         + offset[0] * np.asarray(prepared.frame.x_axis)
         + offset[1] * np.asarray(prepared.frame.y_axis)
     )
-    return at_point(prepared, _vec(target))
+    return at_point(prepared, _vec(target), references=surface.edges)
 
 
 _SURFACE_PRIMITIVES = frozenset(

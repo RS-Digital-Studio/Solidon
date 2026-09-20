@@ -338,7 +338,8 @@ def test_only_real_placement_operations_accept_surface_values():
     assert not placement.supports_surface_placement(REGISTRY.get("translate_object"))
 
 
-def test_circle_facets_never_become_two_linear_measurement_references():
+@pytest.mark.parametrize("with_feature", [False, True])
+def test_circle_facets_never_become_two_linear_measurement_references(with_feature):
     from app.core.geom.boolean import boolean
 
     plate = MeshData.of(trimesh.creation.box((20.0, 20.0, 4.0)))
@@ -350,12 +351,17 @@ def test_circle_facets_never_become_two_linear_measurement_references():
         provenance="detected",
         params={"centre": (0.0, 0.0, 0.0), "axis": (0.0, 0.0, 1.0), "depth": 4.0, "diameter": 0.5},
     )
-    prepared = placement.prepare_surface(mesh, _top(mesh), {feature.id: feature})
+    prepared = placement.prepare_surface(
+        mesh, _top(mesh), {feature.id: feature} if with_feature else {}
+    )
     assert len(prepared.edges) == 4
     hit = placement.at_point(prepared, (0.3, 0.3, 2.0))
     assert len(hit.edges) == 2
     assert all(abs(edge.distance) > 9.0 for edge in hit.edges)
-    assert hit.centres[0].point == pytest.approx((0.0, 0.0, 2.0))
+    if with_feature:
+        assert hit.centres[0].point == pytest.approx((0.0, 0.0, 2.0))
+    else:
+        assert not hit.centres
 
 
 def test_small_straight_cutout_edges_are_preserved():
@@ -371,6 +377,177 @@ def test_small_straight_cutout_edges_are_preserved():
     assert min(
         np.linalg.norm(np.asarray(edge.start) - edge.end) for edge in prepared.edges
     ) == pytest.approx(0.2)
+
+
+def test_reference_choice_keeps_the_point_and_survives_crossing_the_plate():
+    """Eine ausdrücklich gewählte ferne Kante bleibt beim Zug dieselbe."""
+    mesh = MeshData.of(trimesh.creation.box((40.0, 30.0, 8.0)))
+    prepared = placement.prepare_surface(mesh, _top(mesh))
+    original = placement.at_point(prepared, (15.0, 10.0, 4.0))
+    opposite = next(edge for edge in prepared.edges if np.allclose(edge.inward, (1, 0, 0)))
+    index = next(i for i, edge in enumerate(original.edges) if abs(edge.inward[0]) > 0.9)
+    chosen = placement.with_reference(prepared, original, index, opposite.id)
+    assert chosen.point == original.point
+    assert chosen.edges[index].distance == pytest.approx(35.0)
+    moved = placement.at_point(prepared, (-15.0, -10.0, 4.0), references=chosen.edges)
+    assert [edge.id for edge in moved.edges] == [edge.id for edge in chosen.edges]
+    assert moved.edges[index].distance == pytest.approx(5.0)
+    with pytest.raises(ValidationError):
+        placement.with_reference(prepared, original, index, "missing_edge")
+
+
+@pytest.mark.parametrize("angle, accepted", [(15.0, True), (5.0, False)])
+@pytest.mark.parametrize("size", [1.0, 1000.0])
+@pytest.mark.parametrize("tilt", [0.0, 37.0])
+def test_reference_condition_is_independent_of_size_and_world_rotation(angle, accepted, size, tilt):
+    """Die Bediengrenze betrifft das Bezugspaar, weder Größe noch Weltachsen."""
+    from dataclasses import replace
+
+    raw = trimesh.creation.box((size, size, size))
+    face = _top(MeshData.of(raw))
+    matrix = np.asarray(rotation("y", tilt))
+    raw.apply_transform(matrix)
+    prepared = placement.prepare_surface(MeshData.of(raw), face)
+    frame = prepared.frame
+    one = np.asarray(frame.x_axis)
+    two = math.cos(math.radians(angle)) * one + math.sin(math.radians(angle)) * np.asarray(
+        frame.y_axis
+    )
+    origin = np.asarray(frame.origin)
+    edges = tuple(
+        placement.EdgeReference(
+            str(index), tuple(origin), tuple(origin + np.cross(frame.normal, normal)), tuple(normal)
+        )
+        for index, normal in enumerate((one, two))
+    )
+    prepared = replace(prepared, edges=edges)
+    point = tuple(trimesh.transform_points([[0.0, 0.0, size / 2]], matrix)[0])
+    surface = placement.at_point(prepared, point)
+    assert (len(surface.edges) == 2) is accepted
+    if not accepted:
+        with pytest.raises(ValidationError):
+            placement.with_reference(prepared, surface, 1, edges[1].id)
+
+
+def test_inner_reference_is_explicit_and_automatic_references_prefer_the_outer_boundary():
+    """Der winzige echte Innenausschnitt bleibt wählbar, die Außenmaße sind die Vorgabe."""
+    from shapely.geometry import Polygon
+
+    outline = Polygon(
+        [(-10, -10), (10, -10), (10, 10), (-10, 10)],
+        holes=[[(0, 0), (0.2, 0), (0.2, 0.2), (0, 0.2)]],
+    )
+    mesh = MeshData.of(trimesh.creation.extrude_polygon(outline, 2.0))
+    prepared = placement.prepare_surface(mesh, _top(mesh))
+    surface = placement.at_point(prepared, (0.4, 0.4, 2.0))
+    assert all(edge.kind == "outer" for edge in surface.edges)
+    inner = next(
+        edge
+        for edge in prepared.edges
+        if edge.kind == "inner" and abs(np.dot(edge.inward, surface.edges[1].inward)) < 0.1
+    )
+    chosen = placement.with_reference(prepared, surface, 0, inner.id)
+    assert chosen.edges[0].id == inner.id
+    assert chosen.point == surface.point
+
+
+@pytest.mark.parametrize("native", [False, True])
+def test_real_slot_offers_its_measured_centre_and_axis(native):
+    """Beide Körperarten liefern die Langlochachse aus der tatsächlichen Richtung."""
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.perceive.features import detect
+
+    body = edit.slot_bore(
+        edit.box(40.0, 30.0, 8.0),
+        position=(0.0, 0.0, 4.0),
+        direction=(0.0, 0.0, 1.0),
+        diameter=6.0,
+        depth=12.0,
+        length=16.0,
+        angle_deg=30.0,
+        overlap=0.0,
+    )
+    mesh = as_mesh_data(body)
+    features = features_of(body) if native else detect(mesh)
+    slot = next(feature for feature in features.values() if feature.kind == "slot")
+    prepared = placement.prepare_surface(mesh, _top(mesh), features)
+    centre = next(point for identifier, point in prepared.centres if identifier == slot.id)
+    axis = next(edge for edge in prepared.edges if edge.id == f"axis_{slot.id}")
+    assert centre == pytest.approx((0.0, 0.0, 8.0), abs=0.01)
+    direction = np.asarray(axis.end) - axis.start
+    assert np.linalg.norm(direction) == pytest.approx(16.0, abs=0.01)
+    assert abs(
+        direction @ np.asarray((math.cos(math.radians(30)), math.sin(math.radians(30)), 0))
+    ) == pytest.approx(16.0, abs=0.01)
+    nearby = placement.reference_candidates(prepared, centre, 0.1)
+    assert (slot.id, "centre") in nearby
+    assert (axis.id, "axis") in nearby
+    assert (slot.id, "centre") in placement.reference_candidates(
+        prepared, (0.0, 0.0, 0.0), 0.1, ray=((0.0, 0.0, 20.0), (0.0, 0.0, -1.0))
+    )
+    assert not placement.reference_candidates(
+        prepared, (0.0, 0.0, 12.0), 0.1, ray=((0.0, 0.0, 20.0), (0.0, 0.0, -1.0))
+    )
+    assert not placement.reference_candidates(
+        prepared, (0.0, 0.0, 0.0), 0.1, ray=((0.0, 0.0, -20.0), (0.0, 0.0, 1.0))
+    )
+
+
+def test_stale_reference_geometry_is_rejected_even_when_the_number_is_reused():
+    """Eine neue edge_0 ist kein Nachweis für die alte reale Kante."""
+    mesh = MeshData.of(trimesh.creation.box((40.0, 30.0, 8.0)))
+    prepared = placement.prepare_surface(mesh, _top(mesh))
+    surface = placement.at_point(prepared, (15.0, 10.0, 4.0))
+    shifted = mesh.raw.copy()
+    shifted.apply_translation((1.0, 0.0, 0.0))
+    other = MeshData.of(shifted)
+    updated = placement.prepare_surface(other, _top(other))
+    with pytest.raises(ValidationError):
+        placement.at_point(updated, (15.0, 10.0, 4.0), references=surface.edges)
+
+
+def test_reference_extension_is_not_claimed_as_a_wall_distance():
+    """Außerhalb der endlichen Kante ist nur die gestrichelte Verlängerung ein Bezug."""
+    edge = placement.EdgeReference("edge", (0.0, 0.0, 0.0), (2.0, 0.0, 0.0), (0.0, 1.0, 0.0))
+    assert placement.reference_extension(edge, (1.0, 3.0, 0.0)) is None
+    assert placement.reference_extension(edge, (5.0, 3.0, 0.0)) == (
+        (2.0, 0.0, 0.0),
+        (5.0, 0.0, 0.0),
+    )
+
+
+def test_seated_slot_preserves_other_openings_and_their_real_references():
+    """Nur die eigene Öffnung wird zum Platzieren gefüllt; fremde Ausschnitte bleiben frei."""
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+    from app.core.geom.mesh import as_mesh_data
+
+    body = edit.box(50.0, 30.0, 8.0)
+    for x in (-12.0, 12.0):
+        body = edit.slot_bore(
+            body,
+            position=(x, 0.0, 4.0),
+            direction=(0.0, 0.0, 1.0),
+            diameter=4.0,
+            depth=12.0,
+            length=8.0,
+            angle_deg=0.0,
+            overlap=0.0,
+        )
+    features = features_of(body)
+    slots = sorted(
+        (feature for feature in features.values() if feature.kind == "slot"),
+        key=lambda feature: feature.params["centre"][0],
+    )
+    prepared, mouth = placement.seat_of(as_mesh_data(body), slots[0], features)
+    surface = placement.at_point(prepared, mouth)
+    assert f"axis_{slots[0].id}" not in {edge.id for edge in prepared.edges}
+    assert f"axis_{slots[1].id}" in {edge.id for edge in prepared.edges}
+    assert len(surface.centres) == 1
+    with pytest.raises(ValidationError):
+        placement.at_point(prepared, surface.centres[0].point)
 
 
 def test_a_pin_on_the_underside_uses_its_material_base(profile):
@@ -944,6 +1121,8 @@ def test_centre_offsets_are_editable_in_the_actual_rotated_plane():
     reference = next(item for item in result.centres if item.feature_id == centre.id)
     assert reference.offset == pytest.approx((3.123456789, 4.0), abs=1e-12)
     assert reference.distance == pytest.approx(math.hypot(3.123456789, 4.0))
+    crossed = placement.point_with_centre(prepared, result, centre.id, (-4.0, -5.0))
+    assert [edge.id for edge in crossed.edges] == [edge.id for edge in surface.edges]
     with pytest.raises(ValidationError, match="außerhalb"):
         placement.point_with_centre(prepared, result, centre.id, (0.0, 0.0))
     with pytest.raises(ValidationError, match="außerhalb"):
