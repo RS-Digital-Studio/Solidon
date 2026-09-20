@@ -84,7 +84,7 @@ def write(solid: Solid, name: str = "") -> bytes:
         Interface_Static.SetCVal_s("write.step.product.name", name or "Solidon")
         # Der Transfer verändert auch bei gültigen Rundflächen interne
         # Kennzeichen. Szene und Cache behalten ausschließlich ihre eigene Form.
-        working, _faces = copy_shape(solid.shape)
+        working, _faces, _edges = copy_shape(solid.shape)
         writer.Transfer(working, STEPControl_AsIs)
         if writer.Write(str(path)) != IFSelect_RetDone:
             raise ValidationError(

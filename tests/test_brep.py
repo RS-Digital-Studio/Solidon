@@ -194,7 +194,7 @@ def test_native_face_attributes_follow_a_copy_with_reordered_faces(monkeypatch) 
     import numpy as np
     from OCP.BRep import BRep_Builder
     from OCP.collections import IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher as ShapeMap
-    from OCP.TopAbs import TopAbs_COMPOUND, TopAbs_FACE, TopAbs_SOLID
+    from OCP.TopAbs import TopAbs_COMPOUND, TopAbs_EDGE, TopAbs_FACE, TopAbs_SOLID
     from OCP.TopExp import TopExp
     from OCP.TopoDS import TopoDS_Compound
 
@@ -213,21 +213,23 @@ def test_native_face_attributes_follow_a_copy_with_reordered_faces(monkeypatch) 
     original_copy = kernel.copy_shape
 
     def reordered_copy(shape):
-        copied, mapping = original_copy(shape)
+        copied, mapping, edges = original_copy(shape)
         if copied.ShapeType() != TopAbs_COMPOUND:
-            return copied, mapping
-        children, old_faces = ShapeMap(), ShapeMap()
+            return copied, mapping, edges
+        children = ShapeMap()
         TopExp.MapShapes_s(copied, TopAbs_SOLID, children)
-        TopExp.MapShapes_s(copied, TopAbs_FACE, old_faces)
         reordered = TopoDS_Compound()
         builder.MakeCompound(reordered)
         for index in range(children.Extent(), 0, -1):
             builder.Add(reordered, children.FindKey(index))
-        new_faces = ShapeMap()
-        TopExp.MapShapes_s(reordered, TopAbs_FACE, new_faces)
-        return reordered, tuple(
-            int(new_faces.FindIndex(old_faces.FindKey(target + 1))) - 1 for target in mapping
-        )
+
+        def renumbered(kind, old_mapping):
+            old, new = ShapeMap(), ShapeMap()
+            TopExp.MapShapes_s(copied, kind, old)
+            TopExp.MapShapes_s(reordered, kind, new)
+            return tuple(int(new.FindIndex(old.FindKey(target + 1))) - 1 for target in old_mapping)
+
+        return reordered, renumbered(TopAbs_FACE, mapping), renumbered(TopAbs_EDGE, edges)
 
     monkeypatch.setattr(kernel, "copy_shape", reordered_copy)
     assigned = source.with_triangle_slots(slots)
@@ -1160,7 +1162,9 @@ def test_rounding_failures_offer_editing_instead_of_mesh_repair(
         builder.IsDone.return_value = False
         monkeypatch.setattr(brep_api, "BRepAlgoAPI_Defeaturing", lambda: builder)
     elif failure == "missing_edge":
-        monkeypatch.setattr(edit, "edges_of", lambda _solid: ())
+        # Kein Beleg aus der Builder-Historie: der Radiuswechsel sagt ab, statt die
+        # nächste Kante an der alten Mitte zu nehmen.
+        monkeypatch.setattr(edit, "_sharp_edge_after", lambda *_args, **_kwargs: None)
 
     with pytest.raises(GeometryError) as failed:
         if failure == "missing_edge":
@@ -1168,7 +1172,8 @@ def test_rounding_failures_offer_editing_instead_of_mesh_repair(
         else:
             edit.unround(source, centre, 3.0)
 
-    assert {action.id for action in failed.value.suggestions} == {"correct_input", "cancel"}
+    offered = "change_selection" if failure == "missing_edge" else "correct_input"
+    assert {action.id for action in failed.value.suggestions} == {offered, "cancel"}
     assert source.volume == pytest.approx(before, abs=EPS_GEOM)
 
 

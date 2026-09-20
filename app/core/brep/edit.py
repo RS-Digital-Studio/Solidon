@@ -138,9 +138,6 @@ def _seam_edges(solid: Solid) -> Any:
 def edges_of(solid: Solid) -> list[EdgeInfo]:
     """Jede Kante mit den Zahlen, aus denen sich eine Auswahl treffen lässt."""
     require()
-    from OCP.BRepAdaptor import BRepAdaptor_Curve
-    from OCP.BRepGProp import BRepGProp
-    from OCP.GProp import GProp_GProps
 
     # **Nahtkanten gehören nicht dazu.** Wo eine Fläche in sich geschlossen ist
     # — der Mantel eines Zylinders, einer Kugel, eines Kegels —, trägt sie eine
@@ -167,29 +164,77 @@ def edges_of(solid: Solid) -> list[EdgeInfo]:
 
     described: list[EdgeInfo] = []
     for edge in solid.edges():
-        props = GProp_GProps()
-        BRepGProp.LinearProperties_s(edge, props)
-        length = float(props.Mass())
-        if length <= EPS_GEOM:
-            continue
-        if seams.Contains(edge):
-            continue
-
-        curve = BRepAdaptor_Curve(edge)
-        start = curve.Value(curve.FirstParameter())
-        end = curve.Value(curve.LastParameter())
-        span = (end.X() - start.X(), end.Y() - start.Y(), end.Z() - start.Z())
-        norm = max((span[0] ** 2 + span[1] ** 2 + span[2] ** 2) ** 0.5, EPS_GEOM)
-        centre = props.CentreOfMass()
-        described.append(
-            EdgeInfo(
-                edge=edge,
-                length=length,
-                direction=(span[0] / norm, span[1] / norm, span[2] / norm),
-                middle=(centre.X(), centre.Y(), centre.Z()),
-            )
-        )
+        entry = _described_edge(edge, seams)
+        if entry is not None:
+            described.append(entry)
     return described
+
+
+def _described_edge(edge: Any, seams: Any) -> EdgeInfo | None:
+    """Eine Kante beschreiben — oder nichts für Nähte und Nullkanten."""
+    from OCP.BRepAdaptor import BRepAdaptor_Curve
+    from OCP.BRepGProp import BRepGProp
+    from OCP.GProp import GProp_GProps
+
+    props = GProp_GProps()
+    BRepGProp.LinearProperties_s(edge, props)
+    length = float(props.Mass())
+    if length <= EPS_GEOM or seams.Contains(edge):
+        return None
+    curve = BRepAdaptor_Curve(edge)
+    start = curve.Value(curve.FirstParameter())
+    end = curve.Value(curve.LastParameter())
+    span = (end.X() - start.X(), end.Y() - start.Y(), end.Z() - start.Z())
+    norm = max((span[0] ** 2 + span[1] ** 2 + span[2] ** 2) ** 0.5, EPS_GEOM)
+    centre = props.CentreOfMass()
+    return EdgeInfo(
+        edge=edge,
+        length=length,
+        direction=(span[0] / norm, span[1] / norm, span[2] / norm),
+        middle=(centre.X(), centre.Y(), centre.Z()),
+    )
+
+
+def _edges_at(working: Solid, indices: Sequence[int]) -> list[EdgeInfo]:
+    """Die ausdrücklich gewählten Kanten der Arbeitskopie, im Indexraum ``edges()``.
+
+    Keine Suche nach einem ähnlichen Ersatz und kein gerundeter Schlüssel
+    dazwischen: Der Aufrufer hat die Kante am aktuellen Eigentümer bestimmt,
+    die private Kopie hat sie über ``_copied_edges`` nachgeführt, und genau
+    diese Kante bekommt der Builder. Eine Naht oder Nullkante ist keine
+    Kante, die sich bearbeiten ließe — derselbe Satz wie bei einer leeren
+    Gruppe.
+    """
+    seams = _seam_edges(working)
+    edges = working.edges()
+    chosen: list[EdgeInfo] = []
+    for index in indices:
+        entry = _described_edge(edges[index], seams)
+        if entry is None:
+            raise GeometryError(
+                detail=_("Zu dieser Auswahl gehört keine Kante."),
+                suggestions=(CORRECT_INPUT, CANCEL),
+            )
+        chosen.append(entry)
+    return chosen
+
+
+def _edges_for(
+    working: Solid,
+    choice: SharedEdgeChoice,
+    keys: Sequence[str],
+    checked: tuple[int, ...] | None,
+) -> list[EdgeInfo]:
+    """Die Kanten dieses Aufrufs: ausdrücklich gewählte vor Schlüsseln vor Gruppe.
+
+    ``checked`` sind die am Eingabe-Solid geprüften Indizes seines
+    ``edges()``-Raums (:meth:`Solid.checked_edge_indices`, **vor** der
+    Kopie); die Arbeitskopie führt sie nach. Eine ausdrückliche Auswahl
+    fällt nie auf Schlüssel oder Gruppe zurück (§21.3).
+    """
+    if checked is None:
+        return _wanted(working, choice, keys)
+    return _edges_at(working, [working._copied_edges[index] for index in checked])
 
 
 def edge_points(entry: EdgeInfo, deflection: float = DEFLECTION) -> tuple[Vec3, ...]:
@@ -291,19 +336,25 @@ def fillet(
     radius: float,
     choice: EdgeChoice = "all",
     keys: Sequence[str] = (),
+    *,
+    selected_edges: Sequence[int] | None = None,
 ) -> Solid:
     """Rundet die gewählten Kanten. Exakt, weil die Kante eine Kurve
     ist (§30).
 
     ``keys`` sind einzelne Kanten (:func:`edge_key`, E4). Sind welche genannt,
     gelten sie und nicht die Gruppe: Wer eine bestimmte Kante angibt, meint
-    sie — nicht alle senkrechten dazu.
+    sie — nicht alle senkrechten dazu. ``selected_edges`` geht noch einen
+    Schritt weiter: Indizes in ``solid.edges()``, am aktuellen Eigentümer
+    bestimmt und ohne gerundeten Schlüssel dazwischen — der Weg, den der
+    Radiuswechsel für die belegte scharfe Kante nimmt.
     """
     require()
     from OCP.BRepFilletAPI import BRepFilletAPI_MakeFillet
 
+    checked = None if selected_edges is None else solid.checked_edge_indices(selected_edges)
     working = replace(solid)
-    chosen = _wanted(working, choice, keys)
+    chosen = _edges_for(working, choice, keys, checked)
 
     _fits_the_wall(working, radius, chosen, "fillet")
     builder = BRepFilletAPI_MakeFillet(working.shape)
@@ -317,17 +368,20 @@ def chamfer(
     distance: float,
     choice: EdgeChoice = "all",
     keys: Sequence[str] = (),
+    *,
+    selected_edges: Sequence[int] | None = None,
 ) -> Solid:
     """Bricht die gewählten Kanten im 45-Grad-Winkel.
 
-    ``keys`` wie bei :func:`fillet`: einzelne Kanten haben Vorrang vor der
-    Gruppe.
+    ``keys`` und ``selected_edges`` wie bei :func:`fillet`: einzelne Kanten
+    haben Vorrang vor der Gruppe, eine ausdrückliche Auswahl vor beidem.
     """
     require()
     from OCP.BRepFilletAPI import BRepFilletAPI_MakeChamfer
 
+    checked = None if selected_edges is None else solid.checked_edge_indices(selected_edges)
     working = replace(solid)
-    chosen = _wanted(working, choice, keys)
+    chosen = _edges_for(working, choice, keys, checked)
 
     _fits_the_wall(working, distance, chosen, "chamfer")
     builder = BRepFilletAPI_MakeChamfer(working.shape)
@@ -1115,6 +1169,23 @@ def unround(
     zum Eingabe-Solid und wird durch dessen private Kopie nachgeführt (§21.2).
     Eine leere, mehrteilige oder unpassende Auswahl löst keine Ersatzsuche aus.
     """
+    return _unround(solid, centre, radius, selected_faces, cancelled)[0]
+
+
+def _unround(
+    solid: Solid,
+    centre: Vec3,
+    radius: float,
+    selected_faces: Sequence[int] | None,
+    cancelled: CancelToken | None,
+) -> tuple[Solid, int | None]:
+    """Nimmt die Rundung weg und belegt, welche Kante an ihre Stelle tritt.
+
+    Der zweite Wert ist der Index der neuen scharfen Kante in
+    ``result.edges()`` — oder ``None``, wenn die Builder-Historie ihn nicht
+    eindeutig hergibt (:func:`_sharp_edge_after`). Der Radiuswechsel verrundet
+    genau diese Kante; er sucht nicht die nächste an der alten Mitte.
+    """
     require()
     from OCP.BRepAlgoAPI import BRepAlgoAPI_Defeaturing
 
@@ -1174,7 +1245,97 @@ def unround(
     result = working.replacing(builder.Shape(), history=builder, cancelled=cancelled)
     if cancelled is not None:
         cancelled.raise_if_cancelled()
-    return result
+    sharp = _sharp_edge_after(working, face, builder, result, cancelled=cancelled)
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+    return result, sharp
+
+
+def _sharp_edge_after(
+    working: Solid, face: Any, builder: Any, result: Solid, *, cancelled: CancelToken | None
+) -> int | None:
+    """Die Kante, die an die Stelle der entfernten Rundung tritt — belegt über
+    die Builder-Historie, oder ``None``.
+
+    Der Beleg (gemessen am 20.09.2026 an vier gleichen Rundungen R3): Die
+    Rundung grenzt an ihre zwei **Wände** quer zur Achse und an Deckel und
+    Boden. ``Modified(Wand)`` nennt je Wand genau eine verlängerte Fläche,
+    und diese beiden teilen sich im Ergebnis **genau eine** Kante — die
+    scharfe. Deckel und Boden gehören nicht dazu; über alle vier Nachbarn
+    ist der Schnitt leer. Die nächste Kante zur alten Mitte traf dort
+    zufällig dieselbe; sie ist kein Beleg.
+
+    Ohne genau zwei ebene Wände quer zur Achse — eine Rundung zwischen Ebene
+    und Zylindermantel — oder mit einer anderen Zahl gemeinsamer Kanten gibt
+    es keinen Beleg, und der Aufrufer sagt das, statt zu raten (Regel 21).
+    Welche Wand quer zur Achse steht, entscheidet dieselbe Grenze wie am
+    Netz (``units.UPRIGHT_TO_AXIS``).
+    """
+    from OCP.collections import (
+        IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher as NeighbourMap,
+    )
+    from OCP.collections import IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher as ShapeMap
+    from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE
+    from OCP.TopExp import TopExp
+    from OCP.TopoDS import TopoDS
+
+    from app.core.brep.canonical import PlaneSurface
+    from app.core.units import UPRIGHT_TO_AXIS
+
+    surface = describe_surface(face, cancelled=cancelled)
+    if not isinstance(surface, CylinderSurface):
+        return None
+    direction = surface.cylinder.Axis().Direction()
+    axis = (float(direction.X()), float(direction.Y()), float(direction.Z()))
+    neighbours = NeighbourMap()
+    TopExp.MapShapesAndAncestors_s(working.shape, TopAbs_EDGE, TopAbs_FACE, neighbours)
+    walls: list[Any] = []
+    rim = ShapeMap()
+    TopExp.MapShapes_s(face, TopAbs_EDGE, rim)
+    for index in range(1, rim.Extent() + 1):
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        shared = neighbours.FindIndex(rim.FindKey(index))
+        if shared == 0:
+            continue
+        for raw in neighbours.FindFromIndex(shared):
+            if raw.IsSame(face) or any(raw.IsSame(wall) for wall in walls):
+                continue
+            # Die Nachbarkarte gibt nackte Formen zurück; der Träger will die
+            # echte Fläche — dieselbe Falle wie in ``Solid._explore``.
+            other = TopoDS.Face(raw)
+            plane = describe_surface(other, cancelled=cancelled)
+            if not isinstance(plane, PlaneSurface):
+                continue
+            normal = plane.normal
+            across = abs(normal[0] * axis[0] + normal[1] * axis[1] + normal[2] * axis[2])
+            if across <= UPRIGHT_TO_AXIS:
+                walls.append(other)
+    if len(walls) != 2:
+        return None
+    built_edges = ShapeMap()
+    TopExp.MapShapes_s(builder.Shape(), TopAbs_EDGE, built_edges)
+    common: set[int] | None = None
+    for wall in walls:
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        edges: set[int] = set()
+        for modified in builder.Modified(wall):
+            owned = ShapeMap()
+            TopExp.MapShapes_s(modified, TopAbs_EDGE, owned)
+            edges.update(
+                int(built_edges.FindIndex(owned.FindKey(number))) - 1
+                for number in range(1, owned.Extent() + 1)
+            )
+        common = edges if common is None else common & edges
+    if not common or len(common) != 1:
+        return None
+    # Vom Index in der Builder-Form zum Index im Ergebnis: ``replacing`` hat
+    # die Form kopiert, und die Kopie führt ihre Kanten über ``_copied_edges``.
+    (built,) = common
+    if built < 0 or built >= len(result._copied_edges):
+        return None
+    return result._copied_edges[built]
 
 
 def _cylinder_at(
@@ -1225,6 +1386,7 @@ def reround(
     radius: float,
     wanted: float,
     *,
+    selected_faces: Sequence[int] | None = None,
     cancelled: CancelToken | None = None,
 ) -> Solid:
     """Ändert den Radius einer Verrundung — wegnehmen, neu verrunden.
@@ -1233,27 +1395,30 @@ def reround(
     demselben Grund: Dazwischen liegt die scharfe Kante, und die ist der
     Zustand, an dem beide Hälften prüfbar sind.
 
-    Die Kante wird über ihre **Lage** wiedergefunden: die nächste an der
-    Achse der alten Rundung. Ein Index in die Topologie wäre nach dem
-    Defeaturing ein anderer.
+    Beide Übergänge sind belegt, keiner geraten: ``selected_faces`` benennt
+    die Rundungsfläche am aktuellen Eigentümer (wie bei :func:`unround`),
+    und die neue scharfe Kante kommt aus der Builder-Historie der beiden
+    Wände (:func:`_sharp_edge_after`), ohne gerundeten Schlüssel dazwischen.
+    Gibt die Historie keine eindeutige Kante her, sagt der Weg es mit
+    demselben Satz wie der Netzweg — statt die nächste Kante an der alten
+    Mitte zu nehmen, die bei zwei nahen Rundungen die falsche wäre.
+    Ohne ausdrückliche Auswahl bleibt der ältere Suchmodus über Lage und
+    Radius bestehen.
     """
-    radial = radial_rounding(solid, centre, radius, wanted, cancelled=cancelled)
+    from app.core.errors import CHANGE_SELECTION
+    from app.core.geom.edges import NOT_BETWEEN_TWO_PLANES
+
+    radial = radial_rounding(
+        solid, centre, radius, wanted, selected_faces=selected_faces, cancelled=cancelled
+    )
     if radial is not None:
         return radial
-    sharp = unround(solid, centre, radius, cancelled=cancelled)
+    sharp, edge = _unround(solid, centre, radius, selected_faces, cancelled)
     if cancelled is not None:
         cancelled.raise_if_cancelled()
-    described = edges_of(sharp)
-    if not described:
-        raise GeometryError(
-            detail=_(
-                "Nach dem Wegnehmen der Rundung ist an dieser Stelle keine Kante "
-                "übrig, die sich verrunden ließe."
-            ),
-            suggestions=(CORRECT_INPUT, CANCEL),
-        )
-    nearest = min(described, key=lambda entry: math.dist(entry.middle, centre))
-    result = fillet(sharp, wanted, "named", [edge_key(nearest)])
+    if edge is None:
+        raise GeometryError(detail=NOT_BETWEEN_TWO_PLANES, suggestions=(CHANGE_SELECTION, CANCEL))
+    result = fillet(sharp, wanted, selected_edges=(edge,))
     if cancelled is not None:
         cancelled.raise_if_cancelled()
     return result
@@ -1265,9 +1430,15 @@ def radial_rounding(
     radius: float,
     wanted: float,
     *,
+    selected_faces: Sequence[int] | None = None,
     cancelled: CancelToken | None = None,
 ) -> Solid | None:
-    """Versetzt einen mindestens halben Zylindermantel innerhalb seiner echten Randkurven."""
+    """Versetzt einen mindestens halben Zylindermantel innerhalb seiner echten Randkurven.
+
+    ``selected_faces`` benennt die Fläche am aktuellen Eigentümer; sonst wird
+    sie wie bisher über Lage und Radius gesucht. Eine ausdrückliche Auswahl,
+    die keine passende Zylinderfläche ist, löst keine Ersatzsuche aus.
+    """
     from OCP.BRepBuilderAPI import BRepBuilderAPI_Copy
     from OCP.BRepCheck import BRepCheck_Analyzer
     from OCP.BRepLib import BRepLib
@@ -1277,7 +1448,24 @@ def radial_rounding(
 
     from app.core.geom.edges import validate_radial_change
 
-    face = _cylinder_at(solid, centre, radius, cancelled=cancelled)
+    if selected_faces is None:
+        face = _cylinder_at(solid, centre, radius, cancelled=cancelled)
+    else:
+        indices = solid.checked_face_indices(selected_faces, cancelled=cancelled)
+        if len(indices) != 1:
+            raise GeometryError(
+                detail=_("Wähle genau eine vollständige Rundungsfläche mit dem bisherigen Radius."),
+                suggestions=(CORRECT_INPUT, CANCEL),
+            )
+        face = solid.faces()[indices[0]]
+        chosen = describe_surface(face, cancelled=cancelled)
+        if not isinstance(chosen, CylinderSurface) or not is_close(
+            float(chosen.cylinder.Radius()), radius
+        ):
+            raise GeometryError(
+                detail=_("Wähle genau eine vollständige Rundungsfläche mit dem bisherigen Radius."),
+                suggestions=(CORRECT_INPUT, CANCEL),
+            )
     if face is None:
         return None
     surface = describe_surface(face, cancelled=cancelled)

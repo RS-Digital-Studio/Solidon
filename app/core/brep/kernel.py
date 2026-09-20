@@ -30,7 +30,7 @@ from app.core.geom.mesh import MeshData
 from app.core.log import get_logger
 from app.core.types import MAX_SLOTS, BoundingBox, CancelToken
 from app.core.units import MAX_FACET_ANGLE, MAX_FACET_SAG, is_close
-from app.i18n import _
+from app.i18n import TranslatableText, _
 
 _log = get_logger(__name__)
 
@@ -166,28 +166,47 @@ def _quieten() -> None:
 _quiet = False
 
 
-def copy_shape(shape: Any) -> tuple[Any, tuple[int, ...]]:
-    """Eigene Geometrie und die belegte Zuordnung ihrer nativen Quellflächen."""
+def copy_shape(shape: Any) -> tuple[Any, tuple[int, ...], tuple[int, ...]]:
+    """Eigene Geometrie und die belegte Zuordnung ihrer nativen Quellflächen
+    und Quellkanten.
+
+    Eine Kopierprimitive, kein zweiter Kopierweg: Eine Kante hat wie eine
+    Fläche keinen Namen, der eine Kopie überlebt, und wer eine am Original
+    gewählte Kante an der Arbeitskopie bearbeiten will, braucht die Abbildung
+    aus demselben ``ModifiedShape`` — nicht eine angenommene
+    Besuchsreihenfolge. Die Reihenfolge der Kanten ist die von
+    :meth:`Solid.edges`, die der Flächen die von :meth:`Solid.faces`.
+    """
     from OCP.BRepBuilderAPI import BRepBuilderAPI_Copy
-    from OCP.collections import IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher as ShapeMap
-    from OCP.TopAbs import TopAbs_FACE
-    from OCP.TopExp import TopExp
+    from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE
 
     builder = BRepBuilderAPI_Copy(shape, True, False)
     copied = builder.Shape()
-    source_faces, target_faces = ShapeMap(), ShapeMap()
-    TopExp.MapShapes_s(shape, TopAbs_FACE, source_faces)
-    TopExp.MapShapes_s(copied, TopAbs_FACE, target_faces)
-    mapping = tuple(
-        int(target_faces.FindIndex(builder.ModifiedShape(source_faces.FindKey(index)))) - 1
-        for index in range(1, source_faces.Extent() + 1)
+    return (
+        copied,
+        _copied_mapping(builder, shape, copied, TopAbs_FACE, "face"),
+        _copied_mapping(builder, shape, copied, TopAbs_EDGE, "edge"),
     )
-    if sorted(mapping) != list(range(target_faces.Extent())):
+
+
+def _copied_mapping(builder: Any, shape: Any, copied: Any, kind: Any, name: str) -> tuple[int, ...]:
+    """Quellindex → Zielindex einer Kopie, für Flächen wie für Kanten bijektiv belegt."""
+    from OCP.collections import IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher as ShapeMap
+    from OCP.TopExp import TopExp
+
+    source, target = ShapeMap(), ShapeMap()
+    TopExp.MapShapes_s(shape, kind, source)
+    TopExp.MapShapes_s(copied, kind, target)
+    mapping = tuple(
+        int(target.FindIndex(builder.ModifiedShape(source.FindKey(index)))) - 1
+        for index in range(1, source.Extent() + 1)
+    )
+    if sorted(mapping) != list(range(target.Extent())):
         raise InternalError(
-            detail="copy_shape returned an incomplete native face mapping",
-            values={"source_faces": source_faces.Extent(), "target_faces": target_faces.Extent()},
+            detail=f"copy_shape returned an incomplete native {name} mapping",
+            values={f"source_{name}s": source.Extent(), f"target_{name}s": target.Extent()},
         )
-    return copied, mapping
+    return mapping
 
 
 def boolean_builder(kind: str, first: Any, second: Any, *, tolerance: float | None = None) -> Any:
@@ -333,12 +352,14 @@ class Solid:
     """Filament je nativer Fläche; leer bedeutet überall den neutralen Slot null."""
     _cache: dict[str, Any] = field(default_factory=dict, init=False, compare=False, repr=False)
     _copied_faces: tuple[int, ...] = field(init=False, compare=False, repr=False)
+    _copied_edges: tuple[int, ...] = field(init=False, compare=False, repr=False)
 
     def __post_init__(self) -> None:
         """Übernimmt eine eigene Form; die übergebene bleibt Eigentum des Aufrufers."""
-        shape, mapping = copy_shape(self.shape)
+        shape, mapping, edges = copy_shape(self.shape)
         object.__setattr__(self, "shape", shape)
         object.__setattr__(self, "_copied_faces", mapping)
+        object.__setattr__(self, "_copied_edges", edges)
         if self.face_slots:
             if len(self.face_slots) != len(mapping) or any(
                 type(slot) is not int or not 0 <= slot < MAX_SLOTS for slot in self.face_slots
@@ -426,6 +447,32 @@ class Solid:
         die vollständige Dreiecksabdeckung. Die Länge der geprüften bijektiven
         Kopierabbildung ist zugleich die Anzahl unserer nativen Flächen.
         """
+        return self._checked_indices(
+            indices,
+            len(self._copied_faces),
+            _("Wähle vollständige Flächen aus und wiederhole die Änderung."),
+            cancelled=cancelled,
+        )
+
+    def checked_edge_indices(
+        self, indices: Sequence[int], *, cancelled: CancelToken | None = None
+    ) -> tuple[int, ...]:
+        """Dasselbe für native Kanten — der Indexraum ist :meth:`edges`."""
+        return self._checked_indices(
+            indices,
+            len(self._copied_edges),
+            _("Wähle die Kante am Körper neu und wiederhole die Änderung."),
+            cancelled=cancelled,
+        )
+
+    def _checked_indices(
+        self,
+        indices: Sequence[int],
+        count: int,
+        rejection: TranslatableText,
+        *,
+        cancelled: CancelToken | None,
+    ) -> tuple[int, ...]:
         if cancelled is not None:
             cancelled.raise_if_cancelled()
         selected: set[int] = set()
@@ -435,16 +482,12 @@ class Solid:
             if (
                 isinstance(value, bool)
                 or not isinstance(value, Integral)
-                or not 0 <= int(value) < len(self._copied_faces)
+                or not 0 <= int(value) < count
             ):
-                raise ValidationError(
-                    detail=_("Wähle vollständige Flächen aus und wiederhole die Änderung.")
-                )
+                raise ValidationError(detail=rejection)
             selected.add(int(value))
         if not selected:
-            raise ValidationError(
-                detail=_("Wähle vollständige Flächen aus und wiederhole die Änderung.")
-            )
+            raise ValidationError(detail=rejection)
         result = tuple(sorted(selected))
         if cancelled is not None:
             cancelled.raise_if_cancelled()

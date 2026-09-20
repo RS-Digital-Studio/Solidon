@@ -784,7 +784,7 @@ def test_direct_native_selection_cancellation_preserves_its_input_and_cache(
     copied: list[Any] = []
     original_copy = kernel.copy_shape
 
-    def tracked_copy(shape: Any) -> tuple[Any, tuple[int, ...]]:
+    def tracked_copy(shape: Any) -> tuple[Any, tuple[int, ...], tuple[int, ...]]:
         assert stage == "after_copy", "cancelled selection reached the copier"
         result = original_copy(shape)
         copied.append(result[0])
@@ -822,7 +822,7 @@ def test_direct_native_selection_survives_a_genuine_copy_face_reordering(
     from OCP.BRep import BRep_Builder
     from OCP.BRepCheck import BRepCheck_Analyzer
     from OCP.collections import IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher as ShapeMap
-    from OCP.TopAbs import TopAbs_COMPOUND, TopAbs_FACE, TopAbs_SOLID
+    from OCP.TopAbs import TopAbs_COMPOUND, TopAbs_EDGE, TopAbs_FACE, TopAbs_SOLID
     from OCP.TopExp import TopExp
     from OCP.TopoDS import TopoDS_Compound
 
@@ -857,25 +857,27 @@ def test_direct_native_selection_survives_a_genuine_copy_face_reordering(
     original_copy = kernel.copy_shape
     first_mapping: list[tuple[int, ...]] = []
 
-    def reordered_copy(shape: Any) -> tuple[Any, tuple[int, ...]]:
-        copied, mapping = original_copy(shape)
+    def reordered_copy(shape: Any) -> tuple[Any, tuple[int, ...], tuple[int, ...]]:
+        copied, mapping, edges = original_copy(shape)
         if copied.ShapeType() != TopAbs_COMPOUND:
-            return copied, mapping
-        children, old_faces = ShapeMap(), ShapeMap()
+            return copied, mapping, edges
+        children = ShapeMap()
         TopExp.MapShapes_s(copied, TopAbs_SOLID, children)
-        TopExp.MapShapes_s(copied, TopAbs_FACE, old_faces)
         reordered = TopoDS_Compound()
         builder.MakeCompound(reordered)
         for number in range(children.Extent(), 0, -1):
             builder.Add(reordered, children.FindKey(number))
-        new_faces = ShapeMap()
-        TopExp.MapShapes_s(reordered, TopAbs_FACE, new_faces)
-        changed = tuple(
-            int(new_faces.FindIndex(old_faces.FindKey(target + 1))) - 1 for target in mapping
-        )
+
+        def renumbered(kind: Any, old_mapping: tuple[int, ...]) -> tuple[int, ...]:
+            old, new = ShapeMap(), ShapeMap()
+            TopExp.MapShapes_s(copied, kind, old)
+            TopExp.MapShapes_s(reordered, kind, new)
+            return tuple(int(new.FindIndex(old.FindKey(target + 1))) - 1 for target in old_mapping)
+
+        changed = renumbered(TopAbs_FACE, mapping)
         if shape.IsSame(source.shape):
             first_mapping.append(changed)
-        return reordered, changed
+        return reordered, changed, renumbered(TopAbs_EDGE, edges)
 
     monkeypatch.setattr(kernel, "copy_shape", reordered_copy)
     if operation == "push":
@@ -936,7 +938,9 @@ def test_direct_native_selection_cancellation_after_real_build_keeps_the_source(
         profiles.boolean_builder if operation == "push" else brep_api.BRepAlgoAPI_Defeaturing
     )
 
-    def cancel_after_result_copy(shape: Any) -> tuple[Any, tuple[int, ...]]:
+    def cancel_after_result_copy(
+        shape: Any,
+    ) -> tuple[Any, tuple[int, ...], tuple[int, ...]]:
         result = original_copy(shape)
         copies.append(result[0])
         if stage == "result_copy" and len(copies) == 2:
@@ -1024,4 +1028,310 @@ def test_direct_native_push_uses_the_selected_planes_own_outward_normal(
     assert result.volume == pytest.approx(volume, abs=EPS_GEOM, rel=0.0)
     assert _native_selection_contains(result, gained)
     assert not _native_selection_contains(result, (0.0, 0.0, 11.0))
+    assert _native_selection_state(source) == before
+
+
+def _edge_summary(edge: Any) -> tuple[float, float, float, float]:
+    """Länge und Mitte einer nativen Kante als flaches Tupel, unabhängig von ``edit.edges_of``."""
+    from OCP.BRepGProp import BRepGProp
+    from OCP.GProp import GProp_GProps
+
+    props = GProp_GProps()
+    BRepGProp.LinearProperties_s(edge, props)
+    point = props.CentreOfMass()
+    return float(props.Mass()), point.X(), point.Y(), point.Z()
+
+
+def _two_boxes_apart() -> tuple[Any, Any]:
+    """Zwei Quader als Compound — links bei x = −40, rechts bei x = +40 — und der Builder dazu."""
+    from OCP.BRep import BRep_Builder
+    from OCP.TopoDS import TopoDS_Compound
+
+    part = edit.box(40.0, 30.0, 20.0)
+    builder = BRep_Builder()
+    compound = TopoDS_Compound()
+    builder.MakeCompound(compound)
+    builder.Add(compound, edit.moved(part, (-40.0, 0.0, 0.0)).shape)
+    builder.Add(compound, edit.moved(part, (40.0, 0.0, 0.0)).shape)
+    return compound, builder
+
+
+def _reversing_copy(monkeypatch: pytest.MonkeyPatch, builder: Any) -> list[tuple[int, ...]]:
+    """Lässt jede Compound-Kopie ihre Teilkörper rückwärts einhängen und sammelt die
+    Kantenabbildungen."""
+    from OCP.collections import IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher as ShapeMap
+    from OCP.TopAbs import TopAbs_COMPOUND, TopAbs_EDGE, TopAbs_FACE, TopAbs_SOLID
+    from OCP.TopExp import TopExp
+    from OCP.TopoDS import TopoDS_Compound
+
+    from app.core.brep import kernel
+
+    original_copy = kernel.copy_shape
+    edge_mappings: list[tuple[int, ...]] = []
+
+    def reversed_copy(shape: Any) -> tuple[Any, tuple[int, ...], tuple[int, ...]]:
+        copied, faces, edges = original_copy(shape)
+        if copied.ShapeType() != TopAbs_COMPOUND:
+            return copied, faces, edges
+        children = ShapeMap()
+        TopExp.MapShapes_s(copied, TopAbs_SOLID, children)
+        reordered = TopoDS_Compound()
+        builder.MakeCompound(reordered)
+        for number in range(children.Extent(), 0, -1):
+            builder.Add(reordered, children.FindKey(number))
+
+        def renumbered(kind: Any, old_mapping: tuple[int, ...]) -> tuple[int, ...]:
+            old, new = ShapeMap(), ShapeMap()
+            TopExp.MapShapes_s(copied, kind, old)
+            TopExp.MapShapes_s(reordered, kind, new)
+            return tuple(int(new.FindIndex(old.FindKey(target + 1))) - 1 for target in old_mapping)
+
+        changed_edges = renumbered(TopAbs_EDGE, edges)
+        edge_mappings.append(changed_edges)
+        return reordered, renumbered(TopAbs_FACE, faces), changed_edges
+
+    monkeypatch.setattr(kernel, "copy_shape", reversed_copy)
+    return edge_mappings
+
+
+def test_a_copy_maps_every_native_edge_by_history_not_by_visiting_order(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Die Kantenabbildung einer Kopie ist bijektiv und trifft die geometrisch gleiche Kante,
+    auch wenn die Kopie ihre Teilkörper in anderer Reihenfolge trägt."""
+    from OCP.collections import IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher as ShapeMap
+    from OCP.TopAbs import TopAbs_EDGE
+    from OCP.TopExp import TopExp
+
+    compound, builder = _two_boxes_apart()
+    edge_mappings = _reversing_copy(monkeypatch, builder)
+    source = Solid(compound)
+
+    assert len(edge_mappings) == 1
+    assert source._copied_edges == edge_mappings[0]
+    assert sorted(source._copied_edges) == list(range(source.edge_count))
+    assert source._copied_edges != tuple(range(source.edge_count))
+    original = ShapeMap()
+    TopExp.MapShapes_s(compound, TopAbs_EDGE, original)
+    assert original.Extent() == source.edge_count == 24
+    copied = source.edges()
+    for index in range(source.edge_count):
+        assert _edge_summary(copied[source._copied_edges[index]]) == pytest.approx(
+            _edge_summary(original.FindKey(index + 1)), abs=EPS_GEOM, rel=0.0
+        )
+
+
+def test_an_explicit_edge_selection_survives_a_genuine_copy_edge_reordering(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Die am Eigentümer gewählte Kante wird an der vertauschten Arbeitskopie verrundet —
+    nicht ihr Zwilling am anderen Körper."""
+    import math
+
+    from OCP.BRepCheck import BRepCheck_Analyzer
+
+    compound, builder = _two_boxes_apart()
+    source = Solid(compound)
+    chosen = [
+        index
+        for index, edge in enumerate(source.edges())
+        if _edge_summary(edge)[1:] == pytest.approx((-40.0, 15.0, 20.0), abs=EPS_GEOM, rel=0.0)
+    ]
+    assert len(chosen) == 1
+    before = _native_selection_state(source)
+    edge_mappings = _reversing_copy(monkeypatch, builder)
+
+    result = edit.fillet(source, 3.0, "vertical", selected_edges=chosen)
+
+    assert len(edge_mappings) >= 1
+    assert edge_mappings[0] != tuple(range(source.edge_count))
+    assert BRepCheck_Analyzer(result.shape).IsValid()
+    assert result.is_closed and result.solid_count == 2
+    assert result.volume == pytest.approx(
+        48000.0 - 40.0 * 3.0**2 * (1.0 - math.pi / 4.0), abs=EPS_GEOM, rel=0.0
+    )
+    assert not _native_selection_contains(result, (-40.0, 14.5, 19.5))
+    assert _native_selection_contains(result, (40.0, 14.5, 19.5))
+    assert _native_selection_state(source) == before
+
+
+@pytest.mark.parametrize("operation", ["fillet", "chamfer"])
+def test_an_explicit_edge_selection_takes_precedence_over_keys_and_group(operation: str) -> None:
+    """Gewählte Kante vor Schlüssel vor Gruppe: Weder die Gruppe noch der genannte
+    Schlüssel kommen dazu."""
+    import math
+
+    from OCP.BRepCheck import BRepCheck_Analyzer
+
+    source = edit.box(40.0, 30.0, 20.0)
+    top_along_x = [
+        index
+        for index, edge in enumerate(source.edges())
+        if _edge_summary(edge)[1:] == pytest.approx((0.0, 15.0, 20.0), abs=EPS_GEOM, rel=0.0)
+    ]
+    assert len(top_along_x) == 1
+    vertical = next(entry for entry in edit.edges_of(source) if abs(entry.direction[2]) > 0.5)
+    before = _native_selection_state(source)
+
+    if operation == "fillet":
+        result = edit.fillet(
+            source, 3.0, "vertical", [edit.edge_key(vertical)], selected_edges=top_along_x
+        )
+        removed = 40.0 * 3.0**2 * (1.0 - math.pi / 4.0)
+    else:
+        result = edit.chamfer(
+            source, 3.0, "vertical", [edit.edge_key(vertical)], selected_edges=top_along_x
+        )
+        removed = 40.0 * 3.0**2 / 2.0
+
+    assert BRepCheck_Analyzer(result.shape).IsValid()
+    assert result.is_closed and result.solid_count == 1
+    assert result.volume == pytest.approx(24000.0 - removed, abs=EPS_GEOM, rel=0.0)
+    assert not _native_selection_contains(result, (0.0, 14.5, 19.5))
+    assert _native_selection_contains(result, (0.0, -14.5, 19.5))
+    assert _native_selection_contains(result, (19.5, 14.5, 10.0))
+    assert _native_selection_state(source) == before
+
+
+@pytest.mark.parametrize("operation", ["fillet", "chamfer"])
+@pytest.mark.parametrize("indices", [(), (-1,), (10**6,), (1.5,), (True,), ("0",)], ids=repr)
+def test_an_invalid_edge_selection_is_rejected_before_any_copy(
+    monkeypatch: pytest.MonkeyPatch, operation: str, indices: Any
+) -> None:
+    """Eine ungültige Kantenauswahl eröffnet weder eine Kopie noch fällt sie auf die
+    Gruppe zurück."""
+    from app.core.brep import kernel
+    from app.core.errors import ValidationError
+
+    source = edit.box(20.0, 16.0, 10.0)
+    before = _native_selection_state(source)
+
+    def unexpected_copy(_shape: Any) -> Any:
+        raise AssertionError("invalid native edge selection reached a copier")
+
+    monkeypatch.setattr(kernel, "copy_shape", unexpected_copy)
+    with pytest.raises(ValidationError) as rejected:
+        if operation == "fillet":
+            edit.fillet(source, 2.0, "all", selected_edges=indices)
+        else:
+            edit.chamfer(source, 2.0, "all", selected_edges=indices)
+    assert rejected.value.suggestions
+    assert _native_selection_state(source) == before
+
+
+@pytest.mark.parametrize("nurbs", [False, True])
+def test_unround_proves_the_replacing_sharp_edge_from_the_builder_history(nurbs: bool) -> None:
+    """Je Rundung nennt die Historie der beiden Wände genau die senkrechte Eckkante,
+    die sie ersetzt."""
+    import math
+
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_NurbsConvert
+
+    source = edit.fillet(edit.box(40.0, 30.0, 20.0), 3.0, "vertical")
+    if nurbs:
+        source = Solid(BRepBuilderAPI_NurbsConvert(source.shape, True).Shape())
+    fillets = [value for value in features_of(source).values() if value.kind == "fillet"]
+    assert len(fillets) == 4
+    before = _native_selection_state(source)
+
+    for feature in fillets:
+        faces = source.complete_faces_of_triangles(feature.face_indices)
+        result, edge = edit._unround(source, feature.params["centre"], 3.0, faces, None)
+        assert edge is not None
+        assert 0 <= edge < result.edge_count
+        length, *middle = _edge_summary(result.edges()[edge])
+        x, y, _z = feature.params["centre"]
+        assert length == pytest.approx(20.0, abs=EPS_GEOM, rel=0.0)
+        assert middle == pytest.approx(
+            (math.copysign(20.0, x), math.copysign(15.0, y), 10.0), abs=EPS_GEOM, rel=0.0
+        )
+    assert _native_selection_state(source) == before
+
+
+@pytest.mark.parametrize("nurbs", [False, True])
+def test_direct_reround_changes_the_selected_rounding_even_with_another_centre(
+    nurbs: bool,
+) -> None:
+    """Von vier gleichen Rundungen bekommt genau die gewählte den neuen Radius — nicht
+    die an der genannten Mitte."""
+    import math
+
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_NurbsConvert
+    from OCP.BRepCheck import BRepCheck_Analyzer
+
+    from app.core.brep.properties import INTEGRAL_RELATIVE_ERROR
+
+    source = edit.fillet(edit.box(40.0, 30.0, 20.0), 3.0, "vertical")
+    if nurbs:
+        source = Solid(BRepBuilderAPI_NurbsConvert(source.shape, True).Shape())
+    fillets = [value for value in features_of(source).values() if value.kind == "fillet"]
+    chosen = next(f for f in fillets if f.params["centre"][0] > 0 and f.params["centre"][1] > 0)
+    other = next(f for f in fillets if f.params["centre"][0] < 0 and f.params["centre"][1] < 0)
+    faces = source.complete_faces_of_triangles(chosen.face_indices)
+    source.to_mesh()
+    before = _native_selection_state(source)
+
+    result = edit.reround(source, other.params["centre"], 3.0, 2.0, selected_faces=faces)
+
+    assert BRepCheck_Analyzer(result.shape).IsValid()
+    assert result.is_closed and result.solid_count == 1
+    assert result.volume == pytest.approx(
+        24000.0 - 20.0 * (1.0 - math.pi / 4.0) * (3.0 * 3.0**2 + 2.0**2),
+        rel=INTEGRAL_RELATIVE_ERROR,
+        abs=0.0,
+    )
+    radii = {
+        (value.params["centre"][0] > 0, value.params["centre"][1] > 0): float(
+            value.params["radius"]
+        )
+        for value in features_of(result).values()
+        if value.kind == "fillet"
+    }
+    assert len(radii) == 4
+    assert radii[(True, True)] == pytest.approx(2.0, abs=EPS_GEOM, rel=0.0)
+    assert all(
+        radius == pytest.approx(3.0, abs=EPS_GEOM, rel=0.0)
+        for corner, radius in radii.items()
+        if corner != (True, True)
+    )
+    assert _native_selection_state(source) == before
+
+
+def test_reround_refuses_a_rounding_without_two_walls_instead_of_guessing_an_edge() -> None:
+    """Eine Rundung zwischen Deckel und Zylindermantel hat keine belegte Ersatzkante:
+    derselbe Satz wie am Netz."""
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakeCylinder
+    from OCP.gp import gp_Ax2, gp_Dir, gp_Pnt
+
+    from app.core.errors import CHANGE_SELECTION, GeometryError
+    from app.core.geom.edges import NOT_BETWEEN_TWO_PLANES
+
+    lying = Solid(
+        BRepPrimAPI_MakeCylinder(
+            gp_Ax2(gp_Pnt(-20.0, 0.0, 10.0), gp_Dir(1.0, 0.0, 0.0)), 5.0, 40.0
+        ).Shape()
+    )
+    body = edit.boolean("union", [edit.box(40.0, 30.0, 10.0), lying])
+    along = next(
+        entry
+        for entry in edit.edges_of(body)
+        if entry.middle == pytest.approx((0.0, 5.0, 10.0), abs=EPS_GEOM, rel=0.0)
+    )
+    source = edit.fillet(body, 2.0, "named", [edit.edge_key(along)])
+    fillet = next(
+        value
+        for value in features_of(source).values()
+        if value.kind == "fillet" and abs(float(value.params["radius"]) - 2.0) < EPS_GEOM
+    )
+    faces = source.complete_faces_of_triangles(fillet.face_indices)
+    before = _native_selection_state(source)
+
+    removed, edge = edit._unround(source, fillet.params["centre"], 2.0, faces, None)
+    assert edge is None
+    assert removed.is_closed and removed.solid_count == 1
+    assert removed.volume == pytest.approx(body.volume, abs=EPS_GEOM, rel=0.0)
+    with pytest.raises(GeometryError) as refused:
+        edit.reround(source, fillet.params["centre"], 2.0, 1.0, selected_faces=faces)
+    assert refused.value.detail == NOT_BETWEEN_TWO_PLANES
+    assert refused.value.suggestions[0] is CHANGE_SELECTION
     assert _native_selection_state(source) == before

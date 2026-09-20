@@ -3853,7 +3853,7 @@ class ResizeFeatureParams(BaseParams):
 
 @register_op(
     name="resize_feature",
-    cache_version="4",
+    cache_version="5",
     title=_("Merkmal ändern"),
     category="holes",
     params=ResizeFeatureParams,
@@ -8539,15 +8539,20 @@ def _exact_fillet(ctx: OpContext, source: SceneObject, name: str, radius: float 
     measured = [float(value) for value in feature.params["centre"]]
     spot: Vec3 = (measured[0], measured[1], measured[2])
     was = float(feature.params.get("radius", 0.0))
+    ctx.cancelled.raise_if_cancelled()
+    # Die gewählte Rundungsfläche geht am aktuellen Eigentümer in beide Wege:
+    # Entfernen und Radiuswechsel arbeiten an genau dieser Fläche, nicht an
+    # der nächsten zur alten Mitte (P1.4c).
+    selected_faces = body.complete_faces_of_triangles(feature.face_indices)
+    ctx.cancelled.raise_if_cancelled()
     if radius is None:
-        ctx.cancelled.raise_if_cancelled()
-        selected_faces = body.complete_faces_of_triangles(feature.face_indices)
-        ctx.cancelled.raise_if_cancelled()
         solid = edit.unround(
             body, spot, was, selected_faces=selected_faces, cancelled=ctx.cancelled
         )
     else:
-        solid = edit.reround(body, spot, was, radius, cancelled=ctx.cancelled)
+        solid = edit.reround(
+            body, spot, was, radius, selected_faces=selected_faces, cancelled=ctx.cancelled
+        )
     return OpResult(
         outputs=[
             dataclasses.replace(

@@ -5765,8 +5765,8 @@ def _assert_same_native_rounding_form(actual: SceneObject, expected: SceneObject
     from app.core.brep.kernel import boolean_builder, copy_shape
 
     for first, second in ((actual, expected), (expected, actual)):
-        first_shape, _ = copy_shape(first.mesh.shape)
-        second_shape, _ = copy_shape(second.mesh.shape)
+        first_shape, _, _ = copy_shape(first.mesh.shape)
+        second_shape, _, _ = copy_shape(second.mesh.shape)
         difference = boolean_builder("difference", first_shape, second_shape)
         difference.Build()
         assert difference.IsDone(), "ohne gültige Differenz ist die Form nicht verglichen"

@@ -63,7 +63,12 @@ Volumen müssen nach dem Schritt weiter stimmen. Eine Identität baut nichts neu
 Die Flächenzuordnung verkettet `ModifiedShape` des Transformationsbuilders mit
 der tatsächlichen Kopie des Ergebnis-Solids. `Solid._copied_faces` hält dafür
 ein unveränderliches Indextupel außerhalb des Caches; eine neue Qualität startet
-weiter mit kaltem Cache. `faces_of_triangles` ist die geprüfte inverse Zuordnung
+weiter mit kaltem Cache. **Kanten gehen denselben Weg**: `copy_shape` liefert
+neben der Flächen- auch die Kantenabbildung aus demselben `ModifiedShape`
+(`Solid._copied_edges`, Indexraum `edges()`), bijektiv geprüft — eine
+Kopierprimitive, kein zweiter Kopierweg und keine angenommene
+Besuchsreihenfolge; der Test mit rückwärts eingehängten Teilkörpern deckt beide.
+`faces_of_triangles` ist die geprüfte inverse Zuordnung
 zu `triangles_of_face` und weist negative oder fremde Dreiecksindices zurück.
 Weder Besuchsreihenfolge noch alte Dreiecksindices ersetzen diese Zuordnung.
 
@@ -79,8 +84,18 @@ keine Ersatzsuche aus; nur `None` benutzt den bisherigen Lage-/Richtungsweg.
 Abbruch wird bei der Auswahl, vor und nach den nativen Builds sowie nach
 der letzten Ergebniskopie geprüft;
 Eingabeform und Eingabecache bleiben auch dann erhalten. Der anschließende
-Radiuswechsel über `reround` benötigt weiterhin einen eigenen Nachweis für
-die Übergänge von der Rundungsfläche zur scharfen Kante und zur neuen Rundung.
+Radiuswechsel über `reround` nimmt dieselbe `selected_faces`-Auswahl an und
+belegt beide Übergänge selbst: `_unround` gibt neben dem Körper den Index der
+scharfen Ersatzkante zurück, den `_sharp_edge_after` aus der Historie des
+Defeaturing-Builders liest — `Modified(Wand)` der zwei ebenen Wände quer zur
+Rundungsachse (`units.UPRIGHT_TO_AXIS`) teilen sich im Ergebnis genau eine
+Kante, und die ist es. Deckel und Boden gehören nicht dazu, über alle vier
+Nachbarn ist der Schnitt leer; die nächste Kante zur alten Mitte traf dort
+zufällig dieselbe und ist kein Beleg. Ohne genau zwei Wände — eine Rundung
+zwischen Deckel und Zylindermantel — sagt `reround` mit
+`edges.NOT_BETWEEN_TWO_PLANES` ab, demselben Satz wie am Netz, statt eine
+Kante zu raten. Ohne ausdrückliche Auswahl bleibt die Suche über Lage und
+Radius bestehen.
 
 Filamentzuweisungen liegen unveränderlich in `Solid.face_slots`, je nativer
 Fläche. Jede private Kopie führt sie über `_copied_faces` nach; jede neue
@@ -381,6 +396,17 @@ sagt im Register, dass sie gelten. Eine Kante, die es nicht mehr gibt, ist ein
 Satz an den Kunden — und ein anderer als „zu dieser Auswahl gehört keine
 Kante".
 
+**Innerhalb eines Aufrufs ist die Nummer dagegen der Beleg.** `fillet` und
+`chamfer` nehmen mit `selected_edges` Indizes in `solid.edges()` des
+Eingabe-Solids an — am aktuellen Eigentümer bestimmt, über
+`Solid.checked_edge_indices` **vor** der Kopie geprüft und über
+`_copied_edges` auf die Arbeitskopie geführt (`_edges_for`). Eine
+ausdrückliche Auswahl geht vor `keys` und vor der Gruppe und fällt nie auf
+sie zurück; eine Naht oder Nullkante darunter ist „zu dieser Auswahl gehört
+keine Kante". So verrundet der Radiuswechsel genau die Kante, die die
+Builder-Historie belegt hat, ohne gerundeten Schlüssel dazwischen — der
+Index reist nie in eine Projektdatei, dafür bleibt es beim Schlüssel.
+
 `edge_points` gibt dieselbe Kante als **Punktfolge**, abgetastet nach
 Abweichung (`DEFLECTION`, dieselbe Zahl wie die Tessellation). Mitte und
 Richtung genügen für eine Auswahl nach Lage und nicht für einen Zeiger: Der
@@ -415,7 +441,11 @@ analytischen Wert auf fünf Stellen.
 verlängert die Nachbarn selbst. Gemessen an einem Quader mit vier Rundungen zu
 R = 3: 23884,115 mm³ nach dem Wegnehmen einer, analytisch 23845,487 + 1,9314·20
 — dieselbe Zahl auf vier Stellen, in 18 ms. `reround` ist das plus einer neuen
-Verrundung an der zurückgekommenen Kante.
+Verrundung an der zurückgekommenen Kante — belegt über die Builder-Historie
+(`_sharp_edge_after`, oben unter „Eigentum an der nativen Form"), nicht über
+die nächste Kante zur alten Mitte: Von vier gleichen Rundungen bekommt genau
+die gewählte den neuen Radius, auch wenn die genannte Mitte auf eine andere
+zeigt (gemessen 20.09.2026, 24000 − 20·(1 − π/4)·(3·9 + 4)).
 
 **Gesucht wird die Fläche über Radius und Lage**, und die Lage über den Abstand
 zur **begrenzten Zylinderfläche** (`BRepExtrema_DistShapeShape`). Die unendliche

@@ -756,8 +756,11 @@ aktuellen vollständigen Originalflächen. Leere, unvollständige oder ungültig
 Auswahlen halten an; Mittelpunktnähe ersetzt keinen belegten Träger. Der
 Operationsabbruch wird vor und nach der Zuordnung geprüft und an den nativen
 Builder weitergegeben. Ohne Merkmalsauswahl bleibt der gespeicherte
-Richtungsweg von `push_face` erhalten. Der Radiuswechsel einer Rundung nutzt
-weiterhin seinen bestehenden gesonderten Weg.
+Richtungsweg von `push_face` erhalten. Der Radiuswechsel einer Rundung geht
+seit P1.4c.4a denselben Weg: `_exact_fillet` bindet die gewählte Rundungsfläche
+für Entfernen **und** Ändern über `complete_faces_of_triangles`, und
+`brep.edit.reround` belegt die scharfe Ersatzkante aus der Builder-Historie
+statt die nächste an der alten Mitte zu nehmen (`brep/CLAUDE.md`).
 
 `edge_ops.py` — *Verrunden*, *Fase anbringen* und *Wulst anlegen* im Register, **kernübergreifend**:
 Der Rumpf fragt `SceneObject.kind` und wählt danach den Rechenweg — `edit.fillet`
