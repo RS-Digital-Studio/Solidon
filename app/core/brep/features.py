@@ -271,6 +271,14 @@ def features_of(solid: Solid, *, cancelled: CancelToken | None = None) -> dict[F
         )
         found[identifier] = replace(feature, surface_patches=patches + remaining)
 
+    # Ein offenes Langloch kam über den Netzweg; was seine nativen Träger
+    # belegen — Bogenradius, Achse, Flankenrichtung —, heißt jetzt auch so.
+    from app.core.perceive.slots import native_open_slot_measures
+
+    for identifier, feature in found.items():
+        if feature.kind == "slot" and feature.params.get("open"):
+            found[identifier] = native_open_slot_measures(feature)
+
     if cancelled is not None:
         cancelled.raise_if_cancelled()
 

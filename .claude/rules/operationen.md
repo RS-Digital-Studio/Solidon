@@ -752,7 +752,10 @@ seither für beide gelten — Namen, Träger und Handlung, nicht bloß die Zahl:
   (`tests/test_feature_groups.py`), die Kalotte bleibt draußen. Ein Dreieck,
   das zwei Merkmale beanspruchen, gehört dem innersten oder niemandem
   (`relations.cell_owner_table`, `CONTESTED`); der Klick im Bild entscheidet
-  nie nach der Reihenfolge der Erkennung. Die
+  nie nach der Reihenfolge der Erkennung. Und eine Maßquelle heißt `native`,
+  wenn ein nativer Träger sie belegt — am offenen Langloch des exakten Kerns
+  Durchmesser, Achse, Bogenmitte und Richtung, nie Mündung und Weg
+  (`slots.native_open_slot_measures`); keine pauschale Hochstufung. Die
   Umfangsschwelle steht
   einmal (`FULL_TURN_SPAN` = `FULL_TURN`·360, 300 Grad); wer sie ändert,
   ändert beide, und der Test hält sie zusammen (`tests/test_partial_bores.py`).

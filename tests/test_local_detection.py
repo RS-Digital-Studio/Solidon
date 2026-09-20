@@ -297,6 +297,30 @@ def test_missing_or_stale_face_hint_is_checked_geometrically(hint: int) -> None:
     assert any(face in feature.face_indices for feature in found.features.values())
 
 
+def test_a_one_millimetre_stud_face_is_found_locally() -> None:
+    """Die lokale Erkennung nennt die 1-mm²-Flächen des Nockens wie die globale (P1.5).
+
+    Der Klick auf die Nockenspitze wählt genau diese Fläche, der auf eine
+    Nockenseite genau jene; alle fünf stehen in der lokalen Auskunft mit
+    ihren Mitten. Die Schranke ``MIN_FACE_AREA`` gilt hier über dieselbe
+    Randbedingung wie global (``_facets_standing_apart``), auch bei
+    ``all_facets`` in der lokalen Rollenprüfung.
+    """
+    from app.core.perceive.local import detect_local
+    from tests.test_features import STUD_CENTRES, _small_faces, _stud_on_a_plate
+
+    mesh = MeshData.of(_stud_on_a_plate())
+    for point, normal in (((0.0, 0.0, 5.0), (0.0, 0.0, 1.0)), ((0.5, 0.0, 4.5), (1.0, 0.0, 0.0))):
+        result = detect_local(mesh, point, normal=normal, radius=3.0)
+        assert result.complete and not result.seed_choices, result.reason
+        assert len(result.selected) == 1
+        chosen = result.features[result.selected[0]]
+        assert chosen.kind == "face"
+        assert float(chosen.params["area"]) == pytest.approx(1.0)
+        assert tuple(round(float(v), 3) for v in chosen.params["centre"]) == point
+        assert set(_small_faces(result.features)) == STUD_CENTRES
+
+
 def test_shared_diagonal_on_one_plane_is_one_surface() -> None:
     """Ein Treffer genau auf der Dreiecksdiagonale löst keine Rückfrage aus."""
     from app.core.perceive.local import detect_local

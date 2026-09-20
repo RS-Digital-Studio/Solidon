@@ -325,6 +325,62 @@ def test_coarse_slot_walls_keep_their_whole_opening(angle: float) -> None:
         assert len(slot.face_indices) == 36
 
 
+def test_an_open_slot_on_the_exact_core_carries_native_measures_where_it_can() -> None:
+    """Was ein nativer Träger belegt, heißt ``native`` — der Rest bleibt ``fit`` (P1.5).
+
+    Am exakten Kern kommt ein offenes Langloch über den Netzweg, aber sein
+    Bogen ist ein nativer Zylinder und seine Flanken sind native Ebenen:
+    Durchmesser, Achse, Bogenmitte und Richtung sind damit exakt belegt.
+    Mündung, Weg und Länge hängen am Rand des Netzes und bleiben ``fit``;
+    am reinen Netz bleibt alles ``fit``. Keine pauschale Hochstufung.
+    """
+    if not pytest.importorskip("app.core.brep.kernel").available():
+        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+
+    body = edit.slot_bore(
+        edit.box(60.0, 30.0, 8.0),
+        position=(0.0, 8.0, 4.0),
+        direction=(0.0, 0.0, 1.0),
+        diameter=6.0,
+        depth=8.0,
+        length=26.0,
+        angle_deg=90.0,
+        overlap=0.0,
+    )
+    native = [f for f in features_of(body).values() if f.kind == "slot"]
+    assert len(native) == 1 and native[0].params["open"] is True
+    slot = native[0]
+    assert {
+        key: slot.measure_sources[key] for key in ("diameter", "axis", "arc_centre", "direction")
+    } == {
+        "diameter": "native",
+        "axis": "native",
+        "arc_centre": "native",
+        "direction": "native",
+    }
+    assert {
+        slot.measure_sources[key] for key in ("length", "travel", "mouth_centre", "centre")
+    } == {"fit"}
+    assert slot.measure_sources["depth"] == "facets"
+    assert slot.params["diameter"] == 6.0, "exakt, nicht eingepasst"
+    assert tuple(slot.params["axis"]) == (0.0, 0.0, 1.0)
+    # Das Langloch liegt bei y = 8 ± 13; die Platte endet bei y = 15, also
+    # liegt die Mündung dort und der geschlossene Bogen um y = -5 + 3.
+    assert slot.params["arc_centre"][0] == pytest.approx(0.0, abs=1e-9)
+    assert slot.params["arc_centre"][1] == pytest.approx(-2.0, abs=1e-9)
+    assert slot.params["direction"][1] == pytest.approx(1.0, abs=1e-12), "zur Muendung hin"
+    assert {patch.source for patch in slot.surface_patches} == {"native"}
+
+    meshed = [f for f in detect(body.to_mesh(deflection=0.05)).values() if f.kind == "slot"]
+    assert len(meshed) == 1 and meshed[0].params["open"] is True
+    assert {
+        meshed[0].measure_sources[key] for key in ("diameter", "axis", "arc_centre", "direction")
+    } == {"fit"}
+    assert meshed[0].params["diameter"] == pytest.approx(6.0, abs=0.02)
+
+
 def test_a_slot_carries_the_measures_it_was_cut_with(profile: Profile) -> None:
     slot = only_slot(slotted(profile, diameter=5.0, slot_length=20.0))
 

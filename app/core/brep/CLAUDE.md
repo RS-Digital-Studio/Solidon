@@ -141,8 +141,12 @@ vollständigen zusätzlichen Normalennachweis bleiben unklassifiziert.
 
 `Feature.measure_sources` begleitet jedes tatsächlich gelesene native Maß.
 Vollständige native Restflächen ersetzen nur ihre Fläche und Mitte durch
-native Integrale; Teilflächen und offene Langlöcher erhalten die ausdrücklich
-gekennzeichneten Messquellen des Netzwegs. Körperart und `provenance` sind
+native Integrale; Teilflächen erhalten die ausdrücklich gekennzeichneten
+Messquellen des Netzwegs. Ein offenes Langloch kommt über den Netzweg und
+bekommt danach, was seine endgültigen nativen Träger belegen
+(`perceive.slots.native_open_slot_measures`, P1.5): Durchmesser, Achse und
+Bogenmitte aus dem nativen Zylinder, die Richtung aus den nativen Flanken;
+Mündung, Weg und Länge bleiben `fit`. Körperart und `provenance` sind
 dafür keine Ersatzangaben.
 
 `features_of` erhält die einmal gelesenen analytischen Träger als

@@ -32,6 +32,7 @@ ein eingelesenes Netz kommt trotzdem dorthin.
 
 from __future__ import annotations
 
+import dataclasses
 import math
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -381,41 +382,120 @@ def open_slots_instead_of_fillets(
                 and selected.issuperset(feature.face_indices)
             )
         }
+        sources: dict[str, MeasureSource] = {
+            "diameter": "fit",
+            "length": "fit",
+            "travel": "fit",
+            "axis": "fit",
+            "direction": "fit",
+            "centre": "fit",
+            "depth": "facets",
+            "arc_centre": "fit",
+            "mouth_centre": "fit",
+            "opening_normal": "facets",
+        }
+        params: dict[str, Any] = {
+            "diameter": radius * 2.0,
+            "length": radius * 2.0 + travel,
+            "travel": travel,
+            "axis": tuple(float(v) for v in axis),
+            "direction": tuple(float(v) for v in direction),
+            "centre": tuple(float(v) for v in middle),
+            "depth": depth,
+            "through": _reaches_through(body, centre, axis, direction, 0.0, depth),
+            "open": True,
+            "arc_centre": tuple(float(v) for v in centre),
+            "mouth_centre": tuple(float(v) for v in mouth),
+            "opening_normal": tuple(float(v) for v in normal),
+        }
         kept[name] = Feature(
             id=name,
             kind="slot",
             provenance="detected",
             face_indices=indices,
             surface_patches=tuple(parts),
-            measure_sources={
-                "diameter": "fit",
-                "length": "fit",
-                "travel": "fit",
-                "axis": "fit",
-                "direction": "fit",
-                "centre": "fit",
-                "depth": "facets",
-                "arc_centre": "fit",
-                "mouth_centre": "fit",
-                "opening_normal": "facets",
-            },
-            params={
-                "diameter": radius * 2.0,
-                "length": radius * 2.0 + travel,
-                "travel": travel,
-                "axis": tuple(float(v) for v in axis),
-                "direction": tuple(float(v) for v in direction),
-                "centre": tuple(float(v) for v in middle),
-                "depth": depth,
-                "through": _reaches_through(body, centre, axis, direction, 0.0, depth),
-                "open": True,
-                "arc_centre": tuple(float(v) for v in centre),
-                "mouth_centre": tuple(float(v) for v in mouth),
-                "opening_normal": tuple(float(v) for v in normal),
-            },
+            measure_sources=sources,
+            params=params,
         )
         covered.update(indices)
     return kept
+
+
+def _scalar(value: float | Vec3) -> float:
+    """Ein Trägermaß als Zahl; ein Vektor an dieser Stelle ist kein Radius."""
+    return float(value) if isinstance(value, int | float) else math.nan
+
+
+def native_open_slot_measures(feature: Feature) -> Feature:
+    """Was ein nativer Träger belegt, trägt das offene Langloch auch als Maß — und nur das.
+
+    Am exakten Kern kommt ein offenes Langloch über denselben Netzweg wie am
+    Netz, und bis zum 20.09.2026 hieß jedes seiner Maße ``fit``, obwohl der
+    Bogen als nativer Zylinder mit exaktem Radius und exakter Achse im
+    Träger stand (P1.5, „keine pauschale Hochstufung"). Gelesen werden die
+    **endgültigen** Träger, die ``brep.features_of`` zuletzt anhängt — native
+    Originalflächen zuerst, der Netzfit nur für den unbelegten Rest. Deshalb
+    einzeln:
+
+    * Gibt es Zylinderträger und ist keiner davon ein Fit, deckt der native
+      Mantel den ganzen Bogen: Durchmesser, Achse und Bogenmitte kommen aus
+      ihm — der Radius exakt, die Achse im Sinn der gemessenen, die Mitte als
+      Lot der gemessenen Mitte auf seine Achslinie. Zwei native Zylinder mit
+      verschiedener Achse belegen nichts.
+    * Gibt es Ebenenträger und ist keiner davon aus Facetten, liegen alle
+      Flanken in nativen Ebenen; stehen die quer zur Achse und parallel
+      zueinander, kommt die Richtung aus ihrer Normale, im Sinn der gemessenen.
+    * Mündung, Weg, Länge und Tiefe hängen am Rand des Netzes und bleiben,
+      was sie sind. Am reinen Netz gibt es keinen nativen Träger, und nichts
+      ändert sich.
+    """
+    if feature.kind != "slot" or not feature.params.get("open") or not feature.surface_patches:
+        return feature
+    cylinders = [part for part in feature.surface_patches if part.kind == "cylinder"]
+    planes = [part for part in feature.surface_patches if part.kind == "plane"]
+    params: dict[str, Any] = dict(feature.params)
+    sources: dict[str, MeasureSource] = dict(feature.measure_sources)
+    axis = np.asarray(params["axis"], dtype=float)
+    direction = np.asarray(params["direction"], dtype=float)
+    centre = np.asarray(params["arc_centre"], dtype=float)
+    travel = float(params["travel"])
+    exact_axis = axis
+    if cylinders and all(part.source == "native" for part in cylinders):
+        first = cylinders[0]
+        first_axis = np.asarray(first.params["axis"], dtype=float)
+        first_radius = _scalar(first.params["radius"])
+        agree = all(
+            abs(float(np.asarray(part.params["axis"], dtype=float) @ first_axis)) >= PARALLEL_AXES
+            and abs(_scalar(part.params["radius"]) - first_radius) <= first_radius * SAME_RADIUS
+            for part in cylinders[1:]
+        )
+        if agree and float(first_axis @ axis) != 0.0:
+            exact_axis = first_axis if float(first_axis @ axis) > 0.0 else -first_axis
+            exact_axis = exact_axis / float(np.linalg.norm(exact_axis))
+            origin = np.asarray(first.params["centre"], dtype=float)
+            arc = origin + float((centre - origin) @ exact_axis) * exact_axis
+            params["diameter"] = first_radius * 2.0
+            params["length"] = first_radius * 2.0 + travel
+            params["axis"] = tuple(float(v) for v in exact_axis)
+            params["arc_centre"] = tuple(float(v) for v in arc)
+            sources.update(diameter="native", axis="native", arc_centre="native")
+    if planes and travel > EPS_GEOM and all(part.source == "native" for part in planes):
+        across = math.sqrt(max(0.0, 1.0 - PARALLEL_AXES * PARALLEL_AXES))
+        normals = [np.asarray(part.params["axis"], dtype=float) for part in planes]
+        upright = all(abs(float(normal @ exact_axis)) <= across for normal in normals)
+        parallel = all(abs(float(normal @ normals[0])) >= PARALLEL_AXES for normal in normals[1:])
+        if upright and parallel:
+            along = np.cross(exact_axis, normals[0])
+            length = float(np.linalg.norm(along))
+            if length > EPS_GEOM:
+                along = along / length
+                if float(along @ direction) < 0.0:
+                    along = -along
+                params["direction"] = tuple(float(v) for v in along)
+                sources["direction"] = "native"
+    if params == dict(feature.params) and sources == dict(feature.measure_sources):
+        return feature
+    return dataclasses.replace(feature, params=params, measure_sources=sources)
 
 
 def _open_slot_shell(

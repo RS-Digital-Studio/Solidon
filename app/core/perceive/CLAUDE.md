@@ -152,7 +152,13 @@ Geschlossene Langlöcher beziehen ihre Breite aus dem Abstand der geprüften
 ebenen Flanken. Offene Langlöcher übernehmen Kreisradius und Achse aus
 demselben geprüften `CylinderFit`; ein zweiter Kreisfit über Flanken- oder
 Sehnenpunkte würde das Maß erneut verzerren. Beide Wege behalten die volle
-Rechengenauigkeit bis zur Anzeige.
+Rechengenauigkeit bis zur Anzeige. **Am exakten Kern trägt das offene
+Langloch, was seine nativen Träger belegen** (`native_open_slot_measures`,
+P1.5): Deckt ein nativer Zylinder den ganzen Bogen, kommen Durchmesser,
+Achse und Bogenmitte exakt aus ihm; liegen alle Flanken in nativen Ebenen,
+die Richtung aus deren Normale — jeweils mit der Quelle `native`. Mündung,
+Weg, Länge und Tiefe hängen am Rand des Netzes und bleiben `fit` und
+`facets`; am reinen Netz ändert sich nichts. Keine pauschale Hochstufung.
 
 Rohrwände berücksichtigen den gemessenen Querversatz von Höhlung und Mantel.
 Beim Langloch zählt der weiter entfernte Endmittelpunkt einschließlich seiner
@@ -198,6 +204,11 @@ vollständige Anschlussringe und unbeschädigte Boden-/Mündungskanten.
 Die Innenrolle einer Ebene kommt aus räumlich passenden Originalfacetten,
 auch wenn der belegende Rand außerhalb der Suchkugel liegt. Nur ein
 tatsächlich passender Beleg darf einen vollständigen Mantelfit auslösen.
+Eine kleine Fläche unter `MIN_FACE_AREA` gilt hier wie global über ihre
+Ränder (`_facets_standing_apart`, auch bei `all_facets`): Der Klick auf die
+Spitze eines 1-mm-Nockens wählt genau diese Fläche, und die Zuordnung
+hält ihren Namen über eine Verschiebung (`tests/test_local_detection.py`,
+`tests/test_features.py`, P1.5).
 Das Flächenbudget begrenzt diese Fits ebenso wie den Ausschnitt; es ändert
 keine Erkennungstoleranz. Überschreitung oder fehlender Abschluss liefern
 einen Handlungsvorschlag, keine Teilgeometrie.

@@ -4317,6 +4317,40 @@ def test_a_one_millimetre_stud_keeps_its_five_faces(subdivided: bool) -> None:
     assert top.params["centre"][2] == pytest.approx(4.0)
 
 
+def test_the_stud_faces_keep_their_names_after_a_translation() -> None:
+    """Die fünf kleinen Flächen bleiben nach einer Verschiebung dieselben Merkmale.
+
+    Die Zuordnung (``matching.match``) findet sie über die mitbewegten alten
+    Merkmale wieder — eine Fläche, die die Erkennung findet, aber die
+    Zuordnung verliert, wäre nur halb angeschlossen (P1.5, Gegenfall 1:
+    „lokale Wiedererkennung und dieselbe benannte Auswahl").
+    """
+    from app.core.perceive.matching import match, moved_features
+
+    body = _stud_on_a_plate()
+    mesh = MeshData.of(body)
+    before = detect(mesh)
+    small_before = _small_faces(before)
+    assert set(small_before) == STUD_CENTRES
+
+    matrix = np.eye(4)
+    matrix[:3, 3] = (3.0, -2.0, 0.0)
+    moved = body.copy()
+    moved.apply_transform(matrix)
+    moved_mesh = MeshData.of(moved)
+    after = detect(moved_mesh)
+    carried = moved_features(dict(before), matrix)
+    result = match(carried, after, moved_mesh.bounds.centre, moved_mesh.bounds.diagonal)
+
+    assert result.settled, result
+    assert not result.orphaned and not result.ambiguous
+    for centre, feature in small_before.items():
+        successor = after[result.mapping[feature.id]]
+        expected = tuple(round(float(v), 3) for v in np.add(centre, (3.0, -2.0, 0.0)))
+        assert tuple(round(float(v), 3) for v in successor.params["centre"]) == expected
+        assert float(successor.params["area"]) == pytest.approx(1.0)
+
+
 def test_the_stud_is_read_the_same_from_the_exact_body_and_its_tessellation() -> None:
     """Dieselben elf Flächen aus ``features_of`` und aus ``detect`` an zwei Abweichungen."""
     if not pytest.importorskip("app.core.brep.kernel").available():
