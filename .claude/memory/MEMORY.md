@@ -64,6 +64,8 @@ Verwandte Einträge stehen auf einer Zeile; jede Datei trägt ihre eigene Beschr
 - [Arbeiter verlegt die Wartezeit](arbeiter-verlegt-die-wartezeit-ans-ende.md) — ein neuer Arbeiter hat zwei Enden; wer nur das Öffnen misst, findet die Wartezeit beim Schließen wieder.
 - [Knopf und Handlung](knopf-und-handlung-fragen-verschieden.md) · [Reparatur vor den Fehler](reparatur-muss-vor-den-fehler.md) · [Kette endet am letzten Glied](eine-kette-endet-am-letzten-glied.md) — Klickketten bis zum Ende.
 - [Architektur-Sonde](architektur-sonde-type-checking.md) — TYPE_CHECKING ausschließen; Kernänderung = Suite.
+- [Paketexport verdeckt das Modul](paketexport-verdeckt-das-modul.md) — `from app.core.scene import evaluate` ist die Funktion; private Modulhelfer nur über `import_module`.
+- [OCP-Paketattribut ist nicht das Modul](ocp-paketattribut-ist-nicht-das-modul.md) — Patches an `from OCP import X` bleiben im Stub-Modul stehen; immer `import OCP.X as X` patchen; Worker-Leck über collect-only und die xdist-Anfangsportion finden.
 
 ## Messen und Prüfen
 
