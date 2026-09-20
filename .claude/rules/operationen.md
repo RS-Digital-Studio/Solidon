@@ -742,7 +742,10 @@ seither für beide gelten — Namen, Träger und Handlung, nicht bloß die Zahl:
   Mantel an eine andere Höhlung, ist sie berührt — keine Kette, kein eigener
   Körper, `NO_OWN_BODY` in jeder Körperzeile — und wo die Ränder eines
   Merkmals gar nicht lesbar sind, sagt der Einzelweg das wie der Gruppenweg
-  (`CavityState`, `CAVITY_TOPOLOGY_UNKNOWN`) statt „steht allein“. Die
+  (`CavityState`, `CAVITY_TOPOLOGY_UNKNOWN`) statt „steht allein“ — und der
+  Steckbrief sagt es dem Agenten unter der Auswahlzeile mit denselben Sätzen
+  wie das Panel, samt Kette und Handlungsgruppen (`digest._selection_lines`,
+  `relations.group_reason_texts`). Die
   Umfangsschwelle steht
   einmal (`FULL_TURN_SPAN` = `FULL_TURN`·360, 300 Grad); wer sie ändert,
   ändert beide, und der Test hält sie zusammen (`tests/test_partial_bores.py`).

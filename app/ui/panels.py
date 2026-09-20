@@ -4757,36 +4757,21 @@ def _and_then(gathered: str, further: str) -> str:
 def _group_evidence_texts() -> dict[str, str]:
     """Ein Satz je Nachweis der Kern-Gruppe (``FeatureGroupEvidence``).
 
-    Zur Laufzeit übersetzt, nicht beim Import — die Sprache kann wechseln.
-    ``test_feature_panel`` hält die Schlüssel mit dem Literal des Kerns
-    deckungsgleich; ein neuer Wert dort ist sonst ein ``KeyError`` mitten in
-    der Merkmalsauswahl.
+    Die Sätze stehen im Kern (``relations.group_evidence_texts``), weil der
+    Steckbrief sie seit P1.5 auch liest — zur Laufzeit übersetzt, nicht beim
+    Import. ``test_feature_panel`` hält die Schlüssel mit dem Literal des Kerns
+    deckungsgleich.
     """
-    return {
-        "same_target_dimensions": tr("Gleiches Ausgangsmaß für diese Änderung."),
-        "complete_surface_patch": tr("Die vollständige bearbeitete Form stimmt überein."),
-        "parallel_axes": tr("Die Achsen sind parallel ausgerichtet."),
-        "shared_boundary_role": tr("Die Merkmale haben dieselbe Rolle in ihrer Bohrungskette."),
-        "translation_consistent": tr("Die zugehörigen Abschnitte liegen gleich zueinander."),
-    }
+    from app.core.perceive.relations import group_evidence_texts
+
+    return {str(key): text for key, text in group_evidence_texts().items()}
 
 
 def _group_reason_texts() -> dict[str, str]:
-    """Ein Satz je Grund, warum ein Merkmal nicht sicher dazugehört."""
-    return {
-        "selected_feature_unavailable": tr("Das gewählte Merkmal ist nicht mehr vorhanden."),
-        "action_not_applicable": tr("Diese Handlung passt nicht zu den weiteren Merkmalen."),
-        "ambiguous_cavity_chain": tr("Die zugehörigen Bohrungsabschnitte sind nicht eindeutig."),
-        "cavity_topology_unavailable": tr(
-            "Die Verbindung der Bohrungsabschnitte ist nicht sicher erkannt."
-        ),
-        "dimensions_unavailable": tr("Die benötigten Maße sind nicht sicher erkannt."),
-        "complete_shape_unavailable": tr("Die vollständige Form ist nicht sicher vergleichbar."),
-        "orientation_unavailable": tr("Die Ausrichtung ist nicht sicher erkannt."),
-        "relative_position_unavailable": tr(
-            "Die Lage der zugehörigen Abschnitte ist nicht sicher erkannt."
-        ),
-    }
+    """Ein Satz je Grund, warum ein Merkmal nicht sicher dazugehört — aus dem Kern."""
+    from app.core.perceive.relations import group_reason_texts
+
+    return {str(key): text for key, text in group_reason_texts().items()}
 
 
 #: Die Handlungen, deren Knopf unmittelbar in die Platzierung führt.

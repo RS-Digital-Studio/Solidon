@@ -118,6 +118,7 @@ def digest(
     if selection is not None:
         object_id, feature_id = selection
         lines.append(f"{tr('Auswahl')}: {object_id}" + (f" · {feature_id}" if feature_id else ""))
+        lines.extend(_selection_lines(scene, selection))
 
     if document is not None:
         lines.extend(_fit_lines(document, scene))
@@ -133,6 +134,93 @@ def digest(
     if document is not None:
         lines.extend(_stack_lines(document))
     return "\n".join(lines)
+
+
+def _selection_lines(scene: Scene, selection: tuple[ObjectId, str]) -> list[str]:
+    """Was das Merkmalfenster zur gewählten Stelle weiß, in Zeilen für den Agenten.
+
+    Dieselben drei Auskünfte, aus denselben Quellen (P1.5, 20.09.2026):
+
+    * die **Hohlraumkette** (``relations.cavity_chain_state_at``) — Versetzen,
+      Drehen und Verdoppeln nehmen alle Abschnitte mit, und der Agent soll
+      das wissen, bevor er „verschieb hole_3" sagt;
+    * oder der **Grund**, warum das Merkmal nicht sicher einzeln ist — mit dem
+      Satz, den das Panel an der Zeile zeigt (``group_reason_texts``);
+    * die **Handlungsgruppen** (``relations.alike_for_actions``): welche
+      gleichen Merkmale eine Sammelhandlung mitnähme, mit ihrem Umfang, und
+      welche nicht sicher dazugehören, mit dem Grund. Handlungen mit derselben
+      Mitgliedschaft stehen in einer Zeile — fünf Zeilen mit denselben Namen
+      wären Rauschen (§26.1).
+
+    Ohne Merkmal in der Auswahl steht hier nichts. Die Rechnung ist die des
+    Panels bei einem Klick — die Randringe kommen aus dem Cache des Netzes
+    (``_cavity_links``), die Gruppen werden je Aufruf gebildet; der Steckbrief
+    entsteht je Zug des Agenten, nicht je Tastendruck.
+    """
+    object_id, feature_id = selection
+    entry = scene.objects.get(object_id)
+    feature = entry.features.get(feature_id) if entry is not None and feature_id else None
+    if entry is None or feature is None:
+        return []
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.perceive.actions import actions_for
+    from app.core.perceive.relations import (
+        alike_for_actions,
+        cavity_chain_state_at,
+        group_reason_texts,
+    )
+    from app.core.registry import REGISTRY
+
+    mesh = as_mesh_data(entry.mesh)
+    reasons = group_reason_texts()
+    lines: list[str] = []
+    state = cavity_chain_state_at(feature, entry.features, mesh)
+    if state.chain is not None:
+        lines.append(
+            "  "
+            + tr(
+                "Hohlraum: {members} — eine Kette; Versetzen, Drehen und Verdoppeln nehmen "
+                "alle Abschnitte mit"
+            ).format(members=" → ".join(part.id for part in state.chain))
+        )
+    elif state.reason is not None:
+        lines.append(
+            "  "
+            + tr("Hohlraum: nicht sicher einzeln — {reason}").format(reason=reasons[state.reason])
+        )
+
+    actions = actions_for(
+        feature,
+        entry.features,
+        mesh=mesh,
+        cavity=state.chain or (),
+        touches_other=state.touches_other,
+        reason=state.reason,
+    )
+    requested = [str(action.op) for action in actions if action.op]
+    folded: dict[tuple[tuple[str, ...], tuple[tuple[str, str], ...]], list[str]] = {}
+    for group in alike_for_actions(requested, feature.id, entry.features, mesh):
+        others = tuple(
+            "→".join(member.scope) if len(member.scope) > 1 else member.target
+            for member in group.members
+            if member.target != feature.id
+        )
+        uncertain = tuple(
+            (", ".join(item.feature_ids), reasons[item.reason]) for item in group.uncertain
+        )
+        if not others and not uncertain:
+            continue
+        folded.setdefault((others, uncertain), []).append(str(REGISTRY.get(group.action).title))
+    for (others, uncertain), titles in folded.items():
+        parts = []
+        if others:
+            parts.append(tr("gleich: {members}").format(members=", ".join(others)))
+        parts.extend(
+            tr("nicht sicher: {members} ({reason})").format(members=members, reason=reason)
+            for members, reason in uncertain
+        )
+        lines.append(f"  {', '.join(titles)} — {'; '.join(parts)}")
+    return lines
 
 
 def _fit_lines(document: Document, scene: Scene) -> list[str]:

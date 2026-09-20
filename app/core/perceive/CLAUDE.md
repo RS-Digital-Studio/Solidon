@@ -425,6 +425,11 @@ Batch bildet Randgraph, Flächenproben und vollständige Formvergleiche einmal
 für die aktuelle Auswahl; `alike_for_action` delegiert denselben Weg für
 einzelne Aufrufer. Der Wiederverwendungsstand lebt nur während dieses Aufrufs,
 damit ein neues Netz oder eine neue Merkmalskarte keine alte Auskunft erbt.
+**Und der Steckbrief fragt denselben Weg** (`digest._selection_lines`, P1.5):
+Der Agent liest zur gewählten Stelle dieselben Mitglieder, Umfänge und Gründe
+wie das Panel. Die Sätze zu Nachweis und Grund stehen deshalb einmal im Kern
+(`relations.group_evidence_texts`, `group_reason_texts`); das Panel liest sie
+von dort, und `test_feature_panel` hält sie mit den Literalen deckungsgleich.
 
 `AnalysisMap` trennt Messwert und Farbdarstellung. `values`, `low`, `high` und
 `threshold` bleiben immer physische Werte; Renderer und Legende lesen gemeinsam
@@ -463,7 +468,7 @@ unberührt; das Budget gilt nur der Karte.
 | `slots.py` | Langlöcher (§21.1): zwei Halbzylinder, zwei ebene Flanken, ein Merkmal. Dieselbe Bauart wie `helix.py` und aus demselben Grund — die Einpassung findet darin zwei Verrundungen, und der Kunde sah zwei Rundungen, wo eine Öffnung ist |
 | `relations.py` | Nachbarschaften zwischen Merkmalen (§21.1, §21.2): Was zusammengehört und was daraus folgt. Heute das koaxiale Rohr — eine Bohrung und das Material um sie herum, mit der Wand dazwischen. Am Langloch ist das die **dünnste** Wand: Der Weg der Mittellinie geht zur Hälfte ab, denn dort sitzen die Enden. Eine Regel (`_sleeve_between`), drei Auskünfte: `sleeve_at` fragt für **ein** Merkmal; `sleeves_of` liefert die dünnste Wand an **jeder** Merkmalszeile des Steckbriefs; `thinnest_sleeve` liefert das Minimum für die Wandprüfung. Beide Körperabfragen lesen die Maße je Merkmal einmal und teilen dieselbe Paarprüfung (RM-127) |
 | `maps.py` | Analysekarten (§18.4). Die Netzfehlerkarte hat **drei** Stufen, und die dritte ist die einzige räumliche: offene und verzweigte Kanten stehen in der Kantentabelle, eine **Durchdringung** nicht — zwei Wände, die einander schneiden, haben lauter saubere Kanten mit je zwei Flächen (`repair.self_intersecting_faces`, RM-143) |
-| `digest.py` | Der Steckbrief der Szene für den Agenten (§23) |
+| `digest.py` | Der Steckbrief der Szene für den Agenten (§23). Unter der Auswahlzeile steht seit P1.5, was das Merkmalfenster zur gewählten Stelle weiß (`_selection_lines`): die Hohlraumkette oder der Grund „nicht sicher einzeln“, und je Mitgliedschaft eine Zeile der Handlungsgruppen — gleiche Merkmale mit Umfang, unsichere mit Grund; Handlungen mit derselben Mitgliedschaft teilen eine Zeile (§26.1) |
 | `matching.py` | Merkmalsbezeichner über Operationen hinweg stabil halten (§21.2, §21.3) |
 | `actions.py` | Was der Kunde mit einem erkannten Merkmal tun kann — und was nicht, mit Grund. Die Liste fürs Merkmalspanel, **aus dem Register abgeleitet** (§10, §21); `reason_against` beantwortet dieselbe Frage für den Kern |
 

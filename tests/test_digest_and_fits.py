@@ -264,6 +264,104 @@ def test_the_digest_shows_parameters_and_selection(profile: Profile) -> None:
     assert "Auswahl: obj_1 · hole_3" in text
 
 
+def _plate_with_a_countersunk_bore_and_two_alike(profile: Profile) -> Scene:
+    """60 × 40 × 10, mittig Ø 8 mit Senkung Ø 16, daneben zweimal Ø 6 — wie in
+    ``test_feature_panel``, damit die Erkennung Kette und Gleiche sicher findet."""
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.geom.prepare import countersink, drill
+
+    body = MeshData.of(trimesh.creation.box(extents=(60.0, 40.0, 10.0)))
+    body = drill(
+        body, position=(0.0, 0.0, 5.0), axis="z", diameter=8.0, profile=profile, compensate=False
+    ).mesh
+    body = countersink(
+        body, position=(0.0, 0.0, 5.0), axis="z", diameter=16.0, profile=profile
+    ).mesh
+    for x in (-20.0, 20.0):
+        body = drill(
+            body, position=(x, 0.0, 5.0), axis="z", diameter=6.0, profile=profile, compensate=False
+        ).mesh
+    entry = SceneObject(id="obj_1", name="Platte", mesh=body, features=detect(body))
+    return Scene(objects={"obj_1": entry}, profile=profile)
+
+
+def test_the_digest_tells_the_selected_feature_its_chain_and_its_alikes(
+    profile: Profile,
+) -> None:
+    """Dieselbe Auskunft wie das Merkmalfenster, unter der Auswahlzeile (P1.5).
+
+    Bis zum 20.09.2026 schrieb der Steckbrief Einzelmerkmale und Rohrwände,
+    aber weder die Hohlraumkette noch die Handlungsgruppen — der Agent las
+    „hole_1 Ø 8" und wusste nicht, dass Versetzen die Senkung mitnimmt und
+    dass zwei gleiche Bohrungen daneben dieselbe Handlung anböten.
+    """
+    from app.core.perceive.relations import group_reason_texts
+
+    scene = _plate_with_a_countersunk_bore_and_two_alike(profile)
+    found = scene.objects["obj_1"].features
+    sunk = next(f for f in found.values() if f.kind == "hole" and f.params["diameter"] > 7.0)
+    cone = next(f for f in found.values() if f.kind == "cone")
+    small = sorted(
+        (f for f in found.values() if f.kind == "hole" and f.params["diameter"] < 7.0),
+        key=lambda f: f.id,
+    )
+    assert len(small) == 2, sorted(f.id for f in found.values())
+
+    with_chain = digest(scene, selection=("obj_1", sunk.id))
+    assert f"Hohlraum: {sunk.id} → {cone.id} — eine Kette" in with_chain, with_chain
+    assert "gleich:" not in with_chain, "die gesenkte Bohrung hat keine Gleiche"
+
+    with_alikes = digest(scene, selection=("obj_1", small[0].id))
+    assert "Hohlraum:" not in with_alikes, "eine einzelne Bohrung ohne Kette und ohne Grund"
+    line = next(entry for entry in with_alikes.splitlines() if "gleich:" in entry)
+    assert f"gleich: {small[1].id}" in line, line
+    assert "Merkmal verschieben" in line or "verschieben" in line.lower(), line
+    assert "nicht sicher:" not in line
+
+    # Ohne Merkmal in der Auswahl und am Objekt allein steht nichts davon.
+    for text in (digest(scene), digest(scene, selection=("obj_1", ""))):
+        assert "Hohlraum:" not in text and "gleich:" not in text
+
+    # Jeder Grund, den der Steckbrief nennen kann, hat seinen Satz — denselben wie das Panel.
+    assert all(group_reason_texts().values())
+
+
+def test_the_digest_names_the_reason_when_a_bore_is_not_certainly_alone(
+    profile: Profile,
+) -> None:
+    """Zwei Bohrungen, die sich überlappen: „nicht sicher einzeln" mit dem Satz des Panels."""
+    import math
+
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+
+    radius = 3.0
+    distance = 2.0 * radius * math.cos(math.pi / 8.0)
+    plate = trimesh.creation.box(extents=(40.0, 30.0, 10.0))
+    cutters = []
+    for x in (-distance / 2.0, distance / 2.0):
+        cutter = trimesh.creation.cylinder(radius=radius, height=40.0, sections=64)
+        cutter.apply_translation((x, 0.0, 0.0))
+        cutters.append(cutter)
+    body = MeshData.of(trimesh.boolean.difference([plate, *cutters]))
+    found = detect(body)
+    holes = [f for f in found.values() if f.kind == "hole"]
+    assert len(holes) == 2 and all(f.params.get("partial") for f in holes), sorted(found)
+    scene = Scene(
+        objects={"obj_1": SceneObject(id="obj_1", name="Platte", mesh=body, features=found)},
+        profile=profile,
+    )
+
+    text = digest(scene, selection=("obj_1", holes[0].id))
+    assert (
+        "Hohlraum: nicht sicher einzeln — Die zugehörigen Bohrungsabschnitte sind nicht eindeutig."
+        in text
+    ), text
+
+
 def test_the_digest_carries_warnings_but_not_noise(profile: Profile) -> None:
     """§26.1: der Agent muss wissen, worauf er steht."""
     scene = plate_scene(profile)

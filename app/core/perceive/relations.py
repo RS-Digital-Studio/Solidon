@@ -150,6 +150,47 @@ FeatureGroupReason = Literal[
 """Warum eine mögliche Zugehörigkeit nicht sicher entschieden werden konnte."""
 
 
+def group_evidence_texts() -> dict[FeatureGroupEvidence, str]:
+    """Ein Satz je Nachweis einer Sammelgruppe — für Panel und Steckbrief dieselben.
+
+    Zur Laufzeit übersetzt, nicht beim Import: Die Sprache kann wechseln.
+    ``test_feature_panel`` hält die Schlüssel mit :data:`FeatureGroupEvidence`
+    deckungsgleich; ein neuer Wert dort ist sonst ein ``KeyError`` mitten in
+    der Merkmalsauswahl. Bis zum 20.09.2026 standen die Sätze im Panel; seit
+    der Steckbrief sie auch liest (P1.5), stehen sie hier einmal.
+    """
+    from app.i18n import tr
+
+    return {
+        "same_target_dimensions": tr("Gleiches Ausgangsmaß für diese Änderung."),
+        "complete_surface_patch": tr("Die vollständige bearbeitete Form stimmt überein."),
+        "parallel_axes": tr("Die Achsen sind parallel ausgerichtet."),
+        "shared_boundary_role": tr("Die Merkmale haben dieselbe Rolle in ihrer Bohrungskette."),
+        "translation_consistent": tr("Die zugehörigen Abschnitte liegen gleich zueinander."),
+    }
+
+
+def group_reason_texts() -> dict[FeatureGroupReason, str]:
+    """Ein Satz je Grund, warum ein Merkmal nicht sicher dazugehört — siehe
+    :func:`group_evidence_texts`."""
+    from app.i18n import tr
+
+    return {
+        "selected_feature_unavailable": tr("Das gewählte Merkmal ist nicht mehr vorhanden."),
+        "action_not_applicable": tr("Diese Handlung passt nicht zu den weiteren Merkmalen."),
+        "ambiguous_cavity_chain": tr("Die zugehörigen Bohrungsabschnitte sind nicht eindeutig."),
+        "cavity_topology_unavailable": tr(
+            "Die Verbindung der Bohrungsabschnitte ist nicht sicher erkannt."
+        ),
+        "dimensions_unavailable": tr("Die benötigten Maße sind nicht sicher erkannt."),
+        "complete_shape_unavailable": tr("Die vollständige Form ist nicht sicher vergleichbar."),
+        "orientation_unavailable": tr("Die Ausrichtung ist nicht sicher erkannt."),
+        "relative_position_unavailable": tr(
+            "Die Lage der zugehörigen Abschnitte ist nicht sicher erkannt."
+        ),
+    }
+
+
 @dataclass(frozen=True, slots=True)
 class FeatureGroupMember:
     """Ein Ziel der Sammelhandlung und der vollständig zugehörige Umfang."""
