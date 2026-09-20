@@ -355,3 +355,26 @@ OCCT-Refman und -Quelltext, GitHub-Releases, Hersteller-Hilfen); ihre
 Auswertungen liegen in den Sitzungsprotokollen, die Folgerungen in §§3–4.
 Nicht wiederholt: Klickzahlen, native Fensterfahrt, Prototyp-Fits,
 Filament-Rack, HLR — sie bleiben historische Angaben vom 17./18.09.
+
+## 9. Anschluss an die Umsetzung am 20.09.
+
+Die ursprüngliche 132er-Sonde ist inzwischen eine explizite Regression über
+133 registrierte Operationen und 229 Prüfungen. Hinzugekommen ist das
+gemeinsame Aufsetzen einer Importgruppe; Netz, exakte Körper und gemischte
+Eingänge behalten ihre relative Lage und ihre Merkmale. Die übrigen neuen
+P0.7-Wege stehen im Nachtrag des Bedienkonzepts und in RM-188.
+
+Der Hoverbefund aus §5 war zu weitgehend: `always_visible` verhindert eine
+Verdeckung der bereits ausgewählten Beschriftung, schaltet aber nicht alle
+Namen ein. Hover und Auswahl werden unabhängig von der optionalen dauerhaften
+Überlagerung gezeichnet. Der bestehende Fensterfall wurde um das Wegfahren
+ergänzt; gemäß der dauerhaften Prüfregel wird er erst beim Release ausgeführt.
+
+P2.3 schließt zunächst kanonische Ebenen und Kreiszylinder aus NURBS an
+Erkennung und Bearbeitung an. Der durchgehende Kernfall importiert die
+STEP-Platte, ändert ihre Bohrung, speichert, öffnet und nimmt zurück.
+Maßintegrale berücksichtigen die ursprünglichen NURBS-Knoten auch unter
+Offset- und Trimmhüllen; schräge Originalränder werden in beiden
+Knotenrichtungen unterteilt. Wiederholte Radialänderungen und enge Spannen
+haben unabhängige Sollwerte. Die übrigen Merkmalsarten und ihre vollständige Parität bleiben im Paket offen;
+ein grüner Kernweg ersetzt weder Fenster- noch Plattformabnahme.

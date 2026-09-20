@@ -1153,6 +1153,33 @@ die vorhandene Handlung für mehrteilige Importgruppen zusammen; ein
 zweites Importband ist nicht nötig. Die Fensterabnahme wird gemäß der
 dauerhaften Prüfregel ausschließlich beim Release ausgeführt.
 
+**Umsetzung am 20.09.:** Das Aufsetzen verwendet für die unveränderten,
+vollständig vorhandenen Teile desselben Imports eine gemeinsame Translation
+aus ihrem aktuellen tiefsten Punkt. Der Bericht bindet die angebotene Gruppe;
+eine spätere Auswahl ändert ihren Umfang nicht. Andere Importe und bereits
+weiterbearbeitete Teile gehören nicht dazu. Ein Undo nimmt das Aufsetzen
+zurück, das nächste den Import. Der Einzelfall bleibt dieselbe Einzeloperation.
+Steht ein Gruppenmitglied bereits auf dem Bett, bietet der Befund am
+schwebenden Mitglied die wirksame Einzelkorrektur an; ein gemeinsamer
+Nullversatz wird nicht als Korrektur angeboten.
+
+Der frühe UI-/CLI-Start schreibt lokale Python-, Thread- und native
+Absturzprotokolle. Der Supportdialog zeigt einen festen, redigierten
+Schnappschuss der Anhänge vor dem Versand; der Absturz selbst sendet nichts.
+`announce()` ergänzt die bestehende Statuszeile um eine passive Klartextquittung
+am Maus- oder Tastaturort. Sie nimmt keinen Fokus, lässt Eingaben durch und
+bleibt mindestens acht Sekunden sichtbar; längere Texte erhalten mehr Zeit.
+Abbruch und echter Dokumentwechsel verwenden dieselbe Meldungsquelle, damit
+weder die Karte noch die Statuszeile eine alte Projektauskunft behalten.
+
+**Korrektur des Hoverbefunds:** Der vorhandene Code zeigt das überfahrene
+Merkmal bereits bei ausgeschalteter dauerhafter Überlagerung. `always_visible`
+bestimmt die Tiefensichtbarkeit des erzeugten Namens, nicht die Auswahl aller
+Namen. Der bestehende Fensterfall unterscheidet Hover und Auswahl; er ist um
+das Wegfahren mit und ohne bleibende Auswahl ergänzt. Es ist kein zweiter
+Darstellungsweg nötig. Kern- und Entwicklungsnachweise stehen in RM-188;
+Fenster, Tastatur, DPI und Bildschirmleser werden erst beim Release abgenommen.
+
 **Keiner der vier stand am Morgen des 19.09. in `ROADMAP.md`.** Nach der
 Regel dieses Verzeichnisses — offene Arbeit steht im Register und nirgends
 sonst — hat Robert am selben Tag entschieden: Alle vier werden abgearbeitet,

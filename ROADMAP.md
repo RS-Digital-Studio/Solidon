@@ -1361,7 +1361,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   aber einschließlich Auslieferungsweg unbelegt. Analysis Situs bleibt
   eine mögliche Quelltextportierung für eine konkret nachgewiesene Lücke.
 
-  **Entwicklungsstand 20.09.:** `77223ccb` erhält exakte Körper bei affinen
+  **Erster Entwicklungsstand 20.09.:** `77223ccb` erhält exakte Körper bei affinen
   Transformationen, führt native Flächen und Merkmale nach und benennt
   tatsächliche Konvertierungen. `064e3095` verbindet die Eingabewege mit der
   Freigabe ihrer aktuellen dargestellten Vorschau. Gemeinsames
@@ -1372,6 +1372,23 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   ergänzten Fensterregressionen sind noch nicht ausgeführt. Das ist kein
   Abschluss von RM-188 und keine Release-Abnahme.
 
+  **Weiterer Entwicklungsstand 20.09.:** `3bdaa788` schließt
+  kanonische NURBS-Träger an den durchgehenden Bearbeitungsweg an.
+  `7aaa993d` ergänzt gemeinsames Aufsetzen von Importgruppen,
+  `b9b96a91` den lokalen Absturzschutz und `47023b53`
+  die Rückmeldung am Handlungsort. Gemeinsames Entwicklungstor:
+  **11.750 bestanden, 26 übersprungen**, Prozessausgang 0; Ruff,
+  Format und mypy jeweils 0. Der erste Lauf dieses Blocks meldete vier
+  Kernfehler und einen Formatbefund; nach ihren Korrekturen bestanden
+  11.745 Kerntests. Der zusätzliche Hook-Abgleich erforderte fünf neue
+  Gegenproben und den hier genannten abschließenden Gesamtlauf.
+  `5b5b0ef5` ergänzt die Release-Regel aus `69f956e76` im
+  Commit-Hook und in den verbleibenden Agentenanleitungen: neue Texte
+  werden statisch geprüft; sämtliche Fensterdateien und Leistungsprüfungen
+  bleiben beim Release. Die Agenten-Werkzeugliste umfasst 144 Einträge;
+  der funktionale Zählaufruf von qwen3:14b belegt dafür 36.826 Prompt-Token
+  bei `num_ctx=40960`, ohne eine Leistungsprüfung auszuführen.
+
   **Die Pakete in dieser Folge** (Umfang und Abnahme je Paket in Konzept
   §13.2, Voraussetzungen §13.6; jedes Paket endet mit dem Tor vor seinem
   Commit). Der Stand steht als Wort vorn — **offen**, **läuft**,
@@ -1381,12 +1398,12 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
   * **erledigt 19.09.** P0.0 — Merkmale werden bei Spiegelung, Skalierung und Mustern gemeinsam nachgeführt; keine alten Doppelmerkmale, gerichtete Gewindeangaben bleiben korrekt. Kern-, Cache-, Passungs- und Undo-Regressionen sowie zwei native Kundenwege sind belegt; Commit `cfc5e303`. Die nativen Kundenwege wurden vor der neuen Regel geprüft; weitere Fenster- und Leistungsprüfungen gehören zum Release (`69f956e76`). Exakte Skalierung folgt in P2.1.
   * **implementiert, Release-Abnahme offen** P2.1 — `77223ccb`: affine Transformationen erhalten exakte Körper und führen ihre nativen Flächen zur neuen Tessellierung nach. Die explizite Matrix erfasst alle 132 Operationen mit 226 gültigen Darstellungsfällen: 227 Prüfungen bestanden, Exit 0. Gemischte und mehrfache Boolesche Eingänge, leere Ergebnisse, Cache, Wiederöffnung und Undo sind gedeckt. Getrimmte NURBS liefern geprüfte Flächen-/Volumenintegrale einschließlich Abbruch; die private Rundungszwischenform wird vor Veröffentlichung orientiert. Entwicklungstor siehe oben; installierte Plattformen und Fensterabnahme bleiben offen.
-  * **offen** P2.3 — `void`, `torus`, `curved_face` und analytische B-Splines im exakten Kern über die kanonische Erkennung
+  * **läuft** P2.3 — `3bdaa788`: erster Anschluss für analytische Ebenen und Kreiszylinder aus NURBS: gemeinsame Trägerauskunft für Erkennung und Bearbeitung, echte Trimgrenzen und Materialseite, zusätzliche Koeffizientenprüfung, durchgereichter Abbruch und Cacheentwertung. Der STEP-Kernweg erkennt sechs Flächen und eine Bohrung, ändert Ø6 auf Ø8, speichert, öffnet und nimmt zurück; Quelle und exakter Körper bleiben erhalten. Die unabhängige Gegenprüfung ergänzt periodische Nahttrimmungen und unveränderte Originalflächen bei Defeaturing. Acht weitere Maßfälle sichern wiederholte Radialänderungen sowie schräge Originalränder über enge NURBS-Knoten in beiden Richtungen, auch unter Offset- und Trimmhüllen. `void`, `torus`, `curved_face` und die vollständige Semantik-/Teilflächenparität bleiben offen.
   * **offen** P1.1 — Zylindermaßvertrag: Kontur statt Schwerpunkt, Achse, Teilabdeckung, Unterteilung, bewusst polygonale Gegenformen
   * **erledigt 20.09., Werkzeugauswahl** P0.5 — vollständige Zuordnung in Konzept §13.8.1; fachliche Machbarkeit, Vorversuche und Paketnachweise bleiben den jeweiligen Fachpaketen zugeordnet. P0.6 benötigt derzeit keine zusätzliche Infrastruktur: vorhandener Cythonweg bleibt Ausgangspunkt, neue native Ergänzungen nur bei belegtem Bedarf. P5.3 bleibt offen.
   * **implementiert, Release-Abnahme offen** P0.1 — `064e3095`: Positions-Dreier, Einzahltexte, Gründe gesperrter Knöpfe und Rückmeldung zur leeren Skizze sind umgesetzt. Entwicklungstor grün; die ergänzten Fensterfälle laufen erst beim Release.
   * **implementiert, Release-Abnahme offen** P0.2 — `77223ccb`/`064e3095`: Vorschau und Befund nennen Operation, betroffenen Körper und Rückweg einer Konvertierung; beide Körperarten erhalten gleichwertige Baumtexte. Der Agent prüft auch reine Projektparameteränderungen und übernimmt Konvertierungen nicht automatisch. Menü, Merkmalkarte, Gruppen, Platzierung, historische Zwillinge, Filament, Formen und Chat teilen die Prüfung von Auftrag, Dokumentstand, Auswahl und tatsächlich gezeichneter Vorschau. Entwicklungstor grün; Fensterregressionen und reale Kundenabnahme bleiben dem Release vorbehalten.
-  * **offen** P0.7 — Absturzprotokoll, Beschriftung beim Überfahren, zweiter Ort für `announce()`. Weitere Importe behalten gemäß Bauplan §17.1 ihre Dateilage und bieten bereits Aufsetzen mit eigener Undo-Transaktion an (`test_ui.py::test_the_finding_below_the_bed_is_one_click_from_being_fixed`); noch zu ergänzen sind der gemeinsame Versatz mehrteiliger Importgruppen und die übrigen Abnahmen, kein zweites Importband.
+  * **implementiert, Release-Abnahme offen** P0.7 — `7aaa993d` / `b9b96a91` / `47023b53`: früher UI-/CLI-Absturzschutz mit lokalen Python-/Thread-/nativen Berichten und redigierten festen Supportanhängen. `announce()` hat eine passive Klartextquittung am Maus-/Tastaturort; Abbruch und Dokumentwechsel verwenden dieselbe Meldungsquelle. Die Hoverbeschriftung bestand bereits; `always_visible` betrifft Tiefensichtbarkeit. Der vorhandene Fensterfall prüft zusätzlich Wegfahren mit und ohne Auswahl. Weitere Importe behalten ihre Dateilage (§17.1); der Bericht bietet ihrer unveränderten vollständigen Gruppe gemeinsames Aufsetzen als eigene Undo-Transaktion an. Steht die Gruppe schon auf dem Bett, bleibt am schwebenden Mitglied die wirksame Einzelhandlung. Zwölf Gruppen-Kernfälle grün; die Bauartmatrix erfasst jetzt alle 133 Operationen in 229 bestandenen Prüfungen. Neue Fensterfälle sind vorbereitet, werden aber ausschließlich beim Release ausgeführt; Sichtbarkeit, DPI, Tastatur und Bildschirmleser bleiben offen.
   * **offen** P0.3 — gemeinsamer Maßeditor im Viewport: ein Entwurf, ✓/×, Enter/Escape, Vorschau, Zielumfang
   * **offen** P0.4 — Referenzauswahl: echte Kanten, Mitten, Achsen; Bezugswechsel; keine Facetten und keine flüchtigen IDs als Bezug
   * **offen** P1.2 — Kegel-, Kugel- und Torusfits gegen eigene Sollkörper
