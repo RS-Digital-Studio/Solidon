@@ -1126,6 +1126,48 @@ def _oriented_cone(
     return Solid(BRepPrimAPI_MakeCone(frame, base_radius, top_radius, height).Shape())
 
 
+def convex_hull(solid: Solid) -> Solid:
+    """Die konvexe Hülle des Körpers als exakter Vielflächner — zum Beschneiden eines Stopfens.
+
+    Der exakte Kern kennt keine Hülle; sie kommt aus dem Netz-Zwilling
+    (``trimesh``) und wird aus dessen Dreiecken genäht, ebene Nachbarn legt
+    ``unified`` zusammen — die Hülle eines Quaders ist sein Quader. Gebraucht
+    wird sie, wo ``geom.prepare.plug`` sie braucht: Ein Stopfen aus Zahlen darf
+    nicht aus dem Körper herauswachsen, den er füllt, und ohne Merkmal gibt es
+    keine Mündung, an der sich schneiden ließe.
+    """
+    require()
+    from OCP.BRepBuilderAPI import (
+        BRepBuilderAPI_MakeFace,
+        BRepBuilderAPI_MakePolygon,
+        BRepBuilderAPI_MakeSolid,
+        BRepBuilderAPI_Sewing,
+    )
+    from OCP.BRepLib import BRepLib
+    from OCP.gp import gp_Pnt
+    from OCP.TopAbs import TopAbs_SHELL
+    from OCP.TopExp import TopExp_Explorer
+    from OCP.TopoDS import TopoDS
+
+    hull = solid.to_mesh().raw.convex_hull
+    sewing = BRepBuilderAPI_Sewing(EPS_GEOM)
+    for corners in hull.triangles:
+        polygon = BRepBuilderAPI_MakePolygon(
+            gp_Pnt(float(corners[0][0]), float(corners[0][1]), float(corners[0][2])),
+            gp_Pnt(float(corners[1][0]), float(corners[1][1]), float(corners[1][2])),
+            gp_Pnt(float(corners[2][0]), float(corners[2][1]), float(corners[2][2])),
+            True,
+        )
+        sewing.Add(BRepBuilderAPI_MakeFace(polygon.Wire(), True).Face())
+    sewing.Perform()
+    shells = TopExp_Explorer(sewing.SewedShape(), TopAbs_SHELL)
+    if not shells.More() or sewing.NbFreeEdges() != 0:
+        raise InternalError(detail="the convex hull of a solid did not sew into a closed shell")
+    body = BRepBuilderAPI_MakeSolid(TopoDS.Shell(shells.Current())).Solid()
+    BRepLib.OrientClosedSolid_s(body)
+    return unified(Solid(body))
+
+
 def solid_from_faces(
     solid: Solid,
     face_indices: Sequence[int],

@@ -823,7 +823,10 @@ garnichts").
 Versetzen, Verdoppeln, Drehen und Entfernen einer Bohrung oder eines
 Langlochs lassen den exakten Körper exakt — schließen mit `fill_bore`,
 schneiden mit `cut_bore`/`slot_bore`, nativ erkennen, Kennung belegt
-fortführen. Wer eine Merkmalshandlung baut, die einen exakten Körper
+fortführen; Senken und Verschließen ebenso, und wo die Frage nach Mündung
+und Materialseite am Netz gestellt wird, stellt sie derselbe Helfer für
+beide Kerne (`prepare.sink_placement`, `prepare.plug_placement`). Wer eine
+Merkmalshandlung baut, die einen exakten Körper
 vernetzt, tut es nur, wo der Kern die Form nicht hergibt, und der Befund
 `evaluate.exact_became_mesh` sagt es; heute ist das der Einschluss, und der
 steht im Register. Zapfen, Kuppe und Kegelstumpf — und eine Senkung oder

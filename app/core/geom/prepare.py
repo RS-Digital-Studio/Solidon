@@ -1337,31 +1337,10 @@ def countersink(
     ``centre`` nimmt die Position wörtlich, für den, der sie eintippt.
     """
     depth = diameter / 2.0 / math.tan(math.radians(angle / 2.0))
-    at = np.asarray(position, dtype=float)
-    sides = open_sides(mesh, axis, tuple(at))
-    # Eine Mündung, zwei Mündungen, keine: bei genau einer ist sie gefunden,
-    # sonst entscheidet dieselbe Hüllquader-Regel wie beim Bohren.
-    outward = sides[0] if len(sides) == 1 else -into_the_body(mesh, axis, tuple(at))
-    findings: list[Finding] = []
-    if anchor == "mouth" and sides:
-        at = _at_the_mouth(mesh, axis, at, diameter, outward)
-    if not sides and _inside_the_bounds(mesh, at):
-        # Weder vorwärts noch rückwärts kommt der Strahl heraus: hier ist
-        # Material, keine Bohrung. Der Kegel schneidet dann einen Hohlraum, den
-        # niemand je zu sehen bekommt — genau der Fall, für den ``anchor`` da
-        # ist, nur ohne Bohrung, an die man ihn hängen könnte.
-        findings.append(
-            Finding(
-                code="bore.sink_buried",
-                severity="warning",
-                message=_(
-                    "An dieser Stelle liegt Material und keine Bohrungsmündung — die "
-                    "Senkung würde ein Hohlraum im Teil. Position auf eine Fläche oder "
-                    "in eine Bohrung legen."
-                ),
-                values={"diameter": format_length(diameter)},
-            )
-        )
+    placement = sink_placement(mesh, axis, position, diameter, anchor)
+    at = np.asarray(placement.position, dtype=float)
+    outward = placement.outward
+    findings: list[Finding] = list(placement.findings)
 
     narrows = np.zeros(3)
     narrows[AXIS_INDEX[axis]] = -outward
@@ -1391,6 +1370,53 @@ def countersink(
         diameter=diameter,
         findings=findings,
     )
+
+
+@dataclass(frozen=True, slots=True)
+class SinkPlacement:
+    """Wo eine Senkung wirklich ansetzt: die Mündung, die Richtung nach außen, die Befunde."""
+
+    position: Vec3
+    outward: float
+    findings: tuple[Finding, ...]
+
+
+def sink_placement(
+    mesh: MeshData, axis: Axis, position: Vec3, diameter: float, anchor: BoreAnchor
+) -> SinkPlacement:
+    """Die Platzierung einer Senkung — für beide Kerne dieselbe Antwort.
+
+    :func:`countersink` schneidet damit am Netz, ``geom.prepare_ops`` am exakten
+    Körper; gemessen wird in beiden Fällen am Netz, denn die Frage nach
+    Mündung und Materialseite stellt sich mit Strahlen, und der Zwilling eines
+    exakten Körpers hat dieselben. Eine Mündung, zwei Mündungen, keine: bei
+    genau einer ist sie gefunden, sonst entscheidet dieselbe Hüllquader-Regel
+    wie beim Bohren (:func:`into_the_body`).
+    """
+    at = np.asarray(position, dtype=float)
+    sides = open_sides(mesh, axis, tuple(at))
+    outward = sides[0] if len(sides) == 1 else -into_the_body(mesh, axis, tuple(at))
+    findings: list[Finding] = []
+    if anchor == "mouth" and sides:
+        at = _at_the_mouth(mesh, axis, at, diameter, outward)
+    if not sides and _inside_the_bounds(mesh, at):
+        # Weder vorwärts noch rückwärts kommt der Strahl heraus: hier ist
+        # Material, keine Bohrung. Der Kegel schneidet dann einen Hohlraum, den
+        # niemand je zu sehen bekommt — genau der Fall, für den ``anchor`` da
+        # ist, nur ohne Bohrung, an die man ihn hängen könnte.
+        findings.append(
+            Finding(
+                code="bore.sink_buried",
+                severity="warning",
+                message=_(
+                    "An dieser Stelle liegt Material und keine Bohrungsmündung — die "
+                    "Senkung würde ein Hohlraum im Teil. Position auf eine Fläche oder "
+                    "in eine Bohrung legen."
+                ),
+                values={"diameter": format_length(diameter)},
+            )
+        )
+    return SinkPlacement((float(at[0]), float(at[1]), float(at[2])), outward, tuple(findings))
 
 
 def open_sides(mesh: MeshData, axis: Axis, position: Vec3) -> tuple[float, ...]:
@@ -1541,23 +1567,13 @@ def plug(
     nichts — die Bohrung blieb zur Hälfte offen. Bei einem durchgehenden
     Stopfen macht es keinen Unterschied.
     """
-    through = depth <= EPS_GEOM
-    # Wie beim Bohren: ein durchgehender Stopfen ist doppelt so lang wie der
-    # Körper, damit er von jeder Position aus in beide Richtungen hinausreicht —
-    # ``_shell`` schneidet den Überstand ohnehin weg. Zentriert auf die Mündung
-    # füllte die einfache Länge nur die Hälfte und ließ die Bohrung offen.
-    height = _through_length(mesh, axis) * 2.0 if through else depth
+    centre, height = plug_placement(mesh, axis, position, depth, anchor)
     filled = diameter if profile is None else bore_diameter(diameter, profile, compensate)
     cylinder = lathe.cylinder(
         radius=filled / 2.0 + BOOLEAN_OVERLAP, height=height, sections=BORE_SECTIONS
     )
     transform.moved(cylinder, _axis_alignment(axis))
-    offset = np.asarray(position, dtype=float)
-    if not through and anchor == "mouth":
-        direction = np.zeros(3)
-        direction[AXIS_INDEX[axis]] = _into_the_material(mesh, axis, position)
-        offset = offset + direction * (height / 2.0)
-    cylinder.apply_translation(offset)
+    cylinder.apply_translation(np.asarray(centre, dtype=float))
 
     # Erst verschneiden: der Stopfen darf nicht aus dem Körper herauswachsen,
     # den er füllt.
@@ -1576,6 +1592,28 @@ def plug(
         diameter=filled,
         findings=findings,
     )
+
+
+def plug_placement(
+    mesh: MeshData, axis: Axis, position: Vec3, depth: float, anchor: BoreAnchor
+) -> tuple[Vec3, float]:
+    """Mitte und Länge eines Stopfens aus Zahlen — für beide Kerne dieselbe Antwort.
+
+    Wie beim Bohren: ein durchgehender Stopfen ist doppelt so lang wie der
+    Körper, damit er von jeder Position aus in beide Richtungen hinausreicht —
+    die Hülle schneidet den Überstand ohnehin weg. Zentriert auf die Mündung
+    füllte die einfache Länge nur die Hälfte und ließ die Bohrung offen. Und
+    ``mouth`` heißt: die Tiefe geht von der Position aus ins Material
+    (:func:`_into_the_material`), nicht zur Hälfte hinaus.
+    """
+    through = depth <= EPS_GEOM
+    height = _through_length(mesh, axis) * 2.0 if through else depth
+    offset = np.asarray(position, dtype=float)
+    if not through and anchor == "mouth":
+        direction = np.zeros(3)
+        direction[AXIS_INDEX[axis]] = _into_the_material(mesh, axis, position)
+        offset = offset + direction * (height / 2.0)
+    return (float(offset[0]), float(offset[1]), float(offset[2])), height
 
 
 def shell(mesh: MeshData) -> MeshData:

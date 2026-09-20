@@ -614,8 +614,15 @@ sie hinaus mit derselben Flanke so weit weitergeführt, wie
 `_cone_past_a_tilted_face` verlangt — ins Material beim Stumpf, ins Freie bei
 der Senkung, sonst bliebe ihr eine Decke; Höhe und schmalen Radius nennt
 `edit.cone_extent`, und die Erkennung beschreibt den gekippten Kegel am Ende
-dieser Weiterführung. Einschlüsse gehen am exakten Körper noch den Netzweg
-mit `evaluate.exact_became_mesh`; sie folgen.
+dieser Weiterführung. **Senken und Verschließen** gehen denselben Weg
+(`_exact_countersink`, `_exact_plug`): Mündung, Materialseite und die
+Mitte eines Stopfens aus Zahlen kommen aus `prepare.sink_placement` und
+`prepare.plug_placement` — am Netz-Zwilling gemessen, für beide Kerne
+dieselbe Antwort —, der Kegel trägt seinen Durchmesser exakt an der Mündung
+und geht um `FEATURE_OVERLAP` mit derselben Flanke darüber hinaus, der
+Stopfen am Merkmal ist `_exact_cavity_filled`, der aus Zahlen wird an
+`edit.convex_hull` beschnitten wie am Netz an `shell`. Einschlüsse gehen am
+exakten Körper noch den Netzweg mit `evaluate.exact_became_mesh`; sie folgen.
 
 **`slot_hole` und `resize_hole` nehmen dabei eine Stelle entgegen** (`x/y/z`,
 **leer** heißt „lass es, wo es ist" — `_named_place` beantwortet das für beide,

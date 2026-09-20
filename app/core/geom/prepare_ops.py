@@ -79,9 +79,11 @@ from app.core.geom.prepare import (
     named_for,
     over_the_edge_along,
     plug,
+    plug_placement,
     resize_bore,
     shell,
     shortest_slot,
+    sink_placement,
     slot_bore,
     slot_travel,
     split_at_plane,
@@ -7713,6 +7715,8 @@ class CountersinkParams(BaseParams):
 def countersink_hole(ctx: OpContext) -> OpResult:
     params = cast(CountersinkParams, ctx.params)
     source = ctx.inputs[0]
+    if source.kind == "brep":
+        return _exact_countersink(ctx, source, params)
     result = countersink(
         as_mesh_data(source.mesh),
         position=(params.x, params.y, params.z),
@@ -7838,6 +7842,8 @@ def plug_hole(ctx: OpContext) -> OpResult:
     """
     params = cast(PlugParams, ctx.params)
     source = ctx.inputs[0]
+    if source.kind == "brep":
+        return _exact_plug(ctx, source, params)
     if params.at_feature:
         feature = _movable_feature(source, params.at_feature, "plug_hole")
         measured = [float(value) for value in feature.params["centre"]]
@@ -7872,6 +7878,114 @@ def plug_hole(ctx: OpContext) -> OpResult:
         outputs=[dataclasses.replace(source, mesh=result.mesh, features={})],
         solver=result.solver,
         findings=result.findings,
+    )
+
+
+def _exact_countersink(ctx: OpContext, source: SceneObject, params: CountersinkParams) -> OpResult:
+    """Senken am exakten Körper (P2.4): derselbe Kegel, exakt geschnitten.
+
+    Mündung und Materialseite kommen aus :func:`sink_placement`, gemessen am
+    Netz-Zwilling — dieselbe Antwort wie am Netz. Der Kegel selbst ist exakt
+    und trägt seinen Durchmesser **an der Mündung**: Über sie hinaus geht er
+    um ``FEATURE_OVERLAP`` mit derselben Flanke weiter, damit keine Fläche mit
+    der Oberfläche zusammenfällt; am Netz wird er stattdessen angehoben, und
+    dort ist die Mündung um den Überstand mal Flanke enger — das ist der
+    Sehnenfehler des Netzwegs, nicht das Maß.
+    """
+    from app.core.brep import edit
+    from app.core.brep.edit import _oriented_cone
+
+    solid = _exact_body(source)
+    axis = cast(Axis, params.axis)
+    placement = sink_placement(
+        as_mesh_data(source.mesh),
+        axis,
+        (params.x, params.y, params.z),
+        params.diameter,
+        cast(BoreAnchor, params.anchor),
+    )
+    half_angle = params.angle / 2.0
+    radius = params.diameter / 2.0
+    depth = radius / math.tan(math.radians(half_angle))
+    outward = np.asarray(AXIS_NORMALS[axis], dtype=float) * placement.outward
+    base = np.asarray(placement.position, dtype=float) + outward * FEATURE_OVERLAP
+    tool = _oriented_cone(
+        (float(base[0]), float(base[1]), float(base[2])),
+        (float(-outward[0]), float(-outward[1]), float(-outward[2])),
+        radius + FEATURE_OVERLAP * math.tan(math.radians(half_angle)),
+        0.0,
+        depth + FEATURE_OVERLAP,
+    )
+    ctx.progress(0.3, str(_("Die Senkung wird geschnitten …")))
+    sunk = edit.unified(edit.boolean("difference", [solid, tool]))
+    findings = list(placement.findings)
+    nothing = without_effect(solid, sunk, "difference", ctx.profile)
+    if nothing is not None:
+        findings.append(nothing)
+    return _exact_cavity_result(
+        ctx, source, sunk, op="countersink_hole", expected=None, findings=findings
+    )
+
+
+def _exact_plug(ctx: OpContext, source: SceneObject, params: PlugParams) -> OpResult:
+    """Eine Bohrung am exakten Körper verschließen (P2.4) — am Merkmal oder an Zahlen.
+
+    Am Merkmal ist es der Stopfen aus den gemessenen Maßen
+    (:func:`_exact_cavity_filled`), und die Kennung geht mit, wie beim
+    Entfernen. An Zahlen gilt, was :func:`~app.core.geom.prepare.plug` am Netz
+    tut: Mitte und Länge aus :func:`plug_placement`, der Zylinder um die
+    Materialtoleranz weiter, beschnitten an der konvexen Hülle
+    (``edit.convex_hull``), damit ein durchgehender Stopfen nicht aus dem
+    Teil herauswächst.
+    """
+    from app.core.brep import edit
+    from app.core.brep.edit import _oriented_cylinder
+
+    solid = _exact_body(source)
+    if params.at_feature:
+        feature = _movable_feature(source, params.at_feature, "plug_hole")
+        ctx.progress(0.3, str(_("Das Merkmal wird geschlossen …")))
+        filled = edit.unified(_exact_cavity_filled(solid, feature))
+        findings: list[Finding] = []
+        nothing = without_effect(solid, filled, "union", ctx.profile)
+        if nothing is not None:
+            findings.append(nothing)
+        return _exact_cavity_result(
+            ctx,
+            source,
+            filled,
+            op="plug_hole",
+            expected=None,
+            gone=(feature.id,),
+            findings=findings,
+            reserve=True,
+        )
+    axis = cast(Axis, params.axis)
+    centre, height = plug_placement(
+        as_mesh_data(source.mesh),
+        axis,
+        (params.x, params.y, params.z),
+        params.depth,
+        cast(BoreAnchor, params.anchor),
+    )
+    filled_diameter = bore_diameter(params.diameter, ctx.profile, params.compensate)
+    unit = np.asarray(AXIS_NORMALS[axis], dtype=float)
+    start = np.asarray(centre, dtype=float) - unit * (height / 2.0)
+    cylinder = _oriented_cylinder(
+        (float(start[0]), float(start[1]), float(start[2])),
+        (float(unit[0]), float(unit[1]), float(unit[2])),
+        filled_diameter / 2.0 + EPS_GEOM,
+        height,
+    )
+    ctx.progress(0.3, str(_("Die Bohrung wird verschlossen …")))
+    inside = edit.boolean("intersection", [cylinder, edit.convex_hull(solid)])
+    plugged = edit.unified(edit.boolean("union", [solid, inside]))
+    findings = []
+    nothing = without_effect(solid, plugged, "union", ctx.profile)
+    if nothing is not None:
+        findings.append(nothing)
+    return _exact_cavity_result(
+        ctx, source, plugged, op="plug_hole", expected=None, findings=findings
     )
 
 

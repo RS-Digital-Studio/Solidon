@@ -486,7 +486,10 @@ Erkennung am Kegel nicht nennt — Höhe und schmalen Radius —, liest
 bei `Location + v·cos(w)·Achse` mit dem Radius `RefRadius + v·sin(w)`, `w` der
 halbe Öffnungswinkel), und
 `_oriented_cone` baut daraus den exakten Kegelstumpf an freier Achse — das
-Werkzeug, mit dem `geom/prepare_ops` einen Kegel kippt.
+Werkzeug, mit dem `geom/prepare_ops` einen Kegel kippt und eine Senkung
+schneidet. `convex_hull` näht die Hülle des Netz-Zwillings zu einem exakten
+Vielflächner — der exakte Kern hat keine eigene —, an dem ein Stopfen aus
+Zahlen beschnitten wird, wie am Netz an `prepare.shell`.
 
 ## Eine Rundung wegnehmen heißt, ihre Fläche zu streichen
 

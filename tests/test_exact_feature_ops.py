@@ -771,3 +771,155 @@ def test_rotating_a_standalone_countersink_stays_open(profile: Profile) -> None:
     assert turned.params["diameter"] == pytest.approx(2.0 * (6.0 + reach), abs=1e-9)
     assert turned.params["centre"] == pytest.approx(base, abs=1e-9)
     assert _round_trip_volume(solid) == pytest.approx(solid.volume, rel=1e-7)
+
+
+# --- Senken und Verschließen ---------------------------------------------------------------
+
+
+def test_countersinking_an_exact_bore_keeps_the_body_exact(profile: Profile) -> None:
+    """Senken an der Mündung einer exakten Bohrung: der Hohlraum des exakten Bohrens mit Senkung.
+
+    Die Position liegt in der Bohrung, der Bezug ist die Mündung — dort landet
+    der Kegel, oben, weil die Hüllquader-Regel es sagt. Volumen und Merkmale
+    sind die der Platte, die ``drill_outline`` mit derselben Senkung bohrt.
+    """
+    load_operations()
+    source = _bored_plate()
+    hole = _the_one(source, "hole")
+
+    result = run(
+        "countersink_hole",
+        source,
+        profile,
+        diameter=12.0,
+        angle=90.0,
+        x=0.0,
+        y=0.0,
+        z=5.0,
+        axis="z",
+        anchor="mouth",
+    )
+
+    output = result.outputs[0]
+    solid: Any = output.mesh
+    assert output.kind == "brep" and solid.is_closed
+    assert not any(finding.converts_exact_body for finding in result.findings)
+    assert solid.volume == pytest.approx(24000.0 - COUNTERSUNK_CAVITY, rel=1e-9)
+    assert solid.face_count == 8
+    kinds = sorted(f.kind for f in output.features.values() if f.kind != "face")
+    assert kinds == ["cone", "hole"], kinds
+    sink = _the_one(output, "cone")
+    assert sink.params["diameter"] == pytest.approx(12.0, abs=1e-9)
+    assert sink.params["angle"] == pytest.approx(90.0, abs=1e-9)
+    assert sink.params["recess"] is True
+    assert sink.params["centre"] == pytest.approx((0.0, 0.0, 10.0), abs=1e-9)
+    kept = _the_one(output, "hole")
+    assert kept.id == hole.id, "die Bohrung bleibt dieselbe, nur kürzer"
+    assert kept.params["depth"] == pytest.approx(7.0, abs=1e-9)
+    assert kept.params["centre"] == pytest.approx((0.0, 0.0, 3.5), abs=1e-9)
+    assert _round_trip_volume(solid) == pytest.approx(solid.volume, rel=1e-9)
+
+
+def test_countersinking_into_solid_material_says_so_and_stays_exact(profile: Profile) -> None:
+    """Mitten im Material gibt es keine Mündung: der Befund kommt, der Körper bleibt exakt.
+
+    Der Kegel Ø 12/90° ist 6 mm hoch; von z = 8 aus reicht er bis z = 2 und
+    bleibt ganz in der Platte — ein Einschluss, den der Befund benennt. Sein
+    Volumen ist das des um den Überstand weitergeführten Kegels.
+    """
+    load_operations()
+    source = _bored_plate()
+
+    result = run(
+        "countersink_hole",
+        source,
+        profile,
+        diameter=12.0,
+        angle=90.0,
+        x=20.0,
+        y=10.0,
+        z=8.0,
+        axis="z",
+        anchor="centre",
+    )
+
+    output = result.outputs[0]
+    solid: Any = output.mesh
+    assert output.kind == "brep" and solid.is_closed
+    assert [finding.code for finding in result.findings] == ["bore.sink_buried"]
+    from app.core.geom.prepare import FEATURE_OVERLAP
+
+    grown = 6.0 + FEATURE_OVERLAP
+    assert solid.volume == pytest.approx(
+        24000.0 - BORE_AREA * 10.0 - math.pi * grown * grown * grown / 3.0, rel=1e-9
+    )
+    assert [f.kind for f in output.features.values() if f.kind == "void"], (
+        "der vergrabene Kegel ist ein Einschluss"
+    )
+
+
+def test_plugging_an_exact_bore_by_its_feature_keeps_the_body_exact(profile: Profile) -> None:
+    load_operations()
+    source = _bored_plate()
+    hole = _the_one(source, "hole")
+
+    result = run("plug_hole", source, profile, at_feature=hole.id)
+
+    output = result.outputs[0]
+    solid: Any = output.mesh
+    assert output.kind == "brep" and solid.is_closed
+    assert not any(finding.converts_exact_body for finding in result.findings)
+    assert solid.volume == pytest.approx(24000.0, rel=1e-9)
+    assert solid.face_count == 6
+    assert not [f for f in output.features.values() if f.kind == "hole"]
+    assert hole.id in output.reserved_feature_ids
+
+
+def test_plugging_an_exact_bore_by_numbers_keeps_the_body_exact(profile: Profile) -> None:
+    """Ohne Merkmal: der Stopfen aus Zahlen, an der Hülle beschnitten — durch und zur Hälfte."""
+    load_operations()
+    source = _bored_plate()
+
+    through = run(
+        "plug_hole",
+        source,
+        profile,
+        at_feature="",
+        diameter=6.0,
+        x=0.0,
+        y=0.0,
+        z=10.0,
+        axis="z",
+        depth=0.0,
+        compensate=False,
+    )
+    whole = through.outputs[0]
+    full: Any = whole.mesh
+    assert whole.kind == "brep" and full.is_closed
+    assert not any(finding.converts_exact_body for finding in through.findings)
+    assert full.volume == pytest.approx(24000.0, rel=1e-9)
+    assert full.face_count == 6, "nichts wächst aus der Platte heraus"
+
+    partly = run(
+        "plug_hole",
+        source,
+        profile,
+        at_feature="",
+        diameter=6.0,
+        x=0.0,
+        y=0.0,
+        z=10.0,
+        axis="z",
+        depth=4.0,
+        anchor="mouth",
+        compensate=False,
+    )
+    half = partly.outputs[0]
+    part: Any = half.mesh
+    assert half.kind == "brep" and part.is_closed
+    assert part.volume == pytest.approx(24000.0 - BORE_AREA * 6.0, rel=1e-9)
+    assert part.face_count == 8, "die Bohrung ist jetzt ein Sackloch von unten: Mantel und Boden"
+    left = _the_one(half, "hole")
+    assert left.params["through"] is False
+    assert left.params["depth"] == pytest.approx(6.0, abs=1e-9)
+    assert left.params["centre"] == pytest.approx((0.0, 0.0, 3.0), abs=1e-9)
