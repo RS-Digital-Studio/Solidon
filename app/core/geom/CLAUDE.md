@@ -3,6 +3,12 @@
 Die einzige Stelle, an der Geometrie entsteht oder sich ändert (Regel 2).
 Gerechnet wird gegen `manifold3d` und `trimesh`.
 
+`place_on_bed` bleibt eine Einzeloperation; `place_group_on_bed` erhält alle
+gespeicherten Eingaben mit derselben Translation. Beide verwenden denselben
+Helfer, der den tiefsten aktuellen Z-Wert auswertet. Kein im UI vorberechneter
+Versatz: Vorgängeränderung, Cache und Wiederöffnung müssen dieselbe Absicht
+neu rechnen. Merkmale und B-Rep bleiben über `moved_object` erhalten.
+
 Erneute B-Rep-Merkmalserkennung in `ops`, `edge_ops`, `face_ops` und
 `prepare_ops` erhält denselben `ctx.cancelled`; sie erzeugt kein eigenes
 Token und gibt bei Abbruch kein Teilresultat zurück.

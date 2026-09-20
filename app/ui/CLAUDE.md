@@ -15,6 +15,14 @@ Die Regeln dieses Gebiets stehen in `.claude/rules/` und laden sich selbst —
 
 Hier steht die Karte, dort das Gesetz.
 
+Bettbefunde eines unveränderten mehrteiligen Imports bieten gemeinsames
+Aufsetzen an. Gruppierung, Beschriftung und Handler verwenden
+`ingest.plan.imported_group_for_bed` mit tatsächlichen Szenenkörpern;
+verschiedene Imports werden nicht in einer
+handlungsfähigen Sammelzeile vermischt. Der Handler prüft den gebundenen
+Umfang erneut und schreibt genau einen `place_group_on_bed`-Schritt. Die
+spätere Objektauswahl und frühere Szenenobjekte bestimmen diesen Umfang nicht.
+
 `MainWindow._show_start_screen()` schaltet mit der Startfläche auch den
 Projektkopf und die Bearbeitungsmenüs aus. Ein geöffnetes oder neu angelegtes
 leeres Projekt zeigt sie wieder. Der Rückweg aus einem Editor richtet sich

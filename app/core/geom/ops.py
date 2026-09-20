@@ -971,10 +971,35 @@ class PlaceOnBedParams(BaseParams):
     doc=_("Setzt das Objekt mit seiner Unterseite auf das Druckbett."),
 )
 def place_object_on_bed(ctx: OpContext) -> OpResult:
-    source = ctx.inputs[0]
-    matrix = translation((0.0, 0.0, -source.mesh.bounds.minimum[2]))
+    return _place_inputs_on_bed(ctx)
+
+
+@register_op(
+    name="place_group_on_bed",
+    title=_("Gemeinsam auf das Bett setzen"),
+    category="transform",
+    params=PlaceOnBedParams,
+    consumes=VARIABLE,
+    minimum_inputs=2,
+    produces=VARIABLE,
+    doc=_(
+        "Setzt die ausgewählten Körper gemeinsam auf das Druckbett und erhält ihre relative Lage."
+    ),
+)
+def place_group_on_bed(ctx: OpContext) -> OpResult:
+    """Die gespeicherten Eingaben behalten bei jeder Auswertung ihre relative Lage."""
+    return _place_inputs_on_bed(ctx)
+
+
+def _place_inputs_on_bed(ctx: OpContext) -> OpResult:
+    """Einzelkörper und Gruppe erhalten denselben aus aktuellen Grenzen berechneten Versatz."""
+    lowest = float("inf")
+    for source in ctx.inputs:
+        ctx.cancelled.raise_if_cancelled()
+        lowest = min(lowest, source.mesh.bounds.minimum[2])
+    matrix = translation((0.0, 0.0, -lowest))
     return OpResult(
-        outputs=[moved_object(source, matrix, cancelled=ctx.cancelled)],
+        outputs=[moved_object(source, matrix, cancelled=ctx.cancelled) for source in ctx.inputs],
         transform=as_transform(matrix),
     )
 

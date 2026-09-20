@@ -2044,7 +2044,15 @@ GPU_PROMPT_TOKENS_PER_SECOND: Final = 100.0
 #: Kürzungsmeldung mit ihren Handlungen. Der Platz muss aus dem Schema kommen
 #: (RM-173, Fortsetzung als RM-185). Mit *Abschneiden* als 143. Werkzeug am
 #: selben Tag erneut gezählt: 36 731.
-PROMPT_TOKENS: Final = 36731
+#:
+#: Am 20.09.2026 mit *Baugruppe auf die Platte* funktional neu gezählt:
+#: **36 826 Token bei 144 Werkzeugen**, qwen3:14b (bdbd181c33f2), Ollama 0.34.2.
+#: ``tools/measure_local_model.py --count-tokens --model qwen3:14b`` sendete
+#: genau einen vollständigen kompakten Auftrag mit ``num_ctx`` 40 960,
+#: ``num_predict`` 1 und ``keep_alive`` 0; die Antwort zählte einen Ausgabetoken.
+#: Keine Zeit- oder Geschwindigkeitsmessung. SHA-256 der gesendeten Anfrage:
+#: ``52a8e8a613cfd8f9c21eb7569f1959ef456484bd6019d4352aadaabaa5b550b1``.
+PROMPT_TOKENS: Final = 36826
 
 #: Werkzeugzahl derselben Messung. Der Test macht eine neue Operation zum
 #: bewussten Anlass für eine neue Messung, statt die Zeitangabe still altern zu
@@ -2059,9 +2067,9 @@ PROMPT_TOKENS: Final = 36731
 #: ist, sagt der nächste echte Lauf gegen qwen3:14b; bis dahin ist sie eine
 #: Untergrenze und als solche benannt.
 #:
-#: Seit dem 16.09.2026 sind es 143, und die Tokenzahl darüber ist von genau
-#: diesen 143 gemessen — ungekürzt, mit einem Fenster, das sie aufnimmt.
-PROMPT_TOOL_COUNT: Final = 143
+#: Die funktionale Zählung vom 20.09.2026 enthält genau diese 144 Werkzeuge;
+#: Modell, Kontext und Anfragebeleg stehen bei :data:`PROMPT_TOKENS`.
+PROMPT_TOOL_COUNT: Final = 144
 
 #: Unter diesem Anteil der gemessenen Werkzeuglast gilt eine Antwort als
 #: vorn gekürzt (:class:`BackendPromptTruncated`). Die Schwelle hat Luft nach

@@ -25,6 +25,16 @@ gegen eine geänderte Quelle neu rechnen.
 
 ## Was die Stufe entscheidet
 
+`plan.imported_group` bestimmt die vollständigen lebenden Ausgaben eines
+unveränderten mehrteiligen Imports. Jede spätere Verwendung eines Mitglieds
+beendet dieses Angebot konservativ. Auswahl und frühere Szenenobjekte gehören
+nicht zum Umfang; Importkoordinaten bleiben erhalten. Gemeinsames Aufsetzen
+ist die getrennte Operation `place_group_on_bed` und bleibt einzeln rücknehmbar.
+`plan.imported_group_for_bed` prüft zusätzlich die aktuellen Körpergrenzen:
+Liegt die tiefste Unterseite innerhalb `EPS_DISPLAY` auf dem Bett, bleibt am
+schwebenden Mitglied die wirksame Einzelhandlung. Ein gemeinsamer Schritt mit
+Nullwirkung ersetzt sie nicht.
+
 - **Einheiten**: STL trägt keine. Erkannt wird aus der Größe, und bei
   Mehrdeutigkeit **wird gefragt** (`ctx.ask`, Regel 21) — nicht geraten.
 - **3MF ist eine Baugruppe**, kein Körper. Sie kommt als mehrere Objekte an.

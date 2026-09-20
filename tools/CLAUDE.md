@@ -74,7 +74,10 @@ jede Datei am tatsächlich gewählten Ziel bytegenau geprüft.
 (39 Referenzanfragen, **kostet Geld**) · `run_model_suite.py` (die Kette über
 echte Modelle) · `run_ui_audit.py` (der ganze Bestand durch die laufende
 Oberfläche) · `check_local_model.py` (ruft ein lokales Modell die Werkzeuge
-wirklich auf?) · `measure_local_model.py` (**wie lange** braucht es dafür — kalt gegen warm getrennt, Median **und** Spanne, die Lage aus `api/ps` in jeder Zeile, und am Ende ein `keep_alive: 0`, weil 15 GB nach dem Messen den Rechner zäh machen) · `check_support.py` (kommt die Rückmeldung an?) ·
+wirklich auf?) · `measure_local_model.py` (**wie lange** braucht es dafür — kalt gegen warm getrennt, Median **und** Spanne, die Lage aus `api/ps` in jeder Zeile, und am Ende ein `keep_alive: 0`, weil 15 GB nach dem Messen den Rechner zäh machen;
+`--count-tokens` zählt dagegen genau einen vollständigen Auftrag ohne
+Geschwindigkeitsmessung und belegt Modell, Kontext, Werkzeugzahl und
+Anfrage-SHA-256) · `check_support.py` (kommt die Rückmeldung an?) ·
 `check_activation.py` (ist der öffentliche Aktivierungsdienst bereit?) ·
 `licence_admin.py` (private Support-Oberfläche: MoR-Transaktion einem
 Vorratsschlüssel zuordnen, Käufer im externen Schlüsselarchiv finden,

@@ -40,7 +40,7 @@ mehrdeutige Anfragen und zählt, ob gefragt statt geraten wurde.
 
 **„Fragen vor Raten" trägt nur als Vorbedingung, nicht als Gewohnheit.** Als
 vierter Punkt einer Liste war sie anleitend, und das hielt gegen die damals
-84 Werkzeuge nicht — heute sind es 132 Operationen und elf Zusatzwerkzeuge:
+84 Werkzeuge nicht — heute sind es 133 Operationen und elf Zusatzwerkzeuge:
 sobald der Systemprompt vollständig ankam, fiel die Quote von 3/3 auf
 1/3 — wer genug Angebote hat, findet immer eines, das plausibel aussieht.
 Prompt-Version 2 stellt deshalb drei Prüfungen *vor* den ersten
@@ -117,20 +117,24 @@ Modell, das den Auftrag kennt, nicht herumrät. `OLLAMA_CONTEXT_TOKENS` in
 Wer die Werkzeugmenge ändert, prüft diese Zahl nach: `prompt_eval_count` in
 Ollamas Antwort sagt, wie viel wirklich ankam. Liegt es bei etwa der Hälfte des
 Fensters, wurde gekürzt.
+`tools/measure_local_model.py --count-tokens` zählt dafür genau einen
+vollständigen Auftrag und weist Modell, Kontext, Werkzeugzahl und Anfragehash
+aus. Dieser funktionale Zählweg misst keine Geschwindigkeit; Kalt-/Warmläufe
+und Leistungsprüfungen bleiben dem Release vorbehalten.
 
-**Stand 16.09.2026: 132 Operationen, 143 Werkzeuge** — die Zahlen hält
+**Stand 20.09.2026: 133 Operationen, 144 Werkzeuge** — die Zahlen hält
 `tests/test_registry_consistency.py` gegen Register und `tool_schemas()`.
+Der kompakte Auftrag wurde mit `qwen3:14b`, `num_ctx=40960` und
+`num_predict=1` vollständig mit **36 826 Token** gezählt. Werkzeugzahl und
+Tokenzahl in `backends/llm.py` gehören zu derselben Zählung.
 Systemprompt und Werkzeugsatz zusammen waren am 26.08.2026 (90 Operationen,
 nach dem OpenSCAD-Ausbau eines weniger) 149 061 Zeichen im vollen und 110 027
 im kompakten Satz; seither sind weitere Operationen dazugekommen, und die
 Zeichenzahl ist nicht neu gemessen.
 
-Die Tokenmessung darunter ist **älter als diese Zahlen** und steht trotzdem
-hier, weil sie in die sichere Richtung altert: Der Ausbau hat den Auftrag an
-drei Stellen *kürzer* gemacht — ein Werkzeug weniger, eine Gewohnheit weniger
-im Prompt, zwei Regeln weniger in der Sammlung. Was bei mehr Werkzeugen
-hineinpasste, passt bei weniger erst recht. Wer die Zahl scharf braucht, misst
-sie neu; `prompt_eval_count` ist der einzige ehrliche Weg dorthin.
+Die folgenden früheren Messungen sind historische Vergleiche. Sie ersetzen
+die aktuelle vollständige Tokenzählung nicht und belegen keine heutige
+Geschwindigkeit. Leistungswerte werden ausschließlich beim Release erneuert.
 
 Bei 85 Operationen nachgemessen, `qwen3:14b` gegen `num_ctx` 32768: 26 601
 Token für Systemprompt und alle 96 Werkzeuge, 19 249 für den kompakten Satz,

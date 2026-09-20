@@ -18,7 +18,7 @@ laden" gegen „Modell laden" ist Teil derselben Entscheidung.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
@@ -32,8 +32,10 @@ from app.core.ingest.loader import (
     check_unpacked,
 )
 from app.core.ingest.outline import OUTLINE_SUFFIXES, is_outline
+from app.core.registry import REGISTRY
 from app.core.scene.history import OperationDraft
-from app.core.types import Document, ProgressFn
+from app.core.types import Document, ObjectId, ProgressFn, SceneObject
+from app.core.units import EPS_DISPLAY
 from app.i18n import TranslatableText, _
 
 #: Der Titel der Transaktion je Weg. Im Verlauf steht er, nicht der Op-Name.
@@ -257,6 +259,53 @@ def import_plan(
 #: dort auf eine Höhe gezogen, die niemand aus der Datei lesen kann — das ist
 #: eine Konstruktionsentscheidung und kein Einlesen.
 PLAIN_IMPORT_OPS: Final[frozenset[str]] = frozenset({"load", "load_step"})
+
+
+def imported_group_for_bed(
+    document: Document, object_id: ObjectId, objects: Mapping[ObjectId, SceneObject]
+) -> tuple[ObjectId, ...]:
+    """Nur ein wirksames gemeinsames Aufsetzen darf die Einzelhandlung ersetzen."""
+    targets = imported_group(document, object_id, objects)
+    if (
+        not targets
+        or abs(min(objects[key].mesh.bounds.minimum[2] for key in targets)) <= EPS_DISPLAY
+    ):
+        return ()
+    return targets
+
+
+def imported_group(
+    document: Document, object_id: ObjectId, live_objects: Collection[ObjectId]
+) -> tuple[ObjectId, ...]:
+    """Die vollständigen, noch unbenutzten Ausgaben genau dieses mehrteiligen Imports.
+
+    Ein späterer Zugriff auf ein Mitglied beendet das gemeinsame Angebot,
+    auch wenn die Operation dessen Kennung erhält. Andere Imports und die
+    aktuelle Auswahl ändern den Umfang nicht. Die Auswertung liefert die
+    lebenden Kennungen; unvollständige Ergebnisse erhalten kein Gruppenangebot.
+    """
+    for index, operation in enumerate(document.ops):
+        if operation.op not in PLAIN_IMPORT_OPS or object_id not in operation.outputs:
+            continue
+        targets = operation.outputs
+        members = set(targets)
+        if len(targets) < 2 or not members.issubset(live_objects):
+            return ()
+        for later in document.ops[index + 1 :]:
+            if members.intersection((*later.inputs, *later.outputs)):
+                return ()
+            if REGISTRY.has(later.op):
+                spec = REGISTRY.get(later.op)
+                # Eine spätere Gegenflächenwahl kann ihren Träger auch über
+                # einen Ausdruck bestimmen. Ohne Auswertung keinen fremden
+                # Bezug als unbenutzt erklären: Das Angebot endet konservativ.
+                if spec.reads_other_bodies or any(
+                    field.targets_feature and later.params.get(field.name, field.default)
+                    for field in spec.params.spec()
+                ):
+                    return ()
+        return targets
+    return ()
 
 
 def is_only_imported(document: Document) -> bool:

@@ -46,6 +46,20 @@ Socket; Antwort und Verbindung schließt ihr Request-Thread, bevor der
 Aufrufer zurückkehrt. Wird erst während eines Abbruchs eine Verbindung
 hergestellt, verhindert die erneute Tokenprüfung das anschließende POST.
 
+`PROMPT_TOKENS` und `PROMPT_TOOL_COUNT` gehören zu derselben gezählten Anfrage.
+Nach einer Änderung am Werkzeugsatz zählt
+`tools/measure_local_model.py --count-tokens` den vollständigen kompakten
+Systemprompt mit allen Werkzeugen und der festen Frage „Hallo.“ genau einmal.
+Dieser funktionale Weg verwendet die konfigurierte Modell- und Kontextvorgabe,
+fordert höchstens einen Antworttoken an und gibt den Modellspeicher zurück.
+Er misst keine Geschwindigkeit und benötigt keinen Release-Lauf.
+
+Die JSON-Auskunft hält Modell, Kontextfenster, Werkzeugzahl, Eingabe- und
+Ausgabetoken sowie den SHA-256 der gesendeten Anfrage fest. Fehlende Zähler,
+eine unvollständige Antwort oder erkennbare Kontextkürzung ergeben keinen
+neuen Referenzwert. Erst die belegte Zählung erlaubt das Nachziehen beider
+Konstanten; Zeichenzahl und Hochrechnung ersetzen sie nicht.
+
 ## Lokale KI teilt eine Grafikkarte
 
 Ollama und ComfyUI laufen auf demselben Rechner nie gleichzeitig durch

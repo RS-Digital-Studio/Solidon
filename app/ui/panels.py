@@ -99,13 +99,14 @@ from app.core.errors import (
     AppError,
 )
 from app.core.geom.mesh import MeshData, as_mesh_data
+from app.core.ingest.plan import imported_group_for_bed
 from app.core.log import get_logger
 from app.core.perceive.relations import FeatureActionGroup
 from app.core.registry import REGISTRY, shown_of_twins
 from app.core.scene import EvaluationResult
 from app.core.scene.cancel import CancelSignal
 from app.core.scene.history import repair_is_available
-from app.core.types import Document, Feature, Finding, MaterialSlot, ObjectId, OpId
+from app.core.types import Document, Feature, Finding, MaterialSlot, ObjectId, OpId, SceneObject
 from app.core.units import LengthUnit
 from app.i18n import TranslatableText, sort_key, tr
 from app.ui.dialogs import handlers_of
@@ -252,7 +253,11 @@ _BUNDLE_ROLE = int(Qt.ItemDataRole.UserRole) + 3
 _TONE_ROLE = int(Qt.ItemDataRole.UserRole) + 4
 
 
-def _bundled(findings: list[Finding]) -> list[tuple[Finding, list[Finding]]]:
+def _bundled(
+    findings: list[Finding],
+    document: Document | None = None,
+    live_objects: Collection[ObjectId] = (),
+) -> list[tuple[Finding, list[Finding]]]:
     """Gleiche Meldungen ab :data:`REPORT_BUNDLE_FROM` zu einer Zeile je Wortlaut.
 
     Gruppiert wird über Kennung, Grad, Wortlaut, Herkunft, Schritt und die
@@ -277,6 +282,7 @@ def _bundled(findings: list[Finding]) -> list[tuple[Finding, list[Finding]]]:
             finding.source,
             finding.op_id,
             tuple((action.id, str(action.label), action.primary) for action in finding.suggestions),
+            _import_group_for(finding, document, live_objects),
         )
         if key not in groups:
             groups[key] = []
@@ -618,10 +624,34 @@ def actions_for_document(
     target = _object_for_finding(finding, document)
     if target is None or (live_objects is not None and target not in live_objects):
         offered = [action for action in offered if action.id != SHOW_LOCATIONS.id]
+    if _import_group_for(finding, document, live_objects or ()):
+        offered = [
+            dataclasses.replace(action, label=tr("Gemeinsam auf das Bett setzen"))
+            if action.id == PLACE_ON_BED.id
+            else action
+            for action in offered
+        ]
     return tuple(offered)
 
 
-def as_error(finding: Finding, document: Document | None = None) -> AppError:
+def _import_group_for(
+    finding: Finding, document: Document | None, live_objects: Collection[ObjectId]
+) -> tuple[ObjectId, ...]:
+    """Nur Bettbefunde eines unveränderten Imports erhalten die gemeinsame Handlung."""
+    if document is None or finding.code not in {"arrange.below_bed", "arrange.above_bed"}:
+        return ()
+    if not isinstance(live_objects, Mapping):
+        return ()
+    target = _object_for_finding(finding, document)
+    return imported_group_for_bed(document, target, live_objects) if target else ()
+
+
+def as_error(
+    finding: Finding,
+    document: Document | None = None,
+    *,
+    import_group: tuple[ObjectId, ...] = (),
+) -> AppError:
     """Einen Befund so verpacken, dass die Fehlerhandlungen ihn annehmen.
 
     Die Handler des Fensters (``error_handlers``) arbeiten auf einem
@@ -638,13 +668,18 @@ def as_error(finding: Finding, document: Document | None = None) -> AppError:
     Fehler aufgetreten".
     """
     detail = finding.values.get("detail")
+    values: dict[str, Any] = dict(finding.values)
+    if import_group:
+        # Ausschließlich der beim Angebotsaufbau aus der tatsächlichen Szene
+        # gebundene Umfang. Historische Ausgaben sind keine lebenden Körper.
+        values["import_group"] = import_group
     return AppError(
         title=finding.message,
         detail=str(detail) if detail is not None else None,
         suggestions=finding.suggestions,
         object_id=_object_for_finding(finding, document),
         op_id=finding.op_id,
-        values=dict(finding.values),
+        values=values,
     )
 
 
@@ -3563,7 +3598,7 @@ class ReportPanel(QWidget):
         """Für Herkunft, Zielableitung und ausführbare Berichtshandlungen."""
         self._stopped_at: OpId | None = None
         """Der wirklich angehaltene Schritt der gerade gezeigten Auswertung."""
-        self._live_objects: frozenset[ObjectId] = frozenset()
+        self._live_objects: Mapping[ObjectId, SceneObject] = {}
         """Die wirklich ausgewerteten Körper, nicht nur geplante Ausgänge."""
         self._findings: list[Finding] = []
         """Die rohen Befunde hinter den Zeilen. Die Liste im Fenster ist eine
@@ -3740,9 +3775,32 @@ class ReportPanel(QWidget):
             # den Ring Panel → Knopf → Handler → Fenster — gemessen hielten
             # zehn von zehn Wirten mit gewähltem Befund ihr Loslassen aus.
             # Die Handler holt der Klick deshalb selbst, frisch.
-            button.clicked.connect(weak_slot(self, ReportPanel._run_action, action.id))
+            group = (
+                _import_group_for(finding, self._document, self._live_objects)
+                if finding is not None and action.id == PLACE_ON_BED.id
+                else ()
+            )
+            if group and finding is not None:
+                button.clicked.connect(
+                    weak_slot(
+                        self,
+                        ReportPanel._run_bound_bed_action,
+                        as_error(finding, self._document, import_group=group),
+                        self._document,
+                    )
+                )
+            else:
+                button.clicked.connect(weak_slot(self, ReportPanel._run_action, action.id))
             row.addWidget(button)
         self._offers.setVisible(bool(offered))
+
+    def _run_bound_bed_action(self, error: AppError, document: Document | None) -> None:
+        """Der angezeigte Importumfang bleibt gebunden, der Handler prüft seine Gültigkeit."""
+        if document is not self._document:
+            return
+        handler = handlers_of(self).get(PLACE_ON_BED.id)
+        if handler is not None:
+            handler(error)
 
     def _run_action(self, action_id: str) -> None:
         """Führt die Handlung des gewählten Befunds aus.
@@ -3883,7 +3941,7 @@ class ReportPanel(QWidget):
         # Einlesen, das andere von der Reparatur — und das stand nirgends.
         self._document = document
         self._stopped_at = result.stopped_at if result is not None else None
-        self._live_objects = frozenset(result.scene.objects) if result is not None else frozenset()
+        self._live_objects = dict(result.scene.objects) if result is not None else {}
         # Die Namen der Körper, damit ein Befund sagen kann, welchen er meint.
         # Sie stehen im Ergebnis, das ohnehin hereinkommt — die Kennung „obj_2"
         # wäre die zweitbeste Antwort auf „welcher denn".
@@ -3999,7 +4057,9 @@ class ReportPanel(QWidget):
         Mitglieder.
         """
         self.list.clear()
-        for finding, members in _bundled(_by_severity(self._findings)):
+        for finding, members in _bundled(
+            _by_severity(self._findings), self._document, self._live_objects or ()
+        ):
             self._append(finding, members=members)
 
     def _preselect(self) -> None:
@@ -4391,6 +4451,10 @@ class ReportPanel(QWidget):
         if not offered:
             return
 
+        group = _import_group_for(finding, self._document, self._live_objects)
+        bed_error = as_error(finding, self._document, import_group=group)
+        document = self._document
+
         menu = QMenu(self)
         chosen: dict[Any, Any] = {}
         for action in offered:
@@ -4404,6 +4468,9 @@ class ReportPanel(QWidget):
         action_id = chosen[picked].id if picked is not None else None
         menu.deleteLater()
         if action_id is None:
+            return
+        if action_id == PLACE_ON_BED.id and group:
+            self._run_bound_bed_action(bed_error, document)
             return
         self._run_action_for(item, action_id)
 

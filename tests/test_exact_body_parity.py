@@ -409,6 +409,14 @@ CASES = [
     ),
     Case("place_on_bed", "shifted", {}, KEEP, "on_bed", None),
     Case(
+        "place_group_on_bed",
+        "shifted_group",
+        {},
+        (("mesh", ("mesh", "mesh")), ("brep", ("brep", "brep"))),
+        "group_on_bed",
+        None,
+    ),
+    Case(
         "plug_hole",
         "hole",
         {
@@ -865,6 +873,11 @@ def _inputs(case: Case, kind: str, project: Project, profile: Profile) -> list[S
         return [_object(_native_box(100.0, 100.0, 10.0), kind)]
     if source == "shifted":
         return [_object(_native_box(shift=(25.0, 0.0, 20.0)), kind)]
+    if source == "shifted_group":
+        return [
+            _object(_native_box(shift=(25.0, 0.0, -8.0)), kind),
+            _object(_native_box(shift=(-15.0, 3.0, 5.0)), kind, 2),
+        ]
     if source in {"overlapping", "separated", "alignment"}:
         distance = 10.0 if source == "overlapping" else 40.0
         return [
@@ -1080,6 +1093,21 @@ def _assert_invariant(
     elif rule == "on_bed":
         assert first.mesh.bounds.minimum[2] == pytest.approx(0.0, abs=1e-6)
         assert volume == pytest.approx(3200.0, rel=1e-6)
+    elif rule == "group_on_bed":
+        assert [entry.mesh.bounds.minimum[2] for entry in outputs] == pytest.approx((0.0, 13.0))
+        for original, placed in zip(inputs, outputs, strict=True):
+            assert placed.mesh.volume == pytest.approx(3200.0, rel=1e-6)
+            for key, feature in original.features.items():
+                current = placed.features[key]
+                assert current.kind == feature.kind
+                assert np.subtract(
+                    current.params["centre"], feature.params["centre"]
+                ) == pytest.approx((0.0, 0.0, 8.0), abs=1e-6)
+                assert current.params["area"] == pytest.approx(feature.params["area"], abs=1e-6)
+                assert current.params["normal"] == pytest.approx(feature.params["normal"], abs=1e-6)
+            assert np.subtract(
+                placed.mesh.bounds.centre, original.mesh.bounds.centre
+            ) == pytest.approx((0.0, 0.0, 8.0), abs=1e-6)
     elif rule == "arranged":
         a, b = [entry.mesh.bounds for entry in outputs]
         assert (
@@ -1272,7 +1300,7 @@ def test_every_registered_operation_has_an_explicit_success_case() -> None:
     registered = {spec.name for spec in REGISTRY.all()}
     assert len(CASES) == len(CASE_BY_NAME), "Jede Operation braucht genau eine Fallzuordnung."
     assert set(CASE_BY_NAME) == registered
-    assert len(registered) == 132
+    assert len(registered) == 133
     assert all(case.variants and case.invariant for case in CASES)
 
 

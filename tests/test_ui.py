@@ -7195,6 +7195,170 @@ def test_correcting_is_not_offered_where_there_is_no_step(window: MainWindow) ->
     assert "correct_input" in {a.id for a in offered_actions(with_step, handlers)}
 
 
+@pytest.mark.parametrize("count", [2, 8])
+@pytest.mark.parametrize("changed", [False, True])
+def test_import_bed_action_keeps_the_import_group_and_ignores_selection(
+    window: MainWindow, count: int, changed: bool, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Auch eine Sammelzeile setzt den Import gemeinsam auf, ohne Körperauswahldialog."""
+    import trimesh
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QPushButton
+
+    from app.core.export import threemf
+    from app.core.geom.mesh import MeshData
+    from app.ui.panels import BodyChoiceDialog, as_error
+
+    window.session.apply("Vorhanden", [OperationDraft(op="create_box")])
+    window.session.wait_for_idle()
+    old = window.session.last_result.scene.objects["obj_1"].mesh.bounds
+    parts = []
+    for index in range(count):
+        mesh = trimesh.creation.box((10.0, 10.0, 10.0))
+        mesh.apply_translation((30.0 + 10.0 * index, 0.0, -95.0 + 2.0 * index))
+        parts.append(threemf.AssemblyPart(mesh=MeshData.of(mesh), name=f"Teil {index + 1}"))
+    assert window.session.import_payload("gruppe.3mf", threemf.write_assembly(parts))
+    window.session.wait_for_idle()
+    targets = window.session.project.document.ops[-1].outputs
+    before = window.session.last_result
+    assert [before.scene.objects[key].mesh.bounds.minimum[2] for key in targets] == pytest.approx(
+        [-100.0 + 2.0 * index for index in range(count)]
+    )
+    window.object_tree.select("obj_1")
+    listing = window.report.list
+    item = next(
+        listing.item(row)
+        for row in range(listing.count())
+        if listing.item(row).data(Qt.ItemDataRole.UserRole).code == "arrange.below_bed"
+    )
+    listing.setCurrentItem(item)
+    QApplication.processEvents()
+    stale = as_error(
+        item.data(Qt.ItemDataRole.UserRole),
+        window.session.project.document,
+        import_group=targets,
+    )
+
+    def no_choice(*_args, **_kwargs):
+        raise AssertionError("the import already fixes the complete target group")
+
+    monkeypatch.setattr(BodyChoiceDialog, "ask", no_choice)
+    button = next(
+        child
+        for child in window.report._offers.findChildren(QPushButton)
+        if child.text() == tr("Gemeinsam auf das Bett setzen")
+    )
+    if changed:
+        # Die alte Zeile bleibt absichtlich sichtbar: Ein nach dem Aufbau
+        # mutiertes Dokument darf ihren Auftrag nicht auf ein Einzelteil ändern.
+        window.session.history.apply(
+            "Inzwischen geändert",
+            [OperationDraft(op="rename_object", inputs=(targets[-1],), params={"name": "Neu"})],
+        )
+        total = len(window.session.project.document.ops)
+        QTest.mouseClick(button, Qt.MouseButton.LeftButton)
+        assert len(window.session.project.document.ops) == total
+        assert window.session.project.document.ops[-1].op == "rename_object"
+        return
+    QTest.mouseClick(button, Qt.MouseButton.LeftButton)
+    window.session.wait_for_idle()
+    operation = window.session.project.document.ops[-1]
+    assert operation.op == "place_group_on_bed"
+    assert operation.inputs == targets
+    after = window.session.last_result
+    assert [after.scene.objects[key].mesh.bounds.minimum[2] for key in targets] == pytest.approx(
+        [2.0 * index for index in range(count)]
+    )
+    assert after.scene.objects["obj_1"].mesh.bounds == old
+    total = len(window.session.project.document.ops)
+    window._place_on_bed_after_error(stale)
+    assert len(window.session.project.document.ops) == total
+    window.action_undo()
+    window.session.wait_for_idle()
+    restored = window.session.last_result.scene.objects
+    assert [restored[key].mesh.bounds.minimum[2] for key in targets] == pytest.approx(
+        [-100.0 + 2.0 * index for index in range(count)]
+    )
+    window.action_undo()
+    window.session.wait_for_idle()
+    assert set(window.session.last_result.scene.objects) == {"obj_1"}
+
+
+def test_grounded_import_keeps_the_single_bed_action_for_its_floating_body(window):
+    """Der Berichtsklick senkt nur den schwebenden Körper; gemeinsam wäre es eine Nullwirkung."""
+    import trimesh
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QPushButton
+
+    from app.core.export import threemf
+    from app.core.geom.mesh import MeshData
+
+    window.session.apply("Vorhanden", [OperationDraft(op="create_box")])
+    window.session.wait_for_idle()
+    parts = []
+    for index, centre in enumerate(((40.0, 0.0, 5.0), (70.0, 0.0, 15.0))):
+        mesh = trimesh.creation.box((10.0, 10.0, 10.0))
+        mesh.apply_translation(centre)
+        parts.append(threemf.AssemblyPart(mesh=MeshData(mesh), name=f"Teil {index + 1}"))
+    assert window.session.import_payload("aufgesetzt.3mf", threemf.write_assembly(parts))
+    window.session.wait_for_idle()
+    targets = window.session.project.document.ops[-1].outputs
+    before = window.session.last_result
+    assert [before.scene.objects[key].mesh.bounds.minimum[2] for key in targets] == [0.0, 10.0]
+    window.object_tree.select("obj_1")
+    listing = window.report.list
+    item = next(
+        listing.item(row)
+        for row in range(listing.count())
+        if listing.item(row).data(Qt.ItemDataRole.UserRole).code == "arrange.above_bed"
+        and listing.item(row).data(Qt.ItemDataRole.UserRole).object_id == targets[1]
+    )
+    listing.setCurrentItem(item)
+    buttons = window.report._offers.findChildren(QPushButton)
+    assert not any(button.text() == tr("Gemeinsam auf das Bett setzen") for button in buttons)
+    button = next(button for button in buttons if button.text() == str(errors.PLACE_ON_BED.label))
+    QTest.mouseClick(button, Qt.MouseButton.LeftButton)
+    window.session.wait_for_idle()
+    operation = window.session.project.document.ops[-1]
+    assert operation.op == "place_on_bed" and operation.inputs == (targets[1],)
+    after = window.session.last_result
+    assert (
+        after.scene.objects[targets[0]].mesh.bounds == before.scene.objects[targets[0]].mesh.bounds
+    )
+    assert after.scene.objects["obj_1"].mesh.bounds == before.scene.objects["obj_1"].mesh.bounds
+    assert after.scene.objects[targets[1]].mesh.bounds.minimum[2] == pytest.approx(0.0)
+    assert not any(
+        finding.code == "arrange.above_bed" and finding.object_id == targets[1]
+        for finding in after.scene.report.findings
+    )
+    window.action_undo()
+    window.session.wait_for_idle()
+    assert window.session.last_result.scene.objects[targets[1]].mesh.bounds.minimum[
+        2
+    ] == pytest.approx(10.0)
+
+
+def test_import_bed_offer_does_not_invent_a_group_from_historical_outputs(
+    window: MainWindow,
+) -> None:
+    """Ein unvollständiges Ergebnis bietet keinen anschließend stillen Gruppenauftrag."""
+    from app.core.scene.history import History
+    from app.core.scene.project import new_project
+    from app.ui.panels import actions_for_document, as_error
+
+    document = new_project("centauri-carbon-2", "petg").document
+    History(document).apply(
+        "Import", [OperationDraft(op="load", params={"source": "src_1"}, produces=2)]
+    )
+    finding = Finding(
+        code="arrange.below_bed", severity="warning", message="Unter dem Bett", object_id="obj_1"
+    )
+    actions = actions_for_document(finding, document, live_objects=("obj_1",))
+    action = next(action for action in actions if action.id == "place_on_bed")
+    assert action.label == errors.PLACE_ON_BED.label
+    assert "import_group" not in as_error(finding, document).values
+
+
 def test_the_finding_below_the_bed_is_one_click_from_being_fixed(window: MainWindow) -> None:
     """§2.7 zu Ende: der Klick am Befund tut, was der Satz nahelegt.
 

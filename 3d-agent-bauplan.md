@@ -1778,7 +1778,13 @@ vereinheitlichen, Selbstdurchdringungen auflösen, Kleinstkomponenten löschen,
 Vertices verschmelzen
 
 **Transformation** — verschieben, drehen, spiegeln, gleichmäßig und achsweise
-skalieren, auf Bett ausrichten, druckoptimal orientieren
+skalieren, auf Bett ausrichten, gemeinsam auf das Bett setzen, druckoptimal orientieren.
+`place_on_bed` setzt weiterhin einen einzelnen Körper auf. `place_group_on_bed`
+verschiebt seine gespeicherte Auswahl mit einem gemeinsamen Z-Versatz: Der
+tiefste Punkt liegt danach auf dem Bett, die relative Lage aller Teile bleibt
+erhalten. Weitere Importe behalten zunächst ihre Dateikoordinaten (§17.1).
+Das Angebot am Befund nimmt die unveränderten, noch vorhandenen Teile desselben
+Imports gemeinsam auf; es ist ein eigener rücknehmbarer Schritt.
 
 **Boolesch** — Vereinigung, Differenz, Schnitt (mit Rückfallkette §17.2);
 Primitive einfügen (Quader, Zylinder, Kegel oder Kegelstumpf, Kugel und Ring);

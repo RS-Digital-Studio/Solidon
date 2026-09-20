@@ -134,6 +134,7 @@ from app.core.geom.sculpt import (
 from app.core.geom.section import SectionPlane, plane_through
 from app.core.ingest.fetch import FetchedModel, check_url, fetch_model
 from app.core.ingest.plan import MODEL_SUFFIXES as _CORE_MODEL_SUFFIXES
+from app.core.ingest.plan import imported_group_for_bed
 from app.core.knowledge import calibration, filaments, print_settings, profiles
 from app.core.knowledge.parts.ops import creation_name, direction_of, part_of
 from app.core.knowledge.parts.ops import op_name as part_op_name
@@ -16933,21 +16934,32 @@ class MainWindow(QMainWindow):
     def _place_on_bed_after_error(self, error: AppError) -> None:
         """Ein Klick gegen den häufigsten Befund von Weg 1 (§17.1, §2.7).
 
-        Ein heruntergeladenes Modell ist um den Ursprung zentriert und steckt
-        damit zur Hälfte unter der Platte. Die Eingangsstufe setzt es bewusst
-        nicht von selbst auf — sie soll es *anbieten*, und angeboten war es
-        nirgends: Der Bericht nannte den Fall, und die einzigen Handlungen dazu
-        waren *Modell teilen* und *Auf den Bauraum verkleinern*.
-
-        Kein Dialog davor: die Operation hat keinen Parameter, und ein Undo
-        nimmt sie zurück (Regel 19).
+        Ein weiterer Import behält seine Koordinaten. Ein am Befund angebotenes
+        gemeinsames Aufsetzen gilt für dessen gespeicherte Importgruppe; erst
+        nach erneuter Prüfung entsteht ein eigener rücknehmbarer Schritt.
+        Einzelhandlungen behalten ihren bisherigen Umfang (Regel 19).
         """
         object_id = self._object_of(error)
         if object_id is None:
             return
-        spec = REGISTRY.get("place_on_bed")
+        result = self.session.last_result
+        if (
+            not self.session.result_current
+            or result is None
+            or object_id not in result.scene.objects
+        ):
+            return
+        expected = error.values.get("import_group")
+        targets: tuple[ObjectId, ...] = ()
+        if expected is not None:
+            targets = imported_group_for_bed(
+                self.session.project.document, object_id, result.scene.objects
+            )
+            if not targets or tuple(expected) != targets:
+                return
+        spec = REGISTRY.get("place_group_on_bed" if targets else "place_on_bed")
         self.session.apply(
-            spec.title, [OperationDraft(op=spec.name, inputs=(object_id,), params={})]
+            spec.title, [OperationDraft(op=spec.name, inputs=targets or (object_id,), params={})]
         )
 
     def _arrange_after_error(self, error: AppError) -> None:

@@ -28,14 +28,21 @@ Ende steht deshalb ein ``keep_alive: 0``, auch wenn der Lauf scheitert.
 Er ist **kein** Teil der Suite: Er braucht ein laufendes Ollama, lädt Modelle
 in den Speicher und dauert Minuten.
 
+``--count-tokens`` zählt stattdessen genau einen vollständigen Auftrag ohne
+Zeit-, Karten- oder Warmmessung. Die JSON-Auskunft nennt Modell, Kontext,
+Werkzeugzahl und den SHA-256 der tatsächlich gesendeten Anfrage. Eine
+erkennbare Kürzung oder eine unvollständige Antwort liefert keinen Zählwert.
+
     python tools/measure_local_model.py
     python tools/measure_local_model.py --model qwen3:14b --runs 5
     python tools/measure_local_model.py --tools 0 --runs 3
+    python tools/measure_local_model.py --count-tokens
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import statistics
 import sys
@@ -53,6 +60,8 @@ from app.core.backends.llm import (
     DEFAULT_OLLAMA_MODEL,
     GPU_PROMPT_TOKENS_PER_SECOND,
     OLLAMA_CONTEXT_TOKENS,
+    PROMPT_TRUNCATION_FLOOR,
+    _tools_cost,
     ollama_endpoint,
 )
 from app.core.bootstrap import load_operations
@@ -144,44 +153,91 @@ def model_state() -> tuple[bool | None, int | None]:
     return share >= 99, share
 
 
-def _ask(model: str, tools: list[dict[str, object]]) -> Turn | None:
-    """Ein Zug. ``None``, wenn die Gegenseite nicht antwortet."""
-    payload = {
-        "model": model,
-        "stream": False,
-        "keep_alive": MEASURE_KEEP_ALIVE,
-        "options": {"temperature": 0.0, "num_ctx": OLLAMA_CONTEXT_TOKENS, "num_predict": 1},
-        "messages": [
-            {"role": "system", "content": system_prompt(compact=True)},
-            {"role": "user", "content": "Hallo."},
-        ],
-        "tools": [
-            {
-                "type": "function",
-                "function": {
-                    "name": entry["name"],
-                    "description": entry.get("description", ""),
-                    "parameters": entry.get("input_schema", {"type": "object"}),
-                },
-            }
-            for entry in tools
-        ],
-    }
+def _payload(model: str, tools: list[dict[str, object]], *, keep_alive: str | int) -> bytes:
+    """Dieselbe vollständige Anfrage für Tokenzählung und Zeitmessung."""
+    return json.dumps(
+        {
+            "model": model,
+            "stream": False,
+            "keep_alive": keep_alive,
+            "options": {"temperature": 0.0, "num_ctx": OLLAMA_CONTEXT_TOKENS, "num_predict": 1},
+            "messages": [
+                {"role": "system", "content": system_prompt(compact=True)},
+                {"role": "user", "content": "Hallo."},
+            ],
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": entry["name"],
+                        "description": entry.get("description", ""),
+                        "parameters": entry.get("input_schema", {"type": "object"}),
+                    },
+                }
+                for entry in tools
+            ],
+        }
+    ).encode("utf-8")
+
+
+def _chat(payload: bytes) -> dict[str, object]:
+    """Sendet eine Anfrage mit denselben Fristen und Antwortgrenzen wie der Messweg."""
     request = urllib.request.Request(
         ollama_endpoint(None),
-        data=json.dumps(payload).encode("utf-8"),
+        data=payload,
         headers={"Content-Type": "application/json"},
     )
-    started = time.monotonic()
     opener = opener_for(ollama_endpoint(None))
     apply_header_deadline(opener, deadline_after(REQUEST_TIMEOUT_SECONDS))
+    with opener.open(request, timeout=REQUEST_TIMEOUT_SECONDS) as answer:
+        return _answer_json(
+            answer,
+            limit=MAX_CHAT_RESPONSE_BYTES,
+            timeout=REQUEST_TIMEOUT_SECONDS,
+        )
+
+
+def _count_tokens(model: str, tools: list[dict[str, object]]) -> dict[str, object]:
+    """Zählt einen Auftrag; fehlende oder gekürzte Auskunft ist keine neue Referenz."""
+    payload = _payload(model, tools, keep_alive=0)
+    data = _chat(payload)
+    counted, produced = data.get("prompt_eval_count"), data.get("eval_count")
+    if (
+        data.get("done") is not True
+        or data.get("model") != model
+        or "error" in data
+        or not isinstance(counted, int)
+        or isinstance(counted, bool)
+        or counted <= 0
+        or not isinstance(produced, int)
+        or isinstance(produced, bool)
+        or not 0 <= produced <= 1
+    ):
+        raise ValueError("Ollama liefert keine vollständige Tokenauskunft. Erneut zählen.")
+    if counted < _tools_cost(len(tools)) * PROMPT_TRUNCATION_FLOOR:
+        raise ValueError(
+            "Ollama hat den Auftrag offenbar gekürzt. Kontext und Modell prüfen, dann neu zählen."
+        )
+    if counted + produced >= OLLAMA_CONTEXT_TOKENS:
+        raise ValueError(
+            "Ollamas Kontextfenster ist voll. Kontext und Modell prüfen, dann neu zählen."
+        )
+    return {
+        "model": model,
+        "num_ctx": OLLAMA_CONTEXT_TOKENS,
+        "tool_count": len(tools),
+        "prompt_eval_count": counted,
+        "eval_count": produced,
+        "request_sha256": hashlib.sha256(payload).hexdigest(),
+    }
+
+
+def _ask(model: str, tools: list[dict[str, object]]) -> Turn | None:
+    """Ein Zug. ``None``, wenn die Gegenseite nicht antwortet."""
+    payload = _payload(model, tools, keep_alive=MEASURE_KEEP_ALIVE)
+    started = time.monotonic()
     try:
-        with opener.open(request, timeout=REQUEST_TIMEOUT_SECONDS) as answer:
-            data = _answer_json(
-                answer,
-                limit=MAX_CHAT_RESPONSE_BYTES,
-                timeout=REQUEST_TIMEOUT_SECONDS,
-            )
+        data = _chat(payload)
     except (urllib.error.URLError, OSError, ValueError, TimeoutError) as error:
         print(f"    Abbruch nach {time.monotonic() - started:.0f} s — {type(error).__name__}")
         return None
@@ -263,6 +319,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model", default=DEFAULT_OLLAMA_MODEL)
     parser.add_argument(
+        "--count-tokens",
+        action="store_true",
+        help="Einen vollständigen Auftrag zählen, ohne Zeit- oder Geschwindigkeitsmessung",
+    )
+    parser.add_argument(
         "--runs",
         type=int,
         default=3,
@@ -275,6 +336,8 @@ def main() -> int:
         help="Wie viele Werkzeuge; -1 heißt alle, 0 heißt keine (Nullpunkt)",
     )
     arguments = parser.parse_args()
+    if arguments.count_tokens and arguments.tools != -1:
+        parser.error("--count-tokens verlangt alle Werkzeuge; --tools weglassen.")
 
     # Ohne das ist das Register leer und ``tool_schemas`` liefert sieben statt
     # der vollen Zahl — eine Messung gegen eine Nutzlast, die es nicht gibt.
@@ -282,6 +345,16 @@ def main() -> int:
     schemas = list(tool_schemas(compact=True))
     if arguments.tools >= 0:
         schemas = schemas[: arguments.tools]
+
+    if arguments.count_tokens:
+        try:
+            counted = _count_tokens(arguments.model, schemas)
+        except (urllib.error.URLError, OSError, ValueError, TimeoutError) as error:
+            print(f"Tokenzählung nicht abgeschlossen: {error}", file=sys.stderr)
+            print("Ollama und das installierte Modell prüfen, dann erneut zählen.", file=sys.stderr)
+            return 1
+        print(json.dumps(counted, ensure_ascii=False, sort_keys=True))
+        return 0
 
     print(f"{arguments.model} — {len(schemas)} Werkzeuge, num_ctx {OLLAMA_CONTEXT_TOKENS}")
     # Kein Anführungszeichen im f-String: Das deutsche Schlusszeichen beendet
