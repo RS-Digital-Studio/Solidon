@@ -690,6 +690,8 @@ def test_the_search_slices_only_the_finalists_of_the_footprint_ranking(
     „Meistens entscheidet die unterste Schicht" (Robert, 06.09.2026): Standfläche
     und Überhang aus den Flächennormalen ordnen alle Richtungen, geschnitten
     werden höchstens ``FINALISTS`` plus die Ausgangslage — statt aller 200.
+    Dazu die sechs Achsen, seit dem 20.09.2026 (Gitterbecher: die Heuristik
+    setzte jede liegende Lage vor die stehende, die ohne Stützen druckt).
     """
     from app.core.slice import orientation
 
@@ -709,7 +711,9 @@ def test_the_search_slices_only_the_finalists_of_the_footprint_ranking(
     mushroom = MeshData.of(trimesh.util.concatenate([cap, stem]))
     found = search(mushroom, count=200, seed=2)
 
-    assert 1 < len(calls) <= orientation.FINALISTS + 1
+    from app.core.geom.orient import AXES
+
+    assert 1 < len(calls) <= orientation.FINALISTS + 1 + len(AXES)
     searched = next(f for f in found.findings if f.code == "orient.searched")
     assert searched.values["candidates"] > searched.values["sliced"]
     assert found.best.support_volume < found.baseline.support_volume, "der Hut liegt jetzt unten"

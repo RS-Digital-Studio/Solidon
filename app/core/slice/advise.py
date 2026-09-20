@@ -29,11 +29,11 @@ from app.core.knowledge import print_settings as settings_table
 from app.core.log import get_logger
 from app.core.slice.analysis import (
     island_layers,
+    largest_overhang_patch,
     narrowest_measured,
     support_on_model,
     tapered_layers,
     total_overhang,
-    worst_overhang,
 )
 from app.core.types import (
     BoundingBox,
@@ -621,7 +621,7 @@ def _from_geometry(
 
     islands = island_layers(result)
     overhang = total_overhang(result)
-    worst = worst_overhang(result)
+    patch = largest_overhang_patch(result)
     # Die Summe allein reicht nicht, und der Unterschied entscheidet: ein
     # Becher sammelte über dreihundertachtunddreißig Schichten
     # zweihundertvierzig Quadratmillimeter und bekam dieselbe Warnung wie ein
@@ -637,10 +637,18 @@ def _from_geometry(
     # nichts. Die zwei Zahlen sind zwei **Wege**, und jeder trägt für sich:
     # viel auf einmal, oder viel insgesamt bei einem Anteil je Schicht, den
     # keine Wand mehr nebenbei auffängt.
+    #
+    # **Und „auf einmal" heißt an einem Stück, nicht auf einer Schicht.** Ein
+    # Gitterbecher (20.09.2026) trug auf seiner schlimmsten Schicht 278 mm² —
+    # in 56 Stegunterseiten zu je 5 mm², jede über 4,7 mm frei und jede trägt
+    # sich selbst; gedruckt ohne eine einzige Stütze. Die Schichtsumme sah
+    # darin dieselbe Decke wie beim Deckel. Gefragt wird deshalb das größte
+    # zusammenhängende Stück (:func:`largest_overhang_patch`); lange freie
+    # Stege fängt die Brückenregel darunter weiter ab.
     needs_support = (
         bool(islands)
-        or worst > OVERHANG_LAYER_WORTH_SUPPORT
-        or (overhang > OVERHANG_WORTH_SUPPORT and worst > OVERHANG_LAYER_MINIMUM)
+        or patch > OVERHANG_LAYER_WORTH_SUPPORT
+        or (overhang > OVERHANG_WORTH_SUPPORT and patch > OVERHANG_LAYER_MINIMUM)
         or any(layer.bridge_width > SPAN_INTERESTING for layer in result.layers)
     )
 

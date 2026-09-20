@@ -12,6 +12,8 @@ from shapely.geometry import Point
 from app.core.geom.mesh import MeshData
 from app.core.geom.mesh_ops import decimate
 from app.core.geom.orient import (
+    AXES,
+    MAX_FACE_CANDIDATES,
     NoFittingOrientationError,
     evaluate_direction,
     fitting_transform,
@@ -47,7 +49,10 @@ SEARCH_TRIANGLES = 20_000
 #: So viele Lagen aus der Vorauswahl werden wirklich geschnitten. Die
 #: Heuristik (Standfläche gegen Überhang, ``geom.orient``) sortiert vor —
 #: „meistens entscheidet die unterste Schicht" (Robert, 06.09.2026) —, und
-#: die Schichtanalyse beurteilt nur noch, was vorn liegt.
+#: die Schichtanalyse beurteilt nur noch, was vorn liegt. Dazu kommen die
+#: sechs Achsen (:data:`app.core.geom.orient.AXES`), gleich wo sie in der
+#: Vorauswahl stehen; geschnitten wird also höchstens
+#: ``FINALISTS + len(AXES)`` plus die Ausgangslage.
 FINALISTS = 8
 
 
@@ -176,6 +181,7 @@ def judge(
     footing_height: float | None = None,
     *,
     overhang_angle: float | None = None,
+    footing_mesh: MeshData | None = None,
 ) -> Candidate:
     """Dreht den Körper, bis ``direction`` nach unten zeigt, dann schneiden und
     zählen.
@@ -185,6 +191,17 @@ def judge(
     hängt :func:`stands` an der Suchauflösung: Eine Kugel mit R = 20 steht bei
     1,0 mm auf 54 mm² und bei 0,2 mm auf 4,6 mm², und die Antwort auf „kann
     das stehen" fällt einmal so und einmal anders aus.
+
+    **Und die Aufstandsfläche wird am Original gemessen, nicht am
+    Ersatznetz.** ``mesh`` ist in der Suche das auf 20 000 Dreiecke
+    ausgedünnte Netz (:func:`search_proxy`); das reicht, um Stützräume zu
+    ordnen, aber ein schmaler flacher Rand überlebt die Ausdünnung nicht als
+    Ebene. Gemessen am Gitterbecher vom 20.09.2026 (94 990 Dreiecke, Rand
+    2 mm breit): am Ersatznetz stand er mit dem Rand nach unten auf 5 mm²,
+    am Original auf 594. Die Suche verwarf damit genau die Lage, die ohne
+    Stützen druckt, und stellte ihn auf die Schräge. Wer ein ``footing_mesh``
+    mitgibt, bekommt Aufstandsfläche und Stand von dort — eine Drehung und
+    ein Schnitt je beurteilter Lage, an neun Lagen nicht der Rede wert.
     """
     turned = place_on_bed(apply(mesh, rotation_to_down(direction)))
     # §28.2: die Suche liest eine Zahl daraus. Strukturbreiten an einem
@@ -197,21 +214,29 @@ def judge(
         footing_height=footing_height,
         overhang_angle=overhang_angle,
     )
+    standing = (
+        turned
+        if footing_mesh is None
+        else place_on_bed(apply(footing_mesh, rotation_to_down(direction)))
+    )
     # Die Fläche allein trägt nicht: Bei einem Ausleger kann sein Schwerpunkt
     # neben einer großen Auflage liegen. Getrennte Füße tragen gemeinsam über
     # ihre konvexe Hülle; das Loch zwischen ihnen ist kein Grund zum Ablehnen.
-    height = min(footing_height or layer_height / 2.0, turned.bounds.size[2] / 2.0)
-    contact = cross_sections(turned, np.asarray([height], dtype=float))[0]
-    centre = np.asarray(turned.raw.center_mass, dtype=float)[:2]
+    height = min(footing_height or layer_height / 2.0, standing.bounds.size[2] / 2.0)
+    contact = cross_sections(standing, np.asarray([height], dtype=float))[0]
+    centre = np.asarray(standing.raw.center_mass, dtype=float)[:2]
     stable = (
         contact is not None
         and bool(np.isfinite(centre).all())
         and bool(contact.convex_hull.buffer(EPS_GEOM).covers(Point(centre)))
     )
+    first_layer_area = result.first_layer_area
+    if footing_mesh is not None:
+        first_layer_area = 0.0 if contact is None or contact.is_empty else float(contact.area)
     return Candidate(
         direction=direction,
         support_volume=result.support_volume,
-        first_layer_area=result.first_layer_area,
+        first_layer_area=first_layer_area,
         height=turned.bounds.size[2],
         stable=stable,
     )
@@ -312,6 +337,11 @@ def search(
     if cancelled is not None:
         cancelled.raise_if_cancelled()
     proxy = search_proxy(mesh)
+    # Stützräume am Ersatznetz, der Stand am Original (siehe :func:`judge`).
+    # Als Schlüsselwort nur, wenn es ein Original gibt: Wer ``judge`` in einem
+    # Test durch eine Attrappe ersetzt, muss den Fall ohne Ersatznetz nicht
+    # kennen.
+    footing_on: dict[str, MeshData] = {} if proxy is mesh else {"footing_mesh": mesh}
 
     def matrix_for(direction: Vec3) -> np.ndarray | None:
         if profile is None:
@@ -330,12 +360,22 @@ def search(
             layer_height,
             footing,
             overhang_angle=overhang_angle,
+            **footing_on,
         )
         field.append(baseline)
     if cancelled is not None:
         cancelled.raise_if_cancelled()
 
     directions = _unique_directions([baseline_direction, *face_candidates(mesh, hull_limit=count)])
+    # **Die Vorauswahl sieht Achsen und tragende Flächen am Original.** Die
+    # Kandidatenliste beginnt mit der Ausgangslage, den sechs Achsen und den
+    # größten ebenen Flächen des Körpers — und die Ausdünnung, an der die
+    # Stützräume gemessen werden, macht genau aus einer solchen Fläche eine
+    # Landschaft: Der Rand des Gitterbechers (20.09.2026) hatte am Ersatznetz
+    # null Standfläche und kam nie unter die Finalisten; die Suche stellte
+    # ihn auf die Schräge. Die wenigen vorderen Richtungen kosten am Original
+    # nichts, was zählt; die Hüllnormalen dahinter bleiben am Ersatznetz.
+    trusted = 0 if proxy is mesh else min(len(directions), 1 + 6 + MAX_FACE_CANDIDATES)
     scored = []
     for index, direction in enumerate(directions):
         if cancelled is not None:
@@ -348,7 +388,7 @@ def search(
         if matrix is None:
             continue
         matrices[direction] = matrix
-        scored.append(evaluate_direction(proxy, direction))
+        scored.append(evaluate_direction(mesh if index < trusted else proxy, direction))
     if not scored:
         raise NoFittingOrientationError()
     ranked = sorted(
@@ -369,18 +409,34 @@ def search(
     )
     if not complete:
         finalists = [entry for entry in ranked if entry.direction != baseline_direction][:FINALISTS]
-        for index, entry in enumerate(finalists, start=1):
+        # **Und die Achsen immer.** Die Heuristik ordnet nach Standfläche und
+        # nach unten zeigender Fläche, und an einem Gitter zeigt in jeder Lage
+        # die Hälfte nach unten: Der Gitterbecher (20.09.2026) hatte liegend
+        # 14 848 mm² „Überhang" und 4931 Standfläche, stehend 6587 und 594 —
+        # die Heuristik setzte jede liegende Lage vor die stehende, und die
+        # Schichtanalyse sah die Lage, die ohne Stützen druckt, gar nicht.
+        # Eine Achse ist die Lage, die jemand beim Konstruieren gewählt hat;
+        # sie bekommt einen Schnitt, keine Schätzung.
+        sliced = _unique_directions(
+            [
+                *(entry.direction for entry in finalists),
+                *(direction for direction in AXES if direction in matrices),
+            ]
+        )
+        sliced = [direction for direction in sliced if direction != baseline_direction]
+        for index, direction in enumerate(sliced, start=1):
             if cancelled is not None:
                 cancelled.raise_if_cancelled()
             if progress is not None:
-                progress(0.5 + 0.5 * index / max(len(finalists), 1), str(_("Ausrichtung suchen")))
+                progress(0.5 + 0.5 * index / max(len(sliced), 1), str(_("Ausrichtung suchen")))
             field.append(
                 judge(
                     proxy,
-                    entry.direction,
+                    direction,
                     layer_height,
                     footing,
                     overhang_angle=overhang_angle,
+                    **footing_on,
                 )
             )
             if cancelled is not None:

@@ -139,6 +139,16 @@ Liegt schon das kleinste einstellbare Tempo über dem Volumenstrom, hält die
 Beratung mit einem Vorschlag zur Schichthöhe, Bahnbreite oder zum gemessenen
 Profilwert an. Eine leere Liste wäre in diesem Fall keine Entwarnung.
 
+**„Viel auf einmal" heißt an einem Stück, nicht auf einer Schicht.** Die
+Stützfrage las die Überhangfläche je Schicht als Summe, und ein Gitterbecher
+(20.09.2026) trug auf seiner schlimmsten Schicht 278 mm² — in 56
+Stegunterseiten zu je 5 mm², jede über 4,7 mm frei, jede trägt sich selbst,
+gedruckt ohne eine Stütze. Die Summe sah darin dieselbe Decke wie beim
+Deckel mit 138 mm² an einem Stück. Gefragt wird deshalb das größte
+zusammenhängende Stück (`largest_overhang_patch`); ein Ergebnis, das seine
+Stücke nicht mitbringt, gilt schichtweise als eines. Lange freie Stege fängt
+die Brückenregel weiter ab.
+
 **Mehrere Körper werden gemeinsam beurteilt.** `advise.combine` berücksichtigt
 auch Körper, deren Einstellungen bereits passen. Ein einzelner Würfel darf
 deshalb die Stützen eines anderen Körpers nicht abschalten. Filamentwerte
@@ -389,6 +399,22 @@ Centauri meldet 0,9 mm Brücke, eine 0,8er Düse schweigt zu Recht, und die alte
 Codezahl schwieg für beide. **Wer die Zahl zwischenspeichert, nimmt sie in den
 Schlüssel** — der Messwertspeicher des Druckdialogs trägt sie neben dem
 Winkel, denn sein Geometriekontext kennt die Materialien nicht.
+
+**Die Orientierungssuche misst Stützräume am Ersatznetz und den Stand am
+Original.** Auf 20 000 Dreiecke ausgedünnt reicht ein Körper, um Stützräume
+zu ordnen; ein 2 mm breiter flacher Rand überlebt die Ausdünnung aber nicht
+als Ebene. Der Gitterbecher (94 990 Dreiecke, 20.09.2026) stand am Ersatznetz
+mit dem Rand nach unten auf 5 mm², am Original auf 594 — die Suche verwarf
+die Lage, die ohne Stützen druckt. `judge(footing_mesh=…)` misst
+Aufstandsfläche und Schwerpunktlage am Original, die Vorauswahl bewertet
+Ausgangslage, Achsen und große Körperflächen dort ebenfalls, und **die sechs
+Achsen werden immer geschnitten**: Die Heuristik ordnet nach Standfläche
+gegen nach unten zeigende Fläche, und an einem Gitter zeigt in jeder Lage
+die Hälfte nach unten — jede liegende Lage stand vor der stehenden, und die
+Schichtanalyse sah die richtige nie. Geschnitten werden damit höchstens
+`FINALISTS` plus sechs Achsen plus die Ausgangslage; am Gitterbecher sind es
+zwölf in 22 Sekunden, und wo die Zeit hingeht, steht in der Karte des
+Moduls.
 
 Eine einzelne variable Arachne-Bahn kann eine dünne Wand drucken. Die
 Zwei-Bahn-Betrachtung begründet daher keine allgemeine Aussage, dass eine

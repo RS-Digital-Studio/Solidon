@@ -30,7 +30,7 @@ from app.core.errors import ValidationError
 from app.core.geom.mesh import MeshData
 from app.core.knowledge.rules import OVERHANG_ANGLE_FACTOR, OVERHANG_LIMIT_DEGREES
 from app.core.log import get_logger
-from app.core.types import CancelToken, LayerInfo, Polygon, SliceResult
+from app.core.types import CancelToken, LayerInfo, Polygon, Ring, SliceResult
 from app.core.units import EPS_GEOM
 from app.i18n import _
 
@@ -1831,6 +1831,44 @@ def worst_overhang(result: SliceResult) -> float:
     Beide lösten dieselbe Warnung aus, solange nur summiert wurde.
     """
     return float(max((layer.overhang_area for layer in result.layers), default=0.0))
+
+
+def largest_overhang_patch(result: SliceResult) -> float:
+    """Die größte **zusammenhängende** Überhangfläche irgendwo im Körper (§22.2).
+
+    Die Schichtsumme (:func:`worst_overhang`) kennt den Unterschied nicht,
+    der über Stützen entscheidet: Ein Gitterbecher mit hexagonalen Stegen
+    (20.09.2026) sammelt auf seiner schlimmsten Schicht 278 mm² Überhang — in
+    56 Stücken zu je 5 mm², jedes die Unterseite eines Stegs, der sich über
+    4,7 mm selbst trägt. Eine Decke von 138 mm² ist **ein** Stück, und die
+    hängt durch. Dieselbe Summe, zwei Antworten; gefragt wird deshalb das
+    Stück.
+
+    Eine Schicht, die ihre Überhangfläche kennt, aber keine Stücke trägt —
+    ein Ergebnis aus Kennzahlen, wie die Vorschlagstests es bauen —, gilt als
+    ein Stück: Wer die Stücke nicht mitgibt, bekommt die Schichtsumme.
+    """
+    largest = 0.0
+    for layer in result.layers:
+        if layer.overhang_area <= EPS_GEOM:
+            continue
+        if not layer.overhangs:
+            largest = max(largest, float(layer.overhang_area))
+            continue
+        for piece in layer.overhangs:
+            area = _ring_area(piece.outline) - sum(_ring_area(hole) for hole in piece.holes)
+            largest = max(largest, area)
+    return largest
+
+
+def _ring_area(ring: Ring) -> float:
+    """Die Fläche eines Rings nach der Schnürsenkelformel — ohne GEOS, weil
+    es tausende kleine Stücke sind und keines eine Geometriefrage."""
+    if len(ring) < 3:
+        return 0.0
+    points = np.asarray(ring, dtype=float)
+    x, y = points[:, 0], points[:, 1]
+    return float(0.5 * abs(np.dot(x, np.roll(y, -1)) - np.dot(y, np.roll(x, -1))))
 
 
 def island_layers(result: SliceResult) -> tuple[float, ...]:

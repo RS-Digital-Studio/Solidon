@@ -507,3 +507,70 @@ def test_the_taper_rule_stays_quiet_where_it_would_not_help() -> None:
     shoulder = _tapered(share=advise.TAPERED_LAYERS_SHARE / 2.0)
     assert "shell.outer_wall_first" not in paths(advise.advise(base, profile, shoulder))
 
+
+# --- Stützen: an einem Stück, nicht auf einer Schicht (§22.2) --------------------
+
+
+def _pieces(count: int, side: float) -> tuple[Polygon, ...]:
+    """``count`` getrennte Quadrate mit Kantenlänge ``side`` auf einer Schicht."""
+    return tuple(
+        Polygon(
+            outline=(
+                (x, 0.0),
+                (x + side, 0.0),
+                (x + side, side),
+                (x, side),
+            )
+        )
+        for x in (index * (side + 1.0) for index in range(count))
+    )
+
+
+def _overhang_layers(pieces: tuple[Polygon, ...], layers: int = 20) -> SliceResult:
+    """Ein Körper, dessen Schichten alle dieselben Überhangstücke tragen."""
+    from shapely.geometry import Polygon as ShapelyPolygon
+
+    area = sum(ShapelyPolygon(piece.outline).area for piece in pieces)
+    stack = tuple(
+        LayerInfo(
+            z=float(index) * 0.2,
+            contours=(Polygon(outline=SQUARE),),
+            area=5000.0,
+            overhang_area=area,
+            islands=(),
+            min_width=5.0,
+            overhangs=pieces,
+        )
+        for index in range(layers)
+    )
+    return SliceResult(layers=stack, support_volume=0.0, first_layer_area=5000.0, source="internal")
+
+
+def test_a_lattice_of_small_self_supporting_pieces_gets_no_supports() -> None:
+    """Der Gitterbecher vom 20.09.2026: auf der schlimmsten Schicht 278 mm²
+    Überhang — in 56 Stegunterseiten zu je 5 mm², jede über 4,7 mm frei,
+    jede trägt sich selbst. Gedruckt ohne eine einzige Stütze; Solidon riet
+    zu einem Gitter, weil die Schichtsumme aussah wie eine Decke.
+    """
+    from math import sqrt
+
+    profile = profiles.make_profile()
+    settings = print_settings.resolve(profile)
+    lattice = _overhang_layers(_pieces(56, sqrt(5.0)))
+    assert lattice.layers[0].overhang_area > advise.OVERHANG_LAYER_WORTH_SUPPORT
+
+    entries = advise.advise(settings, profile, lattice)
+
+    assert "support.style" not in paths(entries)
+
+
+def test_one_ceiling_of_the_same_area_still_gets_supports() -> None:
+    """Dieselbe Fläche an einem Stück ist die Decke, um die es beim Deckel ging."""
+    profile = profiles.make_profile()
+    settings = print_settings.resolve(profile)
+    ceiling = _overhang_layers(_pieces(1, 16.7), layers=1)
+
+    entries = advise.advise(settings, profile, ceiling)
+
+    chosen = next(entry for entry in entries if entry.path == "support.style")
+    assert chosen.value == "grid"

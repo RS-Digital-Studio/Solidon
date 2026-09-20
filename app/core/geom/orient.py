@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
+from typing import Final
 
 import numpy as np
 
@@ -21,6 +22,18 @@ from app.i18n import _
 #: Wie viele Kandidatenrichtungen über die sechs Achsrichtungen hinaus
 #: angesehen werden.
 MAX_FACE_CANDIDATES = 12
+
+#: Die sechs Achsrichtungen — die Lagen, die jemand beim Konstruieren gewählt
+#: hat. Sie stehen immer vorn in der Kandidatenliste, und die Suche schneidet
+#: sie immer (``slice.orientation.search``).
+AXES: Final[tuple[Vec3, ...]] = (
+    (0.0, 0.0, 1.0),
+    (0.0, 0.0, -1.0),
+    (1.0, 0.0, 0.0),
+    (-1.0, 0.0, 0.0),
+    (0.0, 1.0, 0.0),
+    (0.0, -1.0, 0.0),
+)
 
 #: Zielgrenze je Projektionsmatrix; eine einzelne größere Lage bleibt einzeln.
 MAX_PROJECTION_VALUES = 1_000_000
@@ -101,14 +114,7 @@ def candidates(mesh: MeshData, *, hull_limit: int = 200) -> list[Vec3]:
     Ihre Normalen sind auch bei konkaven oder organischen Körpern geometrisch
     begründet; die tatsächliche Auflage beurteilt erst die Schichtanalyse.
     """
-    found: list[Vec3] = [
-        (0.0, 0.0, 1.0),
-        (0.0, 0.0, -1.0),
-        (1.0, 0.0, 0.0),
-        (-1.0, 0.0, 0.0),
-        (0.0, 1.0, 0.0),
-        (0.0, -1.0, 0.0),
-    ]
+    found: list[Vec3] = list(AXES)
     body = mesh.raw
     if not len(body.faces):
         return found

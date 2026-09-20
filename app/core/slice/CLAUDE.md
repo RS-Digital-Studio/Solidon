@@ -39,9 +39,16 @@ In der Oberfläche heißt es „Schichtanalyse", nicht „Vorschau".
 Die Orientierungskandidaten kommen deterministisch aus den flächengeordneten
 Normalen der konvexen Hülle, den Achsen und den großen Körperflächen (§28.2).
 Der echte Druckbereich wird vor der Schichtanalyse geprüft. Höchstens acht
-Finalisten und eine zulässige Ausgangslage werden geschnitten; der Bericht
-trennt betrachtete, passende und geschnittene Lagen. Eine unzulässige
-Ausgangslage hat `baseline=None`, und dafür wird keine Einsparung behauptet.
+Finalisten, die sechs Achsen und eine zulässige Ausgangslage werden
+geschnitten; der Bericht trennt betrachtete, passende und geschnittene Lagen.
+Eine unzulässige Ausgangslage hat `baseline=None`, und dafür wird keine
+Einsparung behauptet. Stützräume misst die Suche am auf 20 000 Dreiecke
+ausgedünnten Ersatznetz, **Standfläche und Stand am Original**, und die
+Vorauswahl bewertet Ausgangslage, Achsen und große Körperflächen ebenfalls
+am Original: Ein schmaler flacher Rand überlebt die Ausdünnung nicht als
+Ebene, und ein Gitter zeigt in jeder Lage die Hälfte seiner Flächen nach
+unten — beides ließ die Suche am Gitterbecher (20.09.2026) die Lage
+verwerfen, die ohne Stützen druckt.
 Der Schwerpunkt muss in der Hülle der tatsächlichen Auflage liegen. Unter
 stehenden Kandidaten entscheidet Stützvolumen, innerhalb fünf Prozent die
 Auflagefläche. `SearchResult.transform` beschreibt die vollständige geprüfte

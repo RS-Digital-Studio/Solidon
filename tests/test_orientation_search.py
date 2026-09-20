@@ -9,7 +9,7 @@ import trimesh
 
 from app.core.errors import OperationCancelled
 from app.core.geom.mesh import MeshData, read_mesh
-from app.core.geom.orient import Orientation, orient_for_print, ranked_orientations
+from app.core.geom.orient import AXES, Orientation, orient_for_print, ranked_orientations
 from app.core.geom.transform import apply, place_on_bed, rotation
 from app.core.ingest.loader import normalise
 from app.core.scene import CancelSignal
@@ -74,7 +74,7 @@ def test_shortlist_matches_the_fully_sliced_geometric_candidates(organic, profil
         profile.smallest_first_layer,
     )
     assert result.best.support_volume <= full.support_volume * 1.05 + 1e-6
-    assert result.tried <= FINALISTS + 1
+    assert result.tried <= FINALISTS + 1 + len(AXES)
 
 
 def test_the_search_slices_each_direction_only_once(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -122,7 +122,9 @@ def test_a_tilted_plate_is_laid_down_again() -> None:
     assert found.findings[0].values["candidates"] >= 6, (
         "geometric candidates include the axes without requiring random directions"
     )
-    assert found.tried <= FINALISTS + 1, "geschnitten wird nur, was vorn liegt"
+    assert found.tried <= FINALISTS + 1 + len(AXES), (
+        "geschnitten wird nur, was vorn liegt, und die Achsen"
+    )
 
 
 def bar() -> MeshData:
@@ -544,3 +546,70 @@ def test_the_same_body_gets_the_same_pose_twice(organic: bool, profile: Profile)
     assert first.tried == second.tried
     assert np.array_equal(first.transform, second.transform)
     assert np.array_equal(first.mesh.raw.vertices, second.mesh.raw.vertices)
+
+
+# --- der Stand wird am Original gemessen, nicht am Ersatznetz (§22.2) ---------------
+
+
+def _flared_sleeve() -> MeshData:
+    """Eine Hülse, Wand 2 mm, unten mit 63° nach außen aufgeweitet — die
+    Bauart des Gitterbechers vom 20.09.2026 ohne sein Gitter, nur steiler
+    als die Überhanggrenze. Mit der weiten Öffnung nach unten trägt sie sich
+    selbst; mit der engen nach unten hängt die Aufweitung oben über."""
+    profile = [(30.0, 0.0), (32.0, 0.0), (22.0, 5.0), (22.0, 30.0), (20.0, 30.0), (20.0, 5.0)]
+    return place_on_bed(MeshData.of(trimesh.creation.revolve(profile, sections=96)))
+
+
+def _with_a_rough_wide_rim(mesh: MeshData) -> MeshData:
+    """Dasselbe Netz, nur der weite Rand um drei Zehntel verzittert — was
+    eine Ausdünnung aus einem schmalen flachen Rand macht."""
+    import numpy as np
+
+    body = mesh.raw.copy()
+    vertices = np.asarray(body.vertices, dtype=float).copy()
+    # Nur der weite Rand hat Punkte jenseits von r = 28 — in jeder Lage.
+    rim = np.hypot(vertices[:, 0], vertices[:, 1]) > 28.0
+    vertices[rim, 2] += 0.3 * np.sin(np.arange(int(rim.sum())) * 1.7)
+    body.vertices = vertices
+    return MeshData.of(body)
+
+
+def test_the_footing_is_measured_on_the_original(profile: Profile) -> None:
+    """Der Gitterbecher: 94 990 Dreiecke, ein Rand 2 mm breit. Auf 20 000
+    Dreiecke ausgedünnt stand er mit dem Rand nach unten auf 5 mm², am
+    Original auf 594 — und die Suche verwarf die Lage, die ohne Stützen
+    druckt, weil sie am Ersatznetz nicht stehen konnte."""
+    sleeve = _flared_sleeve()
+    rough = _with_a_rough_wide_rim(sleeve)
+    footing = profile.printer.layer_height / 2.0
+
+    alone = judge(rough, (0.0, 0.0, -1.0), 1.0, footing)
+    with_original = judge(rough, (0.0, 0.0, -1.0), 1.0, footing, footing_mesh=sleeve)
+
+    assert alone.first_layer_area < profile.smallest_first_layer, (
+        "am verzitterten Rand steht die Hülse nicht"
+    )
+    assert with_original.first_layer_area > 300.0, "am Original steht sie auf dem ganzen Ring"
+    assert with_original.stable
+
+
+def test_the_search_stands_a_sleeve_on_its_wide_rim_despite_the_proxy(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Dieselbe Falle eine Stufe früher: Die Vorauswahl bewertete jede Lage
+    am Ersatznetz, und ein Rand ohne Standfläche kam nie unter die
+    Finalisten. Achsen und tragende Flächen werden deshalb am Original
+    bewertet, der Rest bleibt am Ersatznetz."""
+    from app.core.slice import orientation
+
+    # Enge Öffnung unten: die Aufweitung hängt oben über. Das Ersatznetz
+    # steht im selben Rahmen wie der Körper, den die Suche bekommt.
+    upside_down = place_on_bed(apply(_flared_sleeve(), rotation("x", 180.0)))
+    rough = _with_a_rough_wide_rim(upside_down)
+    monkeypatch.setattr(orientation, "search_proxy", lambda _mesh: rough)
+
+    found = search(upside_down, count=24, seed=0, profile=profile)
+
+    assert found.best.direction == (0.0, 0.0, 1.0), "gedreht: der weite Rand kommt nach unten"
+    assert found.best.first_layer_area > 300.0
+    assert found.best.support_volume < found.baseline.support_volume  # type: ignore[union-attr]
