@@ -469,7 +469,11 @@ zerteilte die Platte in Ring und Scheibe: zehn Flächen statt sechs), mit
 erhaltenen Filamentgrenzen; `fill_bore` und `slot_bore` rufen es. Gemessen:
 Versetzen, Drehen um 90° und Entfernen treffen das analytische Volumen auf
 die neunte Stelle, ein STEP-Umlauf verliert nichts
-(`tests/test_exact_feature_ops.py`).
+(`tests/test_exact_feature_ops.py`). Eine gesenkte Bohrung geht als Kette:
+`revolved_bore_tool` und `clipped_bore_tool` bauen Stopfen und Werkzeug aus
+den Einlaufprofilen von `geom.prepare_ops` — dieselben, mit denen
+`resize_hole` den Einlauf ändert —, verschoben oder gedreht; ein gekippter
+Kegel geht als B-Spline-Fläche durch STEP und hält dabei die siebte Stelle.
 
 ## Eine Rundung wegnehmen heißt, ihre Fläche zu streichen
 

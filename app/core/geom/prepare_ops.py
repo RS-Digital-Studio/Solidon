@@ -2607,6 +2607,8 @@ def move_feature(ctx: OpContext) -> OpResult:
         )
     if source.kind == "brep" and chain is None and feature.kind in EXACT_CAVITY_KINDS:
         return _exact_move_cavity(ctx, source, feature, centre, target)
+    if source.kind == "brep" and chain is not None:
+        return _exact_move_chain(ctx, source, feature, chain, target)
     ctx.progress(0.1, str(_("Das Merkmal wird an seiner alten Stelle geschlossen …")))
     travel = np.asarray(target, dtype=float) - np.asarray(centre, dtype=float)
     if chain is not None:
@@ -2896,6 +2898,8 @@ def duplicate_feature(ctx: OpContext) -> OpResult:
             values={"feature": feature.id},
             constraint="not_movable",
         )
+    if source.kind == "brep" and chain is not None:
+        return _exact_duplicate_chain(ctx, source, feature, chain, target)
     if chain is not None:
         return _duplicate_cavity_chain(ctx, source, feature, chain, target)
     if source.kind == "brep" and feature.kind in EXACT_CAVITY_KINDS:
@@ -3189,6 +3193,9 @@ def remove_feature(ctx: OpContext) -> OpResult:
             answered["sections"] = choice
         together = choice == "chain"
 
+    if together and chain is not None and source.kind == "brep":
+        result = _exact_remove_chain(ctx, source, feature, chain)
+        return dataclasses.replace(result, answered=answered)
     if together and chain is not None:
         ctx.progress(0.2, str(_("Der ganze Hohlraum wird geschlossen …")))
         # Erst der gemeinsame Körper aus den Flächen; wo das Netz ihn nicht
@@ -3396,6 +3403,8 @@ def rotate_feature(ctx: OpContext) -> OpResult:
             values={"feature": feature.id},
             constraint="not_movable",
         )
+    if source.kind == "brep" and chain is not None:
+        return _exact_rotate_chain(ctx, source, feature, chain, params.axis, params.angle)
     if chain is not None:
         return _rotate_cavity_chain(ctx, source, feature, chain, params.axis, params.angle)
     if source.kind == "brep" and feature.kind in EXACT_CAVITY_KINDS:
@@ -6309,19 +6318,20 @@ def _exact_features_after(
     source: SceneObject,
     solid: Any,
     *,
-    expected: Feature | None,
+    expected: Feature | Sequence[Feature] | None,
     gone: Sequence[str] = (),
     cancelled: CancelToken,
-) -> tuple[dict[str, Feature], tuple[tuple[str, str], ...], str | None]:
+) -> tuple[dict[str, Feature], tuple[tuple[str, str], ...], tuple[str, ...]]:
     """Die Merkmale des neu gebauten exakten Körpers unter ihren fortgeführten Namen.
 
     Die native Erkennung nummeriert frisch; ein Bezug gilt nur belegt
-    (P1.4c.2). ``expected`` ist das bewusst versetzte, gedrehte oder
-    verdoppelte Merkmal mit seinen neuen Werten: Es wird an seiner Stelle
-    gesucht (``_bore_match_id``) und unter dem alten Namen fortgeführt; alles
-    andere ordnet ``match`` zu. ``gone`` nennt, was die Operation entfernt
-    hat. Zurück kommen die Merkmale, die belegten Übergänge und der neue
-    Name des gesuchten Merkmals — ``None``, wenn es nicht wiederzufinden ist.
+    (P1.4c.2). ``expected`` sind die bewusst versetzten, gedrehten oder
+    verdoppelten Merkmale mit ihren neuen Werten — eines oder die ganze
+    Kette: Jedes wird an seiner Stelle gesucht (``_bore_match_id``) und unter
+    dem alten Namen fortgeführt; alles andere ordnet ``match`` zu. ``gone``
+    nennt, was die Operation entfernt hat. Zurück kommen die Merkmale, die
+    belegten Übergänge und die Namen der erwarteten Merkmale, die **nicht**
+    wiederzufinden waren.
     """
     from app.core.brep.features import features_of
     from app.core.perceive.matching import apply_mapping, match
@@ -6330,19 +6340,25 @@ def _exact_features_after(
     previous = {name: entry for name, entry in source.features.items() if name not in gone}
     bounds = solid.bounds
     intended: dict[str, str] = {}
-    found_id: str | None = None
-    if expected is not None:
-        previous.pop(expected.id, None)
+    wanted = (
+        [] if expected is None else [expected] if isinstance(expected, Feature) else list(expected)
+    )
+    lost: list[str] = []
+    for want in wanted:
+        previous.pop(want.id, None)
+    for want in wanted:
         found_id = _bore_match_id(
-            detected,
-            expected,
+            {name: entry for name, entry in detected.items() if name not in intended.values()},
+            want,
             bounds.centre,
             bounds.diagonal,
             check_cancelled=cancelled.raise_if_cancelled,
         )
-        if found_id is not None:
-            previous[expected.id] = dataclasses.replace(detected[found_id], id=expected.id)
-            intended[expected.id] = found_id
+        if found_id is None:
+            lost.append(want.id)
+            continue
+        previous[want.id] = dataclasses.replace(detected[found_id], id=want.id)
+        intended[want.id] = found_id
     matched = match(
         previous,
         detected,
@@ -6350,15 +6366,15 @@ def _exact_features_after(
         bounds.diagonal,
         check_cancelled=cancelled.raise_if_cancelled,
     )
-    if expected is not None and found_id is None:
-        matched.orphaned = (*matched.orphaned, expected.id)
+    if lost:
+        matched.orphaned = (*matched.orphaned, *lost)
     continued = tuple(
         (old_id, old_id)
         for old_id, new_id in intended.items()
         if matched.mapping.get(old_id) == new_id and old_id not in matched.ambiguous
     )
     features = apply_mapping(detected, matched, previous=source.features)
-    return features, continued, found_id
+    return features, continued, tuple(lost)
 
 
 def _through_lost_finding(op: str, feature: Feature, centre: Vec3) -> Finding:
@@ -6396,7 +6412,7 @@ def _exact_cavity_result(
     solid: Any,
     *,
     op: str,
-    expected: Feature | None,
+    expected: Feature | Sequence[Feature] | None,
     gone: Sequence[str] = (),
     findings: list[Finding],
     reserve: bool = False,
@@ -6404,14 +6420,17 @@ def _exact_cavity_result(
     """Das gemeinsame Ende der vier exakten Hohlraumhandlungen: prüfen, erkennen,
     Namen fortführen, Durchgang melden, Bezüge belegen."""
     checked = _exact_body_checked(solid)
-    features, continued, found_id = _exact_features_after(
+    features, continued, lost = _exact_features_after(
         source, checked, expected=expected, gone=gone, cancelled=ctx.cancelled
     )
-    if expected is not None:
-        if found_id is None:
-            findings.append(_cavity_lost_finding(op, expected))
-        elif expected.params.get("through") and not features[expected.id].params.get("through"):
-            findings.append(_through_lost_finding(op, expected, _bore_vector(expected, "centre")))
+    wanted = (
+        [] if expected is None else [expected] if isinstance(expected, Feature) else list(expected)
+    )
+    for want in wanted:
+        if want.id in lost:
+            findings.append(_cavity_lost_finding(op, want))
+        elif want.params.get("through") and not features[want.id].params.get("through"):
+            findings.append(_through_lost_finding(op, want, _bore_vector(want, "centre")))
     reserved = source.reserved_feature_ids
     if reserve:
         reserved = tuple(sorted({*source.reserved_feature_ids, *source.features}))
@@ -6486,7 +6505,7 @@ def _exact_duplicate_cavity(
     if nothing is not None:
         findings.append(nothing)
     checked = _exact_body_checked(placed)
-    features, continued, _found = _exact_features_after(
+    features, continued, _lost = _exact_features_after(
         source, checked, expected=None, cancelled=ctx.cancelled
     )
     # Die Kopie ist die frische Erkennung an der Zielstelle; sie bekommt den
@@ -6583,6 +6602,341 @@ def _exact_remove_cavity(ctx: OpContext, source: SceneObject, feature: Feature) 
         op="remove_feature",
         expected=None,
         gone=(feature.id,),
+        findings=findings,
+        reserve=True,
+    )
+
+
+def _exact_chain_entrance(source: SceneObject, chain: Sequence[Feature]) -> _BoreEntrance:
+    """Der Einlauf einer Kette am exakten Körper — von ihrer Bohrung aus gelesen.
+
+    ``bore_entrance`` liest Abschnitte, Radien und die wirklichen Randebenen
+    für beide Kerne; hier wird er für jede Kettenhandlung gebraucht, nicht nur
+    fürs Ändern. Gibt der Hohlraum keinen eindeutigen Einlauf her, sagt die
+    Operation mit dem Satz des Einlaufs ab.
+    """
+    entrance = bore_entrance(
+        source.mesh, chain[0], source.features, cavity=tuple(chain), touches_other=False
+    )
+    if entrance is None:
+        raise _entrance_error()
+    return entrance
+
+
+def _plane_moved(plane: SectionPlane, travel: NDArray[np.float64]) -> SectionPlane:
+    """Dieselbe Ebene, um ``travel`` verschoben."""
+    normal = np.asarray(plane.normal, dtype=float)
+    return dataclasses.replace(plane, position=plane.position + float(normal @ travel))
+
+
+def _plane_turned(
+    plane: SectionPlane, matrix: NDArray[np.float64], pivot: NDArray[np.float64], shift: float
+) -> SectionPlane:
+    """Dieselbe Ebene, um ``matrix`` gedreht (um ``pivot``) und um ``shift`` entlang
+    ihrer gedrehten Normalen nach außen geschoben."""
+    normal = np.asarray(plane.normal, dtype=float)
+    point = normal * plane.position
+    turned_normal = matrix[:3, :3] @ normal
+    turned_point = matrix[:3, :3] @ (point - pivot) + pivot
+    position = float(turned_normal @ turned_point) + shift
+    return SectionPlane(
+        normal=(float(turned_normal[0]), float(turned_normal[1]), float(turned_normal[2])),
+        position=position,
+    )
+
+
+def _exact_chain_solid(
+    entrance: _BoreEntrance,
+    reach: float,
+    *,
+    filling: bool,
+    frame: PlaneFrame,
+    planes_of: Callable[[int, SectionPlane, SectionPlane], tuple[SectionPlane, ...]],
+) -> Any:
+    """Der Hohlraum einer Kette als exakter Körper — Stopfen oder Werkzeug.
+
+    Dieselben Profile und Randebenen wie ``resize_hole`` (``_entrance_tools``),
+    als Rotationskörper um ``frame`` und an den Ebenen begrenzt, die
+    ``planes_of`` je Abschnitt nennt: unverschoben für den Stopfen an der
+    alten Stelle, verschoben oder gedreht für das Werkzeug an der neuen.
+    """
+    from app.core.brep import edit
+
+    diameter = entrance.sections[0].inner_radius * 2.0
+    parts = []
+    for index, (outline, (lower, upper)) in enumerate(
+        _entrance_tools(entrance, diameter, reach, filling=filling)
+    ):
+        tool = edit.revolved_bore_tool(outline, frame)
+        parts.append(edit.clipped_bore_tool(tool, planes_of(index, lower, upper)))
+    return edit.boolean("union", parts) if len(parts) > 1 else parts[0]
+
+
+def _exact_chain_filled(source: SceneObject, entrance: _BoreEntrance) -> Any:
+    """Die ganze Kette am exakten Körper schließen — der Stopfen aus ihren Profilen."""
+    from app.core.brep import edit
+    from app.core.sketch.planes import frame_of
+
+    solid = _exact_body(source)
+    plug = _exact_chain_solid(
+        entrance,
+        solid.bounds.diagonal,
+        filling=True,
+        frame=frame_of(entrance.axis, entrance.origin),
+        planes_of=lambda _index, lower, upper: (lower, upper),
+    )
+    return edit.unified(edit.boolean("union", [solid, plug]))
+
+
+def _exact_chain_cut_moved(solid: Any, entrance: _BoreEntrance, travel: NDArray[np.float64]) -> Any:
+    """Die Kette an der um ``travel`` verschobenen Stelle exakt ausschneiden."""
+    from app.core.brep import edit
+    from app.core.sketch.planes import frame_of
+
+    origin = np.asarray(entrance.origin, dtype=float) + travel
+    tool = _exact_chain_solid(
+        entrance,
+        solid.bounds.diagonal,
+        filling=False,
+        frame=frame_of(entrance.axis, (float(origin[0]), float(origin[1]), float(origin[2]))),
+        planes_of=lambda _index, lower, upper: (
+            _plane_moved(lower, travel),
+            _plane_moved(upper, travel),
+        ),
+    )
+    return edit.unified(edit.boolean("difference", [solid, tool]))
+
+
+def _exact_chain_cut_turned(
+    solid: Any,
+    entrance: _BoreEntrance,
+    matrix: NDArray[np.float64],
+    pivot: NDArray[np.float64],
+    tilt: float,
+) -> Any:
+    """Die Kette gekippt ausschneiden — mit dem Überstand, den die Neigung verlangt.
+
+    Die Randebenen drehen mit; die Mündungen — die äußere der Senkung und
+    die ferne einer durchgehenden Bohrung — rücken um so viel nach außen, wie
+    ein Zylinder beziehungsweise Kegel braucht, um die vorher quer stehende
+    Oberfläche nach dem Kippen noch zu durchstoßen
+    (``_reach_past_a_tilted_face``, ``_cone_past_a_tilted_face``, dieselben
+    Zahlen wie am Netz). Der Boden eines Sacklochs bleibt, wo er ist.
+    """
+    from app.core.brep import edit
+    from app.core.sketch.planes import frame_of
+
+    at_most = float(solid.bounds.diagonal)
+    axis = np.asarray(entrance.axis, dtype=float)
+    turned_axis = matrix[:3, :3] @ axis
+    origin = np.asarray(entrance.origin, dtype=float)
+    turned_origin = matrix[:3, :3] @ (origin - pivot) + pivot
+    first, last = entrance.sections[0], entrance.sections[-1]
+    through = bool(first.feature.params.get("through"))
+
+    def outward(section: _EntranceSection, at: float, *, cone: bool) -> float:
+        distance = abs(at - float((pivot - origin) @ axis))
+        if cone:
+            half_angle = float(section.feature.params.get("angle", 0.0)) / 2.0
+            return _cone_past_a_tilted_face(
+                distance, section.outer_radius, half_angle, tilt, at_most=at_most
+            )
+        return (
+            _reach_past_a_tilted_face(distance, section.outer_radius, tilt, at_most=at_most)
+            - distance
+        )
+
+    def planes_of(index: int, lower: SectionPlane, upper: SectionPlane) -> tuple[SectionPlane, ...]:
+        low_shift = outward(first, first.start, cone=False) if index == 0 and through else 0.0
+        high_shift = (
+            outward(last, last.end, cone=last.feature.kind == "cone")
+            if index == len(entrance.sections) - 1
+            else 0.0
+        )
+        return (
+            _plane_turned(lower, matrix, pivot, low_shift),
+            _plane_turned(upper, matrix, pivot, high_shift),
+        )
+
+    tool = _exact_chain_solid(
+        entrance,
+        at_most,
+        filling=False,
+        frame=frame_of(
+            (float(turned_axis[0]), float(turned_axis[1]), float(turned_axis[2])),
+            (float(turned_origin[0]), float(turned_origin[1]), float(turned_origin[2])),
+        ),
+        planes_of=planes_of,
+    )
+    return edit.unified(edit.boolean("difference", [solid, tool]))
+
+
+def _exact_move_chain(
+    ctx: OpContext, source: SceneObject, feature: Feature, chain: Sequence[Feature], target: Vec3
+) -> OpResult:
+    """Bohrung samt Senkung am exakten Körper versetzen (P2.4)."""
+    entrance = _exact_chain_entrance(source, chain)
+    travel = np.asarray(target, dtype=float) - np.asarray(feature.params["centre"], dtype=float)
+    ctx.progress(0.1, str(_("Der ganze Hohlraum wird geschlossen …")))
+    filled = _exact_chain_filled(source, entrance)
+    ctx.progress(0.6, str(_("Das Merkmal wird an seiner neuen Stelle gesetzt …")))
+    placed = _exact_chain_cut_moved(filled, entrance, travel)
+    expected = [
+        dataclasses.replace(
+            related,
+            params={
+                **related.params,
+                "centre": tuple(
+                    float(v) for v in np.asarray(related.params["centre"], dtype=float) + travel
+                ),
+            },
+            provenance="generated",
+        )
+        for related in chain
+    ]
+    findings = _edge_findings(as_mesh_data(filled), expected)
+    return _exact_cavity_result(
+        ctx, source, placed, op="move_feature", expected=expected, findings=findings
+    )
+
+
+def _exact_duplicate_chain(
+    ctx: OpContext, source: SceneObject, feature: Feature, chain: Sequence[Feature], target: Vec3
+) -> OpResult:
+    """Bohrung samt Senkung am exakten Körper ein zweites Mal schneiden (P2.4)."""
+    entrance = _exact_chain_entrance(source, chain)
+    solid = _exact_body(source)
+    travel = np.asarray(target, dtype=float) - np.asarray(feature.params["centre"], dtype=float)
+    ctx.progress(0.2, str(_("Das Merkmal wird an der neuen Stelle angelegt …")))
+    placed = _exact_chain_cut_moved(solid, entrance, travel)
+    taken: set[str] = {*source.reserved_feature_ids, *source.features}
+    copies = []
+    for related in chain:
+        name = _free_id_among(taken, related.kind)
+        taken.add(name)
+        copies.append(
+            dataclasses.replace(
+                related,
+                id=name,
+                params={
+                    **related.params,
+                    "centre": tuple(
+                        float(v) for v in np.asarray(related.params["centre"], dtype=float) + travel
+                    ),
+                },
+                provenance="generated",
+            )
+        )
+    findings = _edge_findings(as_mesh_data(solid), copies)
+    nothing = without_effect(solid, placed, "difference", ctx.profile)
+    if nothing is not None:
+        findings.append(nothing)
+    checked = _exact_body_checked(placed)
+    features, continued, _found = _exact_features_after(
+        source, checked, expected=None, cancelled=ctx.cancelled
+    )
+    diagonal = checked.bounds.diagonal
+    for copy in copies:
+        fresh = [
+            name
+            for name, entry in features.items()
+            if name not in source.features
+            and name not in {c.id for c in copies}
+            and entry.kind == copy.kind
+            and _sits_at(entry, copy, diagonal)
+        ]
+        if len(fresh) == 1 and fresh[0] != copy.id:
+            features[copy.id] = dataclasses.replace(features.pop(fresh[0]), id=copy.id)
+        elif not fresh and copy.id not in features:
+            findings.append(_cavity_lost_finding("duplicate_feature", copy))
+    return OpResult(
+        outputs=[
+            dataclasses.replace(
+                source,
+                mesh=checked,
+                kind="brep",
+                features=features,
+                reserved_feature_ids=tuple(sorted(taken)),
+            )
+        ],
+        findings=findings,
+        feature_continuations=(
+            tuple(
+                FeatureContinuation(FeatureRef(source.id, old_id), new_id)
+                for old_id, new_id in continued
+            ),
+        ),
+    )
+
+
+def _exact_rotate_chain(
+    ctx: OpContext,
+    source: SceneObject,
+    feature: Feature,
+    chain: Sequence[Feature],
+    axis: Axis,
+    angle: float,
+) -> OpResult:
+    """Bohrung samt Senkung am exakten Körper kippen — um die Mitte des gewählten
+    Abschnitts (P2.4)."""
+    entrance = _exact_chain_entrance(source, chain)
+    pivot = np.asarray(feature.params["centre"], dtype=float)
+    matrix = np.asarray(
+        trimesh.transformations.rotation_matrix(  # type: ignore[no-untyped-call]
+            math.radians(angle), AXIS_NORMALS[axis], pivot
+        ),
+        dtype=np.float64,
+    )
+    old_axis = np.asarray(entrance.axis, dtype=float)
+    new_axis = matrix[:3, :3] @ old_axis
+    tilt = math.degrees(math.acos(min(1.0, abs(float(old_axis @ new_axis)))))
+    ctx.progress(0.1, str(_("Der ganze Hohlraum wird geschlossen …")))
+    filled = _exact_chain_filled(source, entrance)
+    ctx.progress(0.6, str(_("Das Merkmal wird gedreht gesetzt …")))
+    placed = _exact_chain_cut_turned(filled, entrance, matrix, pivot, tilt)
+    expected = []
+    for related in chain:
+        centre = np.asarray(related.params["centre"], dtype=float)
+        turned_centre = matrix[:3, :3] @ (centre - pivot) + pivot
+        params = {
+            **related.params,
+            "centre": tuple(float(v) for v in turned_centre),
+            "axis": _turned(related, axis, angle),
+        }
+        expected.append(dataclasses.replace(related, params=params, provenance="generated"))
+    findings = _edge_findings(as_mesh_data(filled), expected)
+    return _exact_cavity_result(
+        ctx, source, placed, op="rotate_feature", expected=expected, findings=findings
+    )
+
+
+def _exact_remove_chain(
+    ctx: OpContext, source: SceneObject, feature: Feature, chain: Sequence[Feature]
+) -> OpResult:
+    """Die ganze Kette am exakten Körper schließen (P2.4)."""
+    entrance = _exact_chain_entrance(source, chain)
+    ctx.progress(0.2, str(_("Der ganze Hohlraum wird geschlossen …")))
+    filled = _exact_chain_filled(source, entrance)
+    gone = tuple(section.id for section in chain)
+    findings = [
+        Finding(
+            code="remove_feature.gone",
+            severity="info",
+            message=_(
+                "Der Hohlraum ist mit allen seinen Abschnitten entfernt. Spätere "
+                "Schritte und Passungen, die auf sie verweisen, finden sie nicht mehr."
+            ),
+            feature_ids=gone,
+            values={"feature": feature.id, "kind": feature.kind, "removed": len(gone)},
+        )
+    ]
+    return _exact_cavity_result(
+        ctx,
+        source,
+        filled,
+        op="remove_feature",
+        expected=None,
+        gone=gone,
         findings=findings,
         reserve=True,
     )

@@ -579,9 +579,18 @@ exakten Zweig (`EXACT_CAVITY_KINDS`, `_exact_move_cavity` und Geschwister)
 `slot_bore`, erkennen mit `features_of` und führen die Kennung belegt fort
 (`_exact_features_after`: `_bore_match_id` an der gesetzten Stelle, dann
 `match`, `FeatureContinuation` für das bewusst gesetzte Merkmal). Bis dahin
-liefen sie über das Netz, und der Körper kam als Netz zurück. Ketten aus
-Bohrung und Senkung, Zapfen, Kegel, Kugeln und Einschlüsse gehen am exakten
-Körper noch den Netzweg mit `evaluate.exact_became_mesh`; sie folgen.
+liefen sie über das Netz, und der Körper kam als Netz zurück. **Eine Kette
+aus Bohrung und Senkung geht denselben Weg** (`_exact_move_chain` und
+Geschwister): Ihr Einlauf kommt aus `bore_entrance`, Stopfen und Werkzeug
+sind Rotationskörper derselben Profile wie bei `resize_hole`
+(`_entrance_tools`, `_exact_chain_solid`), begrenzt an den wirklichen
+Randebenen — verschoben beim Versetzen (`_plane_moved`), gedreht und an den
+Mündungen um den Überstand der Neigung nach außen gerückt beim Kippen
+(`_plane_turned`, `_reach_past_a_tilted_face`, `_cone_past_a_tilted_face`;
+der Boden eines Sacklochs bleibt). Gewählt werden darf jeder Abschnitt;
+gedreht wird um dessen Mitte, und `_exact_features_after` führt alle
+Abschnitte belegt fort. Zapfen, Kegel, Kugeln und Einschlüsse gehen am
+exakten Körper noch den Netzweg mit `evaluate.exact_became_mesh`; sie folgen.
 
 **`slot_hole` und `resize_hole` nehmen dabei eine Stelle entgegen** (`x/y/z`,
 **leer** heißt „lass es, wo es ist" — `_named_place` beantwortet das für beide,
