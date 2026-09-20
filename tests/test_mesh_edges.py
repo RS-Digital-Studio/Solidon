@@ -31,6 +31,7 @@ from app.core.bootstrap import load_operations
 from app.core.errors import GeometryError, OperationCancelled
 from app.core.geom.boolean import boolean
 from app.core.geom.edges import (
+    EDGE_CHOICES,
     MIN_ARC_STEPS,
     _arc_steps,
     _corner_stars,
@@ -51,10 +52,19 @@ from app.core.geom.mesh import MeshData, read_mesh
 from app.core.geom.repair import remove_hollow_shells
 from app.core.knowledge import profiles
 from app.core.perceive.features import detect
-from app.core.registry import REGISTRY
+from app.core.registry import REGISTRY, op_params, param
 from app.core.scene.cancel import NeverCancelled
-from app.core.types import Feature, OpContext, OpResult, Profile, Scene, SceneObject
+from app.core.types import (
+    BaseParams,
+    Feature,
+    OpContext,
+    OpResult,
+    Profile,
+    Scene,
+    SceneObject,
+)
 from app.core.units import MAX_FACET_ANGLE, MAX_FACET_SAG
+from app.i18n import _ as message
 
 WIDTH, DEPTH, HEIGHT = 40.0, 30.0, 20.0
 RADIUS = 10.0
@@ -249,12 +259,34 @@ def test_a_named_rim_chamfer_cuts_the_requested_side_of_a_tube(outer: bool) -> N
     assert solid.is_watertight and solid.component_count == 1
 
 
+@op_params
+class _LegacyEdgeParams(BaseParams):
+    """Die Felder der Kantenoperationen, aber ``edge_keys`` ohne die Art ``edges``.
+
+    So sah ein Registereintrag vor der Kantenbindung aus: Die Auswertung band
+    seine Schlüssel nicht, und sein Ergebnis liegt unter demselben
+    Operationsschlüssel im Cache wie das der heutigen Operation.
+    """
+
+    radius: float = param(title=message("Radius"), default=2.0, unit="mm", minimum=0.01)
+    distance: float = param(title=message("Abstand"), default=2.0, unit="mm", minimum=0.01)
+    edges: str = param(title=message("Kanten"), default="vertical", choices=EDGE_CHOICES)
+    edge_keys: str = param(title=message("Einzelne Kanten"), default="")
+
+
 @pytest.mark.parametrize("operation", ["fillet_edges", "chamfer_edges", "bead_edges"])
 @pytest.mark.parametrize("missing", [False, True], ids=["ambiguous", "partly-missing"])
 def test_a_warm_legacy_edge_cache_cannot_hide_an_invalid_selection(
     operation: str, missing: bool
 ) -> None:
-    """Ein gespeichertes Ergebnis der alten Auswahl überspringt keine neue Prüfung."""
+    """Ein gespeichertes Ergebnis der alten Auswahl überspringt keine neue Prüfung.
+
+    Seit P1.4c bindet die Auswertung ein Kantenfeld **vor** ``cache.get``:
+    Der Treffer des alten Eintrags wird gar nicht erst gelesen, der Halt kommt
+    aus der Bindung — bei einem mehrdeutigen Schlüssel als Rückfrage, die
+    ohne jemanden zum Fragen zum Befund wird, bei einem fehlenden mit dem
+    Satz der Auswahl.
+    """
     import dataclasses
 
     from app.core.registry import Registry
@@ -277,7 +309,9 @@ def test_a_warm_legacy_edge_cache_cannot_hide_an_invalid_selection(
 
     source = dataclasses.replace(REGISTRY.get("create_brep_cylinder"), fn=make_tube)
     current = REGISTRY.get(operation)
-    previous = dataclasses.replace(current, fn=old_result, cache_version="2" if missing else "")
+    previous = dataclasses.replace(
+        current, fn=old_result, params=_LegacyEdgeParams, cache_version="2" if missing else ""
+    )
     before, after = Registry(), Registry()
     for registry, editing in ((before, previous), (after, current)):
         registry.register(source)

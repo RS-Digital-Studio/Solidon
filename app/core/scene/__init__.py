@@ -20,6 +20,7 @@ if TYPE_CHECKING:
         drop_other_versions,
     )
     from app.core.scene.cancel import CancelSignal, NeverCancelled
+    from app.core.scene.edge_binding import EdgeTarget
     from app.core.scene.evaluate import EvaluationResult, evaluate
     from app.core.scene.history import History, OperationDraft
     from app.core.scene.migrations import FORMAT_VERSION
@@ -45,6 +46,7 @@ _EXPORTS: Final[dict[str, tuple[str, str]]] = {
     "drop_other_versions": ("cache", "drop_other_versions"),
     "CancelSignal": ("cancel", "CancelSignal"),
     "NeverCancelled": ("cancel", "NeverCancelled"),
+    "EdgeTarget": ("edge_binding", "EdgeTarget"),
     "EvaluationResult": ("evaluate", "EvaluationResult"),
     "evaluate": ("evaluate", "evaluate"),
     "History": ("history", "History"),
@@ -69,6 +71,7 @@ __all__ = [
     "CachedResult",
     "CancelSignal",
     "DiskCache",
+    "EdgeTarget",
     "EvaluationResult",
     "History",
     "MeshCodec",

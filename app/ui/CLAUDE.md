@@ -1696,6 +1696,15 @@ zweiten Start und überschreiben weder den Fortschritt noch seinen Zustand.
   nicht schon beim Einreihen des Szenenaufbaus.
 - Zuordnungsfragen tragen ihre tatsächliche Zwischengeometrie über
   `Session.announce_question` fadenlokal im bestehenden `AskRequest`.
+  Kandidaten sind Merkmale als Paare aus Körper und Kennung — oder Kanten
+  als `EdgeTarget` (P1.4c): Token, Körper, Zug und Anzeigefakten. Der
+  Dialog zeigt je Token die Kantenzeile (`edge_label`, `AskDialog(labels=)`)
+  und gibt das Token zurück; die Ansicht zeichnet den Zug als Linie vor dem
+  Material in derselben Kandidatenverwaltung (`Viewport._draw_edge_candidate`),
+  beschriftet mit derselben Zeile, die betonte breiter. Die Betonung folgt der
+  markierten Zeile über `weak_slot(..., forward=True)` — ohne `forward`
+  verwirft der Empfänger die Signalargumente, und die Betonung blieb bis zum
+  20.09.2026 auf der ersten Zeile stehen.
   `temporary_preview` zeigt sie ausschließlich im Viewport; Dokument,
   Bericht, Verlauf und `last_result` bleiben auf dem gültigen Stand.
   Projektgeneration, Arbeiteridentität und Abbruch binden Frage und Antwort.

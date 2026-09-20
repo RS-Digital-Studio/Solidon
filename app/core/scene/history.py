@@ -39,6 +39,7 @@ from app.core.errors import (
     ValidationError,
 )
 from app.core.log import get_logger
+from app.core.perceive.match_records import EDGE_DOMAIN, domain_of
 from app.core.registry import REGISTRY, VARIABLE, Registry, needed_inputs
 from app.core.scene import bundling
 from app.core.types import (
@@ -149,9 +150,18 @@ def repair_is_available(
 
 
 def _copy_operation_matches(
-    entry: Operation, *, previous_outputs: tuple[ObjectId, ...] | None = None
+    entry: Operation,
+    *,
+    previous_outputs: tuple[ObjectId, ...] | None = None,
+    previous_inputs: tuple[ObjectId, ...] | None = None,
 ) -> Operation:
-    """Kopiert Antworten ohne Alias und überträgt keine Gruppe auf einen fremden Körper."""
+    """Kopiert Antworten ohne Alias und überträgt keine Gruppe auf einen fremden Körper.
+
+    Gruppen gehören einem Ausgabekörper, Kantenantworten (``edge-answer:``)
+    einem Eingangskörper — jede Domäne wird gegen ihre eigene Liste
+    gefiltert, wenn sich Aus- beziehungsweise Eingänge ändern. Nichts wird
+    auf einen neuen Körper umbenannt.
+    """
     if not entry.matches:
         return entry
     matches = dict(entry.matches)
@@ -160,7 +170,14 @@ def _copy_operation_matches(
         matches = {
             key: value
             for key, value in matches.items()
-            if key == "legacy" or value.get("object_id") in outputs
+            if key == "legacy" or domain_of(key) == EDGE_DOMAIN or value.get("object_id") in outputs
+        }
+    if previous_inputs is not None and entry.inputs != previous_inputs:
+        inputs = set(entry.inputs)
+        matches = {
+            key: value
+            for key, value in matches.items()
+            if key == "legacy" or domain_of(key) != EDGE_DOMAIN or value.get("object_id") in inputs
         }
     return dataclasses.replace(entry, matches=deepcopy(matches))
 
@@ -679,7 +696,9 @@ class History:
                 translatable=entry.translatable,
                 matches=entry.matches,
             )
-            cloned = _copy_operation_matches(cloned, previous_outputs=entry.outputs)
+            cloned = _copy_operation_matches(
+                cloned, previous_outputs=entry.outputs, previous_inputs=entry.inputs
+            )
             planned.append(cloned)
             replaced_ids[entry.id] = cloned.id
             living.difference_update(set(cloned.inputs) - set(cloned.outputs))
@@ -1260,7 +1279,9 @@ class History:
         steht der Titel des Schritts — die Transaktion **ist** seine neue
         Fassung, kein eigener Text ohne Katalognachzug.
         """
-        changed = _copy_operation_matches(changed, previous_outputs=entry.outputs)
+        changed = _copy_operation_matches(
+            changed, previous_outputs=entry.outputs, previous_inputs=entry.inputs
+        )
         self._reseed()
         self._forget_undone()
         changes = DocumentChange(

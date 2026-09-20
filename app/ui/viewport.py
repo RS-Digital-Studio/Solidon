@@ -67,7 +67,7 @@ from app.core.log import get_logger
 from app.core.perceive.features import CURVATURE_LIMIT
 from app.core.perceive.maps import AnalysisMap
 from app.core.perceive.relations import cavity_chain_at, cavity_surface_indices
-from app.core.scene import EvaluationResult
+from app.core.scene import EdgeTarget, EvaluationResult
 from app.core.scene.cancel import CancelSignal
 from app.core.sketch.planes import axis_hit, image_normal, ray_hit, to_plane, to_world
 from app.core.sketch.profile import SketchCurve
@@ -4005,11 +4005,11 @@ class Viewport(QWidget):
         self._snap_actors: list[Any] = []
         """Die Fangmarke unter dem Zeiger — sie zeigt vor dem Klick, wohin der
         Punkt fällt."""
-        self._candidates: tuple[tuple[str, str], ...] = ()
+        self._candidates: tuple[tuple[str, str] | EdgeTarget, ...] = ()
         """Die Merkmale, zwischen denen eine Frage entscheiden lässt (§21.3) —
         je Eintrag Körper und Merkmal, denn dieselbe Kennung gibt es in
         mehreren Körpern."""
-        self._candidate_emphasis: tuple[str, str] | None = None
+        self._candidate_emphasis: tuple[str, str] | EdgeTarget | None = None
         self._candidate_actors: list[Any] = []
         self._snap_owner: str = ""
         """Der Körper unter dem Zeiger, im Bild gefragt — damit die Marke dort
@@ -9125,8 +9125,8 @@ class Viewport(QWidget):
 
     def show_candidates(
         self,
-        candidates: Sequence[tuple[str, str]] = (),
-        emphasis: tuple[str, str] | None = None,
+        candidates: Sequence[tuple[str, str] | EdgeTarget] = (),
+        emphasis: tuple[str, str] | EdgeTarget | None = None,
     ) -> None:
         """Zeigt, zwischen welchen Merkmalen eine Frage entscheiden lässt (§21.3).
 
@@ -9148,6 +9148,11 @@ class Viewport(QWidget):
         Eine leere Folge nimmt alles weg. Kennungen, die es in der laufenden
         Auswertung nicht gibt, werden still übergangen: Die Auswertung, die
         gefragt hat, kann eine andere sein als die, die im Bild steht.
+
+        **Kanten sind der zweite Zeichenfall derselben Verwaltung** (P1.4c):
+        Ein ``EdgeTarget`` bringt seinen Zug mit und wird als Linie vor dem
+        Material gezeichnet, wie die gewählte Kante (``_redraw_edge_patch``),
+        beschriftet mit derselben Zeile, die der Dialog zeigt.
         """
         self._candidates = tuple(candidates)
         self._candidate_emphasis = emphasis
@@ -9260,7 +9265,11 @@ class Viewport(QWidget):
         import numpy as np
 
         marks: list[tuple[Vec3, str]] = []
-        for index, (object_id, feature_id) in enumerate(self._candidates):
+        for index, candidate in enumerate(self._candidates):
+            if isinstance(candidate, EdgeTarget):
+                self._draw_edge_candidate(index, candidate, marks)
+                continue
+            object_id, feature_id = candidate
             entry = self._result.scene.objects.get(object_id)
             if entry is None or not self._in_pick_view(object_id, entry):
                 continue
@@ -9305,8 +9314,43 @@ class Viewport(QWidget):
             )
         self._draw()
 
+    def _draw_edge_candidate(
+        self, index: int, candidate: EdgeTarget, marks: list[tuple[Vec3, str]]
+    ) -> None:
+        """Eine Kante einer Kollisionsfrage als Linie vor dem Material.
+
+        Zwei Kandidaten liegen hier vier Tausendstel auseinander; die Farbe
+        allein unterschiede sie nicht (Regel 18). Deshalb die Beschriftung
+        mit Lage, Länge und Ort — und die betonte Kante breiter, wie die
+        gewählte Kante daneben.
+        """
+        if self.renderer is None or self._result is None or len(candidate.points) < 2:
+            return
+        entry = self._result.scene.objects.get(candidate.object_id)
+        if entry is None or not self._in_pick_view(candidate.object_id, entry):
+            return
+
+        import numpy as np
+
+        offset = np.asarray(self._shown_offset(entry, self._result), dtype=float)
+        loud = candidate == self._candidate_emphasis
+        self._candidate_actors.append(
+            self.renderer.add_lines(
+                np.asarray(candidate.points, dtype=float) + offset,
+                name=f"candidate:{index}",
+                colour=CANDIDATE_COLOUR,
+                width=SELECTED_EDGE_WIDTH if loud else 2.0 * FEATURE_EDGE_WIDTH,
+                connected=True,
+                keep_in_front=True,
+            )
+        )
+        middle = np.asarray(candidate.middle, dtype=float) + offset
+        marks.append(
+            ((float(middle[0]), float(middle[1]), float(middle[2])), edge_label(candidate))
+        )
+
     @property
-    def candidates(self) -> tuple[tuple[str, str], ...]:
+    def candidates(self) -> tuple[tuple[str, str] | EdgeTarget, ...]:
         """Welche Kandidaten gerade leuchten — Auskunft für Tests und Dialog."""
         return self._candidates
 

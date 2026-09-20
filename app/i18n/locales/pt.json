@@ -3429,6 +3429,7 @@
   "Körper wählen, um ein Filament zuzuweisen": "Selecionar um corpo para atribuir um filamento",
   "Körper {number}": "Corpo {number}",
   "Körper „{name}“ entfernt — Strg+Z holt ihn zurück.": "Corpo «{name}» removido — Ctrl+Z traz de volta.",
+  "Körper „{object}“: Die gewählte Kante {key} ist nicht eindeutig — {count} Kanten tragen diesen Schlüssel. Wähle die gemeinte Kante.": "Corpo “{object}”: a aresta selecionada {key} não é unívoca — {count} arestas têm esta chave. Selecione a aresta pretendida.",
   "Körper „{object}“: {question}": "Corpo «{object}»: {question}",
   "Kühlung": "Refrigeração",
   "Kürzel": "Atalho",

@@ -531,6 +531,17 @@ class OperationSpec:
     wie bei den drei benannten Lesarten daneben, nur ohne Parameter, an dem
     sie hinge — hier wird nicht ein bestimmter Träger gelesen, sondern die
     Szene als Ganzes."""
+    edges_on_mesh: bool = False
+    """Die Operation liest ihre Kanten (``kind="edges"``) immer am **Netz**,
+    auch an einem exakten Körper.
+
+    *Wulst anlegen* tut das: Es vereinigt am tessellierten Körper und löst
+    seine Schlüssel deshalb an dessen Zügen auf, nicht an der Topologie.
+    Die Auswertung bindet ausdrücklich gewählte Kanten **vor** dem Cache am
+    aktuellen Eingang (``scene.edge_binding``), und sie muss dafür dieselben
+    Kanten sehen wie die Operation — sonst fragte sie nach Kanten, die die
+    Operation nie bekommt. Ohne das Flag entscheidet die Bauart des Körpers:
+    exakt an der Topologie, Netz an den Zügen."""
     produces_from: str | None = None
     """Der Parameter, der bei veränderlicher Anzahl sagt, wie viele Objekte
     herauskommen.
@@ -794,6 +805,7 @@ def register_op(
     requires_body: str = "",
     whole_scene: bool = False,
     reads_other_bodies: bool = False,
+    edges_on_mesh: bool = False,
     produces_from: str | None = None,
     keeps_inputs: int = 0,
     touches_features: bool = False,
@@ -827,6 +839,7 @@ def register_op(
                 requires_body=requires_body,
                 whole_scene=whole_scene,
                 reads_other_bodies=reads_other_bodies,
+                edges_on_mesh=edges_on_mesh,
                 produces_from=produces_from,
                 keeps_inputs=keeps_inputs,
                 touches_features=touches_features,

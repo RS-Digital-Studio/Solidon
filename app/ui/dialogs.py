@@ -108,7 +108,14 @@ class AskDialog(QDialog):
     heraus.
     """
 
-    def __init__(self, question: str, choices: list[str], parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        question: str,
+        choices: list[str],
+        parent: QWidget | None = None,
+        *,
+        labels: Mapping[str, str] | None = None,
+    ) -> None:
         super().__init__(parent)
         self.setWindowTitle(tr("Rückfrage"))
         self.setMinimumWidth(360)
@@ -125,9 +132,14 @@ class AskDialog(QDialog):
         self.list = QListWidget(self)
         # **Anzeigetext und Antwortwert getrennt.** Die Einheitenfrage bot „in"
         # zur Wahl — im deutschen Fenster kein Wort. Der Kern bekommt weiter
-        # das Kürzel, der Kunde liest „Zoll (in)" (Review 02.09.2026).
+        # das Kürzel, der Kunde liest „Zoll (in)" (Review 02.09.2026). Eine
+        # Kantenfrage bietet Antworttoken; ``labels`` trägt dazu die Zeile,
+        # die der Kunde liest — Lage, Länge, Ort (``labels.edge_label``).
         for choice in choices:
-            item = QListWidgetItem(str(UNIT_NAMES.get(choice, choice)), self.list)
+            shown = labels.get(choice) if labels is not None else None
+            if shown is None:
+                shown = str(UNIT_NAMES.get(choice, choice))
+            item = QListWidgetItem(shown, self.list)
             item.setData(Qt.ItemDataRole.UserRole, choice)
         self.list.setCurrentRow(0)
         # Kein Lambda: Es fängt ``self`` in seiner Zelle, der Sender gehört

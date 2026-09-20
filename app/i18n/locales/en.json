@@ -3429,6 +3429,7 @@
   "Körper wählen, um ein Filament zuzuweisen": "Select a body to assign filament",
   "Körper {number}": "Body {number}",
   "Körper „{name}“ entfernt — Strg+Z holt ihn zurück.": "Body “{name}” removed — Ctrl+Z brings it back.",
+  "Körper „{object}“: Die gewählte Kante {key} ist nicht eindeutig — {count} Kanten tragen diesen Schlüssel. Wähle die gemeinte Kante.": "Body “{object}”: the selected edge {key} is ambiguous — {count} edges carry this key. Select the edge you mean.",
   "Körper „{object}“: {question}": "Body “{object}”: {question}",
   "Kühlung": "Cooling",
   "Kürzel": "Shortcut",

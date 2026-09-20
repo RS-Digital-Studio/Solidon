@@ -136,6 +136,12 @@ deklarierte Operationen bekommen hingegen die vollständige Szene. Negative
 Mindestzahlen und eine Mindestzahl neben fester Stelligkeit werden bereits
 beim Registrieren abgewiesen.
 
+`edges_on_mesh` sagt der Auswertung, dass eine Operation ihre Kanten
+(`kind="edges"`) immer am **Netz** liest, auch an einem exakten Körper —
+*Wulst anlegen* vereinigt am tessellierten Körper. Die Kantenbindung vor dem
+Verbrauchercache (`scene.edge_binding`, P1.4c) muss dieselben Kanten sehen
+wie die Operation; ohne das Flag entscheidet die Bauart des Körpers.
+
 `replace_state()` ist ausschließlich der Commit-Schritt für einen bereits in
 einem isolierten Register vollständig geprüften Rezeptzustand. Er übernimmt die
 vorbereitete Abbildung ohne zweite Validierung; nach einer atomar

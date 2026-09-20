@@ -77,6 +77,7 @@ from app.core.perceive.relations import thinnest_sleeve
 from app.core.registry import REGISTRY, OperationSpec, Registry, needed_inputs, validate
 from app.core.scene.cache import CachedResult, ResultCache
 from app.core.scene.cancel import NeverCancelled
+from app.core.scene.edge_binding import NO_BINDING, EdgeBinding, EdgeTarget, bind_edges
 from app.core.scene.fits import active_fits
 from app.core.scene.fits import check as check_fits
 from app.core.scene.hashing import digest, object_hash, operation_hash
@@ -204,9 +205,12 @@ class EvaluationResult:
         return self.stopped_at is None
 
 
-type QuestionContext = Callable[
-    [EvaluationResult | None, tuple[tuple[ObjectId, FeatureId], ...]], None
-]
+type QuestionCandidate = tuple[ObjectId, FeatureId] | EdgeTarget
+"""Ein Kandidat einer Rückfrage: ein Merkmal als Paar aus Körper und Kennung —
+oder eine Kante als :class:`EdgeTarget` (P1.4c), das statt einer Kennung ein
+Antworttoken und seinen Zug trägt."""
+
+type QuestionContext = Callable[[EvaluationResult | None, tuple[QuestionCandidate, ...]], None]
 type FeatureQuestionContext = Callable[[SceneObject | None, tuple[FeatureId, ...]], None]
 
 
@@ -456,6 +460,35 @@ def _evaluate(
             break
 
         inputs = [objects[entry] for entry in operation.inputs]
+        watched = _WatchedAsk(ask)
+
+        def announce_edges(
+            targets: tuple[EdgeTarget, ...], *, operation: Operation = operation
+        ) -> None:
+            """Zeigt die Kanten einer Kollisionsfrage am gültigen Eingangsstand."""
+            if question_context is None:
+                return
+            if not targets:
+                question_context(None, ())
+                return
+            token.raise_if_cancelled()
+            question_context(
+                EvaluationResult(
+                    scene=Scene(
+                        objects=dict(objects),
+                        parameters=parameters,
+                        fits=active_fits(document),
+                        profile=profile,
+                        report=Report(tuple(findings)),
+                    ),
+                    completed=tuple(completed),
+                    stopped_at=operation.id,
+                    object_hashes=dict(hashes),
+                    object_names={name: str(body.name) for name, body in objects.items()},
+                ),
+                targets,
+            )
+
         # Festgehalten, bevor die Operation läuft: die Bezeichner, auf die die
         # neuen Merkmale danach abgebildet werden müssen (§21.2).
         previous_features = {entry.id: dict(entry.features) for entry in inputs}
@@ -479,17 +512,34 @@ def _evaluate(
                 else profile
                 for name in spec.material_params
             }
+            # Ausdrücklich gewählte Kanten werden **vor** dem Cache am
+            # aktuellen Eingang gebunden — eine Kollision fragt hier, und die
+            # gebundene Auswahl geht in den Schlüssel: Eine andere Antwort ist
+            # eine andere Geometrie dieses Schritts (``scene.edge_binding``).
+            binding: EdgeBinding = bind_edges(
+                spec,
+                operation,
+                resolved,
+                inputs,
+                hashes,
+                ask=watched,
+                announce=announce_edges,
+                check_cancelled=token.raise_if_cancelled,
+            )
+            hashed_params = _with_nested_context(
+                spec.params,
+                resolved,
+                values,
+                sources,
+                objects,
+                hashes,
+                reads_other_bodies=spec.reads_other_bodies,
+            )
+            if binding.context:
+                hashed_params = {**hashed_params, **binding.context}
             key = operation_hash(
                 operation,
-                _with_nested_context(
-                    spec.params,
-                    resolved,
-                    values,
-                    sources,
-                    objects,
-                    hashes,
-                    reads_other_bodies=spec.reads_other_bodies,
-                ),
+                hashed_params,
                 [hashes[entry] for entry in operation.inputs],
                 profile,
                 quality,
@@ -501,7 +551,6 @@ def _evaluate(
             stopped_at = operation.id
             break
         cached = cache.get(key) if cache is not None else None
-        watched = _WatchedAsk(ask)
 
         if cached is not None:
             # Unverändert weiterreichen: der Umbau hier warf ohne Not den
@@ -547,6 +596,7 @@ def _evaluate(
                 ask=watched,
                 cancelled=token,
                 sources=sources,
+                bound_edges=binding.selections,
             )
             try:
                 produced = spec.fn(context)
@@ -781,6 +831,13 @@ def _evaluate(
             break
 
         token.raise_if_cancelled()
+        # Eine Kantenantwort wird erst veröffentlicht, wenn der Schritt ganz
+        # gelungen ist — kein halber Antwortsatz an einem Halt; der Aliasfall
+        # geht als Parameter denselben Weg wie die Einheitenfrage (§15.7).
+        if binding is not NO_BINDING:
+            prepared_matches.update(binding.records)
+            if binding.answers:
+                answers[operation.id] = {**answers.get(operation.id, {}), **binding.answers}
         if prepared_matches:
             matches[operation.id] = prepared_matches
 

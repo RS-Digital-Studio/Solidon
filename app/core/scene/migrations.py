@@ -26,7 +26,7 @@ from app.i18n import _
 _log = get_logger(__name__)
 
 #: Aktuelle Version von ``project.json``.
-FORMAT_VERSION: Final = 28
+FORMAT_VERSION: Final = 29
 
 
 @dataclass(frozen=True, slots=True)
@@ -669,6 +669,22 @@ def _allow_native_alias_groups(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def _allow_edge_answers(data: dict[str, Any]) -> dict[str, Any]:
+    """28 → 29: Eine Kantenantwort reist als ``edge-answer:``-Datensatz am Eingang.
+
+    Wer für *Verrunden*, *Fase* oder *Wulst* gewählt hat, welche von zwei
+    Kanten mit demselben Schlüssel gemeint ist, hat das in
+    ``Operation.matches`` unter einer dritten Domäne stehen — gebunden an den
+    Eingangskörper, das Feld, das Schlüsselbündel und die Fassung des Eingangs
+    (§21.3, P1.4c). An einer älteren Datei ist nichts umzuschreiben: Ihre
+    Gruppen bleiben, wie sie sind, und aus keinem Schlüsselbündel wird eine
+    Antwort erfunden. Die Stufe steht wieder für die andere Richtung: Ein
+    älteres Programm läse den Datensatz als Schemafehler; mit der
+    Versionsgrenze sagt es stattdessen, dass die Datei neuer ist.
+    """
+    return data
+
+
 #: Alle bekannten Schritte, älteste zuerst.
 MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=1, to_version=2, apply=_add_chat),
@@ -698,6 +714,7 @@ MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=25, to_version=26, apply=_allow_several_filament_colours),
     Step(from_version=26, to_version=27, apply=_qualify_match_answers),
     Step(from_version=27, to_version=28, apply=_allow_native_alias_groups),
+    Step(from_version=28, to_version=29, apply=_allow_edge_answers),
 )
 
 

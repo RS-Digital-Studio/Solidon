@@ -28,6 +28,7 @@ Gruppen („alle senkrechten") rechnet ``geom.edges.wanted`` für beide.
 from __future__ import annotations
 
 import dataclasses
+from collections.abc import Sequence
 from typing import Literal, cast
 
 from app.core.geom.boolean import HasVolume
@@ -223,6 +224,7 @@ class BeadParams(BaseParams):
     params=BeadParams,
     consumes=1,
     produces=1,
+    edges_on_mesh=True,
     doc=_(
         "Legt eine runde Leiste auf die gewählten Kanten — außen als Wulst, in "
         "einem Innenwinkel als Kehlnaht. Die glatte Hohlkehle macht dagegen "
@@ -250,6 +252,7 @@ def bead_edges_op(ctx: OpContext) -> OpResult:
         params.radius,
         cast(EdgeChoice, params.edges),
         _chosen_edges(params.edges, params.edge_keys),
+        selected_edges=ctx.bound_edges.get("edge_keys"),
         quality=ctx.quality,
         cancelled=ctx.cancelled,
     )
@@ -285,12 +288,18 @@ def _worked(
     keinen Import in den optionalen Kern.
     """
     source = ctx.inputs[0]
+    # Die von der Auswertung gebundene Auswahl (``bound_edges``) geht vor:
+    # Sie ist die bestätigte Antwort auf einen Schlüssel, der zwei Kanten traf,
+    # und ein Schlüssel hier würde wieder zwei treffen. Ohne sie — direkter
+    # Aufruf, Gruppenauswahl — gilt der Schlüsselweg wie bisher.
+    bound = ctx.bound_edges.get("edge_keys")
     if source.kind == "brep":
         return _on_a_solid(
             source,
             size,
             choice,
             keys,
+            selected_edges=bound,
             profile=ctx.profile,
             rounded=rounded,
             cancelled=ctx.cancelled,
@@ -302,7 +311,15 @@ def _worked(
     # 60 Bohrungen (7932 Dreiecke, 132 Kantenzüge): 2,7 s für die Fase über
     # alle Kanten, 6,9 s für die Verrundung. Ohne das Token liefe der Klick
     # auf *Abbrechen* ins Leere (§15.6).
-    outcome = work(body, size, choice, keys, quality=ctx.quality, cancelled=ctx.cancelled)
+    outcome = work(
+        body,
+        size,
+        choice,
+        keys,
+        selected_edges=bound,
+        quality=ctx.quality,
+        cancelled=ctx.cancelled,
+    )
     empty = _too_small_to_see(
         body, outcome.mesh, ctx.profile, kind="fillet" if rounded else "chamfer"
     )
@@ -325,6 +342,7 @@ def _on_a_solid(
     choice: EdgeChoice,
     keys: tuple[str, ...],
     *,
+    selected_edges: Sequence[int] | None = None,
     profile: Profile | None,
     rounded: bool,
     cancelled: CancelToken,
@@ -340,7 +358,7 @@ def _on_a_solid(
     from app.core.brep.kernel import Solid
 
     work = edit.fillet if rounded else edit.chamfer
-    solid = work(cast(Solid, source.mesh), size, choice, keys)
+    solid = work(cast(Solid, source.mesh), size, choice, keys, selected_edges=selected_edges)
     empty = _too_small_to_see(source.mesh, solid, profile, kind="fillet" if rounded else "chamfer")
     return OpResult(
         outputs=[

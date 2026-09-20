@@ -27,9 +27,10 @@ from __future__ import annotations
 
 import itertools
 import math
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, Final, Literal, Protocol
+from numbers import Integral
+from typing import Any, Final, Literal, Protocol, cast
 
 import numpy as np
 
@@ -53,9 +54,14 @@ from app.core.units import (
     EPS_GEOM,
     MAX_FACET_ANGLE,
     MAX_FACET_SAG,
+    is_close,
     weld_tolerance,
 )
-from app.i18n import _
+from app.i18n import TranslatableText, _
+
+#: Der eine Satz für eine ausdrückliche Kantenauswahl, die es so nicht gibt —
+#: am Netz wie im exakten Kern (``brep.kernel.Solid.checked_edge_indices``).
+EDGE_SELECTION_REJECTED = _("Wähle die Kante am Körper neu und wiederhole die Änderung.")
 
 _log = get_logger(__name__)
 
@@ -128,6 +134,83 @@ class HasPlacement(Protocol):
     def extent(self) -> float: ...
 
 
+class DescribedEdge(HasPlacement, Protocol):
+    """Was ein Fingerabdruck von einer Kante braucht: die Lage und ihre Länge."""
+
+    @property
+    def length(self) -> float: ...
+
+
+def edge_fingerprint(entry: DescribedEdge) -> dict[str, Any]:
+    """Die ungerundete Beschreibung **einer** Kante — der Beleg hinter dem Schlüssel.
+
+    Der Schlüssel (:func:`edge_key`) rundet auf ein Hundertstel, und genau
+    deshalb können zwei verschiedene Kanten denselben tragen: die zwei Ränder
+    eines Spalts von vier Tausendstel Millimetern. Der Fingerabdruck trägt
+    Mitte, Richtung (wie im Schlüssel ohne Vorzeichen), Ausdehnung und Länge
+    in voller Genauigkeit. Er unterscheidet, was der Schlüssel zusammenwirft,
+    und er geht in den Cache-Schlüssel des Verbrauchers ein, damit zwei
+    verschieden bestätigte Kanten zwei verschiedene Ergebnisse sind
+    (``scene.edge_binding``, P1.4c). Gespeichert wird er nur in einer
+    Kantenantwort, nie als Ersatz für den Schlüssel im Parameter.
+    """
+    return {
+        "middle": [float(value) for value in entry.middle],
+        "direction": [float(value) for value in _unsigned_direction(entry.direction)],
+        "extent": float(entry.extent),
+        "length": float(entry.length),
+    }
+
+
+def same_edge(fingerprint: Mapping[str, Any], entry: DescribedEdge) -> bool:
+    """Ob ein gespeicherter Fingerabdruck diese Kante beschreibt — innerhalb ``EPS_GEOM``.
+
+    Zwei Kanten, die sich in keinem der vier Werte um mehr als das
+    Rechenepsilon unterscheiden, sind nicht auseinanderzuhalten; eine
+    gespeicherte Wahl zwischen ihnen gilt dann nicht, und die Frage wird neu
+    gestellt (Regel 21).
+    """
+    current = edge_fingerprint(entry)
+    for name in ("middle", "direction"):
+        stored = fingerprint.get(name)
+        if not isinstance(stored, list | tuple) or len(stored) != 3:
+            return False
+        if any(
+            not is_close(float(a), float(b)) for a, b in zip(stored, current[name], strict=True)
+        ):
+            return False
+    return all(is_close(float(fingerprint[name]), current[name]) for name in ("extent", "length"))
+
+
+def checked_indices(
+    indices: Sequence[int],
+    count: int,
+    rejection: TranslatableText = EDGE_SELECTION_REJECTED,
+    *,
+    check_cancelled: Callable[[], None] | None = None,
+) -> tuple[int, ...]:
+    """Eine nichtleere Menge gültiger Indizes in einen Raum von ``count`` Einträgen.
+
+    Sortiert und entdoppelt, ohne Wahrheitswerte und ohne Bruchzahlen: Was
+    hier nicht durchkommt, ist keine Auswahl, sondern ein Bedienfehler mit
+    Rückweg — derselbe Satz für Netz und exakten Kern.
+    """
+    selected: set[int] = set()
+    for value in cast(Sequence[object], indices):
+        if check_cancelled is not None:
+            check_cancelled()
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, Integral)
+            or not 0 <= int(value) < count
+        ):
+            raise ValidationError(detail=rejection)
+        selected.add(int(value))
+    if not selected:
+        raise ValidationError(detail=rejection)
+    return tuple(sorted(selected))
+
+
 def edge_key(entry: HasPlacement) -> str:
     """Der stabile Verweis auf **eine** Kante — Lage und bei Ringen ihre Größe.
 
@@ -165,13 +248,17 @@ def edge_key(entry: HasPlacement) -> str:
 
 def _placement_key(entry: HasPlacement) -> str:
     """Der bisherige Schlüssel bleibt für eindeutige gespeicherte Auswahlen lesbar."""
-    direction = entry.direction
-    lead = next((value for value in direction if abs(value) > 1e-6), 1.0)
-    sign = -1.0 if lead < 0.0 else 1.0
     return "e:{:.2f},{:.2f},{:.2f}:{:.3f},{:.3f},{:.3f}".format(
         *(_unsigned_zero(value, 2) for value in entry.middle),
-        *(_unsigned_zero(value * sign, 3) for value in direction),
+        *(_unsigned_zero(value, 3) for value in _unsigned_direction(entry.direction)),
     )
+
+
+def _unsigned_direction(direction: Vec3) -> tuple[float, float, float]:
+    """Die Richtung ohne Vorzeichen: die erste Komponente ungleich null wird positiv."""
+    lead = next((value for value in direction if abs(value) > 1e-6), 1.0)
+    sign = -1.0 if lead < 0.0 else 1.0
+    return (direction[0] * sign, direction[1] * sign, direction[2] * sign)
 
 
 def _unsigned_zero(value: float, digits: int) -> float:
@@ -420,13 +507,7 @@ def named_edges[AnyEdge: SelectableEdge](
     Mehrdeutige Schlüssel halten dagegen hier an: Ein alter Rohrschlüssel
     oder eine Quantisierungskollision darf keine Kante zufällig auswählen.
     """
-    described: dict[str, list[AnyEdge]] = {}
-    for entry in edges:
-        key = edge_key(entry)
-        described.setdefault(key, []).append(entry)
-        legacy = _placement_key(entry)
-        if legacy != key:
-            described.setdefault(legacy, []).append(entry)
+    described = described_by_key(edges)
     selected: list[AnyEdge] = []
     for key in keys:
         matches = described.get(key, [])
@@ -439,6 +520,46 @@ def named_edges[AnyEdge: SelectableEdge](
         if matches:
             selected.append(matches[0])
     return selected
+
+
+def described_by_key[AnyEdge: SelectableEdge](
+    edges: Sequence[AnyEdge],
+) -> dict[str, list[AnyEdge]]:
+    """Jede Kante unter ihrem Schlüssel — und unter dem alten Lageschlüssel als Alias.
+
+    Mehr als ein Eintrag je Schlüssel ist eine **Kollision**: zwei Kanten, die
+    der gerundete Schlüssel nicht unterscheidet, oder ein alter Rohrschlüssel,
+    der beide Ränder trifft. :func:`named_edges` hält dort an; die Auswertung
+    fragt den Kunden davor (``scene.edge_binding``), und was er wählt, erreicht
+    die Operation als ausdrückliche Auswahl statt als Schlüssel.
+    """
+    described: dict[str, list[AnyEdge]] = {}
+    for entry in edges:
+        key = edge_key(entry)
+        described.setdefault(key, []).append(entry)
+        legacy = _placement_key(entry)
+        if legacy != key:
+            described.setdefault(legacy, []).append(entry)
+    return described
+
+
+def selected_or_wanted[AnyEdge: SelectableEdge](
+    edges: Sequence[AnyEdge],
+    choice: EdgeChoice,
+    keys: Sequence[str],
+    selected_edges: Sequence[int] | None,
+) -> list[AnyEdge]:
+    """Die Kanten dieses Aufrufs: ausdrücklich gewählte vor Schlüsseln vor Gruppe.
+
+    ``selected_edges`` sind Indizes in ``edges`` — am Netz die Reihenfolge von
+    :func:`edges_of`, die für dasselbe Netz dieselbe ist. Eine ausdrückliche
+    Auswahl fällt nie auf Schlüssel oder Gruppe zurück (§21.3): Sie ist die
+    vom Kunden bestätigte Antwort, und ein Schlüssel danach könnte wieder
+    zwei Kanten treffen.
+    """
+    if selected_edges is None:
+        return wanted(edges, choice, keys)
+    return [edges[index] for index in checked_indices(selected_edges, len(edges))]
 
 
 def wanted[AnyEdge: SelectableEdge](
@@ -814,6 +935,7 @@ def round_edges(
     choice: EdgeChoice = "all",
     keys: Sequence[str] = (),
     *,
+    selected_edges: Sequence[int] | None = None,
     quality: Quality = "fine",
     cancelled: CancelToken | None = None,
 ) -> BooleanOutcome:
@@ -827,7 +949,14 @@ def round_edges(
     genauso weit wie die Flächen, die der exakte Kern ausgibt.
     """
     return _worked_edges(
-        mesh, radius, choice, keys, rounded=True, quality=quality, cancelled=cancelled
+        mesh,
+        radius,
+        choice,
+        keys,
+        selected_edges=selected_edges,
+        rounded=True,
+        quality=quality,
+        cancelled=cancelled,
     )
 
 
@@ -837,6 +966,7 @@ def bevel_edges(
     choice: EdgeChoice = "all",
     keys: Sequence[str] = (),
     *,
+    selected_edges: Sequence[int] | None = None,
     quality: Quality = "fine",
     cancelled: CancelToken | None = None,
 ) -> BooleanOutcome:
@@ -847,7 +977,14 @@ def bevel_edges(
     eine Ebene, und eine Ebene hat ein Netz exakt — hier weicht nichts ab.
     """
     return _worked_edges(
-        mesh, distance, choice, keys, rounded=False, quality=quality, cancelled=cancelled
+        mesh,
+        distance,
+        choice,
+        keys,
+        selected_edges=selected_edges,
+        rounded=False,
+        quality=quality,
+        cancelled=cancelled,
     )
 
 
@@ -1311,13 +1448,14 @@ def _worked_edges(
     choice: EdgeChoice,
     keys: Sequence[str],
     *,
+    selected_edges: Sequence[int] | None = None,
     rounded: bool,
     quality: Quality = "fine",
     cancelled: CancelToken | None = None,
 ) -> BooleanOutcome:
     """Löst die Auswahl im Weltsystem und rechnet gemischte Ecken in ihrem Rahmen."""
     entries = edges_of(mesh)
-    chosen = wanted(entries, choice, keys)
+    chosen = selected_or_wanted(entries, choice, keys, selected_edges)
     groups = _selected_edge_groups(chosen)
     mixed = any(_mixed_corner_frame(star) is not None for star in _corner_stars(entries, chosen))
     if len(groups) == 1 or not mixed:
@@ -1925,6 +2063,7 @@ def bead_edges(
     choice: EdgeChoice = "all",
     keys: Sequence[str] = (),
     *,
+    selected_edges: Sequence[int] | None = None,
     quality: Quality = "fine",
     cancelled: CancelToken | None = None,
 ) -> BooleanOutcome:
@@ -1954,7 +2093,7 @@ def bead_edges(
             _("Ohne Radius entsteht kein Wulst. Dieser Wert muss größer als null sein."),
             value=radius,
         )
-    chosen = wanted(edges_of(mesh), choice, keys)
+    chosen = selected_or_wanted(edges_of(mesh), choice, keys, selected_edges)
     # **Jedes Stück einzeln in die Kette.** Zusammengelegt (``concatenate``)
     # überlappen sich die Zylinder eines Zugs an ihren Knicken, und ein Körper
     # mit doppelt belegtem Raum hat kein wohldefiniertes Volumen: Am
@@ -2038,3 +2177,55 @@ def _towards(along: np.ndarray, middle: np.ndarray) -> np.ndarray:
     frame[:3, 2] = along
     frame[:3, 3] = middle
     return frame
+
+
+EdgeKernel = Literal["brep", "mesh"]
+
+
+def edges_in_kernel(
+    body: Mesh, kind: str, *, on_mesh: bool = False
+) -> tuple[EdgeKernel, list[Any]]:
+    """Die Kanten, die eine Kantenoperation an diesem Körper sieht — in ihrem Kern.
+
+    Am exakten Körper (``kind == "brep"``) ist das die Topologie
+    (``brep.edit.edges_of``), am Netz sind es die Züge (:func:`edges_of`);
+    ``on_mesh`` erzwingt das Netz auch am exakten Körper — für *Wulst
+    anlegen*, das am tessellierten Körper vereinigt. Die Auswertung bindet
+    ausdrücklich gewählte Kanten hier (``scene.edge_binding``) und muss
+    dieselbe Liste sehen wie die Operation: dieselbe Funktion, derselbe Kern.
+    """
+    if kind == "brep" and not on_mesh:
+        from app.core.brep import edit
+
+        return "brep", list(edit.edges_of(body))  # type: ignore[arg-type]
+    from app.core.geom.mesh import as_mesh_data
+
+    return "mesh", list(edges_of(as_mesh_data(body)))
+
+
+def indices_in_kernel(
+    kernel: EdgeKernel, body: Mesh, chosen: Sequence[Any], entries: Sequence[Any]
+) -> tuple[int, ...]:
+    """Die Indizes gewählter Kanten im Auswahlraum des Kerns.
+
+    Am exakten Körper ist das ``solid.edges()`` — über echte Mitgliedschaft in
+    der Kantenkarte, nicht über die Position in ``edges_of``, die Nähte und
+    Nullkanten auslässt (``brep.edit.native_edge_indices``). Am Netz ist es
+    die Position in ``entries``, dem Ergebnis von :func:`edges_of` für genau
+    dieses Netz.
+    """
+    if kernel == "brep":
+        from app.core.brep import edit
+
+        return edit.native_edge_indices(body, chosen)  # type: ignore[arg-type]
+    positions = {id(entry): index for index, entry in enumerate(entries)}
+    return tuple(positions[id(entry)] for entry in chosen)
+
+
+def points_in_kernel(kernel: EdgeKernel, body: Mesh, entry: Any) -> tuple[Vec3, ...]:
+    """Der Zug einer Kante als Punktfolge — dieselbe, die die Ansicht abtastet."""
+    if kernel == "brep":
+        from app.core.brep import edit
+
+        return edit.edge_points(entry, body.deflection)  # type: ignore[attr-defined]
+    return tuple(entry.points)

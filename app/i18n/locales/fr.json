@@ -3429,6 +3429,7 @@
   "Körper wählen, um ein Filament zuzuweisen": "Sélectionner un corps pour lui attribuer un filament",
   "Körper {number}": "Corps {number}",
   "Körper „{name}“ entfernt — Strg+Z holt ihn zurück.": "Corps « {name} » supprimé — Ctrl+Z le récupère.",
+  "Körper „{object}“: Die gewählte Kante {key} ist nicht eindeutig — {count} Kanten tragen diesen Schlüssel. Wähle die gemeinte Kante.": "Corps « {object} » : l'arête sélectionnée {key} n'est pas univoque — {count} arêtes portent cette clé. Sélectionnez l'arête voulue.",
   "Körper „{object}“: {question}": "Corps « {object} » : {question}",
   "Kühlung": "Refroidissement",
   "Kürzel": "Raccourci",

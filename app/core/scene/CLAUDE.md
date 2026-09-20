@@ -57,6 +57,32 @@ jemanden zum Fragen (Kommandozeile, Agent) trägt der Halt die Kandidaten als
 Verlauf brauchten dafür nichts Neues — der Folgehash enthält das Alias,
 `_copy_operation_matches` filtert weiter nach Ausgabekörper.
 
+**Und Kanten werden vor dem Cache gebunden** (`edge_binding.bind_edges`,
+P1.4c.4b). Ein Kantenfeld (`kind="edges"`) trägt gerundete Schlüssel, und
+zwei Kanten können denselben tragen — die zwei Ränder eines Spalts von vier
+Tausendstel Millimetern, oder ein alter Rohrschlüssel an beiden Rändern.
+`_evaluate` löst jedes aktive Kantenfeld (`depends_on` erfüllt, Schlüssel
+vorhanden) am ersten Eingang auf, in dem Kern, den die Operation gleich
+benutzt (`geom.edges.edges_in_kernel`; `OperationSpec.edges_on_mesh` für den
+Wulst), **bevor** `cache.get` läuft: Bei einer Kollision fragt es über
+denselben `ask`, zeigt die Kandidaten als `EdgeTarget` (Token, Körper, Zug,
+Anzeigefakten) am gültigen Eingangsstand und gibt der Operation die
+bestätigte Auswahl als Indizes in `OpContext.bound_edges` mit — der Kern
+löst keinen Schlüssel ein zweites Mal auf. Der Fingerabdruck der gebundenen
+Kanten (`edge_fingerprint`) geht in den Operationsschlüssel des Verbrauchers:
+Eine andere Antwort ist ein anderer Cacheeintrag. Die Antwort liegt in
+`Operation.matches` in der dritten Domäne `edge-answer:` — am **Eingang**,
+Feld, Schlüsselbündel und der Fassung des Eingangs (`scope` = sein
+Objekthash; ein anderer Eingang fragt neu), veröffentlicht erst nach dem
+vollständig gelungenen Schritt (Projektformat 29, Migration 28→29 ohne
+Datenumschreibung, `example_v29.p3d`; `_copy_operation_matches` filtert sie
+nach Eingangskörper, der Projektleser prüft sie gegen `in`). Der
+**Aliasfall** — die gewählte Kante trägt einen eindeutigen aktuellen
+Schlüssel — wird zum Parameter über `EvaluationResult.answers`, wie die
+Einheitenfrage. Ohne jemanden zum Fragen ist die Kollision ein
+`AmbiguityError`-Befund mit den Token als `choose:`-Vorschlägen; eine
+Gruppenauswahl bindet nichts.
+
 `Operation.matches` speichert vollständige Antwortgruppen je Ausgabekörper
 und alter Anspruchsmenge. `perceive.match_records` ist die gemeinsame reine
 Schemaquelle für Projektleser und Wiedererkennung; Kandidatenindices sind
@@ -252,6 +278,7 @@ Erneute Erreichbarkeit entfernt den alten Verknüpfungshinweis.
 | `history.py` | Stapel, Transaktionen, Undo (§15.4, §15.5). `OperationDraft` ist der Schritt, bevor er zählt |
 | `bundling.py` | Welche Züge zu einem Schritt verschmelzen (§15.5) — **opt-in je Operation**: wer keine Kumulationsregel hat, bekommt einen eigenen Schritt |
 | `evaluate.py` | Die Auswertung (§15.1) |
+| `edge_binding.py` | Ausdrücklich gewählte Kanten **vor** dem Verbrauchercache am aktuellen Eingang binden; Kollisionen fragen, die Antwort liegt als `edge-answer:` in `Operation.matches` (§21.3, P1.4c) |
 | `cache.py` | Ergebnis-Cache über dem Operations-Hash, im Speicher und auf der Platte |
 | `hashing.py` | Stabile Hashes: `operation_hash()`, `object_hash()`, `profile_key()` |
 | `parameter_usage.py` | Direkte und abgeleitete Projektparameterverwendungen je Operationsfeld (§13) |

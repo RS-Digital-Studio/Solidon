@@ -3429,6 +3429,7 @@
   "Körper wählen, um ein Filament zuzuweisen": "Seleziona un corpo per assegnare un filamento",
   "Körper {number}": "Corpo {number}",
   "Körper „{name}“ entfernt — Strg+Z holt ihn zurück.": "Corpo «{name}» rimosso: Ctrl+Z lo riporta.",
+  "Körper „{object}“: Die gewählte Kante {key} ist nicht eindeutig — {count} Kanten tragen diesen Schlüssel. Wähle die gemeinte Kante.": "Corpo «{object}»: lo spigolo selezionato {key} non è univoco: {count} spigoli portano questa chiave. Selezioni lo spigolo inteso.",
   "Körper „{object}“: {question}": "Corpo «{object}»: {question}",
   "Kühlung": "Raffreddamento",
   "Kürzel": "Scorciatoia",

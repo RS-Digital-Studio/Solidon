@@ -21,11 +21,11 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
-from numbers import Integral
 from operator import index as integer_index
 from typing import Any, cast
 
 from app.core.errors import CANCEL, INSTALL_MISSING, AppError, InternalError, ValidationError
+from app.core.geom.edges import EDGE_SELECTION_REJECTED, checked_indices
 from app.core.geom.mesh import MeshData
 from app.core.log import get_logger
 from app.core.types import MAX_SLOTS, BoundingBox, CancelToken
@@ -459,10 +459,7 @@ class Solid:
     ) -> tuple[int, ...]:
         """Dasselbe für native Kanten — der Indexraum ist :meth:`edges`."""
         return self._checked_indices(
-            indices,
-            len(self._copied_edges),
-            _("Wähle die Kante am Körper neu und wiederhole die Änderung."),
-            cancelled=cancelled,
+            indices, len(self._copied_edges), EDGE_SELECTION_REJECTED, cancelled=cancelled
         )
 
     def _checked_indices(
@@ -473,22 +470,16 @@ class Solid:
         *,
         cancelled: CancelToken | None,
     ) -> tuple[int, ...]:
+        # Die Prüfung selbst steht einmal, in ``geom.edges`` — dieselbe für
+        # Netzkanten; hier kommen nur die Abbruchmarken davor und danach dazu.
         if cancelled is not None:
             cancelled.raise_if_cancelled()
-        selected: set[int] = set()
-        for value in cast(Sequence[object], indices):
-            if cancelled is not None:
-                cancelled.raise_if_cancelled()
-            if (
-                isinstance(value, bool)
-                or not isinstance(value, Integral)
-                or not 0 <= int(value) < count
-            ):
-                raise ValidationError(detail=rejection)
-            selected.add(int(value))
-        if not selected:
-            raise ValidationError(detail=rejection)
-        result = tuple(sorted(selected))
+        result = checked_indices(
+            indices,
+            count,
+            rejection,
+            check_cancelled=cancelled.raise_if_cancelled if cancelled is not None else None,
+        )
         if cancelled is not None:
             cancelled.raise_if_cancelled()
         return result

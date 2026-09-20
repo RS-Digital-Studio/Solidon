@@ -7941,3 +7941,66 @@ def test_a_shadow_is_computed_once_per_piece_and_drawn_once_per_body(
     )
     assert set(view._shadow_owners) == {"obj_1", "obj_2"}, view._shadow_owners
     assert len(hulls) == 2, f"eine Hülle je Stück, nicht je Auffangfläche: {len(hulls)}"
+
+
+def test_the_edges_of_a_collision_question_are_drawn_as_labelled_lines(
+    qt_app: QApplication,
+) -> None:
+    """Zwei Kanten, ein Schlüssel (P1.4c): Die Frage zeigt beide als Linie vor dem
+    Material, beschriftet mit Lage, Länge und Ort — und die betonte breiter.
+
+    Vier Tausendstel Abstand unterscheidet keine Farbe (Regel 18); die
+    Beschriftung ist die zweite Kodierung, und sie ist dieselbe Zeile wie im
+    Dialog (``edge_label``).
+    """
+    import dataclasses
+
+    from app.core.scene import EdgeTarget
+    from app.ui.labels import edge_label
+    from app.ui.viewport import FEATURE_EDGE_WIDTH, SELECTED_EDGE_WIDTH, Viewport
+
+    viewport = Viewport()
+    viewport.show_scene(_scene_with_two_holes())
+    viewport.renderer = renderer = RecordingRenderer()
+    left = EdgeTarget(
+        token="e:0.00,15.00,10.00:0.000,0.000,1.000#1",
+        object_id="obj_1",
+        points=((0.0, 15.0, 0.0), (0.0, 15.0, 20.0)),
+        middle=(0.0, 15.0, 10.0),
+        length=20.0,
+        upright=True,
+        flat=False,
+    )
+    right = dataclasses.replace(
+        left,
+        token="e:0.00,15.00,10.00:0.000,0.000,1.000#2",
+        points=((0.004, 15.0, 0.0), (0.004, 15.0, 20.0)),
+        middle=(0.004, 15.0, 10.0),
+    )
+
+    viewport.show_candidates((left, right), emphasis=right)
+
+    assert viewport.candidates == (left, right)
+    kinds = {str(kwargs["name"]): kind for kind, kwargs in renderer.drawn}
+    assert kinds["candidate:0"] == kinds["candidate:1"] == "lines"
+    first, second = renderer.entries("candidate:0")[-1], renderer.entries("candidate:1")[-1]
+    assert first["width"] == 2.0 * FEATURE_EDGE_WIDTH and second["width"] == SELECTED_EDGE_WIDTH
+    assert first["keep_in_front"] and second["keep_in_front"], (
+        "eine Marke, die im Material verschwindet, sagt nichts über die Stelle"
+    )
+    assert np.allclose(second["item"].points[:, 0], 0.004)
+    assert kinds["candidate-labels"] == "labels"
+    assert renderer.labelled[-1] == [edge_label(left), edge_label(right)]
+    assert edge_label(left) == edge_label(right), (
+        "vier Tausendstel sind in der Beschriftung nicht zu sehen — die Linie muss es sagen"
+    )
+
+    # Merkmal und Kante in derselben Kandidatenverwaltung: Die Bohrung hier
+    # trägt keine Dreiecke und zeichnet nichts, die Kante daneben bleibt eine Linie.
+    viewport.show_candidates((("obj_1", "hole_1"), left))
+    assert viewport.candidates == (("obj_1", "hole_1"), left)
+    kinds = {str(kwargs["name"]): kind for kind, kwargs in renderer.drawn[-2:]}
+    assert kinds == {"candidate:1": "lines", "candidate-labels": "labels"}
+
+    viewport.show_candidates()
+    assert viewport.candidates == ()

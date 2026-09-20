@@ -36,6 +36,7 @@ from app.core.errors import (
     CORRECT_INPUT,
     PROGRAMMING_ERRORS,
     GeometryError,
+    InternalError,
     OperationCancelled,
 )
 from app.core.geom.edges import EDGE_CHOICES as SHARED_EDGE_CHOICES
@@ -193,6 +194,34 @@ def _described_edge(edge: Any, seams: Any) -> EdgeInfo | None:
         direction=(span[0] / norm, span[1] / norm, span[2] / norm),
         middle=(centre.X(), centre.Y(), centre.Z()),
     )
+
+
+def native_edge_indices(solid: Solid, entries: Sequence[EdgeInfo]) -> tuple[int, ...]:
+    """Die Indizes dieser Kanten im Raum ``solid.edges()`` — über echte Mitgliedschaft.
+
+    Die Position in :func:`edges_of` ist kein nativer Index: Die Liste lässt
+    Nähte und Nullkanten aus. Gefragt wird deshalb die Kantenkarte des Solids
+    (dieselbe, aus der :meth:`Solid.edges` liest), und eine Kante, die dort
+    nicht steht, gehört einem anderen Körper — ein Programmfehler, kein
+    Bedienfehler.
+    """
+    require()
+    from OCP.collections import IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher as ShapeMap
+    from OCP.TopAbs import TopAbs_EDGE
+    from OCP.TopExp import TopExp
+
+    found = ShapeMap()
+    TopExp.MapShapes_s(solid.shape, TopAbs_EDGE, found)
+    indices: list[int] = []
+    for entry in entries:
+        index = int(found.FindIndex(entry.edge))
+        if index == 0:
+            raise InternalError(
+                detail="edge does not belong to this solid",
+                values={"middle": [round(value, 3) for value in entry.middle]},
+            )
+        indices.append(index - 1)
+    return tuple(indices)
 
 
 def _edges_at(working: Solid, indices: Sequence[int]) -> list[EdgeInfo]:

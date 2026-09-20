@@ -165,6 +165,7 @@ from app.core.registry import (
     variant_members,
 )
 from app.core.scene import (
+    EdgeTarget,
     EvaluationResult,
     OperationDraft,
     advises_on_bores,
@@ -1748,6 +1749,20 @@ class _PreviewApproval:
     after_shown: Callable[[Any], None] | None = None
 
 
+def _candidate_token(entry: tuple[str, str] | EdgeTarget) -> str:
+    """Womit eine Dialogzeile einen Kandidaten meint: die Kennung oder das Kantentoken."""
+    return entry.token if isinstance(entry, EdgeTarget) else entry[1]
+
+
+def _edge_labels(candidates: Sequence[tuple[str, str] | EdgeTarget]) -> dict[str, str]:
+    """Die Zeile je Kantentoken, die der Kunde im Dialog liest — Lage, Länge, Ort.
+
+    Dieselbe Beschriftung wie in der Kantenliste des Dialogs (``edge_label``);
+    ein Token ist eine Kennung für eine Frage und keine Beschriftung.
+    """
+    return {entry.token: edge_label(entry) for entry in candidates if isinstance(entry, EdgeTarget)}
+
+
 class MainWindow(QMainWindow):
     """Fenster, Menüs und die Verdrahtung zwischen Sitzung und Panels."""
 
@@ -1992,8 +2007,12 @@ class MainWindow(QMainWindow):
         ``_on_scene``). Ein zweiter Durchlauf mitten im ersten räumt Listen,
         die gerade befüllt werden."""
         self._pending_scene: EvaluationResult | None = None
-        self._ask_candidates: tuple[tuple[str, str], ...] = ()
-        """Die Kandidaten der offenen Rückfrage (§21.3) — leer, wenn keine offen ist."""
+        self._ask_candidates: tuple[tuple[str, str] | EdgeTarget, ...] = ()
+        """Die Kandidaten der offenen Rückfrage (§21.3) — leer, wenn keine offen ist.
+
+        Merkmale als Paare aus Körper und Kennung, Kanten als ``EdgeTarget``
+        mit Antworttoken (P1.4c); beide leuchten in derselben
+        Kandidatenverwaltung der Ansicht."""
         self._ask_dialog: AskDialog | None = None
         self._ask_request: AskRequest | None = None
         """Das Ergebnis, das während des Aufbaus hereinkam — nachgeholt, sobald
@@ -16889,12 +16908,19 @@ class MainWindow(QMainWindow):
 
         try:
             self._cancel_pending_question()
-            dialog = AskDialog(request.question, request.choices, self)
+            dialog = AskDialog(
+                request.question,
+                request.choices,
+                self,
+                labels=_edge_labels(request.candidates),
+            )
             self._ask_dialog = dialog
             self._ask_request = request
             self._ask_candidates = ()
             dialog.set_ready(not temporary)
-            dialog.list.currentItemChanged.connect(weak_slot(self, MainWindow._emphasise_candidate))
+            dialog.list.currentItemChanged.connect(
+                weak_slot(self, MainWindow._emphasise_candidate, forward=True)
+            )
             # Diese kurzlebigen Verbindungen gehören nur der laufenden Frage.
             # Der finally-Block löst auch bei einem Aufbaufehler jeden Rückruf.
             for signal, slot in (
@@ -16993,7 +17019,7 @@ class MainWindow(QMainWindow):
         chosen = ""
         if isinstance(current, QListWidgetItem):
             chosen = str(current.data(Qt.ItemDataRole.UserRole) or "")
-        matching = [pair for pair in self._ask_candidates if pair[1] == chosen]
+        matching = [entry for entry in self._ask_candidates if _candidate_token(entry) == chosen]
         self.viewport.show_candidates(
             self._ask_candidates, matching[0] if len(matching) == 1 else None
         )

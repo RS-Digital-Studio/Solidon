@@ -57,6 +57,7 @@ from app.core.log import get_logger
 from app.core.registry import REGISTRY
 from app.core.scene import (
     CancelSignal,
+    EdgeTarget,
     EvaluationResult,
     History,
     NeverCancelled,
@@ -141,14 +142,17 @@ class AskRequest:
     preview: EvaluationResult | None = None
     """Der Zwischenstand, gegen den die Kandidaten aufgelöst wurden."""
 
-    candidates: tuple[tuple[str, str], ...] = ()
-    """Die Merkmale, zwischen denen die Frage entscheidet (§21.3).
+    candidates: tuple[tuple[str, str] | EdgeTarget, ...] = ()
+    """Die Merkmale oder Kanten, zwischen denen die Frage entscheidet (§21.3).
 
-    Je Kandidat ein Paar aus Körper und Kennung — Kennungen sind je Körper
-    vergeben, und zwei Körper tragen beide ein ``hole_1``. Kennungen und keine
-    Merkmalsobjekte: Die Ansicht löst sie gegen die Szene auf, die sie gerade
-    zeigt; ein Objekt aus einer anderen Auswertung wäre eine zweite Wahrheit
-    über dieselbe Fläche.
+    Je Merkmalskandidat ein Paar aus Körper und Kennung — Kennungen sind je
+    Körper vergeben, und zwei Körper tragen beide ein ``hole_1``. Kennungen und
+    keine Merkmalsobjekte: Die Ansicht löst sie gegen die Szene auf, die sie
+    gerade zeigt; ein Objekt aus einer anderen Auswertung wäre eine zweite
+    Wahrheit über dieselbe Fläche. Ein Kantenkandidat ist ein
+    :class:`EdgeTarget` (P1.4c): Antworttoken, Körper und der Zug, wie ihn die
+    Auswertung am aktuellen Eingang abgetastet hat — kein Schlüssel und kein
+    nativer Index, denn beide könnten wieder zwei Kanten treffen.
     """
 
     temporary_preview: bool = False
@@ -3163,7 +3167,7 @@ class Session(QObject):
     def report_progress(self, fraction: float, text: str) -> None:
         self.progressChanged.emit(fraction, text)
 
-    def announce_candidates(self, candidates: tuple[tuple[str, str], ...]) -> None:
+    def announce_candidates(self, candidates: tuple[tuple[str, str] | EdgeTarget, ...]) -> None:
         """Was die **nächste** Frage dieses Fadens zur Wahl stellt (§21.3).
 
         ``orphans.check`` ruft es unmittelbar vor ``ask`` und danach wieder
@@ -3187,7 +3191,9 @@ class Session(QObject):
         self._pending.candidates = tuple(candidates)
 
     def announce_question(
-        self, preview: EvaluationResult | None, candidates: tuple[tuple[str, str], ...]
+        self,
+        preview: EvaluationResult | None,
+        candidates: tuple[tuple[str, str] | EdgeTarget, ...],
     ) -> None:
         """Bindet die echte Zuordnungsvorschau an die nächste Frage dieses Fadens."""
         self._pending.preview = preview

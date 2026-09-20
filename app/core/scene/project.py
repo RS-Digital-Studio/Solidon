@@ -885,6 +885,7 @@ def _validate_operation_schema(
     ):
         raise ValueError(f"schema:{where}")
     outputs: tuple[str, ...] = ()
+    inputs: tuple[str, ...] = ()
     for name in ("in", "out"):
         references = operation.get(name, [])
         if not isinstance(references, list) or any(
@@ -893,6 +894,8 @@ def _validate_operation_schema(
             raise ValueError(f"schema:{where}.{name}")
         if name == "out":
             outputs = tuple(references)
+        else:
+            inputs = tuple(references)
     if not isinstance(operation.get("params", {}), dict):
         raise ValueError(f"schema:{where}.params")
     solver = _nested_mapping(operation.get("solver"), f"{where}.solver", optional=True)
@@ -911,7 +914,7 @@ def _validate_operation_schema(
         raise ValueError(f"schema:{where}.matches")
     if validate_match_groups:
         try:
-            validate_matches(matches, outputs)
+            validate_matches(matches, outputs, inputs)
         except ValueError as problem:
             raise ValueError(f"schema:{where}.matches.{problem}") from problem
     translatable = operation.get("translatable", [])

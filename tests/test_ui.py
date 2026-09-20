@@ -19260,3 +19260,90 @@ def test_an_agent_parameter_change_has_a_preview_without_new_operations(session)
     assert preview.scene.objects["obj_1"].mesh.bounds.size[0] == pytest.approx(30.0)
     assert session.project.document.parameters["width"].value == pytest.approx(20.0)
     assert session.last_result is result_before
+
+
+def test_an_edge_question_shows_the_edge_line_in_the_dialog_and_emphasises_by_token(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Eine Kollisionsfrage (P1.4c) bietet Token an; der Kunde liest die Kantenzeile.
+
+    Das Token ist eine Kennung für diese eine Frage und keine Beschriftung.
+    Der Dialog zeigt je Token dieselbe Zeile wie die Kantenliste (``edge_label``),
+    der Kern bekommt das Token zurück, und die markierte Zeile betont die Kante
+    in der Ansicht — gefunden über das Token, nicht über eine Kennung.
+    """
+    from app.core.scene import EdgeTarget, EvaluationResult
+    from app.core.types import Scene
+    from app.ui import main_window as module
+    from app.ui.labels import edge_label
+
+    left = EdgeTarget(
+        token="e:0.00,15.00,10.00:0.000,0.000,1.000#1",
+        object_id="obj_1",
+        points=((0.0, 15.0, 0.0), (0.0, 15.0, 20.0)),
+        middle=(0.0, 15.0, 10.0),
+        length=20.0,
+        upright=True,
+        flat=False,
+    )
+    right = EdgeTarget(
+        token="e:0.00,15.00,10.00:0.000,0.000,1.000#2",
+        object_id="obj_1",
+        points=((0.004, 15.0, 0.0), (0.004, 15.0, 20.0)),
+        middle=(0.004, 15.0, 10.0),
+        length=20.0,
+        upright=True,
+        flat=False,
+    )
+    preview = EvaluationResult(scene=Scene(objects={}), stopped_at=2)
+    shown: list[tuple[str, Any]] = []
+    built: list[dict[str, str]] = []
+    monkeypatch.setattr(window, "_on_scene", lambda result: shown.append(("scene", result)))
+    monkeypatch.setattr(
+        window.viewport, "show_candidates", lambda *args: shown.append(("candidates", args))
+    )
+
+    class Answer(module.AskDialog):
+        def __init__(self, question, choices, parent=None, *, labels=None):
+            built.append(dict(labels or {}))
+            super().__init__(question, choices, parent, labels=labels)
+
+        def exec(self):
+            shown.append(("dialog", None))
+            self.list.setCurrentRow(1)
+            return self.DialogCode.Accepted
+
+    monkeypatch.setattr(module, "AskDialog", Answer)
+    request = AskRequest(
+        "Welche Kante?", [left.token, right.token], preview=preview, candidates=(left, right)
+    )
+    window._on_ask(request)
+
+    assert built == [{left.token: edge_label(left), right.token: edge_label(right)}]
+    assert request.answer == right.token and request.answered.is_set()
+    emphasised = [args for kind, args in shown if kind == "candidates" and len(args) == 2]
+    assert emphasised and emphasised[-1] == ((left, right), right), (
+        "die markierte Zeile betont die Kante über ihr Token"
+    )
+    assert shown[-1] == ("candidates", ()), "nach der Antwort ist die Frage aus dem Bild"
+
+
+def test_the_ask_dialog_shows_a_label_per_token_and_returns_the_token(
+    qt_app: Any,
+) -> None:
+    from app.core.units import UNIT_NAMES
+    from app.ui.dialogs import AskDialog
+
+    dialog = AskDialog(
+        "Welche?", ["a#1", "a#2", "mm"], labels={"a#1": "Senkrecht · 20 mm", "a#2": "Waagerecht"}
+    )
+    try:
+        assert [dialog.list.item(row).text() for row in range(3)] == [
+            "Senkrecht · 20 mm",
+            "Waagerecht",
+            str(UNIT_NAMES["mm"]),
+        ]
+        dialog.list.setCurrentRow(1)
+        assert dialog.chosen() == "a#2"
+    finally:
+        dialog.deleteLater()

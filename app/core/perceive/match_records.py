@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 import math
-from collections.abc import Callable, Collection, Iterable, Mapping
+from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 
 #: Die Domäne einer Netzantwort: Zuordnung neu erkannter Merkmale (§21.3).
 GROUP_DOMAIN = "group"
@@ -17,6 +17,13 @@ GROUP_DOMAIN = "group"
 #: trägt zusätzlich einen ``scope`` — die Fassung des Erzeugers, für die die
 #: Wahl gilt — und wird nie aus einer Netzantwort erzeugt.
 NATIVE_DOMAIN = "native-group"
+#: Die Domäne einer Kantenantwort: Der Kunde hat für einen **Verbraucher**
+#: gewählt, welche von mehreren Kanten mit demselben Schlüssel gemeint ist. Sie
+#: hängt am Eingang der Operation, nicht an ihrer Ausgabe — am Körper, dem
+#: Feld, dem vollständigen Schlüsselbündel und der Fassung dieses Eingangs
+#: (``scope``, sein Objekthash). Die Auswertung liest sie vor dem Cache
+#: (``scene.edge_binding``).
+EDGE_DOMAIN = "edge-answer"
 
 
 def group_key(object_id: str, old_ids: Iterable[str], *, domain: str = GROUP_DOMAIN) -> str:
@@ -28,9 +35,20 @@ def group_key(object_id: str, old_ids: Iterable[str], *, domain: str = GROUP_DOM
     )
 
 
+def edge_answer_key(object_id: str, field: str, keys: Sequence[str]) -> str:
+    """Bezeichnet Eingangskörper, Kantenfeld und das Schlüsselbündel **in seiner Reihenfolge**.
+
+    Ein anderes Bündel — eine Kante mehr, eine andere Einzelwahl — ist eine
+    andere Frage; eine alte Antwort überschreibt sie nie.
+    """
+    return f"{EDGE_DOMAIN}:" + json.dumps(
+        [object_id, field, list(keys)], ensure_ascii=False, separators=(",", ":")
+    )
+
+
 def domain_of(key: str) -> str | None:
     """Die Domäne eines gespeicherten Schlüssels — oder nichts bei fremder Form."""
-    for domain in (GROUP_DOMAIN, NATIVE_DOMAIN):
+    for domain in (GROUP_DOMAIN, NATIVE_DOMAIN, EDGE_DOMAIN):
         if key.startswith(f"{domain}:"):
             return domain
     return None
@@ -108,7 +126,7 @@ def validate_group(
     if check_cancelled is not None:
         check_cancelled()
     domain = domain_of(key)
-    if domain is None:
+    if domain is None or domain == EDGE_DOMAIN:
         raise ValueError("key")
     fields = {"object_id", "old_ids", "candidates", "decisions"}
     if domain == NATIVE_DOMAIN:
@@ -170,13 +188,104 @@ def validate_group(
         check_cancelled()
 
 
-def validate_matches(
-    records: object,
-    outputs: Collection[str],
+def valid_edge_fingerprint(value: object) -> bool:
+    """Der ungerundete Abdruck einer Kante: Mitte, Richtung, Ausdehnung, Länge."""
+    if not isinstance(value, Mapping) or set(value) != {"middle", "direction", "extent", "length"}:
+        return False
+    if not _vector(value["middle"]) or not _vector(value["direction"]):
+        return False
+    return all(_finite_number(value[name]) and value[name] >= 0.0 for name in ("extent", "length"))
+
+
+def _key_bundle(value: object, check_cancelled: Callable[[], None] | None) -> bool:
+    """Ein Schlüsselbündel: nichtleer, jeder Eintrag ein nichtleerer Text, keiner doppelt."""
+    if not isinstance(value, list) or not value:
+        return False
+    seen: set[str] = set()
+    for name in value:
+        if check_cancelled is not None:
+            check_cancelled()
+        if not isinstance(name, str) or not name or name in seen:
+            return False
+        seen.add(name)
+    return True
+
+
+def validate_edge_answer(
+    key: str,
+    record: object,
+    inputs: Collection[str],
     *,
     check_cancelled: Callable[[], None] | None = None,
 ) -> None:
-    """Prüft neue Gruppen und erhält lesbare, gegebenenfalls unbrauchbare Altabdrücke."""
+    """Verlangt eine vollständige Kantenantwort für einen **Eingangs**körper.
+
+    Je kollidierendem Schlüssel mindestens zwei Kandidaten und genau eine
+    Entscheidung darunter; der Datensatz nennt sein Feld, sein Bündel und die
+    Fassung des Eingangs, für die er gilt. Der Projektleser prüft nur die
+    Struktur — weder Geometrie noch ob das Feld im Register existiert; das
+    tut die Auswertung, wenn sie den Datensatz liest.
+    """
+    if check_cancelled is not None:
+        check_cancelled()
+    if domain_of(key) != EDGE_DOMAIN:
+        raise ValueError("key")
+    fields = {"object_id", "field", "keys", "scope", "candidates", "decisions"}
+    if not isinstance(record, Mapping) or set(record) != fields:
+        raise ValueError("edge_answer")
+    object_id, field, keys = record["object_id"], record["field"], record["keys"]
+    if not isinstance(object_id, str) or object_id not in inputs:
+        raise ValueError("object_id")
+    if not isinstance(field, str) or not field:
+        raise ValueError("field")
+    if not _key_bundle(keys, check_cancelled):
+        raise ValueError("keys")
+    if key != edge_answer_key(object_id, field, keys):
+        raise ValueError("key")
+    if not isinstance(record["scope"], str) or not record["scope"]:
+        raise ValueError("scope")
+    candidates = record["candidates"]
+    if not isinstance(candidates, Mapping) or not candidates:
+        raise ValueError("candidates")
+    for name, fingerprints in candidates.items():
+        if check_cancelled is not None:
+            check_cancelled()
+        if name not in keys or not isinstance(fingerprints, list) or len(fingerprints) < 2:
+            raise ValueError("candidates")
+        if any(not valid_edge_fingerprint(entry) for entry in fingerprints):
+            raise ValueError("fingerprint")
+    decisions = record["decisions"]
+    if not isinstance(decisions, Mapping) or set(decisions) != set(candidates):
+        raise ValueError("decisions")
+    for name, decision in decisions.items():
+        if check_cancelled is not None:
+            check_cancelled()
+        if not isinstance(decision, Mapping) or set(decision) != {"candidate"}:
+            raise ValueError("decision")
+        index = decision["candidate"]
+        if (
+            isinstance(index, bool)
+            or not isinstance(index, int)
+            or not 0 <= index < len(candidates[name])
+        ):
+            raise ValueError("candidate_index")
+    if check_cancelled is not None:
+        check_cancelled()
+
+
+def validate_matches(
+    records: object,
+    outputs: Collection[str],
+    inputs: Collection[str] = (),
+    *,
+    check_cancelled: Callable[[], None] | None = None,
+) -> None:
+    """Prüft neue Gruppen und Kantenantworten und erhält lesbare, gegebenenfalls
+    unbrauchbare Altabdrücke.
+
+    Gruppen gehören einem Ausgabekörper, Kantenantworten einem Eingangskörper
+    — die Domäne im Schlüssel entscheidet, gegen welche Liste geprüft wird.
+    """
     if check_cancelled is not None:
         check_cancelled()
     if not isinstance(records, Mapping):
@@ -192,6 +301,8 @@ def validate_matches(
                     check_cancelled()
                 if not isinstance(name, str) or not isinstance(value, Mapping):
                     raise ValueError("legacy")
+        elif isinstance(key, str) and domain_of(key) == EDGE_DOMAIN:
+            validate_edge_answer(key, record, inputs, check_cancelled=check_cancelled)
         elif isinstance(key, str):
             validate_group(key, record, outputs, check_cancelled=check_cancelled)
         else:

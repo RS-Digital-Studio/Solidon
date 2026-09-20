@@ -953,6 +953,19 @@ eine Karte sagt, was wo liegt, eine Regel, was zu halten ist.
   weitere Antwortdomäne braucht, erweitert `match_records` (Schlüsselpräfix,
   Pflichtfelder) und `_answer_matches` — keinen zweiten Speicher, keine
   zweite Gruppenlogik.
+- **Ein Kantenfeld wird vor dem Cache gebunden, und die gebundene Auswahl
+  geht in den Schlüssel des Verbrauchers** (20.09.2026, P1.4c.4b). Ein
+  Kantenschlüssel ist eine gerundete Lage; zwei Kanten können denselben
+  tragen. Wer eine Operation mit `kind="edges"` baut, liest ihre Kanten
+  über `ctx.bound_edges` und reicht sie als `selected_edges` an den Kern —
+  nie einen Schlüssel ein zweites Mal auflösen, nie bei Kollision auf „alle"
+  oder den ersten Treffer zurückfallen. Rechnet die Operation am Netz, obwohl
+  der Körper exakt ist, deklariert sie `edges_on_mesh=True`, sonst fragt die
+  Auswertung nach Kanten, die die Operation nie sieht. Eine echte Kollision
+  (gleicher aktueller Schlüssel) liegt als `edge-answer:` am Eingang mit
+  dessen Objekthash als Scope; der Aliasfall (eindeutiger aktueller Schlüssel)
+  ist ein Parameter über `answered`. Kein Token, kein Index und kein Handle
+  reist in die Projektdatei.
 - **Der Ergebniscache versioniert geometrische Auskünfte.** Alte Einträge
   ohne den aktuellen Formatstand sind Fehltreffer. Auch Änderungen erzeugter
   Geometrie und Merkmalsmetadaten gehören zu dieser Kompatibilitätsgrenze.

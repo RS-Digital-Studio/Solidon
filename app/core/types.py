@@ -1567,6 +1567,18 @@ class OpContext:
     ask: AskFn
     cancelled: CancelToken
     sources: SourceAccess | None = None
+    bound_edges: Mapping[str, tuple[int, ...]] = field(default_factory=dict)
+    """Je Kantenfeld (``kind="edges"``) die **einmal gebundene** aktuelle Auswahl.
+
+    Die Auswertung löst ausdrücklich gewählte Kanten vor dem Cache am
+    aktuellen Eingang auf, fragt bei einer Kollision den Kunden und gibt der
+    Operation das Ergebnis als Indizes in den Kantenraum ihres Kerns —
+    ``solid.edges()`` am exakten Körper, ``edges_of(mesh)`` am Netz
+    (``scene.edge_binding``, P1.4c). Die Operation reicht sie als
+    ``selected_edges`` an den Kern und löst keinen Schlüssel ein zweites Mal
+    auf: Ein gerundeter Schlüssel könnte wieder zwei Kanten treffen. Leer,
+    wenn kein Feld aktiv ist oder die Operation direkt aufgerufen wird — dann
+    gilt der Schlüsselweg wie bisher."""
 
 
 @dataclass(frozen=True, slots=True)

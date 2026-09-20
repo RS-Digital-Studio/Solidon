@@ -406,6 +406,10 @@ sie zurück; eine Naht oder Nullkante darunter ist „zu dieser Auswahl gehört
 keine Kante". So verrundet der Radiuswechsel genau die Kante, die die
 Builder-Historie belegt hat, ohne gerundeten Schlüssel dazwischen — der
 Index reist nie in eine Projektdatei, dafür bleibt es beim Schlüssel.
+Denselben Weg nimmt die Kantenbindung der Auswertung (P1.4c.4b): Sie
+bestimmt die Indizes über `native_edge_indices` — echte Mitgliedschaft in
+der Kantenkarte des Solids, nicht die Position in `edges_of`, die Nähte
+und Nullkanten auslässt — und gibt sie als `selected_edges` weiter.
 
 `edge_points` gibt dieselbe Kante als **Punktfolge**, abgetastet nach
 Abweichung (`DEFLECTION`, dieselbe Zahl wie die Tessellation). Mitte und

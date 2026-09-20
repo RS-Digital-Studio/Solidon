@@ -762,7 +762,11 @@ für Entfernen **und** Ändern über `complete_faces_of_triangles`, und
 `brep.edit.reround` belegt die scharfe Ersatzkante aus der Builder-Historie
 statt die nächste an der alten Mitte zu nehmen (`brep/CLAUDE.md`).
 
-`edge_ops.py` — *Verrunden*, *Fase anbringen* und *Wulst anlegen* im Register, **kernübergreifend**:
+`edge_ops.py` — *Verrunden*, *Fase anbringen* und *Wulst anlegen* im Register, **kernübergreifend**
+(und alle drei lesen `ctx.bound_edges` — die von der Auswertung vor dem Cache
+gebundene Kantenauswahl geht als `selected_edges` an den Kern, der Wulst mit
+`edges_on_mesh=True`, weil er am Netz vereinigt; ohne Bindung gilt der
+Schlüsselweg):
 Der Rumpf fragt `SceneObject.kind` und wählt danach den Rechenweg — `edit.fillet`
 am exakten Körper, `edges.round_edges` am Netz. Sie standen bis zum 10.09.2026
 in `brep/ops.py` mit `requires_kind="brep"`; wer ein STL einlas, fand sie
@@ -771,7 +775,20 @@ Zwillingspaar (`MENU_TWINS`) — dort wählt der **Kunde**, hier der Körper, un
 für ein Netz gibt es den exakten Weg gar nicht (§30).
 
 `edges.py` — die Kanten eines Netzes als **Züge**, mit denselben Schlüsseln,
-die der exakte Kern vergibt. Eine Bauteilkante besteht in einem feinen Netz
+die der exakte Kern vergibt. **Und die eine Stelle, an der beide Kerne ihre
+Kanten für die Auswertung hergeben** (P1.4c.4b): `edges_in_kernel` liefert
+die Liste, die die Operation gleich sieht — Topologie am exakten Körper,
+Züge am Netz, mit `on_mesh` immer das Netz —, `indices_in_kernel` die
+Indizes gewählter Kanten im Raum dieses Kerns (`brep.edit.native_edge_indices`
+beziehungsweise die Position in `edges_of`), `points_in_kernel` den Zug
+fürs Bild. `described_by_key` legt jede Kante unter ihren Schlüssel und den
+alten Lageschlüssel; mehr als ein Eintrag ist eine Kollision, die
+`scene.edge_binding` vor dem Cache fragt. `edge_fingerprint`/`same_edge`
+sind der ungerundete Beleg dahinter; `checked_indices` und
+`EDGE_SELECTION_REJECTED` die eine Indexprüfung mit dem einen Satz für Netz
+und exakten Kern. `round_edges`, `bevel_edges` und `bead_edges` nehmen mit
+`selected_edges` die gebundene Auswahl an — vor Schlüsseln und Gruppe, ohne
+Rückfall (`selected_or_wanted`). Eine Bauteilkante besteht in einem feinen Netz
 aus vielen Dreieckskanten; wer sie einzeln ausgäbe, zeigte vierzig Kanten, wo
 der Kunde eine sieht. `edge_key` steht hier und wird von `brep.edit`
 mitbenutzt: Dieselbe Kante bekommt aus beiden Kernen denselben Schlüssel,
