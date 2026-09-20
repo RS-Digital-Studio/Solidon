@@ -1676,6 +1676,7 @@
   "Die freigegebenen Maße des Rezepts sind ungültig.": "The recipe’s shared dimensions are invalid.",
   "Die gebaute Anwendung bringt keine Paketverwaltung mit. In einer Entwicklungsumgebung ginge es von hier aus.": "The packaged application brings no package manager. In a development environment this would work from here.",
   "Die gesammelten Pinselzüge dieser Sitzung. Sie werden gemalt, nicht getippt — dieses Feld zeigt nur, was dabei entstanden ist.": "The brush strokes gathered in this session. They are painted, not typed — this field only shows what came of it.",
+  "Die geschlossenen Innenflächen lassen sich nicht zuverlässig zuordnen. Prüfen Sie den Körper oder reparieren Sie eine Arbeitskopie.": "The closed inner surfaces cannot be matched reliably. Check the body or repair a working copy.",
   "Die gespeicherte Geräteidentität ist beschädigt. Der Support kann die bisherige Aktivierung zurücksetzen.": "The saved device identity is damaged. Support can reset the previous activation.",
   "Die gespeicherte Geräteidentität ist unvollständig. Der Support kann die bisherige Aktivierung zurücksetzen.": "The saved device identity is incomplete. Support can reset the previous activation.",
   "Die gespeicherte Öffnungswahl ist nicht lesbar. Wählen Sie die gewünschte Kontur erneut auf der Trägerfläche.": "The saved opening selection cannot be read. Select the desired contour again on the supporting face.",

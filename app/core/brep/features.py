@@ -30,7 +30,7 @@ from typing import Any
 
 from app.core.brep.canonical import CylinderSurface, PlaneSurface, Surface
 from app.core.brep.canonical import describe as describe_surface
-from app.core.brep.kernel import Solid
+from app.core.brep.kernel import Solid, boolean_builder
 from app.core.brep.properties import properties
 from app.core.log import get_logger
 from app.core.types import CancelToken, Feature, FeatureId, FeatureKind, Vec3
@@ -176,6 +176,10 @@ def features_of(solid: Solid, *, cancelled: CancelToken | None = None) -> dict[F
     if fillets:
         found = open_slots_instead_of_fillets(mesh, found, fillets)
 
+    from app.core.perceive.features import voids_instead_of_phantom_bores
+
+    found = voids_instead_of_phantom_bores(found, _void_features(solid, cancelled=cancelled))
+
     if cancelled is not None:
         cancelled.raise_if_cancelled()
 
@@ -186,6 +190,168 @@ def features_of(solid: Solid, *, cancelled: CancelToken | None = None) -> dict[F
         counts["fillet"],
         counts["face"],
     )
+    return found
+
+
+def _void_features(solid: Solid, *, cancelled: CancelToken | None = None) -> list[Feature]:
+    """Geschlossene Luftkammern mit allen Grenzflächen, auch an Materialinseln.
+
+    Die Orientierung der kopierten Innenschale bestimmt die private positive
+    Messform. Weitere Materialkörper werden davon abgezogen. Die gespeicherte
+    Form bleibt unverändert; Builderhistorie belegt jede ausgewählte Quellfläche.
+    """
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_Copy, BRepBuilderAPI_MakeSolid
+    from OCP.BRepCheck import BRepCheck_Analyzer
+    from OCP.BRepClass3d import BRepClass3d, BRepClass3d_SolidClassifier
+    from OCP.BRepLib import BRepLib
+    from OCP.collections import IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher as ShapeMap
+    from OCP.TopAbs import TopAbs_FACE, TopAbs_OUT, TopAbs_SHELL, TopAbs_SOLID
+    from OCP.TopExp import TopExp
+    from OCP.TopoDS import TopoDS
+
+    from app.core.errors import (
+        CANCEL,
+        CORRECT_INPUT,
+        PROGRAMMING_ERRORS,
+        GeometryError,
+        OperationCancelled,
+    )
+    from app.i18n import _
+
+    def check() -> None:
+        """Abbruch vor und nach jedem nativen Arbeitsschritt beachten."""
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+
+    def mapped(shape: Any, kind: Any) -> Any:
+        """Unveränderte Unterformen einmal über ihre nativen Identitäten lesen."""
+        check()
+        result = ShapeMap()
+        TopExp.MapShapes_s(shape, kind, result)
+        check()
+        return result
+
+    check()
+    bodies = mapped(solid.shape, TopAbs_SOLID)
+    if not bodies.Extent() or not solid.is_closed or not BRepCheck_Analyzer(solid.shape).IsValid():
+        return []
+    original_faces = solid.faces()
+    measured: list[tuple[Vec3, Vec3, float, tuple[int, ...]]] = []
+    seen: set[tuple[int, ...]] = set()
+    try:
+        for body_index in range(1, bodies.Extent() + 1):
+            check()
+            owner = TopoDS.Solid(bodies.FindKey(body_index))
+            classifier = BRepClass3d_SolidClassifier(owner)
+            classifier.PerformInfinitePoint(EPS_GEOM)
+            check()
+            if classifier.State() != TopAbs_OUT:
+                continue
+            outer = BRepClass3d.OuterShell_s(owner)
+            if outer.IsNull():
+                continue
+            shells = mapped(owner, TopAbs_SHELL)
+            for shell_index in range(1, shells.Extent() + 1):
+                check()
+                shell = TopoDS.Shell(shells.FindKey(shell_index))
+                if shell.IsSame(outer):
+                    continue
+                shell_faces = mapped(shell, TopAbs_FACE)
+                copy = BRepBuilderAPI_Copy(shell, True, False)
+                check()
+                positive = BRepBuilderAPI_MakeSolid(TopoDS.Shell(copy.Shape())).Solid()
+                if not BRepLib.OrientClosedSolid_s(positive):
+                    raise ValueError("The private cavity shell has no closed orientation")
+                check()
+                if not BRepCheck_Analyzer(positive).IsValid():
+                    raise ValueError("The private cavity solid is invalid")
+                # Auch eine geschlossene Kammer kann mehrere Grenzschalen haben:
+                # eine Materialinsel gehört nicht zum gemeldeten Luftvolumen.
+                cut = None
+                air = positive
+                if bodies.Extent() > 1:
+                    cut = boolean_builder("difference", positive, solid.shape)
+                    check()
+                    cut.Build()
+                    check()
+                    if not cut.IsDone():
+                        raise ValueError("The material inside a cavity could not be separated")
+                    air = cut.Shape()
+                air_bodies = mapped(air, TopAbs_SOLID)
+                if not air_bodies.Extent() or not BRepCheck_Analyzer(air).IsValid():
+                    raise ValueError("The resulting air region has no valid solid")
+                for air_index in range(1, air_bodies.Extent() + 1):
+                    check()
+                    region = air_bodies.FindKey(air_index)
+                    result_faces = mapped(region, TopAbs_FACE)
+                    selected: list[int] = []
+                    covered: set[int] = set()
+                    for face_index, original in enumerate(original_faces):
+                        check()
+                        candidates = [original]
+                        if shell_faces.Contains(original):
+                            candidates.append(copy.ModifiedShape(original))
+                        represented: set[int] = set()
+                        for candidate in candidates:
+                            if result_faces.Contains(candidate):
+                                represented.add(result_faces.FindIndex(candidate))
+                            if cut is not None:
+                                for modified in cut.Modified(candidate):
+                                    if result_faces.Contains(modified):
+                                        represented.add(result_faces.FindIndex(modified))
+                        if represented:
+                            selected.append(face_index)
+                            covered.update(represented)
+                    if covered != set(range(1, result_faces.Extent() + 1)):
+                        raise ValueError("The air boundary has no complete source-face history")
+                    selection = tuple(selected)
+                    # Eine Kammer in einer Insel ist auch aus der umgebenden
+                    # Luftform erreichbar. Dieselben Quellflächen belegen sie
+                    # erneut, nicht eine zweite Kammer am gleichen Ort.
+                    if selection in seen:
+                        continue
+                    seen.add(selection)
+                    volume = properties(region, "volume", cancelled=cancelled).mass
+                    check()
+                    bounds = Solid(region).bounds
+                    check()
+                    if volume <= 0.0:
+                        raise ValueError("The air region has no positive volume")
+                    measured.append((bounds.centre, bounds.size, volume, selection))
+    except OperationCancelled:
+        raise
+    except PROGRAMMING_ERRORS:
+        raise
+    except Exception as problem:
+        raise GeometryError(
+            detail=_(
+                "Die geschlossenen Innenflächen lassen sich nicht zuverlässig zuordnen. "
+                "Prüfen Sie den Körper oder reparieren Sie eine Arbeitskopie."
+            ),
+            suggestions=(CORRECT_INPUT, CANCEL),
+        ) from problem
+    found = []
+    for number, (centre, size, volume, native_indices) in enumerate(sorted(measured), start=1):
+        check()
+        triangles = tuple(
+            sorted(
+                {
+                    index
+                    for face_index in native_indices
+                    for index in solid.triangles_of_face(face_index)
+                }
+            )
+        )
+        found.append(
+            Feature(
+                id=f"void_{number}",
+                kind="void",
+                provenance="detected",
+                params={"volume": volume, "centre": centre, "size": size},
+                face_indices=triangles,
+            )
+        )
+    check()
     return found
 
 

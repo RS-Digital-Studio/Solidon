@@ -29,7 +29,7 @@ import numpy as np
 
 from app.core import units
 from app.core.deferred import trimesh
-from app.core.geom.mesh import MeshData, face_components, fully_stitched, on_surface
+from app.core.geom.mesh import MeshData, face_components, fully_stitched
 from app.core.geom.repair import merge_vertices
 from app.core.log import get_logger
 from app.core.perceive.helix import Helix, find_helices
@@ -996,7 +996,9 @@ def detect(
         # der Liste, zählten sie beim Urteil über das ganze Modell mit und
         # schöben es Richtung Freiform. Hier gehen sie weg, weil sie zu einem
         # Einschluss gehören — nicht, weil das Modell eine Figur wäre.
-        found = _voids_instead_of_phantom_bores(found, detect_voids(mesh))
+        found = voids_instead_of_phantom_bores(
+            found, detect_voids(mesh, check_cancelled=check_cancelled)
+        )
         if check_cancelled is not None:
             check_cancelled()
         found = _partial_cones_folded(mesh, found)
@@ -4794,242 +4796,189 @@ def _enclosed_volume(body: trimesh.Trimesh, faces: Any) -> float:
     entschieden hat (derselbe Grund, aus dem :func:`face_components` die
     Nachbarschaft liest).
 
-    **Das Vorzeichen ist die ganze Auskunft.** Eine geschlossene Schale, deren
+    Eine geschlossene Schale, deren
     Normalen nach außen zeigen, schließt positives Volumen ein; zeigen sie
-    nach innen, ist es negativ — und dann ist die Schale kein Körper, sondern
-    ein Loch in einem.
+    nach innen, ist es negativ. Erst ihre geometrische Verschachtelung belegt
+    eine Luftkammer statt eines umgestülpten Körpers.
     """
     triangles = body.vertices[body.faces[faces]]
     first, second, third = triangles[:, 0], triangles[:, 1], triangles[:, 2]
     return float(np.einsum("ij,ij->i", first, np.cross(second, third)).sum() / 6.0)
 
 
-#: Wie viele Dreiecksschwerpunkte einer Schale gefragt werden.
-#:
-#: Alle zu fragen ist genau, aber teuer: An Roberts ``garden-hose-holder.3mf``
-#: sind es 11 488 Proben gegen ein Material aus 381 044 Dreiecken, und die
-#: Abfrage kostete **2 915 ms** — mehr als die halbe Erkennung, für eine Frage
-#: mit acht Antworten. Der Baum darunter kostet einmalig rund 190 ms, jede
-#: weitere Probe rund 0,24 ms; die Zahl ist also fast vollständig die Zahl der
-#: Proben.
-#:
-#: Zweiunddreißig gleichmäßig über die Flächenliste verteilte reichen, weil die
-#: Frage nicht lautet „liegt jedes Dreieck innen", sondern „liegt diese Schale
-#: innen" — und eine Schale, die zur Hälfte draußen läge, wäre kein Hohlraum,
-#: sondern ein Netzfehler.
-INSIDE_PROBES: Final = 32
-
-#: Und welcher Anteil davon innen liegen muss.
-#:
-#: **Nicht alle**, und das ist gemessen: Ein Schwerpunkt kann auf der Höhe
-#: einer Materialkante liegen, und dort steht die Normale des nächsten
-#: Dreiecks quer zum Versatz — ``signed`` wird null und die ganze Schale fiele
-#: durch. Vier Fünftel trennen die echten Einschlüsse (dort liegen alle Proben
-#: innen) sicher von einem Nachbarkörper (dort liegt keine innen).
-INSIDE_SHARE: Final = 0.8
-
-
-def _spread_over(faces: Any) -> Any:
-    """Höchstens :data:`INSIDE_PROBES` Flächen, gleichmäßig über die Liste.
-
-    Gleichmäßig und nicht die ersten: Die Flächen einer Schale stehen in der
-    Reihenfolge, in der sie im Netz liegen, und die ersten zweiunddreißig eines
-    Zylindermantels sind ein einziger Streifen.
-    """
-    if len(faces) <= INSIDE_PROBES:
-        return faces
-    return np.asarray(faces)[np.linspace(0, len(faces) - 1, INSIDE_PROBES).astype(np.int64)]
+#: Die Enthaltenseinsprüfung verwendet ausschließlich den direkten Float64-Kern.
+#: Keine verschobenen oder neu vernetzten Ersatzformen bei der Erkennung.
 
 
 def _shells_inside_the_material(
-    body: trimesh.Trimesh, components: Sequence[Any], hollow: Sequence[int]
-) -> list[bool]:
-    """Welche dieser Schalen im Material der **festen** Komponenten liegen.
+    body: trimesh.Trimesh,
+    components: Sequence[Any],
+    hollow: Sequence[int],
+    volumes: Sequence[float],
+    *,
+    check_cancelled: Callable[[], None] | None = None,
+) -> list[tuple[int, ...]]:
+    """Die Grenzschalen jeder Luftkammer aus ihrer geometrischen Verschachtelung.
 
-    **Die Frage, die der Docstring von :func:`detect_voids` schon stellte und
-    der Code nicht.** „Zu 100 Prozent innerhalb des Hauptkörpers" stand dort
-    als Messung am Kundenmodell; geprüft wurde nur das Vorzeichen. Damit wurde
-    ein **getrennter** umgestülpter Nachbarkörper, sechzig Millimeter neben dem
-    Teil, zum eingeschlossenen Hohlraum — und
-    :func:`_voids_instead_of_phantom_bores` löschte vorher seine sechs Flächen
-    aus dem Objektbaum.
-
-    **Gefragt wird gegen das Material, nicht gegen „alles andere".** Der erste
-    Anlauf baute die Umgebung je Kandidat aus allen übrigen Komponenten,
-    Hohlraumschalen eingeschlossen — und damit fiel jeder Einschluss durch, der
-    einen Nachbarn hatte: Der nächste Ort lag dann auf **dessen** Mantel, und
-    dort steht die Normale quer zum Versatz. Gemessen an zwei Taschen Ø 2 in
-    einem Quader: bei 2,5 und 5,0 mm Achsabstand null von zwei gefunden, bei
-    8,0 mm beide. Zurück blieben genau die Phantombohrungen, wegen derer diese
-    Funktion entstanden ist.
-
-    Zugleich ist es die billige Fassung: Umgebung, Baum und Abfrage entstehen
-    **einmal** für alle Kandidaten statt je Kandidat. An 83 456 Dreiecken mit
-    acht Schalen waren die acht Umgebungen achtzig Prozent der Laufzeit.
-
-    Gefragt wird über :func:`app.core.geom.mesh.on_surface` und nicht über
-    ``trimesh.contains``: Jenes führt durch ``rtree``, und das greift auf
-    dieser Maschine in fremde Seiten (der ganze Grund, aus dem es
-    ``on_surface`` gibt). Der nächste Ort auf dem Material und die Normale
-    seines Dreiecks sagen dasselbe in einer Abfrage — dieselbe Bauart, mit der
-    ``geom.prepare_ops`` eine offene Flanke prüft.
-
-    Geprüft werden **Dreiecksschwerpunkte** und nicht Eckpunkte: Eine Ecke
-    liegt auf einer Kante, und dort entscheidet bei Gleichstand die
-    Reihenfolge, welches der angrenzenden Dreiecke antwortet. Bei einem
-    Zylinder liegen fünf der sechs Extremecken auf demselben Ring.
+    Der nächste positive Mantel kann eine Materialinsel sein und bezeichnet
+    dann gerade nicht den umgebenden Körper. Vollständiges Enthaltensein ist
+    stattdessen eine leere Differenz gegen eine private positive Schalenform.
+    Die Bounds verwerfen unmögliche Paare; sie beweisen kein Enthaltensein.
+    Eltern sind die jeweils kleinste umfassende Schale. Material und Luft
+    wechseln entlang einer gültigen Kette ihre Orientierung.
     """
-    hollow_indices = set(hollow)
-    solid = [faces for number, faces in enumerate(components) if number not in hollow_indices]
-    if not solid:
-        return [False] * len(hollow)
-    material = trimesh.Trimesh(
-        vertices=body.vertices, faces=body.faces[np.concatenate(solid)], process=False
-    )
-    centres = np.asarray(body.triangles_center)
-    probes = [centres[_spread_over(components[index])] for index in hollow]
-    counts = [len(entry) for entry in probes]
-    points = np.concatenate(probes)
-    closest, _distance, faces_hit = on_surface(material, points)
-    normals = np.asarray(material.face_normals)[faces_hit]
-    # Negativ heißt: der Punkt liegt auf der Materialseite des nächsten
-    # Dreiecks — also im Körper.
-    signed = np.einsum("ij,ij->i", points - closest, normals)
-    inside = signed < -EPS_GEOM
-    at = 0
-    verdicts: list[bool] = []
-    for count in counts:
-        share = float(inside[at : at + count].mean())
-        verdicts.append(share >= INSIDE_SHARE)
-        at += count
-    return verdicts
+    from app.core.errors import GeometryError
+    from app.core.geom.boolean import boolean
+
+    def check() -> None:
+        """Abbruch zwischen Schalen und den einzelnen nativen Differenzen."""
+        if check_cancelled is not None:
+            check_cancelled()
+
+    bounds = []
+    for faces in components:
+        check()
+        points = body.vertices[body.faces[faces]].reshape(-1, 3)
+        bounds.append((points.min(axis=0), points.max(axis=0)))
+    positive: dict[int, MeshData] = {}
+
+    def form(index: int) -> MeshData:
+        """Eine eigene, positiv orientierte Hülle ohne Änderung des Originals."""
+        check()
+        if index not in positive:
+            faces = np.asarray(body.faces)[components[index]].copy()
+            if volumes[index] < 0.0:
+                faces = faces[:, ::-1]
+            shell = trimesh.Trimesh(vertices=body.vertices.copy(), faces=faces, process=False)
+            shell.remove_unreferenced_vertices()
+            positive[index] = MeshData.of(shell)
+        return positive[index]
+
+    parents: list[int | None] = [None] * len(components)
+    order = sorted(range(len(components)), key=lambda index: abs(volumes[index]))
+    for child in order:
+        check()
+        low, high = bounds[child]
+        for parent in order:
+            if abs(volumes[parent]) <= abs(volumes[child]):
+                continue
+            lower, upper = bounds[parent]
+            # Berührung an einer äußeren Grenze belegt keine eingeschlossene Luft.
+            if not (np.all(low > lower + EPS_GEOM) and np.all(high < upper - EPS_GEOM)):
+                continue
+            check()
+            try:
+                remainder = boolean(
+                    "difference",
+                    [form(child), form(parent)],
+                    stages=("direct",),
+                    allow_empty=True,
+                ).mesh
+            except GeometryError:
+                # Ein nicht verlässlich lesbares Schalenpaar begründet kein Merkmal.
+                return [()] * len(hollow)
+            check()
+            if not remainder.triangle_count:
+                parents[child] = parent
+                break
+
+    groups = []
+    for cavity in hollow:
+        check()
+        cursor: int | None = cavity
+        valid = True
+        while cursor is not None:
+            ancestor = parents[cursor]
+            if ancestor is None:
+                valid = volumes[cursor] > 0.0
+                break
+            if (volumes[cursor] > 0.0) == (volumes[ancestor] > 0.0):
+                valid = False
+                break
+            cursor = ancestor
+        children = [index for index, parent in enumerate(parents) if parent == cavity]
+        if any(volumes[index] < 0.0 for index in children):
+            valid = False
+        groups.append((cavity, *children) if valid else ())
+    return groups
 
 
-def detect_voids(mesh: MeshData) -> list[Feature]:
-    """Hohlräume, die vollständig im Material stecken (§21.1).
+def detect_voids(
+    mesh: MeshData, *, check_cancelled: Callable[[], None] | None = None
+) -> list[Feature]:
+    """Geschlossene Luftkammern samt Materialinseln, ohne geratene Öffnungen (§21.1).
 
-    **Der Anlass, und er ist kein gedachter.** Robert lud am 10.09.2026
-    ``garden-hose-holder.3mf``, und der Objektbaum zeigte acht Bohrungen Ø 2,
-    9 mm tief, die es nicht gab: Es sind acht eigene geschlossene Schalen mit
-    **negativem** Volumen (je -28,27 mm³, gemessen zu 100 Prozent innerhalb
-    des Hauptkörpers), wie sie entstehen, wenn ein CAD oder ein Slicer
-    Negativkörper mitschreibt, die nie boolesch abgezogen wurden. Nach
-    :func:`_one_body` liegen ihre nach innen zeigenden Mäntel im selben Netz,
-    und für :func:`detect_holes` sieht das aus wie eine Bohrung — dieselben
-    Normalen, derselbe Kreis, nur ohne Öffnung.
-
-    **Vier Tore, drei topologische und eine geometrische Probe** — und keines
-    davon geraten:
-
-    * Das Netz ist **dicht**. An einem offenen Netz sagt ein Vorzeichen
-      nichts, und wer dort riete, machte aus einer Lücke einen Einschluss
-      (Regel 21). Solche Modelle behalten ihre Bohrungen, wie sie sie hatten.
-    * Sein **Umlaufsinn ist einheitlich**. Ein Vorzeichen trägt nur dort, wo
-      die Normalen verlässlich zeigen; ein Quader mit zehn verkehrt herum
-      stehenden Dreiecken war sonst ein „Lufteinschluss", und seine sechs
-      Flächen verschwanden dabei.
-    * Es hat **mehr als eine Komponente**. Eine einzelne Schale mit negativem
-      Volumen ist ein umgestülptes Teil und kein Loch.
-    * Die Komponente schließt **negatives** Volumen ein und liegt **im
-      Material** der festen Komponenten (:func:`_shells_inside_the_material`).
-      Negativ heißt: Ihre Normalen zeigen in den Hohlraum und nicht ins
-      Material — deshalb ist ihr eingeschlossenes Volumen negativ, und deshalb
-      ist die Materialseite des nächsten Dreiecks die richtige Frage.
-
-    Gemessen über den ganzen Korpus trifft das acht Mal am Kundenmodell und
-    **null Mal** sonst — auch nicht an ``two_components.stl`` mit zwei echten
-    Körpern und nicht an ``broken_selfint.stl``.
-
-    Was ein Einschluss **nicht** ist: bearbeitbar. Es gibt keine Fläche, die
-    ein Werkzeug erreicht, und keine Handlung, die ihn ändert;
-    :mod:`app.core.perceive.actions` sagt genau das, statt ihn zu verschweigen.
+    Dichtheit und einheitlicher Umlaufsinn sind Voraussetzungen. Eine negative
+    Außenschale allein ist kein Innenraum. Die Verschachtelung ordnet jede
+    Insel ihrer umgebenden Kammer zu; eigene Luftkammern in dieser Insel bleiben
+    getrennte Merkmale. Volumen und Auswahl beschreiben dieselbe vollständige
+    Luftgrenze. Verschieben und Entfernen verwenden genau diese Flächen.
     """
+    if check_cancelled is not None:
+        check_cancelled()
     body = mesh.raw
-    # **Der Umlaufsinn gehört zur Frage, nicht nur die Dichtheit.** Ein
-    # Vorzeichen ist nur dort eine Auskunft, wo die Normalen überhaupt
-    # verlässlich zeigen; ``is_winding_consistent`` fällt in derselben
-    # Kantenzählung an wie ``is_watertight`` und liegt danach im Cache. Ohne
-    # ihn wurde ein Quader, dessen Dreiecke zum Teil verkehrt herum standen,
-    # zum „Lufteinschluss" — und seine sechs Flächen verschwanden dabei aus
-    # dem Objektbaum.
     if not (bool(body.is_watertight) and bool(body.is_winding_consistent)):
         return []
     components = face_components(body)
-    # **Ein Einschluss braucht einen Körper um sich herum.** Eine einzelne
-    # Komponente mit negativem Volumen ist ein umgestülptes Teil und kein
-    # Loch — an einem vollständig invertierten Quader blieb sonst genau ein
-    # Merkmal übrig, und das war eine Lüge über das ganze Modell.
-    #
-    # Die Zeile spart nebenbei den teuren Normalfall: An einem einteiligen
-    # Netz mit 327 680 Dreiecken kostete die Volumenschleife 52 bis 113 ms für
-    # eine Antwort, die hier schon feststeht.
     if len(components) < 2:
         return []
-    volumes = [_enclosed_volume(body, faces) for faces in components]
+    volumes = []
+    for faces in components:
+        if check_cancelled is not None:
+            check_cancelled()
+        volumes.append(_enclosed_volume(body, faces))
+    if not all(math.isfinite(volume) for volume in volumes):
+        return []
     hollow = [number for number, volume in enumerate(volumes) if volume < 0.0]
     if not hollow:
         return []
-    # **Alle Kandidaten in einer Abfrage.** Je Kandidat eine eigene Umgebung zu
-    # bauen war nicht nur teuer, es war falsch: Die Umgebung enthielt dann die
-    # übrigen Hohlraumschalen, und ein Einschluss mit einem Nachbarn fiel durch.
-    inside = _shells_inside_the_material(body, components, hollow)
-
-    measured: list[tuple[Vec3, float, Vec3, Any]] = []
-    for number, verdict in zip(hollow, inside, strict=True):
-        if not verdict:
+    groups = _shells_inside_the_material(
+        body, components, hollow, volumes, check_cancelled=check_cancelled
+    )
+    measured: list[tuple[Vec3, Vec3, float, tuple[int, ...]]] = []
+    for group in groups:
+        if check_cancelled is not None:
+            check_cancelled()
+        if not group:
             continue
-        faces = components[number]
+        faces = np.concatenate([components[index] for index in group])
+        volume = -math.fsum(volumes[index] for index in group)
+        if volume <= 0.0:
+            continue
         corners = body.vertices[body.faces[faces]].reshape(-1, 3)
         lower, upper = corners.min(axis=0), corners.max(axis=0)
         middle = (lower + upper) / 2.0
         centre: Vec3 = (float(middle[0]), float(middle[1]), float(middle[2]))
-        size: Vec3 = tuple(float(value) for value in upper - lower)  # type: ignore[assignment]
-        measured.append((centre, float(-volumes[number]), size, faces))
-
-    # **Nach der Mitte nummeriert und nicht nach dem Flächenindex.** Dieselbe
-    # Zeile wie bei Zylindern, Kegeln, Kugeln, Tori und Verrundungen, und aus
-    # demselben Grund (§21.2): Die Nummer eines Merkmals ist eine
-    # Provenienz-ID, und die darf nicht an der Reihenfolge der Flecken hängen.
-    # Hier hing sie daran — `face_components` liefert die Komponenten nach
-    # Flächenindex, und der folgt der Reihenfolge, in der ein Exporter die
-    # Dreiecke geschrieben hat. Gemessen an zweimal derselben Geometrie, nur
-    # anders zusammengesetzt: einmal `void_1` = 28,19 mm³ links und `void_2` =
-    # 112,78 mm³ rechts, einmal umgekehrt. Dieselbe Datei aus einem anderen
-    # Werkzeug, dieselben Hohlräume, vertauschte Namen — und eine Op, die an
-    # `void_2` hängt, sitzt danach am anderen.
-    measured.sort(
-        key=lambda entry: (round(entry[0][0], 3), round(entry[0][1], 3), round(entry[0][2], 3))
-    )
-
-    found: list[Feature] = []
-    for number, (centre, volume, size, faces) in enumerate(measured, start=1):
-        found.append(
-            Feature(
-                id=FeatureId(f"void_{number}"),
-                kind="void",
-                provenance="detected",
-                params={
-                    # Der Betrag, weil die Zahl den Hohlraum beschreibt und
-                    # nicht die Umlaufrichtung seiner Dreiecke.
-                    "volume": round(volume, 4),
-                    "centre": centre,
-                    "size": size,
-                },
-                face_indices=tuple(int(index) for index in faces),
-            )
+        size: Vec3 = (
+            float(upper[0] - lower[0]),
+            float(upper[1] - lower[1]),
+            float(upper[2] - lower[2]),
         )
+        measured.append((centre, size, volume, tuple(sorted(int(index) for index in faces))))
+    found = [
+        Feature(
+            id=FeatureId(f"void_{number}"),
+            kind="void",
+            provenance="detected",
+            params={"volume": volume, "centre": centre, "size": size},
+            face_indices=faces,
+        )
+        for number, (centre, size, volume, faces) in enumerate(sorted(measured), start=1)
+    ]
+    if check_cancelled is not None:
+        check_cancelled()
     return found
 
 
-def _voids_instead_of_phantom_bores(
+def voids_instead_of_phantom_bores(
     found: dict[FeatureId, Feature], voids: Sequence[Feature]
 ) -> dict[FeatureId, Feature]:
     """Wo ein Einschluss liegt, steht er selbst statt der Bohrung, die keine ist.
 
     Dieselbe Bauart wie :func:`_threads_instead_of_phantoms`, und aus demselben
     Grund: Die Flächen eines Einschlusses tragen echte Zylinder- und
-    Kegeleinpassungen — sie sind ja wirklich rund —, nur benennen sie nichts,
-    was jemand anfassen kann. Ein Merkmal, dessen Flächen mehrheitlich auf
+    Kegeleinpassungen — sie sind ja wirklich rund —, aber keine einzelnen
+    Öffnungen nach außen. Ein Merkmal, dessen Flächen mehrheitlich auf
     einer Einschlussschale liegen, verschwindet deshalb, und der Einschluss
     steht an seiner Stelle.
 

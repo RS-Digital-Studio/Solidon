@@ -2646,10 +2646,10 @@ def test_the_thread_feature_moves_with_the_bolt(profile: Profile) -> None:
 
 
 def a_slotted_block(length: float = 20.0, angle: float = 0.0, depth: float = 10.0) -> Solid:
-    """Eine exakte Platte 90 x 60 x 10 mit einem Langloch Ø 6."""
+    """Eine exakte Platte 90 × 60 × 10 mit einem von oben offenen Langloch Ø6."""
     return edit.slot_bore(
         edit.box(90.0, 60.0, 10.0),
-        position=(0.0, 0.0, 5.0),
+        position=(0.0, 0.0, 10.0 - depth / 2.0),
         direction=(0.0, 0.0, 1.0),
         diameter=6.0,
         depth=depth,
@@ -2709,20 +2709,43 @@ def test_an_exact_slot_knows_which_way_it_lies(angle: float) -> None:
     assert min(abs(measured - angle), abs(abs(measured - angle) - 180.0)) < 0.5
 
 
-def test_a_blind_exact_slot_says_it_does_not_go_through() -> None:
+@pytest.mark.parametrize("representation", ["brep", "mesh"])
+def test_a_blind_exact_slot_says_it_does_not_go_through(representation: str) -> None:
     """Ein Sacklangloch behält seinen Boden als eigene Fläche.
 
     Dieselbe Entscheidung wie am Netz: Die zwei Flanken gehen im Langloch auf,
     der Boden nicht — seine Normale zeigt entlang der Achse, er liegt gar
     nicht im Mantel.
     """
-    solid = a_slotted_block(depth=4.0)
+    from OCP.BRepCheck import BRepCheck_Analyzer
+    from OCP.BRepClass3d import BRepClass3d_SolidClassifier
+    from OCP.gp import gp_Pnt
+    from OCP.TopAbs import TopAbs_IN, TopAbs_OUT
 
-    found = features_of(solid)
+    solid = a_slotted_block(depth=4.0)
+    assert BRepCheck_Analyzer(solid.shape).IsValid()
+    assert solid.solid_count == 1
+    assert solid.volume == pytest.approx(54000.0 - (6.1 * 14.0 + math.pi * 3.05**2) * 4.0)
+    # Die Mündung reicht bis Z=10, der Boden liegt bei Z=6. Eine bloß
+    # kleinere Tiefe könnte ebenso einen vollständig geschlossenen Einschluss bauen.
+    classifier = BRepClass3d_SolidClassifier(solid.shape)
+    for z, expected in ((5.0, TopAbs_IN), (9.0, TopAbs_OUT)):
+        classifier.Perform(gp_Pnt(0.0, 0.0, z), EPS_GEOM)
+        assert classifier.State() == expected
+
+    found = features_of(solid) if representation == "brep" else detect(as_mesh_data(solid))
     slot = next(feature for feature in found.values() if feature.kind == "slot")
 
     assert not slot.params["through"], "die Platte ist 10 mm dick, das Loch 4"
-    assert float(slot.params["depth"]) == pytest.approx(4.0, abs=0.2)
+    assert float(slot.params["depth"]) == pytest.approx(4.0, abs=EPS_GEOM)
+    assert slot.params["centre"] == pytest.approx((0.0, 0.0, 8.0), abs=EPS_GEOM)
+    assert not any(feature.kind == "void" for feature in found.values())
+    floor = next(
+        feature
+        for feature in found.values()
+        if feature.kind == "face" and abs(feature.params["centre"][2] - 6.0) < EPS_GEOM
+    )
+    assert set(floor.face_indices).isdisjoint(slot.face_indices)
 
 
 def test_two_exact_slots_stay_two() -> None:

@@ -71,7 +71,9 @@ DEFAULT_DISK_BUDGET_BYTES: Final = 2 * 1024 * 1024 * 1024
 #: und Maßauskünfte auch in vernetzten Folgeergebnissen.
 #: NURBS-Träger liefern ihre bestätigten Ebenen und Zylinder aus der Originalform;
 #: leere frühere Auskünfte dürfen keine Folgeoperation aus dem Cache weitertragen.
-CACHE_FORMAT_VERSION: Final = 12
+#: Innenräume tragen vollständige Luftgrenzen und ziehen Materialinseln ab;
+#: frühere fehlende Innenräume und Phantombohrungen werden neu erkannt.
+CACHE_FORMAT_VERSION: Final = 13
 
 
 @dataclass(frozen=True, slots=True)

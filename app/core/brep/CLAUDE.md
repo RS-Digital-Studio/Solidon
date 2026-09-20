@@ -106,6 +106,27 @@ Operationsaufrufer durch `features_of`, Trägerprüfung und Nachbarwege bis zu
 den Python-Koeffizientenschleifen und der gemeinsamen Maßintegration;
 `OperationCancelled` bleibt dabei unverändert erhalten.
 
+`features._void_features` liest geschlossene Luftkammern über Körper- und
+Schalenzugehörigkeit. Eine invertierte Außenschale wird nicht zum Innenraum.
+Ein Sacklangloch braucht eine wirkliche Mündung nach außen; eine Schnitttiefe
+unterhalb der Körperhöhe belegt sie nicht. Ein vollständig innenliegender
+Langlochmantel gehört mit seinen beiden Abschlüssen zur Luftkammer.
+Die positive Messform entsteht aus einer privaten Innenschalenkopie;
+weitere Materialkörper werden davon abgezogen. Materialinseln zählen deshalb
+nicht zum Luftvolumen, ihre Oberflächen gehören aber zur vollständigen
+Luftgrenze. Kammern in solchen Inseln bleiben eigene Merkmale. Derselbe
+Luftraum wird bei mehreren Nachweisen anhand seiner tatsächlichen
+Quellflächen nur einmal veröffentlicht.
+
+Die Kopier- und Boolesch-Historie muss jede Ergebnisfläche auf eine
+ursprüngliche Fläche zurückführen. Erst danach entstehen über
+`triangles_of_face` die auswählbaren Dreiecke. Native Handles oder Builder
+werden nicht gespeichert. `void.centre` und `void.size` bleiben Welt-AABB-
+Werte, keine Volumenschwerpunkte. Der gemeinsame Nachschritt
+`perceive.features.voids_instead_of_phantom_bores` verdrängt primitive
+Einzelmerkmale auf derselben Luftgrenze. Verschieben und Entfernen benutzen
+weiter ihre vorhandenen, ausdrücklich ausgewiesenen Netzoperationen.
+
 `properties.py` liefert unveränderliche `MassProperties` für Körpermaße und
 Merkmalsauskunft gemeinsam. Analytische Flächen bleiben im nativen Standardweg.
 Das gilt auch für ihre BSpline-Trimmkurven: unabhängige polynomiale

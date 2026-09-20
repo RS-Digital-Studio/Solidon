@@ -16,6 +16,86 @@ from app.core.geom.mesh import MeshData
 DATA = Path(__file__).parent / "data"
 
 
+@pytest.mark.parametrize("radius", [2.0, 20.0])
+def test_local_void_selection_includes_its_disconnected_material_island(radius: float) -> None:
+    """Die Luftgrenze reicht bis zur Insel, auch wenn beide Schalen nicht verbunden sind."""
+    from app.core.perceive.local import detect_local
+
+    stock = trimesh.creation.box(extents=(40.0, 30.0, 20.0))
+    air = trimesh.creation.box(extents=(8.0, 8.0, 8.0))
+    air.invert()
+    island = trimesh.creation.box(extents=(2.0, 2.0, 2.0))
+    source = MeshData.of(trimesh.util.concatenate([stock, air, island]))
+    seed = 12
+    result = detect_local(
+        source,
+        tuple(source.raw.triangles_center[seed]),
+        normal=tuple(source.raw.face_normals[seed]),
+        radius=radius,
+        seed_faces=(seed,),
+    )
+    voids = [feature for feature in result.features.values() if feature.kind == "void"]
+    if radius < 20.0:
+        assert voids == []
+        return
+    assert len(voids) == 1
+    assert set(voids[0].face_indices) == set(range(12, 36))
+    assert voids[0].params["volume"] == pytest.approx(504.0)
+
+
+def test_local_void_does_not_select_a_neighbouring_air_chamber() -> None:
+    """Ein großer Suchradius macht eine zweite Luftkammer nicht zum angeklickten Merkmal."""
+    from app.core.perceive.local import detect_local
+
+    stock = trimesh.creation.box(extents=(40.0, 30.0, 20.0))
+    first = trimesh.creation.box(extents=(4.0, 4.0, 4.0))
+    first.apply_translation((-6.0, 0.0, 0.0))
+    first.invert()
+    second = first.copy()
+    second.apply_translation((12.0, 0.0, 0.0))
+    source = MeshData.of(trimesh.util.concatenate([stock, first, second]))
+    result = detect_local(
+        source,
+        tuple(source.raw.triangles_center[12]),
+        normal=tuple(source.raw.face_normals[12]),
+        radius=30.0,
+        seed_faces=(12,),
+    )
+    voids = [feature for feature in result.features.values() if feature.kind == "void"]
+    assert len(voids) == 1
+    assert set(voids[0].face_indices) == set(range(12, 24))
+
+
+def test_local_void_passes_the_cancel_callback_to_the_complete_original(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Die abschließende Vollkörperprüfung erhält dasselbe Abbruchsignal wie die lokale Suche."""
+    from app.core.errors import OperationCancelled
+    from app.core.perceive import features, local
+    from app.core.scene.cancel import CancelSignal
+
+    source = blind_cylinder()
+    face, point, normal = bore_seed(source)
+    signal = CancelSignal()
+    original = features.detect_voids
+    calls = []
+    check = signal.raise_if_cancelled
+
+    def stop(mesh, *, check_cancelled=None):
+        """Erst die Vollkörperprüfung, nicht die kleinere lokale Teilform abbrechen."""
+        if mesh.triangle_count == source.triangle_count:
+            calls.append(check_cancelled)
+            signal.cancel()
+        return original(mesh, check_cancelled=check_cancelled)
+
+    monkeypatch.setattr(features, "detect_voids", stop)
+    with pytest.raises(OperationCancelled):
+        local.detect_local(
+            source, point, normal=normal, radius=9, seed_faces=(face,), check_cancelled=check
+        )
+    assert calls == [check]
+
+
 def blind_cylinder(*, dense: bool = False) -> MeshData:
     """Analytischer Körper aus der eigenen Korpusdefinition, ohne Booleschen Kern."""
     spec = json.loads((DATA / "local_detection.json").read_text(encoding="utf-8"))

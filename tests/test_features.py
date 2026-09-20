@@ -3226,6 +3226,78 @@ def test_a_cavity_with_no_way_out_is_a_void_and_not_a_bore() -> None:
     )
 
 
+def test_nested_air_chambers_keep_their_material_islands() -> None:
+    """Luft, Materialinsel und deren eigene Luftkammer besitzen getrennte Grenzen."""
+    block = trimesh.creation.box(extents=(40.0, 40.0, 40.0))
+    air = trimesh.creation.box(extents=(12.0, 12.0, 12.0))
+    island = trimesh.creation.box(extents=(6.0, 6.0, 6.0))
+    nested = trimesh.creation.box(extents=(2.0, 2.0, 2.0))
+    air.invert()
+    nested.invert()
+    mesh = MeshData.of(trimesh.util.concatenate([block, air, island, nested]))
+    voids = features_module.detect_voids(mesh)
+    assert sorted(feature.params["volume"] for feature in voids) == pytest.approx([8.0, 1512.0])
+    outer = max(voids, key=lambda feature: feature.params["volume"])
+    inner = min(voids, key=lambda feature: feature.params["volume"])
+    assert set(outer.face_indices) == set(range(12, 36))
+    assert set(inner.face_indices) == set(range(36, 48))
+    assert outer.params["centre"] == pytest.approx((0.0, 0.0, 0.0))
+
+
+def test_air_chamber_beside_a_material_island_keeps_only_its_own_surfaces() -> None:
+    """Zwei getrennte Luftkammern bleiben getrennt, auch wenn eine eine Insel enthält."""
+    block = trimesh.creation.box(extents=(40.0, 30.0, 20.0))
+    first = trimesh.creation.box(extents=(8.0, 8.0, 8.0))
+    first.apply_translation((-8.0, 0.0, 0.0))
+    first.invert()
+    island = trimesh.creation.box(extents=(2.0, 2.0, 2.0))
+    island.apply_translation((-8.0, 0.0, 0.0))
+    second = trimesh.creation.box(extents=(4.0, 4.0, 4.0))
+    second.apply_translation((8.0, 0.0, 0.0))
+    second.invert()
+    mesh = MeshData.of(trimesh.util.concatenate([block, first, island, second]))
+    voids = features_module.detect_voids(mesh)
+    assert [feature.params["volume"] for feature in voids] == pytest.approx([504.0, 64.0])
+    assert set(voids[0].face_indices) == set(range(12, 36))
+    assert set(voids[1].face_indices) == set(range(36, 48))
+
+
+@pytest.mark.parametrize("before_work", [False, True])
+def test_void_containment_can_cancel_and_restart_without_partial_features(
+    monkeypatch: pytest.MonkeyPatch, before_work: bool
+) -> None:
+    """Abbruch erreicht die echte Schalenprüfung, ohne Geometrie oder Cache zu verändern."""
+    import importlib
+
+    from app.core.errors import OperationCancelled
+    from app.core.scene.cancel import CancelSignal
+
+    geometry = importlib.import_module("app.core.geom.boolean")
+    original = geometry.boolean
+    mesh = _block_with_a_trapped_pocket()
+    before_vertices = mesh.raw.vertices.copy()
+    before_faces = mesh.raw.faces.copy()
+    signal = CancelSignal()
+
+    def stop(*args, **kwargs):
+        """Erst die echte private Differenz ausführen, dann den Abbruch verlangen."""
+        result = original(*args, **kwargs)
+        signal.cancel()
+        return result
+
+    forget_cache()
+    if before_work:
+        signal.cancel()
+    else:
+        monkeypatch.setattr(geometry, "boolean", stop)
+    with pytest.raises(OperationCancelled):
+        detect(mesh, check_cancelled=signal.raise_if_cancelled)
+    assert np.array_equal(mesh.raw.vertices, before_vertices)
+    assert np.array_equal(mesh.raw.faces, before_faces)
+    monkeypatch.setattr(geometry, "boolean", original)
+    assert len([feature for feature in detect(mesh).values() if feature.kind == "void"]) == 1
+
+
 def test_an_open_mesh_keeps_its_bores_because_a_sign_says_nothing_there() -> None:
     """Die Grenze der Auskunft, und sie hält an, statt zu raten (Regel 21).
 

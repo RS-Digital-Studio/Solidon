@@ -236,7 +236,7 @@ def _recognise_region(
     }
     # Eine Randschleife aus dem Ausschnitt ist kein Defekt des Originalnetzes.
     # Einschlüsse werden ausschließlich am ganzen Netz eingeordnet.
-    voids = detection.detect_voids(mesh)
+    voids = detection.detect_voids(mesh, check_cancelled=check)
     void_faces = {index for feature in voids for index in feature.face_indices}
     complete = {
         name: feature
@@ -244,8 +244,11 @@ def _recognise_region(
         if void_faces.isdisjoint(feature.face_indices)
     }
     for feature in voids:
-        if all(inside[index] for index in feature.face_indices) and _inside_radius(
-            body, feature, point, radius
+        # Eine Materialinsel trägt eine getrennte Grenzschale derselben Luft.
+        # Der angeklickte Originalpunkt bestimmt die Kammer; der Radius muss
+        # ihre gesamte Grenze einschließlich aller Inseln umfassen.
+        if not set(seeds).isdisjoint(feature.face_indices) and _inside_radius(
+            body, feature, point, radius, check
         ):
             complete[feature.id] = feature
     _check(check)

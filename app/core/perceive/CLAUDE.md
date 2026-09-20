@@ -394,8 +394,22 @@ betroffenen Körper und erzeugenden Schritt; eine Karte bleibt aus. Andere
 - **Ein Hohlraum ohne Weg nach außen ist keine Bohrung.** `detect_voids` findet
   geschlossene Innenschalen über vier Tore — dichtes Netz, einheitlicher
   Umlaufsinn, mehr als eine Komponente, und die Schale liegt im Material der
-  **festen** Komponenten (`_shells_inside_the_material`, eine Abfrage für alle
-  Kandidaten). `_voids_instead_of_phantom_bores` nimmt danach die Merkmale weg,
+  **festen** Komponenten. `_shells_inside_the_material` bestimmt die
+  Schalenhierarchie über private positive Hüllen und leere Differenzen im
+  bestehenden Float64-Kern, ausschließlich über dessen direkte Stufe.
+  Die nächste positive Oberfläche beweist kein Enthaltensein: Sie kann zu
+  einer Materialinsel gehören. Bounds verwerfen unmögliche Schalenpaare;
+  Material und Luft müssen entlang ihrer Verschachtelung abwechseln.
+  Inselvolumen wird von der umgebenden Luft abgezogen; die Inseloberfläche
+  gehört zur vollständigen Auswahl. Eigene Luftkammern in Inseln bleiben
+  getrennte Merkmale. Abbruch reicht vom globalen und lokalen Aufrufer bis
+  zwischen die Schalen und die nativen Differenzen. Es wird keine
+  verschobene oder neu vernetzte Ersatzform zur Erkennung verwendet.
+  Bei lokaler Suche bestimmt der angeklickte Originalpunkt die Luftkammer.
+  Ihre vollständige Grenze muss einschließlich getrennter Inseloberflächen
+  innerhalb des Suchradius liegen; eine zweite Kammer im selben Radius
+  wird dadurch nicht zur gleichen Auswahl.
+  `voids_instead_of_phantom_bores` nimmt danach in beiden Kernen die Merkmale weg,
   deren Flächen mehrheitlich darauf liegen. An einem offenen Netz wird nichts
   behauptet: Dort ist eine solche Schale genauso gut eine Lücke, und Raten
   verbietet Regel 21.
