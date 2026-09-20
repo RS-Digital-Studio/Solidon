@@ -28,6 +28,25 @@ Neu erzeugen (nur bei einer neuen Formatversion, die alte Datei bleibt):
 python -c "from app.core.bootstrap import load_operations; load_operations(); from tests.test_project import build_example_project; from app.core.scene.project import save; from pathlib import Path; save(build_example_project(), Path('tests/data/projects/example_v2.p3d'))"
 ```
 
+## Gewinde (STEP)
+
+`threads/` erzeugt `make_thread_corpus.py` — aus Konstruktionsmaßen, als
+STEP, ohne Erzeugerauskunft im Körper. Die Sollwerte stehen in
+`test_thread_import.py`; Toleranzen: Teilung 1e-4, Radien 1e-3, Achse 1e-6.
+
+| Datei | Inhalt | Erwartung | Test |
+|---|---|---|---|
+| `threads/m6_rechts.step` | `profiles.threaded_rod(6, 1, 12)` | rechts, außen, p 1, L 1, n 1, Ø 6, Tiefe 0,6134, Länge 12, Achse z; Basis aller Ableitungen | `test_thread_import.py` |
+| `threads/m10_rechts.step` | `threaded_rod(10, 1.5, 20)` | p 1,5, Ø 10, Tiefe 0,9201, Länge 20 | `test_thread_import.py` |
+| `threads/m8_innen.step` | Block 20 × 20 × 10 minus `threaded_rod(8.2, 1.25, 10)` | innen, p 1,25, Nenn-Ø 8,2 (der Grund-Ø), Tiefe 0,7668, Länge 10 | `test_thread_import.py` |
+| `threads/zweigaengig.step` | Kern Ø 6,92 plus zwei Helix-Gänge, Vorschub 2 | n 2, L 2, p 1, Ø 8, Tiefe 0,54, Länge 12 | `test_thread_import.py` |
+| `threads/gegen_naht.step` | Zylinder Ø 6,02 mit einem 0,02 mm dünnen Gang | kein Gewinde: Gangtiefe außerhalb `GROOVE_RANGE` | `test_thread_import.py` |
+
+```
+.venv\Scripts\python.exe tests/data/make_thread_corpus.py            # alle fünf
+.venv\Scripts\python.exe tests/data/make_thread_corpus.py m6_rechts  # einen
+```
+
 ## Geometrie
 
 Die STL-Dateien erzeugt `make_corpus.py`, die analytischen

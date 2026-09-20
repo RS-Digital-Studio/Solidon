@@ -191,6 +191,18 @@ def features_of(solid: Solid, *, cancelled: CancelToken | None = None) -> dict[F
     )
     found = _mouth_chamfers_folded(solid, found, named, neighbours, surfaces, cancelled=cancelled)
 
+    # **Ein Gewinde statt einer Handvoll Erfundener** — dieselbe Regel wie am
+    # Netz, gemessen an den Kanten statt an der Konzentration der Dreiecke
+    # (``brep.thread``, P2.5). Was auf der Wendel liegt, ist kein Zapfen und
+    # kein Kegel; die Züge selbst verändern den Körper nicht.
+    from app.core.brep.thread import thread_features
+    from app.core.perceive.features import without_phantoms_on
+
+    for thread in thread_features(solid, cancelled=cancelled):
+        found = without_phantoms_on(found, thread.face_indices)
+        found[thread.id] = thread
+        counts["thread"] = counts.get("thread", 0) + 1
+
     # Der offene Mantel hat an beiden Kernen denselben Randvertrag. Die
     # Dreiecksnummern der Tessellierung sind bereits die Merkmalsnummern.
     from app.core.geom.mesh import as_mesh_data
@@ -283,11 +295,12 @@ def features_of(solid: Solid, *, cancelled: CancelToken | None = None) -> dict[F
         cancelled.raise_if_cancelled()
 
     _log.info(
-        "read %d hole(s), %d pin(s), %d fillet(s) and %d face(s) off a B-Rep body",
+        "read %d hole(s), %d pin(s), %d fillet(s), %d face(s) and %d thread(s) off a B-Rep body",
         counts["hole"],
         counts["pin"],
         counts["fillet"],
         counts["face"],
+        counts.get("thread", 0),
     )
     return found
 

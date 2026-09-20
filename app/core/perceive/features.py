@@ -1073,6 +1073,27 @@ _SWALLOWED_BY_A_HELIX: Final[frozenset[str]] = frozenset(
 )
 
 
+def without_phantoms_on(
+    found: Mapping[FeatureId, Feature], on_the_helix: Sequence[int]
+) -> dict[FeatureId, Feature]:
+    """Ohne die Einpassungen, die überwiegend auf dieser Wendel liegen.
+
+    Die Regel gilt an beiden Kernen — das Netz misst seine Wendel an den
+    Dreiecken, der exakte Körper an seinen Kanten (``brep.thread``), und
+    beide sagen mit derselben Dreiecksmenge, was ein Gewinde ist und kein
+    Kegel, Zapfen, Kugel, Ring oder Rundung (:data:`_SWALLOWED_BY_A_HELIX`).
+    """
+    covered = set(on_the_helix)
+    kept = dict(found)
+    for name, feature in list(kept.items()):
+        if feature.kind not in _SWALLOWED_BY_A_HELIX or not feature.face_indices:
+            continue
+        inside = sum(1 for index in feature.face_indices if index in covered)
+        if inside * 2 > len(feature.face_indices):
+            del kept[name]
+    return kept
+
+
 def _threads_instead_of_phantoms(
     mesh: MeshData,
     found: dict[FeatureId, Feature],
@@ -1111,13 +1132,7 @@ def _threads_instead_of_phantoms(
     )
     kept = dict(found)
     for number, helix in enumerate(helices, start=1):
-        on_the_helix = set(helix.face_indices)
-        for name, feature in list(kept.items()):
-            if feature.kind not in _SWALLOWED_BY_A_HELIX or not feature.face_indices:
-                continue
-            inside = sum(1 for index in feature.face_indices if index in on_the_helix)
-            if inside * 2 > len(feature.face_indices):
-                del kept[name]
+        kept = without_phantoms_on(kept, helix.face_indices)
         identifier = FeatureId(f"thread_{number}")
         kept[identifier] = Feature(
             id=identifier,

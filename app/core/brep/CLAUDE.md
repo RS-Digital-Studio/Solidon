@@ -403,6 +403,41 @@ trägt die wirklichen Manteldreiecke; planare Anschnitte bleiben getrennte
 Flächen. Es verwendet denselben Gewindevertrag wie die Bausteine, ohne die
 exakten Operationswerte für die Anzeige zu runden.
 
+## Ein Gewinde wird an den Kanten gelesen, nicht an Dreiecken (P2.5)
+
+`thread.read_thread` misst ein importiertes Gewinde ohne Erzeugerwissen:
+Jede Kante, die weder Strecke noch Kreis noch eben ist, wird nach
+**Bogenlänge** abgetastet (`GCPnts_UniformAbscissa`) — der Kurvenparameter
+einer B-Spline ist kein Winkel und kommt in keiner Rechnung vor. Kanten,
+die einen Vertex teilen und dort tangential anschließen, werden ein Zug;
+über bloße Nachbarschaft wurden Kamm, beide Fußwendeln und die Stirnkurven
+ein Zug mit 36 „Umläufen“. Die Achse ist der Zylinder durch die Punkte
+(kleinste Quadrate, gestartet aus der SVD und den Achsen der
+Zylinderflächen des Körpers — bestätigt einer davon die Achse, ist sie
+`native`, sonst `fit`); in einer rechtshändigen Basis liefert die
+Regression `z = z0 + L·θ/2π` den Vorschub, sein Vorzeichen die Händigkeit
+und das Residuum die Wendelabweichung (`uncertainty`). Die Gangzahl ist die
+Periodizität **aller** Wendeln (Kamm- wie Fußkanten) unter einer
+Verschiebung um 1/n des Vorschubs — die Kammphasen allein zählten den
+zweigängigen Körper als eingängig. Die Materialseite kommt aus den
+orientierten Normalen der Flächen am Zug, die Gangtiefe aus Kamm- und
+Fußradius gegen `helix.GROOVE_RANGE` (träge importiert, damit `brep` keine
+eifrige Kante zur Wahrnehmung bekommt). Unter einer vollen Umdrehung, bei
+schlechter Wendel oder ohne Rille gibt es einen **Grund** fürs Protokoll
+und nie eine geratene Steigung.
+
+`thread_features` macht daraus das Merkmal im Vertrag des Netzwegs —
+`diameter` bleibt der Nenndurchmesser (außen Kamm, innen Grund) — mit
+`lead`, `starts`, `handedness`, `crest_radius`, `root_radius`, `depth`,
+`turns` und `uncertainty`, alle `native`; seine Dreiecke sind die aller
+Flächen, die die Züge tragen. `features_of` ruft es nach den nativen
+Flächen und verdrängt damit die Zapfen und Kegel auf der Wendel — dieselbe
+Regel wie am Netz (`perceive.features.without_phantoms_on`), nicht kopiert.
+Ein Körper trägt so höchstens ein Gewinde; der Netzweg (`find_helices`)
+ist der gewollte Zwilling, und `tests/test_thread_import.py` lässt beide
+auf dieselbe Frage antworten. Die Referenzkörper baut
+`tests/data/make_thread_corpus.py` aus Konstruktionsmaßen.
+
 ## Eine Kante hat einen Schlüssel, keine Nummer
 
 `edge_key` (RM-147 E4) beschreibt eine Kante über **Mittelpunkt und
@@ -615,6 +650,7 @@ Anwendung gegen die installierte Bindung.
 | `ops.py` | Die B-Rep-Operationen im Register (§25, §10) — **ohne** Verrunden und Fase, die stehen in `geom/edge_ops.py` |
 | `edit.py` | Einen Körper formen |
 | `features.py` | Merkmale aus der Topologie (§30, §21) |
+| `thread.py` | Gewinde an importierter Geometrie: Kantenzüge nach Bogenlänge, Achse eingepasst, Vorschub und Händigkeit aus der Wendelregression, Gangzahl aus der Periodizität (§21.1, P2.5) |
 | `canonical.py` | Geprüfte Ebenen-, Zylinder-, Kugel- und Ringträger mit wirklichen Flächengrenzen (§30, §21) |
 | `properties.py` | Gemeinsame native Integrale mit geprüftem Rückfall für getrimmte NURBS (§30, §11) |
 | `step.py` | STEP hinein und hinaus |
