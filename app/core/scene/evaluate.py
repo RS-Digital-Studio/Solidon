@@ -56,7 +56,12 @@ from app.core.perceive.match_decisions import (
     mapping_with_decisions,
     resolve_group,
 )
-from app.core.perceive.match_records import group_key, valid_fingerprint
+from app.core.perceive.match_records import (
+    GROUP_DOMAIN,
+    NATIVE_DOMAIN,
+    group_key,
+    valid_fingerprint,
+)
 from app.core.perceive.matching import (
     FeatureTransform,
     MatchResult,
@@ -721,6 +726,10 @@ def _evaluate(
                         all_references, positions, active_fit_names, position, object_id
                     ),
                     continuations=continuations[index] if continuations else (),
+                    # Die Fassung des Erzeugers, für die eine native Neuwahl
+                    # gilt: roher Schlüssel plus Ausgabeindex — nicht der
+                    # Objekthash danach, der die Wahl selbst enthielte.
+                    scope=f"{key}:{index}",
                 )
             except AppError as error:
                 # Die Zuordnung fragt, wenn sie mehrere Kandidaten sieht
@@ -1476,6 +1485,105 @@ def _checked_continuations(
     return tuple(checked)
 
 
+def _selectable(feature: Feature, triangles: int) -> bool:
+    """Ob ein aktuelles Merkmal eine gültige Auswahl am aktuellen Körper trägt."""
+    return bool(feature.face_indices) and all(
+        0 <= index < triangles for index in feature.face_indices
+    )
+
+
+def _native_reselection(
+    current: SceneObject,
+    previous: Mapping[FeatureId, Feature],
+    lost: Mapping[FeatureId, tuple[str, ...]],
+    matched: MatchResult,
+    operation: Operation,
+    ask: Any,
+    findings: list[Finding],
+    recorded: dict[str, dict[str, Any]] | None,
+    watch: CancelToken,
+    question_context: FeatureQuestionContext | None,
+    scope: str,
+) -> tuple[SceneObject, MatchResult]:
+    """Lässt am neu gebauten exakten Körper wählen, welche aktuelle Fläche
+    einen nicht belegten alten Bezug fortführt — und veröffentlicht die Wahl
+    als Alias unter dem alten Namen.
+
+    Kandidaten sind die aktuellen Merkmale derselben Art mit gültiger
+    Auswahl, die noch kein belegter alter Name beansprucht — auch ein frisch
+    vergebener gleicher Name ist nur ein Kandidat, kein Beleg. Ein alter
+    Bezug ohne Kandidaten bleibt verloren; „Nicht weiterführen" ebenfalls —
+    beides meldet der Aufrufer als Halt. Die Wahl reist wie eine Netzantwort
+    durch ``recorded`` in den Stapel, nur in der nativen Domäne mit Scope.
+    """
+    occupied = set(matched.mapping.values())
+    triangles = current.mesh.triangle_count
+    claims: dict[FeatureId, tuple[FeatureId, ...]] = {}
+    for name in sorted(lost):
+        watch.raise_if_cancelled()
+        kind = previous[name].kind
+        options = tuple(
+            candidate
+            for candidate, feature in sorted(current.features.items())
+            if feature.kind == kind
+            and candidate not in occupied
+            and _selectable(feature, triangles)
+        )
+        if options:
+            claims[name] = options
+    if not claims:
+        return current, matched
+    question = MatchResult(
+        mapping=dict(matched.mapping),
+        orphaned=tuple(name for name in matched.orphaned if name not in claims),
+        ambiguous=claims,
+        fresh=matched.fresh,
+    )
+    try:
+        _answer_matches(
+            current,
+            question,
+            operation,
+            ask,
+            findings,
+            recorded,
+            frozenset(claims),
+            watch,
+            question_context,
+            frozenset(),
+            scope=scope,
+        )
+    except AmbiguityError as refused:
+        # Ohne jemanden zum Fragen — Kommandozeile, Agent — bleibt die
+        # Frage offen, und die Bezüge bleiben gesperrt: derselbe Halt wie
+        # ohne Kandidaten, nur mit den Wahlmöglichkeiten als Vorschläge, damit
+        # der Agent antworten kann, und mit den Bezügen für den Verweisfilter.
+        raise NativeReferenceLost(
+            refused.detail,
+            references=tuple(FeatureRef(current.id, name) for name in sorted(claims)),
+            suggestions=refused.suggestions,
+            values={
+                "candidates": refused.values.get("candidates", []),
+                "where": "; ".join(sorted({who for name in claims for who in lost[name]})),
+                "operation": str(operation.op),
+            },
+            object_id=current.id,
+        ) from refused
+    chosen = {old: new for old, new in question.mapping.items() if old in claims}
+    if not chosen:
+        return current, question
+    watch.raise_if_cancelled()
+    # Der gewählte Nachfolger lebt unter dem alten Namen weiter — mit seinen
+    # aktuellen Maßen, Dreiecken und Teilträgern. Derselbe Aliasweg wie beim
+    # gezielten Bohrungswechsel; kein zweiter Eintrag unter dem frischen Namen.
+    aliased = apply_mapping(
+        dict(current.features),
+        MatchResult(mapping=chosen, orphaned=question.orphaned),
+        previous=previous,
+    )
+    return dataclasses.replace(current, features=aliased), question
+
+
 def _unproven_native_references(
     wanted: Collection[FeatureId],
     current: SceneObject,
@@ -1505,8 +1613,7 @@ def _unproven_native_references(
             name in matched.ambiguous
             or matched.mapping.get(name) != name
             or feature is None
-            or not feature.face_indices
-            or any(not 0 <= index < triangles for index in feature.face_indices)
+            or not _selectable(feature, triangles)
         ):
             blocked.add(name)
     return frozenset(blocked)
@@ -1570,13 +1677,25 @@ def _answer_matches(
     watch: CancelToken,
     question_context: FeatureQuestionContext | None,
     legacy_eligible: frozenset[str] | None,
+    *,
+    scope: str | None = None,
 ) -> None:
-    """Eine konkurrierende Gruppe vollständig wählen, prüfen und erst dann übernehmen."""
+    """Eine konkurrierende Gruppe vollständig wählen, prüfen und erst dann übernehmen.
+
+    Mit ``scope`` ist es die **native Neuwahl** (§21.3, P1.4c): Der exakte
+    Körper wurde neu gebaut, und der Kunde wählt, welche aktuelle Fläche
+    einen alten Bezug fortführt. Die Antwort liegt in der eigenen Domäne
+    ``native-group`` und gilt nur für diese Erzeugerfassung; eine Netzantwort
+    unter demselben Namen wird nie dafür genommen, und alte Einzelantworten
+    (``legacy``) gelten hier nicht — der Aufrufer übergibt dafür eine leere
+    ``legacy_eligible``-Menge.
+    """
     matched = dataclasses.replace(result, mapping=dict(result.mapping))
     pending_records: dict[str, dict[str, Any]] = {}
     pending_findings: list[Finding] = []
     centre, diagonal = entry.mesh.bounds.centre, entry.mesh.bounds.diagonal
     legacy = operation.matches.get("legacy", {})
+    domain = GROUP_DOMAIN if scope is None else NATIVE_DOMAIN
     grouped_old_ids = {
         name
         for key, record in operation.matches.items()
@@ -1584,7 +1703,7 @@ def _answer_matches(
         for name in record.get("old_ids", ())
     }
     for claims in conflict_groups(matched, check_cancelled=watch.raise_if_cancelled):
-        key = group_key(entry.id, claims)
+        key = group_key(entry.id, claims, domain=domain)
         saved = operation.matches.get(key)
         decisions = (
             resolve_group(
@@ -1596,6 +1715,7 @@ def _answer_matches(
                 diagonal,
                 set(matched.mapping.values()),
                 check_cancelled=watch.raise_if_cancelled,
+                scope=scope,
             )
             if saved is not None
             else None
@@ -1642,6 +1762,11 @@ def _answer_matches(
                 question = tr("Körper „{object}“: {question}").format(
                     object=str(entry.name), question=question
                 )
+                if scope is not None:
+                    question += "\n\n" + tr(
+                        "Dieser Schritt hat den exakten Körper neu gebaut. Wähle die "
+                        "aktuelle Fläche, die den bisherigen Bezug fortführt."
+                    )
                 if len(claims) > 1:
                     question += "\n\n" + tr(
                         "Diese bisherigen Bezüge teilen sich mögliche Nachfolger: {names}. "
@@ -1681,6 +1806,7 @@ def _answer_matches(
                 centre,
                 diagonal,
                 check_cancelled=watch.raise_if_cancelled,
+                scope=scope,
             )
             if newly_chosen
             else None
@@ -1726,6 +1852,7 @@ def _with_features(
     legacy_eligible: frozenset[str] | None = None,
     needed: Mapping[FeatureId, tuple[str, ...]] | None = None,
     continuations: Sequence[FeatureContinuation] = (),
+    scope: str | None = None,
 ) -> SceneObject:
     """Merkmale neu erkennen und die alten Bezeichner behalten, wo sie noch
     passen.
@@ -1734,8 +1861,11 @@ def _with_features(
     Operation noch jemand braucht, je mit dem Verbraucher; ohne die Angabe
     gilt ``referenced``. ``continuations`` sind die von der Operation selbst
     belegten Übergänge (``OpResult.feature_continuations``), bereits auf
-    Struktur geprüft. Beides braucht nur der exakte Körper — am Netz
-    entscheidet die Neuerkennung mit der Zuordnungsfrage.
+    Struktur geprüft. ``scope`` benennt die Fassung des Erzeugers — roher
+    Operationsschlüssel und Ausgabeindex —, für die eine native Neuwahl gilt;
+    ohne ihn wird am exakten Körper nicht gefragt, sondern angehalten. Alles
+    drei braucht nur der exakte Körper — am Netz entscheidet die
+    Neuerkennung mit der Zuordnungsfrage.
 
     ``touches_features`` sagt, ob diese Operation Merkmale **einführt** — das
     Flag stand seit je im Register und hatte bis heute keinen Leser. Es
@@ -1844,13 +1974,37 @@ def _with_features(
                     ),
                 )
         lost = _unproven_native_references(unproven, exact_entry, matched)
+        if lost and matched is not None and scope is not None:
+            # **Die native Neuwahl** (§21.3): Was die Zuordnung nicht belegt,
+            # entscheidet der Kunde am tatsächlich neu gebauten Körper — je
+            # alter Bezug die aktuellen Merkmale derselben Art, die noch keinen
+            # alten Namen tragen. Dieselbe Gruppen-, Fingerabdruck- und
+            # Atomizitätsmechanik wie am Netz, aber in eigener Domäne mit
+            # Erzeugerscope: Eine Netzantwort gibt native Konkurrenz nicht
+            # frei, und eine andere Erzeugerfassung fragt neu.
+            exact_entry, matched = _native_reselection(
+                exact_entry,
+                previous,
+                {name: wanted[name] for name in lost},
+                matched,
+                operation,
+                ask,
+                findings,
+                recorded,
+                watch,
+                question_context,
+                scope,
+            )
+            lost = _unproven_native_references(
+                set(lost) - set(matched.mapping), exact_entry, matched
+            )
         if lost:
             # Atomar an der Erzeugergrenze: keine Ausgabe, keine Antwort, kein
             # Folgecache. Der Befund nennt den späteren Verbraucher, damit der
-            # Halt nicht wie ein falscher Wert dieses Schritts aussieht. Eine
-            # Reparatur bietet er noch nicht an — die native Neuwahl folgt als
-            # eigener Anschluss; bis dahin heilt ein erneutes Wählen derselben
-            # alten Kennung nichts.
+            # Halt nicht wie ein falscher Wert dieses Schritts aussieht. Wer
+            # hier ankommt, hat entweder keine Fassung zum Fragen, keinen
+            # Kandidaten derselben Art oder „Nicht weiterführen" gewählt —
+            # ein erneutes Wählen derselben alten Kennung heilt nichts.
             raise NativeReferenceLost(
                 _(
                     "Dieser Schritt baut den exakten Körper neu, und ein späterer Bezug "

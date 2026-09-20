@@ -45,9 +45,14 @@ darf keinen vermeintlich eindeutigen Treffer freigeben. Die historischen
 Vorgaben optionaler Achsen- und Maßfelder bleiben unverändert.
 
 `match_records` ist die gemeinsame Quelle für reine JSON-Struktur und
-kanonische, körperqualifizierte Gruppenschlüssel. `match_decisions` bildet
-Gruppen, erkennt deren vollständiges Kandidatenmuster geometrisch wieder
-und prüft die gesamte Wahl atomar. Kostenrechnung und letzte Injektivitätsgrenze
+kanonische, körperqualifizierte Gruppenschlüssel — in zwei Domänen:
+`group:` für Netzantworten und `native-group:` für die native Neuwahl am
+umgebauten exakten Körper, die zusätzlich ihren `scope` trägt (die
+Erzeugerfassung, für die die Wahl gilt; `domain_of` liest ihn aus dem
+Schlüssel). `match_decisions` bildet Gruppen, erkennt deren vollständiges
+Kandidatenmuster geometrisch wieder und prüft die gesamte Wahl atomar;
+`resolve_group(scope=...)` gibt eine native Wahl nur für denselben Scope frei
+und eine Netzantwort nie für die native Frage. Kostenrechnung und letzte Injektivitätsgrenze
 bleiben in `matching`; die Antwortschicht erzeugt keine zweite Zuordnung.
 Das historische Fingerabdruckfeld `diameter` speichert unverändert das
 Rohmaß aus `params.diameter`, ersatzweise `params.area`; nur die Position ist

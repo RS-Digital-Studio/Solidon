@@ -281,7 +281,7 @@ def test_match_answer_migration_wraps_all_operation_versions_exactly_once() -> N
     assert operation_to_data(operation_from_data(operation))["matches"] == old
     assert migrate(deepcopy(data), target=26) == data
     migrated = migrate(deepcopy(data))
-    assert migrated["format_version"] == 27
+    assert migrated["format_version"] == FORMAT_VERSION
     assert migrated["ops"][0]["matches"] == {"legacy": old}
     assert migrated["ops"][1]["matches"] == {}
     assert migrated["transactions"][0]["changes"]["annotation"] == "Keine zusätzliche Undo-Seite"
@@ -361,7 +361,7 @@ def test_v26_match_answers_keep_every_history_version_and_actual_geometry(profil
     raw = project_data(path)
     assert raw["format_version"] == 26
     project = load(path)
-    assert project.document.format_version == 27
+    assert project.document.format_version == FORMAT_VERSION
     assert project.document.ops[0].matches == {"legacy": raw["ops"][0]["matches"]}
     for saved, transaction in zip(raw["transactions"], project.document.transactions, strict=True):
         if transaction.changes is None:
@@ -436,7 +436,7 @@ def test_match_answers_cross_the_v19_history_migration_without_double_wrapping(t
     with zipfile.ZipFile(path, "w") as archive:
         archive.writestr(PROJECT_ENTRY, json.dumps(data))
     project = load(path)
-    assert project.document.format_version == 27
+    assert project.document.format_version == FORMAT_VERSION
     assert project.document.ops[-1].matches == {"legacy": old}
     changes = project.document.transactions[-1].changes
     assert changes.before.edited_ops[3].matches == {"legacy": old}

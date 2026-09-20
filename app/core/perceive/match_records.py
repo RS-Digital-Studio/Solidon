@@ -10,12 +10,30 @@ import json
 import math
 from collections.abc import Callable, Collection, Iterable, Mapping
 
+#: Die Domäne einer Netzantwort: Zuordnung neu erkannter Merkmale (§21.3).
+GROUP_DOMAIN = "group"
+#: Die Domäne einer nativen Neuwahl: Der Kunde hat am umgebauten exakten
+#: Körper gewählt, welche aktuelle Fläche einen alten Bezug fortführt. Sie
+#: trägt zusätzlich einen ``scope`` — die Fassung des Erzeugers, für die die
+#: Wahl gilt — und wird nie aus einer Netzantwort erzeugt.
+NATIVE_DOMAIN = "native-group"
 
-def group_key(object_id: str, old_ids: Iterable[str]) -> str:
-    """Bezeichnet einen Körper und die vollständige alte Anspruchsmenge."""
-    return "group:" + json.dumps(
+
+def group_key(object_id: str, old_ids: Iterable[str], *, domain: str = GROUP_DOMAIN) -> str:
+    """Bezeichnet Domäne, Körper und die vollständige alte Anspruchsmenge."""
+    if domain not in (GROUP_DOMAIN, NATIVE_DOMAIN):
+        raise ValueError("domain")
+    return f"{domain}:" + json.dumps(
         [object_id, sorted(old_ids)], ensure_ascii=False, separators=(",", ":")
     )
+
+
+def domain_of(key: str) -> str | None:
+    """Die Domäne eines gespeicherten Schlüssels — oder nichts bei fremder Form."""
+    for domain in (GROUP_DOMAIN, NATIVE_DOMAIN):
+        if key.startswith(f"{domain}:"):
+            return domain
+    return None
 
 
 def _finite_number(value: object) -> bool:
@@ -80,15 +98,22 @@ def validate_group(
     *,
     check_cancelled: Callable[[], None] | None = None,
 ) -> None:
-    """Verlangt eine vollständige, injektive Entscheidung für einen Ausgabekörper."""
+    """Verlangt eine vollständige, injektive Entscheidung für einen Ausgabekörper.
+
+    Eine native Neuwahl (``native-group:``) trägt zusätzlich ihren ``scope``;
+    eine Netzgruppe (``group:``) trägt keinen. Beide Formen sind strikt: Ein
+    Netzdatensatz mit Scope und ein nativer ohne sind keine gültigen Antworten,
+    denn dann wüsste niemand, für welche Fassung die Wahl gelten soll.
+    """
     if check_cancelled is not None:
         check_cancelled()
-    if not isinstance(record, Mapping) or set(record) != {
-        "object_id",
-        "old_ids",
-        "candidates",
-        "decisions",
-    }:
+    domain = domain_of(key)
+    if domain is None:
+        raise ValueError("key")
+    fields = {"object_id", "old_ids", "candidates", "decisions"}
+    if domain == NATIVE_DOMAIN:
+        fields.add("scope")
+    if not isinstance(record, Mapping) or set(record) != fields:
         raise ValueError("group")
     object_id = record["object_id"]
     old_ids = record["old_ids"]
@@ -96,8 +121,10 @@ def validate_group(
         raise ValueError("object_id")
     if not _sorted_names(old_ids, check_cancelled):
         raise ValueError("old_ids")
-    if key != group_key(object_id, old_ids):
+    if key != group_key(object_id, old_ids, domain=domain):
         raise ValueError("key")
+    if domain == NATIVE_DOMAIN and (not isinstance(record["scope"], str) or not record["scope"]):
+        raise ValueError("scope")
     candidates = record["candidates"]
     if not isinstance(candidates, list) or not candidates:
         raise ValueError("candidates")

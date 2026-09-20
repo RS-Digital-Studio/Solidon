@@ -36,8 +36,26 @@ Verbraucher, und `EvaluationResult.blocked_references` trägt die Bezüge zum
 Verweisfilter: `orphans.check(blocked=...)` meldet sie als `feature.blocked`,
 ohne Namensexistenz als Auflösung und ohne Frage gegen die alte Szene.
 Heute stellt allein `resize_hole` am exakten Körper Belege aus (Bohrung und
-belegter Boden aus `_preserved_exact_features`); eine bedienbare native
-Neuwahl gibt es noch nicht, der Halt benennt das.
+belegter Boden aus `_preserved_exact_features`).
+
+**Was die Zuordnung nicht belegt, wählt der Kunde am neu gebauten Körper**
+(`_native_reselection`): je nicht belegtem altem Bezug die aktuellen
+Merkmale derselben Art mit gültiger Auswahl, die noch kein alter Name
+beansprucht, über denselben Frageweg und dieselbe Gruppen-, Fingerabdruck-
+und Atomizitätsmechanik wie am Netz (`_answer_matches` mit `scope`). Die
+Wahl wird als Alias unter dem alten Namen veröffentlicht (`apply_mapping`,
+mit aktuellen Maßen, Dreiecken und Teilträgern) und liegt in
+`Operation.matches` in der eigenen Domäne `native-group:` mit `scope` —
+roher Erzeugerschlüssel plus Ausgabeindex, nicht der Objekthash danach, der
+die Wahl selbst enthielte. Eine Netzantwort (`group:`) gibt native
+Konkurrenz nie frei, ein anderer Scope fragt neu, alte Einzelantworten
+gelten hier nicht. „Nicht weiterführen" und ein fehlender Kandidat halten die
+Kette wie oben an und werden am exakten Körper nicht festgeschrieben; ohne
+jemanden zum Fragen (Kommandozeile, Agent) trägt der Halt die Kandidaten als
+`choose:`-Vorschläge. Projektformat 28 trägt den Datensatz mit fünf Feldern
+(Migration 27→28 ohne Datenumschreibung, `example_v28.p3d`); Cache und
+Verlauf brauchten dafür nichts Neues — der Folgehash enthält das Alias,
+`_copy_operation_matches` filtert weiter nach Ausgabekörper.
 
 `Operation.matches` speichert vollständige Antwortgruppen je Ausgabekörper
 und alter Anspruchsmenge. `perceive.match_records` ist die gemeinsame reine

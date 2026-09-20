@@ -7,7 +7,7 @@ from typing import Any
 
 from app.core.errors import AmbiguityError
 from app.core.perceive import matching
-from app.core.perceive.match_records import group_key, validate_group
+from app.core.perceive.match_records import GROUP_DOMAIN, NATIVE_DOMAIN, group_key, validate_group
 from app.core.types import Feature, FeatureId, ObjectId, Vec3
 from app.i18n import _
 
@@ -103,8 +103,13 @@ def group_fingerprint(
     diagonal: float,
     *,
     check_cancelled: Callable[[], None] | None = None,
+    scope: str | None = None,
 ) -> dict[str, Any]:
-    """Speichert den ganzen Anspruchsgraphen und die Wahl ohne aktuelle Erkennungsnamen."""
+    """Speichert den ganzen Anspruchsgraphen und die Wahl ohne aktuelle Erkennungsnamen.
+
+    Mit ``scope`` entsteht ein Datensatz der nativen Domäne: Die Wahl gilt
+    nur für die Fassung des Erzeugers, die der Scope benennt (§21.3).
+    """
     if check_cancelled is not None:
         check_cancelled()
     mapping_with_decisions(
@@ -131,7 +136,7 @@ def group_fingerprint(
                 "claims": sorted(owners[target]),
             }
         )
-    record = {
+    record: dict[str, Any] = {
         "object_id": object_id,
         "old_ids": sorted(claims),
         "candidates": candidates,
@@ -140,9 +145,16 @@ def group_fingerprint(
             for name, target in sorted(decisions.items())
         },
     }
+    domain = GROUP_DOMAIN
+    if scope is not None:
+        record["scope"] = scope
+        domain = NATIVE_DOMAIN
     try:
         validate_group(
-            group_key(object_id, claims), record, (object_id,), check_cancelled=check_cancelled
+            group_key(object_id, claims, domain=domain),
+            record,
+            (object_id,),
+            check_cancelled=check_cancelled,
         )
     except ValueError as error:
         raise AmbiguityError(
@@ -163,15 +175,29 @@ def resolve_group(
     reserved_targets: Set[FeatureId] = frozenset(),
     *,
     check_cancelled: Callable[[], None] | None = None,
+    scope: str | None = None,
 ) -> dict[FeatureId, FeatureId | None] | None:
-    """Eine ganze gespeicherte Wahl gilt gemeinsam oder verlangt eine neue Entscheidung."""
+    """Eine ganze gespeicherte Wahl gilt gemeinsam oder verlangt eine neue Entscheidung.
+
+    Eine native Wahl (``scope``) gilt nur für dieselbe Erzeugerfassung; ein
+    anderer Scope ist keine Antwort, sondern eine neue Frage. Ein Scope ist
+    dabei eine Sperre gegen die Wiederverwendung auf einer anderen Fassung,
+    kein Topologiebeweis — die vollständige Wiedererkennung aller Kandidaten
+    bleibt zusätzlich Pflicht.
+    """
     if check_cancelled is not None:
         check_cancelled()
+    domain = GROUP_DOMAIN if scope is None else NATIVE_DOMAIN
     try:
         validate_group(
-            group_key(object_id, claims), saved, (object_id,), check_cancelled=check_cancelled
+            group_key(object_id, claims, domain=domain),
+            saved,
+            (object_id,),
+            check_cancelled=check_cancelled,
         )
     except ValueError:
+        return None
+    if scope is not None and saved["scope"] != scope:
         return None
     owners = _claimants(claims, check_cancelled)
     targets = tuple(sorted(owners))

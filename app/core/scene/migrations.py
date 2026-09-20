@@ -26,7 +26,7 @@ from app.i18n import _
 _log = get_logger(__name__)
 
 #: Aktuelle Version von ``project.json``.
-FORMAT_VERSION: Final = 27
+FORMAT_VERSION: Final = 28
 
 
 @dataclass(frozen=True, slots=True)
@@ -652,6 +652,23 @@ def _qualify_match_answers(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def _allow_native_alias_groups(data: dict[str, Any]) -> dict[str, Any]:
+    """27 → 28: Eine native Neuwahl reist als ``native-group:``-Antwort mit Scope.
+
+    Wer am umgebauten exakten Körper gewählt hat, welche aktuelle Fläche einen
+    alten Bezug fortführt, hat das in ``Operation.matches`` unter einer
+    eigenen Domäne stehen — mit dem ``scope``, der Fassung des Erzeugers, für
+    die die Wahl gilt (§21.3, P1.4c). An einer älteren Datei ist nichts
+    umzuschreiben: Ihre Netzgruppen und ``legacy``-Abdrücke bleiben, wie sie
+    sind, und keine davon wird als native Zustimmung umgedeutet oder mit einem
+    Scope aus ungeprüfter Geometrie versehen. Die Stufe steht für die andere
+    Richtung: Ein älteres Programm liest den Datensatz mit fünf Feldern als
+    Schemafehler; mit der Versionsgrenze sagt es stattdessen, dass die Datei
+    neuer ist und ein Update sie öffnet.
+    """
+    return data
+
+
 #: Alle bekannten Schritte, älteste zuerst.
 MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=1, to_version=2, apply=_add_chat),
@@ -680,6 +697,7 @@ MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=24, to_version=25, apply=_keep_raw_import_coordinates),
     Step(from_version=25, to_version=26, apply=_allow_several_filament_colours),
     Step(from_version=26, to_version=27, apply=_qualify_match_answers),
+    Step(from_version=27, to_version=28, apply=_allow_native_alias_groups),
 )
 
 

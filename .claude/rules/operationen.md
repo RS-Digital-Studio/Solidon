@@ -944,6 +944,15 @@ eine Karte sagt, was wo liegt, eine Regel, was zu halten ist.
   nicht, was ein früherer Schritt benannt hat. Ein Halt ist atomar, nennt den
   Verbraucher (`NativeReferenceLost`) und wird von `orphans.check` nicht an
   der alten Szene „geheilt" (`blocked`, Befund `feature.blocked`).
+  **Was kein Beleg trägt, wählt der Kunde am tatsächlich neu gebauten
+  Körper** — nie die Auswertung: Die Frage läuft über denselben Weg wie am
+  Netz, die Antwort liegt in der eigenen Domäne `native-group:` mit `scope`
+  (roher Erzeugerschlüssel plus Ausgabeindex, Projektformat 28). Eine
+  Netzantwort unter demselben Namen gilt nicht, ein anderer Scope fragt neu,
+  „Nicht weiterführen" bleibt ein Halt und wird nicht gespeichert. Wer eine
+  weitere Antwortdomäne braucht, erweitert `match_records` (Schlüsselpräfix,
+  Pflichtfelder) und `_answer_matches` — keinen zweiten Speicher, keine
+  zweite Gruppenlogik.
 - **Der Ergebniscache versioniert geometrische Auskünfte.** Alte Einträge
   ohne den aktuellen Formatstand sind Fehltreffer. Auch Änderungen erzeugter
   Geometrie und Merkmalsmetadaten gehören zu dieser Kompatibilitätsgrenze.

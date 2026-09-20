@@ -1994,6 +1994,7 @@
   "Dieser Schlüssel gilt für eine andere Hauptversion von Solidon.": "Questa chiave vale per un'altra versione principale di Solidon.",
   "Dieser Schritt baut den exakten Körper neu, und ein späterer Bezug auf eine seiner Flächen ist danach nicht belegt. Wähle die Fläche dort neu, oder nimm den Schritt mit Strg+Z zurück.": "Questo passaggio ricostruisce il corpo esatto e, in seguito, un riferimento successivo a una delle sue facce non è verificato. Selezioni di nuovo la faccia lì oppure annulli il passaggio con Ctrl+Z.",
   "Dieser Schritt fasst mehrere Operationen zusammen. Öffnen lässt sich jede einzeln — die eingerückten Zeilen darunter.": "Questo passo raggruppa più operazioni. Ognuna si apre singolarmente: le righe rientrate sotto.",
+  "Dieser Schritt hat den exakten Körper neu gebaut. Wähle die aktuelle Fläche, die den bisherigen Bezug fortführt.": "Questo passaggio ha ricostruito il corpo esatto. Selezioni la faccia attuale che prosegue il riferimento precedente.",
   "Dieser Schritt hat keine Werte.": "Questo passo non ha valori.",
   "Dieser Schritt lässt sich nicht festschreiben.": "Questo passo non si può fissare.",
   "Dieser Schritt verwendet kein vorhandenes Modell, das Solidon reparieren kann.": "Questo passaggio non usa alcun modello esistente che Solidon possa riparare.",

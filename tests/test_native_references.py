@@ -742,6 +742,282 @@ def test_a_blocked_reference_is_neither_resolved_by_name_nor_asked_again(
     assert result.rewritten == 1
 
 
+# --- die native Neuwahl: Format 28, Domäne native-group, Erzeugerscope ---------------------
+
+
+def _pushed_project(profile: Profile, distance: float = 15.0):
+    """Quader, bündige Passung auf Deck- und Bodenfläche, dann die Deckfläche versetzt."""
+    project, history, sources, top, bottom = _box_project(profile)
+    project.document.fits.append(
+        Fit(name="deckel", a=FeatureRef("obj_1", top), b=FeatureRef("obj_1", bottom), kind="flush")
+    )
+    history.apply(
+        "Fläche versetzen",
+        [
+            OperationDraft(
+                op="push_face", inputs=("obj_1",), params={"face": top, "distance": distance}
+            )
+        ],
+    )
+    return project, history, sources, top, bottom
+
+
+class _Chooser:
+    """Antwortet wie ein Kunde, der die versetzte Deckfläche im Bild anklickt.
+
+    Die Auswahl entsteht aus der tatsächlichen Fragegeometrie: ``question_context``
+    liefert die ungeklärte Ausgabe als Vorschau, und gewählt wird der Kandidat,
+    dessen Mitte auf der neuen Höhe liegt — nicht der erste, nicht ein Name.
+    """
+
+    def __init__(self, height: float, *, decline: bool = False) -> None:
+        self.height = height
+        self.decline = decline
+        self.asked: list[str] = []
+        self.offered: list[list[str]] = []
+        self.preview: object = None
+        self.candidates: tuple[tuple[str, str], ...] = ()
+
+    def context(self, preview, candidates) -> None:
+        if preview is not None:
+            self.preview = preview
+            self.candidates = candidates
+
+    def __call__(self, question: str, choices: list[str]) -> str:
+        self.asked.append(question)
+        self.offered.append(list(choices))
+        if self.decline:
+            return choices[-1]
+        scene = self.preview.scene  # type: ignore[attr-defined]
+        for object_id, candidate in self.candidates:
+            feature = scene.objects[object_id].features[candidate]
+            if abs(float(feature.params["centre"][2]) - self.height) < 1e-6:
+                assert candidate in choices
+                return candidate
+        pytest.fail(f"kein Kandidat auf Höhe {self.height}: {self.candidates}")
+
+
+def test_the_customer_chooses_the_face_that_carries_the_reference_on(
+    profile: Profile, tmp_path: Path
+) -> None:
+    """Die Wahl gilt als Alias, wird gespeichert, überlebt Wiederöffnen und warmen Cache."""
+    from app.core.perceive.match_records import NATIVE_DOMAIN, domain_of
+    from app.core.scene import FORMAT_VERSION
+    from app.core.scene.project import load, save
+
+    project, history, sources, top, _bottom = _pushed_project(profile)
+    push_id = project.document.ops[-1].id
+    chooser = _Chooser(35.0)
+    cache = ResultCache()
+
+    result = evaluate(
+        project.document,
+        profile,
+        sources=sources,
+        cache=cache,
+        ask=chooser,
+        question_context=chooser.context,
+    )
+
+    assert result.complete and not result.blocked_references
+    assert len(chooser.asked) == 1 and "exakten Körper neu gebaut" in chooser.asked[0]
+    assert chooser.offered[0][-1] == "Nicht weiterführen"
+    body = result.scene.objects["obj_1"]
+    assert body.mesh.volume == pytest.approx(42000.0, rel=1e-9)
+    assert body.features[top].params["centre"][2] == pytest.approx(35.0)
+    assert set(body.features[top].face_indices) <= set(range(body.mesh.triangle_count))
+    assert project.document.fits[0].a == FeatureRef("obj_1", top), "der Bezug bleibt, wie er war"
+    records = result.matches[push_id]
+    (key,) = records
+    assert domain_of(key) == NATIVE_DOMAIN
+    (decision,) = records[key]["decisions"].values()
+    assert list(records[key]["decisions"]) == [top] and "candidate" in decision
+    chosen = records[key]["candidates"][decision["candidate"]]
+    assert chosen["claims"] == [top] and chosen["fingerprint"]["kind"] == "face"
+    assert chosen["fingerprint"]["relative"][2] > 0.0, "die gewählte Fläche liegt oben"
+    assert records[key]["scope"] and records[key]["object_id"] == "obj_1"
+    assert records[key]["old_ids"] == [top]
+
+    assert history.record_matches(result.matches)
+    again = evaluate(
+        project.document,
+        profile,
+        sources=sources,
+        cache=cache,
+        ask=lambda *_: pytest.fail("die gespeicherte Wahl gilt"),
+    )
+    assert again.complete and not again.matches
+    assert cache.statistics.hits >= 1, "der Erzeuger bleibt ein Cachetreffer"
+    assert again.scene.objects["obj_1"].features[top].params["centre"][2] == pytest.approx(35.0)
+
+    reopened = load(save(project, tmp_path / "neuwahl.p3d"))
+    assert reopened.document.format_version == FORMAT_VERSION
+    assert reopened.document.ops[-1].matches == records
+    cold = evaluate(
+        reopened.document,
+        profile,
+        sources=ProjectSources(reopened),
+        ask=lambda *_: pytest.fail("auch nach dem Wiederöffnen gilt sie"),
+    )
+    assert cold.complete
+    assert cold.scene.objects["obj_1"].features[top].params["centre"][2] == pytest.approx(35.0)
+
+
+def test_another_producer_version_asks_again(profile: Profile) -> None:
+    """Der Scope ist die Fassung des Erzeugers: ein anderer Versatz, eine neue Frage."""
+    project, history, sources, top, _bottom = _pushed_project(profile)
+    push_id = project.document.ops[-1].id
+    chooser = _Chooser(35.0)
+    first = evaluate(
+        project.document, profile, sources=sources, ask=chooser, question_context=chooser.context
+    )
+    assert first.complete and history.record_matches(first.matches)
+
+    history.change_params(push_id, {"face": top, "distance": 16.0})
+    later = _Chooser(36.0)
+    second = evaluate(
+        project.document, profile, sources=sources, ask=later, question_context=later.context
+    )
+
+    assert second.complete and len(later.asked) == 1
+    stored = next(iter(second.matches[push_id].values()))
+    assert stored["scope"] != next(iter(first.matches[push_id].values()))["scope"]
+
+
+def test_not_carried_keeps_the_reference_blocked(profile: Profile) -> None:
+    """„Nicht weiterführen" ist ehrlich: Der Bezug bleibt gesperrt, die Kette steht."""
+    project, _history, sources, top, _bottom = _pushed_project(profile)
+    chooser = _Chooser(35.0, decline=True)
+
+    result = evaluate(
+        project.document, profile, sources=sources, ask=chooser, question_context=chooser.context
+    )
+
+    assert result.stopped_at == project.document.ops[-1].id
+    assert result.blocked_references == (FeatureRef("obj_1", top),)
+    assert not result.matches, "eine Absage wird am exakten Körper nicht festgeschrieben"
+    stop = [f for f in result.scene.report.findings if f.op_id == result.stopped_at]
+    assert [f.code for f in stop] == ["op.push_face.NativeReferenceLost"]
+    assert result.scene.objects["obj_1"].mesh.volume == pytest.approx(24000.0, rel=1e-9)
+
+
+def test_without_anyone_to_ask_the_question_stays_open_with_its_choices(
+    profile: Profile,
+) -> None:
+    """Kommandozeile und Agent: kein Raten, die Kandidaten stehen als Vorschläge da."""
+    project, _history, sources, top, _bottom = _pushed_project(profile)
+
+    result = evaluate(project.document, profile, sources=sources)
+
+    assert result.stopped_at == project.document.ops[-1].id
+    assert FeatureRef("obj_1", top) in result.blocked_references
+    stop = [f for f in result.scene.report.findings if f.op_id == result.stopped_at]
+    assert [f.code for f in stop] == ["op.push_face.NativeReferenceLost"]
+    choices = [action.id for action in stop[0].suggestions if action.id.startswith("choose:")]
+    assert choices, stop[0].suggestions
+    assert "Nicht weiterführen" in choices[-1]
+
+
+def test_a_mesh_answer_never_serves_the_native_reselection(profile: Profile) -> None:
+    """Dieselbe Wahl unter ``group:`` statt ``native-group:`` ist keine native Zustimmung."""
+    from app.core.perceive.match_records import GROUP_DOMAIN, group_key
+
+    project, history, sources, top, _bottom = _pushed_project(profile)
+    push_id = project.document.ops[-1].id
+    chooser = _Chooser(35.0)
+    result = evaluate(
+        project.document, profile, sources=sources, ask=chooser, question_context=chooser.context
+    )
+    record = dict(next(iter(result.matches[push_id].values())))
+    del record["scope"]
+    mesh_key = group_key("obj_1", record["old_ids"], domain=GROUP_DOMAIN)
+    assert history.record_matches({push_id: {mesh_key: record}})
+
+    again = evaluate(project.document, profile, sources=sources)
+
+    assert again.stopped_at == push_id
+    assert FeatureRef("obj_1", top) in again.blocked_references
+
+
+def test_a_native_record_needs_its_scope_and_a_mesh_record_must_not_carry_one() -> None:
+    from app.core.perceive.match_records import (
+        GROUP_DOMAIN,
+        NATIVE_DOMAIN,
+        domain_of,
+        group_key,
+        validate_group,
+    )
+
+    fingerprint = {
+        "kind": "face",
+        "relative": [0.0, 0.0, 0.5],
+        "axis": [0.0, 0.0, 1.0],
+        "diameter": 1200.0,
+        "directional": True,
+    }
+    record = {
+        "object_id": "obj_1",
+        "old_ids": ["face_3"],
+        "candidates": [{"fingerprint": fingerprint, "claims": ["face_3"]}],
+        "decisions": {"face_3": {"candidate": 0}},
+    }
+    native_key = group_key("obj_1", ["face_3"], domain=NATIVE_DOMAIN)
+    mesh_key = group_key("obj_1", ["face_3"], domain=GROUP_DOMAIN)
+    assert domain_of(native_key) == NATIVE_DOMAIN and domain_of(mesh_key) == GROUP_DOMAIN
+    assert domain_of("fremd:[]") is None
+    validate_group(mesh_key, record, ("obj_1",))
+    validate_group(native_key, {**record, "scope": "erzeuger:0"}, ("obj_1",))
+    with pytest.raises(ValueError, match="group"):
+        validate_group(native_key, record, ("obj_1",))
+    with pytest.raises(ValueError, match="group"):
+        validate_group(mesh_key, {**record, "scope": "erzeuger:0"}, ("obj_1",))
+    with pytest.raises(ValueError, match="scope"):
+        validate_group(native_key, {**record, "scope": ""}, ("obj_1",))
+    with pytest.raises(ValueError, match="key"):
+        validate_group(mesh_key, {**record, "old_ids": ["face_4"]}, ("obj_1",))
+    with pytest.raises(ValueError, match="key"):
+        validate_group("fremd:[]", record, ("obj_1",))
+    with pytest.raises(ValueError, match="domain"):
+        group_key("obj_1", ["face_3"], domain="fremd")
+
+
+def test_a_saved_native_choice_holds_only_for_its_scope() -> None:
+    from app.core.perceive.match_decisions import group_fingerprint, resolve_group
+
+    _solid, found = _exact_box()
+    name = next(iter(found))
+    claims = {name: (name,)}
+    centre, diagonal = _solid.bounds.centre, _solid.bounds.diagonal
+    record = group_fingerprint("body", claims, {name: name}, found, centre, diagonal, scope="a:0")
+
+    assert record["scope"] == "a:0"
+    assert resolve_group(record, "body", claims, found, centre, diagonal, scope="a:0") == {
+        name: name
+    }
+    assert resolve_group(record, "body", claims, found, centre, diagonal, scope="b:0") is None
+    assert resolve_group(record, "body", claims, found, centre, diagonal) is None, (
+        "ein nativer Datensatz ist keine Netzantwort"
+    )
+
+
+def test_the_v28_example_carries_a_native_reselection_and_v27_migrates_unchanged() -> None:
+    from app.core.perceive.match_records import NATIVE_DOMAIN, domain_of
+    from app.core.scene import FORMAT_VERSION
+    from app.core.scene.project import load, project_data
+
+    folder = Path(__file__).parent / "data" / "projects"
+    project = load(folder / "example_v28.p3d")
+    assert project.document.format_version == FORMAT_VERSION
+    records = project.document.ops[0].matches
+    native = [record for key, record in records.items() if domain_of(key) == NATIVE_DOMAIN]
+    assert len(native) == 1 and native[0]["scope"] == "beispiel-erzeuger:0"
+
+    raw = project_data(folder / "example_v27.p3d")
+    older = load(folder / "example_v27.p3d")
+    assert older.document.format_version == FORMAT_VERSION
+    assert older.document.ops[0].matches == raw["ops"][0]["matches"]
+
+
 def test_the_session_hands_the_blocked_references_to_the_check() -> None:
     """Der einzige Anschluss, an dem der Sperrzustand eingelöst wird — dort wird er geprüft."""
     source = (Path(__file__).parent.parent / "app" / "ui" / "session.py").read_text(

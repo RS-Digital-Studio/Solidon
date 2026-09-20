@@ -1994,6 +1994,7 @@
   "Dieser Schlüssel gilt für eine andere Hauptversion von Solidon.": "This key is for a different major version of Solidon.",
   "Dieser Schritt baut den exakten Körper neu, und ein späterer Bezug auf eine seiner Flächen ist danach nicht belegt. Wähle die Fläche dort neu, oder nimm den Schritt mit Strg+Z zurück.": "This step rebuilds the exact body, and a later reference to one of its faces is not verified afterwards. Select the face there again, or undo the step with Ctrl+Z.",
   "Dieser Schritt fasst mehrere Operationen zusammen. Öffnen lässt sich jede einzeln — die eingerückten Zeilen darunter.": "This step groups several operations. Each one opens on its own — the indented lines below it.",
+  "Dieser Schritt hat den exakten Körper neu gebaut. Wähle die aktuelle Fläche, die den bisherigen Bezug fortführt.": "This step rebuilt the exact body. Select the current face that carries on the previous reference.",
   "Dieser Schritt hat keine Werte.": "This step has no values.",
   "Dieser Schritt lässt sich nicht festschreiben.": "This step cannot be fixed.",
   "Dieser Schritt verwendet kein vorhandenes Modell, das Solidon reparieren kann.": "This step does not use an existing model that Solidon can repair.",
