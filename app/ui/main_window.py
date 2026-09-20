@@ -42,6 +42,7 @@ from PySide6.QtGui import (
     QStandardItemModel,
 )
 from PySide6.QtWidgets import (
+    QAbstractSpinBox,
     QApplication,
     QCheckBox,
     QComboBox,
@@ -51,6 +52,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QInputDialog,
     QLabel,
+    QLineEdit,
     QListWidgetItem,
     QMainWindow,
     QMenu,
@@ -10296,6 +10298,15 @@ class MainWindow(QMainWindow):
         """Ihr Träger. Getrennt geführt, damit ein Test ihn fragen kann, ohne
         durch den Fluss zu greifen."""
         self._quiet_target: tuple[str, str | None] | None = None
+        self._quiet_order: Callable[[str, Mapping[str, Any]], _PreviewOrder | None] | None = None
+        window_ref = weakref.ref(self)
+
+        def selection_allowed() -> bool:
+            window = window_ref()
+            return window is not None and window._quiet_selection_allowed()
+
+        self.viewport.selection_allowed = selection_allowed
+        self.object_tree.tree.selection_allowed = selection_allowed
         """Körper und Merkmal, deren Stelle die laufende Platzierung bearbeitet."""
         self._measures_to_resume: str = ""
         """Das Merkmal, an dem die Maße nach dem Übernehmen wieder ins Bild kommen.
@@ -10334,7 +10345,7 @@ class MainWindow(QMainWindow):
         # sonst eine Änderung im Bild und keinen Ort mehr, sie zu übernehmen
         # oder zurückzunehmen — samt dem Band und seinem anwendungsweiten
         # Ereignisfilter (gemessen am 03.09.2026: alle sechs Zustände blieben).
-        self.feature_dock.closed.connect(self._drop_feature_preview)
+        self.feature_dock.closed.connect(self._feature_dock_closed)
         # Der Eintrag kommt von Qt selbst und trägt damit denselben Namen wie
         # das Fenster; wer es zugemacht hat, findet es hier wieder.
         entry = self.feature_dock.toggleViewAction()
@@ -10405,6 +10416,10 @@ class MainWindow(QMainWindow):
         übernehmen zu klicken").
         """
         values = {"x": float(centre[0]), "y": float(centre[1]), "z": float(centre[2])}
+        if self._quiet_placement is not None and self._quiet_host is not None:
+            self._quiet_host.begin_edit()
+            self._quiet_placement.move_to((values["x"], values["y"], values["z"]))
+            return
         if not self.feature_panel.take_values("move_feature", values):
             self.announce(tr("Die neue Stelle steht rechts im Auswahlfenster."))
         if self.viewport.slot_drag_waits():
@@ -10448,6 +10463,16 @@ class MainWindow(QMainWindow):
         Wo das Merkmalfenster die Handlung nicht anbietet, bleibt es beim
         Umriss — eine Zahl, die nirgends steht, wäre schlimmer als keine.
         """
+        if (
+            self._quiet_placement is not None
+            and self._quiet_placement.spec_of().name == "slot_hole"
+        ):
+            self._quiet_host.begin_edit()
+            self._quiet_host.take_placement(
+                {"slot_length": float(length), "slot_angle": float(angle)}
+            )
+            return
+
         if not self.feature_panel.take_values(
             "slot_hole", {"slot_length": float(length), "slot_angle": float(angle)}
         ):
@@ -10531,6 +10556,8 @@ class MainWindow(QMainWindow):
 
     def _feature_step(self, op: str, feature_id: str, params: dict[str, Any]) -> None:
         """Eine Geste bleibt ein Auftrag; eine Vernetzung wird vor ihrer Übernahme gezeigt."""
+        if not self._quiet_command_allowed():
+            return
         selected = self.object_tree.selected()
         if selected is None or not REGISTRY.has(op):
             return
@@ -10568,13 +10595,18 @@ class MainWindow(QMainWindow):
             commit()
 
     def _prepare_slot_change(
-        self, feature_id: str, params: Mapping[str, Any]
+        self,
+        feature_id: str,
+        params: Mapping[str, Any],
+        *,
+        object_id: ObjectId | None = None,
+        result: EvaluationResult | None = None,
     ) -> _PreviewOrder | None:
         """Gemessene, unveränderte Werte bleiben im ursprünglichen Langlochschritt."""
         from app.core.geom.prepare_ops import slot_angle_of
 
-        object_id = self.object_tree.selected()
-        result = self.session.last_result
+        object_id = object_id if object_id is not None else self.object_tree.selected()
+        result = result if result is not None else self.session.last_result
         entry = result.scene.objects.get(object_id) if result and object_id else None
         feature = entry.features.get(feature_id) if entry is not None else None
         if feature is None or feature.kind != "slot":
@@ -12635,12 +12667,12 @@ class MainWindow(QMainWindow):
         er ist die eine Stelle, an der beide Wege — Baum und Bild —
         zusammenlaufen.
 
-        **Ein Klick ins Leere verlässt die Maße im Bild.** Er ist neben Escape
-        und *Abbrechen* der dritte Weg heraus (Robert, 11.09.2026: „solange
-        der klick auf dem modell ist" bleibt man drin — der Klick daneben nimmt
-        die Ansicht gar nicht erst an, siehe ``Viewport._on_left_click``). Was
-        darin wartete, geht mit; gerechnet ist bis dahin nichts (Regel 2).
+        Ein Klick ins Leere verlässt die passive Maßanzeige. Ein bereits
+        begonnener Entwurf hält dagegen seine Auswahl bis zum gemeinsamen
+        Abschluss; der Viewport prüft das vor seiner eigenen Auswahländerung.
         """
+        if not self._quiet_selection_allowed():
+            return
         if not object_id and not add:
             self._leave_the_measures()
         self.object_tree.select_object(object_id or None, add=add)
@@ -12699,7 +12731,7 @@ class MainWindow(QMainWindow):
     def _show_feature_fields(
         self, feature_id: str, entry: Any, result: EvaluationResult | None
     ) -> None:
-        """Die Felder dieses Merkmals ins Auswahlfenster, und es aufmachen.
+        """Merkmalsmaße und belegte Originalwerte für Panel und Maßgruppe vorbereiten.
 
         Zwei Wege enden hier: die einzeln angeklickte Zeile und die Bohrung
         mit ihrer Senkung, die als **zwei** Merkmale gemeldet wird und
@@ -12746,14 +12778,26 @@ class MainWindow(QMainWindow):
         )
         if textures:
             self.feature_panel.offer_texture_steps(textures, self._parameter_values())
-        self.feature_dock.reveal()
-        self._start_feature_preview()
-        resume = self._measures_to_resume == feature_id
-        # Ein anderes Merkmal löscht den Merker ebenso: Er gilt der Handlung,
-        # aus der er kam, und nicht der nächsten Auswahl.
+        from app.core.scene.placement import bore_step_of
+
+        bore = bore_step_of(
+            self.session.project.document,
+            result.scene.objects if result is not None else {},
+            FeatureRef(entry.id, feature_id),
+            completed=result.completed if result is not None else (),
+        )
+        if bore is not None:
+            self.feature_panel.offer_bore_step(
+                bore, REGISTRY.get(bore.op), self._parameter_values()
+            )
         self._measures_to_resume = ""
-        if resume and (self._quiet_placement is None or not self._quiet_placement.active):
-            self.feature_panel.request_in_view()
+        if self._op_dialog is None:
+            if bore is not None:
+                self._place_from_feature_panel(bore.op, dict(bore.params))
+            else:
+                self.feature_panel.request_in_view()
+        if self._quiet_placement is None:
+            self._start_feature_preview()
 
     def _close_the_other_way(self) -> None:
         """Ein Zug am Langlochgriff schließt die Platzierung an derselben Stelle.
@@ -12767,6 +12811,14 @@ class MainWindow(QMainWindow):
         hat gerade entschieden. Der Merker geht mit, damit die Platzierung an
         derselben Auswahl nicht sofort wieder anspringt.
         """
+        if (
+            self._quiet_placement is not None
+            and self._quiet_placement.spec_of().name == "slot_hole"
+        ):
+            self._quiet_host.begin_edit()
+            return
+        if not self._quiet_command_allowed():
+            return
         self._drop_stale_measures()
 
     def _drop_stale_measures(self) -> None:
@@ -13088,15 +13140,22 @@ class MainWindow(QMainWindow):
         self._on_features_selected(list(self.object_tree.selected_features()))
 
     def _prepare_group_order(
-        self, op: str, params: Mapping[str, Any], feature_ids: Sequence[str]
+        self,
+        op: str,
+        params: Mapping[str, Any],
+        feature_ids: Sequence[str],
+        *,
+        object_id: ObjectId | None = None,
+        result: EvaluationResult | None = None,
+        selected_feature: str | None = None,
     ) -> _PreviewOrder | None:
         """Alle Gruppenmitglieder bekommen dieselben Maße und ihre eigene Stelle."""
-        selected = self.object_tree.selected()
+        selected = object_id if object_id is not None else self.object_tree.selected()
         if selected is None or not REGISTRY.has(op) or not feature_ids:
             return None
         from app.core.perceive.relations import alike_for_action, params_for_members
 
-        result = self.session.last_result
+        result = result if result is not None else self.session.last_result
         body = result.scene.objects.get(selected) if result else None
         picked = str(params.get("at_feature", ""))
         group = (
@@ -13106,7 +13165,8 @@ class MainWindow(QMainWindow):
         )
         if (
             group is None
-            or self.object_tree.selected_feature() != picked
+            or (selected_feature if object_id is not None else self.object_tree.selected_feature())
+            != picked
             or set(feature_ids) != {member.target for member in group.members}
             or len(feature_ids) != len(group.members)
         ):
@@ -13138,7 +13198,10 @@ class MainWindow(QMainWindow):
 
     def _prepare_feature_order(self, op: str, params: Mapping[str, Any]) -> _PreviewOrder | None:
         """Baustein, Langloch, Gruppe und neuer Auftrag teilen Vorschau und Commit."""
-        step = self.feature_panel.shown_part_step()
+        bound = self._quiet_order
+        if bound is not None:
+            return bound(op, params)
+        step = self.feature_panel.step_for_action(op)
         if step is not None:
             operation = self.session.history.operation(step)
             return _PreviewOrder(change_op=step, change_values={**operation.params, **params})
@@ -13172,6 +13235,11 @@ class MainWindow(QMainWindow):
         entered = self.feature_panel.preview_values()
         if entered is not None:
             self._on_feature_values_changed(*entered)
+
+    def _feature_dock_closed(self) -> None:
+        """Eine Maßgruppe im Bild behält ihre Vorschau auch bei geschlossenem Panel."""
+        if self._quiet_host is None:
+            self._drop_feature_preview()
 
     def _drop_feature_preview(self) -> None:
         """Die wartende Vorschau des Merkmalsfensters fällt.
@@ -13230,6 +13298,11 @@ class MainWindow(QMainWindow):
         verzögert: Wer 16 tippt, tippt zuerst 1, und eine Boolesche über das
         ganze Teil je Tastendruck macht das Feld unbenutzbar.
         """
+        flow = self._quiet_placement
+        if flow is not None and flow.spec_of().name != op:
+            if not self._quiet_command_allowed():
+                return
+            self.end_quiet_placement()
         self._end_changed_quiet_placement()
         previous = self._preview_approval
         order = self._prepare_feature_order(op, params)
@@ -13294,32 +13367,18 @@ class MainWindow(QMainWindow):
         (Regel 2). Der Körper kommt aus der Auswahl — welches Merkmal gemeint
         ist, steht schon in ``at_feature``.
 
-        **Läuft eine Platzierung, schließt dieser Knopf sie ab.** Sie hat seit
-        dem 11.09.2026 keine eigene Leiste mehr, und damit kein eigenes
-        Übernehmen (Robert: „auch 2 mal übernehmen einmal unten und einmal
-        rechts … nur die rechte verwenden"). Träger und Felder halten denselben
-        Stand: Die Bildposition folgt in die Felder, getippte Maße zurück in
-        die Platzierung. Ihr Werkzeugkörper wird mit diesen Werten übernommen.
+        Eine laufende Maßgruppe hält ihren Entwurf im Host und besitzt den
+        gemeinsamen Abschluss im Bild. Der Panelanschluss reicht einen
+        Übernahmeauftrag an dieselbe Freigabe weiter. Bildposition und Felder
+        behalten dabei denselben Stand und erzeugen gemeinsam einen Schritt.
         """
+        flow = self._quiet_placement
+        if flow is not None and flow.spec_of().name != op:
+            if not self._quiet_command_allowed():
+                return
+            self.end_quiet_placement()
         self._end_changed_quiet_placement()
         flow = self._quiet_placement
-        # **Was man bearbeitet hat, bleibt gewählt** — auch ohne Maße im Bild.
-        # Ein Merkmal, das im Schritt seinen Namen wechselt (``hole_1`` wird
-        # ``slot_1``, zugesagt in ``SLOT_FEATURE_RENAMED``), findet der Baum
-        # nicht wieder: Nach *Zum Langloch ziehen* → Übernehmen stand
-        # „Langloch 1" im Baum, gewählt war der **Körper**, und das
-        # Merkmalfenster zeigte seinen Leerzustand (gemessen 13.09.2026). Der
-        # Weg dorthin gab es schon (:meth:`_reselect_the_renamed`), er hing
-        # nur an der laufenden Platzierung.
-        self._feature_to_keep = self.object_tree.selected_feature() or ""
-        self._resume_near = self._where_the_step_puts_it(params)
-        if flow is not None and flow.active:
-            # **Die Maße kommen nach dem Schritt wieder** — an demselben
-            # Merkmal, sobald das Merkmalfenster es neu zeigt
-            # (:meth:`_show_feature_fields`). Gemerkt wird hier, weil hier
-            # feststeht, dass jemand aus dem Bild heraus übernimmt; die
-            # **Auswahl** darüber gilt in jedem Fall.
-            self._measures_to_resume = self._feature_to_keep
         if flow is not None and flow.active and flow.spec_of().name == op:
             flow.accept()
             return
@@ -13333,6 +13392,7 @@ class MainWindow(QMainWindow):
             order = self._prepare_feature_order(op, params)
             if order is None or not self._preview_can_apply(self.feature_panel, order):
                 return
+            self._remember_feature_edit(params)
             # Die Stelle kommt aus den Feldern rechts — dort landet der Zug am
             # Bewegungsgriff ebenso wie eine getippte Zahl.
             place = (
@@ -13348,15 +13408,39 @@ class MainWindow(QMainWindow):
             return
         self._apply_placed_feature(op, params)
 
-    def _where_the_step_puts_it(self, params: Mapping[str, Any]) -> Vec3 | None:
+    def _remember_feature_edit(
+        self, params: Mapping[str, Any], *, historical: bool = False
+    ) -> None:
+        """Auswahl und Bildmaße bleiben auch nach einer Merkmalsumbenennung erhalten."""
+        target = self._quiet_target
+        object_id = target[0] if target is not None else self.object_tree.selected()
+        feature_id = str(
+            params.get("at_feature")
+            or (target[1] if target is not None else self.object_tree.selected_feature())
+            or ""
+        )
+        self._feature_to_keep = feature_id
+        # Ursprüngliche Schrittkoordinaten liegen vor späteren Transformationen
+        # und dürfen nicht als heutige Weltposition zur Wiederwahl dienen.
+        self._resume_near = self._where_the_step_puts_it(
+            {} if historical else params, object_id=object_id, feature_id=feature_id
+        )
+        if self._quiet_placement is not None and self._quiet_placement.active:
+            self._measures_to_resume = feature_id
+
+    def _where_the_step_puts_it(
+        self,
+        params: Mapping[str, Any],
+        *,
+        object_id: str | None,
+        feature_id: str,
+    ) -> Vec3 | None:
         """Die Mitte, an der das gewählte Merkmal nach dem Schritt liegen wird.
 
         Aus den Feldern, wenn der Schritt eine Stelle nennt; sonst die
         gemessene Mitte des Merkmals. Drei Nullen heißen in ``slot_hole`` und
         ``resize_hole`` „lass es, wo es ist" — und so werden sie hier gelesen.
         """
-        feature_id = self.object_tree.selected_feature()
-        object_id = self.object_tree.selected()
         result = self.session.last_result
         entry = result.scene.objects.get(object_id) if result and object_id else None
         feature = entry.features.get(feature_id) if entry is not None and feature_id else None
@@ -13427,60 +13511,38 @@ class MainWindow(QMainWindow):
                     self.object_tree.select_feature(object_id, name)
                     return
 
-    def _apply_placed_feature(self, op: str, params: Mapping[str, Any]) -> None:
-        """Der Schritt selbst — von der Handlung rechts oder aus der Platzierung.
+    def _quiet_selection_allowed(self) -> bool:
+        """Nur die erste Eingabe bindet die Auswahl bis zum gemeinsamen Abschluss."""
+        host = self._quiet_host
+        return host is None or not host.begun or host.committing
 
-        **Eine Stelle für beide Wege**, und sie ist der Rückruf, den ein
-        `QuietHost` beim Übernehmen zieht. Getrennt von
-        :meth:`_apply_from_feature_panel`, weil jene Methode erst fragt, ob
-        eine Platzierung läuft — käme der Rückruf dort an, riefe er sich
-        selbst.
-        """
-        object_id = self.object_tree.selected()
-        if object_id is None:
-            self.announce(_needs_objects(0))
-            return
+    def _quiet_command_allowed(self) -> bool:
+        """Fremde Befehle warten auf den Abschluss und werden nicht vorgemerkt."""
+        if self._quiet_selection_allowed():
+            return True
+        self.announce(tr("Die aktuelle Änderung zuerst übernehmen oder abbrechen."))
+        return False
+
+    def _apply_placed_feature(self, op: str, params: Mapping[str, Any]) -> bool:
+        """Nur den gebundenen, sichtbar geprüften Auftrag übernehmen."""
         order = self._prepare_feature_order(op, params)
         if order is None or not self._preview_can_apply(
             self._quiet_host or self.feature_panel, order
         ):
-            return
-        self._drop_feature_preview()
-        # **Ein Langloch aus einem Schritt ändert den Schritt** — derselbe
-        # Vorrang wie in :meth:`_feature_step`, für den Weg über die Felder
-        # rechts und die stille Platzierung.
-        if order.change_op is not None:
-            self.session.change_params(order.change_op, dict(order.change_values or {}))
-            return
-        self.session.apply(REGISTRY.get(op).title, list(order.drafts), bundle=order.bundle)
+            return False
+        remembered = (self._feature_to_keep, self._resume_near, self._measures_to_resume)
+        self._remember_feature_edit(params, historical=order.change_op is not None)
+        committed = self._commit_preview_order(order)
+        if not committed:
+            self._feature_to_keep, self._resume_near, self._measures_to_resume = remembered
+        return committed
 
     def _place_from_feature_panel(self, op: str, params: dict[str, Any]) -> None:
-        """Dieselbe Handlung, aber im Bild eingestellt (§18.5).
-
-        Der Knopf daneben führt aus, dieser **zeigt**: Im Bild stehen die
-        Maßlinien zu den Kanten der Fläche, jede mit ihrem eigenen Zahlenfeld
-        — dieselbe Bedienung wie beim Setzen einer Bohrung, an einem Merkmal,
-        das es schon gibt.
-
-        **Und ohne Dialog, seit dem 11.09.2026.** Bis dahin öffnete dieser Weg
-        den Operationsdialog und ließ die Platzierung von dort starten; der
-        Dialog stand daneben und zeigte Durchmesser, X, Y und Z ein zweites
-        Mal, während dieselben Zahlen rechts im Merkmalfenster standen — nach
-        einer Operation sogar mit verschiedenen Werten (Robert, 11.09.2026:
-        „werte im dialog und in der rechten merkmalleiste doppelt, sehr
-        verwirrend für den Kunden"). Getragen wird die Platzierung jetzt von
-        einem :class:`~app.ui.placement_flow.QuietHost`: Er hält die Werte und
-        zeigt nichts.
-
-        **Kein zweiter Weg zur Ausführung.** Der Schritt im Verlauf entsteht
-        erst, wenn jemand übernimmt — dann ruft der Träger denselben Weg, den
-        auch der Knopf rechts nimmt (:meth:`_apply_from_feature_panel`). Die
-        Vorschau des Merkmalfensters wird vorher abgeräumt; zwei Vorschauen
-        über demselben Teil sind eine zu viel.
-        """
+        """Eine passive Maßgruppe bindet beim ersten Eingriff ihren vollständigen Auftrag."""
+        from app.ui.panels import feature_field_values, refresh_feature_fields
         from app.ui.placement_flow import PlacementFlow, QuietHost
 
-        if not REGISTRY.has(op):
+        if not REGISTRY.has(op) or not self._quiet_command_allowed():
             return
         object_id = self.object_tree.selected()
         if object_id is None:
@@ -13488,62 +13550,209 @@ class MainWindow(QMainWindow):
             return
         self._drop_feature_preview()
         self.end_quiet_placement()
+        result = self.session.last_result
+        body = result.scene.objects.get(object_id) if result is not None else None
+        feature_id = str(params.get("at_feature") or self.object_tree.selected_feature() or "")
+        built = self.feature_panel.measure_fields(
+            op, self.viewport, feature=body.features.get(feature_id) if body is not None else None
+        )
+        if built is None:
+            return
+        action, fields, editors = built
         spec = REGISTRY.get(op)
         document = self.session.project.document
-        result = self.session.last_result
         target = (object_id, self.object_tree.selected_feature())
+        step = getattr(action, "step", None)
+        operation = self.session.history.operation(step) if step is not None else None
+        original = deepcopy(operation.params) if operation is not None else {}
+        inputs = tuple(operation.inputs) if operation is not None else (object_id,)
+        group = self.feature_panel.measure_group(op) if operation is None else None
+        members = tuple(member.target for member in group.members) if group is not None else ()
+        every = QCheckBox(fields) if len(members) > 1 else None
+        if every is not None:
+            every.setText(tr("Auf alle {count} gleichartigen anwenden").format(count=len(members)))
+            every.setAccessibleDescription(
+                tr("Eine Handlung für alle — und ein Strg+Z nimmt sie zusammen zurück.")
+            )
+        window_ref = weakref.ref(self)
+        scope_ref = weakref.ref(every) if every is not None else None
+        editor_refs = {name: weakref.ref(editor) for name, editor in editors.items()}
 
-        def apply_placement(values: Mapping[str, Any]) -> None:
-            # Ein schon zugestellter Rückruf gehört weiterhin seinem Träger
-            # und Dokumentstand, auch wenn inzwischen dieselben Kennungen in
-            # einem anderen Projekt oder an einer neuen Auswahl vorkommen.
+        def current_editors() -> dict[str, QWidget]:
+            return {
+                name: editor
+                for name, reference in editor_refs.items()
+                if (editor := reference()) is not None and isValid(editor)
+            }
+
+        def prepare(name: str, values: Mapping[str, Any]) -> _PreviewOrder | None:
+            window = window_ref()
+            host = host_ref()
             if (
-                self._quiet_host is not host
-                or self.session.project.document is not document
-                or self.session.last_result is not result
-                or not self.session.result_current
-                or (self.object_tree.selected(), self.object_tree.selected_feature()) != target
+                window is None
+                or host is None
+                or window._quiet_host is not host
+                or name != op
+                or window.session.project.document is not document
+                or window.session.last_result is not result
+                or not window.session.result_current
             ):
-                return
-            self._apply_placed_feature(op, values)
+                return None
+            if step is not None:
+                return _PreviewOrder(change_op=step, change_values={**original, **values})
+            scope = scope_ref() if scope_ref is not None else None
+            if scope is not None and isValid(scope) and scope.isChecked():
+                return window._prepare_group_order(
+                    op,
+                    values,
+                    members,
+                    object_id=object_id,
+                    result=result,
+                    selected_feature=feature_id,
+                )
+            if op == "slot_hole" and feature_id:
+                changed = window._prepare_slot_change(
+                    feature_id, values, object_id=object_id, result=result
+                )
+                if changed is not None:
+                    return changed
+            return _PreviewOrder(
+                drafts=(OperationDraft(op=op, inputs=inputs, params=dict(values)),)
+            )
+
+        def apply_placement(values: Mapping[str, Any]) -> bool:
+            window = window_ref()
+            if window is None or prepare(op, values) is None:
+                return False
+            return window._apply_placed_feature(op, values)
 
         host = QuietHost(
-            params,
+            {**dict(action.fixed), **params},
             apply_placement,
             known=[field.name for field in spec.params.spec()],
         )
+        host.requires_displayed_preview = True
+        host_ref = weakref.ref(host)
 
         def current_preview() -> bool:
-            """Die endgültigen Platzierungswerte müssen noch denselben Auftrag bilden."""
-            order = self._prepare_feature_order(op, host.values())
-            return order is not None and self._preview_can_apply(host, order)
+            window = window_ref()
+            host = host_ref()
+            if host is None:
+                return False
+            order = prepare(op, host.values())
+            return (
+                window is not None and order is not None and window._preview_can_apply(host, order)
+            )
 
         host.preview_check = current_preview
-        flow = PlacementFlow(host, self, lambda: spec, lambda: (object_id,))
+        flow = PlacementFlow(host, self, lambda: spec, lambda: inputs, change_op=step)
         self._quiet_host = host
         self._quiet_placement = flow
         self._quiet_target = target
+        self._quiet_order = prepare
+        self.viewport.set_feature_gizmo_blocked(op != "slot_hole")
 
         def show_values() -> None:
-            if self._quiet_host is host:
-                self.feature_panel.take_values(op, host.values(), arm=False)
-                order = self._prepare_feature_order(op, host.values())
-                if order is not None:
-                    previous = self._preview_approval
-                    approval = self._set_preview_order(host, order)
-                    self._feature_pending = (op, dict(host.values()))
-                    if approval is not previous:
-                        self._feature_preview.start()
+            window = window_ref()
+            host = host_ref()
+            if host is None:
+                return
+            order = prepare(op, host.values())
+            if window is None or order is None:
+                return
+            window.feature_panel.take_values(op, host.values(), arm=False)
+            previous = window._preview_approval
+            approval = window._set_preview_order(host, order)
+            window._feature_pending = (op, dict(host.values()))
+            if approval is not previous:
+                window._feature_preview.start()
 
+        def read_fields(*_ignored: Any, interpret: bool = False) -> bool:
+            window, host = window_ref(), host_ref()
+            if window is None or host is None or window._quiet_host is not host:
+                return False
+            editors = current_editors()
+            if len(editors) != len(editor_refs):
+                return False
+            if interpret:
+                for editor in editors.values():
+                    spins = (
+                        [editor]
+                        if isinstance(editor, QAbstractSpinBox)
+                        else editor.findChildren(QAbstractSpinBox)
+                    )
+                    for spin in spins:
+                        if not spin.isVisibleTo(editor):
+                            continue
+                        if not spin.hasAcceptableInput():
+                            spin.setFocus()
+                            window.announce(tr("Geben Sie eine gültige Zahl ein."))
+                            return False
+                        spin.interpretText()
+            try:
+                values = feature_field_values(
+                    action.fields,
+                    editors,
+                    feature_id=str(params.get("at_feature")) if params.get("at_feature") else None,
+                )
+            except AppError as exc:
+                host.block_apply(str(exc))
+                return False
+            host.take_placement(values)
+            return True
+
+        def refresh(values: Mapping[str, Any]) -> None:
+            focused = QApplication.focusWidget()
+            untouched = {
+                name: editor
+                for name, editor in current_editors().items()
+                if (focused is None or (focused is not editor and not editor.isAncestorOf(focused)))
+                and not any(line.isModified() for line in editor.findChildren(QLineEdit))
+            }
+            refresh_feature_fields(action.fields, untouched, values)
+
+        def begun() -> None:
+            window, host = window_ref(), host_ref()
+            if window is not None and host is not None and window._quiet_host is host:
+                window.feature_panel.set_measuring(True, op=op, begun=True)
+
+        def scope_changed(_checked: bool) -> None:
+            host = host_ref()
+            if host is not None:
+                host.begin_edit()
+                show_values()
+
+        for editor in editors.values():
+            if isinstance(editor, QCheckBox):
+                editor.toggled.connect(read_fields)
+            elif isinstance(editor, QComboBox):
+                editor.currentIndexChanged.connect(read_fields)
+            else:
+                signal = getattr(editor, "valueChangedMm", None)
+                if signal is None:
+                    signal = getattr(editor, "valueChanged", None)
+                if signal is None:
+                    signal = getattr(editor, "changed", None)
+                if signal is not None:
+                    signal.connect(read_fields)
+        if every is not None:
+            every.toggled.connect(scope_changed)
         host.valuesChanged.connect(show_values)
+        host.editStarted.connect(begun)
+        host.finished.connect(weak_slot(self, MainWindow.end_quiet_placement))
+        flow.set_measure_fields(
+            fields,
+            editors=editors.values(),
+            interpret=lambda: read_fields(interpret=True),
+            refresh=refresh,
+            scope=every,
+        )
         flow.start()
         if not flow.active:
-            # Wo keine Fläche zu finden ist, bleibt es beim Knopf rechts —
-            # eine leere Platzierung wäre ein Zustand ohne Ausgang.
             self.end_quiet_placement()
             return
         show_values()
-        self.feature_panel.set_measuring(True)
+        self.feature_panel.set_measuring(True, op=op)
 
     def _end_changed_quiet_placement(self) -> None:
         """Eine Platzierung räumen, sobald die Auswahl eine andere Stelle meint."""
@@ -13565,9 +13774,12 @@ class MainWindow(QMainWindow):
         flow, self._quiet_placement = self._quiet_placement, None
         self._quiet_host = None
         self._quiet_target = None
+        self._quiet_order = None
         if flow is not None:
             flow.dispose()
         self.feature_panel.set_measuring(False)
+        self.viewport.set_feature_gizmo_blocked(False)
+        self._drop_feature_preview()
 
     def _on_measure_mode(self, mode: str) -> None:
         """Messen heißt orthografisch (§18.1, RM-142).
@@ -13718,6 +13930,8 @@ class MainWindow(QMainWindow):
         Was hier gilt, hat der Kunde in der Liste angehakt und nicht im Baum
         markiert.
         """
+        if not self._quiet_command_allowed():
+            return
         # **Erst das Merkmal, dann der Körper** (Robert, 03.09.2026: „wenn wir
         # ein Merkmal auswählen und auf der Tastatur Entf drücken löschen wir
         # den ganzen Körper statt das Merkmal"). Der Weg gilt für jeden
@@ -14558,6 +14772,8 @@ class MainWindow(QMainWindow):
         das übernimmt jetzt diese Stelle, denn zwei Vorschauen um denselben
         Viewport wären eine Frage ohne Antwort.
         """
+        if not self._quiet_command_allowed():
+            return
         if self._local_features is not None:
             self._local_features.invalidate()
         previous = self._op_dialog
@@ -14733,6 +14949,9 @@ class MainWindow(QMainWindow):
             and previous.order == order
             and self._preview_is_current(previous)
         ):
+            if getattr(owner, "requires_displayed_preview", False) and previous.required is False:
+                previous.required = True
+                self._refresh_preview_block()
             return previous
         if previous is not None and previous.owner is not owner:
             block = getattr(previous.owner, "block_apply", None)
@@ -14758,7 +14977,8 @@ class MainWindow(QMainWindow):
             required=(
                 None
                 if order.change_op is not None
-                else self._order_has_exact_inputs(order, self.session.last_result)
+                else bool(getattr(owner, "requires_displayed_preview", False))
+                or self._order_has_exact_inputs(order, self.session.last_result)
             ),
         )
         self._preview_approval = approval
@@ -15015,7 +15235,9 @@ class MainWindow(QMainWindow):
             self._preview_explained(approval.problem)
             self._refresh_preview_block()
             return
-        approval.required = self._order_has_exact_inputs(approval.order, before)
+        approval.required = bool(getattr(approval.owner, "requires_displayed_preview", False)) or (
+            self._order_has_exact_inputs(approval.order, before)
+        )
         self._refresh_preview_block()
         if approval.requested:
             self._request_order_preview(approval)
@@ -16024,7 +16246,8 @@ class MainWindow(QMainWindow):
         #
         # Eine laufende Vorschau kann das nicht treffen: Sie ändert das
         # Dokument nicht und löst ``projectChanged`` deshalb nicht aus.
-        self._drop_feature_preview()
+        if self._quiet_host is None or not self._quiet_host.committing:
+            self._drop_feature_preview()
         document = self.session.project.document
         # Die Sperren kommen aus dem Dokument ins Bild — beim Öffnen, nach
         # einem Undo und nach jedem Umschalten derselbe Weg (RM-080).
@@ -16739,6 +16962,8 @@ class MainWindow(QMainWindow):
         (:func:`_needs_objects`), damit nicht zwei Stellen verschieden
         erklären, was dasselbe ist.
         """
+        if not self._quiet_command_allowed():
+            return
         # **Erst der Baustein, dann das Merkmal, dann der Körper.** Ein Wert
         # an einem Bausteinmerkmal geht in den Schritt des Bausteins
         # (:meth:`_move_the_part`) — derselbe Weg wie beim Zug am Griff.

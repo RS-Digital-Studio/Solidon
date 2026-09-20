@@ -25,6 +25,7 @@ from PySide6.QtCore import (
 )
 from PySide6.QtGui import (
     QColor,
+    QFocusEvent,
     QKeyEvent,
     QPainter,
     QPainterPath,
@@ -40,6 +41,8 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QScrollArea,
+    QVBoxLayout,
     QWidget,
 )
 from shiboken6 import isValid
@@ -56,6 +59,7 @@ from app.core.scene import placement
 from app.core.types import Feature, SceneObject, Vec3
 from app.core.units import EPS_GEOM
 from app.i18n import tr
+from app.ui.icons import icon
 from app.ui.labels import LengthSpin, feature_name, length
 from app.ui.leash import stop_watching_the_dying
 from app.ui.palette import DIFF_PALETTES
@@ -129,6 +133,8 @@ class PlacementHost(Protocol):
 
     preview_required: bool
     """Ob Übernehmen erst nach der aktuell angezeigten Vorschau erlaubt ist."""
+    requires_displayed_preview: bool
+    """Ob dieser Eingabeweg unabhängig von der Körperart eine Vorschau verlangt."""
     preview_check: Callable[[], bool] | None
 
     def block_apply(self, reason: str | None) -> None: ...
@@ -164,16 +170,21 @@ class QuietHost(QObject):
     surfaceRequested = Signal()
     valuesChanged = Signal()
     finished = Signal(int)
+    editStarted = Signal()
+    commitStarted = Signal()
+    commitFinished = Signal(bool)
+    applyStateChanged = Signal()
 
     values_stand_elsewhere = True
     """Sie stehen im Merkmalfenster — deshalb gibt es ihn überhaupt."""
 
     preview_required = False
+    requires_displayed_preview = False
 
     def __init__(
         self,
         values: Mapping[str, Any],
-        accepted: Callable[[Mapping[str, Any]], None],
+        accepted: Callable[[Mapping[str, Any]], bool],
         parent: QObject | None = None,
         *,
         known: Iterable[str] | None = None,
@@ -181,6 +192,9 @@ class QuietHost(QObject):
         super().__init__(parent)
         self._values = dict(values)
         self._accepted = accepted
+        self.begun = False
+        self.committing = False
+        self._finished = False
         self._blocked_reason: str | None = None
         self.preview_check: Callable[[], bool] | None = None
         self._known = frozenset(known) if known is not None else None
@@ -197,6 +211,13 @@ class QuietHost(QObject):
 
     def values(self) -> Mapping[str, Any]:
         return dict(self._values)
+
+    def begin_edit(self) -> None:
+        """Die erste echte Feld- oder Griffbetätigung bindet den Entwurf."""
+        if self.begun or self.committing or self._finished:
+            return
+        self.begun = True
+        self.editStarted.emit()
 
     def take_placement(self, values: Mapping[str, Any]) -> None:
         """Ort und Maße zurück in den Träger — und die Runde ist gemeldet.
@@ -219,10 +240,20 @@ class QuietHost(QObject):
 
     def block_apply(self, reason: str | None) -> None:
         """Übernahme sperren oder freigeben; die Vorschau verwaltet das Fenster."""
+        if reason == self._blocked_reason:
+            return
         self._blocked_reason = reason
+        self.applyStateChanged.emit()
+
+    @property
+    def blocked_reason(self) -> str | None:
+        """Der gesetzte Sperrgrund, ohne eine neue Vorschauprüfung auszulösen."""
+        return self._blocked_reason
 
     def can_accept(self) -> bool:
         """Ob der Träger die aktuellen Werte übernehmen darf."""
+        if self._finished or self.committing:
+            return False
         current = self.preview_check is None or self.preview_check()
         return current and self._blocked_reason is None
 
@@ -235,10 +266,29 @@ class QuietHost(QObject):
         """
         if not self.can_accept():
             return
-        self._accepted(self.values())
+        succeeded = False
+        self.committing = True
+        self.commitStarted.emit()
+        try:
+            succeeded = self._accepted(self.values())
+        finally:
+            self.committing = False
+            self.commitFinished.emit(succeeded)
+        if not succeeded or self._finished:
+            return
+        self._finished = True
+        self.begun = False
         # Dieselbe Zahl, die ein angenommener `QDialog` sendet — wer an
         # `finished` hängt, soll den Träger nicht am Code erkennen müssen.
         self.finished.emit(int(QDialog.DialogCode.Accepted))
+
+    def reject(self) -> None:
+        """Escape oder Abbrechen verwirft den Entwurf genau einmal."""
+        if self._finished:
+            return
+        self._finished = True
+        self.begun = False
+        self.finished.emit(int(QDialog.DialogCode.Rejected))
 
     # --- die vier Fensterfragen, alle ohne Fenster --------------------------------
 
@@ -523,6 +573,11 @@ class PlacementFlow(QObject):
         self._epoch = 0
         self.active = False
         self._disposed = False
+        self._watched: list[QObject] = []
+        self._field_targets: list[QObject] = []
+        self._measure_targets: list[QObject] = []
+        self._committing_document: Any = None
+        self._deferred_document_change = False
         overlay = getattr(window, "overlay", None)
         self._overlay_zones = tuple(
             zone
@@ -530,7 +585,7 @@ class PlacementFlow(QObject):
             if isinstance(zone := getattr(overlay, role, None), QWidget)
         )
         for zone in self._overlay_zones:
-            zone.installEventFilter(self)
+            self._watch(zone)
         self._serial = 0
         self._pending: tuple[int, int, bool] | None = None
         self._surface_busy = False
@@ -547,6 +602,8 @@ class PlacementFlow(QObject):
         self._object_id = ""
         self._centre_id = ""
         self._frozen = False
+        self._position_edited = False
+        self._measure_without_surface = False
         self._distance_valid = True
         self._commit_pending = False
         self._accept_pending = False
@@ -621,6 +678,45 @@ class PlacementFlow(QObject):
         self._accept.clicked.connect(self.accept)
         layout.addWidget(self._accept)
         self._bar.hide()
+        self._measure_group: QWidget | None = None
+        self._measure_scope: QWidget | None = None
+        self._measure_interpret: Callable[[], bool] | None = None
+        self._measure_refresh: Callable[[Mapping[str, Any]], None] | None = None
+        self._interpreting_fields = False
+        self._measure_box = QFrame(self.viewport)
+        self._measure_box.setObjectName("placement_measure_fields")
+        self._measure_box.setAutoFillBackground(True)
+        measure_layout = QVBoxLayout(self._measure_box)
+        measure_layout.setContentsMargins(NORMAL, NORMAL, NORMAL, NORMAL)
+        measure_layout.setSpacing(NORMAL)
+        self._measure_scroll = QScrollArea(self._measure_box)
+        self._measure_scroll.setWidgetResizable(True)
+        self._measure_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self._measure_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        measure_layout.addWidget(self._measure_scroll)
+        self._measure_note = QLabel(self._measure_box)
+        self._measure_note.setWordWrap(True)
+        self._measure_note.hide()
+        measure_layout.addWidget(self._measure_note)
+        measure_actions = QHBoxLayout()
+        measure_actions.addStretch()
+        self._measure_accept = QPushButton(tr("Übernehmen"), self._measure_box)
+        self._measure_accept.setObjectName("placement_measure_accept")
+        self._measure_accept.setIcon(icon("done", self._measure_accept))
+        self._measure_accept.clicked.connect(self.accept)
+        measure_actions.addWidget(self._measure_accept)
+        self._measure_cancel = QPushButton(tr("Abbrechen"), self._measure_box)
+        self._measure_cancel.setObjectName("placement_measure_cancel")
+        self._measure_cancel.setIcon(icon("cancel", self._measure_cancel))
+        self._measure_cancel.clicked.connect(self.back)
+        measure_actions.addWidget(self._measure_cancel)
+        measure_layout.addLayout(measure_actions)
+        self._measure_scope_box = QWidget(self._measure_box)
+        self._measure_scope_layout = QVBoxLayout(self._measure_scope_box)
+        self._measure_scope_layout.setContentsMargins(0, 0, 0, 0)
+        self._measure_scope_box.hide()
+        measure_layout.addWidget(self._measure_scope_box)
+        self._measure_box.hide()
         self._measures = [LengthSpin(self.viewport), LengthSpin(self.viewport)]
         for index, field in enumerate(self._measures):
             field.setObjectName(f"placement_distance_{index + 1}")
@@ -628,7 +724,7 @@ class PlacementFlow(QObject):
                 tr("Abstand zu Kante {number}").replace("{number}", str(index + 1))
             )
             field.setToolTip(tr("Abstand ändern; die Position bleibt dabei auf dieser Fläche."))
-            field.installEventFilter(self)
+            self._watch_field(field)
             field.valueChangedMm.connect(self._distance_changed)
             field.hide()
         #: Die Tiefe als Zahl — dasselbe Feld wie die Kantenabstände, damit
@@ -641,7 +737,7 @@ class PlacementFlow(QObject):
         self._depth_measure.setObjectName("placement_depth")
         self._depth_measure.setAccessibleName(tr("Tiefe der Bohrung"))
         self._depth_measure.setToolTip(tr("Tiefe eintippen oder mit der Maus ziehen."))
-        self._depth_measure.installEventFilter(self)
+        self._watch_field(self._depth_measure)
         self._depth_measure.valueChangedMm.connect(self._depth_typed)
         self._depth_measure.hide()
         #: Was an Wand stehen bleibt — das Gegenstück zur Tiefe. Eine Zahl und
@@ -662,7 +758,7 @@ class PlacementFlow(QObject):
             )
             field.setPrefix(tr("Mitte {number}: ").format(number=index + 1))
             field.setToolTip(tr("Der Maßpfeil zeigt die Richtung auf dieser Fläche."))
-            field.installEventFilter(self)
+            self._watch_field(field)
             field.valueChangedMm.connect(self._centre_changed)
             field.hide()
         self._timer = QTimer(self)
@@ -672,16 +768,22 @@ class PlacementFlow(QObject):
         dialog.surfaceRequested.connect(self.start)
         dialog.valuesChanged.connect(self._values_changed)
         dialog.finished.connect(self.dispose)
-        self.viewport.installEventFilter(self)
+        if isinstance(dialog, QuietHost):
+            dialog.editStarted.connect(self._refresh_measure_actions)
+            dialog.commitStarted.connect(self._commit_started)
+            dialog.commitFinished.connect(self._commit_finished)
+            dialog.applyStateChanged.connect(self.redraw)
+        self._watch(self.viewport)
         render_widget = getattr(self.viewport.renderer, "widget", None)
         if render_widget is not None:
-            render_widget.installEventFilter(self)
+            self._watch(render_widget)
         self.viewport.cameraMoved.connect(self.redraw)
         self.session.sceneChanged.connect(self._scene_changed)
         self.session.projectChanged.connect(self._document_changed)
         self.viewport.sceneApplied.connect(self._scene_applied)
         self.viewport.previewDragged.connect(self._dragged_in_preview)
         self.viewport.placementDragged.connect(self._dragged_at_the_tool)
+        self.viewport.placementDragStarted.connect(self._begin_edit)
         self.viewport.set_preview_gizmo(_grips_its_preview(self.spec_of()))
         self.refresh_available()
         # **Wer eine platzierbare Operation wählt, will platzieren.** Der Weg
@@ -702,6 +804,226 @@ class PlacementFlow(QObject):
         # noch nicht gezeigt, und ``start`` versteckt ihn.
         if starts_by_itself(self.spec_of()) and self._change_op is None and self.can_place():
             QTimer.singleShot(0, self._start_if_still_possible)
+
+    def _watch(self, widget: QObject) -> None:
+        """Den Filter einmal anmelden und bis zum Abbau zuordnen."""
+        if widget not in self._watched:
+            self._watched.append(widget)
+            widget.installEventFilter(self)
+
+    def _watch_field(self, field: QWidget) -> list[QObject]:
+        """Auch die inneren Texteingaben eines zusammengesetzten Feldes beobachten."""
+        targets: list[QObject] = [field, *field.findChildren(QWidget)]
+        for target in targets:
+            self._watch(target)
+            if target not in self._field_targets:
+                self._field_targets.append(target)
+        return targets
+
+    def set_measure_fields(
+        self,
+        group: QWidget,
+        *,
+        editors: Iterable[QWidget],
+        interpret: Callable[[], bool],
+        refresh: Callable[[Mapping[str, Any]], None],
+        scope: QWidget | None = None,
+    ) -> None:
+        """Gemeinsame Fachfelder anzeigen; alle Werte bleiben ausschließlich beim Träger.
+
+        Der Erzeuger liefert dieselben Felder und Leser wie das Merkmalfenster.
+        Der Fluss besitzt ihre Lebensdauer, Anordnung und das gemeinsame Ende.
+        ``refresh`` schreibt nur Anzeige und erhält noch nicht gelesene Texte.
+        """
+        if self._disposed:
+            group.deleteLater()
+            return
+        for target in self._measure_targets:
+            if isValid(target):
+                target.removeEventFilter(self)
+            if target in self._watched:
+                self._watched.remove(target)
+            if target in self._field_targets:
+                self._field_targets.remove(target)
+        self._measure_targets = []
+        previous = self._measure_scroll.takeWidget()
+        if previous is not None and previous is not group:
+            previous.hide()
+            previous.deleteLater()
+        self._measure_group = group
+        previous_scope = self._measure_scope
+        if previous_scope is not None and previous_scope is not scope:
+            self._measure_scope_layout.removeWidget(previous_scope)
+            previous_scope.hide()
+            previous_scope.deleteLater()
+        self._measure_scope = scope
+        if scope is not None:
+            self._measure_scope_layout.addWidget(scope)
+            self._measure_targets.extend(self._watch_field(scope))
+        self._measure_scope_box.setVisible(scope is not None)
+        self._measure_interpret = interpret
+        self._measure_refresh = refresh
+        self.dialog.requires_displayed_preview = True
+        self._measure_scroll.setWidget(group)
+        self._watch(group)
+        self._measure_targets.append(group)
+        for field in editors:
+            self._measure_targets.extend(self._watch_field(field))
+        self._refresh_measure_fields()
+        self._refresh_measure_actions()
+        self.redraw()
+
+    def _refresh_measure_fields(self) -> None:
+        """Geänderte Trägerwerte spiegeln, ohne eine laufende Textlesung zu unterbrechen."""
+        if (
+            not self._disposed
+            and not self._interpreting_fields
+            and self._measure_refresh is not None
+        ):
+            self._measure_refresh(self.dialog.values())
+
+    def _refresh_measure_actions(self) -> None:
+        """Die gesetzte Sperre darstellen, ohne den Vorschauwächter erneut aufzurufen."""
+        if self._disposed:
+            return
+        host = self.dialog
+        reason = host.blocked_reason if isinstance(host, QuietHost) else None
+        begun = not isinstance(host, QuietHost) or host.begun
+        allowed = (
+            self.active
+            and (
+                self._measure_without_surface
+                or (
+                    self._surface is not None
+                    and self._tool_context is not None
+                    and not self._tool_busy
+                )
+            )
+            and self._distance_valid
+            and self.session.result_current
+            and self._display_ready()
+            and begun
+            and reason is None
+            and (not isinstance(host, QuietHost) or not host.committing)
+        )
+        self._measure_accept.setEnabled(allowed)
+        for setter in (
+            self._measure_accept.setToolTip,
+            self._measure_accept.setStatusTip,
+            self._measure_accept.setAccessibleDescription,
+        ):
+            setter(reason or "")
+        information = (
+            tr(
+                "Die ursprünglichen Maße bleiben bearbeitbar. "
+                "Für diese Stelle sind keine eindeutigen Flächenmaße verfügbar."
+            )
+            if self._measure_without_surface
+            else ""
+        )
+        self._measure_note.setText(reason or information)
+        self._measure_note.setVisible((bool(reason) and begun) or bool(information))
+
+    def _size_measure_fields(self, room: QRect) -> None:
+        """Die Fachgruppe bleibt im freien Bildraum; bei Platzmangel rollt ihr Inhalt."""
+        group = self._measure_group
+        if group is None:
+            self._measure_box.hide()
+            return
+        group.ensurePolished()
+        width = min(
+            max(room.width(), 1),
+            max(
+                group.sizeHint().width() + 4 * NORMAL,
+                self._measure_accept.sizeHint().width()
+                + self._measure_cancel.sizeHint().width()
+                + 3 * NORMAL,
+            ),
+        )
+        content_width = max(width - 4 * NORMAL, 1)
+        group.setMaximumWidth(content_width)
+        layout = group.layout()
+        height = (
+            layout.heightForWidth(content_width)
+            if layout is not None and layout.hasHeightForWidth()
+            else group.sizeHint().height()
+        )
+        chrome = self._measure_accept.sizeHint().height() + 3 * NORMAL
+        if not self._measure_note.isHidden():
+            chrome += max(self._measure_note.heightForWidth(content_width), 0) + NORMAL
+        if self._measure_scope is not None:
+            self._measure_scope.setMaximumWidth(content_width)
+            chrome += self._measure_scope.sizeHint().height() + NORMAL
+        # Eine weitere Zeile bleibt für die vorhandenen Kantenabstände frei.
+        distances = self._measures[0].sizeHint().height() + SPACE
+        self._measure_scroll.setFixedHeight(max(1, min(height, room.height() - chrome - distances)))
+        self._measure_box.setMaximumSize(max(width, 1), max(room.height(), 1))
+        self._measure_box.adjustSize()
+        self._measure_box.show()
+
+    def _begin_edit(self) -> None:
+        """Eine Nutzergeste beginnt den stillen Entwurf, nie seine bloße Anzeige."""
+        if not self._disposed and self.active and isinstance(self.dialog, QuietHost):
+            self.dialog.begin_edit()
+
+    def _show_input_for_edit(self) -> None:
+        """Bei erneuter Feldbetätigung die belegte historische Eingabe zurückholen."""
+        if (
+            self.active
+            and self._change_op is not None
+            and self._measure_group is not None
+            and self._result is not None
+            and not self._showing_input
+            and self.session.result_current
+        ):
+            self._showing_input = True
+            self.window._clear_preview()
+            self.viewport.show_scene(self._result)
+            self.redraw()
+
+    def _interpret_active_fields(self) -> bool:
+        """Vor Übernehmen jeden sichtbaren Zahlentext lesen, nicht nur das Fokusfeld."""
+        if self._interpreting_fields:
+            return False
+        self._interpreting_fields = True
+        valid = True
+        try:
+            for field in (*self._measures, *self._centre_measures, self._depth_measure):
+                if not field.isVisibleTo(self.viewport):
+                    continue
+                if field.hasAcceptableInput():
+                    field.interpretText()
+                else:
+                    valid = False
+            if self._measure_interpret is not None:
+                valid = self._measure_interpret() and valid
+        finally:
+            self._interpreting_fields = False
+        if valid:
+            self._refresh_measure_fields()
+        return valid
+
+    def _keep_field_text(self, field: LengthSpin) -> bool:
+        """Eine Neuzeichnung überschreibt keinen aktiven oder noch ungelesenen Zahlentext."""
+        return self._interpreting_fields or field.hasFocus() or field.lineEdit().isModified()
+
+    def _commit_started(self) -> None:
+        """Nur die eigene synchrone Dokumentmeldung bis zum Callback-Ergebnis halten."""
+        self._committing_document = self.session.project.document
+        self._deferred_document_change = False
+        self._refresh_measure_actions()
+
+    def _commit_finished(self, succeeded: bool) -> None:
+        """Erfolg beendet über finished; eine trotz Absage erfolgte Änderung entwertet."""
+        changed = self._deferred_document_change
+        self._committing_document = None
+        self._deferred_document_change = False
+        if self._disposed:
+            return
+        if changed and not succeeded:
+            self._document_changed()
+        else:
+            self._refresh_measure_actions()
 
     @property
     def target(self) -> str:
@@ -762,6 +1084,8 @@ class PlacementFlow(QObject):
         self._epoch += 1
         self._result = self.session.last_result if self._change_op is None else None
         self._frozen = False
+        self._position_edited = False
+        self._measure_without_surface = False
         self._seated_by_default = False
         self._distance_valid = True
         self._commit_pending = False
@@ -802,6 +1126,8 @@ class PlacementFlow(QObject):
                 self._showing_input = True
                 self.viewport.show_scene(result)
                 self._request_tool()
+                if self._measure_group is not None:
+                    self._begin_at_bore_step()
 
             self.session.placement_before(self._change_op, ready, lambda _detail: ready(None))
         self.redraw()
@@ -852,6 +1178,9 @@ class PlacementFlow(QObject):
         Ziel bis zum Dialog.
         """
         if self._disposed:
+            return
+        if isinstance(self.dialog, QuietHost):
+            self.dialog.reject()
             return
         self._stop()
         self._object_id = ""
@@ -930,6 +1259,18 @@ class PlacementFlow(QObject):
         # an einer Bohrung, wo er nicht hingehört.
         self.viewport.set_preview_gizmo(False)
         self._disposed = True
+        for target in self._watched:
+            if isValid(target):
+                target.removeEventFilter(self)
+        self._watched.clear()
+        self._field_targets.clear()
+        self._measure_targets.clear()
+        self._measure_interpret = None
+        self._measure_refresh = None
+        if isValid(self.viewport):
+            self.viewport.placementDragStarted.disconnect(self._begin_edit)
+        if isinstance(self.dialog, QuietHost):
+            self.dialog.reject()
         for widget in self._widgets():
             widget.deleteLater()
 
@@ -949,6 +1290,7 @@ class PlacementFlow(QObject):
             self._centre,
             self._depth_measure,
             self._rest,
+            self._measure_box,
             *self._measures,
             *self._centre_measures,
         )
@@ -1052,7 +1394,12 @@ class PlacementFlow(QObject):
                 self._commit_pending = False
             if self._frozen and not confirm:
                 return True
-            if self._frozen and confirm and not self._seated_by_default:
+            if (
+                self._frozen
+                and confirm
+                and not self._seated_by_default
+                and not self.dialog.requires_displayed_preview
+            ):
                 self.accept()
                 return True
             # Eine von selbst gewählte Stelle bestätigt kein Klick, er setzt
@@ -1197,6 +1544,44 @@ class PlacementFlow(QObject):
                 )
 
         self.session.placement_async(compute, done, failed)
+
+    def _begin_at_bore_step(self) -> None:
+        """Die ursprüngliche Bohrstelle ausschließlich am historischen Eingang ablesen."""
+        entry, _feature = self._source_feature()
+        spec = self.spec_of()
+        if entry is None or spec.name not in {"drill_hole", "drill_brep_hole"}:
+            return
+        stamp = self._serial
+        mesh = for_a_worker(entry.mesh)
+        values = dict(self.dialog.values())
+        parameters = dict(self.session.project.document.parameters)
+
+        def compute() -> Any:
+            resolved = expressions.resolve_params(values, expressions.resolve(parameters))
+            seat = placement.seat_for_bore_step(mesh, spec, resolved, entry.features)
+            if seat is None:
+                return None
+            prepared, mouth = seat
+            return prepared, placement.at_point(prepared, mouth)
+
+        def done(value: Any) -> None:
+            if not isValid(self) or self._disposed or not self.active or stamp != self._serial:
+                return
+            if value is None:
+                self._measure_without_surface = True
+                self._seated_at_feature = True
+                self.redraw()
+                return
+            self._prepared, self._surface = value
+            self._prepared_mesh = entry.mesh
+            self._patch_faces = frozenset(self._surface.face_indices)
+            self._object_id = entry.id
+            self._centre_id = self._surface.centres[0].feature_id if self._surface.centres else ""
+            self._seated_at_feature = True
+            self._distance_valid = True
+            self._settle()
+
+        self.session.placement_async(compute, done, lambda _detail: done(None))
 
     def _begin_at_feature(self) -> None:
         """Beginnt dort, wo das gewählte Merkmal schon sitzt — ohne Klick (§18.5).
@@ -1436,6 +1821,7 @@ class PlacementFlow(QObject):
         """
         if self._disposed or not self.active or self._surface is None or self._deepening:
             return
+        self._begin_edit()
         shown = np.asarray(matrix, dtype=np.float64)[:3, 3]
         point = self.viewport.scene_point_of(
             (float(shown[0]), float(shown[1]), float(shown[2])), self._object_id
@@ -1453,6 +1839,14 @@ class PlacementFlow(QObject):
 
     def _set_values(self) -> bool:
         """Nur die vorberechnete Raumlage übertragen; im Qt-Thread keine Geometrie bauen."""
+        if (
+            self._change_op is not None
+            and self._measure_group is not None
+            and (not self._position_edited or self._measure_without_surface)
+        ):
+            # Die Mündung ist ein Maßbezug. Sie ersetzt weder ursprüngliche
+            # Ausdrücke noch die Ankerlage einer durchgehenden Bohrung.
+            return True
         if self._surface is None or self._tool_context is None:
             return False
         self._updating = True
@@ -1520,6 +1914,7 @@ class PlacementFlow(QObject):
         spec = self.spec_of()
         if self._disposed or not _grips_its_preview(spec):
             return
+        self._begin_edit()
         try:
             entered = expressions.resolve_params(
                 self.dialog.values(), expressions.resolve(self.session.project.document.parameters)
@@ -1545,11 +1940,27 @@ class PlacementFlow(QObject):
         self._accept_pending = False
 
     def _values_changed(self) -> None:
+        self._refresh_measure_fields()
         if not self._disposed and not self._updating:
             self._accept_pending = False
             self.refresh_available()
             if self.active:
+                historical_measures = (
+                    self._change_op is not None and self._measure_group is not None
+                )
+                if historical_measures:
+                    # Eine neue Tiefe verschiebt bei Mittenanker die Mündung.
+                    # Bis der aktuelle Sitz belegt ist, steht keine alte Hilfe.
+                    self._serial += 1
+                    self._surface = None
+                    self._prepared = None
+                    self._prepared_mesh = None
+                    self._patch_faces = frozenset()
+                    self._measure_without_surface = False
+                    self._show_input_for_edit()
                 self._request_tool()
+                if historical_measures:
+                    self._begin_at_bore_step()
 
     def _request_tool(self) -> None:
         if self._tool_busy:
@@ -1664,7 +2075,7 @@ class PlacementFlow(QObject):
                 self._request_tool()
             elif self._accept_pending and self.active:
                 self._accept_pending = False
-                if not self.dialog.preview_required:
+                if not self.dialog.preview_required and not self.dialog.requires_displayed_preview:
                     self.accept()
 
         self.session.placement_async(compute, done, lambda _detail: done(None))
@@ -1691,6 +2102,7 @@ class PlacementFlow(QObject):
         self._pending = None
         self._serial += 1
         self._surface = changed
+        self._position_edited = True
         self._set_values()
         self._note.setText(tr("Position festgelegt. Übernehmen oder mit Esc die Werte bearbeiten."))
         self.redraw()
@@ -1719,6 +2131,7 @@ class PlacementFlow(QObject):
         self._pending = None
         self._serial += 1
         self._surface = changed
+        self._position_edited = True
         self._set_values()
         self._note.setText(tr("Position festgelegt. Übernehmen oder mit Esc die Werte bearbeiten."))
         self.redraw()
@@ -1765,6 +2178,7 @@ class PlacementFlow(QObject):
         self._pending = None
         self._serial += 1
         self._surface = changed
+        self._position_edited = True
         self._set_values()
         self._note.setText(tr("Position festgelegt. Übernehmen oder mit Esc die Werte bearbeiten."))
         self.redraw()
@@ -1826,24 +2240,36 @@ class PlacementFlow(QObject):
         return depth_field(spec.name, spec.params, values)
 
     def accept(self) -> None:
+        """Der gemeinsame Knopf liest alle Felder und versucht den Abschluss."""
+        self._accept_values(allow_pending=True)
+
+    def _accept_values(self, *, allow_pending: bool) -> None:
+        """Ein früher Tastendruck wird unter keinen Umständen nachgeholt."""
+        self._accept_pending = False
+        if self._disposed or not self.active or not self._interpret_active_fields():
+            return
         if (
             not self.active
             or not self.session.result_current
             or not self._display_ready()
-            or self._surface is None
+            or (self._surface is None and not self._measure_without_surface)
         ):
             return
-        if self._tool_busy:
+        if self._tool_busy and not self._measure_without_surface:
             # Der Knopf im Merkmalfenster bleibt erreichbar, während eine
             # neue Maßangabe ihr Werkzeug vorbereitet. Sein Klick gehört dem
             # fertigen Werkzeug; Abbruch und neuere Eingaben löschen ihn.
             self._accept_pending = (
-                self.dialog.values_stand_elsewhere
+                allow_pending
+                and self.dialog.values_stand_elsewhere
                 and self._distance_valid
                 and not self.dialog.preview_required
+                and not self.dialog.requires_displayed_preview
             )
             return
-        if self._tool is None or self._tool_context is None or not self._accept.isEnabled():
+        if not self._measure_without_surface and (
+            self._tool is None or self._tool_context is None or not self._accept.isEnabled()
+        ):
             return
         self._accept_pending = False
         # **Der Klick legt die Stelle fest, nicht das ganze Loch.** Wer eine
@@ -1851,7 +2277,7 @@ class PlacementFlow(QObject):
         # 09.09.2026 wurde sie mit der Vorgabe gesetzt — bei ``depth = 0``
         # heißt das durch das ganze Teil, ohne dass jemand gefragt hätte
         # (Robert: „oder ich bohr komplett durch ohne die tiefenbearbeitung").
-        if self.deepens() and not self._deepening:
+        if self.deepens() and not self._deepening and self._measure_group is None:
             self._begin_depth()
             return
         if not self._set_values():
@@ -1860,7 +2286,6 @@ class PlacementFlow(QObject):
         # haben. Ihre Sperre wird geprüft, bevor die Platzierung verschwindet.
         if not self.dialog.can_accept():
             return
-        self._stop()
         self.dialog.accept()
 
     # --- Stufe 2: die Tiefe ----------------------------------------------------
@@ -2234,6 +2659,15 @@ class PlacementFlow(QObject):
         self.redraw()
 
     def _scene_changed(self, _result: Any) -> None:
+        if self._disposed:
+            return
+        if (
+            isinstance(self.dialog, QuietHost)
+            and self.dialog.committing
+            and self._deferred_document_change
+            and self.session.project.document is self._committing_document
+        ):
+            return
         # Eine fremde Operation oder Undo entwertet die alte Oberfläche.
         if self.active:
             self.back()
@@ -2249,6 +2683,15 @@ class PlacementFlow(QObject):
 
     def _document_changed(self) -> None:
         """Undo und andere Eingriffe entwerten den Bezug vor der nächsten Auswertung."""
+        if self._disposed:
+            return
+        if (
+            isinstance(self.dialog, QuietHost)
+            and self.dialog.committing
+            and self.session.project.document is self._committing_document
+        ):
+            self._deferred_document_change = True
+            return
         self._prepared = None
         self._prepared_mesh = None
         self._patch_faces = frozenset()
@@ -2261,9 +2704,18 @@ class PlacementFlow(QObject):
         # Zeichenfläche — alles sterbliche Widgets. Stirbt eines davon, läuft
         # der Filter sonst in den Abbau hinein (``leash.stop_watching_the_dying``).
         if stop_watching_the_dying(self, watched, event):
+            for targets in (self._watched, self._field_targets, self._measure_targets):
+                while watched in targets:
+                    targets.remove(watched)
+            if watched is self._measure_group:
+                self._measure_group = None
+                self._measure_interpret = None
+                self._measure_refresh = None
+            if watched is self._measure_scope:
+                self._measure_scope = None
             return False
         if self.active:
-            if self.viewport.slot_drag_waits():
+            if self.viewport.slot_drag_waits() and self._measure_group is None:
                 return False
             if watched in self._overlay_zones and event.type() in (
                 QEvent.Type.Move,
@@ -2275,20 +2727,49 @@ class PlacementFlow(QObject):
                 # Platzierung die wirkliche Geometrie statt eines Zwischenstands.
                 QTimer.singleShot(0, self.redraw)
                 return False
-            if (
-                isinstance(event, QKeyEvent)
-                and event.type() == QEvent.Type.KeyPress
-                and event.key() == Qt.Key.Key_Escape
+            if isinstance(event, QKeyEvent) and event.key() in (
+                Qt.Key.Key_Escape,
+                Qt.Key.Key_Return,
+                Qt.Key.Key_Enter,
             ):
-                self.back()
-                return True
-            if event.type() == QEvent.Type.FocusIn and watched is self._depth_measure:
+                if event.type() == QEvent.Type.ShortcutOverride:
+                    event.accept()
+                    return True
+                if event.type() == QEvent.Type.KeyPress:
+                    if event.key() == Qt.Key.Key_Escape:
+                        self.back()
+                    else:
+                        if watched in self._field_targets:
+                            self._begin_edit()
+                        self._accept_values(allow_pending=False)
+                    return True
+            if watched in self._field_targets and (
+                event.type() in (QEvent.Type.MouseButtonPress, QEvent.Type.Wheel)
+                or (
+                    isinstance(event, QFocusEvent)
+                    and event.type() == QEvent.Type.FocusIn
+                    and event.reason()
+                    in (
+                        Qt.FocusReason.MouseFocusReason,
+                        Qt.FocusReason.TabFocusReason,
+                        Qt.FocusReason.BacktabFocusReason,
+                        Qt.FocusReason.ShortcutFocusReason,
+                    )
+                )
+                or (isinstance(event, QKeyEvent) and event.type() == QEvent.Type.KeyPress)
+            ):
+                self._begin_edit()
+                self._show_input_for_edit()
+            if event.type() == QEvent.Type.FocusIn and (
+                watched is self._depth_measure
+                or (isinstance(watched, QWidget) and self._depth_measure.isAncestorOf(watched))
+            ):
                 # Dieselbe Zusage wie bei den Kantenmaßen darunter, nur für die
                 # Tiefe: Wer in das Feld klickt, will tippen und nicht ziehen.
                 self._depth_set = True
-            if event.type() == QEvent.Type.FocusIn and watched in (
-                *self._measures,
-                *self._centre_measures,
+            if event.type() == QEvent.Type.FocusIn and any(
+                watched is field or (isinstance(watched, QWidget) and field.isAncestorOf(watched))
+                for field in (*self._measures, *self._centre_measures)
             ):
                 self._frozen = True
                 self._pending = None
@@ -2307,10 +2788,9 @@ class PlacementFlow(QObject):
     def redraw(self) -> None:
         if not self.active or self._disposed:
             return
-        # Die Langlochvorschau hat ihren eigenen Übernehmen-Weg. Die
-        # Platzierungsabsicht bleibt beim Abbruch erhalten, bedient sich
-        # währenddessen aber weder über ein zweites Feld noch über den Zeiger.
-        if self.viewport.slot_drag_waits():
+        # Ohne gemeinsame Fachgruppe hat die Langlochvorschau ihren eigenen
+        # Übernehmen-Weg. Die gebundene Gruppe behält dagegen ihren Abschluss.
+        if self.viewport.slot_drag_waits() and self._measure_group is None:
             for widget in self._widgets():
                 widget.hide()
             for item in (self._tool, self._addition):
@@ -2354,6 +2834,11 @@ class PlacementFlow(QObject):
             max(room.top(), room.bottom() - self._bar.height()),
         )
         self._bar.raise_()
+        measure_room = QRect(room)
+        if self._bar.isVisibleTo(self.viewport):
+            measure_room.setBottom(self._bar.geometry().top() - NORMAL - 1)
+        self._refresh_measure_actions()
+        self._size_measure_fields(measure_room)
         surface = self._surface
         renderer = self.viewport.renderer
         valid = (
@@ -2363,6 +2848,11 @@ class PlacementFlow(QObject):
             and self._display_ready()
         )
         tool_valid = valid and self._tool_context is not None and not self._tool_busy
+        local_visible = (
+            valid
+            and (self._change_op is None or self._showing_input)
+            and not self.viewport.slot_drag_waits()
+        )
         # **Gefragt wird das vorbereitete Werkzeug, nicht der gezeichnete
         # Körper.** Ob gesetzt werden kann, hängt daran, dass die Geometrie
         # steht — nicht daran, wie sie gerade angezeigt wird. Seit der Umriss
@@ -2378,11 +2868,11 @@ class PlacementFlow(QObject):
         # Fläche, auf der gesetzt wird — in der Tiefenstufe ist die entschieden,
         # und dort steht die Tiefe an ihrer Stelle.
         for index, field in enumerate(self._measures):
-            field.setVisible(valid and not self._deepening and index < len(surface.edges))
+            field.setVisible(local_visible and not self._deepening and index < len(surface.edges))
         self._centre.hide()
         for field in self._centre_measures:
-            field.setVisible(valid and not self._deepening and bool(self._centre_id))
-        self._depth_measure.setVisible(valid and self._deepening)
+            field.setVisible(local_visible and not self._deepening and bool(self._centre_id))
+        self._depth_measure.setVisible(local_visible and self._deepening)
         # **Wo ein Umriss die Stelle zeigt, tritt der Körper zurück.** Der
         # halbtransparente Zylinder steht auch außerhalb des Materials, und
         # beim Drehen der Ansicht war schwer zu sehen, wo das Loch hinkommt
@@ -2402,9 +2892,15 @@ class PlacementFlow(QObject):
         )
         for item in (self._tool, self._addition):
             if item is not None:
-                item.set_visible(tool_valid and not has_outline)
-        if not valid:
+                item.set_visible(tool_valid and local_visible and not has_outline)
+        if not local_visible:
             self._canvas.hide()
+            if self._measure_group is not None:
+                self._measure_box.move(
+                    max(measure_room.left(), measure_room.right() - self._measure_box.width() + 1),
+                    measure_room.top(),
+                )
+                self._measure_box.raise_()
             self.viewport.grip_placement(None)
             self.viewport._draw()
             return
@@ -2429,11 +2925,15 @@ class PlacementFlow(QObject):
             tool_valid
             and self._frozen
             and not self._deepening
-            and not self._seated_at_feature
             and self._tool is not None
-            and not self.dialog.values_stand_elsewhere
+            and (
+                (self._measure_group is not None and self.spec_of().name != "slot_hole")
+                or (not self._seated_at_feature and not self.dialog.values_stand_elsewhere)
+            )
         )
-        self.viewport.grip_placement(self._tool if gripped else None)
+        self.viewport.grip_placement(
+            self._tool if gripped else None, rotation=self._measure_group is None
+        )
         ratio = self.viewport._device_ratio()
 
         def screen(at: Vec3) -> QPointF:
@@ -2471,13 +2971,17 @@ class PlacementFlow(QObject):
             # auf. Wer ein Feld ausblenden will, sammelt es nicht ein (Befund
             # aus Roberts Bild, 09.09.2026: die Abstände der Fläche standen
             # noch da, während unten schon „Maus bewegen: Tiefe" stand).
-            if self._deepening and widget is not self._depth_measure:
+            if self._deepening and widget not in (self._depth_measure, self._measure_box):
                 return
-            widget.setMaximumWidth(max(room.width(), 1))
+            if widget is not self._measure_box:
+                widget.setMaximumWidth(max(room.width(), 1))
             if isinstance(widget, QLabel):
                 widget.setWordWrap(True)
             widget.adjustSize()
             pending.append((widget, (start + end) / 2, (start, end)))
+
+        if self._measure_group is not None:
+            place(self._measure_box, screen(surface.point), screen(surface.point))
 
         if self._deepening and valid:
             # **Die Bezugsmaße der Tiefe** (Robert, 09.09.2026: „bei der tiefe
@@ -2503,8 +3007,9 @@ class PlacementFlow(QObject):
                 # ``set_value_mm`` dazwischen, bliebe das Feld für immer
                 # stumm — es nähme danach keine Eingabe mehr an, ohne dass
                 # etwas danach aussieht.
-                with QSignalBlocker(self._depth_measure):
-                    self._depth_measure.set_value_mm(depth)
+                if not self._keep_field_text(self._depth_measure):
+                    with QSignalBlocker(self._depth_measure):
+                        self._depth_measure.set_value_mm(depth)
                 place(self._depth_measure, mouth, tip)
                 if below > depth + EPS_GEOM:
                     self._canvas.lines.append((tip, screen(tuple(point - axis * below))))
@@ -2527,7 +3032,7 @@ class PlacementFlow(QObject):
             start, end = screen(tuple(foot)), screen(surface.point)
             self._canvas.lines.append((start, end))
             field = self._measures[index]
-            if not field.hasFocus():
+            if not self._keep_field_text(field):
                 with QSignalBlocker(field):
                     bound = max(self._prepared_mesh.bounds.diagonal, abs(edge.distance), 1.0)
                     field.set_range_mm(-bound, bound)
@@ -2542,7 +3047,7 @@ class PlacementFlow(QObject):
             for index, field in enumerate(self._centre_measures):
                 start, end = screen(vertices[index]), screen(vertices[index + 1])
                 self._canvas.lines.append((start, end))
-                if not field.hasFocus():
+                if not self._keep_field_text(field):
                     with QSignalBlocker(field):
                         bound = max(self._prepared_mesh.bounds.diagonal, 1.0)
                         field.set_range_mm(-bound, bound)
@@ -2561,13 +3066,7 @@ class PlacementFlow(QObject):
         # sie unten mittig steht. Vorher lag sie oben und der Raum darunter;
         # wer nur die Leiste verschiebt und diese Rechnung stehen lässt, drückt
         # jedem Feld den Boden weg — die Zahlen rutschten aus dem Bild.
-        bar = self._bar.geometry()
-        bounds = QRect(
-            room.left(),
-            room.top(),
-            max(room.width(), 1),
-            max(bar.top() - NORMAL - room.top(), 1),
-        )
+        bounds = measure_room
         # **Der Setzpunkt ist das erste Hindernis, noch vor jedem Feld.** Jedes
         # Maßfeld will in die Mitte seiner eigenen Maßlinie, und die Linien
         # laufen von den Kanten auf genau diesen Punkt zu — je kürzer der
@@ -2723,7 +3222,8 @@ class PlacementFlow(QObject):
         # und das Tiefenfeld sitzt darüber (Robert, 09.09.2026: „wenn ich die
         # tiefe setz, komm ich nicht in das bearbeitenfeld von der maßeinheit").
         shown = [widget for widget in (self._depth_measure, self._rest) if widget.isVisible()]
-        self._canvas.refresh(tuple(widget.geometry() for widget in (self._bar, *positions, *shown)))
+        bars = (self._bar,) if self._bar.isVisibleTo(self.viewport) else ()
+        self._canvas.refresh(tuple(widget.geometry() for widget in (*bars, *positions, *shown)))
         self._bar.raise_()
         for widget in (*self._measures, *self._centre_measures, self._centre, *shown):
             widget.raise_()

@@ -1228,7 +1228,15 @@ zeigt Geometrie, keine Werkzeugwege.
 ### 18.11 Direktmanipulation
 Gizmo zum Verschieben, Drehen, Skalieren. Snapping: Fläche an Fläche, Achsen
 ausrichten, Bohrungsachsen zur Deckung bringen, Raster- und Winkelfang.
-**Jede Manipulation erzeugt eine Op.** Zahleneingabe während des Ziehens.
+Feld und Griff bearbeiten denselben Entwurf. Die reine Maßanzeige einer
+Auswahl beginnt noch keine Bearbeitung; erst eine Eingabe bindet Handlung,
+Ziel und Umfang. Weitere Züge und Zahleneingaben bleiben in diesem Entwurf.
+Übernehmen oder Enter bestätigt die dargestellte aktuelle Vorschau als einen
+rücknehmbaren Schritt; ein frühes Enter wird nicht nachgeholt. Escape oder
+Abbrechen verwirft den Entwurf. Loslassen, Fokusverlust, Tab und Kamera
+übernehmen nichts. Ein Außenklick erhält einen begonnenen Entwurf samt Ziel;
+eine andere Handlung beginnt erst nach Übernehmen oder Abbrechen. Eine echte
+Dokumentänderung entwertet den alten Entwurf.
 
 ---
 

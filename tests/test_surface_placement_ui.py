@@ -68,6 +68,7 @@ class _Viewport(QWidget):
     sceneApplied = Signal()  # noqa: N815 — Qt-Schnittstelle
     previewDragged = Signal(object)  # noqa: N815 — Qt-Schnittstelle
     placementDragged = Signal(object)  # noqa: N815 — Qt-Schnittstelle
+    placementDragStarted = Signal()  # noqa: N815 — Qt-Schnittstelle
 
     def __init__(self) -> None:
         super().__init__()
@@ -109,7 +110,7 @@ class _Viewport(QWidget):
     def set_preview_gizmo(self, active: bool) -> None:
         self.preview_gizmo = bool(active)
 
-    def grip_placement(self, item: Any) -> None:
+    def grip_placement(self, item: Any, *, rotation: bool = True) -> None:
         self.gripped = item
 
     def scene_point_of(self, point: Any, object_id: str = "") -> Any:
@@ -1533,27 +1534,39 @@ def _a_selected_hole(window):
 
 
 def _measures_in_the_view(window):
-    """Drückt den Knopf, der die Maße des gewählten Merkmals ins Bild bringt.
-
-    **Seit dem 11.09.2026 kommt nichts von selbst** — der Selbststart ist
-    gefallen, weil sein Dialog dieselben Zahlen zeigte wie das Merkmalfenster
-    daneben (Robert: „werte im dialog und in der rechten merkmalleiste
-    doppelt"). Gefahren wird deshalb der Weg der Oberfläche: der Knopf.
-    """
+    """Die automatisch angezeigten Maße oder den ausdrücklich gewählten Einstieg abwarten."""
     from PySide6.QtWidgets import QApplication
 
-    knopf = window.feature_panel._in_view
-    # ``isHidden`` und nicht ``isVisibleTo(panel)`` — wie an der Stelle weiter
-    # unten, die es seit je so hält: Die Knopfzeile wohnt seit dem 13.09.2026
-    # unter dem Rollbereich des Docks (``FeaturePanel.footer``) und ist damit
-    # kein Kind des Panels mehr; ``isVisibleTo`` liefe dann bis zum Fenster
-    # hinauf, und das wird offscreen nie gezeigt.
-    assert not knopf.isHidden(), "an einer Bohrung steht der Knopf"
-    knopf.click()
-    window.session.wait_for_idle()
+    if window._quiet_placement is None:
+        knopf = window.feature_panel._in_view
+        assert not knopf.isHidden(), "die gewählte Handlung bietet Maße im Bild an"
+        knopf.click()
+    assert window.session.wait_for_idle()
     for _ in range(40):
         QApplication.processEvents()
     return window._quiet_placement
+
+
+def _display_measure_preview(window, flow):
+    """Den normalen Vorschauauftrag bis zur wirklichen Rendereranzeige durchführen."""
+    window._feature_preview.stop()
+    window._preview_feature_change()
+    assert window.session.wait_for_idle(30_000)
+    for _ in range(40):
+        QApplication.processEvents()
+    approval = window._preview_approval
+    assert approval is not None and approval.owner is flow.dialog
+    assert approval.displayed and window.viewport.is_difference_applied(approval.difference)
+    return approval
+
+
+def _choose_measure_action(window, op):
+    """Eine andere vorhandene Handlung wählen, bevor ihr Entwurf begonnen wird."""
+    panel = window.feature_panel
+    key = next(key for key, entry in panel._runs.items() if entry.op == op)
+    panel._arm(key)
+    panel.request_in_view()
+    return _measures_in_the_view(window)
 
 
 def test_a_clicked_hole_can_really_be_accepted(qt_app: QApplication) -> None:
@@ -1577,13 +1590,18 @@ def test_a_clicked_hole_can_really_be_accepted(qt_app: QApplication) -> None:
 
     window = _window_with_a_renderer()
     try:
+        window.feature_dock.hide()
         _a_selected_hole(window)
         assert window._op_dialog is None, "ein angeklicktes Loch öffnet keinen Dialog mehr"
         flow = _measures_in_the_view(window)
-        assert flow is not None and flow.active, "der Knopf bringt die Maße ins Bild"
+        assert flow is not None and flow.active, "die Auswahl zeigt die Maße im Bild"
+        assert window.feature_dock.isHidden(), "das geschlossene Panel bleibt geschlossen"
         assert flow._surface is not None, "die Trägerfläche steht"
         assert flow._tool_context is not None, "und ihr Werkzeugkörper auch"
         assert flow._accept.isEnabled(), "sonst verspricht die Leiste etwas, das nicht geht"
+        assert not flow.dialog.begun
+        assert not flow._measure_box.isHidden()
+        assert not flow._measure_accept.isEnabled(), "bloße Auskunft ist noch kein Entwurf"
     finally:
         for dialog in window.findChildren(OperationDialog):
             dialog.reject()
@@ -1591,7 +1609,7 @@ def test_a_clicked_hole_can_really_be_accepted(qt_app: QApplication) -> None:
         window.release()
 
 
-def test_the_button_opens_the_measures_and_a_second_press_replaces_them(
+def test_passive_measures_can_be_replaced_but_a_begun_draft_cannot(
     qt_app: QApplication,
 ) -> None:
     """Zweimal derselbe Knopf legt keine zweite Platzierung übereinander.
@@ -1611,14 +1629,19 @@ def test_the_button_opens_the_measures_and_a_second_press_replaces_them(
     try:
         _a_selected_hole(window)
         erste = _measures_in_the_view(window)
-        assert erste is not None and erste.active, "der Knopf bringt die Maße ins Bild"
+        assert erste is not None and erste.active, "die Maße erscheinen bei der Auswahl"
 
-        zweite = _measures_in_the_view(window)
+        zweite = _choose_measure_action(window, "slot_hole")
         assert zweite is not None and zweite.active, "und beim zweiten Mal wieder"
         assert zweite is not erste, "es ist eine frische Platzierung"
         assert not erste.active, "die erste ist abgeräumt, nicht liegengeblieben"
         assert window._quiet_placement is zweite, "und das Fenster führt genau eine"
         assert window._op_dialog is None, "ein Dialog geht dabei nie auf"
+        zweite.dialog.begin_edit()
+        before = zweite.dialog.values()
+        window.run_operation(REGISTRY.get("create_box"))
+        assert window._quiet_placement is zweite and zweite.active
+        assert zweite.dialog.values() == before and window._op_dialog is None
     finally:
         for dialog in window.findChildren(OperationDialog):
             dialog.reject()
@@ -1675,22 +1698,11 @@ def test_an_open_dialog_keeps_the_click(qt_app: QApplication) -> None:
 def test_neither_a_drag_nor_a_click_beside_the_grip_sends_the_measures_aiming(
     qt_app: QApplication,
 ) -> None:
-    """Am Merkmal zielt die Platzierung nie — weder nach einem Zug noch nach einem Klick.
+    """Ein begonnener Maßentwurf bleibt am Merkmal, auch bei verfehltem Griff."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
 
-    Wer eine Bohrung wählt und *Im Bild einstellen* drückt, bekommt ihre Maße
-    — die Platzierung sitzt dabei **am Merkmal**. Bis zum 11.09.2026 zählte
-    jedes Loslassen der linken Taste als Ansage, woanders hinzuwollen, und
-    danach zielte der Zeiger: Die Bohrungsvorschau klebte an ihm, als setze
-    man eine neue. Am Vormittag fiel das für den **Zug** (Robert: „beim
-    verschieben über Gizmo kommen wir in die ansicht vom bohrung setzen");
-    der Klick daneben blieb als Ansage stehen — und am Abend war es der Klick,
-    der ihn dorthin brachte, ohne Weg heraus (Robert: „auf einmal war ich im
-    modus eine neue Bohrung zu setzen … er sollte an der stelle ja nichtmal
-    kommen").
-
-    Wohin ein vorhandenes Loch soll, sagen der Griff und die Felder rechts.
-    Der Klick gehört der Auswahl, wie ohne Platzierung auch.
-    """
+    from app.ui.labels import LengthSpin
     from app.ui.op_dialog import OperationDialog
     from app.ui.render.api import PointerEvent
 
@@ -1699,6 +1711,9 @@ def test_neither_a_drag_nor_a_click_beside_the_grip_sends_the_measures_aiming(
         _a_selected_hole(window)
         flow = _measures_in_the_view(window)
         assert flow is not None and flow._seated_at_feature, "die Maße stehen am gewählten Merkmal"
+        field = flow._measure_group.findChildren(LengthSpin)[0]
+        QTest.mouseClick(field.lineEdit(), Qt.MouseButton.LeftButton)
+        assert flow.dialog.begun
 
         # Ein Zug über das halbe Bild, der keinen Griff trifft.
         for event in (
@@ -1719,7 +1734,7 @@ def test_neither_a_drag_nor_a_click_beside_the_grip_sends_the_measures_aiming(
         QApplication.processEvents()
         assert flow._seated_at_feature, "der Klick daneben zielt nicht — es gibt kein Zielen"
         assert not flow.pointer(PointerEvent("press", 200, 200, button="left")), (
-            "der Klick gehört der Auswahl, nicht der Platzierung"
+            "der Auswahlwächter entscheidet, der Fluss startet keine neue Flächensuche"
         )
         assert flow.pointer(PointerEvent("move", 200, 200)), (
             "nur die freie Bewegung bleibt bei ihr — keine Vorschau am Zeiger"
@@ -1754,7 +1769,7 @@ def test_pulling_a_slot_and_moving_it_at_the_grip_is_one_step(qt_app: QApplicati
     window = _window_with_a_renderer()
     try:
         _, hole = _a_selected_hole(window)
-        erster = _measures_in_the_view(window)
+        erster = _choose_measure_action(window, "slot_hole")
         assert erster is not None and erster.active
         for _ in range(200):
             QApplication.processEvents()
@@ -1821,7 +1836,8 @@ def test_pulling_a_slot_and_moving_it_at_the_grip_is_one_step(qt_app: QApplicati
         assert armed is not None and armed.op == "slot_hole", "*Zum Langloch ziehen* steht scharf"
 
         vorher = [o.op for o in window.session.history.operations]
-        window.feature_panel._apply.click()
+        _display_measure_preview(window, erster)
+        erster._measure_accept.click()
         window.session.wait_for_idle()
         for _ in range(120):
             QApplication.processEvents()
@@ -1866,7 +1882,7 @@ def test_escape_leaves_the_measures_and_discards_what_waits(qt_app: QApplication
     window = _window_with_a_renderer()
     try:
         _, hole = _a_selected_hole(window)
-        flow = _measures_in_the_view(window)
+        flow = _choose_measure_action(window, "slot_hole")
         assert flow is not None and flow.active
         handle = window.viewport._slot_handle
         assert handle is not None
@@ -1901,95 +1917,44 @@ def test_escape_leaves_the_measures_and_discards_what_waits(qt_app: QApplication
         window.release()
 
 
-def test_a_drag_at_the_grip_proposes_and_the_button_right_takes_it(
-    qt_app: QApplication,
-) -> None:
-    """Ein Zug am Griff schlägt vor; erst das Übernehmen rechts macht den Schritt.
-
-    Bis zum Abend des 11.09.2026 war der Zug selbst der Schritt — und mit ihm
-    endete die Platzierung: Griff und Maße waren weg, bevor jemand
-    „Übernehmen" gelesen hatte (Robert: „nach dem verschieben verschwindet das
-    gizmo gleich ohne auf übernehmen zu klicken"). Jetzt gilt am
-    Bewegungsgriff, was am Langlochgriff schon galt: Der Zug landet in den
-    Feldern rechts (*Merkmal verschieben*), der Griff bleibt an der neuen
-    Stelle stehen, die Maßlinien zeigen sie — und der eine Knopf rechts
-    übernimmt (Regel 2).
-
-    **Und danach stehen die Maße wieder** (Konzept §4, Abnahme 1): Die
-    Operation beendet die Platzierung, das Merkmalfenster zeigt das Merkmal
-    an seiner neuen Stelle neu, und dort geht derselbe Weg wieder ins Bild.
-    """
-    from app.ui.op_dialog import OperationDialog
+def test_the_bound_placement_grip_changes_the_same_measure_order(qt_app: QApplication) -> None:
+    """Der Griff ändert denselben Größenauftrag; Loslassen übernimmt ihn noch nicht."""
     from app.ui.render.api import PointerEvent
 
     window = _window_with_a_renderer()
     try:
-        _, hole = _a_selected_hole(window)
-        erster = _measures_in_the_view(window)
-        assert erster is not None and erster.active, "die Maße stehen"
-        for _ in range(200):
-            QApplication.processEvents()
-            window.session.wait_for_idle()
-            if erster._tool_context is not None:
-                break
-        feature = window.viewport._features_of_selection()[hole]
-        centre = tuple(float(value) for value in feature.params["centre"])
-
-        gizmo = window.viewport._gizmo
-        assert gizmo is not None, "ohne Griff prüft der Test nichts"
-        window.viewport.renderer.item_picks[(400, 300)] = gizmo.items[0]
-        window.viewport.renderer.item_picks[(460, 300)] = gizmo.items[0]
-        vorher = [o.op for o in window.session.history.operations]
+        object_id, hole = _a_selected_hole(window)
+        flow = _measures_in_the_view(window)
+        assert flow is not None and flow.active
+        before = len(window.session.history.operations)
+        original = tuple(flow._surface.point)
+        grip = window.viewport._placement_grip
+        assert grip is not None and not grip._rings
+        window.viewport.renderer.item_picks[(400, 300)] = grip.items[0]
+        window.viewport.renderer.item_picks[(412, 300)] = grip.items[0]
         for event in (
             PointerEvent("move", 400, 300),
             PointerEvent("press", 400, 300, button="left"),
-            PointerEvent("move", 460, 300, buttons=frozenset({"left"})),
-            PointerEvent("release", 460, 300, button="left"),
+            PointerEvent("move", 412, 300, buttons=frozenset({"left"})),
+            PointerEvent("release", 412, 300, button="left"),
         ):
             window.viewport._on_pointer(event)
-        window.session.wait_for_idle()
-        for _ in range(80):
-            QApplication.processEvents()
-
-        assert [o.op for o in window.session.history.operations] == vorher, (
-            "der Zug ist ein Vorschlag, kein Schritt"
-        )
-        assert window.viewport.move_proposal_waits(), "und er wartet auf sein Übernehmen"
-        assert erster.active and window.viewport._gizmo is not None, (
-            "Platzierung und Griff bleiben stehen"
-        )
-        shift = window.viewport._grip_shift
-        assert shift != (0.0, 0.0, 0.0), "der Griff steht an der neuen Stelle"
-        armed = window.feature_panel._runs.get(window.feature_panel._armed or "")
-        assert armed is not None and armed.op == "move_feature", (
-            "*Merkmal verschieben* steht scharf"
-        )
-        traeger = window._quiet_host.values()
-        assert (traeger["x"], traeger["y"]) == pytest.approx(
-            (centre[0] + shift[0], centre[1] + shift[1]), abs=0.05
-        ), "die Maßlinien zeigen die neue Stelle"
-
-        window.feature_panel._apply.click()
-        window.session.wait_for_idle()
-        for _ in range(120):
-            QApplication.processEvents()
-        assert [o.op for o in window.session.history.operations] == [*vorher, "move_feature"], (
-            "der Knopf rechts macht den Schritt"
-        )
-        moved = window.viewport._features_of_selection()[hole]
-        assert moved.params["centre"] == pytest.approx(
-            (centre[0] + shift[0], centre[1] + shift[1], centre[2]), abs=0.05
-        )
-        assert not window.viewport.move_proposal_waits(), "der Vorschlag ist eingelöst"
-        danach = window._quiet_placement
-        assert danach is not None and danach.active and danach is not erster, (
-            "und die Maße stehen danach wieder — in einer frischen Platzierung"
-        )
-        assert window.viewport._gizmo is not None, "mit dem Griff an der neuen Stelle"
+        assert window.session.wait_for_idle(30_000)
+        assert flow.dialog.begun and flow.active
+        assert len(window.session.history.operations) == before
+        values = flow.dialog.values()
+        assert not np.allclose((values["x"], values["y"]), original[:2])
+        _display_measure_preview(window, flow)
+        flow._measure_accept.click()
+        assert window.session.wait_for_idle(30_000)
+        assert len(window.session.history.operations) == before + 1
+        step = window.session.history.operations[-1]
+        assert step.op == "resize_hole" and step.params["at_feature"] == hole
+        assert (step.params["x"], step.params["y"]) == pytest.approx((values["x"], values["y"]))
+        assert window.session.last_result.complete
+        assert object_id in window.session.last_result.scene.objects
     finally:
         window.end_quiet_placement()
-        for open_dialog in window.findChildren(OperationDialog):
-            open_dialog.reject()
         QApplication.processEvents()
         window.release()
 
@@ -2030,6 +1995,294 @@ def test_the_button_shows_the_answer_it_no_longer_holds(flow: Any) -> None:
         controller.dispose()
 
 
+def test_quiet_host_consumes_only_a_successful_callback(qt_app: QApplication) -> None:
+    """Eine Absage erhält den begonnenen Wertestand; der nächste Erfolg verbraucht ihn einmal."""
+    from app.ui.placement_flow import QuietHost
+
+    calls: list[Any] = []
+    finished: list[int] = []
+    starts: list[bool] = []
+
+    def take(values: Any) -> bool:
+        assert host.committing
+        assert not host.can_accept()
+        calls.append(values)
+        host.accept()
+        return len(calls) > 1
+
+    host = QuietHost({"diameter": 5.0}, take)
+    host.finished.connect(finished.append)
+    host.editStarted.connect(lambda: starts.append(host.begun))
+    host.take_placement({"diameter": 6.0})
+    assert not host.begun
+    host.begin_edit()
+    host.begin_edit()
+    assert starts == [True]
+    assert host.accept() is None
+    assert not finished and host.begun and not host.committing
+    assert host.values() == {"diameter": 6.0}
+    assert host.accept() is None
+    assert finished == [1] and not host.begun
+    host.accept()
+    assert calls == [{"diameter": 6.0}, {"diameter": 6.0}]
+    assert finished == [1]
+
+
+@pytest.fixture
+def quiet_measure_flow(flow: Any) -> Any:
+    """Echte Sitzung und Platzierung mit zwei lesbaren Fachfeldern, ohne Hauptfenster."""
+    from PySide6.QtCore import QSignalBlocker
+    from PySide6.QtWidgets import QFormLayout
+
+    from app.ui.labels import LengthSpin
+    from app.ui.placement_flow import QuietHost
+
+    original, session, viewport, _dialog = flow
+    original.dispose()
+    object_id = original.inputs_of()[0]
+    spec = REGISTRY.get("drill_hole")
+    during: list[Any] = []
+
+    def take(values: Any) -> bool:
+        before = controller._surface
+        assert controller.active and host.committing
+        success = session.apply(
+            spec.title, [OperationDraft(op=spec.name, inputs=(object_id,), params=values)]
+        )
+        # projectChanged ist bereits gesendet, der Callback aber noch nicht fertig.
+        during.append((controller.active, controller._surface is before, host.committing))
+        return success
+
+    host = QuietHost(
+        {"diameter": 5.0, "depth": 4.0}, take, known=[field.name for field in spec.params.spec()]
+    )
+    window = SimpleNamespace(
+        viewport=viewport, session=session, _clear_preview=session.cancel_preview
+    )
+    controller = PlacementFlow(host, window, lambda: spec, lambda: (object_id,))
+    group = QWidget()
+    layout = QFormLayout(group)
+    fields = {name: LengthSpin(group) for name in ("diameter", "depth")}
+    for name, field in fields.items():
+        field.set_range_mm(0.1, 30.0)
+        field.set_value_mm(host.values()[name])
+        field.setKeyboardTracking(False)
+        field.setAccessibleName(name)
+        layout.addRow(name, field)
+        field.valueChangedMm.connect(lambda value, key=name: host.take_placement({key: value}))
+
+    def interpret() -> bool:
+        valid = all(field.hasAcceptableInput() for field in fields.values())
+        for field in fields.values():
+            if field.hasAcceptableInput():
+                field.interpretText()
+        if valid:
+            host.take_placement({name: field.value_mm() for name, field in fields.items()})
+        return valid
+
+    def refresh(values: Any) -> None:
+        for name, field in fields.items():
+            if field.hasFocus() or field.lineEdit().isModified():
+                continue
+            with QSignalBlocker(field):
+                field.set_value_mm(values[name])
+
+    controller.set_measure_fields(
+        group, editors=fields.values(), interpret=interpret, refresh=refresh
+    )
+    host.valuesChanged.connect(lambda: host.block_apply("Die Vorschau wird berechnet."))
+    try:
+        viewport.show()
+        controller.start()
+        assert session.wait_for_idle(30_000)
+        _point(controller, session)
+        host.block_apply(None)
+        yield controller, session, viewport, host, group, fields, during
+    finally:
+        controller.dispose()
+        assert session.wait_for_idle(30_000)
+        host.deleteLater()
+
+
+def test_measure_fields_wait_for_a_second_enter_and_commit_all_texts(
+    quiet_measure_flow: Any,
+) -> None:
+    """Frühes Enter liest beide Texte; erst ein neuer Klick nach Freigabe schreibt einen Schritt."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    controller, session, _viewport, host, _group, fields, during = quiet_measure_flow
+    before = len(session.project.document.ops)
+    assert not host.begun
+    assert host.requires_displayed_preview and not host.preview_required
+    for name, text in (("diameter", "6"), ("depth", "7")):
+        editor = fields[name].lineEdit()
+        editor.selectAll()
+        QTest.keyClicks(editor, text)
+    QTest.keyClick(fields["depth"].lineEdit(), Qt.Key.Key_Return)
+    assert host.begun and controller.active
+    assert host.values()["diameter"] == pytest.approx(6.0)
+    assert host.values()["depth"] == pytest.approx(7.0)
+    assert not controller._accept_pending
+    assert session.wait_for_idle(30_000)
+    assert len(session.project.document.ops) == before
+    assert controller.active and not during
+    host.block_apply(None)
+    QTest.keyClick(fields["depth"].lineEdit(), Qt.Key.Key_Return)
+    assert during == [(True, True, True)]
+    assert not controller.active and not host.begun
+    assert session.wait_for_idle(30_000)
+    assert len(session.project.document.ops) == before + 1
+    step = session.project.document.ops[-1]
+    assert step.op == "drill_hole"
+    assert step.params["diameter"] == pytest.approx(6.0)
+    assert step.params["depth"] == pytest.approx(7.0)
+    session.undo()
+    assert session.wait_for_idle(30_000)
+    assert len(session.project.document.ops) == before
+
+
+def test_refused_measure_commit_keeps_the_flow_and_its_fields(
+    quiet_measure_flow: Any, monkeypatch: Any
+) -> None:
+    """Eine fachliche Absage verliert weder die Fläche noch die aktive Feldgruppe."""
+    controller, session, _viewport, host, group, _fields, _during = quiet_measure_flow
+    before = len(session.project.document.ops)
+    surface = controller._surface
+    finished: list[int] = []
+    host.finished.connect(finished.append)
+    host.begin_edit()
+    monkeypatch.setattr(host, "_accepted", lambda _values: False)
+    controller._measure_accept.click()
+    assert controller.active and host.begun
+    assert controller._surface is surface and controller._measure_group is group
+    assert group.isVisibleTo(controller._measure_box)
+    assert not finished and len(session.project.document.ops) == before
+    assert controller._measure_accept.isEnabled()
+
+
+@pytest.mark.parametrize("replace_document", [False, True], ids=["same-document", "new-document"])
+def test_document_change_inside_a_refused_callback_still_invalidates_the_draft(
+    quiet_measure_flow: Any, monkeypatch: Any, replace_document: bool
+) -> None:
+    """Nur die erfolgreiche eigene Änderung darf den Entwurf bis zum Abschluss behalten."""
+    controller, session, _viewport, host, _group, _fields, _during = quiet_measure_flow
+    during: list[bool] = []
+
+    def changed_but_refused(_values: Any) -> bool:
+        if replace_document:
+            session.start_new()
+        else:
+            session.apply("Körper", [OperationDraft(op="create_box")])
+        during.append(controller.active)
+        return False
+
+    host.begin_edit()
+    monkeypatch.setattr(host, "_accepted", changed_but_refused)
+    controller.accept()
+    assert during == [not replace_document]
+    assert not controller.active and not host.begun
+
+
+def test_measure_fields_keep_draft_on_tab_camera_and_release_but_escape_discards(
+    quiet_measure_flow: Any,
+) -> None:
+    """Navigation schreibt nichts; Escape verwirft auch während der Werkzeugrechnung."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    controller, session, viewport, host, _group, fields, during = quiet_measure_flow
+    before = len(session.project.document.ops)
+    editor = fields["diameter"].lineEdit()
+    QTest.mouseClick(editor, Qt.MouseButton.LeftButton)
+    editor.selectAll()
+    QTest.keyClicks(editor, "6")
+    QTest.keyClick(editor, Qt.Key.Key_Tab)
+    viewport.cameraMoved.emit()
+    controller._frozen = True
+    controller.pointer(PointerEvent("release", 320, 240, button="left"))
+    assert session.wait_for_idle(30_000)
+    assert host.begun and controller.active and not during
+    assert len(session.project.document.ops) == before
+    editor.selectAll()
+    QTest.keyClicks(editor, "7")
+    QTest.keyClick(editor, Qt.Key.Key_Return)
+    assert not controller._accept_pending
+    QTest.keyClick(editor, Qt.Key.Key_Escape)
+    assert not controller.active and not host.begun
+    assert not controller._watched and not controller._field_targets
+    assert session.wait_for_idle(30_000)
+    assert len(session.project.document.ops) == before and not during
+    assert controller._tool is None and viewport.pointer is None
+
+
+def test_measure_field_replacement_removes_the_old_editor_filters(quiet_measure_flow: Any) -> None:
+    """Ein ersetztes oder zerstörtes Feld kann den weiterlebenden Entwurf nicht mehr beginnen."""
+    from PySide6.QtCore import QCoreApplication, QEvent
+    from PySide6.QtWidgets import QVBoxLayout
+
+    from app.ui.labels import LengthSpin
+
+    controller, _session, _viewport, host, _group, fields, _during = quiet_measure_flow
+    previous = fields["diameter"]
+    replacement = QWidget()
+    layout = QVBoxLayout(replacement)
+    current = LengthSpin(replacement)
+    layout.addWidget(current)
+    controller.set_measure_fields(
+        replacement, editors=[current], interpret=lambda: True, refresh=lambda _values: None
+    )
+    assert previous not in controller._watched
+    assert previous not in controller._field_targets
+    current.deleteLater()
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    assert current not in controller._watched
+    assert current not in controller._field_targets
+    assert not host.begun
+
+
+@pytest.mark.parametrize("size,point_size", [((900, 650), 14), ((1200, 850), 22)])
+def test_measure_group_keeps_scope_below_its_controls_and_inside_the_view(
+    quiet_measure_flow: Any, size: tuple[int, int], point_size: int
+) -> None:
+    """Große Schrift und lange Gruppenbeschriftung verdrängen keine erreichbaren Knöpfe."""
+    from PySide6.QtCore import QPoint, QRect
+    from PySide6.QtWidgets import QCheckBox
+
+    controller, _session, viewport, _host, group, fields, _during = quiet_measure_flow
+    scope = QCheckBox("Auf alle vier gleichartigen Bohrungen anwenden", group)
+    controller.set_measure_fields(
+        group,
+        editors=fields.values(),
+        interpret=controller._measure_interpret,
+        refresh=controller._measure_refresh,
+        scope=scope,
+    )
+    font = controller._measure_box.font()
+    font.setPointSize(point_size)
+    controller._measure_box.setFont(font)
+    viewport.resize(*size)
+    QApplication.processEvents()
+    controller.redraw()
+    widgets = [controller._measure_box, *controller._measures]
+    visible = [widget for widget in widgets if widget.isVisibleTo(viewport)]
+    for widget in visible:
+        assert viewport.rect().contains(widget.geometry()), (widget.objectName(), widget.geometry())
+    for index, first in enumerate(visible):
+        for second in visible[index + 1 :]:
+            assert not first.geometry().intersects(second.geometry())
+    button = controller._measure_cancel
+    assert (
+        scope.mapTo(viewport, QPoint()).y() > button.mapTo(viewport, QPoint(0, button.height())).y()
+    )
+    for child in (scope, controller._measure_accept, button):
+        rectangle = QRect(child.mapTo(controller._measure_box, QPoint()), child.size())
+        assert controller._measure_box.rect().contains(rectangle)
+    assert scope in controller._field_targets
+    controller.dispose()
+    assert scope not in controller._watched
+
+
 def test_quiet_host_keeps_permission_for_identical_known_values(qt_app: QApplication) -> None:
     """Nur echte Wertänderungen verwerfen die Freigabe; gesperrt endet nichts."""
     from app.ui.placement_flow import QuietHost
@@ -2037,7 +2290,12 @@ def test_quiet_host_keeps_permission_for_identical_known_values(qt_app: QApplica
     accepted: list[Any] = []
     finished: list[int] = []
     changes: list[Any] = []
-    host = QuietHost({"diameter": 5.0}, accepted.append, known={"diameter"})
+
+    def take(values: Any) -> bool:
+        accepted.append(values)
+        return True
+
+    host = QuietHost({"diameter": 5.0}, take, known={"diameter"})
     host.finished.connect(finished.append)
 
     def changed() -> None:
@@ -2098,7 +2356,11 @@ def test_the_flow_runs_on_a_host_without_a_window(
         viewport.hit = object_id, tuple(entry.mesh.raw.triangles_center[face]), face, None
         spec = REGISTRY.get("drill_hole")
 
-        host = QuietHost({"diameter": 5.0, "depth": 4.0}, übernommen.append)
+        def take(values: Any) -> bool:
+            übernommen.append(values)
+            return True
+
+        host = QuietHost({"diameter": 5.0, "depth": 4.0}, take)
         host.preview_required = preview_required
         if preview_required:
             host.valuesChanged.connect(
@@ -2150,42 +2412,40 @@ def test_the_flow_runs_on_a_host_without_a_window(
         qt_app.processEvents()
 
 
-def test_the_placement_at_a_feature_carries_no_bar_of_its_own(qt_app: QApplication) -> None:
-    """Am gewählten Merkmal gibt es ein Übernehmen, nicht zwei.
+def test_measure_group_has_the_only_apply_and_cancel_controls(qt_app: QApplication) -> None:
+    """Die Maßgruppe und der gemeinsame Abschluss bleiben bei geschlossenem Panel nutzbar."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
 
-    Die Leiste unten trug Hinweis, „Werte bearbeiten" und „Position
-    übernehmen" — alle drei stehen am Merkmal rechts, samt eigenem
-    Übernehmen (Robert, 11.09.2026: „auch 2 mal übernehmen einmal unten und
-    einmal rechts … die untere leiste uns sparen und nur die rechte
-    verwenden").
-
-    Geprüft wird beides: dass die Leiste wegbleibt **und** dass der Knopf
-    rechts die Platzierung wirklich abschließt. Ohne die zweite Hälfte wäre
-    die erste eine Sackgasse.
-    """
-    from app.ui.op_dialog import OperationDialog
+    from app.ui.labels import LengthSpin
 
     window = _window_with_a_renderer()
     try:
+        window.feature_dock.hide()
         _a_selected_hole(window)
         flow = _measures_in_the_view(window)
-        assert flow is not None and flow.active, "die Maße stehen im Bild"
-        assert not flow._bar.isVisibleTo(window.viewport), "und zwar ohne Leiste darunter"
-        assert flow.dialog.values_stand_elsewhere, "weil sie rechts stehen"
-
-        vorher = [step.op for step in window.session.project.document.ops]
-        window.feature_panel._apply.click()
-        window.session.wait_for_idle()
-        for _ in range(60):
-            QApplication.processEvents()
-        nachher = [step.op for step in window.session.project.document.ops]
-        assert nachher == [*vorher, "resize_hole"], (
-            f"der Knopf rechts schließt die Platzierung ab: {nachher}"
-        )
+        assert flow is not None and flow.active
+        assert not flow._bar.isVisibleTo(window.viewport)
+        assert window.feature_panel._apply.isHidden() and window.feature_panel._cancel.isHidden()
+        field = flow._measure_group.findChildren(LengthSpin)[0]
+        editor = field.lineEdit()
+        diameter = field.value_mm() + 0.5
+        editor.selectAll()
+        QTest.keyClicks(editor, str(diameter))
+        QTest.keyClick(editor, Qt.Key.Key_Return)
+        assert flow.dialog.begun and flow.active
+        before = len(window.session.project.document.ops)
+        _display_measure_preview(window, flow)
+        window.feature_dock.show()
+        window.feature_dock.close()
+        assert flow.active and window._quiet_placement is flow
+        assert window.viewport.is_difference_applied(window._preview_approval.difference)
+        flow._measure_accept.click()
+        assert window.session.wait_for_idle(30_000)
+        assert len(window.session.project.document.ops) == before + 1
+        assert window.session.project.document.ops[-1].params["diameter"] == pytest.approx(diameter)
     finally:
         window.end_quiet_placement()
-        for dialog in window.findChildren(OperationDialog):
-            dialog.reject()
         QApplication.processEvents()
         window.release()
 
@@ -2204,6 +2464,10 @@ def test_a_slot_drag_puts_its_numbers_into_the_panel(qt_app: QApplication) -> No
     und **derselbe** Knopf rechts macht daraus einen Schritt. Ohne das letzte
     Stück wäre der Zug eine Sackgasse.
     """
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    from app.ui.labels import LengthSpin
     from app.ui.op_dialog import OperationDialog
 
     window = _window_with_a_renderer()
@@ -2214,8 +2478,8 @@ def test_a_slot_drag_puts_its_numbers_into_the_panel(qt_app: QApplication) -> No
         )
         # **Im Bild einstellen** bringt Maße und Griffe zusammen.
         # ``isHidden`` statt ``isVisible``: Das Fenster ist offscreen nie gezeigt.
-        assert not window.feature_panel._in_view.isHidden(), "der Knopf steht an einer Bohrung"
-        window.feature_panel._in_view.click()
+        flow = _choose_measure_action(window, "slot_hole")
+        assert flow is not None and flow.active
         for _ in range(20):
             QApplication.processEvents()
         handle = window.viewport._slot_handle
@@ -2232,12 +2496,15 @@ def test_a_slot_drag_puts_its_numbers_into_the_panel(qt_app: QApplication) -> No
         armed = window.feature_panel._runs.get(window.feature_panel._armed or "")
         assert armed is not None and armed.op == "slot_hole", "die Handlung des Zugs steht scharf"
 
-        window.feature_panel._apply.click()
+        _display_measure_preview(window, flow)
+        assert flow._measure_box.isVisibleTo(window.viewport)
+        editor = flow._measure_group.findChildren(LengthSpin)[0].lineEdit()
+        QTest.keyClick(editor, Qt.Key.Key_Return)
         window.session.wait_for_idle()
         for _ in range(60):
             QApplication.processEvents()
         nachher = [step.op for step in window.session.project.document.ops]
-        assert nachher == [*vorher, "slot_hole"], f"der Knopf rechts übernimmt: {nachher}"
+        assert nachher == [*vorher, "slot_hole"], f"Enter übernimmt denselben Entwurf: {nachher}"
     finally:
         window.end_quiet_placement()
         for dialog in window.findChildren(OperationDialog):
@@ -2514,7 +2781,7 @@ def _a_pulled_slot(window):
     from app.ui.render.api import PointerEvent
 
     _, hole = _a_selected_hole(window)
-    flow = _measures_in_the_view(window)
+    flow = _choose_measure_action(window, "slot_hole")
     assert flow is not None and flow.active
     for _ in range(200):
         QApplication.processEvents()
@@ -2597,18 +2864,10 @@ def test_the_ring_about_the_axis_turns_the_slot_and_its_mark(qt_app: QApplicatio
         window.release()
 
 
-def test_a_click_on_the_model_keeps_the_measures_and_a_click_beside_leaves(
+def test_a_begun_slot_keeps_its_values_on_model_and_outside_clicks(
     qt_app: QApplication,
 ) -> None:
-    """Solange der Klick auf dem Modell liegt, bleiben die Maße im Bild.
-
-    Wer am Griff ansetzt und den Pfeil verfehlt, trifft die Fläche daneben —
-    bis zum 11.09.2026 wählte das die Fläche und beendete die Platzierung samt
-    allem, was darin wartete (Robert: „wenn ich leicht daneben klicke bin ich
-    draußen, solange der klick auf dem modell ist sollte das nicht
-    passieren"). Der Klick ins Leere bleibt der Weg heraus — neben Escape und
-    *Abbrechen* —, und er verwirft, was wartete.
-    """
+    """Modell- und Außenklick erhalten den begonnenen Zug bis zum gemeinsamen Abschluss."""
     import numpy as np
 
     from app.ui.render.api import Pick
@@ -2636,9 +2895,11 @@ def test_a_click_on_the_model_keeps_the_measures_and_a_click_beside_leaves(
 
         window.viewport._on_left_click(5, 5)
         QApplication.processEvents()
-        assert not flow.active, "der Klick ins Leere führt heraus"
-        assert not window.viewport.slot_drag_waits(), "und verwirft, was wartete"
-        assert window.viewport._selected_feature is None
+        assert flow.active and flow.dialog.begun, "auch außen bleibt der begonnene Entwurf"
+        assert window.viewport.slot_drag_waits(), "der wartende Zug bleibt erhalten"
+        assert window.viewport._selected_feature == hole
+        flow._measure_cancel.click()
+        assert not flow.active and not window.viewport.slot_drag_waits()
     finally:
         window.end_quiet_placement()
         QApplication.processEvents()
@@ -2646,25 +2907,20 @@ def test_a_click_on_the_model_keeps_the_measures_and_a_click_beside_leaves(
 
 
 def test_cancel_below_apply_discards_what_waits(qt_app: QApplication) -> None:
-    """*Abbrechen* unter *Übernehmen*: da, solange die Maße im Bild stehen, und es verwirft.
-
-    Escape tut dasselbe, aber ein Knopf steht da, wo der Blick ist (Robert,
-    11.09.2026: „unter dem übernehmen rechts sollte auch noch abbrechen
-    stehen"). Ohne Maße im Bild steht er nicht — er verwürfe nichts.
-    """
+    """Der gemeinsame Abbruch verwirft den Entwurf und erhält die Auswahl."""
     window = _window_with_a_renderer()
     try:
         panel = window.feature_panel
         _, _hole = _a_selected_hole(window)
         # ``isHidden``: die Knopfzeile hängt unter dem Rollbereich des Docks
         # und nicht mehr am Panel (13.09.2026, ``FeaturePanel.footer``).
-        assert panel._cancel.isHidden(), "ohne Maße im Bild kein Abbrechen"
+        assert panel._cancel.isHidden(), "der Abschluss steht ausschließlich an den Maßen"
         hole, flow = _a_pulled_slot(window)
-        assert not panel._cancel.isHidden(), "mit Maßen im Bild steht er unter Übernehmen"
-        assert not panel._apply.isHidden()
+        assert panel._cancel.isHidden() and panel._apply.isHidden()
+        assert not flow._measure_cancel.isHidden(), "ein gemeinsamer Abschluss an den Maßen"
         steps = len(window.session.history.operations)
 
-        panel._cancel.click()
+        flow._measure_cancel.click()
         QApplication.processEvents()
         assert not flow.active, "die Maße im Bild sind zu"
         assert not window.viewport.slot_drag_waits(), "der Zug ist verworfen"
@@ -2698,8 +2954,10 @@ def test_a_drag_at_the_chosen_hole_pulls_the_slot_instead_of_moving_the_body(
     window = _window_with_a_renderer()
     try:
         object_id, hole = _a_selected_hole(window)
-        assert window._quiet_placement is None, "ohne Knopf keine Platzierung"
-        assert window.viewport._slot_handle is None, "und keine Knöpfe"
+        assert window._quiet_placement is not None, "die Auswahl zeigt passive Maße"
+        assert window.viewport._slot_handle is None, "fremde Griffe fehlen am Größenentwurf"
+        chosen = _choose_measure_action(window, "slot_hole")
+        assert chosen is not None and chosen.active
         entry = window.session.last_result.scene.objects[object_id]
         feature = entry.features[hole]
         centre = feature.params["centre"]
@@ -2737,6 +2995,248 @@ def test_a_drag_at_the_chosen_hole_pulls_the_slot_instead_of_moving_the_body(
         assert np.allclose(window.viewport._actors[object_id].matrix(), np.eye(4)), (
             "der Körper ist nicht verschoben"
         )
+    finally:
+        window.end_quiet_placement()
+        QApplication.processEvents()
+        window.release()
+
+
+@pytest.mark.parametrize("begun", [False, True], ids=["passive", "begun"])
+@pytest.mark.parametrize("where", ["tree", "viewport"])
+def test_real_selection_clicks_keep_only_a_begun_measure_draft(
+    qt_app: QApplication, begun: bool, where: str
+) -> None:
+    """Baum und Modell prüfen vor der Mutation; reine Auskunft bleibt abwählbar."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    from app.ui.labels import LengthSpin
+
+    window = _window_with_a_renderer()
+    try:
+        window.show()
+        object_id, hole = _a_selected_hole(window)
+        flow = _measures_in_the_view(window)
+        assert flow is not None and flow.active and not flow.dialog.begun
+        if begun:
+            field = flow._measure_group.findChildren(LengthSpin)[0]
+            QTest.mouseClick(field.lineEdit(), Qt.MouseButton.LeftButton)
+            assert flow.dialog.begun
+        before = flow.dialog.values()
+        steps = len(window.session.project.document.ops)
+        tree = window.object_tree.tree
+        selected = tree.currentIndex()
+        if where == "tree":
+            body = tree.topLevelItem(0)
+            tree.scrollToItem(body)
+            QApplication.processEvents()
+            position = tree.visualItemRect(body).center()
+            assert tree.viewport().rect().contains(position)
+            QTest.mouseClick(tree.viewport(), Qt.MouseButton.LeftButton, pos=position)
+        else:
+            window.viewport._on_left_click(5, 5)
+        QApplication.processEvents()
+        if begun:
+            assert window._quiet_placement is flow and flow.active
+            assert flow.dialog.values() == before
+            assert window.object_tree.selected() == object_id
+            assert window.object_tree.selected_feature() == hole
+            assert window.viewport._selected_feature == hole
+            assert tree.currentIndex() == selected
+        else:
+            assert not flow.active and window._quiet_placement is None
+            assert window.object_tree.selected_feature() is None
+        assert len(window.session.project.document.ops) == steps
+    finally:
+        window.end_quiet_placement()
+        QApplication.processEvents()
+        window.release()
+
+
+def test_mesh_measure_waits_until_its_real_difference_has_been_drawn(
+    qt_app: QApplication, monkeypatch: Any
+) -> None:
+    """Auch eine Netzbohrung braucht die dargestellte Vorschau, nicht nur fertige Rechenwerte."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    from app.ui.labels import LengthSpin
+
+    window = _window_with_a_renderer()
+    try:
+        _a_selected_hole(window)
+        flow = _measures_in_the_view(window)
+        assert flow is not None and flow.active
+        show = window.viewport.show_difference
+        waiting: list[Any] = []
+        monkeypatch.setattr(window.viewport, "show_difference", waiting.append)
+        field = flow._measure_group.findChildren(LengthSpin)[0]
+        field.lineEdit().selectAll()
+        QTest.keyClicks(field.lineEdit(), str(field.value_mm() + 0.5))
+        QTest.keyClick(field.lineEdit(), Qt.Key.Key_Return)
+        window._feature_preview.stop()
+        window._preview_feature_change()
+        assert window.session.wait_for_idle(30_000)
+        approval = window._preview_approval
+        assert approval is not None and approval.required and not approval.displayed
+        assert waiting and not flow.dialog.can_accept()
+        steps = len(window.session.project.document.ops)
+        flow.accept()
+        assert flow.active and len(window.session.project.document.ops) == steps
+        show(waiting[-1])
+        QApplication.processEvents()
+        assert approval.displayed and window.viewport.is_difference_applied(approval.difference)
+        flow._measure_accept.click()
+        assert window.session.wait_for_idle(30_000)
+        assert len(window.session.project.document.ops) == steps + 1
+    finally:
+        window.end_quiet_placement()
+        QApplication.processEvents()
+        window.release()
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+@pytest.mark.parametrize("case", ["mouth", "fields-only", "grip-then-depth", "centre", "through"])
+def test_historical_bore_fields_preview_all_following_steps_and_preserve_original_values(
+    qt_app: QApplication, monkeypatch: Any, kind: str, case: str
+) -> None:
+    """Originalwerte, neuer Flächensitz und Folgeschritte bleiben derselbe Auftrag."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    from app.core.brep import Solid
+    from app.core.scene import placement
+    from app.core.types import Parameter
+    from app.ui.labels import LengthSpin
+
+    window = _window_with_a_renderer()
+    try:
+        initial = {
+            "diameter": 6.0,
+            "depth": 8.0,
+            "z": "@surface_height",
+            "anchor": "mouth",
+            "compensate": False,
+        }
+        edited_depth = 12.0
+        if case == "centre":
+            initial.update(anchor="centre", z=16.0)
+            edited_depth = 6.0
+        elif case == "through":
+            initial.update(depth=0.0, z=10.0)
+            edited_depth = 8.0
+        seat_available = case != "fields-only"
+        session = window.session
+        assert session.add_parameter(Parameter("surface_height", 20.0))
+        assert session.apply(
+            "Platte",
+            [
+                OperationDraft(
+                    op="create_brep_box" if kind == "brep" else "create_box",
+                    params={"width": 40.0, "depth": 30.0, "height": 20.0},
+                )
+            ],
+        )
+        assert session.wait_for_idle(30_000)
+        owner = session.project.document.ops[-1].outputs[0]
+        assert session.apply(
+            "Bohrung",
+            [
+                OperationDraft(
+                    op="drill_brep_hole" if kind == "brep" else "drill_hole",
+                    inputs=(owner,),
+                    params=initial,
+                )
+            ],
+        )
+        assert session.wait_for_idle(30_000)
+        drill = session.project.document.ops[-1]
+        original = dict(drill.params)
+        assert session.apply(
+            "Danach",
+            [
+                OperationDraft(op="translate_object", inputs=(owner,), params={"dx": 25.0}),
+                OperationDraft(op="create_box", params={"x": 90.0}),
+            ],
+        )
+        assert session.wait_for_idle(30_000)
+        result = session.last_result
+        assert result is not None and result.complete and len(result.scene.objects) == 2
+        hole = next(
+            name
+            for name, feature in result.scene.objects[owner].features.items()
+            if feature.kind == "hole" and feature.created_by == drill.id
+        )
+        if not seat_available:
+            monkeypatch.setattr(placement, "seat_for_bore_step", lambda *_args: None)
+        window.feature_dock.hide()
+        window.object_tree.select_object(owner)
+        window.object_tree.select_feature(owner, hole)
+        flow = _measures_in_the_view(window)
+        assert flow is not None and flow._change_op == drill.id
+        assert flow.dialog.values() == original
+        assert not flow.dialog.begun and window.feature_dock.isHidden()
+        assert set(flow._result.scene.objects) == {owner}
+        assert not any(
+            f.kind == "hole" for f in flow._result.scene.objects[owner].features.values()
+        )
+        assert (flow._surface is not None) is seat_available
+        assert flow._measure_without_surface is not seat_available
+        if not seat_available:
+            assert window.viewport._placement_grip is None
+            assert "Flächenmaße" in flow._measure_note.text()
+        expected = dict(original)
+        if case == "grip-then-depth":
+            grip = window.viewport._placement_grip
+            assert grip is not None and not grip._rings
+            renderer = window.viewport.renderer
+            x, y, _depth = renderer.world_to_display(flow._surface.point)
+            x, y = round(x), round(y)
+            renderer.item_picks[(x, y)] = grip.items[0]
+            window.viewport._on_pointer(PointerEvent("move", x, y))
+            window.viewport._on_pointer(PointerEvent("press", x, y, button="left"))
+            assert flow.dialog.begun and window.viewport._placement_grip is grip and grip.pressing
+            window.viewport._on_pointer(PointerEvent("move", x + 8, y, buttons=frozenset({"left"})))
+            window.viewport._on_pointer(PointerEvent("release", x + 8, y, button="left"))
+            assert session.wait_for_idle(30_000)
+            expected = dict(flow.dialog.values())
+            assert abs(expected["x"]) > 1.0
+        depth = next(
+            field
+            for field in flow._measure_group.findChildren(LengthSpin)
+            if "Tiefe" in field.accessibleName()
+        )
+        depth.lineEdit().selectAll()
+        QTest.keyClicks(depth.lineEdit(), str(edited_depth))
+        QTest.keyClick(depth.lineEdit(), Qt.Key.Key_Return)
+        assert session.history.operation(drill.id).params == original
+        expected["depth"] = edited_depth
+        assert flow.dialog.values() == expected
+        approval = _display_measure_preview(window, flow)
+        assert not flow._showing_input
+        assert window.viewport._placement_grip is None
+        assert not flow._canvas.isVisibleTo(window.viewport)
+        assert all(field.isHidden() for field in flow._measures)
+        if case in {"fields-only", "centre", "through"}:
+            assert flow._surface is None and flow._measure_without_surface
+        after = approval.difference.entries[owner].result
+        assert after is not None
+        assert after.mesh.bounds.minimum[0] == pytest.approx(5.0)
+        assert isinstance(after.mesh, Solid) is (kind == "brep")
+        assert len(window.viewport._result.scene.objects) == 2
+        before = len(session.project.document.ops)
+        flow._measure_accept.click()
+        assert session.wait_for_idle(30_000)
+        assert len(session.project.document.ops) == before
+        changed = session.history.operation(drill.id)
+        assert changed.params == expected
+        assert session.last_result.complete
+        session.undo()
+        assert session.wait_for_idle(30_000)
+        assert session.history.operation(drill.id).params == original
+        session.redo()
+        assert session.wait_for_idle(30_000)
+        assert session.history.operation(drill.id).params == expected
     finally:
         window.end_quiet_placement()
         QApplication.processEvents()

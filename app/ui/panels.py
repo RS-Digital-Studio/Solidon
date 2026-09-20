@@ -20,6 +20,7 @@ from PySide6.QtCore import (
     QItemSelectionModel,
     QModelIndex,
     QObject,
+    QPersistentModelIndex,
     QPoint,
     QRectF,
     QSignalBlocker,
@@ -1208,6 +1209,45 @@ class _ThumbnailWorker(Worker):
         super().release_finished_references()
 
 
+class _ObjectTreeView(QTreeWidget):
+    """Benutzerauswahl vor Qts eigener Auswahländerung prüfen."""
+
+    selection_allowed: Callable[[], bool] | None = None
+
+    def mousePressEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Schnittstelle
+        if self.selection_allowed is not None and not self.selection_allowed():
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def mouseDoubleClickEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Schnittstelle
+        if self.selection_allowed is not None and not self.selection_allowed():
+            event.accept()
+            return
+        super().mouseDoubleClickEvent(event)
+
+    def keyPressEvent(self, event: QKeyEvent) -> None:  # noqa: N802 — Qt-Schnittstelle
+        if (
+            event.key() != Qt.Key.Key_Escape
+            and self.selection_allowed is not None
+            and not self.selection_allowed()
+        ):
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+    def selectionCommand(  # noqa: N802 — Qt-Schnittstelle
+        self, index: QModelIndex | QPersistentModelIndex, event: QEvent | None = None
+    ) -> QItemSelectionModel.SelectionFlag:
+        if (
+            event is not None
+            and self.selection_allowed is not None
+            and not self.selection_allowed()
+        ):
+            return QItemSelectionModel.SelectionFlag.NoUpdate
+        return super().selectionCommand(index, event)
+
+
 class ObjectTree(QWidget):
     """Objekte der Szene mit ihren Merkmalen, Herkunft und Größe (§18.8,
     §18.5).
@@ -1251,7 +1291,7 @@ class ObjectTree(QWidget):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.tree = QTreeWidget(self)
+        self.tree = _ObjectTreeView(self)
         self.tree.setAccessibleName(tr("Objekte"))
         self.tree.setColumnCount(3)
         self.tree.setHeaderLabels([tr("Objekt"), tr("Maße"), tr("Filament")])
@@ -1860,6 +1900,8 @@ class ObjectTree(QWidget):
 
     def _on_cell_clicked(self, index: QModelIndex) -> None:
         """Ein Klick in die Filamentspalte fragt nach dem Filament."""
+        if self.tree.selection_allowed is not None and not self.tree.selection_allowed():
+            return
         if index.column() != FILAMENT_COLUMN:
             return
         item = self.tree.itemFromIndex(index)
@@ -2050,6 +2092,8 @@ class ObjectTree(QWidget):
         endet das Durchblättern am Rand, und wer einen Körper sucht, muss
         wissen, in welche Richtung er liegt.
         """
+        if self.tree.selection_allowed is not None and not self.tree.selection_allowed():
+            return
         count = self.tree.topLevelItemCount()
         if not count:
             return
@@ -2336,6 +2380,8 @@ class ObjectTree(QWidget):
         das die Frage nicht beantwortet. Der Statushinweis der Zeile sagt
         weiterhin, was sie ist.
         """
+        if self.tree.selection_allowed is not None and not self.tree.selection_allowed():
+            return
         if item.childCount():
             return
         step: int | None = item.data(0, _STEP_ROLE)
@@ -2371,6 +2417,8 @@ class ObjectTree(QWidget):
         # anwähle springen wir 2 Einträge hoch." Die Verlaufsliste im selben
         # Modul nimmt ihre Position seit je roh (``_on_context_menu`` dort),
         # und sie trifft.
+        if self.tree.selection_allowed is not None and not self.tree.selection_allowed():
+            return
         item = self.tree.itemAt(position)
         if item is not None:
             # Der Rechtsklick meint die Zeile darunter. Ohne diese Auswahl
@@ -4747,6 +4795,145 @@ def _group_reason_texts() -> dict[str, str]:
 LEADS_INTO_THE_VIEW: Final[frozenset[str]] = frozenset({"slot_hole", "resize_hole"})
 
 
+def feature_field(
+    field: Any,
+    parent: QWidget,
+    *,
+    expression_fields: Mapping[str, Any],
+    part_fields: Mapping[str, Any],
+    parameter_values: Mapping[str, float],
+) -> QWidget:
+    """Das Feld zur Art — Länge rechnet Zoll zurück, ein Winkel nicht.
+
+    **Ein gebundener Wert bekommt das Ausdrucksfeld des Dialogs.** Die
+    Textur nimmt es für jedes ihrer Zahlenfelder; ein Baustein nur dort,
+    wo wirklich ein Ausdruck steht — sonst sähe die häufige Lage anders
+    aus als bisher, ohne dass jemand einen Parameter im Spiel hätte.
+    """
+    from app.core.expressions import is_expression
+
+    entry = expression_fields.get(field.name)
+    if entry is None and is_expression(field.value):
+        entry = part_fields.get(field.name)
+    if entry is not None:
+        from app.ui.op_dialog import ValueField
+
+        return ValueField(entry, field.value, parameter_values, parent)
+    kind = str(field.kind)
+    if kind == "bool":
+        check = RowCheckBox(parent)
+        check.setChecked(bool(field.value))
+        return check
+    if kind == "choice":
+        combo = QComboBox(parent)
+        for value, text in field.choices or ():
+            combo.addItem(choice_label(str(text)), value)
+        explain_choices(combo)
+        if field.name == "pattern":
+            from app.ui.op_dialog import _show_patterns
+
+            _show_patterns(combo, tuple(value for value, _text in field.choices or ()))
+        index = combo.findData(field.value)
+        if index >= 0:
+            combo.setCurrentIndex(index)
+        return combo
+    if kind == "length":
+        spin = LengthSpin(parent)
+        spin.set_range_mm(
+            float(field.minimum) if field.minimum is not None else -100000.0,
+            float(field.maximum) if field.maximum is not None else 100000.0,
+        )
+        spin.set_value_mm(float(field.value))
+        return spin
+    if kind == "count":
+        # Eine ganze Zahl ohne Einheit — die Haken eines Einhängers, die
+        # Löcher einer Halterung. Kein Längenfeld: Das trüge „mm" und
+        # rechnete in Zoll um (`_kind_of` in ``perceive.actions``).
+        count = QSpinBox(parent)
+        count.setRange(
+            int(field.minimum) if field.minimum is not None else 0,
+            int(field.maximum) if field.maximum is not None else 100000,
+        )
+        count.setValue(int(field.value))
+        return count
+    angle = NumberSpin(parent)
+    angle.setRange(
+        float(field.minimum) if field.minimum is not None else -360.0,
+        float(field.maximum) if field.maximum is not None else 360.0,
+    )
+    angle.setSuffix(f" {field.unit}" if field.unit else "")
+    angle.setValue(float(field.value))
+    return angle
+
+
+def feature_field_values(
+    fields: Sequence[Any],
+    widgets: Mapping[str, QWidget],
+    fixed: Sequence[tuple[str, Any]] = (),
+    *,
+    feature_id: str | None = None,
+) -> dict[str, Any]:
+    """Was in den Feldern dieser Handlung steht, in der Einheit des Kerns.
+
+    ``fixed`` sind die Werte, die die Handlung mitbringt und die niemand
+    eingibt — an einer angeklickten Kante die Auswahl ``named`` und ihr
+    Schlüssel (:attr:`~app.core.perceive.actions.FeatureAction.fixed`).
+    Sie stehen **vor** den Feldern, damit ein Feld gleichen Namens gewinnt:
+    Was der Kunde sieht, gilt.
+    """
+    params: dict[str, Any] = {}
+    from app.ui.op_dialog import ValueField
+
+    if feature_id is not None:
+        # ``at_feature`` ist kein Feld: Welches Merkmal gemeint ist, steht
+        # in der Auswahl, und eine Frage danach hätte ihre Antwort schon.
+        params["at_feature"] = feature_id
+    params.update(dict(fixed))
+    for field in fields:
+        widget = widgets.get(str(field.name))
+        if isinstance(widget, ValueField):
+            params[str(field.name)] = widget.value()
+        elif isinstance(widget, LengthSpin):
+            params[str(field.name)] = widget.value_mm() * field.parameter_factor
+        elif isinstance(widget, QCheckBox):
+            params[str(field.name)] = widget.isChecked()
+        elif isinstance(widget, QComboBox):
+            params[str(field.name)] = widget.currentData()
+        elif isinstance(widget, QSpinBox):
+            params[str(field.name)] = int(widget.value())
+        elif isinstance(widget, QDoubleSpinBox):
+            params[str(field.name)] = float(widget.value())
+    return params
+
+
+def refresh_feature_fields(
+    fields: Sequence[Any], widgets: Mapping[str, QWidget], values: Mapping[str, Any]
+) -> None:
+    """Kernwerte ohne Rückmeldung in dieselben Anzeige- und Ausdrucksfelder schreiben."""
+    from app.ui.op_dialog import ValueField
+
+    for field in fields:
+        if field.name not in values:
+            continue
+        editor = widgets.get(str(field.name))
+        value = values[field.name]
+        if editor is None:
+            continue
+        with QSignalBlocker(editor):
+            if isinstance(editor, ValueField):
+                editor.set_value(value)
+            elif isinstance(editor, LengthSpin):
+                editor.set_value_mm(float(value) / field.parameter_factor)
+            elif isinstance(editor, QCheckBox):
+                editor.setChecked(bool(value))
+            elif isinstance(editor, QComboBox):
+                editor.setCurrentIndex(editor.findData(value))
+            elif isinstance(editor, QSpinBox):
+                editor.setValue(int(value))
+            elif isinstance(editor, QDoubleSpinBox):
+                editor.setValue(float(value))
+
+
 @dataclasses.dataclass(frozen=True, slots=True)
 class _Handling:
     """Was der eine Knopf unten über eine Handlung wissen muss.
@@ -4763,13 +4950,9 @@ class _Handling:
     op: str
     members: int
     values: Callable[[], dict[str, Any]]
+    action: Any = None
     take: Callable[[Mapping[str, Any]], None] | None = None
-    """Werte von außen in die Felder dieser Handlung schreiben.
-
-    Der Gegenweg zu :attr:`run`: Ein Zug im Bild schlägt Zahlen vor, und sie
-    gehören in die Felder, aus denen das Übernehmen liest — nicht in eine
-    eigene Leiste daneben (Robert, 11.09.2026: „die untere leiste uns sparen
-    und nur die rechte verwenden mit dem was schon drin ist")."""
+    """Kernwerte ohne Rückmeldung in die gegebenenfalls gesperrten Panelgegenstücke spiegeln."""
     in_view: Callable[[], None] | None = None
     """Der Weg ins Bild — oder nichts, wo die Handlung keine Stelle hat.
 
@@ -5377,6 +5560,26 @@ class FeaturePanel(QWidget):
             self._built.append(row)
         self._settle_apply()
 
+    def offer_bore_step(
+        self, operation: Any, spec: Any, parameter_values: Mapping[str, float]
+    ) -> None:
+        """Belegte Originalmaße zusätzlich zu den gemessenen Merkmalsmaßen anbieten."""
+        from app.core.perceive.actions import bore_action
+
+        self._part_fields = {entry.name: entry for entry in spec.params.spec()}
+        self._parameter_values = dict(parameter_values)
+        self._separate()
+        row = self._build_action(bore_action(operation, spec))
+        self._rows.insertWidget(self._rows.count() - 1, row)
+        self._built.append(row)
+        self._arm(next(reversed(self._runs)))
+        self._settle_apply()
+
+    def step_for_action(self, op: str) -> int | None:
+        """Die Herkunft gehört der Handlung, nicht allen Feldern derselben Karte."""
+        entry = next((entry for entry in self._runs.values() if entry.op == op), None)
+        return getattr(entry.action, "step", None) if entry is not None else None
+
     def offer_texture_steps(
         self, operations: Sequence[Any], parameter_values: Mapping[str, float]
     ) -> None:
@@ -5706,10 +5909,15 @@ class FeaturePanel(QWidget):
         for row in self._built:
             for child in row.findChildren(QWidget):
                 if isinstance(child.property("handlingKey"), str):
-                    child.setEnabled(not reason)
+                    entry = self._runs.get(child.property("handlingKey"))
+                    in_measure = self._measuring and (
+                        getattr(self, "_measure_begun", False)
+                        or (entry is not None and entry.op == getattr(self, "_measure_op", None))
+                    )
+                    child.setEnabled(not reason and not in_measure)
         for button in (self._in_view, self._apply, self._cancel):
             button.setEnabled(not reason)
-        self._every.setEnabled(not reason)
+        self._every.setEnabled(not reason and not self._measuring)
         self._lock_note.setText(reason)
         # Ohne Zeilen gibt es nichts, was der Satz erklären könnte: Über dem
         # leeren Zustand („Kein Merkmal gewählt …") stünde eine Absage auf
@@ -5733,6 +5941,11 @@ class FeaturePanel(QWidget):
             self._arm(self._armed)
         else:
             self._settle_apply_block()
+        if self._measuring:
+            self._in_view.hide()
+            self._apply.hide()
+            self._cancel.hide()
+            self._every.hide()
 
     def _build_action(self, action: Any) -> QWidget:
         """Eine Handlung: Titel, ihre Felder untereinander, dann ihr Knopf.
@@ -5925,21 +6138,7 @@ class FeaturePanel(QWidget):
             Vorschau dort zeigt sie bereits. Ein ``valuesChanged`` von hier
             liefe zurück zu dem, der gerade gezogen hat.
             """
-            for name, value in proposed.items():
-                editor = widgets.get(str(name))
-                if not isinstance(editor, QDoubleSpinBox):
-                    continue
-                with QSignalBlocker(editor):
-                    # **Eine Länge kommt in Millimetern herein** und wird über
-                    # `set_value_mm` gesetzt; wer `setValue` nähme, schriebe
-                    # den Kernwert in ein Feld, das in Zoll anzeigt (§19.3).
-                    if isinstance(editor, LengthSpin):
-                        factor = next(
-                            field.parameter_factor for field in entries if field.name == name
-                        )
-                        editor.set_value_mm(float(value) / factor)
-                    else:
-                        editor.setValue(float(value))
+            refresh_feature_fields(entries, widgets, proposed)
 
         def in_view() -> None:
             """Dieselbe Handlung, aber im Bild eingestellt.
@@ -5970,6 +6169,7 @@ class FeaturePanel(QWidget):
             op=op_name,
             members=members,
             values=lambda: self._values(entries, widgets, fixed),
+            action=action,
         )
         if not entries:
             button = QPushButton(str(action.title), box)
@@ -6205,7 +6405,7 @@ class FeaturePanel(QWidget):
         # liest den zugänglichen Namen, und „Übernehmen" allein sagte dort
         # nicht, was übernommen wird (§19.1).
         self._apply.setAccessibleName(entry.title)
-        self._apply.setVisible(True)
+        self._apply.setVisible(not self._measuring)
         applies_to_all = entry.members > 1
         if applies_to_all:
             promise = str(tr("Eine Handlung für alle — und ein Strg+Z nimmt sie zusammen zurück."))
@@ -6305,14 +6505,61 @@ class FeaturePanel(QWidget):
         self._in_view.setAccessibleName(str(tr("Im Bild einstellen")))
         self._in_view.setAccessibleDescription(promise)
 
-    def set_measuring(self, active: bool) -> None:
-        """Ob die Maße dieses Merkmals im Bild stehen — *Abbrechen* steht dann mit.
+    def measure_fields(
+        self, op: str, parent: QWidget, *, feature: Feature | None = None
+    ) -> tuple[Any, QWidget, dict[str, QWidget]] | None:
+        """Die aktive Maßgruppe aus derselben fachlichen Feldbeschreibung aufbauen."""
+        from app.ui.op_dialog import ValueField
 
-        Das Fenster sagt es beim Start und beim Ende der Platzierung; das
-        Merkmalfenster weiß sonst nichts davon, es hält nur die Felder.
-        """
+        entry = next((entry for entry in self._runs.values() if entry.op == op), None)
+        if entry is None or entry.action is None:
+            return None
+        action = entry.action
+        box = QWidget(parent)
+        form = QFormLayout(box)
+        form.setContentsMargins(0, 0, 0, 0)
+        form.setSpacing(TIGHT)
+        form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
+        form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
+        title = QLabel(str(action.title), box)
+        title.setWordWrap(True)
+        set_level(title, "caption")
+        form.addRow(title)
+        if action.note:
+            note = QLabel(str(action.note), box)
+            note.setWordWrap(True)
+            fit_wrapped(note)
+            form.addRow(note)
+        widgets: dict[str, QWidget] = {}
+        for field in action.fields:
+            editor = self._build_field(field, box)
+            label = QLabel(str(field.label), box)
+            label.setWordWrap(True)
+            label.setBuddy(editor)
+            if isinstance(editor, ValueField):
+                editor.captionChanged.connect(label.setText)
+                wheel_needs_focus(editor.spin)
+            elif isinstance(editor, QAbstractSpinBox | QComboBox):
+                wheel_needs_focus(editor)
+            editor.setAccessibleName(f"{action.title} — {field.label}")
+            form.addRow(label, editor)
+            widgets[str(field.name)] = editor
+        if op == "resize_hole" and feature is not None and "depth" in feature.params:
+            measured = QLabel(length(float(feature.params["depth"])), box)
+            measured.setAccessibleName(tr("Gemessene Tiefe"))
+            form.addRow(tr("Gemessene Tiefe"), measured)
+        return action, box, widgets
+
+    def measure_group(self, op: str) -> Any:
+        """Das belegte Gruppenangebot zum Binden an den angezeigten Entwurf."""
+        return self._groups.get(op)
+
+    def set_measuring(self, active: bool, *, op: str | None = None, begun: bool = False) -> None:
+        """Während der Maßgruppe gibt es deren Felder und Abschluss genau einmal."""
         self._measuring = bool(active)
-        self._cancel.setVisible(self._measuring and self._apply_stands())
+        self._measure_op = op if active else None
+        self._measure_begun = bool(active and begun)
+        self._settle_lock()
 
     def request_in_view(self) -> None:
         """Denselben Weg nehmen wie der Knopf *Im Bild einstellen* — wenn er steht.
@@ -6452,67 +6699,14 @@ class FeaturePanel(QWidget):
         return True
 
     def _build_field(self, field: Any, parent: QWidget) -> QWidget:
-        """Das Feld zur Art — Länge rechnet Zoll zurück, ein Winkel nicht.
-
-        **Ein gebundener Wert bekommt das Ausdrucksfeld des Dialogs.** Die
-        Textur nimmt es für jedes ihrer Zahlenfelder; ein Baustein nur dort,
-        wo wirklich ein Ausdruck steht — sonst sähe die häufige Lage anders
-        aus als bisher, ohne dass jemand einen Parameter im Spiel hätte.
-        """
-        from app.core.expressions import is_expression
-
-        entry = self._texture_fields.get(field.name)
-        if entry is None and is_expression(field.value):
-            entry = self._part_fields.get(field.name)
-        if entry is not None:
-            from app.ui.op_dialog import ValueField
-
-            return ValueField(entry, field.value, self._parameter_values, parent)
-        kind = str(field.kind)
-        if kind == "bool":
-            check = RowCheckBox(parent)
-            check.setChecked(bool(field.value))
-            return check
-        if kind == "choice":
-            combo = QComboBox(parent)
-            for value, text in field.choices or ():
-                combo.addItem(choice_label(str(text)), value)
-            explain_choices(combo)
-            if field.name == "pattern":
-                from app.ui.op_dialog import _show_patterns
-
-                _show_patterns(combo, tuple(value for value, _text in field.choices or ()))
-            index = combo.findData(field.value)
-            if index >= 0:
-                combo.setCurrentIndex(index)
-            return combo
-        if kind == "length":
-            spin = LengthSpin(parent)
-            spin.set_range_mm(
-                float(field.minimum) if field.minimum is not None else -100000.0,
-                float(field.maximum) if field.maximum is not None else 100000.0,
-            )
-            spin.set_value_mm(float(field.value))
-            return spin
-        if kind == "count":
-            # Eine ganze Zahl ohne Einheit — die Haken eines Einhängers, die
-            # Löcher einer Halterung. Kein Längenfeld: Das trüge „mm" und
-            # rechnete in Zoll um (`_kind_of` in ``perceive.actions``).
-            count = QSpinBox(parent)
-            count.setRange(
-                int(field.minimum) if field.minimum is not None else 0,
-                int(field.maximum) if field.maximum is not None else 100000,
-            )
-            count.setValue(int(field.value))
-            return count
-        angle = NumberSpin(parent)
-        angle.setRange(
-            float(field.minimum) if field.minimum is not None else -360.0,
-            float(field.maximum) if field.maximum is not None else 360.0,
+        """Panel und Maßgruppe verwenden dieselben Felder und Ausdruckswerte."""
+        return feature_field(
+            field,
+            parent,
+            expression_fields=self._texture_fields,
+            part_fields=self._part_fields,
+            parameter_values=self._parameter_values,
         )
-        angle.setSuffix(f" {field.unit}" if field.unit else "")
-        angle.setValue(float(field.value))
-        return angle
 
     def _values(
         self,
@@ -6520,37 +6714,8 @@ class FeaturePanel(QWidget):
         widgets: Mapping[str, QWidget],
         fixed: Sequence[tuple[str, Any]] = (),
     ) -> dict[str, Any]:
-        """Was in den Feldern dieser Handlung steht, in der Einheit des Kerns.
-
-        ``fixed`` sind die Werte, die die Handlung mitbringt und die niemand
-        eingibt — an einer angeklickten Kante die Auswahl ``named`` und ihr
-        Schlüssel (:attr:`~app.core.perceive.actions.FeatureAction.fixed`).
-        Sie stehen **vor** den Feldern, damit ein Feld gleichen Namens gewinnt:
-        Was der Kunde sieht, gilt.
-        """
-        params: dict[str, Any] = {}
-        from app.ui.op_dialog import ValueField
-
-        if self._feature_id is not None:
-            # ``at_feature`` ist kein Feld: Welches Merkmal gemeint ist, steht
-            # in der Auswahl, und eine Frage danach hätte ihre Antwort schon.
-            params["at_feature"] = self._feature_id
-        params.update(dict(fixed))
-        for field in fields:
-            widget = widgets.get(str(field.name))
-            if isinstance(widget, ValueField):
-                params[str(field.name)] = widget.value()
-            elif isinstance(widget, LengthSpin):
-                params[str(field.name)] = widget.value_mm() * field.parameter_factor
-            elif isinstance(widget, QCheckBox):
-                params[str(field.name)] = widget.isChecked()
-            elif isinstance(widget, QComboBox):
-                params[str(field.name)] = widget.currentData()
-            elif isinstance(widget, QSpinBox):
-                params[str(field.name)] = int(widget.value())
-            elif isinstance(widget, QDoubleSpinBox):
-                params[str(field.name)] = float(widget.value())
-        return params
+        """Panelwerte mit dem dort angezeigten Merkmal lesen."""
+        return feature_field_values(fields, widgets, fixed, feature_id=self._feature_id)
 
     def _emit(
         self,

@@ -71,6 +71,33 @@ wenn gleichzeitig Material hinzukommt und wegfällt.
 
 ## Vorschau und Auswahl
 
+`QuietHost` hält den gemeinsamen Maßentwurf. `feature_field` und
+`feature_field_values` verwenden dieselben Felder, Einheiten und
+Ausdruckswerte in Panel und Bild. Die Maßgruppe besitzt ihre Editoren;
+Panelgegenstücke sind gesperrt und ihr zusätzlicher Abschluss ausgeblendet.
+`requires_displayed_preview` ist die Eingabepflicht des Editors, getrennt
+vom abgeleiteten `preview_required`. Beide Zwillinge brauchen vor Übernehmen
+das dargestellte aktuelle Ergebnis. `accepted(values)` liefert bool;
+`finished` folgt erst auf Erfolg. Frühes Enter wird nie nachgeholt.
+
+Der Auftrag bindet Dokument, Ergebnis, Körper, Merkmal, Originalschritt und
+belegten Gruppenumfang. Das Hauptfenster bereitet Vorschau und Commit aus
+dieser Bindung vor, nicht aus inzwischen neu aufgebauten Panelzeilen.
+`bore_step_of` und `bore_action` liefern eindeutig belegte ursprüngliche
+Bohrungswerte; ihre Vorschau rechnet alle Folgeschritte. Unberührte Ausdrücke
+und historische Koordinaten bleiben erhalten. Erkannte Bohrungen ohne
+solche Herkunft ändern über `resize_hole` Durchmesser und Lage; ihre Tiefe
+bleibt gemessene Auskunft. Beginn, Auswahlbindung und Verwerfen stehen in
+Bauplan §18.11 und `.claude/rules/griffe.md`.
+
+Historische Flächenhilfen gehören ausschließlich zur dargestellten
+Prefixszene. Über der vollständigen Folgeauswertung bleiben sie ausgeblendet;
+Fachwerte und Vorschaufreigabe bestehen weiter. Eine echte neue Eingabe zeigt
+den Prefix erneut und entwertet die alte Gesamtvorschau. Geänderte Bohrwerte
+lassen den Sitz neu prüfen: Ein früherer Mundpunkt darf nach einer
+Tiefenänderung nicht stehen bleiben. Ist kein eindeutiger Sitz belegt,
+bleiben die Originalwerte ohne erfundene Flächenhilfen bearbeitbar.
+
 `Session` rechnet historische Werteänderungen und Zwillingswechsel über
 dieselben `History`-Methoden wie die Übernahme. Ihre Vorschau enthält auch
 die Befunde der neu gerechneten Folgeschritte. Beim Umschalten eines

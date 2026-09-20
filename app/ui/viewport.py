@@ -3517,6 +3517,8 @@ class _SceneMeshWorker(Worker):
 class Viewport(QWidget):
     """Die 3D-Ansicht, oder ein schlichter Hinweis, wenn kein Renderer zu bauen ist."""
 
+    selection_allowed: Callable[[], bool] | None = None
+
     measurementTaken = Signal(object)
     """A finished measurement — carries a ``Measurement``."""
     measurementStatus = Signal(str)
@@ -3524,6 +3526,7 @@ class Viewport(QWidget):
     transformDragged = Signal(object)
     """A finished gizmo drag — carries ``TransformSteps`` (§18.11)."""
     placementDragged = Signal(object)
+    placementDragStarted = Signal()
     """Ein beendeter Zug am Griff des **Werkzeugkörpers** einer Platzierung.
 
     Trägt die Matrix, die der Körper danach hat — ihre Verschiebung ist die
@@ -4684,6 +4687,18 @@ class Viewport(QWidget):
             if handle is None or (held and not handle.pressing):
                 continue
             if handle.handle(event):
+                if (
+                    event.kind == "press"
+                    and handle.pressing
+                    and (
+                        handle is self._placement_grip
+                        or (
+                            self._placement_pointer is not None
+                            and handle in (self._gizmo, self._slot_handle)
+                        )
+                    )
+                ):
+                    self.placementDragStarted.emit()
                 if (
                     event.kind == "release"
                     and handle is self._slot_handle
@@ -10409,6 +10424,8 @@ class Viewport(QWidget):
         es ansetzen könnte. Auf dem gestuften Weg kostet das nichts: Dort ist
         der Körper längst gewählt, sonst käme der Klick gar nicht hierher.
         """
+        if not self.user_selection_allowed():
+            return True
         if add or self._direct_picking:
             return False
         # **``_object_at_view`` und nicht ``_object_at``**: ``point`` kommt aus
@@ -11471,7 +11488,7 @@ class Viewport(QWidget):
             interact_callback=self._on_gizmo_interacted,
         )
 
-    def grip_placement(self, item: Item | None) -> None:
+    def grip_placement(self, item: Item | None, *, rotation: bool = True) -> None:
         """Den Bewegungsgriff an den Werkzeugkörper einer Platzierung hängen — oder abnehmen.
 
         **Ein gesetzter Baustein lässt sich anfassen** (Robert, 11.09.2026:
@@ -11509,6 +11526,7 @@ class Viewport(QWidget):
             scale=self._gizmo_scale_for(item),
             line_radius=GIZMO_LINE_RADIUS,
             release_callback=self._on_placement_grip_released,
+            rotation=rotation,
         )
 
     def _on_placement_grip_released(self, matrix: Any) -> None:
@@ -14156,6 +14174,8 @@ class Viewport(QWidget):
         wählt, setzt die Auswahl auf sie — der nächste Linksklick daneben führt
         also von dort weiter und nicht von vorn.
         """
+        if not self.user_selection_allowed():
+            return
         # **Der Skizzenmodus kommt vor allem anderen**, wie beim Linksklick:
         # Ein Rechtsklick beim Zeichnen meint eine Stelle der Zeichenebene und
         # ihr Menü — nicht die Objektauswahl, die er sonst verstellt hätte.
@@ -14194,6 +14214,11 @@ class Viewport(QWidget):
             self._select_at(self._from_view(point), direct=True)
         self.contextMenuAt.emit(x, y)
 
+    def user_selection_allowed(self) -> bool:
+        """Ein gebundener Entwurf hält die Auswahl, ohne die Kamera zu sperren."""
+        guard = getattr(self, "selection_allowed", None)
+        return guard is None or bool(guard())
+
     def _select_at(self, point: Vec3, *, direct: bool = False, add: bool = False) -> bool:
         """Was ein Klick auswählt: der Körper, und eine Stufe tiefer sein
         Merkmal (§18.5). Gibt zurück, ob ein Merkmal dabei war.
@@ -14215,6 +14240,8 @@ class Viewport(QWidget):
         mit hinaus, weil erst der Empfänger sie einlösen kann: Die Ansicht
         weiß, welche Taste lag, der Objektbaum, was schon gewählt ist.
         """
+        if not self.user_selection_allowed():
+            return True
         object_id, feature_id = self._click_target(point, direct=direct, add=add)
         self.objectPicked.emit(object_id or "", add)
         if feature_id is None:
@@ -14323,7 +14350,7 @@ class Viewport(QWidget):
         Gewähltes liegt, darf die linke Taste überhaupt für den Körper
         reserviert werden statt für die Kamera.
         """
-        if self._selected is None or point is None:
+        if not self.user_selection_allowed() or self._selected is None or point is None:
             return False
         return self._object_at(self._from_view(point)) == self._selected
 
@@ -15187,6 +15214,8 @@ class Viewport(QWidget):
             if hit is not None:
                 self.sketchPointPicked.emit(hit)
             return
+        if self._means_a_feature() and not self.user_selection_allowed():
+            return
         point = self._aim_at(x, y) if self._means_a_feature() else self._world_at(x, y)
         if point is None:
             # **Mit Taste hebt ein Klick ins Leere nichts auf.** Wer
@@ -15209,22 +15238,6 @@ class Viewport(QWidget):
         # hervorgehobene Linie. Gelesen wird dieselbe Rangfolge wie beim
         # Zeiger (:meth:`_means_a_feature`), nicht eine zweite Aufzählung der
         # Flaggen.
-        if self._placement_pointer is not None and self._means_a_feature():
-            # **Ein Klick auf das Modell verlässt die Maße nicht** (Robert,
-            # 11.09.2026: „wenn ich leicht daneben klicke bin ich draußen,
-            # solange der klick auf dem modell ist sollte das nicht passieren").
-            # Wer am Griff ansetzt und den Pfeil verfehlt, trifft die Fläche
-            # daneben — bis hierher wählte das die Fläche und beendete damit
-            # die Platzierung samt allem, was darin wartete. Solange eine
-            # Platzierung läuft, gehört der Klick auf das Modell ihr; heraus
-            # führen Escape, *Abbrechen* rechts und der Klick ins Leere.
-            #
-            # **Aber nur der Auswahlklick.** Messen, Trennen, Skelett und
-            # Formen setzen eine Stelle, keine Auswahl — gefragt wird dieselbe
-            # Rangfolge wie beim Zeiger, nicht allein das Messen: Mit
-            # ``_measure_mode == "off"`` als Frage nahmen *Trennen* und
-            # *Skelett* während einer Platzierung stumm keinen Klick mehr an.
-            return
         if self._means_a_feature() and self._edge_click(x, y, point, add=add):
             return
         self.select_edge(None, None)

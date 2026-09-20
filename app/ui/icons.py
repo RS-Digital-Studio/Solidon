@@ -57,6 +57,7 @@ _HEAD: Final = (
 PATHS: Final[dict[str, str]] = {
     "add": '<path d="M12 5v14M5 12h14" />',
     "remove": '<path d="M5 12h14" />',
+    "cancel": '<path d="M6 6l12 12M18 6 6 18" />',
     "delete": ('<path d="M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14M10 10v7M14 10v7" />'),
     # Ein Körper, den eine Ebene durchtrennt.
     "section": (

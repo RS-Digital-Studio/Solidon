@@ -174,8 +174,14 @@ def test_leaving_a_handle_removes_the_highlight_from_the_drawn_frame(
         handle.remove()
 
 
-def test_dragging_an_arrow_moves_the_body_along_its_axis_only(scene: tuple) -> None:
-    renderer, body, gizmo, releases = scene
+@pytest.mark.parametrize("rotation", [True, False])
+def test_dragging_an_arrow_moves_the_body_along_its_axis_only(scene: tuple, rotation: bool) -> None:
+    """Ein reiner Platzierungsgriff bietet nur übernehmbare Verschiebungen an."""
+    renderer, body, previous, releases = scene
+    previous.remove()
+    gizmo = Gizmo(renderer, body, scale=0.4, rotation=rotation, release_callback=releases.append)
+    renderer.render()
+    assert len(gizmo.items) == (6 if rotation else 3)
     x, y = arrow_tip_pixel(renderer, gizmo, 2)
     gizmo.handle(hover(x, y))
     assert gizmo.handle(press(x, y)), "der Griff nimmt die Geste"
@@ -191,6 +197,7 @@ def test_dragging_an_arrow_moves_the_body_along_its_axis_only(scene: tuple) -> N
     assert gizmo.handle(release(fx, fy))
     assert len(releases) == 1 and np.allclose(releases[0], matrix)
     assert not gizmo.pressing
+    gizmo.remove()
 
 
 def test_dragging_a_ring_turns_the_body_about_its_axis(scene: tuple) -> None:

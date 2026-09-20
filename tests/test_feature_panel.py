@@ -2544,3 +2544,107 @@ def test_a_divider_leads_to_the_organizer_not_to_its_face(qt_app: QApplication) 
         "eine Fachaufteilung ist kein Zahlenfeld"
     )
     assert measures.elsewhere, "und der Weg zu ihr steht daneben"
+
+
+def test_measure_fields_keep_the_bound_feature_after_the_panel_changes(
+    qt_app: QApplication,
+) -> None:
+    """Der Feldleser hält die ausgewählte Bohrung, auch wenn die Karte neu aufgebaut wird."""
+    from app.ui.panels import feature_field_values
+
+    identifier, feature = a_hole()
+    panel = FeaturePanel()
+    owner = QWidget()
+    try:
+        panel.show_feature(identifier, feature)
+        built = panel.measure_fields("resize_hole", owner, feature=feature)
+        assert built is not None
+        action, group, editors = built
+        editors["diameter"].set_value_mm(9.0)
+        panel.show_feature("other-hole", replace(feature, id="other-hole"))
+        values = feature_field_values(action.fields, editors, action.fixed, feature_id=identifier)
+        assert values["at_feature"] == identifier
+        assert values["diameter"] == pytest.approx(9.0)
+        assert "depth" not in values
+        assert all(editor.accessibleName() for editor in editors.values())
+        if "depth" in feature.params:
+            assert any(
+                label.accessibleName() == "Gemessene Tiefe" for label in group.findChildren(QLabel)
+            )
+    finally:
+        owner.close()
+        owner.deleteLater()
+        panel.close()
+        panel.deleteLater()
+
+
+def test_measure_group_owns_the_editable_fields_and_the_only_completion(
+    qt_app: QApplication,
+) -> None:
+    """Panelgegenstücke sind gesperrt, während die Maßgruppe ihren Entwurf hält."""
+    identifier, feature = a_hole()
+    panel = FeaturePanel()
+    try:
+        panel.show_feature(identifier, feature)
+        panel.set_measuring(True, op="resize_hole", begun=True)
+        assert not panel._apply.isVisibleTo(panel)
+        assert not panel._cancel.isVisibleTo(panel)
+        assert not panel._every.isVisibleTo(panel)
+        for row in panel._built:
+            for editor in row.findChildren(QWidget):
+                if isinstance(editor.property("handlingKey"), str):
+                    assert not editor.isEnabled()
+        panel.set_measuring(False)
+        assert panel._apply.isVisibleTo(panel)
+        assert any(editor.isEnabled() for editor in panel.findChildren(LengthSpin))
+    finally:
+        panel.close()
+        panel.deleteLater()
+
+
+@pytest.mark.parametrize("op", ["drill_hole", "drill_brep_hole"])
+def test_original_bore_fields_keep_expressions_through_depth_and_hidden_position(
+    qt_app: QApplication,
+    op: str,
+) -> None:
+    """Ein skalierter Bohrungsschritt bekommt Originalwerte statt gemessener Weltmaße."""
+    from types import SimpleNamespace
+
+    from app.ui.op_dialog import ValueField
+    from app.ui.panels import feature_field_values, refresh_feature_fields
+
+    load_operations()
+    identifier, feature = a_hole()
+    step = SimpleNamespace(
+        id=17,
+        op=op,
+        params={"diameter": "=@bore", "depth": 0.0, "x": 7.0, "y": -3.0, "z": 5.0},
+    )
+    panel = FeaturePanel()
+    owner = QWidget()
+    try:
+        panel.show_feature(identifier, feature)
+        panel.offer_bore_step(step, REGISTRY.get(op), {"bore": 6.0})
+        built = panel.measure_fields(op, owner)
+        assert built is not None
+        action, group, editors = built
+        assert isinstance(editors["diameter"], ValueField)
+        values = feature_field_values(action.fields, editors, action.fixed)
+        assert values["diameter"] == "=@bore"
+        assert values["depth"] == pytest.approx(0.0)
+        assert values["x"] == pytest.approx(7.0)
+        assert values["y"] == pytest.approx(-3.0)
+        assert values["z"] == pytest.approx(5.0)
+        assert "at_feature" not in values
+        assert panel.step_for_action(op) == 17
+        assert panel.step_for_action("resize_hole") is None
+        assert "ursprünglichen Schrittwerte" in spoken(group)
+        refresh_feature_fields(action.fields, editors, {"diameter": "=@bore", "depth": 4.0})
+        changed = feature_field_values(action.fields, editors, action.fixed)
+        assert changed["diameter"] == "=@bore"
+        assert changed["depth"] == pytest.approx(4.0)
+    finally:
+        owner.close()
+        owner.deleteLater()
+        panel.close()
+        panel.deleteLater()

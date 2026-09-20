@@ -1353,6 +1353,7 @@ class OperationDialog(QDialog):
     placement_flow: PlacementFlow | None = None
     seal_flow: SealFlow | None = None
     preview_required = False
+    requires_displayed_preview = False
     preview_order: Callable[[], Any] | None = None
     preview_check: Callable[[], bool] | None = None
 

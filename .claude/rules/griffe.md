@@ -39,14 +39,13 @@ Vier Sachen daran sind Entscheidungen und keine Bequemlichkeit:
   **nicht** mitbekommt — die Operation liest ihn aus dem Merkmal. Ein Zug, der
   sie verschöbe, verspräche etwas, das der Schnitt nicht einlöst; deshalb
   spiegelt der gegenüberliegende Knopf den gegriffenen.
-* **Er kommt mit *Im Bild einstellen*, nicht mit der Auswahl** — wie der
-  Bewegungsgriff an Bohrung und Langloch (Entscheidung Robert, 11.09.2026:
-  „noch bevor ich auf im Bild einstellen anklicke ist das Gizmo schon da").
-  Die Ansage ist der Zeiger der Platzierung (`set_placement_pointer`); mit ihm
-  baut `set_gizmo` die Griffe, ohne ihn zeigt die Auswahl nur, was gewählt
-  ist. Welche Arten das betrifft, sagt `placed_feature_kinds()` — dieselbe
-  Quelle wie der Knopf rechts (`panels.LEADS_INTO_THE_VIEW`). An allen anderen
-  Merkmalen bleibt die Auswahl die Ansage.
+* **Der Maßeditor einer Bohrung erscheint mit der Auswahl.** Die erste
+  Feld- oder Griffbetätigung beginnt den gebundenen Entwurf (§18.11).
+  `PlacementFlow` besitzt die Fachfelder und seine Platzierungsgriffe; der
+  allgemeine Merkmalsgriff bleibt dabei über `set_feature_gizmo_blocked`
+  gesperrt. Ein reiner Verschiebungsauftrag zeigt keine Drehringe.
+  Für weitere, noch nicht angeschlossene Merkmalsarten gilt der vorhandene
+  ausdrückliche Einstieg über *Im Bild einstellen*.
 * **Und am Langloch stehen beide Griffe** — die Knöpfe für Länge und Richtung
   und die Pfeile und Ringe des Bewegungsgriffs, seit es sich versetzen und
   drehen lässt (RM-153). Der Ring um die Bohrachse dreht die Mittellinie.
@@ -138,16 +137,15 @@ Vier Sachen daran sind Entscheidungen und keine Bequemlichkeit:
   den Maßen des Merkmals. `_repaint_preview` tauscht dabei nur die Punkte
   (`update_points`), solange die Form ihre Punktzahl behält — ein Aktor je
   Mausbewegung wäre ein Neuaufbau je Mausbewegung.
-* **Ein Klick auf das Modell verlässt die Maße nicht.** Solange eine
-  Platzierung läuft, nimmt `_on_left_click` einen Klick, der das Modell
-  trifft, gar nicht erst an — wer den Pfeil des Griffs verfehlt, wählt nicht
-  die Fläche daneben (Robert, 11.09.2026: „solange der klick auf dem modell
-  ist sollte das nicht passieren"). Heraus führen drei Wege, alle über
-  `MainWindow._leave_the_measures`: Escape, *Abbrechen* rechts unter
-  *Übernehmen* (`FeaturePanel.cancelRequested`, sichtbar nur mit Maßen im
-  Bild — `set_measuring`) und der Klick ins Leere (`_on_object_picked("")`).
-  Alle drei verwerfen, was wartete; gerechnet ist nichts (Regel 2). Ein
-  Auswahlwechsel über `select_features` verwirft ebenso wie `select_feature`.
+* **Die erste Eingabe bindet die Auswahl.** Vorher bleibt die passive
+  Maßanzeige abwählbar; danach erhalten Außenklick und andere Auswahltasten
+  den Entwurf. `Viewport.user_selection_allowed` liegt vor der Mutation in
+  Bild und Kantenwahl, `_ObjectTreeView` vor Qts Maus-/Tastaturauswahl.
+  Kamera und Scrollen bleiben frei. Fremde Befehle werden nicht vorgemerkt:
+  erst Übernehmen oder Abbrechen gibt sie wieder frei. Escape und das
+  gemeinsame Abbrechen verwerfen den Entwurf; eine echte Dokument- oder
+  Ergebnisänderung entwertet seinen Bezug. Die eigene synchrone
+  Dokumentmeldung beim Commit wartet bis zum booleschen Erfolg des Callbacks.
 * **Die Marke trägt die Langlochform, und sie geht beim Zug mit.** Ein
   wartender Langlochzug (`_slot_waiting`) und ein erkanntes Langloch werden
   als Stadion gezeigt, in die Tiefe gezogen (`_feature_shape` →

@@ -26,6 +26,11 @@ und hat mit diesem Verzeichnis nichts mehr zu tun.
 
 ## Festlegungen, die der Viewport voraussetzt
 
+`Gizmo(rotation=False)` baut ausschließlich die drei Verschiebungspfeile.
+Seine Platzgrenze umfasst nur tatsächlich vorhandene Griffe. Fachliche
+Platzierungen, die nur Koordinaten übernehmen, bieten damit keine wirkungslosen
+Drehringe an. Die übrigen Gizmos behalten ihre Drehfunktion.
+
 * **Deckende Körper reflektieren schwach und breit.** Der neutrale
   Phong-Anteil macht die Form auch bei schwarzer Filamentfarbe lesbar.
   `SurfaceStyle.specular` überschreibt ihn einschließlich ausdrücklich null;

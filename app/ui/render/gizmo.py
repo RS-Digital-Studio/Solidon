@@ -125,6 +125,7 @@ class Gizmo:
         scale: float = 0.15,
         line_radius: float = 0.02,
         axes: np.ndarray | None = None,
+        rotation: bool = True,
         release_callback: Callable[[np.ndarray], None] | None = None,
         interact_callback: Callable[[np.ndarray], np.ndarray | None] | None = None,
     ) -> None:
@@ -134,6 +135,7 @@ class Gizmo:
         self._interact = interact_callback
         self._origin = np.asarray(origin if origin is not None else target.centre(), dtype=float)
         self._axes = np.eye(3) if axes is None else _validated(axes)
+        self._rotation = rotation
         self._cached = target.matrix()
         self._length = float(target.length())
         self._arrow_length = self._length * scale * ARROW_SHARE
@@ -169,6 +171,8 @@ class Gizmo:
                     ),
                 )
             )
+            if not self._rotation:
+                continue
             ring = shapes.closed_ring(
                 shapes.circle_points(
                     self._origin, self._axes[index], self._ring_radius, RING_SEGMENTS
@@ -208,7 +212,7 @@ class Gizmo:
         sichtbar und tot (Robert, 10.09.2026: „ich kann die pfeile und das
         drehen nicht mehr bedienen"). Der Ring ist der weitere von beiden.
         """
-        return max(self._arrow_length, self._ring_radius)
+        return max(self._arrow_length, self._ring_radius if self._rotation else 0.0)
 
     @property
     def axes(self) -> np.ndarray:
