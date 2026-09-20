@@ -1,0 +1,173 @@
+Facettierungsverhältnis 48-Eck/Kreis: 0.997147
+
+== screw_hole (M4, Tiefe 10, Senkung, Kopftiefe 2) ==
+  screw_hole (Netz): watertight=True components=1 V=254.798875 tris=388
+      bounds=(-4.0, -4.0, -10.0, 4.0, 4.0, 0.01)
+  screw_hole exakt: valid=True closed=True solids=1 faces=6 V=255.527983 A=253.6379
+      types={'cylinder': 2, 'plane': 3, 'cone': 1} bounds=(-4.0, -4.0, -10.0, 4.0, 4.0, 0.01)
+  [OK ] screw_hole exakt: nativ gültig
+  [OK ] screw_hole exakt: geschlossen
+  [OK ] screw_hole exakt: Körperzahl 1 — ist 1
+  [OK ] screw_hole: Kegelfläche vorhanden — {'cylinder': 2, 'plane': 3, 'cone': 1}
+  [OK ] screw_hole: Volumen gegen Analytik — ist 255.527983, erwartet 255.527983 (±1e-06)
+  [OK ] screw_hole: Werkzeug liegt unter der Mündung — (-4.0, -4.0, -10.0, 4.0, 4.0, 0.01)
+  [OK ] screw_hole: Bohrung Ø bei z=-8 — ist 4.500000, erwartet 4.500000 (±1e-06)
+  [OK ] screw_hole: Kopfzone Ø bei z=-1 — ist 8.000000, erwartet 8.000000 (±1e-06)
+  [OK ] screw_hole: Senkung Ø in halber Senktiefe — ist 6.250000, erwartet 6.250000 (±1e-06)
+  [OK ] screw_hole: Netz/exakt Volumen = Facettierung — Verhältnis 0.997147 (erlaubt ±0.004)
+  [OK ] screw_hole: Netzbounds == exakte Bounds (Umkreis) — (-4.0, -4.0, -10.0, 4.0, 4.0, 0.01) / (-4.0, -4.0, -10.0, 4.0, 4.0, 0.01)
+  [OK ] screw_hole: STEP-Rundreise gültig
+  [OK ] screw_hole: STEP-Rundreise Volumen — ist 255.527983, erwartet 255.527983 (±0.000255528)
+  [OK ] screw_hole: STEP-Rundreise Flächenzahl — 6 gegen 6
+
+== heatset_m4 (M4, Einführfase, Zusatztiefe 0,5) ==
+  heatset (Netz): watertight=True components=1 V=213.783316 tris=480
+      bounds=(-3.3, -3.3, -8.6, 3.3, 3.3, 0.01)
+  heatset exakt: valid=True closed=True solids=1 faces=6 V=214.395058 A=215.0714
+      types={'cylinder': 2, 'plane': 3, 'cone': 1} bounds=(-3.3, -3.3, -8.6, 3.3, 3.3, 0.01)
+  [OK ] heatset exakt: nativ gültig
+  [OK ] heatset exakt: geschlossen
+  [OK ] heatset exakt: Körperzahl 1 — ist 1
+  [OK ] heatset: Bohrung Ø unten — ist 5.600000, erwartet 5.600000 (±1e-06)
+  [OK ] heatset: Fase weitet an der Mündung — ist 6.599800, erwartet 6.599600 (±0.001)
+  [OK ] heatset: Werkzeug unter der Mündung — (-3.3, -3.3, -8.6, 3.3, 3.3, 0.01)
+  [OK ] heatset: Netz/exakt Volumen = Facettierung — Verhältnis 0.997147 (erlaubt ±0.004)
+  [OK ] heatset: STEP-Rundreise gültig
+  [OK ] heatset: STEP-Rundreise Volumen — ist 214.395058, erwartet 214.395058 (±0.000214395)
+  [OK ] heatset: STEP-Rundreise Flächenzahl — 6 gegen 6
+
+== nut_trap (M4, seitlich, Einschub 12, Schraubenloch) ==
+  nut_trap (Netz): watertight=True components=1 V=676.374996 tris=430
+      bounds=(-3.6, -4.156922, -10.0, 3.6, 12.0, 13.3)
+  nut_trap exakt: valid=True closed=True solids=1 faces=19 V=677.282605 A=644.5516
+      types={'cylinder': 2, 'plane': 17} bounds=(-3.6, -4.156922, -10.0, 3.6, 12.0, 13.3)
+  [OK ] nut_trap exakt: nativ gültig
+  [OK ] nut_trap exakt: geschlossen
+  [OK ] nut_trap exakt: Körperzahl 1 — ist 1
+  [OK ] nut_trap: Schlüsselweite über X (die Ecken liegen in Y) — ist 7.200000, erwartet 7.200000 (±1e-06)
+  [OK ] nut_trap: Umkreis über Y — ist 8.313844, erwartet 8.313844 (±1e-06)
+  [OK ] nut_trap: Sechskant sitzt als Prisma (Ebenen ≥ 8) — {'cylinder': 2, 'plane': 17}
+  [OK ] nut_trap: Netz ist dieselbe Form (Bounds) — (-3.6, -4.156922, -10.0, 3.6, 12.0, 13.3) / (-3.6, -4.156922, -10.0, 3.6, 12.0, 13.3)
+  [OK ] nut_trap: Netz/exakt Volumen (nur Schraubenloch facettiert) — Verhältnis 0.998660 (erlaubt ±0.003)
+  nut_trap bottom exakt: valid=True closed=True solids=1 faces=19 V=677.282605 A=644.5516
+      types={'cylinder': 2, 'plane': 17} bounds=(-3.6, -13.3, -4.156922, 3.6, 10.0, 12.0)
+  [OK ] nut_trap bottom exakt: nativ gültig
+  [OK ] nut_trap bottom exakt: geschlossen
+  [OK ] nut_trap bottom exakt: Körperzahl 1 — ist 1
+  nut_trap bottom (Netz): watertight=True components=1 V=676.374996 tris=430
+      bounds=(-3.6, -13.3, -4.156922, 3.6, 10.0, 12.0)
+  [OK ] nut_trap bottom: Öffnung zeigt nach unten (Netz wie exakt) — (-3.6, -13.3, -4.156922, 3.6, 10.0, 12.0) / (-3.6, -13.3, -4.156922, 3.6, 10.0, 12.0)
+  [OK ] nut_trap: STEP-Rundreise gültig
+  [OK ] nut_trap: STEP-Rundreise Volumen — ist 677.282605, erwartet 677.282605 (±0.000677283)
+  [OK ] nut_trap: STEP-Rundreise Flächenzahl — 19 gegen 19
+
+== printed_thread außen (M6, Länge 12) ==
+  printed_thread außen (Netz): watertight=True components=1 V=285.138498 tris=7010
+      bounds=(-3.0, -3.0, 0.0, 3.0, 3.0, 12.0)
+  (Dauer threaded_rod M6 x 12: 22.3 s — Beobachtung)
+  threaded_rod exakt: valid=True closed=True solids=1 faces=21 V=253.367087 A=387.9639
+      types={'cylinder': 13, 'bspline': 2, 'plane': 6} bounds=(-3.000011, -3.000011, -0.0, 3.000011, 3.000011, 12.0)
+  [OK ] threaded_rod exakt: nativ gültig
+  [OK ] threaded_rod exakt: geschlossen
+  [OK ] threaded_rod exakt: Körperzahl 1 — ist 1
+  [OK ] thread außen: Länge exakt 12 — (-3.000011, -3.000011, -0.0, 3.000011, 3.000011, 12.0)
+  exakt bei z=6 über den Umfang: Kern Ø 4.77320, Gang Ø 6.00000 (Netz: Kern Ø 4.9000, Gang Ø 6.0000)
+  [OK ] thread außen: Gang-Ø = Nenn-Ø (Sweep-Approximation ≤ 1e-4) — ist 6.000000, erwartet 6.000000 (±0.0001)
+  [OK ] thread außen: exakter Kern unter dem Netzkern (Gangprofil 0,6134 p statt 0,55 p)
+  Volumen Netz/exakt = 1.1254 — Formunterschied des Gangprofils, keine Facettierung
+  [OK ] thread außen: Volumenunterschied ist ein Formunterschied (> Facettierung)
+  [OK ] threaded_rod: STEP-Rundreise gültig
+  [OK ] threaded_rod: STEP-Rundreise Volumen — ist 253.367085, erwartet 253.367087 (±0.000253367)
+
+== Prototyp: Gangprofil des Netzwegs (0,55 p, flacher Kamm) als exakter Sweep ==
+  (Dauer thread_ridge_exact M6 x 12: 15.8 s — Beobachtung)
+  Netzprofil exakt: valid=True closed=True solids=1 faces=23 V=287.876456 A=399.1649
+      types={'cylinder': 14, 'bspline': 3, 'plane': 6} bounds=(-3.000023, -3.000023, -0.0, 3.000023, 3.000023, 12.0)
+  [OK ] Netzprofil exakt: nativ gültig
+  [OK ] Netzprofil exakt: geschlossen
+  [OK ] Netzprofil exakt: Körperzahl 1 — ist 1
+  exakt (Netzprofil) bei z=6: Kern Ø 4.92000, Gang Ø 6.00008
+  [OK ] Netzprofil exakt: Kern-Ø wie im Netz (+ 2·Überlappung) — ist 4.920000, erwartet 4.920000 (±0.001)
+  [OK ] Netzprofil exakt: Gang-Ø wie im Netz — ist 6.000082, erwartet 6.000000 (±0.001)
+  [OK ] Netzprofil exakt: Volumen Netz/exakt = Facettierung von Kern und Gang — Verhältnis 0.990489 (erlaubt ±0.012)
+  [OK ] Netzprofil exakt: STEP-Rundreise gültig
+  [OK ] Netzprofil exakt: STEP-Rundreise Volumen (Sweep-Approximation) — Verhältnis 0.999990 (erlaubt ±0.0001)
+
+== printed_thread innen als Werkzeug (M6, Länge 8, Spiel 0,2) ==
+  printed_thread innen (Netz): watertight=True components=1 V=203.412837 tris=4706
+      bounds=(-3.1, -3.1, -8.0, 3.1, 3.1, 0.0)
+  thread innen exakt (Bolzen + Spiel unter der Mündung): valid=True closed=True solids=1 faces=17 V=182.154125 A=284.7742
+      types={'cylinder': 9, 'bspline': 2, 'plane': 6} bounds=(-3.100021, -3.100021, -8.0, 3.100021, 3.100021, 2e-06)
+  [OK ] thread innen exakt (Bolzen + Spiel unter der Mündung): nativ gültig
+  [OK ] thread innen exakt (Bolzen + Spiel unter der Mündung): geschlossen
+  [OK ] thread innen exakt (Bolzen + Spiel unter der Mündung): Körperzahl 1 — ist 1
+  [OK ] thread innen: Werkzeug unter der Mündung (Hüllenzuschlag der NURBS-Bounds ≤ 1e-5) — (-3.100021, -3.100021, -8.0, 3.100021, 3.100021, 2e-06)
+  [OK ] thread innen: Werkzeug-Gang-Ø = nominal + Spiel — ist 6.200000, erwartet 6.200000 (±0.0001)
+  [OK ] thread innen: Netzwerkzeug liegt ebenfalls unter der Mündung — (-3.1, -3.1, -8.0, 3.1, 3.1, 0.0)
+  (Dauer Block minus Innengewinde: 0.0 s — Beobachtung)
+  Block minus Innengewinde: valid=True closed=True solids=1 faces=17 V=3017.845875 A=1633.6970
+      types={'plane': 6, 'cylinder': 9, 'bspline': 2} bounds=(-10.0, -10.0, -8.0, 10.0, 10.0, 2e-06)
+  [OK ] Block minus Innengewinde: nativ gültig
+  [OK ] Block minus Innengewinde: geschlossen
+  [OK ] Block minus Innengewinde: Körperzahl 1 — ist 1
+  [OK ] Block minus Innengewinde: Volumen kleiner als Block
+  [OK ] Block minus Innengewinde: STEP-Rundreise gültig
+  [OK ] Block minus Innengewinde: STEP-Rundreise Volumen — ist 3017.845952, erwartet 3017.845875 (±0.00301785)
+
+== printed_screw (M5, Länge 12, Sechskantkopf) ==
+  printed_screw (Netz): watertight=True components=1 V=512.395681 tris=8678
+      bounds=(-4.25, -4.907477, -11.99, 4.25, 4.907477, 5.0)
+  printed_screw exakt: valid=True closed=True solids=1 faces=29 V=489.947375 A=563.4326
+      types={'plane': 11, 'cylinder': 16, 'bspline': 2} bounds=(-4.25, -4.907477, -11.99, 4.25, 4.907477, 5.0)
+  [OK ] printed_screw exakt: nativ gültig
+  [OK ] printed_screw exakt: geschlossen
+  [OK ] printed_screw exakt: Körperzahl 1 — ist 1
+  [OK ] printed_screw: Kopf oben, Gewinde unten — (-4.25, -4.907477, -11.99, 4.25, 4.907477, 5.0)
+  [OK ] printed_screw: Netz hat dieselbe Höhe — (-4.25, -4.907477, -11.99, 4.25, 4.907477, 5.0) / (-4.25, -4.907477, -11.99, 4.25, 4.907477, 5.0)
+  [OK ] printed_screw: STEP-Rundreise gültig
+  [OK ] printed_screw: STEP-Rundreise Volumen — ist 489.947377, erwartet 489.947375 (±0.000489947)
+
+== printed_screw (M5, Senkkopf) + host_cut ==
+  printed_screw senk (Netz): watertight=True components=1 V=313.754422 tris=8818
+      bounds=(-5.0, -5.0, -14.49, 5.0, 5.0, 0.0)
+  printed_screw senk exakt, Überlappung 0,01 wie im Netz: valid=True closed=True solids=2 faces=30 V=291.780633 A=502.3297
+      types={'plane': 9, 'cone': 1, 'bspline': 3, 'cylinder': 17} bounds=(-5.0, -5.0, -14.49, 5.0, 5.0, 0.0)
+  [OK ] BEFUND printed_screw senk: 0,01 mm Überlappung von Kegelkopf und Gewinde -> zwei Körper — solids=2 — der Netzweg verschmilzt dieselbe Lage zu einem
+  printed_screw senk exakt, Fuzzy-Vereinigung 1e-4: valid=True closed=True solids=1 faces=24 V=291.632930 A=472.5464
+      types={'plane': 5, 'cone': 1, 'bspline': 2, 'cylinder': 16} bounds=(-5.0, -5.0, -14.49, 5.0, 5.0, 0.0)
+  [OK ] printed_screw senk exakt, Fuzzy-Vereinigung 1e-4: nativ gültig
+  [OK ] printed_screw senk exakt, Fuzzy-Vereinigung 1e-4: geschlossen
+  [OK ] printed_screw senk exakt, Fuzzy-Vereinigung 1e-4: Körperzahl 1 — ist 1
+  [OK ] printed_screw senk: breiter Rand bündig bei z=0, Gewinde 12 unter der Kopfspitze — (-5.0, -5.0, -14.49, 5.0, 5.0, 0.0)
+  [OK ] printed_screw senk: Netz hat dieselbe Höhe
+  Beobachtung: Fuzzy-Senkkopf nach STEP-Rundreise valid=False
+  printed_screw senk als Compound (Kopf + Bolzen): valid=True closed=True solids=2 faces=27 V=291.780633 A=502.3297
+      types={'plane': 8, 'cone': 1, 'cylinder': 16, 'bspline': 2} bounds=(-5.0, -5.0, -14.49, 5.0, 5.0, 0.0)
+  [OK ] printed_screw senk Compound: zwei Solids, gültig
+  [OK ] printed_screw senk Compound: STEP-Rundreise gültig
+  [OK ] printed_screw senk Compound: STEP-Rundreise Volumen — ist 291.780633, erwartet 291.780633 (±0.000291781)
+  host_cut Senkung (Netz): watertight=True components=1 V=108.809897 tris=192
+      bounds=(-5.0, -5.0, -2.25, 5.0, 5.0, 0.0)
+  host_cut exakt: valid=True closed=True solids=1 faces=3 V=109.121257 A=179.7709
+      types={'plane': 2, 'cone': 1} bounds=(-5.0, -5.0, -2.25, 5.0, 5.0, 0.0)
+  [OK ] host_cut exakt: nativ gültig
+  [OK ] host_cut exakt: geschlossen
+  [OK ] host_cut exakt: Körperzahl 1 — ist 1
+  [OK ] host_cut: Senkung unter der Mündung, weit oben — (-5.0, -5.0, -2.25, 5.0, 5.0, 0.0)
+  [OK ] host_cut: Netz/exakt = Facettierung — Verhältnis 0.997147 (erlaubt ±0.004)
+
+== printed_nut (M5, Spiel 0,2) ==
+  printed_nut (Netz): watertight=True components=1 V=175.998481 tris=4536
+      bounds=(-4.0, -4.618802, 0.0, 4.0, 4.618802, 4.7)
+  (Dauer printed_nut: Sechskant minus Bolzen: 0.1 s — Beobachtung)
+  printed_nut exakt: valid=True closed=True solids=1 faces=17 V=184.547302 A=328.0496
+      types={'plane': 8, 'bspline': 2, 'cylinder': 7} bounds=(-4.0, -4.618802, -0.0, 4.0, 4.618802, 4.7)
+  [OK ] printed_nut exakt: nativ gültig
+  [OK ] printed_nut exakt: geschlossen
+  [OK ] printed_nut exakt: Körperzahl 1 — ist 1
+  [OK ] printed_nut: Höhe = Normhöhe — (-4.0, -4.618802, -0.0, 4.0, 4.618802, 4.7)
+  [OK ] printed_nut: Gewinde geht durch (Achse frei)
+  [OK ] printed_nut: STEP-Rundreise gültig
+  [OK ] printed_nut: STEP-Rundreise Volumen — ist 184.547302, erwartet 184.547302 (±0.000184547)
+
+S3 Verbindungen: 96 von 96 Zusicherungen halten

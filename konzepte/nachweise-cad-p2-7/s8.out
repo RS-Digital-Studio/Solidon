@@ -1,0 +1,115 @@
+== 1. heute: insert_heatset_m4 am exakten Träger ==
+  [OK ] Träger ist exakt
+  Träger: V=11787.628337 Merkmale {'face': 6, 'hole': 1}
+  [OK ] heute: Ergebnis ist ein Netz (Konvertierungspunkt _insert_at/as_mesh_data)
+  [OK ] heute: Befund evaluate.exact_became_mesh — ['bore.compensated', 'evaluate.exact_became_mesh', 'perceive.deviation', 'perceive.orphaned']
+  heute: V=11756.841026 Merkmale {'cone': 1, 'face': 6, 'hole': 3}
+
+== 2. exakt: heatset M4 an der Bohrung ==
+  (Dauer exakter Schnitt: 0.0 s — Beobachtung)
+  Träger minus Buchse: valid=True closed=True solids=1 faces=10 V=11756.119209 A=3926.8680
+      types={'plane': 7, 'cone': 1, 'cylinder': 2} bounds=(-20.0, -15.0, 0.0, 20.0, 15.0, 10.0)
+  [OK ] Träger minus Buchse: nativ gültig
+  [OK ] Träger minus Buchse: geschlossen
+  [OK ] Träger minus Buchse: Körperzahl 1 — ist 1
+  Trägerbohrung laut Merkmal: Ø5.2 (materialkompensiert, bore.compensated), {'diameter': 5.2, 'centre': (0.0, 0.0, 5.0), 'axis': (0.0, 0.0, 1.0), 'depth': 10.0, 'through': True}
+  [OK ] exakt: Volumen gegen Analytik (Aufweitung + Fase) — ist 11756.119209, erwartet 11756.119209 (±1e-06)
+  [OK ] exakt: Bohrung Ø unter der Mündung = Buchsenbohrung — ist 5.600000, erwartet 5.600000 (±1e-06)
+  [OK ] exakt: Rest der Trägerbohrung darunter bleibt — ist 5.200000, erwartet 5.200000 (±1e-06)
+  [OK ] Netz/exakt Volumen = Facettierung der Bohrungen — Verhältnis 1.000061 (erlaubt ±0.001)
+  features_of am exakten Ergebnis: {'cone': 1, 'face': 7, 'hole': 2}
+  Bohrungen: Ø5.2000 tief 1.4000, Ø5.6000 tief 8.1000
+  [OK ] exakt: features_of liest die aufgeweitete Bohrung Ø5,6
+  [OK ] exakt: features_of liest den Rest der Trägerbohrung
+  [OK ] exakt: Kegelfläche der Fase erkannt (cone/countersink) — {'cone': 1, 'face': 7, 'hole': 2}
+  Provenienz-Merkmale über _placed_features: ['heatset_m4_bore_1', 'heatset_m4_chamfer_1']
+  [OK ] Provenienz-Merkmale entstehen unabhängig von der Bauart (moved_features)
+  heatset_m4_bore_1: centre=(0.0, 0.0, 5.7) Ø5.6
+  [OK ] Provenienz-Bohrung und native Bohrung teilen die Achse (X, Y) — nativ (0.0, 0.0, 5.45)
+  [OK ] Provenienz-Mitte liegt um die halbe Fasenhöhe über der nativen Zylindermitte — ist 0.250000, erwartet 0.250000 (±1e-06)
+  [OK ] native Bohrung trägt Dreiecke (face_indices) für die Auswahl
+  [OK ] Träger minus Buchse: STEP-Rundreise gültig
+  [OK ] Träger minus Buchse: STEP-Rundreise Volumen — ist 11756.119209, erwartet 11756.119209 (±0.0117561)
+  [OK ] Träger minus Buchse: STEP-Rundreise Flächenzahl — 10 gegen 10
+
+== 3a. aufgesetzt ohne Einsenken: Rippe berührt den Träger nur in einer Fläche ==
+  Vereinigung bei reiner Flächenberührung: valid=True closed=True solids=1 faces=18 V=12073.228337 A=4353.6081
+      types={'plane': 17, 'cylinder': 1} bounds=(-20.0, -15.0, 0.0, 20.0, 15.0, 20.0)
+  [OK ] 3a: exakte Vereinigung bei Berührung ergibt einen Körper (Netz braucht OVERLAP) — solids=1
+  [OK ] 3a: Volumen = Träger + Rippe — ist 12073.228337, erwartet 12073.228337 (±1e-06)
+  Vereinigung mit Einsenkung 0,01: valid=True closed=True solids=1 faces=18 V=12072.892477 A=4353.1167
+      types={'plane': 17, 'cylinder': 1} bounds=(-20.0, -15.0, 0.0, 20.0, 15.0, 19.99)
+  [OK ] Vereinigung mit Einsenkung 0,01: nativ gültig
+  [OK ] Vereinigung mit Einsenkung 0,01: geschlossen
+  [OK ] Vereinigung mit Einsenkung 0,01: Körperzahl 1 — ist 1
+  [OK ] 3a: eingesenkt: Volumen = Träger + Rippe - Überlappung — ist 12072.892477, erwartet 12072.892477 (±0.0001)
+
+== 3b. Werkzeug genau so groß wie die Bohrung: Passbohrung Ø5 in Ø5 ==
+  Differenz mit koinzidenter Zylinderfläche: valid=True closed=True solids=1 faces=7 V=11787.628337 A=3920.8885
+      types={'plane': 6, 'cylinder': 1} bounds=(-20.0, -15.0, 0.0, 20.0, 15.0, 10.0)
+  [OK ] 3b: exakt gültig und ohne Wirkung (Volumen gleich) — V 11787.628337 gegen 11787.628337
+
+== 3c. Werkzeug neben dem Körper ==
+  Differenz ohne Treffer: valid=True closed=True solids=1 faces=7 V=11787.628337 A=3920.8885
+      types={'plane': 6, 'cylinder': 1} bounds=(-20.0, -15.0, 0.0, 20.0, 15.0, 10.0)
+  [OK ] Differenz ohne Treffer: nativ gültig
+  [OK ] Differenz ohne Treffer: geschlossen
+  [OK ] Differenz ohne Treffer: Körperzahl 1 — ist 1
+  [OK ] 3c: Volumen unverändert -> without_effect greift wie im Netz — ist 11787.628337, erwartet 11787.628337 (±1e-09)
+
+== 3d. geneigte Fläche: Träger um 30° um X gedreht, Buchse an die Deckfläche ==
+  [OK ] 3d: gedrehter Träger bleibt exakt
+  [OK ] 3d: Deckfläche nach der Drehung erkannt (Normale ~ (0, -0,5, 0,87))
+  (Dauer exakter Schnitt an geneigter Fläche: 0.0 s — Beobachtung)
+  geneigt: Träger minus Buchse: valid=True closed=True solids=1 faces=10 V=11573.479579 A=4067.3601
+      types={'plane': 7, 'cylinder': 2, 'cone': 1} bounds=(-20.0, -15.490381, -6.830127, 20.0, 15.490381, 16.830127)
+  [OK ] geneigt: Träger minus Buchse: nativ gültig
+  [OK ] geneigt: Träger minus Buchse: geschlossen
+  [OK ] geneigt: Träger minus Buchse: Körperzahl 1 — ist 1
+  [OK ] 3d: aufgeweitete Bohrung Ø5,6 erkannt
+  [OK ] 3d: Bohrungsachse folgt der Flächennormalen — ist 1.000000, erwartet 1.000000 (±1e-06)
+  [OK ] 3d: Volumenabtrag = volle Buchse + Fase (neben der Bohrung, x = 10 im Flächenrahmen) — ist 214.148758, erwartet 214.148758 (±1e-06)
+
+== 3e. zwei Ziele: zweite Bohrung, Buchse an beide ==
+  [OK ] 3e: zwei Bohrungen am exakten Träger — ['hole_1', 'hole_2']
+  beide Buchsen exakt: valid=True closed=True solids=1 faces=14 V=11512.238419 A=4053.7361
+      types={'plane': 8, 'cone': 2, 'cylinder': 4} bounds=(-20.0, -15.0, 0.0, 20.0, 15.0, 10.0)
+  [OK ] beide Buchsen exakt: nativ gültig
+  [OK ] beide Buchsen exakt: geschlossen
+  [OK ] beide Buchsen exakt: Körperzahl 1 — ist 1
+  [OK ] 3e: zwei Bohrungen Ø5,6 erkannt
+  [OK ] 3e: doppelter Abtrag — ist 63.018254, erwartet 63.018254 (±1e-06)
+
+== 3f. lösbares Teil: Schraube M5 neben dem Träger (separate_from_host) ==
+  [OK ] 3f: Schraube wird nicht vereinigt (separate)
+  Träger + Schraube als Compound: valid=True closed=True solids=2 faces=36 V=12277.575712 A=4484.3211
+      types={'plane': 17, 'cylinder': 17, 'bspline': 2} bounds=(-20.0, -15.0, -1.99, 20.0, 15.0, 15.0)
+  [OK ] 3f: Compound trägt zwei Körper
+  [OK ] 3f: Volumen = Träger + Schraube — ist 12277.575712, erwartet 12277.575712 (±1e-06)
+  [OK ] 3f: Schraubenkopf liegt an der Mündung (z = 10 .. 10 + Kopfhöhe) — (-20.0, -15.0, -1.99, 20.0, 15.0, 15.0)
+  [OK ] Träger + Schraube: STEP-Rundreise gültig
+  [OK ] Träger + Schraube: STEP-Rundreise Volumen — ist 12277.575713, erwartet 12277.575712 (±0.0122776)
+
+== 4. Kundenweg §5.1: Quader, Bohrung, Verrunden R3, Aushöhlen 2, Buchse, Senkung ==
+  [OK ] Schritte 1-4 exakt
+  nach Aushöhlen: V=4761.0477 Merkmale {'face': 12, 'fillet': 8, 'hole': 1, 'pin': 1}
+  (Dauer Schritt 5 exakt: Buchse: 0.0 s — Beobachtung)
+  Schritt 5: Buchse exakt: valid=True closed=True solids=1 faces=25 V=4729.538611 A=5069.3990
+      types={'plane': 13, 'cylinder': 11, 'cone': 1} bounds=(-20.0, -15.0, 0.0, 20.0, 15.0, 10.0)
+  [OK ] Schritt 5: Buchse exakt: nativ gültig
+  [OK ] Schritt 5: Buchse exakt: geschlossen
+  [OK ] Schritt 5: Buchse exakt: Körperzahl 1 — ist 1
+  Schritt 6: Senkung exakt: valid=True closed=True solids=1 faces=25 V=4717.392167 A=5063.7335
+      types={'plane': 13, 'cylinder': 11, 'cone': 1} bounds=(-20.0, -15.0, 0.0, 20.0, 15.0, 10.0)
+  [OK ] Schritt 6: Senkung exakt: nativ gültig
+  [OK ] Schritt 6: Senkung exakt: geschlossen
+  [OK ] Schritt 6: Senkung exakt: Körperzahl 1 — ist 1
+  [OK ] Schritt 6: Senkung nimmt Material (Kegel an der Mündung) — {'plane': 13, 'cylinder': 11, 'cone': 1}
+  Kundenweg exakt: V=4717.3922, Flächen 25, Arten {'plane': 13, 'cylinder': 11, 'cone': 1}
+  [OK ] Kundenweg §5.1 exakt: STEP-Rundreise gültig
+  [OK ] Kundenweg §5.1 exakt: STEP-Rundreise Volumen — ist 4717.392167, erwartet 4717.392167 (±0.00471739)
+  [OK ] Kundenweg §5.1 exakt: STEP-Rundreise Flächenzahl — 25 gegen 25
+  [OK ] heute kippt der Kundenweg in Schritt 5 ins Netz
+  [OK ] Kundenweg Schritt 5: Netz/exakt = Facettierung — Verhältnis 0.999549 (erlaubt ±0.002)
+
+S8 Einsetzweg: 64 von 64 Zusicherungen halten

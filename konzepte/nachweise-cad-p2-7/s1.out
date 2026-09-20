@@ -1,0 +1,104 @@
+LIBRARY_VERSION = 19
+Bausteine im Register: 35
+Gruppen: {'calibration': 3, 'fasteners': 6, 'mechanics': 8, 'mounting': 7, 'routing': 2, 'structure': 9}
+Operationen der Kategorie parts: 48
+  insert_*: 35   create_*: 11 -> ['create_fit_ladder', 'create_lid', 'create_organizer_divider', 'create_organizer_foot', 'create_organizer_rim', 'create_organizer_tray', 'create_overhang_fan', 'create_profile_clamp_liner', 'create_profile_clamp_shell', 'create_seal_gasket', 'create_wall_ladder']
+
+Baustein | Gruppe | v | Flags | Merkmale
+fit_ladder               calibration   18 standalone,bodies=2,not_at_face                              pin,bore,face
+overhang_fan             calibration   15 standalone,not_at_face                                       face
+wall_ladder              calibration   15 standalone,not_at_face                                       face
+heatset_m4               fasteners     17 subtractive,at_hole                                          bore,chamfer
+nut_trap                 fasteners     15 subtractive,at_hole                                          pocket,bore
+printed_nut              fasteners     15 separate_from_host                                           thread
+printed_screw            fasteners     15 at_hole,at_hole_mouth,separate_from_host,host_cut,not_at_face thread,countersink
+printed_thread           fasteners     15 at_hole                                                      thread
+screw_hole               fasteners     15 subtractive                                                  bore,countersink,washer,head_room
+barrel_hinge             mechanics     15 bodies=2                                                     hinge
+bearing_seat             mechanics     15 subtractive,at_hole                                          seat
+dowel                    mechanics     15 -                                                            pin,bore
+hinge_eye                mechanics     15 -                                                            eye
+latch                    mechanics     15 -                                                            ramp
+living_hinge             mechanics     16 lies_flat                                                    hinge
+snap_connector           mechanics     15 -                                                            arm,hook,catch
+snap_fit                 mechanics     15 -                                                            arm,hook
+foot                     mounting      15 -                                                            foot
+keyhole                  mounting      15 subtractive,keeps_up                                         pocket,bore
+magnet_pocket            mounting      15 subtractive                                                  pocket
+pegboard_hook            mounting      15 joined_by_host,keeps_up                                      hook,latch
+profile_clamp_liner      mounting       1 standalone                                                   front,back
+profile_clamp_shell      mounting      19 standalone                                                   front,back
+wall_mount               mounting      13 -                                                            plate,bore
+cable_clip               routing       15 -                                                            seat
+cable_gland              routing       16 subtractive,host_add                                         bore,relief
+gusset                   structure     10 -                                                            gusset
+organizer_divider        structure      1 standalone                                                   base,top,front,back
+organizer_foot           structure      1 standalone,not_at_face                                       base,seat,pin
+organizer_rim            structure      1 standalone                                                   rim
+organizer_tray           structure      1 standalone                                                   base,floor,rim
+profile_tongue           structure     15 -                                                            tongue
+rib                      structure     10 -                                                            rib
+seal_gasket              structure      1 separate_from_host,standalone                                gasket_contact,gasket_bottom,gasket_walls
+seal_groove              structure      1 subtractive                                                  groove_mouth,groove_floor,groove_walls
+
+Bauart je Bausteinpfad am exakten Träger:
+Grundlage kind=brep HOLE=hole_1 FACE=face_1
+create_fit_ladder                erzeugt:mesh     1    
+evaluation stopped at op 3: op.create_lid.ValidationError: Der Körper ist auf dieser Höhe massiv — es gibt nichts zu verschließen.
+create_lid                       ANGEHALTEN       -                      3 ['', '']
+create_organizer_divider         erzeugt:mesh     1    
+create_organizer_foot            erzeugt:mesh     1    
+create_organizer_rim             erzeugt:mesh     1    
+create_organizer_tray            erzeugt:mesh     1    
+create_overhang_fan              erzeugt:mesh     1    
+create_profile_clamp_liner       erzeugt:mesh     1    
+create_profile_clamp_shell       erzeugt:mesh     1    
+create_seal_gasket               erzeugt:mesh     1    
+create_wall_ladder               erzeugt:mesh     1    
+insert_barrel_hinge              netz             ['mesh']/[19]          bore.compensated,evaluate.exact_became_mesh,perceive.deviation,perceive.orphaned
+insert_bearing_seat              netz             ['mesh']/[9]           bore.compensated,evaluate.exact_became_mesh,perceive.deviation,perceive.orphaned
+insert_cable_clip                netz             ['mesh']/[19]          bore.compensated,evaluate.exact_became_mesh,perceive.deviation,perceive.orphaned
+insert_cable_gland               netz             ['mesh']/[21]          bore.compensated,evaluate.exact_became_mesh,perceive.deviation
+insert_dowel                     netz             ['mesh']/[10]          bore.compensated,evaluate.exact_became_mesh,perceive.deviation
+insert_fit_ladder                netz             ['mesh']/[46]          bore.compensated,evaluate.exact_became_mesh,perceive.deviation,perceive.orphaned
+insert_foot                      netz             ['mesh']/[11]          bore.compensated,evaluate.exact_became_mesh,perceive.deviation,perceive.orphaned
+insert_gusset                    netz             ['mesh']/[10]          bore.compensated,evaluate.exact_became_mesh,perceive.deviation
+insert_heatset_m4                netz             ['mesh']/[10]          bore.compensated,evaluate.exact_became_mesh,perceive.deviation,perceive.orphaned
+insert_hinge_eye                 netz             ['mesh']/[12]          bore.compensated,evaluate.exact_became_mesh,perceive.deviation,perceive.orphaned
+insert_keyhole                   netz             ['mesh']/[14]          bore.compensated,evaluate.exact_became_mesh,perceive.deviation,perceive.orphaned
+insert_latch                     netz             ['mesh']/[10]          bore.compensated,evaluate.exact_became_mesh,perceive.deviation
+insert_living_hinge              netz             ['mesh']/[16]          bore.compensated,evaluate.exact_became_mesh,parts.standing_on_edge,perceive.deviation,perceive.orphaned
+insert_magnet_pocket             netz             ['mesh']/[10]          bore.compensated,evaluate.exact_became_mesh,perceive.deviation,perceive.orphaned
+insert_nut_trap                  netz             ['mesh']/[17]          bore.compensated,evaluate.exact_became_mesh,perceive.deviation
+insert_organizer_divider         netz             ['mesh']/[16]          bore.compensated,evaluate.exact_became_mesh,perceive.deviation,perceive.orphaned
+insert_organizer_foot            netz             ['mesh']/[14]          bore.compensated,evaluate.exact_became_mesh,perceive.deviation,perceive.orphaned
+insert_organizer_rim             netz             ['mesh']/[27]          bore.compensated,evaluate.exact_became_mesh,perceive.deviation,perceive.orphaned
+insert_organizer_tray            netz             ['mesh']/[26]          bore.compensated,evaluate.exact_became_mesh,perceive.deviation,perceive.orphaned
+insert_overhang_fan              netz             ['mesh']/[46]          bore.compensated,evaluate.exact_became_mesh,feature.body_split,parts.hanging_loose,perceive.deviation,perceive
+insert_pegboard_hook             netz             ['mesh']/[35]          bore.compensated,evaluate.exact_became_mesh,feature.body_split,parts.hanging_loose,perceive.deviation
+insert_printed_nut               netz             ['mesh']/[16]          bore.compensated,evaluate.exact_became_mesh,feature.body_split,perceive.deviation
+insert_printed_screw             netz             ['mesh']/[16]          bore.compensated,evaluate.exact_became_mesh,feature.body_split,perceive.deviation,perceive.orphaned
+insert_printed_thread            netz             ['mesh']/[9]           bore.compensated,evaluate.exact_became_mesh,perceive.deviation,perceive.orphaned
+insert_profile_clamp_liner       netz             ['mesh']/[18]          bore.compensated,evaluate.exact_became_mesh,perceive.deviation,perceive.orphaned
+insert_profile_clamp_shell       netz             ['mesh']/[26]          bore.compensated,evaluate.exact_became_mesh,perceive.deviation,perceive.orphaned
+insert_profile_tongue            netz             ['mesh']/[21]          bore.compensated,evaluate.exact_became_mesh,perceive.deviation,perceive.orphaned
+insert_rib                       netz             ['mesh']/[12]          bore.compensated,evaluate.exact_became_mesh,perceive.deviation
+insert_screw_hole                netz             ['mesh']/[10]          bore.compensated,evaluate.exact_became_mesh,perceive.deviation
+insert_seal_gasket               netz             ['mesh']/[20]          bore.compensated,evaluate.exact_became_mesh,feature.body_split,perceive.deviation
+insert_seal_groove               netz             ['mesh']/[18]          bore.compensated,evaluate.exact_became_mesh,perceive.deviation,perceive.orphaned
+insert_snap_connector            netz             ['mesh']/[14]          bore.compensated,evaluate.exact_became_mesh,perceive.deviation
+insert_snap_fit                  netz             ['mesh']/[14]          bore.compensated,evaluate.exact_became_mesh,part.spring_overloaded,perceive.deviation
+insert_wall_ladder               netz             ['mesh']/[43]          bore.compensated,evaluate.exact_became_mesh,perceive.deviation,perceive.orphaned
+insert_wall_mount                netz             ['mesh']/[20]          bore.compensated,evaluate.exact_became_mesh,perceive.deviation,perceive.orphaned
+replace_profile_liners           FEHLER           -                      ValidationError: Die Eingabe war so nicht verwendbar.: Die Operation erwartet eine andere Anzahl an Objekten.
+evaluation stopped at op 3: op.screw_lid.ValidationError: Der Körper ist auf dieser Höhe massiv — es gibt nichts zu verschließen.
+screw_lid                        ANGEHALTEN       -                      3 ['', '']
+
+Zusammenfassung: {'erzeugt:mesh': 10, 'ANGEHALTEN': 2, 'netz': 35, 'FEHLER': 1}
+konvertierende insert_-Pfade: 35
+  ['insert_barrel_hinge', 'insert_bearing_seat', 'insert_cable_clip', 'insert_cable_gland', 'insert_dowel', 'insert_fit_ladder', 'insert_foot', 'insert_gusset', 'insert_heatset_m4', 'insert_hinge_eye', 'insert_keyhole', 'insert_latch', 'insert_living_hinge', 'insert_magnet_pocket', 'insert_nut_trap', 'insert_organizer_divider', 'insert_organizer_foot', 'insert_organizer_rim', 'insert_organizer_tray', 'insert_overhang_fan', 'insert_pegboard_hook', 'insert_printed_nut', 'insert_printed_screw', 'insert_printed_thread', 'insert_profile_clamp_liner', 'insert_profile_clamp_shell', 'insert_profile_tongue', 'insert_rib', 'insert_screw_hole', 'insert_seal_gasket', 'insert_seal_groove', 'insert_snap_connector', 'insert_snap_fit', 'insert_wall_ladder', 'insert_wall_mount']
+angehalten: ['create_lid', 'screw_lid']
+
+Konzeptangabe: 35 Bausteine / 31 konvertierende Pfade
+Gemessen:     35 Bausteine / 35 konvertierende insert_-Pfade + 10 netzerzeugende create_-Pfade
+Bausteine ohne insert_-Operation: []

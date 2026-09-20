@@ -1,0 +1,138 @@
+== foot: Fuß Ø10 h3 und Tasche Ø10 h3 (Spiel 0,2) ==
+  foot (Netz): watertight=True components=1 V=229.533964 tris=288
+      bounds=(-5.0, -5.0, 0.0, 5.0, 5.0, 3.0)
+  foot exakt: valid=True closed=True solids=1 faces=4 V=230.190777 A=239.8171
+      types={'plane': 2, 'cylinder': 1, 'cone': 1} bounds=(-5.0, -5.0, 0.0, 5.0, 5.0, 3.0)
+  [OK ] foot exakt: nativ gültig
+  [OK ] foot exakt: geschlossen
+  [OK ] foot exakt: Körperzahl 1 — ist 1
+  [OK ] foot: Kegelfläche am Standende (oben, z=height) — {'plane': 2, 'cylinder': 1, 'cone': 1}
+  [OK ] foot: Säule Ø am Teil — ist 10.000000, erwartet 10.000000 (±1e-06)
+  [OK ] foot: Netz/exakt = Facettierung — Verhältnis 0.997147 (erlaubt ±0.004)
+  [OK ] foot: STEP-Rundreise gültig
+  [OK ] foot: STEP-Rundreise Volumen — ist 230.190777, erwartet 230.190777 (±0.000230191)
+  [OK ] foot: STEP-Rundreise Flächenzahl — 4 gegen 4
+  foot pocket (Netz): watertight=True components=1 V=250.416066 tris=288
+      bounds=(-5.7, -5.7, -3.0, 5.7, 5.7, 0.0)
+  foot pocket exakt: valid=True closed=True solids=1 faces=4 V=251.132634 A=289.4792
+      types={'plane': 2, 'cylinder': 1, 'cone': 1} bounds=(-5.7, -5.7, -3.0, 5.7, 5.7, 0.0)
+  [OK ] foot pocket exakt: nativ gültig
+  [OK ] foot pocket exakt: geschlossen
+  [OK ] foot pocket exakt: Körperzahl 1 — ist 1
+  [OK ] foot pocket: unter der Mündung — (-5.7, -5.7, -3.0, 5.7, 5.7, 0.0)
+  [OK ] foot pocket: Sitz hat vollen Ø (nicht den schmalen) — ist 10.200000, erwartet 10.200000 (±1e-06)
+  [OK ] foot pocket: Schräge weitet die Mündung
+  [OK ] foot pocket: Netz/exakt = Facettierung — Verhältnis 0.997147 (erlaubt ±0.004)
+
+== keyhole (M4, Einhängeweg 8, Tiefe 4, Kopftiefe 2,5, Spiel 0,2) ==
+  keyhole (Netz): watertight=True components=1 V=389.031780 tris=974
+      bounds=(-3.9, -11.890908, -4.01, 3.9, 3.9, 0.01)
+  keyhole exakt: valid=True closed=True solids=1 faces=20 V=389.552579 A=376.9017
+      types={'plane': 13, 'cylinder': 7} bounds=(-3.9, -11.9, -4.01, 3.9, 3.9, 0.01)
+  [OK ] keyhole exakt: nativ gültig
+  [OK ] keyhole exakt: geschlossen
+  [OK ] keyhole exakt: Körperzahl 1 — ist 1
+  [OK ] keyhole: unter der Mündung — (-3.9, -11.9, -4.01, 3.9, 3.9, 0.01)
+  [OK ] keyhole: Schlitz läuft in -Y (Bounds ymin < -ymax) — (-3.9, -11.9, -4.01, 3.9, 3.9, 0.01)
+  [OK ] keyhole: Kopfkanal am Schlitzende offen (unten)
+  [OK ] keyhole: über dem Kopfkanal nur der Schaft frei (Kopfbreite ist Material) — Treffer 0.0
+  [OK ] keyhole: Einstieg kopfbreit bis zur Mündung
+  [OK ] keyhole: Netz/exakt = Facettierung — Verhältnis 0.998663 (erlaubt ±0.004)
+  [OK ] keyhole: STEP-Rundreise gültig
+  [OK ] keyhole: STEP-Rundreise Volumen — ist 389.552579, erwartet 389.552579 (±0.000389553)
+  [OK ] keyhole: STEP-Rundreise Flächenzahl — 20 gegen 20
+
+== magnet_pocket (8x3, Spiel 0,2, Lippe, Übermaß 0,15, ohne Deckschicht) ==
+  magnet_pocket (Netz): watertight=True components=1 V=157.574789 tris=384
+      bounds=(-4.1, -4.1, -3.0, 4.1, 4.1, 0.01)
+  magnet_pocket exakt: valid=True closed=True solids=1 faces=5 V=158.025691 A=179.4411
+      types={'cylinder': 2, 'plane': 2, 'cone': 1} bounds=(-4.1, -4.1, -3.0, 4.1, 4.1, 0.01)
+  [OK ] magnet_pocket exakt: nativ gültig
+  [OK ] magnet_pocket exakt: geschlossen
+  [OK ] magnet_pocket exakt: Körperzahl 1 — ist 1
+  [OK ] magnet_pocket: Öffnung an der Mündung = Magnet minus Übermaß — ist 7.850009, erwartet 7.850000 (±0.001)
+  [OK ] magnet_pocket: Tasche unten = Magnet plus Spiel — ist 8.200000, erwartet 8.200000 (±1e-06)
+  [OK ] magnet_pocket: Öffnung enger als Tasche (hält)
+  [OK ] magnet_pocket: Netz/exakt = Facettierung — Verhältnis 0.997147 (erlaubt ±0.004)
+  [OK ] magnet_pocket: STEP-Rundreise gültig
+  [OK ] magnet_pocket: STEP-Rundreise Volumen — ist 158.025691, erwartet 158.025691 (±0.000158026)
+  [OK ] magnet_pocket: STEP-Rundreise Flächenzahl — 5 gegen 5
+
+== wall_mount (30 x 25 x 3, M4, 2 Löcher, Auflage 12) ==
+  wall_mount (Netz): watertight=True components=1 V=3234.846406 tris=422
+      bounds=(-15.0, -1.5, 0.0, 15.0, 13.5, 25.0)
+  wall_mount exakt: valid=True closed=True solids=1 faces=16 V=3234.574123 A=2643.2058
+      types={'plane': 14, 'cylinder': 2} bounds=(-15.0, -1.5, 0.0, 15.0, 13.5, 25.0)
+  [OK ] wall_mount exakt: nativ gültig
+  [OK ] wall_mount exakt: geschlossen
+  [OK ] wall_mount exakt: Körperzahl 1 — ist 1
+  [OK ] wall_mount: zwei Zylinderflächen (Löcher) — {'plane': 14, 'cylinder': 2}
+  [OK ] wall_mount: Loch geht durch (Y-Achse)
+  [OK ] wall_mount: Volumen gegen Analytik — ist 3234.574123, erwartet 3234.574123 (±1e-06)
+  [OK ] wall_mount: Netz/exakt (nur Löcher facettiert) — Verhältnis 1.000084 (erlaubt ±0.001)
+  [OK ] wall_mount: STEP-Rundreise gültig
+  [OK ] wall_mount: STEP-Rundreise Volumen — ist 3234.574123, erwartet 3234.574123 (±0.00323457)
+  [OK ] wall_mount: STEP-Rundreise Flächenzahl — 16 gegen 16
+
+== pegboard_hook (skadis, 2 Haken, Rastzunge, ohne Rückplatte, Spiel 0,2) ==
+  pegboard_hook (Netz): watertight=True components=2 V=783.486739 tris=828
+      bounds=(-22.4, -8.35, 0.0, 22.4, 5.544405, 9.942518)
+  pegboard_hook exakt (ohne Träger: zwei Haken): valid=True closed=True solids=2 faces=66 V=784.401186 A=884.0070
+      types={'plane': 56, 'cylinder': 10} bounds=(-22.4, -8.35, 0.0, 22.4, 5.55, 9.942518)
+  [OK ] pegboard_hook exakt (ohne Träger: zwei Haken): nativ gültig
+  [OK ] pegboard_hook exakt (ohne Träger: zwei Haken): geschlossen
+  [OK ] pegboard_hook exakt (ohne Träger: zwei Haken): Körperzahl 2 — ist 2
+  [OK ] pegboard_hook: Netz ebenfalls zwei Körper (joined_by_host) — 2
+  [OK ] pegboard_hook: Nase greift hinter die Platte (z > through) — (-22.4, -8.35, 0.0, 22.4, 5.55, 9.942518)
+  [OK ] pegboard_hook: Zapfen sitzt oben = -Y (ymin trägt Zunge) — (-22.4, -8.35, 0.0, 22.4, 5.55, 9.942518)
+  [OK ] pegboard_hook: Langloch-Zapfen trägt Zylinderflächen — {'plane': 56, 'cylinder': 10}
+  Facettierungs-Sag der Langlochenden: 0.005595
+  [OK ] pegboard_hook: Bounds Netz = exakt bis auf den Facettierungs-Sag — (-22.4, -8.35, 0.0, 22.4, 5.544405, 9.942518) / (-22.4, -8.35, 0.0, 22.4, 5.55, 9.942518)
+  [OK ] pegboard_hook: Netz/exakt Volumen (Langlochenden facettiert) — Verhältnis 0.998834 (erlaubt ±0.004)
+  [OK ] pegboard_hook: STEP-Rundreise gültig
+  [OK ] pegboard_hook: STEP-Rundreise Volumen — ist 784.401186, erwartet 784.401186 (±0.000784401)
+  [OK ] pegboard_hook: STEP-Rundreise Flächenzahl — 66 gegen 66
+
+== profile_clamp_shell: Sitzkontur Kreis Ø20,25, Wand 4, Tiefe 40, untere Hälfte, M4 ==
+  profile_clamp_shell (Netz): watertight=True components=1 V=13979.189063 tris=1188
+      bounds=(-26.436407, -14.118832, 0.0, 26.436407, -0.5, 40.0)
+  [OK ] Sitzkontur ist ein exakter Kreis im Profil
+  Offset-Kontur (Kreis + 4) extrudiert: valid=True closed=True solids=1 faces=3 V=25071.872871 A=4803.5933
+      types={'cylinder': 1, 'plane': 2} bounds=(-14.125, -14.125, 0.0, 14.125, 14.125, 40.0)
+  [OK ] Offset-Kontur (Kreis + 4) extrudiert: nativ gültig
+  [OK ] Offset-Kontur (Kreis + 4) extrudiert: geschlossen
+  [OK ] Offset-Kontur (Kreis + 4) extrudiert: Körperzahl 1 — ist 1
+  [OK ] Offset: Außen-Ø = 20,25 + 8 — ist 28.250000, erwartet 28.250000 (±1e-06)
+  [OK ] Offset: bleibt ein exakter Zylinder — {'cylinder': 1, 'plane': 2}
+  profile_clamp_shell exakt: valid=True closed=True solids=1 faces=24 V=13978.608073 A=6388.3910
+      types={'plane': 18, 'cylinder': 6} bounds=(-26.438844, -14.125, 0.0, 26.438844, -0.5, 40.0)
+  [OK ] profile_clamp_shell exakt: nativ gültig
+  [OK ] profile_clamp_shell exakt: geschlossen
+  [OK ] profile_clamp_shell exakt: Körperzahl 1 — ist 1
+  [OK ] clamp shell: Hälfte endet bei y = -0,5 — (-26.438844, -14.125, 0.0, 26.438844, -0.5, 40.0)
+  [OK ] clamp shell: Schraubenloch geht durchs Ohr
+  [OK ] clamp shell: Kopftasche unten am Ohr
+  Netz V=13979.1891  exakt V=13978.6081  Verhältnis 1.00004
+  [OK ] clamp shell: Netz/exakt (Sitz und Löcher facettiert) — Verhältnis 1.000042 (erlaubt ±0.01)
+  [OK ] clamp shell: Bounds Netz = exakt — (-26.436407, -14.118832, 0.0, 26.436407, -0.5, 40.0) / (-26.438844, -14.125, 0.0, 26.438844, -0.5, 40.0)
+  [OK ] profile_clamp_shell: STEP-Rundreise gültig
+  [OK ] profile_clamp_shell: STEP-Rundreise Volumen — ist 13978.608073, erwartet 13978.608073 (±0.0139786)
+  [OK ] profile_clamp_shell: STEP-Rundreise Flächenzahl — 24 gegen 24
+
+== profile_clamp_liner: Gegenkontur Ø20, Stärke 2, Bund 1,2/1,5, hinten 2, Übermaß 0,1 ==
+  profile_clamp_liner (Netz): watertight=True components=1 V=2771.700291 tris=1348
+      bounds=(-13.143771, -13.147921, 0.0, 13.148204, -0.1, 39.5)
+  profile_clamp_liner exakt: valid=True closed=True solids=1 faces=9 V=2772.443078 A=3100.0426
+      types={'cylinder': 4, 'plane': 5} bounds=(-13.14962, -13.15, 0.0, 13.14962, -0.1, 39.5)
+  [OK ] profile_clamp_liner exakt: nativ gültig
+  [OK ] profile_clamp_liner exakt: geschlossen
+  [OK ] profile_clamp_liner exakt: Körperzahl 1 — ist 1
+  [OK ] liner: Bund vorn (z 0..1,5) breiter als Kern
+  [OK ] liner: Freiraum hinten (Länge = 1,5 + 38) — (-13.14962, -13.15, 0.0, 13.14962, -0.1, 39.5)
+  Netz V=2771.7003  exakt V=2772.4431  Verhältnis 0.99973
+  [OK ] liner: Netz/exakt (Kreise facettiert) — Verhältnis 0.999732 (erlaubt ±0.01)
+  [OK ] profile_clamp_liner: STEP-Rundreise gültig
+  [OK ] profile_clamp_liner: STEP-Rundreise Volumen — ist 2772.443078, erwartet 2772.443078 (±0.00277244)
+  [OK ] profile_clamp_liner: STEP-Rundreise Flächenzahl — 9 gegen 9
+
+S5 Befestigung: 86 von 86 Zusicherungen halten

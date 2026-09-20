@@ -1,0 +1,205 @@
+== cable_clip (cable-5, Breite 8, Wand 2, Verengung 0 -> Ø/5, Spiel 0,2) ==
+  cable_clip (Netz): watertight=True components=1 V=374.371076 tris=316
+      bounds=(-4.604294, -4.0, -0.004294, 4.604294, 4.0, 8.942746)
+  cable_clip exakt: valid=True closed=True solids=1 faces=24 V=374.153412 A=488.1037
+      types={'plane': 18, 'cylinder': 6} bounds=(-4.6, -4.0, 0.0, 4.6, 4.0, 8.948563)
+  [OK ] cable_clip exakt: nativ gültig
+  [OK ] cable_clip exakt: geschlossen
+  [OK ] cable_clip exakt: Körperzahl 1 — ist 1
+  [OK ] cable_clip: Öffnung oben = Ø minus 2·Verengung
+  [OK ] cable_clip: Bügelwand seitlich genau wall (exakt, keine Facettenkorrektur)
+  [OK ] cable_clip: exakte Außenbreite = inner + 2 wall — ist 9.200000, erwartet 9.200000 (±1e-09)
+  Netz-Außenbreite 9.208588 (Facettenkorrektur), exakt 9.200000
+  [OK ] cable_clip: Netz um die Facettenkorrektur breiter (erlaubter Unterschied)
+  [OK ] cable_clip: Kabelauflage bei z=wall frei
+  [OK ] cable_clip: STEP-Rundreise gültig
+  [OK ] cable_clip: STEP-Rundreise Volumen — ist 374.153412, erwartet 374.153412 (±0.000374153)
+  [OK ] cable_clip: STEP-Rundreise Flächenzahl — 24 gegen 24
+
+== cable_gland (cable-5, Wand 3, Zugentlastung, Spiel 0,2) ==
+  cable_gland Werkzeug (Netz): watertight=True components=1 V=334.168474 tris=222
+      bounds=(-2.6, -6.5, -8.2, 2.6, 6.5, 0.01)
+  cable_gland Werkzeug exakt: valid=True closed=True solids=1 faces=11 V=334.351133 A=335.4303
+      types={'cylinder': 1, 'plane': 10} bounds=(-2.6, -6.5, -8.2, 2.6, 6.5, 0.01)
+  [OK ] cable_gland Werkzeug exakt: nativ gültig
+  [OK ] cable_gland Werkzeug exakt: geschlossen
+  [OK ] cable_gland Werkzeug exakt: Körperzahl 1 — ist 1
+  [OK ] cable_gland: Loch geht durch die Wand (z -wall..0)
+  [OK ] cable_gland: Klemmspalt = 0,8·Ø — ist 4.000000, erwartet 4.000000 (±1e-06)
+  [OK ] cable_gland Werkzeug: Netz/exakt (Loch facettiert) — Verhältnis 0.999454 (erlaubt ±0.004)
+  cable_gland host_add (Netz): watertight=True components=1 V=1108.688000 tris=12
+      bounds=(-5.6, -9.5, -8.2, 5.6, 9.5, -2.99)
+  cable_gland host_add exakt: valid=True closed=True solids=1 faces=6 V=1108.688000 A=740.2840
+      types={'plane': 6} bounds=(-5.6, -9.5, -8.2, 5.6, 9.5, -2.99)
+  [OK ] cable_gland host_add exakt: nativ gültig
+  [OK ] cable_gland host_add exakt: geschlossen
+  [OK ] cable_gland host_add exakt: Körperzahl 1 — ist 1
+  [OK ] cable_gland host_add: Netz = exakt (Quader) — ist 1108.688000, erwartet 1108.688000 (±1e-09)
+  (Dauer cable_gland: Träger + Aufbau - Werkzeug: 0.0 s — Beobachtung)
+  cable_gland am Träger exakt: valid=True closed=True solids=1 faces=20 V=5572.421239 A=4182.8726
+      types={'plane': 19, 'cylinder': 1} bounds=(-20.0, -20.0, -8.2, 20.0, 20.0, 0.0)
+  [OK ] cable_gland am Träger exakt: nativ gültig
+  [OK ] cable_gland am Träger exakt: geschlossen
+  [OK ] cable_gland am Träger exakt: Körperzahl 1 — ist 1
+  [OK ] cable_gland am Träger: Volumen gegen Analytik — ist 5572.421239, erwartet 5572.421239 (±1e-06)
+  [OK ] cable_gland am Träger: Kabelweg frei (Loch und Klemmspalt)
+  [OK ] cable_gland am Träger: STEP-Rundreise gültig
+  [OK ] cable_gland am Träger: STEP-Rundreise Volumen — ist 5572.421239, erwartet 5572.421239 (±0.00557242)
+  [OK ] cable_gland am Träger: STEP-Rundreise Flächenzahl — 20 gegen 20
+
+== gusset (Schenkel 12, Dicke 0 -> aus Wand 2) und rib (20 x 10, Wand 2, Anlauf 2) ==
+  gusset (Netz): watertight=True components=1 V=95.040000 tris=8
+      bounds=(-0.66, 0.0, 0.0, 0.66, 12.0, 12.0)
+  gusset exakt: valid=True closed=True solids=1 faces=5 V=95.040000 A=198.0811
+      types={'plane': 5} bounds=(-0.66, 0.0, 0.0, 0.66, 12.0, 12.0)
+  [OK ] gusset exakt: nativ gültig
+  [OK ] gusset exakt: geschlossen
+  [OK ] gusset exakt: Körperzahl 1 — ist 1
+  [OK ] gusset: Volumen = t·l²/2 — ist 95.040000, erwartet 95.040000 (±1e-09)
+  [OK ] gusset: Netz = exakt — ist 95.040000, erwartet 95.040000 (±1e-09)
+  [OK ] gusset: Bounds Netz = exakt — (-0.66, 0.0, 0.0, 0.66, 12.0, 12.0) / (-0.66, 0.0, 0.0, 0.66, 12.0, 12.0)
+  rib (Netz): watertight=True components=1 V=269.280000 tris=28
+      bounds=(-0.66, -12.0, 0.0, 0.66, 12.0, 10.0)
+  rib exakt: valid=True closed=True solids=1 faces=14 V=269.280000 A=494.6670
+      types={'plane': 14} bounds=(-0.66, -12.0, 0.0, 0.66, 12.0, 10.0)
+  [OK ] rib exakt: nativ gültig
+  [OK ] rib exakt: geschlossen
+  [OK ] rib exakt: Körperzahl 1 — ist 1
+  [OK ] rib: Volumen = Rippe + 2 Ausläufe — ist 269.280000, erwartet 269.280000 (±1e-09)
+  [OK ] rib: Netz = exakt — ist 269.280000, erwartet 269.280000 (±1e-09)
+  [OK ] rib: Bounds Netz = exakt — (-0.66, -12.0, 0.0, 0.66, 12.0, 10.0) / (-0.66, -12.0, 0.0, 0.66, 12.0, 10.0)
+  [OK ] rib: STEP-Rundreise gültig
+  [OK ] rib: STEP-Rundreise Volumen — ist 269.280000, erwartet 269.280000 (±0.00026928)
+  [OK ] rib: STEP-Rundreise Flächenzahl — 14 gegen 14
+
+== profile_tongue (2020, Länge 20, Schräge 1,5, Spiel 0,2) ==
+  profile_tongue (Netz): watertight=True components=1 V=1016.290000 tris=44
+      bounds=(-5.2, -10.0, 0.0, 5.2, 10.0, 5.9)
+  profile_tongue exakt: valid=True closed=True solids=1 faces=18 V=1016.290000 A=726.0761
+      types={'plane': 18} bounds=(-5.2, -10.0, 0.0, 5.2, 10.0, 5.9)
+  [OK ] profile_tongue exakt: nativ gültig
+  [OK ] profile_tongue exakt: geschlossen
+  [OK ] profile_tongue exakt: Körperzahl 1 — ist 1
+  [OK ] profile_tongue: Hals = Nutbreite - Spiel — ist 5.800000, erwartet 5.800000 (±1e-06)
+  [OK ] profile_tongue: Kopf = Kern - Spiel — ist 10.400000, erwartet 10.400000 (±1e-06)
+  [OK ] profile_tongue: Enden laufen auf Halsbreite zu
+  [OK ] profile_tongue: Netz = exakt — ist 1016.290000, erwartet 1016.290000 (±1e-06)
+  [OK ] profile_tongue: Bounds Netz = exakt — (-5.2, -10.0, 0.0, 5.2, 10.0, 5.9) / (-5.2, -10.0, 0.0, 5.2, 10.0, 5.9)
+  [OK ] profile_tongue: STEP-Rundreise gültig
+  [OK ] profile_tongue: STEP-Rundreise Volumen — ist 1016.290000, erwartet 1016.290000 (±0.00101629)
+  [OK ] profile_tongue: STEP-Rundreise Flächenzahl — 18 gegen 18
+
+== organizer_tray / _divider / _rim / _foot ==
+  organizer_tray (Netz): watertight=True components=1 V=70446.008189 tris=252
+      bounds=(-60.0, -40.0, 0.0, 60.0, 40.0, 40.0)
+  (Dauer organizer_tray exakt: 0.0 s — Beobachtung)
+  organizer_tray exakt: valid=True closed=True solids=1 faces=19 V=70464.503989 A=48135.1324
+      types={'plane': 11, 'cylinder': 8} bounds=(-60.0, -40.0, 0.0, 60.0, 40.0, 40.0)
+  [OK ] organizer_tray exakt: nativ gültig
+  [OK ] organizer_tray exakt: geschlossen
+  [OK ] organizer_tray exakt: Körperzahl 1 — ist 1
+  [OK ] organizer_tray: Volumen gegen Analytik — ist 70464.503989, erwartet 70464.503989 (±1e-06)
+  [OK ] organizer_tray: acht Zylinderflächen (Ecken außen und innen) — {'plane': 11, 'cylinder': 8}
+  [OK ] organizer_tray: Außenmaße exakt — (-60.0, -40.0, 0.0, 60.0, 40.0, 40.0)
+  Netz/exakt = 0.999738 (Ecken nach MAX_FACET_SAG facettiert)
+  [OK ] organizer_tray: Netz/exakt (Ecken facettiert) — Verhältnis 0.999738 (erlaubt ±0.001)
+  [OK ] organizer_tray: STEP-Rundreise gültig
+  [OK ] organizer_tray: STEP-Rundreise Volumen — ist 70464.503989, erwartet 70464.503989 (±0.0704645)
+  [OK ] organizer_tray: STEP-Rundreise Flächenzahl — 19 gegen 19
+  organizer_divider (Netz): watertight=True components=1 V=7200.000000 tris=12
+      bounds=(-40.0, -1.5, 0.0, 40.0, 1.5, 30.0)
+  organizer_divider exakt: valid=True closed=True solids=1 faces=6 V=7200.000000 A=5460.0000
+      types={'plane': 6} bounds=(-40.0, -1.5, 0.0, 40.0, 1.5, 30.0)
+  [OK ] organizer_divider exakt: nativ gültig
+  [OK ] organizer_divider exakt: geschlossen
+  [OK ] organizer_divider exakt: Körperzahl 1 — ist 1
+  [OK ] organizer_divider: Netz = exakt — ist 7200.000000, erwartet 7200.000000 (±1e-09)
+  [OK ] organizer_divider: Bounds Netz = exakt — (-40.0, -1.5, 0.0, 40.0, 1.5, 30.0) / (-40.0, -1.5, 0.0, 40.0, 1.5, 30.0)
+  organizer_rim (Netz): watertight=True components=1 V=3390.380329 tris=256
+      bounds=(-60.0, -78.5, 0.0, 60.0, 1.5, 3.0)
+  organizer_rim exakt: valid=True closed=True solids=1 faces=18 V=3391.566340 A=4522.0885
+      types={'plane': 10, 'cylinder': 8} bounds=(-60.0, -78.5, 0.0, 60.0, 1.5, 3.0)
+  [OK ] organizer_rim exakt: nativ gültig
+  [OK ] organizer_rim exakt: geschlossen
+  [OK ] organizer_rim exakt: Körperzahl 1 — ist 1
+  [OK ] organizer_rim: Volumen gegen Analytik — ist 3391.566340, erwartet 3391.566340 (±1e-06)
+  [OK ] organizer_rim: Netz/exakt (Ecken facettiert) — Verhältnis 0.999650 (erlaubt ±0.002)
+  [OK ] organizer_rim: Bounds Netz = exakt (Ecken tangieren Achsen) — (-60.0, -78.5, 0.0, 60.0, 1.5, 3.0) / (-60.0, -78.5, 0.0, 60.0, 1.5, 3.0)
+  organizer_foot (Netz): watertight=True components=1 V=3850.000566 tris=384
+      bounds=(-9.0, -9.0, 0.0, 9.0, 9.0, 19.0)
+  organizer_foot exakt: valid=True closed=True solids=1 faces=5 V=3861.017371 A=1457.6990
+      types={'cylinder': 2, 'plane': 3} bounds=(-9.0, -9.0, 0.0, 9.0, 9.0, 19.0)
+  [OK ] organizer_foot exakt: nativ gültig
+  [OK ] organizer_foot exakt: geschlossen
+  [OK ] organizer_foot exakt: Körperzahl 1 — ist 1
+  [OK ] organizer_foot: Volumen — ist 3861.017371, erwartet 3861.017371 (±1e-06)
+  [OK ] organizer_foot: Zapfen-Ø — ist 13.000000, erwartet 13.000000 (±1e-06)
+  [OK ] organizer_foot: Netz/exakt = Facettierung — Verhältnis 0.997147 (erlaubt ±0.004)
+  [OK ] organizer_foot: Facettierungsverhältnis genau — ist 0.997147, erwartet 0.997147 (±1e-06)
+
+== seal_groove (Rechteckweg 20 x 12, Nut 3 x 2) ==
+  seal_groove (Netz): watertight=True components=1 V=380.065502 tris=176
+      bounds=(-11.5, -7.5, -2.0, 11.5, 7.5, 0.0)
+  (Dauer seal_groove Band exakt: 0.0 s — Beobachtung)
+  seal_groove exakt: valid=True closed=True solids=1 faces=14 V=380.137167 A=630.9867
+      types={'plane': 10, 'cylinder': 4} bounds=(-11.5, -7.5, -2.0, 11.5, 7.5, 0.0)
+  [OK ] seal_groove exakt: nativ gültig
+  [OK ] seal_groove exakt: geschlossen
+  [OK ] seal_groove exakt: Körperzahl 1 — ist 1
+  [OK ] seal_groove: unter der Mündung — (-11.5, -7.5, -2.0, 11.5, 7.5, 0.0)
+  [OK ] seal_groove: Ecken außen sind Kreisbögen (Zylinderflächen) — {'plane': 10, 'cylinder': 4}
+  [OK ] seal_groove: Volumen gegen Analytik (außen gerundet, innen scharf) — ist 380.137167, erwartet 380.137167 (±1e-06)
+  [OK ] seal_groove: Nutbreite 3 symmetrisch um die Wegmitte (X-Schenkel bei x = 10)
+  [OK ] seal_groove: Netz/exakt (Ecken facettiert) — Verhältnis 0.999811 (erlaubt ±0.002)
+  [OK ] seal_groove: STEP-Rundreise gültig
+  [OK ] seal_groove: STEP-Rundreise Volumen — ist 380.137167, erwartet 380.137167 (±0.000380137)
+  [OK ] seal_groove: STEP-Rundreise Flächenzahl — 14 gegen 14
+
+== seal_gasket rechteckig (Weg 20 x 12, 2,6 x 2,4) und rund (Ø 2,4) ==
+  seal_gasket rect (Netz): watertight=True components=1 V=395.813705 tris=176
+      bounds=(-11.3, -7.3, 0.0, 11.3, 7.3, 2.4)
+  seal_gasket rect exakt: valid=True closed=True solids=1 faces=14 V=395.878300 A=631.7421
+      types={'plane': 10, 'cylinder': 4} bounds=(-11.3, -7.3, 0.0, 11.3, 7.3, 2.4)
+  [OK ] seal_gasket rect exakt: nativ gültig
+  [OK ] seal_gasket rect exakt: geschlossen
+  [OK ] seal_gasket rect exakt: Körperzahl 1 — ist 1
+  [OK ] seal_gasket rect: steht auf der Fläche (0..2,4) — (-11.3, -7.3, 0.0, 11.3, 7.3, 2.4)
+  [OK ] seal_gasket rect: Netz/exakt (Ecken facettiert) — Verhältnis 0.999837 (erlaubt ±0.002)
+  [OK ] seal_gasket rect: STEP-Rundreise gültig
+  [OK ] seal_gasket rect: STEP-Rundreise Volumen — ist 395.878300, erwartet 395.878300 (±0.000395878)
+  [OK ] seal_gasket rect: STEP-Rundreise Flächenzahl — 14 gegen 14
+  seal_gasket round (Netz): watertight=True components=1 V=285.621467 tris=768
+      bounds=(-11.2, -7.2, 0.0, 11.2, 7.2, 2.4)
+  (Dauer seal_gasket rund: Kugel-Sweep exakt (4 Zylinder + 4 Kugeln): 0.0 s — Beobachtung)
+  seal_gasket round exakt: valid=True closed=True solids=1 faces=8 V=287.551408 A=477.6042
+      types={'sphere': 4, 'cylinder': 4} bounds=(-11.2, -7.2, -0.0, 11.2, 7.2, 2.4)
+  [OK ] seal_gasket round exakt: nativ gültig
+  [OK ] seal_gasket round exakt: geschlossen
+  [OK ] seal_gasket round exakt: Körperzahl 1 — ist 1
+  [OK ] seal_gasket round: Zylinder- und Kugelflächen — {'sphere': 4, 'cylinder': 4}
+  [OK ] seal_gasket round: Volumen gegen Analytik — ist 287.551408, erwartet 287.551408 (±1e-06)
+  [OK ] seal_gasket round: Schnur 0..2,4 hoch — (-11.2, -7.2, -0.0, 11.2, 7.2, 2.4)
+  Netz/exakt = 0.993288 (Kugeln und Kapseln facettiert)
+  [OK ] seal_gasket round: Netz/exakt (Facettierung) — Verhältnis 0.993288 (erlaubt ±0.01)
+  [OK ] seal_gasket round: STEP-Rundreise gültig
+  [OK ] seal_gasket round: STEP-Rundreise Volumen — ist 287.551408, erwartet 287.551408 (±0.000287551)
+  [OK ] seal_gasket round: STEP-Rundreise Flächenzahl — 8 gegen 8
+
+== seal_gasket rund auf Kreisweg Ø 20 -> exakter Torus ==
+  seal_gasket round circle (Netz): watertight=True components=1 V=280.885590 tris=6944
+      bounds=(-11.193771, -11.198443, 0.0, 11.2, 11.198443, 2.4)
+  seal_gasket torus exakt: valid=True closed=True solids=1 faces=1 V=284.244607 A=473.7410
+      types={'torus': 1} bounds=(-11.2, -11.2, -0.0, 11.2, 11.2, 2.4)
+  [OK ] seal_gasket torus exakt: nativ gültig
+  [OK ] seal_gasket torus exakt: geschlossen
+  [OK ] seal_gasket torus exakt: Körperzahl 1 — ist 1
+  [OK ] seal_gasket torus: eine Torusfläche — {'torus': 1}
+  [OK ] seal_gasket torus: Volumen 2π²Rr² — ist 284.244607, erwartet 284.244607 (±1e-06)
+  größter Abstand abgetasteter Netzpunkte zum exakten Torus: 0.00490
+  [OK ] seal_gasket torus: Netzabstand ≤ Bahn-Sag + Kugel-Sag (Facettierung)
+  [OK ] seal_gasket torus: Netz/exakt (zweifache Facettierung) — Verhältnis 0.988183 (erlaubt ±0.02)
+  [OK ] seal_gasket torus: STEP-Rundreise gültig
+  [OK ] seal_gasket torus: STEP-Rundreise Volumen — ist 284.244607, erwartet 284.244607 (±0.000284245)
+  [OK ] seal_gasket torus: STEP-Rundreise Flächenzahl — 1 gegen 1
+
+S6 Struktur und Kabel: 122 von 122 Zusicherungen halten

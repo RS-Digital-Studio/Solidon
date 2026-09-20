@@ -1,0 +1,638 @@
+====================================================================================================
+fit_ladder  [calibration]  v18  Datei: F:\3D Druck\app\core\knowledge\parts\testbodies.py
+  Titel: Toleranz-Testkörper
+  doc: Zapfen und Bohrungen mit gestaffeltem Spiel. Einmal drucken, ausprobieren, und der Wert steht — er gehört danach ins Materialprofil, nicht ins Modell.
+  features: ('pin', 'bore', 'face')
+  feature_requirements: [('pin', None, True, None), ('bore', None, True, None), ('face', None, True, None)]
+  wall: parameter=None reason=Der Kalibrierkörper vermisst diese Druckgrenze und darf sie deshalb unterschreiten. when=None
+  grip_from_profile=True feasible=nein
+  Parameter:
+    diameter             float    default=6.0 mm [2.0..30.0] (front) — Nenndurchmesser
+    steps                int      default=4 [2..8] (front) — Stufen
+    first                float    default=0.1 mm [0.0..1.0] (front) — Kleinstes Spiel
+    step                 float    default=0.05 mm [0.01..0.5] (front) — Schrittweite
+    height               float    default=8.0 mm [2.0..40.0] (front) — Höhe
+  Bauhelfer: {'shapes.box': 1, 'shapes.cylinder': 2, 'shapes.moved': 3}
+  Normteile/Tabellen im Quelltext: []
+  private Helfer: ['_label']
+====================================================================================================
+overhang_fan  [calibration]  v15  Datei: F:\3D Druck\app\core\knowledge\parts\testbodies.py
+  Titel: Überhangfächer
+  doc: Flächen von steil bis flach. Zeigt, ab welchem Winkel dieser Drucker mit diesem Material wirklich Stützen braucht — statt der Faustregel 45 Grad.
+  features: ('face',)
+  feature_requirements: [('face', None, True, None)]
+  wall: parameter=None reason=Der Kalibrierkörper vermisst diese Druckgrenze und darf sie deshalb unterschreiten. when=None
+  grip_from_profile=True feasible=ja
+  Parameter:
+    first                float    default=20.0 ° [5.0..80.0] (front) — Kleinster Winkel
+    step                 float    default=10.0 ° [2.0..30.0] (front) — Schrittweite
+    steps                int      default=6 [2..10] (front) — Stufen
+    width                float    default=8.0 mm [2.0..None] (front) — Breite je Stufe
+    length               float    default=15.0 mm [3.0..None] (front) — Auskraglänge
+  Bauhelfer: {'shapes.box': 1, 'shapes.moved': 1}
+  Normteile/Tabellen im Quelltext: []
+  private Helfer: ['_fan_over_the_top', '_ramp']
+====================================================================================================
+wall_ladder  [calibration]  v15  Datei: F:\3D Druck\app\core\knowledge\parts\testbodies.py
+  Titel: Wandstärkenleiter
+  doc: Wände von einer bis mehreren Extrusionsbreiten. Zeigt, ab wann der Drucker wirklich noch Material legt — die Grundlage für die Mindestwandstärke.
+  features: ('face',)
+  feature_requirements: [('face', None, True, None)]
+  wall: parameter=extrusion reason=None when=None
+  grip_from_profile=True feasible=nein
+  Parameter:
+    extrusion            float    default=0.42 mm [0.2..1.2] (front) — Extrusionsbreite
+    steps                int      default=6 [2..10] (front) — Stufen
+    height               float    default=15.0 mm [3.0..60.0] (front) — Höhe
+    length               float    default=25.0 mm [5.0..120.0] (front) — Länge
+  Bauhelfer: {'shapes.box': 2, 'shapes.moved': 1}
+  Normteile/Tabellen im Quelltext: []
+  private Helfer: []
+====================================================================================================
+heatset_m4  [fasteners]  v17  Datei: F:\3D Druck\app\core\knowledge\parts\fasteners.py
+  Titel: Heat-Set-Einpressbuchse
+  doc: Bohrung für eine Heat-Set-Einpressbuchse mit Einführfase. Der Durchmesser ist bewusst knapp: das Material soll beim Einpressen verdrängt werden.
+  caveat: Nicht ohne Lötkolben: Die Buchse wird warm eingepresst, und der Durchmesser ist dafür knapp gehalten. Kalt hineingedrückt sprengt sie die Wand — ohne Lötkolben trägt eine Mutternfalle ähnlich viel, un
+  features: ('bore', 'chamfer')
+  feature_requirements: [('bore', None, True, None), ('chamfer', 'lead_in', True, None)]
+  wall: parameter=None reason=Der Baustein ist ein abtragender Werkzeugkörper. when=None
+  grip_from_profile=True feasible=nein
+  Parameter:
+    size                 enum     default='M3' choices=('M2', 'M2.5', 'M3', 'M3S', 'M4', 'M4S', 'M5', 'M5S', 'M6') (front) — Größe
+    lead_in              bool     default=True (front) — Einführfase
+    extra_depth          float    default=0.5 mm [0.0..5.0] (advanced) — Zusatztiefe
+  Bauhelfer: {'shapes.cone': 1, 'shapes.cylinder': 1, 'shapes.moved': 2, 'standards.insert': 1}
+  Normteile/Tabellen im Quelltext: ['standards.insert']
+  private Helfer: []
+====================================================================================================
+nut_trap  [fasteners]  v15  Datei: F:\3D Druck\app\core\knowledge\parts\fasteners.py
+  Titel: Mutternfalle
+  doc: Tasche für eine Sechskantmutter, seitlich eingeschoben oder von unten eingelegt, auf Wunsch mit durchgehendem Schraubenloch.
+  caveat: Nur mit passender Sechskantmutter: Die Tasche ist auf die Schlüsselweite aus der Normteiltabelle gebaut, eine beliebige Mutter wackelt darin oder geht nicht hinein. Und sie muss erreichbar bleiben — s
+  features: ('pocket', 'bore')
+  feature_requirements: [('pocket', None, True, None), ('bore', 'screw_hole', True, None)]
+  wall: parameter=None reason=Der Baustein ist ein abtragender Werkzeugkörper. when=None
+  grip_from_profile=True feasible=nein
+  Parameter:
+    size                 enum     default='M3' choices=('M2', 'M2.5', 'M3', 'M4', 'M5', 'M6', 'M8') (front) — Größe
+    direction            enum     default='side' choices=('side', 'bottom') (front) — Richtung
+    slide                float    default=12.0 mm [0.0..100.0] (front) — Einschubweg
+    play                 float    default=0.0 mm [0.0..1.0] (advanced) — Spiel
+    screw_hole           bool     default=True (front) — Schraubenloch mitschneiden
+  Bauhelfer: {'shapes.box': 1, 'shapes.cylinder': 1, 'shapes.hexagon': 1, 'shapes.moved': 2, 'shapes.turned': 1, 'standards.nut': 1, 'standards.screw': 1}
+  Normteile/Tabellen im Quelltext: ['NUT_HEIGHT_FROM_ISO', 'NUT_TRAP_SINKS_ON_A_FACE', 'standards.nut', 'standards.screw']
+  private Helfer: []
+====================================================================================================
+printed_nut  [fasteners]  v15  Datei: F:\3D Druck\app\core\knowledge\parts\fasteners.py
+  Titel: Gedruckte Mutter
+  doc: Druckbare Sechskantmutter mit passendem Innengewinde.
+  caveat: Zusammen mit der gedruckten Schraube aus demselben Material drucken: Das Spiel kommt aus dem Materialprofil. Für hohe Lasten oder häufiges Lösen sind Metallschrauben mit Mutternfalle oder Heat-Set-Buc
+  features: ('thread',)
+  feature_requirements: [('thread', None, True, None)]
+  wall: parameter=None reason=Die Gewindekämme werden von der massiven Mutternhülle getragen. when=None
+  grip_from_profile=True feasible=nein
+  Parameter:
+    size                 enum     default='M5' choices=('M2', 'M2.5', 'M3', 'M4', 'M5', 'M6', 'M8') (front) — Größe
+    play                 float    default=0.0 mm [0.0..1.0] (advanced) — Spiel
+  Bauhelfer: {'shapes.hexagon': 1, 'shapes.moved': 1, 'standards.nut': 1, 'standards.screw': 1}
+  Normteile/Tabellen im Quelltext: ['standards.nut', 'standards.screw']
+  private Helfer: ['_printed_thread']
+====================================================================================================
+printed_screw  [fasteners]  v15  Datei: F:\3D Druck\app\core\knowledge\parts\fasteners.py
+  Titel: Schraube
+  doc: Druckbare Schraube für eine gewählte Bohrung, mit Sechskantkopf oder automatisch bündig gesenktem Senkkopf und passendem Außengewinde.
+  caveat: Zusammen mit der gedruckten Mutter aus demselben Material drucken: Das Spiel kommt aus dem Materialprofil. Für hohe Lasten oder häufiges Lösen sind Metallschrauben mit Mutternfalle oder Heat-Set-Buchs
+  features: ('thread', 'countersink')
+  feature_requirements: [('thread', None, True, None)]
+  wall: parameter=None reason=Die Gewindekämme werden vom massiven Schraubenkern getragen. when=None
+  grip_from_profile=True feasible=nein
+  Parameter:
+    size                 enum     default='M5' choices=('M2', 'M2.5', 'M3', 'M4', 'M5', 'M6', 'M8') (front) — Größe
+    length               float    default=12.0 mm [2.0..200.0] (front) — Länge
+    countersunk          bool     default=False (front) — Senkkopf
+    play                 float    default=0.0 mm [0.0..1.0] (advanced) — Spiel
+  Bauhelfer: {'shapes.cone': 1, 'shapes.hexagon': 1, 'shapes.moved': 2, 'standards.screw': 1}
+  Normteile/Tabellen im Quelltext: ['standards.screw']
+  private Helfer: ['_printed_screw_countersink', '_printed_thread']
+====================================================================================================
+printed_thread  [fasteners]  v15  Datei: F:\3D Druck\app\core\knowledge\parts\fasteners.py
+  Titel: Druckbares Gewinde
+  doc: Druckbares Innengewinde in einer Bohrung oder Gewindebolzen auf einer ebenen Fläche — als Wendel mit abgeflachtem Kamm. Für einen offenen Behälter mit passendem Schraubdeckel ist „Drehdeckel erzeugen“
+  caveat: Nicht, wo eine Metallschraube greifen soll: Der Kamm ist abgeflacht, damit ein Drucker ihn überhaupt auflöst — ein genormtes Gegenstück fasst darin nicht sauber. Für tragende Verschraubungen ist eine 
+  features: ('thread',)
+  feature_requirements: [('thread', None, True, None)]
+  wall: parameter=None reason=Das Innengewinde ist ein abtragendes Werkzeug; beim Außengewinde werden die Gewindekämme vom massiven Kern getragen. when=None
+  grip_from_profile=True feasible=nein
+  Parameter:
+    size                 enum     default='M6' choices=('M2', 'M2.5', 'M3', 'M4', 'M5', 'M6', 'M8') (front) — Größe
+    length               float    default=12.0 mm [2.0..200.0] (front) — Länge
+    internal             bool     default=False subtractive_on=(True,) (front) — Innengewinde (aus = Außengewinde)
+    play                 float    default=0.0 mm [0.0..1.0] (advanced) — Spiel
+  Bauhelfer: {}
+  Normteile/Tabellen im Quelltext: []
+  private Helfer: ['_printed_thread']
+====================================================================================================
+screw_hole  [fasteners]  v15  Datei: F:\3D Druck\app\core\knowledge\parts\fasteners.py
+  Titel: Schraubenloch mit Senkung
+  doc: Durchgangsloch zum Verschrauben mit einer metrischen Schraube, auf Wunsch mit 90-Grad-Senkung und Kopffreiheit. Maße aus der Normteiltabelle.
+  features: ('bore', 'countersink', 'washer', 'head_room')
+  feature_requirements: [('bore', None, True, None), ('countersink', 'countersink', True, None), ('washer', 'washer', True, 'countersink'), ('head_room', None, True, 'head_room')]
+  wall: parameter=None reason=Der Baustein ist ein abtragender Werkzeugkörper. when=None
+  grip_from_profile=True feasible=nein
+  Parameter:
+    size                 enum     default='M3' choices=('M2', 'M2.5', 'M3', 'M4', 'M5', 'M6', 'M8') (front) — Größe
+    depth                float    default=10.0 mm [1.0..200.0] (front) — Tiefe
+    countersink          bool     default=True (front) — Senkkopf
+    washer               bool     default=False depends_on=('countersink', (False,)) (front) — Unterlegscheibe einlassen
+    play                 float    default=0.0 mm [0.0..2.0] depends_on=('washer', (True,)) (advanced) — Spiel
+    head_room            float    default=0.0 mm [0.0..50.0] (advanced) — Kopftiefe
+  Bauhelfer: {'shapes.cone': 1, 'shapes.cylinder': 3, 'shapes.moved': 4, 'standards.screw': 1, 'standards.washer': 1}
+  Normteile/Tabellen im Quelltext: ['SCREW_HEADS_USE_THEIR_OWN_RECESSES', 'SCREW_HOLE_ZONES', 'standards.screw', 'standards.washer']
+  private Helfer: ['_countersink_feature']
+====================================================================================================
+barrel_hinge  [mechanics]  v15  Datei: F:\3D Druck\app\core\knowledge\parts\mechanics.py
+  Titel: Bolzenscharnier
+  doc: Ein Scharnier, das aus dem Drucker schon beweglich kommt: zwei Laschen um einen mitgedruckten Bolzen, dazwischen der Druckspalt. Nichts zusammenzusetzen, nichts einzustecken.
+  caveat: Der Spalt entscheidet: Zu eng verschweißt beim Drucken, zu weit schlackert. Er kommt aus dem kalibrierten Material — wer das Material wechselt, druckt ein Prüfstück, bevor er zwanzig Scharniere druckt
+  features: ('hinge',)
+  feature_requirements: [('hinge', None, True, None)]
+  wall: parameter=wall reason=None when=None
+  grip_from_profile=True feasible=nein
+  Parameter:
+    pin                  float    default=4.0 mm [2.0..20.0] (front) — Bolzen
+    width                float    default=24.0 mm [8.0..120.0] (front) — Breite
+    reach                float    default=12.0 mm [4.0..60.0] (front) — Ausladung
+    wall                 float    default=2.5 mm [1.0..15.0] (front) — Wandstärke
+    play                 float    default=0.0 mm [0.0..2.0] (advanced) — Spiel
+  Bauhelfer: {'shapes.box': 1, 'shapes.cylinder': 1, 'shapes.moved': 3, 'shapes.turned': 1}
+  Normteile/Tabellen im Quelltext: []
+  private Helfer: []
+====================================================================================================
+bearing_seat  [mechanics]  v15  Datei: F:\3D Druck\app\core\knowledge\parts\mechanics.py
+  Titel: Kugellager einsetzen
+  doc: Schneidet eine passende Tasche für ein Kugellager. Außenmaß und Breite kommen aus der Tabelle, die Passung aus dem eingestellten Material.
+  caveat: Für eine durchgehende Welle zuerst ein Loch setzen und den Lagersitz darauf platzieren.
+  features: ('seat',)
+  feature_requirements: [('seat', None, True, None)]
+  wall: parameter=None reason=Der Baustein ist ein abtragender Werkzeugkörper. when=None
+  grip_from_profile=True feasible=nein
+  Parameter:
+    size                 enum     default='608' choices=('623', '624', '625', '626', '608', '6000', '6800', '6001') (front) — Kugellager
+    removable            bool     default=False (front) — Herausnehmbar
+    extra_depth          float    default=0.0 mm [0.0..5.0] (advanced) — Zusatztiefe
+    play                 float    default=0.0 mm [0.0..2.0] depends_on=('removable', (True,)) (advanced) — Spiel
+    grip                 float    default=0.0 mm [0.0..2.0] depends_on=('removable', (False,)) (advanced) — Übermaß
+  Bauhelfer: {'shapes.cylinder': 1, 'shapes.moved': 1, 'standards.bearing': 1}
+  Normteile/Tabellen im Quelltext: ['BEARING_SEAT_ADDED', 'standards.bearing']
+  private Helfer: []
+====================================================================================================
+dowel  [mechanics]  v15  Datei: F:\3D Druck\app\core\knowledge\parts\mechanics.py
+  Titel: Passstift und Passbohrung
+  doc: Stift oder Bohrung als Paar, zum Zusammenstecken zweier Teile. Das Spiel kommt aus dem Materialprofil, damit eine spätere Kalibrierung auch alte Projekte erreicht.
+  features: ('pin', 'bore')
+  feature_requirements: [('pin', 'kind', 'pin', None), ('bore', 'kind', 'bore', None)]
+  wall: parameter=None reason=Die Bohrungsstellung ist ein abtragender Werkzeugkörper. when=kind
+  grip_from_profile=True feasible=nein
+  Parameter:
+    diameter             float    default=4.0 mm [1.0..30.0] (front) — Durchmesser
+    length               float    default=8.0 mm [1.0..100.0] (front) — Länge
+    kind                 enum     default='pin' choices=('pin', 'bore') subtractive_on=('bore',) (front) — Art
+    shape                enum     default='round' choices=('round', 'hex', 'dovetail') (advanced) — Form
+    chamfer              float    default=0.6 mm [0.0..3.0] (advanced) — Fase
+    play                 float    default=0.0 mm [0.0..1.0] (advanced) — Spiel
+  Bauhelfer: {'shapes.cone': 1, 'shapes.moved': 3}
+  Normteile/Tabellen im Quelltext: []
+  private Helfer: ['_profile', '_ring']
+====================================================================================================
+hinge_eye  [mechanics]  v15  Datei: F:\3D Druck\app\core\knowledge\parts\mechanics.py
+  Titel: Scharnierauge
+  doc: Eine Lasche mit Bohrung, die sich um einen Bolzen dreht. Zwei davon an zwei Teilen und ein Passstift dazwischen ergeben ein Scharnier, das hält — anders als das Filmscharnier, das nur biegt.
+  caveat: Ein halbes Scharnier: Das zweite Auge gehört an das Gegenstück, der Bolzen kommt aus der Bibliothek (Passstift) oder aus dem Handel.
+  features: ('eye',)
+  feature_requirements: [('eye', None, True, None)]
+  wall: parameter=wall reason=None when=None
+  grip_from_profile=True feasible=nein
+  Parameter:
+    pin                  float    default=3.0 mm [1.0..20.0] (front) — Stift
+    width                float    default=8.0 mm [2.0..60.0] (front) — Breite
+    reach                float    default=8.0 mm [1.0..60.0] (front) — Abstand
+    wall                 float    default=2.0 mm [0.8..15.0] (front) — Wandstärke
+    play                 float    default=0.0 mm [0.0..2.0] (advanced) — Spiel
+  Bauhelfer: {'shapes.box': 1, 'shapes.cylinder': 1, 'shapes.moved': 4, 'shapes.turned': 1}
+  Normteile/Tabellen im Quelltext: []
+  private Helfer: []
+====================================================================================================
+latch  [mechanics]  v15  Datei: F:\3D Druck\app\core\knowledge\parts\mechanics.py
+  Titel: Rastnase
+  doc: Nase zum Einrasten, mit Anlaufschräge nach oben und gerader Haltefläche nach unten — druckt ohne Stütze und hält gegen Zug.
+  features: ('ramp',)
+  feature_requirements: [('ramp', None, True, None)]
+  wall: parameter=None reason=Die Rastnase läuft funktionsbedingt spitz aus; als Aussparung ist sie zudem ein abtragender Werkzeugkörper. when=None
+  grip_from_profile=True feasible=nein
+  Parameter:
+    width                float    default=6.0 mm [2.0..60.0] (front) — Breite
+    depth                float    default=1.0 mm [0.4..6.0] (front) — Überstand
+    height               float    default=3.0 mm [1.0..30.0] (front) — Höhe
+    negative             bool     default=False (front) — Als Aussparung
+    play                 float    default=0.0 mm [0.0..1.0] (advanced) — Spiel
+  Bauhelfer: {'shapes.moved': 1, 'shapes.turned': 1, 'shapes.wedge': 1}
+  Normteile/Tabellen im Quelltext: []
+  private Helfer: []
+====================================================================================================
+living_hinge  [mechanics]  v16  Datei: F:\3D Druck\app\core\knowledge\parts\mechanics.py
+  Titel: Filmscharnier
+  doc: Zwei Flügel, verbunden durch eine dünne Stelle. Die Schichten laufen quer zur Biegung, sonst bricht das Scharnier beim ersten Öffnen.
+  caveat: Nicht für ein Teil, das aufrecht gedruckt wird: Die dünne Stelle hält nur, solange die Schichten quer zur Biegung laufen. Steht das Scharnier senkrecht auf der Platte, bricht es beim ersten Öffnen.
+  features: ('hinge',)
+  feature_requirements: [('hinge', None, True, None)]
+  wall: parameter=None reason=Folie und Flügel dürfen laut Parameterschema bewusst unter der Profilgrenze liegen und werden an ihren benannten Maßen geprüft. when=None
+  grip_from_profile=True feasible=ja
+  Parameter:
+    width                float    default=30.0 mm [5.0..300.0] (front) — Breite
+    leaf                 float    default=15.0 mm [3.0..200.0] (front) — Flügellänge
+    thickness            float    default=2.0 mm [0.8..10.0] (front) — Materialstärke
+    film                 float    default=0.4 mm [0.2..1.2] (front) — Scharnierstärke
+    gap                  float    default=1.5 mm [0.5..8.0] (front) — Scharnierbreite
+  Bauhelfer: {'shapes.box': 2, 'shapes.moved': 1}
+  Normteile/Tabellen im Quelltext: []
+  private Helfer: ['_hinge_feasible']
+====================================================================================================
+snap_connector  [mechanics]  v15  Datei: F:\3D Druck\app\core\knowledge\parts\mechanics.py
+  Titel: Schnappverbinder für eine Naht
+  doc: Federarm und Tasche als Paar — die Hälften rasten ein, statt geklebt zu werden. Die Armstärke ist ein Zehntel der Länge; kürzer als 8 mm gibt es ihn nicht, darunter wäre der Arm dünner, als eine Düse 
+  caveat: Nicht für kurze Nähte: Der Arm ist ein Zehntel seiner Länge dick, und unter acht Millimetern legt eine Düse ihn nicht mehr tragfähig. Für kleine Teile hält eine Rastnase besser.
+  features: ('arm', 'hook', 'catch')
+  feature_requirements: [('arm', 'kind', 'pin', None), ('hook', 'kind', 'pin', None), ('catch', 'kind', 'bore', None)]
+  wall: parameter=None reason=Der Federarm ist ausdrücklich bis zu zwei Extrusionsbahnen dünn; die Buchsenstellung ist ein abtragender Werkzeugkörper. when=None
+  grip_from_profile=True feasible=nein
+  Parameter:
+    diameter             float    default=6.0 mm [4.0..30.0] (front) — Durchmesser
+    length               float    default=9.0 mm [8.0..100.0] (front) — Länge
+    kind                 enum     default='pin' choices=('pin', 'bore') subtractive_on=('bore',) (front) — Art
+    play                 float    default=0.0 mm [0.0..1.0] (advanced) — Spiel
+  Bauhelfer: {'shapes.box': 3, 'shapes.moved': 4, 'shapes.wedge': 1}
+  Normteile/Tabellen im Quelltext: []
+  private Helfer: []
+====================================================================================================
+snap_fit  [mechanics]  v15  Datei: F:\3D Druck\app\core\knowledge\parts\mechanics.py
+  Titel: Schnappverbindung
+  doc: Federnder Arm mit Haken zum Einrasten zweier Teile. Der Arm ist mindestens zehnmal so lang wie dick, sonst bricht er, statt zu federn.
+  features: ('arm', 'hook')
+  feature_requirements: [('arm', None, True, None), ('hook', None, True, None)]
+  wall: parameter=None reason=Federarm und auslaufender Anlaufkeil dürfen laut Parameterschema bewusst unter der Profilgrenze liegen und werden an ihren benannten Maßen geprüft. when=None
+  grip_from_profile=True feasible=nein
+  Parameter:
+    width                float    default=8.0 mm [2.0..60.0] (front) — Breite
+    length               float    default=16.0 mm [4.0..120.0] (front) — Länge
+    thickness            float    default=1.6 mm [0.6..8.0] (front) — Armstärke
+    hook                 float    default=1.2 mm [0.2..6.0] (front) — Hakenüberstand
+    lead_angle           float    default=35.0 ° [10.0..60.0] (advanced) — Anlaufwinkel
+  Bauhelfer: {}
+  Normteile/Tabellen im Quelltext: []
+  private Helfer: ['_snap_fit_body']
+====================================================================================================
+foot  [mounting]  v15  Datei: F:\3D Druck\app\core\knowledge\parts\mounting.py
+  Titel: Standfuß
+  doc: Ein Fuß unter einem Gehäuse — gedruckt, oder als Tasche für einen gekauften aus Gummi. Vier davon halten ein Gerät ruhig und die Unterseite vom Tisch weg.
+  caveat: Nicht für Teile, die auf der Fläche aufliegen sollen — ein Fuß hebt sie ab. Und nicht zum Verschrauben gedacht: Er hat keine Bohrung, und eine hineingesetzt stünde die Schraube auf dem Tisch.
+  features: ('foot',)
+  feature_requirements: [('foot', None, True, None)]
+  wall: parameter=height reason=Die Taschenstellung ist ein abtragender Werkzeugkörper. when=kind
+  grip_from_profile=True feasible=nein
+  Parameter:
+    kind                 enum     default='foot' choices=('foot', 'pocket') subtractive_on=('pocket',) (front) — Art
+    diameter             float    default=10.0 mm [3.0..60.0] (front) — Durchmesser
+    height               float    default=3.0 mm [0.6..30.0] (front) — Höhe
+    chamfer              float    default=0.0 mm [0.0..10.0] (advanced) — Fase
+    play                 float    default=0.0 mm [0.0..2.0] (advanced) — Spiel
+  Bauhelfer: {}
+  Normteile/Tabellen im Quelltext: []
+  private Helfer: ['_foot_profile', '_pocket_profile']
+====================================================================================================
+keyhole  [mounting]  v15  Datei: F:\3D Druck\app\core\knowledge\parts\mounting.py
+  Titel: Schlüsselloch-Aufhängung
+  doc: Schlüssellochförmige Aussparung: der Kopf geht durch das runde Ende, der Schaft hält im Schlitz.
+  features: ('pocket', 'bore')
+  feature_requirements: [('pocket', None, True, None), ('bore', None, True, None)]
+  wall: parameter=None reason=Der Baustein ist ein abtragender Werkzeugkörper. when=None
+  grip_from_profile=True feasible=ja
+  Parameter:
+    size                 enum     default='M4' choices=('M2', 'M2.5', 'M3', 'M4', 'M5', 'M6', 'M8') (front) — Schraube
+    drop                 float    default=8.0 mm [2.0..60.0] (front) — Einhängeweg
+    depth                float    default=4.0 mm [1.0..40.0] (front) — Tiefe
+    head_room            float    default=2.5 mm [0.5..20.0] (advanced) — Kopftiefe
+    play                 float    default=0.0 mm [0.0..2.0] (advanced) — Spiel
+  Bauhelfer: {'shapes.cylinder': 1, 'shapes.moved': 3, 'shapes.slot': 1, 'shapes.turned': 1, 'standards.screw': 1}
+  Normteile/Tabellen im Quelltext: ['standards.screw']
+  private Helfer: ['_keyhole_minimum_drop', '_keyhole_without_ledge']
+====================================================================================================
+magnet_pocket  [mounting]  v15  Datei: F:\3D Druck\app\core\knowledge\parts\mounting.py
+  Titel: Magnettasche
+  doc: Tasche für einen Rundmagneten, auf Wunsch mit Deckschicht zum Überdrucken und einer Haltelippe am Rand.
+  features: ('pocket',)
+  feature_requirements: [('pocket', None, True, None)]
+  wall: parameter=None reason=Der Baustein ist ein abtragender Werkzeugkörper. when=None
+  grip_from_profile=True feasible=nein
+  Parameter:
+    size                 enum     default='8x3' choices=('6x3', '8x3', '10x3', '12x2', '20x3') (front) — Magnet
+    diameter             float    default=0.0 mm [0.0..100.0] (advanced) — Eigener Durchmesser
+    height               float    default=0.0 mm [0.0..30.0] (advanced) — Eigene Höhe
+    play                 float    default=0.0 mm [0.0..1.0] (advanced) — Spiel
+    cover                float    default=0.0 mm [0.0..5.0] (front) — Deckschicht
+    press_lip            bool     default=True (advanced) — Haltelippe
+    grip                 float    default=0.0 mm [0.0..1.0] (advanced) — Übermaß
+  Bauhelfer: {'shapes.cone': 1, 'shapes.cylinder': 2, 'shapes.moved': 3, 'standards.magnet': 1}
+  Normteile/Tabellen im Quelltext: ['MAGNET_LIP_GRIP', 'MAGNET_LIP_HEIGHT', 'standards.magnet']
+  private Helfer: []
+====================================================================================================
+pegboard_hook  [mounting]  v15  Datei: F:\3D Druck\app\core\knowledge\parts\mounting.py
+  Titel: Lochwand-Einhänger
+  doc: Haken für eine Lochwand, direkt am Teil. Von oben in die Schlitze gesteckt und heruntergezogen — die Nase greift dann hinter die Platte, und die federnde Zunge rastet ein. Gedruckt wird das Teil liege
+  caveat: Zum Abnehmen muss die Rastzunge durch den Schlitz niedergedrückt werden — ohne Werkzeug geht das nur, wenn man vor der Wand steht. Wer ein Teil oft abnimmt, schaltet sie ab; dann löst sich der Einhäng
+  features: ('hook', 'latch')
+  feature_requirements: [('hook', None, True, None), ('latch', 'latch', True, None)]
+  wall: parameter=None reason=Die 0,8-mm-Federzunge ist absichtlich biegsam; ohne Rückplatte verbindet joined_by_host die Haken ausdrücklich erst im Wirtsbauteil. when=None
+  grip_from_profile=True feasible=nein
+  Parameter:
+    system               enum     default='skadis' choices=('skadis',) (front) — Lochwand
+    count                int      default=2 [1..6] (front) — Einhänger
+    steps                int      default=1 [1..4] (front) — Rasterschritte
+    upright              bool     default=False (front) — Übereinander
+    latch                bool     default=True (front) — Rastzunge
+    plate                float    default=0.0 mm [0.0..10.0] (front) — Rückplatte
+    play                 float    default=0.0 mm [0.0..1.5] (advanced) — Spiel
+    lip                  float    default=0.0 mm [0.0..6.0] (advanced) — Nasentiefe
+  Bauhelfer: {'shapes.box': 4, 'shapes.moved': 6, 'shapes.slot': 2, 'shapes.turned': 3, 'shapes.wedge': 1, 'standards.board': 1}
+  Normteile/Tabellen im Quelltext: ['standards.board']
+  private Helfer: ['_latch_tongue', '_slot_area']
+====================================================================================================
+profile_clamp_liner  [mounting]  v1  Datei: F:\3D Druck\app\core\knowledge\parts\profile_clamps.py
+  Titel: Profilklemmen-Einlage
+  doc: Eine separat wechselbare Profil-Einlagenhälfte mit vorderem Anschlagbund und freiem axialem Einschub.
+  features: ('front', 'back')
+  feature_requirements: [('front', None, True, None), ('back', None, True, None)]
+  wall: parameter=liner_thickness reason=None when=None
+  grip_from_profile=True feasible=ja
+  Parameter:
+    counter_sketch       sketch   default='{"plane": "plane:xy", "elements": [{"kind": "circle", "points": [[0.0, 0.0], [8.0, 0.0]]}], "constraints": [{"kind": "distance", "targets": [0, 1], "value": "8.000000000"}, {"kind": "fixed", "targets": [0]}]}' PFLICHT (front) — Gegenkontur
+    outer_sketch         sketch   default='' (advanced) — Vorhandene Außenkontur
+    depth                float    default=40.0 mm [16.0..80.0] (front) — Klemmtiefe
+    liner_thickness      float    default=2.0 mm [1.0..5.0] (front) — Einlagenstärke
+    half                 enum     default='lower' choices=('lower', 'upper') (front) — Hälfte
+    flange_width         float    default=1.2 mm [0.8..4.0] (advanced) — Bundbreite
+    flange_height        float    default=1.5 mm [1.0..4.0] (advanced) — Bundhöhe
+    rear_relief          float    default=2.0 mm [1.0..4.0] (advanced) — Freiraum hinten
+    split_angle          float    default=0.0 ° (advanced) — Winkel der Trennebene
+    split_offset         float    default=0.0 mm (advanced) — Versatz der Trennebene
+    play                 float    default=0.0 mm [0.0..1.0] (advanced) — Teilungsspiel der Einlagen
+    grip                 float    default=0.0 mm [0.0..0.5] (advanced) — Übermaß am Gegenprofil
+  Bauhelfer: {}
+  Normteile/Tabellen im Quelltext: []
+  private Helfer: ['_liner_reason']
+====================================================================================================
+profile_clamp_shell  [mounting]  v19  Datei: F:\3D Druck\app\core\knowledge\parts\profile_clamps.py
+  Titel: Profilklemmschale
+  doc: Eine verschraubte Profilklemmenhälfte mit eindeutig gezeichneter Sitzkontur und Normteilaufnahmen.
+  features: ('front', 'back')
+  feature_requirements: [('front', None, True, None), ('back', None, True, None)]
+  wall: parameter=wall reason=None when=None
+  grip_from_profile=True feasible=ja
+  Parameter:
+    seat_sketch          sketch   default='{"plane": "plane:xy", "elements": [{"kind": "circle", "points": [[0.0, 0.0], [10.125, 0.0]]}], "constraints": [{"kind": "distance", "targets": [0, 1], "value": "10.125000000"}, {"kind": "fixed", "targets": [0]}]}' PFLICHT (front) — Sitzkontur
+    depth                float    default=40.0 mm [16.0..80.0] (front) — Klemmtiefe
+    wall                 float    default=4.0 mm [2.0..8.0] (front) — Schalenwand
+    half                 enum     default='lower' choices=('lower', 'upper') (front) — Hälfte
+    joint_gap            float    default=1.0 mm [0.5..2.0] (advanced) — Teilungsspalt
+    split_angle          float    default=0.0 ° (advanced) — Winkel der Trennebene
+    split_offset         float    default=0.0 mm (advanced) — Versatz der Trennebene
+    screw_size           enum     default='M4' choices=('M4',) (advanced) — Schraubengröße
+    play                 float    default=0.0 mm [0.0..1.0] (advanced) — Spiel der Schraubenaufnahme
+  Bauhelfer: {'standards.nut': 1, 'standards.screw': 1}
+  Normteile/Tabellen im Quelltext: ['standards.nut', 'standards.screw']
+  private Helfer: ['_shell_reason']
+====================================================================================================
+wall_mount  [mounting]  v13  Datei: F:\3D Druck\app\core\knowledge\parts\mounting.py
+  Titel: Wandhalter
+  doc: Rückplatte mit Schraubenlöchern und nach vorn stehender Auflage. Die Löcher sind Durchgangslöcher aus der Normteiltabelle.
+  features: ('plate', 'bore')
+  feature_requirements: [('plate', None, True, None), ('bore', None, True, None)]
+  wall: parameter=thickness reason=None when=None
+  grip_from_profile=True feasible=nein
+  Parameter:
+    width                float    default=30.0 mm [8.0..300.0] (front) — Breite
+    height               float    default=25.0 mm [8.0..300.0] (front) — Höhe
+    thickness            float    default=3.0 mm [1.0..20.0] (front) — Wandstärke
+    size                 enum     default='M4' choices=('M2', 'M2.5', 'M3', 'M4', 'M5', 'M6', 'M8') (front) — Schraube
+    holes                int      default=2 [1..6] (front) — Löcher
+    lip                  float    default=12.0 mm [0.0..100.0] (front) — Auflage
+  Bauhelfer: {'shapes.box': 2, 'shapes.cylinder': 1, 'shapes.moved': 2, 'shapes.turned': 1, 'standards.screw': 1}
+  Normteile/Tabellen im Quelltext: ['standards.screw']
+  private Helfer: []
+====================================================================================================
+cable_clip  [routing]  v15  Datei: F:\3D Druck\app\core\knowledge\parts\structure.py
+  Titel: Kabelclip
+  doc: Ein Bügel, der auf eine Fläche kommt und ein Kabel hält. Die Öffnung ist enger als das Kabel: Man drückt es hinein, und es bleibt.
+  caveat: Nicht für Kabel, die unter Zug stehen — dafür ist die Kabeldurchführung mit Zugentlastung da. Ein Clip führt, er hält nicht fest.
+  features: ('seat',)
+  feature_requirements: [('seat', None, True, None)]
+  wall: parameter=wall reason=None when=None
+  grip_from_profile=False feasible=ja
+  Parameter:
+    size                 enum     default='cable-5' choices=('ptfe-4x2', 'ptfe-6x3', 'cable-5', 'cable-7') (front) — Kabel
+    diameter             float    default=0.0 mm [0.0..100.0] (advanced) — Eigener Durchmesser
+    width                float    default=8.0 mm [2.0..40.0] (front) — Breite
+    wall                 float    default=2.0 mm [0.8..10.0] (front) — Wandstärke
+    grip                 float    default=0.0 mm [0.0..5.0] (front) — Verengung
+    play                 float    default=0.0 mm [0.0..2.0] (advanced) — Spiel
+  Bauhelfer: {'shapes.box': 2, 'shapes.cylinder': 1, 'shapes.moved': 4, 'shapes.turned': 1, 'standards.tube': 1}
+  Normteile/Tabellen im Quelltext: ['standards.tube']
+  private Helfer: ['_clip_closed']
+====================================================================================================
+cable_gland  [routing]  v16  Datei: F:\3D Druck\app\core\knowledge\parts\structure.py
+  Titel: Kabeldurchführung mit Zugentlastung
+  doc: Durchführung für ein Rundkabel, mit einer Klemmstelle dahinter. Ohne die zieht jeder Ruck am Kabel direkt an der Lötstelle.
+  features: ('bore', 'relief')
+  feature_requirements: [('bore', None, True, None), ('relief', 'strain_relief', True, None)]
+  wall: parameter=None reason=Der Baustein ist ein abtragender Werkzeugkörper. when=None
+  grip_from_profile=True feasible=ja
+  Parameter:
+    size                 enum     default='cable-5' choices=('ptfe-4x2', 'ptfe-6x3', 'cable-5', 'cable-7') (front) — Kabel
+    diameter             float    default=0.0 mm [0.0..100.0] (advanced) — Eigener Durchmesser
+    wall                 float    default=3.0 mm [1.0..30.0] (front) — Wandstärke
+    play                 float    default=0.0 mm [0.0..2.0] (advanced) — Spiel
+    strain_relief        bool     default=True (front) — Zugentlastung
+    relief_gap           float    default=0.0 mm [0.0..20.0] (advanced) — Klemmspalt
+  Bauhelfer: {'shapes.box': 2, 'shapes.cylinder': 1, 'shapes.moved': 3, 'standards.tube': 3}
+  Normteile/Tabellen im Quelltext: ['standards.tube']
+  private Helfer: ['_cable_relief_feasible']
+====================================================================================================
+gusset  [structure]  v10  Datei: F:\3D Druck\app\core\knowledge\parts\structure.py
+  Titel: Eckwinkel
+  doc: Dreieck in einer Innenecke: Es hält zwei Wände im rechten Winkel, wo sie sonst aufklappen. Der Klassiker gegen eine Ecke, die beim Anfassen federt.
+  caveat: Nicht in eine Ecke, durch die etwas hindurchmuss — er füllt sie diagonal. Für eine Wand, die für sich zu weich ist, ist die Versteifungsrippe da.
+  features: ('gusset',)
+  feature_requirements: [('gusset', None, True, None)]
+  wall: parameter=wall reason=None when=None
+  grip_from_profile=True feasible=nein
+  Parameter:
+    legs                 float    default=12.0 mm [2.0..100.0] (front) — Schenkel
+    thickness            float    default=0.0 mm [0.0..20.0] (front) — Dicke
+    wall                 float    default=2.0 mm [0.4..20.0] (advanced) — Wandstärke
+  Bauhelfer: {'shapes.wedge': 1}
+  Normteile/Tabellen im Quelltext: []
+  private Helfer: []
+====================================================================================================
+organizer_divider  [structure]  v1  Datei: F:\3D Druck\app\core\knowledge\parts\containers.py
+  Titel: Organizer-Trennwand
+  doc: Gerade Trennwand mit benannten Seiten und eigener Höhe; an den Boden anfügen.
+  features: ('base', 'top', 'front', 'back')
+  feature_requirements: [('base', None, True, None), ('top', None, True, None), ('front', None, True, None), ('back', None, True, None)]
+  wall: parameter=thickness reason=None when=None
+  grip_from_profile=True feasible=nein
+  Parameter:
+    length               float    default=80.0 mm [5.0..300.0] (front) — Länge
+    height               float    default=30.0 mm [1.0..200.0] (front) — Höhe
+    thickness            float    default=3.0 mm [1.0..12.0] (front) — Dicke
+  Bauhelfer: {'shapes.box': 1}
+  Normteile/Tabellen im Quelltext: []
+  private Helfer: []
+====================================================================================================
+organizer_foot  [structure]  v1  Datei: F:\3D Druck\app\core\knowledge\parts\containers.py
+  Titel: Organizer-Steckfuß
+  doc: Separater Steckfuß mit Flansch, Anschlag und benanntem Zapfen. Die Aufnahme erhält das Materialspiel.
+  features: ('base', 'seat', 'pin')
+  feature_requirements: [('base', None, True, None), ('seat', None, True, None), ('pin', None, True, None)]
+  wall: parameter=None reason=None when=None
+  grip_from_profile=True feasible=ja
+  Parameter:
+    diameter             float    default=18.0 mm [6.0..40.0] (front) — Flanschdurchmesser
+    height               float    default=11.0 mm [1.0..30.0] (front) — Fußhöhe
+    pin_diameter         float    default=13.0 mm [2.0..30.0] (front) — Zapfendurchmesser
+    pin_length           float    default=8.0 mm [1.0..20.0] (front) — Zapfenlänge
+  Bauhelfer: {'shapes.cylinder': 2}
+  Normteile/Tabellen im Quelltext: []
+  private Helfer: ['_foot_reason', '_horizontal_area', '_moved', '_require']
+====================================================================================================
+organizer_rim  [structure]  v1  Datei: F:\3D Druck\app\core\knowledge\parts\containers.py
+  Titel: Organizer-Rand
+  doc: Umlaufender offener Rand; an die Oberkante einer Wanne anfügen.
+  features: ('rim',)
+  feature_requirements: [('rim', None, True, None)]
+  wall: parameter=thickness reason=None when=None
+  grip_from_profile=True feasible=ja
+  Parameter:
+    width                float    default=120.0 mm [20.0..300.0] (front) — Breite
+    depth                float    default=80.0 mm [20.0..300.0] (front) — Tiefe
+    height               float    default=3.0 mm [1.0..20.0] (front) — Höhe
+    thickness            float    default=3.0 mm [1.0..12.0] (advanced) — Randbreite
+    radius               float    default=8.0 mm [0.0..25.0] (advanced) — Außenradius
+  Bauhelfer: {}
+  Normteile/Tabellen im Quelltext: []
+  private Helfer: ['_horizontal_area', '_moved', '_require', '_rim_reason']
+====================================================================================================
+organizer_tray  [structure]  v1  Datei: F:\3D Druck\app\core\knowledge\parts\containers.py
+  Titel: Organizer-Wanne
+  doc: Offene Wanne mit unabhängigem Boden, gleichmäßiger Außenwand und gerundeten Ecken.
+  features: ('base', 'floor', 'rim')
+  feature_requirements: [('base', None, True, None), ('floor', None, True, None), ('rim', None, True, None)]
+  wall: parameter=None reason=None when=None
+  grip_from_profile=True feasible=ja
+  Parameter:
+    width                float    default=120.0 mm [20.0..300.0] (front) — Breite
+    depth                float    default=80.0 mm [20.0..300.0] (front) — Tiefe
+    height               float    default=40.0 mm [6.0..200.0] (front) — Höhe
+    wall                 float    default=3.0 mm [1.0..12.0] (advanced) — Wandstärke
+    floor                float    default=3.0 mm [1.0..10.0] (advanced) — Bodenstärke
+    radius               float    default=8.0 mm [0.0..25.0] (advanced) — Außenradius
+  Bauhelfer: {}
+  Normteile/Tabellen im Quelltext: []
+  private Helfer: ['_horizontal_area', '_moved', '_require', '_tray_reason']
+====================================================================================================
+profile_tongue  [structure]  v15  Datei: F:\3D Druck\app\core\knowledge\parts\structure.py
+  Titel: Nutfeder für Aluprofil
+  doc: Ein T-förmiger Fuß, der von der Stirnseite in die Nut einer Aluschiene geschoben wird und dort hält. Hals und Kopf kommen aus der Normteiltabelle. Zum Drucken liegt die Feder am besten mit der Nutrich
+  features: ('tongue',)
+  feature_requirements: [('tongue', None, True, None)]
+  wall: parameter=None reason=None when=None
+  grip_from_profile=True feasible=nein
+  Parameter:
+    size                 enum     default='2020' choices=('2020', '3030', '4040') (front) — Profil
+    length               float    default=20.0 mm [6.0..200.0] (front) — Länge
+    lead_in              float    default=1.5 mm [0.0..6.0] (front) — Einführschräge
+    play                 float    default=0.0 mm [0.0..1.0] (advanced) — Spiel
+    head                 float    default=0.0 mm [0.0..8.0] (advanced) — Kopfhöhe
+  Bauhelfer: {'shapes.box': 1, 'shapes.moved': 1, 'shapes.tapered_bar': 1, 'standards.profile_slot': 1}
+  Normteile/Tabellen im Quelltext: ['standards.profile_slot']
+  private Helfer: []
+====================================================================================================
+rib  [structure]  v10  Datei: F:\3D Druck\app\core\knowledge\parts\structure.py
+  Titel: Versteifungsrippe
+  doc: Rippe mit schrägem Auslauf: Sie verstärkt eine Wand, ohne sie dicker zu machen. Sie bleibt dünner als die Wand, an der sie sitzt — sonst zeichnet sie sich auf der anderen Seite ab.
+  features: ('rib',)
+  feature_requirements: [('rib', None, True, None)]
+  wall: parameter=wall reason=None when=None
+  grip_from_profile=True feasible=nein
+  Parameter:
+    length               float    default=20.0 mm [2.0..300.0] (front) — Länge
+    height               float    default=10.0 mm [1.0..200.0] (front) — Höhe
+    wall                 float    default=2.0 mm [0.4..20.0] (front) — Wandstärke
+    thickness            float    default=0.0 mm [0.0..20.0] (advanced) — Rippenstärke
+    fillet               float    default=2.0 mm [0.0..20.0] (front) — Anlauf
+  Bauhelfer: {'shapes.box': 1, 'shapes.moved': 2, 'shapes.turned': 1, 'shapes.wedge': 1}
+  Normteile/Tabellen im Quelltext: []
+  private Helfer: []
+====================================================================================================
+seal_gasket  [structure]  v1  Datei: F:\3D Druck\app\core\knowledge\parts\seals.py
+  Titel: Separate Dichtung
+  doc: Erzeugt eine eigenständige Dichtung mit rechteckigem oder rundem Querschnitt.
+  caveat: Die Geometrie beschreibt die unverformte Dichtung; sie belegt keine Dichtheit.
+  features: ('gasket_contact', 'gasket_bottom', 'gasket_walls')
+  feature_requirements: [('gasket_contact', None, True, None), ('gasket_bottom', None, True, None), ('gasket_walls', 'section', 'rectangle', None)]
+  wall: parameter=None reason=None when=None
+  grip_from_profile=True feasible=nein
+  Parameter:
+    path_sketch          sketch   default='{"plane":"plane:xy","elements":[{"kind":"circle","points":[[0.0,0.0],[20.0,0.0]]}],"constraints":[{"kind":"distance","targets":[0,1],"value":"20.000000000"},{"kind":"fixed","targets":[0]}]}' PFLICHT (front) — Dichtweg
+    offset               float    default=0.0 mm [-5.0..5.0] (advanced) — Seitlicher Versatz
+    section              enum     default='rectangle' choices=('rectangle', 'round') (front) — Dichtquerschnitt
+    width                float    default=2.6 mm [1.2..12.0] depends_on=('section', ('rectangle',)) (front) — Dichtungsbreite
+    height               float    default=2.4 mm [1.2..12.0] (front) — Dichtungshöhe
+  Bauhelfer: {}
+  Normteile/Tabellen im Quelltext: []
+  private Helfer: ['_profile']
+====================================================================================================
+seal_groove  [structure]  v1  Datei: F:\3D Druck\app\core\knowledge\parts\seals.py
+  Titel: Dichtnut
+  doc: Schneidet eine durchgängige Nut unter der gewählten Fläche entlang einer Zeichnung.
+  caveat: Die Restwand unter und neben der Nut muss am Träger geprüft werden.
+  features: ('groove_mouth', 'groove_floor', 'groove_walls')
+  feature_requirements: [('groove_mouth', None, True, None), ('groove_floor', None, True, None), ('groove_walls', None, True, None)]
+  wall: parameter=None reason=Abtragendes Werkzeug; Restwand wird am Träger geprüft. when=None
+  grip_from_profile=True feasible=nein
+  Parameter:
+    path_sketch          sketch   default='{"plane":"plane:xy","elements":[{"kind":"circle","points":[[0.0,0.0],[20.0,0.0]]}],"constraints":[{"kind":"distance","targets":[0,1],"value":"20.000000000"},{"kind":"fixed","targets":[0]}]}' PFLICHT (front) — Dichtweg
+    offset               float    default=0.0 mm [-5.0..5.0] (advanced) — Seitlicher Versatz
+    width                float    default=3.0 mm [1.2..12.0] (front) — Nutbreite
+    depth                float    default=2.0 mm [0.5..12.0] (front) — Nuttiefe
+  Bauhelfer: {}
+  Normteile/Tabellen im Quelltext: []
+  private Helfer: ['_profile']
+
+Bauhelfer über alle Bausteine:
+  shapes.moved                     57
+  shapes.box                       25
+  shapes.cylinder                  18
+  shapes.turned                    11
+  standards.screw                  7
+  shapes.cone                      5
+  shapes.wedge                     5
+  standards.tube                   4
+  standards.nut                    3
+  shapes.hexagon                   3
+  shapes.slot                      3
+  standards.insert                 1
+  standards.washer                 1
+  standards.bearing                1
+  standards.magnet                 1
+  standards.board                  1
+  standards.profile_slot           1
+  shapes.tapered_bar               1

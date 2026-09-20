@@ -1,0 +1,72 @@
+Formen über die vorhandene API:
+  box 10x20x30: valid=True closed=True solids=1 faces=6 V=6000.000000 A=2200.0000
+      types={'plane': 6} bounds=(-5.0, -10.0, 0.0, 5.0, 10.0, 30.0)
+  [OK ] box 10x20x30: nativ gültig
+  [OK ] box 10x20x30: geschlossen
+  [OK ] box 10x20x30: Körperzahl 1 — ist 1
+  [OK ] box Volumen — ist 6000.000000, erwartet 6000.000000 (±1e-06)
+  cylinder d8 h5: valid=True closed=True solids=1 faces=3 V=251.327412 A=226.1947
+      types={'cylinder': 1, 'plane': 2} bounds=(-4.0, -4.0, 0.0, 4.0, 4.0, 5.0)
+  [OK ] cylinder d8 h5: nativ gültig
+  [OK ] cylinder d8 h5: geschlossen
+  [OK ] cylinder d8 h5: Körperzahl 1 — ist 1
+  [OK ] cylinder Volumen — ist 251.327412, erwartet 251.327412 (±1e-06)
+  hexagon sw7 h3: valid=True closed=True solids=1 faces=8 V=127.305734 A=157.6166
+      types={'plane': 8} bounds=(-3.5, -4.041452, 0.0, 3.5, 4.041452, 3.0)
+  [OK ] hexagon sw7 h3: nativ gültig
+  [OK ] hexagon sw7 h3: geschlossen
+  [OK ] hexagon sw7 h3: Körperzahl 1 — ist 1
+  [OK ] hexagon Volumen — ist 127.305734, erwartet 127.305734 (±1e-06)
+  slot w4 l12 h2: valid=True closed=True solids=1 faces=6 V=89.132741 A=146.2655
+      types={'plane': 4, 'cylinder': 2} bounds=(-6.0, -2.0, 0.0, 6.0, 2.0, 2.0)
+  [OK ] slot w4 l12 h2: nativ gültig
+  [OK ] slot w4 l12 h2: geschlossen
+  [OK ] slot w4 l12 h2: Körperzahl 1 — ist 1
+  [OK ] slot Volumen — ist 89.132741, erwartet 89.132741 (±1e-06)
+  [OK ] slot trägt zwei Zylinderflächen — {'plane': 4, 'cylinder': 2}
+  wedge w6 d1 h3 tip0: valid=True closed=True solids=1 faces=5 V=9.000000 A=45.9737
+      types={'plane': 5} bounds=(-3.0, -0.0, 0.0, 3.0, 1.0, 3.0)
+  [OK ] wedge w6 d1 h3 tip0: nativ gültig
+  [OK ] wedge w6 d1 h3 tip0: geschlossen
+  [OK ] wedge w6 d1 h3 tip0: Körperzahl 1 — ist 1
+  [OK ] wedge Volumen — ist 9.000000, erwartet 9.000000 (±1e-06)
+  [OK ] wedge liegt in X zentriert, Y in +, Z in + — (-3.0, -2.220446049250313e-16, 0.0, 3.0, 1.0, 3.0000000000000004)
+  cone 6->10 h2: valid=True closed=True solids=1 faces=3 V=102.625360 A=177.9003
+      types={'plane': 2, 'cone': 1} bounds=(-5.0, -5.0, 0.0, 5.0, 5.0, 2.0)
+  [OK ] cone 6->10 h2: nativ gültig
+  [OK ] cone 6->10 h2: geschlossen
+  [OK ] cone 6->10 h2: Körperzahl 1 — ist 1
+  [OK ] cone Volumen — ist 102.625360, erwartet 102.625360 (±1e-06)
+  [OK ] cone trägt eine Kegelfläche — {'plane': 2, 'cone': 1}
+  tapered_bar: valid=True closed=True solids=1 faces=10 V=462.000000 A=464.0000
+      types={'plane': 10} bounds=(-4.0, -10.0, 0.0, 4.0, 10.0, 3.0)
+  [OK ] tapered_bar: nativ gültig
+  [OK ] tapered_bar: geschlossen
+  [OK ] tapered_bar: Körperzahl 1 — ist 1
+  rounded_prism 40x30x10 r8: valid=True closed=True solids=1 faces=10 V=11450.619298 A=3552.7787
+      types={'plane': 6, 'cylinder': 4} bounds=(-20.0, -15.0, 0.0, 20.0, 15.0, 10.0)
+  [OK ] rounded_prism 40x30x10 r8: nativ gültig
+  [OK ] rounded_prism 40x30x10 r8: geschlossen
+  [OK ] rounded_prism 40x30x10 r8: Körperzahl 1 — ist 1
+  [OK ] rounded_prism Volumen — ist 11450.619298, erwartet 11450.619298 (±1e-06)
+  [OK ] rounded_prism vier Zylinderflächen — {'plane': 6, 'cylinder': 4}
+  union box+cyl: valid=True closed=True solids=1 faces=10 V=1125.663706 A=725.6637
+      types={'plane': 8, 'cylinder': 2} bounds=(-5.0, -5.0, -5.0, 5.0, 5.0, 15.0)
+  [OK ] union box+cyl: nativ gültig
+  [OK ] union box+cyl: geschlossen
+  [OK ] union box+cyl: Körperzahl 1 — ist 1
+  subtract box-cyl: valid=True closed=True solids=1 faces=7 V=874.336294 A=700.5310
+      types={'plane': 6, 'cylinder': 1} bounds=(-5.0, -5.0, 0.0, 5.0, 5.0, 10.0)
+  [OK ] subtract box-cyl: nativ gültig
+  [OK ] subtract box-cyl: geschlossen
+  [OK ] subtract box-cyl: Körperzahl 1 — ist 1
+  [OK ] subtract Volumen — ist 874.336294, erwartet 874.336294 (±1e-06)
+  [OK ] turned: Zylinderachse liegt jetzt in X — (-1.2246467991473532e-16, -2.0, -2.0, 10.0, 2.0, 2.0000000000000004)
+  [OK ] inside: Mitte des Quaders
+  [OK ] inside: neben dem Quader
+  [OK ] radial_extent Zylinder d8 — ist 4.000000, erwartet 4.000000 (±1e-06)
+  [OK ] rounded_prism: STEP-Rundreise gültig
+  [OK ] rounded_prism: STEP-Rundreise Volumen — ist 11450.619298, erwartet 11450.619298 (±0.0114506)
+  [OK ] rounded_prism: STEP-Rundreise Flächenzahl — 10 gegen 10
+
+S0 Rauchtest: 49 von 49 Zusicherungen halten

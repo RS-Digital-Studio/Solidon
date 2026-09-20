@@ -1,0 +1,25 @@
+== 1. Senkkopf + threaded_rod: Fuzzy-Stufen und STEP-Rundreise ==
+  (Dauer threaded_rod M5 x 12: 17.0 s — Beobachtung)
+  tol=None: solids=2 closed=True valid=True V=291.7806
+  tol=0.0001: solids=1 closed=True valid=True V=291.6329 -> STEP zurück valid=False solids=1 V=291.6329
+  tol=0.001: solids=1 closed=True valid=True V=291.6329 -> STEP zurück valid=False solids=1 V=291.6329
+  tol=0.01: solids=1 closed=True valid=True V=291.7314 -> STEP zurück valid=False solids=1 V=291.7606
+
+== 1b. Senkkopf: Fuzzy 1e-4 mit ShapeFix vor dem STEP-Export ==
+  ShapeFix: solids=1 valid=False V=291.6329 -> STEP zurück valid=False V=291.6329
+
+== 2. Kern + Netzprofil-Gang: Fuzzy-Stufen auf privaten Kopien ==
+  pipe IsDone=True MakeSolid=True
+  ridge roh: valid=True closed=True solids=1 faces=8 V=88.290725 A=577.6678
+      types={'bspline': 6, 'plane': 2} bounds=(-3.000023, -3.000023, -1.0, 3.000023, 3.000023, 13.800004)
+  ridge getrimmt (Solid aus dem Compound): valid=True closed=True solids=1 faces=8 V=75.677759 A=507.1011
+      types={'bspline': 6, 'plane': 2} bounds=(-3.000023, -3.000023, -0.0, 3.000023, 3.000023, 12.0)
+  tol=0.001: solids=1 valid=True faces=23 V=287.8765 Gang erhalten=True
+  tol=0.0001: solids=1 valid=True faces=30 V=228.1399 Gang erhalten=False
+  tol=1e-06: solids=1 valid=True faces=30 V=228.1399 Gang erhalten=False
+
+== 3. Gegenfall: Vereinigung ohne Fuzzy verschluckt den Gang still ==
+  ohne Fuzzy: solids=1 closed=True valid=True faces=30 V=228.1399 (Kern allein 228.1399)
+
+== 1c. Senkkopf als Compound (Kopf + Bolzen, keine Vereinigung): STEP-Rundreise ==
+  Compound: solids=2 valid=True V=291.7806 -> STEP zurück valid=True solids=2 V=291.7806

@@ -1,0 +1,8 @@
+pipe IsDone=True
+MakeSolid=True
+  ridge roh: valid=True closed=True solids=1 faces=8 V=88.290725 A=577.6678
+      types={'bspline': 6, 'plane': 2} bounds=(-3.000023, -3.000023, -1.0, 3.000023, 3.000023, 13.800004)
+  ridge getrimmt: valid=True closed=True solids=1 faces=8 V=75.677759 A=507.1011
+      types={'bspline': 6, 'plane': 2} bounds=(-3.000023, -3.000023, -0.0, 3.000023, 3.000023, 12.0)
+  Kern + Gang: valid=True closed=True solids=1 faces=30 V=228.139945 A=223.5030
+      types={'cylinder': 26, 'plane': 4} bounds=(-2.460002, -2.460001, -0.0, 2.46, 2.46, 12.0)

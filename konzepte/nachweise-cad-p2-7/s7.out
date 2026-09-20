@@ -1,0 +1,61 @@
+== fit_ladder (Ø 6, 4 Stufen, 0,1 + 0,05, Höhe 8) ==
+  fit_ladder (Netz): watertight=True components=2 V=6167.620411 tris=1906
+      bounds=(-33.0, -15.57, 0.0, 33.0, 15.57, 11.0)
+  (Dauer fit_ladder exakt (2 Leisten, 4 Zapfen, 4 Bohrungen, 8 Strichcodes): 0.2 s — Beobachtung)
+  fit_ladder exakt: valid=True closed=True solids=2 faces=124 V=6169.176558 A=5382.1764
+      types={'cylinder': 8, 'plane': 116} bounds=(-33.0, -15.57, 0.0, 33.0, 15.57, 11.0)
+  [OK ] fit_ladder exakt: nativ gültig
+  [OK ] fit_ladder exakt: geschlossen
+  [OK ] fit_ladder exakt: Körperzahl 2 — ist 2
+  [OK ] fit_ladder: Netz erklärt ebenfalls zwei Körper — 2
+  [OK ] fit_ladder: Bohrung 1 Ø = 6.10 — ist 6.100000, erwartet 6.100000 (±1e-06)
+  [OK ] fit_ladder: Zapfen 1 steht (Material bei z = base + h/2)
+  [OK ] fit_ladder: Strichcode 1 graviert (1 Striche)
+  [OK ] fit_ladder: Bohrung 2 Ø = 6.15 — ist 6.150000, erwartet 6.150000 (±1e-06)
+  [OK ] fit_ladder: Zapfen 2 steht (Material bei z = base + h/2)
+  [OK ] fit_ladder: Strichcode 2 graviert (2 Striche)
+  [OK ] fit_ladder: Bohrung 3 Ø = 6.20 — ist 6.200000, erwartet 6.200000 (±1e-06)
+  [OK ] fit_ladder: Zapfen 3 steht (Material bei z = base + h/2)
+  [OK ] fit_ladder: Strichcode 3 graviert (3 Striche)
+  [OK ] fit_ladder: Bohrung 4 Ø = 6.25 — ist 6.250000, erwartet 6.250000 (±1e-06)
+  [OK ] fit_ladder: Zapfen 4 steht (Material bei z = base + h/2)
+  [OK ] fit_ladder: Strichcode 4 graviert (4 Striche)
+  [OK ] fit_ladder: Bounds Netz = exakt — (-33.0, -15.57, 0.0, 33.0, 15.57, 11.0) / (-33.0, -15.57, 0.0, 33.0, 15.57, 11.0)
+  [OK ] fit_ladder: Netz/exakt (Zapfen und Bohrungen facettiert) — Verhältnis 0.999748 (erlaubt ±0.002)
+  [OK ] fit_ladder: STEP-Rundreise gültig
+  [OK ] fit_ladder: STEP-Rundreise Volumen — ist 6169.176558, erwartet 6169.176558 (±0.00616918)
+  [OK ] fit_ladder: STEP-Rundreise Flächenzahl — 124 gegen 124
+
+== wall_ladder (0,42, 6 Stufen, Höhe 15, Länge 25) ==
+  wall_ladder (Netz): watertight=True components=1 V=4630.500000 tris=108
+      bounds=(-13.23, -12.5, 0.0, 13.23, 12.5, 17.0)
+  wall_ladder exakt: valid=True closed=True solids=1 faces=42 V=4630.500000 A=6293.4400
+      types={'plane': 42} bounds=(-13.23, -12.5, 0.0, 13.23, 12.5, 17.0)
+  [OK ] wall_ladder exakt: nativ gültig
+  [OK ] wall_ladder exakt: geschlossen
+  [OK ] wall_ladder exakt: Körperzahl 1 — ist 1
+  [OK ] wall_ladder: Volumen — ist 4630.500000, erwartet 4630.500000 (±1e-09)
+  [OK ] wall_ladder: Netz = exakt — ist 4630.500000, erwartet 4630.500000 (±1e-09)
+  [OK ] wall_ladder: Bounds Netz = exakt — (-13.23, -12.5, 0.0, 13.23, 12.5, 17.0) / (-13.23, -12.5, 0.0, 13.23, 12.5, 17.0)
+  [OK ] wall_ladder: dünnste Wand genau eine Extrusionsbreite — ist 0.420000, erwartet 0.420000 (±1e-06)
+  [OK ] wall_ladder: STEP-Rundreise gültig
+  [OK ] wall_ladder: STEP-Rundreise Volumen — ist 4630.500000, erwartet 4630.500000 (±0.0046305)
+  [OK ] wall_ladder: STEP-Rundreise Flächenzahl — 42 gegen 42
+
+== overhang_fan (20° + 10° x 6, Breite 8, Länge 15) ==
+  overhang_fan (Netz): watertight=True components=1 V=3108.255709 tris=108
+      bounds=(-24.0, -3.0, 0.0, 24.0, 16.095389, 17.085389)
+  overhang_fan exakt: valid=True closed=True solids=1 faces=39 V=3108.255709 A=2824.4839
+      types={'plane': 39} bounds=(-24.0, -3.0, 0.0, 24.0, 16.095389, 17.085389)
+  [OK ] overhang_fan exakt: nativ gültig
+  [OK ] overhang_fan exakt: geschlossen
+  [OK ] overhang_fan exakt: Körperzahl 1 — ist 1
+  [OK ] overhang_fan: Volumen = Sockel + Rampen (bis auf die Überlappung) — ist 3108.255709, erwartet 3108.258690 (±0.5)
+  [OK ] overhang_fan: Netz = exakt — ist 3108.255709, erwartet 3108.255709 (±1e-06)
+  [OK ] overhang_fan: Bounds Netz = exakt — (-24.0, -3.0, 0.0, 24.0, 16.095389, 17.085389) / (-24.0, -3.0, 0.0, 24.0, 16.095389, 17.085389)
+  [OK ] overhang_fan: letzte Rampe hat ihre Unterseite auf der Winkelgeraden
+  [OK ] overhang_fan: STEP-Rundreise gültig
+  [OK ] overhang_fan: STEP-Rundreise Volumen — ist 3108.255709, erwartet 3108.255709 (±0.00310826)
+  [OK ] overhang_fan: STEP-Rundreise Flächenzahl — 39 gegen 39
+
+S7 Kalibrierung: 41 von 41 Zusicherungen halten

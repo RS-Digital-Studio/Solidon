@@ -1,0 +1,182 @@
+== barrel_hinge (Bolzen 4, Breite 24, Ausladung 12, Wand 2,5, Spiel 0,3) ==
+  barrel_hinge (Netz): watertight=True components=2 V=3541.395022 tris=858
+      bounds=(-12.0, 0.0, 0.0, 12.0, 16.8, 9.6)
+  barrel_hinge exakt: valid=True closed=True solids=2 faces=25 V=3543.716148 A=2049.9637
+      types={'cylinder': 4, 'plane': 21} bounds=(-12.0, 0.0, 0.0, 12.0, 16.8, 9.6)
+  [OK ] barrel_hinge exakt: nativ gültig
+  [OK ] barrel_hinge exakt: geschlossen
+  [OK ] barrel_hinge exakt: Körperzahl 2 — ist 2
+  [OK ] barrel_hinge: Netz erklärt ebenfalls zwei Körper — 2
+  [OK ] barrel_hinge: radialer Spalt ist Luft (rechte Lasche)
+  [OK ] barrel_hinge: Bolzen ist Material (rechte Lasche)
+  [OK ] barrel_hinge: axialer Spalt ist Luft
+  [OK ] barrel_hinge: Wand über der Bohrung genau wall — (-12.0, 0.0, 0.0, 12.0, 16.8, 9.6)
+  [OK ] barrel_hinge: Netz/exakt Volumen ~ Facettierung — Verhältnis 0.999345 (erlaubt ±0.006)
+  [OK ] barrel_hinge: Bounds Netz = exakt — (-12.0, 0.0, 0.0, 12.0, 16.8, 9.6) / (-12.0, 0.0, 0.0, 12.0, 16.8, 9.6)
+  [OK ] barrel_hinge: STEP-Rundreise gültig
+  [OK ] barrel_hinge: STEP-Rundreise Volumen — ist 3543.716148, erwartet 3543.716148 (±0.00354372)
+  [OK ] barrel_hinge: STEP-Rundreise Flächenzahl — 25 gegen 25
+
+== bearing_seat (608, fest, Übermaß 0,1) ==
+  bearing_seat (Netz): watertight=True components=1 V=2633.026116 tris=192
+      bounds=(-10.95, -10.95, -7.0, 10.95, 10.95, 0.01)
+  bearing_seat exakt: valid=True closed=True solids=1 faces=3 V=2640.560540 A=1235.6638
+      types={'cylinder': 1, 'plane': 2} bounds=(-10.95, -10.95, -7.0, 10.95, 10.95, 0.01)
+  [OK ] bearing_seat exakt: nativ gültig
+  [OK ] bearing_seat exakt: geschlossen
+  [OK ] bearing_seat exakt: Körperzahl 1 — ist 1
+  [OK ] bearing_seat: Sitz-Ø = außen minus Übermaß — ist 21.900000, erwartet 21.900000 (±1e-06)
+  [OK ] bearing_seat: unter der Mündung — (-10.95, -10.95, -7.0, 10.95, 10.95, 0.01)
+  [OK ] bearing_seat: Netz/exakt = Facettierung — Verhältnis 0.997147 (erlaubt ±0.004)
+  [OK ] bearing_seat: Facettierungsverhältnis genau — ist 0.997147, erwartet 0.997147 (±1e-06)
+
+== dowel: Stift rund/hex/dovetail, Bohrung rund mit Fase ==
+  dowel pin round (Netz): watertight=True components=1 V=222.391571 tris=288
+      bounds=(-3.0, -3.0, 0.0, 3.0, 3.0, 8.0)
+  dowel pin round exakt: valid=True closed=True solids=1 faces=4 V=223.027946 A=200.2516
+      types={'cylinder': 1, 'cone': 1, 'plane': 2} bounds=(-3.0, -3.0, 0.0, 3.0, 3.0, 8.0)
+  [OK ] dowel pin round exakt: nativ gültig
+  [OK ] dowel pin round exakt: geschlossen
+  [OK ] dowel pin round exakt: Körperzahl 1 — ist 1
+  [OK ] dowel pin round: steht auf der Fläche, Länge 8.0 — (-3.0, -3.0, 0.0, 3.0, 3.0, 8.0)
+  [OK ] dowel pin round: Umkreis ≤ Ø — (-3.0, -3.0, 0.0, 3.0, 3.0, 8.0)
+  [OK ] dowel pin round: Fase verengt oben auf min(Apothem, r - Fase) — ist 2.400100, erwartet 2.400000 (±0.001)
+  [OK ] dowel pin round: Netz/exakt Volumen — Verhältnis 0.997147 (erlaubt ±0.004)
+  [OK ] dowel pin round: STEP-Rundreise gültig
+  [OK ] dowel pin round: STEP-Rundreise Volumen — ist 223.027946, erwartet 223.027946 (±0.000223028)
+  [OK ] dowel pin round: STEP-Rundreise Flächenzahl — 4 gegen 4
+  dowel pin hex (Netz): watertight=True components=1 V=186.034788 tris=206
+      bounds=(-2.598076, -3.0, 0.0, 2.598076, 3.0, 8.0)
+  dowel pin hex exakt: valid=True closed=True solids=1 faces=9 V=186.054409 A=186.9085
+      types={'plane': 8, 'cone': 1} bounds=(-2.598076, -3.0, 0.0, 2.598076, 3.0, 8.0)
+  [OK ] dowel pin hex exakt: nativ gültig
+  [OK ] dowel pin hex exakt: geschlossen
+  [OK ] dowel pin hex exakt: Körperzahl 1 — ist 1
+  [OK ] dowel pin hex: steht auf der Fläche, Länge 8.0 — (-2.598076, -3.0, 0.0, 2.598076, 3.0, 8.0)
+  [OK ] dowel pin hex: Umkreis ≤ Ø — (-2.598076, -3.0, 0.0, 2.598076, 3.0, 8.0)
+  [OK ] dowel pin hex: Fase verengt oben auf min(Apothem, r - Fase) — ist 2.400100, erwartet 2.400000 (±0.001)
+  [OK ] dowel pin hex: Netz/exakt Volumen — Verhältnis 0.999895 (erlaubt ±0.02)
+  [OK ] dowel pin hex: STEP-Rundreise gültig
+  [OK ] dowel pin hex: STEP-Rundreise Volumen — ist 186.054409, erwartet 186.054409 (±0.000186054)
+  [OK ] dowel pin hex: STEP-Rundreise Flächenzahl — 9 gegen 9
+  dowel pin dovetail (Netz): watertight=True components=1 V=216.332107 tris=436
+      bounds=(-3.0, -2.598076, 0.0, 3.0, 3.0, 8.0)
+  dowel pin dovetail exakt: valid=True closed=True solids=1 faces=5 V=216.865690 A=198.0277
+      types={'cylinder': 1, 'plane': 3, 'cone': 1} bounds=(-3.0, -2.598076, 0.0, 3.0, 3.0, 8.0)
+  [OK ] dowel pin dovetail exakt: nativ gültig
+  [OK ] dowel pin dovetail exakt: geschlossen
+  [OK ] dowel pin dovetail exakt: Körperzahl 1 — ist 1
+  [OK ] dowel pin dovetail: steht auf der Fläche, Länge 8.0 — (-3.0, -2.598076, 0.0, 3.0, 3.0, 8.0)
+  [OK ] dowel pin dovetail: Umkreis ≤ Ø — (-3.0, -2.598076, 0.0, 3.0, 3.0, 8.0)
+  [OK ] dowel pin dovetail: Fase verengt oben auf min(Apothem, r - Fase) — ist 2.400100, erwartet 2.400000 (±0.001)
+  [OK ] dowel pin dovetail: Netz/exakt Volumen — Verhältnis 0.997540 (erlaubt ±0.004)
+  [OK ] dowel pin dovetail: STEP-Rundreise gültig
+  [OK ] dowel pin dovetail: STEP-Rundreise Volumen — ist 216.865690, erwartet 216.865690 (±0.000216866)
+  [OK ] dowel pin dovetail: STEP-Rundreise Flächenzahl — 5 gegen 5
+  dowel bore round (Netz): watertight=True components=1 V=244.558051 tris=292
+      bounds=(-3.7, -3.7, -8.0, 3.7, 3.7, 0.0)
+  dowel bore exakt: valid=True closed=True solids=1 faces=5 V=245.257855 A=235.4623
+      types={'plane': 3, 'cone': 1, 'cylinder': 1} bounds=(-3.7, -3.7, -8.0, 3.7, 3.7, 0.0)
+  [OK ] dowel bore exakt: nativ gültig
+  [OK ] dowel bore exakt: geschlossen
+  [OK ] dowel bore exakt: Körperzahl 1 — ist 1
+  [OK ] dowel bore: unter der Mündung — (-3.7, -3.7, -8.0, 3.7, 3.7, 0.0)
+  [OK ] dowel bore: Ø = Nenn + Spiel — ist 6.200000, erwartet 6.200000 (±1e-06)
+  [OK ] dowel bore: Fase weitet an der Mündung
+  [OK ] dowel bore: Netz/exakt = Facettierung — Verhältnis 0.997147 (erlaubt ±0.004)
+
+== hinge_eye (Stift 3, Breite 8, Abstand 8, Wand 2, Spiel 0,2) ==
+  hinge_eye (Netz): watertight=True components=1 V=559.976357 tris=392
+      bounds=(-4.0, 0.0, 0.0, 4.0, 11.604293, 7.208587)
+  hinge_eye exakt: valid=True closed=True solids=1 faces=11 V=559.320346 A=496.3327
+      types={'plane': 9, 'cylinder': 2} bounds=(-4.0, 0.0, -0.0, 4.0, 11.6, 7.2)
+  [OK ] hinge_eye exakt: nativ gültig
+  [OK ] hinge_eye exakt: geschlossen
+  [OK ] hinge_eye exakt: Körperzahl 1 — ist 1
+  [OK ] hinge_eye: Bohrung frei
+  [OK ] hinge_eye: Wand hinter der Bohrung genau wall (exakt, keine Facettenkorrektur) — (-4.0, 0.0, -0.0, 4.0, 11.6, 7.2)
+  Netz-Außenradius: 3.604293 (mit Facettenkorrektur), exakt 3.600000
+  [OK ] hinge_eye: Netz ist um die Facettenkorrektur größer (erlaubter Unterschied)
+  [OK ] hinge_eye: STEP-Rundreise gültig
+  [OK ] hinge_eye: STEP-Rundreise Volumen — ist 559.320346, erwartet 559.320346 (±0.00055932)
+  [OK ] hinge_eye: STEP-Rundreise Flächenzahl — 11 gegen 11
+
+== latch (Breite 6, Überstand 1, Höhe 3; Nase und Aussparung mit Spiel 0,2) ==
+  latch negative=False (Netz): watertight=True components=1 V=9.000000 tris=8
+      bounds=(-3.0, -1.0, 0.0, 3.0, 0.0, 3.0)
+  latch negative=False exakt: valid=True closed=True solids=1 faces=5 V=9.000000 A=45.9737
+      types={'plane': 5} bounds=(-3.0, -1.0, -0.0, 3.0, 0.0, 3.0)
+  [OK ] latch negative=False exakt: nativ gültig
+  [OK ] latch negative=False exakt: geschlossen
+  [OK ] latch negative=False exakt: Körperzahl 1 — ist 1
+  [OK ] latch negative=False: Volumen — ist 9.000000, erwartet 9.000000 (±1e-09)
+  [OK ] latch negative=False: Sperrfläche und Schräge liegen wie im Netz — exakt [False, True, False, True] / Netz [False, True, False, True]
+  volle Tiefe liegt oben (z = Höhe)
+  [OK ] latch negative=False: Bounds Netz = exakt — (-3.0, -1.0, 0.0, 3.0, 0.0, 3.0) / (-3.0, -1.0, -0.0, 3.0, 0.0, 3.0)
+  [OK ] latch negative=False: Netz = exakt (keine Rundformen) — ist 9.000000, erwartet 9.000000 (±1e-09)
+  latch negative=True (Netz): watertight=True components=1 V=12.288000 tris=8
+      bounds=(-3.2, -1.2, 0.0, 3.2, 0.0, 3.2)
+  latch negative=True exakt: valid=True closed=True solids=1 faces=5 V=12.288000 A=53.8726
+      types={'plane': 5} bounds=(-3.2, -1.2, -0.0, 3.2, 0.0, 3.2)
+  [OK ] latch negative=True exakt: nativ gültig
+  [OK ] latch negative=True exakt: geschlossen
+  [OK ] latch negative=True exakt: Körperzahl 1 — ist 1
+  [OK ] latch negative=True: Volumen — ist 12.288000, erwartet 12.288000 (±1e-09)
+  [OK ] latch negative=True: Sperrfläche und Schräge liegen wie im Netz — exakt [False, True, False, True] / Netz [False, True, False, True]
+  volle Tiefe liegt oben (z = Höhe)
+  [OK ] latch negative=True: Bounds Netz = exakt — (-3.2, -1.2, 0.0, 3.2, 0.0, 3.2) / (-3.2, -1.2, -0.0, 3.2, 0.0, 3.2)
+  [OK ] latch negative=True: Netz = exakt (keine Rundformen) — ist 12.288000, erwartet 12.288000 (±1e-09)
+
+== living_hinge (30, Flügel 15, Stärke 2, Film 0,4, Spalt 1,5) ==
+  living_hinge (Netz): watertight=True components=1 V=1818.000000 tris=28
+      bounds=(-15.0, -15.75, 0.0, 15.0, 15.75, 2.0)
+  living_hinge exakt: valid=True closed=True solids=1 faces=10 V=1818.000000 A=2227.2000
+      types={'plane': 10} bounds=(-15.0, -15.75, 0.0, 15.0, 15.75, 2.0)
+  [OK ] living_hinge exakt: nativ gültig
+  [OK ] living_hinge exakt: geschlossen
+  [OK ] living_hinge exakt: Körperzahl 1 — ist 1
+  [OK ] living_hinge: Volumen — ist 1818.000000, erwartet 1818.000000 (±1e-09)
+  [OK ] living_hinge: Film liegt unten (0..0,4)
+  [OK ] living_hinge: Netz = exakt — ist 1818.000000, erwartet 1818.000000 (±1e-09)
+
+== snap_connector (Ø 6, Länge 9; Arm und Tasche, Spiel 0,2) ==
+  snap_connector pin (Netz): watertight=True components=1 V=43.816529 tris=24
+      bounds=(-2.526309, -0.45, 0.0, 2.526309, 1.35, 9.0)
+  snap_connector pin exakt: valid=True closed=True solids=1 faces=16 V=43.816529 A=123.3801
+      types={'plane': 16} bounds=(-2.526309, -0.45, 0.0, 2.526309, 1.35, 9.0)
+  [OK ] snap_connector pin exakt: nativ gültig
+  [OK ] snap_connector pin exakt: geschlossen
+  [OK ] snap_connector pin exakt: Körperzahl 1 — ist 1
+  [OK ] snap_connector pin: Haken sitzt oben (Keil ab z=catch)
+  [OK ] snap_connector pin: Bounds Netz = exakt — (-2.526309, -0.45, 0.0, 2.526309, 1.35, 9.0) / (-2.526309, -0.45, 0.0, 2.526309, 1.35, 9.0)
+  [OK ] snap_connector pin: Netz = exakt — ist 43.816529, erwartet 43.816529 (±1e-06)
+  snap_connector bore (Netz): watertight=True components=1 V=106.716397 tris=20
+      bounds=(-2.626309, -1.45, -9.4, 2.626309, 1.45, 0.0)
+  snap_connector bore exakt: valid=True closed=True solids=1 faces=8 V=106.716397 A=169.8480
+      types={'plane': 8} bounds=(-2.626309, -1.45, -9.4, 2.626309, 1.45, 0.0)
+  [OK ] snap_connector bore exakt: nativ gültig
+  [OK ] snap_connector bore exakt: geschlossen
+  [OK ] snap_connector bore exakt: Körperzahl 1 — ist 1
+  [OK ] snap_connector bore: Rastkante zwischen Mündung und Haken (Werkzeug leer)
+  [OK ] snap_connector bore: unter der Rastkante ist das Werkzeug voll (Haken-Raum)
+  [OK ] snap_connector bore: unter der Mündung — (-2.626309, -1.45, -9.4, 2.626309, 1.45, 0.0)
+  [OK ] snap_connector bore: Bounds Netz = exakt — (-2.626309, -1.45, -9.4, 2.626309, 1.45, 0.0) / (-2.626309, -1.45, -9.4, 2.626309, 1.45, 0.0)
+  [OK ] snap_connector bore: Netz = exakt — ist 106.716397, erwartet 106.716397 (±1e-06)
+
+== snap_fit (Breite 8, Länge 16, Arm 1,6, Haken 1,2, Winkel 35) ==
+  snap_fit (Netz): watertight=True components=1 V=213.026133 tris=16
+      bounds=(-4.0, -0.8, 0.0, 4.0, 2.0, 16.0)
+  snap_fit exakt: valid=True closed=True solids=1 faces=7 V=213.026133 A=347.4834
+      types={'plane': 7} bounds=(-4.0, -0.8, 0.0, 4.0, 2.0, 16.0)
+  [OK ] snap_fit exakt: nativ gültig
+  [OK ] snap_fit exakt: geschlossen
+  [OK ] snap_fit exakt: Körperzahl 1 — ist 1
+  [OK ] snap_fit: Volumen — ist 213.026133, erwartet 213.026133 (±1e-09)
+  [OK ] snap_fit: Haltefläche oben (Haken bei z=arm_len voll breit)
+  [OK ] snap_fit: Bounds Netz = exakt — (-4.0, -0.8, 0.0, 4.0, 2.0, 16.0) / (-4.0, -0.8, 0.0, 4.0, 2.0, 16.0)
+  [OK ] snap_fit: Netz = exakt — ist 213.026133, erwartet 213.026133 (±1e-06)
+  [OK ] snap_fit: STEP-Rundreise gültig
+  [OK ] snap_fit: STEP-Rundreise Volumen — ist 213.026133, erwartet 213.026133 (±0.000213026)
+  [OK ] snap_fit: STEP-Rundreise Flächenzahl — 7 gegen 7
+
+S4 Mechanik: 110 von 110 Zusicherungen halten

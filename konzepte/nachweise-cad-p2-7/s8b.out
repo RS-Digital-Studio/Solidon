@@ -1,0 +1,11 @@
+hole_1: {'diameter': 5.2, 'centre': (0.0, 0.0, 5.0), 'axis': (0.0, 0.0, 1.0), 'depth': 10.0, 'through': True}  measure_sources={'diameter': 'native', 'centre': 'native', 'axis': 'native', 'depth': 'native'}
+  z=0.05: Bohrung Ø 5.2000
+  z=0.5: Bohrung Ø 5.2000
+  z=1.0: Bohrung Ø 5.2000
+  z=5.0: Bohrung Ø 5.2000
+  z=9.0: Bohrung Ø 5.2000
+  z=9.5: Bohrung Ø 5.2000
+  z=9.95: Bohrung Ø 5.2000
+  Material auf der Achse bei z=0.2? False
+  Anker (0.0, 0.0, 10.0) Richtung (0.0, 0.0, 1.0)  Werkzeug-Bounds z -8.600..0.010
+  Befunde: ['bore.compensated', 'perceive.deviation']
