@@ -26,9 +26,10 @@ zusammen, nachdem jede Fläche für sich beschrieben ist.
 from __future__ import annotations
 
 import math
+from dataclasses import replace
 from typing import Any
 
-from app.core.brep.canonical import CylinderSurface, PlaneSurface, Surface
+from app.core.brep.canonical import CylinderSurface, PlaneSurface, Surface, TorusSurface
 from app.core.brep.canonical import describe as describe_surface
 from app.core.brep.kernel import Solid, boolean_builder
 from app.core.brep.properties import properties
@@ -176,7 +177,34 @@ def features_of(solid: Solid, *, cancelled: CancelToken | None = None) -> dict[F
     if fillets:
         found = open_slots_instead_of_fillets(mesh, found, fillets)
 
-    from app.core.perceive.features import voids_instead_of_phantom_bores
+    found = _joined_tori(found, mesh, cancelled=cancelled)
+
+    from app.core.perceive.features import detect_curved_faces, voids_instead_of_phantom_bores
+
+    # Die Restflächen teilen die fachliche Glättungs- und Innenseitenprüfung
+    # mit dem Netz. Vollständige native Flächen liefern ihre exakten Integrale;
+    # eine nur teilweise beanspruchte Fläche behält die Netzauskunft.
+    for feature in detect_curved_faces(
+        mesh, found, check_cancelled=cancelled.raise_if_cancelled if cancelled else None
+    ):
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        curved_patch = set(feature.face_indices)
+        native = solid.faces_of_triangles(feature.face_indices)
+        complete = {triangle for index in native for triangle in solid.triangles_of_face(index)}
+        params = dict(feature.params)
+        if complete == curved_patch:
+            measured = [
+                properties(solid.faces()[index], "surface", cancelled=cancelled) for index in native
+            ]
+            area = sum(item.mass for item in measured)
+            if area > EPS_GEOM:
+                params["area"] = area
+                params["centre"] = tuple(
+                    sum(item.mass * item.centre[coordinate] for item in measured) / area
+                    for coordinate in range(3)
+                )
+        found[feature.id] = replace(feature, params=params)
 
     found = voids_instead_of_phantom_bores(found, _void_features(solid, cancelled=cancelled))
 
@@ -191,6 +219,73 @@ def features_of(solid: Solid, *, cancelled: CancelToken | None = None) -> dict[F
         counts["face"],
     )
     return found
+
+
+def _joined_tori(
+    found: dict[FeatureId, Feature], mesh: Any, *, cancelled: CancelToken | None = None
+) -> dict[FeatureId, Feature]:
+    """Angrenzende Teilflächen desselben exakten Rings bilden eine einzige Auswahl.
+
+    Geometrische Gleichheit allein verbindet keine getrennten Ringstücke.
+    Die tatsächliche Tessellierungsnachbarschaft belegt zusätzlich den Anschluss.
+    """
+    import numpy as np
+
+    rings = {name: feature for name, feature in found.items() if feature.kind == "torus"}
+    if len(rings) < 2:
+        return found
+    owners = {index: name for name, feature in rings.items() for index in feature.face_indices}
+    graph: dict[FeatureId, set[FeatureId]] = {name: set() for name in rings}
+    pairs = set()
+    for first, second in mesh.raw.face_adjacency:
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        left, right = owners.get(int(first)), owners.get(int(second))
+        if left is None or right is None or left == right:
+            continue
+        pairs.add(tuple(sorted((left, right))))
+    for left, right in sorted(pairs):
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        one, two = rings[left].params, rings[right].params
+        if one["recess"] is not two["recess"]:
+            continue
+        if any(
+            abs(float(one[key]) - float(two[key])) > EPS_GEOM
+            for key in ("diameter", "tube_diameter")
+        ):
+            continue
+        if any(
+            float(np.linalg.norm(np.asarray(one[key]) - np.asarray(two[key]))) > EPS_GEOM
+            for key in ("centre", "axis")
+        ):
+            continue
+        graph[left].add(right)
+        graph[right].add(left)
+    result = dict(found)
+    unseen = set(rings)
+    for name, feature in rings.items():
+        if name not in unseen:
+            continue
+        group, pending = set(), [name]
+        while pending:
+            if cancelled is not None:
+                cancelled.raise_if_cancelled()
+            current = pending.pop()
+            if current not in unseen:
+                continue
+            unseen.remove(current)
+            group.add(current)
+            pending.extend(graph[current])
+        for member in group:
+            del result[member]
+        result[name] = replace(
+            feature,
+            face_indices=tuple(
+                sorted({index for member in group for index in rings[member].face_indices})
+            ),
+        )
+    return result
 
 
 def _void_features(solid: Solid, *, cancelled: CancelToken | None = None) -> list[Feature]:
@@ -701,13 +796,13 @@ def _describe(
 ) -> tuple[FeatureKind, dict[str, Any]] | None:
     """Was diese Fläche ist, im Vokabular von §21."""
     from OCP.BRepAdaptor import BRepAdaptor_Surface
-    from OCP.GeomAbs import GeomAbs_Cone, GeomAbs_Sphere
+    from OCP.GeomAbs import GeomAbs_Cone, GeomAbs_Sphere, GeomAbs_Torus
     from OCP.gp import gp_Pnt
     from OCP.TopAbs import TopAbs_REVERSED
 
     adaptor = BRepAdaptor_Surface(face)
     kind = adaptor.GetType()
-    if surface is None and kind not in (GeomAbs_Cone, GeomAbs_Sphere):
+    if surface is None and kind not in (GeomAbs_Cone, GeomAbs_Sphere, GeomAbs_Torus):
         return None
     props = properties(face, "surface", cancelled=cancelled)
     area = props.mass
@@ -721,6 +816,16 @@ def _describe(
             "area": area,
             "centre": middle,
             "normal": surface.normal,
+        }
+
+    if isinstance(surface, TorusSurface):
+        torus = surface.torus
+        return "torus", {
+            "diameter": float(torus.MajorRadius()) * 2.0,
+            "tube_diameter": float(torus.MinorRadius()) * 2.0,
+            "axis": _oriented(torus.Axis().Direction()),
+            "centre": tuple(float(value) for value in torus.Location().Coord()),
+            "recess": surface.inward,
         }
 
     if isinstance(surface, CylinderSurface):

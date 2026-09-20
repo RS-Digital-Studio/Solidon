@@ -70,6 +70,23 @@ Nachbarschaft, Langloch und die Flächenauswahl in `edit`/`profiles`. Eine
 NURBS-Parameter werden nie als Winkel oder Länge ausgegeben. Die gerichtete
 Innenprobe liegt innerhalb der wirklichen Trimmkontur, auch bei Innenlöchern.
 
+`TorusSurface` liest native Ringe und prüft rationale Ringträger. Der Kandidat
+kommt aus derselben `fit_torus_samples`-Rechnung wie am Netz, hier mit echten
+Flächenpunkten und Ableitungen. Erst die homogene Torusgleichung über sämtlichen
+Bézier-Koeffizienten begrenzt die Abweichung auf `EPS_GEOM`; eine gute Stichprobe
+allein genügt nicht. Zerlegung, periodische Trimmungen, Polprüfung und
+Arbeitsgrenzen teilen Ebene, Zylinder und Ring. Offset-Ringe ohne diesen
+vollständigen Nachweis bleiben unklassifiziert.
+
+Angrenzende native Ringstücke mit gleichen Achsen, Mitten, Radien und
+Materialseiten bilden eine vollständige Merkmalsauswahl. Getrennte Stücke
+werden nicht allein wegen gleicher Träger vereinigt. Freie gerundete Seiten
+verwenden `detect_curved_faces` und damit dieselbe Glättungs- und
+Innenseitenauskunft wie Netze. Deckt die Auswahl ganze native Flächen ab,
+kommen Fläche und Mitte aus ihren exakten Integralen; teilweise ausgewählte
+Flächen behalten die tessellierte Messung. Quellen und ihre Trimmkurven werden
+dabei nie geändert.
+
 Kanonische Kandidaten verwenden ausschließlich `EPS_GEOM` als numerische
 Geometriegrenze. Jeder Versuch bekommt einen frischen OCCT-Recognizer;
 Status und endliches `GetGap` werden geprüft. Zusätzlich werden alle

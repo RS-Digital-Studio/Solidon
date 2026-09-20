@@ -230,7 +230,10 @@ def test_an_elliptic_nurbs_wall_is_not_a_circle_cylinder() -> None:
     described = [describe(face) for face in source.faces()]
     assert sum(isinstance(surface, PlaneSurface) for surface in described) == 2
     assert described.count(None) == 1
-    assert all(feature.kind == "face" for feature in features_of(source).values())
+    found = list(features_of(source).values())
+    assert sum(feature.kind == "face" for feature in found) == 2
+    assert sum(feature.kind == "curved_face" for feature in found) == 1
+    assert not any(feature.kind in {"hole", "pin", "torus"} for feature in found)
 
 
 @pytest.mark.parametrize("kind", ["plane", "cylinder"])

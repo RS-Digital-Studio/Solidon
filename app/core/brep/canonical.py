@@ -41,7 +41,15 @@ class CylinderSurface:
     inward: bool
 
 
-Surface = PlaneSurface | CylinderSurface
+@dataclass(frozen=True, slots=True)
+class TorusSurface:
+    """Ringträger mit geprüften Radien und tatsächlicher Materialseite."""
+
+    torus: Any
+    inward: bool
+
+
+Surface = PlaneSurface | CylinderSurface | TorusSurface
 
 
 def _check(cancelled: CancelToken | None) -> None:
@@ -174,23 +182,8 @@ def _parameter_spans(
     return ((clipped[0], clipped[1]),) if clipped[1] > clipped[0] else None
 
 
-def _matches(
-    adaptor: Any,
-    candidate: Any,
-    plane: bool,
-    cancelled: CancelToken | None,
-    *,
-    offset: float = 0.0,
-) -> bool:
-    """Prüft jeden rationalen Bézier-Abschnitt einschließlich seiner inneren Pole.
-
-    Positive Gewichte begrenzen Ebenenabstände durch die Polhülle. Beim
-    Zylinder wird X²+Y²-R²W² in homogenen Bernstein-Koeffizienten geprüft.
-    Deren Betragsmaximum, geteilt durch R·min(W)², begrenzt den radialen
-    Abstand. So kann ein Ausschlag zwischen Punktproben nicht verschwinden.
-    Die Aussage gilt der Trägerfläche, nicht einer beidseitigen Hausdorff-
-    Distanz des getrimmten Körpers und nicht einer Fertigungsunsicherheit.
-    """
+def _bezier_patches(adaptor: Any, cancelled: CancelToken | None) -> list[Any] | None:
+    """Private rationale Teilflächen mit periodischen Trimmungen und gemeinsamer Arbeitsgrenze."""
     from OCP.GeomAbs import GeomAbs_BezierSurface
     from OCP.GeomConvert import GeomConvert_BSplineSurfaceToBezierSurface
     from OCP.Precision import Precision
@@ -208,7 +201,7 @@ def _matches(
     else:
         spline = adaptor.BSpline()
         if (spline.NbUKnots() - 1) * (spline.NbVKnots() - 1) > _MAX_CANONICAL_PATCHES:
-            return False
+            return None
         domain = spline.Bounds()
         u_spans = _parameter_spans(
             adaptor.FirstUParameter(),
@@ -225,7 +218,7 @@ def _matches(
             spline.IsVPeriodic(),
         )
         if u_spans is None or v_spans is None:
-            return False
+            return None
         patches = []
         for u_span in u_spans:
             for v_span in v_spans:
@@ -237,11 +230,50 @@ def _matches(
                     len(patches) + converter.NbUPatches() * converter.NbVPatches()
                     > _MAX_CANONICAL_PATCHES
                 ):
-                    return False
+                    return None
                 for row in range(1, converter.NbUPatches() + 1):
                     _check(cancelled)
                     for column in range(1, converter.NbVPatches() + 1):
                         patches.append(converter.Patch(row, column))
+    return patches
+
+
+def _patch_data(patch: Any, cancelled: CancelToken | None) -> tuple[Any, Any] | None:
+    """Endliche Pole und positive, normierte Gewichte einer privaten Bézier-Fläche."""
+    rows, columns = patch.NbUPoles(), patch.NbVPoles()
+    poles = np.empty((rows, columns, 3), dtype=np.float64)
+    weights = np.empty((rows, columns), dtype=np.float64)
+    for row in range(rows):
+        _check(cancelled)
+        for column in range(columns):
+            poles[row, column] = patch.Pole(row + 1, column + 1).Coord()
+            weights[row, column] = patch.Weight(row + 1, column + 1)
+    if not np.isfinite(poles).all() or not np.isfinite(weights).all() or not (weights > 0.0).all():
+        return None
+    weights /= float(weights.max())
+    return poles, weights
+
+
+def _matches(
+    adaptor: Any,
+    candidate: Any,
+    plane: bool,
+    cancelled: CancelToken | None,
+    *,
+    offset: float = 0.0,
+) -> bool:
+    """Prüft jeden rationalen Bézier-Abschnitt einschließlich seiner inneren Pole.
+
+    Positive Gewichte begrenzen Ebenenabstände durch die Polhülle. Beim
+    Zylinder wird X²+Y²-R²W² in homogenen Bernstein-Koeffizienten geprüft.
+    Deren Betragsmaximum, geteilt durch R·min(W)², begrenzt den radialen
+    Abstand. So kann ein Ausschlag zwischen Punktproben nicht verschwinden.
+    Die Aussage gilt der Trägerfläche, nicht einer beidseitigen Hausdorff-
+    Distanz des getrimmten Körpers und nicht einer Fertigungsunsicherheit.
+    """
+    patches = _bezier_patches(adaptor, cancelled)
+    if patches is None:
+        return False
     origin = np.asarray(candidate.Location().Coord(), dtype=np.float64)
     axis = np.asarray(candidate.Axis().Direction().Coord(), dtype=np.float64)
     remaining = _MAX_COEFFICIENT_PRODUCTS
@@ -261,21 +293,11 @@ def _matches(
                 remaining -= 9 * count * (4 * count_u - 4) * (4 * count_v - 4)
         if remaining < 0:
             return False
-        poles = np.empty((count_u, count_v, 3), dtype=np.float64)
-        weights = np.empty((count_u, count_v), dtype=np.float64)
-        for row in range(count_u):
-            _check(cancelled)
-            for column in range(count_v):
-                poles[row, column] = patch.Pole(row + 1, column + 1).Coord()
-                weights[row, column] = patch.Weight(row + 1, column + 1)
-        if (
-            not np.isfinite(poles).all()
-            or not np.isfinite(weights).all()
-            or not (weights > 0.0).all()
-        ):
+        data = _patch_data(patch, cancelled)
+        if data is None:
             return False
+        poles, weights = data
         relative = poles - origin
-        weights /= float(weights.max())
         if plane:
             bound = float(np.max(np.abs(relative @ axis)))
             if abs(offset) > 0.0:
@@ -301,6 +323,135 @@ def _matches(
         if not math.isfinite(bound) or bound > EPS_GEOM:
             return False
     return True
+
+
+def _torus_matches(adaptor: Any, candidate: Any, cancelled: CancelToken | None) -> bool:
+    """Begrenzt den Torusabstand über homogene Bernstein-Koeffizienten.
+
+    F=(|p|²+R²-r²)²-4R²·rho² faktorisiert in (s²-r²) und
+    ((rho+R)²+z²-r²), wobei s der Abstand zum Mittellinienkreis ist
+    und rho der Abstand zur Ringachse.
+    Für R>r ist der zweite Faktor mindestens R²-r²; s+r ist
+    mindestens r. Deshalb begrenzt |F|/[r(R²-r²)] den Flächenabstand.
+    Positive rationale Gewichte liefern diese Schranke ohne Punktstichprobe.
+    Ein durch die Polhülle belegter Mindestabstand zur Achse verschärft den
+    zweiten Faktor auf (rho_min+R)²-r²; er lockert keine Formtoleranz.
+    """
+    patches = _bezier_patches(adaptor, cancelled)
+    if patches is None:
+        return False
+    major, minor = float(candidate.MajorRadius()), float(candidate.MinorRadius())
+    if not math.isfinite(major + minor) or not major > minor > EPS_GEOM:
+        return False
+    origin = np.asarray(candidate.Location().Coord(), dtype=float)
+    frame = candidate.Position()
+    basis = np.asarray(
+        [frame.XDirection().Coord(), frame.YDirection().Coord(), frame.Direction().Coord()]
+    )
+    remaining = _MAX_COEFFICIENT_PRODUCTS
+    for patch in patches:
+        _check(cancelled)
+        rows, columns = patch.NbUPoles(), patch.NbVPoles()
+        count = rows * columns
+        doubled = (2 * rows - 1) * (2 * columns - 1)
+        remaining -= 4 * count**2 + 2 * doubled**2
+        if remaining < 0:
+            return False
+        data = _patch_data(patch, cancelled)
+        if data is None:
+            return False
+        poles, weights = data
+        relative = (poles - origin) @ basis.T / major * weights[:, :, None]
+        squared = [
+            _product(relative[:, :, axis], relative[:, :, axis], cancelled) for axis in range(3)
+        ]
+        weight_squared = _product(weights, weights, cancelled)
+        radial_squared = squared[0] + squared[1]
+        quadratic = radial_squared + squared[2] + (1.0 - (minor / major) ** 2) * weight_squared
+        residual = _product(quadratic, quadratic, cancelled) - 4.0 * _product(
+            radial_squared, weight_squared, cancelled
+        )
+        radial_poles = (poles - origin) @ basis[:2].T
+        direction = radial_poles.mean(axis=(0, 1))
+        direction_length = float(np.linalg.norm(direction))
+        radial_lower = (
+            max(0.0, float(np.min(radial_poles @ (direction / direction_length))))
+            if direction_length > EPS_GEOM
+            else 0.0
+        )
+        denominator = minor * ((radial_lower + major) ** 2 - minor**2) * float(weights.min()) ** 4
+        if not math.isfinite(denominator) or denominator <= 0.0:
+            return False
+        bound = major**4 * float(np.max(np.abs(residual))) / denominator
+        if not math.isfinite(bound) or bound > EPS_GEOM:
+            return False
+    return True
+
+
+def _torus_surface(face: Any, adaptor: Any, cancelled: CancelToken | None) -> TorusSurface | None:
+    """Ein nativer Ring oder ein an der gesamten rationalen Trägerfläche geprüfter Kandidat."""
+    from OCP.GeomAbs import GeomAbs_BezierSurface, GeomAbs_BSplineSurface, GeomAbs_Torus
+    from OCP.gp import gp_Ax3, gp_Dir, gp_Pnt, gp_Torus, gp_Vec
+
+    kind = adaptor.GetType()
+    if kind == GeomAbs_Torus:
+        candidate = adaptor.Torus()
+    elif kind in (GeomAbs_BezierSurface, GeomAbs_BSplineSurface):
+        from app.core.perceive.features import fit_torus_samples
+
+        limits = (
+            adaptor.FirstUParameter(),
+            adaptor.LastUParameter(),
+            adaptor.FirstVParameter(),
+            adaptor.LastVParameter(),
+        )
+        if not all(math.isfinite(value) for value in limits):
+            return None
+        # Native rationale Ableitungen dürfen keine großen Weltkoordinaten
+        # gegeneinander auslöschen. Nur diese private Trägerkopie wird versetzt.
+        working = (adaptor.Bezier() if kind == GeomAbs_BezierSurface else adaptor.BSpline()).Copy()
+        local_origin = np.asarray(working.Pole(1, 1).Coord(), dtype=float)
+        working.Translate(gp_Vec(*(-local_origin)))
+        points, normals = [], []
+        for u in np.linspace(limits[0], limits[1], 9):
+            _check(cancelled)
+            for v in np.linspace(limits[2], limits[3], 9):
+                point, du, dv = gp_Pnt(), gp_Vec(), gp_Vec()
+                working.D1(float(u), float(v), point, du, dv)
+                normal = du.Crossed(dv)
+                if normal.Magnitude() <= EPS_GEOM:
+                    continue
+                normal.Normalize()
+                points.append(point.Coord())
+                normals.append(normal.Coord())
+        fitted = fit_torus_samples(np.asarray(points), np.asarray(normals))
+        _check(cancelled)
+        if fitted is None or not fitted.good:
+            return None
+        candidate = gp_Torus(
+            gp_Ax3(gp_Pnt(*(np.asarray(fitted.centre) + local_origin)), gp_Dir(*fitted.axis)),
+            fitted.ring_radius,
+            fitted.tube_radius,
+        )
+        if not _torus_matches(adaptor, candidate, cancelled):
+            return None
+    else:
+        return None
+    if not float(candidate.MajorRadius()) > float(candidate.MinorRadius()) > EPS_GEOM:
+        return None
+    measured = _point_and_normal(face)
+    _check(cancelled)
+    if measured is None:
+        return None
+    point, normal = measured
+    axis = gp_Vec(candidate.Axis().Direction())
+    radial = gp_Vec(candidate.Location(), point)
+    radial.Subtract(axis.Multiplied(radial.Dot(axis)))
+    if radial.Magnitude() <= EPS_GEOM:
+        return None
+    radial.Normalize()
+    middle = candidate.Location().Translated(radial.Multiplied(candidate.MajorRadius()))
+    return TorusSurface(candidate, normal.Dot(gp_Vec(middle, point)) < 0.0)
 
 
 def _cylinder_limits(
@@ -520,7 +671,7 @@ def describe(face: Any, *, cancelled: CancelToken | None = None) -> Surface | No
             else _candidate(face, adaptor, cancelled)
         )
         if found is None:
-            return None
+            return _torus_surface(face, adaptor, cancelled)
         candidate, plane = found
         _check(cancelled)
         measured = _point_and_normal(face)

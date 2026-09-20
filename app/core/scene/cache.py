@@ -75,7 +75,8 @@ DEFAULT_DISK_BUDGET_BYTES: Final = 2 * 1024 * 1024 * 1024
 #: frühere fehlende Innenräume und Phantombohrungen werden neu erkannt.
 #: Native Merkmale erhalten außerdem dieselbe eindeutige Erzeugerzuordnung
 #: wie Netzmerkmale; alte Auskünfte ohne diesen Bezug werden neu ausgewertet.
-CACHE_FORMAT_VERSION: Final = 14
+#: Native Ring- und Restflächen werden zusätzlich vollständig erkannt.
+CACHE_FORMAT_VERSION: Final = 15
 
 
 @dataclass(frozen=True, slots=True)

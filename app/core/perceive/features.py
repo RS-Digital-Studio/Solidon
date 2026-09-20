@@ -1015,7 +1015,7 @@ def detect(
         # deshalb nach allen anderen und nach dem Freiformfilter: Auf einer
         # Figur wäre die ganze Haut eine einzige Seite, und die sagt nichts.
         if not left_out:
-            for feature in detect_curved_faces(mesh, found):
+            for feature in detect_curved_faces(mesh, found, check_cancelled=check_cancelled):
                 found[feature.id] = feature
     if check_cancelled is not None:
         check_cancelled()
@@ -3428,6 +3428,16 @@ def fit_torus(body: trimesh.Trimesh, patch: list[int]) -> TorusFit | None:
     """
     normals = np.asarray(body.face_normals[patch], dtype=float)
     centres = np.asarray(body.triangles_center[patch], dtype=float)
+    return fit_torus_samples(centres, normals)
+
+
+def fit_torus_samples(centres: np.ndarray, normals: np.ndarray) -> TorusFit | None:
+    """Gemeinsamer Toruskandidat aus Punkten und Normalen beider Darstellungsarten.
+
+    Der Aufrufer prüft, ob sein gesamter Fleck den Kandidaten trägt. Native
+    Flächen verwenden echte Ableitungen und einen anschließenden Formnachweis;
+    Netze bleiben beim eigenständigen Eckpunkt- und Normalenvertrag.
+    """
     if len(normals) < MIN_PATCH_FACES:
         return None
 
@@ -3447,11 +3457,11 @@ def fit_torus(body: trimesh.Trimesh, patch: list[int]) -> TorusFit | None:
 
     on_axis, *_ = np.linalg.lstsq(
         np.cross(normals, axis),
-        np.einsum("ij,ij->i", normals, np.cross(axis, centres)),
+        np.einsum("ij,ij->i", normals, np.cross(axis, centres - middle)),
         rcond=None,
     )
 
-    relative = centres - on_axis
+    relative = (centres - middle) - on_axis
     along = relative @ axis
     radial = np.linalg.norm(relative - np.outer(along, axis), axis=1)
     meridian, tube_radius = _fit_circle(np.column_stack([radial, along]))
@@ -3461,7 +3471,7 @@ def fit_torus(body: trimesh.Trimesh, patch: list[int]) -> TorusFit | None:
 
     # Der Meridiankreis sagt auch, wo die Mitte auf der Achse liegt — der
     # Achsenpunkt aus dem zweiten System ist irgendeiner, dieser ist der.
-    centre = on_axis + float(meridian[1]) * axis
+    centre = middle + on_axis + float(meridian[1]) * axis
 
     tube = np.sqrt((radial - ring_radius) ** 2 + (along - float(meridian[1])) ** 2)
     residual = float(np.mean(np.abs(tube - tube_radius)) / tube_radius)
@@ -4448,7 +4458,12 @@ def _face_roles(
     return roles
 
 
-def detect_curved_faces(mesh: MeshData, found: Mapping[FeatureId, Feature]) -> list[Feature]:
+def detect_curved_faces(
+    mesh: MeshData,
+    found: Mapping[FeatureId, Feature],
+    *,
+    check_cancelled: Callable[[], None] | None = None,
+) -> list[Feature]:
     """Gerundete Seiten: glatte, nicht ebene Flecken, die kein Merkmal beansprucht.
 
     **Der Anlass** (Robert, 11.09.2026, am Schriftzug: „bei den Seiten fehlen
@@ -4477,12 +4492,16 @@ def detect_curved_faces(mesh: MeshData, found: Mapping[FeatureId, Feature]) -> l
     geschlossenen Mantel entsprechend kurz — benannt wird über ``inner``,
     nicht über sie.
     """
+    if check_cancelled is not None:
+        check_cancelled()
     body = mesh.raw
     adjacency = np.asarray(body.face_adjacency, dtype=np.int64).reshape(-1, 2)
     if not len(adjacency):
         return []
     claimed: set[int] = set()
     for feature in found.values():
+        if check_cancelled is not None:
+            check_cancelled()
         claimed.update(feature.face_indices)
     angles = np.degrees(np.asarray(body.face_adjacency_angles, dtype=float))
     smooth = angles < CURVATURE_LIMIT
@@ -4494,6 +4513,8 @@ def detect_curved_faces(mesh: MeshData, found: Mapping[FeatureId, Feature]) -> l
     groups = trimesh.graph.connected_components(
         adjacency[keep], nodes=free, min_len=1, engine="scipy"
     )
+    if check_cancelled is not None:
+        check_cancelled()
     areas = np.asarray(body.area_faces, dtype=float)
     convex = np.asarray(body.face_adjacency_convex, dtype=bool)
     # **Gegen die ganze Oberfläche gemessen**, wie :data:`BROAD_FACE_SHARE`
@@ -4504,6 +4525,8 @@ def detect_curved_faces(mesh: MeshData, found: Mapping[FeatureId, Feature]) -> l
     floor = max(MIN_FACE_AREA, float(body.area) * CURVED_SIDE_SHARE)
     entries: list[tuple[np.ndarray, float]] = []
     for group in groups:
+        if check_cancelled is not None:
+            check_cancelled()
         patch = np.asarray(sorted(int(index) for index in group), dtype=np.int64)
         area = float(areas[patch].sum())
         if area < floor:
@@ -4515,6 +4538,8 @@ def detect_curved_faces(mesh: MeshData, found: Mapping[FeatureId, Feature]) -> l
 
     features: list[Feature] = []
     for number, (patch, area) in enumerate(entries, start=1):
+        if check_cancelled is not None:
+            check_cancelled()
         weights = areas[patch]
         normals = np.asarray(body.face_normals, dtype=float)[patch]
         mean = (normals * weights[:, None]).sum(axis=0) / max(float(weights.sum()), EPS_GEOM)
