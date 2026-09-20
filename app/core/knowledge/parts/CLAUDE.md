@@ -29,12 +29,42 @@ nichts hier darf für sie eine Lizenzfrage aufwerfen.
 
 Wer hier Code hinzufügt, prüft, dass er unter MIT stehen darf.
 
-## Gebaut gegen `manifold3d`
+## Gebaut als Formbeschreibung — gerechnet je Kern
 
 Nicht gegen OpenSCAD. So hängt `insert_part` an keiner externen Installation
 und bleibt testbar. Seit dem Ausbau von OpenSCAD (26.08.2026) gibt es die
 Alternative ohnehin nicht mehr — `scad.py` **schreibt** eine Datei und führt
 nichts aus; das Format bleibt, der Lauf ist weg.
+
+Und seit P2.7 sagt ein Baustein nur noch, **was** er ist: Zylinder, Sechskant,
+vereinigt, verschoben — Aufrufe an `shapes` und `build`. Welcher Kern daraus
+rechnet, wählt der Aufrufer mit `shapes.building(kernel)`: am Netzträger
+`manifold3d` wie bisher, am exakten Träger die Zwillinge in `exact.py`, die
+aus derselben Beschreibung einen `Solid` mit demselben Rahmen machen. Der
+Baustein selbst ändert sich dafür nicht (`zwillinge.md`: ein Zwilling
+entsteht, wo der Zweig ohne ihn endet — und ein Netz hat keine Kanten, ein
+exakter Körper keine Dreiecke). Drei Grenzen dabei:
+
+- **Wer ein Netz direkt anfasst, sagt es.** `shapes.mesh_only(form)` steht
+  an jeder Stelle, die `.raw`, eine Flächenmessung aus Dreiecksnormalen oder
+  eine Netzoperation braucht — das sind die Stellen, an denen ihre Gruppe den
+  exakten Weg noch schuldet. Unter dem exakten Kern kommen sie nie dran:
+  `ops.EXACT_PARTS` lässt nur Bausteine dorthin, deren Beschreibung ohne sie
+  auskommt (heute die Gruppe Verbindungen), alle anderen nehmen am exakten
+  Träger den Netzweg samt Konvertierungsmeldung wie bisher. Die Paritätstabelle
+  (`tests/test_exact_body_parity.py`, `KEEP` statt `MESH`) ist die Abnahme je
+  Gruppe.
+- **Ein Gewinde ist exakt ein genähter Körper, kein Gang plus Kern.**
+  `build.threaded` liefert Kern und Gang auf Länge; am Netz vereinigt es
+  `shapes.thread_body` mit dem Kern, exakt näht `profiles.helical_thread`
+  beide aus Flächen mit geteilten Helixkanten, weil die Vereinigung eines
+  gesweepten Gangs mit dem Kern der unzuverlässigste Schritt des exakten Kerns
+  ist (Bericht P2.7, B1; Rasterfahrt vom 21.09.2026 in `ROADMAP.md`). Der
+  nackte Gang (`shapes.thread_body`) bleibt eine Netzform.
+- **Der Senkkopf bleibt exakt ein Verbund** aus Kegel und Gang (B2): Beide
+  berühren sich nur tangential, und die Fuzzy-Vereinigung kam aus STEP
+  ungültig zurück. Ein lösbares Teil liegt am Träger ohnehin als Verbund
+  (`exact.compound`, das Gegenstück zu `ops._concatenated_with_slots`).
 
 ## Die Karte
 
@@ -58,8 +88,9 @@ nichts aus; das Format bleibt, der Lauf ist weg.
 | `registry.py` | `register_part`, `PARTS`, `LIBRARY_VERSION`, `changed_since()` |
 | `builtin.py` | Lädt die mitgelieferten Gruppen einmalig; `bootstrap.load_operations()` ruft `builtin.load()` vor der Op-Erzeugung, der Paketimport selbst registriert nichts |
 | `ops.py` | **Jeder Baustein wird zusätzlich eine Operation** (§24.1, §10) |
-| `build.py` | Gemeinsamer Boden für jeden Baustein |
-| `shapes.py` | Kleine Formen, aus denen die Bausteine gebaut werden |
+| `build.py` | Gemeinsamer Boden für jeden Baustein: Vereinigen, Abziehen, Schneiden, `threaded`, Verbund und `form_of` — je Kern |
+| `shapes.py` | Kleine Formen, aus denen die Bausteine gebaut werden; `building`/`building_exact` wählen den Kern, `mesh_only` benennt die Netzstellen |
+| `exact.py` | Die exakten Zwillinge der Formen und Operationen aus `shapes`/`build` (P2.7) — `Solid` mit demselben Rahmen, Vereinigung mit Körperzahl-Prüfung und Stufenleiter auf Kopien |
 | `range_check.py` | Der Bereichstest in der Anwendung |
 | `preview.py` | Vorschaubilder — **gerendert, nicht von Hand gepflegt** |
 | `scad.py` | Export als OpenSCAD-Quelltext |
@@ -190,7 +221,8 @@ Bereichsprüfung im Arbeiter darf durch den globalen Sammler keine fremden
 Qt-Objekte finalisieren; deren Lebenszeitbereinigung bleibt bei der Oberfläche.
 
 1. `@register_part(...)` mit `params`, `features`, `preview`, `doc`
-2. Umsetzung gegen `manifold3d`
+2. Umsetzung als Beschreibung über `shapes` und `build`; ein Netz nur hinter
+   `shapes.mesh_only`, und dann steht der Baustein nicht in `ops.EXACT_PARTS`
 3. **Benannte Features zurückgeben** — das sind die Provenienz-IDs, an denen
    später Ops und Passungen ansetzen
 4. `to_scad()` für den Quelltext-Export

@@ -582,7 +582,7 @@ def keyhole(raw: BaseParams) -> PartResult:
     # heraus, statt sich beim Absinken zu verklemmen.
     def falling(width: float, length: float, height: float) -> MeshData:
         """Ein Langloch, dessen Länge in -Y läuft — der Weg der Schraube."""
-        return shapes.turned(shapes.slot(width, length, height), 90.0)
+        return shapes.mesh_only(shapes.turned(shapes.slot(width, length, height), 90.0))
 
     # **Das Kopfspiel kam aus einer festen Zahl** (0,6 mm) und damit an der
     # Kalibrierung vorbei: Die Prüfung nach §28.3 überspringt genau die
@@ -620,13 +620,13 @@ def keyhole(raw: BaseParams) -> PartResult:
     entrance = shapes.cylinder(screw.head + clearance, params.depth + BOOLEAN_OVERLAP)
     entrance = shapes.moved(entrance, (0.0, 0.0, -params.depth))
     pocket = falling(screw.head + clearance, screw.head + clearance + params.drop, params.head_room)
-    pocket = shapes.moved(pocket, (0.0, drop, -params.depth))
+    pocket = shapes.mesh_only(shapes.moved(pocket, (0.0, drop, -params.depth)))
 
     # Der Schlitz, in den der Schaft gleitet, ganz hindurch.
     shaft = falling(
         screw.clearance, screw.clearance + params.drop, params.depth + 2.0 * BOOLEAN_OVERLAP
     )
-    shaft = shapes.moved(shaft, (0.0, drop, -params.depth - BOOLEAN_OVERLAP))
+    shaft = shapes.mesh_only(shapes.moved(shaft, (0.0, drop, -params.depth - BOOLEAN_OVERLAP)))
 
     body = union(entrance, pocket, shaft)
     return result(
@@ -1115,7 +1115,7 @@ def pegboard_hook(raw: BaseParams) -> PartResult:
             along + shank + nose + stack + 2.0 * PLATE_MARGIN,
             params.plate,
         )
-        parts.append(shapes.moved(plate, (0.0, -stack / 2.0, sunk)))
+        parts.append(shapes.mesh_only(shapes.moved(plate, (0.0, -stack / 2.0, sunk))))
 
     # **Die Platte ist kein Merkmal mehr.** Solange sie auf dem Träger auflag,
     # war ihre Rückseite eine echte Fläche und ein sinnvoller Anhaltspunkt.
@@ -1135,13 +1135,13 @@ def pegboard_hook(raw: BaseParams) -> PartResult:
         # was davon im Teil steckt, verschmilzt mit ihm.
         shaft = shapes.turned(shapes.slot(width, shank, through - sunk), 90.0)
         # Der Zapfen sitzt oben, und oben ist **-Y** (``PartSpec.keeps_up``).
-        parts.append(shapes.moved(shaft, (x, y - nose / 2.0, sunk)))
+        parts.append(shapes.mesh_only(shapes.moved(shaft, (x, y - nose / 2.0, sunk))))
         # Die Nase reicht über den Zapfen nach unten hinaus und liegt hinter
         # der Lochwand. Sie beginnt um OVERLAP früher, damit keine Fläche genau
         # auf einer anderen liegt (§39).
         hook_join = min(through / 2.0, lip / 2.0)
         catch = shapes.turned(shapes.slot(width, shank + nose, lip + hook_join), 90.0)
-        parts.append(shapes.moved(catch, (x, y, through - hook_join)))
+        parts.append(shapes.mesh_only(shapes.moved(catch, (x, y, through - hook_join))))
         # **Das Merkmal liegt auf der Rückseite der Nase**, und das ist die
         # einzige Fläche des Hakens, die es dort wirklich gibt. Vorher stand es
         # auf der Höhe der Plattenrückseite mitten im Zapfen — gemessen zu 99 %
@@ -1170,7 +1170,7 @@ def pegboard_hook(raw: BaseParams) -> PartResult:
         # Rückplatte steckt sein vorderes Stück in ihr; frei wird er an ihrer
         # Oberseite, und genau von dort rechnet ``_latch_tongue`` seine Länge.
         arm = shapes.box(tongue.width, tongue.thickness, tongue.lock - sunk)
-        parts.append(shapes.moved(arm, (x, crest + tongue.thickness / 2.0, sunk)))
+        parts.append(shapes.mesh_only(shapes.moved(arm, (x, crest + tongue.thickness / 2.0, sunk))))
 
         # Die Wurzel schließt den Spalt am vorderen Ende und ist das, was die
         # Zunge überhaupt zu einem Teil des Hakens macht. Sie greift bis zur
@@ -1178,7 +1178,7 @@ def pegboard_hook(raw: BaseParams) -> PartResult:
         # unendlich schmal, dort wäre die Verbindung eine Kante und kein Körper.
         reachdown = tongue.gap + tongue.thickness + width / 2.0
         root = shapes.box(tongue.width, reachdown, tongue.thickness)
-        parts.append(shapes.moved(root, (x, crest + reachdown / 2.0, sunk)))
+        parts.append(shapes.mesh_only(shapes.moved(root, (x, crest + reachdown / 2.0, sunk))))
 
         # Die Rastschulter mit ihrer Anlaufschräge. Der Keil steht auf der
         # Schulter und läuft nach hinten aus — beim Einführen drückt er die
@@ -1191,7 +1191,9 @@ def pegboard_hook(raw: BaseParams) -> PartResult:
         barb = shapes.turned(
             shapes.wedge(tongue.width, tongue.step + BOOLEAN_OVERLAP, tongue.run), 180.0
         )
-        parts.append(shapes.moved(barb, (x, crest + BOOLEAN_OVERLAP, tongue.lock)))
+        parts.append(
+            shapes.mesh_only(shapes.moved(barb, (x, crest + BOOLEAN_OVERLAP, tongue.lock)))
+        )
         features.append(
             face(
                 f"latch_{index + 1}",

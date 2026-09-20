@@ -26,7 +26,7 @@ from app.core.geom.autosplit import upright_normal
 from app.core.geom.boolean import BOOLEAN_OVERLAP, boolean, deepest
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.knowledge.parts.build import face
-from app.core.knowledge.parts.shapes import RIDGE_SHARE, moved, thread_body
+from app.core.knowledge.parts.shapes import RIDGE_SHARE, mesh_only, moved, thread_body
 from app.core.knowledge.profiles import for_object
 from app.core.log import get_logger
 from app.core.registry import NAME_DOC, op_params, param, register_op
@@ -868,7 +868,7 @@ def screw_lid(ctx: OpContext) -> OpResult:
     bounded = boolean(
         "intersection",
         [
-            thread_body(major, params.pitch, params.height),
+            mesh_only(thread_body(major, params.pitch, params.height)),
             _pipe(major * 2.0, 0.0, params.height, 0.0),
         ],
         quality=ctx.quality,
@@ -877,8 +877,8 @@ def screw_lid(ctx: OpContext) -> OpResult:
     turns = _lifted(bounded.mesh, z)
     left, bottom, right, top = max(cavities, key=lambda ring: ring.area).bounds
     centre_x, centre_y = (left + right) / 2.0, (bottom + top) / 2.0
-    neck = moved(neck, (centre_x, centre_y, 0.0))
-    turns = moved(turns, (centre_x, centre_y, 0.0))
+    neck = mesh_only(moved(neck, (centre_x, centre_y, 0.0)))
+    turns = mesh_only(moved(turns, (centre_x, centre_y, 0.0)))
     with_neck = boolean("union", [mesh, neck], quality=ctx.quality, cancelled=ctx.cancelled)
     with_thread = boolean(
         "union", [with_neck.mesh, turns], quality=ctx.quality, cancelled=ctx.cancelled
@@ -994,7 +994,7 @@ def _screw_cap(
     # Die Wendel wird vollständig aufgebaut und anschließend an der Decke
     # beschnitten. Eine kürzer aufgebaute Wendel ließe den letzten Nutumlauf
     # weg, obwohl das passende Außengewinde dort noch Material trägt.
-    groove = thread_body(inside, params.pitch, skirt, internal=True)
+    groove = mesh_only(thread_body(inside, params.pitch, skirt, internal=True))
 
     cutter = boolean("union", [MeshData.of(hollow), groove], quality=quality, cancelled=cancelled)
     bounded = boolean(

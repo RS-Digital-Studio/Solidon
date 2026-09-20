@@ -15,11 +15,19 @@ from __future__ import annotations
 from typing import Any, cast
 
 from app.core.errors import ValidationError
-from app.core.geom.boolean import BOOLEAN_OVERLAP, boolean
-from app.core.geom.mesh import MeshData, as_mesh_data
+from app.core.geom.boolean import BOOLEAN_OVERLAP
 from app.core.knowledge import standards
 from app.core.knowledge.parts import shapes
-from app.core.knowledge.parts.build import bore, result, subtract, thread, union
+from app.core.knowledge.parts.build import (
+    bore,
+    compound,
+    form_of,
+    result,
+    subtract,
+    thread,
+    threaded,
+    union,
+)
 from app.core.knowledge.parts.registry import (
     FACE_GIVES_DIRECTION,
     MATERIAL_OF_TARGET,
@@ -783,14 +791,24 @@ def printed_thread(raw: BaseParams) -> PartResult:
     return _printed_thread(params.size, params.length, params.internal, params.play)
 
 
-def _printed_thread(size: str, length: float, internal: bool, play: float) -> PartResult:
-    """Baut das Gewinde für Bausteine, die mit seinen Maßen zusammenpassen."""
+def _printed_thread(
+    size: str, length: float, internal: bool, play: float, *, bottom: float | None = None
+) -> PartResult:
+    """Baut das Gewinde für Bausteine, die mit seinen Maßen zusammenpassen.
+
+    ``bottom`` ist die Höhe des unteren Endes. Ohne Angabe gilt §24.1: **Ein
+    Werkzeug liegt unter seiner Mündung** — das Innengewinde trägt ab, also
+    gehört es in das Material unter der angeklickten Stelle (nach oben gebaut
+    stünde es in der Luft und schnitte nichts); das Außengewinde setzt auf und
+    wächst von null nach oben. Wer das Gewinde woanders braucht (die Schraube
+    unter ihrem Kopf, die Mutter um ihre Höhe), sagt es hier, statt den
+    fertigen Körper zu bewegen — exakt kostet jede Bewegung Sekunden.
+    """
     screw = standards.screw(size)
     depth = screw.pitch * shapes.RIDGE_SHARE
     if internal:
         # Das Werkzeug: Kern plus Spiel, und die Nut reicht von dort hinaus.
         diameter = screw.nominal - 2.0 * depth + play
-        core = shapes.cylinder(diameter + 2.0 * BOOLEAN_OVERLAP, length)
     else:
         diameter = screw.nominal - play
         if diameter <= 2.0 * depth:
@@ -802,33 +820,19 @@ def _printed_thread(size: str, length: float, internal: bool, play: float) -> Pa
                 ),
                 values={"maximum": screw.nominal - 2.0 * depth, "play": play},
             )
-        core = shapes.cylinder(
-            diameter - 2.0 * depth + 2.0 * BOOLEAN_OVERLAP,
-            length,
-        )
+    if bottom is None:
+        bottom = -length if internal else 0.0
 
-    ridge = shapes.thread_body(diameter, screw.pitch, length, internal=internal)
-    body = union(core, ridge)
-    # Die Helix endet ein Stück über der Nennlänge; sie wird zurückgeschnitten,
-    # damit das Teil genau so lang ist, wie es sagt.
-    limit = shapes.cylinder(diameter * 2.0 + 4.0, length)
-    body = _intersect(body, limit)
-
-    # **Ein Werkzeug liegt unter seiner Mündung** (§24.1). Das Innengewinde
-    # trägt ab, also gehört es in das Material unter der angeklickten Stelle;
-    # nach oben gebaut steht es in der Luft und schneidet nichts. Das
-    # Außengewinde setzt auf und bleibt, wo es ist.
-    reach = -length if internal else 0.0
-    if reach:
-        body = shapes.moved(body, (0.0, 0.0, reach))
-
+    # Kern plus Gang, auf Länge geschnitten — wie das entsteht, weiß ``build``
+    # je Kern; die Maße stehen hier.
+    body = threaded(diameter, screw.pitch, length, internal=internal, bottom=bottom)
     return result(
         body,
         thread(
             "thread_1",
             screw.nominal,
             screw.pitch,
-            (0.0, 0.0, reach + length / 2.0),
+            (0.0, 0.0, bottom + length / 2.0),
             internal=internal,
             length=length,
         ),
@@ -911,9 +915,6 @@ def printed_screw(raw: BaseParams) -> PartResult:
     else:
         head = shapes.hexagon(screw.head, screw.head_height)
 
-    threaded = as_mesh_data(
-        _printed_thread(params.size, params.length, internal=False, play=params.play).mesh
-    )
     # Die Länge meint ausdrücklich das Gewinde **unter** dem Kopf. Beim
     # Senkkopf ist dessen schmale Spitze die Trennstelle; z = 0 ist dagegen
     # der breite, bündige Rand. Vorher endete das Gewinde ebenfalls bei null
@@ -921,13 +922,24 @@ def printed_screw(raw: BaseParams) -> PartResult:
     # kein Gang außerhalb des Kegels, bei langen zerfiel die Vereinigung an
     # einzelnen Normgrößen. Ein kleiner Überstand verbindet beide Körper
     # robust, ohne das zugesagte Längenmaß sichtbar zu verändern.
-    threaded = shapes.moved(
-        threaded,
-        (0.0, 0.0, thread_top - params.length + BOOLEAN_OVERLAP),
+    shank = form_of(
+        _printed_thread(
+            params.size,
+            params.length,
+            internal=False,
+            play=params.play,
+            bottom=thread_top - params.length + BOOLEAN_OVERLAP,
+        )
     )
 
+    # **Der Senkkopf bleibt am exakten Kern ein Verbund** (P2.7, Befund B2):
+    # Kegel und Gang berühren sich tangential, die Vereinigung machte daraus
+    # zwei Körper, und die Fuzzy-Stufe, die sie zu einem verschmolz, kam aus
+    # STEP ungültig zurück. Die Schraube ist ohnehin ein lösbares Teil.
+    joined = compound if shapes.building_exact() and params.countersunk else union
+    body = joined(head, shank)
     return result(
-        union(head, threaded),
+        body,
         thread(
             "thread_1",
             screw.nominal,
@@ -986,8 +998,12 @@ def printed_nut(raw: BaseParams) -> PartResult:
     screw = standards.screw(params.size)
     nut = standards.nut(params.size)
     depth = nut.height + 2.0 * BOOLEAN_OVERLAP
-    cutter = as_mesh_data(_printed_thread(params.size, depth, internal=True, play=params.play).mesh)
-    cutter = shapes.moved(cutter, (0.0, 0.0, nut.height + BOOLEAN_OVERLAP))
+    # Das Werkzeug reicht ein Hundertstel unter den Boden und über die Decke hinaus.
+    cutter = form_of(
+        _printed_thread(
+            params.size, depth, internal=True, play=params.play, bottom=-BOOLEAN_OVERLAP
+        )
+    )
     body = subtract(shapes.hexagon(nut.width, nut.height), cutter)
     return result(
         body,
@@ -1000,7 +1016,3 @@ def printed_nut(raw: BaseParams) -> PartResult:
             internal=True,
         ),
     )
-
-
-def _intersect(first: MeshData, second: MeshData) -> MeshData:
-    return boolean("intersection", [first, second], quality="fine").mesh

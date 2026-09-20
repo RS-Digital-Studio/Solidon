@@ -658,7 +658,7 @@ def cable_clip(raw: BaseParams) -> PartResult:
         """Ein Zylinder mit der Achse in Y — das Kabel läuft längs, nicht quer."""
         upright = shapes.cylinder(diameter, length)
         centred = shapes.moved(upright, (0.0, 0.0, -length / 2.0))
-        return shapes.turned(centred, 90.0, (1.0, 0.0, 0.0))
+        return shapes.mesh_only(shapes.turned(centred, 90.0, (1.0, 0.0, 0.0)))
 
     ring = subtract(
         shapes.moved(lying(outer, params.width), (0.0, 0.0, centre)),

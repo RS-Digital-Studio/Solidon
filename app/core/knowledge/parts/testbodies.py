@@ -510,4 +510,4 @@ def _label(step: int, position: tuple[float, float, float]) -> MeshData:
         bars.append(
             shapes.moved(bar, (position[0] + index * 1.4 - count * 0.7, position[1], position[2]))
         )
-    return union(*bars)
+    return shapes.mesh_only(union(*bars))

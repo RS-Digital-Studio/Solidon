@@ -1623,14 +1623,18 @@ def _solid(object_id: str = "obj_2", name: str = "Flansch") -> SceneObject:
     """Ein Körper, der seine Flächen kennt — als Attrappe, ohne OpenCASCADE.
 
     ``BRepBody`` ist ein Protokoll (§30), und ``kind_of`` prüft es zur
-    Laufzeit. Zwei Methoden reichen also, und der Test läuft auch dort, wo der
-    zweite Kern nicht installiert ist.
+    Laufzeit. Drei Mitglieder reichen also, und der Test läuft auch dort, wo
+    der zweite Kern nicht installiert ist.
     """
 
     class Attrappe:
         @property
         def shape(self) -> object:
             return object()
+
+        @property
+        def solid_count(self) -> int:
+            return 1
 
         def to_mesh(self) -> object:
             return body()

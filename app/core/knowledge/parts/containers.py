@@ -40,7 +40,7 @@ def rounded_prism(width: float, depth: float, height: float, radius: float) -> M
             ),
         )
     if radius <= EPS_GEOM:
-        return shapes.box(width, depth, height)
+        return shapes.mesh_only(shapes.box(width, depth, height))
     step = 2 * math.acos(max(0.0, 1 - MAX_FACET_SAG / radius))
     count = max(4, math.ceil(math.pi / (2 * step)))
     vertices: list[tuple[float, float]] = []
@@ -179,7 +179,7 @@ def organizer_tray(raw: BaseParams) -> PartResult:
         params.height - params.floor + BOOLEAN_OVERLAP,
         max(0, params.radius - params.wall),
     )
-    body = subtract(base, _moved(cavity, params.floor))
+    body = shapes.mesh_only(subtract(base, _moved(cavity, params.floor)))
     area = _horizontal_area(body, params.floor)
     return result(
         body,
@@ -413,8 +413,8 @@ def organizer_foot(raw: BaseParams) -> PartResult:
     # Der vorhandene Standfuß fasst bei Fase=0 automatisch. Der Steckfuß
     # verspricht dagegen einen zylindrischen Flansch wie die Vorlagen.
     base = shapes.cylinder(p.diameter, p.height)
-    peg = _moved(shapes.cylinder(p.pin_diameter, p.pin_length), p.height)
-    mesh = union(base, peg)
+    peg = _moved(shapes.mesh_only(shapes.cylinder(p.pin_diameter, p.pin_length)), p.height)
+    mesh = shapes.mesh_only(union(base, peg))
     return result(
         mesh,
         face(

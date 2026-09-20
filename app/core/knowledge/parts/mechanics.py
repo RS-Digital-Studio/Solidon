@@ -592,9 +592,11 @@ def dowel(raw: BaseParams) -> PartResult:
         # nach oben, und die Fase bricht seine Oberkante.
         body = _profile(params.shape, diameter, params.length)
         if chamfer > 0.0:
-            body = subtract(
-                body,
-                shapes.moved(_ring(diameter, chamfer), (0.0, 0.0, params.length - chamfer)),
+            body = shapes.mesh_only(
+                subtract(
+                    body,
+                    shapes.moved(_ring(diameter, chamfer), (0.0, 0.0, params.length - chamfer)),
+                )
             )
         return result(
             body,
@@ -607,14 +609,16 @@ def dowel(raw: BaseParams) -> PartResult:
     # also nach draußen; abgetragen wurde damit nichts als die Fase, die
     # zufällig unter dem Ursprung lag. Gemessen an einem Klotz von 30 auf 30
     # auf 20: minus 28,6 mm³, wo ein Loch von 9 mm Tiefe hätte stehen sollen.
-    body = shapes.moved(_profile(params.shape, diameter, params.length), (0.0, 0.0, -params.length))
+    body = shapes.mesh_only(
+        shapes.moved(_profile(params.shape, diameter, params.length), (0.0, 0.0, -params.length))
+    )
     if chamfer > 0.0:
         # Eine Senkung an der Mündung, nach oben weiter werdend — das ist, was
         # eine Fase an einem Loch tut. Vorher verengte sie sich zur Mündung
         # hin, was aus einer Einführung eine Sperre gemacht hätte, wenn sie je
         # im Material gelegen hätte.
         lead = shapes.cone(diameter, diameter + 2.0 * chamfer, chamfer)
-        body = union(body, shapes.moved(lead, (0.0, 0.0, -chamfer)))
+        body = shapes.mesh_only(union(body, shapes.moved(lead, (0.0, 0.0, -chamfer))))
     return result(
         body,
         bore("bore_1", diameter, (0.0, 0.0, -params.length / 2.0), depth=params.length),
@@ -645,10 +649,10 @@ def _profile(shape: str, diameter: float, length: float) -> MeshData:
     if shape == "hex":
         # Schlüsselweite aus dem Umkreis: beim Sechskant ist sie das
         # √3/2-fache.
-        return shapes.hexagon(diameter * math.sqrt(3.0) / 2.0, length)
+        return shapes.mesh_only(shapes.hexagon(diameter * math.sqrt(3.0) / 2.0, length))
     if shape == "dovetail":
         return _rounded_dovetail(diameter, length)
-    return shapes.cylinder(diameter, length)
+    return shapes.mesh_only(shapes.cylinder(diameter, length))
 
 
 def _rounded_dovetail(diameter: float, length: float) -> MeshData:
@@ -1020,7 +1024,7 @@ def hinge_eye(raw: BaseParams) -> PartResult:
         """Ein Zylinder mit der Achse in X — die Drehachse des Scharniers."""
         upright = shapes.cylinder(diameter, length)
         centred = shapes.moved(upright, (0.0, 0.0, -length / 2.0))
-        return shapes.turned(centred, 90.0, (0.0, 1.0, 0.0))
+        return shapes.mesh_only(shapes.turned(centred, 90.0, (0.0, 1.0, 0.0)))
 
     eye_body = shapes.moved(lying(outer, params.width), (0.0, params.reach, outer / 2.0))
     # Die Lasche reicht bis in die Mitte des Auges hinein: Zwei Körper, die sich
@@ -1172,7 +1176,7 @@ def barrel_hinge(raw: BaseParams) -> PartResult:
         upright = shapes.cylinder(diameter, length)
         centred = shapes.moved(upright, (0.0, 0.0, -length / 2.0))
         turned = shapes.turned(centred, 90.0, (0.0, 1.0, 0.0))
-        return shapes.moved(turned, (x, params.reach, outer / 2.0))
+        return shapes.mesh_only(shapes.moved(turned, (x, params.reach, outer / 2.0)))
 
     def lug(length: float, x: float) -> MeshData:
         """Die Lasche unter einem Auge, bis in dessen Mitte hinein.
@@ -1181,7 +1185,7 @@ def barrel_hinge(raw: BaseParams) -> PartResult:
         berühren, sind der Fall, an dem eine Boolesche Operation bricht (§39).
         """
         body = shapes.box(length, params.reach, outer)
-        return shapes.moved(body, (x, params.reach / 2.0, 0.0))
+        return shapes.mesh_only(shapes.moved(body, (x, params.reach / 2.0, 0.0)))
 
     # Links: Lasche und Auge, dazu der Bolzen über die volle Breite.
     left = union(

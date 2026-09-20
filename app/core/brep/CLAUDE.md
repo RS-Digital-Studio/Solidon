@@ -446,6 +446,26 @@ ist der gewollte Zwilling, und `tests/test_thread_import.py` lässt beide
 auf dieselbe Frage antworten. Die Referenzkörper baut
 `tests/data/make_thread_corpus.py` aus Konstruktionsmaßen.
 
+## Ein Gewinde wird genäht, nicht vereinigt (P2.7)
+
+`profiles.helical_thread` baut Kern und Gang eines Gewindes als **einen**
+Körper, ohne Boolesche Operation dazwischen: Flanken, Kamm und Fußstreifen
+sind Regelflächen zwischen je zwei Helices (`BRepFill.Face`), die sich ihre
+Kanten teilen; die Enden schließen zwei Rampen von der Achse zur Fußhelix und
+je eine ebene Fläche bei Winkel null. Genäht (`BRepBuilderAPI_Sewing`, keine
+freie Kante), orientiert (`OrientClosedSolid`), danach auf Länge geschnitten
+— und der Schnitt ist ein Zylinder gegen Ebenen und BSpline-Flächen, den der
+Kern zuverlässig kann. Gemessen: 44 Flächen in dreißig Millisekunden, gültig,
+Volumen der Analytik (Pappus je Umlauf) auf 2·10⁻⁷, STEP-Rundreise auf
+10⁻¹⁴. Der Grund steht im Docstring: Die Vereinigung von Kern und
+gesweeptem Gang verschluckt den Gang still (Bericht P2.7, B1), und die
+Fuzzy-Stufe, die ihn rettet, ist je Größe eine andere — an einer Rasterfahrt
+über sechs Größen und drei Längen fand sich für zwei Fälle gar keine, und
+jede Stufe kostete 7 bis 24 Sekunden. `threaded_rod` (der Erzeuger
+*Gewindebolzen*, ISO-nahes Profil) geht weiter den Sweep-und-Leiter-Weg mit
+seiner Untergrenze; ihn auf denselben genähten Körper zu stellen steht im
+Register (RM-195). Wer ein neues Gewinde baut, nimmt das Nähen.
+
 ## Eine Kante hat einen Schlüssel, keine Nummer
 
 `edge_key` (RM-147 E4) beschreibt eine Kante über **Mittelpunkt und
@@ -654,7 +674,7 @@ Anwendung gegen die installierte Bindung.
 | Datei | Rolle |
 |---|---|
 | `kernel.py` | Der `Solid` und sein Weg ins Netz. `available()`, `BRepUnavailable` |
-| `profiles.py` | Vom Skizzenumriss zum exakten Körper (§30.1) — das größte Modul hier |
+| `profiles.py` | Vom Skizzenumriss zum exakten Körper (§30.1) — das größte Modul hier; `helical_thread` näht Kern und Gang eines Gewindes ohne Boolesche Operation |
 | `ops.py` | Die B-Rep-Operationen im Register (§25, §10) — **ohne** Verrunden und Fase, die stehen in `geom/edge_ops.py` |
 | `edit.py` | Einen Körper formen |
 | `features.py` | Merkmale aus der Topologie (§30, §21) |

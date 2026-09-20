@@ -264,6 +264,12 @@ class BRepBody(Protocol):
     def to_mesh(self) -> Any:
         """Die Einbahntür aus §30: Dreiecke aus dem exakten Körper."""
 
+    @property
+    def solid_count(self) -> int:
+        """Wie viele Körper die Form trägt — topologisch gezählt, nicht über
+        Dreiecke: Zwei Körper, die sich nur berühren, sind hier zwei.
+        """
+
 
 def kind_of(mesh: Mesh) -> ObjectKind:
     """Welche Sorte Körper das ist. Eine Regel, ein Ort — der Objektbaum zeigt es."""

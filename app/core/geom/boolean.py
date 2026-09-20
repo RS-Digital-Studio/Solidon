@@ -33,7 +33,15 @@ from app.core.geom.attributes import DEFAULT_CUT_SLOT, transfer
 from app.core.geom.mesh import MeshData
 from app.core.geom.repair import merge_vertices, remove_degenerate_faces
 from app.core.log import get_logger
-from app.core.types import CancelToken, Finding, Profile, Quality, SolverInfo, SolverStage
+from app.core.types import (
+    BRepBody,
+    CancelToken,
+    Finding,
+    Profile,
+    Quality,
+    SolverInfo,
+    SolverStage,
+)
 from app.core.units import EPS_GEOM, is_close, weld_digits, weld_tolerance
 from app.i18n import TranslatableText, _
 
@@ -734,9 +742,10 @@ def fell_apart(
     auflöste. Die Fälle bleiben getrennt, weil sie verschiedene Messungen und
     verschiedene Sätze tragen; die Regel steht jetzt hier.
     """
-    if not applies or after.component_count <= before.component_count:
+    pieces_before, pieces_after = _pieces(before), _pieces(after)
+    if not applies or pieces_after <= pieces_before:
         return None
-    loose = after.component_count - before.component_count
+    loose = pieces_after - pieces_before
     return Finding(
         code=code,
         severity="error",
@@ -748,10 +757,23 @@ def fell_apart(
         values={
             **(dict(values) if values else {}),
             "loose": str(loose),
-            "before": str(before.component_count),
-            "after": str(after.component_count),
+            "before": str(pieces_before),
+            "after": str(pieces_after),
         },
     )
+
+
+def _pieces(body: Any) -> int:
+    """Wie viele Stücke ein Körper hat — topologisch am exakten, über die Dreiecke am Netz.
+
+    Zwei exakte Körper, die sich nur berühren, sind zwei; vernetzt können
+    sie eines sein. ``Solid.solid_count`` fragt die Form, ``component_count``
+    die Dreiecke — und die Dreiecke eines exakten Körpers entstünden hier
+    nur für diese Zählung.
+    """
+    if isinstance(body, BRepBody):
+        return int(body.solid_count)
+    return int(body.component_count)
 
 
 def without_effect(

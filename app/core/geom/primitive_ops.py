@@ -30,7 +30,7 @@ from app.core.errors import ValidationError
 from app.core.geom.mesh import MeshData
 from app.core.geom.transform import apply, translation
 from app.core.knowledge.parts.build import face
-from app.core.knowledge.parts.shapes import SEGMENTS, box, cone, cylinder
+from app.core.knowledge.parts.shapes import SEGMENTS, box, cone, cylinder, mesh_only
 from app.core.registry import NAME_DOC, op_params, param, register_op
 from app.core.sketch.planes import frame_of
 from app.core.types import (
@@ -94,7 +94,9 @@ def primitive_local_tool(name: str, values: Mapping[str, Any], quality: Quality)
     +Z, und genau eine Rahmenmatrix legt ihn danach in die Szene.
     """
     if name == "create_box":
-        mesh = box(float(values["width"]), float(values["depth"]), float(values["height"]))
+        mesh = mesh_only(
+            box(float(values["width"]), float(values["depth"]), float(values["height"]))
+        )
         if str(values["anchor"]) == "corner":
             mesh = apply(
                 mesh,
@@ -102,10 +104,12 @@ def primitive_local_tool(name: str, values: Mapping[str, Any], quality: Quality)
             )
         return mesh
     if name == "create_cylinder":
-        return cylinder(
-            float(values["diameter"]),
-            float(values["height"]),
-            segments=int(values["segments"]),
+        return mesh_only(
+            cylinder(
+                float(values["diameter"]),
+                float(values["height"]),
+                segments=int(values["segments"]),
+            )
         )
     if name == "create_cone":
         bottom_diameter = float(values["bottom_diameter"])
@@ -117,11 +121,13 @@ def primitive_local_tool(name: str, values: Mapping[str, Any], quality: Quality)
                 value=bottom_diameter,
                 constraint="range",
             )
-        return cone(
-            bottom_diameter,
-            top_diameter,
-            float(values["height"]),
-            segments=_round_segments(int(values["segments"]), quality),
+        return mesh_only(
+            cone(
+                bottom_diameter,
+                top_diameter,
+                float(values["height"]),
+                segments=_round_segments(int(values["segments"]), quality),
+            )
         )
     if name == "create_sphere":
         import trimesh

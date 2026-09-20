@@ -22,9 +22,17 @@ from __future__ import annotations
 import dataclasses
 import math
 from collections.abc import Container, Iterable, Mapping
-from typing import Any, Final, cast
+from typing import TYPE_CHECKING, Any, Final, cast
 
-from app.core.errors import Action, AppError, ValidationError
+from app.core.errors import (
+    CANCEL,
+    CORRECT_INPUT,
+    Action,
+    AppError,
+    GeometryError,
+    InternalError,
+    ValidationError,
+)
 from app.core.expressions import resolve as resolve_parameters
 from app.core.geom.boolean import (
     BOOLEAN_OVERLAP,
@@ -37,14 +45,18 @@ from app.core.geom.boolean import (
 from app.core.geom.mesh import MeshData, as_mesh_data, concatenated
 from app.core.geom.transform import rotation, translation
 from app.core.knowledge.parts.registry import PARTS, PartRegistry, PartSpec
+from app.core.knowledge.parts.shapes import Kernel, building
 from app.core.knowledge.profiles import for_object
 from app.core.knowledge.strength import spring_load
 from app.core.log import get_logger
 from app.core.registry import Registry, op_params, param, register_op
 from app.core.types import (
     BaseParams,
+    BRepBody,
+    CancelToken,
     Feature,
     Finding,
+    Mesh,
     OpContext,
     OpResult,
     PartResult,
@@ -55,6 +67,9 @@ from app.core.types import (
 )
 from app.core.units import DEGREE_UNIT, EPS_GEOM
 from app.i18n import TranslatableText, _
+
+if TYPE_CHECKING:
+    from app.core.brep.kernel import Solid
 
 _log = get_logger(__name__)
 
@@ -447,7 +462,7 @@ def _register_one(spec: PartSpec, params: type[BaseParams], registry: Registry |
         name=op_name(spec.name),
         title=title,
         category="parts",
-        cache_version=f"{_result_version(spec)}:targets:2",
+        cache_version=f"{_result_version(spec)}:targets:3",
         params=params,
         consumes=1,
         produces=1,
@@ -518,9 +533,7 @@ def _title_for(spec: PartSpec) -> TranslatableText | str:
     return spec.title
 
 
-def _hanging_loose(
-    before: MeshData, after: MeshData, spec: PartSpec, subtractive: bool
-) -> Finding | None:
+def _hanging_loose(before: Mesh, after: Mesh, spec: PartSpec, subtractive: bool) -> Finding | None:
     """Ist etwas neben dem Träger stehengeblieben, statt an ihm zu hängen?
 
     **Der Fall, den Roberts Würfel gezeigt hat.** Zwei Haken im Vierzigerraster
@@ -761,12 +774,17 @@ def _insert_at(ctx: OpContext, spec: PartSpec) -> OpResult:
     """Baut den Baustein, setzt ihn an seinen Platz und verbindet oder schneidet."""
     source = ctx.inputs[0]
     profile = for_object(ctx.profile, source) if ctx.profile is not None else None
+    parameters = resolve_parameters(ctx.scene.parameters)
+    if _builds_exactly(spec, source):
+        # Ein exakter Träger bekommt einen exakten Baustein (P2.7): dieselbe
+        # Formbeschreibung, im anderen Kern gerechnet — der Träger bleibt, was
+        # er ist, statt für den Baustein zum Netz zu werden.
+        part_params, produced = _built_part(
+            spec, ctx.params, profile, ctx.quality, parameters=parameters, kernel="brep"
+        )
+        return _insert_at_exact(ctx, spec, source, profile, part_params, produced)
     part_params, produced = _built_part(
-        spec,
-        ctx.params,
-        profile,
-        ctx.quality,
-        parameters=resolve_parameters(ctx.scene.parameters),
+        spec, ctx.params, profile, ctx.quality, parameters=parameters
     )
     built = as_mesh_data(produced.mesh)
     anchor, direction = _anchor(source, ctx.params, spec, built)
@@ -859,30 +877,18 @@ def _insert_at(ctx: OpContext, spec: PartSpec) -> OpResult:
         # Antwort steht im Volumen (§2.7).
         nothing = without_effect(body, mesh, kind, ctx.profile)
 
-    # **Was der Körper schon trägt, wird nicht überschrieben.** ``update``
-    # stand hier zweimal, und der zweite Baustein derselben Sorte nahm dem
-    # ersten den Namen weg — siehe :func:`_free_name`.
-    features = dict(source.features)
-    for extra in (
-        _placed_features(
-            produced,
-            spec,
-            ctx.params,
-            anchor,
-            sink,
-            direction,
-            spec.keeps_up,
-            flip,
-            taken=features,
-        ),
+    features = _merged_features(
+        source,
+        produced,
+        spec,
+        ctx.params,
+        anchor,
+        sink,
+        direction,
+        flip,
         host_features,
         added_features,
-    ):
-        for name, feature in extra.items():
-            public = _free_name(name, features)
-            features[public] = (
-                feature if public == name else dataclasses.replace(feature, id=public)
-            )
+    )
 
     # Und die Gegenprobe zu „hat nichts bewirkt": Er hat etwas hinzugefügt, nur
     # nicht **am** Teil.
@@ -991,6 +997,248 @@ def _spring_finding(name: str, params: BaseParams, profile: Profile | None) -> F
     )
 
 
+def _merged_features(
+    source: SceneObject,
+    produced: PartResult,
+    spec: PartSpec,
+    params: Any,
+    anchor: Vec3,
+    sink: float,
+    direction: Vec3 | None,
+    flip: bool,
+    host_features: Mapping[str, Feature],
+    added_features: Mapping[str, Feature],
+) -> dict[str, Feature]:
+    """Die Merkmale des Trägers, dazu die des Bausteins — unter freien Namen.
+
+    **Was der Körper schon trägt, wird nicht überschrieben.** ``update``
+    stand hier zweimal, und der zweite Baustein derselben Sorte nahm dem
+    ersten den Namen weg — siehe :func:`_free_name`. Beide Kerne fragen
+    dasselbe: Die Merkmale eines Bausteins sind Provenienz, gerechnet aus
+    seinen Parametern und mit derselben Matrix bewegt wie seine Form.
+    """
+    features = dict(source.features)
+    for extra in (
+        _placed_features(
+            produced,
+            spec,
+            params,
+            anchor,
+            sink,
+            direction,
+            spec.keeps_up,
+            flip,
+            taken=features,
+        ),
+        host_features,
+        added_features,
+    ):
+        for name, feature in extra.items():
+            public = _free_name(name, features)
+            features[public] = (
+                feature if public == name else dataclasses.replace(feature, id=public)
+            )
+    return features
+
+
+#: Die Bausteine, die an einem exakten Träger im exakten Kern bauen (P2.7).
+#: Die Menge wächst gruppenweise: Ein Baustein steht hier, sobald seine ganze
+#: Beschreibung ohne ``shapes.mesh_only`` auskommt und die Paritätstabelle
+#: (``tests/test_exact_body_parity.py``) ihn als ``KEEP`` führt. Was nicht hier
+#: steht, nimmt den Netzweg samt Konvertierungsmeldung, wie bisher.
+EXACT_PARTS: Final = frozenset(
+    {"screw_hole", "heatset_m4", "nut_trap", "printed_thread", "printed_screw", "printed_nut"}
+)
+
+
+def _builds_exactly(spec: PartSpec, source: SceneObject) -> bool:
+    """Ob dieser Baustein an diesem Träger im exakten Kern gebaut wird."""
+    return spec.name in EXACT_PARTS and _solid_of(source.mesh) is not None
+
+
+def _solid_of(mesh: Mesh) -> Solid | None:
+    """Der exakte Körper hinter dem Vertrag — oder ``None`` an einem Netz.
+
+    Gefragt wird die Sorte über ``types.BRepBody`` (eine Regel, ein Ort), nicht
+    über einen Import des optionalen Kerns.
+    """
+    return cast("Solid", mesh) if isinstance(mesh, BRepBody) else None
+
+
+def _place_solid(
+    solid: Solid,
+    params: Any,
+    anchor: Vec3 = (0.0, 0.0, 0.0),
+    sink: float = 0.0,
+    direction: Vec3 | None = None,
+    keeps_up: bool = False,
+    flip: bool = False,
+    *,
+    cancelled: CancelToken | None = None,
+) -> Solid:
+    """Der exakte Baustein an seinem Platz — dieselbe Matrix wie :func:`_place`."""
+    from app.core.brep import edit
+    from app.core.geom.ops import as_transform
+
+    matrix = as_transform(_matrix(params, anchor, sink, direction, keeps_up, flip))
+    return edit.transformed(solid, matrix, cancelled=cancelled)
+
+
+def _insert_at_exact(
+    ctx: OpContext,
+    spec: PartSpec,
+    source: SceneObject,
+    profile: Profile | None,
+    part_params: BaseParams,
+    produced: PartResult,
+) -> OpResult:
+    """Der Baustein am exakten Träger: dieselbe Lage, dieselben Befunde, kein Netz.
+
+    Zeile für Zeile der Netzweg aus :func:`_insert_at`, mit dem exakten Kern
+    an den drei Stellen, an denen dort Dreiecke gerechnet werden: Platzieren
+    (``edit.transformed`` mit derselben Matrix), Vereinigen und Schneiden
+    (``edit.boolean``) und das Anhängen eines lösbaren Teils (ein Verbund
+    statt einer Verkettung, Befund B9 des Berichts). Das Einsenken um
+    ``BOOLEAN_OVERLAP`` bleibt: Es schadet exakt nicht und hält beide Wege
+    auf demselben Maß (B4). Die Merkmale sind Provenienz und reisen wie am
+    Netz mit der Matrix; die Merkmale des Trägers führt die Auswertung nach
+    ihrem Zuordnungsvertrag fort (B3). Trägeraufbau und Sitzvorbereitung
+    entstehen im selben Kern; was ihre Formen melden, wird Befund.
+    """
+    from app.core.brep import edit
+    from app.core.knowledge.parts.exact import compound
+
+    built = _solid_of(produced.mesh)
+    if built is None:
+        raise InternalError(detail=f"part {spec.name} built a mesh under the exact kernel")
+    anchor, direction = _anchor(source, ctx.params, spec, built)
+    flat = _lying_flat(spec, ctx.params, direction)
+    on_edge = _standing_on_edge(spec, ctx.params, direction)
+    subtractive = cuts(spec, ctx.params)
+    sink = 0.0 if subtractive or spec.separate_from_host else BOOLEAN_OVERLAP
+    flip = subtractive and _builds_upward_on_a_face(source, ctx.params, built)
+    placed = _place_solid(
+        built, ctx.params, anchor, sink, direction, spec.keeps_up, flip, cancelled=ctx.cancelled
+    )
+    body = _solid_of(source.mesh)
+    if body is None:
+        raise InternalError(detail="the exact part path needs an exact host")
+    original_body = body
+    added_features: dict[str, Feature] = {}
+    added_findings: list[Finding] = []
+    with building("brep") as notes:
+        addition = spec.host_add(part_params) if spec.host_add is not None else None
+    added_findings.extend(notes)
+    if addition is not None:
+        placed_addition = _place_solid(
+            _exact_form(spec, addition),
+            ctx.params,
+            anchor,
+            0.0,
+            direction,
+            spec.keeps_up,
+            False,
+            cancelled=ctx.cancelled,
+        )
+        body = edit.unified(edit.boolean("union", [body, placed_addition]))
+        added_findings.extend(addition.findings)
+        added_features = _placed_features(
+            addition, spec, ctx.params, anchor, 0.0, direction, spec.keeps_up, False
+        )
+    findings: list[Finding] = []
+    host_features: dict[str, Feature] = {}
+    nothing = None
+    if spec.separate_from_host:
+        prepared = body
+        with building("brep") as notes:
+            host_cut = spec.host_cut(part_params) if spec.host_cut is not None else None
+        findings.extend(notes)
+        if host_cut is not None:
+            placed_cutter = _place_solid(
+                _exact_form(spec, host_cut),
+                ctx.params,
+                anchor,
+                0.0,
+                direction,
+                spec.keeps_up,
+                False,
+                cancelled=ctx.cancelled,
+            )
+            prepared = edit.unified(edit.boolean("difference", [body, placed_cutter]))
+            findings.extend(host_cut.findings)
+            nothing = without_effect(body, prepared, "difference", ctx.profile)
+            host_features = _placed_features(
+                host_cut, spec, ctx.params, anchor, 0.0, direction, spec.keeps_up, False
+            )
+        # Schraube und Mutter liegen im selben Projekt, dürfen aber nicht zu
+        # einem unlösbaren Körper verschweißen: ein Verbund aus zwei Körpern.
+        mesh = compound(prepared, placed)
+    else:
+        kind: BooleanKind = "difference" if subtractive else "union"
+        mesh = edit.unified(edit.boolean(kind, [body, placed]))
+        nothing = without_effect(body, mesh, kind, ctx.profile)
+    _exact_result_checked(mesh)
+    features = _merged_features(
+        source,
+        produced,
+        spec,
+        ctx.params,
+        anchor,
+        sink,
+        direction,
+        flip,
+        host_features,
+        added_features,
+    )
+    loose = (
+        None if spec.separate_from_host else _hanging_loose(original_body, mesh, spec, subtractive)
+    )
+    spring = _spring_finding(spec.name, part_params, profile)
+    return OpResult(
+        outputs=[dataclasses.replace(source, mesh=mesh, kind="brep", features=features)],
+        findings=[
+            *findings,
+            *added_findings,
+            *produced.findings,
+            *([nothing] if nothing else []),
+            *([loose] if loose else []),
+            *([flat] if flat else []),
+            *([on_edge] if on_edge else []),
+            *([spring] if spring else []),
+        ],
+    )
+
+
+def _exact_form(spec: PartSpec, produced: PartResult) -> Solid:
+    """Der exakte Körper eines Begleitteils (Trägeraufbau, Vorbereitung des Sitzes)."""
+    solid = _solid_of(produced.mesh)
+    if solid is None:
+        raise InternalError(detail=f"part {spec.name} built a mesh under the exact kernel")
+    return solid
+
+
+def _exact_result_checked(solid: Solid) -> None:
+    """Nach dem Schnitt muss noch ein geschlossener Körper da sein — dieselben Sätze
+    wie bei den exakten Hohlraumhandlungen.
+    """
+    from app.core.geom.boolean import NOTHING_LEFT_DETAIL, NOTHING_LEFT_TITLE
+
+    if solid.volume <= EPS_GEOM or solid.face_count == 0:
+        raise GeometryError(
+            title=NOTHING_LEFT_TITLE,
+            detail=NOTHING_LEFT_DETAIL,
+            suggestions=(CORRECT_INPUT, CANCEL),
+        )
+    if not solid.is_closed:
+        raise GeometryError(
+            detail=_(
+                "Nach diesem Baustein ist der Körper nicht mehr geschlossen. Den Baustein "
+                "an einer anderen Stelle oder mit anderen Maßen setzen."
+            ),
+            suggestions=(CORRECT_INPUT, CANCEL),
+        )
+
+
 def _concatenated_with_slots(body: MeshData, placed: MeshData) -> MeshData:
     """Hängt ein lösbares Teil an und erhält jede Materialzuweisung.
 
@@ -1016,8 +1264,14 @@ def _built_part(
     quality: Quality,
     *,
     parameters: Mapping[str, float] | None = None,
+    kernel: Kernel = "mesh",
 ) -> tuple[BaseParams, PartResult]:
-    """Vorschau und Operation bauen dieselben Maße mit demselben Materialprofil."""
+    """Vorschau und Operation bauen dieselben Maße mit demselben Materialprofil.
+
+    ``kernel`` wählt, in welchem Kern die Formbeschreibung gerechnet wird
+    (P2.7); was die Formen dabei zu sagen haben (``shapes.note``), hängt an
+    den Befunden des Teils.
+    """
     values = _part_values(spec, params, profile)
     for field in spec.params.spec():
         if field.kind == "sketch" and values.get(field.name):
@@ -1025,10 +1279,12 @@ def _built_part(
 
             values[field.name] = resolve_sketch_values(values[field.name], parameters)
     part_params = spec.params(**values)
-    if spec.build_with_profile is not None:
-        produced = spec.build_with_profile(part_params, profile, quality)
-    else:
-        produced = spec.fn(part_params)
+    with building(kernel) as notes:
+        if spec.build_with_profile is not None:
+            produced = spec.build_with_profile(part_params, profile, quality)
+        else:
+            produced = spec.fn(part_params)
+    produced.findings.extend(notes)
     return part_params, produced
 
 
@@ -1147,7 +1403,7 @@ def _anchor(
     source: SceneObject,
     params: Any,
     spec: PartSpec | None = None,
-    built: MeshData | None = None,
+    built: Mesh | None = None,
 ) -> tuple[Vec3, Vec3 | None]:
     """Wohin der Baustein kommt **und wohin er schaut** — an ein benanntes
     Merkmal, oder an den Ursprung (§25).
@@ -1233,7 +1489,7 @@ def _at_the_mouth(
     point: Vec3,
     direction: Vec3 | None,
     feature: Feature,
-    built: MeshData | None,
+    built: Mesh | None,
     spec: PartSpec | None,
 ) -> Vec3:
     """Der Ansatzpunkt an einer Bohrung — ihre Mündung statt ihrer Mitte.
@@ -1287,7 +1543,7 @@ def _at_the_mouth(
     )
 
 
-def _builds_upward_on_a_face(source: SceneObject, params: Any, built: MeshData) -> bool:
+def _builds_upward_on_a_face(source: SceneObject, params: Any, built: Mesh) -> bool:
     """Ob ein abtragender Baustein an einer Fläche nach oben in die Luft bauen
     würde — dann wird er in Z gespiegelt (§24.1).
 
@@ -1315,7 +1571,7 @@ def _builds_upward_on_a_face(source: SceneObject, params: Any, built: MeshData) 
     return _extends_above_mouth(built)
 
 
-def _extends_above_mouth(built: MeshData) -> bool:
+def _extends_above_mouth(built: Mesh) -> bool:
     """Die eine Spiegelungsentscheidung für Schnittvorschau und tatsächliche Op."""
     return float(built.bounds.maximum[2]) > BOOLEAN_OVERLAP + EPS_GEOM
 

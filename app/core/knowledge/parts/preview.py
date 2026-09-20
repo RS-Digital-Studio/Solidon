@@ -61,9 +61,10 @@ def render(
     addition = spec.host_add(values) if spec.host_add is not None else None
     if addition is not None:
         from app.core.knowledge.parts.build import subtract, union
+        from app.core.knowledge.parts.shapes import mesh_only
 
         support = as_mesh_data(addition.mesh)
-        mesh = subtract(support, mesh) if spec.subtractive else union(support, mesh)
+        mesh = mesh_only(subtract(support, mesh) if spec.subtractive else union(support, mesh))
     colours = drawing.palette(theme)
     tone = colours.subtractive if spec.subtractive and addition is None else colours.solid
     return Preview(

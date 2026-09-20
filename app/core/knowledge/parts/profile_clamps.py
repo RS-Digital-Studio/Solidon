@@ -374,26 +374,32 @@ def build_shell(
     for x in centres:
         centre_z = lift + p.depth / 2.0
         through = shapes.cylinder(screw.clearance, 2 * ear_height + 2 * BOOLEAN_OVERLAP)
-        through = shapes.moved(
-            shapes.turned(through, 90.0, (1.0, 0.0, 0.0)),
-            (x, p.split_offset + ear_height + BOOLEAN_OVERLAP, centre_z),
+        through = shapes.mesh_only(
+            shapes.moved(
+                shapes.turned(through, 90.0, (1.0, 0.0, 0.0)),
+                (x, p.split_offset + ear_height + BOOLEAN_OVERLAP, centre_z),
+            )
         )
         tools.append(through)
         if p.half == "lower":
             pocket = shapes.cylinder(head_diameter, screw.head_height + BOOLEAN_OVERLAP)
-            pocket = shapes.moved(
-                shapes.turned(pocket, -90.0, (1.0, 0.0, 0.0)),
-                (x, p.split_offset - ear_height - BOOLEAN_OVERLAP, centre_z),
+            pocket = shapes.mesh_only(
+                shapes.moved(
+                    shapes.turned(pocket, -90.0, (1.0, 0.0, 0.0)),
+                    (x, p.split_offset - ear_height - BOOLEAN_OVERLAP, centre_z),
+                )
             )
         else:
             pocket = shapes.hexagon(nut.width + p.play, nut.height + BOOLEAN_OVERLAP)
-            pocket = shapes.moved(
-                shapes.turned(pocket, 90.0, (1.0, 0.0, 0.0)),
-                (x, p.split_offset + ear_height + BOOLEAN_OVERLAP, centre_z),
+            pocket = shapes.mesh_only(
+                shapes.moved(
+                    shapes.turned(pocket, 90.0, (1.0, 0.0, 0.0)),
+                    (x, p.split_offset + ear_height + BOOLEAN_OVERLAP, centre_z),
+                )
             )
         tools.append(pocket)
     outcome = boolean("difference", [body, *tools], quality=quality, cancelled=cancelled)
-    body = shapes.turned(outcome.mesh, p.split_angle)
+    body = shapes.mesh_only(shapes.turned(outcome.mesh, p.split_angle))
     return PartResult(
         mesh=body,
         features=_features(body, lift, lift + p.depth),

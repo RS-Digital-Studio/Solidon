@@ -726,13 +726,18 @@ STANDALONE = (
     "seal_gasket",
     "wall_ladder",
 )
+#: Die Bausteine, die an einem exakten Träger exakt bauen (P2.7) — die Abnahme je
+#: Gruppe ist der Wechsel ihrer Zeilen von ``MESH`` nach ``KEEP``.
+EXACT_PARTS = frozenset(
+    {"screw_hole", "heatset_m4", "nut_trap", "printed_thread", "printed_screw", "printed_nut"}
+)
 for _part, (_dimensions, _effect, _height) in PART_CASES.items():
     CASES.append(
         Case(
             f"insert_{_part}",
             "host",
             {**_dimensions, "x": 0.0, "y": 0.0, "z": 10.0, "nx": 0.0, "ny": 0.0, "nz": 1.0},
-            MESH,
+            KEEP if _part in EXACT_PARTS else MESH,
             _effect,
             100000.0,
         )
