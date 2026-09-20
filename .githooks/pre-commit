@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Vor jedem Commit, der app/ oder tools/ berührt: die zwei Sprachprüfungen.
+# Vor jedem Commit an app/ oder tools/: Bezeichner und neue Katalogtexte.
 #
-# Warum gerade diese zwei und warum als Hook: Am 30.08.2026 ist dreimal
+# Warum diese Prüfungen als Hook: Am 30.08.2026 ist dreimal
 # dieselbe Sache schiefgegangen — einmal mittags, einmal abends, einmal in
 # einer dritten Sitzung. Jedes Mal ging ein neuer `tr()`-Text oder ein
 # deutscher Bezeichner nach origin, jedes Mal stand das Tor danach für alle
@@ -11,13 +11,14 @@
 # also nicht fangen. Ein Reflex, der dreimal an einem Tag versagt, gehört ins
 # Werkzeug und nicht in drei Köpfe.
 #
-# Zusammen kosten die beiden Läufe rund zehn Sekunden. Ein fremder Torlauf,
-# der an einer roten Sprachprüfung stirbt, kostet eine halbe Stunde.
+# Die Bezeichnerprüfung läuft ohne Fenster. Neue Texte prüft der vorhandene
+# Index-Wächter direkt gegen die Kataloge; Fensterdateien wie
+# test_translations.py und Leistungsprüfungen laufen nur beim Release.
 #
 # **Was dieser Hook ausdrücklich nicht tut: fremde Arbeit anrechnen.** An
 # diesem Projekt arbeiten bis zu fünf Sitzungen im selben Arbeitsbaum. Die
-# Tests laufen gegen den Baum und sehen deshalb auch, was andere gerade
-# ungestaged liegen haben. Ein Hook, der darauf blockiert, hielte jemanden von
+# Bezeichnertests laufen gegen den Baum und sehen deshalb auch, was andere
+# gerade ungestaged liegen haben. Ein Hook, der darauf blockiert, hielte jemanden von
 # seinem eigenen, sauberen Commit ab — und wäre nach dem zweiten Mal
 # dauerhaft abgeschaltet. Er prüft deshalb bei jedem Befund, ob die
 # betroffene Datei **in diesem Commit** steht, und bricht nur dann ab.
@@ -63,22 +64,18 @@ protokoll=$(mktemp)
 trap 'rm -f "$protokoll"' EXIT
 
 echo "pre-commit: Sprachprüfungen …" >&2
-"$python" -m pytest tests/test_language_rules.py tests/test_translations.py \
+"$python" -m pytest tests/test_language_rules.py \
   -q --no-header -p no:randomly > "$protokoll" 2>&1
 code=$?
 
-if [ "$code" -eq 0 ]; then
-  echo "pre-commit: Bezeichner und Kataloge sind in Ordnung." >&2
-  exit 0
-fi
-
-# Ab hier ist etwas rot. Die Frage ist nur noch, ob es zu diesem Commit
-# gehört. Gesucht wird nach Dateinamen in der Ausgabe — `test_language_rules`
-# nennt sie im Parameter (`[main_window.py]`) und in der Meldung selbst.
-echo "" >&2
-echo "pre-commit: die Sprachprüfung ist rot. Ausgabe:" >&2
-grep -E "^(E |FAILED)" "$protokoll" | head -20 >&2
-echo "" >&2
+meine=""
+if [ "$code" -ne 0 ]; then
+  # Gesucht wird nach Dateinamen in der Ausgabe — `test_language_rules`
+  # nennt sie im Parameter (`[main_window.py]`) und in der Meldung selbst.
+  echo "" >&2
+  echo "pre-commit: die Bezeichnerprüfung ist rot. Ausgabe:" >&2
+  grep -E "^(E |FAILED)" "$protokoll" | head -20 >&2
+  echo "" >&2
 
 # **Gesucht wird nur in den Fehlerzeilen, nicht im ganzen Protokoll.** Der
 # erste Anlauf tat Letzteres und brach bei einem sauberen Commit ab: pytest
@@ -89,52 +86,35 @@ echo "" >&2
 #
 # `grep -a`, weil pytest Steuerzeichen ausgibt: Ohne das meldet grep „Binary
 # file matches" und beantwortet eine andere Frage als die gestellte.
-schuld=$(grep -a -E "^(E |FAILED)" "$protokoll" || true)
+  schuld=$(grep -a -E "^(E |FAILED)" "$protokoll" || true)
 
-meine=""
-for pfad in $gestaged; do
-  name=$(basename "$pfad")
-  if printf '%s' "$schuld" | grep -aqF "$name"; then
-    meine="$meine $name"
-  fi
-done
-
-# **Die Übersetzungsprüfung nennt den fehlenden Text, nicht seine Datei.**
-# Der Namensvergleich oben kann sie deshalb nie finden — im ersten Anlauf ging
-# genau der Fall durch, für den dieser Hook gebaut wurde.
-#
-# Gefragt wird deshalb der Diff und nicht die Meldung: Ein fehlender
-# Katalogeintrag entsteht dadurch, dass jemand einen `tr()`-Text hinzufügt.
-# Tut dieser Commit das, während die Übersetzungsprüfung rot ist, gehört der
-# Verdacht ihm. Das ist absichtlich die vorsichtige Richtung — einmal zu viel
-# anhalten kostet einen Blick, einmal zu wenig kostet einen fremden Torlauf.
-#
-# Und ausdrücklich **ohne Umlaut im Suchmuster**: Der erste Anlauf grepte nach
-# „ohne Übersetzung" und fand es nie, weil die Locale der Hook-Shell eine
-# andere ist als die der pytest-Ausgabe. Ein Muster, das an der Kodierung
-# scheitert, meldet dasselbe wie eines, das nichts findet.
-# **Verschärft am 31.08.2026: nicht „legt Texte an", sondern „legt *diesen*
-# Text an".** Die alte Fassung hielt jeden auf, der irgendeinen `tr()`-Text
-# hinzufügte, während irgendwo im geteilten Baum ein **fremder** Text
-# unübersetzt lag. In einer Nacht ist das fünfmal passiert; zweimal war der
-# eigene Text längst vollständig, und die Sitzung wartete trotzdem.
-#
-# `check_new_texts.py` fragt den Diff gegen die Kataloge statt die Ausgabe —
-# der Grund steht zwei Absätze höher: Ein Muster über die pytest-Ausgabe ist
-# schon einmal an der Kodierung gescheitert, und ein Muster, das daran
-# scheitert, meldet dasselbe wie eines, das nichts findet.
-if grep -aq "test_every_text_is_translated" "$protokoll"; then
-  neu_und_offen=$("$python" tools/check_new_texts.py 2>&1) || {
-    meine="$meine [neue Texte ohne Übersetzung]"
-    echo "$neu_und_offen" >&2
-  }
+  for pfad in $gestaged; do
+    name=$(basename "$pfad")
+    if printf '%s' "$schuld" | grep -aqF "$name"; then
+      meine="$meine $name"
+    fi
+  done
 fi
+
+# Neue Texte werden immer geprüft, auch bei grünen Bezeichnern. Der Wächter
+# liest Index gegen HEAD und fragt nur diese Texte gegen die Kataloge ab.
+# Eine fremde Kataloglücke gehört dadurch nicht zu diesem Commit; die Ausgabe
+# einer Fensterprüfung wird weder gestartet noch als Schalter ausgewertet.
+neu_und_offen=$("$python" tools/check_new_texts.py 2>&1) || {
+  meine="$meine [neue Texte ohne Übersetzung]"
+  echo "$neu_und_offen" >&2
+}
 
 if [ -n "$meine" ]; then
   echo "pre-commit: ABGEBROCHEN — betroffen sind Dateien aus diesem Commit:" >&2
   echo "pre-commit:  $meine" >&2
   echo "pre-commit: Behebe es und committe erneut." >&2
   exit 1
+fi
+
+if [ "$code" -eq 0 ]; then
+  echo "pre-commit: Bezeichner und neue Katalogtexte sind in Ordnung." >&2
+  exit 0
 fi
 
 # Kein gestagter Dateiname taucht in der Ausgabe auf. Das ist der häufige Fall

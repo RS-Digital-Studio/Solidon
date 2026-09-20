@@ -358,13 +358,14 @@ raten: das steht in `AGENTS.md` und gilt unverändert. Dazu kommt hier:
   die Gegenstelle weiter, scheitert er und sagt, was zu tun ist.
   `SOLIDON_KEIN_PUSH=1` schaltet ihn für einen Lauf ab; bei einem reinen
   Commitauftrag ohne Push-Freigabe wird diese Variable pro Prozess gesetzt.
-- **Vor jedem Commit an `app/` oder `tools/` laufen die zwei
-  Sprachprüfungen.** `.githooks/pre-commit` fährt `test_language_rules` und
-  `test_translations` — rund zehn Sekunden — und bricht ab, wenn eine Datei
-  **aus diesem Commit** darin genannt ist. Der Anlass: Am 30.08.2026 ging
-  dreimal derselbe Fehler nach origin, weil er im eigenen Diff unsichtbar ist
-  — ein fehlender Katalogeintrag steht in fünf Dateien, die man gerade *nicht*
-  angefasst hat. `SOLIDON_KEIN_TOR=1` schaltet ihn ganz ab.
+- **Vor jedem Commit an `app/` oder `tools/` laufen die Bezeichnerprüfung
+  und die statische Prüfung neuer Oberflächentexte.** `.githooks/pre-commit`
+  fährt `test_language_rules` und unabhängig von dessen Ergebnis
+  `tools/check_new_texts.py`. Sprachbefunde zu Dateien **aus diesem Commit**
+  und fehlende Übersetzungen seiner neuen Texte verhindern den Commit.
+  `test_translations` ist eine Fensterdatei und läuft ausschließlich beim
+  Release, ebenso wie alle anderen Fensterdateien und Leistungsprüfungen.
+  `SOLIDON_KEIN_TOR=1` schaltet den Hook für einen Lauf ganz ab.
   Beides läuft nur, wenn `core.hooksPath` auf `.githooks` zeigt — `check_env`
   meldet es beim Sitzungsstart, und `tests/test_toolchain.py` prüft zusätzlich,
   dass jeder Hook im Repository ausführbar ist. Seinen Interpreter sucht der

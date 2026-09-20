@@ -80,5 +80,9 @@ lässt, erschreckt ihn grundlos.
 - Typografie: „20 × 20 mm" mit echtem Malzeichen, deutsche Anführungszeichen,
   Einheiten mit schmalem Abstand.
 
-Jeder geänderte Text geht in jeden Katalog aus `app/i18n/locales/`, danach läuft
-`.venv\Scripts\python.exe -m pytest tests/test_translations.py -q`.
+Jeder geänderte Text geht in jeden Katalog aus `app/i18n/locales/`. Nach dem
+Schritt laufen die betroffenen Kerntests über `tools/affected_tests.py`.
+Vor dem Commit prüft `tools/check_new_texts.py` die neuen Texte aus dem Index
+gegen die Kataloge, unabhängig vom Ergebnis der Bezeichnerprüfung.
+`tests/test_translations.py` ist eine Fensterdatei und läuft ausschließlich
+beim Release über `/pruefen --release`.

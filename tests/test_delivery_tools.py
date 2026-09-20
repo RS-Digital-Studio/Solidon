@@ -9,6 +9,8 @@ als Zusicherung festgehalten.
 from __future__ import annotations
 
 import json
+import os
+import subprocess
 import sys
 import zipfile
 from pathlib import Path
@@ -210,6 +212,134 @@ def test_the_download_store_takes_the_new_bytes_even_at_the_same_size(
 
 
 # --- check_new_texts -------------------------------------------------------------
+
+
+def _commit_hook_with(
+    tmp_path: Path,
+    *,
+    language_exit: int = 0,
+    language_output: str = "1 passed",
+    catalog_exit: int = 0,
+) -> tuple[subprocess.CompletedProcess[str], list[list[str]]]:
+    """Den echten Hook mit Git- und Interpreter-Doubles durch Bash ausführen.
+
+    Das Interpreter-Doppel protokolliert jeden Auftrag, startet aber weder
+    pytest noch Qt. Die Index-/AST-Prüfung selbst hat ihre Gegenproben unten;
+    hier zählt, wann der Hook sie aufruft und welchen Ausgang er übernimmt.
+    """
+    from tests.test_tool_review_regressions import _bash_executable
+
+    bash = _bash_executable()
+    if bash is None:
+        pytest.skip("ohne Bash lässt sich der echte Commit-Hook nicht ausführen")
+    interpreter = tmp_path / ".venv" / "bin" / "python"
+    interpreter.parent.mkdir(parents=True)
+    interpreter.write_text(
+        """#!/usr/bin/env bash
+printf '%s\\n' "$*" >> "$HOOK_ROOT/calls.txt"
+case "${1:-}" in
+  -m)
+    printf '%s\\n' "$HOOK_LANGUAGE_OUTPUT"
+    exit "$HOOK_LANGUAGE_EXIT" ;;
+  tools/check_new_texts.py)
+    if [ "$HOOK_CATALOG_EXIT" -ne 0 ]; then
+      printf '%s\\n' 'en: 1 neue Texte ohne Übersetzung, z. B. Eigener neuer Text'
+    fi
+    exit "$HOOK_CATALOG_EXIT" ;;
+  *) printf '%s\\n' 'Unerwarteter Interpreterauftrag' >&2; exit 91 ;;
+esac
+""",
+        encoding="utf-8",
+        newline="\n",
+    )
+    interpreter.chmod(0o755)
+    runner = tmp_path / "run-hook.sh"
+    runner.write_text(
+        """git() {
+  case "$1" in
+    diff) printf '%s\\n' 'app/ui/owned.py' ;;
+    rev-parse) printf '%s/.git\\n' "$HOOK_ROOT" ;;
+    *) printf '%s\\n' 'Unerwarteter Git-Auftrag' >&2; return 92 ;;
+  esac
+}
+source "$HOOK_FILE"
+""",
+        encoding="utf-8",
+        newline="\n",
+    )
+    environment = dict(os.environ)
+    environment.pop("SOLIDON_KEIN_TOR", None)
+    environment.update(
+        HOOK_ROOT=tmp_path.as_posix(),
+        HOOK_FILE=(Path(__file__).resolve().parents[1] / ".githooks" / "pre-commit").as_posix(),
+        HOOK_LANGUAGE_EXIT=str(language_exit),
+        HOOK_LANGUAGE_OUTPUT=language_output,
+        HOOK_CATALOG_EXIT=str(catalog_exit),
+    )
+    result = subprocess.run(
+        [str(bash), str(runner)],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        env=environment,
+        cwd=tmp_path,
+        timeout=20,
+    )
+    calls = (tmp_path / "calls.txt").read_text(encoding="utf-8").splitlines()
+    return result, [call.split() for call in calls]
+
+
+def test_the_commit_hook_checks_new_catalog_texts_after_clean_core_language_tests(
+    tmp_path: Path,
+) -> None:
+    """Grüne Bezeichner überspringen keine Katalogprüfung und starten keine Fensterdatei."""
+    result, calls = _commit_hook_with(tmp_path)
+
+    assert result.returncode == 0, result.stderr
+    assert [argument for call in calls for argument in call if argument.startswith("tests/")] == [
+        "tests/test_language_rules.py"
+    ]
+    assert calls[-1] == ["tools/check_new_texts.py"]
+
+
+@pytest.mark.parametrize("foreign_language_failure", [False, True])
+def test_the_commit_hook_stops_for_its_own_new_catalog_gap(
+    tmp_path: Path, foreign_language_failure: bool
+) -> None:
+    """Eine eigene Kataloglücke blockiert sowohl bei grünen als auch fremden roten Bezeichnern."""
+    result, calls = _commit_hook_with(
+        tmp_path,
+        language_exit=int(foreign_language_failure),
+        language_output=(
+            "FAILED tests/test_language_rules.py::test_identifiers[foreign.py]"
+            if foreign_language_failure
+            else "1 passed"
+        ),
+        catalog_exit=1,
+    )
+
+    assert result.returncode == 1, result.stderr
+    assert calls[-1] == ["tools/check_new_texts.py"]
+    assert "Eigener neuer Text" in result.stderr
+
+
+@pytest.mark.parametrize("failed_file, expected_exit", [("owned.py", 1), ("foreign.py", 0)])
+def test_the_commit_hook_attributes_only_failed_language_files(
+    tmp_path: Path, failed_file: str, expected_exit: int
+) -> None:
+    """Ein grüner gestagter Dateiname macht einen fremden Befund nicht zum eigenen."""
+    result, calls = _commit_hook_with(
+        tmp_path,
+        language_exit=1,
+        language_output=(
+            "tests/test_language_rules.py::test_identifiers[owned.py] PASSED\n"
+            f"FAILED tests/test_language_rules.py::test_identifiers[{failed_file}]"
+        ),
+    )
+
+    assert result.returncode == expected_exit, result.stderr
+    assert calls[-1] == ["tools/check_new_texts.py"]
 
 
 def _guard_with(monkeypatch: pytest.MonkeyPatch, *, before: str, after: str) -> list[str]:

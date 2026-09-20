@@ -59,5 +59,10 @@ ohne Ausrufe:
 so wie der Rest der Anwendung spricht. Ein Text, der eine Handlung anbietet,
 beginnt mit dem Verb.
 
-`.venv\\Scripts\\python.exe -m pytest tests/test_translations.py tests/test_language_rules.py -q`
+Nach dem Schritt laufen die betroffenen Kerntests über `tools/affected_tests.py`.
+Vor dem Commit prüft `tests/test_language_rules.py` die Bezeichner und
+`tools/check_new_texts.py` die neuen Texte aus dem Index gegen die Kataloge.
+Die Katalogprüfung läuft auch bei grünen Bezeichnern.
+`tests/test_translations.py` ist eine Fensterdatei und läuft ausschließlich
+beim Release über `/pruefen --release`.
 """

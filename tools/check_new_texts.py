@@ -1,11 +1,10 @@
 """Ob die **neuen** Oberflächentexte eines Commits in den Katalogen stehen.
 
-**Der Fall, für den es das gibt.** Der ``pre-commit``-Hook hält an, wenn die
-Übersetzungsprüfung rot ist und der Commit ``tr()``-Texte anlegt. Das ist zu
-grob: Er hält damit auch einen Commit auf, der einen ganz anderen Text
-hinzufügt, während irgendwo im Baum ein älterer Text unübersetzt liegt. In der
-Nacht auf den 31.08.2026 ist genau das fünfmal passiert, und zweimal war der
-Text des Commits längst vollständig.
+Der ``pre-commit``-Hook führt diese statische Prüfung unabhängig vom Ergebnis
+der Bezeichnerprüfung aus. Die vollständige Übersetzungs-Fensterdatei bleibt
+dem Release vorbehalten. Geprüft werden nur die neuen ``tr()``-Texte des
+Commits: Ein älterer unübersetzter Text im gemeinsamen Arbeitsbaum darf einen
+anderen, vollständigen Commit nicht aufhalten.
 
 Gefragt wird deshalb: **Steht einer der fehlenden Texte in diesem Commit?**
 
@@ -19,13 +18,13 @@ je durch ``ast``. Die Kataloge kommen als JSON daneben; beide Seiten sind
 eindeutig, und keine hängt an einer Zeilenform. Warum nicht der Diff, steht
 bei :func:`added_texts`.
 
-Aufruf (der Hook tut es, sonst niemand)::
+Aufruf im Hook oder zur gezielten statischen Entwicklungsprüfung::
 
     python tools/check_new_texts.py
 
 Rückgabe 1, wenn ein neuer Text in einem Katalog fehlt oder leer steht —
-dann gehört der Verdacht diesem Commit. Rückgabe 0 sonst, auch wenn die
-Prüfung insgesamt rot ist: Dann liegt es an fremder Arbeit.
+dann gehört der Befund diesem Commit. Rückgabe 0 sonst, auch wenn andere
+Texte im gemeinsamen Arbeitsbaum noch unübersetzt sind.
 """
 
 from __future__ import annotations
