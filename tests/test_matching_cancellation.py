@@ -155,11 +155,14 @@ def test_a_saved_matching_answer_keeps_the_evaluation_cancellation(
         referenced={previous.id},
     )
     assert len(asked) == 1
-    assert previous.id in recorded
+    from app.core.perceive import matching
+    from app.core.perceive.match_records import group_key
+
+    assert group_key(source.id, (previous.id,)) in recorded
     answered = replace(operation, matches=recorded)
     signal = CancelSignal()
     calls = []
-    original = module.resolve
+    original = matching.resolve
 
     def stopped(*args, check_cancelled=None, **kwargs):
         assert getattr(check_cancelled, "__self__", None) is signal
@@ -167,7 +170,7 @@ def test_a_saved_matching_answer_keeps_the_evaluation_cancellation(
         signal.cancel()
         return original(*args, check_cancelled=check_cancelled, **kwargs)
 
-    monkeypatch.setattr(module, "resolve", stopped)
+    monkeypatch.setattr(matching, "resolve", stopped)
     with pytest.raises(OperationCancelled):
         module._with_features(
             source,

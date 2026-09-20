@@ -81,7 +81,11 @@ DEFAULT_DISK_BUDGET_BYTES: Final = 2 * 1024 * 1024 * 1024
 #: Rundflächenmaße, rationale Kugelträger und die ausdrückliche Herkunft jedes
 #: Maßes ersetzen frühere gerundete oder nicht belegte Merkmalsauskünfte.
 #: Teilträger und ihre Originaldreiecke ersetzen alte Auskünfte ohne Formbezug.
-CACHE_FORMAT_VERSION: Final = 19
+#: Konkurrierende bisherige Merkmale dürfen keine zufällige Identität aus
+#: alten Folgeergebnissen übernehmen; ihre Antworten gelten als ganze Gruppe.
+#: Folgehashes tragen die tatsächliche Bindung samt aktuellen Flächenträgern;
+#: dieselben reservierten Namen allein belegen kein unverändertes Ergebnis.
+CACHE_FORMAT_VERSION: Final = 20
 
 
 @dataclass(frozen=True, slots=True)
@@ -286,7 +290,8 @@ class ResultCache:
 # --- Plattenebene ----------------------------------------------------------------
 
 
-def _feature_to_data(feature: Feature) -> dict[str, Any]:
+def feature_to_data(feature: Feature) -> dict[str, Any]:
+    """Die gemeinsame vollständige Merkmalsauskunft für Plattencache und Folgehash."""
     return {
         "id": feature.id,
         "kind": feature.kind,
@@ -648,7 +653,7 @@ class DiskCache:
                         "mesh": name,
                         "kind": entry.kind,
                         "features": {
-                            key_: _feature_to_data(value) for key_, value in entry.features.items()
+                            key_: feature_to_data(value) for key_, value in entry.features.items()
                         },
                         "material_slots": [_slot_to_data(slot) for slot in entry.material_slots],
                         "material": entry.material,

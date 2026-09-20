@@ -26,7 +26,7 @@ from app.i18n import _
 _log = get_logger(__name__)
 
 #: Aktuelle Version von ``project.json``.
-FORMAT_VERSION: Final = 26
+FORMAT_VERSION: Final = 27
 
 
 @dataclass(frozen=True, slots=True)
@@ -618,6 +618,40 @@ def _allow_several_filament_colours(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def _qualify_match_answers(data: dict[str, Any]) -> dict[str, Any]:
+    """26 → 27: Alte Antworten ohne erfundenen Körperbezug unter ``legacy`` erhalten.
+
+    Auch jede gespeicherte Undo-Fassung trägt ihre eigenen unveränderten
+    Abdrücke. Selbst ein früherer Merkmalsname ``legacy`` bleibt ein Name
+    innerhalb dieser Hülle; der Serializer nimmt keine eigene Umstellung vor.
+    """
+    operations = list(data.get("ops", []))
+    for transaction in data.get("transactions", []):
+        changes = transaction.get("changes")
+        if changes is None:
+            continue
+        if not isinstance(changes, dict):
+            raise ValueError("schema:transactions.changes")
+        for side in ("before", "after"):
+            state = changes.get(side, {})
+            if not isinstance(state, dict):
+                raise ValueError(f"schema:transactions.changes.{side}")
+            edited = state.get("edited_ops")
+            if edited is None:
+                continue
+            if not isinstance(edited, dict):
+                raise ValueError(f"schema:transactions.changes.{side}.edited_ops")
+            operations.extend(edited.values())
+    for operation in operations:
+        if operation is None:
+            continue
+        if not isinstance(operation, dict):
+            raise ValueError("schema:edited_operation")
+        if operation.get("matches"):
+            operation["matches"] = {"legacy": operation["matches"]}
+    return data
+
+
 #: Alle bekannten Schritte, älteste zuerst.
 MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=1, to_version=2, apply=_add_chat),
@@ -645,6 +679,7 @@ MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=23, to_version=24, apply=_add_protected_faces),
     Step(from_version=24, to_version=25, apply=_keep_raw_import_coordinates),
     Step(from_version=25, to_version=26, apply=_allow_several_filament_colours),
+    Step(from_version=26, to_version=27, apply=_qualify_match_answers),
 )
 
 

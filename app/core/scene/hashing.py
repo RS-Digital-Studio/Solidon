@@ -15,11 +15,11 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
 from app.core.scene import cache
-from app.core.types import Operation, Profile, Quality
+from app.core.types import Feature, Operation, Profile, Quality
 
 if TYPE_CHECKING:
     from app.core.geom.mesh import MeshData
@@ -107,8 +107,13 @@ def object_hash(
     position: int,
     reserved_feature_ids: Sequence[str] = (),
     cavity: MeshData | None = None,
+    *,
+    features: Mapping[str, Feature] | None = None,
+    check_cancelled: Callable[[], None] | None = None,
 ) -> str:
-    """Die Identität eines Ausgabeobjekts einer Operation."""
+    """Die Ausgabe samt tatsächlicher Merkmalsbindung für nachfolgende Operationen."""
+    if check_cancelled is not None:
+        check_cancelled()
     cavity_key = None
     if cavity is not None:
         # Die geometrische Auskunft ist ein weiterer Op-Eingang. Keine
@@ -116,4 +121,20 @@ def object_hash(
         checksum = hashlib.sha256(cavity.raw.vertices.tobytes())
         checksum.update(cavity.raw.faces.tobytes())
         cavity_key = checksum.hexdigest()
-    return digest(operation_key, position, sorted(reserved_feature_ids), cavity_key)
+    feature_key = None
+    if features:
+        checksum = hashlib.sha256()
+        # Derselbe vollständige Codec wie auf der Platte. Je Merkmal wird nur
+        # ein fester Teilhash gehalten, keine zweite Gesamtkopie aller Träger.
+        for name in sorted(features):
+            if check_cancelled is not None:
+                check_cancelled()
+            value = cache.feature_to_data(features[name])
+            if check_cancelled is not None:
+                check_cancelled()
+            checksum.update(bytes.fromhex(digest(name, value)))
+        feature_key = checksum.hexdigest()
+    key = digest(operation_key, position, sorted(reserved_feature_ids), cavity_key, feature_key)
+    if check_cancelled is not None:
+        check_cancelled()
+    return key

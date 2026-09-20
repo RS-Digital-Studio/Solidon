@@ -466,6 +466,412 @@ def test_the_question_shows_its_intermediate_scene_before_the_choices(
     assert request.answer == "hole_2" and request.answered.is_set()
 
 
+def test_matching_question_context_reaches_the_worker_request_and_is_cleared(
+    session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Auswertungsaufruf überträgt Vorschau und echte IDs, die nächste Frage nicht."""
+    from app.core.scene import EvaluationResult
+    from app.core.types import Scene
+    from app.ui import session as module
+
+    preview = EvaluationResult(scene=Scene(objects={}), stopped_at=2)
+    candidates = (("part_a", "face_2"), ("part_b", "face_2"))
+    requests: list[AskRequest] = []
+
+    def answer(request: AskRequest) -> None:
+        requests.append(request)
+        request.reply(request.choices[0])
+
+    def evaluate(_document, _profile, **kwargs):
+        context = kwargs["question_context"]
+        context(preview, candidates)
+        try:
+            assert kwargs["ask"]("Welcher Bezug bleibt?", ["face_2"]) == "face_2"
+        finally:
+            context(None, ())
+        assert kwargs["ask"]("Welche Einheit?", ["mm"]) == "mm"
+        return preview
+
+    monkeypatch.setattr(module, "evaluate", evaluate)
+    session.askRequested.connect(answer, Qt.ConnectionType.DirectConnection)
+    worker = module._EvaluationWorker(session)
+    session._worker = worker
+    try:
+        worker.work()
+        assert len(requests) == 2
+        first, second = requests
+        assert first.preview is preview and first.candidates == candidates
+        assert first.temporary_preview
+        assert first.worker is worker
+        assert first.project_generation == session._project_generation
+        assert second.preview is None and second.candidates == ()
+        assert not second.temporary_preview
+        assert session._pending.preview is None and session._pending.worker is None
+    finally:
+        _release_unstarted_worker(session, "_worker", worker)
+
+
+def test_an_evaluation_question_keeps_the_project_generation_from_its_creation(
+    session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein alter Arbeiter darf beim verspäteten Start keinen neuen Projektstempel erben."""
+    from app.ui import session as module
+
+    worker = module._EvaluationWorker(session)
+    session._worker = worker
+    requests: list[AskRequest] = []
+    stopped: list[bool] = []
+    session.askRequested.connect(requests.append)
+    worker.cancelled.connect(lambda: stopped.append(True))
+    monkeypatch.setattr(session, "run_evaluation", lambda: session.ask_from_worker("Alt", ["Ja"]))
+    session._project_generation += 1
+    try:
+        worker.work()
+        assert requests == [] and stopped == [True]
+        assert session._pending.worker is None
+    finally:
+        _release_unstarted_worker(session, "_worker", worker)
+
+
+def _matching_question_scenes():
+    """Zwei unterscheidbare Ansichten mit tatsächlichen, körpergebundenen Dreiecken."""
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.scene import EvaluationResult
+    from app.core.types import Scene
+
+    def result(offset: float, names: tuple[str, str]):
+        raw = trimesh.creation.box(extents=(10.0, 8.0, 4.0))
+        raw.apply_translation((offset, 0.0, 0.0))
+        features = {
+            name: Feature(
+                id=name,
+                kind="face",
+                params={"area": 8.0 * 4.0},
+                face_indices=indices,
+                provenance="detected",
+            )
+            for name, indices in zip(names, ((0, 2), (10, 11)), strict=True)
+        }
+        body = SceneObject(id="part", name="Platte", mesh=MeshData(raw), features=features)
+        return EvaluationResult(scene=Scene(objects={body.id: body}), stopped_at=2)
+
+    return result(0.0, ("face_old_a", "face_old_b")), result(6.0, ("face_new_a", "face_new_b"))
+
+
+@pytest.mark.parametrize("gesture", ["button", "enter", "double_click", "accept"])
+def test_matching_choices_wait_for_the_actual_scene_and_restore_it_before_reply(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch, gesture: str
+) -> None:
+    """Kein Übernahmeweg entscheidet über unsichtbare Kandidaten oder publiziert die Vorschau."""
+    from PySide6.QtTest import QTest
+
+    from app.ui.dialogs import AskDialog
+
+    base, preview = _matching_question_scenes()
+    session = window.session
+    session.last_result = base
+    window._on_scene(base)
+    document = session.project.document
+    generation, modified = session.result_generation, session.modified
+    history_count = len(document.transactions)
+    original_show = window.viewport.show_scene
+    original_candidates = window.viewport.show_candidates
+    seen = []
+    finished = []
+    candidates = (("part", "face_new_a"), ("part", "face_new_b"))
+
+    def show(result):
+        seen.append(("scene", result))
+        if result is not preview:
+            original_show(result)
+
+    def mark(pairs=(), emphasis=None):
+        if pairs:
+            assert window.viewport.is_scene_applied(preview)
+        seen.append(("candidates", (tuple(pairs), emphasis)))
+        original_candidates(pairs, emphasis)
+
+    def choose(dialog):
+        if gesture == "button":
+            dialog._accept.click()
+        elif gesture == "enter":
+            QTest.keyClick(dialog, Qt.Key.Key_Return)
+        elif gesture == "double_click":
+            dialog.list.itemDoubleClicked.emit(dialog.list.currentItem())
+        else:
+            dialog.accept()
+
+    def interact(dialog):
+        dialog.finished.connect(finished.append)
+        dialog.show()
+        QApplication.processEvents()
+        assert not dialog.list.isEnabled() and not dialog._accept.isEnabled()
+        buttons = dialog.findChild(QDialogButtonBox)
+        assert buttons.button(QDialogButtonBox.StandardButton.Cancel).isEnabled()
+        assert not request.answered.is_set()
+        choose(dialog)
+        assert finished == [], "no acceptance or accidental cancellation before the scene exists"
+        original_show(preview)
+        assert dialog.list.isEnabled() and dialog._accept.isEnabled()
+        dialog.list.setCurrentRow(1)
+        assert window._ask_candidates == candidates
+        assert seen[-1] == ("candidates", (candidates, candidates[1]))
+        choose(dialog)
+        assert finished == [QDialog.DialogCode.Accepted]
+        return dialog.result()
+
+    class Request(AskRequest):
+        def reply(self, answer):
+            assert window.viewport.is_scene_applied(base)
+            assert window._ask_candidates == ()
+            seen.append(("reply", answer))
+            super().reply(answer)
+
+    monkeypatch.setattr(window.viewport, "show_scene", show)
+    monkeypatch.setattr(window.viewport, "show_candidates", mark)
+    monkeypatch.setattr(window, "_on_scene", lambda _result: pytest.fail("temporary final scene"))
+    monkeypatch.setattr(AskDialog, "exec", interact)
+    request = Request(
+        "Welcher Bezug bleibt?",
+        ["face_new_a", "face_new_b"],
+        preview=preview,
+        candidates=candidates,
+        temporary_preview=True,
+        project_generation=session._project_generation,
+    )
+    window._on_ask(request)
+    assert request.answer == "face_new_b" and request.answered.is_set()
+    assert seen[-2:] == [("scene", base), ("reply", "face_new_b")]
+    assert session.last_result is base and session.project.document is document
+    assert (session.result_generation, session.modified) == (generation, modified)
+    assert len(document.transactions) == history_count
+
+
+@pytest.mark.parametrize("ending", ["cancel", "project", "new_result", "close"])
+def test_a_matching_preview_can_end_before_its_scene_is_ready(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch, ending: str
+) -> None:
+    """Abbruch bleibt erreichbar; Projektwechsel und neue Ergebnisse bekommen keine alte Ansicht."""
+    from app.core.scene.project import new_project
+    from app.ui.dialogs import AskDialog
+
+    base, preview = _matching_question_scenes()
+    window.session.last_result = base
+    shown, errors = [], []
+    monkeypatch.setattr(window.viewport, "show_scene", shown.append)
+    monkeypatch.setattr(window.viewport, "is_scene_applied", lambda _scene: False)
+    monkeypatch.setattr(window, "_on_error", errors.append)
+    request = AskRequest(
+        "Welcher Bezug bleibt?",
+        ["face_new_a"],
+        preview=preview,
+        candidates=(("part", "face_new_a"),),
+        temporary_preview=True,
+        project_generation=window.session._project_generation,
+    )
+
+    def interact(dialog):
+        if ending == "cancel":
+            buttons = dialog.findChild(QDialogButtonBox)
+            buttons.button(QDialogButtonBox.StandardButton.Cancel).click()
+        elif ending == "project":
+            window.session.project = new_project()
+            window.session._project_generation += 1
+            window.session.projectChanged.emit()
+        elif ending == "new_result":
+            window.session.last_result = preview
+            window.session.result_generation += 1
+            window.session.sceneChanged.emit(preview)
+        else:
+            window._close_requested = True
+            window._cancel_pending_question()
+            assert request.answered.is_set(), "the closing window must not wait for its own dialog"
+        assert not dialog._accept.isEnabled()
+        return QDialog.DialogCode.Accepted  # Auch eine verspätete Annahme zählt nicht.
+
+    monkeypatch.setattr(AskDialog, "exec", interact)
+    window._on_ask(request)
+    assert request.answered.is_set() and request.answer is None
+    assert errors == [] and window._ask_candidates == ()
+    if ending == "cancel":
+        assert shown == [preview, base]
+    elif ending in ("project", "close"):
+        assert shown == [preview]
+    else:
+        assert all(result is not base for result in shown)
+
+
+@pytest.mark.parametrize("stage", ["construction", "prepare", "scene", "dialog", "restore"])
+def test_a_matching_preview_error_releases_the_worker_before_reporting_it(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch, stage: str
+) -> None:
+    """Jeder Aufbau- und Rückwegfehler beantwortet die Frage sicher mit Abbruch."""
+    from app.ui.dialogs import AskDialog
+
+    base, preview = _matching_question_scenes()
+    window.session.last_result = base
+    failures = []
+    request = AskRequest(
+        "Welcher Bezug bleibt?",
+        ["face_new_a"],
+        preview=preview,
+        candidates=(("part", "face_new_a"),),
+        temporary_preview=True,
+    )
+
+    def report(error):
+        assert request.answered.is_set()
+        failures.append(error)
+
+    def show(result):
+        if (stage == "prepare" and result is preview) or (stage == "restore" and result is base):
+            raise RuntimeError("prepared scene error")
+
+    def interact(dialog):
+        if stage == "scene":
+            window.viewport.sceneFailed.emit("asynchronous scene error")
+            return dialog.result()
+        if stage == "dialog":
+            raise RuntimeError("dialog error")
+        return QDialog.DialogCode.Accepted
+
+    def broken_dialog(*_args):
+        raise RuntimeError("construction error")
+
+    monkeypatch.setattr(window, "_on_error", report)
+    monkeypatch.setattr(window.viewport, "show_scene", show)
+    monkeypatch.setattr(window.viewport, "is_scene_applied", lambda _result: True)
+    monkeypatch.setattr(AskDialog, "exec", interact)
+    if stage == "construction":
+        monkeypatch.setattr(main_window_module, "AskDialog", broken_dialog)
+    window._on_ask(request)
+    assert request.answered.is_set() and request.answer is None
+    assert len(failures) == 1 and isinstance(failures[0], errors.InternalError)
+    assert window._ask_dialog is None and window._ask_candidates == ()
+
+
+@pytest.mark.parametrize("stale", ["project", "worker", "cancelled"])
+def test_a_queued_stale_question_never_opens_a_dialog(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch, stale: str
+) -> None:
+    """Der Auftrag behält seinen Arbeiter; eine neue Sitzung oder Abbruch entwertet ihn."""
+    from app.ui import session as module
+
+    worker = module._EvaluationWorker(window.session)
+    window.session._worker = worker
+    request = AskRequest(
+        "Welcher Bezug bleibt?",
+        ["face_new_a"],
+        project_generation=window.session._project_generation,
+        worker=worker,
+    )
+    if stale == "project":
+        window.session._project_generation += 1
+    elif stale == "worker":
+        window.session._worker = None
+    else:
+        window.session.cancel_signal.cancel()
+    monkeypatch.setattr(
+        main_window_module, "AskDialog", lambda *_args: pytest.fail("stale question dialog")
+    )
+    try:
+        window._on_ask(request)
+        assert request.answered.is_set() and request.answer is None
+        assert window._ask_dialog is None
+    finally:
+        window.session.cancel_signal.reset()
+        _release_unstarted_worker(window.session, "_worker", worker)
+
+
+@pytest.mark.parametrize("stop", ["cancel", "replace"])
+@pytest.mark.parametrize("phase", ["construction", "scene", "dialog"])
+def test_active_matching_questions_end_when_their_evaluation_is_invalidated(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch, stop: str, phase: str
+) -> None:
+    """Abbruch und Nachlauf lösen auch vor dem Event-Warten jede alte Frage vollständig."""
+    from app.ui import session as module
+    from app.ui.dialogs import AskDialog
+
+    session = window.session
+    base, preview = _matching_question_scenes()
+    session.last_result = base
+    original_show = window.viewport.show_scene
+    original_show(base)
+    original_init = AskDialog.__init__
+    original_ready = AskDialog.set_ready
+    shown, requests, stopped, failures, readiness = [], [], [], [], []
+    worker = module._EvaluationWorker(session)
+    session._worker = worker
+    monkeypatch.setattr(worker, "isRunning", lambda: True)
+    worker.cancelled.connect(lambda: stopped.append(True))
+    remember = requests.append
+    session.askRequested.connect(remember, Qt.ConnectionType.DirectConnection)
+    monkeypatch.setattr(window, "_on_error", failures.append)
+
+    def invalidate():
+        if stop == "cancel":
+            session.cancel_evaluation()
+        else:
+            # Die Änderungsmeldung kommt im echten _changed vor evaluate_async.
+            session.projectChanged.emit()
+            session.evaluate_async()
+
+    def initialise(dialog, *args, **kwargs):
+        original_init(dialog, *args, **kwargs)
+        if phase == "construction":
+            invalidate()
+
+    def show(result):
+        shown.append(result)
+        original_show(result)
+        if result is preview and phase == "scene":
+            invalidate()
+
+    def ready(dialog, value):
+        readiness.append(value)
+        original_ready(dialog, value)
+
+    def interact(dialog):
+        assert phase == "dialog", "a request invalidated before exec must never start its loop"
+        assert dialog._accept.isEnabled()
+        invalidate()
+        assert not dialog._accept.isEnabled()
+        assert dialog.result() == QDialog.DialogCode.Rejected
+        return dialog.result()
+
+    def evaluate():
+        session.announce_question(preview, (("part", "face_new_a"),))
+        session.ask_from_worker("Welcher Bezug bleibt?", ["face_new_a"])
+        pytest.fail("an invalidated evaluation cannot receive a matching answer")
+
+    monkeypatch.setattr(AskDialog, "__init__", initialise)
+    monkeypatch.setattr(AskDialog, "set_ready", ready)
+    monkeypatch.setattr(AskDialog, "exec", interact)
+    monkeypatch.setattr(window.viewport, "show_scene", show)
+    monkeypatch.setattr(session, "run_evaluation", evaluate)
+    try:
+        # Direkte Zustellung beantwortet die Frage noch vor answered.wait().
+        worker.work()
+        assert stopped == [True] and failures == []
+        assert len(requests) == 1 and requests[0].answered.is_set()
+        assert requests[0].answer is None
+        assert session.last_result is base and window.viewport.is_scene_applied(base)
+        assert shown[-1] is base
+        assert window._ask_dialog is None and window._ask_request is None
+        assert window._ask_candidates == ()
+        assert session._pending.preview is None and session._pending.candidates == ()
+        previous_calls = len(readiness)
+        session.questionInvalidated.emit()
+        assert len(readiness) == previous_calls, "the completed dialog has no live signal binding"
+    finally:
+        session._rerun_pending = False
+        session.cancel_signal.reset()
+        session.askRequested.disconnect(remember)
+        _release_unstarted_worker(session, "_worker", worker)
+
+
 @pytest.fixture
 def session(qt_app: QApplication) -> Session:
     return Session()

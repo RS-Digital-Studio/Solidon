@@ -29,10 +29,13 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from app.core.deferred import cKDTree, linear_sum_assignment
+from app.core.errors import AmbiguityError
 from app.core.log import get_logger
+from app.core.perceive.match_records import valid_fingerprint
 from app.core.perceive.surfaces import radial_scales, transformed_patches
 from app.core.types import Feature, FeatureId, Transform, Vec3
 from app.core.units import EPS_GEOM
+from app.i18n import _
 
 if TYPE_CHECKING:
     from app.core.geom.mesh import MeshData
@@ -87,9 +90,9 @@ class MatchResult:
     orphaned: tuple[FeatureId, ...] = ()
     """Alte Merkmale ohne Partner (§21.2)."""
     ambiguous: dict[FeatureId, tuple[FeatureId, ...]] = field(default_factory=dict)
-    """Alte Merkmale mit mehreren gleich guten Kandidaten — nach denen wird gefragt."""
+    """Offene alte Identitäten; mehrere alte Ansprüche dürfen um nur ein Ziel konkurrieren."""
     fresh: tuple[FeatureId, ...] = ()
-    """Neue Merkmale, die niemand erwartet hat."""
+    """Neue Merkmale ohne freigegebenen alten Namen, einschließlich offener Kandidaten."""
 
     @property
     def settled(self) -> bool:
@@ -248,6 +251,32 @@ def _candidate_costs(
                 yield row, columns[accepted], values[accepted]
 
 
+@dataclass(slots=True)
+class _Assignment:
+    """Vollständige Solverantwort und wiederholbarer Zugang zu ihren Originalkosten."""
+
+    rows: np.ndarray
+    columns: np.ndarray
+    values: np.ndarray
+    matrix: np.ndarray | None
+    pairs: Callable[[], Iterator[tuple[int, np.ndarray, np.ndarray]]]
+
+
+def _matrix_pairs(
+    matrix: np.ndarray, check: Callable[[], None] | None
+) -> Iterator[tuple[int, np.ndarray, np.ndarray]]:
+    """Bereits gerechnete angenommene Paare in denselben begrenzten Blöcken lesen."""
+    for row, values in enumerate(matrix):
+        if check is not None:
+            check()
+        indices = np.flatnonzero(values <= MATCH_THRESHOLD)
+        for start in range(0, len(indices), VECTOR_ROWS):
+            if check is not None:
+                check()
+            columns = indices[start : start + VECTOR_ROWS]
+            yield row, columns, values[columns]
+
+
 def _assignment(
     first: list[Feature],
     second: list[Feature],
@@ -255,7 +284,7 @@ def _assignment(
     centre: Vec3,
     diagonal: float,
     check: Callable[[], None] | None,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray | None, list[np.ndarray]]:
+) -> _Assignment:
     """Strikte freie Zeilenminima zertifizieren; sonst den ganzen Solverkontext erhalten."""
     one, two = _vectors(first, before, diagonal, check), _vectors(second, centre, diagonal, check)
     if not np.all(np.isfinite(one)) or not np.all(np.isfinite(two)):
@@ -267,7 +296,9 @@ def _assignment(
         rows, columns = linear_sum_assignment(matrix)
         if check is not None:
             check()
-        return rows, columns, matrix, []
+        return _Assignment(
+            rows, columns, matrix[rows, columns], matrix, lambda: _matrix_pairs(matrix, check)
+        )
     if check is not None:
         check()
     tree = cKDTree(two[:, :3])
@@ -309,22 +340,12 @@ def _assignment(
         columns = np.arange(smaller) if transposed else partners
         order = np.argsort(rows)
         rows, columns = rows[order], columns[order]
-        selected: dict[int, tuple[int, list[int]]] = {
-            int(row): (int(column), []) for row, column in zip(rows, columns, strict=True)
-        }
-        for row, nearby, values in _candidate_costs(first, second, one, two, tree, radius, check):
-            entry = selected.get(row)
-            if entry is None:
-                continue
-            column, rivals = entry
-            best = minima[column if transposed else row]
-            limit = best * (1.0 + AMBIGUITY_MARGIN) + AMBIGUITY_FLOOR
-            rivals.extend(int(index) for index in nearby[(nearby != column) & (values <= limit)])
-        return (
+        return _Assignment(
             rows,
             columns,
+            minima[columns if transposed else rows],
             None,
-            [np.asarray(selected[int(row)][1], dtype=np.intp) for row in rows],
+            lambda: _candidate_costs(first, second, one, two, tree, radius, check),
         )
     if check is not None:
         check()
@@ -340,7 +361,239 @@ def _assignment(
     rows, columns = linear_sum_assignment(matrix)
     if check is not None:
         check()
-    return rows, columns, matrix, []
+    return _Assignment(
+        rows, columns, matrix[rows, columns], matrix, lambda: _matrix_pairs(matrix, check)
+    )
+
+
+def _hull_limits(
+    matrix: np.ndarray, assignment: _Assignment, check: Callable[[], None] | None
+) -> np.ndarray:
+    """Notwendige Kostenhülle aus exakten binären U-L-Summen, ohne Strafsummenverlust.
+
+    Jede vollständige Zuteilung nimmt genau eine Kante der kleineren Seite.
+    Mit deren Minima m und L=sum(m) kann C[r,j] nur dann zu einem Optimum
+    gehören, wenn C[r,j] <= m[r] + U - L. U enthält auch alle Strafpaare.
+    Die Zeilengrenze wird abgerundet: Der Floatvergleich entscheidet danach
+    exakt dieselbe Menge wie der rationale Vergleich, ohne Fraction je Paar.
+    """
+    oriented = matrix.T if matrix.shape[0] > matrix.shape[1] else matrix
+    minima = np.empty(len(oriented))
+    for start in range(0, len(oriented), VECTOR_ROWS):
+        if check is not None:
+            check()
+        minima[start : start + VECTOR_ROWS] = np.min(oriented[start : start + VECTOR_ROWS], axis=1)
+    gap = Fraction(0)
+    for index, (selected, minimum) in enumerate(zip(assignment.values, minima, strict=True)):
+        if check is not None and index % VECTOR_ROWS == 0:
+            check()
+        gap += Fraction(float(selected)) - Fraction(float(minimum))
+    limits = np.empty(len(minima))
+    for index, minimum in enumerate(minima):
+        if check is not None and index % VECTOR_ROWS == 0:
+            check()
+        exact = Fraction(float(minimum)) + gap
+        rounded = float(exact)
+        if Fraction(rounded) > exact:
+            rounded = float(np.nextafter(rounded, -np.inf))
+        limits[index] = rounded
+    return limits
+
+
+def _reachable(
+    graph: list[list[int]], starts: list[int], check: Callable[[], None] | None
+) -> np.ndarray:
+    """Gerichtete Reichweite ohne Rekursion; auch lange Kantenlisten sind abbrechbar."""
+    reached = np.zeros(len(graph), dtype=bool)
+    pending = list(starts)
+    reached[starts] = True
+    while pending:
+        node = pending.pop()
+        for start in range(0, len(graph[node]), VECTOR_ROWS):
+            if check is not None:
+                check()
+            for neighbour in graph[node][start : start + VECTOR_ROWS]:
+                if not reached[neighbour]:
+                    reached[neighbour] = True
+                    pending.append(neighbour)
+    if check is not None:
+        check()
+    return reached
+
+
+def _strong_components(
+    graph: list[list[int]], reverse: list[list[int]], check: Callable[[], None] | None
+) -> np.ndarray:
+    """Kosaraju mit ausdrücklichem Stapel statt Rekursion über Merkmalsketten."""
+    visited: set[int] = set()
+    order: list[int] = []
+    steps = 0
+    for root in range(len(graph)):
+        if check is not None:
+            check()
+        if root in visited:
+            continue
+        visited.add(root)
+        pending = [(root, iter(graph[root]))]
+        while pending:
+            steps += 1
+            if check is not None and steps % VECTOR_ROWS == 0:
+                check()
+            node, edges = pending[-1]
+            neighbour = next(edges, None)
+            if neighbour is None:
+                order.append(node)
+                pending.pop()
+            elif neighbour not in visited:
+                visited.add(neighbour)
+                pending.append((neighbour, iter(graph[neighbour])))
+    labels = np.full(len(graph), -1, dtype=np.intp)
+    for root in reversed(order):
+        if check is not None:
+            check()
+        if labels[root] >= 0:
+            continue
+        labels[root] = root
+        stack = [root]
+        while stack:
+            node = stack.pop()
+            for start in range(0, len(reverse[node]), VECTOR_ROWS):
+                if check is not None:
+                    check()
+                for neighbour in reverse[node][start : start + VECTOR_ROWS]:
+                    if labels[neighbour] < 0:
+                        labels[neighbour] = root
+                        stack.append(neighbour)
+    return labels
+
+
+def _global_support(
+    assignment: _Assignment, partners: np.ndarray, new_count: int, check: Callable[[], None] | None
+) -> list[list[int]]:
+    """Globale Wechselmöglichkeiten durch Hülle, Maximalität und alternierende Wege begrenzen."""
+    support = [[int(partner)] if partner >= 0 else [] for partner in partners]
+    matrix = assignment.matrix
+    if matrix is None:
+        # Alle strikten freien Minima zusammen beweisen das eindeutige Optimum.
+        return support
+    limits = _hull_limits(matrix, assignment, check)
+    old_count = len(partners)
+    transposed = old_count > new_count
+    hull: list[list[int]] = [[] for _ in partners]
+    graph: list[list[int]] = [[] for _ in range(old_count + new_count)]
+    reverse: list[list[int]] = [[] for _ in graph]
+    for row, columns, values in assignment.pairs():
+        kept = columns[values <= (limits[columns] if transposed else limits[row])]
+        hull[row].extend(int(column) for column in kept)
+        for column in kept:
+            before, after = row, old_count + int(column)
+            if partners[row] == column:
+                before, after = after, before
+            graph[before].append(after)
+            reverse[after].append(before)
+    free_old = [index for index, partner in enumerate(partners) if partner < 0]
+    taken = {int(partner) for partner in partners if partner >= 0}
+    free_new = [old_count + column for column in range(new_count) if column not in taken]
+    forward = _reachable(graph, free_old, check)
+    if np.any(forward[free_new]):
+        raise AmbiguityError(
+            _("Die Merkmalszuordnung ist widersprüchlich. Bitte die Zuordnung erneut prüfen.")
+        )
+    backward = _reachable(reverse, free_new, check)
+    labels = _strong_components(graph, reverse, check)
+    for row, neighbours in enumerate(hull):
+        for start in range(0, len(neighbours), VECTOR_ROWS):
+            if check is not None:
+                check()
+            for column in neighbours[start : start + VECTOR_ROWS]:
+                node = old_count + column
+                if column != partners[row] and (
+                    labels[row] == labels[node]
+                    or (forward[row] and forward[node])
+                    or (backward[row] and backward[node])
+                ):
+                    support[row].append(column)
+    return support
+
+
+def _open_claims(
+    assignment: _Assignment, old_count: int, new_count: int, check: Callable[[], None] | None
+) -> tuple[np.ndarray, dict[int, list[int]]]:
+    """Feste A-Referenzen mit Zeilenrivalen R und aktivierten Besitzeransprüchen Q schließen."""
+    partners = np.full(old_count, -1, dtype=np.intp)
+    accepted = assignment.values <= MATCH_THRESHOLD
+    partners[assignment.rows[accepted]] = assignment.columns[accepted]
+    support = _global_support(assignment, partners, new_count, check)
+    old_upper = np.full(old_count, -np.inf)
+    new_upper = np.full(new_count, -np.inf)
+    owners: list[list[int]] = [[] for _ in range(new_count)]
+    for row, targets in enumerate(support):
+        if check is not None:
+            check()
+        for start in range(0, len(targets), VECTOR_ROWS):
+            if check is not None:
+                check()
+            for column in targets[start : start + VECTOR_ROWS]:
+                owners[column].append(row)
+        if targets and assignment.matrix is not None:
+            values = assignment.matrix[row, targets]
+            old_upper[row] = np.max(values)
+            np.maximum.at(new_upper, targets, values)
+    if assignment.matrix is None:
+        old_upper[assignment.rows] = assignment.values
+        new_upper[assignment.columns] = assignment.values
+    row_limits = old_upper * (1.0 + AMBIGUITY_MARGIN) + AMBIGUITY_FLOOR
+    column_limits = new_upper * (1.0 + AMBIGUITY_MARGIN) + AMBIGUITY_FLOOR
+    row_claims: list[list[int]] = [[] for _ in partners]
+    extra_claims: list[list[int]] = [[] for _ in partners]
+    for row, columns, values in assignment.pairs():
+        row_claims[row].extend(int(column) for column in columns[values <= row_limits[row]])
+        extra_claims[row].extend(
+            int(column) for column in columns[values <= column_limits[columns]]
+        )
+    return partners, _close_claims(partners, support, owners, row_claims, extra_claims, check)
+
+
+def _close_claims(
+    partners: np.ndarray,
+    support: list[list[int]],
+    owners: list[list[int]],
+    row_claims: list[list[int]],
+    extra_claims: list[list[int]],
+    check: Callable[[], None] | None,
+) -> dict[int, list[int]]:
+    """Alle geöffneten Besitzer vollständig nachführen, ohne ihre Referenzkosten zu ändern."""
+    pending: list[int] = []
+    for row in range(len(partners)):
+        if check is not None:
+            check()
+        if (
+            len(support[row]) > 1
+            or any(len(owners[column]) > 1 for column in support[row])
+            or any(column != partners[row] for column in row_claims[row])
+            or (partners[row] < 0 and extra_claims[row])
+        ):
+            pending.append(row)
+    opened = set(pending)
+    claims: dict[int, list[int]] = {}
+    while pending:
+        if check is not None:
+            check()
+        row = pending.pop()
+        columns = sorted(set(support[row]) | set(row_claims[row]) | set(extra_claims[row]))
+        claims[row] = columns
+        for start in range(0, len(columns), VECTOR_ROWS):
+            if check is not None:
+                check()
+            for column in columns[start : start + VECTOR_ROWS]:
+                for offset in range(0, len(owners[column]), VECTOR_ROWS):
+                    if check is not None:
+                        check()
+                    for owner in owners[column][offset : offset + VECTOR_ROWS]:
+                        if owner not in opened:
+                            opened.add(owner)
+                            pending.append(owner)
+    return claims
 
 
 def match(
@@ -367,7 +620,7 @@ def match(
     before = old_centre if old_centre is not None else centre
     old_ids = list(old)
     new_ids = list(new)
-    rows, columns, matrix, selected_rivals = _assignment(
+    assignment = _assignment(
         [old[identifier] for identifier in old_ids],
         [new[identifier] for identifier in new_ids],
         before,
@@ -375,47 +628,38 @@ def match(
         diagonal,
         check_cancelled,
     )
-    threshold = MATCH_THRESHOLD
+    partners, claims = _open_claims(assignment, len(old_ids), len(new_ids), check_cancelled)
     result = MatchResult()
     taken: set[str] = set()
-
-    for assigned, (row, column) in enumerate(zip(rows, columns, strict=True)):
+    for row, old_id in enumerate(old_ids):
         if check_cancelled is not None:
             check_cancelled()
-        old_id = old_ids[row]
-        if matrix is not None and matrix[row, column] > threshold:
-            result.orphaned = (*result.orphaned, old_id)
-            continue
-
-        # Ein Rivale ist einer, der *ähnlich gut* passt — nicht jeder, der
-        # überhaupt in Frage kommt. Mit ``max(…, threshold)`` war jeder
-        # Kandidat unter der Annahmeschwelle ein Rivale, auch wenn der beste
-        # Treffer null kostete und er selbst fast eins: eine Mutternfalle mit
-        # Tasche und Bohrung übereinander machte jede Auswertung des Gehäuses
-        # zur Rückfrage. Der Boden hält den Fall offen, dass zwei Kandidaten
-        # beide fast nichts kosten und wirklich nicht zu unterscheiden sind.
-        if matrix is None:
-            rival_indices = selected_rivals[assigned]
-        else:
-            limit = matrix[row, column] * (1.0 + AMBIGUITY_MARGIN) + AMBIGUITY_FLOOR
-            rival_mask = matrix[row] <= limit
-            rival_mask[column] = False
-            rival_indices = np.flatnonzero(rival_mask)
-        rivals = [new_ids[other] for other in rival_indices]
-        if rivals:
-            # §21.3: mehrere dichte Kandidaten — anhalten und fragen statt raten.
-            result.ambiguous[old_id] = (new_ids[column], *rivals)
-            continue
-
-        result.mapping[old_id] = new_ids[column]
-        taken.add(new_ids[column])
-
-    unmatched = [identifier for identifier in old_ids if identifier not in result.mapping]
+        column = int(partners[row])
+        if row in claims:
+            candidates = claims[row]
+            # Die bisherige Anzeigeordnung bleibt: vorgeschlagener Partner
+            # zuerst. Diese Reihenfolge ist keine bestätigte Entscheidung.
+            ordered = ([column] if column in candidates else []) + [
+                other for other in candidates if other != column
+            ]
+            result.ambiguous[old_id] = tuple(new_ids[other] for other in ordered)
+        elif column >= 0:
+            result.mapping[old_id] = new_ids[column]
+            taken.add(new_ids[column])
+    rejected = [
+        old_ids[int(row)]
+        for row, value in zip(assignment.rows, assignment.values, strict=True)
+        if value > MATCH_THRESHOLD and int(row) not in claims
+    ]
+    # Nicht zugeteilte alte Zeilen vor den ausdrücklich abgewiesenen Paaren,
+    # wie im ursprünglichen vollständigen Solverweg.
     result.orphaned = tuple(
         identifier
-        for identifier in unmatched
-        if identifier not in result.ambiguous and identifier not in result.orphaned
-    ) + tuple(entry for entry in result.orphaned)
+        for identifier in old_ids
+        if identifier not in result.mapping
+        and identifier not in result.ambiguous
+        and identifier not in rejected
+    ) + tuple(rejected)
     result.fresh = tuple(identifier for identifier in new_ids if identifier not in taken)
 
     if check_cancelled is not None:
@@ -423,6 +667,17 @@ def match(
     if result.ambiguous:
         _log.info("feature matching left %d ambiguous", len(result.ambiguous))
     return result
+
+
+def require_injective(mapping: Mapping[str, str]) -> None:
+    """Verhindert doppelte Nachfolger vor jeder Namen- und Erzeugerübernahme."""
+    if len(set(mapping.values())) != len(mapping):
+        raise AmbiguityError(
+            _(
+                "Mehrere bisherige Merkmale wurden demselben aktuellen Merkmal zugeordnet. "
+                "Bitte die Zuordnung erneut wählen."
+            )
+        )
 
 
 def inherit_originators(
@@ -436,6 +691,7 @@ def inherit_originators(
     Flächen, deren Topologiekennungen erhalten bleiben müssen. Ein gleicher
     Name oder eine mehrdeutige Zuordnung beweist keinen Vorfahren.
     """
+    require_injective(result.mapping)
     inherited = dict(new)
     for old, name in result.mapping.items():
         feature, ancestor = inherited.get(name), previous.get(old)
@@ -468,6 +724,7 @@ def apply_mapping(
     Flächennormalen sind geometrisch gerichtet. Der Torus trägt die Normale
     seiner Symmetrieebene, keine Längsrichtung, und behält sie ebenfalls.
     """
+    require_injective(result.mapping)
     renamed: dict[FeatureId, Feature] = {}
     reverse = {value: key for key, value in result.mapping.items()}
     # Auch die mehrdeutigen alten Namen bleiben gesperrt: wer eine
@@ -587,10 +844,19 @@ def resolve(
 
     Genommen wird deshalb dieselbe Rivalenlogik wie in :func:`match`: Der Beste
     muss unter der Annahmeschwelle liegen **und** die anderen müssen deutlich
-    schlechter sein. Sonst ``None``.
+    schlechter sein. Sonst ``None``. Ein nicht vergleichbarer gleichartiger
+    Kandidat sperrt die gesamte Wiedererkennung; er ist kein schlechter Rivale.
     """
     if check_cancelled is not None:
         check_cancelled()
+    if not valid_fingerprint(saved, legacy=True):
+        return None
+    try:
+        frame = np.asarray(centre, dtype=float)
+        if frame.shape != (3,) or not np.isfinite(frame).all() or not np.isfinite(diagonal):
+            return None
+    except TypeError, ValueError, OverflowError:
+        return None
     kind = saved.get("kind")
     reference = np.concatenate(
         [
@@ -608,8 +874,25 @@ def resolve(
         feature = detected.get(identifier)
         if feature is None or feature.kind != kind:
             continue
-        vector = feature_vector(feature, centre, diagonal)
-        costs.append((float(_vector_costs(reference, vector, not directional)), identifier))
+        try:
+            # Die gemeinsame Vektorrechnung bewahrt historische Vorgaben für
+            # optionale Richtungen/Maße. Eine fehlende aktuelle Lage darf aber
+            # weder zum Ursprung werden noch durch Broadcasting passend wirken.
+            params = feature.params
+            if np.shape(params.get("centre", ())) != (3,) or np.shape(
+                params.get("axis", params.get("normal", (0.0, 0.0, 0.0)))
+            ) != (3,):
+                return None
+            with np.errstate(over="ignore", invalid="ignore"):
+                vector = feature_vector(feature, centre, diagonal)
+                value = float(_vector_costs(reference, vector, not directional))
+        except TypeError, ValueError, OverflowError:
+            return None
+        if check_cancelled is not None:
+            check_cancelled()
+        if not np.isfinite(vector).all() or not np.isfinite(value):
+            return None
+        costs.append((value, identifier))
 
     if check_cancelled is not None:
         check_cancelled()

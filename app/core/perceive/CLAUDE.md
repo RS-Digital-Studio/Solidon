@@ -17,13 +17,41 @@ globalen Solverseite hat einen strikt besten angenommenen Partner, und
 diese Partner sind paarweise verschieden. Sonst bleibt der vollständige
 globale Solverkontext mit identischen Strafkosten erhalten; eine Aufteilung
 in Zusammenhangskomponenten würde Gleichstände und alte IDs verändern.
-Rivalen, neue/verwaiste IDs und ihre Reihenfolge folgen in beiden Wegen
-demselben Vertrag. Ein zweiter selektiver Durchgang bestimmt Rivalen oder
-belegt die Rückfallmatrix, ohne vorher alle Kandidatenkosten zu speichern.
-Vektoraufbereitung, Baumabfragen, Kostenblöcke, Solverabschluss und
-Ergebnisbildung prüfen den vorhandenen Abbruchcallback. `resolve` führt ihn
-auch durch gespeicherte Antworten bis vor die Rückgabe weiter. Die
-Merkmalsobergrenze bleibt eine gesonderte Release-Entscheidung.
+Die Solverantwort ist noch keine freigegebene alte Identität. Eine exakte
+Kostenhülle summiert die vorhandenen binären Kosten einschließlich Strafpaaren
+auf der kleineren vollständigen Solverseite; pro Zeile abgerundete Grenzen
+vermeiden einen Verlust kleiner Unterschiede in großen Strafsummen.
+Maximalitätsprüfung, starke Zusammenhangskomponenten und gerichtete Wege ab
+freien alten beziehungsweise zu freien neuen Knoten begrenzen die global
+möglichen Partner. Daraus abgeleitete Referenzkosten bleiben beim Abschluss
+lokaler Zeilenrivalen und aktivierter Besitzeransprüche unverändert.
+Ein geöffneter Besitzer führt sämtliche eigenen Ansprüche nach; offene
+Kandidaten können dadurch keinen außen fest zugeordneten Nachfolger belegen.
+Die Hülle ist konservativ und kann bei Hall-Defiziten zusätzliche Fragen
+auslösen; sie behauptet keine Kostengleichheit sämtlicher Kandidaten.
+Auch mehrere alte Ansprüche auf nur einen neuen Kandidaten sind mehrdeutig.
+`require_injective` sperrt doppelte Nachfolger gemeinsam vor Namen- und
+Erzeugerübernahme. `fresh` bezeichnet alle Ziele ohne freigegebenen alten Namen.
+Vektoraufbereitung, Baumabfragen, Kostenblöcke, Solverabschluss, Hülle,
+Graphsuche, Anspruchsschluss und Ergebnisbildung prüfen den vorhandenen
+Abbruchcallback. `resolve` führt ihn auch durch gespeicherte Antworten bis
+vor die Rückgabe weiter. Die Merkmalsobergrenze bleibt eine gesonderte
+Release-Entscheidung.
+Gespeicherte Antworten verlangen einen gültigen historischen Fingerabdruck
+und einen endlichen aktuellen Bezugsrahmen. Jede aktuelle Merkmalslage muss
+tatsächlich dreidimensional vorliegen; nichtendliche Vektoren oder Kosten
+lassen die gesamte Wiedererkennung offen. Auch ein ungültiger Nichtgewinner
+darf keinen vermeintlich eindeutigen Treffer freigeben. Die historischen
+Vorgaben optionaler Achsen- und Maßfelder bleiben unverändert.
+
+`match_records` ist die gemeinsame Quelle für reine JSON-Struktur und
+kanonische, körperqualifizierte Gruppenschlüssel. `match_decisions` bildet
+Gruppen, erkennt deren vollständiges Kandidatenmuster geometrisch wieder
+und prüft die gesamte Wahl atomar. Kostenrechnung und letzte Injektivitätsgrenze
+bleiben in `matching`; die Antwortschicht erzeugt keine zweite Zuordnung.
+Das historische Fingerabdruckfeld `diameter` speichert unverändert das
+Rohmaß aus `params.diameter`, ersatzweise `params.area`; nur die Position ist
+körperbezogen normiert. Die Feldbenennung ist keine Einheitenumrechnung.
 
 `Feature.surface_patches` hält ausschließlich schon akzeptierte analytische
 Teilträger mit ihren aktuellen Originaldreiecken. `surfaces.valid_patch`

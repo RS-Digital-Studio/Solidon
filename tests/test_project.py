@@ -7,6 +7,7 @@ import json
 import os
 import stat
 import zipfile
+from copy import deepcopy
 from pathlib import Path
 
 import pytest
@@ -61,6 +62,408 @@ from app.i18n import SOURCE_LANGUAGE, TranslatableText, _, install_catalog, set_
 from app.i18n.catalog import read_catalog
 
 MESH_PAYLOAD = b"solid test\nendsolid test\n"
+
+
+def _match_group_record() -> dict:
+    """Zwei alte Ansprüche, zwei unterschiedliche Kandidaten und ein ausdrücklicher Verzicht."""
+    return {
+        "object_id": "obj_1",
+        "old_ids": ["hole_1", "hole_2"],
+        "candidates": [
+            {
+                "fingerprint": {
+                    "kind": "hole",
+                    "relative": [0.25, 0.0, 0.0],
+                    "axis": [0.0, 0.0, 1.0],
+                    "diameter": 8.125,
+                    "directional": False,
+                },
+                "claims": ["hole_1", "hole_2"],
+            },
+            {
+                "fingerprint": {
+                    "kind": "hole",
+                    "relative": [-0.25, 0.0, 0.0],
+                    "axis": [0.0, 0.0, 1.0],
+                    "diameter": 8.125,
+                    "directional": False,
+                },
+                "claims": ["hole_1"],
+            },
+        ],
+        "decisions": {"hole_1": {"candidate": 0}, "hole_2": {"not_carried": True}},
+    }
+
+
+def test_match_group_schema_keeps_qualified_names_and_raw_measure() -> None:
+    """Escaping trennt Körper und Ansprüche; auch ein Rohflächenmaß wird nicht normiert."""
+    from app.core.perceive.match_records import group_key, validate_group, validate_matches
+
+    assert group_key('Körper:["1"]', ["b", "a:b"]) == ('group:["Körper:[\\"1\\"]",["a:b","b"]]')
+    assert group_key("a", ["b:c"]) != group_key("a:b", ["c"])
+    record = _match_group_record()
+    record["candidates"][0]["fingerprint"].update(kind="face", diameter=128.5)
+    before = deepcopy(record)
+    key = group_key("obj_1", record["old_ids"])
+    validate_group(key, record, ("obj_1",))
+    validate_matches({key: record, "legacy": {"legacy": {"relative": "unbrauchbar"}}}, ("obj_1",))
+    assert record == before
+    record["decisions"]["hole_1"] = {"not_carried": True}
+    validate_group(key, record, ("obj_1",))
+
+
+@pytest.mark.parametrize(
+    ("path", "value"),
+    [
+        (("object_id",), "obj_2"),
+        (("old_ids",), []),
+        (("old_ids",), ["hole_2", "hole_1"]),
+        (("old_ids",), ["hole_1", "hole_1"]),
+        (("candidates",), []),
+        (("candidates", 0, "claims"), ["foreign"]),
+        (("candidates", 0, "claims"), ["hole_1"]),
+        (("candidates", 0, "fingerprint", "relative"), [0.0, 0.0]),
+        (("candidates", 0, "fingerprint", "axis"), [0.0, float("inf"), 1.0]),
+        (("candidates", 0, "fingerprint", "diameter"), True),
+        (("candidates", 0, "fingerprint", "directional"), 1),
+        (("candidates", 0, "fingerprint"), {"kind": "hole", "relative": [0.0, 0.0, 0.0]}),
+        (("decisions",), {"hole_1": {"candidate": 0}}),
+        (("decisions", "hole_1"), {"candidate": True}),
+        (("decisions", "hole_1"), {"candidate": -1}),
+        (("decisions", "hole_1"), {"candidate": 2}),
+        (("decisions", "hole_2"), {"candidate": 0}),
+        (("decisions", "hole_2"), {"candidate": 1}),
+        (("decisions", "hole_2"), {"not_carried": False}),
+        (("decisions", "hole_2"), {"not_carried": 1}),
+        (("decisions", "hole_2"), {"candidate": 1, "not_carried": True}),
+        (("extra",), {}),
+    ],
+)
+def test_match_group_schema_rejects_incomplete_or_noninjective_answers(path, value) -> None:
+    """Eine beschädigte Teilantwort darf beim Laden nicht zum vollständigen Entscheid werden."""
+    from app.core.perceive.match_records import group_key, validate_group
+
+    record = _match_group_record()
+    key = group_key("obj_1", record["old_ids"])
+    target = record
+    for part in path[:-1]:
+        target = target[part]
+    target[path[-1]] = value
+    with pytest.raises(ValueError):
+        validate_group(key, record, ("obj_1",))
+
+
+@pytest.mark.parametrize(
+    "value",
+    [{}, {"kind": "hole"}, {"kind": "hole", "centre": [0.0, 0.0, 0.0]}],
+)
+def test_match_fingerprint_never_invents_a_missing_relative_position(value) -> None:
+    """Altabdrücke bleiben lesbar, liefern ohne ihren damaligen Bezugsrahmen aber keinen Beleg."""
+    from app.core.perceive.match_records import valid_fingerprint, validate_matches
+
+    validate_matches({"legacy": {"hole_1": value}}, ("obj_1",))
+    assert not valid_fingerprint(value, legacy=True)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("relative", [0.0, True, 0.0]),
+        ("relative", [0.0, float("nan"), 0.0]),
+        ("relative", [0.0, 0.0]),
+        ("axis", [0.0, "1", 0.0]),
+        ("axis", None),
+        ("diameter", False),
+        ("diameter", 10**1000),
+        ("directional", "false"),
+    ],
+)
+def test_match_fingerprint_rejects_invalid_values_even_in_legacy(field, value) -> None:
+    """Auch vorhandene historische Felder brauchen ihre tatsächliche Form und endliche Zahlen."""
+    from app.core.perceive.match_records import valid_fingerprint
+
+    old = {"kind": "hole", "relative": [0.0, 0.0, 0.0], field: value}
+    assert not valid_fingerprint(old, legacy=True)
+
+
+def test_match_fingerprint_accepts_only_historically_optional_omissions() -> None:
+    """Ohne Lage kein Beleg; fehlende historische Richtungsfelder bleiben ausdrücklich optional."""
+    from app.core.perceive.match_records import valid_fingerprint
+
+    old = {"kind": "hole", "relative": [0.0, 0.0, 0.0]}
+    assert valid_fingerprint(old, legacy=True)
+    assert not valid_fingerprint(old)
+    assert valid_fingerprint(_match_group_record()["candidates"][0]["fingerprint"])
+
+
+@pytest.mark.parametrize("phase", ["candidates", "claims", "decisions", "legacy"])
+def test_match_schema_carries_cancellation_through_nested_records(phase) -> None:
+    """Ein Abbruch während der Datenprüfung läuft über dasselbe Signal bis zum Aufrufer."""
+    from app.core.errors import OperationCancelled
+    from app.core.perceive.match_records import group_key, validate_matches
+    from app.core.scene.cancel import CancelSignal
+
+    signal = CancelSignal()
+
+    class InterruptedList(list):
+        """Nach dem ersten tatsächlich gelesenen Eintrag abbrechen."""
+
+        def __iter__(self):
+            for index, value in enumerate(super().__iter__()):
+                if index:
+                    signal.cancel()
+                yield value
+
+    class InterruptedDict(dict):
+        """Auch die Entscheidungstabelle kann zwischen zwei Einträgen abbrechen."""
+
+        def items(self):
+            for index, value in enumerate(super().items()):
+                if index:
+                    signal.cancel()
+                yield value
+
+    record = _match_group_record()
+    records = {group_key("obj_1", record["old_ids"]): record}
+    if phase == "candidates":
+        record["candidates"] = InterruptedList(record["candidates"])
+    elif phase == "claims":
+        record["candidates"][0]["claims"] = InterruptedList(record["candidates"][0]["claims"])
+    elif phase == "decisions":
+        record["decisions"] = InterruptedDict(record["decisions"])
+    else:
+        records = {"legacy": InterruptedDict(first={}, second={})}
+    with pytest.raises(OperationCancelled):
+        validate_matches(records, ("obj_1",), check_cancelled=signal.raise_if_cancelled)
+
+
+def test_match_records_are_deeply_independent_in_both_serialisation_directions() -> None:
+    """Auch Listen und Entscheidungen im Gruppeneintrag gehören ihrer jeweiligen Fassung."""
+    from app.core.perceive.match_records import group_key
+    from app.core.scene.serialise import operation_from_data, operation_to_data
+
+    record = _match_group_record()
+    key = group_key("obj_1", record["old_ids"])
+    entry = Operation(id=1, op="thicken", outputs=("obj_1",), matches={key: record})
+    data = operation_to_data(entry)
+    decoded = operation_from_data(data)
+    data["matches"][key]["candidates"][0]["fingerprint"]["relative"][0] = 99.0
+    data["matches"][key]["decisions"]["hole_2"]["not_carried"] = False
+    assert entry.matches[key] == _match_group_record()
+    assert decoded.matches[key] == _match_group_record()
+    record["candidates"][0]["claims"].append("foreign")
+    assert decoded.matches[key] == _match_group_record()
+
+
+def test_match_answer_migration_wraps_all_operation_versions_exactly_once() -> None:
+    """Die Hülle entsteht ausschließlich in 26→27, auch um frühere gleichnamige Merkmale."""
+    from app.core.scene.serialise import operation_from_data, operation_to_data
+
+    old = {
+        "legacy": {"kind": "hole", "relative": [0.125, 0.0, 0.0], "diameter": 8.125},
+        'group:["obj_1",["hole_1"]]': {"kind": "face", "relative": "unbrauchbar"},
+    }
+    operation = {"id": 1, "op": "create_box", "out": ["obj_1"], "matches": deepcopy(old)}
+    data = {
+        "format_version": 26,
+        "ops": [deepcopy(operation), {"id": 2, "op": "create_box", "matches": {}}],
+        "transactions": [
+            {
+                "changes": {
+                    "before": {"edited_ops": {"1": deepcopy(operation), "2": None}},
+                    "after": {"edited_ops": {"1": deepcopy(operation), "2": None}},
+                    "annotation": "Keine zusätzliche Undo-Seite",
+                }
+            }
+        ],
+    }
+    # Die frühere 19→20-Migration benutzt bereits den heutigen Serializer.
+    assert operation_to_data(operation_from_data(operation))["matches"] == old
+    assert migrate(deepcopy(data), target=26) == data
+    migrated = migrate(deepcopy(data))
+    assert migrated["format_version"] == 27
+    assert migrated["ops"][0]["matches"] == {"legacy": old}
+    assert migrated["ops"][1]["matches"] == {}
+    assert migrated["transactions"][0]["changes"]["annotation"] == "Keine zusätzliche Undo-Seite"
+    for side in ("before", "after"):
+        versions = migrated["transactions"][0]["changes"][side]["edited_ops"]
+        assert versions["1"]["matches"] == {"legacy": old}
+        assert versions["2"] is None
+    assert migrate(deepcopy(migrated)) == migrated
+
+
+@pytest.mark.parametrize("location", ["stack", "before", "after"])
+@pytest.mark.parametrize("damage", ["wrong_body", "missing_decision", "old_shape", "wrong_key"])
+def test_match_groups_are_checked_in_every_loaded_operation_version(
+    filled: Project, tmp_path: Path, location: str, damage: str
+) -> None:
+    """Hauptstapel und Undo-Seiten lehnen denselben unvollständigen oder fremden Entscheid ab."""
+    from app.core.perceive.match_records import group_key
+
+    path = save(filled, tmp_path / "match-group.p3d")
+    data = project_data(path)
+    record = _match_group_record()
+    key = group_key("obj_1", record["old_ids"])
+    if damage == "wrong_body":
+        record["object_id"] = "obj_foreign"
+        key = group_key("obj_foreign", record["old_ids"])
+    elif damage == "missing_decision":
+        del record["decisions"]["hole_2"]
+    elif damage == "wrong_key":
+        key = group_key("obj_1", ["hole_1"])
+    stored = deepcopy(data["ops"][0])
+    stored["matches"] = {key: record}
+    if damage == "old_shape":
+        stored["matches"] = {"hole_1": record["candidates"][0]["fingerprint"]}
+    if location == "stack":
+        data["ops"][0] = stored
+    else:
+        data["transactions"][0]["changes"] = {
+            "before": {},
+            "after": {},
+            location: {"edited_ops": {str(stored["id"]): stored}},
+        }
+    _rewrite_project_entry(path, data)
+    with pytest.raises(ValidationError) as caught:
+        load(path)
+    assert caught.value.constraint == "damaged"
+    assert caught.value.suggestions
+
+
+def test_match_groups_keep_bodies_and_explicit_noncontinuation_after_reopening(
+    filled: Project, tmp_path: Path
+) -> None:
+    """Gleiche alte Namen an zwei Ausgabekörpern bleiben getrennte gespeicherte Entscheidungen."""
+    from app.core.perceive.match_records import group_key
+
+    records = {}
+    for object_id, candidate in (("obj_1", 0), ("obj_2", 1)):
+        record = _match_group_record()
+        record["object_id"] = object_id
+        record["decisions"]["hole_1"] = {"candidate": candidate}
+        records[group_key(object_id, record["old_ids"])] = record
+    filled.document.ops[0] = Operation(
+        id=1, op="create_box", outputs=("obj_1", "obj_2"), matches=records
+    )
+    reopened = load(save(filled, tmp_path / "two-match-groups.p3d"))
+    assert reopened.document.ops[0].matches == records
+    assert all(
+        record["decisions"]["hole_2"] == {"not_carried": True} for record in records.values()
+    )
+
+
+def test_v26_match_answers_keep_every_history_version_and_actual_geometry(profile) -> None:
+    """Die alte Datei trägt drei echte Maße, gelöschte Schritte und unverwertbare Altabdrücke."""
+    from app.core.bootstrap import load_operations
+    from app.core.scene.evaluate import evaluate
+
+    path = Path(__file__).parent / "data" / "projects" / "matching_answers_v26.p3d"
+    raw = project_data(path)
+    assert raw["format_version"] == 26
+    project = load(path)
+    assert project.document.format_version == 27
+    assert project.document.ops[0].matches == {"legacy": raw["ops"][0]["matches"]}
+    for saved, transaction in zip(raw["transactions"], project.document.transactions, strict=True):
+        if transaction.changes is None:
+            continue
+        for side in ("before", "after"):
+            state = getattr(transaction.changes, side)
+            for op_id, version in state.edited_ops.items():
+                original = saved["changes"][side]["edited_ops"][str(op_id)]
+                if original is None:
+                    assert version is None
+                else:
+                    assert version.matches == {"legacy": original["matches"]}
+    load_operations()
+    history = History(project.document)
+
+    def measured(width: float) -> None:
+        """Die Kette rechnet die gespeicherte Breite und das unabhängige Quadermaß."""
+        result = evaluate(project.document, profile, sources=ProjectSources(project))
+        assert result.complete
+        assert len(result.scene.objects) == 1
+        assert result.scene.objects["obj_1"].mesh.raw.volume == pytest.approx(width * 20.0 * 10.0)
+
+    measured(40.0)
+    history.undo()  # Die gelöschte Umbenennung kommt zurück.
+    assert project.document.ops[-1].op == "rename_object"
+    measured(40.0)
+    history.undo()  # Die angelegte Umbenennung verschwindet wieder.
+    history.undo()
+    assert project.document.ops[0].matches["legacy"]["hole_1"]["diameter"] == pytest.approx(8.125)
+    measured(30.0)
+    history.undo()
+    assert project.document.ops[0].matches["legacy"]["face_1"]["centre"] == [0.0, 0.0, 10.0]
+    measured(20.0)
+    history.redo()
+    measured(30.0)
+    history.redo()
+    measured(40.0)
+
+
+def test_v27_example_keeps_an_explicit_noncontinuation() -> None:
+    """Auch die neue Pflichtbeispieldatei trägt den wirklichen vollständigen Gruppeneintrag."""
+    project = load(Path(__file__).parent / "data" / "projects" / "example_v27.p3d")
+    answer = next(iter(project.document.ops[0].matches.values()))
+    assert answer["object_id"] == "obj_1"
+    assert answer["decisions"] == {"hole_1": {"candidate": 0}, "hole_2": {"not_carried": True}}
+    assert answer["candidates"][0]["fingerprint"]["diameter"] == pytest.approx(8.125)
+
+
+def test_match_answers_cross_the_v19_history_migration_without_double_wrapping(tmp_path) -> None:
+    """Die ältere Deckelmigration benutzt heutige History und Serializer vor der neuen Hülle."""
+    data = json.loads(
+        (Path(__file__).parent / "data/projects/flat_lid_v19.json").read_text(encoding="utf-8")
+    )
+    before = deepcopy(data["ops"][-1])
+    old = {"legacy": {"kind": "face", "relative": [0.0, 0.0, 0.5], "diameter": 128.5}}
+    before["matches"] = deepcopy(old)
+    after = deepcopy(before)
+    after["params"]["collar"] = 2.0
+    data["ops"][-1] = deepcopy(after)
+    data["transactions"].append(
+        {
+            "id": "t4",
+            "title": "Kragen ändern",
+            "ops": [],
+            "changes": {
+                "before": {"edited_ops": {"3": before}},
+                "after": {"edited_ops": {"3": after}},
+            },
+        }
+    )
+    path = tmp_path / "v19-match-answers.p3d"
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr(PROJECT_ENTRY, json.dumps(data))
+    project = load(path)
+    assert project.document.format_version == 27
+    assert project.document.ops[-1].matches == {"legacy": old}
+    changes = project.document.transactions[-1].changes
+    assert changes.before.edited_ops[3].matches == {"legacy": old}
+    assert changes.after.edited_ops[3].matches == {"legacy": old}
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        [1],
+        {"before": None},
+        {"before": {"edited_ops": [1]}},
+        {"after": {"edited_ops": {"1": True}}},
+    ],
+)
+def test_v26_match_migration_reports_damaged_undo_data_as_a_file_error(tmp_path, changes) -> None:
+    """Beschädigte historische Unterblöcke sind kein Programmierfehler des Lesers."""
+    original = Path(__file__).parent / "data/projects/matching_answers_v26.p3d"
+    data = project_data(original)
+    data["transactions"][-1]["changes"] = changes
+    path = tmp_path / "v26-damaged-undo.p3d"
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr(PROJECT_ENTRY, json.dumps(data))
+    with pytest.raises(ValidationError) as caught:
+        load(path)
+    assert caught.value.constraint == "damaged"
+    assert caught.value.suggestions
 
 
 EXAMPLE_FILE = Path(__file__).parent / "data" / "projects" / f"example_v{FORMAT_VERSION}.p3d"

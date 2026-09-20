@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+from copy import deepcopy
 from pathlib import Path
 
 import pytest
@@ -219,6 +220,236 @@ def history(document: Document, registry: Registry) -> History:
 def create(history: History) -> str:
     history.apply(_("Objekt anlegen"), [OperationDraft(op="make_object")])
     return history.operations[-1].outputs[0]
+
+
+def _match_answer(object_id: str, offset: float) -> dict:
+    """Eine ganze Antwortgruppe trägt einen geometrischen Beleg und einen bewussten Verzicht."""
+    from app.core.perceive.match_records import group_key
+
+    return {
+        group_key(object_id, ["hole_1", "hole_2"]): {
+            "object_id": object_id,
+            "old_ids": ["hole_1", "hole_2"],
+            "candidates": [
+                {
+                    "fingerprint": {
+                        "kind": "hole",
+                        "relative": [offset, 0.0, 0.0],
+                        "axis": [0.0, 0.0, 1.0],
+                        "diameter": 8.125,
+                        "directional": False,
+                    },
+                    "claims": ["hole_1", "hole_2"],
+                }
+            ],
+            "decisions": {"hole_1": {"candidate": 0}, "hole_2": {"not_carried": True}},
+        }
+    }
+
+
+def test_record_matches_copies_complete_groups_and_is_idempotent(history: History) -> None:
+    """Spätere Ergebnisänderungen schreiben weder den Stapel noch dessen Antworten um."""
+    object_id = create(history)
+    op_id = history.operations[-1].id
+    answer = _match_answer(object_id, 0.25)
+    expected = deepcopy(answer)
+    transactions = len(history.document.transactions)
+    assert history.record_matches({op_id: answer})
+    entry = history.operation(op_id)
+    assert len(history.document.transactions) == transactions
+    assert not history.record_matches({op_id: deepcopy(expected)})
+    assert history.operation(op_id) is entry
+    key = next(iter(answer))
+    answer[key]["candidates"][0]["fingerprint"]["relative"][0] = 77.0
+    answer[key]["decisions"]["hole_2"]["not_carried"] = False
+    assert entry.matches == expected
+    replacement = _match_answer(object_id, -0.25)
+    replacement[key]["decisions"] = {"hole_1": {"not_carried": True}, "hole_2": {"candidate": 0}}
+    assert history.record_matches({op_id: replacement})
+    assert history.operation(op_id).matches == replacement
+    assert entry.matches == expected
+
+
+@pytest.mark.parametrize("reopen", [False, True])
+def test_match_answers_follow_the_edited_version_through_undo_and_redo(
+    history: History, registry: Registry, tmp_path: Path, reopen: bool
+) -> None:
+    """Erst nach der Maßänderung beantwortet: Redo muss genau diese Antwort zurückholen."""
+    object_id = create(history)
+    op_id = history.operations[-1].id
+    a = _match_answer(object_id, 0.1)
+    b = _match_answer(object_id, 0.2)
+    c = _match_answer(object_id, 0.3)
+    history.record_matches({op_id: a})
+    history.change_params(op_id, {"count": 3})
+    history.record_matches({op_id: b})
+    history.change_params(op_id, {"count": 4})
+    history.record_matches({op_id: c})
+    if reopen:
+        loaded = load(save(Project(history.document), tmp_path / "answered-versions.p3d"))
+        history = History(loaded.document, registry)
+    assert len(history.document.transactions) == 3
+    assert history.operation(op_id).matches == c
+    history.undo()
+    assert history.operation(op_id).params["count"] == 3
+    assert history.operation(op_id).matches == b
+    history.undo()
+    assert "count" not in history.operation(op_id).params
+    assert history.operation(op_id).matches == a
+    history.redo()
+    assert history.operation(op_id).matches == b
+    history.redo()
+    assert history.operation(op_id).matches == c
+    assert len(history.document.transactions) == 3
+
+
+def test_match_answer_given_after_undo_belongs_to_that_before_version(history: History) -> None:
+    """Eine Antwort im zurückgenommenen Zustand darf die spätere Fassung nicht überschreiben."""
+    object_id = create(history)
+    op_id = history.operations[-1].id
+    a = _match_answer(object_id, 0.1)
+    b = _match_answer(object_id, 0.2)
+    changed_a = _match_answer(object_id, -0.1)
+    history.record_matches({op_id: a})
+    history.change_params(op_id, {"count": 3})
+    history.record_matches({op_id: b})
+    history.undo()
+    history.record_matches({op_id: changed_a})
+    assert history.can_redo
+    history.redo()
+    assert history.operation(op_id).matches == b
+    history.undo()
+    assert history.operation(op_id).matches == changed_a
+    history.redo()
+    assert history.operation(op_id).matches == b
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("op", "other_operation"),
+        ("inputs", ("foreign",)),
+        ("outputs", ("foreign",)),
+        ("params", {"count": 99}),
+        ("seed", 17),
+        ("translatable", ("count",)),
+    ],
+)
+def test_match_answer_is_not_copied_into_another_operation_version(
+    history: History, field: str, value: object
+) -> None:
+    """Gleiche Op-ID allein bindet die jüngste Antwort nicht an eine fremde Änderungsseite."""
+    object_id = create(history)
+    op_id = history.operations[-1].id
+    a = _match_answer(object_id, 0.1)
+    b = _match_answer(object_id, 0.2)
+    foreign = _match_answer(object_id, 0.9)
+    history.record_matches({op_id: a})
+    history.change_params(op_id, {"count": 3})
+    history.record_matches({op_id: b})
+    # Simuliert eine noch lebende andere Fassung an derselben gespeicherten
+    # Grenze; nur deren strukturelle Übereinstimmung darf eine Antwort binden.
+    history.document.ops[-1] = dataclasses.replace(
+        history.operation(op_id), **{field: value, "matches": foreign}
+    )
+    history.undo()
+    history.redo()
+    assert history.operation(op_id).matches == a
+
+
+def test_solver_notes_do_not_change_the_match_answer_version(history: History) -> None:
+    """Nachträgliche Solverauskunft ist keine neue Eingabe und darf die Antwort nicht verlieren."""
+    object_id = create(history)
+    op_id = history.operations[-1].id
+    b = _match_answer(object_id, 0.2)
+    history.change_params(op_id, {"count": 3})
+    history.record_matches({op_id: b})
+    history.document.ops[-1] = dataclasses.replace(
+        history.operation(op_id), solver=SolverInfo(strategy="test")
+    )
+    history.undo()
+    history.redo()
+    assert history.operation(op_id).matches == b
+
+
+def test_live_match_answers_do_not_alias_saved_change_sides(history: History) -> None:
+    """Änderungsseiten und die aus ihnen wiederhergestellte Fassung besitzen eigene Listen."""
+    object_id = create(history)
+    op_id = history.operations[-1].id
+    a = _match_answer(object_id, 0.1)
+    b = _match_answer(object_id, 0.2)
+    history.record_matches({op_id: a})
+    history.change_params(op_id, {"count": 3})
+    saved = history.document.transactions[-1]
+    key = next(iter(a))
+    history.operation(op_id).matches[key]["candidates"][0]["fingerprint"]["relative"][0] = 19.0
+    assert saved.changes.before.edited_ops[op_id].matches == a
+    assert saved.changes.after.edited_ops[op_id].matches == a
+    history.record_matches({op_id: b})
+    reverted = history.undo()
+    history.operation(op_id).matches[key]["candidates"][0]["claims"].append("foreign")
+    assert reverted.changes.before.edited_ops[op_id].matches == a
+    assert reverted.changes.after.edited_ops[op_id].matches == b
+
+
+def test_match_answers_survive_deleted_and_new_operation_boundaries(history: History) -> None:
+    """None bleibt Löschung; eine Antwort nach dem Wiederherstellen folgt der Vorher-Seite."""
+    object_id = create(history)
+    op_id = history.operations[-1].id
+    a = _match_answer(object_id, 0.1)
+    b = _match_answer(object_id, 0.2)
+    history.record_matches({op_id: a})
+    history.remove_operations([op_id])
+    assert not history.operations
+    history.undo()
+    assert history.operation(op_id).matches == a
+    history.record_matches({op_id: b})
+    history.redo()
+    assert not history.operations
+    history.undo()
+    assert history.operation(op_id).matches == b
+    history.undo()  # Auch die ursprüngliche Anlage behält ihre nachträgliche Antwort.
+    assert not history.operations
+    history.redo()
+    assert history.operation(op_id).matches == b
+
+
+@pytest.mark.parametrize("change", ["inputs", "count", "recount"])
+def test_match_groups_of_removed_outputs_stay_only_in_the_previous_version(
+    history: History, registry: Registry, tmp_path: Path, change: str
+) -> None:
+    """Ein Körperwechsel darf keine unlesbare neue Fassung mit fremdem Gruppenbezug speichern."""
+    first = create(history)
+    second = create(history)
+    name = "rename_object" if change == "inputs" else "copy_object"
+    history.apply(
+        "Schritt anlegen", [OperationDraft(op=name, inputs=(first,), params={"count": 3})]
+    )
+    step = history.operations[-1]
+    old_body = step.outputs[-1]
+    kept = {"legacy": {"old": {"kind": "face", "relative": [0.0, 0.0, 0.0]}}}
+    if change != "inputs":
+        kept.update(_match_answer(step.outputs[0], -0.25))
+    answers = {**kept, **_match_answer(old_body, 0.25)}
+    history.record_matches({step.id: answers})
+    current_id = step.id
+    if change == "inputs":
+        history.change_inputs(step.id, [second])
+    elif change == "recount":
+        transaction = history.recount_and_retry(step.id, 2)
+        current_id = transaction.ops[0]
+    else:
+        history.change_params(step.id, {"count": 2})
+    assert old_body not in history.operation(current_id).outputs
+    assert history.operation(current_id).matches == kept
+    opened = load(save(Project(history.document), tmp_path / "changed-output.p3d"))
+    history = History(opened.document, registry)
+    history.undo()
+    assert old_body in history.operation(step.id).outputs
+    assert history.operation(step.id).matches == answers
+    history.redo()
+    assert old_body not in history.operation(current_id).outputs
+    assert history.operation(current_id).matches == kept
 
 
 def test_operations_and_objects_are_numbered_in_order(history: History) -> None:

@@ -142,7 +142,7 @@ def test_offscreen_shutdown_uses_the_same_platform_neutral_order() -> None:
 def test_accepted_application_exit_uses_the_terminal_viewport_path(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Nur ein bestätigtes echtes Schließen finalisiert den Renderer."""
+    """Bestätigtes Schließen bricht die Frage vor Warten und Rendererfreigabe ab."""
     pytest.importorskip("PySide6")
     from PySide6.QtGui import QCloseEvent
 
@@ -192,6 +192,9 @@ def test_accepted_application_exit_uses_the_terminal_viewport_path(
         def _may_discard(self) -> bool:
             return True
 
+        def _cancel_pending_question(self) -> None:
+            events.append("question.cancel")
+
         def wait_for_workers(self, _timeout_ms: int = 2000) -> bool:
             events.append("window.wait_for_workers")
             return True
@@ -220,6 +223,7 @@ def test_accepted_application_exit_uses_the_terminal_viewport_path(
 
     assert event.isAccepted()
     assert events == [
+        "question.cancel",
         "window.setEnabled:False",
         "window.wait_for_workers",
         "spacemouse.stop",

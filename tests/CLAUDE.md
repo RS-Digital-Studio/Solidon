@@ -13,6 +13,15 @@ Merkmalszahlgrenze wird im Test freigegeben; Erkennung und Zuordnung laufen
 über die Anwendung. Der Nachweis gilt den IDs, Maßen und Flächenträgern,
 nicht einer höheren Produktionsgrenze oder einem Leistungsbudget.
 
+`test_matching_competition.py` prüft konkurrierende alte Identitäten gegen
+unabhängig aufgezählte globale Zuordnungen und den geometrischen Kostenweg.
+`test_match_decisions.py` prüft vollständige Gruppen, geometrische
+Wiedererkennung, Nichtfortführung und widersprüchliche Ansprüche.
+`test_matching_answers.py` verbindet diese Antworten mit tatsächlichen
+Bohrungen, körperbezogenen Gruppen, Operationsabbruch und Wiederöffnung.
+Die Prüfung des Fragekontexts benötigt keine Oberfläche; die Anzeige- und
+Tastaturfälle in `test_ui.py` bleiben Fensterprüfungen für das Release.
+
 Der Crash-Wächter in `test_leash.py` verfolgt auch Arbeiter, die eine Fabrik
 zurückgibt oder an einen Helfer übergibt. Nur die Verbindung des entsprechenden
 Parameters zählt; ein verbundenes anderes Signal im Helfer deckt den Arbeiter

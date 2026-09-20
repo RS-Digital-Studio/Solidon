@@ -1638,7 +1638,7 @@ class Operation:
     kommt — dieselbe Unterscheidung, die ``title_translatable`` seit Format 6
     trifft.
     """
-    matches: Mapping[FeatureId, Mapping[str, Any]] = field(default_factory=dict)
+    matches: Mapping[str, Mapping[str, Any]] = field(default_factory=dict)
     """Antworten auf mehrdeutige Merkmalszuordnungen (§15.7, §21.3).
 
     **Warum das nicht in ``params`` steht.** ``validate`` wiese einen
@@ -1649,14 +1649,18 @@ class Operation:
     von selbst reproduzierbare Prozedur reproduzierbar macht. Eine
     festgehaltene Antwort tut für eine Rückfrage dasselbe.
 
-    **Gespeichert wird ein geometrischer Fingerabdruck, kein Bezeichner.**
-    ``alt → neu`` wäre fragil: Die Erkennung nummeriert beim nächsten Lauf
-    womöglich anders, und dann zeigte die gespeicherte Antwort auf ein fremdes
-    Merkmal — aus „fragt zu oft" würde „nimmt stillschweigend das falsche", und
-    das ist der schlechtere Fehler (Regel 21). Der Abdruck ist lesbares JSON
-    (``kind``, ``centre``, ``axis``, ``diameter``) und wird mit derselben
-    Rivalenlogik aufgelöst, die die Frage überhaupt erst gestellt hat: Gewinnt
-    der Beste nicht mit Abstand, wird wieder gefragt.
+    Ein Eintrag bezeichnet einen Ausgabekörper und seine vollständige Gruppe
+    alter Ansprüche. Kandidaten stehen als geometrische Fingerabdrücke in
+    einer lokalen Tabelle; Entscheidungen wählen deren Index oder halten
+    ausdrücklich ``not_carried`` fest. Neue Erkennungskennungen werden nicht
+    gespeichert. ``perceive.match_records`` prüft die gemeinsame Struktur.
+    Alte Einzelantworten bleiben unverändert unter ``legacy`` lesbar.
+
+    Fingerabdrücke tragen ``kind``, ``relative``, ``axis``, ``diameter`` und
+    ``directional``. Nur die Lage ist relativ zur Körperdiagonale; das
+    Rohmaß ``diameter`` wird nicht normiert. Eine Antwort gilt erst nach der
+    vollständigen geometrischen Wiedererkennung ihrer Kandidaten und
+    Anspruchskanten. Fehlender Beleg führt erneut zur Frage (Regel 21).
 
     **Und es gehört nicht in den Op-Hash.** Die Zuordnung passiert *nach* dem
     Cache — ``_with_features`` läuft in beiden Zweigen, auch nach einem

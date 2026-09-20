@@ -31,7 +31,9 @@ def test_cancelled_matching_stops_before_any_answer(old, new):
         match(old, new, (0.0, 0.0, 0.0), 1.0, check_cancelled=signal.raise_if_cancelled)
 
 
-def complete_reference(old, new, centre=(0.0, 0.0, 0.0), diagonal=1.0, old_centre=None):
+def complete_reference(
+    old, new, centre=(0.0, 0.0, 0.0), diagonal=1.0, old_centre=None, *, assignment_only=False
+):
     """Eingefrorener Vollvergleich einschließlich Solver-Kontext und Ausgabeordnung."""
     if not old:
         return MatchResult(fresh=tuple(new))
@@ -58,6 +60,8 @@ def complete_reference(old, new, centre=(0.0, 0.0, 0.0), diagonal=1.0, old_centr
     from scipy.optimize import linear_sum_assignment
 
     rows, columns = linear_sum_assignment(matrix)
+    if assignment_only:
+        return matrix, rows, columns
     result = MatchResult()
     old_ids, new_ids = list(old), list(new)
     for row, column in zip(rows, columns, strict=True):
@@ -87,6 +91,24 @@ def complete_reference(old, new, centre=(0.0, 0.0, 0.0), diagonal=1.0, old_centr
         identifier for identifier in new if identifier not in result.mapping.values()
     )
     return result
+
+
+def assert_original_assignment(old, new):
+    """P1.4a-Kosten und Solverantwort unabhängig von der neuen Identitätsfreigabe prüfen."""
+    matrix, rows, columns = complete_reference(old, new, assignment_only=True)
+    assigned = matching._assignment(
+        list(old.values()), list(new.values()), (0, 0, 0), (0, 0, 0), 1.0, None
+    )
+    np.testing.assert_array_equal(assigned.rows, rows)
+    np.testing.assert_array_equal(assigned.columns, columns)
+    np.testing.assert_array_equal(assigned.values, matrix[rows, columns])
+    if assigned.matrix is not None:
+        np.testing.assert_array_equal(assigned.matrix, matrix)
+    # Auch der selektive Kostenweg liefert jedes angenommene Paar und nur diese.
+    seen = np.full(matrix.shape, matching.KIND_PENALTY)
+    for row, nearby, values in assigned.pairs():
+        seen[row, nearby] = values
+    np.testing.assert_array_equal(seen, matrix)
 
 
 def test_separated_features_do_not_allocate_or_solve_the_full_assignment(monkeypatch):
@@ -121,20 +143,22 @@ def test_matching_can_cancel_during_actual_preparation():
 
 
 @pytest.mark.parametrize(
-    "before,after",
+    "before,after,same_result",
     [
-        ([0, 1, 1, 1], [0, 0, 1]),
-        ([0.032, -0.04], [0, 0.096]),
-        ([0, 1, 2], [0, 3]),
-        ([0, 1, 2], [3, 4]),
-        ([0, 1], [0, 1, 2]),
-        ([0, 0], [0, 0]),
+        ([0, 1, 1, 1], [0, 0, 1], False),
+        ([0.032, -0.04], [0, 0.096], False),
+        ([0, 1, 2], [0, 3], True),
+        ([0, 1, 2], [3, 4], True),
+        ([0, 1], [0, 1, 2], True),
+        ([0, 0], [0, 0], True),
     ],
 )
-def test_global_ties_rivals_and_rectangular_order_remain_identical(before, after):
+def test_global_solver_ties_and_rectangular_order_remain_identical(before, after, same_result):
     old = {f"old_{index}": hole(f"old_{index}", x) for index, x in enumerate(before)}
     new = {f"new_{index}": hole(f"new_{index}", x) for index, x in enumerate(after)}
-    assert match(old, new, (0.0, 0.0, 0.0), 1.0) == complete_reference(old, new)
+    assert_original_assignment(old, new)
+    if same_result:
+        assert match(old, new, (0, 0, 0), 1.0) == complete_reference(old, new)
 
 
 def test_spatial_boundary_keeps_a_pair_accepted_by_the_original_cost():
@@ -212,21 +236,36 @@ def test_distant_global_context_is_retained_for_true_ties(monkeypatch, transpose
     new = {f"new_{index}": hole(f"new_{index}", x) for index, x in enumerate([0, 0, 1])}
     if transpose:
         old, new = new, old
-    expected = complete_reference(old, new)
+    expected_matrix, expected_rows, expected_columns = complete_reference(
+        old, new, assignment_only=True
+    )
     observed = []
     original = matching.linear_sum_assignment
 
     def captured(matrix):
         observed.append(matrix.shape)
-        return original(matrix)
+        np.testing.assert_array_equal(matrix, expected_matrix)
+        rows, columns = original(matrix)
+        np.testing.assert_array_equal(rows, expected_rows)
+        np.testing.assert_array_equal(columns, expected_columns)
+        return rows, columns
 
     monkeypatch.setattr(matching, "linear_sum_assignment", captured)
-    assert match(old, new, (0, 0, 0), 1.0) == expected
+    result = match(old, new, (0, 0, 0), 1.0)
+    assert not result.mapping and not result.orphaned
+    assert {name: set(candidates) for name, candidates in result.ambiguous.items()} == {
+        name: {
+            target
+            for target, other in new.items()
+            if feature.params["centre"] == other.params["centre"]
+        }
+        for name, feature in old.items()
+    }
     assert observed == [(len(old), len(new))]
 
 
 @pytest.mark.parametrize("seed", range(8))
-def test_selective_pairs_preserve_independent_full_formula_and_result(seed):
+def test_selective_pairs_preserve_independent_full_formula_and_solver(seed):
     random = np.random.default_rng(seed)
     old, new = {}, {}
     for target, prefix, count in ((old, "old", 19), (new, "new", 14 + seed)):
@@ -240,7 +279,7 @@ def test_selective_pairs_preserve_independent_full_formula_and_result(seed):
                 "axis": (0.0, 0.0, float(random.choice([-1.0, 1.0]))),
             }
             target[feature.id] = replace(feature, params=params)
-    assert match(old, new, (0, 0, 0), 1.0) == complete_reference(old, new)
+    assert_original_assignment(old, new)
 
 
 @pytest.mark.parametrize("axis", range(3))

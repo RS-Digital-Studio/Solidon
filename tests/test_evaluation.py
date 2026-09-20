@@ -1599,6 +1599,7 @@ def test_the_question_of_the_matcher_is_asked_once_and_then_never_again() -> Non
     —, und in beiden Hälften: Es wird **einmal** gefragt, die Antwort wird
     **gemeldet**, und mit ihr im Stapel kommt die Frage nicht wieder.
     """
+    from app.core.perceive.match_records import group_key
     from app.core.scene.evaluate import _with_features
     from app.core.types import Feature, Operation, SceneObject
 
@@ -1629,8 +1630,9 @@ def test_the_question_of_the_matcher_is_asked_once_and_then_never_again() -> Non
     )
 
     assert len(asked) == 1, "two candidates at the same cost must be asked about"
-    assert "pin_1" in recorded, f"the answer must be reported: {recorded}"
-    assert recorded["pin_1"]["kind"] == "hole"
+    key = group_key(entry.id, ("pin_1",))
+    assert key in recorded, f"the answer must be reported: {recorded}"
+    assert recorded[key]["candidates"][0]["fingerprint"]["kind"] == "hole"
 
     # Und die Gegenprobe, die den Sinn der Sache ausmacht: kein zweites Fenster.
     answered = dataclasses.replace(operation, matches=recorded)
@@ -1658,15 +1660,15 @@ def test_the_matcher_answer_lands_in_the_stack_beside_seed() -> None:
     )
 
     abdruck = {"kind": "hole", "relative": [0.1, 0.0, 0.0], "axis": [0.0, 0.0, 1.0]}
-    assert history.record_matches({1: {"pin_1": abdruck}}) is True
+    assert history.record_matches({1: {"legacy": {"pin_1": abdruck}}}) is True
 
     entry = project.document.ops[0]
-    assert entry.matches["pin_1"] == abdruck
+    assert entry.matches["legacy"]["pin_1"] == abdruck
     assert "pin_1" not in entry.params, "an answer of the matcher is not an input"
 
     # Zweimal dasselbe schreiben ändert nichts — sonst gälte das Dokument nach
     # jeder Auswertung als geändert, ohne dass jemand etwas entschieden hat.
-    assert history.record_matches({1: {"pin_1": abdruck}}) is False
+    assert history.record_matches({1: {"legacy": {"pin_1": abdruck}}}) is False
 
 
 def test_a_recorded_match_survives_saving_and_reopening(tmp_path: Path) -> None:
@@ -1696,11 +1698,11 @@ def test_a_recorded_match_survives_saving_and_reopening(tmp_path: Path) -> None:
         "axis": [0.0, 0.0, 1.0],
         "diameter": 4.2,
     }
-    assert history.record_matches({1: {"pin_1": abdruck}}) is True
+    assert history.record_matches({1: {"legacy": {"pin_1": abdruck}}}) is True
 
     reopened = load(save(project, tmp_path / "zuordnung.p3d"))
 
-    assert reopened.document.ops[0].matches == {"pin_1": abdruck}, (
+    assert reopened.document.ops[0].matches == {"legacy": {"pin_1": abdruck}}, (
         "die Antwort hat die Datei nicht überstanden — die Frage käme wieder"
     )
     assert "pin_1" not in reopened.document.ops[0].params, "eine Antwort ist keine Eingabe"

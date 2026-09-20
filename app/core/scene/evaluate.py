@@ -20,6 +20,7 @@ Drei Verhaltensweisen sind Absicht:
 from __future__ import annotations
 
 import dataclasses
+from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from functools import cache, partial
@@ -48,11 +49,17 @@ from app.core.perceive.features import (
 )
 from app.core.perceive.local import FEATURE_LIMIT_TRIANGLES as FEATURE_LIMIT_TRIANGLES
 from app.core.perceive.local import rigid_transform
+from app.core.perceive.match_decisions import (
+    conflict_groups,
+    group_fingerprint,
+    mapping_with_decisions,
+    resolve_group,
+)
+from app.core.perceive.match_records import group_key, valid_fingerprint
 from app.core.perceive.matching import (
     FeatureTransform,
     MatchResult,
     apply_mapping,
-    fingerprint,
     inherit_originators,
     match,
     moved_features,
@@ -99,7 +106,7 @@ from app.core.types import (
     kind_of,
 )
 from app.core.units import EPS_DISPLAY, EPS_GEOM, is_close
-from app.i18n import TranslatableText, _, source_text
+from app.i18n import TranslatableText, _, source_text, tr
 
 _log = get_logger(__name__)
 
@@ -182,6 +189,12 @@ class EvaluationResult:
         return self.stopped_at is None
 
 
+type QuestionContext = Callable[
+    [EvaluationResult | None, tuple[tuple[ObjectId, FeatureId], ...]], None
+]
+type FeatureQuestionContext = Callable[[SceneObject | None, tuple[FeatureId, ...]], None]
+
+
 def _silent_progress(fraction: float, text: str) -> None:
     return None
 
@@ -203,6 +216,7 @@ def evaluate(
     cache: ResultCache | None = None,
     registry: Registry | None = None,
     sources: SourceAccess | None = None,
+    question_context: QuestionContext | None = None,
 ) -> EvaluationResult:
     """Rechnet die Szene, die das Dokument beschreibt."""
     result = _evaluate(
@@ -215,6 +229,7 @@ def evaluate(
         cache=cache,
         registry=registry,
         sources=sources,
+        question_context=question_context,
     )
     try:
         usage = parameter_uses(document, registry) if document.parameters else {}
@@ -234,6 +249,7 @@ def _evaluate(
     cache: ResultCache | None,
     registry: Registry | None,
     sources: SourceAccess | None,
+    question_context: QuestionContext | None,
 ) -> EvaluationResult:
     """Geometrie und Befunde auswerten; auch ein Halt erhält anschließend Verwendungsdaten."""
     profile = for_process(profile, document.print_settings)
@@ -575,7 +591,62 @@ def _evaluate(
         prepared_objects: dict[ObjectId, SceneObject] = {}
         prepared_hashes: dict[ObjectId, str] = {}
         prepared_names: dict[ObjectId, str] = {}
+        prepared_matches: dict[str, Any] = {}
         output_findings_start = len(findings)
+
+        # Alte Einzelantworten kennen keinen Körper. Ein gleichnamiger Bezug
+        # auf mehreren Ausgaben darf deshalb keine davon ungefragt freigeben.
+        old_name_counts = Counter(
+            name for output in operation.outputs for name in previous_features.get(output, {})
+        )
+        legacy_eligible = frozenset(name for name, count in old_name_counts.items() if count == 1)
+
+        def announce_candidates(
+            current: SceneObject | None,
+            candidates: tuple[FeatureId, ...],
+            *,
+            operation: Operation = operation,
+            result: CachedResult = result,
+            prepared_objects: dict[ObjectId, SceneObject] = prepared_objects,
+        ) -> None:
+            """Zeigt echte Ausgabegeometrie ausschließlich als vergänglichen Fragekontext."""
+            if question_context is None:
+                return
+            if current is None:
+                question_context(None, ())
+                return
+            token.raise_if_cancelled()
+            preview_objects = {
+                name: body for name, body in objects.items() if name not in operation.inputs
+            }
+            for output, body in zip(operation.outputs, result.objects, strict=True):
+                preview_objects[output] = dataclasses.replace(
+                    body, id=output, created_by=operation.id, kind=kind_of(body.mesh)
+                )
+            preview_objects.update(prepared_objects)
+            preview_objects[current.id] = current
+            question_context(
+                EvaluationResult(
+                    scene=Scene(
+                        objects=preview_objects,
+                        parameters=parameters,
+                        fits=active_fits(document),
+                        profile=profile,
+                        report=Report(tuple(findings)),
+                    ),
+                    completed=tuple(completed),
+                    stopped_at=operation.id,
+                    # Alte Geometriehashes dürfen keine neue Fragegeometrie
+                    # aus dem Viewportcache durch den vorigen Körper ersetzen.
+                    object_hashes={
+                        name: value
+                        for name, value in hashes.items()
+                        if name in preview_objects and name not in operation.outputs
+                    },
+                    object_names={name: str(body.name) for name, body in preview_objects.items()},
+                ),
+                tuple((current.id, candidate) for candidate in candidates),
+            )
 
         # Welche Kennung zu welchem Namen gehört — für Befunde einer
         # Baugruppe (siehe unten). ``None`` heißt „mehrdeutig": Zwei
@@ -620,6 +691,8 @@ def _evaluate(
                     # gehört zu ihr, und ein Balken, der dafür zurückspränge,
                     # sagte etwas Falsches. Was sich ändert, ist der Text.
                     partial(progress, position / total),
+                    question_context=announce_candidates,
+                    legacy_eligible=legacy_eligible,
                 )
             except AppError as error:
                 # Die Zuordnung fragt, wenn sie mehrere Kandidaten sieht
@@ -637,7 +710,7 @@ def _evaluate(
                 # eine eigene Frage aufwerfen. Gesammelt wird deshalb über alle
                 # Ausgaben derselben Operation hinweg.
                 if recorded:
-                    matches.setdefault(operation.id, {}).update(recorded)
+                    prepared_matches.update(recorded)
             prepared_objects[object_id] = _with_feature_reservations(
                 prepared_objects[object_id], inherited_feature_ids, active_feature_ids
             )
@@ -652,6 +725,8 @@ def _evaluate(
                 index,
                 prepared_objects[object_id].reserved_feature_ids,
                 getattr(prepared_objects[object_id].mesh, "cavity", None),
+                features=prepared_objects[object_id].features,
+                check_cancelled=token.raise_if_cancelled,
             )
             # Wächst nur, wird nie geleert: Genau darin liegt der Wert (siehe
             # ``EvaluationResult.object_names``).
@@ -662,6 +737,10 @@ def _evaluate(
 
         if stopped_at is not None:
             break
+
+        token.raise_if_cancelled()
+        if prepared_matches:
+            matches[operation.id] = prepared_matches
 
         conversions = _conversion_findings(
             operation, spec.title, inputs, prepared_objects, result.objects
@@ -1324,6 +1403,155 @@ def _feature_originators(
     return result
 
 
+def _answer_matches(
+    entry: SceneObject,
+    result: MatchResult,
+    operation: Operation,
+    ask: AskFn,
+    findings: list[Finding],
+    recorded: dict[str, dict[str, Any]] | None,
+    referenced: frozenset[str] | set[str],
+    watch: CancelToken,
+    question_context: FeatureQuestionContext | None,
+    legacy_eligible: frozenset[str] | None,
+) -> None:
+    """Eine konkurrierende Gruppe vollständig wählen, prüfen und erst dann übernehmen."""
+    matched = dataclasses.replace(result, mapping=dict(result.mapping))
+    pending_records: dict[str, dict[str, Any]] = {}
+    pending_findings: list[Finding] = []
+    centre, diagonal = entry.mesh.bounds.centre, entry.mesh.bounds.diagonal
+    legacy = operation.matches.get("legacy", {})
+    grouped_old_ids = {
+        name
+        for key, record in operation.matches.items()
+        if key != "legacy" and record.get("object_id") == entry.id
+        for name in record.get("old_ids", ())
+    }
+    for claims in conflict_groups(matched, check_cancelled=watch.raise_if_cancelled):
+        key = group_key(entry.id, claims)
+        saved = operation.matches.get(key)
+        decisions = (
+            resolve_group(
+                saved,
+                entry.id,
+                claims,
+                entry.features,
+                centre,
+                diagonal,
+                set(matched.mapping.values()),
+                check_cancelled=watch.raise_if_cancelled,
+            )
+            if saved is not None
+            else None
+        )
+        # Historische Einzelantworten belegen keine Konkurrenzgruppe und
+        # gelten nur bei einem körperübergreifend eindeutigen alten Namen.
+        old_id = next(iter(claims))
+        if (
+            decisions is None
+            and len(claims) == 1
+            and old_id not in grouped_old_ids
+            and (
+                old_id in legacy_eligible
+                if legacy_eligible is not None
+                else len(operation.outputs) <= 1
+            )
+        ):
+            remembered = legacy.get(old_id)
+            if isinstance(remembered, Mapping) and valid_fingerprint(remembered, legacy=True):
+                answer = resolve(
+                    remembered,
+                    claims[old_id],
+                    entry.features,
+                    centre,
+                    diagonal,
+                    check_cancelled=watch.raise_if_cancelled,
+                )
+                if answer is not None and answer not in matched.mapping.values():
+                    decisions = {old_id: answer}
+        # Bereits bestätigte Identität bleibt auch ohne aktuellen Verbraucher
+        # erhalten. Nur eine neue Frage braucht einen tatsächlich verwendeten
+        # Bezug; unbenutzte ungeklärte Gruppen behalten ihre frischen Namen.
+        if decisions is None and not set(claims) & referenced:
+            continue
+        newly_chosen = decisions is None
+        if newly_chosen:
+            decisions = {}
+            occupied = set(matched.mapping.values())
+            noncontinuation = tr("Nicht weiterführen")
+            for old_id, candidates in claims.items():
+                watch.raise_if_cancelled()
+                available = tuple(name for name in candidates if name not in occupied)
+                question, _unused_choices = question_for(old_id, available)
+                question = tr("Körper „{object}“: {question}").format(
+                    object=str(entry.name), question=question
+                )
+                if len(claims) > 1:
+                    question += "\n\n" + tr(
+                        "Diese bisherigen Bezüge teilen sich mögliche Nachfolger: {names}. "
+                        "Jedes aktuelle Merkmal kann nur einen bisherigen Bezug übernehmen."
+                    ).format(names=", ".join(claims))
+                question += "\n\n" + tr(
+                    "Bei „Nicht weiterführen“ bleiben Verweise auf dieses Merkmal ungeklärt. "
+                    "Ordne sie in den betroffenen Folgeschritten neu zu."
+                )
+                try:
+                    if question_context is not None:
+                        question_context(entry, available)
+                    chosen = ask(question, [*available, noncontinuation])
+                    watch.raise_if_cancelled()
+                finally:
+                    if question_context is not None:
+                        question_context(None, ())
+                if chosen == noncontinuation:
+                    decisions[old_id] = None
+                elif chosen in available:
+                    decisions[old_id] = chosen
+                    occupied.add(chosen)
+                else:
+                    raise AmbiguityError(
+                        _("Die Zuordnung ist nicht mehr gültig. Wähle die Bezüge erneut aus.")
+                    )
+        assert decisions is not None
+        proposed = mapping_with_decisions(
+            matched, claims, decisions, check_cancelled=watch.raise_if_cancelled
+        )
+        new_record = (
+            group_fingerprint(
+                entry.id,
+                claims,
+                decisions,
+                entry.features,
+                centre,
+                diagonal,
+                check_cancelled=watch.raise_if_cancelled,
+            )
+            if newly_chosen
+            else None
+        )
+        watch.raise_if_cancelled()
+        matched.mapping.update(proposed)
+        if new_record is not None and recorded is not None:
+            pending_records[key] = new_record
+        for old_id, candidate in decisions.items():
+            if candidate is None:
+                pending_findings.append(
+                    Finding(
+                        code="perceive.discarded",
+                        severity="info",
+                        message=_("Ein Merkmal wurde verworfen, weil es nicht zuzuordnen war."),
+                        object_id=entry.id,
+                        op_id=operation.id,
+                        values={"feature": old_id},
+                    )
+                )
+    watch.raise_if_cancelled()
+    result.mapping = matched.mapping
+    findings.extend(pending_findings)
+    if recorded is not None:
+        recorded.update(pending_records)
+
+
 def _with_features(
     entry: SceneObject,
     previous: dict[str, Any],
@@ -1337,6 +1565,9 @@ def _with_features(
     touches_features: bool = False,
     cancelled: CancelToken | None = None,
     say: Callable[[str], None] | None = None,
+    *,
+    question_context: FeatureQuestionContext | None = None,
+    legacy_eligible: frozenset[str] | None = None,
 ) -> SceneObject:
     """Merkmale neu erkennen und die alten Bezeichner behalten, wo sie noch
     passen.
@@ -1396,6 +1627,17 @@ def _with_features(
                 check_cancelled=watch.raise_if_cancelled,
             )
             watch.raise_if_cancelled()
+            if set(matched.ambiguous) & referenced:
+                # Ein gleichlautender nativer Topologiename ist kein Beleg
+                # für die alte Fläche. Netzantworten benennen keine B-Rep-
+                # Träger um; hierfür ist bestätigte native Historie nötig.
+                raise AmbiguityError(
+                    _(
+                        "Die bisherigen Flächenbezüge sind am exakten Körper nicht eindeutig. "
+                        "Wähle die betroffenen Flächen im Folgeschritt erneut aus."
+                    ),
+                    candidates=tuple(sorted(set(matched.ambiguous) & referenced)),
+                )
             exact_entry = dataclasses.replace(
                 exact_entry,
                 features=_feature_originators(
@@ -1816,59 +2058,18 @@ def _with_features(
         check_cancelled=watch.raise_if_cancelled,
     )
 
-    saved = operation.matches
-    for old_id, candidates in matched.ambiguous.items():
-        if old_id not in referenced:
-            # Niemand verweist auf dieses Merkmal — keine Passung, keine
-            # Operation. Eine Frage schützte hier nichts und flutete den
-            # Nutzer stattdessen: Das erzeugte Netz von Weg 3 trägt zwölf
-            # offene Kantenschleifen, und vor dem zweiten Schritt standen
-            # zwölf modale Fragen (dieselbe Gestalt wie die 99 Fenster, die
-            # §15.7 begraben hat). Die Erkennung behält ihre eigenen Namen;
-            # sobald etwas den alten nennt, kommt die Frage (§21.3).
-            continue
-        # **Erst die festgehaltene Antwort, dann erst fragen.** ``resolve``
-        # gibt ``None`` zurück, wenn der Beste nicht mit Abstand gewinnt — die
-        # Kandidaten waren ja mehrdeutig, *weil* sie sich gleichen, und „der
-        # nächstliegende" entschiede über einen Abstand, der kleiner ist als
-        # der zwischen ihnen. Dann wird wieder gefragt, und das ist richtig so
-        # (Regel 21).
-        remembered = saved.get(old_id)
-        if remembered is not None:
-            answer = resolve(
-                remembered,
-                candidates,
-                detected,
-                centre,
-                mesh.bounds.diagonal,
-                check_cancelled=watch.raise_if_cancelled,
-            )
-            if answer is not None:
-                matched.mapping[old_id] = answer
-                continue
-
-        question, choices = question_for(old_id, candidates)
-        chosen = ask(question, choices)
-        if chosen in candidates:
-            matched.mapping[old_id] = chosen
-            # Festhalten, woran dieses Merkmal wiederzuerkennen ist — nicht,
-            # wie es gerade heißt. Beim nächsten Lauf nummeriert die Erkennung
-            # womöglich anders.
-            if recorded is not None:
-                picked = detected.get(chosen)
-                if picked is not None:
-                    recorded[old_id] = fingerprint(picked, centre, mesh.bounds.diagonal)
-        else:
-            findings.append(
-                Finding(
-                    code="perceive.discarded",
-                    severity="info",
-                    message=_("Ein Merkmal wurde verworfen, weil es nicht zuzuordnen war."),
-                    object_id=entry.id,
-                    op_id=operation.id,
-                    values={"feature": old_id},
-                )
-            )
+    _answer_matches(
+        dataclasses.replace(entry, features=detected),
+        matched,
+        operation,
+        ask,
+        findings,
+        recorded,
+        referenced,
+        watch,
+        question_context,
+        legacy_eligible,
+    )
 
     # Eine bekannte Abbildung kann mehr belegen als die erneute Erkennung.
     # Das gilt nur für weiterhin exakt beschreibbare Merkmale; der Kandidat

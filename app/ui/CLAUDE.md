@@ -1694,6 +1694,23 @@ zweiten Start und überschreiben weder den Fortschritt noch seinen Zustand.
 - `Viewport.sceneApplied` bestätigt die tatsächlich aufgebaute Szene.
   Schnittgrenzen und Kandidatenmarkierungen werden danach synchronisiert,
   nicht schon beim Einreihen des Szenenaufbaus.
+- Zuordnungsfragen tragen ihre tatsächliche Zwischengeometrie über
+  `Session.announce_question` fadenlokal im bestehenden `AskRequest`.
+  `temporary_preview` zeigt sie ausschließlich im Viewport; Dokument,
+  Bericht, Verlauf und `last_result` bleiben auf dem gültigen Stand.
+  Projektgeneration, Arbeiteridentität und Abbruch binden Frage und Antwort.
+  `questionInvalidated` schließt eine bereits offene Auswertungsfrage nach
+  Abbruch oder eingereihtem Nachlauf. Die Gültigkeitsprüfung vor und nach
+  dem Dialogaufbau schützt auch eine frühere Entwertung; ein bereits
+  gesetztes Antwort-Ereignis geht vor dem Arbeiter-Warten nicht verloren.
+  `AskDialog.set_ready` sperrt Auswahl, Enter und Doppelklick bis zur
+  aufgebauten Kandidatenszene; Abbrechen bleibt erreichbar. Der Frageweg
+  räumt Markierungen und Signalbindungen ab und stellt vor `reply` die
+  aktuelle gültige Szene wieder ein. Projektwechsel legen keine alte Szene
+  zurück; Fensterabbau gibt wartende Fragen vor dem Warten auf Arbeiter frei.
+  Auch ein Ansichts- oder Dialogfehler beantwortet zuerst mit Abbruch und
+  nutzt anschließend die bestehende Fehleranzeige. Waisenfragen behalten
+  ihren bisherigen Ergebnisweg.
 - Die Merkmals-Sammelwahl stammt aus `relations.alike_for_actions`: ein
   gemeinsamer Aufruf pro Auswahl liefert getrennte Gruppen je Handlung.
   Das Panel zeigt deren Belege und ungeklärte Zuordnungen; vor Anwendung wird

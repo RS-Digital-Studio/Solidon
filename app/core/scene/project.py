@@ -50,6 +50,7 @@ from app.core.knowledge.parts import check as part_check
 from app.core.knowledge.parts import recipe as part_recipes
 from app.core.log import get_logger
 from app.core.paths import ensure_dir, lock_file, opened_path, user_data_dir
+from app.core.perceive.match_records import validate_matches
 from app.core.scene.gathered import GATHERED_DIR, externalise, gathered_path, inline, references
 from app.core.scene.migrations import FORMAT_VERSION, migrate
 from app.core.scene.serialise import (
@@ -874,6 +875,7 @@ def _validate_operation_schema(
     where: str,
     *,
     validate_solver_details: bool = True,
+    validate_match_groups: bool = True,
 ) -> tuple[str, ...]:
     """Prüft einen Schritt einschließlich der vom Leser betretenen Unterblöcke."""
     if (
@@ -907,6 +909,11 @@ def _validate_operation_schema(
         not isinstance(entry, dict) for entry in matches.values()
     ):
         raise ValueError(f"schema:{where}.matches")
+    if validate_match_groups:
+        try:
+            validate_matches(matches, outputs)
+        except ValueError as problem:
+            raise ValueError(f"schema:{where}.matches.{problem}") from problem
     translatable = operation.get("translatable", [])
     if not isinstance(translatable, list) or any(
         not isinstance(entry, str) for entry in translatable
@@ -1151,6 +1158,7 @@ def _validate_project_schema(data: object) -> dict[str, Any]:
                 operation,
                 f"ops[{index}]",
                 validate_solver_details=version == FORMAT_VERSION,
+                validate_match_groups=version == FORMAT_VERSION,
             )
         )
     if version == FORMAT_VERSION:

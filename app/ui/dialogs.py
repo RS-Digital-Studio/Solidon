@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any, Final
 
 from PySide6.QtCore import QLocale, Qt, QTimer, QUrl, QUrlQuery, Signal
-from PySide6.QtGui import QDesktopServices
+from PySide6.QtGui import QDesktopServices, QKeyEvent
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -112,9 +112,16 @@ class AskDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle(tr("Rückfrage"))
         self.setMinimumWidth(360)
+        self._ready = True
 
         prompt = QLabel(question, self)
         prompt.setWordWrap(True)
+        self._preparing = QLabel(
+            tr("Die Kandidaten werden in der Ansicht vorbereitet. Danach kannst du auswählen."),
+            self,
+        )
+        self._preparing.setWordWrap(True)
+        self._preparing.hide()
         self.list = QListWidget(self)
         # **Anzeigetext und Antwortwert getrennt.** Die Einheitenfrage bot „in"
         # zur Wahl — im deutschen Fenster kein Wort. Der Kern bekommt weiter
@@ -144,6 +151,7 @@ class AskDialog(QDialog):
 
         layout = QVBoxLayout(self)
         layout.addWidget(prompt)
+        layout.addWidget(self._preparing)
         layout.addWidget(self.list)
         layout.addWidget(buttons)
 
@@ -158,6 +166,27 @@ class AskDialog(QDialog):
         """
         item = self.list.currentItem()
         self._accept.setText(item.text() if item is not None else tr("OK"))
+        self._accept.setEnabled(self._ready and item is not None)
+
+    def set_ready(self, ready: bool) -> None:
+        """Wählt erst an der aufgebauten Szene; Abbrechen bleibt immer erreichbar."""
+        self._ready = ready
+        self.list.setEnabled(ready)
+        self._preparing.setVisible(not ready)
+        self.list.setAccessibleDescription("" if ready else self._preparing.text())
+        self._name_the_choice()
+
+    def accept(self) -> None:
+        """Auch Eingabetaste und Doppelklick beachten die Bereitschaft der Ansicht."""
+        if self._ready and self.chosen() is not None:
+            super().accept()
+
+    def keyPressEvent(self, event: QKeyEvent) -> None:  # noqa: N802 - Qt name
+        """Enter löst während des Aufbaus auch keinen anderen Standardknopf aus."""
+        if not self._ready and event.key() in (Qt.Key.Key_Enter, Qt.Key.Key_Return):
+            event.accept()
+            return
+        super().keyPressEvent(event)
 
     def chosen(self) -> str | None:
         item = self.list.currentItem()

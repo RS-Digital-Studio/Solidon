@@ -142,7 +142,7 @@ def test_a_recognised_flag_survives_the_cache() -> None:
     Erkennungsprüfung, fand keinen Partner und verwaiste — der Fehler, gegen den
     das Feld eingebaut wurde, nur eine Cache-Ebene weiter.
     """
-    from app.core.scene.cache import _feature_from_data, _feature_to_data
+    from app.core.scene.cache import _feature_from_data, feature_to_data
     from app.core.types import Feature
 
     named = Feature(
@@ -155,7 +155,7 @@ def test_a_recognised_flag_survives_the_cache() -> None:
         created_by=3,
     )
 
-    revived = _feature_from_data(_feature_to_data(named))
+    revived = _feature_from_data(feature_to_data(named))
     assert revived.recognised is False, "recognised überlebt den Cache"
 
     # Rückwärtsverträglich wie ``created_by``: ein Eintrag ohne das Feld gilt als
@@ -342,6 +342,178 @@ def test_hashes_are_stable_and_short() -> None:
     assert digest("a", 1) == digest("a", 1)
     assert len(digest("a")) == 32
     assert object_hash("key", 0) != object_hash("key", 1)
+
+
+@pytest.fixture(scope="module", params=("native", "mesh"))
+def bound_faces(request):
+    """Zwei wirkliche gegenüberliegende Quaderflächen unter bleibenden Namen."""
+    from app.core.brep.edit import box
+    from app.core.brep.features import features_of
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.perceive.features import detect
+
+    body = box(8.0, 6.0, 4.0)
+    features = features_of(body) if request.param == "native" else detect(as_mesh_data(body))
+    faces = [feature for feature in features.values() if feature.kind == "face"]
+    top = next(feature for feature in faces if feature.params["normal"][2] > 0.99)
+    bottom = next(feature for feature in faces if feature.params["normal"][2] < -0.99)
+    assert top.params["centre"][2] == pytest.approx(4.0)
+    assert bottom.params["centre"][2] == pytest.approx(0.0)
+    assert set(top.face_indices).isdisjoint(bottom.face_indices)
+    assert top.surface_patches and bottom.surface_patches
+    return {
+        "old_a": dataclasses.replace(top, id="old_a"),
+        "old_b": dataclasses.replace(bottom, id="old_b"),
+    }
+
+
+def test_follow_hash_distinguishes_actual_claims_with_the_same_names(bound_faces) -> None:
+    """Der gleiche Körper mit vertauschten Flächenansprüchen entwertet seine Folgeschritte."""
+    before = object_hash("raw", 0, tuple(bound_faces), features=bound_faces)
+    swapped = {
+        "old_a": dataclasses.replace(bound_faces["old_b"], id="old_a"),
+        "old_b": dataclasses.replace(bound_faces["old_a"], id="old_b"),
+    }
+    assert object_hash("raw", 0, tuple(swapped), features=swapped) != before
+    assert object_hash("raw", 0, tuple(bound_faces), features={}) != before
+    assert object_hash("raw", 0, features={}) == object_hash("raw", 0)
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "mapping_key",
+        "id",
+        "kind",
+        "provenance",
+        "params",
+        "face_indices",
+        "created_by",
+        "recognised",
+        "measure_sources",
+        "patch_kind",
+        "patch_params",
+        "patch_indices",
+        "patch_source",
+    ],
+)
+def test_follow_hash_covers_geometry_carriers_sources_and_originators(bound_faces, field) -> None:
+    """Maß, Originalauswahl und Quellen wirken unabhängig vom reservierten Namen."""
+    import math
+
+    feature = bound_faces["old_a"]
+    patch = feature.surface_patches[0]
+    changes = {
+        "id": "another_name",
+        "kind": "edge",
+        "provenance": "generated",
+        # Schon der nächste darstellbare Wert darf nicht weggerundet werden.
+        "params": {**feature.params, "area": math.nextafter(feature.params["area"], math.inf)},
+        "face_indices": bound_faces["old_b"].face_indices,
+        "created_by": 17,
+        "recognised": False,
+        "measure_sources": {**feature.measure_sources, "area": "parameter"},
+    }
+    patch_changes = {
+        "patch_kind": {"kind": "cylinder", "params": {**patch.params, "radius": 2.0}},
+        "patch_params": {
+            "params": {
+                **patch.params,
+                "centre": (*patch.params["centre"][:2], math.nextafter(4.0, math.inf)),
+            }
+        },
+        "patch_indices": {"face_indices": patch.face_indices[:1]},
+        "patch_source": {"source": "fit"},
+    }
+    changed = dict(bound_faces)
+    if field == "mapping_key":
+        changed["another_key"] = changed.pop("old_a")
+    elif field in patch_changes:
+        changed["old_a"] = dataclasses.replace(
+            feature, surface_patches=(dataclasses.replace(patch, **patch_changes[field]),)
+        )
+    else:
+        changed["old_a"] = dataclasses.replace(feature, **{field: changes[field]})
+    reserved = tuple(bound_faces)
+    assert object_hash("raw", 0, reserved, features=changed) != object_hash(
+        "raw", 0, reserved, features=bound_faces
+    )
+
+
+def test_follow_hash_uses_the_same_full_codec_after_json_and_a_new_process(
+    bound_faces, tmp_path: Path
+) -> None:
+    """JSON-Listen, Reihenfolge und Prozess-Hashseed ändern keine belegte Bindung."""
+    import subprocess
+    import sys
+
+    from app.core.scene.cache import _feature_from_data, feature_to_data
+
+    before = object_hash("raw", 0, tuple(bound_faces), features=bound_faces)
+    data = {name: feature_to_data(feature) for name, feature in reversed(bound_faces.items())}
+    revived = {
+        name: _feature_from_data(value) for name, value in json.loads(json.dumps(data)).items()
+    }
+    assert object_hash("raw", 0, tuple(revived), features=revived) == before
+    path = tmp_path / "features.json"
+    path.write_text(json.dumps(data), encoding="utf-8")
+    script = """
+import json
+import sys
+from pathlib import Path
+from app.core.scene.cache import _feature_from_data
+from app.core.scene.hashing import object_hash
+data = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+features = {key: _feature_from_data(value) for key, value in data.items()}
+print(object_hash("raw", 0, tuple(features), features=features))
+"""
+    child = subprocess.run(
+        [sys.executable, "-c", script, str(path)],
+        cwd=Path(__file__).parents[1],
+        env={**os.environ, "PYTHONHASHSEED": "23"},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert child.returncode == 0, child.stdout + child.stderr
+    assert child.stdout.strip() == before
+
+
+@pytest.mark.parametrize("moment", ["before", "first_feature", "last_feature"])
+def test_follow_hash_cancellation_keeps_the_existing_token(
+    bound_faces, monkeypatch: pytest.MonkeyPatch, moment: str
+) -> None:
+    """Abbruch am Eingang und während echter Codecarbeit liefert keinen Teilhash."""
+    from app.core.errors import OperationCancelled
+    from app.core.scene import cache as cache_module
+    from app.core.scene.cancel import CancelSignal
+
+    token = CancelSignal()
+    encode = cache_module.feature_to_data
+    encoded = []
+
+    def observed(feature):
+        data = encode(feature)
+        encoded.append(feature.id)
+        if moment == "first_feature" or (moment == "last_feature" and len(encoded) == 2):
+            token.cancel()
+        return data
+
+    monkeypatch.setattr(cache_module, "feature_to_data", observed)
+    if moment == "before":
+        token.cancel()
+    with pytest.raises(OperationCancelled):
+        object_hash("raw", 0, features=bound_faces, check_cancelled=token.raise_if_cancelled)
+    assert len(encoded) == {"before": 0, "first_feature": 1, "last_feature": 2}[moment]
+
+
+def test_the_raw_operation_hash_ignores_mapping_answers(profile: Profile) -> None:
+    """Geometrie wird vor der Zuordnung gecacht; erst ihre Ausgabe bindet die Antwort."""
+    original = Operation(id=1, op="resize_hole", inputs=("obj_1",), outputs=("obj_1",))
+    answered = dataclasses.replace(original, matches={"legacy": {"hole_1": {"kind": "hole"}}})
+    assert operation_hash(original, {}, ["body"], profile, "fine") == operation_hash(
+        answered, {}, ["body"], profile, "fine"
+    )
 
 
 def test_the_disk_level_survives_a_new_process(tmp_path: Path) -> None:

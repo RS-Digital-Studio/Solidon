@@ -9,6 +9,33 @@ neu erkannte und deklarierte Merkmale. Gespeicherte Antworten werden über
 den Aufrufer, bevor er Zuordnung oder Ergebnis veröffentlicht; es entsteht
 kein neues Token.
 
+`evaluate(question_context=...)` reicht die tatsächliche ungeklärte Ausgabe
+als vergängliche `EvaluationResult`-Vorschau an die Rückfrage. Neue Ausgaben
+erben dabei keinen Hash der alten Körper. Vollständige Gruppen werden je
+Körper gesammelt, vollständige Antworten erst nach allen Ausgaben einer
+Operation veröffentlicht. Abbruch hinterlässt keine Teilantwort. Native
+referenzierte geometrische Konkurrenz hält vor der Veröffentlichung an;
+generische Netzgruppen benennen keine native Topologie um.
+
+`Operation.matches` speichert vollständige Antwortgruppen je Ausgabekörper
+und alter Anspruchsmenge. `perceive.match_records` ist die gemeinsame reine
+Schemaquelle für Projektleser und Wiedererkennung; Kandidatenindices sind
+lokal zur Gruppe, Nichtfortführung ist ausdrücklich gespeichert. Alte
+Einzelantworten liegen ab Format 27 unverändert unter `legacy`, auch in
+beiden gespeicherten `edited_ops`-Seiten. Die Migration erfindet keine Lage
+oder Körperzuständigkeit; unbrauchbare Altabdrücke bleiben lediglich lesbar.
+
+`History.record_matches` ersetzt ganze Einträge ohne weitere Transaktion
+und übernimmt ihre verschachtelten Werte als eigene Kopie. Vor Undo/Redo
+sichert die gerade verlassene Änderungsseite ihre aktuellen Antworten nur
+bei übereinstimmender Operationsfassung: Name, Ein-/Ausgänge, Parameter,
+Startwert und Übersetzungsmarkierung. Solverauskunft und Antworten selbst
+sind keine neue Fassung. Serializer und wiederhergestellte Fassungen teilen
+keine veränderlichen Antwortlisten; eine andere frühere Fassung bleibt erhalten.
+Wechselt ein Schritt seine Ausgabekörper, behält nur seine Vorher-Fassung
+die Gruppen weggefallener Körper. Verbleibende Gruppen und Altantworten
+werden weder umbenannt noch auf neue Körper übertragen.
+
 Maßquellen reisen mit `Feature.params` durch Auswertung, Historienübernahme
 und beide Cacheebenen. Der Plattencodec speichert `measure_sources` ausdrücklich;
 alte Daten ohne Quelle bleiben unbekannt. Ein neuer Fit behält seine Quelle,
@@ -298,6 +325,16 @@ anderweitig geänderte Datei.
 Geometrie- und Merkmalsauskunft. Eine geänderte Erkennung entwertet damit
 Speicher- und Platteneinträge gemeinsam. Dokumentwerte und gespeicherte
 Operationen bleiben dabei unverändert; die Cacheversion ist kein Projektformat.
+
+`object_hash(features=..., check_cancelled=...)` bindet die tatsächlich
+veröffentlichten Merkmale an Folgeschritte: Zuordnungsschlüssel, vollständige
+Geometrieparameter, Originaldreiecke und Teilträger, Quellen und Erzeuger.
+Der gemeinsame `cache.feature_to_data`-Codec trägt dieselbe Auskunft auf die
+Platte. Stabile Teilhashes entstehen nacheinander je Merkmal mit demselben
+Abbruchrückruf; eine Gesamt-JSON aller Merkmale wird nicht aufgebaut.
+Gleiche reservierte Namen beweisen keine gleiche Bindung. Der rohe
+Operationshash bleibt dagegen unabhängig von gespeicherten Zuordnungsantworten,
+weil das Operationsergebnis vor seiner aktuellen Zuordnung wiederverwendet wird.
 
 Das gilt auch für zuvor unerkannte analytische Träger in NURBS: Ein neu
 bestätigtes Flächen- oder Bohrungsmerkmal muss durch Import und Folgeoperationen

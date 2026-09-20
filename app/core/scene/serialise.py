@@ -12,6 +12,7 @@ Parameter (§13).
 
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import fields
 from typing import Any, Final
 
@@ -535,7 +536,7 @@ def operation_to_data(operation: Operation) -> dict[str, Any]:
     # bläht die Datei und sagt nichts. Die meisten Zuordnungen sind eindeutig
     # und stellen nie eine Frage.
     if operation.matches:
-        data["matches"] = {name: dict(entry) for name, entry in operation.matches.items()}
+        data["matches"] = deepcopy({name: dict(entry) for name, entry in operation.matches.items()})
     # Nur schreiben, wo etwas steht: Der Normalfall ist ein Name, den jemand
     # selbst getippt hat, und der ist wörtlich gemeint.
     if operation.translatable:
@@ -552,7 +553,7 @@ def operation_from_data(data: dict[str, Any]) -> Operation:
         params=dict(data.get("params", {})),
         solver=solver_from_data(data.get("solver")),
         seed=data.get("seed"),
-        matches={name: dict(entry) for name, entry in data.get("matches", {}).items()},
+        matches=deepcopy({name: dict(entry) for name, entry in data.get("matches", {}).items()}),
         translatable=tuple(data.get("translatable", ())),
     )
 

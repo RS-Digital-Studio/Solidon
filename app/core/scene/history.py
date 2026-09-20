@@ -21,6 +21,7 @@ import math
 import re
 import secrets
 from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
+from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import Any, Final
 
@@ -147,6 +148,23 @@ def repair_is_available(
     return object_id is not None and object_id in available
 
 
+def _copy_operation_matches(
+    entry: Operation, *, previous_outputs: tuple[ObjectId, ...] | None = None
+) -> Operation:
+    """Kopiert Antworten ohne Alias und überträgt keine Gruppe auf einen fremden Körper."""
+    if not entry.matches:
+        return entry
+    matches = dict(entry.matches)
+    if previous_outputs is not None and entry.outputs != previous_outputs:
+        outputs = set(entry.outputs)
+        matches = {
+            key: value
+            for key, value in matches.items()
+            if key == "legacy" or value.get("object_id") in outputs
+        }
+    return dataclasses.replace(entry, matches=deepcopy(matches))
+
+
 def restore(document: Document, state: DocumentState) -> None:
     """Legt eine Seite einer Dokumentänderung ins Dokument zurück (§15.5).
 
@@ -185,10 +203,10 @@ def restore(document: Document, state: DocumentState) -> None:
                 continue
             for index, entry in enumerate(document.ops):
                 if entry.id == op_id:
-                    document.ops[index] = version
+                    document.ops[index] = _copy_operation_matches(version)
                     break
             else:
-                document.ops.append(version)
+                document.ops.append(_copy_operation_matches(version))
         document.ops.sort(key=lambda entry: entry.id)
 
 
@@ -661,12 +679,13 @@ class History:
                 translatable=entry.translatable,
                 matches=entry.matches,
             )
+            cloned = _copy_operation_matches(cloned, previous_outputs=entry.outputs)
             planned.append(cloned)
             replaced_ids[entry.id] = cloned.id
             living.difference_update(set(cloned.inputs) - set(cloned.outputs))
             living.update(cloned.outputs)
 
-        old_versions = {entry.id: entry for entry in suffix}
+        old_versions = {entry.id: _copy_operation_matches(entry) for entry in suffix}
         rebound_fits = tuple(
             dataclasses.replace(
                 fit,
@@ -915,6 +934,10 @@ class History:
         gefragt hat. Das Dokument gilt danach als geändert und gehört
         gespeichert — sonst stünde die Antwort im Stapel, der Titel zeigte kein
         ``*``, und beim Schließen wäre sie weg.
+
+        Ganze Gruppeneinträge werden ersetzt und tief kopiert, keine einzelnen
+        Entscheidungen zusammengeführt. Undo und Redo sichern die Antwort
+        zusätzlich an der gerade verlassenen Grenze derselben Op-Fassung.
         """
         if not matches:
             return False
@@ -926,7 +949,7 @@ class History:
             merged = {**entry.matches, **given}
             if merged == dict(entry.matches):
                 continue
-            self.document.ops[index] = dataclasses.replace(entry, matches=merged)
+            self.document.ops[index] = dataclasses.replace(entry, matches=deepcopy(merged))
             changed = True
         return changed
 
@@ -1176,7 +1199,7 @@ class History:
                 constraint="empty",
             )
 
-        versions = {op_id: self.operation(op_id) for op_id in removed_ids}
+        versions = {op_id: _copy_operation_matches(self.operation(op_id)) for op_id in removed_ids}
         objects_before = self._known_objects()
         objects_after: set[ObjectId] = set()
         removed_set = set(removed_ids)
@@ -1237,11 +1260,12 @@ class History:
         steht der Titel des Schritts — die Transaktion **ist** seine neue
         Fassung, kein eigener Text ohne Katalognachzug.
         """
+        changed = _copy_operation_matches(changed, previous_outputs=entry.outputs)
         self._reseed()
         self._forget_undone()
         changes = DocumentChange(
-            before=DocumentState(edited_ops={entry.id: entry}),
-            after=DocumentState(edited_ops={entry.id: changed}),
+            before=DocumentState(edited_ops={entry.id: _copy_operation_matches(entry)}),
+            after=DocumentState(edited_ops={entry.id: _copy_operation_matches(changed)}),
         )
         transaction = Transaction(
             id=f"t{next(self._next_transaction)}",
@@ -1395,6 +1419,42 @@ class History:
 
     # --- Undo und Redo ---------------------------------------------------------
 
+    def _remember_version_matches(self, transaction: Transaction, *, after: bool) -> Transaction:
+        """Sichert Antworten nur an der gerade verlassenen Grenze derselben Op-Fassung.
+
+        Nach einer Auswertung kennt der lebende Stapel neuere Antworten als
+        die gespeicherte Änderungsseite. Nur ihre Eingaben binden beide
+        Fassungen; eine spätere Solvernotiz und die Antworten selbst nicht.
+        """
+        changes = transaction.changes
+        if changes is None:
+            return transaction
+        state = changes.after if after else changes.before
+        if state.edited_ops is None:
+            return transaction
+        current = {entry.id: entry for entry in self.document.ops}
+        edited = dict(state.edited_ops)
+        changed = False
+        fields = ("id", "op", "inputs", "outputs", "params", "seed", "translatable")
+        for op_id, stored in state.edited_ops.items():
+            entry = current.get(op_id)
+            if stored is None or entry is None:
+                continue
+            if any(getattr(stored, name) != getattr(entry, name) for name in fields):
+                continue
+            if stored.matches != entry.matches:
+                edited[op_id] = dataclasses.replace(stored, matches=deepcopy(dict(entry.matches)))
+                changed = True
+        if not changed:
+            return transaction
+        remembered = dataclasses.replace(state, edited_ops=edited)
+        changes = (
+            dataclasses.replace(changes, after=remembered)
+            if after
+            else dataclasses.replace(changes, before=remembered)
+        )
+        return dataclasses.replace(transaction, changes=changes)
+
     def undo(self) -> Transaction | None:
         """Nimmt die letzte Transaktion als Ganzes zurück (§15.5).
 
@@ -1408,11 +1468,11 @@ class History:
         # Ein Undo schließt jedes offene Bündel: Der nächste Zug ist eine neue
         # Absicht und darf den zurückgenommenen Zweig nicht stehen lassen.
         self._open_bundle = None
-        transaction = self.document.transactions.pop()
+        transaction = self._remember_version_matches(self.document.transactions.pop(), after=True)
         remaining: list[Operation] = []
         for entry in self.document.ops:
             if entry.id in transaction.ops:
-                self._undone_ops[entry.id] = entry
+                self._undone_ops[entry.id] = _copy_operation_matches(entry)
             else:
                 remaining.append(entry)
         self.document.ops[:] = remaining
@@ -1427,9 +1487,9 @@ class History:
         if not self._undone:
             return None
         self._open_bundle = None
-        transaction = self._undone.pop()
+        transaction = self._remember_version_matches(self._undone.pop(), after=False)
         for op_id in transaction.ops:
-            self.document.ops.append(self._undone_ops.pop(op_id))
+            self.document.ops.append(_copy_operation_matches(self._undone_ops.pop(op_id)))
         self.document.ops.sort(key=lambda entry: entry.id)
         self.document.transactions.append(transaction)
         if transaction.changes is not None:

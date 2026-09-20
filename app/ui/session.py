@@ -151,6 +151,13 @@ class AskRequest:
     über dieselbe Fläche.
     """
 
+    temporary_preview: bool = False
+    """Die ungeklärte Operationsausgabe gehört ausschließlich in die Ansicht."""
+
+    project_generation: int | None = None
+    worker: _EvaluationWorker | None = None
+    """Der beim Auftrag gebundene Projektstand und sein Auswertungsarbeiter."""
+
     def reply(self, answer: str | None) -> None:
         self.answer = answer
         self.answered.set()
@@ -166,9 +173,12 @@ class _EvaluationWorker(Worker):
     def __init__(self, session: Session) -> None:
         super().__init__()
         self._session = session
+        self._project_generation = session._project_generation
 
     def work(self) -> None:
         session = self._session
+        session._pending.project_generation = self._project_generation
+        session._pending.worker = self
         try:
             # §32: was diese Datei außer Geometrie mitbringt, wird am Dokument
             # abgelesen — vor der Auswertung, damit der Hinweis nicht von dem
@@ -230,6 +240,10 @@ class _EvaluationWorker(Worker):
             self.failedWith.emit(error)
         else:
             self.finishedWith.emit(result)
+        finally:
+            session.announce_question(None, ())
+            session._pending.project_generation = None
+            session._pending.worker = None
 
     def release_finished_references(self) -> None:
         """Den nur für diesen Lauf gehaltenen Sitzungsbezug lösen.
@@ -711,6 +725,8 @@ class Session(QObject):
     busyChanged = Signal(bool)
     askRequested = Signal(object)
     """Eine Frage an den Nutzer — trägt einen ``AskRequest``."""
+    questionInvalidated = Signal()
+    """Abbruch oder Nachlauf hat den bisherigen Auswertungsauftrag entwertet."""
     proposalReady = Signal(object)
     """An agent turn finished — carries a ``ProposalPreview`` (§26.5)."""
     agentProgress = Signal(int, str)
@@ -2640,6 +2656,7 @@ class Session(QObject):
         if self._worker is not None and self._worker.isRunning():
             self._rerun_pending = True
             self.cancel_signal.cancel()
+            self.questionInvalidated.emit()
             return
         self.cancel_signal.reset()
         self._cancel_by_user = False
@@ -2683,6 +2700,7 @@ class Session(QObject):
             quality=quality or once or self.quality,
             progress=self.report_progress,
             ask=self.ask_from_worker,
+            question_context=self.announce_question,
             cancelled=self.cancel_signal,
             cache=self.cache,
             sources=ProjectSources(self.project, base_dir=self.base_dir),
@@ -2755,6 +2773,7 @@ class Session(QObject):
         self._cancel_by_user = True
         self._rerun_pending = False
         self.cancel_signal.cancel()
+        self.questionInvalidated.emit()
 
     def cancel_agent(self) -> None:
         """Hält nur den laufenden Agentenzug an."""
@@ -3166,6 +3185,25 @@ class Session(QObject):
         """
         self._pending.candidates = tuple(candidates)
 
+    def announce_question(
+        self, preview: EvaluationResult | None, candidates: tuple[tuple[str, str], ...]
+    ) -> None:
+        """Bindet die echte Zuordnungsvorschau an die nächste Frage dieses Fadens."""
+        self._pending.preview = preview
+        self._pending.temporary_preview = preview is not None
+        self.announce_candidates(candidates)
+
+    def question_is_current(self, request: AskRequest) -> bool:
+        """Überholte Projekt- oder Arbeiterfragen dürfen keine Antwort übernehmen."""
+        return (
+            request.project_generation in (None, self._project_generation)
+            and not self._outdated(request.worker)
+            and not (
+                request.worker is not None
+                and (self._rerun_pending or self.cancel_signal.is_cancelled)
+            )
+        )
+
     def ask_from_worker(self, question: str, choices: list[str]) -> str:
         """Reicht die Frage ans Fenster und wartet auf die Antwort."""
         candidates = getattr(self._pending, "candidates", ())
@@ -3175,10 +3213,17 @@ class Session(QObject):
             choices=list(choices),
             candidates=candidates,
             preview=getattr(self._pending, "preview", None),
+            temporary_preview=getattr(self._pending, "temporary_preview", False),
+            project_generation=getattr(
+                self._pending, "project_generation", self._project_generation
+            ),
+            worker=getattr(self._pending, "worker", None),
         )
+        if not self.question_is_current(request):
+            raise OperationCancelled
         self.askRequested.emit(request)
         request.answered.wait()
-        if request.answer is None:
+        if request.answer is None or not self.question_is_current(request):
             raise OperationCancelled
         return request.answer
 

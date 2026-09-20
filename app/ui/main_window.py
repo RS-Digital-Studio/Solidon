@@ -1994,6 +1994,8 @@ class MainWindow(QMainWindow):
         self._pending_scene: EvaluationResult | None = None
         self._ask_candidates: tuple[tuple[str, str], ...] = ()
         """Die Kandidaten der offenen Rückfrage (§21.3) — leer, wenn keine offen ist."""
+        self._ask_dialog: AskDialog | None = None
+        self._ask_request: AskRequest | None = None
         """Das Ergebnis, das während des Aufbaus hereinkam — nachgeholt, sobald
         er fertig ist."""
 
@@ -16219,6 +16221,10 @@ class MainWindow(QMainWindow):
     def _viewport_failed(self, detail: str) -> None:
         """Ein Ansichtsfehler lässt das alte Bild stehen und erklärt den Ausweg."""
 
+        if self._ask_dialog is not None:
+            # Der Frageweg legt erst die gültige Szene zurück und gibt seinen
+            # Arbeiter frei. Danach zeigt er genau denselben Fehlerdialog.
+            return
         show_error(InternalError(detail=detail), self)
 
     def _on_scene(self, result: EvaluationResult) -> None:
@@ -16833,28 +16839,149 @@ class MainWindow(QMainWindow):
         wird keine betont, denn die Frage entscheidet dort über die Kennung
         und nicht über den Fundort.
         """
-        if request.preview is not None:
-            self._stop_waiting()
-            self._on_scene(request.preview)
-        dialog = AskDialog(request.question, request.choices, self)
-        self._ask_candidates = tuple(request.candidates)
-        if self._ask_candidates:
-            self.viewport.show_candidates(self._ask_candidates)
-            dialog.list.currentItemChanged.connect(weak_slot(self, MainWindow._emphasise_candidate))
-            self._emphasise_candidate(dialog.list.currentItem(), None)
+        if request.answered.is_set():
+            return
+        if self._close_requested or not self.session.question_is_current(request):
+            request.reply(None)
+            return
+        project = self.session.project
+        result_generation = self.session.result_generation
+        dialog: AskDialog | None = None
+        answer: str | None = None
+        error: AppError | None = None
+        connections: list[tuple[Any, Callable[..., None]]] = []
+        temporary = request.temporary_preview and request.preview is not None
+
+        def current() -> bool:
+            return (
+                not self._close_requested
+                and self._ask_dialog is dialog
+                and self.session.project is project
+                and self.session.result_generation == result_generation
+                and self.session.question_is_current(request)
+            )
+
+        def check_context(*_args: object) -> None:
+            if dialog is not None and not current():
+                dialog.set_ready(False)
+                dialog.reject()
+
+        def scene_ready() -> None:
+            if dialog is None or error is not None:
+                return
+            check_context()
+            if not current():
+                return
+            ready = not temporary or self.viewport.is_scene_applied(request.preview)
+            dialog.set_ready(ready)
+            if ready:
+                self._ask_candidates = tuple(request.candidates)
+                if self._ask_candidates:
+                    self.viewport.show_candidates(self._ask_candidates)
+                    self._emphasise_candidate(dialog.list.currentItem(), None)
+
+        def scene_failed(detail: str) -> None:
+            nonlocal error
+            if dialog is not None and current():
+                error = InternalError(detail=detail)
+                dialog.set_ready(False)
+                dialog.reject()
+
         try:
-            if dialog.exec() == AskDialog.DialogCode.Accepted:
-                request.reply(dialog.chosen())
-            else:
-                request.reply(None)
+            self._cancel_pending_question()
+            dialog = AskDialog(request.question, request.choices, self)
+            self._ask_dialog = dialog
+            self._ask_request = request
+            self._ask_candidates = ()
+            dialog.set_ready(not temporary)
+            dialog.list.currentItemChanged.connect(weak_slot(self, MainWindow._emphasise_candidate))
+            # Diese kurzlebigen Verbindungen gehören nur der laufenden Frage.
+            # Der finally-Block löst auch bei einem Aufbaufehler jeden Rückruf.
+            for signal, slot in (
+                (self.viewport.sceneApplied, scene_ready),
+                (self.viewport.sceneFailed, scene_failed),
+                (self.session.projectChanged, check_context),
+                (self.session.sceneChanged, check_context),
+                (self.session.busyChanged, check_context),
+                (self.session.questionInvalidated, check_context),
+            ):
+                signal.connect(slot)
+                connections.append((signal, slot))
+            if request.preview is not None:
+                self._stop_waiting()
+                if temporary:
+                    self.veil.end()
+                    self.viewport.show_scene(request.preview)
+                else:
+                    self._on_scene(request.preview)
+            scene_ready()
+            if error is None and current():
+                code = dialog.exec()
+                if (
+                    code == AskDialog.DialogCode.Accepted
+                    and current()
+                    and (not temporary or self.viewport.is_scene_applied(request.preview))
+                ):
+                    answer = dialog.chosen()
+        except AppError as failure:
+            error = failure
+        except Exception:
+            error = InternalError(detail=traceback.format_exc())
         finally:
-            # Auch bei Abbruch und auch, wenn der Dialog wirft: Was ohne offene
-            # Frage leuchtet, leuchtet ohne Anlass. Der Kern nimmt seine Ansage
-            # ebenfalls zurück, aber die erreicht nur die nächste Frage — das
-            # Bild gehört dem Fenster.
+            try:
+                for signal, slot in connections:
+                    with suppress(RuntimeError, TypeError):
+                        signal.disconnect(slot)
+                if self._ask_dialog is dialog:
+                    self._ask_dialog = None
+                    self._ask_request = None
+                    if self._ask_candidates:
+                        self.viewport.show_candidates()
+                        self._ask_candidates = ()
+                    if temporary and self.session.project is project and not self._close_requested:
+                        # Vor der Antwort: Der freigegebene Arbeiter darf ein
+                        # neues Ergebnis senden, ohne dass dieser Weg es mit
+                        # einer alten Ansicht wieder überschreibt.
+                        self.viewport.show_scene(self.session.last_result)
+                        self._update_veil(self.session.busy)
+                if dialog is not None:
+                    dialog.hide()
+                    dialog.deleteLater()
+            except Exception:
+                answer = None
+                error = InternalError(detail=traceback.format_exc())
+            finally:
+                if not request.answered.is_set():
+                    request.reply(answer if error is None else None)
+        if (
+            error is not None
+            and not self._close_requested
+            and self.session.project is project
+            and self.session.question_is_current(request)
+        ):
+            self._on_error(error)
+
+    def _cancel_pending_question(self) -> None:
+        """Beim Schließen keine auf eine Dialogantwort wartenden Arbeiter festhalten."""
+        dialog, self._ask_dialog = self._ask_dialog, None
+        request, self._ask_request = self._ask_request, None
+        try:
             if self._ask_candidates:
                 self.viewport.show_candidates()
                 self._ask_candidates = ()
+            if dialog is not None:
+                dialog.set_ready(False)
+                dialog.reject()
+            if (
+                request is not None
+                and request.temporary_preview
+                and request.project_generation in (None, self.session._project_generation)
+                and not self._close_requested
+            ):
+                self.viewport.show_scene(self.session.last_result)
+        finally:
+            if request is not None:
+                request.reply(None)
 
     def _emphasise_candidate(self, current: object, _previous: object) -> None:
         """Die markierte Zeile bekommt die deckendere Hervorhebung.
@@ -18538,6 +18665,7 @@ class MainWindow(QMainWindow):
         ausdrücklich gekappt, bevor Qt die Widgets zerstört.
         """
         self._close_requested = True
+        self._cancel_pending_question()
         self.wait_for_workers(timeout_ms)
         self._action_notice.clear()
         self.spacemouse.stop()
@@ -18621,6 +18749,7 @@ class MainWindow(QMainWindow):
         # ausläuft, dürfte eine neue Eingabe den bereits geprüften
         # Dokumentstand verändern und ohne zweite Verwerfentscheidung
         # verschwinden.
+        self._cancel_pending_question()
         self.setEnabled(False)
         if self.wait_for_workers(0) is False:
             self.announce(
