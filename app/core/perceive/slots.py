@@ -41,7 +41,8 @@ import numpy as np
 
 from app.core import units
 from app.core.geom.mesh import MeshData
-from app.core.types import Feature, FeatureId, MeasureSource, Vec3
+from app.core.perceive.surfaces import PATCH_BLOCK, clipped_patches, planar_patch
+from app.core.types import Feature, FeatureId, MeasureSource, SurfacePatch, Vec3
 from app.core.units import EPS_GEOM, positive_axis, weld_tolerance
 
 if TYPE_CHECKING:  # pragma: no cover - nur für die Typprüfung
@@ -172,6 +173,8 @@ class Slot:
     """Welche Einpassungen aus der übergebenen Liste darin aufgehen."""
     diameter_source: MeasureSource = "fit"
     """Breite aus einem Stadionfit oder aus dem Abstand der wirklichen Flanken."""
+    surface_patches: tuple[SurfacePatch, ...] = ()
+    """Einzeln belegte Enden und Flanken, keine gemittelte Ersatzfläche."""
 
     @property
     def length(self) -> float:
@@ -205,7 +208,7 @@ def slots_instead_of_half_bores(
     ein anderer Weg dorthin; siehe den Kopf dieser Datei.
     """
     slots = find_slots(mesh, fillets, check_cancelled=check_cancelled)
-    slots.extend(slots_from_stadiums(mesh, stadiums))
+    slots.extend(slots_from_stadiums(mesh, stadiums, check_cancelled=check_cancelled))
     # Nach Position sortiert, damit die Nummer nicht daran hängt, über welchen
     # der zwei Wege ein Langloch gekommen ist (§21.2).
     slots.sort(key=lambda slot: tuple(round(value, 3) for value in slot.centre))
@@ -248,6 +251,7 @@ def slots_instead_of_half_bores(
                 "through": slot.through,
             },
             face_indices=slot.face_indices,
+            surface_patches=slot.surface_patches,
         )
     return open_slots_instead_of_fillets(mesh, kept, fillets, check_cancelled=check_cancelled)
 
@@ -293,7 +297,7 @@ def open_slots_instead_of_fillets(
         radius = float(fit.radius)
         if radius <= tolerance:
             continue
-        chosen, rim, has_flanks = _open_slot_shell(
+        chosen, rim, has_flanks, arc_faces = _open_slot_shell(
             triangles,
             normals,
             adjacency,
@@ -342,6 +346,32 @@ def open_slots_instead_of_fillets(
         while f"slot_{number}" in kept:
             number += 1
         name = f"slot_{number}"
+        # Native Auskünfte stammen von den Originalflächen. Der hier bereits
+        # akzeptierte Konturfit ergänzt ausschließlich deren unbelegten Anteil.
+        native = clipped_patches(
+            tuple(
+                part
+                for feature in kept.values()
+                for part in feature.surface_patches
+                if part.source == "native"
+            ),
+            selected,
+            check_cancelled=check_cancelled,
+        )
+        native_faces = {index for part in native for index in part.face_indices}
+        arc_indices = sorted(selected.intersection(arc_faces) - native_faces)
+        parts = list(native)
+        if arc_indices:
+            parts.append(_arc_surface(fit.centre, fit.axis, fit.radius, arc_indices))
+        parts.extend(
+            _flank_surfaces(
+                mesh,
+                sorted(selected - set(arc_faces) - native_faces),
+                centre,
+                np.cross(axis, direction),
+                check_cancelled=check_cancelled,
+            )
+        )
         kept = {
             key: feature
             for key, feature in kept.items()
@@ -356,6 +386,7 @@ def open_slots_instead_of_fillets(
             kind="slot",
             provenance="detected",
             face_indices=indices,
+            surface_patches=tuple(parts),
             measure_sources={
                 "diameter": "fit",
                 "length": "fit",
@@ -399,7 +430,7 @@ def _open_slot_shell(
     tolerance: float,
     *,
     check_cancelled: Callable[[], None] | None,
-) -> tuple[np.ndarray, np.ndarray, bool]:
+) -> tuple[np.ndarray, np.ndarray, bool, set[int]]:
     """Erweitert den Bogen nur über erreichbare Flanken und weitere Kreisfacetten.
 
     Jede besuchte Fläche wird einmal geometrisch geprüft. Abgelehnte Nachbarn
@@ -436,7 +467,7 @@ def _open_slot_shell(
     incident = np.unique(np.concatenate(incident_rows))
     first = np.isin(adjacency[incident, 0], selected)
     second = np.isin(adjacency[incident, 1], selected)
-    return selected, incident[first != second], not arc_faces.issuperset(chosen)
+    return selected, incident[first != second], not arc_faces.issuperset(chosen), arc_faces
 
 
 def _open_slot_candidates(
@@ -460,7 +491,12 @@ def _open_slot_candidates(
     return tangent | on_arc, on_arc
 
 
-def slots_from_stadiums(mesh: MeshData, stadiums: Sequence[tuple[Any, list[int]]]) -> list[Slot]:
+def slots_from_stadiums(
+    mesh: MeshData,
+    stadiums: Sequence[tuple[Any, list[int]]],
+    *,
+    check_cancelled: Callable[[], None] | None = None,
+) -> list[Slot]:
     """Aus jedem eingepassten Stadion das Langloch, das es ist.
 
     Die Einpassung hat Achse, Mittellinie, Radius, Weg und Tiefe schon gemessen
@@ -473,6 +509,8 @@ def slots_from_stadiums(mesh: MeshData, stadiums: Sequence[tuple[Any, list[int]]
     body = mesh.raw
     found: list[Slot] = []
     for fit, patch in stadiums:
+        if check_cancelled is not None:
+            check_cancelled()
         centre = np.asarray(fit.centre, dtype=float)
         axis = np.asarray(fit.axis, dtype=float)
         direction = np.asarray(fit.direction, dtype=float)
@@ -489,6 +527,9 @@ def slots_from_stadiums(mesh: MeshData, stadiums: Sequence[tuple[Any, list[int]]
                 ),
                 face_indices=tuple(sorted(int(face) for face in patch)),
                 swallowed=(),
+                surface_patches=_stadium_surfaces(
+                    mesh, fit, patch, check_cancelled=check_cancelled
+                ),
             )
         )
     return found
@@ -580,6 +621,7 @@ def find_slots(
                 candidates[first],
                 candidates[second],
                 axes,
+                check_cancelled=check_cancelled,
             )
             if slot is not None:
                 found.append(slot)
@@ -628,6 +670,8 @@ def _slot_from(
     first: tuple[int, CylinderFit, list[int]],
     second: tuple[int, CylinderFit, list[int]],
     axes: Mapping[int, np.ndarray | None],
+    *,
+    check_cancelled: Callable[[], None] | None = None,
 ) -> Slot | None:
     """Ob diese zwei Zylinderausschnitte ein Langloch sind — und welches.
 
@@ -756,6 +800,9 @@ def _slot_from(
         direction = np.asarray(stadium.direction, dtype=float)
         travel = stadium.travel
         diameter = stadium.radius * 2.0
+        parts = _stadium_surfaces(
+            MeshData.of(body), stadium, sorted(faces), check_cancelled=check_cancelled
+        )
     else:
         # Die bereits geprüften ebenen Flanken tragen die wirkliche Breite.
         # Ihr Abstand bleibt auch nach erneutem Schneiden derselbe und muss
@@ -763,6 +810,13 @@ def _slot_from(
         flank_distances = (flank_corners - centre) @ across
         diameter = float(np.ptp(flank_distances))
         diameter_source = "facets"
+        parts = (
+            _arc_surface(fit_a.centre, fit_a.axis, fit_a.radius, patch_a),
+            _arc_surface(fit_b.centre, fit_b.axis, fit_b.radius, patch_b),
+            *_flank_surfaces(
+                MeshData.of(body), flank_indices, centre, across, check_cancelled=check_cancelled
+            ),
+        )
 
     corners = triangles[list(faces)].reshape(-1, 3) - centre
     along_axis = corners @ axis
@@ -782,7 +836,140 @@ def _slot_from(
         face_indices=tuple(sorted(faces)),
         swallowed=(index_a, index_b),
         diameter_source=diameter_source,
+        surface_patches=parts,
     )
+
+
+def _point(vector: np.ndarray) -> Vec3:
+    """Kernwerte ohne Anzeigerundung in den Trägervertrag übernehmen."""
+    return float(vector[0]), float(vector[1]), float(vector[2])
+
+
+def _arc_surface(centre: Vec3, axis: Vec3, radius: float, indices: Sequence[int]) -> SurfacePatch:
+    """Das tatsächlich angenommene Ende behalten, auch wenn das Langlochmaße mittelt."""
+    return SurfacePatch(
+        "cylinder",
+        {"centre": centre, "axis": axis, "radius": radius},
+        tuple(int(index) for index in indices),
+        "fit",
+    )
+
+
+def _flank_surfaces(
+    mesh: MeshData,
+    indices: Sequence[int] | np.ndarray,
+    centre: np.ndarray,
+    across: np.ndarray,
+    *,
+    check_cancelled: Callable[[], None] | None,
+) -> tuple[SurfacePatch, ...]:
+    """Die zwei wirklichen Flanken nachweisen; ein leicht gekrümmter Rest bleibt unbekannt."""
+    if check_cancelled is not None:
+        check_cancelled()
+    if not len(indices):
+        return ()
+    numbers = np.asarray(indices, dtype=np.int64)
+    body = mesh.raw
+    sides = (np.asarray(body.triangles_center)[numbers] - centre) @ across
+    result = []
+    for mask in (sides < 0.0, sides > 0.0):
+        chosen = numbers[mask]
+        if not len(chosen):
+            continue
+        first = int(chosen[np.argmax(np.asarray(body.area_faces)[chosen])])
+        origin = np.asarray(body.triangles_center[first])
+        normal = np.asarray(body.face_normals[first])
+        planar: list[int] = []
+        for start in range(0, len(chosen), PATCH_BLOCK):
+            if check_cancelled is not None:
+                check_cancelled()
+            block = chosen[start : start + PATCH_BLOCK]
+            corners = np.asarray(body.vertices)[np.asarray(body.faces)[block]]
+            on_plane = np.max(np.abs((corners - origin) @ normal), axis=1) <= EPS_GEOM
+            planar.extend(int(index) for index in block[on_plane])
+        part = planar_patch(
+            mesh,
+            planar,
+            _point(body.triangles_center[first]),
+            _point(body.face_normals[first]),
+            check_cancelled=check_cancelled,
+        )
+        if part is not None:
+            result.append(part)
+    return tuple(result)
+
+
+def _stadium_surfaces(
+    mesh: MeshData,
+    fit: Any,
+    indices: Sequence[int],
+    *,
+    check_cancelled: Callable[[], None] | None,
+) -> tuple[SurfacePatch, ...]:
+    """Den fertigen Stadionfit an seinen geraden Nähten in Teilträger aufteilen.
+
+    Ein Dreieck über einer Naht bekommt keinen geratenen Besitzer. Die
+    Formparameter kommen vollständig aus der bereits akzeptierten Einpassung.
+    """
+    if check_cancelled is not None:
+        check_cancelled()
+    centre, axis, direction = (
+        np.asarray(value, dtype=float) for value in (fit.centre, fit.axis, fit.direction)
+    )
+    across = np.cross(axis, direction)
+    numbers = np.asarray(indices, dtype=np.int64)
+    half = float(fit.travel) / 2.0
+    # EPS_GEOM deckt ausschließlich Rundungsfehler genau auf der vorhandenen
+    # Naht ab. Überschneidende Besitzer werden unten ausdrücklich verworfen.
+    groups: list[list[int]] = [[], [], [], []]
+    for start in range(0, len(numbers), PATCH_BLOCK):
+        if check_cancelled is not None:
+            check_cancelled()
+        block = numbers[start : start + PATCH_BLOCK]
+        triangles = np.asarray(mesh.raw.vertices)[np.asarray(mesh.raw.faces)[block]]
+        along = (triangles - centre) @ direction
+        sides = (triangles - centre) @ across
+        left = np.max(along, axis=1) <= -half + EPS_GEOM
+        right = np.min(along, axis=1) >= half - EPS_GEOM
+        middle = (np.min(along, axis=1) >= -half - EPS_GEOM) & (
+            np.max(along, axis=1) <= half + EPS_GEOM
+        )
+        masks = (
+            left,
+            right,
+            middle & (np.max(sides, axis=1) < 0.0),
+            middle & (np.min(sides, axis=1) > 0.0),
+        )
+        membership = sum(mask.astype(np.int8) for mask in masks)
+        for members, mask in zip(groups, masks, strict=True):
+            members.extend(int(face) for face in block[mask & (membership == 1)])
+    result = []
+    for index, group in enumerate(groups):
+        if check_cancelled is not None:
+            check_cancelled()
+        selected = tuple(group)
+        if not selected:
+            continue
+        sign = -1.0 if index % 2 == 0 else 1.0
+        if index < 2:
+            result.append(
+                _arc_surface(
+                    _point(centre + sign * half * direction), fit.axis, float(fit.radius), selected
+                )
+            )
+        else:
+            result.append(
+                SurfacePatch(
+                    "plane",
+                    {
+                        "centre": _point(centre + sign * float(fit.radius) * across),
+                        "axis": _point(across),
+                    },
+                    selected,
+                    "fit",
+                )
+            )
+    return tuple(result)
 
 
 def _unit(vector: Any) -> np.ndarray | None:

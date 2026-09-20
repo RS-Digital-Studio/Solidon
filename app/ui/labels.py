@@ -43,6 +43,7 @@ from app.core.units import (
     decimals_for,
     format_area,
     format_length,
+    format_length_bound,
     format_volume,
     from_mm,
     to_mm,
@@ -758,6 +759,11 @@ def length(value_mm: float, unit: LengthUnit | None = None, with_unit: bool = Tr
     stumm.
     """
     return localised(format_length(value_mm, unit or _DISPLAY_UNIT, with_unit))
+
+
+def length_bound(value_mm: float, *, upper: bool) -> str:
+    """Eine numerische Längenschranke mit Anzeigeeinheit und gerichteter Rundung."""
+    return localised(format_length_bound(value_mm, _DISPLAY_UNIT, upper=upper))
 
 
 def compact_length(value_mm: float, unit: LengthUnit | None = None) -> str:

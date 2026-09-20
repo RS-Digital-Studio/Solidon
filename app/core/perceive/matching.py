@@ -21,7 +21,7 @@ Drei Ausgänge, und nur einer davon ist still:
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any
 
@@ -29,6 +29,7 @@ import numpy as np
 
 from app.core.deferred import linear_sum_assignment
 from app.core.log import get_logger
+from app.core.perceive.surfaces import radial_scales, transformed_patches
 from app.core.types import Feature, FeatureId, Transform, Vec3
 from app.core.units import EPS_GEOM
 
@@ -503,7 +504,10 @@ def resolve(
 
 
 def moved_features(
-    features: dict[FeatureId, Feature], transform: Transform
+    features: dict[FeatureId, Feature],
+    transform: Transform,
+    *,
+    check_cancelled: Callable[[], None] | None = None,
 ) -> dict[FeatureId, Feature]:
     """Führt Orte und Richtungen mit (§21.2), bei Spiegelung auch die Händigkeit.
 
@@ -512,10 +516,14 @@ def moved_features(
     Gültigkeit. Normalen folgen auch dort der invers-transponierten Matrix,
     Richtungen der gewöhnlichen linearen Abbildung.
     """
+    if check_cancelled is not None:
+        check_cancelled()
     matrix = np.asarray(transform, dtype=float)
     turn = matrix[:3, :3]
     moved: dict[FeatureId, Feature] = {}
     for identifier, feature in features.items():
+        if check_cancelled is not None:
+            check_cancelled()
         params = dict(feature.params)
         for key in ("centre", "position", "arc_centre", "mouth_centre"):
             if key in params:
@@ -546,7 +554,13 @@ def moved_features(
         # nächsten Schritt die Bohrungen eines Bausteins an einer Erkennung,
         # die sie nie findet, und ließ sie verwaisen. Ein Feld, das später
         # dazukommt, reist jetzt von selbst mit.
-        moved[identifier] = replace(feature, params=params)
+        moved[identifier] = replace(
+            feature,
+            params=params,
+            surface_patches=transformed_patches(
+                feature.surface_patches, transform, check_cancelled=check_cancelled
+            ),
+        )
     return moved
 
 
@@ -559,7 +573,11 @@ class FeatureTransform:
 
 
 def transformed_features(
-    features: Mapping[FeatureId, Feature], transform: Transform, *, mesh: MeshData | None = None
+    features: Mapping[FeatureId, Feature],
+    transform: Transform,
+    *,
+    mesh: MeshData | None = None,
+    check_cancelled: Callable[[], None] | None = None,
 ) -> FeatureTransform:
     """Maße einmal für globale und örtliche Zuordnung nachführen.
 
@@ -571,12 +589,14 @@ def transformed_features(
     """
     from app.core.geom.transform import is_rigid
 
+    if check_cancelled is not None:
+        check_cancelled()
     matrix = np.asarray(transform, dtype=float)
     linear = matrix[:3, :3]
     factors = np.linalg.svd(linear, compute_uv=False)
     uniform = bool(np.allclose(factors, factors[0], rtol=0.0, atol=EPS_GEOM))
     rigid = is_rigid(matrix)
-    result = moved_features(dict(features), transform)
+    result = moved_features(dict(features), transform, check_cancelled=check_cancelled)
     exact: set[FeatureId] = set()
     lengths = (
         "diameter",
@@ -594,6 +614,8 @@ def transformed_features(
         "radial_max",
     )
     for name, feature in result.items():
+        if check_cancelled is not None:
+            check_cancelled()
         params = dict(feature.params)
         sources = dict(feature.measure_sources)
         valid = rigid or uniform
@@ -611,18 +633,10 @@ def transformed_features(
                 params["volume"] *= float(factors[0]) ** 3
         elif feature.kind in {"hole", "pin"}:
             axis = np.asarray(features[name].params["axis"], dtype=float)
-            axis = axis / np.linalg.norm(axis)
-            _u, _s, vectors = np.linalg.svd(axis.reshape(1, 3))
-            radial = linear @ vectors[1:].T
-            radial_factors = np.linalg.svd(radial, compute_uv=False)
-            along = linear @ axis
-            valid = bool(
-                np.allclose(radial_factors, radial_factors[0], rtol=0.0, atol=EPS_GEOM)
-                and (np.abs(along @ radial) <= EPS_GEOM).all()
-            )
-            if valid:
-                radial_scale = float(radial_factors[0])
-                axial_scale = float(np.linalg.norm(along))
+            radial_factors = radial_scales(linear, axis)
+            valid = radial_factors is not None
+            if radial_factors is not None:
+                radial_scale, axial_scale = radial_factors
                 for key in ("diameter", "radius", "fit_error", "radial_min", "radial_max"):
                     if key in params:
                         params[key] *= radial_scale

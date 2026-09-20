@@ -74,6 +74,14 @@ def test_separate_shell_and_liner_have_a_real_free_axial_mount(clamp_reference, 
             max(feature.face_indices) < part.mesh.triangle_count
             for feature in part.features.values()
         )
+        for feature in part.features.values():
+            assert len(feature.surface_patches) == 1
+            surface = feature.surface_patches[0]
+            assert surface.kind == "plane" and surface.source == "facets"
+            assert surface.face_indices == feature.face_indices
+            selected = part.mesh.raw.triangles[list(surface.face_indices)]
+            distances = (selected - surface.params["centre"]) @ np.asarray(surface.params["axis"])
+            assert distances == pytest.approx(0.0, abs=EPS_GEOM)
     assert (
         boolean("intersection", [paired, liner.mesh], quality="fine", allow_empty=True).mesh.volume
         <= EPS_GEOM

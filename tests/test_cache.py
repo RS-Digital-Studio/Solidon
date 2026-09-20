@@ -56,6 +56,27 @@ def test_real_measure_sources_survive_project_reopen_cache_and_undo(
         )
         assert top.params["area"] == pytest.approx(area)
         assert measure_status(top, "area").source == source
+        assert top.surface_patches
+        for patch in top.surface_patches:
+            assert patch.kind == "plane"
+            assert patch.source == source
+            assert set(patch.face_indices) <= set(top.face_indices)
+            assert patch.params["centre"][2] == pytest.approx(top.params["centre"][2])
+        available = [
+            finding
+            for finding in result.scene.report.findings
+            if finding.code == "perceive.deviation"
+        ]
+        assert len(available) == 1
+        assert available[0].object_id == body.id and available[0].severity == "info"
+        assert available[0].location is None and not available[0].values
+        from app.core.perceive.maps import build
+
+        deviation = build("deviation", body)
+        assert deviation.unknown_count == 0
+        assert len(deviation.values) == body.mesh.triangle_count
+        assert deviation.maximum_interval[0] <= 0.0 <= deviation.maximum_interval[1]
+        assert deviation.maximum_interval[1] <= 1e-8
         return top
 
     original = measured(project, cache, 600.0)
@@ -147,6 +168,93 @@ def test_a_recognised_flag_survives_the_cache() -> None:
         "face_indices": [],
     }
     assert _feature_from_data(old_entry).recognised is True
+
+
+def surface_result() -> CachedResult:
+    """Ein zusammengesetztes Merkmal behält fünf verschiedene Originalteilflächen."""
+    from app.core.types import Feature, SurfacePatch
+
+    centre = (1.25, -3.0, 7.5)
+    axis = (0.0, 0.0, 2.0)
+    patches = (
+        SurfacePatch("plane", {"centre": centre, "axis": axis}, (1,), "facets"),
+        SurfacePatch("cylinder", {"centre": centre, "axis": axis, "radius": 2.0}, (2,), "fit"),
+        SurfacePatch("cone", {"apex": centre, "axis": axis, "half_angle": 0.4}, (3,), "native"),
+        SurfacePatch("sphere", {"centre": centre, "radius": 4.0}, (4,), "fit"),
+        SurfacePatch(
+            "torus",
+            {"centre": centre, "axis": axis, "ring_radius": 8.0, "tube_radius": 2.0},
+            (5,),
+            "native",
+        ),
+    )
+    feature = Feature("compound", "face", "detected", {}, (1, 2, 3, 4, 5), surface_patches=patches)
+    body = dataclasses.replace(make_object("obj_1", triangles=10), features={feature.id: feature})
+    return CachedResult(objects=(body,))
+
+
+def test_original_surface_carriers_survive_both_cache_levels(tmp_path: Path) -> None:
+    """JSON darf die Vektoren und ihre Zuordnung nicht in veränderbare Listen verwandeln."""
+    original = surface_result()
+    cache = ResultCache(disk=DiskCache(codec=FakeCodec(), directory=tmp_path))
+    cache.put("carriers", original, to_disk=True)
+    cache.clear()
+    fresh = cache.get("carriers")
+    assert fresh is not None
+    assert fresh.objects[0].features == original.objects[0].features
+    assert cache.statistics.disk_hits == 1
+    assert cache.get("carriers") is fresh
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("kind", "spline"),
+        ("kind", []),
+        ("source", "parameter"),
+        ("source", {}),
+        ("params", []),
+        ("params", {"centre": [0.0, 0.0, 0.0]}),
+        ("params", {"centre": [0.0, 0.0, 0.0], "axis": [0.0, 0.0, 0.0]}),
+        ("params", {"centre": [0.0, 0.0, 0.0], "axis": [True, 0.0, 1.0]}),
+        ("params", {"centre": [float("nan"), 0.0, 0.0], "axis": [0.0, 0.0, 1.0]}),
+        ("params", {"centre": [0.0, 0.0, 0.0], "axis": [0.0, float("inf"), 1.0]}),
+        ("face_indices", []),
+        ("face_indices", None),
+        ("face_indices", [-1]),
+        ("face_indices", [True]),
+        ("face_indices", [1.5]),
+        ("face_indices", [[1]]),
+        ("face_indices", [1, 1]),
+        ("face_indices", [0]),
+        ("face_indices", [10]),
+    ],
+)
+def test_invalid_surface_carrier_drops_the_disk_result(
+    tmp_path: Path, field: str, value: object
+) -> None:
+    """Beschädigte Träger liefern weder erfundene Nullabweichungen noch einen Absturz."""
+    disk = DiskCache(codec=FakeCodec(), directory=tmp_path)
+    disk.put("carriers", surface_result())
+    index = disk._folder("carriers") / "objects.json"
+    data = json.loads(index.read_text(encoding="utf-8"))
+    data["objects"][0]["features"]["compound"]["surface_patches"][0][field] = value
+    index.write_text(json.dumps(data), encoding="utf-8")
+    assert disk.get("carriers") is None
+    assert not index.exists()
+
+
+def test_surface_indices_share_the_existing_memory_budget() -> None:
+    """Originalhaut und zusätzliche Zuordnungen müssen gemeinsam alte Einträge verdrängen."""
+    original = surface_result()
+    assert original.cost == 20  # Zehn Dreiecke, fünf Merkmals- und fünf Trägerindizes.
+    cache = ResultCache(triangle_budget=30)
+    cache.put("first", original)
+    cache.put("second", original)
+    assert cache.get("first") is None
+    assert cache.get("second") is original
+    assert cache.cost == 20
+    assert cache.statistics.evictions == 1
 
 
 def test_a_hit_returns_what_was_stored() -> None:
@@ -386,7 +494,7 @@ def test_old_results_without_fit_roles_are_recomputed(tmp_path: Path) -> None:
     assert restored.objects[0].features["rim"].params["fit_role"] == "outer"
 
 
-@pytest.mark.parametrize("previous_version", [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17])
+@pytest.mark.parametrize("previous_version", [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18])
 def test_old_recognition_results_are_not_read_from_disk(
     tmp_path: Path, previous_version: int
 ) -> None:
@@ -402,7 +510,7 @@ def test_old_recognition_results_are_not_read_from_disk(
 
 
 @pytest.mark.parametrize("reopen", [False, True], ids=["memory", "disk"])
-@pytest.mark.parametrize("previous_version", [5, 6, 7, 11, 12, 13, 14, 15, 16, 17])
+@pytest.mark.parametrize("previous_version", [5, 6, 7, 11, 12, 13, 14, 15, 16, 17, 18])
 def test_recognition_revision_recomputes_a_warm_project_cache(
     tmp_path: Path,
     profile: Profile,

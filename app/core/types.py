@@ -278,6 +278,27 @@ MeasureSource = Literal["native", "facets", "fit", "parameter"]
 
 MeasureState = Literal["exact", "estimated", "unknown"]
 
+SurfaceKind = Literal["plane", "cylinder", "cone", "sphere", "torus"]
+SurfaceSource = Literal["native", "facets", "fit"]
+
+
+@dataclass(frozen=True, slots=True)
+class SurfacePatch:
+    """Vorhandener analytischer Träger und sein Anteil an der ursprünglichen Haut.
+
+    Ebene und Zylinder tragen ``centre`` und ``axis``, der Zylinder zusätzlich
+    ``radius``. Der gerichtete Kegel trägt ``apex``, ``axis`` und seinen
+    ``half_angle`` in Radiant. Die Kugel besitzt ``centre`` und ``radius``,
+    der Ringtorus ``centre``, ``axis``, ``ring_radius`` und ``tube_radius``.
+    Richtungen werden bei der Auswertung normiert, Zahlen bleiben ungerundet.
+    Die Indizes gehören zum aktuellen Körper und zum enthaltenden Feature.
+    """
+
+    kind: SurfaceKind
+    params: Mapping[str, float | Vec3]
+    face_indices: tuple[int, ...]
+    source: SurfaceSource
+
 
 @dataclass(frozen=True, slots=True)
 class MeasureStatus:
@@ -350,6 +371,14 @@ class Feature:
     Neue Messung und Transformation führen die Quelle mit; ein gleicher
     Name, Erzeuger oder Herkunftsvermerk beweist sie nicht. Fehlend heißt
     unbekannt, auch bei einem exakten Körper oder einem eigenen Baustein.
+    """
+
+    surface_patches: tuple[SurfacePatch, ...] = ()
+    """Belegte Teilträger; Auswahlmitte und Vorgabemaße ersetzen sie nicht.
+
+    Zusammengefasste Merkmale behalten ihre verschiedenen Träger. Nach neuer
+    Geometrie stammen Träger und Dreiecke gemeinsam aus dem neuen Nachweis;
+    Name oder Herkunft erlauben keine Übernahme veralteter Flächennummern.
     """
 
 

@@ -34,6 +34,359 @@ from tests.render_fakes import RecordingItem, RecordingRenderer
 MESHES = Path(__file__).parent / "data" / "meshes"
 
 
+@pytest.fixture
+def deviation_host(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> Iterator[tuple[MainWindow, list[Any]]]:
+    """Zwei echte Körper und aufgehaltene Kartenarbeiter für die Release-Fensterfälle."""
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.scene.evaluate import EvaluationResult
+    from app.core.types import Scene, SceneObject
+
+    host = MainWindow(Session(), UiSettings())
+    bodies = {
+        name: SceneObject(id=name, name=name, mesh=MeshData.of(trimesh.creation.box()))
+        for name in ("obj_1", "obj_2")
+    }
+    result = EvaluationResult(Scene(objects=bodies))
+    host.session.last_result = result
+    host.session.result_current = True
+    if host.viewport.renderer is None:
+        host.viewport.renderer = RecordingRenderer()
+    host.viewport.show_scene(result)
+    host.object_tree.show_scene(result)
+    host.object_tree.select_object("obj_1")
+    workers: list[Any] = []
+    monkeypatch.setattr(host._leash, "start", workers.append)
+    try:
+        yield host, workers
+    finally:
+        from shiboken6 import isValid
+
+        if isValid(host):
+            host.release()
+            host.viewport.release_renderer()
+        for worker in workers:
+            worker.release_finished_references()
+            worker.deleteLater()
+        if isValid(host):
+            host.deleteLater()
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+
+def _deviation_result(*, known: int = 12) -> maps.AnalysisMap:
+    """Gleiche Schranken gegenüberliegender Flächen, aber genau ein wirklicher Zeuge."""
+    return maps.AnalysisMap(
+        kind="deviation",
+        title="Formabweichung",
+        unit="mm",
+        low=0.0,
+        high=2e-7,
+        values=(2e-7,) * known + (float("nan"),) * (12 - known),
+        highlighted=(0, 10) if known else (),
+        maximum_interval=(1e-7, 2e-7) if known else None,
+        numerical_error=1e-7 if known else None,
+        witness_point=(-0.5, 0.0, 0.0) if known else None,
+        witness_face=0 if known else None,
+        witness_distance=1e-7 if known else None,
+        unknown_note="Keine Form sicher zugeordnet",
+    )
+
+
+@pytest.mark.parametrize("known", [0, 6, 12])
+def test_deviation_legend_distinguishes_unknown_coverage_and_numerical_bounds(
+    qt_app: QApplication, known: int
+) -> None:
+    legend = MapLegend()
+    analysis = _deviation_result(known=known)
+    try:
+        legend.show_map(analysis)
+        assert f"{known} von 12" in legend.note.text()
+        assert bool(legend.entries) is bool(known)
+        assert ("Größter Abstand" in legend.note.text()) is bool(known)
+        if known:
+            assert "Obergrenzen je Dreiecksfläche" in legend.note.text()
+            assert "e-7 mm" in legend.note.text(), "kleine Abstände bleiben von null verschieden"
+            assert "je Dreiecksfläche: höchstens" in legend.note.text()
+            assert "keine Fertigungstoleranz" in legend.note.toolTip()
+            assert "Raster" not in legend.note.text()
+        else:
+            assert "Keine Abweichungswerte" in legend.note.text()
+            assert " mm" not in legend.note.text()
+        assert legend.note.accessibleDescription() == legend.note.toolTip()
+        assert legend.note.statusTip() == legend.note.toolTip()
+    finally:
+        legend.deleteLater()
+
+
+@pytest.mark.parametrize("unit", ["mm", "in"])
+@pytest.mark.parametrize("known", [0, 12])
+def test_deviation_report_click_waits_for_its_real_witness_and_reuses_the_cache(
+    deviation_host: tuple[MainWindow, list[Any]], unit: str, known: int
+) -> None:
+    host, workers = deviation_host
+    host.set_display_unit(unit)
+    finding = Finding("perceive.deviation", "info", "Formabweichung", object_id="obj_1")
+    host._on_finding_activated(finding)
+    assert len(workers) == 1
+    assert host.analysis_bar.chosen() == "deviation"
+    assert host.viewport._finding_mark is None
+    analysis = _deviation_result(known=known)
+    workers[0].done.emit(analysis)
+    assert host.viewport.analysis_map is analysis
+    assert host._finding_awaiting_map is None
+    if known:
+        point, text, body = host.viewport._finding_mark
+        assert point == (-0.5, 0.0, 0.0), "kein Mittel gegenüberliegender Maximalflächen"
+        assert body == "obj_1" and "Größter gefundener Abstand" in text
+        assert unit in text
+        assert "2,0e-7" not in text, "die Ortsmarke übernimmt keine obere Facettenschranke"
+    else:
+        assert host.viewport._finding_mark is None
+    host._on_finding_activated(finding)
+    assert len(workers) == 1 and host._finding_awaiting_map is None
+    host.set_display_unit("in" if unit == "mm" else "mm")
+    assert len(workers) == 1, "der Einheitenwechsel zeichnet nur vorhandene Werte neu"
+
+
+@pytest.mark.parametrize("replacement", ["body", "kind", "document", "values", "cancel", "close"])
+def test_deviation_late_signals_cannot_reuse_a_replaced_report_request(
+    deviation_host: tuple[MainWindow, list[Any]], replacement: str
+) -> None:
+    from copy import deepcopy
+
+    host, workers = deviation_host
+    finding = Finding("perceive.deviation", "info", "Formabweichung", object_id="obj_1")
+    host._on_finding_activated(finding)
+    previous = workers[-1]
+    if replacement == "body":
+        host.object_tree.select_object("obj_2")
+    elif replacement == "kind":
+        host.analysis_bar.selector.setCurrentIndex(host.analysis_bar.selector.findData("wall"))
+    elif replacement == "document":
+        host.session.project.document = deepcopy(host.session.project.document)
+        host._on_project()
+    elif replacement == "values":
+        from app.core.types import Parameter
+
+        host.session.project.document.parameters["width"] = Parameter("width", 12.0)
+        host._on_project()
+    elif replacement == "cancel":
+        host._render_progress_state(force_visible=True)
+        assert host._progress_owner == "map"
+        host.cancel_button.click()
+        assert previous.cancelled.is_cancelled()
+        assert "abgebrochen" in host.analysis_bar.legend.note.text()
+    else:
+        host.release()
+    before = host.viewport.analysis_map
+    before_progress = host._progress_states["map"]
+    previous.progressed.emit(0.7, "Veralteter Fortschritt")
+    previous.done.emit(_deviation_result())
+    previous.tooLarge.emit(1)
+    previous.crashed.emit("veralteter Fehler")
+    assert host.viewport.analysis_map is before
+    assert host._progress_states["map"] == before_progress
+    assert host.viewport._finding_mark is None
+
+
+def test_deviation_empty_cache_hit_does_not_wait_for_a_nonexistent_worker(
+    deviation_host: tuple[MainWindow, list[Any]],
+) -> None:
+    host, workers = deviation_host
+    body = host.session.last_result.scene.objects["obj_1"]
+    host._map_cache[host._analysis_cache_key(body, "deviation")] = None
+    host._on_finding_activated(
+        Finding("perceive.deviation", "info", "Formabweichung", object_id=body.id)
+    )
+    assert not workers
+    assert host._finding_awaiting_map is None
+    assert host.viewport._finding_mark is None
+
+
+def test_deviation_cancel_and_unit_change_do_not_restart_the_measurement(
+    deviation_host: tuple[MainWindow, list[Any]],
+) -> None:
+    host, workers = deviation_host
+    host.analysis_bar.selector.setCurrentIndex(host.analysis_bar.selector.findData("deviation"))
+    first = workers[-1]
+    host.set_display_unit("in")
+    assert workers == [first] and not first.cancelled.is_cancelled()
+    host._cancel_analysis()
+    host.set_display_unit("mm")
+    assert workers == [first]
+    assert "abgebrochen" in host.analysis_bar.legend.note.text()
+
+
+def test_deviation_old_worker_completion_leaves_the_new_progress_owner_active(
+    deviation_host: tuple[MainWindow, list[Any]],
+) -> None:
+    host, workers = deviation_host
+    host.analysis_bar.selector.setCurrentIndex(host.analysis_bar.selector.findData("deviation"))
+    old = workers[-1]
+    host.object_tree.select_object("obj_2")
+    current = workers[-1]
+    assert current is not old
+    current.progressed.emit(0.4, "Aktuelle Karte")
+    old.finished.emit()
+    assert host._map_worker is current
+    assert host._progress_states["map"].active
+    assert host._progress_states["map"].text == "Aktuelle Karte"
+
+
+def test_deviation_failure_ends_progress_and_preserves_the_document(
+    deviation_host: tuple[MainWindow, list[Any]], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from copy import deepcopy
+
+    host, workers = deviation_host
+    before = deepcopy(host.session.project.document)
+    errors: list[Any] = []
+    monkeypatch.setattr(host, "_on_error", errors.append)
+    host._on_finding_activated(
+        Finding("perceive.deviation", "info", "Formabweichung", object_id="obj_1")
+    )
+    workers[-1].crashed.emit("Die Kartenrechnung ist nicht möglich.")
+    assert len(errors) == 1 and errors[0].suggestions
+    assert not host._progress_states["map"].active
+    assert host._finding_awaiting_map is None and host._map_request is None
+    assert host.viewport.analysis_map is None and host.viewport._finding_mark is None
+    assert host.session.project.document == before
+    assert host.analysis_bar.legend.note.toolTip() == host.analysis_bar.legend.note.text()
+
+
+def test_deviation_callbacks_do_not_touch_a_deleted_window(
+    deviation_host: tuple[MainWindow, list[Any]],
+) -> None:
+    from shiboken6 import isValid
+
+    host, workers = deviation_host
+    host.analysis_bar.selector.setCurrentIndex(host.analysis_bar.selector.findData("deviation"))
+    worker = workers[-1]
+    host.release()
+    host.viewport.release_renderer()
+    host.deleteLater()
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    assert not isValid(host)
+    worker.progressed.emit(0.5, "Veraltete Karte")
+    worker.done.emit(_deviation_result())
+    worker.aborted.emit()
+    worker.crashed.emit("Veralteter Fehler")
+    worker.finished.emit()
+    assert host._map_worker is None
+    assert not host._progress_states["map"].active
+
+
+@pytest.mark.parametrize("source", ["native", "fit"])
+def test_a_real_deviation_report_click_computes_and_marks_one_original_triangle(
+    qt_app: QApplication, source: str
+) -> None:
+    """Der sichtbare Bericht führt über den echten Arbeiter zum Zeugen statt zur Kugelmitte."""
+    import math
+
+    import numpy as np
+    import trimesh
+    from PySide6.QtTest import QTest
+
+    from app.core.geom.mesh import MeshData
+    from app.core.scene.evaluate import EvaluationResult
+    from app.core.types import Feature, Scene, SceneObject, SurfacePatch
+
+    host = MainWindow(Session(), UiSettings())
+    shape = trimesh.creation.icosphere(subdivisions=0, radius=8.0)
+    faces = tuple(range(len(shape.faces)))
+    feature = Feature(
+        "sphere_1",
+        "sphere",
+        "detected",
+        {"centre": (0.0, 0.0, 0.0), "diameter": 16.0},
+        face_indices=faces,
+        surface_patches=(
+            SurfacePatch("sphere", {"centre": (0.0, 0.0, 0.0), "radius": 8.0}, faces, source),
+        ),
+    )
+    body = SceneObject(
+        id="obj_1", name="Kugel", mesh=MeshData.of(shape), features={feature.id: feature}
+    )
+    result = EvaluationResult(Scene(objects={body.id: body}))
+    host.session.last_result = result
+    host.session.result_current = True
+    host.object_tree.show_scene(result)
+    if host.viewport.renderer is None:
+        host.viewport.renderer = RecordingRenderer()
+    host.viewport.show_scene(result)
+    finding = Finding("perceive.deviation", "info", "Formabweichung", object_id=body.id)
+    host.report.add_findings([finding])
+    host.resize(1040, 760)
+    host.show()
+    try:
+        QApplication.processEvents()
+        row = next(
+            host.report.list.item(index)
+            for index in range(host.report.list.count())
+            if host.report.list.item(index).data(Qt.ItemDataRole.UserRole) is finding
+        )
+        host.report.list.scrollToItem(row)
+        QApplication.processEvents()
+        QTest.mouseClick(
+            host.report.list.viewport(),
+            Qt.MouseButton.LeftButton,
+            pos=host.report.list.visualItemRect(row).center(),
+        )
+        wait_for_map(host)
+        analysis = host.viewport.analysis_map
+        assert analysis is not None and analysis.kind == "deviation"
+        assert len(analysis.known) == len(shape.faces), "die Karte umfasst den ganzen Körper"
+        assert analysis.witness_point is not None and analysis.witness_face is not None
+        assert analysis.witness_distance is not None and analysis.maximum_interval is not None
+        expected = 8.0 * (1.0 - math.sqrt((5.0 + 2.0 * math.sqrt(5.0)) / 15.0))
+        assert analysis.maximum_interval[0] <= expected <= analysis.maximum_interval[1]
+        assert analysis.witness_distance == pytest.approx(expected, abs=1e-6)
+        triangle = shape.triangles[analysis.witness_face]
+        barycentric = trimesh.triangles.points_to_barycentric(
+            np.array([triangle]), np.array([analysis.witness_point])
+        )[0]
+        assert min(barycentric) >= -1e-9 and sum(barycentric) == pytest.approx(1.0)
+        assert np.linalg.norm(analysis.witness_point) > 6.0, "kein Mittel gegenüberliegender Orte"
+        assert host.viewport._finding_mark is not None
+        assert host.viewport._finding_mark[0] == analysis.witness_point
+        assert len(host.viewport._finding_actors) == 2, (
+            "der wirkliche Renderer zeichnet Ring und Text"
+        )
+        assert "keine neue Einpassung" in host.analysis_bar.legend.note.text()
+        reference = (
+            "ursprüngliche exakte Flächen" if source == "native" else "bereits eingepasste Flächen"
+        )
+        assert reference in host.analysis_bar.legend.note.text()
+        before = host.viewport._finding_mark[0]
+        host.set_display_unit("in")
+        assert host.viewport.analysis_map is analysis
+        assert host.viewport._finding_mark[0] is before
+        assert " in" in host.viewport._finding_mark[1]
+    finally:
+        host.hide()
+        host.release()
+        host.viewport.release_renderer()
+        host.deleteLater()
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+
+def test_a_deviation_size_limit_offers_to_close_the_map_without_changing_the_body(
+    deviation_host: tuple[MainWindow, list[Any]],
+) -> None:
+    host, workers = deviation_host
+    host.analysis_bar.selector.setCurrentIndex(host.analysis_bar.selector.findData("deviation"))
+    before = tuple(host.session.project.document.ops)
+    workers[-1].tooLarge.emit(2)
+    button = host.analysis_bar.legend.action
+    assert button is not None and button.text() == tr("Keine Karte")
+    button.click()
+    assert host.analysis_bar.chosen() is None
+    assert tuple(host.session.project.document.ops) == before
+
+
 def test_calibration_invalidates_analysis_caches_and_late_workers(
     window: MainWindow, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -294,6 +647,7 @@ def test_a_map_request_discards_old_colours_and_late_replies(
     host = MainWindow(Session(), UiSettings())
     result = EvaluationResult(Scene(objects={"obj_1": make_object()}))
     host.session.last_result = result
+    host.session.result_current = True
     host.object_tree.show_scene(result)
     host.object_tree.select_object("obj_1")
     workers: list[Any] = []
@@ -5693,6 +6047,7 @@ def test_a_cached_map_replaces_the_shown_one_in_a_single_pass(
     body = SceneObject(id="obj_1", name="Quader", mesh=MeshData(trimesh.creation.box()))
     result = EvaluationResult(Scene(objects={"obj_1": body}))
     host.session.last_result = result
+    host.session.result_current = True
     host.object_tree.show_scene(result)
     host.object_tree.select_object("obj_1")
     first = maps.AnalysisMap(

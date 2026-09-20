@@ -115,6 +115,25 @@ native Integrale; Teilflächen und offene Langlöcher erhalten die ausdrücklich
 gekennzeichneten Messquellen des Netzwegs. Körperart und `provenance` sind
 dafür keine Ersatzangaben.
 
+`features_of` erhält die einmal gelesenen analytischen Träger als
+`SurfacePatch` mit ihren tatsächlichen Tessellierungsdreiecken. Nach der
+semantischen Zusammenfassung bekommen Langloch, Ring und Luftkammer jeweils
+nur ihre ausgewählten Teilflächen. Native Belege ersetzen dort überlappende
+Netzfits; unbekannte Reststücke erhalten keinen erfundenen Träger.
+Kugelzentrum und Zylinderachse kommen aus der Originalfläche, auch wenn das
+Merkmal zur Auswahl einen anderen Flächenschwerpunkt trägt. Kegel erhalten
+die native Spitze und die gerichtete Nappe mit dem Halbwinkel im Bogenmaß.
+Die Nappe und der weite Rand folgen gemeinsam den signierten Radien an den
+tatsächlichen V-Trimmgrenzen. Jenseits der Spitze kehrt sich die Richtung um;
+der veröffentlichte Durchmesser bleibt positiv. Eine Trimmung über beide
+Nappen erhält weder ein eindeutiges Kegelmerkmal noch einen gerichteten
+Kegelträger. Sie bleibt über die vorhandene Restflächenerkennung auswählbar,
+ohne die native Form zu teilen oder einen neuen Träger einzupassen.
+Ein gerundeter Spitzenparameter darf nur innerhalb seiner arithmetischen
+Endpunktklammer auf null zurückgeführt werden, wenn der ursprüngliche
+degenerierte Rand tatsächlich den Spitzenknoten trägt. Ein kleiner echter
+Übertritt bleibt auch unterhalb von `EPS_GEOM` eine uneindeutige Doppelnappe.
+
 `TorusSurface` liest native Ringe und prüft rationale Ringträger. Der Kandidat
 kommt aus derselben `fit_torus_samples`-Rechnung wie am Netz, hier mit echten
 Flächenpunkten und Ableitungen. Erst die homogene Torusgleichung über sämtlichen

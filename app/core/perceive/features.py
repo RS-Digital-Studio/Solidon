@@ -34,7 +34,8 @@ from app.core.geom.repair import merge_vertices
 from app.core.log import get_logger
 from app.core.perceive.helix import Helix, find_helices
 from app.core.perceive.slots import ACROSS_THE_AXIS, PARALLEL_AXES, slots_instead_of_half_bores
-from app.core.types import Feature, FeatureId, Vec3, is_a_cavity
+from app.core.perceive.surfaces import clipped_patches, planar_patch
+from app.core.types import Feature, FeatureId, SurfacePatch, Vec3, is_a_cavity
 from app.core.units import (
     EPS_GEOM,
     TANGENT_TO_THE_ARC,
@@ -1003,11 +1004,13 @@ def detect(
         # schöben es Richtung Freiform. Hier gehen sie weg, weil sie zu einem
         # Einschluss gehören — nicht, weil das Modell eine Figur wäre.
         found = voids_instead_of_phantom_bores(
-            found, detect_voids(mesh, check_cancelled=check_cancelled)
+            found,
+            detect_voids(mesh, check_cancelled=check_cancelled),
+            check_cancelled=check_cancelled,
         )
         if check_cancelled is not None:
             check_cancelled()
-        found = _partial_cones_folded(mesh, found)
+        found = _partial_cones_folded(mesh, found, check_cancelled=check_cancelled)
         if check_cancelled is not None:
             check_cancelled()
         found, left_out = _shapes_on_a_freeform(
@@ -1027,7 +1030,11 @@ def detect(
         check_cancelled()
     _log.info("detected %d features, %d left out as freeform", len(found), left_out)
     _FEATURE_CACHE[key] = found
-    _CACHE_INDICES[key] = sum(len(feature.face_indices) for feature in found.values())
+    _CACHE_INDICES[key] = sum(
+        len(feature.face_indices)
+        + sum(len(patch.face_indices) for patch in feature.surface_patches)
+        for feature in found.values()
+    )
     _FREEFORM_DROPPED[key] = left_out
     while len(_FEATURE_CACHE) > CACHE_LIMIT or sum(_CACHE_INDICES.values()) > CACHE_INDEX_LIMIT:
         oldest, _ = _FEATURE_CACHE.popitem(last=False)
@@ -1675,9 +1682,20 @@ def detect_holes(
                 **_cylinder_measures(fit),
             },
             face_indices=tuple(patch),
+            surface_patches=(_cylinder_surface(fit, patch),),
         )
         for number, (fit, patch) in enumerate(found, start=1)
     ]
+
+
+def _cylinder_surface(fit: CylinderFit, patch: Sequence[int]) -> SurfacePatch:
+    """Der akzeptierte Zylinder bleibt derselbe, unabhängig vom semantischen Namen."""
+    return SurfacePatch(
+        "cylinder",
+        {"centre": fit.centre, "axis": fit.axis, "radius": fit.radius},
+        tuple(int(index) for index in patch),
+        "fit",
+    )
 
 
 def _fits_in_the_body(mesh: MeshData, fit: CylinderFit) -> bool:
@@ -2251,6 +2269,14 @@ def detect_spheres(
                 **_round_measures(fit),
             },
             face_indices=tuple(patch),
+            surface_patches=(
+                SurfacePatch(
+                    "sphere",
+                    {"centre": fit.centre, "radius": fit.radius},
+                    tuple(patch),
+                    "fit",
+                ),
+            ),
         )
         for number, (fit, patch) in enumerate(big, start=1)
     ]
@@ -2373,6 +2399,19 @@ def detect_tori(
                 **_round_measures(fit),
             },
             face_indices=tuple(patch),
+            surface_patches=(
+                SurfacePatch(
+                    "torus",
+                    {
+                        "centre": fit.centre,
+                        "axis": fit.axis,
+                        "ring_radius": fit.ring_radius,
+                        "tube_radius": fit.tube_radius,
+                    },
+                    tuple(patch),
+                    "fit",
+                ),
+            ),
         )
         for number, (fit, patch) in enumerate(big, start=1)
     ]
@@ -2498,6 +2537,7 @@ def detect_fillets(
                 **({"tangent": True} if radial is not None and blends else {}),
             },
             face_indices=tuple(patch),
+            surface_patches=(_cylinder_surface(fit, patch),),
         )
         for number, ((fitted, patch), radial, blends) in enumerate(
             zip(big, radials, tangent, strict=True), start=1
@@ -2797,6 +2837,7 @@ def detect_pins(mesh: MeshData, cylinders: Cylinders | None = None) -> list[Feat
                 **_cylinder_measures(fit),
             },
             face_indices=tuple(patch),
+            surface_patches=(_cylinder_surface(fit, patch),),
         )
         for number, (fit, patch) in enumerate(found, start=1)
     ]
@@ -2837,25 +2878,36 @@ def detect_cones(
                 "diameter": fit.radius * 2.0,
                 "angle": fit.half_angle * 2.0,
                 "axis": fit.axis,
-                # Die Spitze steht **nicht** in den Parametern, obwohl die
-                # Einpassung sie kennt: ``moved_features`` nimmt „centre",
-                # „position", „axis" und „normal" mit, sonst nichts (§21.2).
-                # Ein Punkt, der eine Drehung nicht mitmacht, ist nach der
-                # ersten Transformation eine falsche Zahl im Steckbrief — und
-                # aus Mitte, Achse und Winkel ist die Spitze ohnehin zu rechnen.
+                # Die Auswahlmitte bleibt hier; die tatsächliche Spitze steht
+                # am getrennten Träger und wird mit dessen gerichteter Nappe bewegt.
                 "centre": fit.centre,
                 "recess": fit.recess,
                 "residual": fit.residual,
                 **_round_measures(fit),
             },
             face_indices=tuple(patch),
+            surface_patches=(
+                SurfacePatch(
+                    "cone",
+                    {
+                        "apex": fit.apex,
+                        "axis": fit.axis,
+                        "half_angle": math.radians(fit.half_angle),
+                    },
+                    tuple(patch),
+                    "fit",
+                ),
+            ),
         )
         for number, (fit, patch) in enumerate(big, start=1)
     ]
 
 
 def _partial_cones_folded(
-    mesh: MeshData, found: Mapping[FeatureId, Feature]
+    mesh: MeshData,
+    found: Mapping[FeatureId, Feature],
+    *,
+    check_cancelled: Callable[[], None] | None = None,
 ) -> dict[FeatureId, Feature]:
     """Kegelstücke unter dem vollen Umlauf: zum Langloch, zur Bohrung — oder Fase.
 
@@ -2893,6 +2945,8 @@ def _partial_cones_folded(
     (``_cone_is_recognisable``), gilt weiter: Sie entscheidet, ob ein Fleck ein
     Kegel ist; hier entscheidet sich, wem er gehört.
     """
+    if check_cancelled is not None:
+        check_cancelled()
     body = mesh.raw
     cones = [
         (identifier, feature)
@@ -2943,12 +2997,16 @@ def _partial_cones_folded(
 
     kept = dict(found)
     grown: dict[FeatureId, set[int]] = {}
+    grown_patches: dict[FeatureId, list[SurfacePatch]] = {}
     for index, (identifier, feature) in enumerate(partial):
+        if check_cancelled is not None:
+            check_cancelled()
         neighbours = shared[index]
         slots = [name for name in neighbours if found[name].kind == "slot"]
         if slots:
             closest = max(slots, key=lambda name: (neighbours[name], name))
             grown.setdefault(closest, set()).update(int(face) for face in feature.face_indices)
+            grown_patches.setdefault(closest, []).extend(feature.surface_patches)
             del kept[identifier]
         elif not any(found[name].kind == "hole" for name in neighbours):
             kept[identifier] = replace(feature, params={**feature.params, "partial": True})
@@ -2956,7 +3014,11 @@ def _partial_cones_folded(
         # Nur die Flächen wachsen; Länge, Tiefe und Durchgang des Langlochs
         # bleiben bewusst die Nennmaße ohne die Fase.
         slot = kept[name]
-        kept[name] = replace(slot, face_indices=tuple(sorted({*slot.face_indices, *faces})))
+        kept[name] = replace(
+            slot,
+            face_indices=tuple(sorted({*slot.face_indices, *faces})),
+            surface_patches=slot.surface_patches + tuple(grown_patches[name]),
+        )
     return kept
 
 
@@ -5008,6 +5070,13 @@ def detect_faces(
     features: list[Feature] = []
     for number, (facet, area, centre) in enumerate(entries, start=1):
         normal = body.face_normals[facet[0]]
+        plane = planar_patch(
+            mesh,
+            facet,
+            (float(centre[0]), float(centre[1]), float(centre[2])),
+            (float(normal[0]), float(normal[1]), float(normal[2])),
+            check_cancelled=check_cancelled,
+        )
         features.append(
             Feature(
                 id=f"face_{number}",
@@ -5020,6 +5089,7 @@ def detect_faces(
                     "centre": (float(centre[0]), float(centre[1]), float(centre[2])),
                 },
                 face_indices=tuple(int(index) for index in facet),
+                surface_patches=(plane,) if plane is not None else (),
             )
         )
     roles = _face_roles(mesh, features, entries, check_cancelled)
@@ -5661,7 +5731,10 @@ def detect_voids(
 
 
 def voids_instead_of_phantom_bores(
-    found: dict[FeatureId, Feature], voids: Sequence[Feature]
+    found: dict[FeatureId, Feature],
+    voids: Sequence[Feature],
+    *,
+    check_cancelled: Callable[[], None] | None = None,
 ) -> dict[FeatureId, Feature]:
     """Wo ein Einschluss liegt, steht er selbst statt der Bohrung, die keine ist.
 
@@ -5676,18 +5749,39 @@ def voids_instead_of_phantom_bores(
     Einschluss nur streift, gehört weiter dem Körper. Dieselbe Schwelle wie
     bei der Wendel, damit zwei Nachbarschaften nicht zwei Antworten geben.
     """
+    if check_cancelled is not None:
+        check_cancelled()
     if not voids:
         return found
     kept = dict(found)
+    carriers = [
+        feature for feature in found.values() if feature.kind != "void" and feature.surface_patches
+    ]
     for void in voids:
         on_the_shell = set(void.face_indices)
+        patches = list(void.surface_patches)
+        # Die Träger gehören den Originaldreiecken. Das Entfernen eines
+        # semantischen Namens darf keinen Anteil einer späteren Kammer löschen.
+        for feature in carriers:
+            if check_cancelled is not None:
+                check_cancelled()
+            if not on_the_shell.isdisjoint(feature.face_indices):
+                patches.extend(
+                    clipped_patches(
+                        feature.surface_patches,
+                        on_the_shell,
+                        check_cancelled=check_cancelled,
+                    )
+                )
         for name, feature in list(kept.items()):
+            if check_cancelled is not None:
+                check_cancelled()
             if feature.kind == "void" or not feature.face_indices:
                 continue
             inside = sum(1 for index in feature.face_indices if index in on_the_shell)
             if inside * 2 > len(feature.face_indices):
                 del kept[name]
-        kept[void.id] = void
+        kept[void.id] = replace(void, surface_patches=tuple(patches))
     return kept
 
 

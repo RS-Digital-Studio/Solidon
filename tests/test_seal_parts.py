@@ -21,6 +21,13 @@ def test_seal_part_has_one_closed_body_and_geometrically_bound_feature_faces(nam
         selected = built.mesh.raw.triangles[list(feature.face_indices)]
         assert np.isfinite(selected).all()
         assert feature.params["area"] > 0
+        if feature.kind == "face":
+            assert len(feature.surface_patches) == 1
+            surface = feature.surface_patches[0]
+            assert surface.kind == "plane" and surface.source == "facets"
+            assert surface.face_indices == feature.face_indices
+            distance = (selected - surface.params["centre"]) @ np.asarray(surface.params["axis"])
+            assert distance == pytest.approx(0.0, abs=1e-10)
     exported = to_scad(spec)
     assert "polyhedron(" in exported and f"{name}();" in exported
 
@@ -44,6 +51,9 @@ def test_separate_gasket_stands_on_its_base_and_does_not_claim_a_flat_round_cont
     assert built.features["gasket_bottom"].kind == (
         "face" if section == "rectangle" else "curved_face"
     )
+    if section == "round":
+        assert not built.features["gasket_contact"].surface_patches
+        assert not built.features["gasket_bottom"].surface_patches
 
 
 def test_part_dimensions_rebuild_the_actual_gasket_cross_section():

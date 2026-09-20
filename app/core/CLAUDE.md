@@ -34,6 +34,12 @@ Genauigkeitsauskunft samt Quelle; fehlende Quelle bleibt unbekannt.
 `provenance`, Erzeuger und Körperart sind kein Ersatz. Der Zahlenwert steht
 weiter nur in `params`; Normmaße und Drucktoleranzen werden daraus nicht geraten.
 
+`Feature.surface_patches` erhält vorhandene analytische Teilträger zusammen
+mit ihren ursprünglichen Dreiecksindizes. Zusammengesetzte Merkmale können
+mehrere tragen. `SurfacePatch` enthält ausschließlich Zahlen, Vektoren,
+Indizes und Quelle; native Handles oder neue semantische Kennungen gehören
+nicht hinein. Eine deklarierte Maßvorgabe erzeugt noch keinen Trägernachweis.
+
 **Verträge und Zahlen** — was alle anderen benutzen:
 
 | Datei | Rolle |
@@ -62,6 +68,12 @@ Quadrat- beziehungsweise Kubikmillimeter wächst die Zahl der Nachkommastellen,
 unter der Anzeigegrenze steht eine Schranke mit Vorzeichen statt null.
 Die gemeinsame private Formatierung gilt ebenso in Zoll. Dies betrifft nur
 den Text; Geometrie und Kennzahlen behalten ihre ungerundeten Werte.
+
+`units.format_length_bound` formatiert numerische Längenschranken gerichtet:
+untere Grenzen nach unten, obere nach oben, bereits bei der Umrechnung der
+Anzeigeeinheit. Kleine Nichtnullwerte bleiben gegebenenfalls wissenschaftlich
+lesbar. Diese Anzeige verändert weder die Rechnung noch ihre Toleranz;
+`ui.labels.length_bound` ergänzt nur die sprachabhängige Zahlenschreibweise.
 
 **Umgebung und Nutzerdaten:**
 

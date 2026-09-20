@@ -30,9 +30,168 @@ from app.core.types import (
     Report,
     Scene,
     SceneObject,
+    SurfacePatch,
 )
 
 MESHES = Path(__file__).parent / "data" / "meshes"
+
+
+def _deviation_entry() -> SceneObject:
+    """Drei Originaldreiecke auf z=0/4/8; nur das erste und letzte sind zugeordnet."""
+    mesh = MeshData.of(
+        trimesh.Trimesh(
+            vertices=[(x, y, z) for z in (0.0, 4.0, 8.0) for x, y in ((0, 0), (2, 0), (0, 2))],
+            faces=[(0, 1, 2), (3, 4, 5), (6, 7, 8)],
+            process=False,
+        )
+    )
+    patch = SurfacePatch(
+        "plane", {"centre": (0.0, 0.0, 1.0), "axis": (0.0, 0.0, 1.0)}, (2, 0), "facets"
+    )
+    feature = Feature(
+        "compound", "curved_face", "detected", {}, (0, 1, 2), surface_patches=(patch,)
+    )
+    return SceneObject("obj_1", "Prüfflächen", mesh, features={feature.id: feature})
+
+
+def test_deviation_map_keeps_original_order_known_coverage_and_a_real_witness() -> None:
+    entry = _deviation_entry()
+    before = entry.mesh.raw.vertices.copy(), entry.mesh.raw.faces.copy()
+    updates = []
+    analysis = maps.build(
+        "deviation", entry, progress=lambda fraction, _text: updates.append(fraction)
+    )
+    assert analysis.values[0] == pytest.approx(1.0)
+    assert math.isnan(analysis.values[1])
+    assert analysis.values[2] == pytest.approx(7.0)
+    assert analysis.unknown_count == 1
+    assert analysis.maximum_interval[0] <= 7.0 <= analysis.maximum_interval[1]
+    assert analysis.numerical_error < 1e-10
+    assert analysis.witness_face == 2
+    assert analysis.witness_point[2] == pytest.approx(8.0)
+    assert analysis.witness_distance <= 7.0
+    assert maps.focus_point(entry, analysis) == analysis.witness_point
+    assert np.array_equal(entry.mesh.raw.vertices, before[0])
+    assert np.array_equal(entry.mesh.raw.faces, before[1])
+    assert updates[0] == pytest.approx(0.0) and updates[-1] == pytest.approx(1.0)
+    assert updates == sorted(updates)
+
+
+def test_conflicting_surface_claims_remain_unknown_and_identical_ones_do_not() -> None:
+    entry = _deviation_entry()
+    original = entry.features["compound"]
+    repeated = replace(original, id="same")
+    conflict = SurfacePatch(
+        "plane", {"centre": (0.0, 0.0, 5.0), "axis": (0.0, 0.0, 1.0)}, (2,), "facets"
+    )
+    disputed = replace(original, id="different", face_indices=(2,), surface_patches=(conflict,))
+    entry.features = {feature.id: feature for feature in (original, repeated, disputed)}
+    analysis = maps.build("deviation", entry)
+    assert analysis.values[0] == pytest.approx(1.0)
+    assert analysis.unknown_count == 2
+    assert analysis.witness_face == 0
+    assert analysis.maximum_interval[0] <= 1.0 <= analysis.maximum_interval[1]
+
+
+@pytest.mark.parametrize("missing", [True, False])
+def test_unproved_surface_map_has_no_zero_claim_or_location(missing: bool) -> None:
+    entry = _deviation_entry()
+    original = entry.features["compound"]
+    invalid = replace(original.surface_patches[0], params={"centre": (0.0, 0.0, 0.0)})
+    entry.features = {} if missing else {original.id: replace(original, surface_patches=(invalid,))}
+    analysis = maps.build("deviation", entry)
+    assert analysis.unknown_count == entry.mesh.triangle_count
+    assert not analysis.known
+    assert analysis.maximum_interval is None and analysis.numerical_error is None
+    assert analysis.witness_point is None and analysis.witness_face is None
+    assert maps.focus_point(entry, analysis) is None
+    finding = Finding("perceive.deviation", "info", "Prüfen", object_id=entry.id)
+    assert maps.map_for(finding) == "deviation"
+    assert maps.location_of(entry, finding) is None
+
+
+@pytest.mark.parametrize("source", ["native", "facets", "fit"])
+def test_deviation_source_comes_from_evaluated_patch_not_body_kind(source: str) -> None:
+    entry = _deviation_entry()
+    original = entry.features["compound"]
+    entry.features = {
+        original.id: replace(
+            original, surface_patches=(replace(original.surface_patches[0], source=source),)
+        )
+    }
+    analysis = maps.build("deviation", entry)
+    expected = {
+        "native": "ursprüngliche exakte Flächen",
+        "facets": "geprüfte Ebenen der Originaldreiecke",
+        "fit": "bereits eingepasste Flächen",
+    }
+    assert expected[source] in str(analysis.note)
+
+
+def test_identical_carriers_keep_all_used_sources_and_ignore_only_unknown_sources() -> None:
+    entry = _deviation_entry()
+    original = entry.features["compound"]
+    plane = original.surface_patches[0]
+    native = replace(plane, face_indices=(0,), source="native")
+    fitted = replace(plane, face_indices=(2,), source="fit")
+    unknown = replace(plane, face_indices=(1,), source="facets")
+    conflict = replace(
+        unknown, source="fit", params={"centre": (0.0, 0.0, 3.0), "axis": (0.0, 0.0, 1.0)}
+    )
+    entry.features = {
+        original.id: replace(original, surface_patches=(native, fitted, unknown, conflict))
+    }
+    analysis = maps.build("deviation", entry)
+    assert analysis.unknown_count == 1
+    assert "ursprüngliche exakte Flächen" in str(analysis.note)
+    assert "bereits eingepasste Flächen" in str(analysis.note)
+    assert "geprüfte Ebenen der Originaldreiecke" not in str(analysis.note)
+
+
+def test_deviation_measures_the_filled_triangle_instead_of_its_vertices_or_centre() -> None:
+    """Alle Ecken liegen auf R1; der größte Abstand 1 liegt auf der gefüllten Kante."""
+    mesh = MeshData.of(
+        trimesh.Trimesh(
+            vertices=[(1, 0, 0), (-1, 0, 0), (0, 1, 0)], faces=[(0, 1, 2)], process=False
+        )
+    )
+    patch = SurfacePatch("sphere", {"centre": (0.0, 0.0, 0.0), "radius": 1.0}, (0,), "fit")
+    feature = Feature("sphere", "sphere", "detected", {}, (0,), surface_patches=(patch,))
+    entry = SceneObject("obj_1", "Kugelfacette", mesh, features={feature.id: feature})
+    analysis = maps.build("deviation", entry)
+    assert analysis.maximum_interval[0] <= 1.0 <= analysis.maximum_interval[1]
+    assert analysis.values[0] == pytest.approx(1.0, abs=1e-8)
+    assert analysis.witness_distance == pytest.approx(1.0, abs=1e-8)
+    assert analysis.witness_point == pytest.approx((0.0, 0.0, 0.0), abs=1e-8)
+
+
+def test_equal_deviation_extrema_never_point_between_disconnected_faces() -> None:
+    entry = _deviation_entry()
+    feature = entry.features["compound"]
+    patch = replace(
+        feature.surface_patches[0], params={"centre": (0.0, 0.0, 4.0), "axis": (0.0, 0.0, 1.0)}
+    )
+    entry.features = {feature.id: replace(feature, surface_patches=(patch,))}
+    analysis = maps.build("deviation", entry)
+    assert analysis.witness_face in (0, 2)
+    assert analysis.witness_point[2] == pytest.approx(0.0 if analysis.witness_face == 0 else 8.0)
+    assert analysis.witness_distance == pytest.approx(4.0)
+    assert maps.focus_point(entry, analysis) == analysis.witness_point
+
+
+@pytest.mark.parametrize("when", [0.0, 0.1, 0.99, 1.0])
+def test_deviation_progress_cancellation_never_returns_a_partial_map(when: float) -> None:
+    from app.core.errors import OperationCancelled
+    from app.core.scene.cancel import CancelSignal
+
+    token = CancelSignal()
+
+    def progress(fraction: float, _text: str) -> None:
+        if fraction >= when:
+            token.cancel()
+
+    with pytest.raises(OperationCancelled):
+        maps.build("deviation", _deviation_entry(), cancelled=token, progress=progress)
 
 
 def plate() -> MeshData:

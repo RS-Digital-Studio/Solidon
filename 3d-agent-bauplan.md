@@ -332,6 +332,7 @@ Prüfung prüft jede gefundene Datei, nicht die englische.
 | Objekt | `SceneObject` | ein Körper in der Szene |
 | Baustein | `Part` | parametrisches Fertigteil aus der Bibliothek |
 | Feature | `Feature` | erkannte Bohrung, Fläche, Kante |
+| Trägerteilfläche | `SurfacePatch` | vorhandener analytischer Träger mit seinen ursprünglichen Dreiecken und seiner Maßquelle |
 | Langloch | `slot` | zwei Halbzylinder mit ebenen Flanken, ein Merkmal (§21.1) |
 | Lufteinschluss | `void` | geschlossener Hohlraum ohne Weg nach außen (§21.1) |
 | Provenienz | `provenance` | Herkunft eines Features oder einer Op |
@@ -500,6 +501,14 @@ Vertragsänderungen werden vor ihrer Nutzung in abhängigen Modulen festgelegt.
 
 ```python
 @dataclass(frozen=True, slots=True)
+class SurfacePatch:
+    kind: SurfaceKind
+    params: Mapping[str, float | Vec3]
+    face_indices: tuple[int, ...]
+    source: SurfaceSource
+
+
+@dataclass(frozen=True, slots=True)
 class Feature:
     id: FeatureId
     kind: FeatureKind
@@ -508,6 +517,8 @@ class Feature:
     face_indices: tuple[int, ...] = ()
     recognised: bool = True
     created_by: OpId | None = None
+    measure_sources: Mapping[str, MeasureSource] = field(default_factory=dict)
+    surface_patches: tuple[SurfacePatch, ...] = ()
 
 
 @dataclass(slots=True)
@@ -1158,6 +1169,7 @@ Bemaßungen bleiben stehen, bis sie gelöscht werden; Anzeige gerundet auf
 | Überhang | Winkel gegen Z, > 45° hervorgehoben | Stützbedarf, Orientierung |
 | Netzfehler | offene Kanten, Non-Manifold, Durchdringung | Reparaturbedarf |
 | Krümmung | Krümmungsradius in Millimetern, scharfe Kanten gesondert markiert; gemessene Merkmalswerte und Schätzung unterschieden | Feature-Erkennung und Rundungsmaße prüfen |
+| Formabweichung | größter Abstand der ausgefüllten Originalfacette zu ihrem vorhandenen analytischen Träger; obere Schranken, numerische Breite und unbekannte Bereiche ausgewiesen | grobe Rundungen und Näherungen prüfen, ohne die Fläche neu einzupassen |
 | Feature-Zuordnung | jedes Feature eigen eingefärbt | verstehen, was die KI sieht |
 | Passungen | verbundene Paare, Verletzungen markiert | Mehrteiliges prüfen (§14) |
 | Stützbedarf | geometrische Schätzung aus der Schichtanalyse (§22); G-Code-Kennwerte werden getrennt gegenübergestellt (§28) | Orientierung beurteilen |
@@ -1166,6 +1178,16 @@ Immer mit Legende und Zahlenbereich, Paletten nach §19.1. Jede Karte ist auch
 über den Prüfbericht erreichbar: Klick auf eine Warnung schaltet die passende
 Karte ein und fährt die Kamera auf die Stelle — der kürzeste Weg von „es gibt
 ein Problem" zu „hier ist es".
+
+Die Formabweichung liest ausschließlich vorhandene `SurfacePatch`-Daten.
+Ebene, Zylinder, gerichteter Kreiskegel, Kugel und Ringtorus behalten ihre
+eigenen Träger auch nach semantischem Zusammenfassen zu einem Merkmal.
+Vorgabemaße allein belegen keinen Träger. Bei nativen Körpern bezieht sich
+die Karte auf deren Anzeigefacetten; sie behauptet keinen Formfehler des
+exakten Körpers. Ihr größter Abstand und dessen Rechenintervall betreffen
+nur die bekannte Abdeckung. Eine Ortsmarke bezeichnet einen wirklichen
+Probenpunkt auf einem Originaldreieck, niemals eine nur errechnete Obergrenze.
+Rechenfehler, Drucktoleranz und Unsicherheit eines Nennmaßes bleiben getrennt.
 
 ### 18.5 Feature-Overlay
 Erkannte Merkmale tragen übersetzte, verständliche Namen und Maße, etwa

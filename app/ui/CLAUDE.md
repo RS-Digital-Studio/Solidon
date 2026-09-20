@@ -1057,6 +1057,15 @@ deren Legende weiterhin physische Millimeterwerte nennt und die Abstufung
 ausweist. Der Viewport reicht die transformierten Werte an den Renderer;
 Messwerte, Schwellwerte und Hervorhebungen bleiben unverändert.
 
+Die Formabweichung zeigt obere Abstandsgrenzen ganzer Dreiecksflächen. Ihre
+Legende nennt ausgewertete und unbekannte Flächen; bei vollständig unbekannter
+Karte entfallen Zahlenrampe und Maximum. Das Maximalintervall gilt ausschließlich
+für bekannte Flächen. Seine Grenzen und die numerische Facettenspanne werden
+über `labels.length_bound` nach außen gerundet. `resolution` bleibt die
+Rasterweite; die numerische Spanne ist keine Fertigungstoleranz. Herkunft und
+Grund der fehlenden Werte stammen aus derselben Karte, auch im Kurzhinweis
+und in der zugänglichen Beschreibung.
+
 Ausgetauschte Kacheln, Programmzeilen, Spulendetails und Legenden werden vor
 `deleteLater()` verborgen; das Entfernen aus dem Layout beendet ihre Sichtbarkeit
 nicht. Die Füllung und Dicke der Schichtbalken bleiben fachlich gebunden, ihre
@@ -1714,10 +1723,16 @@ zweiten Start und überschreiben weder den Fortschritt noch seinen Zustand.
   eingefrorenen `SliceComparison` des ausgegebenen Auftrags. Sie liest dafür
   weder eine spätere Szene noch spätere Druckwerte. Ohne belegbare
   Materialaufteilung bleibt die betroffene Schätzung unbekannt.
-- Analysekarten tragen eine Anfragekennung und ihre ausgewertete Szene bis
-  zu Ergebnis, Größenabsage und Fehler. Ein Kartenwechsel entfernt die alten
-  Farben sofort; auch ein Treffer im Cache oder „keine Karte“ entwertet
-  verspätete Antworten des vorherigen Arbeiters.
+- Analysekarten binden Anfrage, unveränderten Dokumentstand, ausgewertete Szene,
+  Körper, Kartenart und Profil bis zu Ergebnis, Größenabsage und Fehler.
+  Fortschritt und Abbruch benutzen den gemeinsamen Fortschrittsbereich.
+  Ein Kartenwechsel entfernt die alten Farben sofort; auch ein Treffer im
+  Cache oder „keine Karte“ entwertet verspätete Antworten des Vorgängers.
+  Der gebundene Berichtsklick wird bei warmem und leerem Cache genauso beendet
+  wie beim Arbeiterergebnis. Die Formabweichung markiert ausschließlich ihren
+  wirklichen Zeugen samt unterer Punktdistanz, nie das Mittel mehrerer Flächen
+  oder die obere Schranke als Punktwert. Ein Einheitenwechsel zeichnet Karte
+  und Ortsmarke neu, ohne eine Rechnung oder abgebrochene Anfrage zu starten.
 - Der Wechsel aus dem modalen Druckdialog ins Filamentpanel schließt zuerst
   den Dialog; ein sichtbarer Rückweg öffnet die Druckeinstellungen wieder.
   Spulen werden über Name, Farbe, Materialprofil und Materialart unterschieden.

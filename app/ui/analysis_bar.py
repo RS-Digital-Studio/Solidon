@@ -30,7 +30,7 @@ from PySide6.QtWidgets import (
 from app.core.perceive.maps import AnalysisMap, MapKind
 from app.core.types import SliceResult
 from app.i18n import tr
-from app.ui.labels import TrackSlider, area, length
+from app.ui.labels import TrackSlider, area, length, length_bound
 from app.ui.leash import weak_slot
 from app.ui.palette import LAYER_WIDTHS, ROLES, VIRIDIS, Role, map_colour, readable_on
 from app.ui.panels import origin_label
@@ -59,6 +59,7 @@ MAP_ORDER: tuple[MapKind, ...] = (
     "overhang",
     "defects",
     "curvature",
+    "deviation",
     "features",
     "fits",
     "support",
@@ -129,6 +130,9 @@ class MapLegend(QWidget):
             # zwei Sätze, die etwas erklären sollen (Gesamtreview I-9).
             self._layout.addWidget(self.note, stretch=1)
             self.note.setText("")
+            self.note.setToolTip("")
+            self.note.setStatusTip("")
+            self.note.setAccessibleDescription("")
             return
 
         shown = _legend_entries(analysis, names)
@@ -164,6 +168,32 @@ class MapLegend(QWidget):
             parts.append(f"{tr('Raster')} {length(analysis.resolution)}")
         if analysis.note is not None:
             parts.append(str(analysis.note))
+        if analysis.kind == "deviation":
+            parts.append(
+                tr("Ausgewertete Dreiecksflächen: {known} von {total}").format(
+                    known=len(analysis.known), total=len(analysis.values)
+                )
+            )
+            if analysis.known:
+                parts.append(tr("Obergrenzen je Dreiecksfläche"))
+                if analysis.maximum_interval is not None:
+                    lower, upper = analysis.maximum_interval
+                    parts.append(
+                        tr("Größter Abstand der ausgewerteten Flächen: {lower} bis {upper}").format(
+                            lower=length_bound(lower, upper=False),
+                            upper=length_bound(upper, upper=True),
+                        )
+                    )
+                if analysis.numerical_error is not None:
+                    parts.append(
+                        tr("Berechnete Spanne je Dreiecksfläche: höchstens {bound}").format(
+                            bound=length_bound(analysis.numerical_error, upper=True)
+                        )
+                    )
+            else:
+                parts.append(
+                    tr("Keine Abweichungswerte bestimmbar. Wählen Sie einen anderen Körper.")
+                )
         if analysis.unknown_count:
             # Die Zahl stand unerklärt da. Was sie heißt, weiß nur die Karte,
             # die sie erzeugt hat — also sagt sie es, und zwar in derselben
@@ -173,6 +203,15 @@ class MapLegend(QWidget):
                 unknown = f"{unknown} ({analysis.unknown_note})"
             parts.append(unknown)
         self.note.setText(" · ".join(parts))
+        explanation = "\n".join(parts)
+        if analysis.kind == "deviation" and analysis.numerical_error is not None:
+            explanation += "\n" + tr(
+                "Die Spanne beschreibt nur, wie genau der Abstand berechnet wurde. "
+                "Sie ist keine Fertigungstoleranz."
+            )
+        self.note.setToolTip(explanation)
+        self.note.setStatusTip(explanation)
+        self.note.setAccessibleDescription(explanation)
         self._layout.addWidget(self.note, stretch=1)
 
     def offer(self, label: str, on_action: Any) -> None:
@@ -204,6 +243,8 @@ def _legend_entries(
     aus ``hole_3`` wird „Bohrung 3 · ⌀4,2". Fehlt eine Zuordnung, bleibt die
     Kennung stehen: sie ist immer noch besser als nichts.
     """
+    if not analysis.known:
+        return []
     if analysis.categories:
         count = len(analysis.categories)
         return [
@@ -217,7 +258,9 @@ def _legend_entries(
         fraction = step / max(steps - 1, 1)
         value = analysis.value_at_display_fraction(fraction)
         if analysis.unit == "mm":
-            text = length(value)
+            text = (
+                length_bound(value, upper=True) if analysis.kind == "deviation" else length(value)
+            )
         elif analysis.unit == "°":
             # Ohne Leerzeichen, wie überall sonst im Programm: die
             # Winkelparameter schreiben „45°", die Karten schrieben „45 grad".
@@ -274,6 +317,11 @@ class AnalysisBar(QWidget):
                 "curvature",
                 tr("Krümmung"),
                 tr("Zeigt, wo die Oberfläche eng gebogen ist — dort werden Schichten sichtbar."),
+            ),
+            (
+                "deviation",
+                tr("Formabweichung"),
+                tr("Zeigt die Abweichung der Dreiecksflächen von ihrer zugeordneten Form."),
             ),
             (
                 "features",
@@ -357,6 +405,9 @@ class AnalysisBar(QWidget):
         """
         self.legend.show_map(None)
         self.legend.note.setText(message)
+        self.legend.note.setToolTip(message)
+        self.legend.note.setStatusTip(message)
+        self.legend.note.setAccessibleDescription(message)
         if action and on_action is not None:
             self.legend.offer(action, on_action)
 

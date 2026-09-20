@@ -31,7 +31,7 @@ def cube(kind="mesh"):
     return SceneObject("body", "Träger", body, kind=kind)
 
 
-def run(entry, *, counter=None, profile=None, quality="fine", ask=None, **changes):
+def run(entry, *, counter=None, profile=None, quality="fine", ask=None, cancelled=None, **changes):
     params = CreateSealParams(
         **{
             "path_sketch": sketch_to_text(shapes.circle(10)),
@@ -57,9 +57,30 @@ def run(entry, *, counter=None, profile=None, quality="fine", ask=None, **change
             None,
             lambda *args: None,
             ask or (lambda question, choices: choices[0]),
-            NeverCancelled(),
+            cancelled or NeverCancelled(),
         )
     )
+
+
+def test_named_groove_floor_proof_keeps_the_original_cancel_token(profile, monkeypatch):
+    from app.core.errors import OperationCancelled
+    from app.core.perceive import surfaces
+    from app.core.scene.cancel import CancelSignal
+
+    token = CancelSignal()
+    original = surfaces.planar_patch
+    checked = []
+
+    def cancel_inside(*args, **kwargs):
+        checked.append(True)
+        assert kwargs.get("check_cancelled") is not None
+        token.cancel()
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(surfaces, "planar_patch", cancel_inside)
+    with pytest.raises(OperationCancelled):
+        run(cube(), profile=profile, cancelled=token)
+    assert checked
 
 
 @pytest.mark.parametrize("kind", ["mesh", "brep"])
@@ -80,6 +101,10 @@ def test_one_transaction_produces_real_groove_and_separate_material(kind, profil
         mesh = as_mesh_data(output.mesh)
         assert mesh.is_watertight and mesh.component_count == 1
     assert "groove_floor" in carrier.features
+    floor = carrier.features["groove_floor"]
+    assert len(floor.surface_patches) == 1
+    assert floor.surface_patches[0].face_indices == floor.face_indices
+    assert floor.surface_patches[0].kind == "plane"
     assert "gasket_contact" in gasket.features
     assert any(f.code == "seal.uncompressed" for f in result.findings)
 

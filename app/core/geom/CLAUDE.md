@@ -3,10 +3,43 @@
 Die einzige Stelle, an der Geometrie entsteht oder sich ändert (Regel 2).
 Gerechnet wird gegen `manifold3d` und `trimesh`.
 
+`transform.moved_object` führt analytische Merkmalteilträger zusammen mit
+der Form weiter. Native Neutessellierung ordnet jeden Teilträger über die
+tatsächlichen alten und neuen Topologieflächen zu. Ein unbelegter Ausschnitt
+einer nativen Fläche entfällt als Träger, statt zur ganzen Fläche zu wachsen.
+Punkte, Normalen, gerichtete Kegelnappen und Radien werden anschließend
+einmal über `perceive.surfaces` transformiert; der Operationsabbruch reicht
+bis in diese Zuordnung. Netztransformationen erhalten die Dreiecksreihenfolge.
+
+`deviation.deviation_bounds` prüft ausgefüllte Originaldreiecke gegen einen
+bereits belegten analytischen `SurfacePatch`, ohne neue Formeinpassung.
+Ebene, Zylinder, gerichteter Kegel, Kugel und Ringtorus teilen gerichtete
+Zahlenklammern und echte baryzentrische Zeugen. Deren zwei Floatparameter
+bezeichnen eine exakte reelle Kombination der Originalecken; gerundete
+Anzeigekoordinaten begründen keine Untergrenze. Kugel und Zylinder verwenden
+konvexe Radiusgrenzen, der Kegel globale konkave Stützebenen, der Torus
+vollständige Kantenintervalle und eingeschlossene Innen-/Achsenkandidaten.
+Die einmalige Kegelwinkelklammer verwendet begrenzte exakte Taylor-Terme;
+deterministische punktförmige Winkelfunktionen allein wären kein Fehlerbeweis.
+Die gemeinsame Kantenarbeit je Trägeraufruf ist begrenzt, einschließlich der
+anfänglichen Intervalle. Nach Verbrauch bleibt eine schnelle gültige Klammer.
+Jede Ausgabe trägt Unter-/Obergrenze in mm und kennzeichnet die erreichte
+Zielbreite. Der Abschluss bestätigt erneut endliche, geordnete Grenzen,
+auch nach einer numerisch offenen Verfeinerung. Nicht endlich einschließbare
+Eingaben bleiben unbekannt; Abbruch propagiert auch während Vorbereitung und
+Verfeinerung. Keine neue Geometrie,
+keine Reparatur, kein eigener Karten- oder Projektcache entstehen dabei.
+
 Die Oberseitenmerkmale der Meshgrundformen lesen Fläche und Mitte aus
 `top_face_of` an den tatsächlichen Dreiecken. Der gemeinsame Merkmalshelfer
 bekommt dafür `facets` als Quelle; die vorgegebene Flächennormale bleibt
 `parameter`. Ein erzeugter Name ändert diese Messquelle nicht.
+
+Ein neu benannter Nutboden erhält seinen Ebenenträger durch Prüfung aller
+Originalecken. Zusammengefasste Sacklochböden behalten die Teilträger ihrer
+tatsächlichen Ausgangsflächen. Beim Platzieren eines Merkmals auf einer neuen
+Oberfläche werden alte Dreiecks- und Trägerbezüge gemeinsam entfernt; erst die
+Auswertung bestätigt die neue Originalhaut.
 
 `place_on_bed` bleibt eine Einzeloperation; `place_group_on_bed` erhält alle
 gespeicherten Eingaben mit derselben Translation. Beide verwenden denselben

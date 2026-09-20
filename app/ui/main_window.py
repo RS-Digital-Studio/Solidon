@@ -259,6 +259,7 @@ from app.ui.labels import (
     feature_requirement,
     kind_requirement,
     length,
+    length_bound,
     local_moment,
     localised,
     set_circle_measure,
@@ -742,6 +743,8 @@ class _MapWorker(Worker):
     """Die Dreiecksgrenze der sechs direkt netzgebundenen Karten."""
     timedOut = Signal(float)
     """Das Arbeitsbudget der Stützkarte, das tatsächlich verbraucht wurde."""
+    progressed = Signal(float, str)
+    aborted = Signal()
 
     def __init__(self, kind: Any, entry: Any, profile: Any, scene: Any) -> None:
         super().__init__()
@@ -766,6 +769,7 @@ class _MapWorker(Worker):
                     profile=self._profile,
                     scene=self._scene,
                     cancelled=self.cancelled,
+                    progress=self.progressed.emit,
                 )
             )
         except maps.MapTooLarge as zu_gross:
@@ -777,7 +781,17 @@ class _MapWorker(Worker):
             # Kein Fehler und nie als einer gezeigt (§15.6): Eine andere Karte
             # ist schon unterwegs, und ihr Ergebnis ist das, auf das jemand
             # wartet.
-            return
+            self.aborted.emit()
+
+
+@dataclass(frozen=True, slots=True, eq=False)
+class _MapRequest:
+    """Karte und Berichtsklick gehören genau diesem unveränderten Szenenstand."""
+
+    document: Any
+    document_state: Any
+    result: EvaluationResult
+    key: tuple[Any, ...]
 
 
 class _UpdateWorker(Worker):
@@ -894,6 +908,7 @@ _PROGRESS_PRIORITY: Final = (
     "source",
     "gcode",
     "export",
+    "map",
     "part_file",
     "agent",
     "evaluation",
@@ -1751,7 +1766,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(APP_NAME)
         self.resize(1280, 820)
         self._map_cache: dict[tuple[Any, ...], Any] = {}
-        self._finding_awaiting_map: Finding | None = None
+        self._finding_awaiting_map: tuple[Finding, _MapRequest] | None = None
         """Der angeklickte Befund, dessen Analysekarte noch gerechnet wird.
 
         **Der erste Klick auf eine Warnung fuhr sonst ins Leere.** Der Ort
@@ -1762,7 +1777,7 @@ class MainWindow(QMainWindow):
         aus. Hier steht, wofür ``_map_ready`` ihn nachholen soll.
         """
         self._map_worker: Any = None
-        self._map_request: object | None = None
+        self._map_request: _MapRequest | None = None
         """Die Karte, die gerade gerechnet wird (§18.9). Eine neuere Anfrage ersetzt sie."""
         """Nur die letzte Karte wird gehalten: neu zu rechnen ist billig, sie zu
     halten teuer."""
@@ -2818,6 +2833,19 @@ class MainWindow(QMainWindow):
         generic_description = tr("Zeigt den Fortschritt der laufenden Aufgabe.")
         generic_cancel = tr("Bricht die laufende Aufgabe ab.")
         self._progress_states = {
+            "map": _ProgressState(
+                False,
+                "",
+                0,
+                0,
+                0,
+                tr("Analysekarte"),
+                tr("Die Analysekarte wird berechnet …"),
+                tr("Bricht die Berechnung der Analysekarte ab. Das Modell bleibt unverändert."),
+                True,
+                True,
+                False,
+            ),
             "evaluation": _ProgressState(
                 False,
                 "",
@@ -3104,6 +3132,7 @@ class MainWindow(QMainWindow):
             "gcode": self._cancel_gcode,
             "split": self.session.cancel_split,
             "export": self._cancel_export,
+            "map": self._cancel_analysis,
         }
         handler = handlers.get(owner)
         if handler is not None:
@@ -8192,10 +8221,9 @@ class MainWindow(QMainWindow):
         neu geschrieben — und ``action_settings`` sagt zu, die Einheit wirke
         sofort.
 
-        Analyse- und Schnittleiste folgen erst beim nächsten Zeichnen: Sie
-        halten die Werte nicht, aus denen ihre Zeilen entstehen, und ihnen
-        eine Datenhaltung dafür zu geben ist ein eigener Schritt. Das steht so
-        in der Arbeitsliste, statt hier als stille Lücke.
+        Die Analyselegende und ihre Ortsmarke lesen die vorhandene Karte neu.
+        Ein Einheitenwechsel startet keine Kartenrechnung und nimmt einen
+        ausdrücklichen Abbruch nicht zurück.
 
         **Die Druckeinstellungen bleiben in Millimetern**, mit Absicht: Ihre
         Werte gehen so an den Slicer, wie er sie führt, und wer dort eine
@@ -8205,7 +8233,8 @@ class MainWindow(QMainWindow):
         set_length_unit(unit)  # type: ignore[arg-type]
         self.measurements.set_unit(unit)  # type: ignore[arg-type]
         self.object_tree.set_unit(unit)  # type: ignore[arg-type]
-        self._on_selection(self.object_tree.selected())
+        self._on_selection(self.object_tree.selected(), refresh_analysis=False)
+        self._refresh_map_units()
         self._update_header()
         # Die Merkmalsbeschriftungen in der Überlagerung schreiben Längen ohne
         # eigene Einheit; sie brauchen nur den Anstoß, es neu zu tun.
@@ -11365,6 +11394,9 @@ class MainWindow(QMainWindow):
         Ansicht.
         """
         object_id = self.object_tree.selected()
+        request = self._map_request
+        if request is not None and (kind != request.key[1] or object_id != request.key[0]):
+            self.viewport._hide_finding_mark()
         if kind is None or object_id is None:
             self._cancel_map_worker()
             self._finding_awaiting_map = None
@@ -11376,108 +11408,149 @@ class MainWindow(QMainWindow):
 
         self._analysis_map(kind, object_id)
 
-    def _analysis_map(self, kind: maps.MapKind, object_id: ObjectId) -> None:
-        """§18.9: im Hintergrund gerechnet, je Objekt und Art gecacht.
-
-        Sekunden an einem großen Körper, und ein Fenster, das so lange nicht
-        antwortet, sieht kaputt aus. Eine neuere Anfrage ersetzt eine wartende —
-        niemand will die Karte, von der er weggeklickt hat.
-        """
-        self._cancel_map_worker()
-        self._retire(self._map_worker)
-        self._map_worker = None
+    def _analysis_map(
+        self, kind: maps.MapKind, object_id: ObjectId, *, finding: Finding | None = None
+    ) -> None:
+        """Eine aktuelle Karte teilen Auswahl, Bericht und Einheitenwechsel."""
+        if self._close_requested:
+            return
         result = self.session.last_result
-        entry = result.scene.objects.get(object_id) if result else None
-        if entry is None:
+        entry = result.scene.objects.get(object_id) if result is not None else None
+        if result is None or entry is None or not self.session.result_current or self.session.busy:
+            self._cancel_map_worker()
             self.viewport.set_analysis_map(None, None)
             self.analysis_bar.show_legend(None)
             return
         key = self._analysis_cache_key(entry, kind)
+        request = self._map_request
+        if request is None or request.key != key or not self._map_is_current(request):
+            self._cancel_map_worker()
+            self._retire(self._map_worker)
+            self._map_worker = None
+            document = self.session.project.document
+            request = _MapRequest(document, deepcopy(document), result, key)
+            self._map_request = request
+        if finding is not None:
+            self._finding_awaiting_map = (finding, request)
         if key in self._map_cache:
-            # **Eine gecachte Karte ersetzt die alte in einem Zug.** Erst zu
-            # leeren und dann zu setzen baute die Szene zweimal — jeder Wechsel
-            # zwischen zwei gerechneten Karten kostete zwei Aufbauten statt einem.
             self._show_map(self._map_cache[key], object_id)
+            self._focus_map_finding(self._map_cache[key], object_id)
+            return
+        if self._map_worker is not None:
             return
         self.viewport.set_analysis_map(None, None)
-        self.analysis_bar.show_legend(None)
-
         self.analysis_bar.show_problem(tr("Die Analysekarte wird berechnet …"))
-        request = object()
-        self._map_request = request
-        worker = _MapWorker(kind, entry, self.session.profile, result.scene if result else None)
-        # Stirbt der Arbeiter unerwartet, darf die Legende nicht für immer
-        # „wird berechnet" sagen (Gesamtreview I-2): Wartezustand lösen, der
-        # Grund geht den InternalError-Weg (§33.1).
-        worker.crashed.connect(
-            lambda detail: (
-                self._map_crashed(detail) if self._map_is_current(request, result, key) else None
-            )
+        self._set_progress_state(
+            "map",
+            active=True,
+            text=tr("Die Analysekarte wird berechnet …"),
+            minimum=0,
+            maximum=0,
+            value=0,
+            cancel_enabled=True,
+            accessible_description=tr("Die Analysekarte wird berechnet …"),
         )
-        worker.done.connect(
-            lambda analysis: (
-                self._map_ready(analysis, key, object_id)
-                if self._map_is_current(request, result, key)
-                else None
-            )
+        self._update_waiting_state()
+        worker = _MapWorker(kind, entry, self.session.profile, result.scene)
+        worker.done.connect(weak_slot(self, MainWindow._map_received, request, forward=True))
+        worker.progressed.connect(
+            weak_slot(self, MainWindow._map_progressed, request, forward=True)
+        )
+        worker.crashed.connect(
+            weak_slot(self, MainWindow._map_failed, request, "crashed", forward=True)
         )
         worker.tooLarge.connect(
-            lambda limit: (
-                self._map_too_large(entry.mesh.triangle_count, limit)
-                if self._map_is_current(request, result, key)
-                else None
-            )
+            weak_slot(self, MainWindow._map_failed, request, "large", forward=True)
         )
         worker.timedOut.connect(
-            lambda seconds: (
-                self._map_timed_out(seconds) if self._map_is_current(request, result, key) else None
-            )
+            weak_slot(self, MainWindow._map_failed, request, "timeout", forward=True)
         )
-        # **Nicht** auf ``None`` setzen, wenn der Arbeiter fertig ist.
-        #
-        # ``finished`` kommt, während Qt den Thread noch abräumt. Wer die
-        # Referenz in diesem Moment löscht, überlässt das QThread-Objekt dem
-        # Speicherbereiniger — und der zerstört das C++-Objekt unter einem
-        # Thread, der gerade zu Ende geht. Das ist genau die Falle, vor der
-        # ``_retired`` weiter oben warnt, hier nur von der anderen Seite.
-        #
-        # Der Absturz war eine Zugriffsverletzung ohne Zeile, in etwa jedem
-        # achten Lauf von ``test_analysis_ui.py`` und in etwa jedem vierten
-        # Lauf der ganzen Suite. Der Arbeiter wandert jetzt in dieselbe
-        # Halteleine wie ein ersetzter und wird dort gelöst, wenn er
-        # tatsächlich ausgelaufen ist.
-        #
-        # Vorher bekommt er das Abbruchzeichen: Sein Ergebnis will niemand
-        # mehr, und bis er von allein fertig ist, rechnet er gegen den, der
-        # gerade startet (§18.4).
+        worker.aborted.connect(weak_slot(self, MainWindow._map_failed, request, "cancelled", None))
+        worker.finished.connect(weak_slot(self, MainWindow._map_worker_done, worker))
         self._map_worker = worker
-        worker.finished.connect(lambda done=worker: self._map_worker_done(done))
         self._leash.start(worker)
 
-    def _cancel_map_worker(self) -> None:
-        """Der laufenden Karte sagen, dass niemand mehr auf sie wartet."""
-        self._map_request = None
-        worker = self._map_worker
-        if worker is not None and worker.isRunning():
-            worker.cancel()
+    def _map_received(self, request: _MapRequest, analysis: maps.AnalysisMap | None) -> None:
+        """Nur ein gültiger Auftrag veröffentlicht Karte und Ortsmarke."""
+        if self._map_is_current(request):
+            self._finish_map_progress()
+            self._map_ready(analysis, request.key, request.key[0])
 
-    def _map_is_current(
-        self, request: object, result: EvaluationResult | None, key: tuple[Any, ...]
-    ) -> bool:
-        """Auch Absagen und Fehler gehören ihrer Anfrage und ausgewerteten Szene."""
+    def _map_progressed(self, request: _MapRequest, fraction: float, message: str) -> None:
+        """Der vorhandene Fortschrittsbereich folgt nur seiner aktuellen Karte."""
+        if not self._map_is_current(request):
+            return
+        text = message or tr("Die Analysekarte wird berechnet …")
+        self._set_progress_state(
+            "map",
+            maximum=100,
+            value=min(100, max(0, int(fraction * 100))),
+            text=text,
+            accessible_description=text,
+        )
+
+    def _map_failed(self, request: _MapRequest, reason: str, detail: Any) -> None:
+        """Absage und Fehler beenden dieselbe Anfrage ohne veralteten Zeugen."""
+        if not self._map_is_current(request):
+            return
+        self._finding_awaiting_map = None
+        self._map_request = None
+        self._finish_map_progress()
+        if reason == "large":
+            entry = request.result.scene.objects[request.key[0]]
+            self._map_too_large(entry.mesh.triangle_count, int(detail))
+        elif reason == "timeout":
+            self._map_timed_out(float(detail))
+        elif reason == "cancelled":
+            self._cancel_analysis()
+        else:
+            self._map_crashed(str(detail))
+
+    def _finish_map_progress(self) -> None:
+        """Der Abbau löst den Besitzer auch dann, wenn das Fenster bereits schließt."""
+        self._progress_states["map"] = replace(self._progress_states["map"], active=False)
+        if isValid(self) and not self._close_requested:
+            self._progress_idle()
+
+    def _cancel_analysis(self) -> None:
+        """Ein ausdrücklicher Abbruch behält das Modell und quittiert die Kartenabsage."""
+        self._cancel_map_worker()
+        self.viewport.set_analysis_map(None, None)
+        self.viewport._hide_finding_mark()
+        self.analysis_bar.show_problem(tr("Die Berechnung der Analysekarte wurde abgebrochen."))
+        self.announce(tr("Die Berechnung der Analysekarte wurde abgebrochen."))
+
+    def _cancel_map_worker(self) -> None:
+        """Entwertet Karte und Berichtsklick vor jedem später eintreffenden Signal."""
+        self._map_request = None
+        self._finding_awaiting_map = None
+        worker = self._map_worker
+        if worker is not None:
+            worker.cancel()
+        self._finish_map_progress()
+
+    def _map_is_current(self, request: _MapRequest) -> bool:
+        """Anfrage, Dokument, Ergebnis, Auswahl und Profil müssen noch zusammengehören."""
         return (
-            self._map_request is request
-            and self.session.last_result is result
-            and self.analysis_bar.chosen() == key[1]
-            and self.object_tree.selected() == key[0]
-            and result is not None
-            and (entry := result.scene.objects.get(key[0])) is not None
-            and self._analysis_cache_key(entry, key[1]) == key
+            isValid(self)
+            and not self._close_requested
+            and self._map_request is request
+            and self.session.last_result is request.result
+            and self.session.result_current
+            and not self.session.busy
+            and self.session.project.document is request.document
+            and self.session.project.document == request.document_state
+            and self.analysis_bar.chosen() == request.key[1]
+            and self.object_tree.selected() == request.key[0]
+            and (entry := request.result.scene.objects.get(request.key[0])) is not None
+            and self._analysis_cache_key(entry, request.key[1]) == request.key
         )
 
     def _map_worker_done(self, worker: Any) -> None:
+        """Ein später Vorgänger darf weder Nachfolger noch dessen Fortschritt abräumen."""
         if self._map_worker is worker:
             self._map_worker = None
+            self._finish_map_progress()
         self._hold_until_done(worker)
 
     def _hold_until_done(self, worker: Any) -> None:
@@ -11508,6 +11581,18 @@ class MainWindow(QMainWindow):
         das Verringern eine Kleinigkeit oder ein Verlust an Form ist.
         """
         self.viewport.set_analysis_map(None, None)
+        if self.analysis_bar.chosen() == "deviation":
+            self.analysis_bar.show_problem(
+                tr(
+                    "Für eine Analysekarte ist dieses Modell zu groß: "
+                    "{count} Dreiecke, möglich sind {limit}."
+                ).format(count=triangles, limit=limit)
+                + " "
+                + tr("Wählen Sie einen anderen Körper oder schließen Sie die Karte."),
+                tr("Keine Karte"),
+                weak_slot(self, MainWindow._close_analysis_card),
+            )
+            return
         self.analysis_bar.show_problem(
             tr(
                 "Für eine Analysekarte ist dieses Modell zu groß: "
@@ -11516,6 +11601,11 @@ class MainWindow(QMainWindow):
             tr("Dreiecke verringern"),
             weak_slot(self, MainWindow._decimate_for_a_map, limit),
         )
+
+    def _close_analysis_card(self) -> None:
+        """Der vorhandene Kartenwähler schließt auch eine zu große Karte."""
+        self.analysis_bar.show_map(None)
+        self._on_map_changed(None)
 
     def _decimate_for_a_map(self, limit: int) -> None:
         """*Dreiecke verringern*, vorbelegt mit dem, was die Karte braucht.
@@ -11560,35 +11650,58 @@ class MainWindow(QMainWindow):
         self._on_error(InternalError(detail=detail))
 
     def _map_ready(self, analysis: Any, key: tuple[Any, ...], object_id: ObjectId) -> None:
-        # **Ergänzen, nicht ersetzen.** Hier stand ``= {key: analysis}``, und
-        # damit hatte der Cache trotz seines Typs genau einen Platz: Wer
-        # zwischen Wandstärke und Überhang desselben Körpers wechselte, zahlte
-        # jedes Mal neu, und ``_finding_awaiting_map`` fand beim Sprung zu einem
-        # anderen Körper nie etwas vor.
+        """Karten ergänzen den gemeinsamen Cache, einschließlich eines leeren Ergebnisses."""
         self._map_cache[key] = analysis
         while len(self._map_cache) > MAP_CACHE_KEPT:
             self._map_cache.pop(next(iter(self._map_cache)))
         if self.analysis_bar.chosen() == key[1] and self.object_tree.selected() == object_id:
             self._show_map(analysis, object_id)
-        # **Den Flug nachholen, auf den der Klick gewartet hat.** Der Ort eines
-        # Kartenbefunds steht erst hier fest; wer ihn beim Klick sucht, findet
-        # einen leeren Cache. Nur für den Befund, der noch gilt — wer inzwischen
-        # etwas anderes angeklickt hat, will nicht dorthin.
-        waiting = self._finding_awaiting_map
-        self._finding_awaiting_map = None
+        self._focus_map_finding(analysis, object_id)
+
+    def _focus_map_finding(self, analysis: maps.AnalysisMap | None, object_id: ObjectId) -> None:
+        """Warmer und kalter Cache lösen genau denselben gebundenen Berichtsklick ein."""
+        waiting, self._finding_awaiting_map = self._finding_awaiting_map, None
         if waiting is None or analysis is None:
             return
-        result = self.session.last_result
-        entry = result.scene.objects.get(object_id) if result else None
-        if entry is None:
+        finding, request = waiting
+        if not self._map_is_current(request) or request.key[0] != object_id:
             return
-        target = maps.location_of(entry, waiting) or maps.focus_point(entry, analysis)
+        entry = request.result.scene.objects[object_id]
+        target = maps.location_of(entry, finding) or maps.focus_point(entry, analysis)
+        if analysis.kind == "deviation":
+            target = analysis.witness_point
+            if target is None or analysis.witness_distance is None:
+                return
+            finding = replace(
+                finding, message=self._deviation_witness_text(analysis.witness_distance)
+            )
         if target is not None:
-            self._show_finding_at(waiting, entry, target)
+            self._show_finding_at(finding, entry, target)
+
+    def _deviation_witness_text(self, distance: float) -> Any:
+        """Die Ortsmarke nennt die echte untere Punktdistanz, keine obere Facettenschranke."""
+        return _("Größter gefundener Abstand: {value}", value=length_bound(distance, upper=False))
 
     def _show_map(self, analysis: Any, object_id: ObjectId) -> None:
         self.viewport.set_analysis_map(analysis, object_id if analysis else None)
         self.analysis_bar.show_legend(analysis, self._feature_names())
+
+    def _refresh_map_units(self) -> None:
+        """Die Anzeige liest fertige Werte neu, ohne Rechnung oder Kamerafahrt."""
+        analysis = self.viewport.analysis_map
+        if analysis is None:
+            return
+        self.analysis_bar.show_legend(analysis, self._feature_names())
+        mark = self.viewport._finding_mark
+        if (
+            analysis.kind == "deviation"
+            and mark is not None
+            and mark[0] is analysis.witness_point
+            and analysis.witness_distance is not None
+        ):
+            self.viewport.mark_finding(
+                mark[0], str(self._deviation_witness_text(analysis.witness_distance)), mark[2]
+            )
 
     def _only_body(self) -> ObjectId | None:
         """Der einzige Körper der Szene — oder nichts, wenn es mehrere sind.
@@ -11808,69 +11921,28 @@ class MainWindow(QMainWindow):
             self.object_tree.select_objects(chosen)
 
     def _on_finding_activated(self, finding: Finding) -> None:
-        """Eine Warnung anklicken, die Stelle sehen: der kürzeste Weg vom Problem
-        zum Ort (§18.4).
-
-        **Ein Klick auf einen Befund bleibt nie folgenlos.** Gestuft nach dem,
-        was der Befund hergibt: Wo es einen Ort gibt, fliegt die Kamera hin und
-        eine Marke steht dort; wo nur ein Körper genannt ist, wird der
-        ausgewählt; und wo ein Schritt genannt ist, zeigt der Verlauf ihn.
-        Gemessen am 30.08.2026 über alle 58 Befunde der Beispielprojekte: **58
-        lösten gar nichts aus** — auch die fünfzig mit Analysekarte, deren Ort
-        erst aus dem Kartencache kommt und der beim ersten Klick leer ist.
-        """
-        # **Der Schritt zuerst, denn er gilt unabhängig vom Körper.** Ein
-        # Operationsfehler trägt eine ``op_id`` und sonst wenig; sie beantwortet
-        # die Frage, die er stellt — welcher Schritt war es? Bei einem Befund
-        # ohne Körper ist sie sogar die einzige Antwort, die es gibt.
+        """Ein Berichtsklick bindet zuerst den Körper, dann Karte und tatsächlichen Ort."""
+        self._finding_awaiting_map = None
+        self.viewport._hide_finding_mark()
         if finding.op_id is not None and self.history_panel.point_at(int(finding.op_id)):
             open_section(self.history_panel)
-
         object_id = finding.object_id or self.object_tree.selected()
         result = self.session.last_result
         entry = result.scene.objects.get(object_id) if result and object_id else None
         if entry is None:
             return
-
         kind = maps.map_for(finding)
         if kind is not None:
-            # Wie ``_show_error_location``: Das Werkzeug kommt mit, sonst
-            # färbt die Karte das Modell ohne Legende und Kartenwähler —
-            # reine Farbe ohne zweite Kodierung (Regel 18, §18.4).
             self.tools.activate("analysis")
             self.analysis_bar.show_map(kind)
-            self._analysis_map(kind, entry.id)
-            # Die Kamera geht zu dem Ort, den der Befund nennt. Wo der Befund
-            # keinen eigenen Ort hat, hat die Karte einen — aber die Karte
-            # rechnet vielleicht noch (§18.9), und die Ansicht wird nicht
-            # dafür aufgehalten.
-            target = maps.location_of(entry, finding)
-            if target is None:
-                cached = self._map_cache.get(self._analysis_cache_key(entry, kind))
-                target = maps.focus_point(entry, cached) if cached is not None else None
-        else:
-            target = maps.location_of(entry, finding)
-
-        # **Ein Klick auf einen Befund bleibt nie folgenlos** — und die drei
-        # Stufen schließen einander nicht aus (§18.4). Hier stand nach dem Flug
-        # ein ``return``, und die Auswahl darunter wurde nie erreicht: Wer auf
-        # eine Warnung mit Ort klickte, bekam den Flug **statt** der Auswahl.
-        # Regel und Docstring beschrieben sie gleichzeitig, der Code führte sie
-        # exklusiv aus.
-        #
-        # Der Wächter daneben sah es nicht, weil er den Quelltext nach
-        # ``select_object`` absucht: Der Aufruf stand da, er lief nur nicht.
+        self.object_tree.select_object(entry.id)
+        if self.object_tree.selected() != entry.id:
+            return
+        target = None if kind == "deviation" else maps.location_of(entry, finding)
         if target is not None:
             self._show_finding_at(finding, entry, target)
-        elif kind is not None:
-            # Die Karte rechnet noch. ``_map_ready`` holt den Flug nach, sobald
-            # sie steht; bis dahin bleibt die Auswahl die Antwort.
-            self._finding_awaiting_map = finding
-
-        # Und der Körper wird ausgewählt, ob geflogen wurde oder nicht: Wer die
-        # Stelle sieht, will auch wissen, zu welchem Teil sie gehört — bei zwei
-        # Körpern auf dem Bett ist das nicht selbstverständlich.
-        self.object_tree.select_object(entry.id)
+        if kind is not None:
+            self._analysis_map(kind, entry.id, finding=finding if target is None else None)
 
     def _show_finding_at(self, finding: Finding, entry: Any, target: Vec3) -> None:
         """Zur Stelle eines Befunds fliegen und sie markieren.
@@ -16327,6 +16399,12 @@ class MainWindow(QMainWindow):
             self.status_message.setText(self._announcement)
 
     def _on_project(self) -> None:
+        request = self._map_request
+        if request is not None and not self._map_is_current(request):
+            self._cancel_map_worker()
+            self.viewport.set_analysis_map(None, None)
+            self.viewport._hide_finding_mark()
+            self.analysis_bar.show_legend(None)
         if self._announcement_document is not self.session.project.document:
             self._announcement_document = self.session.project.document
             self.announce("")
@@ -16617,6 +16695,11 @@ class MainWindow(QMainWindow):
             self._waiting = False
 
     def _on_busy(self, busy: bool) -> None:
+        if busy:
+            self._cancel_map_worker()
+            self.viewport.set_analysis_map(None, None)
+            self.viewport._hide_finding_mark()
+            self.analysis_bar.show_legend(None)
         self.feature_panel.limit_fit(self._manual_fit_reason())
         self._set_progress_state(
             "evaluation",
@@ -17454,7 +17537,7 @@ class MainWindow(QMainWindow):
             ],
         )
 
-    def _on_selection(self, object_id: str | None) -> None:
+    def _on_selection(self, object_id: str | None, *, refresh_analysis: bool = True) -> None:
         if self._quiet_target is not None:
             if object_id is None:
                 # Der Baum leert beim Wiederwählen kurz seine Auswahl. Erst
@@ -17496,7 +17579,8 @@ class MainWindow(QMainWindow):
         # Karte und Schichtanalyse gehören zu einem Körper; ein anderer Körper
         # braucht seine eigenen, also folgen sie der Auswahl, statt zu
         # verweilen.
-        self._on_map_changed(self.analysis_bar.chosen())
+        if refresh_analysis:
+            self._on_map_changed(self.analysis_bar.chosen())
         self._on_layer_changed(self.layer_bar.index())
         self._update_actions()
         self._update_transform_roles()

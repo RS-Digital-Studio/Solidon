@@ -43,6 +43,7 @@ from app.core.types import (
     Mesh,
     SceneObject,
     SolverInfo,
+    SurfacePatch,
     Transform,
 )
 from app.i18n import TranslatableText
@@ -79,7 +80,8 @@ DEFAULT_DISK_BUDGET_BYTES: Final = 2 * 1024 * 1024 * 1024
 #: vollständigen Mess- und Attributdaten auch nach dem Wiederöffnen.
 #: Rundflächenmaße, rationale Kugelträger und die ausdrückliche Herkunft jedes
 #: Maßes ersetzen frühere gerundete oder nicht belegte Merkmalsauskünfte.
-CACHE_FORMAT_VERSION: Final = 18
+#: Teilträger und ihre Originaldreiecke ersetzen alte Auskünfte ohne Formbezug.
+CACHE_FORMAT_VERSION: Final = 19
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,10 +98,15 @@ class CachedResult:
 
     @property
     def cost(self) -> int:
-        """Dreiecke dieses Eintrags — das Maß, in dem das Budget zählt."""
+        """Dreiecke und zusätzliche Merkmalsindizes teilen dieselbe Speichergrenze."""
         return sum(
             entry.mesh.triangle_count
             + (cavity.triangle_count if (cavity := getattr(entry.mesh, "cavity", None)) else 0)
+            + sum(
+                len(feature.face_indices)
+                + sum(len(patch.face_indices) for patch in feature.surface_patches)
+                for feature in entry.features.values()
+            )
             for entry in self.objects
         )
 
@@ -295,16 +302,64 @@ def _feature_to_data(feature: Feature) -> dict[str, Any]:
         # gegen den das Feld eingebaut wurde, nur eine Cache-Ebene weiter.
         "recognised": feature.recognised,
         "measure_sources": dict(feature.measure_sources),
+        "surface_patches": [
+            {
+                "kind": patch.kind,
+                "params": dict(patch.params),
+                "face_indices": list(patch.face_indices),
+                "source": patch.source,
+            }
+            for patch in feature.surface_patches
+        ],
     }
 
 
-def _feature_from_data(data: dict[str, Any]) -> Feature:
+def _surface_patches_from_data(
+    data: object, indices: tuple[int, ...], face_count: int | None
+) -> tuple[SurfacePatch, ...]:
+    """Wegwerfbare Cache-Daten gegen denselben Trägervertrag wie die Erkennung lesen."""
+    from app.core.perceive.surfaces import valid_patch
+
+    if not isinstance(data, list):
+        raise ValueError("invalid cached surface patches")
+    if not data:
+        return ()
+    if any(not isinstance(index, int) or isinstance(index, bool) for index in indices):
+        raise ValueError("invalid cached feature indices")
+    allowed = frozenset(indices)
+    patches = []
+    for item in data:
+        if (
+            not isinstance(item, dict)
+            or not isinstance(item.get("kind"), str)
+            or not isinstance(item.get("source"), str)
+            or not isinstance(item.get("params"), dict)
+            or not isinstance(item.get("face_indices"), list)
+        ):
+            raise ValueError("invalid cached surface patch")
+        patch = SurfacePatch(
+            kind=item["kind"],
+            source=item["source"],
+            params={
+                key: tuple(value) if isinstance(value, list) else value
+                for key, value in item["params"].items()
+            },
+            face_indices=tuple(item["face_indices"]),
+        )
+        if not valid_patch(patch, face_count=face_count, allowed_indices=allowed):
+            raise ValueError("invalid cached surface geometry")
+        patches.append(patch)
+    return tuple(patches)
+
+
+def _feature_from_data(data: dict[str, Any], *, face_count: int | None = None) -> Feature:
+    indices = tuple(data["face_indices"])
     return Feature(
         id=data["id"],
         kind=data["kind"],
         provenance=data["provenance"],
         params=data["params"],
-        face_indices=tuple(data["face_indices"]),
+        face_indices=indices,
         # **Mit ``get`` und nicht über den Index.** Der Cache ist hashbasiert
         # und wegwerfbar — nur weggeworfen wird er nicht, wenn ein Feld
         # dazukommt: Der Hash steht über dem Operationsstapel, nicht über der
@@ -318,6 +373,9 @@ def _feature_from_data(data: dict[str, Any]) -> Feature:
         # versioniert.
         recognised=data.get("recognised", True),
         measure_sources=data.get("measure_sources", {}),
+        surface_patches=_surface_patches_from_data(
+            data.get("surface_patches", []), indices, face_count
+        ),
     )
 
 
@@ -506,24 +564,28 @@ class DiskCache:
             data = json.loads(index.read_text(encoding="utf-8"))
             if data.get("format_version") != CACHE_FORMAT_VERSION:
                 return None
-            objects = tuple(
-                SceneObject(
-                    id=entry["id"],
-                    name=_name_from_data(entry["name"]),
-                    mesh=self.codec.loads((folder / entry["mesh"]).read_bytes()),
-                    kind=entry["kind"],
-                    features={
-                        key_: _feature_from_data(value) for key_, value in entry["features"].items()
-                    },
-                    material_slots=[_slot_from_data(slot) for slot in entry["material_slots"]],
-                    material=entry.get("material"),
-                    created_by=entry["created_by"],
-                    visible=entry["visible"],
-                    plate=entry.get("plate", 0),
-                    reserved_feature_ids=tuple(sorted(entry.get("reserved_feature_ids", ()))),
+            objects_list = []
+            for entry in data["objects"]:
+                mesh = self.codec.loads((folder / entry["mesh"]).read_bytes())
+                objects_list.append(
+                    SceneObject(
+                        id=entry["id"],
+                        name=_name_from_data(entry["name"]),
+                        mesh=mesh,
+                        kind=entry["kind"],
+                        features={
+                            key_: _feature_from_data(value, face_count=mesh.triangle_count)
+                            for key_, value in entry["features"].items()
+                        },
+                        material_slots=[_slot_from_data(slot) for slot in entry["material_slots"]],
+                        material=entry.get("material"),
+                        created_by=entry["created_by"],
+                        visible=entry["visible"],
+                        plate=entry.get("plate", 0),
+                        reserved_feature_ids=tuple(sorted(entry.get("reserved_feature_ids", ()))),
+                    )
                 )
-                for entry in data["objects"]
-            )
+            objects = tuple(objects_list)
             # Die drei Beifänge gehören zum Ergebnis wie die Körper selbst:
             # ohne `transform` liest `_with_features` die alten Merkmale im
             # falschen Bezugspunkt und benennt sie um (§21.2), ohne

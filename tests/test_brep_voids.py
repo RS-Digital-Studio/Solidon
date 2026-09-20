@@ -96,6 +96,13 @@ def test_native_air_volume_and_selection_include_material_islands(
     )
     assert set(air.face_indices) == set(expected_faces)
     assert len(source.faces_of_triangles(air.face_indices)) == (4 if island else 3)
+    assert {index for patch in air.surface_patches for index in patch.face_indices} == set(
+        expected_faces
+    )
+    assert {patch.kind for patch in air.surface_patches} == (
+        {"plane", "cylinder", "sphere"} if island else {"plane", "cylinder"}
+    )
+    assert all(patch.source == "native" for patch in air.surface_patches)
     assert all(
         not set(feature.face_indices) & set(air.face_indices)
         for feature in found.values()

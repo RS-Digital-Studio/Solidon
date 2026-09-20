@@ -181,6 +181,8 @@ def _features(mesh: MeshData, front: float, back: float) -> dict[str, Feature]:
     Eine Zeichnung kann beliebig viele Seiten besitzen; deren wechselnde
     Erkennungskennungen sind keine dauerhaften Bausteinversprechen.
     """
+    from app.core.perceive.surfaces import planar_patch
+
     found: dict[str, Feature] = {}
     for name, height, sign in (("front", front, -1.0), ("back", back, 1.0)):
         raw = mesh.raw
@@ -195,6 +197,12 @@ def _features(mesh: MeshData, front: float, back: float) -> dict[str, Feature]:
         area = float(raw.area_faces[indices].sum())
         centre = np.average(raw.triangles_center[indices], axis=0, weights=raw.area_faces[indices])
         occupied = {int(value) for value in indices}
+        surface = planar_patch(
+            mesh,
+            tuple(sorted(occupied)),
+            (float(centre[0]), float(centre[1]), float(centre[2])),
+            (0.0, 0.0, sign),
+        )
         found[name] = Feature(
             id=name,
             kind="face",
@@ -214,6 +222,7 @@ def _features(mesh: MeshData, front: float, back: float) -> dict[str, Feature]:
                 "axis": "parameter",
                 "direction": "parameter",
             },
+            surface_patches=(surface,) if surface else (),
         )
     return found
 

@@ -10,6 +10,18 @@ Operationen und Werte statt abgeleiteter Merkmalsresultate. `bore_advice`
 unterscheidet belegte native Maße, Schätzungen und Vorgabemaße; ein passender
 Zahlenbereich allein belegt kein ursprüngliches Schraubenmaß.
 
+`Feature.surface_patches` trägt die belegten analytischen Teilflächen und
+ihre Originaldreiecke ebenfalls durch beide Cacheebenen. Der Plattencodec
+prüft den gemeinsamen Trägervertrag, die Merkmalszugehörigkeit und die
+tatsächliche Dreieckszahl; beschädigte Einträge werden neu gerechnet.
+Trägervektoren bleiben nach JSON unveränderliche Tupel. Merkmals- und
+Teilträgerindizes zählen zum vorhandenen Speicherbudget hinzu.
+Übernimmt ein erzeugter Name eine neue erkannte Fläche, reisen deren aktuelle
+Teilträger mit. Ein nicht mehr belegter alter Name behält keinen alten
+Formnachweis. Am vollständig ausgewerteten Endstand benennt ein
+Informationsbefund pro Körper die verfügbare Abweichungskarte; Zahlen und
+Ortsmarke entstehen erst durch deren ausdrückliche Berechnung.
+
 Regeln: `.claude/rules/operationen.md`, für die Projektdatei zusätzlich
 `.claude/rules/dateiformat.md`.
 

@@ -40,7 +40,15 @@ from app.core.brep.canonical import describe as describe_surface
 from app.core.brep.kernel import Solid, boolean_builder
 from app.core.brep.properties import properties
 from app.core.log import get_logger
-from app.core.types import CancelToken, Feature, FeatureId, FeatureKind, Vec3
+from app.core.types import (
+    CancelToken,
+    Feature,
+    FeatureId,
+    FeatureKind,
+    SurfaceKind,
+    SurfacePatch,
+    Vec3,
+)
 from app.core.units import EPS_DISPLAY, EPS_GEOM, match_tolerance, positive_axis
 
 _log = get_logger(__name__)
@@ -122,10 +130,14 @@ def features_of(solid: Solid, *, cancelled: CancelToken | None = None) -> dict[F
     # braucht den Weg zurück, und ihn hier mitzuschreiben kostet nichts.
     named: dict[int, FeatureId] = {}
     surfaces: dict[int, Surface | None] = {}
+    surface_patches: dict[int, SurfacePatch] = {}
     for index, face in enumerate(solid.faces()):
         if cancelled is not None:
             cancelled.raise_if_cancelled()
         surfaces[index] = describe_surface(face, cancelled=cancelled)
+        native_patch = _native_patch(solid, index, surfaces[index], cancelled=cancelled)
+        if native_patch is not None:
+            surface_patches[index] = native_patch
         described = _describe(
             face,
             index,
@@ -219,7 +231,33 @@ def features_of(solid: Solid, *, cancelled: CancelToken | None = None) -> dict[F
                 measure_sources.update(area="native", centre="native")
         found[feature.id] = replace(feature, params=params, measure_sources=measure_sources)
 
-    found = voids_instead_of_phantom_bores(found, _void_features(solid, cancelled=cancelled))
+    found = voids_instead_of_phantom_bores(
+        found,
+        _void_features(solid, cancelled=cancelled),
+        check_cancelled=cancelled.raise_if_cancelled if cancelled else None,
+    )
+
+    # Erst die endgültigen Auswahlen schneiden die Originalteilträger zu:
+    # Langloch, Ring und Luftkammer können mehrere unterschiedliche tragen.
+    # Ein Netzfit darf denselben bereits nativ belegten Anteil nicht ersetzen.
+    from app.core.perceive.surfaces import clipped_patches
+
+    for identifier, feature in found.items():
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        native = solid.faces_of_triangles(feature.face_indices)
+        patches = clipped_patches(
+            [surface_patches[index] for index in sorted(native) if index in surface_patches],
+            feature.face_indices,
+            check_cancelled=cancelled.raise_if_cancelled if cancelled else None,
+        )
+        covered = {index for patch in patches for index in patch.face_indices}
+        remaining = clipped_patches(
+            feature.surface_patches,
+            set(feature.face_indices) - covered,
+            check_cancelled=cancelled.raise_if_cancelled if cancelled else None,
+        )
+        found[identifier] = replace(feature, surface_patches=patches + remaining)
 
     if cancelled is not None:
         cancelled.raise_if_cancelled()
@@ -232,6 +270,159 @@ def features_of(solid: Solid, *, cancelled: CancelToken | None = None) -> dict[F
         counts["face"],
     )
     return found
+
+
+def _native_patch(
+    solid: Solid, index: int, surface: Surface | None, *, cancelled: CancelToken | None = None
+) -> SurfacePatch | None:
+    """Die bereits gelesene Originalfläche liefert den Träger, nie ihre Auswahlmitte."""
+    from OCP.BRepAdaptor import BRepAdaptor_Surface
+    from OCP.GeomAbs import GeomAbs_Cone
+
+    from app.core.perceive.surfaces import valid_patch
+
+    params: dict[str, float | Vec3]
+    kind: SurfaceKind
+    if isinstance(surface, PlaneSurface):
+        kind = "plane"
+        params = {"centre": surface.plane.Location().Coord(), "axis": surface.normal}
+    elif isinstance(surface, CylinderSurface):
+        kind = "cylinder"
+        params = {
+            "centre": surface.cylinder.Location().Coord(),
+            "axis": surface.cylinder.Axis().Direction().Coord(),
+            "radius": float(surface.cylinder.Radius()),
+        }
+    elif isinstance(surface, SphereSurface):
+        kind = "sphere"
+        params = {
+            "centre": surface.sphere.Location().Coord(),
+            "radius": float(surface.sphere.Radius()),
+        }
+    elif isinstance(surface, TorusSurface):
+        kind = "torus"
+        params = {
+            "centre": surface.torus.Location().Coord(),
+            "axis": surface.torus.Axis().Direction().Coord(),
+            "ring_radius": float(surface.torus.MajorRadius()),
+            "tube_radius": float(surface.torus.MinorRadius()),
+        }
+    else:
+        adaptor = BRepAdaptor_Surface(solid.faces()[index])
+        if adaptor.GetType() != GeomAbs_Cone:
+            return None
+        span = _cone_nappe(adaptor, cancelled=cancelled)
+        if span is None:
+            return None
+        direction, _, _ = span
+        cone = adaptor.Cone()
+        angle = float(cone.SemiAngle())
+        kind = "cone"
+        axis = cone.Axis().Direction()
+        params = {
+            "apex": cone.Apex().Coord(),
+            "axis": (direction * axis.X(), direction * axis.Y(), direction * axis.Z()),
+            "half_angle": abs(angle),
+        }
+    patch = SurfacePatch(kind, params, solid.triangles_of_face(index), "native")
+    return (
+        patch
+        if valid_patch(
+            patch,
+            face_count=solid.triangle_count,
+            check_cancelled=cancelled.raise_if_cancelled if cancelled else None,
+        )
+        else None
+    )
+
+
+def _cone_nappe(
+    adaptor: Any, *, cancelled: CancelToken | None = None
+) -> tuple[float, float, float] | None:
+    """Richtung, weiter V-Rand und Radius einer vollständig belegten Kegelnappe.
+
+    Der native Träger setzt sich jenseits seiner Spitze fort. Das Vorzeichen
+    des Halbwinkels allein benennt deshalb weder die gewählte Nappe noch den
+    weiten Rand. Eine Trimmung über beide Nappen bleibt ohne eindeutigen Bezug.
+    """
+    cone = adaptor.Cone()
+    angle = float(cone.SemiAngle())
+    radius = float(cone.RefRadius())
+    first, last = float(adaptor.FirstVParameter()), float(adaptor.LastVParameter())
+    if not all(math.isfinite(value) for value in (angle, radius, first, last)):
+        return None
+    sine = math.sin(angle)
+    first_radius = math.fsum((radius, first * sine))
+    last_radius = math.fsum((radius, last * sine))
+    if min(first_radius, last_radius) < 0.0 < max(first_radius, last_radius):
+        near_v, near_radius = min(
+            ((first, first_radius), (last, last_radius)), key=lambda item: abs(item[1])
+        )
+        # Native Spitzenparameter und sin() sind bereits gerundete Werte.
+        # Nur ihre arithmetische Endpunktklammer darf null enthalten, und
+        # zusätzlich muss der Originalrand topologisch die Spitze sein.
+        # Eine EPS_GEOM-breite Typentscheidung würde echte kleine Nappen löschen.
+        rounding = math.fsum(
+            (
+                math.ulp(radius),
+                abs(near_v) * math.ulp(sine),
+                abs(sine) * math.ulp(near_v),
+                math.ulp(near_v * sine),
+            )
+        )
+        if abs(near_radius) > rounding or not _cone_apex_end(
+            adaptor, near_v, rounding / abs(sine), cancelled=cancelled
+        ):
+            return None
+    wide_v, wide_radius = max(
+        ((first, first_radius), (last, last_radius)), key=lambda item: abs(item[1])
+    )
+    if abs(wide_radius) <= EPS_GEOM:
+        return None
+    direction = (1.0 if angle > 0.0 else -1.0) * (1.0 if wide_radius > 0.0 else -1.0)
+    return direction, wide_v, abs(wide_radius)
+
+
+def _cone_apex_end(
+    adaptor: Any, value: float, rounding: float, *, cancelled: CancelToken | None
+) -> bool:
+    """Nur ein degenerierter Originalrand mit wirklichem Spitzenknoten belegt das Ende."""
+    from OCP.BRep import BRep_Tool
+    from OCP.BRepTools import BRepTools
+    from OCP.TopAbs import TopAbs_EDGE, TopAbs_VERTEX
+    from OCP.TopExp import TopExp_Explorer
+    from OCP.TopoDS import TopoDS
+
+    face = adaptor.Face()
+    apex = adaptor.Cone().Apex().Coord()
+    edges = TopExp_Explorer(face, TopAbs_EDGE)
+    while edges.More():
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        edge = TopoDS.Edge(edges.Current())
+        edges.Next()
+        if not BRep_Tool.Degenerated_s(edge):
+            continue
+        _, _, first, last = BRepTools.UVBounds_s(face, edge)
+        if any(abs(at - value) > math.ulp(at) + math.ulp(value) for at in (first, last)):
+            continue
+        vertices = TopExp_Explorer(edge, TopAbs_VERTEX)
+        at_apex = vertices.More()
+        while vertices.More():
+            if cancelled is not None:
+                cancelled.raise_if_cancelled()
+            point = BRep_Tool.Pnt_s(TopoDS.Vertex(vertices.Current())).Coord()
+            position_rounding = rounding + math.fsum(
+                math.ulp(actual) + math.ulp(expected)
+                for actual, expected in zip(point, apex, strict=True)
+            )
+            if math.dist(point, apex) > position_rounding:
+                at_apex = False
+                break
+            vertices.Next()
+        if at_apex:
+            return True
+    return False
 
 
 def _joined_tori(
@@ -928,15 +1119,15 @@ def _describe(
         return "hole" if hollow else "pin", params
 
     if kind == GeomAbs_Cone:
+        span = _cone_nappe(adaptor, cancelled=cancelled)
+        if span is None:
+            return None
+        direction, wide_v, radius = span
         cone = adaptor.Cone()
         angle = float(cone.SemiAngle())
-        first, last = float(adaptor.FirstVParameter()), float(adaptor.LastVParameter())
-        wide_v = last if angle > 0.0 else first
-        radius = float(cone.RefRadius()) + wide_v * math.sin(angle)
         axis = cone.Axis().Direction()
         location = cone.Location()
         along = wide_v * math.cos(angle)
-        direction = 1.0 if angle > 0.0 else -1.0
         turn = abs(adaptor.LastUParameter() - adaptor.FirstUParameter())
         return "cone", {
             "diameter": 2.0 * radius,

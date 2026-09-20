@@ -1,8 +1,9 @@
 """Analysekarten (Bauplan §18.4).
 
-Sieben Arten, denselben Körper anzusehen: wie dick er ist, wo er überhängt, wo
+Arten, denselben Körper anzusehen: wie dick er ist, wo er überhängt, wo
 das Netz kaputt ist, wie er sich krümmt, was die Erkennung aus ihm gemacht
-hat, an welchen Passungen er beteiligt ist, und wo Stützen wachsen werden.
+hat, wie weit Facetten vom belegten Träger abweichen, an welchen Passungen
+er beteiligt ist, und wo Stützen wachsen werden.
 
 Die Karten werden hier gerechnet, nicht im Viewport. Die Oberfläche braucht
 nur die Zahlen, den Bereich und die Einheit — sie malt sie mit der Rampe aus
@@ -17,9 +18,9 @@ from __future__ import annotations
 
 import math
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
-from typing import Any, Final, Literal
+from typing import Any, Final, Literal, cast
 
 import numpy as np
 import shapely
@@ -42,9 +43,12 @@ from app.core.types import (
     MetricSource,
     ObjectId,
     Profile,
+    ProgressFn,
     Scene,
     SceneObject,
     SliceResult,
+    SurfacePatch,
+    SurfaceSource,
     Vec3,
 )
 from app.core.units import DEGREE_UNIT, EPS_DISPLAY, EPS_GEOM
@@ -52,7 +56,9 @@ from app.i18n import TranslatableText, _, format_decimal
 
 _log = get_logger(__name__)
 
-MapKind = Literal["wall", "overhang", "defects", "curvature", "features", "fits", "support"]
+MapKind = Literal[
+    "wall", "overhang", "defects", "curvature", "deviation", "features", "fits", "support"
+]
 MapScale = Literal["linear", "asinh"]
 
 #: Darüber wird eine Karte abgelehnt statt minutenlang gerechnet (§31).
@@ -69,6 +75,9 @@ MapScale = Literal["linear", "asinh"]
 #: und darüber nicht: Der nächste Messpunkt (1 223 836) reißt das Budget bei
 #: der Wandstärke mit 7,06 s. Wer höher will, misst dazwischen.
 MAP_LIMIT_TRIANGLES = 900_000
+
+#: Fortschritt nach begrenzten Facettenpaketen; keine zusätzliche Formtoleranz.
+DEVIATION_PROGRESS_FACETS = 128
 
 #: Wie lange eine Stützkarte rechnen darf, bevor sie einen kleineren
 #: Arbeitskörper vorschlägt (§2.8, §31).
@@ -168,6 +177,16 @@ class AnalysisMap:
     Nur Renderer und Legende benutzen diese monotone Anzeigeabbildung.
     """
 
+    maximum_interval: tuple[float, float] | None = None
+    """Grenzen des größten Abstands ausschließlich innerhalb bekannter Facetten."""
+    numerical_error: float | None = None
+    """Größte verbliebene Rechenbreite einer bekannten Facette, in mm."""
+    witness_point: Vec3 | None = None
+    """Angezeigte Koordinaten einer tatsächlich beprobten Stelle im Originaldreieck."""
+    witness_face: int | None = None
+    witness_distance: float | None = None
+    """Nach unten begrenzter Abstand am Zeugen, keine dort erreichte Obergrenze."""
+
     @property
     def known(self) -> tuple[float, ...]:
         return tuple(value for value in self.values if not math.isnan(value))
@@ -222,7 +241,7 @@ class MapTooLarge(UserError):
     def __init__(self, triangles: int = 0, limit: int = MAP_LIMIT_TRIANGLES) -> None:
         """``limit`` ist die Grenze, die wirklich gegriffen hat.
 
-        Die Grenze gilt den sechs dreieckgebundenen Karten. Die Stützkarte
+        Die Grenze gilt den dreieckgebundenen Karten. Die Stützkarte
         beurteilt ihre tatsächliche Laufzeit, weil ihre Kosten vorab nicht an
         der Dreieckszahl erkennbar sind.
         """
@@ -291,9 +310,10 @@ TITLES: dict[MapKind, TranslatableText] = {
     "overhang": _("Überhang"),
     "defects": _("Netzfehler"),
     "curvature": _("Krümmung"),
+    "deviation": _("Formabweichung"),
     # „Merkmale" und nicht „Feature-Zuordnung": Die Begriffszuordnung aus
-    # Bauplan §4.2 sagt Merkmal → feature, und die sechs Nachbarn heißen
-    # Wandstärke, Überhang, Netzfehler, Krümmung, Passungen, Stützbedarf. Ein
+    # Bauplan §4.2 sagt Merkmal → feature, und die Nachbarn heißen
+    # Wandstärke, Überhang, Netzfehler, Krümmung, Formabweichung, Passungen, Stützbedarf. Ein
     # halb englischer Name in dieser Reihe war der einzige.
     "features": _("Merkmale"),
     "fits": _("Passungen"),
@@ -308,6 +328,7 @@ def build(
     profile: Profile | None = None,
     scene: Scene | None = None,
     cancelled: CancelToken | None = None,
+    progress: ProgressFn | None = None,
 ) -> AnalysisMap:
     """Der eine Einstiegspunkt, den die Oberfläche benutzt; der Rest ist die
     Karte selbst.
@@ -336,6 +357,8 @@ def build(
         return defect_map(mesh, cancelled)
     if kind == "curvature":
         return curvature_map(mesh, entry.features)
+    if kind == "deviation":
+        return deviation_map(mesh, entry, cancelled=cancelled, progress=progress)
     if kind == "features":
         return feature_map(mesh, entry.features)
     if kind == "fits":
@@ -346,6 +369,178 @@ def build(
         budget,
         overhang_angle=angle,
         pitch=default_pitch(mesh, profile.printer.extrusion_width if profile else None),
+    )
+
+
+def deviation_map(
+    mesh: MeshData,
+    entry: SceneObject,
+    *,
+    cancelled: CancelToken | None = None,
+    progress: ProgressFn | None = None,
+) -> AnalysisMap:
+    """Ganze Originalfacetten gegen belegte Teilträger eingrenzen, ohne neue Einpassung."""
+    from app.core.geom.deviation import deviation_bounds
+    from app.core.perceive.surfaces import PATCH_BLOCK, valid_patch
+
+    def check() -> None:
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+
+    def report(fraction: float) -> None:
+        check()
+        if progress is not None:
+            progress(fraction, str(_("Formabweichung eingrenzen …")))
+        check()
+
+    report(0.0)
+    owners = np.full(mesh.triangle_count, -1, dtype=np.int32)
+    origin_masks = np.zeros(mesh.triangle_count, dtype=np.uint8)
+    source_flags: dict[SurfaceSource, int] = {"native": 1, "facets": 2, "fit": 4}
+    carriers: list[SurfacePatch] = []
+    claims: list[list[tuple[int, ...]]] = []
+    # Identische gespeicherte Trägerdaten sind derselbe Beleg. Ähnliche Werte
+    # werden weder gemittelt noch nach dem kleineren Abstand ausgesucht.
+    identities: dict[tuple[object, ...], int] = {}
+    for feature in sorted(entry.features.values(), key=lambda item: item.id):
+        check()
+        for patch in feature.surface_patches:
+            if not valid_patch(
+                patch,
+                face_count=mesh.triangle_count,
+                allowed_indices=feature.face_indices,
+                check_cancelled=check,
+            ):
+                continue
+            identity = (patch.kind, *sorted(patch.params.items()))
+            group = identities.get(identity)
+            if group is None:
+                group = len(carriers)
+                identities[identity] = group
+                carriers.append(patch)
+                claims.append([])
+            claims[group].append(patch.face_indices)
+            for start in range(0, len(patch.face_indices), PATCH_BLOCK):
+                check()
+                indices = np.asarray(
+                    patch.face_indices[start : start + PATCH_BLOCK], dtype=np.int64
+                )
+                previous = owners[indices]
+                origin_masks[indices] |= source_flags[patch.source]
+                owners[indices] = np.where(
+                    previous == -1, group, np.where(previous == group, group, -2)
+                )
+    report(0.1)
+    values = np.full(mesh.triangle_count, np.nan, dtype=np.float64)
+    count = int(np.count_nonzero(owners >= 0))
+    completed = 0
+    maximum_lower = 0.0
+    maximum_upper = 0.0
+    numerical_error = 0.0
+    witness_point: Vec3 | None = None
+    witness_face: int | None = None
+    witness_distance: float | None = None
+    witness_key: tuple[float, int] | None = None
+    used_sources = 0
+    raw = mesh.raw
+    for group, carrier in enumerate(carriers):
+        check()
+        selected: list[int] = []
+        for claim in claims[group]:
+            for start in range(0, len(claim), PATCH_BLOCK):
+                check()
+                indices = np.asarray(claim[start : start + PATCH_BLOCK], dtype=np.int64)
+                owned = indices[owners[indices] == group]
+                selected.extend(int(index) for index in owned)
+                owners[owned] = -3
+        if not selected:
+            continue
+
+        def triangles(indices: list[int]) -> Iterator[tuple[Vec3, Vec3, Vec3]]:
+            for index in indices:
+                points = raw.vertices[raw.faces[index]]
+                yield cast(
+                    tuple[Vec3, Vec3, Vec3],
+                    tuple(tuple(float(value) for value in point) for point in points),
+                )
+
+        for index, bounded in zip(
+            selected,
+            deviation_bounds(
+                carrier, triangles(selected), epsilon_mm=EPS_GEOM, cancelled=cancelled
+            ),
+            strict=True,
+        ):
+            check()
+            completed += 1
+            if completed % DEVIATION_PROGRESS_FACETS == 0 or completed == count:
+                report(0.1 + 0.89 * completed / max(count, 1))
+            if bounded is None:
+                continue
+            lower, upper = bounded.lower_mm, bounded.upper_mm
+            if not (math.isfinite(lower) and math.isfinite(upper) and 0.0 <= lower <= upper):
+                continue
+            values[index] = upper
+            used_sources |= int(origin_masks[index])
+            maximum_lower = max(maximum_lower, lower)
+            maximum_upper = max(maximum_upper, upper)
+            width = math.nextafter(upper - lower, math.inf) if upper > lower else 0.0
+            numerical_error = max(numerical_error, width)
+            key = (lower, -index)
+            if witness_key is None or key > witness_key:
+                first, second, third = raw.vertices[raw.faces[index]]
+                u, v = bounded.witness_uv
+                # Anzeige der belegten baryzentrischen Stelle. Die Untergrenze
+                # gilt für die exakte Linearkombination im Rechner, nicht für
+                # den zwangsläufig gerundeten Anzeigepunkt.
+                point = (1.0 - u - v) * first + u * second + v * third
+                if np.isfinite(point).all():
+                    witness_key = key
+                    witness_point = (float(point[0]), float(point[1]), float(point[2]))
+                    witness_face = index
+                    witness_distance = lower
+    check()
+    known = bool(np.any(np.isfinite(values)))
+    sources = [source for source, flag in source_flags.items() if used_sources & flag]
+    source_names = {
+        "native": _("ursprüngliche exakte Flächen"),
+        "facets": _("geprüfte Ebenen der Originaldreiecke"),
+        "fit": _("bereits eingepasste Flächen"),
+    }
+    source_note = (
+        _(
+            "Bezug: {sources}.",
+            sources=", ".join(str(source_names[source]) for source in sorted(sources)),
+        )
+        if sources
+        else _("Keine Fläche konnte mit einem eindeutigen Formbezug ausgewertet werden.")
+    )
+    body_note = (
+        _("Am exakten Körper wird seine Darstellung geprüft; die Originalform bleibt unverändert.")
+        if entry.kind == "brep"
+        else ""
+    )
+    report(1.0)
+    return AnalysisMap(
+        kind="deviation",
+        title=TITLES["deviation"],
+        values=tuple(float(value) for value in values),
+        unit="mm",
+        low=0.0,
+        high=maximum_upper if maximum_upper > 0.0 else EPS_DISPLAY,
+        highlighted=(witness_face,) if witness_face is not None else (),
+        note=_(
+            "Obere Abstandsgrenzen ganzer Dreiecksflächen; keine neue Einpassung. "
+            "{source_note} {body_note}",
+            source_note=source_note,
+            body_note=body_note,
+        ),
+        unknown_note=_("kein eindeutiger oder numerisch begrenzbarer Formbezug"),
+        maximum_interval=(maximum_lower, maximum_upper) if known else None,
+        numerical_error=numerical_error if known else None,
+        witness_point=witness_point,
+        witness_face=witness_face,
+        witness_distance=witness_distance,
     )
 
 
@@ -1117,6 +1312,8 @@ def focus_point(entry: SceneObject, analysis: AnalysisMap) -> Vec3 | None:
     """Die Mitte dessen, was die Karte hervorhebt — wohin die Kamera schauen
     soll (§18.4).
     """
+    if analysis.kind == "deviation":
+        return analysis.witness_point
     if not analysis.highlighted:
         return None
     mesh = _mesh_of(entry)
@@ -1130,6 +1327,8 @@ def location_of(entry: SceneObject, finding: Finding) -> Vec3 | None:
     """Wo ein Befund sitzt: an seinem eigenen Ort, oder in der Mitte seiner
     Merkmale.
     """
+    if finding.code == "perceive.deviation":
+        return None
     if finding.location is not None:
         return finding.location
     mesh = _mesh_of(entry)
@@ -1162,6 +1361,8 @@ def map_for(finding: Finding) -> MapKind | None:
     zur Stelle (§18.4).
     """
     code = finding.code
+    if code == "perceive.deviation":
+        return "deviation"
     if code.startswith("fit."):
         return "fits"
     # Das Formdetail oder die geschlossene Fehlstelle ist gerade **nicht mehr

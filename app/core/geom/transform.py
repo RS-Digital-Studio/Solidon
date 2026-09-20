@@ -196,12 +196,14 @@ def moved_object(
     from app.core.brep.kernel import Solid
     from app.core.errors import CANCEL, CORRECT_INPUT, GeometryError
     from app.core.perceive.matching import transformed_features
+    from app.core.perceive.surfaces import valid_patch
     from app.i18n import _
 
     if cancelled is not None:
         cancelled.raise_if_cancelled()
     cells = cast(Transform, tuple(tuple(float(value) for value in row) for row in matrix))
     features = dict(source.features)
+    check_cancelled = cancelled.raise_if_cancelled if cancelled is not None else None
     body: Mesh
     if isinstance(source.mesh, Solid):
         solid, face_map = edit.transformed_with_faces(source.mesh, cells, cancelled=cancelled)
@@ -224,8 +226,35 @@ def moved_object(
                     detail=_("Wähle vollständige Flächen aus und wiederhole die Änderung."),
                     suggestions=(CORRECT_INPUT, CANCEL),
                 )
+            patches = []
+            for patch in feature.surface_patches:
+                if not valid_patch(
+                    patch, allowed_indices=selected, check_cancelled=check_cancelled
+                ):
+                    continue
+                patch_faces = source.mesh.faces_of_triangles(patch.face_indices)
+                patch_complete = {
+                    index for face in patch_faces for index in source.mesh.triangles_of_face(face)
+                }
+                if patch_complete != set(patch.face_indices):
+                    # Die neue Tessellierung besitzt keine belegte Abbildung
+                    # eines willkürlichen Ausschnitts einer nativen Fläche.
+                    continue
+                patches.append(
+                    replace(
+                        patch,
+                        face_indices=tuple(
+                            sorted(
+                                index
+                                for face in patch_faces
+                                for index in solid.triangles_of_face(face_map[face])
+                            )
+                        ),
+                    )
+                )
             features[name] = replace(
                 feature,
+                surface_patches=tuple(patches),
                 face_indices=tuple(
                     sorted(
                         index
@@ -236,7 +265,9 @@ def moved_object(
             )
     else:
         body = moved_body(source.mesh, matrix, cancelled=cancelled)
-    mapped = transformed_features(features, cells, mesh=as_mesh_data(body))
+    mapped = transformed_features(
+        features, cells, mesh=as_mesh_data(body), check_cancelled=check_cancelled
+    )
     return replace(
         source,
         mesh=body,

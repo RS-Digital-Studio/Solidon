@@ -160,6 +160,62 @@ def test_formatting_matches_the_display_precision() -> None:
     assert not format_length(-0.001).startswith("-")
 
 
+@pytest.mark.parametrize("unit", ["mm", "cm", "m", "in"])
+@pytest.mark.parametrize("upper", [False, True])
+@pytest.mark.parametrize(
+    "value",
+    [
+        0.0,
+        0.000000123456789,
+        0.010014,
+        math.nextafter(0.01, 0.0),
+        math.nextafter(0.01, math.inf),
+        -0.010014,
+        -0.000000123456789,
+        math.ulp(0.0),
+        -math.ulp(0.0),
+        25.4,
+        1e30,
+    ],
+)
+def test_length_bounds_remain_conservative_after_conversion_and_rounding(
+    value: float, unit: LengthUnit, upper: bool
+) -> None:
+    """Der angezeigte Dezimalwert umschließt die ursprüngliche binäre Kernzahl."""
+    from fractions import Fraction
+
+    from app.core.units import format_length_bound
+
+    factors = {"mm": "1", "cm": "10", "m": "1000", "in": "25.4"}
+    number, suffix = format_length_bound(value, unit, upper=upper).split()
+    displayed_mm = Fraction(number) * Fraction(factors[unit])
+    original = Fraction(value)
+    assert suffix == unit
+    assert displayed_mm >= original if upper else displayed_mm <= original
+    if value:
+        assert displayed_mm, "Ein kleiner belegter Abstand darf nicht als Null erscheinen."
+    else:
+        assert not number.startswith("-")
+
+
+def test_length_bounds_show_usable_digits_without_changing_regular_lengths() -> None:
+    from app.core.units import format_length_bound
+
+    assert format_length_bound(0.010014, upper=False) == "0.010 mm"
+    assert format_length_bound(0.010014, upper=True) == "0.011 mm"
+    assert format_length_bound(0.000000123456789, upper=False) == "1.2e-7 mm"
+    assert format_length_bound(0.000000123456789, upper=True) == "1.3e-7 mm"
+    assert format_length(0.010014) == "0.01 mm"
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), -float("inf")])
+def test_length_bounds_reject_nonfinite_values(value: float) -> None:
+    from app.core.units import format_length_bound
+
+    with pytest.raises(ValueError, match="endlich"):
+        format_length_bound(value, upper=True)
+
+
 def test_an_area_follows_the_display_unit() -> None:
     """Länge und Volumen folgten der Umschaltung seit je, die Fläche nicht.
 

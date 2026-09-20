@@ -10,6 +10,9 @@ und kennzeichnen sie als `parameter`. Tatsächlich aus Dreiecken gemessene
 Flächen und Mitten übergeben ihre Quelle ausdrücklich; bei gemischten Werten
 gilt die Quelle je Parameter. `face` erlaubt diese gezielte Übergabe.
 Rezept-Umbenennung erhält die bestehende Quelle und erzeugt keine neue Maßzusage.
+Ebene Anschluss- und Dichtflächen erhalten einen `SurfacePatch` nur nach
+gemeinsamer Prüfung aller vorhandenen Dreiecksecken gegen ihre gewählte Ebene.
+Gerundete Kontaktbänder und reine Vorgabemaße behaupten keinen Ebenenträger.
 
 `build.thread` beschreibt die rechtsgängige Geometrie aus `shapes.thread_body`
 mit `handedness="right"`: Winkel und Höhe wachsen gemeinsam. Innenwerkzeug,

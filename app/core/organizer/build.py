@@ -38,9 +38,19 @@ def _tool(rect: Rect, radius: float, bottom: float, top: float) -> MeshData:
 
 
 def _patch(
-    mesh: MeshData, identifier: str, normal: Vec3, position: float, region: Rect
+    mesh: MeshData,
+    identifier: str,
+    normal: Vec3,
+    position: float,
+    region: Rect,
+    *,
+    cancelled: CancelToken | None = None,
 ) -> Feature | None:
     """Nur vorhandene ebene Dreiecke innerhalb der benannten Wandfläche ausweisen."""
+    from app.core.perceive.surfaces import planar_patch
+
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
     axis = next(index for index, component in enumerate(normal) if component)
     across = [index for index in range(3) if index != axis]
     raw = mesh.raw
@@ -66,7 +76,15 @@ def _patch(
         & (triangle_points[:, :, 1] <= region.y + region.depth + EPS_GEOM)
     ).all(axis=1)
     marker = face(identifier, float(patch.area), (centre[0], centre[1], centre[2]), normal)[1]
-    return replace(marker, face_indices=tuple(map(int, np.flatnonzero(candidates & contained))))
+    indices = tuple(map(int, np.flatnonzero(candidates & contained)))
+    surface = planar_patch(
+        mesh,
+        indices,
+        (centre[0], centre[1], centre[2]),
+        normal,
+        check_cancelled=cancelled.raise_if_cancelled if cancelled else None,
+    )
+    return replace(marker, face_indices=indices, surface_patches=(surface,) if surface else ())
 
 
 def build_organizer(
@@ -124,9 +142,13 @@ def build_organizer(
     outcome = boolean("difference", [base, *cutters], quality=quality, cancelled=cancelled)
     for cell in layout.cells:
         key = f"{cell.id}/floor"
-        patch = _patch(outcome.mesh, key, (0, 0, 1), layout.floor, cell.rect)
+        patch = _patch(outcome.mesh, key, (0, 0, 1), layout.floor, cell.rect, cancelled=cancelled)
         if patch is not None:
-            features[key] = replace(features[key], face_indices=patch.face_indices)
+            features[key] = replace(
+                features[key],
+                face_indices=patch.face_indices,
+                surface_patches=patch.surface_patches,
+            )
     for wall in layout.walls:
         if cancelled is not None:
             cancelled.raise_if_cancelled()
@@ -155,7 +177,7 @@ def build_organizer(
                 )
         for suffix, normal, position, region in descriptors:
             key = f"{wall.id}/{suffix}"
-            patch = _patch(outcome.mesh, key, normal, position, region)
+            patch = _patch(outcome.mesh, key, normal, position, region, cancelled=cancelled)
             if patch is not None:
                 features[key] = replace(
                     patch,
@@ -166,6 +188,10 @@ def build_organizer(
                         "height_above_floor": wall.height - layout.floor,
                     },
                 )
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
     if progress is not None:
         progress(1.0, str(_("Organizer berechnet.")))
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
     return OrganizerBuild(outcome.mesh, features, outcome.solver, tuple(outcome.findings))

@@ -2308,7 +2308,7 @@ def test_a_named_feature_keeps_the_surface_found_in_the_current_mesh(
     """
     from importlib import import_module
 
-    from app.core.types import Feature, Operation, SceneObject
+    from app.core.types import Feature, Operation, SceneObject, SurfacePatch
 
     evaluate_module = import_module("app.core.scene.evaluate")
     params = {
@@ -2328,6 +2328,14 @@ def test_a_named_feature_keeps_the_surface_found_in_the_current_mesh(
         provenance="detected",
         params=params,
         face_indices=(2, 3),
+        surface_patches=(
+            SurfacePatch(
+                "cylinder",
+                {"centre": (0.0, 0.0, 0.0), "axis": (0.0, 0.0, 1.0), "radius": 3.0},
+                (2, 3),
+                "fit",
+            ),
+        ),
     )
     monkeypatch.setattr(evaluate_module, "detect", lambda _mesh, **kwargs: {"hole_1": detected})
     entry = SceneObject(
@@ -2349,6 +2357,7 @@ def test_a_named_feature_keeps_the_surface_found_in_the_current_mesh(
     assert result.features[named.id].face_indices == (2, 3), (
         "der verständliche Name übernimmt die sichtbare Oberfläche"
     )
+    assert result.features[named.id].surface_patches == detected.surface_patches
 
 
 def _many_features(count: int) -> dict[str, object]:

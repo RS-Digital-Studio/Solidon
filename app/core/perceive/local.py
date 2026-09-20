@@ -16,6 +16,7 @@ from app.core.geom.mesh import MeshData, face_components
 from app.core.perceive import features as detection
 from app.core.perceive.matching import match, transformed_features
 from app.core.perceive.relations import cavity_chains
+from app.core.perceive.surfaces import clipped_patches, reindexed_patches
 from app.core.types import Feature, FeatureId, Transform, Vec3, is_a_cavity
 from app.core.units import EPS_GEOM, match_tolerance, weld_tolerance
 from app.i18n import _
@@ -223,7 +224,11 @@ def _recognise_region(
             continuing.update(int(index) for index in component)
     mapped = {
         name: replace(
-            feature, face_indices=tuple(int(index) for index in indices[list(feature.face_indices)])
+            feature,
+            face_indices=tuple(int(index) for index in indices[list(feature.face_indices)]),
+            surface_patches=reindexed_patches(
+                feature.surface_patches, indices, check_cancelled=check
+            ),
         )
         for name, feature in found.items()
         if feature.face_indices and feature.kind not in {"edge_loop", "void"}
@@ -237,6 +242,31 @@ def _recognise_region(
     # Eine Randschleife aus dem Ausschnitt ist kein Defekt des Originalnetzes.
     # Einschlüsse werden ausschließlich am ganzen Netz eingeordnet.
     voids = detection.detect_voids(mesh, check_cancelled=check)
+    local_void_patches = reindexed_patches(
+        tuple(
+            patch
+            for feature in found.values()
+            if feature.kind == "void"
+            for patch in feature.surface_patches
+        ),
+        indices,
+        check_cancelled=check,
+    )
+    voids = [
+        replace(
+            feature,
+            surface_patches=clipped_patches(
+                local_void_patches,
+                feature.face_indices,
+                check_cancelled=check,
+            ),
+        )
+        for feature in voids
+    ]
+    # Der lokale Fit belegt bereits diese Originaldreiecke. Der Vollkörper
+    # entscheidet nur die Luftzugehörigkeit und übernimmt genau diesen Anteil.
+    with_voids = detection.voids_instead_of_phantom_bores(mapped, voids, check_cancelled=check)
+    voids = [with_voids[feature.id] for feature in voids]
     void_faces = {index for feature in voids for index in feature.face_indices}
     complete = {
         name: feature
@@ -440,10 +470,13 @@ def features_in_region(
 
 
 def transformed_searches(
-    features: Mapping[FeatureId, Feature], transform: Transform
+    features: Mapping[FeatureId, Feature],
+    transform: Transform,
+    *,
+    check_cancelled: Callable[[], None] | None = None,
 ) -> dict[FeatureId, Feature]:
     """Suchkugeln und Maßkandidaten aus derselben Auskunft wie die globale Zuordnung."""
-    return transformed_features(features, transform).candidates
+    return transformed_features(features, transform, check_cancelled=check_cancelled).candidates
 
 
 def rigid_transform(transform: Transform) -> bool:

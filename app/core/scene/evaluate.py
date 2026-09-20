@@ -762,6 +762,22 @@ def _evaluate(
         if walls:
             findings.extend(walls)
             scene = dataclasses.replace(scene, report=Report(tuple(findings)))
+    if stopped_at is None:
+        for measured_body in objects.values():
+            token.raise_if_cancelled()
+            if any(feature.surface_patches for feature in measured_body.features.values()):
+                findings.append(
+                    Finding(
+                        code="perceive.deviation",
+                        severity="info",
+                        message=_(
+                            "Die Formabweichung belegter Flächen lässt sich "
+                            "in der Analysekarte prüfen."
+                        ),
+                        object_id=measured_body.id,
+                    )
+                )
+        scene = dataclasses.replace(scene, report=Report(tuple(findings)))
     if stopped_at is not None:
         _log.warning(
             "evaluation stopped at op %s: %s", stopped_at, _why_it_stopped(findings, stopped_at)
@@ -1205,6 +1221,8 @@ def _carried_along(
     previous: Mapping[FeatureId, Feature],
     transform: Transform | None,
     previous_bounds: BoundingBox | None,
+    *,
+    cancelled: CancelToken | None = None,
 ) -> SceneObject:
     """Nimmt die Merkmale eines exakten Körpers entlang einer starren Bewegung
     mit (§21.2).
@@ -1244,7 +1262,15 @@ def _carried_along(
         return entry
     inherited = _inherited_features(entry.features, previous)
     return dataclasses.replace(
-        entry, features={**entry.features, **moved_features(inherited, matrix)}
+        entry,
+        features={
+            **entry.features,
+            **moved_features(
+                inherited,
+                matrix,
+                check_cancelled=cancelled.raise_if_cancelled if cancelled else None,
+            ),
+        },
     )
 
 
@@ -1349,7 +1375,7 @@ def _with_features(
         # könnte — seine Merkmale kommen aus der Topologie und werden dort
         # gerechnet, wo er entsteht. Bewegt wurde er hier trotzdem
         # (siehe :func:`_carried_along`).
-        exact_entry = _carried_along(entry, previous, transform, previous_bounds)
+        exact_entry = _carried_along(entry, previous, transform, previous_bounds, cancelled=watch)
         if (
             touches_features
             and previous
@@ -1419,7 +1445,10 @@ def _with_features(
     inherited = _inherited_features(entry.features, previous)
     transformed = (
         transformed_features(
-            previous, feature_movement, mesh=mesh if transform is not None else None
+            previous,
+            feature_movement,
+            mesh=mesh if transform is not None else None,
+            check_cancelled=cancelled.raise_if_cancelled if cancelled else None,
         )
         if feature_movement is not None
         else FeatureTransform(dict(previous), frozenset(previous))
@@ -1593,6 +1622,11 @@ def _with_features(
             for old_name, new_name in seen.mapping.items()
             if new_name in detected
         }
+        visible_patches = {
+            old_name: detected[new_name].surface_patches
+            for old_name, new_name in seen.mapping.items()
+            if new_name in detected
+        }
         visible_scopes = {
             old_name: {"local_search_radius": detected[new_name].params["local_search_radius"]}
             for old_name, new_name in seen.mapping.items()
@@ -1605,6 +1639,7 @@ def _with_features(
                 dataclasses.replace(
                     feature,
                     face_indices=visible_faces[name],
+                    surface_patches=visible_patches[name],
                     params={**feature.params, **visible_scopes.get(name, {})},
                 )
                 if name in visible_faces
@@ -1613,7 +1648,11 @@ def _with_features(
             for name, feature in declared.items()
         }
         declared = {
-            name: (feature if name not in blind else dataclasses.replace(feature, recognised=False))
+            name: (
+                feature
+                if name not in blind
+                else dataclasses.replace(feature, recognised=False, surface_patches=())
+            )
             for name, feature in declared.items()
         }
         # **Und was einen benannten Partner hat, kommt nicht zusätzlich in die

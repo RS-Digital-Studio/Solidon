@@ -367,6 +367,33 @@ def format_length(value_mm: float, unit: LengthUnit = "mm", with_unit: bool = Tr
     return f"{text} {unit}" if with_unit else text
 
 
+def format_length_bound(value_mm: float, unit: LengthUnit = "mm", *, upper: bool) -> str:
+    """Eine Längenschranke bei Einheitenwechsel und Anzeige nach außen runden.
+
+    Die Umrechnung rechnet dezimal gerichtet, damit bereits vor der letzten
+    Anzeigestelle keine obere Schranke nach unten wandert. Kleine Nichtnullwerte
+    behalten zwei geltende Ziffern, unter fünf Nachkommastellen wissenschaftlich.
+    Das ist ausschließlich Anzeigepräzision, keine geometrische Toleranz.
+    """
+    if not math.isfinite(value_mm):
+        raise ValueError("Eine Längenschranke muss endlich sein.")
+    value = decimal.Decimal(float(value_mm))
+    rounding = decimal.ROUND_CEILING if upper else decimal.ROUND_FLOOR
+    with decimal.localcontext() as context:
+        context.prec = max(34, value.adjusted() + 10)
+        context.rounding = rounding
+        converted = value / decimal.Decimal(str(UNIT_TO_MM[unit]))
+        exponent = converted.adjusted()
+        scientific = not converted.is_zero() and exponent < -5
+        places = max(_UNIT_DECIMALS[unit], min(5, 1 - exponent))
+        quantum = decimal.Decimal(1).scaleb(exponent - 1 if scientific else -places)
+        rounded = converted.quantize(quantum)
+        if rounded.is_zero():
+            rounded = rounded.copy_abs()
+        text = format(rounded, "e" if scientific else "f")
+    return f"{text} {unit}"
+
+
 def positive_axis(axis: Sequence[float]) -> tuple[float, float, float]:
     """Eine gemessene Achse mit festem Vorzeichen: erste größte Betragskomponente positiv.
 

@@ -30,6 +30,7 @@ from app.core.sketch.profile import profile_of
 from app.core.sketch.serialize import sketch_from_text
 from app.core.types import (
     BaseParams,
+    CancelToken,
     Feature,
     FeatureRef,
     Finding,
@@ -278,10 +279,19 @@ def _measured_boolean(
 
 
 def _named_floor(
-    output: SceneObject, frame: PlaneFrame, footprint: Any, depth: float
+    output: SceneObject,
+    frame: PlaneFrame,
+    footprint: Any,
+    depth: float,
+    *,
+    cancelled: CancelToken | None = None,
 ) -> SceneObject:
     from shapely import contains_xy
 
+    from app.core.perceive.surfaces import planar_patch
+
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
     mesh = as_mesh_data(output.mesh)
     inverse = np.linalg.inv(_matrix(frame))
     centres = mesh.raw.triangles_center @ inverse[:3, :3].T + inverse[:3, 3]
@@ -302,6 +312,13 @@ def _named_floor(
         )
     area = mesh.raw.area_faces[indices]
     centre = np.average(mesh.raw.triangles_center[indices], weights=area, axis=0)
+    surface = planar_patch(
+        mesh,
+        tuple(int(i) for i in indices),
+        (float(centre[0]), float(centre[1]), float(centre[2])),
+        frame.normal,
+        check_cancelled=cancelled.raise_if_cancelled if cancelled else None,
+    )
     feature = Feature(
         "groove_floor",
         "face",
@@ -313,6 +330,7 @@ def _named_floor(
         },
         face_indices=tuple(int(i) for i in indices),
         recognised=False,
+        surface_patches=(surface,) if surface else (),
     )
     return replace(output, features={**output.features, feature.id: feature})
 
@@ -498,6 +516,7 @@ def create_seal(ctx: OpContext) -> OpResult:
         frame,
         footprint,
         p.groove_depth,
+        cancelled=ctx.cancelled,
     )
     gasket_mesh = _placed(geometry.gasket, frame)
     collision = _measured_boolean(ctx, "intersection", as_mesh_data(body.mesh), gasket_mesh)

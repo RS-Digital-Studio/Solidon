@@ -31,3 +31,9 @@ Die gerundeten Schneidprofile müssen vollständig innerhalb der Außenkontur
 bleiben. Boden- und Wandmerkmale behaupten nur vorhandene Flächen; eine bis zur
 Bodenoberseite entfernte Wand erhält keine senkrechten Seiten. Der Boolesche
 Solver und seine Befunde reisen im Ergebnis mit.
+Die benannten Boden- und Wandflächen erhalten ihre Ebenenträger erst nach
+Prüfung sämtlicher ausgewählter Originalecken. Auswahlfreie Vorgabemerkmale
+erhalten dadurch keinen Formnachweis.
+Der gemeinsame Nachweis aus `perceive.surfaces` wird erst im Flächenhelfer
+geladen. Diese ausdrückliche träge Paketabhängigkeit erweitert keinen
+eifrigen Importkreis und ersetzt eine zweite Ebenenprüfung im Organizer.

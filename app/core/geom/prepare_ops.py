@@ -2220,7 +2220,12 @@ def _place_oriented_feature(ctx: OpContext, *, duplicate: bool) -> OpResult:
                 related.kind,
             )
         moved = dataclasses.replace(
-            related, id=identifier, params=values, face_indices=(), provenance="generated"
+            related,
+            id=identifier,
+            params=values,
+            face_indices=(),
+            surface_patches=(),
+            provenance="generated",
         )
         lost = _throughness_lost(
             placed.mesh,
@@ -5778,6 +5783,9 @@ def _bore_floor(
             dataclasses.replace(
                 parts[0],
                 face_indices=joined.face_indices,
+                surface_patches=tuple(
+                    surface for part in parts for surface in part.surface_patches
+                ),
                 params={
                     **parts[0].params,
                     "area": area,

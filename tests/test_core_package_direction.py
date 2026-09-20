@@ -129,6 +129,9 @@ EAGER: Final[frozenset[tuple[str, str]]] = frozenset(
 #: beides steht in der Szene und nicht im einzelnen Körper. Träge, weil der
 #: Kreis sonst um ein Paket wüchse — ``scene`` importiert ``geom``, und
 #: ``geom`` erreicht ``export`` bereits träge zurück.
+#: ``organizer → perceive`` nutzt beim Bauen den gemeinsamen Ebenennachweis
+#: für Originaldreiecke. Der Import bleibt innerhalb des Flächenhelfers;
+#: eine Kopie der Prüfung oder eine neue eifrige Importkante ist nicht nötig.
 LAZY: Final[frozenset[tuple[str, str]]] = frozenset(
     {
         ("brep", "knowledge"),
@@ -144,6 +147,7 @@ LAZY: Final[frozenset[tuple[str, str]]] = frozenset(
         ("knowledge", "ingest"),
         ("knowledge", "perceive"),
         ("knowledge", "sketch"),
+        ("organizer", "perceive"),
         ("registry", "knowledge"),
         ("scene", "organizer"),
     }

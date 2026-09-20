@@ -29,6 +29,269 @@ def _bytes(shape: Any) -> bytes:
     return stream.getvalue()
 
 
+def _trimmed_native_cone(
+    sign: float, span: tuple[float, float], deviation: float, placement: str
+) -> tuple[Solid, Any]:
+    """Eine echte getrimmte Kegelfläche schließen, ohne ihre Trägerparameter umzuschreiben."""
+    from OCP.BRepBuilderAPI import (
+        BRepBuilderAPI_MakeEdge,
+        BRepBuilderAPI_MakeFace,
+        BRepBuilderAPI_MakeSolid,
+        BRepBuilderAPI_MakeWire,
+        BRepBuilderAPI_Sewing,
+        BRepBuilderAPI_Transform,
+    )
+    from OCP.BRepCheck import BRepCheck_Analyzer
+    from OCP.BRepLib import BRepLib
+    from OCP.Geom import Geom_ConicalSurface
+    from OCP.gp import gp_Ax1, gp_Ax2, gp_Ax3, gp_Circ, gp_Dir, gp_Pln, gp_Pnt, gp_Trsf, gp_Vec
+    from OCP.TopoDS import TopoDS
+
+    first, last = sorted(sign * value for value in span)
+    surface = Geom_ConicalSurface(gp_Ax3(), sign * math.pi / 4.0, 1.0)
+    # Der kleine echte Übertritt braucht eine engere Bautoleranz als seine
+    # Endkreisgröße; sonst macht der Konstrukteur daraus bereits eine Spitze.
+    tolerance = EPS_GEOM / 64.0
+    mantle = BRepBuilderAPI_MakeFace(surface, 0.0, math.tau, first, last, tolerance).Face()
+    assert BRepCheck_Analyzer(mantle).IsValid()
+    sewing = BRepBuilderAPI_Sewing(tolerance)
+    sewing.Add(mantle)
+    for value in span:
+        centre = gp_Pnt(0.0, 0.0, sign * value / math.sqrt(2.0))
+        radius = abs(1.0 + value / math.sqrt(2.0))
+        circle = gp_Circ(gp_Ax2(centre, gp_Dir(0, 0, 1)), radius)
+        wire = BRepBuilderAPI_MakeWire(BRepBuilderAPI_MakeEdge(circle).Edge()).Wire()
+        sewing.Add(BRepBuilderAPI_MakeFace(gp_Pln(centre, gp_Dir(0, 0, 1)), wire).Face())
+    sewing.Perform()
+    shape = BRepBuilderAPI_MakeSolid(TopoDS.Shell(sewing.SewedShape())).Solid()
+    assert BRepLib.OrientClosedSolid_s(shape)
+    assert BRepCheck_Analyzer(shape).IsValid()
+
+    transform = gp_Trsf()
+    if placement == "oblique":
+        transform.SetRotation(gp_Ax1(gp_Pnt(), gp_Dir(1, 2, -0.5)), 0.73)
+    elif placement == "mirror":
+        transform.SetMirror(gp_Ax2(gp_Pnt(), gp_Dir(1, 2, -0.5)))
+    transform.SetTranslationPart(gp_Vec(17, -23, 5))
+    shape = BRepBuilderAPI_Transform(shape, transform, True).Shape()
+    assert BRepCheck_Analyzer(shape).IsValid()
+    source = Solid(shape, deviation)
+    assert source.is_closed and source.solid_count == 1
+    return source, transform
+
+
+@pytest.mark.parametrize("deviation", [0.03, 0.15])
+@pytest.mark.parametrize("sign", [-1.0, 1.0])
+@pytest.mark.parametrize("opposite", [False, True])
+@pytest.mark.parametrize("placement", ["shift", "oblique", "mirror"])
+def test_native_cone_trim_keeps_the_actual_nappe_and_positive_dimensions(
+    deviation: float, sign: float, opposite: bool, placement: str
+) -> None:
+    """Ein gültiger Kegelstumpf jenseits der Spitze behält positive Maße und seinen Träger."""
+    from OCP.BRepAdaptor import BRepAdaptor_Surface
+    from OCP.GeomAbs import GeomAbs_Cone
+    from OCP.gp import gp_Pnt, gp_Vec
+
+    span = (-5.0, -3.0) if opposite else (0.0, 2.0)
+    source, transform = _trimmed_native_cone(sign, span, deviation, placement)
+    before = _bytes(source.shape)
+    low_radius, high_radius = sorted(abs(1.0 + value / math.sqrt(2.0)) for value in span)
+    height = (span[1] - span[0]) / math.sqrt(2.0)
+    expected_volume = (
+        math.pi * height * (low_radius**2 + low_radius * high_radius + high_radius**2) / 3.0
+    )
+    assert source.volume == pytest.approx(expected_volume, abs=EPS_GEOM)
+
+    wide = -5.0 if opposite else 2.0
+    direction = -sign if opposite else sign
+    expected_apex = gp_Pnt(0.0, 0.0, -sign).Transformed(transform).Coord()
+    expected_axis = gp_Vec(0.0, 0.0, direction).Transformed(transform).Coord()
+    expected_centre = gp_Pnt(0.0, 0.0, sign * wide / math.sqrt(2.0)).Transformed(transform).Coord()
+    found = features_of(source)
+    cones = [feature for feature in found.values() if feature.kind == "cone"]
+    assert len(cones) == 1
+    cone = cones[0]
+    assert cone.params["diameter"] == pytest.approx(2.0 * high_radius, abs=EPS_GEOM)
+    assert cone.params["centre"] == pytest.approx(expected_centre, abs=EPS_GEOM)
+    assert cone.params["axis"] == pytest.approx(expected_axis, abs=EPS_GEOM)
+    assert cone.params["angle"] == pytest.approx(90.0, abs=EPS_GEOM)
+    assert not cone.params["recess"]
+    native_index = next(
+        index
+        for index, face in enumerate(source.faces())
+        if BRepAdaptor_Surface(face).GetType() == GeomAbs_Cone
+    )
+    expected_indices = source.triangles_of_face(native_index)
+    assert set(cone.face_indices) == set(expected_indices)
+    assert len(cone.surface_patches) == 1
+    patch = cone.surface_patches[0]
+    assert patch.source == "native" and patch.kind == "cone"
+    assert set(patch.face_indices) == set(expected_indices)
+    assert patch.params["apex"] == pytest.approx(expected_apex, abs=EPS_GEOM)
+    assert patch.params["axis"] == pytest.approx(expected_axis, abs=EPS_GEOM)
+    assert patch.params["half_angle"] == pytest.approx(math.pi / 4.0, abs=EPS_GEOM)
+    mesh = as_mesh_data(source)
+    points = mesh.raw.vertices[mesh.raw.faces[list(patch.face_indices)]].reshape(-1, 3)
+    relative = points - expected_apex
+    axial = relative @ np.asarray(expected_axis)
+    radial = np.linalg.norm(relative - axial[:, None] * expected_axis, axis=1)
+    assert np.all(axial > 0.0)
+    assert radial == pytest.approx(axial, abs=EPS_GEOM)
+    assert _bytes(source.shape) == before
+
+
+@pytest.mark.parametrize("deviation", [0.03, 0.15])
+@pytest.mark.parametrize("sign", [-1.0, 1.0])
+@pytest.mark.parametrize("placement", ["shift", "mirror"])
+@pytest.mark.parametrize("first", [-3.0, -math.sqrt(2.0) - EPS_GEOM / 4.0])
+def test_native_cone_trim_across_both_nappes_stays_without_a_single_cone_claim(
+    deviation: float, sign: float, placement: str, first: float
+) -> None:
+    """Eine von OCCT gültig gelesene Doppelnappe darf keine einzige gerichtete Nappe vorspiegeln."""
+    from OCP.BRepAdaptor import BRepAdaptor_Surface
+    from OCP.GeomAbs import GeomAbs_Cone
+
+    source, _ = _trimmed_native_cone(sign, (first, 1.0), deviation, placement)
+    before = _bytes(source.shape)
+    native_index = next(
+        index
+        for index, face in enumerate(source.faces())
+        if BRepAdaptor_Surface(face).GetType() == GeomAbs_Cone
+    )
+    mantle_indices = set(source.triangles_of_face(native_index))
+    assert mantle_indices
+    found = features_of(source)
+    assert not any(feature.kind == "cone" for feature in found.values())
+    assert any(feature.kind == "curved_face" for feature in found.values())
+    assert not any(
+        mantle_indices.intersection(patch.face_indices)
+        for feature in found.values()
+        for patch in feature.surface_patches
+    )
+    assert _bytes(source.shape) == before
+
+
+@pytest.mark.parametrize("deviation", [0.03, 0.15])
+@pytest.mark.parametrize(
+    "radii,height",
+    [((0.0, 4.0), 8.0), ((4.0, 0.0), 8.0), ((0.0, 1.0), math.pi), ((1.0, 0.0), math.pi)],
+)
+def test_native_cone_trim_ending_at_the_apex_keeps_its_carrier(
+    deviation: float, radii: tuple[float, float], height: float
+) -> None:
+    """Der singuläre Spitzenrand eines gewöhnlichen Kegels bleibt ein eindeutiger Bezug."""
+    from OCP.BRep import BRep_Tool
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakeCone
+    from OCP.TopAbs import TopAbs_EDGE, TopAbs_VERTEX
+    from OCP.TopExp import TopExp_Explorer
+    from OCP.TopoDS import TopoDS
+
+    source = Solid(BRepPrimAPI_MakeCone(*radii, height).Shape(), deviation)
+    before = _bytes(source.shape)
+    expected_apex = (0.0, 0.0, 0.0 if radii[1] else height)
+    apex_vertices = []
+    edges = TopExp_Explorer(source.shape, TopAbs_EDGE)
+    while edges.More():
+        edge = TopoDS.Edge(edges.Current())
+        if BRep_Tool.Degenerated_s(edge):
+            vertices = TopExp_Explorer(edge, TopAbs_VERTEX)
+            while vertices.More():
+                apex_vertices.append(BRep_Tool.Pnt_s(TopoDS.Vertex(vertices.Current())).Coord())
+                vertices.Next()
+        edges.Next()
+    assert apex_vertices
+    assert all(
+        np.linalg.norm(np.asarray(point) - expected_apex) <= math.ulp(height) + math.ulp(max(radii))
+        for point in apex_vertices
+    )
+    found = features_of(source)
+    cones = [feature for feature in found.values() if feature.kind == "cone"]
+    assert len(cones) == 1
+    assert cones[0].params["diameter"] == pytest.approx(2.0 * max(radii), abs=EPS_GEOM)
+    assert len(cones[0].surface_patches) == 1
+    patch = cones[0].surface_patches[0]
+    assert patch.source == "native" and patch.kind == "cone"
+    assert patch.params["axis"] == pytest.approx((0.0, 0.0, 1.0 if radii[1] else -1.0))
+    assert set(patch.face_indices) == set(cones[0].face_indices)
+    assert _bytes(source.shape) == before
+
+
+@pytest.mark.parametrize("deviation", [0.03, 0.15])
+@pytest.mark.parametrize("kind", ["cylinder", "cone", "sphere", "torus", "rounded"])
+def test_native_carriers_cover_original_facets_without_using_selection_centres(
+    kind: str, deviation: float
+) -> None:
+    """Träger stammen aus der Originalform, auch an kugeligen und zylindrischen Ecken."""
+    from OCP.BRepPrimAPI import (
+        BRepPrimAPI_MakeCone,
+        BRepPrimAPI_MakeCylinder,
+        BRepPrimAPI_MakeSphere,
+        BRepPrimAPI_MakeTorus,
+    )
+
+    from app.core.brep import edit
+    from app.core.perceive.surfaces import valid_patch
+
+    if kind == "rounded":
+        source = edit.fillet(edit.box(10.0, 16.0, 20.0), 2.0, "all")
+        source = Solid(source.shape, deviation)
+    else:
+        shape = {
+            "cylinder": lambda: BRepPrimAPI_MakeCylinder(8.0, 12.0).Shape(),
+            "cone": lambda: BRepPrimAPI_MakeCone(8.0, 4.0, 12.0).Shape(),
+            "sphere": lambda: BRepPrimAPI_MakeSphere(8.0).Shape(),
+            "torus": lambda: BRepPrimAPI_MakeTorus(17.0, 3.0).Shape(),
+        }[kind]()
+        source = Solid(shape, deviation)
+    before = _bytes(source.shape)
+    features = features_of(source)
+    mesh = as_mesh_data(source)
+    covered = set()
+    seen_kinds = set()
+    differing_centres = set()
+    for feature in features.values():
+        for patch in feature.surface_patches:
+            assert patch.source == "native"
+            assert valid_patch(
+                patch, face_count=source.triangle_count, allowed_indices=feature.face_indices
+            )
+            covered.update(patch.face_indices)
+            seen_kinds.add(patch.kind)
+            points = mesh.raw.vertices[mesh.raw.faces[list(patch.face_indices)]].reshape(-1, 3)
+            if patch.kind == "cone":
+                assert patch.params["apex"] == pytest.approx((0.0, 0.0, 24.0))
+                assert patch.params["axis"] == pytest.approx((0.0, 0.0, -1.0))
+                assert patch.params["half_angle"] == pytest.approx(math.atan(1.0 / 3.0))
+                relative = points - patch.params["apex"]
+                axial = relative @ np.asarray(patch.params["axis"])
+                assert np.all(axial > 0.0)
+                radial = np.linalg.norm(relative[:, :2], axis=1)
+                assert radial == pytest.approx(axial / 3.0, abs=EPS_GEOM)
+            elif patch.kind in {"cylinder", "sphere"}:
+                relative = points - patch.params["centre"]
+                distances = (
+                    np.linalg.norm(np.cross(relative, patch.params["axis"]), axis=1)
+                    if patch.kind == "cylinder"
+                    else np.linalg.norm(relative, axis=1)
+                )
+                assert distances == pytest.approx(patch.params["radius"], abs=EPS_GEOM)
+                if (
+                    feature.kind == "fillet"
+                    and np.linalg.norm(
+                        np.asarray(feature.params["centre"]) - patch.params["centre"]
+                    )
+                    > EPS_GEOM
+                ):
+                    differing_centres.add(patch.kind)
+    assert covered == set(range(source.triangle_count))
+    if kind == "rounded":
+        assert seen_kinds == {"plane", "cylinder", "sphere"}
+        assert differing_centres == {"cylinder", "sphere"}
+    else:
+        assert kind in seen_kinds
+    assert _bytes(source.shape) == before
+
+
 @pytest.mark.parametrize("deviation", [0.03, 0.15])
 @pytest.mark.parametrize("lower", [0.0, math.pi / 6.0])
 @pytest.mark.parametrize("recess", [False, True])

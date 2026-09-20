@@ -109,13 +109,24 @@ def _profile(text: str) -> SketchProfile:
 
 def _surface(mesh: MeshData, name: str, mask: np.ndarray, kind: FeatureKind) -> Feature:
     """Nur tatsächliche Dreiecke und ihre flächengewichteten Maße benennen."""
+    from app.core.perceive.surfaces import planar_patch
+
     indices = np.flatnonzero(mask)
     raw = mesh.raw
     areas = raw.area_faces[indices]
     centre = np.average(raw.triangles_center[indices], weights=areas, axis=0)
     values = {"area": float(areas.sum()), "centre": tuple(float(v) for v in centre)}
+    surface = None
     if kind == "face":
-        values["normal"] = tuple(float(v) for v in raw.face_normals[indices[0]])
+        normal = raw.face_normals[indices[0]]
+        direction = (float(normal[0]), float(normal[1]), float(normal[2]))
+        values["normal"] = direction
+        surface = planar_patch(
+            mesh,
+            tuple(int(index) for index in indices),
+            (float(centre[0]), float(centre[1]), float(centre[2])),
+            direction,
+        )
     return Feature(
         id=name,
         kind=kind,
@@ -124,6 +135,7 @@ def _surface(mesh: MeshData, name: str, mask: np.ndarray, kind: FeatureKind) -> 
         face_indices=tuple(int(index) for index in indices),
         recognised=False,
         measure_sources=dict.fromkeys(values, "facets"),
+        surface_patches=(surface,) if surface else (),
     )
 
 

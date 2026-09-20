@@ -5,6 +5,31 @@ Analysekarten und der Steckbrief (§21, §18.4, §23).
 
 Die Regeln stehen in `.claude/rules/schichtanalyse.md`.
 
+`Feature.surface_patches` hält ausschließlich schon akzeptierte analytische
+Teilträger mit ihren aktuellen Originaldreiecken. `surfaces.valid_patch`
+prüft vollständige Parameter, endliche Zahlen und eindeutige Indizes;
+`planar_patch` belegt die vorgegebene Ebene an allen Originalecken gegen
+`EPS_GEOM`. Ein Artetikett, eine Auswahlmitte oder ein Vorgabemaß erzeugt
+keinen Träger. Kegel speichern ihre wirkliche Spitze und gerichtete Achse
+mit Halbwinkel in Radiant; die semantischen Anzeigeparameter bleiben getrennt.
+
+Langlöcher behalten die einzelnen angenommenen Bogenfits und nachgewiesenen
+Flanken. Der Stadionweg zerlegt den bereits akzeptierten Fit an seinen
+Teilnähten; nahtüberspannende Dreiecke bleiben unbekannt. Offene Langlöcher
+übernehmen auch während der Flutung belegte Bogenfacetten, Mündungsfasen
+behalten ihre Kegelträger. Beim Zusammenfassen zum Innenraum werden nur die
+tatsächlich überdeckten Originaldreiecke übernommen. Eine lokal ausschließlich
+topologisch zugeordnete Materialinsel erhält ohne vorhandenen Fit keinen Träger.
+
+Lokale Ausschnitte führen Trägerindizes über dieselbe Originalzuordnung wie
+ihre Merkmale zurück. `clipped_patches` und `reindexed_patches` reparieren
+keine ungültigen Indizes. `matching` transformiert jeden Träger genau einmal;
+Ebenen bleiben affin erhalten, Kreisflächen nur bei nachgewiesener
+Formerhaltung. Ein elliptisch verzerrter Rundträger entfällt. Die bestehenden
+Erkennungscaches zählen zusätzlich die gespeicherten Trägerindizes. Eckentests
+und Bereichszuordnung arbeiten blockweise mit dem vorhandenen Abbruchsignal;
+es gibt keine zweite Erkennung, keine zusätzlichen Fitobjekte oder Eckpunktkopien.
+
 Maßquellen entstehen beim tatsächlichen Messen. Ein Fit bleibt auch nach
 Übernahme eines erzeugten Namens `fit`; ein deklarierter Vorgabewert wird
 durch angehängte Dreiecksnummern nicht neu gemessen. `matching` transportiert
@@ -344,6 +369,18 @@ damit ein neues Netz oder eine neue Merkmalskarte keine alte Auskunft erbt.
 Krümmung nutzt eine monotone Asinh-Skala mit `EPS_DISPLAY` als linearem Bereich:
 Null bleibt endlich, große nahezu ebene Radien verdrängen kleine Verrundungen
 nicht aus der Farbrampe, und kein Wert wird gekappt oder verschwiegen.
+
+Die Formabweichungskarte liest ausschließlich vorhandene `SurfacePatch`-Belege
+und prüft gefüllte Originaldreiecke. Identische Träger teilen die Rechnung;
+widersprüchliche, fehlende oder numerisch nicht begrenzbare Anteile bleiben
+`nan`. Ein zusätzliches Byte je Dreieck erhält dabei alle tatsächlich
+verwendeten Quellen, auch über zusammengefasste gleiche Träger hinweg.
+Die Werte sind obere Abstandsgrenzen. `maximum_interval` umfasst nur bekannte
+Facetten; `numerical_error` ist ihre größte verbliebene Rechenbreite. Der
+Zeugenpunkt gehört zur unteren Grenze, niemals zum behaupteten Erreichen
+der oberen Grenze. `focus_point` mittelt für diese Karte keine Fundorte.
+Fortschritt und Abbruch laufen durch denselben Kartenauftrag. Es entsteht
+kein neuer Fit, keine automatische Geometrieänderung und kein G-Code-Messwert.
 
 Die Stützkarte wird nach drei Sekunden beendet und bietet **Dreiecke
 verringern** an. Das ist ein begründetes Interaktionsbudget für den direkten
