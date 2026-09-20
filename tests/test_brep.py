@@ -310,6 +310,54 @@ def test_a_planar_bspline_boundary_keeps_its_exact_green_moments(knots) -> None:
     assert result.centre == pytest.approx((moment_x / area, moment_y / area, 0.0), abs=1e-9)
 
 
+@pytest.mark.parametrize("radius", [11.0, 13.0])
+def test_an_offset_nurbs_skin_keeps_its_analytic_integrals(radius: float) -> None:
+    """Der zweite Radialschritt misst die ganze Offset-Haut statt eines nativen Fehlwerts."""
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_Copy, BRepBuilderAPI_NurbsConvert
+    from OCP.BRepLib import BRepLib
+    from OCP.BRepOffsetAPI import BRepOffsetAPI_MakeThickSolid
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakeCylinder
+    from OCP.TopoDS import TopoDS
+
+    height, turn, target = 17.0, math.radians(184.0), 12.5
+    annulus = edit.boolean(
+        "difference",
+        [
+            Solid(BRepPrimAPI_MakeCylinder(16.0, height, turn).Shape()),
+            Solid(BRepPrimAPI_MakeCylinder(12.0, height, turn).Shape()),
+        ],
+    )
+    source = Solid(BRepBuilderAPI_NurbsConvert(annulus.shape, True).Shape())
+    inner = min(
+        (feature for feature in features_of(source).values() if feature.kind == "fillet"),
+        key=lambda feature: feature.params["radius"],
+    )
+    changed = edit.reround(source, inner.params["centre"], 12.0, radius)
+    selected = edit._cylinder_at(changed, inner.params["centre"], radius)
+    assert selected is not None
+    private = BRepBuilderAPI_Copy(selected, True, False).Shape()
+    builder = BRepOffsetAPI_MakeThickSolid()
+    builder.MakeThickSolidBySimple(private, radius - target)
+    assert builder.IsDone()
+    shape = TopoDS.Solid(builder.Shape())
+    assert BRepLib.OrientClosedSolid_s(shape)
+    skin = Solid(shape)
+    assert skin.is_closed and skin.solid_count == 1
+
+    low, high = sorted((radius, target))
+    sector_area = turn * (high**2 - low**2) / 2.0
+    expected_volume = height * sector_area
+    expected_area = height * turn * (low + high) + 2.0 * height * (high - low) + 2.0 * sector_area
+    centre = (
+        (high**3 - low**3) * math.sin(turn) / (3.0 * sector_area),
+        (high**3 - low**3) * (1.0 - math.cos(turn)) / (3.0 * sector_area),
+        height / 2.0,
+    )
+    assert skin.volume == pytest.approx(expected_volume, abs=EPS_GEOM)
+    assert skin._properties("volume").centre == pytest.approx(centre, abs=EPS_GEOM)
+    assert skin.area == pytest.approx(expected_area, abs=EPS_GEOM)
+
+
 def _ridged_surface_face():
     """Ein Zacken aus ebenen Streifen, zusammen als eine gültige BSpline-Fläche."""
     from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace
@@ -354,6 +402,68 @@ def test_a_narrow_surface_span_is_never_missed_by_the_quadrature(
     result = properties.properties(face, "surface")
     assert result.mass == pytest.approx(expected_area, rel=1e-10)
     assert result.centre == pytest.approx((0.5, expected_y, expected_z), abs=1e-9)
+
+
+@pytest.mark.parametrize("swap", [False, True])
+@pytest.mark.parametrize("wrapped", ["offset", "outer_trim", "inner_trim"])
+def test_offset_integration_keeps_narrow_basis_knots(
+    monkeypatch: pytest.MonkeyPatch, swap: bool, wrapped: str
+) -> None:
+    """Eine schräg getrimmte Ebene verliert keine unter Offsethüllen verborgene Knotenspanne."""
+    import numpy as np
+    from OCP.BRepAdaptor import BRepAdaptor_Surface
+    from OCP.BRepBuilderAPI import (
+        BRepBuilderAPI_MakeEdge,
+        BRepBuilderAPI_MakeFace,
+        BRepBuilderAPI_MakeWire,
+    )
+    from OCP.BRepCheck import BRepCheck_Analyzer
+    from OCP.BRepLib import BRepLib
+    from OCP.Geom import Geom_OffsetSurface, Geom_RectangularTrimmedSurface
+    from OCP.Geom2d import Geom2d_Line
+    from OCP.gp import gp_Dir2d, gp_Pnt, gp_Pnt2d
+
+    from app.core.brep import properties
+
+    basis = BRepAdaptor_Surface(_ridged_surface_face()).BSpline().Copy()
+    for row in range(1, 3):
+        for column, y in enumerate((0.0, 0.2, 0.5, 0.8, 1.0), 1):
+            basis.SetPole(row, column, gp_Pnt(float(row - 1), y, 0.0))
+    if swap:
+        basis.ExchangeUV()
+    if wrapped == "inner_trim":
+        basis = Geom_RectangularTrimmedSurface(basis, 0.0, 1.0, 0.0, 1.0)
+    # Die Parametergeschwindigkeit springt, die Fläche und ihre Normale sind
+    # trotzdem überall dieselbe Ebene. OCCT darf diese zulässige C0-Basis lesen.
+    surface = Geom_OffsetSurface(basis, 2.0, True)
+    if wrapped == "outer_trim":
+        surface = Geom_RectangularTrimmedSurface(surface, 0.0, 1.0, 0.0, 1.0)
+    corners = [(0.1, 0.1), (0.9, 0.1), (0.5, 0.9)]
+    if swap:
+        corners = [(v, u) for u, v in corners]
+    wire = BRepBuilderAPI_MakeWire()
+    for start, end in zip(corners, corners[1:] + corners[:1], strict=True):
+        direction = (end[0] - start[0], end[1] - start[1])
+        curve = Geom2d_Line(gp_Pnt2d(*start), gp_Dir2d(*direction))
+        wire.Add(BRepBuilderAPI_MakeEdge(curve, surface, 0.0, math.hypot(*direction)).Edge())
+    face = BRepBuilderAPI_MakeFace(surface, wire.Wire(), True).Face()
+    assert BRepLib.BuildCurves3d_s(face, EPS_GEOM)
+    assert BRepCheck_Analyzer(face).IsValid()
+    monkeypatch.setattr(properties, "_SUBDIVISIONS", ())
+    result = properties.properties(face, "surface")
+    # Die UV-Dreiecksränder werden durch die stückweise lineare Parametrisierung
+    # zu diesem bekannten Polygon. Seine Momente kommen aus der Schuhbändelformel.
+    v_values = np.array((0.1, 0.2, 0.20001, 0.20002, 0.9))
+    y_values = np.interp(v_values, (0.0, 0.2, 0.20001, 0.20002, 1.0), (0.0, 0.2, 0.5, 0.8, 1.0))
+    right = np.column_stack((0.95 - 0.5 * v_values, y_values))
+    left = np.column_stack((0.05 + 0.5 * v_values, y_values))[::-1]
+    polygon = np.concatenate((right, left))
+    after = np.roll(polygon, -1, axis=0)
+    cross = polygon[:, 0] * after[:, 1] - after[:, 0] * polygon[:, 1]
+    area = float(np.sum(cross)) / 2.0
+    centre = np.sum((polygon + after) * cross[:, None], axis=0) / (6.0 * area)
+    assert result.mass == pytest.approx(area, abs=EPS_GEOM)
+    assert result.centre == pytest.approx((*centre, -2.0 if swap else 2.0), abs=EPS_GEOM)
 
 
 def test_a_narrow_solid_span_keeps_its_volume_and_centre() -> None:

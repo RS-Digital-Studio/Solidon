@@ -61,6 +61,129 @@ def test_a_second_quality_wrapper_does_not_share_native_faces() -> None:
     assert other.bounds.maximum == pytest.approx(original.bounds.maximum, abs=EPS_GEOM, rel=0.0)
 
 
+def test_canonical_recognition_does_not_rewrite_native_nurbs_geometry() -> None:
+    """Polwerte, Trimmkurven, Topologie und native Vernetzung bleiben bytegleich."""
+    import io
+
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_NurbsConvert
+    from OCP.BRepTools import BRepTools
+
+    body = edit.cut_bore(
+        edit.box(40.0, 30.0, 10.0),
+        position=(0.0, 0.0, 5.0),
+        direction=(0.0, 0.0, 1.0),
+        diameter=6.0,
+        depth=20.0,
+    )
+    source = Solid(BRepBuilderAPI_NurbsConvert(body.shape, True).Shape())
+    before = io.BytesIO()
+    BRepTools.Write_s(source.shape, before)
+    assert len(features_of(source)) == 7
+    assert len(profiles._planar_faces(source)) == 6
+    after = io.BytesIO()
+    BRepTools.Write_s(source.shape, after)
+    assert after.getvalue() == before.getvalue()
+    assert all(counts == (0, 0) for counts in _triangulations(source))
+
+
+def test_unwrapping_surface_trims_is_read_only_bounded_and_cancellable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Eine tatsächliche Trimmhülle teilt Abbruch und Grenzen mit allen nativen Verbrauchern."""
+    import io
+
+    from OCP.BRep import BRep_Tool
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace, BRepBuilderAPI_NurbsConvert
+    from OCP.BRepTools import BRepTools
+    from OCP.Geom import Geom_RectangularTrimmedSurface
+
+    from app.core.brep import kernel
+    from app.core.errors import OperationCancelled
+    from app.core.scene.cancel import CancelSignal
+
+    body = Solid(BRepBuilderAPI_NurbsConvert(edit.cylinder(6.0, 8.0).shape, True).Shape())
+    basis = BRep_Tool.Surface_s(body.faces()[0]).Copy()
+    trimmed = Geom_RectangularTrimmedSurface(basis, 1.0, 3.0, 1.0, 7.0)
+    face = BRepBuilderAPI_MakeFace(trimmed, EPS_GEOM).Face()
+    before = io.BytesIO()
+    BRepTools.Write_s(face, before)
+
+    class AfterOneWrapper:
+        """Bricht nach dem ersten echten nativen Entpackschritt ab."""
+
+        def __init__(self) -> None:
+            self.calls = 0
+            self.signal = CancelSignal()
+
+        def raise_if_cancelled(self) -> None:
+            self.calls += 1
+            if self.calls == 2:
+                self.signal.cancel()
+            self.signal.raise_if_cancelled()
+
+        @property
+        def is_cancelled(self) -> bool:
+            return self.signal.is_cancelled
+
+    cancelled = AfterOneWrapper()
+    with pytest.raises(OperationCancelled):
+        kernel.untrimmed_surface(trimmed, cancelled=cancelled)
+    assert cancelled.calls == 2
+    with monkeypatch.context() as isolated:
+        isolated.setattr(kernel, "_MAX_SURFACE_WRAPPERS", 0)
+        assert kernel.untrimmed_surface(trimmed) is None
+    original = kernel.untrimmed_surface(trimmed)
+    assert original is not None
+    assert original.Value(2.0, 4.0).Coord() == pytest.approx(
+        basis.Value(2.0, 4.0).Coord(), abs=EPS_GEOM
+    )
+    after = io.BytesIO()
+    BRepTools.Write_s(face, after)
+    assert after.getvalue() == before.getvalue()
+
+
+@pytest.mark.parametrize("nurbs", [False, True])
+@pytest.mark.parametrize("operation", ["unround", "reround"])
+def test_rounding_edits_preserve_all_native_source_geometry(nurbs: bool, operation: str) -> None:
+    """Defeaturing darf auch Polgrad und Knoten benachbarter NURBS-Ebenen nicht verändern."""
+    import io
+    import math
+
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_NurbsConvert
+    from OCP.BRepCheck import BRepCheck_Analyzer
+    from OCP.BRepTools import BRepTools
+
+    from app.core.brep.properties import INTEGRAL_RELATIVE_ERROR
+
+    source = edit.fillet(edit.box(40.0, 30.0, 20.0), 3.0, "vertical")
+    if nurbs:
+        source = Solid(BRepBuilderAPI_NurbsConvert(source.shape, True).Shape())
+    feature = next(value for value in features_of(source).values() if value.kind == "fillet")
+    before = io.BytesIO()
+    BRepTools.Write_s(source.shape, before)
+    if operation == "unround":
+        result = edit.unround(source, feature.params["centre"], 3.0)
+        squared_radii = 3.0 * 3.0**2
+    else:
+        result = edit.reround(source, feature.params["centre"], 3.0, 2.0)
+        squared_radii = 3.0 * 3.0**2 + 2.0**2
+    after = io.BytesIO()
+    BRepTools.Write_s(source.shape, after)
+    assert after.getvalue() == before.getvalue()
+    assert result.is_closed and result.solid_count == 1
+    assert BRepCheck_Analyzer(result.shape).IsValid()
+    assert result.volume == pytest.approx(
+        24000.0 - 20.0 * (1.0 - math.pi / 4.0) * squared_radii,
+        rel=INTEGRAL_RELATIVE_ERROR,
+        abs=0.0,
+    )
+    assert Solid(source.shape).volume == pytest.approx(
+        24000.0 - 20.0 * (1.0 - math.pi / 4.0) * 36.0,
+        rel=INTEGRAL_RELATIVE_ERROR,
+        abs=0.0,
+    )
+
+
 def test_moving_a_solid_keeps_precise_location_and_separate_ownership() -> None:
     """Die Lage wird einmal kopiert, ohne Rundung oder Änderung des Originals."""
     original = edit.box(10.0, 8.0, 6.0)

@@ -25,6 +25,11 @@ ops.py        Extrudieren, Rotieren, Ausschneiden — die Skizzen-Operationen
 `planes.py` beantwortet die Frage davor: **wo** die Skizze liegt — auf einer
 Grundebene oder auf einer Fläche des Modells.
 
+Die Merkmalsauskunft exakter Ergebnisse erhält denselben Abbruchauftrag wie
+die erzeugende Operation. `_created` und `cut_regions` reichen `ctx.cancelled`
+an `brep.features.features_of` weiter; auch die Erkennung rationaler Flächen
+bleibt dadurch abbrechbar, bevor ein Ergebnis in Szene oder Cache erscheint.
+
 ## Die Karte
 
 | Datei | Rolle |

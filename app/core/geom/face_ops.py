@@ -161,10 +161,15 @@ def draft_faces(ctx: OpContext) -> OpResult:
         from app.core.brep.ops import brep_input
 
         exact, body = brep_input(ctx)
-        solid = profiles.draft_vertical(body, params.angle)
+        solid = profiles.draft_vertical(body, params.angle, cancelled=ctx.cancelled)
         return OpResult(
             outputs=[
-                dataclasses.replace(exact, mesh=solid, kind="brep", features=features_of(solid))
+                dataclasses.replace(
+                    exact,
+                    mesh=solid,
+                    kind="brep",
+                    features=features_of(solid, cancelled=ctx.cancelled),
+                )
             ]
         )
 
@@ -213,12 +218,20 @@ def _on_a_solid(ctx: OpContext, params: PushFaceParams, chosen: Feature | None) 
         if spot is not None:
             measured = [float(value) for value in spot]
             centre = (measured[0], measured[1], measured[2])
-    moved = profiles.push_faces(body, direction, params.distance, centre=centre)
+    moved = profiles.push_faces(
+        body, direction, params.distance, centre=centre, cancelled=ctx.cancelled
+    )
     # ``features_of`` wie bei jeder anderen B-Rep-Op: Mit ``features={}``
     # hatte der Körper nach „Fläche versetzen" keine anklickbaren Flächen
     # mehr — „Auf dieser Fläche zeichnen", die exakte Bohrung und jede
     # Passung liefen ins Leere (Gesamtreview D-5).
-    return OpResult(outputs=[dataclasses.replace(source, mesh=moved, features=features_of(moved))])
+    return OpResult(
+        outputs=[
+            dataclasses.replace(
+                source, mesh=moved, features=features_of(moved, cancelled=ctx.cancelled)
+            )
+        ]
+    )
 
 
 __all__ = ["DraftParams", "PushFaceParams", "draft_faces", "push_face_op"]

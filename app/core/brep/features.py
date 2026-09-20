@@ -3,8 +3,9 @@
 Auf einem Netz heißt ein Loch zu finden: Dreiecke gruppieren und einen
 Zylinder hineinpassen — und ihm einen Namen zu geben, der die nächste
 Operation überlebt, heißt gegen die vorigen Namen zuordnen (§21.2). Auf einem
-B-Rep-Körper ist nichts davon nötig: eine zylindrische Fläche *ist* eine
-zylindrische Fläche, und sie nennt ihren Radius und ihre Achse selbst.
+B-Rep-Körper nennt eine analytische Fläche Radius und Achse selbst.
+Rationale B-Splines werden zusätzlich über die gemeinsame Trägerbeschreibung
+geprüft. Erkennung und Kennzahlen ändern dabei weder Trimmkurven noch Körperform.
 
 Das ist der Sprung, den §30 verspricht, und darum ist diese Datei kurz. Was
 sie nicht tut, ist Gewissheit erfinden: eine zylindrische Fläche wird nur als
@@ -27,10 +28,12 @@ from __future__ import annotations
 import math
 from typing import Any
 
+from app.core.brep.canonical import CylinderSurface, PlaneSurface, Surface
+from app.core.brep.canonical import describe as describe_surface
 from app.core.brep.kernel import Solid
 from app.core.brep.properties import properties
 from app.core.log import get_logger
-from app.core.types import Feature, FeatureId, FeatureKind, Vec3
+from app.core.types import CancelToken, Feature, FeatureId, FeatureKind, Vec3
 from app.core.units import EPS_DISPLAY, EPS_GEOM, match_tolerance, positive_axis
 
 _log = get_logger(__name__)
@@ -78,7 +81,7 @@ CORNER_NEIGHBOURS = 2
 # dasselbe Loch.
 
 
-def features_of(solid: Solid) -> dict[FeatureId, Feature]:
+def features_of(solid: Solid, *, cancelled: CancelToken | None = None) -> dict[FeatureId, Feature]:
     """Löcher und ebene Flächen, aus der Topologie abgelesen statt
     eingepasst.
     """
@@ -89,6 +92,8 @@ def features_of(solid: Solid) -> dict[FeatureId, Feature]:
     from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE
     from OCP.TopExp import TopExp
 
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
     found: dict[FeatureId, Feature] = {}
     counts = {"hole": 0, "pin": 0, "face": 0, "fillet": 0, "sphere": 0}
     # Einmal je Körper, nicht einmal je Fläche: der Klassierer baut sich eine
@@ -109,8 +114,21 @@ def features_of(solid: Solid) -> dict[FeatureId, Feature]:
     # Welches Merkmal auf welcher Topologiefläche sitzt — der Nachschritt unten
     # braucht den Weg zurück, und ihn hier mitzuschreiben kostet nichts.
     named: dict[int, FeatureId] = {}
+    surfaces: dict[int, Surface | None] = {}
     for index, face in enumerate(solid.faces()):
-        described = _describe(face, index, inside, neighbours, reach, tolerance)
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        surfaces[index] = describe_surface(face, cancelled=cancelled)
+        described = _describe(
+            face,
+            index,
+            inside,
+            neighbours,
+            reach,
+            tolerance,
+            surface=surfaces[index],
+            cancelled=cancelled,
+        )
         if described is None:
             continue
         kind, params = described
@@ -128,7 +146,16 @@ def features_of(solid: Solid) -> dict[FeatureId, Feature]:
             face_indices=solid.triangles_of_face(index),
         )
 
-    found = _slots_instead_of_half_bores(solid, found, named, neighbours, reach, tolerance)
+    found = _slots_instead_of_half_bores(
+        solid,
+        found,
+        named,
+        neighbours,
+        reach,
+        tolerance,
+        surfaces,
+        cancelled=cancelled,
+    )
 
     # Der offene Mantel hat an beiden Kernen denselben Randvertrag. Die
     # Dreiecksnummern der Tessellierung sind bereits die Merkmalsnummern.
@@ -139,6 +166,8 @@ def features_of(solid: Solid) -> dict[FeatureId, Feature]:
     mesh = as_mesh_data(solid)
     fillets = []
     for feature in found.values():
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
         if feature.kind == "fillet" and feature.params.get("recess"):
             patch = list(feature.face_indices)
             fit = fit_cylinder(mesh.raw, patch)
@@ -146,6 +175,9 @@ def features_of(solid: Solid) -> dict[FeatureId, Feature]:
                 fillets.append((fit, patch))
     if fillets:
         found = open_slots_instead_of_fillets(mesh, found, fillets)
+
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
 
     _log.info(
         "read %d hole(s), %d pin(s), %d fillet(s) and %d face(s) off a B-Rep body",
@@ -164,6 +196,9 @@ def _slots_instead_of_half_bores(
     neighbours: Any,
     reach: float,
     tolerance: float,
+    surfaces: dict[int, Surface | None],
+    *,
+    cancelled: CancelToken | None = None,
 ) -> dict[FeatureId, Feature]:
     """Setzt zwei Halbzylinder und ihre zwei Flanken zu einem Langloch zusammen.
 
@@ -194,10 +229,7 @@ def _slots_instead_of_half_bores(
     Bögen und ihre Nachbarn gebaut, nicht für jede Fläche des Körpers — ein
     STEP-Körper mit zweitausend Flächen hat davon meist keine zwei.
     """
-    from OCP.BRepAdaptor import BRepAdaptor_Surface
     from OCP.collections import IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher as ShapeMap
-    from OCP.GeomAbs import GeomAbs_Cylinder, GeomAbs_Plane
-    from OCP.TopoDS import TopoDS
 
     # Träge, wie jeder Import von ``brep`` nach ``perceive``
     # (``tests/test_core_package_direction.py``): Die Karte erlaubt die
@@ -208,27 +240,22 @@ def _slots_instead_of_half_bores(
     if len(faces) < 4:
         return found
 
-    # Einmal je Fläche und nicht einmal je Paar: Ein Adaptor kostet, und an
-    # hundert Bögen fragt die Paarung unten jede Fläche viele Male.
-    adaptors: dict[int, Any] = {}
-
-    def surface_of(index: int) -> Any:
-        adaptor = adaptors.get(index)
-        if adaptor is None:
-            adaptor = adaptors[index] = BRepAdaptor_Surface(TopoDS.Face(faces[index]))
-        return adaptor
+    # Dieselben geprüften Träger wie bei der Einzelbeschreibung, ohne neue
+    # Erkennung je Nachbarpaar und ohne eine andere Auslegung der UV-Parameter.
+    surface_of = surfaces.__getitem__
 
     # Die Bögen: zylindrisch, angeschnitten, ins Loch gewölbt.
     arcs: list[int] = []
     for index, identifier in named.items():
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
         feature = found.get(identifier)
         if feature is None or feature.kind != "fillet" or not feature.params.get("recess"):
             continue
         surface = surface_of(index)
-        if surface.GetType() != GeomAbs_Cylinder:
+        if not isinstance(surface, CylinderSurface):
             continue
-        turn = abs(surface.LastUParameter() - surface.FirstUParameter())
-        if turn < FULL_TURN * 2.0 * math.pi:
+        if surface.turn < FULL_TURN * 2.0 * math.pi:
             arcs.append(index)
     if len(arcs) < 2:
         return found
@@ -250,15 +277,19 @@ def _slots_instead_of_half_bores(
     # Fläche (gemessen 11.09.2026), und gebraucht wird sie nie.
     around: dict[int, set[int]] = {}
     for index in arcs:
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
         around[index] = neighbours_of(index)
-        axis = surface_of(index).Cylinder().Axis().Direction()
+        cylinder = surface_of(index)
+        assert isinstance(cylinder, CylinderSurface)
+        axis = cylinder.cylinder.Axis().Direction()
         for other in around[index]:
             if other in around:
                 continue
             surface = surface_of(other)
-            if surface.GetType() != GeomAbs_Plane:
+            if not isinstance(surface, PlaneSurface):
                 continue
-            if abs(surface.Plane().Axis().Direction().Dot(axis)) >= ACROSS_THE_AXIS:
+            if abs(surface.plane.Axis().Direction().Dot(axis)) >= ACROSS_THE_AXIS:
                 continue
             around[other] = neighbours_of(other)
 
@@ -270,6 +301,8 @@ def _slots_instead_of_half_bores(
     used: set[int] = set()
     slots = 0
     for first in arcs:
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
         if first in used:
             continue
         two_steps_away: set[int] = set()
@@ -294,6 +327,7 @@ def _slots_instead_of_half_bores(
                 flanks=flanks,
                 number=slots,
                 surface_of=surface_of,
+                cancelled=cancelled,
             )
             used.update({first, second, *flanks})
             break
@@ -326,11 +360,9 @@ def _flanks_of_a_slot(
     surface_of: Any,
 ) -> tuple[int, int] | None:
     """Die zwei Wände zwischen zwei Bögen — oder ``None``, wenn es keine sind."""
-    from OCP.GeomAbs import GeomAbs_Plane
-
     from app.core.perceive.slots import ACROSS_THE_AXIS, PARALLEL_AXES, SAME_RADIUS
 
-    one, other = surface_of(first).Cylinder(), surface_of(second).Cylinder()
+    one, other = surface_of(first).cylinder, surface_of(second).cylinder
     radius = max(float(one.Radius()), float(other.Radius()))
     if abs(one.Radius() - other.Radius()) > radius * SAME_RADIUS:
         return None
@@ -351,9 +383,9 @@ def _flanks_of_a_slot(
     flanks: list[int] = []
     for index in shared:
         surface = surface_of(index)
-        if surface.GetType() != GeomAbs_Plane:
+        if not isinstance(surface, PlaneSurface):
             continue
-        plane = surface.Plane()
+        plane = surface.plane
         normal = plane.Axis().Direction()
         # Eine Flanke steht **längs** zur Achse; Deckel und Boden stehen quer
         # und sind deshalb keine. Ohne diese Zeile zählte ein durchgehendes
@@ -373,7 +405,7 @@ def _flanks_of_a_slot(
         if not {first, second} <= around.get(flank, set()):
             return None
     # Die zwei Wände stehen sich gegenüber.
-    normals = [surface_of(flank).Plane().Axis().Direction() for flank in flanks]
+    normals = [surface_of(flank).plane.Axis().Direction() for flank in flanks]
     if abs(normals[0].Dot(normals[1])) < PARALLEL_AXES:
         return None
     return (flanks[0], flanks[1])
@@ -426,16 +458,17 @@ def _one_slot(
     flanks: tuple[int, int],
     number: int,
     surface_of: Any,
+    cancelled: CancelToken | None = None,
 ) -> dict[FeatureId, Feature]:
     """Baut das Langloch und nimmt die vier Flächen aus der Liste."""
     first, second = arcs
-    one, other = surface_of(first).Cylinder(), surface_of(second).Cylinder()
+    one, other = surface_of(first).cylinder, surface_of(second).cylinder
     radius = (float(one.Radius()) + float(other.Radius())) / 2.0
     across = _across_between(one, other)
     travel = math.sqrt(sum(value * value for value in across))
 
     surface = surface_of(first)
-    first_v, last_v = float(surface.FirstVParameter()), float(surface.LastVParameter())
+    first_v, last_v = surface.first, surface.last
     depth = abs(last_v - first_v)
     # Die Mitte liegt auf halbem Weg zwischen den Achsen, auf halber Tiefe des
     # **ersten** Bogens — der zweite hat denselben Mantel, aber vielleicht
@@ -454,7 +487,13 @@ def _one_slot(
     axis = one.Axis().Direction()
 
     through = not _axis_covered(
-        neighbours, faces[first], one, first_v - reach, last_v + reach, tolerance
+        neighbours,
+        faces[first],
+        one,
+        first_v - reach,
+        last_v + reach,
+        tolerance,
+        cancelled=cancelled,
     )
 
     identifier = f"slot_{number}"
@@ -469,13 +508,13 @@ def _one_slot(
         kind="slot",
         provenance="detected",
         params={
-            "diameter": round(radius * 2.0, 4),
-            "length": round(travel + radius * 2.0, 4),
-            "travel": round(travel, 4),
+            "diameter": radius * 2.0,
+            "length": travel + radius * 2.0,
+            "travel": travel,
             "axis": _oriented(axis),
             "direction": direction,
             "centre": centre,
-            "depth": round(depth, 4),
+            "depth": depth,
             "through": through,
         },
         face_indices=tuple(indices),
@@ -484,49 +523,52 @@ def _one_slot(
 
 
 def _describe(
-    face: Any, index: int, inside: Any, neighbours: Any, reach: float, tolerance: float
+    face: Any,
+    index: int,
+    inside: Any,
+    neighbours: Any,
+    reach: float,
+    tolerance: float,
+    *,
+    surface: Surface | None,
+    cancelled: CancelToken | None = None,
 ) -> tuple[FeatureKind, dict[str, Any]] | None:
     """Was diese Fläche ist, im Vokabular von §21."""
     from OCP.BRepAdaptor import BRepAdaptor_Surface
-    from OCP.GeomAbs import GeomAbs_Cone, GeomAbs_Cylinder, GeomAbs_Plane, GeomAbs_Sphere
+    from OCP.GeomAbs import GeomAbs_Cone, GeomAbs_Sphere
     from OCP.gp import gp_Pnt
     from OCP.TopAbs import TopAbs_REVERSED
 
-    surface = BRepAdaptor_Surface(face)
-    kind = surface.GetType()
-    if kind not in (GeomAbs_Plane, GeomAbs_Cylinder, GeomAbs_Cone, GeomAbs_Sphere):
+    adaptor = BRepAdaptor_Surface(face)
+    kind = adaptor.GetType()
+    if surface is None and kind not in (GeomAbs_Cone, GeomAbs_Sphere):
         return None
-    props = properties(face, "surface")
+    props = properties(face, "surface", cancelled=cancelled)
     area = props.mass
     if area <= EPS_GEOM:
         return None
     middle = props.centre
     centre = gp_Pnt(*middle)
 
-    if kind == GeomAbs_Plane:
-        plane = surface.Plane()
-        normal = plane.Axis().Direction()
-        if face.Orientation() == TopAbs_REVERSED:
-            normal.Reverse()
+    if isinstance(surface, PlaneSurface):
         return "face", {
             "area": area,
             "centre": middle,
-            "normal": (normal.X(), normal.Y(), normal.Z()),
+            "normal": surface.normal,
         }
 
-    if kind == GeomAbs_Cylinder:
-        turn = abs(surface.LastUParameter() - surface.FirstUParameter())
-        cylinder = surface.Cylinder()
+    if isinstance(surface, CylinderSurface):
+        turn = surface.turn
+        cylinder = surface.cylinder
         axis = cylinder.Axis().Direction()
         radius = float(cylinder.Radius())
-        first_v = float(surface.FirstVParameter())
-        last_v = float(surface.LastVParameter())
+        first_v, last_v = surface.first, surface.last
         depth = abs(last_v - first_v)
         # Innen und außen ergeben sich gemeinsam aus Flächenorientierung
         # und Händigkeit der Parametrisierung. Ein Kreisprisma kann auch
         # einen indirekten Zylinder tragen: REVERSED allein vertauscht dann
         # die Bohrung mit dem massiven Zapfen.
-        hollow = (face.Orientation() == TopAbs_REVERSED) == cylinder.Position().Direct()
+        hollow = surface.inward
 
         # **Ein Ausschnitt ist eine Verrundung, kein verworfener Rest.** Wer
         # weniger als eine volle Umdrehung abdeckt, war bis hierher nichts —
@@ -552,7 +594,7 @@ def _describe(
                 "diameter": radius * 2.0,
                 "centre": middle,
                 "axis": _oriented(axis),
-                "length": round(depth, 4),
+                "length": depth,
                 "recess": hollow
                 if turn >= math.pi - EPS_GEOM
                 else not _axis_in_material(inside, cylinder, centre),
@@ -587,21 +629,27 @@ def _describe(
             # („Durchgang" oder „Sackloch"). Ohne den Schlüssel stand an jeder
             # exakten Bohrung „Sackloch", auch an einem Loch durch eine Platte.
             params["through"] = not _axis_covered(
-                neighbours, face, cylinder, first_v - reach, last_v + reach, tolerance
+                neighbours,
+                face,
+                cylinder,
+                first_v - reach,
+                last_v + reach,
+                tolerance,
+                cancelled=cancelled,
             )
         return "hole" if hollow else "pin", params
 
     if kind == GeomAbs_Cone:
-        cone = surface.Cone()
+        cone = adaptor.Cone()
         angle = float(cone.SemiAngle())
-        first, last = float(surface.FirstVParameter()), float(surface.LastVParameter())
+        first, last = float(adaptor.FirstVParameter()), float(adaptor.LastVParameter())
         wide_v = last if angle > 0.0 else first
         radius = float(cone.RefRadius()) + wide_v * math.sin(angle)
         axis = cone.Axis().Direction()
         location = cone.Location()
         along = wide_v * math.cos(angle)
         direction = 1.0 if angle > 0.0 else -1.0
-        turn = abs(surface.LastUParameter() - surface.FirstUParameter())
+        turn = abs(adaptor.LastUParameter() - adaptor.FirstUParameter())
         return "cone", {
             "diameter": 2.0 * radius,
             "angle": math.degrees(abs(angle)) * 2.0,
@@ -618,10 +666,10 @@ def _describe(
         }
 
     if kind == GeomAbs_Sphere:
-        ball = surface.Sphere()
+        ball = adaptor.Sphere()
         radius = float(ball.Radius())
         hollow = not _point_in_material(inside, ball.Location())
-        if _rounded_neighbours(neighbours, face) >= CORNER_NEIGHBOURS:
+        if _rounded_neighbours(neighbours, face, cancelled=cancelled) >= CORNER_NEIGHBOURS:
             # **Als Verrundung, nicht als Kugel.** Was hier steht, ist die
             # Ecke, an der drei verrundete Kanten zusammentreffen. Sie ist
             # gerechnet ein Kugelstück und benannt eine Verrundung: „Kuppel
@@ -646,11 +694,7 @@ def _describe(
 
 
 def _axis_point(cylinder: Any, along: float) -> Vec3:
-    """Der Punkt auf der Zylinderachse beim Parameter ``along``.
-
-    ``V`` einer Zylinderfläche ist die Länge entlang der Achse ab ihrem
-    Ursprung — derselbe Maßstab wie ``FirstVParameter``/``LastVParameter``.
-    """
+    """Der Punkt bei einer gemessenen axialen Länge ab dem Trägerursprung."""
     origin = cylinder.Location()
     direction = cylinder.Axis().Direction()
     return (
@@ -661,7 +705,14 @@ def _axis_point(cylinder: Any, along: float) -> Vec3:
 
 
 def _axis_covered(
-    neighbours: Any, face: Any, cylinder: Any, first: float, last: float, tolerance: float
+    neighbours: Any,
+    face: Any,
+    cylinder: Any,
+    first: float,
+    last: float,
+    tolerance: float,
+    *,
+    cancelled: CancelToken | None = None,
 ) -> bool:
     """Reicht eine Nachbarfläche dieses Mantels bis an die Bohrachse?
 
@@ -696,6 +747,8 @@ def _axis_covered(
     seen: list[Any] = []
     walk = TopExp_Explorer(face, TopAbs_EDGE)
     while walk.More():
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
         edge = walk.Current()
         walk.Next()
         for other in neighbours.FindFromKey(edge):
@@ -703,6 +756,8 @@ def _axis_covered(
                 continue
             seen.append(other)
     for other in seen:
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
         distance = BRepExtrema_DistShapeShape(probe, other)
         if distance.IsDone() and distance.Value() <= tolerance:
             return True
@@ -749,7 +804,7 @@ def _point_in_material(inside: Any, point: Any) -> bool:
     return bool(inside.State() == TopAbs_IN)
 
 
-def _rounded_neighbours(neighbours: Any, face: Any) -> int:
+def _rounded_neighbours(neighbours: Any, face: Any, *, cancelled: CancelToken | None = None) -> int:
     """Wie viele Flächen an dieser hier grenzen und selbst Kantenverrundungen
     sind — zylindrisch und weniger als eine volle Umdrehung.
 
@@ -757,8 +812,6 @@ def _rounded_neighbours(neighbours: Any, face: Any) -> int:
     anstößt; ``TopoDS_Shape`` hat keine Gleichheit, die ein ``set`` versteht,
     darum der ``IsSame``-Vergleich gegen das schon Gesehene.
     """
-    from OCP.BRepAdaptor import BRepAdaptor_Surface
-    from OCP.GeomAbs import GeomAbs_Cylinder
     from OCP.TopAbs import TopAbs_EDGE
     from OCP.TopExp import TopExp_Explorer
     from OCP.TopoDS import TopoDS
@@ -766,6 +819,8 @@ def _rounded_neighbours(neighbours: Any, face: Any) -> int:
     seen: list[Any] = []
     walk = TopExp_Explorer(face, TopAbs_EDGE)
     while walk.More():
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
         edge = walk.Current()
         walk.Next()
         for other in neighbours.FindFromKey(edge):
@@ -775,10 +830,9 @@ def _rounded_neighbours(neighbours: Any, face: Any) -> int:
 
     rounded = 0
     for other in seen:
-        surface = BRepAdaptor_Surface(TopoDS.Face(other))
-        if surface.GetType() != GeomAbs_Cylinder:
+        surface = describe_surface(TopoDS.Face(other), cancelled=cancelled)
+        if not isinstance(surface, CylinderSurface):
             continue
-        turn = abs(surface.LastUParameter() - surface.FirstUParameter())
-        if turn < FULL_TURN * 2.0 * math.pi:
+        if surface.turn < FULL_TURN * 2.0 * math.pi:
             rounded += 1
     return rounded

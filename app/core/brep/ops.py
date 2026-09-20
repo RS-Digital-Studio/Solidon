@@ -51,6 +51,7 @@ from app.core.geom.transform import Axis
 from app.core.registry import NAME_DOC, op_params, param, register_op
 from app.core.types import (
     BaseParams,
+    CancelToken,
     Feature,
     Finding,
     OpContext,
@@ -120,7 +121,9 @@ def create_brep_box(ctx: OpContext) -> OpResult:
         placement_transform(params),
         cancelled=ctx.cancelled,
     )
-    return OpResult(outputs=[_object(params.name or str(_("Quader")), solid)])
+    return OpResult(
+        outputs=[_object(params.name or str(_("Quader")), solid, cancelled=ctx.cancelled)]
+    )
 
 
 @op_params
@@ -172,7 +175,9 @@ def create_brep_cylinder(ctx: OpContext) -> OpResult:
         placement_transform(params),
         cancelled=ctx.cancelled,
     )
-    return OpResult(outputs=[_object(params.name or str(_("Zylinder")), solid)])
+    return OpResult(
+        outputs=[_object(params.name or str(_("Zylinder")), solid, cancelled=ctx.cancelled)]
+    )
 
 
 @op_params
@@ -217,7 +222,7 @@ def load_step(ctx: OpContext) -> OpResult:
 
     solid = step.read(ctx.sources.read(params.source))
     name = params.name or Path(source.path).stem
-    entry = _object(name, solid)
+    entry = _object(name, solid, cancelled=ctx.cancelled)
     return OpResult(
         outputs=[entry],
         findings=[
@@ -271,7 +276,7 @@ class ShellParams(BaseParams):
 def shell_exact(ctx: OpContext) -> OpResult:
     params = cast(ShellParams, ctx.params)
     source, body = brep_input(ctx)
-    solid = profiles.shell_open_top(body, params.wall)
+    solid = profiles.shell_open_top(body, params.wall, cancelled=ctx.cancelled)
     # **Der Zwilling meldete fünf Dinge, dieser keines.** Gemessen über
     # dreizehn Wandstärken an einem Quader 40x30x20: Bei 15 mm kam ein Körper
     # mit Nullspalt zurück — unverändertes Volumen und nicht mehr wasserdicht
@@ -298,7 +303,7 @@ def shell_exact(ctx: OpContext) -> OpResult:
     thin = below_printable_wall(params.wall, ctx.profile)
     if thin is not None:
         findings.append(thin)
-    return OpResult(outputs=[_replaced(source, solid)], findings=findings)
+    return OpResult(outputs=[_replaced(source, solid, cancelled=ctx.cancelled)], findings=findings)
 
 
 @op_params
@@ -380,7 +385,7 @@ def thread_exact(ctx: OpContext) -> OpResult:
         placement,
         cancelled=ctx.cancelled,
     )
-    entry = _object(params.name or str(_("Gewindebolzen")), solid)
+    entry = _object(params.name or str(_("Gewindebolzen")), solid, cancelled=ctx.cancelled)
     # Der Erzeuger kennt den Gang genau; die analytischen Einzelflächen allein
     # beschreiben seine Steigung nicht. Planare Anschnitte bleiben separat
     # auswählbar, der übrige Mantel gehört zum benannten Gewinde.
@@ -547,7 +552,7 @@ def drill_brep_hole(ctx: OpContext) -> OpResult:
         )
     findings.extend(split_findings(body, solid))
     findings.extend(compensation_findings(params.diameter, cut, params.compensate))
-    return OpResult(outputs=[_replaced(source, solid)], findings=findings)
+    return OpResult(outputs=[_replaced(source, solid, cancelled=ctx.cancelled)], findings=findings)
 
 
 def _bore_span(
@@ -744,12 +749,16 @@ def brep_input(ctx: OpContext) -> tuple[SceneObject, Solid]:
     return source, source.mesh
 
 
-def _object(name: str, solid: Solid) -> SceneObject:
-    return SceneObject(id="", name=name, mesh=solid, kind="brep", features=features_of(solid))
+def _object(name: str, solid: Solid, *, cancelled: CancelToken) -> SceneObject:
+    return SceneObject(
+        id="", name=name, mesh=solid, kind="brep", features=features_of(solid, cancelled=cancelled)
+    )
 
 
-def _replaced(source: SceneObject, solid: Solid) -> SceneObject:
-    return dataclasses.replace(source, mesh=solid, kind="brep", features=features_of(solid))
+def _replaced(source: SceneObject, solid: Solid, *, cancelled: CancelToken) -> SceneObject:
+    return dataclasses.replace(
+        source, mesh=solid, kind="brep", features=features_of(solid, cancelled=cancelled)
+    )
 
 
 __all__ = [

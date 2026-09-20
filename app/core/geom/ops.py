@@ -824,7 +824,7 @@ def _boolean_op(ctx: OpContext, kind: BooleanKind, seed: int | None) -> OpResult
                     ctx.inputs[0],
                     mesh=solid,
                     kind="brep",
-                    features=features_of(solid),
+                    features=features_of(solid, cancelled=ctx.cancelled),
                     material_slots=_material_slots_after_boolean(ctx, kind, as_mesh_data(solid)),
                 )
             ],

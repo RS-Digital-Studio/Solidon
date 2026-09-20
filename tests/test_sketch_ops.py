@@ -1595,7 +1595,7 @@ def test_a_bodiless_result_is_a_sentence_not_an_object() -> None:
     big = brep_box(40.0, 40.0, 40.0).mesh
     gone = edit.boolean("difference", [small, big])
     with pytest.raises(GeometryError) as caught:
-        _created("", "x", gone)
+        _created("", "x", gone, cancelled=NeverCancelled())
     assert caught.value.suggestions
 
 

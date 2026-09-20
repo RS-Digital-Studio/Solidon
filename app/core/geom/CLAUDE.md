@@ -3,6 +3,10 @@
 Die einzige Stelle, an der Geometrie entsteht oder sich ändert (Regel 2).
 Gerechnet wird gegen `manifold3d` und `trimesh`.
 
+Erneute B-Rep-Merkmalserkennung in `ops`, `edge_ops`, `face_ops` und
+`prepare_ops` erhält denselben `ctx.cancelled`; sie erzeugt kein eigenes
+Token und gibt bei Abbruch kein Teilresultat zurück.
+
 `lid.screw_lid` benennt Hals- und Deckelgewinde aus demselben rechtsgängigen
 `thread_body`-Erzeuger mit `handedness="right"`. Das Innenwerkzeug ändert den
 Materialbereich, nicht den Drehsinn. Lageänderungen benutzen weiterhin den

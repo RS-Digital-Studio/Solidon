@@ -50,6 +50,9 @@ ANGULAR_DEFLECTION = MAX_FACET_ANGLE
 #: Bohrung ein einzelnes, fremdes Dreieck der Außenwand.
 _FACE_ATTRIBUTE = "solidon_brep_face"
 
+# Begrenzte Anzahl nativer Trägerhüllen, keine geometrische Toleranz.
+_MAX_SURFACE_WRAPPERS = 64
+
 
 class BRepUnavailable(AppError):
     """Der B-Rep-Kern ist nicht installiert."""
@@ -99,6 +102,26 @@ def box_limits(box: Any) -> tuple[float, float, float, float, float, float]:
         float(high.Y()),
         float(high.Z()),
     )
+
+
+def untrimmed_surface(surface: Any, *, cancelled: CancelToken | None = None) -> Any | None:
+    """Liest unter rechteckigen Trägerhüllen, ohne Form oder Parametrisierung zu ändern.
+
+    Die wirklichen Trimmgrenzen bleiben beim ursprünglichen Face/Adaptor.
+    Der zurückgegebene Handle ist eine lesende Auskunft, keine Arbeitskopie.
+    Bei zu tiefer Verschachtelung bleibt die Auskunft ausdrücklich offen.
+    """
+    from OCP.Geom import Geom_RectangularTrimmedSurface
+
+    for depth in range(_MAX_SURFACE_WRAPPERS + 1):
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        if not isinstance(surface, Geom_RectangularTrimmedSurface):
+            return surface
+        if depth == _MAX_SURFACE_WRAPPERS:
+            return None
+        surface = surface.BasisSurface()
+    return None
 
 
 def available() -> bool:

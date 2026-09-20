@@ -30,9 +30,12 @@ geht die exakte Geometrie, und Rückgängig stellt sie wieder her.
 Boolesche Operationen werden durch `kernel.boolean_builder` leer angelegt:
 NonDestructive und gegebenenfalls Fuzzy-Toleranz stehen **vor** dem ersten
 Build. Der Zwei-Shape-Konstruktor rechnet bereits und wird nicht benutzt.
-Fillet, Chamfer, Shell, Draft, ShapeFix und Press/Pull erhalten private
+Fillet, Chamfer, Defeaturing, Shell, Draft, ShapeFix und Press/Pull erhalten private
 Eingabeformen einschließlich der daraus gewählten Flächen/Kanten. Ein neuer
 Ergebnis-Solid trennt anschließend auch die vom Builder geteilten Unterformen.
+`unround` wählt die Rundungsfläche bereits auf seiner Arbeitskopie. So bleibt
+auch beim darauf aufbauenden `reround` die ursprüngliche NURBS-Geometrie
+einschließlich Polgrad, Knoten und Randkurven unverändert.
 
 Die Wandschranke vor Fillet und Chamfer prüft die echten Trägerflächen der
 gewählten Kanten. `triangles_of_face` ordnet ihnen die Werte der Wandkarte zu;
@@ -60,6 +63,49 @@ weiter mit kaltem Cache. `faces_of_triangles` ist die geprüfte inverse Zuordnun
 zu `triangles_of_face` und weist negative oder fremde Dreiecksindices zurück.
 Weder Besuchsreihenfolge noch alte Dreiecksindices ersetzen diese Zuordnung.
 
+`canonical.describe` ist die gemeinsame Trägerauskunft für Erkennung,
+Nachbarschaft, Langloch und die Flächenauswahl in `edit`/`profiles`. Eine
+`PlaneSurface` trägt die Normale der ursprünglichen Fläche; eine
+`CylinderSurface` trägt echte axiale Längen, Winkelabdeckung und Materialseite.
+NURBS-Parameter werden nie als Winkel oder Länge ausgegeben. Die gerichtete
+Innenprobe liegt innerhalb der wirklichen Trimmkontur, auch bei Innenlöchern.
+
+Kanonische Kandidaten verwenden ausschließlich `EPS_GEOM` als numerische
+Geometriegrenze. Jeder Versuch bekommt einen frischen OCCT-Recognizer;
+Status und endliches `GetGap` werden geprüft. Zusätzlich werden alle
+rationalen Bézier-Knotenspannen gegen Ebene beziehungsweise Kreiszylinder
+begrenzt geprüft. Ein örtlicher Ausschlag zwischen Punktproben kann so nicht
+durch einen günstigen gemeldeten Gap verschwinden. Das ist weder ein globaler
+Hausdorff-Nachweis noch eine Fertigungsunsicherheit. Ungeklärte Träger bleiben
+unklassifiziert; Erkennung ersetzt niemals die gespeicherte Form.
+
+Periodische U- und V-Trimmungen werden an ihrer Naht in Intervalle der
+Trägerperiode geteilt. Eine gültige Trimmung außerhalb des nominellen
+Parameterintervalls wird weder abgeschnitten noch verworfen. Die zusätzliche
+Bézier-Prüfung arbeitet auch dort ausschließlich mit privaten Kopien.
+
+Offset-Flächen verwenden denselben Kandidatenweg für ihre private Basis.
+Die natürliche Parameternormale bestimmt die signierte Verschiebung; die
+Orientierung der ursprünglichen Fläche bestimmt weiterhin die Materialseite.
+Neben der Lage wird der Normalenfehler aus rationalen Bézier-Ableitungen
+begrenzt: Lagefehler plus Offsetbetrag mal Normalenfehler bleibt innerhalb
+von `EPS_GEOM`. GetGap am Offset allein reicht nicht. Die zusätzlichen
+Koeffizientenprodukte teilen Abbruch und Arbeitsgrenze der Basisprüfung.
+OCCT fasst konstruktiv geschachtelte Offsets zusammen; verbleibende
+Offset-Basen bleiben ohne rekursive Suche unklassifiziert.
+`kernel.untrimmed_surface` ist die gemeinsame lesende Auskunft unter
+rechteckigen Trägerhüllen. Sie erhält die Geometrie und begrenzt die Hülltiefe;
+die tatsächlichen UV-Grenzen stammen immer vom ursprünglichen Face/Adaptor.
+
+Die NURBS-Hülle von `AddOptimal` enthält auch ohne Formtoleranz einen internen
+Zuschlag. Für axiale Endlagen werden deshalb tatsächliche Abstände der
+begrenzten Fläche zu äußeren Messebenen verwendet. Winkel kommen aus den
+projizierten ursprünglichen Randkurven, einschließlich Nahtübergängen.
+Alle Hilfsformen bleiben privat. `ctx.cancelled` reicht von jedem
+Operationsaufrufer durch `features_of`, Trägerprüfung und Nachbarwege bis zu
+den Python-Koeffizientenschleifen und der gemeinsamen Maßintegration;
+`OperationCancelled` bleibt dabei unverändert erhalten.
+
 `properties.py` liefert unveränderliche `MassProperties` für Körpermaße und
 Merkmalsauskunft gemeinsam. Analytische Flächen bleiben im nativen Standardweg.
 Das gilt auch für ihre BSpline-Trimmkurven: unabhängige polynomiale
@@ -75,6 +121,15 @@ Trägheitsrechnung nicht terminieren und lässt innere V-Knotenspannen aus;
 eine kleine gemeldete Unsicherheit ist dort kein ausreichender Nachweis.
 Volumenträgheit wird ausdrücklich als nicht berechnet geführt und ist keine
 öffentliche Körperauskunft.
+Eine Offset- oder Trimmhülle ändert die nötigen Integrationsspannen ihrer
+NURBS-Basis nicht. `properties` liest diese Basis über die gemeinsame native
+Trimmhüllenauskunft, nutzt ihre Knoten für Unterteilung und Randintegration
+und integriert weiterhin die ursprüngliche Offsetfläche. Ein kleiner nativer
+Fehlerwert ersetzt auch dort keinen Nachweis über die Knotenspannen.
+Schräg verlaufende Trimmränder werden an ihren tatsächlichen Schnitten mit
+U- und V-Knoten zerlegt; auch die äußere Randintegration muss jede schmale
+Spanne sehen. Periodische Basisknoten werden in das wirkliche Trimmintervall
+verschoben, ohne die veröffentlichte Parametrisierung zu verändern.
 Alle Beiträge teilen einen Ursprung und berücksichtigen gerichtete innere
 Wände sowie gemeinsame Flächen mehrerer Körper.
 
@@ -349,6 +404,7 @@ Anwendung gegen die installierte Bindung.
 | `ops.py` | Die B-Rep-Operationen im Register (§25, §10) — **ohne** Verrunden und Fase, die stehen in `geom/edge_ops.py` |
 | `edit.py` | Einen Körper formen |
 | `features.py` | Merkmale aus der Topologie (§30, §21) |
+| `canonical.py` | Geprüfte Ebenen-/Zylinderträger mit wirklichen Flächengrenzen (§30, §21) |
 | `properties.py` | Gemeinsame native Integrale mit geprüftem Rückfall für getrimmte NURBS (§30, §11) |
 | `step.py` | STEP hinein und hinaus |
 

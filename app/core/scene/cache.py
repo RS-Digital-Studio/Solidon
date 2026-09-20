@@ -69,7 +69,9 @@ DEFAULT_DISK_BUDGET_BYTES: Final = 2 * 1024 * 1024 * 1024
 #: (``extra_colours``); ein alter Eintrag ohne sie ist kein gültiger Stand.
 #: Native Flächenhistorie und ungerundete Integrale ersetzen alte Tessellierungs-
 #: und Maßauskünfte auch in vernetzten Folgeergebnissen.
-CACHE_FORMAT_VERSION: Final = 11
+#: NURBS-Träger liefern ihre bestätigten Ebenen und Zylinder aus der Originalform;
+#: leere frühere Auskünfte dürfen keine Folgeoperation aus dem Cache weitertragen.
+CACHE_FORMAT_VERSION: Final = 12
 
 
 @dataclass(frozen=True, slots=True)

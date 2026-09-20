@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from itertools import pairwise
+from itertools import chain, pairwise
 from typing import Any, Literal, cast
 
 from app.core.errors import (
@@ -100,12 +100,29 @@ def _faces(shape: Any, *, cancelled: CancelToken | None = None) -> list[Any]:
     return faces
 
 
-def _needs_spans(face: Any) -> bool:
-    """Analytische Flächen behalten ihren einfachen nativen Integrationsweg."""
-    from OCP.BRepAdaptor import BRepAdaptor_Surface
-    from OCP.GeomAbs import GeomAbs_BezierSurface, GeomAbs_BSplineSurface
+def _spline_basis(face: Any, *, cancelled: CancelToken | None = None) -> Any | None:
+    """Liest die NURBS-Basis auch unter Offset- und Trimmhüllen, ohne sie zu verändern."""
+    from OCP.BRep import BRep_Tool
+    from OCP.Geom import Geom_BezierSurface, Geom_BSplineSurface, Geom_OffsetSurface
 
-    return BRepAdaptor_Surface(face).GetType() in (GeomAbs_BSplineSurface, GeomAbs_BezierSurface)
+    from app.core.brep.kernel import _MAX_SURFACE_WRAPPERS, untrimmed_surface
+
+    surface = BRep_Tool.Surface_s(face)
+    for _depth in range(_MAX_SURFACE_WRAPPERS + 1):
+        surface = untrimmed_surface(surface, cancelled=cancelled)
+        if surface is None:
+            raise _unresolved_integral()
+        if isinstance(surface, (Geom_BSplineSurface, Geom_BezierSurface)):
+            return surface
+        if not isinstance(surface, Geom_OffsetSurface):
+            return None
+        surface = surface.BasisSurface()
+    raise _unresolved_integral()
+
+
+def _needs_spans(face: Any, *, cancelled: CancelToken | None = None) -> bool:
+    """Analytische Flächen behalten ihren einfachen nativen Integrationsweg."""
+    return _spline_basis(face, cancelled=cancelled) is not None
 
 
 def _split_values(
@@ -120,14 +137,7 @@ def _split_values(
     """Unterteilt jede vollständige Knotenspanne innerhalb des getrimmten Gebiets."""
     from OCP.collections import HSequence_double
 
-    knots = [low, high]
-    count = getattr(surface, f"Nb{axis}Knots", None)
-    if count is not None:
-        knot = getattr(surface, f"{axis}Knot")
-        knots.extend(
-            value for index in range(1, count() + 1) if low < (value := float(knot(index))) < high
-        )
-    knots = sorted(set(knots))
+    knots = [low, *_knots(surface, axis, low, high, cancelled=cancelled), high]
     result = HSequence_double()
     for first, last in pairwise(knots):
         if cancelled is not None:
@@ -136,6 +146,41 @@ def _split_values(
             result.Append(first + (last - first) * step / subdivisions)
     result.Append(high)
     return result
+
+
+def _knots(
+    surface: Any, axis: str, low: float, high: float, *, cancelled: CancelToken | None = None
+) -> tuple[float, ...]:
+    """Innere Basisknoten im wirklichen Trimmintervall, auch über einer periodischen Naht."""
+    count = getattr(surface, f"Nb{axis}Knots", None)
+    if count is None:
+        return ()
+    total = count()
+    if total > _MAX_PATCHES:
+        raise _unresolved_integral()
+    period = (
+        float(getattr(surface, f"{axis}Period")())
+        if getattr(surface, f"Is{axis}Periodic")()
+        else None
+    )
+    values = set()
+    for index in range(1, total + 1):
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        value = float(getattr(surface, f"{axis}Knot")(index))
+        if period is None:
+            if low < value < high:
+                values.add(value)
+            continue
+        first = math.floor((low - value) / period) + 1
+        last = math.ceil((high - value) / period)
+        if last - first > _MAX_PATCHES:
+            raise _unresolved_integral()
+        for shift in range(first, last):
+            values.add(value + shift * period)
+            if len(values) > _MAX_PATCHES:
+                raise _unresolved_integral()
+    return tuple(sorted(values))
 
 
 def _patches(
@@ -161,8 +206,9 @@ def _patches(
     low_u, high_u, low_v, high_v = BRepGProp_Face(face).Bounds()
     if not all(math.isfinite(value) for value in (low_u, high_u, low_v, high_v)):
         raise _unresolved_integral()
-    u_values = _split_values(surface, "U", low_u, high_u, subdivisions, cancelled=cancelled)
-    v_values = _split_values(surface, "V", low_v, high_v, subdivisions, cancelled=cancelled)
+    basis = _spline_basis(face, cancelled=cancelled)
+    u_values = _split_values(basis, "U", low_u, high_u, subdivisions, cancelled=cancelled)
+    v_values = _split_values(basis, "V", low_v, high_v, subdivisions, cancelled=cancelled)
     if (u_values.Length() - 1) * (v_values.Length() - 1) > _MAX_PATCHES:
         raise _unresolved_integral()
     splitter = ShapeUpgrade_SplitSurface()
@@ -255,21 +301,14 @@ def _spanned_surface(face: Any, *, cancelled: CancelToken | None = None) -> Mass
     raise _unresolved_integral()
 
 
-def _v_knots(face: Any) -> tuple[float, ...]:
+def _v_knots(face: Any, *, cancelled: CancelToken | None = None) -> tuple[float, ...]:
     """Innere V-Knoten verlangen explizite Schnitte der Randkurven."""
     from OCP.BRepAdaptor import BRepAdaptor_Surface
-    from OCP.GeomAbs import GeomAbs_BSplineSurface
 
     adaptor = BRepAdaptor_Surface(face)
-    if adaptor.GetType() != GeomAbs_BSplineSurface:
-        return ()
-    surface = adaptor.BSpline()
+    surface = _spline_basis(face, cancelled=cancelled)
     low, high = adaptor.FirstVParameter(), adaptor.LastVParameter()
-    return tuple(
-        float(value)
-        for index in range(2, surface.NbVKnots())
-        if low < (value := surface.VKnot(index)) < high
-    )
+    return _knots(surface, "V", low, high, cancelled=cancelled)
 
 
 def _boundary_parameters(
@@ -278,9 +317,10 @@ def _boundary_parameters(
     native: Any,
     v_knots: tuple[float, ...],
     *,
+    u_knots: tuple[float, ...] = (),
     cancelled: CancelToken | None = None,
 ) -> list[float]:
-    """Trimmkurven-Knoten und ihre tatsächlichen Schnitte mit inneren V-Knoten."""
+    """Trimmkurven-Knoten und ihre tatsächlichen Schnitte mit inneren U-/V-Knoten."""
     from OCP.BRepAdaptor import BRepAdaptor_Curve2d
     from OCP.collections import Array1_double
     from OCP.Geom2d import Geom2d_Line
@@ -299,7 +339,7 @@ def _boundary_parameters(
         for index in range(knots.Lower(), knots.Upper() + 1)
         if first < (value := knots.Value(index)) < last
     }
-    if v_knots:
+    if u_knots or v_knots:
         curve = BRepAdaptor_Curve2d(edge, face).Curve()
         if edge.Orientation() == TopAbs_REVERSED:
             curve = curve.Reversed()
@@ -307,10 +347,14 @@ def _boundary_parameters(
         low_u, high_u, low_v, high_v = native.Bounds()
         # Eine relative Rechengenauigkeit im UV-Raum, keine Längentoleranz.
         precision = _PATCH_RELATIVE_ERROR * max(high_u - low_u, high_v - low_v)
-        for v in v_knots:
+        lines = chain(
+            ((gp_Pnt2d(u, 0.0), gp_Dir2d(0.0, 1.0)) for u in u_knots),
+            ((gp_Pnt2d(0.0, v), gp_Dir2d(1.0, 0.0)) for v in v_knots),
+        )
+        for point, direction in lines:
             if cancelled is not None:
                 cancelled.raise_if_cancelled()
-            line = Geom2dAdaptor_Curve(Geom2d_Line(gp_Pnt2d(0.0, v), gp_Dir2d(1.0, 0.0)))
+            line = Geom2dAdaptor_Curve(Geom2d_Line(point, direction))
             crossing = Geom2dInt_GInter(boundary, line, precision, precision)
             if not crossing.IsDone():
                 raise _unresolved_integral()
@@ -353,10 +397,17 @@ def _uv_moments(
     orientation = -1.0 if face.Orientation() == TopAbs_REVERSED else 1.0
     count = 10 if kind == "surface" else 4
     native = BRepGProp_Face(forward, True)
-    v_knots = _v_knots(forward)
+    v_knots = _v_knots(forward, cancelled=cancelled)
     low_u, high_u, _, _ = native.Bounds()
     knots = native.GetUKnots(low_u, high_u)
-    u_knots = [float(knots.Value(index)) for index in range(knots.Lower(), knots.Upper() + 1)]
+    u_knots = sorted(
+        {float(knots.Value(index)) for index in range(knots.Lower(), knots.Upper() + 1)}
+        | set(
+            _knots(
+                _spline_basis(forward, cancelled=cancelled), "U", low_u, high_u, cancelled=cancelled
+            )
+        )
+    )
     point, normal = gp_Pnt(), gp_Vec()
     uv, derivative = gp_Pnt2d(), gp_Vec2d()
     evaluations = 0
@@ -419,7 +470,9 @@ def _uv_moments(
         first, last = native.FirstParameter(), native.LastParameter()
         if not math.isfinite(first) or not math.isfinite(last):
             raise _unresolved_integral()
-        parameters = _boundary_parameters(forward, edge, native, v_knots, cancelled=cancelled)
+        parameters = _boundary_parameters(
+            forward, edge, native, v_knots, u_knots=tuple(u_knots), cancelled=cancelled
+        )
         values, error, info = quad_vec(
             along_boundary,
             first,
@@ -563,7 +616,7 @@ def properties(
         for face in faces:
             if cancelled is not None:
                 cancelled.raise_if_cancelled()
-            requires_spans.append(_needs_spans(face))
+            requires_spans.append(_needs_spans(face, cancelled=cancelled))
         if not any(requires_spans):
             try:
                 return _integrate(shape, kind, cancelled=cancelled)

@@ -40,7 +40,15 @@ from app.core.geom.edges import (
 )
 from app.core.geom.mesh import as_mesh_data
 from app.core.registry import op_params, param, register_op
-from app.core.types import BaseParams, Finding, OpContext, OpResult, Profile, SceneObject
+from app.core.types import (
+    BaseParams,
+    CancelToken,
+    Finding,
+    OpContext,
+    OpResult,
+    Profile,
+    SceneObject,
+)
 from app.core.units import EPS_GEOM
 from app.i18n import _
 
@@ -278,7 +286,15 @@ def _worked(
     """
     source = ctx.inputs[0]
     if source.kind == "brep":
-        return _on_a_solid(source, size, choice, keys, profile=ctx.profile, rounded=rounded)
+        return _on_a_solid(
+            source,
+            size,
+            choice,
+            keys,
+            profile=ctx.profile,
+            rounded=rounded,
+            cancelled=ctx.cancelled,
+        )
 
     body = as_mesh_data(source.mesh)
     work = round_edges if rounded else bevel_edges
@@ -311,6 +327,7 @@ def _on_a_solid(
     *,
     profile: Profile | None,
     rounded: bool,
+    cancelled: CancelToken,
 ) -> OpResult:
     """Der exakte Weg — träge geholt, weil OpenCASCADE optional ist (§36).
 
@@ -326,7 +343,11 @@ def _on_a_solid(
     solid = work(cast(Solid, source.mesh), size, choice, keys)
     empty = _too_small_to_see(source.mesh, solid, profile, kind="fillet" if rounded else "chamfer")
     return OpResult(
-        outputs=[dataclasses.replace(source, mesh=solid, kind="brep", features=features_of(solid))],
+        outputs=[
+            dataclasses.replace(
+                source, mesh=solid, kind="brep", features=features_of(solid, cancelled=cancelled)
+            )
+        ],
         findings=[dataclasses.replace(empty, object_id=source.id)] if empty is not None else [],
     )
 

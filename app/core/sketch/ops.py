@@ -38,6 +38,7 @@ from app.core.sketch.serialize import sketch_from_text
 from app.core.sketch.solver import solve_sketch
 from app.core.types import (
     BaseParams,
+    CancelToken,
     Finding,
     OpContext,
     OpResult,
@@ -302,7 +303,7 @@ def _profile_for(
     return _sketch_profile(shape, length, width, corners)
 
 
-def _created(name: str, fallback: str, solid: Solid) -> SceneObject:
+def _created(name: str, fallback: str, solid: Solid, *, cancelled: CancelToken) -> SceneObject:
     """Das Ergebnis als Szenenobjekt — nachdem feststeht, dass eines da ist.
 
     Alle vier Erzeuger-Ops laufen hier durch. Ein Ergebnis ohne Körper wurde
@@ -322,7 +323,11 @@ def _created(name: str, fallback: str, solid: Solid) -> SceneObject:
             ),
         )
     return SceneObject(
-        id="", name=name or fallback, mesh=solid, kind="brep", features=features_of(solid)
+        id="",
+        name=name or fallback,
+        mesh=solid,
+        kind="brep",
+        features=features_of(solid, cancelled=cancelled),
     )
 
 
@@ -461,7 +466,10 @@ def sketch_extrude(ctx: OpContext) -> OpResult:
     )
     bodies = [profiles.extrude(one, height, plane, frame) for one in chosen]
     solid = bodies[0] if len(bodies) == 1 else edit.boolean("union", bodies)
-    return OpResult(outputs=[_created(params.name, str(_("Grundform")), solid)], findings=findings)
+    return OpResult(
+        outputs=[_created(params.name, str(_("Grundform")), solid, cancelled=ctx.cancelled)],
+        findings=findings,
+    )
 
 
 @op_params
@@ -834,7 +842,14 @@ def cut_regions(
     # eine Magnettasche daneben setzt (`geom/boolean.without_effect`).
     nothing = without_effect(body, solid, "difference", ctx.profile)
     return OpResult(
-        outputs=[dataclasses.replace(source, mesh=solid, kind="brep", features=features_of(solid))],
+        outputs=[
+            dataclasses.replace(
+                source,
+                mesh=solid,
+                kind="brep",
+                features=features_of(solid, cancelled=ctx.cancelled),
+            )
+        ],
         findings=[*findings, *([nothing] if nothing is not None else [])],
     )
 
@@ -970,7 +985,8 @@ def sketch_revolve(ctx: OpContext) -> OpResult:
         placed = shifted(profile, params.offset - low[0], -low[1])
     solid = profiles.revolve(placed, params.angle)
     return OpResult(
-        outputs=[_created(params.name, str(_("Rotationskörper")), solid)], findings=findings
+        outputs=[_created(params.name, str(_("Rotationskörper")), solid, cancelled=ctx.cancelled)],
+        findings=findings,
     )
 
 
@@ -1108,9 +1124,15 @@ def sketch_sweep(ctx: OpContext) -> OpResult:
             )
         path = path_of(_solved_drawing(ctx, params.path_sketch, findings))
         solid = profiles.sweep_path(profile, path, _plane_of(params.path_sketch))
-        return OpResult(outputs=[_created(params.name, str(_("Bahn")), solid)], findings=findings)
+        return OpResult(
+            outputs=[_created(params.name, str(_("Bahn")), solid, cancelled=ctx.cancelled)],
+            findings=findings,
+        )
     solid = profiles.sweep_arc(profile, params.bend_radius, params.bend_angle)
-    return OpResult(outputs=[_created(params.name, str(_("Bogen")), solid)], findings=findings)
+    return OpResult(
+        outputs=[_created(params.name, str(_("Bogen")), solid, cancelled=ctx.cancelled)],
+        findings=findings,
+    )
 
 
 @op_params
@@ -1216,7 +1238,9 @@ def sketch_loft(ctx: OpContext) -> OpResult:
             params.corners,
         )
         solid = profiles.loft(bottom, top, params.height)
-        return OpResult(outputs=[_created(params.name, str(_("Übergang")), solid)])
+        return OpResult(
+            outputs=[_created(params.name, str(_("Übergang")), solid, cancelled=ctx.cancelled)]
+        )
 
     # **Die gezeichnete Skizze, und ihre eigene verkleinerte Kopie darüber.**
     # Diese Operation war die einzige der fünf ohne Skizzenfeld, und der
@@ -1241,7 +1265,10 @@ def sketch_loft(ctx: OpContext) -> OpResult:
             profiles.loft(one, scaled(one, params.top_scale, centre), params.height, plane, frame)
         )
     solid = bodies[0] if len(bodies) == 1 else edit.boolean("union", bodies)
-    return OpResult(outputs=[_created(params.name, str(_("Übergang")), solid)], findings=findings)
+    return OpResult(
+        outputs=[_created(params.name, str(_("Übergang")), solid, cancelled=ctx.cancelled)],
+        findings=findings,
+    )
 
 
 def _loft_between_drawings(
@@ -1327,4 +1354,7 @@ def _loft_between_drawings(
         for below, above in zip(lower, upper, strict=True)
     ]
     solid = bodies[0] if len(bodies) == 1 else edit.boolean("union", bodies)
-    return OpResult(outputs=[_created(params.name, str(_("Übergang")), solid)], findings=findings)
+    return OpResult(
+        outputs=[_created(params.name, str(_("Übergang")), solid, cancelled=ctx.cancelled)],
+        findings=findings,
+    )

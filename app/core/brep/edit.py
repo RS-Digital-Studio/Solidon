@@ -21,6 +21,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from typing import Any, Literal, cast
 
+from app.core.brep.canonical import CylinderSurface
+from app.core.brep.canonical import describe as describe_surface
 from app.core.brep.kernel import DEFLECTION, Solid, boolean_builder, require
 from app.core.errors import (
     CANCEL,
@@ -1077,7 +1079,9 @@ def moved(solid: Solid, offset: Vec3) -> Solid:
     )
 
 
-def unround(solid: Solid, centre: Vec3, radius: float) -> Solid:
+def unround(
+    solid: Solid, centre: Vec3, radius: float, *, cancelled: CancelToken | None = None
+) -> Solid:
     """Nimmt eine Verrundung weg und stellt die scharfe Kante her (§30).
 
     Über ``BRepAlgoAPI_Defeaturing`` und nicht über einen Füllkörper: Der
@@ -1093,7 +1097,10 @@ def unround(solid: Solid, centre: Vec3, radius: float) -> Solid:
     require()
     from OCP.BRepAlgoAPI import BRepAlgoAPI_Defeaturing
 
-    face = _cylinder_at(solid, centre, radius)
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+    working = Solid(solid.shape, deflection=solid.deflection)
+    face = _cylinder_at(working, centre, radius, cancelled=cancelled)
     if face is None:
         raise GeometryError(
             detail=_(
@@ -1104,9 +1111,13 @@ def unround(solid: Solid, centre: Vec3, radius: float) -> Solid:
             suggestions=(CORRECT_INPUT, CANCEL),
         )
     builder = BRepAlgoAPI_Defeaturing()
-    builder.SetShape(solid.shape)
+    builder.SetShape(working.shape)
     builder.AddFaceToRemove(face)
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
     builder.Build()
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
     if not builder.IsDone():
         raise GeometryError(
             detail=_(
@@ -1119,28 +1130,30 @@ def unround(solid: Solid, centre: Vec3, radius: float) -> Solid:
     return Solid(builder.Shape())
 
 
-def _cylinder_at(solid: Solid, centre: Vec3, radius: float) -> Any | None:
+def _cylinder_at(
+    solid: Solid, centre: Vec3, radius: float, *, cancelled: CancelToken | None = None
+) -> Any | None:
     """Die Zylinderfläche dieses Radius an dieser Stelle — oder ``None``."""
-    from OCP.BRepAdaptor import BRepAdaptor_Surface
     from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeVertex
     from OCP.BRepExtrema import BRepExtrema_DistShapeShape
-    from OCP.GeomAbs import GeomAbs_Cylinder
     from OCP.gp import gp_Pnt
     from OCP.TopAbs import TopAbs_FACE
     from OCP.TopExp import TopExp_Explorer
     from OCP.TopoDS import TopoDS
 
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
     probe = BRepBuilderAPI_MakeVertex(gp_Pnt(*centre)).Vertex()
     best: Any | None = None
     closest = math.inf
     explorer = TopExp_Explorer(solid.shape, TopAbs_FACE)
     while explorer.More():
         face = TopoDS.Face(explorer.Current())
-        surface = BRepAdaptor_Surface(face)
+        surface = describe_surface(face, cancelled=cancelled)
         explorer.Next()
-        if surface.GetType() != GeomAbs_Cylinder:
+        if not isinstance(surface, CylinderSurface):
             continue
-        cylinder = surface.Cylinder()
+        cylinder = surface.cylinder
         # Der Radius kommt aus derselben exakten Topologie. Ein relatives
         # Fenster verwechselte die nahe Außenwand einer dünnen C-Klemme mit
         # ihrer Innenwand, weil deren Fläche dem Schwerpunkt näher liegt.
@@ -1149,6 +1162,8 @@ def _cylinder_at(solid: Solid, centre: Vec3, radius: float) -> Any | None:
         # Die begrenzte Fläche unterscheidet auch zwei Rundungen auf derselben
         # Achse. Weder die unendliche Achse noch ihr beliebiger Ursprung tun das.
         distance = BRepExtrema_DistShapeShape(probe, face)
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
         if not distance.IsDone():
             return None
         away = distance.Value()
@@ -1157,7 +1172,14 @@ def _cylinder_at(solid: Solid, centre: Vec3, radius: float) -> Any | None:
     return best
 
 
-def reround(solid: Solid, centre: Vec3, radius: float, wanted: float) -> Solid:
+def reround(
+    solid: Solid,
+    centre: Vec3,
+    radius: float,
+    wanted: float,
+    *,
+    cancelled: CancelToken | None = None,
+) -> Solid:
     """Ändert den Radius einer Verrundung — wegnehmen, neu verrunden.
 
     Dieselbe Zweiteilung wie am Netz (``geom.edges.reround``), und aus
@@ -1168,10 +1190,12 @@ def reround(solid: Solid, centre: Vec3, radius: float, wanted: float) -> Solid:
     Achse der alten Rundung. Ein Index in die Topologie wäre nach dem
     Defeaturing ein anderer.
     """
-    radial = radial_rounding(solid, centre, radius, wanted)
+    radial = radial_rounding(solid, centre, radius, wanted, cancelled=cancelled)
     if radial is not None:
         return radial
-    sharp = unround(solid, centre, radius)
+    sharp = unround(solid, centre, radius, cancelled=cancelled)
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
     described = edges_of(sharp)
     if not described:
         raise GeometryError(
@@ -1182,38 +1206,47 @@ def reround(solid: Solid, centre: Vec3, radius: float, wanted: float) -> Solid:
             suggestions=(CORRECT_INPUT, CANCEL),
         )
     nearest = min(described, key=lambda entry: math.dist(entry.middle, centre))
-    return fillet(sharp, wanted, "named", [edge_key(nearest)])
+    result = fillet(sharp, wanted, "named", [edge_key(nearest)])
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+    return result
 
 
-def radial_rounding(solid: Solid, centre: Vec3, radius: float, wanted: float) -> Solid | None:
+def radial_rounding(
+    solid: Solid,
+    centre: Vec3,
+    radius: float,
+    wanted: float,
+    *,
+    cancelled: CancelToken | None = None,
+) -> Solid | None:
     """Versetzt einen mindestens halben Zylindermantel innerhalb seiner echten Randkurven."""
-    from OCP.BRepAdaptor import BRepAdaptor_Surface
     from OCP.BRepBuilderAPI import BRepBuilderAPI_Copy
     from OCP.BRepCheck import BRepCheck_Analyzer
-    from OCP.BRepGProp import BRepGProp
     from OCP.BRepLib import BRepLib
     from OCP.BRepOffsetAPI import BRepOffsetAPI_MakeThickSolid
-    from OCP.GProp import GProp_GProps
-    from OCP.TopAbs import TopAbs_REVERSED, TopAbs_SOLID
+    from OCP.TopAbs import TopAbs_SOLID
     from OCP.TopoDS import TopoDS
 
     from app.core.geom.edges import validate_radial_change
 
-    face = _cylinder_at(solid, centre, radius)
+    face = _cylinder_at(solid, centre, radius, cancelled=cancelled)
     if face is None:
         return None
-    surface = BRepAdaptor_Surface(face)
-    if abs(surface.LastUParameter() - surface.FirstUParameter()) < math.pi - EPS_GEOM:
+    surface = describe_surface(face, cancelled=cancelled)
+    if not isinstance(surface, CylinderSurface) or surface.turn < math.pi - EPS_GEOM:
         return None
     # Linkshändige Zylindersysteme kehren die natürliche Mantelnormale um;
     # die Topologieorientierung allein bezeichnet dort die falsche Seite.
-    inward = (face.Orientation() == TopAbs_REVERSED) == surface.Cylinder().Position().Direct()
-    actual = float(surface.Cylinder().Radius())
+    inward = surface.inward
+    actual = float(surface.cylinder.Radius())
     offset = (actual - wanted) if inward else (wanted - actual)
     try:
         private = BRepBuilderAPI_Copy(face, True, False).Shape()
         builder = BRepOffsetAPI_MakeThickSolid()
         builder.MakeThickSolidBySimple(private, offset)
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
         if not builder.IsDone():
             raise ValueError("Radial offset did not produce a shape")
         shape = builder.Shape()
@@ -1241,9 +1274,11 @@ def radial_rounding(solid: Solid, centre: Vec3, radius: float, wanted: float) ->
             suggestions=(CORRECT_INPUT, CANCEL),
         ) from problem
     skin = Solid(skin_shape)
-    props = GProp_GProps()
-    BRepGProp.SurfaceProperties_s(skin.shape, props)
+    volume = skin._properties("volume", cancelled=cancelled).mass
+    area = skin._properties("surface", cancelled=cancelled).mass
+    solid._properties("volume", cancelled=cancelled)
     subtracted = (wanted > actual) == inward
     result = boolean("difference" if subtracted else "union", [solid, skin])
-    validate_radial_change(solid, result, skin.volume, float(props.Mass()))
+    result._properties("volume", cancelled=cancelled)
+    validate_radial_change(solid, result, volume, area)
     return result

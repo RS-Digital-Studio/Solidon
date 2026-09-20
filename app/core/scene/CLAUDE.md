@@ -234,6 +234,11 @@ Geometrie- und Merkmalsauskunft. Eine geänderte Erkennung entwertet damit
 Speicher- und Platteneinträge gemeinsam. Dokumentwerte und gespeicherte
 Operationen bleiben dabei unverändert; die Cacheversion ist kein Projektformat.
 
+Das gilt auch für zuvor unerkannte analytische Träger in NURBS: Ein neu
+bestätigtes Flächen- oder Bohrungsmerkmal muss durch Import und Folgeoperationen
+hindurch neu berechnet werden. Exakte Körper werden weiterhin nur im Speicher
+gehalten; der Plattencache bewahrt ausschließlich seine unterstützten Netze.
+
 `parameter_uses` beginnt bei den Feldern des aktuellen Operationsstapels und
 folgt deren Projektparametern durch die Ausdrucksabhängigkeiten. Jeder
 Parameter erhält seine direkten und abgeleiteten Fundstellen mit Schritt

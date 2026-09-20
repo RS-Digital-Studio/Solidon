@@ -15,11 +15,15 @@ import math
 from collections.abc import Callable
 from typing import Any, Final
 
+from app.core.brep.canonical import PlaneSurface
+from app.core.brep.canonical import describe as describe_surface
 from app.core.brep.kernel import DEFLECTION, Solid, boolean_builder, box_limits, require
+from app.core.brep.properties import properties
 from app.core.errors import (
     PROGRAMMING_ERRORS,
     Action,
     GeometryError,
+    OperationCancelled,
     ValidationError,
     require_positive,
 )
@@ -32,7 +36,7 @@ from app.core.sketch.profile import (
     signed_area,
     spline_controls,
 )
-from app.core.types import PlaneFrame, Point2
+from app.core.types import CancelToken, PlaneFrame, Point2
 from app.core.units import EPS_GEOM, is_zero
 from app.i18n import _
 
@@ -497,7 +501,9 @@ def loft(
     return solid
 
 
-def shell_open_top(solid: Solid, thickness: float) -> Solid:
+def shell_open_top(
+    solid: Solid, thickness: float, *, cancelled: CancelToken | None = None
+) -> Solid:
     """Höhlt den Körper exakt aus und lässt die Oberseite offen.
 
     Entfernt werden alle ebenen Flächen, die nach oben zeigen und auf der
@@ -507,21 +513,32 @@ def shell_open_top(solid: Solid, thickness: float) -> Solid:
     from OCP.collections import List_TopoDS_Shape
 
     require_positive("wall", thickness)
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
     working = Solid(solid.shape, deflection=solid.deflection)
-    tops = _top_faces(working)
+    tops = _top_faces(working, cancelled=cancelled)
     if not tops:
         raise GeometryError(
             detail=_("Dieser Körper hat keine ebene Oberseite, die sich öffnen ließe."),
         )
     removed = List_TopoDS_Shape()
     for face in tops:
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
         removed.Append(face)
     builder = BRepOffsetAPI_MakeThickSolid()
     builder.MakeThickSolidByJoin(working.shape, removed, -thickness, EPS_GEOM)
-    return _finished(builder, _("Für diese Wandstärke ist im Körper kein Platz."), solid)
+    return _finished(
+        builder,
+        _("Für diese Wandstärke ist im Körper kein Platz."),
+        solid,
+        cancelled=cancelled,
+    )
 
 
-def draft_vertical(solid: Solid, angle_deg: float) -> Solid:
+def draft_vertical(
+    solid: Solid, angle_deg: float, *, cancelled: CancelToken | None = None
+) -> Solid:
     """Stellt alle senkrechten Flächen um den Winkel an — die Formschräge.
 
     Neutral bleibt die Unterkante des Körpers: dort behält der Körper sein Maß,
@@ -534,16 +551,23 @@ def draft_vertical(solid: Solid, angle_deg: float) -> Solid:
         raise ValidationError(
             "angle", _("Der Winkel muss zwischen null und 30 Grad liegen."), value=angle_deg
         )
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
     working = Solid(solid.shape, deflection=solid.deflection)
-    uprights = _upright_faces(working)
+    uprights = _upright_faces(working, cancelled=cancelled)
     if not uprights:
         raise GeometryError(detail=_("Dieser Körper hat keine senkrechten Flächen."))
     neutral = gp_Pln(gp_Ax3(gp_Pnt(0.0, 0.0, solid.bounds.minimum[2]), gp_Dir(0.0, 0.0, 1.0)))
     builder = BRepOffsetAPI_DraftAngle(working.shape)
     for face in uprights:
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
         builder.Add(face, gp_Dir(0.0, 0.0, 1.0), math.radians(angle_deg), neutral)
     return _finished(
-        builder, _("Die Formschräge lässt sich an diesen Flächen nicht anlegen."), solid
+        builder,
+        _("Die Formschräge lässt sich an diesen Flächen nicht anlegen."),
+        solid,
+        cancelled=cancelled,
     )
 
 
@@ -986,53 +1010,55 @@ def _points(segment: Any) -> list[Point2]:
     return found
 
 
-def _top_faces(solid: Solid) -> list[Any]:
+def _top_faces(solid: Solid, *, cancelled: CancelToken | None = None) -> list[Any]:
     _, _, _, _, _, top = bounds(solid)
     found = []
-    for face, normal, centre in _planar_faces(solid):
+    for face, normal, centre in _planar_faces(solid, cancelled=cancelled):
         if normal[2] > 0.9 and abs(centre[2] - top) <= 1e-4:
             found.append(face)
     return found
 
 
-def _upright_faces(solid: Solid) -> list[Any]:
-    return [face for face, normal, _ in _planar_faces(solid) if abs(normal[2]) < 0.1]
+def _upright_faces(solid: Solid, *, cancelled: CancelToken | None = None) -> list[Any]:
+    return [
+        face
+        for face, normal, _ in _planar_faces(solid, cancelled=cancelled)
+        if abs(normal[2]) < 0.1
+    ]
 
 
-def _planar_faces(solid: Solid) -> list[tuple[Any, tuple[float, float, float], Any]]:
+def _planar_faces(
+    solid: Solid, *, cancelled: CancelToken | None = None
+) -> list[tuple[Any, tuple[float, float, float], Any]]:
     """Jede ebene Fläche mit ihrer nach außen zeigenden Normale und Mitte."""
-    from OCP.BRepAdaptor import BRepAdaptor_Surface
-    from OCP.BRepGProp import BRepGProp
-    from OCP.GeomAbs import GeomAbs_Plane
-    from OCP.GProp import GProp_GProps
-    from OCP.TopAbs import TopAbs_REVERSED
-
     found = []
     for face in solid.faces():
-        surface = BRepAdaptor_Surface(face)
-        if surface.GetType() != GeomAbs_Plane:
+        surface = describe_surface(face, cancelled=cancelled)
+        if not isinstance(surface, PlaneSurface):
             continue
-        direction = surface.Plane().Axis().Direction()
-        normal = [direction.X(), direction.Y(), direction.Z()]
-        if face.Orientation() == TopAbs_REVERSED:
-            normal = [-normal[0], -normal[1], -normal[2]]
-        props = GProp_GProps()
-        BRepGProp.SurfaceProperties_s(face, props)
-        centre = props.CentreOfMass()
-        found.append(
-            (face, (normal[0], normal[1], normal[2]), (centre.X(), centre.Y(), centre.Z()))
-        )
+        centre = properties(face, "surface", cancelled=cancelled).centre
+        found.append((face, surface.normal, centre))
     return found
 
 
-def _finished(builder: Any, sentence: Any, base: Solid | None = None) -> Solid:
+def _finished(
+    builder: Any,
+    sentence: Any,
+    base: Solid | None = None,
+    *,
+    cancelled: CancelToken | None = None,
+) -> Solid:
     """Baut fertig und macht aus dem Scheitern einen Satz mit Vorschlag (§33.1)."""
     try:
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
         builder.Build()
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
         if not builder.IsDone():
             raise GeometryError(detail=sentence)
         shape = builder.Shape()
-    except GeometryError:
+    except GeometryError, OperationCancelled:
         raise
     except PROGRAMMING_ERRORS:
         raise
@@ -1047,6 +1073,8 @@ def push_faces(
     direction: tuple[float, float, float],
     distance: float,
     centre: tuple[float, float, float] | None = None,
+    *,
+    cancelled: CancelToken | None = None,
 ) -> Solid:
     """Versetzt eine Fläche — oder alle einer Richtung — entlang ihrer Normalen.
 
@@ -1071,8 +1099,10 @@ def push_faces(
             _("Ohne Weg bewegt sich nichts — dieser Wert darf nicht null sein."),
             value=distance,
         )
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
     working = Solid(solid.shape, deflection=solid.deflection)
-    wanted = _facing(working, direction)
+    wanted = _facing(working, direction, cancelled=cancelled)
     if not wanted:
         raise ValidationError(
             "nx",
@@ -1081,10 +1111,12 @@ def push_faces(
             constraint="no_face",
         )
     if centre is not None:
-        wanted = _nearest_face(working, wanted, centre)
+        wanted = _nearest_face(working, wanted, centre, cancelled=cancelled)
 
     shape = working.shape
     for face, normal in wanted:
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
         reach = gp_Vec(*(value * abs(distance) for value in normal))
         prism = BRepPrimAPI_MakePrism(face, reach if distance > 0 else reach.Reversed()).Shape()
         joined = boolean_builder("union" if distance > 0 else "difference", shape, prism)
@@ -1096,12 +1128,16 @@ def push_faces(
                 "Mit diesem Weg bleibt von der Fläche nichts übrig — kleiner "
                 "versetzen oder die Richtung umkehren."
             ),
+            cancelled=cancelled,
         ).shape
     outcome = Solid(shape)
     # Und das Ergebnis muss ein Körper sein: distance = -25 auf einem 20 mm
     # hohen Quader gab Volumen null, null Befunde — ein Schritt im Verlauf,
     # nichts im Bild, und gesagt wurde nichts (Gesamtreview D-6).
-    if outcome.solid_count < 1 or outcome.volume <= EPS_GEOM:
+    if (
+        outcome.solid_count < 1
+        or outcome._properties("volume", cancelled=cancelled).mass <= EPS_GEOM
+    ):
         raise GeometryError(
             detail=_(
                 "Mit diesem Weg bleibt vom Körper nichts übrig — kleiner "
@@ -1115,6 +1151,8 @@ def _nearest_face(
     solid: Solid,
     candidates: list[tuple[Any, tuple[float, float, float]]],
     centre: tuple[float, float, float],
+    *,
+    cancelled: CancelToken | None = None,
 ) -> list[tuple[Any, tuple[float, float, float]]]:
     """Von den passend gerichteten Flächen die **eine** an dieser Stelle.
 
@@ -1129,7 +1167,7 @@ def _nearest_face(
     Topologie verschiebt sich beim nächsten Schritt — derselbe Grund, aus dem
     eine Kante über ihre Lage benannt wird (:func:`edit.edge_key`).
     """
-    places = {id(face): spot for face, _n, spot in _planar_faces(solid)}
+    places = {id(face): spot for face, _n, spot in _planar_faces(solid, cancelled=cancelled)}
     reachable = [(face, normal) for face, normal in candidates if id(face) in places]
     if not reachable:
         return candidates[:1]
@@ -1137,7 +1175,10 @@ def _nearest_face(
 
 
 def _facing(
-    solid: Solid, direction: tuple[float, float, float]
+    solid: Solid,
+    direction: tuple[float, float, float],
+    *,
+    cancelled: CancelToken | None = None,
 ) -> list[tuple[Any, tuple[float, float, float]]]:
     """Die ebenen Flächen, deren Normale in die gegebene Richtung zeigt, mit
     ihrer eigenen Normalen — das Prisma folgt der Fläche, nicht der Anfrage."""
@@ -1147,6 +1188,6 @@ def _facing(
     unit = [value / length for value in direction]
     return [
         (face, normal)
-        for face, normal, _centre in _planar_faces(solid)
+        for face, normal, _centre in _planar_faces(solid, cancelled=cancelled)
         if sum(a * b for a, b in zip(normal, unit, strict=True)) > 0.9
     ]

@@ -4280,7 +4280,7 @@ def resize_hole(ctx: OpContext) -> OpResult:
         findings.extend(_widening_findings(source, feature, params.diameter))
         exact_features, recognised = _preserved_exact_features(
             source.features,
-            features_of(solid),
+            features_of(solid, cancelled=ctx.cancelled),
             looked_for,
             cut,
             solid,
@@ -4856,7 +4856,7 @@ def slot_hole(ctx: OpContext) -> OpResult:
             )
         )
         findings.extend(split_findings(source.mesh, solid))
-        exact_features = features_of(solid)
+        exact_features = features_of(solid, cancelled=ctx.cancelled)
         # **Dieselbe Auskunft wie am Netz** (Robert, 10.09.2026: „zwischen den
         # beiden soll es keinen unterschied geben bei garnichts"). Wer über den
         # Rand zieht, behält eine erkennbare Randöffnung als Langloch. Ein
@@ -5601,7 +5601,7 @@ def _resize_bore_entrance(
         if not exact_changed.is_closed:
             raise GeometryError(detail=OPEN_BODY_DETAIL, suggestions=(CORRECT_INPUT, CANCEL))
         changed: Mesh = exact_changed
-        found = features_of(exact_changed)
+        found = features_of(exact_changed, cancelled=ctx.cancelled)
         tool = as_mesh_data(tool_solid)
         before_cut = as_mesh_data(filled_body)
     else:
@@ -8496,10 +8496,16 @@ def _exact_fillet(ctx: OpContext, source: SceneObject, name: str, radius: float 
     spot: Vec3 = (measured[0], measured[1], measured[2])
     was = float(feature.params.get("radius", 0.0))
     solid = (
-        edit.unround(body, spot, was) if radius is None else edit.reround(body, spot, was, radius)
+        edit.unround(body, spot, was, cancelled=ctx.cancelled)
+        if radius is None
+        else edit.reround(body, spot, was, radius, cancelled=ctx.cancelled)
     )
     return OpResult(
-        outputs=[dataclasses.replace(exact, mesh=solid, kind="brep", features=features_of(solid))]
+        outputs=[
+            dataclasses.replace(
+                exact, mesh=solid, kind="brep", features=features_of(solid, cancelled=ctx.cancelled)
+            )
+        ]
     )
 
 

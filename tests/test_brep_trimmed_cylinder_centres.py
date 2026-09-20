@@ -15,6 +15,7 @@ from OCP.BRepAlgoAPI import BRepAlgoAPI_Cut, BRepAlgoAPI_Fuse
 from OCP.BRepBuilderAPI import (
     BRepBuilderAPI_MakeFace,
     BRepBuilderAPI_MakePolygon,
+    BRepBuilderAPI_NurbsConvert,
     BRepBuilderAPI_Transform,
 )
 from OCP.BRepPrimAPI import (
@@ -67,8 +68,9 @@ def _only_hole(solid: Solid) -> Feature:
 
 @pytest.mark.parametrize("recess", [False, True])
 @pytest.mark.parametrize("normal_index", [0, 1])
+@pytest.mark.parametrize("nurbs", [False, True])
 def test_full_cylinder_material_side_includes_the_surface_handedness(
-    recess: bool, normal_index: int
+    recess: bool, normal_index: int, nurbs: bool
 ) -> None:
     """Eine geometrisch gleiche Rundwand bleibt trotz anderer Parametrisierung innen/außen."""
     import json
@@ -91,6 +93,8 @@ def test_full_cylinder_material_side_includes_the_surface_handedness(
         profile_of(solve_sketch(shapes.circle(case["diameter"]))), case["depth"], frame=frame
     )
     body = edit.boolean("difference", [edit.box(*case["stock"]), tool]) if recess else tool
+    if nurbs:
+        body = Solid(BRepBuilderAPI_NurbsConvert(body.shape, True).Shape())
     expected_volume = math.pi * (case["diameter"] / 2.0) ** 2 * case["depth"]
     if recess:
         expected_volume = math.prod(case["stock"]) - expected_volume
@@ -161,7 +165,8 @@ def test_a_cones_material_side_survives_an_indirect_surface_frame(
     )
 
 
-def test_a_trimmed_cylinder_uses_its_axis_and_v_span_for_the_centre() -> None:
+@pytest.mark.parametrize("nurbs", [False, True])
+def test_a_trimmed_cylinder_uses_its_axis_and_v_span_for_the_centre(nurbs: bool) -> None:
     """Der Flächenschwerpunkt wandert zur längeren Seite des schrägen Keils.
 
     Die Bohrungsachse tut das nicht. Ihr unterer Rand liegt bei Z=0, der höchste
@@ -169,6 +174,8 @@ def test_a_trimmed_cylinder_uses_its_axis_and_v_span_for_the_centre() -> None:
     Zylinderfläche ist deshalb der Achspunkt Z=5,75.
     """
     solid = _sloped_bore()
+    if nurbs:
+        solid = Solid(BRepBuilderAPI_NurbsConvert(solid.shape, True).Shape())
     hole = _only_hole(solid)
 
     assert hole.params["axis"] == pytest.approx((0.0, 0.0, 1.0), abs=EPS_GEOM)
@@ -178,12 +185,15 @@ def test_a_trimmed_cylinder_uses_its_axis_and_v_span_for_the_centre() -> None:
     assert solid.is_watertight
 
 
-def test_a_rotated_trimmed_cylinder_does_not_use_world_bounds() -> None:
+@pytest.mark.parametrize("nurbs", [False, True])
+def test_a_rotated_trimmed_cylinder_does_not_use_world_bounds(nurbs: bool) -> None:
     """Die V-Mitte reist mit der freien Achse und bleibt vom Welt-Hüllquader frei."""
     angle = math.radians(31.0)
     transform = gp_Trsf()
     transform.SetRotation(gp_Ax1(gp_Pnt(0.0, 0.0, 0.0), gp_Dir(0.0, 1.0, 0.0)), angle)
     rotated = Solid(BRepBuilderAPI_Transform(_sloped_bore().shape, transform, True).Shape())
+    if nurbs:
+        rotated = Solid(BRepBuilderAPI_NurbsConvert(rotated.shape, True).Shape())
 
     hole = _only_hole(rotated)
     expected_axis = (math.sin(angle), 0.0, math.cos(angle))
@@ -196,7 +206,8 @@ def test_a_rotated_trimmed_cylinder_does_not_use_world_bounds() -> None:
     assert rotated.is_watertight
 
 
-def test_resizing_a_sloped_bore_keeps_the_body_closed_and_the_hole_coaxial() -> None:
+@pytest.mark.parametrize("nurbs", [False, True])
+def test_resizing_a_sloped_bore_keeps_the_body_closed_and_the_hole_coaxial(nurbs: bool) -> None:
     """Der Weg der Teppichklammer: Ø 6 → Ø 7 am schrägen Austritt.
 
     Mit dem Schwerpunkt als Mitte war der Schneidzylinder nicht koaxial, und
@@ -204,6 +215,8 @@ def test_resizing_a_sloped_bore_keeps_the_body_closed_and_the_hole_coaxial() -> 
     Körper geschlossen, und die neue Bohrung liegt auf derselben Achse.
     """
     solid = _sloped_bore()
+    if nurbs:
+        solid = Solid(BRepBuilderAPI_NurbsConvert(solid.shape, True).Shape())
     hole = _only_hole(solid)
 
     resized = edit.resize_bore(
@@ -224,7 +237,8 @@ def test_resizing_a_sloped_bore_keeps_the_body_closed_and_the_hole_coaxial() -> 
     assert wider.params["through"] is True
 
 
-def test_an_exact_hole_says_whether_it_goes_through() -> None:
+@pytest.mark.parametrize("nurbs", [False, True])
+def test_an_exact_hole_says_whether_it_goes_through(nurbs: bool) -> None:
     """Dasselbe Wort wie auf der Netzseite — der Steckbrief liest es.
 
     Durch eine Platte, schräg hinaus und quer durch den Schenkel eines
@@ -264,9 +278,14 @@ def test_an_exact_hole_says_whether_it_goes_through() -> None:
         channel, position=(-10.0, 0.0, 15.0), axis="x", diameter=6.0, depth=2.0
     )
 
-    assert _only_hole(through).params["through"] is True
-    assert _only_hole(_sloped_bore()).params["through"] is True
-    assert _only_hole(across_a_leg).params["through"] is True
-    assert _only_hole(blind).params["through"] is False
-    assert _only_hole(drilled).params["through"] is False
-    assert _only_hole(countersunk).params["through"] is False
+    for solid, expected in (
+        (through, True),
+        (_sloped_bore(), True),
+        (across_a_leg, True),
+        (blind, False),
+        (drilled, False),
+        (countersunk, False),
+    ):
+        if nurbs:
+            solid = Solid(BRepBuilderAPI_NurbsConvert(solid.shape, True).Shape())
+        assert _only_hole(solid).params["through"] is expected
