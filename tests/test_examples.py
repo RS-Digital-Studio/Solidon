@@ -16,9 +16,10 @@ import pytest
 from app.core import examples
 from app.core.knowledge import profiles
 from app.core.registry import REGISTRY
-from app.core.scene import evaluate
+from app.core.scene import History, evaluate
 from app.core.scene.project import ProjectSources, load
 from app.core.types import Profile
+from app.core.units import EPS_GEOM
 from app.i18n import SOURCE_LANGUAGE, set_language
 from app.i18n.catalog import install_language
 
@@ -383,6 +384,9 @@ _ERLAUBTE_BEGRUESSUNG: Final[dict[str, dict[str, str]]] = {
         # — sie ist Teil dessen, was es vorführt.
         "repair.components_removed": "zeigt, was Weg 3 mit erzeugten Netzen tut",
     },
+    "dose-mit-deckel": {
+        "fit.pose_unknown": "Dose und Deckel zeigen getrennte Drucklagen, keine geprüfte Montage",
+    },
     "passung-nach-materialwechsel": {
         # **Hier ist die Warnung der Inhalt.** Das Beispiel führt vor, was
         # geschieht, wenn ein Deckel aus weicherem Material kommen soll: Er
@@ -391,8 +395,63 @@ _ERLAUBTE_BEGRUESSUNG: Final[dict[str, dict[str, str]]] = {
         # kein Makel, sondern die Ausgangslage, und der Weg daraus ist ein
         # Klick auf die Meldung und eine Zahl.
         "fit.violated": "ist der Inhalt des Beispiels, nicht sein Fehler",
+        "fit.pose_unknown": "die angeordneten Einzelteile belegen auch nach Undo keine Einbaulage",
     },
 }
+
+
+@pytest.mark.parametrize("example_id", ["dose-mit-deckel", "passung-nach-materialwechsel"])
+def test_the_lid_examples_keep_their_print_layout_and_the_open_assembly_proof(
+    example_id: str, profile: Profile
+) -> None:
+    """Die Ausnahme ist an echte getrennte Drucklagen gebunden, nicht nur an einen Code."""
+    project = load(examples.directory() / f"{example_id}.p3d")
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert result.complete
+    assert len(project.document.fits) == 1
+    fit = project.document.fits[0]
+    first = result.scene.objects[fit.a.object_id]
+    second = result.scene.objects[fit.b.object_id]
+    for entry in (first, second):
+        assert entry.mesh.bounds.minimum[2] == pytest.approx(0.0, abs=EPS_GEOM)
+    apart = any(
+        first.mesh.bounds.maximum[axis] < second.mesh.bounds.minimum[axis] - EPS_GEOM
+        or second.mesh.bounds.maximum[axis] < first.mesh.bounds.minimum[axis] - EPS_GEOM
+        for axis in (0, 1)
+    )
+    assert first.plate != second.plate or apart, "the example must actually show separate parts"
+    findings = {
+        finding.code: finding
+        for finding in result.scene.report.findings
+        if finding.code.startswith("fit.")
+    }
+    assert set(findings) == (
+        {"fit.pose_unknown"}
+        if example_id == "dose-mit-deckel"
+        else {"fit.pose_unknown", "fit.violated"}
+    )
+    pending = findings["fit.pose_unknown"]
+    assert pending.severity == "warning"
+    assert pending.values["fit"] == fit.name
+    assert {pending.values["a"], pending.values["b"]} == {first.id, second.id}
+    assert "overlap_mm3" not in pending.values, "an untested assembly has no measured overlap"
+
+
+def test_material_undo_restores_the_allowance_but_not_an_assembly_proof(profile: Profile) -> None:
+    """Das Materialspiel wird wieder passend, die getrennte Drucklage bleibt sichtbar offen."""
+    project = load(examples.directory() / "passung-nach-materialwechsel.p3d")
+
+    def fit_codes() -> set[str]:
+        result = evaluate(project.document, profile, sources=ProjectSources(project))
+        assert result.complete
+        return {f.code for f in result.scene.report.findings if f.code.startswith("fit.")}
+
+    assert fit_codes() == {"fit.violated", "fit.pose_unknown"}
+    history = History(project.document)
+    history.undo()
+    assert fit_codes() == {"fit.pose_unknown"}
+    history.redo()
+    assert fit_codes() == {"fit.violated", "fit.pose_unknown"}
 
 
 def test_no_example_greets_the_customer_with_a_warning(profile: Profile) -> None:

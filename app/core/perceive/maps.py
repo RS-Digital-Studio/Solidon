@@ -109,7 +109,12 @@ DEFECT_LEVELS: Final = (
 )
 
 #: Flächenkategorien der Passungskarte, ebenso übersetzbar.
-FIT_LEVELS: Final = (_("unbeteiligt"), _("Teil einer Passung"), _("Passung verletzt"))
+FIT_LEVELS: Final = (
+    _("unbeteiligt"),
+    _("Teil einer Passung"),
+    _("Passung prüfen"),
+    _("Passung verletzt"),
+)
 
 
 def _named(levels: tuple[TranslatableText, ...]) -> tuple[str, ...]:
@@ -858,13 +863,11 @@ def feature_map(mesh: MeshData, features: dict[FeatureId, Feature]) -> AnalysisM
 
 
 def fit_map(mesh: MeshData, entry: SceneObject, scene: Scene | None) -> AnalysisMap:
-    """Welche Dreiecke an einer Passung teilnehmen, und welche davon verletzt
-    sind.
-    """
+    """Beteiligte, ungeklärte und verletzte Passungen aus demselben Prüfbericht."""
     body = mesh.raw
     values = np.zeros(len(body.faces), dtype=float)
     if scene is not None:
-        violated = _violated_features(scene, entry.id)
+        levels = _fit_feature_levels(scene, entry.id)
         for fit in scene.fits:
             for reference in (fit.a, fit.b):
                 if reference.object_id != entry.id:
@@ -872,7 +875,7 @@ def fit_map(mesh: MeshData, entry: SceneObject, scene: Scene | None) -> Analysis
                 feature = entry.features.get(reference.feature_id)
                 if feature is None:
                     continue
-                level = 2.0 if reference.feature_id in violated else 1.0
+                level = levels.get(reference.feature_id, 1.0)
                 for index in feature.face_indices:
                     if 0 <= index < len(values):
                         values[index] = max(values[index], level)
@@ -883,25 +886,39 @@ def fit_map(mesh: MeshData, entry: SceneObject, scene: Scene | None) -> Analysis
         values=tuple(float(value) for value in values),
         unit="",
         low=0.0,
-        high=2.0,
+        high=3.0,
         highlighted=tuple(int(index) for index in np.nonzero(values >= 2.0)[0]),
         threshold=2.0,
         categories=_named(FIT_LEVELS),
     )
 
 
-def _violated_features(scene: Scene, object_id: ObjectId) -> set[FeatureId]:
-    """Merkmale, die ein Passungsbefund benennt — der Prüfbericht ist die
-    eine Quelle (§14).
-    """
-    names: set[FeatureId] = set()
+def _fit_feature_levels(scene: Scene, object_id: ObjectId) -> dict[FeatureId, float]:
+    """Der Bericht ist die einzige Quelle; dieselbe Beziehung betrifft beide Gegenstücke."""
+    levels: dict[FeatureId, float] = {}
+    relationships = {fit.name: fit for fit in scene.fits}
     for finding in scene.report.findings:
-        if not finding.code.startswith("fit."):
+        if not finding.code.startswith("fit.") or finding.severity == "info":
             continue
-        if finding.object_id not in (None, object_id):
-            continue
-        names.update(finding.feature_ids)
-    return names
+        # Eine fehlende Prüfung oder angenäherte Probe belegt keine Verletzung.
+        # Neue unbekannte Warncodes bleiben deshalb ebenfalls ausdrücklich offen.
+        level = (
+            3.0
+            if finding.code
+            in {"fit.violated", "fit.collision", "fit.pitch_mismatch", "fit.handedness_mismatch"}
+            else 2.0
+        )
+        name = finding.values.get("fit")
+        fit = relationships.get(name) if isinstance(name, str) else None
+        if fit is not None:
+            names = [ref.feature_id for ref in (fit.a, fit.b) if ref.object_id == object_id]
+        elif finding.object_id in (None, object_id):
+            names = list(finding.feature_ids)
+        else:
+            names = []
+        for feature_id in names:
+            levels[feature_id] = max(levels.get(feature_id, 1.0), level)
+    return levels
 
 
 def fits_of(scene: Scene, object_id: ObjectId) -> tuple[Fit, ...]:

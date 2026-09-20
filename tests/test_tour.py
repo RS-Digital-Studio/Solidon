@@ -599,7 +599,7 @@ def test_every_tour_counts_the_steps_its_example_really_has() -> None:
 
 
 def test_the_fit_tour_needs_exactly_one_undo() -> None:
-    """Das elfte Beispiel: ein Strg+Z, und die Warnung ist weg.
+    """Das elfte Beispiel: ein Strg+Z, und die Materialwarnung ist weg.
 
     **Der Test gibt es, weil genau das einmal nicht stimmte.** Die Tour sagte
     „nimm den letzten Schritt zurück", und hinter dem gemeinten stand noch das
@@ -624,7 +624,8 @@ def test_the_fit_tour_leads_out_of_the_warning() -> None:
     **Die beiden sind nicht dasselbe, und der alte Fehler saß genau dazwischen.**
     ``_walk`` fragt die ``done``-Funktion; die kann quittieren, während die
     Warnung noch steht. Hier wird gemessen, was der Kunde sieht: eine Warnung
-    beim Öffnen, keine nach einem Undo.
+    zum Material beim Öffnen, keine Materialwarnung nach einem Undo. Der
+    Hinweis auf die ungeprüfte Einbaulage der getrennten Druckteile bleibt.
 
     Geprüft wird der Befundcode und nicht die Zahl allein — „genau eine
     Warnung" wäre auch erfüllt, wenn es eine andere wäre.
@@ -643,11 +644,11 @@ def test_the_fit_tour_leads_out_of_the_warning() -> None:
             if finding.severity in ("warning", "error")
         ]
 
-    assert warnungen() == ["fit.violated"], "beim Öffnen steht genau diese eine Warnung"
+    assert warnungen() == ["fit.violated", "fit.pose_unknown"]
 
     history.undo()
 
-    assert warnungen() == [], "nach einem Undo ist der Bericht grün"
+    assert warnungen() == ["fit.pose_unknown"], "Undo belegt keine Montage der getrennten Teile"
 
 
 def test_the_fit_tour_names_the_numbers_the_report_shows() -> None:

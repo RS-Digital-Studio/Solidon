@@ -227,6 +227,14 @@ den Bericht, den er belegen kann, und keinen erfundenen (Regel 21). Der Import
 liegt dafür in der Funktion — `export → scene` ist eine **träge** Kante und
 steht so in `tests/test_core_package_direction.py`.
 
+`check_before_export(..., cancelled=...)` reicht denselben Abbruchvertrag an
+die aktuelle Körperprobe aus `scene.fits.check` weiter. Gültige leere
+Verschneidung, Kollision, unbekannte Einbaulage und gemischte Netznäherung
+werden wie in der Auswertung berichtet; ein Abbruch liefert keinen halben
+Exportbericht. Eine Passungsbeziehung wird für jeden ausgewählten Partner
+gemeldet, auch wenn nur der Stift und nicht die im Befund fokussierte Öffnung
+exportiert wird. Unbeteiligte Körper übernehmen diesen Befund nicht.
+
 **Und `checked` nimmt einen Bericht entgegen, statt ihn zweimal zu erheben.**
 Die Oberfläche prüft, zeigt, fragt und schreibt erst dann (siehe
 `app/ui/CLAUDE.md`); die Prüfung ist der teure Teil, und ein zweites Ergebnis

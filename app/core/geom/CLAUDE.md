@@ -966,3 +966,12 @@ verwenden das verlustfreie NPZ statt STL. Beim Lesen aus Projektquellen werden
 NPY-Header und entpackte Größe vor der Array-Allokation geprüft.
 `measure.surface_gap` verwendet den räumlichen Index von Manifold mit
 `Mesh64`; fehlende Körperübernahme ist keine Abstandsaussage.
+`measure.body_overlap` misst die vollständige starre Körperverschneidung.
+Zwei native Körper werden auf eigenen Kopien validiert und nichtdestruktiv
+verschnitten; auch Prüfkennzeichen am Original bleiben unverändert. Netz und
+gemischte Paare benutzen ausschließlich unveränderte Dreiecke und die direkte
+Boolesche Stufe mit gültiger leerer Ausgabe. Kein Reparaturweg begründet einen
+Nachweis. Fehler bleiben Fehler, Abbruch wird vor und nach nativen Aufrufen
+geprüft. Ein gemischtes Ergebnis beschreibt ausschließlich den Netzzwilling;
+die Passungsprüfung in `scene.fits` benennt diese Grenze sowie Einbaulage und
+Fertigungsspiel getrennt vom gemessenen Überdeckungsvolumen.

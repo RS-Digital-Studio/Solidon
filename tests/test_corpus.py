@@ -18,7 +18,7 @@ from app.core.geom.mesh import MeshData, read_mesh
 from app.core.ingest import threemf
 from app.core.ingest.loader import normalise, read_model
 from app.core.knowledge import profiles
-from app.core.scene import evaluate
+from app.core.scene import History, OperationDraft, evaluate
 from app.core.scene.project import ProjectSources, load
 from app.core.types import Profile
 from app.core.units import EPS_GEOM
@@ -96,19 +96,67 @@ def project():
     return load(DATA / "projects" / "assembly_fit.p3d")
 
 
+def assembled_project():
+    """Die alte Korpusdatei unverändert laden und ihre Einbaulage herstellen.
+
+    Die Grundkörper liegen in der Quelldatei beide auf z=0 und durchdringen
+    sich. Erst auf der Schulter bei z=6 sitzt die Platte um den freien Stift.
+    Die Korrektur ist ein regulärer Schritt, kein Umschreiben des Altformats.
+    """
+    opened = project()
+    History(opened.document).apply(
+        "Platte auf die Stiftschulter setzen",
+        [OperationDraft(op="translate_object", inputs=("obj_1",), params={"dz": 6.0})],
+    )
+    return opened
+
+
+@pytest.mark.parametrize("material,diameter", [("petg", 6.2), ("pla", 6.15)])
+def test_the_legacy_assembly_reports_its_intersecting_shoulders(
+    material: str, diameter: float
+) -> None:
+    """Passende Kreismaße heben die echte Kollision der alten Grundkörper nicht auf."""
+    opened = project()
+    result = evaluate(
+        opened.document,
+        profiles.make_profile("centauri-carbon-2", material),
+        sources=ProjectSources(opened),
+    )
+
+    assert result.complete
+    findings = {
+        finding.code: finding
+        for finding in result.scene.report.findings
+        if finding.code.startswith("fit.")
+    }
+    assert set(findings) == (
+        {"fit.collision"} if material == "petg" else {"fit.collision", "fit.mesh_uncertain"}
+    )
+    collision = findings["fit.collision"]
+    # Grundkörper 20 mal 20 mal 6 mm abzüglich der durchgehenden 48-eckigen Bohrung.
+    bore_area = 48 / 2 * (diameter / 2) ** 2 * math.sin(math.tau / 48)
+    assert collision.values["overlap_mm3"] == pytest.approx((20 * 20 - bore_area) * 6)
+    assert collision.values["intersects"] is True
+    assert collision.severity == "warning"
+
+
 def test_the_assembly_holds_with_the_material_it_was_built_for(profile: Profile) -> None:
     """6 mm nominal werden eine 6,2-mm-Bohrung, der Stift ist 5,95 — das sind
     0,25 Spiel.
     """
-    opened = project()
+    opened = assembled_project()
 
     result = evaluate(opened.document, profile, sources=ProjectSources(opened))
 
     assert result.complete
     codes = {finding.code for finding in result.scene.report.findings}
-    assert not any(code.startswith("fit.") for code in codes), (
+    assert {code for code in codes if code.startswith("fit.")} == {"fit.geometry_clear"}, (
         "PETG is what both the circle dimensions and the mesh clearance were chosen for"
     )
+    proof = next(f for f in result.scene.report.findings if f.code == "fit.geometry_clear")
+    assert proof.severity == "info"
+    assert proof.values["overlap_mm3"] == pytest.approx(0.0)
+    assert proof.values["intersects"] is False
     assert "bore.compensated" in codes, "and the bore says it was widened"
 
 
@@ -120,25 +168,31 @@ def test_the_fit_notices_when_the_ground_moves() -> None:
     Toleranz bleibt, was das Paar sagt. Die Kreisdurchmesser ergeben in PLA
     0,20 mm Spiel und liegen damit gerade noch im Prüfbereich um 0,25 mm.
     Der tatsächliche 48-eckige Mantel unterschreitet dessen Untergrenze:
-    Eine unsichere Netzpassung muss sichtbar bleiben, ohne eine konkrete
-    Kollision zu behaupten.
+    Eine unsichere Netzpassung muss sichtbar bleiben, obwohl die vollständigen
+    Körper in der hergestellten Einbaulage nachweislich nicht kollidieren.
     """
-    opened = project()
+    opened = assembled_project()
     other = profiles.make_profile("centauri-carbon-2", "pla")
 
     result = evaluate(opened.document, other, sources=ProjectSources(opened))
 
-    findings = [
-        finding for finding in result.scene.report.findings if finding.code.startswith("fit.")
-    ]
-    assert len(findings) == 1
-    assert findings[0].code == "fit.mesh_uncertain"
-    assert findings[0].values["fit"] == "stift_1"
-    assert findings[0].values["clearance_min_mm"] == pytest.approx(
+    assert result.complete
+    findings = {
+        finding.code: finding
+        for finding in result.scene.report.findings
+        if finding.code.startswith("fit.")
+    }
+    assert set(findings) == {"fit.mesh_uncertain", "fit.geometry_clear"}
+    uncertainty = findings["fit.mesh_uncertain"]
+    assert uncertainty.severity == "warning"
+    assert uncertainty.values["fit"] == "stift_1"
+    assert uncertainty.values["clearance_min_mm"] == pytest.approx(
         6.15 * math.cos(math.pi / 48) - 5.95, abs=EPS_GEOM
     )
-    assert findings[0].values["clearance_max_mm"] == pytest.approx(0.20, abs=EPS_GEOM)
-    assert findings[0].values["expected"] == "0.25 mm"
+    assert uncertainty.values["clearance_max_mm"] == pytest.approx(0.20, abs=EPS_GEOM)
+    assert uncertainty.values["expected"] == "0.25 mm"
+    assert findings["fit.geometry_clear"].values["overlap_mm3"] == pytest.approx(0.0)
+    assert findings["fit.geometry_clear"].values["intersects"] is False
 
 
 def test_the_pair_points_at_features_that_exist(profile: Profile) -> None:

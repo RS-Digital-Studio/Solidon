@@ -718,14 +718,7 @@ def _evaluate(
         if cached is None:
             pending.append((key, result, not watched.used))
 
-    progress(1.0, "")
-
-    # Nur ein vollständiger Durchlauf darf den Cache schreiben (§15.6) — und
-    # nur ein Ergebnis ohne Rückfrage darf über die Sitzung hinaus (§15.7).
-    if cache is not None and stopped_at is None:
-        for key, result, to_disk in pending:
-            cache.put(key, result, to_disk=to_disk)
-
+    token.raise_if_cancelled()
     scene = Scene(
         objects=objects,
         parameters=parameters,
@@ -735,14 +728,16 @@ def _evaluate(
     )
     # §14: Passungen werden bei jeder Auswertung geprüft, nie nur auf Nachfrage.
     if stopped_at is None and scene.fits:
-        findings.extend(check_fits(scene, profile, document=document))
+        findings.extend(check_fits(scene, profile, document=document, cancelled=token))
         scene = dataclasses.replace(scene, report=Report(tuple(findings)))
+        token.raise_if_cancelled()
     # Und aus demselben Grund die Lage zum Bauraum: ein Körper, der halb unter
     # der Bauplatte steckt, ist nicht druckbar, und die Schichtanalyse rechnet
     # ihn trotzdem klaglos durch — bis dahin sagte das erst, wer „Kollisionen
     # prüfen" von Hand aufrief.
     if stopped_at is None and objects:
         placement = check_placement(scene)
+        token.raise_if_cancelled()
         if placement:
             findings.extend(placement)
             scene = dataclasses.replace(scene, report=Report(tuple(findings)))
@@ -753,6 +748,7 @@ def _evaluate(
     # Duplizieren stünde dann als überholter Satz da (§17.3).
     if stopped_at is None and len(objects) > 1:
         stacked = check_bodies_in_one_place(scene)
+        token.raise_if_cancelled()
         if stacked:
             findings.extend(stacked)
             scene = dataclasses.replace(scene, report=Report(tuple(findings)))
@@ -762,6 +758,7 @@ def _evaluate(
     # gute (§17.3, RM-127).
     if stopped_at is None and objects:
         walls = check_thin_walls(scene)
+        token.raise_if_cancelled()
         if walls:
             findings.extend(walls)
             scene = dataclasses.replace(scene, report=Report(tuple(findings)))
@@ -775,6 +772,13 @@ def _evaluate(
     settled = _without_repeats(_without_settled(findings))
     if len(settled) != len(findings):
         scene = dataclasses.replace(scene, report=Report(tuple(settled)))
+    token.raise_if_cancelled()
+    # Erst nach sämtlichen Abschlussprüfungen ist der Durchlauf vollständig.
+    # Abbruch davor veröffentlicht weder einen Teilcache noch eine Fertigmeldung.
+    if cache is not None and stopped_at is None:
+        for key, result, to_disk in pending:
+            cache.put(key, result, to_disk=to_disk)
+    progress(1.0, "")
     return EvaluationResult(
         scene=scene,
         completed=tuple(completed),

@@ -45,6 +45,7 @@ from app.core.log import get_logger
 from app.core.types import (
     BoundingBox,
     BRepBody,
+    CancelToken,
     Document,
     Finding,
     MaterialSlot,
@@ -670,6 +671,7 @@ def check_before_export(
     *,
     scene: Scene | None = None,
     document: Document | None = None,
+    cancelled: CancelToken | None = None,
 ) -> list[Finding]:
     """Ein Bericht vor dem Schreiben, keine Sperre (§29).
 
@@ -685,8 +687,16 @@ def check_before_export(
     keine Szene hat, bekommt den Bericht, den er belegen kann, und keinen
     erfundenen (Regel 21).
     """
+    from app.core.scene.cancel import NeverCancelled
+
+    token = cancelled if cancelled is not None else NeverCancelled()
+    token.raise_if_cancelled()
     findings: list[Finding] = []
-    meshes = [as_mesh_data(entry.mesh) for entry in objects]
+    meshes = []
+    for entry in objects:
+        token.raise_if_cancelled()
+        meshes.append(as_mesh_data(entry.mesh))
+    token.raise_if_cancelled()
 
     if export_format in SOLID_ONLY_FORMATS:
         # Gemeldet wird je Objekt, nicht einmal für alles: Bei gemischter
@@ -713,6 +723,7 @@ def check_before_export(
                 )
 
     for entry, mesh in zip(objects, meshes, strict=True):
+        token.raise_if_cancelled()
         if not mesh.is_watertight:
             findings.append(
                 Finding(
@@ -757,7 +768,8 @@ def check_before_export(
         )
     )
     findings.extend(_licence_findings(sources))
-    findings.extend(_fits_and_walls(objects, profile, scene, document))
+    findings.extend(_fits_and_walls(objects, profile, scene, document, token))
+    token.raise_if_cancelled()
     return findings
 
 
@@ -766,6 +778,7 @@ def _fits_and_walls(
     profile: Profile,
     scene: Scene | None,
     document: Document | None,
+    cancelled: CancelToken,
 ) -> list[Finding]:
     """Die zwei Fragen aus §29, die ein einzelner Körper nicht beantwortet.
 
@@ -792,10 +805,15 @@ def _fits_and_walls(
     from app.core.scene.fits import check as check_fits
 
     wanted = {entry.id for entry in objects}
+    related = {fit.name for fit in scene.fits if {fit.a.object_id, fit.b.object_id} & wanted}
     findings = [
         finding
-        for finding in check_fits(scene, profile, document=document)
-        if finding.object_id is None or finding.object_id in wanted
+        for finding in check_fits(scene, profile, document=document, cancelled=cancelled)
+        if (
+            finding.object_id is None
+            or finding.object_id in wanted
+            or finding.values.get("fit") in related
+        )
     ]
     findings.extend(
         check_thin_walls(

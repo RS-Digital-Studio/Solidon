@@ -337,8 +337,8 @@ def test_a_violated_fit_is_named_before_the_file_exists(profile: Profile) -> Non
     )
 
 
-def test_a_fit_of_a_body_that_stays_home_is_not_reported(profile: Profile) -> None:
-    """Gemeldet wird, was die geschriebenen Körper betrifft.
+def test_a_fit_is_reported_for_either_partner_but_not_an_unrelated_body(profile: Profile) -> None:
+    """Eine Beziehung betrifft auch den einzeln exportierten Stift.
 
     Gefragt wird trotzdem an der **ganzen** Szene: Die zweite Hälfte einer
     Passung mag außen vor bleiben, aufgelöst werden muss sie dennoch — sonst
@@ -352,6 +352,13 @@ def test_a_fit_of_a_body_that_stays_home_is_not_reported(profile: Profile) -> No
 
     findings = check_before_export(ohne, profile, {}, scene=scene)
 
+    assert [finding.code for finding in findings if finding.code.startswith("fit.")] == [
+        "fit.violated",
+        "fit.pose_unknown",
+    ]
+    unrelated = replace(scene.objects["obj_2"], id="obj_3", features={})
+    scene.objects[unrelated.id] = unrelated
+    findings = check_before_export([unrelated], profile, {}, scene=scene)
     assert not [finding.code for finding in findings if finding.code.startswith("fit.")]
 
 

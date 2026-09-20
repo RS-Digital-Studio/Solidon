@@ -24,6 +24,7 @@ from copy import copy, deepcopy
 from dataclasses import dataclass, replace
 from functools import partial
 from pathlib import Path
+from threading import Lock
 from typing import Any, Final, cast
 from uuid import uuid4
 
@@ -908,12 +909,10 @@ class _ExportWorker(Worker):
     sind das mehr als zwei Sekunden mit stehendem Fenster — und §2.8 verlangt
     darüber ein Fenster, das bedienbar bleibt.
 
-    **Ohne Abbrechen, und das ist Absicht.** Ein halb geschriebener Export ist
-    eine halbe Datei; der Schreiber im Kern kennt keinen Abbruchpunkt, an dem
-    er sauber aufhören könnte, und einen einzubauen hieße, ihn mitten in einer
-    Datei anhalten zu dürfen. Was §2.8 hier trägt, ist die Bedienbarkeit: der
-    Balken läuft, das Fenster reagiert, und der Menüeintrag ist gesperrt,
-    damit kein zweiter Lauf auf denselben Ordner schreibt.
+    Die Vorprüfung ist über das gemeinsame Token abbrechbar. Abbruch und
+    Übergang zum Schreiben entscheiden unter derselben kurzen Sperre:
+    Ein angenommener Abbruch beginnt keine Datei; die begonnene Ausgabe
+    läuft vollständig zu Ende. Das gilt auch für mehrere Ausgabedateien.
 
     **Und die Befunde kommen jetzt wirklich vor dem Schreiben** (RM-140). Sie
     kamen lange mit dem Ergebnis zurück, mit einer Begründung, die stimmte und
@@ -935,6 +934,8 @@ class _ExportWorker(Worker):
     failed = Signal(object)
     usageReady = Signal(object)
     checked = Signal(object)
+    writing = Signal()
+    aborted = Signal()
 
     def __init__(
         self,
@@ -972,6 +973,17 @@ class _ExportWorker(Worker):
         #: und beantwortet. ``None`` heißt „noch nicht geprüft"; eine **leere**
         #: Liste ist eine Antwort und keine fehlende.
         self._checked = checked
+        self.cancelled = CancelSignal()
+        self._phase_lock = Lock()
+        self._writing = False
+
+    def cancel(self) -> bool:
+        """Nimmt einen Abbruch nur vor dem gemeinsam geschützten Schreibbeginn an."""
+        with self._phase_lock:
+            if self._writing:
+                return False
+            self.cancelled.cancel()
+            return True
 
     def after_check(self, findings: list[Finding]) -> _ExportWorker:
         """Den geprüften Auftrag zum Schreiben weiterreichen, ohne ihn neu einzusammeln."""
@@ -995,6 +1007,7 @@ class _ExportWorker(Worker):
     def work(self) -> None:
         try:
             if self._checked is None:
+                self.cancelled.raise_if_cancelled()
                 found = check_before_export(
                     self._objects,
                     self._profile,
@@ -1002,11 +1015,17 @@ class _ExportWorker(Worker):
                     self._format,
                     scene=self._scene,
                     document=self._document,
+                    cancelled=self.cancelled,
                 )
+                self.cancelled.raise_if_cancelled()
                 if any(entry.severity in ("warning", "error") for entry in found):
                     self.checked.emit(found)
                     return
                 self._checked = found
+            with self._phase_lock:
+                self.cancelled.raise_if_cancelled()
+                self._writing = True
+            self.writing.emit()
             if self._format == "3mf":
                 self._settings = self._profiles_for_selection(self._settings)
                 self._inventory_settings = self._profiles_for_selection(self._inventory_settings)
@@ -1021,6 +1040,11 @@ class _ExportWorker(Worker):
                 written, findings = self._assembly()
             else:
                 written, findings = self._files()
+        except OperationCancelled:
+            if self._writing:
+                raise
+            self.aborted.emit()
+            return
         except AppError as error:
             self.failed.emit(error)
             return
@@ -3079,6 +3103,7 @@ class MainWindow(QMainWindow):
             "source": self._cancel_source_read,
             "gcode": self._cancel_gcode,
             "split": self.session.cancel_split,
+            "export": self._cancel_export,
         }
         handler = handlers.get(owner)
         if handler is not None:
@@ -6664,6 +6689,8 @@ class MainWindow(QMainWindow):
         Einsammeln der Körper — beides braucht die Auswahl, und beides ist
         sofort vorbei.
         """
+        if self._close_requested or self._exporting:
+            return
         result = self.session.last_result
         if result is None or not result.scene.objects:
             return
@@ -6764,6 +6791,8 @@ class MainWindow(QMainWindow):
         zwei Anläufen kann eine Auswertung gelaufen sein, und ein Körper aus der
         alten Szene wäre ein Netz, das im Dokument nicht mehr steht.
         """
+        if self._close_requested or self._exporting:
+            return
         result = self.session.last_result
         if result is None or not result.scene.objects:
             return
@@ -6825,17 +6854,22 @@ class MainWindow(QMainWindow):
         # schreibenden Export den Balken weg — genau der Satz im Docstring
         # von ``_anything_running``, nur war die Flagge nie gesetzt worden.
         self._exporting = True
-        worker.done.connect(self._export_done)
-        worker.failed.connect(self._export_failed)
-        worker.checked.connect(partial(self._export_checked, worker))
+        worker.done.connect(weak_slot(self, MainWindow._export_done, worker, forward=True))
+        worker.failed.connect(weak_slot(self, MainWindow._export_failed, worker, forward=True))
+        worker.checked.connect(weak_slot(self, MainWindow._export_checked, worker, forward=True))
+        worker.writing.connect(weak_slot(self, MainWindow._export_writing, worker))
+        worker.aborted.connect(weak_slot(self, MainWindow._export_cancelled, worker))
         worker.usageReady.connect(self.usage_notice.offer)
         # **Und das Unerwartete.** Der Menüeintrag ist gesperrt, solange
         # geschrieben wird; eine Ausnahme, die den Thread abriss, ließ ihn für
         # den Rest der Sitzung gesperrt — der Kunde konnte nicht mehr
         # exportieren und erfuhr nicht, warum.
-        worker.crashed.connect(lambda detail: self._export_failed(InternalError(detail=detail)))
-        worker.finished.connect(lambda done=worker: self._export_worker_done(done))
-        text = tr("Exportiert wird … {name}").format(name=worker._target.name)
+        worker.crashed.connect(weak_slot(self, MainWindow._export_crashed, worker, forward=True))
+        worker.finished.connect(weak_slot(self, MainWindow._export_worker_done, worker))
+        checking = worker._checked is None
+        text = (
+            tr("Export wird geprüft … {name}") if checking else tr("Exportiert wird … {name}")
+        ).format(name=worker._target.name)
         self._set_progress_state(
             "export",
             active=True,
@@ -6844,12 +6878,57 @@ class MainWindow(QMainWindow):
             maximum=0,
             value=0,
             accessible_description=text,
+            cancellable=checking,
+            cancel_enabled=checking,
         )
         # Solange geschrieben wird, führt der Menüeintrag nirgendwo hin: ein
         # zweiter Lauf schriebe in dieselben Dateien, und welcher von beiden
         # gewinnt, entschiede die Reihenfolge zweier Threads.
         self._update_actions()
         self._leash.start(worker)
+
+    def _cancel_export(self) -> None:
+        """Der bestehende Abbrechenknopf hält nur eine noch laufende Vorprüfung an."""
+        if self._close_requested:
+            self._export_attempt = None
+            self._write_failure = None
+        worker = self._export_worker
+        if worker is None:
+            return
+        if worker.cancel():
+            self._export_attempt = None
+            self._write_failure = None
+            self._set_progress_state("export", cancel_enabled=False)
+        else:
+            # Das Phasensignal kann noch in der Qt-Warteschlange stehen.
+            self._export_writing(worker)
+
+    def _owns_export(self, worker: _ExportWorker) -> bool:
+        """Nur der aktuelle Auftrag darf im weiterhin geöffneten Fenster antworten."""
+        return isValid(self) and not self._close_requested and self._export_worker is worker
+
+    def _export_writing(self, worker: _ExportWorker) -> None:
+        """Vor der Ausgabe den Abbruchweg schließen und denselben Fortschritt fortführen."""
+        if not self._owns_export(worker):
+            return
+        text = tr("Exportiert wird … {name}").format(name=worker._target.name)
+        self._set_progress_state(
+            "export",
+            text=text,
+            accessible_description=text,
+            cancellable=False,
+            cancel_enabled=False,
+        )
+
+    def _export_cancelled(self, worker: _ExportWorker) -> None:
+        """Ein bestätigter Abbruch ist ein Ergebnis; der fertige Arbeiter räumt seinen Bezug auf."""
+        if not self._owns_export(worker):
+            return
+        self._exporting = False
+        self._export_attempt = None
+        self._write_failure = None
+        self._set_progress_state("export", active=False, cancellable=False, cancel_enabled=False)
+        self.announce(tr("Exportprüfung abgebrochen. Keine Datei wurde geschrieben."))
 
     def _export_checked(self, worker: _ExportWorker, findings: list[Finding]) -> None:
         """Der Bericht, bevor die Datei entsteht (§29, RM-140).
@@ -6867,12 +6946,24 @@ class MainWindow(QMainWindow):
         geprüfte Arbeiter hält seinen Auftrag bis zur Antwort; die Fortsetzung
         übernimmt seine Körper und Werte, unabhängig vom heutigen Fenster.
         """
+        if not self._owns_export(worker):
+            return
+        if worker.cancelled.is_cancelled:
+            self._export_cancelled(worker)
+            return
         self._exporting = False
         self._set_progress_state("export", active=False)
         self.report.add_findings(list(findings))
         self._focus_report()
         attempt = self._export_attempt
-        if attempt is None or not confirm_export(findings, self):
+        if attempt is None:
+            return
+        accepted = confirm_export(findings, self)
+        # Der Dialog darf das Threadende zustellen. Ein neuer Versuch oder
+        # ein beendetes Fenster darf den alten Auftrag danach nicht fortsetzen.
+        if not isValid(self) or self._close_requested or self._export_attempt is not attempt:
+            return
+        if not accepted or worker.cancelled.is_cancelled:
             # Abgebrochen heißt: es gibt nichts zu wiederholen. Ein
             # stehengebliebener Versuch wäre beim nächsten Schreibfehler ein
             # Wiederholknopf auf ein Ziel, das niemand mehr gemeint hat.
@@ -6880,8 +6971,12 @@ class MainWindow(QMainWindow):
             return
         self._run_export(worker.after_check(findings))
 
-    def _export_done(self, written: list[Path], findings: list[Finding]) -> None:
+    def _export_done(
+        self, worker: _ExportWorker, written: list[Path], findings: list[Finding]
+    ) -> None:
         """Was geschrieben wurde, und was dabei aufgefallen ist (§29)."""
+        if not self._owns_export(worker):
+            return
         # Das Ende kommt vor dem Auslaufen des Threads (siehe Feld-Docstring).
         self._exporting = False
         self._set_progress_state("export", active=False)
@@ -6914,7 +7009,7 @@ class MainWindow(QMainWindow):
         if self._export_folder is not None:
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(self._export_folder)))
 
-    def _export_failed(self, error: AppError) -> None:
+    def _export_failed(self, worker: _ExportWorker, error: AppError) -> None:
         """Der Fehlerdialog gehört in den Hauptthread, nicht in den Arbeiter.
 
         **Und er bekommt seinen Wiederholknopf.** ``FileWriteError`` schlägt
@@ -6925,6 +7020,11 @@ class MainWindow(QMainWindow):
         wiederholt werden soll, weiß allein diese Stelle; deshalb steht das Ziel
         hier und nicht in der Handlung.
         """
+        if not self._owns_export(worker):
+            return
+        if worker.cancelled.is_cancelled:
+            self._export_cancelled(worker)
+            return
         self._exporting = False
         self._set_progress_state("export", active=False)
         attempt = self._export_attempt
@@ -6934,6 +7034,10 @@ class MainWindow(QMainWindow):
                 elsewhere=self.action_export,
             )
         show_error(error, self)
+
+    def _export_crashed(self, worker: _ExportWorker, detail: str) -> None:
+        """Unerwartete Fehler folgen demselben Besitzer- und Abbruchvertrag."""
+        self._export_failed(worker, InternalError(detail=detail))
 
     def _export_as_mesh_after_error(self, _error: Any) -> None:
         """Dasselbe Teil als 3MF, wenn STEP an einem Netz gescheitert ist (§29).
@@ -6964,9 +7068,10 @@ class MainWindow(QMainWindow):
         if self._export_worker is worker:
             self._export_worker = None
             self._exporting = False
-            self._set_progress_state("export", active=False)
-            self._progress_idle()
-            self._update_actions()
+            self._progress_states["export"] = replace(self._progress_states["export"], active=False)
+            if isValid(self) and not self._close_requested:
+                self._progress_idle()
+                self._update_actions()
         self._hold_until_done(worker)
 
     def action_catalog(self) -> None:
@@ -18265,6 +18370,7 @@ class MainWindow(QMainWindow):
         self._cancel_download()
         self._cancel_source_read()
         self._cancel_gcode()
+        self._cancel_export()
         workers = (
             self._map_worker,
             self._slice_worker,
@@ -18347,6 +18453,7 @@ class MainWindow(QMainWindow):
         Die Sitzung überlebt das Fenster. Ihre Verbindung wird deshalb hier
         ausdrücklich gekappt, bevor Qt die Widgets zerstört.
         """
+        self._close_requested = True
         self.wait_for_workers(timeout_ms)
         self._action_notice.clear()
         self.spacemouse.stop()

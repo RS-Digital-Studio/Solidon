@@ -631,7 +631,7 @@ def test_a_coarse_circle_measure_does_not_prove_actual_mesh_clearance(profile: P
             },
         )
     found = fit_check.check(scene, profile)
-    assert len(found) == 1
+    assert [item.code for item in found] == ["fit.mesh_uncertain", "fit.pose_unknown"]
     assert found[0].code == "fit.mesh_uncertain"
     assert found[0].values["clearance_min_mm"] < 0.0
     assert found[0].values["clearance_max_mm"] > 0.4
@@ -647,7 +647,7 @@ def test_a_coarse_circle_measure_does_not_prove_actual_mesh_clearance(profile: P
 
 
 def test_fine_contours_keep_the_existing_measurable_fit_contract(profile: Profile) -> None:
-    """Ein tatsächlich enges Netzband liegt vollständig innerhalb der Prüfauflösung."""
+    """Ein enges Netzband belegt das Maß; die nicht modellierte Einbaulage bleibt offen."""
     scene = pin_and_hole(30.0, 29.6, profile)
     scene.fits = [replace(clearance_fit(), tolerance=0.4)]
     for entry in scene.objects.values():
@@ -657,7 +657,7 @@ def test_fine_contours_keep_the_existing_measurable_fit_contract(profile: Profil
                 feature,
                 params={**feature.params, "radial_min": radius - 0.005, "radial_max": radius},
             )
-    assert fit_check.check(scene, profile) == []
+    assert [item.code for item in fit_check.check(scene, profile)] == ["fit.pose_unknown"]
 
 
 @pytest.mark.parametrize(
@@ -679,7 +679,7 @@ def test_incomplete_mesh_band_does_not_fall_back_to_a_successful_circle_measure(
     feature = entry.features["hole_1"]
     entry.features[feature.id] = replace(feature, params={**feature.params, **band})
     findings = fit_check.check(scene, profile)
-    assert len(findings) == 1
+    assert [item.code for item in findings] == ["fit.not_measurable", "fit.pose_unknown"]
     assert findings[0].code == "fit.not_measurable"
     scene.report = Report(tuple(findings))
     assert findings[0] in checks.check(EvaluationResult(scene))
@@ -777,12 +777,12 @@ def test_thread_fit_accepts_either_matching_handedness(profile: Profile, handedn
             key: replace(feature, params={**feature.params, "handedness": handedness})
             for key, feature in entry.features.items()
         }
-    assert not fit_check.check(scene, profile)
+    assert [item.code for item in fit_check.check(scene, profile)] == ["fit.pose_unknown"]
 
 
 def test_threads_need_opposite_roles_and_the_same_pitch(profile: Profile) -> None:
     scene = _thread_pair(profile)
-    assert not fit_check.check(scene, profile)
+    assert [item.code for item in fit_check.check(scene, profile)] == ["fit.pose_unknown"]
     outer = scene.objects["obj_2"].features["pin_1"]
     scene.objects["obj_2"].features["pin_1"] = replace(outer, params={**outer.params, "pitch": 1.5})
     assert fit_check.check(scene, profile)[0].code == "fit.pitch_mismatch"
@@ -840,12 +840,12 @@ def test_the_visible_target_follows_both_body_materials(profile: Profile) -> Non
     assert names == (profiles.material("pla").title,)
 
 
-def test_a_fit_that_matches_the_profile_says_nothing(profile: Profile) -> None:
+def test_matching_profile_dimensions_leave_the_installation_pose_open(profile: Profile) -> None:
     gap = profiles.material("petg").clearance
     scene = pin_and_hole(5.0 + gap, 5.0, profile)
     scene.fits.append(clearance_fit())
 
-    assert fit_check.check(scene, profile) == []
+    assert [item.code for item in fit_check.check(scene, profile)] == ["fit.pose_unknown"]
 
 
 def test_a_conditional_fit_requires_its_document_without_blaming_the_step(profile: Profile) -> None:
@@ -858,7 +858,9 @@ def test_a_conditional_fit_requires_its_document_without_blaming_the_step(profil
     document = Document(format_version=1, app_version="0.0.1")
     History(document).apply("Quader", [OperationDraft(op="create_box", params={"width": 5.0})])
 
-    assert fit_check.check(scene, profile, document=document) == []
+    assert [item.code for item in fit_check.check(scene, profile, document=document)] == [
+        "fit.pose_unknown"
+    ]
     with pytest.raises(InternalError):
         fit_check.check(scene, profile)
 
@@ -888,9 +890,12 @@ def test_the_tolerance_follows_the_material(profile: Profile) -> None:
     scene = pin_and_hole(5.0 + profiles.material("petg").clearance, 5.0, profile)
     scene.fits.append(clearance_fit())
 
-    assert fit_check.check(scene, profile) == []
+    assert [item.code for item in fit_check.check(scene, profile)] == ["fit.pose_unknown"]
     scene.profile = tpu
-    assert fit_check.check(scene, tpu), "the same geometry is wrong for a softer material"
+    assert [item.code for item in fit_check.check(scene, tpu)] == [
+        "fit.violated",
+        "fit.pose_unknown",
+    ]
 
 
 def two_faces(offset: float, normal_b: tuple[float, float, float], profile: Profile) -> Scene:
@@ -1074,7 +1079,7 @@ def test_a_softer_body_gets_its_own_clearance(profile: Profile) -> None:
 
     scene.objects["obj_2"].material = "tpu-95a"
 
-    assert fit_check.check(scene, profile) == []
+    assert [item.code for item in fit_check.check(scene, profile)] == ["fit.pose_unknown"]
 
 
 def test_the_finding_names_both_materials(profile: Profile) -> None:
@@ -1113,7 +1118,7 @@ def test_a_named_material_stays_what_it_says(profile: Profile) -> None:
         )
     )
 
-    assert fit_check.check(scene, profile) == []
+    assert [item.code for item in fit_check.check(scene, profile)] == ["fit.pose_unknown"]
 
 
 def test_a_press_fit_takes_the_gentler_number(profile: Profile) -> None:
@@ -1135,7 +1140,7 @@ def test_a_press_fit_takes_the_gentler_number(profile: Profile) -> None:
         )
     )
 
-    assert fit_check.check(scene, profile) == []
+    assert [item.code for item in fit_check.check(scene, profile)] == ["fit.pose_unknown"]
 
 
 def test_the_digest_names_a_body_that_is_not_in_the_project_material(profile: Profile) -> None:

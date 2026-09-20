@@ -14,14 +14,18 @@ from __future__ import annotations
 
 import math
 
-from app.core.errors import AppError, InternalError
+import numpy as np
+
+from app.core.errors import PROGRAMMING_ERRORS, AppError, InternalError, OperationCancelled
 from app.core.expressions import resolve as resolve_parameters
 from app.core.expressions import resolve_value
 from app.core.knowledge.profiles import for_object, resolve_tolerance
 from app.core.log import get_logger
 from app.core.perceive.features import EPS_ANGLE
+from app.core.scene.cancel import NeverCancelled
 from app.core.types import (
     AUTO_TOLERANCE_PREFIX,
+    CancelToken,
     Document,
     Feature,
     FeatureRef,
@@ -30,6 +34,9 @@ from app.core.types import (
     FitKind,
     Profile,
     Scene,
+    SceneObject,
+    Severity,
+    kind_of,
     vec3_or_none,
 )
 from app.core.units import EPS_DISPLAY, EPS_GEOM, format_length
@@ -212,12 +219,21 @@ def active_fits(document: Document) -> list[Fit]:
     return active
 
 
-def check(scene: Scene, profile: Profile, *, document: Document | None = None) -> list[Finding]:
+def check(
+    scene: Scene,
+    profile: Profile,
+    *,
+    document: Document | None = None,
+    cancelled: CancelToken | None = None,
+) -> list[Finding]:
     """Prüft jede Passung der Szene. Verletzungen sind nie still (§14)."""
     if document is None and any(fit.when_positive is not None for fit in scene.fits):
         raise InternalError(detail="Bedingte Passungen brauchen ihr Dokument für die Prüfung.")
+    token = cancelled if cancelled is not None else NeverCancelled()
+    token.raise_if_cancelled()
     findings: list[Finding] = []
     for fit in scene.fits:
+        token.raise_if_cancelled()
         try:
             if _condition_value(fit, document) <= 0.0:
                 continue
@@ -235,11 +251,12 @@ def check(scene: Scene, profile: Profile, *, document: Document | None = None) -
                 )
             )
             continue
-        findings.extend(_check_one(scene, fit, profile))
+        findings.extend(_check_one(scene, fit, profile, token))
+    token.raise_if_cancelled()
     return findings
 
 
-def _check_one(scene: Scene, fit: Fit, profile: Profile) -> list[Finding]:
+def _check_one(scene: Scene, fit: Fit, profile: Profile, cancelled: CancelToken) -> list[Finding]:
     first = resolve(scene, fit.a)
     second = resolve(scene, fit.b)
     if first is None or second is None:
@@ -312,12 +329,13 @@ def _check_one(scene: Scene, fit: Fit, profile: Profile) -> list[Finding]:
     hole_ref, pin_ref = (fit.a, fit.b) if hole is first else (fit.b, fit.a)
     wanted, materials = _wanted(scene, fit, hole_ref, pin_ref, profile)
     actual = hole_diameter - pin_diameter
+    geometry = _check_geometry(scene, fit, hole, pin, hole_ref, pin_ref, cancelled)
     if abs(actual - wanted) <= FIT_TOLERANCE:
         if fit.kind in {"clearance", "press"}:
             uncertainty = _mesh_clearance(fit, hole, pin, hole_ref, wanted)
             if uncertainty is not None:
-                return [uncertainty]
-        return []
+                return [uncertainty, geometry]
+        return [geometry]
 
     return [
         Finding(
@@ -336,8 +354,136 @@ def _check_one(scene: Scene, fit: Fit, profile: Profile) -> list[Finding]:
             # den Punkt, zu dem die Kamera fliegt.
             object_id=hole_ref.object_id,
             feature_ids=(hole_ref.feature_id,),
-        )
+        ),
+        geometry,
     ]
+
+
+def _axis_span(feature: Feature) -> tuple[np.ndarray, np.ndarray, float] | None:
+    """Gemessene Achse mit Mittelpunkt und axialer Ausdehnung, ohne Ersatz aus dem Körpermaß."""
+    centre = vec3_or_none(feature.params.get("centre"))
+    axis = vec3_or_none(feature.params.get("axis"))
+    length = _positive(feature, "depth") or _positive(feature, "length")
+    if centre is None or axis is None or length is None:
+        return None
+    size = math.hypot(*axis)
+    if not all(math.isfinite(value) for value in (*centre, *axis, size)) or size <= EPS_GEOM:
+        return None
+    return np.asarray(centre), np.asarray(axis) / size, length
+
+
+def _shared_pose(first: SceneObject, second: SceneObject, hole: Feature, pin: Feature) -> bool:
+    """Nur dieselbe koaxiale Einbaulage mit belegter axialer Überlappung ist prüfbar."""
+    if first.id == second.id or first.plate != second.plate:
+        return False
+    left, right = _axis_span(hole), _axis_span(pin)
+    if left is None or right is None:
+        return False
+    centre, axis, length = left
+    other_centre, other_axis, other_length = right
+    offset = other_centre - centre
+    along = float(offset @ axis)
+    # Die seitliche Abweichung an beiden Enden wird in mm geprüft. Eine
+    # Winkelschwelle allein könnte bei einem langen Zapfen einen Versatz erlauben.
+    endpoints = (offset - other_axis * other_length / 2, offset + other_axis * other_length / 2)
+    if any(float(np.linalg.norm(point - (point @ axis) * axis)) > EPS_GEOM for point in endpoints):
+        return False
+    projected = other_length * abs(float(axis @ other_axis))
+    overlap = min(length / 2, along + projected / 2) - max(-length / 2, along - projected / 2)
+    return overlap > EPS_GEOM
+
+
+def _check_geometry(
+    scene: Scene,
+    fit: Fit,
+    hole: Feature,
+    pin: Feature,
+    hole_ref: FeatureRef,
+    pin_ref: FeatureRef,
+    cancelled: CancelToken,
+) -> Finding:
+    """Eine starre Probe aller Körperflächen, getrennt von Sollmaß und Montageweg."""
+    from app.core.geom.measure import body_overlap
+
+    first, second = scene.objects[hole_ref.object_id], scene.objects[pin_ref.object_id]
+    values: dict[str, float | str | TranslatableText] = {
+        "fit": fit.name,
+        "a": first.id,
+        "b": second.id,
+    }
+    severity: Severity = "warning"
+    if not _shared_pose(first, second, hole, pin):
+        code = "fit.pose_unknown"
+        message = _(
+            "Die Einbaulage dieser Passung ist nicht belegt. Beide Merkmale auf derselben "
+            "Platte koaxial und mit überlappender Einstecktiefe ausrichten."
+        )
+    else:
+        kinds = (kind_of(first.mesh), kind_of(second.mesh))
+        native = kinds == ("brep", "brep")
+        mixed = kinds[0] != kinds[1]
+        values["geometry_source"] = "native" if native else "mixed" if mixed else "mesh"
+        try:
+            cancelled.raise_if_cancelled()
+            volume = body_overlap(first.mesh, second.mesh, cancelled=cancelled)
+            cancelled.raise_if_cancelled()
+        except OperationCancelled:
+            raise
+        except PROGRAMMING_ERRORS:
+            raise
+        except Exception as problem:  # Native Kerne haben eigene Fehlerklassen.
+            cancelled.raise_if_cancelled()
+            _log.warning("fit geometry probe failed: %s", problem)
+            code = "fit.geometry_failed"
+            values["reason"] = str(problem)
+            message = _(
+                "Die Körper dieser Passung konnten geometrisch nicht geprüft werden. "
+                "Geschlossene gültige Körper verwenden oder die Geometrie erneut prüfen."
+            )
+        else:
+            values["overlap_mm3"] = volume
+            values["intersects"] = volume > 0.0
+            if fit.kind == "press":
+                code = "fit.press_unverified"
+                message = _(
+                    "Bei einer Presspassung ist Übermaß vorgesehen. Diese starre Körperprobe "
+                    "bestätigt weder die Montage noch die Verformung; "
+                    "auch Boden und Schulter prüfen."
+                )
+            elif mixed:
+                code = "fit.geometry_approximate"
+                message = (
+                    _(
+                        "Die Netznäherung zeigt eine Überschneidung in dieser Einbaulage. "
+                        "Die exakten Körper und die Auflösung der Näherung prüfen."
+                    )
+                    if volume > 0.0
+                    else _(
+                        "Die Netznäherung zeigt in dieser Einbaulage keine Überschneidung. "
+                        "Die exakten Körper und den Montageweg separat prüfen."
+                    )
+                )
+            elif volume > 0.0:
+                code = "fit.collision"
+                message = _(
+                    "Die Körper überschneiden sich in dieser Einbaulage. Einstecktiefe, "
+                    "Boden, Schulter und die tatsächlichen Konturen prüfen."
+                )
+            else:
+                code = "fit.geometry_clear"
+                severity = "info"
+                message = _(
+                    "In dieser Einbaulage überschneiden sich die Körper nicht. Montageweg "
+                    "und Druckverhalten separat prüfen."
+                )
+    return Finding(
+        code=code,
+        severity=severity,
+        message=message,
+        values=values,
+        object_id=hole_ref.object_id,
+        feature_ids=(hole_ref.feature_id,),
+    )
 
 
 def _mesh_clearance(

@@ -353,6 +353,25 @@ Presspassungen dürfen beabsichtigte Überdeckung tragen; Spielpassungen
 erhalten bei möglicher Überdeckung auch innerhalb der Anzeigeauflösung einen
 Befund. Diese Grenzen ersetzen weder Fertigungsspiel noch eine Einbauprüfung.
 
+Zusätzlich prüft `fits.check(..., cancelled=...)` bei radialen Paaren die
+tatsächlichen vollständigen Körper in der aktuellen Lage. Unterschiedliche
+Platten, fehlende Achse/Mitte/Tiefe, seitlicher Versatz und fehlende axiale
+Überlappung bleiben `fit.pose_unknown`; angeordnete Druckteile belegen keine
+Einbaulage. Netze laufen unverändert durch die direkte Verschneidung mit
+gültiger leerer Ausgabe, ohne Reparatur, Jitter oder Voxel. Native Körper
+werden auf privaten Kopien validiert und nichtdestruktiv verschnitten; auch
+Prüfkennzeichen der Originale bleiben erhalten. Ein gültiger nativer Kontakt
+ohne Solid ist leer, jeder Solid mit positivem integriertem Volumen zählt
+als Überdeckung. Keine Längentoleranz wird als Volumengrenze verwendet.
+Gemischte Zwillinge liefern ausdrücklich eine Netznäherung. `fit.geometry_failed`
+ersetzt keinen Fehler durch Kollisionsfreiheit; Abbruch wird weitergereicht.
+`fit.press_unverified` bestätigt weder Montage noch Verformung und erklärt
+auch eine Boden-/Schulterüberdeckung nicht pauschal für beabsichtigt.
+Kollisionsfreiheit gilt ausschließlich für die geprüfte Lage, nicht für den
+Montageweg oder das Druckverhalten. Maßbefunde bleiben daneben bestehen.
+Auswertung veröffentlicht Cacheeinträge und Fertigmeldung erst nach allen
+Abschlussprüfungen und deren letzter Abbruchkontrolle.
+
 `fits.active_fits(document)` liest das aktuelle Op-Feld einschließlich
 Projektparameterausdrücken. Ausschließlich gültige Werte <= 0 deaktivieren
 die Passung; fehlender Schritt oder ungültiger Ausdruck bleibt ein Befund.

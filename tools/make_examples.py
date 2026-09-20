@@ -755,7 +755,8 @@ def box_with_lid() -> Project:
 
     # Anordnen ist eine Transformation und meldet seine Bewegung
     # (``OpResult.transform``) — die Merkmale überstehen das, und damit auch
-    # die Passung.
+    # die Passungsbeziehung. Ihre Einbaulage bleibt in dieser getrennten
+    # Druckanordnung ausdrücklich ungeprüft und steht so im Prüfbericht.
     history.apply(
         _("Anordnen"),
         [OperationDraft(op="arrange_bed", inputs=(box, lid), params={"spacing": 8.0})],
@@ -766,8 +767,8 @@ def box_with_lid() -> Project:
 def fit_after_material_change() -> Project:
     """Eine Passung, die nach einem Materialwechsel nicht mehr passt (§12, §14).
 
-    **Das einzige Beispiel, das mit einer Warnung öffnet — und zwar mit
-    Absicht.** Die anderen zehn zeigen, wie etwas geht. Dieses zeigt, was
+    **Das Beispiel öffnet mit einer Materialwarnung — und zwar mit
+    Absicht.** Die anderen zeigen, wie etwas geht. Dieses zeigt, was
     passiert, wenn etwas *nicht mehr* geht, und das ist der Unterschied
     zwischen einem Programm, das Formen baut, und einem, das mitdenkt: Die
     Dose ist unverändert, der Deckel ist unverändert, und trotzdem stimmt
@@ -845,15 +846,15 @@ def fit_after_material_change() -> Project:
 
     # **Der Schritt, um den es geht.** Er ist der letzte im Verlauf, damit ein
     # Klick auf die Warnung genau hierher zeigt — und er ist rücknehmbar: Ein
-    # Strg+Z nimmt den Materialwechsel zurück, und der Bericht wird grün. Das
-    # ist der Weg, den das Beispiel vorführt.
+    # Strg+Z nimmt den Materialwechsel und seine Spielwarnung zurück. Die
+    # getrennte Drucklage belegt weiterhin keine Montage; ihr Hinweis bleibt.
     history.apply(
         _("Anordnen"),
         [OperationDraft(op="arrange_bed", inputs=(box, lid), params={"spacing": 8.0})],
     )
 
     # **Zuletzt, und das ist keine Geschmacksfrage.** Die Tour sagt „nimm den
-    # letzten Schritt zurück, der Bericht wird grün" — stünde danach noch das
+    # letzten Schritt zurück, die Materialwarnung verschwindet" — stünde danach noch das
     # Anordnen, bräuchte es zwei Strg+Z, und nach dem ersten stünde die Warnung
     # noch da. Ein Nutzer tut dann, was dasteht, sieht das Gegenteil, und die
     # Führung quittiert ihm trotzdem Erfolg (gefunden von 72 in der Abnahme,

@@ -728,9 +728,9 @@ TOURS: Final[tuple[Tour, ...]] = (
             TourStep(
                 shows="report",
                 text=_(
-                    "Deshalb steht die Passung auch im Prüfbericht. Wer sein "
-                    "Material einmal kalibriert, verbessert damit diesen Deckel, "
-                    "ohne ihn anzufassen."
+                    "Die Passung steht auch im Prüfbericht. Dose und Deckel liegen "
+                    "getrennt zum Drucken; ihre Einbaulage ist deshalb noch ungeprüft. "
+                    "Das Materialprofil bestimmt das vorgesehene Spiel."
                 ),
             ),
         ),
@@ -745,19 +745,21 @@ TOURS: Final[tuple[Tour, ...]] = (
     Tour(
         example_id="passung-nach-materialwechsel",
         intro=_(
-            "Dieses Beispiel öffnet mit einer Warnung, und das ist Absicht. Der "
-            "Deckel soll aus weichem TPU kommen, damit er beim Zudrücken "
-            "nachgibt — und seitdem sitzt er zu stramm. Warum das so ist und wie "
-            "man es in einem Zug behebt, zeigen die nächsten Schritte."
+            "Dieses Beispiel zeigt eine Warnung zum Materialspiel: Der Deckel soll "
+            "aus weichem TPU kommen, doch das vorgesehene Spiel reicht dafür nicht "
+            "aus. Die Teile liegen getrennt zum Drucken. Deshalb bleibt zusätzlich "
+            "ihre Einbaulage ungeprüft. Die nächsten Schritte zeigen, wie Sie die "
+            "Materialwarnung in einem Zug beheben."
         ),
         steps=(
             TourStep(
                 shows="report",
                 text=_(
-                    "Rechts steht der Prüfbericht, und darin ein Satz: die Passung "
-                    "sitzt enger als vorgesehen. Daneben zwei Zahlen — vorhanden "
-                    "0,20 mm, nötig 0,35 mm. Solidon nennt sie, weil es beide "
-                    "Materialien kennt: die Dose ist hart, der Deckel weich."
+                    "Die Meldung zur Passung vergleicht das vorhandene Spiel mit "
+                    "dem Materialprofil: bei einer Dose aus PLA 0,20 mm, für den "
+                    "TPU-Deckel 0,35 mm. Bei anderen Materialien gelten die Zahlen "
+                    "im Prüfbericht. Der weitere Hinweis betrifft die ungeprüfte "
+                    "Einbaulage der getrennten Teile."
                 ),
             ),
             TourStep(
@@ -772,19 +774,20 @@ TOURS: Final[tuple[Tour, ...]] = (
             TourStep(
                 shows="viewport",
                 text=_(
-                    "Weiches Material braucht mehr Spiel als hartes: Es gibt beim "
-                    "Drucken nach und beim Fügen ebenso. Die Öffnung ist noch die "
-                    "für hartes Material — 0,15 mm zu eng für einen TPU-Deckel."
+                    "Das TPU-Profil sieht mehr Spiel vor als das bisherige Material. "
+                    "Soll der Deckel aus TPU bleiben, vergrößern Sie das Spiel um "
+                    "die im Prüfbericht angezeigte Differenz. Die Körperprobe in "
+                    "Einbaulage und der Montageweg bleiben gesondert zu prüfen."
                 ),
             ),
             TourStep(
                 shows="history",
                 text=_(
-                    "Der letzte Schritt im Verlauf heißt „Deckel aus TPU“. Nehmen "
-                    "Sie ihn mit Strg+Z zurück: Der Bericht wird grün, weil beide "
-                    "Teile wieder aus demselben Material sind. Das ist der eine "
-                    "Weg — der andere ist, die Öffnung um 0,15 mm zu weiten und "
-                    "das weiche Material zu behalten."
+                    "Der letzte Schritt heißt „Deckel aus TPU“. Nehmen Sie ihn mit "
+                    "Strg+Z zurück: Die Warnung zum Materialspiel verschwindet. Der "
+                    "Hinweis auf die ungeprüfte Einbaulage bleibt: Die Teile liegen "
+                    "weiterhin getrennt zum Drucken. Alternativ können Sie das "
+                    "Spiel anpassen und das weiche Material behalten."
                 ),
                 done=_op_gone("set_material"),
             ),

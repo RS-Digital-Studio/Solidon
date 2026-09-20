@@ -13,6 +13,18 @@ Maßgruppen zeigen Schrittvorgaben und die Auskunft „Am fertigen Teil“ getre
 Die Viewport-Auskunft folgt dem tatsächlich dargestellten Vorschaukörper und
 weicht vorübergehend der vorhandenen Fangpunktansage.
 
+Die Exportvorprüfung nutzt den gemeinsamen Fortschritt und `CancelSignal`.
+Ein kurzer gesperrter Übergang entscheidet Abbruch und Schreibbeginn zusammen;
+nach dem ersten Schreibbeginn wird der gesamte Auftrag ohne Abbruch beendet.
+Ein verspäteter Prüfbericht nach angenommenem Abbruch öffnet keinen Dialog.
+Phasensignal, Abbruchquittung und endgültiges Workerende halten Anzeige und
+Workerbezug getrennt, damit auch beim asynchronen Ende kein Folgeauftrag läuft.
+Fensterkreuz und `release` brechen die Vorprüfung ebenfalls ab. Ergebnisrückrufe
+sind schwach gebunden und prüfen Fensterlebensdauer und Arbeiterkennung; das
+Threadende bleibt an der vorhandenen Leine. Eine Bestätigung darf `finished`
+zustellen, aber weder ein beendetes Fenster noch einen ersetzten Versuch
+anschließend fortsetzen.
+
 `PlacementFlow` bietet den Wechsel echter Kanten, Mitten und belegter Achsen
 direkt an den vorhandenen Maßfeldern an. Tastaturliste und Modellklick nutzen
 dieselbe `PreparedSurface`; die Liste bleibt vollständig und zeigt höchstens

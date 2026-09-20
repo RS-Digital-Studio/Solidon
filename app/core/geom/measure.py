@@ -14,13 +14,17 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 from app.core.deferred import trimesh
 from app.core.geom.mesh import RAY_PARALLEL_EPS, MeshData, on_surface
-from app.core.types import BoundingBox, Vec3
+from app.core.types import BoundingBox, CancelToken, Mesh, Vec3
 from app.core.units import EPS_GEOM, round_display
+
+if TYPE_CHECKING:
+    from app.core.brep.kernel import Solid
 
 #: Wie weit ein Klick von einem Eckpunkt oder einer Kante entfernt sein darf,
 #: um darauf gezogen zu werden — relativ zur Modelldiagonale. Auf dem
@@ -47,6 +51,92 @@ SNAP_RADIUS_RELATIVE = 0.02
 #: als achtzehn Segmenten fängt auf seinen Mantellinien — dort sieht man sie
 #: aber auch.
 SHARP_EDGE_ANGLE = math.radians(20.0)
+
+
+def body_overlap(first: Mesh, second: Mesh, *, cancelled: CancelToken) -> float:
+    """Volumen der starren Körperverschneidung; Fehler und Abbruch sind keine leere Ausgabe.
+
+    Beide nativen Körper werden exakt auf privaten Kopien geprüft. Sobald
+    ein Netz beteiligt ist, werden unveränderte Netzflächen direkt verschnitten;
+    ein nativer Partner trägt dafür ausschließlich seinen angenäherten Zwilling bei.
+    """
+    from app.core.brep.kernel import Solid
+    from app.core.geom.boolean import boolean
+    from app.core.geom.mesh import as_mesh_data
+
+    cancelled.raise_if_cancelled()
+    if isinstance(first, Solid) and isinstance(second, Solid):
+        volume = _native_overlap(first, second, cancelled)
+    else:
+        if not all(isinstance(body, (Solid, MeshData)) for body in (first, second)):
+            raise ValueError("unsupported_geometry")
+        meshes = [
+            as_mesh_data(_checked_native_copy(body, cancelled) if isinstance(body, Solid) else body)
+            for body in (first, second)
+        ]
+        cancelled.raise_if_cancelled()
+        result = boolean(
+            "intersection", meshes, allow_empty=True, stages=("direct",), cancelled=cancelled
+        )
+        volume = result.mesh.volume
+        if not math.isfinite(volume) or volume < 0.0:
+            raise ValueError("invalid_intersection_volume")
+    cancelled.raise_if_cancelled()
+    return volume
+
+
+def _checked_native_copy(body: Solid, cancelled: CancelToken) -> Solid:
+    """Auch native Prüfkennzeichen bleiben auf einer privaten Kopie der Eingabe."""
+    from OCP.BRepCheck import BRepCheck_Analyzer
+
+    from app.core.brep.kernel import Solid
+    from app.core.brep.properties import properties
+
+    cancelled.raise_if_cancelled()
+    checked = Solid(body.shape, deflection=body.deflection)
+    if (
+        checked.shape.IsNull()
+        or not BRepCheck_Analyzer(checked.shape).IsValid()
+        or checked.solid_count == 0
+        or not checked.is_closed
+    ):
+        raise ValueError("invalid_native_body")
+    volume = properties(checked.shape, "volume", cancelled=cancelled).mass
+    if not math.isfinite(volume) or volume <= 0.0:
+        raise ValueError("invalid_native_volume")
+    return checked
+
+
+def _native_overlap(first: Solid, second: Solid, cancelled: CancelToken) -> float:
+    """Nichtdestruktive native Verschneidung; gültiger Kontakt ist kein Volumenkörper."""
+    from OCP.BRepCheck import BRepCheck_Analyzer
+    from OCP.TopAbs import TopAbs_SOLID
+    from OCP.TopExp import TopExp_Explorer
+
+    from app.core.brep.kernel import boolean_builder
+    from app.core.brep.properties import properties
+
+    first, second = (_checked_native_copy(body, cancelled) for body in (first, second))
+    cancelled.raise_if_cancelled()
+    operation = boolean_builder("intersection", first.shape, second.shape)
+    operation.Build()
+    cancelled.raise_if_cancelled()
+    # Die installierte OCP-Bindung stellt IsDone bereit, keinen separaten
+    # HasErrors-Bericht. Zusätzlich wird deshalb die Ergebnisform geprüft.
+    if not operation.IsDone():
+        raise ValueError("native_intersection_failed")
+    shape = operation.Shape()
+    if shape.IsNull() or not BRepCheck_Analyzer(shape).IsValid():
+        raise ValueError("invalid_native_intersection")
+    # Eine leere Verschneidung und reine Kontaktflächen tragen keinen Solid.
+    # Keine Längentoleranz wird zur willkürlichen Volumenschwelle umgedeutet:
+    # Jeder gültige Solid mit positivem integriertem Volumen ist Überdeckung.
+    if not TopExp_Explorer(shape, TopAbs_SOLID).More():
+        return 0.0
+    volume = properties(shape, "volume", cancelled=cancelled).mass
+    if not math.isfinite(volume) or volume <= 0.0:
+        raise ValueError("invalid_native_intersection_volume")
+    return volume
 
 
 def surface_gap(first: MeshData, second: MeshData, search_length: float) -> float | None:

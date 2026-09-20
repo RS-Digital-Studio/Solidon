@@ -357,8 +357,61 @@ def test_the_fit_map_marks_the_violated_pair(profile: Profile) -> None:
     analysis = maps.build("fits", entry, scene=scene)
 
     assert analysis.highlighted, "the violated fit is the thing to look at"
-    assert analysis.categories[2] == "Passung verletzt"
+    assert all(
+        analysis.categories[int(analysis.values[index])] == "Passung verletzt"
+        for index in analysis.highlighted
+    )
     assert maps.fits_of(scene, "obj_1")
+
+
+@pytest.mark.parametrize(
+    ("code", "severity", "caption"),
+    [
+        ("fit.geometry_clear", "info", "Teil einer Passung"),
+        ("fit.pose_unknown", "warning", "Passung prüfen"),
+        ("fit.geometry_failed", "warning", "Passung prüfen"),
+        ("fit.geometry_approximate", "warning", "Passung prüfen"),
+        ("fit.press_unverified", "warning", "Passung prüfen"),
+        ("fit.mesh_uncertain", "warning", "Passung prüfen"),
+        ("fit.collision", "warning", "Passung verletzt"),
+        ("fit.violated", "warning", "Passung verletzt"),
+        ("fit.pitch_mismatch", "warning", "Passung verletzt"),
+    ],
+)
+def test_fit_map_distinguishes_proof_and_uncertainty_for_both_partners(
+    profile: Profile, code: str, severity: str, caption: str
+) -> None:
+    """Die Karte übernimmt den Bericht, einschließlich des nicht fokussierten Gegenstücks."""
+    mesh = cube()
+    feature = Feature("bore", "hole", "detected", {"diameter": 8.0}, face_indices=(0, 1))
+    objects = {
+        name: SceneObject(name, name, mesh=mesh, features={"bore": feature})
+        for name in ("socket", "pin", "unrelated")
+    }
+    scene = Scene(
+        objects=objects,
+        profile=profile,
+        fits=[Fit("connection", FeatureRef("socket", "bore"), FeatureRef("pin", "bore"))],
+        report=Report(
+            (
+                Finding(
+                    code=code,
+                    severity=severity,  # type: ignore[arg-type]
+                    message="Aus dem aktuellen Prüfbericht",
+                    object_id="socket",
+                    feature_ids=("bore",),
+                    values={"fit": "connection"},
+                ),
+            )
+        ),
+    )
+    for name in ("socket", "pin"):
+        result = maps.build("fits", objects[name], scene=scene)
+        assert result.categories[int(result.values[0])] == caption
+        assert result.categories[int(result.values[1])] == caption
+        assert bool(result.highlighted) is (severity != "info")
+        assert set(result.values[2:]) == {0.0}
+    assert set(maps.build("fits", objects["unrelated"], scene=scene).values) == {0.0}
 
 
 def test_without_fits_the_map_stays_empty(profile: Profile) -> None:

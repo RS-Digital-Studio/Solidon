@@ -7545,6 +7545,10 @@ def test_closing_keeps_the_window_alive_while_a_worker_is_running(
     """Ein noch laufender QThread darf sein Fenster nicht überleben."""
 
     class _RunningWorker:
+        def cancel(self) -> bool:
+            """Eine schon begonnene Ausgabe läuft vollständig aus."""
+            return False
+
         def isRunning(self) -> bool:  # noqa: N802 — bildet die Qt-API nach
             return True
 
@@ -8865,6 +8869,288 @@ def test_the_export_leaves_the_window_usable(
     assert not window.progress.isVisible(), "der Balken bleibt stehen, wenn niemand ihn abräumt"
 
 
+@pytest.mark.parametrize("export_format", ["stl", "3mf"])
+def test_cancel_export_preflight_never_starts_a_file(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, export_format: str
+) -> None:
+    """Der gemeinsame Knopf erreicht das Token der Prüfung und beginnt keine Ausgabe."""
+    entered, resume = threading.Event(), threading.Event()
+    received, writes, failures = [], [], []
+
+    def checking(*args: Any, cancelled: Any, **kwargs: Any) -> list[Finding]:
+        received.append(cancelled)
+        entered.set()
+        assert resume.wait(10)
+        cancelled.raise_if_cancelled()
+        return []
+
+    def writing(self: Any) -> Any:
+        writes.append(self._format)
+        return [], []
+
+    monkeypatch.setattr(main_window_module, "check_before_export", checking)
+    monkeypatch.setattr(main_window_module._ExportWorker, "_files", writing)
+    monkeypatch.setattr(main_window_module._ExportWorker, "_assembly", writing)
+    monkeypatch.setattr(main_window_module, "show_error", lambda *args: failures.append(args))
+    window.open_path(MESHES / "cube_clean.stl")
+    assert window.session.wait_for_idle(30_000)
+    window._start_export(tmp_path / f"abgebrochen.{export_format}", export_format)
+    worker = window._export_worker
+    assert worker is not None
+    try:
+        assert entered.wait(10)
+        assert received == [worker.cancelled]
+        assert window.cancel_button.isVisibleTo(window)
+        window.cancel_button.click()
+        assert worker.cancelled.is_cancelled
+        assert not window.cancel_button.isEnabled()
+    finally:
+        resume.set()
+        wait_for_export(window)
+    assert not writes and not failures and not list(tmp_path.glob("abgebrochen*"))
+    assert window._export_worker is None and not window._exporting
+    assert window._export_attempt is None
+    assert "Keine Datei wurde geschrieben" in window._announcement
+    assert window.export_action.isEnabled() and not window.progress.isVisibleTo(window)
+
+
+@pytest.mark.parametrize("answer", ["report", "failure"])
+def test_a_queued_export_report_is_discarded_after_cancel(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, answer: str
+) -> None:
+    """Abbrechen gilt auch vor einem bereits eingereihten Bericht oder Prüfungsfehler."""
+    offered = []
+
+    def checking(*args: Any, **kwargs: Any) -> list[Finding]:
+        if answer == "failure":
+            raise errors.UserError(title="Die Prüfung konnte nicht abgeschlossen werden.")
+        return [Finding("fit.collision", "warning", "Überschneidung")]
+
+    monkeypatch.setattr(main_window_module, "check_before_export", checking)
+    monkeypatch.setattr(main_window_module, "confirm_export", lambda *args: offered.append(args))
+    monkeypatch.setattr(main_window_module, "show_error", lambda *args: offered.append(args))
+    window.open_path(MESHES / "cube_clean.stl")
+    assert window.session.wait_for_idle(30_000)
+    target = tmp_path / "abgebrochen.stl"
+    window._start_export(target, "stl")
+    worker = window._export_worker
+    assert worker is not None and worker.wait(10_000)
+    window.cancel_button.click()
+    QApplication.processEvents()
+    assert not offered and not target.exists()
+    assert window._export_worker is None and window._export_attempt is None
+    assert "Keine Datei wurde geschrieben" in window._announcement
+
+
+@pytest.mark.parametrize("ending", ["close", "release"])
+def test_ending_the_window_cancels_the_export_preflight(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, ending: str
+) -> None:
+    """Fensterkreuz und Sprachneuaufbau erreichen dasselbe echte Prüfungstoken."""
+    entered, resume = threading.Event(), threading.Event()
+    dialogs, updates = [], []
+
+    def checking(*args: Any, cancelled: Any, **kwargs: Any) -> list[Finding]:
+        entered.set()
+        assert resume.wait(10)
+        cancelled.raise_if_cancelled()
+        return [Finding("fit.collision", "warning", "Überschneidung")]
+
+    monkeypatch.setattr(main_window_module, "check_before_export", checking)
+    monkeypatch.setattr(main_window_module, "confirm_export", lambda *args: dialogs.append(args))
+    monkeypatch.setattr(main_window_module, "show_error", lambda *args: dialogs.append(args))
+    monkeypatch.setattr(window, "_may_discard", lambda: True)
+    window.open_path(MESHES / "cube_clean.stl")
+    assert window.session.wait_for_idle(30_000)
+    target = tmp_path / "beendet.stl"
+    window._start_export(target, "stl")
+    worker = window._export_worker
+    assert worker is not None
+    try:
+        assert entered.wait(10)
+        if ending == "close":
+            event = QCloseEvent()
+            window.closeEvent(event)
+            assert not event.isAccepted() and not window.isEnabled()
+            window._close_retry.stop()
+        else:
+            window.release(0)
+        assert worker.cancelled.is_cancelled
+        assert window._export_attempt is None
+        monkeypatch.setattr(window, "_progress_idle", lambda: updates.append("progress"))
+        monkeypatch.setattr(window, "_update_actions", lambda: updates.append("actions"))
+    finally:
+        resume.set()
+        wait_for_export(window)
+    assert not target.exists() and not dialogs and not updates
+    assert window._export_worker is None and not window._exporting
+    assert not window._progress_states["export"].active
+
+
+@pytest.mark.parametrize("phase", ["checking", "writing"])
+def test_late_export_signals_do_not_touch_a_deleted_window(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, phase: str
+) -> None:
+    """Der Qt-Abbau beendet Rückrufe, während die Leine den echten Arbeiter weiter hält."""
+    import sys
+
+    from shiboken6 import isValid
+
+    entered, resume = threading.Event(), threading.Event()
+    failures = []
+    real_write = main_window_module.write_plan
+
+    def checking(*args: Any, cancelled: Any, **kwargs: Any) -> list[Finding]:
+        if phase == "checking":
+            entered.set()
+            assert resume.wait(10)
+            cancelled.raise_if_cancelled()
+        return []
+
+    def writing(*args: Any, **kwargs: Any) -> Any:
+        entered.set()
+        assert resume.wait(10)
+        return real_write(*args, **kwargs)
+
+    monkeypatch.setattr(main_window_module, "check_before_export", checking)
+    monkeypatch.setattr(main_window_module, "write_plan", writing)
+    monkeypatch.setattr(main_window_module, "show_error", lambda *args: failures.append(args))
+    monkeypatch.setattr(sys, "excepthook", lambda *args: failures.append(args))
+    window.open_path(MESHES / "cube_clean.stl")
+    assert window.session.wait_for_idle(30_000)
+    assert window.viewport.wait_for_workers(10_000)
+    target = tmp_path / "auslaufend.stl"
+    window._start_export(target, "stl")
+    worker = window._export_worker
+    assert worker is not None
+    try:
+        assert entered.wait(10)
+        window.release(0)
+        assert worker.cancelled.is_cancelled is (phase == "checking")
+        window.viewport.release_renderer()
+        window.deleteLater()
+        QApplication.sendPostedEvents(window, QEvent.Type.DeferredDelete)
+        assert not isValid(window) and worker.isRunning()
+    finally:
+        resume.set()
+        assert worker.wait(10_000)
+        QApplication.processEvents()
+        QApplication.processEvents()
+    assert not failures
+    assert target.exists() is (phase == "writing")
+    assert window._export_worker is None and not window._exporting
+
+
+@pytest.mark.parametrize("release", [False, True])
+def test_export_confirmation_may_deliver_finished_but_cannot_revive_a_released_window(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, release: bool
+) -> None:
+    """Threadende im Bestätigungsdialog erhält den Auftrag; Fensterende verwirft ihn."""
+    monkeypatch.setattr(
+        main_window_module,
+        "check_before_export",
+        lambda *args, **kwargs: [Finding("fit.collision", "warning", "Überschneidung")],
+    )
+
+    def confirming(*args: Any) -> bool:
+        QApplication.processEvents()
+        assert window._export_worker is None
+        if release:
+            window.release(0)
+        return True
+
+    monkeypatch.setattr(main_window_module, "confirm_export", confirming)
+    window.open_path(MESHES / "cube_clean.stl")
+    assert window.session.wait_for_idle(30_000)
+    target = tmp_path / "bestaetigt.stl"
+    window._start_export(target, "stl")
+    wait_for_export(window)
+    assert target.exists() is not release
+    assert window._export_worker is None and not window._exporting
+    assert window._export_attempt is None
+
+
+def test_a_retried_export_keeps_its_worker_when_the_previous_thread_finishes(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der echte Wiederholknopf kann vor dem verspäteten finished den nächsten Lauf starten."""
+    entered, resume = threading.Event(), threading.Event()
+    calls, retried = [], []
+
+    def checking(*args: Any, cancelled: Any, **kwargs: Any) -> list[Finding]:
+        calls.append(True)
+        if len(calls) == 1:
+            raise errors.FileWriteError(target="export.stl", detail="Der Ordner ist belegt.")
+        entered.set()
+        assert resume.wait(10)
+        cancelled.raise_if_cancelled()
+        return []
+
+    def retrying(problem: errors.AppError, owner: MainWindow) -> None:
+        owner.error_handlers()["retry"](problem)
+        retried.append(owner._export_worker)
+
+    monkeypatch.setattr(main_window_module, "check_before_export", checking)
+    monkeypatch.setattr(main_window_module, "show_error", retrying)
+    window.open_path(MESHES / "cube_clean.stl")
+    assert window.session.wait_for_idle(30_000)
+    target = tmp_path / "wiederholt.stl"
+    window._start_export(target, "stl")
+    first = window._export_worker
+    assert first is not None
+    try:
+        assert first.wait(10_000)
+        QApplication.processEvents()
+        assert entered.wait(10)
+        assert len(retried) == 1 and window._export_worker is retried[0]
+        assert window._export_worker is not first and window._exporting
+        assert window._progress_states["export"].active
+    finally:
+        resume.set()
+        wait_for_export(window)
+    assert target.is_file()
+    assert window._export_worker is None and not window._exporting
+
+
+def test_export_closes_cancellation_before_the_first_file_of_a_batch(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein noch nicht zugestelltes Phasensignal erlaubt keinen halben Mehrdateiexport."""
+    entered, resume = threading.Event(), threading.Event()
+    real_write = main_window_module.write_plan
+
+    def writing(*args: Any, **kwargs: Any) -> Any:
+        entered.set()
+        assert resume.wait(10)
+        return real_write(*args, **kwargs)
+
+    monkeypatch.setattr(main_window_module, "check_before_export", lambda *args, **kwargs: [])
+    monkeypatch.setattr(main_window_module, "write_plan", writing)
+    window.open_path(MESHES / "cube_clean.stl")
+    assert window.session.wait_for_idle(30_000)
+    assert window.session.apply(
+        "Zweiter Körper", [OperationDraft(op="create_box", params={"x": 60.0})]
+    )
+    assert window.session.wait_for_idle(30_000)
+    window.object_tree.tree.clearSelection()
+    window._start_export(tmp_path / "ausgabe.stl", "stl")
+    worker = window._export_worker
+    assert worker is not None
+    try:
+        assert entered.wait(10)
+        # Das Schreibsignal liegt noch in der Warteschlange; der sichtbare
+        # Prüfknopf muss seinen Auftrag trotzdem am aktuellen Zustand prüfen.
+        window.cancel_button.click()
+        assert not worker.cancelled.is_cancelled
+        assert not window.cancel_button.isVisibleTo(window)
+    finally:
+        resume.set()
+        wait_for_export(window)
+    assert len(list(tmp_path.glob("*.stl"))) == 2
+    assert window._export_worker is None and not window._exporting
+    assert window.export_action.isEnabled() and not window.progress.isVisibleTo(window)
+
+
 def test_a_failed_export_reports_in_the_main_thread(
     window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -9925,13 +10211,15 @@ def test_split_restores_the_complete_download_progress(
     window.session.busyChanged.emit(False)
 
 
+@pytest.mark.parametrize("writing", [False, True])
 def test_split_restores_the_complete_export_progress(
     window: MainWindow,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     request: pytest.FixtureRequest,
+    writing: bool,
 ) -> None:
-    """Der nicht abbrechbare Export kehrt nach Split ohne fremden Knopf zurück."""
+    """Prüfung und Schreiben erhalten nach Split genau ihren eigenen Abbruchzustand zurück."""
 
     monkeypatch.setattr(window._leash, "start", lambda _worker: None)
     window.session.import_model(MESHES / "cube_clean.stl")
@@ -9940,6 +10228,8 @@ def test_split_restores_the_complete_export_progress(
     worker = window._export_worker
     assert worker is not None
     request.addfinalizer(lambda: _release_unstarted_worker(window, "_export_worker", worker))
+    if writing:
+        window._export_writing(worker)
     expected = _progress_snapshot(window)
     try:
         _show_split_progress(window)
@@ -9948,7 +10238,7 @@ def test_split_restores_the_complete_export_progress(
 
         assert window._progress_owner == "export"
         assert _progress_snapshot(window) == expected
-        assert not window.cancel_button.isVisibleTo(window)
+        assert window.cancel_button.isVisibleTo(window) is not writing
     finally:
         window._exporting = False
         window._export_worker = None
@@ -11035,7 +11325,12 @@ def test_the_export_offers_its_folder(
     monkeypatch.setattr(
         module.QDesktopServices, "openUrl", lambda url: opened.append(url.toLocalFile()) or True
     )
-    window._export_done([tmp_path / "dose.3mf"], [])
+    worker = object()
+    window._export_worker = worker
+    try:
+        window._export_done(worker, [tmp_path / "dose.3mf"], [])
+    finally:
+        window._export_worker = None
     assert not window.reveal_export.isHidden(), "der Knopf steht neben der Meldung"
     assert window.reveal_export.toolTip() == str(tmp_path)
     window.reveal_export.click()

@@ -169,7 +169,7 @@ EXAMPLES: Final[tuple[Example, ...]] = (
             "statt nachgezeichnet, beschriftet und neben die Dose gelegt."
         ),
     ),
-    # **Das einzige Beispiel, das mit einer Warnung öffnet.** Die anderen zehn
+    # **Dieses Beispiel öffnet gezielt mit einer Materialwarnung.** Die anderen
     # zeigen, wie etwas geht; dieses zeigt, was passiert, wenn etwas nicht mehr
     # geht — und das ist der Unterschied zwischen einem Programm, das Formen
     # baut, und einem, das mitdenkt. Die Ausnahme dafür steht in

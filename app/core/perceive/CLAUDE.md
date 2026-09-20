@@ -14,6 +14,12 @@ kurzen Maßzusatz und Erklärung gemeinsam für Steckbrief, Bohrhinweis und UI
 bereit. `ActionField.measurement` beschreibt den Ausgangswert; ein neuer
 Zielwert ist keine neue Messung. Historische Felder lesen weiterhin den Schritt.
 
+Die Passungskarte übernimmt ausschließlich den aktuellen Prüfbericht.
+Informationsbefunde markieren keine Verletzung; ungeklärte oder angenäherte
+Proben heißen „Passung prüfen“, belegte Maß- oder Körperverletzungen
+„Passung verletzt“. Eine benannte Beziehung führt denselben Befund zu beiden
+Gegenstücken. Positive Lageproben überschreiben keine offenen oder verletzten Befunde.
+
 `slots.open_slots_instead_of_fillets` erkennt auch am Rand angeschnittene
 Bohrungen und Langlöcher mit einer ebenen freien Mündung (§21.1). Die
 vorhandenen Bogen- und Flankenflächen bilden ein `slot` mit `open`,
