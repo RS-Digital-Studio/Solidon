@@ -811,15 +811,29 @@ def slot_bore(
     Kerne dieselbe Zahl verwenden.
     """
     tool = _slot_tool(position, direction, diameter, depth, length, angle_deg, overlap)
-    result = boolean("difference", [solid, tool])
     # Beim Nachziehen liegen die alten und neuen Flanken in derselben Ebene.
     # Ihre künstlichen Teilungsnähte gehören nicht zum Langlochmantel.
+    return unified(boolean("difference", [solid, tool]))
+
+
+def unified(solid: Solid) -> Solid:
+    """Koplanare und gleichflächige Teilflächen zusammenlegen — Filamentgrenzen bleiben.
+
+    Eine Boolesche hinterlässt an jeder Berührung eine Naht: Der Deckel eines
+    Füllkörpers zerteilt die Platte, in der er liegt, in Ring und Scheibe, die
+    Flanken eines nachgezogenen Langlochs die alten Flanken. Für die Erkennung
+    ist das eine Fläche, und ``ShapeUpgrade_UnifySameDomain`` macht sie wieder
+    zu einer; ``keep_filament_boundaries`` hält die Kanten zwischen
+    verschiedenen Slots dabei fest. Bis zum 20.09.2026 tat das nur
+    :func:`slot_bore`; eine mit :func:`fill_bore` geschlossene Bohrung ließ
+    zehn Flächen an einer Platte, die sechs hat.
+    """
     from OCP.ShapeUpgrade import ShapeUpgrade_UnifySameDomain
 
-    joined = ShapeUpgrade_UnifySameDomain(result.shape, True, True, False)
-    keep_filament_boundaries(result, joined)
+    joined = ShapeUpgrade_UnifySameDomain(solid.shape, True, True, False)
+    keep_filament_boundaries(solid, joined)
     joined.Build()
-    return result.replacing(joined.Shape(), history=joined.History())
+    return solid.replacing(joined.Shape(), history=joined.History())
 
 
 def _slot_tool(
@@ -963,7 +977,7 @@ def fill_bore(
         )
         envelope = transformed(box(reach * 2.0, reach * 2.0, reach), matrix)
         tool = boolean("intersection", [tool, envelope])
-    return boolean("union", [solid, tool])
+    return unified(boolean("union", [solid, tool]))
 
 
 def cut_bore(

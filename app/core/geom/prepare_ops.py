@@ -1461,18 +1461,7 @@ def _throughness_lost(
         mesh, feature, centre, quality=quality, seed=seed, cancelled=cancelled
     ):
         return []
-    return [
-        Finding(
-            code=f"{op}.no_longer_through",
-            severity="warning",
-            message=_(
-                "Diese Bohrung ging durch das Teil und tut es an der neuen Stelle "
-                "nicht mehr — ihre Achse durchquert das Material dort nicht ganz."
-            ),
-            feature_ids=(feature.id,),
-            location=centre,
-        )
-    ]
+    return [_through_lost_finding(op, feature, centre)]
 
 
 def _between_the_mouths(mesh: MeshData, feature: Feature, centre: Vec3) -> MeshData | None:
@@ -2616,6 +2605,8 @@ def move_feature(ctx: OpContext) -> OpResult:
             values={"feature": feature.id},
             constraint="not_movable",
         )
+    if source.kind == "brep" and chain is None and feature.kind in EXACT_CAVITY_KINDS:
+        return _exact_move_cavity(ctx, source, feature, centre, target)
     ctx.progress(0.1, str(_("Das Merkmal wird an seiner alten Stelle geschlossen …")))
     travel = np.asarray(target, dtype=float) - np.asarray(centre, dtype=float)
     if chain is not None:
@@ -2907,6 +2898,8 @@ def duplicate_feature(ctx: OpContext) -> OpResult:
         )
     if chain is not None:
         return _duplicate_cavity_chain(ctx, source, feature, chain, target)
+    if source.kind == "brep" and feature.kind in EXACT_CAVITY_KINDS:
+        return _exact_duplicate_cavity(ctx, source, feature, target)
     ctx.progress(0.2, str(_("Das Merkmal wird an der neuen Stelle angelegt …")))
     change: BooleanKind = "difference" if cavity else "union"
     placed = boolean(
@@ -3185,6 +3178,8 @@ def remove_feature(ctx: OpContext) -> OpResult:
     body = as_mesh_data(source.mesh)
     cavity = is_a_cavity(feature)
     chain = _cavity_chain_of(body, feature, source.features)
+    if source.kind == "brep" and chain is None and feature.kind in EXACT_CAVITY_KINDS:
+        return _exact_remove_cavity(ctx, source, feature)
     answered: dict[str, Any] = {}
     together = False
     if chain is not None:
@@ -3403,6 +3398,8 @@ def rotate_feature(ctx: OpContext) -> OpResult:
         )
     if chain is not None:
         return _rotate_cavity_chain(ctx, source, feature, chain, params.axis, params.angle)
+    if source.kind == "brep" and feature.kind in EXACT_CAVITY_KINDS:
+        return _exact_rotate_cavity(ctx, source, feature, spun, centre, turned_axis)
     ctx.progress(0.1, str(_("Das Merkmal wird an seiner alten Stelle geschlossen …")))
     closed = _closed_at(
         body,
@@ -6207,6 +6204,388 @@ def _with_nominal_bore(
     else:
         params["angle"] = expected.params["angle"]
     return dataclasses.replace(found, params=params)
+
+
+#: Die Hohlraumarten, die der exakte Kern ohne Vernetzung versetzt, verdoppelt,
+#: dreht und entfernt (P2.4). Ketten aus Bohrung und Senkung, Zapfen, Kegel,
+#: Kugeln und Einschlüsse folgen in eigenen Schritten; bis dahin gehen sie am
+#: exakten Körper den Netzweg, und ``evaluate.exact_became_mesh`` sagt es.
+EXACT_CAVITY_KINDS: Final = ("hole", "slot")
+
+
+def _exact_body(source: SceneObject) -> Any:
+    """Der exakte Körper eines als ``brep`` geführten Objekts — oder ein Programmfehler."""
+    from app.core.brep.kernel import Solid
+
+    if not isinstance(source.mesh, Solid):
+        raise InternalError(
+            detail="a scene object marked as brep does not carry a Solid",
+            values={"object": source.id},
+        )
+    return source.mesh
+
+
+def _exact_cavity_filled(solid: Any, feature: Feature) -> Any:
+    """Eine erkannte Bohrung oder ein Langloch exakt schließen — mit den gemessenen Maßen.
+
+    Dieselbe Paarung wie am Netz (``_closed_at``), nur ohne Vieleck: Der
+    Füllkörper kommt aus ``edit.fill_bore`` und greift radial um ``EPS_GEOM``
+    ins Material, axial bleibt er exakt. Ein offenes Langloch endet an seiner
+    Außenwand, damit beim Versetzen kein Stopfen neben dem Teil steht.
+    """
+    from app.core.brep import edit
+
+    centre = _bore_vector(feature, "centre")
+    axis = _bore_vector(feature, "axis")
+    diameter = _bore_number(feature, "diameter")
+    depth = _bore_number(feature, "depth")
+    if feature.kind == "slot":
+        opening = (
+            (_bore_vector(feature, "mouth_centre"), _bore_vector(feature, "opening_normal"))
+            if feature.params.get("open")
+            else None
+        )
+        return edit.fill_bore(
+            solid,
+            position=centre,
+            direction=axis,
+            diameter=diameter,
+            depth=depth,
+            length=_bore_number(feature, "length"),
+            angle_deg=slot_angle_of(feature, axis),
+            opening=opening,
+        )
+    return edit.fill_bore(solid, position=centre, direction=axis, diameter=diameter, depth=depth)
+
+
+def _exact_cavity_cut(solid: Any, feature: Feature, centre: Vec3, axis: Vec3) -> Any:
+    """Dasselbe Merkmal an ``centre`` entlang ``axis`` exakt ausschneiden.
+
+    Eine durchgehende Bohrung bekommt die ganze Zielhülle als Tiefe
+    (``_through_bore_depth``), eine blinde ihre gemessene; ein Langloch
+    trägt seine Richtung im Rahmen der neuen Achse (``_slot_angle_in_frame``).
+    """
+    from app.core.brep import edit
+
+    diameter = _bore_number(feature, "diameter")
+    depth = (
+        _through_bore_depth(solid, centre, axis)
+        if feature.params.get("through")
+        else _bore_number(feature, "depth")
+    )
+    if feature.kind == "slot":
+        return edit.slot_bore(
+            solid,
+            position=centre,
+            direction=axis,
+            diameter=diameter,
+            depth=depth,
+            length=_bore_number(feature, "length"),
+            angle_deg=_slot_angle_in_frame(feature, axis),
+            overlap=0.0,
+        )
+    return edit.cut_bore(solid, position=centre, direction=axis, diameter=diameter, depth=depth)
+
+
+def _exact_body_checked(solid: Any) -> Any:
+    """Ob nach dem Schnitt noch ein geschlossener Körper da ist — dieselben zwei
+    Fragen wie in ``resize_hole``, mit denselben Sätzen."""
+    if solid.volume <= EPS_GEOM or solid.face_count == 0:
+        raise GeometryError(
+            title=NOTHING_LEFT_TITLE,
+            detail=NOTHING_LEFT_DETAIL,
+            suggestions=(CORRECT_INPUT, CANCEL),
+        )
+    if not solid.is_closed:
+        raise GeometryError(
+            title=OPEN_BODY_TITLE,
+            detail=OPEN_BODY_DETAIL,
+            suggestions=(CORRECT_INPUT, CANCEL),
+        )
+    return solid
+
+
+def _exact_features_after(
+    source: SceneObject,
+    solid: Any,
+    *,
+    expected: Feature | None,
+    gone: Sequence[str] = (),
+    cancelled: CancelToken,
+) -> tuple[dict[str, Feature], tuple[tuple[str, str], ...], str | None]:
+    """Die Merkmale des neu gebauten exakten Körpers unter ihren fortgeführten Namen.
+
+    Die native Erkennung nummeriert frisch; ein Bezug gilt nur belegt
+    (P1.4c.2). ``expected`` ist das bewusst versetzte, gedrehte oder
+    verdoppelte Merkmal mit seinen neuen Werten: Es wird an seiner Stelle
+    gesucht (``_bore_match_id``) und unter dem alten Namen fortgeführt; alles
+    andere ordnet ``match`` zu. ``gone`` nennt, was die Operation entfernt
+    hat. Zurück kommen die Merkmale, die belegten Übergänge und der neue
+    Name des gesuchten Merkmals — ``None``, wenn es nicht wiederzufinden ist.
+    """
+    from app.core.brep.features import features_of
+    from app.core.perceive.matching import apply_mapping, match
+
+    detected = features_of(solid, cancelled=cancelled)
+    previous = {name: entry for name, entry in source.features.items() if name not in gone}
+    bounds = solid.bounds
+    intended: dict[str, str] = {}
+    found_id: str | None = None
+    if expected is not None:
+        previous.pop(expected.id, None)
+        found_id = _bore_match_id(
+            detected,
+            expected,
+            bounds.centre,
+            bounds.diagonal,
+            check_cancelled=cancelled.raise_if_cancelled,
+        )
+        if found_id is not None:
+            previous[expected.id] = dataclasses.replace(detected[found_id], id=expected.id)
+            intended[expected.id] = found_id
+    matched = match(
+        previous,
+        detected,
+        bounds.centre,
+        bounds.diagonal,
+        check_cancelled=cancelled.raise_if_cancelled,
+    )
+    if expected is not None and found_id is None:
+        matched.orphaned = (*matched.orphaned, expected.id)
+    continued = tuple(
+        (old_id, old_id)
+        for old_id, new_id in intended.items()
+        if matched.mapping.get(old_id) == new_id and old_id not in matched.ambiguous
+    )
+    features = apply_mapping(detected, matched, previous=source.features)
+    return features, continued, found_id
+
+
+def _through_lost_finding(op: str, feature: Feature, centre: Vec3) -> Finding:
+    """Der Satz, wenn eine durchgehende Bohrung an der neuen Stelle nicht mehr durchgeht."""
+    return Finding(
+        code=f"{op}.no_longer_through",
+        severity="warning",
+        message=_(
+            "Diese Bohrung ging durch das Teil und tut es an der neuen Stelle "
+            "nicht mehr — ihre Achse durchquert das Material dort nicht ganz."
+        ),
+        feature_ids=(feature.id,),
+        location=centre,
+    )
+
+
+def _cavity_lost_finding(op: str, feature: Feature) -> Finding:
+    """Das Merkmal ist gesetzt, aber am exakten Körper nicht mehr als Merkmal auffindbar."""
+    return Finding(
+        code=f"{op}.feature_lost",
+        severity="warning",
+        message=_(
+            "Das Merkmal wurde gesetzt, lässt sich am Ergebnis aber nicht mehr als "
+            "Merkmal wiederfinden. Die Geometrie stimmt; spätere Schritte, die auf "
+            "es verweisen, verlieren ihren Bezug."
+        ),
+        feature_ids=(feature.id,),
+        values={"feature": feature.id, "kind": feature.kind},
+    )
+
+
+def _exact_cavity_result(
+    ctx: OpContext,
+    source: SceneObject,
+    solid: Any,
+    *,
+    op: str,
+    expected: Feature | None,
+    gone: Sequence[str] = (),
+    findings: list[Finding],
+    reserve: bool = False,
+) -> OpResult:
+    """Das gemeinsame Ende der vier exakten Hohlraumhandlungen: prüfen, erkennen,
+    Namen fortführen, Durchgang melden, Bezüge belegen."""
+    checked = _exact_body_checked(solid)
+    features, continued, found_id = _exact_features_after(
+        source, checked, expected=expected, gone=gone, cancelled=ctx.cancelled
+    )
+    if expected is not None:
+        if found_id is None:
+            findings.append(_cavity_lost_finding(op, expected))
+        elif expected.params.get("through") and not features[expected.id].params.get("through"):
+            findings.append(_through_lost_finding(op, expected, _bore_vector(expected, "centre")))
+    reserved = source.reserved_feature_ids
+    if reserve:
+        reserved = tuple(sorted({*source.reserved_feature_ids, *source.features}))
+    return OpResult(
+        outputs=[
+            dataclasses.replace(
+                source,
+                mesh=checked,
+                kind="brep",
+                features=features,
+                reserved_feature_ids=reserved,
+            )
+        ],
+        findings=findings,
+        feature_continuations=(
+            tuple(
+                FeatureContinuation(FeatureRef(source.id, old_id), new_id)
+                for old_id, new_id in continued
+            ),
+        ),
+    )
+
+
+def _exact_move_cavity(
+    ctx: OpContext, source: SceneObject, feature: Feature, centre: Vec3, target: Vec3
+) -> OpResult:
+    """Bohrung oder Langloch am exakten Körper versetzen: schließen, neu schneiden (P2.4).
+
+    Bis zum 20.09.2026 lief das Versetzen am exakten Körper über das Netz, und
+    der Körper kam als Netz zurück — Fase, Formschräge und STEP-Export waren
+    danach fort. Jetzt bleibt er exakt: Die alte Stelle schließt
+    ``edit.fill_bore``, die neue schneidet ``edit.cut_bore`` beziehungsweise
+    ``edit.slot_bore``, und die Kennung reist belegt mit
+    (``FeatureContinuation``), wie die Auswertung es verlangt (P1.4c.2).
+    """
+    solid = _exact_body(source)
+    axis = _bore_vector(feature, "axis")
+    ctx.progress(0.1, str(_("Das Merkmal wird an seiner alten Stelle geschlossen …")))
+    filled = _exact_cavity_filled(solid, feature)
+    ctx.progress(0.6, str(_("Das Merkmal wird an seiner neuen Stelle gesetzt …")))
+    placed = _exact_cavity_cut(filled, feature, target, axis)
+    expected = dataclasses.replace(
+        feature, params={**feature.params, "centre": target}, provenance="generated"
+    )
+    findings = _edge_findings(as_mesh_data(filled), [expected])
+    return _exact_cavity_result(
+        ctx, source, placed, op="move_feature", expected=expected, findings=findings
+    )
+
+
+def _exact_duplicate_cavity(
+    ctx: OpContext, source: SceneObject, feature: Feature, target: Vec3
+) -> OpResult:
+    """Bohrung oder Langloch am exakten Körper ein zweites Mal schneiden (P2.4).
+
+    Die Kopie bekommt eine eigene Kennung nach derselben Zählung wie am Netz
+    (``_free_feature_id``); das Original bleibt, und die Zuordnung führt es
+    unter seinem Namen weiter.
+    """
+    solid = _exact_body(source)
+    axis = _bore_vector(feature, "axis")
+    ctx.progress(0.2, str(_("Das Merkmal wird an der neuen Stelle angelegt …")))
+    placed = _exact_cavity_cut(solid, feature, target, axis)
+    copy = dataclasses.replace(
+        feature,
+        id=_free_feature_id(source, feature.kind),
+        params={**feature.params, "centre": target},
+        provenance="generated",
+    )
+    findings = _edge_findings(as_mesh_data(solid), [copy])
+    nothing = without_effect(solid, placed, "difference", ctx.profile)
+    if nothing is not None:
+        findings.append(nothing)
+    checked = _exact_body_checked(placed)
+    features, continued, _found = _exact_features_after(
+        source, checked, expected=None, cancelled=ctx.cancelled
+    )
+    # Die Kopie ist die frische Erkennung an der Zielstelle; sie bekommt den
+    # Namen, den die Zählung freigibt — nicht den, den die Erkennung zufällig
+    # vergab, und keinen, der reserviert ist.
+    fresh = [
+        name
+        for name, entry in features.items()
+        if name not in source.features
+        and entry.kind == feature.kind
+        and _sits_at(entry, copy, checked.bounds.diagonal)
+    ]
+    if len(fresh) == 1 and fresh[0] != copy.id:
+        features[copy.id] = dataclasses.replace(features.pop(fresh[0]), id=copy.id)
+    elif not fresh:
+        findings.append(_cavity_lost_finding("duplicate_feature", copy))
+    if (
+        copy.id in features
+        and copy.params.get("through")
+        and not features[copy.id].params.get("through")
+    ):
+        findings.append(_through_lost_finding("duplicate_feature", copy, target))
+    return OpResult(
+        outputs=[
+            dataclasses.replace(
+                source,
+                mesh=checked,
+                kind="brep",
+                features=features,
+                reserved_feature_ids=tuple(
+                    sorted({*source.reserved_feature_ids, *source.features, copy.id})
+                ),
+            )
+        ],
+        findings=findings,
+        feature_continuations=(
+            tuple(
+                FeatureContinuation(FeatureRef(source.id, old_id), new_id)
+                for old_id, new_id in continued
+            ),
+        ),
+    )
+
+
+def _exact_rotate_cavity(
+    ctx: OpContext,
+    source: SceneObject,
+    feature: Feature,
+    spun: Feature,
+    centre: Vec3,
+    turned_axis: Vec3,
+) -> OpResult:
+    """Bohrung oder Langloch am exakten Körper kippen: schließen, gedreht schneiden (P2.4).
+
+    Geschlossen wird mit der gemessenen Achse und Richtung, gesetzt mit der
+    gedrehten — dieselbe Regel wie am Netz: Wer beides mit der neuen tut,
+    füllt neben dem Loch und schneidet ein Kreuz hinein.
+    """
+    solid = _exact_body(source)
+    ctx.progress(0.1, str(_("Das Merkmal wird an seiner alten Stelle geschlossen …")))
+    filled = _exact_cavity_filled(solid, feature)
+    ctx.progress(0.6, str(_("Das Merkmal wird gedreht gesetzt …")))
+    placed = _exact_cavity_cut(filled, spun, centre, turned_axis)
+    expected = dataclasses.replace(
+        spun, params={**spun.params, "axis": turned_axis}, provenance="generated"
+    )
+    findings = _edge_findings(as_mesh_data(filled), [expected])
+    return _exact_cavity_result(
+        ctx, source, placed, op="rotate_feature", expected=expected, findings=findings
+    )
+
+
+def _exact_remove_cavity(ctx: OpContext, source: SceneObject, feature: Feature) -> OpResult:
+    """Bohrung oder Langloch am exakten Körper schließen — und die Kennung geht mit (P2.4)."""
+    solid = _exact_body(source)
+    ctx.progress(0.2, str(_("Das Merkmal wird geschlossen …")))
+    filled = _exact_cavity_filled(solid, feature)
+    findings = [
+        Finding(
+            code="remove_feature.gone",
+            severity="info",
+            message=_(
+                "Das Merkmal ist entfernt. Spätere Schritte und Passungen, die auf es "
+                "verweisen, finden es nicht mehr."
+            ),
+            feature_ids=(feature.id,),
+            values={"feature": feature.id, "kind": feature.kind, "removed": 1},
+        )
+    ]
+    return _exact_cavity_result(
+        ctx,
+        source,
+        filled,
+        op="remove_feature",
+        expected=None,
+        gone=(feature.id,),
+        findings=findings,
+        reserve=True,
+    )
 
 
 def _sits_at(candidate: Feature, expected: Feature, diagonal: float) -> bool:

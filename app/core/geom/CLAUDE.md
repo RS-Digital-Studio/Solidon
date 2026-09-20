@@ -571,6 +571,18 @@ ein verbundener oder mehrdeutiger weiterer Abschnitt hält die Handlung an.
 Eine gesonderte runde Aufweitung lässt sich nicht durch bloßes Ändern ihres
 Durchmessers zu einer passenden Langlochsenkung machen.
 
+**Und die vier Merkmalshandlungen bleiben am exakten Körper exakt** (P2.4,
+20.09.2026): `move_feature`, `duplicate_feature`, `rotate_feature` und
+`remove_feature` gehen an einer Bohrung oder einem Langloch ohne Kette den
+exakten Zweig (`EXACT_CAVITY_KINDS`, `_exact_move_cavity` und Geschwister)
+— schließen über `brep.edit.fill_bore`, schneiden über `cut_bore` oder
+`slot_bore`, erkennen mit `features_of` und führen die Kennung belegt fort
+(`_exact_features_after`: `_bore_match_id` an der gesetzten Stelle, dann
+`match`, `FeatureContinuation` für das bewusst gesetzte Merkmal). Bis dahin
+liefen sie über das Netz, und der Körper kam als Netz zurück. Ketten aus
+Bohrung und Senkung, Zapfen, Kegel, Kugeln und Einschlüsse gehen am exakten
+Körper noch den Netzweg mit `evaluate.exact_became_mesh`; sie folgen.
+
 **`slot_hole` und `resize_hole` nehmen dabei eine Stelle entgegen** (`x/y/z`,
 **leer** heißt „lass es, wo es ist" — `_named_place` beantwortet das für beide,
 und die Felder sind `optional`, weil die Null an einer Koordinate die Mitte des

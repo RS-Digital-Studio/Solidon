@@ -727,6 +727,7 @@
   "Das Merkmal wird gedreht gesetzt …": "Placement de l'élément pivoté …",
   "Das Merkmal wird geschlossen …": "Fermeture de l'élément …",
   "Das Merkmal wird mit dem neuen Maß gesetzt …": "Placement de l'élément à sa nouvelle dimension …",
+  "Das Merkmal wurde gesetzt, lässt sich am Ergebnis aber nicht mehr als Merkmal wiederfinden. Die Geometrie stimmt; spätere Schritte, die auf es verweisen, verlieren ihren Bezug.": "La caractéristique a été placée, mais ne se retrouve plus comme caractéristique sur le résultat. La géométrie est juste ; les étapes ultérieures qui s'y réfèrent perdent leur référence.",
   "Das Modell antwortet …": "Le modèle répond …",
   "Das Modell besteht aus mehreren Teilen.": "Le modèle se compose de plusieurs pièces.",
   "Das Modell hat diese Anfrage abgelehnt und nicht geantwortet. Eine andere Formulierung oder ein anderes Modell führt weiter — an der Anwendung liegt es nicht.": "Le modèle a refusé cette demande et n'a pas répondu. Une autre formulation ou un autre modèle vous fera avancer — l'application n'y est pour rien.",

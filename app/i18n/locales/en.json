@@ -727,6 +727,7 @@
   "Das Merkmal wird gedreht gesetzt …": "Placing the feature turned …",
   "Das Merkmal wird geschlossen …": "Closing the feature …",
   "Das Merkmal wird mit dem neuen Maß gesetzt …": "Placing the feature at its new size …",
+  "Das Merkmal wurde gesetzt, lässt sich am Ergebnis aber nicht mehr als Merkmal wiederfinden. Die Geometrie stimmt; spätere Schritte, die auf es verweisen, verlieren ihren Bezug.": "The feature was placed but can no longer be found as a feature on the result. The geometry is right; later steps that refer to it lose their reference.",
   "Das Modell antwortet …": "The model is answering …",
   "Das Modell besteht aus mehreren Teilen.": "The model consists of several parts.",
   "Das Modell hat diese Anfrage abgelehnt und nicht geantwortet. Eine andere Formulierung oder ein anderes Modell führt weiter — an der Anwendung liegt es nicht.": "The model declined this request and did not answer. A different wording or another model gets you further — the application is not the cause.",

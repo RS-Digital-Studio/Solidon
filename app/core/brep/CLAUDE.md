@@ -460,6 +460,17 @@ Lochs mit einem Satz ab. Gemessen an einer exakten Platte 60 × 40 × 10, Bohrun
 23497,345 — dieselbe Zahl. Das Langloch daneben nimmt 1467,57 mm³ weg, den
 analytischen Wert auf fünf Stellen.
 
+**Und seit P2.4 bleibt der Körper auch beim Versetzen, Verdoppeln, Drehen
+und Entfernen exakt** (20.09.2026): `geom.prepare_ops` ruft für Bohrung und
+Langloch dieselben zwei Primitive — `fill_bore` an der alten, `cut_bore` oder
+`slot_bore` an der neuen Stelle — und erkennt danach nativ. `unified` legt
+die Nähte einer Booleschen wieder zusammen (der Deckel eines Füllkörpers
+zerteilte die Platte in Ring und Scheibe: zehn Flächen statt sechs), mit
+erhaltenen Filamentgrenzen; `fill_bore` und `slot_bore` rufen es. Gemessen:
+Versetzen, Drehen um 90° und Entfernen treffen das analytische Volumen auf
+die neunte Stelle, ein STEP-Umlauf verliert nichts
+(`tests/test_exact_feature_ops.py`).
+
 ## Eine Rundung wegnehmen heißt, ihre Fläche zu streichen
 
 `unround` gibt `BRepAlgoAPI_Defeaturing` die Rundungsfläche, und der Kern

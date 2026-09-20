@@ -819,6 +819,15 @@ Kern das mit einem Satz ab; die Absage ist gefallen, weil ihr Grund gefallen
 ist (Robert: „zwischen den beiden soll es keinen unterschied geben bei
 garnichts").
 
+**Und seit dem 20.09.2026 gilt das für alle vier Merkmalshandlungen** (P2.4):
+Versetzen, Verdoppeln, Drehen und Entfernen einer Bohrung oder eines
+Langlochs lassen den exakten Körper exakt — schließen mit `fill_bore`,
+schneiden mit `cut_bore`/`slot_bore`, nativ erkennen, Kennung belegt
+fortführen. Wer eine Merkmalshandlung baut, die einen exakten Körper
+vernetzt, tut es nur, wo der Kern die Form nicht hergibt, und der Befund
+`evaluate.exact_became_mesh` sagt es; heute sind das Ketten mit Senkung,
+Zapfen, Kegel, Kugel und Einschluss, und die stehen im Register.
+
 Vier Dinge daran, alle gemessen:
 
 * **An der neuen Stelle wird gebohrt, nicht geändert.** Dort ist volles

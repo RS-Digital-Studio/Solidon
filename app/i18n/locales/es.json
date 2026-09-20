@@ -727,6 +727,7 @@
   "Das Merkmal wird gedreht gesetzt …": "Colocando el elemento girado …",
   "Das Merkmal wird geschlossen …": "Cerrando el elemento …",
   "Das Merkmal wird mit dem neuen Maß gesetzt …": "Colocando el elemento con la nueva medida …",
+  "Das Merkmal wurde gesetzt, lässt sich am Ergebnis aber nicht mehr als Merkmal wiederfinden. Die Geometrie stimmt; spätere Schritte, die auf es verweisen, verlieren ihren Bezug.": "La característica se colocó, pero ya no se encuentra como característica en el resultado. La geometría es correcta; los pasos posteriores que se refieren a ella pierden su referencia.",
   "Das Modell antwortet …": "El modelo está respondiendo …",
   "Das Modell besteht aus mehreren Teilen.": "El modelo consta de varias piezas.",
   "Das Modell hat diese Anfrage abgelehnt und nicht geantwortet. Eine andere Formulierung oder ein anderes Modell führt weiter — an der Anwendung liegt es nicht.": "El modelo rechazó esta petición y no respondió. Otra formulación u otro modelo le hará avanzar — no es cosa de la aplicación.",
