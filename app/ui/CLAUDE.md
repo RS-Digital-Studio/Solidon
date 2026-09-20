@@ -947,7 +947,11 @@ zurückgerechnet. Ein Treffer gehört seinem Körper, auch wenn ein kleinerer
 Hüllquader davor liegt. Die Öffnungszielhilfe gibt Körper und Merkmal gemeinsam
 zurück. Dreieckszuordnung und vorbereitete Bohrungsachsen werden pro Auswertung
 gespeichert und beim Szenenaufbau verworfen; Hover projiziert dadurch nicht
-wiederholt alle Bohrungsdreiecke.
+wiederholt alle Bohrungsdreiecke. **Wem ein Dreieck gehört, sagt der Kern**
+(`relations.cell_owner_table`, P1.5): bei Verschachtelung das innerste
+Merkmal, bei zwei, die sich nur überlappen, niemand (`CONTESTED`) — dann
+greift der Ortsfang, und der nimmt bei gleichem Abstand das kleinere Merkmal
+und dann den Namen, nicht das zuerst vorbereitete (`_feature_hit`).
 Die Öffnungszielhilfe verlängert keine axialen Bohrungsgrenzen. Seitlicher
 Randfang gilt nur am sichtbaren Eintritt oder bei einem belegten Treffer des
 wirklichen Bohrungszylinders; eine Rückwand bleibt eine Sichtgrenze.

@@ -43,6 +43,50 @@ def _tube() -> MeshData:
     return MeshData.of(trimesh.creation.annulus(r_min=8.0, r_max=14.0, height=20.0, sections=96))
 
 
+def test_a_shared_triangle_belongs_to_the_inner_feature_or_to_nobody() -> None:
+    """Der Klick auf ein Dreieck, das zwei Merkmale beanspruchen (P1.5).
+
+    Liegt ein Merkmal ganz im anderen, gewinnt das innere; überlappen sich
+    zwei nur, bleibt die Zelle ``CONTESTED`` und der Viewport nimmt den
+    Ortsfang. Bis zum 20.09.2026 hieß jede Doppelbelegung ``-2``, und der
+    Ortsfang nahm danach das zuerst vorbereitete Merkmal.
+    """
+    from app.core.perceive.relations import CONTESTED, NO_OWNER, cell_owner_table
+    from app.core.types import Feature
+
+    def feature(identifier: str, faces: tuple[int, ...]) -> Feature:
+        return Feature(
+            id=identifier,
+            kind="face",
+            provenance="detected",
+            params={"area": 1.0, "normal": (0.0, 0.0, 1.0), "centre": (0.0, 0.0, 0.0)},
+            face_indices=faces,
+        )
+
+    outer = feature("void_1", (0, 1, 2, 3, 4, 5))
+    inner = feature("pin_1", (2, 3))
+    stray = feature("face_1", (5, 6, 7))
+    wide = feature("face_2", (7, 8, 9, 99))
+
+    ids, cells = cell_owner_table(
+        {"void_1": outer, "pin_1": inner, "face_1": stray, "face_2": wide}, 10
+    )
+    assert ids == ("void_1", "pin_1", "face_1", "face_2")
+    assert [int(cells[index]) for index in (0, 1, 4)] == [0, 0, 0], "der Einschluss allein"
+    assert [int(cells[index]) for index in (2, 3)] == [1, 1], "die Insel gewinnt im Einschluss"
+    assert int(cells[5]) == CONTESTED, "zwei, die sich nur überlappen"
+    assert int(cells[6]) == 2 and int(cells[8]) == 3
+    assert int(cells[7]) == CONTESTED
+    assert int(cells[9]) == 3 and NO_OWNER not in cells[:9].tolist()
+
+    # Die Reihenfolge der Merkmale ändert die Antwort nicht.
+    _ids, reversed_cells = cell_owner_table(
+        {"face_2": wide, "face_1": stray, "pin_1": inner, "void_1": outer}, 10
+    )
+    assert [int(reversed_cells[index]) for index in (2, 3)] == [2, 2]
+    assert int(reversed_cells[5]) == CONTESTED and int(reversed_cells[7]) == CONTESTED
+
+
 def test_a_bore_inside_material_is_a_sleeve() -> None:
     """Die Wand steht in keinem der beiden Merkmale — sie entsteht aus beiden."""
     features = detect(_tube())

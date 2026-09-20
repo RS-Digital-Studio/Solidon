@@ -749,7 +749,10 @@ seither für beide gelten — Namen, Träger und Handlung, nicht bloß die Zahl:
   Form haben, sagt der Abstand zur Fläche (`_same_surface_patch`,
   `units.MAX_FACET_SAG`), nie die Vernetzung: Eine Kopie, deren Dreiecke
   nur feiner geteilt sind, bleibt in der Ganzkörpergruppe
-  (`tests/test_feature_groups.py`), die Kalotte bleibt draußen. Die
+  (`tests/test_feature_groups.py`), die Kalotte bleibt draußen. Ein Dreieck,
+  das zwei Merkmale beanspruchen, gehört dem innersten oder niemandem
+  (`relations.cell_owner_table`, `CONTESTED`); der Klick im Bild entscheidet
+  nie nach der Reihenfolge der Erkennung. Die
   Umfangsschwelle steht
   einmal (`FULL_TURN_SPAN` = `FULL_TURN`·360, 300 Grad); wer sie ändert,
   ändert beide, und der Test hält sie zusammen (`tests/test_partial_bores.py`).

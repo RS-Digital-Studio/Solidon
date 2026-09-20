@@ -1097,6 +1097,55 @@ def _shoulder_connections(
     return connections
 
 
+#: Ein Dreieck, das kein Merkmal beansprucht.
+NO_OWNER: Final[int] = -1
+#: Ein Dreieck, das zwei Merkmale beanspruchen, ohne dass eines im anderen liegt.
+CONTESTED: Final[int] = -2
+
+
+def cell_owner_table(
+    features: Mapping[FeatureId, Feature], face_count: int
+) -> tuple[tuple[FeatureId, ...], NDArray[np.int32]]:
+    """Je Dreieck die Nummer des Merkmals, dem es gehört — für den Klick im Bild.
+
+    Beansprucht ein Dreieck nur ein Merkmal, gehört es ihm. Beanspruchen es
+    zwei, entscheidet die **Verschachtelung**: Liegen alle Flächen des einen
+    in denen des anderen, ist das eine ein Teil des anderen, und der Klick auf
+    das Teil meint das Teil — der Zapfen auf der Insel in einem Lufteinschluss,
+    dessen Oberfläche zur vollständigen Auswahl des Einschlusses gehört. Das
+    innerste gewinnt. Überlappen sich zwei, ohne dass eines im anderen liegt,
+    ist das ein Widerspruch der Erkennung und kein Fall für eine Reihenfolge:
+    Die Zelle trägt :data:`CONTESTED`, und der Viewport fällt auf den
+    Ortsfang zurück, statt den alphabetisch ersten zu nehmen (P1.5,
+    Durchsicht der Verbraucher; am Korpus teilt heute kein Dreieck zwei
+    Merkmale, gemessen 20.09.2026 über 32 Dateien).
+
+    Nummern außerhalb des Körpers werden übergangen; die Reihenfolge der
+    Merkmale ist ohne Bedeutung, das Ergebnis dasselbe.
+    """
+    ids = tuple(features)
+    cells = np.full(face_count, NO_OWNER, dtype=np.int32)
+    sets: list[set[int]] = []
+    for number, feature in enumerate(features.values()):
+        indices = np.asarray(feature.face_indices, dtype=np.int64)
+        indices = indices[(indices >= 0) & (indices < face_count)]
+        own = {int(index) for index in indices}
+        sets.append(own)
+        previous = cells[indices]
+        free = previous == NO_OWNER
+        cells[indices[free]] = number
+        for other in np.unique(previous[(previous >= 0) & ~free]):
+            shared = indices[previous == other]
+            theirs = sets[int(other)]
+            if own < theirs:
+                cells[shared] = number
+            elif theirs < own:
+                continue
+            else:
+                cells[shared] = CONTESTED
+    return ids, cells
+
+
 def cavity_surface_indices(mesh: MeshData, features: Iterable[Feature]) -> tuple[int, ...]:
     """Die belegten Hohlraumflächen einschließlich ihrer ebenen Ringschultern.
 

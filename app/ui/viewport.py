@@ -9699,18 +9699,23 @@ class Viewport(QWidget):
             return None
         reach = self._feature_reach(source)
         best: FeatureId | None = None
-        best_offset = float("inf")
+        best_key: tuple[float, int, str] | None = None
         for feature_id, triangles, low, high in prepared:
             # Der Hüllquader zuerst: Er kostet sechs Vergleiche, der genaue
             # Abstand eine Rechnung über jedes Dreieck des Merkmals.
             if np.any(target < low - reach) or np.any(target > high + reach):
                 continue
             offset = distance_to_triangles(triangles, target)
-            if offset < best_offset:
-                best_offset = offset
+            # Bei gleichem Abstand das kleinere Merkmal, dann der Name — nicht
+            # das zuerst vorbereitete: Auf einem Dreieck, das zwei Merkmale
+            # beanspruchen, ist der Abstand zu beiden null, und welches gewinnt,
+            # soll nicht an der Reihenfolge der Erkennung hängen (P1.5).
+            key = (offset, len(triangles), str(feature_id))
+            if best_key is None or key < best_key:
+                best_key = key
                 best = feature_id
-        if best is not None and best_offset <= reach:
-            return best, best_offset
+        if best is not None and best_key is not None and best_key[0] <= reach:
+            return best, best_key[0]
         # **Mitten im Loch ist kein Dreieck, und der Klick meint es trotzdem.**
         # Robert am 23.08.2026, auf die Frage, welcher der beiden Fälle gilt:
         # „beides, es sollte in beiden fällen gehen." Wer eine Bohrung sieht
@@ -9728,8 +9733,10 @@ class Viewport(QWidget):
     def _feature_on_cell(self, object_id: ObjectId, cell: int) -> FeatureId | None:
         """Eindeutige Dreieckszuordnung, kompakt je Auswertung vorbereitet.
 
-        Überlappende Merkmale behalten den bestehenden Ortsfang. Ein Index
-        aus einem geschnittenen oder dezimierten Anzeigenetz gilt hier nie.
+        Wem ein Dreieck gehört, sagt der Kern (``relations.cell_owner_table``):
+        das innerste Merkmal bei Verschachtelung, niemand bei Widerspruch — dann
+        bleibt der bestehende Ortsfang. Ein Index aus einem geschnittenen oder
+        dezimierten Anzeigenetz gilt hier nie.
         """
         if self._result is None or object_id not in self._original_pick_cells or cell < 0:
             return None
@@ -9739,16 +9746,9 @@ class Viewport(QWidget):
             return None
         cached = self._feature_cells.get(object_id)
         if cached is None:
-            import numpy as np
+            from app.core.perceive.relations import cell_owner_table
 
-            ids = tuple(entry.features)
-            cells = np.full(len(raw.faces), -1, dtype=np.int32)
-            for number, feature in enumerate(entry.features.values()):
-                indices = np.asarray(feature.face_indices, dtype=np.int64)
-                indices = indices[(indices >= 0) & (indices < len(cells))]
-                previous = cells[indices]
-                cells[indices] = np.where(previous == -1, number, -2)
-            cached = ids, cells
+            cached = cell_owner_table(entry.features, len(raw.faces))
             self._feature_cells[object_id] = cached
         ids, cells = cached
         number = int(cells[cell])
