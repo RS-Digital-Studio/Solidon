@@ -710,6 +710,39 @@ entlang der Achse wandern, wenn die Zielwand eine andere Stärke besitzt.
 Am exakten Kern gilt dieselbe Suche gegen `features_of`; ein `any(kind ==
 "slot")` schwieg, sobald ein zweites Langloch im Körper stand.
 
+## Beide Kerne sagen dasselbe, und zwar aus der Nachbarschaft (20.09.2026, P1.5)
+
+Drei Gegenfälle, an denen die Kerne auseinanderlagen, und drei Regeln, die
+seither für beide gelten — Namen, Träger und Handlung, nicht bloß die Zahl:
+
+* **Eine kleine Ebene ist eine Fläche, wenn ihre Ränder es belegen.**
+  `MIN_FACE_AREA` (4 mm²) gilt ohne weiteren Beleg; darunter zählt ein
+  Fleck, der an jedem Rand mit einem scharfen Knick an fremde Dreiecke
+  stößt — und jeder Rand hat einen Nachbarn, ein unbelegter Rand ist
+  nicht scharf —, auf keiner Rundung sitzt und kein Streifen ist
+  (`_facets_standing_apart`). Wer die Schranke anfasst, hält die vier
+  Gegenrichtungen: keine Flut auf der Kugel, keine fünfzig Mantelstreifen,
+  keine Streifen einer STL mit T-Stößen (`plate_countersunk.stl`), die
+  Seiten eines Achtecks bleiben. Eine Wand unter `MIN_SURFACE_WIDTH`
+  bleibt ein Streifen; die Formschräge ergänzt sie weiter selbst
+  (`tests/test_mesh_faces.py`, die Folie).
+* **Die Mündungsfase eines Langlochs gehört zum Langloch** — Teilkegel und
+  schräge Flanken, mit ihren Trägern, an beiden Kernen
+  (`_partial_cones_folded`/`_mouth_flanks_folded`, `_mouth_chamfers_folded`).
+  Die Zugehörigkeit kommt aus der Nachbarschaft; ein Kegelstück zwischen
+  zwei Langlöchern bleibt unentschieden, nie dem alphabetisch ersten.
+* **Eine Bohrung unter der vollen Umdrehung ist angeschnitten** (`partial`),
+  und ob sie für sich bearbeitbar ist, sagt nicht der Winkel: Grenzt ihr
+  Mantel an eine andere Höhlung, ist sie berührt — keine Kette, kein eigener
+  Körper, `NO_OWN_BODY` in jeder Körperzeile. Die Umfangsschwelle steht
+  einmal (`FULL_TURN_SPAN` = `FULL_TURN`·360, 300 Grad); wer sie ändert,
+  ändert beide, und der Test hält sie zusammen (`tests/test_partial_bores.py`).
+  Am Netz erkennt den Anschnitt der Rand (zwei Linien längs der Achse über
+  die ganze Tiefe), am exakten Körper der Umfang — nach dem Zusammenführen
+  der Nahtstücke. Eine gleiche Anzahl oder ein gleiches Volumen beweist
+  keine Parität; geprüft werden Art, Maße, Herkunft, Träger, Rolle und
+  Handlung je Fall (`tests/test_features.py`, `tests/test_partial_bores.py`).
+
 ## Ein Langloch ist ein Hohlraum, und die vier Handlungen gelten ihm (11.09.2026)
 
 `types.is_a_cavity` führt `slot` neben `hole` und `void`. Ohne den Eintrag hielt

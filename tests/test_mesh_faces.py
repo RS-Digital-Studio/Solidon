@@ -28,7 +28,7 @@ from app.core.geom.faces import (
     push_face,
 )
 from app.core.geom.mesh import MeshData
-from app.core.perceive.features import _one_body, detect
+from app.core.perceive.features import MIN_FACE_AREA, MIN_SURFACE_WIDTH, _one_body, detect
 from app.core.registry import REGISTRY
 from app.core.scene.cancel import NeverCancelled
 from app.core.types import Feature, OpContext, OpResult, Profile, Scene, SceneObject
@@ -222,15 +222,27 @@ def test_both_kernels_draft_to_the_same_body() -> None:
     assert meshed.volume == pytest.approx(exact.volume, abs=1e-6)
 
 
-def flat_plate() -> MeshData:
-    """Eine flache Platte 8 × 5 × 0,5 — der Körper aus Roberts Befund.
+#: Eine Folie: dünner als die schmalste Fläche, die die Erkennung als Fläche
+#: gelten lässt (``MIN_SURFACE_WIDTH``), damit ihre schmalen Wände Streifen
+#: bleiben — und lang genug, dass die langen Wände ``MIN_FACE_AREA`` erreichen.
+FOIL = (30.0, 5.0, MIN_SURFACE_WIDTH * 0.75)
 
-    Die beiden schmalen Wände messen 2,5 mm², und genau damit fallen sie
-    durch jede Schwelle der Merkmalserkennung: ``MIN_FACE_AREA`` liegt bei
-    4,0, und fünf Prozent der Gesamtoberfläche sind 4,65.
+
+def flat_plate() -> MeshData:
+    """Eine Folie 30 × 5 × 0,15 mit zwei erkannten und zwei unerkannten Wänden.
+
+    Der Körper aus Roberts Befund war eine Platte 8 × 5 × 0,5, deren schmale
+    Wände von 2,5 mm² durch ``MIN_FACE_AREA`` fielen. Seit P1.5 (20.09.2026)
+    zählt eine kleine Fläche, deren Ränder es belegen — die Platte hat am Netz
+    jetzt alle sechs Flächen, so wie ``plate_cm.stl`` aus dem Korpus (gemessen:
+    vier senkrechte Wände erkannt, keine ergänzt). Was die Erkennung noch
+    übergeht, ist ein **Streifen** (``_a_sliver``, unter ``MIN_SURFACE_WIDTH``):
+    Die schmalen Wände dieser Folie messen 5 × 0,15 mm, die langen 4,5 mm² und
+    sind Flächen. So bleibt der Ergänzungsweg der Formschräge unter Beweis.
     """
-    body = trimesh.creation.box(extents=(8.0, 5.0, 0.5))
-    body.apply_translation((0.0, 0.0, 0.25))
+    assert FOIL[2] < MIN_SURFACE_WIDTH and FOIL[0] * FOIL[2] >= MIN_FACE_AREA
+    body = trimesh.creation.box(extents=FOIL)
+    body.apply_translation((0.0, 0.0, FOIL[2] / 2.0))
     return MeshData(body)
 
 
@@ -246,6 +258,9 @@ def test_the_draft_reaches_every_wall_not_just_the_recognised_ones() -> None:
     „was kann der Kunde anklicken", und eine Fläche von 2,5 mm² an einem
     Teil von 93 mm² Oberfläche ist darauf eine vertretbare Antwort. Für
     diese Operation ist es die falsche Frage: Hier zählt jede ebene Wand.
+    Die Platte des Befunds hat seit P1.5 alle sechs Flächen; die Folie in
+    :func:`flat_plate` stellt die Lage wieder her, in der zwei Wände kein
+    Merkmal sind.
     """
     plate = flat_plate()
     recognised = [
@@ -257,14 +272,15 @@ def test_the_draft_reaches_every_wall_not_just_the_recognised_ones() -> None:
 
     shaped = draft_vertical(plate, DRAFT).mesh.raw
 
+    length, width, thickness = FOIL
     slope = math.tan(math.radians(DRAFT))
-    highest = shaped.vertices[shaped.vertices[:, 2] > 0.5 - 1e-6]
-    assert float(highest[:, 0].max()) == pytest.approx(4.0 - slope * 0.5, abs=1e-6), (
+    highest = shaped.vertices[shaped.vertices[:, 2] > thickness - 1e-6]
+    assert float(highest[:, 0].max()) == pytest.approx(length / 2.0 - slope * thickness, abs=1e-6)
+    assert float(highest[:, 1].max()) == pytest.approx(width / 2.0 - slope * thickness, abs=1e-6), (
         "auch die schmale Wand wandert"
     )
-    assert float(highest[:, 1].max()) == pytest.approx(2.5 - slope * 0.5, abs=1e-6)
-    assert shaped.bounds[0][0] == pytest.approx(-4.0, abs=1e-6), "unten bleibt jedes Maß"
-    assert shaped.bounds[0][1] == pytest.approx(-2.5, abs=1e-6)
+    assert shaped.bounds[0][0] == pytest.approx(-length / 2.0, abs=1e-6), "unten bleibt jedes Maß"
+    assert shaped.bounds[0][1] == pytest.approx(-width / 2.0, abs=1e-6)
 
 
 def _inner_rings(body: MeshData, height: float) -> list[Any]:
@@ -384,16 +400,18 @@ def test_the_limit_counts_what_it_guesses_not_what_it_knows(
     ``plate_countersunk.stl`` 48, ``plate_chamfer_and_taper.stl`` 28), und wo
     viel erkannt ist, gibt es nichts zu ergänzen (``oversized.stl``: zehn
     erkannte, null frei). An ``plate_cm.stl`` — dem Stück aus Roberts Befund —
-    sind es zwei erkannte und zwei ergänzte; bei einer Grenze von drei reißt
-    die Summe, die Ergänzung nicht (alle Zahlen gemessen 18.09.2026).
+    waren es zwei erkannte und zwei ergänzte (gemessen 18.09.2026); seit P1.5
+    erkennt das Netz dort alle vier Wände (gemessen 20.09.2026), und die Lage
+    „zwei erkannt, zwei ergänzt" stellt die Folie aus :func:`flat_plate` her.
+    Bei einer Grenze von drei reißt die Summe, die Ergänzung nicht.
     """
-    plate = MeshData.of(trimesh.load_mesh(str(CORPUS / "plate_cm.stl")))
+    plate = flat_plate()
     recognised = [
         entry
         for entry in detect(plate).values()
         if entry.kind == "face" and abs(entry.params["normal"][2]) <= 0.1
     ]
-    assert len(recognised) == 2, "die Voraussetzung dieses Korpusstücks"
+    assert len(recognised) == 2, "die Voraussetzung der Folie: zwei Wände sind Streifen"
 
     monkeypatch.setattr(faces, "MOST_WALLS_TO_GUESS", len(recognised) + 1)
     walls = _upright_faces(plate)

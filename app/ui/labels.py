@@ -2022,6 +2022,10 @@ def feature_name(feature_id: FeatureId, feature: Feature) -> str:
         return tr("Gerundete Seite")
     if feature.kind == "hole":
         name = tr("Sackbohrung") if feature.params.get("through") is False else tr("Bohrung")
+        # Angeschnitten: Ein Nachbar hat den Mantel geöffnet (P1.5) — dasselbe
+        # Wort wie im Steckbrief.
+        if feature.params.get("partial"):
+            name = tr("Angeschnittene Bohrung")
         return f"{name} {feature_id.rsplit('_', 1)[-1]}"
     # **Mit Nummer, wie die Bohrung.** Ein Teil trägt selten eine Bohrung und
     # oft vier; dasselbe gilt für Langlöcher, und ohne die Nummer stünden im

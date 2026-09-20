@@ -370,6 +370,10 @@ def _feature_line(feature_id: str, feature: Feature) -> str:
     if feature.kind == "hole":
         axis = _vector_measure(feature, "axis", _axis_name)
         through = tr("Durchgang") if params.get("through") else tr("Sackloch")
+        # Angeschnitten: Der Agent soll an einer Bohrung, deren Mantel ein
+        # Nachbar geöffnet hat, keine Handlung für sich allein suchen (P1.5).
+        if params.get("partial"):
+            through = f"{through}, {tr('angeschnitten')}"
         return (
             f"{feature_id}  {_measure(feature, 'diameter', prefix='Ø ')}, "
             f"{tr('Achse')} {axis}, {through}{at}"

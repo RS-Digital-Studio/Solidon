@@ -10,6 +10,7 @@ import dataclasses
 import math
 import re
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
@@ -43,7 +44,7 @@ from app.core.perceive.features import (
     is_a_freeform,
 )
 from app.core.perceive.relations import widening_at_the_mouth
-from app.core.types import Feature, FeatureId, Profile
+from app.core.types import Feature, FeatureId, Profile, SurfacePatch
 from app.core.units import EPS_GEOM
 
 MESHES = Path(__file__).parent / "data" / "meshes"
@@ -4245,3 +4246,227 @@ def test_a_coarsely_facetted_bore_survives_a_dense_triangulation() -> None:
             assert fit is not None and fit.spread < 0.5, (
                 f"{sections} Facetten, {len(mesh.raw.faces)} Dreiecke: {fit}"
             )
+
+
+# --- kleine echte Flächen (P1.5) --------------------------------------------------------
+
+
+def _stud_on_a_plate() -> trimesh.Trimesh:
+    """Ein 1-mm-Nocken auf einer Platte 40 × 30 × 4 — als Netz, ohne exakten Kern.
+
+    Beide Quader überlappen in genau 1 mm³, damit der Bau nicht an einer bloßen
+    Berührung zweier Deckflächen hängt (Review P1.5). Volumen 4801, Oberfläche
+    2964, fünf Nockenflächen zu je 1 mm².
+    """
+    base = trimesh.creation.box(extents=(40.0, 30.0, 4.0))
+    base.apply_translation((0.0, 0.0, 2.0))
+    post = trimesh.creation.box(extents=(1.0, 1.0, 2.0))
+    post.apply_translation((0.0, 0.0, 4.0))
+    return trimesh.boolean.union([base, post])
+
+
+def _small_faces(found: dict[FeatureId, Feature]) -> dict[tuple[float, float, float], Feature]:
+    return {
+        tuple(round(float(value), 3) for value in entry.params["centre"]): entry  # type: ignore[misc]
+        for entry in found.values()
+        if entry.kind == "face" and float(entry.params["area"]) < features_module.MIN_FACE_AREA
+    }
+
+
+STUD_CENTRES = {
+    (0.0, 0.0, 5.0),
+    (0.5, 0.0, 4.5),
+    (-0.5, 0.0, 4.5),
+    (0.0, 0.5, 4.5),
+    (0.0, -0.5, 4.5),
+}
+
+
+@pytest.mark.parametrize("subdivided", [False, True], ids=["roh", "unterteilt"])
+def test_a_one_millimetre_stud_keeps_its_five_faces(subdivided: bool) -> None:
+    """Fünf Flächen zu je 1 mm² liegen unter ``MIN_FACE_AREA`` — und sind Flächen.
+
+    Der exakte Kern nennt sie, das Netz nannte keine (P1.5, Gegenfall 3). Was
+    sie trägt, ist nicht die Größe, sondern der Rand: An allen Seiten stößt
+    der Nocken mit rechten Winkeln an Flächen, die nicht zu ihm gehören. Eine
+    Unterteilung derselben Dreiecke ändert daran nichts — weder entsteht eine
+    Fläche mehr, noch fällt eine weg.
+    """
+    raw = _stud_on_a_plate()
+    if subdivided:
+        raw = trimesh.Trimesh(*trimesh.remesh.subdivide(raw.vertices, raw.faces))
+    body = MeshData.of(raw)
+    assert body.volume == pytest.approx(4801.0) and body.area == pytest.approx(2964.0)
+
+    found = detect(body)
+    faces = [entry for entry in found.values() if entry.kind == "face"]
+
+    assert len(found) == len(faces) == 11, sorted(entry.kind for entry in found.values())
+    small = _small_faces(found)
+    assert set(small) == STUD_CENTRES
+    for centre, entry in small.items():
+        assert float(entry.params["area"]) == pytest.approx(1.0)
+        normal = np.asarray(entry.params["normal"], dtype=float)
+        expected = np.asarray(centre) - np.asarray((0.0, 0.0, 4.5 if centre[2] < 5.0 else 4.0))
+        assert np.allclose(normal, expected / np.linalg.norm(expected), atol=1e-9)
+        assert len(entry.face_indices) == (8 if subdivided else 2)
+        assert body.raw.area_faces[list(entry.face_indices)].sum() == pytest.approx(1.0)
+    largest = max(faces, key=lambda entry: float(entry.params["area"]))
+    assert float(largest.params["area"]) == pytest.approx(1200.0)
+    top = next(entry for entry in faces if abs(float(entry.params["area"]) - 1199.0) < 1e-6)
+    assert top.params["centre"][2] == pytest.approx(4.0)
+
+
+def test_the_stud_is_read_the_same_from_the_exact_body_and_its_tessellation() -> None:
+    """Dieselben elf Flächen aus ``features_of`` und aus ``detect`` an zwei Abweichungen."""
+    if not pytest.importorskip("app.core.brep.kernel").available():
+        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+
+    body = edit.boolean(
+        "union", [edit.box(40.0, 30.0, 4.0), edit.moved(edit.box(1.0, 1.0, 2.0), (0.0, 0.0, 3.0))]
+    )
+    native = features_of(body)
+    assert set(_small_faces(native)) == STUD_CENTRES and len(native) == 11
+    for deflection in (0.1, 0.02):
+        found = detect(body.to_mesh(deflection=deflection))
+        assert len(found) == 11 and set(_small_faces(found)) == STUD_CENTRES, deflection
+
+
+def test_a_small_facet_needs_sharp_borders_all_around_to_count() -> None:
+    """Der Beleg ist der Rand: Eine kleine Fläche zwischen zwei Rundungsstufen zählt nicht.
+
+    Ein 24-seitiger Zylinder Ø 6 hat Mantelstreifen von 0,78 mm × 10 mm — klein,
+    eben, und an beiden Längsrändern nur um 15 Grad geknickt. Die Kugel und der
+    Mantel bleiben, was sie waren; der Nocken gewinnt nur, weil ihn rechte
+    Winkel begrenzen.
+    """
+    stub = trimesh.creation.cylinder(radius=3.0, height=10.0, sections=24)
+    plate = trimesh.creation.box(extents=(40.0, 30.0, 4.0))
+    plate.apply_translation((0.0, 0.0, -7.0))
+    body = MeshData.of(trimesh.boolean.union([plate, stub]))
+
+    found = detect(body)
+
+    assert not _small_faces(found), "Mantelstreifen sind keine Flächen"
+    assert sorted(entry.kind for entry in found.values()).count("pin") == 1
+    sphere = MeshData.of(trimesh.creation.icosphere(subdivisions=3, radius=5.0))
+    assert not [entry for entry in detect(sphere).values() if entry.kind == "face"]
+
+
+# --- die Mündungsfase eines Langlochs (P1.5) --------------------------------------------
+
+
+def _exact_slot_with_a_mouth_chamfer() -> Any:
+    """Platte 60 × 30 × 8, Langloch Ø 6 × 26 durch, oben eine 1-mm-Fase am Ring (Review P1.5).
+
+    Sollwerte: abgezogen 980 + 226π/3, Material 13420 − 226π/3; die zwei
+    Halbkegel zusammen 7π√2, die zwei schrägen Flanken zusammen 40√2.
+    """
+    from app.core.brep import edit
+
+    plate = edit.box(60.0, 30.0, 8.0)
+    slotted = edit.slot_bore(
+        plate,
+        position=(0.0, 0.0, 4.0),
+        direction=(0.0, 0.0, 1.0),
+        diameter=6.0,
+        depth=8.0,
+        length=26.0,
+        angle_deg=0.0,
+        overlap=0.0,
+    )
+    rim = [
+        entry
+        for entry in edit.edges_of(slotted)
+        if abs(entry.middle[2] - 8.0) <= EPS_GEOM
+        and abs(entry.middle[0]) < 20.0
+        and abs(entry.middle[1]) < 10.0
+    ]
+    assert len(rim) == 4, "der innere Ring oben: zwei Geraden, zwei Halbkreise"
+    return edit.chamfer(slotted, 1.0, "named", [edit.edge_key(entry) for entry in rim])
+
+
+def _mouth_chamfer_checked(found: dict[FeatureId, Feature], mesh: MeshData, tag: str) -> None:
+    kinds = sorted(entry.kind for entry in found.values())
+    assert kinds == ["face"] * 6 + ["slot"], (tag, kinds)
+    slot = next(entry for entry in found.values() if entry.kind == "slot")
+    assert slot.params["diameter"] == pytest.approx(6.0, abs=1e-9)
+    assert slot.params["length"] == pytest.approx(26.0, abs=1e-9)
+    assert slot.params["travel"] == pytest.approx(20.0, abs=1e-9)
+    assert slot.params["depth"] == pytest.approx(7.0, abs=1e-9), "die Wandtiefe bleibt ohne Fase"
+    assert slot.params["through"] is True
+    by_kind: dict[str, list[SurfacePatch]] = {}
+    for patch in slot.surface_patches:
+        by_kind.setdefault(patch.kind, []).append(patch)
+    assert {kind: len(parts) for kind, parts in by_kind.items()} == {
+        "cylinder": 2,
+        "plane": 4,
+        "cone": 2,
+    }, tag
+    areas = mesh.raw.area_faces
+    apices = sorted(tuple(round(float(v), 6) for v in p.params["apex"]) for p in by_kind["cone"])
+    assert apices == [(-10.0, 0.0, 4.0), (10.0, 0.0, 4.0)], (tag, apices)
+    for cone in by_kind["cone"]:
+        assert float(cone.params["half_angle"]) == pytest.approx(math.pi / 4.0, abs=1e-6)
+        assert np.allclose(np.abs(np.asarray(cone.params["axis"], dtype=float)), (0, 0, 1))
+    tilted = [
+        p
+        for p in by_kind["plane"]
+        if abs(abs(float(np.asarray(p.params["axis"])[2])) - math.sqrt(0.5)) < 1e-6
+    ]
+    assert len(tilted) == 2, (tag, [p.params["axis"] for p in by_kind["plane"]])
+    for flank in tilted:
+        assert areas[list(flank.face_indices)].sum() == pytest.approx(20.0 * math.sqrt(2.0))
+    covered = {index for patch in slot.surface_patches for index in patch.face_indices}
+    assert covered <= set(slot.face_indices)
+    normals = np.asarray(mesh.raw.face_normals)[list(slot.face_indices)]
+    assert not np.any(np.abs(normals[:, 2]) > 0.99), "kein Deckel im Langloch"
+
+
+def test_the_mouth_chamfer_of_a_slot_belongs_to_it_on_both_cores() -> None:
+    """Zwei Halbkegel und zwei schräge Flanken: an beiden Kernen dieselbe Zugehörigkeit.
+
+    Nativ standen die Kegel als ``cone`` mit ``partial`` neben dem Langloch
+    und die Flanken als Flächen — drei Merkmale ohne Körperhandlung; am Netz
+    fehlten die Flanken ganz. Die Träger bleiben mit ihren wirklichen Spitzen
+    und Normalen erhalten, die Maße des Langlochs bleiben die Nennmaße.
+    """
+    if not pytest.importorskip("app.core.brep.kernel").available():
+        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
+    from app.core.brep.features import features_of
+
+    body = _exact_slot_with_a_mouth_chamfer()
+    assert body.volume == pytest.approx(13420.0 - 226.0 * math.pi / 3.0, rel=1e-9)
+    native = features_of(body)
+    _mouth_chamfer_checked(native, body.mesh, "nativ")
+    for deflection in (0.05, 0.01):
+        _mouth_chamfer_checked(
+            detect(body.to_mesh(deflection=deflection)), body.to_mesh(deflection=deflection), "netz"
+        )
+
+
+def test_a_partial_cone_between_two_slots_stays_where_it_is() -> None:
+    """Berührt ein Kegelstück zwei Langlöcher, hat niemand belegt, wem es gehört."""
+    if not pytest.importorskip("app.core.brep.kernel").available():
+        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+
+    plate = edit.box(60.0, 30.0, 8.0)
+    body = plate
+    for y in (-6.0, 6.0):
+        body = edit.slot_bore(
+            body,
+            position=(0.0, y, 4.0),
+            direction=(0.0, 0.0, 1.0),
+            diameter=6.0,
+            depth=8.0,
+            length=26.0,
+            angle_deg=0.0,
+            overlap=0.0,
+        )
+    found = features_of(body)
+    assert sorted(entry.kind for entry in found.values()).count("slot") == 2
+    assert not [entry for entry in found.values() if entry.kind == "cone"]

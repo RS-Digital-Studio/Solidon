@@ -703,12 +703,33 @@ betroffenen Körper und erzeugenden Schritt; eine Karte bleibt aus. Andere
   Langloch auf**: `face` steht in `SWALLOWED_BY_A_SLOT`, denn was
   vollständig im Mantel liegt, ist eine Wand des Lochs und keine Fläche für
   sich (der Boden eines Sacklochs liegt nicht im Mantel und bleibt).
+- **Eine Bohrung unter der vollen Umdrehung ist angeschnitten** (`partial`,
+  `_partial_bores_marked`, P1.5) — nicht am Winkel erkannt, der am Netz
+  je nach Facettierung 345 bis 354 Grad misst, sondern am Rand: zwei
+  gerade Linien längs der Achse, die die ganze Tiefe durchlaufen. Ein
+  Querloch durch die Wand hat solche Linien nicht. Der exakte Kern sagt
+  dasselbe Wort aus dem Umfang der Fläche (`FULL_TURN` ist dieselbe Zahl
+  wie `FULL_TURN_SPAN`, 300 Grad; ein von der Naht geteilter Mantel wird
+  vorher zusammengeführt, `_seam_split_cylinders_joined`). Was der Anschnitt
+  bedeutet, sagt `relations._cut_open_neighbours`: Grenzt der Mantel an
+  eine andere Höhlung, sind beide **berührt** — keine Kette, kein eigener
+  Körper (`actions.no_own_body`, `NO_OWN_BODY`), Objektbaum und Steckbrief
+  sagen „angeschnitten". Zwei Bohrungen, die sich zu je 315 Grad
+  überlappen, sind so an beiden Kernen zwei angeschnittene Bohrungen, nicht
+  drei Verrundungen und nicht zwei ganze.
 - **Ein Kegelstück gehört zum Langloch, zur Bohrung — oder es ist eine
   Kegelfläche** (`_partial_cones_folded`, `span_about`). Ein Kegel unter
   `FULL_TURN_SPAN` ist kein voller Kegel, wie ein Zylinder darunter kein
   Zapfen ist. Grenzt er an den Mantel eines Langlochs, ist er dessen
-  Mündungsfase und geht darin auf; grenzt er an eine Bohrung, bleibt er die
-  Senkung einer angeschnittenen Bohrung; sonst bleibt er als **Kegelfläche**
+  Mündungsfase und geht darin auf — **und die geraden Flanken zwischen den
+  Halbkegeln mit ihm** (`_mouth_flanks_folded`, P1.5): das Band der Fase
+  wächst von den Kegelstücken über freie, schräg zur Achse stehende
+  Nachbarn, also die letzten Kegelfacetten, die der Fit an der Naht ausließ,
+  und die ebenen Flanken, die ihren Ebenenträger behalten. Der exakte Kern
+  tut dasselbe (`brep.features._mouth_chamfers_folded`); ein Kegelstück
+  zwischen zwei Langlöchern bleibt dort, wo es ist. Grenzt er an eine
+  Bohrung, bleibt er die Senkung einer angeschnittenen Bohrung; sonst
+  bleibt er als **Kegelfläche**
   im Baum (`partial`, Objektbaum und Steckbrief sagen das Wort), und jede
   Körperhandlung steht grau mit `actions.CONE_PIECE_HAS_NO_BODY` —
   `prepare_ops._movable_feature` sagt denselben Satz. Weglassen ging nicht:
@@ -818,7 +839,20 @@ betroffenen Körper und erzeugenden Schritt; eine Karte bleibt aus. Andere
   ohne Zeile im Baum und ohne Filament. Die Phase läuft **zuletzt**, weil sie
   den Rest nimmt: gerundete Dreiecke (`_curved_faces`), die kein Merkmal in
   seinen `face_indices` führt, zusammenhängend über glatte Nähte, mindestens
-  ein Prozent der Haut (`CURVED_SIDE_SHARE`) und `MIN_FACE_AREA`. Auf einer
+  ein Prozent der Haut (`CURVED_SIDE_SHARE`) und `MIN_FACE_AREA`. **Und die
+  Flächenschranke ist keine harte Grenze mehr** (P1.5, 20.09.2026): Ein
+  Fleck unter 4 mm² ist eine Fläche, wenn seine Ränder es belegen —
+  an jeder Naht zu einem fremden Dreieck ein Knick von mindestens
+  `CURVATURE_LIMIT`, **jede Randkante mit einem Nachbarn** (an
+  `plate_countersunk.stl` stoßen die Mantelstreifen der Bohrung per
+  T-Stoß aneinander, und ohne diese Bedingung galt jeder zweite als
+  Fläche), nichts davon auf einer Rundung, kein Streifen
+  (`_facets_standing_apart`, gelesen von `_large_facet_faces` und
+  `_planar_face_entries`, auch bei der lokalen Rollenprüfung). Der
+  1-mm-Nocken auf einer Platte hat so am Netz dieselben fünf Flächen wie
+  am exakten Körper; die Facette einer Kugel und der Streifen eines
+  Mantels stoßen an ihre Nachbarn nur mit der Stufe der Rundung und
+  bleiben, wo sie waren. Auf einer
   Freiform läuft sie nicht — dort wäre die ganze Haut eine Seite. Am Korpus
   bleibt nichts übrig; das ist der Test, der die Phase in Schach hält.
   `inner` kommt aus der Konvexität der Nähte, nicht aus einer Normale: Ein

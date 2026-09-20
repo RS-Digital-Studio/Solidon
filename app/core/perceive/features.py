@@ -122,8 +122,15 @@ CURVED_SIDE_SHARE = 0.01
 #: jede Zuordnung mehrdeutig, und die Auswertung hielt bei jeder Operation an
 #: (§21.3), womit Weg 3 nach der Reparatur nicht weiterkam.
 #:
-#: Zwei mal zwei Millimeter ist die kleinste Fläche, an der jemand etwas
-#: ansetzt: darunter passt weder ein Schraubenkopf noch ein lesbarer Buchstabe.
+#: Zwei mal zwei Millimeter ist die kleinste Fläche, die ohne weiteren Beleg
+#: als Fläche gilt. **Mit Beleg gilt auch eine kleinere** (P1.5, 20.09.2026):
+#: Ein 1-mm-Nocken auf einer Platte hat fünf Flächen zu je 1 mm², und der
+#: exakte Kern nennt sie alle — das Netz nannte keine. Was die Schranke
+#: überwindet, ist nicht die Fläche, sondern ihre Ränder: ein Fleck, der an
+#: **jedem** Rand mit einem scharfen Knick an einen Nachbarn stößt, der nicht
+#: zu ihm gehört, und der auf keiner Rundung sitzt (:func:`_facets_standing_apart`).
+#: Die Facette einer Kugel und der Streifen eines Mantels haben an ihren
+#: Rändern nur die Stufe der Rundung — sie bleiben unter der Schranke.
 MIN_FACE_AREA = 4.0
 #: Ab welchem Kosinus zwei Flächennormalen als gleichgerichtet gelten — nur
 #: dann kann die eine die andere verdecken, also innen liegen.
@@ -1011,6 +1018,9 @@ def detect(
         if check_cancelled is not None:
             check_cancelled()
         found = _partial_cones_folded(mesh, found, check_cancelled=check_cancelled)
+        if check_cancelled is not None:
+            check_cancelled()
+        found = _partial_bores_marked(mesh, found, check_cancelled=check_cancelled)
         if check_cancelled is not None:
             check_cancelled()
         found, left_out = _shapes_on_a_freeform(
@@ -3010,6 +3020,10 @@ def _partial_cones_folded(
             del kept[identifier]
         elif not any(found[name].kind == "hole" for name in neighbours):
             kept[identifier] = replace(feature, params={**feature.params, "partial": True})
+    if grown:
+        _mouth_flanks_folded(
+            mesh, found, kept, grown, grown_patches, check_cancelled=check_cancelled
+        )
     for name, faces in grown.items():
         # Nur die Flächen wachsen; Länge, Tiefe und Durchgang des Langlochs
         # bleiben bewusst die Nennmaße ohne die Fase.
@@ -3019,6 +3033,157 @@ def _partial_cones_folded(
             face_indices=tuple(sorted({*slot.face_indices, *faces})),
             surface_patches=slot.surface_patches + tuple(grown_patches[name]),
         )
+    return kept
+
+
+def _mouth_flanks_folded(
+    mesh: MeshData,
+    found: Mapping[FeatureId, Feature],
+    kept: Mapping[FeatureId, Feature],
+    grown: dict[FeatureId, set[int]],
+    grown_patches: dict[FeatureId, list[SurfacePatch]],
+    *,
+    check_cancelled: Callable[[], None] | None = None,
+) -> None:
+    """Die geraden Flanken der Mündungsfase gehören zum Langloch wie ihre Kegel.
+
+    Zwischen den zwei Halbkegeln liegen zwei schräge Ebenen — an einem
+    Langloch Ø 6 auf 26 mit 1-mm-Fase je 20·√2 mm². Sie sind keine Flächen
+    (ihre Ränder zu den Kegelfacetten sind Rundungsstufen) und gehörten bisher
+    niemandem; der exakte Kern nannte sie als Flächen. Jetzt gilt an beiden
+    Kernen dieselbe Regel: Ein ebener Fleck, der an einen übernommenen Kegel
+    **und** an den Mantel desselben Langlochs grenzt und schräg zu dessen
+    Achse steht, ist die gerade Flanke derselben Fase — er geht mit seinem
+    Ebenenträger im Langloch auf (P1.5, 20.09.2026).
+    """
+    from app.core.perceive.slots import ACROSS_THE_AXIS
+    from app.core.perceive.surfaces import planar_patch
+
+    body = mesh.raw
+    taken = np.zeros(len(body.faces), dtype=bool)
+    for feature in found.values():
+        if feature.face_indices:
+            taken[list(feature.face_indices)] = True
+    normals = np.asarray(body.face_normals, dtype=float)
+    neighbours: dict[int, list[int]] = {}
+    for left, right in np.asarray(body.face_adjacency, dtype=np.int64).tolist():
+        neighbours.setdefault(left, []).append(right)
+        neighbours.setdefault(right, []).append(left)
+    for name, pieces in grown.items():
+        if check_cancelled is not None:
+            check_cancelled()
+        axis = np.asarray(kept[name].params["axis"], dtype=float)
+        along = np.abs(normals @ axis)
+        tilted = (along >= ACROSS_THE_AXIS) & (along < units.exact_cos_degrees(1.0))
+        # Das Band der Fase: von den Kegelstücken aus über freie, schräge
+        # Nachbarn. Das sind die letzten Kegelfacetten, die der Fit an der
+        # Naht zur Flanke ausließ, und die geraden Flanken dazwischen —
+        # Deckel (quer) und Mantel (längs) gehören nicht dazu.
+        band = set(pieces)
+        frontier = list(pieces)
+        while frontier:
+            if check_cancelled is not None:
+                check_cancelled()
+            following = [
+                index
+                for triangle in frontier
+                for index in neighbours.get(triangle, ())
+                if index not in band and not taken[index] and tilted[index]
+            ]
+            band.update(following)
+            frontier = following
+        added = band - pieces
+        if not added:
+            continue
+        for facet in body.facets:
+            indices = [int(index) for index in facet]
+            if not all(index in added for index in indices):
+                continue
+            centre = _facet_centre(body, np.asarray(indices, dtype=np.int64))
+            normal = normals[indices[0]]
+            patch = planar_patch(
+                mesh,
+                indices,
+                (float(centre[0]), float(centre[1]), float(centre[2])),
+                (float(normal[0]), float(normal[1]), float(normal[2])),
+                check_cancelled=check_cancelled,
+            )
+            if patch is not None:
+                grown_patches.setdefault(name, []).append(patch)
+        taken[list(added)] = True
+        pieces.update(added)
+
+
+def _partial_bores_marked(
+    mesh: MeshData,
+    found: Mapping[FeatureId, Feature],
+    *,
+    check_cancelled: Callable[[], None] | None = None,
+) -> dict[FeatureId, Feature]:
+    """Eine Bohrung, deren Mantel zwei Schnittlinien längs der Achse begrenzen,
+    ist angeschnitten — ``partial``, dasselbe Wort wie am exakten Körper.
+
+    Ein Mantel über :data:`FULL_TURN_SPAN` ist eine Bohrung; ob er **ganz** ist,
+    sagt nicht der Winkel — ein volles Loch misst am Netz je nach Facettierung
+    345 bis 354 Grad —, sondern sein Rand: Ein ganzer Mantel endet nur an
+    seinen zwei Ringen, ein angeschnittener zusätzlich an **zwei geraden
+    Linien längs der Achse**, die seine ganze Tiefe durchlaufen (P1.5,
+    Gegenfall 2: zwei überlappende Bohrungen zu je 315 Grad). Ein Querloch
+    durch den Mantel hat solche Linien nicht; es bleibt eine ganze Bohrung mit
+    einem Loch in der Wand.
+
+    Was ein angeschnittener Mantel bedeutet, entscheidet danach die
+    Nachbarschaft (``relations._cavity_links``): Grenzt er an eine andere
+    Höhlung, ist er berührt und hat keinen eigenen Körper.
+    """
+    if check_cancelled is not None:
+        check_cancelled()
+    body = mesh.raw
+    holes = [
+        (identifier, feature)
+        for identifier, feature in found.items()
+        if feature.kind == "hole" and feature.face_indices and not feature.params.get("partial")
+    ]
+    if not holes:
+        return dict(found)
+    vertices = np.asarray(body.vertices, dtype=float)
+    faces = np.asarray(body.faces, dtype=np.int64)
+    tolerance = weld_tolerance(float(np.linalg.norm(body.extents)))
+    kept = dict(found)
+    for identifier, feature in holes:
+        if check_cancelled is not None:
+            check_cancelled()
+        axis = np.asarray(feature.params["axis"], dtype=float)
+        chosen = faces[np.asarray(feature.face_indices, dtype=np.int64)]
+        edges = np.sort(
+            np.concatenate((chosen[:, [0, 1]], chosen[:, [1, 2]], chosen[:, [2, 0]])), axis=1
+        )
+        unique, count = np.unique(edges, axis=0, return_counts=True)
+        boundary = unique[count == 1]
+        if not len(boundary):
+            continue
+        vectors = vertices[boundary[:, 1]] - vertices[boundary[:, 0]]
+        lengths = np.linalg.norm(vectors, axis=1)
+        axial = (lengths > tolerance) & (np.abs(vectors @ axis) >= PARALLEL_AXES * lengths)
+        if not axial.any():
+            continue
+        points = vertices[boundary[axial]].reshape(-1, 3)
+        projected = points - np.outer(points @ axis, axis)
+        lines = np.unique(np.round(projected / max(tolerance, EPS_GEOM)).astype(np.int64), axis=0)
+        if len(lines) != 2:
+            continue
+        # Beide Linien laufen durch die ganze Tiefe des Mantels.
+        heights = vertices[np.unique(chosen)] @ axis
+        depth = float(heights.max() - heights.min())
+        for line in lines:
+            on_line = np.all(
+                np.round(projected / max(tolerance, EPS_GEOM)).astype(np.int64) == line, axis=1
+            )
+            reach = points[on_line] @ axis
+            if float(reach.max() - reach.min()) < depth - units.MAX_FACET_SAG:
+                break
+        else:
+            kept[identifier] = replace(feature, params={**feature.params, "partial": True})
     return kept
 
 
@@ -3037,6 +3202,62 @@ def _curved_faces(body: trimesh.Trimesh) -> set[int]:
         return set()
     pairs = np.asarray(body.face_adjacency)[rounded]
     return {int(index) for index in pairs.ravel()}
+
+
+def _facets_standing_apart(
+    body: trimesh.Trimesh, facets: Sequence[np.ndarray], curved: set[int]
+) -> set[int]:
+    """Die Flecken, die auch unter :data:`MIN_FACE_AREA` eine eigene Fläche sind.
+
+    Der Beleg kommt aus den Rändern, nicht aus der Größe: Jede Naht des Flecks
+    zu einem Dreieck, das nicht zu ihm gehört, ist ein scharfer Knick
+    (mindestens :data:`CURVATURE_LIMIT`), kein Dreieck des Flecks liegt auf
+    einer Rundung, und der Fleck ist kein Streifen. Ein 1-mm-Nocken erfüllt das
+    an allen fünf Seiten; die Facette einer Kugel stößt an ihre Nachbarn nur
+    mit der Stufe der Rundung, ein Mantelstreifen ebenso — beide bleiben, wo
+    sie sind. Zurück kommen die **Positionen** in ``facets``.
+
+    **Und jede Randkante muss einen Nachbarn haben.** „Jede Naht ist scharf"
+    gilt nur über die Nähte, die das Netz kennt; wo eine Kante keinen
+    Nachbarn hat, ist der Rand unbelegt, nicht scharf. An
+    ``plate_countersunk.stl`` stoßen die Mantelstreifen der Bohrung nicht
+    aneinander — die STL schreibt sie mit T-Stößen —, und ohne diese Zeile
+    hatte jeder zweite Streifen nur den Boden und die Senkung als Nachbarn,
+    beide scharf: 30 „Flächen" zu je 1,9 mm² auf einem Mantel (gemessen
+    20.09.2026). Ein Fleck aus ``n`` Dreiecken hat ``3n`` Kanten; jede innere
+    Nachbarschaft deckt zwei, jede äußere eine.
+
+    Ein Durchgang über die Nachbarschaft, nicht einer je Fleck: An einem Netz
+    mit einer Million Dreiecken zählt das.
+    """
+    if not facets or not len(body.face_adjacency):
+        return set()
+    owner = np.full(len(body.faces), -1, dtype=np.int64)
+    for number, facet in enumerate(facets):
+        owner[np.asarray(facet, dtype=np.int64)] = number
+    pairs = np.asarray(body.face_adjacency, dtype=np.int64)
+    angles = np.degrees(np.asarray(body.face_adjacency_angles, dtype=float))
+    first, second = owner[pairs[:, 0]], owner[pairs[:, 1]]
+    boundary = first != second
+    soft = boundary & (angles < CURVATURE_LIMIT)
+    disqualified = {int(index) for index in first[soft]} | {int(index) for index in second[soft]}
+    disqualified.discard(-1)
+    counted = np.zeros(len(facets), dtype=np.int64)
+    inner = first == second
+    np.add.at(counted, first[inner & (first >= 0)], 2)
+    np.add.at(counted, first[boundary & (first >= 0)], 1)
+    np.add.at(counted, second[boundary & (second >= 0)], 1)
+    apart: set[int] = set()
+    for number, facet in enumerate(facets):
+        if number in disqualified or any(int(index) in curved for index in facet):
+            continue
+        if int(counted[number]) != 3 * len(facet):
+            continue
+        members = [int(index) for index in facet]
+        if _a_sliver(body, members):
+            continue
+        apart.add(number)
+    return apart
 
 
 def _large_facet_faces(
@@ -3087,12 +3308,14 @@ def _large_facet_faces(
     # Facette. Danach passt die Erkennung dort eine Kugel Ø 23 ein.
     # Der Anteil statt des Vorkommens trennt es nicht: die Streifen liegen bei
     # 0,00 bis 0,85, die echte Deckfläche bei 0,15.
+    apart = _facets_standing_apart(body, facets, curved)
     planar = {
         int(index)
-        for facet, area in zip(facets, areas, strict=True)
+        for number, (facet, area) in enumerate(zip(facets, areas, strict=True))
         if len(facet) >= MIN_FLAT_FACES
         or area >= broad
         or (area >= MIN_FACE_AREA and not any(int(index) in curved for index in facet))
+        or number in apart
         for index in facet
     }
     # Viele Dreiecke machen aus einem Mantelstreifen noch keine eigenständige
@@ -5020,10 +5243,14 @@ def _planar_face_entries(
         planar = _large_facet_faces(body, check_cancelled=check_cancelled)
     if check_cancelled is not None:
         check_cancelled()
+    # Unter der Schranke zählt nur, was seine Ränder belegen — derselbe
+    # Beleg, den ``_large_facet_faces`` liest, auch bei ``all_facets``: Die
+    # lokale Rollenprüfung darf eine echte kleine Fläche nicht übergehen.
+    apart = _facets_standing_apart(body, facets, _curved_faces(body))
     return [
         (facet, area, _facet_centre(body, facet))
-        for facet, area in zip(facets, areas, strict=True)
-        if area >= MIN_FACE_AREA
+        for number, (facet, area) in enumerate(zip(facets, areas, strict=True))
+        if (area >= MIN_FACE_AREA or number in apart)
         and (planar is None or all(int(index) in planar for index in facet))
         and bool(
             np.all(

@@ -338,6 +338,23 @@ grenzen an **beide** Bögen. Damit ist eine Tasche mit verrundeten Ecken keines:
 Zwei benachbarte Ecken teilen eine Wand, nicht zwei. Die Toleranzen und die
 Abgrenzung stehen in `.claude/rules/operationen.md`.
 
+**Und seine Mündungsfase gehört dazu** (`_mouth_chamfers_folded`, P1.5,
+20.09.2026): Ein Teilkegel, der genau ein Langloch berührt, und die
+schrägen Ebenen, die an ihn und an den Mantel desselben Langlochs grenzen,
+gehen im Langloch auf — dieselbe Zugehörigkeit wie am Netz
+(`perceive.features._partial_cones_folded`), mit erhaltenen Trägern: Kegel
+mit Spitze und Halbwinkel, Ebene mit Normale. Die Maße bleiben die Nennmaße
+ohne Fase. Ein Kegelstück zwischen zwei Langlöchern bleibt, was es ist.
+
+**Ein Mantel, den die Naht in zwei Flächen teilt, ist ein Merkmal**
+(`_seam_split_cylinders_joined`): zwei zylindrische Nachbarflächen mit
+derselben Achslinie, demselben Radius und derselben Materialseite werden
+vor dem Langlochpass zusammengeführt, und der gemeinsame Umfang entscheidet
+wie an einer Fläche. `FULL_TURN` ist seither dieselbe Zahl wie
+`perceive.features.FULL_TURN_SPAN` (300 Grad); eine Bohrung unter der
+vollen Umdrehung trägt `partial`, und was das bedeutet, entscheidet die
+Nachbarschaft (`perceive.relations`), nicht der Winkel.
+
 Offene Randbohrungen und Langlöcher ergänzt `features_of` über dieselbe
 Wandprüfung wie der Mesh-Kern (§21.1). `edit.slot_bore` vereinigt nach dem
 Schnitt koplanare Flanken, damit Nachziehen ohne neue Breitenzugabe das

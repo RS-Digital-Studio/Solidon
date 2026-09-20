@@ -72,7 +72,15 @@ def _oriented(direction: Any) -> Vec3:
 #: Wie viel einer vollen Umdrehung eine zylindrische Fläche abdecken muss, um
 #: als Bohrung zu zählen. Darunter ist sie eine Verrundung oder eine gerundete
 #: Ecke, kein Loch.
-FULL_TURN = 0.9
+#:
+#: **Dieselbe Zahl wie am Netz** (``perceive.features.FULL_TURN_SPAN``, 300
+#: Grad; ``tests/test_partial_bores.py`` hält beide zusammen). Bis zum
+#: 20.09.2026 stand hier 0,9 — 324 Grad —, und ein Mantel von 315 Grad war am
+#: exakten Körper eine Verrundung und am Netz eine Bohrung (P1.5). Was er ist,
+#: sagt darüber hinaus ``partial``: Unter der vollen Umdrehung ist eine
+#: Bohrung angeschnitten, und ob sie für sich bearbeitbar ist, entscheidet
+#: ihre Nachbarschaft (``perceive.relations``), nicht der Winkel.
+FULL_TURN = 300.0 / 360.0
 
 #: Wie viele Nachbarflächen einer kugeligen Fläche selbst Kantenverrundungen
 #: sein müssen, damit sie als Ecke gilt — die Stelle, an der verrundete Kanten
@@ -168,6 +176,9 @@ def features_of(solid: Solid, *, cancelled: CancelToken | None = None) -> dict[F
             face_indices=solid.triangles_of_face(index),
         )
 
+    found = _seam_split_cylinders_joined(
+        solid, found, named, neighbours, surfaces, inside, reach, tolerance, cancelled=cancelled
+    )
     found = _slots_instead_of_half_bores(
         solid,
         found,
@@ -178,6 +189,7 @@ def features_of(solid: Solid, *, cancelled: CancelToken | None = None) -> dict[F
         surfaces,
         cancelled=cancelled,
     )
+    found = _mouth_chamfers_folded(solid, found, named, neighbours, surfaces, cancelled=cancelled)
 
     # Der offene Mantel hat an beiden Kernen denselben Randvertrag. Die
     # Dreiecksnummern der Tessellierung sind bereits die Merkmalsnummern.
@@ -800,6 +812,391 @@ def _slots_instead_of_half_bores(
     return found
 
 
+def _seam_split_cylinders_joined(
+    solid: Solid,
+    found: dict[FeatureId, Feature],
+    named: dict[int, FeatureId],
+    neighbours: Any,
+    surfaces: dict[int, Surface | None],
+    inside: Any,
+    reach: float,
+    tolerance: float,
+    *,
+    cancelled: CancelToken | None = None,
+) -> dict[FeatureId, Feature]:
+    """Ein Mantel, den eine Naht in zwei Flächen teilt, ist **ein** Merkmal.
+
+    OpenCASCADE legt die Naht eines Zylinders dorthin, wo seine Parametrisierung
+    beginnt; schneidet eine zweite Bohrung den Mantel an, bleiben von der
+    ersten zwei Flächen zu je 157,5 Grad, obwohl der Träger 315 Grad überdeckt
+    (P1.5, Gegenfall 2). Je Fläche gelesen wären das zwei Verrundungen — und am
+    Netz, das keine Naht kennt, eine angeschnittene Bohrung.
+
+    Zusammengeführt werden zwei zylindrische Nachbarflächen mit **derselben
+    Achslinie**, demselben Radius und derselben Materialseite, die sich eine
+    Kante teilen. Der gemeinsame Umfang entscheidet dann wie an einer einzelnen
+    Fläche: Verrundung unter :data:`FULL_TURN`, sonst Bohrung oder Zapfen, mit
+    ``partial`` unter der vollen Umdrehung. Der Träger bleibt je Fläche
+    erhalten — der Zuschnitt am Ende von :func:`features_of` liest ihn von den
+    nativen Flächen ab.
+
+    **Umfang und Länge sind Vereinigungen, keine Summen.** Die geteilte Kante
+    kann längs der Achse laufen (die Naht: die Winkel ergänzen sich) oder
+    quer dazu (ein Mantel, den eine Vereinigung ohne Zusammenlegen der
+    Flächen in drei Stücke schnitt: die Winkel decken sich, die Längen
+    ergänzen sich). Am verrundeten Kreuz aus ``test_brep`` wurden drei
+    kollineare Viertelmäntel mit summierten Winkeln zu einer „radialen"
+    Verrundung von 270 Grad; gemeint war ein Viertelmantel von 34 mm.
+    :func:`_cylinder_group_extent` misst deshalb beides im Rahmen der
+    ersten Fläche und vereinigt Bögen und Spannen.
+    """
+    from OCP.collections import IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher as ShapeMap
+
+    from app.core.perceive.slots import PARALLEL_AXES, SAME_RADIUS
+
+    cylinders = [
+        index
+        for index, surface in surfaces.items()
+        if isinstance(surface, CylinderSurface)
+        and named.get(index) in found
+        and found[named[index]].kind in ("fillet", "hole", "pin")
+    ]
+    if len(cylinders) < 2:
+        return found
+    faces = solid.faces()
+    numbered = ShapeMap()
+    for face in faces:
+        numbered.Add(face)
+
+    def same_line(one: Any, other: Any) -> bool:
+        axis, second = one.Axis().Direction(), other.Axis().Direction()
+        if abs(axis.Dot(second)) < PARALLEL_AXES:
+            return False
+        radius = max(float(one.Radius()), float(other.Radius()))
+        if abs(float(one.Radius()) - float(other.Radius())) > radius * SAME_RADIUS:
+            return False
+        return _plane_free_distance(one.Axis().Location(), other) <= tolerance
+
+    groups: list[list[int]] = []
+    seen: set[int] = set()
+    for index in cylinders:
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        if index in seen:
+            continue
+        group = [index]
+        seen.add(index)
+        frontier = [index]
+        while frontier:
+            current = frontier.pop()
+            surface = surfaces[current]
+            assert isinstance(surface, CylinderSurface)
+            for other in _neighbouring_faces(faces[current], neighbours, numbered):
+                if other in seen or other not in cylinders:
+                    continue
+                candidate = surfaces[other]
+                assert isinstance(candidate, CylinderSurface)
+                if candidate.inward != surface.inward or not same_line(
+                    surface.cylinder, candidate.cylinder
+                ):
+                    continue
+                seen.add(other)
+                group.append(other)
+                frontier.append(other)
+        if len(group) > 1:
+            groups.append(sorted(group))
+
+    for group in groups:
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        first = surfaces[group[0]]
+        assert isinstance(first, CylinderSurface)
+        cylinder = first.cylinder
+        turn, low, high = _cylinder_group_extent(solid, group, surfaces)
+        radius = float(cylinder.Radius())
+        axis = cylinder.Axis().Direction()
+        depth = high - low
+        indices: list[int] = []
+        weight = 0.0
+        middle = [0.0, 0.0, 0.0]
+        for index in group:
+            indices.extend(solid.triangles_of_face(index))
+            found.pop(named[index], None)
+            props = properties(faces[index], "surface", cancelled=cancelled)
+            weight += props.mass
+            for axis_number in range(3):
+                middle[axis_number] += props.mass * props.centre[axis_number]
+        if weight <= EPS_GEOM:
+            continue
+        # Derselbe Schwerpunkt wie an einer einzelnen Verrundung: der der
+        # Fläche, nicht der Achspunkt — ``_describe`` nennt ihn ``middle``.
+        surface_middle: Vec3 = (middle[0] / weight, middle[1] / weight, middle[2] / weight)
+        if turn < FULL_TURN * math.tau:
+            kind: FeatureKind = "fillet"
+            params: dict[str, Any] = {
+                "radius": radius,
+                "diameter": radius * 2.0,
+                "centre": surface_middle,
+                "axis": _oriented(axis),
+                "length": depth,
+                "recess": first.inward
+                if turn >= math.pi - EPS_GEOM
+                else not _axis_in_material(inside, cylinder, gp_point(surface_middle)),
+                **({"radial": True} if turn >= math.pi - EPS_GEOM else {}),
+            }
+        else:
+            kind = "hole" if first.inward else "pin"
+            params = {
+                "diameter": radius * 2.0,
+                "centre": _axis_point(cylinder, (low + high) / 2.0),
+                "axis": _oriented(axis),
+                "depth": depth,
+            }
+            if first.inward:
+                params["through"] = not _axis_covered(
+                    neighbours,
+                    faces[group[0]],
+                    cylinder,
+                    low - reach,
+                    high + reach,
+                    tolerance,
+                    cancelled=cancelled,
+                )
+                if turn < math.tau - EPS_GEOM:
+                    params["partial"] = True
+        number = 1 + max(
+            (
+                int(identifier.rsplit("_", 1)[-1])
+                for identifier in found
+                if identifier.startswith(f"{kind}_")
+            ),
+            default=0,
+        )
+        identifier = f"{kind}_{number}"
+        for index in group:
+            named[index] = identifier
+        found[identifier] = Feature(
+            id=identifier,
+            kind=kind,
+            provenance="detected",
+            params=params,
+            measure_sources={
+                name: "native" for name, value in params.items() if not isinstance(value, bool)
+            },
+            face_indices=tuple(sorted(indices)),
+        )
+    return found
+
+
+def _cylinder_group_extent(
+    solid: Solid, group: list[int], surfaces: dict[int, Surface | None]
+) -> tuple[float, float, float]:
+    """Winkelabdeckung und axiale Spanne koaxialer Flächen im Rahmen der ersten.
+
+    Der Bogen jeder Fläche kommt aus den Winkeln ihrer Tessellationspunkte um
+    die gemeinsame Achse: Sie liegen auf dem Mantel, und die äußersten liegen
+    auf den Randkanten — der Bogen ist das Komplement der größten Lücke
+    zwischen ihnen, damit eine Naht bei null Grad ihn nicht in zwei Hälften
+    reißt. Die Bögen werden als Vereinigung modulo einer Umdrehung gezählt;
+    zwei Nahthälften ergänzen sich, drei kollineare Stücke decken sich. Die
+    axiale Spanne ist die Vereinigung der Parameterspannen, jede um den
+    Versatz ihres Trägerursprungs längs der gemeinsamen Achse verschoben.
+
+    Rückgabe: Bogen im Bogenmaß, unterer und oberer Achsparameter — beide ab
+    dem Ursprung des ersten Trägers gemessen, so dass :func:`_axis_point` und
+    :func:`_axis_covered` sie unmittelbar lesen.
+    """
+    import numpy as np
+
+    first = surfaces[group[0]]
+    assert isinstance(first, CylinderSurface)
+    frame = first.cylinder.Position()
+    origin = np.asarray(frame.Location().Coord(), dtype=float)
+    direction = np.asarray(frame.Direction().Coord(), dtype=float)
+    across = np.asarray(frame.XDirection().Coord(), dtype=float)
+    upward = np.asarray(frame.YDirection().Coord(), dtype=float)
+    vertices = np.asarray(solid.mesh.raw.vertices, dtype=float)
+    triangles = np.asarray(solid.mesh.raw.faces, dtype=int)
+
+    arcs: list[tuple[float, float]] = []
+    low = math.inf
+    high = -math.inf
+    for index in group:
+        surface = surfaces[index]
+        assert isinstance(surface, CylinderSurface)
+        own = surface.cylinder.Position()
+        offset = float(np.dot(np.asarray(own.Location().Coord(), dtype=float) - origin, direction))
+        forward = float(np.dot(np.asarray(own.Direction().Coord(), dtype=float), direction)) > 0.0
+        ends = (
+            (offset + surface.first, offset + surface.last)
+            if forward
+            else (offset - surface.last, offset - surface.first)
+        )
+        low = min(low, *ends)
+        high = max(high, *ends)
+
+        corners = vertices[np.unique(triangles[list(solid.triangles_of_face(index))].ravel())]
+        relative = corners - origin
+        angles = np.sort(np.arctan2(relative @ upward, relative @ across) % math.tau)
+        if angles.size < 2:
+            continue
+        gaps = np.diff(np.append(angles, angles[0] + math.tau))
+        widest = int(np.argmax(gaps))
+        start = float(angles[(widest + 1) % angles.size])
+        arcs.append((start, math.tau - float(gaps[widest])))
+
+    # Jeder Bogen einmal so und einmal um eine Umdrehung zurückgeschoben:
+    # Dann liegt, was über null Grad hinausreicht, neben dem, was dort beginnt.
+    pieces = sorted(
+        (start + shift, start + shift + width)
+        for start, width in arcs
+        for shift in (0.0, -math.tau)
+    )
+    merged: list[list[float]] = []
+    for begin, end in pieces:
+        if merged and begin <= merged[-1][1] + EPS_GEOM:
+            merged[-1][1] = max(merged[-1][1], end)
+        else:
+            merged.append([begin, end])
+    turn = sum(max(0.0, min(end, math.tau) - max(begin, 0.0)) for begin, end in merged)
+    return min(turn, math.tau), low, high
+
+
+def _plane_free_distance(point: Any, cylinder: Any) -> float:
+    """Der Abstand eines Punkts von der Achslinie eines Zylinders."""
+    axis = cylinder.Axis()
+    origin, direction = axis.Location(), axis.Direction()
+    offset = (point.X() - origin.X(), point.Y() - origin.Y(), point.Z() - origin.Z())
+    along = offset[0] * direction.X() + offset[1] * direction.Y() + offset[2] * direction.Z()
+    lateral = (
+        offset[0] - along * direction.X(),
+        offset[1] - along * direction.Y(),
+        offset[2] - along * direction.Z(),
+    )
+    return math.sqrt(sum(value * value for value in lateral))
+
+
+def gp_point(centre: Vec3) -> Any:
+    """Ein OCCT-Punkt aus einem Tupel — für die Materialprobe an der Achse."""
+    from OCP.gp import gp_Pnt
+
+    return gp_Pnt(*centre)
+
+
+def _mouth_chamfers_folded(
+    solid: Solid,
+    found: dict[FeatureId, Feature],
+    named: dict[int, FeatureId],
+    neighbours: Any,
+    surfaces: dict[int, Surface | None],
+    *,
+    cancelled: CancelToken | None = None,
+) -> dict[FeatureId, Feature]:
+    """Die Mündungsfase eines Langlochs geht im Langloch auf — wie am Netz.
+
+    **Dieselbe Zugehörigkeit an beiden Kernen** (P1.5, 20.09.2026). Das Netz
+    nimmt seit dem 15.09.2026 ein Kegelstück unter dem vollen Umlauf, das an
+    den Mantel eines Langlochs grenzt, in dessen Auswahl auf
+    (``perceive.features._partial_cones_folded``); hier standen dieselben
+    zwei Halbkegel als ``cone`` mit ``partial`` daneben, und die zwei schrägen
+    ebenen Flanken der Fase als Flächen. Ein gefastes Langloch war damit am
+    exakten Körper drei Merkmale mehr als am Netz — und jedes davon ohne
+    Körperhandlung.
+
+    Die Regel ist topologisch, nicht nach Kantenzahl oder Name:
+
+    * Ein Teilkegel, der genau **ein** Langloch berührt, gehört zu dessen
+      Mündung. Berührt er zwei, bleibt er, was er ist — welcher Öffnung er
+      gehört, hat dann niemand belegt.
+    * Eine ebene Fläche, die an einen so übernommenen Kegel **und** an den
+      Mantel desselben Langlochs grenzt und schräg zu dessen Achse steht, ist
+      die gerade Flanke derselben Fase. Deckel und Boden stehen quer zur
+      Achse, die Wände des Langlochs längs — beide sind keine.
+
+    Die Träger bleiben: Kegel mit Spitze und Halbwinkel, Ebene mit Normale —
+    der abschließende Zuschnitt in :func:`features_of` liest sie von den
+    nativen Flächen ab. Maße des Langlochs bleiben die Nennmaße ohne Fase.
+    """
+    from OCP.collections import IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher as ShapeMap
+
+    from app.core.perceive.slots import ACROSS_THE_AXIS
+    from app.core.units import exact_cos_degrees
+
+    slots = {
+        identifier: set(solid.faces_of_triangles(feature.face_indices))
+        for identifier, feature in found.items()
+        if feature.kind == "slot"
+    }
+    cones = [
+        (index, identifier)
+        for index, identifier in named.items()
+        if identifier in found
+        and found[identifier].kind == "cone"
+        and found[identifier].params.get("partial")
+    ]
+    if not slots or not cones:
+        return found
+    faces = solid.faces()
+    numbered = ShapeMap()
+    for face in faces:
+        numbered.Add(face)
+    touching: dict[int, set[int]] = {}
+
+    def neighbours_of(index: int) -> set[int]:
+        if index not in touching:
+            touching[index] = _neighbouring_faces(faces[index], neighbours, numbered)
+        return touching[index]
+
+    folded: dict[FeatureId, set[int]] = {}
+    for index, _identifier in cones:
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        beside = neighbours_of(index)
+        owners = [name for name, members in slots.items() if beside & members]
+        if len(owners) != 1:
+            continue
+        folded.setdefault(owners[0], set()).add(index)
+    if not folded:
+        return found
+
+    for name, pieces in folded.items():
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        slot = found[name]
+        axis = slot.params["axis"]
+        members = slots[name]
+        flanks: set[int] = set()
+        for piece in pieces:
+            for index in neighbours_of(piece):
+                if index in members or index in pieces or index in flanks:
+                    continue
+                surface = surfaces.get(index)
+                if not isinstance(surface, PlaneSurface):
+                    continue
+                identifier = named.get(index)
+                if identifier is None or found.get(identifier) is None:
+                    continue
+                if found[identifier].kind != "face":
+                    continue
+                normal = surface.normal
+                along = abs(normal[0] * axis[0] + normal[1] * axis[1] + normal[2] * axis[2])
+                if along < ACROSS_THE_AXIS or along >= exact_cos_degrees(1.0):
+                    continue
+                if not neighbours_of(index) & members:
+                    continue
+                flanks.add(index)
+        indices = set(slot.face_indices)
+        for index in (*pieces, *flanks):
+            indices.update(solid.triangles_of_face(index))
+            identifier = named.get(index)
+            if identifier is not None:
+                found.pop(identifier, None)
+        # Nur die Auswahl wächst; Länge, Tiefe und Durchgang bleiben die
+        # Nennmaße ohne die Fase — wie am Netz.
+        found[name] = replace(slot, face_indices=tuple(sorted(indices)))
+    return found
+
+
 def _neighbouring_faces(face: Any, neighbours: Any, numbered: Any) -> set[int]:
     """Die Nummern der Flächen, die an ``face`` grenzen — über ``numbered``."""
     from OCP.TopAbs import TopAbs_EDGE
@@ -1063,8 +1460,10 @@ def _describe(
             # Außenkanten eines Quaders kam es zweimal so und zweimal anders
             # heraus. Gefragt ist ohnehin etwas Geometrisches: Liegt die Achse
             # im Material, ist es eine Verrundung, liegt sie außerhalb, eine
-            # Kehle. Gemessen an einem L-Profil mit verrundeten Kanten: 26
-            # Verrundungen, 2 Kehlen an der einspringenden Ecke.
+            # Kehle. Gemessen am umgekehrten T aus ``test_brep`` mit
+            # verrundeten Kanten: 22 Verrundungen, 2 Kehlen an den
+            # einspringenden Ecken — seit die Nahtzusammenführung die von der
+            # Vereinigung zerschnittenen Mäntel wieder zu einem macht.
             # Mindestens halbe Mäntel sind radiale Wände: Ihre Achse kann
             # beiderseits im Hohlraum liegen. Dort zählt die Mantelnormale
             # einschließlich der Händigkeit des Zylinderrahmens.
@@ -1116,6 +1515,13 @@ def _describe(
                 tolerance,
                 cancelled=cancelled,
             )
+            # **Angeschnitten, nicht verworfen**: ein Mantel unter der vollen
+            # Umdrehung ist eine Bohrung, die ein Nachbar geöffnet hat — eine
+            # zweite Bohrung, ein Rand. Dasselbe Wort wie am Netz
+            # (``perceive.features._partial_bores_marked``); ob sie für sich
+            # bearbeitbar ist, sagt die Nachbarschaft (P1.5).
+            if turn < math.tau - EPS_GEOM:
+                params["partial"] = True
         return "hole" if hollow else "pin", params
 
     if kind == GeomAbs_Cone:

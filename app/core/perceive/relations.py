@@ -906,6 +906,12 @@ def _cavity_links(
         *owners.values(),
         *(adjacent for adjacent, _faces in _shoulder_connections(body, owners, candidates)),
     ]
+    # **Eine angeschnittene Bohrung an einer fremden Höhlung ist berührt.**
+    # Ihre Schnittlinien sind kein Ring; über die Ringe fände sie keinen
+    # Nachbarn — und stünde als sicher einzeln da, obwohl ihr Mantel in die
+    # Nachbarbohrung mündet (P1.5, Gegenfall 2). Berührt heißt hier wie bei
+    # drei Ringbesitzern: keine Kette, kein eigener Körper.
+    touching.update(_cut_open_neighbours(body, candidates))
     for adjacent in connections:
         if len(adjacent) < 2:
             continue
@@ -934,6 +940,35 @@ def _cavity_links(
             ),
         )
     return graph, invalid, touching
+
+
+def _cut_open_neighbours(
+    body: trimesh.Trimesh, candidates: Mapping[FeatureId, Feature]
+) -> set[FeatureId]:
+    """Angeschnittene Kandidaten und die, deren Dreiecke sie an der Schnittlinie berühren."""
+    partial = [
+        identifier
+        for identifier, candidate in candidates.items()
+        if candidate.params.get("partial") and candidate.face_indices
+    ]
+    if not partial or not len(body.face_adjacency):
+        return set()
+    names = list(candidates)
+    owner = np.full(len(body.faces), -1, dtype=np.int64)
+    for number, identifier in enumerate(names):
+        indices = np.asarray(candidates[identifier].face_indices, dtype=np.int64)
+        if len(indices) and indices.min() >= 0 and indices.max() < len(body.faces):
+            owner[indices] = number
+    pairs = np.asarray(body.face_adjacency, dtype=np.int64)
+    first, second = owner[pairs[:, 0]], owner[pairs[:, 1]]
+    cut = {names.index(identifier) for identifier in partial}
+    touching: set[FeatureId] = set()
+    across = (first != second) & (first >= 0) & (second >= 0)
+    for one, other in zip(first[across].tolist(), second[across].tolist(), strict=True):
+        if one in cut or other in cut:
+            touching.add(names[one])
+            touching.add(names[other])
+    return touching
 
 
 def _shoulder_connections(

@@ -1484,8 +1484,16 @@ def test_a_hollow_corner_is_a_throat_and_an_outer_one_is_not() -> None:
     ]
 
     throats = [entry for entry in fillets if entry.params["recess"]]
-    assert len(throats) == 2, f"das L hat eine einspringende Ecke: {len(fillets)} Ausschnitte"
-    assert len(fillets) - len(throats) == 26
+    assert len(throats) == 2, f"das T hat zwei einspringende Ecken: {len(fillets)} Ausschnitte"
+    # Der Umriss hat acht Ecken, also acht Kanten längs y und je acht auf den
+    # beiden Stirnflächen: 24 Kanten, davon zwei Kehlen. Bis zur
+    # Nahtzusammenführung (P1.5) zählte der Kern 26: Die Vereinigung schnitt
+    # die Bodenfläche in drei Stücke, und die Verrundung ihrer beiden langen
+    # Kanten kam als je drei kollineare Viertelmäntel — ein Mantel von 34 mm.
+    assert len(fillets) - len(throats) == 22
+    long_ones = [entry for entry in fillets if entry.params["length"] == pytest.approx(34.0)]
+    assert len(long_ones) == 2, sorted(entry.params["length"] for entry in fillets)
+    assert not any(entry.params.get("radial") for entry in long_ones)
 
 
 def test_the_planar_faces_come_with_their_area() -> None:
