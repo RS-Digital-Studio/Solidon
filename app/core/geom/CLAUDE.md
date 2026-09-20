@@ -621,8 +621,14 @@ Mitte eines Stopfens aus Zahlen kommen aus `prepare.sink_placement` und
 dieselbe Antwort —, der Kegel trägt seinen Durchmesser exakt an der Mündung
 und geht um `FEATURE_OVERLAP` mit derselben Flanke darüber hinaus, der
 Stopfen am Merkmal ist `_exact_cavity_filled`, der aus Zahlen wird an
-`edit.convex_hull` beschnitten wie am Netz an `shell`. Einschlüsse gehen am
-exakten Körper noch den Netzweg mit `evaluate.exact_became_mesh`; sie folgen.
+`edit.convex_hull` beschnitten wie am Netz an `shell`. **Und der Einschluss**
+ist ein Hohlraum ohne Rand: Sein Körper sind seine Schalen
+(`edit.void_body` — die Innenschale ohne die Inseln darin), gefüllt beim
+Entfernen, gefüllt und um die Insel herum neu geschnitten beim Versetzen.
+Damit bleibt am exakten Körper keine Merkmalshandlung mehr, die vernetzt;
+`evaluate.exact_became_mesh` ist der Befund für die Operationen, die es
+noch tun (Netzwerkzeuge wie Glätten und Dezimieren, siehe die
+Paritätstabelle).
 
 **`slot_hole` und `resize_hole` nehmen dabei eine Stelle entgegen** (`x/y/z`,
 **leer** heißt „lass es, wo es ist" — `_named_place` beantwortet das für beide,

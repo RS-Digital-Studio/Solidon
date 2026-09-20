@@ -489,7 +489,10 @@ halbe Öffnungswinkel), und
 Werkzeug, mit dem `geom/prepare_ops` einen Kegel kippt und eine Senkung
 schneidet. `convex_hull` näht die Hülle des Netz-Zwillings zu einem exakten
 Vielflächner — der exakte Kern hat keine eigene —, an dem ein Stopfen aus
-Zahlen beschnitten wird, wie am Netz an `prepare.shell`.
+Zahlen beschnitten wird, wie am Netz an `prepare.shell`. `void_body` macht
+aus den ganz gewählten Schalen eines Einschlusses seine Luft — die größte
+Schale als Körper ohne die Inseln, dieselbe Bauart wie in
+`features._void_features`.
 
 ## Eine Rundung wegnehmen heißt, ihre Fläche zu streichen
 

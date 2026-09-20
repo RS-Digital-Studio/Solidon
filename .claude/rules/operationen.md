@@ -828,9 +828,9 @@ und Materialseite am Netz gestellt wird, stellt sie derselbe Helfer für
 beide Kerne (`prepare.sink_placement`, `prepare.plug_placement`). Wer eine
 Merkmalshandlung baut, die einen exakten Körper
 vernetzt, tut es nur, wo der Kern die Form nicht hergibt, und der Befund
-`evaluate.exact_became_mesh` sagt es; heute ist das der Einschluss, und der
-steht im Register. Zapfen, Kuppe und Kegelstumpf — und eine Senkung oder
-Pfanne, die allein steht — gehen aus ihren nativen Flächen
+`evaluate.exact_became_mesh` sagt es; seit dem Einschluss (`edit.void_body`)
+tut das keine Merkmalshandlung mehr. Zapfen, Kuppe und Kegelstumpf — und eine
+Senkung oder Pfanne, die allein steht — gehen aus ihren nativen Flächen
 (`brep.edit.solid_from_faces`); gekippt reichen Zapfen und Kegelstumpf in die
 Grundfläche hinein und die Senkung ins Freie, so weit die Neigung verlangt
 (`_reach_past_a_tilted_face`, `_cone_past_a_tilted_face`). Eine Kette aus Bohrung und Senkung

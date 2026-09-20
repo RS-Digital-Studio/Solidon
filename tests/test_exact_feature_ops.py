@@ -923,3 +923,89 @@ def test_plugging_an_exact_bore_by_numbers_keeps_the_body_exact(profile: Profile
     assert left.params["through"] is False
     assert left.params["depth"] == pytest.approx(6.0, abs=1e-9)
     assert left.params["centre"] == pytest.approx((0.0, 0.0, 3.0), abs=1e-9)
+
+
+# --- Der Einschluss: Luft ohne Rand ------------------------------------------------------
+
+
+def _pocketed_block(*, island: bool) -> SceneObject:
+    """Block 40 × 30 × 20 mit Ø 6 × 8 Luft in der Mitte, auf Wunsch mit Kugel R 1 darin.
+
+    Derselbe Aufbau wie in ``test_brep_voids.py``: Die Kugel ist eine
+    Materialinsel im Einschluss — ein zweiter Körper im selben Verbund.
+    """
+    from OCP.BRep import BRep_Builder
+    from OCP.BRepPrimAPI import (
+        BRepPrimAPI_MakeBox,
+        BRepPrimAPI_MakeCylinder,
+        BRepPrimAPI_MakeSphere,
+    )
+    from OCP.gp import gp_Ax2, gp_Dir, gp_Pnt
+    from OCP.TopoDS import TopoDS_Compound
+
+    from app.core.brep.features import features_of
+    from app.core.brep.kernel import Solid, boolean_builder
+
+    _kernel()
+    stock = BRepPrimAPI_MakeBox(gp_Pnt(-20, -15, 0), 40, 30, 20).Shape()
+    tool = BRepPrimAPI_MakeCylinder(gp_Ax2(gp_Pnt(0, 0, 6), gp_Dir(0, 0, 1)), 3, 8)
+    builder = boolean_builder("difference", stock, tool.Shape())
+    builder.Build()
+    hollow = builder.Shape()
+    if island:
+        compound = TopoDS_Compound()
+        maker = BRep_Builder()
+        maker.MakeCompound(compound)
+        maker.Add(compound, hollow)
+        maker.Add(compound, BRepPrimAPI_MakeSphere(gp_Pnt(0, 0, 10), 1).Shape())
+        hollow = compound
+    body = Solid(hollow)
+    return SceneObject(id="obj_1", name="Block", mesh=body, kind="brep", features=features_of(body))
+
+
+AIR_VOLUME = math.pi * 9.0 * 8.0
+ISLAND_VOLUME = 4.0 / 3.0 * math.pi
+
+
+@pytest.mark.parametrize("island", [False, True], ids=["leer", "mit_insel"])
+def test_filling_a_void_keeps_the_body_exact(profile: Profile, island: bool) -> None:
+    """Entfernen füllt den Einschluss aus seinen Schalen — die Insel geht im Material auf."""
+    load_operations()
+    source = _pocketed_block(island=island)
+    air = _the_one(source, "void")
+    expected_air = AIR_VOLUME - (ISLAND_VOLUME if island else 0.0)
+    assert air.params["volume"] == pytest.approx(expected_air, rel=1e-9)
+
+    result = run("remove_feature", source, profile, at_feature=air.id)
+
+    output = result.outputs[0]
+    solid: Any = output.mesh
+    assert output.kind == "brep" and solid.is_closed and solid.solid_count == 1
+    assert not any(finding.converts_exact_body for finding in result.findings)
+    assert solid.volume == pytest.approx(24000.0, rel=1e-9)
+    assert solid.face_count == 6, "ein voller Block hat sechs Flächen"
+    assert not [f for f in output.features.values() if f.kind == "void"]
+    assert air.id in output.reserved_feature_ids
+
+
+@pytest.mark.parametrize("island", [False, True], ids=["leer", "mit_insel"])
+def test_moving_a_void_keeps_the_body_exact_and_takes_the_island_along(
+    profile: Profile, island: bool
+) -> None:
+    """Versetzen füllt die alte Luft und schneidet sie neu — um die Insel herum."""
+    load_operations()
+    source = _pocketed_block(island=island)
+    air = _the_one(source, "void")
+    assert air.params["centre"] == pytest.approx((0.0, 0.0, 10.0), abs=1e-9)
+
+    result = run("move_feature", source, profile, at_feature=air.id, x=8.0, y=0.0, z=10.0)
+
+    output = _exact_and_proven(result, source, air.id)
+    solid: Any = output.mesh
+    assert solid.volume == pytest.approx(source.mesh.volume, rel=1e-9)
+    assert solid.solid_count == (2 if island else 1), "die Insel reist mit und bleibt ein Körper"
+    moved = _the_one(output, "void")
+    assert moved.id == air.id
+    assert moved.params["centre"] == pytest.approx((8.0, 0.0, 10.0), abs=1e-9)
+    assert moved.params["volume"] == pytest.approx(air.params["volume"], rel=1e-9)
+    assert _round_trip_volume(solid) == pytest.approx(solid.volume, rel=1e-9)

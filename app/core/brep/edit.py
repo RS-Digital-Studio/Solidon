@@ -1126,6 +1126,61 @@ def _oriented_cone(
     return Solid(BRepPrimAPI_MakeCone(frame, base_radius, top_radius, height).Shape())
 
 
+def void_body(solid: Solid, face_indices: Sequence[int]) -> Solid | None:
+    """Die Luft eines Einschlusses als exakter Körper — aus seinen Schalen, ohne die Inseln.
+
+    Ein Einschluss hat keinen Randring: Seine Flächen sind ganze Schalen des
+    Körpers — die Innenschale, die ihn begrenzt, und die Außenschalen der
+    Materialinseln darin. Jede vollständig gewählte Schale wird als private
+    Kopie zum Körper geschlossen (dieselbe Bauart wie in
+    ``features._void_features``); die Luft ist die größte davon ohne die
+    übrigen, so wie die Erkennung ihr Volumen nennt. Beim Versetzen nimmt
+    dieser Körper die Insel mit: Geschnitten wird die Luft **um** sie herum.
+    ``None``, wenn keine Schale ganz gewählt ist oder eine nicht schließt.
+    """
+    require()
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_Copy, BRepBuilderAPI_MakeSolid
+    from OCP.BRepCheck import BRepCheck_Analyzer
+    from OCP.BRepLib import BRepLib
+    from OCP.collections import IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher as ShapeMap
+    from OCP.TopAbs import TopAbs_FACE, TopAbs_SHELL
+    from OCP.TopExp import TopExp, TopExp_Explorer
+    from OCP.TopoDS import TopoDS
+
+    faces = solid.faces()
+    chosen = {int(index) for index in face_indices}
+    if not chosen or min(chosen) < 0 or max(chosen) >= len(faces):
+        return None
+    numbered = ShapeMap()
+    for face in faces:
+        numbered.Add(face)
+    bodies: list[Solid] = []
+    shells = TopExp_Explorer(solid.shape, TopAbs_SHELL)
+    while shells.More():
+        shell = TopoDS.Shell(shells.Current())
+        shells.Next()
+        members = ShapeMap()
+        TopExp.MapShapes_s(shell, TopAbs_FACE, members)
+        owned = {numbered.FindIndex(members.FindKey(i)) - 1 for i in range(1, members.Extent() + 1)}
+        if not owned or not owned <= chosen:
+            continue
+        copied = BRepBuilderAPI_Copy(shell, True, False).Shape()
+        maker = BRepBuilderAPI_MakeSolid(TopoDS.Shell(copied))
+        if not maker.IsDone():
+            return None
+        body = maker.Solid()
+        if not BRepLib.OrientClosedSolid_s(body) or not BRepCheck_Analyzer(body).IsValid():
+            return None
+        bodies.append(Solid(body))
+    if not bodies:
+        return None
+    bodies.sort(key=lambda body: body.volume, reverse=True)
+    air = bodies[0]
+    if len(bodies) > 1:
+        air = boolean("difference", [air, *bodies[1:]])
+    return air if air.volume > EPS_GEOM else None
+
+
 def convex_hull(solid: Solid) -> Solid:
     """Die konvexe Hülle des Körpers als exakter Vielflächner — zum Beschneiden eines Stopfens.
 

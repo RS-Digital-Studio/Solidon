@@ -423,14 +423,17 @@ def test_imported_void_actions_preserve_their_published_meaning(
     )
     changed = run(project, cache)
     output = changed.scene.objects[source.id]
-    assert output.kind == "mesh"
-    assert any(finding.converts_exact_body for finding in changed.scene.report.findings)
-    assert output.mesh.is_watertight
+    assert output.kind == "brep", "der Einschluss bleibt am exakten Körper exakt (P2.4)"
+    assert not any(finding.converts_exact_body for finding in changed.scene.report.findings)
+    assert output.mesh.is_closed
     if operation == "move_feature":
-        assert output.mesh.volume == pytest.approx(source.mesh.to_mesh().volume, abs=1e-5)
+        assert output.mesh.volume == pytest.approx(source.mesh.volume, rel=1e-9)
         assert output.features[air.id].params["centre"] == pytest.approx((8, 0, 10), abs=1e-6)
+        assert output.features[air.id].params["volume"] == pytest.approx(
+            air.params["volume"], rel=1e-9
+        )
     else:
-        assert output.mesh.volume == pytest.approx(24000.0, abs=1e-5)
+        assert output.mesh.volume == pytest.approx(24000.0, rel=1e-9)
         assert not [feature for feature in output.features.values() if feature.kind == "void"]
     assert _bytes(source.mesh.shape) == before
     reopened = load(save(project, tmp_path / "air.solidon"))

@@ -7088,8 +7088,10 @@ def _exact_remove_section(
 #: Pfanne als Hohlraum — was von beiden, sagt die Erkennung in ``recess``.
 #: Gekippt werden Zapfen und Kegel (``_exact_rotate_pin``, ``_exact_rotate_cone``):
 #: Der Körper reicht dabei in die Grundfläche hinein — die Senkung ins Freie —,
-#: statt neben ihr zu schweben. Die Kugel hat keine Lage.
-EXACT_FACE_KINDS: Final = ("pin", "cone", "sphere")
+#: statt neben ihr zu schweben. Die Kugel hat keine Lage. Der Einschluss ist
+#: immer Luft und hat keinen Rand: Sein Körper sind seine Schalen
+#: (``brep.edit.void_body``), versetzt und gefüllt wie jeder Hohlraum.
+EXACT_FACE_KINDS: Final = ("pin", "cone", "sphere", "void")
 
 
 def _exact_body_from_faces(source: SceneObject, feature: Feature) -> Any:
@@ -7098,13 +7100,21 @@ def _exact_body_from_faces(source: SceneObject, feature: Feature) -> Any:
     Das exakte Gegenstück zu ``_body_from_faces``: ein Zapfen, eine Kuppe, ein
     Kegelstumpf — oder eine Senkung und eine Pfanne, die allein stehen. Bei
     einem Hohlraum ist der zweite Ring sein Boden; steht er nicht allein,
-    kommt diese Funktion nicht vor (die Kette geht ihren eigenen Weg).
+    kommt diese Funktion nicht vor (die Kette geht ihren eigenen Weg). Ein
+    Einschluss hat keinen Rand: Seine Schalen sind sein Körper
+    (``edit.void_body``), die Inseln darin ausgenommen.
     """
     from app.core.brep import edit
 
     solid = _exact_body(source)
     native = solid.faces_of_triangles(feature.face_indices) if feature.face_indices else ()
-    body = edit.solid_from_faces(solid, native, allowed_rings=(1, 2)) if native else None
+    body = None
+    if native:
+        body = (
+            edit.void_body(solid, native)
+            if feature.kind == "void"
+            else edit.solid_from_faces(solid, native, allowed_rings=(1, 2))
+        )
     if body is None:
         raise ValidationError(
             field="at_feature",
