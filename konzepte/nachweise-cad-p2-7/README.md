@@ -214,13 +214,16 @@ stehen in §7.
    und spitzem Kamm (ISO-nah); `shapes.thread_body` baut 0,55 p tief, 0,8 p
    Fuß, Kamm flach zwischen 0,25 p und 0,55 p. M6 x 12: Kern Ø 4,773 gegen
    4,900, Volumen 253,4 gegen 285,1 mm³ (×1,125). **Beides ist exakt
-   baubar** (S3). Die Wahl entscheidet, ob alte Netzprojekte und neue exakte
-   Bausteine dasselbe Gewinde tragen (Zusammenschraubbarkeit über die
-   Bibliotheksversion) — sie gehört zu Robert, nicht in eine Toleranz.
-   Empfehlung: das Netzprofil exakt nachbauen (Prototyp
-   `thread_ridge_exact`), `threaded_rod` als Erzeuger *Gewindebolzen*
-   unverändert lassen; sonst ändert P2.7 ein Maß und verlangt
-   `LIBRARY_VERSION` + Änderungsverlauf (§24.4).
+   baubar** (S3). Welches gilt, legt das Konzept fest: Bei P2.7 bleiben
+   Bausteinversionierung, Bereichsprüfung und Normteilmaße verbindlich
+   (§13.2), gespeicherte Schritte bleiben reproduzierbar ohne Umrechnen
+   alter Projekte (§13.1), und die Parität meint dieselbe fachliche
+   Bedeutung mit erkennbarer Näherung (§1). Das Bausteingewinde behält also
+   sein Maß — der exakte Weg baut das Gangprofil des Netzwegs (Prototyp
+   `thread_ridge_exact`); `threaded_rod` bleibt der Erzeuger *Gewindebolzen*
+   mit seinem eigenen Vertrag. Ein Wechsel auf dessen Profil wäre eine
+   Maßänderung mit `LIBRARY_VERSION` und Änderungsverlauf (§24.4) und ist
+   kein Ziel von P2.7.
 2. **Facettenkorrektur der Wand** (`hinge_eye`: `wall / inscribed_ratio`,
    `cable_clip`: `wall / cos(π/48)` + Float32-Reserve). Sie gleicht die
    Apothem-Verkürzung des 48-Ecks aus und macht den Netz-Außendurchmesser
@@ -271,15 +274,19 @@ Baustein entscheidet nach `SceneObject.kind` — dasselbe Muster wie
 Operation). Ein exakter Träger bekommt einen exakten Baustein; ein Netz
 behält den heutigen Weg.
 
-**Zwei Bauarten für die Bausteinfunktionen** (Architekturentscheidung,
-Robert fragen):
+**Zwei denkbare Bauarten für die Bausteinfunktionen** — die Regel
+entscheidet: Ein Zwilling entsteht dort, wo der Zweig ohne ihn endet, nicht
+dort, wo er möglich wäre (`zwillinge.md`), und P2.7 verbindet vorhandene
+Algorithmen mit eigener fachlicher Operationsfolge statt einen zweiten Kern
+zu bauen (§13.8). Der Zweig endet ohne zweite Funktion nicht: Jede Form ist
+als Beschreibung ausdrückbar (§4).
 
 | | A · zweite Funktion je Baustein | B · eine Formbeschreibung, zwei Auswerter |
 |---|---|---|
 | Idee | `PartSpec.fn_exact` liefert `PartResult` mit `Solid` (erfüllt das `Mesh`-Protokoll) | `shapes` beschreibt Formen (cylinder, box, hexagon, slot, wedge, cone, revolve, extrude, offset, capsule, union, subtract, moved, turned); `build` wertet je Bauart als `MeshData` oder `Solid` aus |
 | Aufwand | 35 zweite Funktionen; sieben Bausteine bauen heute direkt mit trimesh/Manifold (`snap_fit`, `dowel` dovetail, `foot`, `organizer_*`, `profile_clamp_*`, `seal_*`, `overhang_fan`) | einmalige Umstellung von `shapes.py`/`build.py`; die sieben direkten Bauer werden auf die Beschreibung gezogen |
 | Risiko | zwei Quellen je Maß — laufen auseinander (Regel aus `bausteine.md`) | Formbeschreibung muss Profile (Bögen) und Konturversatz tragen; Bereichstest läuft je Bauart |
-| Empfehlung | — | **B.** Ein Baustein, ein Merkmalvertrag, ein Bereichstest; die Sonden hier sind faktisch der exakte Auswerter für jede vorkommende Form |
+| Folge aus Regel und Konzept | ausgeschlossen: gewollter Zwilling ohne Not | **B.** Ein Baustein, ein Merkmalvertrag, ein Bereichstest; die Sonden hier sind faktisch der exakte Auswerter für jede vorkommende Form |
 
 **Dateien, die die Integration anfasst** (Lesebefund; nichts davon ist hier geändert):
 
