@@ -195,6 +195,18 @@ Merkmalsart gilt — **abgeleitet aus `applies_to` im Register**, nicht als
 Liste daneben. Eine zweite Tabelle wüsste beim nächsten Registereintrag die
 Hälfte.
 
+`bore_action` bietet nach bestätigter Zuordnung durch `scene.placement.bore_step_of`
+die ursprünglichen Bohrungsschrittwerte an, ausdrücklich beschriftet als Werte
+vor späteren Größen- und Lageänderungen. Durchmesser und Tiefe stehen vorn;
+weitere Felder folgen dem vorhandenen Schema. Die Feldaufbereitung teilt sich
+`_saved_fields` mit den Bausteinhandlungen. Verborgene gespeicherte Werte bleiben
+im festen Auftrag erhalten; eine Transformation wird nicht in Schrittmaße
+zurückgerechnet. Die Handlung ändert über `step` den vorhandenen Verlaufsschritt.
+Auch Parameterausdrücke bleiben ursprüngliche Eingaben. Die eindeutige
+Erzeugerübernahme liegt gemeinsam in `matching.inherit_originators`: Der
+Netzweg ruft sie in `apply_mapping`, die native Auswertung ohne Umbenennung
+der Topologiekennungen auf.
+
 Zwei Entscheidungen darin sind Absicht und keine Bequemlichkeit:
 
 - **Was nicht gilt, steht trotzdem in der Liste**, mit `op=None` und einem

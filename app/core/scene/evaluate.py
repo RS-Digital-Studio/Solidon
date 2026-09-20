@@ -50,8 +50,10 @@ from app.core.perceive.local import FEATURE_LIMIT_TRIANGLES as FEATURE_LIMIT_TRI
 from app.core.perceive.local import rigid_transform
 from app.core.perceive.matching import (
     FeatureTransform,
+    MatchResult,
     apply_mapping,
     fingerprint,
+    inherit_originators,
     match,
     moved_features,
     question_for,
@@ -1271,6 +1273,24 @@ def _with_feature_reservations(
     return dataclasses.replace(entry, features=features, reserved_feature_ids=tuple(sorted(taken)))
 
 
+def _feature_originators(
+    features: Mapping[FeatureId, Feature],
+    matched: MatchResult,
+    operation: Operation,
+    touches_features: bool,
+    knew_features: bool,
+) -> dict[FeatureId, Feature]:
+    """Nur wirklich neue Merkmale tragen den aktuellen Schritt als Erzeuger."""
+    contested = {name for names in matched.ambiguous.values() for name in names}
+    newcomers = set(matched.fresh) - contested if touches_features and knew_features else set()
+    result = {}
+    for name, feature in features.items():
+        if feature.created_by is None and name in newcomers:
+            feature = dataclasses.replace(feature, created_by=operation.id)
+        result[name] = feature
+    return result
+
+
 def _with_features(
     entry: SceneObject,
     previous: dict[str, Any],
@@ -1325,7 +1345,31 @@ def _with_features(
         # könnte — seine Merkmale kommen aus der Topologie und werden dort
         # gerechnet, wo er entsteht. Bewegt wurde er hier trotzdem
         # (siehe :func:`_carried_along`).
-        return _carried_along(entry, previous, transform, previous_bounds)
+        exact_entry = _carried_along(entry, previous, transform, previous_bounds)
+        if (
+            touches_features
+            and previous
+            and max(len(previous), len(exact_entry.features)) <= FEATURE_LIMIT_COUNT
+        ):
+            # Die native Erkennung benennt frisch. Gleiche Namen beweisen
+            # deshalb keinen Vorfahren; es gilt dieselbe eindeutige Zuordnung
+            # wie am Netz. Reine Transformationen tragen ihre Herkunft schon.
+            watch.raise_if_cancelled()
+            matched = match(
+                previous, exact_entry.features, mesh.bounds.centre, mesh.bounds.diagonal
+            )
+            watch.raise_if_cancelled()
+            exact_entry = dataclasses.replace(
+                exact_entry,
+                features=_feature_originators(
+                    inherit_originators(exact_entry.features, matched, previous),
+                    matched,
+                    operation,
+                    touches_features,
+                    True,
+                ),
+            )
+        return exact_entry
     local_only = mesh.triangle_count > FEATURE_LIMIT_TRIANGLES
     if local_only:
         from app.core.perceive.local import detect_known
@@ -1865,17 +1909,7 @@ def _with_features(
     # zu beantworten. Die Kandidaten müssen trotzdem eigens heraus: Bei einer
     # Mehrdeutigkeit bindet die Zuordnung keinen von ihnen, und damit stehen
     # sie alle in ``fresh``.
-    if touches_features and knew_features:
-        contested = {name for names in matched.ambiguous.values() for name in names}
-        newcomers = set(matched.fresh) - contested
-        detected = {
-            name: (
-                dataclasses.replace(feature, created_by=operation.id)
-                if name in newcomers and feature.created_by is None
-                else feature
-            )
-            for name, feature in detected.items()
-        }
+    detected = _feature_originators(detected, matched, operation, touches_features, knew_features)
 
     mapped = apply_mapping(detected, matched, previous=previous)
     # Ein Bezeichner, der von einem erzeugten Merkmal kommt, bleibt erzeugt.

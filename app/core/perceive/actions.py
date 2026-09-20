@@ -947,6 +947,62 @@ def texture_actions(operation: Any, spec: Any) -> list[FeatureAction]:
     ]
 
 
+def _saved_fields(
+    schema: Mapping[str, Any], values: Mapping[str, Any], names: tuple[str, ...]
+) -> tuple[ActionField, ...]:
+    """Felder aus gespeicherten Schrittwerten und derselben Schemaauskunft aufbereiten."""
+    return tuple(
+        ActionField(
+            name=name,
+            label=entry.title,
+            unit=entry.unit,
+            value=values.get(name, entry.default),
+            kind=_kind_of(entry),
+            minimum=entry.minimum,
+            maximum=entry.maximum,
+            choices=tuple((choice, choice) for choice in (entry.choices or ())),
+        )
+        for name in names
+        if (entry := schema.get(name)) is not None
+    )
+
+
+def bore_action(operation: Any, spec: Any) -> FeatureAction:
+    """Den von ``bore_step_of`` belegten Bohrungsschritt mit seinen Originalwerten anbieten.
+
+    Die Herkunftsprüfung liegt beim Aufrufer. Diese Handlung misst keine
+    Weltmaße zurück: Auch nach einer Transformation gelten die gespeicherten
+    Schrittwerte, einschließlich Tiefe null für die durchgehende Bohrung.
+    Nicht angezeigte Werte bleiben unverändert im ursprünglichen Auftrag.
+    """
+    schema = {entry.name: entry for entry in spec.params.spec()}
+    values = dict(operation.params)
+    names = (
+        "diameter",
+        "depth",
+        *(
+            name
+            for name, entry in schema.items()
+            if entry.placement == "front"
+            and name not in {"diameter", "depth"}
+            and entry.kind not in COLLECTED_KINDS
+        ),
+    )
+    fields = _saved_fields(schema, values, names)
+    shown = {entry.name for entry in fields}
+    return FeatureAction(
+        title=_("Bohrung im ursprünglichen Schritt ändern"),
+        op=spec.name,
+        step=operation.id,
+        note=_(
+            "Zeigt die ursprünglichen Schrittwerte vor späteren Größen- und Lageänderungen. "
+            "Tiefe 0 bohrt durch das ganze Teil."
+        ),
+        fields=fields,
+        fixed=tuple((name, value) for name, value in values.items() if name not in shown),
+    )
+
+
 def part_actions(operation: Any, spec: Any) -> list[FeatureAction]:
     """Die Handlungen eines Bausteins — an seinem Schritt, nicht an einer Fläche.
 
@@ -986,27 +1042,6 @@ def part_actions(operation: Any, spec: Any) -> list[FeatureAction]:
     schema = {entry.name: entry for entry in spec.params.spec()}
     values = dict(getattr(operation, "params", {}) or {})
 
-    def taken(names: tuple[str, ...]) -> tuple[ActionField, ...]:
-        fields: list[ActionField] = []
-        for name in names:
-            entry = schema.get(name)
-            if entry is None:
-                continue
-            value = values.get(name, entry.default)
-            fields.append(
-                ActionField(
-                    name=name,
-                    label=entry.title,
-                    unit=entry.unit,
-                    value=value,
-                    kind=_kind_of(entry),
-                    minimum=entry.minimum,
-                    maximum=entry.maximum,
-                    choices=tuple((choice, choice) for choice in (entry.choices or ())),
-                )
-            )
-        return tuple(fields)
-
     # **Ein Sammelparameter bekommt hier kein Feld.** Eine Fachaufteilung ist
     # ein JSON-Text mit einem eigenen Editor (``kind="organizer"``, ebenso
     # ``sketch`` und ``armature``); ``_kind_of`` kennt ihn nicht und gäbe ihm
@@ -1043,7 +1078,7 @@ def part_actions(operation: Any, spec: Any) -> list[FeatureAction]:
                 op=spec.name,
                 step=operation.id,
                 note=_("Ändert den Schritt, der diesen Baustein gesetzt hat."),
-                fields=taken(measures),
+                fields=_saved_fields(schema, values, measures),
                 elsewhere=tuple(schema[name].title for name in collected),
             )
         )
@@ -1053,7 +1088,7 @@ def part_actions(operation: Any, spec: Any) -> list[FeatureAction]:
                 title=_("Baustein verschieben"),
                 op=spec.name,
                 step=operation.id,
-                fields=taken(placement),
+                fields=_saved_fields(schema, values, placement),
             )
         )
     actions.append(

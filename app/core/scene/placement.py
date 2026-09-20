@@ -25,7 +25,7 @@ in der Datei, und die Operation schlägt es bei jedem Rechnen der Szene nach.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from contextlib import suppress
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, Final
@@ -33,10 +33,23 @@ from typing import TYPE_CHECKING, Any, Final
 import numpy as np
 
 from app.core.errors import CORRECT_INPUT, ValidationError
-from app.core.geom.mesh import MeshData
+from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.log import get_logger
 from app.core.registry import OperationSpec
-from app.core.types import Feature, PlaneFrame, Point2, Profile, SceneObject, Vec3, vec3_or_none
+from app.core.types import (
+    Document,
+    Feature,
+    FeatureRef,
+    ObjectId,
+    Operation,
+    OpId,
+    PlaneFrame,
+    Point2,
+    Profile,
+    SceneObject,
+    Vec3,
+    vec3_or_none,
+)
 from app.core.units import EPS_GEOM, MAX_FACET_SAG, format_length, round_display
 from app.i18n import TranslatableText, tr
 
@@ -103,6 +116,103 @@ HEAD_DIAMETER_OPS: Final[frozenset[str]] = frozenset({"countersink_hole"})
 #: Getrennt von ``HEAD_DIAMETER_OPS``: Dort wäre dasselbe Maß falsch, hier ist
 #: es der einzige sichere Ausgangswert.
 MEASURED_DIAMETER_OPS: Final[frozenset[str]] = frozenset({"resize_hole"})
+
+#: Beide Körperarten teilen DrillParams, Flächenanker und lokalen Werkzeugkörper.
+DRILL_OPERATIONS: Final[frozenset[str]] = frozenset({"drill_hole", "drill_brep_hole"})
+
+
+def bore_step_of(
+    document: Document,
+    objects: Mapping[ObjectId, SceneObject],
+    selected: FeatureRef,
+    *,
+    completed: Collection[OpId],
+) -> Operation | None:
+    """Der belegte ursprüngliche Bohrungsschritt einer einzelnen lebenden Bohrung.
+
+    Die Rückgabe enthält **Schrittwerte**, keine heutigen Weltmaße. Auch nach
+    Verschieben, Drehen oder Skalieren bleiben Position, Durchmesser und Tiefe
+    im ursprünglichen Bezugsraum. Der Aufrufer ändert diesen Schritt über die
+    bestehende historische Vorschau samt vollständiger Folgeauswertung.
+
+    Die sichere Startmenge umfasst die beiden DrillParams-Zwillinge und ihre
+    eindeutige Hohlraumkette. Danach sind nur reine Körpertransformationen,
+    Umbenennung, Kopien und Senken belegt. Eine Kopie ist nur zulässig, wenn
+    allein dieser Nachkomme lebt; mehrere Bohrungen desselben Erzeugers sind
+    keine heimliche Gruppenwahl. Spätere Formänderungen wie resize_hole
+    erhalten zwar gegebenenfalls created_by, belegen aber nicht mehr, dass
+    die ursprünglichen Maße das gewählte Merkmal beschreiben. Sie und
+    unbekannte Folgeschritte auf dem Abstammungsweg liefern deshalb None.
+
+    Es wird kein Verlauf gerechnet und keine räumlich nächste Bohrung gewählt.
+    Der Aufrufer übergibt Dokument und abgeschlossenen Ergebnisstand zusammen.
+    """
+    from app.core.perceive.relations import cavity_chain_state_at
+
+    body = objects.get(selected.object_id)
+    feature = body.features.get(selected.feature_id) if body is not None else None
+    if body is None or feature is None or feature.kind not in {"hole", "cone"}:
+        return None
+    chain, touching = cavity_chain_state_at(feature, body.features, as_mesh_data(body.mesh))
+    if touching and chain is None:
+        return None
+    sections = chain or (feature,)
+    makers = {part.created_by for part in sections if part.kind == "hole"}
+    if len(makers) != 1 or None in makers:
+        return None
+    maker = next(iter(makers))
+    operations = tuple(
+        entry for entry in sorted(document.ops, key=lambda entry: entry.id) if entry.id in completed
+    )
+    candidates = [entry for entry in operations if entry.id == maker]
+    if len(candidates) != 1:
+        return None
+    step = candidates[0]
+    if step.op not in DRILL_OPERATIONS or len(step.inputs) != 1:
+        return None
+    section_ids = {part.id for part in sections}
+    if any(
+        part.created_by == maker
+        and part.kind in {"hole", "cone"}
+        and (entry.id != body.id or part.id not in section_ids)
+        for entry in objects.values()
+        for part in entry.features.values()
+    ):
+        return None
+
+    suffix = operations[operations.index(step) + 1 :]
+    descendants = set(step.outputs)
+    for operation in suffix:
+        if descendants.intersection(operation.inputs):
+            descendants.difference_update(operation.inputs)
+            descendants.update(operation.outputs)
+    if descendants.intersection(objects) != {selected.object_id}:
+        return None
+
+    # Zeitlich rückwärts: Eine Änderung am zurückgebliebenen Original nach
+    # dem Kopieren gehört nicht automatisch zur ausgewählten Kopie.
+    following = {
+        "rename_object",
+        "translate_object",
+        "rotate_object",
+        "scale_object",
+        "mirror_object",
+        "fit_to_size",
+        "place_on_bed",
+        "align_to_feature",
+        "duplicate_object",
+        "pattern",
+        "countersink_hole",
+    }
+    wanted = {selected.object_id}
+    for operation in reversed(suffix):
+        if not wanted.intersection(operation.outputs):
+            continue
+        if operation.op not in following or len(operation.inputs) != 1:
+            return None
+        wanted.difference_update(operation.outputs)
+        wanted.update(operation.inputs)
+    return step if wanted.intersection(step.outputs) else None
 
 
 def screw_for_bore(diameter: float) -> str | None:
@@ -900,6 +1010,80 @@ def prepare_surface(
     return PreparedSurface(frame, planar, indices, tuple(references), tuple(centres), area)
 
 
+def seat_for_bore_step(
+    mesh: MeshData,
+    spec: OperationSpec,
+    resolved_params: Mapping[str, Any],
+    features: Mapping[str, Feature],
+) -> tuple[PreparedSurface, Vec3] | None:
+    """Die belegte ursprüngliche Bohrfläche am Körper vor dem historischen Schritt.
+
+    Die Werte sind bereits aufgelöste Originalparameter. Eine endliche
+    Bohrung braucht ihre tatsächliche Mündungsebene; ein Mittenanker wird
+    dafür um die halbe ursprüngliche Tiefe versetzt. Eine gerade durchgehende
+    Bohrung besitzt dagegen keine gespeicherte Eintrittshöhe: Ihr Achsstrahl
+    muss genau eine zusammenhängende Materialsäule treffen. Mehrere getrennte
+    Abschnitte, keine Fläche oder ein nicht ebener Sitz liefern None.
+
+    Die Rückgabe dient der Anzeige und den Abstandsbezügen. Sie ersetzt weder
+    Originalposition noch Anker im Entwurf, solange niemand die Lage ändert.
+    Es werden kein Merkmal erfunden und keine späteren Weltmaße zurückgerechnet.
+    """
+    from app.core.geom.mesh import ray_hits
+    from app.core.geom.prepare import _into_the_material
+    from app.core.geom.prepare_ops import bore_shape
+    from app.core.registry.params import validate
+
+    if spec.name not in DRILL_OPERATIONS:
+        return None
+    values: Any = validate(spec.params, resolved_params)
+    position = np.asarray((values.x, values.y, values.z), dtype=np.float64)
+    direction = np.asarray((values.nx, values.ny, values.nz), dtype=np.float64)
+    length = float(np.linalg.norm(direction))
+    if length <= EPS_GEOM:
+        direction["xyz".index(values.axis)] = -_into_the_material(mesh, values.axis, _vec(position))
+    else:
+        direction /= length
+    # Ein Ursprung jenseits der Hülle trifft dieselbe Achslinie, ohne dass
+    # ein gespeicherter Nullpunkt als bereits gewählte Oberfläche gilt.
+    reach = float(np.linalg.norm(position - mesh.bounds.centre)) + mesh.bounds.diagonal
+    origin = position + direction * reach
+    distances, indices = ray_hits(np.asarray(mesh.raw.triangles), origin, -direction)
+    if not len(distances):
+        return None
+    shape = bore_shape(values, within=mesh)
+    if values.depth <= EPS_GEOM and not (
+        shape.widening_diameter > EPS_GEOM and values.anchor == "mouth"
+    ):
+        levels: list[float] = []
+        for distance in sorted(distances):
+            if not levels or distance - levels[-1] > EPS_GEOM:
+                levels.append(float(distance))
+        if len(levels) != 2:
+            return None
+        mouth = origin - direction * levels[0]
+    else:
+        offset = values.depth / 2.0 if values.anchor == "centre" else 0.0
+        mouth = position + direction * offset
+    points = origin - distances[:, None] * direction
+    at_mouth = np.linalg.norm(points - mouth, axis=1) <= EPS_GEOM
+    seats: dict[tuple[int, ...], PreparedSurface] = {}
+    for index in indices[at_mouth]:
+        if float(mesh.raw.face_normals[index] @ direction) < _SEAT_PARALLEL:
+            continue
+        try:
+            prepared = prepare_surface(mesh, int(index), features)
+            if not prepared.planar:
+                continue
+            at_point(prepared, _vec(mouth))
+        except ValidationError:
+            continue
+        seats[prepared.face_indices] = prepared
+    if len(seats) != 1:
+        return None
+    return next(iter(seats.values())), _vec(mouth)
+
+
 def seat_of(
     mesh: MeshData, feature: Feature, features: Mapping[str, Feature]
 ) -> tuple[PreparedSurface, Vec3] | None:
@@ -1164,9 +1348,9 @@ def supports_surface_placement(spec: OperationSpec) -> bool:
     from app.core.knowledge.parts.ops import part_of
 
     return (
-        spec.name
+        spec.name in DRILL_OPERATIONS
+        or spec.name
         in {
-            "drill_hole",
             "label_text",
             "create_label",
             "move_feature",
@@ -1260,7 +1444,7 @@ def surface_values(
         zip((placed_fields[name] for name in POSITION), target, strict=True)
     )
     values.update(zip(normal_fields(spec.params), placement.normal, strict=True))
-    if spec.name == "drill_hole":
+    if spec.name in DRILL_OPERATIONS:
         values["anchor"] = "mouth"
     if any(field.name == placed_fields[FEATURE_FIELD] for field in spec.params.spec()):
         values[placed_fields[FEATURE_FIELD]] = (
@@ -1403,7 +1587,7 @@ def _creation_tool(
         from app.core.knowledge.parts.ops import placement_tool as part_tool
 
         return part_tool(part, entered_values, profile)
-    if spec.name == "drill_hole":
+    if spec.name in DRILL_OPERATIONS:
         from app.core.geom.prepare import drill_tool
         from app.core.geom.prepare_ops import bore_shape
 

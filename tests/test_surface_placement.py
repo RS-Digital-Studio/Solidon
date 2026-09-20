@@ -1322,3 +1322,629 @@ def test_a_feature_without_an_axis_gets_no_distances():
     )
 
     assert placement.seat_of(mesh, ohne_achse, found) is None
+
+
+def _bore_history(profile, kind, **values):
+    """Eine echte Bohrung mit ursprünglichem Schritt, nicht nur hingeschriebener Herkunft."""
+    from app.core.scene import History, OperationDraft
+    from app.core.scene.evaluate import evaluate
+    from app.core.scene.project import ProjectSources, new_project
+    from app.core.types import FeatureRef
+
+    load_operations()
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    history.apply(
+        "Körper",
+        [
+            OperationDraft(
+                op="create_brep_box" if kind == "brep" else "create_box",
+                params={"width": 40.0, "depth": 30.0, "height": 20.0},
+            )
+        ],
+    )
+    before = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert before.complete
+    owner, body = next(iter(before.scene.objects.items()))
+    history.apply(
+        "Bohrung",
+        [
+            OperationDraft(
+                op="drill_brep_hole" if kind == "brep" else "drill_hole",
+                inputs=(owner,),
+                params={
+                    "diameter": 6.0,
+                    "depth": 8.0,
+                    "z": body.mesh.bounds.maximum[2],
+                    "anchor": "mouth",
+                    "compensate": False,
+                    **values,
+                },
+            )
+        ],
+    )
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert result.complete
+    step = project.document.ops[-1]
+    holes = [
+        f
+        for f in result.scene.objects[owner].features.values()
+        if f.kind == "hole" and f.created_by == step.id
+    ]
+    assert holes, "die echte Bohrung muss ihre Herkunft tragen"
+    return project, history, result, step, FeatureRef(owner, holes[0].id)
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+@pytest.mark.parametrize(
+    "widening",
+    [
+        {},
+        {"widening_diameter": 10.0, "widening_depth": 2.0, "transition_angle": 180.0},
+        {"widening_diameter": 10.0, "widening_depth": 2.0, "transition_angle": 90.0},
+    ],
+)
+def test_bore_step_uses_the_real_origin_of_every_coupled_section(profile, kind, widening):
+    """Grundbohrung und Aufweitung bearbeiten denselben gespeicherten Bohrungsschritt."""
+    from app.core.types import FeatureRef
+
+    project, _history, result, step, selected = _bore_history(profile, kind, **widening)
+    body = result.scene.objects[selected.object_id]
+    sections = [f for f in body.features.values() if f.kind in {"hole", "cone"}]
+    assert len(sections) >= (2 if widening else 1)
+    for section in sections:
+        found = placement.bore_step_of(
+            project.document,
+            result.scene.objects,
+            FeatureRef(body.id, section.id),
+            completed=result.completed,
+        )
+        assert found is step
+        assert found.params["depth"] == 8.0
+        assert found.params["diameter"] == 6.0
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+def test_bore_step_keeps_original_values_after_transform_and_replays_depth(profile, kind):
+    """Die Schrittwerte bleiben ursprünglich; die Folgeauswertung trägt Tiefe und Undo weiter."""
+    from app.core.scene import OperationDraft
+    from app.core.scene.evaluate import evaluate
+    from app.core.scene.project import ProjectSources
+    from app.core.units import MAX_FACET_SAG
+
+    project, history, result, step, selected = _bore_history(profile, kind)
+    history.apply(
+        "Bewegen und vergrößern",
+        [
+            OperationDraft(
+                op="translate_object", inputs=(selected.object_id,), params={"dx": 25.0}
+            ),
+            OperationDraft(op="scale_object", inputs=(selected.object_id,), params={"factor": 2.0}),
+        ],
+    )
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert result.complete
+    feature = result.scene.objects[selected.object_id].features[selected.feature_id]
+    assert feature.created_by == step.id
+    assert feature.params["diameter"] == pytest.approx(12.0, abs=4 * MAX_FACET_SAG)
+    assert feature.params["depth"] == pytest.approx(16.0)
+    found = placement.bore_step_of(
+        project.document, result.scene.objects, selected, completed=result.completed
+    )
+    assert found is step and found.params["diameter"] == 6.0
+    assert found.params["depth"] == 8.0
+    history.change_params(step.id, {**step.params, "depth": 6.0})
+    changed = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert changed.complete
+    hole = changed.scene.objects[selected.object_id].features[selected.feature_id]
+    assert hole.params["depth"] == pytest.approx(12.0)
+    history.undo()
+    restored = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert restored.scene.objects[selected.object_id].features[selected.feature_id].params[
+        "depth"
+    ] == pytest.approx(16.0)
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+@pytest.mark.parametrize("following", ["duplicate_object", "pattern", "resize_hole"])
+def test_bore_step_declines_copies_and_a_later_bore_replacement(profile, kind, following):
+    """Eine einzige Auswahl darf weder ihre Kopien noch ein überholtes Ausgangsmaß ändern."""
+    from app.core.scene import OperationDraft
+    from app.core.scene.evaluate import evaluate
+    from app.core.scene.project import ProjectSources
+    from app.core.types import FeatureRef
+
+    project, history, result, _step, selected = _bore_history(profile, kind)
+    values = {"count": 2}
+    if following == "pattern":
+        values["spacing"] = 55.0
+    elif following == "resize_hole":
+        values = {"at_feature": selected.feature_id, "diameter": 8.0, "compensate": False}
+    history.apply(
+        "Danach", [OperationDraft(op=following, inputs=(selected.object_id,), params=values)]
+    )
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert result.complete
+    holes = [
+        (body.id, feature)
+        for body in result.scene.objects.values()
+        for feature in body.features.values()
+        if feature.kind == "hole"
+    ]
+    assert len(holes) == (1 if following == "resize_hole" else 2)
+    for owner, feature in holes:
+        assert (
+            placement.bore_step_of(
+                project.document,
+                result.scene.objects,
+                FeatureRef(owner, feature.id),
+                completed=result.completed,
+            )
+            is None
+        )
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+def test_bore_step_keeps_zero_for_a_through_hole_and_requires_a_completed_maker(profile, kind):
+    """Durchgang bleibt ein Schrittwert; ein nicht gerechneter Erzeuger wird nicht angeboten."""
+    project, _history, result, step, selected = _bore_history(profile, kind, depth=0.0)
+    feature = result.scene.objects[selected.object_id].features[selected.feature_id]
+    assert feature.params["depth"] == pytest.approx(20.0)
+    found = placement.bore_step_of(
+        project.document, result.scene.objects, selected, completed=result.completed
+    )
+    assert found is step and found.params["depth"] == 0.0
+    assert (
+        placement.bore_step_of(
+            project.document,
+            result.scene.objects,
+            selected,
+            completed=tuple(n for n in result.completed if n != step.id),
+        )
+        is None
+    )
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+def test_bore_step_declines_an_imported_hole_even_with_another_drill_in_the_document(profile, kind):
+    """STL- und STEP-Erkennung haben keinen Bohrungserzeuger; Namen ersetzen keinen Beleg."""
+    from app.core.brep.step import write
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.scene import OperationDraft
+    from app.core.scene.evaluate import evaluate
+    from app.core.scene.project import ProjectSources
+    from app.core.types import FeatureRef, Source
+
+    project, history, result, _step, selected = _bore_history(profile, kind)
+    body = result.scene.objects[selected.object_id].mesh
+    suffix = "step" if kind == "brep" else "stl"
+    project.document.sources["imported"] = Source(
+        id="imported", kind="import", path=f"sources/bore.{suffix}", sha256=""
+    )
+    project.sources["imported"] = (
+        write(body) if kind == "brep" else as_mesh_data(body).raw.export(file_type="stl")
+    )
+    history.apply(
+        "Import",
+        [
+            OperationDraft(
+                op="load_step" if kind == "brep" else "load",
+                params={"source": "imported", **({} if kind == "brep" else {"unit": "mm"})},
+            )
+        ],
+    )
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert result.complete
+    body = result.scene.objects[project.document.ops[-1].outputs[0]]
+    hole = next(f for f in body.features.values() if f.kind == "hole")
+    assert hole.created_by is None
+    assert (
+        placement.bore_step_of(
+            project.document,
+            result.scene.objects,
+            FeatureRef(body.id, hole.id),
+            completed=result.completed,
+        )
+        is None
+    )
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+def test_bore_step_follows_the_bore_under_a_later_countersink(profile, kind):
+    """Eine nachträgliche Senkung hat keinen eigenen Tiefenwert der Grundbohrung."""
+    from app.core.scene import OperationDraft
+    from app.core.scene.evaluate import evaluate
+    from app.core.scene.project import ProjectSources
+    from app.core.types import FeatureRef
+
+    project, history, _result, step, selected = _bore_history(profile, kind)
+    history.apply(
+        "Senken",
+        [
+            OperationDraft(
+                op="countersink_hole",
+                inputs=(selected.object_id,),
+                params={"diameter": 10.0, "angle": 90.0, "z": 20.0, "anchor": "mouth"},
+            )
+        ],
+    )
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert result.complete
+    body = result.scene.objects[selected.object_id]
+    sections = [f for f in body.features.values() if f.kind in {"hole", "cone"}]
+    assert {f.kind for f in sections} == {"hole", "cone"}
+    for feature in sections:
+        found = placement.bore_step_of(
+            project.document,
+            result.scene.objects,
+            FeatureRef(body.id, feature.id),
+            completed=result.completed,
+        )
+        assert found is step
+        assert found.params["depth"] == 8.0
+
+
+@pytest.mark.parametrize("changed_before_copy", [False, True])
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+def test_bore_step_checks_the_copies_actual_history_not_the_later_original(
+    profile, changed_before_copy, kind
+):
+    """Die einzig lebende Kopie stammt vom damaligen Stand, nicht vom später geänderten Original."""
+    from app.core.scene import OperationDraft
+    from app.core.scene.evaluate import evaluate
+    from app.core.scene.project import ProjectSources
+    from app.core.types import FeatureRef
+
+    project, history, _result, step, selected = _bore_history(profile, kind)
+    change = OperationDraft(
+        op="resize_hole",
+        inputs=(selected.object_id,),
+        params={"at_feature": selected.feature_id, "diameter": 8.0, "compensate": False},
+    )
+    if changed_before_copy:
+        history.apply("Original vorher ändern", [change])
+    history.apply(
+        "Kopieren",
+        [OperationDraft(op="duplicate_object", inputs=(selected.object_id,), params={"count": 2})],
+    )
+    copied = project.document.ops[-1].outputs[-1]
+    if not changed_before_copy:
+        history.apply("Nur das Original ändern", [change])
+    history.apply(
+        "Original entfernen", [OperationDraft(op="delete_object", inputs=(selected.object_id,))]
+    )
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert result.complete and set(result.scene.objects) == {copied}
+    hole = next(f for f in result.scene.objects[copied].features.values() if f.kind == "hole")
+    found = placement.bore_step_of(
+        project.document,
+        result.scene.objects,
+        FeatureRef(copied, hole.id),
+        completed=result.completed,
+    )
+    assert found is (None if changed_before_copy else step)
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+def test_bore_originators_do_not_relabel_existing_holes_when_another_is_drilled(profile, kind):
+    """Neue native Kennungen sind keine Erzeugerkennung; beide echten Bohrungen bleiben getrennt."""
+    from app.core.scene import OperationDraft
+    from app.core.scene.evaluate import evaluate
+    from app.core.scene.project import ProjectSources
+    from app.core.types import FeatureRef
+
+    project, history, _result, first, selected = _bore_history(profile, kind)
+    history.apply(
+        "Weitere Bohrung",
+        [
+            OperationDraft(
+                op=first.op, inputs=(selected.object_id,), params={**first.params, "x": -10.0}
+            )
+        ],
+    )
+    second = project.document.ops[-1]
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert result.complete
+    holes = sorted(
+        (f for f in result.scene.objects[selected.object_id].features.values() if f.kind == "hole"),
+        key=lambda f: f.params["centre"][0],
+    )
+    assert len(holes) == 2
+    assert [f.created_by for f in holes] == [second.id, first.id]
+    # Die zweite Formänderung liegt hinter der ersten: Ohne deren fachlichen
+    # Anschluss wird der alte Tiefeneditor nicht als aktuelle Maßanzeige benutzt.
+    assert (
+        placement.bore_step_of(
+            project.document,
+            result.scene.objects,
+            FeatureRef(selected.object_id, holes[1].id),
+            completed=result.completed,
+        )
+        is None
+    )
+    assert (
+        placement.bore_step_of(
+            project.document,
+            result.scene.objects,
+            FeatureRef(selected.object_id, holes[0].id),
+            completed=result.completed,
+        )
+        is second
+    )
+
+
+def test_bore_originators_leave_ambiguous_native_candidates_unclaimed(profile, monkeypatch):
+    """Auch frische native Flächen mit gleichen Namen sind bei Mehrdeutigkeit kein Erzeugerbeleg."""
+    from importlib import import_module
+
+    from app.core.perceive.matching import MatchResult
+    from app.core.scene import OperationDraft
+    from app.core.scene.evaluate import evaluate
+    from app.core.scene.project import ProjectSources
+
+    project, history, _result, first, selected = _bore_history(profile, "brep")
+    module = import_module("app.core.scene.evaluate")
+    original = module.match
+
+    def contested(old, new, centre, diagonal):
+        holes = tuple(name for name, feature in new.items() if feature.kind == "hole")
+        if len(holes) > 1:
+            old_hole = next(name for name, feature in old.items() if feature.kind == "hole")
+            return MatchResult(ambiguous={old_hole: holes}, fresh=holes)
+        return original(old, new, centre, diagonal)
+
+    monkeypatch.setattr(module, "match", contested)
+    history.apply(
+        "Weitere Bohrung",
+        [
+            OperationDraft(
+                op=first.op, inputs=(selected.object_id,), params={**first.params, "x": -10.0}
+            )
+        ],
+    )
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert result.complete
+    holes = [
+        f for f in result.scene.objects[selected.object_id].features.values() if f.kind == "hole"
+    ]
+    assert len(holes) == 2
+    assert all(f.created_by is None for f in holes)
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+@pytest.mark.parametrize("depth", [0.0, 8.0])
+def test_bore_action_edits_original_values_and_preserves_hidden_params(profile, kind, depth):
+    """Die Tiefenhandlung bearbeitet trotz Skalierung den vollständigen ursprünglichen Auftrag."""
+    from app.core.perceive.actions import bore_action
+    from app.core.registry import REGISTRY
+    from app.core.scene import OperationDraft
+    from app.core.scene.evaluate import evaluate
+    from app.core.scene.project import ProjectSources
+
+    project, history, _result, step, selected = _bore_history(profile, kind, depth=depth)
+    saved = dict(step.params)
+    history.apply(
+        "Vergrößern",
+        [OperationDraft(op="scale_object", inputs=(selected.object_id,), params={"factor": 2.0})],
+    )
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert result.complete
+    original = placement.bore_step_of(
+        project.document, result.scene.objects, selected, completed=result.completed
+    )
+    assert original is step
+    action = bore_action(original, REGISTRY.get(original.op))
+    fields = {field.name: field for field in action.fields}
+    assert action.step == step.id
+    assert action.op == step.op
+    assert "ursprünglichen Schritt" in str(action.title)
+    assert "ursprünglichen Schrittwerte" in str(action.note)
+    assert list(fields)[:2] == ["diameter", "depth"]
+    assert fields["diameter"].value == pytest.approx(6.0)
+    assert fields["depth"].value == pytest.approx(depth)
+    assert fields["depth"].minimum == pytest.approx(0.0)
+    assert fields["slotted"].kind == "bool"
+    assert fields["slot_angle"].kind == "angle"
+    assert not {"x", "y", "z", "nx", "anchor", "compensate"} & fields.keys()
+    proposed = {**dict(action.fixed), **{name: field.value for name, field in fields.items()}}
+    assert all(proposed[name] == value for name, value in saved.items())
+    assert step.params == saved
+    proposed["depth"] = 6.0
+    history.change_params(step.id, proposed)
+    changed = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert changed.complete
+    hole = changed.scene.objects[selected.object_id].features[selected.feature_id]
+    assert hole.params["depth"] == pytest.approx(12.0)
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+def test_bore_action_preserves_expressions_in_the_original_step(profile, kind):
+    """Ein benanntes Tiefenmaß bleibt Ausdruck, auch wenn die Bohrung anderswo gemessen wird."""
+    from app.core.perceive.actions import bore_action
+    from app.core.scene.evaluate import evaluate
+    from app.core.scene.project import ProjectSources
+    from app.core.types import Parameter
+
+    project, history, _result, step, selected = _bore_history(profile, kind)
+    project.document.parameters["bore_depth"] = Parameter("bore_depth", 4.0)
+    history.change_params(step.id, {**step.params, "depth": "@bore_depth * 2"})
+    current = project.document.ops[-1]
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert result.complete
+    assert result.scene.objects[selected.object_id].features[selected.feature_id].params[
+        "depth"
+    ] == pytest.approx(8.0)
+    action = bore_action(current, REGISTRY.get(current.op))
+    assert (
+        next(field.value for field in action.fields if field.name == "depth") == "@bore_depth * 2"
+    )
+    assert current.params["depth"] == "@bore_depth * 2"
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+@pytest.mark.parametrize(
+    "values, mouth, outward",
+    [
+        ({"z": 20.0, "depth": 8.0}, (0.0, 0.0, 20.0), (0.0, 0.0, 1.0)),
+        ({"z": 0.0, "depth": 8.0}, (0.0, 0.0, 0.0), (0.0, 0.0, -1.0)),
+        ({"z": 16.0, "depth": 8.0, "anchor": "centre"}, (0.0, 0.0, 20.0), (0.0, 0.0, 1.0)),
+        ({"z": 0.0, "depth": 0.0}, (0.0, 0.0, 0.0), (0.0, 0.0, -1.0)),
+        ({"z": 10.0, "depth": 0.0}, (0.0, 0.0, 20.0), (0.0, 0.0, 1.0)),
+        ({"z": 35.0, "depth": 0.0}, (0.0, 0.0, 20.0), (0.0, 0.0, 1.0)),
+    ],
+)
+def test_original_bore_seat_uses_the_historical_body_and_anchor(
+    profile, kind, values, mouth, outward
+):
+    """Die wirkliche Bohrung erhält ihre ursprüngliche Fläche ohne erneuten Modellklick."""
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.scene.evaluate import evaluate
+    from app.core.scene.project import ProjectSources
+
+    project, history, _result, step, selected = _bore_history(profile, kind, **values)
+    saved = dict(step.params)
+    history.undo()
+    prefix = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert prefix.complete
+    body = prefix.scene.objects[selected.object_id]
+    assert not any(feature.kind == "hole" for feature in body.features.values())
+    seat = placement.seat_for_bore_step(
+        as_mesh_data(body.mesh), REGISTRY.get(step.op), step.params, body.features
+    )
+    assert seat is not None
+    prepared, point = seat
+    assert point == pytest.approx(mouth)
+    assert prepared.frame.normal == pytest.approx(outward)
+    assert prepared.planar
+    assert sorted(
+        edge.distance for edge in placement.at_point(prepared, point).edges
+    ) == pytest.approx([15.0, 20.0])
+    assert step.params == saved
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+def test_original_bore_seat_follows_a_rotated_prefix_face(profile, kind):
+    """Die ursprüngliche freie Bohrrichtung trifft die gedrehte Fläche desselben Eingangs."""
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.scene import OperationDraft
+    from app.core.scene.evaluate import evaluate
+    from app.core.scene.project import ProjectSources
+
+    project, history, _result, step, selected = _bore_history(profile, kind)
+    history.undo()
+    history.apply(
+        "Kippen",
+        [
+            OperationDraft(
+                op="rotate_object",
+                inputs=(selected.object_id,),
+                params={"axis": "x", "angle": 30.0, "about": "origin", "keep_on_bed": False},
+            )
+        ],
+    )
+    prefix = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert prefix.complete
+    body = prefix.scene.objects[selected.object_id]
+    outward = (0.0, -0.5, math.sqrt(3.0) / 2.0)
+    mouth = (0.0, -10.0, 10.0 * math.sqrt(3.0))
+    params = {**step.params, **dict(zip(("x", "y", "z"), mouth, strict=True))}
+    params.update(zip(("nx", "ny", "nz"), outward, strict=True))
+    history.apply("Bohrung", [OperationDraft(op=step.op, inputs=(body.id,), params=params)])
+    drilled = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert drilled.complete
+    assert any(f.kind == "hole" for f in drilled.scene.objects[body.id].features.values())
+    seat = placement.seat_for_bore_step(
+        as_mesh_data(body.mesh), REGISTRY.get(step.op), params, body.features
+    )
+    assert seat is not None
+    prepared, point = seat
+    assert point == pytest.approx(mouth)
+    assert prepared.frame.normal == pytest.approx(outward)
+    assert sorted(
+        edge.distance for edge in placement.at_point(prepared, point).edges
+    ) == pytest.approx([15.0, 20.0])
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+def test_original_bore_seat_declines_no_hit_and_separate_material_columns(profile, kind):
+    """Ein leerer Achsstrahl oder zwei getrennte Eintrittsflächen erzeugen keinen geratenen Sitz."""
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.scene.evaluate import evaluate
+    from app.core.scene.project import ProjectSources
+
+    project, history, _result, step, selected = _bore_history(profile, kind)
+    history.undo()
+    prefix = evaluate(project.document, profile, sources=ProjectSources(project))
+    body = prefix.scene.objects[selected.object_id]
+    mesh = as_mesh_data(body.mesh)
+    spec = REGISTRY.get(step.op)
+    assert (
+        placement.seat_for_bore_step(mesh, spec, {**step.params, "x": 100.0}, body.features) is None
+    )
+    assert (
+        placement.seat_for_bore_step(mesh, spec, {**step.params, "z": 25.0}, body.features) is None
+    )
+    other = mesh.raw.copy()
+    other.apply_translation((0.0, 0.0, 40.0))
+    disconnected = MeshData.of(trimesh.util.concatenate([mesh.raw, other]))
+    assert (
+        placement.seat_for_bore_step(disconnected, spec, {**step.params, "depth": 0.0}, {}) is None
+    )
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+@pytest.mark.parametrize("depth", [0.0, 8.0])
+@pytest.mark.parametrize("shape", ["round", "widened", "slotted"])
+def test_bore_twins_share_surface_values_tool_and_actual_cut(profile, kind, depth, shape):
+    """Beide Bohrwege nehmen dieselbe Fläche und denselben Werkzeugumriss bis zum echten Schnitt."""
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.scene import OperationDraft
+    from app.core.scene.evaluate import evaluate
+    from app.core.scene.project import ProjectSources
+
+    project, history, _result, step, selected = _bore_history(profile, kind)
+    history.undo()
+    prefix = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert prefix.complete
+    body = prefix.scene.objects[selected.object_id]
+    mesh = as_mesh_data(body.mesh)
+    spec = REGISTRY.get(step.op)
+    assert placement.supports_surface_placement(spec)
+    seat = placement.seat_for_bore_step(mesh, spec, step.params, body.features)
+    assert seat is not None
+    prepared, mouth = seat
+    hit = placement.at_point(prepared, mouth)
+    values = {**step.params, "depth": depth, "anchor": "centre"}
+    if shape == "widened":
+        values.update(widening_diameter=10.0, widening_depth=2.0, transition_angle=90.0)
+    elif shape == "slotted":
+        values.update(slotted=True, slot_length=12.0, slot_angle=30.0)
+    placed = placement.surface_values(spec, hit, source=body)
+    assert placed["anchor"] == "mouth"
+    assert [placed[name] for name in ("x", "y", "z")] == pytest.approx((0.0, 0.0, 20.0))
+    assert [placed[name] for name in ("nx", "ny", "nz")] == pytest.approx((0.0, 0.0, 1.0))
+    values.update(placed)
+    tool = placement.prepare_tool(spec, values, profile, source=body)
+    assert tool.mesh.is_watertight
+    assert tool.mesh.bounds.maximum[2] == pytest.approx(0.0)
+    tool_depth = depth or body.mesh.bounds.diagonal
+    assert tool.mesh.bounds.minimum[2] == pytest.approx(-tool_depth)
+    assert placement.mouth_outline(tool)
+    other = REGISTRY.get("drill_hole" if kind == "brep" else "drill_brep_hole")
+    twin_tool = placement.prepare_tool(other, values, profile, source=body)
+    assert twin_tool.mesh.raw.vertices == pytest.approx(tool.mesh.raw.vertices, abs=1e-12)
+    assert np.array_equal(twin_tool.mesh.raw.faces, tool.mesh.raw.faces)
+    history.apply(
+        "Bohrung auf Fläche", [OperationDraft(op=spec.name, inputs=(body.id,), params=values)]
+    )
+    changed = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert changed.complete
+    changed_body = changed.scene.objects[body.id]
+    assert changed_body.mesh.is_watertight
+    drilled_depth = depth or 20.0
+    expected = math.pi * 9.0 * drilled_depth
+    if shape == "widened":
+        expected += math.pi * (32.0 + 44.0 / 3.0)
+    elif shape == "slotted":
+        expected += 36.0 * drilled_depth
+    assert body.mesh.volume - changed_body.mesh.volume == pytest.approx(expected, rel=0.015)

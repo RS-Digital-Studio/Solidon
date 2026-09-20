@@ -195,6 +195,28 @@ danach kommt.
 | `orphans.py` | Merkmalsverweise, die ihr Merkmal verloren haben (§21.3). Statt zu raten: `question_for()` und `candidates_of()`. **Die Kandidaten folgen der Objektidentität durch den Stapel** (`lineage()`, RM-023): Nach einer Zerlegung trägt nur das erste Stück die alte Kennung, und der Verweis findet sein Merkmal am abgetrennten Körper wieder — aber nur dort, nicht an jedem fremden mit demselben Namen |
 | `placement.py` | Dialogvorbelegung und genaue Oberflächenplatzierung am Originalnetz (§18.5). `seat_of` beantwortet die Frage daneben: **wo sitzt, was schon da ist** — die Trägerfläche eines erkannten Merkmals samt seiner Mündung, für die Maßlinien am gewählten Merkmal |
 
+`placement.bore_step_of` verbindet eine eindeutig gekoppelte Bohrung mit ihrem
+abgeschlossenen ursprünglichen `drill_hole`-/`drill_brep_hole`-Schritt. Maßgeblich
+sind Merkmalsherkunft und die zeitliche Eingabe-/Ausgabekette; eine gleiche
+frisch vergebene Kennung oder der letzte Objekterzeuger genügt nicht. Der Helfer
+rechnet keinen Verlauf und liefert ausschließlich ursprüngliche Schrittwerte,
+auch nach Transformationen. Mehrere lebende Nachkommen, nicht belegte Ketten
+und spätere Formänderungen wie `resize_hole` ergeben keine Einzelzuordnung.
+Die historische Vorschau samt Folgeauswertung bleibt beim bestehenden
+`change_op`-Weg. `evaluate._feature_originators` stempelt wirklich neue Netz-
+und exakte Merkmale gleich; vorhandene Erzeuger übernimmt gemeinsam
+`perceive.matching.inherit_originators`, auch im regulären `apply_mapping`.
+Importmerkmale und mehrdeutige Kandidaten erhalten keinen geratenen Ursprung.
+`placement.seat_for_bore_step` bestätigt den ursprünglichen Flächenbezug am
+Prefixkörper aus aufgelösten Schrittwerten, ohne ein Hilfsmerkmal zu erfinden.
+Bei endlicher Tiefe muss die ursprüngliche Mündung auf der Fläche liegen;
+durchgehend wird genau eine zusammenhängende Materialsäule verlangt. Der
+Anzeigepunkt ersetzt weder Originalposition noch Mittenanker im Entwurf.
+`DRILL_OPERATIONS` bindet beide DrillParams-Zwillinge außerdem an dieselbe
+Platzierbarkeit, den Flächenanker und den vorhandenen lokalen Bohrwerkzeugbau.
+Die Auswahl einer neuen Fläche setzt bei beiden den Mündungsanker; ohne
+ausdrückliche Lageänderung bleibt der ursprüngliche Auftrag erhalten.
+
 **Operationen dieses Gebiets**
 
 `ops.py` (Umbenennen, Löschen, Duplizieren, Muster) · `variants.py` (der

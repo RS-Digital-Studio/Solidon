@@ -73,7 +73,9 @@ DEFAULT_DISK_BUDGET_BYTES: Final = 2 * 1024 * 1024 * 1024
 #: leere frühere Auskünfte dürfen keine Folgeoperation aus dem Cache weitertragen.
 #: Innenräume tragen vollständige Luftgrenzen und ziehen Materialinseln ab;
 #: frühere fehlende Innenräume und Phantombohrungen werden neu erkannt.
-CACHE_FORMAT_VERSION: Final = 13
+#: Native Merkmale erhalten außerdem dieselbe eindeutige Erzeugerzuordnung
+#: wie Netzmerkmale; alte Auskünfte ohne diesen Bezug werden neu ausgewertet.
+CACHE_FORMAT_VERSION: Final = 14
 
 
 @dataclass(frozen=True, slots=True)

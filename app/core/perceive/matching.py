@@ -301,6 +301,25 @@ def match(
     return result
 
 
+def inherit_originators(
+    new: Mapping[FeatureId, Feature],
+    result: MatchResult,
+    previous: Mapping[FeatureId, Feature],
+) -> dict[FeatureId, Feature]:
+    """Übernimmt belegte Erzeuger, ohne native Kennungen oder neue Formdaten umzubenennen.
+
+    Dieselbe Übernahme gilt für ``apply_mapping`` am Netz und für native
+    Flächen, deren Topologiekennungen erhalten bleiben müssen. Ein gleicher
+    Name oder eine mehrdeutige Zuordnung beweist keinen Vorfahren.
+    """
+    inherited = dict(new)
+    for old, name in result.mapping.items():
+        feature, ancestor = inherited.get(name), previous.get(old)
+        if feature is not None and ancestor is not None and feature.created_by is None:
+            inherited[name] = replace(feature, created_by=ancestor.created_by)
+    return inherited
+
+
 def apply_mapping(
     new: dict[FeatureId, Feature],
     result: MatchResult,
@@ -333,14 +352,9 @@ def apply_mapping(
     # zeigen. Aufgelöste stehen ohnehin schon im mapping, der Zusatz ist
     # dann folgenlos.
     taken: set[FeatureId] = set(result.mapping) | set(result.orphaned) | set(result.ambiguous)
-    for identifier, feature in new.items():
+    inherited = inherit_originators(new, result, previous) if previous is not None else new
+    for identifier, feature in inherited.items():
         target = reverse.get(identifier)
-        if target is not None and previous is not None and feature.created_by is None:
-            ancestor = previous.get(target)
-            if ancestor is not None:
-                # Die Erkennung liefert neue Dreiecke derselben Fläche. Ihr
-                # Erzeuger stammt weiterhin aus der belegten alten Zuordnung.
-                feature = replace(feature, created_by=ancestor.created_by)
         if (
             target is not None
             and previous is not None
