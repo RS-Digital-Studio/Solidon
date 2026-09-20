@@ -1442,6 +1442,30 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   die bündige Ebenenpassung erhält ihre unabhängige Körperprobe im nächsten
   P1.3-Schritt. Beide Produktcommits sind nach origin/main gepusht.
 
+  **Bündige Passung und Formabweichung 20.09.:** `912789f7` ergänzt die
+  unabhängige vollständige Körperprobe für bündige Ebenenpaare. Die
+  bestehende Ebenenregel verlangt weiterhin keinen Flächenkontakt.
+  `5d451fe7` führt belegte analytische Teilträger über Originaldreiecke,
+  Transformation, warmen/kalten Cache und Historie bis zur neuen
+  Analysekarte. Ganze Dreiecke werden mit numerischer Klammer begrenzt;
+  unbekannte Bereiche, Herkunft und wirkliche Zeugen bleiben ausgewiesen.
+  Berichtsklick, Fortschritt, Abbruch, Ortsmarke und gerichtete
+  Anzeigerundung teilen denselben Kartenweg in allen Sprachen.
+  Vollständige Kernsammlung: **12.682 bestanden, 26 übersprungen**,
+  Exit 0. mypy ist grün; Ruff und Format sind ohne den ausdrücklich
+  getrennten parallelen P2.7-Nachweisordner ebenfalls grün. Der erste
+  unbeschränkte Torprozess bleibt wegen vier Ruff-Befunden und eines
+  Formatbefunds in dessen fremder Sonde korrekt Exit 1. Eigene
+  Commitprüfung und Originalergebnis sind getrennt festgehalten unter
+  `C:/Users/rober/AppData/Local/Temp/solidon-cad-deviation-final-eff89030f7fd4ec1b1096048184d26e7`.
+  Die unabhängige Gegenprüfung sichert Quellenverlust, Abbruchübergaben,
+  numerischen Überlauf und native Kegelnappen einschließlich echter
+  Spitzentopologie ab. Zusätzliche Modellsonden treffen analytische
+  Facettierungsabstände, erhalten ein polygonales Loch und weisen den
+  nach einem Ausreißer verworfenen Rundfit als unbekannten Mantel aus.
+  Produktcommits sind nach origin/main gepusht. Fensterdateien und
+  Leistungsabnahme bleiben ausdrücklich beim Release.
+
   **Die Pakete in dieser Folge** (Umfang und Abnahme je Paket in Konzept
   §13.2, Voraussetzungen §13.6; jedes Paket endet mit dem Tor vor seinem
   Commit). Der Stand steht als Wort vorn — **offen**, **läuft**,
@@ -1460,8 +1484,8 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   * **läuft** P0.3 — gemeinsamer Maßeditor im Viewport: erster Bohrungsweg für beide Zwillinge mit passiver Maßanzeige, gebundenem Entwurf, gemeinsamem Abschluss, zwingend dargestellter Vorschau und geschützter Auswahl. Eindeutig belegte Bohrungsschritte zeigen ihre Originalwerte einschließlich Tiefe und rechnen Folgeschritte mit. `852de666` / `1fc131a6`: Kernnachweise und Entwicklungstor grün; Fensterfälle werden ausschließlich beim Release ausgeführt. Historische Hilfen gehören zur Prefixanzeige, werden über der Gesamtvorschau ausgeblendet und nach Tiefenänderung neu geprüft. Vollständige Feld-/Griff-/Gruppen- und Merkmalsabnahme bleibt offen.
   * **läuft** P0.4 — `102d4bf7`: Bezugswechsel über Auswahlfeld und Modellklick, echte Außen-/Innenkanten, belegte Mitten und Langlochachsen. Zug, Mittenversatz und erneute historische Vorschau erhalten gültige Bezüge. Fast parallele Referenzen und falsche Originalflächen werden abgewiesen; die Bediengrenze ist von geometrischer Toleranz getrennt. Gespeichert werden Operationswerte, keine flüchtigen Kantenbindungen. Vollständige Achsen-/Symmetrieparität folgt mit P1.5, dauerhafte Bezüge mit P3.2; Fensterabnahme bleibt beim Release.
   * **implementiert, Release-Abnahme offen** P1.2 — `851f913a`: Kegel, Kugeln und Tori werden an wirklichen Stützpunkten eingepasst; Teilflächen, Unterteilung, schiefe Lage, Originalauswahl, Gegenformen und Abbruch sind geprüft. Echte native und Netz-Zwillinge treffen unabhängig vorgegebene Maße in beiden Qualitätsstufen. Native und rationale Kugelträger erhalten Trimgrenzen und Materialseite; große Koordinaten werden vor Flächenintegralen lokal zentriert. Warmer und kalter Cache, STEP-/Projekt-Rundreise sowie Undo/Redo tragen dieselben Maße und ihre Quellen. Entwicklungstor grün; Fenster und Leistung bleiben beim Release.
-  * **läuft** P1.3 — `db7d1a5c` / `851f913a` / `eeadc09b`: tatsächliche Konturgrenzen und Maßquellen kennzeichnen Schätzungen in Oberfläche, Steckbrief und Agent. Die unabhängige Körperprobe prüft alle Flächen radialer Paare in belegter Einbaulage, einschließlich Boden und Schulter; native Originale bleiben unverändert, gemischte Zwillinge werden als Näherung benannt. Unsichere Maße, Pressverformung und Montageweg werden nicht durch eine starre Nullverschneidung freigegeben. Die Passungskarte unterscheidet offene Prüfung und Verletzung; Exportvorprüfung und Auswertungsabschluss reichen Abbruch weiter. Beispiele und Tour behalten ehrliche Aussagen zur getrennten Drucklage. Offen bleibt die unabhängige Körperprobe der bündigen Ebenenpassung, deren bestehende Ebenenregel keinen Flächenkontakt verlangt. Fensterabnahme bleibt beim Release.
-  * **offen** P1.6 — Analysekarte „Formabweichung“ aus den Fits
+  * **implementiert, Release-Abnahme offen** P1.3 — `db7d1a5c` / `851f913a` / `eeadc09b`: tatsächliche Konturgrenzen und Maßquellen kennzeichnen Schätzungen in Oberfläche, Steckbrief und Agent. Die unabhängige Körperprobe prüft alle Flächen radialer Paare in belegter Einbaulage, einschließlich Boden und Schulter; native Originale bleiben unverändert, gemischte Zwillinge werden als Näherung benannt. Unsichere Maße, Pressverformung und Montageweg werden nicht durch eine starre Nullverschneidung freigegeben. Die Passungskarte unterscheidet offene Prüfung und Verletzung; Exportvorprüfung und Auswertungsabschluss reichen Abbruch weiter. Beispiele und Tour behalten ehrliche Aussagen zur getrennten Drucklage. `912789f7` ergänzt die unabhängige Körperprobe der bündigen Ebenenpassung; deren bestehende Ebenenregel verlangt weiterhin keinen Flächenkontakt. Verschiedene Platten und zwei Merkmale desselben Körpers bleiben ungeklärte Einbaulagen, kein gemessenes Nullvolumen. Fensterabnahme bleibt beim Release.
+  * **implementiert, Release-Abnahme offen** P1.6 — `5d451fe7`: Analysekarte „Formabweichung“ aus den bereits belegten Ebenen-, Zylinder-, Kugel-, Kegel- und Torusträgern. Originaldreiecke, Teilflächen, tatsächliche Fitwerte und Quellen reisen durch lokale Auswahl, Zusammenfassung, Transformation und Cache. Ganze ausgefüllte Dreiecke erhalten numerische Unter-/Obergrenzen und einen wirklichen baryzentrischen Zeugen; mehrdeutige oder nicht endlich begrenzbare Bereiche bleiben unbekannt. Keine erneute Einpassung. Bericht, asynchroner Fortschritt, Abbruch, bekannte Abdeckung, numerische Breite, Millimeter/Zoll und Ortsmarke sind angeschlossen. Gerichtete native Kegelnappen folgen der wirklichen Trimmung; beide Nappen werden nicht zu einer falschen vereint. Kern- und getrennte Commitprüfung siehe oben; Fenster und Leistung bleiben beim Release.
   * **offen** P1.4 — Zuordnung räumlich vorsortiert, `FEATURE_LIMIT_COUNT` gemessen angehoben
   * **offen** P1.5 — gemeinsamer Merkmalsvertrag und zusammengesetzte Erkennung an beiden Kernen
   * **implementiert, Release-Abnahme offen** P2.2 — `3df89b8e`: `assign_slot`, `paint_slot` und `clear_filament` erhalten B-Rep. Native Flächen tragen unveränderliche Slots, jede Tessellation folgt ihrer belegten Flächenkarte; reine Attribute erhalten aktuelle Merkmalsdreiecke. Builder-Herkunft führt Farben durch Folgeschritte, verschiedenfarbige Teilungsgrenzen bleiben erhalten. Warmer Cache, bewusster Mesh-Diskcache, Quellen plus Operationsverlauf, Wiederöffnung und Undo/Redo sind geprüft. Fensterfall auf B-Rep-Erhalt umgestellt, ausschließlich zum Release auszuführen.
