@@ -589,12 +589,21 @@ Mündungen um den Überstand der Neigung nach außen gerückt beim Kippen
 (`_plane_turned`, `_reach_past_a_tilted_face`, `_cone_past_a_tilted_face`;
 der Boden eines Sacklochs bleibt). Gewählt werden darf jeder Abschnitt;
 gedreht wird um dessen Mitte, und `_exact_features_after` führt alle
-Abschnitte belegt fort. **Materialmerkmale gehen aus ihren Flächen**
-(`EXACT_MATERIAL_KINDS`, `_exact_move_material` und Geschwister): Der Körper
-eines Zapfens, einer Kuppe oder eines Kegelstumpfs kommt aus
+Abschnitte belegt fort. **„Nur das gewählte Merkmal“ einer Kette**
+(`_exact_remove_section`) hält die Reihenfolge des Netzwegs: Liegt etwas
+hinter dem Abschnitt, geht erst der ganze Hohlraum zu, und
+`_exact_chain_cut_kept` schneidet die übrigen Abschnitte frisch — die
+hinteren bis zur Mündung durch, die vorderen ab ihrer eigenen Randebene;
+der innerste wird aus seinen Flächen gefüllt, und die Senkung darüber
+bleibt als Kegelstumpf mit ebenem Boden stehen. **Was allein steht, geht
+aus seinen Flächen** (`EXACT_FACE_KINDS`, `_exact_move_by_faces` und
+Geschwister): Der Körper eines Zapfens, einer Kuppe oder eines Kegelstumpfs
+— und ebenso einer Senkung oder Pfanne ohne Bohrung darunter — kommt aus
 `brep.edit.solid_from_faces` — die nativen Flächen an ihren ebenen Randringen
-geschlossen, das exakte Gegenstück zu `_body_from_faces` —, wird abgetragen
-und an der neuen Stelle vereinigt. Gekippt wird davon nur der Zapfen
+geschlossen, das exakte Gegenstück zu `_body_from_faces` —; an der alten
+Stelle steht das Gegenteil dessen, was das Merkmal ist, an der neuen das
+Merkmal selbst, und `is_a_cavity` sagt, welches von beiden Vereinigen und
+welches Abtragen ist. Gekippt wird davon nur der Zapfen
 (`_exact_rotate_pin`): Seine Kennzahlen beschreiben ihn ganz, und der
 gekippte Zylinder reicht unter die Mitte so weit, wie `_reach_past_a_tilted_face`
 verlangt, statt neben der Grundfläche zu schweben; die Erkennung nennt danach

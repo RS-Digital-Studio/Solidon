@@ -557,3 +557,109 @@ def test_duplicating_a_taper_keeps_the_body_exact(profile: Profile) -> None:
     assert output.mesh.volume == pytest.approx(24000.0 + 2.0 * TAPER_VOLUME, rel=1e-9)
     cones = {f.id: f for f in output.features.values() if f.kind == "cone"}
     assert set(cones) == {taper.id, "cone_2"}, sorted(cones)
+
+
+# --- Nur das gewählte Merkmal einer Kette; die Senkung allein ------------------------
+
+SINK_VOLUME = COUNTERSUNK_CAVITY - BORE_AREA * 7.0
+
+
+def test_removing_only_the_countersink_keeps_the_bore_exact(profile: Profile) -> None:
+    """Nur die Senkung geht; die Bohrung bleibt und geht bis zur Oberseite durch."""
+    load_operations()
+    source = _countersunk_plate(profile)
+    hole, cone = _chain_of(source)
+
+    result = run("remove_feature", source, profile, at_feature=cone.id, sections="single")
+
+    output = _exact_and_proven(result, source, hole.id)
+    solid: Any = output.mesh
+    assert output.mesh.volume == pytest.approx(24000.0 - BORE_AREA * 10.0, rel=1e-9)
+    assert solid.face_count == 7, "sechs Flächen und der Mantel einer durchgehenden Bohrung"
+    kept = _the_one(output, "hole")
+    assert kept.id == hole.id
+    assert kept.params["centre"] == pytest.approx((0.0, 0.0, 5.0), abs=1e-9)
+    assert kept.params["depth"] == pytest.approx(10.0, abs=1e-9)
+    assert kept.params["through"] is True
+    assert not [f for f in output.features.values() if f.kind == "cone"]
+    assert cone.id in output.reserved_feature_ids
+    (gone,) = [f for f in result.findings if f.code == "remove_feature.gone"]
+    assert gone.feature_ids == (cone.id,)
+    assert _round_trip_volume(output.mesh) == pytest.approx(output.mesh.volume, rel=1e-9)
+
+
+def test_removing_only_the_bore_leaves_the_countersink_exact(profile: Profile) -> None:
+    """Nur die Bohrung geht: die Senkung bleibt als Kegelstumpf mit ebenem Boden.
+
+    Und danach steht sie allein — und geht denselben exakten Weg wie ein Zapfen:
+    aus ihren Flächen gefüllt, sechs Flächen bleiben.
+    """
+    load_operations()
+    source = _countersunk_plate(profile)
+    hole, cone = _chain_of(source)
+
+    result = run("remove_feature", source, profile, at_feature=hole.id, sections="single")
+
+    output = _exact_and_proven(result, source, cone.id)
+    solid: Any = output.mesh
+    assert output.mesh.volume == pytest.approx(24000.0 - SINK_VOLUME, rel=1e-9)
+    assert solid.face_count == 8, "sechs Flächen, der Kegelmantel und sein ebener Boden"
+    kept = _the_one(output, "cone")
+    assert kept.id == cone.id and kept.params["recess"] is True
+    assert kept.params["diameter"] == pytest.approx(12.0, abs=1e-9)
+    assert not [f for f in output.features.values() if f.kind == "hole"]
+    assert hole.id in output.reserved_feature_ids
+
+    gone = run("remove_feature", output, profile, at_feature=cone.id)
+    plate = gone.outputs[0]
+    full: Any = plate.mesh
+    assert plate.kind == "brep" and full.is_closed
+    assert full.volume == pytest.approx(24000.0, rel=1e-9)
+    assert full.face_count == 6
+    assert not any(finding.converts_exact_body for finding in gone.findings)
+    assert not [f for f in plate.features.values() if f.kind in ("hole", "cone")]
+
+
+def test_a_standalone_countersink_moves_and_copies_exactly(profile: Profile) -> None:
+    """Die Bohrung ist gefüllt; ihre Senkung wird aus ihren Flächen versetzt und verdoppelt."""
+    load_operations()
+    source = _countersunk_plate(profile)
+    hole, _cone = _chain_of(source)
+    alone = run("remove_feature", source, profile, at_feature=hole.id, sections="single").outputs[0]
+    sink = _the_one(alone, "cone")
+    centre = sink.params["centre"]
+    assert centre == pytest.approx((0.0, 0.0, 10.0), abs=1e-9), "die Senkung sitzt an der Mündung"
+
+    moved = run(
+        "move_feature",
+        alone,
+        profile,
+        at_feature=sink.id,
+        x=centre[0] + 12.0,
+        y=centre[1] - 6.0,
+        z=centre[2],
+    )
+    output = _exact_and_proven(moved, alone, sink.id)
+    shifted: Any = output.mesh
+    assert shifted.volume == pytest.approx(24000.0 - SINK_VOLUME, rel=1e-9)
+    assert shifted.face_count == 8
+    assert _the_one(output, "cone").params["centre"] == pytest.approx((12.0, -6.0, 10.0), abs=1e-9)
+    assert _round_trip_volume(shifted) == pytest.approx(shifted.volume, rel=1e-9)
+
+    copied = run(
+        "duplicate_feature",
+        alone,
+        profile,
+        at_feature=sink.id,
+        x=centre[0] - 15.0,
+        y=centre[1],
+        z=centre[2],
+    )
+    twice = copied.outputs[0]
+    doubled: Any = twice.mesh
+    assert twice.kind == "brep" and doubled.is_closed
+    assert doubled.volume == pytest.approx(24000.0 - 2.0 * SINK_VOLUME, rel=1e-9)
+    cones = {f.id: f for f in twice.features.values() if f.kind == "cone"}
+    assert set(cones) == {sink.id, "cone_2"}, sorted(cones)
+    assert cones["cone_2"].params["centre"] == pytest.approx((-15.0, 0.0, 10.0), abs=1e-9)
+    assert not any(finding.converts_exact_body for finding in copied.findings)
