@@ -27,11 +27,12 @@ from pathlib import Path
 from typing import Any, Final, cast
 from uuid import uuid4
 
-from PySide6.QtCore import QObject, QPoint, Qt, QTimer, QUrl, Signal
+from PySide6.QtCore import QEvent, QObject, QPoint, Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import (
     QAction,
     QActionGroup,
     QCloseEvent,
+    QCursor,
     QDesktopServices,
     QDragEnterEvent,
     QDropEvent,
@@ -262,7 +263,7 @@ from app.ui.labels import (
 )
 from app.ui.labels import area as area_label
 from app.ui.labels import set_display_unit as set_length_unit
-from app.ui.leash import Worker, WorkerLeash, wait_for_all, weak_slot
+from app.ui.leash import Worker, WorkerLeash, stop_watching_the_dying, wait_for_all, weak_slot
 from app.ui.loading import BAR_AFTER_MS, DELAY_MS, LoadingVeil, remaining_time
 from app.ui.local_recognition_flow import LocalRecognitionFlow
 from app.ui.manual_window import ManualWindow
@@ -312,7 +313,7 @@ from app.ui.sketch_editor import (
 from app.ui.spacemouse import SpaceMouseController
 from app.ui.split_bar import POINTS_NEEDED, SplitBar
 from app.ui.start_screen import StartScreen, accepted_path, accepted_url
-from app.ui.style import NORMAL, TIGHT, divider, make_primary, menu_heading, set_level
+from app.ui.style import NORMAL, ROOMY, TIGHT, divider, make_primary, menu_heading, set_level
 from app.ui.support_dialog import SupportDialog, window_shot
 from app.ui.survey import SurveyNotice, UsageClock
 from app.ui.theme import apply_theme
@@ -322,7 +323,7 @@ from app.ui.transform_bar import ROLES as TRANSFORM_ROLES
 from app.ui.transform_bar import TransformBar
 from app.ui.update_dialog import UpdateDialog
 from app.ui.variants_dialog import VariantsDialog
-from app.ui.viewport import DisplayMode, Projection, Viewport
+from app.ui.viewport import DisplayMode, Projection, SketchSelectionBadge, Viewport
 
 _log = get_logger(__name__)
 
@@ -589,6 +590,66 @@ FEATURE_TWINS: Final[dict[str, str]] = {
     "scale_object": "resize_feature",
     "delete_object": "remove_feature",
 }
+
+
+class _ActionNotice(SketchSelectionBadge):
+    """Dieselbe passive Quittung wie in der Skizze, am Ort der letzten Handlung."""
+
+    def __init__(self, parent: QWidget) -> None:
+        super().__init__(parent)
+        self.setTextFormat(Qt.TextFormat.PlainText)
+        self.setWordWrap(True)
+        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self._anchor = QPoint()
+        self._expiry = QTimer(self)
+        self._expiry.setSingleShot(True)
+        self._expiry.timeout.connect(self.clear)
+        parent.installEventFilter(self)
+
+    def show_message(self, text: str, anchor: QPoint) -> None:
+        """Ersetzt die alte Meldung; Fortschritt besitzt weder Text noch Zeitgeber."""
+        self.clear()
+        if not text:
+            return
+        self._anchor = anchor
+        self.setText(text)
+        self.place()
+        self.show()
+        # Der volle Text bleibt zusätzlich in der Statuszeile. Hier reichen
+        # kurze Sätze mindestens acht Sekunden, lange bekommen mehr Lesezeit.
+        self._expiry.start(max(8000, len(text) * 60))
+
+    def clear(self) -> None:
+        """Projektwechsel und Fensterabbau nehmen auch den Zeitgeber mit."""
+        self._expiry.stop()
+        super().clear()
+        self.hide()
+
+    def place(self) -> None:
+        """Am gemerkten Ort, umbrochen und innerhalb der aktuellen Zeichenfläche."""
+        parent = self.parentWidget()
+        if parent is None:
+            return
+        available = max(1, parent.width() - 2 * ROOMY)
+        self.setMaximumWidth(min(available, max(1, self.fontMetrics().averageCharWidth() * 60)))
+        self.adjustSize()
+        x = min(max(ROOMY, self._anchor.x()), max(ROOMY, parent.width() - self.width() - ROOMY))
+        y = self._anchor.y() + ROOMY
+        if y + self.height() > parent.height() - ROOMY:
+            y = self._anchor.y() - self.height() - ROOMY
+        y = min(max(ROOMY, y), max(ROOMY, parent.height() - self.height() - ROOMY))
+        self.move(x, y)
+        self.raise_()
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802 — Qt-Name
+        """Größe und Schrift dürfen den gemerkten Satz nicht außerhalb stehen lassen."""
+        if stop_watching_the_dying(self, watched, event):
+            return False
+        if event.type() in (QEvent.Type.Resize, QEvent.Type.FontChange, QEvent.Type.StyleChange):
+            self.place()
+        elif event.type() == QEvent.Type.Hide:
+            self.clear()
+        return super().eventFilter(watched, event)
 
 
 class _FeatureDock(QDockWidget):
@@ -2586,6 +2647,8 @@ class MainWindow(QMainWindow):
         self.right.setObjectName("rightTabs")
         self.overlay = OverlayHost(self.middle_stack, self)
         self.overlay.set_zones(left, self.right_column, bottom)
+        self._action_notice = _ActionNotice(self.overlay)
+        self._announcement_document = self.session.project.document
         # Parameterzeilen entstehen nach dem Öffnen eines Projekts neu. Ihre
         # endgültige Höhe kennt Qt einen Ereignisschritt später; dann muss die
         # frei gesetzte linke Karte ausdrücklich neu verteilt werden. Ohne
@@ -13581,6 +13644,7 @@ class MainWindow(QMainWindow):
         # Der Schleier zeichnet den Verlauf der Ansicht nach und braucht
         # dieselben Farben wie sie.
         self.veil.set_theme(theme)
+        self._action_notice.set_theme(theme)
 
     def action_navigation(self, scheme: str) -> None:
         self.viewport.set_navigation(scheme)  # type: ignore[arg-type]
@@ -15936,6 +16000,9 @@ class MainWindow(QMainWindow):
             self.status_message.setText(self._announcement)
 
     def _on_project(self) -> None:
+        if self._announcement_document is not self.session.project.document:
+            self._announcement_document = self.session.project.document
+            self.announce("")
         # Eine gezeichnete Trennlinie liegt auf einem Körper, den es nach einer
         # Änderung am Dokument so nicht mehr geben muss — ein neues Projekt,
         # ein Undo, eine Operation von woanders. Sie stehen zu lassen hieße,
@@ -16116,6 +16183,18 @@ class MainWindow(QMainWindow):
         else:
             self._render_progress_state()
 
+        # Kein zweites Live-Ereignis für Bildschirmleser: Die Statuszeile
+        # bleibt die bestehende Meldestelle, die Karte ergänzt nur das Bild.
+        origin = QCursor.pos()
+        focus = QApplication.focusWidget()
+        if (
+            self.testAttribute(Qt.WidgetAttribute.WA_KeyboardFocusChange)
+            and focus is not None
+            and (focus is self or self.isAncestorOf(focus))
+        ):
+            origin = focus.mapToGlobal(focus.rect().center())
+        self._action_notice.show_message(text, self.overlay.mapFromGlobal(origin))
+
     def _on_progress(self, fraction: float, text: str) -> None:
         self.veil.step(fraction, text)
         if not text:
@@ -16257,11 +16336,12 @@ class MainWindow(QMainWindow):
         nächsten Ereignis verschwindet, war für den, der gerade woanders
         hinsah, nie da.
         """
-        self._announcement = tr(
-            "Abgebrochen. Zu sehen ist der letzte vollständig gerechnete Stand — "
-            "eine Änderung am Stapel rechnet weiter."
+        self.announce(
+            tr(
+                "Abgebrochen. Zu sehen ist der letzte vollständig gerechnete Stand — "
+                "eine Änderung am Stapel rechnet weiter."
+            )
         )
-        self.status_message.setText(self._announcement)
 
     def _update_veil(self, busy: bool) -> None:
         """Die Ladeanzeige gilt dem leeren Bild, nicht jeder Rechnung.
@@ -18043,6 +18123,7 @@ class MainWindow(QMainWindow):
         ausdrücklich gekappt, bevor Qt die Widgets zerstört.
         """
         self.wait_for_workers(timeout_ms)
+        self._action_notice.clear()
         self.spacemouse.stop()
         # **Der Wartezeiger geht mit.** Er ist ein Override der *Anwendung*,
         # nicht des Fensters: Ein Zeitgeber, der nach dem Loslassen feuert,
@@ -18155,6 +18236,7 @@ class MainWindow(QMainWindow):
         # Beim Sprachwechsel schließt ``app.rebuild_for_language`` den alten
         # Renderer ausdrücklich vor dem Fenster. Der danach gebaute Renderer
         # ist davon unabhängig.
+        self._action_notice.clear()
         self.viewport.release_renderer()
         self.session.release_recovery()
         event.accept()

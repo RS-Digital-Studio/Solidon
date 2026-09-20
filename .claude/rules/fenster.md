@@ -21,6 +21,15 @@ Zahlen, Barrierefreiheit) gelten weiter und laden zusätzlich.
 
 ## Fenster
 
+**Eine Handlungsquittung steht zusätzlich dort, wo gehandelt wurde.**
+`MainWindow.announce` behält die Statuszeile und ergänzt eine passive
+Quittung im vorhandenen Overlay. Sie nimmt weder Fokus noch Mausklicks,
+wertet keinen RichText aus und bleibt mindestens acht Sekunden lesbar;
+längere Texte erhalten mehr Zeit. Eine neue Quittung ersetzt die alte,
+Fortschritt überschreibt sie nicht. Kontextwechsel und Fensterabbau
+beenden ihre Anzeige samt Zeitgeber. Es entsteht weder eine zusätzliche
+Bedienzone noch ein zweites Live-Ereignis für Bildschirmleser.
+
 Höchstens drei sichtbare Zonen: links Objektbaum, Parameter und Verlauf als
 einklappbare Abschnitte; Mitte der Viewport; rechts **entweder** Chat **oder**
 Prüfbericht, umschaltbar und ganz ausblendbar. Die Umschaltung springt zum

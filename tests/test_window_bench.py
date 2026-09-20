@@ -161,6 +161,10 @@ def test_accepted_application_exit_uses_the_terminal_viewport_path(
         def stop(self) -> None:
             events.append("usage.stop")
 
+    class _Notice:
+        def clear(self) -> None:
+            events.append("notice.clear")
+
     class _ExitViewport:
         def wait_for_workers(self, _timeout_ms: int) -> bool:
             return True
@@ -181,6 +185,7 @@ def test_accepted_application_exit_uses_the_terminal_viewport_path(
         session = _Session()
         settings = type("Settings", (), {"window_geometry": ""})()
         _usage = _Usage()
+        _action_notice = _Notice()
         viewport = _ExitViewport()
         spacemouse = _SpaceMouse()
 
@@ -220,6 +225,7 @@ def test_accepted_application_exit_uses_the_terminal_viewport_path(
         "spacemouse.stop",
         "settings.save",
         "usage.stop",
+        "notice.clear",
         "viewport.release_renderer",
         "session.release_recovery",
     ]

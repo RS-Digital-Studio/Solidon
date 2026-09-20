@@ -9665,6 +9665,104 @@ def test_the_catalog_grid_never_scrolls_sideways(qt_app: QApplication) -> None:
 # --- Auto Split abseits des Hauptthreads (§2.8) ----------------------------------
 
 
+def test_a_fitting_body_gets_the_same_passive_reply_at_the_action_and_in_status(window):
+    """Der echte Menüweg bleibt ohne neue Operation und quittiert im Blickfeld."""
+    assert window.session.apply("Quader", [OperationDraft(op="create_box")])
+    window.session.wait_for_idle()
+    count = len(window.session.project.document.ops)
+    window.action_auto_split("obj_1")
+    window.session.wait_for_idle()
+    expected = tr("Dieses Objekt passt bereits auf das Bett.")
+    notice = window._action_notice
+    assert window._announcement == expected
+    assert window.status_message.text() == expected
+    assert notice.text() == expected and not notice.isHidden()
+    assert notice.parentWidget() is window.overlay
+    assert notice.testAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+    assert notice.focusPolicy() == Qt.FocusPolicy.NoFocus
+    assert notice._expiry.isActive() and notice._expiry.interval() >= 8000
+    assert len(window.session.project.document.ops) == count
+
+
+def test_evaluation_cancellation_replaces_the_action_reply_and_its_timer(window):
+    """Das echte Sitzungssignal ersetzt eine alte Quittung an beiden sichtbaren Orten."""
+    window.announce("Vorherige Meldung")
+    notice = window._action_notice
+    # Ein alter Ablauf darf der neuen, längeren Meldung keine Restzeit leihen.
+    notice._expiry.start(1000)
+    window.session.evaluationCancelled.emit()
+    expected = tr(
+        "Abgebrochen. Zu sehen ist der letzte vollständig gerechnete Stand — "
+        "eine Änderung am Stapel rechnet weiter."
+    )
+    assert window._announcement == expected
+    assert window.status_message.text() == expected
+    assert notice.text() == expected and not notice.isHidden()
+    assert notice._expiry.isActive()
+    assert notice._expiry.interval() == max(8000, len(expected) * 60)
+    window._on_busy(False)
+    assert notice.text() == expected and window.status_message.text() == expected
+
+
+def test_action_reply_survives_progress_and_replaces_its_previous_text(window):
+    """Auslaufender Fortschritt überschreibt weder Karte noch Ergebnisquittung."""
+    window.announce("Erster Hinweis")
+    notice = window._action_notice
+    second = "<b>Lesbarer Klartext</b> " + "Längerer verständlicher Hinweis. " * 10
+    window.announce(second)
+    assert notice.textFormat() == Qt.TextFormat.PlainText
+    assert notice.wordWrap() and notice.text() == second
+    assert notice._expiry.interval() >= len(second) * 60
+    window._on_progress(0.5, "Wird berechnet")
+    window._on_progress(1.0, "")
+    window._on_busy(False)
+    assert notice.text() == second and not notice.isHidden()
+    assert window.status_message.text() == second
+    notice._expiry.timeout.emit()
+    assert notice.isHidden() and not notice._expiry.isActive()
+    assert window._announcement == second and window.status_message.text() == second
+
+
+@pytest.mark.parametrize("theme", ["dark", "light"])
+def test_action_reply_wraps_inside_the_overlay_after_resize_and_font_growth(window, theme):
+    """Längere Texte folgen Schrift und Fenster, ohne einen Eingabefänger zu schaffen."""
+    from PySide6.QtGui import QFont
+
+    notice = window._action_notice
+    notice.set_theme(theme)
+    font = QFont(notice.font())
+    font.setPointSizeF(max(16.0, font.pointSizeF() * 1.5))
+    notice.setFont(font)
+    window.overlay.resize(700, 600)
+    notice.show_message("Ein längerer Hinweis zum gewählten Körper. " * 4, QPoint(690, 590))
+    assert window.overlay.rect().contains(notice.geometry())
+    assert notice.height() > notice.fontMetrics().height()
+    window.overlay.resize(420, 600)
+    notice.place()
+    assert window.overlay.rect().contains(notice.geometry())
+    assert window.overlay.childAt(notice.geometry().center()) is not notice
+
+
+def test_action_reply_uses_keyboard_focus_and_disappears_on_project_change(window, monkeypatch):
+    """Tastaturzugang braucht keinen Mauszeiger; alte Quittungen reisen nicht mit."""
+    window.setAttribute(Qt.WidgetAttribute.WA_KeyboardFocusChange, True)
+    monkeypatch.setattr(QApplication, "focusWidget", staticmethod(lambda: window.status_message))
+    expected = window.overlay.mapFromGlobal(
+        window.status_message.mapToGlobal(window.status_message.rect().center())
+    )
+    window.announce("Gespeichert")
+    assert window._action_notice._anchor == expected
+    window.session.start_new("centauri-carbon-2", "petg")
+    window.session.wait_for_idle()
+    assert window._action_notice.isHidden()
+    assert not window._action_notice._expiry.isActive()
+    assert window._announcement == "" and window.status_message.text() == ""
+    window.announce("Weitere Meldung")
+    window.release()
+    assert window._action_notice.isHidden()
+    assert not window._action_notice._expiry.isActive()
+
+
 def test_the_split_worker_forwards_the_core_progress(
     session: Session, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -12623,12 +12721,14 @@ def test_reading_a_file_stands_under_the_wait_cursor(
     assert QApplication.overrideCursor() is None, "der Wartezeiger blieb stehen"
 
 
+@pytest.mark.parametrize("starting_fresh", [False, True])
 def test_import_dialog_keeps_its_reading_status_after_starting_the_project(
-    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch, starting_fresh: bool
 ) -> None:
     """Auch der Dateidialog bewahrt den Ladehinweis über den Projektanfang."""
     from PySide6.QtWidgets import QFileDialog
 
+    window._show_start_screen(starting_fresh)
     window.announce("Bereit")
     seen: list[tuple[Any, str, str]] = []
     real = window.session.import_model_async
@@ -12657,8 +12757,9 @@ def test_import_dialog_keeps_its_reading_status_after_starting_the_project(
     cursor, status, announcement = seen[0]
     assert cursor is not None and cursor.shape() == Qt.CursorShape.WaitCursor
     assert status == tr("Modell einfügen …"), "der Projektanfang löschte den Ladehinweis"
-    assert announcement == "Bereit", "der vorübergehende Hinweis wurde dauerhaft angekündigt"
-    assert window._announcement == "Bereit"
+    expected = "" if starting_fresh else "Bereit"
+    assert announcement == expected, "nur ein neues Dokument verwirft die vorige Quittung"
+    assert window._announcement == expected
     assert QApplication.overrideCursor() is None, "der Wartezeiger blieb stehen"
 
 

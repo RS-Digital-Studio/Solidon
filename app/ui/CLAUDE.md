@@ -15,6 +15,20 @@ Die Regeln dieses Gebiets stehen in `.claude/rules/` und laden sich selbst —
 
 Hier steht die Karte, dort das Gesetz.
 
+`MainWindow.announce` gibt dieselbe Rückmeldung zusätzlich als passive,
+umgebrochene Quittung am Maus- beziehungsweise Tastaturort aus. `_ActionNotice`
+verwendet die vorhandene `SketchSelectionBadge`-Darstellung im bestehenden
+Overlay. Fortschritt besitzt ihren Text und Zeitgeber nicht; neue Meldungen
+ersetzen die alte. Projektwechsel, ausgeblendeter Arbeitsbereich und
+Fensterabbau räumen Quittung und Zeitgeber gemeinsam ab. Die Statuszeile
+bleibt erhalten, ein zweites Live-Ereignis wird nicht erzeugt.
+
+Merkmalsnamen erscheinen bereits beim Überfahren ohne eingeschaltete
+Gesamtüberlagerung. `_set_hover_target` und `_redraw_features` entfernen beim
+Wegfahren nur den Hovernamen; eine echte Auswahl bleibt beschriftet.
+`LabelStyle.always_visible` regelt die Tiefendarstellung, nicht die Auswahl
+dauerhaft einzublendender Namen.
+
 Bettbefunde eines unveränderten mehrteiligen Imports bieten gemeinsames
 Aufsetzen an. Gruppierung, Beschriftung und Handler verwenden
 `ingest.plan.imported_group_for_bed` mit tatsächlichen Szenenkörpern;

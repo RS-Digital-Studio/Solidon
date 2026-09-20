@@ -1316,6 +1316,10 @@ def test_hover_and_selection_are_two_visible_states(qt_app: QApplication) -> Non
     assert len(labels) == 1 and "8" in labels[0], (
         "auch ohne dauerhafte Überlagerung sagt die Hervorhebung, welches Merkmal sie meint"
     )
+    assert not viewport._feature_overlay
+    viewport._set_hover_target(None, None)
+    assert not viewport._feature_label_data, "ohne Hover bleibt kein ungewählter Name stehen"
+    viewport._set_hover_target("obj_1", "hole_2")
 
     viewport._selected_feature = "hole_2"
     renderer.drawn.clear()
@@ -1326,6 +1330,9 @@ def test_hover_and_selection_are_two_visible_states(qt_app: QApplication) -> Non
     assert "feature-hover" not in renderer.names(), (
         "die deckende Auswahl ersetzt Hover, statt zwei Flächen übereinanderzulegen"
     )
+    viewport._set_hover_target(None, None)
+    assert len(viewport._feature_label_data) == 1
+    assert "8" in viewport._feature_label_data[0][1], "die Auswahl bleibt ohne Hover benannt"
 
 
 def test_difference_colours_take_priority_over_selection(qt_app: QApplication) -> None:
