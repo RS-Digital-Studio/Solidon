@@ -4264,6 +4264,7 @@ def resize_hole(ctx: OpContext) -> OpResult:
             cut,
             solid,
             original=source.mesh if not moved_hole else None,
+            check_cancelled=ctx.cancelled.raise_if_cancelled,
         )
         if not recognised:
             findings.append(_bore_no_longer_a_feature(feature, cut))
@@ -4851,6 +4852,7 @@ def slot_hole(ctx: OpContext) -> OpResult:
             diagonal=solid.bounds.diagonal,
             body_centre=solid.bounds.centre,
             angle=angle,
+            check_cancelled=ctx.cancelled.raise_if_cancelled,
         )
         if pulled_exact is None:
             findings.append(_slot_no_longer_a_feature(feature, params.slot_length))
@@ -4919,7 +4921,7 @@ def slot_hole(ctx: OpContext) -> OpResult:
     from app.core.perceive.features import detect
 
     pulled_feature = _recognised_slot(
-        detect(result.mesh),
+        detect(result.mesh, check_cancelled=ctx.cancelled.raise_if_cancelled),
         feature,
         centre=centre,
         diameter=diameter,
@@ -4927,6 +4929,7 @@ def slot_hole(ctx: OpContext) -> OpResult:
         diagonal=result.mesh.bounds.diagonal,
         body_centre=result.mesh.bounds.centre,
         angle=angle,
+        check_cancelled=ctx.cancelled.raise_if_cancelled,
     )
     features = (
         {**carried, feature.id: pulled_feature}
@@ -5639,7 +5642,12 @@ def _resize_bore_entrance(
     for target in targets.values():
         expected = float(target.params["diameter"])
         recognised = _recognised_resized_feature(
-            as_mesh_data(changed), target, expected, original=original, known=found
+            as_mesh_data(changed),
+            target,
+            expected,
+            original=original,
+            known=found,
+            check_cancelled=ctx.cancelled.raise_if_cancelled,
         )
         if recognised is not None:
             solver = deepest(stages)
@@ -5964,6 +5972,8 @@ def _bore_match_id(
     expected: Feature,
     body_centre: Vec3,
     diagonal: float,
+    *,
+    check_cancelled: Callable[[], None] | None = None,
 ) -> str | None:
     """Vergleicht Durchgänge entlang ihrer Achse, Sacklöcher an ihrer Mitte."""
     from app.core.perceive.matching import match
@@ -5998,9 +6008,13 @@ def _bore_match_id(
                 },
             )
         candidates[name] = candidate
-    return match({expected.id: expected}, candidates, body_centre, diagonal).mapping.get(
-        expected.id
-    )
+    return match(
+        {expected.id: expected},
+        candidates,
+        body_centre,
+        diagonal,
+        check_cancelled=check_cancelled,
+    ).mapping.get(expected.id)
 
 
 def _detect_resized_bores(
@@ -6081,7 +6095,13 @@ def _recognised_resized_feature(
                         float(v) for v in point - float((point - centre) @ axis) * axis
                     )
             comparison[identifier] = dataclasses.replace(candidate, params=params)
-    found_id = _bore_match_id(comparison, expected, mesh.bounds.centre, mesh.bounds.diagonal)
+    found_id = _bore_match_id(
+        comparison,
+        expected,
+        mesh.bounds.centre,
+        mesh.bounds.diagonal,
+        check_cancelled=check_cancelled,
+    )
     if found_id is None:
         return None
     # **Und die Zuordnung wird nachgeprüft** — derselbe Fund wie an
@@ -6195,6 +6215,7 @@ def _recognised_slot(
     diagonal: float,
     body_centre: Vec3,
     angle: float,
+    check_cancelled: Callable[[], None] | None = None,
 ) -> Feature | None:
     """Sucht das eben gezogene Langloch und hängt den bestehenden Namen daran.
 
@@ -6240,7 +6261,9 @@ def _recognised_slot(
             "direction": direction,
         },
     )
-    found_id = _bore_match_id(detected, expected, body_centre, diagonal)
+    found_id = _bore_match_id(
+        detected, expected, body_centre, diagonal, check_cancelled=check_cancelled
+    )
     if found_id is None:
         return None
     candidate = detected[found_id]
@@ -6298,13 +6321,16 @@ def _preserved_exact_features(
     solid: Mesh,
     *,
     original: Mesh | None = None,
+    check_cancelled: Callable[[], None] | None = None,
 ) -> tuple[dict[str, Feature], bool]:
     """Ordnet die exakte Topologie neu zu, mit dem gewählten Maß als Absicht."""
     from app.core.perceive.matching import apply_mapping, match
 
     bounds = solid.bounds
     wanted = _expected_bore(feature, diameter)
-    found_id = _bore_match_id(detected, wanted, bounds.centre, bounds.diagonal)
+    found_id = _bore_match_id(
+        detected, wanted, bounds.centre, bounds.diagonal, check_cancelled=check_cancelled
+    )
     expected = {name: entry for name, entry in previous.items() if name != feature.id}
     if found_id is not None:
         expected[feature.id] = dataclasses.replace(detected[found_id], id=feature.id)
@@ -6316,6 +6342,7 @@ def _preserved_exact_features(
                 as_mesh_data(solid),
                 detected[found_id],
                 detected,
+                check_cancelled=check_cancelled,
             )
             for floor in floors.values():
                 patch = set(floor.face_indices)
@@ -6329,7 +6356,13 @@ def _preserved_exact_features(
                 detected = {name: entry for name, entry in detected.items() if name not in parts}
                 detected[parts[0]] = dataclasses.replace(floor, id=parts[0])
             expected.update(floors)
-    matched = match(expected, detected, bounds.centre, bounds.diagonal)
+    matched = match(
+        expected,
+        detected,
+        bounds.centre,
+        bounds.diagonal,
+        check_cancelled=check_cancelled,
+    )
     if found_id is None:
         matched.orphaned = (*matched.orphaned, feature.id)
     return apply_mapping(detected, matched, previous=previous), found_id is not None

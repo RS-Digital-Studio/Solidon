@@ -50,6 +50,9 @@ neu rechnen. Merkmale und B-Rep bleiben über `moved_object` erhalten.
 Erneute B-Rep-Merkmalserkennung in `ops`, `edge_ops`, `face_ops` und
 `prepare_ops` erhält denselben `ctx.cancelled`; sie erzeugt kein eigenes
 Token und gibt bei Abbruch kein Teilresultat zurück.
+In `prepare_ops` reicht dessen `raise_if_cancelled` auch durch Bohrungs-,
+Einlauf- und Langlochübernahme bis zu `matching.match`. Der Meshzwilling
+verwendet denselben Rückruf bereits bei der Erkennung des neuen Langlochs.
 
 Wiederhergestellte Bohrungen und Langlöcher verwenden das gemessene
 Konturmaß ohne zusätzliche Vieleckkorrektur. `prepare_ops._placing_tool`

@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import dataclasses
 import logging
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -754,6 +755,8 @@ def test_an_ambiguous_match_stops_with_a_finding_instead_of_escaping(
         centre: object,
         diagonal: float,
         old_centre: object = None,
+        *,
+        check_cancelled: Callable[[], None] | None = None,
     ) -> MatchResult:
         """Meldet das erste alte Merkmal als zwischen zweien unentscheidbar."""
         if not old or len(new) < 2:
@@ -829,6 +832,8 @@ def test_an_unreferenced_feature_never_becomes_a_question(
         centre: object,
         diagonal: float,
         old_centre: object = None,
+        *,
+        check_cancelled: Callable[[], None] | None = None,
     ) -> MatchResult:
         if not old or len(new) < 2:
             return MatchResult()
@@ -2188,6 +2193,8 @@ def test_a_contested_feature_never_gets_an_originator(
         centre: object,
         diagonal: float,
         old_centre: object = None,
+        *,
+        check_cancelled: Callable[[], None] | None = None,
     ) -> MatchResult:
         if not old or len(new) < 2:
             return MatchResult(fresh=tuple(new))

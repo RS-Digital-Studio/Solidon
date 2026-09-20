@@ -2,6 +2,13 @@
 
 Was gerade offen ist und wie daraus Geometrie wird (§12–§16).
 
+Die Merkmalszuordnung erhält denselben Abbruch wie die Auswertung:
+`matching.match(check_cancelled=watch.raise_if_cancelled)` gilt für native,
+neu erkannte und deklarierte Merkmale. Gespeicherte Antworten werden über
+`matching.resolve` mit demselben Rückruf erneut verglichen. Ein Abbruch beendet
+den Aufrufer, bevor er Zuordnung oder Ergebnis veröffentlicht; es entsteht
+kein neues Token.
+
 Maßquellen reisen mit `Feature.params` durch Auswertung, Historienübernahme
 und beide Cacheebenen. Der Plattencodec speichert `measure_sources` ausdrücklich;
 alte Daten ohne Quelle bleiben unbekannt. Ein neuer Fit behält seine Quelle,

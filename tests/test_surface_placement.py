@@ -1865,12 +1865,12 @@ def test_bore_originators_leave_ambiguous_native_candidates_unclaimed(profile, m
     module = import_module("app.core.scene.evaluate")
     original = module.match
 
-    def contested(old, new, centre, diagonal):
+    def contested(old, new, centre, diagonal, *, check_cancelled=None):
         holes = tuple(name for name, feature in new.items() if feature.kind == "hole")
         if len(holes) > 1:
             old_hole = next(name for name, feature in old.items() if feature.kind == "hole")
             return MatchResult(ambiguous={old_hole: holes}, fresh=holes)
-        return original(old, new, centre, diagonal)
+        return original(old, new, centre, diagonal, check_cancelled=check_cancelled)
 
     monkeypatch.setattr(module, "match", contested)
     history.apply(

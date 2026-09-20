@@ -5,6 +5,26 @@ Analysekarten und der Steckbrief (§21, §18.4, §23).
 
 Die Regeln stehen in `.claude/rules/schichtanalyse.md`.
 
+`matching.match` bereitet dieselben körperbezogenen Merkmalsvektoren für
+Vollvergleich und räumliche Vorauswahl auf. Ein `cKDTree` mit Maximumsnorm
+und rational hergeleiteter Rundungsreserve verwirft nur räumlich unmögliche
+Paare; weder Nachbarzahl noch neue Geometrietoleranz begrenzen die Auswahl.
+Ein gemeinsamer Vektorkostenhelfer bedient Einzelpaar, vollständige Matrix,
+selektive Paare und gespeicherte Zuordnungsantworten. Die ursprüngliche
+Skalar- bzw. Batchreduktion der Norm bleibt dabei erhalten.
+Die volle Matrix entfällt nur mit Zertifikat: Jede Zeile der kleineren
+globalen Solverseite hat einen strikt besten angenommenen Partner, und
+diese Partner sind paarweise verschieden. Sonst bleibt der vollständige
+globale Solverkontext mit identischen Strafkosten erhalten; eine Aufteilung
+in Zusammenhangskomponenten würde Gleichstände und alte IDs verändern.
+Rivalen, neue/verwaiste IDs und ihre Reihenfolge folgen in beiden Wegen
+demselben Vertrag. Ein zweiter selektiver Durchgang bestimmt Rivalen oder
+belegt die Rückfallmatrix, ohne vorher alle Kandidatenkosten zu speichern.
+Vektoraufbereitung, Baumabfragen, Kostenblöcke, Solverabschluss und
+Ergebnisbildung prüfen den vorhandenen Abbruchcallback. `resolve` führt ihn
+auch durch gespeicherte Antworten bis vor die Rückgabe weiter. Die
+Merkmalsobergrenze bleibt eine gesonderte Release-Entscheidung.
+
 `Feature.surface_patches` hält ausschließlich schon akzeptierte analytische
 Teilträger mit ihren aktuellen Originaldreiecken. `surfaces.valid_patch`
 prüft vollständige Parameter, endliche Zahlen und eindeutige Indizes;

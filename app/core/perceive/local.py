@@ -487,10 +487,20 @@ def rigid_transform(transform: Transform) -> bool:
 
 
 def _query_is_complete(
-    mesh: MeshData, expected: Feature, found: Mapping[FeatureId, Feature]
+    mesh: MeshData,
+    expected: Feature,
+    found: Mapping[FeatureId, Feature],
+    *,
+    check_cancelled: Callable[[], None] | None = None,
 ) -> bool:
     """Ein vollständiger Treffer am erwarteten Ort macht fremde Suchränder irrelevant."""
-    matched = match({expected.id: expected}, dict(found), mesh.bounds.centre, mesh.bounds.diagonal)
+    matched = match(
+        {expected.id: expected},
+        dict(found),
+        mesh.bounds.centre,
+        mesh.bounds.diagonal,
+        check_cancelled=check_cancelled,
+    )
     identifier = matched.mapping.get(expected.id)
     if identifier is None:
         return False
@@ -626,7 +636,9 @@ def detect_known(
                 <= EPS_GEOM
                 for candidate in result.unfinished
             )
-        if blocked and not _query_is_complete(stitched, feature, result.features):
+        if blocked and not _query_is_complete(
+            stitched, feature, result.features, check_cancelled=check_cancelled
+        ):
             raise local_error("boundary")
         gathered.extend(result.features.values())
     return _numbered(gathered)

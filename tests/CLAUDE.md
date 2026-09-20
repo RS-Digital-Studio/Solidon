@@ -7,6 +7,12 @@ Die Regeln stehen in `.claude/rules/tests.md` — dort auch die Messfallen, die
 schon einmal zugeschnappt sind. Hier steht, **wie sie gefahren wird** und
 **was wo geprüft wird**.
 
+`test_matching_lifecycle.py` führt ein Raster mit 1056 wirklichen Flächen als
+STL und STEP durch Import, Änderung, Cache, Speichern und Undo/Redo. Nur die
+Merkmalszahlgrenze wird im Test freigegeben; Erkennung und Zuordnung laufen
+über die Anwendung. Der Nachweis gilt den IDs, Maßen und Flächenträgern,
+nicht einer höheren Produktionsgrenze oder einem Leistungsbudget.
+
 Der Crash-Wächter in `test_leash.py` verfolgt auch Arbeiter, die eine Fabrik
 zurückgibt oder an einen Helfer übergibt. Nur die Verbindung des entsprechenden
 Parameters zählt; ein verbundenes anderes Signal im Helfer deckt den Arbeiter

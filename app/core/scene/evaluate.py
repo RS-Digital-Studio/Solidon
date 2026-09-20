@@ -112,16 +112,19 @@ _log = get_logger(__name__)
 #: brachte 3 372 Merkmale mit, und ``match`` baute daraus eine Kostenmatrix mit
 #: 11,4 Millionen Einträgen. Ein Schritt kostete 101 Sekunden.
 #:
-#: Die Zahl ist gemessen, nicht gegriffen. ``match`` wächst quadratisch:
+#: Die ursprüngliche dichte Zuordnung wurde quadratisch gemessen:
 #: 250 Merkmale 0,63 s, 500 Merkmale 2,47 s, 1 000 Merkmale 9,94 s, 2 000
-#: Merkmale 39,97 s. Und was echte Modelle mitbringen, liegt zwei
-#: Größenordnungen darunter — über die zwanzig Netze des Korpus gemessen ist
-#: der Höchstwert **16** Merkmale.
+#: Merkmale 39,97 s. Der damalige Korpus von zwanzig Netzen enthielt höchstens
+#: **16** Merkmale. Das sind historische Messwerte, keine Aussage über die
+#: aktuelle Zuordnung oder über größere importierte Lochbleche.
 #:
 #: Sie liegt deshalb bewusst hoch. Ohne Zuordnung verliert **jedes** Merkmal
 #: seinen Bezeichner, und daran hängen Operationen und Passungen (§21.2) — eine
 #: enge Grenze schnitte ein Lochblech mit sechshundert Bohrungen ab, das
 #: legitim ist. Gefangen werden soll der Ausreißer, nicht der Alltag.
+#: Die Produktgrenze bleibt bis zur Release-Abnahme unverändert. Dazu gehören
+#: der dichte Rückfall der Zuordnung und alle nachfolgenden Verbraucher; ein
+#: funktionaler Lebenslauftest oberhalb der Grenze ersetzt diese Abnahme nicht.
 FEATURE_LIMIT_COUNT = 1_000
 
 
@@ -1386,7 +1389,11 @@ def _with_features(
             # wie am Netz. Reine Transformationen tragen ihre Herkunft schon.
             watch.raise_if_cancelled()
             matched = match(
-                previous, exact_entry.features, mesh.bounds.centre, mesh.bounds.diagonal
+                previous,
+                exact_entry.features,
+                mesh.bounds.centre,
+                mesh.bounds.diagonal,
+                check_cancelled=watch.raise_if_cancelled,
             )
             watch.raise_if_cancelled()
             exact_entry = dataclasses.replace(
@@ -1588,7 +1595,13 @@ def _with_features(
         watch.raise_if_cancelled()
         if say is not None:
             say(str(_("Merkmale zuordnen")))
-        seen = match(declared, detected, mesh.bounds.centre, mesh.bounds.diagonal)
+        seen = match(
+            declared,
+            detected,
+            mesh.bounds.centre,
+            mesh.bounds.diagonal,
+            check_cancelled=watch.raise_if_cancelled,
+        )
         blind = set(seen.orphaned)
         # Randöffnungen sind geometrisch erkennbare Langlöcher. Fehlt ihre
         # Wand, darf ein mitgetragener Eintrag nicht zur ungeprüften Zusage
@@ -1795,7 +1808,13 @@ def _with_features(
     watch.raise_if_cancelled()
     if say is not None:
         say(str(_("Merkmale zuordnen")))
-    matched = match(previous, detected, centre, mesh.bounds.diagonal)
+    matched = match(
+        previous,
+        detected,
+        centre,
+        mesh.bounds.diagonal,
+        check_cancelled=watch.raise_if_cancelled,
+    )
 
     saved = operation.matches
     for old_id, candidates in matched.ambiguous.items():
@@ -1816,7 +1835,14 @@ def _with_features(
         # (Regel 21).
         remembered = saved.get(old_id)
         if remembered is not None:
-            answer = resolve(remembered, candidates, detected, centre, mesh.bounds.diagonal)
+            answer = resolve(
+                remembered,
+                candidates,
+                detected,
+                centre,
+                mesh.bounds.diagonal,
+                check_cancelled=watch.raise_if_cancelled,
+            )
             if answer is not None:
                 matched.mapping[old_id] = answer
                 continue

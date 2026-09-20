@@ -21,13 +21,14 @@ Drei Ausgänge, und nur einer davon ist still:
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass, field, replace
+from fractions import Fraction
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
-from app.core.deferred import linear_sum_assignment
+from app.core.deferred import cKDTree, linear_sum_assignment
 from app.core.log import get_logger
 from app.core.perceive.surfaces import radial_scales, transformed_patches
 from app.core.types import Feature, FeatureId, Transform, Vec3
@@ -71,11 +72,9 @@ KIND_PENALTY = 1e6
 
 #: Wie viele alte Merkmale gleichzeitig gegen alle neuen gerechnet werden.
 #:
-#: Die volle Kostenmatrix muss für die ungarische Zuordnung ohnehin im
-#: Speicher liegen. Die drei Koordinaten je Paar dagegen nicht: Bei 3 372
-#: Merkmalen wäre allein ein solcher Zwischenwert rund 273 MB groß. Blöcke
-#: halten die Rechnung vektorisiert, ohne den Arbeitsspeicher mit mehreren
-#: dreidimensionalen Matrizen zu belegen.
+#: Eine volle Matrix entsteht nur beim nicht eindeutig zertifizierten
+#: Gesamtkonflikt. Koordinaten je Paar und Baumabfragen bleiben auch dort
+#: blockweise begrenzt; der Abbruch wird zwischen diesen Blöcken geprüft.
 VECTOR_ROWS = 256
 
 
@@ -127,19 +126,47 @@ def cost(
     one = feature_vector(first, first_centre, diagonal)
     two = feature_vector(second, second_centre, diagonal)
 
-    position = float(np.linalg.norm(one[:3] - two[:3])) / POSITION_TOLERANCE
+    return float(_vector_costs(one, two, "axis" in first.params))
+
+
+def _vector_norm(values: np.ndarray) -> np.ndarray:
+    """Skalar- und Batchreduktion des bisherigen Kostenwegs jeweils erhalten."""
+    return np.asarray(
+        np.linalg.norm(values) if values.ndim == 1 else np.linalg.norm(values, axis=-1)
+    )
+
+
+def _vector_costs(one: np.ndarray, two: np.ndarray, signless: np.ndarray | bool) -> np.ndarray:
+    """Eine Kostenformel für Einzelpaar, Matrix, Vorauswahl und gespeicherte Antwort."""
+    position = _vector_norm(one[..., :3] - two[..., :3]) / POSITION_TOLERANCE
     # Eine Bohrungs- oder Stiftachse ist eine Linie, keine Richtung: die
     # Erkennung liefert sie nach einer Drehung mal als +v, mal als -v, und
     # beides ist dasselbe Merkmal. Eine Flächennormale trägt ihr Vorzeichen
     # dagegen zu Recht — innen ist nicht außen. Unterschieden am Parameter,
     # nicht an einer Artenliste: was eine ``axis`` hat, ist richtungslos.
-    delta = float(np.linalg.norm(one[3:6] - two[3:6]))
-    if "axis" in first.params:
-        delta = min(delta, float(np.linalg.norm(one[3:6] + two[3:6])))
+    delta = _vector_norm(one[..., 3:6] - two[..., 3:6])
+    if np.any(signless):
+        opposite = _vector_norm(one[..., 3:6] + two[..., 3:6])
+        delta = np.where(signless, np.minimum(delta, opposite), delta)
     axis = delta / AXIS_TOLERANCE
-    scale = max(abs(float(one[6])), abs(float(two[6])), EPS_GEOM)
-    diameter = abs(float(one[6]) - float(two[6])) / scale / DIAMETER_TOLERANCE
-    return float(position + axis + diameter)
+    scale = np.maximum(np.maximum(np.abs(one[..., 6]), np.abs(two[..., 6])), EPS_GEOM)
+    diameter = np.abs(one[..., 6] - two[..., 6]) / scale / DIAMETER_TOLERANCE
+    return np.asarray(position + axis + diameter)
+
+
+def _vectors(
+    features: list[Feature], centre: Vec3, diagonal: float, check: Callable[[], None] | None
+) -> np.ndarray:
+    """Originale Bezugsrechnung blockweise aufbereiten, ohne eigene Zentrierungsformel."""
+    vectors = np.empty((len(features), 7), dtype=float)
+    for start in range(0, len(features), VECTOR_ROWS):
+        if check is not None:
+            check()
+        stop = min(start + VECTOR_ROWS, len(features))
+        vectors[start:stop] = [
+            feature_vector(entry, centre, diagonal) for entry in features[start:stop]
+        ]
+    return vectors
 
 
 def _cost_matrix(
@@ -148,65 +175,172 @@ def _cost_matrix(
     first_centre: Vec3,
     second_centre: Vec3,
     diagonal: float,
+    *,
+    check_cancelled: Callable[[], None] | None = None,
 ) -> np.ndarray:
-    """Alle Paarkosten auf einmal, mit :func:`cost` als Einzelpaar-Referenz.
-
-    Der frühere Aufbau rief ``cost`` in zwei Python-Schleifen auf. Bei 3 372
-    Merkmalen waren das 11,4 Millionen Aufrufe und rund 101 Sekunden, bevor
-    die eigentliche Zuordnung überhaupt begann. Hier bleibt dieselbe Formel;
-    NumPy rechnet nur ihre unabhängigen Paare blockweise in kompiliertem Code.
-
-    Blockweise ist für die Speichergrenze ebenso wichtig wie die
-    Vektorisierung für die Zeit: Die Ergebnis-Matrix ist quadratisch und
-    unvermeidlich, ihre dreidimensionalen Zwischenwerte sind es nicht.
-    """
-    first_vectors = np.vstack(
-        [feature_vector(feature, first_centre, diagonal) for feature in first]
-    )
-    second_vectors = np.vstack(
-        [feature_vector(feature, second_centre, diagonal) for feature in second]
-    )
+    """Vollständige Referenzmatrix mit derselben Formel wie selektive Paare."""
+    first_vectors = _vectors(first, first_centre, diagonal, check_cancelled)
+    second_vectors = _vectors(second, second_centre, diagonal, check_cancelled)
     second_kinds = np.asarray([feature.kind for feature in second], dtype=object)
     matrix = np.empty((len(first), len(second)), dtype=float)
 
     for start in range(0, len(first), VECTOR_ROWS):
+        if check_cancelled is not None:
+            check_cancelled()
         stop = min(start + VECTOR_ROWS, len(first))
         one = first_vectors[start:stop]
-
-        position_delta = one[:, None, :3] - second_vectors[None, :, :3]
-        block = np.linalg.norm(position_delta, axis=2)
-        del position_delta
-        block /= POSITION_TOLERANCE
-
-        axis_delta = one[:, None, 3:6] - second_vectors[None, :, 3:6]
-        axis_cost = np.linalg.norm(axis_delta, axis=2)
-        del axis_delta
         signless = np.fromiter(
             ("axis" in feature.params for feature in first[start:stop]),
             dtype=bool,
             count=stop - start,
         )
-        if np.any(signless):
-            opposite_delta = one[signless, None, 3:6] + second_vectors[None, :, 3:6]
-            opposite = np.linalg.norm(opposite_delta, axis=2)
-            del opposite_delta
-            axis_cost[signless] = np.minimum(axis_cost[signless], opposite)
-        block += axis_cost / AXIS_TOLERANCE
-        del axis_cost
-
-        first_size = one[:, None, 6]
-        second_size = second_vectors[None, :, 6]
-        scale = np.maximum(np.abs(first_size), np.abs(second_size))
-        np.maximum(scale, EPS_GEOM, out=scale)
-        size_cost = np.abs(first_size - second_size)
-        size_cost /= scale
-        block += size_cost / DIAMETER_TOLERANCE
-
+        block = _vector_costs(one[:, None, :], second_vectors[None, :, :], signless[:, None])
         first_kinds = np.asarray([feature.kind for feature in first[start:stop]], dtype=object)
         block[first_kinds[:, None] != second_kinds[None, :]] = KIND_PENALTY
         matrix[start:stop] = block
 
     return matrix
+
+
+def _query_radius() -> float:
+    """Nur Rundungsreserve für den Raumfilter, keine zusätzliche Annahmetoleranz.
+
+    Bei u=eps/2 umfasst R/(1-u)^5 die Rundungen von Norm, Division und
+    Koordinatendifferenz. Die Baumabfrage verwendet die Maximumsnorm und
+    exakt dieselben gerundeten Positionen wie die Kostenformel. Nahe der
+    festen Grenze R=0,08 sind Quadrat und Wurzel normal darstellbar.
+    """
+    unit = Fraction(float(np.finfo(float).eps)) / 2
+    radius = Fraction(POSITION_TOLERANCE) * Fraction(MATCH_THRESHOLD) / (1 - unit) ** 5
+    rounded = float(radius)
+    return float(np.nextafter(rounded, np.inf)) if Fraction(rounded) < radius else rounded
+
+
+def _candidate_costs(
+    first: list[Feature],
+    second: list[Feature],
+    one: np.ndarray,
+    two: np.ndarray,
+    tree: Any,
+    radius: float,
+    check: Callable[[], None] | None,
+) -> Iterator[tuple[int, np.ndarray, np.ndarray]]:
+    """Alle räumlich möglichen Paare ohne Nachbarlimit; Kosten nur in kleinen Blöcken."""
+    kinds = np.asarray([entry.kind for entry in second], dtype=object)
+    for start in range(0, len(first), VECTOR_ROWS):
+        if check is not None:
+            check()
+        neighbours = tree.query_ball_point(
+            one[start : start + VECTOR_ROWS, :3], radius, p=np.inf, return_sorted=True
+        )
+        if check is not None:
+            check()
+        for offset, nearby in enumerate(neighbours):
+            row = start + offset
+            indices = np.asarray(nearby, dtype=np.intp)
+            indices = indices[kinds[indices] == first[row].kind]
+            for block in range(0, len(indices), VECTOR_ROWS):
+                if check is not None:
+                    check()
+                columns = indices[block : block + VECTOR_ROWS]
+                values = _vector_costs(one[row], two[columns], "axis" in first[row].params)
+                accepted = values <= MATCH_THRESHOLD
+                yield row, columns[accepted], values[accepted]
+
+
+def _assignment(
+    first: list[Feature],
+    second: list[Feature],
+    before: Vec3,
+    centre: Vec3,
+    diagonal: float,
+    check: Callable[[], None] | None,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray | None, list[np.ndarray]]:
+    """Strikte freie Zeilenminima zertifizieren; sonst den ganzen Solverkontext erhalten."""
+    one, two = _vectors(first, before, diagonal, check), _vectors(second, centre, diagonal, check)
+    if not np.all(np.isfinite(one)) or not np.all(np.isfinite(two)):
+        # Ungültige Zahlen behalten den bisherigen Fehlerweg des Vollvergleichs.
+        matrix = _cost_matrix(first, second, before, centre, diagonal, check_cancelled=check)
+        matrix = np.where(matrix > MATCH_THRESHOLD, KIND_PENALTY, matrix)
+        if check is not None:
+            check()
+        rows, columns = linear_sum_assignment(matrix)
+        if check is not None:
+            check()
+        return rows, columns, matrix, []
+    if check is not None:
+        check()
+    tree = cKDTree(two[:, :3])
+    radius = _query_radius()
+    smaller = min(len(first), len(second))
+    transposed = len(first) > len(second)
+    minima = np.full(smaller, np.inf)
+    runners = np.full(smaller, np.inf)
+    partners = np.full(smaller, -1, dtype=np.intp)
+    for row, columns, values in _candidate_costs(first, second, one, two, tree, radius, check):
+        if not len(columns):
+            continue
+        if transposed:
+            improve = values < minima[columns]
+            runners[columns] = np.minimum(
+                runners[columns], np.where(improve, minima[columns], values)
+            )
+            minima[columns] = np.minimum(minima[columns], values)
+            partners[columns[improve]] = row
+        else:
+            best = int(np.argmin(values))
+            value, column = float(values[best]), int(columns[best])
+            other = np.min(np.delete(values, best), initial=np.inf)
+            if value < minima[row]:
+                runners[row] = min(runners[row], minima[row], other)
+                minima[row], partners[row] = value, column
+            else:
+                runners[row] = min(runners[row], value)
+    certified = (
+        np.all(minima <= MATCH_THRESHOLD)
+        and np.all(runners > minima)
+        and len(np.unique(partners)) == smaller
+    )
+    if certified:
+        # Der globale Solver findet auf seiner kleineren Seite jedes strikte
+        # Minimum sofort auf einer freien Spalte. Kein Alternierungspfad und
+        # keine Strafkostenarithmetik können eine andere Paarung erzeugen.
+        rows = partners if transposed else np.arange(smaller)
+        columns = np.arange(smaller) if transposed else partners
+        order = np.argsort(rows)
+        rows, columns = rows[order], columns[order]
+        selected: dict[int, tuple[int, list[int]]] = {
+            int(row): (int(column), []) for row, column in zip(rows, columns, strict=True)
+        }
+        for row, nearby, values in _candidate_costs(first, second, one, two, tree, radius, check):
+            entry = selected.get(row)
+            if entry is None:
+                continue
+            column, rivals = entry
+            best = minima[column if transposed else row]
+            limit = best * (1.0 + AMBIGUITY_MARGIN) + AMBIGUITY_FLOOR
+            rivals.extend(int(index) for index in nearby[(nearby != column) & (values <= limit)])
+        return (
+            rows,
+            columns,
+            None,
+            [np.asarray(selected[int(row)][1], dtype=np.intp) for row in rows],
+        )
+    if check is not None:
+        check()
+    # Abgelehnte Paare kosten überall dieselbe Strafe. Sonst könnte der
+    # Summenoptimierer ein annehmbares Paar zugunsten zweier billigerer,
+    # aber beide abgelehnter Paare opfern. Der vollständige globale Kontext
+    # bleibt auch bei räumlich getrennten Konkurrenzgruppen erhalten.
+    matrix = np.full((len(first), len(second)), KIND_PENALTY, dtype=float)
+    for row, columns, values in _candidate_costs(first, second, one, two, tree, radius, check):
+        matrix[row, columns] = values
+    if check is not None:
+        check()
+    rows, columns = linear_sum_assignment(matrix)
+    if check is not None:
+        check()
+    return rows, columns, matrix, []
 
 
 def match(
@@ -215,12 +349,16 @@ def match(
     centre: Vec3,
     diagonal: float,
     old_centre: Vec3 | None = None,
+    *,
+    check_cancelled: Callable[[], None] | None = None,
 ) -> MatchResult:
     """Ordnet neue Merkmale alten Bezeichnern zu und sagt, was offen blieb.
 
     ``centre`` ist das Bezugssystem des neuen Körpers, ``old_centre`` das, in
     dem die alten Merkmale gemessen wurden — per Vorgabe dasselbe.
     """
+    if check_cancelled is not None:
+        check_cancelled()
     if not old:
         return MatchResult(fresh=tuple(new))
     if not new:
@@ -229,47 +367,23 @@ def match(
     before = old_centre if old_centre is not None else centre
     old_ids = list(old)
     new_ids = list(new)
-    matrix = _cost_matrix(
+    rows, columns, matrix, selected_rivals = _assignment(
         [old[identifier] for identifier in old_ids],
         [new[identifier] for identifier in new_ids],
         before,
         centre,
         diagonal,
+        check_cancelled,
     )
     threshold = MATCH_THRESHOLD
-    # **Was ohnehin abgelehnt würde, kostet so viel wie eine falsche Art.**
-    # Die ungarische Methode minimiert die *Gesamtsumme* und kennt die Schwelle
-    # nicht — sie opfert deshalb ein annehmbares Paar, wenn zwei unannehmbare
-    # zusammen billiger sind. Gemessen an einer Platte mit Schraubenlöchern und
-    # einer Mutternfalle:
-    #
-    #     nut_trap_pocket_1 -> hole_2   3,281   verwaist
-    #     nut_trap_bore_1   -> hole_1   3,742   verwaist   (bester wäre hole_2 mit 0,757)
-    #
-    # Die Summe 7,02 ist kleiner als jede Lösung, die ``hole_2`` an die Bohrung
-    # gibt — und **beide** fallen über die Schwelle. Mit dem 0,757er Paar wäre
-    # eines gerettet worden statt keines. Angehoben sieht die Optimierung, dass
-    # ein Paar über der Schwelle so wertlos ist wie gar keines, und nimmt
-    # lieber das eine, das zählt.
-    matrix = np.where(matrix > threshold, KIND_PENALTY, matrix)
-
-    rows, columns = linear_sum_assignment(matrix)
     result = MatchResult()
     taken: set[str] = set()
 
-    # Der zweite quadratische Python-Lauf war die Rivalensuche: Für jedes
-    # zugeordnete Merkmal wurde die ganze Zeile Element für Element gelesen.
-    # Die Vergleiche entstehen gemeinsam; Python sieht danach nur noch die
-    # wenigen Kennungen, die tatsächlich Rivalen sind.
-    best_costs = matrix[rows, columns]
-    limits = best_costs * (1.0 + AMBIGUITY_MARGIN) + AMBIGUITY_FLOOR
-    rival_masks = matrix[rows] <= limits[:, None]
-    rival_masks[np.arange(len(rows)), columns] = False
-
     for assigned, (row, column) in enumerate(zip(rows, columns, strict=True)):
+        if check_cancelled is not None:
+            check_cancelled()
         old_id = old_ids[row]
-        best = float(matrix[row, column])
-        if best > threshold:
+        if matrix is not None and matrix[row, column] > threshold:
             result.orphaned = (*result.orphaned, old_id)
             continue
 
@@ -280,7 +394,14 @@ def match(
         # Tasche und Bohrung übereinander machte jede Auswertung des Gehäuses
         # zur Rückfrage. Der Boden hält den Fall offen, dass zwei Kandidaten
         # beide fast nichts kosten und wirklich nicht zu unterscheiden sind.
-        rivals = [new_ids[other] for other in np.flatnonzero(rival_masks[assigned])]
+        if matrix is None:
+            rival_indices = selected_rivals[assigned]
+        else:
+            limit = matrix[row, column] * (1.0 + AMBIGUITY_MARGIN) + AMBIGUITY_FLOOR
+            rival_mask = matrix[row] <= limit
+            rival_mask[column] = False
+            rival_indices = np.flatnonzero(rival_mask)
+        rivals = [new_ids[other] for other in rival_indices]
         if rivals:
             # §21.3: mehrere dichte Kandidaten — anhalten und fragen statt raten.
             result.ambiguous[old_id] = (new_ids[column], *rivals)
@@ -297,6 +418,8 @@ def match(
     ) + tuple(entry for entry in result.orphaned)
     result.fresh = tuple(identifier for identifier in new_ids if identifier not in taken)
 
+    if check_cancelled is not None:
+        check_cancelled()
     if result.ambiguous:
         _log.info("feature matching left %d ambiguous", len(result.ambiguous))
     return result
@@ -450,6 +573,8 @@ def resolve(
     detected: Mapping[FeatureId, Feature],
     centre: Vec3,
     diagonal: float,
+    *,
+    check_cancelled: Callable[[], None] | None = None,
 ) -> FeatureId | None:
     """Welcher Kandidat der gespeicherten Antwort entspricht — oder ``None``.
 
@@ -464,6 +589,8 @@ def resolve(
     muss unter der Annahmeschwelle liegen **und** die anderen müssen deutlich
     schlechter sein. Sonst ``None``.
     """
+    if check_cancelled is not None:
+        check_cancelled()
     kind = saved.get("kind")
     reference = np.concatenate(
         [
@@ -476,31 +603,29 @@ def resolve(
 
     costs: list[tuple[float, FeatureId]] = []
     for identifier in candidates:
+        if check_cancelled is not None:
+            check_cancelled()
         feature = detected.get(identifier)
         if feature is None or feature.kind != kind:
             continue
         vector = feature_vector(feature, centre, diagonal)
-        position = float(np.linalg.norm(reference[:3] - vector[:3])) / POSITION_TOLERANCE
-        delta = float(np.linalg.norm(reference[3:6] - vector[3:6]))
-        if not directional:
-            # Dieselbe Regel wie in `cost`: was eine ``axis`` hat, ist eine
-            # Linie und keine Richtung — +v und -v sind dasselbe Merkmal.
-            delta = min(delta, float(np.linalg.norm(reference[3:6] + vector[3:6])))
-        axis = delta / AXIS_TOLERANCE
-        scale = max(abs(float(reference[6])), abs(float(vector[6])), EPS_GEOM)
-        diameter = abs(float(reference[6]) - float(vector[6])) / scale / DIAMETER_TOLERANCE
-        costs.append((float(position + axis + diameter), identifier))
+        costs.append((float(_vector_costs(reference, vector, not directional)), identifier))
 
+    if check_cancelled is not None:
+        check_cancelled()
     if not costs:
         return None
     costs.sort()
+    if check_cancelled is not None:
+        check_cancelled()
     best, winner = costs[0]
     if best > MATCH_THRESHOLD:
         return None
     limit = best * (1.0 + AMBIGUITY_MARGIN) + AMBIGUITY_FLOOR
-    if any(value <= limit for value, identifier in costs[1:]):
-        return None
-    return winner
+    ambiguous = any(value <= limit for value, identifier in costs[1:])
+    if check_cancelled is not None:
+        check_cancelled()
+    return None if ambiguous else winner
 
 
 def moved_features(
