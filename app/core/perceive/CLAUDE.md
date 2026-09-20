@@ -409,7 +409,16 @@ nicht versehentlich zu Formmaßen. Versetzen, Drehen, Verdoppeln und Entfernen
 vergleichen dagegen den vollständigen echten Flächenausschnitt unter der
 ermittelten Verschiebung, zusätzlich zu Profilmaßen und Achse. Gleiche Fläche
 oder gleicher Kugelradius allein reichen damit nicht für gleiche Rand- oder
-Patchform.
+Patchform. **Verglichen wird die Fläche, nicht ihre Vernetzung**
+(`_same_surface_patch`, P1.5, 20.09.2026): Jede Ecke des einen Ausschnitts
+muss auf den Dreiecken des anderen liegen und umgekehrt, innerhalb von
+`units.MAX_FACET_SAG` — eine feiner unterteilte Kopie bleibt dieselbe Form,
+eine Kalotte liegt auf ihrer Kugel, die Kugel aber nicht auf der Kalotte.
+Bis dahin verglich der Kern Eckpunktmengen und Kantenlängen, und eine
+unveränderte Fläche mit anderer Unterteilung galt als verschieden. Die
+Kandidatendreiecke kommen aus den `NEAREST_CORNERS` nächsten Ecken und der
+Nachbarschaft Ecke → Dreiecke (`_distance_to_surface`), nicht aus einem
+zweiten räumlichen Index.
 
 Eine topologisch belegte Hohlraumkette bleibt dabei der Umfang jedes
 Mitglieds. Verglichen werden dieselbe Kettenrolle und Artenfolge; für eine

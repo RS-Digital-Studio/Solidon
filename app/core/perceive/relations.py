@@ -1236,10 +1236,18 @@ _DIAGNOSTIC_PARAMETERS = frozenset(
 
 @dataclass(frozen=True)
 class _SurfacePatch:
-    """Ein echter Flächenausschnitt und seine nur bei Bedarf gebildeten Suchbäume."""
+    """Ein echter Flächenausschnitt: seine Dreiecke, seine Ecken und ihr Suchbaum.
+
+    ``points`` sind die verschiedenen Ecken relativ zur Merkmalsmitte,
+    ``triangles`` die Dreiecke in denselben Koordinaten und ``corners`` je
+    Dreieck die drei Nummern in ``points``. Daraus entsteht bei Bedarf die
+    Nachbarschaft Ecke → Dreiecke (:attr:`incidence`), mit der ein Punkt
+    seine nächsten Dreiecke findet, ohne alle zu messen.
+    """
 
     points: NDArray[np.float64]
-    edge_lengths: NDArray[np.float64]
+    triangles: NDArray[np.float64]
+    corners: NDArray[np.int64]
 
     @cached_property
     def points_tree(self) -> Any:
@@ -1247,9 +1255,22 @@ class _SurfacePatch:
         return cKDTree(self.points)
 
     @cached_property
-    def edges_tree(self) -> Any:
-        """Die Dreiecksformen einmal indizieren, bevor die Punktabdeckung folgt."""
-        return cKDTree(self.edge_lengths)
+    def incidence(self) -> tuple[NDArray[np.int64], NDArray[np.int64]]:
+        """Je Ecke die Dreiecke, die sie tragen — als Zeilenanfänge und Mitglieder."""
+        corner = self.corners.ravel()
+        order = np.argsort(corner, kind="stable")
+        members = (order // 3).astype(np.int64)
+        counts = np.bincount(corner, minlength=len(self.points))
+        starts = np.concatenate(([0], np.cumsum(counts))).astype(np.int64)
+        return starts, members
+
+
+#: Wie viele nächste Ecken der Gegenfläche ein Punkt befragt, bevor er den
+#: Abstand zu deren Dreiecken misst. Der Fächer um eine Ecke hat selten mehr
+#: als sechs Dreiecke; acht Ecken decken das enthaltende Dreieck auch dort,
+#: wo die Vernetzung ungleichmäßig ist. Wer trotzdem außerhalb liegt, fragt
+#: einmal mit dem Vierfachen nach, bevor er als verschieden gilt.
+NEAREST_CORNERS: Final[int] = 8
 
 
 @dataclass(slots=True)
@@ -1651,11 +1672,13 @@ def _surface_patch(
 
 
 def _build_surface_patch(scope: tuple[Feature, ...], mesh: MeshData) -> _SurfacePatch | None:
-    """Flächenproben eines Umfangs, relativ zu seinem ersten Mittelpunkt.
+    """Die Dreiecke eines Umfangs, relativ zu seinem ersten Mittelpunkt.
 
-    Die Eckpunkte bilden die Lage und Abdeckung ab; die drei Kantenlängen
-    jedes Dreiecks bewahren zusätzlich die örtliche Vernetzung. Flächenindex
-    und Reihenfolge tragen keine Bedeutung; die Geometrie selbst schon.
+    Flächenindex, Reihenfolge und Unterteilung tragen keine Bedeutung; die
+    Fläche selbst schon. Bis zum 20.09.2026 hielt der Ausschnitt auch die
+    drei Kantenlängen jedes Dreiecks, und der Vergleich verlangte dieselbe
+    Vernetzung — eine unveränderte ebene Fläche, an einer Kopie nur feiner
+    unterteilt, galt als „verschieden" (P1.5, Durchsicht der Verbraucher).
     """
     centre = centre_of(scope[0])
     indices = np.unique(
@@ -1675,33 +1698,76 @@ def _build_surface_patch(scope: tuple[Feature, ...], mesh: MeshData) -> _Surface
     triangles = np.asarray(body.triangles, dtype=np.float64)[indices] - centre
     if not np.isfinite(triangles).all():
         return None
-    points = np.unique(triangles.reshape(-1, 3), axis=0)
-    edges = np.sort(
-        np.linalg.norm(triangles - np.roll(triangles, 1, axis=1), axis=2),
-        axis=1,
-    )
-    order = np.lexsort((edges[:, 2], edges[:, 1], edges[:, 0]))
+    points, inverse = np.unique(triangles.reshape(-1, 3), axis=0, return_inverse=True)
     return _SurfacePatch(
         points=cast(NDArray[np.float64], points),
-        edge_lengths=cast(NDArray[np.float64], edges[order]),
+        triangles=cast(NDArray[np.float64], triangles),
+        corners=np.asarray(inverse, dtype=np.int64).reshape(-1, 3),
     )
 
 
 def _same_surface_patch(reference: _SurfacePatch, candidate: _SurfacePatch) -> bool:
-    """Punktabdeckung und Dreiecksformen stimmen innerhalb der Auflösung."""
-    edges_to_candidate = candidate.edges_tree.query(reference.edge_lengths, p=np.inf)[0]
-    edges_to_reference = reference.edges_tree.query(candidate.edge_lengths, p=np.inf)[0]
-    if (
-        float(np.max(edges_to_candidate, initial=0.0)) > EPS_DISPLAY
-        or float(np.max(edges_to_reference, initial=0.0)) > EPS_DISPLAY
-    ):
-        return False
-    to_candidate = candidate.points_tree.query(reference.points)[0]
-    to_reference = reference.points_tree.query(candidate.points)[0]
-    return bool(
-        float(np.max(to_candidate, initial=0.0)) <= EPS_DISPLAY
-        and float(np.max(to_reference, initial=0.0)) <= EPS_DISPLAY
+    """Zwei Ausschnitte sind dieselbe Fläche, wenn jeder auf dem anderen liegt.
+
+    Gemessen wird der Abstand jeder Ecke des einen zur **Fläche** des anderen,
+    in beide Richtungen — nicht zu dessen Ecken und nicht über Kantenlängen.
+    Eine feinere Unterteilung setzt ihre neuen Ecken auf die alten Dreiecke
+    und bleibt damit dieselbe Fläche; eine Kalotte liegt auf ihrer Kugel, aber
+    die Kugel nicht auf der Kalotte, und die Gegenrichtung sagt „verschieden".
+    Die Toleranz ist :data:`units.MAX_FACET_SAG`: Zwei Tessellierungen
+    derselben Rundung liegen höchstens um die Sehnenhöhe auseinander, und
+    kleiner als die Anzeigeauflösung wäre für eine Fläche aus Dreiecken keine
+    Auskunft, sondern Zufall. Die Maße selbst vergleicht davor
+    :func:`_dimension_comparison` mit :data:`EPS_DISPLAY`.
+    """
+    for own, other in ((reference, candidate), (candidate, reference)):
+        distances = _distance_to_surface(own.points, other, NEAREST_CORNERS)
+        outside = distances > units.MAX_FACET_SAG
+        if outside.any():
+            distances[outside] = _distance_to_surface(
+                own.points[outside], other, NEAREST_CORNERS * 4
+            )
+            if bool((distances > units.MAX_FACET_SAG).any()):
+                return False
+    return True
+
+
+def _distance_to_surface(
+    points: NDArray[np.float64], patch: _SurfacePatch, neighbours: int
+) -> NDArray[np.float64]:
+    """Der Abstand jedes Punkts zu den Dreiecken um seine nächsten Ecken.
+
+    Die Kandidaten kommen aus dem Eckensuchbaum und der Nachbarschaft
+    Ecke → Dreiecke; gemessen wird dann einmal vektorisiert über alle
+    Paare (``trimesh.triangles.closest_point``) und je Punkt das Minimum
+    genommen. Ein Punkt, dessen nächstes Dreieck an keiner der befragten Ecken
+    hängt, bekommt einen zu großen Abstand — der Aufrufer fragt dann mit mehr
+    Ecken nach.
+    """
+    if not len(points):
+        return np.zeros(0, dtype=np.float64)
+    count = min(neighbours, len(patch.points))
+    nearest = np.asarray(patch.points_tree.query(points, k=count)[1], dtype=np.int64)
+    nearest = nearest.reshape(len(points), count)
+    starts, members = patch.incidence
+    corners = nearest.ravel()
+    begin, end = starts[corners], starts[corners + 1]
+    lengths = end - begin
+    total = int(lengths.sum())
+    if total == 0:
+        return np.full(len(points), np.inf, dtype=np.float64)
+    point_ids = np.repeat(np.repeat(np.arange(len(points)), count), lengths)
+    slots = np.arange(total) - np.repeat(np.cumsum(lengths) - lengths, lengths)
+    triangle_ids = members[np.repeat(begin, lengths) + slots]
+    pairs = np.unique(point_ids * len(patch.triangles) + triangle_ids)
+    point_ids, triangle_ids = pairs // len(patch.triangles), pairs % len(patch.triangles)
+    closest = trimesh.triangles.closest_point(  # type: ignore[no-untyped-call]
+        patch.triangles[triangle_ids], points[point_ids]
     )
+    measured = np.linalg.norm(closest - points[point_ids], axis=1)
+    best = np.full(len(points), np.inf, dtype=np.float64)
+    np.minimum.at(best, point_ids, measured)
+    return best
 
 
 def _dimension_comparison(

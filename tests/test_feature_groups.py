@@ -403,9 +403,62 @@ def test_a_group_builds_each_surface_index_once(monkeypatch: pytest.MonkeyPatch)
     assert all(_targets(group) == tuple(features) for group in grouped), {
         group.action: (_targets(group), group.uncertain) for group in grouped
     }
-    assert built == 2 * len(features), f"{built} surface indexes for {len(features)} patches"
+    assert built == len(features), f"{built} surface indexes for {len(features)} patches"
     assert alike_for_actions(actions, "sphere_1", features, mesh) == grouped
-    assert built == 4 * len(features), "surface indexes must not survive their selection context"
+    assert built == 2 * len(features), "surface indexes must not survive their selection context"
+
+
+def test_a_finer_subdivided_copy_is_still_the_same_complete_shape(
+    garden_pattern: tuple[MeshData, dict[str, Feature]],
+) -> None:
+    """Dieselbe Fläche, anders vernetzt, gehört zur Ganzkörpergruppe (P1.5).
+
+    Am Gartenmuster werden die Dreiecke **einer** der acht Außenbohrungen in
+    vier geteilt — die Fläche ändert sich nicht, die Ecken und Kantenlängen
+    schon. Bis zum 20.09.2026 verglich ``_same_surface_patch`` genau die und
+    ließ die Bohrung aus der Gruppe fallen; jetzt zählt der Abstand zur
+    Fläche, und die Kalottengegenprobe daneben trennt weiter.
+    """
+    mesh, features = garden_pattern
+    small = sorted(
+        (feature for feature in features.values() if feature.kind == "hole"),
+        key=lambda feature: (float(feature.params["diameter"]), feature.id),
+    )[:8]
+    assert len({round(float(f.params["diameter"]), 3) for f in small}) == 1, "acht Ø 2"
+    chosen, other = small[0], small[1]
+    before = alike_for_action("move_feature", chosen.id, features, mesh)
+    assert other.id in _targets(before) and "complete_surface_patch" in before.evidence
+
+    body = mesh.raw
+    vertices, faces, split = trimesh.remesh.subdivide(
+        body.vertices, body.faces, face_index=np.asarray(other.face_indices), return_index=True
+    )
+    # trimesh stellt die unveraenderten Dreiecke in ihrer Reihenfolge nach vorn
+    # und haengt die geteilten an; ``split`` nennt nur die geteilten.
+    untouched = np.setdiff1d(np.arange(len(body.faces)), np.asarray(other.face_indices))
+    new_index = {int(old): (int(new),) for new, old in enumerate(untouched)}
+    new_index.update({int(old): tuple(int(i) for i in new) for old, new in split.items()})
+    remeshed = MeshData.of(trimesh.Trimesh(vertices, faces, process=False))
+    renumbered = {
+        identifier: replace(
+            feature,
+            face_indices=tuple(
+                index for old in feature.face_indices for index in new_index[int(old)]
+            ),
+        )
+        for identifier, feature in features.items()
+    }
+    assert len(renumbered[other.id].face_indices) == 4 * len(other.face_indices)
+    # Gegenprobe der Umnummerierung: dieselben Dreiecksmitten am unveraenderten Merkmal.
+    assert np.allclose(
+        np.sort(remeshed.raw.triangles_center[list(renumbered[chosen.id].face_indices)], axis=0),
+        np.sort(body.triangles_center[list(chosen.face_indices)], axis=0),
+    )
+
+    after = alike_for_action("move_feature", chosen.id, renumbered, remeshed)
+    assert other.id in _targets(after), (_targets(after), after.uncertain)
+    assert "complete_surface_patch" in after.evidence
+    assert _targets(after) == _targets(before)
 
 
 def test_a_whole_shape_without_surface_evidence_is_reported() -> None:

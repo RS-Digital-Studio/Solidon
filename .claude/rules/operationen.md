@@ -745,7 +745,11 @@ seither für beide gelten — Namen, Träger und Handlung, nicht bloß die Zahl:
   (`CavityState`, `CAVITY_TOPOLOGY_UNKNOWN`) statt „steht allein“ — und der
   Steckbrief sagt es dem Agenten unter der Auswahlzeile mit denselben Sätzen
   wie das Panel, samt Kette und Handlungsgruppen (`digest._selection_lines`,
-  `relations.group_reason_texts`). Die
+  `relations.group_reason_texts`). Und ob zwei Merkmale dieselbe vollständige
+  Form haben, sagt der Abstand zur Fläche (`_same_surface_patch`,
+  `units.MAX_FACET_SAG`), nie die Vernetzung: Eine Kopie, deren Dreiecke
+  nur feiner geteilt sind, bleibt in der Ganzkörpergruppe
+  (`tests/test_feature_groups.py`), die Kalotte bleibt draußen. Die
   Umfangsschwelle steht
   einmal (`FULL_TURN_SPAN` = `FULL_TURN`·360, 300 Grad); wer sie ändert,
   ändert beide, und der Test hält sie zusammen (`tests/test_partial_bores.py`).
