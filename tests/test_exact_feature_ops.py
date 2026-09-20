@@ -376,3 +376,184 @@ def test_rotating_a_countersunk_bore_keeps_the_body_exact(profile: Profile) -> N
     # Ein gekippter Kegel geht als B-Spline-Fläche durch STEP; die neunte
     # Stelle bleibt dabei nicht, die siebte schon.
     assert _round_trip_volume(output.mesh) == pytest.approx(output.mesh.volume, rel=1e-7)
+
+
+# --- Materialmerkmale: Zapfen, Kuppe, Kegelstumpf ------------------------------------
+
+PIN_VOLUME = BORE_AREA * 8.0
+DOME_VOLUME = 2.0 / 3.0 * math.pi * 4.0**3
+TAPER_VOLUME = math.pi * 6.0 / 3.0 * (25.0 + 10.0 + 4.0)
+
+
+def _material_plate(kind: str) -> SceneObject:
+    """Die Platte mit genau einem Materialmerkmal auf der Oberseite.
+
+    ``pin``: Zylinder Ø 6 × 8 mittig. ``sphere``: Halbkugel r = 4 bei x = 20.
+    ``cone``: Kegelstumpf r 5 → 2 über 6 mm bei x = −20. Volumen analytisch.
+    """
+    edit = _kernel()
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakeCone, BRepPrimAPI_MakeSphere
+    from OCP.gp import gp_Ax2, gp_Dir, gp_Pnt
+
+    from app.core.brep.features import features_of
+    from app.core.brep.kernel import Solid
+
+    plate = edit.box(*PLATE)
+    if kind == "pin":
+        part = edit.moved(edit.cylinder(2.0 * RADIUS, 8.0), (0.0, 0.0, 10.0))
+        added = PIN_VOLUME
+    elif kind == "sphere":
+        part = Solid(BRepPrimAPI_MakeSphere(gp_Pnt(20.0, 0.0, 10.0), 4.0).Shape())
+        added = DOME_VOLUME
+    else:
+        part = Solid(
+            BRepPrimAPI_MakeCone(
+                gp_Ax2(gp_Pnt(-20.0, 0.0, 10.0), gp_Dir(0.0, 0.0, 1.0)), 5.0, 2.0, 6.0
+            ).Shape()
+        )
+        added = TAPER_VOLUME
+    body = edit.boolean("union", [plate, part])
+    assert body.volume == pytest.approx(24000.0 + added, rel=1e-9)
+    entry = SceneObject(
+        id="obj_1", name="Platte", mesh=body, kind="brep", features=features_of(body)
+    )
+    assert [f.kind for f in entry.features.values() if f.kind != "face"] == [kind]
+    return entry
+
+
+def test_moving_a_pin_keeps_the_body_exact(profile: Profile) -> None:
+    load_operations()
+    source = _material_plate("pin")
+    pin = _the_one(source, "pin")
+    assert pin.params["centre"] == pytest.approx((0.0, 0.0, 14.0), abs=1e-9)
+
+    result = run("move_feature", source, profile, at_feature=pin.id, x=15.0, y=8.0, z=14.0)
+
+    output = _exact_and_proven(result, source, pin.id)
+    assert output.mesh.volume == pytest.approx(24000.0 + PIN_VOLUME, rel=1e-9)
+    moved = _the_one(output, "pin")
+    assert moved.params["centre"] == pytest.approx((15.0, 8.0, 14.0), abs=1e-9)
+    assert moved.params["diameter"] == pytest.approx(2.0 * RADIUS, abs=1e-9)
+    assert _round_trip_volume(output.mesh) == pytest.approx(output.mesh.volume, rel=1e-9)
+
+
+def test_duplicating_a_pin_keeps_the_body_exact(profile: Profile) -> None:
+    load_operations()
+    source = _material_plate("pin")
+    pin = _the_one(source, "pin")
+
+    result = run("duplicate_feature", source, profile, at_feature=pin.id, x=20.0, y=0.0, z=14.0)
+
+    output = result.outputs[0]
+    solid: Any = output.mesh
+    assert output.kind == "brep" and solid.is_closed
+    assert output.mesh.volume == pytest.approx(24000.0 + 2.0 * PIN_VOLUME, rel=1e-9)
+    pins = {f.id: f for f in output.features.values() if f.kind == "pin"}
+    assert set(pins) == {pin.id, "pin_2"}, sorted(pins)
+    assert pins["pin_2"].params["centre"] == pytest.approx((20.0, 0.0, 14.0), abs=1e-9)
+    assert not any(finding.converts_exact_body for finding in result.findings)
+
+
+def test_removing_a_pin_keeps_the_body_exact(profile: Profile) -> None:
+    load_operations()
+    source = _material_plate("pin")
+    pin = _the_one(source, "pin")
+
+    result = run("remove_feature", source, profile, at_feature=pin.id)
+
+    output = result.outputs[0]
+    solid: Any = output.mesh
+    assert output.kind == "brep" and solid.is_closed
+    assert output.mesh.volume == pytest.approx(24000.0, rel=1e-9)
+    assert solid.face_count == 6, "eine Platte ohne Zapfen hat sechs Flächen"
+    assert not [f for f in output.features.values() if f.kind == "pin"]
+
+
+def test_rotating_a_pin_keeps_it_rooted_in_the_plate(profile: Profile) -> None:
+    """30° um X: der gekippte Zapfen bleibt ein Stück mit der Platte, nichts schwebt.
+
+    Um seine Mitte gekippt höbe die Zylinderbasis auf einer Seite von der
+    Platte ab; der exakte Zweig reicht deshalb unter die Mitte so weit, wie
+    die Neigung verlangt. Der Sollwert kommt aus dem Netzweg derselben
+    Operation, mit der Facettentoleranz.
+    """
+    load_operations()
+    from app.core.geom.mesh import MeshData
+    from app.core.perceive.features import detect
+
+    source = _material_plate("pin")
+    pin = _the_one(source, "pin")
+
+    result = run("rotate_feature", source, profile, at_feature=pin.id, axis="x", angle=30.0)
+
+    output = _exact_and_proven(result, source, pin.id)
+    solid: Any = output.mesh
+    assert solid.solid_count == 1, "der gekippte Zapfen bleibt ein Stück mit der Platte"
+    turned = _the_one(output, "pin")
+    axis = turned.params["axis"]
+    assert abs(abs(axis[1]) - 0.5) < 1e-9 and abs(abs(axis[2]) - math.sqrt(0.75)) < 1e-9
+    assert output.mesh.volume > 24000.0 + PIN_VOLUME * 0.9
+
+    tessellated = MeshData.of(source.mesh.to_mesh(deflection=0.02).raw)
+    meshed_source = SceneObject(
+        id="obj_1", name="Platte", mesh=tessellated, kind="mesh", features=detect(tessellated)
+    )
+    meshed_pin = _the_one(meshed_source, "pin")
+    meshed = run(
+        "rotate_feature", meshed_source, profile, at_feature=meshed_pin.id, axis="x", angle=30.0
+    )
+    assert output.mesh.volume == pytest.approx(meshed.outputs[0].mesh.volume, rel=1e-2)
+
+
+def test_moving_a_dome_keeps_the_body_exact(profile: Profile) -> None:
+    load_operations()
+    source = _material_plate("sphere")
+    dome = _the_one(source, "sphere")
+
+    result = run("move_feature", source, profile, at_feature=dome.id, x=0.0, y=5.0, z=10.0)
+
+    output = _exact_and_proven(result, source, dome.id)
+    assert output.mesh.volume == pytest.approx(24000.0 + DOME_VOLUME, rel=1e-9)
+    moved = _the_one(output, "sphere")
+    assert moved.params["centre"] == pytest.approx((0.0, 5.0, 10.0), abs=1e-9)
+    assert moved.params["diameter"] == pytest.approx(8.0, abs=1e-9)
+
+
+def test_removing_a_taper_keeps_the_body_exact(profile: Profile) -> None:
+    load_operations()
+    source = _material_plate("cone")
+    taper = _the_one(source, "cone")
+    assert taper.params["recess"] is False
+
+    result = run("remove_feature", source, profile, at_feature=taper.id)
+
+    output = result.outputs[0]
+    solid: Any = output.mesh
+    assert output.kind == "brep" and solid.is_closed
+    assert output.mesh.volume == pytest.approx(24000.0, rel=1e-9)
+    assert solid.face_count == 6
+    assert not [f for f in output.features.values() if f.kind == "cone"]
+
+
+def test_duplicating_a_taper_keeps_the_body_exact(profile: Profile) -> None:
+    load_operations()
+    source = _material_plate("cone")
+    taper = _the_one(source, "cone")
+    centre = taper.params["centre"]
+
+    result = run(
+        "duplicate_feature",
+        source,
+        profile,
+        at_feature=taper.id,
+        x=centre[0] + 30.0,
+        y=centre[1],
+        z=centre[2],
+    )
+
+    output = result.outputs[0]
+    solid: Any = output.mesh
+    assert output.kind == "brep" and solid.is_closed
+    assert output.mesh.volume == pytest.approx(24000.0 + 2.0 * TAPER_VOLUME, rel=1e-9)
+    cones = {f.id: f for f in output.features.values() if f.kind == "cone"}
+    assert set(cones) == {taper.id, "cone_2"}, sorted(cones)

@@ -825,8 +825,10 @@ Langlochs lassen den exakten Körper exakt — schließen mit `fill_bore`,
 schneiden mit `cut_bore`/`slot_bore`, nativ erkennen, Kennung belegt
 fortführen. Wer eine Merkmalshandlung baut, die einen exakten Körper
 vernetzt, tut es nur, wo der Kern die Form nicht hergibt, und der Befund
-`evaluate.exact_became_mesh` sagt es; heute sind das Zapfen, Kegel, Kugel und
-Einschluss, und die stehen im Register. Eine Kette aus Bohrung und Senkung
+`evaluate.exact_became_mesh` sagt es; heute sind das das Kippen eines Kegels
+und der Einschluss, und die stehen im Register. Zapfen, Kuppe und
+Kegelstumpf gehen aus ihren nativen Flächen (`brep.edit.solid_from_faces`),
+der gekippte Zapfen reicht in die Grundfläche hinein. Eine Kette aus Bohrung und Senkung
 bleibt exakt — Stopfen und Werkzeug sind Rotationskörper ihrer Einlaufprofile
 an den wirklichen Randebenen, beim Kippen um den Überstand der Neigung nach
 außen gerückt; „nur das gewählte Merkmal“ einer Kette geht am exakten Körper

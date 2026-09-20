@@ -1041,6 +1041,115 @@ def _oriented_cylinder(origin: Vec3, direction: Vec3, radius: float, height: flo
     return Solid(BRepPrimAPI_MakeCylinder(frame, radius, height).Shape())
 
 
+def solid_from_faces(
+    solid: Solid,
+    face_indices: Sequence[int],
+    *,
+    allowed_rings: tuple[int, ...] = (1, 2),
+    cancelled: CancelToken | None = None,
+) -> Solid | None:
+    """Der Körper, den diese nativen Flächen einnehmen — an ebenen Randringen geschlossen.
+
+    Das exakte Gegenstück zu ``geom.prepare_ops._body_from_faces``: Die
+    gewählten Flächen (der Mantel eines Zapfens, die Kuppe, der Mantel eines
+    Kegelstumpfs) werden an ihren Randkanten zu Drähten verbunden, jeder
+    geschlossene Ring bekommt einen **ebenen** Deckel, und Flächen samt
+    Deckeln werden zu einer Schale genäht und zum Körper geschlossen. Ein
+    Zapfen hat zwei Ringe (oben und am Fuß), eine Kuppe einen; wie viele
+    erlaubt sind, sagt der Aufrufer, denn ein zweiter Ring bedeutet je nach
+    Geometrie etwas anderes (siehe dort). ``None``, wenn ein Ring nicht in
+    einer Ebene liegt, die Schale nicht schließt oder der Körper ungültig
+    bleibt — dann wird nichts geraten.
+
+    Die Originalflächen werden nicht angefasst: genäht werden private
+    Kopien (``BRepBuilderAPI_Copy``), wie es der Eigentumsvertrag verlangt.
+    """
+    require()
+    from OCP.BRepBuilderAPI import (
+        BRepBuilderAPI_Copy,
+        BRepBuilderAPI_MakeFace,
+        BRepBuilderAPI_MakeSolid,
+        BRepBuilderAPI_Sewing,
+    )
+    from OCP.BRepCheck import BRepCheck_Analyzer
+    from OCP.BRepLib import BRepLib
+    from OCP.collections import HSequence_TopoDS_Shape
+    from OCP.collections import (
+        IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher as NeighbourMap,
+    )
+    from OCP.collections import IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher as ShapeMap
+    from OCP.ShapeAnalysis import ShapeAnalysis_FreeBounds
+    from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE, TopAbs_SHELL
+    from OCP.TopExp import TopExp, TopExp_Explorer
+    from OCP.TopoDS import TopoDS
+
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+    faces = solid.faces()
+    chosen = sorted({int(index) for index in face_indices})
+    if not chosen or chosen[0] < 0 or chosen[-1] >= len(faces):
+        return None
+    numbered = ShapeMap()
+    for face in faces:
+        numbered.Add(face)
+    neighbours = NeighbourMap()
+    TopExp.MapShapesAndAncestors_s(solid.shape, TopAbs_EDGE, TopAbs_FACE, neighbours)
+    wanted = set(chosen)
+    seen = ShapeMap()
+    rim = HSequence_TopoDS_Shape()
+    for index in chosen:
+        walk = TopExp_Explorer(faces[index], TopAbs_EDGE)
+        while walk.More():
+            edge = walk.Current()
+            walk.Next()
+            if seen.Contains(edge):
+                continue
+            seen.Add(edge)
+            owners = {numbered.FindIndex(other) - 1 for other in neighbours.FindFromKey(edge)}
+            if owners - wanted:
+                rim.Append(edge)
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+    wires = ShapeAnalysis_FreeBounds.ConnectEdgesToWires_s(rim, EPS_GEOM, False)
+    if wires.Length() not in allowed_rings:
+        return None
+    sewing = BRepBuilderAPI_Sewing(EPS_GEOM)
+    for index in chosen:
+        sewing.Add(BRepBuilderAPI_Copy(faces[index], True, False).Shape())
+    for position in range(1, wires.Length() + 1):
+        wire = TopoDS.Wire(wires.Value(position))
+        if not wire.Closed():
+            return None
+        cap = BRepBuilderAPI_MakeFace(wire, True)
+        if not cap.IsDone():
+            return None
+        sewing.Add(cap.Face())
+    sewing.Perform()
+    if sewing.NbFreeEdges() != 0:
+        return None
+    sewn = sewing.SewedShape()
+    shells = TopExp_Explorer(sewn, TopAbs_SHELL)
+    if not shells.More():
+        return None
+    # ``Closed()`` ist ein Flag, das Sewing nicht setzt — an einer Kuppe stand
+    # es auf falsch bei null freien Kanten und gültigem Körper (gemessen
+    # 20.09.2026). Geschlossen ist, was keine freie Kante hat.
+    shell = TopoDS.Shell(shells.Current())
+    shells.Next()
+    if shells.More():
+        return None
+    maker = BRepBuilderAPI_MakeSolid(shell)
+    if not maker.IsDone():
+        return None
+    body = maker.Solid()
+    if not BRepLib.OrientClosedSolid_s(body) or not BRepCheck_Analyzer(body).IsValid():
+        return None
+    built = Solid(body)
+    if built.volume <= EPS_GEOM:
+        return None
+    return built
+
+
 def transformed(solid: Solid, matrix: Transform, *, cancelled: CancelToken | None = None) -> Solid:
     """Transformiert den exakten Körper; die Variante daneben führt Flächen mit."""
     return transformed_with_faces(solid, matrix, cancelled=cancelled)[0]

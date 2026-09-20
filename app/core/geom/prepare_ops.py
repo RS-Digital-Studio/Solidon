@@ -2609,6 +2609,8 @@ def move_feature(ctx: OpContext) -> OpResult:
         return _exact_move_cavity(ctx, source, feature, centre, target)
     if source.kind == "brep" and chain is not None:
         return _exact_move_chain(ctx, source, feature, chain, target)
+    if source.kind == "brep" and feature.kind in EXACT_MATERIAL_KINDS and not is_a_cavity(feature):
+        return _exact_move_material(ctx, source, feature, centre, target)
     ctx.progress(0.1, str(_("Das Merkmal wird an seiner alten Stelle geschlossen …")))
     travel = np.asarray(target, dtype=float) - np.asarray(centre, dtype=float)
     if chain is not None:
@@ -2904,6 +2906,8 @@ def duplicate_feature(ctx: OpContext) -> OpResult:
         return _duplicate_cavity_chain(ctx, source, feature, chain, target)
     if source.kind == "brep" and feature.kind in EXACT_CAVITY_KINDS:
         return _exact_duplicate_cavity(ctx, source, feature, target)
+    if source.kind == "brep" and feature.kind in EXACT_MATERIAL_KINDS and not cavity:
+        return _exact_duplicate_material(ctx, source, feature, centre, target)
     ctx.progress(0.2, str(_("Das Merkmal wird an der neuen Stelle angelegt …")))
     change: BooleanKind = "difference" if cavity else "union"
     placed = boolean(
@@ -3184,6 +3188,13 @@ def remove_feature(ctx: OpContext) -> OpResult:
     chain = _cavity_chain_of(body, feature, source.features)
     if source.kind == "brep" and chain is None and feature.kind in EXACT_CAVITY_KINDS:
         return _exact_remove_cavity(ctx, source, feature)
+    if (
+        source.kind == "brep"
+        and chain is None
+        and feature.kind in EXACT_MATERIAL_KINDS
+        and not cavity
+    ):
+        return _exact_remove_material(ctx, source, feature)
     answered: dict[str, Any] = {}
     together = False
     if chain is not None:
@@ -3409,6 +3420,8 @@ def rotate_feature(ctx: OpContext) -> OpResult:
         return _rotate_cavity_chain(ctx, source, feature, chain, params.axis, params.angle)
     if source.kind == "brep" and feature.kind in EXACT_CAVITY_KINDS:
         return _exact_rotate_cavity(ctx, source, feature, spun, centre, turned_axis)
+    if source.kind == "brep" and feature.kind == "pin":
+        return _exact_rotate_pin(ctx, source, feature, centre, turned_axis)
     ctx.progress(0.1, str(_("Das Merkmal wird an seiner alten Stelle geschlossen …")))
     closed = _closed_at(
         body,
@@ -6939,6 +6952,211 @@ def _exact_remove_chain(
         gone=gone,
         findings=findings,
         reserve=True,
+    )
+
+
+#: Die Materialmerkmale, die der exakte Kern ohne Vernetzung versetzt, verdoppelt
+#: und entfernt (P2.4): ihr Körper kommt aus den nativen Flächen
+#: (``brep.edit.solid_from_faces``). Gekippt wird davon nur der Zapfen — seine
+#: Kennzahlen beschreiben ihn ganz, und der gekippte Zylinder reicht in die
+#: Grundfläche hinein, statt neben ihr zu schweben.
+EXACT_MATERIAL_KINDS: Final = ("pin", "cone", "sphere")
+
+
+def _exact_material_body(source: SceneObject, feature: Feature) -> Any:
+    """Der Körper eines Materialmerkmals aus seinen nativen Flächen — oder die Absage."""
+    from app.core.brep import edit
+
+    solid = _exact_body(source)
+    native = solid.faces_of_triangles(feature.face_indices) if feature.face_indices else ()
+    body = edit.solid_from_faces(solid, native, allowed_rings=(1, 2)) if native else None
+    if body is None:
+        raise ValidationError(
+            field="at_feature",
+            detail=NO_BODY_FROM_FACES,
+            values={"feature": feature.id, "kind": feature.kind},
+            constraint="not_movable",
+            suggestions=(CHANGE_SELECTION, CANCEL),
+        )
+    return body
+
+
+def _exact_pin_tool(feature: Feature, centre: Vec3, axis: Vec3, *, reach_below: float) -> Any:
+    """Ein Zapfen aus seinen Kennzahlen, von der Spitze bis ``reach_below`` unter die Mitte.
+
+    Beim Kippen um seine Mitte höbe die Zylinderbasis auf einer Seite von der
+    Grundfläche ab; deshalb reicht der Körper unter der Mitte so weit, wie die
+    Neigung verlangt (``_reach_past_a_tilted_face``), und die Vereinigung
+    verschluckt, was im Material liegt.
+    """
+    from app.core.brep.edit import _oriented_cylinder
+
+    diameter = _bore_number(feature, "diameter")
+    depth = _bore_number(feature, "depth")
+    unit = np.asarray(axis, dtype=float)
+    unit /= float(np.linalg.norm(unit))
+    start = np.asarray(centre, dtype=float) - unit * reach_below
+    return _oriented_cylinder(
+        (float(start[0]), float(start[1]), float(start[2])),
+        (float(unit[0]), float(unit[1]), float(unit[2])),
+        diameter / 2.0,
+        reach_below + depth / 2.0,
+    )
+
+
+def _exact_move_material(
+    ctx: OpContext, source: SceneObject, feature: Feature, centre: Vec3, target: Vec3
+) -> OpResult:
+    """Zapfen, Kegelstumpf oder Kuppe am exakten Körper versetzen: abtragen, neu ansetzen (P2.4)."""
+    from app.core.brep import edit
+
+    solid = _exact_body(source)
+    body = _exact_material_body(source, feature)
+    travel: Vec3 = (target[0] - centre[0], target[1] - centre[1], target[2] - centre[2])
+    ctx.progress(0.1, str(_("Das Merkmal wird an seiner alten Stelle abgetragen …")))
+    cleared = edit.unified(edit.boolean("difference", [solid, body]))
+    ctx.progress(0.6, str(_("Das Merkmal wird an seiner neuen Stelle gesetzt …")))
+    placed = edit.unified(edit.boolean("union", [cleared, edit.moved(body, travel)]))
+    expected = dataclasses.replace(
+        feature, params={**feature.params, "centre": target}, provenance="generated"
+    )
+    return _exact_cavity_result(
+        ctx, source, placed, op="move_feature", expected=expected, findings=[]
+    )
+
+
+def _exact_duplicate_material(
+    ctx: OpContext, source: SceneObject, feature: Feature, centre: Vec3, target: Vec3
+) -> OpResult:
+    """Zapfen, Kegelstumpf oder Kuppe am exakten Körper ein zweites Mal ansetzen (P2.4)."""
+    from app.core.brep import edit
+
+    solid = _exact_body(source)
+    body = _exact_material_body(source, feature)
+    travel: Vec3 = (target[0] - centre[0], target[1] - centre[1], target[2] - centre[2])
+    ctx.progress(0.2, str(_("Das Merkmal wird an der neuen Stelle angelegt …")))
+    placed = edit.unified(edit.boolean("union", [solid, edit.moved(body, travel)]))
+    copy = dataclasses.replace(
+        feature,
+        id=_free_feature_id(source, feature.kind),
+        params={**feature.params, "centre": target},
+        provenance="generated",
+    )
+    findings: list[Finding] = []
+    nothing = without_effect(solid, placed, "union", ctx.profile)
+    if nothing is not None:
+        findings.append(nothing)
+    checked = _exact_body_checked(placed)
+    features, continued, _lost = _exact_features_after(
+        source, checked, expected=None, cancelled=ctx.cancelled
+    )
+    fresh = [
+        name
+        for name, entry in features.items()
+        if name not in source.features
+        and entry.kind == feature.kind
+        and _sits_at(entry, copy, checked.bounds.diagonal)
+    ]
+    if len(fresh) == 1 and fresh[0] != copy.id:
+        features[copy.id] = dataclasses.replace(features.pop(fresh[0]), id=copy.id)
+    elif not fresh:
+        findings.append(_cavity_lost_finding("duplicate_feature", copy))
+    return OpResult(
+        outputs=[
+            dataclasses.replace(
+                source,
+                mesh=checked,
+                kind="brep",
+                features=features,
+                reserved_feature_ids=tuple(
+                    sorted({*source.reserved_feature_ids, *source.features, copy.id})
+                ),
+            )
+        ],
+        findings=findings,
+        feature_continuations=(
+            tuple(
+                FeatureContinuation(FeatureRef(source.id, old_id), new_id)
+                for old_id, new_id in continued
+            ),
+        ),
+    )
+
+
+def _exact_remove_material(ctx: OpContext, source: SceneObject, feature: Feature) -> OpResult:
+    """Zapfen, Kegelstumpf oder Kuppe am exakten Körper abtragen (P2.4)."""
+    from app.core.brep import edit
+
+    solid = _exact_body(source)
+    body = _exact_material_body(source, feature)
+    ctx.progress(0.2, str(_("Das Merkmal wird abgetragen …")))
+    cleared = edit.unified(edit.boolean("difference", [solid, body]))
+    findings = [
+        Finding(
+            code="remove_feature.gone",
+            severity="info",
+            message=_(
+                "Das Merkmal ist entfernt. Spätere Schritte und Passungen, die auf es "
+                "verweisen, finden es nicht mehr."
+            ),
+            feature_ids=(feature.id,),
+            values={"feature": feature.id, "kind": feature.kind, "removed": 1},
+        )
+    ]
+    return _exact_cavity_result(
+        ctx,
+        source,
+        cleared,
+        op="remove_feature",
+        expected=None,
+        gone=(feature.id,),
+        findings=findings,
+        reserve=True,
+    )
+
+
+def _exact_rotate_pin(
+    ctx: OpContext, source: SceneObject, feature: Feature, centre: Vec3, turned_axis: Vec3
+) -> OpResult:
+    """Einen Zapfen am exakten Körper kippen — abtragen, gekippt ansetzen (P2.4).
+
+    Der gekippte Zylinder reicht unter die Mitte so weit, wie die Neigung
+    verlangt, sonst schwebte seine Basis auf einer Seite über der Grundfläche.
+    """
+    from app.core.brep import edit
+
+    solid = _exact_body(source)
+    body = _exact_material_body(source, feature)
+    old_axis = np.asarray(_bore_vector(feature, "axis"), dtype=float)
+    new_axis = np.asarray(turned_axis, dtype=float)
+    tilt = math.degrees(math.acos(min(1.0, abs(float(old_axis @ new_axis)))))
+    depth = _bore_number(feature, "depth")
+    reach = _reach_past_a_tilted_face(
+        depth / 2.0, _bore_number(feature, "diameter") / 2.0, tilt, at_most=solid.bounds.diagonal
+    )
+    ctx.progress(0.1, str(_("Das Merkmal wird an seiner alten Stelle abgetragen …")))
+    cleared = edit.unified(edit.boolean("difference", [solid, body]))
+    ctx.progress(0.6, str(_("Das Merkmal wird gedreht gesetzt …")))
+    tool = _exact_pin_tool(feature, centre, turned_axis, reach_below=reach)
+    placed = edit.unified(edit.boolean("union", [cleared, tool]))
+    # Sichtbar bleibt vom gekippten Zylinder, was über der Grundfläche steht:
+    # von der Spitze (``depth/2`` über der Mitte) bis zum tiefsten Punkt der
+    # schrägen Schnittellipse (``reach`` darunter). Die native Erkennung nennt
+    # die Mitte dieser Spanne — und genau dort wird das Merkmal wiedergesucht.
+    unit = new_axis / float(np.linalg.norm(new_axis))
+    middle = np.asarray(centre, dtype=float) + unit * (depth / 2.0 - reach) / 2.0
+    expected = dataclasses.replace(
+        feature,
+        params={
+            **feature.params,
+            "axis": turned_axis,
+            "centre": (float(middle[0]), float(middle[1]), float(middle[2])),
+            "depth": depth / 2.0 + reach,
+        },
+        provenance="generated",
+    )
+    return _exact_cavity_result(
+        ctx, source, placed, op="rotate_feature", expected=expected, findings=[]
     )
 
 

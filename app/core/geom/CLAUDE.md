@@ -589,8 +589,18 @@ Mündungen um den Überstand der Neigung nach außen gerückt beim Kippen
 (`_plane_turned`, `_reach_past_a_tilted_face`, `_cone_past_a_tilted_face`;
 der Boden eines Sacklochs bleibt). Gewählt werden darf jeder Abschnitt;
 gedreht wird um dessen Mitte, und `_exact_features_after` führt alle
-Abschnitte belegt fort. Zapfen, Kegel, Kugeln und Einschlüsse gehen am
-exakten Körper noch den Netzweg mit `evaluate.exact_became_mesh`; sie folgen.
+Abschnitte belegt fort. **Materialmerkmale gehen aus ihren Flächen**
+(`EXACT_MATERIAL_KINDS`, `_exact_move_material` und Geschwister): Der Körper
+eines Zapfens, einer Kuppe oder eines Kegelstumpfs kommt aus
+`brep.edit.solid_from_faces` — die nativen Flächen an ihren ebenen Randringen
+geschlossen, das exakte Gegenstück zu `_body_from_faces` —, wird abgetragen
+und an der neuen Stelle vereinigt. Gekippt wird davon nur der Zapfen
+(`_exact_rotate_pin`): Seine Kennzahlen beschreiben ihn ganz, und der
+gekippte Zylinder reicht unter die Mitte so weit, wie `_reach_past_a_tilted_face`
+verlangt, statt neben der Grundfläche zu schweben; die Erkennung nennt danach
+die Mitte des sichtbaren Mantels, und genau dort wird er wiedergesucht. Kegel
+kippen und Einschlüsse gehen am exakten Körper noch den Netzweg mit
+`evaluate.exact_became_mesh`; sie folgen.
 
 **`slot_hole` und `resize_hole` nehmen dabei eine Stelle entgegen** (`x/y/z`,
 **leer** heißt „lass es, wo es ist" — `_named_place` beantwortet das für beide,

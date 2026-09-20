@@ -474,6 +474,13 @@ die neunte Stelle, ein STEP-Umlauf verliert nichts
 den Einlaufprofilen von `geom.prepare_ops` — dieselben, mit denen
 `resize_hole` den Einlauf ändert —, verschoben oder gedreht; ein gekippter
 Kegel geht als B-Spline-Fläche durch STEP und hält dabei die siebte Stelle.
+**Und ein Materialmerkmal hat einen Körper aus seinen Flächen**
+(`solid_from_faces`): Randkanten zu Drähten verbunden
+(`ShapeAnalysis_FreeBounds`), je Ring ein ebener Deckel, genäht und zum
+Körper geschlossen — aus privaten Kopien der Flächen. Geschlossen ist, was
+keine freie Kante hat; das `Closed()`-Flag setzt Sewing nicht, und an einer
+Kuppe stand es auf falsch bei gültigem Körper (20.09.2026). Ein Ring, der in
+keiner Ebene liegt, gibt keinen Körper: dann wird nichts geraten.
 
 ## Eine Rundung wegnehmen heißt, ihre Fläche zu streichen
 
