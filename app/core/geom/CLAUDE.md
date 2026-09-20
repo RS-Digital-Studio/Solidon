@@ -750,6 +750,15 @@ dorthin zeigte — an einer Treppe alle Stufen zugleich (24000,0 statt 21000,0).
 Gemeint ist die gewählte Fläche, und die benennt jetzt ein Merkmalsverweis; die
 Richtungsfelder tragen nur noch gespeicherte Schritte (§16).
 
+Am exakten Körper binden `push_face` und das Entfernen einer Rundung die
+gewählten Merkmalsdreiecke über `Solid.complete_faces_of_triangles` an ihre
+aktuellen vollständigen Originalflächen. Leere, unvollständige oder ungültige
+Auswahlen halten an; Mittelpunktnähe ersetzt keinen belegten Träger. Der
+Operationsabbruch wird vor und nach der Zuordnung geprüft und an den nativen
+Builder weitergegeben. Ohne Merkmalsauswahl bleibt der gespeicherte
+Richtungsweg von `push_face` erhalten. Der Radiuswechsel einer Rundung nutzt
+weiterhin seinen bestehenden gesonderten Weg.
+
 `edge_ops.py` — *Verrunden*, *Fase anbringen* und *Wulst anlegen* im Register, **kernübergreifend**:
 Der Rumpf fragt `SceneObject.kind` und wählt danach den Rechenweg — `edit.fillet`
 am exakten Körper, `edges.round_edges` am Netz. Sie standen bis zum 10.09.2026

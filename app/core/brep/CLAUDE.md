@@ -67,6 +67,21 @@ weiter mit kaltem Cache. `faces_of_triangles` ist die geprüfte inverse Zuordnun
 zu `triangles_of_face` und weist negative oder fremde Dreiecksindices zurück.
 Weder Besuchsreihenfolge noch alte Dreiecksindices ersetzen diese Zuordnung.
 
+`profiles.push_faces` und `edit.unround` nehmen mit `selected_faces` eine
+ausdrückliche Auswahl vollständiger aktueller nativer Flächen an. Der
+Operationsaufrufer belegt die vollständige Dreiecksabdeckung am tatsächlichen
+Eingabekörper; `Solid.checked_face_indices` prüft die nichtleere Indexmenge,
+ohne dessen Cache zu füllen. Die private Arbeitskopie übernimmt die Auswahl
+über ihre wirkliche `_copied_faces`-Abbildung. Beim Versetzen zählt die eigene
+Normale jeder gewählten Ebene. Beim Entfernen ist genau eine Zylinderfläche
+mit dem bisherigen Radius zulässig. Leere oder unpassende Auswahlen lösen
+keine Ersatzsuche aus; nur `None` benutzt den bisherigen Lage-/Richtungsweg.
+Abbruch wird bei der Auswahl, vor und nach den nativen Builds sowie nach
+der letzten Ergebniskopie geprüft;
+Eingabeform und Eingabecache bleiben auch dann erhalten. Der anschließende
+Radiuswechsel über `reround` benötigt weiterhin einen eigenen Nachweis für
+die Übergänge von der Rundungsfläche zur scharfen Kante und zur neuen Rundung.
+
 Filamentzuweisungen liegen unveränderlich in `Solid.face_slots`, je nativer
 Fläche. Jede private Kopie führt sie über `_copied_faces` nach; jede neue
 Tessellation bildet daraus die Slots ihrer tatsächlich erzeugten Dreiecke.

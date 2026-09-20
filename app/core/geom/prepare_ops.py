@@ -3111,7 +3111,7 @@ class RemoveFeatureParams(BaseParams):
 
 @register_op(
     name="remove_feature",
-    cache_version="3",
+    cache_version="4",
     title=_("Merkmal entfernen"),
     category="holes",
     params=RemoveFeatureParams,
@@ -8508,11 +8508,15 @@ def _exact_fillet(ctx: OpContext, source: SceneObject, name: str, radius: float 
     measured = [float(value) for value in feature.params["centre"]]
     spot: Vec3 = (measured[0], measured[1], measured[2])
     was = float(feature.params.get("radius", 0.0))
-    solid = (
-        edit.unround(body, spot, was, cancelled=ctx.cancelled)
-        if radius is None
-        else edit.reround(body, spot, was, radius, cancelled=ctx.cancelled)
-    )
+    if radius is None:
+        ctx.cancelled.raise_if_cancelled()
+        selected_faces = body.complete_faces_of_triangles(feature.face_indices)
+        ctx.cancelled.raise_if_cancelled()
+        solid = edit.unround(
+            body, spot, was, selected_faces=selected_faces, cancelled=ctx.cancelled
+        )
+    else:
+        solid = edit.reround(body, spot, was, radius, cancelled=ctx.cancelled)
     return OpResult(
         outputs=[
             dataclasses.replace(

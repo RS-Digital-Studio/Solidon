@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
+from numbers import Integral
 from operator import index as integer_index
 from typing import Any, cast
 
@@ -415,6 +416,39 @@ class Solid:
 
     def edges(self) -> list[Any]:
         return self._explore("edge")
+
+    def checked_face_indices(
+        self, indices: Sequence[int], *, cancelled: CancelToken | None = None
+    ) -> tuple[int, ...]:
+        """Prüft eine nichtleere Menge aktueller nativer Indizes ohne Tessellierung.
+
+        Der Aufrufer belegt zuvor den aktuellen Eigentümer und gegebenenfalls
+        die vollständige Dreiecksabdeckung. Die Länge der geprüften bijektiven
+        Kopierabbildung ist zugleich die Anzahl unserer nativen Flächen.
+        """
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        selected: set[int] = set()
+        for value in cast(Sequence[object], indices):
+            if cancelled is not None:
+                cancelled.raise_if_cancelled()
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, Integral)
+                or not 0 <= int(value) < len(self._copied_faces)
+            ):
+                raise ValidationError(
+                    detail=_("Wähle vollständige Flächen aus und wiederhole die Änderung.")
+                )
+            selected.add(int(value))
+        if not selected:
+            raise ValidationError(
+                detail=_("Wähle vollständige Flächen aus und wiederhole die Änderung.")
+            )
+        result = tuple(sorted(selected))
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        return result
 
     # --- die tessellierten Antworten --------------------------------------------
 

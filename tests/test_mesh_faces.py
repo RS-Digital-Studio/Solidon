@@ -747,3 +747,89 @@ def test_the_profile_decides_whether_a_move_is_worth_a_step(profile: Profile) ->
     with pytest.raises(Exception) as problem:
         push_face(body, top, 0.0)
     assert "null" in str(getattr(problem.value, "detail", problem.value))
+
+
+def _exact_stairs_for_selection() -> tuple[SceneObject, Feature, Feature]:
+    """Zwei echte Stufen mit unabhängigen Höhen und gegenläufigen Auswahlhilfen."""
+    if not pytest.importorskip("app.core.brep.kernel").available():
+        pytest.skip("OpenCASCADE is an optional dependency")
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+
+    low = edit.moved(edit.box(20.0, DEPTH, STEP), (-10.0, 0.0, 0.0))
+    high = edit.moved(edit.box(20.0, DEPTH, HEIGHT), (10.0, 0.0, 0.0))
+    body = edit.boolean("union", [low, high])
+    features = features_of(body)
+    tops = sorted(
+        (
+            feature
+            for feature in features.values()
+            if feature.kind == "face" and feature.params["normal"][2] > 1.0 - EPS_GEOM
+        ),
+        key=lambda feature: feature.params["centre"][2],
+    )
+    assert len(tops) == 2
+    assert tops[0].params["centre"] == pytest.approx((-10.0, 0.0, STEP), abs=EPS_GEOM)
+    assert tops[1].params["centre"] == pytest.approx((10.0, 0.0, HEIGHT), abs=EPS_GEOM)
+    source = SceneObject(id="stairs", name="Zwei Stufen", kind="brep", mesh=body, features=features)
+    return source, tops[0], tops[1]
+
+
+def test_native_push_uses_the_selected_carrier_even_when_the_centre_names_another_face() -> None:
+    """Die Originaldreiecke bestimmen die gewählte Stufe bis zur wirklichen Formänderung."""
+    import dataclasses
+    import io
+
+    source, low, high = _exact_stairs_for_selection()
+    from OCP.BRepTools import BRepTools
+
+    selected = dataclasses.replace(low, params={**low.params, "centre": high.params["centre"]})
+    source = dataclasses.replace(source, features={**source.features, low.id: selected})
+    before = io.BytesIO()
+    BRepTools.Write_s(source.mesh.shape, before)
+
+    outcome = run("push_face", source, face=low.id, distance=5.0).outputs[0]
+
+    assert outcome.kind == "brep"
+    assert outcome.mesh.volume == pytest.approx(21000.0, abs=EPS_GEOM)
+    points = np.asarray(outcome.mesh.raw.vertices)
+    assert points[points[:, 0] < -EPS_GEOM, 2].max() == pytest.approx(15.0, abs=EPS_GEOM)
+    assert points[points[:, 0] > EPS_GEOM, 2].max() == pytest.approx(20.0, abs=EPS_GEOM)
+    assert outcome.mesh.is_watertight
+    after = io.BytesIO()
+    BRepTools.Write_s(source.mesh.shape, after)
+    assert before.getvalue() == after.getvalue()
+    assert source.features[low.id] is selected
+
+
+@pytest.mark.parametrize("selection", ["empty", "partial", "out_of_bounds"])
+def test_native_push_rejects_an_unproven_carrier_without_selecting_by_position(
+    selection: str,
+) -> None:
+    """Ein beschädigter Flächenbezug darf nicht durch eine Ortsuche scheinbar gültig werden."""
+    import dataclasses
+    import io
+
+    from app.core.errors import UserError
+
+    source, low, _high = _exact_stairs_for_selection()
+    from OCP.BRepTools import BRepTools
+
+    assert len(low.face_indices) >= 2
+    choices = {
+        "empty": (),
+        "partial": low.face_indices[:1],
+        "out_of_bounds": (source.mesh.triangle_count + 1,),
+    }
+    selected = dataclasses.replace(low, face_indices=choices[selection])
+    source = dataclasses.replace(source, features={**source.features, low.id: selected})
+    before = io.BytesIO()
+    BRepTools.Write_s(source.mesh.shape, before)
+
+    with pytest.raises(UserError) as raised:
+        run("push_face", source, face=low.id, distance=5.0)
+
+    assert raised.value.suggestions
+    after = io.BytesIO()
+    BRepTools.Write_s(source.mesh.shape, after)
+    assert before.getvalue() == after.getvalue()

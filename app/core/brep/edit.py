@@ -1094,7 +1094,12 @@ def moved(solid: Solid, offset: Vec3) -> Solid:
 
 
 def unround(
-    solid: Solid, centre: Vec3, radius: float, *, cancelled: CancelToken | None = None
+    solid: Solid,
+    centre: Vec3,
+    radius: float,
+    *,
+    selected_faces: Sequence[int] | None = None,
+    cancelled: CancelToken | None = None,
 ) -> Solid:
     """Nimmt eine Verrundung weg und stellt die scharfe Kante her (§30).
 
@@ -1104,17 +1109,42 @@ def unround(
     23884,115 mm³ nach dem Wegnehmen einer, analytisch 23845,487 + 1,9314·20 —
     dieselbe Zahl auf vier Stellen, in 18 ms.
 
-    Gesucht wird die Fläche über ihre **Lage** und ihren Radius, nicht über
-    einen Index: Ein Index in die Topologie verschiebt sich, sobald davor etwas
-    anderes passiert (§21.2, derselbe Grund wie bei :func:`edge_key`).
+    Ohne ausdrückliche Auswahl wird die Fläche wie bisher über Lage und
+    Radius gesucht. ``selected_faces`` benennt dagegen genau eine vollständige
+    aktuelle Zylinderfläche mit diesem Radius. Ihr Index gehört ausschließlich
+    zum Eingabe-Solid und wird durch dessen private Kopie nachgeführt (§21.2).
+    Eine leere, mehrteilige oder unpassende Auswahl löst keine Ersatzsuche aus.
     """
     require()
     from OCP.BRepAlgoAPI import BRepAlgoAPI_Defeaturing
 
     if cancelled is not None:
         cancelled.raise_if_cancelled()
+    indices = (
+        None
+        if selected_faces is None
+        else solid.checked_face_indices(selected_faces, cancelled=cancelled)
+    )
+    if indices is not None and len(indices) != 1:
+        raise GeometryError(
+            detail=_("Wähle genau eine vollständige Rundungsfläche mit dem bisherigen Radius."),
+            suggestions=(CORRECT_INPUT, CANCEL),
+        )
     working = replace(solid)
-    face = _cylinder_at(working, centre, radius, cancelled=cancelled)
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+    if indices is None:
+        face = _cylinder_at(working, centre, radius, cancelled=cancelled)
+    else:
+        face = working.faces()[working._copied_faces[indices[0]]]
+        surface = describe_surface(face, cancelled=cancelled)
+        if not isinstance(surface, CylinderSurface) or not is_close(
+            float(surface.cylinder.Radius()), radius
+        ):
+            raise GeometryError(
+                detail=_("Wähle genau eine vollständige Rundungsfläche mit dem bisherigen Radius."),
+                suggestions=(CORRECT_INPUT, CANCEL),
+            )
     if face is None:
         raise GeometryError(
             detail=_(
@@ -1141,7 +1171,10 @@ def unround(
             ),
             suggestions=(CORRECT_INPUT, CANCEL),
         )
-    return working.replacing(builder.Shape(), history=builder, cancelled=cancelled)
+    result = working.replacing(builder.Shape(), history=builder, cancelled=cancelled)
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+    return result
 
 
 def _cylinder_at(

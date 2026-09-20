@@ -12,7 +12,7 @@ gehen: die exakte Schale und die Formschräge.
 from __future__ import annotations
 
 import math
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import replace
 from typing import Any, Final
 
@@ -1082,6 +1082,7 @@ def push_faces(
     distance: float,
     centre: tuple[float, float, float] | None = None,
     *,
+    selected_faces: Sequence[int] | None = None,
     cancelled: CancelToken | None = None,
 ) -> Solid:
     """Versetzt eine Fläche — oder alle einer Richtung — entlang ihrer Normalen.
@@ -1091,6 +1092,11 @@ def push_faces(
     Umrisses; nach außen wird es vereinigt, nach innen abgezogen. Damit wachsen
     die Nachbarwände mit, statt eine Stufe zu hinterlassen — das Prisma hat
     genau die Kontur der Fläche, die es fortsetzt.
+
+    ``selected_faces`` benennt vollständige aktuelle Topologieflächen des
+    Eingabe-Solids. Ihre eigenen Normalen bestimmen die Bewegung; Richtung
+    und Mitte suchen nur im älteren Modus ``None`` nach einer Fläche.
+    Eine ausdrückliche leere oder ungültige Auswahl wechselt nie den Modus.
 
     **Nicht** über ``BRepOffsetAPI_MakeOffsetShape``: das war der erste Versuch
     und versetzt *alle* Flächen des Körpers. Eine Ausnahmeliste nimmt es zwar
@@ -1109,17 +1115,41 @@ def push_faces(
         )
     if cancelled is not None:
         cancelled.raise_if_cancelled()
+    indices = (
+        None
+        if selected_faces is None
+        else solid.checked_face_indices(selected_faces, cancelled=cancelled)
+    )
     working = replace(solid)
-    wanted = _facing(working, direction, cancelled=cancelled)
-    if not wanted:
-        raise ValidationError(
-            "nx",
-            _("In diese Richtung zeigt keine ebene Fläche dieses Körpers."),
-            value=direction,
-            constraint="no_face",
-        )
-    if centre is not None:
-        wanted = _nearest_face(working, wanted, centre, cancelled=cancelled)
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+    if indices is None:
+        wanted = _facing(working, direction, cancelled=cancelled)
+        if not wanted:
+            raise ValidationError(
+                "nx",
+                _("In diese Richtung zeigt keine ebene Fläche dieses Körpers."),
+                value=direction,
+                constraint="no_face",
+            )
+        if centre is not None:
+            wanted = _nearest_face(working, wanted, centre, cancelled=cancelled)
+    else:
+        faces = working.faces()
+        wanted = []
+        for index in indices:
+            if cancelled is not None:
+                cancelled.raise_if_cancelled()
+            face = faces[working._copied_faces[index]]
+            surface = describe_surface(face, cancelled=cancelled)
+            if not isinstance(surface, PlaneSurface):
+                raise ValidationError(
+                    detail=_(
+                        "Nicht jede gewählte Fläche ist als eben erkannt. "
+                        "Wähle zum Versetzen vollständige ebene Flächen."
+                    )
+                )
+            wanted.append((face, surface.normal))
 
     outcome = working
     for face, normal in wanted:
