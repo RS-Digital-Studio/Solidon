@@ -5,6 +5,15 @@ Analysekarten und der Steckbrief (§21, §18.4, §23).
 
 Die Regeln stehen in `.claude/rules/schichtanalyse.md`.
 
+Maßquellen entstehen beim tatsächlichen Messen. Ein Fit bleibt auch nach
+Übernahme eines erzeugten Namens `fit`; ein deklarierter Vorgabewert wird
+durch angehängte Dreiecksnummern nicht neu gemessen. `matching` transportiert
+Quellen bei belegter Formerhaltung und verwirft sie mit ungültigen Formmaßen.
+Neu aus Dreiecken bestimmte Hüllmaße tragen `facets`. `actions` stellt
+kurzen Maßzusatz und Erklärung gemeinsam für Steckbrief, Bohrhinweis und UI
+bereit. `ActionField.measurement` beschreibt den Ausgangswert; ein neuer
+Zielwert ist keine neue Messung. Historische Felder lesen weiterhin den Schritt.
+
 `slots.open_slots_instead_of_fillets` erkennt auch am Rand angeschnittene
 Bohrungen und Langlöcher mit einer ebenen freien Mündung (§21.1). Die
 vorhandenen Bogen- und Flankenflächen bilden ein `slot` mit `open`,
@@ -437,10 +446,41 @@ betroffenen Körper und erzeugenden Schritt; eine Karte bleibt aus. Andere
   `.claude/rules/schichtanalyse.md`.
 - **Dreieckszahl macht aus einem Mantelstreifen keine Ebene.** Schmale oder
   längs unterteilte Facetten mit belegter Rundungsnaht dürfen den Planarfilter
-  nur verlassen, wenn ihre zusammenhängende Gesamtfläche einen guten Kegel-
-  oder Zylinderfit mit vollem Umfang trägt. Breite Deckflächen bleiben
-  geschützt, auch neben einer Gewindeflanke. Die bestehenden Größen-, Winkel-
-  und Fitgrenzen gelten dabei weiter.
+  nur verlassen, wenn ihre zusammenhängende Gesamtfläche die vollständige
+  Formprüfung für Kegel, Kugel oder Torus beziehungsweise einen Zylinderfit
+  mit vollem Umfang trägt. Auch breite Facetten benötigen diesen gemeinsamen
+  Nachweis; einzelne passende Dreiecke geben keine Deckfläche frei. Die
+  bestehenden Größen-, Winkel- und Fitgrenzen gelten dabei weiter.
+- **Rundmaße kommen aus belegten Mantelpunkten.** `_surface_support` baut
+  für Zylinder, Kegel, Kugel und Torus denselben privaten Koordinaten- und
+  Normalenindex. Zusammenhängende Facettenfächer mit mindestens drei
+  verschiedenen Normalen belegen ursprüngliche Rundflächenecken. Geradlinig
+  unterteilte Facetten und Nähte erzeugen keine zusätzlichen Maßstützen;
+  getrennte Fächer und entgegengesetzte Doppelflächen teilen ihre Stützung
+  nicht. Für nicht konforme Unterteilung werden nur die örtlich gleichen
+  Kantenstrahlen im Leseindex verbunden. Das Originalnetz bleibt unverändert.
+  Beim Kegel dürfen nachgewiesene gemeinsame Mantellinien auch echte
+  Trimmpunkte liefern. Beliebige Sehnenränder werden nicht dazu erklärt.
+- **Ein Kandidat ist noch kein Endmaß.** Kegel, Kugel und Torus verfeinern
+  ihre Maße gemeinsam mit dem geometrischen Punktabstand in zentrierten,
+  skalierten Koordinaten. Der begrenzte Löser muss konvergieren und alle
+  freien Größen bestimmen; unvollständige oder rangdefiziente Ergebnisse
+  werden nicht veröffentlicht. Der Abbruch erreicht sowohl die Fächersuche
+  als auch jede echte Residualauswertung. `fit_torus_samples` bleibt der
+  gemeinsame Kandidatenweg für echte native D1-Punkte und Mesh-Normalen;
+  eine Facettenkorrektur gehört dort nicht hinein.
+  `fit_error` bezeichnet ausschließlich den größten geometrischen Abstand
+  der verwendeten Stützpunkte in Millimetern, beim Kegel orthogonal zum
+  Mantel. Er ist weder ein Band der wirklichen Netzhaut noch eine Zusage
+  über unbekannte Ursprungsmaße. Maximaler örtlicher Punktfehler und alle
+  tatsächlichen Flächennormalen begrenzen die Veröffentlichung zusätzlich.
+- **Ein Kreis allein bestimmt keinen vollständigen Kegel.** Bleibt nur ein
+  belegter Kreis, können die flächengewichteten Mantelnormalen Achse und
+  Winkel binden. Dann müssen die drei Spitzenkoordinaten für sich bestimmt
+  sein und sämtliche bestehenden Formprüfungen weiter gelten.
+  `ConeFit.normal_constrained` nennt diesen internen Fall. Der daraus
+  geschätzte Winkel trägt weiterhin `fit`; auch ein verschwindender
+  Punktfehler beweist keinen ursprünglichen Konstruktionswinkel.
 - Mehrdeutigkeit wird gemeldet, nicht aufgelöst (§15.7, Regel 21).
 - **Eine Freiform bekommt keine Rundformen.** Ein Scan oder eine Figur
   zerfällt an den Krümmungssprüngen in Dutzende Flecken, und auf jeden passt

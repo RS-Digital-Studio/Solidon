@@ -652,7 +652,19 @@ def _object(
     placed = apply(mesh, np.asarray(transform))
     area, centre = top_face_of(mesh)
     features: dict[str, Feature] = (
-        dict([face("face_top", area, centre, (0.0, 0.0, 1.0))]) if area > EPS_GEOM else {}
+        dict(
+            [
+                face(
+                    "face_top",
+                    area,
+                    centre,
+                    (0.0, 0.0, 1.0),
+                    measure_sources={"area": "facets", "centre": "facets"},
+                )
+            ]
+        )
+        if area > EPS_GEOM
+        else {}
     )
     if features:
         from app.core.perceive.matching import moved_features

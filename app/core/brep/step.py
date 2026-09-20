@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from app.core.brep.kernel import Solid, require
+from app.core.brep.kernel import Solid, copy_shape, require
 from app.core.errors import ValidationError
 from app.core.log import get_logger
 from app.i18n import _
@@ -82,7 +82,10 @@ def write(solid: Solid, name: str = "") -> bytes:
         # Der Name gehört gesetzt, *bevor* übertragen wird: er wandert beim
         # Transfer in das PRODUCT der Datei, nachher ist er wirkungslos.
         Interface_Static.SetCVal_s("write.step.product.name", name or "Solidon")
-        writer.Transfer(solid.shape, STEPControl_AsIs)
+        # Der Transfer verändert auch bei gültigen Rundflächen interne
+        # Kennzeichen. Szene und Cache behalten ausschließlich ihre eigene Form.
+        working, _faces = copy_shape(solid.shape)
+        writer.Transfer(working, STEPControl_AsIs)
         if writer.Write(str(path)) != IFSelect_RetDone:
             raise ValidationError(
                 field="file",

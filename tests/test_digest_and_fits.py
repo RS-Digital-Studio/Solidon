@@ -38,6 +38,165 @@ from app.core.types import (
 MESHES = Path(__file__).parent / "data" / "meshes"
 
 
+@pytest.mark.parametrize("provenance", ["detected", "generated"])
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [("native", "exact"), ("facets", "exact"), ("fit", "estimated"), ("parameter", "exact")],
+)
+def test_measure_status_reads_the_value_source_not_the_feature_origin(
+    provenance: str, source: str, expected: str
+) -> None:
+    """Ein neu gemessener Eigenbau und eine native Importfläche behalten ihre Quelle."""
+    from app.core.types import measure_status
+
+    feature = Feature(
+        id="bore",
+        kind="hole",
+        provenance=provenance,  # type: ignore[arg-type]
+        params={"diameter": 8.0, "depth": 4.0},
+        created_by=7,
+        recognised=False,
+        measure_sources={"diameter": source},  # type: ignore[dict-item]
+    )
+    status = measure_status(feature, "diameter")
+    assert (status.state, status.source) == (expected, source)
+    assert measure_status(feature, "depth").state == "unknown"
+    assert feature.params == {"diameter": 8.0, "depth": 4.0}
+
+
+@pytest.mark.parametrize("value", [None, True, "8.0", float("nan"), float("inf"), 0.0, -8.0])
+def test_measure_status_does_not_certify_an_invalid_diameter(value: object) -> None:
+    """Eine vorhandene Quellenkennung ersetzt kein bestimmtes positives Maß."""
+    from app.core.types import measure_status
+
+    feature = Feature(
+        "bore", "hole", "detected", {"diameter": value}, measure_sources={"diameter": "native"}
+    )
+    assert measure_status(feature, "diameter").state == "unknown"
+
+
+def test_measure_status_keeps_unknown_sources_and_valid_zero_values_separate() -> None:
+    """Nullposition und Durchgangstiefe sind Werte; fehlende Quellen sind keine Fits."""
+    from app.core.types import measure_status
+
+    feature = Feature(
+        "bore",
+        "hole",
+        "generated",
+        {"centre": (0.0, 0.0, 0.0), "depth": 0.0, "diameter": 8.0},
+        measure_sources={"centre": "parameter", "depth": "parameter"},
+    )
+    assert measure_status(feature, "centre").state == "exact"
+    assert measure_status(feature, "depth").source == "parameter"
+    assert measure_status(feature, "diameter").state == "unknown"
+    changed = replace(feature, measure_sources={"diameter": "foreign"})  # type: ignore[dict-item]
+    assert measure_status(changed, "diameter").state == "unknown"
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("axis", (0.0, 0.0, 0.0)),
+        ("normal", (0.0, 0.0, 0.0)),
+        ("direction", (0.0, 0.0, 0.0)),
+        ("centre", (0.0, 0.0)),
+        ("size", (3.0, -1.0, 2.0)),
+    ],
+)
+def test_measure_status_rejects_undefined_directions_and_sizes(name: str, value: object) -> None:
+    from app.core.types import measure_status
+
+    feature = Feature("wall", "face", "detected", {name: value}, measure_sources={name: "native"})
+    assert measure_status(feature, name).state == "unknown"
+
+
+@pytest.mark.parametrize(
+    ("source", "qualifier"),
+    [
+        ("native", ""),
+        ("fit", "geschätzt"),
+        ("parameter", "Vorgabemaß"),
+        (None, "Maßherkunft nicht bestimmt"),
+    ],
+)
+def test_digest_reads_the_actual_measure_source(source: str | None, qualifier: str) -> None:
+    """Name und Herkunft können gleich sein, während die Zahlen neu gemessen wurden."""
+    from app.core.perceive.digest import _feature_line
+
+    feature = Feature(
+        "bore",
+        "hole",
+        "generated",
+        {"diameter": 8.012345, "axis": (0, 0, 1)},
+        created_by=3,
+        measure_sources={"diameter": source} if source else {},  # type: ignore[arg-type]
+    )
+    text = _feature_line(feature.id, feature)
+    assert "Ø 8.01" in text
+    assert qualifier in text
+    assert ("geschätzt" in text) is (source == "fit")
+    assert feature.params["diameter"] == pytest.approx(8.012345)
+    missing = _feature_line(feature.id, replace(feature, params={"diameter": None}))
+    assert "Maß nicht bestimmt" in missing and "Ø 0" not in missing
+
+
+@pytest.mark.parametrize(
+    "name", ["depth", "length", "travel", "fit_error", "residual", "radial_min", "radial_max"]
+)
+def test_measure_status_rejects_negative_extents_but_keeps_valid_zero(name: str) -> None:
+    from app.core.types import measure_status
+
+    feature = Feature("bore", "hole", "detected", {name: -1.0}, measure_sources={name: "native"})
+    assert not measure_status(feature, name).available
+    zero = replace(feature, params={name: 0.0})
+    assert measure_status(zero, name).available
+    signed = replace(feature, params={"angle": -45.0}, measure_sources={"angle": "parameter"})
+    assert measure_status(signed, "angle").source == "parameter"
+
+
+def test_digest_does_not_invent_an_axis_for_an_undefined_direction() -> None:
+    from app.core.perceive.digest import _feature_line
+
+    feature = Feature(
+        "bore",
+        "hole",
+        "detected",
+        {"diameter": 8.0, "axis": (0.0, 0.0, 0.0), "centre": (1.0, 2.0)},
+        measure_sources={"diameter": "native", "axis": "native"},
+    )
+    line = _feature_line(feature.id, feature)
+    assert "Achse Maß nicht bestimmt" in line and "+Z" not in line
+    assert ", bei" not in line and line.endswith("Sackloch")
+    fitted = replace(
+        feature,
+        params={**feature.params, "axis": (0.0, 0.0, 1.0)},
+        measure_sources={"diameter": "native", "axis": "fit"},
+    )
+    assert "Achse +Z (geschätzt)" in _feature_line(fitted.id, fitted)
+
+
+def test_measure_fields_use_the_starting_measure_and_keep_the_target_value() -> None:
+    """Eine Zielvorgabe verändert die Quelle des aktuellen Bohrdurchmessers nicht."""
+    from app.core.bootstrap import load_operations
+    from app.core.perceive.actions import actions_for
+
+    load_operations()
+    feature = Feature(
+        "bore",
+        "hole",
+        "generated",
+        {"diameter": 8.012345, "depth": 4.0, "axis": (0, 0, 1)},
+        measure_sources={"diameter": "fit", "depth": "facets", "axis": "fit"},
+    )
+    action = next(action for action in actions_for(feature) if action.op == "resize_hole")
+    diameter = next(field for field in action.fields if field.name == "diameter")
+    assert diameter.value == pytest.approx(8.012345)
+    assert diameter.measurement is not None and diameter.measurement.state == "estimated"
+    target = replace(diameter, value=10.0)
+    assert target.value == pytest.approx(10.0)
+    assert feature.params["diameter"] == pytest.approx(8.012345)
+
+
 def plate_scene(profile: Profile) -> Scene:
     mesh = place_on_bed(
         normalise(read_mesh((MESHES / "plate_holes.stl").read_bytes(), ".stl"), "mm").mesh
@@ -1042,6 +1201,7 @@ def test_no_feature_kind_falls_back_to_its_english_key() -> None:
         "tube_diameter": 4.0,
         "radius": 3.0,
         "area": 100.0,
+        "volume": 1000.0,
         "angle": 90.0,
         "pitch": 1.0,
         "depth": 10.0,

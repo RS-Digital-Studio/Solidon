@@ -49,7 +49,15 @@ class TorusSurface:
     inward: bool
 
 
-Surface = PlaneSurface | CylinderSurface | TorusSurface
+@dataclass(frozen=True, slots=True)
+class SphereSurface:
+    """Kugelträger mit geprüftem Zentrum, Radius und tatsächlicher Materialseite."""
+
+    sphere: Any
+    inward: bool
+
+
+Surface = PlaneSurface | CylinderSurface | TorusSurface | SphereSurface
 
 
 def _check(cancelled: CancelToken | None) -> None:
@@ -58,7 +66,7 @@ def _check(cancelled: CancelToken | None) -> None:
         cancelled.raise_if_cancelled()
 
 
-def _point_and_normal(face: Any) -> tuple[Any, Any] | None:
+def surface_sample(face: Any) -> tuple[Any, Any] | None:
     """Eine echte Innenprobe statt einer möglicherweise ausgeschnittenen UV-Mitte."""
     from OCP.BRepClass3d import BRepClass3d_SolidExplorer
     from OCP.gp import gp_Pnt, gp_Vec
@@ -261,11 +269,13 @@ def _matches(
     cancelled: CancelToken | None,
     *,
     offset: float = 0.0,
+    spherical: bool = False,
 ) -> bool:
     """Prüft jeden rationalen Bézier-Abschnitt einschließlich seiner inneren Pole.
 
     Positive Gewichte begrenzen Ebenenabstände durch die Polhülle. Beim
-    Zylinder wird X²+Y²-R²W² in homogenen Bernstein-Koeffizienten geprüft.
+    Zylinder wird X²+Y²-R²W² in homogenen Bernstein-Koeffizienten geprüft,
+    bei der Kugel zusätzlich Z².
     Deren Betragsmaximum, geteilt durch R·min(W)², begrenzt den radialen
     Abstand. So kann ein Ausschlag zwischen Punktproben nicht verschwinden.
     Die Aussage gilt der Trägerfläche, nicht einer beidseitigen Hausdorff-
@@ -275,13 +285,13 @@ def _matches(
     if patches is None:
         return False
     origin = np.asarray(candidate.Location().Coord(), dtype=np.float64)
-    axis = np.asarray(candidate.Axis().Direction().Coord(), dtype=np.float64)
+    axis = np.asarray(candidate.Position().Direction().Coord(), dtype=np.float64)
     remaining = _MAX_COEFFICIENT_PRODUCTS
     for patch in patches:
         _check(cancelled)
         count_u, count_v = patch.NbUPoles(), patch.NbVPoles()
         count = count_u * count_v
-        remaining -= 3 * count**2
+        remaining -= (4 if spherical else 3) * count**2
         if abs(offset) > 0.0:
             # 12 Ableitungs-, 6 Kreuzprodukt- und beim Zylinder weitere
             # 9 Projektionsprodukte: gezählte Koeffizientenpaare, keine Laufzeitgrenze.
@@ -317,12 +327,62 @@ def _matches(
             + _product(y, y, cancelled)
             - _product(weights, weights, cancelled)
         )
+        if spherical:
+            z = weights * (relative @ axis) / radius
+            residual += _product(z, z, cancelled)
         bound = radius * float(np.max(np.abs(residual))) / float(weights.min()) ** 2
         if abs(offset) > 0.0:
             bound += abs(offset) * _normal_bound(relative, weights, axis, False, cancelled)
         if not math.isfinite(bound) or bound > EPS_GEOM:
             return False
     return True
+
+
+def _sphere_surface(face: Any, adaptor: Any, cancelled: CancelToken | None) -> SphereSurface | None:
+    """Native Kugel oder vollständig geprüfter rationaler Träger auf einer privaten Kopie."""
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace
+    from OCP.GeomAbs import GeomAbs_BezierSurface, GeomAbs_BSplineSurface, GeomAbs_Sphere
+    from OCP.gp import gp_Sphere, gp_Vec
+    from OCP.ShapeAnalysis import ShapeAnalysis_CanonicalRecognition
+
+    kind = adaptor.GetType()
+    if kind == GeomAbs_Sphere:
+        candidate = adaptor.Sphere()
+    elif kind in (GeomAbs_BezierSurface, GeomAbs_BSplineSurface):
+        working = (adaptor.Bezier() if kind == GeomAbs_BezierSurface else adaptor.BSpline()).Copy()
+        local_origin = np.asarray(working.Pole(1, 1).Coord(), dtype=float)
+        working.Translate(gp_Vec(*(-local_origin)))
+        _check(cancelled)
+        local_face = BRepBuilderAPI_MakeFace(
+            working,
+            adaptor.FirstUParameter(),
+            adaptor.LastUParameter(),
+            adaptor.FirstVParameter(),
+            adaptor.LastVParameter(),
+            EPS_GEOM,
+        ).Face()
+        recognizer = ShapeAnalysis_CanonicalRecognition(local_face)
+        candidate = gp_Sphere()
+        matched = recognizer.IsSphere(EPS_GEOM, candidate)
+        _check(cancelled)
+        if not matched or recognizer.GetStatus() != 0:
+            return None
+        gap = float(recognizer.GetGap())
+        if not math.isfinite(gap) or not 0.0 <= gap <= EPS_GEOM:
+            return None
+        candidate.Translate(gp_Vec(*local_origin))
+        if not _matches(adaptor, candidate, False, cancelled, spherical=True):
+            return None
+    else:
+        return None
+    if not math.isfinite(candidate.Radius()) or candidate.Radius() <= EPS_GEOM:
+        return None
+    measured = surface_sample(face)
+    _check(cancelled)
+    if measured is None:
+        return None
+    point, normal = measured
+    return SphereSurface(candidate, normal.Dot(gp_Vec(candidate.Location(), point)) < 0.0)
 
 
 def _torus_matches(adaptor: Any, candidate: Any, cancelled: CancelToken | None) -> bool:
@@ -439,7 +499,7 @@ def _torus_surface(face: Any, adaptor: Any, cancelled: CancelToken | None) -> To
         return None
     if not float(candidate.MajorRadius()) > float(candidate.MinorRadius()) > EPS_GEOM:
         return None
-    measured = _point_and_normal(face)
+    measured = surface_sample(face)
     _check(cancelled)
     if measured is None:
         return None
@@ -635,7 +695,7 @@ def _offset_candidate(
     if found is None:
         return None
     candidate, plane = found
-    measured = _point_and_normal(basis_face)
+    measured = surface_sample(basis_face)
     _check(cancelled)
     if measured is None:
         return None
@@ -656,7 +716,7 @@ def _offset_candidate(
 
 
 def describe(face: Any, *, cancelled: CancelToken | None = None) -> Surface | None:
-    """Liest Ebene oder Kreiszylinder samt Grenzen; die Topologie bleibt unangetastet."""
+    """Liest analytische Träger samt Grenzen; die Topologie bleibt unangetastet."""
     from OCP.BRepAdaptor import BRepAdaptor_Surface
     from OCP.GeomAbs import GeomAbs_Cylinder, GeomAbs_OffsetSurface
     from OCP.gp import gp_Vec
@@ -671,10 +731,11 @@ def describe(face: Any, *, cancelled: CancelToken | None = None) -> Surface | No
             else _candidate(face, adaptor, cancelled)
         )
         if found is None:
-            return _torus_surface(face, adaptor, cancelled)
+            sphere = _sphere_surface(face, adaptor, cancelled)
+            return sphere if sphere is not None else _torus_surface(face, adaptor, cancelled)
         candidate, plane = found
         _check(cancelled)
-        measured = _point_and_normal(face)
+        measured = surface_sample(face)
         _check(cancelled)
         if measured is None:
             return None

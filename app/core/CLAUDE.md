@@ -27,6 +27,13 @@ selbst. Hier steht, **was wo liegt**.
 
 ## Die Module direkt hier
 
+`Feature.measure_sources` nennt je Parameter die tatsächliche Wertequelle:
+`native`, `facets`, `fit` oder `parameter`. Die reine Abfrage
+`measure_status(feature, name)` prüft vorhandene Werte und liefert
+Genauigkeitsauskunft samt Quelle; fehlende Quelle bleibt unbekannt.
+`provenance`, Erzeuger und Körperart sind kein Ersatz. Der Zahlenwert steht
+weiter nur in `params`; Normmaße und Drucktoleranzen werden daraus nicht geraten.
+
 **Verträge und Zahlen** — was alle anderen benutzen:
 
 | Datei | Rolle |

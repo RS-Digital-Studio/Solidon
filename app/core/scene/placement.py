@@ -40,6 +40,7 @@ from app.core.types import (
     Document,
     Feature,
     FeatureRef,
+    MeasureStatus,
     ObjectId,
     Operation,
     OpId,
@@ -48,6 +49,7 @@ from app.core.types import (
     Profile,
     SceneObject,
     Vec3,
+    measure_status,
     vec3_or_none,
 )
 from app.core.units import EPS_GEOM, MAX_FACET_SAG, format_length, round_display
@@ -255,6 +257,7 @@ def bore_advice(
     features: Mapping[str, Feature] | None = None,
     mesh: MeshData | None = None,
     cavity: tuple[Feature, ...] | None = None,
+    status: MeasureStatus | None = None,
 ) -> tuple[str, list[str]]:
     """Was zu dieser Bohrung zu sagen ist — und, wo nichts passt, zu fragen.
 
@@ -274,7 +277,18 @@ def bore_advice(
     Aufrufer zeigt. Das Dezimaltrennzeichen bleibt dabei ein Punkt —
     lokalisiert wird in der Oberfläche.
     """
+    from app.core.perceive.actions import measure_explanation, measure_qualifier
+
+    status = status or (
+        measure_status(feature, "diameter")
+        if feature is not None
+        else MeasureStatus("unknown", available=bool(np.isfinite(diameter) and diameter > 0.0))
+    )
+    if not status.available:
+        return str(measure_explanation(status)), [tr("Selbst eintragen")] if ask else []
     measured = measured if measured is not None else format_length(diameter, with_unit=False)
+    qualifier = measure_qualifier(status)
+    named_measure = f"{measured} mm" + (f" ({qualifier})" if qualifier is not None else "")
     if feature is not None and features is not None:
         from app.core.perceive import relations
 
@@ -287,9 +301,19 @@ def bore_advice(
             )
         if chain is not None and len(chain) > 1 and chain[0].id != feature.id:
             return tr(
-                "Diese Aufweitung misst {measure} mm. Die Schraubengröße richtet sich "
+                "Diese Aufweitung misst {measure}. Die Schraubengröße richtet sich "
                 "nach der engeren Bohrung."
-            ).replace("{measure}", measured), []
+            ).replace("{measure}", named_measure), []
+    if status.source != "native":
+        said = tr(
+            "Bohrungsmaß: {measure}. Eine passende Schraubengröße ist damit nicht sicher bestimmt."
+        ).format(measure=named_measure)
+        if not ask:
+            return said, []
+        return (
+            f"{said} {tr('Zu welcher Schraube gehört sie?')}",
+            [*_sizes_around(diameter), tr("Selbst eintragen")],
+        )
     size = screw_for_bore(diameter)
     if size is not None:
         # Ganze Sätze mit Platzhaltern statt zusammengesetzter Halbsätze: Wer

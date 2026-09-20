@@ -84,6 +84,24 @@ def _recipe(profile: Profile, name: str = "probe_halter") -> recipe.Recipe:
 # --- Das Format (E2) --------------------------------------------------------------
 
 
+def test_recipe_renaming_preserves_the_actual_measure_source(
+    profile: Profile, tmp_path: Path
+) -> None:
+    """Ein eigener Bausteinname macht die gemessene Oberseitenfläche nicht zum Vorgabemaß."""
+    from app.core.types import measure_status
+
+    made = _recipe(profile)
+    path = recipe.save(made, tmp_path)
+    restored = recipe.from_data(json.loads(path.read_text(encoding="utf-8")))
+    for original in (made, restored):
+        built = recipe.build(original, profile=profile)
+        top = built.features["top"]
+        assert top.provenance == "generated"
+        assert top.params["area"] == pytest.approx(600.0)
+        assert measure_status(top, "area").source == "facets"
+        assert measure_status(top, "normal").source == "parameter"
+
+
 def test_capture_after_print_settings_exports_a_geometry_recipe(
     profile: Profile, tmp_path: Path
 ) -> None:

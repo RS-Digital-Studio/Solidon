@@ -595,6 +595,7 @@ def transformed_features(
     )
     for name, feature in result.items():
         params = dict(feature.params)
+        sources = dict(feature.measure_sources)
         valid = rigid or uniform
         if "local_search_radius" in params:
             params["local_search_radius"] *= float(factors[0])
@@ -679,8 +680,15 @@ def transformed_features(
                 low, high = vertices.min(axis=0), vertices.max(axis=0)
                 params["centre"] = tuple(float(value) for value in (low + high) / 2.0)
                 params["size"] = tuple(float(value) for value in high - low)
+                sources.update(centre="facets", size="facets")
                 valid = True
-        result[name] = replace(feature, params=params)
+        result[name] = replace(
+            feature,
+            params=params,
+            measure_sources={key: source for key, source in sources.items() if key in params}
+            if valid
+            else {},
+        )
         if valid:
             exact.add(name)
     return FeatureTransform(result, frozenset(exact))

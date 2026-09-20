@@ -44,6 +44,7 @@ from app.core.perceive.features import (
 )
 from app.core.perceive.relations import widening_at_the_mouth
 from app.core.types import Feature, FeatureId, Profile
+from app.core.units import EPS_GEOM
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -2004,7 +2005,7 @@ def test_no_feature_is_smaller_than_the_tool_that_would_make_it(
     )
     # Dieser Test isoliert die Werkzeuggröße. Die geometrische Kegelgüte prüft
     # ``test_cone_fit_quality.py`` an echten Flächen statt an Würfelflächen.
-    monkeypatch.setattr(features_module, "_cone_is_recognisable", lambda *_args: True)
+    monkeypatch.setattr(features_module, "_cone_is_recognisable", lambda *_args, **_kwargs: True)
     gefunden = detect_cones(mesh, [(kegel, fläche), (replace(kegel, radius=winzig), fläche)])
     assert [f.params["diameter"] for f in gefunden] == [6.0], "ein Kegel unter Werkzeuggröße"
     assert [f.id for f in gefunden] == ["cone_1"], "und die Nummern bleiben lückenlos"
@@ -2013,7 +2014,7 @@ def test_no_feature_is_smaller_than_the_tool_that_would_make_it(
     kugel = SphereFit(centre=(0.0, 0.0, 0.0), radius=3.0, residual=0.0, recess=False)
     # Dieser Test isoliert die Werkzeuggröße. Die geometrische Kugelgüte prüft
     # ``test_sphere_fit_quality.py`` an echten Flächen statt an Würfelflächen.
-    monkeypatch.setattr(features_module, "_sphere_is_recognisable", lambda *_args: True)
+    monkeypatch.setattr(features_module, "_sphere_is_recognisable", lambda *_args, **_kwargs: True)
     gefunden = detect_spheres(mesh, [(kugel, fläche), (replace(kugel, radius=winzig), fläche)])
     assert [f.params["diameter"] for f in gefunden] == [6.0], "eine Kugel unter Werkzeuggröße"
     assert [f.id for f in gefunden] == ["sphere_1"]
@@ -2028,7 +2029,7 @@ def test_no_feature_is_smaller_than_the_tool_that_would_make_it(
         recess=False,
     )
     # Entsprechend gehört die Torusgüte in ``test_torus_fit_quality.py``.
-    monkeypatch.setattr(features_module, "_torus_is_recognisable", lambda *_args: True)
+    monkeypatch.setattr(features_module, "_torus_is_recognisable", lambda *_args, **_kwargs: True)
     # **Der Ring ist groß, die Röhre nicht** — genau der Fall, den ein Blick
     # allein auf ``diameter`` durchgelassen hätte.
     dünn = replace(torus, tube_radius=winzig)
@@ -2422,9 +2423,11 @@ def test_a_sphere_that_beats_a_cone_is_fitted_only_once(
     original = features_module.fit_sphere
     patches: list[tuple[int, ...]] = []
 
-    def counted(body: trimesh.Trimesh, patch: list[int]) -> features_module.SphereFit | None:
+    def counted(
+        body: trimesh.Trimesh, patch: list[int], **kwargs
+    ) -> features_module.SphereFit | None:
         patches.append(tuple(patch))
-        return original(body, patch)
+        return original(body, patch, **kwargs)
 
     monkeypatch.setattr(features_module, "fit_sphere", counted)
     forget_cache()
@@ -3019,18 +3022,38 @@ def test_a_scan_keeps_its_flat_base_and_loses_the_invented_round_shapes() -> Non
     assert "face" in kinds, "die Standfläche ist echt und bleibt"
 
 
+@pytest.mark.parametrize("with_sphere", [False, True])
 def test_without_the_freeform_rule_the_same_scan_keeps_only_supported_round_shapes(
     monkeypatch: pytest.MonkeyPatch,
+    with_sphere: bool,
 ) -> None:
-    """Die Gegenprobe trennt Flächengüte und Urteil über das ganze Modell."""
+    """Nur eine unabhängig gebaute Kugel belegt eine Rundform im verrauschten Scan."""
     monkeypatch.setattr(features_module, "FREEFORM_ROUND_COUNT", 10**6)
     forget_cache()
+    scan = _scan_like_blob()
+    if with_sphere:
+        ball = trimesh.creation.icosphere(radius=7.234567, subdivisions=2)
+        ball.apply_translation((60.0, 0.0, 0.0))
+        mesh = MeshData.of(trimesh.util.concatenate((scan.raw, ball)))
+        expected_faces = set(range(scan.triangle_count, mesh.triangle_count))
+    else:
+        mesh = scan
+        expected_faces = set()
+    points, faces = mesh.raw.vertices.copy(), mesh.raw.faces.copy()
 
-    found = detect(_scan_like_blob())
+    found = detect(mesh)
 
     round_shapes = [f for f in found.values() if f.kind in ("sphere", "torus")]
-    assert 0 < len(round_shapes) < FREEFORM_ROUND_COUNT, len(round_shapes)
-    assert freeform_dropped(_scan_like_blob()) == 0
+    assert len(round_shapes) == int(with_sphere)
+    if with_sphere:
+        sphere = round_shapes[0]
+        assert sphere.kind == "sphere"
+        assert sphere.params["diameter"] == pytest.approx(2 * 7.234567, abs=EPS_GEOM, rel=0)
+        assert sphere.params["centre"] == pytest.approx((60, 0, 0), abs=EPS_GEOM, rel=0)
+        assert set(sphere.face_indices) == expected_faces
+    assert freeform_dropped(mesh) == 0
+    np.testing.assert_array_equal(mesh.raw.vertices, points)
+    np.testing.assert_array_equal(mesh.raw.faces, faces)
 
 
 def test_a_constructed_part_with_one_round_feature_is_left_alone() -> None:

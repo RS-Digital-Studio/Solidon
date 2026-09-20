@@ -28,7 +28,7 @@ from typing import Any, Final, NamedTuple
 import numpy as np
 
 from app.core import units
-from app.core.deferred import trimesh
+from app.core.deferred import cKDTree, least_squares, trimesh
 from app.core.geom.mesh import MeshData, face_components, fully_stitched
 from app.core.geom.repair import merge_vertices
 from app.core.log import get_logger
@@ -204,6 +204,14 @@ FLAT_ANGLE = 0.5
 #: ändert weder den Formnachweis noch eine geometrische Toleranz.
 FIT_SCAN_BLOCK: Final = 16_384
 
+#: Feste Arbeitsgrenze einer deterministischen Endmaßeinpassung; keine
+#: geometrische Toleranz. Jede Residuen-/Jacobi-Auswertung bleibt abbrechbar.
+ROUND_FIT_EVALUATIONS: Final = 100
+
+#: Dimensionslose Lösergenauigkeit im auf Einheitsgröße skalierten Rahmen.
+#: Aus der Float64-Auflösung abgeleitet, nicht aus einem Fertigungsspiel.
+ROUND_FIT_PRECISION: Final = float(np.finfo(float).eps ** 0.75)
+
 
 @dataclass(frozen=True, slots=True)
 class CylinderFit:
@@ -276,6 +284,14 @@ class ConeFit:
     """Mittlere Abweichung vom eingepassten Kegel, bezogen auf den Radius."""
     recess: bool
     """Wahr bei einer Senkung — der Kegel ist ausgehöhlt, nicht aufgesetzt."""
+    fit_error: float | None = None
+    """Größter orthogonaler Stützpunktabstand in mm; keine Nennmaßunsicherheit."""
+    normal_constrained: bool = False
+    """Bei nur einem belegten Kreis bestimmen Mantelnormalen Achse und Winkel.
+
+    Auch ein Stützpunktfehler von null belegt dann keinen Ursprungswinkel.
+    Alle veröffentlichten Kegelmaße bleiben geschätzte Fitwerte.
+    """
 
     @property
     def good(self) -> bool:
@@ -296,6 +312,8 @@ class SphereFit:
     """Mittlere Abweichung vom eingepassten Radius, bezogen auf den Radius."""
     recess: bool
     """Wahr bei einer Pfanne — die Kugel ist ausgehöhlt, nicht aufgesetzt."""
+    fit_error: float | None = None
+    """Größter geometrischer Stützpunktabstand in mm, kein Fehlerband der Haut."""
 
     @property
     def good(self) -> bool:
@@ -368,6 +386,8 @@ class TorusFit:
     residual: float
     recess: bool
     """Wahr bei einer Kehle — die Röhre ist ausgehöhlt, nicht aufgesetzt."""
+    fit_error: float | None = None
+    """Größter geometrischer Stützpunktabstand in mm; Kandidaten haben noch keinen."""
 
     @property
     def good(self) -> bool:
@@ -412,10 +432,12 @@ CONE_TOLERANCE = CYLINDER_TOLERANCE
 #: belegte Freiformfleck ``cone_48`` trägt dagegen auf 46,38 Prozent seiner
 #: Fläche einen größeren Widerspruch. Ein selbst erzeugter 45°-Teilbogen in
 #: drei Vernetzungen und beiden Flächenrichtungen bleibt ohne Ausreißer.
-CONE_NORMAL_ERROR = 5.0
+SURFACE_NORMAL_ERROR = 5.0
+CONE_NORMAL_ERROR = SURFACE_NORMAL_ERROR
 
 #: Mindestens 95 Prozent der belegten Fläche müssen die Kegelnormalen tragen.
-CONE_NORMAL_OUTLIER_SHARE = 0.05
+SURFACE_NORMAL_OUTLIER_SHARE = 0.05
+CONE_NORMAL_OUTLIER_SHARE = SURFACE_NORMAL_OUTLIER_SHARE
 
 #: Wie gut ein Fleck zur eingepassten Kugel oder zum Torus passen muss —
 #: **strenger als bei Zylinder und Kegel, und das ist gemessen.**
@@ -459,7 +481,7 @@ STADIUM_SWEEP = 180
 #: um 9,97 bis 19,90 Grad abwichen. Der echte Ring, die echte Kantenrundung und
 #: ein in beiden Richtungen beschnittener analytischer Torus liegen bei
 #: höchstens 4,51 Grad. Fünf Grad liegen in der gemessenen Lücke.
-TORUS_NORMAL_ERROR = 5.0
+TORUS_NORMAL_ERROR = SURFACE_NORMAL_ERROR
 
 #: Höchster Flächenanteil außerhalb des Normalenwinkels oben.
 #:
@@ -469,7 +491,7 @@ TORUS_NORMAL_ERROR = 5.0
 #: Beim echten Garten-Ring gilt dasselbe. Die acht falschen Funde tragen danach
 #: auf 6,31 bis 33,24 Prozent ihrer Fläche einen größeren Fehler. Fünf Prozent
 #: verlangen die Zusage für mindestens 95 Prozent der belegten Oberfläche.
-TORUS_NORMAL_OUTLIER_SHARE = 0.05
+TORUS_NORMAL_OUTLIER_SHARE = SURFACE_NORMAL_OUTLIER_SHARE
 
 #: Höchste Konditionszahl für einen bestimmbaren Kugelmittelpunkt.
 #:
@@ -492,15 +514,16 @@ SPHERE_MAX_CENTRED_CONDITION = 2_000.0
 #: der Triangulierung weiten Abstand, ohne solche Bänder umzudeuten.
 SPHERE_MIN_CURVATURE_BALANCE = 0.5
 
-#: Mittlerer radialer Fehler als Anteil der lokalen Fleckausdehnung.
+#: Größter geometrischer Stützpunktfehler als Anteil der lokalen Fleckausdehnung.
 #:
-#: Der bisherige Rückstand bleibt für den Vergleich mit Kegeln auf den Radius
-#: bezogen. Als alleinige Güte täuscht er bei großen Fit-Radien: Eine um vier
-#: Prozent gestreckte Kugel besteht ihn mit 0,0101. Lokal liegt ihr Fehler bei
-#: 0,0029; die echte Referenzpfanne, drei reparierte Figurenkugeln und zwei
-#: 5°-Kalotten reichen von 0,0001 bis 0,0007. 0,002 liegt zwischen den
-#: gemessenen Familien und ist weiterhin frei von Lage, Drehung und Maßstab.
-SPHERE_LOCAL_TOLERANCE = 0.002
+#: Der relative Rückstand bleibt für die Formauswahl auf den Radius bezogen.
+#: Ein großer Radius darf jedoch örtliche Formabweichungen nicht kleinrechnen.
+#: Die vorhandene lokale Kugelgrenze gilt deshalb auch an den maßführenden
+#: Kegel-/Torusecken, jeweils am geometrischen Abstand und am schlechtesten
+#: Punkt. Die unabhängigen Kalotten, Teilkegel und Teilringe bleiben erhalten;
+#: die bisherigen Freiform-Gegenfälle werden nach dem Endmaßfit weiterhin
+#: verworfen. Sehnenpunkte sind keine Stütze und tragen ihre eigene Hautprüfung.
+ROUND_LOCAL_TOLERANCE = 0.002
 
 #: Um wie viel besser eine Kugel passen muss, um einen brauchbaren Kegelfit zu
 #: verdrängen — als Verhältnis der Rückstände.
@@ -904,9 +927,9 @@ def detect(
             check_cancelled()
         fitted = _fitted(mesh, planar=planar, check_cancelled=check_cancelled)
         sphere_candidates = _sphere_candidates(mesh, fitted.spheres)
-        sphere_features = detect_spheres(mesh, sphere_candidates)
+        sphere_features = detect_spheres(mesh, sphere_candidates, check_cancelled=check_cancelled)
         torus_candidates = _torus_candidates(mesh, fitted.tori)
-        torus_features = detect_tori(mesh, torus_candidates)
+        torus_features = detect_tori(mesh, torus_candidates, check_cancelled=check_cancelled)
         recognised_round_faces = {
             frozenset(feature.face_indices) for feature in (*sphere_features, *torus_features)
         }
@@ -939,7 +962,7 @@ def detect(
             lambda: detect_holes(mesh, fitted.cylinders, fitted.cones),
             lambda: detect_pins(mesh, fitted.cylinders),
             lambda: detect_fillets(mesh, worth_naming, check_cancelled=check_cancelled),
-            lambda: detect_cones(mesh, fitted.cones),
+            lambda: detect_cones(mesh, fitted.cones, check_cancelled=check_cancelled),
             lambda: sphere_features,
             lambda: torus_features,
             lambda: detect_faces(mesh, planar=planar, check_cancelled=check_cancelled),
@@ -1083,6 +1106,13 @@ def _threads_instead_of_phantoms(
             id=identifier,
             kind="thread",
             provenance="detected",
+            measure_sources={
+                "diameter": "fit",
+                "pitch": "fit",
+                "centre": "fit",
+                "axis": "fit",
+                "length": "facets",
+            },
             params={
                 "diameter": round(helix.diameter, 4),
                 "pitch": round(helix.pitch, 4),
@@ -1414,12 +1444,14 @@ def _fitted(
             # der Achse, beim Kegel um ``sin`` des Halbwinkels daneben.
             #
             # Also: Die Form kommt aus dem Winkel, die Güte aus dem Rückstand.
-            cone = fit_cone(body, patch)
+            cone = fit_cone(body, patch, check_cancelled=check_cancelled)
             if check_cancelled is not None:
                 check_cancelled()
             if cone is not None and cone.half_angle >= CONE_MIN_ANGLE:
-                if cone.good and _fits_in_the_body(mesh, cone):
-                    ball = fit_sphere(body, patch)
+                if cone.good and _cone_is_recognisable(
+                    body, cone, patch, check_cancelled=check_cancelled
+                ):
+                    ball = fit_sphere(body, patch, check_cancelled=check_cancelled)
                     if check_cancelled is not None:
                         check_cancelled()
                     if not _a_ball_fits_far_better(cone, ball):
@@ -1444,21 +1476,25 @@ def _fitted(
             # wäre für jede Bohrungs-Operation unsichtbar. Die andere Hälfte der
             # Antwort ist ``ROUND_TOLERANCE``.
             if ball is None:
-                ball = fit_sphere(body, patch)
+                ball = fit_sphere(body, patch, check_cancelled=check_cancelled)
             if check_cancelled is not None:
                 check_cancelled()
-            if ball is not None and ball.good and _fits_in_the_body_by_size(mesh, ball.radius):
+            if ball is not None and ball.good:
                 spheres.append((ball, patch))
-                return True
-            ring = fit_torus(body, patch)
+                if _sphere_is_recognisable(body, ball, patch, check_cancelled=check_cancelled):
+                    return True
+            ring = fit_torus(body, patch, check_cancelled=check_cancelled)
             if check_cancelled is not None:
                 check_cancelled()
-            if ring is not None and ring.good and _fits_in_the_body_by_size(mesh, ring.ring_radius):
+            if ring is not None and ring.good:
                 tori.append((ring, patch))
                 # Ein algebraisch passender Ring ist erst mit passenden Normalen
                 # ein Treffer. Sonst muss die Nachtrennung seine Zylinderwand
                 # noch finden können. Der Kandidat bleibt für die Freiformauskunft.
-                return _torus_is_recognisable(body, ring, patch)
+                return _torus_is_recognisable(body, ring, patch, check_cancelled=check_cancelled)
+            # Ein nur algebraisch passender, örtlich unbestimmter Kandidat
+            # bleibt Diagnose. Er darf die Suche nach belegten Teilflächen
+            # (etwa einer Bohrung mit Rastnasen) nicht als Treffer beenden.
             return False
 
         patches = _connected_patches(body, curved)
@@ -1533,10 +1569,10 @@ def _fitted(
         found = _merged_cylinders(body, mesh, found, check_cancelled=check_cancelled)
         if check_cancelled is not None:
             check_cancelled()
-        cones = _merged_cones(body, cones)
+        cones = _merged_cones(body, cones, check_cancelled=check_cancelled)
         if check_cancelled is not None:
             check_cancelled()
-        tori = _merged_tori(body, tori)
+        tori = _merged_tori(body, tori, check_cancelled=check_cancelled)
         if check_cancelled is not None:
             check_cancelled()
         helices = find_helices(mesh, check_cancelled=check_cancelled)
@@ -1628,6 +1664,7 @@ def detect_holes(
             id=f"hole_{number}",
             kind="hole",
             provenance="detected",
+            measure_sources={"diameter": "fit", "axis": "fit", "centre": "fit", "depth": "facets"},
             params={
                 "diameter": fit.radius * 2.0,
                 "axis": fit.axis,
@@ -1643,7 +1680,7 @@ def detect_holes(
     ]
 
 
-def _fits_in_the_body(mesh: MeshData, fit: CylinderFit | ConeFit) -> bool:
+def _fits_in_the_body(mesh: MeshData, fit: CylinderFit) -> bool:
     """Passt dieser Zylinder überhaupt in den Körper, der ihn tragen soll?
 
     Kein Grenzwert, ein Widerspruch: Eine Bohrung oder ein Zapfen von Ø 631 mm
@@ -1681,7 +1718,7 @@ def _fits_in_the_body(mesh: MeshData, fit: CylinderFit | ConeFit) -> bool:
     axis = np.abs(np.asarray(fit.axis, dtype=float))
     if float(np.max(axis)) <= EPS_GEOM:
         return True
-    if isinstance(fit, CylinderFit) and fit.radial_min is not None:
+    if fit.radial_min is not None:
         # Das Umkreismaß kann breiter sein als seine facettierte Außenhaut.
         # Der Größenfilter vergleicht deshalb das wirkliche radiale Band
         # mit einer oberen Schranke der Körperausdehnung quer zur Fitachse.
@@ -1734,14 +1771,14 @@ def _cylinder_beside_a_torus(
         if cylinder is None or not cylinder.good or not _fits_in_the_body(mesh, cylinder):
             continue
         joined = sorted({*ring_patch, *rest})
-        again = fit_torus(body, joined)
+        again = fit_torus(body, joined, check_cancelled=check_cancelled)
         if check_cancelled is not None:
             check_cancelled()
         if (
             again is not None
             and again.good
             and _same_torus((ring, ring_patch), (again, joined))
-            and _torus_is_recognisable(body, again, joined)
+            and _torus_is_recognisable(body, again, joined, check_cancelled=check_cancelled)
         ):
             tori[index] = (again, joined)
             return cylinder, candidate
@@ -2182,42 +2219,36 @@ def _a_ball_fits_far_better(cone: ConeFit, ball: SphereFit | None) -> bool:
     return cone.residual >= ball.residual * SPHERE_BEATS_CONE
 
 
-def _fits_in_the_body_by_size(mesh: MeshData, radius: float) -> bool:
-    """Dieselbe Frage wie :func:`_fits_in_the_body`, aber ohne Achse.
-
-    Eine Kugel hat keine, und beim Torus wäre die falsche Richtung gemessen.
-    Verglichen wird deshalb gegen die **größte** Ausdehnung des Körpers und
-    nicht gegen die quer zur Achse — eine Pfanne Ø 16 in einem Block, der nur
-    15 mm dick ist, ist völlig normal, weil nur die halbe Kugel darin steckt.
-    Die Schranke fängt damit weniger als die des Zylinders; sie fängt das, was
-    sie fangen soll: eine Einpassung, die größer ist als das ganze Teil.
-    """
-    return radius * 2.0 <= float(max(mesh.bounds.size)) + EPS_GEOM
-
-
-def detect_spheres(mesh: MeshData, spheres: Spheres | None = None) -> list[Feature]:
+def detect_spheres(
+    mesh: MeshData,
+    spheres: Spheres | None = None,
+    *,
+    check_cancelled: Callable[[], None] | None = None,
+) -> list[Feature]:
     """Kugelige Flecken (§21.1, Ausbaustufe §41).
 
     ``recess`` trennt die Pfanne von der Kuppel — dieselbe Unterscheidung, die
     der Kegel zwischen Senkung und aufgesetztem Kegel trifft, und aus demselben
     Grund: In eine Pfanne setzt man etwas hinein, auf eine Kuppel nicht.
     """
-    found = _fitted(mesh).spheres if spheres is None else spheres
+    found = _fitted(mesh, check_cancelled=check_cancelled).spheres if spheres is None else spheres
     big = [
         entry
         for entry in _sphere_candidates(mesh, found)
-        if _sphere_is_recognisable(mesh.raw, entry[0], entry[1])
+        if _sphere_is_recognisable(mesh.raw, entry[0], entry[1], check_cancelled=check_cancelled)
     ]
     return [
         Feature(
             id=f"sphere_{number}",
             kind="sphere",
             provenance="detected",
+            measure_sources={"diameter": "fit", "centre": "fit"},
             params={
-                "diameter": round(fit.radius * 2.0, 4),
+                "diameter": fit.radius * 2.0,
                 "centre": fit.centre,
                 "recess": fit.recess,
-                "residual": round(fit.residual, 4),
+                "residual": fit.residual,
+                **_round_measures(fit),
             },
             face_indices=tuple(patch),
         )
@@ -2236,34 +2267,71 @@ def _sphere_candidates(mesh: MeshData, spheres: Spheres) -> Spheres:
     ]
 
 
-def _sphere_is_recognisable(body: trimesh.Trimesh, fit: SphereFit, patch: list[int]) -> bool:
-    """Nur örtlich bestimmte, zweifach gekrümmte Kugelflächen veröffentlichen.
-
-    Der algebraische Kugelfit bleibt für die Formauswahl in :func:`_fitted`
-    verfügbar. Eine unsichere Kugel darf dort einen noch schlechteren Kegel-
-    oder Torusfit verdrängen, ohne anschließend selbst als bearbeitbares
-    Merkmal im Objektbaum zu erscheinen.
-    """
-    normals = np.asarray(body.face_normals[patch], dtype=float)
-    centred_normals = normals - normals.mean(axis=0)
+def _sphere_is_recognisable(
+    body: trimesh.Trimesh,
+    fit: SphereFit,
+    patch: list[int],
+    *,
+    check_cancelled: Callable[[], None] | None = None,
+) -> bool:
+    """Bestimmtheit und Punktgüte unabhängig von der Facettenunterteilung prüfen."""
+    support = _surface_support(body, patch, check_cancelled)
+    if support is None or not np.any(support.round_corners):
+        return False
+    weights = support.areas / support.areas.sum()
+    normals = support.normals
+    centred_normals = (normals - weights @ normals) * np.sqrt(weights)[:, None]
     curvature = np.linalg.svd(centred_normals, compute_uv=False)
     if (
         curvature[0] <= EPS_GEOM
         or curvature[1] < curvature[0] * SPHERE_MIN_CURVATURE_BALANCE
-        or curvature[-1] * SPHERE_MAX_CENTRED_CONDITION < math.sqrt(len(normals))
+        or curvature[-1] * SPHERE_MAX_CENTRED_CONDITION < 1.0
+    ):
+        return False
+    points = support.points[support.round_corners]
+    local = points - points.mean(axis=0)
+    local_span = float(2.0 * np.linalg.norm(local, axis=1).max())
+    errors = np.abs(np.linalg.norm(points - fit.centre, axis=1) - fit.radius)
+    # Ungestützte Sehnenpunkte dürfen nach innen liegen; ein fremder Punkt
+    # außerhalb der Kugel wird dadurch nicht unsichtbar.
+    outside = float(np.linalg.norm(support.points - fit.centre, axis=1).max()) - fit.radius
+    if not (
+        local_span > EPS_GEOM
+        and float(errors.max()) <= local_span * ROUND_LOCAL_TOLERANCE
+        and outside <= fit.radius * ROUND_TOLERANCE
     ):
         return False
 
-    centres = np.asarray(body.triangles_center[patch], dtype=float)
-    local_centres = centres - centres.mean(axis=0)
-    local_span = float(2.0 * np.linalg.norm(local_centres, axis=1).max())
-    absolute_residual = float(
-        np.mean(np.abs(np.linalg.norm(centres - fit.centre, axis=1) - fit.radius))
+    def expected_normals(points: np.ndarray) -> np.ndarray | None:
+        """Auch ein schmaler Torusring muss die behaupteten Kugelnormalen tragen."""
+        if check_cancelled is not None:
+            check_cancelled()
+        relative = points - fit.centre
+        lengths = np.linalg.norm(relative, axis=1)
+        if np.any(lengths <= EPS_GEOM):
+            return None
+        return np.asarray(relative / lengths[:, None], dtype=float)
+
+    expected = expected_normals(support.centres)
+    corner_expected = expected_normals(support.points[support.corners].reshape(-1, 3))
+    if expected is None or corner_expected is None:
+        return False
+    return _surface_normals_are_consistent(
+        body,
+        patch,
+        expected,
+        corner_expected.reshape(-1, 3, 3),
+        max_error=SURFACE_NORMAL_ERROR,
+        max_outlier_share=SURFACE_NORMAL_OUTLIER_SHARE,
     )
-    return local_span > EPS_GEOM and absolute_residual <= local_span * SPHERE_LOCAL_TOLERANCE
 
 
-def detect_tori(mesh: MeshData, tori: Tori | None = None) -> list[Feature]:
+def detect_tori(
+    mesh: MeshData,
+    tori: Tori | None = None,
+    *,
+    check_cancelled: Callable[[], None] | None = None,
+) -> list[Feature]:
     """Torusförmige Flecken (§21.1, Ausbaustufe §41).
 
     Zwei Durchmesser, und der zweite ist der interessante: ``diameter`` ist der
@@ -2272,17 +2340,23 @@ def detect_tori(mesh: MeshData, tori: Tori | None = None) -> list[Feature]:
     vor der Veröffentlichung müssen neben dem Punktabstand auch seine
     Flächennormalen zur eingepassten Ringfläche gehören.
     """
-    found = _fitted(mesh).tori if tori is None else tori
+    found = _fitted(mesh, check_cancelled=check_cancelled).tori if tori is None else tori
     big = [
         entry
         for entry in _torus_candidates(mesh, found)
-        if _torus_is_recognisable(mesh.raw, entry[0], entry[1])
+        if _torus_is_recognisable(mesh.raw, entry[0], entry[1], check_cancelled=check_cancelled)
     ]
     return [
         Feature(
             id=f"torus_{number}",
             kind="torus",
             provenance="detected",
+            measure_sources={
+                "diameter": "fit",
+                "tube_diameter": "fit",
+                "axis": "fit",
+                "centre": "fit",
+            },
             params={
                 # **``diameter`` und nicht ``ring_diameter``**, obwohl der
                 # Name unschärfer ist: Die Zuordnung liest die Größe eines
@@ -2290,12 +2364,13 @@ def detect_tori(mesh: MeshData, tori: Tori | None = None) -> list[Feature]:
                 # und zwar für jede Art gleich. Unter einem eigenen Namen war
                 # sie null — zwei Tori mit Ringdurchmesser 40 und 60 kosteten
                 # gegeneinander 0,0 und waren damit dasselbe Merkmal (§21.2).
-                "diameter": round(fit.ring_radius * 2.0, 4),
-                "tube_diameter": round(fit.tube_radius * 2.0, 4),
+                "diameter": fit.ring_radius * 2.0,
+                "tube_diameter": fit.tube_radius * 2.0,
                 "axis": fit.axis,
                 "centre": fit.centre,
                 "recess": fit.recess,
-                "residual": round(fit.residual, 4),
+                "residual": fit.residual,
+                **_round_measures(fit),
             },
             face_indices=tuple(patch),
         )
@@ -2403,6 +2478,13 @@ def detect_fillets(
             id=f"fillet_{number}",
             kind="fillet",
             provenance="detected",
+            measure_sources={
+                "radius": "fit",
+                "diameter": "fit",
+                "axis": "fit",
+                "centre": "fit",
+                "length": "facets",
+            },
             params={
                 "radius": fit.radius,
                 "diameter": fit.radius * 2.0,
@@ -2705,6 +2787,7 @@ def detect_pins(mesh: MeshData, cylinders: Cylinders | None = None) -> list[Feat
             id=f"pin_{number}",
             kind="pin",
             provenance="detected",
+            measure_sources={"diameter": "fit", "axis": "fit", "centre": "fit", "depth": "facets"},
             params={
                 "diameter": fit.radius * 2.0,
                 "axis": fit.axis,
@@ -2719,7 +2802,12 @@ def detect_pins(mesh: MeshData, cylinders: Cylinders | None = None) -> list[Feat
     ]
 
 
-def detect_cones(mesh: MeshData, cones: Cones | None = None) -> list[Feature]:
+def detect_cones(
+    mesh: MeshData,
+    cones: Cones | None = None,
+    *,
+    check_cancelled: Callable[[], None] | None = None,
+) -> list[Feature]:
     """Kegelige Flecken (§21.1): Senkungen, Fasen an Bohrungen, Verjüngungen.
 
     Warum es die Art überhaupt braucht: Ohne sie ist eine Senkung eine Bohrung
@@ -2729,7 +2817,7 @@ def detect_cones(mesh: MeshData, cones: Cones | None = None) -> list[Feature]:
     nicht als Halbwinkel: Eine Senkung heißt „90 Grad", und das ist der ganze
     Kegel.
     """
-    found = _fitted(mesh)[1] if cones is None else cones
+    found = _fitted(mesh, check_cancelled=check_cancelled).cones if cones is None else cones
     # Dieselbe Werkzeugschranke wie bei Bohrung, Zapfen und Verrundung
     # (:data:`MIN_CYLINDER_DIAMETER`) — siehe :func:`_too_small_to_make`.
     big = [
@@ -2737,16 +2825,17 @@ def detect_cones(mesh: MeshData, cones: Cones | None = None) -> list[Feature]:
         for entry in found
         if not _too_small_to_make(entry[0].radius * 2.0)
         and not _a_sliver(mesh.raw, entry[1])
-        and _cone_is_recognisable(mesh.raw, entry[0], entry[1])
+        and _cone_is_recognisable(mesh.raw, entry[0], entry[1], check_cancelled=check_cancelled)
     ]
     return [
         Feature(
             id=f"cone_{number}",
             kind="cone",
             provenance="detected",
+            measure_sources={"diameter": "fit", "angle": "fit", "axis": "fit", "centre": "fit"},
             params={
-                "diameter": round(fit.radius * 2.0, 4),
-                "angle": round(fit.half_angle * 2.0, 3),
+                "diameter": fit.radius * 2.0,
+                "angle": fit.half_angle * 2.0,
                 "axis": fit.axis,
                 # Die Spitze steht **nicht** in den Parametern, obwohl die
                 # Einpassung sie kennt: ``moved_features`` nimmt „centre",
@@ -2756,7 +2845,8 @@ def detect_cones(mesh: MeshData, cones: Cones | None = None) -> list[Feature]:
                 # aus Mitte, Achse und Winkel ist die Spitze ohnehin zu rechnen.
                 "centre": fit.centre,
                 "recess": fit.recess,
-                "residual": round(fit.residual, 4),
+                "residual": fit.residual,
+                **_round_measures(fit),
             },
             face_indices=tuple(patch),
         )
@@ -2953,12 +3043,12 @@ def _large_facet_faces(
     # vollständige, gemeinsam eingepasste Mantel unten darf sie aus ``planar``
     # herausnehmen. Eine Deckfläche am Gewinde bleibt dadurch geschützt: Sie
     # kann eine Rundung berühren, ergibt aber keinen vollständigen Zylinder.
-    # Breite Deckflächen werden gar nicht erst zur Gegenprobe zugelassen.
+    # Auch eine breite Facette muss den vollständigen Rundträgernachweis
+    # erfüllen. Ein kleines Teilstück darf ihren Rest nicht verschlucken.
     recoverable = {
         int(index)
         for facet, area in zip(facets, areas, strict=True)
         if len(facet) >= MIN_FLAT_FACES
-        and area < broad
         and (_a_sliver(body, list(facet)) or any(int(face) in curved for face in facet))
         for index in facet
     }
@@ -2980,20 +3070,34 @@ def _large_facet_faces(
             check_patch_size(len(patch))
         if _a_sliver(body, patch):
             continue
-        cone = fit_cone(body, patch)
-        fit: CylinderFit | ConeFit | None
-        if cone is not None and cone.half_angle >= CONE_MIN_ANGLE:
-            fit = cone
-            if _a_ball_fits_far_better(cone, fit_sphere(body, patch)):
-                continue
-        else:
-            fit = fit_cylinder(body, patch, check_cancelled=check_cancelled)
-        if (
-            fit is not None
-            and fit.good
-            and _fits_in_the_body(mesh, fit)
-            and angular_span(body, fit, patch) >= FULL_TURN_SPAN
-        ):
+        cone = fit_cone(body, patch, check_cancelled=check_cancelled)
+        ball = fit_sphere(body, patch, check_cancelled=check_cancelled)
+        round_surface = (
+            cone is not None
+            and cone.good
+            and _cone_is_recognisable(body, cone, patch, check_cancelled=check_cancelled)
+            and not _a_ball_fits_far_better(cone, ball)
+        ) or (
+            ball is not None
+            and ball.good
+            and _sphere_is_recognisable(body, ball, patch, check_cancelled=check_cancelled)
+        )
+        if not round_surface:
+            cylinder = fit_cylinder(body, patch, check_cancelled=check_cancelled)
+            round_surface = (
+                cylinder is not None
+                and cylinder.good
+                and _fits_in_the_body(mesh, cylinder)
+                and angular_span(body, cylinder, patch) >= FULL_TURN_SPAN
+            )
+        if not round_surface:
+            ring = fit_torus(body, patch, check_cancelled=check_cancelled)
+            round_surface = (
+                ring is not None
+                and ring.good
+                and _torus_is_recognisable(body, ring, patch, check_cancelled=check_cancelled)
+            )
+        if round_surface:
             planar.difference_update(patch)
     return planar
 
@@ -3187,14 +3291,10 @@ def fit_cylinder(
     werden vor Projektion und quadratischen Termen zentriert. Der Fit belegt
     eine Kreisnäherung der Haut, keine unbekannte Konstruktionsabsicht.
     """
-    if check_cancelled is not None:
-        check_cancelled()
-    if len(patch) < MIN_PATCH_FACES:
+    support = _surface_support(body, patch, check_cancelled)
+    if support is None:
         return None
-    normals = np.asarray(body.face_normals[patch], dtype=float)
-    areas = np.asarray(body.area_faces[patch], dtype=float)
-    if not np.isfinite(normals).all() or not np.isfinite(areas).all() or areas.sum() <= EPS_GEOM**2:
-        return None
+    normals, areas = support.normals, support.areas
     _values, vectors = np.linalg.eigh(normals.T @ (normals * areas[:, None]))
     axis = vectors[:, 0]
     axis = np.asarray(positive_axis((float(axis[0]), float(axis[1]), float(axis[2]))), dtype=float)
@@ -3212,11 +3312,7 @@ def fit_cylinder(
         CURVATURE_LIMIT - EPS_ANGLE
     ):
         return None
-    faces = np.asarray(body.faces)[patch]
-    indices, reverse = np.unique(faces, return_inverse=True)
-    points = np.asarray(body.vertices)[indices]
-    if not np.isfinite(points).all():
-        return None
+    points, reverse = support.points, support.corners
     origin = (points.min(axis=0) + points.max(axis=0)) / 2.0
     relative = points - origin
     flat = np.column_stack((relative @ first, relative @ second))
@@ -3228,16 +3324,7 @@ def fit_cylinder(
     # Endpunkte sind dann Ecken der Hülle, aber keine Ecken des ursprünglichen
     # Kreisvielecks. Nur Punkte mit zwei verschiedenen Mantelnormalen tragen
     # das Kreismaß. Getrennte, deckungsgleiche STL-Ecken zählen gemeinsam.
-    _coincident, point_groups = np.unique(points, axis=0, return_inverse=True)
-    normal_min = np.full((len(_coincident), 3), math.inf)
-    normal_max = np.full((len(_coincident), 3), -math.inf)
-    incident = point_groups[reverse].reshape(-1)
-    repeated = np.repeat(normals, 3, axis=0)
-    np.minimum.at(normal_min, incident, repeated)
-    np.maximum.at(normal_max, incident, repeated)
-    supported = np.linalg.norm(normal_max - normal_min, axis=1)[point_groups] > math.sin(
-        math.radians(EPS_ANGLE)
-    )
+    supported = support.ridges
     # Die äußere Hülle kann ausschließlich neue Schnittpunkte enthalten,
     # während die ursprünglichen Kreisecken knapp darunter liegen. Deshalb
     # tragen die belegten Ecken eine eigene Kontur; die gesamte Originalhaut
@@ -3368,6 +3455,11 @@ def _radial_boundaries_are_planar(
         if np.max(np.abs(relative @ directions[-1])) > tolerance:
             return False
     return True
+
+
+def _round_measures(fit: ConeFit | SphereFit | TorusFit) -> dict[str, float]:
+    """Nur tatsächlich berechnete Stützpunktfehler ausgeben, nie einen Nullersatz."""
+    return {} if fit.fit_error is None else {"fit_error": fit.fit_error}
 
 
 def _cylinder_measures(fit: CylinderFit) -> dict[str, float]:
@@ -3509,192 +3601,448 @@ def fit_stadium(
     )
 
 
-def fit_cone(body: trimesh.Trimesh, patch: list[int]) -> ConeFit | None:
-    """Kleinste-Quadrate-Kegel durch einen Fleck von Dreiecken.
+class _SurfaceSupport(NamedTuple):
+    """Private Lesezuordnung zwischen Netzpunkten und ihren Mantelfacetten."""
 
-    Drei Schritte, alle drei linear — kein Zufall, keine Iteration, kein
-    Startwert (§11.3):
+    points: np.ndarray
+    corners: np.ndarray
+    normals: np.ndarray
+    centres: np.ndarray
+    areas: np.ndarray
+    round_corners: np.ndarray
+    ridges: np.ndarray
+    directions: np.ndarray
 
-    **Die Achse** kommt aus den Normalen. Bei einem Zylinder liegen sie auf
-    einem Großkreis der Einheitskugel, bei einem Kegel auf einem **Kleinkreis**;
-    die Ebene dieses Kreises hat die Kegelachse als Normale. Also derselbe
-    Eigenvektor wie beim Zylinder, nur an den **zentrierten** Normalen — und
-    genau der Versatz, den das Zentrieren herausnimmt, ist die Auskunft: Er
-    ist ``sin`` des halben Öffnungswinkels. Null heißt Zylinder.
 
-    **Die Spitze** liegt auf jeder Tangentialebene des Kegels — das ist die
-    Eigenschaft, die ihn vom Zylinder trennt und sie ist exakt. Aus ``n · p``
-    je Dreieck wird damit ein überbestimmtes lineares Gleichungssystem, dessen
-    Lösung die Spitze ist. Beim Zylinder ist dasselbe System entartet, und die
-    Lösung wandert ins Unendliche — auch das eine brauchbare Auskunft.
+def _one_vertex_fan(
+    points: np.ndarray,
+    vertex: int,
+    neighbours: np.ndarray,
+    check_cancelled: Callable[[], None] | None,
+) -> bool:
+    """Die Kantenstrahlen eines Punkts müssen einen gemeinsamen Flächenfächer tragen."""
 
-    **Der Rückstand** vergleicht den gemessenen Abstand zur Achse mit dem, den
-    der Kegel an dieser Höhe verlangt. Gemessen an einer 90°-Senkung aus dem
-    Korpus: Halbwinkel 44,94 Grad bei echten 45, Spitze auf vier Stellen
-    getroffen, Rückstand 0,0003.
+    def connected(edges: np.ndarray) -> bool:
+        """Der Link des Eckpunkts ist ein zusammenhängender Graph seiner Nachbarn."""
+        graph: dict[int, list[int]] = {}
+        for index, (first, second) in enumerate(edges):
+            if check_cancelled is not None and index % FIT_SCAN_BLOCK == 0:
+                check_cancelled()
+            graph.setdefault(int(first), []).append(int(second))
+            graph.setdefault(int(second), []).append(int(first))
+        seen = {int(edges[0, 0])}
+        pending = list(seen)
+        while pending:
+            if check_cancelled is not None and len(seen) % FIT_SCAN_BLOCK == 0:
+                check_cancelled()
+            for neighbour in graph[pending.pop()]:
+                if neighbour not in seen:
+                    seen.add(neighbour)
+                    pending.append(neighbour)
+        return len(seen) == len(graph)
+
+    if connected(neighbours):
+        return True
+    # Eine T-Unterteilung speichert auf derselben alten Kante verschieden
+    # lange Teilkanten. Ihre Strahlen sind gleich, auch wenn die Endpunkte
+    # andere Indizes tragen. Nur im Leseindex verbinden, nicht verschweißen.
+    unique = np.unique(neighbours)
+    rays = points[unique] - points[vertex]
+    lengths = np.linalg.norm(rays, axis=1)
+    if np.any(lengths <= EPS_GEOM):
+        return False
+    if check_cancelled is not None:
+        check_cancelled()
+    close = cKDTree(rays / lengths[:, None]).query_pairs(
+        2.0 * units.exact_sin_degrees(EPS_ANGLE / 2.0), output_type="ndarray"
+    )
+    return bool(len(close)) and connected(np.vstack((neighbours, unique[close])))
+
+
+def _surface_support(
+    body: trimesh.Trimesh,
+    patch: list[int],
+    check_cancelled: Callable[[], None] | None = None,
+) -> _SurfaceSupport | None:
+    """Unveränderte Netzecken von Punkten auf Facetten und Sehnen unterscheiden.
+
+    Drei verschiedene angrenzende Mantelnormalen belegen einen Netzeckpunkt.
+    Unterteilung in einer Facette erzeugt nur eine Normale, an einer alten
+    Kante höchstens zwei. Deckungsgleiche STL-Punkte teilen nur diesen Index;
+    die ursprünglichen Dreiecke und Koordinaten bleiben unangetastet.
     """
-    normals = np.asarray(body.face_normals[patch], dtype=float)
-    centres = np.asarray(body.triangles_center[patch], dtype=float)
-
-    _values, vectors = np.linalg.eigh(_centred_moment(normals))
-    axis = vectors[:, 0]
-    axis = axis / float(np.linalg.norm(axis))
-
-    apex, *_ = np.linalg.lstsq(normals, np.einsum("ij,ij->i", normals, centres), rcond=None)
-    towards = centres - apex
-    # Die Achse zeigt von der Spitze in den Fleck. Ohne diese Festlegung wäre
-    # das Vorzeichen des Versatzes bedeutungslos, und mit ihm die Unterscheidung
-    # zwischen einer Senkung und einem aufgesetzten Kegel.
-    if float(np.mean(towards @ axis)) < 0.0:
-        axis = -axis
-    offset = float(np.mean(normals @ axis))
-    sine = min(1.0, abs(offset))
-    half_angle = math.degrees(math.asin(sine))
-    if sine <= EPS_GEOM:
+    if check_cancelled is not None:
+        check_cancelled()
+    if len(patch) < MIN_PATCH_FACES:
         return None
+    triangles = np.asarray(body.triangles[patch], dtype=float)
+    normals = np.asarray(body.face_normals[patch], dtype=float)
+    areas = np.asarray(body.area_faces[patch], dtype=float)
+    if (
+        not np.isfinite(triangles).all()
+        or not np.isfinite(normals).all()
+        or not np.isfinite(areas).all()
+        or areas.sum() <= EPS_GEOM**2
+    ):
+        return None
+    points, reverse = np.unique(triangles.reshape(-1, 3), axis=0, return_inverse=True)
+    reverse = reverse.ravel()
+    corners = reverse.reshape(-1, 3)
+    repeated = np.repeat(normals, 3, axis=0)
+    occurrence = np.arange(len(reverse))
+    first_index = np.full(len(points), len(reverse), dtype=np.intp)
+    np.minimum.at(first_index, reverse, occurrence)
+    first = repeated[first_index]
+    agreement = np.einsum("ij,ij->i", repeated, first[reverse])
+    lowest = np.full(len(points), math.inf)
+    np.minimum.at(lowest, reverse, agreement)
+    second_index = np.full(len(points), len(reverse), dtype=np.intp)
+    furthest = agreement <= lowest[reverse]
+    np.minimum.at(second_index, reverse[furthest], occurrence[furthest])
+    second = repeated[second_index]
+    limit = units.exact_cos_degrees(EPS_ANGLE)
+    # Gegenläufige Häute am selben Punkt sind keine weiteren Mantelfacetten.
+    # Sie würden aus einem Sehnenpunkt mit zwei Ebenen eine vermeintliche
+    # ursprüngliche Netzecke machen. Ein kohärenter Rundträger besitzt an
+    # einem Punkt keine zwei entgegengesetzten orientierten Tangentialebenen.
+    if np.any(lowest < -limit):
+        return None
+    ridges = lowest < limit
+    third = (agreement < limit) & (np.einsum("ij,ij->i", repeated, second[reverse]) < limit)
+    round_corners = np.zeros(len(points), dtype=bool)
+    np.logical_or.at(round_corners, reverse, third)
+    order = np.argsort(reverse, kind="stable")
+    offsets = np.r_[0, np.cumsum(np.bincount(reverse, minlength=len(points)))]
+    for index in np.flatnonzero(ridges):
+        if check_cancelled is not None:
+            check_cancelled()
+        occurrences = order[offsets[index] : offsets[index + 1]]
+        rows, local = occurrences // 3, occurrences % 3
+        neighbours = np.column_stack(
+            (corners[rows, (local + 1) % 3], corners[rows, (local + 2) % 3])
+        )
+        if not _one_vertex_fan(points, int(index), neighbours, check_cancelled):
+            ridges[index] = False
+            round_corners[index] = False
+    directions = np.cross(first, second)
+    lengths = np.linalg.norm(directions, axis=1)
+    directions /= np.where(lengths > EPS_GEOM, lengths, 1.0)[:, None]
+    if check_cancelled is not None:
+        check_cancelled()
+    return _SurfaceSupport(
+        points, corners, normals, triangles.mean(axis=1), areas, round_corners, ridges, directions
+    )
 
-    along = towards @ axis
-    radial = np.linalg.norm(towards - np.outer(along, axis), axis=1)
-    mean_radius = float(np.mean(radial))
+
+def _ridge_endpoints(
+    support: _SurfaceSupport, check_cancelled: Callable[[], None] | None = None
+) -> np.ndarray:
+    """Kollineare Zwischenpunkte tragen kein zweites Maß einer Mantellinie."""
+    edges = np.sort(support.corners[:, ((0, 1), (1, 2), (2, 0))].reshape(-1, 2), axis=1)
+    edges = np.unique(edges, axis=0)
+    directions = support.points[edges[:, 1]] - support.points[edges[:, 0]]
+    lengths = np.linalg.norm(directions, axis=1)
+    unit = directions / np.where(lengths > EPS_GEOM, lengths, 1.0)[:, None]
+    forward = np.zeros(len(support.points), dtype=bool)
+    backward = np.zeros(len(support.points), dtype=bool)
+    for side in (0, 1):
+        if check_cancelled is not None:
+            check_cancelled()
+        index = edges[:, side]
+        along = np.einsum("ij,ij->i", unit, support.directions[index]) * (
+            1.0 if side == 0 else -1.0
+        )
+        valid = (lengths > EPS_GEOM) & (np.abs(along) >= units.exact_cos_degrees(EPS_ANGLE))
+        np.logical_or.at(forward, index, valid & (along > 0.0))
+        np.logical_or.at(backward, index, valid & (along < 0.0))
+    return support.ridges & ~(forward & backward)
+
+
+def _round_points_are_consistent(
+    support: _SurfaceSupport, errors: np.ndarray, selected: np.ndarray
+) -> bool:
+    """Jede belegte Netzecke muss örtlich passen; ein großer Fitradius hilft nicht."""
+    if not np.any(selected):
+        return False
+    points = support.points[selected]
+    local_span = float(2.0 * np.linalg.norm(points - points.mean(axis=0), axis=1).max())
+    return (
+        local_span > EPS_GEOM
+        and float(np.abs(errors[selected]).max()) <= local_span * ROUND_LOCAL_TOLERANCE
+    )
+
+
+def _cone_support_points(
+    support: _SurfaceSupport,
+    apex: np.ndarray,
+    tolerance: float,
+    check_cancelled: Callable[[], None] | None = None,
+) -> np.ndarray:
+    """Belegte Netzecken und nachgewiesene gemeinsame Mantellinien des Kegels."""
+    off_line = np.linalg.norm(np.cross(support.points - apex, support.directions), axis=1)
+    return support.round_corners | (
+        _ridge_endpoints(support, check_cancelled) & (off_line <= tolerance)
+    )
+
+
+def _refined_fit(
+    initial: np.ndarray,
+    residual: Callable[[np.ndarray], np.ndarray],
+    check_cancelled: Callable[[], None] | None,
+) -> np.ndarray | None:
+    """Begrenzt geometrisch verfeinern und numerisch unbestimmte Maße verwerfen."""
+
+    def checked(values: np.ndarray) -> np.ndarray:
+        """Auch die numerischen Jacobi-Schritte lesen denselben Abbruchauftrag."""
+        if check_cancelled is not None:
+            check_cancelled()
+        return residual(values)
+
+    result = least_squares(
+        checked,
+        initial,
+        ftol=ROUND_FIT_PRECISION,
+        xtol=ROUND_FIT_PRECISION,
+        gtol=ROUND_FIT_PRECISION,
+        max_nfev=ROUND_FIT_EVALUATIONS,
+    )
+    if not result.success or not np.isfinite(result.x).all() or not np.isfinite(result.fun).all():
+        return None
+    singular = np.linalg.svd(result.jac, compute_uv=False)
+    # Unterhalb dieser Grenze verstärkt die Lösung Float64-Rauschen über
+    # dessen halbe signifikante Stellen hinaus. Fachliche Krümmungs- und
+    # Normalengrenzen werden anschließend weiterhin separat geprüft.
+    if len(singular) < len(initial) or singular[-1] <= singular[0] * np.sqrt(np.finfo(float).eps):
+        return None
+    return np.asarray(result.x, dtype=float)
+
+
+def fit_cone(
+    body: trimesh.Trimesh,
+    patch: list[int],
+    *,
+    check_cancelled: Callable[[], None] | None = None,
+) -> ConeFit | None:
+    """Achse, Spitze und Winkel gemeinsam an belegten Mantelpunkten einpassen."""
+    support = _surface_support(body, patch, check_cancelled)
+    if support is None:
+        return None
+    weights = support.areas / support.areas.sum()
+    origin = weights @ support.centres
+    centres = support.centres - origin
+    normal_mean = weights @ support.normals
+    centred_normals = support.normals - normal_mean
+    _values, vectors = np.linalg.eigh(centred_normals.T @ (centred_normals * weights[:, None]))
+    axis = vectors[:, 0]
+    root_weight = np.sqrt(weights)
+    apex, _residual, rank, _singular = np.linalg.lstsq(
+        support.normals * root_weight[:, None],
+        np.einsum("ij,ij->i", support.normals, centres) * root_weight,
+        rcond=None,
+    )
+    if rank < 3:
+        return None
+    if float(weights @ ((centres - apex) @ axis)) < 0.0:
+        axis = -axis
+    offset = float(normal_mean @ axis)
+    half_angle = math.asin(min(1.0, abs(offset)))
+    if half_angle <= EPS_GEOM:
+        return None
+    points = support.points - origin
+    # Eine gerade Naht zweier Mantelfacetten ist nur dann eine zusätzliche
+    # Stütze, wenn sie durch dieselbe Spitze läuft. Schnittpunkte auf einer
+    # solchen Mantellinie liegen ebenfalls auf dem analytischen Kegel.
+    line_tolerance = max(weld_tolerance(float(np.linalg.norm(body.extents))), ROUND_WALL_TOLERANCE)
+    selected = _cone_support_points(support, origin + apex, line_tolerance, check_cancelled)
+    if int(selected.sum()) < 6:
+        return None
+    scale = float(np.linalg.norm(np.ptp(points[selected], axis=0)))
+    if scale <= EPS_GEOM:
+        return None
+    samples = points[selected] / scale
+    apex = apex / scale
+    initial_axis = axis
+    first, second = _plane_basis(initial_axis)
+    at_apex = np.flatnonzero(np.linalg.norm(samples - apex, axis=1) <= EPS_GEOM / scale)
+
+    def parameters(values: np.ndarray) -> tuple[np.ndarray, np.ndarray, float]:
+        """Die Achse besitzt genau zwei Freiheitsgrade, keine freie Länge."""
+        direction = initial_axis + first * values[3] + second * values[4]
+        return values[:3], direction / np.linalg.norm(direction), float(values[5])
+
+    def residual(values: np.ndarray) -> np.ndarray:
+        """Geometrischer Abstand zum Kegel; eine belegte Spitze bleibt ein Punkt."""
+        tip, direction, angle = parameters(values)
+        relative = samples - tip
+        along = relative @ direction
+        radial = np.linalg.norm(relative - np.outer(along, direction), axis=1)
+        errors = radial * math.cos(angle) - along * math.sin(angle)
+        if len(at_apex):
+            errors = np.r_[errors, tip - samples[at_apex[0]]]
+        return np.asarray(errors, dtype=float)
+
+    fitted = _refined_fit(np.r_[apex, 0.0, 0.0, half_angle], residual, check_cancelled)
+    normal_constrained = False
+    if fitted is None and float(np.ptp(samples @ initial_axis)) <= line_tolerance / scale:
+        # Ein einziger erhaltener Kreis bestimmt nicht sechs Kegelgrößen.
+        # Die übrigen Beobachtungen sind die tatsächlichen Mantelnormalen;
+        # sie binden hier ausdrücklich Achse und Winkel. Sehnenschnittpunkte
+        # werden dafür nicht nachträglich als Kreispunkte ausgegeben.
+        def tip_residual(tip: np.ndarray) -> np.ndarray:
+            """Drei bestimmte Spitzenkoordinaten bei beobachteter Achse und Winkel."""
+            return residual(np.r_[tip, 0.0, 0.0, half_angle])
+
+        tip = _refined_fit(apex, tip_residual, check_cancelled)
+        if tip is not None:
+            fitted = np.r_[tip, 0.0, 0.0, half_angle]
+            normal_constrained = True
+    if fitted is None:
+        return None
+    apex, axis, angle = parameters(fitted)
+    if not 0.0 < angle < math.pi / 2:
+        return None
+    apex = apex * scale
+    relative = points - apex
+    along = relative @ axis
+    if float(along.min()) < -EPS_GEOM:
+        return None
+    radial = np.linalg.norm(relative - np.outer(along, axis), axis=1)
+    mean_radius = float(radial[selected].mean())
     if mean_radius <= EPS_GEOM:
         return None
-    expected = along * math.tan(math.radians(half_angle))
-    residual = float(np.mean(np.abs(radial - expected)) / mean_radius)
-
-    # Der weiteste Punkt kommt aus den **Ecken** und nicht aus den
-    # Dreiecksmitten: Die Mitte einer Facette liegt ein Stück unterhalb ihrer
-    # oberen Kante, und der Durchmesser einer Senkung ist der, den man messen
-    # kann — nicht der, den die Facettenmitten hergeben.
-    corners = np.asarray(body.vertices[np.unique(body.faces[patch])], dtype=float)
-    reach = (corners - apex) @ axis
-    widest = float(reach.max())
-    outer = np.linalg.norm(corners - apex - np.outer(reach, axis), axis=1)
-
+    errors = radial[selected] - along[selected] * math.tan(angle)
+    widest = float(along.max())
+    world_apex = origin + apex
+    centre = world_apex + axis * widest
     return ConeFit(
         axis=(float(axis[0]), float(axis[1]), float(axis[2])),
-        apex=(float(apex[0]), float(apex[1]), float(apex[2])),
-        centre=tuple(float(value) for value in apex + axis * widest),  # type: ignore[arg-type]
-        half_angle=half_angle,
-        radius=float(outer.max()),
-        residual=residual,
-        # Der äußere Normalenvektor einer **Senkung** zeigt in die Mulde und
-        # damit in Achsenrichtung; bei einem aufgesetzten Kegel weg von ihr.
-        # Hergeleitet: n · a = -sin(Halbwinkel) für den massiven Kegel, +sin für
-        # die Mulde.
-        recess=offset > 0.0,
+        apex=(float(world_apex[0]), float(world_apex[1]), float(world_apex[2])),
+        centre=(float(centre[0]), float(centre[1]), float(centre[2])),
+        half_angle=math.degrees(angle),
+        radius=widest * math.tan(angle),
+        residual=float(np.abs(errors).mean()) / mean_radius,
+        recess=float(weights @ (support.normals @ axis)) > 0.0,
+        fit_error=float(np.abs(errors).max()) * math.cos(angle),
+        normal_constrained=normal_constrained,
     )
 
 
-def fit_sphere(body: trimesh.Trimesh, patch: list[int]) -> SphereFit | None:
-    """Kleinste-Quadrate-Kugel durch einen Fleck von Dreiecken — linear.
-
-    **Ein Schritt, und es ist derselbe wie beim Kegel, nur mit einer Zahl mehr
-    rechts.** Die Tangentialebene eines Kegels geht durch die Spitze, also gilt
-    ``n · p = n · apex``. Bei der Kugel ist der Abstand vom Mittelpunkt nicht
-    null, sondern der Radius: ``n · p = n · c + R``. Das ist ein
-    überbestimmtes lineares System mit vier Unbekannten, und es ist derselbe
-    Ansatz — kein Zufall, keine Iteration, kein Startwert (§11.3).
-
-    Dieser Unterschied ist keine Feinheit. Mit der Kegelgleichung an einer
-    Kalotte eingepasst kam ein Mittelpunkt 12 mm neben dem richtigen heraus und
-    ein Radius von 10,2 statt 8, bei einem Rückstand von 0,24 — plausibel
-    genug, um nicht aufzufallen, und falsch. Mit der richtigen Gleichung liegt
-    der Mittelpunkt auf drei Nachkommastellen und der Rückstand bei 0,0003.
-
-    Das **Vorzeichen** des Radius ist die Auskunft, die den Rest trägt: Zeigen
-    die Normalen nach außen, kommt +R heraus, bei einer Pfanne -R. Das trennt
-    die Kalotte von der Kuppel, ohne dass jemand nachmisst.
-
-    Alle vier Unbekannten müssen bestimmt sein. Bei einer senkrecht
-    extrudierten Kurve fehlt den Normalen die Komponente entlang der
-    Extrusionsachse; das System hat dann nur Rang drei. Die
-    Kleinste-Quadrate-Lösung setzt den unbestimmten Mittelpunktanteil abhängig
-    von der absoluten Lage und kann daraus trotzdem einen kleinen Rückstand
-    errechnen. Ein solcher Fleck ist keine eindeutig lokalisierte Kugel.
-    """
-    normals = np.asarray(body.face_normals[patch], dtype=float)
-    centres = np.asarray(body.triangles_center[patch], dtype=float)
-
-    system = np.column_stack([normals, np.ones(len(normals))])
-    origin = centres.mean(axis=0)
-    local_centres = centres - origin
-    solution, _residuals, rank, _singular_values = np.linalg.lstsq(
-        system, np.einsum("ij,ij->i", normals, local_centres), rcond=None
+def fit_sphere(
+    body: trimesh.Trimesh,
+    patch: list[int],
+    *,
+    check_cancelled: Callable[[], None] | None = None,
+) -> SphereFit | None:
+    """Mittelpunkt und Radius aus belegten Netzecken, nicht aus Facettenebenen."""
+    support = _surface_support(body, patch, check_cancelled)
+    if support is None or int(support.round_corners.sum()) < 4:
+        return None
+    points = support.points[support.round_corners]
+    origin = points.mean(axis=0)
+    scale = float(np.linalg.norm(np.ptp(points, axis=0)))
+    if scale <= EPS_GEOM:
+        return None
+    local = (points - origin) / scale
+    system = np.column_stack((2.0 * local, np.ones(len(local))))
+    solution, _residuals, rank, _singular = np.linalg.lstsq(
+        system, np.einsum("ij,ij->i", local, local), rcond=None
     )
-    if rank < system.shape[1]:
+    if rank < 4:
         return None
-    centre, signed = solution[:3] + origin, float(solution[3])
-    radius = abs(signed)
-    if radius <= EPS_GEOM:
+    square = float(solution[3] + solution[:3] @ solution[:3])
+    if square <= 0.0:
         return None
 
-    distance = np.linalg.norm(centres - centre, axis=1)
-    absolute_residual = float(np.mean(np.abs(distance - radius)))
-    residual = absolute_residual / radius
+    def residual(values: np.ndarray) -> np.ndarray:
+        """Radialer Abstand der belegten Punkte in der lokalen Längeneinheit."""
+        return np.asarray(np.linalg.norm(local - values[:3], axis=1) - values[3], dtype=float)
+
+    fitted = _refined_fit(np.r_[solution[:3], math.sqrt(square)], residual, check_cancelled)
+    if fitted is None or fitted[3] * scale <= EPS_GEOM:
+        return None
+    centre = origin + fitted[:3] * scale
+    radius = float(fitted[3] * scale)
+    agreement = np.einsum(
+        "ij,ij->i", support.normals, (support.centres - origin) - fitted[:3] * scale
+    )
     return SphereFit(
         centre=(float(centre[0]), float(centre[1]), float(centre[2])),
         radius=radius,
-        residual=residual,
-        recess=signed < 0.0,
+        residual=float(np.abs(residual(fitted)).mean()) * scale / radius,
+        recess=float(agreement @ support.areas) < 0.0,
+        fit_error=float(np.abs(residual(fitted)).max()) * scale,
     )
 
 
-def fit_torus(body: trimesh.Trimesh, patch: list[int]) -> TorusFit | None:
-    """Torus durch einen Fleck — Achse aus den Normalen, Radien aus dem
-    Meridiankreis. Drei Schritte, alle drei linear (§11.3).
+def fit_torus(
+    body: trimesh.Trimesh,
+    patch: list[int],
+    *,
+    check_cancelled: Callable[[], None] | None = None,
+) -> TorusFit | None:
+    """Den gemeinsamen Toruskandidaten an belegten Netzecken geometrisch verfeinern."""
+    support = _surface_support(body, patch, check_cancelled)
+    if support is None or int(support.round_corners.sum()) < 7:
+        return None
+    initial = fit_torus_samples(support.centres, support.normals, weights=support.areas)
+    if initial is None:
+        return None
+    points = support.points[support.round_corners]
+    origin = points.mean(axis=0)
+    scale = float(np.linalg.norm(np.ptp(points, axis=0)))
+    if scale <= EPS_GEOM:
+        return None
+    local = (points - origin) / scale
+    initial_axis = np.asarray(initial.axis)
+    first, second = _plane_basis(initial_axis)
 
-    **Die Achse** nutzt eine Eigenschaft jeder Rotationsfläche: Ihre Normale
-    schneidet die Achse, ``n``, ``a`` und ``p - c`` sind also koplanar. Als
-    Gleichung ``dot(a, cross(p, n)) = dot(cross(a, c), n)`` — homogen und **linear in
-    ``a`` und ``cross(a, c)`` zusammen**, also sechs Unbekannte und eine
-    Singulärwertzerlegung. Die Punkte werden davor zentriert und auf
-    Einheitsgröße gebracht: ``cross(p, n)`` liegt sonst in der Größenordnung des
-    Körpers und ``n`` bei eins, und der größere Block bestimmt die Lösung
-    allein. Ohne diese Skalierung kam an einem Viertelring eine Achse von
-    (0,70 | -0,70 | -0,13) heraus statt (0 | 0 | 1).
+    def parameters(values: np.ndarray) -> tuple[np.ndarray, np.ndarray, float, float]:
+        """Ringmitte, zweiachsige Richtung und beide positiven Radien."""
+        direction = initial_axis + first * values[3] + second * values[4]
+        return values[:3], direction / np.linalg.norm(direction), float(values[5]), float(values[6])
 
-    **Der Achsenpunkt** kommt danach aus einem zweiten, kleineren System:
-    ``dot(c, cross(n, a)) = dot(n, cross(a, p))``, drei Unbekannte bei bekannter Achse. Ihn aus
-    dem ``cross(a, c)`` des ersten Schritts zurückzurechnen ist der naheliegende Weg
-    und der falsche — am vollen Ring stimmt er (das Zentrum ist der Ursprung),
-    an einem Viertelring landete er 25 mm neben der Achse.
+    def residual(values: np.ndarray) -> np.ndarray:
+        """Geometrischer Abstand zum Meridiankreis an jedem belegten Netzpunkt."""
+        centre, direction, ring, tube = parameters(values)
+        relative = local - centre
+        along = relative @ direction
+        radial = np.linalg.norm(relative - np.outer(along, direction), axis=1)
+        return np.asarray(np.hypot(radial - ring, along) - tube, dtype=float)
 
-    **Die Radien** aus dem **Meridiankreis**: Der Meridianschnitt eines Torus
-    *ist* ein Kreis, sein Mittelpunkt liegt beim Ringradius und sein Radius ist
-    der Röhrenradius. Dafür gibt es :func:`_fit_circle` schon, und eine
-    Kreiseinpassung braucht keinen ganzen Kreis — genau darin liegt der
-    Gewinn gegenüber dem früheren Weg, der Ring- und Röhrenradius aus den
-    **Rändern** des Flecks las und damit einen ganzen Ring voraussetzte.
-
-    Gemessen an einem Torus mit R 20 und r 5, in Segmenten:
-
-    ========  =======  ======
-    Fleck     R        r
-    ========  =======  ======
-    voll      19,99    4,99
-    90 Grad   19,99    4,99
-    45 Grad   19,71    4,98
-    22 Grad    5,65    4,37
-    ========  =======  ======
-
-    Zwei Dinge stehen darin, auf die sich später jemand verlassen will.
-    **Unter etwa 45 Grad bricht die Einpassung** — der Rückstand meldet es,
-    und dann wird die Form abgelehnt statt geraten (Regel 21). Und **der
-    Röhrenradius bleibt stabil, während der Ringradius zuerst wegbricht**:
-    Bei 22 Grad ist R um das Vierfache daneben und r um zwölf Prozent. Für
-    eine Verrundung ist der Röhrenradius das Gesuchte, für einen Ring der
-    Ringradius — die schwierigere Zahl ist also die, die seltener gebraucht
-    wird.
-
-    Der frühere Weg über die Ränder traf den vollen Ring mit 19,96 und 4,93;
-    dieser trifft ihn mit 19,99 und 4,99.
-    """
-    normals = np.asarray(body.face_normals[patch], dtype=float)
-    centres = np.asarray(body.triangles_center[patch], dtype=float)
-    return fit_torus_samples(centres, normals)
+    fitted = _refined_fit(
+        np.r_[
+            (np.asarray(initial.centre) - origin) / scale,
+            0.0,
+            0.0,
+            initial.ring_radius / scale,
+            initial.tube_radius / scale,
+        ],
+        residual,
+        check_cancelled,
+    )
+    if fitted is None:
+        return None
+    centre, axis, ring, tube = parameters(fitted)
+    if not ring > tube > EPS_GEOM / scale:
+        return None
+    local_centres = (support.centres - origin) / scale
+    mid = _tube_centres(centre, axis, local_centres, ring)
+    agreement = np.einsum("ij,ij->i", support.normals, local_centres - mid)
+    world_centre = origin + centre * scale
+    return TorusFit(
+        axis=(float(axis[0]), float(axis[1]), float(axis[2])),
+        centre=(float(world_centre[0]), float(world_centre[1]), float(world_centre[2])),
+        ring_radius=ring * scale,
+        tube_radius=tube * scale,
+        residual=float(np.abs(residual(fitted)).mean()) / tube,
+        recess=float(agreement @ support.areas) < 0.0,
+        fit_error=float(np.abs(residual(fitted)).max()) * scale,
+    )
 
 
-def fit_torus_samples(centres: np.ndarray, normals: np.ndarray) -> TorusFit | None:
+def fit_torus_samples(
+    centres: np.ndarray, normals: np.ndarray, *, weights: np.ndarray | None = None
+) -> TorusFit | None:
     """Gemeinsamer Toruskandidat aus Punkten und Normalen beider Darstellungsarten.
 
     Der Aufrufer prüft, ob sein gesamter Fleck den Kandidaten trägt. Native
@@ -3704,13 +4052,17 @@ def fit_torus_samples(centres: np.ndarray, normals: np.ndarray) -> TorusFit | No
     if len(normals) < MIN_PATCH_FACES:
         return None
 
-    middle = centres.mean(axis=0)
+    if weights is None:
+        weights = np.ones(len(centres))
+    weights = np.asarray(weights, dtype=float) / float(np.sum(weights))
+    root_weight = np.sqrt(weights)
+    middle = weights @ centres
     scale = float(np.abs(centres - middle).max())
     if scale <= EPS_GEOM:
         return None
     scaled = (centres - middle) / scale
 
-    system = np.column_stack([np.cross(scaled, normals), -normals])
+    system = np.column_stack([np.cross(scaled, normals), -normals]) * root_weight[:, None]
     *_, right = np.linalg.svd(system, full_matrices=False)
     axis = right[-1][:3]
     length = float(np.linalg.norm(axis))
@@ -3719,8 +4071,8 @@ def fit_torus_samples(centres: np.ndarray, normals: np.ndarray) -> TorusFit | No
     axis = axis / length
 
     on_axis, *_ = np.linalg.lstsq(
-        np.cross(normals, axis),
-        np.einsum("ij,ij->i", normals, np.cross(axis, centres - middle)),
+        np.cross(normals, axis) * root_weight[:, None],
+        np.einsum("ij,ij->i", normals, np.cross(axis, centres - middle)) * root_weight,
         rcond=None,
     )
 
@@ -3764,7 +4116,13 @@ def _tube_centres(
     return np.asarray(centre + across / length[:, None] * ring_radius, dtype=float)
 
 
-def _torus_is_recognisable(body: trimesh.Trimesh, fit: TorusFit, patch: list[int]) -> bool:
+def _torus_is_recognisable(
+    body: trimesh.Trimesh,
+    fit: TorusFit,
+    patch: list[int],
+    *,
+    check_cancelled: Callable[[], None] | None = None,
+) -> bool:
     """Nur Flecken mit belegten Normalen des eingepassten Torus veröffentlichen.
 
     :func:`fit_torus` bleibt für die Formauswahl und Diagnose verfügbar. Erst
@@ -3775,9 +4133,31 @@ def _torus_is_recognisable(body: trimesh.Trimesh, fit: TorusFit, patch: list[int
     corners = np.asarray(body.triangles[patch], dtype=float)
     centre = np.asarray(fit.centre, dtype=float)
     axis = np.asarray(fit.axis, dtype=float)
+    support = _surface_support(body, patch, check_cancelled)
+    if support is None:
+        return False
+    relative = support.points - centre
+    along = relative @ axis
+    across = np.linalg.norm(relative - np.outer(along, axis), axis=1)
+    errors = np.hypot(across - fit.ring_radius, along) - fit.tube_radius
+    if not _round_points_are_consistent(support, errors, support.round_corners):
+        return False
+    # Lineare Unterteilung eines Torusdreiecks bleibt zwischen seinen
+    # axialen Tangentialebenen und innerhalb seines äußeren Zylinders.
+    # Das gilt auch für ungestützte Randpunkte. Eine lange Zylinderwand
+    # neben der Rundung darf daher nicht im Stützpunktfit verschwinden.
+    allowance = max(
+        weld_tolerance(float(np.linalg.norm(body.extents))), fit.tube_radius * ROUND_TOLERANCE
+    )
+    if np.any(np.abs(along) > fit.tube_radius + allowance) or np.any(
+        across > fit.ring_radius + fit.tube_radius + allowance
+    ):
+        return False
 
     def expected_normals(points: np.ndarray) -> np.ndarray | None:
         """Torusnormalen an Punkten, unabhängig von ihrer Flächenrichtung."""
+        if check_cancelled is not None:
+            check_cancelled()
         tube_centres = _tube_centres(centre, axis, points, fit.ring_radius)
         radial = points - tube_centres
         lengths = np.linalg.norm(radial, axis=1)
@@ -3800,13 +4180,19 @@ def _torus_is_recognisable(body: trimesh.Trimesh, fit: TorusFit, patch: list[int
     )
 
 
-def _cone_vertices_are_consistent(body: trimesh.Trimesh, fit: ConeFit, patch: list[int]) -> bool:
+def _cone_vertices_are_consistent(
+    body: trimesh.Trimesh,
+    fit: ConeFit,
+    patch: list[int],
+    *,
+    check_cancelled: Callable[[], None] | None = None,
+) -> bool:
     """Ob alle wirklichen Facettenecken den eingepassten Kegelmantel tragen.
 
-    :func:`fit_cone` mittelt denselben dimensionslosen Abstand über die
-    Dreiecksschwerpunkte. Für die Veröffentlichung gilt seine bestehende
-    Toleranz zusätzlich an jeder Ecke: Eine breite Facette darf nicht weit
-    neben dem behaupteten Werkzeugmantel enden, nur weil ihre Mitte passt.
+    Maßführende Netzecken und die übrige Haut bleiben getrennte Belege.
+    Die bestehende Hauttoleranz gilt weiterhin an jeder ursprünglichen Ecke;
+    eine breite Facette darf nicht hinter wenigen passenden Stützpunkten
+    verschwinden. Der örtliche Maximalfehler prüft zusätzlich die Stützen.
     """
     axis = np.asarray(fit.axis, dtype=float)
     apex = np.asarray(fit.apex, dtype=float)
@@ -3823,12 +4209,31 @@ def _cone_vertices_are_consistent(body: trimesh.Trimesh, fit: ConeFit, patch: li
     along = relative @ axis
     radial = np.linalg.norm(relative - np.outer(along, axis), axis=1)
     expected = along * math.tan(math.radians(fit.half_angle))
-    return float(np.max(np.abs(radial - expected))) <= mean_radius * CONE_TOLERANCE
+    if float(np.max(np.abs(radial - expected))) > mean_radius * CONE_TOLERANCE:
+        return False
+    support = _surface_support(body, patch, check_cancelled)
+    if support is None:
+        return False
+    relative = support.points - apex
+    along = relative @ axis
+    radial = np.linalg.norm(relative - np.outer(along, axis), axis=1)
+    angle = math.radians(fit.half_angle)
+    errors = radial * math.cos(angle) - along * math.sin(angle)
+    tolerance = max(weld_tolerance(float(np.linalg.norm(body.extents))), ROUND_WALL_TOLERANCE)
+    return _round_points_are_consistent(
+        support, errors, _cone_support_points(support, apex, tolerance, check_cancelled)
+    )
 
 
-def _cone_is_recognisable(body: trimesh.Trimesh, fit: ConeFit, patch: list[int]) -> bool:
+def _cone_is_recognisable(
+    body: trimesh.Trimesh,
+    fit: ConeFit,
+    patch: list[int],
+    *,
+    check_cancelled: Callable[[], None] | None = None,
+) -> bool:
     """Nur Flecken mit belegten Punkten und Normalen als Kegel veröffentlichen."""
-    if not _cone_vertices_are_consistent(body, fit, patch):
+    if not _cone_vertices_are_consistent(body, fit, patch, check_cancelled=check_cancelled):
         return False
     centres = np.asarray(body.triangles_center[patch], dtype=float)
     corners = np.asarray(body.triangles[patch], dtype=float)
@@ -3839,6 +4244,8 @@ def _cone_is_recognisable(body: trimesh.Trimesh, fit: ConeFit, patch: list[int])
 
     def expected_normals(points: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         """Kegelnormalen und ihre Gültigkeit an beliebigen Punkten."""
+        if check_cancelled is not None:
+            check_cancelled()
         relative = points - apex
         along = relative @ axis
         radial = relative - np.outer(along, axis)
@@ -3894,16 +4301,6 @@ def _surface_normals_are_consistent(
     ).max(axis=1)
     outlier_area = float(areas[error > resolution + max_error].sum())
     return outlier_area <= total_area * max_outlier_share
-
-
-def _centred_moment(normals: np.ndarray) -> np.ndarray:
-    """Das zweite Moment der Normalen **um ihren Mittelwert**.
-
-    Der Unterschied zu :func:`fit_cylinder` ist genau dieses Zentrieren, und er
-    ist der ganze Unterschied zwischen den beiden Formen.
-    """
-    centred = normals - normals.mean(axis=0)
-    return centred.T @ centred
 
 
 def _plane_basis(axis: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -4616,6 +5013,7 @@ def detect_faces(
                 id=f"face_{number}",
                 kind="face",
                 provenance="detected",
+                measure_sources={"area": "facets", "normal": "facets", "centre": "facets"},
                 params={
                     "area": round(area, 4),
                     "normal": (float(normal[0]), float(normal[1]), float(normal[2])),
@@ -4820,6 +5218,7 @@ def detect_curved_faces(
                 id=f"curve_{number}",
                 kind="curved_face",
                 provenance="detected",
+                measure_sources={"area": "facets", "normal": "facets", "centre": "facets"},
                 params={
                     "area": round(area, 4),
                     "normal": (float(mean[0]), float(mean[1]), float(mean[2])),
@@ -5033,6 +5432,7 @@ def detect_edge_loops(mesh: MeshData) -> list[Feature]:
             id=f"edge_loop_{number}",
             kind="edge_loop",
             provenance="detected",
+            measure_sources={"centre": "facets"},
             params={"open_edges": count, "centre": centre},
         )
         for number, (count, centre, _corners) in enumerate(named, start=1)
@@ -5057,6 +5457,7 @@ def detect_edge_loops(mesh: MeshData) -> list[Feature]:
                 id=f"edge_loop_{len(named) + 1}",
                 kind="edge_loop",
                 provenance="detected",
+                measure_sources={"centre": "facets"},
                 params={
                     "open_edges": sum(count for count, _centre, _corners in rest),
                     "centre": rest[0][1],
@@ -5248,6 +5649,7 @@ def detect_voids(
             id=FeatureId(f"void_{number}"),
             kind="void",
             provenance="detected",
+            measure_sources={"volume": "facets", "centre": "facets", "size": "facets"},
             params={"volume": volume, "centre": centre, "size": size},
             face_indices=faces,
         )
@@ -5370,7 +5772,12 @@ def _same_cone(one: tuple[ConeFit, list[int]], two: tuple[ConeFit, list[int]]) -
     return float(np.linalg.norm(offset)) <= scale * SINK_FIT_LIMIT
 
 
-def _merged_cones(body: trimesh.Trimesh, found: Cones) -> Cones:
+def _merged_cones(
+    body: trimesh.Trimesh,
+    found: Cones,
+    *,
+    check_cancelled: Callable[[], None] | None = None,
+) -> Cones:
     """Kegelflecken, die denselben Kegel beschreiben, zu einem machen.
 
     Wie :func:`_merged_tori`, und mit derselben Rechtfertigung: Der gemeinsame
@@ -5392,10 +5799,12 @@ def _merged_cones(body: trimesh.Trimesh, found: Cones) -> Cones:
     merged: Cones = []
     for fit, patch in found:
         for index, (other, gathered) in enumerate(merged):
+            if check_cancelled is not None:
+                check_cancelled()
             if not _same_cone((fit, patch), (other, gathered)):
                 continue
             together = gathered + patch
-            again = fit_cone(body, together)
+            again = fit_cone(body, together, check_cancelled=check_cancelled)
             if again is not None and again.good and again.residual <= ROUND_TOLERANCE:
                 merged[index] = (again, together)
                 break
@@ -5404,7 +5813,12 @@ def _merged_cones(body: trimesh.Trimesh, found: Cones) -> Cones:
     return merged
 
 
-def _merged_tori(body: trimesh.Trimesh, found: Tori) -> Tori:
+def _merged_tori(
+    body: trimesh.Trimesh,
+    found: Tori,
+    *,
+    check_cancelled: Callable[[], None] | None = None,
+) -> Tori:
     """Ringflecken, die denselben Ring beschreiben, zu einem machen.
 
     Wie :func:`_merged_cylinders`, und aus demselben Grund: Mehrere Merkmale
@@ -5432,10 +5846,12 @@ def _merged_tori(body: trimesh.Trimesh, found: Tori) -> Tori:
     merged: Tori = []
     for fit, patch in found:
         for index, (other, gathered) in enumerate(merged):
+            if check_cancelled is not None:
+                check_cancelled()
             if not _same_torus((fit, patch), (other, gathered)):
                 continue
             together = gathered + patch
-            again = fit_torus(body, together)
+            again = fit_torus(body, together, check_cancelled=check_cancelled)
             if again is not None and again.residual <= ROUND_TOLERANCE:
                 merged[index] = (again, together)
                 break

@@ -381,19 +381,28 @@ def _uv_moments(
     Innere Drähte subtrahieren sich über ihren Umlaufsinn. OCCT liefert
     Trimmung, Knotenspannen und exakte Ableitungen; die Quadratur erhält
     Fehlergrenzen für alle normalisierten Momente einschließlich der
-    inneren U-Integration. Keine Kopie der Geometrie wird verändert.
+    inneren U-Integration. Eine private, nur verschobene Arbeitsfläche
+    erhält die ursprünglichen Trimmkurven und ihre Parameter.
     """
     import numpy as np
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
     from OCP.BRepGProp import BRepGProp_Domain, BRepGProp_Face
-    from OCP.gp import gp_Pnt, gp_Pnt2d, gp_Vec, gp_Vec2d
+    from OCP.gp import gp_Pnt, gp_Pnt2d, gp_Trsf, gp_Vec, gp_Vec2d
     from OCP.TopAbs import TopAbs_FORWARD, TopAbs_REVERSED
     from OCP.TopoDS import TopoDS
     from scipy.integrate import quad_vec
 
     if cancelled is not None:
         cancelled.raise_if_cancelled()
-    forward = TopoDS.Face(face.Oriented(TopAbs_FORWARD))
-    reference = np.asarray(origin)
+    # Bereits die rationalen Ableitungen müssen lokal entstehen. Erst nach
+    # der Auswertung große Weltkoordinaten abzuziehen verliert die Stellen,
+    # die die Quadratur für ihre unveränderte Fehlerschranke benötigt.
+    transform = gp_Trsf()
+    transform.SetTranslation(gp_Vec(*(-np.asarray(origin))))
+    local = BRepBuilderAPI_Transform(face, transform, True).Shape()
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+    forward = TopoDS.Face(local.Oriented(TopAbs_FORWARD))
     orientation = -1.0 if face.Orientation() == TopAbs_REVERSED else 1.0
     count = 10 if kind == "surface" else 4
     native = BRepGProp_Face(forward, True)
@@ -421,7 +430,7 @@ def _uv_moments(
         if evaluations > _MAX_EVALUATIONS:
             raise _unresolved_integral()
         native.Normal(float(u), float(v), point, normal)
-        x, y, z = (np.array((point.X(), point.Y(), point.Z())) - reference) / size
+        x, y, z = np.array((point.X(), point.Y(), point.Z())) / size
         if kind == "volume":
             # Divergenzsatz: div(r)=3 und div(r_i*r)=4. Alle Flächen benutzen
             # denselben Ursprung; die gerichtete Normale erhält innere Hohlräume.

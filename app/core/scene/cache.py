@@ -77,7 +77,9 @@ DEFAULT_DISK_BUDGET_BYTES: Final = 2 * 1024 * 1024 * 1024
 #: wie Netzmerkmale; alte Auskünfte ohne diesen Bezug werden neu ausgewertet.
 #: Konturmaße, native Ringmerkmale und native Filamentflächen brauchen ihre
 #: vollständigen Mess- und Attributdaten auch nach dem Wiederöffnen.
-CACHE_FORMAT_VERSION: Final = 17
+#: Rundflächenmaße, rationale Kugelträger und die ausdrückliche Herkunft jedes
+#: Maßes ersetzen frühere gerundete oder nicht belegte Merkmalsauskünfte.
+CACHE_FORMAT_VERSION: Final = 18
 
 
 @dataclass(frozen=True, slots=True)
@@ -292,6 +294,7 @@ def _feature_to_data(feature: Feature) -> dict[str, Any]:
         # die Erkennungsprüfung, findet keinen Partner und verwaist — der Fehler,
         # gegen den das Feld eingebaut wurde, nur eine Cache-Ebene weiter.
         "recognised": feature.recognised,
+        "measure_sources": dict(feature.measure_sources),
     }
 
 
@@ -314,6 +317,7 @@ def _feature_from_data(data: dict[str, Any]) -> Feature:
         # kennt ``recognised`` nicht, und der Cache ist wegwerfbar, nicht
         # versioniert.
         recognised=data.get("recognised", True),
+        measure_sources=data.get("measure_sources", {}),
     )
 
 

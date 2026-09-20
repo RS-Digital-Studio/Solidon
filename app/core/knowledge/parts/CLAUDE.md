@@ -5,6 +5,12 @@ Geprüfte, parametrische Teile, die der Agent und der Nutzer zusammensetzen
 
 Die Regeln stehen in `.claude/rules/bausteine.md`.
 
+Gemeinsame Merkmalshelfer in `build` erhalten vorgegebene Zahlen ungerundet
+und kennzeichnen sie als `parameter`. Tatsächlich aus Dreiecken gemessene
+Flächen und Mitten übergeben ihre Quelle ausdrücklich; bei gemischten Werten
+gilt die Quelle je Parameter. `face` erlaubt diese gezielte Übergabe.
+Rezept-Umbenennung erhält die bestehende Quelle und erzeugt keine neue Maßzusage.
+
 `build.thread` beschreibt die rechtsgängige Geometrie aus `shapes.thread_body`
 mit `handedness="right"`: Winkel und Höhe wachsen gemeinsam. Innenwerkzeug,
 Schraube und Mutter verschieben oder beschneiden diese Wendel, ohne ihren

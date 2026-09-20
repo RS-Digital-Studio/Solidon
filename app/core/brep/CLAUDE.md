@@ -16,6 +16,10 @@ ohne fremde Triangulation (`BRepBuilderAPI_Copy`, `copyGeom=True`,
 Handles werden intern nur gelesen. Ein `frozen`-Dataclass allein schützt
 keinen OCCT-Handle gegen native Mutationen.
 
+Auch der STEP-Transfer arbeitet mit `copy_shape` auf einer privaten Form.
+Der native Schreiber kann Prüfkennzeichen gültiger Rundflächen verändern;
+ein Export lässt deshalb sämtliche ursprünglichen Shape-Kennzeichen erhalten.
+
 Tessellation arbeitet auf einer weiteren privaten Arbeitsform. Sie schreibt
 nie an die Shape eines Szene- oder Cache-Eintrags. Die Dreieckzuordnung läuft
 über `ModifiedShape(original_face)` der Kopie und die ursprüngliche
@@ -91,12 +95,32 @@ Nachbarschaft, Langloch und die Flächenauswahl in `edit`/`profiles`. Eine
 NURBS-Parameter werden nie als Winkel oder Länge ausgegeben. Die gerichtete
 Innenprobe liegt innerhalb der wirklichen Trimmkontur, auch bei Innenlöchern.
 
+`canonical.surface_sample` liefert diese orientierte Innenprobe auch für
+Kugelabschnitte. Ihre Materialseite folgt Hautnormale und Kugelradiale,
+nicht der Lage des Kugelzentrums im gesamten Körper. Das Zentrum eines
+Kugelmerkmals ist der Trägerursprung; der Flächenschwerpunkt bleibt die
+Auswahlmitte kugeliger Eckverrundungen. Native Radien werden erst angezeigt
+gerundet, nie bei ihrer Veröffentlichung.
+
+`SphereSurface` prüft auch rationale Kugelträger. Der Kandidat entsteht auf
+einer privaten, lokal verschobenen Fläche. Die homogene Kugelgleichung über
+allen Bézier-Koeffizienten belegt ihn innerhalb von `EPS_GEOM`; Status und
+Abstand des Recognizers allein reichen nicht. Materialseite und Auswahl
+stammen weiter aus der ursprünglichen getrimmten Fläche. Offset-Kugeln ohne
+vollständigen zusätzlichen Normalennachweis bleiben unklassifiziert.
+
+`Feature.measure_sources` begleitet jedes tatsächlich gelesene native Maß.
+Vollständige native Restflächen ersetzen nur ihre Fläche und Mitte durch
+native Integrale; Teilflächen und offene Langlöcher erhalten die ausdrücklich
+gekennzeichneten Messquellen des Netzwegs. Körperart und `provenance` sind
+dafür keine Ersatzangaben.
+
 `TorusSurface` liest native Ringe und prüft rationale Ringträger. Der Kandidat
 kommt aus derselben `fit_torus_samples`-Rechnung wie am Netz, hier mit echten
 Flächenpunkten und Ableitungen. Erst die homogene Torusgleichung über sämtlichen
 Bézier-Koeffizienten begrenzt die Abweichung auf `EPS_GEOM`; eine gute Stichprobe
 allein genügt nicht. Zerlegung, periodische Trimmungen, Polprüfung und
-Arbeitsgrenzen teilen Ebene, Zylinder und Ring. Offset-Ringe ohne diesen
+Arbeitsgrenzen teilen Ebene, Zylinder, Kugel und Ring. Offset-Ringe ohne diesen
 vollständigen Nachweis bleiben unklassifiziert.
 
 Angrenzende native Ringstücke mit gleichen Achsen, Mitten, Radien und
@@ -167,6 +191,11 @@ weiter ihre vorhandenen, ausdrücklich ausgewiesenen Netzoperationen.
 
 `properties.py` liefert unveränderliche `MassProperties` für Körpermaße und
 Merkmalsauskunft gemeinsam. Analytische Flächen bleiben im nativen Standardweg.
+Der UV-Rückfall verschiebt eine private Arbeitsfläche vor der Auswertung
+in den gemeinsamen lokalen Bezugsrahmen. Dadurch entstehen bereits die
+rationalen Ableitungen ohne Verlust durch große Weltkoordinaten. Originale
+Trimmparameter, Normalenorientierung und Fehlerschranken bleiben erhalten;
+nur der fertige Schwerpunkt wird in Weltkoordinaten zurückgeführt.
 Das gilt auch für ihre BSpline-Trimmkurven: unabhängige polynomiale
 Green-Integrale prüfen Fläche und Schwerpunkt bei ungleichmäßigen Knoten und
 Innenlöchern. Jeder native Weg prüft seinen gemeldeten Integrationsfehler
@@ -463,7 +492,7 @@ Anwendung gegen die installierte Bindung.
 | `ops.py` | Die B-Rep-Operationen im Register (§25, §10) — **ohne** Verrunden und Fase, die stehen in `geom/edge_ops.py` |
 | `edit.py` | Einen Körper formen |
 | `features.py` | Merkmale aus der Topologie (§30, §21) |
-| `canonical.py` | Geprüfte Ebenen-/Zylinderträger mit wirklichen Flächengrenzen (§30, §21) |
+| `canonical.py` | Geprüfte Ebenen-, Zylinder-, Kugel- und Ringträger mit wirklichen Flächengrenzen (§30, §21) |
 | `properties.py` | Gemeinsame native Integrale mit geprüftem Rückfall für getrimmte NURBS (§30, §11) |
 | `step.py` | STEP hinein und hinaus |
 

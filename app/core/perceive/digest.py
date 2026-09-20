@@ -13,13 +13,22 @@ nachsieht, was dem Modell gesagt wurde.
 from __future__ import annotations
 
 import math
-from collections.abc import Collection
+from collections.abc import Callable, Collection
 from pathlib import PurePosixPath
 from typing import Final
 
 from app.core import units
+from app.core.perceive.actions import measure_qualifier
 from app.core.perceive.relations import Sleeve, sleeves_of
-from app.core.types import Document, Feature, ObjectId, Operation, Scene, SceneObject
+from app.core.types import (
+    Document,
+    Feature,
+    ObjectId,
+    Operation,
+    Scene,
+    SceneObject,
+    measure_status,
+)
 from app.core.units import EPS_GEOM, format_length, format_volume, round_display
 from app.i18n import TranslatableText, tr
 
@@ -326,6 +335,22 @@ def _solidity(entry: SceneObject) -> float | None:
     return float(entry.mesh.volume / box)
 
 
+def _measure(
+    feature: Feature,
+    name: str,
+    *,
+    prefix: str = "",
+    format_value: Callable[[float], str] = format_length,
+) -> str:
+    """Formatiert den vorhandenen Wert mit der gemeinsamen belegten Maßquelle."""
+    status = measure_status(feature, name)
+    qualifier = measure_qualifier(status)
+    if not status.available:
+        return str(qualifier)
+    value = prefix + format_value(float(feature.params[name]))
+    return f"{value} ({qualifier})" if qualifier is not None else value
+
+
 def _feature_line(feature_id: str, feature: Feature) -> str:
     """Ein Merkmal, mit dem Ort, an dem es sitzt.
 
@@ -337,12 +362,16 @@ def _feature_line(feature_id: str, feature: Feature) -> str:
     — der Agent sieht nur diesen Text (§26.1).
     """
     params = feature.params
-    at = _place(params.get("centre"))
+    at = (
+        _vector_measure(feature, "centre", _place)
+        if measure_status(feature, "centre").available
+        else ""
+    )
     if feature.kind == "hole":
-        axis = _axis_name(params.get("axis", (0.0, 0.0, 1.0)))
+        axis = _vector_measure(feature, "axis", _axis_name)
         through = tr("Durchgang") if params.get("through") else tr("Sackloch")
         return (
-            f"{feature_id}  Ø {format_length(float(params.get('diameter', 0.0)))}, "
+            f"{feature_id}  {_measure(feature, 'diameter', prefix='Ø ')}, "
             f"{tr('Achse')} {axis}, {through}{at}"
         )
     if feature.kind == "slot":
@@ -350,19 +379,19 @@ def _feature_line(feature_id: str, feature: Feature) -> str:
         # das über die Schraube entscheidet; die Länge sagt, wieviel Spiel sie
         # hat. Ohne die Richtung wüsste der Agent nicht, wohin sich das Teil
         # verschieben lässt — und genau dafür gibt es Langlöcher.
-        axis = _axis_name(params.get("axis", (0.0, 0.0, 1.0)))
-        along = _direction_name(params.get("direction", (1.0, 0.0, 0.0)))
+        axis = _vector_measure(feature, "axis", _axis_name)
+        along = _vector_measure(feature, "direction", _direction_name)
         through = tr("Durchgang") if params.get("through") else tr("Sackloch")
         return (
             f"{feature_id}  {tr('Langloch')} "
-            f"{format_length(float(params.get('diameter', 0.0)))} × "
-            f"{format_length(float(params.get('length', 0.0)))}, "
+            f"{_measure(feature, 'diameter')} × {_measure(feature, 'length')}, "
             f"{tr('Achse')} {axis}, {tr('Länge entlang')} {along}, {through}{at}"
         )
     if feature.kind == "face":
-        normal = _axis_name(params.get("normal", (0.0, 0.0, 1.0)))
+        normal = _vector_measure(feature, "normal", _axis_name)
         return (
-            f"{feature_id}  {tr('planar')} {float(params.get('area', 0.0)):.0f} mm², "
+            f"{feature_id}  {tr('planar')} "
+            f"{_measure(feature, 'area', format_value=units.format_area)}, "
             f"{tr('Normale')} {normal}{at}"
         )
     if feature.kind == "curved_face":
@@ -370,7 +399,9 @@ def _feature_line(feature_id: str, feature: Feature) -> str:
         # Verlaufs, und ein gemitteltes „+X" wäre eine Aussage über nichts.
         # Ob die Seite hohl liegt, ist die Auskunft, die der Agent braucht.
         shape = tr("gerundet innen") if params.get("inner") else tr("gerundet")
-        return f"{feature_id}  {shape} {float(params.get('area', 0.0)):.0f} mm²{at}"
+        return (
+            f"{feature_id}  {shape} {_measure(feature, 'area', format_value=units.format_area)}{at}"
+        )
     if feature.kind == "cone":
         # Der Öffnungswinkel steht vorn, weil er die Sache benennt: „90 Grad"
         # ist eine Senkung für eine Senkkopfschraube, „118 Grad" der Boden
@@ -382,30 +413,31 @@ def _feature_line(feature_id: str, feature: Feature) -> str:
             shape = tr("Kegelfläche")
         else:
             shape = tr("Senkung") if params.get("recess") else tr("Verjüngung")
-        axis = _axis_name(params.get("axis", (0.0, 0.0, 1.0)))
+        axis = _vector_measure(feature, "axis", _axis_name)
         return (
-            f"{feature_id}  {shape} {float(params.get('angle', 0.0)):.0f}°, "
-            f"Ø {format_length(float(params.get('diameter', 0.0)))}, "
+            f"{feature_id}  {shape} "
+            f"{_measure(feature, 'angle', format_value=lambda value: f'{value:.0f}°')}, "
+            f"{_measure(feature, 'diameter', prefix='Ø ')}, "
             f"{tr('Achse')} {axis}{at}"
         )
     if feature.kind == "pin":
         # Der Gegenpart zu ``hole``, und genauso aufgebaut: erst die Zahl, die
         # der Kunde nennt, dann Richtung und Länge. Ohne diesen Zweig las der
         # Agent „pin_1  pin" und wusste von einem Zapfen nur, dass es ihn gibt.
-        axis = _axis_name(params.get("axis", (0.0, 0.0, 1.0)))
+        axis = _vector_measure(feature, "axis", _axis_name)
         return (
-            f"{feature_id}  {tr('Zapfen')} Ø {format_length(float(params.get('diameter', 0.0)))}, "
+            f"{feature_id}  {tr('Zapfen')} {_measure(feature, 'diameter', prefix='Ø ')}, "
             f"{tr('Achse')} {axis}, {tr('Höhe')} "
-            f"{format_length(float(params.get('depth', 0.0)))}{at}"
+            f"{_measure(feature, 'depth')}{at}"
         )
     if feature.kind == "thread":
         # Steigung dazu, denn sie macht das Gewinde: Ø6 mit 1,0 ist M6, Ø6 mit
         # 0,75 ist M6 fein, und in das eine passt die Schraube des anderen nicht.
         shape = tr("Innengewinde") if params.get("internal") else tr("Außengewinde")
-        axis = _axis_name(params.get("axis", (0.0, 0.0, 1.0)))
+        axis = _vector_measure(feature, "axis", _axis_name)
         return (
-            f"{feature_id}  {shape} Ø {format_length(float(params.get('diameter', 0.0)))}, "
-            f"{tr('Steigung')} {format_length(float(params.get('pitch', 0.0)))}, "
+            f"{feature_id}  {shape} {_measure(feature, 'diameter', prefix='Ø ')}, "
+            f"{tr('Steigung')} {_measure(feature, 'pitch')}, "
             f"{tr('Achse')} {axis}{at}"
         )
     if feature.kind == "sphere":
@@ -413,15 +445,15 @@ def _feature_line(feature_id: str, feature: Feature) -> str:
         # eingelassene Kalotte ist eine Pfanne (Kugellager, Magnettasche), eine
         # aufgesetzte eine Kuppel. Was man mit ihr tun kann, hängt daran.
         shape = tr("Pfanne") if params.get("recess") else tr("Kuppel")
-        return f"{feature_id}  {shape} Ø {format_length(float(params.get('diameter', 0.0)))}{at}"
+        return f"{feature_id}  {shape} {_measure(feature, 'diameter', prefix='Ø ')}{at}"
     if feature.kind == "torus":
         # Zwei Zahlen ohne Wort dazwischen, wie beim Kegel: Ringdurchmesser,
         # dann Rohrstärke. Ein Wort dazwischen wäre eine weitere Stelle, an der
         # eine Sprache fehlen kann — die Oberfläche hält es genauso.
         shape = tr("Kehle") if params.get("recess") else tr("Wulst")
         return (
-            f"{feature_id}  {shape} Ø {format_length(float(params.get('diameter', 0.0)))} / "
-            f"Ø {format_length(float(params.get('tube_diameter', 0.0)))}{at}"
+            f"{feature_id}  {shape} {_measure(feature, 'diameter', prefix='Ø ')} / "
+            f"{_measure(feature, 'tube_diameter', prefix='Ø ')}{at}"
         )
     if feature.kind == "fillet":
         # **R und nicht Ø.** Eine Verrundung wird über ihren Radius benannt:
@@ -439,9 +471,13 @@ def _feature_line(feature_id: str, feature: Feature) -> str:
         # Zahl, die der Agent für eine Auskunft hält. Dritter Fund derselben
         # Bauart an einem Tag, diesmal in frisch geschriebenem Code.
         direction = params.get("axis")
-        along = f", {tr('Achse')} {_axis_name(direction)}" if direction is not None else ""
-        size = format_length(float(params.get("radius", 0.0)))
-        return f"{feature_id}  {shape} R{size}{along}{at}"
+        along = (
+            f", {tr('Achse')} {_vector_measure(feature, 'axis', _axis_name)}"
+            if direction is not None
+            else ""
+        )
+        size = _measure(feature, "radius", prefix="R")
+        return f"{feature_id}  {shape} {size}{along}{at}"
     if feature.kind == "edge_loop":
         # ``loops`` trägt nur die Sammelzeile, die ``detect_edge_loops`` ab
         # ihrer Obergrenze anhängt. Ohne diesen Zweig stünde dort eine einzelne
@@ -456,7 +492,7 @@ def _feature_line(feature_id: str, feature: Feature) -> str:
     # vor, sie zu ändern — an einer Fläche, die kein Werkzeug erreicht. Das
     # Volumen ist die einzige Zahl, die den Hohlraum wirklich beschreibt.
     if feature.kind == "void":
-        size = format_volume(float(params.get("volume", 0.0)))
+        size = _measure(feature, "volume", format_value=format_volume)
         return f"{feature_id}  {tr('Lufteinschluss im Material')} {size}{at}"
     # **Der Fallback nennt den englischen Schlüssel.** Er sieht aus wie ein Name
     # — genau daran sind pin, thread, sphere, torus und fillet vorbeigelaufen,
@@ -471,6 +507,19 @@ def _feature_line(feature_id: str, feature: Feature) -> str:
     # noch nicht gibt. Dann ist eine englische Zeile besser als ein Absturz
     # mitten im Steckbrief.
     return f"{feature_id}  {feature.kind}{at}"  # type: ignore[unreachable]
+
+
+def _vector_measure(
+    feature: Feature, name: str, formatter: Callable[[tuple[float, float, float]], str]
+) -> str:
+    """Auch Richtungen und Orte erhalten keine erfundene Genauigkeit oder Ersatzachse."""
+    status = measure_status(feature, name)
+    qualifier = measure_qualifier(status)
+    if not status.available:
+        return str(qualifier)
+    x, y, z = feature.params[name]
+    value = formatter((x, y, z))
+    return f"{value} ({qualifier})" if qualifier is not None else value
 
 
 def _place(centre: object) -> str:

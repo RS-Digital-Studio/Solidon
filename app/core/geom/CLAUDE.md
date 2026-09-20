@@ -3,6 +3,11 @@
 Die einzige Stelle, an der Geometrie entsteht oder sich ändert (Regel 2).
 Gerechnet wird gegen `manifold3d` und `trimesh`.
 
+Die Oberseitenmerkmale der Meshgrundformen lesen Fläche und Mitte aus
+`top_face_of` an den tatsächlichen Dreiecken. Der gemeinsame Merkmalshelfer
+bekommt dafür `facets` als Quelle; die vorgegebene Flächennormale bleibt
+`parameter`. Ein erzeugter Name ändert diese Messquelle nicht.
+
 `place_on_bed` bleibt eine Einzeloperation; `place_group_on_bed` erhält alle
 gespeicherten Eingaben mit derselben Translation. Beide verwenden denselben
 Helfer, der den tiefsten aktuellen Z-Wert auswertet. Kein im UI vorberechneter

@@ -102,6 +102,7 @@ from app.core.errors import (
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.ingest.plan import imported_group_for_bed
 from app.core.log import get_logger
+from app.core.perceive.actions import measure_explanation, measure_qualifier
 from app.core.perceive.relations import FeatureActionGroup
 from app.core.registry import REGISTRY, shown_of_twins
 from app.core.scene import EvaluationResult
@@ -124,11 +125,13 @@ from app.ui.labels import (
     explain_choices,
     feature_label,
     feature_measure,
+    feature_measure_tip,
     feature_name,
     fill_parameter_units,
     kind_requirement,
     length,
     localised,
+    measure_text,
     spoiled_the_exact_body,
     value_line,
     value_text,
@@ -880,6 +883,8 @@ def _feature_tip(feature_id: str, feature: Feature, document: Document | None) -
     Wort daneben wäre die Farbe die einzige Aussage darüber.
     """
     lines = [feature_label(feature_id, feature)]
+    if explanation := feature_measure_tip(feature):
+        lines.append(explanation)
     # Erkannt oder erzeugt — das ist der Grund, aus dem es überhaupt da ist.
     # ``created_by`` trennt beides sauber: Was die Erkennung im Netz gefunden
     # hat, trägt keinen Schritt (§21.2).
@@ -4812,18 +4817,48 @@ def feature_field(
     """
     from app.core.expressions import is_expression
 
+    def explained(editor: QWidget) -> QWidget:
+        """Die Herkunft gehört zum unveränderten Ausgangswert, nicht zur neuen Eingabe."""
+        status = getattr(field, "measurement", None)
+        if status is None:
+            return editor
+        source = str(measure_explanation(status))
+        qualifier = measure_qualifier(status)
+        if isinstance(field.value, (int, float)) and not isinstance(field.value, bool):
+            value = (
+                length(float(field.value))
+                if field.kind == "length"
+                else f"{localised(f'{float(field.value):g}')} {field.unit}".strip()
+            )
+            if qualifier is not None:
+                value = f"{value} · {qualifier}"
+            source = tr("Ausgangswert: {value}. {source}").format(value=value, source=source)
+        elif qualifier is not None:
+            source = f"{qualifier}. {source}"
+        current = editor.toolTip()
+        hint = f"{current}\n{source}" if current else source
+        editor.setToolTip(hint)
+        editor.setStatusTip(hint)
+        editor.setAccessibleDescription(hint)
+        inner = getattr(editor, "spin", None)
+        if isinstance(inner, QWidget):
+            inner.setToolTip(hint)
+            inner.setStatusTip(hint)
+            inner.setAccessibleDescription(hint)
+        return editor
+
     entry = expression_fields.get(field.name)
     if entry is None and is_expression(field.value):
         entry = part_fields.get(field.name)
     if entry is not None:
         from app.ui.op_dialog import ValueField
 
-        return ValueField(entry, field.value, parameter_values, parent)
+        return explained(ValueField(entry, field.value, parameter_values, parent))
     kind = str(field.kind)
     if kind == "bool":
         check = RowCheckBox(parent)
         check.setChecked(bool(field.value))
-        return check
+        return explained(check)
     if kind == "choice":
         combo = QComboBox(parent)
         for value, text in field.choices or ():
@@ -4836,7 +4871,7 @@ def feature_field(
         index = combo.findData(field.value)
         if index >= 0:
             combo.setCurrentIndex(index)
-        return combo
+        return explained(combo)
     if kind == "length":
         spin = LengthSpin(parent)
         spin.set_range_mm(
@@ -4844,7 +4879,7 @@ def feature_field(
             float(field.maximum) if field.maximum is not None else 100000.0,
         )
         spin.set_value_mm(float(field.value))
-        return spin
+        return explained(spin)
     if kind == "count":
         # Eine ganze Zahl ohne Einheit — die Haken eines Einhängers, die
         # Löcher einer Halterung. Kein Längenfeld: Das trüge „mm" und
@@ -4855,7 +4890,7 @@ def feature_field(
             int(field.maximum) if field.maximum is not None else 100000,
         )
         count.setValue(int(field.value))
-        return count
+        return explained(count)
     angle = NumberSpin(parent)
     angle.setRange(
         float(field.minimum) if field.minimum is not None else -360.0,
@@ -4863,7 +4898,7 @@ def feature_field(
     )
     angle.setSuffix(f" {field.unit}" if field.unit else "")
     angle.setValue(float(field.value))
-    return angle
+    return explained(angle)
 
 
 def feature_field_values(
@@ -5369,6 +5404,10 @@ class FeaturePanel(QWidget):
         heading = QLabel(
             f"{cavity_name(feature_id, feature, cavity)}  ·  {feature_measure(feature)}"
         )
+        hint = feature_measure_tip(feature)
+        heading.setToolTip(hint)
+        heading.setStatusTip(hint)
+        heading.setAccessibleDescription(hint)
         heading.setWordWrap(True)
         fit_wrapped(heading)
         set_level(heading, "section")
@@ -6062,6 +6101,9 @@ class FeaturePanel(QWidget):
                 # welcher — an einer Bohrung stehen vier Handlungen mit je
                 # eigenen Feldern.
                 label.setBuddy(editor)
+                label.setToolTip(editor.toolTip())
+                label.setStatusTip(editor.statusTip())
+                label.setAccessibleDescription(editor.accessibleDescription())
                 editor.setAccessibleName(f"{action.title} — {field.label}")
                 form.addRow(label, editor)
                 if isinstance(editor, RowCheckBox):
@@ -6525,6 +6567,21 @@ class FeaturePanel(QWidget):
         title.setWordWrap(True)
         set_level(title, "caption")
         form.addRow(title)
+        if feature is not None:
+            caption = (
+                tr("Am fertigen Teil: {measure}")
+                if getattr(action, "step", None) is not None
+                else tr("Aktuell: {measure}")
+            ).format(measure=feature_measure(feature))
+            current = QLabel(caption, box)
+            current.setObjectName("feature-measure-source")
+            current.setWordWrap(True)
+            hint = feature_measure_tip(feature)
+            current.setToolTip(hint)
+            current.setStatusTip(hint)
+            current.setAccessibleDescription(hint)
+            fit_wrapped(current)
+            form.addRow(current)
         if action.note:
             note = QLabel(str(action.note), box)
             note.setWordWrap(True)
@@ -6536,6 +6593,9 @@ class FeaturePanel(QWidget):
             label = QLabel(str(field.label), box)
             label.setWordWrap(True)
             label.setBuddy(editor)
+            label.setToolTip(editor.toolTip())
+            label.setStatusTip(editor.statusTip())
+            label.setAccessibleDescription(editor.accessibleDescription())
             if isinstance(editor, ValueField):
                 editor.captionChanged.connect(label.setText)
                 wheel_needs_focus(editor.spin)
@@ -6545,8 +6605,12 @@ class FeaturePanel(QWidget):
             form.addRow(label, editor)
             widgets[str(field.name)] = editor
         if op == "resize_hole" and feature is not None and "depth" in feature.params:
-            measured = QLabel(length(float(feature.params["depth"])), box)
+            measured = QLabel(measure_text(feature, "depth"), box)
             measured.setAccessibleName(tr("Gemessene Tiefe"))
+            hint = feature_measure_tip(feature, "depth")
+            measured.setToolTip(hint)
+            measured.setStatusTip(hint)
+            measured.setAccessibleDescription(hint)
             form.addRow(tr("Gemessene Tiefe"), measured)
         return action, box, widgets
 

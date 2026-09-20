@@ -41,7 +41,7 @@ import numpy as np
 
 from app.core import units
 from app.core.geom.mesh import MeshData
-from app.core.types import Feature, FeatureId, Vec3
+from app.core.types import Feature, FeatureId, MeasureSource, Vec3
 from app.core.units import EPS_GEOM, positive_axis, weld_tolerance
 
 if TYPE_CHECKING:  # pragma: no cover - nur für die Typprüfung
@@ -170,6 +170,8 @@ class Slot:
     """Der ganze Mantel: beide Bögen und beide Flanken."""
     swallowed: tuple[int, ...]
     """Welche Einpassungen aus der übergebenen Liste darin aufgehen."""
+    diameter_source: MeasureSource = "fit"
+    """Breite aus einem Stadionfit oder aus dem Abstand der wirklichen Flanken."""
 
     @property
     def length(self) -> float:
@@ -226,6 +228,15 @@ def slots_instead_of_half_bores(
             id=name,
             kind="slot",
             provenance="detected",
+            measure_sources={
+                "diameter": slot.diameter_source,
+                "length": "fit",
+                "travel": "fit",
+                "axis": "fit",
+                "direction": "fit",
+                "centre": "fit",
+                "depth": "facets",
+            },
             params={
                 "diameter": slot.diameter,
                 "length": slot.length,
@@ -345,6 +356,18 @@ def open_slots_instead_of_fillets(
             kind="slot",
             provenance="detected",
             face_indices=indices,
+            measure_sources={
+                "diameter": "fit",
+                "length": "fit",
+                "travel": "fit",
+                "axis": "fit",
+                "direction": "fit",
+                "centre": "fit",
+                "depth": "facets",
+                "arc_centre": "fit",
+                "mouth_centre": "fit",
+                "opening_normal": "facets",
+            },
             params={
                 "diameter": radius * 2.0,
                 "length": radius * 2.0 + travel,
@@ -674,6 +697,7 @@ def _slot_from(
         flank_corners = triangles[flank_indices].reshape(-1, 3)
 
     centre = (centre_a + centre_b) / 2.0
+    diameter_source: MeasureSource = "fit"
     if not _corners_are_flanks(flank_corners, centre, across, radius):
         # Grobe Bogenflecken können Tangentenstücke mittragen und ihre
         # Nachbarn noch Bogenreste. Dann gilt der vorhandene Formnachweis
@@ -738,6 +762,7 @@ def _slot_from(
         # nicht aus zwei nur angenähert gleichen Kreisradien entstehen.
         flank_distances = (flank_corners - centre) @ across
         diameter = float(np.ptp(flank_distances))
+        diameter_source = "facets"
 
     corners = triangles[list(faces)].reshape(-1, 3) - centre
     along_axis = corners @ axis
@@ -756,6 +781,7 @@ def _slot_from(
         through=_reaches_through(body, middle, axis, direction, travel, depth),
         face_indices=tuple(sorted(faces)),
         swallowed=(index_a, index_b),
+        diameter_source=diameter_source,
     )
 
 

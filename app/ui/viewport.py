@@ -98,6 +98,7 @@ from app.ui.labels import (
     display_unit,
     edge_label,
     feature_label,
+    feature_measure_tip,
     feature_name,
     length,
     localised,
@@ -7994,7 +7995,7 @@ class Viewport(QWidget):
             return
         self._remove_snap_actors()
         self._snap_shown = None
-        self.setAccessibleDescription("")
+        self.setAccessibleDescription(self.toolTip())
         self._draw()
 
     @property
@@ -8682,6 +8683,10 @@ class Viewport(QWidget):
     def _redraw_features(self) -> None:
         if self.renderer is None:
             return
+        self.setToolTip("")
+        self.setStatusTip("")
+        if self._snap_shown is None:
+            self.setAccessibleDescription("")
         self._redraw_feature_patch()
         self._redraw_edge_patch()
         self._redraw_protected_patch()
@@ -8736,6 +8741,19 @@ class Viewport(QWidget):
             if feature_id not in entry.features:
                 continue
             feature = entry.features[feature_id]
+            if (object_id, feature_id) == (
+                self._hovered_object,
+                self._hovered_feature,
+            ) or (not self.toolTip() and (object_id, feature_id) in selected_refs):
+                hint = "\n".join(
+                    text
+                    for text in (feature_label(feature_id, feature), feature_measure_tip(feature))
+                    if text
+                )
+                self.setToolTip(hint)
+                self.setStatusTip(hint)
+                if self._snap_shown is None:
+                    self.setAccessibleDescription(hint)
             explicit = (object_id, feature_id) in selected_refs or (object_id, feature_id) == (
                 self._hovered_object,
                 self._hovered_feature,

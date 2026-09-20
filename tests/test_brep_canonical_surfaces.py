@@ -524,6 +524,7 @@ def test_a_local_deformation_cannot_hide_behind_a_zero_reported_gap(
         return SimpleNamespace(
             IsPlane=lambda tolerance, plane: candidate_kind == "plane",
             IsCylinder=is_cylinder,
+            IsSphere=lambda tolerance, sphere: False,
             GetGap=lambda: 0.0,
             GetStatus=lambda: 0,
         )

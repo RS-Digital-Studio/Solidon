@@ -1678,7 +1678,9 @@ def test_a_hole_says_which_screw_fits(qt_app: QApplication) -> None:
     from app.ui.labels import localised
 
     diameter = float(feature.params["diameter"])
-    erwartet, _choices = bore_advice(diameter, ask=False, measured=localised(f"{diameter:.2f}"))
+    erwartet, _choices = bore_advice(
+        diameter, feature=feature, ask=False, measured=localised(f"{diameter:.2f}")
+    )
 
     panel = FeaturePanel()
     panel.show_feature(identifier, feature)
@@ -2578,6 +2580,46 @@ def test_measure_fields_keep_the_bound_feature_after_the_panel_changes(
         panel.deleteLater()
 
 
+@pytest.mark.parametrize("provenance", ["generated", "detected"])
+def test_measure_source_is_shared_by_tree_caption_fields_and_accessibility(
+    qt_app: QApplication, provenance: str
+) -> None:
+    """Der Zielwert ist editierbar, die Aussage zum vorhandenen Fit bleibt dieselbe."""
+    from app.ui.panels import _feature_tip
+
+    identifier, original = a_hole()
+    feature = replace(
+        original,
+        provenance=provenance,  # type: ignore[arg-type]
+        params={**original.params, "diameter": 8.012345},
+        measure_sources={**original.measure_sources, "diameter": "fit"},
+    )
+    panel = FeaturePanel()
+    owner = QWidget()
+    try:
+        panel.show_feature(identifier, feature)
+        built = panel.measure_fields("resize_hole", owner, feature=feature)
+        assert built is not None
+        _action, group, editors = built
+        caption = group.findChild(QLabel, "feature-measure-source")
+        assert caption is not None and "geschätzt" in caption.text()
+        editor = editors["diameter"]
+        hint = editor.toolTip()
+        assert "Ausgangswert:" in hint and "geschätzt" in hint
+        assert "Konstruktionsmaß ist nicht bekannt" in hint
+        assert editor.statusTip() == editor.accessibleDescription() == hint
+        assert "geschätzt" in _feature_tip(identifier, feature, None)
+        editor.set_value_mm(10.0)
+        assert editor.toolTip() == hint
+        assert "10" not in caption.text()
+        assert feature.params["diameter"] == pytest.approx(8.012345)
+    finally:
+        owner.close()
+        owner.deleteLater()
+        panel.close()
+        panel.deleteLater()
+
+
 def test_measure_group_owns_the_editable_fields_and_the_only_completion(
     qt_app: QApplication,
 ) -> None:
@@ -2629,6 +2671,8 @@ def test_original_bore_fields_keep_expressions_through_depth_and_hidden_position
         assert built is not None
         action, group, editors = built
         assert isinstance(editors["diameter"], ValueField)
+        assert "Vorgabemaß" in editors["diameter"].toolTip()
+        assert "erzeugenden Schritt" in editors["diameter"].accessibleDescription()
         values = feature_field_values(action.fields, editors, action.fixed)
         assert values["diameter"] == "=@bore"
         assert values["depth"] == pytest.approx(0.0)

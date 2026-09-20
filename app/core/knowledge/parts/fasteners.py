@@ -311,6 +311,9 @@ def _countersink_feature(diameter: float, top: float, depth: float) -> tuple[str
             "depth": depth,
             "recess": True,
         },
+        measure_sources=dict.fromkeys(
+            ("diameter", "angle", "axis", "centre", "depth"), "parameter"
+        ),
     )
 
 

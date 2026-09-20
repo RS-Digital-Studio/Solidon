@@ -47,6 +47,44 @@ def ids(spec: PartSpec) -> str:
     return spec.name
 
 
+def test_part_measures_distinguish_parameters_from_measured_facets() -> None:
+    """Eine Buchse verspricht Vorgabemaße; die gerundete Schale misst ihre Bodenfläche."""
+    from app.core.types import measure_status
+
+    insert_spec = PARTS.get("heatset_m4")
+    insert = insert_spec.fn(insert_spec.params(size="M4"))
+    bore = next(feature for feature in insert.features.values() if feature.kind == "hole")
+    assert bore.params["diameter"] == pytest.approx(standards.insert("M4").hole)
+    assert measure_status(bore, "diameter").source == "parameter"
+    tray_spec = PARTS.get("organizer_tray")
+    tray = tray_spec.fn(tray_spec.params())
+    floor = tray.features["floor"]
+    assert measure_status(floor, "area").source == "facets"
+    assert measure_status(floor, "centre").source == "parameter"
+    assert floor.params["area"] > 0.0
+
+
+def test_declared_measure_sources_keep_the_complete_parameter_value() -> None:
+    """Die Maßdeklaration rundet weder Längen noch Fläche oder Steigung im Kern."""
+    from app.core.knowledge.parts import build
+    from app.core.types import measure_status
+
+    value = 8.123456789
+    point = (1.23456789, -2.34567891, 3.45678912)
+    made = (
+        build.bore("bore", value, point, depth=value)[1],
+        build.pin("pin", value, point, length=value)[1],
+        build.face("face", value, point)[1],
+        build.thread("thread", value, value, point, length=value)[1],
+    )
+    for feature in made:
+        assert feature.params["centre"] == point
+        for name in ("diameter", "depth", "area", "pitch", "length"):
+            if name in feature.params:
+                assert feature.params[name] == pytest.approx(value, rel=0.0, abs=1e-12)
+                assert measure_status(feature, name).source == "parameter"
+
+
 def corners(spec: PartSpec) -> list[dict[str, Any]]:
     """Die Ecken des Parameterbereichs — seit dem 25.08.2026 aus dem Kern.
 

@@ -183,12 +183,19 @@ def organizer_tray(raw: BaseParams) -> PartResult:
     area = _horizontal_area(body, params.floor)
     return result(
         body,
-        face("base", _horizontal_area(body, 0, up=False), (0, 0, 0), (0, 0, -1)),
-        face("floor", area, (0, 0, params.floor)),
+        face(
+            "base",
+            _horizontal_area(body, 0, up=False),
+            (0, 0, 0),
+            (0, 0, -1),
+            measure_sources={"area": "facets"},
+        ),
+        face("floor", area, (0, 0, params.floor), measure_sources={"area": "facets"}),
         face(
             "rim",
             _horizontal_area(body, params.height),
             (0, (params.depth - params.wall) / 2, params.height),
+            measure_sources={"area": "facets"},
         ),
     )
 
@@ -334,6 +341,7 @@ def organizer_rim(raw: BaseParams) -> PartResult:
             "rim",
             _horizontal_area(mesh, p.height),
             (0, 0, p.height),
+            measure_sources={"area": "facets"},
         ),
     )
 
@@ -409,11 +417,18 @@ def organizer_foot(raw: BaseParams) -> PartResult:
     mesh = union(base, peg)
     return result(
         mesh,
-        face("base", _horizontal_area(mesh, 0, up=False), (0, 0, 0), (0, 0, -1)),
+        face(
+            "base",
+            _horizontal_area(mesh, 0, up=False),
+            (0, 0, 0),
+            (0, 0, -1),
+            measure_sources={"area": "facets"},
+        ),
         face(
             "seat",
             _horizontal_area(mesh, p.height),
             ((p.diameter + p.pin_diameter) / 4, 0, p.height),
+            measure_sources={"area": "facets"},
         ),
         pin("pin", p.pin_diameter, (0, 0, p.height + p.pin_length / 2), length=p.pin_length),
     )

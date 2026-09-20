@@ -31,12 +31,58 @@ from typing import TYPE_CHECKING, Any, Final
 
 from app.core.registry import REGISTRY
 from app.core.registry.surfaces import asked_fields, normal_fields_of
-from app.core.types import Feature, FeatureId
+from app.core.types import Feature, FeatureId, MeasureStatus, measure_status
 from app.core.units import DEGREE_UNIT
 from app.i18n import TranslatableText, _
 
 if TYPE_CHECKING:
     from app.core.geom.mesh import MeshData
+
+
+def measure_qualifier(status: MeasureStatus) -> TranslatableText | None:
+    """Kurzer Zusatz für dieselbe Maßquelle in Oberfläche und Steckbrief."""
+    if not status.available:
+        return _("Maß nicht bestimmt")
+    if status.state == "unknown":
+        return _("Maßherkunft nicht bestimmt")
+    if status.source == "parameter":
+        return _("Vorgabemaß")
+    if status.state == "estimated":
+        return _("geschätzt")
+    return None
+
+
+def measure_explanation(status: MeasureStatus) -> TranslatableText:
+    """Die Herkunft erklärt ein Maß, ohne einen Genauigkeitsbereich zu erfinden."""
+    if not status.available:
+        return _(
+            "Dieses Maß ist nicht zuverlässig bestimmt. Einen Zielwert eingeben "
+            "oder einen geeigneten Bezug wählen."
+        )
+    if status.state == "unknown":
+        return _(
+            "Für diesen Wert ist nicht belegt, wie er bestimmt wurde. "
+            "Er wird deshalb nicht als exaktes Maß ausgegeben."
+        )
+    if status.source == "parameter":
+        return _(
+            "Wert aus dem erzeugenden Schritt. Die vorhandene Oberfläche kann davon abweichen."
+        )
+    if status.source == "fit":
+        return _(
+            "Aus der vorhandenen Oberfläche geschätzt. Das ursprüngliche "
+            "Konstruktionsmaß ist nicht bekannt."
+        )
+    if status.source == "facets":
+        return _(
+            "Am vorhandenen Dreiecksmodell bestimmt. Eine gerundete Ursprungsfläche "
+            "kann davon abweichen."
+        )
+    return _(
+        "An der exakten Modellfläche bestimmt. Druckabweichungen und Passungsspiel "
+        "sind darin nicht enthalten."
+    )
+
 
 #: Die Zeilen des Panels, je Zeile die Operationen, die sie einlösen können.
 #:
@@ -299,6 +345,8 @@ class ActionField:
     choices: tuple[tuple[str, TranslatableText | str], ...] = ()
     parameter_factor: float = 1.0
     """Faktor vom sichtbaren Maß zum Operationsparameter, etwa Radius zu Durchmesser."""
+    measurement: MeasureStatus | None = None
+    """Quelle des Ausgangswerts; der editierte Zielwert ist keine neue Messung."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -447,6 +495,12 @@ def _action_field(entry: Any, feature: Feature, op: str) -> ActionField:
     """Ein gemessenes Maß samt Rückübersetzung in den gespeicherten Parameter."""
     radius = entry.name == "diameter" and feature.kind == "fillet"
     factor = 2.0 if radius else 1.0
+    source = feature_value_source(entry.name, feature)
+    if feature.kind == "slot" and entry.name in {"slot_length", "slot_angle"}:
+        source = ("length" if entry.name == "slot_length" else "direction", None)
+    derived = (op, entry.name) in _SHIFTED_BY and not (
+        feature.kind == "slot" and entry.name == "slot_length" and not feature.params.get("open")
+    )
     return ActionField(
         name=entry.name,
         label=_("Radius") if radius else entry.title,
@@ -457,6 +511,9 @@ def _action_field(entry: Any, feature: Feature, op: str) -> ActionField:
         maximum=entry.maximum / factor if entry.maximum is not None else None,
         choices=tuple((choice, choice) for choice in entry.choices),
         parameter_factor=factor,
+        measurement=measure_status(feature, source[0])
+        if source is not None and not derived
+        else None,
     )
 
 
@@ -961,6 +1018,9 @@ def _saved_fields(
             minimum=entry.minimum,
             maximum=entry.maximum,
             choices=tuple((choice, choice) for choice in (entry.choices or ())),
+            measurement=MeasureStatus("exact", "parameter", available=True)
+            if _kind_of(entry) in {"length", "angle"}
+            else None,
         )
         for name in names
         if (entry := schema.get(name)) is not None

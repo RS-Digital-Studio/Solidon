@@ -123,6 +123,7 @@ def _surface(mesh: MeshData, name: str, mask: np.ndarray, kind: FeatureKind) -> 
         params=values,
         face_indices=tuple(int(index) for index in indices),
         recognised=False,
+        measure_sources=dict.fromkeys(values, "facets"),
     )
 
 

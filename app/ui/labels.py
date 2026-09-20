@@ -32,10 +32,11 @@ from app.core import figures
 from app.core.activation import Activation
 from app.core.errors import AppError
 from app.core.geom.mesh import MeshData, face_components
+from app.core.perceive.actions import measure_explanation, measure_qualifier
 from app.core.registry import MENU_GROUPS as MENU_GROUPS
 from app.core.registry import REGISTRY
 from app.core.registry import group_title as group_title
-from app.core.types import Feature, FeatureId, Finding, SceneObject
+from app.core.types import Feature, FeatureId, Finding, SceneObject, measure_status
 from app.core.units import (
     DEGREE_UNIT,
     LengthUnit,
@@ -2083,6 +2084,62 @@ def feature_name(feature_id: FeatureId, feature: Feature) -> str:
     return feature_id  # type: ignore[unreachable]
 
 
+def measure_text(
+    feature: Feature,
+    name: str,
+    *,
+    prefix: str = "",
+    format_value: Callable[[float], str] = length,
+    with_source: bool = True,
+) -> str:
+    """Eine vorhandene Zahl und ihre belegte Herkunft, ohne erneute Maßrechnung."""
+    status = measure_status(feature, name)
+    qualifier = measure_qualifier(status)
+    if not status.available:
+        return str(qualifier)
+    value = prefix + format_value(float(feature.params[name]))
+    return f"{value} · {qualifier}" if with_source and qualifier is not None else value
+
+
+def _measure_group(
+    feature: Feature,
+    fields: tuple[tuple[str, str, Callable[[float], str]], ...],
+    separator: str,
+) -> str:
+    """Gleiche Quellen teilen ihren Zusatz; gemischte bleiben je Zahl kenntlich."""
+    statuses = [measure_status(feature, name) for name, _prefix, _formatter in fields]
+    common = all(status == statuses[0] and status.available for status in statuses)
+    value = separator.join(
+        measure_text(feature, name, prefix=prefix, format_value=formatter, with_source=not common)
+        for name, prefix, formatter in fields
+    )
+    qualifier = measure_qualifier(statuses[0]) if common else None
+    return f"{value} · {qualifier}" if qualifier is not None else value
+
+
+def feature_measure_tip(feature: Feature, *names: str) -> str:
+    """Die gemeinsame Maßauskunft für Tooltip, Statushinweis und Vorlesen."""
+    chosen = names or tuple(
+        name
+        for name in (
+            "diameter",
+            "radius",
+            "tube_diameter",
+            "angle",
+            "pitch",
+            "area",
+            "volume",
+            "length",
+            "depth",
+        )
+        if name in feature.params
+    )
+    descriptions = dict.fromkeys(
+        str(measure_explanation(measure_status(feature, name))) for name in chosen
+    )
+    return "\n".join(descriptions)
+
+
 def feature_measure(feature: Feature) -> str:
     """Die eine Zahl, die dieses Merkmal ausmacht — ohne seinen Namen.
 
@@ -2092,29 +2149,31 @@ def feature_measure(feature: Feature) -> str:
     """
     params = feature.params
     if feature.kind == "hole":
-        return f"Ø{length(float(params.get('diameter', 0.0)))}"
+        return measure_text(feature, "diameter", prefix="Ø")
     # **Beide Maße, und die Breite zuerst.** Ein Langloch bestellt man wie ein
     # Blech: „8 auf 20". Die Breite entscheidet über die Schraube, die Länge
     # über ihr Spiel — eine Zahl allein sagt keines von beidem. Das ``Ø`` steht
     # vorn, weil die Breite wirklich ein Durchmesser ist: die zwei runden Enden.
     if feature.kind == "slot":
-        width = length(float(params.get("diameter", 0.0)))
-        return f"Ø{width} × {length(float(params.get('length', 0.0)))}"
+        return _measure_group(feature, (("diameter", "Ø", length), ("length", "", length)), " × ")
     # **R und nicht Ø**, weil eine Verrundung über ihren Radius benannt wird:
     # Der Kunde sagt „R3", der Slicer sagt „R3", Fusion sagt „R3". Ohne diese
     # Zeile blieb die Maßspalte des Objektbaums bei jeder Verrundung leer,
     # während sie bei jedem anderen Merkmal etwas zeigt.
     if feature.kind == "fillet":
-        return f"R{length(float(params.get('radius', 0.0)))}"
+        return measure_text(feature, "radius", prefix="R")
     # Zwei Vergleiche statt ``in``: So sieht mypy die Verzweigung vollständig
     # und hält die Zeile am Ende weiter für unerreichbar.
     if feature.kind == "face" or feature.kind == "curved_face":
-        return area(float(params.get("area", 0.0)))
+        return measure_text(feature, "area", format_value=area)
     if feature.kind == "cone":
-        angle = float(params.get("angle", 0.0))
-        return f"{angle:.0f}° Ø{length(float(params.get('diameter', 0.0)))}"
+        return _measure_group(
+            feature,
+            (("angle", "", lambda value: f"{value:.0f}°"), ("diameter", "Ø", length)),
+            " ",
+        )
     if feature.kind == "sphere":
-        return f"Ø{length(float(params.get('diameter', 0.0)))}"
+        return measure_text(feature, "diameter", prefix="Ø")
     # Zwei Zahlen ohne Wort, wie beim Kegel: Ringdurchmesser, dann Rohrstärke.
     # Ein Wort dazwischen wäre eine zweite Stelle, an der eine Sprache fehlt.
     #
@@ -2124,8 +2183,9 @@ def feature_measure(feature: Feature) -> str:
     # Namen war die Komponente null — zwei Tori mit Ringdurchmesser 40 und 60
     # kosteten gegeneinander 0,0 und waren damit ununterscheidbar (§21.2).
     if feature.kind == "torus":
-        ring = length(float(params.get("diameter", 0.0)))
-        return f"Ø{ring} / Ø{length(float(params.get('tube_diameter', 0.0)))}"
+        return _measure_group(
+            feature, (("diameter", "Ø", length), ("tube_diameter", "Ø", length)), " / "
+        )
     if feature.kind == "edge_loop":
         # Dieselbe Unterscheidung wie im Steckbrief: Die Sammelzeile trägt
         # ``loops`` und meint Stellen, nicht Kanten.
@@ -2141,17 +2201,15 @@ def feature_measure(feature: Feature) -> str:
     # Durchmesser und Steigung, denn die macht es aus (Ø6 mit 1,0 ist
     # M6, Ø6 mit 0,75 ist M6 fein).
     if feature.kind == "pin":
-        return f"Ø{length(float(params.get('diameter', 0.0)))}"
+        return measure_text(feature, "diameter", prefix="Ø")
     if feature.kind == "thread":
-        pitch = float(params.get("pitch", 0.0))
-        diameter = length(float(params.get("diameter", 0.0)))
-        return f"Ø{diameter} × {length(pitch)}" if pitch else f"Ø{diameter}"
+        return _measure_group(feature, (("diameter", "Ø", length), ("pitch", "", length)), " × ")
     # **Das Volumen und kein Durchmesser.** Ein Einschluss hat keine Form, die
     # eine Länge beschriebe — er ist, was ein Negativkörper hinterlassen hat,
     # und das kann ein Zylinder sein oder sonst etwas. Was der Kunde wissen
     # will, ist, wie viel Luft im Teil steckt.
     if feature.kind == "void":
-        return volume(float(params.get("volume", 0.0)))
+        return measure_text(feature, "volume", format_value=volume)
     # Wie bei ``feature_name`` oben: Seit alle elf Arten ein Maß haben,
     # hält mypy diese Zeile für unerreichbar — und **das ist die
     # Bestätigung, dass die Verzweigung vollständig ist**. Sie bleibt

@@ -3176,6 +3176,7 @@ def test_historical_bore_fields_preview_all_following_steps_and_preserve_origina
     """Originalwerte, neuer Flächensitz und Folgeschritte bleiben derselbe Auftrag."""
     from PySide6.QtCore import Qt
     from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QLabel
 
     from app.core.brep import Solid
     from app.core.scene import placement
@@ -3248,6 +3249,8 @@ def test_historical_bore_fields_preview_all_following_steps_and_preserve_origina
         flow = _measures_in_the_view(window)
         assert flow is not None and flow._change_op == drill.id
         assert flow.dialog.values() == original
+        caption = flow._measure_group.findChild(QLabel, "feature-measure-source")
+        assert caption is not None and "Am fertigen Teil:" in caption.text()
         assert not flow.dialog.begun and window.feature_dock.isHidden()
         assert set(flow._result.scene.objects) == {owner}
         assert not any(
@@ -3279,6 +3282,8 @@ def test_historical_bore_fields_preview_all_following_steps_and_preserve_origina
             for field in flow._measure_group.findChildren(LengthSpin)
             if "Tiefe" in field.accessibleName()
         )
+        assert "Vorgabemaß" in depth.toolTip()
+        assert "erzeugenden Schritt" in depth.accessibleDescription()
         depth.lineEdit().selectAll()
         QTest.keyClicks(depth.lineEdit(), str(edited_depth))
         QTest.keyClick(depth.lineEdit(), Qt.Key.Key_Return)

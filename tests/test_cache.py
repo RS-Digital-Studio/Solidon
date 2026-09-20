@@ -19,6 +19,68 @@ from app.i18n import TranslatableText
 from tests.conftest import FakeMesh, make_object
 
 
+@pytest.mark.parametrize("op,source", [("create_box", "facets"), ("create_brep_box", "native")])
+@pytest.mark.parametrize("quality", ["draft", "fine"])
+def test_real_measure_sources_survive_project_reopen_cache_and_undo(
+    profile: Profile, tmp_path: Path, op: str, source: str, quality: str
+) -> None:
+    """Beide Quaderwege führen dieselben Flächenmaße durch echte gespeicherte Schritte."""
+    from app.core.bootstrap import load_operations
+    from app.core.geom.mesh import MeshCodec
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.project import ProjectSources, load, new_project, save
+    from app.core.types import measure_status
+
+    load_operations()
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    history.apply(
+        "Quader", [OperationDraft(op=op, params={"width": 30.0, "depth": 20.0, "height": 8.0})]
+    )
+    cache = ResultCache(disk=DiskCache(codec=MeshCodec(), directory=tmp_path / "cache"))
+
+    def measured(current, active_cache, area):
+        result = evaluate(
+            current.document,
+            profile,
+            quality=quality,
+            sources=ProjectSources(current),
+            cache=active_cache,
+        )
+        assert result.complete
+        body = result.scene.objects["obj_1"]
+        top = next(
+            feature
+            for feature in body.features.values()
+            if feature.kind == "face" and feature.params["normal"][2] > 0.99
+        )
+        assert top.params["area"] == pytest.approx(area)
+        assert measure_status(top, "area").source == source
+        return top
+
+    original = measured(project, cache, 600.0)
+    assert measured(project, cache, 600.0) == original
+    history.apply(
+        "Skalieren", [OperationDraft(op="scale_object", inputs=("obj_1",), params={"factor": 2.0})]
+    )
+    changed = measured(project, cache, 2400.0)
+    path = save(project, tmp_path / "quader.p3d")
+    reopened = load(path)
+    cold = ResultCache(disk=DiskCache(codec=MeshCodec(), directory=tmp_path / "cache"))
+    restored = measured(reopened, cold, 2400.0)
+    assert dataclasses.replace(restored, params=changed.params) == changed
+    assert restored.params.keys() == changed.params.keys()
+    for name, value in changed.params.items():
+        assert restored.params[name] == pytest.approx(value)
+    if op == "create_box":
+        assert cold.statistics.disk_hits > 0
+    history.undo()
+    assert measured(project, cache, 600.0) == original
+    history.redo()
+    assert measured(project, cache, 2400.0) == changed
+    assert original.params["area"] == pytest.approx(600.0)
+
+
 class FakeCodec:
     """Steht für die Geometrieschicht, die den echten später liefert."""
 
@@ -263,6 +325,39 @@ def test_objects_keep_their_features_through_the_disk_level(tmp_path: Path) -> N
     assert feature.face_indices == (1, 2, 3)
 
 
+@pytest.mark.parametrize("reload", [False, True])
+def test_measure_sources_survive_warm_and_persisted_results(tmp_path: Path, reload: bool) -> None:
+    """Derselbe Wert bleibt nach einem Speicher- oder Plattentreffer als Fit erkennbar."""
+    import trimesh
+
+    from app.core.geom.mesh import MeshCodec, MeshData
+    from app.core.types import Feature, measure_status
+
+    feature = Feature(
+        "bore",
+        "hole",
+        "generated",
+        {"diameter": 8.02, "depth": 4.0},
+        measure_sources={"diameter": "fit", "depth": "parameter"},
+    )
+    body = SceneObject(
+        "obj_1", "Teil", MeshData.of(trimesh.creation.box()), features={"bore": feature}
+    )
+    disk = DiskCache(codec=MeshCodec(), directory=tmp_path)
+    cache = ResultCache(disk=disk)
+    cache.put("measure", CachedResult(objects=(body,)), to_disk=True)
+    if reload:
+        cache = ResultCache(disk=DiskCache(codec=MeshCodec(), directory=tmp_path))
+    revived = cache.get("measure")
+    assert revived is not None
+    found = revived.objects[0].features["bore"]
+    assert found.params == {"diameter": 8.02, "depth": 4.0}
+    assert found.measure_sources == {"diameter": "fit", "depth": "parameter"}
+    assert measure_status(found, "diameter").state == "estimated"
+    assert measure_status(found, "depth").source == "parameter"
+    assert feature.measure_sources == {"diameter": "fit", "depth": "parameter"}
+
+
 def test_old_results_without_fit_roles_are_recomputed(tmp_path: Path) -> None:
     """Ein alter Deckel-Cache darf die neue Innen-/Außenauskunft nicht verschlucken."""
     from app.core.types import Feature
@@ -291,7 +386,7 @@ def test_old_results_without_fit_roles_are_recomputed(tmp_path: Path) -> None:
     assert restored.objects[0].features["rim"].params["fit_role"] == "outer"
 
 
-@pytest.mark.parametrize("previous_version", [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16])
+@pytest.mark.parametrize("previous_version", [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17])
 def test_old_recognition_results_are_not_read_from_disk(
     tmp_path: Path, previous_version: int
 ) -> None:
@@ -307,7 +402,7 @@ def test_old_recognition_results_are_not_read_from_disk(
 
 
 @pytest.mark.parametrize("reopen", [False, True], ids=["memory", "disk"])
-@pytest.mark.parametrize("previous_version", [5, 6, 7, 11, 12, 13, 14, 15, 16])
+@pytest.mark.parametrize("previous_version", [5, 6, 7, 11, 12, 13, 14, 15, 16, 17])
 def test_recognition_revision_recomputes_a_warm_project_cache(
     tmp_path: Path,
     profile: Profile,

@@ -34,6 +34,52 @@ MESHES = Path(__file__).parent / "data" / "meshes"
 load_operations()
 
 
+def test_transform_carries_measure_sources_only_with_proved_form_values() -> None:
+    """Ein Kreisfit bleibt geschätzt; eine Ellipse bekommt keine alte Kreis-Zusage."""
+    from app.core.perceive.matching import transformed_features
+    from app.core.types import measure_status
+
+    feature = Feature(
+        "bore",
+        "hole",
+        "generated",
+        {"diameter": 8.0, "depth": 4.0, "centre": (1.0, 2.0, 3.0), "axis": (0.0, 0.0, 1.0)},
+        measure_sources={"diameter": "fit", "depth": "facets", "centre": "fit", "axis": "fit"},
+    )
+    scaled = transformed_features({"bore": feature}, np.diag([2.0, 2.0, 3.0, 1.0]))
+    assert scaled.exact == {"bore"}
+    assert scaled.candidates["bore"].params["diameter"] == pytest.approx(16.0)
+    assert measure_status(scaled.candidates["bore"], "diameter").state == "estimated"
+    ellipse = transformed_features({"bore": feature}, np.diag([2.0, 3.0, 3.0, 1.0]))
+    assert not ellipse.exact
+    assert measure_status(ellipse.candidates["bore"], "diameter").state == "unknown"
+    assert measure_status(feature, "diameter").state == "estimated"
+
+
+def test_renamed_fit_keeps_its_measure_source_from_the_new_geometry() -> None:
+    """Ein geerbter Erzeuger macht einen neu gemessenen Wert nicht zum Vorgabemaß."""
+    from app.core.perceive.matching import MatchResult
+    from app.core.types import measure_status
+
+    old = Feature(
+        "made_bore",
+        "hole",
+        "generated",
+        {"diameter": 8.0},
+        created_by=3,
+        measure_sources={"diameter": "parameter"},
+    )
+    found = Feature(
+        "hole_1", "hole", "detected", {"diameter": 8.02}, measure_sources={"diameter": "fit"}
+    )
+    mapped = apply_mapping(
+        {"hole_1": found}, MatchResult(mapping={"made_bore": "hole_1"}), previous={"made_bore": old}
+    )["made_bore"]
+    assert mapped.created_by == 3
+    assert mapped.params["diameter"] == pytest.approx(8.02)
+    assert measure_status(mapped, "diameter").state == "estimated"
+
+
 def body(name: str) -> MeshData:
     return normalise(read_mesh((MESHES / name).read_bytes(), ".stl"), "mm").mesh
 
@@ -1287,7 +1333,8 @@ def test_the_measured_diameter_is_said_out_loud() -> None:
     ist die Auskunft ein Satz und keine Frage; zu fragen, was ohnehin feststeht,
     wäre eine Rückfrage ohne Mehrdeutigkeit.
     """
-    text, choices = bore_advice(MEASURED_BORE)
+    feature = replace(clicked_bore(), measure_sources={"diameter": "native"})
+    text, choices = bore_advice(MEASURED_BORE, feature=feature)
 
     assert "5.19" in text, "das gemessene Maß steht im Satz"
     assert "M5" in text, "und die Größe, die daraus folgt"
@@ -1296,7 +1343,7 @@ def test_the_measured_diameter_is_said_out_loud() -> None:
 
 def test_a_blind_bore_is_not_described_as_a_through_hole() -> None:
     """Ein passender Durchmesser belegt keinen Durchgang und keinen Einsatzzweck."""
-    feature = clicked_bore(9.0)
+    feature = replace(clicked_bore(9.0), measure_sources={"diameter": "native"})
     feature.params["through"] = False
     text, choices = bore_advice(9.0, feature=feature, ask=False)
     assert "Sackbohrung" in text
@@ -1316,7 +1363,8 @@ def test_no_bore_falls_between_the_two_answers() -> None:
     for tenth in range(10, 121):
         diameter = tenth / 10.0
         size = screw_for_bore(diameter)
-        text, choices = bore_advice(diameter)
+        feature = replace(clicked_bore(diameter), measure_sources={"diameter": "native"})
+        text, choices = bore_advice(diameter, feature=feature)
 
         assert format_length(diameter, with_unit=False) in text, (
             f"das Maß {diameter} fehlt in seiner eigenen Auskunft"
@@ -1326,3 +1374,20 @@ def test_no_bore_falls_between_the_two_answers() -> None:
         )
         if size is not None:
             assert size in text, f"{diameter} mm gehört zu {size}, und der Satz sagt es"
+
+
+@pytest.mark.parametrize("source", ["fit", "parameter", None])
+def test_bore_advice_distinguishes_a_measurement_from_a_known_screw(source: str | None) -> None:
+    """Auch ein Wert mitten im Normbereich beweist kein ursprüngliches Schraubenmaß."""
+    feature = replace(
+        clicked_bore(),
+        measure_sources={"diameter": source} if source else {},  # type: ignore[arg-type]
+    )
+    text, choices = bore_advice(MEASURED_BORE, feature=feature)
+    qualifier = {"fit": "geschätzt", "parameter": "Vorgabemaß", None: "Maßherkunft nicht bestimmt"}
+    assert qualifier[source] in text
+    assert "5.19" in text and "nicht sicher bestimmt" in text
+    assert "M5" not in text
+    assert choices and choices[-1] == "Selbst eintragen"
+    passive, choices = bore_advice(MEASURED_BORE, feature=feature, ask=False)
+    assert qualifier[source] in passive and not choices

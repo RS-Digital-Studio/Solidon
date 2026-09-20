@@ -13,9 +13,11 @@ unter diesem Namen von ihr.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 from app.core.geom.boolean import boolean
 from app.core.geom.mesh import MeshData
-from app.core.types import Feature, FeatureId, PartResult, Vec3
+from app.core.types import Feature, FeatureId, MeasureSource, PartResult, Vec3
 
 
 def union(*meshes: MeshData) -> MeshData:
@@ -45,12 +47,13 @@ def bore(
         kind="hole",
         provenance="generated",
         params={
-            "diameter": round(diameter, 4),
+            "diameter": diameter,
             "centre": centre,
             "axis": axis,
-            "depth": round(depth, 4),
+            "depth": depth,
             "through": through,
         },
+        measure_sources=dict.fromkeys(("diameter", "centre", "axis", "depth"), "parameter"),
     )
 
 
@@ -68,11 +71,12 @@ def pin(
         kind="pin",
         provenance="generated",
         params={
-            "diameter": round(diameter, 4),
+            "diameter": diameter,
             "centre": centre,
             "axis": axis,
-            "depth": round(length, 4),
+            "depth": length,
         },
+        measure_sources=dict.fromkeys(("diameter", "centre", "axis", "depth"), "parameter"),
     )
 
 
@@ -81,12 +85,18 @@ def face(
     area: float,
     centre: Vec3,
     normal: Vec3 = (0.0, 0.0, 1.0),
+    *,
+    measure_sources: Mapping[str, MeasureSource] | None = None,
 ) -> tuple[FeatureId, Feature]:
     return identifier, Feature(
         id=identifier,
         kind="face",
         provenance="generated",
-        params={"area": round(area, 4), "centre": centre, "normal": normal},
+        params={"area": area, "centre": centre, "normal": normal},
+        measure_sources={
+            **dict.fromkeys(("area", "centre", "normal"), "parameter"),
+            **(measure_sources or {}),
+        },
     )
 
 
@@ -128,16 +138,19 @@ def thread(
         kind="thread",
         provenance="generated",
         params={
-            "diameter": round(diameter, 4),
-            "pitch": round(pitch, 4),
+            "diameter": diameter,
+            "pitch": pitch,
             # thread_body lässt Winkel und Höhe gemeinsam wachsen; auch
             # Innenwerkzeuge, Schraube und Mutter behalten diesen rechten Gang.
             "handedness": "right",
             "centre": centre,
             "axis": axis,
             "internal": internal,
-            "length": round(length, 4),
+            "length": length,
         },
+        measure_sources=dict.fromkeys(
+            ("diameter", "pitch", "centre", "axis", "length"), "parameter"
+        ),
     )
 
 

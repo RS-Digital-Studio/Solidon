@@ -29,7 +29,13 @@ import math
 from dataclasses import replace
 from typing import Any
 
-from app.core.brep.canonical import CylinderSurface, PlaneSurface, Surface, TorusSurface
+from app.core.brep.canonical import (
+    CylinderSurface,
+    PlaneSurface,
+    SphereSurface,
+    Surface,
+    TorusSurface,
+)
 from app.core.brep.canonical import describe as describe_surface
 from app.core.brep.kernel import Solid, boolean_builder
 from app.core.brep.properties import properties
@@ -141,6 +147,9 @@ def features_of(solid: Solid, *, cancelled: CancelToken | None = None) -> dict[F
             kind=kind,
             provenance="detected",
             params=params,
+            measure_sources={
+                name: "native" for name, value in params.items() if not isinstance(value, bool)
+            },
             # Eine Topologiefläche besteht im Viewport aus vielen Dreiecken.
             # Der nackte ``index`` gehört zur B-Rep-Flächenliste und wäre als
             # Dreiecksindex eine andere Zahl mit zufällig gültigem Bereich.
@@ -195,6 +204,7 @@ def features_of(solid: Solid, *, cancelled: CancelToken | None = None) -> dict[F
         native = solid.faces_of_triangles(feature.face_indices)
         complete = {triangle for index in native for triangle in solid.triangles_of_face(index)}
         params = dict(feature.params)
+        measure_sources = dict(feature.measure_sources)
         if complete == curved_patch:
             measured = [
                 properties(solid.faces()[index], "surface", cancelled=cancelled) for index in native
@@ -206,7 +216,8 @@ def features_of(solid: Solid, *, cancelled: CancelToken | None = None) -> dict[F
                     sum(item.mass * item.centre[coordinate] for item in measured) / area
                     for coordinate in range(3)
                 )
-        found[feature.id] = replace(feature, params=params)
+                measure_sources.update(area="native", centre="native")
+        found[feature.id] = replace(feature, params=params, measure_sources=measure_sources)
 
     found = voids_instead_of_phantom_bores(found, _void_features(solid, cancelled=cancelled))
 
@@ -445,6 +456,7 @@ def _void_features(solid: Solid, *, cancelled: CancelToken | None = None) -> lis
                 kind="void",
                 provenance="detected",
                 params={"volume": volume, "centre": centre, "size": size},
+                measure_sources=dict.fromkeys(("volume", "centre", "size"), "native"),
                 face_indices=triangles,
             )
         )
@@ -780,6 +792,9 @@ def _one_slot(
             "depth": depth,
             "through": through,
         },
+        measure_sources=dict.fromkeys(
+            ("diameter", "length", "travel", "axis", "direction", "centre", "depth"), "native"
+        ),
         face_indices=tuple(indices),
     )
     return found
@@ -938,10 +953,10 @@ def _describe(
             **({"partial": True} if turn < FULL_TURN * math.tau else {}),
         }
 
-    if kind == GeomAbs_Sphere:
-        ball = adaptor.Sphere()
+    if isinstance(surface, SphereSurface):
+        ball = surface.sphere
         radius = float(ball.Radius())
-        hollow = not _point_in_material(inside, ball.Location())
+        hollow = surface.inward
         if _rounded_neighbours(neighbours, face, cancelled=cancelled) >= CORNER_NEIGHBOURS:
             # **Als Verrundung, nicht als Kugel.** Was hier steht, ist die
             # Ecke, an der drei verrundete Kanten zusammentreffen. Sie ist
@@ -950,15 +965,15 @@ def _describe(
             # gesagt. Der Kunde sieht eine verrundete Ecke und will ihren
             # Radius. Keine Achse — eine Ecke hat keine.
             return "fillet", {
-                "radius": round(radius, 4),
-                "diameter": round(radius * 2.0, 4),
+                "radius": radius,
+                "diameter": radius * 2.0,
                 "centre": middle,
                 "length": 0.0,
                 "recess": hollow,
             }
         return "sphere", {
-            "diameter": round(radius * 2.0, 4),
-            "centre": middle,
+            "diameter": radius * 2.0,
+            "centre": tuple(float(value) for value in ball.Location().Coord()),
             "recess": hollow,
         }
 

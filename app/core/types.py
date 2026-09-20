@@ -273,6 +273,22 @@ def kind_of(mesh: Mesh) -> ObjectKind:
 # --- Merkmale und Objekte ------------------------------------------------------
 
 
+MeasureSource = Literal["native", "facets", "fit", "parameter"]
+"""Die tatsächliche Quelle eines Maßwerts, unabhängig von der Merkmalherkunft."""
+
+MeasureState = Literal["exact", "estimated", "unknown"]
+
+
+@dataclass(frozen=True, slots=True)
+class MeasureStatus:
+    """Maßauskunft ohne eigene Zahl; ein Vorgabemaß bleibt als solches erkennbar."""
+
+    state: MeasureState
+    source: MeasureSource | None = None
+    available: bool = False
+    """Ein gültiger Zahlenwert kann vorhanden sein, obwohl seine Quelle unbekannt ist."""
+
+
 @dataclass(frozen=True, slots=True)
 class Feature:
     """Ein erkanntes Loch, eine Fläche, eine Kante — das gemeinsame Vokabular
@@ -324,6 +340,77 @@ class Feature:
     erkanntes Merkmal behält ``None``, und der Eintrag „diesen Schritt ändern"
     entfällt dort ersatzlos: Es hat keinen Erzeuger, und ein Menüeintrag, der
     ins Leere führt, ist schlechter als keiner (§21.2)."""
+
+    measure_sources: Mapping[str, MeasureSource] = field(default_factory=dict)
+    """Quelle je tatsächlich veröffentlichtem Maß in ``params``.
+
+    ``native`` liest die ursprüngliche Modellfläche, ``facets`` die wirklichen
+    Dreiecke, ``fit`` eine daran eingepasste Form und ``parameter`` einen
+    belegten Vorgabewert. Der Wert entsteht ausschließlich in ``params``.
+    Neue Messung und Transformation führen die Quelle mit; ein gleicher
+    Name, Erzeuger oder Herkunftsvermerk beweist sie nicht. Fehlend heißt
+    unbekannt, auch bei einem exakten Körper oder einem eigenen Baustein.
+    """
+
+
+def measure_status(feature: Feature, name: str) -> MeasureStatus:
+    """Liest die belegte Maßquelle ohne Geometrie, Nachmessung oder Nennwertraten.
+
+    ``exact`` gilt für die bezeichnete Quelle: Ein Facettenmaß beschreibt das
+    vorhandene Netz, ein Vorgabemaß den gespeicherten Wert, keine Druck- oder
+    Passungszusage. Deshalb bleibt die Quelle im Ergebnis erhalten.
+    """
+    value = feature.params.get(name)
+    vector = name in {
+        "centre",
+        "position",
+        "arc_centre",
+        "mouth_centre",
+        "axis",
+        "normal",
+        "direction",
+        "opening_normal",
+        "profile_clamp_y",
+        "size",
+    }
+    if isinstance(value, (tuple, list)) != vector:
+        return MeasureStatus("unknown")
+    values = value if isinstance(value, (tuple, list)) else (value,)
+    if not values or any(
+        isinstance(item, bool) or not isinstance(item, (int, float)) for item in values
+    ):
+        return MeasureStatus("unknown")
+    try:
+        if not all(math.isfinite(item) for item in values):
+            return MeasureStatus("unknown")
+    except OverflowError:
+        return MeasureStatus("unknown")
+    if name in {"diameter", "tube_diameter", "radius", "area", "volume", "pitch"} and (
+        len(values) != 1 or values[0] <= 0.0
+    ):
+        return MeasureStatus("unknown")
+    if vector and len(values) != 3:
+        return MeasureStatus("unknown")
+    if name in {"axis", "normal", "direction", "opening_normal", "profile_clamp_y"} and not any(
+        abs(item) > 0.0 for item in values
+    ):
+        return MeasureStatus("unknown")
+    if name == "size" and any(item < 0.0 for item in values):
+        return MeasureStatus("unknown")
+    if name in {
+        "depth",
+        "length",
+        "travel",
+        "fit_error",
+        "residual",
+        "radial_min",
+        "radial_max",
+    } and (values[0] < 0.0):
+        return MeasureStatus("unknown")
+    source = feature.measure_sources.get(name)
+    if source not in ("native", "facets", "fit", "parameter"):
+        return MeasureStatus("unknown", available=True)
+    return MeasureStatus("estimated" if source == "fit" else "exact", source, available=True)
 
 
 def is_a_cavity(feature: Feature) -> bool:

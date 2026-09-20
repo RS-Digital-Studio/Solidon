@@ -207,6 +207,13 @@ def _features(mesh: MeshData, front: float, back: float) -> dict[str, Feature]:
                 "axis": (0.0, 0.0, 1.0),
                 "direction": (1.0, 0.0, 0.0),
             },
+            measure_sources={
+                "area": "facets",
+                "centre": "facets",
+                "normal": "parameter",
+                "axis": "parameter",
+                "direction": "parameter",
+            },
         )
     return found
 

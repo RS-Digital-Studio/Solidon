@@ -6616,7 +6616,9 @@ def test_preview_labels_and_contours_follow_only_the_surviving_features(
     enlarged = body.mesh.raw.copy()
     enlarged.apply_scale((2.0, 1.0, 1.0))
     feature = replace(
-        body.features["hole_2"], params={**body.features["hole_2"].params, "diameter": 16.0}
+        body.features["hole_2"],
+        params={**body.features["hole_2"].params, "diameter": 16.0},
+        measure_sources={"diameter": "fit"},
     )
     after = Scene(
         objects={"obj_1": replace(body, mesh=MeshData(enlarged), features={"hole_2": feature})}
@@ -6624,10 +6626,14 @@ def test_preview_labels_and_contours_follow_only_the_surviving_features(
     viewport.show_difference(compare_scenes(before.scene, after))
     assert len(viewport._feature_label_data) == 1
     assert "16" in viewport._feature_label_data[0][1]
+    assert "geschätzt" in viewport._feature_label_data[0][1]
+    assert "geschätzt" in viewport.toolTip()
+    assert viewport.accessibleDescription() == viewport.toolTip()
     contour = renderer.item_of("feature-outline:obj_1")
     assert np.ptp(contour.points[:, 0]) == pytest.approx(80.0)
     viewport.hold_before(True)
     assert len(viewport._feature_label_data) == 2
+    assert "geschätzt" not in viewport.toolTip()
     contour = renderer.item_of("feature-outline:obj_1")
     assert np.ptp(contour.points[:, 0]) == pytest.approx(40.0)
 

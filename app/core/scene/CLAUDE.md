@@ -2,6 +2,14 @@
 
 Was gerade offen ist und wie daraus Geometrie wird (§12–§16).
 
+Maßquellen reisen mit `Feature.params` durch Auswertung, Historienübernahme
+und beide Cacheebenen. Der Plattencodec speichert `measure_sources` ausdrücklich;
+alte Daten ohne Quelle bleiben unbekannt. Ein neuer Fit behält seine Quelle,
+auch wenn er einen erzeugten Namen erbt. Projektdateien speichern weiterhin
+Operationen und Werte statt abgeleiteter Merkmalsresultate. `bore_advice`
+unterscheidet belegte native Maße, Schätzungen und Vorgabemaße; ein passender
+Zahlenbereich allein belegt kein ursprüngliches Schraubenmaß.
+
 Regeln: `.claude/rules/operationen.md`, für die Projektdatei zusätzlich
 `.claude/rules/dateiformat.md`.
 
