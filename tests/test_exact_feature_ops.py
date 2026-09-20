@@ -663,3 +663,111 @@ def test_a_standalone_countersink_moves_and_copies_exactly(profile: Profile) -> 
     assert set(cones) == {sink.id, "cone_2"}, sorted(cones)
     assert cones["cone_2"].params["centre"] == pytest.approx((-15.0, 0.0, 10.0), abs=1e-9)
     assert not any(finding.converts_exact_body for finding in copied.findings)
+
+
+# --- Kegel kippen: Kegelstumpf und allein stehende Senkung ---------------------------
+
+
+def _cone_past(radius: float, half_angle: float, tilt: float) -> float:
+    """Die Weiterführung über das weite Ende hinaus — die Formel der Operation nachgerechnet.
+
+    Gekippt um ``tilt`` steigt der tiefe Rand eines Kegels je Millimeter
+    Weiterführung nur um ``cos(tilt) − tan(half) · sin(tilt)``; der Rand des
+    weiten Endes liegt ``radius · sin(tilt)`` zu hoch. Der Quotient ist der Weg.
+    """
+    climb = math.cos(math.radians(tilt)) - math.tan(math.radians(half_angle)) * math.sin(
+        math.radians(tilt)
+    )
+    return radius * math.sin(math.radians(tilt)) / climb
+
+
+def _cone_solid(
+    base: tuple[float, float, float],
+    direction: tuple[float, float, float],
+    base_radius: float,
+    top_radius: float,
+    height: float,
+) -> Any:
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakeCone
+    from OCP.gp import gp_Ax2, gp_Dir, gp_Pnt
+
+    from app.core.brep.kernel import Solid
+
+    frame = gp_Ax2(gp_Pnt(*base), gp_Dir(*direction))
+    return Solid(BRepPrimAPI_MakeCone(frame, base_radius, top_radius, height).Shape())
+
+
+def test_rotating_a_taper_keeps_it_rooted_in_the_plate(profile: Profile) -> None:
+    """30° um X: der Kegelstumpf bleibt ein Stück mit der Platte, nichts schwebt, nichts fehlt.
+
+    Der Sollwert ist unabhängig gebaut: derselbe Kegel aus den Maßen des
+    Prüfstücks (r 5 → 2 über 6 mm), um seine Grundmitte gekippt und unter sie so
+    weit weitergeführt, wie die Formel verlangt — und davon zählt, was über der
+    Platte steht. Unter der Oberseite fehlt nichts, und die Erkennung nennt den
+    Kegel an seinem weitesten Rand, dem Ende der Weiterführung.
+    """
+    load_operations()
+    edit = _kernel()
+    source = _material_plate("cone")
+    taper = _the_one(source, "cone")
+    assert taper.params["centre"] == pytest.approx((-20.0, 0.0, 10.0), abs=1e-9)
+
+    result = run("rotate_feature", source, profile, at_feature=taper.id, axis="x", angle=30.0)
+
+    output = _exact_and_proven(result, source, taper.id)
+    solid: Any = output.mesh
+    assert solid.solid_count == 1, "der gekippte Kegelstumpf bleibt ein Stück mit der Platte"
+    slope = 0.5
+    reach = _cone_past(5.0, math.degrees(math.atan(slope)), 30.0)
+    sine, cosine = math.sin(math.radians(30.0)), math.cos(math.radians(30.0))
+    direction = (0.0, -sine, cosine)
+    base = (-20.0, sine * reach, 10.0 - cosine * reach)
+    tool = _cone_solid(base, direction, 5.0 + reach * slope, 2.0, reach + 6.0)
+    above = edit.boolean(
+        "intersection", [tool, edit.moved(edit.box(200.0, 200.0, 100.0), (0.0, 0.0, 10.0))]
+    )
+    assert solid.volume == pytest.approx(24000.0 + above.volume, rel=1e-9)
+    assert above.volume > TAPER_VOLUME, "der Keil unter der gekippten Grundfläche ist gefüllt"
+    below = edit.boolean("intersection", [solid, edit.box(200.0, 200.0, 10.0)])
+    assert below.volume == pytest.approx(24000.0, rel=1e-9), "unter der Oberseite fehlt nichts"
+    turned = _the_one(output, "cone")
+    axis = turned.params["axis"]
+    assert abs(abs(axis[1]) - sine) < 1e-9 and abs(abs(axis[2]) - cosine) < 1e-9
+    assert turned.params["recess"] is False
+    assert turned.params["diameter"] == pytest.approx(2.0 * (5.0 + reach * slope), abs=1e-9)
+    assert turned.params["centre"] == pytest.approx(base, abs=1e-9)
+
+
+def test_rotating_a_standalone_countersink_stays_open(profile: Profile) -> None:
+    """30° um X: die Senkung ohne Bohrung darunter kippt, bleibt zur Oberseite offen, exakt.
+
+    Um ihre Mündungsmitte gekippt behielte die Senkung eine Decke; das
+    Werkzeug führt den Kegel deshalb ins Freie weiter, und was davon in der
+    Platte liegt, ist genau das, was fehlt.
+    """
+    load_operations()
+    edit = _kernel()
+    source = _countersunk_plate(profile)
+    hole, _cone = _chain_of(source)
+    alone = run("remove_feature", source, profile, at_feature=hole.id, sections="single").outputs[0]
+    sink = _the_one(alone, "cone")
+
+    result = run("rotate_feature", alone, profile, at_feature=sink.id, axis="x", angle=30.0)
+
+    output = _exact_and_proven(result, alone, sink.id)
+    solid: Any = output.mesh
+    assert solid.solid_count == 1
+    reach = _cone_past(6.0, 45.0, 30.0)
+    sine, cosine = math.sin(math.radians(30.0)), math.cos(math.radians(30.0))
+    direction = (0.0, sine, -cosine)
+    base = (0.0, -sine * reach, 10.0 + cosine * reach)
+    tool = _cone_solid(base, direction, 6.0 + reach, 3.0, reach + 3.0)
+    inside = edit.boolean("intersection", [tool, edit.box(200.0, 200.0, 10.0)])
+    assert solid.volume == pytest.approx(24000.0 - inside.volume, rel=1e-9)
+    assert inside.volume > SINK_VOLUME, "die gekippte Senkung nimmt mehr mit als die gerade"
+    assert solid.face_count == 8, "sechs Flächen, der Kegelmantel und sein ebener Boden"
+    turned = _the_one(output, "cone")
+    assert turned.params["recess"] is True
+    assert turned.params["diameter"] == pytest.approx(2.0 * (6.0 + reach), abs=1e-9)
+    assert turned.params["centre"] == pytest.approx(base, abs=1e-9)
+    assert _round_trip_volume(solid) == pytest.approx(solid.volume, rel=1e-7)

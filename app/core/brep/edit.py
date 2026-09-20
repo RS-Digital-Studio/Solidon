@@ -1041,6 +1041,91 @@ def _oriented_cylinder(origin: Vec3, direction: Vec3, radius: float, height: flo
     return Solid(BRepPrimAPI_MakeCylinder(frame, radius, height).Shape())
 
 
+@dataclass(frozen=True, slots=True)
+class ConeExtent:
+    """Die Enden eines nativen Kegelstumpfs: weit, schmal, und die Achse dazwischen."""
+
+    wide_centre: Vec3
+    wide_radius: float
+    narrow_radius: float
+    #: Einheitsvektor vom weiten zum schmalen Ende.
+    direction: Vec3
+    height: float
+    half_angle: float
+
+
+def cone_extent(solid: Solid, face_indices: Sequence[int]) -> ConeExtent | None:
+    """Die Enden des Kegels, den diese nativen Flächen tragen — oder ``None``.
+
+    Die Erkennung nennt am Kegel Durchmesser, Winkel, Achse und die Mitte
+    des weiten Endes, nicht aber seine Höhe und den schmalen Radius. Beides
+    steht im Parameterbereich der Fläche: Ein Punkt der Kegelfläche liegt bei
+    ``Location + v·cos(w)·Achse`` mit dem Radius ``RefRadius + v·sin(w)`` (``w``
+    der halbe Öffnungswinkel),
+    und die Grenzen von ``v`` sind die beiden Enden. Mehrere Flächen desselben
+    Kegels (ein Mantel in zwei Hälften) geben dieselben Enden.
+    """
+    require()
+    from OCP.BRepAdaptor import BRepAdaptor_Surface
+    from OCP.GeomAbs import GeomAbs_Cone
+
+    faces = solid.faces()
+    ends: list[tuple[tuple[float, float, float], float]] = []
+    half_angle = 0.0
+    for index in face_indices:
+        if index < 0 or index >= len(faces):
+            return None
+        adaptor = BRepAdaptor_Surface(faces[index])
+        if adaptor.GetType() != GeomAbs_Cone:
+            return None
+        cone = adaptor.Cone()
+        angle = float(cone.SemiAngle())
+        radius = float(cone.RefRadius())
+        axis = cone.Axis().Direction()
+        location = cone.Location()
+        half_angle = math.degrees(abs(angle))
+        for v in (float(adaptor.FirstVParameter()), float(adaptor.LastVParameter())):
+            along = v * math.cos(angle)
+            ends.append(
+                (
+                    (
+                        location.X() + along * axis.X(),
+                        location.Y() + along * axis.Y(),
+                        location.Z() + along * axis.Z(),
+                    ),
+                    abs(radius + v * math.sin(angle)),
+                )
+            )
+    if not ends:
+        return None
+    ends.sort(key=lambda end: end[1])
+    (narrow_centre, narrow_radius), (wide_centre, wide_radius) = ends[0], ends[-1]
+    direction = tuple(narrow_centre[i] - wide_centre[i] for i in range(3))
+    height = math.hypot(*direction)
+    if height <= EPS_GEOM or wide_radius <= EPS_GEOM:
+        return None
+    return ConeExtent(
+        wide_centre=wide_centre,
+        wide_radius=wide_radius,
+        narrow_radius=narrow_radius,
+        direction=(direction[0] / height, direction[1] / height, direction[2] / height),
+        height=height,
+        half_angle=half_angle,
+    )
+
+
+def _oriented_cone(
+    base: Vec3, direction: Vec3, base_radius: float, top_radius: float, height: float
+) -> Solid:
+    """Ein exakter Kegelstumpf an freier Achse — von ``base`` aus entlang ``direction``."""
+    require()
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakeCone
+    from OCP.gp import gp_Ax2, gp_Dir, gp_Pnt
+
+    frame = gp_Ax2(gp_Pnt(*base), gp_Dir(*direction))
+    return Solid(BRepPrimAPI_MakeCone(frame, base_radius, top_radius, height).Shape())
+
+
 def solid_from_faces(
     solid: Solid,
     face_indices: Sequence[int],

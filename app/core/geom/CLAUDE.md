@@ -603,13 +603,19 @@ Geschwister): Der Körper eines Zapfens, einer Kuppe oder eines Kegelstumpfs
 geschlossen, das exakte Gegenstück zu `_body_from_faces` —; an der alten
 Stelle steht das Gegenteil dessen, was das Merkmal ist, an der neuen das
 Merkmal selbst, und `is_a_cavity` sagt, welches von beiden Vereinigen und
-welches Abtragen ist. Gekippt wird davon nur der Zapfen
-(`_exact_rotate_pin`): Seine Kennzahlen beschreiben ihn ganz, und der
-gekippte Zylinder reicht unter die Mitte so weit, wie `_reach_past_a_tilted_face`
-verlangt, statt neben der Grundfläche zu schweben; die Erkennung nennt danach
-die Mitte des sichtbaren Mantels, und genau dort wird er wiedergesucht. Kegel
-kippen und Einschlüsse gehen am exakten Körper noch den Netzweg mit
-`evaluate.exact_became_mesh`; sie folgen.
+welches Abtragen ist. Gekippt werden davon Zapfen und Kegel, die Kugel hat
+keine Lage. Der Zapfen (`_exact_rotate_pin`) kommt aus seinen Kennzahlen, und
+der gekippte Zylinder reicht unter die Mitte so weit, wie
+`_reach_past_a_tilted_face` verlangt, statt neben der Grundfläche zu
+schweben; die Erkennung nennt danach die Mitte des sichtbaren Mantels, und
+genau dort wird er wiedergesucht. Der Kegel (`_exact_rotate_cone`) dreht um
+die Mitte seines weiten Endes, und dort liegt die Grundfläche: Er wird über
+sie hinaus mit derselben Flanke so weit weitergeführt, wie
+`_cone_past_a_tilted_face` verlangt — ins Material beim Stumpf, ins Freie bei
+der Senkung, sonst bliebe ihr eine Decke; Höhe und schmalen Radius nennt
+`edit.cone_extent`, und die Erkennung beschreibt den gekippten Kegel am Ende
+dieser Weiterführung. Einschlüsse gehen am exakten Körper noch den Netzweg
+mit `evaluate.exact_became_mesh`; sie folgen.
 
 **`slot_hole` und `resize_hole` nehmen dabei eine Stelle entgegen** (`x/y/z`,
 **leer** heißt „lass es, wo es ist" — `_named_place` beantwortet das für beide,

@@ -3422,6 +3422,8 @@ def rotate_feature(ctx: OpContext) -> OpResult:
         return _exact_rotate_cavity(ctx, source, feature, spun, centre, turned_axis)
     if source.kind == "brep" and feature.kind == "pin":
         return _exact_rotate_pin(ctx, source, feature, centre, turned_axis)
+    if source.kind == "brep" and feature.kind == "cone":
+        return _exact_rotate_cone(ctx, source, feature, centre, turned_axis, cavity=cavity)
     ctx.progress(0.1, str(_("Das Merkmal wird an seiner alten Stelle geschlossen …")))
     closed = _closed_at(
         body,
@@ -7082,9 +7084,9 @@ def _exact_remove_section(
 #: (``brep.edit.solid_from_faces``) und so ohne Vernetzung versetzt, verdoppelt
 #: und entfernt (P2.4): Zapfen, Kuppe und Kegelstumpf als Material, Senkung und
 #: Pfanne als Hohlraum — was von beiden, sagt die Erkennung in ``recess``.
-#: Gekippt wird davon nur der Zapfen — seine Kennzahlen beschreiben ihn ganz,
-#: und der gekippte Zylinder reicht in die Grundfläche hinein, statt neben ihr
-#: zu schweben.
+#: Gekippt werden Zapfen und Kegel (``_exact_rotate_pin``, ``_exact_rotate_cone``):
+#: Der Körper reicht dabei in die Grundfläche hinein — die Senkung ins Freie —,
+#: statt neben ihr zu schweben. Die Kugel hat keine Lage.
 EXACT_FACE_KINDS: Final = ("pin", "cone", "sphere")
 
 
@@ -7316,6 +7318,82 @@ def _exact_rotate_pin(
             "axis": turned_axis,
             "centre": (float(middle[0]), float(middle[1]), float(middle[2])),
             "depth": depth / 2.0 + reach,
+        },
+        provenance="generated",
+    )
+    return _exact_cavity_result(
+        ctx, source, placed, op="rotate_feature", expected=expected, findings=[]
+    )
+
+
+def _exact_rotate_cone(
+    ctx: OpContext,
+    source: SceneObject,
+    feature: Feature,
+    centre: Vec3,
+    turned_axis: Vec3,
+    *,
+    cavity: bool,
+) -> OpResult:
+    """Einen Kegelstumpf oder eine Senkung am exakten Körper kippen (P2.4).
+
+    Gedreht wird um die Mitte des weiten Endes, und dort liegt die
+    Grundfläche: Um sie gekippt höbe der Stumpf auf einer Seite von der Platte
+    ab, und die Senkung behielte eine Decke. Deshalb wird der Kegel über sein
+    weites Ende hinaus so weit weitergeführt, wie ``_cone_past_a_tilted_face``
+    verlangt — mit derselben Flanke, ins Material beim Stumpf, ins Freie bei
+    der Senkung. Höhe und schmalen Radius nennt die native Fläche
+    (``edit.cone_extent``); die Erkennung beschreibt den gekippten Kegel
+    danach an seinem weitesten Rand, und das ist das Ende dieser
+    Weiterführung — dort wird er wiedergesucht.
+    """
+    from app.core.brep import edit
+    from app.core.brep.edit import _oriented_cone
+
+    solid = _exact_body(source)
+    body = _exact_body_from_faces(source, feature)
+    extent = edit.cone_extent(solid, solid.faces_of_triangles(feature.face_indices))
+    if extent is None:
+        raise ValidationError(
+            field="at_feature",
+            detail=NO_BODY_FROM_FACES,
+            values={"feature": feature.id, "kind": feature.kind},
+            constraint="not_movable",
+            suggestions=(CHANGE_SELECTION, CANCEL),
+        )
+    old_axis = np.asarray(_bore_vector(feature, "axis"), dtype=float)
+    new_axis = np.asarray(turned_axis, dtype=float)
+    tilt = math.degrees(math.acos(min(1.0, abs(float(old_axis @ new_axis)))))
+    reach = _cone_past_a_tilted_face(
+        0.0, extent.wide_radius, extent.half_angle, tilt, at_most=solid.bounds.diagonal
+    )
+    matrix = np.asarray(transform.rotation_between(old_axis, new_axis), dtype=float)[:3, :3]
+    turned = matrix @ np.asarray(extent.direction, dtype=float)
+    base = np.asarray(centre, dtype=float) - turned * reach
+    base_radius = extent.wide_radius + reach * math.tan(math.radians(extent.half_angle))
+    ctx.progress(
+        0.1,
+        str(_("Das Merkmal wird an seiner alten Stelle geschlossen …"))
+        if cavity
+        else str(_("Das Merkmal wird an seiner alten Stelle abgetragen …")),
+    )
+    cleared = edit.unified(edit.boolean("union" if cavity else "difference", [solid, body]))
+    ctx.progress(0.6, str(_("Das Merkmal wird gedreht gesetzt …")))
+    tool = _oriented_cone(
+        (float(base[0]), float(base[1]), float(base[2])),
+        (float(turned[0]), float(turned[1]), float(turned[2])),
+        base_radius,
+        extent.narrow_radius,
+        reach + extent.height,
+    )
+    placed = edit.unified(edit.boolean("difference" if cavity else "union", [cleared, tool]))
+    expected = dataclasses.replace(
+        feature,
+        params={
+            **feature.params,
+            "axis": turned_axis,
+            "centre": (float(base[0]), float(base[1]), float(base[2])),
+            "diameter": 2.0 * base_radius,
         },
         provenance="generated",
     )

@@ -480,7 +480,13 @@ Kegel geht als B-Spline-Fläche durch STEP und hält dabei die siebte Stelle.
 Körper geschlossen — aus privaten Kopien der Flächen. Geschlossen ist, was
 keine freie Kante hat; das `Closed()`-Flag setzt Sewing nicht, und an einer
 Kuppe stand es auf falsch bei gültigem Körper (20.09.2026). Ein Ring, der in
-keiner Ebene liegt, gibt keinen Körper: dann wird nichts geraten.
+keiner Ebene liegt, gibt keinen Körper: dann wird nichts geraten. Was die
+Erkennung am Kegel nicht nennt — Höhe und schmalen Radius —, liest
+`cone_extent` aus dem Parameterbereich der nativen Fläche (ein Punkt liegt
+bei `Location + v·cos(w)·Achse` mit dem Radius `RefRadius + v·sin(w)`, `w` der
+halbe Öffnungswinkel), und
+`_oriented_cone` baut daraus den exakten Kegelstumpf an freier Achse — das
+Werkzeug, mit dem `geom/prepare_ops` einen Kegel kippt.
 
 ## Eine Rundung wegnehmen heißt, ihre Fläche zu streichen
 
