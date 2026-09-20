@@ -263,15 +263,173 @@ def test_commands_defer_windows_and_never_run_performance(
 
     lines = commands(selection_tree.values(), release=release)
 
-    assert len(lines) == (3 if release else 1)
-    assert lines[0][-2:] == ["tests/test_mixed.py", "tests/test_plain.py"]
+    assert len(lines) == (4 if release else 1)
+    assert [argument for argument in lines[0] if argument.startswith("tests/")] == [
+        "tests/test_plain.py"
+    ]
     if release:
         assert [line[-1] for line in lines[1:]] == [
             "tests/test_marked.py",
+            "tests/test_mixed.py",
             "tests/test_window.py",
         ]
-    assert all(line[4:6] == ["-m", "not performance"] for line in lines)
     assert all("tests/test_performance.py" not in line for line in lines)
+
+
+@pytest.mark.parametrize("source", ["environment", "configuration"])
+@pytest.mark.parametrize(
+    "filters",
+    [
+        "-k test_regular",
+        "-k no_such_test",
+        '-m "not windowed"',
+        "-m performance",
+        '-k test_regular -m "not performance and not windowed"',
+        "--deselect=tests/test_window.py",
+    ],
+)
+def test_file_groups_ignore_case_filters(
+    selection_tree: dict[str, Path],
+    source: str,
+    filters: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Eine Abwahl ändert weder Fensterbedarf noch die vorhandenen Kerndateien."""
+    import os
+
+    from tools.list_windowed_tests import collect_test_groups
+
+    root = selection_tree["plain"].parent.parent
+    if source == "environment":
+        monkeypatch.setenv("PYTEST_ADDOPTS", filters)
+    else:
+        configuration = root / "pytest.ini"
+        configuration.write_text(
+            configuration.read_text(encoding="utf-8").replace(
+                "addopts = --import-mode=importlib", f"addopts = --import-mode=importlib {filters}"
+            ),
+            encoding="utf-8",
+        )
+    before = os.environ.get("PYTEST_ADDOPTS")
+
+    windowed, plain = collect_test_groups(tuple(selection_tree.values()), confcutdir=root)
+
+    assert set(windowed) == {selection_tree[name] for name in ("window", "marked", "mixed")}
+    assert plain == (selection_tree["plain"],)
+    assert os.environ.get("PYTEST_ADDOPTS") == before
+
+
+@pytest.mark.parametrize("filters", ["-k no_such_test", "--deselect=tests/test_plain.py"])
+def test_file_classification_respects_the_explicit_file_selection(
+    selection_tree: dict[str, Path], filters: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die vollständige Prüfung einer Datei nimmt keine benachbarte Datei hinzu."""
+    from tools.list_windowed_tests import collect_test_groups
+
+    plain = selection_tree["plain"]
+    monkeypatch.setenv("PYTEST_ADDOPTS", filters)
+
+    assert collect_test_groups((plain,), confcutdir=plain.parent.parent) == ((), (plain,))
+
+
+@pytest.mark.parametrize("source", ["environment", "configuration", "command"])
+def test_the_actual_core_process_keeps_case_filters(
+    selection_tree: dict[str, Path],
+    source: str,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Der echte Kindprozess führt genau den beauftragten Kernfall aus."""
+    import os
+
+    from tools import affected_tests
+
+    plain = selection_tree["plain"]
+    root = plain.parent.parent
+    plain.write_text(
+        "import pytest\n"
+        "@pytest.mark.requested\ndef test_keep_requested():\n    assert True\n"
+        "def test_keep_other():\n    raise AssertionError('marker filter lost')\n"
+        "@pytest.mark.requested\ndef test_drop_requested():\n"
+        "    raise AssertionError('keyword filter lost')\n"
+        "@pytest.mark.performance\n@pytest.mark.requested\ndef test_keep_measure():\n"
+        "    raise AssertionError('performance was run')\n",
+        encoding="utf-8",
+    )
+    configuration = root / "pytest.ini"
+    configuration.write_text(
+        configuration.read_text(encoding="utf-8") + "    requested: Ausgewählter Fall\n",
+        encoding="utf-8",
+    )
+    filters = ["-k", "keep", "-m", "requested"]
+    if source == "environment":
+        monkeypatch.setenv("PYTEST_ADDOPTS", " ".join(filters))
+    elif source == "configuration":
+        configuration.write_text(
+            configuration.read_text(encoding="utf-8").replace(
+                "addopts = --import-mode=importlib",
+                "addopts = --import-mode=importlib " + " ".join(filters),
+            ),
+            encoding="utf-8",
+        )
+    monkeypatch.setattr(affected_tests, "affected", lambda _: ({plain}, {plain: "selbst geändert"}))
+    # Im echten Lauf liegt tools/ unter cwd; der kleine Korpus liegt getrennt.
+    module_root = str(Path(__file__).resolve().parent.parent)
+    monkeypatch.setenv(
+        "PYTHONPATH", os.pathsep.join((module_root, os.environ.get("PYTHONPATH", "")))
+    )
+
+    result = affected_tests.main([str(plain), "--run", *(filters if source == "command" else [])])
+
+    assert result == 0, capsys.readouterr().out
+    assert "1 passed, 3 deselected" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("source", ["environment", "command"])
+def test_a_filtered_window_file_is_wholly_deferred(
+    selection_tree: dict[str, Path],
+    source: str,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Auch der ausdrücklich gewählte reine Fall einer Fensterdatei läuft erst im Release."""
+    from tools import affected_tests
+
+    window = selection_tree["marked"]
+    filters = ["-k", "test_regular", "-m", "not windowed"]
+    if source == "environment":
+        monkeypatch.setenv("PYTEST_ADDOPTS", '-k test_regular -m "not windowed"')
+    monkeypatch.setattr(
+        affected_tests, "affected", lambda _: ({window}, {window: "selbst geändert"})
+    )
+    monkeypatch.setattr(affected_tests, "run", lambda _: pytest.fail("a window file was started"))
+
+    assert (
+        affected_tests.main([str(window), "--run", *(filters if source == "command" else [])]) == 0
+    )
+    output = capsys.readouterr().out
+    assert "tests/test_marked.py" in output
+    assert "Zurückgestellt" in output
+    assert "kein Testlauf gestartet" in output
+
+
+def test_a_filtered_core_file_is_never_reported_as_deferred(
+    selection_tree: dict[str, Path],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Ein Name ohne Treffer macht eine Kerndatei nicht zur Fenster- oder Leistungsdatei."""
+    from tools import affected_tests
+
+    plain = selection_tree["plain"]
+    monkeypatch.setenv("PYTEST_ADDOPTS", "-k no_such_test")
+    monkeypatch.setattr(affected_tests, "affected", lambda _: ({plain}, {plain: "selbst geändert"}))
+
+    assert affected_tests.main([str(plain), "--split"]) == 0
+    output = capsys.readouterr().out
+    assert "tests/test_plain.py" in output
+    assert "Zurückgestellt" not in output
+    assert "kein Testlauf gestartet" not in output
 
 
 @pytest.mark.parametrize("mode", ["--run", "--split", "--why"])
@@ -324,6 +482,19 @@ def test_a_truly_empty_collection_stays_an_error(tmp_path: Path) -> None:
     empty = _write(tmp_path, "test_empty.py", "# Keine Tests vorhanden.\n")
     with pytest.raises(RuntimeError, match="Exit 5"):
         collect_test_groups((empty,), confcutdir=tmp_path)
+
+
+def test_a_partly_broken_collection_stays_an_error(
+    selection_tree: dict[str, Path], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Schon gesammelte Kernfälle verdecken keinen anschließenden Importfehler."""
+    from tools.list_windowed_tests import collect_test_groups
+
+    plain = selection_tree["plain"]
+    broken = _write(plain.parent, "test_broken.py", "raise RuntimeError('broken collection')\n")
+    monkeypatch.setenv("PYTEST_ADDOPTS", "-k test_plain")
+    with pytest.raises(RuntimeError, match="Exit 2"):
+        collect_test_groups((plain, broken), confcutdir=plain.parent.parent)
 
 
 @pytest.mark.parametrize("release", [False, True])

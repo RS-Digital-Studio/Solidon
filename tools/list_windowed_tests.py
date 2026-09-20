@@ -29,27 +29,26 @@ class WindowedCollector:
 
     def __init__(self) -> None:
         self.files: set[Path] = set()
-        self.plain_files: set[Path] = set()
-        self.performance_count = 0
-        self.deselected_count = 0
+        self.regular_files: set[Path] = set()
+        self.collected_count = 0
 
-    def pytest_deselected(self, items: list[pytest.Item]) -> None:
-        self.deselected_count += len(items)
-        self.performance_count += sum(
-            item.get_closest_marker("performance") is not None for item in items
-        )
+    def pytest_itemcollected(self, item: pytest.Item) -> None:
+        """Erfasst den aufgelösten Fall vor jeder Abwahl durch Fallfilter."""
+        self.collected_count += 1
+        path = Path(str(item.path)).resolve()
+        if (
+            "qt_app" in getattr(item, "fixturenames", ())
+            or item.get_closest_marker("windowed") is not None
+        ):
+            self.files.add(path)
+        if item.get_closest_marker("performance") is None:
+            self.regular_files.add(path)
 
-    def pytest_collection_finish(self, session: pytest.Session) -> None:
-        for item in session.items:
-            if item.get_closest_marker("performance") is not None:
-                continue
-            if (
-                "qt_app" in getattr(item, "fixturenames", ())
-                or item.get_closest_marker("windowed") is not None
-            ):
-                self.files.add(Path(str(item.path)).resolve())
-            else:
-                self.plain_files.add(Path(str(item.path)).resolve())
+
+def pytest_configure(config: pytest.Config) -> None:
+    """Als ausdrücklich geladenes Laufplugin Leistung zusätzlich abwählen."""
+    marker = config.option.markexpr
+    config.option.markexpr = f"({marker}) and not performance" if marker else "not performance"
 
 
 def collect_windowed(paths: Sequence[Path], *, confcutdir: Path | None = None) -> tuple[Path, ...]:
@@ -61,9 +60,12 @@ def collect_windowed(paths: Sequence[Path], *, confcutdir: Path | None = None) -
 def collect_test_groups(
     paths: Sequence[Path], *, confcutdir: Path | None = None
 ) -> tuple[tuple[Path, ...], tuple[Path, ...]]:
-    """Fenster und übrige Dateien mit ausführbaren Tests; Leistung bleibt draußen."""
+    """Ganze Dateien nach Fensterbedarf teilen; reine Leistungsdateien bleiben draußen."""
     collector = WindowedCollector()
-    arguments = ["--collect-only", "-q", "-m", "not performance"]
+    # Nur die Sammlung ist ungefiltert. Die Umgebung bleibt für den echten
+    # Lauf erhalten; dort verknüpft das Plugin den wirksamen Marker mit dem
+    # Leistungsausschluss, statt den Nutzerfilter zu überschreiben.
+    arguments = ["--collect-only", "-q", "-k", "", "-m", ""]
     if confcutdir is not None:
         arguments.extend(("--confcutdir", str(confcutdir)))
     arguments.extend(str(path) for path in paths)
@@ -71,15 +73,14 @@ def collect_test_groups(
     captured_err = io.StringIO()
     with contextlib.redirect_stdout(captured_out), contextlib.redirect_stderr(captured_err):
         outcome = pytest.main(arguments, plugins=[collector])
-    only_performance = (
-        outcome == pytest.ExitCode.NO_TESTS_COLLECTED
-        and collector.performance_count > 0
-        and collector.performance_count == collector.deselected_count
-    )
-    if outcome != pytest.ExitCode.OK and not only_performance:
+    only_filtered = outcome == pytest.ExitCode.NO_TESTS_COLLECTED and collector.collected_count > 0
+    if outcome != pytest.ExitCode.OK and not only_filtered:
         details = (captured_out.getvalue() + captured_err.getvalue()).strip()
         raise RuntimeError(f"Die Tests ließen sich nicht sammeln (Exit {int(outcome)}).\n{details}")
-    return tuple(sorted(collector.files)), tuple(sorted(collector.plain_files - collector.files))
+    return (
+        tuple(sorted(collector.files & collector.regular_files)),
+        tuple(sorted(collector.regular_files - collector.files)),
+    )
 
 
 def main() -> int:

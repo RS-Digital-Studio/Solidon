@@ -104,7 +104,14 @@ Tests, die eine geänderte Textdatei beim Namen nennen; `--why`, `--split`,
 `--split` und `--run` nehmen Fensterdateien erst mit `--release` auf und lassen
 Leistung stets draußen. `list_windowed_tests` liefert aus derselben Sammlung
 die Fenstergruppe und die übrigen Dateien mit nicht-performance Tests;
-ausschließlich abgewählte Leistungstests lösen keinen leeren pytest-Lauf aus) ·
+reine Leistungsdateien lösen keinen leeren pytest-Lauf aus. Die Einteilung
+liest jeden aufgelösten Fall vor der Abwahl: `-k`, `-m`, `--deselect` und
+Filter aus `PYTEST_ADDOPTS` oder der Pytest-Konfiguration ändern nicht die
+Dateigruppe. Schon ein Fensterfall stellt die ganze Datei zurück, auch wenn
+dieser Fall zusätzlich `performance` trägt. Der eigentliche betroffene Lauf
+behält die Filter; `-k` und `-m` lassen sich auch direkt am Werkzeug angeben.
+Das ausdrücklich geladene Laufplugin in `list_windowed_tests` verknüpft den
+wirksamen Markerfilter mit `not performance`, statt ihn zu überschreiben) ·
 `count_new_windows.py` (welche Fenster während eines Befehls aufgehen — Klasse,
 Titel, Prozess; die Sichtprüfung aus RM-100 als Messung, zwanzig Abtastungen je
 Sekunde über `EnumWindows`, Exit 1 bei einem neuen Konsolenfenster) ·

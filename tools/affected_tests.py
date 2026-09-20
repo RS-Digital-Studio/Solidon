@@ -313,14 +313,40 @@ def split_windowed(files: Iterable[Path]) -> tuple[list[Path], list[Path]]:
     return list(windowed), list(plain)
 
 
-def commands(files: Iterable[Path], *, release: bool = False) -> list[list[str]]:
+def commands(
+    files: Iterable[Path],
+    *,
+    release: bool = False,
+    keyword: str | None = None,
+    markexpr: str | None = None,
+) -> list[list[str]]:
     """Die regulären Aufrufe; nur beim Release kommt je Fensterdatei einer dazu."""
     windowed, plain = split_windowed(files)
-    return _commands(windowed, plain, release=release)
+    return _commands(windowed, plain, release=release, keyword=keyword, markexpr=markexpr)
 
 
-def _commands(windowed: list[Path], plain: list[Path], *, release: bool) -> list[list[str]]:
-    base = [str(PYTHON), "-m", "pytest", "-q", "-m", "not performance", "-p", "no:cacheprovider"]
+def _commands(
+    windowed: list[Path],
+    plain: list[Path],
+    *,
+    release: bool,
+    keyword: str | None = None,
+    markexpr: str | None = None,
+) -> list[list[str]]:
+    base = [
+        str(PYTHON),
+        "-m",
+        "pytest",
+        "-q",
+        "-p",
+        "tools.list_windowed_tests",
+        "-p",
+        "no:cacheprovider",
+    ]
+    if keyword is not None:
+        base.extend(("-k", keyword))
+    if markexpr is not None:
+        base.extend(("-m", markexpr))
     lines: list[list[str]] = []
     if plain:
         lines.append([*base, *(str(path.relative_to(ROOT).as_posix()) for path in plain)])
@@ -366,6 +392,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--run", action="store_true", help="die Auswahl gleich fahren")
     parser.add_argument("--split", action="store_true", help="die Aufrufe zeigen, nicht fahren")
     parser.add_argument("--why", action="store_true", help="je Datei den Grund nennen")
+    parser.add_argument("-k", dest="keyword", help="nur passende Testnamen im eigentlichen Lauf")
+    parser.add_argument(
+        "-m", dest="markexpr", help="zusätzlicher Markerfilter im eigentlichen Lauf"
+    )
     parser.add_argument(
         "--release", action="store_true", help="beim Release auch Fensterdateien fahren"
     )
@@ -403,7 +433,13 @@ def main(argv: list[str] | None = None) -> int:
         print("Zurückgestellt: Fensterdateien nur mit --release; Leistung separat beim Release.")
         for path in sorted(deferred):
             print(f"  {path.relative_to(ROOT).as_posix()}")
-    lines = _commands(windowed, plain, release=arguments.release)
+    lines = _commands(
+        windowed,
+        plain,
+        release=arguments.release,
+        keyword=arguments.keyword,
+        markexpr=arguments.markexpr,
+    )
     if not lines:
         print("Keine regulären Tests ausgewählt; kein Testlauf gestartet.")
         return 0
