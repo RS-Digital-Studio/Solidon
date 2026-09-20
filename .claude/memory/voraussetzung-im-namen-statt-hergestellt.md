@@ -70,3 +70,22 @@ Dort fehlt alles, was nicht im Repository steht — `dist/`, `website/dl/`,
 `packaging/build/` —, also genau das, was eine lokale Voraussetzung
 ausmacht. Über vier Testdateien gefahren: 178 grün, 13 übersprungen, alle
 Skips plattformbedingt und in der Linux-CI aktiv. Der Baum wird nur gelesen; committet wird dort nie.
+
+## Die fünfte Art: der Referenzkörper trägt das Merkmal nicht, das die Sonde sucht
+
+Am 20.09.2026 (P2.5, `konzepte/nachweise-cad-p2-5/`) hieß ein Fall
+`m6_kurz` — „kurzes Teilgewinde, 2,5 Umläufe" — und kam aus
+`threaded_rod(6, 1, 2.5)`. Der Prototyp meldete „Kamm ohne Rille", und ich
+suchte den Fehler eine Stunde im Prototyp (Verkettung, Planaritätsfilter).
+Der Körper hatte **11 Flächen und exakt das Kernvolumen**: kein Gang. Die
+Sonde prüfte „importiert, gültig, kein Erzeugermerkmal" — alles Form, nichts
+Brauchbarkeit. Und die falsche Voraussetzung war selbst der Fund: `threaded_rod`
+verliert an neun von 23 Längen den Gang still (Befund B3 im Bericht).
+
+**How to apply, ergänzt:** Bei einem Referenzkörper eine **billige,
+unabhängige Kennzahl** gegen die Konstruktion halten, bevor irgendetwas
+daran gemessen wird — Volumen über dem Kern, Flächenarten, die das Merkmal
+haben muss (ein Sweep hat B-Spline-Flanken). Meldet die Sonde einen
+Prototypfehler, zuerst den Prüfling ansehen: `faces`, `volume`, `types`.
+Dieselbe Wurzel wie [[sollwert-aus-dem-pruefling]] und
+[[testprojekt-trifft-den-fall-nicht]].

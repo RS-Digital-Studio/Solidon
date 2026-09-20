@@ -1,0 +1,318 @@
+{
+ "m6_rechts": {
+  "pitch": 1.0,
+  "lead": 1.0,
+  "starts": 1,
+  "handedness": "right",
+  "internal": false,
+  "diameter": 6.0,
+  "depth": 0.6134,
+  "length": 12.0,
+  "axis": [
+   0.0,
+   0.0,
+   1.0
+  ],
+  "found": true,
+  "faces": 21,
+  "volume": 253.3670853658517,
+  "types": {
+   "cylinder": 13,
+   "bspline": 2,
+   "plane": 6
+  }
+ },
+ "m10_rechts": {
+  "pitch": 1.5,
+  "lead": 1.5,
+  "starts": 1,
+  "handedness": "right",
+  "internal": false,
+  "diameter": 10.0,
+  "depth": 0.9200999999999999,
+  "length": 20.0,
+  "axis": [
+   0.0,
+   0.0,
+   1.0
+  ],
+  "found": true,
+  "faces": 22,
+  "volume": 1217.2729847316511,
+  "types": {
+   "cylinder": 14,
+   "bspline": 2,
+   "plane": 6
+  }
+ },
+ "m6_links": {
+  "pitch": 1.0,
+  "lead": 1.0,
+  "starts": 1,
+  "handedness": "left",
+  "internal": false,
+  "diameter": 6.0,
+  "depth": 0.6134,
+  "length": 12.0,
+  "axis": [
+   0.0,
+   0.0,
+   1.0
+  ],
+  "found": true,
+  "faces": 21,
+  "volume": 253.36708533578616,
+  "types": {
+   "cylinder": 13,
+   "bspline": 2,
+   "plane": 6
+  }
+ },
+ "m8_innen": {
+  "pitch": 1.25,
+  "lead": 1.25,
+  "starts": 1,
+  "handedness": "right",
+  "internal": true,
+  "diameter": 8.2,
+  "depth": 0.7667499999999999,
+  "length": 10.0,
+  "axis": [
+   0.0,
+   0.0,
+   1.0
+  ],
+  "found": true,
+  "faces": 17,
+  "volume": 3593.5965153576403,
+  "types": {
+   "plane": 6,
+   "cylinder": 9,
+   "bspline": 2
+  }
+ },
+ "zweigaengig": {
+  "pitch": 1.0,
+  "lead": 2.0,
+  "starts": 2,
+  "handedness": "right",
+  "internal": false,
+  "diameter": 8.0,
+  "depth": 0.54,
+  "length": 12.0,
+  "axis": [
+   0.0,
+   0.0,
+   1.0
+  ],
+  "found": true,
+  "faces": 31,
+  "volume": 533.2556587469766,
+  "types": {
+   "plane": 10,
+   "cylinder": 15,
+   "bspline": 6
+  }
+ },
+ "m6_gedreht": {
+  "pitch": 1.0,
+  "lead": 1.0,
+  "starts": 1,
+  "handedness": "right",
+  "internal": false,
+  "diameter": 6.0,
+  "depth": 0.6134,
+  "length": 12.0,
+  "axis": [
+   0.42554748389075236,
+   -0.42554748389075236,
+   0.7986355100472928
+  ],
+  "found": true,
+  "faces": 21,
+  "volume": 253.36708536175934,
+  "types": {
+   "cylinder": 13,
+   "bspline": 2,
+   "plane": 6
+  }
+ },
+ "m6_angeschnitten": {
+  "pitch": 1.0,
+  "lead": 1.0,
+  "starts": 1,
+  "handedness": "right",
+  "internal": false,
+  "diameter": 6.0,
+  "depth": 0.6134,
+  "length": 12.0,
+  "axis": [
+   0.0,
+   0.0,
+   1.0
+  ],
+  "found": true,
+  "partial": true,
+  "faces": 57,
+  "volume": 187.11332100404297,
+  "types": {
+   "cylinder": 24,
+   "bspline": 26,
+   "plane": 7
+  }
+ },
+ "m6_kurz": {
+  "pitch": 1.0,
+  "lead": 1.0,
+  "starts": 1,
+  "handedness": "right",
+  "internal": false,
+  "diameter": 6.0,
+  "depth": 0.6134,
+  "length": 2.5,
+  "axis": [
+   0.0,
+   0.0,
+   1.0
+  ],
+  "found": true,
+  "faces": 7,
+  "volume": 52.784800194907284,
+  "types": {
+   "bspline": 2,
+   "plane": 2,
+   "cylinder": 3
+  }
+ },
+ "m6_beschaedigt": {
+  "pitch": 1.0,
+  "lead": 1.0,
+  "starts": 1,
+  "handedness": "right",
+  "internal": false,
+  "diameter": 6.0,
+  "depth": 0.6134,
+  "length": 12.0,
+  "axis": [
+   0.0,
+   0.0,
+   1.0
+  ],
+  "found": true,
+  "partial": true,
+  "faces": 46,
+  "volume": 250.849367642391,
+  "types": {
+   "cylinder": 17,
+   "bspline": 10,
+   "plane": 19
+  }
+ },
+ "m6_geteilt": {
+  "pitch": 1.0,
+  "lead": 1.0,
+  "starts": 1,
+  "handedness": "right",
+  "internal": false,
+  "diameter": 6.0,
+  "depth": 0.6134,
+  "length": 12.0,
+  "axis": [
+   0.0,
+   0.0,
+   1.0
+  ],
+  "found": true,
+  "faces": 24,
+  "volume": 253.36708536168078,
+  "types": {
+   "cylinder": 14,
+   "bspline": 4,
+   "plane": 6
+  }
+ },
+ "m6_nurbs": {
+  "pitch": 1.0,
+  "lead": 1.0,
+  "starts": 1,
+  "handedness": "right",
+  "internal": false,
+  "diameter": 6.0,
+  "depth": 0.6134,
+  "length": 12.0,
+  "axis": [
+   0.0,
+   0.0,
+   1.0
+  ],
+  "found": true,
+  "faces": 21,
+  "volume": 253.36708481592112,
+  "types": {
+   "bspline": 21
+  }
+ },
+ "gegen_zylinder": {
+  "found": false,
+  "why": "glatter Zylinder",
+  "faces": 3,
+  "volume": 339.29200658769776,
+  "types": {
+   "cylinder": 1,
+   "plane": 2
+  }
+ },
+ "gegen_ringrillen": {
+  "found": false,
+  "why": "Ringrillen (Tori), periodisch, nicht schraubenförmig",
+  "faces": 11,
+  "volume": 321.4146964300314,
+  "types": {
+   "cylinder": 5,
+   "torus": 4,
+   "plane": 2
+  }
+ },
+ "gegen_raendel": {
+  "found": false,
+  "why": "Längsrillen, alle Kanten gerade",
+  "faces": 50,
+  "volume": 313.80465691334007,
+  "types": {
+   "cylinder": 12,
+   "plane": 38
+  }
+ },
+ "gegen_welle": {
+  "found": false,
+  "why": "gewellter Drehkörper, Spline-Meridian",
+  "faces": 50,
+  "volume": 340.9733978190367,
+  "types": {
+   "plane": 2,
+   "revolution": 48
+  }
+ },
+ "gegen_naht": {
+  "found": false,
+  "why": "Wendel ohne Rille (Tiefe 0,02 mm)",
+  "faces": 23,
+  "volume": 342.52277960021445,
+  "types": {
+   "cylinder": 14,
+   "bspline": 3,
+   "plane": 6
+  }
+ },
+ "gegen_viertelgang": {
+  "found": false,
+  "why": "ein Ausschnitt unter einer Umdrehung",
+  "faces": 7,
+  "volume": 2.4013986433752605,
+  "types": {
+   "bspline": 2,
+   "plane": 4,
+   "cylinder": 1
+  }
+ }
+}

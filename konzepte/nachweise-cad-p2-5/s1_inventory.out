@@ -1,0 +1,58 @@
+== 1. Erzeuger thread_exact: M6 x 1, Länge 12 ==
+  (Dauer thread_exact: 60.8 s — Beobachtung)
+  [OK ] Erzeuger: thread_1 mit provenance generated
+  Merkmale: {'curved_face': 2, 'face': 6, 'fillet': 2, 'pin': 11, 'thread': 1}
+  thread_1: {'diameter': 6.0, 'pitch': 1.0, 'handedness': 'right', 'length': 12.0, 'centre': (0.0, 0.0, 6.0), 'axis': (0.0, 0.0, 1.0), 'internal': False}
+  measure_sources: {}
+  [OK ] Erzeuger: Händigkeit ist Erzeugerwissen (right), keine Messung
+  [OK ] Erzeuger: weder Vorschub noch Gangzahl im Vertrag
+
+== 2. Import über STEP: derselbe Körper ohne Erzeugerwissen ==
+  features_of: {'curved_face': 2, 'face': 6, 'fillet': 2, 'pin': 11}
+  [OK ] Import: kein thread-Merkmal aus der Topologie
+  Zapfen: Ø4.7732, Ø4.7732, Ø4.7732, Ø4.7732, Ø4.7732, Ø4.7732, Ø4.7732, Ø4.7732, Ø4.7732, Ø4.7732, Ø4.7732
+  [OK ] Import: die Kernstücke werden als Zapfen gelesen (Konzept §3: 7 pin)
+  [OK ] Import: kein Merkmal kennt Steigung oder Händigkeit
+
+== 3. Netzweg an der Tessellation desselben Körpers ==
+  (Dauer detect am Netz: 2.4 s — Beobachtung)
+  detect: {'face': 2, 'thread': 1}
+  [OK ] Netzweg: genau ein thread — 1
+  thread: {'diameter': 6.0382, 'pitch': 0.99, 'centre': (0.03179274182859516, -0.026169036766513155, 6.078141102735562), 'axis': (-0.0030402840474307536, -0.005724679214781814, 0.9999789921397343), 'internal': False, 'length': 12.0326}
+  measure_sources: {'diameter': 'fit', 'pitch': 'fit', 'centre': 'fit', 'axis': 'fit', 'length': 'facets'}
+  [OK ] Netzweg: Steigung 1,0 (Raster 0,01) — ist 0.990000, erwartet 1.000000 (±0.011)
+  [OK ] Netzweg: Ø 6 (Facettierung) — Verhältnis 1.006367 (erlaubt ±0.03)
+  [OK ] Netzweg: außen
+  [OK ] Netzweg: keine Händigkeit, kein Vorschub, keine Gangzahl
+
+== 3b. Netzweg an einem Linksgewinde (Spiegelung derselben Tessellation) ==
+  rechts: 1 Wendel(n); links: 0 Wendel(n)
+  [OK ] BEFUND Netzweg: Linksgewinde wird nicht gefunden — Konzentration z - p·θ/2π setzt Rechtsgang voraus
+
+== 4. Normteiltabelle: bekannte Steigungen ==
+  M2    nominal  2.00 pitch 0.400 tap  1.60
+  M2.5  nominal  2.50 pitch 0.450 tap  2.05
+  M3    nominal  3.00 pitch 0.500 tap  2.50
+  M4    nominal  4.00 pitch 0.700 tap  3.30
+  M5    nominal  5.00 pitch 0.800 tap  4.20
+  M6    nominal  6.00 pitch 1.000 tap  5.00
+  M8    nominal  8.00 pitch 1.250 tap  6.80
+  Es gibt keine Funktion Steigung -> Größe; size_for_thread ordnet nur einen Bohrungs-Ø zu.
+  Eine gemessene Teilung 1,0 bei Ø 6 passt zu M6, 1,25 bei Ø 8 zu M8 — eine Zuordnung
+  bleibt ein Vorschlag mit Toleranz, keine Antwort (Konzept §13.4).
+
+== 5. Gegenstück: das Paar screw_and_nut teilt size und play ==
+  screw_and_nut: printed_screw + printed_nut, geteilt ('size', 'play'), Passung thread
+  [OK ] Gegenstück braucht eine Normgröße; ein Importgewinde ohne size hat heute keinen Weg (P2.6)
+
+== 6. Gewindebausteine (Netzprofil) durch den Netzweg ==
+  printed_thread außen: 1 Wendel(n)
+    p 1.0000 Ø 6.0796 innen=False Umläufe 12.1
+  [OK ] Baustein außen: Steigung 1,0 — ist 1.000000, erwartet 1.000000 (±0.011)
+  [OK ] Baustein außen: der Körper selbst trägt sein Material innen (Werkzeug)
+  printed_thread innen: 1 Wendel(n)
+    p 1.0000 Ø 6.2851 innen=False Umläufe 12.1
+  [OK ] Baustein innen: Steigung 1,0 — ist 1.000000, erwartet 1.000000 (±0.011)
+  [OK ] Baustein innen: der Körper selbst trägt sein Material innen (Werkzeug)
+
+S1 Bestand: 17 von 17 Zusicherungen halten

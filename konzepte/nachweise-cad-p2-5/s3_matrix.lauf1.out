@@ -1,0 +1,267 @@
+
+== m6_rechts ==
+  (Dauer m6_rechts: Messung: 0.5 s — Beobachtung)
+  [OK ] m6_rechts: Eingabe unverändert (Flächen, Kanten, Volumen, Abtastpunkte)
+  Auskunft: Außengewinde right, Ø 6.0000, Teilung 1.0000, Vorschub 1.0000, 1-gängig, Tiefe 0.6130, Länge 12.000, 12.00 Umläufe, Wendelabweichung 0.00002, Achse (-0.0, -0.0, 1.0)
+  [OK ] m6_rechts: Gewinde gefunden
+  [OK ] m6_rechts: Teilung — ist 1.000000, erwartet 1.000000 (±0.0001)
+  [OK ] m6_rechts: Vorschub je Umdrehung — ist 1.000000, erwartet 1.000000 (±0.0001)
+  [OK ] m6_rechts: Gangzahl 1 — ist 1
+  [OK ] m6_rechts: Händigkeit right — ist right
+  [OK ] m6_rechts: außen — ist internal=False
+  [OK ] m6_rechts: Kamm-Ø — ist 6.000000, erwartet 6.000000 (±0.001)
+  [OK ] m6_rechts: Gangtiefe — ist 0.613000, erwartet 0.613400 (±0.001)
+  [OK ] m6_rechts: Achse (Skalarprodukt) — ist 1.000000, erwartet 1.000000 (±1e-06)
+  [OK ] m6_rechts: Länge der Wendel — ist 12.000000, erwartet 12.000000 (±0.001)
+  [OK ] m6_rechts: Wendelabweichung < 1e-4 (Sweep-Approximation) — 2.24e-05
+  Netz (find_helices): 1 Wendel(n)
+    Netz: Ø 6.0382 p 0.9900 innen=False Länge 12.033 Umläufe 12.15
+  [OK ] m6_rechts: Netz-Teilung = exakte Teilung (Raster 0,01) — ist 0.990000, erwartet 1.000000 (±0.011)
+  [OK ] m6_rechts: Netz innen/außen wie exakt
+  [OK ] m6_rechts: Netz-Ø gegen exakten Kamm-Ø (Facettierung) — Verhältnis 1.006367 (erlaubt ±0.03)
+    Netz kennt weder Händigkeit noch Gangzahl — unbekannt, nicht verglichen
+
+== m10_rechts ==
+  (Dauer m10_rechts: Messung: 0.8 s — Beobachtung)
+  [OK ] m10_rechts: Eingabe unverändert (Flächen, Kanten, Volumen, Abtastpunkte)
+  Auskunft: Außengewinde right, Ø 10.0000, Teilung 1.5000, Vorschub 1.5000, 1-gängig, Tiefe 0.9200, Länge 20.000, 13.33 Umläufe, Wendelabweichung 0.00434, Achse (1e-06, 0.0, 1.0)
+  [OK ] m10_rechts: Gewinde gefunden
+  [OK ] m10_rechts: Teilung — ist 1.500000, erwartet 1.500000 (±0.0001)
+  [OK ] m10_rechts: Vorschub je Umdrehung — ist 1.500000, erwartet 1.500000 (±0.0001)
+  [OK ] m10_rechts: Gangzahl 1 — ist 1
+  [OK ] m10_rechts: Händigkeit right — ist right
+  [OK ] m10_rechts: außen — ist internal=False
+  [OK ] m10_rechts: Kamm-Ø — ist 10.000000, erwartet 10.000000 (±0.001)
+  [OK ] m10_rechts: Gangtiefe — ist 0.920000, erwartet 0.920100 (±0.001)
+  [OK ] m10_rechts: Achse (Skalarprodukt) — ist 1.000000, erwartet 1.000000 (±1e-06)
+  [OK ] m10_rechts: Länge der Wendel — ist 20.000000, erwartet 20.000000 (±0.001)
+  [ROT] m10_rechts: Wendelabweichung < 1e-4 (Sweep-Approximation) — 4.34e-03
+  Netz (find_helices): 1 Wendel(n)
+    Netz: Ø 10.0001 p 1.5000 innen=False Länge 20.000 Umläufe 13.33
+  [OK ] m10_rechts: Netz-Teilung = exakte Teilung (Raster 0,01) — ist 1.500000, erwartet 1.500000 (±0.011)
+  [OK ] m10_rechts: Netz innen/außen wie exakt
+  [OK ] m10_rechts: Netz-Ø gegen exakten Kamm-Ø (Facettierung) — Verhältnis 1.000008 (erlaubt ±0.03)
+    Netz kennt weder Händigkeit noch Gangzahl — unbekannt, nicht verglichen
+
+== m6_links ==
+  (Dauer m6_links: Messung: 0.5 s — Beobachtung)
+  [OK ] m6_links: Eingabe unverändert (Flächen, Kanten, Volumen, Abtastpunkte)
+  Auskunft: Außengewinde left, Ø 6.0000, Teilung 1.0000, Vorschub 1.0000, 1-gängig, Tiefe 0.6130, Länge 12.000, 12.00 Umläufe, Wendelabweichung 0.00002, Achse (-0.0, 0.0, 1.0)
+  [OK ] m6_links: Gewinde gefunden
+  [OK ] m6_links: Teilung — ist 1.000000, erwartet 1.000000 (±0.0001)
+  [OK ] m6_links: Vorschub je Umdrehung — ist 1.000000, erwartet 1.000000 (±0.0001)
+  [OK ] m6_links: Gangzahl 1 — ist 1
+  [OK ] m6_links: Händigkeit left — ist left
+  [OK ] m6_links: außen — ist internal=False
+  [OK ] m6_links: Kamm-Ø — ist 6.000000, erwartet 6.000000 (±0.001)
+  [OK ] m6_links: Gangtiefe — ist 0.613000, erwartet 0.613400 (±0.001)
+  [OK ] m6_links: Achse (Skalarprodukt) — ist 1.000000, erwartet 1.000000 (±1e-06)
+  [OK ] m6_links: Länge der Wendel — ist 12.000000, erwartet 12.000000 (±0.001)
+  [OK ] m6_links: Wendelabweichung < 1e-4 (Sweep-Approximation) — 2.24e-05
+  Netz (find_helices): 0 Wendel(n)
+    Netz: keine Wendel gefunden (Beobachtung; der Netzweg verlangt 5 Umläufe und 200 scharfe Kanten)
+
+== m8_innen ==
+  (Dauer m8_innen: Messung: 0.4 s — Beobachtung)
+  [OK ] m8_innen: Eingabe unverändert (Flächen, Kanten, Volumen, Abtastpunkte)
+  Auskunft: Innengewinde right, Ø 6.6660, Teilung 1.2500, Vorschub 1.2500, 1-gängig, Tiefe 0.7670, Länge 10.000, 8.00 Umläufe, Wendelabweichung 0.00002, Achse (0.0, 0.0, 1.0)
+  [OK ] m8_innen: Gewinde gefunden
+  [OK ] m8_innen: Teilung — ist 1.250000, erwartet 1.250000 (±0.0001)
+  [OK ] m8_innen: Vorschub je Umdrehung — ist 1.250000, erwartet 1.250000 (±0.0001)
+  [OK ] m8_innen: Gangzahl 1 — ist 1
+  [OK ] m8_innen: Händigkeit right — ist right
+  [OK ] m8_innen: innen — ist internal=True
+  [ROT] m8_innen: Kamm-Ø — ist 6.666000, erwartet 8.200000 (±0.001)
+  [OK ] m8_innen: Gangtiefe — ist 0.767000, erwartet 0.766750 (±0.001)
+  [OK ] m8_innen: Achse (Skalarprodukt) — ist 1.000000, erwartet 1.000000 (±1e-06)
+  [OK ] m8_innen: Länge der Wendel — ist 10.000001, erwartet 10.000000 (±0.001)
+  [OK ] m8_innen: Wendelabweichung < 1e-4 (Sweep-Approximation) — 1.88e-05
+  Netz (find_helices): 1 Wendel(n)
+    Netz: Ø 7.8158 p 1.2500 innen=True Länge 10.108 Umläufe 8.09
+  [OK ] m8_innen: Netz-Teilung = exakte Teilung (Raster 0,01) — ist 1.250000, erwartet 1.250000 (±0.011)
+  [OK ] m8_innen: Netz innen/außen wie exakt
+  [ROT] m8_innen: Netz-Ø gegen exakten Kamm-Ø (Facettierung) — Verhältnis 1.172484 (erlaubt ±0.03)
+    Netz kennt weder Händigkeit noch Gangzahl — unbekannt, nicht verglichen
+
+== zweigaengig ==
+  (Dauer zweigaengig: Messung: 1.5 s — Beobachtung)
+  [OK ] zweigaengig: Eingabe unverändert (Flächen, Kanten, Volumen, Abtastpunkte)
+  Auskunft: kein Gewinde: Gangtiefe 0.540 mm ist 0.27 Teilungen — außerhalb (0.4, 1.2)
+  [ROT] zweigaengig: Gewinde gefunden — Gangtiefe 0.540 mm ist 0.27 Teilungen — außerhalb (0.4, 1.2)
+
+== m6_gedreht ==
+  (Dauer m6_gedreht: Messung: 0.4 s — Beobachtung)
+  [OK ] m6_gedreht: Eingabe unverändert (Flächen, Kanten, Volumen, Abtastpunkte)
+  Auskunft: Außengewinde right, Ø 6.0000, Teilung 1.0000, Vorschub 1.0000, 1-gängig, Tiefe 0.6130, Länge 12.000, 12.00 Umläufe, Wendelabweichung 0.00002, Achse (0.425547, -0.425547, 0.798636)
+  [OK ] m6_gedreht: Gewinde gefunden
+  [OK ] m6_gedreht: Teilung — ist 1.000000, erwartet 1.000000 (±0.0001)
+  [OK ] m6_gedreht: Vorschub je Umdrehung — ist 1.000000, erwartet 1.000000 (±0.0001)
+  [OK ] m6_gedreht: Gangzahl 1 — ist 1
+  [OK ] m6_gedreht: Händigkeit right — ist right
+  [OK ] m6_gedreht: außen — ist internal=False
+  [OK ] m6_gedreht: Kamm-Ø — ist 6.000000, erwartet 6.000000 (±0.001)
+  [OK ] m6_gedreht: Gangtiefe — ist 0.613000, erwartet 0.613400 (±0.001)
+  [OK ] m6_gedreht: Achse (Skalarprodukt) — ist 1.000000, erwartet 1.000000 (±1e-06)
+  [OK ] m6_gedreht: Länge der Wendel — ist 12.000000, erwartet 12.000000 (±0.001)
+  [OK ] m6_gedreht: Wendelabweichung < 1e-4 (Sweep-Approximation) — 2.24e-05
+  Netz (find_helices): 1 Wendel(n)
+    Netz: Ø 6.0382 p 0.9900 innen=False Länge 12.033 Umläufe 12.15
+  [OK ] m6_gedreht: Netz-Teilung = exakte Teilung (Raster 0,01) — ist 0.990000, erwartet 1.000000 (±0.011)
+  [OK ] m6_gedreht: Netz innen/außen wie exakt
+  [OK ] m6_gedreht: Netz-Ø gegen exakten Kamm-Ø (Facettierung) — Verhältnis 1.006367 (erlaubt ±0.03)
+    Netz kennt weder Händigkeit noch Gangzahl — unbekannt, nicht verglichen
+
+== m6_angeschnitten ==
+  (Dauer m6_angeschnitten: Messung: 0.7 s — Beobachtung)
+  [OK ] m6_angeschnitten: Eingabe unverändert (Flächen, Kanten, Volumen, Abtastpunkte)
+  Auskunft: Außengewinde right, Ø 6.0000, Teilung 1.0001, Vorschub 1.0001, 1-gängig, Tiefe 0.6130, Länge 12.000, 7.65 Umläufe, Wendelabweichung 0.00003, Achse (-2e-06, 6e-06, 1.0)
+  [OK ] m6_angeschnitten: Gewinde gefunden
+  [OK ] m6_angeschnitten: Teilung — ist 1.000066, erwartet 1.000000 (±0.0001)
+  [OK ] m6_angeschnitten: Vorschub je Umdrehung — ist 1.000066, erwartet 1.000000 (±0.0001)
+  [OK ] m6_angeschnitten: Gangzahl 1 — ist 1
+  [OK ] m6_angeschnitten: Händigkeit right — ist right
+  [OK ] m6_angeschnitten: außen — ist internal=False
+  [OK ] m6_angeschnitten: Kamm-Ø — ist 6.000000, erwartet 6.000000 (±0.001)
+  [OK ] m6_angeschnitten: Gangtiefe — ist 0.613000, erwartet 0.613400 (±0.001)
+  [OK ] m6_angeschnitten: Achse (Skalarprodukt) — ist 1.000000, erwartet 1.000000 (±1e-06)
+  [OK ] m6_angeschnitten: Wendelabweichung < 1e-4 (Sweep-Approximation) — 3.13e-05
+  Netz (find_helices): 0 Wendel(n)
+    Netz: keine Wendel gefunden (Beobachtung; der Netzweg verlangt 5 Umläufe und 200 scharfe Kanten)
+
+== m6_kurz ==
+  (Dauer m6_kurz: Messung: 0.2 s — Beobachtung)
+  [OK ] m6_kurz: Eingabe unverändert (Flächen, Kanten, Volumen, Abtastpunkte)
+  Auskunft: kein Gewinde: Kamm ohne Rille: Züge auf einem Radius — eine Naht, kein Gewinde
+  [ROT] m6_kurz: Gewinde gefunden — Kamm ohne Rille: Züge auf einem Radius — eine Naht, kein Gewinde
+
+== m6_beschaedigt ==
+  (Dauer m6_beschaedigt: Messung: 0.6 s — Beobachtung)
+  [OK ] m6_beschaedigt: Eingabe unverändert (Flächen, Kanten, Volumen, Abtastpunkte)
+  Auskunft: Außengewinde right, Ø 6.0000, Teilung 1.0000, Vorschub 1.0000, 1-gängig, Tiefe 0.6130, Länge 12.000, 11.45 Umläufe, Wendelabweichung 0.00002, Achse (0.0, -0.0, 1.0)
+  [OK ] m6_beschaedigt: Gewinde gefunden
+  [OK ] m6_beschaedigt: Teilung — ist 1.000002, erwartet 1.000000 (±0.0001)
+  [OK ] m6_beschaedigt: Vorschub je Umdrehung — ist 1.000002, erwartet 1.000000 (±0.0001)
+  [OK ] m6_beschaedigt: Gangzahl 1 — ist 1
+  [OK ] m6_beschaedigt: Händigkeit right — ist right
+  [OK ] m6_beschaedigt: außen — ist internal=False
+  [OK ] m6_beschaedigt: Kamm-Ø — ist 6.000000, erwartet 6.000000 (±0.001)
+  [OK ] m6_beschaedigt: Gangtiefe — ist 0.613000, erwartet 0.613400 (±0.001)
+  [OK ] m6_beschaedigt: Achse (Skalarprodukt) — ist 1.000000, erwartet 1.000000 (±1e-06)
+  [OK ] m6_beschaedigt: Wendelabweichung < 1e-4 (Sweep-Approximation) — 2.26e-05
+  Netz (find_helices): 2 Wendel(n)
+    Netz: Ø 6.0001 p 1.0000 innen=False Länge 4.707 Umläufe 4.71
+  [OK ] m6_beschaedigt: Netz-Teilung = exakte Teilung (Raster 0,01) — ist 1.000000, erwartet 1.000002 (±0.011)
+  [OK ] m6_beschaedigt: Netz innen/außen wie exakt
+  [OK ] m6_beschaedigt: Netz-Ø gegen exakten Kamm-Ø (Facettierung) — Verhältnis 1.000022 (erlaubt ±0.03)
+    Netz kennt weder Händigkeit noch Gangzahl — unbekannt, nicht verglichen
+
+== m6_geteilt ==
+  (Dauer m6_geteilt: Messung: 0.5 s — Beobachtung)
+  [OK ] m6_geteilt: Eingabe unverändert (Flächen, Kanten, Volumen, Abtastpunkte)
+  Auskunft: Außengewinde right, Ø 6.0000, Teilung 1.0000, Vorschub 1.0000, 1-gängig, Tiefe 0.6130, Länge 12.000, 12.00 Umläufe, Wendelabweichung 0.00002, Achse (-0.0, -0.0, 1.0)
+  [OK ] m6_geteilt: Gewinde gefunden
+  [OK ] m6_geteilt: Teilung — ist 1.000000, erwartet 1.000000 (±0.0001)
+  [OK ] m6_geteilt: Vorschub je Umdrehung — ist 1.000000, erwartet 1.000000 (±0.0001)
+  [OK ] m6_geteilt: Gangzahl 1 — ist 1
+  [OK ] m6_geteilt: Händigkeit right — ist right
+  [OK ] m6_geteilt: außen — ist internal=False
+  [OK ] m6_geteilt: Kamm-Ø — ist 6.000000, erwartet 6.000000 (±0.001)
+  [OK ] m6_geteilt: Gangtiefe — ist 0.613000, erwartet 0.613400 (±0.001)
+  [OK ] m6_geteilt: Achse (Skalarprodukt) — ist 1.000000, erwartet 1.000000 (±1e-06)
+  [OK ] m6_geteilt: Länge der Wendel — ist 12.000000, erwartet 12.000000 (±0.001)
+  [OK ] m6_geteilt: Wendelabweichung < 1e-4 (Sweep-Approximation) — 2.24e-05
+  Netz (find_helices): 1 Wendel(n)
+    Netz: Ø 6.0390 p 0.9900 innen=False Länge 12.033 Umläufe 12.15
+  [OK ] m6_geteilt: Netz-Teilung = exakte Teilung (Raster 0,01) — ist 0.990000, erwartet 1.000000 (±0.011)
+  [OK ] m6_geteilt: Netz innen/außen wie exakt
+  [OK ] m6_geteilt: Netz-Ø gegen exakten Kamm-Ø (Facettierung) — Verhältnis 1.006492 (erlaubt ±0.03)
+    Netz kennt weder Händigkeit noch Gangzahl — unbekannt, nicht verglichen
+
+== m6_nurbs ==
+  (Dauer m6_nurbs: Messung: 0.5 s — Beobachtung)
+  [OK ] m6_nurbs: Eingabe unverändert (Flächen, Kanten, Volumen, Abtastpunkte)
+  Auskunft: Außengewinde right, Ø 6.0000, Teilung 1.0000, Vorschub 1.0000, 1-gängig, Tiefe 0.6130, Länge 12.000, 12.00 Umläufe, Wendelabweichung 0.00002, Achse (-0.0, -0.0, 1.0)
+  [OK ] m6_nurbs: Gewinde gefunden
+  [OK ] m6_nurbs: Teilung — ist 1.000000, erwartet 1.000000 (±0.0001)
+  [OK ] m6_nurbs: Vorschub je Umdrehung — ist 1.000000, erwartet 1.000000 (±0.0001)
+  [OK ] m6_nurbs: Gangzahl 1 — ist 1
+  [OK ] m6_nurbs: Händigkeit right — ist right
+  [OK ] m6_nurbs: außen — ist internal=False
+  [OK ] m6_nurbs: Kamm-Ø — ist 6.000000, erwartet 6.000000 (±0.001)
+  [OK ] m6_nurbs: Gangtiefe — ist 0.613000, erwartet 0.613400 (±0.001)
+  [OK ] m6_nurbs: Achse (Skalarprodukt) — ist 1.000000, erwartet 1.000000 (±1e-06)
+  [OK ] m6_nurbs: Länge der Wendel — ist 12.000000, erwartet 12.000000 (±0.001)
+  [OK ] m6_nurbs: Wendelabweichung < 1e-4 (Sweep-Approximation) — 2.24e-05
+  Netz (find_helices): 1 Wendel(n)
+    Netz: Ø 6.0349 p 0.9900 innen=False Länge 12.032 Umläufe 12.15
+  [OK ] m6_nurbs: Netz-Teilung = exakte Teilung (Raster 0,01) — ist 0.990000, erwartet 1.000000 (±0.011)
+  [OK ] m6_nurbs: Netz innen/außen wie exakt
+  [OK ] m6_nurbs: Netz-Ø gegen exakten Kamm-Ø (Facettierung) — Verhältnis 1.005815 (erlaubt ±0.03)
+    Netz kennt weder Händigkeit noch Gangzahl — unbekannt, nicht verglichen
+
+== gegen_zylinder ==
+  (Dauer gegen_zylinder: Messung: 0.0 s — Beobachtung)
+  [OK ] gegen_zylinder: Eingabe unverändert (Flächen, Kanten, Volumen, Abtastpunkte)
+  Auskunft: kein Gewinde: keine Kantenzüge außer Strecken, Kreisen und ebenen Kurven
+  [OK ] gegen_zylinder: kein Gewinde gemeldet (glatter Zylinder) — keine Kantenzüge außer Strecken, Kreisen und ebenen Kurven
+
+== gegen_ringrillen ==
+  (Dauer gegen_ringrillen: Messung: 0.0 s — Beobachtung)
+  [OK ] gegen_ringrillen: Eingabe unverändert (Flächen, Kanten, Volumen, Abtastpunkte)
+  Auskunft: kein Gewinde: keine Kantenzüge außer Strecken, Kreisen und ebenen Kurven
+  [OK ] gegen_ringrillen: kein Gewinde gemeldet (Ringrillen (Tori), periodisch, nicht schraubenförmig) — keine Kantenzüge außer Strecken, Kreisen und ebenen Kurven
+
+== gegen_raendel ==
+  (Dauer gegen_raendel: Messung: 0.0 s — Beobachtung)
+  [OK ] gegen_raendel: Eingabe unverändert (Flächen, Kanten, Volumen, Abtastpunkte)
+  Auskunft: kein Gewinde: keine Kantenzüge außer Strecken, Kreisen und ebenen Kurven
+  [OK ] gegen_raendel: kein Gewinde gemeldet (Längsrillen, alle Kanten gerade) — keine Kantenzüge außer Strecken, Kreisen und ebenen Kurven
+
+== gegen_welle ==
+  (Dauer gegen_welle: Messung: 0.1 s — Beobachtung)
+  [OK ] gegen_welle: Eingabe unverändert (Flächen, Kanten, Volumen, Abtastpunkte)
+  Auskunft: kein Gewinde: keine Kantenzüge außer Strecken, Kreisen und ebenen Kurven
+  [OK ] gegen_welle: kein Gewinde gemeldet (gewellter Drehkörper, Spline-Meridian) — keine Kantenzüge außer Strecken, Kreisen und ebenen Kurven
+
+== gegen_naht ==
+  (Dauer gegen_naht: Messung: 0.7 s — Beobachtung)
+  [OK ] gegen_naht: Eingabe unverändert (Flächen, Kanten, Volumen, Abtastpunkte)
+  Auskunft: kein Gewinde: Gangtiefe 0.010 mm ist 0.01 Teilungen — außerhalb (0.4, 1.2)
+  [OK ] gegen_naht: kein Gewinde gemeldet (Wendel ohne Rille (Tiefe 0,02 mm)) — Gangtiefe 0.010 mm ist 0.01 Teilungen — außerhalb (0.4, 1.2)
+
+== gegen_viertelgang ==
+  (Dauer gegen_viertelgang: Messung: 0.3 s — Beobachtung)
+  [OK ] gegen_viertelgang: Eingabe unverändert (Flächen, Kanten, Volumen, Abtastpunkte)
+  Auskunft: kein Gewinde: Wendelabweichung 0.0110 mm über 2% des Vorschubs
+  [OK ] gegen_viertelgang: kein Gewinde gemeldet (ein Ausschnitt unter einer Umdrehung) — Wendelabweichung 0.0110 mm über 2% des Vorschubs
+
+== Abbruch: der Zähler wirft nach 50 Prüfungen ==
+  [OK ] Abbruch propagiert aus der Messung — nach 50 Prüfungen
+  [OK ] Abbruchprüfung wird laufend aufgerufen (Kanten, Fit, Züge) — 1454 Aufrufe
+
+== Matrix ==
+  m6_rechts            ja     p=1.0000 L=1.0000 n=1 right außen Ø6.0000
+  m10_rechts           ja     p=1.5000 L=1.5000 n=1 right außen Ø10.0000
+  m6_links             ja     p=1.0000 L=1.0000 n=1 left außen Ø6.0000
+  m8_innen             ja     p=1.2500 L=1.2500 n=1 right innen Ø6.6660
+  zweigaengig          FEHLT  Gangtiefe 0.540 mm ist 0.27 Teilungen — außerhalb (0.4, 1.2)
+  m6_gedreht           ja     p=1.0000 L=1.0000 n=1 right außen Ø6.0000
+  m6_angeschnitten     ja     p=1.0001 L=1.0001 n=1 right außen Ø6.0000
+  m6_kurz              FEHLT  Kamm ohne Rille: Züge auf einem Radius — eine Naht, kein Gewinde
+  m6_beschaedigt       ja     p=1.0000 L=1.0000 n=1 right außen Ø6.0000
+  m6_geteilt           ja     p=1.0000 L=1.0000 n=1 right außen Ø6.0000
+  m6_nurbs             ja     p=1.0000 L=1.0000 n=1 right außen Ø6.0000
+  gegen_zylinder       nein   keine Kantenzüge außer Strecken, Kreisen und ebenen Kurven
+  gegen_ringrillen     nein   keine Kantenzüge außer Strecken, Kreisen und ebenen Kurven
+  gegen_raendel        nein   keine Kantenzüge außer Strecken, Kreisen und ebenen Kurven
+  gegen_welle          nein   keine Kantenzüge außer Strecken, Kreisen und ebenen Kurven
+  gegen_naht           nein   Gangtiefe 0.010 mm ist 0.01 Teilungen — außerhalb (0.4, 1.2)
+  gegen_viertelgang    nein   Wendelabweichung 0.0110 mm über 2% des Vorschubs
+
+S3 Fallmatrix: 140 von 145 Zusicherungen halten
+  ROT: m10_rechts: Wendelabweichung < 1e-4 (Sweep-Approximation)
+  ROT: m8_innen: Kamm-Ø
+  ROT: m8_innen: Netz-Ø gegen exakten Kamm-Ø (Facettierung)
+  ROT: zweigaengig: Gewinde gefunden
+  ROT: m6_kurz: Gewinde gefunden
+Exit: 1

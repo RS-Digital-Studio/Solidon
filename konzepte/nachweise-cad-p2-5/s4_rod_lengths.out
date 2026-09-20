@@ -1,0 +1,69 @@
+== Gangvolumen je Umlauf über Länge/Steigung ==
+  Umläufe = Länge/Steigung + 2 (so baut threaded_rod seine Helix)
+  (Dauer threaded_rod M6x1 L=2.2: 8.1 s — Beobachtung)
+  M6x1 L=2.2   Umläufe  4.20: Flächen 11  Gang    7.0838 mm³ (  3.2199 je Umlauf)  dicht=True
+  (Dauer threaded_rod M6x1 L=2.5: 6.5 s — Beobachtung)
+  M6x1 L=2.5   Umläufe  4.50: Flächen 11  Gang    0.0000 mm³ (  0.0000 je Umlauf)  dicht=True
+  (Dauer threaded_rod M6x1 L=2.75: 15.2 s — Beobachtung)
+  M6x1 L=2.75  Umläufe  4.75: Flächen 12  Gang    8.8548 mm³ (  3.2199 je Umlauf)  dicht=True
+  (Dauer threaded_rod M6x1 L=3: 15.1 s — Beobachtung)
+  M6x1 L=3     Umläufe  5.00: Flächen 12  Gang    9.6599 mm³ (  3.2200 je Umlauf)  dicht=True
+  (Dauer threaded_rod M6x1 L=3.5: 5.9 s — Beobachtung)
+  M6x1 L=3.5   Umläufe  5.50: Flächen 13  Gang    0.0000 mm³ (  0.0000 je Umlauf)  dicht=True
+  (Dauer threaded_rod M6x1 L=4: 8.9 s — Beobachtung)
+  M6x1 L=4     Umläufe  6.00: Flächen 13  Gang   12.8796 mm³ (  3.2199 je Umlauf)  dicht=True
+  (Dauer threaded_rod M6x1 L=4.5: 6.7 s — Beobachtung)
+  M6x1 L=4.5   Umläufe  6.50: Flächen 15  Gang   -0.0000 mm³ ( -0.0000 je Umlauf)  dicht=True
+  (Dauer threaded_rod M6x1 L=6.5: 7.2 s — Beobachtung)
+  M6x1 L=6.5   Umläufe  8.50: Flächen 19  Gang   -0.0000 mm³ ( -0.0000 je Umlauf)  dicht=True
+  (Dauer threaded_rod M6x1 L=8: 18.8 s — Beobachtung)
+  M6x1 L=8     Umläufe 10.00: Flächen 17  Gang   25.7597 mm³ (  3.2200 je Umlauf)  dicht=True
+  (Dauer threaded_rod M6x1 L=10.5: 4.0 s — Beobachtung)
+  M6x1 L=10.5  Umläufe 12.50: Flächen 27  Gang   -0.0000 mm³ ( -0.0000 je Umlauf)  dicht=True
+  (Dauer threaded_rod M6x1 L=12: 22.5 s — Beobachtung)
+  M6x1 L=12    Umläufe 14.00: Flächen 21  Gang   38.6382 mm³ (  3.2199 je Umlauf)  dicht=True
+  (Dauer threaded_rod M8x1.25 L=5: 8.4 s — Beobachtung)
+  M8x1.25 L=5     Umläufe  6.00: Flächen 13  Gang   27.8788 mm³ (  6.9697 je Umlauf)  dicht=True
+  (Dauer threaded_rod M8x1.25 L=5.625: 7.2 s — Beobachtung)
+  M8x1.25 L=5.625 Umläufe  6.50: Flächen 15  Gang    0.0000 mm³ (  0.0000 je Umlauf)  dicht=True
+  (Dauer threaded_rod M8x1.25 L=6.25: 17.1 s — Beobachtung)
+  M8x1.25 L=6.25  Umläufe  7.00: Flächen 14  Gang   34.8486 mm³ (  6.9697 je Umlauf)  dicht=True
+  (Dauer threaded_rod M8x1.25 L=8: 7.2 s — Beobachtung)
+  M8x1.25 L=8     Umläufe  8.40: Flächen 19  Gang   -0.0000 mm³ ( -0.0000 je Umlauf)  dicht=True
+  (Dauer threaded_rod M8x1.25 L=10: 18.7 s — Beobachtung)
+  M8x1.25 L=10    Umläufe 10.00: Flächen 17  Gang   55.7569 mm³ (  6.9696 je Umlauf)  dicht=True
+  (Dauer threaded_rod M10x1.5 L=3.5: 14.7 s — Beobachtung)
+  M10x1.5 L=3.5   Umläufe  4.33: Flächen 11  Gang   29.9430 mm³ ( 12.8327 je Umlauf)  dicht=True
+  (Dauer threaded_rod M10x1.5 L=4: 13.1 s — Beobachtung)
+  M10x1.5 L=4     Umläufe  4.67: Flächen  9  Gang -112.4571 mm³ (-42.1714 je Umlauf)  dicht=True
+  (Dauer threaded_rod M10x1.5 L=4.5: 15.3 s — Beobachtung)
+  M10x1.5 L=4.5   Umläufe  5.00: Flächen 12  Gang   38.5987 mm³ ( 12.8662 je Umlauf)  dicht=True
+  (Dauer threaded_rod M10x1.5 L=6: 8.7 s — Beobachtung)
+  M10x1.5 L=6     Umläufe  6.00: Flächen 13  Gang   51.4654 mm³ ( 12.8664 je Umlauf)  dicht=True
+  (Dauer threaded_rod M10x1.5 L=6.75: 6.9 s — Beobachtung)
+  M10x1.5 L=6.75  Umläufe  6.50: Flächen 15  Gang    0.0000 mm³ (  0.0000 je Umlauf)  dicht=True
+  (Dauer threaded_rod M10x1.5 L=8: 17.0 s — Beobachtung)
+  M10x1.5 L=8     Umläufe  7.33: Flächen 14  Gang   68.4883 mm³ ( 12.8416 je Umlauf)  dicht=True
+  (Dauer threaded_rod M10x1.5 L=12: 19.0 s — Beobachtung)
+  M10x1.5 L=12    Umläufe 10.00: Flächen 17  Gang  102.9297 mm³ ( 12.8662 je Umlauf)  dicht=True
+
+== Befund ==
+  [OK ] M6x1: das Gangvolumen je Umlauf ist eine Konstante des Profils — ist 0.000107, erwartet 0.000000 (±0.05)
+  [OK ] M8x1.25: das Gangvolumen je Umlauf ist eine Konstante des Profils — ist 0.000111, erwartet 0.000000 (±0.05)
+  [OK ] M10x1.5: das Gangvolumen je Umlauf ist eine Konstante des Profils — ist 0.033638, erwartet 0.000000 (±0.05)
+  [OK ] B3: threaded_rod liefert an mehreren Längen den Kern ohne Gang — ohne Fehler — M6x1 L=2.5   Umläufe  4.50; M6x1 L=3.5   Umläufe  5.50; M6x1 L=4.5   Umläufe  6.50; M6x1 L=6.5   Umläufe  8.50; M6x1 L=10.5  Umläufe 12.50; M8x1.25 L=5.625 Umläufe  6.50; M8x1.25 L=8     Umläufe  8.40; M10x1.5 L=6.75  Umläufe  6.50
+  [OK ] B3: und liefert mindestens einmal einen Körper unter dem Kernvolumen — M10x1.5 L=4     Umläufe  4.67
+  [OK ] B3: jede halbzahlige Umlaufzahl des Rasters verliert den Gang — 7 halbzahlige, verloren: 7
+  [OK ] B3: halbzahlig ist hinreichend, nicht notwendig — auch andere Längen verlieren ihn — M8x1.25 L=8     Umläufe  8.40
+  Verloren oder beschädigt: 9 von 23 Rasterpunkten. Kein Fall meldet einen Fehler — die Absage bliebe dem Nutzer verborgen.
+
+== Die Stufe, an der der Gang verloren geht ==
+  M6x1 L=2.5: Sweep 41.194 mm³ (geschlossen=True), Zuschnitt 22.886 mm³ (sound=True), Kern 44.735, Vereinigung 44.735 mm³ (volume=44.735 watertight=True components=1)
+  [OK ] M6x1 L=2,5: der Sweep hat Volumen
+  [OK ] M6x1 L=2,5: der Zuschnitt hat Volumen
+  [OK ] M6x1 L=2,5: die Vereinigung ist der Kern allein — ist 44.735176, erwartet 44.735176 (±1e-06)
+  M10x1.5 L=4: Sweep 169.256 mm³ (geschlossen=True), Zuschnitt 96.718 mm³ (sound=True), Kern 209.175, Vereinigung 96.718 mm³ (volume=96.718 watertight=False components=1)
+  [OK ] M10x1,5 L=4: der Zuschnitt hat Volumen
+  [OK ] M10x1,5 L=4: die Vereinigung liegt unter dem Kern — und wird trotzdem geliefert — 96.718 < 209.175
+
+S4 threaded_rod über die Länge: 12 von 12 Zusicherungen halten

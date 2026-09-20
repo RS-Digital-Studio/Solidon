@@ -1,0 +1,172 @@
+== Rechtsgewinde M6 x 1, Länge 12 ==
+  (Dauer threaded_rod M6: 53.3 s — Beobachtung)
+  m6_rechts: importiert: valid=True closed=True solids=1 faces=21 V=253.367085 A=387.9639
+      types={'cylinder': 13, 'bspline': 2, 'plane': 6} bounds=(-3.000011, -3.000011, -0.0, 3.000011, 3.000011, 12.0)
+  [OK ] m6_rechts: importiert: nativ gültig
+  [OK ] m6_rechts: importiert: geschlossen
+  [OK ] m6_rechts: importiert: Körperzahl 1 — ist 1
+  [OK ] m6_rechts: kein Erzeugermerkmal nach dem Import (kein thread, keine generated-Herkunft) — Merkmale ['curved_face', 'face', 'fillet', 'pin']
+  [OK ] m6_rechts: der Körper trägt Wendelflächen (B-Spline-Flächen >= 2) — Flächenarten {'cylinder': 13, 'bspline': 2, 'plane': 6}
+  Sollwerte: {'pitch': 1.0, 'lead': 1.0, 'starts': 1, 'handedness': 'right', 'internal': False, 'diameter': 6.0, 'depth': 0.6134, 'length': 12.0, 'axis': (0.0, 0.0, 1.0), 'found': True, 'faces': 21, 'volume': 253.3670853658517}
+
+== Rechtsgewinde M10 x 1,5, Länge 20 ==
+  (Dauer threaded_rod M10: 32.0 s — Beobachtung)
+  m10_rechts: importiert: valid=True closed=True solids=1 faces=22 V=1217.272985 A=1087.6024
+      types={'cylinder': 14, 'bspline': 2, 'plane': 6} bounds=(-5.000022, -5.000022, -0.0, 5.000022, 5.000022, 20.0)
+  [OK ] m10_rechts: importiert: nativ gültig
+  [OK ] m10_rechts: importiert: geschlossen
+  [OK ] m10_rechts: importiert: Körperzahl 1 — ist 1
+  [OK ] m10_rechts: kein Erzeugermerkmal nach dem Import (kein thread, keine generated-Herkunft) — Merkmale ['curved_face', 'face', 'fillet', 'pin']
+  [OK ] m10_rechts: der Körper trägt Wendelflächen (B-Spline-Flächen >= 2) — Flächenarten {'cylinder': 14, 'bspline': 2, 'plane': 6}
+  Sollwerte: {'pitch': 1.5, 'lead': 1.5, 'starts': 1, 'handedness': 'right', 'internal': False, 'diameter': 10.0, 'depth': 0.9200999999999999, 'length': 20.0, 'axis': (0.0, 0.0, 1.0), 'found': True, 'faces': 22, 'volume': 1217.2729847316511}
+
+== Linksgewinde M6 x 1 (Spiegelung an XZ) ==
+  m6_links: importiert: valid=True closed=True solids=1 faces=21 V=253.367085 A=387.9639
+      types={'cylinder': 13, 'bspline': 2, 'plane': 6} bounds=(-3.000011, -3.000011, -0.0, 3.000011, 3.000011, 12.0)
+  [OK ] m6_links: importiert: nativ gültig
+  [OK ] m6_links: importiert: geschlossen
+  [OK ] m6_links: importiert: Körperzahl 1 — ist 1
+  [OK ] m6_links: kein Erzeugermerkmal nach dem Import (kein thread, keine generated-Herkunft) — Merkmale ['curved_face', 'face', 'fillet', 'pin']
+  [OK ] m6_links: der Körper trägt Wendelflächen (B-Spline-Flächen >= 2) — Flächenarten {'cylinder': 13, 'bspline': 2, 'plane': 6}
+  Sollwerte: {'pitch': 1.0, 'lead': 1.0, 'starts': 1, 'handedness': 'left', 'internal': False, 'diameter': 6.0, 'depth': 0.6134, 'length': 12.0, 'axis': (0.0, 0.0, 1.0), 'found': True, 'faces': 21, 'volume': 253.36708533578616}
+
+== Innengewinde M8 x 1,25 im Block, Spiel 0,2, Tiefe 10 ==
+  (Dauer Block minus Bolzen: 48.1 s — Beobachtung)
+  m8_innen: importiert: valid=True closed=True solids=1 faces=17 V=3593.596515 A=1915.2581
+      types={'plane': 6, 'cylinder': 9, 'bspline': 2} bounds=(-10.0, -10.0, -10.0, 10.0, 10.0, 0.0)
+  [OK ] m8_innen: importiert: nativ gültig
+  [OK ] m8_innen: importiert: geschlossen
+  [OK ] m8_innen: importiert: Körperzahl 1 — ist 1
+  [OK ] m8_innen: kein Erzeugermerkmal nach dem Import (kein thread, keine generated-Herkunft) — Merkmale ['curved_face', 'face', 'fillet', 'hole']
+  [OK ] m8_innen: der Körper trägt Wendelflächen (B-Spline-Flächen >= 2) — Flächenarten {'plane': 6, 'cylinder': 9, 'bspline': 2}
+  Sollwerte: {'pitch': 1.25, 'lead': 1.25, 'starts': 1, 'handedness': 'right', 'internal': True, 'diameter': 8.2, 'depth': 0.7667499999999999, 'length': 10.0, 'axis': (0.0, 0.0, 1.0), 'found': True, 'faces': 17, 'volume': 3593.5965153576403}
+
+== zweigängig: Ø8, Teilung 1,0, Vorschub 2,0, Länge 12 ==
+  (Dauer zwei Gänge: 43.7 s — Beobachtung)
+  zweigaengig: importiert: valid=True closed=True solids=1 faces=31 V=533.255659 A=568.5474
+      types={'plane': 10, 'cylinder': 15, 'bspline': 6} bounds=(-4.0, -4.00002, -0.0, 4.0, 4.00002, 12.0)
+  [OK ] zweigaengig: importiert: nativ gültig
+  [OK ] zweigaengig: importiert: geschlossen
+  [OK ] zweigaengig: importiert: Körperzahl 1 — ist 1
+  [OK ] zweigaengig: kein Erzeugermerkmal nach dem Import (kein thread, keine generated-Herkunft) — Merkmale ['curved_face', 'face', 'fillet', 'pin']
+  [OK ] zweigaengig: der Körper trägt Wendelflächen (B-Spline-Flächen >= 2) — Flächenarten {'plane': 10, 'cylinder': 15, 'bspline': 6}
+  Sollwerte: {'pitch': 1.0, 'lead': 2.0, 'starts': 2, 'handedness': 'right', 'internal': False, 'diameter': 8.0, 'depth': 0.54, 'length': 12.0, 'axis': (0.0, 0.0, 1.0), 'found': True, 'faces': 31, 'volume': 533.2556587469766}
+
+== gedreht 37° um (1, 1, 0) und verschoben (12, -7, 3) ==
+  m6_gedreht: importiert: valid=True closed=True solids=1 faces=21 V=253.367085 A=387.9639
+      types={'cylinder': 13, 'bspline': 2, 'plane': 6} bounds=(9.504663, -14.708259, 1.327807, 19.804714, -4.383166, 14.019918)
+  [OK ] m6_gedreht: importiert: nativ gültig
+  [OK ] m6_gedreht: importiert: geschlossen
+  [OK ] m6_gedreht: importiert: Körperzahl 1 — ist 1
+  [OK ] m6_gedreht: kein Erzeugermerkmal nach dem Import (kein thread, keine generated-Herkunft) — Merkmale ['curved_face', 'face', 'fillet', 'pin']
+  [OK ] m6_gedreht: der Körper trägt Wendelflächen (B-Spline-Flächen >= 2) — Flächenarten {'cylinder': 13, 'bspline': 2, 'plane': 6}
+  Sollwerte: {'pitch': 1.0, 'lead': 1.0, 'starts': 1, 'handedness': 'right', 'internal': False, 'diameter': 6.0, 'depth': 0.6134, 'length': 12.0, 'axis': (0.42554748389075236, -0.42554748389075236, 0.7986355100472928), 'found': True, 'faces': 21, 'volume': 253.36708536175934}
+
+== angeschnitten: alles unter x = -1 fehlt ==
+  (Dauer halbiert: 0.3 s — Beobachtung)
+  m6_angeschnitten: importiert: valid=True closed=True solids=1 faces=57 V=187.113321 A=306.5514
+      types={'cylinder': 24, 'bspline': 26, 'plane': 7} bounds=(-1.0, -3.000011, -0.0, 3.000011, 3.000011, 12.0)
+  [OK ] m6_angeschnitten: importiert: nativ gültig
+  [OK ] m6_angeschnitten: importiert: geschlossen
+  [OK ] m6_angeschnitten: importiert: Körperzahl 1 — ist 1
+  [OK ] m6_angeschnitten: kein Erzeugermerkmal nach dem Import (kein thread, keine generated-Herkunft) — Merkmale ['curved_face', 'face', 'fillet']
+  [OK ] m6_angeschnitten: der Körper trägt Wendelflächen (B-Spline-Flächen >= 2) — Flächenarten {'cylinder': 24, 'bspline': 26, 'plane': 7}
+  Sollwerte: {'pitch': 1.0, 'lead': 1.0, 'starts': 1, 'handedness': 'right', 'internal': False, 'diameter': 6.0, 'depth': 0.6134, 'length': 12.0, 'axis': (0.0, 0.0, 1.0), 'found': True, 'partial': True, 'faces': 57, 'volume': 187.11332100404297}
+
+== kurzes Teilgewinde: M6 x 1, Stück z 4,75..7,25 (2,5 Umläufe) ==
+  (Dauer kurzer Bolzen: 0.0 s — Beobachtung)
+  [OK ] kurzer Bolzen: mehr Volumen als sein Kern allein (der Gang ist da) — 52.785 gegen Kern 44.735
+  m6_kurz: importiert: valid=True closed=True solids=1 faces=7 V=52.784800 A=114.2563
+      types={'bspline': 2, 'plane': 2, 'cylinder': 3} bounds=(-2.999991, -3.000011, 4.75, 3.000005, 3.000011, 7.25)
+  [OK ] m6_kurz: importiert: nativ gültig
+  [OK ] m6_kurz: importiert: geschlossen
+  [OK ] m6_kurz: importiert: Körperzahl 1 — ist 1
+  [OK ] m6_kurz: kein Erzeugermerkmal nach dem Import (kein thread, keine generated-Herkunft) — Merkmale ['curved_face', 'face', 'pin']
+  [OK ] m6_kurz: der Körper trägt Wendelflächen (B-Spline-Flächen >= 2) — Flächenarten {'bspline': 2, 'plane': 2, 'cylinder': 3}
+  Sollwerte: {'pitch': 1.0, 'lead': 1.0, 'starts': 1, 'handedness': 'right', 'internal': False, 'diameter': 6.0, 'depth': 0.6134, 'length': 2.5, 'axis': (0.0, 0.0, 1.0), 'found': True, 'faces': 7, 'volume': 52.784800194907284}
+
+== beschädigte Flanken: Sektor 60° über z 4..8 ab r = 2,6 fehlt ==
+  (Dauer beschädigt: 0.5 s — Beobachtung)
+  m6_beschaedigt: importiert: valid=True closed=True solids=1 faces=46 V=250.849368 A=382.6227
+      types={'cylinder': 17, 'bspline': 10, 'plane': 19} bounds=(-3.000011, -3.000011, -0.0, 3.000011, 3.000011, 12.0)
+  [OK ] m6_beschaedigt: importiert: nativ gültig
+  [OK ] m6_beschaedigt: importiert: geschlossen
+  [OK ] m6_beschaedigt: importiert: Körperzahl 1 — ist 1
+  [OK ] m6_beschaedigt: kein Erzeugermerkmal nach dem Import (kein thread, keine generated-Herkunft) — Merkmale ['curved_face', 'face', 'fillet', 'pin']
+  [OK ] m6_beschaedigt: der Körper trägt Wendelflächen (B-Spline-Flächen >= 2) — Flächenarten {'cylinder': 17, 'bspline': 10, 'plane': 19}
+  Sollwerte: {'pitch': 1.0, 'lead': 1.0, 'starts': 1, 'handedness': 'right', 'internal': False, 'diameter': 6.0, 'depth': 0.6134, 'length': 12.0, 'axis': (0.0, 0.0, 1.0), 'found': True, 'partial': True, 'faces': 46, 'volume': 250.849367642391}
+
+== geteilte Trägerflächen: Ebene z = 6 teilt Flächen und Kanten ==
+  (Dauer Splitter: 0.4 s — Beobachtung)
+  m6_geteilt: importiert: valid=True closed=True solids=1 faces=24 V=253.367085 A=387.9639
+      types={'cylinder': 14, 'bspline': 4, 'plane': 6} bounds=(-3.000011, -3.000011, -0.0, 3.000011, 3.000011, 12.0)
+  [OK ] m6_geteilt: importiert: nativ gültig
+  [OK ] m6_geteilt: importiert: geschlossen
+  [OK ] m6_geteilt: importiert: Körperzahl 1 — ist 1
+  [OK ] m6_geteilt: kein Erzeugermerkmal nach dem Import (kein thread, keine generated-Herkunft) — Merkmale ['curved_face', 'face', 'fillet', 'pin']
+  [OK ] m6_geteilt: der Körper trägt Wendelflächen (B-Spline-Flächen >= 2) — Flächenarten {'cylinder': 14, 'bspline': 4, 'plane': 6}
+  Sollwerte: {'pitch': 1.0, 'lead': 1.0, 'starts': 1, 'handedness': 'right', 'internal': False, 'diameter': 6.0, 'depth': 0.6134, 'length': 12.0, 'axis': (0.0, 0.0, 1.0), 'found': True, 'faces': 24, 'volume': 253.36708536168078}
+
+== neue Parametrisierung: alles als NURBS (BRepBuilderAPI_NurbsConvert) ==
+  (Dauer NurbsConvert: 0.4 s — Beobachtung)
+  m6_nurbs: importiert: valid=True closed=True solids=1 faces=21 V=253.367085 A=387.9639
+      types={'bspline': 21} bounds=(-3.000011, -3.000011, -0.0, 3.000011, 3.000011, 12.0)
+  [OK ] m6_nurbs: importiert: nativ gültig
+  [OK ] m6_nurbs: importiert: geschlossen
+  [OK ] m6_nurbs: importiert: Körperzahl 1 — ist 1
+  [OK ] m6_nurbs: kein Erzeugermerkmal nach dem Import (kein thread, keine generated-Herkunft) — Merkmale ['curved_face', 'face', 'fillet', 'pin']
+  [OK ] m6_nurbs: der Körper trägt Wendelflächen (B-Spline-Flächen >= 2) — Flächenarten {'bspline': 21}
+  Sollwerte: {'pitch': 1.0, 'lead': 1.0, 'starts': 1, 'handedness': 'right', 'internal': False, 'diameter': 6.0, 'depth': 0.6134, 'length': 12.0, 'axis': (0.0, 0.0, 1.0), 'found': True, 'faces': 21, 'volume': 253.36708481592112}
+
+== Gegenfälle ==
+  gegen_zylinder: importiert: valid=True closed=True solids=1 faces=3 V=339.292007 A=282.7433
+      types={'cylinder': 1, 'plane': 2} bounds=(-3.0, -3.0, 0.0, 3.0, 3.0, 12.0)
+  [OK ] gegen_zylinder: importiert: nativ gültig
+  [OK ] gegen_zylinder: importiert: geschlossen
+  [OK ] gegen_zylinder: importiert: Körperzahl 1 — ist 1
+  [OK ] gegen_zylinder: kein Erzeugermerkmal nach dem Import (kein thread, keine generated-Herkunft) — Merkmale ['face', 'pin']
+  Sollwerte: {'found': False, 'why': 'glatter Zylinder', 'faces': 3, 'volume': 339.29200658769776}
+  (Dauer Ringrillen: 0.0 s — Beobachtung)
+  gegen_ringrillen: importiert: valid=True closed=True solids=1 faces=11 V=321.414696 A=309.1305
+      types={'cylinder': 5, 'torus': 4, 'plane': 2} bounds=(-3.0, -3.0, 0.0, 3.0, 3.0, 12.0)
+  [OK ] gegen_ringrillen: importiert: nativ gültig
+  [OK ] gegen_ringrillen: importiert: geschlossen
+  [OK ] gegen_ringrillen: importiert: Körperzahl 1 — ist 1
+  [OK ] gegen_ringrillen: kein Erzeugermerkmal nach dem Import (kein thread, keine generated-Herkunft) — Merkmale ['face', 'pin', 'torus']
+  Sollwerte: {'found': False, 'why': 'Ringrillen (Tori), periodisch, nicht schraubenförmig', 'faces': 11, 'volume': 321.4146964300314}
+  (Dauer Rändel: 0.1 s — Beobachtung)
+  gegen_raendel: importiert: valid=True closed=True solids=1 faces=50 V=313.804657 A=360.4199
+      types={'cylinder': 12, 'plane': 38} bounds=(-2.984962, -2.984962, 0.0, 2.984962, 2.984962, 12.0)
+  [OK ] gegen_raendel: importiert: nativ gültig
+  [OK ] gegen_raendel: importiert: geschlossen
+  [OK ] gegen_raendel: importiert: Körperzahl 1 — ist 1
+  [OK ] gegen_raendel: kein Erzeugermerkmal nach dem Import (kein thread, keine generated-Herkunft) — Merkmale ['face', 'fillet']
+  Sollwerte: {'found': False, 'why': 'Längsrillen, alle Kanten gerade', 'faces': 50, 'volume': 313.80465691334007}
+  (Dauer Wellenprofil: 0.0 s — Beobachtung)
+  gegen_welle: importiert: valid=True closed=True solids=1 faces=50 V=340.973398 A=326.4386
+      types={'plane': 2, 'revolution': 48} bounds=(-3.3, -3.3, -0.0, 3.3, 3.3, 12.0)
+  [OK ] gegen_welle: importiert: nativ gültig
+  [OK ] gegen_welle: importiert: geschlossen
+  [OK ] gegen_welle: importiert: Körperzahl 1 — ist 1
+  [OK ] gegen_welle: kein Erzeugermerkmal nach dem Import (kein thread, keine generated-Herkunft) — Merkmale ['curved_face', 'face']
+  Sollwerte: {'found': False, 'why': 'gewellter Drehkörper, Spline-Meridian', 'faces': 50, 'volume': 340.9733978190367}
+  (Dauer Naht: 12.1 s — Beobachtung)
+  gegen_naht: importiert: valid=True closed=True solids=1 faces=23 V=342.522780 A=284.5379
+      types={'cylinder': 14, 'bspline': 3, 'plane': 6} bounds=(-3.020015, -3.020015, -1e-06, 3.020015, 3.020015, 12.000001)
+  [OK ] gegen_naht: importiert: nativ gültig
+  [OK ] gegen_naht: importiert: geschlossen
+  [OK ] gegen_naht: importiert: Körperzahl 1 — ist 1
+  [OK ] gegen_naht: kein Erzeugermerkmal nach dem Import (kein thread, keine generated-Herkunft) — Merkmale ['curved_face', 'face', 'fillet', 'pin']
+  Sollwerte: {'found': False, 'why': 'Wendel ohne Rille (Tiefe 0,02 mm)', 'faces': 23, 'volume': 342.52277960021445}
+  (Dauer Viertelgang: 0.2 s — Beobachtung)
+  gegen_viertelgang: importiert: valid=True closed=True solids=1 faces=7 V=2.401399 A=16.7766
+      types={'bspline': 2, 'plane': 4, 'cylinder': 1} bounds=(-0.0, -0.0, 3.0, 2.999991, 3.000005, 3.4)
+  [OK ] gegen_viertelgang: importiert: nativ gültig
+  [OK ] gegen_viertelgang: importiert: geschlossen
+  [OK ] gegen_viertelgang: importiert: Körperzahl 1 — ist 1
+  [OK ] gegen_viertelgang: kein Erzeugermerkmal nach dem Import (kein thread, keine generated-Herkunft) — Merkmale ['face', 'fillet']
+  Sollwerte: {'found': False, 'why': 'ein Ausschnitt unter einer Umdrehung', 'faces': 7, 'volume': 2.4013986433752605}
+
+17 Fälle nach konzepte\nachweise-cad-p2-5\step und cases.json geschrieben
+
+S2 Referenzkörper: 80 von 80 Zusicherungen halten
