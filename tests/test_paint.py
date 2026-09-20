@@ -35,7 +35,7 @@ def ball(subdivisions: int = 3) -> MeshData:
     return MeshData.of(trimesh.creation.icosphere(subdivisions=subdivisions, radius=20.0))
 
 
-def run(op: str, entry: SceneObject, profile: Profile, **params: object):
+def run(op: str, entry: SceneObject, profile: Profile, *, quality="fine", **params: object):
     spec = REGISTRY.get(op)
     return spec.fn(
         OpContext(
@@ -43,7 +43,7 @@ def run(op: str, entry: SceneObject, profile: Profile, **params: object):
             inputs=[entry],
             params=spec.params(**params),
             profile=profile,
-            quality="fine",
+            quality=quality,
             seed=None,
             progress=lambda fraction, text: None,
             ask=lambda question, choices: choices[0],
@@ -66,6 +66,238 @@ def _with_top_face(entry: SceneObject, indices: tuple[int, ...]) -> SceneObject:
         face_indices=indices,
     )
     return dataclasses.replace(entry, features={"face_1": face})
+
+
+def _exact_filament_cylinder() -> tuple[SceneObject, str]:
+    """Ein exakter Zylinder; die gewählte Deckfläche liegt nachweislich bei z = 20."""
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+
+    solid = edit.cylinder(24.0, 20.0)
+    features = features_of(solid)
+    top = next(
+        feature
+        for feature in features.values()
+        if feature.kind == "face" and feature.params["normal"][2] > 0.9
+    )
+    return SceneObject("obj_1", "Zylinder", solid, kind="brep", features=features), top.id
+
+
+def _assert_cylinder_filaments(mesh, top_slot: int, other_slot: int) -> None:
+    """Der Sollbereich kommt aus den Koordinaten, nicht aus der nativen Flächenkarte."""
+    import numpy as np
+
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.units import EPS_GEOM
+
+    data = as_mesh_data(mesh)
+    top = np.all(np.abs(data.raw.triangles[:, :, 2] - 20.0) <= EPS_GEOM, axis=1)
+    assert top.any() and (~top).any()
+    slots = np.asarray(data.slot_indices or (0,) * data.triangle_count)
+    assert np.all(slots[top] == top_slot)
+    assert np.all(slots[~top] == other_slot)
+
+
+@pytest.mark.parametrize("quality", ["coarse", "fine"])
+def test_exact_filaments_follow_retessellation_and_clear_without_changing_source(
+    profile: Profile, quality: str
+) -> None:
+    """Körper- und Flächenzuweisung bleiben exakt, auch mit vollständig neuen Dreiecken."""
+    import io
+    import math
+
+    from OCP.BRepTools import BRepTools
+
+    from app.core.brep import step
+    from app.core.brep.kernel import Solid
+
+    source, top = _exact_filament_cylinder()
+    original = io.BytesIO()
+    BRepTools.Write_s(source.mesh.shape, original)
+    assigned = run("assign_slot", source, profile, quality=quality, slot=2, name="Blau").outputs[0]
+    assert isinstance(assigned.mesh, Solid)
+    _assert_cylinder_filaments(assigned.mesh, 2, 2)
+    painted = run(
+        "paint_slot", assigned, profile, quality=quality, slot=3, name="Rot", at_feature=top
+    ).outputs[0]
+    assert isinstance(painted.mesh, Solid)
+    assert painted.mesh.volume == pytest.approx(math.pi * 12.0**2 * 20.0)
+    _assert_cylinder_filaments(painted.mesh, 3, 2)
+    coarse = dataclasses.replace(painted.mesh, deflection=0.5)
+    fine = dataclasses.replace(painted.mesh, deflection=0.005)
+    assert coarse.triangle_count != fine.triangle_count
+    _assert_cylinder_filaments(coarse, 3, 2)
+    _assert_cylinder_filaments(fine, 3, 2)
+    partial = run("clear_filament", painted, profile, quality=quality, at_feature=top).outputs[0]
+    assert isinstance(partial.mesh, Solid)
+    _assert_cylinder_filaments(dataclasses.replace(partial.mesh, deflection=0.005), 0, 2)
+    cleared = run("clear_filament", painted, profile, quality=quality).outputs[0]
+    assert isinstance(cleared.mesh, Solid)
+    _assert_cylinder_filaments(dataclasses.replace(cleared.mesh, deflection=0.005), 0, 0)
+    assert cleared.material_slots == [] and cleared.material is None
+    assert step.read(step.write(painted.mesh)).volume == pytest.approx(source.mesh.volume)
+    unchanged = io.BytesIO()
+    BRepTools.Write_s(source.mesh.shape, unchanged)
+    assert unchanged.getvalue() == original.getvalue()
+    assert source.mesh.mesh.slots == () and source.material_slots == []
+    _assert_cylinder_filaments(assigned.mesh, 2, 2)
+
+
+@pytest.mark.parametrize("operation", ["paint_slot", "clear_filament"])
+def test_exact_filament_never_expands_a_partial_native_face(
+    profile: Profile, operation: str
+) -> None:
+    """Ein einzelnes Dreieck wird beim Qualitätswechsel nicht zur ganzen Deckfläche."""
+    source, top = _exact_filament_cylinder()
+    face = source.features[top]
+    assert len(face.face_indices) > 1
+    partial = dataclasses.replace(face, face_indices=face.face_indices[:1])
+    source = dataclasses.replace(source, features={**source.features, top: partial})
+    # Slot null ist bereits neutral; auch diese Auswahl muss als Teilfläche erkannt werden.
+    params = {"at_feature": top, **({"slot": 3} if operation == "paint_slot" else {})}
+    with pytest.raises(ValidationError) as failure:
+        run(operation, source, profile, **params)
+    assert failure.value.suggestions
+    assert source.mesh.mesh.slots == ()
+
+
+def test_exact_clear_preserves_a_used_zero_definition_outside_the_face(profile: Profile) -> None:
+    from app.core.brep.kernel import Solid
+
+    source, top = _exact_filament_cylinder()
+    assigned = run("assign_slot", source, profile, slot=0, name="Weiß").outputs[0]
+    cleared = run("clear_filament", assigned, profile, at_feature=top).outputs[0]
+    assert isinstance(cleared.mesh, Solid)
+    assert [(slot.index, slot.name) for slot in cleared.material_slots] == [(1, "Weiß")]
+    _assert_cylinder_filaments(dataclasses.replace(cleared.mesh, deflection=0.005), 0, 1)
+
+
+@pytest.mark.parametrize("quality", ["coarse", "fine"])
+def test_exact_filament_history_survives_project_cache_undo_and_explicit_mesh_export(
+    tmp_path: Path, profile: Profile, quality: str
+) -> None:
+    """Der echte STEP-Import bleibt nach Zuweisung und Wiederöffnen weiterhin STEP-fähig."""
+    from app.core.brep import step
+    from app.core.brep.kernel import Solid
+    from app.core.geom.mesh import MeshCodec
+    from app.core.ingest.plan import import_plan
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.cache import DiskCache, ResultCache
+    from app.core.scene.project import ProjectSources, load, new_project, save
+    from app.core.types import Source
+
+    original, _ = _exact_filament_cylinder()
+    payload = step.write(original.mesh)
+    project = new_project("centauri-carbon-2", "petg")
+    project.sources["src_1"] = payload
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/coloured.step", sha256=""
+    )
+    history = History(project.document)
+    plan = import_plan("src_1", "coloured.step", payload)
+    history.apply(plan.title, [plan.draft])
+    cache = ResultCache(disk=DiskCache(codec=MeshCodec(), directory=tmp_path / "cache"))
+
+    def evaluated(current=project):
+        result = evaluate(
+            current.document, profile, quality=quality, sources=ProjectSources(current), cache=cache
+        )
+        assert result.complete, result.scene.report.findings
+        return result
+
+    before = evaluated()
+    body = before.scene.objects["obj_1"]
+    top = next(
+        feature.id
+        for feature in body.features.values()
+        if feature.kind == "face" and feature.params["normal"][2] > 0.9
+    )
+    history.apply(
+        "Filamente zuweisen",
+        [
+            OperationDraft(op="assign_slot", inputs=(body.id,), params={"slot": 2, "name": "Blau"}),
+            OperationDraft(
+                op="paint_slot",
+                inputs=(body.id,),
+                params={"slot": 3, "name": "Rot", "at_feature": top},
+            ),
+        ],
+    )
+    assigned = evaluated()
+    assert isinstance(assigned.scene.objects[body.id].mesh, Solid)
+    assert not any(finding.converts_exact_body for finding in assigned.scene.report.findings)
+    _assert_cylinder_filaments(assigned.scene.objects[body.id].mesh, 3, 2)
+    assert history.undo() is not None
+    _assert_cylinder_filaments(evaluated().scene.objects[body.id].mesh, 0, 0)
+    assert history.redo() is not None
+    _assert_cylinder_filaments(evaluated().scene.objects[body.id].mesh, 3, 2)
+    history.apply(
+        "Verschieben",
+        [OperationDraft(op="translate_object", inputs=(body.id,), params={"dx": 5.0})],
+    )
+    moved = evaluated().scene.objects[body.id]
+    assert isinstance(moved.mesh, Solid)
+    _assert_cylinder_filaments(moved.mesh, 3, 2)
+    path = save(project, tmp_path / "filaments.solidon")
+    reopened = load(path)
+    cache = ResultCache(disk=DiskCache(codec=MeshCodec(), directory=tmp_path / "cache"))
+    fresh = evaluated(reopened).scene.objects[body.id]
+    assert isinstance(fresh.mesh, Solid)
+    _assert_cylinder_filaments(dataclasses.replace(fresh.mesh, deflection=0.005), 3, 2)
+    assert [(slot.index, slot.name) for slot in fresh.material_slots] == [(2, "Blau"), (3, "Rot")]
+    roundtrip = step.read(step.write(fresh.mesh))
+    assert roundtrip.volume == pytest.approx(original.mesh.volume)
+    assert roundtrip.bounds.centre == pytest.approx((5.0, 0.0, 10.0))
+    fresh_history = History(reopened.document)
+    fresh_history.apply(
+        "Vernetzen",
+        [OperationDraft(op="brep_to_mesh", inputs=(body.id,), params={"deflection": 0.005})],
+    )
+    meshed = evaluated(reopened).scene.objects[body.id]
+    assert isinstance(meshed.mesh, MeshData)
+    _assert_cylinder_filaments(meshed.mesh, 3, 2)
+    assert fresh_history.undo() is not None
+    assert isinstance(evaluated(reopened).scene.objects[body.id].mesh, Solid)
+    assert project.sources["src_1"] == reopened.sources["src_1"] == payload
+    _assert_cylinder_filaments(body.mesh, 0, 0)
+
+
+def test_native_filament_cache_keeps_faces_and_only_persists_explicit_meshes(
+    tmp_path: Path, profile: Profile
+) -> None:
+    """Ein warmer Solid behält Flächenattribute.
+
+    Die Platte speichert erst die bewusste Vernetzung.
+    """
+    from app.core.brep.kernel import Solid
+    from app.core.geom.mesh import MeshCodec
+    from app.core.scene.cache import CachedResult, DiskCache, ResultCache
+
+    source, top = _exact_filament_cylinder()
+    assigned = run("assign_slot", source, profile, slot=2).outputs[0]
+    painted = run("paint_slot", assigned, profile, slot=3, at_feature=top).outputs[0]
+    native_key, mesh_key = "a" * 64, "b" * 64
+    directory = tmp_path / "cache"
+    disk = DiskCache(codec=MeshCodec(), directory=directory)
+    cache = ResultCache(disk=disk)
+    cache.put(native_key, CachedResult(objects=(painted,)), to_disk=True)
+    warm = cache.get(native_key)
+    assert warm is not None and cache.statistics.hits == 1
+    solid = warm.objects[0].mesh
+    assert isinstance(solid, Solid)
+    assert solid.face_slots == painted.mesh.face_slots
+    assert set(solid.face_slots) == {2, 3}
+    _assert_cylinder_filaments(dataclasses.replace(solid, deflection=0.005), 3, 2)
+    assert disk.get(native_key) is None
+    assert not tuple(directory.rglob("objects.json"))
+
+    converted = dataclasses.replace(painted, mesh=solid.to_mesh(deflection=0.005), kind="mesh")
+    cache.put(mesh_key, CachedResult(objects=(converted,)), to_disk=True)
+    reopened = ResultCache(disk=DiskCache(codec=MeshCodec(), directory=directory))
+    persisted = reopened.get(mesh_key)
+    assert persisted is not None and reopened.statistics.disk_hits == 1
+    assert isinstance(persisted.objects[0].mesh, MeshData)
+    _assert_cylinder_filaments(persisted.objects[0].mesh, 3, 2)
 
 
 def _filament_cube(slots: tuple[int, ...], definitions: tuple[int, ...]) -> SceneObject:

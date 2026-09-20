@@ -267,6 +267,14 @@ korrigiert das Merkmal. Entfernte Kennungen bleiben in
 Materialslots werden nach einer Booleschen Operation anhand der erhaltenen
 Eingangsflächen übertragen; eine gleiche Dreieckszahl beweist keine gleiche
 Zuordnung. Rasterbudgets multiplizieren mit unbegrenzten Ganzzahlen.
+`assign_slot`, `paint_slot` und `clear_filament` ändern Attribute über
+`attributes.with_slots` und erhalten dabei Mesh oder BRep. Bei exakten Körpern
+bindet `Solid` die Slots an native Flächen und bildet sie bei jeder neuen
+Tessellation auf die neuen Dreiecke ab. `validate_full_faces` weist Teilmengen
+einer nativen Fläche vor der Zuweisung zurück, auch wenn ihr bisheriger Slot
+bereits dem Ziel entspricht. Eine Teilfläche wird beim Vernetzen nicht
+heimlich zur ganzen Fläche erweitert. Vorhandene Merkmalsindices bleiben
+bei einer reinen Attributänderung gültig.
 `paint_slot.replace_filament` übernimmt eine ausdrücklich gewählte Spule
 vollständig, auch unbekannte Materialwerte. Ohne dieses gespeicherte Flag
 behält die Operation das historische Ergänzungsverhalten leerer Felder.

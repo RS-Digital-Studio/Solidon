@@ -13,7 +13,7 @@ import re
 from typing import cast
 
 from app.core.errors import ValidationError
-from app.core.geom.attributes import counts, with_slot
+from app.core.geom.attributes import counts, validate_full_faces, with_slots
 from app.core.geom.mesh import as_mesh_data
 from app.core.geom.texture import to_slots
 from app.core.knowledge.filaments import MAX_COLOURS, profile_name
@@ -92,7 +92,9 @@ def assign_slot(ctx: OpContext) -> OpResult:
         material=profile_name(params.slicer_profile) or None,
         material_type=params.material_type or None,
     )
-    painted = with_slot(as_mesh_data(source.mesh), params.slot)
+    painted = with_slots(
+        source.mesh, (params.slot,) * source.mesh.triangle_count, cancelled=ctx.cancelled
+    )
     return OpResult(
         outputs=[
             dataclasses.replace(
@@ -148,7 +150,7 @@ def clear_filament(ctx: OpContext) -> OpResult:
             outputs=[
                 dataclasses.replace(
                     source,
-                    mesh=dataclasses.replace(mesh, slots=()),
+                    mesh=with_slots(source.mesh, (), cancelled=ctx.cancelled),
                     material_slots=[],
                     material=None,
                 )
@@ -171,6 +173,7 @@ def clear_filament(ctx: OpContext) -> OpResult:
         reason = reason_against("clear_filament", feature.kind)
         if reason is not None:
             raise ValidationError(field=field_name, constraint="feature_kind", detail=reason)
+        validate_full_faces(source.mesh, feature.face_indices)
         indices = {index for index in feature.face_indices if 0 <= index < mesh.triangle_count}
         if not indices:
             raise ValidationError(
@@ -222,7 +225,7 @@ def clear_filament(ctx: OpContext) -> OpResult:
         outputs=[
             dataclasses.replace(
                 source,
-                mesh=dataclasses.replace(mesh, slots=tuple(after)),
+                mesh=with_slots(source.mesh, tuple(after), cancelled=ctx.cancelled),
                 material=None,
                 material_slots=[
                     definitions[index] for index in sorted(definitions) if index in used

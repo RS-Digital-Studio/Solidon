@@ -63,6 +63,27 @@ weiter mit kaltem Cache. `faces_of_triangles` ist die geprüfte inverse Zuordnun
 zu `triangles_of_face` und weist negative oder fremde Dreiecksindices zurück.
 Weder Besuchsreihenfolge noch alte Dreiecksindices ersetzen diese Zuordnung.
 
+Filamentzuweisungen liegen unveränderlich in `Solid.face_slots`, je nativer
+Fläche. Jede private Kopie führt sie über `_copied_faces` nach; jede neue
+Tessellation bildet daraus die Slots ihrer tatsächlich erzeugten Dreiecke.
+`with_triangle_slots` übernimmt nur widerspruchsfreie ganze Flächen. Bei
+reinen Attributänderungen bleiben die vorhandenen Merkmalsdreiecke in ihrer
+Reihenfolge erhalten; deren native Flächenkarte wird auf die private Kopie
+umgeschrieben. Ein Qualitätswechsel beginnt weiterhin mit kaltem Cache.
+Auch `to_mesh(deflection=...)` und die bewusste Operation `brep_to_mesh`
+verwenden diese Attributzuordnung.
+
+`carried_face_slots` führt Attribute durch Folgeoperationen allein anhand
+nativer Identität und belegter Builder-Ersetzungen nach. Transformationen
+reichen `ModifiedShape`, ShapeFix seine `ShapeBuild_ReShape`-Ersetzung weiter.
+Bei mehreren Eingängen gilt die erste passende Quelle mit Attributen;
+Abzugswerkzeuge sind keine Farbquelle. Neue Flächen erhalten Slot null.
+`keep_filament_boundaries` bewahrt beim Vereinigen gleichartiger Flächen die
+Kanten zwischen verschiedenen Slots. Widersprüchliche Nachfahren werden
+abgewiesen, niemals über Mehrheit oder Besuchsreihenfolge aufgelöst.
+Projektdateien speichern weiterhin Quellen und Filamentoperationen; die
+native Zuordnung wird beim Öffnen aus demselben Verlauf neu aufgebaut.
+
 `canonical.describe` ist die gemeinsame Trägerauskunft für Erkennung,
 Nachbarschaft, Langloch und die Flächenauswahl in `edit`/`profiles`. Eine
 `PlaneSurface` trägt die Normale der ursprünglichen Fläche; eine

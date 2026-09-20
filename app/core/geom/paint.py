@@ -162,6 +162,7 @@ class PaintParams(BaseParams):
 )
 def paint_slot(ctx: OpContext) -> OpResult:
     from app.core.export.threemf import slots_for_object
+    from app.core.geom.attributes import validate_full_faces, with_slots
 
     params = cast(PaintParams, ctx.params)
     source = ctx.inputs[0]
@@ -197,6 +198,7 @@ def paint_slot(ctx: OpContext) -> OpResult:
             constraint="unknown_feature",
             values={"feature": params.at_feature},
         )
+    validate_full_faces(source.mesh, feature.face_indices)
     stroke = fill_feature(mesh, feature.face_indices, params.slot)
     covered = stroke.painted
     if not covered:
@@ -261,7 +263,7 @@ def paint_slot(ctx: OpContext) -> OpResult:
         outputs=[
             dataclasses.replace(
                 source,
-                mesh=stroke.mesh,
+                mesh=with_slots(source.mesh, stroke.mesh.slots, cancelled=ctx.cancelled),
                 material_slots=slots,
             )
         ],

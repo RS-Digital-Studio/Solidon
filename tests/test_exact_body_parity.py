@@ -101,7 +101,7 @@ CASES = [
         "assign_slot",
         "box",
         {"slot": 2, "name": "Prüfrot", "colour": "#ff0000", "material_type": "PLA"},
-        MESH,
+        KEEP,
         "assigned",
         2,
     ),
@@ -125,7 +125,7 @@ CASES = [
         "join_clear",
         None,
     ),
-    Case("clear_filament", "coloured", {}, MESH_ONLY, "cleared", None),
+    Case("clear_filament", "coloured", {}, KEEP, "cleared", None),
     Case("compensate_first_layer", "box", {"height": 0.6, "amount": 0.2}, MESH, "less", 3200.0),
     Case(
         "countersink_hole",
@@ -395,7 +395,7 @@ CASES = [
             "name": "Prüfgrün",
             "material_type": "PLA",
         },
-        MESH,
+        KEEP,
         "painted",
         3,
     ),
@@ -958,12 +958,13 @@ def _inputs(case: Case, kind: str, project: Project, profile: Profile) -> list[S
         raw.remove_unreferenced_vertices()
         return [dataclasses.replace(entry, mesh=MeshData.of(raw), features={})]
     if source == "coloured":
+        from app.core.geom.attributes import with_slots
         from app.core.types import MaterialSlot
 
         return [
             dataclasses.replace(
                 entry,
-                mesh=MeshData.of(raw, slots=(2,) * len(raw.faces)),
+                mesh=with_slots(entry.mesh, (2,) * entry.mesh.triangle_count),
                 material_slots=[
                     MaterialSlot(index=2, name="Rot", colour="#ff0000", material_type="PLA")
                 ],

@@ -308,7 +308,7 @@ def test_exact_quick_assignment_previews_then_commits_the_same_spool_and_scope(
     """Vorschau, Abbruch und Übernahme halten Körperart, Flächen und Lagerbindung zusammen."""
     from copy import deepcopy
 
-    from app.core.brep.kernel import available
+    from app.core.brep.kernel import Solid, available
     from app.core.scene.history import OperationDraft
     from app.ui.session import Session
 
@@ -356,7 +356,9 @@ def test_exact_quick_assignment_previews_then_commits_the_same_spool_and_scope(
             assert len(approval.order.drafts) == count
             assert all(draft.op == expected_op for draft in approval.order.drafts)
             assert all(draft.inputs == (identifier,) for draft in approval.order.drafts)
-            assert "geraden Teilstücken" in window.viewport._preview_note
+            assert approval.difference is not None
+            assert not any(finding.converts_exact_body for finding in approval.difference.findings)
+            assert "geraden Teilstücken" not in window.viewport._preview_note
             assert window.session.project.document == before
             assert picker.can_accept()
             if cancel:
@@ -375,7 +377,11 @@ def test_exact_quick_assignment_previews_then_commits_the_same_spool_and_scope(
                 (draft.op, draft.inputs, draft.params) for draft in prepared.drafts
             ]
         changed = window.session.last_result.scene.objects[identifier]
-        assert changed.kind == "mesh"
+        assert changed.kind == "brep" and isinstance(changed.mesh, Solid)
+        assert not any(
+            finding.converts_exact_body
+            for finding in window.session.last_result.scene.report.findings
+        )
         assert any(slot.name == inventory.name for slot in changed.material_slots)
         assert window.session.project.document.print_settings.spool_bindings[
             0

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable
+from dataclasses import replace
 from typing import Any, Final
 
 from app.core.brep.canonical import PlaneSurface
@@ -515,7 +516,7 @@ def shell_open_top(
     require_positive("wall", thickness)
     if cancelled is not None:
         cancelled.raise_if_cancelled()
-    working = Solid(solid.shape, deflection=solid.deflection)
+    working = replace(solid)
     tops = _top_faces(working, cancelled=cancelled)
     if not tops:
         raise GeometryError(
@@ -531,7 +532,7 @@ def shell_open_top(
     return _finished(
         builder,
         _("Für diese Wandstärke ist im Körper kein Platz."),
-        solid,
+        working,
         cancelled=cancelled,
     )
 
@@ -553,7 +554,7 @@ def draft_vertical(
         )
     if cancelled is not None:
         cancelled.raise_if_cancelled()
-    working = Solid(solid.shape, deflection=solid.deflection)
+    working = replace(solid)
     uprights = _upright_faces(working, cancelled=cancelled)
     if not uprights:
         raise GeometryError(detail=_("Dieser Körper hat keine senkrechten Flächen."))
@@ -566,7 +567,7 @@ def draft_vertical(
     return _finished(
         builder,
         _("Die Formschräge lässt sich an diesen Flächen nicht anlegen."),
-        solid,
+        working,
         cancelled=cancelled,
     )
 
@@ -739,12 +740,12 @@ def _finely_meshed(rod: Solid, fineness: float) -> Solid:
     gelungenen Körper.
     """
     for _attempt in range(3):
-        meshed = Solid(rod.shape, deflection=fineness)
+        meshed = replace(rod, deflection=fineness)
         if meshed.is_watertight:
             return meshed
         fineness /= 2.0
         _log.info("thread rod: mesh had gaps, refining to %.4f mm", fineness)
-    return Solid(rod.shape, deflection=fineness)
+    return replace(rod, deflection=fineness)
 
 
 #: Wie grob die späteren Vereinigungen eines Gewindes sein dürfen, als Anteil
@@ -923,13 +924,13 @@ def _sewn(solid: Solid, tolerance: float = 0.0) -> Solid:
     """
     from OCP.ShapeFix import ShapeFix_Shape
 
-    working = Solid(solid.shape, deflection=solid.deflection)
+    working = replace(solid)
     fix = ShapeFix_Shape(working.shape)
     if tolerance > 0.0:
         fix.SetPrecision(tolerance)
         fix.SetMaxTolerance(tolerance)
     fix.Perform()
-    return Solid(fix.Shape(), deflection=solid.deflection)
+    return working.replacing(fix.Shape(), history=fix.Context())
 
 
 def _fuzzy_boolean(kind: str, first: Solid, second: Solid, tolerance: float = EPS_GEOM) -> Solid:
@@ -953,6 +954,8 @@ def _fuzzy_boolean(kind: str, first: Solid, second: Solid, tolerance: float = EP
             "ein leicht anderer Durchmesser oder eine andere Steigung verschiebt die "
             "Berührung."
         ),
+        first,
+        others=() if kind == "difference" else (second,),
     )
 
 
@@ -1047,6 +1050,7 @@ def _finished(
     base: Solid | None = None,
     *,
     cancelled: CancelToken | None = None,
+    others: tuple[Solid, ...] = (),
 ) -> Solid:
     """Baut fertig und macht aus dem Scheitern einen Satz mit Vorschlag (§33.1)."""
     try:
@@ -1065,7 +1069,11 @@ def _finished(
     except Exception as problem:  # OpenCASCADE wirft eigene Ausnahmearten
         raise GeometryError(detail=sentence) from problem
     _log.info("profile build via %s", type(builder).__name__)
-    return base.replacing(shape) if base is not None else Solid(shape)
+    return (
+        base.replacing(shape, history=builder, others=others, cancelled=cancelled)
+        if base is not None
+        else Solid(shape)
+    )
 
 
 def push_faces(
@@ -1101,7 +1109,7 @@ def push_faces(
         )
     if cancelled is not None:
         cancelled.raise_if_cancelled()
-    working = Solid(solid.shape, deflection=solid.deflection)
+    working = replace(solid)
     wanted = _facing(working, direction, cancelled=cancelled)
     if not wanted:
         raise ValidationError(
@@ -1113,24 +1121,24 @@ def push_faces(
     if centre is not None:
         wanted = _nearest_face(working, wanted, centre, cancelled=cancelled)
 
-    shape = working.shape
+    outcome = working
     for face, normal in wanted:
         if cancelled is not None:
             cancelled.raise_if_cancelled()
         reach = gp_Vec(*(value * abs(distance) for value in normal))
         prism = BRepPrimAPI_MakePrism(face, reach if distance > 0 else reach.Reversed()).Shape()
-        joined = boolean_builder("union" if distance > 0 else "difference", shape, prism)
+        joined = boolean_builder("union" if distance > 0 else "difference", outcome.shape, prism)
         # ``_finished`` statt blindem ``Shape()``: Ein Schritt ohne ``IsDone``
         # lieferte sonst wortlos irgendetwas — bis hin zu gar nichts.
-        shape = _finished(
+        outcome = _finished(
             joined,
             _(
                 "Mit diesem Weg bleibt von der Fläche nichts übrig — kleiner "
                 "versetzen oder die Richtung umkehren."
             ),
+            outcome,
             cancelled=cancelled,
-        ).shape
-    outcome = Solid(shape)
+        )
     # Und das Ergebnis muss ein Körper sein: distance = -25 auf einem 20 mm
     # hohen Quader gab Volumen null, null Befunde — ein Schritt im Verlauf,
     # nichts im Bild, und gesagt wurde nichts (Gesamtreview D-6).

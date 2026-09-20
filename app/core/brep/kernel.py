@@ -20,14 +20,14 @@ und der Rest der Anwendung bleibt unberührt (§36).
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from operator import index as integer_index
 from typing import Any, cast
 
 from app.core.errors import CANCEL, INSTALL_MISSING, AppError, InternalError, ValidationError
 from app.core.geom.mesh import MeshData
 from app.core.log import get_logger
-from app.core.types import BoundingBox, CancelToken
+from app.core.types import MAX_SLOTS, BoundingBox, CancelToken
 from app.core.units import MAX_FACET_ANGLE, MAX_FACET_SAG, is_close
 from app.i18n import _
 
@@ -216,6 +216,109 @@ def boolean_builder(kind: str, first: Any, second: Any, *, tolerance: float | No
     return operation
 
 
+def carried_face_slots(
+    shape: Any,
+    sources: Sequence[tuple[Any, tuple[int, ...]]],
+    *,
+    history: Any = None,
+    cancelled: CancelToken | None = None,
+) -> tuple[int, ...]:
+    """Belegte alte Flächen behalten Filamente; neue Schnittflächen erhalten Slot null.
+
+    Native Identität und Builder-Herkunft sind die einzigen Belege. Bei mehreren
+    Körpern gewinnt wie im Netzweg die erste passende Quelle mit Attributen. Eine vom Builder
+    zusammengefasste mehrfarbige Fläche braucht dagegen ihre Teilungsgrenze.
+    """
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+    if not any(slots for _source, slots in sources):
+        return ()
+    from OCP.collections import IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher as ShapeMap
+    from OCP.TopAbs import TopAbs_FACE
+    from OCP.TopExp import TopExp
+
+    targets = ShapeMap()
+    TopExp.MapShapes_s(shape, TopAbs_FACE, targets)
+    values = [0] * targets.Extent()
+    assigned: set[int] = set()
+    for source, slots in sources:
+        if not slots:
+            continue
+        native = ShapeMap()
+        TopExp.MapShapes_s(source, TopAbs_FACE, native)
+        if len(slots) != native.Extent():
+            raise InternalError(detail="incomplete native source face slots")
+        claims: dict[int, int] = {}
+        for index in range(1, native.Extent() + 1):
+            if cancelled is not None:
+                cancelled.raise_if_cancelled()
+            face = native.FindKey(index)
+            changed = [face]
+            if history is not None:
+                if hasattr(history, "Modified"):
+                    changed.extend(history.Modified(face))
+                else:
+                    # ShapeFix liefert seine echte Ersetzung über ShapeBuild_ReShape.
+                    modified = history.Apply(face)
+                    if not modified.IsNull():
+                        changed.append(modified)
+                # GTransform veröffentlicht seine verkettete NURBS-Zuordnung
+                # ausschließlich über ModifiedShape, nicht über Modified.
+                if hasattr(history, "ModifiedShape"):
+                    modified = history.ModifiedShape(face)
+                    if not modified.IsNull():
+                        changed.append(modified)
+            slot = slots[index - 1]
+            for modified in changed:
+                if modified.IsNull():
+                    continue
+                fragments = ShapeMap()
+                TopExp.MapShapes_s(modified, TopAbs_FACE, fragments)
+                for number in range(1, fragments.Extent() + 1):
+                    target = int(targets.FindIndex(fragments.FindKey(number))) - 1
+                    if target < 0:
+                        continue
+                    if target in claims and claims[target] != slot:
+                        raise ValidationError(
+                            detail=_(
+                                "Diese Änderung würde unterschiedlich zugewiesene Filamentflächen "
+                                "zusammenfassen. Behalten Sie ihre Teilungsgrenze oder weisen Sie "
+                                "ihnen zuerst dasselbe Filament zu."
+                            )
+                        )
+                    claims[target] = slot
+        for target, slot in claims.items():
+            if target not in assigned:
+                values[target] = slot
+                assigned.add(target)
+    return tuple(values)
+
+
+def keep_filament_boundaries(solid: Solid, builder: Any) -> None:
+    """Eine Flächenvereinigung darf Grenzen verschiedener Filamente nicht entfernen."""
+    if not solid.face_slots:
+        return
+    from OCP.collections import (
+        IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher as NeighbourMap,
+    )
+    from OCP.collections import (
+        IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher as ShapeMap,
+    )
+    from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE
+    from OCP.TopExp import TopExp
+
+    faces, neighbours = ShapeMap(), NeighbourMap()
+    TopExp.MapShapes_s(solid.shape, TopAbs_FACE, faces)
+    TopExp.MapShapesAndAncestors_s(solid.shape, TopAbs_EDGE, TopAbs_FACE, neighbours)
+    for index in range(1, neighbours.Extent() + 1):
+        slots = {
+            solid.face_slots[int(faces.FindIndex(face)) - 1]
+            for face in neighbours.FindFromIndex(index)
+        }
+        if len(slots) > 1:
+            builder.KeepShape(neighbours.FindKey(index))
+
+
 @dataclass(frozen=True, slots=True)
 class Solid:
     """Ein B-Rep-Körper. Erfüllt das ``Mesh``-Protokoll, indem er sich selbst
@@ -225,6 +328,8 @@ class Solid:
     shape: Any
     """``TopoDS_Shape``. Absichtlich lose typisiert — die Anbindung ist optional."""
     deflection: float = DEFLECTION
+    face_slots: tuple[int, ...] = ()
+    """Filament je nativer Fläche; leer bedeutet überall den neutralen Slot null."""
     _cache: dict[str, Any] = field(default_factory=dict, init=False, compare=False, repr=False)
     _copied_faces: tuple[int, ...] = field(init=False, compare=False, repr=False)
 
@@ -233,6 +338,15 @@ class Solid:
         shape, mapping = copy_shape(self.shape)
         object.__setattr__(self, "shape", shape)
         object.__setattr__(self, "_copied_faces", mapping)
+        if self.face_slots:
+            if len(self.face_slots) != len(mapping) or any(
+                type(slot) is not int or not 0 <= slot < MAX_SLOTS for slot in self.face_slots
+            ):
+                raise InternalError(detail="incomplete or invalid native face slots")
+            slots = [0] * len(mapping)
+            for source, target in enumerate(mapping):
+                slots[target] = self.face_slots[source]
+            object.__setattr__(self, "face_slots", tuple(slots))
 
     # --- die exakten Antworten --------------------------------------------------
 
@@ -309,13 +423,89 @@ class Solid:
         """Die Dreiecke. Einmal gemacht, und nie in die Form zurückgespeist."""
         cached = self._cache.get("mesh")
         if cached is None:
-            cached = tessellate(self.shape, self.deflection)
+            cached = self._tessellated(self.deflection)
             self._cache["mesh"] = cached
         return cast(MeshData, cached)
 
-    def to_mesh(self) -> MeshData:
+    def to_mesh(self, *, deflection: float | None = None) -> MeshData:
         """Die Einbahntür aus §30. Ausdrücklich, denn der Rückweg ist zu."""
-        return self.mesh
+        return self.mesh if deflection is None else self._tessellated(deflection)
+
+    def _tessellated(self, deflection: float) -> MeshData:
+        """Jede neue Vernetzung liest ihre Filamente aus den exakten Trägerflächen."""
+        import numpy as np
+
+        mesh = tessellate(self.shape, deflection)
+        if not self.face_slots:
+            return mesh
+        source = np.asarray(mesh.raw.face_attributes.get(_FACE_ATTRIBUTE, ()), dtype=np.int64)
+        if len(source) != mesh.triangle_count or any(
+            index < 0 or index >= len(self.face_slots) for index in source
+        ):
+            raise InternalError(detail="the tessellation has no complete native face mapping")
+        return replace(mesh, slots=tuple(self.face_slots[index] for index in source))
+
+    def with_triangle_slots(
+        self, slots: tuple[int, ...], *, cancelled: CancelToken | None = None
+    ) -> Solid:
+        """Bindet reine Attribute an Flächen und erhält die gegenwärtigen Merkmalsdreiecke."""
+        import numpy as np
+
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        mesh = self.mesh
+        if slots and (
+            len(slots) != mesh.triangle_count
+            or any(type(slot) is not int or not 0 <= slot < MAX_SLOTS for slot in slots)
+        ):
+            raise InternalError(detail="incomplete or invalid triangle slots")
+        source = np.asarray(mesh.raw.face_attributes.get(_FACE_ATTRIBUTE, ()), dtype=np.int64)
+        if (
+            len(source) != mesh.triangle_count
+            or np.any(source < 0)
+            or np.any(source >= self.face_count)
+        ):
+            raise InternalError(detail="the tessellation has no complete native face mapping")
+        face_slots = list(self.face_slots or (0,) * self.face_count) if slots else []
+        if slots:
+            values = np.asarray(slots, dtype=np.int64)
+            low = np.full(self.face_count, MAX_SLOTS, dtype=np.int64)
+            high = np.full(self.face_count, -1, dtype=np.int64)
+            np.minimum.at(low, source, values)
+            np.maximum.at(high, source, values)
+            covered = high >= 0
+            if np.any(low[covered] != high[covered]):
+                raise ValidationError(
+                    detail=_("Wähle vollständige Flächen aus und wiederhole die Änderung.")
+                )
+            for face in np.flatnonzero(covered):
+                face_slots[face] = int(low[face])
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        result = replace(self, face_slots=tuple(face_slots))
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        # Die Kopie besitzt andere native Flächen. Die schon angezeigten Dreiecke
+        # behalten ihre Reihenfolge; nur ihr belegter Weg zur Topologie ändert sich.
+        raw = mesh.raw.copy()
+        raw.face_attributes[_FACE_ATTRIBUTE] = np.asarray(result._copied_faces, dtype=np.int64)[
+            source
+        ]
+        result._cache["mesh"] = replace(mesh, raw=raw, slots=slots)
+        return result
+
+    def complete_faces_of_triangles(self, indices: Sequence[int]) -> tuple[int, ...]:
+        """Eine Auswahl muss vollständige exakte Flächen enthalten, auch bei Slot null."""
+        import numpy as np
+
+        faces = self.faces_of_triangles(indices)
+        source = np.asarray(self.raw.face_attributes.get(_FACE_ATTRIBUTE, ()), dtype=np.int64)
+        complete = set(np.flatnonzero(np.isin(source, faces)))
+        if set(indices) != complete:
+            raise ValidationError(
+                detail=_("Wähle vollständige Flächen aus und wiederhole die Änderung.")
+            )
+        return faces
 
     def triangles_of_face(self, face_index: int) -> tuple[int, ...]:
         """Die Dreiecke der Tessellation, die zu einer exakten Fläche gehören.
@@ -419,11 +609,24 @@ class Solid:
     def to_stl(self) -> bytes:
         return self.mesh.to_stl()
 
-    def replacing(self, shape: Any) -> Solid:
+    def replacing(
+        self,
+        shape: Any,
+        *,
+        history: Any = None,
+        others: Sequence[Solid] = (),
+        cancelled: CancelToken | None = None,
+    ) -> Solid:
         """Ein neuer Körper um eine geänderte Form, in derselben
         Tessellationsqualität.
         """
-        return Solid(shape=shape, deflection=self.deflection)
+        slots = carried_face_slots(
+            shape,
+            [(self.shape, self.face_slots), *((other.shape, other.face_slots) for other in others)],
+            history=history,
+            cancelled=cancelled,
+        )
+        return Solid(shape=shape, deflection=self.deflection, face_slots=slots)
 
     # --- inside ------------------------------------------------------------------
 

@@ -22,7 +22,7 @@ import numpy as np
 
 from app.core.brep import edit, profiles, step
 from app.core.brep.features import features_of
-from app.core.brep.kernel import Solid, require, tessellate
+from app.core.brep.kernel import Solid, require
 from app.core.errors import (
     CANCEL,
     CORRECT_INPUT,
@@ -690,7 +690,7 @@ def brep_to_mesh(ctx: OpContext) -> OpResult:
     source, body = brep_input(ctx)
     # tessellate besitzt seine Arbeitskopie; ein weiterer Solid würde hier
     # dieselbe Eingabe vor der eigentlichen Vernetzung unnötig doppelt kopieren.
-    mesh = tessellate(body.shape, params.deflection)
+    mesh = body.to_mesh(deflection=params.deflection)
     return OpResult(
         outputs=[dataclasses.replace(source, mesh=mesh, kind="mesh", features={})],
         findings=[converted_finding(source, mesh)],

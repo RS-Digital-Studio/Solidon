@@ -38,6 +38,304 @@ def block() -> Solid:
     return edit.box(WIDTH, DEPTH, HEIGHT)
 
 
+def _coloured_block() -> Solid:
+    """Der Quader trägt oben Slot drei und auf den übrigen Flächen Slot zwei."""
+    import numpy as np
+
+    body = block()
+    top = np.all(np.abs(body.raw.triangles[:, :, 2] - HEIGHT) <= EPS_GEOM, axis=1)
+    return body.with_triangle_slots(tuple(int(value) for value in np.where(top, 3, 2)))
+
+
+@pytest.mark.parametrize(
+    "matrix",
+    [
+        ((1.0, 0.0, 0.0, 13.0), (0.0, 1.0, 0.0, -5.0), (0.0, 0.0, 1.0, 7.0), (0, 0, 0, 1)),
+        ((0.0, -1.0, 0.0, 0.0), (1.0, 0.0, 0.0, 0.0), (0.0, 0.0, 1.0, 0.0), (0, 0, 0, 1)),
+        ((-1.0, 0.0, 0.0, 0.0), (0.0, 1.0, 0.0, 0.0), (0.0, 0.0, 1.0, 0.0), (0, 0, 0, 1)),
+        ((1.5, 0.2, 0.0, 0.0), (0.0, 0.8, 0.0, 0.0), (0.0, 0.0, 2.0, 0.0), (0, 0, 0, 1)),
+    ],
+    ids=["translation", "rotation", "reflection", "affine"],
+)
+def test_exact_face_filaments_follow_the_native_transform(matrix) -> None:
+    """Der inverse Ort jedes Ergebnisdreiecks entscheidet unabhängig über sein Filament."""
+    import dataclasses
+
+    import numpy as np
+
+    original = _coloured_block()
+    result = edit.transformed(original, matrix)
+    assert isinstance(result, Solid)
+    for deflection in (0.4, 0.01):
+        mesh = dataclasses.replace(result, deflection=deflection).mesh
+        inverse = np.linalg.inv(matrix)
+        points = mesh.raw.triangles_center @ inverse[:3, :3].T + inverse[:3, 3]
+        top = np.abs(points[:, 2] - HEIGHT) <= EPS_GEOM
+        assert set(mesh.slots) == {2, 3}
+        assert np.array_equal(np.asarray(mesh.slots), np.where(top, 3, 2))
+    assert set(original.mesh.slots) == {2, 3}
+
+
+@pytest.mark.parametrize("kind", ["difference", "union", "intersection"])
+def test_exact_boolean_keeps_old_face_filaments_and_neutral_cut_faces(kind: str) -> None:
+    """Echte alte Randflächen behalten ihre Herkunft; eine Abzugsfläche übernimmt kein Werkzeug."""
+    import numpy as np
+
+    original = _coloured_block()
+    tool = edit.moved(edit.box(WIDTH, DEPTH, HEIGHT), (WIDTH / 2, 0.0, 0.0))
+    tool = tool.with_triangle_slots((4,) * tool.triangle_count)
+    result = edit.boolean(kind, [original, tool])
+    mesh = result.mesh
+    points = np.asarray(mesh.raw.triangles_center)
+    normals = np.asarray(mesh.raw.face_normals)
+    expected = np.full(mesh.triangle_count, 2)
+    expected[np.abs(points[:, 2] - HEIGHT) <= EPS_GEOM] = 3
+    if kind == "difference":
+        expected[np.abs(points[:, 0]) <= EPS_GEOM] = 0
+        assert set(expected) == {0, 2, 3}
+    elif kind == "union":
+        expected[points[:, 0] > WIDTH / 2 + EPS_GEOM] = 4
+        assert set(expected) == {2, 3, 4}
+    else:
+        expected[(np.abs(points[:, 0]) <= EPS_GEOM) & (normals[:, 0] < -0.9)] = 4
+        assert set(expected) == {2, 3, 4}
+    assert np.array_equal(np.asarray(mesh.slots), expected)
+    assert result.volume == pytest.approx(
+        WIDTH * DEPTH * HEIGHT * (1.5 if kind == "union" else 0.5)
+    )
+
+
+def test_exact_fillet_keeps_old_faces_and_marks_new_round_surfaces_neutral() -> None:
+    import numpy as np
+
+    result = edit.fillet(_coloured_block(), 2.0, "vertical")
+    points = result.raw.triangles_center
+    normals = np.abs(result.raw.face_normals)
+    vertical_planes = np.any(np.abs(normals[:, :2] - 1.0) <= EPS_GEOM, axis=1)
+    top = np.abs(points[:, 2] - HEIGHT) <= EPS_GEOM
+    bottom = np.abs(points[:, 2]) <= EPS_GEOM
+    expected = np.where(top, 3, np.where(vertical_planes | bottom, 2, 0))
+    assert set(expected) == {0, 2, 3}
+    assert np.array_equal(np.asarray(result.mesh.slots), expected)
+
+
+@pytest.mark.parametrize("operation", ["shell", "draft", "push"])
+def test_exact_profile_edits_preserve_filaments_on_surviving_surfaces(operation: str) -> None:
+    import numpy as np
+
+    from app.core.brep import profiles
+
+    source = _coloured_block()
+    if operation == "shell":
+        result = profiles.shell_open_top(source, 2.0)
+    elif operation == "draft":
+        result = profiles.draft_vertical(source, 3.0)
+    else:
+        result = profiles.push_faces(source, (0.0, 0.0, 1.0), 2.0)
+    points = result.raw.triangles_center
+    if operation == "shell":
+        outer = (
+            (np.abs(np.abs(points[:, 0]) - WIDTH / 2) <= EPS_GEOM)
+            | (np.abs(np.abs(points[:, 1]) - DEPTH / 2) <= EPS_GEOM)
+            | (np.abs(points[:, 2]) <= EPS_GEOM)
+        )
+        # Der stehen gebliebene Rand oben gehört weiterhin zur ursprünglichen Deckfläche.
+        top = np.abs(points[:, 2] - HEIGHT) <= EPS_GEOM
+        expected = np.where(outer, 2, np.where(top, 3, 0))
+        assert set(expected) == {0, 2, 3}
+    elif operation == "draft":
+        expected = np.where(np.abs(points[:, 2] - HEIGHT) <= EPS_GEOM, 3, 2)
+        assert set(expected) == {2, 3}
+    else:
+        expected = np.where(points[:, 2] > HEIGHT + EPS_GEOM, 0, 2)
+        assert set(expected) == {0, 2}
+    assert np.array_equal(np.asarray(result.mesh.slots), expected)
+
+
+def test_exact_slot_followup_preserves_the_boundary_between_coplanar_filaments() -> None:
+    """Das Langloch entfernt künstliche Nähte, aber keine echte Filamentgrenze."""
+    import dataclasses
+
+    import numpy as np
+
+    first = _coloured_block()
+    second = edit.moved(block(), (WIDTH / 2, 0.0, 0.0))
+    second = second.with_triangle_slots((4,) * second.triangle_count)
+    source = edit.boolean("union", [first, second])
+    result = edit.slot_bore(
+        source,
+        position=(-10.0, 0.0, HEIGHT / 2),
+        direction=(0.0, 0.0, 1.0),
+        diameter=4.0,
+        depth=HEIGHT + 2.0,
+        length=8.0,
+        angle_deg=0.0,
+        overlap=0.0,
+    )
+    for solid in (result, dataclasses.replace(result, deflection=0.01)):
+        triangles = solid.raw.triangles
+        top = np.all(np.abs(triangles[:, :, 2] - HEIGHT) <= EPS_GEOM, axis=1)
+        points = triangles.mean(axis=1)
+        assert top.any()
+        assert np.array_equal(
+            np.asarray(solid.mesh.slots)[top], np.where(points[top, 0] > WIDTH / 2, 4, 3)
+        )
+        # Kein Deckdreieck überbrückt die Materialgrenze bei x = 20.
+        assert not np.any(
+            (triangles[top, :, 0].min(axis=1) < WIDTH / 2 - EPS_GEOM)
+            & (triangles[top, :, 0].max(axis=1) > WIDTH / 2 + EPS_GEOM)
+        )
+
+
+def test_native_face_attributes_follow_a_copy_with_reordered_faces(monkeypatch) -> None:
+    """Eine echte Compound-Kopie kehrt die Körperreihenfolge um; die Farben bleiben örtlich."""
+    import dataclasses
+
+    import numpy as np
+    from OCP.BRep import BRep_Builder
+    from OCP.collections import IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher as ShapeMap
+    from OCP.TopAbs import TopAbs_COMPOUND, TopAbs_FACE, TopAbs_SOLID
+    from OCP.TopExp import TopExp
+    from OCP.TopoDS import TopoDS_Compound
+
+    from app.core.brep import kernel
+
+    left = edit.moved(block(), (-40.0, 0.0, 0.0))
+    right = edit.moved(block(), (40.0, 0.0, 0.0))
+    compound = TopoDS_Compound()
+    builder = BRep_Builder()
+    builder.MakeCompound(compound)
+    builder.Add(compound, left.shape)
+    builder.Add(compound, right.shape)
+    source = Solid(compound)
+    slots = tuple(int(value) for value in np.where(source.raw.triangles_center[:, 0] < 0, 2, 4))
+    original_mapping = np.asarray(source.raw.face_attributes[kernel._FACE_ATTRIBUTE]).copy()
+    original_copy = kernel.copy_shape
+
+    def reordered_copy(shape):
+        copied, mapping = original_copy(shape)
+        if copied.ShapeType() != TopAbs_COMPOUND:
+            return copied, mapping
+        children, old_faces = ShapeMap(), ShapeMap()
+        TopExp.MapShapes_s(copied, TopAbs_SOLID, children)
+        TopExp.MapShapes_s(copied, TopAbs_FACE, old_faces)
+        reordered = TopoDS_Compound()
+        builder.MakeCompound(reordered)
+        for index in range(children.Extent(), 0, -1):
+            builder.Add(reordered, children.FindKey(index))
+        new_faces = ShapeMap()
+        TopExp.MapShapes_s(reordered, TopAbs_FACE, new_faces)
+        return reordered, tuple(
+            int(new_faces.FindIndex(old_faces.FindKey(target + 1))) - 1 for target in mapping
+        )
+
+    monkeypatch.setattr(kernel, "copy_shape", reordered_copy)
+    assigned = source.with_triangle_slots(slots)
+    assert assigned._copied_faces != tuple(range(source.face_count))
+    assert np.array_equal(assigned.raw.triangles, source.raw.triangles)
+    assert np.array_equal(source.raw.face_attributes[kernel._FACE_ATTRIBUTE], original_mapping)
+    for result in (assigned, dataclasses.replace(assigned, deflection=0.01)):
+        expected = np.where(result.raw.triangles_center[:, 0] < 0, 2, 4)
+        assert np.array_equal(np.asarray(result.mesh.slots), expected)
+        for face_index in range(result.face_count):
+            indices = result.triangles_of_face(face_index)
+            assert indices
+            assert result.faces_of_triangles(indices) == (face_index,)
+    assert source.mesh.slots == ()
+
+
+def test_native_attribute_history_does_not_hide_a_conflicting_merge() -> None:
+    from OCP.ShapeUpgrade import ShapeUpgrade_UnifySameDomain
+
+    source = _coloured_block()
+    other = edit.moved(block(), (WIDTH, 0.0, 0.0))
+    other = other.with_triangle_slots((4,) * other.triangle_count)
+    joined = edit.boolean("union", [source, other])
+    unifier = ShapeUpgrade_UnifySameDomain(joined.shape, True, True, False)
+    unifier.Build()
+    with pytest.raises(ValidationError) as failure:
+        joined.replacing(unifier.Shape(), history=unifier.History())
+    assert failure.value.suggestions
+
+
+def test_native_attribute_history_honours_cancellation() -> None:
+    from app.core.brep.kernel import carried_face_slots
+    from app.core.errors import OperationCancelled
+    from app.core.scene.cancel import CancelSignal
+
+    source = _coloured_block()
+    cancelled = CancelSignal()
+    cancelled.cancel()
+    with pytest.raises(OperationCancelled):
+        carried_face_slots(source.shape, [(source.shape, source.face_slots)], cancelled=cancelled)
+    with pytest.raises(OperationCancelled):
+        source.with_triangle_slots((4,) * source.triangle_count, cancelled=cancelled)
+
+
+@pytest.mark.parametrize("broken", ["missing", "short", "outside"])
+def test_native_filaments_require_a_complete_triangle_face_mapping(broken: str) -> None:
+    import numpy as np
+
+    from app.core.brep.kernel import _FACE_ATTRIBUTE
+    from app.core.errors import InternalError
+
+    source = block()
+    mapping = np.asarray(source.raw.face_attributes[_FACE_ATTRIBUTE]).copy()
+    if broken == "missing":
+        del source.raw.face_attributes[_FACE_ATTRIBUTE]
+    elif broken == "short":
+        source.raw.face_attributes[_FACE_ATTRIBUTE] = mapping[:-1]
+    else:
+        mapping[0] = source.face_count
+        source.raw.face_attributes[_FACE_ATTRIBUTE] = mapping
+    with pytest.raises(InternalError):
+        source.with_triangle_slots((2,) * source.triangle_count)
+
+
+@pytest.mark.parametrize("slots", [(2,), (8,) * 6, (-1,) * 6])
+def test_native_filament_constructor_rejects_invalid_face_slots(slots) -> None:
+    from app.core.errors import InternalError
+
+    source = block()
+    with pytest.raises(InternalError):
+        Solid(source.shape, face_slots=slots)
+
+
+@pytest.mark.parametrize("slot", [False, True])
+@pytest.mark.parametrize("entry", ["face", "triangle"])
+def test_native_filament_rejects_boolean_slot_numbers(slot: bool, entry: str) -> None:
+    from app.core.errors import InternalError
+
+    source = block()
+    with pytest.raises(InternalError):
+        if entry == "face":
+            Solid(source.shape, face_slots=(slot,) * source.face_count)
+        else:
+            source.with_triangle_slots((slot,) * source.triangle_count)
+
+
+def test_native_filament_storage_cannot_save_part_of_one_face() -> None:
+    source = block()
+    values = [0] * source.triangle_count
+    values[source.triangles_of_face(0)[0]] = 2
+    with pytest.raises(ValidationError) as failure:
+        source.with_triangle_slots(tuple(values))
+    assert failure.value.suggestions
+
+
+def test_native_boolean_does_not_treat_missing_attributes_as_an_explicit_colour() -> None:
+    """Wie beim Netz darf eine wirklich zugewiesene Quelle die unzugewiesene Fläche färben."""
+    import numpy as np
+
+    plain = block()
+    assigned = edit.moved(block(), (WIDTH / 2, 0.0, 0.0))
+    assigned = assigned.with_triangle_slots((4,) * assigned.triangle_count)
+    result = edit.boolean("union", [plain, assigned])
+    expected = np.where(result.raw.triangles_center[:, 0] >= -EPS_GEOM, 4, 0)
+    assert set(expected) == {0, 4}
+    assert np.array_equal(np.asarray(result.mesh.slots), expected)
+
+
 def _native_affine_shape(source: Solid, diagonal: tuple[float, float, float]) -> Solid:
     """Unabhängige Eingabe: native NURBS-Form ohne Solidons Transformationsweg."""
     from OCP.BRepBuilderAPI import BRepBuilderAPI_GTransform

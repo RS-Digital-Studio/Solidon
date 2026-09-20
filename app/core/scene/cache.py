@@ -75,8 +75,9 @@ DEFAULT_DISK_BUDGET_BYTES: Final = 2 * 1024 * 1024 * 1024
 #: frühere fehlende Innenräume und Phantombohrungen werden neu erkannt.
 #: Native Merkmale erhalten außerdem dieselbe eindeutige Erzeugerzuordnung
 #: wie Netzmerkmale; alte Auskünfte ohne diesen Bezug werden neu ausgewertet.
-#: Erkannte Kreise tragen Konturfehler und tatsächliche radiale Netzgrenzen.
-CACHE_FORMAT_VERSION: Final = 16
+#: Konturmaße, native Ringmerkmale und native Filamentflächen brauchen ihre
+#: vollständigen Mess- und Attributdaten auch nach dem Wiederöffnen.
+CACHE_FORMAT_VERSION: Final = 17
 
 
 @dataclass(frozen=True, slots=True)

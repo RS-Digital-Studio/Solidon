@@ -25,8 +25,9 @@ from __future__ import annotations
 
 import numpy as np
 
-from app.core.geom.mesh import MeshData
+from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.log import get_logger
+from app.core.types import CancelToken, Mesh
 
 _log = get_logger(__name__)
 
@@ -147,6 +148,27 @@ def with_slot(mesh: MeshData, slot: int) -> MeshData:
     return MeshData(
         raw=mesh.raw, slots=tuple([int(slot)] * len(mesh.raw.faces)), cavity=mesh.cavity
     )
+
+
+def with_slots(mesh: Mesh, slots: tuple[int, ...], *, cancelled: CancelToken | None = None) -> Mesh:
+    """Ändert ausschließlich Filamentattribute und erhält die Bauart des Körpers."""
+    from dataclasses import replace
+
+    from app.core.brep.kernel import Solid
+
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+    if isinstance(mesh, Solid):
+        return mesh.with_triangle_slots(slots, cancelled=cancelled)
+    return replace(as_mesh_data(mesh), slots=slots)
+
+
+def validate_full_faces(mesh: Mesh, indices: tuple[int, ...]) -> None:
+    """Exakte Teilflächen dürfen beim nächsten Vernetzen nicht heimlich wachsen."""
+    from app.core.brep.kernel import Solid
+
+    if isinstance(mesh, Solid):
+        mesh.complete_faces_of_triangles(indices)
 
 
 def counts(mesh: MeshData) -> dict[int, int]:

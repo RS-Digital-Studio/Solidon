@@ -23,7 +23,14 @@ from typing import Any, Literal, cast
 
 from app.core.brep.canonical import CylinderSurface
 from app.core.brep.canonical import describe as describe_surface
-from app.core.brep.kernel import DEFLECTION, Solid, boolean_builder, require
+from app.core.brep.kernel import (
+    DEFLECTION,
+    Solid,
+    boolean_builder,
+    carried_face_slots,
+    keep_filament_boundaries,
+    require,
+)
 from app.core.errors import (
     CANCEL,
     CORRECT_INPUT,
@@ -295,14 +302,14 @@ def fillet(
     require()
     from OCP.BRepFilletAPI import BRepFilletAPI_MakeFillet
 
-    working = Solid(solid.shape, deflection=solid.deflection)
+    working = replace(solid)
     chosen = _wanted(working, choice, keys)
 
     _fits_the_wall(working, radius, chosen, "fillet")
     builder = BRepFilletAPI_MakeFillet(working.shape)
     for entry in chosen:
         builder.Add(radius, entry.edge)
-    return _built(solid, builder, "fillet", radius, len(chosen))
+    return _built(working, builder, "fillet", radius, len(chosen))
 
 
 def chamfer(
@@ -319,14 +326,14 @@ def chamfer(
     require()
     from OCP.BRepFilletAPI import BRepFilletAPI_MakeChamfer
 
-    working = Solid(solid.shape, deflection=solid.deflection)
+    working = replace(solid)
     chosen = _wanted(working, choice, keys)
 
     _fits_the_wall(working, distance, chosen, "chamfer")
     builder = BRepFilletAPI_MakeChamfer(working.shape)
     for entry in chosen:
         builder.Add(distance, entry.edge)
-    return _built(solid, builder, "chamfer", distance, len(chosen))
+    return _built(working, builder, "chamfer", distance, len(chosen))
 
 
 def _wall_not_proven() -> GeometryError:
@@ -509,7 +516,7 @@ def _built(solid: Solid, builder: Any, kind: str, size: float, edges: int) -> So
             suggestions=(CORRECT_INPUT, CANCEL),
             values={"size_mm": round(size, 3), "edges": edges},
         )
-    outcome = solid.replacing(shape)
+    outcome = solid.replacing(shape, history=builder)
     if (
         outcome.solid_count != solid.solid_count
         or not outcome.is_closed
@@ -537,6 +544,7 @@ def boolean(kind: Literal["union", "difference", "intersection"], parts: list[So
     if len(parts) < 2:
         raise ValueError("a boolean operation needs at least two bodies")
     shape = parts[0].shape
+    slots = parts[0].face_slots
     for other in parts[1:]:
         operation = boolean_builder(kind, shape, other.shape)
         operation.Build()
@@ -555,8 +563,13 @@ def boolean(kind: Literal["union", "difference", "intersection"], parts: list[So
                 ),
                 suggestions=(CORRECT_INPUT, CANCEL),
             )
-        shape = operation.Shape()
-    return parts[0].replacing(shape)
+        result = operation.Shape()
+        sources = [(shape, slots)]
+        if kind != "difference":
+            sources.append((other.shape, other.face_slots))
+        slots = carried_face_slots(result, sources, history=operation)
+        shape = result
+    return Solid(shape, deflection=parts[0].deflection, face_slots=slots)
 
 
 def bore(
@@ -689,7 +702,7 @@ def clipped_bore_tool(solid: Solid, planes: Sequence[SectionPlane]) -> Solid:
                 detail=_("Das Bohrwerkzeug konnte nicht an seinem Rand begrenzt werden."),
                 suggestions=(CORRECT_INPUT, CANCEL),
             )
-        solid = solid.replacing(builder.Shape())
+        solid = solid.replacing(builder.Shape(), history=builder)
     return solid
 
 
@@ -721,8 +734,9 @@ def slot_bore(
     from OCP.ShapeUpgrade import ShapeUpgrade_UnifySameDomain
 
     joined = ShapeUpgrade_UnifySameDomain(result.shape, True, True, False)
+    keep_filament_boundaries(result, joined)
     joined.Build()
-    return result.replacing(joined.Shape())
+    return result.replacing(joined.Shape(), history=joined.History())
 
 
 def _slot_tool(
@@ -1025,7 +1039,7 @@ def transformed_with_faces(
         shape = builder.Shape()
         if not BRepCheck_Analyzer(shape).IsValid():
             raise _invalid_transform(result=True)
-        result = solid.replacing(shape)
+        result = solid.replacing(shape, history=builder, cancelled=cancelled)
         if (
             result.solid_count != solid.solid_count
             or not result.is_closed
@@ -1099,7 +1113,7 @@ def unround(
 
     if cancelled is not None:
         cancelled.raise_if_cancelled()
-    working = Solid(solid.shape, deflection=solid.deflection)
+    working = replace(solid)
     face = _cylinder_at(working, centre, radius, cancelled=cancelled)
     if face is None:
         raise GeometryError(
@@ -1127,7 +1141,7 @@ def unround(
             ),
             suggestions=(CORRECT_INPUT, CANCEL),
         )
-    return Solid(builder.Shape())
+    return working.replacing(builder.Shape(), history=builder, cancelled=cancelled)
 
 
 def _cylinder_at(
