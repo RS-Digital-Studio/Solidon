@@ -190,7 +190,7 @@ def test_blind_countersunk_bore_has_one_unambiguous_chain(profile, review_run, d
     ).mesh
     features = detect(body)
     cone = next(f for f in features.values() if f.kind == "cone")
-    chain, _ = cavity_chain_state_at(cone, features, body)
+    chain = cavity_chain_state_at(cone, features, body).chain
     assert chain is not None
     assert {f.kind for f in chain} == {"hole", "cone"}
     entry = SceneObject(id="obj_1", name="Platte", mesh=body, features=features)

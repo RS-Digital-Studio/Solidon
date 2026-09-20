@@ -395,8 +395,14 @@ zwei Ringe zu 48 Ecken vorher, zwei zu 65 und 48 danach).
 
 **Gefragt wird an der Sache, nicht an ihrer Kennzahl.**
 `perceive.relations.cavity_chain_state_at` beantwortet beides — ob das Merkmal
-Abschnitt einer Kette ist und ob es einen fremden Rand berührt —, und erst
+Abschnitt einer Kette ist und ob es sicher einzeln ist —, und erst
 wenn beides verneint ist, gehört der Hohlraum ihm allein (`_stands_alone`).
+**Nicht sicher einzeln hat zwei Gründe, und die Absage nennt den richtigen:**
+ein berührter fremder Rand (`NO_OWN_BODY`) oder eigene Ränder, die keine
+Ringe ergeben (`CAVITY_TOPOLOGY_UNKNOWN`) — derselbe Grund, den der
+Gruppenweg als `cavity_topology_unavailable` führt (`CavityState.reason`,
+`prepare_ops.cavity_refusal`). Wer den Zustand liest, liest den Grund mit;
+ein `(None, False)` war bis zum 20.09.2026 auch die Antwort auf „weiß nicht“.
 `feature_placement_geometry` traf diese Unterscheidung seit je; sie fehlte
 allein im Werkzeugbau.
 
@@ -734,7 +740,10 @@ seither für beide gelten — Namen, Träger und Handlung, nicht bloß die Zahl:
 * **Eine Bohrung unter der vollen Umdrehung ist angeschnitten** (`partial`),
   und ob sie für sich bearbeitbar ist, sagt nicht der Winkel: Grenzt ihr
   Mantel an eine andere Höhlung, ist sie berührt — keine Kette, kein eigener
-  Körper, `NO_OWN_BODY` in jeder Körperzeile. Die Umfangsschwelle steht
+  Körper, `NO_OWN_BODY` in jeder Körperzeile — und wo die Ränder eines
+  Merkmals gar nicht lesbar sind, sagt der Einzelweg das wie der Gruppenweg
+  (`CavityState`, `CAVITY_TOPOLOGY_UNKNOWN`) statt „steht allein“. Die
+  Umfangsschwelle steht
   einmal (`FULL_TURN_SPAN` = `FULL_TURN`·360, 300 Grad); wer sie ändert,
   ändert beide, und der Test hält sie zusammen (`tests/test_partial_bores.py`).
   Am Netz erkennt den Anschnitt der Rand (zwei Linien längs der Achse über

@@ -1085,7 +1085,8 @@ def test_a_shared_cavity_greys_out_what_would_fail_on_it(profile: Any) -> None:
     found = detect(mesh)
     bore = next(f for f in found.values() if f.kind == "hole")
     sink = next(f for f in found.values() if f.kind == "cone")
-    chain, touches_other = cavity_chain_state_at(bore, found, mesh)
+    state = cavity_chain_state_at(bore, found, mesh)
+    chain, touches_other = state.chain, state.touches_other
     assert chain is not None and {f.id for f in chain} == {bore.id, sink.id}, "die Voraussetzung"
 
     # Wie das Fenster fragt: mit der Kette aus dem Netz.
@@ -1183,11 +1184,9 @@ def test_the_panel_uses_the_mesh_for_a_complete_cavity_chain(
 
     from app.core.perceive import relations
 
-    def chain_at(
-        selected: Feature, available: object, mesh: MeshData
-    ) -> tuple[tuple[Feature, ...], bool]:
+    def chain_at(selected: Feature, available: object, mesh: MeshData) -> relations.CavityState:
         asked.append((selected, available, mesh))
-        return (bore, transition, counterbore), False
+        return relations.CavityState((bore, transition, counterbore), False, None)
 
     # Seit dem 14.09.2026 fragt das Fenster die Kette **und** die Berührung
     # eines fremden Rands in einem Zug (``cavity_chain_state_at``): Beides

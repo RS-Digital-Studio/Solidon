@@ -13,6 +13,7 @@ from app.core.errors import ValidationError
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.perceive.features import _curved_faces, _large_facet_faces, detect
 from app.core.perceive.relations import (
+    CavityState,
     bore_and_widening_at,
     cavity_chain_at,
     cavity_chain_state_at,
@@ -76,7 +77,7 @@ def test_a_flat_annular_shoulder_keeps_the_complete_cavity(conical: bool, rotate
     assert len(chains) == 1
     assert {feature.id for feature in chains[0]} == set(cavities)
     for feature in cavities.values():
-        assert cavity_chain_state_at(feature, features, mesh) == (chains[0], True)
+        assert cavity_chain_state_at(feature, features, mesh) == CavityState(chains[0], True, None)
         assert cavity_chain_at(feature, dict(reversed(list(features.items()))), mesh) == chains[0]
 
 
@@ -92,8 +93,9 @@ def test_an_ambiguous_owner_at_a_shoulder_never_becomes_a_single_bore() -> None:
     )
     duplicate = replace(wide, id="duplicate")
     ambiguous = {**features, duplicate.id: duplicate}
-    assert cavity_chain_state_at(narrow, ambiguous, mesh) == (None, True)
-    assert cavity_chain_state_at(wide, ambiguous, mesh) == (None, True)
+    ambiguous_state = CavityState(None, True, "ambiguous_cavity_chain")
+    assert cavity_chain_state_at(narrow, ambiguous, mesh) == ambiguous_state
+    assert cavity_chain_state_at(wide, ambiguous, mesh) == ambiguous_state
 
 
 @pytest.mark.parametrize("damaged", [False, True])
@@ -358,7 +360,7 @@ def test_separate_coaxial_blind_bores_do_not_form_a_chain() -> None:
     assert cavity_chains(features, mesh) == ()
     for feature in holes:
         assert cavity_chain_at(feature, features, mesh) is None
-        assert cavity_chain_state_at(feature, features, mesh) == (None, False)
+        assert cavity_chain_state_at(feature, features, mesh) == CavityState(None, False, None)
         assert bore_and_widening_at(feature, features, mesh=mesh) is None
 
 
@@ -372,7 +374,9 @@ def test_duplicate_candidates_at_a_ring_are_ambiguous() -> None:
     assert cavity_chains(ambiguous, mesh) == ()
     for feature in chain:
         assert cavity_chain_at(feature, ambiguous, mesh) is None
-        assert cavity_chain_state_at(feature, ambiguous, mesh) == (None, True)
+        assert cavity_chain_state_at(feature, ambiguous, mesh) == CavityState(
+            None, True, "ambiguous_cavity_chain"
+        )
 
 
 def test_unindexed_triangles_use_the_same_topology_as_detection() -> None:
@@ -396,6 +400,50 @@ def test_invalid_face_indices_do_not_connect_a_cavity() -> None:
     assert cavity_chains(stale, mesh) == ()
     for feature in stale.values():
         assert cavity_chain_at(feature, stale, mesh) is None
+
+
+def test_a_cavity_whose_rings_cannot_be_read_is_not_alone() -> None:
+    """Unlesbare Ränder heißen im Einzelweg dasselbe wie im Gruppenweg (P1.5).
+
+    Bis zum 20.09.2026 lieferte ``cavity_chain_state_at`` für ein Merkmal, dessen
+    Flächen keine Ringe ergeben, ``(None, False)`` — „steht allein" —, während
+    ``_feature_group_topology`` es als ``cavity_topology_unavailable`` führte.
+    Versetzen, Verdoppeln, Drehen und Entfernen hätten den Hohlraum allein
+    genommen, ohne zu wissen, wem er gehört. Jetzt sagt der Einzelweg den Grund,
+    jede Körperzeile trägt seinen Satz, und die Operation sagt mit demselben ab.
+    """
+    from app.core.geom.prepare_ops import CAVITY_TOPOLOGY_UNKNOWN, NO_OWN_BODY, cavity_refusal
+    from app.core.perceive.actions import actions_for
+    from app.core.perceive.relations import _feature_group_topology, cavity_is_shared
+
+    mesh = _stepped_bore()
+    features = detect(mesh)
+    chain = next(iter(cavity_chains(features, mesh)))
+    unreadable = replace(chain[1], face_indices=(len(mesh.raw.faces),))
+    stale = {**features, unreadable.id: unreadable}
+
+    state = cavity_chain_state_at(unreadable, stale, mesh)
+    assert state == CavityState(None, True, "cavity_topology_unavailable")
+    assert cavity_is_shared(state)
+    assert cavity_refusal(state) is CAVITY_TOPOLOGY_UNKNOWN
+    _scopes, uncertain = _feature_group_topology(stale, mesh)
+    assert uncertain[unreadable.id] == "cavity_topology_unavailable", (
+        "derselbe Grund wie die Gruppe"
+    )
+
+    refused = {
+        str(action.title): action.reason
+        for action in actions_for(unreadable, stale, mesh=mesh)
+        if action.op is None
+    }
+    body_rows = [reason for reason in refused.values() if reason is CAVITY_TOPOLOGY_UNKNOWN]
+    assert len(body_rows) >= 4, refused
+    assert NO_OWN_BODY not in refused.values(), "kein Satz über einen Nachbarn, den niemand kennt"
+
+    # Und die Gegenrichtung: die lesbare Bohrung derselben Kette bleibt, was sie war.
+    readable = cavity_chain_state_at(chain[0], features, mesh)
+    assert readable.chain is not None and readable.reason is None
+    assert cavity_refusal(readable) is None
 
 
 def test_a_thread_cap_stays_planar_despite_its_curved_neighbours() -> None:

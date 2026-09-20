@@ -283,9 +283,15 @@ Verzweigung, Zyklus oder ein uneindeutiger Anfang liefern keine Auskunft.
 `cavity_chains` bildet die Ringe einmal für den ganzen Objektbaum. Die alten
 Paarfunktionen bleiben ohne Netz kompatibel; mit `mesh=` liefern sie nur
 echte Zweierketten und kürzen längere Hohlräume nicht ab.
-`cavity_chain_state_at` bewahrt bei einer abgelehnten Kette die nachgewiesene
-Randberührung, damit eine Geometrieoperation nicht auf das Versetzen nur eines
-Abschnitts zurückfällt.
+`cavity_chain_state_at` liefert einen `CavityState` — Kette, „nicht sicher
+einzeln“ und den Grund mit demselben Wort wie der Gruppenweg
+(`ambiguous_cavity_chain` für den berührten fremden Rand,
+`cavity_topology_unavailable` für Ränder, die keine Ringe ergeben) —, damit
+eine Geometrieoperation nicht auf das Versetzen nur eines Abschnitts
+zurückfällt und ihre Absage den richtigen Satz trägt
+(`prepare_ops.cavity_refusal`: `NO_OWN_BODY` oder `CAVITY_TOPOLOGY_UNKNOWN`).
+Bis zum 20.09.2026 fielen unlesbare Ränder im Einzelweg auf „steht allein“,
+während `_feature_group_topology` sie als unsicher führte (P1.5).
 
 ## Die Auskunft für das Merkmalspanel
 
@@ -741,7 +747,9 @@ betroffenen Körper und erzeugenden Schritt; eine Karte bleibt aus. Andere
 - **Und was sonst keinen eigenen Körper hat, steht grau, bevor die Operation
   es sagt** (`actions.no_own_body`): eine Bohrung oder Senkung, die einen
   fremden Rand berührt, ohne dass daraus eine Kette wird
-  (`prepare_ops.NO_OWN_BODY`), und ein Kegel oder eine Kuppel, aus deren
+  (`prepare_ops.NO_OWN_BODY`), eine, deren eigene Ränder keine Ringe ergeben
+  (`CAVITY_TOPOLOGY_UNKNOWN`, der Grund reist als `reason` aus dem
+  `CavityState` bis in die Zeile), und ein Kegel oder eine Kuppel, aus deren
   Flächen kein Körper entsteht — drei Randringe, ein Kegelstumpf mit
   Querbohrung (`prepare_ops.has_own_body`, `NO_BODY_FROM_FACES`). Dazu eine
   Bohrung, in deren Zylinder Material steht — die Innenwand eines Rades mit

@@ -155,10 +155,10 @@ def bore_step_of(
     feature = body.features.get(selected.feature_id) if body is not None else None
     if body is None or feature is None or feature.kind not in {"hole", "cone"}:
         return None
-    chain, touching = cavity_chain_state_at(feature, body.features, as_mesh_data(body.mesh))
-    if touching and chain is None:
+    state = cavity_chain_state_at(feature, body.features, as_mesh_data(body.mesh))
+    if state.touches_other and state.chain is None:
         return None
-    sections = chain or (feature,)
+    sections = state.chain or (feature,)
     makers = {part.created_by for part in sections if part.kind == "hole"}
     if len(makers) != 1 or None in makers:
         return None

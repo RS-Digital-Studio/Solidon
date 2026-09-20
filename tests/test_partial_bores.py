@@ -22,7 +22,7 @@ from app.core.geom.prepare_ops import NO_OWN_BODY
 from app.core.perceive import features as mesh_features
 from app.core.perceive.actions import actions_for
 from app.core.perceive.features import detect, span_about
-from app.core.perceive.relations import cavity_chain_state_at
+from app.core.perceive.relations import CavityState, cavity_chain_state_at
 from app.core.types import Feature, FeatureId
 
 RADIUS = 3.0
@@ -114,8 +114,8 @@ def test_a_cut_open_bore_touches_its_neighbour_and_has_no_own_body(reading: str)
     body = _overlapping_bores()
     found, mesh = _both_readings(body)[reading]
     for hole in _holes(found):
-        chain, touches_other = cavity_chain_state_at(hole, found, mesh)
-        assert chain is None and touches_other, (reading, hole.id)
+        state = cavity_chain_state_at(hole, found, mesh)
+        assert state == CavityState(None, True, "ambiguous_cavity_chain"), (reading, hole.id)
         actions = actions_for(hole, found, mesh=mesh)
         refused = {action.title: action.reason for action in actions if action.op is None}
         offered = {action.op for action in actions if action.op is not None}
@@ -137,7 +137,7 @@ def test_a_single_full_bore_is_neither_cut_open_nor_touched() -> None:
     for reading, (found, mesh) in _both_readings(body).items():
         (hole,) = _holes(found)
         assert "partial" not in hole.params, reading
-        assert cavity_chain_state_at(hole, found, mesh) == (None, False), reading
+        assert cavity_chain_state_at(hole, found, mesh) == CavityState(None, False, None), reading
         offered = {action.op for action in actions_for(hole, found, mesh=mesh)}
         assert "move_feature" in offered, reading
 
@@ -192,4 +192,4 @@ def test_a_mesh_bore_cut_open_by_a_flat_side_is_partial_but_not_touched() -> Non
     )
     assert 300.0 < span < 330.0, span
     assert hole.params.get("partial") is True
-    assert cavity_chain_state_at(hole, found, body) == (None, False)
+    assert cavity_chain_state_at(hole, found, body) == CavityState(None, False, None)

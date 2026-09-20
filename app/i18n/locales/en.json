@@ -1549,6 +1549,7 @@
   "Die Restwand unter und neben der Nut muss am Träger geprüft werden.": "The remaining wall below and beside the groove must be checked on the supporting body.",
   "Die Rezeptdaten sind unvollständig oder widersprüchlich.": "The recipe data is incomplete or inconsistent.",
   "Die Richtung dieses Merkmals hat die Länge null — daraus lässt sich keine Achse bilden.": "The direction of this feature has zero length — no axis can be formed from it.",
+  "Die Ränder dieses Merkmals sind nicht sicher erkannt. Reparieren Sie das Netz und wählen Sie das Merkmal danach neu.": "The edges of this feature are not reliably recognised. Repair the mesh and then select the feature again.",
   "Die Rückmeldung ist noch leer.": "The feedback is still empty.",
   "Die Rückmeldung ist zu lang.": "The feedback is too long.",
   "Die Rückmeldung ließ sich nicht senden.": "The feedback could not be sent.",

@@ -5391,10 +5391,12 @@ class FeaturePanel(QWidget):
 
         cavity: tuple[Feature, ...] = ()
         touches_other = False
+        reason: relations.FeatureGroupReason | None = None
         if features is not None:
             if mesh is not None:
-                chain, touches_other = relations.cavity_chain_state_at(feature, features, mesh)
-                cavity = chain or ()
+                state = relations.cavity_chain_state_at(feature, features, mesh)
+                touches_other, reason = state.touches_other, state.reason
+                cavity = state.chain or ()
             else:
                 cavity = relations.bore_and_widening_at(feature, features) or ()
         self.clear()
@@ -5474,7 +5476,12 @@ class FeaturePanel(QWidget):
             self._built.append(note)
 
         actions = actions_for(
-            feature, features, mesh=mesh, cavity=cavity, touches_other=touches_other
+            feature,
+            features,
+            mesh=mesh,
+            cavity=cavity,
+            touches_other=touches_other,
+            reason=reason,
         )
         if features is not None and mesh is not None:
             self._groups = {

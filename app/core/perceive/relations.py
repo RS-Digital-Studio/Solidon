@@ -25,7 +25,7 @@ import math
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Any, Final, Literal, cast
+from typing import Any, Final, Literal, NamedTuple, cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -764,46 +764,78 @@ def cavity_chain_at(
     wird ausschließlich über vollständig gemeinsame Ringe; Abstände und
     Einfügereihenfolge ersetzen diese Verbindung nicht.
     """
-    chain, _touches_other = cavity_chain_state_at(feature, features, mesh)
-    return chain
+    return cavity_chain_state_at(feature, features, mesh).chain
 
 
-def cavity_is_shared(chain: tuple[Feature, ...] | None, touches_other: bool) -> bool:
+class CavityState(NamedTuple):
+    """Was ein Hohlraum von seinen Nachbarn weiß — die eine Auskunft für alle Verbraucher.
+
+    ``chain`` ist die eindeutige Kette, deren Abschnitt das Merkmal ist, oder
+    ``None``. ``touches_other`` heißt: **nicht sicher einzeln** — ein fremder
+    Rand ist berührt, oder die Ränder des Merkmals lassen sich nicht lesen;
+    nur ohne beides darf eine Geometrieoperation den Hohlraum allein
+    verschieben. Warum, sagt ``reason`` mit demselben Wort wie der Gruppenweg
+    (:func:`_feature_group_topology`): ``ambiguous_cavity_chain`` für die
+    Berührung ohne Kette, ``cavity_topology_unavailable`` für Ränder, die
+    keine Ringe ergeben (veraltete Flächennummern, eine Naht mit drei
+    Dreiecken, ein Fleck ohne Rand). Bis zum 20.09.2026 fiel der zweite Fall
+    im Einzelweg auf ``(None, False)`` — „steht allein" — und nur der
+    Gruppenweg kannte ihn (P1.5).
+    """
+
+    chain: tuple[Feature, ...] | None
+    touches_other: bool
+    reason: FeatureGroupReason | None
+
+
+def cavity_is_shared(state: CavityState) -> bool:
     """Ob ein Hohlraum anderen Abschnitten gehört — die eine Bedingung für alle.
 
     Eine Kette heißt, das Merkmal ist ein Abschnitt von mehreren (eine Kette
     hat immer mindestens zwei Glieder, :func:`_ordered_cavity`); ein berührter
-    fremder Rand heißt, die Nachbarschaft ist da und nur nicht eindeutig.
-    Beides zusammen entscheidet, ob *Zum Langloch ziehen*, *Merkmal drehen*
-    und *Merkmal verdoppeln* absagen und ob das Merkmalfenster ihre Zeile
-    vorher grau stellt. Bis zum 14.09.2026 stand die Bedingung an zwei
-    Stellen wörtlich gleich — und nichts wurde rot, wenn eine sich löste.
+    fremder Rand heißt, die Nachbarschaft ist da und nur nicht eindeutig —
+    und unlesbare Ränder zählen dazu (:class:`CavityState`). Beides zusammen
+    entscheidet, ob *Zum Langloch ziehen*, *Merkmal drehen* und *Merkmal
+    verdoppeln* absagen und ob das Merkmalfenster ihre Zeile vorher grau
+    stellt. Bis zum 14.09.2026 stand die Bedingung an zwei Stellen wörtlich
+    gleich — und nichts wurde rot, wenn eine sich löste.
     """
-    return touches_other or chain is not None
+    return state.touches_other or state.chain is not None
 
 
 def cavity_chain_state_at(
     feature: Feature, features: Mapping[FeatureId, Feature], mesh: MeshData
-) -> tuple[tuple[Feature, ...] | None, bool]:
-    """Die Kette und ob der gewählte Abschnitt einen anderen Rand berührt.
+) -> CavityState:
+    """Die Kette, ob der gewählte Abschnitt sicher einzeln ist, und der Grund.
 
     Die zweite Auskunft trennt eine sicher einzelne Bohrung von einer
-    mehrdeutigen oder ungültigen Kette. Beide liefern keine Kette, aber nur die
-    einzelne darf eine Geometrieoperation allein verschieben. Auch bei drei
-    Besitzern desselben Randrings bleibt die Berührung erhalten, obwohl daraus
-    absichtlich keine Verbindung gewählt wird.
+    mehrdeutigen oder unlesbaren Kette. Beide liefern keine Kette, aber nur
+    die einzelne darf eine Geometrieoperation allein verschieben. Auch bei
+    drei Besitzern desselben Randrings bleibt die Berührung erhalten, obwohl
+    daraus absichtlich keine Verbindung gewählt wird.
     """
     if feature.kind not in {"hole", "cone"} or not is_a_cavity(feature):
-        return None, False
+        return CavityState(None, False, None)
     candidates = {
         identifier: candidate
         for identifier, candidate in features.items()
         if candidate.kind in {"hole", "cone"} and is_a_cavity(candidate)
     }
     if feature.id not in candidates:
-        return None, False
+        return CavityState(None, False, None)
     graph, invalid, touching = _cavity_links(candidates, mesh)
-    return _ordered_cavity(feature.id, candidates, graph, invalid), feature.id in touching
+    chain = _ordered_cavity(feature.id, candidates, graph, invalid)
+    if chain is not None:
+        return CavityState(chain, feature.id in touching, None)
+    if feature.id in touching:
+        return CavityState(None, True, "ambiguous_cavity_chain")
+    # Unlesbar sind Ränder, die das Merkmal **beansprucht** und die keine Ringe
+    # ergeben. Ein erzeugtes Merkmal ohne Flächennummern beansprucht keine —
+    # es kennt seine Form aus den Zahlen, und die Operation geht diesen Weg
+    # (``test_surface_placement``: ``hole_9`` mit ``provenance="generated"``).
+    if feature.id in invalid and feature.face_indices:
+        return CavityState(None, True, "cavity_topology_unavailable")
+    return CavityState(None, False, None)
 
 
 def cavity_chains(

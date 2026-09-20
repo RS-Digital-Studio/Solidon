@@ -37,6 +37,7 @@ from app.i18n import TranslatableText, _
 
 if TYPE_CHECKING:
     from app.core.geom.mesh import MeshData
+    from app.core.perceive.relations import FeatureGroupReason
 
 
 def measure_qualifier(status: MeasureStatus) -> TranslatableText | None:
@@ -549,6 +550,7 @@ def actions_for(
     mesh: MeshData | None = None,
     cavity: tuple[Feature, ...] | None = None,
     touches_other: bool = False,
+    reason: FeatureGroupReason | None = None,
 ) -> list[FeatureAction]:
     """Was sich an diesem Merkmal tun lässt — und was nicht, mit Grund.
 
@@ -559,8 +561,9 @@ def actions_for(
     wurde. Mit ``mesh`` folgt der Hinweis aufs gemeinsame Versetzen der echten
     Randringkette; ohne bleibt die bisherige Paar-Auskunft für ältere Aufrufer.
 
-    ``cavity`` und ``touches_other`` sagen, ob das Merkmal seinen Hohlraum mit
-    anderen teilt (``relations.cavity_chain_state_at``). Dann tragen die
+    ``cavity``, ``touches_other`` und ``reason`` sagen, ob das Merkmal seinen
+    Hohlraum mit anderen teilt oder seine Ränder unlesbar sind
+    (``relations.cavity_chain_state_at``). Dann tragen die
     Handlungen, die daran scheitern würden, ``op=None`` und den Satz, den die
     Operation beim Rechnen sagt — gemessen am 14.09.2026 an
     ``plate_countersunk.stl``: *Drehen* und *Verdoppeln* an der Senkung und
@@ -583,9 +586,10 @@ def actions_for(
     ):
         from app.core.perceive.relations import cavity_chain_state_at
 
-        chain, touches_other = cavity_chain_state_at(feature, features, mesh)
-        cavity = chain if chain is not None else ()
-    own_body_blocked = no_own_body(feature, cavity, touches_other, mesh)
+        state = cavity_chain_state_at(feature, features, mesh)
+        touches_other, reason = state.touches_other, state.reason
+        cavity = state.chain if state.chain is not None else ()
+    own_body_blocked = no_own_body(feature, cavity, touches_other, mesh, reason=reason)
     from app.core.geom.prepare_ops import HOLE_IS_NOT_EMPTY
 
     for candidates in ACTION_ORDER:
@@ -631,6 +635,7 @@ def actions_for(
                 mesh=mesh,
                 cavity=cavity,
                 touches_other=touches_other,
+                reason=reason,
             )
         ):
             actions.append(FeatureAction(title=fitting.title, op=None, reason=shared))
@@ -702,17 +707,22 @@ def no_own_body(
     cavity: tuple[Feature, ...] | None,
     touches_other: bool,
     mesh: MeshData | None = None,
+    *,
+    reason: FeatureGroupReason | None = None,
 ) -> TranslatableText | None:
     """Warum Versetzen, Verdoppeln, Drehen, Entfernen und Ändern an diesem
     Merkmal absagen würden — oder ``None``.
 
-    Zwei Gründe, beide aus der Operation und mit ihrem Satz:
+    Drei Gründe, alle aus der Operation und mit ihrem Satz:
 
     * Eine Bohrung oder Senkung, die einen **fremden Rand berührt, ohne dass
       daraus eine eindeutige Kette wird** (``cavity_chain_state_at`` liefert
       keine Kette und ``touches_other``): Aus ihren Flächen entsteht kein
       Werkzeug, und mitnehmen lässt sich nichts, was nicht benannt ist
-      (``NO_OWN_BODY``).
+      (``NO_OWN_BODY``). Sind es die **eigenen Ränder, die sich nicht lesen
+      lassen** (``reason`` ist ``cavity_topology_unavailable``), sagt die
+      Zeile das und nicht „geht in einen anderen Hohlraum über"
+      (``CAVITY_TOPOLOGY_UNKNOWN``, P1.5).
     * Ein Kegel oder eine Kuppel, aus deren Flächen **kein Körper** entsteht
       — der Rand hat zu viele Ringe oder liegt in keiner Ebene
       (``prepare_ops.has_own_body``, ``NO_BODY_FROM_FACES``): ein Kegelstumpf
@@ -736,9 +746,9 @@ def no_own_body(
     if feature.kind not in ("hole", "cone", "sphere") or cavity:
         return None
     if touches_other and feature.kind != "sphere":
-        from app.core.geom.prepare_ops import NO_OWN_BODY
+        from app.core.geom.prepare_ops import CAVITY_TOPOLOGY_UNKNOWN, NO_OWN_BODY
 
-        return NO_OWN_BODY
+        return CAVITY_TOPOLOGY_UNKNOWN if reason == "cavity_topology_unavailable" else NO_OWN_BODY
     if mesh is None or not feature.face_indices:
         return None
     from app.core.geom.prepare_ops import (
@@ -845,6 +855,7 @@ def _shares_its_cavity(
     mesh: MeshData | None,
     cavity: tuple[Feature, ...] | None,
     touches_other: bool,
+    reason: FeatureGroupReason | None = None,
 ) -> TranslatableText | None:
     """Warum diese Handlung an einem geteilten Hohlraum absagen würde — oder ``None``.
 
@@ -873,14 +884,19 @@ def _shares_its_cavity(
     elif cavity is None:
         from app.core.perceive.relations import cavity_chain_state_at, cavity_is_shared
 
-        shared = cavity_is_shared(*cavity_chain_state_at(feature, features, mesh))
+        state = cavity_chain_state_at(feature, features, mesh)
+        shared, reason = cavity_is_shared(state), state.reason
     else:
         shared = bool(cavity)
     if not shared:
         return None
-    from app.core.geom.prepare_ops import NEEDS_A_PLAIN_BORE
+    from app.core.geom.prepare_ops import CAVITY_TOPOLOGY_UNKNOWN, NEEDS_A_PLAIN_BORE
 
-    return NEEDS_A_PLAIN_BORE
+    # Unlesbare Ränder sind keine „weiteren Abschnitte": derselbe Satz wie an
+    # den Körperhandlungen, nicht der Rat, eine Senkung zu entfernen.
+    return (
+        CAVITY_TOPOLOGY_UNKNOWN if reason == "cavity_topology_unavailable" else NEEDS_A_PLAIN_BORE
+    )
 
 
 def _note_for(

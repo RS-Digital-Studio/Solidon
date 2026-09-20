@@ -11,7 +11,7 @@ import dataclasses
 import math
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from functools import lru_cache
-from typing import Any, Final, Literal, cast
+from typing import TYPE_CHECKING, Any, Final, Literal, cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -122,6 +122,9 @@ from app.core.units import (
     is_zero,
 )
 from app.i18n import TranslatableText, _
+
+if TYPE_CHECKING:
+    from app.core.perceive.relations import CavityState
 
 _AXES = tuple(AXIS_NORMALS)
 
@@ -833,7 +836,7 @@ def _stands_alone(mesh: MeshData, feature: Feature, features: Mapping[str, Featu
     """
     from app.core.perceive.relations import cavity_chain_state_at, cavity_is_shared
 
-    return not cavity_is_shared(*cavity_chain_state_at(feature, features, mesh))
+    return not cavity_is_shared(cavity_chain_state_at(feature, features, mesh))
 
 
 def _body_from_faces(
@@ -2087,9 +2090,10 @@ def feature_placement_geometry(
 
     feature = _movable_feature(source, feature.id, operation)
     body = as_mesh_data(source.mesh)
-    chain, touches_other = cavity_chain_state_at(feature, source.features, body)
-    if chain is None and touches_other:
-        raise ValidationError(field="at_feature", detail=NO_OWN_BODY, constraint="not_movable")
+    state = cavity_chain_state_at(feature, source.features, body)
+    chain = state.chain
+    if (refused := cavity_refusal(state)) is not None:
+        raise ValidationError(field="at_feature", detail=refused, constraint="not_movable")
     centre = cast(Vec3, tuple(float(value) for value in feature.params["centre"]))
     related = chain or (feature,)
     built = (
@@ -2389,6 +2393,31 @@ NO_OWN_BODY: Final = _(
     "Sie es dann neu."
 )
 
+#: Und der Satz für den Fall daneben: Die Ränder des Merkmals ergeben keine
+#: Ringe — veraltete Flächennummern, eine Naht mit drei Dreiecken, ein Fleck
+#: ohne Rand (``relations.CavityState``, ``cavity_topology_unavailable``). Ob
+#: ein Nachbar den Hohlraum teilt, weiß dann niemand, und „geht in einen
+#: anderen Hohlraum über" wäre eine Behauptung. Dasselbe Wort steht im
+#: Merkmalfenster an der Gruppenzeile.
+CAVITY_TOPOLOGY_UNKNOWN: Final = _(
+    "Die Ränder dieses Merkmals sind nicht sicher erkannt. Reparieren Sie das Netz und "
+    "wählen Sie das Merkmal danach neu."
+)
+
+
+def cavity_refusal(state: CavityState) -> TranslatableText | None:
+    """Der Satz, mit dem eine Körperhandlung an diesem Hohlraum absagt — oder ``None``.
+
+    Eine Kette ist keine Absage: Versetzen, Drehen und Verdoppeln nehmen sie
+    mit. Ohne Kette entscheidet der Grund aus :func:`cavity_chain_state_at`.
+    """
+    if state.chain is not None or not state.touches_other:
+        return None
+    if state.reason == "cavity_topology_unavailable":
+        return CAVITY_TOPOLOGY_UNKNOWN
+    return NO_OWN_BODY
+
+
 #: Warum ein Kegel oder eine Kuppel aus ihren Flächen kein Werkzeug hergibt: Der
 #: Rand hat mehr Ringe als ein einzelnes Merkmal oder liegt in keiner Ebene
 #: (``_body_from_faces``) — ein Kegelstumpf mit einer Querbohrung durch seinen
@@ -2578,11 +2607,12 @@ def move_feature(ctx: OpContext) -> OpResult:
         )
 
     body = as_mesh_data(source.mesh)
-    chain, touches_other = cavity_chain_state_at(feature, source.features, body)
-    if chain is None and touches_other:
+    state = cavity_chain_state_at(feature, source.features, body)
+    chain = state.chain
+    if (refused := cavity_refusal(state)) is not None:
         raise ValidationError(
             field="at_feature",
-            detail=NO_OWN_BODY,
+            detail=refused,
             values={"feature": feature.id},
             constraint="not_movable",
         )
@@ -2866,11 +2896,12 @@ def duplicate_feature(ctx: OpContext) -> OpResult:
     cavity = is_a_cavity(feature)
     from app.core.perceive.relations import cavity_chain_state_at
 
-    chain, touches_other = cavity_chain_state_at(feature, source.features, body)
-    if chain is None and touches_other:
+    state = cavity_chain_state_at(feature, source.features, body)
+    chain = state.chain
+    if (refused := cavity_refusal(state)) is not None:
         raise ValidationError(
             field="at_feature",
-            detail=NO_OWN_BODY,
+            detail=refused,
             values={"feature": feature.id},
             constraint="not_movable",
         )
@@ -3361,11 +3392,12 @@ def rotate_feature(ctx: OpContext) -> OpResult:
     body = as_mesh_data(source.mesh)
     from app.core.perceive.relations import cavity_chain_state_at
 
-    chain, touches_other = cavity_chain_state_at(feature, source.features, body)
-    if chain is None and touches_other:
+    state = cavity_chain_state_at(feature, source.features, body)
+    chain = state.chain
+    if (refused := cavity_refusal(state)) is not None:
         raise ValidationError(
             field="at_feature",
-            detail=NO_OWN_BODY,
+            detail=refused,
             values={"feature": feature.id},
             constraint="not_movable",
         )
@@ -4652,7 +4684,7 @@ def slot_hole(ctx: OpContext) -> OpResult:
         ]
         if len(matching) == 1:
             selected = matching[0]
-    if cavity_is_shared(*cavity_chain_state_at(selected, neighbours, body)):
+    if cavity_is_shared(cavity_chain_state_at(selected, neighbours, body)):
         raise ValidationError(
             field="at_feature",
             constraint="slot_and_widening",
@@ -5386,11 +5418,11 @@ def bore_entrance(
     from app.core.perceive.relations import cavity_chain_state_at
 
     mesh = as_mesh_data(body)
-    chain, touches = (
-        cavity_chain_state_at(feature, features, mesh)
-        if cavity is None and not touches_other
-        else (cavity or None, touches_other)
-    )
+    if cavity is None and not touches_other:
+        state = cavity_chain_state_at(feature, features, mesh)
+        chain, touches = state.chain, state.touches_other
+    else:
+        chain, touches = cavity or None, touches_other
     if feature.kind != "hole" or (chain is None and touches):
         raise _entrance_error()
     if chain is None:
