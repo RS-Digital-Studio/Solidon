@@ -17,6 +17,28 @@ Operation veröffentlicht. Abbruch hinterlässt keine Teilantwort. Native
 referenzierte geometrische Konkurrenz hält vor der Veröffentlichung an;
 generische Netzgruppen benennen keine native Topologie um.
 
+**Ein alter Flächenbezug am exakten Körper gilt nur mit Beleg.** Nach jedem
+Ausgabeübergang eines exakten Körpers — auch nach einem Cachetreffer und auch
+bei Operationen ohne `touches_features` — prüft `_with_features`, ob jedes
+alte Merkmal, das ein **späterer** Verbraucher oder eine aktive Passung noch
+braucht (`_needed_after`, dieselbe zeitliche Grenze wie
+`orphans.pending_references`), auf einem von drei Wegen belegt ist:
+unverändert durchgereicht, von der Operation selbst als
+`OpResult.feature_continuations` ausgestellt (`FeatureContinuation`, körper-
+qualifiziert, ordinal je Ausgabe, auf Struktur geprüft in
+`_checked_continuations`, im Ergebniscache als `CachedResult.continuations`
+mitgeführt) oder durch die eindeutige geometrische Zuordnung auf **denselben**
+Namen mit gültiger aktueller Auswahl. Ein frisch vergebener gleicher Name,
+ein Partner unter anderem Namen und eine ausgelassene Zuordnung sind nicht
+belegt (`_unproven_native_references`); die Kette hält atomar an der
+Erzeugergrenze mit `NativeReferenceLost`, der Befund nennt den späteren
+Verbraucher, und `EvaluationResult.blocked_references` trägt die Bezüge zum
+Verweisfilter: `orphans.check(blocked=...)` meldet sie als `feature.blocked`,
+ohne Namensexistenz als Auflösung und ohne Frage gegen die alte Szene.
+Heute stellt allein `resize_hole` am exakten Körper Belege aus (Bohrung und
+belegter Boden aus `_preserved_exact_features`); eine bedienbare native
+Neuwahl gibt es noch nicht, der Halt benennt das.
+
 `Operation.matches` speichert vollständige Antwortgruppen je Ausgabekörper
 und alter Anspruchsmenge. `perceive.match_records` ist die gemeinsame reine
 Schemaquelle für Projektleser und Wiedererkennung; Kandidatenindices sind

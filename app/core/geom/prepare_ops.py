@@ -96,7 +96,9 @@ from app.core.types import (
     BaseParams,
     CancelToken,
     Feature,
+    FeatureContinuation,
     FeatureId,
+    FeatureRef,
     Finding,
     Mesh,
     OpContext,
@@ -4257,7 +4259,7 @@ def resize_hole(ctx: OpContext) -> OpResult:
         )
         findings.extend(compensation_findings(params.diameter, cut, params.compensate))
         findings.extend(_widening_findings(source, feature, params.diameter))
-        exact_features, recognised = _preserved_exact_features(
+        exact_features, recognised, continued = _preserved_exact_features(
             source.features,
             features_of(solid, cancelled=ctx.cancelled),
             looked_for,
@@ -4278,6 +4280,15 @@ def resize_hole(ctx: OpContext) -> OpResult:
                 )
             ],
             findings=findings,
+            # Der Beleg für die bewusst geänderte Bohrung und ihren Boden reist
+            # mit dem Ergebnis: Die Auswertung darf ihn weder aus dem Namen der
+            # Operation noch aus gleichen Kennungen erraten (§21.2).
+            feature_continuations=(
+                tuple(
+                    FeatureContinuation(FeatureRef(source.id, old_id), new_id)
+                    for old_id, new_id in continued
+                ),
+            ),
         )
 
     body = as_mesh_data(source.mesh)
@@ -6322,8 +6333,16 @@ def _preserved_exact_features(
     *,
     original: Mesh | None = None,
     check_cancelled: Callable[[], None] | None = None,
-) -> tuple[dict[str, Feature], bool]:
-    """Ordnet die exakte Topologie neu zu, mit dem gewählten Maß als Absicht."""
+) -> tuple[dict[str, Feature], bool, tuple[tuple[str, str], ...]]:
+    """Ordnet die exakte Topologie neu zu, mit dem gewählten Maß als Absicht.
+
+    Zurück kommen die Merkmale unter ihren fortgeführten Namen, ob die
+    Bohrung wiedergefunden wurde, und **welche Übergänge belegt sind**: Paare
+    aus altem und neuem Namen für die bewusst geänderte Bohrung und ihren
+    Boden — nur die, die der gemeinsame Anspruchsschluss tatsächlich
+    freigegeben hat. Ein Kandidat aus ``_bore_match_id`` allein ist noch kein
+    Beleg; erst die Zuordnung ohne Konkurrenz macht ihn dazu.
+    """
     from app.core.perceive.matching import apply_mapping, match
 
     bounds = solid.bounds
@@ -6332,8 +6351,10 @@ def _preserved_exact_features(
         detected, wanted, bounds.centre, bounds.diagonal, check_cancelled=check_cancelled
     )
     expected = {name: entry for name, entry in previous.items() if name != feature.id}
+    intended: dict[str, str] = {}
     if found_id is not None:
         expected[feature.id] = dataclasses.replace(detected[found_id], id=feature.id)
+        intended[feature.id] = found_id
         if original is not None:
             floors = _resized_bore_floor(
                 as_mesh_data(original),
@@ -6355,6 +6376,7 @@ def _preserved_exact_features(
                 ]
                 detected = {name: entry for name, entry in detected.items() if name not in parts}
                 detected[parts[0]] = dataclasses.replace(floor, id=parts[0])
+                intended[floor.id] = parts[0]
             expected.update(floors)
     matched = match(
         expected,
@@ -6365,7 +6387,16 @@ def _preserved_exact_features(
     )
     if found_id is None:
         matched.orphaned = (*matched.orphaned, feature.id)
-    return apply_mapping(detected, matched, previous=previous), found_id is not None
+    # Belegt ist ein Übergang erst, wenn die Zuordnung genau den erwarteten
+    # Nachfolger freigibt — ohne Konkurrenz um ihn und ohne, dass er einem
+    # anderen alten Anspruch zugefallen wäre. Der Alias wird dann unter dem
+    # alten Namen veröffentlicht, und genau dieser Name ist das Ziel.
+    continued = tuple(
+        (old_id, old_id)
+        for old_id, new_id in intended.items()
+        if matched.mapping.get(old_id) == new_id and old_id not in matched.ambiguous
+    )
+    return apply_mapping(detected, matched, previous=previous), found_id is not None, continued
 
 
 def _both_halves_or_stop(first: MeshData, second: MeshData, position: float) -> None:

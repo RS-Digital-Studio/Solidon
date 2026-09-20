@@ -15,7 +15,7 @@ bei jeder Auswertung.
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -298,9 +298,18 @@ def check(
     announce: Callable[[tuple[tuple[str, str], ...]], None] | None = None,
     *,
     pending: Sequence[Reference] | None = None,
+    blocked: Collection[FeatureRef] = (),
 ) -> CheckResult:
     """Löst jeden Verweis einmal auf und fragt, wo die Antwort nicht
     offensichtlich ist (§21.3).
+
+    ``blocked`` sind die Verweise, die die Auswertung selbst angehalten hat
+    (``EvaluationResult.blocked_references``): alte native Flächenbezüge, die
+    nach dem Umbau des exakten Körpers nicht belegt sind. Für sie gilt
+    weder die Namensexistenz als Auflösung — ``face_1`` steht wieder da und
+    ist eine andere Fläche — noch die Frage gegen die alte Szene, denn die
+    zeigt den Körper **vor** dem Umbau. Sie bekommen ihren Befund und bleiben
+    stehen, bis die native Neuwahl sie beantworten kann.
 
     ``announce`` sagt vor jeder Frage, welche Merkmale gleich zur Wahl stehen —
     je Kandidat ein Paar aus Körper und Kennung —, und nach der Antwort mit
@@ -324,7 +333,11 @@ def check(
     """
     result = CheckResult()
     family = lineage(document)
+    held = frozenset(blocked)
     for reference in references(document, registry) if pending is None else pending:
+        if reference.ref in held:
+            result.findings.append(_blocked(reference))
+            continue
         if _resolves(scene, reference.ref):
             continue
         candidates = _candidates(scene, reference, family)
@@ -593,6 +606,25 @@ def _rewritten_finding(reference: Reference, chosen: tuple[ObjectId, FeatureId])
             "to": f"{object_id}:{feature_id}" if moved else feature_id,
             "where": reference.title,
         },
+    )
+
+
+def _blocked(reference: Reference) -> Finding:
+    """Der Verweis, den die Auswertung angehalten hat — ohne Frage, ohne Umschreiben.
+
+    Ein Fehler und keine Warnung, denn die Kette steht; und ohne Kandidaten,
+    denn die Kandidaten der alten Szene wären die Flächen vor dem Umbau.
+    """
+    return Finding(
+        code="feature.blocked",
+        severity="error",
+        message=_(
+            "Ein Verweis ist seit dem Umbau des exakten Körpers nicht belegt. "
+            "Er wird nicht neu geraten; wähle die Fläche im betroffenen Schritt neu."
+        ),
+        object_id=reference.ref.object_id,
+        feature_ids=(reference.ref.feature_id,),
+        values={"reference": str(reference.ref), "where": reference.title},
     )
 
 

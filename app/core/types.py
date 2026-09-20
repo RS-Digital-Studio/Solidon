@@ -613,6 +613,27 @@ class FeatureRef:
         return f"{self.object_id}:{self.feature_id}"
 
 
+@dataclass(frozen=True, slots=True)
+class FeatureContinuation:
+    """Ein belegter Übergang: das alte Merkmal ``source`` lebt in der Ausgabe
+    als ``target`` weiter.
+
+    Ausgestellt wird er nur von der Operation, die den Übergang selbst
+    nachgewiesen hat — *Bohrung ändern* kennt die bewusst geänderte Bohrung
+    und ihren Boden. Die Auswertung errät ihn weder aus gleichen Namen noch
+    aus gleicher Herkunft; sie prüft nur, dass Quelle und Ziel tatsächlich
+    existieren. Wie ``OpResult.transform`` ist das abgeleitete Rechenauskunft:
+    Sie reist durch den Ergebniscache und wird aus den Parametern neu
+    erzeugt, nie in die Projektdatei geschrieben.
+    """
+
+    source: FeatureRef
+    """Das Merkmal am Eingang, körperqualifiziert — zwei Eingänge mit
+    ``hole_1`` sind zwei Quellen."""
+    target: FeatureId
+    """Das Merkmal der zugehörigen Ausgabe, unter dem die Quelle weiterlebt."""
+
+
 Tolerance = float | str
 """Eine Zahl in Millimetern, oder ``auto:<material>`` als Verweis ins
 Profil (§12).
@@ -1590,6 +1611,16 @@ class OpResult:
     Merkmalszuordnung danach es aus dem Ergebnis zurückraten müsste (§21.2).
     Mit der Matrix überleben die alten Bezeichner eine Drehung; ohne sie
     sieht eine gedrehte Platte aus wie eine andere Platte."""
+
+    feature_continuations: tuple[tuple[FeatureContinuation, ...], ...] = ()
+    """Je Ausgabe die belegten Übergänge alter Merkmale — leer, wenn die
+    Operation keinen nachgewiesen hat.
+
+    Die Ausgabe ist über ihre **Position** zugeordnet, denn ihre endgültige
+    Objektkennung bekommt sie erst beim Einhängen. Eine leere Folge sagt
+    „kein zusätzlicher Beleg", nicht „nichts hat überlebt": Was die Operation
+    unverändert durchreicht, belegt sich selbst, und für alles andere fragt
+    die Auswertung die geometrische Zuordnung."""
 
 
 OpFn = Callable[[OpContext], OpResult]

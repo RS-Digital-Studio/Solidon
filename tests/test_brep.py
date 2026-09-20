@@ -973,7 +973,10 @@ def test_an_unproven_native_transform_never_returns_a_new_solid(
     monkeypatch: pytest.MonkeyPatch, failure_kind: str
 ) -> None:
     """Gültige Eingaben reichen nicht: Builder-Abschluss, Körper und Zuordnung zählen."""
-    from OCP import BRepBuilderAPI
+    # Das Modul, nicht das Paketattribut: ``edit`` holt den Builder über
+    # ``from OCP.BRepBuilderAPI import``, also aus dem Stub-Modul; nur ein Patch
+    # dort ist sichtbar und wird nach dem Test auch dort zurückgesetzt.
+    import OCP.BRepBuilderAPI as BRepBuilderAPI
 
     source = edit.box(10.0, 8.0, 6.0)
     unrelated = edit.box(11.0, 8.0, 6.0)

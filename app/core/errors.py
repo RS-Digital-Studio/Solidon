@@ -17,7 +17,7 @@ from __future__ import annotations
 from typing import Any, ClassVar, Final
 
 from app.core.types import Action as Action
-from app.core.types import ObjectId, OpId, SolverStage, Vec3
+from app.core.types import FeatureRef, ObjectId, OpId, SolverStage, Vec3
 from app.core.units import UNIT_NAMES
 from app.i18n import TranslatableText, _
 
@@ -475,6 +475,37 @@ class AmbiguityError(UserError):
                 *(Action(f"choose:{name}", name) for name in candidates),
                 CANCEL,
             )
+
+
+class NativeReferenceLost(UserError):
+    """Ein späterer Bezug auf eine Fläche des exakten Körpers ist nach diesem
+    Schritt nicht belegt (§21.2).
+
+    Der Schritt hat den exakten Körper neu gebaut, und die Auswertung konnte
+    für eine Fläche, die eine Passung oder ein späterer Schritt braucht,
+    weder Durchreichen noch Übergang noch eindeutige geometrische Zuordnung
+    nachweisen. Ein neu vergebener gleicher Name heilt das nicht. Die Kette
+    hält vor der Veröffentlichung an; ``references`` nennt die betroffenen
+    körperqualifizierten Verweise, damit der Halt nicht mit einem falschen
+    Parameter des Schritts verwechselt wird.
+    """
+
+    default_title: ClassVar[TranslatableText] = _(
+        "Ein Flächenbezug ist am exakten Körper nicht mehr belegt."
+    )
+    default_suggestions: ClassVar[tuple[Action, ...]] = (SHOW_HISTORY, CANCEL)
+
+    def __init__(
+        self,
+        detail: TranslatableText | str | None = None,
+        references: tuple[FeatureRef, ...] = (),
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(
+            detail=detail,
+            **_with_values(kwargs, references=[str(reference) for reference in references]),
+        )
+        self.references = references
 
 
 class UnitUnknownError(UserError):

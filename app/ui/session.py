@@ -219,6 +219,7 @@ class _EvaluationWorker(Worker):
                             pending=orphans.pending_references(
                                 session.project.document, result.stopped_at
                             ),
+                            blocked=result.blocked_references,
                         )
                     finally:
                         session._pending.preview = None

@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import dataclasses
 from collections import Counter
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, field
 from functools import cache, partial
 from typing import Any, Final
@@ -36,6 +36,7 @@ from app.core.errors import (
     AmbiguityError,
     AppError,
     InternalError,
+    NativeReferenceLost,
     OperationCancelled,
 )
 from app.core.geom.mesh import MeshData
@@ -74,7 +75,7 @@ from app.core.scene.cancel import NeverCancelled
 from app.core.scene.fits import active_fits
 from app.core.scene.fits import check as check_fits
 from app.core.scene.hashing import digest, object_hash, operation_hash
-from app.core.scene.orphans import feature_ref_of_sketch
+from app.core.scene.orphans import Reference, feature_ref_of_sketch
 from app.core.scene.orphans import references as feature_references
 from app.core.scene.parameter_usage import ParameterUse, parameter_uses
 from app.core.sketch.serialize import sketch_parameter_references
@@ -85,6 +86,7 @@ from app.core.types import (
     CancelToken,
     Document,
     Feature,
+    FeatureContinuation,
     FeatureId,
     FeatureRef,
     Finding,
@@ -183,6 +185,14 @@ class EvaluationResult:
     parameter_usage: Mapping[str, tuple[ParameterUse, ...]] | None = None
     """Verwendungen im aktuellen Stapel; None bedeutet noch nicht zuverlässig erhoben."""
     parameter_usage_error: AppError | None = None
+    blocked_references: tuple[FeatureRef, ...] = ()
+    """Verweise, die den Halt tragen: alte native Flächenbezüge, die nach dem
+    angehaltenen Schritt nicht belegt sind (§21.2).
+
+    Abgeleitet, nie gespeichert. Der Verweisfilter (``orphans.check``) darf
+    sie nicht allein wegen eines vorhandenen gleichen Namens für aufgelöst
+    halten und sie auch nicht gegen die alte Szene vor dem Halt neu wählen
+    lassen — die Fläche, die er dort fände, ist die vor dem Umbau."""
 
     @property
     def complete(self) -> bool:
@@ -318,7 +328,14 @@ def _evaluate(
     # Stapel, und der ändert sich während einer Auswertung nicht.
     referenced_features: dict[ObjectId, set[str]] = {}
     referenced_anywhere: set[str] = set()
-    for reference in feature_references(document, source):
+    all_references = feature_references(document, source)
+    # Für den exakten Körper zählt außerdem, **wann** ein Verweis gebraucht
+    # wird: Eine Fläche, die nur ein früherer Schritt benannt hat, sperrt
+    # ihren späteren bewussten Umbau nicht (siehe ``_needed_after``).
+    positions = {operation.id: index for index, operation in enumerate(operations)}
+    active_fit_names = frozenset(fit.name for fit in active_fits(document))
+    blocked: list[FeatureRef] = []
+    for reference in all_references:
         if reference.ref.object_id == "":
             # Eine Skizzenebene kennt ihren Körper nicht (``frame_for`` sucht
             # über alle) — ihr Merkmal zählt deshalb an jedem Objekt als
@@ -578,10 +595,17 @@ def _evaluate(
                 findings=tuple(produced.findings),
                 solver=produced.solver,
                 transform=produced.transform,
+                continuations=tuple(tuple(entries) for entries in produced.feature_continuations),
             )
 
         if len(result.objects) != len(operation.outputs):
             findings.append(_object_count_finding(operation, len(result.objects)))
+            stopped_at = operation.id
+            break
+        try:
+            continuations = _checked_continuations(operation, result, previous_features)
+        except AppError as error:
+            findings.append(_finding_from(error, operation))
             stopped_at = operation.id
             break
 
@@ -693,6 +717,10 @@ def _evaluate(
                     partial(progress, position / total),
                     question_context=announce_candidates,
                     legacy_eligible=legacy_eligible,
+                    needed=_needed_after(
+                        all_references, positions, active_fit_names, position, object_id
+                    ),
+                    continuations=continuations[index] if continuations else (),
                 )
             except AppError as error:
                 # Die Zuordnung fragt, wenn sie mehrere Kandidaten sieht
@@ -703,6 +731,11 @@ def _evaluate(
                 # der beiden Bohrungen, zwischen denen zu wählen war.
                 del findings[output_findings_start:]
                 findings.append(_finding_from(error, operation))
+                if isinstance(error, NativeReferenceLost):
+                    # Strukturiert weiterreichen, nicht nur als Satz: Der
+                    # Verweisfilter muss diese Bezüge kennen, damit er sie
+                    # nicht an der alten Szene für aufgelöst hält.
+                    blocked.extend(error.references)
                 stopped_at = operation.id
                 break
             else:
@@ -886,6 +919,7 @@ def _evaluate(
         solvers=solvers,
         answers=answers,
         matches=matches,
+        blocked_references=tuple(blocked),
     )
 
 
@@ -1356,6 +1390,128 @@ def _carried_along(
     )
 
 
+def _needed_after(
+    references: Sequence[Reference],
+    positions: Mapping[OpId, int],
+    active_fits: Collection[str],
+    position: int,
+    object_id: ObjectId,
+) -> dict[FeatureId, tuple[str, ...]]:
+    """Welche Merkmale dieses Körpers **nach** diesem Schritt noch jemand
+    braucht — und wer.
+
+    Die über das ganze Dokument erhobenen Verweise sagen nur, dass ein Name
+    irgendwo benannt ist. Für den Halt an einem umgebauten exakten Körper
+    zählt die Lebensdauer: Ein Verweis eines früheren Schritts ist verbraucht,
+    einer des Schritts selbst wird an seinem Eingang aufgelöst, und eine
+    Passung gilt erst im Endstand — dieselbe zeitliche Grenze wie in
+    ``orphans.pending_references``. Ein Körper, dessen Fläche nur ein
+    früherer Schritt benannt hat, darf sie in einem späteren Schritt bewusst
+    verlieren.
+
+    Gezählt wird am Körper mit **dieser** Kennung, dazu die körperlosen
+    Skizzenebenen alter Projekte, die an jedem Körper zu Hause sein dürfen.
+    Über eine spätere Teilung hinweg gilt ein gleicher Name nicht als derselbe
+    Bezug; dort sucht der Verweisfilter über den Stammbaum, nicht der Halt.
+    """
+    needed: dict[FeatureId, list[str]] = {}
+    for reference in references:
+        if reference.kind == "fit":
+            if reference.fit_name not in active_fits:
+                continue
+        elif positions.get(reference.op_id, -1) <= position:
+            continue
+        if reference.ref.object_id not in ("", object_id):
+            continue
+        needed.setdefault(reference.ref.feature_id, []).append(reference.title)
+    return {name: tuple(who) for name, who in needed.items()}
+
+
+def _checked_continuations(
+    operation: Operation,
+    result: CachedResult,
+    previous_features: Mapping[ObjectId, Mapping[FeatureId, Feature]],
+) -> tuple[tuple[FeatureContinuation, ...], ...]:
+    """Die belegten Übergänge einer Operation auf Struktur und Bezug prüfen.
+
+    Die **fachliche** Absicht — ob eine Bohrung wirklich bewusst geändert
+    wurde — entsteht allein am Geometrieprüfer der Operation; hier wird nur
+    geprüft, dass der Beleg auf etwas zeigt, das es gibt: Die Quelle ist ein
+    Eingang dieser Operation und trug das Merkmal, das Ziel steht an der
+    zugehörigen Ausgabe, und weder eine Quelle noch ein Ziel kommt zweimal
+    vor. Ein Beleg, der das verletzt, ist ein Programmfehler der Operation,
+    kein Bedienfehler — und er darf nicht still zu „kein Beleg" werden.
+    """
+    given = result.continuations
+    if not given:
+        return ()
+    if len(given) != len(result.objects):
+        raise InternalError(
+            detail="feature continuations do not match the outputs",
+            values={"operation": str(operation.op)},
+            op_id=operation.id,
+        )
+    checked: list[tuple[FeatureContinuation, ...]] = []
+    for output, entries in zip(result.objects, given, strict=True):
+        sources: set[FeatureRef] = set()
+        targets: set[FeatureId] = set()
+        for entry in entries:
+            known = previous_features.get(entry.source.object_id)
+            if (
+                entry.source.object_id not in operation.inputs
+                or known is None
+                or entry.source.feature_id not in known
+                or entry.target not in output.features
+                or entry.source in sources
+                or entry.target in targets
+            ):
+                raise InternalError(
+                    detail=f"invalid feature continuation {entry.source} -> {entry.target}",
+                    values={"operation": str(operation.op)},
+                    op_id=operation.id,
+                )
+            sources.add(entry.source)
+            targets.add(entry.target)
+        checked.append(tuple(entries))
+    return tuple(checked)
+
+
+def _unproven_native_references(
+    wanted: Collection[FeatureId],
+    current: SceneObject,
+    matched: MatchResult | None,
+) -> frozenset[FeatureId]:
+    """Welche noch gebrauchten alten Bezüge am neuen exakten Körper nicht
+    belegt sind.
+
+    Belegt ist ein Bezug nur durch die eindeutige geometrische Zuordnung auf
+    **denselben** logischen Namen mit gültiger aktueller Auswahl. Ein
+    verlorener Name, ein umkämpfter, einer, der zu einem anderen aktuellen
+    Namen passt, und eine ausgelassene Zuordnung sind alle dasselbe: nicht
+    belegt. Ein frisch vergebener gleicher Name beweist die alte Fläche nicht —
+    ``features_of`` nummeriert neu, und ``face_1`` kann eine andere sein.
+    """
+    if not wanted:
+        return frozenset()
+    if matched is None:
+        # Ungeprüft heißt unbekannt, nicht gültig — auch über der
+        # Merkmalsgrenze verschwindet die Frage nicht still.
+        return frozenset(wanted)
+    triangles = current.mesh.triangle_count
+    blocked = set()
+    for name in wanted:
+        feature = current.features.get(name)
+        if (
+            name in matched.ambiguous
+            or matched.mapping.get(name) != name
+            or feature is None
+            or not feature.face_indices
+            or any(not 0 <= index < triangles for index in feature.face_indices)
+        ):
+            blocked.add(name)
+    return frozenset(blocked)
+
+
 def _with_feature_reservations(
     entry: SceneObject, inherited: set[str], active: set[str]
 ) -> SceneObject:
@@ -1568,9 +1724,18 @@ def _with_features(
     *,
     question_context: FeatureQuestionContext | None = None,
     legacy_eligible: frozenset[str] | None = None,
+    needed: Mapping[FeatureId, tuple[str, ...]] | None = None,
+    continuations: Sequence[FeatureContinuation] = (),
 ) -> SceneObject:
     """Merkmale neu erkennen und die alten Bezeichner behalten, wo sie noch
     passen.
+
+    ``needed`` nennt die alten Merkmale dieses Körpers, die **nach** dieser
+    Operation noch jemand braucht, je mit dem Verbraucher; ohne die Angabe
+    gilt ``referenced``. ``continuations`` sind die von der Operation selbst
+    belegten Übergänge (``OpResult.feature_continuations``), bereits auf
+    Struktur geprüft. Beides braucht nur der exakte Körper — am Netz
+    entscheidet die Neuerkennung mit der Zuordnungsfrage.
 
     ``touches_features`` sagt, ob diese Operation Merkmale **einführt** — das
     Flag stand seit je im Register und hatte bis heute keinen Leser. Es
@@ -1609,18 +1774,47 @@ def _with_features(
         # könnte — seine Merkmale kommen aus der Topologie und werden dort
         # gerechnet, wo er entsteht. Bewegt wurde er hier trotzdem
         # (siehe :func:`_carried_along`).
+        #
+        # **Was die Operation unverändert durchgereicht hat, belegt sich
+        # selbst** — gemessen vor der starren Mitnahme, denn danach ist ein
+        # bewegtes Merkmal kein gleiches mehr. Alles andere braucht einen
+        # Beleg: den der Operation (``continuations``) oder die eindeutige
+        # Zuordnung auf denselben Namen.
+        passed_through = frozenset(_inherited_features(entry.features, previous))
         exact_entry = _carried_along(entry, previous, transform, previous_bounds, cancelled=watch)
+        wanted: Mapping[FeatureId, tuple[str, ...]] = (
+            dict.fromkeys(referenced, ()) if needed is None else needed
+        )
+        wanted = {name: who for name, who in wanted.items() if name in previous}
+        continued = frozenset(
+            entry_.source.feature_id
+            for entry_ in continuations
+            if entry_.source.object_id == entry.id
+            and entry_.target == entry_.source.feature_id
+            and entry_.target in exact_entry.features
+        )
+        unproven = set(wanted) - passed_through - continued
+        matched: MatchResult | None = None
         if (
-            touches_features
-            and previous
+            previous
+            and (touches_features or unproven)
             and max(len(previous), len(exact_entry.features)) <= FEATURE_LIMIT_COUNT
         ):
             # Die native Erkennung benennt frisch. Gleiche Namen beweisen
             # deshalb keinen Vorfahren; es gilt dieselbe eindeutige Zuordnung
-            # wie am Netz. Reine Transformationen tragen ihre Herkunft schon.
+            # wie am Netz — auch bei Operationen ohne ``touches_features``:
+            # *Fläche versetzen* und *Formschräge* bauen den Körper neu und
+            # tragen das Flag nicht, denn es beschreibt das Einführen von
+            # Merkmalen, nicht das Erhalten von Bezügen. Eine gemeldete
+            # Bewegung wird dabei an den alten Maßen nachgeführt, wie am Netz.
             watch.raise_if_cancelled()
+            reference_features: dict[FeatureId, Feature] = previous
+            if transform is not None:
+                reference_features = transformed_features(
+                    previous, transform, check_cancelled=watch.raise_if_cancelled
+                ).candidates
             matched = match(
-                previous,
+                reference_features,
                 exact_entry.features,
                 mesh.bounds.centre,
                 mesh.bounds.diagonal,
@@ -1638,15 +1832,37 @@ def _with_features(
                     ),
                     candidates=tuple(sorted(set(matched.ambiguous) & referenced)),
                 )
-            exact_entry = dataclasses.replace(
-                exact_entry,
-                features=_feature_originators(
-                    inherit_originators(exact_entry.features, matched, previous),
-                    matched,
-                    operation,
-                    touches_features,
-                    True,
+            if touches_features:
+                exact_entry = dataclasses.replace(
+                    exact_entry,
+                    features=_feature_originators(
+                        inherit_originators(exact_entry.features, matched, previous),
+                        matched,
+                        operation,
+                        touches_features,
+                        True,
+                    ),
+                )
+        lost = _unproven_native_references(unproven, exact_entry, matched)
+        if lost:
+            # Atomar an der Erzeugergrenze: keine Ausgabe, keine Antwort, kein
+            # Folgecache. Der Befund nennt den späteren Verbraucher, damit der
+            # Halt nicht wie ein falscher Wert dieses Schritts aussieht. Eine
+            # Reparatur bietet er noch nicht an — die native Neuwahl folgt als
+            # eigener Anschluss; bis dahin heilt ein erneutes Wählen derselben
+            # alten Kennung nichts.
+            raise NativeReferenceLost(
+                _(
+                    "Dieser Schritt baut den exakten Körper neu, und ein späterer Bezug "
+                    "auf eine seiner Flächen ist danach nicht belegt. Wähle die Fläche "
+                    "dort neu, oder nimm den Schritt mit Strg+Z zurück."
                 ),
+                references=tuple(FeatureRef(entry.id, name) for name in sorted(lost)),
+                values={
+                    "where": "; ".join(sorted({who for name in lost for who in wanted[name]})),
+                    "operation": str(operation.op),
+                },
+                object_id=entry.id,
             )
         return exact_entry
     local_only = mesh.triangle_count > FEATURE_LIMIT_TRIANGLES

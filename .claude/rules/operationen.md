@@ -926,6 +926,24 @@ eine Karte sagt, was wo liegt, eine Regel, was zu halten ist.
   `SceneObject.reserved_feature_ids` über Zwischenoperationen fort und
   verhindert eine neue Zuordnung gelöschter Namen. Cache und Objekthash
   tragen die sortierte Sammlung; ein Projekt rekonstruiert sie aus den Ops.
+- **Wer einen exakten Körper neu baut, belegt die Bezüge, die danach noch
+  jemand braucht — oder die Kette hält an** (20.09.2026, P1.4c.2). Die
+  native Erkennung nummeriert frisch; ein `face_1` nach `features_of` ist
+  kein Beleg für das `face_1` davor. Belegt ist ein Bezug nur durch
+  Durchreichen, durch die eindeutige Zuordnung auf denselben Namen oder durch
+  einen von der Operation selbst ausgestellten Übergang
+  (`OpResult.feature_continuations`). Diesen stellt nur aus, wer die
+  Änderungsabsicht geometrisch nachgewiesen hat — `resize_hole` über
+  `_preserved_exact_features` —, und nur für Paare, die der Anspruchsschluss
+  tatsächlich freigegeben hat. Die Auswertung errät ihn weder aus dem
+  Operationsnamen noch aus gleichen Kennungen, `created_by` oder
+  `provenance`; `touches_features` ist kein Erhaltungsflag. Der Beleg reist
+  wie `transform` durch den Ergebniscache (`CachedResult.continuations`,
+  Cacheformat 21) und nie in die Projektdatei. Gezählt werden nur spätere
+  Verbraucher und aktive Passungen, nicht der eigene Eingang des Schritts und
+  nicht, was ein früherer Schritt benannt hat. Ein Halt ist atomar, nennt den
+  Verbraucher (`NativeReferenceLost`) und wird von `orphans.check` nicht an
+  der alten Szene „geheilt" (`blocked`, Befund `feature.blocked`).
 - **Der Ergebniscache versioniert geometrische Auskünfte.** Alte Einträge
   ohne den aktuellen Formatstand sind Fehltreffer. Auch Änderungen erzeugter
   Geometrie und Merkmalsmetadaten gehören zu dieser Kompatibilitätsgrenze.

@@ -476,7 +476,10 @@ def test_a_local_deformation_cannot_hide_behind_a_zero_reported_gap(
     monkeypatch: pytest.MonkeyPatch, candidate_kind: str
 ) -> None:
     """Ein unabhängiger Gegenpunkt widerlegt den Kandidaten; GetGap=0 darf ihn nicht retten."""
-    from OCP import ShapeAnalysis
+    # Das Modul, nicht das Paketattribut — siehe den gleichen Patch in
+    # ``test_brep_surfaces``: ``canonical`` liest die Klasse aus dem Stub-Modul
+    # ``OCP.ShapeAnalysis``, und nur dort setzt ``monkeypatch`` sie auch zurück.
+    import OCP.ShapeAnalysis as ShapeAnalysis
     from OCP.BRep import BRep_Tool
     from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace
     from OCP.BRepCheck import BRepCheck_Analyzer

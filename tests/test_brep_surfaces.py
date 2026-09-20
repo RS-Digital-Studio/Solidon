@@ -476,7 +476,14 @@ def test_narrow_nurbs_bulge_cannot_hide_behind_a_sphere_candidate(
     """Selbst ein falscher Kandidat mit Abstand null muss den vollständigen Nachweis bestehen."""
     from types import SimpleNamespace
 
-    from OCP import ShapeAnalysis
+    # Das Modul, nicht das Paketattribut: ``OCP.ShapeAnalysis`` ist ein
+    # Stub-Paket (``from ..OCP.ShapeAnalysis import *``) und damit ein eigenes
+    # Objekt. ``canonical`` holt die Klasse über ``from OCP.ShapeAnalysis
+    # import``; ein Patch am Attribut des Pakets ``OCP`` erreichte sie nur,
+    # wenn dieser Test das Stub-Modul als erster erzeugte — und blieb dann
+    # nach dem Zurücksetzen für den ganzen Prozess darin stehen (14 rote
+    # NURBS-Fälle auf einem xdist-Arbeiter, 20.09.2026).
+    import OCP.ShapeAnalysis as ShapeAnalysis
     from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace
     from OCP.gp import gp_Ax3, gp_Dir, gp_Pnt
 

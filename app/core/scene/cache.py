@@ -38,6 +38,8 @@ from app.core.scene.serialise import (
 )
 from app.core.types import (
     Feature,
+    FeatureContinuation,
+    FeatureRef,
     Finding,
     MaterialSlot,
     Mesh,
@@ -85,7 +87,10 @@ DEFAULT_DISK_BUDGET_BYTES: Final = 2 * 1024 * 1024 * 1024
 #: alten Folgeergebnissen übernehmen; ihre Antworten gelten als ganze Gruppe.
 #: Folgehashes tragen die tatsächliche Bindung samt aktuellen Flächenträgern;
 #: dieselben reservierten Namen allein belegen kein unverändertes Ergebnis.
-CACHE_FORMAT_VERSION: Final = 20
+#: Belegte Übergänge alter Merkmale (``continuations``) gehören zum Ergebnis:
+#: Ein älterer Eintrag ohne das Feld kennt keinen Beleg und wird neu gerechnet,
+#: statt dass ein warmer Treffer einen Bezug still für verloren erklärt.
+CACHE_FORMAT_VERSION: Final = 21
 
 
 @dataclass(frozen=True, slots=True)
@@ -99,6 +104,11 @@ class CachedResult:
     """Beim Ergebnis aufgehoben: eine Operation aus dem Cache muss dieselbe
     Bewegung melden wie beim ersten Mal, sonst überlebten die Bezeichner nur
     einen kalten Lauf."""
+    continuations: tuple[tuple[FeatureContinuation, ...], ...] = ()
+    """Aus demselben Grund aufgehoben: die belegten Übergänge alter Merkmale
+    je Ausgabe (``OpResult.feature_continuations``). Ein Cachetreffer, der
+    sie verlöre, ließe eine bewusst geänderte Bohrung beim zweiten Lauf als
+    unbelegt anhalten."""
 
     @property
     def cost(self) -> int:
@@ -357,6 +367,40 @@ def _surface_patches_from_data(
     return tuple(patches)
 
 
+def _continuations_from_data(
+    data: object, outputs: int
+) -> tuple[tuple[FeatureContinuation, ...], ...]:
+    """Die belegten Übergänge je Ausgabe lesen — oder den Eintrag verwerfen.
+
+    Ein fehlendes Feld ist innerhalb dieses Formatstands eine leere Folge:
+    Die Operation hat keinen Beleg ausgestellt. Ein Feld mit falscher Gestalt
+    ist dagegen ein beschädigter Eintrag; die Zuordnung darf ihn nicht halb
+    lesen und den Rest für „kein Beleg" halten.
+    """
+    if not isinstance(data, list):
+        raise ValueError("invalid cached continuations")
+    if not data:
+        return ()
+    if len(data) != outputs:
+        raise ValueError("cached continuations do not match the outputs")
+    result: list[tuple[FeatureContinuation, ...]] = []
+    for per_output in data:
+        if not isinstance(per_output, list):
+            raise ValueError("invalid cached continuations")
+        entries = []
+        for item in per_output:
+            if (
+                not isinstance(item, dict)
+                or not isinstance(item.get("source"), str)
+                or not isinstance(item.get("target"), str)
+                or not item["target"]
+            ):
+                raise ValueError("invalid cached continuation")
+            entries.append(FeatureContinuation(FeatureRef.parse(item["source"]), item["target"]))
+        result.append(tuple(entries))
+    return tuple(result)
+
+
 def _feature_from_data(data: dict[str, Any], *, face_count: int | None = None) -> Feature:
     indices = tuple(data["face_indices"])
     return Feature(
@@ -605,6 +649,7 @@ class DiskCache:
                 if raw_transform
                 else None
             )
+            continuations = _continuations_from_data(data.get("continuations", []), len(objects))
         except (OSError, KeyError, ValueError) as problem:
             # Ein beschädigter Cache-Eintrag ist nie fatal: verwerfen und
             # neu rechnen.
@@ -618,7 +663,13 @@ class DiskCache:
         # Ordnerpfad eine reguläre Datei an und blockiert den nächsten Schreibzug.
         with suppress(OSError):
             os.utime(folder, None)
-        return CachedResult(objects=objects, findings=findings, solver=solver, transform=transform)
+        return CachedResult(
+            objects=objects,
+            findings=findings,
+            solver=solver,
+            transform=transform,
+            continuations=continuations,
+        )
 
     def put(self, key: str, result: CachedResult) -> None:
         # **Der gewollte Fall kommt gar nicht erst in den Fehlerpfad** (§30):
@@ -670,6 +721,11 @@ class DiskCache:
                 payload["solver"] = solver_to_data(result.solver)
             if result.transform is not None:
                 payload["transform"] = [list(row) for row in result.transform]
+            if any(result.continuations):
+                payload["continuations"] = [
+                    [{"source": str(entry.source), "target": entry.target} for entry in per_output]
+                    for per_output in result.continuations
+                ]
             (folder / "objects.json").write_text(json.dumps(payload), encoding="utf-8")
         except (OSError, TypeError) as problem:
             # ``TypeError`` hatte hier **zwei** Ursachen, und die zweite hat
