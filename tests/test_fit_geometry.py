@@ -16,6 +16,155 @@ from app.core.scene.fits import check
 from app.core.types import Feature, FeatureRef, Fit, Profile, Scene, SceneObject
 
 
+def flush_pair(
+    profile: Profile,
+    *,
+    kind: str = "mesh",
+    offset: tuple[float, float, float] = (20.0, 0.0, 0.0),
+    bottom: bool = False,
+) -> Scene:
+    """Zwei echte 10-mm-Würfel und ihre obere bzw. untere ebene Fläche."""
+    from app.core.brep.edit import box, moved
+    from app.core.geom.mesh import as_mesh_data
+
+    objects = {}
+    for index, (name, corner) in enumerate((("socket", (0.0, 0.0, 0.0)), ("pin", offset))):
+        native = kind == "native" or kind == f"mixed_{index}"
+        if native:
+            body = moved(box(10.0, 10.0, 10.0), (corner[0] + 5, corner[1] + 5, corner[2]))
+        else:
+            mesh = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+            mesh.apply_translation(np.asarray(corner) + 5)
+            body = MeshData(mesh)
+        lower = index == 1 and bottom
+        normal = (0.0, 0.0, -1.0 if lower else 1.0)
+        centre = (corner[0] + 5, corner[1] + 5, corner[2] + (0 if lower else 10))
+        mesh = as_mesh_data(body).raw
+        indices = tuple(int(i) for i in np.flatnonzero(mesh.face_normals @ normal > 0.99))
+        feature = Feature(
+            "mating",
+            "face",
+            "generated",
+            {"centre": centre, "normal": normal, "area": 100.0},
+            face_indices=indices,
+            measure_sources=dict.fromkeys(
+                ("centre", "normal", "area"), "native" if native else "facets"
+            ),
+        )
+        objects[name] = SceneObject(name, name, mesh=body, features={"mating": feature})
+    return Scene(
+        objects=objects,
+        profile=profile,
+        fits=[Fit("flush", FeatureRef("socket", "mating"), FeatureRef("pin", "mating"), "flush")],
+    )
+
+
+@pytest.mark.parametrize("kind", ["mesh", "native", "mixed_0", "mixed_1"])
+@pytest.mark.parametrize(
+    ("offset", "bottom", "volume", "violated"),
+    [
+        ((20.0, 0.0, 0.0), False, 0.0, False),
+        ((0.0, 0.0, 10.0), True, 0.0, False),
+        ((5.0, 0.0, 0.0), False, 5 * 10 * 10, False),
+        ((0.0, 0.0, 10.025), True, 0.0, False),
+        ((0.0, 0.0, 0.3), False, 10 * 10 * 9.7, True),
+        ((10.0, 0.0, 10.0), True, 0.0, False),
+        ((10.0, 10.0, 10.0), True, 0.0, False),
+    ],
+)
+def test_flush_planes_and_full_body_overlap_are_independent(
+    profile: Profile, kind: str, offset, bottom: bool, volume: float, violated: bool
+) -> None:
+    """Koplanar heißt weder Kontakt noch Kollisionsfreiheit; die Würfel liefern das Soll."""
+    from app.core.geom.mesh import as_mesh_data
+
+    scene = flush_pair(profile, kind=kind, offset=offset, bottom=bottom)
+    sources = {
+        name: dict(entry.features["mating"].measure_sources)
+        for name, entry in scene.objects.items()
+    }
+    meshes = {name: as_mesh_data(entry.mesh).raw for name, entry in scene.objects.items()}
+    before = {name: (mesh.vertices.copy(), mesh.faces.copy()) for name, mesh in meshes.items()}
+    native_scene = replace(
+        scene,
+        objects={
+            name: entry for name, entry in scene.objects.items() if hasattr(entry.mesh, "shape")
+        },
+    )
+    native_before = native_bytes(native_scene)
+    findings = check(scene, profile)
+    code = (
+        "fit.geometry_approximate"
+        if kind.startswith("mixed")
+        else "fit.collision"
+        if volume
+        else "fit.geometry_clear"
+    )
+    assert [finding.code for finding in findings] == (["fit.violated"] if violated else []) + [code]
+    found = findings[-1]
+    assert found.values["geometry_source"] == ("mixed" if kind.startswith("mixed") else kind)
+    assert found.values["overlap_mm3"] == pytest.approx(volume, abs=1e-9)
+    assert found.values["intersects"] is (volume > 0.0)
+    assert found.severity == ("info" if code == "fit.geometry_clear" else "warning")
+    if not volume:
+        assert "Flächenkontakt" in str(found.message) and "nicht nachgewiesen" in str(found.message)
+    assert native_bytes(native_scene) == native_before
+    for name, mesh in meshes.items():
+        np.testing.assert_array_equal(mesh.vertices, before[name][0])
+        np.testing.assert_array_equal(mesh.faces, before[name][1])
+        assert scene.objects[name].features["mating"].measure_sources == sources[name]
+
+
+@pytest.mark.parametrize("reason", ["different_plates", "same_body"])
+def test_flush_without_two_bodies_in_one_plate_has_no_volume_result(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch, reason: str
+) -> None:
+    """Unvergleichbare Platten und zwei Ebenen eines Körpers sind keine Körperkollision."""
+    from app.core.geom import measure
+
+    scene = flush_pair(profile, offset=(0.0, 0.0, 0.0))
+    if reason == "different_plates":
+        scene.objects["pin"].plate = 1
+    else:
+        entry = scene.objects["socket"]
+        original = entry.features["mating"]
+        # Zwei echte Teildreiecke derselben ebenen Würfelseite, keine Kopie desselben Verweises.
+        for name, index in zip(("mating", "other"), original.face_indices, strict=True):
+            entry.features[name] = replace(
+                original,
+                id=name,
+                face_indices=(index,),
+                params={
+                    **original.params,
+                    "centre": tuple(entry.mesh.raw.triangles_center[index]),
+                    "area": 50.0,
+                },
+            )
+        scene.fits[0] = replace(scene.fits[0], b=FeatureRef("socket", "other"))
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("there is no applicable shared body pose")
+
+    monkeypatch.setattr(measure, "body_overlap", forbidden)
+    found = check(scene, profile)
+    assert [finding.code for finding in found] == ["fit.pose_unknown"]
+    assert found[0].values["reason"] == reason
+    assert "overlap_mm3" not in found[0].values and "intersects" not in found[0].values
+    assert "koaxial" not in str(found[0].message)
+
+
+@pytest.mark.parametrize("normal", [None, (0.0, 0.0, 0.0), (float("nan"), 0.0, 1.0)])
+def test_unmeasured_flush_plane_does_not_hide_body_collision(profile: Profile, normal) -> None:
+    scene = flush_pair(profile, offset=(5.0, 0.0, 0.0))
+    feature = scene.objects["pin"].features["mating"]
+    scene.objects["pin"].features["mating"] = replace(
+        feature, params={**feature.params, "normal": normal}
+    )
+    findings = check(scene, profile)
+    assert [finding.code for finding in findings] == ["fit.not_measurable", "fit.collision"]
+    assert findings[-1].values["overlap_mm3"] == pytest.approx(500.0)
+
+
 def pair(profile: Profile, *, segments: int = 256, angle: float = 0.0) -> Scene:
     """Analytisch festgelegte Polygone, unabhängig von Erkennung und Passungsprüfung."""
     ring = trimesh.creation.annulus(r_min=15.0, r_max=20.0, height=10.0, sections=16)
@@ -270,9 +419,10 @@ def test_common_rigid_transform_and_subdivision_preserve_collision(
     assert found.values["overlap_mm3"] == pytest.approx(original.values["overlap_mm3"], rel=1e-8)
 
 
+@pytest.mark.parametrize("flush", [False, True])
 @pytest.mark.parametrize("native", [False, True])
 def test_cancel_after_kernel_returns_no_geometry_result(
-    profile: Profile, monkeypatch: pytest.MonkeyPatch, native: bool
+    profile: Profile, monkeypatch: pytest.MonkeyPatch, native: bool, flush: bool
 ) -> None:
     import importlib
 
@@ -292,7 +442,7 @@ def test_cancel_after_kernel_returns_no_geometry_result(
             def __getattr__(self, name):
                 return getattr(self.builder, name)
 
-        scene = native_pair(profile)
+        scene = flush_pair(profile, kind="native") if flush else native_pair(profile)
         before = native_bytes(scene)
         monkeypatch.setattr(module, "boolean_builder", CancelAfterBuild)
     else:
@@ -304,7 +454,7 @@ def test_cancel_after_kernel_returns_no_geometry_result(
             signal.cancel()
             return result
 
-        scene = pair(profile, segments=16)
+        scene = flush_pair(profile) if flush else pair(profile, segments=16)
         monkeypatch.setattr(module, "boolean", cancel)
     with pytest.raises(OperationCancelled):
         check(scene, profile, cancelled=signal)
@@ -312,8 +462,9 @@ def test_cancel_after_kernel_returns_no_geometry_result(
         assert native_bytes(scene) == before
 
 
+@pytest.mark.parametrize("flush", [False, True])
 def test_kernel_error_is_not_clear_and_no_repair_is_attempted(
-    profile: Profile, monkeypatch: pytest.MonkeyPatch
+    profile: Profile, monkeypatch: pytest.MonkeyPatch, flush: bool
 ) -> None:
     import importlib
 
@@ -324,11 +475,14 @@ def test_kernel_error_is_not_clear_and_no_repair_is_attempted(
         raise RuntimeError("forced kernel error")
 
     monkeypatch.setattr(importlib.import_module("app.core.geom.boolean"), "boolean", fail)
-    assert geometry_finding(pair(profile)).code == "fit.geometry_failed"
+    scene = flush_pair(profile) if flush else pair(profile)
+    found = geometry_finding(scene)
+    assert found.code == "fit.geometry_failed"
+    assert "overlap_mm3" not in found.values and "intersects" not in found.values
     assert calls == [("intersection", ("direct",), True)]
 
 
-def fit_document(profile: Profile):
+def fit_document(profile: Profile, *, flush: bool = False):
     """Ein reproduzierbarer Operationsstapel benutzt den echten Auswertungsanschluss."""
     from app.core.registry import Registry, op_params, register_op
     from app.core.scene import History, OperationDraft
@@ -357,6 +511,7 @@ def fit_document(profile: Profile):
         registry=registry,
     )
     def make(ctx: OpContext) -> OpResult:
+        scene = flush_pair(profile, offset=(5.0, 0.0, 0.0)) if flush else pair(profile)
         return OpResult(
             outputs=[
                 replace(
@@ -367,14 +522,18 @@ def fit_document(profile: Profile):
                         for key, feature in entry.features.items()
                     },
                 )
-                for entry in pair(profile).objects.values()
+                for entry in scene.objects.values()
             ]
         )
 
     document = Document(format_version=1, app_version="0.0.1")
     history = History(document, registry=registry)
     fit = Fit(
-        "pair", FeatureRef("obj_1", "mating"), FeatureRef("obj_2", "mating"), "clearance", 0.4
+        "pair",
+        FeatureRef("obj_1", "mating"),
+        FeatureRef("obj_2", "mating"),
+        "flush" if flush else "clearance",
+        0.4,
     )
     history.apply(
         "Passungsprobe",
@@ -387,14 +546,15 @@ def fit_document(profile: Profile):
 @pytest.mark.parametrize(
     "finish", ["check_fits", "check_placement", "check_bodies_in_one_place", "check_thin_walls"]
 )
+@pytest.mark.parametrize("flush", [False, True])
 def test_cancelled_final_checks_publish_neither_cache_nor_completion(
-    profile: Profile, monkeypatch: pytest.MonkeyPatch, finish: str
+    profile: Profile, monkeypatch: pytest.MonkeyPatch, finish: str, flush: bool
 ) -> None:
     import importlib
 
     from app.core.scene import ResultCache, evaluate
 
-    document, _history, registry = fit_document(profile)
+    document, _history, registry = fit_document(profile, flush=flush)
     module = importlib.import_module("app.core.scene.evaluate")
     original = getattr(module, finish)
     signal = CancelSignal()
@@ -420,13 +580,14 @@ def test_cancelled_final_checks_publish_neither_cache_nor_completion(
     assert (1.0, "") not in progress
 
 
+@pytest.mark.parametrize("flush", [False, True])
 def test_export_reuses_the_geometry_finding_and_propagates_cancel(
-    profile: Profile, monkeypatch: pytest.MonkeyPatch
+    profile: Profile, monkeypatch: pytest.MonkeyPatch, flush: bool
 ) -> None:
     from app.core.export.writer import check_before_export
     from app.core.scene import fits
 
-    scene = pair(profile)
+    scene = flush_pair(profile, offset=(5.0, 0.0, 0.0)) if flush else pair(profile)
     findings = check_before_export(list(scene.objects.values()), profile, {}, scene=scene)
     assert [finding for finding in findings if finding.code.startswith("fit.")] == check(
         scene, profile
@@ -456,26 +617,33 @@ def test_export_selected_pin_keeps_the_relationship_warning(profile: Profile) ->
     )
 
 
+@pytest.mark.parametrize("flush", [False, True])
 @pytest.mark.parametrize("mixed", [False, True])
 def test_invalid_native_input_is_never_accepted_by_either_probe(
-    profile: Profile, mixed: bool
+    profile: Profile, mixed: bool, flush: bool
 ) -> None:
     from app.core.brep.kernel import Solid
 
-    scene = native_pair(profile)
+    scene = flush_pair(profile, kind="native") if flush else native_pair(profile)
     pin = scene.objects["pin"]
     scene.objects["pin"] = replace(pin, mesh=Solid(pin.mesh.faces()[0]))
     if mixed:
-        scene.objects["socket"] = pair(profile).objects["socket"]
+        source = flush_pair(profile) if flush else pair(profile)
+        scene.objects["socket"] = source.objects["socket"]
     assert geometry_finding(scene).code == "fit.geometry_failed"
 
 
+@pytest.mark.parametrize("flush", [False, True])
 def test_native_kernel_failure_after_build_preserves_original_bytes(
-    profile: Profile, monkeypatch: pytest.MonkeyPatch
+    profile: Profile, monkeypatch: pytest.MonkeyPatch, flush: bool
 ) -> None:
     from app.core.brep import kernel
 
-    scene = native_pair(profile, floor=True)
+    scene = (
+        flush_pair(profile, kind="native", offset=(5.0, 0.0, 0.0))
+        if flush
+        else native_pair(profile, floor=True)
+    )
     before = native_bytes(scene)
     original = kernel.boolean_builder
 
@@ -534,3 +702,139 @@ def test_real_document_cache_reopen_undo_redo_and_export_share_collision(
         document=opened.document,
     )
     assert [finding for finding in exported if finding.code.startswith("fit.")] == expected
+
+
+@pytest.mark.parametrize("kind", ["mesh", "native", "mixed_0", "mixed_1"])
+def test_flush_common_rigid_transform_preserves_both_statements(
+    profile: Profile, kind: str
+) -> None:
+    """Körper und ausgewählte Fläche werden durch den echten gemeinsamen Transformweg bewegt."""
+    from app.core.geom.transform import moved_object
+
+    scene = flush_pair(profile, kind=kind, offset=(5.0, 0.0, 0.0))
+    before = check(scene, profile)
+    matrix = trimesh.transformations.rotation_matrix(0.79, (1.0, 2.0, 3.0))
+    matrix[:3, 3] = (53.0, -7.0, 125.0)
+    scene.objects = {name: moved_object(entry, matrix) for name, entry in scene.objects.items()}
+    found = check(scene, profile)
+    assert [finding.code for finding in found] == [finding.code for finding in before]
+    assert len(found) == 1
+    assert found[0].values["overlap_mm3"] == pytest.approx(500.0, rel=1e-9)
+    for entry in scene.objects.values():
+        assert entry.features["mating"].measure_sources
+
+
+def test_open_flush_body_is_not_clear(profile: Profile) -> None:
+    scene = flush_pair(profile)
+    entry = scene.objects["pin"]
+    mesh = entry.mesh.raw
+    entry.mesh = MeshData(trimesh.Trimesh(mesh.vertices, mesh.faces[:-1], process=False))
+    findings = check(scene, profile)
+    assert [finding.code for finding in findings] == ["fit.geometry_failed"]
+    assert "overlap_mm3" not in findings[0].values
+
+
+def test_flush_missing_reference_stays_an_error(profile: Profile) -> None:
+    scene = flush_pair(profile)
+    scene.fits[0] = replace(scene.fits[0], b=FeatureRef("pin", "missing"))
+    assert [finding.code for finding in check(scene, profile)] == ["fit.missing_feature"]
+
+
+@pytest.mark.parametrize(
+    ("kind", "offset", "plate", "caption"),
+    [
+        ("mesh", (20.0, 0.0, 0.0), 0, "Teil einer Passung"),
+        ("native", (5.0, 0.0, 0.0), 0, "Passung verletzt"),
+        ("mixed_1", (20.0, 0.0, 0.0), 0, "Passung prüfen"),
+        ("mesh", (5.0, 0.0, 0.0), 1, "Passung prüfen"),
+        ("mesh", (0.0, 0.0, 0.3), 0, "Passung verletzt"),
+    ],
+)
+def test_flush_report_reaches_map_digest_agent_and_either_export_partner(
+    profile: Profile, kind: str, offset, plate: int, caption: str
+) -> None:
+    """Die Verbraucher sehen die echten Prüfergebnisse ohne neue eigene Geometrieprobe."""
+    from app.core.agent import checks
+    from app.core.export.writer import check_before_export
+    from app.core.perceive import maps
+    from app.core.perceive.digest import digest
+    from app.core.scene.evaluate import EvaluationResult
+    from app.core.types import Document, Report
+
+    scene = flush_pair(profile, kind=kind, offset=offset)
+    scene.objects["pin"].plate = plate
+    scene.report = Report(tuple(check(scene, profile)))
+    document = Document(format_version=1, app_version="0.0.1", fits=list(scene.fits))
+    text = digest(scene, document)
+    fit_findings = list(scene.report.findings)
+    assert fit_findings
+    for finding in fit_findings:
+        assert ("verletzt" if finding.code == "fit.violated" else str(finding.message)) in text
+    result = EvaluationResult(scene=scene)
+    assert [
+        finding for finding in checks.check(result) if finding.code.startswith("fit.")
+    ] == fit_findings
+    for entry in scene.objects.values():
+        mapped = maps.build("fits", entry, scene=scene)
+        selected = entry.features["mating"].face_indices
+        assert selected
+        assert {mapped.categories[int(mapped.values[index])] for index in selected} == {caption}
+        exported = check_before_export([entry], profile, {}, scene=scene, document=document)
+        assert [finding for finding in exported if finding.code.startswith("fit.")] == fit_findings
+
+
+def test_flush_document_movement_cache_reopen_and_undo_preserve_both_checks(
+    profile: Profile, tmp_path
+) -> None:
+    """Ein realer Verschiebeschritt beseitigt die Kollision und verletzt unabhängig die Ebene."""
+    from app.core.bootstrap import load_operations
+    from app.core.export.writer import check_before_export
+    from app.core.geom.mesh import MeshCodec
+    from app.core.registry import REGISTRY
+    from app.core.scene import History, OperationDraft, ResultCache, evaluate
+    from app.core.scene.cache import DiskCache
+    from app.core.scene.migrations import FORMAT_VERSION
+    from app.core.scene.project import Project, load, save
+
+    load_operations()
+    document, history, registry = fit_document(profile, flush=True)
+    registry.register(REGISTRY.get("translate_object"))
+    document.format_version = FORMAT_VERSION
+    cache = ResultCache(disk=DiskCache(codec=MeshCodec(), directory=tmp_path / "cache"))
+    collision = evaluate(document, profile, registry=registry, cache=cache)
+    original = [
+        finding for finding in collision.scene.report.findings if finding.code.startswith("fit.")
+    ]
+    assert [finding.code for finding in original] == ["fit.collision"]
+    assert original[0].values["overlap_mm3"] == pytest.approx(500.0)
+    history.apply(
+        "Verschieben",
+        [OperationDraft(op="translate_object", inputs=("obj_2",), params={"dx": 15.0, "dz": 0.3})],
+    )
+    moved = evaluate(document, profile, registry=registry, cache=cache)
+    current = [
+        finding for finding in moved.scene.report.findings if finding.code.startswith("fit.")
+    ]
+    assert [finding.code for finding in current] == ["fit.violated", "fit.geometry_clear"]
+    assert current[-1].values["overlap_mm3"] == pytest.approx(0.0)
+    assert (
+        evaluate(document, profile, registry=registry, cache=cache).scene.report
+        == moved.scene.report
+    )
+    opened = load(save(Project(document), tmp_path / "flush.p3d"))
+    cache = ResultCache(disk=DiskCache(codec=MeshCodec(), directory=tmp_path / "cache"))
+    restored = evaluate(opened.document, profile, registry=registry, cache=cache)
+    assert cache.statistics.disk_hits == 2
+    assert restored.scene.report == moved.scene.report
+    history = History(opened.document, registry=registry)
+    history.undo()
+    undone = evaluate(opened.document, profile, registry=registry, cache=cache)
+    assert undone.scene.report == collision.scene.report
+    history.redo()
+    redone = evaluate(opened.document, profile, registry=registry, cache=cache)
+    assert redone.scene.report == moved.scene.report
+    for entry in redone.scene.objects.values():
+        exported = check_before_export(
+            [entry], profile, {}, scene=redone.scene, document=opened.document
+        )
+        assert [finding for finding in exported if finding.code.startswith("fit.")] == current

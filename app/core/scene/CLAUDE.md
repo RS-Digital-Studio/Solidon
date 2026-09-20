@@ -372,6 +372,18 @@ Montageweg oder das Druckverhalten. Maßbefunde bleiben daneben bestehen.
 Auswertung veröffentlicht Cacheeinträge und Fertigmeldung erst nach allen
 Abschlussprüfungen und deren letzter Abbruchkontrolle.
 
+`flush` behält seine Ebenenregel aus Normalen und Abstand: gleichgerichtete
+oder getrennte koplanare Flächen sind zulässig, Kontakt ist keine Bedingung.
+Daneben läuft dieselbe vollständige Körperprobe ohne radiale Voraussetzungen.
+Zwei verschiedene Körper auf derselben Platte werden in ihrer aktuellen Lage
+geprüft; verschiedene Platten und zwei Merkmale desselben Körpers erhalten
+`fit.pose_unknown` mit `reason = different_plates | same_body`, ohne erfundenes
+Nullvolumen. Auch ein nicht messbares Ebenenpaar kann bei auflösbaren
+Körperverweisen einen unabhängigen Körperbefund tragen. Fehlende Merkmale
+bleiben Fehler. Die bündigen Körpertexte bestätigen weder Flächenkontakt noch
+Montageweg; Ebenenverletzung und Körperbefund bleiben nebeneinander sichtbar.
+Bericht, Steckbrief, Analysekarte und Export übernehmen dieselben Befunde.
+
 `fits.active_fits(document)` liest das aktuelle Op-Feld einschließlich
 Projektparameterausdrücken. Ausschließlich gültige Werte <= 0 deaktivieren
 die Passung; fehlender Schritt oder ungültiger Ausdruck bleibt ein Befund.

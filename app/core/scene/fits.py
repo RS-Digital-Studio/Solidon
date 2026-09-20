@@ -295,7 +295,7 @@ def _check_one(scene: Scene, fit: Fit, profile: Profile, cancelled: CancelToken)
                 first_pitch=format_length(float(first.params["pitch"])),
                 second_pitch=format_length(float(second.params["pitch"])),
             )
-        return [
+        findings = [
             Finding(
                 code=code,
                 severity="warning",
@@ -305,9 +305,15 @@ def _check_one(scene: Scene, fit: Fit, profile: Profile, cancelled: CancelToken)
                 feature_ids=(fit.a.feature_id,),
             )
         ]
+        if fit.kind == "flush":
+            findings.append(_check_geometry(scene, fit, first, second, fit.a, fit.b, cancelled))
+        return findings
 
     if fit.kind == "flush":
-        return _check_flush(fit, first, second)
+        return [
+            *_check_flush(fit, first, second),
+            _check_geometry(scene, fit, first, second, fit.a, fit.b, cancelled),
+        ]
 
     hole, pin = _sort_by_kind(first, second)
     hole_diameter = diameter_of(hole)
@@ -396,23 +402,38 @@ def _shared_pose(first: SceneObject, second: SceneObject, hole: Feature, pin: Fe
 def _check_geometry(
     scene: Scene,
     fit: Fit,
-    hole: Feature,
-    pin: Feature,
-    hole_ref: FeatureRef,
-    pin_ref: FeatureRef,
+    first_feature: Feature,
+    second_feature: Feature,
+    first_ref: FeatureRef,
+    second_ref: FeatureRef,
     cancelled: CancelToken,
 ) -> Finding:
-    """Eine starre Probe aller Körperflächen, getrennt von Sollmaß und Montageweg."""
+    """Eine gemeinsame Körperprobe; bündige Ebenen brauchen keine radiale Einbaulage."""
     from app.core.geom.measure import body_overlap
 
-    first, second = scene.objects[hole_ref.object_id], scene.objects[pin_ref.object_id]
+    first, second = scene.objects[first_ref.object_id], scene.objects[second_ref.object_id]
     values: dict[str, float | str | TranslatableText] = {
         "fit": fit.name,
         "a": first.id,
         "b": second.id,
     }
     severity: Severity = "warning"
-    if not _shared_pose(first, second, hole, pin):
+    flush = fit.kind == "flush"
+    if flush and (first.id == second.id or first.plate != second.plate):
+        code = "fit.pose_unknown"
+        values["reason"] = "same_body" if first.id == second.id else "different_plates"
+        message = (
+            _(
+                "Beide Flächen gehören zum selben Körper. Für eine Überschneidungsprobe "
+                "zwischen zwei Körpern zwei verschiedene Körper wählen."
+            )
+            if first.id == second.id
+            else _(
+                "Diese Körper liegen auf verschiedenen Druckplatten. Für eine gemeinsame "
+                "Körperprobe beide auf derselben Platte anordnen."
+            )
+        )
+    elif not flush and not _shared_pose(first, second, first_feature, second_feature):
         code = "fit.pose_unknown"
         message = _(
             "Die Einbaulage dieser Passung ist nicht belegt. Beide Merkmale auf derselben "
@@ -452,37 +473,65 @@ def _check_geometry(
                 )
             elif mixed:
                 code = "fit.geometry_approximate"
-                message = (
-                    _(
-                        "Die Netznäherung zeigt eine Überschneidung in dieser Einbaulage. "
-                        "Die exakten Körper und die Auflösung der Näherung prüfen."
+                if flush:
+                    message = (
+                        _(
+                            "Die Netznäherung zeigt eine Überschneidung in der aktuellen Lage. "
+                            "Die exakten Körper und die Auflösung der Näherung prüfen."
+                        )
+                        if volume > 0.0
+                        else _(
+                            "Die Netznäherung zeigt in der aktuellen Lage keine Überschneidung. "
+                            "Ein Flächenkontakt und der Montageweg sind damit nicht nachgewiesen; "
+                            "die exakten Körper separat prüfen."
+                        )
                     )
-                    if volume > 0.0
-                    else _(
-                        "Die Netznäherung zeigt in dieser Einbaulage keine Überschneidung. "
-                        "Die exakten Körper und den Montageweg separat prüfen."
+                else:
+                    message = (
+                        _(
+                            "Die Netznäherung zeigt eine Überschneidung in dieser Einbaulage. "
+                            "Die exakten Körper und die Auflösung der Näherung prüfen."
+                        )
+                        if volume > 0.0
+                        else _(
+                            "Die Netznäherung zeigt in dieser Einbaulage keine Überschneidung. "
+                            "Die exakten Körper und den Montageweg separat prüfen."
+                        )
                     )
-                )
             elif volume > 0.0:
                 code = "fit.collision"
-                message = _(
-                    "Die Körper überschneiden sich in dieser Einbaulage. Einstecktiefe, "
-                    "Boden, Schulter und die tatsächlichen Konturen prüfen."
+                message = (
+                    _(
+                        "Die Körper überschneiden sich in der aktuellen Lage. "
+                        "Die gesamten Körper und ihre Platzierung prüfen."
+                    )
+                    if flush
+                    else _(
+                        "Die Körper überschneiden sich in dieser Einbaulage. Einstecktiefe, "
+                        "Boden, Schulter und die tatsächlichen Konturen prüfen."
+                    )
                 )
             else:
                 code = "fit.geometry_clear"
                 severity = "info"
-                message = _(
-                    "In dieser Einbaulage überschneiden sich die Körper nicht. Montageweg "
-                    "und Druckverhalten separat prüfen."
+                message = (
+                    _(
+                        "In der aktuellen Lage überschneiden sich die Körper nicht. "
+                        "Ein Flächenkontakt und der Montageweg sind damit nicht nachgewiesen."
+                    )
+                    if flush
+                    else _(
+                        "In dieser Einbaulage überschneiden sich die Körper nicht. Montageweg "
+                        "und Druckverhalten separat prüfen."
+                    )
                 )
     return Finding(
         code=code,
         severity=severity,
         message=message,
         values=values,
-        object_id=hole_ref.object_id,
-        feature_ids=(hole_ref.feature_id,),
+        object_id=first_ref.object_id,
+        feature_ids=(first_ref.feature_id,),
     )
 
 

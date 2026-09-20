@@ -899,26 +899,41 @@ def test_the_tolerance_follows_the_material(profile: Profile) -> None:
 
 
 def two_faces(offset: float, normal_b: tuple[float, float, float], profile: Profile) -> Scene:
-    """Zwei Flächen, die in einer Ebene sitzen sollen, und eine versetzte."""
+    """Zwei echte Würfelflächen; seitliche Trennung erhält die unabhängige Ebenenfrage."""
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+
+    lower_mesh = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+    lower_indices = tuple(
+        int(i) for i, normal in enumerate(lower_mesh.face_normals) if normal[2] > 0.5
+    )
+    upper_mesh = lower_mesh.copy()
+    lower_mesh.apply_translation((0.0, 0.0, 5.0))
+    upper_mesh.apply_translation((0.0, 0.0, -5.0))
+    upper_mesh.apply_transform(trimesh.geometry.align_vectors((0.0, 0.0, 1.0), normal_b))
+    upper_mesh.apply_translation((20.0, 0.0, 10.0 + offset))
     lower = Feature(
         id="face_1",
         kind="face",
         provenance="detected",
         params={"area": 100.0, "centre": (0.0, 0.0, 10.0), "normal": (0.0, 0.0, 1.0)},
+        face_indices=lower_indices,
     )
     upper = Feature(
         id="face_1",
         kind="face",
         provenance="detected",
-        params={"area": 100.0, "centre": (0.0, 0.0, 10.0 + offset), "normal": normal_b},
+        params={"area": 100.0, "centre": (20.0, 0.0, 10.0 + offset), "normal": normal_b},
+        face_indices=lower_indices,
     )
     return Scene(
         objects={
             "obj_1": SceneObject(
-                id="obj_1", name="Kiste", mesh=_dummy(), features={"face_1": lower}
+                id="obj_1", name="Kiste", mesh=MeshData(lower_mesh), features={"face_1": lower}
             ),
             "obj_2": SceneObject(
-                id="obj_2", name="Deckel", mesh=_dummy(), features={"face_1": upper}
+                id="obj_2", name="Deckel", mesh=MeshData(upper_mesh), features={"face_1": upper}
             ),
         },
         profile=profile,
@@ -935,14 +950,14 @@ def flush_fit() -> Fit:
     )
 
 
-def test_two_faces_in_one_plane_say_nothing(profile: Profile) -> None:
-    """§14: ``flush`` wurde angenommen und nie geprüft — eine Passungsart als
-    Bühnenrequisite.
-    """
+def test_two_faces_in_one_plane_report_only_the_body_probe(profile: Profile) -> None:
+    """§14: Die Ebenenregel bleibt erfüllt, die unabhängige Körperaussage ist sichtbar."""
     scene = two_faces(0.0, (0.0, 0.0, -1.0), profile)
     scene.fits.append(flush_fit())
 
-    assert fit_check.check(scene, profile) == []
+    findings = fit_check.check(scene, profile)
+    assert [finding.code for finding in findings] == ["fit.geometry_clear"]
+    assert findings[0].values["overlap_mm3"] == pytest.approx(0.0)
 
 
 def test_a_lid_that_sits_proud_is_reported(profile: Profile) -> None:
@@ -951,7 +966,7 @@ def test_a_lid_that_sits_proud_is_reported(profile: Profile) -> None:
 
     findings = fit_check.check(scene, profile)
 
-    assert findings and findings[0].code == "fit.violated"
+    assert [finding.code for finding in findings] == ["fit.violated", "fit.geometry_clear"]
     assert findings[0].values["actual"].startswith("0.3")
 
 
@@ -964,7 +979,8 @@ def test_faces_at_an_angle_are_a_different_mistake(profile: Profile) -> None:
 
     findings = fit_check.check(scene, profile)
 
-    assert findings and "parallel" in str(findings[0].message)
+    assert [finding.code for finding in findings] == ["fit.violated", "fit.geometry_clear"]
+    assert "parallel" in str(findings[0].message)
 
 
 def test_a_flush_fit_needs_two_faces(profile: Profile) -> None:
@@ -991,7 +1007,7 @@ def test_scaled_normals_do_not_change_a_flush_result(profile: Profile) -> None:
         first, params={**first.params, "normal": (0.0, 0.0, 1000.0)}
     )
     scene.fits.append(flush_fit())
-    assert not fit_check.check(scene, profile)
+    assert [finding.code for finding in fit_check.check(scene, profile)] == ["fit.geometry_clear"]
 
 
 def test_float32_noise_on_a_normal_is_still_flush(profile: Profile) -> None:
@@ -999,7 +1015,7 @@ def test_float32_noise_on_a_normal_is_still_flush(profile: Profile) -> None:
     dem Umlauf um bis zu 6e-6 (gemessen 06.09.2026). Das ist keine Schräge."""
     scene = two_faces(0.0, (6e-6, 0.0, 1.0), profile)
     scene.fits.append(flush_fit())
-    assert not fit_check.check(scene, profile)
+    assert [finding.code for finding in fit_check.check(scene, profile)] == ["fit.geometry_clear"]
 
 
 def test_a_tenth_of_a_degree_is_not_flush(profile: Profile) -> None:
@@ -1008,7 +1024,9 @@ def test_a_tenth_of_a_degree_is_not_flush(profile: Profile) -> None:
 
     scene = two_faces(0.0, (math.sin(math.radians(0.1)), 0.0, math.cos(math.radians(0.1))), profile)
     scene.fits.append(flush_fit())
-    assert "parallel" in str(fit_check.check(scene, profile)[0].message)
+    findings = fit_check.check(scene, profile)
+    assert [finding.code for finding in findings] == ["fit.violated", "fit.geometry_clear"]
+    assert "parallel" in str(findings[0].message)
 
 
 def test_five_degrees_at_the_same_centre_is_not_flush(profile: Profile) -> None:
@@ -1016,7 +1034,9 @@ def test_five_degrees_at_the_same_centre_is_not_flush(profile: Profile) -> None:
 
     scene = two_faces(0.0, (math.sin(math.radians(5)), 0.0, math.cos(math.radians(5))), profile)
     scene.fits.append(flush_fit())
-    assert "parallel" in str(fit_check.check(scene, profile)[0].message)
+    findings = fit_check.check(scene, profile)
+    assert [finding.code for finding in findings] == ["fit.violated", "fit.geometry_clear"]
+    assert "parallel" in str(findings[0].message)
 
 
 @pytest.mark.parametrize("role", [["inner"], {"role": "inner"}])
