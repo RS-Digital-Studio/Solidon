@@ -1272,6 +1272,8 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "choices": _("Auswahl"),
     "checked": _("Geprüft"),
     "clearance": _("Spiel"),
+    "clearance_min_mm": _("Untere Grenze des Spiels (mm)"),
+    "clearance_max_mm": _("Obere Grenze des Spiels (mm)"),
     "comfortable": _("Bequem"),
     "components": _("Komponenten"),
     "constraint": _("Bedingung"),

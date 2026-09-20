@@ -321,6 +321,16 @@ dafür `fit_role` am Erzeuger; Gewinde tragen `internal` und eine positive
 Steigung. Historische radiale Passungen an Gewinden bleiben radiale Prüfungen;
 die Gewindepassung prüft zusätzlich die Steigung. Bündige Flächen werden mit
 normalisierten Normalen auf Parallelität und Ebenenabstand geprüft.
+Radiale Netzmaße tragen neben dem geschätzten Kreisradius das tatsächliche
+Band `radial_min`/`radial_max`. Ein zum Profil passendes Kreismaß belegt bei
+groben Facetten noch kein Spiel: `fits.check` prüft zusätzlich die konservative
+Differenz beider Bänder. Ein nicht belegtes Spiel erscheint als
+`fit.mesh_uncertain`, kein daraus behaupteter Kollisionsnachweis. Fehlende
+Bandhälften oder ungültige Werte bleiben ausdrücklich nicht messbar.
+Presspassungen dürfen beabsichtigte Überdeckung tragen; Spielpassungen
+erhalten bei möglicher Überdeckung auch innerhalb der Anzeigeauflösung einen
+Befund. Diese Grenzen ersetzen weder Fertigungsspiel noch eine Einbauprüfung.
+
 `fits.active_fits(document)` liest das aktuelle Op-Feld einschließlich
 Projektparameterausdrücken. Ausschließlich gültige Werte <= 0 deaktivieren
 die Passung; fehlender Schritt oder ungültiger Ausdruck bleibt ein Befund.

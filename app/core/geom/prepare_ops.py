@@ -965,27 +965,6 @@ def _outward_axis(chain: Sequence[Feature], feature: Feature) -> NDArray[np.floa
     return -axis if float(outward @ axis) < 0.0 else axis
 
 
-def _polygon_gain(feature: Feature) -> float:
-    """Was ein Vieleck an seinen Flanken verliert — als Zugabe auf den Durchmesser.
-
-    ``trimesh.creation.cylinder`` baut ein **eingeschriebenes** Vieleck: Sein
-    Umkreis ist der angegebene Durchmesser, sein Innenkreis ist um
-    ``cos(π/sections)`` kleiner. Wer aus einem gemessenen Maß ein Werkzeug baut,
-    das dieses Maß wiederherstellen soll, rechnet den Unterschied dazu — sonst
-    schrumpft die Bohrung bei jedem Zyklus.
-    """
-    return _polygon_gain_for(float(feature.params.get("diameter", 0.0)))
-
-
-def _polygon_gain_for(diameter: float) -> float:
-    """Dieselbe Zugabe für ein Maß, das an keinem Merkmal steht.
-
-    Beim Versetzen darf der Kunde die Bohrung gleichzeitig ändern; dann gilt
-    der Verlust für den **neuen** Durchmesser und nicht für den gemessenen.
-    """
-    return diameter * (1.0 / units.inscribed_ratio(FEATURE_SECTIONS) - 1.0)
-
-
 def _measured_section(
     chain: Sequence[Feature], feature: Feature, *, outward: float = 0.0
 ) -> MeshData | None:
@@ -1023,14 +1002,9 @@ def _measured_section(
     """
     centre = cast(Vec3, tuple(float(value) for value in feature.params["centre"]))
     if feature.kind != "cone":
-        # **Der Innenkreis muss stimmen, nicht der Umkreis.** Ein Zylinder mit
-        # ``FEATURE_SECTIONS`` Seiten ist ein eingeschriebenes Vieleck: Aus dem
-        # gemessenen Durchmesser gebaut ist er an seinen Flanken um
-        # eins minus cos(pi/48) enger, und die Erkennung misst danach 7,9696 statt
-        # 7,9848 — die Bohrung verlöre bei jedem solchen Zyklus 0,017 mm. Die
-        # übrigen Aufrufer merken davon nichts, weil ihre Zugabe (§39) zufällig
-        # dieselbe Größenordnung hat und den Verlust überdeckt.
-        return _feature_solid(feature, centre, oversize=_polygon_gain(feature))
+        # Das erkannte Kreismaß kommt aus Konturecken. Eine zusätzliche
+        # Vieleckkorrektur vergrößerte diesen Umkreis bei jedem Neuaufbau.
+        return _feature_solid(feature, centre, oversize=0.0)
 
     wide = float(feature.params.get("diameter", 0.0))
     angle = float(feature.params.get("angle", 0.0))
@@ -1664,6 +1638,7 @@ def _tool_for(
     quality: Quality = "fine",
     seed: int | None = None,
     cancelled: CancelToken | None = None,
+    oversize: float = FEATURE_OVERLAP,
 ) -> MeshData:
     """Der Werkzeugkörper dieses Merkmals, an ``centre`` gesetzt.
 
@@ -1710,7 +1685,7 @@ def _tool_for(
     if built is not None:
         built = _past_the_mouths(mesh, built)
     if built is None and feature.kind in PARAMETRIC_KINDS:
-        return _feature_solid(feature, centre, scale=scale, axis=axis)
+        return _feature_solid(feature, centre, scale=scale, axis=axis, oversize=oversize)
 
     if built is None:
         built = _feature_body(mesh, feature, alone=alone)
@@ -1773,6 +1748,7 @@ def _placing_tool(
         quality=ctx.quality,
         seed=ctx.seed,
         cancelled=ctx.cancelled,
+        oversize=0.0 if feature.kind in {"hole", "pin", "slot"} else FEATURE_OVERLAP,
     )
     if cavity:
         return tool
@@ -3621,10 +3597,8 @@ def _past_the_mouths(mesh: MeshData, cavity: MeshData) -> MeshData:
 
     Ein Hohlraum aus seinen Flächen (:func:`_body_from_faces`) endet bündig
     in der Oberfläche, und eine bündige Differenz lässt eine Haut stehen. Das
-    Werkzeug aus Kennzahlen wäre der Ausweg, kostet aber Volumen: Sein Vieleck
-    umschreibt den Kreis (``_polygon_gain``), der Pfropfen aus den echten
-    Flächen füllt nur den Kreis — an einer Senkbohrung Ø 11 sind das bis zu
-    0,9 mm³ je Versetzen (gemessen 15.09.2026). Hier bleibt es bei den echten
+    Werkzeug aus Kennzahlen wäre der Ausweg, kann aber eine andere
+    Facettierung tragen als der Pfropfen aus den Originalflächen. Hier bleibt es bei den echten
     Dreiecken: Jeder ebene Deckel des Körpers, hinter dem **kein Material**
     liegt, ist eine Mündung und bekommt einen Kragen — der Ring wird um die
     Zugabe nach außen kopiert, die Wand dazwischen ergänzt, der Deckel wandert
@@ -3755,12 +3729,12 @@ def _stretched_section(
     über sein Ende hinaus verlängert — in Richtung ``outward``.
 
     Ohne Verlängerung ist es der Körper aus :func:`_feature_solid` mit exaktem
-    Querschnitt (``_polygon_gain``): so weit wie gemessen, mit der Zugabe an
+    Querschnitt: so weit wie gemessen, mit der Zugabe an
     beiden Enden.
     """
     if feature.kind == "cone":
         return None
-    diameter = float(feature.params.get("diameter", 0.0)) + _polygon_gain(feature)
+    diameter = float(feature.params.get("diameter", 0.0))
     if diameter <= EPS_GEOM:
         return None
     depth = float(feature.params.get("depth", 0.0))
@@ -4359,10 +4333,8 @@ def resize_hole(ctx: OpContext) -> OpResult:
         # 10.09.2026: Loch weiterhin bei (-20 | -10), Volumen unverändert,
         # dazu der Satz „Die Bohrung hat bereits diesen Durchmesser".
         #
-        # **Und die Vieleckzugabe gehört dazu**, denn das Maß hier ist ein
-        # gemessenes: Ein eingeschriebenes 48-Eck ist schmaler als sein
-        # Umkreis, und ohne die Zugabe schrumpfte die Bohrung bei jedem
-        # Versetzen (gemessen 10.09.2026: 7,9848 vorher, 7,9696 danach).
+        # Der Umkreis ist bereits das gemessene Konturmaß; eine zusätzliche
+        # Vieleckzugabe würde es bei jedem Versetzen weiter vergrößern.
         # ``compensate`` steht dabei auf ``False`` — die Materialtoleranz ist
         # in ``cut`` schon drin, ein zweites Mal wäre sie zweimal drauf.
         result = drill(
@@ -4370,7 +4342,7 @@ def resize_hole(ctx: OpContext) -> OpResult:
             position=centre,
             axis="z",
             normal=axis,
-            diameter=cut + _polygon_gain_for(cut),
+            diameter=cut,
             depth=0.0 if through else exact_depth,
             anchor="centre",
             profile=ctx.profile,

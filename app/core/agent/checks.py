@@ -36,8 +36,6 @@ VOLUME_FACTOR = 10.0
 PASSED_THROUGH = (
     "perceive.orphaned",
     "feature.orphaned",
-    "fit.violated",
-    "fit.missing_feature",
     "bore.over_the_edge",
     # Dieselbe Sorte Fehler eine Stufe weiter: Das Werkzeug hat den Körper
     # nicht gestreift, sondern zerlegt (Fund des Reviews, 13.09.2026).
@@ -89,6 +87,7 @@ def check(result: EvaluationResult, before: Scene | None = None) -> list[Finding
         for finding in scene.report.findings
         if (
             finding.code in PASSED_THROUGH
+            or finding.code.startswith("fit.")
             or (
                 finding.converts_exact_body
                 and (before is None or finding not in before.report.findings)

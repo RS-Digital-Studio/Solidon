@@ -33,7 +33,7 @@ from app.core.geom.mesh import MeshData, face_components, fully_stitched
 from app.core.geom.repair import merge_vertices
 from app.core.log import get_logger
 from app.core.perceive.helix import Helix, find_helices
-from app.core.perceive.slots import ACROSS_THE_AXIS, slots_instead_of_half_bores
+from app.core.perceive.slots import ACROSS_THE_AXIS, PARALLEL_AXES, slots_instead_of_half_bores
 from app.core.types import Feature, FeatureId, Vec3, is_a_cavity
 from app.core.units import (
     EPS_GEOM,
@@ -200,6 +200,10 @@ EPS_ANGLE = 0.01
 #: würde ein Radius von 170 Metern.
 FLAT_ANGLE = 0.5
 
+#: Blöcke begrenzen Speicher und Abbruchlatenz der Konturprüfung. Die Anzahl
+#: ändert weder den Formnachweis noch eine geometrische Toleranz.
+FIT_SCAN_BLOCK: Final = 16_384
+
 
 @dataclass(frozen=True, slots=True)
 class CylinderFit:
@@ -209,52 +213,31 @@ class CylinderFit:
     centre: Vec3
     radius: float
     residual: float
-    """Mittlere Abweichung vom eingepassten Radius, bezogen auf den Radius."""
+    """Mittlerer radialer Fehler der geprüften Konturecken, geteilt durch den Radius."""
     inward: bool
     """Wahr, wenn die Normalen zur Achse zeigen — das ist eine Bohrung, kein Zapfen."""
     spread: float = 0.0
-    """Streuung um den eingepassten Kreis, in **Sehnenhöhen** der Polygonnäherung.
+    """Mittlerer Kontureckenfehler in Sehnenhöhen der Polygonnäherung.
 
-    **Der Rückstand allein kann einen falschen Zylinder nicht sehen**, und der
-    Grund ist keine Nachlässigkeit, sondern seine Bauart: Er misst gegen den
-    **eingepassten** Kreis, nicht gegen die Wirklichkeit. Ein Bogen von neunzig
-    Grad passt auf unendlich viele Kreise fast gleich gut; die Einpassung
-    wählt einen, und die Punkte liegen dann tatsächlich fast exakt darauf.
+    Die Sehnenhöhe kommt aus Facettenwinkeln und summierten Flächen, nicht
+    aus Dreiecksbreiten; Unterteilung verändert ihren Maßstab nicht.
+    ROUND_WALL_TOLERANCE begrenzt ihn gegen numerisches Rauschen nach unten.
+    Die zusätzliche Prüfung aller Konturecken und Flächennormalen fängt
+    Ausreißer und falsche Achsen, die ein mittlerer relativer Fehler verdeckt.
+    Der Abstand einer Facettenmitte zum Kreis gehört nicht zum Fitfehler,
+    sondern zum getrennten radialen Netzband.
+    """
 
-    Dazu kommt, dass der Rückstand **relativ** zum Radius normiert — und damit
-    genau das belohnt, was er fangen soll. Gemessen an einem Viertelbogen eines
-    Zylinders mit r = 3: Die Einpassung fand **r = 89,79**, dreißigmal zu groß,
-    und meldete einen Rückstand von **0,0023** bei einer Schwelle von 0,08.
-    Dieselbe absolute Streuung von 0,20 mm ist bei r = 3 ein Viertel des
-    Radius und bei r = 90 ein Promille. Ein Fit, der den Radius aufbläht,
-    verbessert seinen eigenen Rückstand.
+    fit_error: float | None = None
+    """Größter radialer Fehler der Konturecken in mm; keine Nennmaßunsicherheit."""
+    radial_min: float | None = None
+    """Kleinster Abstand der wirklichen Manteldreiecke zur Fitachse in mm."""
+    radial_max: float | None = None
+    """Größter Abstand der wirklichen Manteldreiecke zur Fitachse in mm.
 
-    Dieses Feld misst deshalb **absolut** — und normiert auf die Sehnenhöhe der
-    Polygonnäherung (:func:`_chord_sag`), denn die ist die Auflösung, mit der
-    das Netz einen Kreis überhaupt beschreiben kann: Ein Polygon liegt um genau
-    diesen Betrag neben seinem Umkreis. Was darunter bleibt, erklärt die
-    Näherung; was darüber liegt, ist wirklich.
-
-    **Auf die Facettenbreite normiert war es dichteabhängig, und das war ein
-    Fehler.** Eine Unterteilung halbiert die Breite eines Dreiecks, ohne die
-    Polygonnäherung anzufassen — der Zähler bleibt stehen, der Nenner
-    halbiert sich, der Wert verdoppelt sich. Gemessen an ``plate_holes.stl``
-    (17.09.2026): 0,0138 bei 203 776 Dreiecken, 0,0277 bei 815 104, 0,0554 bei
-    3 260 416, an einer Schranke von 0,02. Ab 815 104 Dreiecken verlor die
-    Platte alle vier Bohrungen, und der ganze Mantel fiel zusätzlich in die
-    ebenen Flächen zurück. Auf die Sehnenhöhe normiert läuft dieselbe Reihe in
-    die Sättigung: 0,2550 — 0,2564 — 0,2566.
-
-    Nach unten begrenzt :data:`ROUND_WALL_TOLERANCE` den Nenner, aus dem Grund,
-    aus dem die Zahl dort steht: Feiner als zehn Mikrometer löst kein Netz
-    einen Kreis auf, und unterhalb davon misst dieses Feld nur noch das
-    Float32 der Datei, aus der das Netz kam. Ohne die Schranke stieg ein
-    richtiger Zapfen von ``post_with_fillet.stl`` — 96 Segmente auf r = 6,
-    Sehnenhöhe 3,3 µm — auf 1,19, allein wegen 3,9 µm Rundungsrauschen.
-
-    Über den Korpus liegen alle achtzehn richtigen Einpassungen bei höchstens
-    0,39, der Fleck aus Verrundung und anschließenden Ebenen bei 32,7 bis 62,6
-    — Faktor vierundachtzig."""
+    Das Netzband ist weder Fertigungsspiel noch eine Einbaugarantie. Fehlende
+    Werte an älteren, von Hand aufgebauten Fits sind keine Nullabweichung.
+    """
 
     @property
     def good(self) -> bool:
@@ -955,7 +938,7 @@ def detect(
         for phase in (
             lambda: detect_holes(mesh, fitted.cylinders, fitted.cones),
             lambda: detect_pins(mesh, fitted.cylinders),
-            lambda: detect_fillets(mesh, worth_naming),
+            lambda: detect_fillets(mesh, worth_naming, check_cancelled=check_cancelled),
             lambda: detect_cones(mesh, fitted.cones),
             lambda: sphere_features,
             lambda: torus_features,
@@ -1447,7 +1430,7 @@ def _fitted(
                 # runden Formen sind damit aber nicht ausgeschlossen: Eine Kalotte
                 # hat einen Kegelwinkel, ohne ein Kegel zu sein.
             else:
-                fit = fit_cylinder(body, patch)
+                fit = fit_cylinder(body, patch, check_cancelled=check_cancelled)
                 if check_cancelled is not None:
                     check_cancelled()
                 if fit is not None and fit.good and _fits_in_the_body(mesh, fit):
@@ -1521,6 +1504,13 @@ def _fitted(
             # Jedes Stück wird gefragt, nicht nur bis zum ersten Treffer — die
             # Liste ist Absicht, kein ``any`` mit Kurzschluss.
             classified = [classify(piece) for piece in pieces] if len(pieces) > 1 else []
+            for piece, known in zip(pieces, classified, strict=False):
+                if not known:
+                    separated = _cylinder_beside_a_torus(
+                        body, mesh, piece, tori, check_cancelled=check_cancelled
+                    )
+                    if separated is not None:
+                        found.append(separated)
             if any(classified):
                 # Belegte Teilflächen ersetzen die unsichere Gesamtdeutung;
                 # dieselben Dreiecke zählen nicht zusätzlich als verworfener Ring.
@@ -1540,7 +1530,7 @@ def _fitted(
 
         if check_cancelled is not None:
             check_cancelled()
-        found = _merged_cylinders(body, mesh, found)
+        found = _merged_cylinders(body, mesh, found, check_cancelled=check_cancelled)
         if check_cancelled is not None:
             check_cancelled()
         cones = _merged_cones(body, cones)
@@ -1639,12 +1629,13 @@ def detect_holes(
             kind="hole",
             provenance="detected",
             params={
-                "diameter": round(fit.radius * 2.0, 4),
+                "diameter": fit.radius * 2.0,
                 "axis": fit.axis,
                 "centre": fit.centre,
-                "depth": round(_patch_extent(body, patch, fit.axis), 4),
+                "depth": _patch_extent(body, patch, fit.axis),
                 "through": _is_through(mesh, fit, cones, patch, bounds=through_bounds),
-                "residual": round(fit.residual, 4),
+                "residual": fit.residual,
+                **_cylinder_measures(fit),
             },
             face_indices=tuple(patch),
         )
@@ -1690,12 +1681,80 @@ def _fits_in_the_body(mesh: MeshData, fit: CylinderFit | ConeFit) -> bool:
     axis = np.abs(np.asarray(fit.axis, dtype=float))
     if float(np.max(axis)) <= EPS_GEOM:
         return True
+    if isinstance(fit, CylinderFit) and fit.radial_min is not None:
+        # Das Umkreismaß kann breiter sein als seine facettierte Außenhaut.
+        # Der Größenfilter vergleicht deshalb das wirkliche radiale Band
+        # mit einer oberen Schranke der Körperausdehnung quer zur Fitachse.
+        # Die projizierte Boxdiagonale schließt auch gedrehte Halbmäntel ein;
+        # einzelne Weltachsenbreiten können deren Durchmesser unterschätzen.
+        first, second = _plane_basis(np.asarray(fit.axis, dtype=float))
+        across = math.hypot(
+            float(np.asarray(size) @ np.abs(first)), float(np.asarray(size) @ np.abs(second))
+        )
+        return fit.radial_min * 2.0 <= across + EPS_GEOM
     along = int(np.argmax(axis))
     across = max(size[index] for index in range(3) if index != along)
     return fit.radius * 2.0 <= across + EPS_GEOM
 
 
-def _merged_cylinders(body: trimesh.Trimesh, mesh: MeshData, found: Cylinders) -> Cylinders:
+def _cylinder_beside_a_torus(
+    body: trimesh.Trimesh,
+    mesh: MeshData,
+    patch: list[int],
+    tori: Tori,
+    *,
+    check_cancelled: Callable[[], None] | None,
+) -> tuple[CylinderFit, list[int]] | None:
+    """Trennt eine Zylinderwand von der letzten Facette einer belegten Rundung.
+
+    Der Krümmungssplit kann eine tangentiale Torusfacette am Zylinder lassen.
+    Sie darf weder dessen Kreismaß verändern noch unbemerkt verloren gehen.
+    Die bestehende Torusachse schlägt eine Teilung vor; beide vollständigen
+    Teilflächen müssen danach ihre gewöhnlichen Formprüfungen bestehen.
+    """
+    if not tori:
+        return None
+    indices = np.asarray(patch, dtype=np.int64)
+    normals = np.asarray(body.face_normals)[indices]
+    adjacency = np.asarray(body.face_adjacency)
+    for index, (ring, ring_patch) in enumerate(tori):
+        if check_cancelled is not None:
+            check_cancelled()
+        perpendicular = np.abs(normals @ np.asarray(ring.axis)) <= ACROSS_THE_AXIS
+        if perpendicular.all() or not perpendicular.any():
+            continue
+        candidate = indices[perpendicular].tolist()
+        rest = indices[~perpendicular].tolist()
+        if len(candidate) < MIN_PATCH_FACES or len(_connected_patches(body, candidate)) != 1:
+            continue
+        neighbours = adjacency[np.isin(adjacency, rest).any(axis=1)]
+        if not np.isin(neighbours, ring_patch).any():
+            continue
+        cylinder = fit_cylinder(body, candidate, check_cancelled=check_cancelled)
+        if cylinder is None or not cylinder.good or not _fits_in_the_body(mesh, cylinder):
+            continue
+        joined = sorted({*ring_patch, *rest})
+        again = fit_torus(body, joined)
+        if check_cancelled is not None:
+            check_cancelled()
+        if (
+            again is not None
+            and again.good
+            and _same_torus((ring, ring_patch), (again, joined))
+            and _torus_is_recognisable(body, again, joined)
+        ):
+            tori[index] = (again, joined)
+            return cylinder, candidate
+    return None
+
+
+def _merged_cylinders(
+    body: trimesh.Trimesh,
+    mesh: MeshData,
+    found: Cylinders,
+    *,
+    check_cancelled: Callable[[], None] | None = None,
+) -> Cylinders:
     """Zylinderflecken, die **dieselbe Fläche** beschreiben, zu einem machen.
 
     **Der Fall ist die gefaste Bohrung, und sie ist der Standardfall.** Jede
@@ -1723,11 +1782,13 @@ def _merged_cylinders(body: trimesh.Trimesh, mesh: MeshData, found: Cylinders) -
 
     merged: Cylinders = []
     for fit, patch in found:
+        if check_cancelled is not None:
+            check_cancelled()
         for index, (other, gathered) in enumerate(merged):
             if not _same_cylinder(body, (fit, patch), (other, gathered)):
                 continue
             together = gathered + patch
-            again = fit_cylinder(body, together)
+            again = fit_cylinder(body, together, check_cancelled=check_cancelled)
             # **Die Vereinigung muss sich selbst rechtfertigen.** Dass zwei
             # Flecken zueinander passen, heißt nicht, dass ihre Summe eine
             # Fläche ist: An einem hohlen Quader stehen die verrundeten
@@ -1758,7 +1819,7 @@ def _merged_cylinders(body: trimesh.Trimesh, mesh: MeshData, found: Cylinders) -
                 and _fits_in_the_body(mesh, again)
                 and (
                     again.spread <= max(fit.spread, other.spread) + EPS_GEOM
-                    or _lies_on_the_cylinder(body, other, patch)
+                    or _lies_on_the_cylinder(body, other, patch, check_cancelled=check_cancelled)
                 )
             ):
                 merged[index] = (again, together)
@@ -1768,8 +1829,14 @@ def _merged_cylinders(body: trimesh.Trimesh, mesh: MeshData, found: Cylinders) -
     return merged
 
 
-def _lies_on_the_cylinder(body: trimesh.Trimesh, fit: CylinderFit, patch: list[int]) -> bool:
-    """Ob die Schwerpunkte dieses Flecks auf dem Zylinder ``fit`` liegen.
+def _lies_on_the_cylinder(
+    body: trimesh.Trimesh,
+    fit: CylinderFit,
+    patch: list[int],
+    *,
+    check_cancelled: Callable[[], None] | None = None,
+) -> bool:
+    """Ob dieselben geprüften Konturecken auf dem vorhandenen Zylinder liegen.
 
     Gemessen wie :attr:`CylinderFit.spread`: der mittlere Abstand vom
     Zylinder, bezogen auf die Sehnenhöhe der Polygonnäherung dieses Flecks —
@@ -1777,12 +1844,19 @@ def _lies_on_the_cylinder(body: trimesh.Trimesh, fit: CylinderFit, patch: list[i
     Vertrag des Fits erfüllt, ohne dass er für sie gerechnet wurde, ist
     dieselbe Wand.
     """
-    centres = np.asarray(body.triangles_center[patch], dtype=float)
     axis = np.asarray(fit.axis, dtype=float)
-    relative = centres - np.asarray(fit.centre, dtype=float)
-    distances = np.linalg.norm(relative - np.outer(relative @ axis, axis), axis=1)
+    points = np.asarray(body.vertices)[np.unique(np.asarray(body.faces)[patch])]
+    relative = points - np.asarray(fit.centre, dtype=float)
+    first, second = _plane_basis(axis)
+    tolerance = max(weld_tolerance(float(np.linalg.norm(body.extents))), ROUND_WALL_TOLERANCE)
+    outline = _cylinder_contour(
+        np.column_stack((relative @ first, relative @ second)), tolerance, check_cancelled
+    )
+    if outline is None:
+        return False
+    errors = np.abs(np.linalg.norm(outline, axis=1) - fit.radius)
     sag = max(_chord_sag(body, patch, axis), ROUND_WALL_TOLERANCE)
-    return float(np.mean(np.abs(distances - fit.radius)) / sag) <= CYLINDER_SPREAD
+    return float(errors.max()) <= tolerance and float(errors.mean() / sag) <= CYLINDER_SPREAD
 
 
 def _split_off_fillets(body: trimesh.Trimesh, found: Cylinders) -> tuple[Cylinders, Fillets]:
@@ -2268,7 +2342,12 @@ def _fillets_worth_naming(mesh: MeshData, found: Fillets) -> Fillets:
     ]
 
 
-def detect_fillets(mesh: MeshData, fillets: Fillets | None = None) -> list[Feature]:
+def detect_fillets(
+    mesh: MeshData,
+    fillets: Fillets | None = None,
+    *,
+    check_cancelled: Callable[[], None] | None = None,
+) -> list[Feature]:
     """Verrundete Kanten (§21.1) — Zylinder**ausschnitte**, keine Zapfen.
 
     ``radius`` statt ``diameter``, und das ist Absicht: Eine Verrundung wird
@@ -2281,7 +2360,9 @@ def detect_fillets(mesh: MeshData, fillets: Fillets | None = None) -> list[Featu
     — dieselbe Unterscheidung wie bei Kegel, Kugel und Torus, aus demselben
     Grund: hinein oder heraus.
     """
-    found = _fitted(mesh).fillets if fillets is None else fillets
+    if check_cancelled is not None:
+        check_cancelled()
+    found = _fitted(mesh, check_cancelled=check_cancelled).fillets if fillets is None else fillets
     body = mesh.raw
     # **Dieselbe Schranke wie bei Bohrung und Zapfen**
     # (:data:`MIN_CYLINDER_DIAMETER`). Hier stand „und sie fehlte hier als
@@ -2307,7 +2388,10 @@ def detect_fillets(mesh: MeshData, fillets: Fillets | None = None) -> list[Featu
     # Modellen aus dem Netz: 32 Absagen „lässt sich innerhalb ihrer Ränder
     # nicht versetzen" erst nach dem Klick; mit dem Kennzeichen stellt das
     # Panel die Zeile vorher grau.
-    radials = [radial_cylinder(body, fitted, patch) for fitted, patch in big]
+    radials = [
+        radial_cylinder(body, fitted, patch, check_cancelled=check_cancelled)
+        for fitted, patch in big
+    ]
     # Ein Durchlauf über die Nachbarschaft für alle runden Wände zusammen, nicht
     # einer je Wand: Am Hemmungsrad sind es 531 Verrundungen, und jede einzeln
     # gefragt hieße 531 Gänge über ``face_adjacency``.
@@ -2320,13 +2404,14 @@ def detect_fillets(mesh: MeshData, fillets: Fillets | None = None) -> list[Featu
             kind="fillet",
             provenance="detected",
             params={
-                "radius": round(fit.radius, 4),
-                "diameter": round(fit.radius * 2.0, 4),
+                "radius": fit.radius,
+                "diameter": fit.radius * 2.0,
                 "axis": fit.axis,
                 "centre": fit.centre,
-                "length": round(_patch_extent(body, patch, fit.axis), 4),
+                "length": _patch_extent(body, patch, fit.axis),
                 "recess": fit.inward,
-                "residual": round(fit.residual, 4),
+                "residual": fit.residual,
+                **_cylinder_measures(fit),
                 **({"radial": True} if radial is not None else {}),
                 **({"tangent": True} if radial is not None and blends else {}),
             },
@@ -2621,11 +2706,12 @@ def detect_pins(mesh: MeshData, cylinders: Cylinders | None = None) -> list[Feat
             kind="pin",
             provenance="detected",
             params={
-                "diameter": round(fit.radius * 2.0, 4),
+                "diameter": fit.radius * 2.0,
                 "axis": fit.axis,
                 "centre": fit.centre,
-                "depth": round(_patch_extent(body, patch, fit.axis), 4),
-                "residual": round(fit.residual, 4),
+                "depth": _patch_extent(body, patch, fit.axis),
+                "residual": fit.residual,
+                **_cylinder_measures(fit),
             },
             face_indices=tuple(patch),
         )
@@ -2901,7 +2987,7 @@ def _large_facet_faces(
             if _a_ball_fits_far_better(cone, fit_sphere(body, patch)):
                 continue
         else:
-            fit = fit_cylinder(body, patch)
+            fit = fit_cylinder(body, patch, check_cancelled=check_cancelled)
         if (
             fit is not None
             and fit.good
@@ -2997,123 +3083,300 @@ def _chord_sag(body: trimesh.Trimesh, patch: list[int], axis: np.ndarray) -> flo
     return (width / 2.0) * float(np.tan(float(np.median(steps[breaks])) / 4.0))
 
 
-def fit_cylinder(body: trimesh.Trimesh, patch: list[int]) -> CylinderFit | None:
-    """Kleinste-Quadrate-Zylinder durch einen Fleck von Dreiecken.
+def _cylinder_contour(
+    flat: np.ndarray,
+    tolerance: float,
+    check_cancelled: Callable[[], None] | None,
+) -> np.ndarray | None:
+    """Prüft die projizierte Originalhaut und entfernt Sehnenunterteilungen.
 
-    Die Achse ist die Richtung, auf der jede Normale senkrecht steht — der
-    Eigenvektor der Normalen-Kovarianz mit dem kleinsten Eigenwert.
-    """
-    normals = np.asarray(body.face_normals[patch], dtype=float)
-    centres = np.asarray(body.triangles_center[patch], dtype=float)
-
-    _values, vectors = np.linalg.eigh(normals.T @ normals)
-    axis = vectors[:, 0]
-    axis = axis / float(np.linalg.norm(axis))
-    # Ein Eigenvektor und sein Gegenvektor beschreiben dieselbe Achse. Welches
-    # Vorzeichen gilt, entscheidet ``units.positive_axis`` — für beide Kerne
-    # dieselbe Wahl, sonst liegt derselbe Langlochwinkel an ihnen gespiegelt.
-    # Nach einer Bewegung richtet die Zuordnung diese Messachse am
-    # mitgedrehten Vorgänger aus, damit der Erstbezug keine Mündung zurückdreht.
-    axis = np.asarray(positive_axis((float(axis[0]), float(axis[1]), float(axis[2]))), dtype=float)
-
-    # In die Ebene senkrecht zur Achse projizieren und dort einen Kreis einpassen.
-    basis_u, basis_v = _plane_basis(axis)
-    flat = np.column_stack([centres @ basis_u, centres @ basis_v])
-    centre_2d, radius = _fit_circle(flat)
-    if radius <= EPS_GEOM:
-        return None
-
-    distances = np.linalg.norm(flat - centre_2d, axis=1)
-    residual = float(np.mean(np.abs(distances - radius)) / radius)
-    # Dieselbe Abweichung noch einmal, aber **absolut** und auf die Sehnenhöhe
-    # der Polygonnäherung bezogen: Was der Rückstand nicht sehen kann, sieht sie.
-    sag = max(_chord_sag(body, patch, axis), ROUND_WALL_TOLERANCE)
-    spread = float(np.mean(np.abs(distances - radius)) / sag)
-
-    along = _patch_axial_midpoint(body, patch, axis)
-    centre = basis_u * centre_2d[0] + basis_v * centre_2d[1] + axis * along
-
-    towards = centre - centres
-    towards = towards - np.outer(towards @ axis, axis)
-    inward = bool(np.mean(np.einsum("ij,ij->i", normals, towards)) > 0)
-
-    return CylinderFit(
-        axis=(float(axis[0]), float(axis[1]), float(axis[2])),
-        centre=(float(centre[0]), float(centre[1]), float(centre[2])),
-        radius=float(radius),
-        residual=residual,
-        inward=inward,
-        spread=spread,
-    )
-
-
-def radial_cylinder(
-    body: trimesh.Trimesh, fit: CylinderFit, patch: list[int]
-) -> CylinderFit | None:
-    """Belegt einen mindestens halben Zylindermantel an seinen tatsächlichen Ecken.
-
-    Ein solcher Mantel kann keine Verrundung zwischen zwei sich schneidenden
-    Tangentialebenen sein. Sein Radius wird radial geändert. Eine beliebige
-    gute Einpassung genügt dafür nicht: Alle Ecken müssen denselben Kreis
-    und alle Flächennormalen dieselbe Achse belegen. Zusätzliche Eckpunkte
-    mitten auf vorhandenen Sehnen zählen als Unterteilung derselben Haut.
-
-    **Die konvexe Hülle kommt aus GEOS und nicht aus Qhull**, und der Grund
-    ist gemessen (Fund des Reviews, 13.09.2026): ``scipy.spatial.ConvexHull``
-    legt je Aufruf eine **temporäre Datei** an — SciPy führt Qhulls Ausgabe
-    über ``tempfile.mkstemp``. Diese Funktion läuft einmal je benannter
-    Verrundung; an der Prüfplatte mit 64 Taschen sind das 256 Aufrufe, und
-    unter Windows kosteten sie 4,60 s von 7,08 s der ganzen Erkennung, davon
-    4,597 s allein in ``nt.open``. ``detect`` lag damit bei 3,6 bis 6,4 s
-    gegen ein Budget von 2,5 s (§31). Derselbe Bogen über
-    ``MultiPoint(...).convex_hull``: 11 ms statt 1531 ms für 256 Hüllen, bei
-    Punkt für Punkt identischer Eckenmenge. Shapely ist ohnehin da — genau
-    diese Hülle baut auch ``scene.placement.mouth_outline``.
+    GEOS liefert die konvexe Hülle ohne Qhulls temporäre Dateien. Ihre
+    Vereinfachung hält Originalecken, erzeugt aber keine neue Geometrie.
+    Auch der zyklische Anfangspunkt wird auf Kollinearität geprüft: Bleibt
+    dort ein Sehnenmittelpunkt stehen, würde er den Kreisradius verkürzen.
+    Alle ursprünglichen Punkte müssen auf der belegten Kontur bleiben;
+    eine Hülle allein könnte Einbuchtungen verstecken.
     """
     from shapely import distance
     from shapely import points as planar_points
     from shapely.geometry import MultiPoint, Polygon
 
-    axis = np.asarray(fit.axis, dtype=float)
-    if np.max(np.abs(np.asarray(body.face_normals)[patch] @ axis)) > ACROSS_THE_AXIS:
-        return None
-    centre = np.asarray(fit.centre, dtype=float)
-    points = np.asarray(body.vertices)[np.unique(np.asarray(body.faces)[patch])]
-    first, second = _plane_basis(axis)
-    flat = np.column_stack(((points - centre) @ first, (points - centre) @ second))
-    # Weniger als drei Ecken oder eine Gerade ergeben keine Fläche — dieselbe
-    # Absage, die ``QhullError`` vorher trug.
+    if check_cancelled is not None:
+        check_cancelled()
     hull = MultiPoint(flat).convex_hull
     if hull.geom_type != "Polygon":
         return None
-    # Die Schweißtoleranz allein wies jede eingelesene Wand ab — die
-    # Begründung und die Zahlen stehen bei :data:`ROUND_WALL_TOLERANCE`.
-    tolerance = max(weld_tolerance(float(np.linalg.norm(body.extents))), ROUND_WALL_TOLERANCE)
-    # Nach mehreren Schnitten können Sehnenpunkte um Rundungsfehler außen
-    # liegen und dadurch selbst Hull-Ecken werden. Nur numerisch kollineare
-    # Unterteilungen fallen weg; derselbe Abstand gilt am ganzen Netz.
-    outline = np.asarray(hull.simplify(tolerance).exterior.coords, dtype=float)[:-1]
-    circle, radius = _fit_circle(outline)
-    if radius <= tolerance:
+    outline = np.asarray(hull.exterior.coords, dtype=float)[:-1]
+    # Douglas-Peucker hält den Anfang eines geschlossenen Rings fest. Zuerst
+    # müssen deshalb alle numerisch geraden Hüllpunkte verschwinden. Nach
+    # der Vereinfachung könnten ihre echten Nachbarn schon entfernt sein,
+    # sodass ein zuvor gerader Sehnenpunkt selbst eine Ecke vortäuscht.
+    while len(outline) > 3:
+        if check_cancelled is not None:
+            check_cancelled()
+        before = outline - np.roll(outline, 1, axis=0)
+        after = np.roll(outline, -1, axis=0) - outline
+        lengths = np.linalg.norm(before, axis=1) * np.linalg.norm(after, axis=1)
+        cosine = np.einsum("ij,ij->i", before, after) / np.maximum(lengths, EPS_GEOM**2)
+        candidates = np.flatnonzero(cosine >= units.exact_cos_degrees(FLAT_ANGLE))
+        if not len(candidates):
+            break
+        outline = np.delete(outline, int(candidates[np.argmax(cosine[candidates])]), axis=0)
+    # Drei Punkte bestimmen schon den Kreis; eine vierte Originalecke muss
+    # ihn unabhängig tragen. Zwei ebene Streifen sind noch keine Rundung.
+    if len(outline) < 4:
         return None
-    distances = np.linalg.norm(outline - circle, axis=1)
-    error = float(np.max(np.abs(distances - radius)))
+    outline = np.asarray(Polygon(outline).simplify(tolerance).exterior.coords, dtype=float)[:-1]
+    boundary = Polygon(outline).exterior
+    for start in range(0, len(flat), FIT_SCAN_BLOCK):
+        if check_cancelled is not None:
+            check_cancelled()
+        away = distance(planar_points(flat[start : start + FIT_SCAN_BLOCK]), boundary)
+        if float(np.max(away)) > tolerance:
+            return None
+    return outline
+
+
+def _cylinder_band(
+    triangles: np.ndarray,
+    check_cancelled: Callable[[], None] | None,
+) -> tuple[float, float]:
+    """Radiales Netzband aus echten Dreiecken in der Ebene quer zur Achse.
+
+    Das Minimum liegt auf einer Kante oder bei null im Dreiecksinneren;
+    das Maximum liegt immer an einer Ecke. Eine fehlende Mantelpartie wird
+    dabei nicht durch die Schließsehne einer konvexen Hülle ersetzt.
+    """
+    minimum, maximum = math.inf, 0.0
+    for start in range(0, len(triangles), FIT_SCAN_BLOCK):
+        if check_cancelled is not None:
+            check_cancelled()
+        points = triangles[start : start + FIT_SCAN_BLOCK]
+        ends = np.roll(points, -1, axis=1)
+        vectors = ends - points
+        squares = np.einsum("ijk,ijk->ij", vectors, vectors)
+        along = np.clip(
+            -np.einsum("ijk,ijk->ij", points, vectors) / np.maximum(squares, EPS_GEOM**2),
+            0.0,
+            1.0,
+        )
+        closest = points + along[:, :, None] * vectors
+        distances = np.linalg.norm(closest, axis=2).min(axis=1)
+        # Nur ein flächiges projiziertes Dreieck kann die Achse im Inneren
+        # tragen. Ein kollinearer Mantelstreifen hat ansonsten überall null
+        # Kreuzprodukt und würde fälschlich einen Radius von null erhalten.
+        cross = points[:, :, 0] * ends[:, :, 1] - points[:, :, 1] * ends[:, :, 0]
+        nonzero = np.abs(cross.sum(axis=1)) > EPS_GEOM**2
+        inside = nonzero & (np.all(cross >= 0.0, axis=1) | np.all(cross <= 0.0, axis=1))
+        distances[inside] = 0.0
+        minimum = min(minimum, float(distances.min()))
+        maximum = max(maximum, float(np.linalg.norm(points, axis=2).max()))
+    return minimum, maximum
+
+
+def fit_cylinder(
+    body: trimesh.Trimesh,
+    patch: list[int],
+    *,
+    check_cancelled: Callable[[], None] | None = None,
+) -> CylinderFit | None:
+    """Ein Kreis durch geprüfte Konturecken, mit separat gemessenem Netzband.
+
+    Die Achse minimiert das flächengewichtete Normalenmoment. Axiale Ringe
+    und Dreiecksdiagonalen erhalten damit dieselbe Bedeutung. Weltkoordinaten
+    werden vor Projektion und quadratischen Termen zentriert. Der Fit belegt
+    eine Kreisnäherung der Haut, keine unbekannte Konstruktionsabsicht.
+    """
+    if check_cancelled is not None:
+        check_cancelled()
+    if len(patch) < MIN_PATCH_FACES:
+        return None
+    normals = np.asarray(body.face_normals[patch], dtype=float)
+    areas = np.asarray(body.area_faces[patch], dtype=float)
+    if not np.isfinite(normals).all() or not np.isfinite(areas).all() or areas.sum() <= EPS_GEOM**2:
+        return None
+    _values, vectors = np.linalg.eigh(normals.T @ (normals * areas[:, None]))
+    axis = vectors[:, 0]
+    axis = np.asarray(positive_axis((float(axis[0]), float(axis[1]), float(axis[2]))), dtype=float)
+    if np.max(np.abs(normals @ axis)) > UPRIGHT_TO_AXIS:
+        return None
+    first, second = _plane_basis(axis)
+    # Drei nicht kollineare Punkte tragen stets einen Umkreis. Erst mehrere
+    # aufgelöste, glatte Normalenwechsel belegen eine Rundung statt eines
+    # absichtlichen Vielecks. Die vorhandenen Winkelgrenzen bleiben dieselben.
+    angles = np.sort(np.arctan2(normals @ second, normals @ first))
+    steps = np.diff(np.r_[angles, angles[0] + math.tau])
+    # FLAT_ANGLE gilt der gesamten aufgelösten Krümmung, nicht dem einzelnen
+    # Facettenschritt: Ein 1024-Eck hat kleinere Schritte und bleibt rund.
+    if math.tau - steps.max() < math.radians(FLAT_ANGLE) or np.sort(steps)[-2] >= math.radians(
+        CURVATURE_LIMIT - EPS_ANGLE
+    ):
+        return None
+    faces = np.asarray(body.faces)[patch]
+    indices, reverse = np.unique(faces, return_inverse=True)
+    points = np.asarray(body.vertices)[indices]
+    if not np.isfinite(points).all():
+        return None
+    origin = (points.min(axis=0) + points.max(axis=0)) / 2.0
+    relative = points - origin
+    flat = np.column_stack((relative @ first, relative @ second))
+    tolerance = max(weld_tolerance(float(np.linalg.norm(body.extents))), ROUND_WALL_TOLERANCE)
+    outline = _cylinder_contour(flat, tolerance, check_cancelled)
+    if outline is None:
+        return None
+    # Ein Schnitt kann einen Mantel mitten in einer Facette begrenzen. Seine
+    # Endpunkte sind dann Ecken der Hülle, aber keine Ecken des ursprünglichen
+    # Kreisvielecks. Nur Punkte mit zwei verschiedenen Mantelnormalen tragen
+    # das Kreismaß. Getrennte, deckungsgleiche STL-Ecken zählen gemeinsam.
+    _coincident, point_groups = np.unique(points, axis=0, return_inverse=True)
+    normal_min = np.full((len(_coincident), 3), math.inf)
+    normal_max = np.full((len(_coincident), 3), -math.inf)
+    incident = point_groups[reverse].reshape(-1)
+    repeated = np.repeat(normals, 3, axis=0)
+    np.minimum.at(normal_min, incident, repeated)
+    np.maximum.at(normal_max, incident, repeated)
+    supported = np.linalg.norm(normal_max - normal_min, axis=1)[point_groups] > math.sin(
+        math.radians(EPS_ANGLE)
+    )
+    # Die äußere Hülle kann ausschließlich neue Schnittpunkte enthalten,
+    # während die ursprünglichen Kreisecken knapp darunter liegen. Deshalb
+    # tragen die belegten Ecken eine eigene Kontur; die gesamte Originalhaut
+    # wurde oben unabhängig davon geprüft.
+    outline = _cylinder_contour(flat[supported], tolerance, check_cancelled)
+    if outline is None:
+        return None
+    circle, radius = _fit_circle(outline)
+    if not math.isfinite(radius) or radius <= tolerance:
+        return None
+    errors = np.abs(np.linalg.norm(outline - circle, axis=1) - radius)
+    error = float(np.abs(np.linalg.norm(flat[supported] - circle, axis=1) - radius).max())
     if error > tolerance:
         return None
-    # Der Schnittkern darf eine Facette unterteilen. Deren neue Knoten
-    # liegen auf der Sehne, nicht auf dem Kreis; der Abstand zur gesamten
-    # konvexen Kontur beweist, dass keine weitere Einbuchtung versteckt ist.
-    away = distance(planar_points(flat), Polygon(outline).exterior)
-    if float(np.max(away)) > tolerance:
+    radial_triangles = (flat - circle)[reverse].reshape(-1, 3, 2)
+    radial_centres = radial_triangles.mean(axis=1)
+    radial_normals = np.column_stack((normals @ first, normals @ second))
+    signs = np.einsum("ij,ij->i", radial_centres, radial_normals)
+    if not (np.all(signs > EPS_GEOM) or np.all(signs < -EPS_GEOM)):
         return None
-    shifted = centre + first * circle[0] + second * circle[1]
-    refined = replace(
-        fit,
-        centre=(float(shifted[0]), float(shifted[1]), float(shifted[2])),
-        radius=radius,
-        residual=error / radius,
+    inward = bool(np.all(signs < 0.0))
+    radial_min, radial_max = _cylinder_band(radial_triangles, check_cancelled)
+    # Auch ungestützte Schnittendpunkte gehören zur geprüften Haut. Lange
+    # Tangentenflanken können denselben Bogen tragen, reichen aber aus seinem
+    # Umkreis heraus und sind deshalb kein Bestandteil des Zylinders.
+    if radial_max > radius + tolerance:
+        return None
+    along = relative @ axis
+    centre = (
+        origin + first * circle[0] + second * circle[1] + axis * ((along.min() + along.max()) / 2.0)
     )
-    return refined if angular_span(body, refined, patch) >= 180.0 - EPS_GEOM else None
+    sag = max(_chord_sag(body, patch, axis), ROUND_WALL_TOLERANCE)
+    if check_cancelled is not None:
+        check_cancelled()
+    return CylinderFit(
+        axis=(float(axis[0]), float(axis[1]), float(axis[2])),
+        centre=(float(centre[0]), float(centre[1]), float(centre[2])),
+        radius=radius,
+        residual=float(errors.mean()) / radius,
+        inward=inward,
+        spread=float(errors.mean()) / sag,
+        fit_error=error,
+        radial_min=radial_min,
+        radial_max=radial_max,
+    )
+
+
+def radial_cylinder(
+    body: trimesh.Trimesh,
+    fit: CylinderFit,
+    patch: list[int],
+    *,
+    check_cancelled: Callable[[], None] | None = None,
+) -> CylinderFit | None:
+    """Derselbe Konturfit mit der zusätzlichen Grenze der radialen Bearbeitung.
+
+    Mindestens ein halber Mantel und die strengere Querstellung seiner
+    Normalen schließen einen gewöhnlichen Übergang zwischen Tangentialebenen
+    aus. Auch ein extern aufgebauter Kandidat ersetzt den Formnachweis nicht.
+    """
+    refined = fit_cylinder(body, patch, check_cancelled=check_cancelled)
+    if refined is None or not refined.good:
+        return None
+    axis = np.asarray(refined.axis, dtype=float)
+    if np.max(np.abs(np.asarray(body.face_normals)[patch] @ axis)) > ACROSS_THE_AXIS:
+        return None
+    if angular_span(body, refined, patch) < 180.0 - EPS_GEOM:
+        return None
+    return refined if _radial_boundaries_are_planar(body, axis, patch, check_cancelled) else None
+
+
+def _radial_boundaries_are_planar(
+    body: trimesh.Trimesh,
+    axis: np.ndarray,
+    patch: list[int],
+    check_cancelled: Callable[[], None] | None,
+) -> bool:
+    """Der vollständige Mantel endet an axialen Seiten und ebenen Trimmkurven.
+
+    Der Krümmungssplit kann eine Delle aus einer ansonsten runden Wand
+    heraustrennen. Deren Rest bleibt ein messbarer Zylinder, aber seine
+    ausgezackte Grenze belegt keine vollständige radial bearbeitbare Wand.
+    Tangentiale Nachbarflächen werden weiterhin separat ausgewiesen.
+    """
+    if check_cancelled is not None:
+        check_cancelled()
+    adjacency = np.asarray(body.face_adjacency)
+    within = adjacency[np.isin(adjacency, patch).all(axis=1)]
+    if (
+        len(
+            trimesh.graph.connected_components(
+                within, nodes=np.asarray(patch), min_len=1, engine="scipy"
+            )
+        )
+        != 1
+    ):
+        return False
+    faces = np.asarray(body.faces)[patch]
+    edges = np.sort(np.concatenate((faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [2, 0]])), axis=1)
+    edges, count = np.unique(edges, axis=0, return_counts=True)
+    if (count > 2).any():
+        return False
+    boundary = edges[count == 1]
+    if not len(boundary):
+        return False
+    points = np.asarray(body.vertices)
+    vectors = points[boundary[:, 1]] - points[boundary[:, 0]]
+    tolerance = max(weld_tolerance(float(np.linalg.norm(body.extents))), ROUND_WALL_TOLERANCE)
+    along = vectors @ axis
+    # Die Längengrenze allein würde kurze unterteilte Ringkanten für axiale
+    # Seiten halten. Richtung und radialer Abstand müssen beide passen.
+    axial = (np.abs(along) >= PARALLEL_AXES * np.linalg.norm(vectors, axis=1)) & (
+        np.linalg.norm(vectors - np.outer(along, axis), axis=1) <= tolerance
+    )
+    transverse = boundary[~axial]
+    if not len(transverse):
+        return False
+    groups = trimesh.graph.connected_components(
+        transverse, nodes=np.unique(transverse), min_len=1, engine="scipy"
+    )
+    for group in groups:
+        if check_cancelled is not None:
+            check_cancelled()
+        relative = points[group] - points[group].mean(axis=0)
+        if len(relative) < 4:
+            continue
+        _left, _singular, directions = np.linalg.svd(relative, full_matrices=False)
+        if np.max(np.abs(relative @ directions[-1])) > tolerance:
+            return False
+    return True
+
+
+def _cylinder_measures(fit: CylinderFit) -> dict[str, float]:
+    """Nur tatsächlich erhobene Diagnosemaße werden am Merkmal veröffentlicht."""
+    return {
+        name: value
+        for name in ("fit_error", "radial_min", "radial_max")
+        if (value := getattr(fit, name)) is not None
+    }
 
 
 def fit_stadium(

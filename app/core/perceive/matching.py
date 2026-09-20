@@ -589,7 +589,9 @@ def transformed_features(
         "width",
         "height",
         "travel",
-        "residual",
+        "fit_error",
+        "radial_min",
+        "radial_max",
     )
     for name, feature in result.items():
         params = dict(feature.params)
@@ -620,7 +622,7 @@ def transformed_features(
             if valid:
                 radial_scale = float(radial_factors[0])
                 axial_scale = float(np.linalg.norm(along))
-                for key in ("diameter", "radius"):
+                for key in ("diameter", "radius", "fit_error", "radial_min", "radial_max"):
                     if key in params:
                         params[key] *= radial_scale
                 for key in ("depth", "length"):
@@ -633,7 +635,16 @@ def transformed_features(
                 valid = not any(
                     key in params
                     for key in (*lengths, "size")
-                    if key not in {"diameter", "radius", "depth", "length", "residual"}
+                    if key
+                    not in {
+                        "diameter",
+                        "radius",
+                        "depth",
+                        "length",
+                        "fit_error",
+                        "radial_min",
+                        "radial_max",
+                    }
                 )
         elif feature.kind == "face":
             normal = np.asarray(features[name].params["normal"], dtype=float)
@@ -643,12 +654,11 @@ def transformed_features(
             )
             if "area" in params:
                 params["area"] *= factor
-            valid = not any(
-                key in params for key in (*lengths, "size", "volume") if key != "residual"
-            )
-        if not uniform:
-            # Ein gemessener Fitfehler lässt sich bei verschiedenen Maßstäben
-            # ohne seine Messpunkte nicht als neuer Messwert ausgeben.
+            valid = not any(key in params for key in (*lengths, "size", "volume"))
+        if not uniform and not (valid and feature.kind in {"hole", "pin"}):
+            # Der relative Konturfehler bleibt bei einheitlicher Vergrößerung
+            # und kreisbewahrender Zylinderskalierung gleich. Andere affine
+            # Formen brauchen für einen neuen Gütewert die wirklichen Messpunkte.
             params.pop("residual", None)
         if feature.kind == "void":
             # Größe und Mitte des Hohlraums bezeichnen seine Welt-AABB.

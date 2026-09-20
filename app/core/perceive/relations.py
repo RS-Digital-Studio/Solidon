@@ -1114,7 +1114,15 @@ def _ordered_cavity(
 _Comparison = Literal["same", "different", "unavailable"]
 _POSE_PARAMETERS = frozenset({"axis", "centre", "normal", "position"})
 _DIAGNOSTIC_PARAMETERS = frozenset(
-    {"residual", "local_search_radius", "profile_clamp", "profile_clamp_y"}
+    {
+        "residual",
+        "fit_error",
+        "radial_min",
+        "radial_max",
+        "local_search_radius",
+        "profile_clamp",
+        "profile_clamp_y",
+    }
 )
 
 

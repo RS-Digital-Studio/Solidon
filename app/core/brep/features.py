@@ -171,7 +171,9 @@ def features_of(solid: Solid, *, cancelled: CancelToken | None = None) -> dict[F
             cancelled.raise_if_cancelled()
         if feature.kind == "fillet" and feature.params.get("recess"):
             patch = list(feature.face_indices)
-            fit = fit_cylinder(mesh.raw, patch)
+            fit = fit_cylinder(
+                mesh.raw, patch, check_cancelled=cancelled.raise_if_cancelled if cancelled else None
+            )
             if fit is not None:
                 fillets.append((fit, patch))
     if fillets:

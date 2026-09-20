@@ -13,6 +13,12 @@ Erneute B-Rep-Merkmalserkennung in `ops`, `edge_ops`, `face_ops` und
 `prepare_ops` erhält denselben `ctx.cancelled`; sie erzeugt kein eigenes
 Token und gibt bei Abbruch kein Teilresultat zurück.
 
+Wiederhergestellte Bohrungen und Langlöcher verwenden das gemessene
+Konturmaß ohne zusätzliche Vieleckkorrektur. `prepare_ops._placing_tool`
+trennt das maßhaltige Setzen vom vergrößerten Werkzeug zum Schließen oder
+Abtragen; die axiale Überlappung an Mündungen bleibt erhalten. Tatsächlich
+umschreibende Hüllwerkzeuge behalten ihre geometrisch nötige Sehnenzugabe.
+
 `lid.screw_lid` benennt Hals- und Deckelgewinde aus demselben rechtsgängigen
 `thread_body`-Erzeuger mit `handedness="right"`. Das Innenwerkzeug ändert den
 Materialbereich, nicht den Drehsinn. Lageänderungen benutzen weiterhin den

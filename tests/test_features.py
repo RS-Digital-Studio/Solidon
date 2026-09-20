@@ -23,7 +23,6 @@ from app.core.perceive.actions import actions_for
 from app.core.perceive.features import (
     _FEATURE_CACHE,
     CACHE_LIMIT,
-    CYLINDER_TOLERANCE,
     EDGE_LOOP_LIMIT,
     FREEFORM_ROUND_COUNT,
     FREEFORM_ROUND_SHARE,
@@ -1173,38 +1172,21 @@ def test_a_rounded_edge_keeps_its_own_radius() -> None:
 
 
 def test_the_residual_cannot_see_a_blown_up_circle() -> None:
-    """Der Rückstand ist die letzte Schranke, und allein sieht er nichts.
+    """Ein Viertelbogen samt Deckeln darf keinen guten Zylinder ergeben.
 
-    Er misst gegen den **eingepassten** Kreis, nicht gegen die Wirklichkeit —
-    ein Bogen von neunzig Grad passt auf unendlich viele Kreise fast gleich
-    gut. Und er normiert **relativ** zum Radius, belohnt also genau das, was er
-    fangen soll: Dieselbe absolute Streuung ist bei r = 3 ein Viertel des
-    Radius und bei r = 90 ein Promille.
-
-    Gemessen an einem Viertelbogen eines Zylinders r = 3: Die Einpassung findet
-    **r = 89,79** und meldet einen Rückstand von 0,0023 bei einer Schwelle von
-    0,08. Der ``spread`` misst absolut und in Sehnenhöhen der Polygonnäherung —
-    er meldet 20,26 bei einer Schwelle von 2,0, und die Form wird abgelehnt.
-
-    Der Fleck ist dabei zur Hälfte **Deckel**: Die Auswahl über den Winkel der
-    Schwerpunkte nimmt die Stirnflächen mit, und deren Punkte nahe der Achse
-    ziehen den Kreis auf. Die eingepasste Achse liegt deshalb quer zum
-    Zylinder — und genau darum meldet ``_chord_sag`` hier keine Sehnenhöhe,
-    sondern null: Was quer zu einer falschen Achse gemessen wird, entschuldigt
-    keine Abweichung.
+    Der frühere Schwerpunktfit meldete R89,79 statt R3 bei winzigem
+    relativem Restfehler. Die bekannte falsche Eingabe bleibt der Gegenfall;
+    ihr falscher Radius ist kein Sollwert des neuen Konturvertrags.
     """
-    import trimesh
-
     cylinder = trimesh.creation.cylinder(radius=3.0, height=30.0, sections=96)
     angle = np.arctan2(cylinder.triangles_center[:, 1], cylinder.triangles_center[:, 0])
     quarter = [int(index) for index in np.where((angle > 0.0) & (angle < math.pi / 2.0))[0]]
+    axial = np.abs(cylinder.face_normals[quarter, 2])
+    assert np.any(axial > 0.9) and np.any(axial < 0.1), "the patch includes caps and mantle"
 
     fit = fit_cylinder(cylinder, quarter)
 
-    assert fit is not None
-    assert fit.radius > 50.0, "the fit really is that far off"
-    assert fit.residual < CYLINDER_TOLERANCE, "and the residual really does not notice"
-    assert not fit.good, "but the spread does"
+    assert fit is None or not fit.good
 
 
 def test_a_ring_is_not_a_heap_of_flat_faces() -> None:
@@ -1427,8 +1409,8 @@ def test_the_normals_decide_the_shape_and_not_the_residual() -> None:
     Jede Facette eines aufgesetzten Kegels ist **ein** Dreieck von der
     Grundfläche zur Spitze; ihr Schwerpunkt liegt auf einem Drittel der Höhe,
     und damit liegen alle Schwerpunkte auf einem Kreis. Die
-    Zylindereinpassung rechnet über die Schwerpunkte und findet einen
-    tadellosen Zylinder — Rückstand 0,0000 — an einem Kegel mit 31 Grad.
+    frühere Zylindereinpassung fand dort einen tadellosen Zylinder. Der
+    Konturvertrag muss die Kegelfläche jetzt bereits selbst ablehnen.
     """
     from app.core.perceive.features import fit_cone, fit_cylinder
 
@@ -1445,7 +1427,7 @@ def test_the_normals_decide_the_shape_and_not_the_residual() -> None:
     cylinder = fit_cylinder(body, patch)
     cone = fit_cone(body, patch)
 
-    assert cylinder is not None and cylinder.good, "this is the trap: the cylinder looks perfect"
+    assert cylinder is None or not cylinder.good, "cone normals and corners do not prove a cylinder"
     # Halbwinkel aus Radius 6 und Höhe 10: atan(6/10) = 30,96°.
     assert cone is not None and cone.half_angle == pytest.approx(30.9, abs=1.0)
 
@@ -3675,7 +3657,18 @@ def test_a_patch_on_a_different_cylinder_stays_apart() -> None:
 
     body = trimesh.creation.cylinder(radius=15.0, height=4.0, sections=72)
     small, big = _mantle_split_by_angle(body, 45.0)
-    body = _with_small_arc_scaled(body, small, 1.05)
+    # Getrennte Originalecken: Die Änderung des kleinen Bogens darf nicht
+    # gleichzeitig die Randfacetten des großen Bogens verformen. Der frühere
+    # gemeinsame Eckbestand erzeugte dort unbemerkt zwei echte Ausreißer.
+    larger = body.submesh([big], append=True)
+    smaller = body.submesh([small], append=True)
+    smaller.apply_scale((1.05, 1.05, 1.0))
+    body = trimesh.util.concatenate([larger, smaller])
+    big = list(range(len(larger.faces)))
+    small = list(range(len(larger.faces), len(body.faces)))
+    for patch, expected in ((big, 15.0), (small, 15.75)):
+        points = np.asarray(body.vertices)[np.unique(body.faces[patch])]
+        assert np.linalg.norm(points[:, :2], axis=1) == pytest.approx(expected, abs=1e-9)
     first, second = fit_cylinder(body, big), fit_cylinder(body, small)
     assert first is not None and second is not None
     assert _same_cylinder(body, (first, big), (second, small)), (
@@ -4164,7 +4157,7 @@ def test_bores_survive_any_triangle_count() -> None:
             f"bei {len(mesh.raw.faces)} Dreiecken kamen {len(bores)} Bohrungen zurück"
         )
         for bore in bores:
-            assert bore.params["diameter"] == pytest.approx(5.19, abs=0.02)
+            assert bore.params["diameter"] == pytest.approx(5.2, abs=5e-6)
 
 
 def test_the_spread_of_a_bore_does_not_follow_the_triangle_count() -> None:

@@ -40,16 +40,11 @@ _log = get_logger(__name__)
 #: Wie weit das tatsächliche Spiel vom Profilwert abweichen darf, bevor es ein
 #: Befund wird.
 #:
-#: §14 sagt „im Rahmen von ``EPS_GEOM``", und das stimmt für den Fall, den er
-#: meinte: zwei **konstruierte** Maße unterscheiden sich exakt bis aufs
-#: Fließkommarauschen. Gemessen wird hier aber an erkannten Merkmalen, und
-#: deren Maße kommen bei B-Rep-Körpern aus der Tessellation — die trägt
-#: konstant etwa 0,025 mm (die halbe ``DEFLECTION``; gemessen in der
-#: Live-Durchsicht vom 05.08.2026, bei Ø 6 wie bei Ø 120). Mit ``EPS_GEOM``
-#: wäre jede Passung auf einem exakten Körper „verletzt". Fünffaches
-#: ``EPS_DISPLAY`` liegt sicher über dem Rauschen und weit unter jedem
-#: Spiel, über das eine Passung etwas aussagt. §14 ist entsprechend
-#: nachzuziehen — Bauplanänderung mit Ansage, siehe ROADMAP.
+#: §14 hält diese Prüfauflösung getrennt vom Materialprofil. Native
+#: analytische Maße kommen aus der Topologie, Netzmaße aus einer Einpassung.
+#: Der Bereich ist keine pauschale Genauigkeitszusage für fremde Netze:
+#: deren tatsächliches Radialband wird zusätzlich geprüft. Eine mögliche
+#: Überdeckung der Spielpassung verschwindet auch innerhalb dieses Bereichs nicht.
 FIT_TOLERANCE = EPS_DISPLAY * 5
 
 
@@ -318,6 +313,10 @@ def _check_one(scene: Scene, fit: Fit, profile: Profile) -> list[Finding]:
     wanted, materials = _wanted(scene, fit, hole_ref, pin_ref, profile)
     actual = hole_diameter - pin_diameter
     if abs(actual - wanted) <= FIT_TOLERANCE:
+        if fit.kind in {"clearance", "press"}:
+            uncertainty = _mesh_clearance(fit, hole, pin, hole_ref, wanted)
+            if uncertainty is not None:
+                return [uncertainty]
         return []
 
     return [
@@ -339,6 +338,65 @@ def _check_one(scene: Scene, fit: Fit, profile: Profile) -> list[Finding]:
             feature_ids=(hole_ref.feature_id,),
         )
     ]
+
+
+def _mesh_clearance(
+    fit: Fit, hole: Feature, pin: Feature, hole_ref: FeatureRef, wanted: float
+) -> Finding | None:
+    """Kreismaß und tatsächliches radiales Netzband nicht als dieselbe Messung behandeln.
+
+    Die Differenz der äußeren Bandgrenzen ist eine konservative Auskunft.
+    Sie beweist weder eine konkrete Kollision noch die passende Winkelstellung
+    zweier Polygone. Ein nicht belegtes Spiel bleibt deshalb ausdrücklich offen.
+    """
+    if not any(
+        "radial_min" in feature.params or "radial_max" in feature.params for feature in (hole, pin)
+    ):
+        return None
+    bands = []
+    for feature in (hole, pin):
+        if not any(key in feature.params for key in ("radial_min", "radial_max")):
+            diameter = diameter_of(feature)
+            assert diameter is not None
+            bands.append((diameter / 2.0, diameter / 2.0))
+            continue
+        low, high = _positive(feature, "radial_min"), _positive(feature, "radial_max")
+        if low is None or high is None or low > high:
+            return Finding(
+                code="fit.not_measurable",
+                severity="warning",
+                message=_(
+                    "Die Netzmaße dieser Passung sind nicht vollständig bestimmt. "
+                    "Die Merkmale erneut erkennen oder eine genauer aufgelöste Datei verwenden."
+                ),
+                values={"fit": fit.name},
+                object_id=hole_ref.object_id,
+                feature_ids=(hole_ref.feature_id,),
+            )
+        bands.append((low, high))
+    minimum = 2.0 * (bands[0][0] - bands[1][1])
+    maximum = 2.0 * (bands[0][1] - bands[1][0])
+    within = minimum >= wanted - FIT_TOLERANCE and maximum <= wanted + FIT_TOLERANCE
+    possible_interference = fit.kind == "clearance" and minimum < -EPS_GEOM
+    if within and not possible_interference:
+        return None
+    return Finding(
+        code="fit.mesh_uncertain",
+        severity="warning",
+        message=_(
+            "Die geschätzten Kreismaße passen, die tatsächlichen Netzflächen belegen das Spiel "
+            "aber nicht. Die Verbindung in Einbaulage prüfen oder eine genauer aufgelöste "
+            "Datei verwenden."
+        ),
+        values={
+            "fit": fit.name,
+            "clearance_min_mm": minimum,
+            "clearance_max_mm": maximum,
+            "expected": format_length(wanted),
+        },
+        object_id=hole_ref.object_id,
+        feature_ids=(hole_ref.feature_id,),
+    )
 
 
 def _wanted(

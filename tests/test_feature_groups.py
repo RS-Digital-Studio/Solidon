@@ -64,6 +64,41 @@ def _targets(group: FeatureActionGroup) -> tuple[str, ...]:
     return tuple(member.target for member in group.members)
 
 
+def test_fit_diagnostics_do_not_split_geometrically_equal_action_groups(
+    garden_pattern: tuple[MeshData, dict[str, Feature]],
+) -> None:
+    """Eine neu gemessene Unsicherheit ist kein zusätzliches Formmaß eines Lochs."""
+    mesh, features = garden_pattern
+    outside = sorted(
+        (
+            feature
+            for feature in features.values()
+            if feature.kind == "hole" and feature.params["diameter"] < 3
+        ),
+        key=lambda feature: feature.id,
+    )
+    selected = outside[0]
+    baseline = set(_targets(alike_for_action("move_feature", selected.id, features, mesh)))
+    assert len(baseline) == 8
+    changed = {
+        name: replace(
+            feature,
+            params={
+                key: value
+                for key, value in feature.params.items()
+                if key not in {"fit_error", "radial_min", "radial_max"}
+            },
+        )
+        for name, feature in features.items()
+    }
+    candidate = changed[outside[1].id]
+    changed[candidate.id] = replace(
+        candidate,
+        params={**candidate.params, "fit_error": 0.002, "radial_min": 0.99, "radial_max": 1.0},
+    )
+    assert set(_targets(alike_for_action("move_feature", selected.id, changed, mesh))) == baseline
+
+
 def test_resize_groups_the_measured_role_instead_of_every_hole(
     garden_pattern: tuple[MeshData, dict[str, Feature]],
 ) -> None:

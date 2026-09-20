@@ -131,19 +131,23 @@ def _fit_lines(document: Document, scene: Scene) -> list[str]:
 
     Der Agent konnte Passungen anlegen, aber nie nachsehen, welche es gibt —
     er sah nur die Verletzungen, die es bis in den Prüfbericht schafften.
-    Verletzt oder nicht steht dabei: die Angabe kommt aus denselben Befunden,
-    ausgewiesen am Namen der Passung.
+    Auch nicht messbare oder unsichere Passungen stehen dabei: Der Zustand
+    kommt aus denselben Befunden, ausgewiesen am Namen der Passung.
     """
     if not document.fits:
         return []
-    violated = {
-        str(finding.values.get("fit", ""))
-        for finding in scene.report.findings
-        if finding.code == "fit.violated"
-    }
+    states: dict[str, list[str]] = {}
+    for finding in scene.report.findings:
+        if finding.code.startswith("fit."):
+            message = (
+                tr("verletzt")
+                if finding.code == "fit.violated"
+                else " ".join(str(finding.message).split())
+            )
+            states.setdefault(str(finding.values.get("fit", "")), []).append(message)
     parts = []
     for fit in document.fits:
-        state = f" — {tr('verletzt')}" if fit.name in violated else ""
+        state = " — " + "; ".join(states[fit.name]) if fit.name in states else ""
         # Alle fünf Felder kommen aus der Projektdatei (§32). Ohne Rahmen:
         # Der Name einer Passung ist die Kennung, mit der der Agent sie
         # anspricht — in Anführungszeichen sähe er aus, als gehörten sie dazu.

@@ -114,6 +114,12 @@ Regel 21 und zugleich das, was die Agenten-Suite misst.
 
 ## Viele Formdetails bleiben ein Zustand
 
+Alle `fit.*`-Befunde aus der gemeinsamen Passungsprüfung erreichen
+`checks.check()` und die Passungszeile des Steckbriefs. Auch fehlende Maße,
+unsichere Netzkonturen und ungeeignete Gewindepaare bleiben damit am Namen
+der betroffenen Passung sichtbar; eine neue fachliche Diagnose braucht
+keine zweite Freigabeliste im Agenten.
+
 `checks.check()` behält jeden Rohbefund für Vorschlag und Prüfbericht.
 `checks.as_lines()` zählt nur `perceive.orphaned` je Körper und Schritt, bevor
 der Text zum Modell geht. So bleiben Diagnose und Klickziele vollständig,

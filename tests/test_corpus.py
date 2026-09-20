@@ -8,6 +8,7 @@ wird, und dass ein Passungspaar bemerkt, wenn sich der Boden unter ihm bewegt.
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 
 import pytest
@@ -20,6 +21,7 @@ from app.core.knowledge import profiles
 from app.core.scene import evaluate
 from app.core.scene.project import ProjectSources, load
 from app.core.types import Profile
+from app.core.units import EPS_GEOM
 
 DATA = Path(__file__).parent / "data"
 MESHES = DATA / "meshes"
@@ -104,7 +106,9 @@ def test_the_assembly_holds_with_the_material_it_was_built_for(profile: Profile)
 
     assert result.complete
     codes = {finding.code for finding in result.scene.report.findings}
-    assert "fit.violated" not in codes, "PETG is what the numbers were chosen for"
+    assert not any(code.startswith("fit.") for code in codes), (
+        "PETG is what both the circle dimensions and the mesh clearance were chosen for"
+    )
     assert "bore.compensated" in codes, "and the bore says it was widened"
 
 
@@ -113,19 +117,28 @@ def test_the_fit_notices_when_the_ground_moves() -> None:
     Hinschreiben.
 
     In einem anderen Material gedruckt kommt die Bohrung anders heraus — die
-    Toleranz bleibt, was das Paar sagt, und der Unterschied wird gemeldet statt
-    still hingenommen.
+    Toleranz bleibt, was das Paar sagt. Die Kreisdurchmesser ergeben in PLA
+    0,20 mm Spiel und liegen damit gerade noch im Prüfbereich um 0,25 mm.
+    Der tatsächliche 48-eckige Mantel unterschreitet dessen Untergrenze:
+    Eine unsichere Netzpassung muss sichtbar bleiben, ohne eine konkrete
+    Kollision zu behaupten.
     """
     opened = project()
     other = profiles.make_profile("centauri-carbon-2", "pla")
 
     result = evaluate(opened.document, other, sources=ProjectSources(opened))
 
-    violations = [
-        finding for finding in result.scene.report.findings if finding.code == "fit.violated"
+    findings = [
+        finding for finding in result.scene.report.findings if finding.code.startswith("fit.")
     ]
-    assert violations, "a fit written for PETG does not hold in PLA by itself"
-    assert violations[0].values["fit"] == "stift_1"
+    assert len(findings) == 1
+    assert findings[0].code == "fit.mesh_uncertain"
+    assert findings[0].values["fit"] == "stift_1"
+    assert findings[0].values["clearance_min_mm"] == pytest.approx(
+        6.15 * math.cos(math.pi / 48) - 5.95, abs=EPS_GEOM
+    )
+    assert findings[0].values["clearance_max_mm"] == pytest.approx(0.20, abs=EPS_GEOM)
+    assert findings[0].values["expected"] == "0.25 mm"
 
 
 def test_the_pair_points_at_features_that_exist(profile: Profile) -> None:

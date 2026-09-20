@@ -227,13 +227,13 @@ def slots_instead_of_half_bores(
             kind="slot",
             provenance="detected",
             params={
-                "diameter": round(slot.diameter, 4),
-                "length": round(slot.length, 4),
-                "travel": round(slot.travel, 4),
+                "diameter": slot.diameter,
+                "length": slot.length,
+                "travel": slot.travel,
                 "axis": slot.axis,
                 "direction": slot.direction,
                 "centre": slot.centre,
-                "depth": round(slot.depth, 4),
+                "depth": slot.depth,
                 "through": slot.through,
             },
             face_indices=slot.face_indices,
@@ -276,22 +276,10 @@ def open_slots_instead_of_fillets(
             continue
         axis = np.asarray(positive_axis(fit.axis))
         centre = np.asarray(fit.centre)
-        # Der Vorfit misst Facettenschwerpunkte. Für Flankentangenz und das
-        # Werkzeugmaß zählt der Kreis durch die tatsächlichen Eckpunkte.
-        arc_points = vertices[np.unique(np.asarray(body.faces)[patch])] - centre
-        radial = arc_points - np.outer(arc_points @ axis, axis)
-        u = radial[0] / np.linalg.norm(radial[0])
-        v = np.cross(axis, u)
-        flat = np.column_stack((radial @ u, radial @ v))
-        solved, _, rank, _ = np.linalg.lstsq(
-            np.column_stack((2.0 * flat, np.ones(len(flat)))),
-            np.sum(flat * flat, axis=1),
-            rcond=None,
-        )
-        if rank != 3:
-            continue
-        radius = math.sqrt(max(0.0, float(solved[2] + solved[:2] @ solved[:2])))
-        centre = centre + solved[0] * u + solved[1] * v
+        # Derselbe geprüfte Konturfit liefert Kreis und Achse. Eine zweite
+        # Einpassung über alle Ecken würde Flanken- und Sehnenpunkte wieder
+        # als Kreisecken zählen und das Werkzeugmaß beim Öffnen verändern.
+        radius = float(fit.radius)
         if radius <= tolerance:
             continue
         chosen, rim, has_flanks = _open_slot_shell(
@@ -745,9 +733,9 @@ def _slot_from(
         travel = stadium.travel
         diameter = stadium.radius * 2.0
     else:
-        # Die Zylinderanpassung misst Dreiecksschwerpunkte, also innerhalb des
-        # Kreisbogens. Die Breite tragen dagegen die bereits geprüften ebenen
-        # Flanken: Ihr Abstand bleibt auch nach erneutem Schneiden derselbe.
+        # Die bereits geprüften ebenen Flanken tragen die wirkliche Breite.
+        # Ihr Abstand bleibt auch nach erneutem Schneiden derselbe und muss
+        # nicht aus zwei nur angenähert gleichen Kreisradien entstehen.
         flank_distances = (flank_corners - centre) @ across
         diameter = float(np.ptp(flank_distances))
 

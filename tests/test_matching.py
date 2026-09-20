@@ -1055,6 +1055,39 @@ def test_anisotropic_face_diameter_is_not_an_exact_circular_fit() -> None:
     assert feature.id not in result.exact
 
 
+@pytest.mark.parametrize("factors", [(2.0, 2.0, 2.0), (-2.0, 2.0, 2.0), (2.0, 2.0, 3.0)])
+def test_cylinder_mesh_band_follows_the_actual_radial_scale(factors: tuple[float, ...]) -> None:
+    """Kreisbewahrende Abbildungen führen Fitfehler und Netzband als Längen mit."""
+    from app.core.geom.ops import as_transform
+    from app.core.geom.transform import scaling
+    from app.core.perceive.matching import transformed_features
+
+    feature = Feature(
+        id="bore",
+        kind="hole",
+        provenance="detected",
+        params={
+            "centre": (0.0, 0.0, 0.0),
+            "axis": (0.0, 0.0, 1.0),
+            "diameter": 30.0,
+            "depth": 8.0,
+            "fit_error": 0.001,
+            "residual": 0.001 / 15.0,
+            "radial_min": 14.7,
+            "radial_max": 15.0,
+        },
+    )
+    result = transformed_features({feature.id: feature}, as_transform(scaling(factors)))
+    assert feature.id in result.exact
+    params = result.candidates[feature.id].params
+    assert params["fit_error"] == pytest.approx(0.002)
+    assert params["residual"] == pytest.approx(0.001 / 15.0)
+    assert params["radial_min"] == pytest.approx(29.4)
+    assert params["radial_max"] == pytest.approx(30.0)
+    assert params["depth"] == pytest.approx(8.0 * factors[2])
+    assert feature.params["radial_min"] == 14.7
+
+
 def test_apply_mapping_keeps_every_field_of_a_feature() -> None:
     """``apply_mapping`` baute ein frisches ``Feature`` aus fünf von sieben
     Feldern — ``created_by`` und ``recognised`` fielen still weg.

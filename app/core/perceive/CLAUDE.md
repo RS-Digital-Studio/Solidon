@@ -52,8 +52,10 @@ punktweise Wendelabweichung und Gangtiefe müssen gemeinsam passen. Die
 bisherige Spektrumsprüfung bleibt für lange Gewinde erhalten.
 
 Geschlossene Langlöcher beziehen ihre Breite aus dem Abstand der geprüften
-ebenen Flanken. Die Bogenanpassung erkennt die Form, ihr an Dreiecksschwerpunkten
-gemessener Radius verkürzt jedoch das Maß beim wiederholten Bearbeiten.
+ebenen Flanken. Offene Langlöcher übernehmen Kreisradius und Achse aus
+demselben geprüften `CylinderFit`; ein zweiter Kreisfit über Flanken- oder
+Sehnenpunkte würde das Maß erneut verzerren. Beide Wege behalten die volle
+Rechengenauigkeit bis zur Anzeige.
 
 Rohrwände berücksichtigen den gemessenen Querversatz von Höhlung und Mantel.
 Beim Langloch zählt der weiter entfernte Endmittelpunkt einschließlich seiner
@@ -246,10 +248,14 @@ Steckbrief „Runde Wand“**, nicht Verrundung — das Ende einer Lasche, der
 Boden einer Nut, die Innenwand eines Clips haben keine Kante, zu der sie
 gehören könnten; die grauen Zeilen des Panels sagen das mit einem eigenen
 Satz (`actions.ROUND_WALL_HAS_NO_PLACE`). Ob die Ecken auf einem Kreis
-liegen, prüft `radial_cylinder` gegen `ROUND_WALL_TOLERANCE` (10 µm) und
+liegen, prüft der gemeinsame `fit_cylinder` gegen `ROUND_WALL_TOLERANCE` (10 µm) und
 nicht allein gegen die Schweißtoleranz: Die ist für Solidons eigene Netze
 bemessen, und eine eingelesene Wand liegt Mikrometer neben ihrem Kreis
-(Float32 der STL, Toleranz des fremden Kerns). **Und das Panel fragt die
+(Float32 der STL, Toleranz des fremden Kerns). `radial_cylinder` ergänzt
+mindestens 180° Umfang und den strengeren Normalenvertrag der radialen
+Bearbeitung. Die Haut muss zusammenhängen; ihre Trimmketten bleiben nach
+Abtrennung axialer Seiten eben. Eine vom Krümmungssplit ausgesparte Delle
+beweist keine vollständige runde Wand. **Und das Panel fragt die
 Bedingung der Operation, bevor es eine Zeile anbietet** (`fillet_blocked`,
 seit dem 15.09.2026): Eine Verrundung, die quer zu ihrer Achse nicht an
 genau zwei erkannte ebene Flächen grenzt, lässt sich nicht auf eine Kante
@@ -499,19 +505,43 @@ betroffenen Körper und erzeugenden Schritt; eine Karte bleibt aus. Andere
   Einträge, `CACHE_INDEX_LIMIT` ihr Gewicht in Flächenindizes —
   ein Eintrag für ein 400 000-Dreieck-Modell wiegt 3,9 MiB, und
   die Anzahl allein ließe fast ein Gigabyte zu.
-- **Ein Zylinderfit wird zweimal beurteilt, relativ und absolut.**
-  `CylinderFit.residual` misst gegen den eingepassten Kreis und ist auf den
-  Radius bezogen; er kann einen aufgeblähten Fit nicht sehen, weil ein
-  größerer Radius seinen eigenen Rückstand verbessert. `CylinderFit.spread`
-  misst deshalb absolut, in **Sehnenhöhen der Polygonnäherung**
-  (`_chord_sag`): Ein Netz beschreibt einen Kreis als Vieleck, und um genau
-  diesen Betrag liegt es daneben. Gemessen wird die Sehnenhöhe aus dem
-  Winkelschritt der Facettennormalen und ihrer Breite — beides ändert eine
-  Unterteilung nicht, die Facettenbreite dagegen schon. Wo der Fleck kein
-  Vieleck um diese Achse ist (Normalen nicht senkrecht zur Achse, kein
-  Winkelsprung, keine Länge), gibt es keine Sehnenhöhe; dann greift
-  `ROUND_WALL_TOLERANCE` als Boden, und die Streuung wird in Millimetern
-  gemessen. Die Grenze steht in `CYLINDER_SPREAD`.
+- **Das Zylindermaß kommt aus belegten Konturecken.** Achse und
+  Achslage verwenden flächengewichtete Normalen und echte axiale Extrema;
+  alle quadratischen Terme liegen in einem zentrierten Maßrahmen. Die
+  zyklische Konturprüfung entfernt kollineare Unterteilungen vor der
+  Vereinfachung. Ein neuer Schnittendpunkt innerhalb einer Facette trägt
+  keinen Kreis: Erst verschiedene angrenzende Mantelnormalen belegen eine
+  ursprüngliche Kreisecke. Getrennte deckungsgleiche STL-Ecken zählen dabei
+  gemeinsam. Ganze Haut, einzelne Konturecken, Normalenrichtung und
+  aufgelöste Krümmung müssen passen; ein regelmäßiges Vieleck beweist keine
+  ursprüngliche Konstruktionsabsicht. Die Winkelgrenze gilt der gesamten
+  Krümmung, nicht jedem kleinen Facettenschritt. Auch ungestützte
+  Schnittendpunkte bleiben innerhalb des belegten Umkreises: Ein richtiger
+  Halbkreis macht lange Tangentenflanken nicht zu einem Zylindermantel.
+  Der nachfolgende Größenfilter vergleicht das radiale Netzband mit einer
+  konservativen Körperausdehnung quer zur Fitachse, nicht den größeren
+  Umkreis mit einer einzelnen kleineren Weltachsenbreite des Vielecks.
+- **Kreismaß, Fitfehler und tatsächliches Netzband bleiben getrennt.**
+  `CylinderFit.radius` ist ein geschätzter Kreisradius. `residual` misst
+  den mittleren Kontureckenfehler relativ dazu, `spread` normiert ihn mit
+  der unterteilungsfesten Sehnenhöhe (`_chord_sag`) und der numerischen
+  Untergrenze `ROUND_WALL_TOLERANCE`. `fit_error` ist der größte Fehler
+  aller belegten Kreisecken in mm, keine Nennmaßunsicherheit.
+  `radial_min` und `radial_max` messen die wirklichen Dreiecksflächen
+  zur Fitachse; ein fehlender Bogen bekommt keine Schließsehne. Diese drei
+  Diagnosewerte reisen an Bohrung, Zapfen und Zylinderverrundung mit.
+  Sie enthalten kein Fertigungsspiel und ersetzen keine Einbau- oder
+  Kollisionsprüfung. `None` an alten von Hand erzeugten Fits ist kein
+  Nullfehler. Der Abbruch läuft durch Kontur- und Dreiecksblöcke; erst die
+  vollständige Erkennung schreibt ihren Merkmalscache.
+  `residual` bleibt beim Nachführen dimensionslos; `fit_error` und die
+  beiden radialen mm-Maße skalieren mit der belegten radialen Dehnung.
+- **Eine benachbarte Torusfacette gehört nicht zum Zylindermaß.** Bleibt
+  sie beim Krümmungssplit an einer Säule hängen, schlägt die bereits
+  belegte Torusachse eine Teilung vor. Der vollständige Zylinder und die
+  vollständig ergänzte, angrenzende Rundung müssen beide ihre normalen
+  Formprüfungen bestehen. Die Auskunft verwirft keine Restfläche und
+  erweitert keine Maßtoleranz.
 - **Was zerfällt, wird wieder zusammengeführt.** Ein Mantel kommt aus
   der Fleckenbildung oft in Stücken; `_merged_cylinders`, `_merged_cones`
   und `_merged_tori` machen daraus wieder **ein** Merkmal. Anker ist, was von

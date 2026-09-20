@@ -339,7 +339,7 @@ def _recognise_region(
         if feature.id in roles:
             feature = replace(feature, params={**feature.params, "inner": roles[feature.id]})
         if feature.kind == "hole":
-            fit = detection.fit_cylinder(body, list(feature.face_indices))
+            fit = detection.fit_cylinder(body, list(feature.face_indices), check_cancelled=check)
             if fit is None or not fit.good:
                 continue
             feature = replace(

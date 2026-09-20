@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from app.core.agent import checks
 from app.core.geom.mesh import read_mesh
 from app.core.geom.transform import place_on_bed
 from app.core.ingest.loader import normalise
@@ -14,6 +15,7 @@ from app.core.knowledge import profiles
 from app.core.perceive.digest import digest, new_feature_lines
 from app.core.perceive.features import detect
 from app.core.scene import fits as fit_check
+from app.core.scene.evaluate import EvaluationResult
 from app.core.types import (
     Document,
     Feature,
@@ -447,6 +449,86 @@ def clearance_fit() -> Fit:
         kind="clearance",
         tolerance="auto:",
     )
+
+
+def test_a_coarse_circle_measure_does_not_prove_actual_mesh_clearance(profile: Profile) -> None:
+    """Ø30 gegen Ø29,6 hat rechnerisch Spiel, die 16-Eck-Innenkontur aber nicht."""
+    import math
+
+    scene = pin_and_hole(30.0, 29.6, profile)
+    scene.fits = [replace(clearance_fit(), tolerance=0.4)]
+    for object_id, feature_id, radius, segments in (
+        ("obj_1", "hole_1", 15.0, 16),
+        ("obj_2", "pin_1", 14.8, 64),
+    ):
+        feature = scene.objects[object_id].features[feature_id]
+        scene.objects[object_id].features[feature_id] = replace(
+            feature,
+            params={
+                **feature.params,
+                "fit_error": 0.0,
+                "radial_min": radius * math.cos(math.pi / segments),
+                "radial_max": radius,
+            },
+        )
+    found = fit_check.check(scene, profile)
+    assert len(found) == 1
+    assert found[0].code == "fit.mesh_uncertain"
+    assert found[0].values["clearance_min_mm"] < 0.0
+    assert found[0].values["clearance_max_mm"] > 0.4
+    assert found[0].object_id == "obj_1"
+    assert found[0].feature_ids == ("hole_1",)
+    scene.report = Report(tuple(found))
+    assert found[0] in checks.check(EvaluationResult(scene))
+    document = Document(format_version=1, app_version="0.0.1", fits=scene.fits)
+    fit_line = next(
+        line for line in digest(scene, document).splitlines() if line.startswith("Passungen:")
+    )
+    assert str(found[0].message) in fit_line
+
+
+def test_fine_contours_keep_the_existing_measurable_fit_contract(profile: Profile) -> None:
+    """Ein tatsächlich enges Netzband liegt vollständig innerhalb der Prüfauflösung."""
+    scene = pin_and_hole(30.0, 29.6, profile)
+    scene.fits = [replace(clearance_fit(), tolerance=0.4)]
+    for entry in scene.objects.values():
+        for name, feature in entry.features.items():
+            radius = feature.params["diameter"] / 2
+            entry.features[name] = replace(
+                feature,
+                params={**feature.params, "radial_min": radius - 0.005, "radial_max": radius},
+            )
+    assert fit_check.check(scene, profile) == []
+
+
+@pytest.mark.parametrize(
+    "band",
+    [
+        {"radial_min": 15.0},
+        {"radial_min": -1.0, "radial_max": 15.0},
+        {"radial_min": 15.1, "radial_max": 15.0},
+        {"radial_min": float("nan"), "radial_max": 15.0},
+    ],
+)
+def test_incomplete_mesh_band_does_not_fall_back_to_a_successful_circle_measure(
+    profile: Profile, band: dict[str, float]
+) -> None:
+    """Vorhandene, aber ungültige Messdaten sind keine Erlaubnis zum Raten."""
+    scene = pin_and_hole(30.0, 29.6, profile)
+    scene.fits = [replace(clearance_fit(), tolerance=0.4)]
+    entry = scene.objects["obj_1"]
+    feature = entry.features["hole_1"]
+    entry.features[feature.id] = replace(feature, params={**feature.params, **band})
+    findings = fit_check.check(scene, profile)
+    assert len(findings) == 1
+    assert findings[0].code == "fit.not_measurable"
+    scene.report = Report(tuple(findings))
+    assert findings[0] in checks.check(EvaluationResult(scene))
+    document = Document(format_version=1, app_version="0.0.1", fits=scene.fits)
+    fit_line = next(
+        line for line in digest(scene, document).splitlines() if line.startswith("Passungen:")
+    )
+    assert str(findings[0].message) in fit_line
 
 
 @pytest.mark.parametrize("kind", ["pin", "cone", "face"])

@@ -2135,6 +2135,42 @@ def test_the_moved_bore_keeps_its_identity(profile: Profile) -> None:
     assert versetzt.params["centre"][0] == pytest.approx(15.0, abs=0.5), versetzt.params["centre"]
 
 
+def test_repeated_bore_moves_preserve_the_measured_circle(profile: Profile) -> None:
+    """Der neue Konturvertrag braucht keine frühere Schwerpunktszugabe am Werkzeug."""
+    from app.core.slice.analysis import cross_section
+
+    entry, hole = _block_with_a_bore(profile)
+    for x in (-5.0, 5.0, 15.0):
+        entry = _run_op("move_feature", entry, profile, at_feature=hole, x=x, y=0.0, z=0.0).outputs[
+            0
+        ]
+        assert entry.mesh.is_watertight
+        section = cross_section(as_mesh_data(entry.mesh), 0.0)
+        assert section is not None and section.geom_type == "Polygon"
+        assert len(section.interiors) == 1
+        points = np.asarray(section.interiors[0].coords)
+        radii = np.linalg.norm(points - np.array([x, 0.0]), axis=1)
+        assert float(radii.max()) == pytest.approx(4.0, abs=EPS_GEOM)
+        found = [feature for feature in detect(entry.mesh).values() if feature.kind == "hole"]
+        assert len(found) == 1
+        assert found[0].params["diameter"] == pytest.approx(8.0, abs=EPS_GEOM)
+
+
+@pytest.mark.parametrize("extension", [0.0, 3.0])
+def test_stretched_bore_section_preserves_its_measured_circle(
+    profile: Profile, extension: float
+) -> None:
+    """Eine längere Wiederherstellung ändert nur den axialen Umfang, nie den Durchmesser."""
+    from app.core.geom.prepare_ops import _stretched_section
+
+    entry, hole = _block_with_a_bore(profile)
+    feature = entry.features[hole]
+    body = _stretched_section(feature, np.array([0.0, 0.0, 1.0]), extension)
+    assert body is not None and body.is_watertight
+    radial = body.raw.vertices[:, :2] - np.asarray(feature.params["centre"])[:2]
+    assert float(np.linalg.norm(radial, axis=1).max()) == pytest.approx(4.0, abs=EPS_GEOM)
+
+
 def test_a_feature_that_cannot_be_moved_says_so(profile: Profile) -> None:
     """Drei Arten lassen sich nicht versetzen, und das ist eine Auskunft.
 
