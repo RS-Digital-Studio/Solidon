@@ -31,6 +31,7 @@ from app.core.slice.analysis import (
     island_layers,
     narrowest_measured,
     support_on_model,
+    tapered_layers,
     total_overhang,
     worst_overhang,
 )
@@ -56,6 +57,12 @@ SMALL_FOOTPRINT = 400.0
 #: Ab diesem Verhältnis von Höhe zu kleinster Grundkante ist ein Teil schlank
 #: genug, dass die Düse es beim Anfahren kippen kann.
 SLENDER_RATIO = 4.0
+
+#: Ab diesem Anteil der Schichten mit einem Keil in der Wand lohnt es, die
+#: Außenwand zuerst zu legen. Der Becher im Organizer vom 20.09.2026 steht auf
+#: neun Zehnteln der Höhe; ein Keil, der nur eine Schulter lang ist, hinterlässt
+#: ein paar Rillen, aber kein Band, für das man die Wandreihenfolge ändert.
+TAPERED_LAYERS_SHARE = 0.2
 
 #: Überhangfläche in mm², ab der Stützen mehr nützen als kosten. Darunter
 #: trägt die Schicht darunter genug, dass ein Absacken in der Wand verschwindet.
@@ -787,6 +794,40 @@ def _from_geometry(
                     "Mit dieser Linienbreite passen zwei Bahnen in die dünnste "
                     "Stelle. Bei breiteren Linien kann der Slicer dort nur eine "
                     "variable Bahn oder Lückenfüllung erzeugen."
+                ),
+                severity="warning",
+            )
+        )
+
+    # **Ein Keil in der Wand zeichnet sich durch die Außenwand ab.** Der
+    # Organizer vom 20.09.2026: Außenwand 1,0 mm, in den spitzen Enden je ein
+    # Becher, der die Wand von innen berührt — auf 24 mm Umfang läuft die
+    # Stärke stetig von 1,0 auf 3,0 mm. Arachne wechselt dort die Wandzahl
+    # Bahn für Bahn, die Innenwände werden zuerst gelegt, und ihre
+    # Übergangsstücke wölben die dünne Außenwand darüber: ein Band aus Rillen
+    # über die ganze Höhe, an beiden Enden. Zuerst gelegt liegt die Außenwand
+    # auf glattem Grund, und die Übergänge bleiben innen, wo sie niemand sieht.
+    #
+    # Nicht, wo Stützen nötig sind: Eine zuerst gelegte Außenwand kragt ohne
+    # Innenwand neben sich vor, und an steilen Überhängen ist das der
+    # schlechtere Tausch.
+    if (
+        result.layers
+        and tapered_layers(result) >= TAPERED_LAYERS_SHARE * len(result.layers)
+        and settings.shell.wall_generator == "arachne"
+        and not settings.shell.outer_wall_first
+        and not needs_support
+    ):
+        advice.append(
+            _advice(
+                settings,
+                path="shell.outer_wall_first",
+                value=True,
+                reason=_(
+                    "Die Wandstärke läuft an der Außenkontur stetig über mehrere "
+                    "Bahnen. Mit variabler Bahnbreite wechselt dort die Wandzahl, "
+                    "und zuerst gelegte Innenwände zeichnen das durch die Außenwand "
+                    "ab. Zuerst gelegt liegt die Außenwand auf glattem Grund."
                 ),
                 severity="warning",
             )

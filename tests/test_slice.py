@@ -11,6 +11,7 @@ import math
 from itertools import pairwise
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 import numpy as np
 import pytest
@@ -1186,4 +1187,83 @@ def test_the_thinnest_part_is_looked_at_first() -> None:
     left, _bottom, right, _top = first.bounds
     assert right - left == pytest.approx(0.2, abs=0.001), (
         "der dünnste Streifen steht vorn, nicht der erste der Liste"
+    )
+
+
+# --- der Keil in der Wand (§22.2) ----------------------------------------------
+
+
+def _extruded(outline: Any, height: float = 10.0) -> MeshData:
+    """Ein Querschnitt als Körper — das ist die Bauart der Prüfkörper hier."""
+    assert outline.geom_type == "Polygon", "der Querschnitt muss ein Teil sein"
+    return on_bed(trimesh.creation.extrude_polygon(outline, height))
+
+
+def _rounded_box_wall(wall: float = 1.0) -> tuple[Any, Any]:
+    """Außenkontur 60 auf 40 mit Rundungen R6 und ihre Wand: die Bezugsform."""
+    from shapely.geometry import box
+
+    outer = (
+        box(0.0, 0.0, 60.0, 40.0).buffer(6.0, join_style="round").buffer(-6.0, join_style="round")
+    )
+    return outer, outer.buffer(-wall)
+
+
+def test_a_cup_touching_the_outer_wall_is_measured_as_a_taper() -> None:
+    """Der Organizer vom 20.09.2026: Außenwand 1,0 mm, in der Ecke ein Becher,
+    der die Wand berührt — auf 24 mm Umfang läuft die Stärke von 1,0 auf
+    3,0 mm, und der Slicer mit variabler Bahnbreite wechselt dort die
+    Wandzahl. Gedruckt mit Solidons Werten: ein Band aus Rillen über die
+    Höhe, an beiden Enden. Die Messung war der fehlende Anschluss.
+    """
+    from shapely.geometry import Point, box
+
+    from app.core.slice.analysis import TAPER_RUN, tapered_layers
+
+    outer, inner = _rounded_box_wall()
+    block = box(-1.0, -1.0, 21.0, 21.0)
+    hole = Point(10.9, 10.9).buffer(9.0, quad_segs=64)
+    cup = outer.difference(inner.difference(block)).difference(hole)
+
+    result = slice_body(_extruded(cup), 0.2, support_volume=False)
+
+    middle = result.layers[len(result.layers) // 2]
+    assert middle.taper_length >= 2.0 * TAPER_RUN, (
+        "der Keil läuft an zwei Wänden aus dem Becher heraus"
+    )
+    assert tapered_layers(result) == len(result.layers), "und auf jeder Schicht"
+
+
+def test_an_even_wall_and_a_square_junction_are_no_taper() -> None:
+    """Zwei Formen, die ein Slicer ohne Übergänge druckt, und die Messung
+    muss beide von einem Keil unterscheiden: die gleichmäßige Wand um eine
+    Rundung — Anstieg null — und die Trennwand, die rechtwinklig auf die
+    Außenwand trifft — ein Sprung über das Band hinaus, kein Verlauf.
+    """
+    from shapely.geometry import box
+
+    from app.core.slice.analysis import tapered_layers
+
+    outer, inner = _rounded_box_wall()
+    even = outer.difference(inner)
+    divided = outer.difference(inner.difference(box(29.5, -1.0, 30.5, 41.0)))
+
+    for name, outline in (("gleichmäßig", even), ("Trennwand", divided)):
+        result = slice_body(_extruded(outline), 0.2, support_volume=False)
+        assert tapered_layers(result) == 0, f"{name}: kein Keil, nirgends"
+
+
+def test_a_part_without_a_cavity_has_no_wall_to_taper() -> None:
+    """Der Gitterbecher: 224 Stege je Schicht, keiner mit Innenkontur. Die
+    Messung fragt nur Teile mit Loch — sonst kostete sie dort, wo sie nichts
+    zu sagen hat.
+    """
+    from app.core.slice.analysis import taper_length
+
+    result = slice_body(on_bed(trimesh.creation.box(extents=(20.0, 20.0, 20.0))), 0.2)
+
+    assert all(layer.taper_length == 0.0 for layer in result.layers)
+    assert (
+        taper_length(cross_section(on_bed(trimesh.creation.box(extents=(20.0, 20.0, 20.0))), 10.0))
+        == 0.0
     )

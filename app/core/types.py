@@ -1997,6 +1997,16 @@ class LayerInfo:
     quer durch die Luft spannt — und dass niemand sie las, hat einen Satz
     Behälter gekostet, deren Ringschulter der Slicer mit 24 mm freien Bahnen
     überspannte."""
+    taper_length: float = 0.0
+    """Wie viel Außenkontur dieser Schicht auf einem **Keil** liegt, in
+    Millimetern (§22.2): einer Wand, deren Stärke stetig über mehrere Bahnen
+    läuft, statt zu springen oder gleich zu bleiben.
+
+    Ein runder Becher, der eine Außenwand von innen berührt, macht aus zwei
+    Wänden von je einem Millimeter auf zwei Zentimetern Umfang eine von drei —
+    und ein Slicer mit variabler Bahnbreite wechselt dort die Wandzahl Bahn
+    für Bahn. Zuerst gelegte Innenwände zeichnen diese Übergänge durch die
+    Außenwand ab (Organizer vom 20.09.2026). Null heißt: keine solche Stelle."""
 
 
 @dataclass(frozen=True, slots=True)

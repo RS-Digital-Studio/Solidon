@@ -100,6 +100,33 @@ WIDTH_SCAN_PARTS = 64
 #: kostete mehr als alles andere zusammen.
 WIDTH_INTERESTING = 2.0
 
+#: Der Keil (:func:`taper_length`): eine Wand, deren Stärke entlang der
+#: Außenkontur stetig läuft. Gemessen wird alle ``TAPER_STEP`` Millimeter der
+#: Abstand der Außenkontur zur nächsten Innenkontur. Ein Messpunkt gehört zum
+#: Keil, wenn seine Stärke zwischen ``TAPER_FROM`` und ``TAPER_TO`` liegt und
+#: sich gegenüber dem Punkt ``TAPER_WINDOW`` Millimeter weiter oder zurück —
+#: der ebenfalls im Band liegt — um mindestens ``TAPER_RISE`` unterscheidet.
+#: Eine zusammenhängende Strecke zählt ab ``TAPER_RUN``.
+#:
+#: Die Grenzen sind Geometrie, keine Bahnen: Unter 0,6 mm ist es eine dünne
+#: Wand und die Frage eine andere (:func:`minimum_width`); über 4 mm füllt
+#: jeder Slicer die Mitte mit Muster, und die Wandzahl ändert sich nicht mehr.
+#: Der Becher im Organizer vom 20.09.2026 läuft von 1,0 auf 3,0 mm über
+#: 24 mm, also um 0,25 auf vier Millimeter; verlangt wird ein Anstieg, den
+#: eine Bahnbreite nicht erklärt. Verglichen wird über ein Fenster und nicht
+#: von Punkt zu Punkt, weil ein Keil an seiner dünnsten Stelle für einen
+#: Moment flach läuft — dort riss die Strecke sonst in zwei zu kurze Hälften.
+#: Eine Trennwand, die rechtwinklig auf die Außenwand trifft, springt: Der
+#: Partner vier Millimeter weiter liegt außerhalb des Bandes, der Vergleich
+#: entfällt, und was an Zwischenwerten bleibt, ist kürzer als die Mindestlänge.
+#: Eine gleichmäßige Wand hat keinen Anstieg, auch um eine Rundung herum.
+TAPER_STEP = 1.0
+TAPER_FROM = 0.6
+TAPER_TO = 4.0
+TAPER_WINDOW = 4.0
+TAPER_RISE = 0.15
+TAPER_RUN = 8.0
+
 #: Ab welcher Breite eine ungestützte Fläche als Brücke zählt und nicht mehr
 #: als Überhang — **wenn kein Drucker bekannt ist**.
 #:
@@ -165,6 +192,8 @@ class LayerMetrics:
     """Der ungestützte Bereich selbst — die Stützkarte braucht den Ort, nicht die Zahl."""
     islands: ShapelyPolygon | None = None
     """Die Inseln selbst — damit der Ergebnisaufbau sie nicht ein zweites Mal schneidet."""
+    taper_length: float = 0.0
+    """Wie viel Außenkontur auf einem Keil liegt (:func:`taper_length`)."""
 
 
 def slice_body(
@@ -340,6 +369,7 @@ def slice_body(
                 if metrics.overhang is None or metrics.overhang.is_empty
                 else _to_polygons(metrics.overhang),
                 bridge_width=metrics.bridge_width,
+                taper_length=metrics.taper_length,
             )
         )
 
@@ -542,6 +572,7 @@ def _repeated(source: LayerMetrics, shape: ShapelyPolygon) -> LayerMetrics:
         min_width=source.min_width,
         bridge_width=0.0,
         contour_count=source.contour_count,
+        taper_length=source.taper_length,
     )
 
 
@@ -1217,6 +1248,7 @@ def _measure(
         contour_count=_contour_count(shape),
         overhang=region,
         islands=island_region,
+        taper_length=taper_length(shape),
     )
 
 
@@ -1849,6 +1881,82 @@ def _total_area(parts: list[ShapelyPolygon]) -> float:
     if not parts:
         return 0.0
     return float(shapely.area(np.asarray(parts, dtype=object)).sum())
+
+
+def taper_length(shape: ShapelyPolygon) -> float:
+    """Wie viel Außenkontur dieser Schicht auf einem Keil liegt, in mm (§22.2).
+
+    Die Wandstärke entlang der Außenkontur ist der Abstand zur nächsten
+    Innenkontur desselben Teils. Gemessen alle :data:`TAPER_STEP` Millimeter,
+    vektorisiert in GEOS — ein Aufruf je Außenring, nicht je Punkt. Gezählt
+    werden zusammenhängende Strecken von Messpunkten, deren Stärke zwischen
+    :data:`TAPER_FROM` und :data:`TAPER_TO` liegt und sich gegenüber einem
+    Partner :data:`TAPER_WINDOW` weiter oder zurück um :data:`TAPER_RISE`
+    unterscheidet; kürzer als :data:`TAPER_RUN` zählt eine Strecke nicht.
+
+    Was das unterscheidet: Eine gleichmäßige Wand hat keinen Anstieg, auch um
+    eine Rundung herum. Eine Trennwand, die rechtwinklig anschließt, springt
+    in zwei Messpunkten über :data:`TAPER_TO` hinaus, und ein Partner
+    außerhalb des Bandes zählt nicht. Nur die stetig dicker werdende Wand —
+    Becher an der Ecke, Rippe, die in einen Bogen ausläuft, runde Außenecke
+    über einer scharfen Innenecke — liefert eine lange Strecke mit Anstieg,
+    und genau dort wechselt ein Slicer mit variabler Bahnbreite die Wandzahl.
+
+    Ein Teil ohne Innenkontur hat keine Wand in diesem Sinn und meldet null.
+    """
+    if shape.is_empty:
+        return 0.0
+    total = 0.0
+    parts = shape.geoms if isinstance(shape, MultiPolygon) else (shape,)
+    window = max(1, round(TAPER_WINDOW / TAPER_STEP))
+    for part in parts:
+        if not part.interiors:
+            continue
+        inner = shapely.multilinestrings(
+            [shapely.linestrings(np.asarray(ring.coords)) for ring in part.interiors]
+        )
+        outer = shapely.linearrings(np.asarray(part.exterior.coords))
+        length = float(shapely.length(outer))
+        if length < TAPER_RUN:
+            continue
+        stations = np.arange(0.0, length, TAPER_STEP)
+        points = shapely.line_interpolate_point(outer, stations)
+        thickness = shapely.distance(points, inner)
+        in_band = (thickness >= TAPER_FROM) & (thickness <= TAPER_TO)
+        # Der Ring ist geschlossen: Der Partner des letzten Punkts liegt
+        # hinter dem Ringschluss, ``roll`` holt ihn von vorn.
+        ahead = np.roll(thickness, -window)
+        behind = np.roll(thickness, window)
+        rises = (np.roll(in_band, -window) & (np.abs(ahead - thickness) >= TAPER_RISE)) | (
+            np.roll(in_band, window) & (np.abs(behind - thickness) >= TAPER_RISE)
+        )
+        tapered = in_band & rises
+        if not tapered.any():
+            continue
+        if tapered.all():
+            total += length
+            continue
+        # Zusammenhängende Strecken zählen — auch die, die über den
+        # Ringschluss hinweg zusammenhängen. Der Ring wird deshalb an einem
+        # nicht keilförmigen Punkt aufgeschnitten.
+        start = int(np.argmin(tapered))
+        rolled = np.roll(tapered, -start)
+        run = 0
+        for flag in rolled:
+            if flag:
+                run += 1
+                continue
+            if run * TAPER_STEP >= TAPER_RUN:
+                total += run * TAPER_STEP
+            run = 0
+        if run * TAPER_STEP >= TAPER_RUN:
+            total += run * TAPER_STEP
+    return float(total)
+
+
+def tapered_layers(result: SliceResult) -> int:
+    """Wie viele Schichten eine Keilstrecke tragen (:func:`taper_length`)."""
+    return sum(1 for layer in result.layers if layer.taper_length > EPS_GEOM)
 
 
 def narrowest(result: SliceResult) -> float:

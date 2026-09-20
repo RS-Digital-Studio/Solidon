@@ -23,12 +23,16 @@ SQUARE = ((0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0))
 
 
 def result_with(
-    overhangs: list[float], *, area: float = 5000.0, min_width: float = 5.0
+    overhangs: list[float],
+    *,
+    area: float = 5000.0,
+    min_width: float = 5.0,
+    tapers: list[float] | None = None,
 ) -> SliceResult:
     """Ein Schnittergebnis mit vorgegebener Überhangfläche je Schicht.
 
     Die Vorschläge lesen nur Kennzahlen; die Konturen stehen dabei, damit die
-    Schichten nicht leer sind.
+    Schichten nicht leer sind. ``tapers`` gibt je Schicht die Keilstrecke vor.
     """
     layers = tuple(
         LayerInfo(
@@ -38,6 +42,7 @@ def result_with(
             overhang_area=overhang,
             islands=(),
             min_width=min_width,
+            taper_length=0.0 if tapers is None else tapers[index],
         )
         for index, overhang in enumerate(overhangs)
     )
@@ -447,3 +452,58 @@ def test_no_setting_can_exceed_the_machine_without_a_word() -> None:
             silent.append(f"{path} = {wanted} (Maschine: {limit} = {ceiling:g})")
 
     assert not silent, "ohne ein Wort einstellbar:\n" + "\n".join(silent)
+
+
+# --- der Keil in der Wand: Außenwand zuerst (§22.2, §29) ---------------------------
+
+
+def _tapered(layers: int = 100, share: float = 1.0) -> SliceResult:
+    """Ein Körper ohne Überhang, dessen Wand auf einem Anteil der Schichten
+    einen Keil trägt — der Organizer, auf Kennzahlen reduziert."""
+    tapered = round(layers * share)
+    return result_with([0.0] * layers, tapers=[40.0] * tapered + [0.0] * (layers - tapered))
+
+
+def test_a_taper_in_the_wall_puts_the_outer_wall_first() -> None:
+    """Der Fund vom 20.09.2026: Ein Organizer mit 1,0-mm-Wand und einem Becher
+    in jedem Ende, gedruckt mit Solidons Werten — ein Band aus Rillen über
+    die ganze Höhe, genau an der Stelle, an der die Wand von 1,0 auf 3,0 mm
+    läuft. Arachne wechselt dort die Wandzahl, die Innenwände zuerst, und
+    ihre Übergänge wölben die Außenwand darüber. Solidon hatte für das Teil
+    keinen einzigen Vorschlag.
+    """
+    profile = profiles.make_profile()
+    settings = print_settings.resolve(profile)
+    assert settings.shell.wall_generator == "arachne" and not settings.shell.outer_wall_first
+
+    entries = advise.advise(settings, profile, _tapered())
+
+    chosen = next(entry for entry in entries if entry.path == "shell.outer_wall_first")
+    assert chosen.value is True
+    assert chosen.severity == "warning"
+
+
+def test_the_taper_rule_stays_quiet_where_it_would_not_help() -> None:
+    """Vier Lagen, in denen der Vorschlag nichts bringt oder schadet: Die
+    Außenwand liegt schon vorn; der Wandgenerator hat feste Bahnen und keine
+    Übergänge; das Teil braucht Stützen, und eine zuerst gelegte Außenwand
+    kragt an steilen Überhängen ohne Nachbarn vor; und ein Keil auf ein paar
+    Schichten ist eine Schulter, kein Band.
+    """
+    profile = profiles.make_profile()
+    base = print_settings.resolve(profile)
+
+    first = print_settings.with_path(base, "shell.outer_wall_first", True)
+    assert "shell.outer_wall_first" not in paths(advise.advise(first, profile, _tapered()))
+
+    classic = print_settings.with_path(base, "shell.wall_generator", "classic")
+    assert "shell.outer_wall_first" not in paths(advise.advise(classic, profile, _tapered()))
+
+    hanging = result_with([0.0, 0.0, 500.0, 0.0], tapers=[40.0] * 4)
+    spoken = advise.advise(base, profile, hanging)
+    assert "support.style" in paths(spoken), "die Lage verlangt Stützen"
+    assert "shell.outer_wall_first" not in paths(spoken)
+
+    shoulder = _tapered(share=advise.TAPERED_LAYERS_SHARE / 2.0)
+    assert "shell.outer_wall_first" not in paths(advise.advise(base, profile, shoulder))
+

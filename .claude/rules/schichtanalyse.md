@@ -395,6 +395,31 @@ Zwei-Bahn-Betrachtung begründet daher keine allgemeine Aussage, dass eine
 Wand nicht druckbar sei. Unterhalb der angesetzten Mindestbahnbreite fordert
 der Befund eine Kontrolle der tatsächlichen Materialbahnen im Slicer.
 
+**Und die dritte Breite ist keine Zahl, sondern eine Strecke.** `taper_length`
+misst je Schicht, wie viel Außenkontur auf einem **Keil** liegt: einer Wand,
+deren Stärke stetig über mehrere Bahnen läuft, statt gleich zu bleiben oder
+zu springen. Gemessen wird der Abstand der Außenkontur zur nächsten
+Innenkontur alle Millimeter, vektorisiert in GEOS; gezählt wird, was zwischen
+0,6 und 4 mm liegt und sich gegenüber dem Partner vier Millimeter weiter um
+mindestens 0,15 mm unterscheidet, ab acht Millimetern am Stück. Eine
+gleichmäßige Wand hat keinen Anstieg, auch um eine Rundung; eine Trennwand,
+die rechtwinklig anschließt, springt aus dem Band, und ihr Partner zählt
+nicht. Ein Teil ohne Innenkontur hat keine Wand in diesem Sinn.
+
+Warum das eine eigene Messung ist: Ein Slicer mit variabler Bahnbreite
+wechselt auf einem Keil die Wandzahl Bahn für Bahn, und die Übergangsstücke
+der zuerst gelegten Innenwände wölben die Außenwand darüber. Gemessen am
+Organizer vom 20.09.2026 (Außenwand 1,0 mm, in jedem spitzen Ende ein Becher,
+der die Wand berührt): 24 mm Umfang von 1,0 auf 3,0 mm, an 460 von 500
+Schichten, gedruckt mit Solidons Werten aus 0.4.3 — ein Band aus Rillen über
+die ganze Höhe, an beiden Enden, nur an der Keilstelle. Daraus der Vorschlag
+„Außenwand zuerst" (`advise.py`), sobald ein Fünftel der Schichten einen Keil
+trägt, der Wandgenerator variabel ist und keine Stützen nötig sind: Eine
+zuerst gelegte Außenwand kragt an steilen Überhängen ohne Innenwand neben sich
+vor, und dort wäre der Tausch der schlechtere. Was das kostet, ist gemessen:
+0,1 s an den 500 Schichten des Organizers, nichts am Gitterbecher, dessen
+Stege keine Innenkontur haben.
+
 ## Stabile IDs
 
 Feature-Erkennung liefert Provenienz-IDs, an denen Ops und Passungen hängen.
