@@ -24,6 +24,7 @@
 ## Produkt und Entscheidungen
 
 - [Alexander Schneider](alexander-schneider-kunde-und-mac-tester.md) · [Ralph W. Dietrich](ralph-dietrich-mac-kunde-3d-maus.md) — Kunden; Mac-Berichte stehen aus.
+- [Verkaufsphase und Demo-Zahlen](verkaufsphase-preise-und-demo-zahlen.md) — 69/199/249 €; 5000 Besucher, 1700 Downloads seit 23.08.
 - [Vorstufe vor dem Slicer](solidon-ist-die-vorstufe-vor-dem-slicer.md) · [Technische Produktreife](technische-produktreife-konzept.md) · [Firmennutzung](marktwert-zielgruppe-und-firmenvalidierung.md) — Maker, Einmalkauf.
 - [Viewport: zwei Renderer](viewport-zwei-renderer-messen.md) — GFX (pygfx) gewählt, VTK ausgebaut.
 - [Modellkette vor Freigabe](modellkette-vor-erzeugerfreigabe.md) · [KI-Hinweis sperrt](ki-hinweis-sperrt-den-ersten-modellaufruf.md) · [Kein Rechteübergang](neu-speichern-aendert-keine-urheberschaft.md) — TripoSG; Provenienz bleibt.
