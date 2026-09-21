@@ -90,6 +90,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-175 — Bauplan §30.1 um Winkel, gleich, Mittelpunkt, Vieleck und Langloch nachtragen](#rm-175) | Bedienung und Darstellung | Robert sagt den Nachtrag an; sechs Sätze liegen im Bericht W2 |
 | [RM-192 — Sieben Fenstertests des Merkmalfensters sind am HEAD rot](#rm-192) | Bedienung und Darstellung | `test_feature_panel.py`: Feldzugriff, Abbrechen-Knopf, Nennmaß-Hinweis, Tab-Reihenfolge und zwei Bausteinvorschauen — gemessen am 20.09.2026 in einem Arbeitsbaum, vor der nächsten Release-Abnahme beheben |
 | [RM-194 — Elf Werteschlüssel ohne Beschriftung, zwei Beschriftungen ohne Schlüssel](#rm-194) | Bedienung und Darstellung | `test_value_labels.py` (Fensterdatei) ist am HEAD rot: `clearance_max_mm`, `clearance_min_mm`, `geometry_source`, `intersects` (`fits.py`), `input_name`, `input_object`, `outputs`, `step` (`evaluate.py`), `mapped_triangles` (`kernel.py`), `middle` (`edit.py`), `references` (`errors.py`) ohne Eintrag in `_VALUE_NAMES`; `clearance_max_mm`, `clearance_min_mm` als Beschriftung ohne Schlüssel — gemessen am 20.09.2026 in einem frischen Arbeitsbaum am HEAD `9b8efa8c`, vor der nächsten Release-Abnahme beheben |
+| [RM-197 — Maßeditor im Bild: kein Bezugswechsel am Etikett, Beschriftungen mit Abstand zum Modell](#rm-197) | Bedienung und Darstellung | Entscheidung Robert, 21.09.2026 an Weg 1: das Auswahlfeld *Bezug ändern* hinter jeder Maßbeschriftung fällt weg; die Beschriftungen rücken vom Modell und von den Maßlinien ab und zeigen eindeutig, wohin sie gehören — in der laufenden Arbeit an P0.3/P0.4 (RM-188) einlösen |
 | [RM-195 — Der Gewindebolzen vereinigt Sweep und Kern noch mit der Fuzzy-Leiter](#rm-195) | Geometrie, Erkennung und Druckvorbereitung | `profiles.threaded_rod` (*Gewindebolzen*, `thread_exact`) geht weiter den Weg Sweep, Zuschnitt, Fuzzy-Leiter mit Untergrenze — bis zu 94 s (M10 × 1,5, L4) und die Stufe je Größe woanders; `helical_thread` näht dieselbe Sache in 30 ms — den Erzeuger darauf stellen, ISO-nahes Profil beibehalten (keine Maßänderung), `test_sketch_ops.py`, `test_exact_thread_features.py`, `test_brep.py` nachmessen |
 | [RM-196 — Ein exaktes Gewinde einzusetzen dauert acht bis dreizehn Sekunden](#rm-196) | Geometrie, Erkennung und Druckvorbereitung | Gemessen am 21.09.2026: Gewinde 8,2 s, Schraube 13,1 s, Mutter 9,0 s am exakten Träger (Netz 0,04 bis 0,07 s), Bauplan §31 verlangt unter 2 s. Der Bau selbst kostet 0,3 s; die Sekunden stecken in `edit.transformed` (zwei konvergierte Volumenintegrale je Bewegung, `INTEGRAL_RELATIVE_ERROR` 1e-9, an BSpline-Flanken je etwa fünf Sekunden) und im Volumen des Ergebnisses für `without_effect` — eine starre Bewegung erhält das Volumen, das Integral belegt dort nichts; vor der Release-Abnahme beheben oder gegen §31 ausweisen |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären |
@@ -1709,6 +1710,32 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Je Schlüssel entscheiden: Beschriftung in sechs Sprachen nachtragen oder den
   Wert aus `values` nehmen, wenn er keinem Kunden etwas sagt. Abnahme: die
   Datei läuft im Release-Tor grün.
+
+<a id="rm-197"></a>
+
+- [ ] **RM-197 — Maßeditor im Bild: kein Bezugswechsel am Etikett,
+  Beschriftungen mit Abstand zum Modell.** Robert, 21.09.2026, nach dem Klick
+  auf eine Bohrung an Weg 1 mit dem Maßeditor aus P0.3/P0.4 (RM-188): „das
+  wollte ich übersichtlicher, also das mit bezug ändern hintendran brauche ich
+  garnicht, außerdem wollte ich von den ganzen anzeigen einen weiteren abstand
+  zum modell und linien haben, damit es nicht stört und ich auch weiß wo etwas
+  hingeht."
+
+  Zwei Entscheidungen daraus:
+
+  1. **Das Auswahlfeld *Bezug ändern* hinter jeder Maßbeschriftung fällt
+     weg.** Der Bezugswechsel aus P0.4 bleibt über den Modellklick erreichbar;
+     ein Feld je Etikett verdoppelt die Breite jeder Beschriftung und steht
+     im Bild, wo das Modell steht.
+  2. **Die Beschriftungen rücken vom Modell und von den Maßlinien ab** und
+     zeigen eindeutig, zu welcher Linie und Kante sie gehören — Abstand zum
+     Körper und eine erkennbare Zuordnung, keine Etiketten quer über der
+     Platte und übereinander (am 21.09. lagen *Außenkante 2* und *Mitte 2*
+     auf der Kante und aufeinander, *Bohrung 4 – Abstand* auf der Platte).
+
+  Abnahme: Weg 1 öffnen, eine Bohrung anklicken — kein *Bezug ändern* im
+  Bild; jede Beschriftung steht frei neben dem Körper, und aus dem Bild geht
+  hervor, welche Linie sie bemaßt. Gehört zur laufenden Arbeit an P0.3/P0.4.
 
 <a id="rm-070"></a>
 

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable, Iterable, Mapping
-from itertools import pairwise
+from itertools import pairwise, product
 from typing import Any, Final, Protocol, cast, runtime_checkable
 
 import numpy as np
@@ -36,12 +36,13 @@ from PySide6.QtGui import (
     QRegion,
 )
 from PySide6.QtWidgets import (
+    QAbstractSpinBox,
     QApplication,
-    QComboBox,
     QDialog,
     QFrame,
     QHBoxLayout,
     QLabel,
+    QMenu,
     QPushButton,
     QScrollArea,
     QVBoxLayout,
@@ -784,40 +785,29 @@ class PlacementFlow(QObject):
         self._held_centre = ""
         self._reference_message = ""
         self._reference_boxes: list[QWidget] = []
-        self._reference_choices: list[QComboBox] = []
+        # **Der Bezugswechsel steht nicht im Bild** (Robert, 21.09.2026,
+        # RM-197: „das mit bezug ändern hintendran brauche ich garnicht").
+        # Bis dahin trug jedes Kantenmaß ein Auswahlfeld *Bezug ändern* hinter
+        # sich — die doppelte Breite je Beschriftung, mitten über der Platte.
+        # Die Wahl bleibt erreichbar, wo sie niemanden stört: als Kontextmenü
+        # des Maßes (Rechtsklick oder Menütaste, `_reference_menu`), gebaut je
+        # Aufruf und danach weggeräumt. Der Rahmen um das Feld bleibt: Er ist,
+        # was `redraw` an die Maßlinie legt und was die Maske freihält.
         for index, reference_field in enumerate((*self._measures, self._centre)):
             box = QWidget(self.viewport)
             layout = QHBoxLayout(box)
             layout.setContentsMargins(0, 0, 0, 0)
             layout.setSpacing(SPACE)
             layout.addWidget(reference_field)
-            choice = QComboBox(box)
-            choice.setObjectName(f"placement_reference_{index + 1}")
-            choice.setAccessibleName(tr("Bezug für Maß {number} ändern").format(number=index + 1))
-            choice.setToolTip(
-                tr("Bezug ändern erhält die Position. Eine dauerhafte Bindung entsteht nicht.")
+            reference_field.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+            reference_field.customContextMenuRequested.connect(
+                lambda at, slot=index: self._reference_menu(slot, at)
             )
-            choice.setMaxVisibleItems(8)
-            choice.activated.connect(
-                lambda selected, slot=index: self._reference_selected(slot, selected)
-            )
-            layout.addWidget(choice)
             self._reference_boxes.append(box)
-            self._reference_choices.append(choice)
-            self._watch(choice)
             box.hide()
         # **Die Tabulatortaste geht denselben Weg wie das Auge** (`oberflaeche.md`):
-        # Die Bezugslisten entstehen nach allen Feldern und stünden in der
-        # Fokuskette hinter der letzten Mitte — jede gehört hinter ihr Maß.
-        ordered = [
-            *(
-                widget
-                for pair in zip(self._measures, self._reference_choices[:2], strict=True)
-                for widget in pair
-            ),
-            *self._centre_measures,
-            self._reference_choices[2],
-        ]
+        # erst die zwei Kantenmaße, dann die Mitten.
+        ordered = [*self._measures, *self._centre_measures]
         for earlier, later in pairwise(ordered):
             QWidget.setTabOrder(earlier, later)
         self._timer = QTimer(self)
@@ -2169,25 +2159,53 @@ class PlacementFlow(QObject):
 
         self.session.placement_async(compute, done, lambda _detail: done(None))
 
-    def _reference_options(self, index: int) -> None:
-        """Tastatur und Modellwahl verwenden dieselben belegten Referenzen."""
+    def _reference_entries(self, index: int) -> list[tuple[str, tuple[str, str]]]:
+        """Menü und Modellwahl verwenden dieselben belegten Referenzen."""
         if self._surface is None or self._prepared is None:
-            return
-        choice = self._reference_choices[index]
+            return []
         entries = (
             [(identifier, "centre") for identifier, _ in self._prepared.centres]
             if index == 2
             else [(edge.id, edge.kind) for edge in self._prepared.edges]
         )
-        if [choice.itemData(row) for row in range(2, choice.count())] == entries:
-            return
-        with QSignalBlocker(choice):
-            choice.clear()
-            choice.addItem(tr("Bezug ändern"), None)
-            choice.addItem(tr("Im Modell wählen"), _PICK_IN_MODEL)
-            for number, (identifier, kind) in enumerate(entries, 1):
-                choice.addItem(self._reference_name(kind, number), (identifier, kind))
-            choice.setCurrentIndex(0)
+        return [
+            (self._reference_name(kind, number), (identifier, kind))
+            for number, (identifier, kind) in enumerate(entries, 1)
+        ]
+
+    def _reference_field(self, index: int) -> QWidget:
+        """Das Maß, an dem der Bezug mit dem Index hängt: zwei Kanten, eine Mitte."""
+        return (*self._measures, self._centre)[index]
+
+    def _reference_menu(self, index: int, at: QPoint | None = None) -> QMenu | None:
+        """Rechtsklick oder Menütaste auf einem Maß: den Bezug wechseln (RM-197).
+
+        Ein Zahlenfeld behält dabei sein gewohntes Menü — Kopieren, Einfügen,
+        Schritt auf und ab —, die Bezüge stehen darunter. Gebaut je Aufruf,
+        gezeigt über ``popup`` statt ``exec``: Ein ``exec`` hielte die
+        Ereignisschleife des Flusses an, und offscreen wartete es auf einen
+        Klick, den es nie gibt. Weggeräumt, sobald es zugeht
+        (`app/ui/CLAUDE.md`, „Ein Kontextmenü gehört seinem Klick").
+        """
+        entries = self._reference_entries(index)
+        if not entries or not self.active:
+            return None
+        field = self._reference_field(index)
+        line = field.lineEdit() if isinstance(field, QAbstractSpinBox) else None
+        menu = line.createStandardContextMenu() if line is not None else QMenu(field)
+        if line is not None:
+            menu.addSeparator()
+        menu.addSection(tr("Bezug ändern"))
+        pick = menu.addAction(tr("Im Modell wählen"))
+        pick.setData(_PICK_IN_MODEL)
+        for label, data in entries:
+            menu.addAction(label).setData(data)
+        menu.triggered.connect(
+            lambda action, slot=index: self._reference_selected(slot, action.data())
+        )
+        menu.aboutToHide.connect(menu.deleteLater)
+        menu.popup(field.mapToGlobal(at if at is not None else QPoint(0, field.height())))
+        return menu
 
     @staticmethod
     def _reference_name(kind: str, number: int) -> str:
@@ -2199,11 +2217,8 @@ class PlacementFlow(QObject):
         }
         return names[kind].format(number=number)
 
-    def _reference_selected(self, index: int, selected: int) -> None:
+    def _reference_selected(self, index: int, data: object) -> None:
         """Eine bewusste Wahl ändert nur den Bezug, niemals die Geometrie."""
-        choice = self._reference_choices[index]
-        data = choice.itemData(selected)
-        choice.setCurrentIndex(0)
         if data is None or self._surface is None or self._prepared is None:
             return
         self._begin_edit()
@@ -2214,12 +2229,13 @@ class PlacementFlow(QObject):
             self._reference_pick = index
             self._reference_message = tr(
                 "Auf den gewünschten Bezug dieser Fläche klicken "
-                "oder ihn im Feld Bezug ändern wählen."
+                "oder ihn mit Rechtsklick auf das Maß wählen."
             )
             self._show_input_for_edit()
             self.redraw()
             return
-        self._choose_reference(index, *data)
+        if isinstance(data, tuple) and len(data) == 2:
+            self._choose_reference(index, str(data[0]), str(data[1]))
 
     def _choose_reference(self, index: int, identifier: str, kind: str) -> None:
         if self._surface is None or self._prepared is None:
@@ -2233,11 +2249,10 @@ class PlacementFlow(QObject):
                 self._surface = placement.with_reference(
                     self._prepared, self._surface, index, identifier
                 )
-        except ValidationError:
-            self._reference_message = tr(
-                "Diese Bezüge fehlen oder liegen zu parallel. "
-                "Wählen Sie über Bezug ändern eine andere Kante oder Mitte."
-            )
+        except ValidationError as problem:
+            # Der Satz kommt aus dem Kern (`placement._reference_error`), damit
+            # Bild, Kommandozeile und Agent dieselbe Absage lesen.
+            self._reference_message = str(problem.detail or problem.title)
             self.redraw()
             return
         self._reference_pick = None
@@ -2263,7 +2278,7 @@ class PlacementFlow(QObject):
         ):
             self._reference_message = tr(
                 "Auf den gewünschten Bezug dieser Fläche klicken "
-                "oder ihn im Feld Bezug ändern wählen."
+                "oder ihn mit Rechtsklick auf das Maß wählen."
             )
             self.redraw()
             return
@@ -2313,14 +2328,14 @@ class PlacementFlow(QObject):
         if len(candidates) == 1:
             self._choose_reference(index, *candidates[0])
         else:
-            # Kein nächster Kandidat gewinnt eine Gleichlage. Die vorhandene
-            # Auswahlliste bleibt vollständig und ohne zusätzlichen Dialog.
+            # Kein nächster Kandidat gewinnt eine Gleichlage. Der Satz nennt
+            # den Weg zur vollständigen Liste; von selbst öffnet sich kein
+            # Menü — ein ``exec`` aus einem Arbeiterrückruf hielte den Fluss
+            # an, und die Modellwahl bleibt scharf.
             self._reference_message = tr(
                 "Hier ist kein eindeutiger Bezug getroffen. "
-                "Näher heranzoomen oder im Feld Bezug ändern auswählen."
+                "Näher heranzoomen oder mit Rechtsklick auf das Maß auswählen."
             )
-            self._reference_choices[index].setFocus()
-            self._reference_choices[index].showPopup()
             self.redraw()
 
     def _distance_changed(self, _value: float) -> None:
@@ -2981,17 +2996,6 @@ class PlacementFlow(QObject):
                 # Platzierung die wirkliche Geometrie statt eines Zwischenstands.
                 QTimer.singleShot(0, self.redraw)
                 return False
-            if (
-                watched in self._reference_choices
-                and isinstance(event, QKeyEvent)
-                and event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter)
-            ):
-                if event.type() == QEvent.Type.ShortcutOverride:
-                    event.accept()
-                    return True
-                if event.type() == QEvent.Type.KeyPress:
-                    watched.showPopup()
-                    return True
             if isinstance(event, QKeyEvent) and event.key() in (
                 Qt.Key.Key_Escape,
                 Qt.Key.Key_Return,
@@ -3049,6 +3053,34 @@ class PlacementFlow(QObject):
                 # mitten im Aufbau würde mehrere Linienlisten vermischen.
                 self.redraw()
         return super().eventFilter(watched, event)
+
+    def _body_on_screen(
+        self, screen: Callable[[Vec3], QPointF], bounds: QRect, margin: int
+    ) -> QRect | None:
+        """Die projizierte Hülle des Trägers, um ``margin`` erweitert — oder
+        ``None``, wenn neben ihr kein Platz im Bild bleibt.
+
+        Acht Ecken des Hüllquaders, geklemmt wie der Setzpunkt: Eine sehr nahe
+        Kamera projiziert jenseits von int32.
+        """
+        mesh = self._prepared_mesh
+        if mesh is None or mesh.triangle_count == 0:
+            return None
+        low, high = mesh.bounds.minimum, mesh.bounds.maximum
+        xs: list[int] = []
+        ys: list[int] = []
+        for corner in product((low[0], high[0]), (low[1], high[1]), (low[2], high[2])):
+            shown = screen(corner)
+            if not math.isfinite(shown.x()) or not math.isfinite(shown.y()):
+                return None
+            xs.append(max(bounds.left() - margin, min(round(shown.x()), bounds.right() + margin)))
+            ys.append(max(bounds.top() - margin, min(round(shown.y()), bounds.bottom() + margin)))
+        body = QRect(QPoint(min(xs), min(ys)), QPoint(max(xs), max(ys))).adjusted(
+            -margin, -margin, margin, margin
+        )
+        if body.contains(bounds):
+            return None
+        return body
 
     def redraw(self) -> None:
         if not self.active or self._disposed:
@@ -3318,8 +3350,11 @@ class PlacementFlow(QObject):
                     bound = max(self._prepared_mesh.bounds.diagonal, abs(edge.distance), 1.0)
                     field.set_range_mm(-bound, bound)
                     field.set_value_mm(edge.distance)
-            self._reference_options(index)
-            field.setToolTip(tr("Signierter Abstand der Zielmitte zum Bezug; kein Wandabstand."))
+            field.setToolTip(
+                tr("Signierter Abstand der Zielmitte zum Bezug; kein Wandabstand.")
+                + " "
+                + tr("Rechtsklick: Bezug ändern.")
+            )
             place(self._reference_boxes[index], start, end)
         centre = next(
             (entry for entry in surface.centres if entry.feature_id == self._centre_id), None
@@ -3344,7 +3379,7 @@ class PlacementFlow(QObject):
                     feature=name, distance=length(centre.distance)
                 )
             )
-            self._reference_options(2)
+            self._centre.setToolTip(tr("Rechtsklick: Bezug ändern."))
             self._centre.show()
             place(self._reference_boxes[2], screen(centre.point), screen(centre.point))
         # Der Platz für die Maßfelder ist der Raum **über** der Leiste, seit
@@ -3418,6 +3453,19 @@ class PlacementFlow(QObject):
                     1,
                 ).adjusted(-around, -around, around, around)
             )
+        # **Und der Körper selbst bleibt frei** (Robert, 21.09.2026, RM-197:
+        # „einen weiteren abstand zum modell und linien … damit es nicht stört
+        # und ich auch weiß wo etwas hingeht"). Jedes Feld wollte in die Mitte
+        # seiner Maßlinie, und die läuft über die Platte: Drei Beschriftungen
+        # standen auf dem Teil, zwei davon aufeinander. Die projizierte Hülle
+        # des Trägers wird deshalb als belegt geführt, mit demselben Abstand
+        # wie um den Setzpunkt — die Felder rücken an den nächsten freien
+        # Platz daneben, und die Verbindungslinie sagt, welches Maß sie
+        # bemaßen. Füllt der Körper das ganze Bild, gilt die alte Regel: Ein
+        # Feld außerhalb des Bildes ist keines.
+        body = self._body_on_screen(screen, bounds, room_around)
+        if body is not None:
+            occupied.append(body)
         positions: dict[QWidget, QRect] = {}
         for widget, wanted, _line in sorted(pending, key=lambda entry: -entry[0].width()):
             width, height = widget.width(), widget.height()

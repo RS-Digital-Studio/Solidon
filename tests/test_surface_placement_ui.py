@@ -18,7 +18,7 @@ from app.core.registry import REGISTRY
 from app.core.scene.history import OperationDraft
 from app.core.scene.project import load, save
 from app.ui.op_dialog import OperationDialog
-from app.ui.placement_flow import PlacementFlow
+from app.ui.placement_flow import _PICK_IN_MODEL, PlacementFlow
 from app.ui.render.api import PointerEvent
 from app.ui.session import Session
 
@@ -353,9 +353,12 @@ def test_reference_choice_changes_no_position_and_keeps_the_selected_edge_on_dra
         for edge in controller._prepared.edges
         if np.dot(edge.inward, surface.edges[0].inward) < -0.9
     )
-    choice = controller._reference_choices[0]
-    row = next(row for row in range(choice.count()) if choice.itemData(row) == (edge.id, edge.kind))
-    choice.activated.emit(row)
+    # Der Bezug kommt aus dem Menü des Maßes (RM-197) — hier über dessen
+    # Eintrag, ohne das Menü aufzuklappen.
+    data = next(
+        data for _, data in controller._reference_entries(0) if data == (edge.id, edge.kind)
+    )
+    controller._reference_selected(0, data)
     assert controller._surface.point == surface.point
     assert dialog.values() == before
     assert session.project.document is document
@@ -379,7 +382,7 @@ def test_reference_pick_rejects_foreign_body_and_early_enter_never_commits(flow)
     before = dict(dialog.values())
     document = session.project.document
     original = controller._surface
-    controller._reference_choices[0].activated.emit(1)
+    controller._reference_selected(0, _PICK_IN_MODEL)
     assert controller._reference_pick == 0
     object_id, point, cell, ray = viewport.hit
     viewport.hit = "foreign_body", point, cell, ray
@@ -396,21 +399,47 @@ def test_reference_pick_rejects_foreign_body_and_early_enter_never_commits(flow)
     assert session.project.document is document
 
 
-def test_reference_list_enter_opens_choices_instead_of_accepting_the_operation(flow):
-    """Die erreichbare Tastaturliste besitzt ihren Enter; der Entwurf bleibt stehen."""
-    from PySide6.QtCore import Qt
-    from PySide6.QtTest import QTest
+def test_the_reference_menu_hangs_on_the_dimension_and_changes_only_the_reference(
+    flow, qt_app: QApplication
+) -> None:
+    """Rechtsklick auf ein Maß bietet Modellwahl und belegte Bezüge; kein Feld dahinter (RM-197).
 
-    controller, session, _viewport, _dialog = flow
+    Das Auswahlfeld hinter jedem Maß ist am 21.09.2026 gefallen (Robert: „das
+    mit bezug ändern hintendran brauche ich garnicht"). Was bleibt, ist das
+    Menü des Maßes — und es ändert den Bezug, nie die Stelle.
+    """
+    from PySide6.QtCore import QPoint, Qt
+    from PySide6.QtWidgets import QComboBox, QMenu
+
+    controller, session, _viewport, dialog = flow
     controller.start()
     _point(controller, session)
-    choice = controller._reference_choices[0]
+    before = dict(dialog.values())
     document = session.project.document
-    QTest.keyClick(choice, Qt.Key.Key_Return)
-    assert choice.view().isVisible()
-    assert controller.active
+    surface = controller._surface
+    field = controller._measures[0]
+    assert field.contextMenuPolicy() == Qt.ContextMenuPolicy.CustomContextMenu
+    assert not controller._reference_boxes[0].findChildren(QComboBox)
+    edge = next(
+        edge
+        for edge in controller._prepared.edges
+        if np.dot(edge.inward, surface.edges[0].inward) < -0.9
+    )
+    field.customContextMenuRequested.emit(QPoint(1, 1))
+    menus = [menu for menu in field.findChildren(QMenu) if menu.isVisible()]
+    assert len(menus) == 1, "der Rechtsklick öffnet genau ein Menü am Maß"
+    offered = [(action.text(), action.data()) for action in menus[0].actions()]
+    assert any(data == _PICK_IN_MODEL for _, data in offered)
+    assert {data for _, data in offered} >= {data for _, data in controller._reference_entries(0)}
+    chosen = next(action for action in menus[0].actions() if action.data() == (edge.id, edge.kind))
+    chosen.trigger()
+    menus[0].hide()
+    qt_app.processEvents()
+    assert controller._surface.edges[0].id == edge.id
+    assert controller._surface.point == surface.point
+    assert dialog.values() == before
     assert session.project.document is document
-    choice.hidePopup()
+    assert controller.active
 
 
 def test_the_placement_worker_returns_in_the_qt_thread(qt_app: QApplication) -> None:
@@ -1284,18 +1313,15 @@ def test_tab_reaches_both_dimension_groups_and_returns_to_editable_values(
     controller._back.setFocus(Qt.FocusReason.OtherFocusReason)
     qt_app.processEvents()
     assert controller._back.hasFocus()
-    # Seit der Bezugswahl (20.09.2026) steht hinter jedem Kantenmaß seine
-    # Bezugsliste — und die Kette folgt dem Auge, nicht der Entstehung.
-    choices = controller._reference_choices
+    # Die Kette folgt dem Auge: die zwei Kantenmaße, dann die Mitten. Die
+    # Bezugslisten dazwischen sind am 21.09.2026 gefallen (RM-197); der
+    # Bezugswechsel hängt seither als Menü am Maß selbst.
     expected = [
         controller._accept,
         fields[0],
-        choices[0],
         fields[1],
-        choices[1],
         fields[2],
         fields[3],
-        choices[2],
         controller._back,
     ]
     seen = []
@@ -1307,7 +1333,7 @@ def test_tab_reaches_both_dimension_groups_and_returns_to_editable_values(
         current = next(
             (
                 widget
-                for widget in (controller._back, controller._accept, *fields, *choices)
+                for widget in (controller._back, controller._accept, *fields)
                 if widget.hasFocus()
             ),
             None,

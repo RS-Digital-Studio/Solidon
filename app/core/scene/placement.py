@@ -1324,7 +1324,7 @@ def _reference_error() -> ValidationError:
         "references",
         tr(
             "Diese Bezüge fehlen oder liegen zu parallel. "
-            "Wählen Sie über Bezug ändern eine andere Kante oder Mitte."
+            "Wählen Sie eine andere Kante oder Mitte als Bezug."
         ),
     )
 

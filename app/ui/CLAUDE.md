@@ -26,20 +26,30 @@ zustellen, aber weder ein beendetes Fenster noch einen ersetzten Versuch
 anschließend fortsetzen.
 
 `PlacementFlow` bietet den Wechsel echter Kanten, Mitten und belegter Achsen
-direkt an den vorhandenen Maßfeldern an. Tastaturliste und Modellklick nutzen
-dieselbe `PreparedSurface`; die Liste bleibt vollständig und zeigt höchstens
-acht Zeilen gleichzeitig. Fremde Körper und andere Flächen sind kein Treffer,
-Mehrdeutigkeit führt zur bestehenden Liste. Der Referenzwechsel hält den
-Zielpunkt fest; ein späterer Zug behält die gewählten Bezüge und Vorzeichen.
-Durchgezogene Bezugslinie, gestrichelte nötige Verlängerung und benanntes
-Maßfeld erklären den signierten Abstand zur Zielmitte, keinen Wandabstand.
-Enter in der Liste öffnet die Auswahl; während einer Modellbezugsauswahl
-wird keine Übernahme vorgemerkt. Escape verwirft über den gemeinsamen Editor.
+als Kontextmenü des Maßes an (`_reference_menu`: Rechtsklick oder Menütaste,
+über `popup` statt `exec`, weggeräumt beim Zugehen). Das Auswahlfeld hinter
+jedem Maß ist am 21.09.2026 gefallen (RM-197, Robert: „das mit bezug ändern
+hintendran brauche ich garnicht"). Menü und Modellklick nutzen dieselbe
+`PreparedSurface` (`_reference_entries`). Fremde Körper und andere Flächen
+sind kein Treffer; Mehrdeutigkeit nennt den Weg zum Menü und öffnet nichts
+von selbst. Der Referenzwechsel hält den Zielpunkt fest; ein späterer Zug
+behält die gewählten Bezüge und Vorzeichen. Die Absage zu parallelen Bezügen
+kommt aus dem Kern (`placement._reference_error`), nicht aus einem zweiten
+Satz der Oberfläche. Durchgezogene Bezugslinie, gestrichelte nötige
+Verlängerung und benanntes Maßfeld erklären den signierten Abstand zur
+Zielmitte, keinen Wandabstand. Während einer Modellbezugsauswahl wird keine
+Übernahme vorgemerkt. Escape verwirft über den gemeinsamen Editor.
 Die numerischen Operationswerte bleiben der einzige gespeicherte Auftrag;
 eine dauerhafte Kantenassoziation wird nicht behauptet (§18.11, §19).
-Die Fokuskette folgt dem Auge: hinter jedem Kantenmaß seine Bezugsliste,
-dann die Mitten, dann die Liste der Mitte (`setTabOrder` beim Aufbau) — die
-Listen entstehen nach allen Feldern und stünden sonst am Ende der Kette.
+Die Fokuskette folgt dem Auge: die zwei Kantenmaße, dann die Mitten
+(`setTabOrder` beim Aufbau).
+
+**Und die Felder stehen neben dem Körper, nicht auf ihm** (RM-197, dieselbe
+Entscheidung): `_body_on_screen` führt die projizierte Hülle des Trägers als
+belegtes Rechteck, mit demselben Abstand wie um den Setzpunkt; die Felder
+rücken an den nächsten freien Platz daneben, die Verbindungslinie je Feld
+sagt, welches Maß es bemaßt. Füllt der Körper das ganze Bild, gilt die alte
+Regel — ein Feld außerhalb des Bildes ist keines.
 Wer eine Zahl in ein Maßfeld tippt, wird dabei nicht überschrieben: Jeder
 Tastendruck geht als Wert in den Entwurf, und die zwei Rückwege — Maßgruppe
 und Merkmalfenster — schreiben während des Lesens nichts zurück

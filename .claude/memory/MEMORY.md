@@ -82,6 +82,7 @@
 - [Gekillter Lauf schreibt weiter](gekillter-lauf-schreibt-weiter.md) · [Schreibfehler auf Datei](schreibfehler-auf-eine-vorhandene-datei.md) · [Eigenen Lauf beenden](eigenen-lauf-ueber-die-elternkette-beenden.md) · [Hintergrundlauf stirbt mit der Sitzung](hintergrundlauf-stirbt-mit-der-sitzung.md) — je Lauf ein Ordner.
 - [Suite abgekoppelt starten](suite-abgekoppelt-per-pwsh-start-process.md) · [$args als Parametername](powershell-args-als-parametername.md) · [Zweite Sitzung im selben Baum](zweite-sitzung-im-selben-baum.md) — pwsh Start-Process.
 - [Teardown-Riss bei gewählter Fläche](teardown-riss-bei-gewaehlter-flaeche.md) · [Leere Transkriptdatei ist kein Hänger](leere-transkriptdatei-ist-kein-haenger.md) — Auswahl vor dem Testende leeren.
+- [QMenu.exec blockiert offscreen](qmenu-exec-blockiert-offscreen-und-laesst-sich-nicht-patchen.md) — popup + triggered; QMenu.exec ist nicht patchbar.
 - [Parallele Reviewer kollidieren](parallele-reviewer-kollidieren-an-den-raendern.md) · [Patchübernahme in den geteilten Baum](patchuebernahme-in-den-geteilten-baum.md) · [Skript im Worktree lädt app aus dem Hauptbaum](skript-im-worktree-laedt-app-aus-dem-hauptbaum.md) — Patches in Reihenfolge; sys.path[0].
 - [Paketexport verdeckt das Modul](paketexport-verdeckt-das-modul.md) · [OCP-Paketattribut ist nicht das Modul](ocp-paketattribut-ist-nicht-das-modul.md) — import_module; `import OCP.X as X` patchen.
 

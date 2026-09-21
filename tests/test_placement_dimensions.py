@@ -483,6 +483,56 @@ def test_dimension_fields_leave_the_placement_point_itself_visible(
         viewport.close()
 
 
+def test_dimension_fields_stand_beside_the_body_and_keep_their_leaders(
+    qt_app: QApplication,
+) -> None:
+    """Die Beschriftungen rücken vom Körper ab (Robert, 21.09.2026, RM-197).
+
+    Jedes Maßfeld wollte in die Mitte seiner Maßlinie, und die läuft über das
+    Teil: An Weg 1 standen drei Beschriftungen auf der Platte, zwei davon
+    aufeinander („einen weiteren abstand zum modell und linien … damit ich
+    auch weiß wo etwas hingeht"). Die projizierte Hülle des Trägers ist seither
+    belegt; die Verbindungslinie je Feld sagt weiterhin, welches Maß es ist.
+    """
+    flow, session, viewport, dialog = _layout(qt_app, (900, 600), 1.0, "bottom")
+    try:
+        flow._tool_context = PlacementTool(
+            MeshData(trimesh.creation.cylinder(radius=2.5, height=10))
+        )
+        # Die 40-mm-Platte mittig im Bild, sechs Bildpunkte je Millimeter:
+        # 240 mal 240 Bildpunkte, ringsum bleibt Platz für jedes Feld.
+        viewport.renderer.world_to_display = lambda point: (
+            450 + point[0] * 6,
+            300 + point[1] * 6,
+            0.5,
+        )
+        flow.redraw()
+
+        ratio = viewport._device_ratio()
+        low, high = flow._prepared_mesh.bounds.minimum, flow._prepared_mesh.bounds.maximum
+        xs, ys = [], []
+        for corner in ((low[0], low[1], 0.0), (high[0], high[1], 0.0)):
+            x, y, _depth = viewport.renderer.world_to_display(
+                viewport.view_point_of(corner, flow._object_id)
+            )
+            xs.append(round(x / ratio))
+            ys.append(round(y / ratio))
+        body = QRect(QPoint(min(xs), min(ys)), QPoint(max(xs), max(ys)))
+        assert body.width() > 200 and body.height() > 200, "der Körper muss im Bild etwas belegen"
+
+        fields = [*flow._reference_boxes[:2], *flow._centre_measures, flow._reference_boxes[2]]
+        for field in fields:
+            assert field.isVisible(), field.objectName()
+            assert not field.geometry().intersects(body), (field.objectName(), field.geometry())
+        # Und jedes versetzte Feld behält seine Verbindungslinie zur Maßlinie.
+        assert len(flow._canvas.leaders) >= len(fields)
+    finally:
+        flow.dispose()
+        session.release()
+        dialog.close()
+        viewport.close()
+
+
 def test_the_mouth_outline_marks_the_spot_instead_of_the_whole_cylinder(
     qt_app: QApplication,
 ) -> None:
