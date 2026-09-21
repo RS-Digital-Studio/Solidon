@@ -462,6 +462,7 @@ class PoseParams(BaseParams):
 
 @register_op(
     name="pose_armature",
+    result_kind="mesh",
     title=_("Stellung geben"),
     category="mesh",
     params=PoseParams,

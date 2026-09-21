@@ -218,6 +218,7 @@ class BeadParams(BaseParams):
 
 @register_op(
     name="bead_edges",
+    result_kind="mesh",
     cache_version="6",
     title=_("Wulst anlegen"),
     category="shaping",

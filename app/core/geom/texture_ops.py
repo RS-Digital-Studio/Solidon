@@ -815,6 +815,7 @@ def texture_tool(source: SceneObject, params: TextureParams, seed: int = 0) -> M
 
 @register_op(
     name="apply_texture",
+    result_kind="mesh",
     cache_version="1",
     title=_("Textur aufbringen"),
     category="surface",

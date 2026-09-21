@@ -112,7 +112,10 @@ def test_deviation_legend_distinguishes_unknown_coverage_and_numerical_bounds(
             # sie sucht — die Zeile nennt den Abstand und die Abdeckung.
             assert "Obergrenzen je Dreiecksfläche" not in legend.note.text()
             assert "Obergrenzen je Dreiecksfläche" in legend.note.toolTip()
-            assert "e-7 mm" in legend.note.text(), "kleine Abstände bleiben von null verschieden"
+            # Kleine Abstände bleiben von null verschieden — und stehen als
+            # Dezimalzahl, nicht als Zehnerpotenz: Ein Kunde liest Millimeter.
+            assert "0,000000099 mm bis 0,00000020 mm" in legend.note.text()
+            assert "e-" not in legend.note.text()
             assert "je Dreiecksfläche: höchstens" not in legend.note.text()
             assert "je Dreiecksfläche: höchstens" in legend.note.toolTip()
             assert "keine Fertigungstoleranz" in legend.note.toolTip()

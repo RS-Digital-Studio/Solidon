@@ -6390,7 +6390,9 @@ class MainWindow(QMainWindow):
                 if window is None:
                     return
                 picker = window.quick_filament
-                if not window._preview_can_apply(picker, order):
+                # Vor dem Bild geklickt: Die Zuweisung läuft, sobald die
+                # Vorschau steht (:meth:`_apply_when_previewed`).
+                if not window._preview_can_apply(picker, order, then=accept):
                     return
                 if window._current_inventory_spool(current) is None:
                     picker.cancel_preview()
@@ -9901,7 +9903,13 @@ class MainWindow(QMainWindow):
         # eine Kante, die sie ablehnt — eine Sackgasse hinter einem Knopf, der
         # aus einer Sackgasse herausführen soll.
         order = self._sculpt_refinement_order()
-        if not self._preview_can_apply(self.sculpt_bar.refine, order):
+        # Der Klick vor dem Bild wartet auf die Vorschau, wie am Dialog
+        # (:meth:`_apply_when_previewed`): Der Knopf ist seit „Warten ist
+        # keine Sperre" frei, und ein stiller Rücksprung wäre ein Knopf, der
+        # nichts tut (Release-Tor 22.09.2026, ``test_sculpt_session``).
+        if not self._preview_can_apply(
+            self.sculpt_bar.refine, order, then=weak_slot(self, MainWindow.refine_for_sculpt)
+        ):
             return
         self._clear_preview()
         self.session.apply(tr("Dreiecke angleichen"), list(order.drafts))
@@ -10115,7 +10123,12 @@ class MainWindow(QMainWindow):
             self.announce(tr("Der geformte Körper ist nicht mehr da — die Sitzung bleibt offen."))
             return
         order = self._sculpt_order()
-        if order.drafts and not self._preview_can_apply(self.sculpt_bar.done, order):
+        # Ein frühes *Fertig* wartet auf das Bild mit der Konvertierung und
+        # schließt dann — genau einmal; ein neuer Zug entwertet die Vorschau
+        # samt dem wartenden Klick (:meth:`_apply_when_previewed`).
+        if order.drafts and not self._preview_can_apply(
+            self.sculpt_bar.done, order, then=weak_slot(self, MainWindow.finish_sculpt)
+        ):
             return
         self._clear_preview()
         self._sculpt_target = None
@@ -15535,10 +15548,14 @@ class MainWindow(QMainWindow):
         zwei exakten Quadern bleiben sie exakt — der Dialog dafür hatte null
         Felder und eine Vorschau, die nichts zu zeigen hatte (Regel 19, Review
         21.09.2026). Gezeigt werden muss die Handlung, wenn sie den Körper
-        **umwandeln** kann: Das Register verlangt ein Netz
-        (``requires_kind="mesh"``), oder die Eingänge sind gemischt — dann geht
-        der Kern den Netzweg (``_boolean_op``), und der exakte Körper wird
-        dabei zum Dreiecksmodell.
+        **umwandeln** kann: Das Register sagt, dass ihr Ergebnis ein Netz ist
+        (``result_kind="mesh"`` — Glätten, Formen, Teilen, die Prägung),
+        es verlangt ein Netz (``requires_kind="mesh"``), oder die Eingänge sind
+        gemischt — dann geht der Kern den Netzweg (``_boolean_op``), und der
+        exakte Körper wird dabei zum Dreiecksmodell. Die erste Frage fehlte
+        einen Tag lang: *Skelett stellen* an einem exakten Quader lief ohne
+        Vorschau und Rückweg durch (Release-Tor 22.09.2026,
+        ``test_pose_session``).
         """
         from app.core.brep.kernel import Solid
 
@@ -15552,7 +15569,7 @@ class MainWindow(QMainWindow):
         }
         if True not in kinds:
             return False
-        return spec.requires_kind == "mesh" or len(kinds) > 1
+        return spec.result_kind == "mesh" or spec.requires_kind == "mesh" or len(kinds) > 1
 
     def _preview_prefix_step(self, order: _PreviewOrder) -> int:
         """Beim Kernwechsel gehört auch das ursprüngliche Erzeugerergebnis zum Bezug."""

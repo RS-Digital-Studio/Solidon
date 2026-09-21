@@ -1045,6 +1045,7 @@ class AlignParams(BaseParams):
 
 @register_op(
     name="align_to_feature",
+    result_kind="mesh",
     title=_("An Merkmal ausrichten"),
     category="transform",
     params=AlignParams,

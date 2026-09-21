@@ -374,6 +374,7 @@ class SculptParams(BaseParams):
 
 @register_op(
     name="sculpt_strokes",
+    result_kind="mesh",
     title=_("Formen"),
     category="mesh",
     params=SculptParams,

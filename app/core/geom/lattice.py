@@ -321,6 +321,7 @@ NO_CAVITY: Final = _(
 
 @register_op(
     name="lattice_fill",
+    result_kind="mesh",
     title=_("Gitter füllen"),
     category="surface",
     params=LatticeParams,

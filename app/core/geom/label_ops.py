@@ -735,6 +735,7 @@ def _too_fine(
 
 @register_op(
     name="label_text",
+    result_kind="mesh",
     title=_("Text aufbringen"),
     category="label",
     params=LabelParams,

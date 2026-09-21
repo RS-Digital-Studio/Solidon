@@ -790,7 +790,7 @@ TOURS: Final[tuple[Tour, ...]] = (
             TourStep(
                 shows="history",
                 text=_(
-                    "Der letzte Schritt heißt „Deckel aus TPU“. Nehmen Sie ihn mit "
+                    "Der letzte Schritt im Verlauf heißt „Deckel aus TPU“. Nehmen Sie ihn mit "
                     "Strg+Z zurück: Die Warnung zum Materialspiel verschwindet, und "
                     "zur Passung steht nichts mehr im Prüfbericht. Alternativ können "
                     "Sie das Spiel anpassen und das weiche Material behalten."

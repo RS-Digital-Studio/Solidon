@@ -342,6 +342,7 @@ class BlendParams(BaseParams):
 
 @register_op(
     name="blend_union",
+    result_kind="mesh",
     # Das Abstandsfeld misst seit dem 18.09.2026 zur Ebene des nächsten
     # Dreiecks statt zu seiner Mitte (siehe :func:`distance_field`). Ein
     # Ergebnis aus dem Cache trüge sonst weiter die gewellten Wände.

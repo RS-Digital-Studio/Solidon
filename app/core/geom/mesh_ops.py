@@ -543,6 +543,7 @@ class DecimateParams(BaseParams):
 
 @register_op(
     name="decimate_mesh",
+    result_kind="mesh",
     # Nicht „Dezimieren". Das Wort ist der Fachbegriff und steht so in jedem
     # Netzwerkzeug — es sagt nur niemandem, der zum ersten Mal ein zu großes
     # Netz vor sich hat, worum es geht. Der Bezeichner bleibt, was er war;
@@ -616,6 +617,7 @@ class SmoothParams(BaseParams):
 
 @register_op(
     name="smooth_mesh",
+    result_kind="mesh",
     title=_("Glätten"),
     category="mesh",
     params=SmoothParams,
@@ -701,6 +703,7 @@ class RemeshParams(BaseParams):
 
 @register_op(
     name="remesh_mesh",
+    result_kind="mesh",
     title=_("Kanten verfeinern"),
     category="mesh",
     params=RemeshParams,
@@ -808,6 +811,7 @@ class UniformParams(BaseParams):
 
 @register_op(
     name="remesh_uniform",
+    result_kind="mesh",
     title=_("Dreiecke angleichen"),
     category="mesh",
     params=UniformParams,
@@ -890,6 +894,7 @@ class SubdivideParams(BaseParams):
 
 @register_op(
     name="subdivide_surface",
+    result_kind="mesh",
     title=_("Fläche unterteilen"),
     category="mesh",
     params=SubdivideParams,

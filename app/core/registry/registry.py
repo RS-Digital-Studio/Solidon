@@ -609,6 +609,23 @@ class OperationSpec:
     Deklariert statt in der Oberfläche aufgezählt, denn eine Liste in der
     Oberfläche wäre beim nächsten Zuwachs des exakten Kerns unvollständig —
     und dieselbe Auskunft braucht auch der Agent (§10, Leitprinzip 3)."""
+    result_kind: str = ""
+    """Bauart, die das Ergebnis am **exakten** Eingang hat — ``"mesh"``, wenn
+    die Operation aus einem exakten Körper ein Dreiecksmodell macht, sonst
+    leer: Das Ergebnis behält die Bauart seines Eingangs.
+
+    Dreiundzwanzig Operationen rechnen nur am Netz und vernetzen einen
+    exakten Eingang dafür — Glätten, Reduzieren, Formen, Teilen, die
+    Prägung, der Prüfkörper. Bis zum 22.09.2026 stand diese Auskunft an zwei
+    Orten, die sich nicht kannten: in der Paritätstabelle von
+    ``tests/test_exact_body_parity.py`` (``MESH``) und im Hauptfenster als
+    „exakter Eingang vorhanden". Das Fenster braucht sie **vor** der
+    Rechnung — nur eine Handlung, die den Körper umwandeln kann, muss mit
+    Vorschau und Rückweg gezeigt werden (Regel 19, CAD-Konzept); eine, die ihn
+    exakt lässt, läuft ohne Dialog. Deklariert, damit Fenster, Agent und
+    Tabelle dieselbe Antwort lesen (§10, Leitprinzip 3);
+    ``test_the_table_promises_no_more_and_no_less_than_the_register`` hält
+    Register und Tabelle zusammen."""
     requires_body: str = ""
     """Was der Körper mitbringen muss, damit die Operation überhaupt etwas
     tun kann — einer der Werte aus :data:`BODY_REQUIREMENTS`, oder leer.
@@ -914,6 +931,7 @@ def register_op(
     produces: int = 1,
     applies_to: Iterable[str] = (),
     requires_kind: str = "",
+    result_kind: str = "",
     requires_body: str = "",
     whole_scene: bool = False,
     reads_other_bodies: bool = False,
@@ -948,6 +966,7 @@ def register_op(
                 produces=produces,
                 applies_to=tuple(applies_to),
                 requires_kind=requires_kind,
+                result_kind=result_kind,
                 requires_body=requires_body,
                 whole_scene=whole_scene,
                 reads_other_bodies=reads_other_bodies,

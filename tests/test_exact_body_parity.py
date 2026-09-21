@@ -1425,6 +1425,20 @@ def test_the_table_promises_no_more_and_no_less_than_the_register() -> None:
             assert "brep" in kinds, (
                 f"{spec.name} verspricht beide Bauarten und läuft nie am exakten Körper"
             )
+        # ``result_kind`` sagt dem Fenster vor der Rechnung, ob der exakte
+        # Körper ein Netz wird; die Tabelle sagt es nach der Rechnung. Beide
+        # müssen dasselbe sagen — sonst läuft eine Umwandlung ohne Vorschau
+        # durch (22.09.2026, *Skelett stellen* am exakten Quader).
+        exact_outputs = [
+            outputs for kind, outputs in CASE_BY_NAME[spec.name].variants if kind == "brep"
+        ]
+        converts = bool(exact_outputs) and all(
+            outputs and "brep" not in outputs for outputs in exact_outputs
+        )
+        assert (spec.result_kind == "mesh") is converts, (
+            f"{spec.name}: result_kind={spec.result_kind!r}, die Tabelle sagt "
+            f"{'Netz' if converts else 'exakt bleibt exakt'}"
+        )
 
 
 @pytest.mark.parametrize(

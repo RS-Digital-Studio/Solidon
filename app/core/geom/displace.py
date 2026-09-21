@@ -314,6 +314,7 @@ class DisplaceParams(BaseParams):
 
 @register_op(
     name="displace_image",
+    result_kind="mesh",
     title=_("Relief auflegen"),
     category="surface",
     params=DisplaceParams,

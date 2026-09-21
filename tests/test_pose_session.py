@@ -77,13 +77,15 @@ def test_exact_armature_gestures_reach_the_guarded_operation_dialog(window: Main
     bones = armature_from_text(str(dialog.values()["armature"]))
     assert len(bones) == 1 and bones[0].tail == (10.0, 10.0, 20.0)
     dialog.accept()
+    # **Der Klick vor dem Bild verfällt nicht** (Entscheidung Robert,
+    # 21.09.2026): Er bindet sich an die erwartete Freigabe und läuft, sobald
+    # die Vorschau mit der Konvertierung steht — geschrieben wird erst dann,
+    # und genau einmal.
+    approval = window._preview_approval
+    assert approval is not None and approval.pending_click is not None
     assert len(window.session.project.document.ops) == before
     assert window.session.wait_for_idle(30_000)
-    assert window._preview_approval.displayed
-    assert "geraden Teilstücken" in window.viewport._preview_note
-    assert len(window.session.project.document.ops) == before
-    dialog.accept()
-    assert window.session.wait_for_idle(30_000)
+    assert len(window.session.project.document.ops) == before + 1
     assert window.session.last_result.scene.objects[identifier].kind == "mesh"
     assert window.session.project.document.ops[-1].op == "pose_armature"
 

@@ -75,7 +75,8 @@ def exact_body(window: MainWindow) -> str:
 def test_exact_sculpt_requires_the_latest_strokes_and_symmetry_before_finishing(
     window: MainWindow, exact_body: str
 ) -> None:
-    """Frühes Fertig schließt nichts; neue Gesten entwerten die alte Vorschau sofort."""
+    """Frühes Fertig schreibt nichts; neue Gesten entwerten die alte Vorschau
+    sofort — samt dem Klick, der an ihr hing."""
     window.start_sculpt(exact_body)
     before = len(window.session.project.document.ops)
     # Der vernetzte Quader hat acht Ecken und sonst keinen Punkt: Ein Zug
@@ -84,13 +85,17 @@ def test_exact_sculpt_requires_the_latest_strokes_and_symmetry_before_finishing(
     window._on_sculpt((10.0, 10.0, 20.0))
     first = window._preview_approval
     assert first is not None and first.owner is window.sculpt_bar.done
-    assert not window.sculpt_bar.done.isEnabled()
+    # **Warten ist keine Sperre** (Entscheidung Robert, 21.09.2026): Der Knopf
+    # bleibt frei, ein Klick vor dem Bild bindet sich an die Freigabe.
+    assert window.sculpt_bar.done.isEnabled()
     window.finish_sculpt()
+    assert first.pending_click is not None
     assert window.sculpting() and len(window.session.project.document.ops) == before
     window._on_sculpt((-10.0, 10.0, 20.0))
     window.sculpt_bar.symmetry.setCurrentIndex(1)
     latest = window._preview_approval
-    assert latest is not first and not window.sculpt_bar.done.isEnabled()
+    assert latest is not first and latest.pending_click is None
+    assert window.sculpt_bar.done.isEnabled()
     assert window.session.wait_for_idle(30_000)
     assert latest.displayed and window.sculpt_bar.done.isEnabled()
     assert window.sculpting() and len(window.session.project.document.ops) == before
@@ -120,10 +125,13 @@ def test_exact_refinement_waits_for_the_current_brush_without_auto_applying(
     first_edge = first.order.drafts[0].params["edge"]
     window.refine_for_sculpt()
     assert len(window.session.project.document.ops) == before
+    assert first.pending_click is not None, "der frühe Klick wartet auf das Bild"
     window.sculpt_bar.radius.set_value_mm(8.0)
     latest = window._preview_approval
     assert latest is not first and latest.order.drafts[0].params["edge"] > first_edge
-    assert not window.sculpt_bar.refine.isEnabled()
+    # Der neue Radius entwertet die alte Vorschau samt dem Klick, der an ihr
+    # hing; der Knopf bleibt frei (Warten ist keine Sperre).
+    assert latest.pending_click is None and window.sculpt_bar.refine.isEnabled()
     assert window.session.wait_for_idle(30_000)
     assert latest.displayed and window.sculpt_bar.refine.isEnabled()
     assert len(window.session.project.document.ops) == before
@@ -131,6 +139,25 @@ def test_exact_refinement_waits_for_the_current_brush_without_auto_applying(
     assert window.session.wait_for_idle(30_000)
     assert window.sculpting()
     assert window.session.project.document.ops[-1].params == latest.order.drafts[0].params
+    assert window.session.last_result.scene.objects[exact_body].kind == "mesh"
+
+
+def test_an_early_finish_waits_for_the_conversion_preview_and_closes_once(
+    window: MainWindow, exact_body: str
+) -> None:
+    """*Fertig* vor dem Bild verfällt nicht: Es läuft, sobald die Vorschau
+    steht — und genau einmal (Entscheidung Robert, 21.09.2026)."""
+    window.start_sculpt(exact_body)
+    before = len(window.session.project.document.ops)
+    window._on_sculpt((10.0, 10.0, 20.0))
+    window.finish_sculpt()
+    approval = window._preview_approval
+    assert approval is not None and approval.pending_click is not None
+    assert window.sculpting() and len(window.session.project.document.ops) == before
+    assert window.session.wait_for_idle(30_000)
+    assert not window.sculpting()
+    assert len(window.session.project.document.ops) == before + 1
+    assert window.session.project.document.ops[-1].op == "sculpt_strokes"
     assert window.session.last_result.scene.objects[exact_body].kind == "mesh"
 
 

@@ -4114,6 +4114,7 @@ class ResizeFeatureParams(BaseParams):
 
 @register_op(
     name="resize_feature",
+    result_kind="mesh",
     cache_version="5",
     title=_("Merkmal ändern"),
     category="holes",
@@ -9477,6 +9478,7 @@ class ElephantFootParams(BaseParams):
 
 @register_op(
     name="compensate_first_layer",
+    result_kind="mesh",
     title=_("Elefantenfuß ausgleichen"),
     category="prepare",
     params=ElephantFootParams,
@@ -9602,6 +9604,7 @@ class TestPieceParams(BaseParams):
 
 @register_op(
     name="test_piece",
+    result_kind="mesh",
     title=_("Prüfstück erzeugen"),
     category="prepare",
     params=TestPieceParams,
@@ -9859,6 +9862,7 @@ ONE_PIECE: Final = _("Der Körper besteht aus einem Stück; es gibt nichts zu ze
 
 @register_op(
     name="split_bodies",
+    result_kind="mesh",
     title=_("In Einzelteile zerlegen"),
     category="prepare",
     params=SplitBodiesParams,
@@ -10004,6 +10008,7 @@ def split_bodies(ctx: OpContext) -> OpResult:
 
 @register_op(
     name="split_pinned",
+    result_kind="mesh",
     # Nicht mehr „Teilen und verstiften": Seit *An Ebene teilen* in dieser
     # Operation aufgegangen ist (Formatversion 11), ist es die eine Zeile für
     # beides — mit Stiften und ohne. Ein Titel, der die Stifte verspricht,
@@ -10187,6 +10192,7 @@ class CutAwayParams(BaseParams):
 
 @register_op(
     name="cut_away",
+    result_kind="mesh",
     title=_("Abschneiden"),
     category="prepare",
     params=CutAwayParams,
@@ -10339,6 +10345,7 @@ class SplitLineParams(BaseParams):
 
 @register_op(
     name="split_line",
+    result_kind="mesh",
     title=_("An gezeichneter Linie trennen"),
     category="prepare",
     params=SplitLineParams,

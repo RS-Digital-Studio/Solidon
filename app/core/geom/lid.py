@@ -794,6 +794,7 @@ class ScrewLidParams(BaseParams):
 
 @register_op(
     name="screw_lid",
+    result_kind="mesh",
     title=_("Drehdeckel erzeugen"),
     category="parts",
     params=ScrewLidParams,

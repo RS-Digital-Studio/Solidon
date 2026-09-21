@@ -860,6 +860,7 @@ class ToMeshParams(BaseParams):
 
 @register_op(
     name="brep_to_mesh",
+    result_kind="mesh",
     cache_version="2",
     requires_kind="brep",
     title=_("Flächenbearbeitung beenden"),
