@@ -831,6 +831,7 @@ def forget_cache() -> None:
     _CACHE_INDICES.clear()
     _FREEFORM_DROPPED.clear()
     _SUPPORT_CACHE.clear()
+    _DIGESTS.clear()
 
 
 def _one_body(mesh: MeshData) -> MeshData:
@@ -2204,6 +2205,17 @@ def _a_sliver(body: trimesh.Trimesh, patch: list[int]) -> bool:
 
     Die Begründung der Zahl steht bei :data:`MIN_SURFACE_WIDTH`.
     """
+    result: bool = _remembered(
+        "a_sliver",
+        body,
+        patch,
+        lambda: _a_sliver_read(body, patch),
+    )
+    return result
+
+
+def _a_sliver_read(body: trimesh.Trimesh, patch: list[int]) -> bool:
+    """Der Rumpf von :func:`_a_sliver` — die Antwort merkt sich die Hülle."""
     if not patch:
         return True
     faces = np.asarray(patch, dtype=int)
@@ -3196,11 +3208,15 @@ def _partial_bores_marked(
             check_cancelled()
         axis = np.asarray(feature.params["axis"], dtype=float)
         chosen = faces[np.asarray(feature.face_indices, dtype=np.int64)]
-        edges = np.sort(
-            np.concatenate((chosen[:, [0, 1]], chosen[:, [1, 2]], chosen[:, [2, 0]])), axis=1
+        # Die Kanten als eine Zahl je Kante zählen (``_edge_codes``): ein
+        # ``np.unique`` über Zeilenpaare sortierte an der Lochplatte je Bohrung
+        # 73 000 Zeilen in dreißig Millisekunden, die Zahl in drei.
+        codes = _edge_codes(chosen, len(vertices))
+        unique_codes, count = np.unique(codes, return_counts=True)
+        boundary_codes = unique_codes[count == 1]
+        boundary = np.column_stack(
+            (boundary_codes // len(vertices), boundary_codes % len(vertices))
         )
-        unique, count = np.unique(edges, axis=0, return_counts=True)
-        boundary = unique[count == 1]
         if not len(boundary):
             continue
         vectors = vertices[boundary[:, 1]] - vertices[boundary[:, 0]]
@@ -3235,6 +3251,17 @@ def _curved_faces(body: trimesh.Trimesh) -> set[int]:
     Fläche, ein deutlicher Knick ist eine Kante, und alles dazwischen ist die
     Stufe einer Rundung, die das Netz nur nicht rund darstellen kann.
     """
+    result: set[int] = _remembered(
+        "curved_faces",
+        body,
+        (),
+        lambda: _curved_faces_read(body),
+    )
+    return result
+
+
+def _curved_faces_read(body: trimesh.Trimesh) -> set[int]:
+    """Der Rumpf von :func:`_curved_faces` — die Antwort merkt sich die Hülle."""
     if not len(body.face_adjacency):
         return set()
     angles = np.degrees(np.asarray(body.face_adjacency_angles, dtype=float))
@@ -3280,6 +3307,22 @@ def _facets_standing_apart(
     Ein Durchgang über die Nachbarschaft, nicht einer je Fleck: An einem Netz
     mit einer Million Dreiecken zählt das.
     """
+    # Beide Aufrufer reichen ``body.facets`` und ``_curved_faces(body)`` herein —
+    # die Antwort hängt am Körper, und ``_large_facet_faces`` wie
+    # ``_planar_face_entries`` fragen sie je Erkennung einmal.
+    result: set[int] = _remembered(
+        "facets_standing_apart",
+        body,
+        (),
+        lambda: _facets_standing_apart_read(body, facets, curved),
+    )
+    return result
+
+
+def _facets_standing_apart_read(
+    body: trimesh.Trimesh, facets: Sequence[np.ndarray], curved: set[int]
+) -> set[int]:
+    """Der Rumpf von :func:`_facets_standing_apart` — die Antwort merkt sich die Hülle."""
     if not facets or not len(body.face_adjacency):
         return set()
     owner = np.full(len(body.faces), -1, dtype=np.int64)
@@ -4011,56 +4054,42 @@ def _one_vertex_fan(
     return bool(len(close)) and connected(np.vstack((neighbours, unique[close])))
 
 
-def _connected_fans(
-    corners: np.ndarray,
-    reverse: np.ndarray,
-    order: np.ndarray,
-    offsets: np.ndarray,
-    candidates: np.ndarray,
-    check_cancelled: Callable[[], None] | None,
-) -> np.ndarray:
-    """Für jede Ecke auf einmal: Ist der Graph ihrer Nachbarn zusammenhängend?
+def _fan_arcs(body: trimesh.Trimesh, patch: Sequence[int], used: np.ndarray) -> np.ndarray | None:
+    """Wie viele getrennte Bögen die Dreiecke des Flecks um jede benutzte Ecke legen.
 
-    Dieselbe Frage wie ``connected`` in :func:`_one_vertex_fan`, für alle
-    Kandidaten in einem Zug: Knoten sind die Paare (Ecke, Nachbar), Kanten die
-    Gegenkanten der Dreiecke um die Ecke, und ein Fächer hängt zusammen, wenn
-    seine Ecke genau eine Komponente trägt. Wer hier ``False`` bekommt, geht
-    den Einzelweg mit dem Strahlenvergleich — die Antwort ist dieselbe, nur
-    die Reihenfolge der Arbeit eine andere.
+    Dieselbe Frage wie ``connected`` in :func:`_one_vertex_fan`, für alle Ecken
+    in einem Zug über den Fleck: Um eine Ecke liegen die Dreiecke des Flecks
+    in Bögen, und ein Bogen aus ``k`` Dreiecken hat ``k - 1`` innere Kanten —
+    Kanten, deren beide Dreiecke zum Fleck gehören. Die Zahl der Bögen ist
+    also Dreiecke minus innere Kanten, und ein Fächer hängt zusammen, wenn es
+    genau ein Bogen ist — oder null, wenn die Dreiecke um die Ecke einen
+    geschlossenen Ring bilden, der so viele innere Kanten hat wie Dreiecke.
+
+    **Gelesen wird der Fleck, nicht das Netz** (:func:`_neighbour_index`): Ein
+    erster Anlauf maskierte je Fleck alle Dreiecke und alle Nähte des Netzes
+    und war an 2 843 kleinen Flecken langsamer als die Komponentenrechnung,
+    die er ablösen sollte (gemessen am 21.09.2026). An einer Kante mit drei
+    Dreiecken kennt der Index keine Naht, die Bogenzahl fällt zu hoch aus, und
+    die Ecke geht den Einzelweg — dort ist die Antwort dann wie bisher die des
+    Graphen. Zurück kommt die Bogenzahl je Eintrag in ``used``; ``None``, wenn
+    das Netz keine Nachbarschaft kennt.
     """
-    from scipy.sparse import coo_matrix
-    from scipy.sparse.csgraph import connected_components
-
-    connected = np.zeros(len(candidates), dtype=bool)
-    wanted = np.flatnonzero(candidates)
-    if not len(wanted):
-        return connected
-    if check_cancelled is not None:
-        check_cancelled()
-    counts = offsets[wanted + 1] - offsets[wanted]
-    occurrences = np.concatenate([order[offsets[index] : offsets[index + 1]] for index in wanted])
-    centre = np.repeat(wanted, counts)
-    rows, local = occurrences // 3, occurrences % 3
-    first = corners[rows, (local + 1) % 3]
-    second = corners[rows, (local + 2) % 3]
-    stride = np.int64(len(candidates))
-    keys = np.concatenate(
-        (centre.astype(np.int64) * stride + first, centre.astype(np.int64) * stride + second)
-    )
-    unique, node = np.unique(keys, return_inverse=True)
-    node = node.ravel()
-    half = len(first)
-    if check_cancelled is not None:
-        check_cancelled()
-    graph = coo_matrix(
-        (np.ones(half, dtype=np.int8), (node[:half], node[half:])), shape=(len(unique), len(unique))
-    )
-    _count, labels = connected_components(graph, directed=False)
-    owner = (unique // stride).astype(np.intp)
-    pairs = np.unique(np.column_stack((owner, labels)), axis=0)
-    components = np.bincount(pairs[:, 0], minlength=len(candidates))
-    connected[wanted] = components[wanted] == 1
-    return connected
+    neighbours, pair_rows = _neighbour_index(body)
+    if not neighbours.shape[1]:
+        return None
+    indices = np.asarray(patch, dtype=np.int64)
+    chosen = neighbours[indices]
+    inner = chosen >= 0
+    inner[inner] = np.isin(chosen[inner], indices)
+    # Jede innere Kante steht zweimal da, einmal je Seite — halbiert statt
+    # eindeutig gemacht: ``np.unique`` über eine Million Nähte kostete an der
+    # Ikosphäre hundert Millisekunden, das Halbieren nichts.
+    rows = pair_rows[indices][inner]
+    edges = np.asarray(body.face_adjacency_edges, dtype=np.int64)[rows]
+    corners = np.asarray(body.faces[indices], dtype=np.int64).ravel()
+    triangles = np.bincount(corners, minlength=len(body.vertices))
+    inner_edges = np.bincount(edges.ravel(), minlength=len(body.vertices)) // 2
+    return np.asarray(triangles[used] - inner_edges[used], dtype=np.int64)
 
 
 #: Die zuletzt gelesenen Stützpunkte je Netz und Fleck (:func:`_surface_support`).
@@ -4072,19 +4101,48 @@ def _connected_fans(
 #: jeder Frage neu, 0,4 ms an 200 000 Dreiecken — an der Freiform mit 9 589
 #: Fragen waren das vier Sekunden, mehr als die Lesungen selbst. Der schwache
 #: Verweis daneben sagt, ob hinter der Identität noch dasselbe Netz steht.
-_SUPPORT_CACHE: OrderedDict[tuple[str, int, bytes, Any, int], tuple[weakref.ref[Any], Any]] = (
-    OrderedDict()
-)
+_SUPPORT_CACHE: dict[
+    str, OrderedDict[tuple[int, bytes, Any, int], tuple[weakref.ref[Any], Any]]
+] = {}
 
-#: Wie viele Lesungen und Fits gehalten werden. Je Fleck stellen Kegel,
-#: Zylinder, Kugel, Ring und ihre Nachweise zusammen rund ein Dutzend
-#: Fragen, und mehr als eine Handvoll Flecken liegt nie zugleich an.
-SUPPORT_CACHE_LIMIT = 64
+#: Wie viele Antworten je Frage gehalten werden. Die Stützpunktlesung trägt
+#: Felder in der Größe des Flecks — an der Ikosphäre dreißig Megabyte — und
+#: wird je Fleck ein Dutzend Mal gefragt, nacheinander: acht reichen. Fits,
+#: Nachweise und die Streifenprüfung sind klein und kommen zu Hunderten je
+#: Erkennung; ein Fleck, der beim zweiten Durchgang schon vergessen wäre,
+#: hätte den Merker umsonst gehabt (gemessen am 21.09.2026: 218 Streifen-
+#: fragen an der Lochplatte verdrängten die Facettenantwort zwischen ihren
+#: zwei Lesern).
+SUPPORT_CACHE_LIMIT = 8
+CACHE_LIMIT_PER_QUESTION = 4096
+
+
+#: Die zuletzt gebildeten Abdrücke je Listenobjekt — mit der Liste selbst als
+#: Anker, damit ihre Identität nicht an eine andere Liste fallen kann.
+_DIGESTS: OrderedDict[int, tuple[Sequence[int], bytes]] = OrderedDict()
+DIGEST_LIMIT = 32
 
 
 def _patch_digest(patch: Sequence[int]) -> bytes:
-    """Der Abdruck einer Flächenliste — sechzehn Bytes für 327 680 Indizes in 7 ms."""
-    return hashlib.blake2b(np.asarray(patch, dtype=np.int64).tobytes(), digest_size=16).digest()
+    """Der Abdruck einer Flächenliste — sechzehn Bytes für 327 680 Indizes in 7 ms.
+
+    Dieselbe Liste wird je Erkennung zwei Dutzend Mal gefragt (Kegel, Zylinder,
+    Kugel, Ring, Nachweise, Streifen), und jedes Mal kostete das Feld aus der
+    Python-Liste fünf Millisekunden — an der Ikosphäre 140 ms für nichts. Der
+    Abdruck bleibt deshalb am Listenobjekt gemerkt; die Liste wird dabei
+    festgehalten, damit ihre Adresse nicht an eine neue Liste geht, und eine
+    Fleckenliste ändert nach ihrer Bildung niemand.
+    """
+    key = id(patch)
+    known = _DIGESTS.get(key)
+    if known is not None and known[0] is patch:
+        _DIGESTS.move_to_end(key)
+        return known[1]
+    digest = hashlib.blake2b(np.asarray(patch, dtype=np.int64).tobytes(), digest_size=16).digest()
+    _DIGESTS[key] = (patch, digest)
+    while len(_DIGESTS) > DIGEST_LIMIT:
+        _DIGESTS.popitem(last=False)
+    return digest
 
 
 def _remembered(
@@ -4113,15 +4171,17 @@ def _remembered(
         check_cancelled()
     # Das Löserbudget gehört zum Schlüssel: Ein Test setzt es auf eins und
     # fragt danach noch einmal mit dem vollen — zwei Fragen, zwei Antworten.
-    key = (name, id(body), _patch_digest(patch), extra, ROUND_FIT_EVALUATIONS)
-    remembered = _SUPPORT_CACHE.get(key)
+    key = (id(body), _patch_digest(patch), extra, ROUND_FIT_EVALUATIONS)
+    answers = _SUPPORT_CACHE.setdefault(name, OrderedDict())
+    remembered = answers.get(key)
     if remembered is not None and remembered[0]() is body:
-        _SUPPORT_CACHE.move_to_end(key)
+        answers.move_to_end(key)
         return remembered[1]
     value = compute()
-    _SUPPORT_CACHE[key] = (weakref.ref(body), value)
-    while len(_SUPPORT_CACHE) > SUPPORT_CACHE_LIMIT:
-        _SUPPORT_CACHE.popitem(last=False)
+    answers[key] = (weakref.ref(body), value)
+    limit = SUPPORT_CACHE_LIMIT if name == "support" else CACHE_LIMIT_PER_QUESTION
+    while len(answers) > limit:
+        answers.popitem(last=False)
     return value
 
 
@@ -4151,6 +4211,25 @@ def _surface_support(
     return support
 
 
+def _coincident_vertices(body: trimesh.Trimesh) -> bool:
+    """Ob zwei Ecken des Netzes dieselben Koordinaten tragen — einmal je Körper.
+
+    Eine ungeschweißte STL schreibt jedes Dreieck mit eigenen Ecken; dann
+    fallen deckungsgleiche Punkte in der Lesung zusammen (:func:`_read_surface_support`).
+    Ein geschweißtes Netz hat keine, und die Frage kostet einmal so viel wie
+    eine Lesung des ganzen Körpers, nicht einmal je Fleck.
+    """
+    result: bool = _remembered(
+        "coincident",
+        body,
+        (),
+        lambda: bool(
+            len(np.unique(np.asarray(body.vertices, dtype=float), axis=0)) < len(body.vertices)
+        ),
+    )
+    return result
+
+
 def _read_surface_support(
     body: trimesh.Trimesh,
     patch: list[int],
@@ -4173,12 +4252,24 @@ def _read_surface_support(
     # Netz selbst kennt, sind ein Sechstel davon, und deckungsgleiche
     # STL-Punkte fallen unter ihnen genauso zusammen. Das Ergebnis ist
     # dasselbe sortierte Punktfeld mit derselben Zuordnung.
-    used, corner_of = np.unique(
-        np.asarray(body.faces[patch], dtype=np.int64).ravel(), return_inverse=True
-    )
-    points, vertex_of = np.unique(
-        np.asarray(body.vertices[used], dtype=float), axis=0, return_inverse=True
-    )
+    # Die benutzten Ecken ohne Sortierung: Markieren, zählen, umnummerieren —
+    # an der Ikosphäre zehn statt fünfzig Millisekunden für 983 040 Ecken.
+    flat_corners = np.asarray(body.faces[patch], dtype=np.int64).ravel()
+    present = np.zeros(len(body.vertices), dtype=bool)
+    present[flat_corners] = True
+    used = np.flatnonzero(present)
+    renumbered = np.full(len(body.vertices), -1, dtype=np.int64)
+    renumbered[used] = np.arange(len(used))
+    corner_of = renumbered[flat_corners]
+    all_vertices = np.asarray(body.vertices, dtype=float)
+    if _coincident_vertices(body):
+        points, vertex_of = np.unique(all_vertices[used], axis=0, return_inverse=True)
+    else:
+        # **Ohne deckungsgleiche Ecken ist jede Ecke ihr eigener Punkt** — die
+        # Sortierung der Koordinaten je Fleck entfällt; sie kostete an 2 843
+        # kleinen Flecken so viel wie die Lesung selbst (gemessen 21.09.2026).
+        points = all_vertices[used]
+        vertex_of = np.arange(len(used))
     reverse = vertex_of.ravel()[corner_of.ravel()]
     corners = reverse.reshape(-1, 3)
     repeated = np.repeat(normals, 3, axis=0)
@@ -4220,13 +4311,28 @@ def _read_surface_support(
     # bei zusammengelegten deckungsgleichen Punkten, deren Ring das Netz
     # nicht kennt. An der Ikosphäre ist der Fleck das ganze Netz: keine Ecke
     # am Rand, keine Frage (gemessen am 21.09.2026: 0,5 s je Lesung).
-    asked = ridges.copy()
-    if len(points) == len(used) and bool(body.is_watertight) and bool(body.is_winding_consistent):
-        degree = np.asarray(body.vertex_degree, dtype=np.int64)[used]
-        degree_of_point = np.empty(len(points), dtype=np.int64)
-        degree_of_point[vertex_of.ravel()] = degree
-        asked &= np.bincount(reverse, minlength=len(points)) != degree_of_point
-    torn = asked & ~_connected_fans(corners, reverse, order, offsets, asked, check_cancelled)
+    torn = ridges.copy()
+    if len(points) == len(used):
+        # Ohne zusammengelegte deckungsgleiche Punkte ist jede Ecke genau eine
+        # Netzecke, und die Bogenzahl aus der Nachbarschaft beantwortet die
+        # Frage für alle auf einmal; nur wer mehr als einen Bogen trägt, geht
+        # den Einzelweg mit dem Strahlenvergleich.
+        if check_cancelled is not None:
+            check_cancelled()
+        arcs = _fan_arcs(body, patch, used)
+        if arcs is not None:
+            arcs_of_point = np.empty(len(points), dtype=np.int64)
+            arcs_of_point[vertex_of.ravel()] = arcs
+            # Ein offener Bogen zählt eins, ein geschlossener Ring null — und
+            # null ist nur an einem wasserdichten, gleich orientierten Netz
+            # ein einziger Ring; sonst könnten es zwei sein, und die Ecke geht
+            # den Einzelweg.
+            whole = (
+                arcs_of_point == 0
+                if bool(body.is_watertight) and bool(body.is_winding_consistent)
+                else np.zeros(len(points), dtype=bool)
+            )
+            torn &= (arcs_of_point != 1) & ~whole
     for index in np.flatnonzero(torn):
         if check_cancelled is not None:
             check_cancelled()
@@ -5523,6 +5629,17 @@ def _connected_patches(body: trimesh.Trimesh, faces: list[int]) -> list[list[int
     Facetten, die groß genug für eigene Flächen sind, und wird ohnehin nicht
     als Zylinder gelesen.
     """
+    result: list[list[int]] = _remembered(
+        "connected_patches",
+        body,
+        faces,
+        lambda: _connected_patches_read(body, faces),
+    )
+    return result
+
+
+def _connected_patches_read(body: trimesh.Trimesh, faces: list[int]) -> list[list[int]]:
+    """Der Rumpf von :func:`_connected_patches` — die Antwort merkt sich die Hülle."""
     pairs = np.asarray(body.face_adjacency)
     adjacency = pairs[:0]
     if len(pairs):
@@ -5548,7 +5665,11 @@ def _connected_patches(body: trimesh.Trimesh, faces: list[int]) -> list[list[int
         chosen = neighbours[indices]
         present = chosen >= 0
         present[present] = wanted[chosen[present]]
-        rows = np.unique(pair_rows[indices][present])
+        # Dieselben Zeilen in derselben aufsteigenden Ordnung wie ``np.unique``,
+        # nur ohne Sortierung: eine Maske über die Nähte.
+        seen = np.zeros(len(pairs), dtype=bool)
+        seen[pair_rows[indices][present]] = True
+        rows = np.flatnonzero(seen)
         angles = np.degrees(np.asarray(body.face_adjacency_angles, dtype=float)[rows])
         adjacency = pairs[rows[angles < CURVATURE_LIMIT]]
     if not len(adjacency):

@@ -607,26 +607,37 @@ betroffenen Körper und erzeugenden Schritt; eine Karte bleibt aus. Andere
   getrennte Fächer und entgegengesetzte Doppelflächen teilen ihre Stützung
   nicht. Für nicht konforme Unterteilung werden nur die örtlich gleichen
   Kantenstrahlen im Leseindex verbunden. Das Originalnetz bleibt unverändert.
-  **Gelesen wird je Netz und Fleck einmal** (`_SUPPORT_CACHE`, Identität
-  plus Abdruck der Flächenliste, nicht der Datenhash — trimesh rechnet ihn
-  je Frage neu): Acht Fragen an denselben Fleck lasen die Ikosphäre mit
-  327 680 Dreiecken achtmal. Der Fächer einer Ecke wird für alle Ecken auf
-  einmal geprüft (`_connected_fans`, Komponenten über die Paare Ecke–Nachbar)
-  und an einem wasserdichten, gleich orientierten Netz nur am Rand des Flecks
-  — innen hängt er von selbst zusammen; der Einzelweg mit dem Strahlenvergleich
-  bleibt den zerrissenen. Die Punkte kommen aus den Ecken des Netzes, nicht
-  aus allen 3n Dreiecksecken, deckungsgleiche fallen unter ihnen zusammen.
-  **Und je Fleck wird auch jeder Fit und jeder Nachweis einmal gerechnet**
-  (`_remembered`: Kegel, Zylinder, Kugel, Ring und ihre `_is_recognisable`,
-  der Fit als Teil des Schlüssels; das Löserbudget gehört dazu, und ein
-  abgebrochener Auftrag bekommt auch keine gemerkte Antwort). Gemessen am
-  21.09.2026: 22,8 s → 2,0 s an der Ikosphäre, 5,9 s → 4,5 s an der
-  verrauschten Freiform (Ziel §31: 1 s; Marken der 0.4.4: 0,84 s und 1,25 s,
-  mit den linearen Fits gemessen, die P1.2 bewusst ersetzt hat — verworfen
-  mit dieser Begründung). Was bleibt, ist die Verfeinerung selbst: je Fleck
-  ein begrenzter Löser, und die Freiform stellt 5 400 Flecken; ein lineares
-  Sieb davor ist gemessen unsicher (Sieb gegen Endmaß bis 10⁹ an echten
-  kleinen Kugeln).
+  **Gelesen wird je Netz und Fleck einmal** (`_remembered`: je Frage ein
+  eigener Merker mit Identität des Netzes plus Abdruck der Flächenliste als
+  Schlüssel — nicht der Datenhash, trimesh rechnet ihn je Frage neu; die
+  Stützpunktlesung hält acht Antworten, weil ihre Felder so groß sind wie
+  der Fleck, jede andere Frage viertausend, denn 218 Streifenfragen
+  verdrängten sonst die Facettenantwort zwischen ihren zwei Lesern). Acht
+  Fragen an denselben Fleck lasen die Ikosphäre mit 327 680 Dreiecken
+  achtmal. Dasselbe gilt je Fleck für jeden Fit und jeden Nachweis (Kegel,
+  Zylinder, Kugel, Ring, ihre `_is_recognisable` mit dem Fit im Schlüssel,
+  die Streifenprüfung), je Körper für die gerundeten Dreiecke, die Flecken
+  einer Dreiecksliste, die kleinen Flächen und die Frage nach
+  deckungsgleichen Ecken; das Löserbudget gehört zum Schlüssel, und ein
+  abgebrochener Auftrag bekommt keine gemerkte Antwort. Der Abdruck einer
+  Flächenliste bleibt am Listenobjekt (`_patch_digest`, die Liste als Anker),
+  denn dieselbe Liste wird je Erkennung zwei Dutzend Mal gefragt.
+  Der Fächer einer Ecke wird über die Bogenzahl aus dem Nachbarindex gezählt
+  (`_fan_arcs`: Dreiecke minus innere Nähte, ein offener Bogen zählt eins,
+  ein geschlossener Ring an einem wasserdichten Netz null); der Einzelweg mit
+  dem Strahlenvergleich bleibt den zerrissenen. Die Punkte kommen aus den
+  Ecken des Netzes ohne Sortierung, und wo das Netz keine deckungsgleichen
+  Ecken hat (`_coincident_vertices`, einmal je Körper), ist jede Ecke ihr
+  eigener Punkt. Gemessen am 21.09.2026, allein auf Roberts Maschine:
+  Ikosphäre 22,8 → 1,4 s, Lochplatte mit 204 000 Dreiecken 1,4 → 1,0 s,
+  Taschenplatte 1,3 → 0,95 s, verrauschte Freiform 5,9 → 4,3 s (Ziel §31:
+  eine Sekunde). Was an der Freiform bleibt, ist die Verfeinerung selbst: je
+  Fleck ein begrenzter Löser, 5 400 Flecken, und angenommene Kegel brauchen
+  am Korpus bis zu 78 Auswertungen — ein kleineres Budget kostete echte
+  Formen, ein lineares Sieb davor ist gemessen unsicher (Sieb gegen Endmaß bis
+  10⁹ an echten kleinen Kugeln), und das Anfangsresiduum sagt beim Kegel und
+  Ring nichts über das Ende (bis 10¹⁴ darüber). Die Marken der 0.4.4 galten
+  den linearen Fits, die P1.2 bewusst ersetzt hat, und sind verworfen.
   Beim Kegel dürfen nachgewiesene gemeinsame Mantellinien auch echte
   Trimmpunkte liefern. Beliebige Sehnenränder werden nicht dazu erklärt.
 - **Ein Kandidat ist noch kein Endmaß.** Kegel, Kugel und Torus verfeinern
