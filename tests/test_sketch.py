@@ -965,9 +965,10 @@ def test_a_degenerate_loop_beside_a_good_one_is_dropped() -> None:
     import dataclasses
 
     from app.core.sketch import shapes
-    from app.core.sketch.profile import _area, _outline, regions_of
+    from app.core.sketch.profile import _outline, regions_of
     from app.core.sketch.solver import solve_sketch
     from app.core.types import SketchConstraint, SketchElement
+    from app.core.units import ring_area
 
     rectangle = shapes.rectangle(40.0, 30.0)
     points = sum(len(element.points) for element in rectangle.elements)
@@ -987,7 +988,7 @@ def test_a_degenerate_loop_beside_a_good_one_is_dropped() -> None:
     regions = regions_of(solve_sketch(mixed))
 
     assert len(regions) == 1, "die geschrumpfte Kette ist keine Region"
-    assert _area(_outline(regions[0])) == pytest.approx(1200.0)
+    assert ring_area(_outline(regions[0])) == pytest.approx(1200.0)
 
 
 # --- Ebenenkoordinaten (§30.1, Konzept „Die Skizze in den Raum", P0) --------

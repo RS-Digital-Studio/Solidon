@@ -16,11 +16,13 @@ from app.core.scene import History, OperationDraft, evaluate
 from app.core.scene.cache import DiskCache, ResultCache
 from app.core.scene.project import ProjectSources, load, new_project, save
 from app.core.types import Profile, Source
+from tests.helpers import exact_kernel
 
 
 def _grid_source(exact: bool) -> tuple[bytes, str, str]:
     """176 getrennte Würfel mit Kantenlänge 2 mm tragen zusammen 1056 echte ebene Flächen."""
     if exact:
+        exact_kernel()
         from OCP.BRep import BRep_Builder
         from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox
         from OCP.gp import gp_Pnt

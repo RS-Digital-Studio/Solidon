@@ -21,7 +21,7 @@ from typing import Any, Final, Literal
 from app.core.errors import CORRECT_INPUT, Action, GeometryError
 from app.core.sketch.planes import to_world
 from app.core.types import PlaneFrame, Point2, SketchElement, SolvedSketch, Vec3
-from app.core.units import EPS_GEOM, is_zero
+from app.core.units import EPS_GEOM, is_zero, ring_area
 from app.i18n import TranslatableText, _
 
 #: Wie nah zwei Endpunkte beieinander liegen müssen, um als verbunden zu
@@ -128,7 +128,7 @@ def regions_of(solved: SolvedSketch) -> tuple[Profile, ...]:
     # geschrumpften Linie ging damit durch, und die leere Kette wanderte weiter
     # in den exakten Kern. Was keine Fläche hat, ist keine Region: Es fliegt
     # heraus, und erst wenn nichts übrig bleibt, ist die Skizze der Fehler.
-    bearing = [loop for loop in loops if _area(_outline(loop)) > EPS_GEOM * EPS_GEOM]
+    bearing = [loop for loop in loops if ring_area(_outline(loop)) > EPS_GEOM * EPS_GEOM]
     if not bearing:
         raise _broken(_("Die Skizze umschließt keine Fläche."))
     # **Eine Kette, die sich selbst kreuzt, wird hier abgewiesen** und nicht
@@ -435,16 +435,6 @@ def _inside(point: Point2, outline: list[Point2]) -> bool:
         if (ay > y) != (by > y) and x < (bx - ax) * (y - ay) / (by - ay) + ax:
             within = not within
     return within
-
-
-def _area(outline: list[Point2]) -> float:
-    """Der Betrag der Schuhbandformel — als Maß dafür, wer wen umschließt."""
-    total = 0.0
-    for index in range(len(outline)):
-        ax, ay = outline[index]
-        bx, by = outline[(index + 1) % len(outline)]
-        total += ax * by - bx * ay
-    return abs(total) / 2.0
 
 
 def signed_area(profile: Profile) -> float:

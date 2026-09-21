@@ -730,7 +730,7 @@ def test_batched_scores_match_physical_rotations_across_batch_boundaries(
     monkeypatch.setattr(
         orient, "MAX_PROJECTION_VALUES", per_batch * max(body.vertex_count, body.triangle_count)
     )
-    scores = orient._evaluate_directions(body, directions)
+    scores = orient.evaluate_directions(body, directions)
     assert [score.direction for score in scores] == directions
     for direction, actual in zip(directions, scores, strict=True):
         physical = apply(body, rotation_to_down(direction))

@@ -1213,6 +1213,40 @@ def _rounded_box_wall(wall: float = 1.0) -> tuple[Any, Any]:
     return outer, outer.buffer(-wall)
 
 
+def test_the_patch_area_is_the_one_shoelace_the_sketch_uses_too() -> None:
+    """Die Fläche eines Überhangstücks kommt aus ``units.ring_area`` — derselben
+    Schnürsenkelformel, mit der die Skizze ihre Umrisse ordnet. Bis zum
+    21.09.2026 stand sie zweimal, einmal je Weg, und die Fassung hier packte
+    jedes der tausenden kleinen Stücke erst in ein NumPy-Feld: 287 ms je
+    Vorschlagsrechnung am Gitterbecher, jetzt 19.
+    """
+    from app.core.sketch import profile as sketch_profile
+    from app.core.slice.analysis import largest_overhang_patch
+    from app.core.types import LayerInfo, Polygon, SliceResult
+    from app.core.units import ring_area
+
+    assert sketch_profile.ring_area is ring_area, "eine Formel, zwei Leser"
+    square = ((0.0, 0.0), (4.0, 0.0), (4.0, 4.0), (0.0, 4.0))
+    assert ring_area(square) == pytest.approx(16.0)
+    assert ring_area((*square, square[0])) == pytest.approx(16.0), "geschlossen übergeben"
+    assert ring_area(square[::-1]) == pytest.approx(16.0), "ohne Vorzeichen"
+    assert ring_area(square[:2]) == 0.0, "zwei Punkte haben keine Fläche"
+    hole = ((1.0, 1.0), (2.0, 1.0), (2.0, 2.0), (1.0, 2.0))
+    layer = LayerInfo(
+        z=0.2,
+        contours=(Polygon(outline=square),),
+        area=16.0,
+        overhang_area=15.0,
+        islands=(),
+        min_width=4.0,
+        overhangs=(Polygon(outline=square, holes=(hole,)), Polygon(outline=hole)),
+    )
+    result = SliceResult(
+        layers=(layer,), support_volume=0.0, first_layer_area=16.0, source="internal"
+    )
+    assert largest_overhang_patch(result) == pytest.approx(15.0), "Loch abgezogen, größtes Stück"
+
+
 def test_a_cup_touching_the_outer_wall_is_measured_as_a_taper() -> None:
     """Der Organizer vom 20.09.2026: Außenwand 1,0 mm, in der Ecke ein Becher,
     der die Wand berührt — auf 24 mm Umfang läuft die Stärke von 1,0 auf
@@ -1255,6 +1289,89 @@ def test_an_even_wall_and_a_square_junction_are_no_taper() -> None:
     for name, outline in (("gleichmäßig", even), ("Trennwand", divided)):
         result = slice_body(_extruded(outline), 0.2, support_volume=False)
         assert tapered_layers(result) == 0, f"{name}: kein Keil, nirgends"
+
+
+def _sheared(mesh: MeshData, slope: float = 0.05) -> MeshData:
+    """Derselbe Körper, je Millimeter Höhe um ``slope`` in X verschoben:
+    Jede Schicht ist damit eine andere (``_same_layer`` greift nicht), die
+    Wandstärke bleibt, weil die Scherung in der Ebene liegt."""
+    body = mesh.raw.copy()
+    vertices = np.asarray(body.vertices, dtype=float).copy()
+    vertices[:, 0] += slope * vertices[:, 2]
+    body.vertices = vertices
+    return MeshData.of(body)
+
+
+def _cup_in_the_corner() -> Any:
+    """Der Querschnitt aus :func:`test_a_cup_touching_the_outer_wall_is_measured_as_a_taper`."""
+    from shapely.geometry import Point, box
+
+    outer, inner = _rounded_box_wall()
+    block = box(-1.0, -1.0, 21.0, 21.0)
+    hole = Point(10.9, 10.9).buffer(9.0, quad_segs=64)
+    return outer.difference(inner.difference(block)).difference(hole)
+
+
+def test_the_taper_is_measured_on_every_fifth_layer_and_carried_between(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Der Keil ist eine Eigenschaft der Wand über ihre Höhe, und seine
+    Messung kostete an einer Vase ein Drittel der ganzen Analyse. Gesucht
+    wird er deshalb an jeder ``TAPER_SAMPLE``. gemessenen Schicht; die
+    dazwischen tragen den Wert der zuletzt gemessenen. An einem gescherten
+    Becher — jede Schicht anders, der Keil auf jeder — zählt die Messung so
+    ein Fünftel der Schichten und meldet trotzdem alle.
+    """
+    from app.core.slice.analysis import TAPER_SAMPLE, tapered_layers
+
+    counted: list[int] = []
+    measured = analysis.taper_length
+
+    def counting(shape: Any) -> float:
+        counted.append(1)
+        return measured(shape)
+
+    monkeypatch.setattr(analysis, "taper_length", counting)
+    result = slice_body(_sheared(_extruded(_cup_in_the_corner())), 0.2, support_volume=False)
+
+    assert len(result.layers) >= 40, "genug Schichten für die Parallelisierung"
+    assert len(counted) == -(-len(result.layers) // TAPER_SAMPLE), (
+        "gemessen wird jede fünfte Schicht, nicht jede"
+    )
+    assert tapered_layers(result) == len(result.layers), "und alle tragen den Keil"
+    assert all(layer.taper_length > 0.0 for layer in result.layers)
+
+
+@pytest.mark.parametrize("base_height", [10.0, 10.2, 10.4])
+def test_a_taper_shorter_than_the_sample_is_not_a_measurement(
+    base_height: float, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Grenze der Stichprobe, beim Namen genannt: Ein Keil, der weniger
+    Schichten hoch ist als ``TAPER_SAMPLE``, liegt je nach Lage zwischen zwei
+    Messungen und wird gar nicht gezählt — oder trifft eine und wird bis zur
+    nächsten fortgeschrieben. Derselbe Becher von drei Schichten, um eine
+    oder zwei Schichten höher gesetzt, zählt einmal drei und zweimal null;
+    gemessen an jeder Schicht zählt er immer drei. Beides bleibt unter jeder
+    Schwelle, die ihn liest (``advise.TAPERED_LAYERS_SHARE``, ein Fünftel).
+    """
+    from app.core.slice.analysis import TAPER_SAMPLE, tapered_layers
+
+    outer, inner = _rounded_box_wall()
+    even = trimesh.creation.extrude_polygon(outer.difference(inner), base_height)
+    cup = trimesh.creation.extrude_polygon(_cup_in_the_corner(), 0.6)
+    cup.apply_translation((0.0, 0.0, base_height))
+    stacked = trimesh.util.concatenate([even, cup])
+    stacked.merge_vertices()
+    body = _sheared(on_bed(stacked))
+
+    sampled = tapered_layers(slice_body(body, 0.2, support_volume=False))
+    monkeypatch.setattr(analysis, "TAPER_SAMPLE", 1)
+    every = tapered_layers(slice_body(body, 0.2, support_volume=False))
+
+    assert every == 3, "an jeder Schicht gemessen: der Becher ist drei Schichten hoch"
+    assert sampled in (0, 3), "getroffen und fortgeschrieben, oder ganz verfehlt"
+    assert sampled <= TAPER_SAMPLE
+    assert sampled == (3 if base_height == 10.0 else 0), "welche Lage trifft, steht fest"
 
 
 def test_a_part_without_a_cavity_has_no_wall_to_taper() -> None:

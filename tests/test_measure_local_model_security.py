@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import http.server
 import json
+import math
 import threading
 from collections.abc import Callable, Iterator
 from typing import Any
@@ -118,6 +119,18 @@ def _complete_count() -> dict[str, object]:
     }
 
 
+def _truncation_floor() -> int:
+    """Die kleinste Tokenzahl, die das Werkzeug noch als ungekürzt annimmt.
+
+    Dieselbe Rechnung wie in ``measure_local_model.py``: Was die mitgeschickten
+    Werkzeuge kosten (``llm.tools_cost``), mal dem Anteil, unter dem Ollama
+    den Auftrag gekürzt haben muss (``PROMPT_TRUNCATION_FLOOR``). Bis zum
+    21.09.2026 stand hier ``OLLAMA_CONTEXT_TOKENS // 2 + 2`` — eine Zahl, die
+    zufällig darunter lag und mit jeder Werkzeugliste anders weit.
+    """
+    return math.ceil(llm.tools_cost(len(tool_schemas())) * llm.PROMPT_TRUNCATION_FLOOR)
+
+
 def test_token_count_sends_every_tool_once_and_identifies_the_actual_request(
     count_call: Callable[[object], tuple[int, list[bytes]]], capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -167,7 +180,7 @@ def test_token_count_sends_every_tool_once_and_identifies_the_actual_request(
         {"prompt_eval_count": 0},
         {"prompt_eval_count": 17.5},
         {"prompt_eval_count": "37000"},
-        {"prompt_eval_count": llm.OLLAMA_CONTEXT_TOKENS // 2 + 2},
+        {"prompt_eval_count": _truncation_floor() - 1},
         {"prompt_eval_count": llm.OLLAMA_CONTEXT_TOKENS - 1},
         {"eval_count": None},
         {"eval_count": False},
@@ -187,6 +200,21 @@ def test_token_count_rejects_unverified_answers_without_printing_a_reference(
     output = capsys.readouterr()
     assert output.out == ""
     assert "erneut zählen" in output.err
+
+
+def test_the_truncation_floor_itself_is_still_a_complete_count(
+    count_call: Callable[[object], tuple[int, list[bytes]]],
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Die Grenze gehört zur guten Seite: Genau der Boden aus Werkzeugkosten und
+    Kürzungsanteil zählt noch als vollständig, eins darunter nicht (siehe die
+    parametrisierte Ablehnung). Ohne diesen Fall wäre jede Zahl unterhalb von
+    ``PROMPT_TOKENS`` ein Beleg für die Ablehnung gewesen."""
+    status, requests = count_call({**_complete_count(), "prompt_eval_count": _truncation_floor()})
+
+    assert status == 0
+    assert len(requests) == 1
+    assert "erneut zählen" not in capsys.readouterr().err
 
 
 def test_token_count_reports_transport_failure_without_a_reference(

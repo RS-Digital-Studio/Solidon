@@ -91,6 +91,7 @@ def test_saved_answer_never_ignores_an_incomparable_current_candidate(change, pl
     ],
 )
 def test_saved_answer_requires_a_finite_three_dimensional_current_frame(centre, diagonal):
+    """Ohne endlichen Bezugsrahmen des heutigen Körpers gibt es keine gespeicherte Antwort."""
     detected = holes([0.0], "new")
     saved = {"kind": "hole", "relative": [0, 0, 0], "axis": [0, 0, 1], "diameter": 4.0}
     with np.errstate(over="ignore", invalid="ignore"):
@@ -110,6 +111,7 @@ def test_saved_answer_requires_a_finite_three_dimensional_current_frame(centre, 
     ],
 )
 def test_saved_answer_requires_its_actual_finite_reference(change):
+    """Eine gespeicherte Antwort mit unvollständigem oder unendlichem Bezug löst nichts auf."""
     detected = holes([0.0], "new")
     saved = {"kind": "hole", "relative": [0, 0, 0], "axis": [0, 0, 1], "diameter": 4.0, **change}
     if saved["relative"] is None:
@@ -130,6 +132,12 @@ def test_saved_answer_keeps_legacy_optional_fields_and_scalar_cost_semantics():
 
 
 def test_three_equal_ancestors_do_not_publish_an_arbitrary_owner():
+    """Drei alte Bohrungen an derselben Stelle und eine neue: keine bekommt den Namen.
+
+    Die Zuordnung veröffentlicht keine Wahl, die sie nur getroffen hat, weil eine
+    Reihenfolge sie zuerst nannte; alle drei bleiben mehrdeutig, und der Kunde
+    entscheidet.
+    """
     old = holes([0.0, 1.0, 1.0, 1.0], "old")
     new = holes([0.0, 0.0, 1.0], "new")
     result = matching.match(old, new, (0.0, 0.0, 0.0), 1.0)
@@ -185,6 +193,12 @@ def test_exact_binary_counterexamples_keep_the_whole_competition(
 
 @pytest.mark.parametrize("function", [matching.inherit_originators, matching.apply_mapping])
 def test_duplicate_targets_cannot_mix_one_ancestors_name_with_anothers_origin(function):
+    """Zwei alte Merkmale auf ein neues gemappt ist ein Widerspruch, kein Erbe.
+
+    Weder Name noch Herkunft dürfen dabei aus verschiedenen Vorfahren zusammengesetzt
+    werden; beide Anwender der Zuordnung lehnen mit Vorschlag ab und lassen das neue
+    Merkmal unberührt.
+    """
     old = holes([0.0, 0.0], "old")
     old = {
         name: replace(feature, created_by=index + 1)
@@ -210,6 +224,11 @@ def assignment_for(matrix):
 
 
 def test_penalty_sum_cannot_erase_a_real_binary_cost_difference():
+    """Eine Strafe von der Größe P darf einen Unterschied von 2⁻⁶⁰ nicht verschlucken.
+
+    Die Hüllgrenzen je Zeile werden aus exakten Binärzahlen gebildet; die Summe der
+    Zuteilung minus die Zeilenminima ist genau null, nicht „ungefähr".
+    """
     penalty = matching.KIND_PENALTY
     small = 2.0**-60
     matrix = np.array([[0.0, small, penalty], [0.0, penalty, penalty], [penalty] * 3])
@@ -221,6 +240,8 @@ def test_penalty_sum_cannot_erase_a_real_binary_cost_difference():
 
 
 def test_hull_rounds_each_exact_binary_bound_down():
+    """Die Hüllgrenze einer Zeile ist die größte Gleitkommazahl unter der exakten Summe,
+    nie darüber."""
     matrix = np.array([[0.1, 0.3], [0.0, 0.2]])
     # Eine zulässige obere Grenze genügt; die Paarung muss hierfür nicht optimal sein.
     assigned = matching._Assignment(
@@ -280,6 +301,12 @@ def test_alternating_graph_matches_exhaustive_maximum_cardinality_support(values
 
 
 def test_hull_neighbour_without_alternating_path_does_not_open_fixed_identity():
+    """Eine Hall-Lücke an anderer Stelle öffnet keine feste Identität.
+
+    Zwei zusätzliche alte Merkmale, die um dasselbe neue konkurrieren, vergrößern
+    die Menge der offenen Ansprüche — aber nur ihre eigene; die feste Paarung
+    ``0→0``, ``1→1`` ohne alternierenden Pfad dorthin bleibt fest.
+    """
     matrix = np.array([[0.0, 0.5, 1e6], [1e6, 0.5, 1e6], [1e6, 1e6, 1e6]])
     # Eine gesonderte Hall-Lücke vergrößert U-L, ohne den festen Teil zu verbinden.
     combined = np.full((5, 5), 1e6)
@@ -298,6 +325,11 @@ def test_hull_neighbour_without_alternating_path_does_not_open_fixed_identity():
 
 
 def test_fast_certificate_still_checks_unassigned_nearby_old_claims():
+    """Das schnelle Zertifikat übersieht keinen nahen alten Anspruch ohne Zuteilung.
+
+    Zwei alte Bohrungen zwei Tausendstel auseinander und eine neue: keine Zuordnung
+    wird veröffentlicht, beide bleiben mehrdeutig auf dasselbe Ziel.
+    """
     old = holes([0.0, 0.002], "old")
     new = holes([0.0], "new")
     result = matching.match(old, new, (0, 0, 0), 1.0)
@@ -306,6 +338,9 @@ def test_fast_certificate_still_checks_unassigned_nearby_old_claims():
 
 
 def test_existing_row_rival_opens_its_previously_fixed_owner():
+    """Ein Zeilenrivale, der schon in der Zuteilung stand, öffnet auch den bisher festen Besitzer
+    seines Ziels.
+    """
     old = holes([0.032, -0.04], "old")
     new = holes([0.0, 0.096], "new")
     # Die globale Zuteilung gibt a→y und b→x. Der bisherige Zeilenrivale a→x
@@ -332,6 +367,14 @@ def test_a_fixed_free_partner_is_not_opened_by_column_proximity_alone(monkeypatc
 def test_every_exact_global_optimum_stays_available_without_fixed_external_claims(
     monkeypatch, transpose
 ):
+    """Über 25 zufällige Kostenmatrizen: Veröffentlicht wird nur, was in **jedem**
+    globalen Optimum steht, und erreichbar bleibt alles, was in **irgendeinem** steht.
+
+    Die Optima werden erschöpfend über alle Permutationen mit exakten Brüchen
+    bestimmt, nicht über den Löser, dessen Antwort geprüft wird. Zuordnung,
+    Mehrdeutigkeit und Verwaisung sind dabei disjunkt und decken alle alten
+    Merkmale ab.
+    """
     random = np.random.default_rng(1405)
     for _ in range(25):
         matrix = random.choice([0.0, 0.125, 0.375, 1.0, 1e6], size=(4, 3))
@@ -378,6 +421,9 @@ def test_every_exact_global_optimum_stays_available_without_fixed_external_claim
 
 
 def test_nonmaximal_solver_answer_does_not_certify_fixed_identities():
+    """Eine Löserantwort, die nicht maximal ist, zertifiziert keine feste Identität — sie wird mit
+    Vorschlag abgewiesen.
+    """
     matrix = np.array([[0.0, 0.5], [0.0, 1e6]])
     assigned = matching._Assignment(
         np.array([0, 1]),
@@ -395,6 +441,9 @@ def test_nonmaximal_solver_answer_does_not_certify_fixed_identities():
     "stage", ["_hull_limits", "_reachable", "_strong_components", "_close_claims"]
 )
 def test_cancellation_inside_hull_graph_and_closure_reaches_the_original_caller(monkeypatch, stage):
+    """Ein Abbruch mitten in jeder der vier Stufen der Hüllrechnung erreicht den Aufrufer als
+    ``OperationCancelled``.
+    """
     old = holes([0.0, 0.0, 0.0], "old")
     new = holes([0.0, 0.0], "new")
     signal = CancelSignal()

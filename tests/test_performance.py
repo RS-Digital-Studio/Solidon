@@ -720,19 +720,21 @@ def test_a_real_slot_survives_the_shortcuts_that_make_the_search_fast() -> None:
 def test_feature_detection_on_a_freeform_tracks_the_real_customer_path() -> None:
     """Die Freiform prüft tausende Fits, bevor sie erfundene Formen weglässt.
 
-    Gemessen auf Roberts Maschine: **1,00 s** synthetisch (RM-132, 12.09.2026;
-    davor 1,41). Die 120 610 Flecken einer verrauschten Oberfläche wurden für
-    die Nachtrennung einzeln gruppiert, obwohl nur 1 650 von ihnen groß genug
-    zum Einpassen sind, und die Fleckenbildung selbst lief Zeile für Zeile —
-    zusammen vier Zehntel Sekunde für Stücke, die niemand liest.
+    Gemessen auf Roberts Maschine: **3,7 s** synthetisch (21.09.2026, unter
+    Fremdlast; 1,00 s am 12.09.2026 mit den linearen Fits, die P1.2 bewusst
+    durch die Verfeinerung an Stützpunkten ersetzt hat — die Marke von damals
+    gilt einer anderen Rechnung). Die 120 610 Flecken einer verrauschten
+    Oberfläche werden für die Nachtrennung nur gruppiert, wo sie groß genug
+    zum Einpassen sind (1 650 von ihnen); was bleibt, sind 5 400 begrenzte
+    Löser, und angenommene Kegel brauchen am Korpus bis zu 78 Auswertungen.
 
     Die beiden Kundenwerte daneben stammen vom 10.09.2026 und sind seither
     nicht neu gemessen: 1,52 s am organischen 197k-Modell, 2,76 s am
-    277k-Segel. Das Ein-Sekunden-Ziel aus §31 ist damit am synthetischen Fall
-    erreicht und am Kundenfall offen; der Zehn-Sekunden-Wächter behauptet
-    weiterhin keine Zielerfüllung, sondern fängt wie die übrigen
-    plattformübergreifenden Schwellen nur eine Größenordnung. Die Zahl, die
-    eine Verlangsamung meldet, ist die Regressionsmarke daneben.
+    277k-Segel. Das Ein-Sekunden-Ziel aus §31 ist am synthetischen Fall
+    damit offen; der Zehn-Sekunden-Wächter behauptet keine Zielerfüllung,
+    sondern fängt wie die übrigen plattformübergreifenden Schwellen nur eine
+    Größenordnung. Die Zahl, die eine Verlangsamung meldet, ist die
+    Regressionsmarke daneben.
     """
     mesh = freeform_feature_mesh()
     forget_cache()
@@ -784,6 +786,50 @@ def test_the_layer_analysis_stays_under_the_budget() -> None:
     """
     mesh = slice_target_mesh()
     taken = measure("slice_medium", lambda: slice_body(mesh, 0.2))
+    assert taken < 2.5
+
+
+def hollow_slice_target_mesh() -> MeshData:
+    """Derselbe Körper als Schale: Wand 1,5 mm, außen und innen zusammen
+    200 000 Dreiecke — der Fall, den ein Kunde druckt.
+
+    Die Vollkugel hat auf jeder Schicht **einen** Ring und keinen Überhang
+    nach innen; ein ausgehöhlter Körper hat auf jeder Schicht eine
+    Innenkontur, und an der hängen Puffer, Differenz und Stützsäulen der
+    Messung. Die §31-Zeile nennt 200 000 Dreiecke, nicht „massiv".
+    """
+    import trimesh
+
+    outer = trimesh.creation.icosphere(subdivisions=7, radius=40.0)
+    inner = trimesh.creation.icosphere(subdivisions=7, radius=38.5)
+    inner.invert()
+    shell = trimesh.util.concatenate([outer, inner])
+    result = MeshData.of(shell.simplify_quadric_decimation(face_count=200_000))
+    assert result.triangle_count == 200_000, "the hollow §31 fixture does not have its named size"
+    assert result.is_watertight, "decimation opened the hollow §31 fixture"
+    assert result.component_count == 2, "a shell has an outer and an inner skin"
+    return result
+
+
+def test_the_layer_analysis_of_a_hollow_body_is_watched_too() -> None:
+    """Der hohle Zwilling der Zeile darüber: 200 000 Dreiecke, Wand 1,5 mm.
+
+    §31 nennt 300 ms, und die Vollkugel hält sie. Die Schale nicht: Gemessen
+    am 21.09.2026 auf dem i9-13900K 1,05–1,15 s — jede Schicht trägt eine
+    Innenkontur, und daran hängen 3 658 Puffer, 796 Differenzen und 718
+    Anfragen an den Stützindex, die es bei einem Ring nicht gibt. Die Marke
+    hält den Stand fest, damit er nicht schlechter wird; die Grenze darunter
+    fängt eine Größenordnung. Wer die Schale unter die §31-Zahl bringen will,
+    fängt bei ``_measure`` an, nicht beim Schnitt: Der kostet 27 ms von den
+    1 100.
+    """
+    mesh = hollow_slice_target_mesh()
+    outcome: list[Any] = []
+    taken = measure("slice_medium_hollow", lambda: outcome.append(slice_body(mesh, 0.2)))
+    middle = outcome[0].layers[len(outcome[0].layers) // 2]
+    assert len(middle.contours) == 1 and middle.contours[0].holes, (
+        "eine Schicht der Schale ist ein Ring mit Loch"
+    )
     assert taken < 2.5
 
 
@@ -865,7 +911,7 @@ def test_the_wall_thickness_map_stays_under_the_bound() -> None:
     assert taken < 8.0
 
 
-def test_the_orientation_search_over_two_hundred_candidates() -> None:
+def test_the_orientation_search_over_two_hundred_candidates(profile: Profile) -> None:
     """§31: 200 betrachtete Kandidaten unter 20 Sekunden, unterbrechbar.
 
     **Der Körper muss die Suche zwingen, zu suchen.** Bis zum 14.09.2026 stand
@@ -876,22 +922,30 @@ def test_the_orientation_search_over_two_hundred_candidates() -> None:
     Sekunden" aus der Zeit vor der Vorauswahl (RM-139). Der gekippte,
     gestreckte organische Körper liefert 218 Hüllnormalen, von denen die
     Vorauswahl neun wirklich schneidet; ``tried > 1`` hält fest, dass die
-    Uhr über einer Suche lief und nicht über einem Ausstieg. Gemessen am
-    14.09.2026: 0,23 s allein — dorthin kam sie, indem sie Arbeit
-    unterlässt, die niemand liest: eine Zahl je Schnitt (``detail="support"``),
-    und nur die Finalisten werden geschnitten.
+    Uhr über einer Suche lief und nicht über einem Ausstieg.
+
+    **Und der Körper muss die Größe der Zeile haben.** Bis zum 21.09.2026
+    hatte er 1 280 Dreiecke und die Uhr las 0,23 s — an einem Körper, an dem
+    die Suche nichts ausdünnt, nichts kopiert und nichts dreht, was Zeit
+    kostet. Die Zeile in §31 steht neben „200 000 Dreiecke", und dort kostete
+    dieselbe Suche 4,8 s ohne und 9,2 s mit Druckerprofil, weil jede
+    Kandidatenlage das ganze Netz kopierte (Review 21.09.2026). Seitdem
+    drehen sich nur noch die äußersten Ecken, und die Uhr liest 1,2 s für
+    beide Fälle. Mit Profil, weil das der Weg des Kunden ist: Jede Lage wird
+    dabei auch in den Druckraum gesetzt.
     """
     from app.core.geom.orient import candidates
 
     trimesh = deferred.trimesh
-    raw = trimesh.creation.icosphere(subdivisions=3, radius=12)
-    raw.apply_scale((1.0, 0.7, 1.5))  # type: ignore[no-untyped-call]
+    raw = slice_target_mesh().raw.copy()
     raw.apply_transform(trimesh.transformations.rotation_matrix(0.7, (1.0, 0.3, 0.0)))
     mesh = MeshData.of(raw)
+    assert mesh.triangle_count == 200_000, "the §31 fixture does not have its named size"
     assert len(candidates(mesh, hull_limit=200)) >= 200, "sonst betrachtet der Test keine 200"
     outcome: list[Any] = []
     taken = measure(
-        "orient_200_tilted", lambda: outcome.append(search(mesh, count=200, layer_height=0.4))
+        "orient_200_200k",
+        lambda: outcome.append(search(mesh, count=200, layer_height=0.4, profile=profile)),
     )
     assert outcome[0].tried > 1, "die Uhr lief über einem Ausstieg, nicht über der Suche"
     assert taken < 20.0, "the §31 target, and it holds"
@@ -1445,11 +1499,21 @@ def test_the_application_is_usable_quickly(tmp_path: Path) -> None:
     kalte Zahl braucht einen geleerten Plattencache und gehört nicht in diesen
     Testlauf.
 
-    Die Marke behält den kleinsten Wert und ist damit die **warme** Zahl. Sie
-    ist die richtige für den Vergleich — eine Suite, die mehrmals am Tag läuft,
-    startet nie kalt — und sie ist nicht die, die der Nutzer nach dem
-    Hochfahren erlebt. Wer die kalte wissen will, muss sie einzeln messen und
-    dazwischen den Cache leeren; in dieser Suite steht sie nicht.
+    Die Marke ist die **warme** Zahl, und zwar durch den Aufbau: Ein erster,
+    ungemessener Start holt die Dateien in den Cache, gemessen wird der
+    zweite. Sie ist die richtige für den Vergleich — eine Suite, die mehrmals
+    am Tag läuft, startet nie kalt — und sie ist nicht die, die der Nutzer
+    nach dem Hochfahren erlebt. Wer die kalte wissen will, muss sie einzeln
+    messen und dazwischen den Cache leeren; in dieser Suite steht sie nicht.
+
+    **Zwei Grenzen.** Dreißig Sekunden fangen eine Größenordnung, und das
+    reichte, solange die Marke des Kontexts das Feinere tat. Fünf Sekunden
+    sind die Regressionsmarke, die auch auf einer frischen Maschine gilt:
+    §31 verlangt drei, der warme Start liest am 21.09.2026 auf dem
+    i9-13900K 2,7 bis 2,85 s allein (Review Leistung) und 2,84 bis 3,23 s
+    neben fünf anderen Sitzungen — knapp, und ein Start, der die Fünf
+    reißt, hat eine schwere Bibliothek zu früh geladen oder ein Fenster zu
+    viel gebaut, nicht Rauschen.
 
     Die Nutzerverzeichnisse sind über Umgebungsvariablen umgebogen (§38), und
     die erbt der Unterprozess — er schreibt nichts in Roberts Profil.
@@ -1474,12 +1538,20 @@ def test_the_application_is_usable_quickly(tmp_path: Path) -> None:
             )
         )
 
-    taken = measure("app_start", start)
-
+    start()
     assert finished[0].returncode == 0, (
         f"the application did not come up: {finished[0].stderr[-2000:]}"
     )
+    taken = measure("app_start", start)
+
+    assert finished[1].returncode == 0, (
+        f"the application did not come up: {finished[1].stderr[-2000:]}"
+    )
     assert taken < 30.0, "the target is three seconds; thirty catches an order of magnitude"
+    assert taken < 5.0, (
+        f"warm start took {taken:.2f} s — §31 says three, 2.85 measured on 21.09.2026; "
+        "something heavy is loaded before the window shows"
+    )
 
 
 def test_a_second_step_on_an_unwelded_model_stays_quick(profile: Profile) -> None:

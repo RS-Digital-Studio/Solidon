@@ -372,8 +372,10 @@ def format_length_bound(value_mm: float, unit: LengthUnit = "mm", *, upper: bool
 
     Die Umrechnung rechnet dezimal gerichtet, damit bereits vor der letzten
     Anzeigestelle keine obere Schranke nach unten wandert. Kleine Nichtnullwerte
-    behalten zwei geltende Ziffern, unter fünf Nachkommastellen wissenschaftlich.
-    Das ist ausschließlich Anzeigepräzision, keine geometrische Toleranz.
+    behalten zwei geltende Ziffern — auch unter fünf Nachkommastellen als
+    Dezimalzahl („0,00000012 mm"), nicht als Exponent: Ein Kunde liest
+    Millimeter, keine Zehnerpotenzen. Das ist ausschließlich Anzeigepräzision,
+    keine geometrische Toleranz.
     """
     if not math.isfinite(value_mm):
         raise ValueError("Eine Längenschranke muss endlich sein.")
@@ -384,13 +386,13 @@ def format_length_bound(value_mm: float, unit: LengthUnit = "mm", *, upper: bool
         context.rounding = rounding
         converted = value / decimal.Decimal(str(UNIT_TO_MM[unit]))
         exponent = converted.adjusted()
-        scientific = not converted.is_zero() and exponent < -5
+        tiny = not converted.is_zero() and exponent < -5
         places = max(_UNIT_DECIMALS[unit], min(5, 1 - exponent))
-        quantum = decimal.Decimal(1).scaleb(exponent - 1 if scientific else -places)
+        quantum = decimal.Decimal(1).scaleb(exponent - 1 if tiny else -places)
         rounded = converted.quantize(quantum)
         if rounded.is_zero():
             rounded = rounded.copy_abs()
-        text = format(rounded, "e" if scientific else "f")
+        text = format(rounded, "f")
     return f"{text} {unit}"
 
 
@@ -694,3 +696,33 @@ def exact_centre(points: Sequence[Sequence[float]]) -> tuple[float, float, float
         exact_mean([row[1] for row in rows]),
         exact_mean([row[2] for row in rows]),
     )
+
+
+def ring_area(points: Sequence[Sequence[float]]) -> float:
+    """Die Fläche eines geschlossenen Streckenzugs in der Ebene, ohne Vorzeichen
+    — die Schnürsenkelformel.
+
+    **Eine Schleife in Python, kein NumPy und kein GEOS**, und das ist
+    gemessen: Die Ringe, um die es geht, sind klein — die Stegunterseiten
+    eines Gitterbechers zu je acht Punkten, die Umrisse einer Skizze —, und
+    dort kostet allein das Umpacken einer Tupel-Liste in ein Feld das
+    Zwanzigfache der Rechnung: 10,5 µs je Achteck gegen 0,4 µs (21.09.2026);
+    erst ab tausend Punkten liegt NumPy überhaupt in derselben Größenordnung,
+    und bei 4096 ist die Schleife immer noch dreimal schneller. Vorher stand
+    dieselbe Formel zweimal, einmal je Weg — in ``sketch/profile`` und in
+    ``slice/analysis`` —, und die eine davon brauchte an 476 Schichten mal 56
+    Stücken 287 ms je Vorschlagsrechnung.
+
+    Der Ring darf offen oder mit seinem ersten Punkt geschlossen übergeben
+    werden: Der Schluss trägt nichts bei, weil ``x·y - x·y`` null ist.
+    Weniger als drei Punkte haben keine Fläche.
+    """
+    if len(points) < 3:
+        return 0.0
+    total = 0.0
+    ax, ay = points[-1][0], points[-1][1]
+    for point in points:
+        bx, by = point[0], point[1]
+        total += ax * by - bx * ay
+        ax, ay = bx, by
+    return abs(total) / 2.0

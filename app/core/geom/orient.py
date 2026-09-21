@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from typing import Final
+from typing import Final, cast
 
 import numpy as np
 
@@ -13,9 +13,9 @@ from app.core.build_area import placement_offset
 from app.core.deferred import trimesh
 from app.core.errors import CANCEL, CHOOSE_PRINTER, SPLIT_MODEL, GeometryError
 from app.core.geom.mesh import MeshData
-from app.core.geom.transform import apply, rotation, translation
+from app.core.geom.transform import apply, moved_points, rotation, translation
 from app.core.knowledge.rules import OVERHANG_LIMIT_DEGREES
-from app.core.types import CancelToken, Finding, PrinterProfile, Vec3
+from app.core.types import BoundingBox, CancelToken, Finding, PrinterProfile, Vec3
 from app.core.units import EPS_GEOM
 from app.i18n import _
 
@@ -37,6 +37,28 @@ AXES: Final[tuple[Vec3, ...]] = (
 
 #: Zielgrenze je Projektionsmatrix; eine einzelne größere Lage bleibt einzeln.
 MAX_PROJECTION_VALUES = 1_000_000
+
+#: Mehr Eckpunkte sieht Qhull für die Kandidatenrichtungen nicht. Die
+#: Hüllnormalen sind Vorschläge, die die Schichtanalyse danach beurteilt; ob
+#: sie aus allen 655 362 Ecken einer Kugel kommen oder aus jeder dreißigsten,
+#: ändert an den großen Hüllflächen nichts — an der Zeit schon: 5,3 s gegen
+#: 0,4 s für ``candidates`` an 1,3 Millionen Dreiecken (21.09.2026).
+HULL_SAMPLE = 20_000
+
+#: Ab so vielen Eckpunkten fragt :func:`extreme_points` erst eine Stichprobe,
+#: ob die konvexe Hülle überhaupt lohnt. Liegt mehr als ``HULL_ROUND_SHARE``
+#: der Stichprobe auf ihrer eigenen Hülle, ist der Körper rund wie eine
+#: Kugel: Dort ist jede Ecke eine äußerste, die vollständige Hülle kostete
+#: 2,9 s an 655 362 Ecken und spart nichts.
+HULL_PROBE_FROM = 50_000
+HULL_ROUND_SHARE = 0.25
+
+#: So weit darf die schnelle Projektion (BLAS) von der elementweisen Rechnung
+#: abweichen, mit der die äußersten Punkte danach exakt bewegt werden. Der
+#: gemessene Unterschied liegt bei 10⁻¹⁴ mm (RM-187); das Band ist bewusst
+#: fünf Größenordnungen weiter, und trotzdem fallen nur eine Handvoll Ecken
+#: hinein.
+EXTENT_BAND = 1e-9
 
 
 class NoFittingOrientationError(GeometryError):
@@ -113,6 +135,12 @@ def candidates(mesh: MeshData, *, hull_limit: int = 200) -> list[Vec3]:
     Die Hülle verwendet sortierte eindeutige Punkte ohne Zufallsstörung.
     Ihre Normalen sind auch bei konkaven oder organischen Körpern geometrisch
     begründet; die tatsächliche Auflage beurteilt erst die Schichtanalyse.
+
+    **Über :data:`HULL_SAMPLE` Ecken nimmt die Hülle jede n-te**, dazu die
+    äußersten in den sechs Achsenrichtungen, damit ein Klotz seine Ecken
+    behält — dieselbe Stichprobe wie ``mesh.hull_planes``. Die Richtungen
+    bleiben deterministisch, weil die Stichprobe aus den sortierten Punkten
+    gezogen wird und nicht aus der Reihenfolge der Datei.
     """
     found: list[Vec3] = list(AXES)
     body = mesh.raw
@@ -125,6 +153,13 @@ def candidates(mesh: MeshData, *, hull_limit: int = 200) -> list[Vec3]:
     vertices = np.unique(np.asarray(body.vertices, dtype=float), axis=0)
     if len(vertices) < 4:
         return found
+    if len(vertices) > HULL_SAMPLE:
+        step = len(vertices) // HULL_SAMPLE + 1
+        extremes = np.concatenate(
+            [vertices[vertices[:, axis].argmin()][None] for axis in range(3)]
+            + [vertices[vertices[:, axis].argmax()][None] for axis in range(3)]
+        )
+        vertices = np.unique(np.concatenate([vertices[::step], extremes]), axis=0)
     from scipy.spatial import ConvexHull, QhullError
 
     try:
@@ -146,15 +181,21 @@ def candidates(mesh: MeshData, *, hull_limit: int = 200) -> list[Vec3]:
 
 def evaluate_direction(mesh: MeshData, direction: Vec3) -> Orientation:
     """Wie der Körper aussähe, stünde er auf dieser Fläche."""
-    return _evaluate_directions(mesh, [direction])[0]
+    return evaluate_directions(mesh, [direction])[0]
 
 
-def _evaluate_directions(
+def evaluate_directions(
     mesh: MeshData, directions: list[Vec3], cancelled: CancelToken | None = None
 ) -> list[Orientation]:
-    """Bewertet dieselben Lagen in speicherbegrenzten gemeinsamen Projektionen."""
+    """Bewertet dieselben Lagen in speicherbegrenzten gemeinsamen Projektionen.
+
+    Öffentlich, weil die Suche (``slice.orientation.search``) ihre Lagen
+    ebenfalls stapelt: je Netz ein Aufruf statt einer je Richtung.
+    """
     if cancelled is not None:
         cancelled.raise_if_cancelled()
+    if not directions:
+        return []
     body = mesh.raw
     normals = np.asarray(body.face_normals, dtype=float)
     areas = np.asarray(body.area_faces, dtype=float)
@@ -221,7 +262,7 @@ def ranked_orientations(
             continue
         directions.append(direction)
 
-    scored = _evaluate_directions(mesh, directions, cancelled)
+    scored = evaluate_directions(mesh, directions, cancelled)
 
     ranked = sorted(
         scored,
@@ -277,6 +318,118 @@ def rotation_to_down(direction: Vec3) -> np.ndarray:
     return np.asarray(trimesh.transformations.rotation_matrix(angle, axis), dtype=float)
 
 
+def extreme_points(mesh: MeshData) -> np.ndarray:
+    """Die Ecken, an denen der Körper in irgendeiner Richtung am weitesten
+    reicht — einmal je Netz gerechnet, dann im Cache des Netzes.
+
+    Die Hüllbox eines gedrehten Körpers steht an seinen äußersten Ecken, und
+    das sind die Ecken seiner konvexen Hülle: Eine lineare Größe nimmt ihr
+    Extrem über eine Punktmenge auf deren Hülle an. Wer die Hüllbox von
+    zweihundert Drehungen braucht — die Orientierungssuche für jede
+    Kandidatenlage —, dreht danach nur noch diese Ecken statt des ganzen
+    Netzes: :func:`print_transform` kopierte 1,3 Millionen Dreiecke je
+    Kandidat, 18,9 der 37 Sekunden einer Suche (21.09.2026).
+
+    **Rund wie eine Kugel heißt: alle Ecken.** Dort ist jede Ecke eine
+    äußerste; Qhull über 655 362 Punkte kostete 2,9 s und gab dieselben
+    655 362 zurück. Ab :data:`HULL_PROBE_FROM` Ecken entscheidet deshalb eine
+    Stichprobe (:data:`HULL_ROUND_SHARE`), ob die Hülle überhaupt gerechnet
+    wird. Ein Klotz aus 1,3 Millionen Dreiecken kommt so auf acht Ecken, die
+    Kugel bleibt bei allen — und beide sind für die Hüllbox exakt.
+
+    Exakt heißt hier: bis auf Qhulls eigene Rundungstoleranz. Eine Ecke, die
+    Qhull beim Verschmelzen fast koplanarer Flächen als „koplanar" einstuft,
+    liegt höchstens um Rundungsfehler (10⁻¹³ mm) außerhalb der gemeldeten
+    Hülle; so weit kann die Hüllbox daneben liegen, und ``fits_on_bed`` misst
+    mit ``EPS_GEOM``.
+
+    Gezählt werden nur referenzierte Ecken, wie in ``MeshData.bounds``.
+    """
+    from scipy.spatial import ConvexHull, QhullError
+
+    body = mesh.raw
+    cache = getattr(body, "_cache", None)
+    if cache is not None:
+        cache.verify()
+        if "solidon_extreme_points" in cache:
+            return cast(np.ndarray, cache["solidon_extreme_points"])
+    points = np.asarray(body.vertices, dtype=float)
+    referenced = body.referenced_vertices
+    if not referenced.all():
+        points = points[referenced]
+    found = points
+    if len(points) >= 4:
+        worthwhile = True
+        if len(points) > HULL_PROBE_FROM:
+            sample = points[:: len(points) // HULL_PROBE_FROM + 1]
+            try:
+                probe = ConvexHull(sample)
+            except QhullError:
+                worthwhile = False
+            else:
+                worthwhile = len(probe.vertices) <= HULL_ROUND_SHARE * len(sample)
+        if worthwhile:
+            try:
+                hull = ConvexHull(points)
+            except QhullError:
+                # Flach oder entartet — dann bleiben alle Ecken die äußersten.
+                pass
+            else:
+                found = points[np.sort(hull.vertices)]
+    if cache is not None:
+        cache["solidon_extreme_points"] = found
+    return found
+
+
+def turned_extents(points: np.ndarray, turn: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Kleinste und größte Koordinate der bewegten Punkte — bitgleich mit
+    ``apply(mesh, turn).bounds``, wenn ``points`` die äußersten Ecken sind.
+
+    Zwei Rechnungen, eine Antwort: Die schnelle Projektion ``points @ R.T``
+    geht durch BLAS und ist auf verschiedenen Maschinen um 10⁻¹⁴ mm
+    verschieden (RM-187, :func:`app.core.geom.transform.moved_points`). Sie
+    darf deshalb nur **auswählen**: welche Ecken einem Extrem auf
+    :data:`EXTENT_BAND` nahekommen. Diese wenigen werden dann elementweise
+    bewegt, mit denselben Rechenschritten wie das ganze Netz — und das
+    Minimum darüber ist das Minimum über alle, Bit für Bit.
+
+    Die Verschiebung von ``turn`` kommt zuletzt dazu, einmal je Achse: Genau
+    so rechnet ``moved_points`` sie je Ecke, und eine einzelne Addition ist
+    monoton — das Minimum der verschobenen Ecken ist die verschobene kleinste
+    Ecke.
+    """
+    cells = np.asarray(turn, dtype=float)
+    linear = np.eye(4)
+    linear[:3, :3] = cells[:3, :3]
+    rough = points @ cells[:3, :3].T
+    low = np.empty(3)
+    high = np.empty(3)
+    for axis in range(3):
+        column = rough[:, axis]
+        near = (column <= column.min() + EXTENT_BAND) | (column >= column.max() - EXTENT_BAND)
+        exact = moved_points(points[near], linear)[:, axis]
+        low[axis] = exact.min()
+        high[axis] = exact.max()
+    return low + cells[:3, 3], high + cells[:3, 3]
+
+
+def _lifted(mesh: MeshData, direction: Vec3) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Die Drehung nach unten und die Hüllbox des gedrehten Körpers."""
+    turn = rotation_to_down(direction)
+    low, high = turned_extents(extreme_points(mesh), turn)
+    return turn, low, high
+
+
+def _onto_bed(mesh: MeshData, turn: np.ndarray, low: np.ndarray, high: np.ndarray) -> np.ndarray:
+    """Die Drehung, ergänzt um den Schritt aufs Bett und zurück über die alte Mitte."""
+    offset = (
+        mesh.bounds.centre[0] - (high[0] + low[0]) / 2.0,
+        mesh.bounds.centre[1] - (high[1] + low[1]) / 2.0,
+        -low[2],
+    )
+    return np.asarray(translation(offset) @ turn, dtype=float)
+
+
 def print_transform(mesh: MeshData, direction: Vec3) -> np.ndarray:
     """Die eine Matrix, die den Körper auf diese Fläche stellt: erst drehen,
     dann aufs Bett setzen.
@@ -286,38 +439,106 @@ def print_transform(mesh: MeshData, direction: Vec3) -> np.ndarray:
     nacheinander angewandte Matrizen ergeben dasselbe Netz und keine Auskunft.
     Benutzt auch die Schichtanalyse-Suche über die Operation — sie dreht mit
     denselben zwei Schritten, hat aber nur die Richtung zurückgegeben.
+
+    Das Netz selbst wird dafür nicht bewegt: Die Hüllbox der gedrehten Lage
+    kommt aus den äußersten Ecken (:func:`extreme_points`,
+    :func:`turned_extents`), und die Matrix ist dieselbe wie aus einer Kopie.
     """
-    turn = rotation_to_down(direction)
-    lifted = apply(mesh, turn)
-    offset = (
-        mesh.bounds.centre[0] - lifted.bounds.centre[0],
-        mesh.bounds.centre[1] - lifted.bounds.centre[1],
-        -lifted.bounds.minimum[2],
+    turn, low, high = _lifted(mesh, direction)
+    return _onto_bed(mesh, turn, low, high)
+
+
+@dataclass(frozen=True, slots=True)
+class _Placed:
+    """Ein bewegter Körper, dessen Hüllbox feststeht, bevor das Netz bewegt ist.
+
+    ``placement_offset`` liest die Hüllbox und — nur wenn das Rechteck an
+    einer Sperrfläche oder am Rand scheitert — die tatsächliche Projektion;
+    dafür holt es sich das Netz über ``to_mesh`` (``as_mesh_data``). So wird
+    von zweihundert Kandidatenlagen nur die kopiert, die den Umweg braucht.
+    Eine starre Bewegung ändert an Volumen, Fläche, Dichtheit und Teilen
+    nichts; sie kommen vom Ursprung.
+    """
+
+    source: MeshData
+    matrix: np.ndarray
+    bounds: BoundingBox
+
+    def to_mesh(self) -> MeshData:
+        return apply(self.source, self.matrix)
+
+    @property
+    def vertex_count(self) -> int:
+        return self.source.vertex_count
+
+    @property
+    def triangle_count(self) -> int:
+        return self.source.triangle_count
+
+    @property
+    def volume(self) -> float:
+        return self.source.volume
+
+    @property
+    def area(self) -> float:
+        return self.source.area
+
+    @property
+    def is_watertight(self) -> bool:
+        return self.source.is_watertight
+
+    @property
+    def component_count(self) -> int:
+        return self.source.component_count
+
+    @property
+    def slot_indices(self) -> tuple[int, ...]:
+        return self.source.slot_indices
+
+
+def _shifted(low: np.ndarray, high: np.ndarray, shift: np.ndarray) -> BoundingBox:
+    """Die Hüllbox nach einer Verschiebung — je Achse eine Addition, wie
+    ``moved_points`` sie zuletzt je Ecke ausführt."""
+    return BoundingBox(
+        (float(low[0] + shift[0]), float(low[1] + shift[1]), float(low[2] + shift[2])),
+        (float(high[0] + shift[0]), float(high[1] + shift[1]), float(high[2] + shift[2])),
     )
-    return np.asarray(translation(offset) @ turn, dtype=float)
 
 
 def fitting_transform(
     mesh: MeshData, direction: Vec3, printer: PrinterProfile, *, margin: float = 0.0
 ) -> np.ndarray | None:
-    """Eine passende Lage dieser Grundfläche, auch um 90° auf dem Bett gedreht."""
-    initial = print_transform(mesh, direction)
+    """Eine passende Lage dieser Grundfläche, auch um 90° auf dem Bett gedreht.
+
+    Die äußersten Ecken werden einmal je Richtung gedreht; die Lage um 90° ist
+    davon ein Tausch der Achsen — ``x' = -y, y' = x`` Bit für Bit, weil die
+    Drehmatrix dort nur Nullen und Einsen enthält — und die Verschiebungen
+    kommen als je eine Addition dazu (:func:`turned_extents`). Das Netz
+    kopiert erst ``placement_offset``, und nur, wenn es die Projektion braucht.
+    """
+    turn, low, high = _lifted(mesh, direction)
+    initial = _onto_bed(mesh, turn, low, high)
     for yaw in (0.0, 90.0):
-        turn = rotation("z", yaw) @ initial
-        turned = apply(mesh, turn)
+        turned = np.asarray(rotation("z", yaw) @ initial, dtype=float)
+        if yaw:
+            low, high = (
+                np.array([-high[1], low[0], low[2]]),
+                np.array([-low[1], high[0], high[2]]),
+            )
+        box = _shifted(low, high, turned[:3, 3])
         # Eine Drehung in der Platte bewahrt denselben sinnvollen Mittelpunkt.
         centre = translation(
             (
-                mesh.bounds.centre[0] - turned.bounds.centre[0],
-                mesh.bounds.centre[1] - turned.bounds.centre[1],
+                mesh.bounds.centre[0] - box.centre[0],
+                mesh.bounds.centre[1] - box.centre[1],
                 0.0,
             )
         )
-        turn = centre @ turn
-        moved = apply(mesh, turn)
-        offset = placement_offset(moved, printer, margin=margin)
+        turned = np.asarray(centre @ turned, dtype=float)
+        placed = _Placed(mesh, turned, _shifted(low, high, turned[:3, 3]))
+        offset = placement_offset(placed, printer, margin=margin)
         if offset is not None:
-            return np.asarray(translation(offset) @ turn, dtype=float)
+            return np.asarray(translation(offset) @ turned, dtype=float)
     return None
 
 

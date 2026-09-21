@@ -55,6 +55,21 @@ Auflagefläche. `SearchResult.transform` beschreibt die vollständige geprüfte
 Bewegung; `seed` bleibt als Aufrufparameter für bestehende Projekte lesbar,
 hat aber keinen Einfluss auf die geometrische Kandidatenauswahl.
 
+**Das Original wird dabei nie kopiert.** Zweihundert Kandidatenlagen hießen
+bis zum 21.09.2026 zweihundert Kopien des ganzen Netzes (`print_transform`,
+`fitting_transform`), und jede beurteilte Lage drehte das Original noch
+einmal und rechnete seinen Schwerpunkt neu — an 1,3 Millionen Dreiecken
+35 s je Suche, 755 ms je `judge`. Jetzt kennt das Netz seine äußersten
+Ecken einmal (`geom.orient.extreme_points`, im Cache des Netzes; bei einer
+Kugel sind das alle), und die Hüllbox jeder Lage kommt aus ihnen
+(`turned_extents`, bitgleich mit der Kopie); `judge` dreht nur Schwerpunkt
+und die Dreiecke, die die Aufstandsebene kreuzen (`_contact`). Die Lagen
+der Vorauswahl werden je Netz in einem Zug bewertet
+(`evaluate_directions`), die Hüllnormalen der Kandidaten kommen aus einer
+Stichprobe der Ecken (`HULL_SAMPLE`). Gemessen: 200 000 Dreiecke 4,8 → 1,2 s
+ohne und 9,2 → 1,2 s mit Druckerprofil, 1,3 Millionen 35,4 → 5,4 s, `judge`
+755 → 90 ms — dieselben Lagen, dieselben Matrizen.
+
 Ebenenschnitt und Konturverkettung haben einen übersetzten Teil —
 `tools/build_slice_core.py` baut ihn, das Budget dafür steht in §31.
 Der Ebenenschnitt verlangt `PLANE_SEGMENTS_API = 2`, einschließlich des
@@ -103,6 +118,16 @@ Robert „Vorschläge beim Slicen dauern ewig"). Drei Stellen, drei Antworten:
   Druckdialog behält den letzten gemessenen Stand in der Sitzung
   (`Session.remember_analyses`), damit ein zweites Öffnen nicht wieder
   schneidet.
+- **Der Keil an jeder fünften Schicht.** `taper_length` kostete an einer Vase
+  ein Drittel der Analyse; `_measure_all` fragt ihn nur an jeder
+  `TAPER_SAMPLE`. gemessenen Schicht und schreibt den Wert dazwischen fort.
+  Ein Keil kürzer als fünf Schichten wird dabei je nach Lage verfehlt oder
+  fünffach gezählt — unter jeder Schwelle, die ihn liest (`advise`, ein
+  Fünftel der Schichten). Die Grenze steht als Test in `test_slice.py`.
+- **Stückflächen ohne GEOS und ohne NumPy.** `largest_overhang_patch` rechnet
+  tausende kleine Ringe mit `units.ring_area` (die Schnürsenkelformel in einer
+  Python-Schleife, gemessen zwanzigmal schneller als das Umpacken in ein
+  Feld): 287 → 19 ms je Vorschlagsrechnung am Gitterbecher.
 
 Die Arbeiterzahl der vollständigen Messung steht bei sechs (`FULL_WORKERS`);
 die Messreihe dazu steht an der Konstante.

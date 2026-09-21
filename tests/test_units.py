@@ -203,8 +203,10 @@ def test_length_bounds_show_usable_digits_without_changing_regular_lengths() -> 
 
     assert format_length_bound(0.010014, upper=False) == "0.010 mm"
     assert format_length_bound(0.010014, upper=True) == "0.011 mm"
-    assert format_length_bound(0.000000123456789, upper=False) == "1.2e-7 mm"
-    assert format_length_bound(0.000000123456789, upper=True) == "1.3e-7 mm"
+    assert format_length_bound(0.000000123456789, upper=False) == "0.00000012 mm"
+    assert format_length_bound(0.000000123456789, upper=True) == "0.00000013 mm"
+    assert format_length_bound(0.0000000012, upper=True) == "0.0000000012 mm"
+    assert format_length_bound(0.000000123456789, "in", upper=True) == "0.0000000049 in"
     assert format_length(0.010014) == "0.01 mm"
 
 

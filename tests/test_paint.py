@@ -23,6 +23,7 @@ from app.core.geom.paint import fill_feature
 from app.core.registry import REGISTRY
 from app.core.scene.cancel import NeverCancelled
 from app.core.types import MaterialSlot, OpContext, Profile, Scene, SceneObject
+from tests.helpers import exact_kernel
 
 
 def plate() -> MeshData:
@@ -70,7 +71,7 @@ def _with_top_face(entry: SceneObject, indices: tuple[int, ...]) -> SceneObject:
 
 def _exact_filament_cylinder() -> tuple[SceneObject, str]:
     """Ein exakter Zylinder; die gewählte Deckfläche liegt nachweislich bei z = 20."""
-    from app.core.brep import edit
+    edit = exact_kernel()
     from app.core.brep.features import features_of
 
     solid = edit.cylinder(24.0, 20.0)
@@ -106,6 +107,7 @@ def test_exact_filaments_follow_retessellation_and_clear_without_changing_source
     import io
     import math
 
+    exact_kernel()
     from OCP.BRepTools import BRepTools
 
     from app.core.brep import step

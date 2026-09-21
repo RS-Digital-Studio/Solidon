@@ -38,6 +38,11 @@ TOOLS_DIR = PACKAGE_DIR.parent / "tools"
 #: nach wie vor ein Verstoß.
 GERMAN_WORDS = frozenset(
     {
+        # Zwei Bezeichner aus der Notlage der Platzsuche in ``overlay.py``
+        # (``platz``, ``unten``, vom 09.09. bis 21.09.2026); als ganzes Wort, denn
+        # „unten" steckt in „untenable" und „platz" in keinem, das man
+        # ausschließen müsste — der Stamm wäre trotzdem ein Falschmelder
+        # auf Vorrat.
         "platz",
         "unten",
         "erwartet",
@@ -214,6 +219,7 @@ GERMAN_STEMS = (
     "schluss",
     "schmal",
     "schuld",
+    "schwelle",
     "sicht",
     "skizze",
     "sprach",

@@ -105,7 +105,7 @@ Was nur diese Datei weiß:
 | Die vier Hauptwege Ende zu Ende | `test_way_one.py` … `test_way_four.py` |
 | 39 Referenzanfragen an den Agenten | `test_agent_suite.py`, Fälle in `agent_cases.py`, das Modell mit vorgeschriebenen Antworten in `scripted_backend.py` |
 | Importiert jede Schicht nur nach unten — `core` nie `ui`/`cli`, `i18n` gar nichts? | `test_layer_direction.py` |
-| Und eine Ebene tiefer: welches Kernpaket importiert welches, eifrig oder träge? | `test_core_package_direction.py` — 47 eifrige und 14 träge Kanten eingefroren, dazu der Kreis aus acht Paketen; eine neue Kante ist eine Entscheidung, eine abgebaute verschwindet aus der Liste |
+| Und eine Ebene tiefer: welches Kernpaket importiert welches, eifrig oder träge? | `test_core_package_direction.py` — jede eifrige und jede träge Kante eingefroren, dazu der Kreis aus acht Paketen; eine neue Kante ist eine Entscheidung, eine abgebaute verschwindet aus der Liste |
 | Stimmen `_EXPORTS`, `__all__` und `TYPE_CHECKING` der Lazy-Pakete überein, und löst jeder Eintrag auf? | `test_lazy_exports.py` |
 | Wählt `tools/affected_tests.py` die richtigen Tests aus dem Importgraphen? | `test_affected_tests.py` |
 | Verwenden die gemeinsamen Hooks das unterstützte Protokoll und richtige Patchpfade? | `test_solidon3d_hooks.py`; echte Event-Auslösung im Editor ist zusätzlich zu prüfen |
@@ -114,18 +114,24 @@ Was nur diese Datei weiß:
 | Gilt eine Zusage auch dort, wo der Code auf dieser Maschine nie läuft? | `test_hard_rules.py` — fcntl-Puffergrenze über den Quelltext, die Nutzerverzeichnisse für darwin, win32 und linux |
 | Wird eine gewählte Kante vor dem Verbrauchercache gebunden, fragt eine Kollision den Kunden, und gilt die Antwort nur für ihren Eingang? | `test_edge_binding.py` — zwei Quader mit vier Tausendstel Spalt an beiden Kernen; die Fensterhälfte (Linien, Dialogzeilen, Betonung über das Token) in `test_viewport_decisions.py` und `test_ui.py` |
 | Sagen beide Kerne an einer angeschnittenen Bohrung dasselbe — angeschnitten, berührt, ohne eigenen Körper — und ist die Umfangsschwelle eine Zahl? | `test_partial_bores.py` — zwei überlappende Bohrungen zu je 315 Grad, dazu die Gegenkontrollen ganze Bohrung, Querloch und Randöffnung |
+| Misst die Zylindereinpassung Kreis und Facettenband getrennt, hält das Maß unter starrer Bewegung und ungleicher Vernetzung, und wird ein grobes Vieleck nie als runder Zapfen veröffentlicht? | `test_cylinder_measurements.py` — Kreis- und Polygonmaße unabhängig vom Erkenner nachgerechnet |
+| Kommen die Endmaße runder Flächen aus den Originalpunkten, folgen sie dem bekannten starren Rahmen, und lässt sich die Einpassung vor und während der Vorbereitung abbrechen? | `test_round_surface_measurements.py` — Zylinder, Kegel, Torus und Kugel in beiden Kernen, Facettenunterteilung ohne Geometrieänderung |
+| Erhält die räumliche Vorauswahl der Zuordnung dieselbe Antwort wie die vollständige Kostenmatrix, und erreicht ein Abbruch den Aufrufer vor jeder Antwort? | `test_spatial_matching.py` — getrennte Merkmale ohne die volle Zuteilung, Gleichstände und Rechteckordnung unverändert |
 | Bleibt der exakte Körper beim Versetzen, Verdoppeln, Drehen und Entfernen einer Bohrung, eines Langlochs, einer gesenkten Bohrung (ganz oder nur ein Abschnitt), eines Zapfens, einer Kuppe, eines Kegelstumpfs einer allein stehenden Senkung oder eines Einschlusses (mit und ohne Insel) exakt, und bleibt er es beim Senken und Verschließen — Volumen analytisch, Kennungen belegt, STEP-Umlauf verlustfrei? | `test_exact_feature_ops.py` — die gekippte Kette und der gekippte Zapfen messen sich am Netzweg derselben Operation, gekippter Kegelstumpf und gekippte Senkung an einem unabhängig aus den Maßen gebauten Kegel |
 | Tragen Wulst und Kehle in beiden Kernen dieselben fünf Handlungen — Entfernen trifft den Schaft, Versetzen hält das Volumen und die unabhängige Erkennung findet den Ring an der neuen Stelle, Verdoppeln legt den zweiten an, die Rohrdicke ändert sich gegen die Analytik, der quer gestellte Ring trägt die gedrehte Achse, ein Ring, der der ganze Körper ist, sagt es, und Netz und exakt weichen nur um die Tessellierung ab? | `test_torus_feature_ops.py` — die Analytik ist π²r²R ± 4πr³/3 für einen Ring R/r auf einem Schaft vom Radius R |
 | Lässt sich ein Gewinde in beiden Kernen ändern und verschließen — außen bleibt beim Entfernen der Kern, innen ist die Bohrung zu, das neue Gewinde trifft Pappus über das Gangprofil und wird danach erkannt, linksgängig und eine Steigung ohne Kern sagen ab, das Fenster bietet Ändern und Entfernen und nichts Bewegendes? | `test_thread_feature_ops.py` — aufgesetztes M6 × 1 auf einer Platte und ein M6 × 1 darin, geändert auf M8 × 1,25 |
 | Nehmen Wulst, Kehle und Gewinde in beiden Kernen ein Filament an und geben es zurück — der Ring genau seine Dreiecke, das erzeugte Gewinde seine Flanken ohne Spitze und Sockel, das Gewindeloch ohne die Stirnflächen der Platte, und behält der exakte Ring sein Filament durch eine feinere Vernetzung? | `test_filament_on_rings_and_threads.py` — `paint_slot` und `clear_filament` an den Körpern der Torus- und Gewindetests |
 | Bekommt ein vorhandenes Gewinde sein Gegenstück am anderen Teil — im Tabellenmaß, als ein Schritt mit Gewindepassung, in beiden Kernen, mit einem Undo für beides, und sagen ein Maß ohne Normgröße, ein Nicht-Gewinde, ein belegtes Linksgewinde und dasselbe Teil ab; trifft die Erkennungsgrenze nie zwei Tabellengrößen zugleich? | `test_thread_counterpart.py` — zwei Platten, ein M6 darauf oder darin; das Fenster ohne Dialog in `test_counterpart_ui.py` |
 | Sind die Kernwahl-Haken gefallen — entstehen die fünf Grundkörper exakt, wo der Kern da ist, und als Netz, wo nicht; behält ein gespeicherter Schritt seinen Kern; bleibt eine Bohrung am exakten Körper ohne Haken exakt; folgt das Aushöhlen der Tabelle aus Konzept §10.1; stehen die exakten Grundkörper dort, wo ihre Netz-Zwillinge stehen; und stellt der Verlauf einen Schritt weiter auf seinen Zwilling um, mit der Sperre des Kerns dagegen? | `test_kernel_switch.py` — Kegel, Kugel und Ring gegen die Analytik auf 10⁻⁶, ihre Netz-Zwillinge auf zwei Prozent |
-| Baut jeder mitgelieferte Baustein am exakten Träger exakt — jede Grundform als Zwilling mit demselben Rahmen, jeder Baustein gültig, geschlossen, mit der erklärten Körperzahl, dem Volumen der Analytik, seinen Merkmalen und der STEP-Rundreise, und bleibt ein exakter Träger beim Einsetzen exakt, samt Verbund für das lösbare Teil und Befund, wenn der Baustein den Träger verfehlt? | `test_exact_parts.py` — die Erzeuger rechnen bis P2.8 am Netz und sagen es (`shapes.mesh_only`), und ein Netzträger nimmt weiter den Netzweg |
-| Liest der exakte Kern ein importiertes Gewinde ohne Erzeugerwissen — Teilung, Vorschub, Gangzahl, Händigkeit, Seite, Nenn-Ø, Tiefe, Achse —, lehnt er Gegenformen mit Grund ab, lässt er die Eingabe unangetastet, reißt der Abbruch an jeder Schleife, und sagt der Netzweg dasselbe, soweit er es kennt? | `test_thread_import.py` — vier Basiskörper aus `data/threads/`, alles Abgeleitete in unter einer Sekunde aus M6 |
-| Nehmen Verrunden, Fase, Wulst und das Zurücknehmen einer Rundung beide Kerne an? | `test_mesh_edges.py` — dreißig Zusicherungen, jede gegen eine analytische Zahl; die Gegenproben haben dabei zweimal den Testkörper verworfen und nicht den Fix |
+| Baut jeder mitgelieferte Baustein am exakten Träger exakt — jede Grundform als Zwilling mit demselben Rahmen, jeder Baustein gültig, geschlossen, mit der erklärten Körperzahl, dem Volumen der Analytik, seinen Merkmalen und der STEP-Rundreise, und bleibt ein exakter Träger beim Einsetzen exakt, samt Verbund für das lösbare Teil und Befund, wenn der Baustein den Träger verfehlt? | `test_exact_parts.py` — alle 35 Bausteine bauen exakt; `shapes.mesh_only` ist nur noch die Sperre für einen Weg, der Dreiecke anfasst, und ein Netzträger nimmt weiter den Netzweg |
+| Liest der exakte Kern ein importiertes Gewinde ohne Erzeugerwissen — Teilung, Vorschub, Gangzahl, Händigkeit, Seite, Nenn-Ø, Tiefe, Achse —, lehnt er Gegenformen mit Grund ab, lässt er die Eingabe unangetastet, reißt der Abbruch an jeder Schleife, und sagt der Netzweg dasselbe, soweit er es kennt? | `test_thread_import.py` — fünf Basiskörper aus `data/threads/`, drei davon je Lauf gegen ihren Erzeuger geprüft, alles Abgeleitete aus M6 gebaut |
+| Nehmen Verrunden, Fase, Wulst und das Zurücknehmen einer Rundung beide Kerne an? | `test_mesh_edges.py` — jede Zusicherung gegen eine analytische Zahl; die Gegenproben haben dabei zweimal den Testkörper verworfen und nicht den Fix |
 | Und Fläche versetzen und Formschräge? | `test_mesh_faces.py` — die Treppe ist dort der kleinste Körper, an dem „eine Fläche" von „alle einer Richtung" zu unterscheiden ist |
 | Findet `tools/twin_scan.py` die Zwillinge, für die es gebaut wurde? | `test_twin_scan.py` — gepflanzte Fälle, und ein leerer Baum ist ein Fehler statt eines Ergebnisses |
 | Überleben zwei Sitzungen, die gleichzeitig in `MEMORY.md` schreiben? | `test_memory_index.py` — zwei echte Prozesse; ohne Sperre gingen gemessen 17 bis 20 von 40 Einträgen verloren |
+| Lässt ein Versetzen am Netz keine Narben zurück, verliert eine vergrabene Senkung kein Volumen, sagt ein Ring ohne Achse ab, und reist keine alte Dreiecksnummer mit? | `test_feature_moves_keep_shape.py` — vier Züge an der Lochplatte bleiben bei 796 Dreiecken, das Volumen der Senkung auf 10⁻⁹ |
+| Findet die vektorisierte Selbstdurchdringung dieselben Paare wie der skalare Weg? | `test_self_intersections.py` — acht Treffer zweier Quader, je Paar gegen die skalare Rechnung |
+| Prüft das Einlesen Dichtheit und Kennzahlen einmal und reicht sie warm weiter? | `test_ingest_figures.py` — `is_watertight` und `volume` zählen ihre Aufrufe |
 
 ## Der Korpus
 
@@ -146,12 +152,26 @@ Gezählt am 23.08.2026: 78 deutsche Bezeichner in 27 Dateien. Sie werden
 **nicht** umbenannt — eine Massenänderung in fremden Dateien kostet mehr, als
 sie einbringt. Assert-Meldungen bleiben ebenfalls beim Bestand der Datei.
 
-## `conftest.py` tut zwei Dinge, die leicht zu übersehen sind
+## `conftest.py` tut drei Dinge, die leicht zu übersehen sind
 
 - Es setzt `QT_QPA_PLATFORM=offscreen` — Qt-Tests brauchen kein Bild.
 - Es biegt **die Nutzerverzeichnisse in einen Temp-Ordner** um (§38), `HOME`
   eingeschlossen. Läuft ein Test außerhalb der Suite, fehlt ihm das, und er
   liest in Roberts echtem Profil.
+- Unter `CI` beendet es den Lauf, wenn der exakte Kern fehlt
+  (`pytest_sessionstart`, Muster `php_probe.py`): `build.yml` installiert das
+  Extra `brep` in jedem Testlauf, und ohne den Kern übersprängen sich die
+  Dateien des exakten Kerns still. Lokal bleibt ein fehlender Kern ein Skip —
+  über `tests.helpers.exact_kernel()`, das **vor** jedem `OCP`-Import einer
+  Testfunktion steht; `test_toolchain.py` prüft die Zusicherung.
+
+## `helpers.py` — was mehr als eine Datei braucht
+
+Prüfkörper und Wächter, die mehrere Testdateien lesen, stehen in
+`tests/helpers.py` unter öffentlichem Namen (`exact_kernel`, `ridged_shaft`,
+`the_torus` und die Maße des Schafts), nicht als `from tests.test_x import
+_privat` beim zufällig ersten Nutzer. Was dort noch fehlt, nennt der
+Modul-Docstring — die Quelldateien gehören anderen Umbauten.
 
 Wer `WorkerLeash.start` durch eine Testfunktion ersetzt, übernimmt den Abbau
 der echten, absichtlich nicht gestarteten Worker. Ein lokaler Finalizer löst

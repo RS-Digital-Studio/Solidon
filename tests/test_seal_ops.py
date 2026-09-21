@@ -63,24 +63,29 @@ def run(entry, *, counter=None, profile=None, quality="fine", ask=None, cancelle
 
 
 def test_named_groove_floor_proof_keeps_the_original_cancel_token(profile, monkeypatch):
+    """Der Nachweis des Nutbodens (``seal_ops`` → ``surfaces.planar_patch``)
+    bekommt **dasselbe** Abbruchsignal wie die Operation: Festgehalten wird der
+    Rückruf, den ``planar_patch`` erhält, und er muss der des Aufrufers sein.
+    Bis zum 21.09.2026 stand hier ``is not None`` — ein fremder Rückruf, der
+    nie den Token der Operation fragt, wäre durchgegangen.
+    """
     from app.core.errors import OperationCancelled
     from app.core.perceive import surfaces
     from app.core.scene.cancel import CancelSignal
 
     token = CancelSignal()
     original = surfaces.planar_patch
-    checked = []
+    calls = []
 
     def cancel_inside(*args, **kwargs):
-        checked.append(True)
-        assert kwargs.get("check_cancelled") is not None
+        calls.append(kwargs.get("check_cancelled"))
         token.cancel()
         return original(*args, **kwargs)
 
     monkeypatch.setattr(surfaces, "planar_patch", cancel_inside)
     with pytest.raises(OperationCancelled):
         run(cube(), profile=profile, cancelled=token)
-    assert checked
+    assert calls == [token.raise_if_cancelled], "der Rückruf ist der des Aufrufers, einmal"
 
 
 @pytest.mark.parametrize("kind", ["mesh", "brep"])

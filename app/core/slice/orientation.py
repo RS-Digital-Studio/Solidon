@@ -8,21 +8,26 @@ from dataclasses import dataclass, field
 
 import numpy as np
 from shapely.geometry import Point
+from shapely.geometry import Polygon as ShapelyPolygon
 
+from app.core.deferred import trimesh
 from app.core.geom.mesh import MeshData
 from app.core.geom.mesh_ops import decimate
 from app.core.geom.orient import (
     AXES,
     MAX_FACE_CANDIDATES,
     NoFittingOrientationError,
-    evaluate_direction,
+    Orientation,
+    evaluate_directions,
+    extreme_points,
     fitting_transform,
     print_transform,
     ranked_orientations,
     rotation_to_down,
+    turned_extents,
 )
 from app.core.geom.orient import candidates as face_candidates
-from app.core.geom.transform import apply, place_on_bed
+from app.core.geom.transform import apply, moved_points, place_on_bed, translation
 from app.core.log import get_logger
 from app.core.slice.analysis import cross_sections, slice_body
 from app.core.types import CancelToken, Finding, Profile, ProgressFn, Vec3
@@ -200,10 +205,18 @@ def judge(
     2 mm breit): am Ersatznetz stand er mit dem Rand nach unten auf 5 mm²,
     am Original auf 594. Die Suche verwarf damit genau die Lage, die ohne
     Stützen druckt, und stellte ihn auf die Schräge. Wer ein ``footing_mesh``
-    mitgibt, bekommt Aufstandsfläche und Stand von dort — eine Drehung und
-    ein Schnitt je beurteilter Lage, an neun Lagen nicht der Rede wert.
+    mitgibt, bekommt Aufstandsfläche und Stand von dort.
+
+    **Ohne das Original zu kopieren.** Eine Drehung und ein Schnitt je Lage
+    hieß zuerst: das ganze Netz drehen, aufs Bett setzen, den Schwerpunkt
+    des gedrehten Netzes rechnen — 754 ms je Lage an 1,3 Millionen Dreiecken,
+    davon 587 ms für einen Schwerpunkt, der sich mitdreht wie jeder andere
+    Punkt (21.09.2026). Jetzt kennt das Original seinen Schwerpunkt einmal,
+    die Drehung trifft nur ihn und die äußersten Ecken, und geschnitten werden
+    allein die Dreiecke, die die Aufstandsebene kreuzen (:func:`_contact`).
     """
-    turned = place_on_bed(apply(mesh, rotation_to_down(direction)))
+    turn = rotation_to_down(direction)
+    turned = place_on_bed(apply(mesh, turn))
     # §28.2: die Suche liest eine Zahl daraus. Strukturbreiten an einem
     # Körper zu messen, der gleich wieder gedreht wird, ist Arbeit, die
     # niemand ansieht.
@@ -214,17 +227,11 @@ def judge(
         footing_height=footing_height,
         overhang_angle=overhang_angle,
     )
-    standing = (
-        turned
-        if footing_mesh is None
-        else place_on_bed(apply(footing_mesh, rotation_to_down(direction)))
-    )
+    standing = mesh if footing_mesh is None else footing_mesh
     # Die Fläche allein trägt nicht: Bei einem Ausleger kann sein Schwerpunkt
     # neben einer großen Auflage liegen. Getrennte Füße tragen gemeinsam über
     # ihre konvexe Hülle; das Loch zwischen ihnen ist kein Grund zum Ablehnen.
-    height = min(footing_height or layer_height / 2.0, standing.bounds.size[2] / 2.0)
-    contact = cross_sections(standing, np.asarray([height], dtype=float))[0]
-    centre = np.asarray(standing.raw.center_mass, dtype=float)[:2]
+    contact, centre = _contact(standing, turn, footing_height or layer_height / 2.0)
     stable = (
         contact is not None
         and bool(np.isfinite(centre).all())
@@ -240,6 +247,48 @@ def judge(
         height=turned.bounds.size[2],
         stable=stable,
     )
+
+
+def _contact(
+    mesh: MeshData, turn: np.ndarray, footing_height: float
+) -> tuple[ShapelyPolygon | None, np.ndarray]:
+    """Die Aufstandsfläche des gedrehten Körpers und sein Schwerpunkt in XY —
+    ohne das Netz zu drehen.
+
+    Auf dem Bett steht der Körper, sobald seine tiefste gedrehte Ecke auf null
+    liegt; die kommt aus den äußersten Ecken (``orient.extreme_points``). Die
+    Aufstandsebene liegt ``footing_height`` darüber, höchstens auf halber
+    Höhe. Welche Dreiecke sie kreuzen, sagt die gedrehte Höhe ihrer Ecken;
+    nur diese werden bewegt und geschnitten — mit derselben Matrix und
+    denselben Rechenschritten wie das ganze Netz, also mit demselben Schnitt.
+
+    Der Schwerpunkt ist der des Originals, einmal gerechnet und von
+    ``trimesh`` am Netz gehalten, und wird wie eine Ecke mitgedreht.
+    """
+    body = mesh.raw
+    low, high = turned_extents(extreme_points(mesh), turn)
+    matrix = translation((0.0, 0.0, -low[2])) @ turn
+    height = min(footing_height, (high[2] - low[2]) / 2.0)
+    vertices = np.asarray(body.vertices, dtype=float)
+    faces = np.asarray(body.faces, dtype=np.int64)
+    # Die Auswahl darf grob sein — BLAS statt elementweise —, solange sie
+    # jedes Dreieck behält, das der Ebenenschnitt mit seiner eigenen Toleranz
+    # noch ansieht; die Bewegung danach ist die exakte.
+    lifted = vertices @ np.asarray(matrix[2, :3], dtype=float) + float(matrix[2, 3])
+    corners = lifted[faces]
+    crossing = (corners.min(axis=1) <= height + 2.0 * EPS_GEOM) & (
+        corners.max(axis=1) >= height - 2.0 * EPS_GEOM
+    )
+    centre = moved_points(np.asarray(body.center_mass, dtype=float)[None, :], matrix)[0, :2]
+    if not crossing.any():
+        return None, centre
+    used, local = np.unique(faces[crossing], return_inverse=True)
+    band = trimesh.Trimesh(
+        vertices=moved_points(vertices[used], matrix),
+        faces=local.reshape(-1, 3),
+        process=False,
+    )
+    return cross_sections(MeshData.of(band), np.asarray([height], dtype=float))[0], centre
 
 
 def search_proxy(mesh: MeshData) -> MeshData:
@@ -376,7 +425,8 @@ def search(
     # ihn auf die Schräge. Die wenigen vorderen Richtungen kosten am Original
     # nichts, was zählt; die Hüllnormalen dahinter bleiben am Ersatznetz.
     trusted = 0 if proxy is mesh else min(len(directions), 1 + 6 + MAX_FACE_CANDIDATES)
-    scored = []
+    on_original: list[Vec3] = []
+    on_proxy: list[Vec3] = []
     for index, direction in enumerate(directions):
         if cancelled is not None:
             cancelled.raise_if_cancelled()
@@ -388,7 +438,13 @@ def search(
         if matrix is None:
             continue
         matrices[direction] = matrix
-        scored.append(evaluate_direction(mesh if index < trusted else proxy, direction))
+        (on_original if index < trusted else on_proxy).append(direction)
+    # Gestapelt statt einzeln: die Projektionen aller Lagen in einem Zug je
+    # Netz (``orient.evaluate_directions``), so weit die Speichergrenze reicht.
+    scored: list[Orientation] = [
+        *evaluate_directions(mesh, on_original, cancelled),
+        *evaluate_directions(proxy, on_proxy, cancelled),
+    ]
     if not scored:
         raise NoFittingOrientationError()
     ranked = sorted(
@@ -444,7 +500,13 @@ def search(
     best = best_of(field, floor)
     matrix = matrices[best.direction]
     turned = apply(mesh, matrix)
-    saved = baseline.support_volume - best.support_volume if baseline is not None else None
+    # Nie negativ, wie :attr:`SearchResult.improvement`: Kippt die
+    # Ausgangslage, gewinnt eine stehende Lage auch mit mehr Stützen, und
+    # „minus vier Kubikzentimeter gespart" wäre keine Auskunft, sondern ein
+    # Rätsel. Gespart ist dann nichts — und das steht da.
+    saved = (
+        max(0.0, baseline.support_volume - best.support_volume) if baseline is not None else None
+    )
     findings = [
         Finding(
             code="orient.searched",

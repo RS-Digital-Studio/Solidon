@@ -1019,10 +1019,33 @@ def test_the_v28_example_carries_a_native_reselection_and_v27_migrates_unchanged
 
 
 def test_the_session_hands_the_blocked_references_to_the_check() -> None:
-    """Der einzige Anschluss, an dem der Sperrzustand eingelöst wird — dort wird er geprüft."""
+    """Der einzige Anschluss, an dem der Sperrzustand eingelöst wird — dort wird er geprüft.
+
+    Gelesen über den Syntaxbaum, nicht als Text: Bis zum 21.09.2026 nahm der
+    Test den ersten ``orphans.check(`` bis zur ersten Zeile, die mit ``)``
+    endete — ein zweiter Aufruf ohne ``blocked`` wäre ungesehen geblieben,
+    und ein Zeilenumbruch an der falschen Stelle hätte den ersten zerteilt.
+    Jetzt zählt jeder Aufruf, und jeder muss die gesperrten Verweise der
+    Auswertung weiterreichen.
+    """
+    import ast
+
     source = (Path(__file__).parent.parent / "app" / "ui" / "session.py").read_text(
         encoding="utf-8"
     )
-    call = source[source.index("orphans.check(") :]
-    call = call[: call.index(")\n")]
-    assert "blocked=result.blocked_references" in call
+    calls = [
+        node
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "check"
+        and isinstance(node.func.value, ast.Name)
+        and node.func.value.id == "orphans"
+    ]
+    assert calls, "kein orphans.check in session.py — dann prüft dieser Test nichts"
+    for call in calls:
+        blocked = [keyword for keyword in call.keywords if keyword.arg == "blocked"]
+        assert len(blocked) == 1, f"Zeile {call.lineno}: orphans.check ohne blocked="
+        assert ast.unparse(blocked[0].value) == "result.blocked_references", (
+            f"Zeile {call.lineno}: {ast.unparse(blocked[0].value)}"
+        )

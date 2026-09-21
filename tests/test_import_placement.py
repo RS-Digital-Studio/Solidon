@@ -1,7 +1,5 @@
 """Ein Import bleibt eine Gruppe; gemeinsames Aufsetzen ist ein eigener Schritt."""
 
-from dataclasses import replace
-
 import pytest
 import trimesh
 
@@ -53,7 +51,9 @@ def test_import_group_placement_is_a_separate_reversible_cached_step(profile, tm
 
     before = run()
     assert before.complete
-    assert [before.scene.objects[key].mesh.bounds.minimum[2] for key in targets] == [-10.0, 10.0]
+    assert [before.scene.objects[key].mesh.bounds.minimum[2] for key in targets] == pytest.approx(
+        [-10.0, 10.0]
+    )
     assert plan.imported_group(project.document, targets[1], before.scene.objects) == targets
     assert (
         plan.imported_group_for_bed(project.document, targets[1], before.scene.objects) == targets
@@ -65,23 +65,35 @@ def test_import_group_placement_is_a_separate_reversible_cached_step(profile, tm
     )
     for result in (run(), run()):
         assert result.complete
-        assert [result.scene.objects[key].mesh.bounds.minimum[2] for key in targets] == [0.0, 20.0]
-        assert [result.scene.objects[key].mesh.bounds.centre[0] for key in targets] == [40.0, 70.0]
-        assert result.scene.objects["obj_1"].mesh.bounds == original
+        assert [
+            result.scene.objects[key].mesh.bounds.minimum[2] for key in targets
+        ] == pytest.approx([0.0, 20.0])
+        assert [
+            result.scene.objects[key].mesh.bounds.centre[0] for key in targets
+        ] == pytest.approx([40.0, 70.0])
+        untouched = result.scene.objects["obj_1"].mesh.bounds
+        assert untouched.minimum == pytest.approx(original.minimum)
+        assert untouched.maximum == pytest.approx(original.maximum)
     assert plan.imported_group(project.document, targets[0], result.scene.objects) == ()
     path = save(project, tmp_path / "gruppe.p3d")
     restored = run(load(path))
     assert restored.complete
-    assert [restored.scene.objects[key].mesh.bounds.minimum[2] for key in targets] == [0.0, 20.0]
+    assert [restored.scene.objects[key].mesh.bounds.minimum[2] for key in targets] == pytest.approx(
+        [0.0, 20.0]
+    )
     history.undo()
     undone = run()
-    assert [undone.scene.objects[key].mesh.bounds.minimum[2] for key in targets] == [-10.0, 10.0]
+    assert [undone.scene.objects[key].mesh.bounds.minimum[2] for key in targets] == pytest.approx(
+        [-10.0, 10.0]
+    )
     assert plan.imported_group(project.document, targets[0], undone.scene.objects) == targets
     history.undo()
     assert set(run().scene.objects) == {"obj_1"}
     history.redo()
     history.redo()
-    assert [run().scene.objects[key].mesh.bounds.minimum[2] for key in targets] == [0.0, 20.0]
+    assert [run().scene.objects[key].mesh.bounds.minimum[2] for key in targets] == pytest.approx(
+        [0.0, 20.0]
+    )
 
 
 @pytest.mark.parametrize("kind", ["mesh", "brep", "mixed"])
@@ -117,9 +129,10 @@ def test_group_placement_recomputes_one_offset_for_all_current_inputs(profile, k
         [OperationDraft(op="place_group_on_bed", inputs=("obj_1", "obj_2"))],
     )
     cache = ResultCache()
+    scaling = project.document.ops[2]
     for factor in (1.0, 2.0):
-        scaling = project.document.ops[2]
-        project.document.ops[2] = replace(scaling, params={"factor": factor})
+        # Über den Verlauf, nicht am Dokument vorbei: So ändert der Kunde den Wert.
+        history.change_params(scaling.id, {"factor": factor})
         result = evaluate(project.document, profile, quality=quality, cache=cache)
         assert result.complete
         objects = [result.scene.objects[key] for key in ("obj_1", "obj_2")]

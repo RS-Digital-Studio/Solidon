@@ -17,7 +17,7 @@ verschiedene Dinge, und der Bericht sagt, welches welches ist.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Literal, cast
 
 import numpy as np
@@ -30,8 +30,8 @@ from app.core.errors import ValidationError
 from app.core.geom.mesh import MeshData
 from app.core.knowledge.rules import OVERHANG_ANGLE_FACTOR, OVERHANG_LIMIT_DEGREES
 from app.core.log import get_logger
-from app.core.types import CancelToken, LayerInfo, Polygon, Ring, SliceResult
-from app.core.units import EPS_GEOM
+from app.core.types import CancelToken, LayerInfo, Polygon, SliceResult
+from app.core.units import EPS_GEOM, ring_area
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -126,6 +126,19 @@ TAPER_TO = 4.0
 TAPER_WINDOW = 4.0
 TAPER_RISE = 0.15
 TAPER_RUN = 8.0
+
+#: Der Keil wird an jeder so vielten **gemessenen** Schicht gesucht, die
+#: dazwischen tragen den Wert der zuletzt gemessenen. Ein Keil ist eine
+#: Eigenschaft der Wand über ihre Höhe — der Becher im Organizer steht auf
+#: neun Zehnteln —, und wer ihn liest (``advise``), fragt nach einem Fünftel
+#: aller Schichten: Fünf Schichten Unschärfe an jedem Ende ändern die
+#: Antwort nicht. Was die Stichprobe spart: an einer Hohlkugel mit 400
+#: Schichten kostete der Keil 136 ms, mit jeder fünften 57; an einer Vase mit
+#: 1,15 Millionen Dreiecken 303 statt 36 — ein Drittel der ganzen Analyse
+#: (21.09.2026). Was sie nicht mehr sieht: einen Keil, der kürzer ist als
+#: ``TAPER_SAMPLE`` gemessene Schichten — der wird je nach Lage gar nicht oder
+#: fünffach gezählt, und beides liegt unter jeder Schwelle, die ihn liest.
+TAPER_SAMPLE = 5
 
 #: Ab welcher Breite eine ungestützte Fläche als Brücke zählt und nicht mehr
 #: als Überhang — **wenn kein Drucker bekannt ist**.
@@ -615,10 +628,17 @@ def _measure_all(
     Luft, und genau das ist eine Insel (:func:`_islands`); ``on_plate`` gilt
     deshalb nur der untersten Schicht des Körpers. Das wird hier entschieden,
     bevor irgendetwas beginnt.
+
+    **Der Keil wird an jeder :data:`TAPER_SAMPLE`. gemessenen Schicht
+    gesucht**, die übrigen tragen den Wert der zuletzt gemessenen — die
+    Schleife am Ende (``carried``) schreibt ihn fort, bevor die gleichen
+    Schichten ihre Zahlen kopieren. Ein Keil ist eine Eigenschaft der Wand
+    über ihre Höhe, und die Messung kostete an einer Vase ein Drittel der
+    ganzen Analyse (:func:`taper_length`).
     """
     from concurrent.futures import ThreadPoolExecutor
 
-    jobs: list[tuple[int, ShapelyPolygon, ShapelyPolygon | None, bool]] = []
+    jobs: list[tuple[int, ShapelyPolygon, ShapelyPolygon | None, bool, bool]] = []
     # Schicht → die gemessene Schicht, deren Zahlen sie übernimmt.
     repeats: dict[int, int] = {}
     previous: ShapelyPolygon | None = None
@@ -633,7 +653,7 @@ def _measure_all(
         if previous is not None and source >= 0 and _same_layer(shape, previous):
             repeats[index] = source
         else:
-            jobs.append((index, shape, previous, on_plate))
+            jobs.append((index, shape, previous, on_plate, len(jobs) % TAPER_SAMPLE == 0))
             source = index
         previous = shape
         on_plate = False
@@ -642,7 +662,16 @@ def _measure_all(
     if not jobs:
         return results
 
-    def copied() -> list[LayerMetrics | None]:
+    def carried() -> list[LayerMetrics | None]:
+        taper = 0.0
+        for index, _shape, _below, _plate, sampled in jobs:
+            measured = results[index]
+            if measured is None:
+                continue
+            if sampled:
+                taper = measured.taper_length
+            elif taper > 0.0:
+                results[index] = replace(measured, taper_length=taper)
         for index, origin in repeats.items():
             measured = results[origin]
             shape = sections[index]
@@ -651,21 +680,23 @@ def _measure_all(
         return results
 
     if len(jobs) < PARALLEL_FROM:
-        for index, shape, below, plate in jobs:
+        for index, shape, below, plate, sampled in jobs:
             if cancelled is not None:
                 cancelled.raise_if_cancelled()
             step = _layer_step(index, layer_height, first_layer_height)
             results[index] = _measure(
-                shape, below, plate, step, detail, overhang_factor, bridge_from
+                shape, below, plate, step, detail, overhang_factor, bridge_from, sampled
             )
-        return copied()
+        return carried()
 
-    def one(job: tuple[int, ShapelyPolygon, ShapelyPolygon | None, bool]) -> None:
+    def one(job: tuple[int, ShapelyPolygon, ShapelyPolygon | None, bool, bool]) -> None:
         if cancelled is not None:
             cancelled.raise_if_cancelled()
-        index, shape, below, plate = job
+        index, shape, below, plate, sampled = job
         step = _layer_step(index, layer_height, first_layer_height)
-        results[index] = _measure(shape, below, plate, step, detail, overhang_factor, bridge_from)
+        results[index] = _measure(
+            shape, below, plate, step, detail, overhang_factor, bridge_from, sampled
+        )
         if cancelled is not None:
             cancelled.raise_if_cancelled()
 
@@ -696,7 +727,7 @@ def _measure_all(
             for start in range(0, len(jobs), workers):
                 cancelled.raise_if_cancelled()
                 list(pool.map(one, jobs[start : start + workers]))
-    return copied()
+    return carried()
 
 
 def _workers(limit: int) -> int:
@@ -1188,7 +1219,14 @@ def _measure(
     detail: Detail = "full",
     overhang_factor: float = OVERHANG_ANGLE_FACTOR,
     bridge_from: float = BRIDGE_FROM,
+    taper: bool = True,
 ) -> LayerMetrics:
+    """Die Kennzahlen einer Schicht gegen die darunter.
+
+    ``taper`` sagt, ob der Keil (:func:`taper_length`) an dieser Schicht
+    gesucht wird; :func:`_measure_all` fragt nur jede :data:`TAPER_SAMPLE`.
+    und schreibt den Wert dazwischen fort.
+    """
     area = float(shape.area)
     reach = max(layer_height * overhang_factor, OVERHANG_MARGIN)
     region: ShapelyPolygon | None = None
@@ -1248,7 +1286,7 @@ def _measure(
         contour_count=_contour_count(shape),
         overhang=region,
         islands=island_region,
-        taper_length=taper_length(shape),
+        taper_length=taper_length(shape) if taper else 0.0,
     )
 
 
@@ -1847,6 +1885,11 @@ def largest_overhang_patch(result: SliceResult) -> float:
     Eine Schicht, die ihre Überhangfläche kennt, aber keine Stücke trägt —
     ein Ergebnis aus Kennzahlen, wie die Vorschlagstests es bauen —, gilt als
     ein Stück: Wer die Stücke nicht mitgibt, bekommt die Schichtsumme.
+
+    Gerechnet wird mit :func:`app.core.units.ring_area`, ohne GEOS und ohne
+    NumPy: Es sind tausende kleine Stücke, und keines ist eine
+    Geometriefrage. Am Gitterbecher (476 Schichten mal 56 Stücke) kostete
+    der NumPy-Weg 287 ms je Vorschlagsrechnung, dieser 19.
     """
     largest = 0.0
     for layer in result.layers:
@@ -1856,19 +1899,9 @@ def largest_overhang_patch(result: SliceResult) -> float:
             largest = max(largest, float(layer.overhang_area))
             continue
         for piece in layer.overhangs:
-            area = _ring_area(piece.outline) - sum(_ring_area(hole) for hole in piece.holes)
+            area = ring_area(piece.outline) - sum(ring_area(hole) for hole in piece.holes)
             largest = max(largest, area)
     return largest
-
-
-def _ring_area(ring: Ring) -> float:
-    """Die Fläche eines Rings nach der Schnürsenkelformel — ohne GEOS, weil
-    es tausende kleine Stücke sind und keines eine Geometriefrage."""
-    if len(ring) < 3:
-        return 0.0
-    points = np.asarray(ring, dtype=float)
-    x, y = points[:, 0], points[:, 1]
-    return float(0.5 * abs(np.dot(x, np.roll(y, -1)) - np.dot(y, np.roll(x, -1))))
 
 
 def island_layers(result: SliceResult) -> tuple[float, ...]:
@@ -1993,7 +2026,13 @@ def taper_length(shape: ShapelyPolygon) -> float:
 
 
 def tapered_layers(result: SliceResult) -> int:
-    """Wie viele Schichten eine Keilstrecke tragen (:func:`taper_length`)."""
+    """Wie viele Schichten eine Keilstrecke tragen (:func:`taper_length`).
+
+    Gemessen ist der Keil an jeder :data:`TAPER_SAMPLE`. Schicht, die
+    dazwischen tragen den Wert der zuletzt gemessenen; die Zahl ist damit auf
+    ``TAPER_SAMPLE`` Schichten genau, und wer sie liest, fragt nach Anteilen
+    (``advise.TAPERED_LAYERS_SHARE``), nicht nach einzelnen Schichten.
+    """
     return sum(1 for layer in result.layers if layer.taper_length > EPS_GEOM)
 
 

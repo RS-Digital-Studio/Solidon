@@ -57,6 +57,37 @@ from app.core.types import BoundingBox, Document, Profile, SceneObject
 
 #: Der Stichtag der Demo, gesichert bevor die Fixture unten ihn wegnimmt.
 _SHIPPED_DEMO_UNTIL = activation_store.DEMO_UNTIL
+
+#: Der Satz, mit dem der Lauf endet, wenn der exakte Kern in der CI fehlt.
+#: ``test_toolchain.py`` prüft, dass er an ``pytest_sessionstart`` hängt.
+EXACT_KERNEL_MISSING_IN_CI = (
+    "Der exakte Kern (OpenCASCADE) fehlt, und dieser Lauf ist die CI: build.yml "
+    "installiert das Extra brep in jedem Testlauf. Ohne den Kern überspringen sich "
+    "die Dateien des exakten Kerns still, und das Tor wäre grün über nichts."
+)
+
+
+def pytest_sessionstart(session: pytest.Session) -> None:
+    """Unter ``CI`` ist ein fehlender exakter Kern ein Fehler, kein Skip.
+
+    Zweiunddreißig Testdateien überspringen sich ohne OpenCASCADE —
+    ``tests.helpers.exact_kernel``, ``importorskip("OCP")``, ein
+    ``pytestmark`` —, und ``brep.kernel.available()`` fängt dabei jede
+    Ausnahme. Auf einem Entwicklerrechner ohne das Extra ist das richtig. In
+    der CI war dasselbe Überspringen unsichtbar: ``build.yml`` installiert
+    ``brep`` in jedem Lauf, und wäre das Rad für eine Plattform einmal nicht
+    da oder der Import gerissen, hätte sich der zweite Kern still
+    verabschiedet. Dasselbe Muster wie ``tests/php_probe.py`` für PHP, nur
+    für alle Plattformen, weil das Extra überall installiert wird.
+    """
+    if not os.environ.get("CI"):
+        return
+    from app.core.brep import kernel
+
+    if not kernel.available():
+        pytest.exit(EXACT_KERNEL_MISSING_IN_CI, returncode=1)
+
+
 #: Der tatsächlich ausgelieferte Testbeginn. Die Suite aktiviert den
 #: erhaltenen Pfad darunter für seine Mechaniktests wieder.
 _SHIPPED_TRIAL_FROM = activation_store.TRIAL_FROM

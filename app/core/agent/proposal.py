@@ -80,10 +80,12 @@ class Proposal:
     stopped: str = ""
     """Gesetzt, wenn der Zug nicht von selbst geendet hat.
 
-    Vier Gründe: ``steps`` und ``tokens`` sind die harten Grenzen aus §26.5,
-    ``truncated`` und ``refused`` kommen vom Modell (``stop_reason``). Die
-    beiden letzten tragen zusätzlich einen Befund mit dem, was jetzt hilft —
-    eine Kennung allein erklärt niemandem etwas."""
+    Fünf Gründe: ``steps`` und ``tokens`` sind die harten Grenzen aus §26.5,
+    ``truncated`` und ``refused`` kommen vom Modell (``stop_reason``), und
+    ``halted`` heißt, dass ein Schritt des Zuges die Auswertung angehalten
+    hat und die Sitzung seine Parameter, Passungen und Druckwerte
+    zurückgenommen hat. Die drei letzten tragen zusätzlich einen Befund mit
+    dem, was jetzt hilft — eine Kennung allein erklärt niemandem etwas."""
 
     @property
     def changes_geometry(self) -> bool:

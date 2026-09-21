@@ -61,8 +61,8 @@ from app.core.backends.llm import (
     GPU_PROMPT_TOKENS_PER_SECOND,
     OLLAMA_CONTEXT_TOKENS,
     PROMPT_TRUNCATION_FLOOR,
-    _tools_cost,
     ollama_endpoint,
+    tools_cost,
 )
 from app.core.bootstrap import load_operations
 from app.core.discover import opener_for
@@ -214,7 +214,7 @@ def _count_tokens(model: str, tools: list[dict[str, object]]) -> dict[str, objec
         or not 0 <= produced <= 1
     ):
         raise ValueError("Ollama liefert keine vollständige Tokenauskunft. Erneut zählen.")
-    if counted < _tools_cost(len(tools)) * PROMPT_TRUNCATION_FLOOR:
+    if counted < tools_cost(len(tools)) * PROMPT_TRUNCATION_FLOOR:
         raise ValueError(
             "Ollama hat den Auftrag offenbar gekürzt. Kontext und Modell prüfen, dann neu zählen."
         )

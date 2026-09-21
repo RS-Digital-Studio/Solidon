@@ -56,11 +56,17 @@ def _names(files: set[Path], root: Path) -> set[str]:
 
 
 def test_module_name_strips_init_and_uses_the_given_root(tmp_path: Path) -> None:
+    """Ein Paket heißt nach seinem Ordner, ein Modul nach seiner Datei — relativ zur genannten
+    Wurzel.
+    """
     assert module_name(tmp_path / "app" / "core" / "__init__.py", tmp_path) == "app.core"
     assert module_name(tmp_path / "app" / "core" / "units.py", tmp_path) == "app.core.units"
 
 
 def test_a_changed_module_selects_direct_indirect_typed_and_tree_readers(tree: Path) -> None:
+    """Eine geänderte Kerndatei wählt, wer sie direkt, mittelbar oder nur für Typen importiert,
+    dazu jeden Baumleser — und nennt je Datei den Grund.
+    """
     files, reasons = affected([tree / "app" / "x.py"], ImportGraph(tree))
 
     assert _names(files, tree) == {
@@ -81,6 +87,7 @@ def test_an_unrelated_module_selects_only_the_tree_readers(tree: Path) -> None:
 
 
 def test_a_changed_test_file_selects_itself(tree: Path) -> None:
+    """Eine geänderte Testdatei ist selbst betroffen, und nur sie."""
     files, reasons = affected([tree / "tests" / "test_unrelated.py"], ImportGraph(tree))
 
     assert _names(files, tree) == {"tests/test_unrelated.py"}
@@ -88,6 +95,7 @@ def test_a_changed_test_file_selects_itself(tree: Path) -> None:
 
 
 def test_conftest_selects_every_test(tree: Path) -> None:
+    """``conftest.py`` lädt vor jeder Testdatei; eine Änderung daran betrifft alle."""
     files, _ = affected([tree / "tests" / "conftest.py"], ImportGraph(tree))
 
     assert _names(files, tree) == {
@@ -439,6 +447,10 @@ def test_a_named_window_file_is_deferred_but_remains_visible(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
+    """Eine ausdrücklich genannte Fensterdatei wird bis zum Release zurückgestellt, steht aber in
+    der Ausgabe — mit Grund bei ``--why``, sonst mit dem Hinweis, dass kein Lauf gestartet
+    wurde.
+    """
     from tools import affected_tests
 
     window = selection_tree["window"]
@@ -464,6 +476,9 @@ def test_an_only_performance_selection_does_not_start_empty_pytest(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
+    """Besteht die Auswahl nur aus Leistungstests, startet auch ``--release`` keinen leeren pytest-
+    Lauf — der endete mit Exit 5 und sähe aus wie ein Fehler.
+    """
     from tools import affected_tests
 
     performance = selection_tree["performance"]
@@ -477,6 +492,8 @@ def test_an_only_performance_selection_does_not_start_empty_pytest(
 
 
 def test_a_truly_empty_collection_stays_an_error(tmp_path: Path) -> None:
+    """Eine Datei ohne Tests sammelt nichts, und das bleibt ein Fehler (Exit 5), kein grüner
+    Lauf."""
     from tools.list_windowed_tests import collect_test_groups
 
     empty = _write(tmp_path, "test_empty.py", "# Keine Tests vorhanden.\n")
@@ -501,6 +518,9 @@ def test_a_partly_broken_collection_stays_an_error(
 def test_the_isolated_runner_uses_the_same_release_selection(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, release: bool
 ) -> None:
+    """Der abgekoppelte Läufer trennt Fenster- von Kerndateien mit derselben Regel wie
+    ``affected_tests``: ohne ``--release`` nur der Kern, mit beidem — und nie die Leistung.
+    """
     from tools import affected_tests, run_suite_isolated
 
     plain, window, performance = [tmp_path / name for name in ("plain", "window", "performance")]
@@ -523,6 +543,9 @@ def test_the_isolated_runner_uses_the_same_release_selection(
 def test_a_successful_summary_cannot_hide_the_process_exit(
     monkeypatch: pytest.MonkeyPatch, exit_code: int
 ) -> None:
+    """„1 passed" in der Ausgabe rettet keinen Prozess, der mit 5 oder 139 endete: Der Exit-Code
+    entscheidet, nicht die Schlusszeile.
+    """
     from tools import affected_tests
 
     monkeypatch.setattr(

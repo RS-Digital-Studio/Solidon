@@ -49,6 +49,14 @@
 #   ComfyUI           GPL-3.0   extern, eigener Prozess — Weg 3 (§27)
 #   TripoSG           MIT       Quelltext und Gewichte, in ComfyUI geladen
 #   BiRefNet          MIT       Freistell-Gewichte (Comfy-Org/BiRefNet)
+#   SDXL Base 1.0     CreativeML Open RAIL++-M
+#                               Bildmodell für den Textweg zu Weg 3
+#                               (``comfy_setup.fetch_image_model``,
+#                               ``sd_xl_base_1.0.safetensors``); Gewichte
+#                               beim Kunden, nie im Paket — die Lizenz
+#                               erlaubt den lokalen Gebrauch, verbietet
+#                               bestimmte Verwendungen der Ausgaben, und
+#                               das entscheidet der Kunde am eigenen Bild
 #
 # TripoSG ist der Grund, warum Weg 3 überhaupt geht: Die naheliegende
 # Alternative war lizenzrechtlich in Europa nicht nutzbar. Die Knoten unter

@@ -19,6 +19,7 @@ from app.core.scene.evaluate import _answer_matches, _with_feature_reservations,
 from app.core.scene.project import load, new_project, save
 from app.core.types import BaseParams, Feature, Operation, OpResult, SceneObject
 from app.i18n import _, tr
+from tests.helpers import exact_kernel
 
 
 @pytest.fixture(scope="module")
@@ -50,6 +51,10 @@ def old_holes(count=1):
 
 
 def test_competing_group_asks_every_owner_and_never_offers_one_target_twice(plates):
+    """Drei alte Bohrungen um zwei neue: Jede wird gefragt, die Auswahl schrumpft mit jeder
+    Antwort, die letzte bekommt nur noch „Nicht weiterführen" — und wer nicht fortgeführt wird,
+    bleibt als Kennung reserviert.
+    """
     body = SceneObject(id="body", name="Platte", mesh=plates[1])
     before = old_holes(3)
     recorded, asked, contexts = {}, [], []
@@ -104,6 +109,10 @@ def test_competing_group_asks_every_owner_and_never_offers_one_target_twice(plat
 
 @pytest.mark.parametrize("stop", ("cancel", "invalid", "raise"))
 def test_answer_failure_after_another_group_keeps_mapping_records_and_findings(plates, stop):
+    """Bricht die zweite Antwort ab — Abbruch, ungültige Wahl oder Ausnahme —, bleibt von der
+    ersten nichts stehen: Zuordnung, Aufzeichnung und Befunde sind wie vorher, der Kontext ist
+    geleert.
+    """
     body = SceneObject(id="body", name="Platte", mesh=plates[1], features=detect(plates[1]))
     targets = tuple(name for name, feature in body.features.items() if feature.kind == "hole")
     matched = MatchResult(ambiguous={"old_a": (targets[0],), "old_b": (targets[1],)})
@@ -141,6 +150,9 @@ def test_answer_failure_after_another_group_keeps_mapping_records_and_findings(p
 
 
 def test_old_unqualified_answer_never_frees_a_new_competing_group(plates):
+    """Eine alte Antwort ohne Objektbezug entscheidet keine neue Konkurrenz um dasselbe Ziel; beide
+    Bewerber werden gefragt.
+    """
     body = SceneObject(id="body", name="Platte", mesh=plates[1])
     holes = {name: feature for name, feature in detect(plates[1]).items() if feature.kind == "hole"}
     old = old_holes(2)
@@ -161,6 +173,9 @@ def test_old_unqualified_answer_never_frees_a_new_competing_group(plates):
 
 
 def test_valid_old_single_answer_is_reused_without_inventing_a_group(plates):
+    """Eine gültige alte Einzelantwort ohne Gegenbewerber wird stumm wiederverwendet; niemand wird
+    gefragt, und keine Gruppe entsteht.
+    """
     body = SceneObject(id="body", name="Platte", mesh=plates[1])
     target = next(feature for feature in detect(plates[1]).values() if feature.kind == "hole")
     saved = fingerprint(target, body.mesh.bounds.centre, body.mesh.bounds.diagonal)
@@ -179,6 +194,9 @@ def test_valid_old_single_answer_is_reused_without_inventing_a_group(plates):
 
 
 def test_stale_group_cannot_fall_back_to_a_superseded_legacy_answer(plates):
+    """Passt die aufgezeichnete Gruppe nicht mehr, gilt die ältere Einzelantwort daneben nicht als
+    Ersatz: Es wird einmal neu gefragt.
+    """
     body = SceneObject(id="body", name="Platte", mesh=plates[1])
     operation = Operation(id=3, op="thicken", outputs=("body",))
     recorded = {}
@@ -282,6 +300,9 @@ def two_body_project(plates):
 def test_whole_operation_answers_are_object_qualified_and_atomic(
     plates, profile, tmp_path, abort_second
 ):
+    """Eine Operation über zwei Körper fragt je Körper mit dessen Namen, zeigt dabei die Vorschau
+    des angehaltenen Stands — und der Stapel bleibt bis zur letzten Antwort unverändert.
+    """
     project, history, registry = two_body_project(plates)
     before = deepcopy(project.document.ops)
     cache = ResultCache(disk=DiskCache(codec=MeshCodec(), directory=tmp_path / "cache"))
@@ -341,7 +362,9 @@ def test_whole_operation_answers_are_object_qualified_and_atomic(
 
 
 def test_native_competition_does_not_take_a_matching_mesh_answer(monkeypatch):
-    from app.core.brep import edit
+    """Eine gespeicherte Netzantwort passt nicht auf einen exakten Körper: Die
+    Zuordnung fragt neu, statt Kennungen über die Kerngrenze zu übernehmen."""
+    edit = exact_kernel()
     from app.core.brep.features import features_of
     from app.core.perceive.match_decisions import group_fingerprint
 
@@ -378,6 +401,10 @@ def test_native_competition_does_not_take_a_matching_mesh_answer(monkeypatch):
 def test_two_bodies_never_share_legacy_answer_and_save_explicit_noncontinuation(
     plates, profile, tmp_path, noncontinuation
 ):
+    """Zwei Körper mit gleich benannten Merkmalen teilen sich keine alte Antwort; „Nicht
+    weiterführen" wird je Körper ausdrücklich gespeichert und beim Wiederöffnen nicht erneut
+    gefragt.
+    """
     project, history, registry = two_body_project(plates)
     hole = next(feature for feature in detect(plates[1]).values() if feature.kind == "hole")
     saved = fingerprint(hole, plates[1].bounds.centre, plates[1].bounds.diagonal)

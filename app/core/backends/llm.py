@@ -1407,7 +1407,7 @@ class OllamaBackend:
         # Agent schickt alle; eine Probe mit zwei Werkzeugen kostet weniger als
         # der Durchschnitt je Werkzeug, und die Erwartung wäre geraten.
         if len(tools) * 2 >= PROMPT_TOOL_COUNT:
-            expected = _tools_cost(len(tools))
+            expected = tools_cost(len(tools))
             if 0 < reply.input_tokens < expected * PROMPT_TRUNCATION_FLOOR:
                 raise BackendPromptTruncated(
                     counted=reply.input_tokens,
@@ -1430,9 +1430,13 @@ class OllamaBackend:
         return reply
 
 
-def _tools_cost(count: int) -> int:
+def tools_cost(count: int) -> int:
     """Was ``count`` Werkzeuge nach der Messung von :data:`PROMPT_TOKENS`
-    kosten — anteilig, denn Tests und Proben schicken nicht alle."""
+    kosten — anteilig, denn Tests und Proben schicken nicht alle.
+
+    Öffentlich, weil ``tools/measure_local_model.py`` dieselbe Schwelle
+    braucht: Was die Anwendung als gekürzten Auftrag zurückweist, weist auch
+    die Messung zurück — aus einer Rechnung, nicht aus einer Kopie."""
     return round(PROMPT_TOKENS * count / PROMPT_TOOL_COUNT)
 
 

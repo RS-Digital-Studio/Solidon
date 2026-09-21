@@ -2032,7 +2032,12 @@ class LayerInfo:
     Wänden von je einem Millimeter auf zwei Zentimetern Umfang eine von drei —
     und ein Slicer mit variabler Bahnbreite wechselt dort die Wandzahl Bahn
     für Bahn. Zuerst gelegte Innenwände zeichnen diese Übergänge durch die
-    Außenwand ab (Organizer vom 20.09.2026). Null heißt: keine solche Stelle."""
+    Außenwand ab (Organizer vom 20.09.2026). Null heißt: keine solche Stelle.
+
+    Gemessen an jeder :data:`~app.core.slice.analysis.TAPER_SAMPLE`. gemessenen
+    Schicht, dazwischen fortgeschrieben — ein Keil ist eine Eigenschaft der
+    Wand über ihre Höhe, und die Messung kostete an einer Vase ein Drittel der
+    ganzen Analyse."""
 
 
 @dataclass(frozen=True, slots=True)

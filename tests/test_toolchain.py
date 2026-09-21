@@ -148,6 +148,41 @@ def test_the_workflow_runs_the_interpreter_the_project_demands() -> None:
     )
 
 
+def test_the_ci_refuses_to_run_without_the_exact_kernel(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Unter ``CI`` beendet ``tests/conftest.py`` den Lauf, wenn OpenCASCADE fehlt.
+
+    Zweiunddreißig Dateien überspringen sich ohne den exakten Kern, und
+    ``build.yml`` installiert ihn in jedem Testlauf — ein Lauf, in dem er
+    trotzdem fehlt, ist kaputt und darf nicht grün werden. Geprüft wird die
+    Zusicherung selbst, in beiden Richtungen: Ohne ``CI`` bleibt ein
+    fehlender Kern ein Skip wie bisher; mit ``CI`` endet die Sitzung mit dem
+    Satz, der den Grund nennt, und mit Exit 1.
+    """
+    import importlib
+
+    from app.core.brep import kernel
+
+    conftest = importlib.import_module("tests.conftest")
+    monkeypatch.setattr(kernel, "available", lambda: False)
+
+    monkeypatch.delenv("CI", raising=False)
+    conftest.pytest_sessionstart(None)  # type: ignore[arg-type]
+
+    monkeypatch.setenv("CI", "true")
+    with pytest.raises(pytest.exit.Exception) as ended:
+        conftest.pytest_sessionstart(None)  # type: ignore[arg-type]
+    assert ended.value.returncode == 1
+    assert ended.value.msg == conftest.EXACT_KERNEL_MISSING_IN_CI
+    assert "build.yml" in conftest.EXACT_KERNEL_MISSING_IN_CI
+
+    workflow = (_ROOT / ".github" / "workflows" / "build.yml").read_text(encoding="utf-8")
+    installs = re.findall(r"pip install[^\n]*\.\[[^\]]*\]", workflow)
+    assert installs, "kein pip install mit Extras im Workflow — dann prüft dieser Test nichts"
+    assert all("brep" in line for line in installs), (
+        "ein CI-Lauf ohne das Extra brep würde mit dem Wächter rot: " + str(installs)
+    )
+
+
 def test_the_version_is_the_same_in_both_places_that_carry_it() -> None:
     """Die Version steht in ``branding.py`` und in ``pyproject.toml``.
 

@@ -17,6 +17,14 @@ CASES = json.loads((Path(__file__).parent / "data" / "organizer_layouts.json").r
 
 
 def test_final_organizer_surface_proof_keeps_the_original_cancel_token(monkeypatch):
+    """Der Flächennachweis je Wand (``build._patch`` → ``surfaces.planar_patch``)
+    bekommt **dasselbe** Abbruchsignal wie der Organizerbau, nicht keines und
+    nicht ein eigenes: Festgehalten wird der Rückruf, den ``planar_patch``
+    erhält, und er muss der des Aufrufers sein. Bis zum 21.09.2026 prüfte der
+    Test nur, dass ein Abbruch irgendwo ankommt — ``check_cancelled=None`` an
+    ``planar_patch`` blieb grün, weil ``build_organizer`` danach selbst noch
+    einmal fragt.
+    """
     from app.core.errors import OperationCancelled
     from app.core.perceive import surfaces
     from app.core.scene.cancel import CancelSignal
@@ -33,14 +41,17 @@ def test_final_organizer_surface_proof_keeps_the_original_cancel_token(monkeypat
     )
     token = CancelSignal()
     original = surfaces.planar_patch
+    calls = []
 
     def cancel_inside(*args, **kwargs):
+        calls.append(kwargs.get("check_cancelled"))
         token.cancel()
         return original(*args, **kwargs)
 
     monkeypatch.setattr(surfaces, "planar_patch", cancel_inside)
     with pytest.raises(OperationCancelled):
         build_organizer(layout, cancelled=token)
+    assert calls == [token.raise_if_cancelled], "der Rückruf ist der des Aufrufers, einmal"
 
 
 def test_square_two_cell_body_and_lower_divider_have_independent_volumes():
