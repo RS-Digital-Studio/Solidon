@@ -11,6 +11,7 @@ from __future__ import annotations
 import functools
 import importlib.util
 import re
+import sys
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Final, get_args
@@ -177,21 +178,71 @@ def group_title(category: str) -> str:
     return category
 
 
-def exact_kernel_present() -> bool:
-    """Ist der exakte Kern auf dieser Maschine da? Gefragt beim Laden des Registers.
+#: Was die Probe (:func:`probe_exact_kernel`) ergeben hat — oder noch nichts.
+_KERNEL_PROBED: bool | None = None
 
-    Dieselbe Frage wie ``brep.kernel.available`` — hier ohne den Import des
-    Pakets, damit das Register keine neue Kante in den Kernkreis zieht
-    (``tests/test_core_package_direction.py``). Eine kompilierte Erweiterung
-    scheitert auf mehr Arten als mit ``ImportError``.
+
+def probe_exact_kernel() -> bool:
+    """Den exakten Kern wirklich laden und die Antwort merken.
+
+    Dieselbe Frage wie ``brep.kernel.available`` — und absichtlich nicht
+    dessen Aufruf: Eine Kante ``registry → brep``, auch träge, schließt für
+    mypy den Kreis über ``scene.history`` (gemessen am 21.09.2026: „Cannot
+    determine type of REGISTRY" an drei Stellen). Der Weg, die zwei Proben
+    zu einer zu machen, führt andersherum — ``brep`` importiert das Register
+    ohnehin, ``kernel.available`` kann hierher zeigen (``zwillinge.md``).
+    Eine kompilierte Erweiterung scheitert auf mehr Arten als mit
+    ``ImportError``.
+
+    Gerufen vom Ladebildschirm hinter dem Fenster (``app.ui.app._KernelProbe``)
+    — im Arbeiter, denn OpenCASCADE sind 30 native Module und 0,4 s.
     """
-    if importlib.util.find_spec("OCP") is None:
+    global _KERNEL_PROBED
+    if not _kernel_is_installed():
+        _KERNEL_PROBED = False
         return False
     try:
         import OCP.BRepPrimAPI  # noqa: F401
     except Exception:
+        _KERNEL_PROBED = False
         return False
+    _KERNEL_PROBED = True
     return True
+
+
+def _kernel_is_installed() -> bool:
+    """Ob das Paket ``OCP`` auf dem Suchpfad liegt — ohne es zu laden.
+
+    Ein Finder auf ``sys.meta_path`` darf auf die Frage auch mit einer
+    Ausnahme antworten statt mit ``None`` (ein eingefrorenes Paket, eine
+    kaputte ``.pth``, die Sperre eines Tests) — und die Frage „ist der Kern
+    da?" hat darauf nur eine richtige Antwort: nein.
+    """
+    try:
+        return importlib.util.find_spec("OCP") is not None
+    except Exception:
+        return False
+
+
+def exact_kernel_present() -> bool:
+    """Ist der exakte Kern auf dieser Maschine da? Gefragt beim Bau der Menüs.
+
+    **Ohne Import, wo es geht.** Bis zum 21.09.2026 importierte die Frage
+    OpenCASCADE selbst — 0,42 s in jedem ``MainWindow()``, auch in jedem
+    Fenstertest (Review Fenster #7, Leistung B5). Die Antwort kommt jetzt in
+    dieser Reihenfolge: Ist der Kern schon geladen, ja; hat die Probe des
+    Ladebildschirms geantwortet, ihre Antwort; sonst genügt, dass
+    ``find_spec`` das **Paket** findet (0,4 ms — die Suche nach einem
+    Untermodul lüde das Paket und mit ihm 364 ms native Bibliotheken).
+    Geladen wird es bei der ersten exakten Operation, und scheitert es dort,
+    sagt ``kernel.require`` den einen klaren Satz statt eines
+    Import-Stapelabzugs.
+    """
+    if "OCP.BRepPrimAPI" in sys.modules:
+        return True
+    if _KERNEL_PROBED is not None:
+        return _KERNEL_PROBED
+    return _kernel_is_installed()
 
 
 #: Die fünf Grundkörper, je als Netz und exakt — dieselbe Handlung in zwei Rechenkernen.

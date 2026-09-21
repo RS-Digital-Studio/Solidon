@@ -281,6 +281,9 @@ def build_palette(theme: Theme) -> QPalette:
 #: teurere Weg zu derselben Auskunft.
 _ACTIVE: Theme = "dark"
 
+#: Die Eigenschaft an der ``QApplication``, die sagt, welches Thema sie trägt.
+_THEME_PROPERTY: Final = "solidonTheme"
+
 
 def current_theme() -> Theme:
     """Das Thema, das gerade gilt."""
@@ -299,9 +302,18 @@ def apply_theme(application: QApplication, theme: Theme) -> None:
 
     global _ACTIVE
     _ACTIVE = theme
-    application.setStyle("Fusion")
-    application.setPalette(build_palette(theme))
-    apply_style(application, theme)
+    # **Einmal je Anwendung und Thema.** Der Start rief dreimal hierher —
+    # vor dem Ladebildschirm, in ``build_application`` und aus
+    # ``_apply_settings`` —, und der dritte Aufruf ging über 672 fertige
+    # Widgets: 415 ms für ein Stylesheet, das schon stand (Review Leistung
+    # B7). Die Anwendung merkt sich, welches Thema sie trägt; dasselbe noch
+    # einmal ist nichts, was sich lohnt. Der Zeiger darunter läuft trotzdem:
+    # Er erreicht Fenster, die seit dem letzten Aufruf entstanden sind.
+    if application.property(_THEME_PROPERTY) != theme or not application.styleSheet():
+        application.setStyle("Fusion")
+        application.setPalette(build_palette(theme))
+        apply_style(application, theme)
+        application.setProperty(_THEME_PROPERTY, theme)
     # Der Zeiger gehört zum Aussehen wie die Farben. Er hing lange nur am
     # Viewport, und in den Panels stand der gewöhnliche Pfeil daneben — zwei
     # Programme in einem Fenster. Hier gesetzt, weil ein Themenwechsel die

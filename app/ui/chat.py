@@ -367,6 +367,25 @@ class ChatPanel(QWidget):
         self.setup.setVisible(not available and not self._locked)
         self._update_enabled()
 
+    def set_probing(self) -> None:
+        """Die Modellfrage läuft noch — der Chat sagt das, statt „kein Modell" zu raten.
+
+        Bis zum 21.09.2026 fragte das Fenster beim Aufbau synchron nach dem
+        Modell: Schlüsselbund und zwei Sockets, 0,3 bis 0,4 s im Hauptthread
+        (Review Leistung B6). Die Frage läuft jetzt im Arbeiter, und bis die
+        Antwort da ist, wäre „Der Chat braucht einen Zugang …" eine Auskunft,
+        die noch niemand weiß.
+        """
+        self._available = False
+        self._backend_name = ""
+        self.hint.setText(tr("Sprachmodell wird gesucht …"))
+        self.hint.setVisible(not self._locked)
+        if not self._locked:
+            self.access_hint.setText("")
+        self.access_hint.setVisible(self._locked)
+        self.setup.setVisible(False)
+        self._update_enabled()
+
     def set_notice(self, text: str) -> None:
         """Ein Hinweis unter dem Zustand — leer heißt: nichts zu sagen."""
         self.notice.setText(text)

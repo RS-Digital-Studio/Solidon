@@ -1219,28 +1219,41 @@ class _ThumbnailWorker(Worker):
 
 
 class _ObjectTreeView(QTreeWidget):
-    """Benutzerauswahl vor Qts eigener Auswahländerung prüfen."""
+    """Benutzerauswahl vor Qts eigener Auswahländerung prüfen.
+
+    **Und sagen, warum sie nicht geht.** Solange eine begonnene Maßgruppe
+    ihre Auswahl hält, verschluckte der Baum Klick, Doppelklick und Taste
+    stumm; den Satz „Die aktuelle Änderung zuerst übernehmen oder abbrechen"
+    sagte nur der Menüweg (Review Fenster #6, 21.09.2026). ``selection_refused``
+    ist der Satz — einmal je Geste, nicht je Auswahländerung, deshalb an den
+    Ereignissen und nicht in ``selectionCommand``.
+    """
 
     selection_allowed: Callable[[], bool] | None = None
+    selection_refused: Callable[[], None] | None = None
+
+    def _refused(self) -> bool:
+        """Ob die Auswahl gerade gehalten wird — und der Satz dazu, wenn ja."""
+        if self.selection_allowed is None or self.selection_allowed():
+            return False
+        if self.selection_refused is not None:
+            self.selection_refused()
+        return True
 
     def mousePressEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Schnittstelle
-        if self.selection_allowed is not None and not self.selection_allowed():
+        if self._refused():
             event.accept()
             return
         super().mousePressEvent(event)
 
     def mouseDoubleClickEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Schnittstelle
-        if self.selection_allowed is not None and not self.selection_allowed():
+        if self._refused():
             event.accept()
             return
         super().mouseDoubleClickEvent(event)
 
     def keyPressEvent(self, event: QKeyEvent) -> None:  # noqa: N802 — Qt-Schnittstelle
-        if (
-            event.key() != Qt.Key.Key_Escape
-            and self.selection_allowed is not None
-            and not self.selection_allowed()
-        ):
+        if event.key() != Qt.Key.Key_Escape and self._refused():
             event.accept()
             return
         super().keyPressEvent(event)
@@ -4439,8 +4452,12 @@ class ReportPanel(QWidget):
         """Die Kennzahlen über den Befunden — wasserdicht, Volumen, Teile.
 
         Ein Bericht aus Sätzen sagt, *was* zu tun ist; er sagt nicht, woran man
-        gerade ist. Diese drei Zahlen tun das, und sie kosten nichts: Sie
-        stehen im ausgewerteten Netz und werden nicht gerechnet.
+        gerade ist. Diese drei Zahlen tun das, und sie kosten hier nichts —
+        **weil der Auswertungsarbeiter sie vorher angefasst hat**
+        (``session._warm_metrics``). Gemerkt werden sie am Körper; der erste
+        Zugriff rechnet, und der lag bis zum 21.09.2026 in dieser Methode: 0,4
+        s Hauptthread an einer Million Dreiecken, 15 s an einem exakten
+        Gewinde (Review Leistung B1/B2).
 
         Bewusst nur, was ohne Schichtanalyse dasteht. Schmalste Wand und
         schlimmster Überhang gehören der Sache nach hierher, aber sie kosten
@@ -5005,6 +5022,13 @@ def refresh_feature_fields(
                 editor.setValue(float(value))
 
 
+#: Der Operationsname einer Handlung **ohne** Operation — *Maße ändern* und
+#: *entfernen* an einem Baustein meinen den Schritt, nicht das Register.
+#: ``str(action.op)`` macht aus ``None`` genau diese Zeichenkette; benannt,
+#: damit kein Vergleich mehr gegen ein zufälliges ``"None"`` läuft.
+NO_OPERATION: Final = "None"
+
+
 @dataclasses.dataclass(frozen=True, slots=True)
 class _Handling:
     """Was der eine Knopf unten über eine Handlung wissen muss.
@@ -5150,6 +5174,13 @@ class FeaturePanel(QWidget):
     #: ein Empfänger, der beim falschen Signal ausführt, schreibt einen Schritt
     #: in den Verlauf, den niemand ausgelöst hat.
     valuesChanged = Signal(str, dict)
+    #: Eine **andere** Handlung ist scharf — Registername und ihre heutigen
+    #: Werte. Kein ``valuesChanged``: Ein Klick in ein Feld ändert nichts,
+    #: und bis zum 21.09.2026 rechnete das Fenster darauf eine Vorschau mit
+    #: unveränderten Zahlen (Band, Abbrechen, an der 360k-Platte 2,6 bis 4,2 s je
+    #: Tab). Wer zuhört, bindet den Auftrag der neuen Handlung und entwertet
+    #: die Freigabe der alten — gerechnet wird erst bei einem echten Wert.
+    handlingArmed = Signal(str, dict)
 
     stepChangeRequested = Signal(int, dict)
     """Neue Werte für einen Schritt des Verlaufs — die Kennung und die Werte.
@@ -5236,6 +5267,9 @@ class FeaturePanel(QWidget):
         mit der es Menü, Werkzeugzeile und Befehlspalette sperrt."""
         self._apply_blocked_reason: str | None = None
         self.preview_check: Callable[[], bool] | None = None
+        self.preview_defer: Callable[[], None] | None = None
+        """Ein Klick auf *Übernehmen* vor der Vorschau wartet auf sie — das
+        Fenster hängt den Haken ein (``MainWindow._apply_when_previewed``)."""
         # **Die Reihenfolge ist eine Aussage:** Titel, der Weg ins Bild, der
         # Haken, das Übernehmen, das Verwerfen. Der Haken gehört unmittelbar
         # über den Knopf, dessen Umfang er ändert — ein Knopf dazwischen machte
@@ -5282,6 +5316,11 @@ class FeaturePanel(QWidget):
         """Ob die Maße des gezeigten Merkmals gerade im Bild stehen — dann
         trägt die Maßgruppe Übernehmen und Abbrechen, und die Knöpfe hier
         unten gehen mit (``set_measuring``)."""
+        self._measure_op: str | None = None
+        """Welche Handlung im Bild steht — ihr Block rechts geht mit (RM-199)."""
+        self._measure_begun = False
+        """Ob die Maßgruppe schon einen Zug oder eine Zahl gesehen hat — dann
+        sind auch die übrigen Handlungen gesperrt, bis sie endet."""
         self._cancel_offered = False
         """Ob eine Vorschau aus diesem Panel wartet — dann steht *Abbrechen*
         neben dem Übernehmen und verwirft sie (:meth:`offer_cancel`)."""
@@ -5310,6 +5349,10 @@ class FeaturePanel(QWidget):
         self._fit_choice: QComboBox | None = None
         self._fit_reason = ""
         self._runs: dict[str, _Handling] = {}
+        self._keyed: list[QWidget] = []
+        """Jedes Bedienelement mit ``handlingKey`` — die Liste, die
+        :meth:`_settle_lock` durchgeht, statt je Aufbau alle Kinder jeder Zeile
+        zu suchen (13 ms je Auswahlwechsel an sechs Handlungen, 21.09.2026)."""
         self._blocks: dict[str, tuple[QWidget | None, QWidget]] = {}
         """Je Handlungsschlüssel ihr Strich und ihre Zeile — was weggeht, solange
         ihre Maße im Bild stehen (:meth:`set_measuring`, RM-199)."""
@@ -5368,6 +5411,7 @@ class FeaturePanel(QWidget):
         self._fit_button = None
         self._fit_choice = None
         self._runs.clear()
+        self._keyed.clear()
         self._blocks.clear()
         self._texture_fields.clear()
         self._part_fields.clear()
@@ -5659,10 +5703,14 @@ class FeaturePanel(QWidget):
 
         self._part_fields = {entry.name: entry for entry in spec.params.spec()}
         self._parameter_values = dict(parameter_values)
-        self._separate()
+        line = self._separate()
         row = self._build_action(bore_action(operation, spec))
         self._rows.insertWidget(self._rows.count() - 1, row)
         self._built.append(row)
+        # Auch dieser Block steht nicht rechts, solange seine Maße im Bild
+        # stehen (RM-199): Ohne den Eintrag blieb „Bohrung im ursprünglichen
+        # Schritt ändern" mit vier gesperrten Feldern neben der Maßgruppe.
+        self._blocks[next(reversed(self._runs))] = (line, row)
         self._arm(next(reversed(self._runs)))
         self._settle_apply()
 
@@ -5746,7 +5794,7 @@ class FeaturePanel(QWidget):
             self._rows.insertWidget(self._rows.count() - 1, row)
             self._built.append(row)
         details = QPushButton(tr("Weitere Einstellungen …"), self)
-        details.setProperty("handlingKey", "texture-details")
+        self._mark(details, "texture-details")
         details.clicked.connect(lambda: self.stepEditRequested.emit(int(operation.id)))
         self._rows.insertWidget(self._rows.count() - 1, details)
         self._built.append(details)
@@ -5969,7 +6017,7 @@ class FeaturePanel(QWidget):
     def preview_values(self) -> tuple[str, dict[str, Any]] | None:
         """Die aktive Handlung aus derselben Wertequelle wie ihre Übernahme lesen."""
         entry = self._runs.get(self._armed or "")
-        if entry is None or entry.op == "None":
+        if entry is None or entry.op == NO_OPERATION:
             return None
         return entry.op, entry.values()
 
@@ -6010,15 +6058,14 @@ class FeaturePanel(QWidget):
         abwechselnd.
         """
         reason = self._locked
-        for row in self._built:
-            for child in row.findChildren(QWidget):
-                if isinstance(child.property("handlingKey"), str):
-                    entry = self._runs.get(child.property("handlingKey"))
-                    in_measure = self._measuring and (
-                        getattr(self, "_measure_begun", False)
-                        or (entry is not None and entry.op == getattr(self, "_measure_op", None))
-                    )
-                    child.setEnabled(not reason and not in_measure)
+        for child in self._keyed:
+            if not isValid(child):
+                continue
+            entry = self._runs.get(child.property("handlingKey"))
+            in_measure = self._measuring and (
+                self._measure_begun or (entry is not None and entry.op == self._measure_op)
+            )
+            child.setEnabled(not reason and not in_measure)
         for button in (self._in_view, self._apply, self._cancel):
             button.setEnabled(not reason)
         self._every.setEnabled(not reason and not self._measuring)
@@ -6285,7 +6332,7 @@ class FeaturePanel(QWidget):
             # Derselbe Merker wie an den Feldern: Er sagt, wem dieses
             # Bedienelement gehört — und damit auch, dass es mit ihnen gesperrt
             # wird, solange die Kette anhält (:meth:`_settle_lock`).
-            button.setProperty("handlingKey", key)
+            self._mark(button, key)
             layout.addWidget(button)
         if self._armed is None:
             self._arm(key)
@@ -6310,7 +6357,7 @@ class FeaturePanel(QWidget):
         if elsewhere and step is not None:
             named = ", ".join(str(entry) for entry in elsewhere)
             deeper = QPushButton(tr("{fields} ändern …").replace("{fields}", named), box)
-            deeper.setProperty("handlingKey", f"{key}|elsewhere")
+            self._mark(deeper, f"{key}|elsewhere")
             deeper.setToolTip(tr("Öffnet den vollständigen Dialog dieses Schritts."))
             deeper.setStatusTip(deeper.toolTip())
             deeper.setAccessibleDescription(deeper.toolTip())
@@ -6532,8 +6579,8 @@ class FeaturePanel(QWidget):
                 self._every.setChecked(False)
         self._every.setVisible(applies_to_all)
         self._settle_apply_block()
-        if changed and entry.op != "None":
-            self.valuesChanged.emit(entry.op, entry.values())
+        if changed and entry.op != NO_OPERATION:
+            self.handlingArmed.emit(entry.op, entry.values())
 
     def take_values(self, op: str, values: Mapping[str, Any], *, arm: bool = True) -> bool:
         """Vorgeschlagene Zahlen in die Felder dieser Handlung — und sie scharf.
@@ -6565,6 +6612,9 @@ class FeaturePanel(QWidget):
         # interpretText im Tastaturweg kann synchron eine neue Vorschau
         # auslösen und damit die vorherige Freigabe zurücknehmen.
         if not self.can_accept():
+            # Ein Klick vor der Vorschau verfällt nicht, er wartet auf sie.
+            if self.preview_defer is not None and self._apply_allowed():
+                self.preview_defer()
             return
         entry = self._runs.get(self._armed or "")
         if entry is not None:
@@ -6753,7 +6803,7 @@ class FeaturePanel(QWidget):
     def _group_changed(self, _checked: bool) -> None:
         """Ein geänderter Umfang braucht dieselbe Vorschau wie geänderte Maße."""
         entry = self._runs.get(self._armed or "")
-        if entry is not None and entry.op != "None":
+        if entry is not None and entry.op != NO_OPERATION:
             self.valuesChanged.emit(entry.op, entry.values())
 
     def preview_targets(self, op: str) -> tuple[str, ...]:
@@ -6804,7 +6854,7 @@ class FeaturePanel(QWidget):
             self.valuesChanged.emit(op, self._values(fields, widgets, fixed))
 
         for target in (editor, *editor.findChildren(QLineEdit)):
-            target.setProperty("handlingKey", key)
+            self._mark(target, key)
             target.installEventFilter(self)
         from app.ui.op_dialog import ValueField
 
@@ -6876,6 +6926,11 @@ class FeaturePanel(QWidget):
         self._arm(key)
         self._run_armed()
         return True
+
+    def _mark(self, widget: QWidget, key: str) -> None:
+        """Ein Bedienelement seiner Handlung zuordnen — und für die Sperre merken."""
+        widget.setProperty("handlingKey", key)
+        self._keyed.append(widget)
 
     def _build_field(self, field: Any, parent: QWidget) -> QWidget:
         """Panel und Maßgruppe verwenden dieselben Felder und Ausdruckswerte."""

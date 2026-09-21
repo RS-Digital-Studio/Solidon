@@ -174,6 +174,34 @@ class AskRequest:
         self.answered.set()
 
 
+#: Was das Fenster nach jeder Auswertung je Körper liest — in dieser Reihenfolge.
+_READ_IN_THE_WINDOW: Final = ("volume", "area", "is_watertight", "component_count")
+
+
+def _warm_metrics(result: EvaluationResult, cancelled: CancelSignal) -> None:
+    """Die Kennzahlen, die das Fenster liest, hier im Arbeiter anfassen.
+
+    Volumen, Oberfläche, Wasserdichtheit und Teilezahl sind gemerkte
+    Eigenschaften der Körper — beim ersten Zugriff gerechnet, danach gelesen.
+    Der erste Zugriff kam aus dem Hauptthread: ``describe_selection`` beim
+    Wiederherstellen der Auswahl, ``_measure_up`` über dem Prüfbericht,
+    ``_update_facts`` für die Kostenzeile. Gemessen am 21.09.2026 (Review
+    Leistung B1/B2): 1,5 s Hauptthread beim zweiten Öffnen von ``dense_1m``,
+    15,6 s an einem STEP-Gewinde. Der Plattencache liefert frische Körper
+    mit kaltem Gedächtnis; wo er sie nicht vorwärmt, tut es diese Schleife —
+    ein zweites Mal kostet sie nichts.
+    """
+    for entry in result.scene.objects.values():
+        cancelled.raise_if_cancelled()
+        mesh = entry.mesh
+        for name in _READ_IN_THE_WINDOW:
+            try:
+                getattr(mesh, name)
+            except Exception as problem:  # eine Kennzahl, die nicht geht, sagt es später am Ort
+                _log.info("metric %s of %s not available: %s", name, entry.id, problem)
+                break
+
+
 class _EvaluationWorker(Worker):
     """Ein Auswertungslauf. Besitzt nichts, meldet alles."""
 
@@ -246,6 +274,7 @@ class _EvaluationWorker(Worker):
                     session._dirty = True
                     session.projectChanged.emit()
             result = _with_findings(result, outside)
+            _warm_metrics(result, session.cancel_signal)
         except OperationCancelled:
             self.cancelled.emit()
         except AppError as error:
@@ -778,6 +807,13 @@ class Session(QObject):
     """Stapel, Pfad oder Titel haben sich geändert; die Leisten laden neu."""
     failed = Signal(object)
     """An ``AppError`` the surface shows as a suggestion (§2.7)."""
+    counterpartFinished = Signal(object)
+    """Die Passung eines Gegenstücks ist nachgetragen — trägt die neuen Befunde.
+
+    Das Paar selbst steht sofort im Dokument (:meth:`create_counterpart`,
+    :meth:`create_thread_counterpart`); die Passung braucht die Kennungen der
+    erzeugten Merkmale, und die kennt erst die Auswertung. Sie läuft im
+    Arbeiter, und dieses Signal sagt dem Fenster, was dabei herauskam."""
     backendChanged = Signal()
     """Der Chat spricht ab jetzt mit einem anderen Modell — die Kopfzeile lädt neu.
 
@@ -914,6 +950,9 @@ class Session(QObject):
         """Stempel der jüngsten Vorschau-Anfrage (§18.7) — eine verspätete
         Antwort auf eine ältere wird verworfen statt gezeigt."""
         self._backend: LLMBackend | None = None
+        self._backend_probed = False
+        """Ob ``first_available`` schon einmal gefragt wurde — auch ein „keins"
+        ist eine Antwort, die nicht bei jedem Fensteraufbau neu kostet."""
         self._selection: tuple[str, str] | None = None
         self._pending_views: tuple[tuple[str, bytes], ...] = ()
         """Die Ansichten des nächsten Zuges (§23) — im Hauptthread gerendert,
@@ -922,6 +961,9 @@ class Session(QObject):
         self._accepted: dict[str, str | None] = {}
         self._rerun_pending = False
         self._dirty = False
+        self._after_evaluation: list[tuple[int, Callable[[Any], None]]] = []
+        """Was nach der nächsten gültigen Auswertung dieses Dokuments noch zu tun
+        ist — je Eintrag der Projektstempel und der Abschluss (:meth:`_finish_after`)."""
 
     # --- state ------------------------------------------------------------------
 
@@ -2314,15 +2356,12 @@ class Session(QObject):
             first_place,
             second_place,
         )
-        try:
-            # Erst die Auswertung liefert die Kennungen der erzeugten Merkmale.
-            # Die Passung gehört an dieselbe Transaktion wie die beiden Hälften.
-            result = self.evaluate_now()
-            attach_fit(self.project.document, applied, pair, result.scene)
-        finally:
-            # Auch wenn die Auswertung abbricht, stehen die Schritte schon im
-            # Dokument und müssen beim Schließen oder Sichern erhalten bleiben.
-            self._changed()
+        # Erst die Auswertung liefert die Kennungen der erzeugten Merkmale.
+        # Die Passung gehört an dieselbe Transaktion wie die beiden Hälften.
+        self._finish_after(
+            lambda scene: attach_fit(self.project.document, applied, pair, scene), applied
+        )
+        self._changed()
         return applied
 
     def create_thread_counterpart(
@@ -2339,12 +2378,49 @@ class Session(QObject):
         applied = apply_thread_counterpart(
             self.project.document, feature, first_object, second_object, second_place
         )
-        try:
-            result = self.evaluate_now()
-            attach_thread_fit(self.project.document, applied, feature, result.scene)
-        finally:
-            self._changed()
+        self._finish_after(
+            lambda scene: attach_thread_fit(self.project.document, applied, feature, scene),
+            applied,
+        )
+        self._changed()
         return applied
+
+    def _finish_after(self, attach: Callable[[Any], Any], applied: CounterpartApplied) -> None:
+        """Die Passung nachtragen, sobald die Auswertung im Arbeiter durch ist.
+
+        **Bis zum 21.09.2026 lief hier ``evaluate_now``** — im Hauptthread,
+        ohne Fortschritt, ohne Abbrechen: 0,34 s an zwei Netzplatten, 18,6 s
+        an zwei exakten (gemessen, Review Fenster #2). Die Schritte stehen mit
+        ``_changed`` sofort im Dokument; die Auswertung geht ihren gewohnten
+        Weg mit Balken und Abbrechen, und der Abschluss läuft, sobald ein
+        gültiges Ergebnis **dieses** Dokuments da ist (:meth:`_run_finishers`).
+        Ein Projektwechsel dazwischen lässt ihn verfallen — dieselbe Zusage,
+        die ``_stale_import`` dem Einleseplan gibt (UI-01).
+        """
+        known = len(applied.findings)
+
+        def finish(scene: Any) -> None:
+            attach(scene)
+            self.counterpartFinished.emit(tuple(applied.findings[known:]))
+
+        self._after_evaluation.append((self._project_generation, finish))
+
+    def _run_finishers(self, result: Any) -> None:
+        """Die wartenden Abschlüsse dieses Dokuments — jeder genau einmal.
+
+        Ein Abschluss darf das Dokument ändern und ruft dann ``_changed``;
+        die nächste Auswertung rechnet aus dem Cache und prüft die Passung.
+        Abschlüsse eines früheren Dokuments werden verworfen, nicht gefahren.
+        """
+        if not self._after_evaluation:
+            return
+        pending, self._after_evaluation = self._after_evaluation, []
+        for generation, finish in pending:
+            if generation != self._project_generation:
+                _log.info("counterpart finish arrived after the project changed — dropped")
+                continue
+            finish(result.scene)
+            self._changed()
 
     def preview_async(
         self,
@@ -2777,6 +2853,7 @@ class Session(QObject):
         self.result_generation += 1
         self.result_current = True
         self.sceneChanged.emit(result)
+        self._run_finishers(result)
         return result
 
     def remember_analyses(
@@ -2832,15 +2909,24 @@ class Session(QObject):
         """Das Modell, das der Chat benutzt, oder None — dann ist der Chat
         aus (§27).
         """
-        if self._backend is None:
+        if self._backend is None and not self._backend_probed:
             self._backend = first_available()
+            self._backend_probed = True
         return self._backend
 
+    @property
+    def backend_known(self) -> bool:
+        """Ob die Modellfrage beantwortet ist — sonst kostet :attr:`agent_backend`
+        Schlüsselbund und Netz, und das gehört in einen Arbeiter
+        (``MainWindow._refresh_chat_availability``)."""
+        return self._backend is not None or self._backend_probed
+
     def set_agent_backend(self, backend: LLMBackend | None) -> None:
-        """Das Modell von Hand wählen — der Einstellungsdialog und die Suite tun
-        das.
+        """Das Modell von Hand wählen — der Einstellungsdialog, der Arbeiter
+        der Modellfrage und die Suite tun das.
         """
         self._backend = backend
+        self._backend_probed = True
 
     def propose_async(
         self,
@@ -3348,6 +3434,7 @@ class Session(QObject):
             self._dirty = True
             self.projectChanged.emit()
         self.sceneChanged.emit(result)
+        self._run_finishers(result)
 
     def _on_failed(self, error: Any, finished: _EvaluationWorker | None = None) -> None:
         if self._stale(finished):
@@ -3364,6 +3451,7 @@ class Session(QObject):
             # abgelehnten Schlüssel und meldete jedes Mal denselben Fehler.
             _log.info("backend %s is no longer available, choosing again", self._backend.id)
             self._backend = None
+            self._backend_probed = False
             self.backendChanged.emit()
         self.failed.emit(error)
 

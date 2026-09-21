@@ -19,6 +19,7 @@ if __name__ == "__main__":
 
 # isort: split
 
+import importlib
 import sys
 from collections.abc import Callable
 from pathlib import Path
@@ -195,6 +196,59 @@ class _AdapterProbe(Worker):
         from app.ui.render.factory import probe
 
         probe()
+
+
+class _KernelProbe(Worker):
+    """Lädt den exakten Kern, sobald das Fenster steht.
+
+    ``menu_twins`` entscheidet, welcher Zwilling im Menü steht, und fragt dafür
+    ``exact_kernel_present`` — das importierte OpenCASCADE: 30 native Module,
+    173 MB, 0,42 bis 0,45 s im Hauptthread, während das Startbild stand
+    (Review Leistung B5, 21.09.2026). Die Frage kommt heute ohne Import aus
+    (``find_spec``); hier wird der Kern danach wirklich geladen
+    (``probe_exact_kernel``), damit die erste exakte Operation ihn vorfindet
+    und ein kaputtes Paket sich vor ihr meldet.
+
+    Wie die Adapterprobe ohne Ergebnissignal: Wer früher fragt als der
+    Arbeiter antwortet, bekommt dieselbe Antwort, nur selbst gerechnet.
+    """
+
+    def work(self) -> None:
+        from app.core.registry import menu_twins, probe_exact_kernel
+
+        probe_exact_kernel()
+        menu_twins()
+
+
+class _ImportWarmup(Worker):
+    """Die Geometriebibliotheken laden, sobald das Fenster steht.
+
+    ``app.core.deferred`` hält trimesh, scipy und networkx bis zur ersten
+    Rechnung zurück — damit das Fenster früher steht (§31). Die erste
+    Rechnung trug den Import dann selbst: Weg 1 öffnen kostete 1,36 s, mit
+    geladenen Bibliotheken 0,41 s (Review Leistung B8). Hier vergeht dieselbe
+    Zeit in einem Arbeiter, nachdem der Kunde das Fenster sieht — der
+    Importmechanismus ist threadsicher, und ``sys.modules`` gehört danach
+    allen. ``test_loading_the_registry_defers_geometry_libraries`` bleibt
+    davon unberührt: Das Register lädt weiterhin nichts davon.
+    """
+
+    def work(self) -> None:
+        for name in ("trimesh", "scipy.spatial", "networkx", "shapely", "manifold3d"):
+            try:
+                importlib.import_module(name)
+            except Exception as error:  # eine fehlende Bibliothek meldet sich beim ersten Gebrauch
+                _log.info("warmup skipped %s: %s", name, error)
+
+
+def _kernel_probe_failed(detail: str) -> None:
+    """Auch diese Frage ist eine Abkürzung; das Menü fragt dann selbst."""
+    _log.warning("the kernel probe did not come back: %s", detail)
+
+
+def _warmup_failed(detail: str) -> None:
+    """Ein gescheiterter Vorabimport kostet nichts — die erste Rechnung lädt selbst."""
+    _log.warning("the import warmup did not come back: %s", detail)
 
 
 def _adapter_probe_failed(detail: str) -> None:
@@ -433,7 +487,8 @@ def main(argv: list[str] | None = None) -> int:
     # im Laden die Farbe wechselt. Dieselbe Zeile deckt den Abschiedsdialog
     # einer abgelaufenen Demo darunter ab: der wäre sonst das einzige Fenster
     # dieses Starts gewesen — und ungefärbt. ``build_application`` setzt es
-    # danach noch einmal; das kostet nichts und bleibt die Stelle, an der ein
+    # danach noch einmal — ``apply_theme`` erkennt dasselbe Thema an der
+    # Anwendung und tut dann nichts mehr; die Stelle bleibt die, an der ein
     # Themenwechsel im Betrieb ankommt.
     apply_theme(application, settings.theme)  # type: ignore[arg-type]
     # **Die Titelleiste bekommt die Farbe der Anwendung** (G15). Windows malt
@@ -470,7 +525,8 @@ def main(argv: list[str] | None = None) -> int:
     # modulweit, und ``leash.wait_for_all`` erreicht ihn beim Fensterende.
     adapter_probe = _AdapterProbe()
     adapter_probe.crashed.connect(_adapter_probe_failed)
-    WorkerLeash(application).start(adapter_probe)
+    leash = WorkerLeash(application)
+    leash.start(adapter_probe)
 
     splash.step(tr("Operationen werden geladen …"), 0.12)
     load_operations()
@@ -502,6 +558,19 @@ def main(argv: list[str] | None = None) -> int:
     else:
         window.showMaximized()
     splash.finish(window)
+    # **Jetzt, hinter dem sichtbaren Fenster, die schweren Bibliotheken.**
+    # Sie gehören der ersten Rechnung, und die kommt mit dem ersten Klick;
+    # bis dahin lädt sie ein Arbeiter (:class:`_ImportWarmup`).
+    warmup = _ImportWarmup()
+    warmup.crashed.connect(_warmup_failed)
+    leash.start(warmup)
+    # Und der exakte Kern — nach dem Fenster, nicht neben dem Register: Die
+    # Menüs kommen mit ``find_spec`` aus, und ein Import von 30 nativen
+    # Modulen neben ``load_operations`` kostete dort die Hälfte der Zeit noch
+    # einmal (GIL). Hier bestätigt die Probe nur, was das Menü angenommen hat.
+    kernel_probe = _KernelProbe()
+    kernel_probe.crashed.connect(_kernel_probe_failed)
+    leash.start(kernel_probe)
     # Der erste Start und der Update-Hinweis gehören hinter das sichtbare
     # Fenster (§38) — und nur hierher, wo wirklich ein Mensch hinsieht.
     #

@@ -2502,7 +2502,19 @@ def test_parameter_only_proposals_are_checked_before_automatic_acceptance(
     ).propose("Ändere die Breite.")
 
     assert not proposal.drafts
-    assert proposal.parameters["width"].value == pytest.approx(width)
     assert agent_apply.auto_acceptable(proposal) is acceptable
     assert any(finding.code == "agent.stopped" for finding in proposal.findings) is not acceptable
     assert project.document.parameters["width"].value == pytest.approx(20.0)
+    if acceptable:
+        assert proposal.parameters["width"].value == pytest.approx(width)
+        assert not proposal.stopped
+    else:
+        # §15.2, dieselbe Regel wie bei einer Operation: Was die Kette
+        # anhält, ist nicht Teil des Vorschlags. Bis zum 21.09.2026 reiste der
+        # Wert mit, und ein angenommener Vorschlag hielt das Projekt an
+        # (Review Rest #9).
+        assert "width" not in proposal.parameters, "der anhaltende Wert ist zurückgenommen"
+        assert proposal.stopped == "halted"
+        assert any(
+            finding.code == "agent.halted_by_document_change" for finding in proposal.findings
+        )

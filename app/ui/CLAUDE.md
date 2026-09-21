@@ -67,8 +67,12 @@ alles. Seither gehen Unterlage, Striche, Pfeile und Marken über `add_lines`
 und `add_surface` mit `keep_in_front` in den Renderer, wie die
 Merkmalslinien; die Zahlenfelder bleiben Qt-Fenster und liegen ohnehin über
 dem Bild. Die Listen der Klasse tragen logische Bildpunkte, `refresh` legt
-sie über `display_to_world` auf eine feste Tiefe und tauscht die Elemente je
-Aufbau aus; `segments` sagt Tests, wo Tinte liegt. Je Aufbau holt sie drei
+sie über `display_to_world` auf eine feste Tiefe — **in Renderer-Elemente
+mit fester Kapazität** (vier Linien- und drei Flächenelemente, NaN-gepolsterte
+Segmentpuffer, kollabierte Dreiecke), die je Aufbau nur `set_data` in place
+bekommen; neu entstehen sie erst, wenn die Kapazität reißt (Review Ansicht #7:
+10 Elemente je Aufbau entfernt und angelegt kosteten 12 der 22 ms je
+Kamerageste). `segments` sagt Tests, wo Tinte liegt. Je Aufbau holt sie drei
 Weltpunkte und rechnet den Rest affin (`Renderer.display_to_world` sagt das
 zu; je Punkt die Kamera zu invertieren kostete 15 ms je Aufbau), das
 Geräteverhältnis kommt vom Renderer (`device_ratio`, `ansicht.md`), und
@@ -115,6 +119,11 @@ Overlay. Fortschritt besitzt ihren Text und Zeitgeber nicht; neue Meldungen
 ersetzen die alte. Projektwechsel, ausgeblendeter Arbeitsbereich und
 Fensterabbau räumen Quittung und Zeitgeber gemeinsam ab. Die Statuszeile
 bleibt erhalten, ein zweites Live-Ereignis wird nicht erzeugt.
+**Ein Hinweis ist keine Quittung:** `announce(text, receipt=False)` schreibt
+nur die Statuszeile, solange der Hinweis gilt, und ein leerer Hinweis stellt
+die letzte Quittung wieder her — so laufen die Griffsätze der Ansicht
+(`gizmoStatus` → `_on_gizmo_status`), ohne Blase und ohne die Ansage des
+letzten Exports samt *Ordner zeigen* zu wischen.
 
 Merkmalsnamen erscheinen bereits beim Überfahren ohne eingeschaltete
 Gesamtüberlagerung. `_set_hover_target` und `_redraw_features` entfernen beim
@@ -211,8 +220,20 @@ Annahme. Beide Körperarten behalten gleichwertige Namen im Objektbaum;
 ihre Kurzhilfe erklärt die Darstellung von Rundungen.
 
 `FeaturePanel` und Platzierungsträger trennen `block_apply(reason)` von der
-Dokumentsperre: Vorschauwartezeit sperrt nur Übernehmen, Felder und Abbrechen
-bleiben zugänglich. Stehen Maße im Bild (`set_measuring`), trägt die
+Dokumentsperre: Gesperrt wird nur, was ein Problem hat; **Warten auf die
+Vorschau ist keine Sperre.** Ein Klick auf *Übernehmen* vor dem Bild bindet
+sich an die erwartete Freigabe (`_PreviewApproval.pending_click`,
+`MainWindow._apply_when_previewed`) und läuft in `_preview_rendered`, sobald
+das Bild steht und kein Problem dagegen spricht — sonst sagt die Statuszeile
+das Problem (Entscheidung Robert, 21.09.2026). Die Frage nach der Freigabe
+(`preview_check`) bindet nichts; nur der Klick (`preview_defer` an Dialog,
+Panel und `QuietHost`, `then=` an `_preview_can_apply`) tut es.
+Ein Wechsel der scharfen Handlung im Panel ist keine Wertänderung
+(`handlingArmed`, nicht `valuesChanged`): Das Fenster bindet den Auftrag der
+neuen Handlung und lässt die Vorschau der alten fallen, gerechnet wird erst
+bei einem echten Wert; und die Maßgruppe im Bild bindet beim Aufbau nur
+(`show_values` in `_place_from_feature_panel`), die Uhr stellt der erste Zug
+oder die erste Zahl (`host.begun`). Stehen Maße im Bild (`set_measuring`), trägt die
 Maßgruppe Übernehmen und Abbrechen, die Knöpfe unten im Panel sind verborgen —
 und mit ihnen der Block der Handlung, deren Maße im Bild stehen (Strich und
 Zeile je Handlung in `_blocks`; RM-199, Robert: „durchmesser ist ja im
@@ -232,15 +253,18 @@ Session einmal neu angefordert (`_resume_preview_after_idle`); und eine
 Bauartänderung ohne bewegtes Dreieck (*Flächenbearbeitung beenden*) ist keine
 leere Vorschau — ihr Befund ist die Auskunft, kein Grund
 (`Session._preview_outcome`). `can_accept()` wird auch nach Texteingabe und nach den
-endgültigen Platzierungswerten geprüft. Ein geschützter früher Klick wird
-nicht nachträglich ausgeführt; identische Platzierungswerte lösen keine
-erneute Änderung aus. Die Revision und der geprüfte Auftrag gehören dem
-Hauptfenster, die Träger halten keine zweite Vorschauverwaltung.
-Auch Chat-Übernehmen und die Rückkehr zu einem wartenden Vorschlag nach
-einem anderen Editor verwenden diesen Auftrag. Konvertierungsbefunde
-erzwingen die Freigabe selbst dann, wenn der exakte Körper erst innerhalb
-des Vorschlags entsteht. Dokumentänderung, Projektwechsel und Verwerfen
-entwerten sie; ein früher Klick wird nie nachgeholt.
+endgültigen Platzierungswerten geprüft. Ein früher Klick wartet auf das Bild
+seiner eigenen Freigabe — nie auf ein älteres: eine geänderte Zahl, ein
+geändertes Dokument oder ein Projektwechsel entwerten die Freigabe samt Klick.
+Identische Platzierungswerte lösen keine erneute Änderung aus. Die Revision
+und der geprüfte Auftrag gehören dem Hauptfenster, die Träger halten keine
+zweite Vorschauverwaltung. Auch Chat-Übernehmen und die Rückkehr zu einem
+wartenden Vorschlag nach einem anderen Editor verwenden diesen Auftrag.
+Konvertierungsbefunde erzwingen die Freigabe selbst dann, wenn der exakte
+Körper erst innerhalb des Vorschlags entsteht. Eine feldlose Operation an
+exakten Körpern läuft ohne Dialog, wenn sie nicht umwandeln kann
+(`_order_may_convert`: Register verlangt ein Netz, oder die Eingänge sind
+gemischt) — Regel 19 gilt auch dort.
 
 `seal_dialog.py` sammelt Dichtweg, Trägerfläche, bestätigte Öffnung und optionale
 Gegenfläche als einen zusammengehörigen Parameterblock. Der Feldtext zeigt
@@ -594,7 +618,18 @@ bevor es jemand wusste:
 - **`session.apply()` endet mit `evaluate_async()`.** Nach dem Aufruf steht
   das Ergebnis noch **nicht**. Und es wirft nicht: Fehler kommen über das
   Signal `failed`. Ein `try` um den Aufruf läuft ins Leere — nach dem
-  Ergebnis fragen, nicht nach dem Grund.
+  Ergebnis fragen, nicht nach dem Grund. Dasselbe gilt für
+  `create_counterpart` und `create_thread_counterpart`: Die Schritte stehen
+  sofort, die Passung kommt mit der Auswertung (`_finish_after`,
+  `_run_finishers`) und meldet sich über `counterpartFinished`; ein
+  Projektwechsel dazwischen lässt den Abschluss verfallen.
+- **Der Auswertungsarbeiter fasst die Kennzahlen an** (`_warm_metrics`):
+  Volumen, Oberfläche, Wasserdichtheit und Teilezahl jedes Körpers sind
+  danach gemerkt, und `describe_selection`, `_measure_up` und `_update_facts`
+  lesen im Hauptthread nur noch.
+- **Die Modellfrage läuft im Arbeiter** (`_BackendProbe` im Fenster): Bis
+  `backend_known` steht, sagt der Chat „Sprachmodell wird gesucht …";
+  `set_agent_backend` beantwortet sie, auch mit „keins".
 - **Und hinter einen Halt nimmt es keinen Schritt an.** Solange
   `last_result.stopped_at` steht, schreibt `apply` mit Entwürfen nichts und
   meldet über `failed` die Absage aus `halt_in_the_way` — mit den Handlungen
@@ -777,8 +812,12 @@ keine.
 (`set_feature_gizmo_blocked`) und hängt seinen Platzierungsgriff an den
 Werkzeugkörper; `set_gizmo` lässt in beiden Lagen nur Pfeile, Ringe und Würfel
 weg (`only_knobs`) und baut Flächenscheibe und Langlochknöpfe weiter auf,
-`grip_placement` holt sie nach dem ersten Griff zurück. Während eines Zugs an
-den Knöpfen zeichnet `SlotHandle` nicht selbst; die Marke folgt über
+`grip_placement` holt sie nach dem ersten Griff zurück. **Der Bewegungsgriff
+der Platzierung bleibt über Kamerageste und Radraste erhalten**: Statt je
+Zeichnen frisch zu entstehen, bleibt er, solange `Gizmo.fits` dieselbe
+Zielmatrix, Drehung und denselben Maßstab bestätigt — und ein gedrückter
+Griff (`pressing`) wird nie unter der Hand ersetzt (Review Ansicht #3 und #7).
+Während eines Zugs an den Knöpfen zeichnet `SlotHandle` nicht selbst; die Marke folgt über
 `_on_slot_interacted`, und nur wenn `_repaint_preview` nichts gezeichnet hat,
 rendert der Viewport nach — ein Bild je Mausbewegung statt zwei (RM-200, die
 Regel in `griffe.md`).

@@ -631,6 +631,67 @@ raise RuntimeError("ursprünglicher Fehler")
     assert "Berichtsordner schreibgeschützt" in done.stderr
 
 
+def test_the_same_slot_error_gets_one_report_folder_per_minute(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein Slot, der bei jedem Bild wirft, schreibt nicht je Wurf einen Ordner.
+
+    ``_record_unhandled`` legte je Ausnahme synchron im Hauptthread einen
+    Berichtsordner mit Steckbrief und Anhängen an (Review Rest #11,
+    21.09.2026). Die Absturzdatei bekommt weiter jeden Wurf; der Ordner ist
+    je (Fehlerart, letzte Zeile) und Minute einer — ein anderer Fehler oder
+    dieselbe Art an anderer Stelle bekommt seinen eigenen.
+    """
+    from app.core import log as log_module
+    from app.core import report as report_module
+
+    written: list[str] = []
+    monkeypatch.setattr(
+        report_module,
+        "write",
+        lambda record, directory=None: written.append(record.summary) or tmp_path,
+    )
+    monkeypatch.setattr(log_module, "_recent_reports", {})
+    clock = {"now": 1000.0}
+    monkeypatch.setattr(log_module.time, "monotonic", lambda: clock["now"])
+
+    def fail(message: str) -> tuple[BaseException, Any]:
+        try:
+            raise RuntimeError(message)
+        except RuntimeError as error:
+            return error, error.__traceback__
+
+    def fail_elsewhere(message: str) -> tuple[BaseException, Any]:
+        try:
+            raise RuntimeError(message)
+        except RuntimeError as error:
+            return error, error.__traceback__
+
+    log_module._record_unhandled(*fail("erster Wurf"), "Slot")
+    log_module._record_unhandled(*fail("zweiter Wurf, dieselbe Zeile"), "Slot")
+    assert len(written) == 1, "dieselbe Art an derselben Zeile binnen einer Minute: ein Ordner"
+    log_module._record_unhandled(*fail_elsewhere("andere Zeile"), "Slot")
+    assert len(written) == 2, "eine andere Stelle ist ein anderer Fehler"
+    clock["now"] += 61.0
+    log_module._record_unhandled(*fail("nach einer Minute"), "Slot")
+    assert len(written) == 3, "nach der Frist wieder ein Ordner"
+
+
+def test_redaction_caps_its_input_before_the_patterns_run() -> None:
+    """Zwei Megabyte durch vier Muster und einen Zeichenlauf sind 287 ms — für acht Kilozeichen."""
+    import time
+
+    from app.core.log import redact
+
+    huge = ("x" * 1000 + " sk-abcdefghijklmnop ") * 2000
+    started = time.perf_counter()
+    text = redact(huge)
+    elapsed = time.perf_counter() - started
+    assert len(text) <= 8192
+    assert "sk-abcdefghijklmnop" not in text and "<redigiert>" in text
+    assert elapsed < 0.1, f"{elapsed:.3f} s für eine gedeckelte Zeile"
+
+
 def test_a_native_crash_still_writes_after_logging_has_shut_down(tmp_path: Path) -> None:
     """Der eigene Deskriptor überlebt den normalen Logger und den Python-Abbau."""
     done = _crash_child(
@@ -745,9 +806,13 @@ old = [path for path in log.crash_paths(capture.parent) if path.name.startswith(
 assert len(old) == 5
 assert not empty.exists()
 assert manual.read_text(encoding='utf-8') == 'behalten'
+# Acht **verschiedene** Fehler: Derselbe Fehler an derselben Zeile bekommt
+# je Minute nur einen Berichtsordner (``_reported_recently``); gemessen wird
+# hier die Aufbewahrung, nicht die Drossel.
 for number in range(8):
+    kind = type(f'Fehler{number}', (RuntimeError,), {})
     try:
-        raise RuntimeError(f'Fehler {number}')
+        raise kind(f'Fehler {number}')
     except RuntimeError as problem:
         sys.excepthook(type(problem), problem, problem.__traceback__)
 folders = list(capture.with_suffix('').glob('bericht-*'))

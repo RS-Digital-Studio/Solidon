@@ -4129,7 +4129,13 @@ def _render_exact_preview(window: MainWindow, shown: dict[str, Any], difference:
 
 
 def test_exact_apply_waits_for_the_displayed_result(deferred_exact_preview, monkeypatch):
-    """Früher Knopf und frühes Return schreiben auch nach der Rechnung noch nichts."""
+    """Ein früher Klick schreibt nichts vor dem Bild — und mit dem Bild genau einmal.
+
+    Bis zum 21.09.2026 war das Warten eine Sperre: Knopf grau, „Die aktuelle
+    Vorschau abwarten", und der Klick verfiel. Entscheidung Robert (Review
+    Fenster #8): Der Klick bindet sich an die erwartete Freigabe und läuft,
+    sobald das Bild steht — ohne zweiten Klick.
+    """
     window, requests, shown = deferred_exact_preview
     applied = []
     monkeypatch.setattr(
@@ -4138,19 +4144,19 @@ def test_exact_apply_waits_for_the_displayed_result(deferred_exact_preview, monk
     window.run_operation(REGISTRY.get("translate_object"), {"dx": 3.0})
     dialog = window._op_dialog
     assert dialog is not None and dialog.preview_required
-    assert not dialog._accept_button.isEnabled()
+    assert dialog._accept_button.isEnabled(), "Warten ist keine Sperre"
     dialog._accept_button.click()
     dialog.accept()
-    assert not applied and window._op_dialog is dialog
+    assert not applied and window._op_dialog is dialog, "vor dem Bild wird nichts geschrieben"
+    assert window._preview_approval is not None and window._preview_approval.pending_click
 
     difference = _exact_difference(window)
     requests[-1][0](difference)
-    assert not dialog._accept_button.isEnabled(), "Die Ansichtsaufbereitung fehlt noch."
-    _render_exact_preview(window, shown, difference)
-    assert dialog._accept_button.isEnabled()
+    assert not applied, "Die Ansichtsaufbereitung fehlt noch."
     checked = requests[-1][1]
-    dialog._accept_button.click()
-    assert len(applied) == 1 and tuple(applied[0][0]) == checked
+    _render_exact_preview(window, shown, difference)
+    assert len(applied) == 1 and tuple(applied[0][0]) == checked, "der gebundene Klick, einmal"
+    assert window._op_dialog is None
 
 
 def test_changed_values_revoke_exact_approval_before_the_timer(deferred_exact_preview):
@@ -4162,7 +4168,7 @@ def test_changed_values_revoke_exact_approval_before_the_timer(deferred_exact_pr
     first_approval = window._preview_approval
     dialog.take_placement({"dx": 2.0})
     assert window._preview_approval is not first_approval
-    assert not dialog._accept_button.isEnabled()
+    assert not dialog.can_accept(), "die alte Freigabe gilt den neuen Zahlen nicht"
     obsolete = _exact_difference(window)
     first(obsolete)
     _render_exact_preview(window, shown, obsolete)
@@ -4196,7 +4202,9 @@ def test_mutated_document_keeps_the_exact_editor_open(deferred_exact_preview, mo
     assert window.session.project.document is document
     assert window._op_dialog is dialog and not applied
     assert dialog.values()["dx"] == pytest.approx(2.0)
-    assert not dialog._accept_button.isEnabled() and len(requests) == 2
+    # Der Klick verfällt nicht: Er hat eine frische Vorschau angefordert und
+    # wartet auf sie — geschrieben wird erst mit deren Bild.
+    assert len(requests) == 2 and window._preview_approval.pending_click is not None
     dialog.reject()
 
 
@@ -4350,7 +4358,7 @@ def test_real_exact_preview_is_released_by_the_actual_viewport_render(
     try:
         window.run_operation(REGISTRY.get("translate_object"), {"dx": 3.0})
         dialog = window._op_dialog
-        assert dialog is not None and not dialog._accept_button.isEnabled()
+        assert dialog is not None and not dialog.can_accept()
         assert window.session.wait_for_idle(10000)
         qt_app.processEvents()
         if rendering != "small":
@@ -4410,7 +4418,7 @@ def test_exact_group_scope_previews_and_commits_the_same_members(
     _render_exact_preview(window, shown, single)
     assert panel.can_accept()
     panel._every.setChecked(True)
-    assert not panel._apply.isEnabled()
+    assert not panel.can_accept(), "der Gruppenhaken entwertet die Einzelvorschau"
     _render_exact_preview(window, shown, single)
     assert not panel.can_accept()
     window._preview_feature_change()

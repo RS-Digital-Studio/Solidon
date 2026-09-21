@@ -211,30 +211,32 @@ nicht weiter.
 **Eine Operation je Handlung, nicht je Variante.** Neun Texturmuster sind ein
 Menüeintrag mit einem Auswahlparameter, nicht neun Einträge. Rechteck aus zwei
 Ecken oder aus Mitte und Maß ist dasselbe Werkzeug mit einem Umschalter. Die
-Mesh/B-Rep-Zwillinge (Quader, Zylinder) sind dieselbe Handlung in zwei
-Rechenkernen: ein Eintrag, „Exakt (B-Rep)" ist ein Umschalter hinten im
-Dialog, und `MENU_TWINS` im Register hält die Zuordnung — auch für den
-Menüort, den der Agent nennt (§2.6).
+Mesh/B-Rep-Zwillinge (Quader, Zylinder, Bohrung, Aushöhlen) sind dieselbe
+Handlung in zwei Rechenkernen: **ein** Eintrag, und `menu_twins()` im Register
+sagt, welcher der beiden ihn trägt — auch für den Menüort, den der Agent nennt
+(§2.6). **Einen Haken zwischen den Kernen gibt es nicht mehr** (P2.8, Konzept
+§10.1, Entscheidung 4): Ein Erzeuger entsteht exakt, wo der Kern da ist; eine
+Bearbeitung fragt die Körperart ihres Eingangs (*Bohrung setzen*, *Aushöhlen*
+— „der Körper entscheidet"); der versteckte Zwilling steht in der
+Befehlspalette, und ein gespeicherter Schritt wechselt seinen Kern über das
+Kontextmenü des Verlaufs (`History.change_kernel`).
 
-**Nicht jeder Zwilling braucht einen Umschalter.** Die Beschriftung liegt in
-`TWIN_TOGGLES`, nicht als Zeichenkette in der Oberfläche; wer dort fehlt, hat
-seinen Umschalter als **Wert** im Dialog des Partners. *An Ebene teilen* ist
-*Teilen* mit `pins = 0` — ein Haken „Exakter Körper (B-Rep)" wäre dort eine
-Wegbeschreibung zu etwas, das es nicht gibt. Solange das fest verdrahtet war,
-taugte die ganze Zusammenlegung für nichts als die zwei Rechenkerne.
+**Ein Zwilling, der eine Bedingung hat, fragt sie — vorher.** Das Menü graut
+eine Operation des exakten Kerns (`requires_kind="brep"`) an einem Netz aus
+und schreibt den Grund in den Tooltip; dieselbe Kette (`_reason_locked`)
+speist Menüleiste, Kontextmenü, Auswahlkarte und die Variantenliste im Dialog
+— eine weitere Formulierung derselben Auskunft wäre eine weitere
+Gelegenheit, auseinanderzulaufen. Der Satz des Kerns ist gut und bleibt; er
+ist die *zweite* Hürde. (Gemessen, als der Haken die erste war: Haken wählbar,
+Dialog geht durch, Auswertung hält bei op 2 an, Absage im Prüfbericht.)
 
-**Ein Umschalter, dessen Zwilling eine Bedingung hat, fragt sie — vorher.**
-Das Menü graut eine Operation des exakten Kerns (`requires_kind="brep"`) an
-einem Netz aus und schreibt den Grund in den Tooltip. Seit die Zwillinge
-zusammengelegt sind, hat `drill_brep_hole` gar keinen eigenen Menüeintrag mehr:
-Der **Haken ist der Weg zu ihr**, und dort wurde nicht gefragt. Gemessen an
-einer eingelesenen STL — Haken wählbar, Dialog geht durch, Auswertung hält bei
-op 2 an, Absage im Prüfbericht. Der Satz des Kerns ist gut und bleibt; er ist
-die *zweite* Hürde, und die erste fehlte.
-
-`_lock_twin_toggle` fragt dafür `_reason_locked`, also dieselbe Kette wie
-Menüleiste und Kontextmenü — eine dritte Formulierung derselben Auskunft wäre
-eine dritte Gelegenheit, auseinanderzulaufen.
+**Und die Regel gilt auch ohne Feld.** *Vereinigen*, *Abziehen*, *Auf das
+Bett setzen* und Entf haben keinen Parameter; an exakten Körpern bleiben sie
+exakt und laufen ohne Dialog (Regel 19). Gezeigt wird eine feldlose Handlung
+nur, wenn sie den Körper **umwandeln** kann — das Register verlangt ein Netz,
+oder die Eingänge sind gemischt (`MainWindow._order_may_convert`). Ein Dialog
+mit null Feldern vor einer rücknehmbaren Handlung war die Sackgasse aus Regel
+19 in neuer Gestalt (Review 21.09.2026).
 
 **Und ein Menü zeigt Hinweise nur, wenn man es ihm sagt.** `QMenu` steht mit
 `toolTipsVisible == False` auf der Welt: Der Satz, den `_add_operation` an die
@@ -265,14 +267,14 @@ mit Eingang dazunimmt, nimmt diese Frage mit.
 **Und der Zwilling heißt genau wie sein Partner.** `create_brep_box` trägt
 „Quader anlegen", `drill_brep_hole` „Bohrung setzen" (`app/core/brep/ops.py`)
 — denselben Titel wie `create_box` und `drill_hole`. Den Unterschied nennt
-nicht der Titel, sondern der Haken im Dialog des Partners („Flächen und Kanten
-später bearbeiten", `_EXACT_TOGGLE` in `registry.py`); in der Palette steht
-der Zwilling nicht ein zweites Mal (`hidden_from_the_menu`). Kein eigener
-Titel und kein Wort davor: Die Befehlspalette sortiert nach Titel, und „Exakt"
-vor dem Namen liest sich wie eine Qualitätsstufe, obwohl es den Rechenkern
-meint. Dahinter steht der Kunde: Er sucht das **Substantiv** („Bohrung"), und
-wer den Zwilling umformuliert, nimmt ihm eine der beiden Antworten aus der
-Liste.
+nicht der Titel, sondern der Weg: `TWIN_WAYS` in `registry.py` sagt je Paar,
+wo der versteckte Zwilling steht („über die Befehlspalette" bzw. „im selben
+Dialog — der Körper entscheidet"); im Menü steht er nicht ein zweites Mal
+(`hidden_from_the_menu`). Kein eigener Titel und kein Wort davor: Die
+Befehlspalette sortiert nach Titel, und „Exakt" vor dem Namen liest sich wie
+eine Qualitätsstufe, obwohl es den Rechenkern meint. Dahinter steht der
+Kunde: Er sucht das **Substantiv** („Bohrung"), und wer den Zwilling
+umformuliert, nimmt ihm eine der beiden Antworten aus der Liste.
 (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026)
 
 **Ein Umschalter zwischen Varianten schaltet den ganzen Dialog um**, nicht nur

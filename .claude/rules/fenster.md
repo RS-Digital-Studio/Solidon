@@ -594,3 +594,17 @@ Knöpfe einer Karte sind kein Beiwerk der Zone, sondern Teil der Karte: Wer der
 Liste die ganze Zuteilung gibt, schiebt sie unten heraus — und mit ihnen den
 einzigen Weg, den die Karte anbietet.
 (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026)
+
+**Gesetzt wird einmal je Ereignisdurchlauf, nicht je Ereignis.** Der Filter
+des Trägers sieht jedes `Resize`, `Show`, `Hide` und `LayoutRequest` jedes
+Kindes, und jedes davon rechnete die Zonen sofort neu: 433 Durchläufe beim
+Start, 671 auf Weg 1, 81 bis 115 ms je Undo (Review 21.09.2026).
+`_place_later` merkt vor und setzt über einen Nullzeitgeber — ein Zeitgeber
+und kein nachgereichtes Ereignis, weil die Listen ihre Zeilen selbst über
+einen Nullzeitgeber legen und `rows_height` an `visualRect` misst; ein
+Ereignis käme vor den Zeilen dran und läse die alte Höhe. `resizeEvent` und
+`reflow` setzen weiter sofort. **Für Tests heißt das: mehrere Runden
+`processEvents`**, bis Karte und Liste zur Ruhe gekommen sind (gemessen drei
+für eine gewachsene Berichtkarte) — eine Zusicherung nach einer Runde misst
+einen Zwischenstand. `is_room_taker` beantwortet die Frage je Widget-Typ
+einmal; sie ist strukturell, und der Typ ändert sich nicht.

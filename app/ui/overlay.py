@@ -37,6 +37,7 @@ from PySide6.QtCore import (
     QRectF,
     QSize,
     Qt,
+    QTimer,
 )
 from PySide6.QtGui import QPainterPath, QRegion
 from PySide6.QtWidgets import QAbstractItemView, QScrollArea, QTreeView, QVBoxLayout, QWidget
@@ -81,6 +82,14 @@ class RoomTaker(Protocol):
         ...
 
 
+#: Je Widget-Typ einmal beantwortet, ob er den Raumvertrag erfüllt.
+#:
+#: Die Frage ist strukturell — vier Methoden am Typ —, und sie wurde je Kind
+#: und je Durchlauf neu gestellt: 84 435 Mal beim Start, vier ``getattr`` je
+#: Kind (Review Leistung B4, 21.09.2026). Der Typ ändert sich nicht.
+_ROOM_TAKERS: dict[type, bool] = {}
+
+
 def is_room_taker(value: object) -> TypeGuard[RoomTaker]:
     """Qt-Widgets mit dem Raumvertrag ohne Laufzeitprüfung von ``Protocol``.
 
@@ -88,12 +97,17 @@ def is_room_taker(value: object) -> TypeGuard[RoomTaker]:
     Shiboken-Typs. Während echter Sprachwechsel lieferte Qt dort vorübergehend
     eine Liste statt eines Iterators; der Resize brach sichtbar ab. Vier
     benannte, aufrufbare Methoden beantworten dieselbe strukturelle Frage ohne
-    Introspektion in Qt-internen Typdaten.
+    Introspektion in Qt-internen Typdaten — und je Typ nur einmal.
     """
-    return all(
-        callable(getattr(value, name, None))
-        for name in ("height", "wanted_height", "least_height", "set_room")
-    )
+    kind = type(value)
+    known = _ROOM_TAKERS.get(kind)
+    if known is None:
+        known = all(
+            callable(getattr(kind, name, None))
+            for name in ("height", "wanted_height", "least_height", "set_room")
+        )
+        _ROOM_TAKERS[kind] = known
+    return known
 
 
 #: Wie lange eine Karte für ihren Weg braucht.
@@ -569,6 +583,9 @@ class OverlayHost(QWidget):
         die niemand hält, mitten im Weg eingesammelt wird."""
         self._placing = False
         """Ob gerade gesetzt wird — siehe ``_place``."""
+        self._pending: bool | None = None
+        """Ob ein Setzen für den nächsten Ereignisdurchlauf vorgemerkt ist —
+        und ob es bewegt (:meth:`_place_later`)."""
 
         self.view = view
         view.setParent(self)
@@ -655,8 +672,40 @@ class OverlayHost(QWidget):
             QEvent.Type.Hide,
             QEvent.Type.LayoutRequest,
         ):
-            self._place(moving=True)
+            self._place_later(moving=True)
         return super().eventFilter(watched, event)
+
+    def _place_later(self, *, moving: bool) -> None:
+        """Einmal je Ereignisdurchlauf setzen, nicht je Ereignis.
+
+        Jedes ``Resize``, ``Show``, ``Hide`` und ``LayoutRequest`` jedes Kindes
+        rechnete die Zonen sofort neu: 433 Durchläufe beim Start (0,34 bis
+        0,38 s), 217 beim Öffnen einer Platte, 671 auf Weg 1, 81 bis 115 ms je
+        Undo (Review Leistung B4, 21.09.2026). Ein Durchlauf reicht, wenn die
+        Ereignisse des Takts durch sind. **Während des Setzens** kommt nichts
+        dazu — dieselbe Regel wie in :meth:`_place`: Was das Setzen selbst
+        auslöst, meint nichts Neues. ``resizeEvent`` und :meth:`reflow` setzen
+        weiter sofort; wer dort ankommt, weiß, dass sich etwas geändert hat.
+        """
+        if self._placing:
+            return
+        if self._pending is None:
+            self._pending = moving
+            # Ein Zeitgeber mit null und kein nachgereichtes Ereignis: Die
+            # Listen legen ihre Zeilen selbst über einen Nullzeitgeber
+            # (``QListView``, verzögertes ``doItemsLayout``), und gemessen wird
+            # an ``visualRect`` — ein Ereignis käme vor den Zeilen dran und
+            # läse die alte Höhe (gemessen am 21.09.2026, ``test_overlay``).
+            QTimer.singleShot(0, self._place_pending)
+        else:
+            self._pending = self._pending or moving
+
+    def _place_pending(self) -> None:
+        """Der vorgemerkte Durchlauf — genau einer, mit der stärksten Bewegung."""
+        pending, self._pending = self._pending, None
+        if pending is None or not isValid(self):
+            return
+        self._place(moving=pending)
 
     def reflow(self) -> None:
         """Die Zonen neu setzen, weil eine von ihnen anders hoch sein will.

@@ -530,7 +530,11 @@ def test_findings_that_arrive_later_make_the_card_grow(window: MainWindow) -> No
             for number in range(8)
         ]
     )
-    QApplication.processEvents()
+    # Mehrere Durchläufe: Der Träger setzt je Ereignisdurchlauf einmal
+    # (``_place_later``), und die Liste legt ihre Zeilen erst, nachdem die
+    # Karte gewachsen ist — gemessen drei Runden bis zur Ruhe.
+    for _ in range(4):
+        QApplication.processEvents()
 
     assert report.height() > before, (
         "die Karte muss wachsen, wenn Befunde nach der Auswertung dazukommen"

@@ -107,9 +107,14 @@ def test_deviation_legend_distinguishes_unknown_coverage_and_numerical_bounds(
         assert bool(legend.entries) is bool(known)
         assert ("Größter Abstand" in legend.note.text()) is bool(known)
         if known:
-            assert "Obergrenzen je Dreiecksfläche" in legend.note.text()
+            # Die Zeile ist die Auskunft, das Feine steht im Tooltip (Review
+            # Fenster #13): Obergrenzen und die berechnete Spanne findet, wer
+            # sie sucht — die Zeile nennt den Abstand und die Abdeckung.
+            assert "Obergrenzen je Dreiecksfläche" not in legend.note.text()
+            assert "Obergrenzen je Dreiecksfläche" in legend.note.toolTip()
             assert "e-7 mm" in legend.note.text(), "kleine Abstände bleiben von null verschieden"
-            assert "je Dreiecksfläche: höchstens" in legend.note.text()
+            assert "je Dreiecksfläche: höchstens" not in legend.note.text()
+            assert "je Dreiecksfläche: höchstens" in legend.note.toolTip()
             assert "keine Fertigungstoleranz" in legend.note.toolTip()
             assert "Raster" not in legend.note.text()
         else:
@@ -218,6 +223,14 @@ def test_deviation_cancel_and_unit_change_do_not_restart_the_measurement(
     host.set_display_unit("mm")
     assert workers == [first]
     assert "abgebrochen" in host.analysis_bar.legend.note.text()
+    # **Und der Weg zurück steht daneben** (Regel 17, Review Fenster #10):
+    # Bis zum 21.09.2026 war „wurde abgebrochen" eine Sackgasse — wer die
+    # Karte doch wollte, musste eine andere wählen und wieder zurück.
+    button = host.analysis_bar.legend.action
+    assert button is not None and button.text() == "Erneut berechnen"
+    button.click()
+    assert len(workers) == 2 and workers[-1] is not first, "dieselbe Karte, neu gestartet"
+    assert host._map_cancelled_for is None
 
 
 def test_deviation_old_worker_completion_leaves_the_new_progress_owner_active(
@@ -322,14 +335,19 @@ def test_a_real_deviation_report_click_computes_and_marks_one_original_triangle(
     host.resize(1040, 760)
     host.show()
     try:
-        QApplication.processEvents()
+        # Mehrere Runden: Der Träger setzt die Karten je Ereignisdurchlauf
+        # einmal (``OverlayHost._place_later``), und die Zeile, auf die der
+        # Klick zielt, hat ihren Platz erst, wenn die Karte ihren hat.
+        for _ in range(4):
+            QApplication.processEvents()
         row = next(
             host.report.list.item(index)
             for index in range(host.report.list.count())
             if host.report.list.item(index).data(Qt.ItemDataRole.UserRole) is finding
         )
         host.report.list.scrollToItem(row)
-        QApplication.processEvents()
+        for _ in range(4):
+            QApplication.processEvents()
         QTest.mouseClick(
             host.report.list.viewport(),
             Qt.MouseButton.LeftButton,
@@ -353,7 +371,7 @@ def test_a_real_deviation_report_click_computes_and_marks_one_original_triangle(
         assert host.viewport._finding_mark is not None
         assert host.viewport._finding_mark[0] == analysis.witness_point
         assert len(host.viewport._finding_actors) == 2, (
-            "der wirkliche Renderer zeichnet Ring und Text"
+            "der aufzeichnende Renderer bekommt Ring und Text als zwei Darsteller"
         )
         assert "keine neue Einpassung" in host.analysis_bar.legend.note.text()
         reference = (
@@ -5367,9 +5385,12 @@ def test_a_part_stays_chosen_when_its_measures_swap_its_features(window: MainWin
         QApplication.processEvents()
     assert window.feature_panel.shown_part_step() == step
 
-    # Der Kundenweg: Der Wert im Merkmalfenster ändert sich, die Vorschau
-    # rechnet und zeigt — erst dann übernimmt der Klick (20.09.2026: Übernehmen
-    # wartet auf die dargestellte Vorschau, ein früher Klick wird nicht nachgeholt).
+    # Der Weg des Kunden, hier über die Privatmethoden dahinter nachgestellt —
+    # nicht über Feld und Knopf: Der Wert im Merkmalfenster ändert sich, die
+    # Vorschau rechnet und zeigt, erst dann übernimmt der Klick (20.09.2026:
+    # Übernehmen wartet auf die dargestellte Vorschau, ein früher Klick wird
+    # nicht nachgeholt). Was Feld und Knopf selbst tun, prüfen die Fensterfälle
+    # in ``test_feature_panel.py``.
     window._on_feature_values_changed("insert_snap_connector", {"kind": "bore"})
     window._feature_preview.stop()
     window._preview_feature_change()

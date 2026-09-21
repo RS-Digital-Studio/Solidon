@@ -168,24 +168,30 @@ class MapLegend(QWidget):
             parts.append(f"{tr('Raster')} {length(analysis.resolution)}")
         if analysis.note is not None:
             parts.append(str(analysis.note))
+        # **Die Zeile sagt, was der Kunde wissen will; das Feine steht im
+        # Tooltip** (Review Fenster #13, 21.09.2026). „Obergrenzen je
+        # Dreiecksfläche · Berechnete Spanne je Dreiecksfläche: höchstens
+        # 1,2e-7 mm" stand in einer Zeile, die eine Auskunft sein soll —
+        # gelesen hat das niemand, und die Zahl daneben ging darin unter.
+        fine: list[str] = []
         if analysis.kind == "deviation":
+            if analysis.known and analysis.maximum_interval is not None:
+                lower, upper = analysis.maximum_interval
+                parts.append(
+                    tr("Größter Abstand: {lower} bis {upper}").format(
+                        lower=length_bound(lower, upper=False),
+                        upper=length_bound(upper, upper=True),
+                    )
+                )
             parts.append(
-                tr("Ausgewertete Dreiecksflächen: {known} von {total}").format(
+                tr("{known} von {total} Flächen ausgewertet").format(
                     known=len(analysis.known), total=len(analysis.values)
                 )
             )
             if analysis.known:
-                parts.append(tr("Obergrenzen je Dreiecksfläche"))
-                if analysis.maximum_interval is not None:
-                    lower, upper = analysis.maximum_interval
-                    parts.append(
-                        tr("Größter Abstand der ausgewerteten Flächen: {lower} bis {upper}").format(
-                            lower=length_bound(lower, upper=False),
-                            upper=length_bound(upper, upper=True),
-                        )
-                    )
+                fine.append(tr("Die Zahlen sind Obergrenzen je Dreiecksfläche."))
                 if analysis.numerical_error is not None:
-                    parts.append(
+                    fine.append(
                         tr("Berechnete Spanne je Dreiecksfläche: höchstens {bound}").format(
                             bound=length_bound(analysis.numerical_error, upper=True)
                         )
@@ -203,7 +209,7 @@ class MapLegend(QWidget):
                 unknown = f"{unknown} ({analysis.unknown_note})"
             parts.append(unknown)
         self.note.setText(" · ".join(parts))
-        explanation = "\n".join(parts)
+        explanation = "\n".join((*parts, *fine))
         if analysis.kind == "deviation" and analysis.numerical_error is not None:
             explanation += "\n" + tr(
                 "Die Spanne beschreibt nur, wie genau der Abstand berechnet wurde. "

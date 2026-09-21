@@ -163,6 +163,53 @@ def _truncation_finding(had_calls: bool) -> Finding:
     )
 
 
+@dataclass(frozen=True, slots=True)
+class _DocumentState:
+    """Parameter, Passungen und Druckziel — im Vorschlag und in der Arbeitskopie."""
+
+    parameters: dict[str, Parameter]
+    fits: tuple[Fit, ...]
+    print_target: tuple[str, str] | None
+    working_parameters: dict[str, Parameter]
+    working_fits: tuple[Fit, ...]
+    working_target: tuple[str, str]
+
+    @classmethod
+    def of(cls, proposal: Proposal, working: Document) -> _DocumentState:
+        return cls(
+            dict(proposal.parameters),
+            tuple(proposal.fits),
+            proposal.print_target,
+            dict(working.parameters),
+            tuple(working.fits),
+            (working.printer, working.material),
+        )
+
+    def restore(self, proposal: Proposal, working: Document) -> None:
+        """Vorschlag und Arbeitskopie auf diesen Stand zurücksetzen."""
+        proposal.parameters.clear()
+        proposal.parameters.update(self.parameters)
+        proposal.fits[:] = list(self.fits)
+        proposal.print_target = self.print_target
+        working.parameters.clear()
+        working.parameters.update(self.working_parameters)
+        working.fits[:] = list(self.working_fits)
+        working.printer, working.material = self.working_target
+
+
+def _halted_finding() -> Finding:
+    """Die Kette hält an den letzten Projektangaben an — sie sind zurückgenommen."""
+    return Finding(
+        code="agent.halted_by_document_change",
+        severity="warning",
+        message=_(
+            "Die letzten Parameter, Passungen oder Druckwerte dieses Zuges hielten die "
+            "Auswertung an und wurden zurückgenommen. Der Vorschlag zeigt den Stand "
+            "davor; der Grund steht im Befund darüber."
+        ),
+    )
+
+
 def _refusal_finding() -> Finding:
     """Das Modell hat die Antwort verweigert
     (:data:`~app.core.backends.llm.REFUSAL_STOPS`).
@@ -361,6 +408,9 @@ class AgentSession:
         # Größe, weil sie nur bis zum Ende dieses Zuges gilt.
         spent = 0
         pending_document_check = False
+        # Der Stand der Projektangaben vor dem Block, der noch ungeprüft ist —
+        # was danach kam, geht zurück, wenn die Kette an ihm hält.
+        checked = _DocumentState.of(proposal, working)
         while True:
             if self.cancelled is not None:
                 self.cancelled.raise_if_cancelled()
@@ -443,6 +493,7 @@ class AgentSession:
                     # Eine Operation hat auch die davor gesammelten
                     # Projektangaben ausgewertet und geprüft.
                     pending_document_check = False
+                    checked = _DocumentState.of(proposal, working)
                 messages.append(Message(role="tool", tool_call_id=call.id, content=answer))
 
             if proposal.steps >= self.max_steps:
@@ -462,6 +513,15 @@ class AgentSession:
                 for finding in checks.check(final_result, scene)
                 if finding not in proposal.findings
             )
+            if final_result.stopped_at is not None:
+                # §15.2, dieselbe Regel wie in ``_run``: Was die Kette anhält,
+                # ist nicht Teil des Vorschlags. Eine Operation nimmt ``_run``
+                # zurück; die Projektangaben des ungeprüften Blocks gehen
+                # hier zurück — bis zum 21.09.2026 reisten sie mit, und ein
+                # angenommener Vorschlag hielt das Projekt an (Review Rest #9).
+                checked.restore(proposal, working)
+                proposal.stopped = "halted"
+                proposal.findings.append(_halted_finding())
 
         _log.info(
             "proposal with %d operations after %d steps", len(proposal.drafts), proposal.steps

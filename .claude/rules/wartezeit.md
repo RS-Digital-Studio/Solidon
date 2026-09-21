@@ -431,6 +431,15 @@ Rückrufs, sondern **wer ihn aufbewahrt**.
 Das war der letzte Halter des Hauptfensters, und er ist gefunden worden,
 nachdem alle 27 Lambdas darin schon umgebaut waren.
 
+**Und ein Empfänger an der Sitzung, der keine Methode ist, geht in
+`release()`.** Die Sitzung überlebt das Fenster (Sprachwechsel), und
+`session.disconnect(self)` trennt nur gebundene Methoden: Eine Closure am
+`sceneChanged` — der Wächter eines wartenden Vorschlags, das `changed` des
+Operationsdialogs — blieb hängen und rief das nächste Ergebnis in zerstörte
+Widgets (Review 21.09.2026). Der Wächter ist deshalb ein `weak_slot`
+(`_proposal_context_changed`), und `release()` räumt Vorschlag und Dialog
+selbst (`_clear_proposal()`, `_op_dialog.reject()`), bevor es trennt.
+
 Von Hand geschriebene `weakref.ref`-Blöcke braucht es nur noch, wo mehrere
 Rückrufe zusammen entstehen — `viewport._weak_callbacks` ist der Fall, zehn
 Stück für den Navigator (`NavigatorCallbacks`).

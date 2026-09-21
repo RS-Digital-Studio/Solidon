@@ -533,8 +533,15 @@ def test_preview_block_keeps_fields_and_cancel_available(qt_app: QApplication) -
     assert requested[0][1]["diameter"] == pytest.approx(6.0)
 
 
-def test_changed_handling_invalidates_preview_without_editing_a_value(qt_app: QApplication) -> None:
-    """Auch ein Fokuswechsel braucht die Vorschau seiner eigenen Handlung."""
+def test_changed_handling_arms_without_reporting_a_value_change(qt_app: QApplication) -> None:
+    """Ein Fokuswechsel nennt die neue Handlung — und meldet keine Wertänderung.
+
+    Bis zum 21.09.2026 kam ein Klick in ein Feld als ``valuesChanged`` an, und
+    das Fenster rechnete darauf eine Vorschau mit unveränderten Zahlen (Review
+    Fenster #3). Was der Wechsel sagt, ist ``handlingArmed``: die Handlung,
+    ihre heutigen Werte, die Ziele der Gruppe — damit das Fenster den Auftrag
+    bindet. Gerechnet wird erst bei einem echten Wert.
+    """
     identifier, feature = a_hole()
     panel = FeaturePanel()
     mesh = plate()
@@ -543,22 +550,23 @@ def test_changed_handling_invalidates_preview_without_editing_a_value(qt_app: QA
     move = next(key for key, entry in panel._runs.items() if entry.op == "move_feature")
     panel._arm(resize)
     panel._every.setChecked(True)
-    previews: list[Any] = []
-
-    def preview(op: str, params: dict[str, Any]) -> None:
-        previews.append((op, params, panel.preview_targets(op), panel._armed_title.text()))
-        panel.block_apply("Die Vorschau wird berechnet. Bitte das Ergebnis abwarten.")
-
-    panel.valuesChanged.connect(preview)
+    armed: list[Any] = []
+    changed: list[Any] = []
+    panel.handlingArmed.connect(
+        lambda op, params: armed.append(
+            (op, params, panel.preview_targets(op), panel._armed_title.text())
+        )
+    )
+    panel.valuesChanged.connect(lambda op, params: changed.append((op, params)))
     panel._arm(move)
-    assert len(previews) == 1
-    assert previews[0][0] == "move_feature"
-    assert previews[0][1]["at_feature"] == identifier
-    assert previews[0][2][0] == identifier
-    assert previews[0][3] == "Merkmal verschieben"
-    assert not panel.can_accept()
+    assert not changed, "ein Fokuswechsel ist keine Wertänderung"
+    assert len(armed) == 1
+    assert armed[0][0] == "move_feature"
+    assert armed[0][1]["at_feature"] == identifier
+    assert armed[0][2][0] == identifier
+    assert armed[0][3] == "Merkmal verschieben"
     panel._arm(move)
-    assert len(previews) == 1
+    assert len(armed) == 1, "dieselbe Handlung noch einmal ist kein Wechsel"
 
 
 def test_return_rechecks_preview_permission_after_interpreting_text(qt_app: QApplication) -> None:
@@ -2674,6 +2682,42 @@ def test_measure_group_owns_the_editable_fields_and_the_only_completion(
         panel.set_measuring(False)
         assert panel._apply.isVisibleTo(panel)
         assert any(editor.isEnabled() for editor in panel.findChildren(LengthSpin))
+    finally:
+        panel.close()
+        panel.deleteLater()
+
+
+def test_the_original_bore_block_leaves_the_panel_while_its_measures_stand_in_the_view(
+    qt_app: QApplication,
+) -> None:
+    """RM-199 ganz: Auch der Block des Bohrschritts steht nicht rechts, solange er im Bild steht.
+
+    ``set_measuring`` verbirgt die Zeile der gemessenen Handlung (``_blocks``);
+    der nachgereichte Block „Bohrung im ursprünglichen Schritt ändern" trug
+    sich dort nicht ein und blieb mit vier gesperrten Feldern neben der
+    Maßgruppe stehen (Review Fenster #5).
+    """
+    from types import SimpleNamespace
+
+    load_operations()
+    identifier, feature = a_hole()
+    step = SimpleNamespace(id=17, op="drill_hole", params={"diameter": 6.0, "depth": 0.0})
+    panel = FeaturePanel()
+    try:
+        panel.show_feature(identifier, feature)
+        panel.offer_bore_step(step, REGISTRY.get("drill_hole"), {})
+        key = next(key for key, entry in panel._runs.items() if entry.op == "drill_hole")
+        assert key in panel._blocks, "der Bohrschritt-Block kennt seine Zeile"
+        line, row = panel._blocks[key]
+        panel.set_measuring(True, op="drill_hole")
+        assert not row.isVisibleTo(panel), "seine Maße stehen im Bild, nicht rechts"
+        assert line is None or not line.isVisibleTo(panel)
+        other = next(
+            row for key, (_l, row) in panel._blocks.items() if panel._runs[key].op == "move_feature"
+        )
+        assert other.isVisibleTo(panel), "die übrigen Handlungen bleiben"
+        panel.set_measuring(False)
+        assert row.isVisibleTo(panel)
     finally:
         panel.close()
         panel.deleteLater()

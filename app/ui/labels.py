@@ -1301,6 +1301,9 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     # ``perceive.freeform``: wie viele Rundformen die Erkennung auf einer
     # Freiform wegließ — der Kunde liest die Zahl im Prüfbericht.
     "dropped": _("Weggelassen"),
+    # ``perceive.voids_unreadable``: wie viele Schalen die Erkennung nicht
+    # lesen konnte — ob eine davon Luft einschließt, bleibt offen.
+    "shells": _("Schalen"),
     "body_diameter": _("Breiteste Stelle des Körpers"),
     "diameter": _("Durchmesser"),
     # ``geom.faces``: um wie viel eine Fläche versetzt werden sollte, als der
@@ -1690,12 +1693,20 @@ def exact_conversion_lines(
         name = str(finding.values.get("input_name") or names.get(source) or tr("Körper"))
         operation = str(finding.values.get("op") or "")
         title = str(REGISTRY.get(operation).title) if REGISTRY.has(operation) else tr("Umwandeln")
+        # Ein Satz je Eingang, nicht drei (Review Fenster #13): Was danach
+        # gilt und dass Strg+Z zurückführt, steht einmal darunter — an drei
+        # Eingängen standen die zwei Sätze dreimal.
+        lines.append(
+            tr("„{operation}“ macht aus „{object}“ ein Dreiecksmodell.").format(
+                operation=title, object=name
+            )
+        )
+    if lines:
         lines.append(
             tr(
-                "„{operation}“ wandelt „{object}“ in ein Dreiecksmodell um. Flächen und Kanten "
-                "bleiben bearbeitbar; Rundungen bestehen danach aus geraden Teilstücken. "
-                "Rückgängig stellt den vorherigen Körper wieder her."
-            ).format(operation=title, object=name)
+                "Flächen und Kanten bleiben bearbeitbar; Rundungen bestehen dann aus "
+                "geraden Teilstücken. Rückgängig stellt den vorherigen Körper wieder her."
+            )
         )
     return tuple(lines)
 
@@ -1736,8 +1747,8 @@ def kind_requirement(spec: Any, kinds: Sequence[str], spoiled_by: str = "") -> s
             tr(
                 "„{step}“ hat den Körper in ein Dreiecksmodell umgewandelt. Dieses Werkzeug "
                 "braucht echte Kurven und muss im Verlauf davor stehen. "
-                "Nimm die Schritte ab dort zurück, wende das Werkzeug an und setze den "
-                "Rest danach neu."
+                "Nehmen Sie die Schritte ab dort zurück, wenden Sie das Werkzeug an und "
+                "setzen Sie den Rest danach neu."
             )
         ).format(step=spoiled_by)
     # **Welche Art fehlt, entscheidet den Satz** (Review, 21.09.2026). Bis dahin
@@ -1747,7 +1758,7 @@ def kind_requirement(spec: Any, kinds: Sequence[str], spoiled_by: str = "") -> s
     if spec.requires_kind == "mesh":
         return str(
             tr(
-                "Dieses Werkzeug rechnet am Dreiecksmodell. Wandle den Körper vorher um "
+                "Dieses Werkzeug rechnet am Dreiecksmodell. Wandeln Sie den Körper vorher um "
                 "(„Flächenbearbeitung beenden“)."
             )
         )
@@ -1757,7 +1768,7 @@ def kind_requirement(spec: Any, kinds: Sequence[str], spoiled_by: str = "") -> s
     return str(
         tr(
             "Dieses Werkzeug braucht einen Körper mit echten Kurven. Eine Grundform "
-            "bringt sie mit; einen älteren Schritt stellst du im Verlauf auf „Mit echten "
+            "bringt sie mit; einen älteren Schritt stellen Sie im Verlauf auf „Mit echten "
             "Flächen und Kanten rechnen“. Eine STEP-Datei bringt diese Flächen und "
             "Kanten ebenfalls mit."
         )

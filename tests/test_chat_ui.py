@@ -125,6 +125,15 @@ def window(qt_app: QApplication) -> MainWindow:
     return made
 
 
+def _needs_the_exact_kernel() -> None:
+    """Ein Test an einem exakten Körper braucht OpenCASCADE — Skip statt Importfehler
+    im Quellklon ohne das Extra ``brep`` (Review Tests-1 #4)."""
+    from app.core.registry import exact_kernel_present
+
+    if not exact_kernel_present():
+        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
+
+
 def scripted(window: MainWindow, *answers: Reply) -> ScriptedBackend:
     backend = ScriptedBackend(answers=list(answers))
     window.session.set_agent_backend(backend)
@@ -404,6 +413,85 @@ def test_a_stopped_turn_is_not_swallowed_by_the_empty_shortcut(window: MainWindo
     assert window._proposal is preview, "und sie wartet auf die Entscheidung"
 
 
+def test_a_released_window_with_a_waiting_proposal_lets_go(
+    qt_app: QApplication, unpinned_windows: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein Sprachwechsel mit wartendem Vorschlag lässt die Sitzung nicht ins Leere rufen.
+
+    Der Vorschlag hörte über eine Closure auf ``projectChanged`` und
+    ``sceneChanged``; ``release`` trennt mit ``session.disconnect(self)`` nur
+    gebundene Methoden. Die Closure blieb, und das nächste Ergebnis der
+    weiterlebenden Sitzung rief in Widgets, die der Sprachwechsel längst
+    zerstört hatte — ``RuntimeError`` im Slot (Review Fenster #11,
+    21.09.2026). Gemessen: ``release`` räumt den Vorschlag samt Empfänger, und
+    eine Szene nach dem Abbau erreicht keinen Fehler mehr.
+    """
+    import sys
+
+    from PySide6.QtCore import QEvent
+    from shiboken6 import isValid
+
+    from app.core.agent.proposal import Proposal
+
+    session = Session()
+    window = MainWindow(session, UiSettings())
+    window.open_path(MESHES / "plate_holes.stl")
+    assert session.wait_for_idle(30_000)
+    waiting = Proposal(request="x")
+    waiting.stopped = "refused"
+    window._on_proposal(ProposalPreview(proposal=waiting))
+    assert window._proposal is not None, "der Vorschlag wartet"
+    assert window._proposal_changed is not None, "und hört auf die Szene"
+
+    window.release()
+    assert window._proposal is None, "freigegeben heißt: kein wartender Vorschlag"
+    assert window._proposal_changed is None, "und kein Empfänger mehr an der Sitzung"
+    window.deleteLater()
+    QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    assert not isValid(window), "das Fenster ist auf der C++-Seite weg"
+
+    raised: list[BaseException] = []
+    monkeypatch.setattr(sys, "excepthook", lambda kind, error, trace: raised.append(error))
+    session.sceneChanged.emit(session.last_result)
+    session.projectChanged.emit()
+    QApplication.processEvents()
+    assert not raised, raised
+
+
+def test_the_model_question_runs_in_a_worker_only_once_the_loop_runs(
+    qt_app: QApplication,
+) -> None:
+    """Der Fensterbau startet keinen Arbeiter; die Ereignisschleife tut es.
+
+    ``first_available`` liest den Schlüsselbund und öffnet Sockets — 0,3 bis
+    0,4 s im Hauptthread beim Fensterbau (Review Leistung B6). Die Frage geht
+    in einen Arbeiter, aber erst im nächsten Ereignisdurchlauf: Ein Prozess,
+    der ein Fenster baut und endet (die Startmarke in ``test_performance``,
+    Bildschirmfotos), riss sonst beim Beenden mit einem laufenden QThread
+    (0xC0000409, gemessen am 21.09.2026). Bis die Antwort da ist, sagt der
+    Chat, dass gesucht wird — nicht, dass nichts da sei.
+    """
+    session = Session()
+    window = MainWindow(session, UiSettings())
+    try:
+        assert not session.backend_known, "die Frage ist beim Bau noch offen"
+        assert window._backend_probe is None, "und kein Arbeiter läuft ohne Ereignisschleife"
+        assert "gesucht" in window.chat.hint.text()
+        assert not window.chat.setup.isVisibleTo(window.chat), (
+            "kein „kein Modell“, bevor gefragt ist"
+        )
+        QApplication.processEvents()
+        assert window._backend_probe is not None or session.backend_known
+        assert window.wait_for_workers(10_000)
+        for _ in range(5):
+            QApplication.processEvents()
+        assert session.backend_known, "die Antwort ist da — in der Suite: keins"
+        assert "gesucht" not in window.chat.hint.text()
+    finally:
+        window.release()
+        window.deleteLater()
+
+
 def test_proposal_findings_reach_the_report(window: MainWindow) -> None:
     """Fund 3: Die Befunde eines Zugs hatten keinen Anzeigeweg.
 
@@ -459,7 +547,14 @@ def test_a_failed_acceptance_shows_the_error_and_keeps_the_proposal(
 def test_converting_proposal_waits_for_current_render_and_applies_once(
     window: MainWindow, monkeypatch: pytest.MonkeyPatch, created_in_proposal: bool
 ) -> None:
-    """Auch ein erst vorgeschlagener exakter Körper wartet auf das sichtbare Ergebnis."""
+    """Auch ein erst vorgeschlagener exakter Körper wartet auf das sichtbare Ergebnis.
+
+    **Und der frühe Klick wartet mit** (Entscheidung Robert, 21.09.2026, Review
+    Fenster #8): Bis dahin war der Knopf grau und der Klick verfiel; jetzt
+    bindet er sich an die erwartete Freigabe und schreibt mit dem Bild — genau
+    einmal.
+    """
+    _needs_the_exact_kernel()
     from app.core.agent.proposal import Proposal
     from app.core.scene.history import OperationDraft
     from app.core.types import Parameter
@@ -486,25 +581,22 @@ def test_converting_proposal_waits_for_current_render_and_applies_once(
 
     window._on_proposal(preview)
     assert window._proposal is preview, "conversion must not be auto-accepted"
-    assert not window.chat.accept_button.isEnabled()
+    assert window.chat.accept_button.isEnabled(), "Warten ist keine Sperre"
     window._on_proposal_accepted()
-    assert len(session.project.document.ops) == before
+    assert len(session.project.document.ops) == before, "vor dem Bild wird nichts geschrieben"
     assert "test_width" not in session.project.document.parameters
     assert session.wait_for_idle(30_000)
     approval = window._preview_approval
     assert approval is not None and approval.required and approval.presentation_ready
     assert not approval.displayed
-    assert not window.chat.accept_button.isEnabled()
+    assert approval.pending_click is not None, "der Klick wartet auf das Bild"
     assert window.chat.discard_button.isEnabled()
 
     rendered = True
     window.viewport.differenceApplied.emit(approval.difference)
     assert approval.displayed
-    assert window.chat.accept_button.isEnabled()
-    assert len(session.project.document.ops) == before, "early click is not replayed"
-    window.chat.accept_button.click()
     assert session.wait_for_idle(30_000)
-    assert window._proposal is None
+    assert window._proposal is None, "der gebundene Klick hat übernommen"
     assert len(session.project.document.ops) == before + len(proposal.drafts)
     assert session.project.document.parameters["test_width"].value == pytest.approx(12.0)
     assert session.last_result.scene.objects[target].kind == "mesh"
@@ -524,6 +616,7 @@ def test_converting_proposal_invalidates_document_change_and_discard(
     window: MainWindow, monkeypatch: pytest.MonkeyPatch, finish: str
 ) -> None:
     """Alte Renderantworten dürfen weder neue Hauptmaße noch Verwerfen überholen."""
+    _needs_the_exact_kernel()
     from app.core.agent.proposal import Proposal
     from app.core.scene.history import OperationDraft
     from app.core.types import Parameter
@@ -551,9 +644,11 @@ def test_converting_proposal_invalidates_document_change_and_discard(
     assert old is not None and old.displayed
     before = len(session.project.document.ops)
     assert session.change_parameter("body_width", 30.0)
-    assert not window.chat.accept_button.isEnabled()
+    assert not window._preview_can_apply(window.chat.accept_button, old.order), (
+        "die alte Freigabe gilt dem geänderten Dokument nicht"
+    )
+    # Eine alte Renderantwort gibt nichts frei — und schreibt nichts.
     window.viewport.differenceApplied.emit(old.difference)
-    window._on_proposal_accepted()
     assert len(session.project.document.ops) == before
     assert session.wait_for_idle(30_000)
     fresh = window._preview_approval

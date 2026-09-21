@@ -36,7 +36,7 @@ from PySide6.QtWidgets import (
 from app.core.backends import comfy_setup
 from app.core.errors import InternalError
 from app.core.log import get_logger
-from app.i18n import tr
+from app.i18n import format_decimal, tr
 from app.ui.dialogs import show_error
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash
 from app.ui.style import make_primary, set_role
@@ -139,7 +139,10 @@ class ComfySetupDialog(QDialog):
         # tippte einen Satz und las, dass ein Bild verlangt wird: Bis dahin
         # holte Solidon dieses Modell gar nicht.
         self.image_model = QCheckBox(
-            tr("Bildmodell für den Weg aus Text laden — rund 6,9 GB"), self
+            tr("Bildmodell für den Weg aus Text laden — rund {size} GB").format(
+                size=format_decimal(comfy_setup.IMAGE_MODEL_GIGABYTES, 1)
+            ),
+            self,
         )
         image_model_there = found is not None and comfy_setup.image_model_present(found)
         self.image_model.setChecked(not image_model_there if image_model is None else image_model)

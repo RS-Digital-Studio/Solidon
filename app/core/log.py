@@ -21,6 +21,7 @@ import re
 import secrets
 import sys
 import threading
+import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from logging.handlers import RotatingFileHandler
@@ -59,6 +60,10 @@ _KNOWN_TOKEN = re.compile(r"(?i)\b(?:sk|rk|pk)-[a-z0-9_-]{12,}\b")
 _configured = False
 _CRASH_PATTERN = re.compile(r"crash-\d{8}T\d{6}-[\w.+-]+-\d+-[0-9a-f]{16}\.log")
 _CRASH_KEEP = 5
+#: Je (Fehlerart, letzte Zeile) höchstens ein Berichtsordner in dieser Frist.
+_REPORT_THROTTLE_SECONDS: Final = 60.0
+_RECENT_REPORT_LIMIT: Final = 64
+_recent_reports: dict[tuple[str, str], float] = {}
 _capture_guard = threading.RLock()
 _installed = False
 
@@ -105,7 +110,12 @@ def redact(value: object, *, limit: int = _MAX_MESSAGE_CHARACTERS) -> str:
     """
     if limit < 1:
         raise ValueError("limit must be positive")
-    text = str(value)
+    # Gekappt, bevor die Muster laufen: Die vier Ersetzungen und der
+    # Zeichenlauf gingen über den ganzen Wert — 287 ms für zwei Megabyte
+    # (Review Rest #11, 21.09.2026), von denen die Zeile am Ende acht
+    # Kilozeichen zeigt. Das Vierfache des Deckels reicht, damit eine
+    # Ersetzung, die Text verlängert, den Deckel noch erreicht.
+    text = str(value)[: limit * 4]
 
     def replace_url(match: re.Match[str]) -> str:
         raw = match.group(0)
@@ -262,6 +272,34 @@ def _diagnostic_stderr(text: str) -> None:
         return
 
 
+def _report_key(error: BaseException, traceback: TracebackType | None) -> tuple[str, str]:
+    """Art und letzte Zeile — was einen Fehler von seiner Wiederholung unterscheidet."""
+    last = traceback
+    while last is not None and last.tb_next is not None:
+        last = last.tb_next
+    where = f"{last.tb_frame.f_code.co_filename}:{last.tb_lineno}" if last is not None else ""
+    return type(error).__qualname__, where
+
+
+def _reported_recently(key: tuple[str, str]) -> bool:
+    """Ob derselbe Fehler binnen einer Minute schon einen Berichtsordner bekam.
+
+    Ein Slot, der bei jedem Bild wirft, schrieb je Wurf einen Ordner — im
+    Hauptthread, mit Steckbrief und Anhängen (Review Rest #11, 21.09.2026).
+    Die Absturzdatei bekommt weiterhin jeden; der Ordner mit dem
+    Handlungsvorschlag ist je Fehler und Minute einer.
+    """
+    now = time.monotonic()
+    seen = _recent_reports.get(key)
+    if seen is not None and now - seen < _REPORT_THROTTLE_SECONDS:
+        return True
+    _recent_reports[key] = now
+    if len(_recent_reports) > _RECENT_REPORT_LIMIT:
+        oldest = min(_recent_reports, key=_recent_reports.__getitem__)
+        del _recent_reports[oldest]
+    return False
+
+
 def _record_unhandled(error: BaseException, traceback: TracebackType | None, context: str) -> None:
     """Sichert zuerst den Fehler; der komfortablere Bericht darf daran nichts ändern."""
     text = exception_text(error, traceback)
@@ -280,6 +318,8 @@ def _record_unhandled(error: BaseException, traceback: TracebackType | None, con
             except OSError as problem:
                 _diagnostic_stderr(f"{text}\n{redact(problem)}")
         _diagnostic_stderr(text)
+        if _reported_recently(_report_key(error, traceback)):
+            return
         try:
             # Erst im Fehlerfall importieren: der frühe Startweg benötigt
             # weder Geometrie, Qt noch die Berichts- und Sprachinfrastruktur.

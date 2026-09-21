@@ -893,6 +893,18 @@ def test_active_matching_questions_end_when_their_evaluation_is_invalidated(
         _release_unstarted_worker(session, "_worker", worker)
 
 
+def _needs_the_exact_kernel() -> None:
+    """Ein Test an einem exakten Körper braucht OpenCASCADE — und sagt es, statt rot zu werden.
+
+    Die CI installiert das Extra ``brep``; ein Quellklon ohne es lief in diesen
+    Tests in einen Importfehler statt in einen Skip (Review Tests-1 #4).
+    """
+    from app.core.registry import exact_kernel_present
+
+    if not exact_kernel_present():
+        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
+
+
 @pytest.fixture
 def session(qt_app: QApplication) -> Session:
     return Session()
@@ -3935,10 +3947,19 @@ def test_the_gizmo_sentence_reaches_the_status_line(window: MainWindow) -> None:
     Ein Satz, den niemand anzeigt, ist derselbe Fall wie ein Signal ohne
     Empfänger: im Sender geprüft, beim Kunden unsichtbar.
     """
+    window.announce("Exportiert: dose.3mf")
     window.viewport.gizmoStatus.emit("Der Griff bewegt die Bohrung.")
     QApplication.processEvents()
 
-    assert "Bohrung" in window._announcement
+    assert "Bohrung" in window.status_message.text()
+    # **Ein Hinweis ist keine Quittung** (Review Fenster #9, 21.09.2026): Er
+    # steht, solange er gilt, und wischt die letzte Ansage nicht — die kam
+    # als Blase und stand acht Sekunden unter dem Zeiger, und ein leerer
+    # Hinweis beim Verlassen des Griffs nahm die Quittung des Exports mit.
+    assert window._announcement == "Exportiert: dose.3mf"
+    assert window._action_notice.text() == "Exportiert: dose.3mf", "keine Blase für den Griff"
+    window.viewport.gizmoStatus.emit("")
+    assert window.status_message.text() == "Exportiert: dose.3mf", "die Quittung kommt zurück"
 
 
 def test_selecting_a_feature_fills_the_panel_and_clearing_empties_it(
@@ -5692,6 +5713,7 @@ def test_the_tree_explains_editability_without_cad_vocabulary(
     window: MainWindow, kind: str
 ) -> None:
     """Die Körperart nennt die Folge, nicht den Namen des Rechenkerns."""
+    _needs_the_exact_kernel()
     window.session.apply(
         "Werkstück",
         [
@@ -5726,6 +5748,95 @@ def test_removing_an_object_and_taking_it_back(window: MainWindow) -> None:
     window.session.undo()
     window.session.wait_for_idle()
     assert set(window.session.evaluate_now().scene.objects) == {"obj_1", "obj_2"}
+
+
+@pytest.mark.parametrize(
+    ("name", "chosen"),
+    [
+        ("union_objects", ("obj_1", "obj_2")),
+        ("subtract_objects", ("obj_1", "obj_2")),
+        ("place_on_bed", ("obj_1",)),
+        ("delete_object", ("obj_1",)),
+    ],
+)
+def test_a_fieldless_operation_on_exact_bodies_runs_without_a_dialog(
+    window: MainWindow, name: str, chosen: tuple[str, ...]
+) -> None:
+    """Regel 19: Ein Dialog mit null Feldern vor einer rücknehmbaren Handlung ist keiner.
+
+    Gemessen am 21.09.2026 an zwei exakten Quadern: *Vereinigen*, *Abziehen*,
+    *Auf das Bett setzen* und Entf öffneten einen Dialog ohne ein einziges
+    Feld, mit einer Vorschau, die 2,2 s brauchte, um dasselbe zu zeigen — weil
+    ein exakter Eingang allein als Grund galt. Der Grund ist die mögliche
+    Umwandlung, und die gibt es hier nicht: Alle vier bleiben an exakten
+    Körpern exakt (``test_exact_body_parity``: KEEP).
+    """
+    from app.core.registry import exact_kernel_present
+
+    if not exact_kernel_present():
+        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
+    window.session.start_new()
+    window.session.apply(
+        "Zwei Quader",
+        [
+            OperationDraft(op="create_brep_box", params={"width": 40.0, "height": 10.0}),
+            OperationDraft(op="create_brep_box", params={"width": 20.0, "height": 30.0}),
+        ],
+    )
+    assert window.session.wait_for_idle(60_000)
+    window._on_scene(window.session.evaluate_now())
+    assert all(entry.kind == "brep" for entry in window.session.last_result.scene.objects.values())
+    window.object_tree.select_objects(chosen)
+    QApplication.processEvents()
+    before = len(window.session.project.document.ops)
+
+    window.run_operation(REGISTRY.get(name))
+
+    assert window._op_dialog is None, "kein Dialog: die Handlung hat nichts zu fragen"
+    assert window.session.wait_for_idle(60_000)
+    assert [step.op for step in window.session.project.document.ops][before:] == [name]
+    if name != "delete_object":
+        assert all(
+            entry.kind == "brep" for entry in window.session.evaluate_now().scene.objects.values()
+        ), "und der Körper ist danach noch exakt"
+
+
+def test_a_fieldless_operation_that_mixes_body_kinds_still_shows_its_preview(
+    window: MainWindow,
+) -> None:
+    """Die Gegenprobe: gemischte Eingänge gehen den Netzweg, und das wird gezeigt.
+
+    *Vereinigen* an einem exakten und einem Netzkörper macht aus dem exakten
+    ein Dreiecksmodell (``evaluate.exact_became_mesh``). Das ist die
+    Umwandlung, vor der die Vorschau stehen muss — und der einzige Grund, aus
+    dem eine feldlose Operation einen Dialog bekommt.
+    """
+    from app.core.registry import exact_kernel_present
+
+    if not exact_kernel_present():
+        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
+    window.session.start_new()
+    window.session.apply(
+        "Gemischt",
+        [
+            OperationDraft(op="create_brep_box", params={"width": 40.0, "height": 10.0}),
+            OperationDraft(op="create_box", params={"width": 20.0, "height": 30.0}),
+        ],
+    )
+    assert window.session.wait_for_idle(60_000)
+    window._on_scene(window.session.evaluate_now())
+    window.object_tree.select_objects(("obj_1", "obj_2"))
+    QApplication.processEvents()
+    before = len(window.session.project.document.ops)
+
+    window.run_operation(REGISTRY.get("union_objects"))
+
+    dialog = window._op_dialog
+    assert dialog is not None, "gemischte Eingänge: die Umwandlung wird vorher gezeigt"
+    assert len(window.session.project.document.ops) == before
+    dialog.reject()
+    window.session.wait_for_idle()
+    assert window._op_dialog is None
 
 
 def test_an_operation_dialog_does_not_lock_the_window(window: MainWindow) -> None:
@@ -11503,6 +11614,39 @@ def test_the_wired_dialog_previews_into_the_viewport(window: MainWindow) -> None
     assert window.viewport.difference is None
 
 
+def test_the_window_reads_metrics_the_worker_has_already_computed(
+    session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Volumen, Oberfläche, Wasserdichtheit und Teilezahl rechnet der Arbeiter.
+
+    Sie sind gemerkte Eigenschaften der Körper, und der erste Zugriff rechnet.
+    Der kam aus dem Hauptthread — ``describe_selection`` beim Wiederherstellen
+    der Auswahl, ``_measure_up`` über dem Bericht —: 1,5 s an einer Million
+    Dreiecken, 15 s an einem STEP-Gewinde (Review Leistung B1/B2, 21.09.2026).
+    Gemessen wird, **in welchem Faden** die vier zum ersten Mal gerechnet
+    werden: nie im Hauptthread.
+    """
+    from app.core.geom.mesh import MeshData
+
+    first_thread: dict[str, str] = {}
+    for name in ("volume", "area", "is_watertight", "component_count"):
+        original = getattr(MeshData, name)
+
+        def spy(self: Any, _name: str = name, _original: Any = original) -> Any:
+            first_thread.setdefault(_name, threading.current_thread().name)
+            return _original.fget(self)
+
+        monkeypatch.setattr(MeshData, name, property(spy))
+
+    session.import_model(MESHES / "cube_clean.stl")
+    assert session.wait_for_idle(30_000)
+    entry = next(iter(session.last_result.scene.objects.values()))
+    # Der Hauptthread liest — und trifft dabei auf gemerkte Werte.
+    assert entry.mesh.volume > 0.0 and entry.mesh.is_watertight
+    assert set(first_thread) == {"volume", "area", "is_watertight", "component_count"}
+    assert all(thread != "MainThread" for thread in first_thread.values()), first_thread
+
+
 def test_rapid_previews_never_orphan_a_worker(session: Session) -> None:
     """Wer schnell tippt, startet Vorschau auf Vorschau. Jeder laufende
     Arbeiter bleibt referenziert, bis er ausgelaufen ist — ein QThread ohne
@@ -15234,6 +15378,10 @@ def test_the_theme_stands_before_anything_is_shown(
     gone = Activation(licence=None, days_left=0, deadline=datetime.date(2000, 1, 1))
     assert gone.over, "sonst läuft der Test durch den ganzen Start"
     monkeypatch.setattr(app_module.activation, "state", lambda: gone)
+    # Wie ``test_cli.py``: ``main`` läuft hier im Prozess der Suite, und der
+    # Prozessschutz bög sonst ``sys.excepthook`` und ``faulthandler`` von
+    # pytest um (Review Rest #5).
+    monkeypatch.setattr(app_module, "install_crash_logging", lambda: None)
 
     shown: list[bool] = []
     monkeypatch.setattr(
@@ -15272,6 +15420,7 @@ def test_the_program_start_configures_https_before_reading_the_licence(
         lambda: order.append("licence") or gone,
     )
     monkeypatch.setattr("app.ui.dialogs.show_expired_demo", lambda _state: None, raising=False)
+    monkeypatch.setattr(app_module, "install_crash_logging", lambda: None)
 
     assert app_module.main([]) == 1
     assert order[:2] == ["certificates", "licence"]
@@ -15546,7 +15695,9 @@ def test_a_locked_tool_names_the_step_that_spoiled_the_exact_body(window: MainWi
     hint = window._op_actions["brep_to_mesh"].toolTip()
 
     assert str(REGISTRY.get("hollow_object").title) in hint, hint
-    assert "Nimm die Schritte ab dort zurück" in hint, "der Satz nennt eine Handlung, die es gibt"
+    assert "Nehmen Sie die Schritte ab dort zurück" in hint, (
+        "der Satz nennt eine Handlung, die es gibt"
+    )
 
 
 def test_a_finding_names_a_body_a_later_step_has_replaced(qt_app: QApplication) -> None:
@@ -19086,6 +19237,7 @@ def test_hiding_from_a_feature_row_names_the_body(window: MainWindow) -> None:
 @pytest.mark.parametrize("operation", ["brep_to_mesh", "union_objects"])
 def test_exact_conversion_is_shown_before_apply_even_without_volume_change(window, operation):
     """Das Band nennt die wirkliche Bauartänderung, während das Dokument unverändert bleibt."""
+    _needs_the_exact_kernel()
     window.session.apply(
         "Zwei Körper",
         [
@@ -19105,10 +19257,10 @@ def test_exact_conversion_is_shown_before_apply_even_without_volume_change(windo
     text = window.viewport.banner.note.text()
     assert str(REGISTRY.get(operation).title) in text
     assert "Werkzeug" in text
-    assert "wandelt" in text and "Dreiecksmodell" in text
+    assert "macht aus" in text and "Dreiecksmodell" in text
     assert "bleiben bearbeitbar" in text
     assert "Rückgängig" in text
-    assert text.count("wandelt") == 1
+    assert text.count("Dreiecksmodell") == 1
     assert window.session.last_result is before
     assert window.session.last_result.scene.objects["obj_2"].kind == "brep"
     assert len(window.session.project.document.ops) == 2
@@ -19117,6 +19269,7 @@ def test_exact_conversion_is_shown_before_apply_even_without_volume_change(windo
 
 def test_an_exact_body_keeps_its_kind_when_the_preview_triangle_limit_is_low(session, monkeypatch):
     """Viele Anzeigedreiecke machen den exakten Eingabekörper nicht zum groben Netz."""
+    _needs_the_exact_kernel()
     from app.ui import session as session_module
 
     session.apply("Rundkörper", [OperationDraft(op="create_brep_cylinder")])
@@ -19139,6 +19292,7 @@ def test_an_exact_body_keeps_its_kind_when_the_preview_triangle_limit_is_low(ses
 
 def test_editing_a_step_includes_conversion_information_from_its_suffix(session):
     """Die spätere Umwandlung gehört zum Ergebnis der geänderten früheren Operation."""
+    _needs_the_exact_kernel()
     session.apply(
         "Körper und Folgeänderung",
         [
@@ -19221,6 +19375,7 @@ def test_a_history_preview_uses_the_chosen_twin_without_changing_the_document(
 
 def test_an_agent_preview_uses_new_parameters_and_the_proposed_print_target(session):
     """Neue Maße und Druckwerte gelten schon in derselben Vorschau wie die Operation."""
+    _needs_the_exact_kernel()
     import copy
 
     from app.core.backends.llm import Reply, ToolCall
@@ -19309,6 +19464,7 @@ def test_an_agent_preview_uses_new_parameters_and_the_proposed_print_target(sess
 
 def test_an_agent_parameter_change_has_a_preview_without_new_operations(session):
     """Ein geändertes Hauptmaß bewegt vorhandene Geometrie auch ohne neuen Operationsschritt."""
+    _needs_the_exact_kernel()
     from app.core.backends.llm import Reply, ToolCall
     from tests.scripted_backend import ScriptedBackend
 

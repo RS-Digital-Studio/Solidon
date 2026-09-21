@@ -39,7 +39,7 @@ from typing import IO, Final
 
 from app.core import discover
 from app.core.log import get_logger
-from app.i18n import TranslatableText, _
+from app.i18n import TranslatableText, _, format_decimal
 
 _log = get_logger(__name__)
 
@@ -1258,15 +1258,24 @@ def _space_or_stop(
     free = free_gigabytes(where) + _gigabytes_in(where)
     if free >= needed:
         return
+    # Beide Zahlen lokalisiert und mit einer Nachkommastelle: ``{needed:.0f}``
+    # machte aus 8,5 eine „8" — und stand neben 8,3 GB frei, die nicht
+    # reichten (Review Rest #4); ``{free:.1f}`` schrieb „12.3" ins deutsche
+    # Fenster (Review Fenster #13).
     raise SetupFailed(
         str(
             _(
-                "Auf dem Datenträger von {drive} sind {free:.1f} GB frei, gebraucht "
-                "werden {needed:.0f}. Schaffen Sie dort Platz — geladen wird in den "
+                "Auf dem Datenträger von {drive} sind {free} GB frei, gebraucht "
+                "werden {needed} GB. Schaffen Sie dort Platz — geladen wird in den "
                 "Zwischenordner, und von dort wandern die Gewichte nach "
                 "{folder}; beide Orte müssen sie fassen."
             )
-        ).format(drive=where, free=free, needed=needed, folder=destination)
+        ).format(
+            drive=where,
+            free=format_decimal(free, 1),
+            needed=format_decimal(needed, 1),
+            folder=destination,
+        )
     )
 
 
@@ -1318,7 +1327,10 @@ def fetch_image_model(
             IMAGE_MODEL_REVISION,
             IMAGE_MODEL_SHA256,
         ],
-        _("Bildmodell für den Weg aus Text laden — rund 6,9 GB, das dauert"),
+        _(
+            "Bildmodell für den Weg aus Text laden — rund {size} GB, das dauert",
+            size=format_decimal(IMAGE_MODEL_GIGABYTES, 1),
+        ),
         progress,
         cancelled,
     )

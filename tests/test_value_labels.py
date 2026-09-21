@@ -1067,6 +1067,9 @@ def test_an_area_reaches_the_user_in_his_unit(qt_app: object) -> None:
 def test_feature_measure_names_its_source_without_inventing_a_nominal_size(
     qt_app: object, source: str | None, qualifier: str
 ) -> None:
+    """Das Maß eines Merkmals trägt seine Herkunft als Zusatz — geschätzt, Vorgabemaß, gemessen —
+    und erfindet keine Nenngröße; ein fehlendes Maß sagt das, statt null zu zeigen.
+    """
     from dataclasses import replace
 
     from app.core.types import Feature
@@ -1095,6 +1098,9 @@ def test_feature_measure_names_its_source_without_inventing_a_nominal_size(
 def test_equal_measure_sources_share_one_suffix_but_mixed_sources_remain_explicit(
     qt_app: object, kind: str, second: str
 ) -> None:
+    """Zwei Maße derselben Herkunft teilen sich einen Zusatz am Ende; zwei verschiedener Herkunft
+    nennen beide.
+    """
     from dataclasses import replace
 
     from app.core.types import Feature

@@ -812,6 +812,22 @@ class _UpdateWorker(Worker):
         self.done.emit(updates.check())
 
 
+class _BackendProbe(Worker):
+    """Die Modellfrage (§27) abseits des Oberflächen-Threads.
+
+    ``first_available`` liest den Schlüsselbund (unter Windows über WMI,
+    84 bis 137 ms) und öffnet je lokalem Modell einen Socket (zweimal 125 ms,
+    bei DNS ohne Frist) — beim Fensteraufbau, vor dem ersten Bild (Review
+    Leistung B6, 21.09.2026). Die Antwort ist ein Modell oder keines; bis
+    sie da ist, sagt der Chat „wird gesucht" (:meth:`ChatPanel.set_probing`).
+    """
+
+    done = Signal(object)
+
+    def work(self) -> None:
+        self.done.emit(llm.first_available())
+
+
 class _OllamaSizeWorker(Worker):
     """Die Modellgrößen-Frage an Ollama (§27), abseits des Oberflächen-Threads.
 
@@ -1754,6 +1770,9 @@ class _PreviewApproval:
     difference: Any = None
     presentation_ready: bool = False
     after_shown: Callable[[Any], None] | None = None
+    pending_click: Callable[[], object] | None = None
+    """Ein Klick auf *Übernehmen*, der vor dem Bild kam und auf es wartet
+    (:meth:`MainWindow._apply_when_previewed`) — der letzte gilt."""
 
 
 def _candidate_token(entry: tuple[str, str] | EdgeTarget) -> str:
@@ -1822,6 +1841,8 @@ class MainWindow(QMainWindow):
         """Die laufende Update-Anfrage (§37.2) — festgehalten wie jeder
         andere Arbeiter, damit sie das Fenster nicht überlebt."""
         self._ollama_size_worker: Any = None
+        self._backend_probe: Any = None
+        """Der laufende Arbeiter der Modellfrage (:class:`_BackendProbe`)."""
         """Die Modellgrößen-Frage an Ollama (§27), aus demselben Grund."""
         self._download_worker: Any = None
         self._downloading = False
@@ -2179,6 +2200,13 @@ class MainWindow(QMainWindow):
         """Geschlossen, Stücke, Hohlraum — je Körper, für die Auswertung, die
         gerade gilt. ``_update_actions`` fragt bei jeder Auswahl für drei
         Operationen danach; gerechnet wird je Körper und Auswertung einmal."""
+        self._difference_standing = False
+        """Ob im Bild eine Differenz liegt — dann lohnt ``show_difference(None)``.
+
+        Ohne den Merker räumte jeder Aufbau einer Maßgruppe eine Differenz ab,
+        die es nie gab: ``show_difference(None)`` färbt die Auswahl neu und
+        zeichnet die Merkmale neu, 0,22 s an der 360k-Platte je Klick auf eine
+        Bohrung (Review Fenster #12)."""
         self._preview_shown = False
         """Ob dieses Fenster eine Vorschau ins Bild gelegt hat, die es
         zurückzunehmen hat.
@@ -2191,7 +2219,9 @@ class MainWindow(QMainWindow):
         anwendungsweiten Ereignisfilter für die Leertaste stehen; der Kommentar
         in ``_show_start_screen`` beschreibt genau diesen Zustand als behoben."""
         self.feature_panel.valuesChanged.connect(self._on_feature_values_changed)
+        self.feature_panel.handlingArmed.connect(self._on_handling_armed)
         self.feature_panel.preview_check = self._feature_preview_can_apply
+        self.feature_panel.preview_defer = weak_slot(self, MainWindow._defer_feature_apply)
         self.feature_panel.operationRequestedForEach.connect(self._apply_to_each_feature)
         # Derselbe Katalog wie aus dem Objektbaum — ein zweiter Weg dorthin,
         # kein zweiter Katalog.
@@ -2281,8 +2311,10 @@ class MainWindow(QMainWindow):
         self.viewport.slotStarted.connect(self._close_the_other_way)
         self.viewport.slotProposed.connect(self._on_slot_proposed)
         # Was der Griff bewegen wird, sagt die Ansicht — wo der Satz steht,
-        # entscheidet das Fenster, wie bei ``measurementStatus``.
-        self.viewport.gizmoStatus.connect(self.announce)
+        # entscheidet das Fenster, wie bei ``measurementStatus``. Ein Hinweis,
+        # keine Quittung: Er steht in der Statuszeile und nimmt der letzten
+        # Ansage nichts weg (``announce(receipt=False)``).
+        self.viewport.gizmoStatus.connect(self._on_gizmo_status)
         self.viewport.featurePicked.connect(self._on_feature_picked)
         self.viewport.edgePicked.connect(self._on_edge_picked)
         self.viewport.objectPicked.connect(self._on_object_picked)
@@ -4233,6 +4265,16 @@ class MainWindow(QMainWindow):
     def _update_actions(self) -> None:
         """Was jetzt geht, sieht man, statt es zu erfahren (§2.6).
 
+        **Einmal je Schritt, nicht dreimal.** Ein Schritt ruft
+        ``projectChanged``, dann stellt der Baum seine Auswahl wieder her, dann
+        kommt ``sceneChanged`` — und jedes der drei stellte alle Einträge neu:
+        rund 8 ms je Lauf, 27 Läufe beim Öffnen von Weg 1 (Review Leistung
+        B15, 21.09.2026). ``_on_project`` überspringt den Lauf, solange eine
+        Auswertung aussteht (der Stand ohne Szene ist einer, den die Szene
+        gleich ersetzt), und ``_on_selection`` den Lauf, während ``_on_scene``
+        aufbaut (``_show_scene`` stellt am Ende selbst, nach der Nachwahl).
+        Was der Kunde auslöst — ein Klick, eine Auswahl — stellt weiter sofort.
+
         Vorher war jeder der siebzig Einträge immer anklickbar, auch bei leerer
         Szene; wer einen wählte, bekam ein modales Fenster mit dem Hinweis, dass
         er vorher etwas hätte auswählen sollen. Eine Sackgasse als Antwort auf
@@ -5159,6 +5201,7 @@ class MainWindow(QMainWindow):
         self.session.splitCancelRequested.connect(self._on_split_cancel_requested)
         self.session.splitCancelled.connect(self._on_split_cancelled)
         self.session.evaluationCancelled.connect(self._on_evaluation_cancelled)
+        self.session.counterpartFinished.connect(self._on_counterpart_finished)
         self._refresh_chat_availability()
 
     # --- actions ----------------------------------------------------------------
@@ -8033,6 +8076,17 @@ class MainWindow(QMainWindow):
         for finding in applied.findings:
             self.announce(str(finding.message))
 
+    def _on_counterpart_finished(self, findings: Any) -> None:
+        """Was das Nachtragen der Passung ergab — angesagt, sobald es feststeht.
+
+        Die Passung kommt erst mit der Auswertung (``Session._finish_after``),
+        und die läuft im Arbeiter; die Sätze dazu — „Beide Hälften sind als
+        Passung eingetragen" oder der Grund, warum nicht — kommen deshalb
+        hier an und nicht als Rückgabewert des Klicks.
+        """
+        for finding in findings:
+            self.announce(str(finding.message))
+
     def _thread_among(
         self, first: tuple[str, str], second: tuple[str, str]
     ) -> tuple[tuple[str, Any], tuple[str, str]] | None:
@@ -8112,7 +8166,28 @@ class MainWindow(QMainWindow):
         Leben an einer HTTP-Antwort hängt — Tests und Screenshot-Werkzeuge
         bauen Fenster und warten auf keinen. Und einmal bei der Einrichtung
         gesagt ist genug — bei jedem Start wäre es Nörgeln (§27).
+
+        **Die Modellfrage selbst läuft im Arbeiter**, solange sie offen ist
+        (:class:`_BackendProbe`): Schlüsselbund und Sockets gehören nicht in
+        den Fensteraufbau. Die Antwort kommt über :meth:`_backend_answered`
+        hierher zurück; dann ist sie bekannt, und der Rest ist synchron.
         """
+        if not self.session.backend_known:
+            # Erst die Sperre, dann der Suchhinweis: ``set_locked`` stellt den
+            # Zustand über ``set_available`` neu und nähme den Hinweis mit.
+            self.chat.set_locked(not activation.state().unlocked)
+            self.chat.set_probing()
+            self.chat.set_notice("")
+            # **Gestartet erst im nächsten Ereignisdurchlauf.** Der stille
+            # Fensterbau — Tests, Bildschirmfotos, die Startmarke in
+            # ``test_performance`` — baut ein Fenster und endet; ein Arbeiter,
+            # der dabei schon liefe, überlebte den Prozess und riss ihn beim
+            # Beenden (QThread zerstört, während er läuft: 0xC0000409, gemessen
+            # am 21.09.2026). Ohne Ereignisschleife feuert der Zeitgeber nie,
+            # und dann gibt es auch keinen Arbeiter, auf den jemand warten
+            # müsste; mit ihr startet die Probe, sobald das Fenster steht.
+            QTimer.singleShot(0, weak_slot(self, MainWindow._start_backend_probe, probe_local))
+            return
         backend = self.session.agent_backend
         self.chat.set_available(
             backend is not None, f"{backend.id}:{backend.model}" if backend else ""
@@ -8134,6 +8209,46 @@ class MainWindow(QMainWindow):
         self._ollama_size_worker = worker
         worker.finished.connect(lambda done=worker: self._ollama_size_worker_done(done))
         self._leash.start(worker)
+
+    def _start_backend_probe(self, probe_local: bool) -> None:
+        """Die Modellfrage im Arbeiter — an der Leine des Fensters."""
+        if self._close_requested:
+            return
+        if self.session.backend_known:
+            self._refresh_chat_availability(probe_local)
+            return
+        if self._backend_probe is not None and self._backend_probe.isRunning():
+            return
+        probe = _BackendProbe()
+        probe.done.connect(weak_slot(self, MainWindow._backend_answered, probe_local, forward=True))
+        probe.crashed.connect(self._backend_probe_crashed)
+        self._retire(self._backend_probe)
+        self._backend_probe = probe
+        probe.finished.connect(weak_slot(self, MainWindow._backend_probe_done, probe))
+        self._leash.start(probe)
+
+    def _backend_answered(self, probe_local: bool, backend: Any) -> None:
+        """Die Modellfrage ist beantwortet — jetzt zeigt der Chat, was gilt.
+
+        Die Antwort gehört der Sitzung auch dann, wenn das Fenster schon geht:
+        Ein Signal aus der Warteschlange kann nach ``release`` ankommen, und
+        die Widgets sind dann weg (gemessen am 21.09.2026 an zwei
+        Fenstertests, die späte Signale in ein gelöschtes Fenster schicken).
+        """
+        self.session.set_agent_backend(backend)
+        if self._close_requested or not isValid(self):
+            return
+        self._refresh_chat_availability(probe_local)
+
+    def _backend_probe_crashed(self, detail: str) -> None:
+        """Ohne Antwort gilt: kein Modell — der Chat sagt es, das Fenster läuft."""
+        _log.warning("backend probe crashed: %s", detail)
+        self._backend_answered(False, None)
+
+    def _backend_probe_done(self, worker: Any) -> None:
+        if self._backend_probe is worker:
+            self._backend_probe = None
+        self._hold_until_done(worker)
 
     def _ollama_size_worker_done(self, worker: Any) -> None:
         if self._ollama_size_worker is worker:
@@ -10502,8 +10617,18 @@ class MainWindow(QMainWindow):
             window = window_ref()
             return window is not None and window._quiet_selection_allowed()
 
+        def selection_refused() -> None:
+            """Der Satz zur gehaltenen Auswahl — derselbe wie am Menüweg."""
+            window = window_ref()
+            if window is not None:
+                window._say_the_change_comes_first()
+
         self.viewport.selection_allowed = selection_allowed
+        # Die Ansicht kennt den Satz noch nicht als Feld (Paket E schließt ihn
+        # an ``_select_at``, Rechtsklick und ``mousePressEvent`` an).
+        self.viewport.selection_refused = selection_refused
         self.object_tree.tree.selection_allowed = selection_allowed
+        self.object_tree.tree.selection_refused = selection_refused
         """Körper und Merkmal, deren Stelle die laufende Platzierung bearbeitet."""
         self._measures_to_resume: str = ""
         """Das Merkmal, an dem die Maße nach dem Übernehmen wieder ins Bild kommen.
@@ -11459,7 +11584,7 @@ class MainWindow(QMainWindow):
         object_id = self.object_tree.selected()
         request = self._map_request
         if request is not None and (kind != request.key[1] or object_id != request.key[0]):
-            self.viewport._hide_finding_mark()
+            self.viewport.clear_finding_mark()
         if kind is None or object_id is None:
             self._cancel_map_worker()
             self._finding_awaiting_map = None
@@ -11534,7 +11659,9 @@ class MainWindow(QMainWindow):
         worker.timedOut.connect(
             weak_slot(self, MainWindow._map_failed, request, "timeout", forward=True)
         )
-        worker.aborted.connect(weak_slot(self, MainWindow._map_failed, request, "cancelled", None))
+        # ``aborted`` braucht hier keinen Empfänger: Abgebrochen wird nur über
+        # ``_cancel_map_worker``, und das entwertet den Auftrag vorher — die
+        # Meldung käme immer an einer Anfrage an, die keine mehr ist.
         worker.finished.connect(weak_slot(self, MainWindow._map_worker_done, worker))
         self._map_worker = worker
         self._leash.start(worker)
@@ -11570,8 +11697,6 @@ class MainWindow(QMainWindow):
             self._map_too_large(entry.mesh.triangle_count, int(detail))
         elif reason == "timeout":
             self._map_timed_out(float(detail))
-        elif reason == "cancelled":
-            self._cancel_analysis()
         else:
             self._map_crashed(str(detail))
 
@@ -11582,13 +11707,34 @@ class MainWindow(QMainWindow):
             self._progress_idle()
 
     def _cancel_analysis(self) -> None:
-        """Ein ausdrücklicher Abbruch behält das Modell und quittiert die Kartenabsage."""
+        """Ein ausdrücklicher Abbruch behält das Modell und quittiert die Kartenabsage.
+
+        **Und er bietet den Weg zurück** (Regel 17). „wurde abgebrochen" stand
+        bis zum 21.09.2026 ohne Handlung in der Legende; wer die Karte doch
+        wollte, musste eine andere wählen und wieder zurück (Review Fenster
+        #10). *Erneut berechnen* nimmt den Abbruch zurück und startet
+        dieselbe Karte am selben Körper.
+        """
         self._map_cancelled_for = (self.object_tree.selected(), self.analysis_bar.chosen())
         self._cancel_map_worker()
         self.viewport.set_analysis_map(None, None)
-        self.viewport._hide_finding_mark()
-        self.analysis_bar.show_problem(tr("Die Berechnung der Analysekarte wurde abgebrochen."))
+        self.viewport.clear_finding_mark()
+        self.analysis_bar.show_problem(
+            tr("Die Berechnung der Analysekarte wurde abgebrochen."),
+            tr("Erneut berechnen"),
+            weak_slot(self, MainWindow._recompute_cancelled_map),
+        )
         self.announce(tr("Die Berechnung der Analysekarte wurde abgebrochen."))
+
+    def _recompute_cancelled_map(self) -> None:
+        """Den Abbruch zurücknehmen — dieselbe Karte, derselbe Körper, jetzt gerechnet."""
+        cancelled, self._map_cancelled_for = self._map_cancelled_for, None
+        if cancelled is None:
+            return
+        object_id, kind = cancelled
+        if object_id is None or kind is None:
+            return
+        self._analysis_map(kind, object_id)
 
     def _cancel_map_worker(self) -> None:
         """Entwertet Karte und Berichtsklick vor jedem später eintreffenden Signal."""
@@ -11762,7 +11908,7 @@ class MainWindow(QMainWindow):
         if analysis is None:
             return
         self.analysis_bar.show_legend(analysis, self._feature_names())
-        mark = self.viewport._finding_mark
+        mark = self.viewport.finding_mark()
         if (
             analysis.kind == "deviation"
             and mark is not None
@@ -11993,7 +12139,7 @@ class MainWindow(QMainWindow):
     def _on_finding_activated(self, finding: Finding) -> None:
         """Ein Berichtsklick bindet zuerst den Körper, dann Karte und tatsächlichen Ort."""
         self._finding_awaiting_map = None
-        self.viewport._hide_finding_mark()
+        self.viewport.clear_finding_mark()
         if finding.op_id is not None and self.history_panel.point_at(int(finding.op_id)):
             open_section(self.history_panel)
         object_id = finding.object_id or self.object_tree.selected()
@@ -12302,28 +12448,34 @@ class MainWindow(QMainWindow):
                 self.chat.show_document(self.session.project.document)
                 # Eine wartende Differenz eines abgelösten Vorschlags bliebe
                 # sonst unbeschriftet über der neuen Szene stehen.
-                self.viewport.show_difference(None)
+                self._show_difference(None)
                 self.viewport.mark_preview("")
                 self._focus_chat()
                 return
         self._proposal = preview
         self.chat.show_proposal(preview)
-        project = self.session.project
-
-        def changed(*_args: Any) -> None:
-            """Ein Vorschlag bleibt an sein Projekt und dessen aktuellen Stand gebunden."""
-            if self._proposal is not preview:
-                return
-            if self.session.project is not project:
-                self._clear_proposal()
-                return
-            self._show_pending_proposal()
-
+        # **Schwach gebunden, nicht als Closure.** Die Sitzung überlebt das
+        # Fenster (Sprachwechsel, zweites Fenster), und ``release`` trennt mit
+        # ``session.disconnect(self)`` nur gebundene Methoden — eine Closure
+        # blieb hängen, hielt das Fenster am Leben und lief beim nächsten
+        # Ergebnis in ein zerstörtes Widget (Review Fenster #11, 21.09.2026).
+        changed = weak_slot(
+            self, MainWindow._proposal_context_changed, preview, self.session.project
+        )
         self._proposal_changed: Callable[..., None] | None = changed
         self.session.projectChanged.connect(changed)
         self.session.sceneChanged.connect(changed)
         self._show_pending_proposal()
         self._focus_chat()
+
+    def _proposal_context_changed(self, preview: Any, project: Any) -> None:
+        """Ein Vorschlag bleibt an sein Projekt und dessen aktuellen Stand gebunden."""
+        if self._proposal is not preview:
+            return
+        if self.session.project is not project:
+            self._clear_proposal()
+            return
+        self._show_pending_proposal()
 
     def _show_pending_proposal(self) -> _PreviewApproval | None:
         """Chat und wiederhergestelltes Vorschauband verwenden denselben Auftrag."""
@@ -12367,7 +12519,7 @@ class MainWindow(QMainWindow):
             return approval
         self.chat.accept_button.setEnabled(True)
         if preview.difference is not None:
-            self.viewport.show_difference(preview.difference)
+            self._show_difference(preview.difference)
             self.viewport.mark_preview(
                 self._conversion_preview_note(
                     tr("Vorschlag — noch nicht übernommen"), preview.proposal.findings
@@ -12382,7 +12534,9 @@ class MainWindow(QMainWindow):
         try:
             approval = self._show_pending_proposal()
             if approval is not None and not self._preview_can_apply(
-                self.chat.accept_button, approval.order
+                self.chat.accept_button,
+                approval.order,
+                then=weak_slot(self, MainWindow._on_proposal_accepted),
             ):
                 return
             self.session.accept_proposal(self._proposal)
@@ -12443,7 +12597,7 @@ class MainWindow(QMainWindow):
         self.chat.accept_button.setStatusTip("")
         self.chat.accept_button.setAccessibleDescription("")
         self.chat.show_proposal(None)
-        self.viewport.show_difference(None)
+        self._show_difference(None)
         self.viewport.mark_preview("")
         self.chat.show_document(self.session.project.document)
 
@@ -12919,6 +13073,7 @@ class MainWindow(QMainWindow):
         Abschluss; der Viewport prüft das vor seiner eigenen Auswahländerung.
         """
         if not self._quiet_selection_allowed():
+            self._say_the_change_comes_first()
             return
         if not object_id and not add:
             self._leave_the_measures()
@@ -13222,7 +13377,15 @@ class MainWindow(QMainWindow):
     def _on_features_selected(self, chosen: list[Any]) -> None:
         """Abstand im selben Körper, manuelle Prüfbeziehung zwischen zwei Körpern."""
         if chosen:
-            self.viewport.select_feature_refs(chosen)
+            # **Was das Bild schon zeigt, wird nicht ein zweites Mal gezeichnet.**
+            # Der Baum meldet je Klick erst das eine Merkmal (``featureSelected``
+            # → ``select_feature``) und dann die Mehrfachauswahl; bei einem
+            # einzelnen Merkmal ist das dieselbe Auswahl, und
+            # ``select_feature_refs`` zeichnete alle Merkmale noch einmal —
+            # 0,25 s an der 360k-Platte (Review Fenster #12, Paket E).
+            shown = tuple((str(object_id), str(feature_id)) for object_id, feature_id in chosen)
+            if self.viewport.highlighted_feature_refs() != shown:
+                self.viewport.select_feature_refs(chosen)
             # **Die ganzen Körper daneben bleiben gewählt.** ``select_feature_refs``
             # merkt sich die Besitzer der Merkmale als Auswahl; ein zweiter
             # Körper, der ohne Merkmal im Baum markiert ist, fiel damit aus dem
@@ -13481,14 +13644,29 @@ class MainWindow(QMainWindow):
             drafts=(OperationDraft(op=op, inputs=(selected,), params=dict(params)),)
         )
 
-    def _feature_preview_can_apply(self) -> bool:
-        """Auch ohne vorherige Wertmeldung die tatsächlich aktive Handlung prüfen."""
+    def _defer_feature_apply(self) -> None:
+        """Der Klick auf *Übernehmen* im Merkmalfenster, wenn die Vorschau noch aussteht."""
+        self._feature_preview_can_apply(defer=True)
+
+    def _feature_preview_can_apply(self, defer: bool = False) -> bool:
+        """Auch ohne vorherige Wertmeldung die tatsächlich aktive Handlung prüfen.
+
+        ``defer`` ist der Klick auf *Übernehmen*: Kommt er vor der Vorschau,
+        wartet er auf sie (``FeaturePanel.preview_defer``). Die bloße Frage
+        (``preview_check``) bindet nichts.
+        """
         entered = self.feature_panel.preview_values()
         if entered is None:
             return True
         order = self._prepare_feature_order(*entered)
         return order is not None and self._preview_can_apply(
-            self._quiet_host or self.feature_panel, order
+            self._quiet_host or self.feature_panel,
+            order,
+            then=(
+                weak_slot(self.feature_panel, type(self.feature_panel)._run_armed)
+                if defer
+                else None
+            ),
         )
 
     def _start_feature_preview(self) -> None:
@@ -13540,12 +13718,28 @@ class MainWindow(QMainWindow):
         der dieser Fehler an diesem Tag mehrfach auftrat: Der Abbruch war
         bedacht, das Fertigwerden nicht.
         """
+        # **Eine bloß gebundene Freigabe ist nichts, was abzuräumen wäre.** Seit
+        # jeder Merkmalsklick seinen Auftrag bindet (``_start_feature_preview``),
+        # war ``_preview_approval`` praktisch nie ``None`` — und der Ausstieg
+        # darunter tot: Jeder Klick lief durch ``_clear_preview`` und damit
+        # durch ``show_difference(None)`` (Review Fenster #12, 21.09.2026).
+        # Gebunden, aber weder angefordert noch gezeigt noch mit wartendem
+        # Klick, heißt: vergessen genügt, und das kostet kein Bild.
+        approval = self._preview_approval
+        idle = approval is None or (
+            approval.owner in (self.feature_panel, self._quiet_host)
+            and not approval.requested
+            and not approval.displayed
+            and approval.pending_click is None
+        )
         if (
             self._feature_pending is None
             and not self._feature_preview.isActive()
             and not self._preview_shown
-            and self._preview_approval is None
+            and idle
         ):
+            if approval is not None:
+                self._forget_preview_approval()
             # **Nichts zu tun, und das ist der Normalfall.** Seit dieser Abbau
             # am Dokumentwechsel hängt, läuft er bei jedem Anwenden, jedem Undo
             # und jedem geänderten Parameter — und ``_clear_preview`` ist nicht
@@ -13563,6 +13757,38 @@ class MainWindow(QMainWindow):
         self._feature_pending = None
         self._feature_preview.stop()
         self._clear_preview()
+        self._offer_feature_cancel()
+
+    def _on_handling_armed(self, op: str, params: dict[str, Any]) -> None:
+        """Eine andere Handlung ist scharf — binden, nicht rechnen.
+
+        Ein Klick in ein Feld ist keine Änderung. Bis zum 21.09.2026 kam er als
+        ``valuesChanged`` an, und das Fenster rechnete eine Vorschau mit den
+        unveränderten Zahlen: Band und Abbrechen erschienen, *Merkmal drehen*
+        warnte sofort, *Merkmal entfernen* ließ die Bohrung verschwinden — und
+        an der 360k-Platte kostete jeder Tab 2,6 bis 4,2 s (Review Fenster #3).
+
+        Was ein Wechsel der Handlung tun muss: die Vorschau der **vorigen**
+        Handlung fällt, weil das Bild sonst etwas anderes zeigte, als der Knopf
+        täte; und der Auftrag der neuen wird gebunden, damit ein späteres
+        *Übernehmen* ihn geprüft vorfindet. Die Uhr stellt erst ein echter Wert
+        (:meth:`_on_feature_values_changed`).
+        """
+        flow = self._quiet_placement
+        if flow is not None and flow.spec_of().name != op:
+            if not self._quiet_command_allowed():
+                return
+            self.end_quiet_placement()
+        self._end_changed_quiet_placement()
+        if (
+            self._feature_pending is not None
+            or self._feature_preview.isActive()
+            or self._preview_shown
+        ):
+            self._drop_feature_preview()
+        order = self._prepare_feature_order(op, params)
+        if order is not None:
+            self._set_preview_order(self._quiet_host or self.feature_panel, order)
         self._offer_feature_cancel()
 
     def _on_feature_values_changed(self, op: str, params: dict[str, Any]) -> None:
@@ -13666,6 +13892,13 @@ class MainWindow(QMainWindow):
             if host is not None:
                 host.begin_edit()
                 host.take_placement(params)
+                if not host.can_accept():
+                    # Ein Klick vor der Vorschau wartet auf sie — hier, bis
+                    # ``PlacementFlow._accept_values`` den Haken selbst kennt.
+                    defer = getattr(host, "preview_defer", None)
+                    if defer is not None:
+                        defer()
+                        return
             flow.accept()
             return
         # **Und ein Zug am Langlochgriff endet hier ebenso.** Er wartet mit
@@ -13806,14 +14039,29 @@ class MainWindow(QMainWindow):
         """Fremde Befehle warten auf den Abschluss und werden nicht vorgemerkt."""
         if self._quiet_selection_allowed():
             return True
-        self.announce(tr("Die aktuelle Änderung zuerst übernehmen oder abbrechen."))
+        self._say_the_change_comes_first()
         return False
+
+    def _say_the_change_comes_first(self) -> None:
+        """Der eine Satz, wo eine begonnene Änderung Auswahl oder Befehl hält.
+
+        Gesagt am Menüweg, im Objektbaum (``_ObjectTreeView.selection_refused``)
+        und im Bild (``Viewport.selection_refused``) — vorher schwiegen Baum und
+        Bild und verschluckten den Klick (Review Fenster #6, 21.09.2026).
+        """
+        self.announce(tr("Die aktuelle Änderung zuerst übernehmen oder abbrechen."))
+
+    def _apply_placed_feature_later(self, op: str, params: Mapping[str, Any]) -> None:
+        """Der wartende Klick, sobald das Bild steht (``_apply_when_previewed``)."""
+        self._apply_placed_feature(op, params)
 
     def _apply_placed_feature(self, op: str, params: Mapping[str, Any]) -> bool:
         """Nur den gebundenen, sichtbar geprüften Auftrag übernehmen."""
         order = self._prepare_feature_order(op, params)
         if order is None or not self._preview_can_apply(
-            self._quiet_host or self.feature_panel, order
+            self._quiet_host or self.feature_panel,
+            order,
+            then=weak_slot(self, MainWindow._apply_placed_feature_later, op, dict(params)),
         ):
             return False
         remembered = (self._feature_to_keep, self._resume_near, self._measures_to_resume)
@@ -13943,17 +14191,27 @@ class MainWindow(QMainWindow):
         host.requires_displayed_preview = True
         host_ref = weakref.ref(host)
 
-        def current_preview() -> bool:
+        def current_preview(defer: bool = False) -> bool:
+            """Die Frage nach der Freigabe — und mit ``defer`` der wartende Klick."""
             window = window_ref()
             host = host_ref()
             if host is None:
                 return False
             order = prepare(op, host.values())
             return (
-                window is not None and order is not None and window._preview_can_apply(host, order)
+                window is not None
+                and order is not None
+                and window._preview_can_apply(host, order, then=host.accept if defer else None)
             )
 
+        def defer_accept() -> None:
+            """Ein Klick vor der Vorschau wartet auf sie (``QuietHost.preview_defer``)."""
+            current_preview(defer=True)
+
         host.preview_check = current_preview
+        # ``QuietHost`` kennt den Haken noch nicht als Feld (Paket E:
+        # ``preview_defer`` an ``PlacementHost`` und ``QuietHost.accept``).
+        host.preview_defer = defer_accept
         flow = PlacementFlow(host, self, lambda: spec, lambda: inputs, change_op=step)
         self._quiet_host = host
         self._quiet_placement = flow
@@ -13973,6 +14231,14 @@ class MainWindow(QMainWindow):
                 window.feature_panel.take_values(op, host.values(), arm=False)
             previous = window._preview_approval
             approval = window._set_preview_order(host, order)
+            if not host.begun:
+                # **Gebunden, nicht gerechnet.** Beim Aufbau der Maßgruppe
+                # stehen die gemessenen Werte im Träger, und eine Vorschau
+                # damit zeigte nur, was schon da ist — mit einem Band „Keine
+                # Vorschau: Die Bohrung hat bereits diesen Durchmesser" als
+                # Absagegrund (Review Fenster #4). Die Uhr stellt der erste
+                # Zug oder die erste getippte Zahl (``editStarted``).
+                return
             window._feature_pending = (op, dict(host.values()))
             if approval is not previous:
                 window._feature_preview.start()
@@ -14496,7 +14762,8 @@ class MainWindow(QMainWindow):
             if spec.name == "split_pinned" and len(operations) > count_before:
                 self._queue_split_reveal(operations[-1].outputs)
 
-        if spec.params.spec() or self._order_has_exact_inputs(
+        if spec.params.spec() or self._order_may_convert(
+            spec,
             _PreviewOrder(drafts=(OperationDraft(op=spec.name, inputs=inputs, params=values),)),
             result,
         ):
@@ -14683,7 +14950,8 @@ class MainWindow(QMainWindow):
 
             self._open_operation_dialog(dialog, run_chosen)
             return
-        # Ohne Felder und ohne exakten Eingang bleibt die unmittelbare Handlung erhalten.
+        # Ohne Felder und ohne mögliche Umwandlung bleibt die unmittelbare
+        # Handlung erhalten — auch an exakten Körpern (Regel 19).
         run(values)
 
     # --- Fernsteuerung über MCP (Konzept P15 §7 Etappe 9, D19) ------------------
@@ -15086,6 +15354,15 @@ class MainWindow(QMainWindow):
         """
         if not self._quiet_command_allowed():
             return
+        # **Ein Dialog mit Platzierung beendet die stillen Maße.** Zwei Flüsse
+        # an derselben Ansicht hören dieselben Signale: Ein Zug am Griff des
+        # Bausteins verschob bis zum 21.09.2026 auch die stillen Maße der
+        # gewählten Bohrung und band ihren Entwurf an eine fremde Stelle
+        # (Review Ansicht #1, Sonde ``probe_two_flows.py``). Ein begonnener
+        # Entwurf hält den Weg hierher ohnehin an (``_quiet_command_allowed``);
+        # ein bloß gebundener geht.
+        if self._quiet_host is not None and not self._quiet_host.begun:
+            self.end_quiet_placement()
         if self._local_features is not None:
             self._local_features.invalidate()
         previous = self._op_dialog
@@ -15223,12 +15500,8 @@ class MainWindow(QMainWindow):
             and self._preview_selection() == approval.selection
         )
 
-    def _order_has_exact_inputs(self, order: _PreviewOrder, result: Any) -> bool:
-        """Die tatsächlichen Körper entscheiden, nicht die Anforderung des Registers."""
-        from app.core.brep.kernel import Solid
-
-        if result is None:
-            return False
+    def _order_identifiers(self, order: _PreviewOrder, result: Any) -> set[ObjectId]:
+        """Die Körper, die ein Auftrag anfasst — bei Szenenoperationen alle."""
         if order.change_op is not None:
             operation = self.session.history.operation(order.change_op)
             identifiers = set(operation.inputs)
@@ -15240,10 +15513,46 @@ class MainWindow(QMainWindow):
             identifiers = {body for draft in order.drafts for body in draft.inputs}
             if any(REGISTRY.get(draft.op).takes_whole_scene for draft in order.drafts):
                 identifiers.update(result.scene.objects)
+        return identifiers
+
+    def _order_has_exact_inputs(self, order: _PreviewOrder, result: Any) -> bool:
+        """Die tatsächlichen Körper entscheiden, nicht die Anforderung des Registers."""
+        from app.core.brep.kernel import Solid
+
+        if result is None:
+            return False
+        identifiers = self._order_identifiers(order, result)
         return any(
             identifier in identifiers and isinstance(entry.mesh, Solid)
             for identifier, entry in result.scene.objects.items()
         )
+
+    def _order_may_convert(self, spec: OperationSpec, order: _PreviewOrder, result: Any) -> bool:
+        """Kann dieser Auftrag einen exakten Körper vernetzen? Nur dann muss er gezeigt werden.
+
+        Ein exakter Eingang allein ist kein Grund für einen Dialog: *Vereinigen*,
+        *Abziehen*, *Auf das Bett setzen* und *Löschen* haben kein Feld, und an
+        zwei exakten Quadern bleiben sie exakt — der Dialog dafür hatte null
+        Felder und eine Vorschau, die nichts zu zeigen hatte (Regel 19, Review
+        21.09.2026). Gezeigt werden muss die Handlung, wenn sie den Körper
+        **umwandeln** kann: Das Register verlangt ein Netz
+        (``requires_kind="mesh"``), oder die Eingänge sind gemischt — dann geht
+        der Kern den Netzweg (``_boolean_op``), und der exakte Körper wird
+        dabei zum Dreiecksmodell.
+        """
+        from app.core.brep.kernel import Solid
+
+        if result is None:
+            return False
+        identifiers = self._order_identifiers(order, result)
+        kinds = {
+            isinstance(entry.mesh, Solid)
+            for identifier, entry in result.scene.objects.items()
+            if identifier in identifiers
+        }
+        if True not in kinds:
+            return False
+        return spec.requires_kind == "mesh" or len(kinds) > 1
 
     def _preview_prefix_step(self, order: _PreviewOrder) -> int:
         """Beim Kernwechsel gehört auch das ursprüngliche Erzeugerergebnis zum Bezug."""
@@ -15323,11 +15632,10 @@ class MainWindow(QMainWindow):
         reason = self._preview_block_reason
         if approval is not None:
             owner.preview_required = approval.required is not False
-            if approval.required is not False and not approval.displayed:
-                reason = approval.problem or tr(
-                    "Die aktuelle Vorschau abwarten und das Ergebnis prüfen."
-                )
-            elif approval.problem:
+            # **Warten ist keine Sperre.** Ein Klick vor dem Bild bindet sich
+            # an die Freigabe (:meth:`_apply_when_previewed`); gesperrt wird
+            # nur, was ein Problem hat.
+            if approval.problem:
                 reason = approval.problem
         block = getattr(owner, "block_apply", None)
         if block is not None:
@@ -15340,8 +15648,19 @@ class MainWindow(QMainWindow):
         if owner is not None and owner is self._quiet_host:
             self.feature_panel.block_apply(reason)
 
-    def _preview_can_apply(self, owner: Any, order: _PreviewOrder) -> bool:
-        """Vor dem Abräumen und Schreiben genau den sichtbar geprüften Auftrag verlangen."""
+    def _preview_can_apply(
+        self, owner: Any, order: _PreviewOrder, *, then: Callable[[], object] | None = None
+    ) -> bool:
+        """Vor dem Abräumen und Schreiben genau den sichtbar geprüften Auftrag verlangen.
+
+        ``then`` ist der Klick, der gerade fragt. **Kommt er vor der Vorschau,
+        verfällt er nicht** (Entscheidung Robert, 21.09.2026): Er bindet sich
+        an die erwartete Freigabe und läuft in :meth:`_preview_rendered`, sobald
+        das Bild steht und kein Problem dagegen spricht — sonst sagt die
+        Statuszeile das Problem. Bis dahin hieß es „Die aktuelle Vorschau
+        abwarten", der Knopf war grau, und wer 0,8 s später noch einmal
+        klickte, schrieb den Schritt (Review Fenster #8).
+        """
         approval = self._set_preview_order(owner, order)
         if not self._preview_is_current(approval):
             return False
@@ -15353,8 +15672,15 @@ class MainWindow(QMainWindow):
             approval.displayed = False
         if not approval.requested:
             self._request_order_preview(approval)
+        if then is not None and not approval.problem and self._preview_is_current(approval):
+            self._apply_when_previewed(approval, then)
         self._refresh_preview_block()
         return False
+
+    def _apply_when_previewed(self, approval: _PreviewApproval, then: Callable[[], object]) -> None:
+        """Den Klick an die erwartete Freigabe hängen — genau einen, den letzten."""
+        approval.pending_click = then
+        self.announce(tr("Wird übernommen, sobald die Vorschau steht."), receipt=False)
 
     def _request_order_preview(self, approval: _PreviewApproval) -> None:
         """Ein gemeinsamer Antwortpfad für Dialog, Merkmalkarte und stille Platzierung."""
@@ -15415,6 +15741,12 @@ class MainWindow(QMainWindow):
 
             return receive
 
+        def waiting_click_hears(reason: str) -> None:
+            """Ein gebundener Klick erfährt in der Statuszeile, woran er scheitert."""
+            if approval.pending_click is not None and approval.problem:
+                approval.pending_click = None
+                self.announce(reason)
+
         def failed(_detail: Any) -> None:
             """Ein fehlendes Ergebnis bleibt gesperrt und nennt den nächsten Handgriff."""
             reason = tr(
@@ -15424,6 +15756,7 @@ class MainWindow(QMainWindow):
             if approval.required is not False:
                 approval.problem = reason
             self._preview_explained(reason)
+            waiting_click_hears(reason)
             self._refresh_preview_block()
 
         def explained(reason: str) -> None:
@@ -15431,6 +15764,7 @@ class MainWindow(QMainWindow):
             if approval.required is not False:
                 approval.problem = reason
             self._preview_explained(reason)
+            waiting_click_hears(reason)
             self._refresh_preview_block()
 
         def shown(difference: Any) -> None:
@@ -15553,6 +15887,11 @@ class MainWindow(QMainWindow):
         self._refresh_preview_block()
         if approval.after_shown is not None:
             approval.after_shown(difference)
+        # Der Klick, der vor dem Bild kam — jetzt, wo es steht, und nur wenn
+        # nichts dagegen spricht (:meth:`_apply_when_previewed`).
+        click, approval.pending_click = approval.pending_click, None
+        if click is not None and self._preview_approval is approval and not approval.problem:
+            click()
 
     def _preview_render_failed(self, difference: Any, _detail: str) -> None:
         """Ein fehlendes Vorschaubild verlangt neue Werte statt einer blinden Übernahme."""
@@ -15595,12 +15934,9 @@ class MainWindow(QMainWindow):
         if approval is not None:
             block = getattr(approval.owner, "block_apply", None)
             if block is not None:
-                block(
-                    tr("Die aktuelle Vorschau abwarten und das Ergebnis prüfen.")
-                    if approval.owner.preview_required
-                    and getattr(approval.owner, "preview_check", None)
-                    else None
-                )
+                # Keine Sperre bis zum nächsten Wert: Der nächste Klick bindet
+                # sich an eine frische Vorschau (:meth:`_preview_can_apply`).
+                block(None)
             elif isinstance(approval.owner, QPushButton):
                 approval.owner.setEnabled(True)
                 approval.owner.setToolTip("")
@@ -15659,6 +15995,12 @@ class MainWindow(QMainWindow):
 
         dialog.preview_order = prepared
         dialog.preview_check = lambda: self._preview_can_apply(dialog, prepared())
+
+        def defer_accept() -> None:
+            """Ein Klick vor der Vorschau wartet auf sie (``OperationDialog.preview_defer``)."""
+            self._preview_can_apply(dialog, prepared(), then=weak_slot(dialog, type(dialog).accept))
+
+        dialog.preview_defer = defer_accept
 
         def request() -> None:
             approval = self._set_preview_order(dialog, prepared())
@@ -15748,13 +16090,13 @@ class MainWindow(QMainWindow):
             # gesetzt hat, bleibt deshalb auch stehen.
             self._preview_reason = ""
             self._preview_effect = ""
-            self.viewport.show_difference(difference)
+            self._show_difference(difference)
             return
         self._preview_reason = ""
         # **Und ein Bild gibt den Knopf wieder frei.** Was das Band gesperrt
         # hat, galt für den Stand, den diese Vorschau gerade abgelöst hat.
         self._block_apply(None)
-        self.viewport.show_difference(difference)
+        self._show_difference(difference)
         partial = any(
             finding.code == "difference.incomplete"
             for entry in getattr(difference, "entries", {}).values()
@@ -15886,12 +16228,19 @@ class MainWindow(QMainWindow):
         self._preview_coarse_at = 0
         self._preview_effect = ""
         self._block_apply(reason if advice in self._APPLY_BLOCKING_ADVICE else None)
-        self.viewport.show_difference(None)
+        self._show_difference(None)
         self.viewport.mark_preview(tr("Keine Vorschau: {reason}").format(reason=reason), "")
 
     def _say_preview_busy(self) -> None:
         """Nach 0,2 s ohne Ergebnis sagt das Band, dass gerechnet wird (§2.8)."""
         self.viewport.mark_preview(tr("Vorschau wird gerechnet …"), "")
+
+    def _show_difference(self, difference: Any | None) -> None:
+        """Eine Differenz ins Bild — oder die stehende heraus; keine Arbeit ohne Differenz."""
+        if difference is None and not self._difference_standing:
+            return
+        self._difference_standing = difference is not None
+        self.viewport.show_difference(difference)
 
     def _clear_preview(self) -> None:
         """Die Vorschau geht — Rechnung und Bild —, ein wartender
@@ -15915,7 +16264,7 @@ class MainWindow(QMainWindow):
         self._preview_effect = ""
         self._preview_action = ""
         self.session.cancel_preview()
-        self.viewport.show_difference(None)
+        self._show_difference(None)
         self.viewport.mark_preview("")
         # Auch nach einem anderen Editor gilt die aktuelle sichtbare Freigabe.
         self._show_pending_proposal()
@@ -16498,10 +16847,11 @@ class MainWindow(QMainWindow):
         self.history_panel.show_document(
             self.session.project.document, result.stopped_at, self.session.history.undone
         )
-        self._update_actions()
         # Nach Baum **und** Ansicht: Beide stellen ihre Auswahl selbst wieder
         # her, und eine Nachwahl davor ginge im Aufbau der Ansicht verloren.
         self._reselect_the_renamed(result)
+        # Und erst danach die Einträge — einmal, mit der Auswahl, die jetzt gilt.
+        self._update_actions()
         if result.stopped_at is not None:
             # §15.3: der letzte vollständige Zustand bleibt sichtbar, die
             # Statusleiste sagt warum. Und der Bericht kommt nach vorn, auch
@@ -16575,7 +16925,7 @@ class MainWindow(QMainWindow):
         if request is not None and not self._map_is_current(request):
             self._cancel_map_worker()
             self.viewport.set_analysis_map(None, None)
-            self.viewport._hide_finding_mark()
+            self.viewport.clear_finding_mark()
             self.analysis_bar.show_legend(None)
         if self._announcement_document is not self.session.project.document:
             self._announcement_document = self.session.project.document
@@ -16635,7 +16985,10 @@ class MainWindow(QMainWindow):
         self._refresh_applied_bar()
         self.setWindowTitle(f"{self.session.title} — {APP_NAME}")
         self._update_header()
-        self._update_actions()
+        # Steht eine Auswertung aus, stellt ``_show_scene`` gleich — mit der
+        # Szene, die zu diesem Dokument gehört (B15).
+        if self.session.result_current:
+            self._update_actions()
 
     def _refresh_applied_bar(self) -> None:
         """Die Übernommen-Leiste hängt am Dokument, nicht an der Zeit (§26.5).
@@ -16706,10 +17059,13 @@ class MainWindow(QMainWindow):
     def _update_facts(self) -> None:
         """Material und Dauer aus dem, was ohnehin vorliegt.
 
-        Volumen und Oberfläche bringt jedes ausgewertete Netz mit; die
-        Schätzung darauf kostet nichts und darf deshalb nach jeder Auswertung
-        laufen (§31). Eine Schichtanalyse dürfte das nicht — sie braucht
-        Sekunden, und die Zeile stünde nach jedem gezogenen Parameter still.
+        Volumen und Oberfläche liest die Zeile vom Körper — gerechnet hat sie
+        der Auswertungsarbeiter (``session._warm_metrics``), und darum darf
+        die Schätzung nach jeder Auswertung laufen (§31). Bis zum 21.09.2026
+        rechnete der erste Zugriff hier: 1,3 s je Auswertung für die
+        Oberfläche eines exakten Körpers (Review Leistung B1). Eine
+        Schichtanalyse dürfte das nicht — sie braucht Sekunden, und die Zeile
+        stünde nach jedem gezogenen Parameter still.
 
         Gerechnet wird mit :meth:`effective_print_settings` — die Zeile führt
         eine Zahl, die der Kunde liest, und sie muss dieselbe Grundlage haben
@@ -16733,8 +17089,20 @@ class MainWindow(QMainWindow):
         path = self.session.path
         return str(path) if path else ""
 
-    def announce(self, text: str) -> None:
+    def _on_gizmo_status(self, text: str) -> None:
+        """Der Satz am Griff — solange er gilt, und ohne die Quittung zu wischen."""
+        self.announce(text, receipt=False)
+
+    def announce(self, text: str, *, receipt: bool = True) -> None:
         """Eine Meldung, die einen Lauf überlebt (§2.8).
+
+        ``receipt=False`` ist ein **Hinweis**: Er steht in der Statuszeile,
+        solange er gilt, und ein leerer Hinweis stellt die letzte Quittung
+        wieder her. Bis zum 21.09.2026 lief jeder Griffsatz („Der Griff
+        versetzt die gewählte Fläche …") als Quittung durch — als Blase acht
+        Sekunden unter dem Zeiger, und ``gizmoStatus.emit("")`` beim Verlassen
+        wischte die Ansage des letzten Exports samt *Ordner zeigen* (Review
+        Fenster #9). Ein Hinweis bekommt keine Blase und räumt nichts ab.
 
         Die Statuszeile trug zweierlei und behandelte es gleich: den
         Fortschrittstext eines Laufs, der mit ihm verschwinden soll, und das
@@ -16751,6 +17119,10 @@ class MainWindow(QMainWindow):
         Gemerkt wird deshalb, was zuletzt zu *sagen* war; die Laufanzeige legt
         sich nur darüber und gibt sie danach wieder frei.
         """
+        if not receipt:
+            if self._active_progress_owner() is None:
+                self.status_message.setText(text or self._announcement)
+            return
         self._announcement = text
         # Eine neue Ankündigung räumt den Ordner-Knopf des Exports ab; der
         # Export stellt ihn nach seiner eigenen wieder hin.
@@ -16870,7 +17242,7 @@ class MainWindow(QMainWindow):
         if busy:
             self._cancel_map_worker()
             self.viewport.set_analysis_map(None, None)
-            self.viewport._hide_finding_mark()
+            self.viewport.clear_finding_mark()
             self.analysis_bar.show_legend(None)
         self.feature_panel.limit_fit(self._manual_fit_reason())
         self._set_progress_state(
@@ -17915,7 +18287,8 @@ class MainWindow(QMainWindow):
         if refresh_analysis:
             self._on_map_changed(self.analysis_bar.chosen())
         self._on_layer_changed(self.layer_bar.index())
-        self._update_actions()
+        if not self._showing_scene:
+            self._update_actions()
         self._update_transform_roles()
         # „Abtragen“ hängt nicht nur am Umriss, sondern am gewählten exakten
         # Körper. Wer dem Hinweis folgt und ihn im Objektbaum auswählt, muss
@@ -18396,8 +18769,9 @@ class MainWindow(QMainWindow):
         # einen Klick, den es nie gibt, und die Suite stand ohne ein rotes
         # Wort (``oberflaeche.md``, „Ein modaler Dialog auf einem Startweg hält
         # die ganze Suite an"; gemessen am 21.09.2026 an einer Zusicherung im
-        # Frageweg). Gebaut wird der Bericht trotzdem — ein Test darf ihn
-        # lesen —, der Fehler geht ins Protokoll, und ausgeführt wird nichts.
+        # Frageweg). Gebaut wird der Dialog trotzdem, damit sein Aufbau auch
+        # offscreen durchläuft; gelesen wird er dort von niemandem und geht
+        # gleich wieder — was ein Test prüfen kann, ist die Protokollzeile.
         if os.environ.get("QT_QPA_PLATFORM", "") == "offscreen":
             _log.error("Programmfehler ohne Fenster: %s", text)
             dialog.deleteLater()
@@ -18883,6 +19257,15 @@ class MainWindow(QMainWindow):
         """
         self._close_requested = True
         self._cancel_pending_question()
+        # **Was an der Sitzung hängt und keine Methode ist, geht hier.** Der
+        # Vorschlag und der offene Operationsdialog halten je einen Empfänger
+        # an ``sceneChanged``, den ``session.disconnect(self)`` unten nicht
+        # kennt; ohne diese zwei Zeilen rief das nächste Ergebnis nach einem
+        # Sprachwechsel in ein Fenster, dessen Widgets schon weg waren
+        # (Review Fenster #11, 21.09.2026).
+        self._clear_proposal()
+        if self._op_dialog is not None:
+            self._op_dialog.reject()
         # Der Baum zeichnet seine Bilder nebenan und stellt den Start zurück;
         # freigegeben heißt: nichts mehr anfangen (``ObjectTree.release``).
         self.object_tree.release()

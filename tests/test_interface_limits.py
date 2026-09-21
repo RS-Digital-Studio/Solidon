@@ -49,6 +49,8 @@ MAX_TOOLS = 8
 
 #: Felder auf der **Vorderseite** eines Operationsdialogs. Was darüber
 #: hinausgeht, gehört hinter „Weitere Einstellungen" (§2.5, `placement`).
+#: Dieselbe Zahl wie ``MAX_FRONT_FIELDS`` im Dialog — geprüft in
+#: ``test_the_dialog_and_the_test_agree_on_the_front``.
 MAX_FRONT_PARAMS = 8
 
 #: Einträge in einem Untermenü. Darüber liest niemand mehr, er sucht — und
@@ -1952,3 +1954,15 @@ def test_a_heading_names_only_what_belongs_to_it(window: MainWindow) -> None:
         "kein Menü mit Untermenü gefunden — dann prüft dieser Test seine Zuordnung "
         "und nicht die Anordnung"
     )
+
+
+def test_the_dialog_and_the_test_agree_on_the_front() -> None:
+    """Der Dialog legt die Vorderseite mit derselben Zahl an, die hier geprüft wird.
+
+    ``op_dialog._MAX_FRONT_FIELDS`` stand ohne Bindung neben
+    ``MAX_FRONT_PARAMS`` (Review Fenster #15, 21.09.2026) — dasselbe Muster
+    wie ``OPEN_UP_TO`` eine Prüfung darüber, nur ohne die Prüfung.
+    """
+    from app.ui.op_dialog import MAX_FRONT_FIELDS
+
+    assert MAX_FRONT_FIELDS == MAX_FRONT_PARAMS, "zwei Grenzen für dieselbe Frage"

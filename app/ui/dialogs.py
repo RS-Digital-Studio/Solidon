@@ -124,7 +124,7 @@ class AskDialog(QDialog):
         prompt = QLabel(question, self)
         prompt.setWordWrap(True)
         self._preparing = QLabel(
-            tr("Die Kandidaten werden in der Ansicht vorbereitet. Danach kannst du auswählen."),
+            tr("Die Kandidaten werden in der Ansicht vorbereitet. Danach können Sie auswählen."),
             self,
         )
         self._preparing.setWordWrap(True)

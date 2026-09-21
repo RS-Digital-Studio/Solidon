@@ -16,7 +16,7 @@ Fall wäre ein zweiter Ort, an dem sich ein Parameter vergessen lässt.
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Final
 
 from PySide6.QtCore import QEvent, QObject, QSignalBlocker, Qt, QTimer, Signal
 from PySide6.QtWidgets import (
@@ -75,7 +75,12 @@ if TYPE_CHECKING:
 _SEAL_PATH_COMPANIONS = frozenset({"support_feature", "opening_signature", "counterface"})
 
 #: Die kurze Vorderseite bleibt innerhalb der acht Felder aus Bauplan §35.
-_MAX_FRONT_FIELDS = 8
+#:
+#: Dieselbe Zahl wie ``MAX_FRONT_PARAMS`` in ``tests/test_interface_limits.py``,
+#: und der Test hält beide zusammen (Muster ``OPEN_UP_TO``): Wer hier neun
+#: erlaubt, während die Prüfung acht verlangt, hat zwei Grenzen für dieselbe
+#: Frage — und die Oberfläche wächst an der Stelle mit, die niemand misst.
+MAX_FRONT_FIELDS: Final = 8
 
 #: Werte unterhalb dieser Größenordnung werden feiner angezeigt. Eine Toleranz
 #: von 0,075 mm wurde bei zwei Nachkommastellen beim Öffnen des Dialogs zu 0,08
@@ -1321,7 +1326,7 @@ def _promoted_fields(spec: OperationSpec, given: Mapping[str, Any]) -> frozenset
         }
         # Die Fachparameter behalten ihren Platz. Reicht die Vorderseite nicht
         # für die ganze Position, bleiben auch deren entschiedene Werte hinten.
-        if len(front | coordinates) <= _MAX_FRONT_FIELDS:
+        if len(front | coordinates) <= MAX_FRONT_FIELDS:
             promoted.update(coordinates)
         else:
             promoted.difference_update(coordinates)
@@ -1356,6 +1361,12 @@ class OperationDialog(QDialog):
     requires_displayed_preview = False
     preview_order: Callable[[], Any] | None = None
     preview_check: Callable[[], bool] | None = None
+    preview_defer: Callable[[], None] | None = None
+    """Ein Klick vor der Vorschau wartet auf sie — das Fenster hängt ihn hier ein.
+
+    ``preview_check`` fragt nur; dieser Haken bindet. Getrennt, weil die Frage
+    an vielen Stellen gestellt wird und nur ein Klick auf *Übernehmen* ein
+    Klick ist (Entscheidung Robert, 21.09.2026: der Klick verfällt nicht)."""
 
     def __init__(
         self,
@@ -1867,8 +1878,15 @@ class OperationDialog(QDialog):
         )
 
     def accept(self) -> None:
-        """Erst anwenden, wenn jede nachgereichte Quelle wirklich feststeht."""
+        """Erst anwenden, wenn jede nachgereichte Quelle wirklich feststeht.
+
+        Steht die Vorschau noch aus, verfällt der Klick nicht: ``preview_defer``
+        hängt ihn an die erwartete Freigabe, und er läuft, sobald das Bild
+        steht (``MainWindow._apply_when_previewed``).
+        """
         if not self.can_accept():
+            if self.preview_defer is not None:
+                self.preview_defer()
             return
         super().accept()
 

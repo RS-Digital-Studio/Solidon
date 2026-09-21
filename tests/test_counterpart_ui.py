@@ -132,6 +132,9 @@ def test_both_halves_and_their_fit_come_from_one_click(
             assert step.params["diameter"] == pytest.approx(4.0)
             assert step.params["length"] == pytest.approx(8.0)
         assert document.ops[-2].params["at_feature"] == _top_face(window, first)
+        # Die Passung braucht die Kennungen der erzeugten Merkmale, und die
+        # kennt erst die Auswertung — sie läuft im Arbeiter, nicht im Klick.
+        assert window.session.wait_for_idle(30_000)
         assert len(document.fits) == 1, "und ihre Passung gehört dazu"
 
         result = window.session.last_result
@@ -338,6 +341,7 @@ def test_a_thread_brings_its_half_and_the_dialog_stays_closed(
         assert step.op == "insert_printed_thread" and step.inputs == (second,)
         assert step.params["size"] == "M6" and step.params["internal"] is True
         assert step.params["at_feature"] == _top_face(window, second)
+        assert window.session.wait_for_idle(30_000)
         assert len(document.fits) == 1 and document.fits[0].kind == "thread"
         passung = document.fits[0]
         assert passung.a.object_id == first and passung.a.feature_id == threads[0]
@@ -348,4 +352,77 @@ def test_a_thread_brings_its_half_and_the_dialog_stays_closed(
         release = getattr(type(window), "release", None)
         if release is not None:
             release(window)
+        window.deleteLater()
+
+
+def test_the_thread_counterpart_does_not_hold_the_window_while_it_is_evaluated(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Klick kehrt zurück, bevor gerechnet ist — und die Passung kommt nach.
+
+    Bis zum 21.09.2026 rief ``create_thread_counterpart`` die Auswertung
+    synchron im Hauptthread: 0,34 s an zwei Netzplatten, 18,6 s an zwei
+    exakten, ohne Balken und ohne Abbrechen (Review Fenster #2). Gemessen mit
+    einer Auswertung, die im Arbeiter wartet, bis der Test sie freigibt: Der
+    Klick ist vorher zurück, der Schritt steht, die Passung fehlt noch — und
+    nach der Freigabe ist sie da, mit der Ansage dazu.
+    """
+    import threading
+
+    from app.ui import counterpart_dialog as module
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        first, second = _two_plates(window)
+        window.session.history.apply(
+            "Bolzen auf der ersten Platte",
+            [
+                OperationDraft(
+                    op="insert_printed_thread",
+                    inputs=(first,),
+                    params={"size": "M6", "length": 8.0, "internal": False, "z": 10.0},
+                )
+            ],
+        )
+        window.session.evaluate_now()
+        result = window.session.last_result
+        assert result is not None
+        thread = next(
+            name
+            for name, feature in result.scene.objects[first].features.items()
+            if feature.kind == "thread" and feature.provenance == "generated"
+        )
+        window.object_tree.select_features(((first, thread), (second, _top_face(window, second))))
+        QApplication.processEvents()
+        monkeypatch.setattr(
+            module.CounterpartDialog,
+            "exec",
+            lambda self: (_ for _ in ()).throw(AssertionError("kein Dialog am Gewinde")),
+        )
+        gate = threading.Event()
+        original = type(window.session).run_evaluation
+
+        def held(self: Session, quality: object = None) -> object:
+            """Die Auswertung wartet auf den Test — im Arbeiter, nicht im Klick."""
+            assert threading.current_thread() is not threading.main_thread()
+            assert gate.wait(30.0), "der Test hat die Auswertung nie freigegeben"
+            return original(self, quality)  # type: ignore[arg-type]
+
+        monkeypatch.setattr(type(window.session), "run_evaluation", held)
+        said: list[str] = []
+        monkeypatch.setattr(window, "announce", lambda text, **_kw: said.append(str(text)))
+        document = window.session.project.document
+        before = len(document.transactions)
+
+        window.action_counterpart()
+
+        assert len(document.transactions) == before + 1, "der Schritt steht sofort"
+        assert not document.fits, "die Passung wartet auf die Auswertung"
+        assert window.session.busy, "die im Arbeiter läuft, mit Balken und Abbrechen"
+        gate.set()
+        assert window.session.wait_for_idle(30_000)
+        assert len(document.fits) == 1 and document.fits[0].kind == "thread"
+        assert any("Passung" in text for text in said), said
+    finally:
+        window.release()
         window.deleteLater()
