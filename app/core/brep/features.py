@@ -36,7 +36,6 @@ from app.core.brep.canonical import (
     Surface,
     TorusSurface,
 )
-from app.core.brep.canonical import describe as describe_surface
 from app.core.brep.kernel import Solid, boolean_builder
 from app.core.brep.properties import properties
 from app.core.log import get_logger
@@ -142,11 +141,12 @@ def features_of(solid: Solid, *, cancelled: CancelToken | None = None) -> dict[F
     for index, face in enumerate(solid.faces()):
         if cancelled is not None:
             cancelled.raise_if_cancelled()
-        surfaces[index] = describe_surface(face, cancelled=cancelled)
+        surfaces[index] = solid.surface(index, cancelled=cancelled)
         native_patch = _native_patch(solid, index, surfaces[index], cancelled=cancelled)
         if native_patch is not None:
             surface_patches[index] = native_patch
         described = _describe(
+            solid,
             face,
             index,
             inside,
@@ -242,9 +242,7 @@ def features_of(solid: Solid, *, cancelled: CancelToken | None = None) -> dict[F
         params = dict(feature.params)
         measure_sources = dict(feature.measure_sources)
         if complete == curved_patch:
-            measured = [
-                properties(solid.faces()[index], "surface", cancelled=cancelled) for index in native
-            ]
+            measured = [solid.face_properties(index, cancelled=cancelled) for index in native]
             area = sum(item.mass for item in measured)
             if area > EPS_GEOM:
                 params["area"] = area
@@ -943,7 +941,7 @@ def _seam_split_cylinders_joined(
         for index in group:
             indices.extend(solid.triangles_of_face(index))
             found.pop(named[index], None)
-            props = properties(faces[index], "surface", cancelled=cancelled)
+            props = solid.face_properties(index, cancelled=cancelled)
             weight += props.mass
             for axis_number in range(3):
                 middle[axis_number] += props.mass * props.centre[axis_number]
@@ -1410,6 +1408,7 @@ def _one_slot(
 
 
 def _describe(
+    solid: Solid,
     face: Any,
     index: int,
     inside: Any,
@@ -1420,7 +1419,11 @@ def _describe(
     surface: Surface | None,
     cancelled: CancelToken | None = None,
 ) -> tuple[FeatureKind, dict[str, Any]] | None:
-    """Was diese Fläche ist, im Vokabular von §21."""
+    """Was diese Fläche ist, im Vokabular von §21.
+
+    ``face`` ist die Fläche ``index`` von ``solid``; Maße und Träger kommen
+    aus dessen Memo, damit dieselbe Fläche nicht je Frage neu integriert wird.
+    """
     from OCP.BRepAdaptor import BRepAdaptor_Surface
     from OCP.GeomAbs import GeomAbs_Cone, GeomAbs_Sphere, GeomAbs_Torus
     from OCP.gp import gp_Pnt
@@ -1430,7 +1433,7 @@ def _describe(
     kind = adaptor.GetType()
     if surface is None and kind not in (GeomAbs_Cone, GeomAbs_Sphere, GeomAbs_Torus):
         return None
-    props = properties(face, "surface", cancelled=cancelled)
+    props = solid.face_properties(index, cancelled=cancelled)
     area = props.mass
     if area <= EPS_GEOM:
         return None
@@ -1575,7 +1578,7 @@ def _describe(
         ball = surface.sphere
         radius = float(ball.Radius())
         hollow = surface.inward
-        if _rounded_neighbours(neighbours, face, cancelled=cancelled) >= CORNER_NEIGHBOURS:
+        if _rounded_neighbours(solid, neighbours, face, cancelled=cancelled) >= CORNER_NEIGHBOURS:
             # **Als Verrundung, nicht als Kugel.** Was hier steht, ist die
             # Ecke, an der drei verrundete Kanten zusammentreffen. Sie ist
             # gerechnet ein Kugelstück und benannt eine Verrundung: „Kuppel
@@ -1595,7 +1598,6 @@ def _describe(
             "recess": hollow,
         }
 
-    del index
     return None
 
 
@@ -1620,7 +1622,8 @@ def _axis_covered(
     *,
     cancelled: CancelToken | None = None,
 ) -> bool:
-    """Reicht eine Nachbarfläche dieses Mantels bis an die Bohrachse?
+    """Reicht eine Nachbarfläche dieses Mantels in die Mündung — über die Achse
+    oder über einen der zwei Ringe darin?
 
     Ein Sackloch endet an einer Fläche, die über der Achse liegt — ein ebener
     Boden, der Kegel einer Spitzenbohrung, die Kalotte eines Kugelfräsers —,
@@ -1628,11 +1631,21 @@ def _axis_covered(
     Flächen an, in denen das Loch selbst liegt: Ihr Rand ist der Rand des
     Lochs, und der bleibt einen Radius von der Achse entfernt.
 
-    **Nachbarn, nicht der ganze Körper.** Der Netzzwilling (``_is_through``)
-    zählt Dreiecke über der Achse im Abschnitt der Bohrung; hier sagt es die
-    Topologie: Der gegenüberliegende Schenkel eines U-Profils liegt zwar über
-    der Achse, grenzt aber nicht an den Mantel — und die Bohrung im ersten
-    Schenkel ist durchgehend.
+    **Nicht nur die Achse, die ganze Mündung** — dieselbe Frage wie im
+    Netzzwilling (``perceive.features._is_through``, ``THROUGH_RINGS``,
+    ``THROUGH_SAMPLES``): Die Aufweitung einer gesenkten Durchgangsbohrung
+    (Ø 9 über Ø 5) hat über ihrer Achse nichts, und doch endet sie am
+    Übergangskegel — der liegt über den Ringen. Am exakten Körper hieß sie
+    bis zum 22.09.2026 ``through``, am Netz nicht (Kreuzbefund Paket C), und
+    ``prepare_ops._exact_cavity_cut`` hätte mit dem Flag die ganze Zielhülle
+    als Tiefe genommen. Die Ringe liegen innerhalb des Mantels, damit die
+    eigene Wand nie zählt; die Achse bleibt die erste und billigste Probe.
+
+    **Nachbarn, nicht der ganze Körper.** Der Netzzwilling zählt Dreiecke über
+    der Mündung im Abschnitt der Bohrung; hier sagt es die Topologie: Der
+    gegenüberliegende Schenkel eines U-Profils liegt zwar über der Achse,
+    grenzt aber nicht an den Mantel — und die Bohrung im ersten Schenkel ist
+    durchgehend.
 
     **Abstand, nicht Schnitt.** Der erste Versuch schnitt die Achse als Gerade
     mit jeder Nachbarfläche (``IntCurvesFace_Intersector``) und fand die
@@ -1645,11 +1658,13 @@ def _axis_covered(
     """
     from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeEdge
     from OCP.BRepExtrema import BRepExtrema_DistShapeShape
-    from OCP.gp import gp_Lin
+    from OCP.gp import gp_Ax1, gp_Lin, gp_Pnt
     from OCP.TopAbs import TopAbs_EDGE
     from OCP.TopExp import TopExp_Explorer
 
-    probe = BRepBuilderAPI_MakeEdge(gp_Lin(cylinder.Axis()), first, last).Edge()
+    # Träge, damit ``brep`` keine eifrige Kante zur Wahrnehmung bekommt.
+    from app.core.perceive.features import THROUGH_RINGS, THROUGH_SAMPLES
+
     seen: list[Any] = []
     walk = TopExp_Explorer(face, TopAbs_EDGE)
     while walk.More():
@@ -1661,12 +1676,38 @@ def _axis_covered(
             if other.IsSame(face) or any(other.IsSame(known) for known in seen):
                 continue
             seen.append(other)
-    for other in seen:
-        if cancelled is not None:
-            cancelled.raise_if_cancelled()
-        distance = BRepExtrema_DistShapeShape(probe, other)
-        if distance.IsDone() and distance.Value() <= tolerance:
-            return True
+    if not seen:
+        return False
+
+    def covered(line: Any) -> bool:
+        probe = BRepBuilderAPI_MakeEdge(line, first, last).Edge()
+        for other in seen:
+            if cancelled is not None:
+                cancelled.raise_if_cancelled()
+            distance = BRepExtrema_DistShapeShape(probe, other)
+            if distance.IsDone() and distance.Value() <= tolerance:
+                return True
+        return False
+
+    axis = cylinder.Axis()
+    if covered(gp_Lin(axis)):
+        return True
+    origin = cylinder.Location()
+    direction = axis.Direction()
+    across, along = cylinder.XAxis().Direction(), cylinder.YAxis().Direction()
+    radius = float(cylinder.Radius())
+    for share in THROUGH_RINGS:
+        for sample in range(THROUGH_SAMPLES):
+            angle = math.tau * sample / THROUGH_SAMPLES
+            reach_x = radius * share * math.cos(angle)
+            reach_y = radius * share * math.sin(angle)
+            point = gp_Pnt(
+                origin.X() + reach_x * across.X() + reach_y * along.X(),
+                origin.Y() + reach_x * across.Y() + reach_y * along.Y(),
+                origin.Z() + reach_x * across.Z() + reach_y * along.Z(),
+            )
+            if covered(gp_Lin(gp_Ax1(point, direction))):
+                return True
     return False
 
 
@@ -1710,19 +1751,21 @@ def _point_in_material(inside: Any, point: Any) -> bool:
     return bool(inside.State() == TopAbs_IN)
 
 
-def _rounded_neighbours(neighbours: Any, face: Any, *, cancelled: CancelToken | None = None) -> int:
+def _rounded_neighbours(
+    solid: Solid, neighbours: Any, face: Any, *, cancelled: CancelToken | None = None
+) -> int:
     """Wie viele Flächen an dieser hier grenzen und selbst Kantenverrundungen
     sind — zylindrisch und weniger als eine volle Umdrehung.
 
     Eine Fläche wird nur einmal gezählt, auch wenn sie über zwei Kanten
-    anstößt; ``TopoDS_Shape`` hat keine Gleichheit, die ein ``set`` versteht,
-    darum der ``IsSame``-Vergleich gegen das schon Gesehene.
+    anstößt; die Nachbarkarte gibt sie als nacktes Handle zurück, und
+    ``Solid.face_index`` führt sie über ``IsSame`` auf ihre Nummer zurück —
+    deren Träger das Memo des Körpers schon kennt.
     """
     from OCP.TopAbs import TopAbs_EDGE
     from OCP.TopExp import TopExp_Explorer
-    from OCP.TopoDS import TopoDS
 
-    seen: list[Any] = []
+    seen: set[int] = set()
     walk = TopExp_Explorer(face, TopAbs_EDGE)
     while walk.More():
         if cancelled is not None:
@@ -1730,13 +1773,15 @@ def _rounded_neighbours(neighbours: Any, face: Any, *, cancelled: CancelToken | 
         edge = walk.Current()
         walk.Next()
         for other in neighbours.FindFromKey(edge):
-            if other.IsSame(face) or any(other.IsSame(known) for known in seen):
+            if other.IsSame(face):
                 continue
-            seen.append(other)
+            number = solid.face_index(other)
+            if number >= 0:
+                seen.add(number)
 
     rounded = 0
-    for other in seen:
-        surface = describe_surface(TopoDS.Face(other), cancelled=cancelled)
+    for number in sorted(seen):
+        surface = solid.surface(number, cancelled=cancelled)
         if not isinstance(surface, CylinderSurface):
             continue
         if surface.turn < FULL_TURN * 2.0 * math.pi:

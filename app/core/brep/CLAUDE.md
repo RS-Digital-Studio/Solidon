@@ -65,8 +65,14 @@ auslösen. Ein Bounds-Cache ersetzt keinen Eigentumsvertrag.
 Spiegelung und Scherung. Ähnlichkeiten verwenden `gp_Trsf`, allgemeine affine
 Matrizen `gp_GTrsf`: `gp_Trsf.SetValues` orthogonalisiert sonst die Eingabe.
 Die Matrix muss endlich, affin und numerisch umkehrbar sein. Körperzahl,
-Geschlossenheit, native Gültigkeit und das mit der Determinante skalierte
-Volumen müssen nach dem Schritt weiter stimmen. Eine Identität baut nichts neu.
+Geschlossenheit und native Gültigkeit müssen nach dem Schritt weiter stimmen.
+**Eine starre Bewegung beweist sich über die Partnerschaft der Formen**
+(`IsPartner`: dieselbe Topologie und Geometrie, anders gelegt — mehr tut der
+Builder dort nicht), nicht über ein Integral: Zwei Volumenintegrale je
+Verschieben kosteten an einem STEP-Gewinde 27 s (Review 21.09.2026). Maßstab,
+Spiegelung und die allgemeine affine Abbildung bauen die Flächen neu — eine
+Lage trägt keinen Maßstab —, und dort belegt das mit der Determinante skalierte
+Volumen weiterhin, dass nichts verloren ging. Eine Identität baut nichts neu.
 
 Die Flächenzuordnung verkettet `ModifiedShape` des Transformationsbuilders mit
 der tatsächlichen Kopie des Ergebnis-Solids. `Solid._copied_faces` hält dafür
@@ -79,6 +85,20 @@ Besuchsreihenfolge; der Test mit rückwärts eingehängten Teilkörpern deckt be
 `faces_of_triangles` ist die geprüfte inverse Zuordnung
 zu `triangles_of_face` und weist negative oder fremde Dreiecksindices zurück.
 Weder Besuchsreihenfolge noch alte Dreiecksindices ersetzen diese Zuordnung.
+Die Kantenabbildung entsteht mit der Flächenabbildung in derselben Kopie —
+gemessen 0,1 ms je Körper; sie träge zu bauen hieße, den Kopierbuilder und
+damit die Quellform am Ergebnis festzuhalten.
+
+**Was ein Körper über seine Flächen weiß, weiß er einmal.** `Solid.surface(i)`
+ist der geprüfte Träger der Fläche `i` (`canonical.describe`),
+`Solid.face_properties(i)` ihre Fläche und Mitte, `Solid.face_index(face)`
+die Nummer eines nackten Handles aus einer Nachbarkarte — alle drei Memos im
+`_cache` des Körpers. Erkennung, Nahtzusammenführung, Langloch, Flächenauswahl
+und Versetzen fragen dort, statt dieselbe Fläche je Frage neu zu beschreiben
+und zu integrieren: `features_of` an `m6_nurbs.step` fiel von 19,6 s auf
+0,9 s (Review 21.09.2026). Eine Kopie beginnt kalt, sie hat andere Flächen;
+und ein Memo am Eingang ist keine Änderung an ihm — es hält, was `volume`
+und `faces()` seit je halten.
 
 `profiles.push_faces` und `edit.unround` nehmen mit `selected_faces` eine
 ausdrückliche Auswahl vollständiger aktueller nativer Flächen an. Der
@@ -251,9 +271,44 @@ Einzelmerkmale auf derselben Luftgrenze. Verschieben und Entfernen benutzen
 weiter ihre vorhandenen, ausdrücklich ausgewiesenen Netzoperationen.
 
 `properties.py` liefert unveränderliche `MassProperties` für Körpermaße und
-Merkmalsauskunft gemeinsam. Analytische Flächen bleiben im nativen Standardweg.
-Der UV-Rückfall verschiebt eine private Arbeitsfläche vor der Auswertung
-in den gemeinsamen lokalen Bezugsrahmen. Dadurch entstehen bereits die
+Merkmalsauskunft gemeinsam — **nativ mit Knotenzerlegung, Python als
+Rückfall** (21.09.2026). Analytische Flächen bleiben im nativen Standardweg.
+Jede andere Fläche geht als **knotenzerlegter Verbund** privater Kopien in
+die native Integration: Spline-Flächen an ihren eigenen Knoten geteilt, eine
+Extrusion an denen ihrer Basiskurve, ein Drehkörper ebenso, Offset- und
+Trimmhüllen unter sich gelesen. Der Grund ist der Zackenkörper in
+`tests/test_brep.py`: Die native Gauß-Quadratur übersieht auf der ganzen
+Fläche eine 10⁻⁵ breite Spanne und meldet dazu 10⁻¹⁶ Fehler; je Spanne
+getrennt trifft sie exakt. Und die Extrusion eines rationalen Kreises maß
+ungeteilt 1,2 Prozent daneben, bei gemeldetem Fehler 2·10⁻¹⁶.
+**Die Leiter 1/2/4** — jede Spanne ganz, halbiert, geviertelt — verlangt
+von zwei Stufen Einigkeit in Masse und Schwerpunkt auf
+`INTEGRAL_RELATIVE_ERROR`; die Trägheit muss nur endlich sein, niemand liest
+sie (die Forderung nach 10⁻⁹ an ihr schickte die erste Fläche des M10 für
+5 s in den Python-Weg). Ohne Spannen genügt die erste Stufe. Erst wenn die
+Leiter nicht zusammenkommt, integriert der Python-Rückfall entlang der
+ursprünglichen Randkurven — derselbe Weg, tausendmal langsamer.
+Zwei Dinge daran sind gemessen, nicht angenommen: Die Teilflächen tragen die
+ursprünglichen Trimmkurven, an den Knotenlinien geschnitten, **ohne**
+`BuildCurves3d` und `SameParameter` — beides verschob die Ränder um bis zu
+8·10⁻⁶ mm, und jede feinere Stufe integrierte ein anderes Gebiet. Und der
+**Bezugspunkt des Kegelvolumens ist fest** (die Hüllmitte, wie im
+Python-Weg; `BRepGProp_Vinert` je Fläche statt `VolumeProperties` am
+Verbund): OCCT wählt sonst den groben Schwerpunkt der übergebenen Form, der
+mit jeder Teilung wandert, und an einem Körper mit Nähten innerhalb seiner
+Toleranz hängt das Volumen daran (M10-Bolzen des alten Korpus, 3,5 µm
+Kantentoleranz: 10⁻⁷ zwischen den Stufen).
+Was die Leiter nicht zusammenbringt, sind Körper, deren Nähte unter ihrer
+Toleranz offen stehen — die Sweep-plus-Fuzzy-Bolzen des alten
+`threaded_rod` (Grad 9, C⁰ an jedem Knoten): Dort gaben zwei exakte
+Integrationswege dieselbe Fläche um 10⁻⁸ verschieden an, und kein dritter
+konnte entscheiden; das Volumen solcher Körper ist unterhalb dieser Grenze
+nicht definiert, und der Rückfall zertifiziert dort einen Wert, der nicht
+besser ist. Der genähte Bolzen (RM-195) kommt bei 10⁻¹⁵ zusammen.
+Der Python-Rückfall verschiebt eine private Arbeitsfläche vor der Auswertung
+in den gemeinsamen lokalen Bezugsrahmen — derselbe Rahmen, in dem auch der
+Verbund rechnet (`BRepTools_Modifier`, nicht der Transformationsbuilder, den
+`edit.transformed` als Vertrag führt). Dadurch entstehen bereits die
 rationalen Ableitungen ohne Verlust durch große Weltkoordinaten. Originale
 Trimmparameter, Normalenorientierung und Fehlerschranken bleiben erhalten;
 nur der fertige Schwerpunkt wird in Weltkoordinaten zurückgeführt.
@@ -263,11 +318,11 @@ Innenlöchern. Jeder native Weg prüft seinen gemeldeten Integrationsfehler
 sowie endliche, nicht negative Maße; Schwerpunkt und berechnete Trägheit
 müssen ebenfalls endlich sein. Native Ausnahmen tragen denselben Rückweg.
 NURBS-Volumen und Schwerpunkt entstehen über den Divergenzsatz auf den
-ursprünglichen Flächen. Derselbe begrenzte Weg übernimmt, wenn die native
-Standardintegration eines analytischen Körpers keine belastbare Fehlerschätzung
-liefert. Der native GK-Weg mit Schwerpunktrechnung kann selbst ohne
-Trägheitsrechnung nicht terminieren und lässt innere V-Knotenspannen aus;
-eine kleine gemeldete Unsicherheit ist dort kein ausreichender Nachweis.
+ursprünglichen Flächen; eine leere Form hat Volumen null, und ob das ein
+Befund ist, entscheidet der Aufrufer. Der native GK-Weg (`VolumePropertiesGK`)
+lässt innere V-Knotenspannen aus — gemessen 6·10⁻⁸ am STEP-Gewinde bei
+ehrlich gemeldetem Fehler —, terminiert aber, auch mit Schwerpunktrechnung
+(74 ms am Korpus; die Behauptung, er könne hängen, war nicht zu belegen).
 Volumenträgheit wird ausdrücklich als nicht berechnet geführt und ist keine
 öffentliche Körperauskunft.
 Eine Offset- oder Trimmhülle ändert die nötigen Integrationsspannen ihrer
@@ -293,10 +348,11 @@ Ein einzelner nativer OCCT-Aufruf wird vor und nach seinem Lauf geprüft;
 die Python-Quadratur braucht keinen Abschluss einer ganzen Fläche abzuwarten.
 
 NURBS-Flächen werden zunächst auf privaten Kopien an Knotenspannen unterteilt.
-Fläche, Schwerpunkt und Flächenträgheit müssen gemeinsam konvergieren.
-`ShapeFix_ComposeShell` braucht einen expliziten `ShapeBuild_ReShape`-Kontext;
-die Arbeitskopie wird nach Aufbau der 3D-Kurven und `SameParameter` auf native
-Gültigkeit geprüft. Konvergieren schwierige Trimmungen dort nicht, integriert
+Fläche und Schwerpunkt müssen gemeinsam konvergieren, die Flächenträgheit
+endlich sein. `ShapeFix_ComposeShell` braucht einen expliziten
+`ShapeBuild_ReShape`-Kontext; die Teilflächen werden **nicht** nachgezogen
+(siehe oben), und ob die Zerlegung vollständig ist, belegt die Leiter.
+Konvergieren schwierige Trimmungen dort nicht, integriert
 der gemeinsame Rückfall entlang ihrer ursprünglichen UV-Randkurven. Der
 Umlaufsinn innerer Drähte zieht Löcher ab; native Ableitungen, Knotenspannen,
 innere und äußere Quadraturfehler sowie ein begrenztes Auswertungsbudget
@@ -388,10 +444,14 @@ Der Mittelpunkt einer Bohrung oder eines Zapfens liegt **auf der Achse, in
 der Mitte der V-Spanne** des Mantels — nicht im Flächenschwerpunkt, der bei
 einem schräg beschnittenen Mantel radial und axial daneben liegt und den
 Schneidzylinder von `edit.resize_bore` aus der Achse schob. Ob ein Loch
-durchgeht (`through`), sagen die Nachbarflächen des Mantels: Reicht eine bis
-an die Achse (Boden, Bohrerspitze, Kalotte), ist es ein Sackloch; der Abstand
-wird gemessen, nicht geschnitten, weil eine Kegelspitze im Schnitt ein
-entarteter Punkt ist.
+durchgeht (`through`), sagen die Nachbarflächen des Mantels: Reicht eine in
+die Mündung — über die Achse (Boden, Bohrerspitze, Kalotte) oder über einen
+der zwei Ringe darin, dieselben wie im Netzweg (`THROUGH_RINGS`) —, ist es
+ein Sackloch; der Abstand wird gemessen, nicht geschnitten, weil eine
+Kegelspitze im Schnitt ein entarteter Punkt ist. Die Ringe kamen am
+22.09.2026 dazu: Die Aufweitung Ø 9 einer gesenkten Durchgangsbohrung Ø 5
+hat über ihrer Achse nichts und endet doch am Übergangskegel — am Netz hieß
+sie Sackloch, hier durchgehend (Kreuzbefund Paket C).
 
 Splines aus Skizzen übernehmen die kubischen Kontrollpunkte aus
 `sketch.profile.spline_controls`; sie werden nicht neu interpoliert.
@@ -416,7 +476,14 @@ exakten Operationswerte für die Anzeige zu runden.
 `thread.read_thread` misst ein importiertes Gewinde ohne Erzeugerwissen:
 Jede Kante, die weder Strecke noch Kreis noch eben ist, wird nach
 **Bogenlänge** abgetastet (`GCPnts_UniformAbscissa`) — der Kurvenparameter
-einer B-Spline ist kein Winkel und kommt in keiner Rechnung vor. Kanten,
+einer B-Spline ist kein Winkel und kommt in keiner Rechnung vor. **Grob
+entscheiden, fein messen:** Ebenheit und Verkettung sehen `SAMPLES_COARSE`
+Punkte je Kante; erst die Züge, die übrig bleiben, bekommen
+`SAMPLES_PER_TURN` Punkte je Umlauf, den Umlauf aus dem Radius einer
+Einpassung an die groben Punkte. Ein fester Abstand von 0,05 mm tastete
+231 Kanten einer verrundeten Lochplatte mit 83 000 Punkten ab, bevor die
+Ebenheit alle aussortierte (749 ms für eine Absage, jetzt 97 ms; die
+Korpuswerte bis 10⁻⁴ an der Steigung dieselben). Kanten,
 die einen Vertex teilen und dort tangential anschließen, werden ein Zug;
 über bloße Nachbarschaft wurden Kamm, beide Fußwendeln und die Stirnkurven
 ein Zug mit 36 „Umläufen“. Die Achse ist der Zylinder durch die Punkte
@@ -424,7 +491,14 @@ ein Zug mit 36 „Umläufen“. Die Achse ist der Zylinder durch die Punkte
 Zylinderflächen des Körpers — bestätigt einer davon die Achse, ist sie
 `native`, sonst `fit`); in einer rechtshändigen Basis liefert die
 Regression `z = z0 + L·θ/2π` den Vorschub, sein Vorzeichen die Händigkeit
-und das Residuum die Wendelabweichung (`uncertainty`). Die Gangzahl ist die
+und das Residuum die Wendelabweichung (`uncertainty`). Stücke derselben
+Wendel — gleicher Radius, gleiche Phase — zählen zusammen, gruppiert mit
+`RADIUS_TOLERANCE` und `PHASE_TOLERANCE` auf dem Kreis, nicht über `round`
+(Regel 6: zwei Phasen 0,00499 und 0,00501 fielen in zwei Gruppen, und der
+Körper galt als „nur 0,60 Umläufe belegt“). Ob überhaupt eine volle
+Umdrehung belegt ist, sagen die Züge **um dieselbe Achslinie** wie der
+längste zusammen: Zwölf Stücke einer halbierten Wendel belegen sie, zwei
+Bögen um verschiedene Achsen nicht. Die Gangzahl ist die
 Periodizität **aller** Wendeln (Kamm- wie Fußkanten) unter einer
 Verschiebung um 1/n des Vorschubs — die Kammphasen allein zählten den
 zweigängigen Körper als eingängig. Die Materialseite kommt aus den
@@ -456,15 +530,25 @@ je eine ebene Fläche bei Winkel null. Genäht (`BRepBuilderAPI_Sewing`, keine
 freie Kante), orientiert (`OrientClosedSolid`), danach auf Länge geschnitten
 — und der Schnitt ist ein Zylinder gegen Ebenen und BSpline-Flächen, den der
 Kern zuverlässig kann. Gemessen: 44 Flächen in dreißig Millisekunden, gültig,
-Volumen der Analytik (Pappus je Umlauf) auf 2·10⁻⁷, STEP-Rundreise auf
-10⁻¹⁴. Der Grund steht im Docstring: Die Vereinigung von Kern und
-gesweeptem Gang verschluckt den Gang still (Bericht P2.7, B1), und die
-Fuzzy-Stufe, die ihn rettet, ist je Größe eine andere — an einer Rasterfahrt
-über sechs Größen und drei Längen fand sich für zwei Fälle gar keine, und
-jede Stufe kostete 7 bis 24 Sekunden. `threaded_rod` (der Erzeuger
-*Gewindebolzen*, ISO-nahes Profil) geht weiter den Sweep-und-Leiter-Weg mit
-seiner Untergrenze; ihn auf denselben genähten Körper zu stellen steht im
-Register (RM-195). Wer ein neues Gewinde baut, nimmt das Nähen.
+Volumen der Analytik (Pappus je Umlauf) auf 5·10⁻¹⁰, STEP-Rundreise auf
+10⁻¹⁴. Die Helix ist dabei eine BSpline-Näherung ihrer Linie auf dem
+Zylinder, und wie genau, sagt `_HELIX_PRECISION`: Mit OCCTs Vorgabe von
+10⁻⁵ mm lagen die Flanken Mikrometer neben der Schraubfläche (Pappus auf
+2·10⁻⁷, die Hülle eines M10-Bolzens 3 µm neben der Achse); ein Hundertstel
+von `EPS_GEOM` kostet keine messbare Bauzeit. Der Grund fürs Nähen steht im
+Docstring: Die Vereinigung von Kern und gesweeptem Gang verschluckt den Gang
+still (Bericht P2.7, B1), und die Fuzzy-Stufe, die ihn rettet, ist je Größe
+eine andere — an einer Rasterfahrt über sechs Größen und drei Längen fand
+sich für zwei Fälle gar keine. **Seit RM-195 (21.09.2026) geht auch
+`threaded_rod` — der Erzeuger *Gewindebolzen* — diesen Weg**, mit seinem
+ISO-nahen Profil aus `thread_ridge` (Fuß 0,75 p, Tiefe 0,6134 p, Flanken so
+steil wie beim Sweep mit seinem Sockel `_THREAD_FOOT_SEAT` unter dem Kern):
+M6 × 1, L 12 in 0,3 s statt 15, M10 × 1,5, L 12 in 0,3 s statt 27. Die
+Sekunden des Sweep-Wegs steckten nicht in der Vereinigung (0,3 s), sondern
+in den Volumenintegralen seiner Prüfstufen, und die Sweep-Flächen (Grad 9,
+C⁰ an jedem Knoten) hielten kein Integral auf 10⁻⁹. `_checked_rod` bleibt
+die letzte Absage; `_fuzzy_boolean` und `_sewn` bleiben als geprüfte
+Bausteine. Wer ein neues Gewinde baut, nimmt das Nähen.
 
 ## Eine Kante hat einen Schlüssel, keine Nummer
 
@@ -697,7 +781,7 @@ Anwendung gegen die installierte Bindung.
 | `features.py` | Merkmale aus der Topologie (§30, §21) |
 | `thread.py` | Gewinde an importierter Geometrie: Kantenzüge nach Bogenlänge, Achse eingepasst, Vorschub und Händigkeit aus der Wendelregression, Gangzahl aus der Periodizität (§21.1, P2.5) |
 | `canonical.py` | Geprüfte Ebenen-, Zylinder-, Kugel- und Ringträger mit wirklichen Flächengrenzen (§30, §21); `horizontal_area` summiert die ebenen Flächen einer Höhe in einer Richtung — die exakte Seite der gezählten Organizer-Flächen (P2.7) |
-| `properties.py` | Gemeinsame native Integrale mit geprüftem Rückfall für getrimmte NURBS (§30, §11) |
+| `properties.py` | Volumen und Fläche nativ auf dem knotenzerlegten Verbund mit Leiter, Python-Randintegral als Rückfall (§30, §11) |
 | `step.py` | STEP hinein und hinaus |
 
 ## Grenzen

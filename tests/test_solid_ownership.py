@@ -253,7 +253,11 @@ def test_cancellation_is_checked_before_a_cached_native_measure(kind: str) -> No
 def test_cancellation_during_native_quadrature_keeps_source_and_cache(
     monkeypatch: pytest.MonkeyPatch, route: str
 ) -> None:
-    """Abbruch zwischen echten Quadraturpunkten bleibt Abbruch; ein späterer Lauf gelingt."""
+    """Abbruch zwischen echten Quadraturpunkten bleibt Abbruch; ein späterer Lauf gelingt.
+
+    Die Python-Quadratur ist seit dem knotenzerlegten Verbund der letzte
+    Rückfall; der Test nimmt den nativen Weg weg, damit sie überhaupt läuft.
+    """
     import math
 
     from OCP.BRepBuilderAPI import BRepBuilderAPI_NurbsConvert
@@ -293,6 +297,8 @@ def test_cancellation_during_native_quadrature_keeps_source_and_cache(
         probe.setattr("scipy.integrate.quad_vec", interrupting_quadrature)
         if route == "surface":
             probe.setattr("app.core.brep.properties._spanned_surface", unavailable_patches)
+        else:
+            probe.setattr("app.core.brep.properties._spanned_volume", unavailable_patches)
         with pytest.raises(OperationCancelled):
             if route == "transform":
                 edit.transformed_with_faces(source, matrix, cancelled=cancelled)
@@ -328,10 +334,13 @@ def test_affine_integrals_do_not_modify_source_or_owned_triangulations() -> None
     assert result.face_count == source.face_count == 3
 
 
-@pytest.mark.parametrize("length", [8.0, 12.0])
-def test_the_surface_integral_keeps_complex_trimmed_thread_flanks_unchanged(length: float) -> None:
-    """Eine nicht konvergierende Patch-Zerlegung blockiert keine gültige Gewindefläche."""
-    source = profiles.threaded_rod(10.0, 1.5, length)
+def test_the_surface_integral_keeps_complex_trimmed_thread_flanks_unchanged() -> None:
+    """Das Flächenintegral eines Gewindes lässt Form, Vernetzung und Cache des Körpers stehen.
+
+    Eine Länge genügt: Die zweite (12 mm) prüfte dieselbe Zusage an denselben
+    Flächenarten, nur mit mehr Umläufen (Review 21.09.2026).
+    """
+    source = profiles.threaded_rod(10.0, 1.5, 8.0)
     before = source.bounds, source.volume, source.face_count, _triangulations(source)
     before_mesh = source._cache.get("mesh")
     area = source.area
@@ -539,6 +548,12 @@ def test_real_boolean_keeps_its_input_geometry(kind: str, expected_volume: float
         assert all(entry == (0, 0) for entry in _triangulations(body))
 
 
+#: Die Memos je Fläche — Träger, Maße, Indexkarte — sind Auskünfte über den
+#: Eingang, keine Änderung an ihm: Eine Operation darf sie am Eingang anlegen,
+#: so wie ``volume`` und ``faces()`` es seit je tun. Was da war, bleibt dasselbe Objekt.
+MEMO_KEYS = frozenset({"surfaces", "face_properties", "map:face"})
+
+
 def _native_selection_state(solid: Solid) -> tuple[Any, ...]:
     """Hält Originalform, vorhandene Cacheobjekte und gegebenenfalls Netzarrays fest."""
     import io
@@ -550,7 +565,9 @@ def _native_selection_state(solid: Solid) -> tuple[Any, ...]:
     mesh = solid._cache.get("mesh")
     return (
         native.getvalue(),
-        tuple(sorted((key, id(value)) for key, value in solid._cache.items())),
+        tuple(
+            sorted((key, id(value)) for key, value in solid._cache.items() if key not in MEMO_KEYS)
+        ),
         None
         if mesh is None
         else (mesh.raw.vertices.tobytes(), mesh.raw.faces.tobytes(), mesh.slots),
@@ -1335,3 +1352,46 @@ def test_reround_refuses_a_rounding_without_two_walls_instead_of_guessing_an_edg
     assert refused.value.detail == NOT_BETWEEN_TWO_PLANES
     assert refused.value.suggestions[0] is CHANGE_SELECTION
     assert _native_selection_state(source) == before
+
+
+# --- Der Weg auf die Platte: ein Körper als Bytes und zurück -------------------------
+
+
+def test_a_body_survives_the_byte_round_trip_with_its_faces_slots_and_triangles() -> None:
+    """``to_bytes``/``from_bytes`` geben denselben Körper zurück — bitgenau, in Flächenreihenfolge.
+
+    Der Plattencache soll exakte Körper ablegen können (Review Leistung B13:
+    jedes Öffnen las STEP und erkannte das Gewinde neu, 1,45 s). Dafür muss
+    außer dem Volumen die **Reihenfolge** der Flächen stehen — an ihr hängen
+    ``face_slots`` — und die Tessellation dieselben Dreiecke liefern, denn die
+    Merkmale zeigen mit ihren Indizes darauf.
+    """
+    from pathlib import Path
+
+    from app.core.brep import step
+
+    box = edit.box(20.0, 16.0, 10.0)
+    coloured = Solid(box.shape, face_slots=tuple(index % 3 for index in range(box.face_count)))
+    thread = step.read((Path(__file__).parent / "data" / "threads" / "m6_rechts.step").read_bytes())
+    for body in (coloured, replace(thread, deflection=0.01)):
+        payload = body.to_bytes()
+        back = Solid.from_bytes(payload, deflection=body.deflection, face_slots=body.face_slots)
+        assert not back.shape.IsPartner(body.shape)
+        assert back.volume == body.volume
+        assert back.deflection == body.deflection and back.face_slots == body.face_slots
+        assert [back.face_properties(i).centre for i in range(back.face_count)] == [
+            body.face_properties(i).centre for i in range(body.face_count)
+        ]
+        assert back.triangle_count == body.triangle_count
+        assert back.mesh.slots == body.mesh.slots
+        assert {name: feature.face_indices for name, feature in features_of(back).items()} == {
+            name: feature.face_indices for name, feature in features_of(body).items()
+        }
+
+
+def test_a_stream_that_is_no_body_is_a_programming_error() -> None:
+    """Ein unlesbarer Cacheeintrag ist kein Befund für den Kunden, sondern ein Bericht."""
+    from app.core.errors import InternalError
+
+    with pytest.raises(InternalError):
+        Solid.from_bytes(b"kein Koerper")

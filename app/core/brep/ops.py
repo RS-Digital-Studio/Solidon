@@ -34,6 +34,7 @@ from app.core.errors import (
 from app.core.geom.boolean import NOTHING_LEFT_DETAIL, NOTHING_LEFT_TITLE, without_effect
 from app.core.geom.hollow import below_printable_wall, hollowed, too_thin
 from app.core.geom.mesh import MeshData, as_mesh_data
+from app.core.geom.ops import as_transform
 from app.core.geom.prepare import (
     bore_diameter,
     compensation_findings,
@@ -131,9 +132,15 @@ def create_brep_box(ctx: OpContext) -> OpResult:
     # Dieselbe Lage wie beim Netz-Zwilling: Position, Richtung und Bezugspunkt
     # sind Felder beider Dialoge, und der Tausch zwischen den Kernen behält sie.
     body = edit.box(params.width, params.depth, params.height)
+    matrix = np.asarray(placement_transform(params), dtype=float)
     if str(params.anchor) == "corner":
-        body = edit.moved(body, (params.width / 2.0, params.depth / 2.0, 0.0))
-    solid = edit.transformed(body, placement_transform(params), cancelled=ctx.cancelled)
+        # Bezugspunkt und Lage sind eine Bewegung, nicht zwei: erst die Ecke
+        # auf den Ursprung, dann die Lage — als eine Matrix, damit der Körper
+        # einmal geprüft und kopiert wird statt zweimal.
+        shift = np.eye(4)
+        shift[:3, 3] = (params.width / 2.0, params.depth / 2.0, 0.0)
+        matrix = matrix @ shift
+    solid = edit.transformed(body, as_transform(matrix), cancelled=ctx.cancelled)
     return OpResult(
         outputs=[_object(params.name or str(_("Quader")), solid, cancelled=ctx.cancelled)]
     )

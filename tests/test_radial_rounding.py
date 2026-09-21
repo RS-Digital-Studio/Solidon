@@ -159,7 +159,10 @@ def test_an_unorientable_radial_skin_is_rejected_before_publication(
             _resize(source, 13.0, profile)
 
     assert failure.value.suggestions
-    assert source.mesh._cache.keys() == cached.keys()
+    # Nichts, was vorher im Cache lag, wird ersetzt — ein Memo, das die
+    # Rechnung erst angelegt hat (die Indexkarte der Flächen), darf dazukommen:
+    # Es liest die Topologie und schreibt sie nicht um.
+    assert cached.keys() <= source.mesh._cache.keys()
     assert all(source.mesh._cache[key] is value for key, value in cached.items())
     assert source.mesh.volume == pytest.approx(volume, abs=0.000001)
     assert np.array_equal(as_mesh_data(source.mesh).raw.vertices, vertices)

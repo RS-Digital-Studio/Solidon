@@ -11,7 +11,7 @@ plus der Kern, wie in ``test_exact_parts._thread_volume``.
 from __future__ import annotations
 
 import math
-from itertools import pairwise
+from functools import cache
 from pathlib import Path
 from typing import Any
 
@@ -25,26 +25,13 @@ from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.knowledge.parts import build, shapes
 from app.core.knowledge.parts.shapes import building
 from app.core.types import Feature, Profile, SceneObject
+from tests.test_exact_parts import _thread_volume
 from tests.test_missing_ops import run
 from tests.test_thread_import import BASES
 
 PLATE = (40.0, 40.0, 10.0)
 PLATE_VOLUME = PLATE[0] * PLATE[1] * PLATE[2]
 LENGTH = 8.0
-
-
-def _thread_volume(diameter: float, pitch: float, length: float, *, internal: bool) -> float:
-    """Kern plus Gang: Pappus je Umlauf über das Gangprofil, schraubensymmetrisch je Länge."""
-    profile = list(shapes.ridge_profile(diameter, pitch, internal=internal))
-    root = profile[0][0]
-    corners = [*profile, profile[0]]
-    area = moment = 0.0
-    for (r_a, z_a), (r_b, z_b) in pairwise(corners):
-        cross = r_a * z_b - r_b * z_a
-        area += cross
-        moment += (r_a + r_b) * cross
-    area, moment = abs(area) / 2.0, abs(moment) / 6.0
-    return math.pi * root**2 * length + 2.0 * math.pi * moment * (length / pitch)
 
 
 def _root(diameter: float, pitch: float) -> float:
@@ -137,8 +124,14 @@ def _joined(kind: str, plate: Any, tool: Any, how: str) -> Any:
     return boolean(how, [plate, tool], quality="fine").mesh  # type: ignore[arg-type]
 
 
+@cache
 def _studded_plate(kind: str, handedness: str = "right") -> SceneObject:
-    """Platte 40 x 40 x 10 mit einem aufgesetzten M6 x 1 der Länge 8, um den Überlapp gesenkt."""
+    """Platte 40 x 40 x 10 mit einem aufgesetzten M6 x 1 der Länge 8, um den Überlapp gesenkt.
+
+    Einmal je Modul gebaut: Die Operationen lesen ihren Eingang nur, und ein
+    exakter Träger mit Gewinde kostete je Test eine Vereinigung und ein
+    Volumenintegral (Review 21.09.2026).
+    """
     bottom = PLATE[2] - BOOLEAN_OVERLAP
     if kind == "brep":
         with building("brep"):
@@ -154,8 +147,9 @@ def _studded_plate(kind: str, handedness: str = "right") -> SceneObject:
     )
 
 
+@cache
 def _tapped_plate(kind: str) -> SceneObject:
-    """Dieselbe Platte mit einem durchgehenden M6 × 1 darin."""
+    """Dieselbe Platte mit einem durchgehenden M6 × 1 darin — einmal je Modul."""
     if kind == "brep":
         with building("brep"):
             tap = build.threaded(
@@ -206,6 +200,7 @@ def kind(request: Any) -> str:
 
 
 def test_the_stud_and_the_tapped_hole_measure_as_built(kind: str) -> None:
+    """Die Fixtures sind, was sie vorgeben: Platte plus Bolzen, Platte minus Gewindebohrung."""
     stud = _studded_plate(kind)
     added = _built(kind, 6.0, 1.0, LENGTH, internal=False) - _sunk(kind, 6.0, 1.0, LENGTH)
     assert float(stud.mesh.volume) - PLATE_VOLUME == pytest.approx(added, rel=_tolerance(kind))
@@ -215,6 +210,7 @@ def test_the_stud_and_the_tapped_hole_measure_as_built(kind: str) -> None:
 
 
 def test_removing_an_outer_thread_leaves_the_plain_core(kind: str, profile: Profile) -> None:
+    """*Merkmal entfernen* nimmt außen den Gang bis auf den Kern — der Kern bleibt stehen."""
     source = _studded_plate(kind)
     result = run("remove_feature", source, profile, at_feature="thread_1")
     output = _stays(result, kind)
@@ -228,6 +224,7 @@ def test_removing_an_outer_thread_leaves_the_plain_core(kind: str, profile: Prof
 
 
 def test_closing_an_inner_thread_fills_the_bore(kind: str, profile: Profile) -> None:
+    """*Merkmal entfernen* schließt innen die Bohrung: Übrig bleibt die volle Platte."""
     source = _tapped_plate(kind)
     result = run("remove_feature", source, profile, at_feature="thread_1")
     output = _stays(result, kind)
@@ -238,6 +235,7 @@ def test_closing_an_inner_thread_fills_the_bore(kind: str, profile: Profile) -> 
 
 
 def test_changing_an_outer_thread_recuts_it_on_the_same_axis(kind: str, profile: Profile) -> None:
+    """*Merkmal ändern* setzt Durchmesser und Steigung neu, an derselben Achse und Mitte."""
     source = _studded_plate(kind)
     result = run("resize_feature", source, profile, at_feature="thread_1", diameter=8.0, pitch=1.25)
     output = _stays(result, kind)
@@ -265,6 +263,7 @@ def test_changing_an_outer_thread_recuts_it_on_the_same_axis(kind: str, profile:
 
 
 def test_changing_an_inner_thread_fills_and_recuts(kind: str, profile: Profile) -> None:
+    """Innen heißt ändern: füllen und neu schneiden, mit dem Werkzeug in der Bohrung darunter."""
     source = _tapped_plate(kind)
     result = run("resize_feature", source, profile, at_feature="thread_1", diameter=8.0, pitch=1.25)
     output = _stays(result, kind)
@@ -278,6 +277,7 @@ def test_changing_an_inner_thread_fills_and_recuts(kind: str, profile: Profile) 
 
 
 def test_the_same_measures_change_nothing(kind: str, profile: Profile) -> None:
+    """Dieselben Maße lassen den Körper stehen und sagen es als Befund."""
     source = _studded_plate(kind)
     result = run("resize_feature", source, profile, at_feature="thread_1", diameter=6.0, pitch=0.0)
     assert result.outputs[0] is source
@@ -285,6 +285,7 @@ def test_the_same_measures_change_nothing(kind: str, profile: Profile) -> None:
 
 
 def test_a_left_hand_thread_is_refused_with_advice(kind: str, profile: Profile) -> None:
+    """Ein belegtes Linksgewinde wird nicht still rechts neu geschnitten."""
     source = _studded_plate(kind, handedness="left")
     with pytest.raises(ValidationError) as caught:
         run("resize_feature", source, profile, at_feature="thread_1", diameter=8.0, pitch=1.25)
@@ -293,6 +294,7 @@ def test_a_left_hand_thread_is_refused_with_advice(kind: str, profile: Profile) 
 
 
 def test_a_pitch_that_leaves_no_core_is_refused(kind: str, profile: Profile) -> None:
+    """Eine Steigung, die den Kern aufbraucht, ist eine Absage mit Vorschlag."""
     source = _studded_plate(kind)
     with pytest.raises(ValidationError) as caught:
         run("resize_feature", source, profile, at_feature="thread_1", diameter=6.0, pitch=6.0)
@@ -300,6 +302,7 @@ def test_a_pitch_that_leaves_no_core_is_refused(kind: str, profile: Profile) -> 
 
 
 def test_a_thread_without_a_length_says_so(kind: str, profile: Profile) -> None:
+    """Ohne Strecke gibt es nichts zu verschließen — die Absage nennt sie."""
     source = _studded_plate(kind)
     short = {**source.features["thread_1"].params, "length": 0.0}
     feature = Feature(id="thread_1", kind="thread", provenance="generated", params=short)
@@ -434,6 +437,7 @@ def test_a_mesh_read_thread_is_not_refused_as_left_handed(profile: Profile) -> N
 
 
 def test_a_natively_read_left_hand_thread_is_refused(profile: Profile) -> None:
+    """Ein an den Kanten gelesenes Linksgewinde sperrt das Ändern — der Beleg ist nativ."""
     _kernel()
     from tests.test_thread_import import _mirrored
 
@@ -445,6 +449,7 @@ def test_a_natively_read_left_hand_thread_is_refused(profile: Profile) -> None:
 
 
 def test_a_multi_start_thread_is_refused_instead_of_becoming_single(profile: Profile) -> None:
+    """Ein mehrgängiges Gewinde wird nicht still eingängig neu geschnitten."""
     _kernel()
     source, thread = _recognised("brep", _corpus("zweigaengig"))
     assert thread.params["starts"] == 2
@@ -477,6 +482,7 @@ def test_closing_a_blind_generated_thread_leaves_no_pocket(profile: Profile) -> 
 
 
 def test_the_panel_offers_changing_and_removing_a_thread() -> None:
+    """Das Merkmalfenster bietet an einem Gewinde Ändern und Entfernen, mit Steigungsfeld."""
     from app.core.perceive.actions import actions_for
 
     load_operations()
@@ -499,6 +505,7 @@ def test_the_panel_offers_changing_and_removing_a_thread() -> None:
 
 
 def test_the_exact_thread_survives_a_step_round_trip(profile: Profile) -> None:
+    """Das neu geschnittene exakte Gewinde geht durch STEP und kommt mit seinem Volumen zurück."""
     _kernel()
     load_operations()
     from app.core.brep import step
@@ -517,6 +524,7 @@ def test_the_exact_thread_survives_a_step_round_trip(profile: Profile) -> None:
 
 
 def test_both_kernels_agree_on_the_recut_thread(profile: Profile) -> None:
+    """Netz und exakter Kern schneiden dasselbe Gewinde — bis auf die Facettierung."""
     _kernel()
     load_operations()
     exact = run(

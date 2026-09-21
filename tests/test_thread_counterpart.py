@@ -22,7 +22,7 @@ from app.core.counterpart import (
     thread_size_for,
 )
 from app.core.errors import ValidationError
-from app.core.knowledge import profiles, standards
+from app.core.knowledge import standards
 from app.core.scene import ResultCache, evaluate
 from app.core.scene.fits import active_fits
 from app.core.scene.history import History, OperationDraft
@@ -33,11 +33,6 @@ from app.core.types import Document, Feature, Profile, Scene
 @pytest.fixture(autouse=True)
 def _operations() -> None:
     load_operations()
-
-
-@pytest.fixture
-def profile() -> Profile:
-    return profiles.make_profile("centauri-carbon-2", "petg")
 
 
 def _kernel_or_skip(kind: str) -> None:

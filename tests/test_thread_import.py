@@ -14,6 +14,7 @@ vollständigen Körpern; die Wendelabweichung wird gemeldet, nicht verschluckt.
 from __future__ import annotations
 
 import math
+from itertools import pairwise
 from pathlib import Path
 from typing import Any
 
@@ -378,7 +379,7 @@ COUNTER_CASES = {
 
 @pytest.mark.parametrize("label", sorted(COUNTER_CASES))
 def test_bodies_without_a_thread_say_why(label: str) -> None:
-    """Sechs Gegenfälle lehnen mit Grund ab — und nie mit einer geratenen Steigung."""
+    """Fünf Gegenfälle lehnen mit Grund ab — und nie mit einer geratenen Steigung."""
     build, reason = COUNTER_CASES[label]
     reading = _reading(build())
     assert not reading.found
@@ -460,7 +461,13 @@ def test_features_of_publishes_one_thread_and_no_phantoms(m6: Solid) -> None:
     assert thread.measure_sources["axis"] in ("native", "fit")
     assert thread.face_indices, "ein Klick auf eine Flanke wählt das Gewinde"
     carriers = m6.faces_of_triangles(thread.face_indices)
-    assert len(carriers) >= 13, "Flanken, Kamm und Grund tragen die Züge"
+    # Der genähte Bolzen trägt je Umlauf zwei Flanken und einen Fußstreifen,
+    # und der Kamm ist eine Kante; zwölf Umläufe auf zwölf Millimetern Länge
+    # ergeben 36 Flächen, dazu die angeschnittenen Umläufe an beiden Enden.
+    assert len(carriers) >= 3 * int(BASES["m6_rechts"]["length"] / BASES["m6_rechts"]["pitch"]), (
+        "Flanken und Grund jedes Umlaufs tragen die Züge"
+    )
+    assert len(carriers) == m6.face_count - 2, "alles außer den zwei Stirnflächen"
     entry = SceneObject(id="obj_1", name="Bolzen", mesh=m6, kind="brep", features=found)
     assert entry.features["thread_1"].kind == "thread"
 
@@ -494,3 +501,158 @@ def test_the_mesh_twin_agrees_where_it_can(m6: Solid) -> None:
     assert helices[0].pitch == pytest.approx(exact.pitch, abs=1.5 * PITCH_STEP)
     assert helices[0].internal is exact.internal
     assert helices[0].diameter == pytest.approx(exact.diameter, abs=0.05)
+
+
+# --- Was die Durchsicht vom 21.09.2026 gefunden hat ------------------------------------
+
+
+def _winding(
+    radius: float, phase: float, turns: float, axis=(0.0, 0.0, 1.0), centre=(0.0, 0.0, 0.0)
+):
+    """Eine gemessene Wendel aus Zahlen — für die Zusammenfassung, ohne Kanten."""
+    from app.core.brep.thread import Chain, Winding
+
+    return Winding(
+        chain=Chain((), np.zeros((0, 3)), 0.0),
+        axis=axis,
+        centre=centre,
+        radius=radius,
+        radius_spread=0.0,
+        lead=1.0,
+        handedness="right",
+        turns=turns,
+        deviation=0.0,
+        low=0.0,
+        high=turns,
+        phase=phase,
+    )
+
+
+def test_pieces_of_one_helix_are_grouped_by_tolerance_not_by_rounding() -> None:
+    """Zwei Stücke mit den Phasen 0,00499 und 0,00501 sind eine Wendel (Regel 6).
+
+    ``round(phase, 2)`` legte sie in zwei Gruppen, die Umläufe der Wendel
+    halbierten sich, und ein Gewinde galt als „nur 0,60 Umläufe belegt".
+    """
+    from app.core.brep.thread import RADIUS_TOLERANCE, _same_helices
+
+    pieces = [_winding(3.0, 0.00499, 0.6), _winding(3.0 + RADIUS_TOLERANCE / 2.0, 0.00501, 0.6)]
+    groups = _same_helices(pieces, 1.0)
+    assert len(groups) == 1
+    assert sum(w.turns for w in groups[0]) == pytest.approx(1.2)
+    # Und eine Wendel auf einem anderen Radius bleibt eine andere.
+    apart = _same_helices([*pieces, _winding(2.4, 0.005, 0.6)], 1.0)
+    assert sorted(len(group) for group in apart) == [1, 2]
+
+
+def test_the_first_gate_adds_up_only_coaxial_pieces() -> None:
+    """Zwei Bögen um verschiedene Achsen belegen keine Umdrehung, Stücke einer Achse schon."""
+    from app.core.brep.thread import _coaxial
+
+    reference = _winding(3.0, 0.0, 0.64)
+    same_line = _winding(3.0, 0.5, 0.64, centre=(0.0, 0.0, 7.0))
+    tilted = _winding(3.0, 0.5, 0.64, axis=(0.0, 0.1, 0.995))
+    beside = _winding(3.0, 0.5, 0.64, centre=(0.5, 0.0, 0.0))
+    assert _coaxial(same_line, reference)
+    assert not _coaxial(tilted, reference)
+    assert not _coaxial(beside, reference)
+
+
+def test_planar_edges_are_sorted_out_after_a_coarse_sampling() -> None:
+    """231 Kanten einer verrundeten Lochplatte: grob abgetastet, nichts davon fein.
+
+    Der feste Abstand von 0,05 mm kostete hier 83 000 Punkte für eine Absage;
+    jetzt bekommt jede Kante ``SAMPLES_COARSE`` Punkte, und fein abgetastet
+    wird nur, was ein Zug geworden ist.
+    """
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_NurbsConvert
+
+    from app.core.brep import edit, thread
+
+    plate = edit.box(60.0, 60.0, 10.0)
+    for i in range(3):
+        for j in range(3):
+            plate = edit.cut_bore(
+                plate,
+                position=((i - 1) * 18.0, (j - 1) * 18.0, 5.0),
+                direction=(0.0, 0.0, 1.0),
+                diameter=5.0,
+                depth=12.0,
+            )
+    plate = Solid(BRepBuilderAPI_NurbsConvert(edit.fillet(plate, 1.0, "all").shape, True).Shape())
+    counts: list[int] = []
+    original = thread._sample_edge
+
+    def counting(edge, count, check_cancelled):
+        counts.append(count)
+        return original(edge, count, check_cancelled)
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(thread, "_sample_edge", counting)
+        reading = thread.read_thread(plate)
+    assert not reading.found
+    assert counts, "die Kanten der Rundungen sind Kandidaten und werden abgetastet"
+    assert set(counts) == {thread.SAMPLES_COARSE}
+
+
+def test_the_fine_sampling_follows_the_turns(m6: Solid) -> None:
+    """Die Züge des M6 tragen Punkte je Umlauf, nicht je Millimeter: rund 64 je Umdrehung."""
+    from app.core.brep.thread import SAMPLES_PER_TURN, candidate_chains, cylinder_axes
+
+    chains = candidate_chains(m6, None, cylinder_axes(m6))
+    longest = max(chains, key=lambda chain: len(chain.points))
+    reading = _reading(m6)
+    per_turn = len(longest.points) / reading.turns
+    assert 0.8 * SAMPLES_PER_TURN <= per_turn <= 1.5 * SAMPLES_PER_TURN, per_turn
+
+
+@pytest.mark.parametrize("name", ["m6_rechts", "m10_rechts", "m8_innen"])
+def test_the_corpus_matches_its_generator(name: str) -> None:
+    """Die abgelegte STEP-Datei ist der Körper, den ``make_thread_corpus.py`` heute baut.
+
+    Am 20.09.2026 lagen Korpus und Erzeuger an M10 um 0,09 mm³ auseinander:
+    Die Datei stammte von 23:18, der Erzeuger änderte sich um 23:36 und dreimal
+    am Tag darauf. Seit die Bolzen genäht entstehen (RM-195), kostet der
+    Vergleich je Körper unter einer Sekunde; die zwei Sweep-Körper
+    (``zweigaengig``, ``gegen_naht``) prüft ``--check`` von Hand.
+    """
+    import importlib.util
+
+    source = Path(__file__).parent / "data" / "make_thread_corpus.py"
+    spec = importlib.util.spec_from_file_location("make_thread_corpus_under_test", source)
+    assert spec is not None and spec.loader is not None
+    generator = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(generator)
+    same, line = generator.compare(name)
+    assert same, line
+
+
+def test_the_thread_volume_and_area_come_from_the_native_compound(
+    m6: Solid, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Volumen und Fläche des Gewindes rechnet der knotenzerlegte Verbund, nicht Python.
+
+    Bis zum 21.09.2026 ging jedes Volumen eines Körpers mit Spline-Flächen
+    durch die Python-Quadratur — 13,8 s für dieses M6 aus STEP, 20 ms nativ
+    auf dem Verbund (Review brep #1). Der Sollwert ist Pappus über das
+    Gangprofil des Erzeugers, und der genähte Bolzen trifft ihn auf 10⁻⁹.
+    """
+    from app.core.brep import profiles, properties
+
+    def never(*args: Any, **kwargs: Any) -> Any:
+        raise AssertionError("der Python-Rückfall darf hier nicht laufen")
+
+    monkeypatch.setattr(properties, "_uv_volume", never)
+    monkeypatch.setattr(properties, "_uv_surface", never)
+    body = Solid(m6.shape)
+    ridge = list(profiles.thread_ridge(6.0, 1.0))
+    corners = [*ridge, ridge[0]]
+    area = moment = 0.0
+    for (r_a, z_a), (r_b, z_b) in pairwise(corners):
+        cross = r_a * z_b - r_b * z_a
+        area += cross
+        moment += (r_a + r_b) * cross
+    area, moment = abs(area) / 2.0, abs(moment) / 6.0
+    expected = math.pi * ridge[0][0] ** 2 * 12.0 + 2.0 * math.pi * moment * 12.0
+    assert body.volume == pytest.approx(expected, rel=1e-9)
+    assert body.area > 0.0

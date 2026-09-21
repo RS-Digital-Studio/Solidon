@@ -55,6 +55,19 @@ _FACE_ATTRIBUTE = "solidon_brep_face"
 _MAX_SURFACE_WRAPPERS = 64
 
 
+#: Womit jeder Strom aus :meth:`Solid.to_bytes` beginnt — die Kopfzeile des
+#: BRep-Binärformats, an der :meth:`Solid.from_bytes` fremde Bytes erkennt.
+_BREP_STREAM_HEADER = b"\nOpen CASCADE Topology V"
+
+
+def _stream_version() -> Any:
+    """Die BRep-Binärfassung, in der ein Körper auf die Platte geht — festgehalten,
+    damit ein Cacheeintrag nicht mit der OCCT-Version die Fassung wechselt."""
+    from OCP.BinTools import BinTools_FormatVersion
+
+    return BinTools_FormatVersion.BinTools_FormatVersion_VERSION_4
+
+
 class BRepUnavailable(AppError):
     """Der B-Rep-Kern ist nicht installiert."""
 
@@ -126,12 +139,18 @@ def untrimmed_surface(surface: Any, *, cancelled: CancelToken | None = None) -> 
 
 
 def available() -> bool:
-    """Ist der Kern da? Wird gefragt, bevor sich eine Handlung anbietet (§36)."""
-    try:
-        import OCP.BRepPrimAPI  # noqa: F401
-    except Exception:  # eine kompilierte Erweiterung scheitert auf mehr Arten als mit ImportError
-        return False
-    return True
+    """Ist der Kern da? Wird gefragt, bevor sich eine Handlung anbietet (§36).
+
+    Dieselbe Probe wie die des Registers (``registry.probe_exact_kernel``):
+    Sie lädt OpenCASCADE wirklich und merkt sich die Antwort, damit das Menü
+    (``exact_kernel_present``) danach ohne Import antwortet. Ein zweiter
+    Import hier wäre der Zwilling, den ``zwillinge.md`` verbietet — und die
+    Kante ``registry → brep`` schließt für mypy einen Kreis über
+    ``scene.history``, die Kante ``brep → registry`` gibt es bereits.
+    """
+    from app.core.registry.registry import probe_exact_kernel
+
+    return probe_exact_kernel()
 
 
 def require() -> None:
@@ -438,6 +457,60 @@ class Solid:
     def edges(self) -> list[Any]:
         return self._explore("edge")
 
+    def face_index(self, face: Any) -> int:
+        """Der Index einer nativen Fläche dieses Körpers in :meth:`faces`, sonst ``-1``.
+
+        Über die Indexkarte der Topologie (``IsSame``), nicht über Python-Identität:
+        Eine Nachbarkarte gibt dieselbe Fläche als anderes Handle zurück.
+        """
+        numbered = self._cache.get("map:face")
+        if numbered is None:
+            from OCP.collections import IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher as ShapeMap
+            from OCP.TopAbs import TopAbs_FACE
+            from OCP.TopExp import TopExp
+
+            numbered = ShapeMap()
+            TopExp.MapShapes_s(self.shape, TopAbs_FACE, numbered)
+            self._cache["map:face"] = numbered
+        return int(numbered.FindIndex(face)) - 1
+
+    def surface(self, index: int, *, cancelled: CancelToken | None = None) -> Any:
+        """Der geprüfte analytische Träger der Fläche ``index`` — einmal je Körper gelesen.
+
+        ``canonical.describe`` prüft rationale Träger über alle Bézier-Koeffizienten;
+        wer dieselbe Fläche für Erkennung, Nachbarschaft, Langloch und Auswahl je
+        neu beschrieb, las sie an einem M6-Gewinde aus STEP bis zu dreimal
+        (Review 21.09.2026, ``features_of`` an ``m6_nurbs.step`` 19,6 s). Das
+        Memo gehört dem Körper: Eine Kopie beginnt kalt, denn sie hat andere Flächen.
+        """
+        from app.core.brep.canonical import describe
+
+        described = self._cache.setdefault("surfaces", {})
+        if index in described:
+            if cancelled is not None:
+                cancelled.raise_if_cancelled()
+            return described[index]
+        surface = describe(self.faces()[index], cancelled=cancelled)
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        described[index] = surface
+        return surface
+
+    def face_properties(self, index: int, *, cancelled: CancelToken | None = None) -> Any:
+        """Fläche und Schwerpunkt der Fläche ``index`` — ``MassProperties``, einmal je Körper."""
+        from app.core.brep.properties import properties
+
+        measured = self._cache.setdefault("face_properties", {})
+        if index in measured:
+            if cancelled is not None:
+                cancelled.raise_if_cancelled()
+            return measured[index]
+        props = properties(self.faces()[index], "surface", cancelled=cancelled)
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        measured[index] = props
+        return props
+
     def checked_face_indices(
         self, indices: Sequence[int], *, cancelled: CancelToken | None = None
     ) -> tuple[int, ...]:
@@ -450,7 +523,7 @@ class Solid:
         return self._checked_indices(
             indices,
             len(self._copied_faces),
-            _("Wähle vollständige Flächen aus und wiederhole die Änderung."),
+            _("Wählen Sie vollständige Flächen aus und wiederholen Sie die Änderung."),
             cancelled=cancelled,
         )
 
@@ -544,7 +617,9 @@ class Solid:
             covered = high >= 0
             if np.any(low[covered] != high[covered]):
                 raise ValidationError(
-                    detail=_("Wähle vollständige Flächen aus und wiederhole die Änderung.")
+                    detail=_(
+                        "Wählen Sie vollständige Flächen aus und wiederholen Sie die Änderung."
+                    )
                 )
             for face in np.flatnonzero(covered):
                 face_slots[face] = int(low[face])
@@ -571,7 +646,7 @@ class Solid:
         complete = set(np.flatnonzero(np.isin(source, faces)))
         if set(indices) != complete:
             raise ValidationError(
-                detail=_("Wähle vollständige Flächen aus und wiederhole die Änderung.")
+                detail=_("Wählen Sie vollständige Flächen aus und wiederholen Sie die Änderung.")
             )
         return faces
 
@@ -676,6 +751,58 @@ class Solid:
 
     def to_stl(self) -> bytes:
         return self.mesh.to_stl()
+
+    # --- der Weg auf die Platte ----------------------------------------------------
+
+    def to_bytes(self) -> bytes:
+        """Die Form als BRep-Binärstrom — Topologie und Geometrie, keine Dreiecke.
+
+        ``BinTools`` schreibt die Zahlen binär und damit bitgenau; der
+        ASCII-Weg (``BRepTools``) wäre doppelt so groß (146 KB statt 81 KB am
+        M6-Gewinde) und nicht genauer. Was ein Körper außer seiner Form trägt
+        — ``deflection`` und ``face_slots`` —, gehört daneben in den Eintrag,
+        nicht in den Strom; :meth:`from_bytes` nimmt beides wieder an. Der
+        Anlass ist der Plattencache (Review Leistung B13): Ein exakter Körper
+        wurde bis dahin nie gecacht, und jedes Öffnen las STEP und erkannte
+        das Gewinde neu.
+        """
+        import io
+
+        from OCP.BinTools import BinTools
+
+        stream = io.BytesIO()
+        BinTools.Write_s(self.shape, stream, False, False, _stream_version())
+        return stream.getvalue()
+
+    @classmethod
+    def from_bytes(
+        cls, payload: bytes, *, deflection: float = DEFLECTION, face_slots: tuple[int, ...] = ()
+    ) -> Solid:
+        """Der Körper aus :meth:`to_bytes`, mit derselben Vernetzungsfeinheit und Filamentzuweisung.
+
+        Die Flächen kommen in derselben Reihenfolge zurück, wie :meth:`faces`
+        sie zählt (die Indexkarte folgt der Struktur der Form, und die reist
+        mit) — ``face_slots`` passen deshalb ohne Umrechnung. Ein Strom, der
+        keine Form ergibt, ist ein Programmfehler des Aufrufers, kein Befund.
+        """
+        import io
+
+        from OCP.BinTools import BinTools
+        from OCP.TopoDS import TopoDS_Shape
+
+        require()
+        # Der Kopf des Stroms, vor dem nativen Leser geprüft: Der schreibt bei
+        # fremden Bytes auf die Konsole, bevor er scheitert.
+        if not payload.startswith(_BREP_STREAM_HEADER):
+            raise InternalError(detail="the cached exact body is no BRep stream")
+        shape = TopoDS_Shape()
+        try:
+            BinTools.Read_s(shape, io.BytesIO(payload))
+        except Exception as problem:  # OpenCASCADE wirft eigene Ausnahmearten
+            raise InternalError(detail="the cached exact body could not be read") from problem
+        if shape.IsNull():
+            raise InternalError(detail="the cached exact body is empty")
+        return cls(shape=shape, deflection=deflection, face_slots=face_slots)
 
     def replacing(
         self,

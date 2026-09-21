@@ -19,11 +19,14 @@ Boolesche Operation zerlegt, legt es hierher und schreibt den Test dagegen.
 Was ein Skript wiederherstellt. Das parametrische Skript ist die Quelle, die
 Datei daraus ist das Ergebnis — dieselbe Regel wie im Ordner „3D Drucker".
 
-**Die Ausnahme dazu ist die Zeit:** Ein Gewindebolzen kostet im exakten Kern
-rund zwanzig Sekunden, ein Innengewinde fast eine Minute. Die fünf Körper in
-`threads/` liegen deshalb als Ergebnis ihres Skripts hier — das Skript bleibt
-die Quelle, und wer ein Maß ändert, fährt es neu. Was in unter einer Sekunde
-aus einem Körper abzuleiten ist (Spiegelung, Lage, Zuschnitt), baut der Test.
+**Die Ausnahme dazu ist die Zeit:** Der zweigängige Bolzen und die Naht ohne
+Rille entstehen als Sweep mit Fuzzy-Vereinigung und kosten Sekunden. Die
+fünf Körper in `threads/` liegen deshalb als Ergebnis ihres Skripts hier —
+das Skript bleibt die Quelle, und wer ein Maß oder den Erzeuger ändert, fährt
+es neu; `make_thread_corpus.py --check` sagt, ob Datei und Erzeuger noch
+dasselbe sind, und `test_thread_import.py` fragt das je Lauf für die drei
+genähten Bolzen (RM-195: unter einer halben Sekunde je Körper). Was aus einem
+Körper abzuleiten ist (Spiegelung, Lage, Zuschnitt), baut der Test.
 
 ## Alte Projektdateien bleiben liegen
 

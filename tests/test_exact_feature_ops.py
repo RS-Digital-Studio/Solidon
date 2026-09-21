@@ -255,6 +255,68 @@ def _chain_of(entry: SceneObject) -> tuple[Any, Any]:
     return hole, _the_one(entry, "cone")
 
 
+def test_the_widening_of_a_through_bore_is_not_through_in_either_kernel(profile: Profile) -> None:
+    """Die Aufweitung einer Durchgangsbohrung endet am Übergang — beide Kerne sagen es.
+
+    Am exakten Körper fragte ``through`` nur die Achse, und über der Achse der
+    Aufweitung Ø 9 liegt nichts: Sie hieß durchgehend, während das Netz die
+    Ringe in der Mündung fragt (``THROUGH_RINGS``) und den Übergangskegel
+    findet (Kreuzbefund Paket C, 22.09.2026). Mit dem Flag hätte
+    ``prepare_ops._exact_cavity_cut`` an einer allein stehenden Aufweitung die
+    ganze Zielhülle als Tiefe genommen. Dieselben Ringe an beiden Kernen: Bei
+    Ø 5 in Ø 9 liegt der äußere Ring (0,6) auf dem Kegel; die Bohrung selbst
+    bleibt durchgehend.
+    """
+    edit = _kernel()
+    load_operations()
+    from app.core.brep.features import features_of
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.geom.prepare import drill_outline
+    from app.core.perceive.features import detect
+    from app.core.sketch.planes import frame_of
+
+    outline = drill_outline(
+        diameter=5.0,
+        depth=12.0,
+        profile=profile,
+        compensate=False,
+        widening_diameter=9.0,
+        widening_depth=2.0,
+        transition_angle=90.0,
+    )
+    body = edit.bore_profile(edit.box(*PLATE), outline, frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 10.0)))
+    exact = {
+        round(feature.params["diameter"], 6): feature.params["through"]
+        for feature in features_of(body).values()
+        if feature.kind == "hole"
+    }
+    assert exact == {5.0: True, 9.0: False}, exact
+    # Der Netz-Zwilling: dieselbe Bohrung, am Netz gebohrt und am Netz gelesen.
+    twin = run(
+        "drill_hole",
+        run("create_box", None, profile, width=PLATE[0], depth=PLATE[1], height=PLATE[2]).outputs[
+            0
+        ],
+        profile,
+        diameter=5.0,
+        x=0.0,
+        y=0.0,
+        z=PLATE[2],
+        axis="z",
+        depth=0.0,
+        widening_diameter=9.0,
+        widening_depth=2.0,
+        anchor="mouth",
+        compensate=False,
+    ).outputs[0]
+    meshed = {
+        round(feature.params["diameter"], 1): feature.params["through"]
+        for feature in detect(as_mesh_data(twin.mesh)).values()
+        if feature.kind == "hole"
+    }
+    assert meshed == exact, meshed
+
+
 def test_moving_a_countersunk_bore_keeps_the_body_exact(profile: Profile) -> None:
     """Bohrung **und** Senkung wandern, beide Kennungen bleiben belegt, das Volumen auch."""
     load_operations()

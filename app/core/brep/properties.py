@@ -1,8 +1,15 @@
 """Native Integrale über Knotenspannen und ursprüngliche NURBS-Trimmkurven.
 
-Die Topologie bleibt unverändert. Nur private Arbeitsflächen werden unterteilt;
-bei schwierigen Konturen integriert ein begrenzter Rückfall die ursprünglichen
-Randkurven. Lage, Innenlöcher und Orientierung bleiben Teil des Integrationsgebiets.
+Die Topologie bleibt unverändert. Volumen wie Fläche rechnet der Kern nativ auf
+einem **knotenzerlegten Verbund** privater Arbeitsflächen: Jede Spline-Fläche
+wird an ihren Knotenspannen geteilt, damit die native Gauß-Quadratur keine
+schmale Spanne übersieht (der Zackenkörper in ``tests/test_brep.py`` verliert
+ungeteilt 7·10⁻⁶, geteilt nichts), und zwei unabhängige Teilungen müssen sich
+auf ``INTEGRAL_RELATIVE_ERROR`` einigen. Erst wenn das nicht gelingt, integriert
+der Python-Rückfall entlang der ursprünglichen Randkurven — derselbe Weg, nur
+tausendmal langsamer (genähtes M6-Gewinde: 20 ms gegen 3 s, gemessen
+21.09.2026). Lage, Innenlöcher und Orientierung bleiben Teil des
+Integrationsgebiets.
 """
 
 from __future__ import annotations
@@ -26,9 +33,12 @@ from app.i18n import _
 # vergleicht unabhängige Unterteilungen; OCCT rechnet jedes Teilgebiet feiner.
 INTEGRAL_RELATIVE_ERROR = 1e-9
 _PATCH_RELATIVE_ERROR = 1e-12
-_SUBDIVISIONS = (2, 4, 8)
-# Die Parameterkurven werden auf privaten Flächen erneut synchronisiert.
-# Diese Genauigkeit in mm verändert keine Kante der veröffentlichten Form.
+# Die Leiter der Knotenzerlegung: erst jede Spanne ganz, dann halbiert, dann
+# geviertelt. Zwei aufeinanderfolgende Stufen müssen sich einigen; die erste
+# genügt allein, wenn keine Fläche eine Spanne hat (nichts zu teilen).
+_SUBDIVISIONS = (1, 2, 4)
+# Die Trimmkurven werden beim Teilen an den Knotenlinien geschnitten. Diese
+# Genauigkeit im Parameterraum verändert keine Kante der veröffentlichten Form.
 _REPARAMETRIZATION_PRECISION = 1e-9
 # Begrenzt die temporäre Topologie, bevor der native Aufteiler sie erzeugt.
 _MAX_PATCHES = 4096
@@ -120,9 +130,80 @@ def _spline_basis(face: Any, *, cancelled: CancelToken | None = None) -> Any | N
     raise _unresolved_integral()
 
 
+def _span_source(
+    face: Any, *, cancelled: CancelToken | None = None
+) -> tuple[tuple[Any | None, str], tuple[Any | None, str]] | None:
+    """Woher die Knotenspannen je Parameterrichtung kommen — oder ``None`` für analytische Träger.
+
+    Ebene, Zylinder, Kegel, Kugel und Ring bleiben im nativen Standardweg.
+    Alles andere wird zerlegt: Spline-Flächen an ihren eigenen Knoten, eine
+    Extrusion an den Knoten ihrer Basiskurve (in U), ein Drehkörper ebenso (in
+    V); Offset- und Trimmhüllen lesen unter sich. Eine Fläche ohne Knoten wird
+    trotzdem zerlegt — die Leiter halbiert dann das Parametergebiet, und das
+    ist der Nachweis, den der native Gauß-Weg ohne Knotenwissen nicht führt:
+    Die Extrusion eines rationalen Kreises maß ungeteilt 1,2 Prozent daneben
+    bei gemeldetem Fehler 2·10⁻¹⁶ (``test_planar_consumers_use_the_original_nurbs_faces``).
+    """
+    from OCP.BRep import BRep_Tool
+    from OCP.BRepAdaptor import BRepAdaptor_Surface
+    from OCP.Geom import (
+        Geom_BezierCurve,
+        Geom_BezierSurface,
+        Geom_BSplineCurve,
+        Geom_BSplineSurface,
+        Geom_OffsetSurface,
+        Geom_SurfaceOfLinearExtrusion,
+        Geom_SurfaceOfRevolution,
+        Geom_TrimmedCurve,
+    )
+    from OCP.GeomAbs import (
+        GeomAbs_Cone,
+        GeomAbs_Cylinder,
+        GeomAbs_Plane,
+        GeomAbs_Sphere,
+        GeomAbs_Torus,
+    )
+
+    from app.core.brep.kernel import _MAX_SURFACE_WRAPPERS, untrimmed_surface
+
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+    if BRepAdaptor_Surface(face).GetType() in (
+        GeomAbs_Plane,
+        GeomAbs_Cylinder,
+        GeomAbs_Cone,
+        GeomAbs_Sphere,
+        GeomAbs_Torus,
+    ):
+        return None
+    surface = BRep_Tool.Surface_s(face)
+    for _depth in range(_MAX_SURFACE_WRAPPERS + 1):
+        surface = untrimmed_surface(surface, cancelled=cancelled)
+        if surface is None:
+            raise _unresolved_integral()
+        if isinstance(surface, (Geom_BSplineSurface, Geom_BezierSurface)):
+            return (surface, "U"), (surface, "V")
+        if isinstance(surface, (Geom_SurfaceOfLinearExtrusion, Geom_SurfaceOfRevolution)):
+            curve = surface.BasisCurve()
+            for _inner in range(_MAX_SURFACE_WRAPPERS + 1):
+                if cancelled is not None:
+                    cancelled.raise_if_cancelled()
+                if not isinstance(curve, Geom_TrimmedCurve):
+                    break
+                curve = curve.BasisCurve()
+            knotted = curve if isinstance(curve, (Geom_BSplineCurve, Geom_BezierCurve)) else None
+            if isinstance(surface, Geom_SurfaceOfLinearExtrusion):
+                return (knotted, ""), (None, "")
+            return (None, ""), (knotted, "")
+        if not isinstance(surface, Geom_OffsetSurface):
+            return (None, ""), (None, "")
+        surface = surface.BasisSurface()
+    raise _unresolved_integral()
+
+
 def _needs_spans(face: Any, *, cancelled: CancelToken | None = None) -> bool:
     """Analytische Flächen behalten ihren einfachen nativen Integrationsweg."""
-    return _spline_basis(face, cancelled=cancelled) is not None
+    return _span_source(face, cancelled=cancelled) is not None
 
 
 def _split_values(
@@ -151,7 +232,11 @@ def _split_values(
 def _knots(
     surface: Any, axis: str, low: float, high: float, *, cancelled: CancelToken | None = None
 ) -> tuple[float, ...]:
-    """Innere Basisknoten im wirklichen Trimmintervall, auch über einer periodischen Naht."""
+    """Innere Basisknoten im wirklichen Trimmintervall, auch über einer periodischen Naht.
+
+    ``axis`` ist ``"U"`` oder ``"V"`` an einer Fläche und leer an einer Kurve
+    (``NbKnots``, ``Knot``, ``IsPeriodic``, ``Period``); ohne Quelle gibt es keine Knoten.
+    """
     count = getattr(surface, f"Nb{axis}Knots", None)
     if count is None:
         return ()
@@ -186,12 +271,22 @@ def _knots(
 def _patches(
     original: Any, subdivisions: int, *, cancelled: CancelToken | None = None
 ) -> list[Any]:
-    """Zerlegt eine private Flächenkopie und erhält ihre äußeren und inneren Drähte."""
+    """Zerlegt eine private Flächenkopie und erhält ihre äußeren und inneren Drähte.
+
+    Die Teilflächen tragen die **ursprünglichen Trimmkurven**, an den
+    Knotenlinien geschnitten — und sonst nichts: Weder werden 3D-Kurven neu
+    gebaut noch die Parameterkurven mit ``SameParameter`` nachgezogen. Beides
+    stand hier bis zum 21.09.2026 und verschob die Ränder um bis zu 8·10⁻⁶ mm
+    (gemessen am Flankenrand eines M10-Bolzens mit Kantentoleranz 6·10⁻⁵),
+    womit jede feinere Teilung ein **anderes** Gebiet integrierte und die
+    Leiter an echten Gewinden nie zusammenkam (2·10⁻⁸ zwischen den Stufen).
+    Die Integration liest allein die Parameterkurven; mit den ungeänderten
+    stimmt die Zerlegung mit dem Randintegral der ganzen Fläche auf 10⁻¹²
+    überein, und ob sie vollständig ist, belegt die Leiter der Aufrufer.
+    """
     from OCP.BRep import BRep_Tool
     from OCP.BRepBuilderAPI import BRepBuilderAPI_Copy
-    from OCP.BRepCheck import BRepCheck_Analyzer
     from OCP.BRepGProp import BRepGProp_Face
-    from OCP.BRepLib import BRepLib
     from OCP.ShapeBuild import ShapeBuild_ReShape
     from OCP.ShapeFix import ShapeFix_ComposeShell
     from OCP.ShapeUpgrade import ShapeUpgrade_SplitSurface
@@ -206,9 +301,12 @@ def _patches(
     low_u, high_u, low_v, high_v = BRepGProp_Face(face).Bounds()
     if not all(math.isfinite(value) for value in (low_u, high_u, low_v, high_v)):
         raise _unresolved_integral()
-    basis = _spline_basis(face, cancelled=cancelled)
-    u_values = _split_values(basis, "U", low_u, high_u, subdivisions, cancelled=cancelled)
-    v_values = _split_values(basis, "V", low_v, high_v, subdivisions, cancelled=cancelled)
+    source = _span_source(face, cancelled=cancelled)
+    if source is None:
+        raise _unresolved_integral()
+    (u_source, u_axis), (v_source, v_axis) = source
+    u_values = _split_values(u_source, u_axis, low_u, high_u, subdivisions, cancelled=cancelled)
+    v_values = _split_values(v_source, v_axis, low_v, high_v, subdivisions, cancelled=cancelled)
     if (u_values.Length() - 1) * (v_values.Length() - 1) > _MAX_PATCHES:
         raise _unresolved_integral()
     splitter = ShapeUpgrade_SplitSurface()
@@ -230,14 +328,151 @@ def _patches(
     result = composer.Result()
     if result.IsNull():
         raise _unresolved_integral()
-    BRepLib.BuildCurves3d_s(result, _REPARAMETRIZATION_PRECISION)
-    BRepLib.SameParameter_s(result, _REPARAMETRIZATION_PRECISION, True)
-    if not BRepCheck_Analyzer(result).IsValid():
-        raise _unresolved_integral()
     patches = _faces(result, cancelled=cancelled)
     if not patches:
         raise _unresolved_integral()
     return patches
+
+
+def _local_copy(shape: Any, origin: Vec3, *, cancelled: CancelToken | None = None) -> Any:
+    """Eine private Kopie, in den lokalen Bezugsrahmen verschoben — Geometrie, nicht Lage.
+
+    Bereits die rationalen Ableitungen müssen lokal entstehen: Erst nach der
+    Auswertung große Weltkoordinaten abzuziehen verliert die Stellen, die die
+    Quadratur für ihre Fehlerschranke braucht (Halbkugel bei 5·10⁶ mm in
+    ``tests/test_brep_surfaces.py``). Über ``BRepTools_Modifier`` statt des
+    Transformationsbuilders: Der ist der Vertrag von ``edit.transformed``, und
+    was ihn dort stellvertretend beschädigt, darf ein Maß des Eingangs nicht
+    mitbeschädigen.
+    """
+    import numpy as np
+    from OCP.BRepTools import BRepTools_Modifier, BRepTools_TrsfModification
+    from OCP.gp import gp_Trsf, gp_Vec
+
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+    transform = gp_Trsf()
+    transform.SetTranslation(gp_Vec(*(-np.asarray(origin))))
+    modifier = BRepTools_Modifier(shape, BRepTools_TrsfModification(transform))
+    if not modifier.IsDone():
+        raise _unresolved_integral()
+    local = modifier.ModifiedShape(shape)
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+    if local.IsNull():
+        raise _unresolved_integral()
+    return local
+
+
+def _shifted(centre: tuple[float, float, float], origin: Vec3) -> Vec3:
+    """Der im lokalen Rahmen gerechnete Schwerpunkt, zurück in Weltkoordinaten."""
+    return cast(
+        Vec3, tuple(float(value + shift) for value, shift in zip(centre, origin, strict=True))
+    )
+
+
+def _oriented_faces(shape: Any, *, cancelled: CancelToken | None = None) -> list[Any]:
+    """Die gerichteten Flächen, so oft sie vorkommen — nicht entdoppelt.
+
+    Gemeinsame Wände zweier Körper zählen mit beiden Orientierungen; eine
+    Indexkarte fasste die beiden gerichteten Vorkommen zusammen.
+    """
+    from OCP.TopAbs import TopAbs_FACE, TopAbs_FORWARD, TopAbs_REVERSED
+    from OCP.TopExp import TopExp_Explorer
+    from OCP.TopoDS import TopoDS
+
+    faces = []
+    explorer = TopExp_Explorer(shape, TopAbs_FACE)
+    while explorer.More():
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        face = TopoDS.Face(explorer.Current())
+        explorer.Next()
+        if face.Orientation() in (TopAbs_FORWARD, TopAbs_REVERSED):
+            faces.append(face)
+    return faces
+
+
+def _cone_volume(face: Any, *, cancelled: CancelToken | None = None) -> tuple[Any, float]:
+    """Das native Kegelvolumen einer Fläche zum lokalen Ursprung samt seinem Fehler.
+
+    OCCTs ``VolumeProperties`` wählt den Bezugspunkt selbst — den groben
+    Schwerpunkt der übergebenen Form. An einem Verbund aus Teilflächen wandert
+    er mit jeder Teilung, und an einem Körper, dessen Nähte innerhalb seiner
+    Toleranz offen stehen, hängt das Volumen am Bezugspunkt: Der M10-Bolzen
+    des Korpus (Kantentoleranz 3,5 µm) schwankte damit um 10⁻⁷ zwischen den
+    Stufen. Der Bezugspunkt ist deshalb fest — derselbe wie im Python-Rückfall.
+    """
+    from OCP.BRepGProp import BRepGProp_Domain, BRepGProp_Face, BRepGProp_Vinert
+    from OCP.gp import gp_Pnt
+
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+    surface = BRepGProp_Face(face)
+    if surface.NaturalRestriction():
+        inert = BRepGProp_Vinert(surface, gp_Pnt(0.0, 0.0, 0.0), _PATCH_RELATIVE_ERROR)
+    else:
+        inert = BRepGProp_Vinert(
+            surface, BRepGProp_Domain(face), gp_Pnt(0.0, 0.0, 0.0), _PATCH_RELATIVE_ERROR
+        )
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+    mass = float(inert.Mass())
+    error = float(inert.GetEpsilon())
+    if not math.isfinite(mass) or not math.isfinite(error) or error < 0.0:
+        raise _unresolved_integral()
+    # Der gemeldete Fehler ist relativ zum Kegelvolumen dieser Fläche; die
+    # Summe zählt absolut gegen das ganze Volumen, wie im Python-Rückfall.
+    return inert, error * abs(mass)
+
+
+def _spanned_volume(shape: Any, *, cancelled: CancelToken | None = None) -> MassProperties:
+    """Volumen und Schwerpunkt nativ auf dem knotenzerlegten Verbund, mit Leiter.
+
+    Jede Spline-Fläche geht an ihren Knotenspannen geteilt hinein, jede
+    analytische ganz; zwei aufeinanderfolgende Teilungen müssen sich in
+    Volumen und Schwerpunkt auf ``INTEGRAL_RELATIVE_ERROR`` einigen. Trägt
+    keine Fläche Spannen, gibt es nichts zu teilen, und die erste Stufe ist
+    das Ergebnis. Gemessen (21.09.2026): genähtes M6-Gewinde 20 ms statt 3 s,
+    STEP-Gewinde ``m6_rechts`` 130 ms statt 13,8 s, verrundete
+    NurbsConvert-Lochplatte Millisekunden statt 9,8 s — der Zackenkörper mit
+    seiner 10⁻⁵ breiten Spanne bleibt exakt.
+    """
+    from OCP.GProp import GProp_GProps
+
+    if not _oriented_faces(shape, cancelled=cancelled):
+        # Eine leere Form hat kein Volumen und keinen Ort — der Aufrufer
+        # entscheidet, ob das ein Befund ist (``boolean.NOTHING_LEFT``).
+        return MassProperties(0.0, (0.0, 0.0, 0.0), None)
+    origin, size = _local_frame(shape, cancelled=cancelled)
+    local = _local_copy(shape, origin, cancelled=cancelled)
+    faces = _oriented_faces(local, cancelled=cancelled)
+    spanned = [_needs_spans(face, cancelled=cancelled) for face in faces]
+    levels = _SUBDIVISIONS if any(spanned) else _SUBDIVISIONS[:1]
+    before = None
+    for subdivisions in levels:
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        total = GProp_GProps()
+        error = 0.0
+        for face, split in zip(faces, spanned, strict=True):
+            for part in _patches(face, subdivisions, cancelled=cancelled) if split else (face,):
+                inert, absolute = _cone_volume(part, cancelled=cancelled)
+                total.Add(inert)
+                error += absolute
+        mass = float(total.Mass())
+        if not math.isfinite(mass) or mass < 0.0 or error > INTEGRAL_RELATIVE_ERROR * mass:
+            raise _unresolved_integral()
+        centre = total.CentreOfMass()
+        measured = MassProperties(
+            mass, _shifted((centre.X(), centre.Y(), centre.Z()), origin), None
+        )
+        if before is None and len(levels) == 1:
+            return measured
+        if before is not None and _converged(before, measured, size):
+            return measured
+        before = measured
+    raise _unresolved_integral()
 
 
 def _integrate(shape: Any, kind: str, *, cancelled: CancelToken | None = None) -> MassProperties:
@@ -259,23 +494,25 @@ def _integrate(shape: Any, kind: str, *, cancelled: CancelToken | None = None) -
     return _from_native(props, inertia=kind == "surface")
 
 
-def _converged(before: MassProperties, after: MassProperties) -> bool:
-    """Fläche/Volumen, Schwerpunkt und Trägheit müssen gemeinsam konvergieren."""
+def _converged(before: MassProperties, after: MassProperties, span: float) -> bool:
+    """Fläche/Volumen und Schwerpunkt müssen gemeinsam konvergieren; die Trägheit endlich sein.
+
+    ``span`` ist die Länge, an der der Schwerpunkt gemessen wird — die
+    Diagonale der Hülle. Bis zum 21.09.2026 verlangte die Leiter auch von der
+    Trägheit Konvergenz auf 10⁻⁹, obwohl niemand sie liest: Die erste Fläche
+    des M10-Gewindes fiel daran in den Python-Rückfall (5,1 s statt
+    Millisekunden bei 3·10⁻¹⁰ Unterschied in der Fläche).
+    """
     import numpy as np
 
     mass = abs(after.mass)
-    if not math.isfinite(mass) or mass <= 0.0:
+    if not math.isfinite(mass) or mass <= 0.0 or not math.isfinite(span) or span <= 0.0:
         return False
     if not math.isclose(before.mass, after.mass, rel_tol=INTEGRAL_RELATIVE_ERROR, abs_tol=0.0):
         return False
-    old, new = np.asarray(before.inertia), np.asarray(after.inertia)
-    inertia_scale = float(np.linalg.norm(new))
-    span = math.sqrt(inertia_scale / mass)
-    return bool(
-        np.isfinite(new).all()
-        and math.dist(before.centre, after.centre) <= INTEGRAL_RELATIVE_ERROR * span
-        and np.linalg.norm(old - new) <= INTEGRAL_RELATIVE_ERROR * inertia_scale
-    )
+    if after.inertia is not None and not np.isfinite(np.asarray(after.inertia)).all():
+        return False
+    return math.dist(before.centre, after.centre) <= INTEGRAL_RELATIVE_ERROR * span
 
 
 def _spanned_surface(face: Any, *, cancelled: CancelToken | None = None) -> MassProperties:
@@ -283,6 +520,8 @@ def _spanned_surface(face: Any, *, cancelled: CancelToken | None = None) -> Mass
     from OCP.BRep import BRep_Builder
     from OCP.TopoDS import TopoDS_Compound
 
+    origin, size = _local_frame(face, cancelled=cancelled)
+    local = _local_copy(face, origin, cancelled=cancelled)
     before = None
     for subdivisions in _SUBDIVISIONS:
         if cancelled is not None:
@@ -290,12 +529,13 @@ def _spanned_surface(face: Any, *, cancelled: CancelToken | None = None) -> Mass
         compound = TopoDS_Compound()
         builder = BRep_Builder()
         builder.MakeCompound(compound)
-        for patch in _patches(face, subdivisions, cancelled=cancelled):
+        for patch in _patches(local, subdivisions, cancelled=cancelled):
             if cancelled is not None:
                 cancelled.raise_if_cancelled()
             builder.Add(compound, patch)
-        total = _integrate(compound, "surface", cancelled=cancelled)
-        if before is not None and _converged(before, total):
+        measured = _integrate(compound, "surface", cancelled=cancelled)
+        total = MassProperties(measured.mass, _shifted(measured.centre, origin), measured.inertia)
+        if before is not None and _converged(before, total, size):
             return total
         before = total
     raise _unresolved_integral()
@@ -616,10 +856,25 @@ def _surface_sum(
 def properties(
     shape: Any, kind: Literal["volume", "surface"], *, cancelled: CancelToken | None = None
 ) -> MassProperties:
-    """Geprüfte Maße; schwierige Trimmungen rechnen auf den ursprünglichen Randkurven."""
+    """Geprüfte Maße; schwierige Trimmungen rechnen auf den ursprünglichen Randkurven.
+
+    Volumen: der knotenzerlegte Verbund mit Leiter (:func:`_spanned_volume`),
+    danach der Python-Rückfall. Fläche: analytische Flächen im nativen
+    Standardweg, Spline-Flächen je Fläche über die Leiter, der Rückfall je
+    Fläche — und ein Körper ohne Spline-Fläche in einem einzigen nativen Aufruf.
+    """
     try:
         if cancelled is not None:
             cancelled.raise_if_cancelled()
+        if kind == "volume":
+            try:
+                return _spanned_volume(shape, cancelled=cancelled)
+            except OperationCancelled:
+                raise
+            except PROGRAMMING_ERRORS:
+                raise
+            except Exception:
+                return _uv_volume(shape, cancelled=cancelled)
         faces = _faces(shape, cancelled=cancelled)
         requires_spans = []
         for face in faces:
@@ -634,13 +889,7 @@ def properties(
             except PROGRAMMING_ERRORS:
                 raise
             except Exception:
-                if kind == "volume":
-                    return _uv_volume(shape, cancelled=cancelled)
-        if kind == "volume":
-            # Native GK-Integrale lassen V-Spannen aus und können bei der
-            # Schwerpunktrechnung nicht terminieren. Der gemeinsame UV-Weg
-            # begrenzt beide Momente an den tatsächlichen Knotenspannen.
-            return _uv_volume(shape, cancelled=cancelled)
+                pass
         measured = []
         for face, split in zip(faces, requires_spans, strict=True):
             try:

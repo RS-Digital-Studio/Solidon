@@ -32,7 +32,9 @@ from app.core.types import Sketch, SketchConstraint, SketchElement
         ("pattern", {"count": 2}),
         ("create_brep_box", {}),
         ("create_brep_cylinder", {}),
-        ("thread_exact", {"diameter": 10.0, "pitch": 1.5, "length": 8.0}),
+        # Der kleinste Bolzen, den das Schema zulässt: drei Umläufe reichen, um
+        # den Abbruch bis in die Transformation zu tragen.
+        ("thread_exact", {"diameter": 10.0, "pitch": 1.0, "length": 3.0}),
     ],
 )
 def test_exact_transform_operations_forward_cancellation_to_native_work(

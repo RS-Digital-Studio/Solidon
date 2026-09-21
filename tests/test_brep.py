@@ -9,13 +9,14 @@ nachrechnen lässt, nicht gegen ein Bild.
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import pytest
 import trimesh
-from OCP.BRepPrimAPI import BRepPrimAPI_MakeSphere
 
-from app.core.brep import edit, step
+from app.core.brep import edit, profiles, step
 from app.core.brep.features import features_of
 from app.core.brep.kernel import Solid, available, tessellate
 from app.core.errors import GeometryError, NeedsSolidError, ValidationError
@@ -30,6 +31,10 @@ from app.core.types import Mesh, OpContext, Profile, Scene, SceneObject, Source,
 from app.core.units import EPS_DISPLAY, EPS_GEOM
 
 pytestmark = pytest.mark.skipif(not available(), reason="OpenCASCADE is an optional dependency")
+
+# Nach dem Skip, nicht davor: Ein Quellklon ohne das Extra ``brep`` scheiterte
+# an dieser Zeile beim Sammeln, bevor die Markierung darüber greifen konnte.
+BRepPrimAPI_MakeSphere = pytest.importorskip("OCP.BRepPrimAPI").BRepPrimAPI_MakeSphere
 
 WIDTH, DEPTH, HEIGHT = 40.0, 30.0, 20.0
 
@@ -840,8 +845,14 @@ def test_an_exhausted_surface_integral_stops_without_a_cached_guess(
 def test_an_unresolved_volume_quadrature_is_not_cached(
     monkeypatch: pytest.MonkeyPatch, reported_error: float
 ) -> None:
-    """Eine ungültige oder zu große Quadraturfehlerschätzung darf keine Kennzahl liefern."""
+    """Eine ungültige oder zu große Quadraturfehlerschätzung darf keine Kennzahl liefern.
+
+    Der Python-Rückfall ist seit dem knotenzerlegten Verbund die letzte Stufe;
+    der Test nimmt den nativen Weg weg, damit die Quadratur überhaupt läuft.
+    """
     from scipy import integrate
+
+    from app.core.brep import properties
 
     solid = _native_affine_shape(edit.cylinder(6.0, 8.0), (2.0, 1.0, 0.5))
     original = integrate.quad_vec
@@ -851,6 +862,11 @@ def test_an_unresolved_volume_quadrature_is_not_cached(
         result, _, info = original(*args, **kwargs)
         return result, reported_error, info
 
+    def unavailable(*args, **kwargs):
+        """Der native Verbundweg fällt aus — wie an einer Fläche, die sich nicht teilen lässt."""
+        raise ValueError("unavailable native compound")
+
+    monkeypatch.setattr(properties, "_spanned_volume", unavailable)
     monkeypatch.setattr(integrate, "quad_vec", uncertain)
     with pytest.raises(GeometryError) as failure:
         _ = solid.volume
@@ -883,14 +899,21 @@ def test_an_affine_rotated_open_round_bore_retains_its_exact_volume() -> None:
 def test_an_unresolved_analytic_integral_is_not_cached(
     monkeypatch: pytest.MonkeyPatch, kind: str, reported_error: float
 ) -> None:
-    """Auch analytische Trägerflächen dürfen ihre gemeldete Rechengrenze nicht übergehen."""
-    from OCP.BRepGProp import BRepGProp
+    """Auch analytische Trägerflächen dürfen ihre gemeldete Rechengrenze nicht übergehen.
+
+    Das Volumen fragt je Fläche ``BRepGProp_Vinert`` nach seinem Fehler, die
+    Fläche den Sammelaufruf ``SurfaceProperties`` — beschädigt wird jeweils die
+    Auskunft, die der Weg tatsächlich liest.
+    """
+    from OCP.BRepGProp import BRepGProp, BRepGProp_Vinert
 
     from app.core.brep import properties
 
     solid = edit.box(10.0, 8.0, 6.0)
-    method = "SurfaceProperties_s" if kind == "surface" else "VolumeProperties_s"
-    monkeypatch.setattr(BRepGProp, method, lambda *args: reported_error)
+    if kind == "surface":
+        monkeypatch.setattr(BRepGProp, "SurfaceProperties_s", lambda *args: reported_error)
+    else:
+        monkeypatch.setattr(BRepGProp_Vinert, "GetEpsilon", lambda self: reported_error)
     monkeypatch.setattr(properties, "_MAX_EVALUATIONS", 0)
     with pytest.raises(GeometryError) as failure:
         _ = solid.area if kind == "surface" else solid.volume
@@ -960,6 +983,39 @@ def test_affine_transformation_keeps_two_separate_solids() -> None:
     assert result.solid_count == 2 and result.is_closed
     assert result.volume == pytest.approx(504.0, rel=1e-10)
     assert sorted(mapping) == list(range(12))
+
+
+def test_a_rigid_motion_proves_itself_without_a_volume_integral(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verschieben und Drehen belegen sich über die Partnerschaft der Formen, nicht über Integrale.
+
+    Zwei konvergierte Volumenintegrale je Bewegung kosteten an einem
+    STEP-Gewinde 27 s (Review 21.09.2026); Maßstab und Scherung bauen die
+    Flächen neu und behalten die Probe.
+    """
+    from app.core.geom.transform import rotation
+
+    integrals: list[str] = []
+    original = Solid._properties
+
+    def counting(self: Solid, kind: str, *, cancelled: Any = None) -> Any:
+        integrals.append(kind)
+        return original(self, kind, cancelled=cancelled)
+
+    monkeypatch.setattr(Solid, "_properties", counting)
+    source = edit.box(10.0, 8.0, 6.0)
+    moved = edit.moved(source, (7.0, -3.0, 5.0))
+    turned = edit.transformed(source, rotation("z", 30.0))
+    assert integrals == [], "eine starre Bewegung rechnet kein Volumen"
+    assert moved.bounds.minimum == pytest.approx((2.0, -7.0, 5.0), abs=EPS_GEOM)
+    assert turned.solid_count == 1 and turned.is_closed
+    scaled = edit.transformed(
+        source,
+        ((2.0, 0.0, 0.0, 0.0), (0.0, 1.0, 0.0, 0.0), (0.0, 0.0, 0.5, 0.0), (0.0, 0.0, 0.0, 1.0)),
+    )
+    assert integrals.count("volume") == 2, "Maßstab belegt sich weiter über das Volumen"
+    assert scaled.volume == pytest.approx(480.0, rel=1e-10)
 
 
 def test_affine_translation_does_not_round_a_small_motion_away() -> None:
@@ -2173,6 +2229,67 @@ def test_a_corner_fillet_leaves_no_degenerate_triangles() -> None:
 
 
 # --- was der Netz-Zwilling meldete und dieser nicht ------------------------------
+
+
+@pytest.mark.parametrize(
+    "attempt",
+    [
+        lambda: profiles.shell_open_top(edit.sphere(20.0), 1.0),
+        lambda: profiles.draft_vertical(edit.sphere(20.0), 5.0),
+        lambda: profiles.push_faces(edit.box(40.0, 30.0, 20.0), (0.0, 0.0, 1.0), -25.0),
+    ],
+    ids=["shell_open_top", "draft_vertical", "push_faces"],
+)
+def test_a_refusal_of_the_exact_kernel_offers_no_mesh_repair(attempt: Callable[[], Any]) -> None:
+    """Wo der exakte Kern absagt, heißt der Weg nach vorn „Eingabe korrigieren".
+
+    Ohne eigene Vorschläge erbte die Absage „Reparieren und erneut versuchen"
+    und „Stellen zeigen" — Netzreparatur und offene Kanten gibt es an einem
+    B-Rep-Körper nicht (Review 21.09.2026; ``edit.boolean`` sagte es schon).
+    """
+    from app.core.errors import CANCEL, CORRECT_INPUT, REPAIR_AND_RETRY, SHOW_LOCATIONS
+
+    with pytest.raises(GeometryError) as caught:
+        attempt()
+    offered = [action.id for action in caught.value.suggestions]
+    assert CORRECT_INPUT.id in offered and CANCEL.id in offered
+    assert REPAIR_AND_RETRY.id not in offered and SHOW_LOCATIONS.id not in offered
+
+
+def test_the_exact_box_takes_corner_and_place_in_one_motion(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Bezugspunkt und Lage sind eine Matrix: ein Prüf- und Kopierweg, nicht zwei.
+
+    Der Eckbezug lief als eigenes ``edit.moved`` vor der Lage — zwei native
+    Builder, zwei Gültigkeitsprüfungen, zwei Kopien für eine Bewegung
+    (Review 21.09.2026). Gemessen wird, wo die Ecke landet, und dass kein
+    zweiter Bewegungsschritt mehr läuft.
+    """
+    moved_calls: list[tuple[float, float, float]] = []
+    original = edit.moved
+
+    def counting(solid: Solid, offset: tuple[float, float, float]) -> Solid:
+        moved_calls.append(offset)
+        return original(solid, offset)
+
+    monkeypatch.setattr(edit, "moved", counting)
+    placed = run(
+        "create_brep_box",
+        None,
+        profile,
+        width=12.0,
+        depth=8.0,
+        height=5.0,
+        anchor="corner",
+        x=4.0,
+        y=5.0,
+        z=6.0,
+    ).outputs[0]
+    assert placed.mesh.bounds.minimum == pytest.approx((4.0, 5.0, 6.0), abs=1e-9)
+    assert placed.mesh.bounds.maximum == pytest.approx((16.0, 13.0, 11.0), abs=1e-9)
+    assert float(placed.mesh.volume) == pytest.approx(480.0, rel=1e-12)
+    assert moved_calls == []
 
 
 def test_a_bore_that_swallows_the_body_is_refused(profile: Profile) -> None:

@@ -2,16 +2,25 @@
 
 Dieselbe Bauart wie ``konzepte/nachweise-cad-p2-5/reference.py``: Die
 Sollwerte der Tests kommen aus **diesen Maßen**, nie aus dem Prüfling. Die
-Körper werden hier einmal gebaut und als STEP abgelegt, denn ein Bolzen
-kostet rund zwanzig Sekunden und ein Innengewinde fast eine Minute — im
-Tor wäre das zu viel. Alles Abgeleitete (Spiegelung, Lage, Zuschnitt,
-Beschädigung, geteilte Träger, NURBS) baut ``tests/test_thread_import.py``
-in unter einer Sekunde aus ``m6_rechts`` selbst.
+Körper liegen als STEP hier, weil der zweigängige Bolzen und die Naht ohne
+Rille als Sweep mit Fuzzy-Vereinigung entstehen und Sekunden kosten; die
+drei Bolzen aus ``profiles.threaded_rod`` baut der genähte Weg in unter
+einer halben Sekunde (RM-195). Alles Abgeleitete (Spiegelung, Lage,
+Zuschnitt, Beschädigung, geteilte Träger, NURBS) baut
+``tests/test_thread_import.py`` aus ``m6_rechts`` selbst.
 
-    .venv\\Scripts\\python.exe tests/data/make_thread_corpus.py
+    .venv\\Scripts\\python.exe tests/data/make_thread_corpus.py            # alle neu bauen
+    .venv\\Scripts\\python.exe tests/data/make_thread_corpus.py m6_rechts  # einen neu bauen
+    .venv\\Scripts\\python.exe tests/data/make_thread_corpus.py --check    # Datei gegen Erzeuger
 
-Nur laufen lassen, wenn ein Maß sich ändert; die Sollwerte stehen in der
-Fallmatrix des Tests.
+Nur neu bauen, wenn ein Maß oder der Erzeuger sich ändert; die Sollwerte
+stehen in der Fallmatrix des Tests. ``--check`` baut jeden Körper und
+vergleicht Flächenzahl, Volumen und Oberfläche (auf ``CHECK_RELATIVE``) mit
+der abgelegten Datei — der Wächter dafür, dass Korpus und Erzeuger nicht
+auseinanderlaufen: Am 20.09.2026 lagen sie an M10 um 0,09 mm³ auseinander.
+``tests/test_thread_import.py`` fährt ihn je Lauf an den drei Bolzen
+(``test_the_corpus_matches_its_generator``); die zwei Sweep-Körper prüft der
+Aufruf von Hand vor einem Release.
 """
 
 from __future__ import annotations
@@ -148,11 +157,52 @@ BODIES = {
 }
 
 
-def main(names: list[str]) -> None:
-    """Baut die genannten Körper, ohne Namen alle."""
+#: Wie weit das Volumen der Datei vom Erzeuger abweichen darf — die
+#: STEP-Rundreise liegt bei 10⁻⁸, ein anderer Erzeuger bei 10⁻⁶ und mehr.
+CHECK_RELATIVE = 1e-6
+
+
+def compare(name: str) -> tuple[bool, str]:
+    """Baut ``name`` neu und vergleicht mit der Datei: Flächen, Volumen, Oberfläche.
+
+    Kanten zählen nicht mit: Der STEP-Umlauf legt am genähten Bolzen eine
+    doppelt genähte Rampenkante zusammen (81 Kanten hinein, 80 heraus, Volumen
+    und Oberfläche auf 10⁻¹⁴ gleich). Gibt zurück, ob beides dasselbe ist, und
+    die Zeile dazu.
+    """
+    body = BODIES[name]()
+    stored = step.read((THREADS / f"{name}.step").read_bytes())
+    same = (
+        body.face_count == stored.face_count
+        and abs(body.volume - stored.volume) <= CHECK_RELATIVE * abs(stored.volume)
+        and abs(body.area - stored.area) <= CHECK_RELATIVE * abs(stored.area)
+    )
+    line = (
+        f"{name}: Erzeuger {body.face_count} Flächen, Volumen {body.volume:.6f}, "
+        f"Oberfläche {body.area:.6f} | Datei {stored.face_count} Flächen, "
+        f"Volumen {stored.volume:.6f}, Oberfläche {stored.area:.6f} | "
+        f"{'gleich' if same else 'VERSCHIEDEN'}"
+    )
+    return same, line
+
+
+def main(arguments: list[str]) -> int:
+    """Baut die genannten Körper, ohne Namen alle; mit ``--check`` nur vergleichen."""
+    check = "--check" in arguments
+    names = [name for name in arguments if name != "--check"]
+    unknown = [name for name in names if name not in BODIES]
+    if unknown:
+        print(f"unbekannt: {', '.join(unknown)} — bekannt sind {', '.join(BODIES)}")
+        return 2
     THREADS.mkdir(parents=True, exist_ok=True)
+    failed = False
     for name, build in BODIES.items():
         if names and name not in names:
+            continue
+        if check:
+            same, line = compare(name)
+            failed = failed or not same
+            print(line)
             continue
         body = build()
         payload = step.write(body)
@@ -161,7 +211,8 @@ def main(names: list[str]) -> None:
             f"{name}: {body.face_count} Flächen, {body.edge_count} Kanten, "
             f"Volumen {body.volume:.6f}, {len(payload)} Byte"
         )
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":
-    main(sys.argv[1:])
+    sys.exit(main(sys.argv[1:]))

@@ -15,7 +15,6 @@ import pytest
 
 from app.core.bootstrap import load_operations
 from app.core.errors import ValidationError
-from app.core.knowledge import profiles
 from app.core.registry import (
     MENU_TWINS,
     PRIMITIVE_TWINS,
@@ -37,11 +36,6 @@ from tests.test_missing_ops import run
 @pytest.fixture(autouse=True)
 def _operations() -> None:
     load_operations()
-
-
-@pytest.fixture
-def profile() -> Profile:
-    return profiles.make_profile("centauri-carbon-2", "petg")
 
 
 def _kernel() -> None:
@@ -232,6 +226,7 @@ def test_the_exact_box_turns_around_its_anchor_like_the_mesh_twin(profile: Profi
 
 def test_the_surface_placement_previews_the_exact_primitives_too(profile: Profile) -> None:
     """Die Vorschau am Körper ist ein Netz — auch für den exakten Erzeuger im Menü."""
+    _kernel()
     for mesh_name, brep_name in PRIMITIVE_TWINS:
         spec = REGISTRY.get(brep_name)
         values = {
@@ -250,6 +245,7 @@ def test_the_history_offers_the_switch_only_at_primitives(monkeypatch: pytest.Mo
     Und in den exakten Kern nur, wenn er da ist — sonst kein Eintrag statt
     einer Absage nach dem Klick (Regel 19).
     """
+    _kernel()
     for name in ("drill_hole", "drill_brep_hole", "hollow_object", "shell_exact"):
         assert kernel_switch_label(name) is None, name
     for mesh, brep in PRIMITIVE_TWINS:

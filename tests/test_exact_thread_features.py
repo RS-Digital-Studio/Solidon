@@ -21,8 +21,9 @@ pytestmark = pytest.mark.skipif(not available(), reason="OpenCASCADE is an optio
 DIAMETER = 6.123456789
 PITCH = 1.23456789
 # **Nicht 4,3456789**: Mit 3,52 Umläufen verlor die Vereinigung den Gang still, und
-# die Fixture war fünf Wochen lang ein glatter Bolzen — die Zusicherung
+# die Fixture war zwei Wochen lang ein glatter Bolzen — die Zusicherung
 # ``core < volume`` hielt um ein Rundungsrauschen (B3, P2.5). 4,0 mm trägt ihn.
+# Seit RM-195 entsteht der Bolzen genäht, ohne Vereinigung; die Länge bleibt.
 LENGTH = 4.0
 
 

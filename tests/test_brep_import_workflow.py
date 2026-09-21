@@ -126,7 +126,7 @@ def test_import_cancellation_reaches_surface_recognition_without_caching_a_parti
     profile: Profile, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Abbrechen während der ersten Trägerprüfung lässt Quelle und Verlauf vollständig stehen."""
-    from app.core.brep import features
+    from app.core.brep import canonical
 
     load_operations()
     project = new_project("centauri-carbon-2", "petg")
@@ -140,7 +140,7 @@ def test_import_cancellation_reaches_surface_recognition_without_caching_a_parti
     initial = deepcopy(project.document)
     signal = CancelSignal()
     cache = ResultCache()
-    original_describe = features.describe_surface
+    original_describe = canonical.describe
     visited = []
 
     def stop_after_one_surface(face, *, cancelled=None):
@@ -152,7 +152,7 @@ def test_import_cancellation_reaches_surface_recognition_without_caching_a_parti
         return result
 
     with monkeypatch.context() as during:
-        during.setattr(features, "describe_surface", stop_after_one_surface)
+        during.setattr(canonical, "describe", stop_after_one_surface)
         with pytest.raises(OperationCancelled):
             evaluate(
                 project.document,

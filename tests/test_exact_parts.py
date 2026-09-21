@@ -1,4 +1,4 @@
-"""Bausteine am exakten Kern (P2.7) — die Gruppe Verbindungen.
+"""Bausteine am exakten Kern (P2.7) — alle mitgelieferten, Verbindungen bis Kalibrierung.
 
 Eine Formbeschreibung, zwei Auswerter: Jeder Baustein wird einmal als Netz und
 einmal als exakter Körper gebaut, und der exakte Körper muss gültig,

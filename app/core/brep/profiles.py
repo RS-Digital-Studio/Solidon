@@ -18,9 +18,7 @@ from itertools import pairwise
 from typing import Any, Final
 
 from app.core.brep.canonical import PlaneSurface
-from app.core.brep.canonical import describe as describe_surface
 from app.core.brep.kernel import DEFLECTION, Solid, boolean_builder, box_limits, require
-from app.core.brep.properties import properties
 from app.core.errors import (
     CANCEL,
     CORRECT_INPUT,
@@ -428,7 +426,8 @@ def sweep_path(profile: Profile, path: Profile, plane: str = "plane:xz") -> Soli
     # Fehler zeigte sich erst beim Schneiden oder Exportieren.
     if not builder.MakeSolid():
         raise GeometryError(
-            detail=_("Diese Bahn ergibt keinen geschlossenen Körper — prüfen Sie ihren Verlauf.")
+            detail=_("Diese Bahn ergibt keinen geschlossenen Körper — prüfen Sie ihren Verlauf."),
+            suggestions=(CORRECT_INPUT, CANCEL),
         )
     solid = solid.replacing(builder.Shape())
     # MakePipeShell nimmt einen Draht, keine Fläche mit Innenkonturen. Jedes
@@ -525,6 +524,7 @@ def shell_open_top(
     if not tops:
         raise GeometryError(
             detail=_("Dieser Körper hat keine ebene Oberseite, die sich öffnen ließe."),
+            suggestions=(CORRECT_INPUT, CANCEL),
         )
     removed = List_TopoDS_Shape()
     for face in tops:
@@ -561,7 +561,10 @@ def draft_vertical(
     working = replace(solid)
     uprights = _upright_faces(working, cancelled=cancelled)
     if not uprights:
-        raise GeometryError(detail=_("Dieser Körper hat keine senkrechten Flächen."))
+        raise GeometryError(
+            detail=_("Dieser Körper hat keine senkrechten Flächen."),
+            suggestions=(CORRECT_INPUT, CANCEL),
+        )
     neutral = gp_Pln(gp_Ax3(gp_Pnt(0.0, 0.0, solid.bounds.minimum[2]), gp_Dir(0.0, 0.0, 1.0)))
     builder = BRepOffsetAPI_DraftAngle(working.shape)
     for face in uprights:
@@ -592,23 +595,62 @@ _THREAD_FOOT_SHARE: Final = 0.375
 _THREAD_MIN_CORE_SHARE: Final = 0.33
 
 
-def threaded_rod(major: float, pitch: float, length: float) -> Solid:
-    """Ein Bolzen mit exaktem Außengewinde: Kern plus helikaler Gang.
+#: Wie genau die 3D-Kurve einer Helix ihre Linie auf dem Zylinder trifft — eine
+#: Helix ist keine NURBS, OCCT nähert sie als BSpline. Die Vorgabe (10⁻⁵ mm)
+#: verschob die Flanken um Mikrometer: Volumen gegen Pappus 2·10⁻⁷, die Hülle
+#: eines M10-Bolzens 3 µm neben der Achse. Ein Hundertstel von ``EPS_GEOM``
+#: hält beides unter 10⁻⁹ und kostet keine messbare Bauzeit (21.09.2026).
+_HELIX_PRECISION: Final = EPS_GEOM / 100.0
 
-    Der Gang ist ein echter Sweep entlang der Helix, kein Netz — damit trägt
-    ihn der STEP-Export, und eine Differenz mit Spiel ergibt das Innengewinde.
-    Gebaut wird mit Überstand und dann auf Länge geschnitten: der Anschnitt
-    einer Helix ist sonst eine offene Kante. Erst kürzen, dann vereinigen —
-    die umgekehrte Reihenfolge lässt die Boolesche Stufe scheitern,
-    nachgemessen."""
+#: Wie tief der Fuß des Gangs unter dem Kernradius sitzt, in Millimetern —
+#: die Sockelbreite des früheren Sweeps. Sie bestimmt zusammen mit der
+#: Fußbreite den Flankenwinkel: Die Flanke lief vom Fuß bei ``core - 0.1`` zur
+#: Spitze, und was der Bolzen davon zeigt, beginnt am Kernradius. Der genähte
+#: Körper baut genau dieses Profil, damit kein Maß sich ändert (RM-195).
+_THREAD_FOOT_SEAT: Final = 0.1
+
+
+def thread_ridge(major: float, pitch: float) -> tuple[Point2, ...]:
+    """Das sichtbare Gangprofil eines Umlaufs, vom Kernradius aus (radial, axial).
+
+    Das ISO-nahe Profil des Erzeugers *Gewindebolzen*: Kamm bei ``major / 2``,
+    Kern um ``_THREAD_DEPTH_SHARE`` mal Steigung darunter, die Flanken so
+    steil, wie der Sweep sie mit seinem Fuß ``_THREAD_FOOT_SEAT`` unter dem
+    Kern und der halben Fußbreite ``_THREAD_FOOT_SHARE`` mal Steigung zog.
+    Über dem Kern bleibt davon ein Dreieck: Fuß, Spitze, Fuß.
+    """
+    ridge = _THREAD_DEPTH_SHARE * pitch
+    core_radius = major / 2.0 - ridge
+    half = pitch * _THREAD_FOOT_SHARE
+    at_core = half * ridge / (ridge + _THREAD_FOOT_SEAT)
+    return (
+        (core_radius, 0.0),
+        (core_radius + ridge, at_core),
+        (core_radius, 2.0 * at_core),
+    )
+
+
+def threaded_rod(major: float, pitch: float, length: float) -> Solid:
+    """Ein Bolzen mit exaktem Außengewinde: Kern und Gang als **ein** genähter Körper.
+
+    Kein Sweep, keine Vereinigung mehr (RM-195): :func:`helical_thread` näht
+    Flanken, Kamm und Fußstreifen aus Regelflächen zwischen geteilten
+    Helixkanten, mit einem Umlauf Vorlauf unter dem Bett und einem über der
+    Länge, und der Schnitt auf Länge ist ein Zylinder gegen Ebenen und
+    BSpline-Flächen — der Schnitt, den der Kern zuverlässig kann. Das Profil
+    ist dasselbe wie beim Sweep (:func:`thread_ridge`); die Flanken sind exakt
+    die Regelflächen der Schraubbewegung, wo der Sweep sie als Spline neunten
+    Grades genähert hatte. Gemessen (21.09.2026): M6 x 1, L 12 in 0,2 s statt
+    15 s, M10 x 1,5, L 12 in 0,25 s statt 27 s — davon steckten 25 s in den
+    Volumenintegralen der Prüfstufen und keine in der Vereinigung, die der
+    Registereintrag RM-195 dafür hielt.
+
+    Die Absage bei zu großer Steigung, zu kurzer Länge und einem Bolzen, der
+    doch nicht geschlossen ist, bleibt (:func:`_checked_rod`)."""
     require()
-    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeWire
-    from OCP.BRepLib import BRepLib
-    from OCP.BRepOffsetAPI import BRepOffsetAPI_MakePipeShell
     from OCP.BRepPrimAPI import BRepPrimAPI_MakeCylinder
-    from OCP.Geom import Geom_CylindricalSurface
-    from OCP.Geom2d import Geom2d_Line
-    from OCP.gp import gp_Ax2d, gp_Ax3, gp_Dir2d, gp_Pnt, gp_Pnt2d
+
+    from app.core.brep import edit
 
     ridge = _THREAD_DEPTH_SHARE * pitch
     core_radius = major / 2.0 - ridge
@@ -628,66 +670,13 @@ def threaded_rod(major: float, pitch: float, length: float) -> Solid:
             constraint="too_short",
         )
 
-    turns = length / pitch + 2.0
-    surface = Geom_CylindricalSurface(gp_Ax3(), core_radius)
-    line = Geom2d_Line(gp_Ax2d(gp_Pnt2d(0.0, -pitch), gp_Dir2d(2.0 * math.pi, pitch)))
-    span = math.hypot(2.0 * math.pi, pitch) * turns
-    helix = BRepBuilderAPI_MakeEdge(line, surface, 0.0, span).Edge()
-    BRepLib.BuildCurves3d_s(helix)
-    spine = BRepBuilderAPI_MakeWire(helix).Wire()
-
-    # Das Gangprofil am Helixstart: die Flanken laufen von der Fußbreite zur
-    # Spitze, und unter dem Kern steht ein gerader Sockel.
-    #
-    # **Der Sockel ist der Unterschied zwischen einem Bolzen und zwei Teilen.**
-    # Hier saß der Fuß mit einem festen Zehntelmillimeter im Kern, und auf dem
-    # Linux-Runner blieben Kern und Gang danach zwei getrennte Stücke: Die
-    # Vereinigung meldete `components=2` bei einem Volumen, in dem beide
-    # steckten — sie lagen aneinander, ohne sich zu durchdringen. Ein Zehntel
-    # ist bei M6 knapp vier Prozent des Kernradius, und wo die Rechnung anders
-    # rundet, taucht der Fuß stellenweise auf; dann gibt es nichts zu
-    # vereinigen. Auf dieser Maschine kam dasselbe Maß durch — dieselbe
-    # OCCT-Version, anders übersetzt.
-    #
-    # **Der Sockel und nicht ein tieferer Fuß.** Den Fuß einfach nach innen zu
-    # schieben, ändert die Flanke: Sie läuft dann über eine längere Strecke zur
-    # selben Spitze, wird flacher, und das Gewinde verliert die Hälfte seines
-    # Gangs (gemessen: 57 statt 106 mm³ bei M10). Der Sockel läuft senkrecht
-    # nach innen, die Flanken bleiben, wo sie waren, und was im Kern liegt,
-    # verschwindet ohnehin in der Vereinigung.
-    half = pitch * _THREAD_FOOT_SHARE
-    foot = core_radius - 0.1
-    seat = core_radius - max(0.1, ridge)
-    corners = (
-        (seat, -pitch - half),
-        (foot, -pitch - half),
-        (core_radius + ridge, -pitch),
-        (foot, -pitch + half),
-        (seat, -pitch + half),
-    )
-    # Kante für Kante statt alle auf einmal: Der Konstruktor nimmt höchstens
-    # vier, und das Profil hat seit dem Sockel fünf.
-    outline = BRepBuilderAPI_MakeWire()
-    for index in range(len(corners)):
-        start, end = corners[index - 1], corners[index]
-        outline.Add(
-            BRepBuilderAPI_MakeEdge(
-                gp_Pnt(start[0], 0.0, start[1]), gp_Pnt(end[0], 0.0, end[1])
-            ).Edge()
-        )
-    profile = outline.Wire()
-
-    pipe = BRepOffsetAPI_MakePipeShell(spine)
-    pipe.SetMode(True)
-    pipe.Add(profile)
-    _finished(pipe, _("Aus dieser Steigung entsteht kein Gewindegang."))
-    try:
-        pipe.MakeSolid()
-        ridge_solid = Solid(pipe.Shape())
-    except PROGRAMMING_ERRORS:
-        raise
-    except Exception as problem:  # OpenCASCADE wirft eigene Ausnahmearten
-        raise GeometryError(detail=_("Aus dieser Steigung entsteht kein Gewindegang.")) from problem
+    turns = math.ceil(length / pitch) + 2
+    whole = helical_thread(core_radius, pitch, turns, thread_ridge(major, pitch), start=-pitch)
+    slab = Solid(BRepPrimAPI_MakeCylinder(major / 2.0 + 1.0, length).Shape())
+    rod = edit.boolean("intersection", [whole, slab])
+    # **Ein Bolzen ohne Gang ist keiner** (B3, P2.5): Über dem Kern muss
+    # Volumen liegen, sonst hat der Schnitt den Gang verloren.
+    rod = _checked_rod(rod, major, pitch, at_least=math.pi * core_radius**2 * length)
 
     # **Die Vernetzung folgt der Steigung.** Die Standardfeinheit (0,05 mm)
     # ist für einen Gewindegang von einem Viertelmillimeter zu grob: Der Körper
@@ -699,22 +688,7 @@ def threaded_rod(major: float, pitch: float, length: float) -> Solid:
     # Ein Zwanzigstel der Steigung ist die Grenze, unterhalb derer die Flanke
     # in Dreiecken aufgeht; feiner als nötig wird nicht vernetzt, denn jede
     # Halbierung vervierfacht die Dreiecke.
-    fineness = min(DEFLECTION, pitch / 20.0)
-
-    slab = Solid(BRepPrimAPI_MakeCylinder(major / 2.0 + 1.0, length).Shape())
-    trimmed = _fuzzy_boolean("intersection", ridge_solid, slab)
-    core = Solid(BRepPrimAPI_MakeCylinder(core_radius, length).Shape())
-    # Was in die Vereinigung geht, bevor sie etwas daraus macht. Ein Gang, der
-    # den Zuschnitt schon offen verlässt, ist durch kein Vernähen danach zu
-    # retten — und die Absage unten läse sich trotzdem, als läge es an der
-    # Vereinigung.
-    if not _is_sound_rod(trimmed):
-        _log.info("thread rod: the trimmed ridge is already unsound (%s)", _rod_state(trimmed))
-    rod = _joined_rod(core, trimmed, major, pitch, at_least=core.volume)
-    # Die Feinheit gilt dem Ergebnis, und sie wird am Ende gesetzt: Jede
-    # Zwischenstufe damit zu vernetzen wäre Arbeit für Dreiecke, die niemand
-    # sieht.
-    return _finely_meshed(rod, fineness)
+    return _finely_meshed(rod, min(DEFLECTION, pitch / 20.0))
 
 
 def helical_thread(
@@ -739,7 +713,9 @@ def helical_thread(
     den Umläufen ebenso, und die Enden schließen zwei Rampen von der Achse zur
     Fußhelix mit je einer ebenen Fläche bei Winkel null. Nähen macht daraus
     einen Körper: gültig, geschlossen, in dreißig Millisekunden, mit dem
-    Volumen der Analytik auf 2·10⁻⁷ (die Helix ist eine BSpline-Näherung).
+    Volumen der Analytik auf 5·10⁻¹⁰ (die Helix ist eine BSpline-Näherung mit
+    ``_HELIX_PRECISION``; mit OCCTs Vorgabe von 10⁻⁵ waren es 2·10⁻⁷, und die
+    Hülle eines M10-Bolzens saß 3 µm neben der Achse).
 
     ``ridge`` ist das Gangprofil **eines** Umlaufs in der Ebene (radial,
     axial), vom Fuß ``(root_radius, 0)`` bis zum letzten Gangpunkt
@@ -785,7 +761,7 @@ def helical_thread(
         edge = BRepBuilderAPI_MakeEdge(
             line, surfaces[point], 0.0, math.hypot(2.0 * math.pi, pitch)
         ).Edge()
-        BRepLib.BuildCurves3d_s(edge)
+        BRepLib.BuildCurves3d_s(edge, _HELIX_PRECISION)
         return edge
 
     def segment(one: Vec3, other: Vec3) -> Any:
@@ -869,103 +845,13 @@ def _finely_meshed(rod: Solid, fineness: float) -> Solid:
     return replace(rod, deflection=fineness)
 
 
-#: Wie grob die späteren Vereinigungen eines Gewindes sein dürfen, als Anteil
-#: der Steigung, von fein nach grob. Bei M6 sind das 0,1 bis 10 Mikrometer —
-#: alles feiner als jeder Drucker und jede Passung, und in dieser Spanne liegt
-#: die Naht, die OCCT je nach Version findet oder nicht.
-#:
-#: Mehrere Werte, weil beides schiefgeht: zu fein lässt die Naht offen, zu grob
-#: bringt die Boolesche Operation ganz zum Aufgeben. Die Bausteine kennen
-#: dieselben drei Zehnerpotenzen absolut in Millimetern
-#: (``knowledge.parts.exact.UNION_FUZZ_MM``), weil ein Baustein keine Steigung
-#: hat; ein Test hält beide gleich.
+#: Die Stufen der Fuzzy-Leiter, als Anteil der Steigung, von fein nach grob —
+#: die Zahlen, die die Bausteine absolut in Millimetern kennen
+#: (``knowledge.parts.exact.UNION_FUZZ_MM``; ein Test hält beide gleich). Der
+#: Gewindebolzen selbst braucht die Leiter seit RM-195 nicht mehr: Kern und
+#: Gang entstehen genäht, ohne Vereinigung. Bei M6 wären das 0,1 bis 10
+#: Mikrometer — alles feiner als jeder Drucker und jede Passung.
 ROD_FUZZ_RATIOS: Final = (1e-4, 1e-3, 1e-2)
-
-#: Wie weit die Nahtreparatur aufmachen darf, gemessen an der Steigung.
-#:
-#: Ein Prozent ist bei M6 ein Hundertstel Millimeter: genug für eine Naht, die
-#: zwei Flächen um eine Rundungsstelle auseinanderhält, zu wenig, um eine
-#: Flanke zu verrücken. Weiter aufzumachen hieße, die Geometrie zu ändern,
-#: statt sie zu schließen — und dann stimmt das Gewinde nicht mehr.
-ROD_SEW_SHARE: Final = 0.01
-
-
-def _joined_rod(
-    core: Solid, ridge: Solid, major: float, pitch: float, *, at_least: float = 0.0
-) -> Solid:
-    """Kern und Gang zusammenfügen — in Stufen, wie die Boolesche Kette (§17.2).
-
-    **Und ein Bolzen ohne Gang ist keiner** (B3, P2.5): An neun von 23
-    Rasterlängen — jeder halbzahligen Umlaufzahl, dazu M8 x 1,25 mit Länge 8 —
-    lieferte die Vereinigung den nackten Kern zurück, gültig, geschlossen, ein
-    Stück, und keine Stufe merkte es: Geschlossen und einteilig ist der Kern
-    allein auch. ``at_least`` ist das Volumen des Kerns; was nicht darüber
-    liegt, hat den Gang verloren und gilt nicht als gelungen — die nächste
-    Stufe versucht es, und am Ende steht die Absage statt eines glatten
-    Bolzens (``thread_exact`` mit Länge 2,5 und Steigung 1 erzeugte einen).
-
-    Der Reihe nach: die feine Vereinigung, dann das Vernähen des Ergebnisses,
-    dann eine gröbere Vereinigung. Jede Stufe wird nur betreten, wenn die
-    vorige keinen geschlossenen Bolzen ergeben hat — und geprüft wird nach
-    jeder, nicht am Ende.
-
-    Dass es die Stufen braucht, hat der Linux-Runner gezeigt: **M6 mit einem
-    Millimeter Steigung**, das gewöhnlichste Gewinde überhaupt, kam dort offen
-    heraus und hier geschlossen. Dieselbe Rechnung, andere OCCT-Version.
-
-    Dass eine zweite Stufe die **Eingaben** der ersten wiederverwendet, ist
-    dabei der Punkt, an dem der erste Versuch abstürzte: OCCT ändert seine
-    Argumente, solange man es nicht ausdrücklich verbietet. ``_fuzzy_boolean``
-    tut das seither (``SetNonDestructive``) — ohne diese Zeile fügt die grobe
-    Vereinigung Formen zusammen, die die feine bereits ausgehöhlt hat, und der
-    Prozess stirbt ohne Zeile.
-    """
-    solid = _fuzzy_boolean("union", core, ridge)
-    if _is_sound_rod(solid, at_least=at_least):
-        return solid
-    _log.info("thread rod: fine union did not close (%s)", _rod_state(solid))
-    sewn = _sewn(solid)
-    if _is_sound_rod(sewn, at_least=at_least):
-        return sewn
-    _log.info("thread rod: sewing did not close it either (%s)", _rod_state(sewn))
-    # Zweiter Anlauf mit einer Naht-Toleranz, die zur Steigung passt: Auf dem
-    # macOS-Runner blieb der Bolzen ein Stück und war doch nicht dicht, und
-    # genau dafür ist diese Stufe da. Ein Prozent der Steigung ist bei M6 ein
-    # Hundertstel Millimeter — genug für eine Naht, zu wenig, um eine Flanke
-    # zu verrücken.
-    widened = _sewn(solid, tolerance=pitch * ROD_SEW_SHARE)
-    if _is_sound_rod(widened, at_least=at_least):
-        return widened
-    _log.info("thread rod: sewing with tolerance did not close it (%s)", _rod_state(widened))
-    sewn = widened
-    for ratio in ROD_FUZZ_RATIOS:
-        try:
-            coarse = _fuzzy_boolean("union", core, ridge, tolerance=pitch * ratio)
-        except GeometryError:
-            # Zu grob ist auch falsch: dann rechnet OCCT gar nicht mehr. Die
-            # nächste Stufe darf es trotzdem versuchen — und wenn keine mehr
-            # kommt, sagt `_checked_rod` es mit Vorschlägen statt mit dem
-            # nackten Fehlschlag einer Booleschen Operation.
-            continue
-        if _is_sound_rod(coarse, at_least=at_least):
-            return coarse
-        # **Auch die grobe Stufe wird genäht.** Das Vernähen stand bisher nur
-        # hinter der feinen Vereinigung, und damit fiel die gröbere durch,
-        # sobald sie eine Naht offen ließ — obwohl genau dafür der Schritt da
-        # ist. Auf dem Linux-Runner endete M6 mit einem Millimeter Steigung so:
-        # jede Stufe lieferte etwas, keine lieferte etwas Geschlossenes, und
-        # die Absage kam für ein Gewinde, das rechnerisch in Ordnung war.
-        mended = _sewn(coarse)
-        if _is_sound_rod(mended, at_least=at_least):
-            return mended
-        _log.info(
-            "thread rod: coarse union at %.4f mm did not close (%s), sewn (%s)",
-            pitch * ratio,
-            _rod_state(coarse),
-            _rod_state(mended),
-        )
-        sewn = mended
-    return _checked_rod(sewn, major, pitch, at_least=at_least)
 
 
 def _checked_rod(solid: Solid, major: float, pitch: float, *, at_least: float = 0.0) -> Solid:
@@ -1390,11 +1276,11 @@ def round_cord(face: Any, radius: float, centre_z: float) -> Solid:
             point = BRep_Tool.Pnt_s(TopoDS.Vertex(corners.FindKey(index)))
             pieces.append(Solid(BRepPrimAPI_MakeSphere(point, radius).Shape()))
     if not pieces:
-        raise GeometryError(detail=_("Aus diesem Umriss entsteht kein Körper."))
-    cord = pieces[0]
-    for piece in pieces[1:]:
-        cord = edit.boolean("union", [cord, piece])
-    return cord
+        raise GeometryError(
+            detail=_("Aus diesem Umriss entsteht kein Körper."),
+            suggestions=(CORRECT_INPUT, CANCEL),
+        )
+    return pieces[0] if len(pieces) == 1 else edit.boolean("union", pieces)
 
 
 def _leftmost(profile: Profile) -> float:
@@ -1449,13 +1335,18 @@ def _upright_faces(solid: Solid, *, cancelled: CancelToken | None = None) -> lis
 def _planar_faces(
     solid: Solid, *, cancelled: CancelToken | None = None
 ) -> list[tuple[Any, tuple[float, float, float], Any]]:
-    """Jede ebene Fläche mit ihrer nach außen zeigenden Normale und Mitte."""
+    """Jede ebene Fläche mit ihrer nach außen zeigenden Normale und Mitte.
+
+    Träger und Mitte kommen aus dem Memo des Körpers: ``push_faces`` fragt
+    zweimal (Richtung, dann Stelle), und vorher wurde jede Fläche zweimal
+    beschrieben und integriert.
+    """
     found = []
-    for face in solid.faces():
-        surface = describe_surface(face, cancelled=cancelled)
+    for index, face in enumerate(solid.faces()):
+        surface = solid.surface(index, cancelled=cancelled)
         if not isinstance(surface, PlaneSurface):
             continue
-        centre = properties(face, "surface", cancelled=cancelled).centre
+        centre = solid.face_properties(index, cancelled=cancelled).centre
         found.append((face, surface.normal, centre))
     return found
 
@@ -1468,7 +1359,12 @@ def _finished(
     cancelled: CancelToken | None = None,
     others: tuple[Solid, ...] = (),
 ) -> Solid:
-    """Baut fertig und macht aus dem Scheitern einen Satz mit Vorschlag (§33.1)."""
+    """Baut fertig und macht aus dem Scheitern einen Satz mit Vorschlag (§33.1).
+
+    Die Vorschläge sind die des exakten Kerns: Eingabe berichtigen oder
+    abbrechen. Die geerbten — Netz reparieren, offene Stellen zeigen — gibt es
+    für einen B-Rep-Körper nicht (wie in ``edit.boolean``).
+    """
     try:
         if cancelled is not None:
             cancelled.raise_if_cancelled()
@@ -1476,14 +1372,14 @@ def _finished(
         if cancelled is not None:
             cancelled.raise_if_cancelled()
         if not builder.IsDone():
-            raise GeometryError(detail=sentence)
+            raise GeometryError(detail=sentence, suggestions=(CORRECT_INPUT, CANCEL))
         shape = builder.Shape()
     except GeometryError, OperationCancelled:
         raise
     except PROGRAMMING_ERRORS:
         raise
     except Exception as problem:  # OpenCASCADE wirft eigene Ausnahmearten
-        raise GeometryError(detail=sentence) from problem
+        raise GeometryError(detail=sentence, suggestions=(CORRECT_INPUT, CANCEL)) from problem
     _log.info("profile build via %s", type(builder).__name__)
     return (
         base.replacing(shape, history=builder, others=others, cancelled=cancelled)
@@ -1557,12 +1453,12 @@ def push_faces(
             if cancelled is not None:
                 cancelled.raise_if_cancelled()
             face = faces[working._copied_faces[index]]
-            surface = describe_surface(face, cancelled=cancelled)
+            surface = solid.surface(index, cancelled=cancelled)
             if not isinstance(surface, PlaneSurface):
                 raise ValidationError(
                     detail=_(
                         "Nicht jede gewählte Fläche ist als eben erkannt. "
-                        "Wähle zum Versetzen vollständige ebene Flächen."
+                        "Wählen Sie zum Versetzen vollständige ebene Flächen."
                     )
                 )
             wanted.append((face, surface.normal))
@@ -1596,7 +1492,8 @@ def push_faces(
             detail=_(
                 "Mit diesem Weg bleibt vom Körper nichts übrig — kleiner "
                 "versetzen oder die Richtung umkehren."
-            )
+            ),
+            suggestions=(CORRECT_INPUT, CANCEL),
         )
     return outcome
 

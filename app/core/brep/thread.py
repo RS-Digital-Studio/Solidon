@@ -66,15 +66,26 @@ _log = get_logger(__name__)
 
 Cancel = Callable[[], None] | None
 
-#: Abtastung je Kante: mindestens so viele Punkte, höchstens alle 0,05 mm.
+#: Grobe Abtastung je Kante — genug, um Ebenheit und Verkettung zu entscheiden.
+SAMPLES_COARSE: Final = 24
+#: Feine Abtastung der Züge: so viele Punkte je Umlauf, je Zug mindestens
+#: ``SAMPLES_MIN``. Der Abstand hängt am Umfang, nicht am Millimeter: Ein
+#: fester Abstand von 0,05 mm tastete 231 Kanten einer verrundeten Lochplatte
+#: mit 83 000 Punkten ab, bevor die Ebenheit sie alle aussortierte (Review
+#: 21.09.2026); die fünf Korpuswerte sind bei 64 Punkten je Umlauf bis auf
+#: 10⁻⁴ an der Steigung dieselben wie bei 0,05 mm.
+SAMPLES_PER_TURN: Final = 64
 SAMPLES_MIN: Final = 120
-SAMPLE_SPACING: Final = 0.05
 
 #: Was „gleiche Achse“, „gleicher Radius“ und „gleicher Vorschub“ heißt, wenn
 #: Züge zu einem Gewinde zusammengefasst werden.
 SAME_AXIS_TOLERANCE: Final = 1e-3
 RADIUS_TOLERANCE: Final = 2e-3
 LEAD_TOLERANCE: Final = 2e-3
+
+#: Wann zwei Zylinderachsen des Körpers dieselbe sind — im Skalarprodukt, für
+#: die Startkandidaten der Achseinpassung.
+SAME_START_AXIS: Final = 1e-6
 
 #: Unter einer vollen Umdrehung ist eine Steigung eine Vermutung, keine Messung.
 MIN_TURNS_FOR_PITCH: Final = 1.0
@@ -177,8 +188,10 @@ def _curve_kind(edge: Any) -> int:
     return int(BRepAdaptor_Curve(TopoDS.Edge(edge)).GetType())
 
 
-def _sample_edge(edge: Any, check_cancelled: Cancel) -> tuple[NDArray[np.float64], float]:
-    """Punkte nach **Bogenlänge**, nicht nach Parameter."""
+def _sample_edge(
+    edge: Any, count: int, check_cancelled: Cancel
+) -> tuple[NDArray[np.float64], float]:
+    """``count`` Punkte nach **Bogenlänge**, nicht nach Parameter — und die Länge."""
     from OCP.BRepAdaptor import BRepAdaptor_Curve
     from OCP.GCPnts import GCPnts_AbscissaPoint, GCPnts_UniformAbscissa
     from OCP.TopoDS import TopoDS
@@ -186,8 +199,7 @@ def _sample_edge(edge: Any, check_cancelled: Cancel) -> tuple[NDArray[np.float64
     _check(check_cancelled)
     adaptor = BRepAdaptor_Curve(TopoDS.Edge(edge))
     length = float(GCPnts_AbscissaPoint.Length_s(adaptor))
-    count = max(SAMPLES_MIN, math.ceil(length / SAMPLE_SPACING))
-    spread = GCPnts_UniformAbscissa(adaptor, count)
+    spread = GCPnts_UniformAbscissa(adaptor, max(2, count))
     if not spread.IsDone():
         return np.zeros((0, 3)), length
     points = []
@@ -281,7 +293,11 @@ def _tangent_at_shared_vertex(
     return False
 
 
-def candidate_chains(solid: Solid, check_cancelled: Cancel = None) -> list[Chain]:
+def candidate_chains(
+    solid: Solid,
+    check_cancelled: Cancel = None,
+    starts: Sequence[NDArray[np.float64]] | None = None,
+) -> list[Chain]:
     """Kantenzüge aus allen nicht geradlinigen, nicht kreisförmigen, nicht ebenen Kanten.
 
     Verkettet werden Kanten, die einen Vertex teilen, dort **tangential**
@@ -292,6 +308,12 @@ def candidate_chains(solid: Solid, check_cancelled: Cancel = None) -> list[Chain
     laufen am Kamm fast tangential ein; über sie wurden Kamm und beide
     Fußwendeln zu einem Zug (gemessen: 36 „Umläufe“, 6 mm Abweichung). Und
     über bloße Nachbarschaft ohne Tangente wurden aus drei Wendeln eine.
+
+    **Grob entscheiden, fein messen.** Ebenheit und Verkettung brauchen
+    ``SAMPLES_COARSE`` Punkte je Kante; erst die Züge, die übrig bleiben,
+    werden mit ``SAMPLES_PER_TURN`` Punkten je Umlauf abgetastet — der Umlauf
+    kommt aus dem Radius einer Einpassung an die groben Punkte, ``starts``
+    sind dieselben Startachsen wie in der Messung.
     """
     from OCP.collections import (
         IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher as AncestorMap,
@@ -312,7 +334,7 @@ def candidate_chains(solid: Solid, check_cancelled: Cancel = None) -> list[Chain
         if not candidate[index]:
             continue
         _check(check_cancelled)
-        points, length = _sample_edge(edge, check_cancelled)
+        points, length = _sample_edge(edge, SAMPLES_COARSE, check_cancelled)
         sampled[index] = (points, length)
         if len(points) < 4 or _is_planar(points):
             candidate[index] = False
@@ -343,8 +365,23 @@ def candidate_chains(solid: Solid, check_cancelled: Cancel = None) -> list[Chain
             seen.add(index)
             members.append(index)
             stack.extend(sorted(neighbours[index] - seen))
-        ordered = _ordered_points([sampled[index][0] for index in members])
+        coarse = _ordered_points([sampled[index][0] for index in members])
         total = sum(sampled[index][1] for index in members)
+        if not len(coarse):
+            continue
+        # Der Umfang des Zugs bestimmt die Abtastung: so viele Punkte je Umlauf
+        # wie ``SAMPLES_PER_TURN``, verteilt auf die Kanten nach ihrer Länge.
+        _axis, _foot, radius, _spread, _native = fit_axis(coarse, starts, check_cancelled)
+        wanted = SAMPLES_MIN
+        if math.isfinite(radius) and radius > EPS_GEOM:
+            wanted = max(SAMPLES_MIN, math.ceil(SAMPLES_PER_TURN * total / (math.tau * radius)))
+        fine = []
+        for index in members:
+            _check(check_cancelled)
+            share = sampled[index][1] / total if total > 0.0 else 1.0 / len(members)
+            count = max(SAMPLES_COARSE, math.ceil(wanted * share))
+            fine.append(_sample_edge(edges[index], count, check_cancelled)[0])
+        ordered = _ordered_points(fine)
         if len(ordered):
             chains.append(Chain(tuple(sorted(members)), ordered, total))
     return chains
@@ -380,7 +417,7 @@ def cylinder_axes(solid: Solid, check_cancelled: Cancel = None) -> list[NDArray[
             continue
         direction = adaptor.Cylinder().Axis().Direction()
         axis = np.array([direction.X(), direction.Y(), direction.Z()], dtype=float)
-        if not any(abs(abs(float(axis @ other)) - 1.0) <= 1e-6 for other in found):
+        if not any(abs(abs(float(axis @ other)) - 1.0) <= SAME_START_AXIS for other in found):
             found.append(axis)
     return found
 
@@ -603,6 +640,43 @@ def _phase_gap(one: float, other: float) -> float:
     return min(gap, 1.0 - gap)
 
 
+def _coaxial(one: Winding, other: Winding) -> bool:
+    """Ob zwei Züge dieselbe Achslinie messen — Richtung und Fußpunkt."""
+    axis, other_axis = np.asarray(one.axis), np.asarray(other.axis)
+    if abs(abs(float(axis @ other_axis)) - 1.0) > SAME_AXIS_TOLERANCE:
+        return False
+    gap = np.asarray(one.centre) - np.asarray(other.centre)
+    across = gap - other_axis * float(gap @ other_axis)
+    return float(np.linalg.norm(across)) <= RADIUS_TOLERANCE * max(1.0, other.radius)
+
+
+def _same_helices(windings: Sequence[Winding], lead: float) -> list[list[Winding]]:
+    """Stücke derselben Wendel zusammen: gleicher Radius, gleiche Phase — mit Toleranz.
+
+    Eine Wendel = ein Radius und eine Phase je Vorschub. Bis zum 21.09.2026
+    entschied ``round``: Zwei Stücke mit den Phasen 0,00499 und 0,00501 fielen
+    in zwei Gruppen, die Gangzahl halbierte sich, und der Körper galt als
+    „nur 0,60 Umläufe belegt“ (Regel 6 — kein Vergleich über Rundung).
+    Gruppiert wird wie in :func:`starts_from_periodicity`, mit
+    ``RADIUS_TOLERANCE`` und ``PHASE_TOLERANCE`` auf dem Kreis.
+    """
+    groups: list[list[Winding]] = []
+    for winding in windings:
+        phase = (winding.phase / lead) % 1.0
+        for group in groups:
+            radius = float(np.mean([w.radius for w in group]))
+            reference = float(np.mean([(w.phase / lead) % 1.0 for w in group]))
+            if (
+                abs(winding.radius - radius) <= RADIUS_TOLERANCE
+                and _phase_gap(phase, reference) <= PHASE_TOLERANCE
+            ):
+                group.append(winding)
+                break
+        else:
+            groups.append([winding])
+    return groups
+
+
 def starts_from_periodicity(helices: Sequence[tuple[float, float]]) -> int:
     """Die Gangzahl n, unter der die Menge (Radius, Phase) periodisch ist.
 
@@ -641,10 +715,10 @@ def read_thread(solid: Solid, *, cancelled: CancelToken | None = None) -> Thread
     """
     require()
     check_cancelled = cancelled.raise_if_cancelled if cancelled is not None else None
-    chains = candidate_chains(solid, check_cancelled)
+    starts = cylinder_axes(solid, check_cancelled)
+    chains = candidate_chains(solid, check_cancelled, starts)
     if not chains:
         return ThreadReading(False, "keine Kantenzüge außer Strecken, Kreisen und ebenen Kurven")
-    starts = cylinder_axes(solid, check_cancelled)
     first_pass: list[Winding] = []
     confirmed = False
     for chain in chains:
@@ -658,8 +732,13 @@ def read_thread(solid: Solid, *, cancelled: CancelToken | None = None) -> Thread
     # **Unter einer vollen Umdrehung ist die Achse selbst eine Vermutung.** Die
     # Einpassung an einen Viertelbogen liefert irgendeine Achse und dazu einen
     # Vorschub (gemessen: 0,15 statt 1,0 an einem 90°-Ausschnitt) — die
-    # Abweichung davon zu melden, wäre die falsche Begründung.
-    covered = sum(w.turns for w in first_pass)
+    # Abweichung davon zu melden, wäre die falsche Begründung. Zusammen zählen
+    # nur Züge um **dieselbe Achslinie** wie der längste: Zwölf Stücke einer
+    # halbierten Wendel zu je 0,64 Umläufen belegen sie (der Kernzylinder
+    # bestätigt jedem seine Achse), zwei Bögen um verschiedene Achsen nicht.
+    # Bis zum 21.09.2026 zählte die Summe aller Züge.
+    reference = max(first_pass, key=lambda w: w.turns)
+    covered = sum(w.turns for w in first_pass if _coaxial(w, reference))
     if covered < MIN_TURNS_FOR_PITCH:
         return ThreadReading(
             False,
@@ -695,12 +774,8 @@ def read_thread(solid: Solid, *, cancelled: CancelToken | None = None) -> Thread
             centre=reference.centre,
         )
     lead = float(np.mean([w.lead for w in lead_group]))
-    # Eine Wendel = gleicher Radius und gleiche Phase; ihre Stücke zählen zusammen.
-    helices: dict[tuple[float, float], list[Winding]] = {}
-    for w in lead_group:
-        key = (round(w.radius, 3), round((w.phase / lead) % 1.0, 2) % 1.0)
-        helices.setdefault(key, []).append(w)
-    total_turns = max(sum(w.turns for w in group) for group in helices.values())
+    helices = _same_helices(lead_group, lead)
+    total_turns = max(sum(w.turns for w in group) for group in helices)
     if total_turns < MIN_TURNS_FOR_PITCH:
         return ThreadReading(
             False,
@@ -710,7 +785,7 @@ def read_thread(solid: Solid, *, cancelled: CancelToken | None = None) -> Thread
             centre=reference.centre,
             turns=total_turns,
         )
-    radii = sorted({key[0] for key in helices})
+    radii = sorted(float(np.mean([w.radius for w in group])) for group in helices)
     outer, inner = max(radii), min(radii)
     outside = material_outside(solid, reference, check_cancelled)
     if outside is None:
@@ -732,8 +807,11 @@ def read_thread(solid: Solid, *, cancelled: CancelToken | None = None) -> Thread
     # Gangzahl: die Periodizität aller Wendeln (Radius, Phase je Vorschub);
     # Teilung = Vorschub / Gangzahl.
     phase_sets = [
-        (key[0], float(np.mean([(w.phase / lead) % 1.0 for w in group])))
-        for key, group in helices.items()
+        (
+            float(np.mean([w.radius for w in group])),
+            float(np.mean([(w.phase / lead) % 1.0 for w in group])),
+        )
+        for group in helices
     ]
     starts_count = starts_from_periodicity(phase_sets)
     pitch = lead / starts_count

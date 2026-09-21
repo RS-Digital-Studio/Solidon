@@ -22,7 +22,6 @@ from dataclasses import dataclass, replace
 from typing import Any, Literal, cast
 
 from app.core.brep.canonical import CylinderSurface
-from app.core.brep.canonical import describe as describe_surface
 from app.core.brep.kernel import (
     DEFLECTION,
     Solid,
@@ -1481,11 +1480,13 @@ def transformed_with_faces(
             or not BRepCheck_Analyzer(solid.shape).IsValid()
         ):
             raise _invalid_transform(result=True)
-        expected_volume = solid._properties("volume", cancelled=cancelled).mass * abs(determinant)
         gram = linear.T @ linear
         squared_scale = float(np.trace(gram) / 3.0)
+        similarity = bool(
+            np.allclose(gram, np.eye(3) * squared_scale, atol=roundoff * squared_scale, rtol=0.0)
+        )
         builder: Any
-        if np.allclose(gram, np.eye(3) * squared_scale, atol=roundoff * squared_scale, rtol=0.0):
+        if similarity:
             transform = gp_Trsf()
             transform.SetValues(*(float(value) for value in values[:3].flat))
             builder = BRepBuilderAPI_Transform(solid.shape, transform, False)
@@ -1500,22 +1501,40 @@ def transformed_with_faces(
         if not builder.IsDone() or builder.Shape().IsNull():
             raise _invalid_transform(result=True)
         shape = builder.Shape()
+        # **Eine starre Bewegung bewegt dieselbe Form, sie baut keine neue.**
+        # Ohne Maßstab und Spiegelung ändert der Builder nur die Lage
+        # (``Copy=False``), und der Beleg dafür ist die Partnerschaft der
+        # Formen: dieselbe Topologie und Geometrie, anders gelegt. Damit steht
+        # das Volumen fest, ohne ein Integral — das stand hier bis zum
+        # 21.09.2026 zweimal je Bewegung und kostete an einem Gewinde 27 s für
+        # ein Verschieben um drei Millimeter (Review,
+        # ``edit.moved(m6_rechts.step)``). Maßstab, Spiegelung und die
+        # allgemeine affine Abbildung bauen die Flächen neu — eine Lage trägt
+        # keinen Maßstab —, und dort belegt das Integral gegen die Determinante
+        # weiterhin, dass nichts verloren ging.
+        rigid = similarity and math.isclose(determinant, 1.0, rel_tol=roundoff, abs_tol=0.0)
+        if rigid and not shape.IsPartner(solid.shape):
+            raise _invalid_transform(result=True)
         if not BRepCheck_Analyzer(shape).IsValid():
             raise _invalid_transform(result=True)
         result = solid.replacing(shape, history=builder, cancelled=cancelled)
-        if (
-            result.solid_count != solid.solid_count
-            or not result.is_closed
-            or expected_volume <= 0.0
-            or not math.isfinite(expected_volume)
-            or not math.isclose(
-                result._properties("volume", cancelled=cancelled).mass,
-                expected_volume,
-                rel_tol=2.0 * INTEGRAL_RELATIVE_ERROR,
-                abs_tol=0.0,
-            )
-        ):
+        if result.solid_count != solid.solid_count or not result.is_closed:
             raise _invalid_transform(result=True)
+        if not rigid:
+            expected_volume = solid._properties("volume", cancelled=cancelled).mass * abs(
+                determinant
+            )
+            if (
+                expected_volume <= 0.0
+                or not math.isfinite(expected_volume)
+                or not math.isclose(
+                    result._properties("volume", cancelled=cancelled).mass,
+                    expected_volume,
+                    rel_tol=2.0 * INTEGRAL_RELATIVE_ERROR,
+                    abs_tol=0.0,
+                )
+            ):
+                raise _invalid_transform(result=True)
         source_faces, target_faces = ShapeMap(), ShapeMap()
         TopExp.MapShapes_s(solid.shape, TopAbs_FACE, source_faces)
         TopExp.MapShapes_s(shape, TopAbs_FACE, target_faces)
@@ -1607,22 +1626,36 @@ def _unround(
     )
     if indices is not None and len(indices) != 1:
         raise GeometryError(
-            detail=_("Wähle genau eine vollständige Rundungsfläche mit dem bisherigen Radius."),
+            detail=_(
+                "Wählen Sie genau eine vollständige Rundungsfläche mit dem bisherigen Radius."
+            ),
             suggestions=(CORRECT_INPUT, CANCEL),
         )
     working = replace(solid)
     if cancelled is not None:
         cancelled.raise_if_cancelled()
     if indices is None:
-        face = _cylinder_at(working, centre, radius, cancelled=cancelled)
+        # Gesucht wird am Eingang, dessen Träger das Memo schon kennt (der
+        # Radiuswechsel hat sie eben erst gelesen), und die Arbeitskopie
+        # übernimmt die Fläche über ihre belegte Abbildung — nicht über eine
+        # zweite Suche auf kaltem Cache.
+        found = _cylinder_at(solid, centre, radius, cancelled=cancelled)
+        face = (
+            None
+            if found is None
+            else working.faces()[working._copied_faces[solid.face_index(found)]]
+        )
     else:
-        face = working.faces()[working._copied_faces[indices[0]]]
-        surface = describe_surface(face, cancelled=cancelled)
+        source_index = indices[0]
+        face = working.faces()[working._copied_faces[source_index]]
+        surface = solid.surface(source_index, cancelled=cancelled)
         if not isinstance(surface, CylinderSurface) or not is_close(
             float(surface.cylinder.Radius()), radius
         ):
             raise GeometryError(
-                detail=_("Wähle genau eine vollständige Rundungsfläche mit dem bisherigen Radius."),
+                detail=_(
+                    "Wählen Sie genau eine vollständige Rundungsfläche mit dem bisherigen Radius."
+                ),
                 suggestions=(CORRECT_INPUT, CANCEL),
             )
     if face is None:
@@ -1691,7 +1724,7 @@ def _sharp_edge_after(
     from app.core.brep.canonical import PlaneSurface
     from app.core.units import UPRIGHT_TO_AXIS
 
-    surface = describe_surface(face, cancelled=cancelled)
+    surface = working.surface(working.face_index(face), cancelled=cancelled)
     if not isinstance(surface, CylinderSurface):
         return None
     direction = surface.cylinder.Axis().Direction()
@@ -1711,9 +1744,13 @@ def _sharp_edge_after(
             if raw.IsSame(face) or any(raw.IsSame(wall) for wall in walls):
                 continue
             # Die Nachbarkarte gibt nackte Formen zurück; der Träger will die
-            # echte Fläche — dieselbe Falle wie in ``Solid._explore``.
+            # echte Fläche — dieselbe Falle wie in ``Solid._explore``. Ihre
+            # Nummer kennt der Körper, und damit ihr Memo.
+            number = working.face_index(raw)
+            if number < 0:
+                continue
             other = TopoDS.Face(raw)
-            plane = describe_surface(other, cancelled=cancelled)
+            plane = working.surface(number, cancelled=cancelled)
             if not isinstance(plane, PlaneSurface):
                 continue
             normal = plane.normal
@@ -1754,20 +1791,14 @@ def _cylinder_at(
     from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeVertex
     from OCP.BRepExtrema import BRepExtrema_DistShapeShape
     from OCP.gp import gp_Pnt
-    from OCP.TopAbs import TopAbs_FACE
-    from OCP.TopExp import TopExp_Explorer
-    from OCP.TopoDS import TopoDS
 
     if cancelled is not None:
         cancelled.raise_if_cancelled()
     probe = BRepBuilderAPI_MakeVertex(gp_Pnt(*centre)).Vertex()
     best: Any | None = None
     closest = math.inf
-    explorer = TopExp_Explorer(solid.shape, TopAbs_FACE)
-    while explorer.More():
-        face = TopoDS.Face(explorer.Current())
-        surface = describe_surface(face, cancelled=cancelled)
-        explorer.Next()
+    for index, face in enumerate(solid.faces()):
+        surface = solid.surface(index, cancelled=cancelled)
         if not isinstance(surface, CylinderSurface):
             continue
         cylinder = surface.cylinder
@@ -1863,21 +1894,25 @@ def radial_rounding(
         indices = solid.checked_face_indices(selected_faces, cancelled=cancelled)
         if len(indices) != 1:
             raise GeometryError(
-                detail=_("Wähle genau eine vollständige Rundungsfläche mit dem bisherigen Radius."),
+                detail=_(
+                    "Wählen Sie genau eine vollständige Rundungsfläche mit dem bisherigen Radius."
+                ),
                 suggestions=(CORRECT_INPUT, CANCEL),
             )
         face = solid.faces()[indices[0]]
-        chosen = describe_surface(face, cancelled=cancelled)
+        chosen = solid.surface(indices[0], cancelled=cancelled)
         if not isinstance(chosen, CylinderSurface) or not is_close(
             float(chosen.cylinder.Radius()), radius
         ):
             raise GeometryError(
-                detail=_("Wähle genau eine vollständige Rundungsfläche mit dem bisherigen Radius."),
+                detail=_(
+                    "Wählen Sie genau eine vollständige Rundungsfläche mit dem bisherigen Radius."
+                ),
                 suggestions=(CORRECT_INPUT, CANCEL),
             )
     if face is None:
         return None
-    surface = describe_surface(face, cancelled=cancelled)
+    surface = solid.surface(solid.face_index(face), cancelled=cancelled)
     if not isinstance(surface, CylinderSurface) or surface.turn < math.pi - EPS_GEOM:
         return None
     # Linkshändige Zylindersysteme kehren die natürliche Mantelnormale um;
