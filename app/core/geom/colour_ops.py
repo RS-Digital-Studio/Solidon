@@ -127,7 +127,7 @@ class ClearFilamentParams(BaseParams):
     params=ClearFilamentParams,
     consumes=1,
     produces=1,
-    applies_to=["face", "curved_face"],
+    applies_to=["face", "curved_face", "torus", "thread"],
     doc=_(
         "Entfernt die Filamentzuweisung am Körper oder an einer Fläche. "
         "Die übrigen Flächen behalten ihr Filament; die Geometrie bleibt unverändert."
@@ -173,8 +173,11 @@ def clear_filament(ctx: OpContext) -> OpResult:
         reason = reason_against("clear_filament", feature.kind)
         if reason is not None:
             raise ValidationError(field=field_name, constraint="feature_kind", detail=reason)
-        validate_full_faces(source.mesh, feature.face_indices)
-        indices = {index for index in feature.face_indices if 0 <= index < mesh.triangle_count}
+        from app.core.geom.paint import feature_triangles
+
+        triangles = feature_triangles(mesh, feature)
+        validate_full_faces(source.mesh, triangles)
+        indices = {index for index in triangles if 0 <= index < mesh.triangle_count}
         if not indices:
             raise ValidationError(
                 field=field_name,

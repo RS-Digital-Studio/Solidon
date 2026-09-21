@@ -19,13 +19,23 @@ from __future__ import annotations
 import dataclasses
 from typing import cast
 
+import numpy as np
+
 from app.core.errors import ValidationError
 from app.core.geom.colour_ops import colour_from, colours_from, merged_slots
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.knowledge.filaments import profile_name
 from app.core.log import get_logger
 from app.core.registry import op_params, param, register_op
-from app.core.types import MAX_SLOTS, BaseParams, Finding, MaterialSlot, OpContext, OpResult
+from app.core.types import (
+    MAX_SLOTS,
+    BaseParams,
+    Feature,
+    Finding,
+    MaterialSlot,
+    OpContext,
+    OpResult,
+)
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -45,6 +55,50 @@ class BrushResult:
 
     mesh: MeshData
     painted: int
+
+
+def feature_triangles(mesh: MeshData, feature: Feature) -> tuple[int, ...]:
+    """Die Dreiecke, die ein Merkmal zum Färben und Abwählen beansprucht (P2.6).
+
+    Eine erkannte Fläche, ein Ring, ein erkanntes Gewinde nennen ihre Dreiecke
+    selbst (``face_indices``). Ein **erzeugtes** Gewinde nennt keine — der
+    Baustein sagt nur Achse, Mitte, Durchmesser, Steigung und Länge (§24.1).
+    Seine Flächen sind dann alle Dreiecke in seiner Hülle: radial bis zum
+    Kamm, axial über die bewendelte Strecke, und ohne die Deckel quer zur
+    Achse — das sind die Spitze und der Sockel, an dem es sitzt, beziehungsweise
+    die Stirnflächen um seine Mündung. Am exakten Körper sind das ganze native
+    Flächen, denn die Flanken liegen ganz in der Hülle und die Deckel ganz
+    außerhalb; ``validate_full_faces`` prüft es beim Färben.
+    """
+    if feature.face_indices or feature.kind != "thread":
+        return tuple(feature.face_indices)
+    from app.core.knowledge.parts import shapes
+    from app.core.units import EPS_GEOM
+
+    params = feature.params
+    length = float(params.get("length", 0.0))
+    if length <= EPS_GEOM:
+        return ()
+    centre = np.asarray(params.get("centre", (0.0, 0.0, 0.0)), dtype=float)
+    axis = np.asarray(params.get("axis", (0.0, 0.0, 1.0)), dtype=float)
+    axis /= float(np.linalg.norm(axis)) or 1.0
+    profile = shapes.ridge_profile(
+        float(params.get("diameter", 0.0)),
+        float(params.get("pitch", 1.0)),
+        internal=bool(params.get("internal", False)),
+    )
+    crest = max(radial for radial, _axial in profile)
+    raw = mesh.raw
+    relative = np.asarray(raw.triangles_center, dtype=float) - centre
+    along = relative @ axis
+    radial = np.linalg.norm(relative - np.outer(along, axis), axis=1)
+    facing = np.abs(np.asarray(raw.face_normals, dtype=float) @ axis)
+    inside = (
+        (np.abs(along) <= length / 2.0 + EPS_GEOM)
+        & (radial <= crest + EPS_GEOM)
+        & (facing < 1.0 - EPS_GEOM)
+    )
+    return tuple(int(index) for index in np.flatnonzero(inside))
 
 
 def fill_feature(mesh: MeshData, indices: tuple[int, ...], slot: int) -> BrushResult:
@@ -154,7 +208,10 @@ class PaintParams(BaseParams):
     # Auch die gerundete Seite: Sie hat keine Ebene, aber Dreiecke — und
     # gefärbt werden Dreiecke (Robert, 11.09.2026: „bei den Seiten fehlen die
     # gerundeten flächen", am Bogen eines D, dem kein Filament zu geben war).
-    applies_to=["face", "curved_face"],
+    # Und seit P2.6 Wulst, Kehle und Gewinde: der Ring und ein erkanntes
+    # Gewinde nennen ihre Dreiecke selbst, ein erzeugtes Gewinde seine Hülle
+    # (``feature_triangles``).
+    applies_to=["face", "curved_face", "torus", "thread"],
     doc=_(
         "Färbt eine erkannte Fläche vollständig in ein Filament. Die Grenze "
         "der Fläche kommt aus der Erkennung — kein Pinsel, kein Radius."
@@ -198,8 +255,9 @@ def paint_slot(ctx: OpContext) -> OpResult:
             constraint="unknown_feature",
             values={"feature": params.at_feature},
         )
-    validate_full_faces(source.mesh, feature.face_indices)
-    stroke = fill_feature(mesh, feature.face_indices, params.slot)
+    triangles = feature_triangles(mesh, feature)
+    validate_full_faces(source.mesh, triangles)
+    stroke = fill_feature(mesh, triangles, params.slot)
     covered = stroke.painted
     if not covered:
         return OpResult(
