@@ -14,12 +14,10 @@ from dataclasses import dataclass
 from typing import Final, cast
 
 from app.core.errors import ValidationError
-from app.core.geom import lathe
 from app.core.geom.boolean import BOOLEAN_OVERLAP
-from app.core.geom.mesh import MeshData
 from app.core.knowledge import standards
 from app.core.knowledge.parts import shapes
-from app.core.knowledge.parts.build import bore, face, result, subtract, union
+from app.core.knowledge.parts.build import bore, compound, face, result, subtract, union
 
 # **Die Federarmregeln stehen bei der Mechanik, und dort bleiben sie.** Ein
 # Federarm ist zehnmal so lang wie dick und mindestens zwei Außenwände stark —
@@ -36,6 +34,7 @@ from app.core.knowledge.parts.registry import (
     WallRequirement,
     register_part,
 )
+from app.core.knowledge.parts.shapes import Form
 from app.core.registry import GRIP_TITLE, op_params, param, play_param
 from app.core.types import BaseParams, PartResult
 from app.core.units import is_greater
@@ -580,9 +579,9 @@ def keyhole(raw: BaseParams) -> PartResult:
     # und 7,60 in Y, und 15,58 ist ``head + 0,6 + drop`` — der Schlitz selbst.
     # Waagerecht hält ein Schlüsselloch nicht, die Schraube wandert seitlich
     # heraus, statt sich beim Absinken zu verklemmen.
-    def falling(width: float, length: float, height: float) -> MeshData:
+    def falling(width: float, length: float, height: float) -> Form:
         """Ein Langloch, dessen Länge in -Y läuft — der Weg der Schraube."""
-        return shapes.mesh_only(shapes.turned(shapes.slot(width, length, height), 90.0))
+        return shapes.turned(shapes.slot(width, length, height), 90.0)
 
     # **Das Kopfspiel kam aus einer festen Zahl** (0,6 mm) und damit an der
     # Kalibrierung vorbei: Die Prüfung nach §28.3 überspringt genau die
@@ -620,13 +619,13 @@ def keyhole(raw: BaseParams) -> PartResult:
     entrance = shapes.cylinder(screw.head + clearance, params.depth + BOOLEAN_OVERLAP)
     entrance = shapes.moved(entrance, (0.0, 0.0, -params.depth))
     pocket = falling(screw.head + clearance, screw.head + clearance + params.drop, params.head_room)
-    pocket = shapes.mesh_only(shapes.moved(pocket, (0.0, drop, -params.depth)))
+    pocket = shapes.moved(pocket, (0.0, drop, -params.depth))
 
     # Der Schlitz, in den der Schaft gleitet, ganz hindurch.
     shaft = falling(
         screw.clearance, screw.clearance + params.drop, params.depth + 2.0 * BOOLEAN_OVERLAP
     )
-    shaft = shapes.mesh_only(shapes.moved(shaft, (0.0, drop, -params.depth - BOOLEAN_OVERLAP)))
+    shaft = shapes.moved(shaft, (0.0, drop, -params.depth - BOOLEAN_OVERLAP))
 
     body = union(entrance, pocket, shaft)
     return result(
@@ -1108,14 +1107,14 @@ def pegboard_hook(raw: BaseParams) -> PartResult:
     # Mit Zunge steht der Einhänger nicht mehr mittig zu ihr: Sie sitzt über dem
     # Zapfen, also wächst die Platte nach oben mit und rückt um ihre halbe Höhe
     # nach. Ohne Zunge ist ``stack`` null, und es bleibt die Platte von vorher.
-    parts: list[MeshData] = []
+    plate: Form | None = None
     if params.plate > 0.0:
         plate = shapes.box(
             across + width + 2.0 * PLATE_MARGIN,
             along + shank + nose + stack + 2.0 * PLATE_MARGIN,
             params.plate,
         )
-        parts.append(shapes.mesh_only(shapes.moved(plate, (0.0, -stack / 2.0, sunk))))
+        plate = shapes.moved(plate, (0.0, -stack / 2.0, sunk))
 
     # **Die Platte ist kein Merkmal mehr.** Solange sie auf dem Träger auflag,
     # war ihre Rückseite eine echte Fläche und ein sinnvoller Anhaltspunkt.
@@ -1125,7 +1124,9 @@ def pegboard_hook(raw: BaseParams) -> PartResult:
     # Was am Teil anliegt, ist jetzt die angeklickte Fläche selbst; die trägt
     # ihren eigenen Namen und braucht von hier keinen zweiten.
     features = []
+    hooks: list[Form] = []
     for index in range(params.count):
+        parts: list[Form] = []
         offset = index * reach - span / 2.0
         x = 0.0 if params.upright else offset
         y = offset if params.upright else 0.0
@@ -1135,13 +1136,13 @@ def pegboard_hook(raw: BaseParams) -> PartResult:
         # was davon im Teil steckt, verschmilzt mit ihm.
         shaft = shapes.turned(shapes.slot(width, shank, through - sunk), 90.0)
         # Der Zapfen sitzt oben, und oben ist **-Y** (``PartSpec.keeps_up``).
-        parts.append(shapes.mesh_only(shapes.moved(shaft, (x, y - nose / 2.0, sunk))))
+        parts.append(shapes.moved(shaft, (x, y - nose / 2.0, sunk)))
         # Die Nase reicht über den Zapfen nach unten hinaus und liegt hinter
         # der Lochwand. Sie beginnt um OVERLAP früher, damit keine Fläche genau
         # auf einer anderen liegt (§39).
         hook_join = min(through / 2.0, lip / 2.0)
         catch = shapes.turned(shapes.slot(width, shank + nose, lip + hook_join), 90.0)
-        parts.append(shapes.mesh_only(shapes.moved(catch, (x, y, through - hook_join))))
+        parts.append(shapes.moved(catch, (x, y, through - hook_join)))
         # **Das Merkmal liegt auf der Rückseite der Nase**, und das ist die
         # einzige Fläche des Hakens, die es dort wirklich gibt. Vorher stand es
         # auf der Höhe der Plattenrückseite mitten im Zapfen — gemessen zu 99 %
@@ -1158,6 +1159,7 @@ def pegboard_hook(raw: BaseParams) -> PartResult:
         )
 
         if tongue is None:
+            hooks.append(union(*parts))
             continue
 
         # Die Zunge sitzt über der Oberkante des Zapfens, durch den Federweg
@@ -1170,7 +1172,7 @@ def pegboard_hook(raw: BaseParams) -> PartResult:
         # Rückplatte steckt sein vorderes Stück in ihr; frei wird er an ihrer
         # Oberseite, und genau von dort rechnet ``_latch_tongue`` seine Länge.
         arm = shapes.box(tongue.width, tongue.thickness, tongue.lock - sunk)
-        parts.append(shapes.mesh_only(shapes.moved(arm, (x, crest + tongue.thickness / 2.0, sunk))))
+        parts.append(shapes.moved(arm, (x, crest + tongue.thickness / 2.0, sunk)))
 
         # Die Wurzel schließt den Spalt am vorderen Ende und ist das, was die
         # Zunge überhaupt zu einem Teil des Hakens macht. Sie greift bis zur
@@ -1178,7 +1180,7 @@ def pegboard_hook(raw: BaseParams) -> PartResult:
         # unendlich schmal, dort wäre die Verbindung eine Kante und kein Körper.
         reachdown = tongue.gap + tongue.thickness + width / 2.0
         root = shapes.box(tongue.width, reachdown, tongue.thickness)
-        parts.append(shapes.mesh_only(shapes.moved(root, (x, crest + reachdown / 2.0, sunk))))
+        parts.append(shapes.moved(root, (x, crest + reachdown / 2.0, sunk)))
 
         # Die Rastschulter mit ihrer Anlaufschräge. Der Keil steht auf der
         # Schulter und läuft nach hinten aus — beim Einführen drückt er die
@@ -1191,9 +1193,7 @@ def pegboard_hook(raw: BaseParams) -> PartResult:
         barb = shapes.turned(
             shapes.wedge(tongue.width, tongue.step + BOOLEAN_OVERLAP, tongue.run), 180.0
         )
-        parts.append(
-            shapes.mesh_only(shapes.moved(barb, (x, crest + BOOLEAN_OVERLAP, tongue.lock)))
-        )
+        parts.append(shapes.moved(barb, (x, crest + BOOLEAN_OVERLAP, tongue.lock)))
         features.append(
             face(
                 f"latch_{index + 1}",
@@ -1203,7 +1203,15 @@ def pegboard_hook(raw: BaseParams) -> PartResult:
             )
         )
 
-    return result(union(*parts), *features)
+        hooks.append(union(*parts))
+    # Mit Platte hängt alles zusammen; ohne sie sind die Haken getrennte Körper, die
+    # erst der Träger verbindet (``joined_by_host``) — also ein Verbund, keine
+    # Vereinigung, die nichts vereinigt.
+    if plate is not None:
+        body = union(plate, *hooks)
+    else:
+        body = hooks[0] if len(hooks) == 1 else compound(*hooks)
+    return result(body, *features)
 
 
 def _slot_area(width: float, length: float) -> float:
@@ -1380,7 +1388,7 @@ def foot(raw: BaseParams) -> PartResult:
     return result(body, marker)
 
 
-def _foot_profile(wide: float, narrow: float, height: float, chamfer: float) -> MeshData:
+def _foot_profile(wide: float, narrow: float, height: float, chamfer: float) -> Form:
     """Säule und Standfase als ein geschlossenes Drehprofil.
 
     Zwei überlappende Körper hinterließen am Beginn der Fase eine waagerechte
@@ -1391,23 +1399,23 @@ def _foot_profile(wide: float, narrow: float, height: float, chamfer: float) -> 
     """
 
     outline = [
-        [0.0, 0.0],
-        [wide / 2.0, 0.0],
-        [wide / 2.0, height - chamfer],
-        [narrow / 2.0, height],
-        [0.0, height],
+        (0.0, 0.0),
+        (wide / 2.0, 0.0),
+        (wide / 2.0, height - chamfer),
+        (narrow / 2.0, height),
+        (0.0, height),
     ]
-    return MeshData.of(lathe.revolve(outline, sections=shapes.SEGMENTS))
+    return shapes.revolved(outline)
 
 
-def _pocket_profile(wide: float, height: float, chamfer: float) -> MeshData:
+def _pocket_profile(wide: float, height: float, chamfer: float) -> Form:
     """Sitz und Einführfase als ein geschlossenes abtragendes Drehprofil."""
 
     outline = [
-        [0.0, 0.0],
-        [wide / 2.0 + chamfer, 0.0],
-        [wide / 2.0, -chamfer],
-        [wide / 2.0, -height],
-        [0.0, -height],
+        (0.0, 0.0),
+        (wide / 2.0 + chamfer, 0.0),
+        (wide / 2.0, -chamfer),
+        (wide / 2.0, -height),
+        (0.0, -height),
     ][::-1]
-    return MeshData.of(lathe.revolve(outline, sections=shapes.SEGMENTS))
+    return shapes.revolved(outline)

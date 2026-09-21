@@ -109,9 +109,14 @@ def _host() -> SceneObject:
 # --- die Gruppe ------------------------------------------------------------------
 
 
-def test_the_exact_groups_are_fasteners_and_mechanics() -> None:
+def test_the_exact_groups_are_fasteners_mechanics_and_mounting_without_clamps() -> None:
     builtin.load()
-    groups = {spec.name for spec in PARTS.all() if spec.group in {"fasteners", "mechanics"}}
+    groups = {
+        spec.name
+        for spec in PARTS.all()
+        if spec.group in {"fasteners", "mechanics", "mounting"}
+        and not spec.name.startswith("profile_clamp")
+    }
     assert groups == EXACT_PARTS
 
 
@@ -695,3 +700,167 @@ def test_a_snap_fit_grows_on_an_exact_host_and_a_bearing_seat_cuts_it(profile: P
     seat = _sound(cut.outputs[0].mesh)
     assert seat.volume < HOST[0] * HOST[1] * HOST[2]
     assert "bearing_seat_seat_1" in cut.outputs[0].features
+
+
+# --- die Befestigung ohne Profilklemmen --------------------------------------------------------
+
+
+def test_foot_exact_is_one_revolved_outline_with_the_chamfer_at_the_standing_end() -> None:
+    from app.core.knowledge.parts.mounting import MIN_FOOT_TIP, POCKET_LEAD
+
+    _kernel()
+    diameter, height = 10.0, 3.0
+    body = _sound(
+        _built(
+            "foot", True, kind="foot", diameter=diameter, height=height, chamfer=0.0, play=0.0
+        ).mesh
+    )
+    chamfer = min(height / 5.0, height / 2.0, (diameter - MIN_FOOT_TIP) / 2.0)
+    narrow = diameter - 2.0 * chamfer
+    expected = math.pi * (diameter / 2.0) ** 2 * (height - chamfer) + _frustum(
+        diameter, narrow, chamfer
+    )
+    assert body.volume == pytest.approx(expected, rel=1e-9)
+    assert body.bounds.maximum[2] == pytest.approx(height, abs=1e-9)
+    assert body.bounds.maximum[0] == pytest.approx(diameter / 2.0, abs=1e-9)
+    mesh = _built("foot", False, kind="foot", diameter=diameter, height=height, chamfer=0.0).mesh
+    assert mesh.volume / body.volume == pytest.approx(FACET, rel=1e-6)
+    _roundtrip(body)
+    produced = _built(
+        "foot", True, kind="pocket", diameter=diameter, height=height, chamfer=0.0, play=0.2
+    )
+    tool = _sound(produced.mesh)
+    wide = diameter + 0.2
+    lead = min(POCKET_LEAD, height / 2.0)
+    expected = math.pi * (wide / 2.0) ** 2 * (height - lead) + _frustum(
+        wide, wide + 2.0 * lead, lead
+    )
+    assert tool.volume == pytest.approx(expected, rel=1e-9)
+    assert tool.bounds.maximum[2] == pytest.approx(0.0, abs=1e-9)
+    assert tool.bounds.minimum[2] == pytest.approx(-height, abs=1e-9)
+    assert tool.bounds.maximum[0] == pytest.approx(wide / 2.0 + lead, abs=1e-9)
+    assert "foot_1" in produced.features
+
+
+def test_keyhole_exact_runs_down_minus_y_with_true_slot_ends() -> None:
+    _kernel()
+    values = {"size": "M4", "drop": 8.0, "depth": 4.0, "head_room": 2.5, "play": 0.2}
+    produced = _built("keyhole", True, **values)
+    tool = _sound(produced.mesh)
+    mesh = _built("keyhole", False, **values).mesh
+    assert tool.bounds.maximum[2] == pytest.approx(BOOLEAN_OVERLAP, abs=1e-9)
+    assert tool.bounds.minimum[2] == pytest.approx(-4.0 - BOOLEAN_OVERLAP, abs=1e-9)
+    assert tool.bounds.minimum[1] < -tool.bounds.maximum[1]
+    # Die Langlochenden sind exakt Halbkreise; das Netz endet um den Sag früher.
+    assert tool.bounds.minimum[1] == pytest.approx(mesh.bounds.minimum[1], abs=0.01)
+    assert tool.bounds.minimum[1] < mesh.bounds.minimum[1]
+    assert FACET - 0.01 < mesh.volume / tool.volume < 1.0
+    assert {"pocket_1", "bore_1"} <= set(produced.features)
+    _roundtrip(tool)
+
+
+def test_magnet_pocket_exact_narrows_at_the_lip_and_matches_its_analytic_volume() -> None:
+    from app.core.knowledge.parts.mounting import MAGNET_LIP_HEIGHT
+
+    _kernel()
+    entry = standards.magnet("8x3")
+    values = {"size": "8x3", "play": 0.2, "cover": 0.0, "press_lip": True, "grip": 0.15}
+    produced = _built("magnet_pocket", True, **values)
+    tool = _sound(produced.mesh)
+    diameter = entry.diameter + 0.2
+    narrow = entry.diameter - 0.15
+    lip = min(MAGNET_LIP_HEIGHT, entry.height / 2.0)
+    expected = (
+        math.pi * (diameter / 2.0) ** 2 * (entry.height - lip)
+        + _frustum(diameter, narrow, lip)
+        + math.pi * (narrow / 2.0) ** 2 * BOOLEAN_OVERLAP
+    )
+    assert tool.volume == pytest.approx(expected, rel=1e-9)
+    assert tool.bounds.maximum[2] == pytest.approx(BOOLEAN_OVERLAP, abs=1e-9)
+    assert tool.bounds.minimum[2] == pytest.approx(-entry.height, abs=1e-9)
+    assert tool.bounds.maximum[0] == pytest.approx(diameter / 2.0, abs=1e-9)
+    assert "pocket_1" in produced.features
+    mesh = _built("magnet_pocket", False, **values).mesh
+    assert mesh.volume / tool.volume == pytest.approx(FACET, rel=1e-6)
+    _roundtrip(tool)
+
+
+def test_wall_mount_exact_matches_its_analytic_volume_with_holes_along_y() -> None:
+    _kernel()
+    screw = standards.screw("M4")
+    values = {
+        "width": 30.0,
+        "height": 25.0,
+        "thickness": 3.0,
+        "size": "M4",
+        "holes": 2,
+        "lip": 12.0,
+    }
+    produced = _built("wall_mount", True, **values)
+    body = _sound(produced.mesh)
+    expected = (
+        30.0 * 3.0 * 25.0 + 30.0 * 12.0 * 3.0 - 2.0 * math.pi * (screw.clearance / 2.0) ** 2 * 3.0
+    )
+    assert body.volume == pytest.approx(expected, rel=1e-9)
+    assert body.bounds.maximum[1] == pytest.approx(1.5 + 12.0, abs=1e-9)
+    assert produced.features["bore_1"].params["axis"] == (0.0, 1.0, 0.0)
+    assert produced.features["bore_2"].params["through"] is True
+    # Nur die Löcher sind facettiert, und ein 48-Eck-Loch nimmt weniger weg als ein rundes.
+    mesh = _built("wall_mount", False, **values).mesh
+    assert 1.0 < mesh.volume / body.volume < 1.0 + 0.001
+    _roundtrip(body)
+
+
+def test_pegboard_hook_exact_is_two_hooks_without_a_plate_and_one_body_with_it() -> None:
+    _kernel()
+    values = {
+        "system": "skadis",
+        "count": 2,
+        "steps": 1,
+        "upright": False,
+        "latch": True,
+        "play": 0.2,
+        "lip": 0.0,
+    }
+    produced = _built("pegboard_hook", True, **values, plate=0.0)
+    hooks = _sound(produced.mesh, bodies=2)
+    mesh = _built("pegboard_hook", False, **values, plate=0.0).mesh
+    assert mesh.component_count == 2
+    assert {"hook_1", "hook_2", "latch_1", "latch_2"} <= set(produced.features)
+    # Bounds bis auf den Sag der Langlochenden gleich; nur die Langlöcher sind facettiert.
+    assert hooks.bounds.minimum == pytest.approx(mesh.bounds.minimum, abs=0.01)
+    assert hooks.bounds.maximum == pytest.approx(mesh.bounds.maximum, abs=0.01)
+    assert FACET - 0.01 < mesh.volume / hooks.volume < 1.0
+    _roundtrip(hooks)
+    joined = _sound(_built("pegboard_hook", True, **values, plate=2.0).mesh)
+    assert joined.volume > hooks.volume
+    assert joined.bounds.minimum[2] == pytest.approx(-2.0, abs=1e-9)
+
+
+def test_a_magnet_pocket_cuts_and_a_wall_mount_grows_on_an_exact_host(profile: Profile) -> None:
+    _kernel()
+    host = _host()
+    cut = run(
+        "insert_magnet_pocket", host, profile, size="8x3", cover=0.0, press_lip=False, **ON_TOP
+    )
+    tool = _sound(cut.outputs[0].mesh)
+    assert cut.outputs[0].kind == "brep"
+    assert tool.volume < HOST[0] * HOST[1] * HOST[2]
+    assert "magnet_pocket_pocket_1" in cut.outputs[0].features
+    grown = run(
+        "insert_wall_mount",
+        host,
+        profile,
+        width=30.0,
+        height=25.0,
+        thickness=3.0,
+        size="M4",
+        holes=2,
+        lip=12.0,
+        **ON_TOP,
+    )
+    body = _sound(grown.outputs[0].mesh)
+    assert body.volume > HOST[0] * HOST[1] * HOST[2]
+    assert {"wall_mount_plate_1", "wall_mount_bore_1", "wall_mount_bore_2"} <= set(
+        grown.outputs[0].features
+    )

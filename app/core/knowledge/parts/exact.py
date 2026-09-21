@@ -174,6 +174,11 @@ def prism_across(outline: Sequence[Point2], width: float) -> Solid:
     return _edit().moved(body, (-width / 2.0, 0.0, 0.0))  # type: ignore[no-any-return]
 
 
+def revolved(outline: Sequence[Point2]) -> Solid:
+    """Der Drehkörper aus ``shapes.revolved`` — derselbe Umriss, exakt um Z gedreht."""
+    return _profiles().revolve(_polygon(outline), 360.0)  # type: ignore[no-any-return]
+
+
 def rounded_dovetail(diameter: float, length: float) -> Solid:
     """Der gerundete Schwalbenschwanz aus ``shapes.rounded_dovetail`` mit echtem Bogen."""
     from app.core.knowledge.parts.shapes import DOVETAIL_ARC, DOVETAIL_START

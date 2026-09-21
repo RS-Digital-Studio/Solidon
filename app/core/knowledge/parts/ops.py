@@ -1064,6 +1064,12 @@ EXACT_PARTS: Final = frozenset(
         "living_hinge",
         "snap_connector",
         "snap_fit",
+        # Befestigung — die Profilklemmen folgen mit ihrem Konturversatz
+        "foot",
+        "keyhole",
+        "magnet_pocket",
+        "pegboard_hook",
+        "wall_mount",
     }
 )
 

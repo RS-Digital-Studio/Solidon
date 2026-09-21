@@ -744,6 +744,11 @@ EXACT_PARTS = frozenset(
         "living_hinge",
         "snap_connector",
         "snap_fit",
+        "foot",
+        "keyhole",
+        "magnet_pocket",
+        "pegboard_hook",
+        "wall_mount",
     }
 )
 for _part, (_dimensions, _effect, _height) in PART_CASES.items():

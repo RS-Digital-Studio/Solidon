@@ -349,6 +349,20 @@ def prism_across(outline: Sequence[Point2], width: float) -> Form:
     return MeshData.of(body)
 
 
+def revolved(outline: Sequence[Point2]) -> Form:
+    """Ein geschlossener Querschnitt (x = Abstand von der Achse, y = Höhe) um Z gedreht.
+
+    Der Fuß und seine Tasche sind so eine Form: Säule und Fase als ein Umriss,
+    ohne innere Fläche zwischen zwei Körpern. Am Netz mit ``SEGMENTS`` Ecken je
+    Umfang (``lathe.revolve``, plattformgleiche Ecken), exakt als Drehkörper.
+    """
+    if building_exact():
+        from app.core.knowledge.parts import exact as twins
+
+        return twins.revolved(outline)
+    return MeshData.of(lathe.revolve([[float(x), float(y)] for x, y in outline], sections=SEGMENTS))
+
+
 def rounded_dovetail(diameter: float, length: float) -> Form:
     """Ein gerundeter Schwalbenschwanz innerhalb seines Nenn-Umkreises.
 
