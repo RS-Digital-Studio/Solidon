@@ -403,7 +403,8 @@ steht aber im Verlauf, ein Undo holt den exakten Körper also zurück.
 Exportiert wird ein solcher Körper als `STEP` mit Flächen und Kanten; STL und
 3MF bleiben für alles, was auf den Drucker soll.
 
-Der Kern ist optional:
+Jedes Installationspaket bringt den Kern mit. Optional ist er nur beim Start
+aus den Quellen:
 
 ```bash
 .venv/Scripts/python.exe -m pip install -c constraints.txt -e ".[brep]"

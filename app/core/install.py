@@ -1,9 +1,12 @@
 """Fehlendes installieren, aus der Anwendung heraus (Bauplan §36, §38).
 
-Solidon kommt ohne Slicer und ohne B-Rep-Kern — beim ersten aus
-Lizenzgründen, beim zweiten wegen der Größe (§36). Das ist eine gute
-Entscheidung und eine schlechte Erfahrung: wer eine Verrundung will, soll kein
-README lesen müssen, um herauszufinden, welches Paket zu installieren ist.
+Solidon kommt ohne Slicer — aus Lizenzgründen (§36) —, und wer es aus den
+Quellen startet, hat vielleicht den B-Rep-Kern oder V-HACD nicht installiert.
+Jedes gebaute Paket bringt beide mit (die CI baut mit dem Extra ``brep``,
+die Spec verlangt die OCP-Module), und was da ist, steht nicht in der Liste.
+Das ist eine gute Entscheidung und eine schlechte Erfahrung: wer eine
+Verrundung will, soll kein README lesen müssen, um herauszufinden, welches
+Paket zu installieren ist.
 
 Also zählt dieses Modul auf, was fehlt, und installiert es — unter drei
 Regeln, die nicht verhandelbar sind:
