@@ -32,3 +32,11 @@ benachrichtigen, wenn ihr Commit fremde Hunks trägt — mit Commit-Kennung.
 Verwandt: [[datei-die-vor-dem-patch-modifiziert-war-geht-nur-als-blob]],
 [[heredoc-frisst-den-backslash]] (viermal an einem Morgen: Python mit `\\n` nur
 als Datei über Write, nie als Heredoc).
+
+**Noch einmal am 21.09.2026:** Mein RM-193-Block in `ROADMAP.md` (26 Zeilen,
+uncommittet seit dem Vorabend) stand am Morgen in `HEAD` — mitgenommen von
+einem RM-188-Commit der Nachbarsitzung, die dieselbe Datei um eine Zeile
+änderte. Nicht schlimm, aber unsichtbar: `git diff` zeigte von meinem Block
+nichts mehr, und wer die Datei nur über den Diff prüft, hält ihn für verloren.
+Vor dem eigenen Commit deshalb `git show HEAD:<datei> | grep <eigene Marke>`,
+um zu wissen, was schon drüben ist.

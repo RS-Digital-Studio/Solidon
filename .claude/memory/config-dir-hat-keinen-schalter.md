@@ -48,3 +48,12 @@ Namen gebunden haben. Die App selbst verhielt sich korrekt: `_read()`
 überschreibt eine beschädigte Datei nie und meldet `catalogue/unreadable` mit
 Handlungsvorschlag (Regel 17). Behoben durch Umbenennen des Schrotts nach
 `filaments.json.kaputt-2026-09-12`; die gültige Datei war wieder da.
+
+**Nachtrag 20.09.2026 — auch die Kommandozeile trifft die echten Daten.** Eine
+Sonde über `python -m app.cli.main new/import/info` aus der Entwicklungs-
+`.venv` schrieb in Roberts `RS Digital/Solidon3D/logs/app.log`, legte dort
+einen Crash-Marker mit ihrer PID an und verwarf den Ergebniscache der
+installierten 0.4.4 („dropped result cache of an older version") — die
+nächste Sitzung der installierten Anwendung rechnet alles neu. Wer die CLI
+als Sonde nimmt, setzt vorher `APPDATA` und `LOCALAPPDATA` auf einen
+Temp-Ordner; `tests/conftest.py` zeigt, wie (§38).

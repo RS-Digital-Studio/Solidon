@@ -25,6 +25,7 @@ für den Rückstand glauben darf, ist das Register in `ROADMAP.md`.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-09-20 | [Ein Drache aus TripoSG: 1,9 Meter, acht Minuten, kein Merkmal (20.09.2026)](#ein-drache-aus-triposg-19-meter-acht-minuten-kein-merkmal-20092026) |
 | 2026-09-15 | [Vierunddreißig Modelle aus dem Netz: Erkennung, Bearbeitung, Leistung (15.09.2026)](#vierunddreißig-modelle-aus-dem-netz-erkennung-bearbeitung-leistung-15092026) |
 | 2026-09-15 | [GitHub Actions nahm keinen Lauf an, das Repository war privat (15.09.2026)](#github-actions-nahm-keinen-lauf-an-das-repository-war-privat-15092026) |
 | 2026-09-15 | [Drehen und Verdoppeln nehmen die Hohlraumkette mit (15.09.2026)](#drehen-und-verdoppeln-nehmen-die-hohlraumkette-mit-15092026) |
@@ -29130,3 +29131,61 @@ Ein Vorschlag aus der Bedienweg-Durchsicht vom 14.09.2026, entschieden und gebau
   (`perceive.actions._WANT_A_PLAIN_BORE`) und der Fenstertest gingen am 15.09. um 05:45 mit dem
   fremden Commit 4f1c49b5 hinaus — zusammen mit zwei unfertigen Kopien der Geometrietests, die
   der Commit hier wieder auf eine bringt; der Kern folgte erst mit diesem Commit.
+
+
+## Ein Drache aus TripoSG: 1,9 Meter, acht Minuten, kein Merkmal (20.09.2026)
+
+Roberts Meldung: „keine Chance die Merkmale zu erkennen lädt ewig nichts passiert, generiert
+mit comfyUI". Die Datei lag in den Downloads (`image_00001_.glb`, 5,8 MB, 325 244 Dreiecke,
+162 608 Ecken, wasserdicht, eine Komponente, Ausdehnung 1,41 × 1,90 × 1,14 in der Datei), in
+der Wiederherstellungsdatei stand ihr Ladeschritt mit `unit: auto` und `coordinates: gltf`.
+Nachgestellt über die Kommandozeile (`new`, `import`, `info`) und mit Profil und Stackabzügen
+direkt an `detect`, unter Fremdlast (ein fremder pytest-Lauf mit 18 Prozessen).
+
+**Drei Befunde, zwei behoben:**
+
+1. **Die Meter-Lesart machte den Drachen 1,9 m hoch.** glTF schreibt Meter vor, und seit
+   `d33d9c89` (15.09.) liest der Import sie ohne Frage — TripoSG schreibt aber seinen
+   Einheitswürfel in die Datei. Als Meter gelesen misst das Modell 1 407 × 1 901 × 1 144 mm,
+   als Zentimeter 141 × 190 × 114. Behoben: Ist die Meter-Lesart nicht plausibel
+   (`PLAUSIBLE_MIN_MM` bis `plausible_reach`), stellt `load` die Einheitenfrage mit Meter als
+   erster Antwort und den plausiblen Lesarten daneben (`ingest/ops.py`, `_a_format_convention`,
+   `_unit_for(doubted=…)`); eine 3MF-Einheit bleibt eine Aussage der Datei und wird weiter
+   ohne Frage angewandt. Tests: `test_a_generator_glb_in_a_unit_cube_is_asked_about_its_unit`,
+   `test_a_glb_of_printable_size_is_still_read_in_metres_without_a_question`.
+2. **Die Kerbenschließung vom 17.09. lief je Kandidatenmenge über den ganzen Fleck.** Bei der
+   30-Grad-Trennung ist der Drache ein Fleck mit 307 063 Dreiecken und 65 Kandidaten an
+   fransigen Randknoten: 2 145 Mengen, jede Prüfung ein `np.unique` über eine Million Kanten
+   und ein Filter über 488 000 Paare — 264 von 482 Sekunden; `_connected_patches`, das
+   `_cylinder_beside_a_torus` je Splitstück ruft, filterte je Aufruf alle Paare des Netzes —
+   5 576 Aufrufe, 320 s. Behoben: `_rim_of` zählt Kanten und Randgrade eines Flecks einmal,
+   `_candidates_at` liest die Kandidaten über `vertex_faces` und einen Nachbarindex je Körper
+   (`_neighbour_index`, im Cache von trimesh), `_closes` prüft eine Menge an ihren eigenen
+   Kanten; `_connected_patches` liest denselben Index und bekommt dieselben Paare in
+   derselben Reihenfolge. Antwort bitgleich an den drei Kerbentests, den Senkungs- und
+   Mündungstests; „schließt“ heißt seither „keine Kante dreifach, kein Randknoten über zwei“
+   — vorher galt auch eine Menge als schließend, nach der nur keine Kandidaten mehr zu finden
+   waren. Leistungstest `test_closing_notches_on_a_huge_patch_reads_the_rim_not_the_mesh`:
+   Halbkugel aus 81 920 Dreiecken, eine Kerbe heilt, zwanzig bleiben; alte Fassung 24,5 s,
+   neue 86 ms. Drache: 482 → 151 s, Ergebnis unverändert.
+3. **Was bleibt, ist die Freiform selbst** — 151 s für null Merkmale, siehe RM-193.
+4. **Der Textweg verlangte ein Bild** (21.09.2026, Robert: „comfyUI wollten wir auch ohne
+   Bild, hab einen text eingegeben aber es wollte ein bild"). Sein ComfyUI unter
+   `E:\ComfyUI (1)` hatte Knoten, TripoSG und BiRefNet, aber kein Bildmodell unter
+   `models/checkpoints` — und das holte Solidon bis dahin bewusst nicht: Der Dialog nannte
+   Datei und Ordner, der Kunde sollte 6,9 GB selbst besorgen. Behoben: `fetch_image_model`
+   lädt `sd_xl_base_1.0.safetensors` in fester Revision und mit Prüfsumme über denselben Weg
+   wie das Freistell-Modell, `setup(image_model=…)` als eigener Wunsch nach den Gewichten, im
+   Einrichtungsdialog ein eigenes Häkchen (vorbelegt, wenn keines da ist), und der Knopf im
+   Erzeugen-Dialog bei fehlendem Bildmodell führt in diese Einrichtung statt in die
+   Programmliste. Handbuch und Kataloge nachgezogen; die Lizenz (CreativeML Open RAIL++-M)
+   steht im Handbuch und bei RM-003. Tests: drei Kernfälle in `test_mesh_backend.py`, der
+   Fenstertest `test_a_missing_model_gets_its_own_sentence_and_a_button` einmal allein grün.
+
+**Dazu die Wartezeit:** Die Kommandozeile stand die ganze Zeit bei „90 % — Auf das Bett
+setzen“; die Erkennung meldet ihren Schritt (`say("Merkmale erkennen")`), aber keinen
+Fortschritt darin. Bei acht Minuten ist das „lädt ewig, nichts passiert“.
+
+**Eine Sonde traf echte Daten:** Der Kommandozeilenlauf aus der Entwicklungsumgebung schrieb
+in Roberts `app.log` und verwarf den Ergebniscache der installierten 0.4.4 („dropped result
+cache of an older version“) — festgehalten in der Erinnerung „Config-Dir ohne Schalter“.

@@ -110,3 +110,14 @@ bleibt dann der **gestagte** Stand im Arbeitsbaum — fünf Katalogeinträge
 waren weg, ohne Fehler im Diff, nur `git status` sagte `M ` statt `MM`. Das
 Zurückschreiben bekommt dieselbe Wiederholung wie jedes andere Schreiben, und
 danach wird der Inhalt gegen das Original **verglichen**, nicht angenommen.
+
+**Nachtrag 21.09.2026 — `write_text` leert die Datei, bevor es an einem
+Argument scheitert.** `Path.write_text(t, newline="\n")` (ein Skript, das
+über das Write-Tool entstand und den Backslash deshalb doppelt trug) öffnete
+`tests/test_mesh_backend.py` im Modus `w`, warf dann `ValueError: illegal
+newline value` — und die Datei hatte 0 Byte, 2890 Zeilen weg, `git ls-files
+--eol` sagte `w/none`. Aufgefallen erst, weil ein `assert t.count(old) == 1`
+im nächsten Lauf scheiterte. Wiederhergestellt aus `git show HEAD:…`, weil die
+Datei keine ungestageten Änderungen trug. Lehre: Vor einem Skript, das
+Projektdateien schreibt, `wc -c` der Ziele merken, und nach einem Traceback
+im Schreibpfad zuerst die Zieldatei ansehen, nicht das Skript.
