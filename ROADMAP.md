@@ -4,7 +4,7 @@ Abgleich vom **08.09.2026** gegen Bauplan §40, Quelltext, Tests, Paketmetadaten
 und Git-Verlauf, **nachgeführt am 10.09.2026** — jeder offene Punkt einmal am
 heutigen Code nachgemessen; was dabei erledigt, überholt oder falsch
 beschrieben war, steht am Punkt. Der lokale Veröffentlichungsstand ist
-**0.4.1** (`website/version.json`, seit dem 14.09.2026; die Mac-Pakete sind
+**0.4.4** (`website/version.json`, seit dem 19.09.2026; die Mac-Pakete sind
 signiert und notarisiert, das Windows-Setup nicht, siehe RM-001). Die früheren Durchsichten und Messreihen stehen im
 [Archiv](ROADMAP-ARCHIV.md); dessen
 [Abgleichstabelle](ROADMAP-ARCHIV.md#abgleich-der-gesamten-roadmap-mit-dem-bestand-08092026)
@@ -53,7 +53,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-005 — Wahl der Stiftseite gegen das fertige Stützvolumen prüfen](#rm-005) | Geometrie, Erkennung und Druckvorbereitung | Beide Stiftseiten am fertigen Stützvolumen vergleichen |
 | [RM-017 — Nutfedermaße an realen Aluminiumprofilen prüfen](#rm-017) | Geometrie, Erkennung und Druckvorbereitung | Zwei benannte Aluminiumprofile nachmessen und Passung prüfen |
 | [RM-022 — Nachbau als Operationsfolge](#rm-022) | Geometrie, Erkennung und Druckvorbereitung | Beschlossen am 17.09.; startet nach 0.4.4 als P4.0–P4.3 des CAD-Plans — erst der exakte Körper ohne Verlauf, dann der geprüfte Nachbau hinter dem Import (CAD-Konzept §§8, 13.5) |
-| [RM-188 — CAD-Parität und einfache vollständige Kundenwege](#rm-188) | Geometrie, Erkennung und Druckvorbereitung | Umsetzung läuft auf main; der Bau von 0.4.4 verwendet seinen Tag-Commit. Der vollständige Umfang bleibt vor der darauffolgenden Version, in der Reihenfolge aus Konzept §13.10 — die Pakete stehen unten als Liste mit Stand |
+| [RM-188 — CAD-Parität und einfache vollständige Kundenwege](#rm-188) | Geometrie, Erkennung und Druckvorbereitung | Umsetzung läuft auf main; das Review über alle Änderungen seit 0.4.4 (21./22.09.2026, sechs Pakete, 148 Befunde) ist eingearbeitet und geht mit 0.5.0 hinaus. Der vollständige Umfang bleibt vor der darauffolgenden Version, in der Reihenfolge aus Konzept §13.10 — die Pakete stehen unten als Liste mit Stand |
 | [RM-189 — Eine Passung verliert ihr Merkmal, und der Fall ist nicht nachgestellt](#rm-189) | Geometrie, Erkennung und Druckvorbereitung | Der Befund trägt seit dem 18.09.2026 einen Weg; die Ursache fehlt — die Schrittfolge von Robert holen oder einen Weg im Korpus finden, der ihn herstellt |
 | [RM-190 — Druckoptimal ausrichten dreht einen Körper nicht, und der Fall ist nicht nachgestellt](#rm-190) | Geometrie, Erkennung und Druckvorbereitung | Zwölf Körper aus Korpus, Downloads und Roberts Regal drehen richtig; den Körper und die Schrittfolge von Robert holen, an denen die Suche stehen bleibt |
 | [RM-191 — PrusaSlicer verbraucht für dieselbe Übergabe ein Drittel mehr Material](#rm-191) | Geometrie, Erkennung und Druckvorbereitung | Die neun Platten des Regals je Slicer gegen die Prusa-Ausgabe aufschlüsseln: Stützen, Wände oder Füllung — und die Übergabe der Prusa-Schlüssel danach ergänzen |
@@ -76,8 +76,13 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-164 — Creality Print: Erkennung steht, der Konsolenlauf ist ungeprüft](#rm-164) | Geometrie, Erkennung und Druckvorbereitung | Slicer einrichten, dann Öffnen- und Konsolenweg mit mehreren Spulen abnehmen |
 | [RM-166 — Ergebnisnetze aus Mesh-Ops an einer STL überstehen keinen Weld](#rm-166) | Geometrie, Erkennung und Druckvorbereitung | Der Weld ist behoben und als Kundenweg getestet; offen bleiben das Flackern der Tetraederecke auf dem Linux-Runner und das Beispielarchiv der Werkstattfilme |
 | [RM-181 — Handlungsliste und Baugruppenladen an dichten Netzen weiter vermessen](#rm-181) | Geometrie, Erkennung und Druckvorbereitung | Die Langlochsuche ist gebaut (126 s → 9 s); offen sind `actions_for` mit Netz (0,14 s je Merkmal) und die Ladezeit einer Baugruppe mit vielen Körpern |
-| [RM-193 — Die Erkennung an einer glatten Generator-Freiform kostet Minuten für null Merkmale](#rm-193) | Geometrie, Erkennung und Druckvorbereitung | Der Drache aus TripoSG (325 244 Dreiecke, ein Fleck mit 307 063) brauchte 482 s, nach der lokalen Kerbenschließung 151 s unter Fremdlast — der Rest sind 27 690 Splitstücke durch vier Einpassungen, `_surface_support` je Knoten in Python und `_large_facet_faces`; eine Freiformentscheidung vor der Nachtrennung entscheiden und einen glatten organischen Körper in den Leistungskorpus nehmen |
+| [RM-193 — Die Erkennung an einer glatten Generator-Freiform kostet Minuten für null Merkmale](#rm-193) | Geometrie, Erkennung und Druckvorbereitung | Der Drache aus TripoSG braucht seit dem Review 37,7 s statt 482 (ein Fleck fragt nur die Ringe, an die er grenzt; die Flächenrollen blockweise); was bleibt, sind 2 275 Kegelverfeinerungen an Stücken, deren Achse aus den Normalen nicht bestimmbar ist. Zu entscheiden von Robert: eine Freiformentscheidung **vor** der Nachtrennung — ein Fleck über der Hälfte der Oberfläche, der keine Grundform ist, wird nicht in Stücke geteilt und eingepasst; das kostet tangential eingeblendete Zapfen |
+| [RM-201 — Ein hohler Körper hält die 300 ms der Schichtanalyse nicht](#rm-201) | Geometrie, Erkennung und Druckvorbereitung | Die neue Leistungsmarke `slice_medium_hollow` (200 000 Dreiecke, Wand 1,5 mm) misst 1,5 s für §31 „300 ms": 3 658 Puffer, 796 Differenzen und 718 STRtree-Anfragen je Lauf — die Stufen je Schicht stapeln oder das Ziel für Schalen neu fassen |
+| [RM-202 — Die Formabweichung am Ring schließt nur auf 0,65 mm](#rm-202) | Geometrie, Erkennung und Druckvorbereitung | Das Verfeinerungsbudget des Torus gilt je Aufruf; an einem Ring bleibt die Klammer 0,65 mm breit, wo Ebene, Zylinder, Kugel und Kegel geschlossen rechnen — Budget je Dreieck oder eine geschlossene Kandidatenmenge für den Torus |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Der Mac ist gefahren; die Zoom-Dämpfung ist seit dem 16.09. eine Rampe statt einer Klippe und am Gerät zu bestätigen; offen bleiben Linux, die 3DxWare-Mausemulation und die Bildrate an 1 Mio. Dreiecken |
+| [RM-203 — Die Ansicht rechnet je Bild und je Klick, was sie je Auswertung rechnen könnte](#rm-203) | Bedienung und Darstellung | Kanten und Schattenhüllen entstehen je Auswertung im Hauptthread (200 000 Dreiecke: 57 + 71 ms) statt im `_SceneMeshWorker`; `_redraw_feature_patch` kostet an einer Fläche der 360k-Platte 0,41 s; `show_scene` läuft am historischen Bohrschritt je Tastendruck; der Zeiger ruht 16 ms nicht, bevor er fragt — jeden Posten am echten Renderer messen, dann verlegen |
+| [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | `show_feature` leert und baut je Auswahl achtzehn Widgets neu (`_build_action`, 80 ms je Klick); `_settle_lock` ist seit dem Review ohne `findChildren`. Weg: `_Handling` mutabel mit `entries/widgets/fixed`, Wiederverwendung je (Operation, Felder, Schritt, Gruppengröße), Werte über `refresh_feature_fields` |
+| [RM-205 — Escape in der dritten Stufe der Platzierung springt in den Dialog](#rm-205) | Bedienung und Darstellung | `surfaceRequested` hat keinen Sender, Escape in Stufe 3 überspringt Stufe 2, und aus dem Dialog führt kein Weg zurück in Stufe 1 — Bedienidee nach §2/§19, vor der Umsetzung zu `bedienlogik` |
 | [RM-183 — Zeichenmodus am Fenster abnehmen](#rm-183) | Bedienung und Darstellung | Fünf Entscheidungen der Durchsicht sind gefallen und gebaut; offen: Führen mit gezeichneter Bahn und Überblenden mit gezeichnetem Umriss am Fenster fahren, Rollen und Rampe der 3D-Maus prüfen |
 | [RM-074 — Verbleibenden Bildnachweis der Viewport-Serie abschließen](#rm-074) | Bedienung und Darstellung | Befundsprung und sichtbare Marke an einem echten Warnprojekt zeigen |
 | [RM-084 — Kundentexte gegen die vereinbarte Sprache prüfen](#rm-084) | Bedienung und Darstellung | Kundentexte systematisch prüfen und alle Sprachfassungen nachziehen |
@@ -88,14 +93,10 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-136 — Gezeichnetes Fensterschema und Bildbeschreibungen aktualisieren](#rm-136) | Bedienung und Darstellung | Fensterschema, Bildunterschriften und Alternativtexte aller Sprachen nachziehen |
 | [RM-174 — Der Geist beim Zug an einem Bausteinmerkmal zeigt nur dieses Merkmal](#rm-174) | Bedienung und Darstellung | Der Zug bewegt den ganzen Baustein; während des Zugs wandert im Bild nur die Marke des angefassten Merkmals — der Rest folgt erst beim Loslassen |
 | [RM-175 — Bauplan §30.1 um Winkel, gleich, Mittelpunkt, Vieleck und Langloch nachtragen](#rm-175) | Bedienung und Darstellung | Robert sagt den Nachtrag an; sechs Sätze liegen im Bericht W2 |
-| [RM-192 — Sieben Fenstertests des Merkmalfensters sind am HEAD rot](#rm-192) | Bedienung und Darstellung | `test_feature_panel.py`: Feldzugriff, Abbrechen-Knopf, Nennmaß-Hinweis, Tab-Reihenfolge und zwei Bausteinvorschauen — gemessen am 20.09.2026 in einem Arbeitsbaum, vor der nächsten Release-Abnahme beheben |
-| [RM-194 — Elf Werteschlüssel ohne Beschriftung, zwei Beschriftungen ohne Schlüssel](#rm-194) | Bedienung und Darstellung | `test_value_labels.py` (Fensterdatei) ist am HEAD rot: `clearance_max_mm`, `clearance_min_mm`, `geometry_source`, `intersects` (`fits.py`), `input_name`, `input_object`, `outputs`, `step` (`evaluate.py`), `mapped_triangles` (`kernel.py`), `middle` (`edit.py`), `references` (`errors.py`) ohne Eintrag in `_VALUE_NAMES`; `clearance_max_mm`, `clearance_min_mm` als Beschriftung ohne Schlüssel — gemessen am 20.09.2026 in einem frischen Arbeitsbaum am HEAD `9b8efa8c`, vor der nächsten Release-Abnahme beheben |
-| [RM-197 — Maßeditor im Bild: kein Bezugswechsel am Etikett, Beschriftungen mit Abstand zum Modell](#rm-197) | Bedienung und Darstellung | Umgesetzt in `ebba075e` (Auswahlfeld gefallen, Bezugswechsel als Kontextmenü des Maßes, Felder neben dem Körper) in `ad3deadd` (Verbindung zur Linienmitte, keine kreuzenden Zuordnungslinien; die Maßtinte zieht in den Renderer, weil `ebba075e` an Weg 1 beim Wählen einer Bohrung riss, RM-198) und `bd310fa5` (die Langlochknöpfe bleiben am gewählten Loch); offen ist die Fensterabnahme beim Release |
-| [RM-198 — Eine feine Fenstermaske über der Vulkan-Fläche verliert das Gerät](#rm-198) | Bedienung und Darstellung | Gemessen am 21.09.2026 an Weg 1: 1682 Rechtecke in der Maske der Maßfläche, und der Vulkan-Treiber der RTX 4080 meldet „Parent device is lost"; 1380 liefen, D3D12 lief immer. Behoben an der Wurzel: Die Maßtinte liegt seit `ad3deadd` im Renderer, die Maske ist weg; offen bleibt nur die Frage, ob Windows D3D12 als Backend bekommt — die Karten tragen kleine Masken und sind nicht betroffen |
-| [RM-199 — Der Durchmesser steht doppelt: im Bild und rechts im Auswahlfenster](#rm-199) | Bedienung und Darstellung | Robert, 21.09.2026: „durchmesser ist ja im viewport kann im merkmalpanel/auswahlpanel entfernt werden" — die gesperrten Zwillingsfelder der Maßgruppe (`Bohrung ändern` mit Durchmesser, Änderungsumfang, X/Y/Z) fallen rechts weg, solange die Maße im Bild stehen — umgesetzt in `b25167fd` durch die CAD-Sitzung (`FeaturePanel._blocks`, `set_measuring` nimmt den Block der Handlung im Bild weg und bringt ihn zurück); offen ist die Fensterabnahme beim Release |
-| [RM-200 — Ein Zug am Griff soll flüssig sein](#rm-200) | Bedienung und Darstellung | Robert, 21.09.2026: „das verschieben über gizmo ist auch noch nicht flüssig". Gemessen am 21.09. an Weg 1 im echten Fenster: Platzierungsgriff 13 ms je Bewegung, Langlochknopf 32 ms (zwei Bilder je Bewegung) — seit `bd310fa5` 21 ms (eines); je Bild kosten 12 bis 17 ms den Durchgang mit Umgebungsverdeckung. Offen: Roberts Geste nachstellen und die Verdeckung während eines Zugs aussetzen |
-| [RM-195 — Der Gewindebolzen vereinigt Sweep und Kern noch mit der Fuzzy-Leiter](#rm-195) | Geometrie, Erkennung und Druckvorbereitung | `profiles.threaded_rod` (*Gewindebolzen*, `thread_exact`) geht weiter den Weg Sweep, Zuschnitt, Fuzzy-Leiter mit Untergrenze — bis zu 94 s (M10 × 1,5, L4) und die Stufe je Größe woanders; `helical_thread` näht dieselbe Sache in 30 ms — den Erzeuger darauf stellen, ISO-nahes Profil beibehalten (keine Maßänderung), `test_sketch_ops.py`, `test_exact_thread_features.py`, `test_brep.py` nachmessen |
-| [RM-196 — Ein exaktes Gewinde einzusetzen dauert acht bis dreizehn Sekunden](#rm-196) | Geometrie, Erkennung und Druckvorbereitung | Gemessen am 21.09.2026: Gewinde 8,2 s, Schraube 13,1 s, Mutter 9,0 s am exakten Träger (Netz 0,04 bis 0,07 s), Bauplan §31 verlangt unter 2 s. Der Bau selbst kostet 0,3 s; die Sekunden stecken in `edit.transformed` (zwei konvergierte Volumenintegrale je Bewegung, `INTEGRAL_RELATIVE_ERROR` 1e-9, an BSpline-Flanken je etwa fünf Sekunden) und im Volumen des Ergebnisses für `without_effect` — eine starre Bewegung erhält das Volumen, das Integral belegt dort nichts; vor der Release-Abnahme beheben oder gegen §31 ausweisen |
+| [RM-197 — Maßeditor im Bild: kein Bezugswechsel am Etikett, Beschriftungen mit Abstand zum Modell](#rm-197) | Bedienung und Darstellung | Umgesetzt und im Review vom 21./22.09.2026 nachgezogen (Griff überlebt ein Bild mitten im Zug, Radraste über einem Maßfeld zoomt, erstes Escape nimmt nur die Bezugswahl zurück); die Fensterdateien der Ansicht liefen dabei grün (456 Fälle). Offen bleibt allein die Abnahme am echten Fenster beim Release 0.5.0 |
+| [RM-198 — Eine feine Fenstermaske über der Vulkan-Fläche verliert das Gerät](#rm-198) | Bedienung und Darstellung | Behoben an der Wurzel: Die Maßtinte liegt seit `ad3deadd` im Renderer, seit dem Review mit fester Kapazität (sieben Elemente, nur die Punkte wechseln) und unter `draw_order` vor dem Material; die Maske ist weg. Offen: die Probe über den echten Startweg beim Release 0.5.0 noch einmal fahren, und ob Windows D3D12 als Backend bekommt, bleibt eine eigene Entscheidung |
+| [RM-199 — Der Durchmesser steht doppelt: im Bild und rechts im Auswahlfenster](#rm-199) | Bedienung und Darstellung | Eingelöst in `b25167fd`, und im Review ganz: Auch der Block des historischen Bohrschritts weicht, solange die Maße im Bild stehen (`offer_bore_step` trägt `_blocks`). Abnahme beim Release 0.5.0: Bohrung an Weg 1 wählen, rechts kein Durchmesser, keine Koordinaten; Escape, und sie stehen wieder |
+| [RM-200 — Ein Zug am Griff soll flüssig sein](#rm-200) | Bedienung und Darstellung | Seit dem Review kostet ein Radzoom ein Bild statt zwei (22 → 7,7 ms je Aufbau der Maßtinte), der Bewegungsgriff bleibt über `Gizmo.fits` erhalten statt je Kamerageste neu zu entstehen, und der Zeiger meldet nur bei geändertem Zustand. Offen: Roberts Geste nachstellen und die Umgebungsverdeckung während eines Zugs aussetzen (4 × 2 statt der vollen Stufe), gemessen am echten Renderer |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
 | [RM-014 — Zusätzliche Formenregel und zugehörige Suite-Abnahme entscheiden](#rm-014) | KI und Generatoren | Zusätzliche Formenregel entscheiden; bei Änderung Suite vorher/nachher |
@@ -104,6 +105,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-144 — Orientierungsanalyse über MCP ohne blockiertes Hauptfenster ermöglichen](#rm-144) | KI und Generatoren | Gemeinsame Orientierungsanalyse an den fernbedienten Arbeiterweg anschließen |
 | [RM-173 — Der Platz im Kontextfenster des lokalen Modells geht aus](#rm-173) | KI und Generatoren | Zwei Wächter stehen, die Kürzung ist drin (Suite 20/39 → 24/39); offen sind der dritte Lauf ohne Denkblock, die Neumessung von `PROMPT_TOKENS` auf ruhiger Karte und drei Entscheidungen von Robert |
 | [RM-185 — Das kompakte Werkzeugschema passt nicht mehr ins Fenster des lokalen Modells](#rm-185) | KI und Generatoren | Fenster seit dem 16.09.2026 auf 40 960 (Entscheidung Robert, Preis 11 statt 41 Token/s); offen bleibt, das Schema unter 28 000 Token zu bringen und dann 32 768 zurückzustellen |
+| [RM-206 — Die Bereichsprüfung eines Bausteins zählt Dreieckspaare in Python](#rm-206) | Tests und Entwicklungswerkzeuge | `range_check.has_self_intersections` braucht 632 ms für 352 Dreiecke und 3,7 s für 2 400; der skalare Möller-Test ist im Kern seit dem Review als Feld gerechnet (`geom/repair.py`, 5,3 s → 185 ms) — dieselbe Rechnung hier; dazu `bvh_follows_a_helix` 17,5 s und `hook_count` 16,3 s in `test_parts.py` |
 | [RM-020 — Sicherung der eigenständigen Druckprojekte belegen](#rm-020) | Tests und Entwicklungswerkzeuge | Sicherungsweg entscheiden und Wiederherstellung belegen |
 | [RM-099 — Konzeptbestand und veraltete Verweise ordnen](#rm-099) | Tests und Entwicklungswerkzeuge | Verweise sind vollständig gültig; offen ist nur noch das Umräumen — Umfang entscheidet Robert |
 | [RM-103 — Große Kernfunktionen nach konkretem Wartungsbedarf aufteilen](#rm-103) | Tests und Entwicklungswerkzeuge | Auswertung und weitere große Funktionen nach Wartungsbedarf priorisieren |
@@ -1504,6 +1506,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   * **implementiert, Release-Abnahme offen** P2.7 — Produktionsanschluss: jeder mitgelieferte Baustein baut am exakten Träger exakt, in sechs Einheiten von den Verbindungen bis zur Kalibrierung. **`f08500aa` stellt die Bausteine auf eine Formbeschreibung mit zwei Auswertern** (Bericht §7, Bauart B): `shapes.building(kernel)` wählt den Kern je Bau, jede Grundform in `shapes` hat in `parts/exact.py` einen Zwilling mit demselben Rahmen (Bounds gleich bis 1e-6, Volumen 1,0 für Prismen und `polygon_ratio(48)` für Rundes, das Langloch endet exakt bei ±L/2), `build` vereinigt, zieht ab, schneidet und verbindet je Kern; die 40 Netzstellen der übrigen Gruppen stehen hinter `shapes.mesh_only` (Programmfehler statt Absturz unter dem exakten Kern), und `ops.EXACT_PARTS` lässt nur die sechs Verbindungen dorthin — `_insert_at_exact` platziert mit derselben `_matrix` über `edit.transformed`, vereinigt und schneidet mit `edit.boolean` plus `unified`, hängt ein lösbares Teil als Verbund an (B9), zählt die Teilezahl topologisch (`boolean._pieces`), prüft Volumen und Geschlossenheit nach dem Schnitt und führt die Merkmale über denselben Helfer wie am Netz fort (`_merged_features`, B3); ein Netzträger geht unverändert den alten Weg, `create_*` bleibt am Netz, bis P2.8 die Kernwahl regelt. **Das Gewinde ist exakt ein genähter Körper:** Die Vereinigung eines gesweepten Gangs mit dem Kern verschluckt den Gang still (B1), und die Rasterfahrt vom 21.09.2026 über sechs Größen und drei Längen fand die rettende Fuzzy-Stufe je Fall woanders (M3 × 0,5: 1e-2, 1e-3, 3e-3 bei L6/L8/L12), für M5 × 0,8 L8 und M6 × 1 L8 gar keine, je Stufe 7 bis 24 s; `profiles.helical_thread` näht Kern und Gang aus Regelflächen zwischen geteilten Helixkanten mit Rampen von der Achse als Enden — 44 Flächen in 30 ms, gültig, Volumen gegen Pappus auf 2,4·10⁻⁷, STEP-Rundreise 10⁻¹⁴ (Sonde `probe_sewn.py`), `build.threaded` liefert Kern und Gang auf Länge je Kern, der nackte Gang bleibt Netzform. Der Senkkopf bleibt ein Verbund aus Kegel und Gang (B2); am Träger sind es drei Körper, und der Verbund trägt Filamentzuweisung und Vernetzungsfeinheit seiner Teile weiter (`exact.compound`, §20). Der Review-Durchgang (13 Befunde) ist eingearbeitet: Das Gewinde entsteht gleich an seiner Höhe (`build.threaded(bottom=)`) statt danach bewegt zu werden, `exact.union` fragt Körperzahl und Geschlossenheit statt eines Volumenintegrals und meldet eine gebrauchte Nahttoleranz als Befund (`shapes.note`, `parts.fuzzy_union`) oder sagt mit Vorschlag ab, das Gangprofil steht einmal (`shapes.ridge_profile`, `RIDGE_START`) und der Test rechnet Pappus daraus, die Kernfrage geht überall über `types.BRepBody` (mit `solid_count` im Protokoll), `_place_solid` ist abbrechbar. Gemessen am Einsetzen an einem exakten Träger, Netzträger in Klammern: Schraubenloch 0,02 s (0,01), Gewinde 8,2 s (0,04), Schraube 13,1 s (0,07), Mutter 9,0 s (0,04) — vor dem Review 11, 29 und 22 s. Was bleibt, steckt nicht im Bau (Gewinde 0,3 s), sondern in `edit.transformed` (zwei konvergierte Volumenintegrale je Bewegung, an BSpline-Flanken je fünf Sekunden) und im Volumen des Ergebnisses für `without_effect`: RM-196, gegen §31 (unter 2 s) offen. `tests/test_exact_parts.py` (77 Tests): Zwillinge je Grundform, je Baustein Volumen, Richtung, Merkmale und STEP-Rundreise, der Einsetzweg am exakten Träger mit Verbund, `without_effect` und `hanging_loose`, der Netzträger unverändert; die sechs `insert_`-Zeilen der Paritätstabelle tragen `KEEP`. Endtor: 13.247 bestanden, 48 übersprungen, Ruff, Format und mypy je 0 (Arbeitsbaum am HEAD mit nur diesen Dateien). **`6bf141e4` schließt die Gruppe Mechanik an** (acht Bausteine, Bericht Abschnitt 4.2): Der Seitenriss des Schnapphakens und der gerundete Schwalbenschwanz des Passstifts bauten bis dahin direkt mit trimesh — jetzt sind sie Formen mit zwei Auswertern (`shapes.prism_across`, das auch die Rampe trägt, und `shapes.rounded_dovetail` mit echtem 300-Grad-Bogen exakt, `DOVETAIL_START`/`DOVETAIL_ARC` einmal); die Facettenkorrektur der Augenwand gilt nur noch dem Netz (Abschnitt 5.2: exakt ist die Wand genau `wall`, gemessen); das Bolzenscharnier sagt seine zwei Körper über `build.compound` (am Netz dieselbe Vereinigung, exakt ein Verbund) statt über eine Vereinigung, die nichts vereinigt; die übrigen acht Netzstellen der Gruppe waren nur Typgrenzen. Je Baustein gegen unabhängige Analytik auf 10⁻⁹: Lagersitz, runder Stift mit Fase (Zylinder minus Ring = Kegelstumpf oben), Bohrung mit Einführung, Scharnierauge (halber Zylinder auf der Lasche minus Bohrung), Rastnase, Filmscharnier, Schnappverbinder-Tasche, Schnapphaken (Breite mal Seitenriss); Sechskant- und Schwalbenschwanzstift, Bolzenscharnier gegen das Netz (Facettierung, Umkreis, zwei Körper, gleiche Hüllen), alle mit STEP-Rundreise; Schnapphaken und Lagersitz auch am exakten Träger. Die acht `insert_`-Zeilen der Gruppe tragen `KEEP`. Endtor: 13.257 bestanden, 48 übersprungen, Ruff, Format und mypy je 0 (Arbeitsbaum am HEAD mit nur diesen Dateien). **`4fe0b1f5` schließt die Befestigung ohne die Profilklemmen an** (fünf Bausteine, Bericht Abschnitt 4.3): Der Fuß und seine Tasche sind ein Drehkörper mit zwei Auswertern (`shapes.revolved`: `lathe.revolve` am Netz, `profiles.revolve` exakt), Schlüsselloch, Magnettasche und Wandhalter brauchten nur ihre Typgrenzen, und der Lochwand-Einhänger vereinigt je Haken und sagt ohne Platte seine getrennten Haken über `build.compound` (`joined_by_host`: erst der Träger verbindet sie). Je Baustein gegen Analytik auf 10⁻⁹: Fuß (Säule plus Kegelstumpf am Standende) und Tasche (voller Sitz, Einführung weitet die Mündung), Magnettasche (Tasche, Lippe, Haut), Wandhalter (Platte, Auflage, zwei Löcher längs Y); Schlüsselloch und Einhänger gegen das Netz — die Langlochenden sind exakt Halbkreise, das Netz endet um den Sag früher (0,0056), und das Facettenverhältnis liegt je nach Form über oder unter eins (ein 48-Eck-Loch nimmt weniger weg als ein rundes); alle mit STEP-Rundreise, Magnettasche und Wandhalter auch am exakten Träger. Die fünf `insert_`-Zeilen tragen `KEEP`. Endtor: 13.263 bestanden, 48 übersprungen, Ruff, Format und mypy je 0 (Arbeitsbaum am HEAD mit nur diesen Dateien). **`f7aaddc8` schließt die Profilklemmen an** (Bericht Abschnitt 4.3): Schale und Einlage entstehen aus Querschnitten — Sitz, Normalversatz, Differenz, Ohren, Hälfte, Prisma —, und `parts/section.py` trägt je Querschnitt beide Auswerter zugleich: den `manifold3d.CrossSection` für die Prüfungen (Bounds, ein Materialintervall je Schnitt, keine Löcher, ein Stück) und unter dem exakten Kern die ebene Fläche für die Geometrie. `brep/profiles.py` bekommt dafür `face_of`, `rectangle_face`, `offset_face` (`BRepOffsetAPI_MakeOffset` mit `GeomAbs_Arc`; ein Versatz, der zerfällt, ist eine Absage), `face_boolean`, `face_rotated` und `prism(…, bottom=)`, das den Boden vor dem Einpacken verschiebt statt den fertigen Körper (RM-196). Gemessen: Der Versatz eines Kreises Ø 20,25 um 4 ist exakt ein Kreis Ø 28,25, das Prisma darüber ein Zylinder mit dem Volumen der Analytik auf 10⁻⁹, der Ring aus beiden ebenso; die untere Schalenhälfte endet exakt bei y = −0,5, ihre Ohren reichen um `ear_width − wall` über den Sitz hinaus, beide Stirnflächen tragen Dreiecksindizes ihrer Tessellierung, Netz gegen exakt innerhalb eines Prozents (Sitz nach `CONTOUR_SAG`, Löcher 48-Eck), Hüllen bis 0,02; die Einlage beginnt bei null und endet bei 39,5 (Bund vorn, Freiraum hinten), beide mit STEP-Rundreise, die Schale auch am exakten Träger. Am Netz ändert sich nichts: dieselben Querschnitte, dieselbe Rückfallkette mit gemeldeter Stufe, das Klemmenpaar und die Ersetzung unverändert (`test_profile_clamps.py` grün). Die zwei `insert_`-Zeilen der Klemmen tragen `KEEP`. Endtor: 13.272 bestanden, 48 übersprungen, Ruff, Format und mypy je 0 (Arbeitsbaum am HEAD mit nur diesen Dateien). **`1d6393b4` schließt Struktur, Kabel und Organizer an** (neun Bausteine, Bericht Abschnitt 4.4 ohne die Dichtungen): Rippe, Eckwinkel, Nutfeder und Kabeldurchführung brauchten nur ihre Typgrenzen; drei Stellen rechneten am Netz vorbei an der Beschreibung. Der gerundete Quader der Organizer-Wanne war eine eigene manifold3d-Konstruktion und ist jetzt `shapes.rounded_box` mit zwei Auswertern — Sehnen nach `MAX_FACET_SAG` am Netz (derselbe Code, dieselben Dreiecke), vier echte Viertelkreise exakt, die Eckmitten für beide aus `shapes.rounded_corners`, ein voller Radius ohne entartete Kante. Die Flächenmaße `base`/`floor`/`rim`/`seat` zählten Dreiecke nach Normalen; exakt sind sie das Integral über die ebenen Flächen einer Höhe (`brep.canonical.horizontal_area`, Richtung aus Ebenenachse und Flächenorientierung, keine Innenprobe), und `measure_sources` sagt `native` statt `facets`. Die Facettenkorrektur der Kabelclip-Bügelwand gilt nur noch dem Netz (Abschnitt 5.2). Gemessen je Baustein gegen unabhängige Analytik auf 10⁻⁹: Rippe (Riegel plus zwei Rampen, Netz = exakt), Eckwinkel (fünf Flächen), Nutfeder aus den Tabellenmaßen 2020 (Hals plus zulaufender Kopf), Kabeldurchführung (Bohrung, Kanal, gemeinsamer Streifen; Netz nur an der Bohrung facettiert, `polygon_ratio(48)` auf 10⁻³), Kabelclip (Sockel, Ring, Öffnungssegment, eingetauchtes Kreissegment; Wand exakt `wall`, Scheitel ist der Rand der Öffnung), Wanne (19 Flächen, Volumen, drei Flächenmaße nativ, Netz auf 10⁻³), Trennwand, Rand (Ursprung auf dem Rand, Hülle −28,5 bis 1,5), Steckfuß (Flansch plus Zapfen, Ringflächen nativ, Netz `polygon_ratio(48)` auf 10⁻⁹); alle mit STEP-Rundreise. Am exakten Träger: Rippe mit dem eingesunkenen Überlappungsanteil (Riegel voll, Rampen verjüngt) auf 10⁻⁹, Kabelclip, und die Kabeldurchführung mit ihrem Klemmblock über den bestehenden `host_add`-Weg an einer Wand von 3 mm — Block, Bohrung, Kanal und gemeinsamer Streifen gegen die Analytik auf 10⁻⁹. Der Organizer als Ganzes (`organizer/build.py`) bleibt am Netz und sagt es an seinen zwei Stellen (`shapes.mesh_only`); er geht mit P2.8 auf den exakten Kern. Die neun `insert_`-Zeilen tragen `KEEP`. Endtor: 13.286 bestanden, 48 übersprungen, Ruff, Format und mypy je 0 im zweiten Sammellauf am Commit; der erste Sammellauf hatte bei denselben Dateien zwei Umgebungsrisse — die lokale PHP-Gegenstelle setzte die Verbindung zurück, und scipys Quadratur im Bolzentest brach mit einem `TypeError` in `range` —, beide einzeln dreimal grün (Arbeitsbaum am HEAD mit nur diesen Dateien). **`62f30c81` schließt die Dichtungen und die Kalibrierung an — damit baut jeder mitgelieferte Baustein am exakten Träger exakt** (Bericht Abschnitte 4.4 und 4.5). Dichtnut und rechteckige Dichtung sind ein Band um den gezeichneten Weg (Versatz nach außen und innen, Differenz, Prisma) und bauen jetzt aus demselben `Section`-Querschnitt wie die Profilklemmen; die Sehnengrenze der Dichtungen (`_SEAL_SAG`) war Wert für Wert die der Klemmen (`CONTOUR_SAG`) und kommt aus einer Quelle. Die runde Schnur ist exakt die Minkowski-Summe des Wegs mit der Kugel aus Stücken (`brep.profiles.round_cord`): je Strecke ein Zylinder, je Kreisbogen ein Torusstück, je Ecke eine Kugel, vereinigt; ein Kreisweg ein ganzer Torus, ein Spline sein Rohr. **Gemessen und verworfen:** `BRepOffsetAPI_MakePipeShell` mit `BRepBuilderAPI_RoundCorner` baute dieselbe Form gültig und auf 10⁻¹⁰ genau (Rechteckweg vier Zylinder und vier Eckflächen, Kreisweg ein Torus, versetzter Rechteckweg vier Zylinder und vier Tori), kam aber aus STEP um zehn Prozent leichter zurück — seine Eckflächen sind keine Kugeln. Die ebenen Flächen der Dichtungen (`groove_mouth`, `groove_floor`, `gasket_contact`, `gasket_bottom`) bekommen ihr Maß exakt aus `canonical.horizontal_area` (`native`), Mantel und runde Schnur bleiben Dreiecke der Tessellierung (`facets`). Die Toleranzleiter sagt ihre zwei Leisten als Verbund (`build.compound`) statt über eine Vereinigung, die nichts vereinigt, ihr Strichcode ebenso (ein Verbund aus einem Teil ist das Teil), und die Rampen des Überhangfächers sind ein Seitenriss (`shapes.prism_across`) statt acht von Hand vernähter Dreiecke. Gemessen gegen unabhängige Analytik auf 10⁻⁹: Nut (Band außen gerundet, innen scharf, 14 Flächen, unter der Mündung), rechteckige Dichtung (steht auf der Fläche), runde Dichtung am Rechteckweg (vier Zylinder, vier Kugeln; Steinmetz-Viertel und Viertelkugel je Ecke) und am Kreisweg (ein Torus, 2π²Rr²), Toleranzleiter (zwei Körper, Leisten, Zapfen, gestaffelte Bohrungen, gravierte Striche), Wandleiter, Überhangfächer (Rampen mit ihrem Überlappungsanteil); Netz gegen exakt innerhalb 0,2 % am Band, 1,5 % an der Schnur (Bahn und Kugeln facettiert, Bericht Abschnitt 5), 0,5 % an der Leiter; alle mit STEP-Rundreise. Am exakten Träger: Die Nut schneidet, die Schnur liegt lose daneben (zwei Körper), die Leiter wächst als ein Körper — eingesunken um die Überlappung ohne die Bohrungen, die der Träger wieder füllt. `tests/test_exact_parts.py` hält `EXACT_PARTS` jetzt mit dem ganzen Register gleich; alle fünf `insert_`-Zeilen tragen `KEEP`. Der Dichtungserzeuger (`create_seal`) rechnet weiter am Netz und sagt es (`mesh_only`), wie der Organizer und alle `create_*`. Endtor: 13.295 bestanden, 48 übersprungen, Ruff, Format und mypy je 0 (Arbeitsbaum am HEAD mit nur diesen Dateien). **Bereichsläufe von Hand** (`bausteine.md`) über die neunzehn Bausteine, deren Netzbau P2.7 umgestellt hat — Rippe, Eckwinkel, Nutfeder, Kabeldurchführung, Kabelclip, die vier Organizer-Teile, Schnapphaken, Passstift, Fuß, Dichtnut und Dichtung, beide Profilklemmen, Toleranzleiter, Wandleiter, Überhangfächer: alle bestanden bis auf die Rippe, die an sechs Ecken (Länge 2, Anlauf 20) Selbstdurchdringung meldete — **vorbestehend** (am Stand `5126e46c` dieselben sechs) und **behoben in `f3423a81`:** Die um 180 Grad gedrehte Rampe lag mit ihrer Rückseite um 1,2 · 10⁻¹⁶ neben der Stirnfläche der Rippe (`math.sin(math.radians(180))`), die Vereinigung ließ beide Flächen als Doppelwand ohne Dicke stehen; `transform.rotation_about` rechnet jetzt aus den exakten Winkelfunktionen (RM-187), `shapes.turned` nimmt dieselbe Matrix wie `exact.turned`, die Rippe besteht ihre 32 Ecken, und ihr Körper hat 28 statt 34 Dreiecke (Endtor für den Fix: 13.295 bestanden, 48 übersprungen, Ruff, Format und mypy je 0). Dabei mitgemessen, fürs Release-Tor: Die Fensterdatei `test_pose_session.py` hat am Stand vor P2.7e (`5126e46c`) und danach denselben roten Test (`test_exact_armature_gestures_reach_the_guarded_operation_dialog`: die Vorschaufreigabe des Operationsdialogs wird nicht angezeigt) — nicht diese Einheit, aber vor dem Release zu beheben. **P2.7 ist damit abgeschlossen; offen daraus:** `create_*` exakt mit P2.8; RM-195 für den Gewindebolzen, RM-196 für die Sekunden des exakten Gewindes; Fenster und Leistung beim Release. Machbarkeit belegt: `69efc1cdf` legt die Nachweise in `konzepte/nachweise-cad-p2-7/` ab (Bericht, Prüfkörper, elf Sonden, 568 Zusicherungen, alle Prozesse Exit 0 am Stand `1cf405496`; Kernsammlung 12.682 bestanden, 26 übersprungen, Ruff, Format und mypy je 0 für genau diesen Stand). Gemessen: es konvertieren **alle 35** `insert_`-Pfade und die zehn `create_`-Pfade, nicht 31 — die vier angehaltenen scheiterten nur am Pflicht-Skizzenparameter. Jede Bausteinform entsteht mit `brep.edit`, `brep.profiles` und `Profile`; als Sonde belegt sind der Konturversatz (`BRepOffsetAPI_MakeOffset`) für Klemmen und Dichtungen und der Helix-Gang mit dem Gangprofil des Netzwegs, keine neue Abhängigkeit. Der Einsetzweg ist am exakten Träger mit derselben `_anchor`/`_matrix`-Lage nachgestellt, einschließlich geneigter Fläche, zwei Zielen, lösbarem Teil und dem Kundenweg aus Konzept §5.1; Netz und exakt unterscheiden sich bis auf drei benannte Fälle nur durch Facettierung. Vier Befunde für die Integration: Kern + Gang ohne Fuzzy-Toleranz verliert den Gang still; der Senkkopf wird mit Fuzzy ein Körper, kommt aber aus STEP ungültig zurück und bleibt Compound; Fuzzy-Stufen auf denselben Eingaben reißen den Prozess (Exit 139, 3/3), private Kopien nicht; nach einem exakten Schnitt werden Trägermerkmale fortgeführt, nicht neu erkannt. Gangprofil und Bauart folgen aus Konzept §13.1/§13.2 und `zwillinge.md`: Bausteinmaß bleibt, eine Formbeschreibung mit zwei Auswertern. Übergabematrix, Integrationsdateien und Abnahmekriterien je Bausteingruppe stehen im Bericht; Fenster, Leistung, Bereichsläufe und ein integrierter Kundenweg bleiben offen.
   * **implementiert, Release-Abnahme offen** P2.8 — Umschalten: die vier Kernwahl-Haken fallen, Aushöhlen nach Entscheidungstabelle, alte Projekte unverändert. **`6a4918b5`** (Konzept §10.1, Entscheidung 4 vom 17.09.2026): `registry.MENU_TWINS` wird beim Laden nach der Verfügbarkeit des exakten Kerns gebaut — faul, beim ersten Zugriff über `menu_twins()`, denn die Antwort lädt OpenCASCADE (334 Module, 0,43 s je Import des Registers); `exact_kernel_present` ohne Paketkante — die fünf Grundkörper aus `PRIMITIVE_TWINS` sichtbar exakt und versteckt als Netz, ohne Kern umgekehrt; Kegel, Kugel und Ring bekommen ihre exakten Erzeuger (`create_brep_cone`, `_sphere`, `_torus` über `edit.cone`, `edit.sphere`, `edit.torus`), der exakte Quader den Bezugspunkt `anchor`, `ANCHORS` und `tube_fits_the_ring` stehen einmal in `primitive_ops`. *Bohrung setzen* und *Aushöhlen* fragen die Körperart ihres Eingangs (`drill_hole` ruft `drill_brep_hole`, `hollow_object` ruft `shell_exact` nach der Tabelle aus §10.1 — `exactly_hollowable`: Oberseite offen, keine andere Öffnung, keine Entlüftung; sonst der Netzweg mit `evaluate.exact_became_mesh`); ihre exakten Zwillinge bleiben für alte Projekte und den Verlauf registriert und versteckt. `TWIN_TOGGLES`, `_EXACT_TOGGLE`, `_HOLLOW_TOGGLE`, `_lock_twin_toggle` und `_twin_toggle_hint` sind weg, vier Sätze aus sechs Katalogen mit ihnen; der Menüweg eines versteckten Zwillings nennt den Weg (`twin_way`). Der Kernwechsel eines gespeicherten Schritts steht im Kontextmenü des Verlaufs (`HistoryPanel.kernelSwitchRequested`, `MainWindow.switch_kernel`, Sätze aus `registry.kernel_switch_label` — Nutzen, nie Rechenkern; nur an den fünf Grundkörpern, denn Bohren und Aushöhlen entscheidet der Körper selbst, und in den exakten Kern nur, wenn er da ist — sonst kein Eintrag) und `History.change_kernel` wirft `needs_exact` mit der Zahl der Schritte, die sonst anhielten; `exact_names()` ist die eine Antwort dafür in Verlauf und Fenster. Aus dem Review vom 21.09.2026 dazu: `create_brep_cone` mit gleichen Radien baut einen Zylinder statt einer Absage aus OpenCASCADE; die Vorschau am Körper (`placement._creation_tool`) kennt die exakten Erzeuger über ihren Netz-Zwilling; die Palette findet alle zehn unter „exakt“; der Agent liest am versteckten Zwilling „Zweite Wahl“ mit dem Eintrag im Menü; fünf Kundentexte und der Handbuchabsatz zu STEP zeigen auf den Verlauf statt auf den Haken, und `kind_requirement` nennt am Netz-Werkzeug *Flächenbearbeitung beenden* statt der fehlenden Kurven. **Gemessen** (`tests/test_kernel_switch.py`, 18 Tests): Richtung der Paare mit und ohne Kern, alte `create_box`-Schritte bleiben Netz, Bohrung am exakten Körper exakt ohne Haken (Volumen auf 10⁻⁶), Aushöhlen nach den drei Zeilen der Tabelle, Kegel, Kugel und Ring gegen die Analytik auf 10⁻⁶ und gegen ihre Netz-Zwillinge auf zwei Prozent an derselben Stelle, Anker und Drehung des Quaders gegen den Netz-Zwilling auf 10⁻⁶, der Kegel mit gleichen Radien, die Vorschau der fünf exakten Erzeuger, der Wechsel im Verlauf mit der Sperre des Kerns und nur an Grundkörpern, das Register ohne OpenCASCADE im Import; im Fenster (`test_ui.py`) der Eintrag am Quaderschritt, nicht an der Bohrung, hin und zurück mit Undo; die Paritätstabelle führt `drill_hole` und `hollow_object` am exakten Körper als `KEEP`, drei Regeldateien zählen 136 Operationen und 1231 Parameter. Endtor: 13421 bestanden, 48 übersprungen, Ruff, Format und mypy je 0 (Arbeitsbaum am HEAD mit nur diesen Dateien). **Offen aus P2.8:** die übrigen Erzeuger (`create_seal`, Organizer, Skizze, Text) rechnen weiter am Netz und sagen es (`shapes.mesh_only`); die Fenstertests laufen mit dem Release-Tor.
   * **Fensterabnahme 21.09. (`f0e61621`)** — der erste Release-Lauf seit dem 20.09.2026, und er war rot: 110 Fensterfälle in fünfzehn Dateien (74 im ersten Lauf, 36 in `test_ui` und den Viewport-Dateien, hinter denen der Lauf stand). Gemessen am Stand vor P2.8 (`2c70d9a7`, zweiter Arbeitsbaum, beide `FAILED`-Listen mit `comm` verglichen): sechs kamen von P2.8, der Rest aus den Commits des 20.09. (`064e3095`, `1fc131a6`, `102d4bf7`, `5d451fe7`, `851f913a`, `db7d1a5c`), deren Fenstertests nie mit ihrem eigenen Code gefahren worden waren. **Elf Funde in der Anwendung**, alle behoben: Tippen in ein Maßfeld im Bild verzehnfachte die Zahl (zwei Rückwege schrieben während des Lesens formatiert zurück, `reading` in `_place_from_feature_panel`); die Freigabe der Vorschau kam nie, wo ein exakter Körper vernetzt wurde, ein Körper erst im Vorschlag entstand, keine 3D-Ansicht da war oder die Antwort während der Auswertung verfiel (`shown`, `_resume_preview_after_idle`, `differenceApplied` ohne Renderer); *Flächenbearbeitung beenden* galt der Vorschau als leer und ging als Absage hinaus (`_preview_outcome`); ein Quader aus der Befehlspalette über dem Startbildschirm hatte einen freien Übernehmen-Knopf, der nichts tat — die Sitzung war nie ausgewertet (`_begin_from_the_start_screen`: der Anfang ersetzt das offene Projekt, wie beim Einfügen von dort); eine Koordinate senkrecht zur Fläche aus der Maßgruppe verlor ihre Zahl beim Ende der Platzierung (`_hand_quiet_placement_to_panel`); ein Einheitenwechsel rechnete die Analysekarte neu und ein Abbruch hielt nicht (`_map_cancelled_for`); Enter im Fragedialog verwarf die Frage (Fokus auf Abbrechen, `make_primary`); ein Feld ohne Wert im Schritt wanderte mit seiner Vorgabe hinein (`untouched_defaults`); Tabulator, Langlochzug bei stehenden Knöpfen und `DeferredDelete` im Ereignisfilter; und der Absturzbericht als modaler Dialog hielt die Suite offscreen ohne rotes Wort an — der Hänger, den `CLAUDE.md` seit dem 16.08. als nativen Abriss führt, war zur Hälfte das (`report_error` geht offscreen ins Protokoll); und ein freigegebener Objektbaum fing noch an zu zeichnen — der zurückgestellte Start seines Zeichners feuerte nach dem Warten, der Thread überlebte den Prozess (Exit 127 nach „60 passed“; `ObjectTree.release` leert den Vorrat, `MainWindow.release` ruft es). Dazu ein nativer Abriss über dreizehn Portionen (`test_placement_dimensions`, Exit 139, seit `102d4bf7`): Der Aufbau setzte `_surface` ohne `_prepared`, was die Anwendung nie tut, und aus dem `AttributeError` im Ereignisfilter beim Anzeigen wurde unter PySide ein Abriss ohne Traceback — gefunden mit `git bisect` und `sys.settrace`. Dazu dreizehn Wertbeschriftungen, die Tour mit drei Hinweisen und dem Sprung in den Prüfbericht. Die übrigen Tests hielten überholte Stände fest und stehen auf der geltenden Regel mit Datum und Grund (Übernehmen erst nach der dargestellten Vorschau, auch in der Maßgruppe; gestellte Merkmale mit `measure_sources`; der Hinweis auf die Formabweichung in der Kopfzeile des Prüfberichts; drei Knöpfe unten im Merkmalfenster). Release-Tor: Sammelgruppe 13.421 bestanden, 48 übersprungen; Fensterdateien in getrennten Prozessen 18.482 bestanden, 18 rot — genau die Handbuchfälle; Ruff, Format und mypy je 0 (Arbeitsbaum am HEAD mit nur diesen Dateien). **Offen:** `test_manual` und die Handbuchabsätze in `test_wording` (18 Fälle) bis zum nächsten Paketbau. **Entschieden und umgesetzt (`e5ac389a`):** Das Abbrechen des Merkmalfensters hat wieder eine Aufgabe — es steht, solange eine Feldvorschau aus dem Panel wartet, und verwirft sie ohne Schritt und ohne Rückfrage (`offer_cancel`, `_cancel_from_feature_panel`); und der Hinweis auf die Formabweichung ist ein Befund mit Maß geworden (`evaluate.check_form_deviation`: `fit_error` über `units.MAX_FACET_SAG`, am schlimmsten Merkmal, als Weg in die Karte nach §18.4) statt eines Satzes an jedem Körper — ein Quader erreicht wieder „Keine Befunde. Das Teil ist druckbereit.“, die erste Tour nennt wieder zwei Hinweise, die Karte selbst bleibt in der Analyseleiste für jeden. **Und die Leistung ist rot** (`pytest -m performance` im Torbaum, ohne Fremdlast: 38 bestanden, 2 rot), beide seit dem 20.09.: `test_smooth_feature_detection_keeps_its_existing_regression_mark` misst 22,8 s statt unter 10 (Ziel 1 s; `git bisect` mit beiden Tests als Sonde: erster roter Stand `851f913a`, am Tag 0.4.4 noch 3,5 s für beide zusammen), und `test_feature_detection_on_a_freeform_tracks_the_real_customer_path` findet an der Freiform eine Fläche von 0,22 mm², wo keine sein darf (rot zwischen `5d451fe7` und `38e11e09`). Beides gehört zu P1.2 und ist dort vermerkt.
+  * **Review über alle Änderungen seit 0.4.4 (21./22.09.2026), eingearbeitet und mit 0.5.0 draußen** — zehn Prüfer nach Gebiet, 148 Befunde, sechs Pakete, jeder Leistungsfund gemessen, jeder Test am Stand davor rot. Exakter Kern: Volumen und Fläche nativ aus dem knotenzerlegten Verbund (STEP-Körper 7–16 s → 0,2 s), starre Bewegungen ohne Integral, Merkmale und Flächenkennzahlen je Körper gemerkt (`features_of` am NURBS-M6 19,6 → 0,9 s), der Gewindeleser mit grober und feiner Abtastung (749 → 97 ms), Gewindebolzen genäht (RM-195), Gewinde einsetzen unter einer halben Sekunde (RM-196), die Aufweitung über einer Durchgangsbohrung an beiden Kernen `through=False`. Netzkern und Szene: die Passung meldet nur Gemessenes (keine `pose_unknown`-Warnung mehr), die Formabweichung gestapelt (Dose mit Deckel 11,8 s → 98 ms), Hash und Cache (Format 23, Kanten je Netz gemerkt, Weg 1 warm 25 → 7 ms), das Schließen an der alten Stelle ohne Narben (796 statt 1852 Dreiecke), eine vergrabene Senkung ohne Volumenverlust, ein Ring ohne Achse sagt ab, Selbstdurchdringung als Feld (5,3 s → 185 ms), Einlesen zählt Kennzahlen einmal, unlesbare Einschlüsse als Warnung. Erkennung: Antworten hängen am Körper und sterben mit ihm (369 MiB tot gehalten → 0), Einschlüsse per Strahltest (1,18 → 0,13 s), ein Kegel zwischen zwei Langlöchern bleibt Kegel, Flächenrollen blockweise, ein Fleck fragt nur seine Ringe (Drache 54,5 → 37,7 s), Bohrungsklick an der 360k-Platte 1,0 → 0,25 s. Fenster und Start: Regel 19 auch feldlos, Gegenstücke asynchron, kein Dialog vor einer exakten Vereinigung, `exact_kernel_present` ohne Import, Start 2,85 → 1,42 s, Hinweise ohne Blase, ein Zug am Modell hält den Vorschlag, der Sitzungsstand rollt nach einem angehaltenen Zug zurück (`halted`). Ansicht: RM-197 bis RM-200. Schichtanalyse und Orientierung: die Suche dreht nur die äußersten Ecken (1,3 M Dreiecke 35 → 5,4 s), `ring_area` einmal, der Keil an jeder fünften Schicht, drei neue Leistungsmarken, `test_parts` 160 → 83 s, `tests.helpers.exact_kernel` mit CI-Wächter, die Paritätstabelle gegen das Register geprüft. Dazu 36 Kundentexte in der Sie-Form und sechs Kataloge nachgezogen. Was offen blieb, steht als RM-201 bis RM-206 im Register; RM-192 und RM-194 sind mit `f0e61621` zu.
   * **offen** P3.1 — Ebenenvertrag: Versatz-, Dreipunkt- und Neigungsebene gehören der Skizze
   * **offen** P3.2 — Rahmen, Referenzauflösung, Cache und Verwaisung über sämtliche Verbraucher
   * **offen** P3.3 — „Neue Ebene …“ mit Art-Auswahl, Menüort vorher benannt
@@ -1622,98 +1625,59 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   (vier `_surface_support`-Läufe über den ganzen Körper und je eine Kegel-, Kugel-, Torus- und
   Zylindereinpassung an 300 000 Dreiecken). Am Ende verwirft `_shapes_on_a_freeform` ohnehin
   alles. Der Freiformkorpus von RM-132 ist **verrauscht** (120 610 Flecken) und deckt die
-  glatte Gestalt nicht. Zu entscheiden: eine Freiformentscheidung **vor** der Nachtrennung
-  (ein Fleck über der Hälfte der Oberfläche, der keine Grundform ist, wird nicht in Stücke
-  geteilt und eingepasst — was er an Bohrungen und Flächen trägt, liegt an seinen Rändern und
-  bleibt), dazu `_surface_support` vektorisieren. Abnahme: der Drache unter §31 oder eine
-  belegte Grenze mit Befund; `generated_figure.stl` daraufhin prüfen, ob es die glatte Gestalt
-  deckt, sonst einen glatten Generatorkörper in den Leistungskorpus; die verrauschten Fälle
-  bleiben.
+  glatte Gestalt nicht.
+
+  **Stand nach dem Review (22.09.2026):** `_surface_support` liest die Fächer aller Ecken auf
+  einmal (`e66c246d`), die Splitstücke fragen nur die Ringe, an die sie grenzen
+  (`_TorusCandidates`), die Flächenrollen prüfen blockweise mit frühem Ende (`_face_roles`),
+  und jeder Fit und Nachweis wird je Fleck einmal gerechnet (`remembered`). Der Drache: 482 →
+  37,7 s bei gleichem Ergebnis; das Kumiko-Gitter 22 → 19,4 s. Was bleibt, sind 2 275
+  Kegelverfeinerungen an Stücken mit 7 bis 50 Dreiecken und 3° Normalenspreizung, deren Achse
+  aus den Normalen nicht bestimmbar ist — 12,5 s im Löser für `None`. Ein lineares Sieb davor
+  ist gemessen unsicher (Erinnerung „Lineares Sieb vor der Verfeinerung ist unsicher"), ein
+  Anfangsrang-Test wäre dasselbe Sieb.
+
+  Zu entscheiden von Robert: eine Freiformentscheidung **vor** der Nachtrennung (ein Fleck
+  über der Hälfte der Oberfläche, der keine Grundform ist, wird nicht in Stücke geteilt und
+  eingepasst — was er an Bohrungen und Flächen trägt, liegt an seinen Rändern und bleibt).
+  Der Preis: tangential eingeblendete Zapfen auf einer Freiform würden nicht mehr gefunden.
+  Abnahme: der Drache unter §31 oder eine belegte Grenze mit Befund; `generated_figure.stl`
+  daraufhin prüfen, ob es die glatte Gestalt deckt, sonst einen glatten Generatorkörper in den
+  Leistungskorpus; die verrauschten Fälle bleiben.
 
   [Befund](ROADMAP-ARCHIV.md#ein-drache-aus-triposg-19-meter-acht-minuten-kein-merkmal-20092026).
 
 
-<a id="rm-195"></a>
+<a id="rm-201"></a>
 
-- [ ] **RM-195 — Der Gewindebolzen vereinigt Sweep und Kern noch mit der
-  Fuzzy-Leiter.** Aufgefallen am 21.09.2026 bei P2.7a: Die Vereinigung eines
-  gesweepten Gangs mit dem Kernzylinder gibt ohne Toleranz den nackten Kern
-  zurück, und die rettende Fuzzy-Stufe ist je Größe und Länge eine andere —
-  über sechs Größen und drei Längen fand sich für zwei Fälle keine, jede
-  Stufe kostete 7 bis 24 s. `profiles.threaded_rod` fängt das mit der Leiter
-  und der Untergrenze über dem Kern (P2.5b) und braucht dafür bis zu 94 s.
-  `profiles.helical_thread` (P2.7a) näht Kern und Gang aus Regelflächen mit
-  geteilten Helixkanten in 30 ms, gültig, Volumen gegen Pappus auf 2·10⁻⁷.
-  Den Erzeuger *Gewindebolzen* darauf stellen: dasselbe ISO-nahe Profil
-  (Fuß 0,75 p, Tiefe 0,6134 p) als `ridge`-Polygon, damit kein Maß sich
-  ändert und keine `LIBRARY_VERSION` fällig wird; Sockel und Sweep, `_joined_rod`,
-  `_sewn`, `_checked_rod` und `ROD_FUZZ_RATIOS` werden dann frei. Abnahme:
-  `test_sketch_ops.py`, `test_exact_thread_features.py` und die Gewindeteile
-  von `test_brep.py` grün, die Fixture-Volumen dort gegen die Analytik
-  nachgemessen, `thread_exact` M6 × 1 L12 unter einer Sekunde.
+- [ ] **RM-201 — Ein hohler Körper hält die 300 ms der Schichtanalyse nicht.**
+  Gefunden am 21.09.2026 im Review (Paket F): Die Leistungsmarke
+  `slice_medium` maß nur den massiven Körper, und ein massiver Körper hat je
+  Schicht eine Kontur. Die neue Marke `slice_medium_hollow`
+  (`test_the_layer_analysis_of_a_hollow_body_is_watched_too`: 200 000
+  Dreiecke, Wand 1,5 mm, 400 Schichten) misst 1,49 bis 1,62 s, wo §31
+  „300 ms" sagt — 3 658 Puffer, 796 Differenzen und 718 STRtree-Anfragen je
+  Lauf, je Schicht einzeln. Die Marke wacht über die Regression, nicht über
+  das Ziel. Weg: die Pufferung und die Differenzen aller Schichten einer
+  Höhe stapeln, wie die Formabweichung es seit dem Review je Trägerart tut,
+  oder das Ziel für Schalen mit Begründung neu fassen. Abnahme: die Marke
+  unter 300 ms auf der Referenzmaschine ohne Fremdlast, oder ein Satz in §31,
+  der Schalen ausnimmt und sagt, warum.
 
-<a id="rm-196"></a>
+<a id="rm-202"></a>
 
-- [ ] **RM-196 — Ein exaktes Gewinde einzusetzen dauert acht bis dreizehn
-  Sekunden.** Gemessen am 21.09.2026 nach dem Review von P2.7a, am exakten
-  Träger 100 × 100 × 10: `insert_printed_thread` 8,2 s, `insert_printed_screw`
-  13,1 s, `insert_printed_nut` 9,0 s; am Netzträger 0,04 bis 0,07 s; Bauplan
-  §31 verlangt für Parameteränderung bis sichtbares Ergebnis unter 2 s. Der
-  Bau selbst ist schnell (genähtes Gewinde 0,3 s, Schraubenloch 0,02 s). Die
-  Sekunden stecken in `edit.transformed`, das vor und nach jeder Bewegung ein
-  konvergiertes Volumenintegral rechnet (`INTEGRAL_RELATIVE_ERROR` 1e-9) — an
-  den BSpline-Flanken eines Gewindes je etwa fünf Sekunden —, und im Volumen
-  des Ergebnisses für `without_effect`. Eine starre Bewegung erhält das
-  Volumen; das Integral belegt dort nichts, was Determinante und
-  `BRepCheck` nicht schon sagen. Weg: für Ähnlichkeitstransformationen das
-  Integral durch den Determinantenvergleich der Hülle ersetzen oder mit
-  grober Toleranz rechnen, `without_effect` am exakten Körper über die
-  Flächenzahl und eine grobe Volumenprobe entscheiden lassen; danach die
-  vier Fälle gegen §31 messen. Abnahme: alle drei unter 2 s, die exakten
-  Zusicherungen aus `test_exact_feature_ops.py` und `test_exact_parts.py`
-  unverändert grün.
+- [ ] **RM-202 — Die Formabweichung am Ring schließt nur auf 0,65 mm.**
+  Gefunden am 21.09.2026 im Review (Paket B), beim Stapeln der
+  Formabweichung: Ebene, Zylinder, Kugel und Kegel rechnen ihre Klammer
+  geschlossen (Ecken, Lotfußpunkte, Achsentreffer); der Torus verfeinert,
+  und sein Budget gilt je Aufruf — an einem Ring bleibt die Klammer 0,65 mm
+  breit, wo die übrigen Träger auf Mikrometer schließen. Vorbestehend, nicht
+  vom Stapeln. Weg: Budget je Dreieck statt je Aufruf, oder eine
+  geschlossene Kandidatenmenge für den Torus (Punkte größten und kleinsten
+  Abstands zum Ringkreis je Dreieck). Abnahme: die Klammer am Ring aus
+  `test_surface_deviation.py` unter 0,01 mm, die übrigen Klammern unverändert.
 
 ## Bedienung und Darstellung
-<a id="rm-192"></a>
-
-- [ ] **RM-192 — Sieben Fenstertests des Merkmalfensters sind am HEAD rot.**
-  Aufgefallen am 20.09.2026 beim Nachfahren von `test_feature_panel.py` nach
-  der Höhlungsauskunft (RM-188, P1.5); in einem Arbeitsbaum am HEAD ohne diese
-  Änderung genauso rot, also älter. Die Fensterdateien laufen nur beim
-  Release, deshalb hat es kein Entwicklungstor gemeldet:
-  `test_original_bore_fields_keep_expressions_through_depth_and_hidden_position`
-  (beide Parameter, `'QLineEdit' object is not callable`),
-  `test_preview_block_keeps_fields_and_cancel_available` (`_cancel` nicht
-  sichtbar), `test_a_nearly_nominal_bore_explains_why_it_is_not_assigned` (der
-  Satz „knapp unter dem Nennmaß“ fehlt),
-  `test_the_tab_key_goes_down_the_panel_like_the_eye` („Im Bild einstellen“
-  steht nicht da), `test_a_part_step_keeps_the_values_it_was_not_asked_about`
-  und `test_the_live_preview_of_a_part_changes_its_step` (die Attrappe kennt
-  `_preview_can_apply` und `_prepare_feature_order` nicht). Zwei Sorten:
-  Attrappen, die dem Fenster hinterherhängen, und Zusagen, die das Fenster
-  nicht mehr einlöst — je Test entscheiden, welche, und den Fund am Fenster
-  nachstellen, bevor die Attrappe angepasst wird. Abnahme: die Datei läuft
-  im Release-Tor grün.
-
-<a id="rm-194"></a>
-
-- [ ] **RM-194 — Elf Werteschlüssel ohne Beschriftung, zwei Beschriftungen ohne
-  Schlüssel.** Aufgefallen am 20.09.2026 beim Nachfahren von
-  `test_value_labels.py` nach den Gewindetexten (RM-188, P2.5); in einem
-  frischen Arbeitsbaum am HEAD `9b8efa8c` genauso rot, also älter. Die Datei
-  gehört zur Fenstergruppe, deshalb hat es kein Entwicklungstor gemeldet.
-  `test_every_value_key_has_a_label`: elf Schlüssel, die eine Ausnahme oder
-  ein Befund in `values=` trägt, stehen nicht in `ui.labels._VALUE_NAMES` und
-  landen als Bezeichner im Tooltip — `clearance_max_mm`, `clearance_min_mm`,
-  `geometry_source`, `intersects` (`scene/fits.py`), `input_name`,
-  `input_object`, `outputs`, `step` (`scene/evaluate.py`), `mapped_triangles`
-  (`brep/kernel.py`), `middle` (`brep/edit.py`), `references` (`errors.py`).
-  `test_the_dictionary_carries_nothing_dead`: `clearance_max_mm` und
-  `clearance_min_mm` stehen beschriftet, aber unter anderem Namen als im Code.
-  Je Schlüssel entscheiden: Beschriftung in sechs Sprachen nachtragen oder den
-  Wert aus `values` nehmen, wenn er keinem Kunden etwas sagt. Abnahme: die
-  Datei läuft im Release-Tor grün.
-
 <a id="rm-197"></a>
 
 - [~] **RM-197 — Maßeditor im Bild: kein Bezugswechsel am Etikett,
@@ -1806,8 +1770,23 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   toter Zweig in `set_gizmo`, das wirkungslose `area`, ein Test mit
   Selbstvergleich und zwei deutsche Bezeichner (`platz`, `unten`, seit dem
   09.09. in der Notlage der Platzsuche) sind weg; `gizmo_reach` kennt den
-  Platzierungsgriff. Offen: die Fensterabnahme beim Release. Gehört zur
-  laufenden Arbeit an P0.3/P0.4.
+  Platzierungsgriff.
+
+  **Review vom 21./22.09.2026 (Paket E), eingearbeitet:** Ein Bild mitten im
+  Zug — Radraste, Vorschau, Overlay — nahm den Griff weg, und aus dem Zug
+  wurde ein Kameraschwenk (`grip_placement` hält einen Griff mit `pressing`);
+  eine Radraste über einem schwebenden Maßfeld zoomte nicht, sie verstellte
+  das Maß und band den Entwurf (`wheel_needs_focus`); ein Druck zwischen die
+  Knöpfe des gewählten Lochs zog ein Langloch statt den Baustein zu setzen;
+  bei gewählter Bohrung fehlte der Tooltip, und der Merkmalstext der Auswahl
+  verdrängte die Statuszeile; ein Zug am Bausteingriff verschob auch den
+  stillen Bohrungsfluss; das erste Escape in der Bezugswahl nimmt nur den
+  Pickmodus zurück, der Entwurf bleibt („Bezugswahl abgebrochen; der bisherige
+  Bezug bleibt."); ein Abschlussklick vor der fertigen Vorschau wartet auf sie
+  und übernimmt einmal (`preview_defer`). Die Fensterdateien der Ansicht
+  liefen dabei grün (456 Fälle), jeder neue Test am Stand davor rot. Offen: die
+  Abnahme am echten Fenster beim Release 0.5.0. Gehört zur laufenden Arbeit an
+  P0.3/P0.4.
 
 <a id="rm-198"></a>
 
@@ -1834,8 +1813,16 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Startweg überlebt seither (zweimal), das Bild ist sauber
   (`test_dimension_ink_lives_in_the_renderer_and_leaves_with_the_surface`).
 
+  **Und die Tinte legte je Kamerageste zehn Renderer-Objekte neu an**
+  (Review 21.09.2026, Paket E): Seither hält sie sieben Elemente mit fester
+  Kapazität und tauscht nur die Punkte (`Item.update_points`,
+  `GfxItem._refill`), liegt über `draw_order` vor dem Material statt über
+  einen geweiteten Tiefenbereich, und `cameraMoved` kommt vor dem Bild — ein
+  Radzoom zeichnet ein Bild statt zwei (22 → 7,7 ms je Aufbau).
+
   **Was bleibt:** Die Overlaykarten tragen Masken mit runden Ecken — wenige
-  Rechtecke, nicht betroffen. Ob Windows D3D12 als Backend bekommt, wo es da
+  Rechtecke, nicht betroffen. Die Probe über den echten Startweg beim Release
+  0.5.0 noch einmal fahren. Ob Windows D3D12 als Backend bekommt, wo es da
   ist (unter D3D12 gab es den Fall nie), ist eine eigene Entscheidung und
   kein Muss mehr.
 
@@ -1858,8 +1845,11 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   *Bohrung ändern* mehr, *Merkmal verschieben* schon; nach
   `end_quiet_placement` stehen Durchmesser und Koordinaten wieder
   (`test_ui.py::test_the_measures_in_the_view_take_their_twins_out_of_the_panel`).
-  Abnahme, offen beim Release: Bohrung an Weg 1 wählen, rechts kein
-  Durchmesser, keine Koordinaten; Escape, und sie stehen wieder.
+  Das Review vom 21.09.2026 fand den Rest: Der Block des historischen
+  Bohrschritts (`offer_bore_step`) blieb neben der Maßgruppe stehen; er trägt
+  sich seither in `_blocks` ein und weicht mit den übrigen. Abnahme, offen
+  beim Release 0.5.0: Bohrung an Weg 1 wählen, rechts kein Durchmesser, keine
+  Koordinaten; Escape, und sie stehen wieder.
 
 <a id="rm-200"></a>
 
@@ -1871,11 +1861,65 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Langlochknopf** kostete 32 ms, weil Knopf und Merkmalsmarke je ein eigenes
   Bild anforderten — seit `bd310fa5` eines (21 ms). Was bleibt,
   ist der Durchgang mit Umgebungsverdeckung: 12 bis 17 ms je Bild bei 3163 ×
-  1259 Bildpunkten, also 60 Bilder je Sekunde und nicht mehr. Offen: Roberts
-  Geste nachstellen (welcher Griff, und ob das Loslassen hängt — der
-  Werkzeugkörper wird danach im Arbeiter neu gebaut) und die
-  Umgebungsverdeckung während eines Zugs aussetzen, wie sie unter einer
-  Analysekarte schon weicht (`ansicht.md`).
+  1259 Bildpunkten, also 60 Bilder je Sekunde und nicht mehr.
+
+  **Review vom 21./22.09.2026 (Paket E):** Ein Radzoom zeichnete zwei Bilder,
+  weil die Maßtinte je Kamerageste neu entstand — jetzt eines (22 → 7,7 ms je
+  Aufbau, `cameraMoved` vor dem Bild); der Bewegungsgriff der Platzierung
+  bleibt über `Gizmo.fits` erhalten, statt je Kamerageste neu zu entstehen;
+  `_on_pointer` meldet nur bei geändertem Zustand. Was der Prüfer außerdem
+  maß und was noch nicht gefahren ist: die Umgebungsverdeckung im Zug auf
+  4 × 2 zurücknehmen, wie sie unter einer Analysekarte schon weicht
+  (`ansicht.md`). Offen: Roberts Geste nachstellen (welcher Griff, und ob das
+  Loslassen hängt — der Werkzeugkörper wird danach im Arbeiter neu gebaut) und
+  die Verdeckung im Zug aussetzen, gemessen am echten Renderer.
+
+<a id="rm-203"></a>
+
+- [ ] **RM-203 — Die Ansicht rechnet je Bild und je Klick, was sie je Auswertung
+  rechnen könnte.** Vier Posten aus dem Review vom 21.09.2026 (Pakete E und
+  D, Leistung B10), jeder gemessen, keiner verlegt: Kanten und
+  Schattenhüllen entstehen je Auswertung im Hauptthread — `feature_edges`
+  rechnet seit dem Review mit einem 1-D-Schlüssel (200 000 Dreiecke 333 →
+  57 ms), `face_components` daneben 71 ms —, richtig wären sie im
+  `_SceneMeshWorker` vorgerechnet, was Kanten- und Schattencache und den
+  Vertrag `_PreparedScene` berührt; `_redraw_feature_patch` kostet an einer
+  Fläche der 360k-Platte 0,41 s (`np.unique`, `argsort`, `_lifted_corners`);
+  `show_scene` läuft am historischen Bohrschritt je Tastendruck; und der
+  Zeiger ruht keine 16 ms, bevor er fragt. Abnahme: je Posten eine Messung am
+  echten Renderer vorher und nachher; ein Auswahlwechsel an der 360k-Platte
+  unter 100 ms an der Fläche (heute 0,38 s, davon 0,41 s hier — die Erkennung
+  ist seit dem Review dort nicht mehr der Posten).
+
+<a id="rm-204"></a>
+
+- [ ] **RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu.**
+  Gemessen am 21.09.2026 im Review (Leistung A5): `_on_feature_selected` 47
+  bis 60 ms und `_show_feature_fields` 42 bis 53 ms je Merkmalauswahl, weil
+  `show_feature` das Fenster leert und alle Handlungen neu baut
+  (`_build_action`, achtzehn Widgets, `request_in_view` synchron). Das Review
+  nahm `findChildren` aus `_settle_lock` (13 ms je Wechsel); der Widget-Cache
+  je Merkmalsart ist nicht gebaut, weil `_build_action` neun Closures an
+  `action`, `fields`, `widgets` und `fixed` bindet, dazu Gruppen-Nachweise,
+  `elsewhere`-Knöpfe, Katalogknopf und Schutzumschalter. Weg: `_Handling`
+  mutabel mit `entries`, `widgets` und `fixed`, die Closures lesen aus dem
+  Objekt, Wiederverwendung je (Operation, Feldnamen und -arten, Schritt oder
+  nicht, Gruppengröße über eins), Werte über `refresh_feature_fields`.
+  Abnahme: ein Merkmalklick unter 20 ms im Fenster, `test_feature_panel.py`
+  und `test_ui.py` unverändert grün.
+
+<a id="rm-205"></a>
+
+- [ ] **RM-205 — Escape in der dritten Stufe der Platzierung springt in den
+  Dialog.** Gefunden am 21.09.2026 im Review (Ansicht #11):
+  `placement_flow.py` sendet `surfaceRequested` ohne Sender; Escape in Stufe 3
+  überspringt Stufe 2 und landet im Dialog, und aus dem Dialog führt kein Weg
+  zurück in Stufe 1. Das ist eine Bedienfrage nach §2 und §19, keine
+  Codefrage: Welche Stufe ein Escape verlässt und wohin es führt, entscheidet
+  der Ablauf, nicht die Signalverdrahtung. Weg: `bedienlogik` entwirft den
+  Rückweg Klick für Klick, dann die Umsetzung mit einem Test je Stufe.
+  Abnahme: ein Escape je Stufe geht genau eine Stufe zurück, der Dialog hat
+  einen Rückweg in die erste, und kein Zustand bleibt ohne Sender.
 
 <a id="rm-070"></a>
 
@@ -2304,6 +2348,21 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   zurück, und der Vorgabeweg ist wieder so schnell wie am 14.09.2026.
 
 ## Tests und Entwicklungswerkzeuge
+
+<a id="rm-206"></a>
+
+- [ ] **RM-206 — Die Bereichsprüfung eines Bausteins zählt Dreieckspaare in
+  Python.** Gemessen am 21.09.2026 im Review (Paket F):
+  `knowledge/parts/range_check.has_self_intersections` braucht 632 ms für 352
+  Dreiecke und 3,7 s für 2 400 — ein skalarer Möller-Test je Paar. Im Kern
+  rechnet dieselbe Frage seit dem Review als Feld (`geom/repair.py`, 507 ms
+  → 10 ms, 5,3 s → 185 ms, je Paar gegen die skalare Rechnung geprüft in
+  `test_self_intersections.py`). Dieselbe Rechnung hier, ohne zweite Fassung.
+  Dazu die zwei teuersten Fälle in `test_parts.py`, die nach dem Review
+  (160 → 83 s) übrig sind: `bvh_follows_a_helix` 17,5 s und `hook_count`
+  16,3 s. Abnahme: `range_check` an den 27 Bausteinen unter einer Sekunde je
+  Baustein für die Selbstdurchdringung, `test_parts.py` unter 60 s auf der
+  Referenzmaschine.
 
 <a id="rm-020"></a>
 

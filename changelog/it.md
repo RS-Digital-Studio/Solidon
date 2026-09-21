@@ -15,6 +15,78 @@ gli stessi punti nello stesso ordine (`tests/test_changelog.py`).
 `tools/make_download.py` ne prende la sezione della versione corrente e la
 scrive in `website/version.json`.
 
+## 0.5.0
+
+### Riconoscimento
+
+- Il riconoscimento sui modelli importati è molte volte più veloce: una piastra da 200 000 triangoli con i suoi fori è pronta in un secondo, dove una forma libera liscia richiedeva minuti.
+- Le facce piccole come la punta di una camma, i fori tagliati e gli smussi d'imbocco sono riconosciuti allo stesso modo su una mesh e su un corpo esatto.
+- Le cavità chiuse e le camere d'aria annidate sono riconosciute come un tutto. Un foro che sbocca in una cavità non compare più come fantasma.
+- Le filettature importate vengono misurate: passo, numero di principi, verso destro o sinistro e diametro nominale. Le parti specchiate mantengono il verso corretto.
+- Coni, sfere e anelli mantengono le loro misure reali, e il pannello delle caratteristiche dice da dove viene un valore: misurato, adattato o dal passaggio.
+- Una parte specchiata, scalata o ripetuta porta con sé le sue caratteristiche. Le caratteristiche superate non restano più accanto a quelle nuove.
+- I file STEP con superfici di forma libera mantengono i fori modificabili, anche dopo salvataggio, riapertura e annullamento.
+- Dopo una modifica, ogni caratteristica che esiste ancora mantiene il suo nome. Se entrano in gioco due candidate, Solidon chiede invece di indovinare.
+- Un clic su un foro di un modello con 360 000 triangoli risponde in un quarto del tempo.
+- Una svasatura che tocca due asole in modo uguale resta una faccia conica invece di sparire in una delle due.
+- Se un modello è fatto di più gusci e non si può leggere con certezza se uno di essi intrappola aria, il rapporto lo dice come avviso.
+- Un modello chiuso libera la sua memoria; prima restavano occupati alcune centinaia di megabyte per modello.
+
+### Modificare sul modello esatto
+
+- I corpi base nascono sempre con facce e spigoli reali. La casella «Modificare facce e spigoli più tardi» è sparita; i progetti vecchi si calcolano senza cambiamenti.
+- Foro, asola, lamatura, perno, cupola e tronco di cono restano esatti su un corpo esatto quando li spostate, duplicate, ruotate o rimuovete.
+- Cordoni e gole si possono spostare, duplicare, ruotare, modificare e rimuovere. Una filettatura si può modificare e chiudere.
+- Una filettatura riceve la sua controparte sull'altra parte con un solo tasto, nella misura di tabella e come un unico accoppiamento.
+- Tutti i blocchi della libreria si costruiscono esattamente su un corpo esatto, dall'avvitamento alla scanalatura di tenuta.
+- Dopo un cambio di raggio, Solidon raccorda lo spigolo giusto, anche quando due raccordi sono vicini.
+- Se due spigoli si trovano nello stesso punto, Solidon chiede quale intendete invece di prenderne uno.
+- Applica attende finché l'anteprima mostra il risultato attuale. Un clic su un'immagine superata non scrive nulla di sbagliato.
+- I colori del filamento restano sui corpi esatti e seguono ogni nuova mesh.
+- Volume e area di un corpo esatto arrivano in millisecondi invece che in secondi.
+- Inserire una filettatura richiede meno di mezzo secondo invece che fino a tredici; una barra filettata nasce in un terzo di secondo invece che in un minuto.
+- Unisci, Sottrai e Posa sul piatto non chiedono più se convertire i corpi esatti. Restano esatti.
+- Quando un foro viene spostato, nel vecchio punto non restano triangoli in più, e una svasatura nascosta non perde nulla del suo volume.
+- Ripara lascia invariato un modello pulito, anche sul corpo esatto.
+- La controparte di una filettatura nasce in secondo piano. Nel frattempo la finestra resta utilizzabile.
+
+### Forare e quote nella vista
+
+- Un foro cliccato mostra subito le sue quote nella vista: distanze dagli spigoli, centro e diametro, con campi numerici per digitare.
+- I campi delle quote stanno accanto alla parte invece che sopra, e le loro linee non si incrociano.
+- Il riferimento di una quota, spigolo, centro o asse, si cambia con clic destro sulla quota o con un clic nel modello.
+- Ciò che sta nella vista non è ripetuto a destra nel pannello di selezione.
+- Dopo aver tirato un foro in asola, le quote restano, anche se ruotate la vista. I pulsanti per tirare stanno sempre sul foro scelto.
+- Scegliendo un foro, la vista 3D poteva cadere su alcune schede grafiche. È risolto.
+- Un trascinamento sulla maniglia sopravvive a un ridisegno a metà trascinamento, e uno scatto della rotella sopra un campo di quota ingrandisce la vista invece di cambiare la quota.
+- Il primo Esc durante la scelta di un riferimento ritira solo la scelta; i valori digitati restano.
+
+### Verificare e stampare
+
+- Gli accoppiamenti verificano i corpi reali nella loro posizione di montaggio. L'esportazione si può annullare prima.
+- Lo scostamento di forma mostra quali facce di una mesh si trovano a quale distanza dall'originale.
+- Se uno spessore di parete si assottiglia a cuneo, Solidon lo dice e consiglia di stampare prima la parete esterna.
+- La ricerca dell'orientamento appoggia una griglia dal bordo stretto sul suo bordo, e una griglia di traversi corti non ha bisogno di supporti.
+- La scheda per l'assistente dice del punto scelto la stessa cosa del pannello delle caratteristiche.
+- Lo scostamento di forma di una scatola con coperchio si calcola in un decimo di secondo invece che in dodici.
+- Le parti separate per la stampa non ricevono più un avviso sulla posizione di montaggio. L'accoppiamento segnala solo ciò che ha misurato.
+- La ricerca dell'orientamento su un modello con oltre un milione di triangoli richiede cinque secondi invece di mezzo minuto.
+- Le distanze molto piccole compaiono nella mappa di analisi come decimali, non come potenze di dieci.
+
+### Importare
+
+- Un assieme importato si può appoggiare sul piano come un tutto con un clic. Le parti mantengono la loro posizione reciproca.
+- Un glTF senza una dimensione plausibile non viene più creduto in metri. Solidon chiede l'unità e mostra le misure per ogni lettura.
+
+### Uso e sistema
+
+- Ogni azione conferma brevemente il suo risultato dove avete cliccato, oltre che nella riga di stato.
+- Un errore del programma lascia un registro locale, allegato alla segnalazione al supporto. Nulla viene inviato da solo.
+- La configurazione di «Modello dal testo» scarica da sola il modello d'immagine mancante invece di rimandarvi a una cartella.
+- Solidon si avvia nella metà del tempo.
+- Con una caratteristica selezionata il suggerimento resta, e un'indicazione sulla maniglia non cancella più l'ultima conferma.
+- Se un passaggio dell'assistente ferma la valutazione, la proposta lo ritira del tutto e mostra lo stato precedente.
+
 ## 0.4.4
 
 ### Modificare

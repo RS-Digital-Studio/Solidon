@@ -16,6 +16,78 @@ portent les mêmes points dans le même ordre (`tests/test_changelog.py`).
 `tools/make_download.py` en tire la section de la version courante et l'écrit
 dans `website/version.json`.
 
+## 0.5.0
+
+### Reconnaissance
+
+- La reconnaissance sur les modèles importés est bien plus rapide : une plaque de 200 000 triangles et ses perçages sont prêts en une seconde, là où une forme libre lisse prenait des minutes.
+- Les petites faces comme la pointe d'une came, les perçages coupés et les chanfreins d'entrée sont reconnus de la même façon sur un maillage et sur un corps exact.
+- Les cavités fermées et les chambres d'air imbriquées sont reconnues comme un tout. Un perçage qui débouche dans une cavité n'apparaît plus comme un fantôme.
+- Les filetages importés sont mesurés : pas, nombre de filets, sens droit ou gauche et diamètre nominal. Les pièces en miroir gardent le bon sens.
+- Cônes, sphères et anneaux gardent leurs vraies cotes, et le panneau des caractéristiques dit d'où vient une valeur : mesurée, ajustée ou issue de l'étape.
+- Une pièce en miroir, mise à l'échelle ou répétée emporte ses caractéristiques. Les caractéristiques périmées ne restent plus à côté des nouvelles.
+- Les fichiers STEP à surfaces de forme libre gardent leurs perçages modifiables, même après enregistrement, réouverture et annulation.
+- Après une modification, chaque caractéristique qui existe encore garde son nom. Si deux candidates entrent en jeu, Solidon demande au lieu de deviner.
+- Un clic sur un perçage d'un modèle de 360 000 triangles répond en un quart du temps.
+- Une fraisure qui touche deux trous oblongs à égalité reste une face conique au lieu de disparaître dans l'un des deux.
+- Si un modèle se compose de plusieurs coques et qu'on ne peut pas lire avec certitude si l'une d'elles emprisonne de l'air, le rapport le dit sous forme d'avertissement.
+- Un modèle fermé libère sa mémoire ; avant, quelques centaines de mégaoctets par modèle restaient occupés.
+
+### Modifier sur le modèle exact
+
+- Les corps de base sont toujours créés avec de vraies faces et arêtes. La case « Modifier faces et arêtes plus tard » a disparu ; les anciens projets se calculent sans changement.
+- Perçage, trou oblong, lamage, tenon, dôme et tronc de cône restent exacts sur un corps exact quand vous les déplacez, dupliquez, tournez ou supprimez.
+- Les bourrelets et les gorges se laissent déplacer, dupliquer, tourner, modifier et supprimer. Un filetage se laisse modifier et fermer.
+- Un filetage reçoit sa contrepartie sur l'autre pièce d'un seul clic, à la cote du tableau et comme un seul ajustement.
+- Tous les blocs de la bibliothèque se construisent exactement sur un corps exact, du vissage à la rainure d'étanchéité.
+- Après un changement de rayon, Solidon arrondit la bonne arête, même quand deux arrondis sont proches.
+- Si deux arêtes se trouvent au même endroit, Solidon demande laquelle vous voulez au lieu d'en prendre une.
+- Appliquer attend que l'aperçu montre le résultat actuel. Un clic sur une image périmée n'écrit rien de faux.
+- Les couleurs de filament restent sur les corps exacts et suivent chaque nouveau maillage.
+- Le volume et l'aire d'un corps exact arrivent en millisecondes au lieu de secondes.
+- Insérer un filetage prend moins d'une demi-seconde au lieu de treize au plus ; une tige filetée se construit en un tiers de seconde au lieu d'une minute.
+- Unir, Soustraire et Poser sur le plateau ne demandent plus s'il faut convertir les corps exacts. Ils restent exacts.
+- Quand un perçage est déplacé, aucun triangle superflu ne reste à l'ancien endroit, et une fraisure cachée ne perd rien de son volume.
+- Réparer laisse un modèle propre inchangé, aussi sur le corps exact.
+- La contrepartie d'un filetage se construit en arrière-plan. La fenêtre reste utilisable pendant ce temps.
+
+### Percer et cotes dans la vue
+
+- Un perçage cliqué montre aussitôt ses cotes dans la vue : distances aux arêtes, centre et diamètre, avec des champs numériques pour saisir.
+- Les champs de cote se placent à côté de la pièce plutôt que dessus, et leurs lignes ne se croisent pas.
+- La référence d'une cote, arête, centre ou axe, se change par clic droit sur la cote ou par un clic dans le modèle.
+- Ce qui figure dans la vue n'est pas répété à droite dans le panneau de sélection.
+- Après avoir étiré un perçage en trou oblong, les cotes restent, même si vous tournez la vue. Les boutons pour étirer se trouvent toujours au perçage choisi.
+- Choisir un perçage pouvait faire tomber la vue 3D sur certaines cartes graphiques. C'est corrigé.
+- Un glissement sur la poignée survit à un rafraîchissement en plein glissement, et un cran de molette au-dessus d'un champ de cote zoome la vue au lieu de modifier la cote.
+- Le premier Échap pendant le choix d'une référence ne retire que le choix ; les valeurs saisies restent.
+
+### Vérifier et imprimer
+
+- Les ajustements vérifient les vrais corps dans leur position de montage. L'export peut être annulé avant.
+- L'écart de forme montre quelles faces d'un maillage se trouvent à quelle distance de l'original.
+- Quand une épaisseur de paroi s'amincit en coin, Solidon le dit et conseille d'imprimer la paroi extérieure en premier.
+- La recherche d'orientation pose une grille à bord étroit sur son bord, et une grille de courtes entretoises n'a pas besoin de supports.
+- La fiche pour l'assistant dit du point choisi la même chose que le panneau des caractéristiques.
+- L'écart de forme d'une boîte avec couvercle se calcule en un dixième de seconde au lieu de douze.
+- Les pièces posées séparément pour l'impression ne reçoivent plus d'avertissement sur leur position de montage. L'ajustement ne signale que ce qu'il a mesuré.
+- La recherche d'orientation sur un modèle de plus d'un million de triangles prend cinq secondes au lieu d'une demi-minute.
+- Les très petites distances apparaissent dans la carte d'analyse en décimales, pas en puissances de dix.
+
+### Importer
+
+- Un assemblage importé se pose sur le plateau d'un seul clic, comme un tout. Les pièces gardent leur position les unes par rapport aux autres.
+- Un glTF sans taille plausible n'est plus cru en mètres. Solidon demande l'unité et montre les cotes pour chaque lecture.
+
+### Utilisation et système
+
+- Chaque action confirme brièvement son résultat là où vous avez cliqué, en plus de la ligne d'état.
+- Une erreur du programme laisse un journal local, joint au rapport de support. Rien n'est envoyé de lui-même.
+- La configuration de « Modèle à partir d'un texte » télécharge elle-même le modèle d'image manquant au lieu de vous renvoyer vers un dossier.
+- Solidon démarre en deux fois moins de temps.
+- Avec une caractéristique sélectionnée, l'infobulle reste, et une indication sur la poignée n'efface plus le dernier accusé.
+- Si une étape de l'assistant arrête l'évaluation, la proposition la retire entièrement et montre l'état précédent.
+
 ## 0.4.4
 
 ### Modifier

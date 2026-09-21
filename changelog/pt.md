@@ -15,6 +15,78 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 `tools/make_download.py` retira daqui a secção da versão atual e escreve-a em
 `website/version.json`.
 
+## 0.5.0
+
+### Reconhecimento
+
+- O reconhecimento em modelos importados é muitas vezes mais rápido: uma placa com 200 000 triângulos e os seus furos fica pronta num segundo, onde uma forma livre lisa demorava minutos.
+- Faces pequenas como a ponta de um came, furos cortados e chanfros de boca são reconhecidos da mesma forma numa malha e num corpo exato.
+- Cavidades fechadas e câmaras de ar encaixadas são reconhecidas como um todo. Um furo que dá para uma cavidade já não aparece como fantasma.
+- Roscas importadas são medidas: passo, número de entradas, sentido direito ou esquerdo e diâmetro nominal. Peças espelhadas mantêm o sentido correto.
+- Cones, esferas e anéis mantêm as suas medidas reais, e o painel de características diz de onde vem um valor: medido, ajustado ou do passo.
+- Uma peça espelhada, escalada ou repetida em padrão leva consigo as suas características. Características desatualizadas já não ficam ao lado das novas.
+- Ficheiros STEP com superfícies de forma livre mantêm os furos editáveis, mesmo depois de guardar, reabrir e anular.
+- Após uma alteração, cada característica que ainda existe mantém o seu nome. Se duas candidatas entram em questão, o Solidon pergunta em vez de adivinhar.
+- Um clique num furo de um modelo com 360 000 triângulos responde num quarto do tempo.
+- Um escareado que toca dois rasgos por igual continua a ser uma face cónica em vez de desaparecer num deles.
+- Se um modelo é composto por várias cascas e não se consegue ler com segurança se alguma prende ar, o relatório di-lo como aviso.
+- Um modelo fechado liberta a sua memória; antes ficavam algumas centenas de megabytes por modelo.
+
+### Editar no modelo exato
+
+- Os corpos básicos são sempre criados com faces e arestas reais. A opção «Editar faces e arestas mais tarde» desapareceu; projetos antigos calculam-se sem alterações.
+- Furo, furo oblongo, rebaixo, pino, cúpula e tronco de cone mantêm-se exatos num corpo exato quando os desloca, duplica, roda ou remove.
+- Cordões e gargantas podem ser deslocados, duplicados, rodados, alterados e removidos. Uma rosca pode ser alterada e fechada.
+- Uma rosca recebe a sua contraparte na outra peça com um só clique, na medida da tabela e como um único ajuste.
+- Todos os blocos da biblioteca constroem-se exatamente num corpo exato, da união aparafusada à ranhura de vedação.
+- Após uma mudança de raio, o Solidon arredonda a aresta certa, mesmo quando dois arredondamentos estão próximos.
+- Se duas arestas estão no mesmo sítio, o Solidon pergunta qual pretende em vez de escolher uma.
+- Aplicar espera até a pré-visualização mostrar o resultado atual. Um clique numa imagem desatualizada não escreve nada de errado.
+- As cores de filamento mantêm-se nos corpos exatos e acompanham cada nova malha.
+- Volume e área de um corpo exato chegam em milissegundos em vez de segundos.
+- Inserir uma rosca demora menos de meio segundo em vez de até treze; um perno roscado constrói-se num terço de segundo em vez de um minuto.
+- Unir, Subtrair e Pousar na mesa já não perguntam se devem converter corpos exatos. Continuam exatos.
+- Ao deslocar um furo não ficam triângulos a mais no sítio antigo, e um escareado escondido não perde nada do seu volume.
+- Reparar deixa um modelo limpo inalterado, também no corpo exato.
+- A contraparte de uma rosca é construída em segundo plano. Entretanto a janela continua utilizável.
+
+### Furar e cotas na vista
+
+- Um furo clicado mostra logo as suas cotas na vista: distâncias às arestas, centro e diâmetro, com campos numéricos para escrever.
+- Os campos de cota ficam ao lado da peça em vez de em cima dela, e as suas linhas não se cruzam.
+- A referência de uma cota, aresta, centro ou eixo, muda-se com clique direito na cota ou com um clique no modelo.
+- O que está na vista não se repete à direita no painel de seleção.
+- Depois de puxar um furo até ficar oblongo, as cotas mantêm-se, mesmo que rode a vista. Os botões para puxar estão sempre no furo escolhido.
+- Ao escolher um furo, a vista 3D podia falhar em algumas placas gráficas. Está corrigido.
+- Um arrasto na pega sobrevive a um redesenho a meio do arrasto, e um passo da roda sobre um campo de cota amplia a vista em vez de alterar a cota.
+- O primeiro Escape ao escolher uma referência retira apenas a escolha; os valores digitados mantêm-se.
+
+### Verificar e imprimir
+
+- Os ajustes verificam os corpos reais na sua posição de montagem. A exportação pode ser cancelada antes.
+- O desvio de forma mostra que faces de uma malha estão a que distância do original.
+- Quando uma espessura de parede se estreita em cunha, o Solidon diz-o e aconselha imprimir primeiro a parede exterior.
+- A procura de orientação assenta uma grelha de bordo estreito sobre o seu bordo, e uma grelha de travessas curtas não precisa de suportes.
+- A ficha para o assistente diz sobre o ponto escolhido o mesmo que o painel de características.
+- O desvio de forma de uma caixa com tampa calcula-se num décimo de segundo em vez de doze.
+- Peças separadas para imprimir deixam de receber um aviso sobre a posição de montagem. O ajuste comunica apenas o que mediu.
+- A procura de orientação num modelo com mais de um milhão de triângulos demora cinco segundos em vez de meio minuto.
+- Distâncias muito pequenas aparecem no mapa de análise como decimais, não como potências de dez.
+
+### Importar
+
+- Um conjunto importado pode ser assente na mesa como um todo com um clique. As peças mantêm a sua posição relativa.
+- Um glTF sem um tamanho plausível já não é tomado como metros. O Solidon pergunta a unidade e mostra as medidas para cada leitura.
+
+### Utilização e sistema
+
+- Cada ação confirma brevemente o seu resultado onde clicou, além da linha de estado.
+- Um erro do programa deixa um registo local que é anexado ao relatório de apoio. Nada é enviado por si só.
+- A configuração de «Modelo a partir de texto» descarrega por si própria o modelo de imagem em falta em vez de o remeter para uma pasta.
+- O Solidon arranca em metade do tempo.
+- Com uma característica selecionada a dica mantém-se, e uma indicação sobre a pega já não apaga a última confirmação.
+- Se um passo do assistente parar a avaliação, a proposta retira-o por completo e mostra o estado anterior.
+
 ## 0.4.4
 
 ### Editar

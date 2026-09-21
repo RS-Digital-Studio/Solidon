@@ -40,6 +40,78 @@ wieder heraus (Entscheidung Robert). Wo ein Nutzen bleibt, der ohne den
 Mechanismus auskommt — „die Meldung nennt den wirklichen Grund“ —, steht der
 Nutzen da und sonst nichts.
 
+## 0.5.0
+
+### Erkennen
+
+- Die Erkennung an eingelesenen Modellen ist um ein Vielfaches schneller: Eine Lochplatte mit 200 000 Dreiecken steht in einer Sekunde, eine glatte Freiform brauchte vorher Minuten.
+- Kleine Flächen wie die Spitze eines Nockens, angeschnittene Bohrungen und Mündungsfasen werden am Netz und am exakten Körper gleich erkannt.
+- Geschlossene Hohlräume und verschachtelte Luftkammern werden als Ganzes erkannt. Eine Bohrung, die in einen Hohlraum führt, erscheint nicht mehr als Phantom.
+- Importierte Gewinde werden vermessen: Steigung, Gangzahl, Rechts- oder Linksgang und Nenndurchmesser. Auch gespiegelte Teile behalten die richtige Händigkeit.
+- Kegel, Kugeln und Ringe behalten ihre echten Maße, und das Merkmalfenster sagt, woher ein Maß stammt: gemessen, eingepasst oder aus dem Schritt.
+- Ein gespiegeltes, skaliertes oder gemustertes Teil führt seine Merkmale mit. Veraltete Merkmale bleiben nicht neben neuen stehen.
+- STEP-Dateien mit Freiformflächen behalten ihre Bohrungen bearbeitbar, auch nach Speichern, Wiederöffnen und Zurücknehmen.
+- Nach einer Änderung bleibt jedes Merkmal, das es noch gibt, unter seinem Namen. Kommen zwei Kandidaten in Frage, fragt Solidon, statt zu raten.
+- Ein Klick auf eine Bohrung an einem Modell mit 360 000 Dreiecken antwortet in einem Viertel der Zeit.
+- Eine Senkung, die zwei Langlöcher gleich berührt, bleibt eine Kegelfläche, statt in einem der beiden zu verschwinden.
+- Besteht ein Modell aus mehreren Schalen und lässt sich nicht sicher lesen, ob eine davon Luft einschließt, steht das als Warnung im Prüfbericht.
+- Ein geschlossenes Modell gibt seinen Speicher frei; vorher blieben einige hundert Megabyte je Modell liegen.
+
+### Bearbeiten am exakten Modell
+
+- Grundkörper entstehen immer mit echten Flächen und Kanten. Der Haken „Flächen und Kanten später bearbeiten“ ist gefallen; alte Projekte rechnen unverändert.
+- Bohrung, Langloch, Senkung, Zapfen, Kuppe und Kegelstumpf bleiben am exakten Körper exakt, wenn Sie sie versetzen, verdoppeln, drehen oder entfernen.
+- Wulst und Kehle lassen sich versetzen, verdoppeln, drehen, ändern und entfernen. Ein Gewinde lässt sich ändern und verschließen.
+- Ein Gewinde bekommt sein Gegenstück am anderen Teil auf Knopfdruck, im Tabellenmaß und als eine Passung.
+- Alle Bausteine der Bibliothek bauen am exakten Körper exakt, von der Verschraubung bis zur Dichtnut.
+- Nach einem Radiuswechsel verrundet Solidon die richtige Kante, auch wenn zwei Rundungen nah beieinander liegen.
+- Liegen zwei Kanten an derselben Stelle, fragt Solidon, welche gemeint ist, statt eine zu nehmen.
+- Übernehmen wartet, bis die Vorschau das aktuelle Ergebnis zeigt. Ein Klick auf ein veraltetes Bild schreibt nichts Falsches.
+- Filamentfarben bleiben an exakten Körpern erhalten und folgen jeder neuen Vernetzung.
+- Volumen und Fläche eines exakten Körpers kommen in Millisekunden statt in Sekunden.
+- Ein Gewinde einzusetzen dauert unter einer halben Sekunde statt bis zu dreizehn; ein Gewindebolzen entsteht in einer Drittelsekunde statt in einer Minute.
+- Vereinigen, Abziehen und Auf das Bett setzen fragen an exakten Körpern nicht mehr, ob umgewandelt werden soll. Sie bleiben exakt.
+- Wird eine Bohrung versetzt, bleiben an der alten Stelle keine überzähligen Dreiecke zurück, und eine verdeckte Senkung verliert nichts von ihrem Volumen.
+- Reparieren lässt ein sauberes Modell unverändert, auch am exakten Körper.
+- Das Gegenstück zu einem Gewinde entsteht im Hintergrund. Das Fenster bleibt so lange bedienbar.
+
+### Bohren und Maße im Bild
+
+- Eine angeklickte Bohrung zeigt ihre Maße sofort im Bild: Abstände zu den Kanten, Mitte und Durchmesser, mit Zahlenfeldern zum Tippen.
+- Die Maßfelder stehen neben dem Teil statt darauf, und ihre Linien kreuzen sich nicht.
+- Der Bezug eines Maßes, Kante, Mitte oder Achse, lässt sich per Rechtsklick auf das Maß wechseln oder im Modell anklicken.
+- Was im Bild steht, steht rechts im Auswahlfenster nicht noch einmal.
+- Nach dem Zug zum Langloch bleiben die Maße stehen, auch wenn Sie die Ansicht drehen. Die Knöpfe zum Ziehen stehen immer am gewählten Loch.
+- Beim Wählen einer Bohrung konnte die 3D-Ansicht auf manchen Grafikkarten ausfallen. Das ist behoben.
+- Ein Zug am Griff übersteht ein Bild mitten im Zug, und eine Radraste über einem Maßfeld zoomt die Ansicht, statt das Maß zu verstellen.
+- Das erste Escape bei der Bezugswahl nimmt nur die Wahl zurück; die getippten Werte bleiben.
+
+### Prüfen und Drucken
+
+- Passungen prüfen die wirklichen Körper in ihrer Einbaulage. Der Export lässt sich vorher abbrechen.
+- Die Formabweichung zeigt, welche Flächen einer Vernetzung wie weit vom Original entfernt liegen.
+- Läuft eine Wandstärke keilförmig aus, sagt Solidon es und rät, die Außenwand zuerst zu drucken.
+- Die Orientierungssuche stellt ein Gitter mit schmalem Rand auf seinen Rand, und ein Gitter aus kurzen Stegen braucht keine Stützen.
+- Der Steckbrief für den Assistenten sagt zur gewählten Stelle dasselbe wie das Merkmalfenster.
+- Die Formabweichung an einer Dose mit Deckel rechnet in einem Zehntel Sekunde statt in zwölf.
+- Getrennt liegende Druckteile bekommen keine Warnung zur Einbaulage mehr. Die Passung meldet nur, was sie gemessen hat.
+- Die Orientierungssuche an einem Modell mit über einer Million Dreiecken dauert fünf Sekunden statt einer halben Minute.
+- Sehr kleine Abstände stehen in der Analysekarte als Dezimalzahl, nicht als Zehnerpotenz.
+
+### Einlesen
+
+- Eine eingelesene Baugruppe lässt sich mit einem Klick als Ganzes auf das Bett setzen. Die Teile behalten ihre Lage zueinander.
+- Ein glTF ohne plausible Größe wird nicht mehr in Metern geglaubt. Solidon fragt nach der Einheit und zeigt die Maße je Lesart.
+
+### Bedienung und System
+
+- Jede Handlung quittiert ihr Ergebnis kurz dort, wo Sie geklickt haben, zusätzlich zur Statuszeile.
+- Ein Programmfehler hinterlässt ein lokales Protokoll, das dem Supportbericht beiliegt. Von allein wird nichts gesendet.
+- Die Einrichtung für „Modell aus Text“ holt das fehlende Bildmodell selbst, statt Sie auf einen Ordner zu verweisen.
+- Solidon startet in der Hälfte der Zeit.
+- Bei einem gewählten Merkmal bleibt der Tooltip erhalten, und ein Hinweis zum Griff wischt die letzte Quittung nicht mehr weg.
+- Hält ein Schritt des Assistenten die Auswertung an, nimmt der Vorschlag ihn ganz zurück und zeigt den Stand davor.
+
 ## 0.4.4
 
 ### Bearbeiten

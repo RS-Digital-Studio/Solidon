@@ -16,6 +16,78 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 `tools/make_download.py` toma el apartado de la versión actual y lo escribe en
 `website/version.json`.
 
+## 0.5.0
+
+### Reconocimiento
+
+- El reconocimiento en modelos importados es muchas veces más rápido: una placa con 200 000 triángulos y sus agujeros está lista en un segundo, donde una forma libre lisa tardaba minutos.
+- Las caras pequeñas como la punta de una leva, los agujeros cortados y los chaflanes de boca se reconocen igual en una malla y en un cuerpo exacto.
+- Las cavidades cerradas y las cámaras de aire anidadas se reconocen como un todo. Un agujero que lleva a una cavidad ya no aparece como fantasma.
+- Las roscas importadas se miden: paso, número de entradas, sentido derecho o izquierdo y diámetro nominal. Las piezas reflejadas conservan el sentido correcto.
+- Conos, esferas y anillos conservan sus medidas reales, y el panel de características dice de dónde viene un valor: medido, ajustado o del paso.
+- Una pieza reflejada, escalada o repetida en patrón lleva consigo sus características. Las características caducadas ya no quedan junto a las nuevas.
+- Los archivos STEP con superficies de forma libre mantienen sus agujeros editables, también tras guardar, reabrir y deshacer.
+- Tras un cambio, cada característica que sigue existiendo conserva su nombre. Si dos candidatas entran en cuestión, Solidon pregunta en vez de adivinar.
+- Un clic en un taladro de un modelo con 360 000 triángulos responde en la cuarta parte del tiempo.
+- Un avellanado que toca dos ranuras por igual sigue siendo una cara cónica en lugar de desaparecer en una de ellas.
+- Si un modelo consta de varias cáscaras y no se puede leer con seguridad si alguna encierra aire, el informe lo indica como advertencia.
+- Un modelo cerrado libera su memoria; antes quedaban unos cientos de megabytes por modelo.
+
+### Editar sobre el modelo exacto
+
+- Los cuerpos básicos se crean siempre con caras y aristas reales. La casilla «Editar caras y aristas más tarde» ha desaparecido; los proyectos antiguos se calculan sin cambios.
+- Agujero, ranura, avellanado, tetón, cúpula y tronco de cono se mantienen exactos en un cuerpo exacto al desplazarlos, duplicarlos, girarlos o eliminarlos.
+- Los cordones y las gargantas se pueden desplazar, duplicar, girar, cambiar y eliminar. Una rosca se puede cambiar y cerrar.
+- Una rosca obtiene su contraparte en la otra pieza con solo pulsar un botón, en la medida de tabla y como un único ajuste.
+- Todos los bloques de la biblioteca se construyen exactamente sobre un cuerpo exacto, desde el atornillado hasta la ranura de junta.
+- Tras cambiar un radio, Solidon redondea la arista correcta, incluso cuando dos redondeos están muy cerca.
+- Si dos aristas están en el mismo lugar, Solidon pregunta cuál quiere decir en vez de tomar una.
+- Aplicar espera hasta que la vista previa muestra el resultado actual. Un clic sobre una imagen caducada no escribe nada erróneo.
+- Los colores de filamento se conservan en los cuerpos exactos y siguen cada nuevo mallado.
+- El volumen y el área de un cuerpo exacto llegan en milisegundos en lugar de segundos.
+- Insertar una rosca tarda menos de medio segundo en lugar de hasta trece; un perno roscado se construye en un tercio de segundo en lugar de un minuto.
+- Unir, Restar y Colocar sobre la cama ya no preguntan si convertir los cuerpos exactos. Siguen siendo exactos.
+- Al desplazar un taladro no quedan triángulos sobrantes en el sitio antiguo, y un avellanado oculto no pierde nada de su volumen.
+- Reparar deja intacto un modelo limpio, también en el cuerpo exacto.
+- La contraparte de una rosca se construye en segundo plano. Mientras tanto la ventana sigue utilizable.
+
+### Taladrar y medidas en la vista
+
+- Un agujero al que se hace clic muestra sus medidas de inmediato en la vista: distancias a las aristas, centro y diámetro, con campos numéricos para escribir.
+- Los campos de medida están junto a la pieza en lugar de sobre ella, y sus líneas no se cruzan.
+- La referencia de una medida, arista, centro o eje, se puede cambiar con clic derecho sobre la medida o haciendo clic en el modelo.
+- Lo que está en la vista no se repite a la derecha en el panel de selección.
+- Tras estirar un agujero hasta convertirlo en ranura, las medidas se mantienen, aunque gire la vista. Los botones para estirar están siempre en el agujero elegido.
+- Al elegir un agujero, la vista 3D podía fallar en algunas tarjetas gráficas. Está corregido.
+- Un arrastre en el asa sobrevive a un redibujado en mitad del arrastre, y un paso de rueda sobre un campo de cota amplía la vista en lugar de cambiar la cota.
+- El primer Escape al elegir una referencia solo retira la elección; los valores tecleados se conservan.
+
+### Comprobar e imprimir
+
+- Los ajustes comprueban los cuerpos reales en su posición de montaje. La exportación se puede cancelar antes.
+- La desviación de forma muestra qué caras de un mallado están a qué distancia del original.
+- Si un grosor de pared se estrecha en cuña, Solidon lo dice y aconseja imprimir primero la pared exterior.
+- La búsqueda de orientación pone una rejilla de borde estrecho sobre su borde, y una rejilla de travesaños cortos no necesita soportes.
+- La ficha para el asistente dice sobre el punto elegido lo mismo que el panel de características.
+- La desviación de forma de una caja con tapa se calcula en una décima de segundo en lugar de doce.
+- Las piezas separadas para imprimir ya no reciben una advertencia sobre su posición de montaje. El ajuste informa solo de lo que ha medido.
+- La búsqueda de orientación en un modelo con más de un millón de triángulos tarda cinco segundos en lugar de medio minuto.
+- Las distancias muy pequeñas aparecen en el mapa de análisis como decimales, no como potencias de diez.
+
+### Importar
+
+- Un conjunto importado se puede colocar sobre la cama como un todo con un clic. Las piezas conservan su posición relativa.
+- Un glTF sin un tamaño plausible ya no se toma por metros. Solidon pregunta la unidad y muestra las medidas de cada lectura.
+
+### Manejo y sistema
+
+- Cada acción confirma brevemente su resultado donde ha hecho clic, además de en la línea de estado.
+- Un error del programa deja un registro local que se adjunta al informe de soporte. Nada se envía por sí solo.
+- La configuración de «Modelo a partir de texto» descarga por sí misma el modelo de imagen que falta en vez de remitirle a una carpeta.
+- Solidon arranca en la mitad de tiempo.
+- Con una característica seleccionada se mantiene la descripción emergente, y una indicación sobre el asa ya no borra el último acuse.
+- Si un paso del asistente detiene la evaluación, la propuesta lo retira por completo y muestra el estado anterior.
+
 ## 0.4.4
 
 ### Editar

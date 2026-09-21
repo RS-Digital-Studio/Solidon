@@ -25,6 +25,7 @@ für den Rückstand glauben darf, ist das Register in `ROADMAP.md`.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-09-22 | [Das Review über alle Änderungen seit 0.4.4 (21./22.09.2026)](#das-review-über-alle-änderungen-seit-044-2122092026) |
 | 2026-09-20 | [Ein Drache aus TripoSG: 1,9 Meter, acht Minuten, kein Merkmal (20.09.2026)](#ein-drache-aus-triposg-19-meter-acht-minuten-kein-merkmal-20092026) |
 | 2026-09-15 | [Vierunddreißig Modelle aus dem Netz: Erkennung, Bearbeitung, Leistung (15.09.2026)](#vierunddreißig-modelle-aus-dem-netz-erkennung-bearbeitung-leistung-15092026) |
 | 2026-09-15 | [GitHub Actions nahm keinen Lauf an, das Repository war privat (15.09.2026)](#github-actions-nahm-keinen-lauf-an-das-repository-war-privat-15092026) |
@@ -29189,3 +29190,144 @@ Fortschritt darin. Bei acht Minuten ist das „lädt ewig, nichts passiert“.
 **Eine Sonde traf echte Daten:** Der Kommandozeilenlauf aus der Entwicklungsumgebung schrieb
 in Roberts `app.log` und verwarf den Ergebniscache der installierten 0.4.4 („dropped result
 cache of an older version“) — festgehalten in der Erinnerung „Config-Dir ohne Schalter“.
+
+
+## Das Review über alle Änderungen seit 0.4.4 (21./22.09.2026)
+
+Vor 0.5.0 ein Review über 133 Commits seit `v0.4.4` — zehn Prüfer nach Gebiet
+(exakter Kern, Netzkern und Szene, Erkennung, Fenster, Ansicht, drei
+Testgruppen, Leistung, der Rest), 148 Befunde, und sechs Pakete, die alles
+davon behoben haben, mit Messung je Leistungsfund und Gegenprobe je Test.
+Was dabei an Registerpunkten zuging, steht hier; was neu aufkam, steht als
+RM-201 bis RM-206 im Register.
+
+<a id="rm-195"></a>
+
+- [x] **RM-195 — Der Gewindebolzen vereinigt Sweep und Kern noch mit der
+  Fuzzy-Leiter.** Aufgefallen am 21.09.2026 bei P2.7a: Die Vereinigung eines
+  gesweepten Gangs mit dem Kernzylinder gibt ohne Toleranz den nackten Kern
+  zurück, und die rettende Fuzzy-Stufe ist je Größe und Länge eine andere —
+  über sechs Größen und drei Längen fand sich für zwei Fälle keine, jede
+  Stufe kostete 7 bis 24 s. `profiles.threaded_rod` fängt das mit der Leiter
+  und der Untergrenze über dem Kern (P2.5b) und braucht dafür bis zu 94 s.
+  `profiles.helical_thread` (P2.7a) näht Kern und Gang aus Regelflächen mit
+  geteilten Helixkanten in 30 ms, gültig, Volumen gegen Pappus auf 2·10⁻⁷.
+  Den Erzeuger *Gewindebolzen* darauf stellen: dasselbe ISO-nahe Profil
+  (Fuß 0,75 p, Tiefe 0,6134 p) als `ridge`-Polygon, damit kein Maß sich
+  ändert und keine `LIBRARY_VERSION` fällig wird; Sockel und Sweep, `_joined_rod`,
+  `_sewn`, `_checked_rod` und `ROD_FUZZ_RATIOS` werden dann frei. Abnahme:
+  `test_sketch_ops.py`, `test_exact_thread_features.py` und die Gewindeteile
+  von `test_brep.py` grün, die Fixture-Volumen dort gegen die Analytik
+  nachgemessen, `thread_exact` M6 × 1 L12 unter einer Sekunde.
+
+  **Erledigt am 21.09.2026** (Review-Paket A): `profiles.threaded_rod` steht
+  auf `helical_thread` — `thread_ridge` trägt dasselbe ISO-nahe Profil (Fuß
+  0,75 p, Tiefe 0,6134 p, Flankenwinkel über `_THREAD_FOOT_SEAT`), der Bolzen
+  wird auf Länge geschnitten, `_checked_rod` bleibt die Absage; `_joined_rod`
+  und `ROD_SEW_SHARE` sind gefallen. Dazu `_HELIX_PRECISION = EPS_GEOM / 100`:
+  OCCTs 1e-5 legte die Flanken Mikrometer neben die Schraubfläche (Hülle des
+  M10 3 µm neben der Achse). Gemessen: M6 × 1 L12 15,2 s → 0,30 s, M10 × 1,5
+  L12 26,7 s → 0,28 s, `thread_exact` als Operation 0,55 s. Die Sekunden
+  steckten nicht in der Vereinigung, sondern in den Volumenintegralen der
+  Prüfstufen — mit dem nativen Volumen (RM-196) fallen beide. Der Korpus
+  `data/threads/` ist mit den genähten Bolzen neu erzeugt (`m6_rechts`,
+  `m10_rechts`, `m8_innen`; `make_thread_corpus.py --check` prüft Flächen,
+  Volumen und Oberfläche auf 1e-6), und `test_the_corpus_matches_its_generator`
+  fährt drei davon je Lauf. Nachweis: `test_sketch_ops.py`,
+  `test_exact_thread_features.py` und die Gewindeteile von `test_brep.py`
+  grün, die Fixture-Volumen gegen Pappus nachgemessen; neun Gewinde-Testdateien
+  234 + 94 + 103 s → 87 s zusammen.
+
+
+<a id="rm-196"></a>
+
+- [x] **RM-196 — Ein exaktes Gewinde einzusetzen dauert acht bis dreizehn
+  Sekunden.** Gemessen am 21.09.2026 nach dem Review von P2.7a, am exakten
+  Träger 100 × 100 × 10: `insert_printed_thread` 8,2 s, `insert_printed_screw`
+  13,1 s, `insert_printed_nut` 9,0 s; am Netzträger 0,04 bis 0,07 s; Bauplan
+  §31 verlangt für Parameteränderung bis sichtbares Ergebnis unter 2 s. Der
+  Bau selbst ist schnell (genähtes Gewinde 0,3 s, Schraubenloch 0,02 s). Die
+  Sekunden stecken in `edit.transformed`, das vor und nach jeder Bewegung ein
+  konvergiertes Volumenintegral rechnet (`INTEGRAL_RELATIVE_ERROR` 1e-9) — an
+  den BSpline-Flanken eines Gewindes je etwa fünf Sekunden —, und im Volumen
+  des Ergebnisses für `without_effect`. Eine starre Bewegung erhält das
+  Volumen; das Integral belegt dort nichts, was Determinante und
+  `BRepCheck` nicht schon sagen. Weg: für Ähnlichkeitstransformationen das
+  Integral durch den Determinantenvergleich der Hülle ersetzen oder mit
+  grober Toleranz rechnen, `without_effect` am exakten Körper über die
+  Flächenzahl und eine grobe Volumenprobe entscheiden lassen; danach die
+  vier Fälle gegen §31 messen. Abnahme: alle drei unter 2 s, die exakten
+  Zusicherungen aus `test_exact_feature_ops.py` und `test_exact_parts.py`
+  unverändert grün.
+
+  **Erledigt am 21.09.2026** (Review-Paket A): Eine starre Bewegung rechnet
+  kein Integral mehr — `edit.transformed` erkennt Ähnlichkeitstransformationen
+  über `IsPartner` und behält die Probe nur für Maßstab, Spiegelung und
+  Scherung; und das Volumen eines exakten Körpers kommt nativ aus dem
+  knotenzerlegten Verbund (`properties.py`: `BRepGProp_Vinert` je Fläche mit
+  der Hüllmitte als Bezugspunkt, Leiter 1/2/4 bis `INTEGRAL_RELATIVE_ERROR`
+  1e-9, der UV-Weg in Python bleibt der Rückfall für Körper, deren Nähte ihre
+  Toleranz nicht halten). Gemessen: `moved` am M6-Bolzen 27,3 s → 9 ms;
+  `insert_printed_thread` 8,2 → 0,41 s, `insert_printed_screw` 13,1 → 0,38 s,
+  `insert_printed_nut` 9,0 → 0,38 s — alle drei unter den 2 s aus §31;
+  Volumen eines STEP-Körpers 7–16 s → 0,16–0,27 s; Zackenkörper 2e-16,
+  NurbsConvert-Quader 1,5e-16, Halbkugel 5,4e-11 gegen die Analytik. Nachweis:
+  `test_exact_feature_ops.py`, `test_exact_parts.py`, `test_solid_ownership.py`
+  und `test_brep.py` unverändert grün (`rel=1e-9`).
+
+
+<a id="rm-192"></a>
+
+- [x] **RM-192 — Sieben Fenstertests des Merkmalfensters sind am HEAD rot.**
+  Aufgefallen am 20.09.2026 beim Nachfahren von `test_feature_panel.py` nach
+  der Höhlungsauskunft (RM-188, P1.5); in einem Arbeitsbaum am HEAD ohne diese
+  Änderung genauso rot, also älter. Die Fensterdateien laufen nur beim
+  Release, deshalb hat es kein Entwicklungstor gemeldet:
+  `test_original_bore_fields_keep_expressions_through_depth_and_hidden_position`
+  (beide Parameter, `'QLineEdit' object is not callable`),
+  `test_preview_block_keeps_fields_and_cancel_available` (`_cancel` nicht
+  sichtbar), `test_a_nearly_nominal_bore_explains_why_it_is_not_assigned` (der
+  Satz „knapp unter dem Nennmaß“ fehlt),
+  `test_the_tab_key_goes_down_the_panel_like_the_eye` („Im Bild einstellen“
+  steht nicht da), `test_a_part_step_keeps_the_values_it_was_not_asked_about`
+  und `test_the_live_preview_of_a_part_changes_its_step` (die Attrappe kennt
+  `_preview_can_apply` und `_prepare_feature_order` nicht). Zwei Sorten:
+  Attrappen, die dem Fenster hinterherhängen, und Zusagen, die das Fenster
+  nicht mehr einlöst — je Test entscheiden, welche, und den Fund am Fenster
+  nachstellen, bevor die Attrappe angepasst wird. Abnahme: die Datei läuft
+  im Release-Tor grün.
+
+  **Erledigt am 21.09.2026** mit der Fensterabnahme `f0e61621` (110 rote
+  Fensterfälle, elf Funde in der Anwendung): Die Attrappen kennen
+  `_preview_can_apply` und `_prepare_feature_order`, der Abbrechen-Knopf und
+  „Im Bild einstellen" stehen wieder da, der Satz zum Nennmaß kommt. Am
+  22.09.2026 im Arbeitsbaum vor 0.5.0 nachgefahren: `test_feature_panel.py`
+  79 bestanden, Exit 0.
+
+
+<a id="rm-194"></a>
+
+- [x] **RM-194 — Elf Werteschlüssel ohne Beschriftung, zwei Beschriftungen ohne
+  Schlüssel.** Aufgefallen am 20.09.2026 beim Nachfahren von
+  `test_value_labels.py` nach den Gewindetexten (RM-188, P2.5); in einem
+  frischen Arbeitsbaum am HEAD `9b8efa8c` genauso rot, also älter. Die Datei
+  gehört zur Fenstergruppe, deshalb hat es kein Entwicklungstor gemeldet.
+  `test_every_value_key_has_a_label`: elf Schlüssel, die eine Ausnahme oder
+  ein Befund in `values=` trägt, stehen nicht in `ui.labels._VALUE_NAMES` und
+  landen als Bezeichner im Tooltip — `clearance_max_mm`, `clearance_min_mm`,
+  `geometry_source`, `intersects` (`scene/fits.py`), `input_name`,
+  `input_object`, `outputs`, `step` (`scene/evaluate.py`), `mapped_triangles`
+  (`brep/kernel.py`), `middle` (`brep/edit.py`), `references` (`errors.py`).
+  `test_the_dictionary_carries_nothing_dead`: `clearance_max_mm` und
+  `clearance_min_mm` stehen beschriftet, aber unter anderem Namen als im Code.
+  Je Schlüssel entscheiden: Beschriftung in sechs Sprachen nachtragen oder den
+  Wert aus `values` nehmen, wenn er keinem Kunden etwas sagt. Abnahme: die
+  Datei läuft im Release-Tor grün.
+
+  **Erledigt am 21.09.2026** mit `f0e61621`: Jeder Werteschlüssel trägt eine
+  Beschriftung in sechs Sprachen oder ist aus `values` genommen; die zwei
+  falsch benannten Spielwerte heißen wie im Code. Am 22.09.2026 im
+  Arbeitsbaum vor 0.5.0 nachgefahren, mit dem neuen Schlüssel `shells` des
+  Befunds `perceive.voids_unreadable`: `test_value_labels.py` 231 bestanden,
+  Exit 0.
+

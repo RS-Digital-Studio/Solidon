@@ -15,6 +15,78 @@ carry the same points in the same order (`tests/test_changelog.py`).
 `tools/make_download.py` takes the section for the current version and writes
 it into `website/version.json`.
 
+## 0.5.0
+
+### Recognition
+
+- Recognition on imported models is many times faster: a plate with 200,000 triangles and its holes is ready in one second, where a smooth free-form shape used to take minutes.
+- Small faces such as the tip of a cam, cut-off holes and mouth chamfers are recognised the same way on a mesh and on an exact body.
+- Closed cavities and nested air chambers are recognised as a whole. A hole leading into a cavity no longer appears as a phantom.
+- Imported threads are measured: pitch, number of starts, right- or left-hand and nominal diameter. Mirrored parts keep the correct handedness.
+- Cones, spheres and rings keep their true dimensions, and the feature panel says where a value comes from: measured, fitted or from the step.
+- A mirrored, scaled or patterned part carries its features along. Stale features no longer remain next to new ones.
+- STEP files with free-form faces keep their holes editable, even after saving, reopening and undoing.
+- After a change, every feature that still exists keeps its name. When two candidates come into question, Solidon asks instead of guessing.
+- Clicking a bore on a model with 360,000 triangles responds in a quarter of the time.
+- A countersink touching two slots equally stays a cone face instead of vanishing into one of them.
+- If a model consists of several shells and it cannot be read reliably whether one of them traps air, the report says so as a warning.
+- A closed model releases its memory; before, a few hundred megabytes per model stayed behind.
+
+### Editing on the exact model
+
+- Primitives are always created with true faces and edges. The checkbox “Edit faces and edges later” is gone; old projects compute unchanged.
+- Hole, slot, counterbore, boss, dome and truncated cone stay exact on an exact body when you move, duplicate, rotate or remove them.
+- Beads and grooves can be moved, duplicated, rotated, changed and removed. A thread can be changed and closed.
+- A thread gets its counterpart on the other part at the press of a button, in the table size and as one fit.
+- Every part in the library builds exactly on an exact body, from the screw joint to the seal groove.
+- After a radius change, Solidon rounds the right edge, even when two roundings lie close together.
+- When two edges lie at the same place, Solidon asks which one you mean instead of taking one.
+- Apply waits until the preview shows the current result. A click on an outdated picture writes nothing wrong.
+- Filament colours stay on exact bodies and follow every new meshing.
+- Volume and area of an exact body come in milliseconds instead of seconds.
+- Inserting a thread takes under half a second instead of up to thirteen; a threaded rod is built in a third of a second instead of a minute.
+- Unite, Subtract and Place on the bed no longer ask whether to convert exact bodies. They stay exact.
+- When a bore is moved, no surplus triangles remain at the old place, and a hidden countersink loses none of its volume.
+- Repair leaves a clean model unchanged, also on an exact body.
+- The counterpart of a thread is built in the background. The window stays usable meanwhile.
+
+### Drilling and dimensions in the view
+
+- A clicked hole shows its dimensions in the view at once: distances to the edges, centre and diameter, with number fields for typing.
+- The dimension fields stand next to the part instead of on it, and their lines do not cross.
+- The reference of a dimension, edge, centre or axis, can be changed by right-clicking the dimension or by clicking in the model.
+- What stands in the view is not repeated on the right in the selection panel.
+- After pulling a hole into a slot, the dimensions stay, even when you rotate the view. The knobs for pulling always stand at the chosen hole.
+- Choosing a hole could make the 3D view fail on some graphics cards. That is fixed.
+- A drag on the handle survives a redraw in the middle of the drag, and a wheel click over a dimension field zooms the view instead of changing the dimension.
+- The first Escape while picking a reference only takes back the pick; the typed values stay.
+
+### Checking and printing
+
+- Fits check the real bodies in their assembled position. The export can be cancelled beforehand.
+- The shape deviation shows which faces of a meshing lie how far from the original.
+- When a wall thickness tapers off like a wedge, Solidon says so and advises printing the outer wall first.
+- The orientation search stands a grid with a narrow rim on its rim, and a grid of short struts needs no supports.
+- The profile for the assistant says the same about the chosen spot as the feature panel.
+- The shape deviation of a box with lid computes in a tenth of a second instead of twelve.
+- Parts lying apart for printing no longer get a warning about their assembled position. The fit reports only what it has measured.
+- The orientation search on a model with over a million triangles takes five seconds instead of half a minute.
+- Very small distances appear in the analysis map as decimals, not as powers of ten.
+
+### Importing
+
+- An imported assembly can be placed on the bed as a whole with one click. The parts keep their position relative to each other.
+- A glTF without a plausible size is no longer believed to be in metres. Solidon asks for the unit and shows the dimensions for each reading.
+
+### Operation and system
+
+- Every action briefly confirms its result where you clicked, in addition to the status line.
+- A program error leaves a local log that is attached to the support report. Nothing is sent on its own.
+- The setup for “Model from text” fetches the missing image model itself instead of pointing you to a folder.
+- Solidon starts in half the time.
+- With a feature selected, the tooltip remains, and a hint about the handle no longer wipes the last receipt.
+- If a step of the assistant halts the evaluation, the proposal takes it back entirely and shows the state before.
+
 ## 0.4.4
 
 ### Editing
