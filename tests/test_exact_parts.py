@@ -109,13 +109,10 @@ def _host() -> SceneObject:
 # --- die Gruppe ------------------------------------------------------------------
 
 
-def test_the_exact_groups_are_fasteners_mechanics_and_mounting_without_clamps() -> None:
+def test_the_exact_groups_are_fasteners_mechanics_and_mounting() -> None:
     builtin.load()
     groups = {
-        spec.name
-        for spec in PARTS.all()
-        if spec.group in {"fasteners", "mechanics", "mounting"}
-        and not spec.name.startswith("profile_clamp")
+        spec.name for spec in PARTS.all() if spec.group in {"fasteners", "mechanics", "mounting"}
     }
     assert groups == EXACT_PARTS
 
@@ -862,5 +859,139 @@ def test_a_magnet_pocket_cuts_and_a_wall_mount_grows_on_an_exact_host(profile: P
     body = _sound(grown.outputs[0].mesh)
     assert body.volume > HOST[0] * HOST[1] * HOST[2]
     assert {"wall_mount_plate_1", "wall_mount_bore_1", "wall_mount_bore_2"} <= set(
+        grown.outputs[0].features
+    )
+
+
+# --- die Profilklemmen: Querschnitte mit zwei Auswertern -----------------------------------------
+
+
+def _circle_sketch(diameter: float) -> str:
+    from app.core.sketch import shapes as sketch_shapes
+    from app.core.sketch.serialize import sketch_to_text
+
+    return sketch_to_text(sketch_shapes.circle(diameter))
+
+
+def test_an_offset_circle_section_stays_a_circle_exactly() -> None:
+    """Der Versatz eines Kreises um vier Millimeter ist exakt wieder ein Kreis (Bericht 4.3)."""
+    from app.core.knowledge.parts.section import CONTOUR_SAG, Section
+    from app.core.sketch.profile import Profile
+
+    _kernel()
+    with building("brep"):
+        seat = Section.of(Profile(circle=((0.0, 0.0), 10.125)))
+        outer = seat.offset(4.0)
+        ring = _sound(outer.minus(seat).extrude(40.0))
+        prism = _sound(outer.extrude(40.0, bottom=1.5))
+    assert prism.bounds.maximum[0] == pytest.approx(14.125, abs=1e-9)
+    assert prism.bounds.minimum[2] == pytest.approx(1.5, abs=1e-9)
+    assert prism.volume == pytest.approx(math.pi * 14.125**2 * 40.0, rel=1e-9)
+    assert ring.volume == pytest.approx(math.pi * (14.125**2 - 10.125**2) * 40.0, rel=1e-9)
+    assert outer.bounds() == pytest.approx((-14.125, -14.125, 14.125, 14.125), abs=CONTOUR_SAG)
+    with building("brep"):
+        lower = seat.clipped(Section.rectangle(-50.0, 50.0, -50.0, -0.5))
+        assert lower.pieces() == 1
+        half = _sound(lower.extrude(40.0))
+    assert half.bounds.maximum[1] == pytest.approx(-0.5, abs=1e-9)
+
+
+def test_profile_clamp_shell_exact_has_cylindrical_seat_ears_and_holes() -> None:
+    _kernel()
+    screw, nut = standards.screw("M4"), standards.nut("M4")
+    values = {
+        "seat_sketch": _circle_sketch(20.25),
+        "depth": 40.0,
+        "wall": 4.0,
+        "half": "lower",
+        "joint_gap": 1.0,
+        "split_angle": 0.0,
+        "split_offset": 0.0,
+        "screw_size": "M4",
+        "play": 0.2,
+    }
+    produced = _built("profile_clamp_shell", True, **values)
+    shell = _sound(produced.mesh)
+    mesh = _built("profile_clamp_shell", False, **values).mesh
+    head = screw.head + 0.2
+    nut_across = (nut.width + 0.2) * 2.0 / math.sqrt(3.0)
+    ear_width = max(head, nut_across) + 2.0 * 4.0
+    ear_height = max(screw.head_height, nut.height) + 4.0 + 0.5
+    # Die untere Hälfte endet am halben Teilungsspalt; die Ohren reichen über den Sitz hinaus.
+    assert shell.bounds.maximum[1] == pytest.approx(-0.5, abs=1e-9)
+    assert shell.bounds.maximum[0] == pytest.approx(14.125 + ear_width - 4.0, abs=1e-9)
+    assert shell.bounds.minimum[1] == pytest.approx(-14.125, abs=1e-9)
+    assert shell.bounds.minimum[2] == pytest.approx(0.0, abs=1e-9)
+    assert shell.bounds.maximum[2] == pytest.approx(40.0, abs=1e-9)
+    assert shell.bounds.minimum == pytest.approx(mesh.bounds.minimum, abs=0.02)
+    assert shell.bounds.maximum == pytest.approx(mesh.bounds.maximum, abs=0.02)
+    # Sitz und Löcher sind am Netz facettiert, der Sitz nach CONTOUR_SAG feiner als 48 Ecken.
+    assert abs(mesh.volume / shell.volume - 1.0) < 0.01
+    # Ein Ohr ohne Loch wäre um das Loch schwerer: Ø Durchgang mal Ohrhöhe.
+    ear_volume_with_holes = shell.volume
+    assert ear_volume_with_holes < (
+        math.pi * (14.125**2 - 10.125**2) / 2.0 * 40.0 + 2.0 * ear_width * ear_height * 40.0
+    )
+    for name, height, sign in (("front", 0.0, -1.0), ("back", 40.0, 1.0)):
+        feature = produced.features[name]
+        assert feature.params["centre"][2] == pytest.approx(height, abs=1e-6)
+        assert feature.params["normal"] == (0.0, 0.0, sign)
+        assert feature.face_indices
+        assert max(feature.face_indices) < shell.triangle_count
+    _roundtrip(shell)
+
+
+def test_profile_clamp_liner_exact_has_its_flange_in_front_and_relief_behind() -> None:
+    _kernel()
+    values = {
+        "counter_sketch": _circle_sketch(20.0),
+        "outer_sketch": "",
+        "depth": 40.0,
+        "liner_thickness": 2.0,
+        "half": "lower",
+        "flange_width": 1.2,
+        "flange_height": 1.5,
+        "rear_relief": 2.0,
+        "split_angle": 0.0,
+        "split_offset": 0.0,
+        "play": 0.2,
+        "grip": 0.1,
+    }
+    produced = _built("profile_clamp_liner", True, **values)
+    liner = _sound(produced.mesh)
+    mesh = _built("profile_clamp_liner", False, **values).mesh
+    inner = 10.0 - 0.05
+    outer = inner + 2.0
+    assert liner.bounds.minimum[2] == pytest.approx(0.0, abs=1e-9)
+    assert liner.bounds.maximum[2] == pytest.approx(1.5 + 38.0, abs=1e-9)
+    assert liner.bounds.minimum[1] == pytest.approx(-(outer + 1.2), abs=1e-9)
+    assert liner.bounds.maximum[1] == pytest.approx(-0.1, abs=1e-9)
+    # Ein halber Ring plus ein halber Bundring, beide um das Spiel unter der Trennebene —
+    # gegen das Netz statt gegen die Analytik, weil die Halbebene beide Ringe schneidet.
+    assert abs(mesh.volume / liner.volume - 1.0) < 0.01
+    assert liner.bounds.minimum == pytest.approx(mesh.bounds.minimum, abs=0.02)
+    assert liner.bounds.maximum == pytest.approx(mesh.bounds.maximum, abs=0.02)
+    assert produced.features["front"].params["centre"][2] == pytest.approx(0.0, abs=1e-6)
+    assert produced.features["back"].params["centre"][2] == pytest.approx(39.5, abs=1e-6)
+    _roundtrip(liner)
+
+
+def test_a_clamp_shell_grows_on_an_exact_host(profile: Profile) -> None:
+    _kernel()
+    host = _host()
+    grown = run(
+        "insert_profile_clamp_shell",
+        host,
+        profile,
+        seat_sketch=_circle_sketch(20.25),
+        depth=20.0,
+        wall=4.0,
+        half="lower",
+        **ON_TOP,
+    )
+    body = _sound(grown.outputs[0].mesh)
+    assert grown.outputs[0].kind == "brep"
+    assert body.volume > HOST[0] * HOST[1] * HOST[2]
+    assert {"profile_clamp_shell_front", "profile_clamp_shell_back"} <= set(
         grown.outputs[0].features
     )

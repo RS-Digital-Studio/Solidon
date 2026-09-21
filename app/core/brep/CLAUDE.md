@@ -674,7 +674,7 @@ Anwendung gegen die installierte Bindung.
 | Datei | Rolle |
 |---|---|
 | `kernel.py` | Der `Solid` und sein Weg ins Netz. `available()`, `BRepUnavailable` |
-| `profiles.py` | Vom Skizzenumriss zum exakten Körper (§30.1) — das größte Modul hier; `helical_thread` näht Kern und Gang eines Gewindes ohne Boolesche Operation |
+| `profiles.py` | Vom Skizzenumriss zum exakten Körper (§30.1) — das größte Modul hier; `helical_thread` näht Kern und Gang eines Gewindes ohne Boolesche Operation; `face_of`, `offset_face`, `face_boolean`, `face_rotated` und `prism` sind die exakte Seite der Querschnitte, aus denen die Profilklemmen bauen (`knowledge/parts/section.py`) |
 | `ops.py` | Die B-Rep-Operationen im Register (§25, §10) — **ohne** Verrunden und Fase, die stehen in `geom/edge_ops.py` |
 | `edit.py` | Einen Körper formen |
 | `features.py` | Merkmale aus der Topologie (§30, §21) |

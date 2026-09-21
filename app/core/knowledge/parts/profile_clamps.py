@@ -3,32 +3,32 @@
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING, Any, Final, cast
+from typing import TYPE_CHECKING, cast
 
 import numpy as np
-from shapely.geometry import LineString, Polygon
+from shapely.geometry import LineString
 
-from app.core.deferred import trimesh
-from app.core.errors import ValidationError
 from app.core.geom.boolean import BOOLEAN_OVERLAP, boolean
-from app.core.geom.contours import offset_section as normal_offset
-from app.core.geom.contours import polygons_of
-from app.core.geom.contours import section_of as profile_section
-from app.core.geom.mesh import MeshData
+from app.core.geom.mesh import as_mesh_data
 from app.core.knowledge import standards
 from app.core.knowledge.parts import shapes
+from app.core.knowledge.parts.build import subtract, union
 from app.core.knowledge.parts.registry import PartChange, WallRequirement, register_part
+from app.core.knowledge.parts.section import CONTOUR_SAG, Section, invalid
+from app.core.knowledge.parts.shapes import Form
 from app.core.registry import op_params, param
 from app.core.types import BaseParams, CancelToken, Feature, PartResult, Quality, SolverInfo
-from app.core.units import DEGREE_UNIT, EPS_GEOM, MAX_FACET_SAG
+from app.core.units import DEGREE_UNIT, EPS_GEOM
 from app.i18n import TranslatableText, _
 
 if TYPE_CHECKING:
+    from shapely.geometry import Polygon
+
     from app.core.sketch.profile import Profile as SketchProfile
 
-#: Die Kontur und ihre aufeinander folgenden Versätze teilen sich das
-#: Auflösungsbudget des Kerns. Das ist Sehnenauflösung, kein Fertigungsspiel.
-CONTOUR_SAG: Final = MAX_FACET_SAG / 8.0
+_invalid = invalid
+__all__ = ["CONTOUR_SAG"]
+
 _ADDED = PartChange("1", "2026-09-15", "Geteilte Profilklemme mit separat wechselbaren Einlagen.")
 _SHELL_SEATED = PartChange(
     version="19",
@@ -41,19 +41,14 @@ _SHELL_SEATED = PartChange(
 )
 
 
-def _invalid(detail: TranslatableText, field: str = "sketch") -> ValidationError:
-    """Die Korrektur gehört zu demselben gezeichneten Profil und seinen Maßen."""
-    return ValidationError(field=field, constraint="profile_clamp", detail=detail)
-
-
-def section_of(profile: SketchProfile) -> Any:
+def section_of(profile: SketchProfile) -> Section:
     """Den vorhandenen Skizzenumriss als einen gefüllten Profilquerschnitt lesen."""
     if profile.holes:
         raise _invalid(_("Wählen Sie genau einen äußeren Profilumriss ohne weitere Ausschnitte."))
-    return profile_section(profile, max_sag=CONTOUR_SAG)
+    return Section.of(profile)
 
 
-def drawn_section(text: str) -> Any:
+def drawn_section(text: str) -> Section:
     """Ein Baustein erhält eine bereits numerisch aufgelöste Zeichnung."""
     from app.core.sketch.profile import profile_of
     from app.core.sketch.serialize import sketch_from_text
@@ -72,72 +67,33 @@ def _circle_text(diameter: float) -> str:
     return sketch_to_text(sketch_shapes.circle(diameter))
 
 
-def polygon_of(section: Any) -> Polygon:
+def polygon_of(section: Section) -> Polygon:
     """Ein gefüllter zusammenhängender Querschnitt, ohne versteckte weitere Konturen."""
-    polygons = polygons_of(section)
-    if len(polygons) != 1:
-        raise _invalid(
-            _("Der Konturversatz zerfällt in mehrere Teile. Ändern Sie Kontur oder Einlagenstärke.")
-        )
-    polygon = polygons[0]
-    if polygon.interiors:
-        raise _invalid(
-            _("Der Konturversatz lässt keinen gültigen Sitz. Ändern Sie die Kontur oder das Spiel.")
-        )
-    return polygon
+    return section.polygon()
 
 
-def offset_section(section: Any, distance: float) -> Any:
+def offset_section(section: Section, distance: float) -> Section:
     """Echter Normalversatz; numerische Clipper-Restkanten werden an EPS_GEOM entfernt."""
-    if abs(distance) <= EPS_GEOM:
-        return section
-    moved = normal_offset(section, distance, max_sag=CONTOUR_SAG)
-    polygon_of(moved)
+    moved = section.offset(distance)
+    moved.polygon()
     return moved
 
 
-def _rectangle(x0: float, x1: float, y0: float, y1: float) -> Any:
-    import manifold3d
-
-    return manifold3d.CrossSection.square((x1 - x0, y1 - y0)).translate((x0, y0))
-
-
-def _mesh(solid: Any) -> MeshData:
-    """Eine eigene Manifold-Konstruktion ohne Genauigkeitsverlust übernehmen."""
-    raw = solid.to_mesh64()
-    mesh = MeshData.of(
-        trimesh.Trimesh(
-            vertices=np.array(raw.vert_properties[:, :3], copy=True),
-            faces=np.array(raw.tri_verts, copy=True),
-            process=False,
-        )
-    )
-    if (
-        not mesh.is_watertight
-        or mesh.component_count != 1
-        or not mesh.raw.nondegenerate_faces().all()
-    ):
-        raise _invalid(
-            _("Die Teilung erzeugt keine geschlossene einzelne Hälfte. Ändern Sie die Trennebene.")
-        )
-    return mesh
-
-
-def _half(section: Any, half: str, gap: float, split_offset: float) -> Any:
+def _half(section: Section, half: str, gap: float, split_offset: float) -> Section:
     """Die Halbebene aus dem wirklichen Außenumfang ableiten, nicht aus einer Weltgröße."""
     if half not in {"lower", "upper"}:
         raise _invalid(_("Wählen Sie die untere oder obere Hälfte."), "half")
     left, low, right, high = section.bounds()
     reach = max(right - left, high - low, abs(split_offset), gap) + BOOLEAN_OVERLAP
     cut = split_offset + (-gap / 2.0 if half == "lower" else gap / 2.0)
-    box = _rectangle(
+    box = Section.rectangle(
         left - reach,
         right + reach,
         low - reach if half == "lower" else cut,
         cut if half == "lower" else high + reach,
     )
-    clipped = section ^ box
-    if len(clipped.decompose()) != 1 or clipped.area() <= EPS_GEOM**2:
+    clipped = section.clipped(box)
+    if clipped.pieces() != 1 or clipped.area() <= EPS_GEOM**2:
         raise _invalid(
             _(
                 "Diese Trennebene ergibt keine einzelne Hälfte. "
@@ -147,7 +103,7 @@ def _half(section: Any, half: str, gap: float, split_offset: float) -> Any:
     return clipped
 
 
-def _monotone(section: Any, cancelled: CancelToken | None = None) -> None:
+def _monotone(section: Section, cancelled: CancelToken | None = None) -> None:
     """Ein seitlicher gerader Montageweg verlangt in Y genau ein Materialintervall."""
     polygon = polygon_of(section)
     points = np.asarray(polygon.exterior.coords)
@@ -169,20 +125,23 @@ def _monotone(section: Any, cancelled: CancelToken | None = None) -> None:
             )
 
 
-def _oriented(section: Any, split_angle: float) -> Any:
+def _oriented(section: Section, split_angle: float) -> Section:
     """Im Teilungsrahmen rechnen und das Ergebnis danach zurückdrehen."""
-    return section.rotate(-split_angle)
+    return section.rotated(-split_angle)
 
 
-def _features(mesh: MeshData, front: float, back: float) -> dict[str, Feature]:
+def _features(body: Form, front: float, back: float) -> dict[str, Feature]:
     """Die versprochenen Stirnflächen am wirklichen Netz benennen.
 
     Weitere Flächen und Schraubenaufnahmen erkennt die gemeinsame Auswertung.
     Eine Zeichnung kann beliebig viele Seiten besitzen; deren wechselnde
-    Erkennungskennungen sind keine dauerhaften Bausteinversprechen.
+    Erkennungskennungen sind keine dauerhaften Bausteinversprechen. Ein
+    exakter Körper wird dafür vernetzt: Seine Dreiecke sind die seiner
+    Tessellierung, und auf die zeigen auch die Merkmale der Auswertung.
     """
     from app.core.perceive.surfaces import planar_patch
 
+    mesh = as_mesh_data(body)
     found: dict[str, Feature] = {}
     for name, height, sign in (("front", front, -1.0), ("back", back, 1.0)):
         raw = mesh.raw
@@ -333,12 +292,12 @@ def profile_clamp_shell(raw: BaseParams) -> PartResult:
 
 def build_shell(
     p: ProfileClampShellParams,
-    seat: Any,
+    seat: Section,
     *,
     lift: float = 0.0,
     quality: Quality = "fine",
     cancelled: CancelToken | None = None,
-) -> tuple[PartResult, SolverInfo]:
+) -> tuple[PartResult, SolverInfo | None]:
     """Eine Schale aus der einmal gemeinsam vorbereiteten ungedrehten Sitzkontur bauen.
 
     ``lift`` hebt die Schale entlang der Profilachse an. Allein sitzt sie wie
@@ -353,75 +312,84 @@ def build_shell(
     seat = _oriented(seat, p.split_angle)
     _monotone(seat, cancelled)
     outer = offset_section(seat, p.wall)
-    shell = outer - seat
+    shell = outer.minus(seat)
     screw, nut = standards.screw(p.screw_size), standards.nut(p.screw_size)
     head_diameter = screw.head + p.play
     nut_diameter = (nut.width + p.play) * 2.0 / math.sqrt(3.0)
     ear_width = max(head_diameter, nut_diameter) + 2.0 * p.wall
     ear_height = max(screw.head_height, nut.height) + p.wall + p.joint_gap / 2.0
-    left, _low, right, _high = polygon_of(outer).bounds
+    # Aus dem Querschnitt, nicht aus seinem Polygon: exakt liegen die Ohren genau am Kreis.
+    left, _low, right, _high = outer.bounds()
     centres = (left - ear_width / 2.0 + p.wall, right + ear_width / 2.0 - p.wall)
     for x in centres:
-        shell += _rectangle(
-            x - ear_width / 2.0,
-            x + ear_width / 2.0,
-            p.split_offset - ear_height,
-            p.split_offset + ear_height,
+        shell = shell.plus(
+            Section.rectangle(
+                x - ear_width / 2.0,
+                x + ear_width / 2.0,
+                p.split_offset - ear_height,
+                p.split_offset + ear_height,
+            )
         )
-    solid = _half(shell, p.half, p.joint_gap, p.split_offset).extrude(p.depth)
-    body = _mesh(solid.translate((0, 0, lift)))
-    tools = []
+    body = _half(shell, p.half, p.joint_gap, p.split_offset).extrude(p.depth, bottom=lift)
+    tools: list[Form] = []
     for x in centres:
         centre_z = lift + p.depth / 2.0
         through = shapes.cylinder(screw.clearance, 2 * ear_height + 2 * BOOLEAN_OVERLAP)
-        through = shapes.mesh_only(
-            shapes.moved(
-                shapes.turned(through, 90.0, (1.0, 0.0, 0.0)),
-                (x, p.split_offset + ear_height + BOOLEAN_OVERLAP, centre_z),
-            )
+        through = shapes.moved(
+            shapes.turned(through, 90.0, (1.0, 0.0, 0.0)),
+            (x, p.split_offset + ear_height + BOOLEAN_OVERLAP, centre_z),
         )
         tools.append(through)
         if p.half == "lower":
             pocket = shapes.cylinder(head_diameter, screw.head_height + BOOLEAN_OVERLAP)
-            pocket = shapes.mesh_only(
-                shapes.moved(
-                    shapes.turned(pocket, -90.0, (1.0, 0.0, 0.0)),
-                    (x, p.split_offset - ear_height - BOOLEAN_OVERLAP, centre_z),
-                )
+            pocket = shapes.moved(
+                shapes.turned(pocket, -90.0, (1.0, 0.0, 0.0)),
+                (x, p.split_offset - ear_height - BOOLEAN_OVERLAP, centre_z),
             )
         else:
             pocket = shapes.hexagon(nut.width + p.play, nut.height + BOOLEAN_OVERLAP)
-            pocket = shapes.mesh_only(
-                shapes.moved(
-                    shapes.turned(pocket, 90.0, (1.0, 0.0, 0.0)),
-                    (x, p.split_offset + ear_height + BOOLEAN_OVERLAP, centre_z),
-                )
+            pocket = shapes.moved(
+                shapes.turned(pocket, 90.0, (1.0, 0.0, 0.0)),
+                (x, p.split_offset + ear_height + BOOLEAN_OVERLAP, centre_z),
             )
         tools.append(pocket)
-    outcome = boolean("difference", [body, *tools], quality=quality, cancelled=cancelled)
-    body = shapes.mesh_only(shapes.turned(outcome.mesh, p.split_angle))
+    solver: SolverInfo | None = None
+    findings = []
+    if shapes.building_exact():
+        cut = subtract(body, *tools)
+    else:
+        # Am Netz geht der Schnitt durch die Rückfallkette, und ihre Stufe wird
+        # gemeldet (``operationen.md``); der exakte Kern kennt keine Stufen.
+        outcome = boolean(
+            "difference",
+            [as_mesh_data(body), *(as_mesh_data(tool) for tool in tools)],
+            quality=quality,
+            cancelled=cancelled,
+        )
+        cut, solver, findings = outcome.mesh, outcome.solver, outcome.findings
+    body = shapes.turned(cut, p.split_angle)
     return PartResult(
         mesh=body,
         features=_features(body, lift, lift + p.depth),
-        findings=outcome.findings,
-    ), outcome.solver
+        findings=findings,
+    ), solver
 
 
 def seat_probes(
-    p: ProfileClampShellParams, seat: Any, *, strip: float, lift: float = 0.0
-) -> tuple[MeshData, MeshData]:
+    p: ProfileClampShellParams, seat: Section, *, strip: float, lift: float = 0.0
+) -> tuple[Form, Form]:
     """Vollständiger Hohlraum und umlaufender Materialstreifen über die ganze Sitztiefe.
 
     ``lift`` ist derselbe Versatz wie in :func:`build_shell` — die Proben
     liegen dort, wo die geprüfte Schale liegt.
     """
     section = _oriented(seat, p.split_angle)
-    band = offset_section(section, strip) - section
-    meshes = []
+    band = offset_section(section, strip).minus(section)
+    probes = []
     for shape in (section, band):
-        solid = _half(shape, p.half, p.joint_gap, p.split_offset).extrude(p.depth)
-        meshes.append(_mesh(solid.translate((0.0, 0.0, lift)).rotate((0, 0, p.split_angle))))
-    return meshes[0], meshes[1]
+        body = _half(shape, p.half, p.joint_gap, p.split_offset).extrude(p.depth, bottom=lift)
+        probes.append(shapes.turned(body, p.split_angle))
+    return probes[0], probes[1]
 
 
 @op_params
@@ -563,9 +531,9 @@ def profile_clamp_liner(raw: BaseParams) -> PartResult:
 
 def build_liner(
     p: ProfileClampLinerParams,
-    counter: Any,
+    counter: Section,
     *,
-    outside: Any = None,
+    outside: Section | None = None,
     cancelled: CancelToken | None = None,
 ) -> PartResult:
     """Die gemeinsame Gegenkontur, beim Ersatz die belegte feste Außenkontur übernehmen."""
@@ -591,10 +559,13 @@ def build_liner(
                 "Verkleinern Sie die Gegenkontur oder erzeugen Sie eine neue Klemme."
             )
         )
-    core = _half(outside - inside, p.half, p.play, p.split_offset).extrude(p.depth - p.rear_relief)
-    core = core.translate((0, 0, p.flange_height))
-    flange = _half(offset_section(outside, p.flange_width) - inside, p.half, p.play, p.split_offset)
-    body = _mesh((core + flange.extrude(p.flange_height)).rotate((0, 0, p.split_angle)))
+    core = _half(outside.minus(inside), p.half, p.play, p.split_offset).extrude(
+        p.depth - p.rear_relief, bottom=p.flange_height
+    )
+    flange = _half(
+        offset_section(outside, p.flange_width).minus(inside), p.half, p.play, p.split_offset
+    ).extrude(p.flange_height)
+    body = shapes.turned(union(core, flange), p.split_angle)
     return PartResult(
         mesh=body, features=_features(body, 0.0, p.flange_height + p.depth - p.rear_relief)
     )

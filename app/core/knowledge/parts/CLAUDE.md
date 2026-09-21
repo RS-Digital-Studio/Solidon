@@ -50,8 +50,7 @@ exakter Körper keine Dreiecke). Drei Grenzen dabei:
   eine Netzoperation braucht — das sind die Stellen, an denen ihre Gruppe den
   exakten Weg noch schuldet. Unter dem exakten Kern kommen sie nie dran:
   `ops.EXACT_PARTS` lässt nur Bausteine dorthin, deren Beschreibung ohne sie
-  auskommt (heute Verbindungen, Mechanik und die Befestigung ohne die
-  Profilklemmen), alle anderen nehmen am exakten
+  auskommt (heute Verbindungen, Mechanik und Befestigung), alle anderen nehmen am exakten
   Träger den Netzweg samt Konvertierungsmeldung wie bisher. Die Paritätstabelle
   (`tests/test_exact_body_parity.py`, `KEEP` statt `MESH`) ist die Abnahme je
   Gruppe.
@@ -91,6 +90,7 @@ exakter Körper keine Dreiecke). Drei Grenzen dabei:
 | `ops.py` | **Jeder Baustein wird zusätzlich eine Operation** (§24.1, §10) |
 | `build.py` | Gemeinsamer Boden für jeden Baustein: Vereinigen, Abziehen, Schneiden, `threaded`, Verbund und `form_of` — je Kern |
 | `shapes.py` | Kleine Formen, aus denen die Bausteine gebaut werden; `building`/`building_exact` wählen den Kern, `mesh_only` benennt die Netzstellen |
+| `section.py` | Querschnitte mit zwei Auswertern (P2.7): `manifold3d.CrossSection` fürs Netz und die Prüfungen, eine ebene Fläche des exakten Kerns für die Geometrie — Versatz, Differenz, Ohren, Hälfte, Prisma; die Profilklemmen bauen daraus |
 | `exact.py` | Die exakten Zwillinge der Formen und Operationen aus `shapes`/`build` (P2.7) — `Solid` mit demselben Rahmen, Vereinigung mit Körperzahl-Prüfung und Stufenleiter auf Kopien |
 | `range_check.py` | Der Bereichstest in der Anwendung |
 | `preview.py` | Vorschaubilder — **gerendert, nicht von Hand gepflegt** |

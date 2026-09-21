@@ -749,6 +749,8 @@ EXACT_PARTS = frozenset(
         "magnet_pocket",
         "pegboard_hook",
         "wall_mount",
+        "profile_clamp_liner",
+        "profile_clamp_shell",
     }
 )
 for _part, (_dimensions, _effect, _height) in PART_CASES.items():

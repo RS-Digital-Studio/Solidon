@@ -1124,6 +1124,177 @@ def bounds(solid: Solid) -> tuple[float, float, float, float, float, float]:
 # --- Innereien -------------------------------------------------------------------
 
 
+# --- Querschnitte: ebene Flächen in XY als exakter Zwilling des Netzquerschnitts (P2.7) ---
+
+OFFSET_FAILED = _(
+    "Der Konturversatz ließ sich exakt nicht bilden. Ändern Sie die Kontur oder den Abstand."
+)
+SECTIONS_NOT_JOINED = _("Die Querschnitte ließen sich nicht verknüpfen. Ändern Sie die Kontur.")
+
+
+def face_of(profile: Profile) -> Any:
+    """Die ebene Fläche eines Umrisses in XY — der exakte Querschnitt eines Bausteins.
+
+    Das Gegenstück zu ``geom.contours.section_of``: Dort wird der Umriss nach
+    ``max_sag`` in Sehnen zerlegt, hier bleibt ein Bogen ein Bogen. Die
+    Profilklemmen bauen aus solchen Flächen (``knowledge/parts/section.py``).
+    """
+    require()
+    return _face(profile, _lift_xy)
+
+
+def rectangle_face(x0: float, x1: float, y0: float, y1: float) -> Any:
+    """Ein achsparalleles Rechteck als Fläche — die Ohren einer Klemme, eine Halbebene."""
+    require()
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace, BRepBuilderAPI_MakePolygon
+    from OCP.gp import gp_Pnt
+
+    polygon = BRepBuilderAPI_MakePolygon()
+    for x, y in ((x0, y0), (x1, y0), (x1, y1), (x0, y1)):
+        polygon.Add(gp_Pnt(x, y, 0.0))
+    polygon.Close()
+    return BRepBuilderAPI_MakeFace(polygon.Wire(), True).Face()
+
+
+def offset_face(face: Any, distance: float) -> Any:
+    """Exakter Normalversatz einer Kontur: Bögen bleiben Bögen, Ecken bekommen Kreisbögen.
+
+    ``BRepOffsetAPI_MakeOffset`` mit ``GeomAbs_Arc`` — der eine Baustein, den
+    Klemmen und Dichtungen zusätzlich brauchen (Bericht P2.7, Abschnitt 4.3):
+    Ein Kreis um vier Millimeter versetzt ist wieder ein Kreis, und das Prisma
+    darüber ein Zylinder. Positiv wächst Material, negativ schrumpft es. Ein
+    Versatz, der die Kontur in mehrere Teile zerlegt, ist keine Wand mehr und
+    wird abgewiesen — dieselbe Regel, die der Netzquerschnitt am Polygon prüft.
+    """
+    require()
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace
+    from OCP.BRepOffsetAPI import BRepOffsetAPI_MakeOffset
+    from OCP.GeomAbs import GeomAbs_Arc
+    from OCP.TopAbs import TopAbs_WIRE
+    from OCP.TopExp import TopExp_Explorer
+    from OCP.TopoDS import TopoDS
+
+    if abs(distance) <= EPS_GEOM:
+        return face
+    offset = BRepOffsetAPI_MakeOffset(TopoDS.Face(face), GeomAbs_Arc)
+    try:
+        offset.Perform(distance)
+        done = offset.IsDone()
+    except PROGRAMMING_ERRORS:
+        raise
+    except Exception as problem:  # OpenCASCADE wirft eigene Ausnahmearten
+        raise GeometryError(detail=OFFSET_FAILED, suggestions=(CORRECT_INPUT, CANCEL)) from problem
+    if not done:
+        raise GeometryError(detail=OFFSET_FAILED, suggestions=(CORRECT_INPUT, CANCEL))
+    wires = []
+    explorer = TopExp_Explorer(offset.Shape(), TopAbs_WIRE)
+    while explorer.More():
+        wires.append(TopoDS.Wire(explorer.Current()))
+        explorer.Next()
+    if len(wires) != 1:
+        raise ValidationError(
+            field="sketch",
+            constraint="profile_clamp",
+            detail=_(
+                "Der Konturversatz zerfällt in mehrere Teile. "
+                "Ändern Sie Kontur oder Einlagenstärke."
+            ),
+        )
+    return BRepBuilderAPI_MakeFace(wires[0], True).Face()
+
+
+def face_boolean(kind: str, first: Any, second: Any) -> Any:
+    """Vereinigung, Differenz oder Schnitt zweier ebener Flächen in XY.
+
+    Kommt genau eine Fläche heraus, ist sie das Ergebnis; mehrere bleiben als
+    Verbund, und ob das erlaubt ist, entscheidet der Aufrufer am
+    Netzquerschnitt daneben (``Section.pieces``).
+    """
+    require()
+    from OCP.TopAbs import TopAbs_FACE
+    from OCP.TopExp import TopExp_Explorer
+    from OCP.TopoDS import TopoDS
+
+    operation = boolean_builder(kind, first, second)
+    try:
+        operation.Build()
+        done = operation.IsDone()
+    except PROGRAMMING_ERRORS:
+        raise
+    except Exception as problem:  # OpenCASCADE wirft eigene Ausnahmearten
+        raise GeometryError(
+            detail=SECTIONS_NOT_JOINED, suggestions=(CORRECT_INPUT, CANCEL)
+        ) from problem
+    if not done:
+        raise GeometryError(detail=SECTIONS_NOT_JOINED, suggestions=(CORRECT_INPUT, CANCEL))
+    from OCP.ShapeUpgrade import ShapeUpgrade_UnifySameDomain
+
+    # Eine Vereinigung zweier ebener Flächen lässt drei Teilflächen zurück,
+    # die sich Kanten teilen; als eine Fläche zusammengelegt zieht das Prisma
+    # darüber einen Körper statt dreier.
+    unified = ShapeUpgrade_UnifySameDomain(operation.Shape(), True, True, False)
+    unified.Build()
+    shape = unified.Shape()
+    faces = []
+    explorer = TopExp_Explorer(shape, TopAbs_FACE)
+    while explorer.More():
+        faces.append(TopoDS.Face(explorer.Current()))
+        explorer.Next()
+    return faces[0] if len(faces) == 1 else shape
+
+
+def face_bounds(face: Any) -> tuple[float, float, float, float]:
+    """Der Hüllquader einer Fläche in XY: xmin, ymin, xmax, ymax — exakt aus der Geometrie.
+
+    Wie :func:`bounds` über ``AddOptimal`` ohne Vernetzung und ohne Formtoleranz;
+    die Ohren einer Klemme sitzen sonst um den Sehnen-Sag des Netzquerschnitts
+    daneben.
+    """
+    require()
+    from OCP.Bnd import Bnd_Box
+    from OCP.BRepBndLib import BRepBndLib
+
+    box = Bnd_Box()
+    BRepBndLib.AddOptimal_s(face, box, False, False)
+    xmin, ymin, _zmin, xmax, ymax, _zmax = box_limits(box)
+    return (xmin, ymin, xmax, ymax)
+
+
+def face_rotated(face: Any, degrees: float) -> Any:
+    """Die Fläche um die Z-Achse gedreht — der Teilungsrahmen einer Klemme."""
+    require()
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
+    from OCP.gp import gp_Ax1, gp_Dir, gp_Pnt, gp_Trsf
+
+    turn = gp_Trsf()
+    turn.SetRotation(gp_Ax1(gp_Pnt(0.0, 0.0, 0.0), gp_Dir(0.0, 0.0, 1.0)), math.radians(degrees))
+    return BRepBuilderAPI_Transform(face, turn, True).Shape()
+
+
+def prism(face: Any, height: float, *, bottom: float = 0.0) -> Solid:
+    """Das Prisma über einer fertigen Fläche, mit dem Boden auf ``bottom``.
+
+    Der Boden wird vor dem Einpacken verschoben: Eine Verschiebung des fertigen
+    Körpers über ``edit.transformed`` kostete zwei Volumenintegrale (RM-196),
+    eine Verschiebung der rohen Form nichts.
+    """
+    require()
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakePrism
+    from OCP.gp import gp_Trsf, gp_Vec
+
+    require_positive("height", height)
+    body = _finished(
+        BRepPrimAPI_MakePrism(face, gp_Vec(0.0, 0.0, height)),
+        _("Aus diesem Umriss entsteht kein Körper."),
+    )
+    if not bottom:
+        return body
+    lift = gp_Trsf()
+    lift.SetTranslation(gp_Vec(0.0, 0.0, bottom))
+    return Solid(BRepBuilderAPI_Transform(body.shape, lift, True).Shape())
+
+
 def _leftmost(profile: Profile) -> float:
     if profile.circle is not None:
         centre, radius = profile.circle
