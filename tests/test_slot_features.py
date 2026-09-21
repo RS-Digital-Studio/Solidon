@@ -370,7 +370,7 @@ def test_an_open_slot_on_the_exact_core_carries_native_measures_where_it_can() -
     # liegt die Mündung dort und der geschlossene Bogen um y = -5 + 3.
     assert slot.params["arc_centre"][0] == pytest.approx(0.0, abs=1e-9)
     assert slot.params["arc_centre"][1] == pytest.approx(-2.0, abs=1e-9)
-    assert slot.params["direction"][1] == pytest.approx(1.0, abs=1e-12), "zur Muendung hin"
+    assert slot.params["direction"][1] == pytest.approx(1.0, abs=1e-12), "zur Mündung hin"
     assert {patch.source for patch in slot.surface_patches} == {"native"}
 
     meshed = [f for f in detect(body.to_mesh(deflection=0.05)).values() if f.kind == "slot"]
@@ -379,6 +379,63 @@ def test_an_open_slot_on_the_exact_core_carries_native_measures_where_it_can() -
         meshed[0].measure_sources[key] for key in ("diameter", "axis", "arc_centre", "direction")
     } == {"fit"}
     assert meshed[0].params["diameter"] == pytest.approx(6.0, abs=0.02)
+
+
+def _open_slot_with_a_native_arc(axis: tuple[float, ...], radius: float) -> Feature:
+    """Ein offenes Langloch Ø 6 mit einem nativen Zylinderträger der gegebenen Achse und Größe."""
+    from app.core.types import SurfacePatch
+
+    return Feature(
+        id="slot_1",
+        kind="slot",
+        provenance="detected",
+        params={
+            "open": True,
+            "diameter": 6.0,
+            "length": 20.0,
+            "travel": 14.0,
+            "axis": (0.0, 0.0, 1.0),
+            "direction": (0.0, 1.0, 0.0),
+            "arc_centre": (0.0, -2.0, 4.0),
+        },
+        measure_sources={"diameter": "fit", "axis": "fit", "arc_centre": "fit"},
+        surface_patches=(
+            SurfacePatch(
+                kind="cylinder",
+                params={"axis": axis, "centre": (0.0, -2.0, 0.0), "radius": radius},
+                face_indices=(0, 1, 2),
+                source="native",
+            ),
+        ),
+    )
+
+
+@pytest.mark.parametrize(
+    ("axis", "radius", "promoted"),
+    [
+        ((0.0, 0.0, 1.0), 3.0, True),
+        ((0.0, math.sin(math.radians(2.0)), math.cos(math.radians(2.0))), 3.0, False),
+        ((0.0, 0.0, 1.0), 3.75, False),
+    ],
+    ids=["trifft", "zwei Grad gekippt", "anderthalb Millimeter größer"],
+)
+def test_a_native_arc_carrier_must_hit_the_measured_arc_to_count(
+    axis: tuple[float, ...], radius: float, promoted: bool
+) -> None:
+    """Ein nativer Zylinder beschriftet das Langloch nur, wenn er dessen Bogen ist.
+
+    Bis zum 21.09.2026 genügte ein Skalarprodukt der Achsen ungleich null
+    (Regel 6): Ein um zwei Grad gekippter oder anderthalb Millimeter größerer
+    nativer Zylinder hätte Durchmesser, Achse und Bogenmitte als ``native``
+    ausgewiesen. Achse und Radius müssen den gemessenen Bogen im Vertrag von
+    ``PARALLEL_AXES`` und ``SAME_RADIUS`` treffen.
+    """
+    from app.core.perceive.slots import native_open_slot_measures
+
+    slot = native_open_slot_measures(_open_slot_with_a_native_arc(axis, radius))
+    expected = "native" if promoted else "fit"
+    assert {slot.measure_sources[key] for key in ("diameter", "axis", "arc_centre")} == {expected}
+    assert slot.params["diameter"] == (6.0 if not promoted else radius * 2.0)
 
 
 def test_a_slot_carries_the_measures_it_was_cut_with(profile: Profile) -> None:

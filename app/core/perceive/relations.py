@@ -44,6 +44,7 @@ from app.core.perceive.features import (
     _one_body,
     axis_of,
     centre_of,
+    remembered,
     sits_at_the_mouth_of,
 )
 from app.core.registry import REGISTRY
@@ -1125,18 +1126,34 @@ def cell_owner_table(
     """
     ids = tuple(features)
     cells = np.full(face_count, NO_OWNER, dtype=np.int32)
-    sets: list[set[int]] = []
+    arrays: list[np.ndarray] = []
+    sets: dict[int, set[int]] = {}
+
+    def members(number: int) -> set[int]:
+        """Die Flächenmenge eines Merkmals — erst gebaut, wenn zwei sich überlappen.
+
+        Der Viewport fragt die Tabelle im Hauptfaden; eine Menge aus Python-
+        Zahlen je Merkmal kostete an einem Körper mit 400 000 Dreiecken rund
+        100 ms für Merkmale, die kein Dreieck teilen (gemessen 21.09.2026).
+        """
+        if number not in sets:
+            sets[number] = {int(index) for index in arrays[number]}
+        return sets[number]
+
     for number, feature in enumerate(features.values()):
         indices = np.asarray(feature.face_indices, dtype=np.int64)
         indices = indices[(indices >= 0) & (indices < face_count)]
-        own = {int(index) for index in indices}
-        sets.append(own)
+        arrays.append(indices)
         previous = cells[indices]
         free = previous == NO_OWNER
         cells[indices[free]] = number
-        for other in np.unique(previous[(previous >= 0) & ~free]):
+        clashing = previous[(previous >= 0) & ~free]
+        if not len(clashing):
+            continue
+        own = members(number)
+        for other in np.unique(clashing):
             shared = indices[previous == other]
-            theirs = sets[int(other)]
+            theirs = members(int(other))
             if own < theirs:
                 cells[shared] = number
             elif theirs < own:
@@ -1146,6 +1163,28 @@ def cell_owner_table(
     return ids, cells
 
 
+def _shape_key(features: Iterable[Feature]) -> tuple[Any, ...]:
+    """Woran eine Flächenauskunft hängt: Kennung, Art, Dreiecke, Achse und Mitte je Merkmal.
+
+    Der Schlüssel der Merker unten — dieselben Dreiecke unter einem anderen
+    Namen oder mit anderer Achse sind eine andere Frage.
+    """
+    return tuple(
+        (
+            str(feature.id),
+            feature.kind,
+            tuple(feature.face_indices),
+            tuple(float(value) for value in feature.params["axis"])
+            if "axis" in feature.params
+            else None,
+            tuple(float(value) for value in feature.params["centre"])
+            if "centre" in feature.params
+            else None,
+        )
+        for feature in features
+    )
+
+
 def cavity_surface_indices(mesh: MeshData, features: Iterable[Feature]) -> tuple[int, ...]:
     """Die belegten Hohlraumflächen einschließlich ihrer ebenen Ringschultern.
 
@@ -1153,9 +1192,30 @@ def cavity_surface_indices(mesh: MeshData, features: Iterable[Feature]) -> tuple
     Flächen kommen nur hinzu, wenn ihre beiden Randringe eindeutig zu zwei
     verschiedenen, koaxialen Abschnitten gehören. So benutzt die Bearbeitung
     dieselben echten Schulterflächen wie die Erkennung des Zusammenhangs.
+
+    Gemerkt je Körper und Kette (:func:`features.remembered`): Ansicht,
+    Merkmalfenster und die Frage nach dem eigenen Körper stellen sie nach
+    jedem Klick nacheinander — an der Lochplatte mit 360 000 Dreiecken je
+    0,11 s (gemessen am 22.09.2026), und alle lesen dieselbe Antwort.
     """
     body = _one_body(mesh).raw
     candidates = {feature.id: feature for feature in features}
+    answer: tuple[int, ...] = remembered(
+        "cavity_surface",
+        body,
+        (),
+        lambda: _cavity_surface_indices_read(body, candidates),
+        # Nach Kennung sortiert: Die Antwort hängt nicht an der Reihenfolge,
+        # in der Ansicht und Merkmalfenster die Kette nennen.
+        extra=_shape_key(candidates[name] for name in sorted(candidates)),
+    )
+    return answer
+
+
+def _cavity_surface_indices_read(
+    body: trimesh.Trimesh, candidates: Mapping[FeatureId, Feature]
+) -> tuple[int, ...]:
+    """Der Rumpf von :func:`cavity_surface_indices` — die Antwort merkt sich die Hülle."""
     owners: dict[frozenset[tuple[int, int]], list[FeatureId]] = {}
     indices = {index for feature in candidates.values() for index in feature.face_indices}
     if not indices or min(indices) < 0 or max(indices) >= len(body.faces):
@@ -1355,9 +1415,11 @@ def alike_for_actions(
 ) -> tuple[FeatureActionGroup, ...]:
     """Mehrere Handlungsgruppen mit einer gemeinsamen Topologieauskunft.
 
-    Die Reihenfolge entspricht ``actions``. Der Kontext lebt nur für diesen
-    Aufruf; ein anderer Mesh- oder Merkmalsstand kann daher keinen veralteten
-    Randgraphen erben.
+    Die Reihenfolge entspricht ``actions``. Der Randgraph lebt nur für diesen
+    Aufruf; die Flächenausschnitte und ihre Vergleiche hängen am Körper und
+    an Dreiecken, Achsen und Mitten der Merkmale (:func:`_shape_key`) — ein
+    anderer Mesh- oder Merkmalsstand kann so keine veraltete Antwort erben,
+    und Merkmalfenster, Steckbrief und Ansicht lesen dieselbe.
     """
     requested = tuple(actions)
     if not requested:
@@ -1705,7 +1767,18 @@ def _complete_shape_comparison(
     candidate_patch = _surface_patch(candidate, context)
     if reference_patch is None or candidate_patch is None:
         return "unavailable", "complete_shape_unavailable"
-    if not _same_surface_patch(reference_patch, candidate_patch):
+    # Der Vergleich zweier Ausschnitte wird je Körper gemerkt: Das Merkmal-
+    # fenster fragt ihn bei jedem Klick für jede Handlung, der Steckbrief
+    # noch einmal — an der Lochplatte mit 360 000 Dreiecken 0,47 s je Klick
+    # für vier Bohrungen (gemessen am 22.09.2026).
+    same: bool = remembered(
+        "same_surface_patch",
+        _one_body(context.mesh).raw,
+        (),
+        lambda: _same_surface_patch(reference_patch, candidate_patch),
+        extra=(_shape_key(reference), _shape_key(candidate)),
+    )
+    if not same:
         return "different", None
     return "same", None
 
@@ -1729,6 +1802,19 @@ def _build_surface_patch(scope: tuple[Feature, ...], mesh: MeshData) -> _Surface
     Vernetzung — eine unveränderte ebene Fläche, an einer Kopie nur feiner
     unterteilt, galt als „verschieden" (P1.5, Durchsicht der Verbraucher).
     """
+    body = _one_body(mesh).raw
+    patch: _SurfacePatch | None = remembered(
+        "surface_patch",
+        body,
+        (),
+        lambda: _read_surface_patch(scope, body),
+        extra=_shape_key(scope),
+    )
+    return patch
+
+
+def _read_surface_patch(scope: tuple[Feature, ...], body: trimesh.Trimesh) -> _SurfacePatch | None:
+    """Der Rumpf von :func:`_build_surface_patch` — Ausschnitt samt Suchbaum bleiben gemerkt."""
     centre = centre_of(scope[0])
     indices = np.unique(
         np.fromiter(
@@ -1736,7 +1822,6 @@ def _build_surface_patch(scope: tuple[Feature, ...], mesh: MeshData) -> _Surface
             dtype=np.int64,
         )
     )
-    body = _one_body(mesh).raw
     if (
         centre is None
         or not len(indices)

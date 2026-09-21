@@ -19,6 +19,19 @@ mit `handedness="right"`: Winkel und Höhe wachsen gemeinsam. Innenwerkzeug,
 Schraube und Mutter verschieben oder beschneiden diese Wendel, ohne ihren
 Drehsinn zu ändern. Eine Spiegelung führt die Angabe über den gemeinsamen
 Merkmaltransformationsweg nach; ein unbekanntes Importgewinde erhält keine Vorgabe.
+Auch die Händigkeit steht in `measure_sources` als `parameter` — der Steckbrief
+sagt „rechtsgängig (Vorgabemaß)" und nicht „rechtsgängig" wie zu einem
+gemessenen Gewinde.
+
+**Und ein Baustein gibt seinem Wirt dessen Merkmale ohne die alten Dreiecke
+zurück** (`ops._merged_features`): Die Boolesche Operation nummeriert das Netz
+neu, und Dreiecksnummern des Eingangs bezeichnen im Ergebnis fremde Dreiecke
+— an der Dose mit Deckel bis über die letzte hinaus, und der Plattencache
+verwarf den Eintrag bei jedem Öffnen. Ort und Maß reisen mit; die Oberfläche
+gibt ihnen die Auswertung an der neuen Erkennung zurück
+(`evaluate._with_features`, „Der Name bleibt, die aktuelle Oberfläche geht
+mit"). Ein Merkmal, das dort keinen Partner findet, steht danach ohne
+Dreiecke im Baum statt mit falschen.
 
 ## Eigene Lizenz — MIT
 

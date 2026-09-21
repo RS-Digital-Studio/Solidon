@@ -128,7 +128,8 @@ class Section:
         )
 
     def rotated(self, degrees: float) -> Section:
-        if not degrees:
+        # Kein ``not degrees`` — Fließkomma wird nicht auf null geprüft (Regel 6).
+        if abs(degrees) <= EPS_GEOM:
             return self
         return self._paired(
             self.cross.rotate(degrees), lambda: _faces().face_rotated(self.face, degrees)

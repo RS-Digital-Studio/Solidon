@@ -260,8 +260,10 @@ def thread(
             "internal": internal,
             "length": length,
         },
+        # Auch die Händigkeit ist ein Parameter des Bausteins, keine Messung —
+        # ohne Quelle las der Steckbrief „rechtsgängig" wie ein gemessenes Maß.
         measure_sources=dict.fromkeys(
-            ("diameter", "pitch", "centre", "axis", "length"), "parameter"
+            ("diameter", "pitch", "handedness", "centre", "axis", "length"), "parameter"
         ),
     )
 

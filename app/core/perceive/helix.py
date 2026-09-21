@@ -509,32 +509,54 @@ def _best_pitch(
     Gipfel; die andere ist an einer echten Wendel Rauschen. Vorher setzte die
     Rechnung den Rechtsgang voraus, und die Spiegelung desselben Bolzens ergab
     null Wendeln.
+
+    **Und beide aus einem Durchlauf.** Die Phase ist ``a ∓ θ`` mit
+    ``a = 2π·z/p``; ``cos(a ∓ θ) = cos a·cos θ ± sin a·sin θ`` und
+    ``sin(a ∓ θ) = sin a·cos θ ∓ cos a·sin θ``. Die Winkelfunktionen über die
+    Phasenmatrix — das teure Stück — laufen deshalb einmal je Block, und die
+    vier Mittelwerte sind zwei Matrixprodukte der Phasenmatrix mit den zwei
+    Spalten ``cos θ`` und ``sin θ``; beide Händigkeiten kommen aus denselben
+    vier Zahlen je Steigung. Ein Modulo braucht die Phase nicht, Sinus und
+    Kosinus sind periodisch. Zwei volle Durchläufe verdoppelten die
+    Steigungssuche (``test_helix.py`` von 7,3 auf 16,5 s, gemessen am
+    21.09.2026); gemessen am M3-Bolzen mit 6 965 Punkten: 236 → 66 ms.
     """
     helper = np.array([1.0, 0.0, 0.0]) if abs(axis[0]) < 0.9 else np.array([0.0, 1.0, 0.0])
     first = np.cross(axis, helper)
     first /= np.linalg.norm(first)
     second = np.cross(axis, first)
     angle = np.arctan2(offset @ second, offset @ first)
+    turns = np.stack((np.cos(angle), np.sin(angle)), axis=1) / len(along)
 
     pitches = np.arange(PITCH_RANGE[0], PITCH_RANGE[1] + PITCH_STEP, PITCH_STEP)
     rows = max(1, PITCH_BLOCK_VALUES // len(along))
-    chosen: tuple[float, float, float, str] | None = None
-    for sign, handedness in ((1.0, "right"), (-1.0, "left")):
-        strength = np.empty(len(pitches), dtype=float)
-        for start in range(0, len(pitches), rows):
-            if check_cancelled is not None:
-                check_cancelled()
-            block = pitches[start : start + rows]
-            rest = (
-                along[None, :] - sign * block[:, None] * angle[None, :] / (2 * math.pi)
-            ) % block[:, None]
-            phase = 2 * math.pi * rest / block[:, None]
-            strength[start : start + len(block)] = np.hypot(
-                np.cos(phase).mean(axis=1), np.sin(phase).mean(axis=1)
-            )
+    strengths = {
+        "right": np.empty(len(pitches), dtype=float),
+        "left": np.empty(len(pitches), dtype=float),
+    }
+    for start in range(0, len(pitches), rows):
         if check_cancelled is not None:
             check_cancelled()
+        block = pitches[start : start + rows]
+        phase = along[None, :] * (2 * math.pi / block)[:, None]
+        # Je Steigung: mean(cos a·cos θ), mean(cos a·sin θ) und
+        # mean(sin a·cos θ), mean(sin a·sin θ).
+        with_cos = np.cos(phase) @ turns
+        with_sin = np.sin(phase) @ turns
+        stop = start + len(block)
+        # Rechtsgang: a - θ; Linksgang: a + θ.
+        strengths["right"][start:stop] = np.hypot(
+            with_cos[:, 0] + with_sin[:, 1], with_sin[:, 0] - with_cos[:, 1]
+        )
+        strengths["left"][start:stop] = np.hypot(
+            with_cos[:, 0] - with_sin[:, 1], with_sin[:, 0] + with_cos[:, 1]
+        )
+    if check_cancelled is not None:
+        check_cancelled()
 
+    chosen: tuple[float, float, float, str] | None = None
+    for handedness in ("right", "left"):
+        strength = strengths[handedness]
         highest = float(strength.max())
         rises = np.r_[True, strength[1:] >= strength[:-1]]
         falls = np.r_[strength[:-1] >= strength[1:], True]

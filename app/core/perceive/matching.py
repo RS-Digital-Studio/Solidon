@@ -29,7 +29,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from app.core.deferred import cKDTree, linear_sum_assignment
-from app.core.errors import AmbiguityError
+from app.core.errors import AmbiguityError, InternalError
 from app.core.log import get_logger
 from app.core.perceive.match_records import valid_fingerprint
 from app.core.perceive.surfaces import radial_scales, transformed_patches
@@ -277,6 +277,12 @@ def _matrix_pairs(
             yield row, columns, values[columns]
 
 
+def _not_finite(features: list[Feature], vectors: np.ndarray) -> list[str]:
+    """Die Kennungen der Merkmale, deren Vektor keine endliche Zahl trägt."""
+    finite = np.all(np.isfinite(vectors), axis=1) if len(vectors) else np.ones(0, dtype=bool)
+    return [str(feature.id) for feature, good in zip(features, finite, strict=True) if not good]
+
+
 def _assignment(
     first: list[Feature],
     second: list[Feature],
@@ -287,17 +293,16 @@ def _assignment(
 ) -> _Assignment:
     """Strikte freie Zeilenminima zertifizieren; sonst den ganzen Solverkontext erhalten."""
     one, two = _vectors(first, before, diagonal, check), _vectors(second, centre, diagonal, check)
-    if not np.all(np.isfinite(one)) or not np.all(np.isfinite(two)):
-        # Ungültige Zahlen behalten den bisherigen Fehlerweg des Vollvergleichs.
-        matrix = _cost_matrix(first, second, before, centre, diagonal, check_cancelled=check)
-        matrix = np.where(matrix > MATCH_THRESHOLD, KIND_PENALTY, matrix)
-        if check is not None:
-            check()
-        rows, columns = linear_sum_assignment(matrix)
-        if check is not None:
-            check()
-        return _Assignment(
-            rows, columns, matrix[rows, columns], matrix, lambda: _matrix_pairs(matrix, check)
+    broken = _not_finite(first, one) + _not_finite(second, two)
+    if broken:
+        # **Ein Merkmal ohne Zahl ist ein Programmfehler, kein Bedienfehler.**
+        # Bis zum 21.09.2026 lief der Fall in den Vollvergleich, und scipy
+        # warf dort „matrix contains invalid numeric entries" — ein Satz
+        # ohne Handlung (Regel 17). Jetzt nennt die Ausnahme das Merkmal und
+        # trägt den Fehlerbericht als Vorschlag.
+        raise InternalError(
+            detail="feature vectors contain non-finite values",
+            values={"features": broken[:8], "count": len(broken)},
         )
     if check is not None:
         check()
@@ -928,6 +933,9 @@ def moved_features(
         check_cancelled()
     matrix = np.asarray(transform, dtype=float)
     turn = matrix[:3, :3]
+    # Normalen folgen der invers-transponierten Matrix — einmal gerechnet,
+    # nicht ein Gleichungssystem je Merkmal (531 Verrundungen am Hemmungsrad).
+    for_normals = np.linalg.inv(turn).T
     moved: dict[FeatureId, Feature] = {}
     for identifier, feature in features.items():
         if check_cancelled is not None:
@@ -942,7 +950,7 @@ def moved_features(
             if key in params:
                 original = np.asarray(params[key], dtype=float)
                 direction = (
-                    np.linalg.solve(turn.T, original)
+                    for_normals @ original
                     if key in {"normal", "opening_normal"}
                     else turn @ original
                 )

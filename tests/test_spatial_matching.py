@@ -405,10 +405,20 @@ def test_equal_best_candidates_across_blocks_keep_the_global_tie(monkeypatch):
     assert observed == [(1, 302)]
 
 
-def test_nonfinite_normalised_position_keeps_the_original_failure():
+def test_nonfinite_normalised_position_names_the_feature_and_offers_a_way_out():
+    """Ein Merkmal ohne Zahl ist ein Programmfehler — mit Kennung und Vorschlag (Regel 17).
+
+    Bis zum 21.09.2026 lief der Fall in den Vollvergleich, und scipy warf dort
+    „matrix contains invalid numeric entries": ein Satz ohne Handlung.
+    """
+    from app.core.errors import InternalError
+
     old = {"old": hole("old", float("nan"))}
     new = {"new": hole("new")}
-    with pytest.raises(ValueError, match="invalid numeric"):
+    with pytest.raises(InternalError) as caught:
         match(old, new, (0, 0, 0), 1.0)
-    with pytest.raises(ValueError, match="invalid numeric"):
-        complete_reference(old, new)
+    assert caught.value.suggestions, "jede Ausnahme trägt einen Handlungsvorschlag"
+    assert caught.value.values["features"] == ["old"]
+    with pytest.raises(InternalError) as caught:
+        match(new, old, (0, 0, 0), 1.0)
+    assert caught.value.values["features"] == ["old"], "auch auf der neuen Seite"

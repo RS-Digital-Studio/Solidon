@@ -1372,6 +1372,53 @@ def test_inserting_two_snap_arms_reports_the_same_load_warning_once(profile: Pro
     assert {"snap_fit_arm_1", "snap_fit_arm_1_2"} <= set(outcome.outputs[0].features)
 
 
+def test_a_part_hands_back_no_triangles_of_the_host_it_no_longer_has(profile: Profile) -> None:
+    """Die Merkmale des Wirts kommen ohne die Dreiecke des alten Netzes zurück.
+
+    Die Boolesche Operation nummeriert neu; bis zum 21.09.2026 trugen die
+    mitgereichten Wirtsmerkmale die Nummern des Eingangsnetzes — an der Dose
+    mit Deckel bis über die letzte hinaus, und der Plattencache verwarf den
+    Eintrag bei jedem Öffnen (Review Leistung B3). Ort und Maß bleiben; die
+    Oberfläche gibt die Auswertung an der neuen Erkennung zurück.
+    """
+    import trimesh
+
+    from app.core.perceive.features import detect
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.types import OpContext, Scene, SceneObject
+
+    mesh = MeshData.of(trimesh.creation.box((100, 60, 5)))
+    detected = detect(mesh)
+    assert detected and all(feature.face_indices for feature in detected.values())
+    source = SceneObject(id="obj_1", name="Platte", mesh=mesh, features=detected)
+    spec = REGISTRY.get("insert_screw_hole")
+    outcome = spec.fn(
+        OpContext(
+            scene=Scene(objects={source.id: source}),
+            inputs=[source],
+            params=spec.params(size="M4", x=10.0, y=5.0, z=5.0),
+            profile=profile,
+            quality="draft",
+            seed=None,
+            progress=lambda fraction, text: None,
+            ask=lambda question, choices: choices[0],
+            cancelled=NeverCancelled(),
+        )
+    )
+    made = outcome.outputs[0]
+    assert made.mesh.triangle_count != mesh.triangle_count, "die Vorbedingung: ein neues Netz"
+    for name, feature in detected.items():
+        carried = made.features[name]
+        assert carried.params == feature.params, name
+        assert carried.face_indices == () and carried.surface_patches == (), (
+            f"{name} trägt Dreiecke eines Netzes, das die Operation nicht ausgibt"
+        )
+    assert all(
+        max(feature.face_indices, default=-1) < made.mesh.triangle_count
+        for feature in made.features.values()
+    )
+
+
 def test_multiple_targets_keep_findings_with_distinct_locations(
     profile: Profile, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -4364,10 +4411,13 @@ def test_the_clip_lets_the_cable_lie_but_not_drop_in(size: str) -> None:
     Genau daran hängt, ob ein Clip hält. Ist die Öffnung so weit wie das Kabel,
     fällt es wieder heraus; ist der Innenraum zu eng, drückt der Bügel es platt.
 
-    Gefragt wird über die Boolesche Operation, und ihre **Ausnahme ist die
-    Antwort**: Eine leere Schnittmenge meldet ``boolean`` als
-    ``BooleanFailedError`` („Es bleibt kein Körper übrig"), und das ist hier
-    genau das gesuchte Ergebnis.
+    Gefragt wird über die Boolesche Operation, und **nichts ist die
+    Antwort**: Eine leere Schnittmenge ist bei ``allow_empty`` ein Ergebnis
+    der ersten Stufe und keine Ausnahme. Bis zum 21.09.2026 fragte der Test
+    ohne den Schalter und ließ die Kette alle vier Stufen bis zur
+    Voxelisierung durchlaufen, um „Es bleibt kein Körper übrig" zu hören —
+    sieben Sekunden je Größe für eine Tatsache, die die erste Stufe in
+    Millisekunden kennt.
 
     **Warum die Probe neunzig Prozent misst und nicht hundert.** Der Sitz ist
     so groß wie das Kabel, also berühren sich beide in einer Fläche — und
@@ -4378,7 +4428,6 @@ def test_the_clip_lets_the_cable_lie_but_not_drop_in(size: str) -> None:
     das sich selbst misst. Bei neunzig Prozent ist die Antwort eindeutig, und
     die Zusage — der Sitz ist für das Kabel gebaut — prüft sie immer noch.
     """
-    from app.core.errors import BooleanFailedError
     from app.core.geom.boolean import boolean
     from app.core.knowledge import standards
     from app.core.knowledge.parts import PARTS, shapes
@@ -4399,8 +4448,8 @@ def test_the_clip_lets_the_cable_lie_but_not_drop_in(size: str) -> None:
         lying = shapes.turned(centred, 90.0, (1.0, 0.0, 0.0))
         return shapes.moved(lying, (0.0, 0.0, height))
 
-    with pytest.raises(BooleanFailedError):
-        boolean("intersection", [built.mesh, cable(axis, 0.90)])
+    lying = boolean("intersection", [built.mesh, cable(axis, 0.90)], allow_empty=True)
+    assert lying.mesh.triangle_count == 0, f"{size}: the seat presses into the cable"
 
     # Und der Weg von oben ist versperrt: ein Kabel, das über der Öffnung steht
     # und heruntergedrückt würde, trifft auf Material. Hier ist der Schnitt
@@ -5179,6 +5228,14 @@ def test_a_printed_joint_needs_a_gap_the_printer_can_hold(profile: Profile) -> N
     den Bogen, der gemessene Spalt fällt also um Bruchteile kleiner aus —
     0,2499 bei eingestellten 0,25. Mit dem Rechenepsilon meldete die Prüfung
     ein Scharnier, das genau richtig gebaut war.
+
+    **Zwei Ecken je Frage, nicht zweiunddreißig.** Bis zum 21.09.2026 fuhr
+    der erste Schritt den ganzen Bereich des Scharniers — fünf Maße, 32
+    Ecken, jede mit Wandmessung, Selbstdurchdringung und Spaltmaß: 51 s, für
+    eine Zusage, die an zwei Ecken genauso steht. Der volle Bereichslauf ist
+    seit dem 03.09.2026 nicht mehr Teil des Tors (AGENTS.md, Checkliste
+    Baustein, Punkt 5); hier zählt nur, dass der Profilwert eingesetzt wird
+    und der Spalt danach hält — am dünnsten und am dicksten Bolzen.
     """
     from app.core.knowledge.parts import PARTS
     from app.core.knowledge.parts.range_check import check
@@ -5187,9 +5244,19 @@ def test_a_printed_joint_needs_a_gap_the_printer_can_hold(profile: Profile) -> N
 
     hinge = PARTS.get("barrel_hinge")
 
-    # So, wie der Kunde es bekommt: `play` bleibt null, der Bereichstest setzt
-    # den Profilwert ein — wie `insert_part` es tut.
-    assert check(hinge.params, hinge.fn, profile, bodies=hinge.bodies).passed
+    @op_params
+    class AsDelivered(BaseParams):
+        pin: float = param(title="Bolzen", default=4.0, unit="mm", minimum=3.0, maximum=5.0)
+        play: float = param(title="Spiel", default=0.0, unit="mm", minimum=0.0, maximum=0.0)
+
+    def built_as_delivered(values: Any) -> Any:
+        """So, wie der Kunde es bekommt: `play` bleibt null, der Bereichstest
+        setzt den Profilwert ein — wie `insert_part` es tut."""
+        return hinge.fn(hinge.params(pin=values.pin, play=values.play))
+
+    delivered = check(AsDelivered, built_as_delivered, profile, bodies=hinge.bodies)
+    assert delivered.checked == 2, "der dünnste und der dickste Bolzen, sonst nichts"
+    assert delivered.passed, [failure.reason for failure in delivered.failures]
 
     @op_params
     class TooTight(BaseParams):
@@ -5574,6 +5641,9 @@ def test_a_named_thread_says_how_long_its_helix_is() -> None:
         assert threads, f"{name} nennt sein Gewinde nicht"
         for feature in threads:
             assert feature.params["handedness"] == "right"
+            # Ein Wort des Bausteins, kein Messwert: Ohne diese Quelle las der
+            # Steckbrief „rechtsgängig" wie ein gemessenes Maß (21.09.2026).
+            assert feature.measure_sources.get("handedness") == "parameter"
             length = float(feature.params.get("length", 0.0))
             centre = feature.params["centre"]
             assert length == pytest.approx(erwartet), (

@@ -11,6 +11,15 @@ from app.core.perceive.match_records import GROUP_DOMAIN, NATIVE_DOMAIN, group_k
 from app.core.types import Feature, FeatureId, ObjectId, Vec3
 from app.i18n import _
 
+#: Die zwei Sätze der Zuordnungsfragen — in der Sie-Form, wie jeder Kundentext.
+#: Bis zum 21.09.2026 standen sie als „Ordne … zu" und „Wähle … aus" da.
+ASSIGN_THE_WHOLE_GROUP = _(
+    "Ordnen Sie alle bisherigen Bezüge dieser Gruppe zu, oder führen Sie sie nicht weiter."
+)
+MAPPING_NO_LONGER_VALID = _(
+    "Die Zuordnung ist nicht mehr gültig. Wählen Sie die Bezüge erneut aus."
+)
+
 type Claims = Mapping[FeatureId, tuple[FeatureId, ...]]
 type Decisions = Mapping[FeatureId, FeatureId | None]
 
@@ -66,26 +75,20 @@ def mapping_with_decisions(
     if check_cancelled is not None:
         check_cancelled()
     if set(decisions) != set(claims):
-        raise AmbiguityError(
-            _("Ordne alle bisherigen Bezüge dieser Gruppe zu oder führe sie nicht weiter.")
-        )
+        raise AmbiguityError(ASSIGN_THE_WHOLE_GROUP)
     if not any(
         dict(claims) == group for group in conflict_groups(result, check_cancelled=check_cancelled)
     ):
-        raise AmbiguityError(
-            _("Ordne alle bisherigen Bezüge dieser Gruppe zu oder führe sie nicht weiter.")
-        )
+        raise AmbiguityError(ASSIGN_THE_WHOLE_GROUP)
     proposed = dict(result.mapping)
     occupied = set(proposed.values())
     if any(target in occupied for candidates in claims.values() for target in candidates):
-        raise AmbiguityError(_("Die Zuordnung ist nicht mehr gültig. Wähle die Bezüge erneut aus."))
+        raise AmbiguityError(MAPPING_NO_LONGER_VALID)
     for old_id, candidate in decisions.items():
         if check_cancelled is not None:
             check_cancelled()
         if old_id in proposed or (candidate is not None and candidate not in claims[old_id]):
-            raise AmbiguityError(
-                _("Die Zuordnung ist nicht mehr gültig. Wähle die Bezüge erneut aus.")
-            )
+            raise AmbiguityError(MAPPING_NO_LONGER_VALID)
         if candidate is not None:
             proposed[old_id] = candidate
     matching.require_injective(proposed)
@@ -127,9 +130,7 @@ def group_fingerprint(
             check_cancelled()
         feature = detected.get(target)
         if feature is None:
-            raise AmbiguityError(
-                _("Die Zuordnung ist nicht mehr gültig. Wähle die Bezüge erneut aus.")
-            )
+            raise AmbiguityError(MAPPING_NO_LONGER_VALID)
         candidates.append(
             {
                 "fingerprint": matching.fingerprint(feature, centre, diagonal),
@@ -157,9 +158,7 @@ def group_fingerprint(
             check_cancelled=check_cancelled,
         )
     except ValueError as error:
-        raise AmbiguityError(
-            _("Die Zuordnung ist nicht mehr gültig. Wähle die Bezüge erneut aus.")
-        ) from error
+        raise AmbiguityError(MAPPING_NO_LONGER_VALID) from error
     if check_cancelled is not None:
         check_cancelled()
     return record

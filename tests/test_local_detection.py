@@ -317,7 +317,7 @@ def test_a_one_millimetre_stud_face_is_found_locally() -> None:
         chosen = result.features[result.selected[0]]
         assert chosen.kind == "face"
         assert float(chosen.params["area"]) == pytest.approx(1.0)
-        assert tuple(round(float(v), 3) for v in chosen.params["centre"]) == point
+        assert chosen.params["centre"] == pytest.approx(point, abs=1e-3)
         assert set(_small_faces(result.features)) == STUD_CENTRES
 
 

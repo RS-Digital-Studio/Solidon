@@ -1016,8 +1016,23 @@ def _merged_features(
     ersten den Namen weg — siehe :func:`_free_name`. Beide Kerne fragen
     dasselbe: Die Merkmale eines Bausteins sind Provenienz, gerechnet aus
     seinen Parametern und mit derselben Matrix bewegt wie seine Form.
+
+    **Und die Dreiecke des Wirts reisen nicht mit.** Seine Merkmale zeigen
+    auf das Netz **vor** dem Baustein; die Boolesche Operation nummeriert
+    neu, und im Ergebnis bezeichneten die alten Nummern fremde Dreiecke — bis
+    über die letzte hinaus (Dose mit Deckel: Merkmale bis Index 40 284 an
+    40 254 Dreiecken, und der Plattencache verwarf den Eintrag bei jedem
+    Öffnen, gemessen am 21.09.2026). Eine Operation gibt nur Merkmale ihres
+    Ausgangsnetzes zurück: Ort und Maß bleiben, die Oberfläche gibt ihnen
+    die Auswertung an der neuen Erkennung zurück (``evaluate._with_features``,
+    „Der Name bleibt, die aktuelle Oberfläche geht mit").
     """
-    features = dict(source.features)
+    features = {
+        name: dataclasses.replace(feature, face_indices=(), surface_patches=())
+        if feature.face_indices or feature.surface_patches
+        else feature
+        for name, feature in source.features.items()
+    }
     for extra in (
         _placed_features(
             produced,

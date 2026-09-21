@@ -446,6 +446,17 @@ vor, und dort wäre der Tausch der schlechtere. Was das kostet, ist gemessen:
 0,1 s an den 500 Schichten des Organizers, nichts am Gitterbecher, dessen
 Stege keine Innenkontur haben.
 
+**Und gemessen wird der Keil an jeder fünften gemessenen Schicht**
+(`TAPER_SAMPLE`, 21.09.2026), die dazwischen tragen den Wert der zuletzt
+gemessenen. Der Keil ist eine Eigenschaft der Wand über ihre Höhe, der Leser
+fragt nach einem Fünftel aller Schichten — fünf Schichten Unschärfe an jedem
+Ende ändern die Antwort nicht, und an einer Vase kostete die Messung an jeder
+Schicht ein Drittel der ganzen Analyse (303 ms von 1276). Was die Stichprobe
+nicht mehr sieht, steht als Test in `test_slice.py`: Ein Keil, der kürzer ist
+als fünf Schichten, wird je nach Lage verfehlt oder fünffach gezählt — beides
+unter jeder Schwelle, die ihn liest. Wer ihn je Schicht braucht, fragt
+`taper_length(shape)` selbst.
+
 ## Stabile IDs
 
 Feature-Erkennung liefert Provenienz-IDs, an denen Ops und Passungen hängen.
@@ -560,7 +571,19 @@ liegt. Vier Sätze dazu:
   keinen `perceive.void`, weil die Merkmalsart selbst die Auskunft ist —
   „Lufteinschluss 3 · 28 mm³". Wer beides will, baut den Befund in derselben
   Bauart wie `perceive.freeform` (`scene/evaluate.py`); heute ist es einer,
-  und dieser Satz sagt welcher.
+  und dieser Satz sagt welcher. **Und was nicht lesbar war, verschwindet
+  auch nicht still**: Kann die native Differenz ein Schalenpaar nicht
+  lesen, gibt die Erkennung keine Einschlüsse aus und nennt der Auswertung
+  über `features.unreadable_void_shells` die Schalenzahl — der Befund dazu
+  gehört in dieselbe Bauart wie `perceive.freeform`, nicht in ein
+  Protokoll, das der Kunde nie sieht (21.09.2026).
+* **Enthaltensein wird gezeigt, nicht gerechnet, wo es geht.** Das vierte
+  Tor fragte je Schalenpaar eine native Differenz — am Quader mit acht
+  Kammern 1,2 s für acht Antworten, die ein Strahl in 30 ms gibt. Der
+  Strahl ist nur dann exakt, wenn die Schalen sich nicht kreuzen; das belegt
+  ein Zertifikat über die Hüllquader der Dreiecke, und fehlt es, rechnet die
+  Differenz wie zuvor. Ein Strahl, der eine Kante trifft, entscheidet
+  nichts und nimmt die nächste Richtung — geraten wird an keiner Stelle.
 * **Und er ist nicht gesperrt.** Der erste Entwurf sperrte alles mit der
   Begründung, an einen eingeschlossenen Hohlraum komme kein Werkzeug heran —
   und das war messbar falsch: `test_a_cavity_inside_the_body_moves_without_

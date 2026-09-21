@@ -369,7 +369,13 @@ def test_complete_surface_shape_uses_the_actual_patch_not_only_sphere_radius() -
 
 
 def test_a_group_builds_each_surface_index_once(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Acht gleiche Kugeln teilen ihre Suchbäume nur während dieser Auswahl."""
+    """Acht gleiche Kugeln teilen ihre Suchbäume — und ein zweiter Klick baut keinen neu.
+
+    Bis zum 22.09.2026 lebten die Ausschnitte nur für einen Aufruf, und jeder
+    Klick im Merkmalfenster baute sie neu (0,47 s an der Lochplatte mit
+    360 000 Dreiecken). Jetzt hängen sie am Körper und an den Dreiecken,
+    Achsen und Mitten der Merkmale; ein anderer Körper bekommt seine eigenen.
+    """
     bodies = []
     features = {}
     offset = 0
@@ -405,7 +411,10 @@ def test_a_group_builds_each_surface_index_once(monkeypatch: pytest.MonkeyPatch)
     }
     assert built == len(features), f"{built} surface indexes for {len(features)} patches"
     assert alike_for_actions(actions, "sphere_1", features, mesh) == grouped
-    assert built == 2 * len(features), "surface indexes must not survive their selection context"
+    assert built == len(features), "the same body reads its surface indexes, it does not rebuild"
+    copy = MeshData.of(mesh.raw.copy())
+    assert alike_for_actions(actions, "sphere_1", features, copy) == grouped
+    assert built == 2 * len(features), "another body gets its own surface indexes"
 
 
 def test_a_finer_subdivided_copy_is_still_the_same_complete_shape(
@@ -433,8 +442,8 @@ def test_a_finer_subdivided_copy_is_still_the_same_complete_shape(
     vertices, faces, split = trimesh.remesh.subdivide(
         body.vertices, body.faces, face_index=np.asarray(other.face_indices), return_index=True
     )
-    # trimesh stellt die unveraenderten Dreiecke in ihrer Reihenfolge nach vorn
-    # und haengt die geteilten an; ``split`` nennt nur die geteilten.
+    # trimesh stellt die unveränderten Dreiecke in ihrer Reihenfolge nach vorn
+    # und hängt die geteilten an; ``split`` nennt nur die geteilten.
     untouched = np.setdiff1d(np.arange(len(body.faces)), np.asarray(other.face_indices))
     new_index = {int(old): (int(new),) for new, old in enumerate(untouched)}
     new_index.update({int(old): tuple(int(i) for i in new) for old, new in split.items()})
@@ -449,7 +458,7 @@ def test_a_finer_subdivided_copy_is_still_the_same_complete_shape(
         for identifier, feature in features.items()
     }
     assert len(renumbered[other.id].face_indices) == 4 * len(other.face_indices)
-    # Gegenprobe der Umnummerierung: dieselben Dreiecksmitten am unveraenderten Merkmal.
+    # Gegenprobe der Umnummerierung: dieselben Dreiecksmitten am unveränderten Merkmal.
     assert np.allclose(
         np.sort(remeshed.raw.triangles_center[list(renumbered[chosen.id].face_indices)], axis=0),
         np.sort(body.triangles_center[list(chosen.face_indices)], axis=0),

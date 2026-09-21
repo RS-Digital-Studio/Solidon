@@ -20,6 +20,7 @@ from __future__ import annotations
 import hashlib
 import itertools
 import math
+import threading
 import weakref
 from collections import Counter, OrderedDict
 from collections.abc import Callable, Mapping, Sequence
@@ -136,6 +137,10 @@ MIN_FACE_AREA = 4.0
 #: Ab welchem Kosinus zwei Flächennormalen als gleichgerichtet gelten — nur
 #: dann kann die eine die andere verdecken, also innen liegen.
 PARALLEL_FACE_COSINE: Final = 0.99
+
+#: Wie viele parallele Kandidatenflächen :func:`_face_roles` je Block prüft,
+#: bevor es beim ersten Treffer aufhört — ein Arbeitsstück, keine Toleranz.
+FACE_ROLE_BLOCK: Final = 64
 
 #: Kleinster Durchmesser der automatischen geometrischen Einpassung.
 #:
@@ -774,6 +779,14 @@ _CACHE_INDICES: OrderedDict[bytes, int] = OrderedDict()
 #: fragt über :func:`freeform_dropped` nach und macht einen Befund daraus.
 _FREEFORM_DROPPED: OrderedDict[bytes, int] = OrderedDict()
 
+#: Je Eintrag die Komponentenzahl des Körpers, wenn :func:`detect_voids` seine
+#: Schalen nicht lesen konnte — sonst null. Dieselbe Bauart wie
+#: :data:`_FREEFORM_DROPPED`, aus demselben Grund: Acht Einschlüsse, die
+#: verschwinden, weil eine native Differenz scheiterte, sind sonst nirgends
+#: zu sehen (Regel 17); :func:`unreadable_void_shells` nennt der Auswertung
+#: die Zahl.
+_UNREADABLE_VOIDS: OrderedDict[bytes, int] = OrderedDict()
+
 #: Wie viele Zwischenkörper der Cache behält. Eine Auswertung untersucht nicht
 #: nur die fertigen Objekte, sondern nach jeder Operation deren damaliges Netz.
 #: Der gemessene Kundenverlauf hat bei 163 Operationen 132 verschiedene Netze;
@@ -830,8 +843,13 @@ def forget_cache() -> None:
     _FEATURE_CACHE.clear()
     _CACHE_INDICES.clear()
     _FREEFORM_DROPPED.clear()
-    _SUPPORT_CACHE.clear()
-    _DIGESTS.clear()
+    _UNREADABLE_VOIDS.clear()
+    with _MEMORY_LOCK:
+        _SUPPORT_CACHE.clear()
+        _DIGESTS.clear()
+        for memory in _MEMORIES.values():
+            memory.answers.clear()
+            memory.digests.clear()
 
 
 def _one_body(mesh: MeshData) -> MeshData:
@@ -871,8 +889,19 @@ def _one_body(mesh: MeshData) -> MeshData:
     """
     if fully_stitched(mesh.raw):
         return mesh
+    # **Einmal je Eingangskörper.** Merkmalfenster, Steckbrief und Ansicht
+    # fragen nach jedem Klick dieselbe Geometrie, und jede Frage schweißte
+    # neu — mit einem neuen Körper, an dem kein Merker eine Antwort fand.
+    # Gemerkt wird nur die verschweißte Kopie, nie das Netz selbst: Es im
+    # Merker seines eigenen Körpers zu halten hielte den Körper für immer.
+    welded: MeshData | None = remembered("one_body", mesh.raw, (), lambda: _welded(mesh))
+    return welded if welded is not None else mesh
+
+
+def _welded(mesh: MeshData) -> MeshData | None:
+    """Die verschweißte Kopie — oder nichts, wenn es nichts zu verschweißen gab."""
     welded, gone = merge_vertices(mesh)
-    return welded if gone else mesh
+    return welded if gone else None
 
 
 def detect(
@@ -911,13 +940,13 @@ def detect(
     key = _mesh_key(mesh)
     if check_cancelled is not None:
         check_cancelled()
-    remembered = _FEATURE_CACHE.get(key)
-    if remembered is not None:
+    known = _FEATURE_CACHE.get(key)
+    if known is not None:
         _FEATURE_CACHE.move_to_end(key)
         # Eine Kopie, weil der Aufrufer sein Ergebnis behalten darf. Die
         # ``Feature``-Objekte selbst sind unveränderlich (``frozen=True``) und
         # dürfen geteilt werden; die Zuordnung darüber hinein nicht.
-        return dict(remembered)
+        return dict(known)
 
     mesh = _one_body(mesh)
     if check_cancelled is not None:
@@ -1013,11 +1042,8 @@ def detect(
         # der Liste, zählten sie beim Urteil über das ganze Modell mit und
         # schöben es Richtung Freiform. Hier gehen sie weg, weil sie zu einem
         # Einschluss gehören — nicht, weil das Modell eine Figur wäre.
-        found = voids_instead_of_phantom_bores(
-            found,
-            detect_voids(mesh, check_cancelled=check_cancelled),
-            check_cancelled=check_cancelled,
-        )
+        voids, unreadable = _detect_voids(mesh, check_cancelled=check_cancelled)
+        found = voids_instead_of_phantom_bores(found, voids, check_cancelled=check_cancelled)
         if check_cancelled is not None:
             check_cancelled()
         found = _partial_cones_folded(mesh, found, check_cancelled=check_cancelled)
@@ -1049,15 +1075,19 @@ def detect(
         for feature in found.values()
     )
     _FREEFORM_DROPPED[key] = left_out
+    _UNREADABLE_VOIDS[key] = unreadable
     while len(_FEATURE_CACHE) > CACHE_LIMIT or sum(_CACHE_INDICES.values()) > CACHE_INDEX_LIMIT:
+        if len(_FEATURE_CACHE) == 1:
+            # Ein einzelner Eintrag über der Grenze bleibt: Ihn wegzuwerfen
+            # hieße, ihn beim nächsten Aufruf sofort neu zu rechnen — der Cache
+            # wäre dann nicht begrenzt, sondern aus. Bis zum 21.09.2026 warf
+            # die Schleife ihn weg und brach erst danach ab; dieser Satz stand
+            # darunter und stimmte nicht.
+            break
         oldest, _ = _FEATURE_CACHE.popitem(last=False)
         _CACHE_INDICES.pop(oldest, None)
         _FREEFORM_DROPPED.pop(oldest, None)
-        if not _FEATURE_CACHE:
-            # Ein einzelner Eintrag über der Grenze bleibt: Ihn wegzuwerfen
-            # hieße, ihn beim nächsten Aufruf sofort neu zu rechnen — der Cache
-            # wäre dann nicht begrenzt, sondern aus.
-            break
+        _UNREADABLE_VOIDS.pop(oldest, None)
     return dict(found)
 
 
@@ -1355,6 +1385,18 @@ def freeform_dropped(mesh: MeshData) -> int:
     return _FREEFORM_DROPPED.get(_mesh_key(mesh), 0)
 
 
+def unreadable_void_shells(mesh: MeshData) -> int:
+    """Wie viele Schalen der Körper hat, wenn :func:`detect` seine Einschlüsse nicht lesen konnte.
+
+    Null für jedes Modell, dessen Schalenpaare die native Differenz lesen
+    konnte — und null für ein Netz, das ``detect`` noch nicht gesehen hat.
+    Die Auswertung fragt unmittelbar nach ``detect`` wie bei
+    :func:`freeform_dropped` und macht daraus einen Befund: Ein Einschluss,
+    der fehlt, weil ein Schalenpaar nicht lesbar war, verschwindet sonst still.
+    """
+    return _UNREADABLE_VOIDS.get(_mesh_key(mesh), 0)
+
+
 # --- Bohrungen -------------------------------------------------------------------
 
 
@@ -1454,14 +1496,14 @@ def _fitted(
             planar = _large_facet_faces(body, check_cancelled=check_cancelled)
         if check_cancelled is not None:
             check_cancelled()
-        curved = [index for index in range(len(body.faces)) if index not in planar]
+        curved = _all_but(len(body.faces), planar)
         if not curved:
             return Fitted([], [], [], [], [], [], [])
 
         found: Cylinders = []
         cones: Cones = []
         spheres: Spheres = []
-        tori: Tori = []
+        tori = _TorusCandidates(len(body.faces))
         stadiums: Stadiums = []
 
         def classify(patch: list[int]) -> bool:
@@ -1590,7 +1632,7 @@ def _fitted(
             if any(classified):
                 # Belegte Teilflächen ersetzen die unsichere Gesamtdeutung;
                 # dieselben Dreiecke zählen nicht zusätzlich als verworfener Ring.
-                tori[:] = [entry for entry in tori if entry[1] is not patch]
+                tori.drop_patch(patch)
                 continue
             # **Dritte Runde, für den Mantel eines knapp aufgezogenen
             # Langlochs** (RM-155): kein Zylinder, weil der Weg zu groß ist,
@@ -1602,7 +1644,7 @@ def _fitted(
             stadium = fit_stadium(body, patch)
             if stadium is not None and stadium.good and stadium.inward:
                 stadiums.append((stadium, patch))
-                tori[:] = [entry for entry in tori if entry[1] is not patch]
+                tori.drop_patch(patch)
 
         if check_cancelled is not None:
             check_cancelled()
@@ -1612,7 +1654,7 @@ def _fitted(
         cones = _merged_cones(body, cones, check_cancelled=check_cancelled)
         if check_cancelled is not None:
             check_cancelled()
-        tori = _merged_tori(body, tori, check_cancelled=check_cancelled)
+        rings = _merged_tori(body, tori.entries, check_cancelled=check_cancelled)
         if check_cancelled is not None:
             check_cancelled()
         helices = find_helices(mesh, check_cancelled=check_cancelled)
@@ -1649,7 +1691,7 @@ def _fitted(
             )
         )
         # Kugeln und Tori nach demselben Schlüssel und aus demselben Grund (§21.2).
-        for round_shapes in (spheres, tori):
+        for round_shapes in (spheres, rings):
             round_shapes.sort(
                 key=lambda entry: (
                     round(entry[0].centre[0], 3),
@@ -1665,7 +1707,7 @@ def _fitted(
                     round(entry[0].centre[2], 3),
                 )
             )
-        return Fitted(found, cones, spheres, tori, fillets, helices, stadiums)
+        return Fitted(found, cones, spheres, rings, fillets, helices, stadiums)
 
 
 def detect_holes(
@@ -1785,11 +1827,97 @@ def _fits_in_the_body(mesh: MeshData, fit: CylinderFit) -> bool:
     return fit.radius * 2.0 <= across + EPS_GEOM
 
 
+#: Ein Dreieck, das mehr Ringkandidaten trägt, als die Karte Plätze hat.
+_CROWDED: Final = -2
+
+
+class _TorusCandidates:
+    """Die Ringkandidaten von :func:`_fitted` samt Karte Dreieck → Kandidat.
+
+    :func:`_cylinder_beside_a_torus` fragte je Splitstück **jeden** Kandidaten,
+    ob das Stück an ihn grenzt — am Drachen aus TripoSG 27 168 Stücke mal alle
+    Ringe, 18 der 72 Sekunden eines Profils (gemessen am 21.09.2026), und die
+    Antwort war fast immer nein. Die Karte nennt je Dreieck den Kandidaten,
+    der es trägt; ein Stück fragt seine eigenen Dreiecke und deren Nachbarn
+    und bekommt die Handvoll Ringe, die überhaupt in Frage kommen.
+
+    **Ein Dreieck kann zwei Kandidaten tragen**: der ursprüngliche Fleck, der
+    als Ring passte, aber nicht belegt war, und ein Splitstück daraus, das
+    ebenfalls als Ring passte — oder ein Stück und die Vereinigung, die
+    :func:`_cylinder_beside_a_torus` an seine Stelle setzt. Dafür hat die
+    Karte zwei Plätze; ein dritter Kandidat macht das Dreieck ``_CROWDED``,
+    und wer ein solches trifft, fragt wie früher alle. Die Karte ist eine
+    Vorauswahl: Ob ein Stück wirklich angrenzt, prüft der Aufrufer weiter
+    an den Dreiecken selbst.
+    """
+
+    __slots__ = ("_next", "entries", "first", "second", "serials")
+
+    def __init__(self, count: int) -> None:
+        self.entries: Tori = []
+        self.serials: list[int] = []
+        self.first = np.full(count, -1, dtype=np.int64)
+        self.second = np.full(count, -1, dtype=np.int64)
+        self._next = 0
+
+    def __len__(self) -> int:
+        return len(self.entries)
+
+    def _mark(self, serial: int, faces: Sequence[int]) -> None:
+        indices = np.asarray(faces, dtype=np.int64)
+        free = self.first[indices] == -1
+        self.first[indices[free]] = serial
+        taken = indices[~free]
+        free = self.second[taken] == -1
+        self.second[taken[free]] = serial
+        self.second[taken[~free]] = _CROWDED
+
+    def _unmark(self, serial: int, faces: Sequence[int]) -> None:
+        indices = np.asarray(faces, dtype=np.int64)
+        self.first[indices[self.first[indices] == serial]] = -1
+        self.second[indices[self.second[indices] == serial]] = -1
+
+    def append(self, entry: tuple[TorusFit, list[int]]) -> None:
+        serial = self._next
+        self._next += 1
+        self.entries.append(entry)
+        self.serials.append(serial)
+        self._mark(serial, entry[1])
+
+    def replace(self, index: int, entry: tuple[TorusFit, list[int]]) -> None:
+        """Ein Kandidat wächst: dieselbe Nummer, mehr Dreiecke."""
+        self._unmark(self.serials[index], self.entries[index][1])
+        self.entries[index] = entry
+        self._mark(self.serials[index], entry[1])
+
+    def drop_patch(self, patch: list[int]) -> None:
+        """Belegte Teilflächen ersetzen die unsichere Gesamtdeutung des Flecks."""
+        kept: Tori = []
+        serials: list[int] = []
+        for entry, serial in zip(self.entries, self.serials, strict=True):
+            if entry[1] is patch:
+                self._unmark(serial, entry[1])
+            else:
+                kept.append(entry)
+                serials.append(serial)
+        self.entries = kept
+        self.serials = serials
+
+    def positions_beside(self, faces: np.ndarray) -> list[int] | None:
+        """Die Kandidaten, die eines dieser Dreiecke tragen — ``None`` heißt: alle fragen."""
+        marks = np.concatenate((self.first[faces], self.second[faces]))
+        marks = np.unique(marks[marks != -1])
+        if len(marks) and marks[0] == _CROWDED:
+            return None
+        wanted = set(marks.tolist())
+        return [index for index, serial in enumerate(self.serials) if serial in wanted]
+
+
 def _cylinder_beside_a_torus(
     body: trimesh.Trimesh,
     mesh: MeshData,
     patch: list[int],
-    tori: Tori,
+    tori: _TorusCandidates,
     *,
     check_cancelled: Callable[[], None] | None,
 ) -> tuple[CylinderFit, list[int]] | None:
@@ -1800,24 +1928,37 @@ def _cylinder_beside_a_torus(
     Die bestehende Torusachse schlägt eine Teilung vor; beide vollständigen
     Teilflächen müssen danach ihre gewöhnlichen Formprüfungen bestehen.
     """
-    if not tori:
+    if not len(tori):
         return None
     indices = np.asarray(patch, dtype=np.int64)
     normals = np.asarray(body.face_normals)[indices]
-    adjacency = np.asarray(body.face_adjacency)
-    for index, (ring, ring_patch) in enumerate(tori):
+    # Die Nachbarn der Restdreiecke aus dem Index je Dreieck, nicht aus
+    # einem ``np.isin`` über alle Nähte des Netzes je Ring: 3 778 Aufrufe an
+    # der verrauschten Freiform kosteten so 0,27 s (gemessen am 21.09.2026).
+    neighbour_table, _rows = _neighbour_index(body)
+    # Nur die Ringe, die das Stück oder seine Nachbarn tragen — in der
+    # Reihenfolge der Kandidaten, damit der erste Treffer derselbe bleibt.
+    around = neighbour_table[indices]
+    around = np.concatenate((indices, around[around >= 0]))
+    positions = tori.positions_beside(around)
+    if positions is None:
+        positions = list(range(len(tori)))
+    for index in positions:
+        ring, ring_patch = tori.entries[index]
         if check_cancelled is not None:
             check_cancelled()
         perpendicular = np.abs(normals @ np.asarray(ring.axis)) <= ACROSS_THE_AXIS
         if perpendicular.all() or not perpendicular.any():
             continue
         candidate = indices[perpendicular].tolist()
-        rest = indices[~perpendicular].tolist()
+        rest = indices[~perpendicular]
         if len(candidate) < MIN_PATCH_FACES or len(_connected_patches(body, candidate)) != 1:
             continue
-        neighbours = adjacency[np.isin(adjacency, rest).any(axis=1)]
-        if not np.isin(neighbours, ring_patch).any():
+        beside = neighbour_table[rest]
+        beside = beside[beside >= 0]
+        if not np.isin(rest, ring_patch).any() and not np.isin(beside, ring_patch).any():
             continue
+        rest = rest.tolist()
         cylinder = fit_cylinder(body, candidate, check_cancelled=check_cancelled)
         if cylinder is None or not cylinder.good or not _fits_in_the_body(mesh, cylinder):
             continue
@@ -1831,7 +1972,7 @@ def _cylinder_beside_a_torus(
             and _same_torus((ring, ring_patch), (again, joined))
             and _torus_is_recognisable(body, again, joined, check_cancelled=check_cancelled)
         ):
-            tori[index] = (again, joined)
+            tori.replace(index, (again, joined))
             return cylinder, candidate
     return None
 
@@ -2205,7 +2346,7 @@ def _a_sliver(body: trimesh.Trimesh, patch: list[int]) -> bool:
 
     Die Begründung der Zahl steht bei :data:`MIN_SURFACE_WIDTH`.
     """
-    result: bool = _remembered(
+    result: bool = remembered(
         "a_sliver",
         body,
         patch,
@@ -2345,7 +2486,7 @@ def _sphere_is_recognisable(
     check_cancelled: Callable[[], None] | None = None,
 ) -> bool:
     """Bestimmtheit und Punktgüte unabhängig von der Facettenunterteilung prüfen."""
-    result: bool = _remembered(
+    result: bool = remembered(
         "_sphere_is_recognisable",
         body,
         patch,
@@ -3067,7 +3208,17 @@ def _partial_cones_folded(
         neighbours = shared[index]
         slots = [name for name in neighbours if found[name].kind == "slot"]
         if slots:
-            closest = max(slots, key=lambda name: (neighbours[name], name))
+            most = max(neighbours[name] for name in slots)
+            leaders = [name for name in slots if neighbours[name] == most]
+            if len(leaders) != 1:
+                # **Gleichstand ist kein Beleg** (Regel 21). Eine Senkung Ø 12
+                # zwischen zwei Langlöchern Ø 6 bei y = ±4 teilt mit beiden
+                # acht Kanten; bis zum 21.09.2026 gewann der alphabetisch
+                # spätere Name, und der Kegel verschwand im zweiten Langloch,
+                # während der exakte Kern ihn als Kegelfläche stehen ließ.
+                kept[identifier] = replace(feature, params={**feature.params, "partial": True})
+                continue
+            closest = leaders[0]
             grown.setdefault(closest, set()).update(int(face) for face in feature.face_indices)
             grown_patches.setdefault(closest, []).extend(feature.surface_patches)
             del kept[identifier]
@@ -3251,7 +3402,7 @@ def _curved_faces(body: trimesh.Trimesh) -> set[int]:
     Fläche, ein deutlicher Knick ist eine Kante, und alles dazwischen ist die
     Stufe einer Rundung, die das Netz nur nicht rund darstellen kann.
     """
-    result: set[int] = _remembered(
+    result: set[int] = remembered(
         "curved_faces",
         body,
         (),
@@ -3310,7 +3461,7 @@ def _facets_standing_apart(
     # Beide Aufrufer reichen ``body.facets`` und ``_curved_faces(body)`` herein —
     # die Antwort hängt am Körper, und ``_large_facet_faces`` wie
     # ``_planar_face_entries`` fragen sie je Erkennung einmal.
-    result: set[int] = _remembered(
+    result: set[int] = remembered(
         "facets_standing_apart",
         body,
         (),
@@ -3353,6 +3504,35 @@ def _facets_standing_apart_read(
     return apart
 
 
+def _all_but(count: int, left_out: set[int]) -> list[int]:
+    """Die Dreiecksnummern ``0 … count - 1`` ohne die genannten, aufsteigend.
+
+    Als Maske statt als Prüfung je Nummer gegen die Menge: an 327 680
+    Dreiecken vier statt fünfzehn Millisekunden (gemessen am 21.09.2026).
+    """
+    mask = np.ones(count, dtype=bool)
+    if left_out:
+        mask[np.fromiter(left_out, dtype=np.int64, count=len(left_out))] = False
+    return np.flatnonzero(mask).tolist()
+
+
+def _facet_areas(body: trimesh.Trimesh, facets: Sequence[np.ndarray]) -> list[float]:
+    """Die Fläche je Facette — eine Summe über alle Dreiecke statt einer je Facette.
+
+    41 310 Facetten der glatten Freiform kosteten als Schleife 38 ms, als
+    ``bincount`` acht (gemessen am 21.09.2026); die Zahlen sind dieselben
+    bis auf die Reihenfolge der Summanden.
+    """
+    if not facets:
+        return []
+    lengths = np.fromiter((len(facet) for facet in facets), dtype=np.int64, count=len(facets))
+    members = np.concatenate([np.asarray(facet, dtype=np.int64) for facet in facets])
+    owner = np.repeat(np.arange(len(facets)), lengths)
+    weights = np.asarray(body.area_faces, dtype=float)[members]
+    summed: list[float] = np.bincount(owner, weights=weights, minlength=len(facets)).tolist()
+    return summed
+
+
 def _large_facet_faces(
     body: trimesh.Trimesh,
     *,
@@ -3367,13 +3547,43 @@ def _large_facet_faces(
     unterdrücken. Viele koplanare Dreiecke oder eine breite Ebene qualifizieren
     sich auch neben einer Rundung; der vollständige Mantelnachweis schützt
     weiterhin vor bloß unterteilten Zylinderstreifen.
+
+    Die Antwort für den ganzen Körper wird gemerkt (:func:`remembered`):
+    Jeder Klick auf eine Bohrung fragte sie zweimal, je 0,17 s an der
+    Lochplatte mit 360 000 Dreiecken (gemessen am 22.09.2026). Die lokale
+    Erkennung mit ``requested`` oder Flächenbudget rechnet weiter selbst.
     """
     if check_cancelled is not None:
         check_cancelled()
+    if requested is None and check_patch_size is None:
+        planar: set[int] = remembered(
+            "large_facet_faces",
+            body,
+            (),
+            lambda: _large_facet_faces_read(body, check_cancelled=check_cancelled),
+            check_cancelled=check_cancelled,
+        )
+        return set(planar)
+    return _large_facet_faces_read(
+        body,
+        check_cancelled=check_cancelled,
+        requested=requested,
+        check_patch_size=check_patch_size,
+    )
+
+
+def _large_facet_faces_read(
+    body: trimesh.Trimesh,
+    *,
+    check_cancelled: Callable[[], None] | None = None,
+    requested: set[int] | None = None,
+    check_patch_size: Callable[[int], None] | None = None,
+) -> set[int]:
+    """Der Rumpf von :func:`_large_facet_faces` — die Antwort merkt sich die Hülle."""
     facets = list(body.facets)
     if not facets:
         return set()
-    areas = [float(body.area_faces[facet].sum()) for facet in facets]
+    areas = _facet_areas(body, facets)
     # Ein Mantelstreifen eines Zylinders ist groß genug für eine Fläche und
     # trotzdem keine eigene Ebene — die Naht zu seinen Nachbarn sagt es. Der
     # zweite Weg bleibt davon unberührt: ein Fleck aus vielen koplanaren
@@ -3433,7 +3643,7 @@ def _large_facet_faces(
     if not recoverable or (requested is not None and requested.isdisjoint(recoverable)):
         return planar
     protected = planar - recoverable
-    candidates = [index for index in range(len(body.faces)) if index not in protected]
+    candidates = _all_but(len(body.faces), protected)
     mesh = MeshData.of(body)
     for patch in _connected_patches(body, candidates):
         if check_cancelled is not None:
@@ -3669,7 +3879,7 @@ def fit_cylinder(
     werden vor Projektion und quadratischen Termen zentriert. Der Fit belegt
     eine Kreisnäherung der Haut, keine unbekannte Konstruktionsabsicht.
     """
-    result: CylinderFit | None = _remembered(
+    result: CylinderFit | None = remembered(
         "fit_cylinder",
         body,
         patch,
@@ -4099,11 +4309,18 @@ def _fan_arcs(body: trimesh.Trimesh, patch: Sequence[int], used: np.ndarray) -> 
 #: der Abdruck der Flächenliste; die Geometrie dahinter ist unveränderlich
 #: (Regel 3). **Nicht der Datenhash des Netzes:** trimesh rechnet ihn bei
 #: jeder Frage neu, 0,4 ms an 200 000 Dreiecken — an der Freiform mit 9 589
-#: Fragen waren das vier Sekunden, mehr als die Lesungen selbst. Der schwache
-#: Verweis daneben sagt, ob hinter der Identität noch dasselbe Netz steht.
-_SUPPORT_CACHE: dict[
-    str, OrderedDict[tuple[int, bytes, Any, int], tuple[weakref.ref[Any], Any]]
-] = {}
+#: Fragen waren das vier Sekunden, mehr als die Lesungen selbst.
+#:
+#: **Und die Antworten eines Körpers gehen mit ihm** (:class:`_BodyMemory`).
+#: Die erste Fassung hielt sie, bis die Grenze je Frage sie verdrängte — und
+#: die Stützpunktlesung eines toten Körpers wiegt so viel wie sein Fleck:
+#: Nach vier Ikosphären lagen 369 MiB an Antworten zu Netzen, die niemand
+#: mehr hatte (gemessen am 21.09.2026). Jeder Körper führt deshalb die
+#: Schlüssel, die er hier hinterlassen hat, und ein ``weakref.finalize``
+#: räumt sie aus, sobald er stirbt — bevor seine Adresse an einen neuen
+#: Körper gehen kann, denn CPython ruft den Abschied beim letzten Verweis
+#: und die Speicherbereinigung ihn vor dem Freigeben.
+_SUPPORT_CACHE: dict[str, OrderedDict[tuple[int, bytes, Any, int], Any]] = {}
 
 #: Wie viele Antworten je Frage gehalten werden. Die Stützpunktlesung trägt
 #: Felder in der Größe des Flecks — an der Ikosphäre dreißig Megabyte — und
@@ -4112,7 +4329,9 @@ _SUPPORT_CACHE: dict[
 #: Erkennung; ein Fleck, der beim zweiten Durchgang schon vergessen wäre,
 #: hätte den Merker umsonst gehabt (gemessen am 21.09.2026: 218 Streifen-
 #: fragen an der Lochplatte verdrängten die Facettenantwort zwischen ihren
-#: zwei Lesern).
+#: zwei Lesern). Die Grenzen gelten über alle Körper, damit auch viele
+#: lebende Körper — der Ergebniscache hält bis zu zwanzig Millionen Dreiecke
+#: — zusammen nicht mehr als acht Lesungen halten.
 SUPPORT_CACHE_LIMIT = 8
 CACHE_LIMIT_PER_QUESTION = 4096
 
@@ -4123,7 +4342,74 @@ _DIGESTS: OrderedDict[int, tuple[Sequence[int], bytes]] = OrderedDict()
 DIGEST_LIMIT = 32
 
 
-def _patch_digest(patch: Sequence[int]) -> bytes:
+class _BodyMemory:
+    """Was ein Körper in den Merkern hinterlassen hat — damit es mit ihm geht.
+
+    ``answers`` nennt je gemerkter Antwort die Frage und den Schlüssel in
+    :data:`_SUPPORT_CACHE`, ``digests`` die Listenabdrücke in :data:`_DIGESTS`.
+    Beides sind Mengen, denn eine verdrängte und neu gerechnete Antwort trägt
+    denselben Schlüssel. Der schwache Verweis sagt, ob hinter der Adresse noch
+    derselbe Körper steht.
+    """
+
+    __slots__ = ("answers", "digests", "ref")
+
+    def __init__(self, body: trimesh.Trimesh) -> None:
+        self.ref: weakref.ref[Any] = weakref.ref(body)
+        self.answers: set[tuple[str, tuple[int, bytes, Any, int]]] = set()
+        self.digests: set[int] = set()
+
+
+#: Je lebendem Körper sein Merker, unter seiner Adresse.
+_MEMORIES: dict[int, _BodyMemory] = {}
+
+#: **Ein Schloss um alle drei Merker.** Das Merkmalfenster fragt
+#: ``fillet_blocked`` → ``detect_faces`` im Hauptfaden, während der Arbeiter
+#: dasselbe Modul für die nächste Auswertung fragt; ``get`` und
+#: ``move_to_end`` an einem ``OrderedDict`` sind zwei Schritte, und wer
+#: dazwischen verdrängt wird, bekam einen ``KeyError``. Wiedereintrittsfähig,
+#: weil der Abschied eines Körpers (:func:`_forget_body`) aus der
+#: Speicherbereinigung heraus in jedem Faden und an jeder Zuweisung laufen
+#: kann — auch innerhalb des gehaltenen Schlosses.
+_MEMORY_LOCK = threading.RLock()
+
+
+def _memory_of(body: trimesh.Trimesh) -> _BodyMemory:
+    """Der Merker eines Körpers, beim ersten Mal angelegt — mit dem Abschied im Gepäck.
+
+    Nur mit gehaltenem :data:`_MEMORY_LOCK` aufrufen.
+    """
+    key = id(body)
+    memory = _MEMORIES.get(key)
+    if memory is not None and memory.ref() is body:
+        return memory
+    memory = _BodyMemory(body)
+    _MEMORIES[key] = memory
+    farewell = weakref.finalize(body, _forget_body, key, memory)
+    # Beim Beenden des Prozesses gibt es nichts mehr aufzuräumen — und die
+    # Modulvariablen sind dann womöglich schon abgebaut. (``atexit`` ist zur
+    # Laufzeit eine Eigenschaft der Klasse; der Stub führt sie als Feld neben
+    # leeren ``__slots__``, daher die Ausnahme für mypy.)
+    farewell.atexit = False  # type: ignore[misc]
+    return memory
+
+
+def _forget_body(key: int, memory: _BodyMemory) -> None:
+    """Der Abschied: Die Antworten eines gestorbenen Körpers gehen mit ihm."""
+    with _MEMORY_LOCK:
+        if _MEMORIES.get(key) is memory:
+            del _MEMORIES[key]
+        for name, answer_key in memory.answers:
+            answers = _SUPPORT_CACHE.get(name)
+            if answers is not None:
+                answers.pop(answer_key, None)
+        for digest_key in memory.digests:
+            _DIGESTS.pop(digest_key, None)
+        memory.answers.clear()
+        memory.digests.clear()
+
+
+def _patch_digest(memory: _BodyMemory, patch: Sequence[int]) -> bytes:
     """Der Abdruck einer Flächenliste — sechzehn Bytes für 327 680 Indizes in 7 ms.
 
     Dieselbe Liste wird je Erkennung zwei Dutzend Mal gefragt (Kegel, Zylinder,
@@ -4131,21 +4417,26 @@ def _patch_digest(patch: Sequence[int]) -> bytes:
     Python-Liste fünf Millisekunden — an der Ikosphäre 140 ms für nichts. Der
     Abdruck bleibt deshalb am Listenobjekt gemerkt; die Liste wird dabei
     festgehalten, damit ihre Adresse nicht an eine neue Liste geht, und eine
-    Fleckenliste ändert nach ihrer Bildung niemand.
+    Fleckenliste ändert nach ihrer Bildung niemand. Gerechnet wird außerhalb
+    des Schlosses — der Hauptfaden soll nicht auf ein Feld aus 327 680 Ecken
+    warten.
     """
     key = id(patch)
-    known = _DIGESTS.get(key)
-    if known is not None and known[0] is patch:
-        _DIGESTS.move_to_end(key)
-        return known[1]
+    with _MEMORY_LOCK:
+        known = _DIGESTS.get(key)
+        if known is not None and known[0] is patch:
+            _DIGESTS.move_to_end(key)
+            return known[1]
     digest = hashlib.blake2b(np.asarray(patch, dtype=np.int64).tobytes(), digest_size=16).digest()
-    _DIGESTS[key] = (patch, digest)
-    while len(_DIGESTS) > DIGEST_LIMIT:
-        _DIGESTS.popitem(last=False)
+    with _MEMORY_LOCK:
+        _DIGESTS[key] = (patch, digest)
+        memory.digests.add(key)
+        while len(_DIGESTS) > DIGEST_LIMIT:
+            _DIGESTS.popitem(last=False)
     return digest
 
 
-def _remembered(
+def remembered(
     name: str,
     body: trimesh.Trimesh,
     patch: Sequence[int],
@@ -4161,27 +4452,32 @@ def _remembered(
     160 000 Punkte (gemessen am 21.09.2026). Die Antworten sind reine
     Funktionen von Netz und Fleck (Regel 3: eine Eingabe ändert niemand);
     ``extra`` trägt, was die Frage sonst noch bestimmt, etwa den Fit, den ein
-    Nachweis prüft. Der schwache Verweis sagt, ob hinter der Identität noch
-    dasselbe Netz steht.
+    Nachweis prüft. Gerechnet wird außerhalb des Schlosses; fragen zwei Fäden
+    zugleich dasselbe, rechnen beide und legen dieselbe Antwort ab.
     """
     # **Ein abgebrochener Auftrag bekommt auch keine gemerkte Antwort.** Der
     # Abbruch gilt dem Auftrag, nicht der Rechnung; wer schon abgebrochen hat,
     # beginnt nichts — und liest auch nichts nach.
     if check_cancelled is not None:
         check_cancelled()
+    with _MEMORY_LOCK:
+        memory = _memory_of(body)
     # Das Löserbudget gehört zum Schlüssel: Ein Test setzt es auf eins und
     # fragt danach noch einmal mit dem vollen — zwei Fragen, zwei Antworten.
-    key = (id(body), _patch_digest(patch), extra, ROUND_FIT_EVALUATIONS)
-    answers = _SUPPORT_CACHE.setdefault(name, OrderedDict())
-    remembered = answers.get(key)
-    if remembered is not None and remembered[0]() is body:
-        answers.move_to_end(key)
-        return remembered[1]
+    key = (id(body), _patch_digest(memory, patch), extra, ROUND_FIT_EVALUATIONS)
+    with _MEMORY_LOCK:
+        answers = _SUPPORT_CACHE.setdefault(name, OrderedDict())
+        if key in answers:
+            answers.move_to_end(key)
+            return answers[key]
     value = compute()
-    answers[key] = (weakref.ref(body), value)
-    limit = SUPPORT_CACHE_LIMIT if name == "support" else CACHE_LIMIT_PER_QUESTION
-    while len(answers) > limit:
-        answers.popitem(last=False)
+    with _MEMORY_LOCK:
+        answers = _SUPPORT_CACHE.setdefault(name, OrderedDict())
+        answers[key] = value
+        memory.answers.add((name, key))
+        limit = SUPPORT_CACHE_LIMIT if name == "support" else CACHE_LIMIT_PER_QUESTION
+        while len(answers) > limit:
+            answers.popitem(last=False)
     return value
 
 
@@ -4201,7 +4497,7 @@ def _surface_support(
         check_cancelled()
     if len(patch) < MIN_PATCH_FACES:
         return None
-    support: _SurfaceSupport | None = _remembered(
+    support: _SurfaceSupport | None = remembered(
         "support",
         body,
         patch,
@@ -4219,7 +4515,7 @@ def _coincident_vertices(body: trimesh.Trimesh) -> bool:
     Ein geschweißtes Netz hat keine, und die Frage kostet einmal so viel wie
     eine Lesung des ganzen Körpers, nicht einmal je Fleck.
     """
-    result: bool = _remembered(
+    result: bool = remembered(
         "coincident",
         body,
         (),
@@ -4405,6 +4701,24 @@ def _cone_support_points(
     )
 
 
+def _row_lengths(vectors: np.ndarray) -> np.ndarray:
+    """``np.linalg.norm(vectors, axis=1)`` ohne dessen Umweg — dieselben Zahlen, Bit für Bit.
+
+    ``norm`` rechnet für reelle Felder genau ``sqrt(add.reduce(x * x, axis))``,
+    prüft davor aber Art, Achse und Ordnung in Python. Die Residuen und
+    Ableitungen der Verfeinerung rufen das je Löserschritt an kleinen Feldern
+    — am Drachen aus TripoSG 2,5 Millionen Mal, acht der 72 Sekunden eines
+    Profils (21.09.2026).
+    """
+    lengths: np.ndarray = np.sqrt(np.add.reduce(vectors * vectors, axis=1))
+    return lengths
+
+
+def _length(vector: np.ndarray) -> float:
+    """``np.linalg.norm(vector)`` für einen Vektor: ``sqrt(v · v)``, Bit für Bit dasselbe."""
+    return math.sqrt(float(vector.dot(vector)))
+
+
 def _refined_fit(
     initial: np.ndarray,
     residual: Callable[[np.ndarray], np.ndarray],
@@ -4460,7 +4774,7 @@ def fit_cone(
     check_cancelled: Callable[[], None] | None = None,
 ) -> ConeFit | None:
     """Achse, Spitze und Winkel gemeinsam an belegten Mantelpunkten einpassen."""
-    result: ConeFit | None = _remembered(
+    result: ConeFit | None = remembered(
         "fit_cone",
         body,
         patch,
@@ -4521,14 +4835,14 @@ def _fit_cone_read(
     def parameters(values: np.ndarray) -> tuple[np.ndarray, np.ndarray, float]:
         """Die Achse besitzt genau zwei Freiheitsgrade, keine freie Länge."""
         direction = initial_axis + first * values[3] + second * values[4]
-        return values[:3], direction / np.linalg.norm(direction), float(values[5])
+        return values[:3], direction / _length(direction), float(values[5])
 
     def residual(values: np.ndarray) -> np.ndarray:
         """Geometrischer Abstand zum Kegel; eine belegte Spitze bleibt ein Punkt."""
         tip, direction, angle = parameters(values)
         relative = samples - tip
         along = relative @ direction
-        radial = np.linalg.norm(relative - np.outer(along, direction), axis=1)
+        radial = _row_lengths(relative - along[:, None] * direction)
         errors = radial * math.cos(angle) - along * math.sin(angle)
         if len(at_apex):
             errors = np.r_[errors, tip - samples[at_apex[0]]]
@@ -4540,14 +4854,14 @@ def _fit_cone_read(
         raw_direction = initial_axis + first * values[3] + second * values[4]
         relative = samples - tip
         along = relative @ direction
-        perpendicular = relative - np.outer(along, direction)
-        radial = np.linalg.norm(perpendicular, axis=1)
+        perpendicular = relative - along[:, None] * direction
+        radial = _row_lengths(perpendicular)
         safe = np.where(radial > EPS_GEOM, radial, EPS_GEOM)
         unit = perpendicular / safe[:, None]
         cosine, sine = math.cos(angle), math.sin(angle)
         columns = np.empty((len(samples), 6))
         columns[:, :3] = -cosine * unit + sine * direction
-        length = float(np.linalg.norm(raw_direction))
+        length = _length(raw_direction)
         for column, basis in ((3, first), (4, second)):
             turned = (basis - direction * float(direction @ basis)) / length
             d_along = relative @ turned
@@ -4613,7 +4927,7 @@ def fit_sphere(
     check_cancelled: Callable[[], None] | None = None,
 ) -> SphereFit | None:
     """Mittelpunkt und Radius aus belegten Netzecken, nicht aus Facettenebenen."""
-    result: SphereFit | None = _remembered(
+    result: SphereFit | None = remembered(
         "fit_sphere",
         body,
         patch,
@@ -4651,12 +4965,12 @@ def _fit_sphere_read(
 
     def residual(values: np.ndarray) -> np.ndarray:
         """Radialer Abstand der belegten Punkte in der lokalen Längeneinheit."""
-        return np.asarray(np.linalg.norm(local - values[:3], axis=1) - values[3], dtype=float)
+        return np.asarray(_row_lengths(local - values[:3]) - values[3], dtype=float)
 
     def jacobian(values: np.ndarray) -> np.ndarray:
         """Die Ableitung des radialen Abstands nach Mittelpunkt und Radius."""
         relative = local - values[:3]
-        distance = np.linalg.norm(relative, axis=1)
+        distance = _row_lengths(relative)
         safe = np.where(distance > EPS_GEOM, distance, EPS_GEOM)
         columns = np.empty((len(local), 4))
         columns[:, :3] = -relative / safe[:, None]
@@ -4689,7 +5003,7 @@ def fit_torus(
     check_cancelled: Callable[[], None] | None = None,
 ) -> TorusFit | None:
     """Den gemeinsamen Toruskandidaten an belegten Netzecken geometrisch verfeinern."""
-    result: TorusFit | None = _remembered(
+    result: TorusFit | None = remembered(
         "fit_torus",
         body,
         patch,
@@ -4724,14 +5038,14 @@ def _fit_torus_read(
     def parameters(values: np.ndarray) -> tuple[np.ndarray, np.ndarray, float, float]:
         """Ringmitte, zweiachsige Richtung und beide positiven Radien."""
         direction = initial_axis + first * values[3] + second * values[4]
-        return values[:3], direction / np.linalg.norm(direction), float(values[5]), float(values[6])
+        return values[:3], direction / _length(direction), float(values[5]), float(values[6])
 
     def residual(values: np.ndarray) -> np.ndarray:
         """Geometrischer Abstand zum Meridiankreis an jedem belegten Netzpunkt."""
         centre, direction, ring, tube = parameters(values)
         relative = local - centre
         along = relative @ direction
-        radial = np.linalg.norm(relative - np.outer(along, direction), axis=1)
+        radial = _row_lengths(relative - along[:, None] * direction)
         return np.asarray(np.hypot(radial - ring, along) - tube, dtype=float)
 
     def jacobian(values: np.ndarray) -> np.ndarray:
@@ -4740,16 +5054,16 @@ def _fit_torus_read(
         raw_direction = initial_axis + first * values[3] + second * values[4]
         relative = local - centre
         along = relative @ direction
-        perpendicular = relative - np.outer(along, direction)
-        radial = np.linalg.norm(perpendicular, axis=1)
+        perpendicular = relative - along[:, None] * direction
+        radial = _row_lengths(perpendicular)
         safe_radial = np.where(radial > EPS_GEOM, radial, EPS_GEOM)
         unit = perpendicular / safe_radial[:, None]
         offset = radial - ring
         distance = np.hypot(offset, along)
         safe = np.where(distance > EPS_GEOM, distance, EPS_GEOM)
         columns = np.empty((len(local), 7))
-        columns[:, :3] = -unit * (offset / safe)[:, None] - np.outer(along / safe, direction)
-        length = float(np.linalg.norm(raw_direction))
+        columns[:, :3] = -unit * (offset / safe)[:, None] - (along / safe)[:, None] * direction
+        length = _length(raw_direction)
         for column, basis in ((3, first), (4, second)):
             turned = (basis - direction * float(direction @ basis)) / length
             d_along = relative @ turned
@@ -4880,7 +5194,7 @@ def _torus_is_recognisable(
     diese Prüfung entscheidet, ob der algebraisch passende Fleck auch als
     sicher bearbeitbares Merkmal in den Objektbaum darf.
     """
-    result: bool = _remembered(
+    result: bool = remembered(
         "_torus_is_recognisable",
         body,
         patch,
@@ -5003,7 +5317,7 @@ def _cone_is_recognisable(
     check_cancelled: Callable[[], None] | None = None,
 ) -> bool:
     """Nur Flecken mit belegten Punkten und Normalen als Kegel veröffentlichen."""
-    result: bool = _remembered(
+    result: bool = remembered(
         "_cone_is_recognisable",
         body,
         patch,
@@ -5273,7 +5587,6 @@ def _is_through(
         if not len(corners):
             return True
 
-    flat = np.stack([corners @ basis_u, corners @ basis_v], axis=-1)
     # **Nicht nur die Achse, die ganze Mündung.** Ein Becherboden mit einer
     # kleinen Bohrung in der Mitte ließ über der Achse kein Dreieck stehen —
     # und der Topf Ø 116 galt als durchgehend; *Versetzen* schnitt ihn daraufhin
@@ -5283,10 +5596,50 @@ def _is_through(
     # dieser Punkte ein Dreieck liegt, sieht man hindurch. Vorher fallen alle
     # Dreiecke weg, deren Projektion die Mündungsscheibe gar nicht erreicht.
     radius = float(fit.radius)
+    if _mouth_covered(corners, basis_u, basis_v, radius):
+        return False
+    # **Und die Flächen, die an den Mantel grenzen, in ganzer Länge** — die
+    # Frage des exakten Kerns (``brep.features._axis_covered``: seine Nachbar-
+    # flächen über den ganzen Körper). Der Abschnitt oben sah vom Übergangs-
+    # kegel einer Aufweitung Ø 9 über Ø 5 nur das Band, das seine Endebene
+    # berührt: Am netzgebohrten Zwilling ist das der ganze Kegel, an der
+    # Tessellierung des exakten Körpers ein Streifen von 3,8 bis 4,5 mm
+    # Radius, und der Ring bei 0,6 (2,7 mm) blieb frei — die Aufweitung hieß
+    # dort durchgehend, am exakten Körper nicht (Kreuzbefund Paket A,
+    # 22.09.2026). Der gegenüberliegende Schenkel eines U-Profils grenzt nicht
+    # an den Mantel und zählt weiter nicht.
+    if patch is not None:
+        members = _faces_beside(mesh.raw, patch)
+        if bounds is not None and len(members):
+            # Dieselbe Vorauswahl über das Mündungsquadrat wie oben, ohne den
+            # Abschnitt: Die Deckflächen einer Platte mit 200 000 Dreiecken
+            # zählen sonst je Bohrung ganz.
+            square = bounds.candidates(axis, basis_u, basis_v, fit, None)
+            if square is not None:
+                members = members[square[members]]
+        if len(members):
+            beside = np.asarray(mesh.raw.triangles, dtype=float)[members] - centre
+            if _mouth_covered(beside, basis_u, basis_v, radius):
+                return False
+    return True
+
+
+def _mouth_covered(
+    corners: np.ndarray, basis_u: np.ndarray, basis_v: np.ndarray, radius: float
+) -> bool:
+    """Liegt eines dieser Dreiecke über der Achse oder einem der Ringe der Mündung?
+
+    ``corners`` sind Dreiecke relativ zur Mitte der Bohrung, ``(n, 3, 3)``.
+    Ein Punkt-in-Dreieck-Test in der Projektion senkrecht zur Achse —
+    baryzentrische Vorzeichen, kein Strahlwurf und damit kein Raumindex.
+    """
+    if not len(corners):
+        return False
+    flat = np.stack([corners @ basis_u, corners @ basis_v], axis=-1)
     within = (flat.min(axis=1) <= radius).all(axis=1) & (flat.max(axis=1) >= -radius).all(axis=1)
     flat = flat[within]
     if not len(flat):
-        return True
+        return False
     angles = np.linspace(0.0, 2.0 * np.pi, THROUGH_SAMPLES, endpoint=False)
     samples = np.vstack(
         [
@@ -5312,8 +5665,60 @@ def _is_through(
             (side_a <= 0.0) & (side_b <= 0.0) & (side_c <= 0.0)
         )
         if bool(covers.any()):
-            return False
-    return True
+            return True
+    return False
+
+
+def _surface_owners(body: trimesh.Trimesh) -> np.ndarray:
+    """Je Dreieck die Nummer der Fläche, auf der es liegt — einmal je Körper.
+
+    Das Netzgegenstück zu den Flächen des exakten Körpers: Die ebenen Facetten,
+    die :func:`_large_facet_faces` als Flächen liest, sind je eine; was übrig
+    bleibt, zerfällt an seinen Kanten in glatte Rundflecken
+    (:func:`_connected_patches`, dieselbe Teilung wie in :func:`_fitted`) —
+    der Übergangskegel einer Aufweitung, der Boden eines Sacklochs, der Mantel
+    der Bohrung darunter. ``-1`` trägt ein Dreieck ohne Fläche.
+    """
+    owners: np.ndarray = remembered("surface_owners", body, (), lambda: _surface_owners_read(body))
+    return owners
+
+
+def _surface_owners_read(body: trimesh.Trimesh) -> np.ndarray:
+    """Der Rumpf von :func:`_surface_owners` — die Antwort merkt sich die Hülle."""
+    planar = _large_facet_faces(body)
+    owners = np.full(len(body.faces), -1, dtype=np.int64)
+    number = 0
+    for facet in body.facets:
+        members = np.asarray(facet, dtype=np.int64)
+        if len(members) and int(members[0]) in planar:
+            owners[members] = number
+            number += 1
+    for patch in _connected_patches(body, _all_but(len(body.faces), planar)):
+        owners[np.asarray(patch, dtype=np.int64)] = number
+        number += 1
+    return owners
+
+
+def _faces_beside(body: trimesh.Trimesh, patch: Sequence[int]) -> np.ndarray:
+    """Alle Dreiecke der Flächen, die an diesen Fleck grenzen — ohne den Fleck selbst."""
+    indices = np.asarray(patch, dtype=np.int64)
+    if not len(indices):
+        return np.zeros(0, dtype=np.int64)
+    neighbours, _rows = _neighbour_index(body)
+    if not neighbours.shape[1]:
+        return np.zeros(0, dtype=np.int64)
+    inside = np.zeros(len(body.faces), dtype=bool)
+    inside[indices] = True
+    beside = neighbours[indices]
+    beside = beside[beside >= 0]
+    beside = beside[~inside[beside]]
+    if not len(beside):
+        return np.zeros(0, dtype=np.int64)
+    owners = _surface_owners(body)
+    surfaces = np.unique(owners[beside])
+    surfaces = surfaces[surfaces >= 0]
+    members = np.flatnonzero(np.isin(owners, surfaces)) if len(surfaces) else beside
+    return members[~inside[members]]
 
 
 def facet_middles(body: trimesh.Trimesh) -> np.ndarray:
@@ -5629,7 +6034,7 @@ def _connected_patches(body: trimesh.Trimesh, faces: list[int]) -> list[list[int
     Facetten, die groß genug für eigene Flächen sind, und wird ohnehin nicht
     als Zylinder gelesen.
     """
-    result: list[list[int]] = _remembered(
+    result: list[list[int]] = remembered(
         "connected_patches",
         body,
         faces,
@@ -5761,9 +6166,10 @@ def _notch_faces(body: trimesh.Trimesh, patch: Sequence[int]) -> set[int]:
     :func:`_closing_set` ruft je Kandidatenmenge. Am Drachen aus TripoSG trug
     ein Fleck aus 307 063 Dreiecken 65 Kandidaten, das sind 2 145 Mengen, und
     jede Prüfung lief noch einmal über den ganzen Fleck und das ganze Netz:
-    264 von 482 Sekunden. Jetzt sagt ``vertex_faces``, welche Dreiecke am
-    ausgefransten Knoten liegen, und der Nachbarindex, welche davon an den
-    Fleck grenzen — dieselbe Menge, gelesen an der Stelle, um die es geht.
+    264 von 482 Sekunden. Jetzt sagt der Index Ecke → Dreiecke
+    (:func:`_vertex_faces_index`), welche Dreiecke am ausgefransten Knoten
+    liegen, und der Nachbarindex, welche davon an den Fleck grenzen — dieselbe
+    Menge, gelesen an der Stelle, um die es geht.
     """
     rim = _rim_of(body, patch)
     if rim is None or not rim.frayed:
@@ -5771,16 +6177,51 @@ def _notch_faces(body: trimesh.Trimesh, patch: Sequence[int]) -> set[int]:
     return _candidates_at(body, patch, rim.frayed)
 
 
+#: Unter diesem Schlüssel hält der Cache von ``trimesh`` den Index Ecke → Dreiecke
+#: eines Körpers — wie :data:`_NEIGHBOUR_INDEX_KEY` lebt er mit der Geometrie.
+_VERTEX_FACES_KEY: Final = "solidon_vertex_faces"
+
+
+def _vertex_faces_index(body: trimesh.Trimesh) -> tuple[np.ndarray, np.ndarray]:
+    """Je Ecke die Dreiecke, die sie tragen — als gepackter Index, einmal je Körper.
+
+    ``trimesh.vertex_faces`` baut dieselbe Auskunft über ein dünnbesetztes
+    Produkt und fällt, sobald **ein** Dreieck entartet ist, in eine
+    Python-Schleife je Ecke über alle Dreiecke: 37 ms bei 10 000, 20 s bei
+    300 000, sechs Minuten bei 1,3 Millionen (gemessen 21.09.2026) — und ein
+    Generatornetz aus TripoSG löst das je Auswertung zweimal aus. Hier: die
+    Ecken aller Dreiecke stabil sortiert, die Dreiecksnummer ist die Position
+    durch drei, und die Zähler je Ecke geben die Ränge. 19 ms bei 300 000,
+    entartet oder nicht.
+
+    Zurück kommen ``ranges`` mit ``len(vertices) + 1`` Einträgen und die
+    Dreiecke; die Dreiecke der Ecke ``v`` stehen in
+    ``faces[ranges[v] : ranges[v + 1]]``. Ein entartetes Dreieck ``(a, a, b)``
+    steht bei ``a`` zweimal — wer Mengen bildet, merkt es nicht.
+    """
+    if _VERTEX_FACES_KEY in body._cache:
+        cached: tuple[np.ndarray, np.ndarray] = body._cache[_VERTEX_FACES_KEY]
+        return cached
+    corners = np.asarray(body.faces, dtype=np.int64).ravel()
+    order = np.argsort(corners, kind="stable")
+    counts = np.bincount(corners, minlength=len(body.vertices))
+    ranges = np.zeros(len(counts) + 1, dtype=np.int64)
+    np.cumsum(counts, out=ranges[1:])
+    faces = order // 3
+    body._cache[_VERTEX_FACES_KEY] = (ranges, faces)
+    return ranges, faces
+
+
 def _candidates_at(body: trimesh.Trimesh, patch: Sequence[int], frayed: frozenset[int]) -> set[int]:
     """Die Dreiecke außerhalb des Flecks, die an ihn grenzen und einen fransigen Knoten tragen."""
     inside = np.zeros(len(body.faces), dtype=bool)
     inside[np.asarray(patch, dtype=np.intp)] = True
     neighbours, _rows = _neighbour_index(body)
-    vertex_faces = np.asarray(body.vertex_faces)
+    ranges, vertex_faces = _vertex_faces_index(body)
     found: set[int] = set()
     for node in frayed:
-        for face in vertex_faces[node]:
-            if face < 0 or inside[face]:
+        for face in vertex_faces[ranges[node] : ranges[node + 1]]:
+            if inside[face]:
                 continue
             # Nur die unmittelbaren Nachbarn des Flecks kommen in Frage: Ein
             # Dreieck, das den Knoten teilt, aber nirgends anliegt, schließt
@@ -5920,7 +6361,7 @@ def _planar_face_entries(
     if not facets:
         return []
 
-    areas = [float(body.area_faces[facet].sum()) for facet in facets]
+    areas = _facet_areas(body, facets)
     # Dieselbe Schwelle, die die Bohrungserkennung benutzt — ein Fleck ist also
     # entweder eine Fläche oder Teil einer gekrümmten Oberfläche, nie beides,
     # nie keines. Was auf einer Rundung sitzt, wird dort als Zylinder gemeldet
@@ -6059,7 +6500,8 @@ def _face_roles(
     # mit ein: Der Boden einer Dose liegt unter deren Rand, obwohl durch die
     # Öffnung nach oben freie Sicht besteht. Eine seitlich versetzte Lippe
     # oder ein zweiter Körper belegt dagegen keine Innenlage.
-    from shapely.geometry import MultiPoint, Point
+    import shapely
+    from shapely.geometry import MultiPoint
 
     normals = np.asarray([body.face_normals[facet[0]] for facet, _a, _c in entries], dtype=float)
     centres = np.asarray([centre for _f, _a, centre in entries], dtype=float)
@@ -6067,7 +6509,31 @@ def _face_roles(
     for number, component in enumerate(face_components(body)):
         shell[component] = number
     entry_shells = np.asarray([shell[int(facet[0])] for facet, _a, _c in entries])
-    projections: dict[int, tuple[Any, np.ndarray, np.ndarray]] = {}
+    vertices = np.asarray(body.vertices)
+    faces = np.asarray(body.faces)
+    # Die zwei Basisvektoren jeder Fläche in einem Zug — dieselbe Rechnung
+    # wie :func:`_plane_basis`, über alle Flächen zugleich.
+    helpers = np.where(
+        (np.abs(normals[:, 0]) < 0.9)[:, None],
+        np.array([1.0, 0.0, 0.0])[None, :],
+        np.array([0.0, 1.0, 0.0])[None, :],
+    )
+    basis_u = np.cross(normals, helpers)
+    basis_u = basis_u / np.linalg.norm(basis_u, axis=1)[:, None]
+    basis_v = np.cross(normals, basis_u)
+    # Je Kandidatenfläche ihre Kontur in der eigenen Ebene — einmal gebildet,
+    # für jede Fläche, die sie fragt.
+    outlines: dict[int, Any] = {}
+
+    def outline_of(other: int) -> Any:
+        if other not in outlines:
+            corners = vertices[np.unique(faces[entries[other][0]])] - centres[other]
+            footprint = MultiPoint(
+                np.column_stack((corners @ basis_u[other], corners @ basis_v[other]))
+            )
+            outlines[other] = footprint.convex_hull
+        return outlines[other]
+
     roles: dict[FeatureId, bool] = {}
     for feature in features:
         if check_cancelled is not None:
@@ -6080,21 +6546,27 @@ def _face_roles(
             & ((centres - centre) @ normal > EPS_GEOM)
         )
         inner = False
-        for other in candidates:
-            if int(other) not in projections:
-                basis_u, basis_v = _plane_basis(normals[other])
-                corners = (
-                    np.asarray(body.vertices)[
-                        np.unique(np.asarray(body.faces)[entries[int(other)][0]])
-                    ]
-                    - centres[other]
+        # **Blockweise, nicht ein Punkt und ein ``covers`` je Kandidat** —
+        # und wie bisher nur bis zum ersten Treffer: Am Kumiko-Gitter mit
+        # 7 295 Flächen hat jede Fläche rund 200 parallele Kandidaten, und
+        # ein Punkt je Kandidat kostete 5,5 s im Hauptweg der
+        # Flächenerkennung (gemessen am 21.09.2026).
+        for start in range(0, len(candidates), FACE_ROLE_BLOCK):
+            block = candidates[start : start + FACE_ROLE_BLOCK]
+            offsets = centre - centres[block]
+            coordinates = np.column_stack(
+                (
+                    np.einsum("ij,ij->i", offsets, basis_u[block]),
+                    np.einsum("ij,ij->i", offsets, basis_v[block]),
                 )
-                footprint = MultiPoint(np.column_stack((corners @ basis_u, corners @ basis_v)))
-                projections[int(other)] = (footprint.convex_hull, basis_u, basis_v)
-            outline, basis_u, basis_v = projections[int(other)]
-            offset = centre - centres[other]
-            if outline.covers(Point(float(offset @ basis_u), float(offset @ basis_v))) and (
+            )
+            covered = shapely.covers(
+                np.asarray([outline_of(int(other)) for other in block], dtype=object),
+                shapely.points(coordinates),
+            )
+            if any(
                 eligible is None or eligible(entries[int(other)][0])
+                for other in block[np.asarray(covered, dtype=bool)]
             ):
                 inner = True
                 break
@@ -6459,27 +6931,219 @@ def component_count(mesh: MeshData) -> int:
     return len(face_components(mesh.raw))
 
 
-def _enclosed_volume(body: trimesh.Trimesh, faces: Any) -> float:
+def _enclosed_volume(
+    body: trimesh.Trimesh, faces: Any, triangles: np.ndarray | None = None
+) -> float:
     """Das Volumen, das diese Dreiecke einschließen — mit Vorzeichen.
 
     Über das Divergenztheorem an den Dreiecken selbst, ohne ein Teilnetz zu
     bauen: ``Trimesh.split`` kostet an einem Modell mit 390 000 Dreiecken das
     Vielfache und repariert dabei, was die Eingangsstufe noch gar nicht
     entschieden hat (derselbe Grund, aus dem :func:`face_components` die
-    Nachbarschaft liest).
+    Nachbarschaft liest). Wer die Dreiecke als Feld ``(n, 3, 3)`` schon hat,
+    reicht sie herein und spart den zweiten Griff ins Netz.
 
     Eine geschlossene Schale, deren
     Normalen nach außen zeigen, schließt positives Volumen ein; zeigen sie
     nach innen, ist es negativ. Erst ihre geometrische Verschachtelung belegt
     eine Luftkammer statt eines umgestülpten Körpers.
     """
-    triangles = body.vertices[body.faces[faces]]
+    if triangles is None:
+        triangles = body.vertices[body.faces[faces]]
     first, second, third = triangles[:, 0], triangles[:, 1], triangles[:, 2]
     return float(np.einsum("ij,ij->i", first, np.cross(second, third)).sum() / 6.0)
 
 
-#: Die Enthaltenseinsprüfung verwendet ausschließlich den direkten Float64-Kern.
-#: Keine verschobenen oder neu vernetzten Ersatzformen bei der Erkennung.
+#: Die Enthaltenseinsprüfung verwendet ausschließlich den direkten Float64-Kern,
+#: wo sie ihn braucht. Keine verschobenen oder neu vernetzten Ersatzformen bei
+#: der Erkennung.
+
+#: Die Strahlrichtungen für :func:`_point_inside_shell`, der Reihe nach: Wer
+#: an einer Kante oder Ecke vorbeischrammt, nimmt die nächste.
+_RAY_AXES: Final = ((0, 1), (1, 1), (2, 1), (0, -1), (1, -1), (2, -1))
+
+#: Wie nah ein Treffer an Kante, Ecke oder Ausgangspunkt liegen darf, bevor er
+#: als unentscheidbar gilt — relativ, in baryzentrischen Koordinaten.
+_RAY_MARGIN: Final = 1e-9
+
+#: Wie viele Gitterzellen je Achse das Zertifikat höchstens anlegt.
+_CROSSING_GRID: Final = 128
+
+#: Wie viele große Elterndreiecke der Zellenweg einzeln prüft, bevor er das
+#: Zertifikat aufgibt und der exakten Differenz das Wort lässt.
+_CROSSING_BIG_TRIANGLES: Final = 4096
+
+
+def _triangle_bounds(triangles: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Hüllquader je Dreieck aus einem Feld ``(n, 3, 3)`` — je Schale einmal gerechnet.
+
+    Drei Eckenvergleiche statt einer Reduktion über die mittlere Achse: Die
+    kostet an 393 216 Dreiecken sechs Millisekunden, die Vergleiche eine. Der
+    Aufrufer reicht das Ergebnis an Zertifikat und Strahltest weiter, statt es
+    je Paar neu zu bilden.
+    """
+    first, second, third = triangles[:, 0], triangles[:, 1], triangles[:, 2]
+    return (
+        np.minimum(np.minimum(first, second), third),
+        np.maximum(np.maximum(first, second), third),
+    )
+
+
+def _shells_do_not_cross(
+    child_bounds: tuple[np.ndarray, np.ndarray],
+    parent_bounds: tuple[np.ndarray, np.ndarray],
+    *,
+    check_cancelled: Callable[[], None] | None = None,
+) -> bool:
+    """Das Zertifikat: Kein Dreieck der Elternschale kommt einem der Kindschale nahe.
+
+    Zwei Dreiecke können sich nur schneiden, wenn ihre Hüllquader sich
+    überlappen. Die Kinddreiecke belegen ein Gitter über dem Hüllquader des
+    Kinds — die Zelle so groß wie das größte Kinddreieck, damit jedes höchstens
+    zwei Zellen je Achse deckt —, und jedes Elterndreieck, dessen Hüllquader in
+    den des Kinds ragt, fragt seine Zellen ab. Bleibt jede leer, ist keine
+    Berührung möglich, und der Strahltest an einer Ecke entscheidet exakt. Ein
+    ``False`` behauptet nichts: Dann rechnet die native Differenz wie bisher.
+
+    Die Hüllquader tragen :data:`EPS_GEOM` Zuschlag, damit auch eine Berührung
+    an der Rechengrenze den exakten Weg nimmt.
+    """
+    if check_cancelled is not None:
+        check_cancelled()
+    child_low = child_bounds[0] - EPS_GEOM
+    child_high = child_bounds[1] + EPS_GEOM
+    origin = child_low.min(axis=0)
+    extent = child_high.max(axis=0) - origin
+    parent_low, parent_high = parent_bounds
+    corner = origin + extent
+    candidates = np.flatnonzero(
+        (parent_high[:, 0] >= origin[0])
+        & (parent_high[:, 1] >= origin[1])
+        & (parent_high[:, 2] >= origin[2])
+        & (parent_low[:, 0] <= corner[0])
+        & (parent_low[:, 1] <= corner[1])
+        & (parent_low[:, 2] <= corner[2])
+    )
+    if not len(candidates):
+        return True
+    # Die Zelle: so groß wie das größte Kinddreieck, aber nicht so klein, dass
+    # das Gitter über die Grenze wächst.
+    cell = float(max((child_high - child_low).max(), extent.max() / _CROSSING_GRID, EPS_GEOM))
+    shape = np.minimum(np.floor(extent / cell).astype(np.int64) + 1, _CROSSING_GRID)
+    occupied = np.zeros(int(np.prod(shape)), dtype=bool)
+
+    def cells_of(low: np.ndarray, high: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        """Zellbereich je Dreieck, an das Gitter geklemmt."""
+        first = np.clip(np.floor((low - origin) / cell).astype(np.int64), 0, shape - 1)
+        last = np.clip(np.floor((high - origin) / cell).astype(np.int64), 0, shape - 1)
+        return first, last
+
+    first, last = cells_of(child_low, child_high)
+    if check_cancelled is not None:
+        check_cancelled()
+    for offset in itertools.product((0, 1), repeat=3):
+        step = np.asarray(offset, dtype=np.int64)
+        here = first + step
+        within = np.all(here <= last, axis=1)
+        if within.any():
+            occupied[np.ravel_multi_index(here[within].T, shape)] = True
+    # Die Elterndreiecke: kleine über dieselben acht Ecken, große Zelle für
+    # Zelle — und zu viele große sind kein Zertifikat, sondern eine Absage.
+    first, last = cells_of(parent_low[candidates], parent_high[candidates])
+    spans = last - first
+    small = np.all(spans <= 1, axis=1)
+    if check_cancelled is not None:
+        check_cancelled()
+    for offset in itertools.product((0, 1), repeat=3):
+        step = np.asarray(offset, dtype=np.int64)
+        here = first[small] + step
+        within = np.all(here <= last[small], axis=1)
+        if within.any() and occupied[np.ravel_multi_index(here[within].T, shape)].any():
+            return False
+    big = np.flatnonzero(~small)
+    if len(big) > _CROSSING_BIG_TRIANGLES:
+        return False
+    if len(big):
+        block = occupied.reshape(tuple(int(size) for size in shape))
+        for number, index in enumerate(big):
+            if check_cancelled is not None and number % FIT_SCAN_BLOCK == 0:
+                check_cancelled()
+            low, high = first[index], last[index]
+            if block[low[0] : high[0] + 1, low[1] : high[1] + 1, low[2] : high[2] + 1].any():
+                return False
+    return True
+
+
+def _point_inside_shell(
+    point: np.ndarray,
+    triangles: np.ndarray,
+    bounds: tuple[np.ndarray, np.ndarray],
+) -> bool | None:
+    """Liegt der Punkt in der geschlossenen Schale? Ein Strahl zählt die Durchstöße.
+
+    Achsenparallel, damit die Vorauswahl zwei Vergleiche je Dreieck kostet
+    statt einer Raumwinkelsumme über alle: Nur Dreiecke, deren Hüllquader den
+    Strahl quer zur Richtung deckt, werden geschnitten. Trifft der Strahl eine
+    Kante, eine Ecke oder ein fast paralleles Dreieck, ist die Zählung nicht
+    zu entscheiden, und die nächste Richtung ist dran; bleibt keine, kommt
+    ``None`` zurück, und der Aufrufer rechnet exakt.
+    """
+    low, high = bounds
+    for axis, sign in _RAY_AXES:
+        across = [index for index in range(3) if index != axis]
+        chosen = np.flatnonzero(
+            (low[:, across[0]] <= point[across[0]])
+            & (high[:, across[0]] >= point[across[0]])
+            & (low[:, across[1]] <= point[across[1]])
+            & (high[:, across[1]] >= point[across[1]])
+            & ((high[:, axis] >= point[axis]) if sign > 0 else (low[:, axis] <= point[axis]))
+        )
+        if not len(chosen):
+            return False
+        corners = triangles[chosen]
+        first = corners[:, 1, across] - corners[:, 0, across]
+        second = corners[:, 2, across] - corners[:, 0, across]
+        to_point = point[across] - corners[:, 0, across]
+        determinant = first[:, 0] * second[:, 1] - first[:, 1] * second[:, 0]
+        # Ein Dreieck, dessen Projektion gegen seine wahre Fläche verschwindet,
+        # liegt fast parallel zum Strahl. Trifft der Strahl seine Ebene — der
+        # Punkt liegt darin —, ist nichts zu entscheiden; liegt die Ebene
+        # abseits, kann der Strahl es nicht kreuzen, und es zählt nicht mit.
+        edges_first = corners[:, 1] - corners[:, 0]
+        edges_second = corners[:, 2] - corners[:, 0]
+        normals = np.cross(edges_first, edges_second)
+        true_area = np.linalg.norm(normals, axis=1)
+        parallel = np.abs(determinant) <= _RAY_MARGIN * true_area
+        if parallel.any():
+            distance = np.abs(
+                np.einsum("ij,ij->i", point - corners[parallel, 0], normals[parallel])
+            ) / np.maximum(true_area[parallel], EPS_GEOM)
+            if np.any(distance <= EPS_GEOM):
+                continue
+            keep = ~parallel
+            corners, first, second = corners[keep], first[keep], second[keep]
+            to_point, determinant = to_point[keep], determinant[keep]
+            if not len(corners):
+                return False
+        weight_second = (
+            to_point[:, 0] * second[:, 1] - to_point[:, 1] * second[:, 0]
+        ) / determinant
+        weight_third = (first[:, 0] * to_point[:, 1] - first[:, 1] * to_point[:, 0]) / determinant
+        weight_first = 1.0 - weight_second - weight_third
+        weights = np.stack((weight_first, weight_second, weight_third), axis=1)
+        inside = np.all(weights > _RAY_MARGIN, axis=1)
+        near_edge = np.all(weights > -_RAY_MARGIN, axis=1) & ~inside
+        if near_edge.any():
+            continue
+        if not inside.any():
+            return False
+        hit = np.einsum("ij,ij->i", weights[inside], corners[inside][:, :, axis])
+        ahead = sign * (hit - point[axis])
+        scale = np.abs(corners[inside][:, :, axis]).max(axis=1) + abs(float(point[axis]))
+        if np.any(np.abs(ahead) <= _RAY_MARGIN * np.maximum(scale, 1.0)):
+            continue
+        return bool(np.count_nonzero(ahead > 0.0) % 2 == 1)
+    return None
 
 
 def _shells_inside_the_material(
@@ -6488,13 +7152,20 @@ def _shells_inside_the_material(
     hollow: Sequence[int],
     volumes: Sequence[float],
     *,
+    corners: Sequence[np.ndarray] | None = None,
     check_cancelled: Callable[[], None] | None = None,
-) -> list[tuple[int, ...]]:
-    """Die Grenzschalen jeder Luftkammer aus ihrer geometrischen Verschachtelung.
+) -> tuple[list[tuple[int, ...]], bool]:
+    """Die Grenzschalen jeder Luftkammer aus ihrer Verschachtelung — und ob sie lesbar waren.
 
     Der nächste positive Mantel kann eine Materialinsel sein und bezeichnet
-    dann gerade nicht den umgebenden Körper. Vollständiges Enthaltensein ist
-    stattdessen eine leere Differenz gegen eine private positive Schalenform.
+    dann gerade nicht den umgebenden Körper. Vollständiges Enthaltensein heißt:
+    Die Schalen kreuzen sich nicht (:func:`_shells_do_not_cross`), und eine
+    Ecke des Kinds liegt in der Elternschale (:func:`_point_inside_shell`) —
+    für geschlossene Schalen, die einander nicht schneiden, ist das dieselbe
+    Aussage wie eine leere Differenz, nur ohne einen Manifold je Paar. Fehlt
+    das Zertifikat, entscheidet die native Differenz gegen eine private
+    positive Schalenform wie bisher: Am Quader mit acht Kammern aus 434 176
+    Dreiecken kostete sie 1,2 s, der Strahl 30 ms (gemessen 21.09.2026).
     Die Bounds verwerfen unmögliche Paare; sie beweisen kein Enthaltensein.
     Eltern sind die jeweils kleinste umfassende Schale. Material und Luft
     wechseln entlang einer gültigen Kette ihre Orientierung.
@@ -6507,11 +7178,21 @@ def _shells_inside_the_material(
         if check_cancelled is not None:
             check_cancelled()
 
+    # Ein Griff je Schale: die Dreiecke als Feld (vom Aufrufer, der sie für
+    # das Volumen schon gelesen hat), ihre Hüllquader und daraus der
+    # Hüllquader der Schale — Zertifikat und Strahltest lesen dieselben
+    # Felder, kein Paar greift noch einmal ins Netz.
+    if corners is None:
+        corners = [
+            np.asarray(body.vertices[body.faces[faces]], dtype=np.float64) for faces in components
+        ]
+    triangle_bounds: list[tuple[np.ndarray, np.ndarray]] = []
     bounds = []
-    for faces in components:
+    for triangles in corners:
         check()
-        points = body.vertices[body.faces[faces]].reshape(-1, 3)
-        bounds.append((points.min(axis=0), points.max(axis=0)))
+        low, high = _triangle_bounds(triangles)
+        triangle_bounds.append((low, high))
+        bounds.append((low.min(axis=0), high.max(axis=0)))
     positive: dict[int, MeshData] = {}
 
     def form(index: int) -> MeshData:
@@ -6525,6 +7206,26 @@ def _shells_inside_the_material(
             shell.remove_unreferenced_vertices()
             positive[index] = MeshData.of(shell)
         return positive[index]
+
+    def contained(child: int, parent: int) -> bool:
+        """Liegt die Kindschale vollständig in der Elternschale?"""
+        if _shells_do_not_cross(
+            triangle_bounds[child], triangle_bounds[parent], check_cancelled=check_cancelled
+        ):
+            check()
+            answer = _point_inside_shell(
+                corners[child][0, 0], corners[parent], triangle_bounds[parent]
+            )
+            if answer is not None:
+                return answer
+        check()
+        remainder = boolean(
+            "difference",
+            [form(child), form(parent)],
+            stages=("direct",),
+            allow_empty=True,
+        ).mesh
+        return not remainder.triangle_count
 
     parents: list[int | None] = [None] * len(components)
     order = sorted(range(len(components)), key=lambda index: abs(volumes[index]))
@@ -6540,17 +7241,22 @@ def _shells_inside_the_material(
                 continue
             check()
             try:
-                remainder = boolean(
-                    "difference",
-                    [form(child), form(parent)],
-                    stages=("direct",),
-                    allow_empty=True,
-                ).mesh
-            except GeometryError:
-                # Ein nicht verlässlich lesbares Schalenpaar begründet kein Merkmal.
-                return [()] * len(hollow)
+                inside = contained(child, parent)
+            except GeometryError as problem:
+                # Ein nicht verlässlich lesbares Schalenpaar begründet kein
+                # Merkmal — und es verschwindet nicht still: Der Aufrufer
+                # trägt es der Auswertung zu (:func:`unreadable_void_shells`),
+                # die einen Befund daraus macht (Regel 17).
+                _log.warning(
+                    "void shells unreadable: %d components, pair (%d, %d): %s",
+                    len(components),
+                    child,
+                    parent,
+                    problem,
+                )
+                return [()] * len(hollow), False
             check()
-            if not remainder.triangle_count:
+            if inside:
                 parents[child] = parent
                 break
 
@@ -6572,7 +7278,7 @@ def _shells_inside_the_material(
         if any(volumes[index] < 0.0 for index in children):
             valid = False
         groups.append((cavity, *children) if valid else ())
-    return groups
+    return groups, True
 
 
 def detect_voids(
@@ -6586,27 +7292,45 @@ def detect_voids(
     getrennte Merkmale. Volumen und Auswahl beschreiben dieselbe vollständige
     Luftgrenze. Verschieben und Entfernen verwenden genau diese Flächen.
     """
+    return _detect_voids(mesh, check_cancelled=check_cancelled)[0]
+
+
+def _detect_voids(
+    mesh: MeshData, *, check_cancelled: Callable[[], None] | None = None
+) -> tuple[list[Feature], int]:
+    """:func:`detect_voids` samt der Zahl der Schalen, wenn sie nicht lesbar waren.
+
+    Die zweite Zahl ist null, solange jede Differenz gerechnet werden konnte;
+    sonst die Komponentenzahl des Körpers — :func:`detect` merkt sie sich für
+    :func:`unreadable_void_shells`, damit die Auswertung sagen kann, dass hier
+    Einschlüsse fehlen könnten.
+    """
     if check_cancelled is not None:
         check_cancelled()
     body = mesh.raw
     if not (bool(body.is_watertight) and bool(body.is_winding_consistent)):
-        return []
+        return [], 0
     components = face_components(body)
     if len(components) < 2:
-        return []
+        return [], 0
+    corners = []
     volumes = []
     for faces in components:
         if check_cancelled is not None:
             check_cancelled()
-        volumes.append(_enclosed_volume(body, faces))
+        triangles = np.asarray(body.vertices[body.faces[faces]], dtype=np.float64)
+        corners.append(triangles)
+        volumes.append(_enclosed_volume(body, faces, triangles))
     if not all(math.isfinite(volume) for volume in volumes):
-        return []
+        return [], 0
     hollow = [number for number, volume in enumerate(volumes) if volume < 0.0]
     if not hollow:
-        return []
-    groups = _shells_inside_the_material(
-        body, components, hollow, volumes, check_cancelled=check_cancelled
+        return [], 0
+    groups, readable = _shells_inside_the_material(
+        body, components, hollow, volumes, corners=corners, check_cancelled=check_cancelled
     )
+    if not readable:
+        return [], len(components)
     measured: list[tuple[Vec3, Vec3, float, tuple[int, ...]]] = []
     for group in groups:
         if check_cancelled is not None:
@@ -6640,7 +7364,7 @@ def detect_voids(
     ]
     if check_cancelled is not None:
         check_cancelled()
-    return found
+    return found, 0
 
 
 def voids_instead_of_phantom_bores(

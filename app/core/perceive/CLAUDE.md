@@ -138,7 +138,11 @@ Scharf begrenzte ebene Funktionsflächen hängen an der absoluten
 Erkennungsauflösung, nicht an der größten Fläche des Körpers. Vor der
 Veröffentlichung müssen ihre Normalen tatsächlich koplanar sein. `inner`
 verlangt dieselbe Schale und eine örtlich darüberliegende parallele
-Außenkontur; eine versetzte Lippe oder ein fremdes Teil genügt nicht.
+Außenkontur; eine versetzte Lippe oder ein fremdes Teil genügt nicht. Die
+Deckungsprobe läuft blockweise über die parallelen Kandidaten und hört beim
+ersten Treffer auf (`_face_roles`, `FACE_ROLE_BLOCK`): Am Kumiko-Gitter mit
+7 295 Flächen hat jede rund 200 Kandidaten, und ein Punkt samt `covers` je
+Kandidat kostete 5,5 der 7 Sekunden der Flächenerkennung (21.09.2026).
 An Rundflächen bestimmen nur gekrümmte Nähte die Innenlage, keine ebenen
 Dreiecksdiagonalen.
 
@@ -154,7 +158,11 @@ der auch `brep.thread` misst, und gibt die Richtung mit dem höheren Gipfel
 als `Helix.handedness` zurück; das erkannte Gewinde trägt sie als Maß mit
 Quelle `fit`. Bis dahin setzte die Rechnung den Rechtsgang voraus, und die
 Spiegelung desselben Bolzens ergab null Wendeln. Die Gangzahl kennt das Netz
-weiter nicht — ein Vielfaches der Steigung konzentriert nicht.
+weiter nicht — ein Vielfaches der Steigung konzentriert nicht. **Beide
+Vorzeichen kommen aus einem Durchlauf**: Sinus und Kosinus der Phasenmatrix
+einmal je Block, die vier Mittelwerte als zwei Matrixprodukte mit `cos θ`
+und `sin θ` — am M3-Bolzen mit 6 965 Kammpunkten 236 → 50 ms, Ergebnis
+gleich bis auf die letzte Stelle (21.09.2026).
 
 Geschlossene Langlöcher beziehen ihre Breite aus dem Abstand der geprüften
 ebenen Flanken. Offene Langlöcher übernehmen Kreisradius und Achse aus
@@ -166,7 +174,10 @@ P1.5): Deckt ein nativer Zylinder den ganzen Bogen, kommen Durchmesser,
 Achse und Bogenmitte exakt aus ihm; liegen alle Flanken in nativen Ebenen,
 die Richtung aus deren Normale — jeweils mit der Quelle `native`. Mündung,
 Weg, Länge und Tiefe hängen am Rand des Netzes und bleiben `fit` und
-`facets`; am reinen Netz ändert sich nichts. Keine pauschale Hochstufung.
+`facets`; am reinen Netz ändert sich nichts. Keine pauschale Hochstufung —
+und der native Zylinder muss den gemessenen Bogen treffen, Achse im Vertrag
+von `PARALLEL_AXES`, Radius im Vertrag von `SAME_RADIUS`: Bis zum 21.09.2026
+genügte ein Skalarprodukt der Achsen ungleich null.
 
 Rohrwände berücksichtigen den gemessenen Querversatz von Höhlung und Mantel.
 Beim Langloch zählt der weiter entfernte Endmittelpunkt einschließlich seiner
@@ -449,10 +460,19 @@ eindeutige Randketten stehen als Reason-Code in `uncertain`; der Kern ergänzt
 keine angenommene Schrauben- oder Musterabsicht.
 
 Das Panel fragt seine Zeilen gemeinsam über `alike_for_actions` ab. Dieser
-Batch bildet Randgraph, Flächenproben und vollständige Formvergleiche einmal
-für die aktuelle Auswahl; `alike_for_action` delegiert denselben Weg für
-einzelne Aufrufer. Der Wiederverwendungsstand lebt nur während dieses Aufrufs,
-damit ein neues Netz oder eine neue Merkmalskarte keine alte Auskunft erbt.
+Batch bildet den Randgraph einmal für die aktuelle Auswahl; `alike_for_action`
+delegiert denselben Weg für einzelne Aufrufer. Der Randgraph lebt nur während
+dieses Aufrufs. **Die Flächenausschnitte, ihre Vergleiche und die belegten
+Hohlraumflächen hängen dagegen am Körper** (`features.remembered`, Schlüssel
+`_shape_key`: Kennung, Art, Dreiecke, Achse und Mitte je Merkmal — seit dem
+22.09.2026): Ein Klick auf eine Bohrung der Lochplatte mit 360 000 Dreiecken
+kostete 1,0 s im Hauptfaden, davon 0,47 s Flächenvergleiche und 0,22 s
+Hohlraumflächen, die Ansicht, Merkmalfenster und Körperfrage nacheinander
+neu rechneten; jetzt 0,25 s, und alle drei lesen dieselbe Antwort. Ein neues
+Netz oder ein Merkmal mit anderen Dreiecken, anderer Achse oder Mitte ist
+ein anderer Schlüssel und erbt nichts. Ebenso liest `_large_facet_faces` die
+ebenen Flecken je Körper einmal, und `_one_body` verschweißt eine
+ungeschweißte STL je Körper einmal statt bei jeder Frage.
 **Und der Steckbrief fragt denselben Weg** (`digest._selection_lines`, P1.5):
 Der Agent liest zur gewählten Stelle dieselben Mitglieder, Umfänge und Gründe
 wie das Panel. Die Sätze zu Nachweis und Grund stehen deshalb einmal im Kern
@@ -551,8 +571,12 @@ betroffenen Körper und erzeugenden Schritt; eine Karte bleibt aus. Andere
   steht eine Gabelung, und die zu raten verbietet Regel 21.
   **Gesucht und geprüft wird am Knoten, nicht im Netz** (20.09.2026):
   `_rim_of` zählt Kanten und Randgrade eines Flecks einmal, `_candidates_at`
-  liest die Kandidaten über `vertex_faces` und den Nachbarindex
-  (`_neighbour_index`, je Körper einmal im Cache von trimesh), und `_closes`
+  liest die Kandidaten über den eigenen Index Ecke → Dreiecke
+  (`_vertex_faces_index`, gepackt aus einer stabilen Sortierung; trimeshs
+  `vertex_faces` fällt bei **einem** entarteten Dreieck in eine Schleife je
+  Ecke — 20 s bei 300 000, sechs Minuten bei 1,3 Millionen) und den
+  Nachbarindex (`_neighbour_index`, je Körper einmal im Cache von trimesh),
+  und `_closes`
   prüft eine Kandidatenmenge an ihren eigenen Kanten. Die erste Fassung lief
   je Kandidatenmenge noch einmal über den ganzen Fleck und alle Paare des
   Netzes — am Drachen aus TripoSG (325 244 Dreiecke, ein Fleck mit 307 063
@@ -570,8 +594,18 @@ betroffenen Körper und erzeugenden Schritt; eine Karte bleibt aus. Andere
   geschlossene Innenschalen über vier Tore — dichtes Netz, einheitlicher
   Umlaufsinn, mehr als eine Komponente, und die Schale liegt im Material der
   **festen** Komponenten. `_shells_inside_the_material` bestimmt die
-  Schalenhierarchie über private positive Hüllen und leere Differenzen im
-  bestehenden Float64-Kern, ausschließlich über dessen direkte Stufe.
+  Schalenhierarchie ohne einen Manifold je Paar: Ein Gitterzertifikat über
+  die Hüllquader der Dreiecke belegt, dass zwei Schalen sich nicht kreuzen
+  (`_shells_do_not_cross`), und dann entscheidet ein achsenparalleler Strahl
+  von einer Ecke des Kinds, ob es in der Elternschale liegt
+  (`_point_inside_shell`; Kante, Ecke oder ein fast paralleles Dreieck
+  schicken ihn in die nächste Richtung, und nach sechs gibt er auf). Nur ohne
+  Zertifikat rechnet die private positive Hülle und die leere Differenz im
+  Float64-Kern wie bisher, ausschließlich über dessen direkte Stufe — am
+  Quader mit acht Kammern aus 434 176 Dreiecken 1,2 s je Erkennung, mit
+  Zertifikat 0,12 s (21.09.2026). Scheitert die Differenz, verschwinden die
+  Einschlüsse nicht still: `unreadable_void_shells` nennt der Auswertung die
+  Schalenzahl für einen Befund (Regel 17).
   Die nächste positive Oberfläche beweist kein Enthaltensein: Sie kann zu
   einer Materialinsel gehören. Bounds verwerfen unmögliche Schalenpaare;
   Material und Luft müssen entlang ihrer Verschachtelung abwechseln.
@@ -607,7 +641,7 @@ betroffenen Körper und erzeugenden Schritt; eine Karte bleibt aus. Andere
   getrennte Fächer und entgegengesetzte Doppelflächen teilen ihre Stützung
   nicht. Für nicht konforme Unterteilung werden nur die örtlich gleichen
   Kantenstrahlen im Leseindex verbunden. Das Originalnetz bleibt unverändert.
-  **Gelesen wird je Netz und Fleck einmal** (`_remembered`: je Frage ein
+  **Gelesen wird je Netz und Fleck einmal** (`remembered`: je Frage ein
   eigener Merker mit Identität des Netzes plus Abdruck der Flächenliste als
   Schlüssel — nicht der Datenhash, trimesh rechnet ihn je Frage neu; die
   Stützpunktlesung hält acht Antworten, weil ihre Felder so groß sind wie
@@ -622,6 +656,13 @@ betroffenen Körper und erzeugenden Schritt; eine Karte bleibt aus. Andere
   abgebrochener Auftrag bekommt keine gemerkte Antwort. Der Abdruck einer
   Flächenliste bleibt am Listenobjekt (`_patch_digest`, die Liste als Anker),
   denn dieselbe Liste wird je Erkennung zwei Dutzend Mal gefragt.
+  **Die Antworten eines Körpers gehen mit ihm** (`_BodyMemory`,
+  `weakref.finalize`): Vier Ikosphären hinterließen sonst 369 MiB an
+  Lesungen zu Netzen, die niemand mehr hatte, bis die Grenze je Frage sie
+  verdrängte. Und **ein Schloss um alle drei Merker** (`_MEMORY_LOCK`), weil
+  das Merkmalfenster im Hauptfaden dieselben Fragen stellt wie der Arbeiter
+  — `get` und `move_to_end` sind zwei Schritte, und dazwischen verdrängte
+  der andere Faden den Schlüssel (21.09.2026).
   Der Fächer einer Ecke wird über die Bogenzahl aus dem Nachbarindex gezählt
   (`_fan_arcs`: Dreiecke minus innere Nähte, ein offener Bogen zählt eins,
   ein geschlossener Ring an einem wasserdichten Netz null); der Einzelweg mit
@@ -728,7 +769,11 @@ betroffenen Körper und erzeugenden Schritt; eine Karte bleibt aus. Andere
 - **Der Merkmals-Cache hat zwei Schranken.** `CACHE_LIMIT` zählt
   Einträge, `CACHE_INDEX_LIMIT` ihr Gewicht in Flächenindizes —
   ein Eintrag für ein 400 000-Dreieck-Modell wiegt 3,9 MiB, und
-  die Anzahl allein ließe fast ein Gigabyte zu.
+  die Anzahl allein ließe fast ein Gigabyte zu. Ein einzelner Eintrag über
+  der Gewichtsgrenze bleibt trotzdem: Ihn wegzuwerfen hieße, ihn beim
+  nächsten Schritt sofort neu zu rechnen — der Cache wäre nicht begrenzt,
+  sondern aus (bis zum 21.09.2026 tat die Verdrängung genau das, und ein
+  Test schrieb es fest).
 - **Das Zylindermaß kommt aus belegten Konturecken.** Achse und
   Achslage verwenden flächengewichtete Normalen und echte axiale Extrema;
   alle quadratischen Terme liegen in einem zentrierten Maßrahmen. Die
@@ -765,7 +810,12 @@ betroffenen Körper und erzeugenden Schritt; eine Karte bleibt aus. Andere
   belegte Torusachse eine Teilung vor. Der vollständige Zylinder und die
   vollständig ergänzte, angrenzende Rundung müssen beide ihre normalen
   Formprüfungen bestehen. Die Auskunft verwirft keine Restfläche und
-  erweitert keine Maßtoleranz.
+  erweitert keine Maßtoleranz. **Gefragt werden nur die Ringe, die das Stück
+  oder seine Nachbarn tragen** (`_TorusCandidates`, eine Karte Dreieck →
+  Kandidat mit zwei Plätzen je Dreieck): Am Drachen aus TripoSG fragten
+  27 168 Stücke jeden Kandidaten, 18 von 72 Sekunden eines Profils
+  (21.09.2026). Die Karte ist eine Vorauswahl in Kandidatenreihenfolge; ob
+  ein Stück wirklich angrenzt, prüft der Aufrufer weiter an den Dreiecken.
 - **Was zerfällt, wird wieder zusammengeführt.** Ein Mantel kommt aus
   der Fleckenbildung oft in Stücken; `_merged_cylinders`, `_merged_cones`
   und `_merged_tori` machen daraus wieder **ein** Merkmal. Anker ist, was von
@@ -845,12 +895,24 @@ betroffenen Körper und erzeugenden Schritt; eine Karte bleibt aus. Andere
   Wand (531 am Hemmungsrad); `blends_into_its_neighbours` bleibt der Weg für
   eine einzelne. `_partial_cones_folded` zählt die Nachbarn seiner Kegelstücke
   im selben Muster und gibt ein Stück dem Langloch, mit dem es die meisten
-  Kanten teilt, nicht dem alphabetisch ersten. Zwei Winkel, zwei Namen:
+  Kanten teilt — **und bei Gleichstand keinem** (Regel 21): Eine Senkung Ø 12
+  zwischen zwei Langlöchern Ø 6 bei y = ±4 teilt mit beiden acht Kanten und
+  bleibt Kegelfläche, wie am exakten Kern; bis zum 21.09.2026 gewann der
+  alphabetisch spätere Name. Zwei Winkel, zwei Namen:
   `UPRIGHT_TO_AXIS` misst eine Normale gegen die Achse, `TANGENT_TO_THE_ARC`
   gegen den Radius (`planes_beside`). Durch eine Bohrung sieht man hindurch,
   wenn Achse und zwei Ringe bei 0,3 und 0,6 des Radius frei sind
   (`THROUGH_RINGS`) — innerhalb der Sehnen des Mantels und innerhalb des
-  Kerns eines groben Gewindes. `relations.boundary_rings` ist öffentlich, weil
+  Kerns eines groben Gewindes. Frei heißt: kein Dreieck im Abschnitt der
+  Bohrung darüber, **und keine Fläche, die an den Mantel grenzt, in ganzer
+  Länge** (`_faces_beside`, `_surface_owners`: ebene Facetten und glatte
+  Rundflecken als die Flächen des Netzes) — die Frage des exakten Kerns
+  (`brep.features._axis_covered`). Der Abschnitt allein sah vom Übergangskegel
+  einer Aufweitung Ø 9 über Ø 5 nur das Band, das ihre Endebene berührt: an
+  der Tessellierung des exakten Körpers ein Streifen bis 3,8 mm Radius, und
+  der Ring bei 0,6 blieb frei (Kreuzbefund Paket A, 22.09.2026). Der
+  gegenüberliegende Schenkel eines U-Profils grenzt nicht an den Mantel und
+  zählt weiter nicht. `relations.boundary_rings` ist öffentlich, weil
   `geom` es braucht.
 - **Eine Wendel ist keine Grundform, und sie verschluckt die, die man auf ihr
   findet.** `helix.py` misst sie am Netz statt an den Einpassungen: scharfe

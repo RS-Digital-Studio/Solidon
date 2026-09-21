@@ -572,6 +572,47 @@ def test_the_cavity_links_are_built_once_per_mesh_and_die_with_it() -> None:
         relations._shoulder_connections = real
 
 
+def test_the_cavity_surface_is_read_once_per_body_and_chain(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ansicht, Merkmalfenster und die Körperfrage lesen dieselben Hohlraumflächen.
+
+    Jeder Klick auf eine Bohrung rechnete sie zweimal — 0,11 s je Aufruf an
+    der Lochplatte mit 360 000 Dreiecken (Review Paket D, 22.09.2026). Gemerkt
+    wird je Körper und Kette; dieselbe Kette mit anderer Achse oder anderen
+    Dreiecken ist eine andere Frage, ein anderer Körper auch.
+    """
+    from app.core.perceive import relations
+
+    mesh = _corpus("plate_countersunk.stl")
+    features = detect(mesh)
+    chain = [f for f in features.values() if f.kind in {"hole", "cone"} and is_a_cavity(f)]
+    assert len(chain) >= 2, "ohne Kette prüft der Test nichts"
+    runs = 0
+    real = relations._cavity_surface_indices_read
+
+    def counted(*args: object, **rest: object) -> object:
+        nonlocal runs
+        runs += 1
+        return real(*args, **rest)
+
+    monkeypatch.setattr(relations, "_cavity_surface_indices_read", counted)
+    first = relations.cavity_surface_indices(mesh, chain)
+    assert first and runs == 1
+    assert relations.cavity_surface_indices(mesh, chain) == first
+    assert relations.cavity_surface_indices(mesh, list(reversed(chain))) == first
+    assert runs == 1, "der zweite und dritte Aufruf lesen die Antwort des ersten"
+
+    tilted = dataclasses.replace(
+        chain[0], params={**chain[0].params, "axis": (0.0, math.sin(0.3), math.cos(0.3))}
+    )
+    relations.cavity_surface_indices(mesh, [tilted, *chain[1:]])
+    assert runs == 2, "eine andere Achse ist eine andere Frage"
+    copy = MeshData.of(mesh.raw.copy())
+    assert relations.cavity_surface_indices(copy, chain) == first
+    assert runs == 3, "ein anderer Körper rechnet für sich"
+
+
 def test_a_border_through_one_corner_twice_is_two_borders() -> None:
     """Ein Rand in Form einer Acht ist zwei Ränder, und beide werden gebraucht.
 

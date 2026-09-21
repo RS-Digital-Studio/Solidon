@@ -469,7 +469,18 @@ def native_open_slot_measures(feature: Feature) -> Feature:
             and abs(_scalar(part.params["radius"]) - first_radius) <= first_radius * SAME_RADIUS
             for part in cylinders[1:]
         )
-        if agree and float(first_axis @ axis) != 0.0:
+        # **Und der Träger muss den gemessenen Bogen treffen** — dieselbe
+        # Achse im Vertrag von :data:`PARALLEL_AXES`, derselbe Radius im
+        # Vertrag von :data:`SAME_RADIUS`. Bis zum 21.09.2026 genügte ein
+        # Skalarprodukt ungleich null (Regel 6): Ein nativer Zylinder, der
+        # um zwei Grad kippt oder anderthalb Millimeter größer ist, hätte
+        # das Langloch als exakt beschriftet.
+        measured_radius = float(params["diameter"]) / 2.0
+        if (
+            agree
+            and abs(float(first_axis @ axis)) >= PARALLEL_AXES
+            and abs(first_radius - measured_radius) <= measured_radius * SAME_RADIUS
+        ):
             exact_axis = first_axis if float(first_axis @ axis) > 0.0 else -first_axis
             exact_axis = exact_axis / float(np.linalg.norm(exact_axis))
             origin = np.asarray(first.params["centre"], dtype=float)

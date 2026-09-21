@@ -24,6 +24,7 @@ from app.core.perceive.actions import actions_for
 from app.core.perceive.features import detect, span_about
 from app.core.perceive.relations import CavityState, cavity_chain_state_at
 from app.core.types import Feature, FeatureId
+from tests.helpers import exact_kernel
 
 RADIUS = 3.0
 #: Achsabstand, bei dem jeder Mantel genau 45 Grad an den anderen verliert.
@@ -31,17 +32,8 @@ DISTANCE = 2.0 * RADIUS * math.cos(math.pi / 8.0)
 BODY_OPS = ("move_feature", "duplicate_feature", "rotate_feature", "remove_feature")
 
 
-def _exact_kernel() -> Any:
-    kernel = pytest.importorskip("app.core.brep.kernel")
-    if not kernel.available():
-        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
-    from app.core.brep import edit
-
-    return edit
-
-
 def _overlapping_bores() -> Any:
-    edit = _exact_kernel()
+    edit = exact_kernel()
     body = edit.box(40.0, 30.0, 10.0)
     for x in (-DISTANCE / 2.0, DISTANCE / 2.0):
         body = edit.cut_bore(
@@ -126,7 +118,7 @@ def test_a_cut_open_bore_touches_its_neighbour_and_has_no_own_body(reading: str)
 def test_a_single_full_bore_is_neither_cut_open_nor_touched() -> None:
     """Die Gegenkontrolle: eine ganze Bohrung bleibt eine, mit ihren Handlungen."""
     load_operations()
-    edit = _exact_kernel()
+    edit = exact_kernel()
     body = edit.cut_bore(
         edit.box(40.0, 30.0, 10.0),
         position=(0.0, 0.0, 5.0),
@@ -145,7 +137,7 @@ def test_a_single_full_bore_is_neither_cut_open_nor_touched() -> None:
 def test_a_bore_with_a_cross_hole_is_still_a_whole_bore() -> None:
     """Ein Querloch durch die Wand ist kein Anschnitt: Der Rand darum ist eine
     Schleife, keine zwei geraden Linien längs der Achse."""
-    edit = _exact_kernel()
+    edit = exact_kernel()
     body = edit.cut_bore(
         edit.box(40.0, 30.0, 10.0),
         position=(0.0, 0.0, 5.0),

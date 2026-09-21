@@ -28,7 +28,7 @@ from app.core.types import OpContext, Operation, Profile, Scene, SceneObject
 def _source(kind: str, *, entrance: bool = False) -> SceneObject:
     """Eine wirkliche Bohrung, wahlweise mit dem eindeutigen Einlauf derselben Achse."""
     if not available():
-        pytest.skip("OpenCASCADE is an optional dependency")
+        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
     stock = edit.box(40.0, 30.0, 12.0)
     if entrance:
         exact = edit.bore_profile(

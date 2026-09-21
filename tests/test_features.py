@@ -950,8 +950,13 @@ def test_the_expensive_search_runs_once_per_detection(monkeypatch: pytest.Monkey
 
 
 def test_the_planar_mask_is_shared_by_fits_and_faces(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Die beiden Erkennungsphasen brauchen dieselbe Maske nur einmal."""
-    original = features_module._large_facet_faces
+    """Die beiden Erkennungsphasen brauchen dieselbe Maske nur einmal.
+
+    Gezählt wird die Rechnung (``_large_facet_faces_read``), nicht die Frage:
+    Seit dem 22.09.2026 merkt sich die Hülle die Antwort je Körper, und die
+    Durchgangsprobe fragt sie ein weiteres Mal — gerechnet wird trotzdem einmal.
+    """
+    original = features_module._large_facet_faces_read
     calls = 0
 
     def counted(*args: object, **kwargs: object) -> object:
@@ -959,7 +964,7 @@ def test_the_planar_mask_is_shared_by_fits_and_faces(monkeypatch: pytest.MonkeyP
         calls += 1
         return original(*args, **kwargs)
 
-    monkeypatch.setattr(features_module, "_large_facet_faces", counted)
+    monkeypatch.setattr(features_module, "_large_facet_faces_read", counted)
     forget_cache()
     found = detect(plate())
 
@@ -2311,6 +2316,160 @@ def test_the_cache_counts_weight_and_not_only_entries() -> None:
     assert not _FEATURE_CACHE and not _CACHE_INDICES
 
 
+def test_the_support_cache_lets_go_of_a_dead_body() -> None:
+    """Die gemerkten Antworten eines Körpers sterben mit ihm — nicht erst mit der Grenze.
+
+    **Gemessen am 21.09.2026:** Vier Ikosphären nacheinander erkannt, danach
+    369 MiB an Stützpunktlesungen, Flecken und Abdrücken zu Netzen, die
+    niemand mehr hatte — der Merker fiel erst bei 4096 Einträgen je Frage.
+    Jeder Körper führt jetzt seine Schlüssel, und ``weakref.finalize`` räumt
+    sie aus, sobald er stirbt.
+    """
+    import gc
+
+    from app.core.perceive import features as module
+
+    forget_cache()
+    mesh = MeshData.of(trimesh.creation.icosphere(subdivisions=3, radius=5.0))
+    body = mesh.raw
+    key = id(body)
+    detect(mesh)
+    remembered = {
+        name: sum(1 for entry in answers if entry[0] == key)
+        for name, answers in module._SUPPORT_CACHE.items()
+    }
+    assert sum(remembered.values()) > 0, "die Vorbedingung: der Körper hat Antworten hinterlassen"
+    assert key in module._MEMORIES and module._MEMORIES[key].answers
+    assert module._DIGESTS, "und Abdrücke seiner Fleckenlisten"
+
+    del mesh, body
+    gc.collect()
+
+    assert key not in module._MEMORIES, "der Merker des toten Körpers ist weg"
+    assert not [
+        entry for answers in module._SUPPORT_CACHE.values() for entry in answers if entry[0] == key
+    ], "und keine seiner Antworten steht mehr im Stützcache"
+    assert not module._DIGESTS, "auch die Abdrücke seiner Listen sind fort"
+
+
+def test_a_reader_in_one_thread_keeps_its_key_while_a_writer_evicts_in_another(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``get`` und ``move_to_end`` sind zwei Schritte — dazwischen darf niemand verdrängen.
+
+    Das Merkmalfenster fragt ``fillet_blocked`` → ``detect_faces`` im
+    Hauptfaden, während der Arbeiter dieselbe Frage für die nächste Auswertung
+    stellt. Ohne Schloss verdrängte der Schreiber den Schlüssel zwischen den
+    zwei Schritten des Lesers, und der bekam einen ``KeyError`` (Review
+    perceive #7, 21.09.2026). Nachgestellt mit einem Wörterbuch, das den Leser
+    im ersten Schritt anhalten lässt, bis der Schreiber dran war — oder, mit
+    Schloss, bis er es aufgibt zu warten.
+    """
+    import threading
+    from collections import OrderedDict
+
+    from app.core.perceive import features as module
+
+    body = trimesh.creation.box()
+    evicted = threading.Event()
+
+    class Hooked(OrderedDict):
+        def __contains__(self, key: object) -> bool:
+            present = super().__contains__(key)
+            if present:
+                evicted.wait(0.3)
+            return present
+
+        def get(self, key, default=None):  # type: ignore[override]
+            value = super().get(key, default)
+            if value is not default:
+                evicted.wait(0.3)
+            return value
+
+    forget_cache()
+    monkeypatch.setattr(module, "_SUPPORT_CACHE", {"probe": Hooked()})
+    monkeypatch.setattr(module, "CACHE_LIMIT_PER_QUESTION", 1)
+    assert module.remembered("probe", body, [0], lambda: "eins") == "eins"
+    results: list[str] = []
+
+    def reader() -> None:
+        results.append(module.remembered("probe", body, [0], lambda: "neu gerechnet"))
+
+    def writer() -> None:
+        module.remembered("probe", body, [1], lambda: "zwei")
+        evicted.set()
+
+    reading = threading.Thread(target=reader)
+    writing = threading.Thread(target=writer)
+    reading.start()
+    writing.start()
+    reading.join(5.0)
+    writing.join(5.0)
+    assert results == ["eins"], "der Leser bekommt seine gemerkte Antwort, keinen KeyError"
+
+
+def test_the_planar_faces_of_a_body_are_read_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``_large_facet_faces`` rechnet je Körper einmal — und gibt jedem seine eigene Menge.
+
+    Jeder Klick auf eine Bohrung fragte sie zweimal, je 0,17 s an der
+    Lochplatte mit 360 000 Dreiecken (Review Paket D, 22.09.2026). Die
+    lokale Erkennung mit ``requested`` oder Flächenbudget bleibt ungemerkt:
+    Sie fragt nach anderen Flecken.
+    """
+    from app.core.perceive import features as module
+
+    mesh = plate("plate_countersunk.stl")
+    body = mesh.raw
+    runs = 0
+    real = module._large_facet_faces_read
+
+    def counted(*args: object, **rest: object) -> object:
+        nonlocal runs
+        runs += 1
+        return real(*args, **rest)
+
+    monkeypatch.setattr(module, "_large_facet_faces_read", counted)
+    forget_cache()
+    first = module._large_facet_faces(body)
+    assert first and runs == 1
+    second = module._large_facet_faces(body)
+    assert second == first and runs == 1, "der zweite Aufruf liest die Antwort des ersten"
+    second.clear()
+    assert module._large_facet_faces(body) == first, "und jeder bekommt seine eigene Menge"
+    module._large_facet_faces(body, requested={0})
+    assert runs == 2, "eine Anfrage nach bestimmten Flecken ist eine andere Frage"
+
+
+def test_the_welded_reading_of_an_unstitched_mesh_is_made_once() -> None:
+    """Eine ungeschweißte STL wird je Körper einmal verschweißt — nicht bei jedem Klick.
+
+    Merkmalfenster, Steckbrief und Ansicht fragen nach jedem Klick nach der
+    Geometrie; bis zum 22.09.2026 schweißte jede Frage neu, mit einem neuen
+    Körper, an dem kein Merker eine Antwort fand. Ein geschweißtes Netz kommt
+    unverändert zurück und hinterlässt keinen Eintrag, der es festhielte.
+    """
+    from app.core.perceive import features as module
+
+    stitched = MeshData.of(trimesh.creation.box(extents=(20.0, 30.0, 40.0)))
+    forget_cache()
+    assert module._one_body(stitched) is stitched
+    assert id(stitched.raw) not in module._MEMORIES, "ein geschweißtes Netz merkt sich nichts"
+
+    loose = trimesh.creation.box(extents=(20.0, 30.0, 40.0))
+    loose = trimesh.Trimesh(
+        vertices=loose.vertices[loose.faces].reshape(-1, 3),
+        faces=np.arange(len(loose.faces) * 3).reshape(-1, 3),
+        process=False,
+    )
+    mesh = MeshData.of(loose)
+    assert not module.fully_stitched(mesh.raw), "die Vorbedingung: ungeschweißt"
+    welded = module._one_body(mesh)
+    assert welded is not mesh and welded.raw.is_watertight
+    assert module._one_body(mesh) is welded, "dieselbe verschweißte Fassung beim zweiten Mal"
+    other = module._one_body(MeshData.of(loose.copy()))
+    assert other is not welded, "ein anderer Körper bekommt seine eigene"
+
+
 def test_every_fitted_kind_asks_the_same_question() -> None:
     """Die Werkzeugschranke wird an **einer** Stelle gefragt, nicht an sechs.
 
@@ -3017,7 +3176,22 @@ def test_on_a_freeform_the_round_shapes_go_and_the_rest_stays() -> None:
     assert features_module._shapes_on_a_freeform(unchanged) == (unchanged, 0)
 
 
-def test_a_scan_keeps_its_flat_base_and_loses_the_invented_round_shapes() -> None:
+@pytest.fixture(scope="module")
+def scan_detection() -> tuple[MeshData, dict[FeatureId, Feature], int]:
+    """Der Scan-Körper einmal erkannt — 2,3 s je Erkennung, und zwei Tests lesen dasselbe.
+
+    Der Zähler der weggelassenen Rundformen wird sofort abgelesen: Die
+    Suite leert den Merkmalscache vor jedem Test, und mit ihm den Zähler.
+    """
+    mesh = _scan_like_blob()
+    forget_cache()
+    found = detect(mesh)
+    return mesh, found, freeform_dropped(mesh)
+
+
+def test_a_scan_keeps_its_flat_base_and_loses_the_invented_round_shapes(
+    scan_detection: tuple[MeshData, dict[FeatureId, Feature], int],
+) -> None:
     """Der Kundenfall an einem Körper aus dem Test selbst — ohne Korpusdatei,
     weil kein freies Scanmodell im Korpus liegt.
 
@@ -3025,13 +3199,10 @@ def test_a_scan_keeps_its_flat_base_and_loses_the_invented_round_shapes() -> Non
     Kugeln und Ringe, die die Krümmungsflecken hergaben — und der Zähler
     daneben sagt der Auswertung, wie viele es waren (Regel 17).
     """
-    mesh = _scan_like_blob()
-    forget_cache()
-
-    found = detect(mesh)
+    _mesh, found, dropped = scan_detection
 
     kinds = {feature.kind for feature in found.values()}
-    assert freeform_dropped(mesh) >= FREEFORM_ROUND_COUNT, freeform_dropped(mesh)
+    assert dropped >= FREEFORM_ROUND_COUNT, dropped
     assert not kinds & {"sphere", "torus", "cone", "fillet"}, kinds
     assert "face" in kinds, "die Standfläche ist echt und bleibt"
 
@@ -3285,22 +3456,26 @@ def test_air_chamber_beside_a_material_island_keeps_only_its_own_surfaces() -> N
 def test_void_containment_can_cancel_and_restart_without_partial_features(
     monkeypatch: pytest.MonkeyPatch, before_work: bool
 ) -> None:
-    """Abbruch erreicht die echte Schalenprüfung, ohne Geometrie oder Cache zu verändern."""
-    import importlib
+    """Abbruch erreicht die echte Schalenprüfung, ohne Geometrie oder Cache zu verändern.
 
+    Die Schalenprüfung ist seit dem 21.09.2026 das Gitterzertifikat samt
+    Strahltest (``_shells_do_not_cross``), nicht mehr eine native Differenz
+    je Paar; der Abbruch muss unmittelbar danach greifen.
+    """
     from app.core.errors import OperationCancelled
     from app.core.scene.cancel import CancelSignal
 
-    geometry = importlib.import_module("app.core.geom.boolean")
-    original = geometry.boolean
+    original = features_module._shells_do_not_cross
     mesh = _block_with_a_trapped_pocket()
     before_vertices = mesh.raw.vertices.copy()
     before_faces = mesh.raw.faces.copy()
     signal = CancelSignal()
+    calls = []
 
     def stop(*args, **kwargs):
-        """Erst die echte private Differenz ausführen, dann den Abbruch verlangen."""
+        """Erst die echte Schalenprüfung ausführen, dann den Abbruch verlangen."""
         result = original(*args, **kwargs)
+        calls.append(result)
         signal.cancel()
         return result
 
@@ -3308,13 +3483,160 @@ def test_void_containment_can_cancel_and_restart_without_partial_features(
     if before_work:
         signal.cancel()
     else:
-        monkeypatch.setattr(geometry, "boolean", stop)
+        monkeypatch.setattr(features_module, "_shells_do_not_cross", stop)
     with pytest.raises(OperationCancelled):
         detect(mesh, check_cancelled=signal.raise_if_cancelled)
+    assert calls == ([] if before_work else [True])
     assert np.array_equal(mesh.raw.vertices, before_vertices)
     assert np.array_equal(mesh.raw.faces, before_faces)
-    monkeypatch.setattr(geometry, "boolean", original)
+    monkeypatch.setattr(features_module, "_shells_do_not_cross", original)
     assert len([feature for feature in detect(mesh).values() if feature.kind == "void"]) == 1
+
+
+def _tube_with_a_pocket(centre_x: float) -> MeshData:
+    """Ein Rohr (Innenradius 5, Außenradius 15) mit einer umgestülpten Tasche 4 × 4 × 4.
+
+    Bei ``centre_x = 10`` liegt die Tasche ganz in der Rohrwand; bei ``5``
+    kreuzt sie die Innenwand — ihr Hüllquader bleibt trotzdem strikt im
+    Hüllquader des Rohrs, das Tor der Bounds lässt sie also durch.
+    """
+    tube = trimesh.creation.annulus(r_min=5.0, r_max=15.0, height=20.0, sections=96)
+    pocket = trimesh.creation.box(extents=(4.0, 4.0, 4.0))
+    pocket.apply_translation((centre_x, 0.0, 0.0))
+    pocket.invert()
+    return MeshData.of(trimesh.util.concatenate([tube, pocket]))
+
+
+def test_a_pocket_inside_the_wall_needs_no_native_difference(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Enthaltensein ohne einen Manifold je Paar — und exakt, wo die Schalen sich kreuzen.
+
+    Am Quader mit acht Kammern aus 434 176 Dreiecken kostete die native
+    Differenz je Schalenpaar 1,2 s (gemessen am 21.09.2026). Kreuzen sich die
+    Schalen nicht — das belegt das Gitterzertifikat über die Hüllquader der
+    Dreiecke —, entscheidet ein Strahl von einer Ecke des Kinds; nur wo das
+    Zertifikat fehlt, rechnet die Differenz wie bisher, und die sagt an einer
+    Tasche, die die Innenwand durchstößt, weiter: kein Einschluss.
+    """
+    import importlib
+
+    geometry = importlib.import_module("app.core.geom.boolean")
+    original = geometry.boolean
+    calls: list[str] = []
+
+    def counted(kind, *args, **kwargs):
+        calls.append(kind)
+        return original(kind, *args, **kwargs)
+
+    monkeypatch.setattr(geometry, "boolean", counted)
+
+    inside = features_module.detect_voids(_tube_with_a_pocket(10.0))
+    assert [feature.params["volume"] for feature in inside] == pytest.approx([64.0])
+    assert calls == [], "die Tasche in der Wand braucht keine native Differenz"
+
+    crossing = features_module.detect_voids(_tube_with_a_pocket(5.0))
+    assert crossing == [], "eine Tasche, die die Innenwand durchstößt, ist kein Einschluss"
+    assert calls == ["difference"], "und genau dort entscheidet die Differenz"
+
+
+def test_the_crossing_certificate_reads_triangle_boxes_not_shell_boxes() -> None:
+    """Zwei Schalen mit überlappenden Hüllquadern kreuzen sich nur, wenn ihre Dreiecke es tun.
+
+    Eine Kugel in einer Kugel: Der Hüllquader der Innenkugel ragt in die
+    Ecken hinein, die die Außenkugel nicht füllt, und die Hüllquader beider
+    Schalen überlappen — das Zertifikat sieht die Dreiecke und sagt trotzdem
+    ja. Eine kreuzende Tasche bekommt es nicht.
+    """
+    outer = trimesh.creation.icosphere(subdivisions=5, radius=40.0)
+    inner = trimesh.creation.icosphere(subdivisions=5, radius=30.0)
+    outer_bounds = features_module._triangle_bounds(np.asarray(outer.triangles, dtype=float))
+    inner_bounds = features_module._triangle_bounds(np.asarray(inner.triangles, dtype=float))
+    assert features_module._shells_do_not_cross(inner_bounds, outer_bounds)
+    assert features_module._shells_do_not_cross(outer_bounds, inner_bounds)
+
+    tube = trimesh.creation.annulus(r_min=5.0, r_max=15.0, height=20.0, sections=96)
+    pocket = trimesh.creation.box(extents=(4.0, 4.0, 4.0))
+    pocket.apply_translation((5.0, 0.0, 0.0))
+    tube_bounds = features_module._triangle_bounds(np.asarray(tube.triangles, dtype=float))
+    pocket_bounds = features_module._triangle_bounds(np.asarray(pocket.triangles, dtype=float))
+    assert not features_module._shells_do_not_cross(pocket_bounds, tube_bounds)
+
+
+def test_a_ray_through_every_face_middle_decides_nothing_and_the_difference_takes_over(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Sechs Strahlen durch sechs Diagonalen: unentscheidbar — und der Einschluss bleibt.
+
+    Vom Mittelpunkt eines Würfels trifft jeder achsenparallele Strahl die
+    Mitte einer Seite, also die Diagonale zwischen deren zwei Dreiecken. Der
+    Strahltest sagt dann ``None`` statt zu raten, und die native Differenz
+    entscheidet wie bisher.
+    """
+    import importlib
+
+    box = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
+    triangles = np.asarray(box.triangles, dtype=float)
+    bounds = features_module._triangle_bounds(triangles)
+    assert features_module._point_inside_shell(np.zeros(3), triangles, bounds) is None
+    assert features_module._point_inside_shell(np.array([1.0, 2.0, 3.0]), triangles, bounds)
+    assert not features_module._point_inside_shell(np.array([1.0, 2.0, 30.0]), triangles, bounds)
+
+    # Ein Tetraeder als Tasche, dessen erste Ecke im Mittelpunkt des Würfels
+    # liegt — genau der Fall, in dem der Strahl nichts entscheidet. Das
+    # Umstülpen dreht jedes Dreieck um; ``[2, 1, 0]`` wird dabei ``[0, 1, 2]``.
+    pocket = trimesh.Trimesh(
+        vertices=[[0.0, 0.0, 0.0], [3.0, 0.0, 0.0], [0.0, 3.0, 0.0], [0.0, 0.0, 3.0]],
+        faces=[[2, 1, 0], [0, 1, 3], [0, 3, 2], [1, 2, 3]],
+        process=False,
+    )
+    assert pocket.is_watertight and pocket.volume > 0.0
+    pocket.invert()
+    mesh = MeshData.of(trimesh.util.concatenate([box, pocket]))
+    geometry = importlib.import_module("app.core.geom.boolean")
+    original = geometry.boolean
+    calls: list[str] = []
+
+    def counted(kind, *args, **kwargs):
+        calls.append(kind)
+        return original(kind, *args, **kwargs)
+
+    monkeypatch.setattr(geometry, "boolean", counted)
+    voids = features_module.detect_voids(mesh)
+    assert [feature.params["volume"] for feature in voids] == pytest.approx([4.5])
+    assert calls == ["difference"]
+
+
+def test_unreadable_shells_are_reported_not_swallowed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Scheitert die Differenz, fehlen die Einschlüsse nicht still (Regel 17).
+
+    Bis zum 21.09.2026 gab ``_shells_inside_the_material`` bei einem
+    ``GeometryError`` leere Gruppen zurück, und niemand erfuhr davon.
+    ``unreadable_void_shells`` nennt der Auswertung jetzt die Zahl der Schalen
+    des Körpers, damit sie einen Befund daraus machen kann.
+    """
+    import importlib
+
+    from app.core.errors import GeometryError
+
+    geometry = importlib.import_module("app.core.geom.boolean")
+
+    def broken(*_args, **_kwargs):
+        raise GeometryError("nicht lesbar")
+
+    monkeypatch.setattr(geometry, "boolean", broken)
+    mesh = _tube_with_a_pocket(5.0)
+    forget_cache()
+    assert features_module.unreadable_void_shells(mesh) == 0, "vor der Erkennung weiß es niemand"
+    found = detect(mesh)
+    assert not [feature for feature in found.values() if feature.kind == "void"]
+    assert features_module.unreadable_void_shells(mesh) == 2, "zwei Schalen, keine lesbar"
+
+    forget_cache()
+    detect(_tube_with_a_pocket(10.0))
+    assert features_module.unreadable_void_shells(_tube_with_a_pocket(10.0)) == 0, (
+        "wo keine Differenz nötig war, ist auch nichts unlesbar"
+    )
 
 
 def test_an_open_mesh_keeps_its_bores_because_a_sign_says_nothing_there() -> None:
@@ -3537,14 +3859,14 @@ def test_a_constructed_part_leaves_no_curved_face_over(name: str) -> None:
     assert not [f for f in found.values() if f.kind == "curved_face"], name
 
 
-def test_a_freeform_gets_no_curved_face_because_its_skin_would_be_one() -> None:
+def test_a_freeform_gets_no_curved_face_because_its_skin_would_be_one(
+    scan_detection: tuple[MeshData, dict[FeatureId, Feature], int],
+) -> None:
     """Auf einem Scan wäre die ganze Haut eine einzige gerundete Seite, und
     die sagt nichts. Der Freiformfilter geht vor: Was er als erfunden verwirft,
     bekommt auch keinen Rest."""
-    mesh = _scan_like_blob()
-    forget_cache()
-    found = detect(mesh)
-    assert freeform_dropped(mesh) > 0, "ohne Freiformurteil prüft der Test nichts"
+    _mesh, found, dropped = scan_detection
+    assert dropped > 0, "ohne Freiformurteil prüft der Test nichts"
     assert not [f for f in found.values() if f.kind == "curved_face"]
 
 
@@ -4066,6 +4388,89 @@ def test_a_pocket_over_a_small_hole_in_its_floor_is_not_through() -> None:
     assert holes[4].params["through"] is True, "und die kleine Bohrung geht durch"
 
 
+def _widened_through_bore(bands: int) -> MeshData:
+    """Platte 30 × 30 × 10, Ø 5 durch, oben Ø 9 zwei Millimeter tief, dazwischen 45 Grad Übergang.
+
+    ``bands`` sagt, in wie viele Ringe der Übergangskegel tesselliert ist: Ein
+    Ring ist die Bauart des Netzbohrers, vier sind die der Tessellierung des
+    exakten Körpers (BRepMesh) — und dort berührt nur der äußerste Ring die
+    Endebene der Aufweitung.
+    """
+    from app.core.geom.boolean import boolean
+
+    steps = [(2.5 + 2.0 * step / bands, 6.0 + 2.0 * step / bands) for step in range(bands + 1)]
+    profile = [(0.0, -1.0), (2.5, -1.0), *steps, (4.5, 11.0), (0.0, 11.0)]
+    tool = trimesh.creation.revolve(profile, sections=64)
+    plate = trimesh.creation.box(extents=(30.0, 30.0, 10.0))
+    plate.apply_translation((0.0, 0.0, 5.0))
+    return boolean("difference", [MeshData.of(plate), MeshData.of(tool)]).mesh
+
+
+@pytest.mark.parametrize("bands", [1, 4], ids=["netzgebohrt", "tesselliert"])
+def test_the_widening_over_a_through_bore_is_not_through_however_it_is_tessellated(
+    bands: int,
+) -> None:
+    """Die Aufweitung Ø 9 über einer Ø-5-Durchgangsbohrung endet am Übergang — an jedem Netz.
+
+    Der Abschnitt der Aufweitung sah vom Übergangskegel nur das Band, das
+    ihre Endebene berührt: am netzgebohrten Zwilling der ganze Kegel, an der
+    Tessellierung des exakten Körpers ein Streifen von 4,0 bis 4,5 mm Radius
+    — und der Ring bei 0,6 (2,7 mm) blieb frei, die Aufweitung hieß dort
+    durchgehend, der exakte Kern sagte nein (Kreuzbefund Paket A, 22.09.2026).
+    Gefragt werden jetzt die Flächen, die an den Mantel grenzen, in ganzer
+    Länge — dieselbe Frage wie ``brep.features._axis_covered``. Die Bohrung
+    selbst bleibt durchgehend, und der gegenüberliegende Schenkel des U-Profils
+    (``test_a_bore_through_one_leg_of_a_u_is_a_through_bore``) zählt weiter
+    nicht: Er grenzt nicht an den Mantel.
+    """
+    forget_cache()
+    holes = {
+        round(float(feature.params["diameter"]), 1): feature.params["through"]
+        for feature in detect(_widened_through_bore(bands)).values()
+        if feature.kind == "hole"
+    }
+    assert holes == {5.0: True, 9.0: False}, holes
+
+
+def test_the_widening_reads_the_same_on_the_tessellated_exact_body() -> None:
+    """Dieselbe Aufweitung aus dem exakten Kern, gelesen an seiner Tessellierung (P1.5)."""
+    if not pytest.importorskip("app.core.brep.kernel").available():
+        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.geom.prepare import drill_outline
+    from app.core.knowledge import profiles
+    from app.core.sketch.planes import frame_of
+
+    outline = drill_outline(
+        diameter=5.0,
+        depth=12.0,
+        profile=profiles.make_profile("centauri-carbon-2", "petg"),
+        compensate=False,
+        widening_diameter=9.0,
+        widening_depth=2.0,
+        transition_angle=90.0,
+    )
+    body = edit.bore_profile(
+        edit.box(60.0, 40.0, 10.0), outline, frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 10.0))
+    )
+    exact = {
+        round(float(feature.params["diameter"]), 1): feature.params["through"]
+        for feature in features_of(body).values()
+        if feature.kind == "hole"
+    }
+    assert exact == {5.0: True, 9.0: False}, exact
+    for deflection in (0.1, 0.02):
+        forget_cache()
+        meshed = {
+            round(float(feature.params["diameter"]), 1): feature.params["through"]
+            for feature in detect(as_mesh_data(body.to_mesh(deflection=deflection))).values()
+            if feature.kind == "hole"
+        }
+        assert meshed == exact, (deflection, meshed)
+
+
 def test_a_patch_missing_one_triangle_gets_it_back() -> None:
     """Ein Band aus Dreiecken ohne eines hat keinen brauchbaren Rand mehr.
 
@@ -4129,6 +4534,50 @@ def test_a_notch_of_two_triangles_is_closed_as_a_pair() -> None:
     # genau einer Zweiermenge und 29 gar nicht — mehrdeutig ist keines. Ein
     # Test dafür bräuchte einen eigens konstruierten Körper; die Zusage steht
     # in ``_closing_set`` und fiele sonst als Zierat auf, der nichts prüft.
+
+
+def test_the_vertex_face_index_reads_a_degenerate_mesh_like_trimesh_does() -> None:
+    """Ein entartetes Dreieck schickt ``trimesh.vertex_faces`` in eine Schleife je Ecke.
+
+    Gemessen am 21.09.2026: 37 ms bei 10 000 Dreiecken, 20 s bei 300 000,
+    sechs Minuten bei 1,3 Millionen — und ein Generatornetz aus TripoSG trägt
+    solche Dreiecke. Der gepackte Index sortiert einmal stabil und gibt je
+    Ecke dieselbe Menge; die Kandidaten der Kerbenschließung ändern sich nicht.
+    """
+    from app.core.perceive.features import _candidates_at, _rim_of, _vertex_faces_index
+
+    band = trimesh.creation.revolve([(3.0, 0.0), (6.0, 3.0)], sections=48)
+    faces = np.vstack([band.faces, [[0, 0, 1]]])
+    body = trimesh.Trimesh(vertices=band.vertices, faces=faces, process=False)
+    ranges, own = _vertex_faces_index(body)
+    theirs = np.asarray(body.vertex_faces)
+    assert len(ranges) == len(body.vertices) + 1 and ranges[-1] == 3 * len(body.faces)
+    for vertex in range(len(body.vertices)):
+        mine = set(own[ranges[vertex] : ranges[vertex + 1]].tolist())
+        assert mine == {int(face) for face in theirs[vertex] if face >= 0}, vertex
+    assert own[ranges[0] : ranges[1]].tolist().count(len(band.faces)) == 2, (
+        "das entartete Dreieck steht an seiner doppelten Ecke zweimal"
+    )
+
+    patch = [index for index in range(len(band.faces)) if index != 5]
+    rim = _rim_of(body, patch)
+    assert rim is not None and rim.frayed
+    found = _candidates_at(body, patch, rim.frayed)
+    assert found and 5 in found
+    # Die Kandidaten sind dieselben wie über ``trimesh.vertex_faces``:
+    inside = np.zeros(len(body.faces), dtype=bool)
+    inside[patch] = True
+    neighbours = features_module._neighbour_index(body)[0]
+    expected = set()
+    for node in rim.frayed:
+        for face in theirs[node]:
+            if face < 0 or inside[face]:
+                continue
+            beside = neighbours[face]
+            beside = beside[beside >= 0]
+            if len(beside) and inside[beside].any():
+                expected.add(int(face))
+    assert found == expected
 
 
 def test_a_notch_too_large_to_be_one_stays_open() -> None:
@@ -4494,16 +4943,17 @@ def test_the_mouth_chamfer_of_a_slot_belongs_to_it_on_both_cores() -> None:
         )
 
 
-def test_a_partial_cone_between_two_slots_stays_where_it_is() -> None:
-    """Berührt ein Kegelstück zwei Langlöcher, hat niemand belegt, wem es gehört."""
-    if not pytest.importorskip("app.core.brep.kernel").available():
-        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
-    from app.core.brep import edit
-    from app.core.brep.features import features_of
+def _cone_between_two_slots() -> Any:
+    """Platte 60 × 30 × 8, zwei Langlöcher Ø 6 × 26 bei y = ±4, dazwischen eine Senkung Ø 12 → 6.
 
-    plate = edit.box(60.0, 30.0, 8.0)
-    body = plate
-    for y in (-6.0, 6.0):
+    Die Senkung sitzt am Ursprung und geht von z = 8 drei Millimeter tief; ihr
+    Mantel wird von beiden inneren Langlochflanken (y = ±1) beschnitten und
+    berührt so beide Langlöcher mit gleich vielen Kanten.
+    """
+    from app.core.brep import edit
+
+    body = edit.box(60.0, 30.0, 8.0)
+    for y in (-4.0, 4.0):
         body = edit.slot_bore(
             body,
             position=(0.0, y, 4.0),
@@ -4514,6 +4964,90 @@ def test_a_partial_cone_between_two_slots_stays_where_it_is() -> None:
             angle_deg=0.0,
             overlap=0.0,
         )
-    found = features_of(body)
-    assert sorted(entry.kind for entry in found.values()).count("slot") == 2
-    assert not [entry for entry in found.values() if entry.kind == "cone"]
+    sink = edit.moved(edit.cone(6.0, 14.0, 4.0), (0.0, 0.0, 5.0))
+    return edit.boolean("difference", [body, sink])
+
+
+def _one_partial_cone_and_two_slots(
+    found: dict[FeatureId, Feature], label: str, *, bare: bool
+) -> None:
+    """Genau ein Kegel, als Kegelfläche, und zwei Langlöcher — ``bare``: ohne Kegelträger.
+
+    Am Netz ist der Kegelmantel **ein** Fleck (``_merged_cones`` führt ihn
+    über die Spitze zusammen), und die Langlöcher bekommen nichts davon. Der
+    exakte Kern trägt die Naht des Kegels bei +x: Der Streifen dort ist zwei
+    Flächen, die je nur ein Langloch berühren und als Mündungsfase darin
+    aufgehen — seine Langlöcher tragen deshalb je einen Kegelträger.
+    """
+    cones = [entry for entry in found.values() if entry.kind == "cone"]
+    assert len(cones) == 1 and cones[0].params.get("partial") is True, (
+        f"{label}: {[(entry.kind, entry.params.get('partial')) for entry in found.values()]}"
+    )
+    slots = [entry for entry in found.values() if entry.kind == "slot"]
+    assert len(slots) == 2, label
+    for slot in slots:
+        assert set(slot.face_indices).isdisjoint(cones[0].face_indices), label
+        if bare:
+            assert not [patch for patch in slot.surface_patches if patch.kind == "cone"], (
+                f"{label}: das Langloch {slot.id} hat den Kegel verschluckt"
+            )
+
+
+def test_a_partial_cone_between_two_slots_stays_where_it_is() -> None:
+    """Berührt ein Kegelstück zwei Langlöcher gleich stark, hat niemand belegt, wem es gehört.
+
+    Am Netz teilt die Senkung mit beiden Langlöchern acht Kanten; bis zum
+    21.09.2026 entschied dann der alphabetisch spätere Name, und der Kegel
+    verschwand im zweiten Langloch — der exakte Kern ließ ihn als Kegelfläche
+    stehen. Beide Kerne sagen jetzt dasselbe, an zwei Abweichungen des Netzes.
+    """
+    if not pytest.importorskip("app.core.brep.kernel").available():
+        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
+    from app.core.brep.features import features_of
+
+    body = _cone_between_two_slots()
+    _one_partial_cone_and_two_slots(features_of(body), "exakt", bare=False)
+    for deflection in (0.1, 0.02):
+        forget_cache()
+        _one_partial_cone_and_two_slots(
+            detect(body.to_mesh(deflection=deflection)), f"Netz {deflection}", bare=True
+        )
+
+
+def test_a_partial_cone_with_one_clear_owner_still_folds_into_that_slot() -> None:
+    """Die Gegenprobe zur Gleichstandsregel: ein klarer Sieger nimmt das Stück weiter mit.
+
+    Dieselbe Platte, aber die Senkung um 1 mm zum oberen Langloch gerückt —
+    dort teilt der Kegel mehr Kanten mit ``slot_2`` als mit ``slot_1`` und
+    geht als Mündungsfase darin auf, wie an einem Langloch allein.
+    """
+    if not pytest.importorskip("app.core.brep.kernel").available():
+        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
+    from app.core.brep import edit
+
+    body = edit.box(60.0, 30.0, 8.0)
+    for y in (-4.0, 4.0):
+        body = edit.slot_bore(
+            body,
+            position=(0.0, y, 4.0),
+            direction=(0.0, 0.0, 1.0),
+            diameter=6.0,
+            depth=8.0,
+            length=26.0,
+            angle_deg=0.0,
+            overlap=0.0,
+        )
+    sink = edit.moved(edit.cone(6.0, 14.0, 4.0), (0.0, 1.0, 5.0))
+    body = edit.boolean("difference", [body, sink])
+    forget_cache()
+    found = detect(body.to_mesh(deflection=0.1))
+    assert not [entry for entry in found.values() if entry.kind == "cone"], (
+        f"{[(entry.kind, entry.params.get('partial')) for entry in found.values()]}"
+    )
+    slots = {entry.id: entry for entry in found.values() if entry.kind == "slot"}
+    assert len(slots) == 2
+    carriers = {
+        name: [patch.kind for patch in slot.surface_patches if patch.kind == "cone"]
+        for name, slot in slots.items()
+    }
+    assert sum(1 for kinds in carriers.values() if kinds) == 1, carriers

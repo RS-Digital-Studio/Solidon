@@ -497,6 +497,13 @@ def test_native_retriangulation_maps_patch_faces_and_discards_only_unproved_subs
 def test_recognition_cache_counts_carrier_indices_and_reuses_its_published_values(
     monkeypatch,
 ) -> None:
+    """Der Cache wiegt seine Träger mit — und ein einzelner Eintrag über der Grenze bleibt.
+
+    Bis zum 21.09.2026 warf die Verdrängung den einzigen Eintrag weg und
+    brach erst danach ab; der Kommentar daneben versprach das Gegenteil. Ein
+    Modell, das allein über der Grenze liegt, wäre so bei jedem Schritt neu
+    erkannt worden — der Cache nicht begrenzt, sondern aus.
+    """
     from collections import OrderedDict
 
     from app.core.perceive import features
@@ -504,6 +511,7 @@ def test_recognition_cache_counts_carrier_indices_and_reuses_its_published_value
     monkeypatch.setattr(features, "_FEATURE_CACHE", OrderedDict())
     monkeypatch.setattr(features, "_CACHE_INDICES", {})
     monkeypatch.setattr(features, "_FREEFORM_DROPPED", {})
+    monkeypatch.setattr(features, "_UNREADABLE_VOIDS", {})
     mesh = MeshData.of(trimesh.creation.box(extents=(20.0, 30.0, 40.0)))
     result = features.detect(mesh)
     assert len(result) == 6
@@ -516,8 +524,17 @@ def test_recognition_cache_counts_carrier_indices_and_reuses_its_published_value
     features.forget_cache()
     monkeypatch.setattr(features, "CACHE_INDEX_LIMIT", 23)
     assert features.detect(mesh) == result
-    assert not features._FEATURE_CACHE
-    assert not features._CACHE_INDICES
+    assert len(features._FEATURE_CACHE) == 1, "der einzige Eintrag bleibt, auch über der Grenze"
+    assert sum(features._CACHE_INDICES.values()) == 24
+    with monkeypatch.context() as read:
+        read.setattr(
+            features, "_fitted", lambda *_a, **_kw: pytest.fail("warm cache must not refit")
+        )
+        assert features.detect(mesh) == result
+    # Ein zweiter Eintrag verdrängt den ersten: Über der Grenze bleibt genau einer.
+    other = MeshData.of(trimesh.creation.box(extents=(10.0, 10.0, 10.0)))
+    assert len(features.detect(other)) == 6
+    assert list(features._FEATURE_CACHE) == [features._mesh_key(other)]
 
 
 def test_a_cancelled_planar_publication_leaves_no_partial_detection_cache(monkeypatch) -> None:
