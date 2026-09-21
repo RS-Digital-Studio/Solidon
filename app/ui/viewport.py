@@ -11354,12 +11354,24 @@ class Viewport(QWidget):
             # führt: Der Zug schnitte ein Langloch neben seinen Schritt, und
             # beim nächsten Verschieben bliebe es stehen (16.09.2026).
             slotted = None
+        # **Ein gesperrter Bewegungsgriff sperrt nicht die Langlochknöpfe**
+        # (21.09.2026, Robert an Weg 1: „wo sind eigentlich die markierungen
+        # um es zum langloch zu ziehen?"). Die stille Platzierung an einer
+        # Bohrung sperrt den Merkmalsgriff (``set_feature_gizmo_blocked``) und
+        # hängt ihren eigenen Griff an den Werkzeugkörper
+        # (``grip_placement``) — beides zu Recht, denn zwei Sätze Pfeile
+        # säßen übereinander. Die zwei Knöpfe am Loch sind aber keine Pfeile:
+        # Sie ziehen die Länge, und dafür gibt es keinen zweiten Griff. Seit
+        # dem Maßeditor (20.09.2026) fielen sie mit dem Bewegungsgriff, und
+        # ein gewähltes Loch hatte im Bild nichts mehr, woran man es zum
+        # Langloch zieht. Was in diesen Lagen entfällt, sind Pfeile, Ringe und
+        # Würfel; Flächenscheibe und Knöpfe bleiben.
+        only_knobs = self._feature_gizmo_blocked or self._placement_grip_item is not None
         if (
             (not active and marked is None)
             or self._selected is None
             or self._preview_gizmo_wanted
-            or self._feature_gizmo_blocked
-            or self._placement_grip_item is not None
+            or (only_knobs and slotted is None)
         ):
             self.gizmoStatus.emit("")
             return
@@ -11384,11 +11396,11 @@ class Viewport(QWidget):
         if actor is None:
             self.gizmoStatus.emit("")
             return
-        self.gizmoStatus.emit(gizmo_sentence(marked, part=of_a_part))
+        self.gizmoStatus.emit("" if only_knobs else gizmo_sentence(marked, part=of_a_part))
         scale = self._gizmo_scale_for(
             actor, self._face_seat[0] if marked is not None and self._face_seat else None
         )
-        if chosen is not None or marked is None:
+        if (chosen is not None or marked is None) and not only_knobs:
             # **Kein Bewegungsgriff, wo nichts zu bewegen ist.** An einem
             # Langloch gäbe er drei Pfeile, die keine Operation einlösen kann —
             # ein Griff, der nichts auslöst, ist schlimmer als keiner.
@@ -11400,7 +11412,9 @@ class Viewport(QWidget):
                 release_callback=self._on_gizmo_released,
                 interact_callback=self._on_gizmo_interacted,
             )
-        if marked is None:
+        if marked is None and only_knobs:
+            pass
+        elif marked is None:
             # Das dritte Drittel von §18.11: Der Griff verschiebt und dreht,
             # der Würfel skaliert. **Nur am ganzen Objekt** — ein Merkmal hat
             # keine Größe, die dieser Würfel ändern könnte: Eine Fläche kennt
@@ -11606,6 +11620,12 @@ class Viewport(QWidget):
             release_callback=self._on_placement_grip_released,
             rotation=rotation,
         )
+        if was is None:
+            # Der Griff der Auswahl ist weg — die Langlochknöpfe kommen
+            # zurück, denn die ersetzt er nicht (``set_gizmo``, ``only_knobs``).
+            # Nur beim ersten Griff: Der Fluss hängt ihn bei jedem Zeichnen
+            # neu an, und die Knöpfe sitzen am Merkmal, nicht am Werkzeug.
+            self.set_gizmo(self._gizmo_wanted)
 
     def _on_placement_grip_released(self, matrix: Any) -> None:
         """Ein Zug am Werkzeugkörper endet als Stelle, nicht als Operation.
@@ -12093,7 +12113,9 @@ class Viewport(QWidget):
         self.drag_bar.follow_length(str(tr("Länge")), length)
         self._update_slot_labels()
         # Die Marke wächst mit dem Umriss — eine Form für dasselbe Loch.
-        self._repaint_preview()
+        if not self._repaint_preview() and self.renderer is not None:
+            # Der Griff hat seine Knöpfe schon versetzt und wartet aufs Bild.
+            self.renderer.render()
         self._queue_feature_label_layout()
 
     def _update_slot_labels(self) -> None:
@@ -12546,17 +12568,19 @@ class Viewport(QWidget):
             style=SurfaceStyle(colour=MEASURE_COLOUR, opacity=0.45, lighting=False, pickable=False),
         )
 
-    def _repaint_preview(self) -> None:
+    def _repaint_preview(self) -> bool:
         """Die Marke des gewählten Merkmals neu — nach einem Zug, der ihre Form ändert.
 
         Der Sitz bleibt (:attr:`_face_seat`), nur die Gestalt wird neu
         gerechnet: Ein wartender Langlochzug macht aus dem Zylinder das
-        Stadion (:meth:`_slot_form_of`).
+        Stadion (:meth:`_slot_form_of`). Sagt, ob dabei gezeichnet wurde — der
+        Langlochgriff zeichnet während des Zugs nicht selbst, damit je
+        Zeigerereignis ein Bild entsteht und nicht zwei (``SlotHandle._drag``).
         """
         chosen = self.slot_handle_feature()
         seat = self._face_seat
         if chosen is None or seat is None or self.renderer is None:
-            return
+            return False
         centre, normal, radius = seat
         actor = self._shape_actor
         if actor is not None:
@@ -12569,10 +12593,11 @@ class Viewport(QWidget):
                 actor.update_points(vertices)
             except ValueError:
                 self._show_preview(chosen, centre, normal, radius)
-            else:
-                self.renderer.render()
-            return
+            self.renderer.render()
+            return True
         self._show_preview(chosen, centre, normal, radius)
+        self.renderer.render()
+        return True
 
     def _drop_preview(self) -> None:
         """Nimmt die Vorschau weg."""

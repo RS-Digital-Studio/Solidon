@@ -2614,10 +2614,12 @@ def test_a_slot_drag_puts_its_numbers_into_the_panel(qt_app: QApplication) -> No
     window = _window_with_a_renderer()
     try:
         _a_selected_hole(window)
-        assert window.viewport._slot_handle is None, (
-            "die Auswahl allein zeigt nur, was gewählt ist (Robert, 11.09.2026)"
-        )
-        # **Im Bild einstellen** bringt Maße und Griffe zusammen.
+        # Seit die Maße mit der Auswahl kommen (20.09.2026), stehen die zwei
+        # Knöpfe mit ihnen — der gesperrte Bewegungsgriff nimmt sie nicht mit
+        # (Robert, 21.09.2026: „wo sind eigentlich die markierungen um es zum
+        # langloch zu ziehen?").
+        assert window.viewport._slot_handle is not None, "die Maße bringen die Knöpfe mit"
+        assert window.viewport._gizmo is None, "aber keinen zweiten Satz Pfeile"
         # ``isHidden`` statt ``isVisible``: Das Fenster ist offscreen nie gezeigt.
         flow = _choose_measure_action(window, "slot_hole")
         assert flow is not None and flow.active
@@ -3096,7 +3098,8 @@ def test_a_drag_at_the_chosen_hole_pulls_the_slot_instead_of_moving_the_body(
     try:
         object_id, hole = _a_selected_hole(window)
         assert window._quiet_placement is not None, "die Auswahl zeigt passive Maße"
-        assert window.viewport._slot_handle is None, "fremde Griffe fehlen am Größenentwurf"
+        assert window.viewport._slot_handle is not None, "und die Knöpfe stehen am Loch"
+        assert window.viewport._gizmo is None, "ohne einen zweiten Satz Pfeile"
         chosen = _choose_measure_action(window, "slot_hole")
         assert chosen is not None and chosen.active
         entry = window.session.last_result.scene.objects[object_id]

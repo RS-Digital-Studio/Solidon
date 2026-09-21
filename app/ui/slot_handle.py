@@ -529,12 +529,22 @@ class SlotHandle:
             angle = _normalised_angle(self._settle_angle(angle))
         self._dragged = True
         self.length, self.angle = length, angle
-        self._redraw()
+        # **Ein Bild je Zeigerereignis, nicht zwei.** Der Rückruf zeichnet die
+        # Marke des Merkmals neu und stellt dabei das ganze Bild dar — mit
+        # eigenem ``render`` davor kostete jeder Zug am Knopf zwei volle
+        # Durchgänge, gemessen am 21.09.2026 an Weg 1: 32 ms je Bewegung,
+        # zwei Drittel davon Zeichnen (Robert: „das verschieben über gizmo
+        # ist auch noch nicht flüssig"). Ohne Rückruf zeichnet der Griff selbst.
+        self._redraw(render=self._interact is None)
         if self._interact is not None:
             self._interact(self.length, self.angle)
 
-    def _redraw(self) -> None:
-        """Knöpfe an ihre neue Stelle, Umriss auf die neue Form."""
+    def _redraw(self, *, render: bool = True) -> None:
+        """Knöpfe an ihre neue Stelle, Umriss auf die neue Form.
+
+        ``render=False`` überlässt das Bild dem Aufrufer, der ohnehin gleich
+        zeichnet — während des Zugs dem Rückruf der Ansicht.
+        """
         for index, item in enumerate(self._knobs):
             seat = np.asarray(self._knob_seat(index, self.length, self.angle), dtype=float)
             offset = seat - np.asarray(self._built_seats[index], dtype=float) + self._shift
@@ -557,4 +567,5 @@ class SlotHandle:
         self._outline.set_position(
             (float(self._shift[0]), float(self._shift[1]), float(self._shift[2]))
         )
-        self._renderer.render()
+        if render:
+            self._renderer.render()

@@ -46,6 +46,16 @@ Vier Sachen daran sind Entscheidungen und keine Bequemlichkeit:
   gesperrt. Ein reiner Verschiebungsauftrag zeigt keine Drehringe.
   Für weitere, noch nicht angeschlossene Merkmalsarten gilt der vorhandene
   ausdrückliche Einstieg über *Im Bild einstellen*.
+* **Gesperrt heißt: ohne Pfeile, Ringe und Würfel — nicht ohne Knöpfe.**
+  Die Sperre über `set_feature_gizmo_blocked` und der Platzierungsgriff am
+  Werkzeugkörper nehmen dem Loch nur den Bewegungsgriff; Flächenscheibe und
+  die zwei Langlochknöpfe bleiben (`set_gizmo`, `only_knobs`), und
+  `grip_placement` baut sie nach dem ersten Griff wieder auf. Bis zum
+  21.09.2026 nahm die Sperre die Knöpfe mit, und mit dem Maßeditor fehlten sie
+  an jeder gewählten Bohrung (Robert: „wo sind eigentlich die markierungen um
+  es zum langloch zu ziehen?") — geprüft an zwei Bildern derselben Lage, am
+  Stand vor dem Editor genauso. Die Gizmo-Ansage bleibt dabei leer: Ein Satz
+  über Pfeile, die nicht da sind, wäre die falsche Auskunft.
 * **Und am Langloch stehen beide Griffe** — die Knöpfe für Länge und Richtung
   und die Pfeile und Ringe des Bewegungsgriffs, seit es sich versetzen und
   drehen lässt (RM-153). Der Ring um die Bohrachse dreht die Mittellinie.
@@ -137,6 +147,13 @@ Vier Sachen daran sind Entscheidungen und keine Bequemlichkeit:
   den Maßen des Merkmals. `_repaint_preview` tauscht dabei nur die Punkte
   (`update_points`), solange die Form ihre Punktzahl behält — ein Aktor je
   Mausbewegung wäre ein Neuaufbau je Mausbewegung.
+* **Und je Mausbewegung entsteht ein Bild, nicht zwei.** Während eines Zugs
+  an den Knöpfen zeichnet `SlotHandle._drag` nicht selbst
+  (`_redraw(render=False)`); die Marke folgt über `_on_slot_interacted`, und
+  `_repaint_preview` sagt, ob sie gezeichnet hat — nur wenn nicht, rendert
+  der Viewport nach. Gemessen am 21.09.2026 im echten Fenster mit `cProfile`:
+  32 ms je Bewegung mit zwei Bildern, 21 ms mit einem; der Grundpreis je Bild
+  ist der Durchgang mit Umgebungsverdeckung, 12 bis 17 ms (RM-200).
 * **Die erste Eingabe bindet die Auswahl.** Vorher bleibt die passive
   Maßanzeige abwählbar; danach erhalten Außenklick und andere Auswahltasten
   den Entwurf. `Viewport.user_selection_allowed` liegt vor der Mutation in

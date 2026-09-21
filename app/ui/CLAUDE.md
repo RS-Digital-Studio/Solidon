@@ -761,6 +761,17 @@ verlöre es beide. An einem Langloch steht deshalb der Knopf **ohne**
 Bewegungsgriff; drei Pfeile, die keine Operation einlöst, wären schlimmer als
 keine.
 
+**Und die Knöpfe stehen auch, wo der Bewegungsgriff gesperrt ist** (RM-197,
+21.09.2026). Der Maßeditor sperrt an einer gewählten Bohrung den Merkmalsgriff
+(`set_feature_gizmo_blocked`) und hängt seinen Platzierungsgriff an den
+Werkzeugkörper; `set_gizmo` lässt in beiden Lagen nur Pfeile, Ringe und Würfel
+weg (`only_knobs`) und baut Flächenscheibe und Langlochknöpfe weiter auf,
+`grip_placement` holt sie nach dem ersten Griff zurück. Während eines Zugs an
+den Knöpfen zeichnet `SlotHandle` nicht selbst; die Marke folgt über
+`_on_slot_interacted`, und nur wenn `_repaint_preview` nichts gezeichnet hat,
+rendert der Viewport nach — ein Bild je Mausbewegung statt zwei (RM-200, die
+Regel in `griffe.md`).
+
 **Der Zug endet im Merkmalfenster, nicht im Verlauf** (Robert, 10.09.2026):
 Wohin etwas gehört, sagt die Stelle, an der man loslässt; wie **lang** es ist,
 sagt eine Zahl, und zwanzig Millimeter trifft niemand mit der Maus. Nach dem
