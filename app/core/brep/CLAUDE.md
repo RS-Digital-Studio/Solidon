@@ -692,7 +692,7 @@ Anwendung gegen die installierte Bindung.
 |---|---|
 | `kernel.py` | Der `Solid` und sein Weg ins Netz. `available()`, `BRepUnavailable` |
 | `profiles.py` | Vom Skizzenumriss zum exakten Körper (§30.1) — das größte Modul hier; `helical_thread` näht Kern und Gang eines Gewindes ohne Boolesche Operation; `face_of`, `offset_face`, `face_boolean`, `face_rotated` und `prism` sind die exakte Seite der Querschnitte, aus denen Profilklemmen und Dichtnuten bauen (`knowledge/parts/section.py`); `round_cord` zieht die runde Dichtschnur als Rohrsweep mit runden Ecken am exakten Weg entlang |
-| `ops.py` | Die B-Rep-Operationen im Register (§25, §10) — **ohne** Verrunden und Fase, die stehen in `geom/edge_ops.py` |
+| `ops.py` | Die B-Rep-Operationen im Register (§25, §10) — **ohne** Verrunden und Fase, die stehen in `geom/edge_ops.py`. Seit P2.8 die fünf exakten Grundkörper (`create_brep_box` mit `anchor`, `_cylinder`, `_cone`, `_sphere`, `_torus` — sichtbar, wo der Kern da ist; `edit.sphere` und `edit.cone` daneben zu `box`, `cylinder`, `torus`); `drill_brep_hole` und `shell_exact` bleiben registriert und versteckt, weil `prepare_ops.drill_hole` und `hollow_object` sie am exakten Körper selbst rufen |
 | `edit.py` | Einen Körper formen |
 | `features.py` | Merkmale aus der Topologie (§30, §21) |
 | `thread.py` | Gewinde an importierter Geometrie: Kantenzüge nach Bogenlänge, Achse eingepasst, Vorschub und Händigkeit aus der Wendelregression, Gangzahl aus der Periodizität (§21.1, P2.5) |

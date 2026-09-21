@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.core.registry import MENU_TWINS, PaletteEntry, palette_entries, variant_members
+from app.core.registry import PaletteEntry, menu_twins, palette_entries, variant_members
 from app.i18n import tr
 
 #: Wie ein Umlaut auf einer Tastatur ohne Umlaute geschrieben wird.
@@ -218,6 +218,12 @@ SYNONYMS: Final[dict[str, tuple[str, ...]]] = {
     "create_brep_box": ("exakt", "brep", "echte kanten"),
     "create_cylinder": ("exakt", "brep", "echte kanten"),
     "create_brep_cylinder": ("exakt", "brep", "echte kanten"),
+    "create_cone": ("exakt", "brep", "echte kanten"),
+    "create_brep_cone": ("exakt", "brep", "echte kanten"),
+    "create_sphere": ("exakt", "brep", "echte kanten"),
+    "create_brep_sphere": ("exakt", "brep", "echte kanten"),
+    "create_torus": ("exakt", "brep", "echte kanten"),
+    "create_brep_torus": ("exakt", "brep", "echte kanten"),
     "drill_hole": ("exakt", "brep", "echte kanten"),
     "drill_brep_hole": ("exakt", "brep", "echte kanten"),
     "repair_mesh": ("loecher schliessen", "reparieren", "flicken"),
@@ -267,8 +273,8 @@ def hidden_from_the_menu() -> frozenset[str]:
 
     **Eine Regel, nicht zwei**, und das ist der Punkt dieser Funktion: Es gibt
     inzwischen zwei Wege, einen Eintrag zusammenzulegen — den Zwilling in
-    einem zweiten Rechenkern (:data:`MENU_TWINS`, „Exakten Quader anlegen"
-    unter dem Haken von „Quader anlegen") und die Variantengruppe
+    einem zweiten Rechenkern (:data:`MENU_TWINS`, seit P2.8 der Netz-Quader
+    hinter dem exakten „Quader anlegen") und die Variantengruppe
     (:func:`variant_members`, die vier Skizzen-Arten unter „Aus Skizze
     erzeugen …"). Für die Palette ist der Unterschied gleichgültig: Beide
     Male steht die Handlung anderswo, und beide Male soll sie nicht ein
@@ -280,7 +286,7 @@ def hidden_from_the_menu() -> frozenset[str]:
     sonst wächst mit jedem Mechanismus die Zahl der Orte, an denen er
     vergessen werden kann.
     """
-    return frozenset(MENU_TWINS) | variant_members()
+    return frozenset(menu_twins()) | variant_members()
 
 
 def matches(entry: PaletteEntry, query: str, *, stem: bool = False, any_word: bool = False) -> bool:
@@ -483,7 +489,7 @@ class CommandPalette(QDialog):
         # Unterschied stand nur im Tooltip. Beide Zwillinge bekommen ihren
         # ``doc``-Satz als zweite Zeile, so wie der gesperrte Fall seinen Grund
         # (Review 02.09.2026).
-        twins = MENU_TWINS.keys() | MENU_TWINS.values()
+        twins = menu_twins().keys() | menu_twins().values()
         found.sort(
             key=lambda entry: (
                 -word_hits(entry, query) if loosened else 0,

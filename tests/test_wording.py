@@ -49,8 +49,8 @@ ABGELEGT: tuple[tuple[str, tuple[str, ...] | None, str], ...] = (
     (
         "B-Rep",
         None,
-        "Die Anwendung nennt den Nutzen („Flächen und Kanten später "
-        "bearbeiten“), nie den Rechenkern.",
+        "Die Anwendung nennt den Nutzen („Mit echten Flächen und Kanten "
+        "rechnen“), nie den Rechenkern.",
     ),
     (
         "Spline",

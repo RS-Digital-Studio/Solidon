@@ -46,7 +46,8 @@ from app.core.types import (
 from app.core.units import DEGREE_UNIT, EPS_DISPLAY, EPS_GEOM, is_greater, is_zero
 from app.i18n import TranslatableText, _
 
-_ANCHORS = ("centre", "corner")
+#: Die zwei Bezugspunkte eines Quaders — beide Kerne bieten dieselben (P2.8).
+ANCHORS = ("centre", "corner")
 
 _POSITION_X_DOC = _("Verschiebt den bisherigen Bezugspunkt des Körpers entlang X.")
 _POSITION_MORE_DOC = _("Weitere Achse des Orts — siehe Position X.")
@@ -84,6 +85,21 @@ def _round_segments(segments: int, quality: Quality) -> int:
     """
     wanted = segments if quality == "fine" else max(8, segments // 2)
     return ((wanted + 3) // 4) * 4
+
+
+def tube_fits_the_ring(outer_diameter: float, tube_diameter: float) -> None:
+    """Die Absage eines Rings, dessen Schnur die Achse kreuzt — für beide Kerne (P2.8)."""
+    if not is_greater(outer_diameter, 2.0 * tube_diameter):
+        raise ValidationError(
+            "tube_diameter",
+            _(
+                "Die Schnurstärke ist für diesen Außendurchmesser zu groß — sie muss kleiner "
+                "als dessen Hälfte sein."
+            ),
+            value=tube_diameter,
+            constraint="crosses_axis",
+            values={"maximum_mm": outer_diameter / 2.0},
+        )
 
 
 def primitive_local_tool(name: str, values: Mapping[str, Any], quality: Quality) -> MeshData:
@@ -147,17 +163,7 @@ def primitive_local_tool(name: str, values: Mapping[str, Any], quality: Quality)
 
         outer_diameter = float(values["outer_diameter"])
         tube_diameter = float(values["tube_diameter"])
-        if not is_greater(outer_diameter, 2.0 * tube_diameter):
-            raise ValidationError(
-                "tube_diameter",
-                _(
-                    "Die Schnurstärke ist für diesen Außendurchmesser zu groß — sie muss kleiner "
-                    "als dessen Hälfte sein."
-                ),
-                value=tube_diameter,
-                constraint="crosses_axis",
-                values={"maximum_mm": outer_diameter / 2.0},
-            )
+        tube_fits_the_ring(outer_diameter, tube_diameter)
         minor_radius = tube_diameter / 2.0
         segments = _round_segments(int(values["segments"]), quality)
         body = trimesh.creation.torus(
@@ -272,7 +278,7 @@ class BoxParams(PositionedPrimitiveParams):
     anchor: str = param(
         title=_("Bezugspunkt"),
         default="centre",
-        choices=_ANCHORS,
+        choices=ANCHORS,
         placement="advanced",
         doc=_("Mittig auf dem Ursprung oder mit der Ecke darauf."),
     )

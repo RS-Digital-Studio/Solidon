@@ -520,8 +520,11 @@ für einen weiteren Integrationsweg behandelt.
 
 **Körper erzeugen und formen**
 
-`primitive_ops.py` (Quader, Zylinder, Kegel oder Kegelstumpf, Kugel und Ring;
-Kegel und Ring dienen auch als verständliche Werkzeugkörper für Boolesche Ops)
+`primitive_ops.py` (Quader, Zylinder, Kegel oder Kegelstumpf, Kugel und Ring
+am Netz; Kegel und Ring dienen auch als verständliche Werkzeugkörper für
+Boolesche Ops. **Seit P2.8 sind die Netz-Erzeuger die versteckten Zwillinge**:
+Wo der exakte Kern da ist, zeigt das Menü `brep/ops.create_brep_*`, und
+`ANCHORS` sowie `tube_fits_the_ring` stehen hier einmal für beide Kerne)
 · `blend.py` (weiches Verschmelzen — sein Abstandsfeld misst den Weg zur
 **Ebene** des nächsten Dreiecks, nicht zu seiner Mitte: Die Oberflächenwolke
 ist diskret, und der Weg zum nächsten Punkt fällt vor einer ebenen Wand

@@ -40,7 +40,7 @@ mehrdeutige Anfragen und zählt, ob gefragt statt geraten wurde.
 
 **„Fragen vor Raten" trägt nur als Vorbedingung, nicht als Gewohnheit.** Als
 vierter Punkt einer Liste war sie anleitend, und das hielt gegen die damals
-84 Werkzeuge nicht — heute sind es 133 Operationen und elf Zusatzwerkzeuge:
+84 Werkzeuge nicht — heute sind es 136 Operationen und elf Zusatzwerkzeuge:
 sobald der Systemprompt vollständig ankam, fiel die Quote von 3/3 auf
 1/3 — wer genug Angebote hat, findet immer eines, das plausibel aussieht.
 Prompt-Version 2 stellt deshalb drei Prüfungen *vor* den ersten
@@ -122,10 +122,11 @@ vollständigen Auftrag und weist Modell, Kontext, Werkzeugzahl und Anfragehash
 aus. Dieser funktionale Zählweg misst keine Geschwindigkeit; Kalt-/Warmläufe
 und Leistungsprüfungen bleiben dem Release vorbehalten.
 
-**Stand 20.09.2026: 133 Operationen, 144 Werkzeuge** — die Zahlen hält
+**Stand 21.09.2026: 136 Operationen, 147 Werkzeuge** — die Zahlen hält
 `tests/test_registry_consistency.py` gegen Register und `tool_schemas()`.
 Der kompakte Auftrag wurde mit `qwen3:14b`, `num_ctx=40960` und
-`num_predict=1` vollständig mit **36 826 Token** gezählt. Werkzeugzahl und
+`num_predict=1` vollständig mit **37 661 Token** gezählt (91,9 Prozent des
+Fensters; drei weitere Operationen dieser Größe sprengen es). Werkzeugzahl und
 Tokenzahl in `backends/llm.py` gehören zu derselben Zählung.
 Systemprompt und Werkzeugsatz zusammen waren am 26.08.2026 (90 Operationen,
 nach dem OpenSCAD-Ausbau eines weniger) 149 061 Zeichen im vollen und 110 027

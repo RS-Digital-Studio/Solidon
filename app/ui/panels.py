@@ -104,7 +104,7 @@ from app.core.ingest.plan import imported_group_for_bed
 from app.core.log import get_logger
 from app.core.perceive.actions import measure_explanation, measure_qualifier
 from app.core.perceive.relations import FeatureActionGroup
-from app.core.registry import REGISTRY, shown_of_twins
+from app.core.registry import REGISTRY, kernel_switch_label, kernel_twin_of, shown_of_twins
 from app.core.scene import EvaluationResult
 from app.core.scene.cancel import CancelSignal
 from app.core.scene.history import repair_is_available
@@ -3050,6 +3050,9 @@ class HistoryPanel(QWidget):
     Als Signal und nicht als Aufruf: Die Nachfrage stellt das Fenster, denn sie
     ist die einzige im ganzen Programm — die Handlung ist nicht folgenlos
     rücknehmbar, und Regel 19 gilt nur für die, die es sind."""
+    kernelSwitchRequested = Signal(int)
+    """Dieser Grundkörperschritt soll im anderen Rechenkern rechnen (P2.8,
+    ``History.change_kernel``) — rücknehmbar, also ohne Nachfrage."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -3102,6 +3105,8 @@ class HistoryPanel(QWidget):
         self._bakeable: frozenset[int] = frozenset()
         """Formsitzungen, deren Stand sich festschreiben lässt — also die, die
         noch aus ihren Zügen gerechnet werden."""
+        self._switchable: dict[int, str] = {}
+        """Grundkörperschritte, die in den anderen Rechenkern können, mit dem Satz dafür."""
         # Wie beim Objektbaum: ein Satz statt eines stummen Kastens.
         self._empty = QLabel(_empty_history_text(), self)
         self._empty.setWordWrap(True)
@@ -3183,6 +3188,15 @@ class HistoryPanel(QWidget):
             for entry in document.ops
             if entry.op == "sculpt_strokes" and not entry.params.get("baked")
         )
+        # **Der Kernwechsel steht am Schritt, nicht als Haken im Dialog** (P2.8):
+        # Nur ein Schritt mit Zwilling bekommt den Eintrag, und der Satz nennt,
+        # was er bringt — nie den Rechenkern.
+        self._switchable = {
+            entry.id: str(label)
+            for entry in document.ops
+            if kernel_twin_of(entry.op) is not None
+            and (label := kernel_switch_label(entry.op)) is not None
+        }
         for transaction in document.transactions:
             # Nur was abweicht, wird ausgeschrieben (§26.4). „(Nutzer)" stand
             # vorher an jeder Zeile — in einem Projekt ohne Agenten also
@@ -3468,6 +3482,11 @@ class HistoryPanel(QWidget):
             action = menu.addAction(tr("Parameter ändern …"))
             action.triggered.connect(
                 lambda _checked=False, chosen=single_op: self.operationActivated.emit(chosen)
+            )
+        if single_op is not None and single_op in self._switchable:
+            switch = menu.addAction(self._switchable[single_op])
+            switch.triggered.connect(
+                lambda _checked=False, chosen=single_op: self.kernelSwitchRequested.emit(chosen)
             )
         remove = menu.addAction(tr("Schritt löschen …"))
         remove.triggered.connect(

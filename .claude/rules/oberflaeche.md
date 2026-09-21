@@ -88,7 +88,7 @@ ins Nichts. Dasselbe gilt für Algorithmennamen (`gyroid`, `arachne`).
 
 **Jedes Feld sagt, was es tut — und zwar alle.** Das gilt an zwei Orten: Die
 sechsundfünfzig Felder der Druckeinstellungen tragen je einen `note`-Satz, die
-1200 Parameter der 133 Operationen ihren `doc`-Satz aus dem Register. Beide Male
+1231 Parameter der 136 Operationen ihren `doc`-Satz aus dem Register. Beide Male
 hängt er an **beiden** Hälften der Zeile — wer eine Zeile nicht versteht, zeigt
 auf das unverständliche Wort und nicht auf den Kasten daneben. In den
 Druckeinstellungen setzt `_editor` ihn am Eingabefeld und `_label` an der
@@ -357,37 +357,52 @@ sie dahinter, damit kein verborgenes Feld den Fokus bekommt; der Dialog wächst
 und schrumpft mit (`adjustSize`, nur wenn sich eine Zeile bewegt hat).
 `test_a_rectangle_shows_only_the_rows_a_rectangle_has` hält die vier fest.
 
-**Was entscheidet, was später überhaupt geht, gehört nach vorn.** Der
-Umschalter der zwei Rechenkerne stand hinten, zugeklappt — und an ihm hängen
-sieben Operationen: Fase, Verrundung, Formschräge, Fläche versetzen, exaktes
-Aushöhlen, Tasche schneiden, Umwandeln. Wer den Quader ohne ihn anlegte, fand
-sie später alle grau. Das ist weder Toleranz noch Auflösung noch
-Rückfallverhalten; die Regel oben trennt nach *Häufigkeit der Änderung*, und
-eine Entscheidung, die man einmal trifft und nie wieder ändern kann, fällt
-durch beide Raster. Sein Hinweis zählt die Werkzeuge auf, statt „STEP-Export
-und spätere Verrundungen" zu nennen — wer eine Tasche wollte, hatte damit
-keinen Anlass, den Haken zu setzen.
+**Die Kernwahl-Haken sind gefallen** (P2.8, Konzept §10.1, Entscheidung 4
+vom 17.09.2026). Bis dahin stand im Dialog jedes Zwillingspaars ein
+Umschalter „Flächen und Kanten später bearbeiten“, vorn, mit einer Zählung der
+Schritte darüber — eine Entscheidung, die der Kunde beim Anlegen treffen
+musste, um sieben Werkzeuge nicht später grau zu finden. Heute entscheidet
+niemand mehr: Ein Grundkörper entsteht exakt, wo der exakte Kern da ist
+(`registry.menu_twins()`, faul, denn die Antwort lädt OpenCASCADE: sichtbar
+`create_brep_*`, versteckt der Netz-Zwilling, erreichbar über die
+Befehlspalette — und der Agent liest an ihm „Zweite Wahl“ mit dem Namen des
+Eintrags im Menü); *Bohrung setzen* und
+*Aushöhlen* fragen die Körperart ihres Eingangs (`prepare_ops.drill_hole`,
+`hollow_object` mit der Tabelle aus §10.1: Oberseite offen ohne Entlüftung
+bleibt exakt, alles andere geht den Netzweg und `evaluate.exact_became_mesh`
+sagt es im Vorschauband). Ohne exakten Kern bleiben die Netz-Erzeuger
+sichtbar — ein erklärter Weg, kein stilles Scheitern. Gespeicherte Schritte
+behalten ihren Kern; ein altes Projekt rechnet unverändert.
 
-**Und derselbe Umschalter steht im Verlauf.** `History.change_kernel` stellt
-einen Schritt auf seinen Zwilling um, `edit_operation` zeigt den Haken auf dem
-Stand, der im Dokument steht — an beiden Enden des Paars, also auch zum
-Abwählen. Ohne ihn war ein Quader, den jemand ohne den Haken angelegt hatte,
-endgültig ein Netz: der einzige Weg dorthin war, den Schritt zu löschen und
-alles darüber neu zu bauen. Getauscht wird nur zwischen `MENU_TWINS` —
-beliebige Operationen gegeneinander wäre kein Bearbeiten mehr, sondern ein
-Umschreiben der Geschichte. Und der Dialog wird immer aus dem **sichtbaren**
-Zwilling gebaut, gleich welcher im Verlauf steht: aus dem exakten heraus gäbe
-es kein `anchor`, und wer den Haken abwählte, bekäme einen Dialog ohne die
-Felder, die er gerade freigeschaltet hat.
+**Der Wechsel steht am Schritt, nicht im Dialog.** `History.change_kernel`
+stellt einen Schritt weiter auf seinen Zwilling um — vom Kontextmenü des
+Verlaufs aus (`HistoryPanel.kernelSwitchRequested`, `MainWindow.switch_kernel`),
+mit dem Satz, der den Nutzen nennt und nie den Rechenkern („Mit echten
+Flächen und Kanten rechnen“, „Als Dreiecksmodell rechnen“,
+`registry.kernel_switch_label`). Zwei Sperren vor dem Klick (Regel 19): in den
+exakten Kern nur, wenn er da ist (dann fehlt der Eintrag; das Fenster prüft
+es ein zweites Mal für den direkten Aufruf); ins Netz nur, wenn kein
+späterer Schritt einzeln bearbeitbare Flächen braucht (der Kern wirft
+`needs_exact` mit der Zahl der Schritte). Getauscht wird nur zwischen den
+fünf Grundkörpern aus `PRIMITIVE_TWINS` — Bohren und Aushöhlen entscheidet
+der Körper selbst, ein Wechsel an ihrem Schritt liefe ins Leere (gemessen im
+Review vom 21.09.2026); und beliebige Operationen gegeneinander wäre kein
+Bearbeiten mehr, sondern ein Umschreiben der Geschichte.
 
 **Ein gesperrtes Werkzeug kennt zwei Lagen, nicht eine.** Der Körper war nie
-exakt — dann geht es um den Haken. Oder er war es und ist es nicht mehr, weil
-eine Mesh-Operation dazwischen liegt; dann hilft kein Haken.
+exakt — dann steht der Wechsel am Erzeugerschritt im Verlauf. Oder er war es
+und ist es nicht mehr, weil eine Mesh-Operation dazwischen liegt; dann hilft
+kein Wechsel am Erzeuger, sondern nur am Schritt, der vernetzt hat.
 `spoiled_the_exact_body()` liest den Schuldigen aus
 `evaluate.exact_became_mesh` und `kind_requirement` nennt ihn beim Titel. Der
 Vorschlag muss dabei ausführbar sein: Der erste Entwurf schlug vor, „den
 Schritt im Verlauf nach hinten zu nehmen" — und das kann der Verlauf nicht,
 aus gutem Grund (spätere Operationen bauen auf seinen Ausgaben auf).
+Und eine dritte Lage ist die umgekehrte: Ein Werkzeug mit
+`requires_kind="mesh"` (*Merkmale an dieser Stelle erkennen*) bekommt am
+exakten Körper seinen eigenen Satz — *Flächenbearbeitung beenden* —, nicht
+den Satz über die fehlenden Kurven; seit Grundkörper exakt entstehen, ist
+das dort der Normalfall.
 
 ## Ein Feld ohne Namen ist für einen Bildschirmleser ein leeres Kästchen
 
@@ -686,7 +701,7 @@ Register. Ist der einfache Buchstabe belegt, kommt Umschalt dazu (*Vereinigen*
 Strg+Umschalt+V, *Abziehen* Strg+Umschalt+A); ist auch das belegt, **bleibt die
 Operation ohne Kürzel**. *Skalieren* ist der Fall: S gehört dem Speichern,
 Umschalt+S dem Speichern unter, und ein erfundener Buchstabe wäre schlechter als
-keiner. Fünfzehn der hundertdreiunddreißig Operationen führen eines; wer eine sechzehnte Taste
+keiner. Fünfzehn der hundertsechsunddreißig Operationen führen eines; wer eine sechzehnte Taste
 vergibt, prüft vorher am **gebauten Fenster** gegen die dreiundvierzig, die
 nicht aus dem Register kommen — Ansichten, Werkzeugzeile, Dateibefehle,
 Navigation. Eine doppelt belegte Taste führt keine der beiden Aktionen aus

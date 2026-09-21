@@ -382,12 +382,11 @@ def test_splitting_at_a_plane_is_not_a_second_operation() -> None:
     Tabelle, sondern für eine Migration. ``split_plane`` ist in Formatversion
     11 in *Teilen* aufgegangen; ihr Weg ist die Null im Feld *Passstifte*.
     """
-    from app.core.registry import MENU_TWINS, TWIN_TOGGLES
+    from app.core.registry import MENU_TWINS
 
     names = {spec.name for spec in REGISTRY.all()}
     assert "split_plane" not in names, "die Operation ist migriert, nicht versteckt"
     assert "split_plane" not in MENU_TWINS
-    assert "split_plane" not in TWIN_TOGGLES
 
     # Was von ihr gebraucht wird, kann der Partner: null Stifte heißt schneiden.
     # Und die Vorgabe ist *nicht* null — deshalb trägt die Migration sie
@@ -395,13 +394,6 @@ def test_splitting_at_a_plane_is_not_a_second_operation() -> None:
     pins = next(f for f in REGISTRY.get("split_pinned").params.fields() if f.name == "pins")
     assert pins.metadata["param"]["minimum"] == 0, "ohne die Null geht die Migration nicht"
     assert pins.default != 0, "wäre sie null, bräuchte die Migration den Parameter nicht"
-
-
-def test_every_toggle_belongs_to_a_twin() -> None:
-    """Ein Umschalter ohne Paar wäre ein Haken, den kein Dialog zeigt."""
-    from app.core.registry import MENU_TWINS, TWIN_TOGGLES
-
-    assert set(TWIN_TOGGLES) <= set(MENU_TWINS)
 
 
 # --- die Verbinderformen ------------------------------------------------------------

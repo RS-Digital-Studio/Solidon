@@ -694,7 +694,7 @@ def deepest(infos: Iterable[SolverInfo | None]) -> SolverInfo | None:
 #: versuchten Stufen mit, der exakte Kern rechnet einmal und hat keine. Der
 #: **Satz** ist derselbe, und zwei wörtliche Kopien wären zwei Stellen, an
 #: denen er beim nächsten Nachbessern auseinanderläuft — dieselbe Begründung
-#: wie beim Umschaltertext der Zwillinge (``_EXACT_TOGGLE`` im Register).
+#: wie beim Wegtext der Zwillinge (``TWIN_WAYS`` im Register).
 #:
 #: Der exakte Zwilling hatte den Fall bis zum 27.08.2026 gar nicht: Er gab
 #: einen Körper mit null Volumen, null Flächen und ``is_watertight=False``

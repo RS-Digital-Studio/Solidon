@@ -37,7 +37,6 @@ from app.core.agent.tools import UNDO_TRANSACTION
 from app.core.export import handover
 from app.core.geom.measure import Measurement
 from app.core.registry import REGISTRY, catalogue_operations
-from app.core.registry.registry import TWIN_TOGGLES
 from app.core.scene import OperationDraft
 from app.core.scene.project import load
 from app.core.types import (
@@ -5518,87 +5517,6 @@ def test_removing_an_object_and_taking_it_back(window: MainWindow) -> None:
     window.session.undo()
     window.session.wait_for_idle()
     assert set(window.session.evaluate_now().scene.objects) == {"obj_1", "obj_2"}
-
-
-def _exact_toggle(window: MainWindow) -> Any:
-    """Der Haken für später einzeln bearbeitbare Flächen und Kanten."""
-    from PySide6.QtWidgets import QCheckBox
-
-    dialog = window._op_dialog
-    assert dialog is not None
-    haken = [box for box in dialog.findChildren(QCheckBox) if "Flächen und Kanten" in box.text()]
-    assert haken, [box.text() for box in dialog.findChildren(QCheckBox)]
-    return haken[0]
-
-
-def test_the_exact_toggle_is_locked_where_its_twin_cannot_work(window: MainWindow) -> None:
-    """Regel 19: nicht anbieten und nach dem ausgefüllten Dialog ablehnen.
-
-    Die Menüleiste graut eine Operation des exakten Kerns an einem Netz aus
-    und schreibt den Grund in den Tooltip. Seit die Zwillinge zusammengelegt
-    sind, hat ``drill_brep_hole`` gar keinen eigenen Menüeintrag mehr — der
-    Haken **ist** der Weg zu ihr, und dort wurde nicht gefragt.
-
-    Gemessen an einer eingelesenen STL, bevor das hier stand: Haken wählbar,
-    Dialog geht durch, Auswertung hält bei op 2 an, und die Absage steht im
-    Prüfbericht. Der Satz dort ist gut — er ist nur die zweite Hürde.
-
-    Beim Quader konnte es nicht auffallen: ``create_brep_box`` verbraucht
-    nichts, es gibt keinen Eingangskörper, der der falsche sein könnte.
-    """
-    _with_two_objects(window)
-    window.object_tree.select_object("obj_1")
-    assert window.session.last_result.scene.objects["obj_1"].kind == "mesh"
-
-    window.run_operation(REGISTRY.get("drill_hole"))
-    toggle = _exact_toggle(window)
-
-    assert not toggle.isEnabled(), "an einem Netz führt der Haken ins Leere"
-    assert toggle.toolTip(), "und er sagt, warum"
-    assert toggle.toolTip() != str(TWIN_TOGGLES["drill_brep_hole"][1]), (
-        "der Grund steht dort, nicht der Werbetext für den exakten Kern"
-    )
-    assert toggle.statusTip() == toggle.toolTip(), "die Statuszeile sagt dasselbe"
-
-    dialog = window._op_dialog
-    assert dialog is not None
-    dialog.reject()
-
-
-def test_the_exact_toggle_is_free_on_an_exact_body(window: MainWindow) -> None:
-    """Und die andere Hälfte der Regel: auf einem exakten Körper ist er frei.
-
-    Ohne diese Hälfte wäre ein Haken, der immer gesperrt ist, genauso grün.
-    """
-    from app.core.brep import available
-
-    if not available():
-        pytest.skip("OpenCASCADE is an optional dependency")
-
-    window.run_operation(REGISTRY.get("create_brep_box"))
-    dialog = window._op_dialog
-    assert dialog is not None
-    dialog.accept()
-    window.session.wait_for_idle()
-
-    exact_id = next(
-        object_id
-        for object_id, entry in window.session.last_result.scene.objects.items()
-        if entry.kind == "brep"
-    )
-    window.object_tree.select_object(exact_id)
-
-    window.run_operation(REGISTRY.get("drill_hole"))
-    toggle = _exact_toggle(window)
-
-    assert toggle.isEnabled(), "hier kann der exakte Zweig arbeiten"
-    assert toggle.toolTip() == str(TWIN_TOGGLES["drill_brep_hole"][1]), (
-        "und der Tooltip erklärt wieder, was der Haken tut"
-    )
-
-    dialog = window._op_dialog
-    assert dialog is not None
-    dialog.reject()
 
 
 def test_an_operation_dialog_does_not_lock_the_window(window: MainWindow) -> None:
@@ -12057,120 +11975,52 @@ def test_the_sketch_field_knows_as_much_as_the_sketch_mode(window: MainWindow) -
         dialog.reject()
 
 
-def test_the_exact_toggle_is_visible_without_unfolding(window: MainWindow) -> None:
-    """Der Umschalter der Rechenkerne stand unter „Weitere Einstellungen".
+def test_the_history_offers_the_other_kernel_at_a_primitive_step(window: MainWindow) -> None:
+    """Der Kernwechsel steht am Schritt im Verlauf, und nur an einem Grundkörper (P2.8).
 
-    Dort findet ihn niemand, der nicht schon weiß, dass es ihn gibt. §2.4
-    stellt hinten hin, was Toleranz, Auflösung oder Rückfallverhalten ist —
-    eine Entscheidung darüber, was mit dem Ergebnis später geht, ist keins
-    davon.
-
-    **Was an ihm hängt, ist am 10.09.2026 kleiner geworden.** Er nannte sieben
-    Werkzeuge, die es ohne ihn nicht gäbe; Fase, Verrundung, Formschräge und
-    Fläche versetzen rechnen seitdem auch am Netz. Übrig bleibt, was wirklich
-    an ihm hängt: die runde Kurve statt des Sehnenzugs, das exakte Aushöhlen
-    und STEP. Geprüft wird deshalb, dass der Satz **eine Folge** nennt und
-    nicht mehr eine Liste von Verboten.
+    Der Haken im Dialog ist gefallen; was blieb, ist ein Eintrag im
+    Kontextmenü des Verlaufs mit dem Satz, der den Nutzen nennt. Ein
+    Bohrungsschritt bekommt keinen: Bohren fragt den Körper selbst, und ein
+    Wechsel dort liefe ins Leere. Ohne den exakten Kern gibt es den Eintrag
+    in diese Richtung nicht — statt einer Absage nach dem Klick (Regel 19).
     """
-    from PySide6.QtWidgets import QCheckBox
+    from app.core.registry import exact_kernel_present
+    from app.core.scene.history import OperationDraft
 
-    window.run_operation(REGISTRY.get("create_box"))
-    dialog = next(child for child in window.findChildren(OperationDialog) if child.isVisible())
-    try:
-        exact = next(
-            box for box in dialog.findChildren(QCheckBox) if "Flächen und Kanten" in box.text()
-        )
-
-        assert exact.isVisibleTo(dialog), "der Umschalter liegt wieder eingeklappt"
-        advanced = getattr(dialog, "advanced", None)
-        if advanced is not None:
-            assert not advanced.isChecked(), "gemessen wird mit zugeklapptem Bereich"
-        # Und er sagt, was er entscheidet — beim Namen und nicht als Drohung.
-        said = exact.toolTip()
-        assert "STEP" in said, said
-        assert "Kurven" in said, said
-    finally:
-        dialog.reject()
-
-
-def test_the_exact_twin_runs_through_the_partner_dialog(window: MainWindow) -> None:
-    """Die zusammengelegten Zwillinge: derselbe Dialog, ein Umschalter, und
-    erst er entscheidet den Rechenkern. Die Parameter werden auf das Schema
-    der gewählten Op gefiltert — der exakte Quader kennt kein ``anchor``.
-    """
-    from PySide6.QtWidgets import QCheckBox
-
-    window.run_operation(REGISTRY.get("create_box"))
-    dialog = next(child for child in window.findChildren(OperationDialog) if child.isVisible())
-    exact = next(
-        box for box in dialog.findChildren(QCheckBox) if "Flächen und Kanten" in box.text()
+    window.session.start_new("centauri-carbon-2", "petg")
+    window.session.history.apply(
+        "Quader mit Bohrung",
+        [
+            OperationDraft(op="create_box", params={"width": 40.0, "depth": 30.0, "height": 20.0}),
+            OperationDraft(
+                op="drill_hole",
+                inputs=("obj_1",),
+                params={"x": 0.0, "y": 0.0, "z": 20.0, "diameter": 6.0, "depth": 10.0},
+            ),
+        ],
     )
-    exact.setChecked(True)
-    # ``accept`` wendet an und räumt den Dialog selbst ab — danach gehört
-    # das C++-Objekt niemandem mehr, auch keinem ``finally``.
-    dialog.accept()
+    window.session.evaluate_now()
     window.session.wait_for_idle()
+    box_step, hole_step = (entry.id for entry in window.session.project.document.ops)
+    offered = window.history_panel._switchable
+    assert hole_step not in offered, "Bohren entscheidet der Körper, nicht der Verlauf"
+    if not exact_kernel_present():
+        assert box_step not in offered, "ohne Kern kein Weg dorthin"
+        return
+    assert offered[box_step] == "Mit echten Flächen und Kanten rechnen"
 
+    window.switch_kernel(box_step)
+    window.session.wait_for_idle()
     ops = window.session.project.document.ops
-    assert [entry.op for entry in ops] == ["create_brep_box"]
-    assert "anchor" not in ops[-1].params, "gefiltert auf das Schema des exakten Kerns"
+    assert ops[0].op == "create_brep_box"
+    assert window.history_panel._switchable[box_step] == "Als Dreiecksmodell rechnen"
+    result = window.session.last_result
+    assert result is not None
+    assert result.scene.objects["obj_1"].kind == "brep", "die Bohrung blieb am exakten Körper"
 
-
-@pytest.mark.parametrize(
-    ("shown", "hidden", "gone"),
-    [
-        ("create_box", "create_brep_box", "anchor"),
-        ("create_cylinder", "create_brep_cylinder", "segments"),
-    ],
-)
-def test_the_exact_twin_hides_what_it_cannot_do(
-    window: MainWindow, shown: str, hidden: str, gone: str
-) -> None:
-    """Ein Feld ohne Wirkung ist ein Versprechen, das niemand hält.
-
-    Gefiltert wurden bis dahin nur die Werte beim Anwenden; im Dialog stand
-    der Bezugspunkt weiter da — und er steht in derselben aufgeklappten
-    Gruppe wie der Umschalter, an der also jeder vorbeikommt, der „Exakt"
-    sucht. Wer ihn auf „Ecke" stellte, bekam einen mittigen Quader und keinen
-    Ton dazu. Mit dem Umschalter verschwindet die Zeile, und die Beschreibung
-    oben wechselt mit: die des Netz-Quaders nennt eine Wahl, die es im
-    exakten Kern nicht gibt.
-    """
-    from PySide6.QtWidgets import QCheckBox, QComboBox
-
-    from app.ui.op_dialog import ValueField
-
-    window.run_operation(REGISTRY.get(shown))
-    dialog = next(child for child in window.findChildren(OperationDialog) if child.isVisible())
-    dialog.advanced.setChecked(True)
-    exact = next(
-        box for box in dialog.findChildren(QCheckBox) if "Flächen und Kanten" in box.text()
-    )
-
-    assert dialog._editors[gone].isVisibleTo(dialog), "im Netzkern hat das Feld seine Wirkung"
-    editor = dialog._editors[gone]
-    if isinstance(editor, QComboBox):
-        editor.setCurrentIndex(editor.count() - 1)
-    else:
-        assert isinstance(editor, ValueField)
-        editor.set_value(36)
-    saved = dialog.values()[gone]
-    exact.setChecked(True)
-    unused = dialog._editors.get(gone)
-    assert unused is None or not unused.isVisibleTo(dialog), f"{gone} wirkt in {hidden} nicht"
-    assert gone not in dialog.values(), "ein unwirksames Feld wird auch nicht angewendet"
-    assert dialog._description is not None
-    assert dialog._description.text() == str(REGISTRY.get(hidden).doc)
-
-    # Und zurück: der Umschalter ist keine Einbahnstraße.
-    exact.setChecked(False)
-    assert dialog._rows[gone] is dialog._front, "der geänderte Wert steht auf der Vorderseite"
-    # Neu eingefügte Widgets erhalten ihr Show-Ereignis in der Ereignisschleife.
-    QApplication.processEvents()
-    assert dialog._editors[gone].isVisibleTo(dialog)
-    assert dialog.values()[gone] == saved
-    assert dialog._description.text() == str(REGISTRY.get(shown).doc)
-    dialog.reject()
+    window.session.undo()
+    window.session.wait_for_idle()
+    assert window.session.project.document.ops[0].op == "create_box"
 
 
 def test_the_menu_path_matches_the_built_menu_for_every_operation(window: MainWindow) -> None:
@@ -16309,51 +16159,41 @@ def test_the_status_line_explains_the_sale_version_without_inventing_a_trial(
     assert "Geräteaktivierung" in window.trial_line.text()
 
 
-def test_switching_back_to_the_mesh_says_what_it_costs(window: MainWindow) -> None:
-    """Der Weg **zurück** aus dem exakten Kern hat dieselbe Sackgasse wie der
-    Weg hin — nur sperrt ihn niemand, und das ist richtig.
+def test_no_dialog_asks_for_the_kernel_any_more(window: MainWindow) -> None:
+    """P2.8: Der Haken „Flächen und Kanten später bearbeiten“ ist aus jedem Dialog verschwunden.
 
-    Gemessen von d1 am laufenden System: exakter Quader, darüber ein Schritt
-    des exakten Kerns, dann den Haken abgewählt — die Auswertung hält dort an,
-    weil sie einen exakten Körper braucht. Der Satz des Kerns ist gut und kommt
-    **nach** dem Klick (Regel 19). ``_lock_twin_toggle`` fragt nur, ob der
-    Zwilling auf der *Auswahl* kann, nicht ob darüber liegende Schritte die
-    Exaktheit brauchen.
-
-    **Der Schritt darüber war bis zum 10.09.2026 eine Verrundung, danach eine
-    Formschräge.** Beide rechnen seitdem an beiden Kernen, und damit kostet das
-    Zurückschalten dort gar nichts mehr — es kommt eine Rundung aus Sehnen
-    statt einer Kurve, und kein Anhalten. Geprüft wird deshalb am exakten
-    Aushöhlen, das den zweiten Kern weiterhin braucht.
-
-    Gesperrt wird trotzdem nicht: Zurückschalten ist eine legitime Absicht,
-    und ein Haken, den man nicht abwählen darf, wäre die schlechtere
-    Sackgasse. Was fehlte, ist die Auskunft davor.
+    Ein Quader entsteht exakt, wo der Kern da ist — der Menüeintrag *Quader
+    anlegen* ruft den exakten Erzeuger, und sein Dialog trägt keinen Haken
+    zwischen den Rechenkernen mehr. Geprüft am gebauten Dialog, nicht am
+    Register (Konzept §10.1, Entscheidung 4).
     """
-    from app.core.bootstrap import load_operations
-    from app.core.scene import History, OperationDraft
+    from PySide6.QtWidgets import QCheckBox
 
-    load_operations()
-    document = window.session.project.document
-    history = History(document)
-    history.apply("Quader", [OperationDraft(op="create_brep_box", params={})])
-    box_step = document.ops[-1].id
-    history.apply(
-        "Aushöhlen",
-        [OperationDraft(op="shell_exact", inputs=("obj_1",), params={"wall": 2.0})],
-    )
+    from app.core.registry import MENU_TWINS, exact_kernel_present
 
-    hint = window._twin_toggle_hint("Grundsatz.", box_step, exact_now=True)
+    if not exact_kernel_present():
+        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
+    assert "create_brep_box" in window._op_actions, "das Menü ruft den exakten Quader"
+    assert "create_box" not in window._op_actions, "der Netz-Quader ist der versteckte Zwilling"
+    assert MENU_TWINS["create_box"] == "create_brep_box"
+    # Bohren und Aushöhlen brauchen einen gewählten Körper — sonst fragt
+    # ``run_operation`` mit einem Hinweisfenster nach einer Markierung.
+    from app.core.scene import OperationDraft
 
-    assert "Grundsatz." in hint, "der Werbetext bleibt stehen"
-    assert "1" in hint, f"die Zahl der betroffenen Schritte fehlt: {hint!r}"
-
-    # Gegenprobe eins: ohne einen Schritt darüber gibt es nichts zu warnen.
-    assert window._twin_toggle_hint("Grundsatz.", document.ops[-1].id, exact_now=True) == (
-        "Grundsatz."
-    )
-    # Gegenprobe zwei: Wer den Haken **setzt**, nimmt niemandem etwas weg.
-    assert window._twin_toggle_hint("Grundsatz.", box_step, exact_now=False) == "Grundsatz."
+    window.session.history.apply("Quader", [OperationDraft(op="create_brep_box", params={})])
+    result = window.session.evaluate_now()
+    window.object_tree.select_object(next(iter(result.scene.objects)))
+    QApplication.processEvents()
+    for name in ("create_brep_box", "drill_hole", "hollow_object"):
+        window.run_operation(REGISTRY.get(name))
+        dialog = next(child for child in window.findChildren(OperationDialog) if child.isVisible())
+        try:
+            boxes = [box.text() for box in dialog.findChildren(QCheckBox)]
+            assert not any("Flächen und Kanten" in text for text in boxes), (name, boxes)
+        finally:
+            dialog.reject()
+            dialog.deleteLater()
+            QApplication.processEvents()
 
 
 def test_the_dialog_names_both_bodies_a_boolean_will_take() -> None:

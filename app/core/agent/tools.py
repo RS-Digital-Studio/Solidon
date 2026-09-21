@@ -25,6 +25,7 @@ from app.core.registry import (
     Registry,
     caveat_line,
     menu_path,
+    menu_twins,
     needed_inputs,
 )
 from app.core.registry import tool_schemas as op_schemas
@@ -279,6 +280,15 @@ def operation_tools(
                 # ungerahmt zurück.
                 menu = untrusted_recipe_text(foreign_source, menu_path(spec, source))
                 description = f"{description} {tr('Ort')}: {menu}."
+                # **Der versteckte Zwilling ist zweite Wahl** (P2.8): Seit ein
+                # Quader im Menü exakt entsteht, soll der Agent für „mach mir
+                # einen Quader" dasselbe greifen wie der Kunde — nicht den
+                # Netz-Zwilling, der nur in der Palette steht.
+                twins = menu_twins()
+                if spec.name in twins:
+                    description = f"{description} " + str(
+                        tr("Zweite Wahl — im Menü steht „{title}“.")
+                    ).format(title=source.get(twins[spec.name]).title)
             schemas.append(
                 {
                     "name": schema["name"],

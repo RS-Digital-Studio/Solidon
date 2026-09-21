@@ -313,7 +313,7 @@ def hollowed(wall: float, removed_mm3: float) -> Finding:
     **Weniger Werte als der Netz-Zwilling, und das ist kein Mangel.** Dort
     stehen zusätzlich ``eroded_mm``, ``tolerance_mm`` und ``vents`` — sie
     beschreiben das Raster und die Entlüftungen, und beides hat der exakte
-    Kern nicht (siehe ``registry._HOLLOW_TOGGLE``). Eine Null dafür wäre eine
+    Kern nicht (Konzept §10.1, die Tabelle des Aushöhlens). Eine Null dafür wäre eine
     Aussage über etwas, das es nicht gibt.
     """
     return Finding(

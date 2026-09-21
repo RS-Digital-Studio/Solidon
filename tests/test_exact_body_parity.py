@@ -160,6 +160,30 @@ CASES = [
         300.0 * math.pi,
     ),
     Case(
+        "create_brep_cone",
+        "none",
+        {"bottom_diameter": 20.0, "top_diameter": 10.0, "height": 12.0},
+        CREATE_EXACT,
+        "volume",
+        700.0 * math.pi,
+    ),
+    Case(
+        "create_brep_sphere",
+        "none",
+        {"diameter": 10.0},
+        CREATE_EXACT,
+        "volume",
+        500.0 * math.pi / 3.0,
+    ),
+    Case(
+        "create_brep_torus",
+        "none",
+        {"outer_diameter": 40.0, "tube_diameter": 8.0},
+        CREATE_EXACT,
+        "volume",
+        2.0 * math.pi**2 * 16.0 * 16.0,
+    ),
+    Case(
         "create_cone",
         "none",
         {"bottom_diameter": 20.0, "top_diameter": 10.0, "height": 12.0, "segments": 96},
@@ -280,7 +304,8 @@ CASES = [
         "drill_hole",
         "box",
         {"diameter": 4.0, "x": 0.0, "y": 0.0, "z": 10.0, "compensate": False},
-        MESH,
+        # P2.8: die Körperart entscheidet — am exakten Körper bleibt die Bohrung exakt.
+        KEEP,
         "volume",
         3200.0 - 40.0 * math.pi,
     ),
@@ -325,7 +350,13 @@ CASES = [
     ),
     Case("fit_to_size", "box", {"largest": 40.0}, KEEP, "volume", 25600.0),
     Case(
-        "hollow_object", "box", {"wall": 2.0, "open_top": True, "vents": 0}, MESH, "hollow", 1664.0
+        "hollow_object",
+        "box",
+        {"wall": 2.0, "open_top": True, "vents": 0},
+        # P2.8: Oberseite offen ohne Entlüftung bleibt am exakten Körper exakt (§10.1).
+        KEEP,
+        "hollow",
+        1664.0,
     ),
     Case("intersect_objects", "overlapping", {}, KEEP, "volume", 1600.0),
     Case(
@@ -1342,7 +1373,7 @@ def test_every_registered_operation_has_an_explicit_success_case() -> None:
     registered = {spec.name for spec in REGISTRY.all()}
     assert len(CASES) == len(CASE_BY_NAME), "Jede Operation braucht genau eine Fallzuordnung."
     assert set(CASE_BY_NAME) == registered
-    assert len(registered) == 133
+    assert len(registered) == 136
     assert all(case.variants and case.invariant for case in CASES)
 
 

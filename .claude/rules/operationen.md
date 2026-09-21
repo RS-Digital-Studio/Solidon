@@ -76,12 +76,21 @@ Sie stehen jetzt in `geom/edge_ops.py`, fragen `SceneObject.kind` im Rumpf und
 wählen danach den Kern.
 
 **Das ist kein Zwillingspaar** (`MENU_TWINS`, `registry/registry.py`), und der
-Unterschied ist keine Feinheit: Bei einem Zwilling wählt der **Kunde** über
-einen Haken im Dialog, was entstehen soll. Hier wählt der **Körper**, und dem
-Kunden bliebe gar nichts zu wählen — ein Netz lässt sich nicht exakt verrunden
-(§30, der Rückweg zur Topologie existiert nicht), und ein exakter Körper hat
-keinen Grund für den gröberen Weg. Ein Haken dafür wäre eine Frage ohne
-Antwortmöglichkeit.
+Unterschied ist keine Feinheit: Ein Zwillingspaar sind zwei registrierte
+Operationen für dieselbe Handlung, und bis P2.8 wählte der **Kunde** über
+einen Haken im Dialog, welche entstehen soll. Hier wählt der **Körper**, und
+dem Kunden bliebe gar nichts zu wählen — ein Netz lässt sich nicht exakt
+verrunden (§30, der Rückweg zur Topologie existiert nicht), und ein exakter
+Körper hat keinen Grund für den gröberen Weg. Ein Haken dafür wäre eine Frage
+ohne Antwortmöglichkeit. **Seit P2.8 gilt dieselbe Weiche auch für die
+Zwillinge** (Konzept §10.1, Entscheidung 4): *Bohrung setzen* und *Aushöhlen*
+fragen die Körperart ihres Eingangs und rufen den exakten Zwilling selbst
+(`drill_brep_hole`, `shell_exact` — Aushöhlen nur, wenn die Oberseite offen
+bleibt und keine Entlüftung gewünscht ist, sonst der Netzweg mit Befund);
+die fünf Grundkörper entstehen exakt, wo der Kern da ist, ihr Netz-Zwilling
+ist versteckt und über die Befehlspalette erreichbar. Der Haken ist aus beiden
+Dialogen verschwunden; der Kernwechsel eines gespeicherten Schritts steht im
+Kontextmenü des Verlaufs (`History.change_kernel`, `oberflaeche.md`).
 
 **Was der Kunde stattdessen erfährt, steht im `caveat`.** Am Netz ist der
 Bogen ein Sehnenzug; die Grenze dafür (`units.MAX_FACET_SAG`) ist dieselbe,

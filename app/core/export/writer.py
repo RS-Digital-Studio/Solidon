@@ -714,8 +714,8 @@ def check_before_export(
                             "STEP speichert einzeln bearbeitbare Flächen und Kanten; der "
                             "gewählte Körper besteht nur noch aus festen Dreiecken. Als STL "
                             "oder 3MF lässt er sich exportieren. Für STEP eine STEP-Datei "
-                            "öffnen oder bei der Grundform „Flächen und Kanten später "
-                            "bearbeiten“ aktivieren."
+                            "öffnen oder den Schritt der Grundform im Verlauf auf „Mit "
+                            "echten Flächen und Kanten rechnen“ stellen."
                         ),
                         object_id=entry.id,
                         values={"format": export_format},

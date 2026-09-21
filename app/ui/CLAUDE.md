@@ -1248,6 +1248,15 @@ mit ihm (`_reset_for`). Der Rezeptdialog belegt daraus Titel, Gruppe, Lizenz,
 Autor, die freigegebenen Maße und die benannten Stellen vor — dann heißt sein
 Knopf *Baustein ersetzen*, und ein anderer Titel legt einen zweiten an.
 
+**Der Verlauf stellt einen Schritt in den anderen Rechenkern** (P2.8):
+`HistoryPanel` bietet an jedem Grundkörperschritt den Satz aus
+`registry.kernel_switch_label` an (`None` ohne Zwilling, an Bohren und
+Aushöhlen, und in den exakten Kern ohne Kern) und sendet
+`kernelSwitchRequested`; `MainWindow.switch_kernel` ruft
+`Session.change_kernel` — die zweite Sperre (kein späterer Schritt braucht
+den exakten Körper) wirft der Kern. Der Haken in den Operationsdialogen ist
+gefallen — die Regel dazu steht in `oberflaeche.md`.
+
 **Ein Paar ist kein Baustein, sondern zwei** (RM-147 E1): *Gegenstücke setzen …*
 steht deshalb im Menü *Bausteine* neben dem Katalog und nicht darin.
 `counterpart_dialog.py` fragt genau zwei Dinge — welches Paar und wie groß —,

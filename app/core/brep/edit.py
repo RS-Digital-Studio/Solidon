@@ -125,6 +125,22 @@ def torus(centre: Vec3, axis: Vec3, ring_diameter: float, tube_diameter: float) 
     return Solid(BRepPrimAPI_MakeTorus(frame, ring_diameter / 2.0, tube_diameter / 2.0).Shape())
 
 
+def sphere(diameter: float) -> Solid:
+    """Eine Kugel um den Ursprung — der Grundkörper des Kerns (P2.8)."""
+    require()
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakeSphere
+
+    return Solid(BRepPrimAPI_MakeSphere(diameter / 2.0).Shape())
+
+
+def cone(bottom: float, top: float, height: float) -> Solid:
+    """Ein Kegel oder Kegelstumpf auf Z = 0 — eine Null macht die Seite zur Spitze (P2.8)."""
+    require()
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakeCone
+
+    return Solid(BRepPrimAPI_MakeCone(bottom / 2.0, top / 2.0, height).Shape())
+
+
 def defeatured(
     solid: Solid, face_indices: Sequence[int], *, cancelled: CancelToken | None = None
 ) -> Solid | None:

@@ -2052,7 +2052,14 @@ GPU_PROMPT_TOKENS_PER_SECOND: Final = 100.0
 #: ``num_predict`` 1 und ``keep_alive`` 0; die Antwort zählte einen Ausgabetoken.
 #: Keine Zeit- oder Geschwindigkeitsmessung. SHA-256 der gesendeten Anfrage:
 #: ``52a8e8a613cfd8f9c21eb7569f1959ef456484bd6019d4352aadaabaa5b550b1``.
-PROMPT_TOKENS: Final = 36826
+#:
+#: Am 21.09.2026 mit den drei exakten Grundkörpern Kegel, Kugel und Ring
+#: (P2.8) erneut gezählt: **37 661 Token bei 147 Werkzeugen**, 91,9 Prozent des
+#: Fensters — qwen3:14b (bdbd181c33f2), Ollama 0.34.2, derselbe Aufruf mit
+#: ``num_ctx`` 40 960, ``num_predict`` 1, ``keep_alive`` 0, ein Ausgabetoken.
+#: SHA-256 der gesendeten Anfrage:
+#: ``9028a67c2d6d7aabfb11c287dfffc0fcaacc2a32526f6c0eb805ecc04d692143``.
+PROMPT_TOKENS: Final = 37661
 
 #: Werkzeugzahl derselben Messung. Der Test macht eine neue Operation zum
 #: bewussten Anlass für eine neue Messung, statt die Zeitangabe still altern zu
@@ -2067,9 +2074,10 @@ PROMPT_TOKENS: Final = 36826
 #: ist, sagt der nächste echte Lauf gegen qwen3:14b; bis dahin ist sie eine
 #: Untergrenze und als solche benannt.
 #:
-#: Die funktionale Zählung vom 20.09.2026 enthält genau diese 144 Werkzeuge;
-#: Modell, Kontext und Anfragebeleg stehen bei :data:`PROMPT_TOKENS`.
-PROMPT_TOOL_COUNT: Final = 144
+#: Die funktionale Zählung vom 21.09.2026 enthält genau diese 147 Werkzeuge
+#: (P2.8: Kegel, Kugel und Ring exakt); Modell, Kontext und Anfragebeleg
+#: stehen bei :data:`PROMPT_TOKENS`.
+PROMPT_TOOL_COUNT: Final = 147
 
 #: Unter diesem Anteil der gemessenen Werkzeuglast gilt eine Antwort als
 #: vorn gekürzt (:class:`BackendPromptTruncated`). Die Schwelle hat Luft nach

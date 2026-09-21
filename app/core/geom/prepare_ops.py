@@ -516,6 +516,14 @@ def bore_shape(params: DrillParams, *, within: Mesh | None = None) -> BoreShape:
 def drill_hole(ctx: OpContext) -> OpResult:
     params = cast(DrillParams, ctx.params)
     source = ctx.inputs[0]
+    if source.kind == "brep":
+        # **Die Weiche statt des Hakens** (P2.8, Konzept §10.1): Ein exakter
+        # Körper bleibt exakt, und das entscheidet der Körper, nicht ein Feld
+        # im Dialog. Dasselbe Schema, derselbe Schritt im Verlauf; der
+        # Zwilling bleibt für alte Projekte und ``change_kernel`` registriert.
+        from app.core.brep.ops import drill_brep_hole
+
+        return drill_brep_hole(ctx)
     shape = bore_shape(params, within=source.mesh)
     result = drill(
         as_mesh_data(source.mesh),
@@ -9215,7 +9223,8 @@ class HollowParams(BaseParams):
     produces=1,
     doc=_(
         "Höhlt ein Objekt aus und setzt Entlüftungen. Spart Material und Zeit; "
-        "die Wandstärke stimmt im Rahmen des Rasters."
+        "die Wandstärke stimmt im Rahmen des Rasters. Ein Körper mit bearbeitbaren "
+        "Flächen bleibt exakt, wenn nur die Oberseite offen bleibt."
     ),
     caveat=_(
         "Nicht ohne Entlüftung, wenn im Slicer Stützen entstehen: Der Hohlraum füllt "
@@ -9228,6 +9237,15 @@ class HollowParams(BaseParams):
 def hollow_object(ctx: OpContext) -> OpResult:
     params = cast(HollowParams, ctx.params)
     source = ctx.inputs[0]
+    if source.kind == "brep" and exactly_hollowable(params):
+        # **Die Entscheidungstabelle** (P2.8, Konzept §10.1): Der exakte Weg
+        # öffnet immer die Oberseite und kennt weder eine andere Öffnung noch
+        # Entlüftungen. Genau dieser Auftrag bleibt exakt; jeder andere geht
+        # den Netzweg, und ``evaluate.exact_became_mesh`` sagt es vor der
+        # Übernahme im Vorschauband.
+        from app.core.brep.ops import shell_exact
+
+        return shell_exact(ctx)
     result = hollow(
         as_mesh_data(source.mesh),
         params.wall,
@@ -9259,6 +9277,12 @@ def hollow_object(ctx: OpContext) -> OpResult:
             if entry is not None
         ],
     )
+
+
+def exactly_hollowable(params: HollowParams) -> bool:
+    """Trifft dieser Auftrag den exakten Weg — Oberseite offen, keine andere Öffnung, keine
+    Entlüftung? Die Tabelle aus Konzept §10.1, an einer Stelle für Operation und Vorschau."""
+    return bool(params.open_top) and not str(params.open_at).strip() and int(params.vents) == 0
 
 
 def _opening_direction(source: SceneObject, open_at: str) -> Vec3 | None:

@@ -8,10 +8,12 @@ hier, beim Import, nicht später in einer Oberfläche.
 
 from __future__ import annotations
 
+import functools
+import importlib.util
 import re
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
-from typing import Final, get_args
+from typing import TYPE_CHECKING, Any, Final, get_args
 
 from app.core.errors import InternalError
 from app.core.types import BaseParams, FeatureKind, OpFn
@@ -175,96 +177,154 @@ def group_title(category: str) -> str:
     return category
 
 
-#: Zusammengelegte Menü-Zwillinge: dieselbe Handlung in zwei Rechenkernen.
-#:
-#: Zwei technische Rechenwege waren zwei Menüeinträge für
-#: einen Quader — gegen das Hausprinzip „eine Operation je Handlung, nicht je
-#: Variante". Die Ops bleiben im Register getrennt (Verlauf und Provenienz
-#: brauchen das); zusammengelegt ist nur die Bedienung: Der Dialog fragt nach
-#: dem **Nutzen** „Flächen und Kanten später bearbeiten", nicht nach „B-Rep"
-#: oder „exakt". Schlüssel ist der versteckte B-Rep-Zwilling, Wert der
-#: sichtbare Eintrag. Erreichbar bleiben beide — über die Befehlspalette und
-#: über den Verlauf.
-MENU_TWINS: Final[dict[str, str]] = {
-    "create_brep_box": "create_box",
-    "create_brep_cylinder": "create_cylinder",
-    "drill_brep_hole": "drill_hole",
+def exact_kernel_present() -> bool:
+    """Ist der exakte Kern auf dieser Maschine da? Gefragt beim Laden des Registers.
+
+    Dieselbe Frage wie ``brep.kernel.available`` — hier ohne den Import des
+    Pakets, damit das Register keine neue Kante in den Kernkreis zieht
+    (``tests/test_core_package_direction.py``). Eine kompilierte Erweiterung
+    scheitert auf mehr Arten als mit ``ImportError``.
+    """
+    if importlib.util.find_spec("OCP") is None:
+        return False
+    try:
+        import OCP.BRepPrimAPI  # noqa: F401
+    except Exception:
+        return False
+    return True
+
+
+#: Die fünf Grundkörper, je als Netz und exakt — dieselbe Handlung in zwei Rechenkernen.
+PRIMITIVE_TWINS: Final[tuple[tuple[str, str], ...]] = (
+    ("create_box", "create_brep_box"),
+    ("create_cylinder", "create_brep_cylinder"),
+    ("create_cone", "create_brep_cone"),
+    ("create_sphere", "create_brep_sphere"),
+    ("create_torus", "create_brep_torus"),
+)
+
+
+@functools.cache
+def menu_twins() -> dict[str, str]:
+    """Wer von einem Paar versteckt ist, hängt an der Maschine (P2.8).
+
+    **Neue Grundkörper entstehen exakt** (Konzept §10.1, Entscheidung 4 vom
+    17.09.2026: die vier Kernwahl-Haken fallen): Sichtbar ist der exakte
+    Erzeuger, versteckt der Netz-Zwilling — erreichbar über die Befehlspalette
+    und über den Verlauf, und gespeicherte Schritte behalten ihren Namen. Ohne
+    den exakten Kern bleibt der Netz-Erzeuger sichtbar: ein erklärter
+    verfügbarer Weg, kein stilles Scheitern. **Bearbeitungen** haben keinen
+    Haken mehr, sondern eine Weiche: *Bohrung setzen* und *Aushöhlen* fragen
+    die Körperart ihres Eingangs (``prepare_ops.drill_hole``,
+    ``hollow_object``); ihre exakten Zwillinge bleiben für alte Projekte und
+    den Verlauf registriert und versteckt.
+    """
+    exact = exact_kernel_present()
+    twins = {(mesh if exact else brep): (brep if exact else mesh) for mesh, brep in PRIMITIVE_TWINS}
+    twins["drill_brep_hole"] = "drill_hole"
     # „Aushöhlen" und „Exakt aushöhlen" standen nebeneinander im Menü — und
     # zwar in **zwei verschiedenen** (``prepare`` gegen ``shaping``). Dort
     # liest „exakt" wie eine Qualitätsstufe („das andere ist also ungenau?"),
-    # obwohl es den Rechenkern meint. Diese Fachsprache steht heute gar nicht
-    # mehr am Haken; er benennt die spätere Bearbeitbarkeit.
-    "shell_exact": "hollow_object",
+    # obwohl es den Rechenkern meint.
+    twins["shell_exact"] = "hollow_object"
+    return twins
+
+
+if TYPE_CHECKING:
+    #: Zusammengelegte Menü-Zwillinge: dieselbe Handlung in zwei Rechenkernen.
+    #:
+    #: Zwei technische Rechenwege waren zwei Menüeinträge für einen Quader —
+    #: gegen das Hausprinzip „eine Operation je Handlung, nicht je Variante".
+    #: Die Ops bleiben im Register getrennt (Verlauf und Provenienz brauchen
+    #: das); zusammengelegt ist nur die Bedienung. Schlüssel ist der versteckte
+    #: Zwilling, Wert der sichtbare Eintrag — welcher das ist, sagt
+    #: :func:`menu_twins`. Erreichbar bleiben beide — über die Befehlspalette
+    #: und über den Verlauf (``History.change_kernel``).
+    #:
+    #: **Faul, weil die Antwort OpenCASCADE lädt** (Review, 21.09.2026): 334
+    #: Module und 0,43 s bei jedem Import des Registers — Kommandozeile,
+    #: Werkzeuge, jeder Testprozess. Gebraucht wird sie erst am Menü; das
+    #: Modul liefert den Namen deshalb über ``__getattr__`` beim ersten Zugriff.
+    MENU_TWINS: dict[str, str]
+
+
+def __getattr__(name: str) -> Any:
+    if name == "MENU_TWINS":
+        return menu_twins()
+    raise AttributeError(name)
+
+
+def exact_names() -> frozenset[str]:
+    """Die Namen der Zwillinge, die im exakten Kern rechnen — eine Antwort für Verlauf,
+    Fenster und Verlaufssatz (``zwillinge.md``: dreimal gebildet war dreimal anders)."""
+    found = {brep for _mesh, brep in PRIMITIVE_TWINS}
+    for pair in menu_twins().items():
+        found.update(
+            name
+            for name in pair
+            if REGISTRY.has(name) and REGISTRY.get(name).requires_kind == "brep"
+        )
+    return frozenset(found)
+
+
+#: Der Weg zum versteckten Zwilling, je Paar — für Menüweg, Handbuch und Agent.
+#:
+#: **Die Haken sind gefallen** (P2.8, Konzept §10.1). Bis dahin stand im
+#: Dialog des sichtbaren Zwillings ein Umschalter „Flächen und Kanten später
+#: bearbeiten“ mit einer Erklärung je Paar (``TWIN_TOGGLES``). Ein Erzeuger
+#: entsteht heute exakt, wo der Kern da ist; sein Netz-Zwilling steht in der
+#: Befehlspalette. Eine Bearbeitung fragt die Körperart ihres Eingangs; ihr
+#: Zwilling ist über denselben Dialog erreichbar, weil der Körper entscheidet.
+#: Und im Verlauf stellt ``History.change_kernel`` einen Schritt weiterhin auf
+#: seinen Zwilling um — über das Kontextmenü des Schritts, nicht über einen
+#: Haken im Dialog.
+TWIN_WAYS: Final[dict[str, TranslatableText]] = {
+    "primitive": _("über die Befehlspalette"),
+    "edit": _("im selben Dialog — der Körper entscheidet"),
 }
 
-#: Der Umschalter der beiden Rechenkerne. Einmal geschrieben und zweimal
-#: eingetragen: Zwei wörtliche Kopien wären zwei Stellen, an denen derselbe
-#: Satz beim nächsten Nachbessern auseinanderläuft.
-_EXACT_TOGGLE: Final[tuple[TranslatableText, TranslatableText]] = (
-    _("Flächen und Kanten später bearbeiten"),
-    # Der Satz zählt die Folgen auf, ohne vom Nutzer den Namen des Rechenkerns
-    # zu verlangen. Die Entscheidung fällt hier; deshalb stehen Nutzen **und**
-    # das, was dafür im Dialog entfällt, genau hier.
-    #
-    # **Zurückgeschnitten am 10.09.2026.** Er zählte „Fasen, Verrundungen,
-    # Formschrägen, versetzte Flächen" als Dinge auf, die es ohne ihn nicht
-    # gäbe — seit diese vier auch am Netz rechnen (``geom.edge_ops``,
-    # ``geom.face_ops``), war das eine Drohung, die nicht mehr stimmt. Ein
-    # Haken, der mehr verspricht, als er hält, schickt den Kunden in eine
-    # Entscheidung, die er gar nicht treffen muss. Übrig bleibt, was wirklich
-    # an ihm hängt: die runde Kurve statt des Sehnenzugs, das exakte Aushöhlen
-    # und STEP.
-    _(
-        "Aktivieren für Rundungen als echte Kurven statt als Folge gerader "
-        "Stücke, für das exakte Aushöhlen und für den STEP-Export. Fasen, "
-        "Verrundungen, Formschrägen und versetzte Flächen gehen auch ohne — "
-        "am Dreiecksmodell. Einstellungen dafür, etwa Bezugspunkt oder "
-        "Segmentzahl, entfallen mit dem Haken."
-    ),
-)
 
-#: Der Umschalter, mit dem der Dialog des sichtbaren Zwillings auf den
-#: versteckten wechselt — und die Erklärung dazu.
-#:
-#: **Nicht jedes Paar braucht einen.** Die Tabelle stand lange nicht hier,
-#: sondern als fest eingebaute Zeichenkette „Exakter Körper (B-Rep)" in der
-#: Oberfläche und als „(Umschalter „Exakt")" im Menüweg. Damit ließ sich
-#: `MENU_TWINS` für nichts anderes benutzen als für die zwei Rechenkerne: Ein
-#: drittes Paar hätte einen Haken bekommen, der von einem exakten Körper
-#: spricht, den es nicht gibt.
-#:
-#: Wer hier fehlt, hat keinen eigenen Umschalter, und dann muss es einen
-#: anderen Weg zu ihm geben: einen Wert im Dialog des Partners, der dasselbe
-#: bewirkt. Gibt es den nicht, gehört das Paar nicht in diese Tabelle,
-#: sondern in eine Migration — so ist es ``split_plane`` ergangen, das
-#: *Teilen* mit null Stiften war und in Formatversion 11 darin aufgegangen
-#: ist. Ein versteckter Zwilling ohne Umschalter wäre sonst eine zweite Zeile
-#: in der Befehlspalette, die dasselbe tut wie die erste.
-#: Der Umschalter des Aushöhlens — **ein eigener Text, und zwar zwingend.**
-#:
-#: Am Aushöhlen gelten andere Folgen als an einer neuen Grundform. Der Titel
-#: bleibt derselbe — gleiche Entscheidung, gleiche Übersetzung —, aber der
-#: Satz nennt hier „Oberseite öffnen" und Entlüftungen als entfallende Felder.
-#:
-#: Der Titel ist derselbe wie dort, und das ist Absicht: gleicher Satz,
-#: gleicher Katalogschlüssel, eine Übersetzung. Nur die Erklärung ist eigen.
-_HOLLOW_TOGGLE: Final[tuple[TranslatableText, TranslatableText]] = (
-    _EXACT_TOGGLE[0],
-    _(
-        "Höhlt exakt aus und behält einzeln bearbeitbare Flächen — für Rundungen "
-        "als echte Kurven und für den STEP-Export. Dafür entfallen „Oben öffnen“ "
-        "und Entlüftungen; hier wird nur die Wandstärke eingestellt. Die Option "
-        "ist gesperrt, wenn der gewählte Körper bereits nur noch aus festen "
-        "Dreiecken besteht."
-    ),
-)
+def kernel_twin_of(name: str) -> str | None:
+    """Der Zwilling im anderen Rechenkern — in beide Richtungen, oder ``None``."""
+    twins = menu_twins()
+    if name in twins:
+        return twins[name]
+    return next((hidden for hidden, shown in twins.items() if shown == name), None)
 
-TWIN_TOGGLES: Final[dict[str, tuple[TranslatableText, TranslatableText]]] = {
-    "create_brep_box": _EXACT_TOGGLE,
-    "create_brep_cylinder": _EXACT_TOGGLE,
-    "drill_brep_hole": _EXACT_TOGGLE,
-    "shell_exact": _HOLLOW_TOGGLE,
-}
+
+def kernel_switch_label(name: str) -> TranslatableText | None:
+    """Der Satz im Kontextmenü des Verlaufs, der den Schritt in den anderen Kern stellt.
+
+    Genannt wird der Nutzen, nie der Rechenkern (``test_wording``): Wer am
+    Netz steht, bekommt „Mit echten Flächen und Kanten rechnen“, wer exakt
+    steht, „Als Dreiecksmodell rechnen“.
+
+    **Nur an einem Grundkörper.** Bohren und Aushöhlen entscheidet der Körper
+    selbst (die Weiche in ``prepare_ops``); ein Wechsel am Schritt liefe dort
+    ins Leere — gemessen im Review vom 21.09.2026: *Aushöhlen* am Netz auf
+    „exakt“ gestellt hielt die Kette an, eine gespeicherte exakte Bohrung
+    „als Dreiecksmodell“ blieb exakt. Und in den exakten Kern nur, wenn er
+    auf dieser Maschine da ist — sonst kein Eintrag statt einer Absage nach
+    dem Klick (Regel 19).
+    """
+    primitives = {name for pair in PRIMITIVE_TWINS for name in pair}
+    if name not in primitives:
+        return None
+    twin = kernel_twin_of(name)
+    if twin is None:
+        return None
+    if twin in exact_names():
+        if not exact_kernel_present():
+            return None
+        return _("Mit echten Flächen und Kanten rechnen")
+    return _("Als Dreiecksmodell rechnen")
+
+
+def twin_way(hidden: str) -> TranslatableText:
+    """Wie der versteckte Zwilling erreicht wird: Erzeuger über die Palette, Bearbeitung
+    über den Körper."""
+    names = {mesh for mesh, _brep in PRIMITIVE_TWINS} | {brep for _mesh, brep in PRIMITIVE_TWINS}
+    return TWIN_WAYS["primitive" if hidden in names else "edit"]
 
 
 def shown_of_twins(specs: Iterable[OperationSpec]) -> tuple[OperationSpec, ...]:
@@ -300,7 +360,8 @@ def shown_of_twins(specs: Iterable[OperationSpec]) -> tuple[OperationSpec, ...]:
     """
     offered = tuple(specs)
     names = {spec.name for spec in offered}
-    return tuple(spec for spec in offered if MENU_TWINS.get(spec.name) not in names)
+    twins = menu_twins()
+    return tuple(spec for spec in offered if twins.get(spec.name) not in names)
 
 
 @dataclass(frozen=True)

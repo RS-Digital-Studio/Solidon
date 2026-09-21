@@ -48,7 +48,7 @@ Werkzeugaufruf keine gerade unwirksame Eingabe erfinden muss.
 
 | Datei | Rolle |
 |---|---|
-| `registry.py` | `register_op`, `OperationSpec`, `Registry`. Dazu die Ordnung: `CATEGORIES`, `MENU_GROUPS`, `PANEL_CATEGORIES` mit `in_the_menu_bar` (welche Gruppen rechts in der Karte wohnen statt in der Leiste), `MENU_TWINS`, `VARIANT_GROUPS` |
+| `registry.py` | `register_op`, `OperationSpec`, `Registry`. Dazu die Ordnung: `CATEGORIES`, `MENU_GROUPS`, `PANEL_CATEGORIES` mit `in_the_menu_bar` (welche Gruppen rechts in der Karte wohnen statt in der Leiste), `MENU_TWINS` (seit P2.8 nach Verfügbarkeit des exakten Kerns gebaut — **faul**, beim ersten Zugriff über `menu_twins()`, denn die Antwort lädt OpenCASCADE; wer sie im Modul braucht, ruft die Funktion: die fünf Grundkörper aus `PRIMITIVE_TWINS` sichtbar exakt, versteckt als Netz; Bohren und Aushöhlen sichtbar als die Operation, die die Körperart selbst fragt), `exact_names` (welche Zwillinge exakt rechnen — eine Antwort für Verlauf und Fenster), `kernel_twin_of` und `kernel_switch_label` für den Kernwechsel am Schritt im Verlauf (nur an einem Grundkörper, und in den exakten Kern nur, wenn er da ist), `twin_way` für den Menüweg, `VARIANT_GROUPS` |
 | `params.py` | Das Parameterschema: `param()`, `op_params()`, `validate()`, `json_schema()`. Grenzen, Einheiten, Vorgaben, Vorder- oder Rückseite des Dialogs — und `optional` für eine Zahl, bei der die Null ein gültiger Wert ist (RM-154) |
 | `surfaces.py` | Alles, was **aus** dem Register erzeugt wird — die sechs Funktionen oben, dazu `parameter_table()`, `caveat_line()` und die Menüstruktur (siehe unten) |
 

@@ -2616,13 +2616,14 @@ class OperationDialog(QDialog):
     def switch_variant(self, spec: OperationSpec) -> None:
         """Der Dialog gehört jetzt einer anderen Variante derselben Handlung.
 
-        Die zusammengelegten Zwillinge (``MENU_TWINS``) rechnen je nach
-        Umschalter im Mesh- oder im exakten Kern, und die beiden Schemata sind
-        nicht dieselben. Bis hierher wurden die überzähligen Werte **beim
-        Anwenden** weggefiltert — im Dialog standen sie weiter da: wer „Exakt"
-        ankreuzte und den Bezugspunkt auf „Ecke" stellte, bekam einen mittigen
-        Quader und keinen Ton dazu. Ein Feld ohne Wirkung ist ein Versprechen,
-        das niemand hält; es verschwindet, statt zu lügen.
+        Eine Variantengruppe (``VARIANT_GROUPS``) wechselt hier ihre Art, und
+        die Schemata sind nicht dieselben. Bis P2.8 galt das auch den
+        zusammengelegten Zwillingen (``MENU_TWINS``) über den Haken im Dialog:
+        Die überzähligen Werte wurden **beim Anwenden** weggefiltert — im Dialog
+        standen sie weiter da, wer „Exakt" ankreuzte und den Bezugspunkt auf
+        „Ecke" stellte, bekam einen mittigen Quader und keinen Ton dazu. Ein
+        Feld ohne Wirkung ist ein Versprechen, das niemand hält; es
+        verschwindet, statt zu lügen.
 
         Die Beschreibung wechselt mit: die des Mesh-Quaders nennt eine Wahl
         („mittig auf Z = 0 oder auf einer Ecke"), die es im exakten Kern nicht

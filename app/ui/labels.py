@@ -1691,8 +1691,8 @@ def kind_requirement(spec: Any, kinds: Sequence[str], spoiled_by: str = "") -> s
     Netz gemacht hat — die Auswertung meldet ihn als
     ``evaluate.exact_became_mesh``. Damit gibt es zwei ganz verschiedene Lagen,
     und ein Satz für beide wäre für eine davon falsch: Der Körper war nie
-    exakt, dann geht es um den Haken beim Anlegen. Oder er war es und ist es
-    nicht mehr — dann hilft kein Haken, sondern nur die Reihenfolge.
+    exakt, dann steht der Wechsel am Erzeugerschritt im Verlauf. Oder er war es
+    und ist es nicht mehr — dann hilft nur die Reihenfolge.
     """
     if not spec.requires_kind or not kinds:
         return None
@@ -1712,17 +1712,26 @@ def kind_requirement(spec: Any, kinds: Sequence[str], spoiled_by: str = "") -> s
                 "Rest danach neu."
             )
         ).format(step=spoiled_by)
+    # **Welche Art fehlt, entscheidet den Satz** (Review, 21.09.2026). Bis dahin
+    # nannte jede Absage den exakten Körper — auch an einem Werkzeug, das das
+    # Dreiecksmodell braucht; seit neue Grundkörper exakt entstehen (P2.8),
+    # war das der Normalfall an *Merkmale an dieser Stelle erkennen*.
+    if spec.requires_kind == "mesh":
+        return str(
+            tr(
+                "Dieses Werkzeug rechnet am Dreiecksmodell. Wandle den Körper vorher um "
+                "(„Flächenbearbeitung beenden“)."
+            )
+        )
     # Der Satz sagte, woher exakte Körper *kommen*, und ließ offen, was man
-    # jetzt tun soll: „aus den Grundformen mit „Exakt"" liest sich wie ein
-    # eigener Menüeintrag, den es nicht gibt. Es ist ein Haken im Dialog — und
-    # er ist nicht nur beim Anlegen zu haben: derselbe Haken steht im Dialog
-    # des Schritts, wenn man ihn im Verlauf wieder öffnet.
+    # jetzt tun soll. Seit P2.8 bringt eine Grundform die Flächen und Kanten
+    # von sich aus mit; ein älterer Schritt wird im Verlauf umgestellt.
     return str(
         tr(
-            "Dieses Werkzeug braucht einen Körper mit echten Kurven. Aktiviere "
-            "dafür im Dialog der Grundform „Flächen und Kanten später bearbeiten“ — "
-            "auch nachträglich über den Schritt im Verlauf. Eine STEP-Datei bringt "
-            "diese Flächen und Kanten ebenfalls mit."
+            "Dieses Werkzeug braucht einen Körper mit echten Kurven. Eine Grundform "
+            "bringt sie mit; einen älteren Schritt stellst du im Verlauf auf „Mit echten "
+            "Flächen und Kanten rechnen“. Eine STEP-Datei bringt diese Flächen und "
+            "Kanten ebenfalls mit."
         )
     )
 

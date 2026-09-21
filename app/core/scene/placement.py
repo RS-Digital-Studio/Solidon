@@ -1565,9 +1565,18 @@ def point_with_centre(
     return at_point(prepared, _vec(target), references=surface.edges)
 
 
-_SURFACE_PRIMITIVES = frozenset(
-    {"create_box", "create_cylinder", "create_cone", "create_sphere", "create_torus"}
-)
+def _surface_primitives() -> frozenset[str]:
+    """Die fünf Grundkörper in beiden Kernen — seit P2.8 ist der sichtbare der exakte."""
+    from app.core.registry import PRIMITIVE_TWINS
+
+    return frozenset(name for pair in PRIMITIVE_TWINS for name in pair)
+
+
+def _mesh_primitive_name(name: str) -> str:
+    """Der Netzname eines Grundkörpers — ``primitive_local_tool`` kennt nur diese."""
+    from app.core.registry import PRIMITIVE_TWINS
+
+    return next((mesh for mesh, brep in PRIMITIVE_TWINS if brep == name), name)
 
 
 def supports_surface_placement(spec: OperationSpec) -> bool:
@@ -1592,7 +1601,7 @@ def supports_surface_placement(spec: OperationSpec) -> bool:
             # bewegt, will dabei sehen, wo sie sitzt.
             "resize_hole",
         }
-        or spec.name in _SURFACE_PRIMITIVES
+        or spec.name in _surface_primitives()
         or part_of(spec.name) is not None
     )
 
@@ -1804,11 +1813,16 @@ def _creation_tool(
     from app.core.registry.params import validate
 
     profile = for_object(profile, source)
-    if spec.name in _SURFACE_PRIMITIVES:
+    if spec.name in _surface_primitives():
         from app.core.geom.primitive_ops import primitive_local_tool
+        from app.core.registry import REGISTRY
 
-        checked = validate(spec.params, entered_values)
-        return primitive_local_tool(spec.name, checked.as_dict(), "fine")
+        # Die Vorschau ist ein Netz, auch für den exakten Erzeuger: dasselbe
+        # Werkzeug wie beim Netz-Zwilling, gegen dessen Schema geprüft (die
+        # Vorgaben füllen ``segments`` und ``anchor``, wo der exakte sie nicht hat).
+        mesh_name = _mesh_primitive_name(spec.name)
+        checked = validate(REGISTRY.get(mesh_name).params, entered_values)
+        return primitive_local_tool(mesh_name, checked.as_dict(), "fine")
     part = part_of(spec.name)
     if part is not None:
         from app.core.knowledge.parts.ops import placement_tool as part_tool

@@ -46,7 +46,12 @@ from app.core.geom.prepare import (
     split_findings,
 )
 from app.core.geom.prepare_ops import DrillParams, bore_shape
-from app.core.geom.primitive_ops import PositionedPrimitiveParams, placement_transform
+from app.core.geom.primitive_ops import (
+    ANCHORS,
+    PositionedPrimitiveParams,
+    placement_transform,
+    tube_fits_the_ring,
+)
 from app.core.geom.transform import Axis
 from app.core.registry import NAME_DOC, op_params, param, register_op
 from app.core.types import (
@@ -91,6 +96,15 @@ class BrepBoxParams(PositionedPrimitiveParams):
         maximum=1000.0,
         doc=_("Ausdehnung in Z, also nach oben."),
     )
+    # Derselbe Bezugspunkt wie am Netz-Zwilling (P2.8): Seit der exakte Quader
+    # der sichtbare ist, darf ihm kein Feld fehlen, das der Kunde hatte.
+    anchor: str = param(
+        title=_("Bezugspunkt"),
+        default="centre",
+        choices=ANCHORS,
+        placement="advanced",
+        doc=_("Mittig auf dem Ursprung oder mit der Ecke darauf."),
+    )
     name: str = param(
         title=_("Name"),
         default="",
@@ -114,13 +128,12 @@ class BrepBoxParams(PositionedPrimitiveParams):
 def create_brep_box(ctx: OpContext) -> OpResult:
     params = cast(BrepBoxParams, ctx.params)
     require()
-    # Dieselbe Lage wie beim Netz-Zwilling: Position und Richtung sind
-    # Felder beider Dialoge, und der Haken zwischen den Kernen behält sie.
-    solid = edit.transformed(
-        edit.box(params.width, params.depth, params.height),
-        placement_transform(params),
-        cancelled=ctx.cancelled,
-    )
+    # Dieselbe Lage wie beim Netz-Zwilling: Position, Richtung und Bezugspunkt
+    # sind Felder beider Dialoge, und der Tausch zwischen den Kernen behält sie.
+    body = edit.box(params.width, params.depth, params.height)
+    if str(params.anchor) == "corner":
+        body = edit.moved(body, (params.width / 2.0, params.depth / 2.0, 0.0))
+    solid = edit.transformed(body, placement_transform(params), cancelled=ctx.cancelled)
     return OpResult(
         outputs=[_object(params.name or str(_("Quader")), solid, cancelled=ctx.cancelled)]
     )
@@ -177,6 +190,181 @@ def create_brep_cylinder(ctx: OpContext) -> OpResult:
     )
     return OpResult(
         outputs=[_object(params.name or str(_("Zylinder")), solid, cancelled=ctx.cancelled)]
+    )
+
+
+@op_params
+class BrepConeParams(PositionedPrimitiveParams):
+    """Dieselben Felder wie ``ConeParams`` am Netz, ohne ``segments`` — ein Kegel des
+    exakten Kerns hat keine Segmente."""
+
+    bottom_diameter: float = param(
+        title=_("Unterer Durchmesser"),
+        default=20.0,
+        unit="mm",
+        minimum=0.0,
+        maximum=1000.0,
+        doc=_("Durchmesser auf dem Druckbett. Null macht diese Seite zur Spitze."),
+    )
+    top_diameter: float = param(
+        title=_("Oberer Durchmesser"),
+        default=10.0,
+        unit="mm",
+        minimum=0.0,
+        maximum=1000.0,
+        doc=_("Durchmesser an der Oberseite. Null macht diese Seite zur Spitze."),
+    )
+    height: float = param(
+        title=_("Höhe"),
+        default=20.0,
+        unit="mm",
+        minimum=0.1,
+        maximum=1000.0,
+        doc=_("Höhe nach oben, von der Standfläche aus."),
+    )
+    name: str = param(
+        title=_("Name"),
+        default="",
+        placement="advanced",
+        doc=NAME_DOC,
+    )
+
+
+@register_op(
+    name="create_brep_cone",
+    title=_("Kegel anlegen"),
+    category="primitive",
+    params=BrepConeParams,
+    consumes=0,
+    produces=1,
+    doc=_(
+        "Legt einen Kegel oder Kegelstumpf mit einer echten Kegelfläche an, stehend auf dem "
+        "Druckbett — an seine Kanten lassen sich später Fasen und Verrundungen setzen."
+    ),
+)
+def create_brep_cone(ctx: OpContext) -> OpResult:
+    params = cast(BrepConeParams, ctx.params)
+    require()
+    if params.bottom_diameter <= EPS_GEOM and params.top_diameter <= EPS_GEOM:
+        raise ValidationError(
+            "bottom_diameter",
+            _("Mindestens einer der beiden Durchmesser muss größer als null sein."),
+            value=params.bottom_diameter,
+            constraint="range",
+        )
+    # Zwei gleiche Radien sind für ``BRepPrimAPI_MakeCone`` ein Fehler
+    # (``Standard_DomainError``), für den Kunden ein Zylinder — der Netz-Zwilling
+    # baut ihn, ohne zu fragen, und die Vorgaben 20/10 liegen einen Tastendruck
+    # davon entfernt (Review, 21.09.2026).
+    body = (
+        edit.cylinder(params.bottom_diameter, params.height)
+        if is_close(params.bottom_diameter, params.top_diameter)
+        else edit.cone(params.bottom_diameter, params.top_diameter, params.height)
+    )
+    solid = edit.transformed(body, placement_transform(params), cancelled=ctx.cancelled)
+    fallback = (
+        _("Kegel")
+        if params.bottom_diameter <= EPS_GEOM or params.top_diameter <= EPS_GEOM
+        else _("Kegelstumpf")
+    )
+    return OpResult(outputs=[_object(params.name or str(fallback), solid, cancelled=ctx.cancelled)])
+
+
+@op_params
+class BrepSphereParams(PositionedPrimitiveParams):
+    diameter: float = param(
+        title=_("Durchmesser"),
+        default=20.0,
+        unit="mm",
+        minimum=0.1,
+        maximum=1000.0,
+        doc=_("Außendurchmesser. Die Kugel sitzt auf dem Druckbett auf."),
+    )
+    name: str = param(
+        title=_("Name"),
+        default="",
+        placement="advanced",
+        doc=NAME_DOC,
+    )
+
+
+@register_op(
+    name="create_brep_sphere",
+    title=_("Kugel anlegen"),
+    category="primitive",
+    params=BrepSphereParams,
+    consumes=0,
+    produces=1,
+    doc=_("Legt eine Kugel mit einer echten Kugelfläche an, aufsitzend auf dem Druckbett."),
+)
+def create_brep_sphere(ctx: OpContext) -> OpResult:
+    params = cast(BrepSphereParams, ctx.params)
+    require()
+    solid = edit.transformed(
+        edit.moved(edit.sphere(params.diameter), (0.0, 0.0, params.diameter / 2.0)),
+        placement_transform(params),
+        cancelled=ctx.cancelled,
+    )
+    return OpResult(
+        outputs=[_object(params.name or str(_("Kugel")), solid, cancelled=ctx.cancelled)]
+    )
+
+
+@op_params
+class BrepTorusParams(PositionedPrimitiveParams):
+    outer_diameter: float = param(
+        title=_("Außendurchmesser"),
+        default=40.0,
+        unit="mm",
+        minimum=0.1,
+        maximum=1000.0,
+        doc=_("Gesamter Durchmesser von Außenkante zu Außenkante."),
+    )
+    tube_diameter: float = param(
+        title=_("Schnurstärke"),
+        default=8.0,
+        unit="mm",
+        minimum=0.1,
+        maximum=500.0,
+        doc=_("Durchmesser des runden Ringquerschnitts."),
+    )
+    name: str = param(
+        title=_("Name"),
+        default="",
+        placement="advanced",
+        doc=NAME_DOC,
+    )
+
+
+@register_op(
+    name="create_brep_torus",
+    title=_("Ring anlegen"),
+    category="primitive",
+    params=BrepTorusParams,
+    consumes=0,
+    produces=1,
+    doc=_(
+        "Legt einen Ring mit einer echten Ringfläche an, liegend auf dem Druckbett — der "
+        "Querschnitt bleibt auch beim Vergrößern wirklich rund."
+    ),
+)
+def create_brep_torus(ctx: OpContext) -> OpResult:
+    params = cast(BrepTorusParams, ctx.params)
+    require()
+    tube_fits_the_ring(params.outer_diameter, params.tube_diameter)
+    minor = params.tube_diameter / 2.0
+    solid = edit.transformed(
+        edit.torus(
+            (0.0, 0.0, minor),
+            (0.0, 0.0, 1.0),
+            params.outer_diameter - params.tube_diameter,
+            params.tube_diameter,
+        ),
+        placement_transform(params),
+        cancelled=ctx.cancelled,
+    )
+    return OpResult(
+        outputs=[_object(params.name or str(_("Ring")), solid, cancelled=ctx.cancelled)]
     )
 
 
@@ -262,7 +450,7 @@ class ShellParams(BaseParams):
     doc=_(
         "Höhlt einen Körper mit bearbeitbaren Flächen auf die gewählte Wandstärke "
         "aus und lässt die Oberseite offen — ein Kasten aus einem Quader, in einem "
-        "Schritt. Für geschlossenes Aushöhlen mit Entlüftung die Option abwählen."
+        "Schritt."
     ),
     # Der Entlüftungshinweis der Netz-Operation gilt hier nicht: Die Oberseite
     # bleibt offen, es entsteht kein eingeschlossener Hohlraum. Der zweite Satz
@@ -739,9 +927,9 @@ def brep_input(ctx: OpContext) -> tuple[SceneObject, Solid]:
             # Der Name reist wie überall in ``values``.
             detail=_(
                 "Der gewählte Körper besteht bereits aus festen Dreiecken. Dieses "
-                "Werkzeug braucht einzeln bearbeitbare Flächen und Kanten. Aktiviere "
-                "dafür bei einer Grundform oder beim Aushöhlen „Flächen und Kanten "
-                "später bearbeiten“ oder öffne eine STEP-Datei."
+                "Werkzeug braucht einzeln bearbeitbare Flächen und Kanten. Stelle den "
+                "Schritt der Grundform im Verlauf auf „Mit echten Flächen und Kanten "
+                "rechnen“ oder öffne eine STEP-Datei."
             ),
             values={"name": source.name, "field": "in", "constraint": "needs_brep"},
             object_id=source.id,
@@ -764,7 +952,10 @@ def _replaced(source: SceneObject, solid: Solid, *, cancelled: CancelToken) -> S
 __all__ = [
     "brep_to_mesh",
     "create_brep_box",
+    "create_brep_cone",
     "create_brep_cylinder",
+    "create_brep_sphere",
+    "create_brep_torus",
     "drill_brep_hole",
     "load_step",
     "shell_exact",

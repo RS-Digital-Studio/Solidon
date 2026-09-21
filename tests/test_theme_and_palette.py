@@ -492,20 +492,20 @@ def test_the_twin_never_stands_before_its_partner(qt_app: object) -> None:
         )
 
 
-def test_typing_exact_finds_the_dialog_with_the_checkbox_too(qt_app: object) -> None:
+def test_typing_exact_finds_both_twins(qt_app: object) -> None:
     """Wer „exakt" tippt, soll **beide** Wege sehen.
 
-    Der Zwilling ist der eine (Direktwahl des exakten Kerns), der Eintrag des
-    Partners der andere — und der ist meist der bessere, weil sein Dialog alle
-    Felder zeigt und den Haken trägt. Ohne Synonym am Partner fände die Suche
-    nur die Direktwahl, und der Kunde landete auf dem engeren Weg, ohne den
-    breiteren gesehen zu haben.
+    Seit P2.8 steht der exakte Erzeuger im Menü und der Netz-Zwilling nur in
+    der Palette — oder umgekehrt, wo der Kern fehlt. Welcher von beiden
+    versteckt ist, darf die Suche nicht entscheiden: Ohne Synonym an beiden
+    fände sie je nach Maschine nur einen, und der Kunde landete auf dem
+    Weg, den er nicht meinte.
     """
     entries = {entry.name: entry for entry in _palette_entries()}
 
     for hidden, shown in MENU_TWINS.items():
-        assert matches(entries[hidden], "exakt"), f"{hidden} — die Direktwahl"
-        assert matches(entries[shown], "exakt"), f"{shown} — der Dialog mit dem Haken"
+        assert matches(entries[hidden], "exakt"), f"{hidden} — der versteckte Zwilling"
+        assert matches(entries[shown], "exakt"), f"{shown} — der Eintrag im Menü"
 
 
 def test_the_palette_opens_big_enough_to_be_a_list(qt_app: object) -> None:

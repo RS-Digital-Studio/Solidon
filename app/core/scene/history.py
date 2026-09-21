@@ -1122,12 +1122,10 @@ class History:
         anderen Rechenkern (§15.4, ``MENU_TWINS``).
 
         Die Oberfläche behandelt die beiden Kerne seit je als **eine**
-        Handlung: ein Menüeintrag, ein Dialog, und ein Haken darin entscheidet.
-        Beim Nachbearbeiten fehlte genau das. Wer den Quader ohne den Haken
-        angelegt hatte, fand später sieben Werkzeuge grau — Fase, Verrundung,
-        Formschräge, Fläche versetzen, exaktes Aushöhlen, Tasche schneiden,
-        Umwandeln — und der einzige Weg dorthin war, den Schritt zu löschen
-        und alles darüber neu zu bauen.
+        Handlung: ein Menüeintrag, ein Dialog. Bis P2.8 entschied ein Haken
+        darin; seither entsteht ein Grundkörper exakt, und dieser Tausch steht
+        im Kontextmenü des Verlaufs — für die Quader, die vor P2.8 ohne Haken
+        angelegt wurden und sonst endgültig Netze blieben.
 
         **Nur Zwillinge.** Beliebige Operationen im Verlauf gegeneinander zu
         tauschen wäre kein Bearbeiten mehr, sondern ein Umschreiben der
@@ -1141,7 +1139,7 @@ class History:
         späterer Schritt, der mit der neuen Art nicht kann, hält die Kette an
         und sagt das. Rücknehmbar ist der Tausch wie jeder andere Schritt.
         """
-        from app.core.registry import MENU_TWINS
+        from app.core.registry import MENU_TWINS, exact_names
 
         activation.require(activation.CHANGE)  # schreibt ins Dokument (kern.md)
         entry = self.operation(op_id)
@@ -1159,6 +1157,28 @@ class History:
                 )
 
         spec = self._registry.get(op_name)
+        # **Ins Netz nur, wenn niemand darüber den exakten Körper braucht** (P2.8).
+        # Bis dahin sagte das ein Hinweis am Haken; jetzt ist es die Hürde des
+        # Kerns, damit Verlauf, Palette und Agent dieselbe Absage bekommen — mit
+        # der Zahl der Schritte, die anhalten würden (Regel 17).
+        exact = exact_names()
+        if entry.op in exact and op_name not in exact:
+            later = [
+                other
+                for other in self.operations
+                if other.id > op_id and self._registry.get(other.op).requires_kind == "brep"
+            ]
+            if later:
+                raise ValidationError(
+                    field="op",
+                    detail=_(
+                        "Schritte darüber brauchen echte Flächen und Kanten. Ändern Sie "
+                        "diese zuerst oder lassen Sie den Schritt exakt."
+                    ),
+                    constraint="needs_exact",
+                    values={"op": entry.op, "wanted": op_name, "count": len(later)},
+                    suggestions=(CANCEL,),
+                )
         self._check_params(spec.name, spec.params.spec(), params)
         # **Nicht** mit den alten verschmelzen, anders als ``change_params``:
         # Die beiden Schemata sind verschieden, und ein ``anchor`` aus dem

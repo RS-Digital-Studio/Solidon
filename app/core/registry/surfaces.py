@@ -24,9 +24,7 @@ from app.core.registry.registry import (
     CATEGORIES,
     FEATURE_TITLES,
     MENU_GROUPS,
-    MENU_TWINS,
     REGISTRY,
-    TWIN_TOGGLES,
     VARIABLE,
     VARIANT_GROUPS,
     MenuSection,
@@ -34,6 +32,8 @@ from app.core.registry.registry import (
     Registry,
     group_title,
     in_the_menu_bar,
+    menu_twins,
+    twin_way,
     variant_members,
 )
 from app.core.types import ParamSpec
@@ -88,7 +88,7 @@ def menu_rows_of(categories: Collection[str], registry: Registry | None = None) 
     """
     source = registry or REGISTRY
     inside = [spec for spec in source.all() if spec.category in categories]
-    names = {spec.name for spec in inside if spec.name not in MENU_TWINS}
+    names = {spec.name for spec in inside if spec.name not in menu_twins()}
     members = variant_members()
     rows = len(names - members)
     # Je Variantengruppe, die hier überhaupt vertreten ist, genau eine Zeile
@@ -220,20 +220,19 @@ def menu_path(spec: OperationSpec, registry: Registry | None = None) -> str:
     behalten keine festgeschriebenen Beispielwege oder Operationszahlen.
     """
     source = registry or REGISTRY
-    if spec.name in MENU_TWINS:
+    twins = menu_twins()
+    if spec.name in twins:
         # Ein zusammengelegter Zwilling hat keinen eigenen Eintrag
         # (MENU_TWINS): sein Ort ist der Eintrag des Partners — alles andere
         # schickte Nutzer und Agent an eine Stelle, die es nicht gibt.
         #
-        # Wie er dort erreicht wird, hängt am Paar: mit einer Option
-        # (TWIN_TOGGLES), oder über einen Wert im Dialog. Der Zusatz nannte
-        # früher immer den Umschalter „Exakt" — für ein Paar ohne ihn wäre
-        # das eine Wegbeschreibung zu einem Haken, den es nicht gibt.
-        twin = source.get(MENU_TWINS[spec.name])
+        # Wie er dort erreicht wird, hängt am Paar (``registry.twin_way``):
+        # ein Erzeuger über die Befehlspalette, eine Bearbeitung über den
+        # Körper, den man ihr gibt. Der Zusatz nannte früher den Umschalter
+        # „Exakt" — den gibt es seit P2.8 nicht mehr.
+        twin = source.get(twins[spec.name])
         where = menu_path(twin, source)
-        if spec.name in TWIN_TOGGLES:
-            return f"{where} ({_('Option „Flächen und Kanten später bearbeiten“')})"
-        return f"{where} ({_('im selben Dialog')})"
+        return f"{where} ({twin_way(spec.name)})"
     if spec.name in catalogue_operations():
         # **Ein Baustein nennt den Ort, den er wirklich hat.**
         # Die Bausteine der Bibliothek stehen seit dem 29.08.2026 nur noch im

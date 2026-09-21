@@ -621,7 +621,13 @@ def test_tool_descriptions_carry_the_menu_place() -> None:
         "Ort: Handlungen rechts (bei gewähltem Merkmal: Fläche) → Bohrung setzen."
         in described["drill_hole"]
     )
-    assert "Ort: Erzeugen → Grundformen → Quader anlegen." in described["create_box"]
+    # Seit P2.8 ist der exakte Quader der sichtbare Zwilling; der Netz-Quader
+    # nennt denselben Ort und dazu den Weg, auf dem er noch erreichbar ist.
+    assert "Ort: Erzeugen → Grundformen → Quader anlegen." in described["create_brep_box"]
+    assert (
+        "Ort: Erzeugen → Grundformen → Quader anlegen (über die Befehlspalette)."
+        in described["create_box"]
+    )
     assert (
         "Ort: Handlungen rechts (bei gewähltem Körper) → Objekt umbenennen."
         in described["rename_object"]

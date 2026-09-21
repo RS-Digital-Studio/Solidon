@@ -147,19 +147,21 @@ from app.core.perceive import maps
 from app.core.perceive.digest import digest
 from app.core.perceive.maps import wall_thickness_map
 from app.core.registry import (
-    MENU_TWINS,
     REGISTRY,
-    TWIN_TOGGLES,
     VARIABLE,
     VARIANT_GROUPS,
     OperationSpec,
     PaletteEntry,
     catalogue_operations,
     caveat_line,
+    exact_kernel_present,
+    exact_names,
     folded_categories,
     group_for_variant,
     in_the_menu_bar,
+    kernel_twin_of,
     menu_tree,
+    menu_twins,
     needed_inputs,
     palette_entries,
     variant_members,
@@ -2103,6 +2105,7 @@ class MainWindow(QMainWindow):
         self.history_panel.noteRequested.connect(self.announce)
         self.history_panel.removalRequested.connect(self.remove_history_operations)
         self.history_panel.bakeRequested.connect(self.bake_sculpt)
+        self.history_panel.kernelSwitchRequested.connect(self.switch_kernel)
         self.filaments = FilamentPanel(self)
         self.filaments.overrideRequested.connect(self._edit_filament_settings)
         self.filaments.printSettingsRequested.connect(self.action_print_settings)
@@ -3413,7 +3416,7 @@ class MainWindow(QMainWindow):
                 # eine Handlung gerade geht (``_update_actions`` liest sie).
                 for section in present:
                     for spec in section.entries:
-                        if spec.name in MENU_TWINS or spec.name in variant_members():
+                        if spec.name in menu_twins() or spec.name in variant_members():
                             continue
                         self._op_actions[spec.name] = self._operation_action(None, spec)
                 continue
@@ -3523,11 +3526,10 @@ class MainWindow(QMainWindow):
                     )
                 subgroups: dict[str, QMenu] = {}
                 for spec in section.entries:
-                    if spec.name in MENU_TWINS:
-                        # Zusammengelegte Zwillinge (MENU_TWINS): der B-Rep-
-                        # Zwilling hat keinen eigenen Eintrag — sein Weg ist
-                        # der Umschalter im Dialog des Mesh-Zwillings, und
-                        # erreichbar bleibt er über Palette und Verlauf.
+                    if spec.name in menu_twins():
+                        # Zusammengelegte Zwillinge (MENU_TWINS): der versteckte
+                        # Zwilling hat keinen eigenen Eintrag — erreichbar
+                        # bleibt er über die Befehlspalette und den Verlauf (P2.8).
                         continue
                     if spec.name in variant_members():
                         # Variantengruppe (VARIANT_GROUPS): Die vier Wege aus
@@ -4840,79 +4842,43 @@ class MainWindow(QMainWindow):
             return frozenset()
         return frozenset(feature.kind for feature in entry.features.values())
 
-    def _lock_twin_toggle(self, toggle: QCheckBox, hidden: str, objects: int, chosen: int) -> None:
-        """Den Umschalter sperren, wo sein Zwilling auf dieser Auswahl nicht
-        kann — mit dem Grund statt des Werbetexts.
+    def switch_kernel(self, op_id: int) -> None:
+        """Denselben Schritt im anderen Rechenkern (P2.8, ``History.change_kernel``).
 
-        **Dieselbe Sackgasse, die die Menüleiste zwei Ebenen weiter vermeidet,
-        stand am Haken wieder offen.** Eine Operation des exakten Kerns trägt
-        ``requires_kind="brep"``; das Menü graut sie an einem Netz aus und
-        schreibt den Grund in den Tooltip, statt sie anzubieten und nach dem
-        ausgefüllten Dialog abzulehnen (Regel 19). Seit die Zwillinge
-        zusammengelegt sind, ist der Haken der Weg zu ihr — sie hat gar keinen
-        eigenen Menüeintrag mehr —, und dort wurde nicht gefragt. Gemessen an
-        einer eingelesenen STL: Haken wählbar, Dialog geht durch, Auswertung
-        hält an, und die Absage steht im Prüfbericht.
+        Bis P2.8 stand dafür ein Haken im Dialog des Schritts — an beiden Enden
+        des Paars, samt Zählung der Schritte darüber. Der Haken ist gefallen
+        (Konzept §10.1, Entscheidung 4); was blieb, ist der Weg zurück und
+        vor: ein Eintrag im Kontextmenü des Verlaufs, den nur ein Schritt mit
+        Zwilling trägt.
 
-        Der gute Satz im Kern bleibt, er ist die **zweite** Hürde: „Der
-        gewählte Körper ist ein Netz. Exakte Körper kommen aus einer
-        STEP-Datei oder aus den Grundformen, deren Name mit Exakt beginnt."
-        Was fehlte, war die erste.
-
-        **Beim Quader konnte es nicht auffallen.** ``create_brep_box`` und
-        ``create_brep_cylinder`` verbrauchen nichts (``consumes=0``) — es gibt
-        keinen Eingangskörper, der der falsche sein könnte. Die exakte Bohrung
-        ist der erste Zwilling mit einem Eingang, und damit der erste Fall, in
-        dem der Haken eine Bedingung hat.
-
-        Gefragt wird über ``_reason_locked``, also über dieselbe Kette wie
-        Menüleiste und Kontextmenü — eine dritte Formulierung derselben
-        Auskunft wäre eine dritte Gelegenheit, auseinanderzulaufen.
+        **Zwei Sperren, beide vor dem Klick** (Regel 19): In den exakten Kern
+        geht es nur, wenn er auf dieser Maschine da ist — der Verlauf zeigt den
+        Eintrag sonst nicht (``kernel_switch_label``), und hier steht die
+        Prüfung ein zweites Mal für den direkten Aufruf; ins Netz nur, wenn
+        kein späterer Schritt einzeln bearbeitbare Flächen braucht — das prüft
+        der Kern selbst, mit der Zahl der Schritte, die sonst anhielten.
         """
-        kinds = self._kinds_of_selection(self.session.last_result)
-        reason = self._reason_locked(REGISTRY.get(hidden), kinds, objects, chosen)
-        if reason is None:
+        try:
+            entry = self.session.history.operation(op_id)
+        except AppError as error:
+            self.session.failed.emit(error)
             return
-        toggle.setEnabled(False)
-        toggle.setToolTip(reason)
-        toggle.setStatusTip(reason)
+        twin = kernel_twin_of(entry.op)
+        if twin is None:
+            return
+        target = REGISTRY.get(twin)
+        if twin in exact_names() and not exact_kernel_present():
+            from app.core.brep.kernel import BRepUnavailable
 
-    def _twin_toggle_hint(self, hint: str, op_id: int, *, exact_now: bool) -> str:
-        """Der Satz am Umschalter — und was das Abwählen den Schritten darüber
-        kostet.
-
-        **Die Sperre daneben fragt die Auswahl, nicht die Zukunft.**
-        :meth:`_lock_twin_toggle` prüft, ob der Zwilling auf dem *gewählten*
-        Körper überhaupt kann, und schützt damit den Weg **zum** exakten Kern.
-        Der Weg zurück hat dieselbe Sackgasse spiegelbildlich: Ein exakter
-        Quader, darüber eine Verrundung, dann den Haken abgewählt — die
-        Auswertung hält bei der Verrundung an, weil sie einen exakten Körper
-        braucht. Der Satz des Kerns ist gut und kommt zu spät; er steht im
-        Prüfbericht, nachdem geklickt wurde (Regel 19).
-
-        **Gesperrt wird trotzdem nicht.** Zurückschalten ist eine legitime
-        Absicht — vielleicht will der Kunde die Verrundung ohnehin loswerden,
-        und ein Haken, den er nicht abwählen darf, wäre die schlechtere
-        Sackgasse. Was fehlte, ist die Auskunft davor: wie viele Schritte
-        darüber daran hängen. Die Zahl steht im Verlauf, die Bedingung im
-        Register.
-        """
-        if not exact_now:
-            # Der Haken ist aus: Setzen kostet nichts, was hier zu warnen wäre.
-            return hint
-        document = self.session.project.document
-        later = [
-            entry
-            for entry in document.ops
-            if entry.id > op_id and REGISTRY.get(entry.op).requires_kind == "brep"
-        ]
-        if not later:
-            return hint
-        warning = tr(
-            "Darüber liegen {count} Schritte, die einzeln bearbeitbare Flächen und "
-            "Kanten brauchen. Ohne diese Option halten sie an."
-        ).format(count=len(later))
-        return f"{hint}\n\n{warning}"
+            show_error(BRepUnavailable(), self)
+            return
+        # Die zweite Sperre — kein späterer Schritt braucht den exakten Körper —
+        # ist die Hürde des Kerns (``History.change_kernel``, ``needs_exact``);
+        # ``Session.change_kernel`` meldet sie über ``failed``.
+        allowed = {item.name for item in target.params.spec()}
+        self.session.change_kernel(
+            op_id, twin, {key: value for key, value in entry.params.items() if key in allowed}
+        )
 
     @staticmethod
     def _button_tip(label: str, source: QAction | None, own_hint: str) -> str:
@@ -14345,39 +14311,10 @@ class MainWindow(QMainWindow):
             _PreviewOrder(drafts=(OperationDraft(op=spec.name, inputs=inputs, params=values),)),
             result,
         ):
-            # Zusammengelegte Zwillinge (MENU_TWINS): derselbe Dialog trägt
-            # hinten einen Umschalter, und erst er entscheidet, welche der
-            # beiden Ops rechnet — Mesh oder exakter Kern. Die Parameter
-            # werden auf das Schema der gewählten Op gefiltert (der exakte
-            # Quader kennt kein ``anchor``, der exakte Zylinder keine
-            # ``segments``).
-            #
-            # Den Umschalter bekommt nur, wer einen deklariert hat
-            # (``TWIN_TOGGLES``). Die Beschriftung stand hier als feste
-            # Zeichenkette, und damit taugte die ganze Zusammenlegung für
-            # nichts als die zwei Rechenkerne: *An Ebene teilen* unter
-            # *Teilen* hätte einen Haken bekommen, der von einem exakten
-            # Körper spricht, den es dort nicht gibt.
-            #
-            # Dieses dritte Paar gibt es nicht mehr — es rechnete wirklich
-            # dasselbe und ist in Formatversion 11 in *Teilen* aufgegangen.
-            # Ein Zwilling, der keinen Umschalter braucht, gehört in eine
-            # Migration und nicht hierher: Aus dem Menü war er fort, in der
-            # Befehlspalette stand er weiter.
-            hidden_twin = next(
-                (
-                    hidden
-                    for hidden, shown in MENU_TWINS.items()
-                    if shown == spec.name and hidden in TWIN_TOGGLES
-                ),
-                None,
-            )
-            exact: QCheckBox | None = None
-            if hidden_twin is not None:
-                label, hint = TWIN_TOGGLES[hidden_twin]
-                exact = QCheckBox(str(label), self)
-                exact.setToolTip(str(hint))
-                self._lock_twin_toggle(exact, hidden_twin, len(objects), len(chosen))
+            # **Kein Haken zwischen den Rechenkernen mehr** (P2.8, Entscheidung 4
+            # im Konzept §10.1): Ein Erzeuger entsteht exakt, wo der Kern da
+            # ist, eine Bearbeitung fragt die Körperart ihres Eingangs. Den
+            # Zwilling erreicht man über die Befehlspalette und den Verlauf.
 
             # **Die Variantengruppe (VARIANT_GROUPS), und warum sie eine Liste
             # bekommt und keinen Haken.** Ein Haken trägt zwei Zustände; hier
@@ -14424,8 +14361,6 @@ class MainWindow(QMainWindow):
             def chosen_spec() -> OperationSpec:
                 if variant is not None:
                     return REGISTRY.get(str(variant.currentData()))
-                if exact is not None and exact.isChecked() and hidden_twin is not None:
-                    return REGISTRY.get(hidden_twin)
                 return spec
 
             def fitted(entered: Mapping[str, Any]) -> dict[str, Any]:
@@ -14460,7 +14395,7 @@ class MainWindow(QMainWindow):
                     result, except_for=chosen[0] if chosen and _wants_a_target(spec) else None
                 ),
                 source_objects=inputs,
-                extra=exact if exact is not None else variant,
+                extra=variant,
                 extra_label=str(group.choice) if group is not None else "",
                 surroundings=self._sketch_surroundings(),
                 images=self._image_names(),
@@ -14488,16 +14423,6 @@ class MainWindow(QMainWindow):
 
                 variant.currentIndexChanged.connect(switch_variant)
                 variant.currentIndexChanged.connect(dialog.valuesChanged)
-            if exact is not None:
-                # Die Live-Vorschau (§18.7) muss den Kernwechsel mitmachen —
-                # eine Vorschau der falschen Variante wäre gelogen. Und der
-                # Dialog zeigt danach nur noch, was die gewählte Variante
-                # kennt: die Werte wurden schon vorher gefiltert, die Felder
-                # standen weiter da und versprachen eine Wirkung, die es nicht
-                # gab (Bezugspunkt beim exakten Quader, Segmentzahl beim
-                # exakten Zylinder).
-                exact.toggled.connect(lambda: dialog.switch_variant(chosen_spec()))
-                exact.toggled.connect(dialog.valuesChanged)
 
             # §18.7: der Dialog zeigt, was er täte, während getippt wird —
             # dieselbe Differenzansicht wie beim Agentenvorschlag.
@@ -14815,30 +14740,11 @@ class MainWindow(QMainWindow):
             self.session.failed.emit(error)
             return
 
-        # Der Umschalter der Rechenkerne gehört auch hierher. Beim Anlegen gab
-        # es ihn seit je, beim Nachbearbeiten nicht — und damit war ein
-        # Quader, den jemand ohne ihn angelegt hatte, endgültig ein Netz. Sieben
-        # Operationen blieben ihm für immer grau, und der einzige Weg dorthin
-        # war, den Schritt zu löschen und alles darüber neu zu bauen.
-        #
-        # Gezeigt wird er an **beiden** Enden des Paars: Der Schritt kann schon
-        # der exakte sein, und dann heißt Umschalten, den Haken wegzunehmen.
-        shown = MENU_TWINS.get(spec.name, spec.name)
-        hidden = next((name for name, partner in MENU_TWINS.items() if partner == shown), None)
-        exact: QCheckBox | None = None
-        if hidden is not None and hidden in TWIN_TOGGLES:
-            label, hint = TWIN_TOGGLES[hidden]
-            exact = QCheckBox(str(label), self)
-            exact.setToolTip(
-                self._twin_toggle_hint(str(hint), op_id, exact_now=spec.name == hidden)
-            )
-            exact.setStatusTip(exact.toolTip())
-            exact.setAccessibleDescription(exact.toolTip())
-            exact.setChecked(spec.name == hidden)
+        # **Kein Haken mehr auch hier** (P2.8): Der Wechsel in den anderen
+        # Rechenkern steht am Schritt im Verlauf (:meth:`switch_kernel`), und
+        # der Dialog zeigt genau das Schema des gespeicherten Schritts.
 
         def chosen_spec() -> OperationSpec:
-            if exact is not None and hidden is not None:
-                return REGISTRY.get(hidden if exact.isChecked() else shown)
             return spec
 
         def fitted(entered: Mapping[str, Any]) -> dict[str, Any]:
@@ -14846,8 +14752,8 @@ class MainWindow(QMainWindow):
             return {key: value for key, value in entered.items() if key in allowed}
 
         dialog = OperationDialog(
-            # Der gespeicherte Schritt bestimmt das Anfangsschema. Beim
-            # Kernwechsel baut der Dialog das andere Schema vollständig auf.
+            # Der gespeicherte Schritt bestimmt das Schema — seit P2.8 ohne
+            # Kernwechsel im Dialog, der steht im Verlauf (``switch_kernel``).
             spec,
             self._object_names(),
             self,
@@ -14863,7 +14769,7 @@ class MainWindow(QMainWindow):
                 except_for=entry.inputs[0] if entry.inputs and _wants_a_target(spec) else None,
             ),
             source_objects=entry.inputs,
-            extra=exact,
+            extra=None,
             surroundings=self._sketch_surroundings(),
             images=self._image_names(),
             pick_image=DeferredSourcePicker(self._pick_image_source, self._cancel_source_read),
@@ -14898,22 +14804,13 @@ class MainWindow(QMainWindow):
 
         connect_sketch_editors()
         dialog.schemaChanged.connect(connect_sketch_editors)
-        if exact is not None:
-            exact.toggled.connect(lambda: dialog.switch_variant(chosen_spec()))
-            exact.toggled.connect(dialog.valuesChanged)
-            dialog.switch_variant(chosen_spec())
         # Auch beim Korrigieren zeigt die Vorschau den Zweig, wie er würde —
         # gerechnet als geänderte Operation, nicht als neuer Schritt (§15.4).
         self._wire_preview(dialog, None, change_op=op_id, spec_of=chosen_spec, values_of=fitted)
         dialog.place_beside(self.viewport)
 
         def apply_change() -> None:
-            picked = chosen_spec()
-            values = fitted(dialog.values())
-            if picked.name == entry.op:
-                self.session.change_params(op_id, values)
-                return
-            self.session.change_kernel(op_id, picked.name, values)
+            self.session.change_params(op_id, fitted(dialog.values()))
 
         self._open_operation_dialog(dialog, apply_change)
         if field:
