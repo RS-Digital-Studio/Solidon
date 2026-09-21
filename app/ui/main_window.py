@@ -2127,7 +2127,7 @@ class MainWindow(QMainWindow):
         self.feature_panel = FeaturePanel(self)
         self.feature_panel.operationRequested.connect(self._apply_from_feature_panel)
         self.feature_panel.inViewRequested.connect(self._place_from_feature_panel)
-        self.feature_panel.cancelRequested.connect(self._leave_the_measures)
+        self.feature_panel.cancelRequested.connect(self._cancel_from_feature_panel)
         self.feature_panel.fitRequested.connect(
             self._add_fit_from_panel, Qt.ConnectionType.QueuedConnection
         )
@@ -8597,6 +8597,23 @@ class MainWindow(QMainWindow):
         # war: Wer eines geöffnet hat, meint mit Escape das Werkzeug.
         self._step_selection_out()
 
+    def _cancel_from_feature_panel(self) -> None:
+        """*Abbrechen* im Merkmalfenster: erst die Maße im Bild, sonst die wartende Vorschau.
+
+        Die Feldvorschau ist noch kein Schritt (Regel 2): Verworfen wird der
+        gemerkte Posten samt Zeitgeber, Rechnung und Bild
+        (:meth:`_drop_feature_preview`), und die Felder zeigen wieder, was der
+        Schritt trägt — derselbe Aufbau wie beim Anklicken des Merkmals.
+        """
+        if self._leave_the_measures():
+            return
+        approval = self._preview_approval
+        if approval is None or approval.owner is not self.feature_panel:
+            return
+        self._drop_feature_preview()
+        self._forget_preview_approval()
+        self._on_feature_selected(self.object_tree.selected_feature())
+
     def _leave_the_measures(self) -> bool:
         """Escape verlässt die Maße im Bild — und verwirft, was darin wartet.
 
@@ -13546,6 +13563,7 @@ class MainWindow(QMainWindow):
         self._feature_pending = None
         self._feature_preview.stop()
         self._clear_preview()
+        self._offer_feature_cancel()
 
     def _on_feature_values_changed(self, op: str, params: dict[str, Any]) -> None:
         """Eine geänderte Zahl im Merkmalspanel — erst zeigen, nicht tun.
@@ -13601,6 +13619,7 @@ class MainWindow(QMainWindow):
         self._feature_pending = (op, dict(params))
         if approval is not previous:
             self._feature_preview.start()
+        self._offer_feature_cancel()
 
     def _preview_feature_change(self) -> None:
         """Der tatsächliche Übernahmeauftrag läuft durch denselben Freigabepfad wie im Menü."""
@@ -15280,10 +15299,27 @@ class MainWindow(QMainWindow):
         self._refresh_preview_block()
         return approval
 
+    def _offer_feature_cancel(self) -> None:
+        """*Abbrechen* im Merkmalfenster steht, solange dort eine Änderung wartet.
+
+        Gewartet wird auf eine **Änderung**, nicht auf jede Freigabe: Das
+        Anzeigen eines Merkmals bindet schon einen Auftrag mit den Werten des
+        Schritts (``_start_feature_preview``), und der ist nichts, was sich
+        verwerfen ließe. Eine getippte Zahl hinterlässt einen Merkposten oder
+        eine angeforderte Vorschau — dann gibt es etwas zurückzunehmen.
+        """
+        approval = self._preview_approval
+        self.feature_panel.offer_cancel(
+            approval is not None
+            and approval.owner is self.feature_panel
+            and (self._feature_pending is not None or approval.requested)
+        )
+
     def _refresh_preview_block(self) -> None:
         """Wartende Freigabe und fachlicher Sperrgrund bleiben getrennte Zustände."""
         approval = self._preview_approval
         owner: Any = approval.owner if approval is not None else self._op_dialog
+        self._offer_feature_cancel()
         reason = self._preview_block_reason
         if approval is not None:
             owner.preview_required = approval.required is not False
@@ -15555,6 +15591,7 @@ class MainWindow(QMainWindow):
         approval, self._preview_approval = self._preview_approval, None
         self._preview_revision += 1
         self._preview_block_reason = None
+        self._offer_feature_cancel()
         if approval is not None:
             block = getattr(approval.owner, "block_apply", None)
             if block is not None:

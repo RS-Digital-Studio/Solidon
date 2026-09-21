@@ -255,19 +255,22 @@ TOURS: Final[tuple[Tour, ...]] = (
                 # Bericht dieses Beispiels sagt „An diesem Netz war nichts zu
                 # reparieren". Wer als Erstes einen Widerspruch zwischen
                 # Anleitung und Anwendung liest, glaubt danach keiner von
-                # beiden. Genannt wird deshalb, was dasteht: drei Hinweise,
+                # beiden. Genannt wird deshalb, was dasteht: zwei Hinweise,
                 # keine Warnung. ``tests/test_tour.py`` hält die Zahl fest.
-                # Zwei waren es seit dem 14.09.2026 („Doppelte Punkte wurden
+                # Zwei sind es seit dem 14.09.2026 („Doppelte Punkte wurden
                 # verschweißt" war das Lesen einer STL und ist kein Befund
-                # mehr, ``ingest.loader.normalise``); der dritte kam am
-                # 20.09.2026 mit der Formabweichung belegter Flächen
-                # (``perceive.deviation``, ``evaluate``).
+                # mehr, ``ingest.loader.normalise``). Vom 20. bis zum
+                # 21.09.2026 stand ein dritter da — der Hinweis auf die
+                # Analysekarte „Formabweichung" an jedem Körper mit belegten
+                # Flächen; seither ist er ein Befund mit Maß und steht nur,
+                # wo belegte Punkte neben der Form liegen
+                # (``evaluate.check_form_deviation``), und an dieser Halterung
+                # liegen sie nicht.
                 text=_(
-                    "Rechts steht der Prüfbericht — hier drei Hinweise und keine Warnung: "
+                    "Rechts steht der Prüfbericht — hier zwei Hinweise und keine Warnung: "
                     '„nichts zu reparieren" für '
-                    "dieses Netz, die Bohrung, die um die Materialtoleranz gewachsen ist, "
-                    "und die Formabweichung, die sich in der Analysekarte prüfen lässt. Bei "
-                    "heruntergeladenen Modellen steht dort öfter eine Warnung."
+                    "dieses Netz, und die Bohrung, die um die Materialtoleranz gewachsen "
+                    "ist. Bei heruntergeladenen Modellen steht dort öfter eine Warnung."
                 ),
             ),
         ),

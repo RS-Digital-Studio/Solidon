@@ -48,8 +48,17 @@ Die Fokuskette folgt dem Auge: die zwei Kantenmaße, dann die Mitten
 Entscheidung): `_body_on_screen` führt die projizierte Hülle des Trägers als
 belegtes Rechteck, mit demselben Abstand wie um den Setzpunkt; die Felder
 rücken an den nächsten freien Platz daneben, die Verbindungslinie je Feld
-sagt, welches Maß es bemaßt. Füllt der Körper das ganze Bild, gilt die alte
+sagt, welches Maß es bemaßt — sie endet in der **Mitte** der Maßlinie, nicht
+am nächstgelegenen Punkt. Füllt der Körper das ganze Bild, gilt die alte
 Regel — ein Feld außerhalb des Bildes ist keines.
+
+**Die Fenstermaske der Maßfläche hat eine Obergrenze** (`MASK_RECTS_AT_MOST`,
+`_Dimensions.bounded`, RM-198): Jede schräge Linie liefert ein Rechteck je
+Bildzeile, und bei 1682 Rechtecken verlor der Vulkan-Treiber das Gerät —
+„Parent device is lost" im nächsten `submit`, ohne Fehler davor; 1380
+liefen, unter D3D12 alles. Gerastert wird nur, wenn es nötig ist, und so grob
+wie nötig. Ob Windows D3D12 bekommt oder die Tinte in den Renderer zieht,
+steht als Entscheidung im Register.
 Wer eine Zahl in ein Maßfeld tippt, wird dabei nicht überschrieben: Jeder
 Tastendruck geht als Wert in den Entwurf, und die zwei Rückwege — Maßgruppe
 und Merkmalfenster — schreiben während des Lesens nichts zurück
@@ -185,6 +194,11 @@ ihre Kurzhilfe erklärt die Darstellung von Rundungen.
 Dokumentsperre: Vorschauwartezeit sperrt nur Übernehmen, Felder und Abbrechen
 bleiben zugänglich. Stehen Maße im Bild (`set_measuring`), trägt die
 Maßgruppe Übernehmen und Abbrechen, die Knöpfe unten im Panel sind verborgen.
+Ohne Messen steht *Abbrechen* unten, solange eine Feldvorschau aus dem Panel
+wartet — ein Merkposten oder eine angeforderte Vorschau, nicht der Auftrag,
+den das Anzeigen eines Merkmals ohnehin bindet (`offer_cancel`,
+`_offer_feature_cancel`); ein Klick verwirft sie und baut die Felder aus dem
+Schritt neu (`_cancel_from_feature_panel`).
 Eine Vorschau mit einem `explained`-Satz zum Ergebnis (die Vernetzung eines
 exakten Körpers) ist kein Problem und sperrt die Freigabe nicht; ein
 erschienener Körper hat keinen Nachherkörper und gilt nicht als unvollständig;

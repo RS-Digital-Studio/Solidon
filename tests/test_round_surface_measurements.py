@@ -229,9 +229,16 @@ def test_a_trimmed_round_patch_passes_the_real_classification(kind: str) -> None
 
 
 @pytest.mark.parametrize("kind", ("sphere", "cone", "torus"))
-@pytest.mark.parametrize("stop_at", (1, 5))
+@pytest.mark.parametrize("stop_at", (1, 3, 4))
 def test_the_round_fit_can_stop_before_and_during_preparation(kind: str, stop_at: int) -> None:
-    """Ein Abbruch liefert keine halben Maße und lässt dieselbe Quelle erneut berechnen."""
+    """Ein Abbruch liefert keine halben Maße und lässt dieselbe Quelle erneut berechnen.
+
+    Der erste Haltepunkt liegt vor der Lesung, der dritte im ersten Residuum
+    des Lösers, der vierte in seiner ersten Ableitung. Mehr hat die Kugel
+    nicht: Mit der geschlossenen Ableitung (21.09.2026) steht sie nach einem
+    Schritt — vorher zählte der fünfte Haltepunkt noch zur numerischen
+    Schätzung der Ableitung.
+    """
     from app.core.errors import OperationCancelled
     from app.core.scene.cancel import CancelSignal
 

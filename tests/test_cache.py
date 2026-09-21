@@ -62,14 +62,16 @@ def test_real_measure_sources_survive_project_reopen_cache_and_undo(
             assert patch.source == source
             assert set(patch.face_indices) <= set(top.face_indices)
             assert patch.params["centre"][2] == pytest.approx(top.params["centre"][2])
-        available = [
+        # Ein Quader trägt keine Rundform und damit keinen belegten Punkt, der
+        # neben seiner Form liegen könnte: kein Befund (21.09.2026; bis dahin
+        # stand an jedem Körper mit belegten Flächen ein Hinweis auf die Karte).
+        # Die Karte selbst baut trotzdem — aus denselben Trägern, die durch
+        # den Cache gereist sind.
+        assert not [
             finding
             for finding in result.scene.report.findings
             if finding.code == "perceive.deviation"
         ]
-        assert len(available) == 1
-        assert available[0].object_id == body.id and available[0].severity == "info"
-        assert available[0].location is None and not available[0].values
         from app.core.perceive.maps import build
 
         deviation = build("deviation", body)

@@ -20,6 +20,7 @@ Drei Verhaltensweisen sind Absicht:
 from __future__ import annotations
 
 import dataclasses
+import math
 from collections import Counter
 from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -113,7 +114,7 @@ from app.core.types import (
     Transform,
     kind_of,
 )
-from app.core.units import EPS_DISPLAY, EPS_GEOM, is_close
+from app.core.units import EPS_DISPLAY, EPS_GEOM, MAX_FACET_SAG, is_close
 from app.i18n import TranslatableText, _, source_text, tr
 
 _log = get_logger(__name__)
@@ -943,21 +944,18 @@ def _evaluate(
         if walls:
             findings.extend(walls)
             scene = dataclasses.replace(scene, report=Report(tuple(findings)))
-    if stopped_at is None:
-        for measured_body in objects.values():
-            token.raise_if_cancelled()
-            if any(feature.surface_patches for feature in measured_body.features.values()):
-                findings.append(
-                    Finding(
-                        code="perceive.deviation",
-                        severity="info",
-                        message=_(
-                            "Die Formabweichung belegter Flächen lässt sich "
-                            "in der Analysekarte prüfen."
-                        ),
-                        object_id=measured_body.id,
-                    )
-                )
+    # Und die vierte: Liegen belegte Punkte neben der Form, die sie tragen?
+    # Bis zum 21.09.2026 stand hier an jedem Körper mit belegten Flächen
+    # derselbe Satz — „lässt sich in der Analysekarte prüfen" —, und damit
+    # erreichte kein solcher Körper mehr „Keine Befunde. Das Teil ist
+    # druckbereit." Ein Befund ist, was zu berichten ist (§18.4: der Klick
+    # führt von „es gibt ein Problem" zu „hier ist es"); die Karte selbst
+    # steht in der Analyseleiste für jeden.
+    if stopped_at is None and objects:
+        deviations = check_form_deviation(scene)
+        token.raise_if_cancelled()
+        if deviations:
+            findings.extend(deviations)
         scene = dataclasses.replace(scene, report=Report(tuple(findings)))
     if stopped_at is not None:
         _log.warning(
@@ -3163,6 +3161,48 @@ def check_bodies_in_one_place(scene: Scene) -> list[Finding]:
                     "objects": ", ".join(names),
                     "plate": plate + 1,
                 },
+            )
+        )
+    return findings
+
+
+def check_form_deviation(scene: Scene) -> list[Finding]:
+    """Je Körper das Merkmal, dessen belegte Punkte am weitesten neben der Form liegen.
+
+    ``fit_error`` ist der größte geometrische Abstand der Stützpunkte, die
+    eine Rundform tragen, in Millimetern — kein Facettenband, denn die Ecken
+    eines sauber facettierten Zylinders liegen **auf** dem Zylinder. Wo er
+    über der Sehnengrenze der Tessellierung (:data:`units.MAX_FACET_SAG`) liegt,
+    ist die Haut verformt oder verrauscht: ein gescannter Zapfen, ein
+    gedruckter und wieder eingelesener Sitz. Der Befund nennt Merkmal und
+    Maß; der Klick darauf schaltet die Karte „Formabweichung" ein, die zeigt,
+    wo (§18.4). Ein Körper ohne solchen Punkt bekommt keinen Satz — auch
+    keinen, der nur sagt, dass es die Karte gibt.
+    """
+    findings: list[Finding] = []
+    for object_id, entry in scene.objects.items():
+        worst: tuple[float, FeatureId] | None = None
+        for feature_id, feature in entry.features.items():
+            error = feature.params.get("fit_error")
+            if not feature.surface_patches or isinstance(error, bool):
+                continue
+            if not isinstance(error, int | float) or not math.isfinite(error):
+                continue
+            if worst is None or float(error) > worst[0]:
+                worst = (float(error), feature_id)
+        if worst is None or worst[0] <= MAX_FACET_SAG:
+            continue
+        findings.append(
+            Finding(
+                code="perceive.deviation",
+                severity="info",
+                message=_(
+                    "Belegte Punkte liegen neben der eingepassten Form. "
+                    "Prüfen Sie die Abweichung in der Analysekarte."
+                ),
+                object_id=object_id,
+                feature_ids=(worst[1],),
+                values={"deviation_mm": round(worst[0], 2)},
             )
         )
     return findings

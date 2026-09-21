@@ -524,11 +524,13 @@ def test_the_first_tour_describes_the_report_it_really_gets() -> None:
     reparieren." Wer als Erstes einen Widerspruch zwischen Anleitung und
     Anwendung liest, glaubt danach keiner von beiden.
 
-    Festgehalten wird die Zahl, auf die der Text sich beruft: drei Hinweise,
+    Festgehalten wird die Zahl, auf die der Text sich beruft: zwei Hinweise,
     keine Warnung. Ändert jemand die Kette des Beispiels, fällt das hier um und
     nicht vor einem neuen Nutzer — so wie am 14.09.2026, als das Verschweißen
-    einer STL aufhörte, ein Befund zu sein, und am 20.09.2026, als die
-    Formabweichung belegter Flächen als dritter Hinweis dazukam.
+    einer STL aufhörte, ein Befund zu sein, und vom 20. bis zum 21.09.2026,
+    als der Hinweis auf die Analysekarte „Formabweichung" an jedem Körper mit
+    belegten Flächen stand: Seither ist er ein Befund mit Maß, der nur steht,
+    wo belegte Punkte neben der Form liegen — an dieser Halterung nicht.
     """
     from app.core.knowledge import profiles
     from app.core.scene import evaluate
@@ -545,16 +547,16 @@ def test_the_first_tour_describes_the_report_it_really_gets() -> None:
     )
 
     findings = result.scene.report.findings
-    assert len(findings) == 3, [str(entry.message) for entry in findings]
+    assert len(findings) == 2, [str(entry.message) for entry in findings]
     assert {entry.severity for entry in findings} == {"info"}
     codes = {entry.code for entry in findings}
     assert "repair.nothing_to_do" in codes, "der Text nennt es, also gehört der Befund dazu"
-    assert "perceive.deviation" in codes, "der Text nennt die Formabweichung"
+    assert "perceive.deviation" not in codes, "an dieser Halterung liegt kein Punkt neben der Form"
 
     tour = tour_for("weg1-halterung-anpassen")
     assert tour is not None
     last = str(tour.steps[-1].text)
-    assert "drei Hinweise" in last, "der Text nennt die Zahl nicht mehr, die hier geprüft wird"
+    assert "zwei Hinweise" in last, "der Text nennt die Zahl nicht mehr, die hier geprüft wird"
     assert "verschweißt" not in last, "das Lesen einer STL ist kein Befund mehr"
     assert "gefunden hat" not in last, "die alte Behauptung steht wieder da"
 

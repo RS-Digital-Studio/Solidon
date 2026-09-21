@@ -3042,6 +3042,69 @@ def test_choosing_another_feature_drops_the_waiting_preview(window: MainWindow) 
     assert window._feature_pending is None, "und ihr Merkposten auch"
 
 
+def test_cancel_in_the_feature_panel_drops_the_waiting_preview_and_restores_the_fields(
+    window: MainWindow,
+) -> None:
+    """*Abbrechen* steht, solange eine Feldvorschau wartet — und nimmt sie zurück.
+
+    Seit dem 20.09.2026 trägt die Maßgruppe im Bild Übernehmen und Abbrechen
+    selbst, und der Knopf im Merkmalfenster hatte keinen Ort mehr: sichtbar
+    nur beim Messen, beim Messen verborgen (gemessen am 21.09.2026). Wer eine
+    Zahl getippt hatte und sie nicht wollte, kam nur über Escape aus der
+    Auswahl heraus. Jetzt steht er neben Übernehmen, solange die Vorschau aus
+    dem Panel wartet; ein Klick verwirft sie, und das Feld zeigt wieder, was
+    der Schritt trägt — ohne Schritt im Verlauf und ohne Rückfrage (Regel 19).
+    """
+    from app.ui.labels import LengthSpin
+
+    window.open_path(MESHES / "plate_holes.stl")
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    object_id, entry = next(iter(result.scene.objects.items()))
+    hole = next(name for name, feature in entry.features.items() if feature.kind == "hole")
+    window.object_tree.select_object(object_id)
+    window.object_tree.select_feature(object_id, hole)
+    QApplication.processEvents()
+    panel = window.feature_panel
+    # ``isHidden`` statt ``isVisibleTo``: Die Knopfzeile wohnt beim Träger
+    # unter dem Rollbereich (``footer``), nicht mehr im Panel selbst.
+    assert panel._cancel.isHidden(), "ohne wartende Vorschau steht kein Abbrechen"
+    before = len(window.session.project.document.ops)
+
+    field = next(
+        spin
+        for spin in panel.findChildren(LengthSpin)
+        if "Bohrung ändern" in spin.accessibleName() and "Durchmesser" in spin.accessibleName()
+    )
+    original = field.value_mm()
+    field.set_value_mm(original + 1.0)
+    QApplication.processEvents()
+    assert window._feature_preview.isActive() or window._preview_approval is not None
+    assert not panel._cancel.isHidden(), "eine wartende Vorschau bietet Abbrechen an"
+
+    panel._cancel.click()
+    QApplication.processEvents()
+    assert window.session.wait_for_idle(30_000)
+    # Die alten Zeilen gehen über ``deleteLater`` — erst zustellen, sonst
+    # findet die Suche unten das getippte Feld von vorhin.
+    QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    QApplication.processEvents()
+
+    assert not window._feature_preview.isActive(), "die wartende Vorschau ist weg"
+    assert window._feature_pending is None
+    # Das neu gezeigte Merkmal bindet wieder den Auftrag seines Schritts —
+    # angefordert ist davon nichts.
+    assert window._preview_approval is None or not window._preview_approval.requested
+    assert len(window.session.project.document.ops) == before, "verworfen heißt: kein Schritt"
+    restored = next(
+        spin
+        for spin in panel.findChildren(LengthSpin)
+        if "Bohrung ändern" in spin.accessibleName() and "Durchmesser" in spin.accessibleName()
+    )
+    assert restored.value_mm() == pytest.approx(original), "das Feld zeigt wieder den Schritt"
+    assert panel._cancel.isHidden(), "und Abbrechen geht mit der Vorschau"
+
+
 def test_applying_drops_the_waiting_preview_too(window: MainWindow) -> None:
     """Der Zwilling zu ``test_choosing_another_feature_drops_the_waiting_preview``.
 
@@ -16932,15 +16995,15 @@ def test_a_clean_part_offers_the_way_to_the_slicer(window: MainWindow) -> None:
     """Der letzte Meter: „Keine Befunde." ohne nächsten Schritt war eine Sackgasse.
 
     Leere Szene: kein Knopf, weil nichts zu übergeben ist. Ein Körper ohne
-    Fehler: der Bericht bietet den Slicer an; der Knopf öffnet denselben
-    Dialog wie *Datei → Druckeinstellungen …* (Review 02.09.2026).
+    Befund: der Bericht sagt „druckbereit" und bietet den Slicer an; der Knopf
+    öffnet denselben Dialog wie *Datei → Druckeinstellungen …*
+    (Review 02.09.2026).
 
-    Seit dem 20.09.2026 trägt jeder Körper mit belegten Flächen den Hinweis
-    auf die Analysekarte „Formabweichung" (``perceive.deviation``, der Weg aus
-    dem Prüfbericht in die Karte). Die Kopfzeile zählt ihn wie jeden Hinweis;
-    „Keine Befunde. Das Teil ist druckbereit." bleibt Körpern ohne einen
-    einzigen Befund vorbehalten. Der Weg zum Slicer hängt nicht daran — er
-    steht, sobald kein Fehler im Weg ist.
+    Vom 20. bis zum 21.09.2026 stand an jedem Körper mit belegten Flächen ein
+    Hinweis auf die Analysekarte „Formabweichung", und kein Quader erreichte
+    mehr „druckbereit". Seither ist die Formabweichung ein Befund mit Maß, der
+    nur steht, wo belegte Punkte neben der Form liegen
+    (``evaluate.check_form_deviation``) — an einem Quader liegt keiner.
     """
     report = window.report
     assert not report.to_slicer.isVisibleTo(report)
@@ -16960,11 +17023,8 @@ def test_a_clean_part_offers_the_way_to_the_slicer(window: MainWindow) -> None:
     QApplication.processEvents()
 
     assert report.to_slicer.isVisibleTo(report)
-    assert report.summary.text() == "0 × Fehler · 0 × Warnung · 1 × Hinweis"
-    assert [
-        report.list.item(row).data(Qt.ItemDataRole.UserRole).code
-        for row in range(report.list.count())
-    ] == ["perceive.deviation"]
+    assert report.summary.text() == "Keine Befunde. Das Teil ist druckbereit."
+    assert report.list.count() == 0
     opened: list[str] = []
     window.action_print_settings = lambda: opened.append("dialog")  # type: ignore[method-assign]
     report.slicerRequested.disconnect()

@@ -5301,6 +5301,74 @@ def test_a_wall_that_carries_is_not_reported(profile: Profile) -> None:
     assert check_thin_walls(scene) == []
 
 
+def test_a_form_deviation_is_reported_with_its_measure_and_only_where_it_is(
+    profile: Profile,
+) -> None:
+    """Belegte Punkte neben der Form sind ein Befund mit Maß — ein sauberes Rohr hat keinen.
+
+    Vom 20. bis zum 21.09.2026 stand an jedem Körper mit belegten Flächen
+    derselbe Satz, dass sich die Formabweichung in der Analysekarte prüfen
+    lasse, und kein Quader erreichte mehr „druckbereit". Gemessen wird jetzt
+    ``fit_error``, der größte Abstand der Stützpunkte von der eingepassten
+    Form: An einem sauber facettierten Rohr liegen die Ecken **auf** dem
+    Zylinder, also kein Befund. Trägt ein Merkmal einen Abstand über der
+    Sehnengrenze, steht der Befund mit Maß am schlimmsten Merkmal — als Weg
+    in die Karte. Die Erkennung selbst hält ihre Formen enger als die Grenze
+    (gemessen am 21.09.2026 über den Korpus: kein veröffentlichtes Merkmal
+    über 0,02 mm), deshalb bekommt das Rohr seinen Abstand hier gestellt.
+    """
+    from app.core.scene.evaluate import check_form_deviation
+    from app.core.types import Scene
+    from app.core.units import MAX_FACET_SAG
+
+    clean = _tube(inner=16.0, outer=28.0)
+    features = detect(clean)
+    assert {feature.kind for feature in features.values()} >= {"hole", "pin"}
+    scene = Scene(
+        objects={"obj_1": SceneObject(id="obj_1", name="Rohr", mesh=clean, features=features)},
+        profile=profile,
+    )
+    assert check_form_deviation(scene) == [], "auf dem Zylinder liegende Ecken sind kein Befund"
+
+    hole = next(key for key, feature in features.items() if feature.kind == "hole")
+    pin = next(key for key, feature in features.items() if feature.kind == "pin")
+    bent = {
+        key: dataclasses.replace(
+            feature,
+            params={
+                **feature.params,
+                "fit_error": {hole: 0.12, pin: 0.31}.get(key, feature.params.get("fit_error")),
+            },
+        )
+        for key, feature in features.items()
+    }
+    scene = Scene(
+        objects={"obj_1": SceneObject(id="obj_1", name="Rohr", mesh=clean, features=bent)},
+        profile=profile,
+    )
+
+    findings = check_form_deviation(scene)
+
+    assert len(findings) == 1, [str(entry.message) for entry in findings]
+    finding = findings[0]
+    assert finding.code == "perceive.deviation" and finding.severity == "info"
+    assert finding.object_id == "obj_1"
+    assert finding.feature_ids == (pin,), "genannt wird das Merkmal mit dem größten Abstand"
+    assert float(finding.values["deviation_mm"]) == pytest.approx(0.31)
+    assert MAX_FACET_SAG < 0.12, "die Sehnengrenze liegt unter beiden gestellten Abständen"
+
+    grazing = {
+        key: dataclasses.replace(feature, params={**feature.params, "fit_error": MAX_FACET_SAG})
+        for key, feature in features.items()
+        if feature.kind in {"hole", "pin"}
+    }
+    scene = Scene(
+        objects={"obj_1": SceneObject(id="obj_1", name="Rohr", mesh=clean, features=grazing)},
+        profile=profile,
+    )
+    assert check_form_deviation(scene) == [], "die Sehnengrenze selbst ist kein Befund"
+
+
 @pytest.mark.parametrize("before_export", [False, True])
 def test_a_wall_warning_uses_each_body_material(before_export: bool) -> None:
     """Eine PLA-Kalibrierung darf PETG und unbekannte Spulen nicht freigeben."""

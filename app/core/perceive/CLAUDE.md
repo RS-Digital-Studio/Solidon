@@ -616,16 +616,29 @@ betroffenen Körper und erzeugenden Schritt; eine Karte bleibt aus. Andere
   — innen hängt er von selbst zusammen; der Einzelweg mit dem Strahlenvergleich
   bleibt den zerrissenen. Die Punkte kommen aus den Ecken des Netzes, nicht
   aus allen 3n Dreiecksecken, deckungsgleiche fallen unter ihnen zusammen.
-  Gemessen am 21.09.2026: 22,8 s → 2,2 s an der Ikosphäre (Ziel §31: 1 s,
-  Marke der 0.4.4: 0,84 s — der Rest steckt in der Verfeinerung der
-  Kandidaten, siehe unten).
+  **Und je Fleck wird auch jeder Fit und jeder Nachweis einmal gerechnet**
+  (`_remembered`: Kegel, Zylinder, Kugel, Ring und ihre `_is_recognisable`,
+  der Fit als Teil des Schlüssels; das Löserbudget gehört dazu, und ein
+  abgebrochener Auftrag bekommt auch keine gemerkte Antwort). Gemessen am
+  21.09.2026: 22,8 s → 2,0 s an der Ikosphäre, 5,9 s → 4,5 s an der
+  verrauschten Freiform (Ziel §31: 1 s; Marken der 0.4.4: 0,84 s und 1,25 s,
+  mit den linearen Fits gemessen, die P1.2 bewusst ersetzt hat — verworfen
+  mit dieser Begründung). Was bleibt, ist die Verfeinerung selbst: je Fleck
+  ein begrenzter Löser, und die Freiform stellt 5 400 Flecken; ein lineares
+  Sieb davor ist gemessen unsicher (Sieb gegen Endmaß bis 10⁹ an echten
+  kleinen Kugeln).
   Beim Kegel dürfen nachgewiesene gemeinsame Mantellinien auch echte
   Trimmpunkte liefern. Beliebige Sehnenränder werden nicht dazu erklärt.
 - **Ein Kandidat ist noch kein Endmaß.** Kegel, Kugel und Torus verfeinern
   ihre Maße gemeinsam mit dem geometrischen Punktabstand in zentrierten,
   skalierten Koordinaten. Der begrenzte Löser muss konvergieren und alle
   freien Größen bestimmen; unvollständige oder rangdefiziente Ergebnisse
-  werden nicht veröffentlicht. Der Abbruch erreicht sowohl die Fächersuche
+  werden nicht veröffentlicht. Die Ableitung bringt jedes Residuum geschlossen
+  mit (`jacobian` an `_refined_fit`): dasselbe Minimum, ohne die numerische
+  Schätzung, die je Schritt so viele Residuen kostete, wie es Größen gibt
+  (am Korpus gemessen: Ableitung gegen Differenzen bis 10⁻⁹, Ergebnisse
+  gleich bis auf flache Täler, in denen beide Wege gleich gut und gleich
+  unbestimmt sind). Der Abbruch erreicht sowohl die Fächersuche
   als auch jede echte Residualauswertung. `fit_torus_samples` bleibt der
   gemeinsame Kandidatenweg für echte native D1-Punkte und Mesh-Normalen;
   eine Facettenkorrektur gehört dort nicht hinein.

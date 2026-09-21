@@ -2333,6 +2333,25 @@ def _sphere_is_recognisable(
     check_cancelled: Callable[[], None] | None = None,
 ) -> bool:
     """Bestimmtheit und Punktgüte unabhängig von der Facettenunterteilung prüfen."""
+    result: bool = _remembered(
+        "_sphere_is_recognisable",
+        body,
+        patch,
+        lambda: _sphere_is_recognisable_read(body, fit, patch, check_cancelled=check_cancelled),
+        extra=fit,
+        check_cancelled=check_cancelled,
+    )
+    return result
+
+
+def _sphere_is_recognisable_read(
+    body: trimesh.Trimesh,
+    fit: SphereFit,
+    patch: list[int],
+    *,
+    check_cancelled: Callable[[], None] | None = None,
+) -> bool:
+    """Der Rumpf von :func:`_sphere_is_recognisable` — die Antwort merkt sich die Hülle."""
     support = _surface_support(body, patch, check_cancelled)
     if support is None or not np.any(support.round_corners):
         return False
@@ -3607,6 +3626,23 @@ def fit_cylinder(
     werden vor Projektion und quadratischen Termen zentriert. Der Fit belegt
     eine Kreisnäherung der Haut, keine unbekannte Konstruktionsabsicht.
     """
+    result: CylinderFit | None = _remembered(
+        "fit_cylinder",
+        body,
+        patch,
+        lambda: _fit_cylinder_read(body, patch, check_cancelled=check_cancelled),
+        check_cancelled=check_cancelled,
+    )
+    return result
+
+
+def _fit_cylinder_read(
+    body: trimesh.Trimesh,
+    patch: list[int],
+    *,
+    check_cancelled: Callable[[], None] | None = None,
+) -> CylinderFit | None:
+    """Der Rumpf von :func:`fit_cylinder` — die Antwort merkt sich die Hülle."""
     support = _surface_support(body, patch, check_cancelled)
     if support is None:
         return None
@@ -4036,13 +4072,57 @@ def _connected_fans(
 #: jeder Frage neu, 0,4 ms an 200 000 Dreiecken — an der Freiform mit 9 589
 #: Fragen waren das vier Sekunden, mehr als die Lesungen selbst. Der schwache
 #: Verweis daneben sagt, ob hinter der Identität noch dasselbe Netz steht.
-_SUPPORT_CACHE: OrderedDict[
-    tuple[int, bytes], tuple[weakref.ref[trimesh.Trimesh], _SurfaceSupport | None]
-] = OrderedDict()
+_SUPPORT_CACHE: OrderedDict[tuple[str, int, bytes, Any, int], tuple[weakref.ref[Any], Any]] = (
+    OrderedDict()
+)
 
-#: Wie viele Stützpunktlesungen gehalten werden — ein Fleck je Frage, die
-#: Fragen kommen nacheinander, mehr als eine Handvoll Flecken liegt nie an.
-SUPPORT_CACHE_LIMIT = 8
+#: Wie viele Lesungen und Fits gehalten werden. Je Fleck stellen Kegel,
+#: Zylinder, Kugel, Ring und ihre Nachweise zusammen rund ein Dutzend
+#: Fragen, und mehr als eine Handvoll Flecken liegt nie zugleich an.
+SUPPORT_CACHE_LIMIT = 64
+
+
+def _patch_digest(patch: Sequence[int]) -> bytes:
+    """Der Abdruck einer Flächenliste — sechzehn Bytes für 327 680 Indizes in 7 ms."""
+    return hashlib.blake2b(np.asarray(patch, dtype=np.int64).tobytes(), digest_size=16).digest()
+
+
+def _remembered(
+    name: str,
+    body: trimesh.Trimesh,
+    patch: Sequence[int],
+    compute: Callable[[], Any],
+    extra: Any = None,
+    check_cancelled: Callable[[], None] | None = None,
+) -> Any:
+    """Dieselbe Frage an dasselbe Netz und denselben Fleck wird einmal beantwortet.
+
+    ``classify`` fragt je Fleck Kegel, Zylinder, Kugel und Ring; die Nachweise
+    dahinter und ``_large_facet_faces`` stellen dieselben Fragen noch einmal —
+    an der Ikosphäre zwei Kegelfits mit je achtzig Residualauswertungen über
+    160 000 Punkte (gemessen am 21.09.2026). Die Antworten sind reine
+    Funktionen von Netz und Fleck (Regel 3: eine Eingabe ändert niemand);
+    ``extra`` trägt, was die Frage sonst noch bestimmt, etwa den Fit, den ein
+    Nachweis prüft. Der schwache Verweis sagt, ob hinter der Identität noch
+    dasselbe Netz steht.
+    """
+    # **Ein abgebrochener Auftrag bekommt auch keine gemerkte Antwort.** Der
+    # Abbruch gilt dem Auftrag, nicht der Rechnung; wer schon abgebrochen hat,
+    # beginnt nichts — und liest auch nichts nach.
+    if check_cancelled is not None:
+        check_cancelled()
+    # Das Löserbudget gehört zum Schlüssel: Ein Test setzt es auf eins und
+    # fragt danach noch einmal mit dem vollen — zwei Fragen, zwei Antworten.
+    key = (name, id(body), _patch_digest(patch), extra, ROUND_FIT_EVALUATIONS)
+    remembered = _SUPPORT_CACHE.get(key)
+    if remembered is not None and remembered[0]() is body:
+        _SUPPORT_CACHE.move_to_end(key)
+        return remembered[1]
+    value = compute()
+    _SUPPORT_CACHE[key] = (weakref.ref(body), value)
+    while len(_SUPPORT_CACHE) > SUPPORT_CACHE_LIMIT:
+        _SUPPORT_CACHE.popitem(last=False)
+    return value
 
 
 def _surface_support(
@@ -4061,18 +4141,13 @@ def _surface_support(
         check_cancelled()
     if len(patch) < MIN_PATCH_FACES:
         return None
-    key = (
-        id(body),
-        hashlib.blake2b(np.asarray(patch, dtype=np.int64).tobytes(), digest_size=16).digest(),
+    support: _SurfaceSupport | None = _remembered(
+        "support",
+        body,
+        patch,
+        lambda: _read_surface_support(body, patch, check_cancelled),
+        check_cancelled=check_cancelled,
     )
-    remembered = _SUPPORT_CACHE.get(key)
-    if remembered is not None and remembered[0]() is body:
-        _SUPPORT_CACHE.move_to_end(key)
-        return remembered[1]
-    support = _read_surface_support(body, patch, check_cancelled)
-    _SUPPORT_CACHE[key] = (weakref.ref(body), support)
-    while len(_SUPPORT_CACHE) > SUPPORT_CACHE_LIMIT:
-        _SUPPORT_CACHE.popitem(last=False)
     return support
 
 
@@ -4228,8 +4303,17 @@ def _refined_fit(
     initial: np.ndarray,
     residual: Callable[[np.ndarray], np.ndarray],
     check_cancelled: Callable[[], None] | None,
+    jacobian: Callable[[np.ndarray], np.ndarray] | None = None,
 ) -> np.ndarray | None:
-    """Begrenzt geometrisch verfeinern und numerisch unbestimmte Maße verwerfen."""
+    """Begrenzt geometrisch verfeinern und numerisch unbestimmte Maße verwerfen.
+
+    **Die Ableitung kommt geschlossen, wo es sie gibt.** Ohne ``jacobian``
+    schätzt der Löser sie aus Differenzen und ruft dafür je Schritt so viele
+    Residuen, wie es Größen gibt — an der Freiform mit 200 000 Dreiecken
+    14 870 Jacobi-Schätzungen für 1 263 Verfeinerungen, mehr als die Hälfte
+    ihrer Zeit (gemessen am 21.09.2026). Kegel, Kugel und Ring bringen ihre
+    Ableitung deshalb mit; das Ergebnis ist dasselbe Minimum.
+    """
 
     def checked(values: np.ndarray) -> np.ndarray:
         """Auch die numerischen Jacobi-Schritte lesen denselben Abbruchauftrag."""
@@ -4237,9 +4321,16 @@ def _refined_fit(
             check_cancelled()
         return residual(values)
 
+    def checked_jacobian(values: np.ndarray) -> np.ndarray:
+        if check_cancelled is not None:
+            check_cancelled()
+        assert jacobian is not None
+        return jacobian(values)
+
     result = least_squares(
         checked,
         initial,
+        jac="2-point" if jacobian is None else checked_jacobian,
         ftol=ROUND_FIT_PRECISION,
         xtol=ROUND_FIT_PRECISION,
         gtol=ROUND_FIT_PRECISION,
@@ -4263,6 +4354,23 @@ def fit_cone(
     check_cancelled: Callable[[], None] | None = None,
 ) -> ConeFit | None:
     """Achse, Spitze und Winkel gemeinsam an belegten Mantelpunkten einpassen."""
+    result: ConeFit | None = _remembered(
+        "fit_cone",
+        body,
+        patch,
+        lambda: _fit_cone_read(body, patch, check_cancelled=check_cancelled),
+        check_cancelled=check_cancelled,
+    )
+    return result
+
+
+def _fit_cone_read(
+    body: trimesh.Trimesh,
+    patch: list[int],
+    *,
+    check_cancelled: Callable[[], None] | None = None,
+) -> ConeFit | None:
+    """Der Rumpf von :func:`fit_cone` — die Antwort merkt sich die Hülle."""
     support = _surface_support(body, patch, check_cancelled)
     if support is None:
         return None
@@ -4320,7 +4428,33 @@ def fit_cone(
             errors = np.r_[errors, tip - samples[at_apex[0]]]
         return np.asarray(errors, dtype=float)
 
-    fitted = _refined_fit(np.r_[apex, 0.0, 0.0, half_angle], residual, check_cancelled)
+    def jacobian(values: np.ndarray) -> np.ndarray:
+        """Die Ableitung des Kegelabstands nach Spitze, Achsneigung und Winkel."""
+        tip, direction, angle = parameters(values)
+        raw_direction = initial_axis + first * values[3] + second * values[4]
+        relative = samples - tip
+        along = relative @ direction
+        perpendicular = relative - np.outer(along, direction)
+        radial = np.linalg.norm(perpendicular, axis=1)
+        safe = np.where(radial > EPS_GEOM, radial, EPS_GEOM)
+        unit = perpendicular / safe[:, None]
+        cosine, sine = math.cos(angle), math.sin(angle)
+        columns = np.empty((len(samples), 6))
+        columns[:, :3] = -cosine * unit + sine * direction
+        length = float(np.linalg.norm(raw_direction))
+        for column, basis in ((3, first), (4, second)):
+            turned = (basis - direction * float(direction @ basis)) / length
+            d_along = relative @ turned
+            d_radial = -along * (unit @ turned)
+            columns[:, column] = cosine * d_radial - sine * d_along
+        columns[:, 5] = -radial * sine - along * cosine
+        if len(at_apex):
+            apex_rows = np.zeros((3, 6))
+            apex_rows[:, :3] = np.eye(3)
+            columns = np.vstack((columns, apex_rows))
+        return columns
+
+    fitted = _refined_fit(np.r_[apex, 0.0, 0.0, half_angle], residual, check_cancelled, jacobian)
     normal_constrained = False
     if fitted is None and float(np.ptp(samples @ initial_axis)) <= line_tolerance / scale:
         # Ein einziger erhaltener Kreis bestimmt nicht sechs Kegelgrößen.
@@ -4373,6 +4507,23 @@ def fit_sphere(
     check_cancelled: Callable[[], None] | None = None,
 ) -> SphereFit | None:
     """Mittelpunkt und Radius aus belegten Netzecken, nicht aus Facettenebenen."""
+    result: SphereFit | None = _remembered(
+        "fit_sphere",
+        body,
+        patch,
+        lambda: _fit_sphere_read(body, patch, check_cancelled=check_cancelled),
+        check_cancelled=check_cancelled,
+    )
+    return result
+
+
+def _fit_sphere_read(
+    body: trimesh.Trimesh,
+    patch: list[int],
+    *,
+    check_cancelled: Callable[[], None] | None = None,
+) -> SphereFit | None:
+    """Der Rumpf von :func:`fit_sphere` — die Antwort merkt sich die Hülle."""
     support = _surface_support(body, patch, check_cancelled)
     if support is None or int(support.round_corners.sum()) < 4:
         return None
@@ -4396,7 +4547,19 @@ def fit_sphere(
         """Radialer Abstand der belegten Punkte in der lokalen Längeneinheit."""
         return np.asarray(np.linalg.norm(local - values[:3], axis=1) - values[3], dtype=float)
 
-    fitted = _refined_fit(np.r_[solution[:3], math.sqrt(square)], residual, check_cancelled)
+    def jacobian(values: np.ndarray) -> np.ndarray:
+        """Die Ableitung des radialen Abstands nach Mittelpunkt und Radius."""
+        relative = local - values[:3]
+        distance = np.linalg.norm(relative, axis=1)
+        safe = np.where(distance > EPS_GEOM, distance, EPS_GEOM)
+        columns = np.empty((len(local), 4))
+        columns[:, :3] = -relative / safe[:, None]
+        columns[:, 3] = -1.0
+        return columns
+
+    fitted = _refined_fit(
+        np.r_[solution[:3], math.sqrt(square)], residual, check_cancelled, jacobian
+    )
     if fitted is None or fitted[3] * scale <= EPS_GEOM:
         return None
     centre = origin + fitted[:3] * scale
@@ -4420,6 +4583,23 @@ def fit_torus(
     check_cancelled: Callable[[], None] | None = None,
 ) -> TorusFit | None:
     """Den gemeinsamen Toruskandidaten an belegten Netzecken geometrisch verfeinern."""
+    result: TorusFit | None = _remembered(
+        "fit_torus",
+        body,
+        patch,
+        lambda: _fit_torus_read(body, patch, check_cancelled=check_cancelled),
+        check_cancelled=check_cancelled,
+    )
+    return result
+
+
+def _fit_torus_read(
+    body: trimesh.Trimesh,
+    patch: list[int],
+    *,
+    check_cancelled: Callable[[], None] | None = None,
+) -> TorusFit | None:
+    """Der Rumpf von :func:`fit_torus` — die Antwort merkt sich die Hülle."""
     support = _surface_support(body, patch, check_cancelled)
     if support is None or int(support.round_corners.sum()) < 7:
         return None
@@ -4448,6 +4628,31 @@ def fit_torus(
         radial = np.linalg.norm(relative - np.outer(along, direction), axis=1)
         return np.asarray(np.hypot(radial - ring, along) - tube, dtype=float)
 
+    def jacobian(values: np.ndarray) -> np.ndarray:
+        """Die Ableitung des Meridianabstands nach Mitte, Achsneigung und Radien."""
+        centre, direction, ring, _tube = parameters(values)
+        raw_direction = initial_axis + first * values[3] + second * values[4]
+        relative = local - centre
+        along = relative @ direction
+        perpendicular = relative - np.outer(along, direction)
+        radial = np.linalg.norm(perpendicular, axis=1)
+        safe_radial = np.where(radial > EPS_GEOM, radial, EPS_GEOM)
+        unit = perpendicular / safe_radial[:, None]
+        offset = radial - ring
+        distance = np.hypot(offset, along)
+        safe = np.where(distance > EPS_GEOM, distance, EPS_GEOM)
+        columns = np.empty((len(local), 7))
+        columns[:, :3] = -unit * (offset / safe)[:, None] - np.outer(along / safe, direction)
+        length = float(np.linalg.norm(raw_direction))
+        for column, basis in ((3, first), (4, second)):
+            turned = (basis - direction * float(direction @ basis)) / length
+            d_along = relative @ turned
+            d_radial = -along * (unit @ turned)
+            columns[:, column] = (offset * d_radial + along * d_along) / safe
+        columns[:, 5] = -offset / safe
+        columns[:, 6] = -1.0
+        return columns
+
     fitted = _refined_fit(
         np.r_[
             (np.asarray(initial.centre) - origin) / scale,
@@ -4458,6 +4663,7 @@ def fit_torus(
         ],
         residual,
         check_cancelled,
+        jacobian,
     )
     if fitted is None:
         return None
@@ -4568,6 +4774,25 @@ def _torus_is_recognisable(
     diese Prüfung entscheidet, ob der algebraisch passende Fleck auch als
     sicher bearbeitbares Merkmal in den Objektbaum darf.
     """
+    result: bool = _remembered(
+        "_torus_is_recognisable",
+        body,
+        patch,
+        lambda: _torus_is_recognisable_read(body, fit, patch, check_cancelled=check_cancelled),
+        extra=fit,
+        check_cancelled=check_cancelled,
+    )
+    return result
+
+
+def _torus_is_recognisable_read(
+    body: trimesh.Trimesh,
+    fit: TorusFit,
+    patch: list[int],
+    *,
+    check_cancelled: Callable[[], None] | None = None,
+) -> bool:
+    """Der Rumpf von :func:`_torus_is_recognisable` — die Antwort merkt sich die Hülle."""
     centres = np.asarray(body.triangles_center[patch], dtype=float)
     corners = np.asarray(body.triangles[patch], dtype=float)
     centre = np.asarray(fit.centre, dtype=float)
@@ -4672,6 +4897,25 @@ def _cone_is_recognisable(
     check_cancelled: Callable[[], None] | None = None,
 ) -> bool:
     """Nur Flecken mit belegten Punkten und Normalen als Kegel veröffentlichen."""
+    result: bool = _remembered(
+        "_cone_is_recognisable",
+        body,
+        patch,
+        lambda: _cone_is_recognisable_read(body, fit, patch, check_cancelled=check_cancelled),
+        extra=fit,
+        check_cancelled=check_cancelled,
+    )
+    return result
+
+
+def _cone_is_recognisable_read(
+    body: trimesh.Trimesh,
+    fit: ConeFit,
+    patch: list[int],
+    *,
+    check_cancelled: Callable[[], None] | None = None,
+) -> bool:
+    """Der Rumpf von :func:`_cone_is_recognisable` — die Antwort merkt sich die Hülle."""
     if not _cone_vertices_are_consistent(body, fit, patch, check_cancelled=check_cancelled):
         return False
     centres = np.asarray(body.triangles_center[patch], dtype=float)

@@ -477,9 +477,12 @@ def test_a_locked_panel_says_why_before_anyone_clicks(qt_app: QApplication) -> N
 def test_preview_block_keeps_fields_and_cancel_available(qt_app: QApplication) -> None:
     """Die Vorschau sperrt nur Übernehmen und überlebt Feld- und Sperrwechsel.
 
-    *Abbrechen* gehört dem Messen im Bild und steht dort an der Maßgruppe,
-    nicht hier unten (``set_measuring``); geprüft wird deshalb, dass Felder
-    und der Weg ins Bild frei bleiben, während Übernehmen mit dem Grund sperrt.
+    *Abbrechen* steht, solange das Fenster eine wartende Vorschau aus diesem
+    Panel anbietet (``offer_cancel``) — beim Messen im Bild trägt die
+    Maßgruppe beide Knöpfe (``set_measuring``). Ohne Fenster bietet niemand
+    sie an; geprüft wird deshalb, dass Felder und der Weg ins Bild frei
+    bleiben, während Übernehmen mit dem Grund sperrt, und dass das Angebot
+    den Knopf zeigt und mit dem Messen wieder nimmt.
     """
     identifier, feature = a_hole()
     panel = FeaturePanel()
@@ -515,6 +518,15 @@ def test_preview_block_keeps_fields_and_cancel_available(qt_app: QApplication) -
     panel._apply.click()
     assert not requested
     panel.preview_check = None
+
+    assert panel._cancel.isHidden(), "ohne Angebot steht kein Abbrechen"
+    panel.offer_cancel(True)
+    assert not panel._cancel.isHidden(), "eine wartende Vorschau bietet Abbrechen an"
+    panel.set_measuring(True, op="resize_hole")
+    assert panel._cancel.isHidden(), "beim Messen trägt die Maßgruppe den Knopf"
+    panel.set_measuring(False)
+    panel.offer_cancel(False)
+    assert panel._cancel.isHidden()
     panel._apply.click()
     assert len(requested) == 1
     assert requested[0][0] == "resize_hole"

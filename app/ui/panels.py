@@ -733,6 +733,9 @@ _LINE_VALUES: tuple[str, ...] = (
     # Tooltip.
     "wall_mm",
     "removed_cm3",
+    # Die Formabweichung nennt ihr Maß in der Zeile — der Befund steht nur,
+    # wo belegte Punkte messbar neben der Form liegen (``check_form_deviation``).
+    "deviation_mm",
 )
 
 
@@ -5277,7 +5280,11 @@ class FeaturePanel(QWidget):
         self._rows.addWidget(self._footer)
         self._measuring = False
         """Ob die Maße des gezeigten Merkmals gerade im Bild stehen — dann
-        steht *Abbrechen* unter dem Übernehmen."""
+        trägt die Maßgruppe Übernehmen und Abbrechen, und die Knöpfe hier
+        unten gehen mit (``set_measuring``)."""
+        self._cancel_offered = False
+        """Ob eine Vorschau aus diesem Panel wartet — dann steht *Abbrechen*
+        neben dem Übernehmen und verwirft sie (:meth:`offer_cancel`)."""
         self._rows.addStretch(1)
         self._built: list[QWidget] = []
         self._feature_id: str | None = None
@@ -6413,7 +6420,9 @@ class FeaturePanel(QWidget):
             self._rows.insertWidget(self._rows.count() - 1, self._footer)
         self._settle_tab_order()
         self._settle_in_view()
-        self._cancel.setVisible(self._measuring and self._apply_stands())
+        self._cancel.setVisible(
+            self._cancel_offered and not self._measuring and self._apply_stands()
+        )
         self._settle_lock()
 
     def _settle_tab_order(self) -> None:
@@ -6682,6 +6691,25 @@ class FeaturePanel(QWidget):
         self._measure_op = op if active else None
         self._measure_begun = bool(active and begun)
         self._settle_lock()
+        self._cancel.setVisible(
+            self._cancel_offered and not self._measuring and self._apply_stands()
+        )
+
+    def offer_cancel(self, offered: bool) -> None:
+        """Ob *Abbrechen* steht: solange eine Vorschau aus diesem Panel wartet.
+
+        Bis zum 20.09.2026 stand der Knopf beim Messen im Bild; seit die
+        Maßgruppe Übernehmen und Abbrechen selbst trägt, hatte er hier keinen
+        Ort mehr — sichtbar nur beim Messen, beim Messen verborgen (gemessen am
+        21.09.2026). Sein Satz sagt, wozu er da ist: „Verwirft, was im Bild
+        wartet — gerechnet wird nichts." Das ist die Feldvorschau, die eine
+        getippte Zahl angestoßen hat und die noch kein Schritt ist; wer sie
+        nicht will, hatte bis dahin nur Escape aus der Auswahl heraus.
+        """
+        self._cancel_offered = bool(offered)
+        self._cancel.setVisible(
+            self._cancel_offered and not self._measuring and self._apply_stands()
+        )
 
     def request_in_view(self) -> None:
         """Denselben Weg nehmen wie der Knopf *Im Bild einstellen* — wenn er steht.

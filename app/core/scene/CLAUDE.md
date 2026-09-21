@@ -306,10 +306,16 @@ relevante Profile mit dem aktuellen Druckprozess, einschließlich Kalibrierung.
 Eine geänderte Einlagenpassung darf deshalb trotz gleicher Profilkennung
 kein Ergebnis einer früheren Kalibrierung laden.
 
-**Drei Fragen beantwortet erst der Endstand**, und deshalb stehen sie in
+**Vier Fragen beantwortet erst der Endstand**, und deshalb stehen sie in
 `evaluate.py` und in keiner Operation: `check_placement` (liegt der Körper auf
-dem Bett), `check_bodies_in_one_place` (zwei Körper am selben Ort) und
-`check_thin_walls` (was von der Wand übrig ist, RM-127). Ihnen allen ist
+dem Bett), `check_bodies_in_one_place` (zwei Körper am selben Ort),
+`check_thin_walls` (was von der Wand übrig ist, RM-127) und
+`check_form_deviation` (liegen belegte Punkte neben der Form, die sie tragen:
+`fit_error` über `units.MAX_FACET_SAG` — ein Befund mit Maß am schlimmsten
+Merkmal, der Weg in die Analysekarte „Formabweichung" nach §18.4; bis zum
+21.09.2026 stand an jedem Körper mit belegten Flächen stattdessen ein Satz,
+dass es die Karte gibt, und kein Quader erreichte mehr „druckbereit"). Den
+ersten dreien ist
 dasselbe gemeinsam: Die Antwort hängt an einem **Verhältnis**, das ein
 späterer Schritt noch umdreht. Eine Wand steht in keinem Merkmal — sie
 entsteht zwischen einer Bohrung und dem Mantel um sie herum
