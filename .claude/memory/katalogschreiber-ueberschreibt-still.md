@@ -61,3 +61,13 @@ Vollüberschreibung. Bei einer bereits sortierten Datei ist das folgenlos —
 schreibt aber gleichzeitig jemand anders, gewinnt der Letzte mit seinem
 Lesestand, und die fremde Zeile ist weg, ohne dass ein Diff sie je gezeigt
 hätte.
+
+**Und die dritte Gestalt trifft den, der alles richtig gemacht hat** (21.09.2026):
+Die Katalog-Blobs im Index waren HEAD plus eigene Schlüssel, der Commit trotzdem
+abgebrochen — „10 neue Texte ohne Übersetzung“. `.githooks/pre-commit` liest die
+Kataloge aus dem **Arbeitsbaum**, und die hatte die Parallelsitzung inzwischen
+aus HEAD plus *ihren* Schlüsseln neu geschrieben; meine standen nur noch im
+Index. Griff: die eigenen Schlüssel **im Commit-Skript unmittelbar vor `git
+commit`** noch einmal mit `add_keys2.py` in den Arbeitsbaum legen (idempotent),
+und einen `OSError 22` beim Schreiben als „die andere schreibt gerade“ lesen —
+fünf Sekunden warten, wiederholen.
