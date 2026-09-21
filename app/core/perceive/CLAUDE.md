@@ -549,6 +549,15 @@ betroffenen Körper und erzeugenden Schritt; eine Karte bleibt aus. Andere
   Geschlossen wird nur, was **eindeutig** ist: genau ein freies Dreieck bringt
   den Rand in Ordnung. Bringen es zwei, bleibt der Fleck, wie er ist — dort
   steht eine Gabelung, und die zu raten verbietet Regel 21.
+  **Gesucht und geprüft wird am Knoten, nicht im Netz** (20.09.2026):
+  `_rim_of` zählt Kanten und Randgrade eines Flecks einmal, `_candidates_at`
+  liest die Kandidaten über `vertex_faces` und den Nachbarindex
+  (`_neighbour_index`, je Körper einmal im Cache von trimesh), und `_closes`
+  prüft eine Kandidatenmenge an ihren eigenen Kanten. Die erste Fassung lief
+  je Kandidatenmenge noch einmal über den ganzen Fleck und alle Paare des
+  Netzes — am Drachen aus TripoSG (325 244 Dreiecke, ein Fleck mit 307 063
+  und 65 Kandidaten) waren das 264 von 482 Sekunden. Denselben Index liest
+  `_connected_patches`, das je Splitstück gerufen wird: 320 statt 11 Sekunden.
 - **Bohrungen teilen ihre Durchgangsvorarbeit.** `detect_holes` hält
   `_ThroughBounds` nur für seinen aktuellen, unveränderlichen Körper. Die
   Dreiecksgrenzen entstehen erst bei der ersten exakt achsenparallelen Bohrung.

@@ -1653,3 +1653,68 @@ def test_many_arcs_on_one_shell_do_not_flood_it_per_pair() -> None:
 
     assert found == [[]], "hundert Kerben sind kein Langloch"
     assert taken < 2.5, "die Suche darf nicht wieder je Paar über den Mantel laufen"
+
+
+def test_closing_notches_on_a_huge_patch_reads_the_rim_not_the_mesh() -> None:
+    """§31: Die Kerbenschließung kostet je Kandidatenmenge den Rand, nicht den Fleck.
+
+    Der Drache aus TripoSG (20.09.2026): 325 244 Dreiecke, davon 307 063 in
+    einem Fleck mit 65 Kandidaten — 2 145 Mengen, und jede Prüfung lief in der
+    ersten Fassung noch einmal über den ganzen Fleck und alle Paare des Netzes:
+    264 von 482 Sekunden für null Merkmale. Seither zählt ``_rim_of`` den Rand
+    einmal, ``_closes`` prüft eine Menge an ihren eigenen Kanten, und die
+    Kandidaten kommen über ``vertex_faces`` statt über ``face_adjacency``.
+
+    Nachgebaut: die obere Hälfte einer fein unterteilten Kugel als ein Fleck,
+    dem Dreiecke der zweiten Reihe fehlen — jedes macht seinen Randknoten
+    fransig, und an jedem liegen mehrere freie Nachbarn. Fehlt eines, kommt es
+    eindeutig zurück. Fehlen zwanzig, ist das keine Kerbe mehr (eine Kerbe
+    sind höchstens ``NOTCH_AT_MOST`` Dreiecke), und der Fleck bleibt, wie er
+    ist — genau das war die Antwort am Drachen, nur nach 264 Sekunden. An
+    dieser Halbkugel brauchte die alte Fassung für die zwanzig 24,5 s, die
+    neue 86 ms (gemessen 20.09.2026, beide unter derselben Fremdlast).
+    """
+    import numpy as np
+
+    from app.core.perceive.features import _rim_of, _without_notches
+
+    body = deferred.trimesh.creation.icosphere(subdivisions=6)
+    above = np.flatnonzero(body.triangles_center[:, 2] > 0.0)
+    rim = _rim_of(body, above.tolist())
+    assert rim is not None and not rim.frayed, "die Halbkugel hat einen sauberen Rand"
+    faces = body.faces[above]
+    edges = np.sort(np.concatenate((faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [2, 0]])), axis=1)
+    unique_edges, count = np.unique(edges, axis=0, return_counts=True)
+    rim_nodes = set(unique_edges[count == 1].ravel().tolist())
+    assert rim_nodes, "die Halbkugel hat einen Rand"
+    second_row = [
+        int(face)
+        for face in above
+        if sum(int(corner) in rim_nodes for corner in body.faces[face]) == 1
+    ]
+    removed = second_row[:: max(1, len(second_row) // 20)][:20]
+    assert len(removed) == 20, "zwanzig Zweitreihendreiecke braucht der Fall"
+
+    one_missing = [int(face) for face in above if face != removed[0]]
+    healed_one: list[list[int]] = []
+    taken_one = measure(
+        "close_one_notch_huge_patch",
+        lambda: healed_one.extend(_without_notches(body, [one_missing])),
+    )
+    assert set(healed_one[0]) == set(above.tolist()), "das eine Dreieck kommt zurück"
+
+    gone = set(removed)
+    patch = [int(face) for face in above if face not in gone]
+    frayed = _rim_of(body, patch)
+    assert frayed is not None and len(frayed.frayed) == 20, (
+        "jedes fehlende Dreieck franst seinen Knoten"
+    )
+    healed: list[list[int]] = []
+    taken = measure(
+        "close_notches_huge_patch", lambda: healed.extend(_without_notches(body, [patch]))
+    )
+
+    assert healed[0] == patch, "zwanzig Kerben sind keine Kerbe — der Fleck bleibt, wie er ist"
+    assert taken_one < 1.5 and taken < 1.5, (
+        "eine Kandidatenmenge darf nicht wieder den ganzen Fleck kosten"
+    )

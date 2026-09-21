@@ -5071,6 +5071,59 @@ def _split_patches_by_curvature(
     return split
 
 
+#: Unter diesem Schlüssel hält der Cache von ``trimesh`` den Nachbarindex eines
+#: Körpers — er lebt und stirbt mit dessen Geometrie wie ``face_adjacency``.
+_NEIGHBOUR_INDEX_KEY: Final = "solidon_neighbour_index"
+
+
+def _neighbour_index(body: trimesh.Trimesh) -> tuple[np.ndarray, np.ndarray]:
+    """Je Dreieck seine Kantennachbarn und die Nummer der Naht dazu, einmal je Körper.
+
+    ``face_adjacency`` ist eine Liste von Paaren über das ganze Netz. Wer
+    daraus die Nachbarn **eines** Flecks lesen will, muss sie ganz durchgehen
+    — und das taten :func:`_connected_patches` und :func:`_notch_faces` bei
+    jedem Aufruf. Gemessen am Drachen aus TripoSG (325 244 Dreiecke, 190 mm,
+    20.09.2026): 5 576 Aufrufe der Fleckenbildung und 23 610 der Randprüfung,
+    jeder mit einer Maske über alle Dreiecke und einem Filter über alle
+    488 000 Paare — 40 und 82 Sekunden, die nichts über den Fleck sagen.
+
+    Zurück kommen zwei gepolsterte Felder derselben Form: die Nachbarn je
+    Dreieck und die Zeile in ``face_adjacency``, aus der der Nachbar stammt
+    (``-1`` wo keiner ist). Über die Zeilennummer bleibt die **Reihenfolge**
+    der Paare erhalten — wer daraus wieder eine Paarliste baut, bekommt
+    dieselbe Teilmenge in derselben Ordnung wie über den Filter, und damit
+    dieselben Flecken in derselben Folge.
+    """
+    if _NEIGHBOUR_INDEX_KEY in body._cache:
+        cached: tuple[np.ndarray, np.ndarray] = body._cache[_NEIGHBOUR_INDEX_KEY]
+        return cached
+    count = len(body.faces)
+    pairs = np.asarray(body.face_adjacency, dtype=np.int64)
+    if not len(pairs):
+        empty = np.full((count, 0), -1, dtype=np.int64)
+        body._cache[_NEIGHBOUR_INDEX_KEY] = (empty, empty)
+        return empty, empty
+    # Jede Naht zweimal, einmal von jeder Seite gesehen.
+    faces = np.concatenate((pairs[:, 0], pairs[:, 1]))
+    others = np.concatenate((pairs[:, 1], pairs[:, 0]))
+    rows = np.concatenate((np.arange(len(pairs)), np.arange(len(pairs))))
+    order = np.argsort(faces, kind="stable")
+    faces, others, rows = faces[order], others[order], rows[order]
+    # Spalte = laufende Nummer innerhalb desselben Dreiecks. Drei sind es an
+    # einem sauberen Netz; die Breite folgt trotzdem dem Netz, damit ein
+    # Dreieck mit mehr Nachbarn keinen davon verliert.
+    first = np.r_[0, np.flatnonzero(np.diff(faces)) + 1]
+    sizes = np.diff(np.r_[first, len(faces)])
+    slot = np.arange(len(faces)) - np.repeat(first, sizes)
+    width = int(sizes.max()) if len(sizes) else 0
+    neighbours = np.full((count, width), -1, dtype=np.int64)
+    pair_rows = np.full((count, width), -1, dtype=np.int64)
+    neighbours[faces, slot] = others
+    pair_rows[faces, slot] = rows
+    body._cache[_NEIGHBOUR_INDEX_KEY] = (neighbours, pair_rows)
+    return neighbours, pair_rows
+
+
 def _connected_patches(body: trimesh.Trimesh, faces: list[int]) -> list[list[int]]:
     """Gruppiert die gegebenen Dreiecke in zusammenhängende Flecken.
 
@@ -5095,28 +5148,90 @@ def _connected_patches(body: trimesh.Trimesh, faces: list[int]) -> list[list[int
     pairs = np.asarray(body.face_adjacency)
     adjacency = pairs[:0]
     if len(pairs):
-        angles = np.degrees(np.asarray(body.face_adjacency_angles, dtype=float))
-        pairs = pairs[angles < CURVATURE_LIMIT]
-        # **Beides als Feld, nicht Zeile für Zeile** (RM-132). Die Auswahl
-        # stand als Schleife über die Nachbarpaare mit einer Menge daneben und
-        # das Ergebnis als ``int()`` je Dreieck. Beides ist dieselbe Antwort
-        # und kostete am 200 000-Dreiecke-Freiformkörper 20 und 84
-        # Millisekunden gegen 4 und 14 — die 120 610 Flecken einer verrauschten
-        # Oberfläche zahlen jede Python-Schleife hundertzwanzigtausendfach.
+        # **Nur die Nähte dieses Flecks, nicht alle des Netzes** (20.09.2026).
+        # Die Auswahl lief als Winkelfilter über alle Paare und eine Maske
+        # über alle Dreiecke — je Aufruf, und :func:`_cylinder_beside_a_torus`
+        # ruft je Splitstück. Am Drachen aus TripoSG waren das 5 576 Aufrufe
+        # und 40 Sekunden. Der Nachbarindex liefert dieselben Paare über die
+        # Nummer ihrer Zeile in ``face_adjacency``; ``np.unique`` darüber gibt
+        # sie in derselben Reihenfolge zurück wie der Filter — die Flecken
+        # kommen also in derselben Folge heraus.
         #
         # **Beide Enden werden geprüft, obwohl ``connected_components`` das
         # auch tut** (es verwirft Kanten, deren Knoten nicht in ``nodes``
         # stehen). Die Aussage „ein Fleck besteht nur aus den gewünschten
-        # Dreiecken" gehört hierher und nicht in eine fremde Bibliothek; sie
-        # kostet zwei Millisekunden. Ein Test dafür gibt es aus demselben
-        # Grund nicht: Weggelassen ändert sich keine Antwort.
+        # Dreiecken" gehört hierher und nicht in eine fremde Bibliothek. Ein
+        # Test dafür gibt es aus demselben Grund nicht: Weggelassen ändert
+        # sich keine Antwort.
+        indices = np.asarray(faces, dtype=np.intp)
         wanted = np.zeros(len(body.faces), dtype=bool)
-        wanted[np.asarray(faces, dtype=np.intp)] = True
-        adjacency = pairs[wanted[pairs[:, 0]] & wanted[pairs[:, 1]]]
+        wanted[indices] = True
+        neighbours, pair_rows = _neighbour_index(body)
+        chosen = neighbours[indices]
+        present = chosen >= 0
+        present[present] = wanted[chosen[present]]
+        rows = np.unique(pair_rows[indices][present])
+        angles = np.degrees(np.asarray(body.face_adjacency_angles, dtype=float)[rows])
+        adjacency = pairs[rows[angles < CURVATURE_LIMIT]]
     if not len(adjacency):
         return [[index] for index in faces]
     groups = trimesh.graph.connected_components(adjacency, nodes=np.asarray(faces), engine="scipy")
     return _without_notches(body, [group.tolist() for group in groups])
+
+
+class _Rim(NamedTuple):
+    """Der Rand eines Flecks, so gezählt, dass ein Dreieck mehr sich lokal prüfen lässt."""
+
+    #: Kantencode → wie viele Dreiecke des Flecks an dieser Kante liegen (eins
+    #: oder zwei; eine dritte macht den Fleck unbrauchbar).
+    counts: dict[int, int]
+    #: Knoten → wie viele Randkanten des Flecks dort zusammenlaufen.
+    degrees: dict[int, int]
+    #: Die Knoten, an denen mehr als zwei Randkanten zusammenlaufen.
+    frayed: frozenset[int]
+
+
+def _edge_codes(faces: np.ndarray, corners: int) -> np.ndarray:
+    """Die drei Kanten jedes Dreiecks als je eine Zahl, in Dreiecksreihenfolge."""
+    edges = np.sort(np.concatenate((faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [2, 0]])), axis=1)
+    return np.asarray(edges[:, 0].astype(np.int64) * corners + edges[:, 1], dtype=np.int64)
+
+
+def _rim_of(body: trimesh.Trimesh, patch: Sequence[int]) -> _Rim | None:
+    """Rand und ausgefranste Knoten eines Flecks — ``None``, wenn er unbrauchbar ist.
+
+    Unbrauchbar heißt: eine Kante trägt drei Dreiecke des Flecks. Dort ist
+    nichts zu heilen, und es wird auch nichts gezählt.
+    """
+    indices = np.asarray(patch, dtype=np.int64)
+    if len(indices) < 3:
+        return None
+    faces = np.asarray(body.faces)[indices]
+    # **Eine Kante als eine Zahl** (Leistung, gemessen 17.09.2026). ``np.unique``
+    # über ein zweispaltiges Feld sortiert lexikografisch und kostete an einem
+    # merkmalsreichen Körper mit 204 000 Dreiecken ein Drittel der ganzen
+    # Erkennung. Dieselbe Kodierung benutzt ``relations._shoulder_connections``,
+    # und aus demselben Grund.
+    corners = len(body.vertices)
+    codes = _edge_codes(faces, corners)
+    unique, count = np.unique(codes, return_counts=True)
+    if (count > 2).any():
+        return None
+    border = unique[count == 1]
+    if not len(border):
+        return _Rim({}, {}, frozenset())
+    ends = np.column_stack((border // corners, border % corners))
+    vertices, degrees = np.unique(ends, return_counts=True)
+    frayed = frozenset(int(node) for node in vertices[degrees > 2])
+    if not frayed:
+        return _Rim({}, {}, frozenset())
+    # Die Wörterbücher entstehen nur, wenn jemand sie liest — an einem Fleck
+    # aus dreihunderttausend Dreiecken sind es eine Million Kanten.
+    return _Rim(
+        dict(zip(unique.tolist(), count.tolist(), strict=True)),
+        dict(zip(vertices.tolist(), degrees.tolist(), strict=True)),
+        frayed,
+    )
 
 
 def _notch_faces(body: trimesh.Trimesh, patch: Sequence[int]) -> set[int]:
@@ -5141,40 +5256,41 @@ def _notch_faces(body: trimesh.Trimesh, patch: Sequence[int]) -> set[int]:
     liegt am ausgefransten Knoten, gehört keinem anderen Fleck, und der Rand
     ist danach sauber. Alles andere bleibt, wie die Einpassung es vorfindet —
     ein Fleck, der aus einem anderen Grund offen ist, wird hier nicht zugenäht.
+
+    **Gesucht wird am Knoten, nicht im Netz** (20.09.2026). Die Nachbarn kamen
+    aus einem Filter über alle Paare von ``face_adjacency``, je Aufruf — und
+    :func:`_closing_set` ruft je Kandidatenmenge. Am Drachen aus TripoSG trug
+    ein Fleck aus 307 063 Dreiecken 65 Kandidaten, das sind 2 145 Mengen, und
+    jede Prüfung lief noch einmal über den ganzen Fleck und das ganze Netz:
+    264 von 482 Sekunden. Jetzt sagt ``vertex_faces``, welche Dreiecke am
+    ausgefransten Knoten liegen, und der Nachbarindex, welche davon an den
+    Fleck grenzen — dieselbe Menge, gelesen an der Stelle, um die es geht.
     """
-    indices = np.asarray(patch, dtype=np.int64)
-    if len(indices) < 3:
+    rim = _rim_of(body, patch)
+    if rim is None or not rim.frayed:
         return set()
-    faces = np.asarray(body.faces)[indices]
-    edges = np.sort(np.concatenate((faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [2, 0]])), axis=1)
-    # **Eine Kante als eine Zahl** (Leistung, gemessen 17.09.2026). ``np.unique``
-    # über ein zweispaltiges Feld sortiert lexikografisch und kostete an einem
-    # merkmalsreichen Körper mit 204 000 Dreiecken ein Drittel der ganzen
-    # Erkennung. Dieselbe Kodierung benutzt ``relations._shoulder_connections``,
-    # und aus demselben Grund.
-    corners = len(body.vertices)
-    codes = edges[:, 0].astype(np.int64) * corners + edges[:, 1]
-    _codes, first, count = np.unique(codes, return_index=True, return_counts=True)
-    if (count > 2).any():
-        return set()
-    border = first[count == 1]
-    if not len(border):
-        return set()
-    boundary = edges[border]
-    vertices, degrees = np.unique(boundary, return_counts=True)
-    frayed = {int(node) for node in vertices[degrees > 2]}
-    if not frayed:
-        return set()
-    # Nur die unmittelbaren Nachbarn des Flecks kommen in Frage: Ein Dreieck,
-    # das den Knoten teilt, aber nirgends anliegt, schließt keine Kerbe.
-    neighbours: set[int] = set()
-    pairs = np.asarray(body.face_adjacency)
-    if len(pairs):
-        inside = np.zeros(len(body.faces), dtype=bool)
-        inside[indices] = True
-        touching = pairs[inside[pairs[:, 0]] ^ inside[pairs[:, 1]]]
-        neighbours = {int(face) for face in touching.ravel() if not inside[face]}
-    return {face for face in neighbours if frayed & {int(corner) for corner in body.faces[face]}}
+    return _candidates_at(body, patch, rim.frayed)
+
+
+def _candidates_at(body: trimesh.Trimesh, patch: Sequence[int], frayed: frozenset[int]) -> set[int]:
+    """Die Dreiecke außerhalb des Flecks, die an ihn grenzen und einen fransigen Knoten tragen."""
+    inside = np.zeros(len(body.faces), dtype=bool)
+    inside[np.asarray(patch, dtype=np.intp)] = True
+    neighbours, _rows = _neighbour_index(body)
+    vertex_faces = np.asarray(body.vertex_faces)
+    found: set[int] = set()
+    for node in frayed:
+        for face in vertex_faces[node]:
+            if face < 0 or inside[face]:
+                continue
+            # Nur die unmittelbaren Nachbarn des Flecks kommen in Frage: Ein
+            # Dreieck, das den Knoten teilt, aber nirgends anliegt, schließt
+            # keine Kerbe.
+            beside = neighbours[face]
+            beside = beside[beside >= 0]
+            if len(beside) and inside[beside].any():
+                found.add(int(face))
+    return found
 
 
 #: Wie viele freie Dreiecke eine Kerbe höchstens schließen dürfen.
@@ -5208,8 +5324,14 @@ def _without_notches(body: trimesh.Trimesh, patches: list[list[int]]) -> list[li
         if len(patch) < MIN_PATCH_FACES:
             healed.append(patch)
             continue
-        candidates = sorted(face for face in _notch_faces(body, patch) if face not in taken)
-        closing = _closing_set(body, patch, candidates)
+        rim = _rim_of(body, patch)
+        if rim is None or not rim.frayed:
+            healed.append(patch)
+            continue
+        candidates = sorted(
+            face for face in _candidates_at(body, patch, rim.frayed) if face not in taken
+        )
+        closing = _closing_set(body, rim, candidates)
         if closing is None:
             healed.append(patch)
             continue
@@ -5219,16 +5341,35 @@ def _without_notches(body: trimesh.Trimesh, patches: list[list[int]]) -> list[li
 
 
 def _closing_set(
-    body: trimesh.Trimesh, patch: Sequence[int], candidates: Sequence[int]
+    body: trimesh.Trimesh, rim: _Rim, candidates: Sequence[int]
 ) -> tuple[int, ...] | None:
-    """Die kleinste eindeutige Menge freier Dreiecke, die den Rand schließt."""
+    """Die kleinste eindeutige Menge freier Dreiecke, die den Rand schließt.
+
+    **Geprüft wird am Rand, nicht am Fleck.** Ob eine Menge den Rand in
+    Ordnung bringt, entscheidet sich an ihren eigenen Kanten: Eine Randkante,
+    die ein Dreieck der Menge belegt, hört auf, Rand zu sein; eine Kante, die
+    der Fleck nicht kannte, wird Rand. Beides ändert den Grad nur an den Ecken
+    der Menge. Die Zählung des Flecks (:class:`_Rim`) steht einmal, und jede
+    Menge kostet danach ein Dutzend Nachschläge statt eines Durchgangs über
+    alle Dreiecke — am Drachen aus TripoSG waren es 2 145 Durchgänge über
+    307 063 Dreiecke.
+
+    **Sauber heißt sauber.** Vorher galt eine Menge als schließend, wenn danach
+    keine Kandidaten mehr zu finden waren — das traf auch eine Kante mit drei
+    Dreiecken und einen Knoten, der fransig blieb, aber am Rand des Netzes
+    ohne freie Nachbarn lag. Jetzt heißt schließend: keine Kante dreifach, kein
+    Randknoten mit mehr als zwei Randkanten. An geschlossenen Netzen ist das
+    dieselbe Antwort; an offenen die ehrlichere.
+    """
     if not candidates:
         return None
+    corners = len(body.vertices)
+    triangles = np.asarray(body.faces)
     for size in range(1, NOTCH_AT_MOST + 1):
         found = [
             group
             for group in itertools.combinations(candidates, size)
-            if not _notch_faces(body, [*patch, *group])
+            if _closes(rim, _edge_codes(triangles[list(group)], corners), corners)
         ]
         if len(found) == 1:
             return found[0]
@@ -5236,6 +5377,32 @@ def _closing_set(
             # Mehrere Mengen derselben Größe: eine Gabelung, keine Kerbe.
             return None
     return None
+
+
+def _closes(rim: _Rim, codes: np.ndarray, corners: int) -> bool:
+    """Ob die Dreiecke mit diesen Kanten jeden fransigen Knoten des Rands in Ordnung bringen."""
+    added: dict[int, int] = {}
+    for code in codes.tolist():
+        added[code] = added.get(code, 0) + 1
+    change: dict[int, int] = {}
+    for code, more in added.items():
+        before = rim.counts.get(code, 0)
+        after = before + more
+        if after > 2:
+            return False
+        if before == 1:
+            # Eine Randkante wird zur Innenkante.
+            step = -1
+        elif after == 1:
+            # Eine neue Kante wird Rand.
+            step = 1
+        else:
+            continue
+        for node in (code // corners, code % corners):
+            change[node] = change.get(node, 0) + step
+    if any(rim.degrees.get(node, 0) + step > 2 for node, step in change.items()):
+        return False
+    return all(node in change for node in rim.frayed)
 
 
 # --- Flächen ---------------------------------------------------------------------
