@@ -40,11 +40,32 @@ class _Renderer:
     #: Wird beim Aufbau gesetzt — die Projektion liest darüber den Zoom.
     viewport: Any = None
 
-    def add_surface(self, *_args: Any, **_kwargs: Any) -> _Item:
-        return _Item()
+    def __init__(self) -> None:
+        #: Was die Maßtinte anlegt und wieder abräumt — je Aufruf Name und
+        #: Argumente, damit ein Test fragen kann, was im Bild steht.
+        self.lines: list[dict[str, Any]] = []
+        self.surfaces: list[dict[str, Any]] = []
+        self.removed: list[Any] = []
 
-    def remove(self, _item: Any) -> None:
-        pass
+    def add_surface(self, *_args: Any, **_kwargs: Any) -> _Item:
+        item = _Item()
+        self.surfaces.append({"args": _args, "item": item, **_kwargs})
+        return item
+
+    def add_lines(self, points: Any, **kwargs: Any) -> _Item:
+        item = _Item()
+        self.lines.append({"points": np.asarray(points, dtype=float), "item": item, **kwargs})
+        return item
+
+    def remove(self, item: Any) -> None:
+        self.removed.append(item)
+        self.lines = [entry for entry in self.lines if entry["item"] is not item]
+        self.surfaces = [entry for entry in self.surfaces if entry["item"] is not item]
+
+    def display_to_world(self, x: float, y: float, _depth: float) -> tuple[float, float, float]:
+        """Die Umkehrung von ``world_to_display`` in der Ebene z = 0."""
+        scale = _Viewport.SCALE * self.viewport.zoom()
+        return ((x - 320) / scale, (240 - y) / scale, 0.0)
 
     def world_to_display(self, point: Any) -> tuple[float, float, float]:
         """Eine Projektion, in der auch **z** ankommt.
@@ -3344,7 +3365,7 @@ def test_historical_bore_fields_preview_all_following_steps_and_preserve_origina
         approval = _display_measure_preview(window, flow)
         assert not flow._showing_input
         assert window.viewport._placement_grip is None
-        assert not flow._canvas.isVisibleTo(window.viewport)
+        assert not flow._canvas.shown
         assert all(field.isHidden() for field in flow._measures)
         if case in {"fields-only", "centre", "through"}:
             assert flow._surface is None and flow._measure_without_surface

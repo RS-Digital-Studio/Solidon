@@ -8,7 +8,7 @@ bleibt der einzige Weg ins Dokument.
 from __future__ import annotations
 
 import math
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from itertools import pairwise, product
 from typing import Any, Final, Protocol, cast, runtime_checkable
 
@@ -24,17 +24,7 @@ from PySide6.QtCore import (
     QTimer,
     Signal,
 )
-from PySide6.QtGui import (
-    QColor,
-    QFocusEvent,
-    QKeyEvent,
-    QPainter,
-    QPainterPath,
-    QPainterPathStroker,
-    QPen,
-    QPolygonF,
-    QRegion,
-)
+from PySide6.QtGui import QColor, QFocusEvent, QKeyEvent, QPolygonF
 from PySide6.QtWidgets import (
     QAbstractSpinBox,
     QApplication,
@@ -66,7 +56,7 @@ from app.ui.icons import icon
 from app.ui.labels import LengthSpin, feature_name, length
 from app.ui.leash import stop_watching_the_dying
 from app.ui.palette import DIFF_PALETTES
-from app.ui.render.api import Item, PointerEvent, SurfaceStyle
+from app.ui.render.api import Item, PointerEvent, Renderer, SurfaceStyle
 from app.ui.style import NORMAL, ROOMY, SPACE
 
 #: Wie nah der Zeiger einer Marke kommen muss, damit sie ihn hält — in
@@ -392,11 +382,120 @@ def _grips_its_preview(spec: OperationSpec) -> bool:
     return {"x", "y", "z", "nx", "ny", "nz", "angle"} <= names
 
 
-class _Dimensions(QWidget):
-    """Maßpfeile im Bildraum, mit getrennten erreichbaren Zahlenfeldern."""
+def _crosses(a: tuple[QPointF, QPointF], b: tuple[QPointF, QPointF]) -> bool:
+    """Ob zwei Strecken einander schneiden — echte Kreuzung, keine Berührung."""
 
-    def __init__(self, parent: QWidget) -> None:
-        super().__init__(parent)
+    def side(p: QPointF, q: QPointF, r: QPointF) -> float:
+        return (q.x() - p.x()) * (r.y() - p.y()) - (q.y() - p.y()) * (r.x() - p.x())
+
+    d1 = side(b[0], b[1], a[0])
+    d2 = side(b[0], b[1], a[1])
+    d3 = side(a[0], a[1], b[0])
+    d4 = side(a[0], a[1], b[1])
+    return ((d1 > 0) != (d2 > 0)) and ((d3 > 0) != (d4 > 0)) and 0 not in (d1, d2, d3, d4)
+
+
+def _untangle(
+    positions: dict[QWidget, QRect],
+    pending: Sequence[tuple[QWidget, QPointF, tuple[QPointF, QPointF]]],
+    bounds: QRect,
+    obstacles: Sequence[QRect],
+) -> None:
+    """Zwei Felder tauschen die Plätze, wenn ihre Zuordnungslinien einander kreuzen.
+
+    Robert, 21.09.2026: „aufpassen dass sich die maßlinien nicht kreuzen".
+    Die Platzsuche setzt jedes Feld für sich an den nächsten freien Ort; stehen
+    mehrere gestapelt neben dem Körper, laufen ihre Linien fächerförmig zu den
+    Maßlinien und schneiden sich. Getauscht wird paarweise und nur, wenn beide
+    Felder an den fremden Plätzen ins Bild passen, keinem Hindernis und keinem
+    dritten Feld zu nahe kommen und danach weniger Kreuzungen stehen — so lange,
+    bis kein Tausch mehr etwas bringt. Fünf Felder sind zehn Paare; das kostet
+    nichts.
+    """
+    anchors = {widget: (start + end) / 2 for widget, _wanted, (start, end) in pending}
+    widgets = [widget for widget, _wanted, _line in pending if widget in positions]
+
+    def leader(widget: QWidget, rect: QRect) -> tuple[QPointF, QPointF]:
+        return (QPointF(rect.center()), anchors[widget])
+
+    def crossings(layout: dict[QWidget, QRect]) -> int:
+        lines = [leader(widget, layout[widget]) for widget in widgets]
+        return sum(
+            1
+            for index, first in enumerate(lines)
+            for second in lines[index + 1 :]
+            if _crosses(first, second)
+        )
+
+    def fits(widget: QWidget, rect: QRect, layout: dict[QWidget, QRect]) -> bool:
+        if not bounds.contains(rect):
+            return False
+        grown = rect.adjusted(-SPACE, -SPACE, SPACE, SPACE)
+        if any(grown.intersects(taken) for taken in obstacles):
+            return False
+        return not any(grown.intersects(layout[other]) for other in widgets if other is not widget)
+
+    for _round in range(len(widgets) * len(widgets)):
+        now = crossings(positions)
+        if now == 0:
+            return
+        improved = False
+        for index, first in enumerate(widgets):
+            for second in widgets[index + 1 :]:
+                a, b = positions[first], positions[second]
+                swapped = dict(positions)
+                swapped[first] = QRect(b.topLeft(), a.size())
+                swapped[second] = QRect(a.topLeft(), b.size())
+                if not fits(first, swapped[first], swapped) or not fits(
+                    second, swapped[second], swapped
+                ):
+                    continue
+                if crossings(swapped) < now:
+                    positions.update(swapped)
+                    improved = True
+                    break
+            if improved:
+                break
+        if not improved:
+            return
+
+
+class _Dimensions:
+    """Maßtinte im Bildraum — gezeichnet im Renderer vor dem Material.
+
+    Bis zum 21.09.2026 war das ein Qt-Widget über der Renderfläche, das über
+    eine Fenstermaske nur seine Linien belegte. Die Maske hatte je schräger
+    Linie ein Rechteck je Bildzeile, und bei 1682 Rechtecken verlor der
+    Vulkan-Treiber der RTX 4080 das Gerät — „Parent device is lost" im
+    nächsten ``submit``, ohne Fehler davor; 1380 liefen, unter D3D12 lief
+    alles (RM-198, gemessen an Weg 1, dreimal je Stand). Ein gerastertes
+    Ersatzbild kostete eine gestufte graue Unterlage und je Bild vier
+    Durchläufe über alle Rechtecke (Robert: „performancetechnisch auch ganz
+    schlecht").
+
+    Die Tinte geht seither denselben Weg wie die Merkmalslinien der Ansicht:
+    ``renderer.add_lines`` und ``add_surface`` mit ``keep_in_front`` — kein
+    Widget, keine Maske, nichts, was ein Treiber zerlegen müsste. Die
+    Zahlenfelder bleiben Qt-Fenster und liegen ohnehin über dem Bild.
+
+    Die Listen tragen Bildkoordinaten in logischen Bildpunkten; ``refresh``
+    legt sie über ``display_to_world`` auf eine Tiefe vor der Kamera und
+    tauscht die Elemente des Renderers aus. Reihenfolge ist Zeichenreihenfolge:
+    pygfx sortiert die Deckschicht nach Reihe, Ordnung und Abstand, und die
+    sind hier für alle gleich — was zuerst angelegt wird, liegt unten.
+    """
+
+    #: Wo die Tinte im Tiefenbereich liegt — mitten drin, weit weg von beiden
+    #: Klippen; die Tiefenprüfung ist für sie ohnehin aus.
+    DEPTH: Final = 0.5
+    #: Gestrichelt heißt: so viele Bildpunkte Strich, so viele Lücke.
+    DASH: Final = (8.0, 4.0)
+    #: Die Marke an beiden Enden einer Zuordnungslinie und ihr Rand.
+    MARK: Final = 3.5
+    MARK_RIM: Final = 1.5
+
+    def __init__(self, viewport: QWidget) -> None:
+        self._viewport = viewport
         self.lines: list[tuple[QPointF, QPointF]] = []
         self.leaders: list[tuple[QPointF, QPointF]] = []
         self.references: list[tuple[QPointF, QPointF]] = []
@@ -418,13 +517,41 @@ class _Dimensions(QWidget):
         #: durch die maßlinien zu treffen/sehen"). Der Umriss bleibt: Er zeigt
         #: das Loch, und das gehört unter den Griff.
         self.clearing: tuple[QPointF, float] | None = None
-        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-        self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent)
+        #: Die Fläche, auf die die Tinte beschränkt ist — das Bild der Ansicht.
+        self.area = QRect()
+        #: Was zuletzt wirklich gezeichnet wurde: die Striche in
+        #: Bildkoordinaten, nach Aussparung und Strichelung — für Tests, die
+        #: fragen, wo Tinte liegt, ohne ein Bild aufzunehmen.
+        self.segments: list[tuple[QPointF, QPointF]] = []
+        self._items: list[Item] = []
+
+    # --- Zustand, wie ihn der Fluss braucht -----------------------------------------
+
+    @property
+    def shown(self) -> bool:
+        """Ob gerade Tinte im Bild steht."""
+        return bool(self._items)
+
+    def set_area(self, area: QRect) -> None:
+        self.area = QRect(area)
+
+    def hide(self) -> None:
+        """Alle Elemente aus dem Renderer nehmen — die Listen bleiben."""
+        renderer = getattr(self._viewport, "renderer", None)
+        for item in self._items:
+            if renderer is not None:
+                renderer.remove(item)
+        self._items = []
+        self.segments = []
+
+    def deleteLater(self) -> None:  # noqa: N802 — dieselbe Geste wie bei den Widgets daneben
         self.hide()
+
+    # --- Geometrie in Bildkoordinaten ------------------------------------------------
 
     @staticmethod
     def _arrowheads(start: QPointF, end: QPointF) -> tuple[QPolygonF, ...]:
-        """Zeichnung und Maske verwenden dieselben Pfeilspitzen."""
+        """Beide Pfeilspitzen einer Maßlinie als gefüllte Dreiecke."""
         vector = end - start
         size = math.hypot(vector.x(), vector.y())
         if size < 1.0:
@@ -437,119 +564,195 @@ class _Dimensions(QWidget):
             heads.append(QPolygonF([point, base + sideways * SPACE, base - sideways * SPACE]))
         return tuple(heads)
 
-    def refresh(self, exclusions: tuple[QRect, ...] = ()) -> None:
-        """Nur die wirkliche Tinte belegen; alles andere gehört dem nativen Renderfenster.
+    @staticmethod
+    def _disc(centre: QPointF, radius: float, sides: int = 16) -> QPolygonF:
+        return QPolygonF(
+            [
+                centre
+                + QPointF(
+                    math.cos(2.0 * math.pi * index / sides) * radius,
+                    math.sin(2.0 * math.pi * index / sides) * radius,
+                )
+                for index in range(sides)
+            ]
+        )
 
-        Ein vollflächiges Kind mit WA_NoSystemBackground blitzt hier den alten
-        Qt-Backingstore über das native Renderfenster, einschließlich längst
-        verborgener Ladeanzeige. Wie bei den Overlaykarten beschränkt eine
-        Maske die Fläche.
-        Innerhalb dieser kleinen Maske wird jeder Pixel definiert neu gezeichnet.
+    def _outside_the_clearing(self, start: QPointF, end: QPointF) -> list[tuple[QPointF, QPointF]]:
+        """Das Stück Strecke, das nicht im Griff liegt — null, ein oder zwei Teile."""
+        if self.clearing is None:
+            return [(start, end)]
+        centre, radius = self.clearing
+        vector = end - start
+        square = QPointF.dotProduct(vector, vector)
+        if square < EPS_GEOM:
+            return []
+        offset = start - centre
+        # |offset + t·vector|² = r² — quadratisch in t
+        b = 2.0 * QPointF.dotProduct(offset, vector)
+        c = QPointF.dotProduct(offset, offset) - radius * radius
+        discriminant = b * b - 4.0 * square * c
+        if discriminant <= 0.0:
+            return [] if c < 0.0 else [(start, end)]
+        root = math.sqrt(discriminant)
+        first = (-b - root) / (2.0 * square)
+        second = (-b + root) / (2.0 * square)
+        pieces: list[tuple[QPointF, QPointF]] = []
+        if first > 0.0:
+            pieces.append((start, start + vector * min(first, 1.0)))
+        if second < 1.0:
+            pieces.append((start + vector * max(second, 0.0), end))
+        return [
+            (head, tail)
+            for head, tail in pieces
+            if QPointF.dotProduct(tail - head, tail - head) >= 1.0
+        ]
+
+    def _in_the_clearing(self, point: QPointF) -> bool:
+        if self.clearing is None:
+            return False
+        centre, radius = self.clearing
+        return math.hypot(point.x() - centre.x(), point.y() - centre.y()) < radius
+
+    @classmethod
+    def _dashed(cls, start: QPointF, end: QPointF) -> list[tuple[QPointF, QPointF]]:
+        vector = end - start
+        length = math.hypot(vector.x(), vector.y())
+        if length < 1.0:
+            return []
+        unit = vector / length
+        on, off = cls.DASH
+        pieces = []
+        at = 0.0
+        while at < length:
+            stop = min(at + on, length)
+            pieces.append((start + unit * at, start + unit * stop))
+            at = stop + off
+        return pieces
+
+    # --- Zeichnen ---------------------------------------------------------------------
+
+    def refresh(self) -> None:
+        """Die Elemente des Renderers gegen die aktuellen Listen tauschen.
+
+        Unterlage zuerst, dann die Striche, dann Pfeile und Marken: eine
+        helle beziehungsweise dunkle Unterlage hält dieselbe Linie auf dem
+        Modell und auf dem Hintergrund lesbar, ohne Farbe als einzige
+        Kodierung. Zuordnungslinien sind gestrichelt und tragen an beiden
+        Enden eine Marke, Maßlinien sind durchgezogen und tragen Pfeile — so
+        bleiben sie ohne Farbe unterscheidbar (Regel 18). Gezeichnet wird
+        nach Aussparung des Griffs.
         """
-        strokes = QPainterPath()
-        ink = QPainterPath()
-        for start, end in (*self.lines, *self.leaders, *self.references, *self.extensions):
-            strokes.moveTo(start)
-            strokes.lineTo(end)
-        stroker = QPainterPathStroker()
-        stroker.setWidth(6.0)  # Vier Pixel Unterlage und beidseitig ein Pixel Kantenglättung.
-        ink = ink.united(stroker.createStroke(strokes))
-        for start, end in self.leaders:
-            for point in (start, end):
-                marker = QPainterPath()
-                marker.addEllipse(point, 5.0, 5.0)
-                ink = ink.united(marker)
-        for start, end in self.lines:
-            for polygon in self._arrowheads(start, end):
-                head = QPainterPath()
-                head.addPolygon(polygon)
-                head.closeSubpath()
-                stroker.setWidth(2.0)
-                ink = ink.united(head).united(stroker.createStroke(head))
-        if self.clearing is not None:
-            # Die Linien weichen dem Griff; was darunter läge, wird nicht
-            # gezeichnet — die Maske klemmt auch das ``paintEvent``.
-            middle, radius = self.clearing
-            hole = QPainterPath()
-            hole.addEllipse(middle, radius, radius)
-            ink = ink.subtracted(hole)
-        if len(self.outline) >= 3:
-            ring = QPainterPath()
-            ring.addPolygon(QPolygonF(self.outline))
-            ring.closeSubpath()
-            stroker.setWidth(6.0)
-            ink = ink.united(stroker.createStroke(ring))
-        area = QPainterPath()
-        area.addRect(self.rect())
-        ink = ink.intersected(area)
-        mask = QRegion(ink.toFillPolygon().toPolygon(), Qt.FillRule.WindingFill)
-        # Über nativen Renderflächen reicht raise_ der Geschwister nicht aus:
-        # Zahlen und Beschriftungen bleiben in jeder Stapelreihenfolge frei.
-        for rect in exclusions:
-            mask = mask.subtracted(QRegion(rect))
-        if mask.isEmpty():
-            self.hide()  # Eine leere QWidget-Maske würde das ganze Rechteck freigeben.
+        self.hide()
+        renderer = cast("Renderer | None", getattr(self._viewport, "renderer", None))
+        if renderer is None:
             return
-        self.setMask(mask)
-        self.show()
-        self.raise_()
-        self.update()
-
-    def paintEvent(self, _event: Any) -> None:  # noqa: N802 — Qt-Schnittstelle
-        painter = QPainter(self)
-        painter.setClipRegion(self.mask())
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        colour = self.palette().text().color()
-        backdrop = self.palette().window().color()
-        painter.fillRect(self.rect(), backdrop)
-        for segments, style in (
-            (self.references, Qt.PenStyle.SolidLine),
-            (self.extensions, Qt.PenStyle.DashLine),
-        ):
-            for start, end in segments:
-                painter.setPen(QPen(backdrop, 4.0))
-                painter.drawLine(start, end)
-                painter.setPen(QPen(colour, 2.0, style))
-                painter.drawLine(start, end)
+        solid: list[tuple[QPointF, QPointF]] = []
+        for start, end in (*self.lines, *self.references):
+            solid.extend(self._outside_the_clearing(start, end))
+        dashed: list[tuple[QPointF, QPointF]] = []
+        for start, end in (*self.leaders, *self.extensions):
+            for piece in self._outside_the_clearing(start, end):
+                dashed.extend(self._dashed(*piece))
+        ring: list[tuple[QPointF, QPointF]] = []
         if len(self.outline) >= 3 and self.outline_colour is not None:
-            ring = QPolygonF(self.outline)
-            # Dieselbe Unterlage wie bei den Maßlinien: Der Umriss liegt auf
-            # dem Modell und muss auf hellem wie dunklem Material lesbar sein.
-            painter.setPen(QPen(backdrop, 4.0))
-            painter.setBrush(Qt.BrushStyle.NoBrush)
-            painter.drawPolygon(ring)
-            painter.setPen(QPen(self.outline_colour, 2.0))
-            painter.drawPolygon(ring)
-        for start, end in self.leaders:
-            # Zuordnungslinien haben keine Maßpfeile. **Eine Marke an jedem
-            # Ende**, gefüllt und beide gleich groß: Der Strich verbindet dann
-            # sichtbar zwei Punkte, statt irgendwo am Feld anzusetzen. Bis zum
-            # 10.09.2026 war er ein Punktstrich von einem Bildpunkt mit einer
-            # hohlen Marke — im Fenster kaum zu finden, und bei fünf Feldern
-            # nebeneinander gehörte jede Zahl zu jeder Linie (Robert:
-            # „es war bisschen undeutlich welcher wert zu welcher linie
-            # gehört"). Gestrichelt statt gepunktet aus demselben Grund; sie
-            # bleibt damit von einer Maßlinie unterscheidbar, die durchgezogen
-            # ist und Pfeile trägt (Regel 18 — nicht die Farbe trennt sie).
-            painter.setPen(QPen(backdrop, 4.0))
-            painter.drawLine(start, end)
-            painter.setPen(QPen(colour, 1.5, Qt.PenStyle.DashLine))
-            painter.drawLine(start, end)
-            painter.setPen(QPen(backdrop, 1.5))
-            painter.setBrush(colour)
-            for point in (start, end):
-                painter.drawEllipse(point, 3.5, 3.5)
-        for start, end in self.lines:
-            # Eine helle/dunkle Unterlage hält dieselbe Linie auf dem Modell
-            # und auf dem Hintergrund lesbar, ohne Farbe als einzige Kodierung.
-            painter.setPen(QPen(backdrop, 4.0))
-            painter.drawLine(start, end)
-            painter.setPen(QPen(colour, 1.5))
-            painter.drawLine(start, end)
-            painter.setBrush(colour)
-            for polygon in self._arrowheads(start, end):
-                painter.drawPolygon(polygon)
-        painter.end()
+            ring = list(zip(self.outline, [*self.outline[1:], self.outline[0]], strict=True))
+        heads = [
+            polygon
+            for start, end in self.lines
+            for polygon in self._arrowheads(start, end)
+            if not self._in_the_clearing(polygon.toList()[0])
+        ]
+        marks = [
+            point
+            for start, end in self.leaders
+            for point in (start, end)
+            if not self._in_the_clearing(point)
+        ]
+        self.segments = [*solid, *dashed, *ring]
+        if not self.segments and not heads and not marks:
+            return
+        ratio = float(self._viewport.devicePixelRatioF())
+        depth = self.DEPTH
+
+        def world(point: QPointF) -> Vec3 | None:
+            return renderer.display_to_world(point.x() * ratio, point.y() * ratio, depth)
+
+        def line_points(segments: Sequence[tuple[QPointF, QPointF]]) -> np.ndarray | None:
+            rows: list[Vec3] = []
+            for start, end in segments:
+                head, tail = world(start), world(end)
+                if head is not None and tail is not None:
+                    rows.extend((head, tail))
+            return np.asarray(rows, dtype=np.float64) if rows else None
+
+        def surface(polygons: Sequence[QPolygonF]) -> tuple[np.ndarray, np.ndarray] | None:
+            vertices: list[Vec3] = []
+            faces: list[tuple[int, int, int]] = []
+            for polygon in polygons:
+                corners = [world(corner) for corner in polygon.toList()]
+                if any(corner is None for corner in corners):
+                    continue
+                base = len(vertices)
+                vertices.extend(corner for corner in corners if corner is not None)
+                for index in range(1, len(corners) - 1):
+                    faces.append((base, base + index, base + index + 1))
+            if not faces:
+                return None
+            return np.asarray(vertices, dtype=np.float64), np.asarray(faces, dtype=np.int64)
+
+        palette = self._viewport.palette()
+        colour = palette.text().color().name()
+        backdrop = palette.window().color().name()
+        items: list[Item] = []
+        underlay = line_points(self.segments)
+        if underlay is not None:
+            items.append(
+                renderer.add_lines(
+                    underlay,
+                    name="dimension_backdrop",
+                    colour=backdrop,
+                    width=4.0,
+                    keep_in_front=True,
+                )
+            )
+        rim = surface([self._disc(point, self.MARK + self.MARK_RIM) for point in marks])
+        if rim is not None:
+            items.append(self._surface(renderer, "dimension_mark_rim", rim, backdrop))
+        outline_colour = self.outline_colour.name() if self.outline_colour is not None else colour
+        for name, segments, width, tint in (
+            ("dimension_lines", solid, 2.0, colour),
+            ("dimension_leaders", dashed, 1.5, colour),
+            ("dimension_outline", ring, 2.0, outline_colour),
+        ):
+            points = line_points(segments)
+            if points is not None:
+                items.append(
+                    renderer.add_lines(
+                        points, name=name, colour=tint, width=width, keep_in_front=True
+                    )
+                )
+        for name, polygons in (
+            ("dimension_arrowheads", heads),
+            ("dimension_marks", [self._disc(point, self.MARK) for point in marks]),
+        ):
+            built = surface(polygons)
+            if built is not None:
+                items.append(self._surface(renderer, name, built, colour))
+        self._items = items
+
+    @staticmethod
+    def _surface(
+        renderer: Renderer, name: str, built: tuple[np.ndarray, np.ndarray], tint: str
+    ) -> Item:
+        vertices, faces = built
+        return renderer.add_surface(
+            vertices,
+            faces,
+            name=name,
+            style=SurfaceStyle(
+                colour=tint, lighting=False, show_edges=False, pickable=False, keep_in_front=True
+            ),
+        )
 
 
 class PlacementFlow(QObject):
@@ -1263,6 +1466,7 @@ class PlacementFlow(QObject):
         self.viewport.set_placement_pointer(None)
         for widget in self._widgets():
             widget.hide()
+        self._canvas.hide()
         self.viewport.grip_placement(None)
         self._remove_tools()
         self._tool_context = None
@@ -1334,6 +1538,7 @@ class PlacementFlow(QObject):
             self.dialog.reject()
         for widget in self._widgets():
             widget.deleteLater()
+        self._canvas.deleteLater()
 
     def _show_bar(self) -> None:
         """Die Leiste unten zeigen — außer der Träger trägt seine Werte schon.
@@ -1347,7 +1552,6 @@ class PlacementFlow(QObject):
     def _widgets(self) -> tuple[QWidget, ...]:
         return (
             self._bar,
-            self._canvas,
             self._depth_measure,
             self._rest,
             self._measure_box,
@@ -3090,6 +3294,7 @@ class PlacementFlow(QObject):
         if self.viewport.slot_drag_waits() and self._measure_group is None:
             for widget in self._widgets():
                 widget.hide()
+            self._canvas.hide()
             for item in (self._tool, self._addition):
                 if item is not None:
                     item.set_visible(False)
@@ -3098,7 +3303,7 @@ class PlacementFlow(QObject):
             return
         self._show_bar()
         area = self.viewport.rect()
-        self._canvas.setGeometry(area)
+        self._canvas.set_area(area)
         room = area.adjusted(ROOMY, ROOMY, -ROOMY, -ROOMY)
         overlay = getattr(self.window, "overlay", None)
         for role in ("left", "right", "bottom"):
@@ -3466,6 +3671,7 @@ class PlacementFlow(QObject):
         body = self._body_on_screen(screen, bounds, room_around)
         if body is not None:
             occupied.append(body)
+        obstacles = list(occupied)
         positions: dict[QWidget, QRect] = {}
         for widget, wanted, _line in sorted(pending, key=lambda entry: -entry[0].width()):
             width, height = widget.width(), widget.height()
@@ -3528,20 +3734,19 @@ class PlacementFlow(QObject):
             )
             positions[widget] = chosen
             occupied.append(chosen)
+        _untangle(positions, pending, bounds, obstacles)
         for widget, _wanted, (start, end) in pending:
             rect = positions[widget]
             widget.move(rect.topLeft())
             widget.show()
             widget.raise_()
             middle = QPointF(rect.center())
-            vector = end - start
-            square = QPointF.dotProduct(vector, vector)
-            along = (
-                max(0.0, min(QPointF.dotProduct(middle - start, vector) / square, 1.0))
-                if square
-                else 0.0
-            )
-            anchor = start + vector * along
+            # **Die Verbindung geht zur Mitte der Maßlinie** (Robert, 21.09.2026:
+            # „schöner wäre noch wenn die linien von den maßen zu den
+            # mittellinien jeweils gehen"). Bis dahin endete sie am
+            # nächstgelegenen Punkt der Linie — bei einem Feld neben dem Körper
+            # ist das ihr Ende, und zwei Felder zeigten auf denselben Eckpunkt.
+            anchor = (start + end) / 2
             direction = anchor - middle
             ratios = [1.0]
             if direction.x():
@@ -3555,8 +3760,7 @@ class PlacementFlow(QObject):
         # und das Tiefenfeld sitzt darüber (Robert, 09.09.2026: „wenn ich die
         # tiefe setz, komm ich nicht in das bearbeitenfeld von der maßeinheit").
         shown = [widget for widget in (self._depth_measure, self._rest) if widget.isVisible()]
-        bars = (self._bar,) if self._bar.isVisibleTo(self.viewport) else ()
-        self._canvas.refresh(tuple(widget.geometry() for widget in (*bars, *positions, *shown)))
+        self._canvas.refresh()
         self._bar.raise_()
         for widget in (*self._measures, *self._centre_measures, self._centre, *shown):
             widget.raise_()

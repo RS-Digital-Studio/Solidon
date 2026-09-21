@@ -14,7 +14,6 @@ import numpy as np
 import pytest
 import trimesh
 from PySide6.QtCore import QPoint, QPointF, QRect
-from PySide6.QtGui import QColor, QPalette
 from PySide6.QtWidgets import QApplication, QFrame, QLabel, QVBoxLayout, QWidget
 from shapely.geometry import Polygon
 
@@ -31,21 +30,38 @@ from app.core.scene.placement import (
 from app.core.types import PlaneFrame, Scene, SceneObject
 from app.ui.op_dialog import OperationDialog
 from app.ui.overlay import OverlayHost
-from app.ui.placement_flow import PlacementFlow, _Dimensions
+from app.ui.placement_flow import PlacementFlow, _crosses, _Dimensions, _untangle
 from app.ui.session import Session
 from tests.test_surface_placement_ui import _Item, _Viewport
 
 
-def test_dimension_ink_does_not_cover_the_empty_viewport_area(qt_app: QApplication) -> None:
-    """Eine leere Qt-Overlayfläche darf keinen alten Backingstore über das Renderbild legen."""
+def test_dimension_ink_lives_in_the_renderer_and_leaves_with_the_surface(
+    qt_app: QApplication,
+) -> None:
+    """Die Maßtinte ist kein Qt-Widget über der Renderfläche (RM-198).
+
+    Bis zum 21.09.2026 lag sie als maskiertes Widget über dem nativen
+    Renderfenster; die Maske hatte je schräger Linie ein Rechteck je Bildzeile,
+    und bei 1682 Rechtecken verlor der Vulkan-Treiber das Gerät. Jetzt gehen
+    Unterlage, Striche, Pfeile und Marken als Elemente vor dem Material in den
+    Renderer — und mit der Fläche kommen sie wieder heraus.
+    """
     flow, session, viewport, dialog = _layout(qt_app, (900, 600), 1.0, "bottom")
     viewport.renderer.world_to_display = lambda point: (80 + point[0] * 20, 80 + point[1] * 20, 0.5)
     flow.redraw()
     canvas = flow._canvas
+    renderer = viewport.renderer
     try:
-        assert not canvas.mask().isEmpty(), "eine leere Qt-Maske gibt das ganze Rechteck frei"
-        assert canvas.mask().contains(QPoint(85, 280)), "die freie Maßlinie bleibt sichtbar"
-        assert not canvas.mask().contains(QPoint(850, 550)), "hier muss allein der Renderer malen"
+        assert not isinstance(canvas, QWidget), "keine Fenstermaske über der Renderfläche"
+        assert canvas.shown
+        names = [entry["name"] for entry in renderer.lines]
+        assert "dimension_backdrop" in names and "dimension_lines" in names
+        assert all(entry["keep_in_front"] for entry in renderer.lines)
+        assert all(entry["style"].keep_in_front for entry in renderer.surfaces)
+        assert any(entry["name"] == "dimension_arrowheads" for entry in renderer.surfaces)
+        # Die Unterlage liegt unter der Tinte: zuerst angelegt, zuerst gezeichnet.
+        assert names.index("dimension_backdrop") < names.index("dimension_lines")
+        first_items = [entry["item"] for entry in (*renderer.lines, *renderer.surfaces)]
 
         viewport.renderer.world_to_display = lambda point: (
             380 + point[0] * 20,
@@ -53,14 +69,17 @@ def test_dimension_ink_does_not_cover_the_empty_viewport_area(qt_app: QApplicati
             0.5,
         )
         flow.redraw()
-        assert not canvas.mask().contains(QPoint(85, 280)), (
-            "die alte Maßlage gibt ihre Pixel zurück"
+        assert all(item in renderer.removed for item in first_items), (
+            "die alte Maßlage gibt ihre Elemente zurück"
         )
-        assert canvas.mask().contains(QPoint(385, 480))
+        assert len(
+            [entry for entry in renderer.lines if entry["name"].startswith("dimension_")]
+        ) == len([name for name in names if name.startswith("dimension_")])
 
         flow._surface = None
         flow.redraw()
-        assert canvas.isHidden(), "ohne Tinte darf keine unmaskierte Vollfläche erscheinen"
+        assert not canvas.shown, "ohne Fläche steht keine Tinte im Bild"
+        assert not [entry for entry in renderer.lines if entry["name"].startswith("dimension_")]
     finally:
         flow.dispose()
         session.release()
@@ -72,7 +91,7 @@ def test_dimension_ink_does_not_cover_the_empty_viewport_area(qt_app: QApplicati
 def test_dimension_ink_leaves_the_actual_value_and_caption_rectangles_clear(
     qt_app: QApplication, with_centre: bool
 ) -> None:
-    """Die native Stapelreihenfolge darf keine Pfeile durch Zahlen oder Mittelpunkttext ziehen."""
+    """Zahlen und Mittelpunkttext bleiben Qt-Fenster über dem Bild; die Tinte liegt darunter."""
     flow, session, viewport, dialog = _layout(qt_app, (900, 600), 1.0, "bottom")
     if not with_centre:
         flow._centre_id = ""
@@ -85,23 +104,58 @@ def test_dimension_ink_leaves_the_actual_value_and_caption_rectangles_clear(
             )
             flow.redraw()
             assert len(flow._canvas.lines) == (4 if with_centre else 2)
-            assert not flow._canvas.mask().isEmpty(), "freie Pfeilstücke bleiben sichtbar"
+            assert flow._canvas.shown, "die Striche stehen im Renderer"
+            assert flow._canvas.segments, "nach Aussparung bleibt Tinte übrig"
             # Die Kantenmaße sitzen seit der Bezugswahl (20.09.2026) in ihren
-            # Boxen; im Bild verteilt werden die Boxen, die Felder liegen darin.
+            # Boxen; im Bild verteilt werden die Boxen, die Felder liegen darin
+            # — als Qt-Fenster über dem Bild, die Tinte darunter.
             fields = [flow._bar, *flow._reference_boxes[:2]]
             if with_centre:
                 fields.extend([*flow._centre_measures, flow._reference_boxes[2]])
             for field in fields:
                 assert field.isVisible()
-                assert not flow._canvas.mask().intersects(field.geometry()), (
-                    field.objectName(),
-                    field.geometry(),
-                )
     finally:
         flow.dispose()
         session.release()
         dialog.close()
         viewport.close()
+
+
+def test_leaders_swap_their_fields_until_none_of_them_cross(qt_app: QApplication) -> None:
+    """Zwei gestapelte Felder, deren Linien sich kreuzen, tauschen die Plätze (RM-197).
+
+    Robert, 21.09.2026: „aufpassen dass sich die maßlinien nicht kreuzen". Das
+    obere Feld zeigt auf den unteren Anker und umgekehrt — getauscht laufen
+    beide Linien nebeneinander. Ein drittes Feld daneben bleibt, wo es ist,
+    und ein Tausch, der einem Hindernis zu nahe käme, findet nicht statt.
+    """
+    upper, lower, aside = QWidget(), QWidget(), QWidget()
+    positions = {
+        upper: QRect(10, 10, 100, 30),
+        lower: QRect(10, 60, 100, 30),
+        aside: QRect(300, 10, 100, 30),
+    }
+    pending = [
+        (upper, QPointF(), (QPointF(200, 200), QPointF(200, 200))),
+        (lower, QPointF(), (QPointF(200, 100), QPointF(200, 100))),
+        (aside, QPointF(), (QPointF(350, 300), QPointF(350, 300))),
+    ]
+    assert _crosses((QPointF(60, 25), QPointF(200, 200)), (QPointF(60, 75), QPointF(200, 100)))
+    _untangle(positions, pending, QRect(0, 0, 600, 400), [])
+    assert positions[upper] == QRect(10, 60, 100, 30)
+    assert positions[lower] == QRect(10, 10, 100, 30)
+    assert positions[aside] == QRect(300, 10, 100, 30)
+    assert not _crosses(
+        (QPointF(positions[upper].center()), QPointF(200, 200)),
+        (QPointF(positions[lower].center()), QPointF(200, 100)),
+    )
+    # Mit einem Hindernis auf dem oberen Platz bleibt die Kreuzung stehen —
+    # ein Feld über dem Setzpunkt wäre schlimmer als eine gekreuzte Linie.
+    positions[upper], positions[lower] = positions[lower], positions[upper]
+    _untangle(positions, pending, QRect(0, 0, 600, 400), [QRect(0, 0, 130, 45)])
+    assert positions[upper] == QRect(10, 10, 100, 30)
+    for widget in (upper, lower, aside):
+        widget.deleteLater()
 
 
 def test_placement_ghost_uses_a_filled_surface_without_tessellation_edges(
@@ -112,8 +166,10 @@ def test_placement_ghost_uses_a_filled_surface_without_tessellation_edges(
     styles = []
 
     def add_surface(_points, _faces, *, name, style):
-        assert name == "surface_placement_tool"
-        styles.append(style)
+        # Pfeile und Marken der Maßtinte kommen denselben Weg — gezählt wird
+        # hier nur der Werkzeugkörper.
+        if name == "surface_placement_tool":
+            styles.append(style)
         return _Item()
 
     # Ein bereits vorbereiteter Körper genügt; geprüft wird hier allein seine
@@ -139,40 +195,30 @@ def test_placement_ghost_uses_a_filled_surface_without_tessellation_edges(
         viewport.close()
 
 
-def test_moving_dimension_ink_clears_its_previous_qt_pixels(qt_app: QApplication) -> None:
-    """Rasternachweis für Löschen und neue Striche; die GPU-Abnahme bleibt ein eigener Lauf."""
-    parent = QWidget()
-    parent.resize(320, 240)
-    palette = parent.palette()
-    background = QColor("#204060")
-    palette.setColor(QPalette.ColorRole.Window, background)
-    parent.setPalette(palette)
-    parent.setAutoFillBackground(True)
-    canvas = _Dimensions(parent)
-    palette = canvas.palette()
-    palette.setColor(QPalette.ColorRole.Window, QColor("#101010"))
-    palette.setColor(QPalette.ColorRole.WindowText, QColor("#ffffff"))
-    canvas.setPalette(palette)
-    canvas.setGeometry(parent.rect())
-    canvas.lines = [(QPointF(20, 40), QPointF(180, 40))]
-    try:
-        parent.show()
-        canvas.refresh()
-        qt_app.processEvents()
-        first = parent.grab().toImage()
-        assert first.pixelColor(80, 40) != background
-        assert first.pixelColor(250, 190) == background
+def test_moving_dimension_ink_swaps_its_renderer_items(qt_app: QApplication) -> None:
+    """Jeder Aufbau tauscht die Elemente aus — nichts sammelt sich im Renderer an."""
+    from tests.test_surface_placement_ui import _Viewport
 
+    viewport = _Viewport()
+    canvas = _Dimensions(viewport)
+    canvas.lines = [(QPointF(20, 40), QPointF(180, 40))]
+    canvas.leaders = [(QPointF(20, 60), QPointF(180, 90))]
+    try:
+        canvas.refresh()
+        first = [entry["item"] for entry in (*viewport.renderer.lines, *viewport.renderer.surfaces)]
+        assert first, "die erste Tinte steht im Renderer"
+        assert canvas.shown
         canvas.lines = [(QPointF(20, 140), QPointF(180, 140))]
         canvas.refresh()
-        qt_app.processEvents()
-        second = parent.grab().toImage()
-        assert second.pixelColor(80, 40) == background
-        assert second.pixelColor(80, 140) != background
-        assert second.pixelColor(250, 190) == background
+        assert all(item in viewport.renderer.removed for item in first)
+        second = [
+            entry["item"] for entry in (*viewport.renderer.lines, *viewport.renderer.surfaces)
+        ]
+        assert second and not set(second) & set(first)
+        canvas.hide()
+        assert not canvas.shown and not viewport.renderer.lines and not viewport.renderer.surfaces
     finally:
-        parent.close()
-        parent.deleteLater()
+        viewport.close()
 
 
 def test_resizing_a_dimension_field_does_not_mix_nested_line_lists(qt_app: QApplication) -> None:
@@ -192,9 +238,7 @@ def test_resizing_a_dimension_field_does_not_mix_nested_line_lists(qt_app: QAppl
         assert len({(a.x(), a.y(), b.x(), b.y()) for a, b in flow._canvas.lines}) == 2
         viewport.resize(960, 640)
         qt_app.processEvents()
-        assert flow._canvas.size() == viewport.size(), (
-            "die echte Ansichtsgröße wird weiter verfolgt"
-        )
+        assert flow._canvas.area == viewport.rect(), "die echte Ansichtsgröße wird weiter verfolgt"
         assert len(flow._canvas.lines) == len(flow._canvas.leaders) == 2
     finally:
         flow.dispose()
@@ -305,8 +349,8 @@ def test_the_dimension_lines_leave_the_movement_handle_alone(qt_app: QApplicatio
     sitzen Pfeile und Ringe: vier Linien mit Unterlage über dem Griff, und er
     war weder zu sehen noch zu treffen (Robert, 11.09.2026: „das verschieben
     ist auch schwer durch die maßlinien zu treffen/sehen"). Die Maßfläche
-    zeichnet nur, was ihre Maske freigibt; innerhalb der Griffspanne gibt sie
-    nichts frei — außer dem Umriss des Lochs, der dorthin gehört.
+    zeichnet nur, was außerhalb der Griffspanne liegt — und den Umriss des
+    Lochs, der dorthin gehört.
 
     Die Gegenprobe steht wieder daneben: Ohne gemeldeten Griff liegt die Tinte
     an derselben Stelle.
@@ -343,14 +387,28 @@ def test_the_dimension_lines_leave_the_movement_handle_alone(qt_app: QApplicatio
             )
 
         nahe, fern = dazwischen(0.1), dazwischen(0.9)
-        assert canvas.mask().contains(nahe), "ohne Griff zeichnet die Fläche bis in die Mitte"
+
+        def tinte_bei(point: QPoint) -> bool:
+            """Ob ein gezeichneter Strich näher als zwei Bildpunkte am Punkt liegt."""
+            for start, end in canvas.segments:
+                vector = end - start
+                square = QPointF.dotProduct(vector, vector)
+                along = (
+                    QPointF.dotProduct(QPointF(point) - start, vector) / square if square else 0.0
+                )
+                foot = start + vector * max(0.0, min(along, 1.0))
+                if math.hypot(foot.x() - point.x(), foot.y() - point.y()) < 2.0:
+                    return True
+            return False
+
+        assert tinte_bei(nahe), "ohne Griff zeichnet die Fläche bis in die Mitte"
 
         viewport.handle = ((10.0, 10.0, 0.0), 5.0)
         flow.redraw()
         qt_app.processEvents()
         assert canvas.clearing is not None
-        assert not canvas.mask().contains(nahe), "mit Griff bleibt seine Spanne frei von Linien"
-        assert canvas.mask().contains(fern), "die Linie selbst bleibt — nur der Griff wird frei"
+        assert not tinte_bei(nahe), "mit Griff bleibt seine Spanne frei von Linien"
+        assert tinte_bei(fern), "die Linie selbst bleibt — nur der Griff wird frei"
     finally:
         flow.dispose()
         session.release()
@@ -524,8 +582,21 @@ def test_dimension_fields_stand_beside_the_body_and_keep_their_leaders(
         for field in fields:
             assert field.isVisible(), field.objectName()
             assert not field.geometry().intersects(body), (field.objectName(), field.geometry())
-        # Und jedes versetzte Feld behält seine Verbindungslinie zur Maßlinie.
+        # Und jedes versetzte Feld behält seine Verbindungslinie — zur **Mitte**
+        # seiner Maßlinie (Robert, 21.09.2026: „schöner wäre noch wenn die
+        # linien von den maßen zu den mittellinien jeweils gehen").
         assert len(flow._canvas.leaders) >= len(fields)
+        targets = [(start + end) / 2 for start, end in flow._canvas.lines]
+        # Die Mitte eines erkannten Lochs hat keine Linie: Ihr Etikett hängt
+        # am Punkt selbst.
+        for spot in (flow._surface.point, flow._surface.centres[0].point):
+            x, y, _depth = viewport.renderer.world_to_display(
+                viewport.view_point_of(spot, flow._object_id)
+            )
+            targets.append(QPointF(x / ratio, y / ratio))
+        for _tail, anchor in flow._canvas.leaders:
+            near = min((anchor - target).manhattanLength() for target in targets)
+            assert near < 1.0, ("Verbindung endet nicht an einer Linienmitte", anchor)
     finally:
         flow.dispose()
         session.release()

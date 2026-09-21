@@ -50,15 +50,24 @@ belegtes Rechteck, mit demselben Abstand wie um den Setzpunkt; die Felder
 rücken an den nächsten freien Platz daneben, die Verbindungslinie je Feld
 sagt, welches Maß es bemaßt — sie endet in der **Mitte** der Maßlinie, nicht
 am nächstgelegenen Punkt. Füllt der Körper das ganze Bild, gilt die alte
-Regel — ein Feld außerhalb des Bildes ist keines.
+Regel — ein Feld außerhalb des Bildes ist keines. Und keine zwei
+Verbindungen kreuzen sich (Robert: „aufpassen dass sich die maßlinien nicht
+kreuzen"): `_untangle` tauscht nach der Platzsuche paarweise die Plätze
+zweier Felder, solange das Kreuzungen spart und beide am fremden Platz frei
+stehen (`_crosses` je Paar von Strecken).
 
-**Die Fenstermaske der Maßfläche hat eine Obergrenze** (`MASK_RECTS_AT_MOST`,
-`_Dimensions.bounded`, RM-198): Jede schräge Linie liefert ein Rechteck je
-Bildzeile, und bei 1682 Rechtecken verlor der Vulkan-Treiber das Gerät —
-„Parent device is lost" im nächsten `submit`, ohne Fehler davor; 1380
-liefen, unter D3D12 alles. Gerastert wird nur, wenn es nötig ist, und so grob
-wie nötig. Ob Windows D3D12 bekommt oder die Tinte in den Renderer zieht,
-steht als Entscheidung im Register.
+**Die Maßtinte liegt im Renderer, nicht als Widget über ihm** (`_Dimensions`,
+RM-198). Bis zum 21.09.2026 war sie ein maskiertes Qt-Widget über der nativen
+Renderfläche; die Maske hatte je schräger Linie ein Rechteck je Bildzeile, und
+bei 1682 Rechtecken verlor der Vulkan-Treiber das Gerät — „Parent device is
+lost" im nächsten `submit`, ohne Fehler davor; 1380 liefen, unter D3D12
+alles. Seither gehen Unterlage, Striche, Pfeile und Marken über `add_lines`
+und `add_surface` mit `keep_in_front` in den Renderer, wie die
+Merkmalslinien; die Zahlenfelder bleiben Qt-Fenster und liegen ohnehin über
+dem Bild. Die Listen der Klasse tragen logische Bildpunkte, `refresh` legt
+sie über `display_to_world` auf eine feste Tiefe und tauscht die Elemente je
+Aufbau aus; `segments` sagt Tests, wo Tinte liegt. Die Overlaykarten tragen
+weiter Masken — runde Ecken, wenige Rechtecke.
 Wer eine Zahl in ein Maßfeld tippt, wird dabei nicht überschrieben: Jeder
 Tastendruck geht als Wert in den Entwurf, und die zwei Rückwege — Maßgruppe
 und Merkmalfenster — schreiben während des Lesens nichts zurück
@@ -984,13 +993,13 @@ Maßfelder erhalten ihre Float64-Werte und werden gemeinsam außerhalb der
 tatsächlich sichtbaren `OverlayHost`-Karten angeordnet; Verbindungslinien halten
 verschobene Felder ihren Maßpfeilen zugeordnet.
 
-Die Maßfläche belegt über eine `QRegion`-Maske nur Linien, Pfeilspitzen und
-Zuordnungsmarken. Dort zeichnet sie deckend neu; der übrige Bereich bleibt dem
-nativen Renderer. Ein vollflächiges `WA_NoSystemBackground`-Widget ist über
-der pygfx-Renderfläche ausgeschlossen.
-Die Maske nimmt die tatsächlichen Rechtecke aller Zahlenfelder und
-Beschriftungen aus; die native Stapelreihenfolge allein schützt deren
-Lesbarkeit nicht. Die gefüllte Werkzeugvorschau zeigt ihre Oberfläche ohne
+Die Maßtinte — Linien, Pfeilspitzen, Zuordnungsmarken — liegt im Renderer
+(`_Dimensions`, oben unter RM-198); ein Qt-Widget mit Maske über der
+pygfx-Renderfläche gibt es seit dem 21.09.2026 nicht mehr, und ein
+vollflächiges `WA_NoSystemBackground`-Widget darüber bleibt ausgeschlossen.
+Die Zahlenfelder sind Qt-Fenster und liegen von sich aus über dem Bild; die
+Tinte spart ihre Rechtecke beim Verteilen aus (`occupied`), nicht über eine
+Maske. Die gefüllte Werkzeugvorschau zeigt ihre Oberfläche ohne
 innere Dreieckskanten.
 Resize eigener Maßfelder ist ein Layoutergebnis und startet keinen weiteren
 Aufbau; nur Viewport und Rendererwidget verändern die verfügbare Fläche.
