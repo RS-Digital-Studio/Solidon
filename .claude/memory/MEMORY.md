@@ -89,6 +89,7 @@
 - [QMenu.exec blockiert offscreen](qmenu-exec-blockiert-offscreen-und-laesst-sich-nicht-patchen.md) — popup + triggered; QMenu.exec ist nicht patchbar.
 - [Parallele Reviewer kollidieren](parallele-reviewer-kollidieren-an-den-raendern.md) · [Patchübernahme in den geteilten Baum](patchuebernahme-in-den-geteilten-baum.md) · [Skript im Worktree lädt app aus dem Hauptbaum](skript-im-worktree-laedt-app-aus-dem-hauptbaum.md) — Patches in Reihenfolge; sys.path[0].
 - [Paketexport verdeckt das Modul](paketexport-verdeckt-das-modul.md) · [OCP-Paketattribut ist nicht das Modul](ocp-paketattribut-ist-nicht-das-modul.md) — import_module; `import OCP.X as X` patchen.
+- [trimesh-Hash ist kein Merkerschlüssel](trimesh-hash-ist-kein-merkerschluessel.md) — hash(mesh) rechnet je Aufruf (0,44 ms an 200k Dreiecken); id + weakref; je Frage ein eigener Merker, sonst verdrängt die häufige Frage die seltene.
 
 ## Shell und Git
 
