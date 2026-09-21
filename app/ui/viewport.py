@@ -4719,10 +4719,15 @@ class Viewport(QWidget):
         if (
             event.kind == "press"
             and event.button == "left"
-            and self._slot_handle is None
-            and self._placement_pointer is None
+            and (self._slot_handle is None or self._placement_pointer is not None)
             and self._pull_at_the_hole(event)
         ):
+            # Das Loch ist der Griff — auch wenn seine zwei Knöpfe schon stehen,
+            # weil die Maße im Bild sind (``_choose_measure_action``): Ein Druck
+            # zwischen die Knöpfe ging bis zum 21.09.2026 an die Platzierung
+            # und setzte das Loch um, statt es in die Länge zu ziehen.
+            if self._placement_pointer is not None and self._slot_handle is not None:
+                self.placementDragStarted.emit()
             return
         if self._placement_pointer is not None and self._placement_pointer(event):
             return
@@ -10584,6 +10589,15 @@ class Viewport(QWidget):
         self._redraw_features()
         if self.renderer is not None:
             self._draw()
+        elif difference is not None and not self._difference_held:
+            # **Ohne 3D-Ansicht gibt es nichts abzuwarten.** Wer die Freigabe an
+            # das gezeichnete Bild bindet (``differenceApplied``), wartete auf
+            # einem Rechner ohne Renderer für immer — *Übernehmen* blieb grau,
+            # obwohl Band und Bericht die Vorschau längst sagten (gemessen am
+            # 21.09.2026 an sieben Fenstertests, offscreen). Das Ergebnis gilt
+            # dann als gezeigt, sobald es da ist.
+            self._displayed_difference = difference
+            self.differenceApplied.emit(difference)
 
     @property
     def difference(self) -> Any | None:
@@ -10595,9 +10609,11 @@ class Viewport(QWidget):
 
     def _difference_is_ready(self) -> bool:
         """Die aktuelle Darstellung enthält alle aufbereiteten Vorschaukörper."""
+        if self.renderer is None:
+            # Kein Bild, das fehlen könnte — siehe :meth:`show_difference`.
+            return self._difference is not None and not self._difference_held and self._map is None
         return (
             self._difference is not None
-            and self.renderer is not None
             and self._difference_meshes is not None
             and not self._difference_pending
             and not self._difference_failed
@@ -12141,8 +12157,10 @@ class Viewport(QWidget):
         point = self._aim_at(event.x, event.y)
         if point is None or self._feature_at(self._from_view(point)) != chosen.id:
             return False
-        self._face_handle(chosen)
-        self._attach_slot_handle(chosen)
+        borrowed = self._slot_handle is None
+        if borrowed:
+            self._face_handle(chosen)
+            self._attach_slot_handle(chosen)
         handle = self._slot_handle
         if handle is None:
             return False
@@ -12150,7 +12168,9 @@ class Viewport(QWidget):
         nearer = int(
             np.argmin([math.hypot(seat[0] - event.x, seat[1] - event.y) for seat in seats])
         )
-        self._slot_borrowed = True
+        # Geliehen ist nur ein Griff, der für diesen Druck entstand; einer aus
+        # der Platzierung bleibt nach dem Loslassen stehen, wie er kam.
+        self._slot_borrowed = borrowed
         return handle.take_press(event, nearer)
 
     def _on_slot_interaction_cancelled(self) -> None:

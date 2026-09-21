@@ -60,6 +60,28 @@ from app.ui.settings import UiSettings
 MESHES = Path(__file__).parent / "data" / "meshes"
 
 
+def _accept_after_preview(window: MainWindow, dialog: OperationDialog) -> None:
+    """Übernehmen, sobald die Vorschau dargestellt ist — so wie der Kunde.
+
+    Seit dem 20.09.2026 wartet Übernehmen auf die aktuelle **dargestellte**
+    Vorschau: Ein Klick, bevor sie steht, tut nichts, und der Knopf ist bis
+    dahin grau. Ein Test, der direkt nach dem Tippen ``accept()`` ruft,
+    schließt den Dialog deshalb nicht mehr.
+    """
+    from time import monotonic, sleep
+
+    assert window.session.wait_for_idle(30_000)
+    deadline = monotonic() + 30
+    while monotonic() < deadline:
+        QApplication.processEvents()
+        if dialog._accept_button.isEnabled() and dialog.can_accept():
+            break
+        sleep(0.01)
+    assert dialog._accept_button.isEnabled(), "die Vorschau ist dargestellt, Übernehmen frei"
+    dialog.accept()
+    assert window._op_dialog is not dialog, "der Dialog hat übernommen und ist zu"
+
+
 def _release_unstarted_worker(owner: object, field: str, worker: Worker) -> None:
     """Eine vom Test bewusst nicht gestartete QThread-Attrappe abbauen."""
     if getattr(owner, field, None) is worker:
@@ -1009,7 +1031,7 @@ def test_editing_outline_contours_keeps_bound_dimensions(
     assert operation_dialog.values()["height"] == "=@thickness"
     assert operation_dialog.values()["width"] == "=@span"
     assert field.value() == chosen
-    operation_dialog.accept()
+    _accept_after_preview(window, operation_dialog)
     assert session.wait_for_idle()
     updated = session.history.operation(step.id)
     assert updated.params["height"] == "=@thickness"
@@ -1065,7 +1087,7 @@ def test_organizer_layout_choice_keeps_bound_dimensions_and_reaches_history(
     assert parent.values()["width"] == "=@span"
     assert parent.values()["height"] == "=@rise"
     assert field.value() == chosen
-    parent.accept()
+    _accept_after_preview(window, parent)
     assert session.wait_for_idle()
     updated = session.history.operation(step.id)
     assert updated.params["width"] == "=@span"
@@ -3572,6 +3594,10 @@ def test_a_feature_placement_stays_with_its_selected_place(
         assert len(window.session.project.document.ops) == before, "der alte Rückruf ist ungültig"
         if selection in ("none", "project", "evaluation"):
             return
+    # Die neue Auswahl zeigt ihre Maße von selbst im Bild, und dort trägt die
+    # Maßgruppe das Übernehmen; geprüft wird hier der Weg über das Panel —
+    # also die Maße beenden, dann tippen, Vorschau abwarten, übernehmen.
+    window.end_quiet_placement()
     diameter = next(
         field
         for field in panel.findChildren(LengthSpin)
@@ -3580,6 +3606,11 @@ def test_a_feature_placement_stays_with_its_selected_place(
         and "Durchmesser" in field.accessibleName()
     )
     diameter.set_value_mm(diameter.value_mm() + 0.5)
+    window._feature_preview.stop()
+    window._preview_feature_change()
+    assert window.session.wait_for_idle(30_000)
+    for _ in range(40):
+        QApplication.processEvents()
     panel._apply.click()
     assert window.session.wait_for_idle(30_000)
     step = window.session.project.document.ops[-1]
@@ -3608,11 +3639,24 @@ def _hole_fields_in_placement(window: MainWindow) -> tuple[str, str, Any, dict[s
         QApplication.processEvents()
     flow = window._quiet_placement
     assert flow is not None and flow.active and flow._accept.isEnabled()
+    # Stehen die Maße im Bild, gehören Felder und Abschluss der Maßgruppe
+    # (20.09.2026): Die Gegenstücke im Panel sind gesperrt, sein Übernehmen
+    # verborgen — getippt und übernommen wird in der Gruppe.
+    assert flow._measure_group is not None
     fields = {
         field.accessibleName().rsplit(" — ", 1)[-1]: field
-        for field in window.feature_panel.findChildren(LengthSpin)
-        if field.isVisibleTo(window.feature_panel) and "Bohrung ändern" in field.accessibleName()
+        for field in flow._measure_group.findChildren(LengthSpin)
+        if "Bohrung ändern" in field.accessibleName()
     }
+    # Ein Entwurf beginnt mit einer Geste — Klick, Tab oder Taste im Feld —,
+    # nicht mit seiner Anzeige; ``set_value_mm`` ist keine. Offscreen trägt
+    # kein Fokus, ein Tastendruck kommt an: Ende im Feld ändert nichts und
+    # ist die Geste, die der Kunde macht, bevor er tippt.
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    QTest.keyClick(next(iter(fields.values())).lineEdit(), Qt.Key.Key_End)
+    QApplication.processEvents()
     return object_id, hole, flow, fields
 
 
@@ -3631,6 +3675,20 @@ def test_panel_dimensions_and_placement_position_are_adopted_together(
         assert fields["X"].value_mm() == pytest.approx(wanted_position[0])
     else:
         fields[("X", "Y", "Z")[axis]].set_value_mm(wanted_position[axis])
+        QApplication.processEvents()
+    if position_source == "normal":
+        # Eine Koordinate senkrecht zur Fläche verlässt sie: Die Maßgruppe
+        # geht, und es gilt die normale Feldvorschau mit den Feldern rechts.
+        from app.ui.labels import LengthSpin
+
+        assert not flow.active
+        fields = {
+            field.accessibleName().rsplit(" — ", 1)[-1]: field
+            for field in window.feature_panel.findChildren(LengthSpin)
+            if field.isVisibleTo(window.feature_panel)
+            and "Bohrung ändern" in field.accessibleName()
+        }
+        assert fields["Z"].value_mm() == pytest.approx(wanted_position[2])
     wanted_diameter = fields["Durchmesser"].value_mm() + 1.0
     fields["Durchmesser"].set_value_mm(wanted_diameter)
     assert window.session.wait_for_idle(30_000)
@@ -3640,7 +3698,16 @@ def test_panel_dimensions_and_placement_position_are_adopted_together(
         assert flow._tool_context is not None
         assert flow._tool_context.mesh.bounds.size[0] == pytest.approx(wanted_diameter)
 
-    window.feature_panel._apply.click()
+    # Übernehmen wartet auf die dargestellte Vorschau (20.09.2026).
+    window._feature_preview.stop()
+    window._preview_feature_change()
+    assert window.session.wait_for_idle(30_000)
+    for _ in range(40):
+        QApplication.processEvents()
+    if position_source == "normal":
+        window.feature_panel._apply.click()
+    else:
+        flow._measure_accept.click()
     assert window.session.wait_for_idle(30_000)
 
     assert len(window.session.project.document.ops) == before + 1
@@ -3660,7 +3727,14 @@ def test_panel_dimensions_and_placement_position_are_adopted_together(
 def test_a_pending_feature_placement_accept_belongs_to_its_current_context(
     window: MainWindow, monkeypatch: pytest.MonkeyPatch, next_action: str
 ) -> None:
-    """Ein Klick wartet auf die neuen Maße; Abbruch und Kontextwechsel verwerfen ihn."""
+    """Während das Werkzeug rechnet, ist Übernehmen gesperrt; Kontextwechsel legen nichts ab.
+
+    Bis zum 20.09.2026 merkte sich die Platzierung einen frühen Klick und holte
+    ihn nach, sobald das Werkzeug stand. Seit die Maßgruppe auf die
+    **dargestellte** Vorschau wartet, gibt es diesen Klick nicht mehr: Der
+    Knopf ist grau, solange gerechnet wird, und ein Übernehmen gilt erst nach
+    dem Bild, das der Kunde gesehen hat (``requires_displayed_preview``).
+    """
     from app.core.scene import placement
 
     _, hole, flow, fields = _hole_fields_in_placement(window)
@@ -3678,7 +3752,8 @@ def test_a_pending_feature_placement_accept_belongs_to_its_current_context(
     fields["Durchmesser"].set_value_mm(wanted)
     try:
         assert entered.wait(5), "das neue Werkzeug rechnet"
-        window.feature_panel._apply.click()
+        assert not flow._measure_accept.isEnabled()
+        flow._measure_accept.click()
         assert len(window.session.project.document.ops) == before
         if next_action == "cancel":
             window.feature_panel._cancel.click()
@@ -3711,6 +3786,16 @@ def test_a_pending_feature_placement_accept_belongs_to_its_current_context(
         assert window.session.wait_for_idle(30_000)
 
         if next_action == "accept":
+            # Übernehmen wartet auf die dargestellte Vorschau (20.09.2026).
+            assert len(window.session.project.document.ops) == before
+            window._feature_preview.stop()
+            window._preview_feature_change()
+            assert window.session.wait_for_idle(30_000)
+            for _ in range(40):
+                QApplication.processEvents()
+            assert flow._measure_accept.isEnabled()
+            flow._measure_accept.click()
+            assert window.session.wait_for_idle(30_000)
             assert len(window.session.project.document.ops) == before + 1
             step = window.session.project.document.ops[-1]
             assert step.op == "resize_hole" and step.params["at_feature"] == hole
@@ -3846,10 +3931,16 @@ def test_the_apply_button_stays_in_sight_however_low_the_window_is(window: MainW
     Die Frage ist, ob die Zeile im sichtbaren Bereich des Docks liegt.
 
     **Und das Fenster wird dafür gezeigt.** Ungezeigt legt Qt seine Kinder
-    nicht aus: Das Dock maß 100 auf 84 Punkte, und alle vier Halte lagen auf
+    nicht aus: Das Dock maß 100 auf 84 Punkte, und alle Halte lagen auf
     derselben Stelle — eine Messung, die auch mit der Knopfzeile im Rollinhalt
     grün blieb (gemessen an der Gegenprobe). Offscreen erscheint dabei nichts
     auf einem Bildschirm; ausgelegt wird trotzdem.
+
+    Gemessen wird der **gewöhnliche** Zustand: Stehen die Maße im Bild, trägt
+    seit dem 20.09.2026 die Maßgruppe Übernehmen und Abbrechen, und die Knöpfe
+    hier unten gehen mit dem Messen (``set_measuring``). Unten stehen an einer
+    Bohrung drei — *Im Bild einstellen*, der Haken für die Gruppe und
+    *Übernehmen*.
     """
     from PySide6.QtCore import QPoint, QRect
     from PySide6.QtWidgets import QScrollArea
@@ -3863,7 +3954,6 @@ def test_the_apply_button_stays_in_sight_however_low_the_window_is(window: MainW
     roller = dock.findChild(QScrollArea)
     assert roller is not None
     panel = window.feature_panel
-    panel.set_measuring(True)
     # **Zweimal, und die zweite Runde trägt die Messung.** Die Zeilen entstehen
     # in der ersten; ausgelegt werden sie erst danach, und vorher meldet das
     # Panel 272 Punkte statt 764 — eine Zahl, gegen die jede Höhenaussage
@@ -3880,9 +3970,9 @@ def test_the_apply_button_stays_in_sight_however_low_the_window_is(window: MainW
         "passen die Zeilen ins Sichtfeld, prüft dieser Test nichts — "
         f"{panel.height()} in {roller.viewport().height()}"
     )
-    unten = [panel._in_view, panel._every, panel._apply, panel._cancel]
+    unten = [panel._in_view, panel._every, panel._apply]
     stehen = [halt for halt in unten if halt.isVisibleTo(dock)]
-    assert len(stehen) == len(unten), "an dieser Bohrung stehen alle vier"
+    assert len(stehen) == len(unten), "an dieser Bohrung stehen alle drei"
     draussen = [
         f"{halt.accessibleName() or halt.text()} bei y={halt.mapTo(dock, QPoint(0, 0)).y()}"
         for halt in stehen
@@ -5930,9 +6020,13 @@ def test_operations_are_greyed_out_until_they_could_run(window: MainWindow) -> N
     """Ein Menü, in dem alles anklickbar ist und die Hälfte mit „Bitte zuerst
     etwas auswählen" antwortet, lässt den Nutzer die Regeln erraten.
     """
+    from app.core.registry import MENU_TWINS
+
     drilling = window._op_actions["drill_hole"]
     joining = window._op_actions["union_objects"]
-    creating = window._op_actions["create_box"]
+    # Welcher Quader im Menü steht, sagt seit P2.8 die Maschine (der exakte,
+    # wo der Kern da ist); der andere Zwilling hat keinen eigenen Eintrag.
+    creating = window._op_actions[MENU_TWINS.get("create_box", "create_box")]
 
     assert not drilling.isEnabled(), "leere Szene, kein Körper zum Bohren"
     assert creating.isEnabled(), "anlegen geht immer"
@@ -7548,7 +7642,7 @@ def test_import_bed_action_keeps_the_import_group_and_ignores_selection(
     assert [before.scene.objects[key].mesh.bounds.minimum[2] for key in targets] == pytest.approx(
         [-100.0 + 2.0 * index for index in range(count)]
     )
-    window.object_tree.select("obj_1")
+    window.object_tree.select_object("obj_1")
     listing = window.report.list
     item = next(
         listing.item(row)
@@ -7629,7 +7723,7 @@ def test_grounded_import_keeps_the_single_bed_action_for_its_floating_body(windo
     targets = window.session.project.document.ops[-1].outputs
     before = window.session.last_result
     assert [before.scene.objects[key].mesh.bounds.minimum[2] for key in targets] == [0.0, 10.0]
-    window.object_tree.select("obj_1")
+    window.object_tree.select_object("obj_1")
     listing = window.report.list
     item = next(
         listing.item(row)
@@ -8092,6 +8186,57 @@ def test_dropping_a_model_on_the_start_screen_asks_before_replacing(
     assert [entry.op for entry in window.session.project.document.ops] == ["load"], (
         "Verwerfen beginnt das neue Projekt"
     )
+
+
+@pytest.mark.parametrize("entry", ["operation", "sketch"])
+def test_a_creation_from_the_start_screen_begins_the_empty_project(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch, entry: str
+) -> None:
+    """Palette und Kürzel gelten auch über dem Startbildschirm — und dort begann nichts.
+
+    *Quader anlegen* über Strg+Umschalt+P öffnete seinen Dialog über dem
+    Startbildschirm, in einer Sitzung, die nie ausgewertet worden war. Seit
+    Übernehmen auf die aktuelle dargestellte Vorschau wartet (20.09.2026),
+    gibt es die nur zu einem ausgewerteten Stand: Der Knopf war frei und tat
+    nichts (gemessen am 21.09.2026). Jetzt gilt derselbe Weg wie beim Einfügen
+    von dort: das leere Projekt beginnt, der Arbeitsbereich kommt, die Vorschau
+    liegt im Bild — und ein geändertes Projekt dahinter wird gefragt.
+    """
+    import app.ui.main_window as module
+
+    assert window.stack.currentWidget() is window.start_screen
+    assert not window.session.result_current
+
+    if entry == "sketch":
+        window.start_sketch("")
+        assert window.sketching()
+        assert window.stack.currentWidget() is not window.start_screen
+        assert window.session.wait_for_idle(30_000)
+        assert window.session.result_current, "das leere Projekt ist ausgewertet"
+        window.finish_sketch(keep=False)
+        return
+
+    window._run_palette_choice("create_box")
+    dialog = window._op_dialog
+    assert dialog is not None
+    assert window.stack.currentWidget() is not window.start_screen, "die Vorschau liegt im Bild"
+    _accept_after_preview(window, dialog)
+    assert window.session.wait_for_idle(30_000)
+    assert [entry.op for entry in window.session.project.document.ops] == ["create_box"]
+
+    # Über einem geänderten Projekt fragt der Anfang — wie beim Einfügen.
+    window.action_new()
+    assert window.stack.currentWidget() is window.start_screen
+    monkeypatch.setattr(module, "confirm_unsaved", lambda title, parent: "cancel")
+    window._run_palette_choice("create_box")
+    assert window._op_dialog is None, "Abbrechen lässt das Projekt, wie es war"
+    assert [entry.op for entry in window.session.project.document.ops] == ["create_box"]
+    monkeypatch.setattr(module, "confirm_unsaved", lambda title, parent: "discard")
+    window._run_palette_choice("create_box")
+    dialog = window._op_dialog
+    assert dialog is not None
+    assert window.session.project.document.ops == [], "Verwerfen beginnt das neue Projekt"
+    dialog.reject()
 
 
 # --- Einstellungen an einem Ort (§19.3, §38) ------------------------------------
@@ -11929,7 +12074,7 @@ def test_undo_in_the_sketch_mode_means_the_last_stroke(window: MainWindow) -> No
 
     window.run_operation(REGISTRY.get("create_box"))
     dialog = next(child for child in window.findChildren(OperationDialog) if child.isVisible())
-    dialog.accept()
+    _accept_after_preview(window, dialog)
     window.session.wait_for_idle()
     assert window.session.history.can_undo, "sonst prüft das Folgende nichts"
     assert window.undo_action.isEnabled()
@@ -15216,72 +15361,31 @@ def test_the_finder_event_opens_what_it_names(tmp_path: Path, qt_app: QApplicati
 def test_a_step_can_be_made_exact_afterwards(window: MainWindow) -> None:
     """Der Weg, den es nicht gab: erst bauen, dann exakt brauchen.
 
-    Beim Anlegen gab es den Umschalter seit je, beim Nachbearbeiten nicht — und
-    damit war ein Quader, den jemand ohne ihn angelegt hatte, endgültig ein
-    Netz. Sieben Operationen blieben ihm für immer gesperrt, und der einzige
-    Weg dorthin war, den Schritt zu löschen und alles darüber neu zu bauen.
+    Ein Quader aus einem alten Projekt, vor P2.8 ohne Haken angelegt, war
+    endgültig ein Netz: Sieben Operationen blieben ihm gesperrt, und der
+    einzige Weg dorthin war, den Schritt zu löschen und alles darüber neu zu
+    bauen. Seit P2.8 steht der Wechsel am Schritt im Verlauf
+    (``MainWindow.switch_kernel``); der Dialog trägt keinen Haken mehr.
     """
-    from PySide6.QtWidgets import QCheckBox
+    from app.core.registry import exact_kernel_present
 
+    if not exact_kernel_present():
+        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
     window.session.start_new()
-    window.run_operation(REGISTRY.get("create_box"))
-    dialog = next(child for child in window.findChildren(OperationDialog) if child.isVisible())
-    dialog.accept()
+    window.session.history.apply(
+        "Quader", [OperationDraft(op="create_box", params={"width": 30.0})]
+    )
+    window.session.evaluate_now()
     window.session.wait_for_idle()
     assert [entry.op for entry in window.session.project.document.ops] == ["create_box"]
 
     op_id = window.session.project.document.ops[0].id
-    window.edit_operation(op_id)
-    dialog = next(child for child in window.findChildren(OperationDialog) if child.isVisible())
-    exact = next(
-        box for box in dialog.findChildren(QCheckBox) if "Flächen und Kanten" in box.text()
-    )
-    assert not exact.isChecked(), "der Haken steht auf dem, was im Verlauf steht"
-    assert exact.isVisibleTo(dialog), "und er ist zu sehen, ohne aufzuklappen"
-    exact.setChecked(True)
-    dialog.accept()
+    window.switch_kernel(op_id)
     window.session.wait_for_idle()
 
     assert [entry.op for entry in window.session.project.document.ops] == ["create_brep_box"]
     body = next(iter(window.session.last_result.scene.objects.values()))
     assert body.kind == "brep", "der Körper ist jetzt wirklich exakt"
-
-
-def test_the_edit_dialog_shows_the_toggle_on_an_exact_step_too(window: MainWindow) -> None:
-    """Auch am anderen Ende des Paars: der Haken steht dann gesetzt da.
-
-    Der Dialog startet mit dem gespeicherten Schema. Der Rückwechsel baut
-    die Felder des Netzkerns vollständig auf und erhält die gemeinsamen Maße.
-    """
-    from PySide6.QtWidgets import QCheckBox
-
-    window.session.start_new()
-    window.session.apply(
-        "Quader", [OperationDraft(op="create_brep_box", inputs=[], params={"width": 30.0})]
-    )
-    window.session.wait_for_idle()
-
-    op_id = window.session.project.document.ops[0].id
-    window.edit_operation(op_id)
-    dialog = next(child for child in window.findChildren(OperationDialog) if child.isVisible())
-    try:
-        exact = next(
-            box for box in dialog.findChildren(QCheckBox) if "Flächen und Kanten" in box.text()
-        )
-        assert exact.isChecked(), "der Schritt ist der exakte — der Haken sagt es"
-        unused = dialog._editors.get("anchor")
-        assert unused is None or not unused.isVisibleTo(dialog)
-        assert "anchor" not in dialog.values()
-        exact.setChecked(False)
-        dialog.advanced.setChecked(True)
-        assert dialog._editors["anchor"].isVisibleTo(dialog)
-        assert "anchor" in dialog.values()
-        assert dialog.values()["width"] == pytest.approx(30.0)
-        exact.setChecked(True)
-        assert "anchor" not in dialog.values()
-        assert dialog.values()["width"] == pytest.approx(30.0)
-    finally:
-        dialog.reject()
 
 
 def test_a_locked_tool_names_the_step_that_spoiled_the_exact_body(window: MainWindow) -> None:
@@ -15304,8 +15408,17 @@ def test_a_locked_tool_names_the_step_that_spoiled_the_exact_body(window: MainWi
     )
     window.session.wait_for_idle()
     body = next(iter(window.session.last_result.scene.objects))
+    # Seit P2.8 bohrt *Bohrung setzen* am exakten Körper exakt; was ihn zum
+    # Netz macht, ist ein Aushöhlen mit Entlüftung (Konzept §10.1).
     window.session.apply(
-        "Bohrung", [OperationDraft(op="drill_hole", inputs=[body], params={"diameter": 5.0})]
+        "Aushöhlen",
+        [
+            OperationDraft(
+                op="hollow_object",
+                inputs=[body],
+                params={"wall": 2.0, "open_top": True, "vents": 2},
+            )
+        ],
     )
     window.session.wait_for_idle()
 
@@ -15313,7 +15426,7 @@ def test_a_locked_tool_names_the_step_that_spoiled_the_exact_body(window: MainWi
     window._update_actions()
     hint = window._op_actions["brep_to_mesh"].toolTip()
 
-    assert str(REGISTRY.get("drill_hole").title) in hint, hint
+    assert str(REGISTRY.get("hollow_object").title) in hint, hint
     assert "Nimm die Schritte ab dort zurück" in hint, "der Satz nennt eine Handlung, die es gibt"
 
 
@@ -16177,11 +16290,16 @@ def test_no_dialog_asks_for_the_kernel_any_more(window: MainWindow) -> None:
     assert "create_box" not in window._op_actions, "der Netz-Quader ist der versteckte Zwilling"
     assert MENU_TWINS["create_box"] == "create_brep_box"
     # Bohren und Aushöhlen brauchen einen gewählten Körper — sonst fragt
-    # ``run_operation`` mit einem Hinweisfenster nach einer Markierung.
+    # ``run_operation`` mit einem Hinweisfenster nach einer Markierung. Über
+    # die Sitzung, nicht am Verlauf vorbei: Erst ihr Dokumentwechsel verlässt
+    # den Startbildschirm, und von dort begänne ``run_operation`` das leere
+    # Projekt (21.09.2026) — ohne Körper, mit demselben Hinweisfenster.
     from app.core.scene import OperationDraft
 
-    window.session.history.apply("Quader", [OperationDraft(op="create_brep_box", params={})])
-    result = window.session.evaluate_now()
+    assert window.session.apply("Quader", [OperationDraft(op="create_brep_box", params={})])
+    assert window.session.wait_for_idle(30_000)
+    result = window.session.last_result
+    assert result is not None
     window.object_tree.select_object(next(iter(result.scene.objects)))
     QApplication.processEvents()
     for name in ("create_brep_box", "drill_hole", "hollow_object"):
@@ -16814,9 +16932,15 @@ def test_a_clean_part_offers_the_way_to_the_slicer(window: MainWindow) -> None:
     """Der letzte Meter: „Keine Befunde." ohne nächsten Schritt war eine Sackgasse.
 
     Leere Szene: kein Knopf, weil nichts zu übergeben ist. Ein Körper ohne
-    Befund: der Bericht sagt „druckbereit" und bietet den Slicer an; der Knopf
-    öffnet denselben Dialog wie *Datei → Druckeinstellungen …*
-    (Review 02.09.2026).
+    Fehler: der Bericht bietet den Slicer an; der Knopf öffnet denselben
+    Dialog wie *Datei → Druckeinstellungen …* (Review 02.09.2026).
+
+    Seit dem 20.09.2026 trägt jeder Körper mit belegten Flächen den Hinweis
+    auf die Analysekarte „Formabweichung" (``perceive.deviation``, der Weg aus
+    dem Prüfbericht in die Karte). Die Kopfzeile zählt ihn wie jeden Hinweis;
+    „Keine Befunde. Das Teil ist druckbereit." bleibt Körpern ohne einen
+    einzigen Befund vorbehalten. Der Weg zum Slicer hängt nicht daran — er
+    steht, sobald kein Fehler im Weg ist.
     """
     report = window.report
     assert not report.to_slicer.isVisibleTo(report)
@@ -16836,7 +16960,11 @@ def test_a_clean_part_offers_the_way_to_the_slicer(window: MainWindow) -> None:
     QApplication.processEvents()
 
     assert report.to_slicer.isVisibleTo(report)
-    assert report.summary.text() == "Keine Befunde. Das Teil ist druckbereit."
+    assert report.summary.text() == "0 × Fehler · 0 × Warnung · 1 × Hinweis"
+    assert [
+        report.list.item(row).data(Qt.ItemDataRole.UserRole).code
+        for row in range(report.list.count())
+    ] == ["perceive.deviation"]
     opened: list[str] = []
     window.action_print_settings = lambda: opened.append("dialog")  # type: ignore[method-assign]
     report.slicerRequested.disconnect()
@@ -18679,7 +18807,7 @@ def test_naming_the_dimensions_makes_them_project_parameters(window: MainWindow)
             assert isinstance(editor, ValueField)
             editor.set_value(value)
         dialog._naming.setChecked(True)
-        dialog.accept()
+        _accept_after_preview(window, dialog)
         QApplication.processEvents()
         window.session.wait_for_idle()
 

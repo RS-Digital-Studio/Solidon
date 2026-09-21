@@ -476,14 +476,18 @@ def test_the_twin_never_stands_before_its_partner(qt_app: object) -> None:
     ist.
 
     Geprüft an der **Reihenfolge** und nicht am ersten Eintrag allein: Dass der
-    Partner überhaupt dabei ist, gehört zur Aussage.
+    Partner überhaupt dabei ist, gehört zur Aussage. Welcher der beiden die
+    Normalform ist, sagt seit P2.8 die Maschine (``MENU_TWINS``): mit exaktem
+    Kern der exakte Quader, ohne ihn der Netz-Quader.
     """
     palette = CommandPalette()
-    for suche, partner, zwilling in (
+    for suche, mesh, brep in (
         ("quader", "create_box", "create_brep_box"),
         ("zylinder", "create_cylinder", "create_brep_cylinder"),
         ("aushöhlen", "hollow_object", "shell_exact"),
     ):
+        zwilling = mesh if mesh in MENU_TWINS else brep
+        partner = MENU_TWINS[zwilling]
         palette.search.setText(suche)
         namen = [palette.list.item(index).data(0x0100) for index in range(palette.list.count())]
         assert partner in namen and zwilling in namen, f"„{suche}“ findet beide"

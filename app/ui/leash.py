@@ -558,8 +558,15 @@ def stop_watching_the_dying(watcher: QObject, watched: QObject, event: QEvent) -
     dafür, dass die nächste Filterstelle den Griff mitbekommt. Wer sie streichen
     will, hat die Zahl auf seiner Seite; wer sie behält, den Fall, den die Suite
     nicht fährt. Was nicht geht, ist sie für eine Behebung zu halten.
+
+    **Und ``DeferredDelete`` zählt mit** (21.09.2026): Ein Widget, das über
+    ``deleteLater`` geht, bekommt dieses Ereignis als letzten Takt, in dem sein
+    Python-Wrapper noch steht — ``Destroy`` erreicht den Filter danach nur an
+    Kindern und Eltern, nicht mehr am Widget selbst (gemessen an einem
+    ``LengthSpin`` der Maßgruppe: 52 kam an, 16 nicht). Wer hier nicht
+    abbestellt, hält ein totes Objekt in seiner Liste.
     """
-    if event.type() != QEvent.Type.Destroy:
+    if event.type() not in (QEvent.Type.Destroy, QEvent.Type.DeferredDelete):
         return False
     watched.removeEventFilter(watcher)
     return True

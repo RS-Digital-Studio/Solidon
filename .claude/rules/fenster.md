@@ -35,6 +35,20 @@ einklappbare Abschnitte; Mitte der Viewport; rechts **entweder** Chat **oder**
 Prüfbericht, umschaltbar und ganz ausblendbar. Die Umschaltung springt zum
 Bericht, wenn eine Warnung entsteht.
 
+**Wer auf dem Startbildschirm zu arbeiten beginnt, beginnt das leere
+Projekt.** Der Startbildschirm verbirgt die Arbeitsmenüs, nicht die Kürzel
+und nicht die Befehlspalette — *Quader anlegen* oder *Zeichnen* ist von dort
+erreichbar, und die Sitzung dahinter ist noch nie ausgewertet worden. Seit
+Übernehmen auf die aktuelle dargestellte Vorschau wartet (20.09.2026), gibt
+es die nur zu einem ausgewerteten Stand: Ein Dialog über dem Startbildschirm
+hatte einen freien Übernehmen-Knopf, der nichts tat (gemessen am 21.09.2026).
+`run_operation` und `start_sketch` gehen deshalb über
+`_begin_from_the_start_screen`: dieselbe Regel wie beim Einfügen und beim
+Download von dort — der Anfang ersetzt das offene Projekt, mit derselben
+Frage (`_may_discard`), wenn eines verloren ginge, und mit dem Wechsel in
+den Arbeitsbereich, damit die Vorschau nicht hinter dem Startbildschirm
+liegt. `start_empty` sagt, ob es dazu kam.
+
 **Die Handlungen an der Auswahl stehen in einer zweiten Karte darunter,
 nicht in derselben** (Entscheidung Robert, 07.09.2026): Bericht und Chat
 schließen mit ihrem eigenen Rand ab, die Auswahlkarte trägt denselben Stil,

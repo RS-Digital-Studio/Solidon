@@ -155,6 +155,11 @@ class AskDialog(QDialog):
         # sich aus der Liste danebenzudenken. Derselbe Grundsatz wie im Dialog
         # *Ungesicherte Änderungen*: der Knopf sagt, was er tut.
         self._accept = buttons.button(QDialogButtonBox.StandardButton.Ok)
+        # **Der Hauptknopf ist die Antwort, nicht Abbrechen.** Ohne ``default``
+        # nimmt Qt für die Eingabetaste den Knopf, der beim Anzeigen als Erster
+        # aktiv war — und das war während des Aufbaus *Abbrechen*: Enter in der
+        # Liste verwarf die Frage (gemessen am 21.09.2026, ``test_ui``).
+        make_primary(self._accept)
         self.list.currentItemChanged.connect(weak_slot(self, AskDialog._name_the_choice))
         self._name_the_choice()
 
@@ -187,6 +192,14 @@ class AskDialog(QDialog):
         self._preparing.setVisible(not ready)
         self.list.setAccessibleDescription("" if ready else self._preparing.text())
         self._name_the_choice()
+        if ready:
+            # **Die Frage bekommt den Fokus zurück.** Während des Aufbaus sind
+            # Liste und Antwortknopf gesperrt, und Qt legt den Fokus auf den
+            # ersten Knopf, der noch geht — *Abbrechen*. Ein fokussierter Knopf
+            # ist der, den Enter auslöst: Die Eingabetaste verwarf die Frage
+            # (gemessen am 21.09.2026, ``test_ui``). Ab jetzt steht der Fokus
+            # in der Liste, und Enter ist die Antwort.
+            self.list.setFocus(Qt.FocusReason.OtherFocusReason)
 
     def accept(self) -> None:
         """Auch Eingabetaste und Doppelklick beachten die Bereitschaft der Ansicht."""

@@ -78,13 +78,16 @@ def test_exact_sculpt_requires_the_latest_strokes_and_symmetry_before_finishing(
     """Frühes Fertig schließt nichts; neue Gesten entwerten die alte Vorschau sofort."""
     window.start_sculpt(exact_body)
     before = len(window.session.project.document.ops)
-    window._on_sculpt((20.0, 20.0, 20.0))
+    # Der vernetzte Quader hat acht Ecken und sonst keinen Punkt: Ein Zug
+    # bewegt nur, was in seinem Radius liegt — also an eine Ecke, nicht in die
+    # Luft daneben und nicht auf die Mitte einer Fläche ohne Punkt.
+    window._on_sculpt((10.0, 10.0, 20.0))
     first = window._preview_approval
     assert first is not None and first.owner is window.sculpt_bar.done
     assert not window.sculpt_bar.done.isEnabled()
     window.finish_sculpt()
     assert window.sculpting() and len(window.session.project.document.ops) == before
-    window._on_sculpt((0.0, 0.0, 20.0))
+    window._on_sculpt((-10.0, 10.0, 20.0))
     window.sculpt_bar.symmetry.setCurrentIndex(1)
     latest = window._preview_approval
     assert latest is not first and not window.sculpt_bar.done.isEnabled()

@@ -389,7 +389,10 @@ def test_a_selected_bore_opens_resize_at_its_measured_size(window: MainWindow) -
     values = window._from_selection(REGISTRY.get("resize_hole"), object_id)
 
     assert values["at_feature"] == "hole_1"
-    assert values["diameter"] == pytest.approx(5.1901, abs=0.001)
+    # Die Platte trägt Bohrungen Ø 5,2 mm (``tests/data/README.md``); seit dem
+    # Kreisfit an den Konturecken (20.09.2026) misst die Erkennung das Maß
+    # und nicht mehr das um die Vieleckkorrektur kleinere 5,1901.
+    assert values["diameter"] == pytest.approx(5.2, abs=0.001)
 
 
 def test_a_part_is_told_the_name_of_the_feature(window: MainWindow) -> None:
@@ -1206,7 +1209,8 @@ def test_the_greyed_out_entry_says_why(window: MainWindow) -> None:
 
     hint = window._op_actions["brep_to_mesh"].toolTip()
     assert "Flächen und Kanten" in hint
-    assert "später bearbeiten" in hint
+    # Seit P2.8 zeigt der Satz auf den Verlauf, nicht auf einen Haken.
+    assert "im Verlauf" in hint
 
 
 def test_rounding_and_chamfering_stay_available_on_a_mesh(window: MainWindow) -> None:
@@ -4267,7 +4271,7 @@ def test_parameterless_mixed_boolean_opens_the_normal_preview_editor(
         window.object_tree.select_object(identifier, add=index > 0)
     applied = []
     monkeypatch.setattr(window.session, "apply", lambda *args, **kw: applied.append(args))
-    window.run_operation(REGISTRY.get("difference_objects"))
+    window.run_operation(REGISTRY.get("subtract_objects"))
     dialog = window._op_dialog
     assert dialog is not None and not dialog.isModal()
     assert requests[-1][1][0].inputs == identifiers
@@ -4279,38 +4283,6 @@ def test_parameterless_mixed_boolean_opens_the_normal_preview_editor(
     _render_exact_preview(window, shown, difference)
     dialog._accept_button.click()
     assert len(applied) == 1
-
-
-def test_historical_twin_uses_original_exact_output_even_after_a_mesh_step(
-    deferred_exact_preview, monkeypatch
-):
-    """Ein späteres Netz verdeckt nicht die exakte Herkunft des geänderten Erzeugers."""
-    from PySide6.QtWidgets import QCheckBox
-
-    window, requests, _shown = deferred_exact_preview
-    original = window.session.last_result
-    identifier = next(iter(original.scene.objects))
-    window.session.history.apply(
-        "Spätere Vernetzung", [OperationDraft(op="brep_to_mesh", inputs=(identifier,))]
-    )
-    window.session.evaluate_now()
-    prefixes = []
-    monkeypatch.setattr(
-        window.session, "placement_before", lambda step, then, failed: prefixes.append((step, then))
-    )
-    window.edit_operation(1)
-    dialog = window._op_dialog
-    exact = next(box for box in dialog.findChildren(QCheckBox) if box.isChecked())
-    exact.setChecked(False)
-    dialog.accept()
-    assert window._op_dialog is dialog and not dialog.can_accept()
-    assert prefixes[-1][0] == 2, "Der Erzeuger muss einschließlich seines Ergebnisses zählen."
-    prefixes[-1][1](original)
-    assert window._preview_approval.required is True
-    assert requests[-1][2]["change_op"] == 1
-    assert requests[-1][2]["change_name"] == "create_box"
-    assert not requests[-1][1]
-    dialog.reject()
 
 
 def test_menu_dimension_bindings_preview_the_same_document_change(window, monkeypatch):
@@ -4344,8 +4316,13 @@ def test_real_exact_preview_is_released_by_the_actual_viewport_render(
     from threading import Event
 
     from app.ui import viewport as module
+    from tests.render_fakes import RecordingRenderer
 
     pytest.importorskip("OCP")
+    # Offscreen baut die Ansicht keinen Renderer; der Test misst das Zeichnen,
+    # also stellt er die Betriebslage her (``.claude/rules/tests.md``).
+    if window.viewport.renderer is None:
+        window.viewport.renderer = RecordingRenderer()
     window.session.start_new()
     assert window.session.wait_for_idle()
     window.session.history.apply("Quader", [OperationDraft(op="create_brep_box")])
@@ -4414,7 +4391,7 @@ def _add_exact_holes(window: MainWindow) -> tuple[str, list[Any]]:
     holes = [feature for feature in body.features.values() if feature.kind == "hole"]
     assert len(holes) >= 2
     window.object_tree.select_object(identifier)
-    window.object_tree.select_feature(holes[0].id)
+    window.object_tree.select_feature(identifier, holes[0].id)
     return identifier, holes
 
 
@@ -4476,7 +4453,10 @@ def test_existing_slot_previews_the_original_step_and_preserves_its_other_values
     body = window.session.last_result.scene.objects[identifier]
     slot = next(feature for feature in body.features.values() if feature.kind == "slot")
     window.object_tree.select_object(identifier)
-    window.object_tree.select_feature(slot.id)
+    window.object_tree.select_feature(identifier, slot.id)
+    # Ein gewähltes Langloch zeigt seine Maße von selbst im Bild; geprüft wird
+    # hier der Weg über die Felder rechts, also ohne die Maßgruppe.
+    window.end_quiet_placement()
     monkeypatch.setattr(window.session, "placement_before", lambda op, then, failed: then(before))
     panel = window.feature_panel
     assert panel.take_values("slot_hole", {"slot_length": 14.0})

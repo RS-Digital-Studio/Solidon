@@ -3136,8 +3136,17 @@ class Session(QObject):
         # durch, ändert nichts und meldet als Befund, warum — und der Befund
         # stand im Prüfbericht, das Band sagte „am Volumen ändert sich nichts".
         # Der Satz gehört ins Band, solange die Zahl noch zu ändern ist.
+        #
+        # **Und eine Bauartänderung ist keine leere Vorschau.** *Flächen-
+        # bearbeitung beenden* lässt jedes Dreieck, wo es war, und wandelt den
+        # Körper trotzdem um; der Befund dazu ist die Auskunft der Vorschau
+        # und keine Absage. Als Grund gelesen stand der Satz zweimal im Band
+        # (gemessen am 21.09.2026, ``test_ui``).
         if difference is not None and not (
-            difference.changed or difference.reshaped or difference.recoloured
+            difference.changed
+            or difference.reshaped
+            or difference.recoloured
+            or any(finding.converts_exact_body for finding in difference.findings)
         ):
             return result.scene, difference, _warning_of(result, previewed)
         return result.scene, difference, ""

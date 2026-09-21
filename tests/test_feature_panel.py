@@ -333,8 +333,11 @@ def spoken(row: QWidget) -> str:
     """
     stuecke: list[str] = []
     for widget in row.findChildren(QWidget):
+        # ``text`` ist nicht überall eine Methode: Der Namensfeld-Träger des
+        # Dialogs führt sein Zeilenfeld unter diesem Namen.
+        text = getattr(widget, "text", None)
         for teil in (
-            getattr(widget, "text", lambda: "")(),
+            text() if callable(text) else "",
             widget.toolTip(),
             widget.accessibleDescription(),
         ):
@@ -472,15 +475,17 @@ def test_a_locked_panel_says_why_before_anyone_clicks(qt_app: QApplication) -> N
 
 
 def test_preview_block_keeps_fields_and_cancel_available(qt_app: QApplication) -> None:
-    """Die Vorschau sperrt nur Übernehmen und überlebt Feld- und Sperrwechsel."""
+    """Die Vorschau sperrt nur Übernehmen und überlebt Feld- und Sperrwechsel.
+
+    *Abbrechen* gehört dem Messen im Bild und steht dort an der Maßgruppe,
+    nicht hier unten (``set_measuring``); geprüft wird deshalb, dass Felder
+    und der Weg ins Bild frei bleiben, während Übernehmen mit dem Grund sperrt.
+    """
     identifier, feature = a_hole()
     panel = FeaturePanel()
     panel.show_feature(identifier, feature)
-    panel.set_measuring(True)
     requested: list[Any] = []
-    cancelled: list[bool] = []
     panel.operationRequested.connect(lambda *args: requested.append(args))
-    panel.cancelRequested.connect(lambda: cancelled.append(True))
     spin = next(
         field
         for field in panel.findChildren(LengthSpin)
@@ -492,8 +497,7 @@ def test_preview_block_keeps_fields_and_cancel_available(qt_app: QApplication) -
     panel.set_locked("Die Kette hält an Schritt 2 an.")
     panel.set_locked("")
 
-    assert spin.isEnabled() and panel._cancel.isEnabled() and panel._in_view.isEnabled()
-    assert panel._cancel.isVisibleTo(panel)
+    assert spin.isEnabled() and panel._in_view.isEnabled()
     assert not panel.can_accept() and not panel._apply.isEnabled()
     assert panel._apply.toolTip() == reason
     assert panel._apply.statusTip() == reason
@@ -502,8 +506,6 @@ def test_preview_block_keeps_fields_and_cancel_available(qt_app: QApplication) -
     panel._apply.click()
     panel._run_armed()
     assert not requested
-    panel._cancel.click()
-    assert cancelled == [True]
 
     panel.block_apply(None)
     assert panel.can_accept() and panel._apply.isEnabled()
@@ -665,8 +667,8 @@ def test_the_return_key_in_a_field_does_what_the_button_below_does(
 def test_the_tab_key_goes_down_the_panel_like_the_eye(qt_app: QApplication) -> None:
     """Die Fokuskette folgt dem Layout, nicht der Entstehungsreihenfolge.
 
-    Die vier Halte unten — *Im Bild einstellen*, der Haken, *Übernehmen*,
-    *Abbrechen* — entstehen im Aufbau des Panels und liegen damit vor jedem
+    Die Halte unten — *Im Bild einstellen*, der Haken, *Übernehmen* und beim
+    Messen *Abbrechen* — entstehen im Aufbau des Panels und liegen damit vor jedem
     Feld, das ``show_feature`` später einfügt. Sie im Layout ans Ende zu hängen
     verschiebt sie in der Fokuskette **nicht**: Gemessen am gebauten Fenster
     an einer Bohrung mit drei gleichartigen Geschwistern kam *Im Bild
@@ -687,11 +689,13 @@ def test_the_tab_key_goes_down_the_panel_like_the_eye(qt_app: QApplication) -> N
     panel = FeaturePanel()
     mesh = plate()
     panel.show_feature(identifier, feature, features=features.detect(mesh), mesh=mesh)
-    panel.set_measuring(True)
-
-    unten = (panel._in_view, panel._every, panel._apply, panel._cancel)
+    # *Abbrechen* gehört dem Messen im Bild (``set_measuring``) und steht
+    # ohne Maßgruppe nicht da; gemessen wird die Kette über die Halte, die
+    # man sieht — und die drei bleiben die Stelle, an der es klemmte.
+    unten = (panel._in_view, panel._every, panel._apply)
     for widget in unten:
         assert widget.isVisibleTo(panel), f"{widget.accessibleName()} steht gar nicht da"
+    assert not panel._cancel.isVisibleTo(panel), "ohne Maße im Bild kein Abbrechen"
 
     stops: list[QWidget] = []
     node = panel.nextInFocusChain()
@@ -1819,7 +1823,15 @@ def test_a_nearly_nominal_bore_explains_why_it_is_not_assigned(qt_app: QApplicat
 
     identifier, feature = a_hole()
     panel = FeaturePanel()
-    panel.show_feature(identifier, replace(feature, params={**feature.params, "diameter": 1.9999}))
+    # Die Nennmaß-Auskunft gilt einem **belegten** Maß: Eine eingepasste Bohrung
+    # (``fit``) sagt seit den Maßquellen ehrlich „nicht sicher bestimmt" — hier
+    # steht die Frage nach der Rundung, also ein nativ gelesenes Maß.
+    nearly = replace(
+        feature,
+        params={**feature.params, "diameter": 1.9999},
+        measure_sources={**feature.measure_sources, "diameter": "native"},
+    )
+    panel.show_feature(identifier, nearly)
     text = " ".join(label.text() for label in panel.findChildren(QLabel))
     assert "knapp unter dem Nennmaß von M2" in text
     assert "Zu welcher Schraube" not in text
@@ -1997,11 +2009,18 @@ def test_a_part_step_keeps_the_values_it_was_not_asked_about(qt_app: QApplicatio
     schritt = SimpleNamespace(id=3, op="insert_keyhole", params={"size": "M5", "drop": 9.0})
     geschrieben: list[tuple[int, dict]] = []
 
+    # Seit dem 20.09.2026 geht auch dieser Weg durch die Vorschaufreigabe
+    # (``_preview_can_apply``) und räumt die Merkmalsvorschau ab; hier gilt
+    # beides als erledigt, geprüft wird das Zusammensetzen der Werte.
     fenster = SimpleNamespace(
         session=SimpleNamespace(
             project=SimpleNamespace(document=SimpleNamespace(ops=[schritt])),
             change_params=lambda op_id, params: geschrieben.append((op_id, params)),
-        )
+        ),
+        feature_panel=object(),
+        _quiet_host=None,
+        _preview_can_apply=lambda owner, order: True,
+        _drop_feature_preview=lambda: None,
     )
     MainWindow._change_part_step(fenster, 3, {"x": 12.0})
 
@@ -2143,35 +2162,40 @@ def test_the_live_preview_of_a_part_changes_its_step(qt_app: QApplication) -> No
 
     from app.ui.main_window import MainWindow
 
-    gerufen: list[dict[str, Any]] = []
-    panel = SimpleNamespace(shown_part_step=lambda: 5)
-    erklaert = object()
+    gerufen: list[Any] = []
+    schritt = SimpleNamespace(id=5, op="insert_keyhole", params={"size": "M5", "drop": 9.0})
+    panel = SimpleNamespace(
+        step_for_action=lambda op: 5, preview_targets=lambda op: (), shown_part_step=lambda: 5
+    )
+    # Seit dem 20.09.2026 baut die Vorschau einen Auftrag (``_PreviewOrder``)
+    # und reicht ihn an die Freigabe; geprüft wird die Weiche davor — der
+    # Auftrag nennt den Schritt, nicht einen zweiten Baustein daneben.
     fenster = SimpleNamespace(
         _feature_pending=("insert_keyhole", {"size": "M5"}),
         feature_panel=panel,
-        _show_preview=object(),
-        _preview_explained=erklaert,
-        _preview_busy=SimpleNamespace(start=lambda: None),
+        _quiet_host=None,
+        _quiet_order=None,
         object_tree=SimpleNamespace(selected=lambda: "obj_1"),
-        session=SimpleNamespace(
-            preview_async=lambda then, drafts=None, **rest: gerufen.append(
-                {"drafts": drafts, **rest}
-            )
-        ),
+        session=SimpleNamespace(history=SimpleNamespace(operation=lambda op_id: schritt)),
+        _set_preview_order=lambda owner, order: gerufen.append(order) or order,
+        _request_order_preview=lambda approval: None,
+    )
+    fenster._prepare_feature_order = lambda op, params: MainWindow._prepare_feature_order(
+        fenster, op, params
     )
 
     MainWindow._preview_feature_change(fenster)
-    assert gerufen == [
-        {"drafts": None, "change_op": 5, "change_values": {"size": "M5"}, "explained": erklaert}
-    ], gerufen
+    assert len(gerufen) == 1, gerufen
+    assert gerufen[0].change_op == 5 and gerufen[0].drafts == ()
+    assert gerufen[0].change_values == {"size": "M5", "drop": 9.0}
 
     # Und ohne Baustein bleibt es beim Entwurf neben der Szene.
     gerufen.clear()
-    panel.shown_part_step = lambda: None
+    panel.step_for_action = lambda op: None
     fenster._feature_pending = ("resize_hole", {"diameter": 6.0})
     MainWindow._preview_feature_change(fenster)
-    assert len(gerufen) == 1 and gerufen[0]["drafts"] is not None, gerufen
-    assert "change_op" not in gerufen[0]
+    assert len(gerufen) == 1 and gerufen[0].drafts, gerufen
+    assert gerufen[0].change_op is None
 
 
 def test_the_edge_panel_carries_the_key_the_customer_never_sees(qt_app: QApplication) -> None:

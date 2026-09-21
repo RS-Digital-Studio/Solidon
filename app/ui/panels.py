@@ -45,6 +45,7 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QAbstractSpinBox,
+    QApplication,
     QCheckBox,
     QComboBox,
     QDialog,
@@ -1559,7 +1560,16 @@ class ObjectTree(QWidget):
         return self._drawing is None
 
     def release(self) -> None:
-        """Auf den Zeichner warten, bevor der Baum weggeht (``wartezeit.md``)."""
+        """Auf den Zeichner warten, bevor der Baum weggeht (``wartezeit.md``).
+
+        **Und nichts mehr anfangen.** ``show_scene`` stellt das Zeichnen mit
+        ``singleShot(0)`` zurück; wer freigibt, bevor der Zeitgeber feuert,
+        ließ ihn danach einen Zeichner starten, auf den niemand mehr wartete —
+        ein Thread, der den Prozess überlebt (``QThread: Destroyed while
+        thread is still running``, gemessen am 21.09.2026 an fünf Fällen in
+        ``test_operation_ui``, deren Test keine Ereignisrunde durchlief).
+        """
+        self._pending.clear()
         self._stop_drawing()
         self._leash.wait_all()
 
@@ -1569,7 +1579,14 @@ class ObjectTree(QWidget):
         selected_features = self.selected_features()
         self._result = result
         self._document = document
-        self.tree.clear()
+        # **Das Leeren ist keine Auswahl.** ``clear()`` meldete „nichts
+        # gewählt", bevor ``_restore`` die Auswahl zurückholte — und das
+        # Fenster brach dazwischen die laufende Analysekarte ab und rechnete
+        # sie nach jedem Baumaufbau neu (Einheit, Thema, Ausblenden; gemessen
+        # am 21.09.2026 am Einheitenwechsel). Gemeldet wird einmal, aus
+        # ``_restore`` — oder hier, wenn es nichts wiederherzustellen gibt.
+        with QSignalBlocker(self.tree):
+            self.tree.clear()
         # Was noch nicht gezeichnet war, gehört zu Zeilen, die es nicht mehr
         # gibt. Der Vorrat bleibt: dieselben Körper kommen meist wieder.
         self._pending.clear()
@@ -1583,6 +1600,7 @@ class ObjectTree(QWidget):
         self._rows_for = {}
         self._faces.clear()
         if result is None:
+            self._on_selection()
             return
         for object_id, entry in result.scene.objects.items():
             size = entry.mesh.bounds.size
@@ -4958,6 +4976,17 @@ def refresh_feature_fields(
         value = values[field.name]
         if editor is None:
             continue
+        # **Wer gerade tippt, bekommt nichts überschrieben.** Das Feld, in dem
+        # der Kunde tippt, zeigt seine Eingabe; den Wert kennt der Entwurf
+        # ohnehin. Der Fokus liegt dabei auf dem **Zeilenfeld im** Drehfeld,
+        # nicht auf dem Drehfeld selbst. Die tragende Sperre steht beim
+        # Aufrufer (``MainWindow._place_from_feature_panel``, ``reading``):
+        # Offscreen gibt es keinen Fokus — der Aufrufer weiß, dass er liest.
+        # ``isModified`` taugt hier nicht: Qt setzt es nach dem Tippen nie von
+        # selbst zurück, und ein Zug am Griff käme danach nicht mehr ins Feld.
+        focused = QApplication.focusWidget()
+        if focused is not None and (focused is editor or editor.isAncestorOf(focused)):
+            continue
         with QSignalBlocker(editor):
             if isinstance(editor, ValueField):
                 editor.set_value(value)
@@ -5624,6 +5653,19 @@ class FeaturePanel(QWidget):
         self._built.append(row)
         self._arm(next(reversed(self._runs)))
         self._settle_apply()
+
+    def arm_action(self, op: str) -> bool:
+        """Diese Handlung scharfschalten — wenn das Merkmal sie anbietet.
+
+        Für das Hauptfenster, das nach einem Übernehmen die Maße zurück ins
+        Bild holt: Ein Langloch aus einem ``slot_hole``-Schritt bekommt sie
+        an *Zum Langloch ziehen*, nicht an der ersten Handlung mit Weg ins Bild.
+        """
+        found = next((key for key, entry in self._runs.items() if entry.op == op), None)
+        if found is None:
+            return False
+        self._arm(found)
+        return True
 
     def step_for_action(self, op: str) -> int | None:
         """Die Herkunft gehört der Handlung, nicht allen Feldern derselben Karte."""
@@ -6630,7 +6672,12 @@ class FeaturePanel(QWidget):
         return self._groups.get(op)
 
     def set_measuring(self, active: bool, *, op: str | None = None, begun: bool = False) -> None:
-        """Während der Maßgruppe gibt es deren Felder und Abschluss genau einmal."""
+        """Während der Maßgruppe gibt es deren Felder und Abschluss genau einmal.
+
+        Stehen Maße im Bild, trägt die Maßgruppe Übernehmen und Abbrechen; die
+        Knöpfe hier unten gehen mit dem Messen und kommen mit seinem Ende zurück
+        (``_settle_lock``).
+        """
         self._measuring = bool(active)
         self._measure_op = op if active else None
         self._measure_begun = bool(active and begun)
@@ -6642,7 +6689,17 @@ class FeaturePanel(QWidget):
         Für das Hauptfenster, das die Maße nach einem Übernehmen wieder ins
         Bild bringt: Es klickt nicht auf ein Widget, es nimmt den Weg, der am
         Widget hängt. Wo kein Knopf steht, geschieht nichts.
+
+        **Die scharfe Handlung hat Vorrang.** Der Knopf steht einmal je
+        Merkmal (``_settle_in_view``) und führt zur ersten Handlung mit Weg
+        ins Bild; wer vorher *Zum Langloch ziehen* scharfgeschaltet hat, meint
+        aber dessen Maße — sonst stand nach dem Wechsel wieder *Bohrung
+        ändern* im Bild (gemessen am 21.09.2026 an vier Fenstertests).
         """
+        armed = self._runs.get(self._armed or "")
+        if armed is not None and armed.in_view is not None:
+            armed.in_view()
+            return
         if self._into_view is not None:
             self._into_view()
 

@@ -177,7 +177,7 @@ def test_deviation_late_signals_cannot_reuse_a_replaced_report_request(
         host._render_progress_state(force_visible=True)
         assert host._progress_owner == "map"
         host.cancel_button.click()
-        assert previous.cancelled.is_cancelled()
+        assert previous.cancelled.is_cancelled
         assert "abgebrochen" in host.analysis_bar.legend.note.text()
     else:
         host.release()
@@ -213,7 +213,7 @@ def test_deviation_cancel_and_unit_change_do_not_restart_the_measurement(
     host.analysis_bar.selector.setCurrentIndex(host.analysis_bar.selector.findData("deviation"))
     first = workers[-1]
     host.set_display_unit("in")
-    assert workers == [first] and not first.cancelled.is_cancelled()
+    assert workers == [first] and not first.cancelled.is_cancelled
     host._cancel_analysis()
     host.set_display_unit("mm")
     assert workers == [first]
@@ -1301,6 +1301,9 @@ def test_a_fillet_says_what_it_is_and_how_big() -> None:
             kind="fillet",
             params={"radius": 3.0, "recess": recess},
             provenance="test",
+            # Ein Maß ohne belegte Quelle trägt „Maßherkunft nicht bestimmt“ —
+            # hier steht die Beschriftung selbst auf dem Prüfstand, nicht die Quelle.
+            measure_sources={"radius": "native"},
         )
 
     assert feature_name("fillet_1", fillet("fillet_1", recess=False)) == tr("Verrundung")
@@ -1342,6 +1345,7 @@ def test_a_curved_face_is_named_by_its_hollowness_and_not_by_a_direction() -> No
             id=name,
             kind="curved_face",
             params={"area": 381.7, "normal": (0.9, 0.0, 0.0), "inner": inner},
+            measure_sources={"area": "facets"},
             provenance="test",
         )
 
@@ -1640,6 +1644,12 @@ def test_the_menu_entry_opens_that_step(window: MainWindow) -> None:
     assert dialog is not None, "der Schritt steht offen"
     assert dialog.spec.name == "insert_printed_thread", dialog.spec.name
 
+    # Übernehmen wartet auf die dargestellte Vorschau (20.09.2026): erst
+    # rechnen und zeigen lassen, dann klicken — wie der Kunde es sieht.
+    window.session.wait_for_idle()
+    for _ in range(40):
+        QApplication.processEvents()
+    assert dialog.can_accept(), dialog.toolTip()
     dialog.accept()
     window.session.wait_for_idle()
     document = window.session.project.document
@@ -4139,7 +4149,10 @@ def test_a_bundle_over_many_bodies_selects_all_of_them_on_click(
 
     report = window.report
     rows = [report.list.item(row) for row in range(report.list.count())]
-    bundles = [item for item in rows if item.text().startswith("(10) ")]
+    # Seit dem 20.09.2026 trägt jeder Körper mit belegten Flächen auch den
+    # Hinweis auf die Formabweichung — ein zweites Zehnerbündel; geprüft wird
+    # die Zeile, die dieser Test nachgeschoben hat.
+    bundles = [item for item in rows if item.text().startswith("(10) Ausrichtung")]
     assert len(bundles) == 1, [item.text() for item in rows]
     (bundle,) = bundles
     assert bundle.text() == "(10) Ausrichtung über die Schichtanalyse gesucht.", (
@@ -5254,19 +5267,28 @@ def test_turning_a_slot_from_a_step_changes_that_step(window: MainWindow) -> Non
     window.object_tree.select_feature(object_id, slot_id)
     for _ in range(40):
         QApplication.processEvents()
+    # Ein gewähltes Langloch zeigt seine Maße von selbst im Bild; geprüft wird
+    # der Weg über die Felder rechts.
+    window.end_quiet_placement()
     # Was das Merkmalfenster beim Übernehmen schickt: die gemessene Länge, die
-    # gemessene Mitte — und den neuen Winkel.
-    window._apply_from_feature_panel(
-        "slot_hole",
-        {
-            "at_feature": slot_id,
-            "slot_length": measured,
-            "slot_angle": 45.0,
-            "x": where[0],
-            "y": where[1],
-            "z": where[2],
-        },
-    )
+    # gemessene Mitte — und den neuen Winkel. Erst gemeldet und gezeigt, dann
+    # übernommen: Übernehmen wartet auf die dargestellte Vorschau (20.09.2026),
+    # und ein früher Klick wird nicht nachgeholt.
+    turned_values = {
+        "at_feature": slot_id,
+        "slot_length": measured,
+        "slot_angle": 45.0,
+        "x": where[0],
+        "y": where[1],
+        "z": where[2],
+    }
+    window._on_feature_values_changed("slot_hole", turned_values)
+    window._feature_preview.stop()
+    window._preview_feature_change()
+    window.session.wait_for_idle()
+    for _ in range(40):
+        QApplication.processEvents()
+    window._apply_from_feature_panel("slot_hole", turned_values)
     window.session.wait_for_idle()
     for _ in range(40):
         QApplication.processEvents()
@@ -5345,6 +5367,15 @@ def test_a_part_stays_chosen_when_its_measures_swap_its_features(window: MainWin
         QApplication.processEvents()
     assert window.feature_panel.shown_part_step() == step
 
+    # Der Kundenweg: Der Wert im Merkmalfenster ändert sich, die Vorschau
+    # rechnet und zeigt — erst dann übernimmt der Klick (20.09.2026: Übernehmen
+    # wartet auf die dargestellte Vorschau, ein früher Klick wird nicht nachgeholt).
+    window._on_feature_values_changed("insert_snap_connector", {"kind": "bore"})
+    window._feature_preview.stop()
+    window._preview_feature_change()
+    window.session.wait_for_idle()
+    for _ in range(40):
+        QApplication.processEvents()
     window._change_part_step(step, {"kind": "bore"})
     window.session.wait_for_idle()
     for _ in range(40):

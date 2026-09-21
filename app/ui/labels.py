@@ -1279,8 +1279,10 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "choices": _("Auswahl"),
     "checked": _("Geprüft"),
     "clearance": _("Spiel"),
-    "clearance_min_mm": _("Untere Grenze des Spiels (mm)"),
-    "clearance_max_mm": _("Obere Grenze des Spiels (mm)"),
+    # ``scene.fits``: die Grenzen des Spiels — ohne ``_mm``, denn die Einheit
+    # kommt aus ``_VALUE_UNITS`` und steht am Wert, nicht in der Beschriftung.
+    "clearance_min": _("Untere Grenze des Spiels"),
+    "clearance_max": _("Obere Grenze des Spiels"),
     "comfortable": _("Bequem"),
     "components": _("Komponenten"),
     "constraint": _("Bedingung"),
@@ -1345,11 +1347,21 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "free_dof": _("Freie Freiheitsgrade"),
     "from": _("Von"),
     "gap": _("Spalt"),
+    # ``scene.fits``: woraus die Passung gerechnet wurde — exakt, Netz, gemischt.
+    "geometry_source": _("Geometriequelle"),
     "given": _("Vorhanden"),
     "grams": _("Gramm"),
     "grid": _("Raster"),
+    # ``geom.prepare_ops``: die Händigkeit eines Gewindes, das nicht neu geschnitten wird.
+    "handedness": _("Gangrichtung"),
     "groups": _("Gruppen"),
     "height": _("Höhe"),
+    # ``scene.evaluate``: der Eingang eines Schritts, dessen Ausgaben fehlen.
+    "input_name": _("Eingang"),
+    "input_object": _("Eingangskörper"),
+    # ``scene.fits``: ob die zwei Körper in Einbaulage einander durchdringen —
+    # nicht „Durchdringung“, das ist im Katalog die Selbstdurchdringung.
+    "intersects": _("Überschneidung"),
     # Die Kennungen, die ein Erzeuger mit Eingängen aus einer Altdatei nicht
     # verbraucht (``evaluate.creator_inputs_dropped``). „Übersprungen" statt
     # eines neuen Wortes: Es steht schon in allen sechs Katalogen und sagt
@@ -1375,6 +1387,10 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "major": _("Hauptversion"),
     "machine": _("Maschine"),
     "margin": _("Randabstand"),
+    # ``brep.kernel``: wie viele Dreiecke der Tessellierung eine Fläche kennen.
+    "mapped_triangles": _("Zugeordnete Dreiecke"),
+    # ``brep.edit``: die Mitte einer Kante, die zu keinem Körper gehört.
+    "middle": _("Mitte"),
     "matches": _("Treffer"),
     "material": _("Material"),
     "maximum": _("Höchstwert"),
@@ -1389,6 +1405,8 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "name": _("Name"),
     "neck": _("Hals"),
     "needed": _("Nötig"),
+    # ``counterpart``: die nächste Tabellengröße zu einem Gewinde ohne Norm.
+    "nearest": _("Nächste Größe"),
     "node": _("Knoten"),
     "nominal": _("Nennmaß"),
     "now": _("Jetzt"),
@@ -1401,6 +1419,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "operation": _("Operation"),
     "operations": _("Operationen"),
     "output": _("Ausgabe"),
+    "outputs": _("Ausgaben"),
     "overhang": _("Überhang"),
     "oversize": _("Übermaß"),
     "parameter": _("Parameter"),
@@ -1424,7 +1443,11 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "read": _("Gelesen"),
     "reason": _("Grund"),
     "room": _("Platz daneben"),
+    # ``brep.profiles``: der Kerndurchmesser, aus dem kein Gewindegang entsteht.
+    "root": _("Kerndurchmesser"),
     "reference": _("Bezug"),
+    # ``errors``: die Flächenbezüge, die am exakten Körper nicht mehr belegt sind.
+    "references": _("Bezüge"),
     "regions": _("Bereiche"),
     # Die getrennten Umrisse der beiden Zeichnungen eines Übergangs
     # (RM-147 E2) — die Zahlen, an denen der Kunde sieht, was nicht passt.
@@ -1461,7 +1484,10 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "span": _("Spannweite"),
     "speed_field": _("Geschwindigkeitsfeld"),
     "stages": _("Stufen"),
+    # ``geom.prepare_ops``: die Gangzahl eines mehrgängigen Gewindes.
+    "starts": _("Gänge"),
     "status": _("Zustand"),
+    "step": _("Schritt"),
     "steps": _("Schritte"),
     "stress": _("Biegespannung"),
     "strokes": _("Striche"),
@@ -1476,6 +1502,8 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "transaction": _("Transaktion"),
     "transactions": _("Transaktionen"),
     "triangles": _("Dreiecke"),
+    # ``geom.prepare_ops``: die Schnurstärke eines Rings, die nicht in ihn passt.
+    "tube_diameter": _("Schnurstärke"),
     "type": _("Art"),
     "unit": _("Einheit"),
     "unknown": _("Unbekannt"),

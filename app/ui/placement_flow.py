@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable, Iterable, Mapping
+from itertools import pairwise
 from typing import Any, Final, Protocol, cast, runtime_checkable
 
 import numpy as np
@@ -81,6 +82,11 @@ SNAP_PIXELS = 12.0
 LEAST_DEPTH_MM = 0.1
 
 _log = get_logger(__name__)
+
+
+#: Der Eintrag „Im Modell wählen“ in der Bezugsauswahl trägt diesen Wert statt
+#: einer Kante — ein Zeichen für den Code, kein Text für den Nutzer.
+_PICK_IN_MODEL: Final = "pick"
 
 
 @runtime_checkable
@@ -800,6 +806,20 @@ class PlacementFlow(QObject):
             self._reference_choices.append(choice)
             self._watch(choice)
             box.hide()
+        # **Die Tabulatortaste geht denselben Weg wie das Auge** (`oberflaeche.md`):
+        # Die Bezugslisten entstehen nach allen Feldern und stünden in der
+        # Fokuskette hinter der letzten Mitte — jede gehört hinter ihr Maß.
+        ordered = [
+            *(
+                widget
+                for pair in zip(self._measures, self._reference_choices[:2], strict=True)
+                for widget in pair
+            ),
+            *self._centre_measures,
+            self._reference_choices[2],
+        ]
+        for earlier, later in pairwise(ordered):
+            QWidget.setTabOrder(earlier, later)
         self._timer = QTimer(self)
         self._timer.setSingleShot(True)
         self._timer.setInterval(16)
@@ -961,7 +981,13 @@ class PlacementFlow(QObject):
             if self._measure_without_surface
             else ""
         )
-        self._measure_note.setText(reason or self._reference_message or information)
+        # Sperre, Bezugshinweis und Auskunft stehen **zusammen**: Eine wartende
+        # Vorschau verdrängte bis zum 21.09.2026 den Satz, dass es an dieser
+        # Stelle keine Flächenmaße gibt — und der erklärt, warum die Felder
+        # rechts die einzigen sind.
+        self._measure_note.setText(
+            "\n".join(filter(None, (reason, self._reference_message, information)))
+        )
         self._measure_note.setVisible(
             (bool(reason) and begun) or bool(self._reference_message) or bool(information)
         )
@@ -2158,7 +2184,7 @@ class PlacementFlow(QObject):
         with QSignalBlocker(choice):
             choice.clear()
             choice.addItem(tr("Bezug ändern"), None)
-            choice.addItem(tr("Im Modell wählen"), "pick")
+            choice.addItem(tr("Im Modell wählen"), _PICK_IN_MODEL)
             for number, (identifier, kind) in enumerate(entries, 1):
                 choice.addItem(self._reference_name(kind, number), (identifier, kind))
             choice.setCurrentIndex(0)
@@ -2182,7 +2208,7 @@ class PlacementFlow(QObject):
             return
         self._begin_edit()
         self._accept_pending = False
-        if data == "pick":
+        if data == _PICK_IN_MODEL:
             self._pending = None
             self._serial += 1
             self._reference_pick = index

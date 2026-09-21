@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import inspect
 import math
+import os
 import re
 import sys
 import time
@@ -1731,6 +1732,10 @@ class _PreviewOrder:
     changes: DocumentChange | None = None
 
 
+#: Ein Feld ohne Vorgabe unterscheidet sich von jedem Wert (``_place_from_feature_panel``).
+_NO_DEFAULT: Final = object()
+
+
 @dataclass(slots=True)
 class _PreviewApproval:
     """Eine Freigabe gehört einem Editor, Auftrag und unveränderten Dokumentstand."""
@@ -1798,6 +1803,9 @@ class MainWindow(QMainWindow):
         """Die Karte, die gerade gerechnet wird (§18.9). Eine neuere Anfrage ersetzt sie."""
         """Nur die letzte Karte wird gehalten: neu zu rechnen ist billig, sie zu
     halten teuer."""
+        self._map_cancelled_for: tuple[str | None, Any] | None = None
+        """Körper und Kartenart, deren Rechnung der Kunde abgebrochen hat —
+        gehalten bis zur nächsten anderen Wahl (``_on_map_changed``)."""
         self._slice_cache: SliceResult | None = None
         self._slice_key: tuple[Any, ...] | None = None
         self._slice_worker: Any = None
@@ -5183,14 +5191,37 @@ class MainWindow(QMainWindow):
         """
         self._show_start_screen(True)
 
-    def start_empty(self) -> None:
-        """Ein leeres Projekt — was der Hauptknopf des Startbildschirms tut."""
+    def start_empty(self) -> bool:
+        """Ein leeres Projekt — was der Hauptknopf des Startbildschirms tut.
+
+        Sagt, ob es dazu kam: Wer ein geändertes Projekt behalten will, bleibt,
+        wo er ist, und wer den Anfang für eine Handlung braucht
+        (:meth:`_begin_from_the_start_screen`), lässt sie dann aus.
+        """
         if not self._may_discard():
-            return
+            return False
         self.announce("")
         self.session.start_new(self.settings.printer, self.settings.material)
         self._remove_tour()
         self._show_start_screen(False)
+        return True
+
+    def _begin_from_the_start_screen(self) -> bool:
+        """Wer auf dem Startbildschirm zu arbeiten beginnt, beginnt das leere Projekt.
+
+        Die Menüs sind dort verborgen, die Kürzel und die Befehlspalette nicht
+        — *Quader anlegen* über Strg+Umschalt+P öffnete seinen Dialog über dem
+        Startbildschirm, in einer Sitzung, die nie ausgewertet worden war. Seit
+        Übernehmen auf die aktuelle dargestellte Vorschau wartet (20.09.2026),
+        gibt es die nur zu einem ausgewerteten Stand (``result_current``): Der
+        Knopf war frei und tat nichts (gemessen am 21.09.2026, ``test_ui``).
+
+        Dieselbe Regel wie beim Einfügen und beim Download von dort: Der
+        Anfang ersetzt das offene Projekt, mit derselben Frage, wenn eines
+        verloren ginge — und mit dem Wechsel in den Arbeitsbereich, damit die
+        Vorschau des Dialogs nicht hinter dem Startbildschirm liegt.
+        """
+        return self.stack.currentWidget() is not self.start_screen or self.start_empty()
 
     def action_open(self) -> None:
         name, _filter = QFileDialog.getOpenFileName(self, tr("Projekt öffnen"), "", PROJECT_FILTER)
@@ -8690,7 +8721,7 @@ class MainWindow(QMainWindow):
         Werkzeugzeile genauso wie eine Skizzen-Operation aus Menü oder
         Palette.
         """
-        if self._sketch_panel is not None:
+        if self._sketch_panel is not None or not self._begin_from_the_start_screen():
             return
         plane = plane or (self._selected_face_plane() if not text.strip() else "")
         show_plane_picker = not text.strip() and not plane
@@ -11420,7 +11451,13 @@ class MainWindow(QMainWindow):
             if kind is not None:
                 self.analysis_bar.show_problem(tr("Wählen Sie zuerst ein Objekt im Objektbaum."))
             return
-
+        # **Ein Abbruch hält, bis der Kunde etwas anderes wählt.** Ein neuer
+        # Baumaufbau (Einheit, Thema, Ausblenden) meldet dieselbe Auswahl noch
+        # einmal — das ist kein Anlass, die abgebrochene Rechnung neu zu
+        # starten (gemessen am 21.09.2026 am Einheitenwechsel nach Abbrechen).
+        if self._map_cancelled_for == (object_id, kind):
+            return
+        self._map_cancelled_for = None
         self._analysis_map(kind, object_id)
 
     def _analysis_map(
@@ -11529,6 +11566,7 @@ class MainWindow(QMainWindow):
 
     def _cancel_analysis(self) -> None:
         """Ein ausdrücklicher Abbruch behält das Modell und quittiert die Kartenabsage."""
+        self._map_cancelled_for = (self.object_tree.selected(), self.analysis_bar.chosen())
         self._cancel_map_worker()
         self.viewport.set_analysis_map(None, None)
         self.viewport._hide_finding_mark()
@@ -12970,6 +13008,10 @@ class MainWindow(QMainWindow):
         )
         if textures:
             self.feature_panel.offer_texture_steps(textures, self._parameter_values())
+        # Ein anderes Merkmal bringt das Fenster zurück (Konzept D) — die Zeile
+        # fiel am 20.09.2026 mit dem Umbau der Bohrungsmaße heraus, während
+        # Textur und Baustein darüber sie behielten (gemessen am 21.09.2026).
+        self.feature_dock.reveal()
         from app.core.scene.placement import bore_step_of
 
         bore = bore_step_of(
@@ -12987,6 +13029,16 @@ class MainWindow(QMainWindow):
             if bore is not None:
                 self._place_from_feature_panel(bore.op, dict(bore.params))
             else:
+                # **Ein Langloch aus einem Schritt bekommt seine Maße an
+                # diesem Schritt** (``_change_slot_step``): *Zum Langloch
+                # ziehen* wird scharf, sonst nähme der Weg ins Bild die erste
+                # Handlung — *Bohrung ändern*, die am Langloch den Griff sperrt
+                # (gemessen am 21.09.2026 nach dem Übernehmen eines Zugs).
+                if feature.kind == "slot" and any(
+                    entry.id == getattr(feature, "created_by", None) and entry.op == "slot_hole"
+                    for entry in self.session.project.document.ops
+                ):
+                    self.feature_panel.arm_action("slot_hole")
                 self.feature_panel.request_in_view()
         if self._quiet_placement is None:
             self._start_feature_preview()
@@ -13423,10 +13475,22 @@ class MainWindow(QMainWindow):
         )
 
     def _start_feature_preview(self) -> None:
-        """Erst nach dem vollständigen Aufbau der Karte ihre erste Vorschau beginnen."""
+        """Erst nach dem vollständigen Aufbau der Karte ihren Auftrag binden.
+
+        Gebunden, nicht gerechnet: Ein bloßer Klick auf ein Merkmal ist keine
+        Änderung, und eine Vorschau mit den gemessenen Werten zeigte nur, was
+        schon da ist. Was hier entsteht, ist der Auftrag, den ein späteres
+        *Übernehmen* geprüft vorfindet; die Uhr stellt erst ein echter Wert
+        (``_on_feature_values_changed``). Eine wartende Vorschau des vorigen
+        Merkmals ist damit nach dem Wechsel wirklich weg (21.09.2026).
+        """
         entered = self.feature_panel.preview_values()
-        if entered is not None:
-            self._on_feature_values_changed(*entered)
+        if entered is None:
+            return
+        op, params = entered
+        order = self._prepare_feature_order(op, params)
+        if order is not None:
+            self._set_preview_order(self._quiet_host or self.feature_panel, order)
 
     def _feature_dock_closed(self) -> None:
         """Eine Maßgruppe im Bild behält ihre Vorschau auch bei geschlossenem Panel."""
@@ -13540,7 +13604,10 @@ class MainWindow(QMainWindow):
 
     def _preview_feature_change(self) -> None:
         """Der tatsächliche Übernahmeauftrag läuft durch denselben Freigabepfad wie im Menü."""
-        pending = self._feature_pending
+        # Vorgemerkt ist, was zuletzt gemeldet wurde; ohne Meldung gilt die
+        # scharfe Handlung mit dem, was in ihren Feldern steht — dieselbe
+        # Quelle wie ``_feature_preview_can_apply``.
+        pending = self._feature_pending or self.feature_panel.preview_values()
         if pending is None:
             return
         op, params = pending
@@ -13571,7 +13638,15 @@ class MainWindow(QMainWindow):
             self.end_quiet_placement()
         self._end_changed_quiet_placement()
         flow = self._quiet_placement
+        host = self._quiet_host
         if flow is not None and flow.active and flow.spec_of().name == op:
+            # **Die Zahlen rechts gelten.** Der Abschluss liest die Maßgruppe;
+            # was das Merkmalfenster schickt — den Winkel aus *Merkmal drehen*,
+            # eine getippte Länge —, geht vorher in den Entwurf, sonst übernahm
+            # der Klick den alten Stand (gemessen am 21.09.2026 am Ring um Y).
+            if host is not None:
+                host.begin_edit()
+                host.take_placement(params)
             flow.accept()
             return
         # **Und ein Zug am Langlochgriff endet hier ebenso.** Er wartet mit
@@ -13740,6 +13815,18 @@ class MainWindow(QMainWindow):
         if object_id is None:
             self.announce(_needs_objects(0))
             return
+        # **Dieselbe Stelle, dieselbe Handlung: die Maße stehen schon.** Die
+        # Wiederherstellung einer Auswahl meldet sie wie neu, und ein Neubau
+        # der Maßgruppe verwarf einen begonnenen Entwurf samt seiner Werte
+        # (gemessen am 21.09.2026, ``test_ui``).
+        running = self._quiet_placement
+        if (
+            running is not None
+            and running.active
+            and running.spec_of().name == op
+            and self._quiet_target == (object_id, self.object_tree.selected_feature())
+        ):
+            return
         self._drop_feature_preview()
         self.end_quiet_placement()
         result = self.session.last_result
@@ -13757,6 +13844,9 @@ class MainWindow(QMainWindow):
         step = getattr(action, "step", None)
         operation = self.session.history.operation(step) if step is not None else None
         original = deepcopy(operation.params) if operation is not None else {}
+        untouched_defaults = {
+            entry.name: entry.default for entry in spec.params.spec() if entry.name not in original
+        }
         inputs = tuple(operation.inputs) if operation is not None else (object_id,)
         group = self.feature_panel.measure_group(op) if operation is None else None
         members = tuple(member.target for member in group.members) if group is not None else ()
@@ -13769,6 +13859,14 @@ class MainWindow(QMainWindow):
         window_ref = weakref.ref(self)
         scope_ref = weakref.ref(every) if every is not None else None
         editor_refs = {name: weakref.ref(editor) for name, editor in editors.items()}
+        # **Wer gerade liest, schreibt nicht zurück.** Jeder Tastendruck geht
+        # als Wert in den Entwurf, und zwei Rückwege — die Maßgruppe im Bild
+        # und das Merkmalfenster — schrieben ihn synchron und formatiert in
+        # dasselbe Feld, mit dem Cursor an der alten Stelle: Aus „8,00" wurde
+        # „8,00,00 mm" und daraus 800 Millimeter (gemessen am 21.09.2026 an
+        # zehn Fenstertests). Der Fokus verrät den Tipper offscreen nicht;
+        # der Aufrufer weiß es.
+        reading = {"fields": False}
 
         def current_editors() -> dict[str, QWidget]:
             return {
@@ -13852,7 +13950,8 @@ class MainWindow(QMainWindow):
             order = prepare(op, host.values())
             if window is None or order is None:
                 return
-            window.feature_panel.take_values(op, host.values(), arm=False)
+            if not reading["fields"]:
+                window.feature_panel.take_values(op, host.values(), arm=False)
             previous = window._preview_approval
             approval = window._set_preview_order(host, order)
             window._feature_pending = (op, dict(host.values()))
@@ -13890,10 +13989,69 @@ class MainWindow(QMainWindow):
             except AppError as exc:
                 host.block_apply(str(exc))
                 return False
-            host.take_placement(values)
+            if operation is not None:
+                # **Nicht angezeigte Werte bleiben unverändert im Auftrag**
+                # (``bore_action``). Ein Feld, das der Schritt nie trug und das
+                # nur seine Vorgabe zeigt — *Langloch* an einer runden
+                # Bohrung —, schriebe sonst einen neuen Wert in einen alten
+                # Schritt (gemessen am 21.09.2026 an zehn Fenstertests). Was
+                # der Kunde anfasst, weicht von der Vorgabe ab und geht mit.
+                values = {
+                    name: value
+                    for name, value in values.items()
+                    if name in original or untouched_defaults.get(name, _NO_DEFAULT) != value
+                }
+            reading["fields"] = True
+            try:
+                # **Eine getippte Koordinate führt die Stelle** — dieselbe
+                # Regel wie am Panelfeld (``_on_feature_values_changed``):
+                # Innerhalb der Fläche wandern Maßlinien und Werkzeug mit,
+                # sonst schrieb das nächste Neuzeichnen die Flächenposition
+                # über die Zahl zurück (gemessen am 21.09.2026, ``test_ui``).
+                flow = window._quiet_placement
+                previous_values = host.values()
+                axes = ("x", "y", "z")
+                moved = all(
+                    isinstance(values.get(axis), int | float)
+                    and isinstance(previous_values.get(axis), int | float)
+                    for axis in axes
+                ) and any(
+                    not is_close(float(values[axis]), float(previous_values[axis])) for axis in axes
+                )
+                if moved and flow is not None and flow.active:
+                    if flow.move_to(
+                        tuple(float(values[axis]) for axis in axes), on_plane_only=True
+                    ):
+                        host.take_placement({k: v for k, v in values.items() if k not in axes})
+                    else:
+                        # Freie Koordinaten dürfen die Trägerfläche verlassen —
+                        # dann gilt die normale Feldvorschau mit den Werten,
+                        # und die steht rechts: Die Maßgruppe geht mit der
+                        # Platzierung, und was in ihr getippt war, muss vorher
+                        # hinüber, sonst zeigte das Panel danach die alte Zahl
+                        # (gemessen am 21.09.2026, ``test_ui``).
+                        host.take_placement(values)
+                        handed = dict(values)
+
+                        def hand_over() -> None:
+                            window, host = window_ref(), host_ref()
+                            if (
+                                window is not None
+                                and host is not None
+                                and window._quiet_host is host
+                            ):
+                                window._hand_quiet_placement_to_panel(op, handed)
+
+                        QTimer.singleShot(0, hand_over)
+                else:
+                    host.take_placement(values)
+            finally:
+                reading["fields"] = False
             return True
 
         def refresh(values: Mapping[str, Any]) -> None:
+            if reading["fields"]:
+                return
             focused = QApplication.focusWidget()
             untouched = {
                 name: editor
@@ -13951,6 +14109,18 @@ class MainWindow(QMainWindow):
         selected = (self.object_tree.selected(), self.object_tree.selected_feature())
         if self._quiet_target is not None and self._quiet_target != selected:
             self.end_quiet_placement()
+
+    def _hand_quiet_placement_to_panel(self, op: str, values: dict[str, Any]) -> None:
+        """Eine Koordinate senkrecht zur Fläche beendet die Platzierung — die Zahlen bleiben.
+
+        Derselbe Weg, den ein Panelfeld nimmt (``_on_feature_values_changed``):
+        Dort steht die Zahl schon im Feld, wenn die Platzierung geht. Aus der
+        Maßgruppe kommt sie erst hierher, und die Feldvorschau rechts nimmt sie
+        an, als wäre sie dort getippt worden.
+        """
+        self.end_quiet_placement()
+        self.feature_panel.take_values(op, values)
+        self._on_feature_values_changed(op, values)
 
     def end_quiet_placement(self) -> None:
         """Eine laufende Platzierung ohne Dialog beenden und abräumen.
@@ -14122,7 +14292,7 @@ class MainWindow(QMainWindow):
         Was hier gilt, hat der Kunde in der Liste angehakt und nicht im Baum
         markiert.
         """
-        if not self._quiet_command_allowed():
+        if not self._quiet_command_allowed() or not self._begin_from_the_start_screen():
             return
         # **Erst das Merkmal, dann der Körper** (Robert, 03.09.2026: „wenn wir
         # ein Merkmal auswählen und auf der Tastatur Entf drücken löschen wir
@@ -15235,6 +15405,15 @@ class MainWindow(QMainWindow):
                 else:
                     self._show_preview(None)
                 return
+            # **Ein Satz zu einem Ergebnis ist kein Problem.** Der Arbeiter meldet
+            # ``explained`` auch dann, wenn ein Bild kommt — „Flächenbearbeitung
+            # beenden hat … umgewandelt“ reist so mit jeder Vorschau, die einen
+            # exakten Körper vernetzt. Als Problem gelesen sperrte der Hinweis die
+            # Freigabe für immer: ``_preview_rendered`` hält jedes Problem für einen
+            # Grund, das Bild nicht als angezeigt zu zählen (gemessen am 21.09.2026
+            # an vierzehn Fenstertests, Chat bis Formsitzung). Ein Problem ist, was
+            # ohne Ergebnis oder mit unvollständigem Ergebnis übrig bleibt.
+            approval.problem = ""
             findings = [
                 *getattr(difference, "findings", ()),
                 *(
@@ -15246,8 +15425,14 @@ class MainWindow(QMainWindow):
             if any(finding.converts_exact_body for finding in findings):
                 approval.required = True
             incomplete = any(finding.severity == "error" for finding in findings)
+            # Ein **erschienener** Körper hat keinen Nachherkörper: Er ist selbst
+            # sein ``added``, und ``result`` bleibt leer — kein Loch in der
+            # Vorschau (gemessen am 21.09.2026: ein im Vorschlag erzeugter und
+            # vernetzter Quader galt als „unvollständig" und sperrte die Freigabe).
+            created = getattr(difference, "created", ())
             missing_result = any(
                 identifier not in getattr(difference, "deleted", ())
+                and identifier not in created
                 and entry.result is None
                 and (
                     entry.changed
@@ -16662,6 +16847,39 @@ class MainWindow(QMainWindow):
         )
         self._update_waiting_state()
         self._update_veil(busy)
+        if not busy:
+            self._resume_preview_after_idle()
+
+    def _resume_preview_after_idle(self) -> None:
+        """Eine Vorschau, deren Antwort während der Auswertung verfiel, wird neu angefordert.
+
+        ``_preview_is_current`` verlangt eine ruhende Session — richtig, denn
+        eine Antwort auf den alten Stand darf nichts freigeben. Nur kam die
+        Antwort oft **genau dann**: ``sceneChanged`` meldet das neue Ergebnis,
+        bevor der Faden als beendet gilt, und wer daraufhin eine Vorschau
+        anforderte (der wartende Agentenvorschlag bei jeder Dokumentänderung),
+        bekam sie zurück, solange ``busy`` noch stand — und ``still`` warf
+        sie weg. Danach fragte niemand mehr; *Übernehmen* blieb für immer grau
+        (gemessen am 21.09.2026 an vier Fenstertests des Chats). Mit der Ruhe
+        wird deshalb einmal nachgefragt: der Auftrag ist derselbe, nur seine
+        Antwort fehlt.
+        """
+        approval = self._preview_approval
+        if approval is None or approval.displayed or approval.difference is not None:
+            return
+        if not approval.requested:
+            # Ein gebundener, nie angeforderter Auftrag (die erste Handlung
+            # einer frisch gewählten Bohrung) bleibt still — nachgeholt wird
+            # nur, was schon einmal unterwegs war. Der wartende Vorschlag ist
+            # die Ausnahme: Ihn fordert seine eigene Wiedervorlage an.
+            if self._proposal is not None and approval.owner is self.chat.accept_button:
+                self._show_pending_proposal()
+            return
+        if not self._preview_is_current(approval):
+            if self._proposal is not None:
+                self._show_pending_proposal()
+            return
+        self._request_order_preview(approval)
 
     def _update_waiting_state(self) -> None:
         """Führt die gestufte Warteanzeige für den gewählten Besitzer nach."""
@@ -18136,6 +18354,17 @@ class MainWindow(QMainWindow):
             self._crash_dialog.activateWindow()
             return
         dialog = self._support_dialog(KIND_CRASH, detail=text)
+        # **Offscreen sitzt niemand vor dem Dialog** — dieselbe Frage wie
+        # ``motion.animations_enabled``: Ein modaler Bericht wartete dort auf
+        # einen Klick, den es nie gibt, und die Suite stand ohne ein rotes
+        # Wort (``oberflaeche.md``, „Ein modaler Dialog auf einem Startweg hält
+        # die ganze Suite an"; gemessen am 21.09.2026 an einer Zusicherung im
+        # Frageweg). Gebaut wird der Bericht trotzdem — ein Test darf ihn
+        # lesen —, der Fehler geht ins Protokoll, und ausgeführt wird nichts.
+        if os.environ.get("QT_QPA_PLATFORM", "") == "offscreen":
+            _log.error("Programmfehler ohne Fenster: %s", text)
+            dialog.deleteLater()
+            return
         self._crash_dialog = dialog
         try:
             dialog.exec()
@@ -18617,6 +18846,9 @@ class MainWindow(QMainWindow):
         """
         self._close_requested = True
         self._cancel_pending_question()
+        # Der Baum zeichnet seine Bilder nebenan und stellt den Start zurück;
+        # freigegeben heißt: nichts mehr anfangen (``ObjectTree.release``).
+        self.object_tree.release()
         self.wait_for_workers(timeout_ms)
         self._action_notice.clear()
         self.spacemouse.stop()

@@ -786,6 +786,15 @@ prüft Verhalten und wird nicht bedient. Der Merker eines solchen Hinweises
 wird dabei **nicht** gesetzt; sonst hätte der Kunde ihn nie gesehen und bekäme
 ihn trotzdem nie wieder.
 
+**Der Absturzbericht ist der Dialog, den man am wenigsten erwartet** — und der
+gefährlichste: `_on_ask` macht aus **jeder** Ausnahme aus einem Fragedialog
+einen `InternalError`, und `report_error` öffnete ihn modal. Eine
+fehlgeschlagene Zusicherung in einem Testrückruf war damit kein rotes Wort,
+sondern ein stehender Prozess — der Hänger in `test_ui.py`, den die
+Suite-Beschreibung seit dem 16.08.2026 als „nativen Abriss" führte, war zur
+Hälfte das (21.09.2026). Offscreen geht der Bericht seither ins Protokoll
+(`_log.error`) und öffnet nichts.
+
 **Ein Widget braucht die `QApplication` in der Signatur, nicht im Glück.** Wer
 ein Widget ohne sie baut, bringt den ganzen Lauf mit 0xC0000409 um — ohne ein
 Wort Ausgabe, nur mit einem Rückgabewert. In der vollen Datei fällt das nicht

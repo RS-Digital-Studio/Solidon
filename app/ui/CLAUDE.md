@@ -37,6 +37,25 @@ Enter in der Liste öffnet die Auswahl; während einer Modellbezugsauswahl
 wird keine Übernahme vorgemerkt. Escape verwirft über den gemeinsamen Editor.
 Die numerischen Operationswerte bleiben der einzige gespeicherte Auftrag;
 eine dauerhafte Kantenassoziation wird nicht behauptet (§18.11, §19).
+Die Fokuskette folgt dem Auge: hinter jedem Kantenmaß seine Bezugsliste,
+dann die Mitten, dann die Liste der Mitte (`setTabOrder` beim Aufbau) — die
+Listen entstehen nach allen Feldern und stünden sonst am Ende der Kette.
+Wer eine Zahl in ein Maßfeld tippt, wird dabei nicht überschrieben: Jeder
+Tastendruck geht als Wert in den Entwurf, und die zwei Rückwege — Maßgruppe
+und Merkmalfenster — schreiben während des Lesens nichts zurück
+(`_place_from_feature_panel`, `reading`; aus „8,00" wurde sonst „8,00,00 mm").
+Ein Feld, das der Schritt nie trug und nur seine Vorgabe zeigt (*Langloch* an
+einer runden Bohrung), geht nicht in den Auftrag; `request_in_view` nimmt die
+scharfe Handlung, wo sie einen Weg ins Bild hat, und ein Druck auf das Loch
+zieht das Langloch auch, wenn seine zwei Knöpfe schon stehen.
+Eine getippte Koordinate führt die Stelle: innerhalb der Fläche wandern
+Maßlinien und Werkzeug mit (`move_to(..., on_plane_only=True)`); eine Zahl
+senkrecht dazu verlässt die Fläche, und dann geht die Maßgruppe mit der
+Platzierung — die getippten Werte reichen vorher ans Merkmalfenster weiter
+(`_hand_quiet_placement_to_panel`), wo die normale Feldvorschau sie annimmt,
+als wären sie dort getippt. Ein Klick auf Übernehmen, während das Werkzeug
+noch rechnet, wird in der Maßgruppe nicht gemerkt: Der Knopf ist grau, und ein
+Übernehmen gilt erst nach dem Bild, das der Kunde gesehen hat.
 
 Die Regeln dieses Gebiets stehen in `.claude/rules/` und laden sich selbst —
 **vier Dateien, je nachdem, was man anfasst:**
@@ -154,7 +173,17 @@ ihre Kurzhilfe erklärt die Darstellung von Rundungen.
 
 `FeaturePanel` und Platzierungsträger trennen `block_apply(reason)` von der
 Dokumentsperre: Vorschauwartezeit sperrt nur Übernehmen, Felder und Abbrechen
-bleiben zugänglich. `can_accept()` wird auch nach Texteingabe und nach den
+bleiben zugänglich. Stehen Maße im Bild (`set_measuring`), trägt die
+Maßgruppe Übernehmen und Abbrechen, die Knöpfe unten im Panel sind verborgen.
+Eine Vorschau mit einem `explained`-Satz zum Ergebnis (die Vernetzung eines
+exakten Körpers) ist kein Problem und sperrt die Freigabe nicht; ein
+erschienener Körper hat keinen Nachherkörper und gilt nicht als unvollständig;
+ohne 3D-Ansicht gilt das Ergebnis als gezeigt, sobald es da ist; eine
+Vorschau, deren Antwort während der Auswertung verfiel, wird mit der Ruhe der
+Session einmal neu angefordert (`_resume_preview_after_idle`); und eine
+Bauartänderung ohne bewegtes Dreieck (*Flächenbearbeitung beenden*) ist keine
+leere Vorschau — ihr Befund ist die Auskunft, kein Grund
+(`Session._preview_outcome`). `can_accept()` wird auch nach Texteingabe und nach den
 endgültigen Platzierungswerten geprüft. Ein geschützter früher Klick wird
 nicht nachträglich ausgeführt; identische Platzierungswerte lösen keine
 erneute Änderung aus. Die Revision und der geprüfte Auftrag gehören dem
@@ -1050,7 +1079,9 @@ Loch — bestätigt wird im Merkmalfenster) ·
 
 `CardColumn` liest seine Karten aus dem besitzenden Layout; einzeln gelöschte
 Widgets bleiben dadurch nicht in einer zweiten Liste für die Maske stehen.
-Sein Ereignisfilter bestellt wie jeder sterbliche Filter beim `Destroy` ab.
+Sein Ereignisfilter bestellt wie jeder sterbliche Filter beim `Destroy` ab
+— und beim `DeferredDelete`, denn ein über `deleteLater` gehendes Widget
+bekommt `Destroy` am Filter nicht mehr (21.09.2026, `leash.py`).
 
 Die Legende in `analysis_bar.py` verteilt bei vielen benannten Kartenstufen
 ihre Beispiele über den gesamten Farbbereich und nennt die Zahl ausgelassener
@@ -1734,7 +1765,10 @@ zweiten Start und überschreiben weder den Fortschritt noch seinen Zustand.
   dem Dialogaufbau schützt auch eine frühere Entwertung; ein bereits
   gesetztes Antwort-Ereignis geht vor dem Arbeiter-Warten nicht verloren.
   `AskDialog.set_ready` sperrt Auswahl, Enter und Doppelklick bis zur
-  aufgebauten Kandidatenszene; Abbrechen bleibt erreichbar. Der Frageweg
+  aufgebauten Kandidatenszene; Abbrechen bleibt erreichbar. Danach bekommt
+  die Liste den Fokus zurück: Während des Aufbaus lag er auf *Abbrechen*,
+  dem einzigen Knopf, der ging, und Enter verwarf die Frage (21.09.2026;
+  der OK-Knopf ist seither der Hauptknopf). Der Frageweg
   räumt Markierungen und Signalbindungen ab und stellt vor `reply` die
   aktuelle gültige Szene wieder ein. Projektwechsel legen keine alte Szene
   zurück; Fensterabbau gibt wartende Fragen vor dem Warten auf Arbeiter frei.
@@ -1775,6 +1809,11 @@ zweiten Start und überschreiben weder den Fortschritt noch seinen Zustand.
   Fortschritt und Abbruch benutzen den gemeinsamen Fortschrittsbereich.
   Ein Kartenwechsel entfernt die alten Farben sofort; auch ein Treffer im
   Cache oder „keine Karte“ entwertet verspätete Antworten des Vorgängers.
+  Ein Baumaufbau (Einheit, Thema, Ausblenden) ist keine neue Auswahl: Der
+  Objektbaum leert sich unter `QSignalBlocker` und meldet einmal aus
+  `_restore`, sonst brach die Leerung dazwischen die laufende Karte ab. Ein
+  ausdrücklicher Abbruch hält, bis der Kunde Körper oder Kartenart wechselt
+  (`_map_cancelled_for`, 21.09.2026).
   Der gebundene Berichtsklick wird bei warmem und leerem Cache genauso beendet
   wie beim Arbeiterergebnis. Die Formabweichung markiert ausschließlich ihren
   wirklichen Zeugen samt unterer Punktdistanz, nie das Mittel mehrerer Flächen

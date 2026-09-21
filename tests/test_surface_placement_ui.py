@@ -9,7 +9,7 @@ from typing import Any
 import numpy as np
 import pytest
 import trimesh
-from PySide6.QtCore import QThread, Signal
+from PySide6.QtCore import QLocale, QThread, Signal
 from PySide6.QtWidgets import QApplication, QWidget
 
 from app.core.geom.mesh import MeshData
@@ -1284,8 +1284,22 @@ def test_tab_reaches_both_dimension_groups_and_returns_to_editable_values(
     controller._back.setFocus(Qt.FocusReason.OtherFocusReason)
     qt_app.processEvents()
     assert controller._back.hasFocus()
+    # Seit der Bezugswahl (20.09.2026) steht hinter jedem Kantenmaß seine
+    # Bezugsliste — und die Kette folgt dem Auge, nicht der Entstehung.
+    choices = controller._reference_choices
+    expected = [
+        controller._accept,
+        fields[0],
+        choices[0],
+        fields[1],
+        choices[1],
+        fields[2],
+        fields[3],
+        choices[2],
+        controller._back,
+    ]
     seen = []
-    for _ in range(6):
+    for _ in range(len(expected)):
         focused = qt_app.focusWidget()
         assert focused is not None
         QTest.keyClick(focused, Qt.Key.Key_Tab)
@@ -1293,14 +1307,14 @@ def test_tab_reaches_both_dimension_groups_and_returns_to_editable_values(
         current = next(
             (
                 widget
-                for widget in (controller._back, controller._accept, *fields)
+                for widget in (controller._back, controller._accept, *fields, *choices)
                 if widget.hasFocus()
             ),
             None,
         )
         assert current is not None, "Tab verlor den Fokus außerhalb der Platzierungsbedienung"
         seen.append(current)
-    assert seen == [controller._accept, *fields, controller._back]
+    assert seen == expected
     assert controller._frozen, "beim Bearbeiten darf die Maus den Bezug nicht mehr wechseln"
 
     QTest.keyClick(controller._back, Qt.Key.Key_Space)
@@ -1663,9 +1677,11 @@ def test_a_clicked_hole_can_really_be_accepted(qt_app: QApplication) -> None:
 
     window = _window_with_a_renderer()
     try:
-        window.feature_dock.hide()
         _a_selected_hole(window)
         assert window._op_dialog is None, "ein angeklicktes Loch öffnet keinen Dialog mehr"
+        # Zugemacht **nach** der Auswahl: Eine neue Auswahl bringt das Fenster
+        # zurück (Konzept D, ``_on_selection``); der Weg ins Bild tut es nicht.
+        window.feature_dock.hide()
         flow = _measures_in_the_view(window)
         assert flow is not None and flow.active, "die Auswahl zeigt die Maße im Bild"
         assert window.feature_dock.isHidden(), "das geschlossene Panel bleibt geschlossen"
@@ -2337,7 +2353,9 @@ def test_measure_group_keeps_scope_below_its_controls_and_inside_the_view(
     viewport.resize(*size)
     QApplication.processEvents()
     controller.redraw()
-    widgets = [controller._measure_box, *controller._measures]
+    # Die Kantenmaße sitzen seit der Bezugswahl (20.09.2026) in ihren Boxen;
+    # im Bild verteilt werden die Boxen, ihre Felder liegen darin bei (0, 0).
+    widgets = [controller._measure_box, *controller._reference_boxes[:2]]
     visible = [widget for widget in widgets if widget.isVisibleTo(viewport)]
     for widget in visible:
         assert viewport.rect().contains(widget.geometry()), (widget.objectName(), widget.geometry())
@@ -2502,9 +2520,12 @@ def test_measure_group_has_the_only_apply_and_cancel_controls(qt_app: QApplicati
         assert window.feature_panel._apply.isHidden() and window.feature_panel._cancel.isHidden()
         field = flow._measure_group.findChildren(LengthSpin)[0]
         editor = field.lineEdit()
-        diameter = field.value_mm() + 0.5
+        # Getippt wird, wie der Kunde tippt: mit dem Dezimalzeichen der Sprache.
+        # ``str(5.7)`` liefert einen Punkt, und der fällt in einer deutschen
+        # Anzeige aus dem Feld — übrig blieb „57000“ Millimeter.
+        diameter = round(field.value_mm() + 0.5, 2)
         editor.selectAll()
-        QTest.keyClicks(editor, str(diameter))
+        QTest.keyClicks(editor, QLocale().toString(diameter, "f", 2))
         QTest.keyClick(editor, Qt.Key.Key_Return)
         assert flow.dialog.begun and flow.active
         before = len(window.session.project.document.ops)
@@ -3145,7 +3166,9 @@ def test_mesh_measure_waits_until_its_real_difference_has_been_drawn(
         monkeypatch.setattr(window.viewport, "show_difference", waiting.append)
         field = flow._measure_group.findChildren(LengthSpin)[0]
         field.lineEdit().selectAll()
-        QTest.keyClicks(field.lineEdit(), str(field.value_mm() + 0.5))
+        QTest.keyClicks(
+            field.lineEdit(), QLocale().toString(round(field.value_mm() + 0.5, 2), "f", 2)
+        )
         QTest.keyClick(field.lineEdit(), Qt.Key.Key_Return)
         window._feature_preview.stop()
         window._preview_feature_change()
@@ -3243,9 +3266,11 @@ def test_historical_bore_fields_preview_all_following_steps_and_preserve_origina
         )
         if not seat_available:
             monkeypatch.setattr(placement, "seat_for_bore_step", lambda *_args: None)
-        window.feature_dock.hide()
         window.object_tree.select_object(owner)
         window.object_tree.select_feature(owner, hole)
+        # Zugemacht **nach** der Auswahl (Konzept D: die nächste Auswahl bringt
+        # das Fenster zurück, der Weg ins Bild nicht).
+        window.feature_dock.hide()
         flow = _measures_in_the_view(window)
         assert flow is not None and flow._change_op == drill.id
         assert flow.dialog.values() == original
@@ -3285,7 +3310,7 @@ def test_historical_bore_fields_preview_all_following_steps_and_preserve_origina
         assert "Vorgabemaß" in depth.toolTip()
         assert "erzeugenden Schritt" in depth.accessibleDescription()
         depth.lineEdit().selectAll()
-        QTest.keyClicks(depth.lineEdit(), str(edited_depth))
+        QTest.keyClicks(depth.lineEdit(), QLocale().toString(float(edited_depth), "f", 2))
         QTest.keyClick(depth.lineEdit(), Qt.Key.Key_Return)
         assert session.history.operation(drill.id).params == original
         expected["depth"] = edited_depth

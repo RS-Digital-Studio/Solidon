@@ -785,6 +785,14 @@ def test_a_report_names_the_versions_even_without_package_metadata() -> None:
     """
     import importlib.metadata as metadata
 
+    # Gelesen wird am **geladenen** Modul (``sys.modules``) — der Bericht importiert
+    # nichts nach, damit ein Ladefehler nicht ein zweites Mal ausgelöst wird. Läuft
+    # diese Datei allein, hat noch nichts ``scipy`` importiert; hier also ausdrücklich.
+    import numpy as np  # noqa: F401
+    import PySide6  # noqa: F401
+    import scipy  # noqa: F401
+    import shapely  # noqa: F401
+
     def no_metadata(name: str) -> str:
         raise metadata.PackageNotFoundError(name)
 
@@ -1644,10 +1652,19 @@ def test_a_programme_error_arrives_as_a_crash_with_its_traceback(
     qt_app: QApplication, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """§33.1: Ein Programmfehler bekommt den Dialog, der ihn melden kann —
-    samt Stapelabzug, den der Nutzer nicht abtippen soll."""
+    samt Stapelabzug, den der Nutzer nicht abtippen soll.
+
+    Offscreen führt das Fenster den Bericht nicht aus (er hielte die Suite
+    an, 21.09.2026), baut ihn aber — gefangen wird er deshalb beim Bau."""
     window = MainWindow(Session(), UiSettings())
     opened: dict[str, SupportDialog] = {}
-    monkeypatch.setattr(SupportDialog, "exec", lambda self: opened.setdefault("dialog", self) and 0)
+    build = MainWindow._support_dialog
+
+    def catch(self: MainWindow, kind: str, detail: str = "") -> SupportDialog:
+        return opened.setdefault("dialog", build(self, kind, detail))
+
+    monkeypatch.setattr(MainWindow, "_support_dialog", catch)
+    monkeypatch.setattr(SupportDialog, "exec", lambda self: 0)
 
     try:
         raise ValueError("kaputt")

@@ -16,11 +16,18 @@ import trimesh
 from PySide6.QtCore import QPoint, QPointF, QRect
 from PySide6.QtGui import QColor, QPalette
 from PySide6.QtWidgets import QApplication, QFrame, QLabel, QVBoxLayout, QWidget
+from shapely.geometry import Polygon
 
 from app.core.geom.mesh import MeshData
 from app.core.registry import REGISTRY
 from app.core.scene.evaluate import EvaluationResult
-from app.core.scene.placement import CentreReference, EdgeReference, PlacementTool, SurfacePlacement
+from app.core.scene.placement import (
+    CentreReference,
+    EdgeReference,
+    PlacementTool,
+    PreparedSurface,
+    SurfacePlacement,
+)
 from app.core.types import PlaneFrame, Scene, SceneObject
 from app.ui.op_dialog import OperationDialog
 from app.ui.overlay import OverlayHost
@@ -79,9 +86,11 @@ def test_dimension_ink_leaves_the_actual_value_and_caption_rectangles_clear(
             flow.redraw()
             assert len(flow._canvas.lines) == (4 if with_centre else 2)
             assert not flow._canvas.mask().isEmpty(), "freie Pfeilstücke bleiben sichtbar"
-            fields = [flow._bar, *flow._measures]
+            # Die Kantenmaße sitzen seit der Bezugswahl (20.09.2026) in ihren
+            # Boxen; im Bild verteilt werden die Boxen, die Felder liegen darin.
+            fields = [flow._bar, *flow._reference_boxes[:2]]
             if with_centre:
-                fields.extend([*flow._centre_measures, flow._centre])
+                fields.extend([*flow._centre_measures, flow._reference_boxes[2]])
             for field in fields:
                 assert field.isVisible()
                 assert not flow._canvas.mask().intersects(field.geometry()), (
@@ -173,7 +182,7 @@ def test_resizing_a_dimension_field_does_not_mix_nested_line_lists(qt_app: QAppl
     flow.redraw()
     try:
         assert len(flow._canvas.lines) == 2
-        field = flow._measures[0]
+        field = flow._reference_boxes[0]
         # Ein echter synchroner QWidget-Resize, dessen bisheriger Rückruf die
         # Wunschgröße wiederherstellt und dabei mitten im Aufbau erneut eintritt.
         field.resize(field.width() + 31, field.height())
@@ -202,7 +211,7 @@ def test_dimension_fields_do_not_overlap_at_zoomed_view_edges(
     """Vier Maße plus Mittelpunkt bleiben im Bild, auch bei gleichem Wunschplatz."""
     flow, session, viewport, dialog = _layout(qt_app, size, scale, corner)
     try:
-        widgets = [*flow._measures, *flow._centre_measures, flow._centre]
+        widgets = [*flow._reference_boxes[:2], *flow._centre_measures, flow._reference_boxes[2]]
         assert len(flow._canvas.lines) == 4
         for field in widgets:
             assert field.isVisible()
@@ -260,7 +269,7 @@ def test_the_dimension_fields_leave_the_movement_handle_alone(qt_app: QApplicati
         )
         flow.redraw()
         qt_app.processEvents()
-        widgets = [*flow._measures, *flow._centre_measures, flow._centre]
+        widgets = [*flow._reference_boxes[:2], *flow._centre_measures, flow._reference_boxes[2]]
         frei = [widget.geometry() for widget in widgets]
 
         viewport.handle = ((10.0, 10.0, 0.0), 30.0)
@@ -372,7 +381,12 @@ def test_placement_controls_avoid_real_overlay_zones(
     flow, session, viewport, dialog = _layout(qt_app, size, 1000.0, "bottom", with_zones=True)
     host = flow.window.overlay
     try:
-        widgets = [flow._bar, *flow._measures, *flow._centre_measures, flow._centre]
+        widgets = [
+            flow._bar,
+            *flow._reference_boxes[:2],
+            *flow._centre_measures,
+            flow._reference_boxes[2],
+        ]
         for zone in (host.left, host.right, host.bottom):
             obstacle = QRect(viewport.mapFromGlobal(zone.mapToGlobal(QPoint())), zone.size())
             for widget in widgets:
@@ -405,6 +419,16 @@ def test_dimension_fields_leave_the_placement_point_itself_visible(
     """
     flow, session, viewport, dialog = _layout(qt_app, (900, 600), 1.0, "bottom")
     try:
+        # **Das Werkzeug ist die Bohrung, nicht die Platte.** ``_layout`` gibt
+        # dem Fluss die Platte als Werkzeug mit — hier zählt deren Ausdehnung
+        # als Vorschau, und eine 40-mm-Platte bei zwölf Bildpunkten je
+        # Millimeter sperrt 480 von 600 Bildpunkten: Kein Feld von 312
+        # Bildpunkten Breite (seit der Bezugswahl vom 20.09.2026 mit seiner
+        # Bezugsliste) fände daneben Platz. Die Zusage gilt der Bohrung von
+        # sechzig Bildpunkten, die der Docstring nennt.
+        flow._tool_context = PlacementTool(
+            MeshData(trimesh.creation.cylinder(radius=2.5, height=10))
+        )
         # Der Setzpunkt in die Bildmitte, damit die Felder ihn überhaupt von
         # allen Seiten umgeben können — am Rand weicht die Suche ohnehin aus.
         viewport.renderer.world_to_display = lambda point: (
@@ -441,7 +465,12 @@ def test_dimension_fields_leave_the_placement_point_itself_visible(
 
         covering = [
             field.objectName() or type(field).__name__
-            for field in (flow._bar, *flow._measures, *flow._centre_measures, flow._centre)
+            for field in (
+                flow._bar,
+                *flow._reference_boxes[:2],
+                *flow._centre_measures,
+                flow._reference_boxes[2],
+            )
             if field.isVisible() and field.geometry().intersects(preview)
         ]
         assert not covering, (
@@ -611,6 +640,20 @@ def _layout(
             EdgeReference("b", (0, 0, 0), (40, 0, 0), (0, 1, 0), 10),
         ),
         centres=(CentreReference("hole_1", (0, 0, 0), (10, 10), 14.142135623730951),),
+    )
+    # **Fläche und Vorbereitung gehen zu zweit**, wie ``at_point`` sie der
+    # Anwendung liefert: Seit der Bezugswahl (20.09.2026) nummeriert
+    # ``redraw`` jedes Kantenmaß über ``_prepared.edges``. Ohne die
+    # Vorbereitung warf das im Ereignisfilter beim Anzeigen — und daraus wurde
+    # unter PySide ein nativer Abriss (Exit 139) statt eines roten Tests
+    # (gemessen am 21.09.2026, dreizehn Portionen des Release-Tors).
+    flow._prepared = PreparedSurface(
+        frame=flow._surface.frame,
+        planar=True,
+        face_indices=(0,),
+        edges=flow._surface.edges,
+        centres=(("hole_1", (0, 0, 0)),),
+        area=Polygon(((-20, -20), (20, -20), (20, 20), (-20, 20))),
     )
     flow.active = True
     viewport.show()

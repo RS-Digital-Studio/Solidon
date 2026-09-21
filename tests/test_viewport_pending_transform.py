@@ -32,12 +32,16 @@ def two_bodies(*, plates: bool = False) -> EvaluationResult:
         raw = trimesh.creation.box(extents=(4.0, 4.0, 4.0))
         raw.apply_translation((x, 0.0, 0.0))
         sides = tuple(int(face) for face in np.flatnonzero(np.abs(raw.face_normals[:, 2]) < 0.5))
+        # Mit belegter Maßquelle, wie die Erkennung sie liefert: Ohne sie
+        # trüge die Beschriftung seit dem 20.09.2026 den Zusatz „Maßherkunft
+        # nicht bestimmt" und fände im Bild keinen Platz mehr.
         feature = Feature(
             id="hole_1",
             kind="hole",
             provenance="detected",
             params={"centre": (x, 0.0, 0.0), "diameter": 2.0, "axis": (0.0, 0.0, 1.0)},
             face_indices=sides,
+            measure_sources={"diameter": "facets"},
         )
         objects[name] = SceneObject(
             id=name,

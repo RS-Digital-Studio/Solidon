@@ -816,6 +816,13 @@ Drei Sätze, die über diesen Fall hinausgehen:
   jedes Bild einzeln (`_ThumbnailWorker.drawn`), die Zeilen kommen also
   weiter nacheinander nach. Ein Signal am Ende hätte dieselbe Rechnung und
   vier Sekunden leere Zeilen.
+* **Freigegeben heißt: nichts mehr anfangen.** `show_scene` stellt den Start
+  des Zeichners mit `singleShot(0)` zurück. `ObjectTree.release` leert den
+  Vorrat, bevor es wartet, und `MainWindow.release` ruft es — sonst startete
+  der Zeitgeber nach dem Warten einen Zeichner, auf den niemand mehr wartete,
+  und der Thread überlebte den Prozess (`QThread: Destroyed while thread is
+  still running`, Exit 127; gemessen am 21.09.2026 an fünf Fällen in
+  `test_operation_ui`, deren Test keine Ereignisrunde durchlief).
 
 ### Ein Dialog, der beim Öffnen nachsieht, öffnet erst danach
 

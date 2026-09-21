@@ -717,18 +717,23 @@ def _scene_with_two_holes() -> Any:
     from app.core.types import Feature, Scene, SceneObject
 
     mesh = MeshData(trimesh.creation.box(extents=(40.0, 40.0, 10.0)))
+    # Mit belegter Maßquelle, wie die Erkennung sie liefert: Ohne sie trüge
+    # jede Beschriftung seit dem 20.09.2026 den Zusatz „Maßherkunft nicht
+    # bestimmt", und die Zeile fände im Bild keinen Platz mehr.
     features = {
         "hole_1": Feature(
             id="hole_1",
             kind="hole",
             provenance="detected",
             params={"diameter": 5.0, "centre": (-10.0, 0.0, 5.0), "axis": (0.0, 0.0, 1.0)},
+            measure_sources={"diameter": "facets"},
         ),
         "hole_2": Feature(
             id="hole_2",
             kind="hole",
             provenance="detected",
             params={"diameter": 8.0, "centre": (10.0, 0.0, 5.0), "axis": (0.0, 0.0, 1.0)},
+            measure_sources={"diameter": "facets"},
         ),
     }
     return EvaluationResult(
@@ -4183,7 +4188,12 @@ def test_clicking_a_finding_is_never_without_an_answer() -> None:
         "Stufe 1: der Klick merkt sich, dass er auf eine Karte wartet"
     )
 
-    nachgeholt = inspect.getsource(MainWindow._map_ready)
+    # Die Nachholung wohnt seit dem 20.09.2026 in ``_focus_map_finding``, das
+    # ``_map_ready`` ruft — der Wächter liest beide, damit die Kette hält.
+    nachgeholt = inspect.getsource(MainWindow._map_ready) + inspect.getsource(
+        MainWindow._focus_map_finding
+    )
+    assert "_focus_map_finding" in inspect.getsource(MainWindow._map_ready)
     assert "_show_finding_at" in nachgeholt, (
         "die fertige Karte holt den Flug nach — sonst ist der erste Klick "
         "immer folgenlos und der zweite tut es"
@@ -7197,6 +7207,9 @@ def test_the_grip_on_a_preview_is_asked_before_the_camera(qt_app: QApplication) 
         def __init__(self, nimmt: bool) -> None:
             self.nimmt = nimmt
             self.gefragt = 0
+            # Seit dem 20.09.2026 fragt die Vorfahrt, ob ein Griff gedrückt
+            # gehalten wird (``pressing``) — die Attrappe trägt den Vertrag mit.
+            self.pressing = False
 
         def handle(self, event: object) -> bool:
             self.gefragt += 1
@@ -7252,6 +7265,7 @@ def test_a_grip_is_asked_before_a_running_placement(qt_app: QApplication) -> Non
         def __init__(self, nimmt: bool) -> None:
             self.nimmt = nimmt
             self.gefragt = 0
+            self.pressing = False
 
         def handle(self, event: object) -> bool:
             self.gefragt += 1

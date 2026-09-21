@@ -255,16 +255,19 @@ TOURS: Final[tuple[Tour, ...]] = (
                 # Bericht dieses Beispiels sagt „An diesem Netz war nichts zu
                 # reparieren". Wer als Erstes einen Widerspruch zwischen
                 # Anleitung und Anwendung liest, glaubt danach keiner von
-                # beiden. Genannt wird deshalb, was dasteht: zwei Hinweise,
+                # beiden. Genannt wird deshalb, was dasteht: drei Hinweise,
                 # keine Warnung. ``tests/test_tour.py`` hält die Zahl fest.
-                # **Zwei seit dem 14.09.2026, nicht drei**: „Doppelte Punkte
-                # wurden verschweißt" war das Lesen einer STL und ist kein
-                # Befund mehr (``ingest.loader.normalise``, ``weld_is_reading``).
+                # Zwei waren es seit dem 14.09.2026 („Doppelte Punkte wurden
+                # verschweißt" war das Lesen einer STL und ist kein Befund
+                # mehr, ``ingest.loader.normalise``); der dritte kam am
+                # 20.09.2026 mit der Formabweichung belegter Flächen
+                # (``perceive.deviation``, ``evaluate``).
                 text=_(
-                    "Rechts steht der Prüfbericht — hier zwei Hinweise und keine Warnung: "
+                    "Rechts steht der Prüfbericht — hier drei Hinweise und keine Warnung: "
                     '„nichts zu reparieren" für '
-                    "dieses Netz, und die Bohrung, die um die Materialtoleranz gewachsen "
-                    "ist. Bei heruntergeladenen Modellen steht dort öfter eine Warnung."
+                    "dieses Netz, die Bohrung, die um die Materialtoleranz gewachsen ist, "
+                    "und die Formabweichung, die sich in der Analysekarte prüfen lässt. Bei "
+                    "heruntergeladenen Modellen steht dort öfter eine Warnung."
                 ),
             ),
         ),
@@ -772,7 +775,9 @@ TOURS: Final[tuple[Tour, ...]] = (
                 ),
             ),
             TourStep(
-                shows="viewport",
+                # Die Differenz steht im Prüfbericht — dorthin zeigt der Schritt
+                # (``tests/test_tour.py`` hält Ort und Text zusammen).
+                shows="report",
                 text=_(
                     "Das TPU-Profil sieht mehr Spiel vor als das bisherige Material. "
                     "Soll der Deckel aus TPU bleiben, vergrößern Sie das Spiel um "
