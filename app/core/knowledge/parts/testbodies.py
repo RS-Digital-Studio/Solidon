@@ -25,20 +25,17 @@ from __future__ import annotations
 import math
 from typing import Any, cast
 
-import numpy as np
-
-from app.core.deferred import trimesh
 from app.core.errors import ValidationError
 from app.core.geom.boolean import BOOLEAN_OVERLAP
-from app.core.geom.mesh import MeshData
 from app.core.knowledge.parts import shapes
-from app.core.knowledge.parts.build import bore, face, pin, result, subtract, union
+from app.core.knowledge.parts.build import bore, compound, face, pin, result, subtract, union
 from app.core.knowledge.parts.registry import (
     FACE_GIVES_DIRECTION,
     PartChange,
     WallRequirement,
     register_part,
 )
+from app.core.knowledge.parts.shapes import Form
 from app.core.registry import op_params, param
 from app.core.types import BaseParams, PartResult
 from app.core.units import DEGREE_UNIT
@@ -221,19 +218,21 @@ def fit_ladder(raw: BaseParams) -> PartResult:
     rail_depth = max(spacing, largest_bore + 8.0)
     rail_offset = (rail_depth + spacing * 0.2) / 2.0
     pin_y, bore_y = -rail_offset, rail_offset
-    bodies = [
-        shapes.moved(shapes.box(width, rail_depth, base_height), (0.0, y, 0.0))
+    rails = {
+        y: shapes.moved(shapes.box(width, rail_depth, base_height), (0.0, y, 0.0))
         for y in (pin_y, bore_y)
-    ]
+    }
     features = [face("face_1", width * rail_depth, (0.0, pin_y, base_height))]
-    cutters = []
+    studs: list[Form] = []
+    holes: list[Form] = []
+    labels: dict[float, list[Form]] = {pin_y: [], bore_y: []}
 
     for index in range(params.steps):
         play = params.first + params.step * index
         x = -width / 2.0 + spacing * (index + 1)
 
         stud = shapes.cylinder(params.diameter, params.height)
-        bodies.append(shapes.moved(stud, (x, pin_y, base_height)))
+        studs.append(shapes.moved(stud, (x, pin_y, base_height)))
         features.append(
             pin(
                 f"pin_{index + 1}",
@@ -244,7 +243,7 @@ def fit_ladder(raw: BaseParams) -> PartResult:
         )
 
         hole = shapes.cylinder(params.diameter + play, base_height + 2.0 * BOOLEAN_OVERLAP)
-        cutters.append(shapes.moved(hole, (x, bore_y, -BOOLEAN_OVERLAP)))
+        holes.append(shapes.moved(hole, (x, bore_y, -BOOLEAN_OVERLAP)))
         features.append(
             bore(
                 f"bore_{index + 1}",
@@ -255,12 +254,15 @@ def fit_ladder(raw: BaseParams) -> PartResult:
             )
         )
         for y in (pin_y, bore_y):
-            cutters.append(
+            labels[y].append(
                 _label(index + 1, (x, y + largest_bore / 2.0 + 2.0, base_height - LABEL_DEPTH))
             )
 
-    body = subtract(union(*bodies), *cutters)
-    return result(body, *features)
+    # Zwei Leisten, die getrennt gedruckt werden: je Leiste ein Körper, zusammen
+    # ein Verbund (``bodies=2``) — keine Vereinigung, die nichts vereinigt.
+    pins = subtract(union(rails[pin_y], *studs), *labels[pin_y])
+    bores = subtract(rails[bore_y], *holes, *labels[bore_y])
+    return result(compound(pins, bores), *features)
 
 
 @op_params
@@ -447,40 +449,17 @@ def overhang_fan(raw: BaseParams) -> PartResult:
     return result(body, face("face_1", total * depth, (0.0, 0.0, base_height)))
 
 
-def _ramp(width: float, reach: float, rise: float) -> MeshData:
+def _ramp(width: float, reach: float, rise: float) -> Form:
     """Ein Keil, der über nichts hinauslehnt — die Form, aus der ein
     Überhangtest besteht.
+
+    Ein Seitenriss mit zwei Auswertern (P2.7): unten die Kante, oben der
+    Auslauf um ``reach`` — dieselbe Form wie der Anlauf einer Rippe.
     """
-    points = np.array(
-        [
-            [-width / 2.0, 0.0, 0.0],
-            [width / 2.0, 0.0, 0.0],
-            [width / 2.0, reach, rise],
-            [-width / 2.0, reach, rise],
-            [-width / 2.0, 0.0, rise],
-            [width / 2.0, 0.0, rise],
-        ],
-        dtype=float,
-    )
-    faces = np.array(
-        [
-            [0, 1, 2],
-            [0, 2, 3],
-            [4, 5, 1],
-            [4, 1, 0],
-            [3, 2, 5],
-            [3, 5, 4],
-            [1, 5, 2],
-            [0, 3, 4],
-        ],
-        dtype=np.int64,
-    )
-    body = trimesh.Trimesh(vertices=points, faces=faces, process=True)
-    trimesh.repair.fix_normals(body)
-    return MeshData.of(body)
+    return shapes.prism_across([(0.0, 0.0), (reach, rise), (0.0, rise)], width)
 
 
-def _label(step: int, position: tuple[float, float, float]) -> MeshData:
+def _label(step: int, position: tuple[float, float, float]) -> Form:
     """Die Stufennummer als eingravierter Strichcode: ``step`` Striche.
 
     Keine Schrift: eine Schrift ist eine Abhängigkeit, eine Lizenzfrage und ein
@@ -510,4 +489,5 @@ def _label(step: int, position: tuple[float, float, float]) -> MeshData:
         bars.append(
             shapes.moved(bar, (position[0] + index * 1.4 - count * 0.7, position[1], position[2]))
         )
-    return shapes.mesh_only(union(*bars))
+    # Getrennte Striche sind getrennte Körper: ein Verbund, kein vereinigter Block.
+    return compound(*bars)

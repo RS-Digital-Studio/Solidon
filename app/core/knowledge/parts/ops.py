@@ -1083,6 +1083,13 @@ EXACT_PARTS: Final = frozenset(
         "organizer_divider",
         "organizer_rim",
         "organizer_foot",
+        # Dichtungen
+        "seal_groove",
+        "seal_gasket",
+        # Kalibrierung
+        "fit_ladder",
+        "wall_ladder",
+        "overhang_fan",
     }
 )
 

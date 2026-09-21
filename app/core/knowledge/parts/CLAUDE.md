@@ -47,12 +47,12 @@ exakter Körper keine Dreiecke). Drei Grenzen dabei:
 
 - **Wer ein Netz direkt anfasst, sagt es.** `shapes.mesh_only(form)` steht
   an jeder Stelle, die `.raw`, eine Flächenmessung aus Dreiecksnormalen oder
-  eine Netzoperation braucht — das sind die Stellen, an denen ihre Gruppe den
-  exakten Weg noch schuldet. Unter dem exakten Kern kommen sie nie dran:
-  `ops.EXACT_PARTS` lässt nur Bausteine dorthin, deren Beschreibung ohne sie
-  auskommt (heute alle Gruppen bis auf die Dichtungen und die Kalibrierung),
-  alle anderen nehmen am exakten Träger den Netzweg samt Konvertierungsmeldung
-  wie bisher. Die Paritätstabelle
+  eine Netzoperation braucht. Seit P2.7f gibt es in den Bausteinen keine
+  mehr: `ops.EXACT_PARTS` führt jeden mitgelieferten Baustein, und
+  `tests/test_exact_parts.py` hält die Liste mit dem Register gleich. Was
+  bleibt, sind die Erzeuger (`create_*`, der Organizer als Ganzes in
+  `organizer/build.py`, die Dichtung aus `geom/seal_ops.py`): Sie rechnen am
+  Netz und sagen es, bis P2.8 die Kernwahl regelt. Die Paritätstabelle
   (`tests/test_exact_body_parity.py`, `KEEP` statt `MESH`) ist die Abnahme je
   Gruppe.
 - **Ein Gewinde ist exakt ein genähter Körper, kein Gang plus Kern.**
@@ -79,8 +79,8 @@ exakter Körper keine Dreiecke). Drei Grenzen dabei:
 | `structure.py` | Struktur — versteifen, hindurchführen, anbinden |
 | `containers.py` | Organizer-Wanne, Teilungswand, Rand und separater Steckfuß; exakte Außenmaße, unabhängiger Boden und reale ebene Merkmalsflächen — am Netz aus Dreiecken gezählt (`facets`), exakt als Integral über die ebenen Flächen (`native`, `brep.canonical.horizontal_area`); die gerundete Wanne ist `shapes.rounded_box` |
 | `profile_clamps.py` | Einzelne Klemmschale und wechselbare Einlage mit gezeichneter Gegen- bzw. Sitzkontur; der gemeinsame Vierkörperweg liegt in `geom/profile_clamp_ops.py` |
-| `seals.py` | Abtragende Dichtnut und separate rechteckige/runde Dichtung aus einem gemeinsamen geschlossenen Skizzenweg; tatsächliche Kontakt-, Boden- und Manteldreiecke |
-| `testbodies.py` | Prüfkörper für die Kalibrierung (§28.3) |
+| `seals.py` | Abtragende Dichtnut und separate rechteckige/runde Dichtung aus einem gemeinsamen geschlossenen Skizzenweg (`geom/seal.py` rechnet Band und Schnur als `Section` bzw. `round_cord`); tatsächliche Kontakt-, Boden- und Manteldreiecke, die ebenen Flächen exakt aus dem Integral (`native`) |
+| `testbodies.py` | Prüfkörper für die Kalibrierung (§28.3) — die zwei Leisten der Toleranzleiter und die Striche ihrer Beschriftung sind Verbünde (`build.compound`), die Rampen des Überhangfächers ein Seitenriss (`shapes.prism_across`) |
 
 **Das Gerüst**
 

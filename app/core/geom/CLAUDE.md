@@ -75,7 +75,9 @@ bleiben sichtbar. Fertigungsspiel kommt ausschließlich vom Aufrufer.
 Splinekurve mit begrenzter Sehnenabweichung, Abbruch und Punktbudget.
 Ohne diese optionale Grenze bleibt die bisherige Abtastung erhalten.
 
-`seal.py` erzeugt Dichtnut und unverformten Dichtring aus demselben
+`seal.py` erzeugt Dichtnut und unverformten Dichtring — als Formen mit zwei
+Auswertern (P2.7): Band und Versatz über `knowledge/parts/section.Section`,
+die Schnur am Netz als Kapselkette, exakt als `brep.profiles.round_cord` — aus demselben
 geschlossenen Weg und normalem Versatz. Runde Querschnitte verwenden die
 Vereinigung identisch facettierter Kugelhüllen, damit gemeinsame Bahnenden
 keine inneren Kappen zurücklassen. `opening_choices` bindet Innenringe an

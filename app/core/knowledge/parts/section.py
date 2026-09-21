@@ -67,10 +67,10 @@ class Section:
     face: Any = None
 
     @classmethod
-    def of(cls, profile: Profile) -> Section:
+    def of(cls, profile: Profile, *, check_cancelled: Callable[[], None] | None = None) -> Section:
         """Aus einem Skizzenumriss — Bögen bleiben exakt Bögen."""
         return cls(
-            profile_section(profile, max_sag=CONTOUR_SAG),
+            profile_section(profile, max_sag=CONTOUR_SAG, check_cancelled=check_cancelled),
             _faces().face_of(profile) if building_exact() else None,
         )
 

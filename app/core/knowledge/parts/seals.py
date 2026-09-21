@@ -6,21 +6,24 @@ from typing import TYPE_CHECKING, cast
 
 import numpy as np
 
-from app.core.geom.mesh import MeshData
+from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.geom.seal import seal_geometry
+from app.core.knowledge.parts import shapes
 from app.core.knowledge.parts.registry import (
     FeatureRequirement,
     PartChange,
     WallRequirement,
     register_part,
 )
+from app.core.knowledge.parts.shapes import Form
 from app.core.registry import op_params, param
-from app.core.types import BaseParams, Feature, FeatureKind, PartResult
+from app.core.types import BaseParams, Feature, FeatureKind, MeasureSource, PartResult
 from app.core.units import EPS_GEOM
 from app.i18n import _
 
 _ADDED = PartChange("1", "2026-09-15", "Dichtnut und getrennte Dichtung mit gemeinsamem Dichtweg.")
 if TYPE_CHECKING:
+    from app.core.brep.kernel import Solid
     from app.core.sketch.profile import Profile as SketchProfile
 
 _DEFAULT_PATH = (
@@ -107,8 +110,20 @@ def _profile(text: str) -> SketchProfile:
     return profile_of(solve_sketch(sketch_from_text(text)))
 
 
-def _surface(mesh: MeshData, name: str, mask: np.ndarray, kind: FeatureKind) -> Feature:
-    """Nur tatsächliche Dreiecke und ihre flächengewichteten Maße benennen."""
+def _surface(
+    mesh: MeshData,
+    name: str,
+    mask: np.ndarray,
+    kind: FeatureKind,
+    *,
+    exact: Solid | None = None,
+) -> Feature:
+    """Nur tatsächliche Dreiecke und ihre flächengewichteten Maße benennen.
+
+    Am exakten Körper sind die Dreiecke die seiner Tessellierung, und eine
+    ebene Fläche bekommt ihr Maß aus dem Integral des Kerns statt aus den
+    Sehnen (``brep.canonical.horizontal_area``); die Quelle sagt es.
+    """
     from app.core.perceive.surfaces import planar_patch
 
     indices = np.flatnonzero(mask)
@@ -116,11 +131,19 @@ def _surface(mesh: MeshData, name: str, mask: np.ndarray, kind: FeatureKind) -> 
     areas = raw.area_faces[indices]
     centre = np.average(raw.triangles_center[indices], weights=areas, axis=0)
     values = {"area": float(areas.sum()), "centre": tuple(float(v) for v in centre)}
+    sources: dict[str, MeasureSource] = dict.fromkeys(values, "facets")
     surface = None
     if kind == "face":
         normal = raw.face_normals[indices[0]]
         direction = (float(normal[0]), float(normal[1]), float(normal[2]))
         values["normal"] = direction
+        sources["normal"] = "facets"
+        if exact is not None:
+            from app.core.brep.canonical import horizontal_area
+
+            height = float(raw.triangles_center[indices[0]][2])
+            values["area"] = horizontal_area(exact, height, up=direction[2] > 0.0)
+            sources["area"] = "native"
         surface = planar_patch(
             mesh,
             tuple(int(index) for index in indices),
@@ -134,13 +157,15 @@ def _surface(mesh: MeshData, name: str, mask: np.ndarray, kind: FeatureKind) -> 
         params=values,
         face_indices=tuple(int(index) for index in indices),
         recognised=False,
-        measure_sources=dict.fromkeys(values, "facets"),
+        measure_sources=sources,
         surface_patches=(surface,) if surface else (),
     )
 
 
-def seal_features(mesh: MeshData, *, gasket: bool, rounded: bool = False) -> dict[str, Feature]:
+def seal_features(body: Form, *, gasket: bool, rounded: bool = False) -> dict[str, Feature]:
     """Geometrisch belegte Kontakt-, Boden- und Mantelbereiche eines neuen Rings."""
+    mesh = as_mesh_data(body)
+    exact = None if isinstance(body, MeshData) else body
     normals = mesh.raw.face_normals
     if rounded:
         # Die runde Schnur berührt an einer Linie, nicht an einer Planfläche.
@@ -157,8 +182,8 @@ def seal_features(mesh: MeshData, *, gasket: bool, rounded: bool = False) -> dic
     lower = "gasket_bottom" if gasket else "groove_floor"
     mantle = "gasket_walls" if gasket else "groove_walls"
     return {
-        upper: _surface(mesh, upper, top, "face"),
-        lower: _surface(mesh, lower, bottom, "face"),
+        upper: _surface(mesh, upper, top, "face", exact=exact),
+        lower: _surface(mesh, lower, bottom, "face", exact=exact),
         mantle: _surface(mesh, mantle, side, "curved_face"),
     }
 
@@ -216,9 +241,7 @@ def seal_gasket(raw: BaseParams) -> PartResult:
         section=p.section,
         offset=p.offset,
     )
-    shifted = geometry.gasket.raw.copy()
-    shifted.apply_translation((0, 0, p.height))
-    mesh = MeshData.of(shifted)
+    body = shapes.moved(geometry.gasket, (0.0, 0.0, p.height))
     return PartResult(
-        mesh=mesh, features=seal_features(mesh, gasket=True, rounded=p.section == "round")
+        mesh=body, features=seal_features(body, gasket=True, rounded=p.section == "round")
     )

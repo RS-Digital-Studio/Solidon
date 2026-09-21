@@ -118,11 +118,14 @@ def compound(*parts: Form) -> Form:
     sich nicht berühren, bleiben darin getrennte Komponenten —, exakt ein
     Verbund (``exact.compound``), der die Teile als Körper nebeneinander trägt.
     """
-    plain = _meshes(list(parts))
+    bodies = [part for part in parts if part is not None]
+    if len(bodies) == 1:
+        return bodies[0]
+    plain = _meshes(bodies)
     if plain is None:
         from app.core.knowledge.parts import exact as twins
 
-        return twins.compound(*_solids(list(parts)))
+        return twins.compound(*_solids(bodies))
     return boolean("union", plain, quality="fine").mesh
 
 

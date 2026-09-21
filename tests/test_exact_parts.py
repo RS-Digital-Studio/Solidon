@@ -26,6 +26,7 @@ from app.core.knowledge.parts.ops import EXACT_PARTS
 from app.core.knowledge.parts.registry import PARTS
 from app.core.knowledge.parts.shapes import building
 from app.core.knowledge.parts.structure import MIN_RIB, RIB_SHARE
+from app.core.knowledge.parts.testbodies import LABEL_DEPTH
 from app.core.types import Profile, SceneObject
 from tests.test_missing_ops import run
 
@@ -110,16 +111,9 @@ def _host(size: tuple[float, float, float] = HOST) -> SceneObject:
 # --- die Gruppe ------------------------------------------------------------------
 
 
-#: Die Dichtungen bauen noch am Netz — Band und Schnur folgen (P2.7f).
-SEALS = {"seal_groove", "seal_gasket"}
-
-
-def test_the_exact_groups_are_all_but_the_seals_and_the_calibration() -> None:
+def test_every_built_in_part_builds_exactly() -> None:
     builtin.load()
-    exact_groups = {"fasteners", "mechanics", "mounting", "structure", "routing"}
-    groups = {spec.name for spec in PARTS.all() if spec.group in exact_groups}
-    assert groups - SEALS == EXACT_PARTS
-    assert groups >= SEALS
+    assert {spec.name for spec in PARTS.all()} == EXACT_PARTS
 
 
 # --- die Grundformen: Zwillinge ---------------------------------------------------------
@@ -879,6 +873,13 @@ def _circle_sketch(diameter: float) -> str:
     return sketch_to_text(sketch_shapes.circle(diameter))
 
 
+def _rectangle_sketch(width: float, height: float) -> str:
+    from app.core.sketch import shapes as sketch_shapes
+    from app.core.sketch.serialize import sketch_to_text
+
+    return sketch_to_text(sketch_shapes.rectangle(width, height))
+
+
 def test_an_offset_circle_section_stays_a_circle_exactly() -> None:
     """Der Versatz eines Kreises um vier Millimeter ist exakt wieder ein Kreis (Bericht 4.3)."""
     from app.core.knowledge.parts.section import CONTOUR_SAG, Section
@@ -1322,3 +1323,291 @@ def test_a_cable_gland_builds_its_relief_block_behind_an_exact_wall(profile: Pro
     assert body.bounds.minimum[2] == pytest.approx(-diameter, abs=1e-9)
     assert body.bounds.maximum[2] == pytest.approx(wall, abs=1e-9)
     assert "cable_gland_relief_1" in features
+
+
+# --- Dichtungen: Band und Schnur -------------------------------------------------------------
+
+
+def _band_area(width: float, depth: float, band: float) -> float:
+    """Ein Band um ein Rechteck: außen gerundet um die halbe Bandbreite, innen scharf."""
+    half = band / 2.0
+    outer = (width + band) * (depth + band) - (4.0 - math.pi) * half**2
+    return outer - (width - band) * (depth - band)
+
+
+def _surface_kinds(solid: Any) -> dict[str, int]:
+    from OCP.BRepAdaptor import BRepAdaptor_Surface
+    from OCP.GeomAbs import GeomAbs_Cylinder, GeomAbs_Plane, GeomAbs_Sphere, GeomAbs_Torus
+
+    names = {
+        GeomAbs_Plane: "plane",
+        GeomAbs_Cylinder: "cylinder",
+        GeomAbs_Sphere: "sphere",
+        GeomAbs_Torus: "torus",
+    }
+    kinds: dict[str, int] = {}
+    for face in solid.faces():
+        kind = names.get(BRepAdaptor_Surface(face).GetType(), "other")
+        kinds[kind] = kinds.get(kind, 0) + 1
+    return kinds
+
+
+def _cord_volume(perimeter: float, radius: float) -> float:
+    """Eine Schnur um ein Rechteck: je Seite ein Zylinder, je Ecke ein Viertel-Steinmetz
+    weniger und eine Viertelkugel mehr."""
+    return (
+        perimeter * math.pi * radius**2
+        - 4.0 * (4.0 / 3.0) * radius**3
+        + 4.0 * (math.pi / 3.0) * radius**3
+    )
+
+
+def test_seal_groove_exact_is_a_band_with_round_outer_corners_under_the_mouth() -> None:
+    _kernel()
+    values = {
+        "path_sketch": _rectangle_sketch(20.0, 12.0),
+        "offset": 0.0,
+        "width": 3.0,
+        "depth": 2.0,
+    }
+    produced = _built("seal_groove", True, **values)
+    tool = _sound(produced.mesh)
+    mesh = _built("seal_groove", False, **values)
+    ring = _band_area(20.0, 12.0, 3.0)
+    assert tool.volume == pytest.approx(ring * 2.0, rel=1e-9)
+    # Außen vier Ebenen und vier Zylinder, innen vier scharfe Ebenen, Mündung und Boden.
+    assert tool.face_count == 14
+    assert tool.bounds.minimum[2] == pytest.approx(-2.0, abs=1e-9)
+    assert tool.bounds.maximum[2] == pytest.approx(0.0, abs=1e-9)
+    assert tool.bounds.maximum[0] == pytest.approx(11.5, abs=1e-9)
+    assert abs(mesh.mesh.volume / tool.volume - 1.0) < 2e-3
+    features = produced.features
+    for name, height, sign in (("groove_mouth", 0.0, 1.0), ("groove_floor", -2.0, -1.0)):
+        feature = features[name]
+        assert feature.params["area"] == pytest.approx(ring, rel=1e-9)
+        assert feature.measure_sources["area"] == "native"
+        assert feature.params["centre"][2] == pytest.approx(height, abs=1e-9)
+        assert feature.params["normal"] == (0.0, 0.0, sign)
+        assert feature.face_indices and max(feature.face_indices) < tool.triangle_count
+        assert mesh.features[name].measure_sources["area"] == "facets"
+        assert mesh.features[name].params["area"] == pytest.approx(ring, rel=2e-3)
+    assert features["groove_walls"].measure_sources["area"] == "facets"
+    _roundtrip(tool)
+
+
+def test_seal_gasket_exact_rectangle_stands_on_its_base_with_the_band_of_the_groove() -> None:
+    _kernel()
+    values = {
+        "path_sketch": _rectangle_sketch(20.0, 12.0),
+        "offset": 0.0,
+        "section": "rectangle",
+        "width": 2.6,
+        "height": 2.4,
+    }
+    produced = _built("seal_gasket", True, **values)
+    gasket = _sound(produced.mesh)
+    mesh = _built("seal_gasket", False, **values).mesh
+    assert gasket.volume == pytest.approx(_band_area(20.0, 12.0, 2.6) * 2.4, rel=1e-9)
+    assert gasket.bounds.minimum[2] == pytest.approx(0.0, abs=1e-9)
+    assert gasket.bounds.maximum[2] == pytest.approx(2.4, abs=1e-9)
+    assert abs(mesh.volume / gasket.volume - 1.0) < 2e-3
+    contact = produced.features["gasket_contact"]
+    assert contact.params["centre"][2] == pytest.approx(2.4, abs=1e-9)
+    assert contact.measure_sources["area"] == "native"
+    assert produced.features["gasket_bottom"].params["normal"] == (0.0, 0.0, -1.0)
+    _roundtrip(gasket)
+
+
+def test_seal_gasket_exact_round_is_cylinders_and_sphere_pieces_around_a_rectangle() -> None:
+    _kernel()
+    values = {
+        "path_sketch": _rectangle_sketch(20.0, 12.0),
+        "offset": 0.0,
+        "section": "round",
+        "width": 2.6,
+        "height": 2.4,
+    }
+    produced = _built("seal_gasket", True, **values)
+    cord = _sound(produced.mesh)
+    mesh = _built("seal_gasket", False, **values).mesh
+    assert cord.volume == pytest.approx(_cord_volume(64.0, 1.2), rel=1e-9)
+    # Vier Zylinder, vier Kugeln an den Ecken — und kein Sehnenzug dazwischen.
+    kinds = _surface_kinds(cord)
+    assert kinds["cylinder"] == 4 and kinds["sphere"] == 4 and set(kinds) == {"cylinder", "sphere"}
+    assert cord.bounds.minimum[2] == pytest.approx(0.0, abs=1e-6)
+    assert cord.bounds.maximum[2] == pytest.approx(2.4, abs=1e-6)
+    assert cord.bounds.maximum[0] == pytest.approx(11.2, abs=1e-6)
+    # Das Netz facettiert Bahn und Kugeln (Bericht Abschnitt 5: 0,988 bis 0,993).
+    assert 0.985 < mesh.volume / cord.volume < 1.0
+    contact = produced.features["gasket_contact"]
+    assert contact.kind == "curved_face"
+    assert contact.measure_sources["area"] == "facets"
+    assert contact.face_indices and max(contact.face_indices) < cord.triangle_count
+    _roundtrip(cord)
+
+
+def test_seal_gasket_exact_round_on_a_circle_is_one_torus() -> None:
+    _kernel()
+    values = {
+        "path_sketch": _circle_sketch(20.0),
+        "offset": 0.0,
+        "section": "round",
+        "width": 2.6,
+        "height": 2.4,
+    }
+    produced = _built("seal_gasket", True, **values)
+    ring = _sound(produced.mesh)
+    mesh = _built("seal_gasket", False, **values).mesh
+    assert ring.face_count == 1 and _surface_kinds(ring) == {"torus": 1}
+    assert ring.volume == pytest.approx(2.0 * math.pi**2 * 10.0 * 1.2**2, rel=1e-9)
+    assert ring.bounds.maximum[0] == pytest.approx(11.2, abs=1e-6)
+    assert 0.98 < mesh.volume / ring.volume < 1.0
+    _roundtrip(ring)
+
+
+def test_a_seal_groove_cuts_an_exact_host_and_a_gasket_lies_loose_beside_it(
+    profile: Profile,
+) -> None:
+    _kernel()
+    host = _host()
+    sketch = _rectangle_sketch(20.0, 12.0)
+    cut = run(
+        "insert_seal_groove",
+        host,
+        profile,
+        path_sketch=sketch,
+        offset=0.0,
+        width=3.0,
+        depth=2.0,
+        **ON_TOP,
+    )
+    body = _sound(cut.outputs[0].mesh)
+    assert cut.outputs[0].kind == "brep"
+    assert body.volume == pytest.approx(
+        HOST[0] * HOST[1] * HOST[2] - _band_area(20.0, 12.0, 3.0) * 2.0, rel=1e-9
+    )
+    assert "seal_groove_groove_floor" in cut.outputs[0].features
+    loose = run(
+        "insert_seal_gasket",
+        host,
+        profile,
+        path_sketch=sketch,
+        offset=0.0,
+        section="round",
+        width=2.6,
+        height=2.4,
+        **ON_TOP,
+    )
+    pair = _sound(loose.outputs[0].mesh, bodies=2)
+    assert loose.outputs[0].kind == "brep"
+    assert pair.volume == pytest.approx(
+        HOST[0] * HOST[1] * HOST[2] + _cord_volume(64.0, 1.2), rel=1e-9
+    )
+    assert "seal_gasket_gasket_contact" in loose.outputs[0].features
+
+
+# --- Kalibrierung ------------------------------------------------------------------------------
+
+
+def _ladder_layout(
+    diameter: float, steps: int, first: float, step: float
+) -> tuple[float, float, float]:
+    """Breite, Leistentiefe und Abstand der Toleranzleiter — wie im Baustein."""
+    largest = diameter + first + step * (steps - 1)
+    spacing = max(diameter * 2.2, largest * 1.5, steps * 1.4 + 2.8)
+    return spacing * steps + spacing, max(spacing, largest + 8.0), spacing
+
+
+def _ladder_volume(diameter: float, steps: int, first: float, step: float, height: float) -> float:
+    width, rail_depth, _ = _ladder_layout(diameter, steps, first, step)
+    rails = 2.0 * width * rail_depth * 3.0
+    studs = steps * math.pi * (diameter / 2.0) ** 2 * height
+    holes = sum(
+        math.pi * ((diameter + first + step * index) / 2.0) ** 2 * 3.0 for index in range(steps)
+    )
+    bars = 2.0 * sum(range(1, steps + 1)) * 0.8 * 3.0 * LABEL_DEPTH
+    return rails + studs - holes - bars
+
+
+def test_fit_ladder_exact_is_two_rails_with_staggered_bores_and_engraved_bars() -> None:
+    _kernel()
+    values = {"diameter": 6.0, "steps": 4, "first": 0.10, "step": 0.05, "height": 6.0}
+    produced = _built("fit_ladder", True, **values)
+    ladder = _sound(produced.mesh, bodies=2)
+    mesh = _built("fit_ladder", False, **values).mesh
+    assert ladder.volume == pytest.approx(_ladder_volume(6.0, 4, 0.10, 0.05, 6.0), rel=1e-9)
+    assert abs(mesh.volume / ladder.volume - 1.0) < 5e-3
+    width, _, _ = _ladder_layout(6.0, 4, 0.10, 0.05)
+    assert ladder.bounds.maximum[2] == pytest.approx(9.0, abs=1e-9)
+    assert ladder.bounds.maximum[0] == pytest.approx(width / 2.0, abs=1e-9)
+    for index in range(4):
+        bore = produced.features[f"bore_{index + 1}"]
+        assert bore.params["diameter"] == pytest.approx(6.0 + 0.10 + 0.05 * index)
+        assert produced.features[f"pin_{index + 1}"].params["diameter"] == 6.0
+    _roundtrip(ladder)
+
+
+def test_wall_ladder_exact_is_the_box_row_of_the_mesh() -> None:
+    _kernel()
+    values = {"extrusion": 0.42, "steps": 6, "height": 15.0, "length": 25.0}
+    produced = _built("wall_ladder", True, **values)
+    ladder = _sound(produced.mesh)
+    mesh = _built("wall_ladder", False, **values).mesh
+    thicknesses = [0.42 * (index + 1) for index in range(6)]
+    width = sum(thicknesses) + 0.42 * 6.0 * 7
+    expected = width * 25.0 * 2.0 + sum(thicknesses) * 25.0 * 15.0
+    assert ladder.volume == pytest.approx(expected, rel=1e-9)
+    assert mesh.volume == pytest.approx(expected, rel=1e-9)
+    assert ladder.bounds.maximum[2] == pytest.approx(17.0, abs=1e-9)
+    assert produced.features["face_1"].params["centre"] == (0.0, 0.0, 2.0)
+    _roundtrip(ladder)
+
+
+def test_overhang_fan_exact_leans_its_ramps_like_the_mesh() -> None:
+    _kernel()
+    values = {"first": 20.0, "step": 10.0, "steps": 3, "width": 8.0, "length": 15.0}
+    produced = _built("overhang_fan", True, **values)
+    fan = _sound(produced.mesh)
+    mesh = _built("overhang_fan", False, **values).mesh
+    expected = 24.0 * 6.0 * 3.0
+    for index in range(3):
+        angle = math.radians(20.0 + 10.0 * index)
+        reach, rise = 15.0 * math.sin(angle), 15.0 * math.cos(angle)
+        # Die Rampe beginnt um die Überlappung im Sockel; dort ist sie noch schmal.
+        expected += 8.0 * (reach * rise / 2.0 - reach * BOOLEAN_OVERLAP**2 / (2.0 * rise))
+    assert fan.volume == pytest.approx(expected, rel=1e-9)
+    assert mesh.volume == pytest.approx(expected, rel=1e-9)
+    # Die letzte Rampe lehnt am weitesten hinaus.
+    assert fan.bounds.maximum[1] == pytest.approx(
+        2.0 + 15.0 * math.sin(math.radians(40.0)), abs=1e-9
+    )
+    assert fan.bounds.maximum[2] == pytest.approx(
+        3.0 - BOOLEAN_OVERLAP + 15.0 * math.cos(math.radians(20.0)), abs=1e-9
+    )
+    _roundtrip(fan)
+
+
+def test_a_fit_ladder_grows_on_an_exact_host_as_one_body(profile: Profile) -> None:
+    _kernel()
+    host = _host()
+    grown = run(
+        "insert_fit_ladder",
+        host,
+        profile,
+        diameter=6.0,
+        steps=4,
+        first=0.10,
+        step=0.05,
+        height=6.0,
+        **ON_TOP,
+    )
+    body = _sound(grown.outputs[0].mesh)
+    assert grown.outputs[0].kind == "brep"
+    width, rail_depth, _ = _ladder_layout(6.0, 4, 0.10, 0.05)
+    # Eingesunken sind beide Leisten — ohne die Bohrungen, die der Träger wieder füllt.
+    holes = sum(math.pi * ((6.0 + 0.10 + 0.05 * index) / 2.0) ** 2 for index in range(4))
+    sunk = (2.0 * width * rail_depth - holes) * BOOLEAN_OVERLAP
+    assert body.volume == pytest.approx(
+        HOST[0] * HOST[1] * HOST[2] + _ladder_volume(6.0, 4, 0.10, 0.05, 6.0) - sunk, rel=1e-9
+    )
+    assert {"fit_ladder_pin_1", "fit_ladder_bore_4"} <= set(grown.outputs[0].features)

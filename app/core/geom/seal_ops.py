@@ -10,10 +10,9 @@ import numpy as np
 from app.core.errors import CHOOSE_PRINTER, ValidationError
 from app.core.geom import transform
 from app.core.geom.boolean import BooleanOutcome, boolean, deepest
-from app.core.geom.contours import offset_section, polygons_of, section_of
+from app.core.geom.contours import polygons_of
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.geom.seal import (
-    _SEAL_SAG,
     _band,
     _mesh,
     match_opening,
@@ -23,6 +22,8 @@ from app.core.geom.seal import (
     support_geometry,
 )
 from app.core.knowledge import profiles
+from app.core.knowledge.parts.section import Section
+from app.core.knowledge.parts.shapes import mesh_only
 from app.core.registry import op_params, param, register_op
 from app.core.sketch.planes import feature_plane, frame_for_plane
 from app.core.sketch.profile import Profile as SketchProfile
@@ -486,13 +487,18 @@ def create_seal(ctx: OpContext) -> OpResult:
         offset=p.offset,
         check_cancelled=ctx.cancelled.raise_if_cancelled,
     )
-    section = offset_section(section_of(path, max_sag=_SEAL_SAG), p.offset, max_sag=_SEAL_SAG)
+    # Der Erzeuger rechnet am Netz, bis P2.8 die Kernwahl regelt — die Dichtung
+    # selbst ist längst eine Form mit zwei Auswertern.
+    gasket_body = mesh_only(geometry.gasket)
+    section = Section.of(path).offset(p.offset)
     band = _band(section, p.groove_width, ctx.cancelled.raise_if_cancelled)
-    footprint = polygons_of(band)[0]
+    footprint = polygons_of(band.cross)[0]
     wall = body_profile.minimum_wall_thickness
     envelope = _band(section, p.groove_width + 2 * wall, ctx.cancelled.raise_if_cancelled)
     envelope_mesh = _placed(
-        _mesh(envelope.extrude(p.groove_depth + wall).translate((0, 0, -p.groove_depth - wall))),
+        _mesh(
+            envelope.cross.extrude(p.groove_depth + wall).translate((0, 0, -p.groove_depth - wall))
+        ),
         frame,
     )
     missing = _measured_boolean(ctx, "difference", envelope_mesh, as_mesh_data(ctx.inputs[0].mesh))
@@ -518,7 +524,7 @@ def create_seal(ctx: OpContext) -> OpResult:
         p.groove_depth,
         cancelled=ctx.cancelled,
     )
-    gasket_mesh = _placed(geometry.gasket, frame)
+    gasket_mesh = _placed(gasket_body, frame)
     collision = _measured_boolean(ctx, "intersection", as_mesh_data(body.mesh), gasket_mesh)
     if _thicker_than_shown(collision.mesh.volume, gasket_mesh.raw.area):
         raise _invalid(
@@ -529,14 +535,14 @@ def create_seal(ctx: OpContext) -> OpResult:
             ),
         )
     features = moved_features(
-        seal_features(geometry.gasket, gasket=True, rounded=p.section == "round"),
+        seal_features(gasket_body, gasket=True, rounded=p.section == "round"),
         cast(Transform, tuple(tuple(float(v) for v in row) for row in _matrix(frame))),
     )
     gasket = SceneObject(
         "", _("Dichtung"), gasket_mesh, features=features, material=p.gasket_material
     )
     gasket_footprint = cross_section(
-        geometry.gasket, -p.groove_depth + (p.groove_depth + p.protrusion) / 2
+        gasket_body, -p.groove_depth + (p.groove_depth + p.protrusion) / 2
     )
     assert gasket_footprint is not None
     findings.extend(_counterface(ctx, p, frame, gasket_footprint, gasket_mesh))

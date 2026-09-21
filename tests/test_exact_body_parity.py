@@ -760,6 +760,11 @@ EXACT_PARTS = frozenset(
         "organizer_divider",
         "organizer_rim",
         "organizer_foot",
+        "seal_groove",
+        "seal_gasket",
+        "fit_ladder",
+        "wall_ladder",
+        "overhang_fan",
     }
 )
 for _part, (_dimensions, _effect, _height) in PART_CASES.items():

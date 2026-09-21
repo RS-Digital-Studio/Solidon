@@ -14,18 +14,21 @@ import numpy as np
 
 from app.core.deferred import trimesh
 from app.core.errors import ValidationError
-from app.core.geom.contours import offset_section, polygons_of, section_of
+from app.core.geom.contours import polygons_of
 from app.core.geom.mesh import MeshData
 from app.core.geom.sketch_solid import MAX_OUTLINE_POINTS
+from app.core.knowledge.parts.section import CONTOUR_SAG, Section
+from app.core.knowledge.parts.shapes import Form
 from app.core.sketch.profile import Profile as SketchProfile
 from app.core.sketch.profile import ProfileSegment
 from app.core.types import FeatureRef, PlaneFrame, Point2, SceneObject, Vec3
-from app.core.units import EPS_GEOM, MAX_FACET_ANGLE, MAX_FACET_SAG
+from app.core.units import EPS_GEOM, MAX_FACET_ANGLE
 from app.i18n import _
 
 # Bahn, Normalversatz und Querschnitt teilen sich die gemeinsame Sehnengrenze.
-# Das engere Teilbudget lässt auch an gekrümmten Verläufen die Summe darunter.
-_SEAL_SAG = MAX_FACET_SAG / 8
+# Das engere Teilbudget lässt auch an gekrümmten Verläufen die Summe darunter —
+# dieselbe Grenze wie die Querschnitte der Profilklemmen, deshalb aus einer Quelle.
+_SEAL_SAG = CONTOUR_SAG
 MAX_OPENING_SIGNATURE = 1_048_576
 
 
@@ -303,10 +306,12 @@ class SealGeometry:
     ``clearance`` bezeichnet das eingegebene seitliche Nennspiel. Die
     spätere Partnerprüfung misst zusätzlich die wirklichen Körper und
     verwechselt diese geometrische Aussage nicht mit einer Dichtheitszusage.
+    Beide Körper sind Formen mit zwei Auswertern (P2.7): am Netz wie bisher,
+    unter ``shapes.building("brep")`` exakt.
     """
 
-    groove: MeshData
-    gasket: MeshData
+    groove: Form
+    gasket: Form
     clearance: float
 
 
@@ -329,17 +334,30 @@ def _single(section: Any) -> Any:
     return polygons[0]
 
 
-def _band(path: Any, width: float, check: Callable[[], None] | None) -> Any:
-    """Ein echter Normalversatz beider Ränder; verengte Wege nicht verschlucken."""
-    outside = offset_section(path, width / 2, max_sag=_SEAL_SAG, check_cancelled=check)
-    inside = offset_section(path, -width / 2, max_sag=_SEAL_SAG, check_cancelled=check)
-    _single(outside)
-    _single(inside)
-    ring = outside - inside
-    polygons = polygons_of(ring)
+def _band(path: Section, width: float, check: Callable[[], None] | None) -> Section:
+    """Ein echter Normalversatz beider Ränder; verengte Wege nicht verschlucken.
+
+    Ein Querschnitt mit zwei Auswertern: Die Prüfungen fragen den
+    Netzquerschnitt, die Geometrie kommt unter dem exakten Kern aus der Fläche
+    (``knowledge/parts/section.py``).
+    """
+    outside = path.offset(width / 2, check_cancelled=check)
+    inside = path.offset(-width / 2, check_cancelled=check)
+    _single(outside.cross)
+    _single(inside.cross)
+    ring = outside.minus(inside)
+    polygons = polygons_of(ring.cross)
     if len(polygons) != 1 or len(polygons[0].interiors) != 1:
         raise _closed_path()
     return ring
+
+
+def _solid(section: Section, height: float, bottom: float) -> Form:
+    """Das Prisma des Bands, je Kern; was kein geschlossener Ring wird, liegt am Weg."""
+    try:
+        return section.extrude(height, bottom=bottom)
+    except ValidationError as problem:
+        raise _closed_path() from problem
 
 
 def _mesh(body: Any) -> MeshData:
@@ -357,17 +375,30 @@ def _mesh(body: Any) -> MeshData:
     return result
 
 
-def _round_tube(path: Any, radius: float, centre_z: float, check: Callable[[], None] | None) -> Any:
+def _round_tube(
+    path: Section, radius: float, centre_z: float, check: Callable[[], None] | None
+) -> Form:
     """Geschlossener Kugelsweep: echte runde Übergänge auch an scharfen Ecken.
 
     Jede Kapsel ist die konvexe Hülle zweier identisch facettierter Kugeln.
     Die gemeinsame Vereinigung begrenzt konkave Ecken tatsächlich; ein
     gemittelter Ecknormalenvektor würde dort einen anderen Querschnitt
     behaupten oder sich selbst durchdringen. Alle Werkzeuge bleiben Manifold.
+
+    Exakt ist dieselbe Form ein Rohrsweep entlang des exakten Wegs mit runden
+    Ecken (``brep.profiles.round_cord``): Zylinder auf Strecken, Torusstücke
+    auf Bögen, Kugelstücke an Ecken — kein Weg wird dafür in Sehnen zerlegt.
     """
+    if path.face is not None:
+        from app.core.brep.profiles import round_cord
+
+        cord = round_cord(path.face, radius, centre_z)
+        if not cord.is_closed or cord.solid_count != 1:
+            raise _closed_path()
+        return cord
     import manifold3d
 
-    points = list(_single(path).exterior.coords)[:-1]
+    points = list(_single(path.cross).exterior.coords)[:-1]
     if len(points) > MAX_OUTLINE_POINTS:
         raise _closed_path()
     angle = min(MAX_FACET_ANGLE, 2 * math.acos(max(0.0, 1 - _SEAL_SAG / radius)))
@@ -398,7 +429,7 @@ def _round_tube(path: Any, radius: float, centre_z: float, check: Callable[[], N
         check()
     # Rein numerische Splitter bleiben unter der gemeinsamen
     # Verschweißtoleranz; die Topologie der Hülle bleibt erhalten.
-    return result.simplify(EPS_GEOM)
+    return _mesh(result.simplify(EPS_GEOM))
 
 
 def seal_geometry(
@@ -438,17 +469,17 @@ def seal_geometry(
                 "Prüfen Sie Nutbreite, Nuttiefe und Überstand."
             ),
         )
-    path = section_of(profile, max_sag=_SEAL_SAG, check_cancelled=check_cancelled)
-    _single(path)
-    path = offset_section(path, offset, max_sag=_SEAL_SAG, check_cancelled=check_cancelled)
-    _single(path)
+    path = Section.of(profile, check_cancelled=check_cancelled)
+    _single(path.cross)
+    path = path.offset(offset, check_cancelled=check_cancelled)
+    _single(path.cross)
     groove_section = _band(path, groove_width, check_cancelled)
     gasket_section = _band(path, width, check_cancelled)
-    groove = groove_section.extrude(groove_depth).translate((0, 0, -groove_depth))
+    groove = _solid(groove_section, groove_depth, -groove_depth)
     if section == "round":
         gasket = _round_tube(path, height / 2, -groove_depth + height / 2, check_cancelled)
     else:
-        gasket = gasket_section.extrude(height).translate((0, 0, -groove_depth))
+        gasket = _solid(gasket_section, height, -groove_depth)
     if check_cancelled is not None:
         check_cancelled()
-    return SealGeometry(_mesh(groove), _mesh(gasket), (groove_width - width) / 2)
+    return SealGeometry(groove, gasket, (groove_width - width) / 2)

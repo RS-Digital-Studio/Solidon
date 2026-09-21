@@ -1295,6 +1295,108 @@ def prism(face: Any, height: float, *, bottom: float = 0.0) -> Solid:
     return Solid(BRepBuilderAPI_Transform(body.shape, lift, True).Shape())
 
 
+def round_cord(face: Any, radius: float, centre_z: float) -> Solid:
+    """Eine runde Schnur entlang des Außenrands einer Fläche, an jeder Ecke rund (P2.7).
+
+    Die exakte Seite von ``geom.seal._round_tube``: die Minkowski-Summe des
+    Wegs mit der Kugel, die das Netz als Hüllenkette facettiert — je Strecke
+    ein Zylinder, je Kreisbogen ein Torusstück, je Ecke eine Kugel, alles
+    vereinigt; ein geschlossener Kreis ist ein ganzer Torus. Gemessen:
+    Rechteckweg 20 mal 12 gegen die Analytik (vier Zylinder, vier Kugeln) auf
+    10⁻¹⁰, Kreisweg Ø 20 ein einziger Torus.
+
+    **Kein Rohrsweep mit runden Ecken.** ``BRepOffsetAPI_MakePipeShell`` mit
+    ``BRepBuilderAPI_RoundCorner`` baute dieselbe Form gültig und ebenso
+    genau, kam aber aus STEP um zehn Prozent leichter zurück (21.09.2026):
+    Seine Eckflächen sind keine Kugeln, und was STEP daraus liest, ist ein
+    anderer Körper. Eine Kante, die weder Strecke noch Bogen ist (ein Spline),
+    bekommt ihr Stück als Rohr entlang genau dieser einen Kante — dort gibt
+    es keine Ecke, die rund werden müsste.
+    """
+    require()
+    from OCP.BRep import BRep_Tool
+    from OCP.BRepAdaptor import BRepAdaptor_Curve
+    from OCP.BRepBuilderAPI import (
+        BRepBuilderAPI_MakeEdge,
+        BRepBuilderAPI_MakeFace,
+        BRepBuilderAPI_MakeWire,
+        BRepBuilderAPI_Transform,
+    )
+    from OCP.BRepOffsetAPI import BRepOffsetAPI_MakePipe
+    from OCP.BRepPrimAPI import (
+        BRepPrimAPI_MakeCylinder,
+        BRepPrimAPI_MakeSphere,
+        BRepPrimAPI_MakeTorus,
+    )
+    from OCP.BRepTools import BRepTools
+    from OCP.collections import IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher as ShapeMap
+    from OCP.GeomAbs import GeomAbs_Circle, GeomAbs_Line
+    from OCP.gp import gp_Ax2, gp_Circ, gp_Dir, gp_Pnt, gp_Trsf, gp_Vec
+    from OCP.TopAbs import TopAbs_EDGE, TopAbs_VERTEX
+    from OCP.TopExp import TopExp, TopExp_Explorer
+    from OCP.TopoDS import TopoDS
+
+    from app.core.brep import edit
+
+    require_positive("radius", radius)
+    lift = gp_Trsf()
+    lift.SetTranslation(gp_Vec(0.0, 0.0, centre_z))
+    spine = TopoDS.Wire(BRepBuilderAPI_Transform(BRepTools.OuterWire_s(face), lift, True).Shape())
+    edges = []
+    explorer = TopExp_Explorer(spine, TopAbs_EDGE)
+    while explorer.More():
+        edges.append(TopoDS.Edge(explorer.Current()))
+        explorer.Next()
+    pieces: list[Solid] = []
+    whole_circle = False
+    for edge in edges:
+        curve = BRepAdaptor_Curve(edge)
+        first, last = curve.FirstParameter(), curve.LastParameter()
+        start, end = curve.Value(first), curve.Value(last)
+        kind = curve.GetType()
+        if kind == GeomAbs_Line:
+            length = start.Distance(end)
+            if length <= EPS_GEOM:
+                continue
+            axis = gp_Ax2(start, gp_Dir(gp_Vec(start, end)))
+            pieces.append(Solid(BRepPrimAPI_MakeCylinder(axis, radius, length).Shape()))
+        elif kind == GeomAbs_Circle:
+            # Der Bogen läuft im Parameter gegen den Uhrzeigersinn um seine
+            # Achse; der Rahmen des Torus beginnt mit seiner X-Richtung am
+            # Bogenanfang und überstreicht denselben Winkel.
+            circle = curve.Circle()
+            centre = circle.Location()
+            sweep = float(last - first)
+            axis = gp_Ax2(centre, circle.Axis().Direction(), gp_Dir(gp_Vec(centre, start)))
+            if sweep >= 2.0 * math.pi - EPS_GEOM:
+                whole_circle = len(edges) == 1
+                torus = BRepPrimAPI_MakeTorus(axis, circle.Radius(), radius)
+            else:
+                torus = BRepPrimAPI_MakeTorus(axis, circle.Radius(), radius, sweep)
+            pieces.append(Solid(torus.Shape()))
+        else:
+            tangent = gp_Vec()
+            curve.D1(first, gp_Pnt(), tangent)
+            ring = BRepBuilderAPI_MakeWire(
+                BRepBuilderAPI_MakeEdge(gp_Circ(gp_Ax2(start, gp_Dir(tangent)), radius)).Edge()
+            ).Wire()
+            path = BRepBuilderAPI_MakeWire(edge).Wire()
+            pipe = BRepOffsetAPI_MakePipe(path, BRepBuilderAPI_MakeFace(ring, True).Face())
+            pieces.append(Solid(pipe.Shape()))
+    if not whole_circle:
+        corners = ShapeMap()
+        TopExp.MapShapes_s(spine, TopAbs_VERTEX, corners)
+        for index in range(1, corners.Extent() + 1):
+            point = BRep_Tool.Pnt_s(TopoDS.Vertex(corners.FindKey(index)))
+            pieces.append(Solid(BRepPrimAPI_MakeSphere(point, radius).Shape()))
+    if not pieces:
+        raise GeometryError(detail=_("Aus diesem Umriss entsteht kein Körper."))
+    cord = pieces[0]
+    for piece in pieces[1:]:
+        cord = edit.boolean("union", [cord, piece])
+    return cord
+
+
 def _leftmost(profile: Profile) -> float:
     if profile.circle is not None:
         centre, radius = profile.circle
