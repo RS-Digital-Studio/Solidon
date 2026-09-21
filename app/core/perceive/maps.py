@@ -18,9 +18,9 @@ from __future__ import annotations
 
 import math
 import time
-from collections.abc import Callable, Iterator
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Final, Literal, cast
+from typing import Any, Final, Literal
 
 import numpy as np
 import shapely
@@ -75,9 +75,6 @@ MapScale = Literal["linear", "asinh"]
 #: und darüber nicht: Der nächste Messpunkt (1 223 836) reißt das Budget bei
 #: der Wandstärke mit 7,06 s. Wer höher will, misst dazwischen.
 MAP_LIMIT_TRIANGLES = 900_000
-
-#: Fortschritt nach begrenzten Facettenpaketen; keine zusätzliche Formtoleranz.
-DEVIATION_PROGRESS_FACETS = 128
 
 #: Wie lange eine Stützkarte rechnen darf, bevor sie einen kleineren
 #: Arbeitskörper vorschlägt (§2.8, §31).
@@ -380,7 +377,7 @@ def deviation_map(
     progress: ProgressFn | None = None,
 ) -> AnalysisMap:
     """Ganze Originalfacetten gegen belegte Teilträger eingrenzen, ohne neue Einpassung."""
-    from app.core.geom.deviation import deviation_bounds
+    from app.core.geom.deviation import DeviationTable, deviation_bounds_grouped
     from app.core.perceive.surfaces import PATCH_BLOCK, valid_patch
 
     def check() -> None:
@@ -432,73 +429,72 @@ def deviation_map(
                 )
     report(0.1)
     values = np.full(mesh.triangle_count, np.nan, dtype=np.float64)
-    count = int(np.count_nonzero(owners >= 0))
-    completed = 0
-    maximum_lower = 0.0
-    maximum_upper = 0.0
-    numerical_error = 0.0
-    witness_point: Vec3 | None = None
-    witness_face: int | None = None
-    witness_distance: float | None = None
-    witness_key: tuple[float, int] | None = None
-    used_sources = 0
     raw = mesh.raw
-    for group, carrier in enumerate(carriers):
+    # Je Träger die Dreiecke, die er allein beansprucht — und dann alle Träger
+    # zusammen in einen Aufruf: `deviation_bounds_grouped` rechnet je Trägerart
+    # einen Stapel über alle Träger, nicht einen je Bohrung.
+    selected_per_carrier: list[np.ndarray] = []
+    for group in range(len(carriers)):
         check()
-        selected: list[int] = []
+        selected: list[np.ndarray] = []
         for claim in claims[group]:
             for start in range(0, len(claim), PATCH_BLOCK):
                 check()
                 indices = np.asarray(claim[start : start + PATCH_BLOCK], dtype=np.int64)
                 owned = indices[owners[indices] == group]
-                selected.extend(int(index) for index in owned)
+                selected.append(owned)
                 owners[owned] = -3
-        if not selected:
-            continue
+        selected_per_carrier.append(
+            np.concatenate(selected) if selected else np.zeros(0, dtype=np.int64)
+        )
 
-        def triangles(indices: list[int]) -> Iterator[tuple[Vec3, Vec3, Vec3]]:
-            for index in indices:
-                points = raw.vertices[raw.faces[index]]
-                yield cast(
-                    tuple[Vec3, Vec3, Vec3],
-                    tuple(tuple(float(value) for value in point) for point in points),
-                )
+    def advance(done: int, total: int) -> None:
+        report(0.1 + 0.89 * done / max(total, 1))
 
-        for index, bounded in zip(
-            selected,
-            deviation_bounds(
-                carrier, triangles(selected), epsilon_mm=EPS_GEOM, cancelled=cancelled
-            ),
-            strict=True,
-        ):
-            check()
-            completed += 1
-            if completed % DEVIATION_PROGRESS_FACETS == 0 or completed == count:
-                report(0.1 + 0.89 * completed / max(count, 1))
-            if bounded is None:
-                continue
-            lower, upper = bounded.lower_mm, bounded.upper_mm
-            if not (math.isfinite(lower) and math.isfinite(upper) and 0.0 <= lower <= upper):
-                continue
-            values[index] = upper
-            used_sources |= int(origin_masks[index])
-            maximum_lower = max(maximum_lower, lower)
-            maximum_upper = max(maximum_upper, upper)
-            width = math.nextafter(upper - lower, math.inf) if upper > lower else 0.0
-            numerical_error = max(numerical_error, width)
-            key = (lower, -index)
-            if witness_key is None or key > witness_key:
-                first, second, third = raw.vertices[raw.faces[index]]
-                u, v = bounded.witness_uv
-                # Anzeige der belegten baryzentrischen Stelle. Die Untergrenze
-                # gilt für die exakte Linearkombination im Rechner, nicht für
-                # den zwangsläufig gerundeten Anzeigepunkt.
-                point = (1.0 - u - v) * first + u * second + v * third
-                if np.isfinite(point).all():
-                    witness_key = key
-                    witness_point = (float(point[0]), float(point[1]), float(point[2]))
-                    witness_face = index
-                    witness_distance = lower
+    tables = deviation_bounds_grouped(
+        carriers,
+        [raw.vertices[raw.faces[indices]] for indices in selected_per_carrier],
+        epsilon_mm=EPS_GEOM,
+        cancelled=cancelled,
+        progress=advance,
+    )
+    check()
+    # Die Klammern je Dreieck als Arrays: Obergrenze in die Karte, Breite als
+    # numerischer Fehler, und der Zeuge ist das Dreieck mit der größten
+    # belegten Untergrenze — bei Gleichstand das mit dem kleineren Index.
+    face_indices = np.concatenate(selected_per_carrier) if carriers else np.zeros(0, dtype=np.int64)
+    joined = DeviationTable.joined(tables, len(face_indices))
+    lowers, uppers = joined.lower_mm, joined.upper_mm
+    with np.errstate(invalid="ignore"):
+        usable = joined.known & (lowers >= 0.0) & (lowers <= uppers)
+    face_indices = face_indices[usable]
+    lowers, uppers = lowers[usable], uppers[usable]
+    witnesses = joined.witness_uv[usable]
+    values[face_indices] = uppers
+    used_sources = int(np.bitwise_or.reduce(origin_masks[face_indices])) if len(face_indices) else 0
+    maximum_lower = float(lowers.max()) if len(lowers) else 0.0
+    maximum_upper = float(uppers.max()) if len(uppers) else 0.0
+    widths = np.where(uppers > lowers, np.nextafter(uppers - lowers, np.inf), 0.0)
+    numerical_error = float(widths.max()) if len(widths) else 0.0
+    witness_point: Vec3 | None = None
+    witness_face: int | None = None
+    witness_distance: float | None = None
+    # Der Zeuge nach fallender Untergrenze, bei Gleichstand nach steigendem
+    # Index — und nur, wo der Anzeigepunkt endlich ist.
+    for position in np.lexsort((face_indices, -lowers)):
+        check()
+        index = int(face_indices[position])
+        first, second, third = raw.vertices[raw.faces[index]]
+        u, v = (float(witnesses[position, 0]), float(witnesses[position, 1]))
+        # Anzeige der belegten baryzentrischen Stelle. Die Untergrenze
+        # gilt für die exakte Linearkombination im Rechner, nicht für
+        # den zwangsläufig gerundeten Anzeigepunkt.
+        point = (1.0 - u - v) * first + u * second + v * third
+        if np.isfinite(point).all():
+            witness_point = (float(point[0]), float(point[1]), float(point[2]))
+            witness_face = index
+            witness_distance = float(lowers[position])
+            break
     check()
     known = bool(np.any(np.isfinite(values)))
     sources = [source for source, flag in source_flags.items() if used_sources & flag]

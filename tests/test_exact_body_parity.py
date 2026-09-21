@@ -287,7 +287,9 @@ CASES = [
             "projection": "face",
             "at_feature": "top",
         },
-        MESH_ONLY,
+        # Ein Relief ist ein Netz: Der exakte Körper geht hinein und kommt als
+        # Netz heraus — das ist die Zusage, nicht ein Fehlen des Falls.
+        MESH,
         "greater",
         3200.0,
     ),
@@ -486,7 +488,7 @@ CASES = [
         "repair",
         "broken_box",
         {"fill_holes": True, "weld": True, "normals": True},
-        MESH_ONLY,
+        KEEP,
         "repaired",
         3200.0,
     ),
@@ -598,7 +600,9 @@ CASES = [
         "slot",
         12.0,
     ),
-    Case("slots_from_texture", "textured", {"filaments": 2}, MESH_ONLY, "texture_slots", 2),
+    # Am exakten Körper gibt es keine Textur; er bleibt exakt und sagt es
+    # (``colour.no_texture``) — die Invariante prüft je Bauart etwas anderes.
+    Case("slots_from_texture", "textured", {"filaments": 2}, KEEP, "texture_slots", 2),
     Case("smooth_mesh", "sphere", {"iterations": 2}, MESH, "smoothed", None),
     Case(
         "split_bodies",
@@ -757,54 +761,19 @@ STANDALONE = (
     "seal_gasket",
     "wall_ladder",
 )
-#: Die Bausteine, die an einem exakten Träger exakt bauen (P2.7) — die Abnahme je
-#: Gruppe ist der Wechsel ihrer Zeilen von ``MESH`` nach ``KEEP``.
-EXACT_PARTS = frozenset(
-    {
-        "screw_hole",
-        "heatset_m4",
-        "nut_trap",
-        "printed_thread",
-        "printed_screw",
-        "printed_nut",
-        "barrel_hinge",
-        "bearing_seat",
-        "dowel",
-        "hinge_eye",
-        "latch",
-        "living_hinge",
-        "snap_connector",
-        "snap_fit",
-        "foot",
-        "keyhole",
-        "magnet_pocket",
-        "pegboard_hook",
-        "wall_mount",
-        "profile_clamp_liner",
-        "profile_clamp_shell",
-        "rib",
-        "gusset",
-        "profile_tongue",
-        "cable_gland",
-        "cable_clip",
-        "organizer_tray",
-        "organizer_divider",
-        "organizer_rim",
-        "organizer_foot",
-        "seal_groove",
-        "seal_gasket",
-        "fit_ladder",
-        "wall_ladder",
-        "overhang_fan",
-    }
-)
+# **Jeder Baustein baut an einem exakten Träger exakt** (P2.7, abgenommen für
+# alle 35). Bis zum 21.09.2026 stand hier eine Liste ``EXACT_PARTS`` mit genau
+# diesen 35 Namen und ein ``MESH``-Zweig für die übrigen — den es nicht mehr
+# gab, und ein neuer Baustein wäre still in ihn gefallen. Jetzt ist ``KEEP``
+# die Zusage für jeden, und wer einen Baustein baut, der sie nicht hält,
+# bekommt hier den roten Fall.
 for _part, (_dimensions, _effect, _height) in PART_CASES.items():
     CASES.append(
         Case(
             f"insert_{_part}",
             "host",
             {**_dimensions, "x": 0.0, "y": 0.0, "z": 10.0, "nx": 0.0, "ny": 0.0, "nz": 1.0},
-            KEEP if _part in EXACT_PARTS else MESH,
+            KEEP,
             _effect,
             100000.0,
         )
@@ -1021,6 +990,18 @@ def _inputs(case: Case, kind: str, project: Project, profile: Profile) -> list[S
     entry = _object(_native_box(), kind)
     if source == "box":
         return [entry]
+    if kind == "brep" and source in {"fine_box", "textured"}:
+        # Der exakte Körper trägt weder eine feinere Vernetzung noch Farben
+        # je Dreieck; das Relief holt sich sein Bild aus der Quelle, die
+        # Texturfrage bekommt den nackten Körper und muss das sagen.
+        if source == "fine_box":
+            _add_source(project, "image", ".png", _gradient_png(), "image")
+        return [entry]
+    if kind == "brep" and source == "broken_box":
+        # Einen kaputten exakten Körper gibt es nicht — der Kern kennt keine
+        # offenen Dreiecke. Die Reparatur bekommt den ganzen Körper und muss
+        # ihn ganz lassen: exakt, mit Merkmalen, derselbe Körper.
+        return [entry]
     raw = as_mesh_data(entry.mesh).raw.copy()
     if source == "broken_box":
         raw.update_faces(np.arange(len(raw.faces)) != 0)
@@ -1043,16 +1024,8 @@ def _inputs(case: Case, kind: str, project: Project, profile: Profile) -> list[S
             )
         ]
     if source == "fine_box":
-        from PIL import Image
-
         raw = raw.subdivide().subdivide().subdivide()
-        payload = io.BytesIO()
-        # Ein Verlauf trägt echte Höhen; ein einfarbiges Bild bedeutet im
-        # Reliefvertrag ausdrücklich Höhe null.
-        Image.fromarray(np.tile(np.linspace(0, 255, 8, dtype=np.uint8), (8, 1))).save(
-            payload, format="PNG"
-        )
-        _add_source(project, "image", ".png", payload.getvalue(), "image")
+        _add_source(project, "image", ".png", _gradient_png(), "image")
         top = Feature(
             "top",
             "face",
@@ -1070,6 +1043,18 @@ def _inputs(case: Case, kind: str, project: Project, profile: Profile) -> list[S
         raw.visual.face_colors = colours
         return [dataclasses.replace(entry, mesh=MeshData.of(raw), features={})]
     raise AssertionError(f"Die Quelle {source!r} hat keinen ausdrücklichen Aufbau.")
+
+
+def _gradient_png() -> bytes:
+    """Ein Verlauf trägt echte Höhen; ein einfarbiges Bild bedeutet im
+    Reliefvertrag ausdrücklich Höhe null."""
+    from PIL import Image
+
+    payload = io.BytesIO()
+    Image.fromarray(np.tile(np.linspace(0, 255, 8, dtype=np.uint8), (8, 1))).save(
+        payload, format="PNG"
+    )
+    return payload.getvalue()
 
 
 def _unexpected_question(question: str, choices: list[str]) -> str:
@@ -1232,8 +1217,14 @@ def _assert_invariant(
     elif rule == "texture_slots":
         from app.core.geom.attributes import used_slots
 
-        assert len(used_slots(mesh)) == expected
-        assert len(first.material_slots) == expected
+        if inputs[0].kind == "brep":
+            # Kein Dreieck, keine Farbe je Dreieck: Der exakte Körper bleibt,
+            # was er war, und der Bericht sagt, warum nichts zu verteilen war.
+            assert first.kind == "brep"
+            assert "colour.no_texture" in {f.code for f in result.scene.report.findings}
+        else:
+            assert len(used_slots(mesh)) == expected
+            assert len(first.material_slots) == expected
         assert volume == pytest.approx(3200.0)
     elif rule == "material":
         assert first.material == expected
@@ -1250,7 +1241,17 @@ def _assert_invariant(
     elif rule == "repaired":
         assert mesh.is_watertight
         assert volume == pytest.approx(expected, rel=1e-6)
-        assert not as_mesh_data(inputs[0].mesh).is_watertight
+        if first.kind == "brep":
+            # Nichts zu reparieren: Strg+Umschalt+R an einem STEP machte bis
+            # zum 21.09.2026 aus dem Körper Dreiecke und sagte „nichts zu
+            # reparieren“ — jetzt kommt derselbe exakte Körper zurück.
+            assert first.mesh is inputs[0].mesh
+            assert set(first.features) == set(inputs[0].features)
+            assert any(
+                entry.code == "repair.nothing_to_do" for entry in result.scene.report.findings
+            )
+        else:
+            assert not as_mesh_data(inputs[0].mesh).is_watertight
     elif rule == "smoothed":
         assert not np.array_equal(mesh.raw.vertices, as_mesh_data(inputs[0].mesh).raw.vertices)
         assert mesh.triangle_count == as_mesh_data(inputs[0].mesh).triangle_count
@@ -1367,14 +1368,63 @@ def _assert_invariant(
         raise AssertionError(f"Die Invariante {rule!r} ist nicht umgesetzt.")
 
 
+#: Operationen, die beide Bauarten annehmen (``requires_kind == ""``) und
+#: trotzdem keinen Erfolgsfall am exakten Körper haben — jede mit dem Grund,
+#: warum es dort keinen gibt. Wer hier eine Zeile streicht, gibt der Tabelle
+#: oben eine ``brep``-Variante; wer eine hinzufügt, erklärt sie.
+NO_EXACT_VARIANT = {
+    # Aufdicken verlangt eine offene Fläche; ein exakter Körper ist immer
+    # geschlossen und wird mit ``already_solid`` abgewiesen (Menüpunkt grau).
+    "thicken": "ein exakter Körper ist nie eine offene Fläche",
+    # Die vier Teile kommen aus ``create_profile_clamp_set`` und das baut
+    # Netze (``CREATE_MESH``); einen exakten Klemmensatz gibt es nicht.
+    "replace_profile_liners": "der Klemmensatz entsteht als Netz",
+}
+
+
 def test_every_registered_operation_has_an_explicit_success_case() -> None:
-    """Erzeuger und ganze Szene gehören ohne Filter zur vollständigen Liste."""
+    """Erzeuger und ganze Szene gehören ohne Filter zur vollständigen Liste.
+
+    Die Zahl der Operationen steht nicht mehr daneben: Sie stand bei 136 und
+    sagte nichts, was die Mengengleichheit nicht sagt — außer, dass jede neue
+    Operation diese Zeile mit anfassen musste.
+    """
     load_operations()
     registered = {spec.name for spec in REGISTRY.all()}
     assert len(CASES) == len(CASE_BY_NAME), "Jede Operation braucht genau eine Fallzuordnung."
     assert set(CASE_BY_NAME) == registered
-    assert len(registered) == 136
     assert all(case.variants and case.invariant for case in CASES)
+
+
+def test_the_table_promises_no_more_and_no_less_than_the_register() -> None:
+    """``requires_kind`` und die Varianten der Tabelle sagen dasselbe.
+
+    Eine Operation, die beide Bauarten annimmt, hat einen Erfolgsfall am
+    exakten Körper — oder steht mit Grund in :data:`NO_EXACT_VARIANT`. Eine,
+    die nur Netze nimmt, hat keine ``brep``-Variante, eine, die nur exakte
+    Körper nimmt, keine ``mesh``-Variante. Bis zum 21.09.2026 standen fünf
+    Operationen mit ``requires_kind == ""`` als ``MESH_ONLY`` in der Tabelle,
+    und niemand verglich die beiden Aussagen.
+    """
+    load_operations()
+    specs = [spec for spec in REGISTRY.all() if spec.consumes >= 1 and not spec.whole_scene]
+    assert specs, "ohne verbrauchende Operationen prüft dieser Test nichts"
+    for spec in specs:
+        kinds = {kind for kind, _outputs in CASE_BY_NAME[spec.name].variants}
+        if spec.requires_kind == "mesh":
+            assert "brep" not in kinds, f"{spec.name} nimmt nur Netze, die Tabelle fährt brep"
+        elif spec.requires_kind == "brep":
+            assert "mesh" not in kinds, (
+                f"{spec.name} nimmt nur exakte Körper, die Tabelle fährt mesh"
+            )
+        elif spec.name in NO_EXACT_VARIANT:
+            assert "brep" not in kinds, (
+                f"{spec.name} hat eine brep-Variante — der Eintrag in NO_EXACT_VARIANT ist überholt"
+            )
+        else:
+            assert "brep" in kinds, (
+                f"{spec.name} verspricht beide Bauarten und läuft nie am exakten Körper"
+            )
 
 
 @pytest.mark.parametrize(

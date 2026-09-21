@@ -442,3 +442,111 @@ def test_iterator_preserves_order_and_prepares_the_carrier_once(monkeypatch):
     assert results[2].lower_mm <= 10 * math.sin(math.pi / 4) <= results[2].upper_mm
     assert calls == [carrier.params["half_angle"]]
     assert dict(carrier.params) == before
+
+
+# --- Alle Dreiecke einer Trägerart zugleich -------------------------------------
+
+
+def _random_triangles(seed: int, count: int) -> list:
+    import random
+
+    source = random.Random(seed)
+    return [
+        tuple(tuple(source.uniform(-15.0, 15.0) for _ in range(3)) for _ in range(3))
+        for _ in range(count)
+    ]
+
+
+def test_grouped_bounds_say_the_same_as_the_single_carrier_path() -> None:
+    """Zwei Zylinder mit verschiedenen Radien und Achsen, eine Ebene, eine Kugel, ein
+    Kegel und ein Torus in einem Aufruf: Jede Klammer schließt dieselben Zeugen und
+    Rasterpunkte ein wie der Einzelweg, und beide Klammern liegen auf zwölf Stellen
+    beieinander — der Stapel rundet um höchstens ein ULP weiter als ``_I``."""
+    import numpy as np
+
+    from app.core.geom.deviation import deviation_bounds_grouped
+
+    carriers = [
+        patch("cylinder"),
+        patch("cylinder", centre=(3.0, -2.0, 1.0), axis=(0.0, 1.0, 1.0), radius=4.0),
+        patch("plane", centre=(1.0, 1.0, 1.0), axis=(1.0, 2.0, 3.0)),
+        patch("sphere", radius=7.0),
+        patch("cone", half_angle=0.3),
+        patch("torus", tube_radius=5.0),
+    ]
+    triangles = [_random_triangles(seed, 9) for seed in range(len(carriers))]
+    tables = deviation_bounds_grouped(
+        carriers, [np.asarray(entry) for entry in triangles], epsilon_mm=1e-6
+    )
+    assert len(tables) == len(carriers)
+    for carrier, entries, table in zip(carriers, triangles, tables, strict=True):
+        single = list(deviation_bounds(carrier, entries, epsilon_mm=1e-6))
+        assert table.known.all() and len(single) == len(entries)
+        for index, (triangle, expected) in enumerate(zip(entries, single, strict=True)):
+            assert expected is not None
+            lower, upper = float(table.lower_mm[index]), float(table.upper_mm[index])
+            scale = max(1.0, expected.upper_mm)
+            assert abs(lower - expected.lower_mm) <= 1e-12 * scale
+            assert abs(upper - expected.upper_mm) <= 1e-12 * scale
+            assert bool(table.converged[index]) == expected.converged
+            witness = (
+                Fraction(float(table.witness_uv[index, 0])),
+                Fraction(float(table.witness_uv[index, 1])),
+            )
+            assert witness[0] >= 0 and witness[1] >= 0 and witness[0] + witness[1] <= 1
+            assert Decimal(lower) <= reference_distance(carrier, triangle, witness) + Decimal(
+                "1e-70"
+            )
+            for u in range(5):
+                for v in range(5 - u):
+                    value = reference_distance(carrier, triangle, (Fraction(u, 4), Fraction(v, 4)))
+                    assert value <= Decimal(upper) + Decimal("1e-70")
+
+
+def test_grouped_table_keeps_order_and_marks_the_unknown() -> None:
+    """Ein Dreieck mit ``nan`` mitten im Stapel bleibt unbekannt, seine Nachbarn nicht —
+    und Zahlen jenseits von 10¹⁰⁰ gehen den skalaren Weg, ohne die Reihenfolge zu stören."""
+    import numpy as np
+
+    from app.core.geom.deviation import deviation_bounds_grouped
+
+    good = ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0))
+    broken = ((float("nan"), 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0))
+    huge = ((1e150, 0.0, 0.0),) * 3
+    (table,) = deviation_bounds_grouped(
+        [patch("sphere")], [np.asarray([good, broken, good, huge])], epsilon_mm=1e-6
+    )
+    assert table.known.tolist() == [True, False, True, True]
+    assert table.lower_mm[0] == table.lower_mm[2] and table.upper_mm[0] == table.upper_mm[2]
+    single = list(deviation_bounds(patch("sphere"), [huge], epsilon_mm=1e-6))
+    assert single[0] is not None
+    assert table.lower_mm[3] == single[0].lower_mm and table.upper_mm[3] == single[0].upper_mm
+
+
+@pytest.mark.parametrize("kind", ["plane", "sphere", "cylinder", "cone"])
+def test_closed_form_carriers_never_fall_back_to_the_scalar_path(kind: str, monkeypatch) -> None:
+    """Ebene, Kugel, Zylinder und Kegel sind im Stapel geschlossen gerechnet — auch mit
+    einem Dreieck, das die Achse trifft, und mit Klammern um null, deren oberer Rand
+    eine Denormalzahl ist (die Wurzel daraus war am 21.09.2026 nicht bestätigbar,
+    und 96 von 96 Kegeldreiecken der Dose gingen den langsamen Weg)."""
+    from app.core.geom import deviation
+
+    def forbidden(*args):
+        raise AssertionError("the batch must carry every closed-form carrier itself")
+
+    monkeypatch.setattr(deviation, "_scalar_result", forbidden)
+    carrier = patch(kind)
+    triangles = [
+        ((-2.0, -2.0, 10.0), (2.0, -2.0, 10.0), (0.0, 2.0, 10.0)),
+        ((11.0, 0.0, 0.0),) * 3,
+        ((0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0)),
+        *_random_triangles(21092026, 6),
+    ]
+    results = list(deviation_bounds(carrier, triangles, epsilon_mm=1e-6))
+    assert all(result is not None for result in results)
+    for triangle, result in zip(triangles, results, strict=True):
+        assert result is not None and result.converged
+        for u in range(5):
+            for v in range(5 - u):
+                value = reference_distance(carrier, triangle, (Fraction(u, 4), Fraction(v, 4)))
+                assert value <= Decimal(result.upper_mm) + Decimal("1e-70")

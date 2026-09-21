@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import dataclasses
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -755,8 +756,10 @@ def box_with_lid() -> Project:
 
     # Anordnen ist eine Transformation und meldet seine Bewegung
     # (``OpResult.transform``) — die Merkmale überstehen das, und damit auch
-    # die Passungsbeziehung. Ihre Einbaulage bleibt in dieser getrennten
-    # Druckanordnung ausdrücklich ungeprüft und steht so im Prüfbericht.
+    # die Passungsbeziehung. In dieser getrennten Druckanordnung ist die
+    # Einbaulage nicht modelliert; die Körperprobe der Passung läuft erst,
+    # wenn die Teile ineinanderstehen, und bis dahin steht dazu nichts im
+    # Prüfbericht.
     history.apply(
         _("Anordnen"),
         [OperationDraft(op="arrange_bed", inputs=(box, lid), params={"spacing": 8.0})],
@@ -910,6 +913,24 @@ liegt. Ohne diese Eigenschaft bräuchte es hier zwei Listen, die auseinander
 laufen können."""
 
 
+#: Welche Bau-Funktion welches Beispiel aufstellt — auf Modulebene, damit der
+#: Test (`tests/test_examples.py`) dieselbe Zuordnung fährt wie der Bau: Bis
+#: zum 21.09.2026 lag sie nur in `main()`, und der Test kannte neun von elf.
+BUILDERS: dict[str, Callable[[], Project]] = {
+    "weg1-halterung-anpassen": way_one,
+    "weg2-halter-konstruieren": way_two,
+    "weg3-generiert-aufbereiten": way_three,
+    "weg4-figur-formen": way_four,
+    "gehaeuse-mit-bausteinen": housing,
+    "schild-zweifarbig": two_colour_sign,
+    "skizze-mit-massen": sketched_plate,
+    "drucker-kalibrieren": calibration_plate,
+    "aushoehlen-und-teilen": hollow_and_split,
+    "dose-mit-deckel": box_with_lid,
+    "passung-nach-materialwechsel": fit_after_material_change,
+}
+
+
 def fixed_seeds(project: Project) -> None:
     """Gibt jeder Operation mit Startwert einen festen (§11.3).
 
@@ -976,21 +997,8 @@ def main() -> int:
 
     from app.core.examples import EXAMPLES
 
-    builders = {
-        "weg1-halterung-anpassen": way_one,
-        "weg2-halter-konstruieren": way_two,
-        "weg3-generiert-aufbereiten": way_three,
-        "weg4-figur-formen": way_four,
-        "gehaeuse-mit-bausteinen": housing,
-        "schild-zweifarbig": two_colour_sign,
-        "skizze-mit-massen": sketched_plate,
-        "drucker-kalibrieren": calibration_plate,
-        "aushoehlen-und-teilen": hollow_and_split,
-        "dose-mit-deckel": box_with_lid,
-        "passung-nach-materialwechsel": fit_after_material_change,
-    }
     for example in EXAMPLES:
-        project = builders[example.id]()
+        project = BUILDERS[example.id]()
         fixed_seeds(project)
         mark_translatable(project)
         result = evaluate(project.document, profile, sources=ProjectSources(project))

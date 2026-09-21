@@ -35,8 +35,10 @@ Erzeugergrenze mit `NativeReferenceLost`, der Befund nennt den späteren
 Verbraucher, und `EvaluationResult.blocked_references` trägt die Bezüge zum
 Verweisfilter: `orphans.check(blocked=...)` meldet sie als `feature.blocked`,
 ohne Namensexistenz als Auflösung und ohne Frage gegen die alte Szene.
-Heute stellt allein `resize_hole` am exakten Körper Belege aus (Bohrung und
-belegter Boden aus `_preserved_exact_features`).
+Belege stellen `resize_hole` (Bohrung und belegter Boden aus
+`_preserved_exact_features`) und jede exakte Merkmalshandlung aus
+(`prepare_ops._exact_features_after`, über `_exact_cavity_result`,
+`_exact_copy_result` und `_thread_result`).
 
 **Was die Zuordnung nicht belegt, wählt der Kunde am neu gebauten Körper**
 (`_native_reselection`): je nicht belegtem altem Bezug die aktuellen
@@ -112,8 +114,16 @@ Zahlenbereich allein belegt kein ursprüngliches Schraubenmaß.
 
 `Feature.surface_patches` trägt die belegten analytischen Teilflächen und
 ihre Originaldreiecke ebenfalls durch beide Cacheebenen. Der Plattencodec
-prüft den gemeinsamen Trägervertrag, die Merkmalszugehörigkeit und die
-tatsächliche Dreieckszahl; beschädigte Einträge werden neu gerechnet.
+prüft den gemeinsamen Trägervertrag und die Merkmalszugehörigkeit; beschädigte
+Einträge werden neu gerechnet. **Nicht geprüft wird die Dreieckszahl des
+gespeicherten Netzes**: Der Cache trägt die **rohe** Ausgabe einer Operation,
+und die darf Merkmale ihres Eingangs mit dessen Dreiecksnummern durchreichen
+(der Bausteinwirt, das Reparieren) — erst `_with_features` bindet sie an das
+neue Netz, beim Treffer wie beim frischen Lauf. Vorbereitete Objekte in den
+Cache zu legen war der andere Weg und ist verworfen: Ein warmer Treffer lief
+damit nicht idempotent durch `_with_features` (Weg 3, 21.09.2026). Beim Lesen
+von der Platte fasst `_warm_figures` Volumen, Fläche, Dichtheit und Teilezahl
+im Arbeiter an, damit das Fenster sie nur noch abliest.
 Trägervektoren bleiben nach JSON unveränderliche Tupel. Merkmals- und
 Teilträgerindizes zählen zum vorhandenen Speicherbudget hinzu.
 Übernimmt ein erzeugter Name eine neue erkannte Fläche, reisen deren aktuelle
@@ -409,7 +419,12 @@ veröffentlichten Merkmale an Folgeschritte: Zuordnungsschlüssel, vollständige
 Geometrieparameter, Originaldreiecke und Teilträger, Quellen und Erzeuger.
 Der gemeinsame `cache.feature_to_data`-Codec trägt dieselbe Auskunft auf die
 Platte. Stabile Teilhashes entstehen nacheinander je Merkmal mit demselben
-Abbruchrückruf; eine Gesamt-JSON aller Merkmale wird nicht aufgebaut.
+Abbruchrückruf (`hashing.feature_digest`: Dreiecksnummern als `int64`-Bytes,
+Fließkommawerte über `float()`, damit ein `np.float64` und seine Rundreise
+durch die Platte denselben Schlüssel tragen); eine Gesamt-JSON aller Merkmale
+wird nicht aufgebaut. Innerhalb einer Auswertung hält `FeatureMemo` den
+Teilhash je Merkmalsobjekt — ein Merkmal, das unverändert durch fünf Schritte
+reist, wird einmal gehasht.
 Gleiche reservierte Namen beweisen keine gleiche Bindung. Der rohe
 Operationshash bleibt dagegen unabhängig von gespeicherten Zuordnungsantworten,
 weil das Operationsergebnis vor seiner aktuellen Zuordnung wiederverwendet wird.
@@ -488,21 +503,31 @@ erhalten bei möglicher Überdeckung auch innerhalb der Anzeigeauflösung einen
 Befund. Diese Grenzen ersetzen weder Fertigungsspiel noch eine Einbauprüfung.
 
 Zusätzlich prüft `fits.check(..., cancelled=...)` bei radialen Paaren die
-tatsächlichen vollständigen Körper in der aktuellen Lage. Unterschiedliche
-Platten, fehlende Achse/Mitte/Tiefe, seitlicher Versatz und fehlende axiale
-Überlappung bleiben `fit.pose_unknown`; angeordnete Druckteile belegen keine
-Einbaulage. Netze laufen unverändert durch die direkte Verschneidung mit
-gültiger leerer Ausgabe, ohne Reparatur, Jitter oder Voxel. Native Körper
+tatsächlichen vollständigen Körper in der aktuellen Lage — **nur, wenn die
+Lage belegt ist** (`_pose_proven`). Unterschiedliche Platten, fehlende
+Achse/Mitte/Tiefe, seitlicher Versatz und fehlende axiale Überlappung sind
+**kein Befund**: Angeordnete Druckteile belegen keine Einbaulage, und eine
+Warnung darüber war nicht behebbar (*Anordnen* zieht die Teile gerade
+auseinander) — sie stand bis zum 21.09.2026 an jedem Passungsbeispiel. Eine
+leere Verschneidung ist ebenfalls kein Befund; die Zahl dazu gibt
+`fits.overlap(scene, fit)` als `GeometryProbe` (Quelle, Volumen,
+`intersects`) — die eigene Auskunft für die Passungskarte und jeden, der das
+Maß braucht, ohne den Bericht zu lesen. Netze laufen unverändert durch die
+direkte Verschneidung mit gültiger leerer Ausgabe, ohne Reparatur, Jitter oder
+Voxel. Native Körper
 werden auf privaten Kopien validiert und nichtdestruktiv verschnitten; auch
 Prüfkennzeichen der Originale bleiben erhalten. Ein gültiger nativer Kontakt
 ohne Solid ist leer, jeder Solid mit positivem integriertem Volumen zählt
 als Überdeckung. Keine Längentoleranz wird als Volumengrenze verwendet.
-Gemischte Zwillinge liefern ausdrücklich eine Netznäherung. `fit.geometry_failed`
-ersetzt keinen Fehler durch Kollisionsfreiheit; Abbruch wird weitergereicht.
-`fit.press_unverified` bestätigt weder Montage noch Verformung und erklärt
-auch eine Boden-/Schulterüberdeckung nicht pauschal für beabsichtigt.
-Kollisionsfreiheit gilt ausschließlich für die geprüfte Lage, nicht für den
-Montageweg oder das Druckverhalten. Maßbefunde bleiben daneben bestehen.
+Gemischte Zwillinge liefern ausdrücklich eine Netznäherung
+(`fit.geometry_approximate`: Warnung bei Überschneidung, sonst Hinweis).
+`fit.geometry_failed` ersetzt keinen Fehler durch Kollisionsfreiheit; Abbruch
+wird weitergereicht. `fit.press_unverified` ist ein Hinweis: Übermaß ist bei
+einer Presspassung vorgesehen, und die starre Probe bestätigt weder Montage
+noch Verformung — sie nennt die gemessene Überschneidung, oder dass es keine
+gibt. `fit.collision` bleibt die Warnung. Kollisionsfreiheit gilt
+ausschließlich für die geprüfte Lage, nicht für den Montageweg oder das
+Druckverhalten. Maßbefunde bleiben daneben bestehen.
 Auswertung veröffentlicht Cacheeinträge und Fertigmeldung erst nach allen
 Abschlussprüfungen und deren letzter Abbruchkontrolle.
 
@@ -510,9 +535,9 @@ Abschlussprüfungen und deren letzter Abbruchkontrolle.
 oder getrennte koplanare Flächen sind zulässig, Kontakt ist keine Bedingung.
 Daneben läuft dieselbe vollständige Körperprobe ohne radiale Voraussetzungen.
 Zwei verschiedene Körper auf derselben Platte werden in ihrer aktuellen Lage
-geprüft; verschiedene Platten und zwei Merkmale desselben Körpers erhalten
-`fit.pose_unknown` mit `reason = different_plates | same_body`, ohne erfundenes
-Nullvolumen. Auch ein nicht messbares Ebenenpaar kann bei auflösbaren
+geprüft; verschiedene Platten und zwei Merkmale desselben Körpers sind keine
+Lage und kein Befund, und `overlap` gibt dort `None` statt eines erfundenen
+Nullvolumens. Auch ein nicht messbares Ebenenpaar kann bei auflösbaren
 Körperverweisen einen unabhängigen Körperbefund tragen. Fehlende Merkmale
 bleiben Fehler. Die bündigen Körpertexte bestätigen weder Flächenkontakt noch
 Montageweg; Ebenenverletzung und Körperbefund bleiben nebeneinander sichtbar.

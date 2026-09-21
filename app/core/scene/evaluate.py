@@ -48,10 +48,12 @@ from app.core.perceive.features import (
     centre_of,
     detect,
     freeform_dropped,
+    unreadable_void_shells,
 )
 from app.core.perceive.local import FEATURE_LIMIT_TRIANGLES as FEATURE_LIMIT_TRIANGLES
 from app.core.perceive.local import rigid_transform
 from app.core.perceive.match_decisions import (
+    MAPPING_NO_LONGER_VALID,
     conflict_groups,
     group_fingerprint,
     mapping_with_decisions,
@@ -81,7 +83,7 @@ from app.core.scene.cancel import NeverCancelled
 from app.core.scene.edge_binding import NO_BINDING, EdgeBinding, EdgeTarget, bind_edges
 from app.core.scene.fits import active_fits
 from app.core.scene.fits import check as check_fits
-from app.core.scene.hashing import digest, object_hash, operation_hash
+from app.core.scene.hashing import FeatureMemo, digest, object_hash, operation_hash
 from app.core.scene.orphans import Reference, feature_ref_of_sketch
 from app.core.scene.orphans import references as feature_references
 from app.core.scene.parameter_usage import ParameterUse, parameter_uses
@@ -287,6 +289,9 @@ def _evaluate(
     objects: dict[ObjectId, SceneObject] = {}
     hashes: dict[ObjectId, str] = {}
     names: dict[ObjectId, str] = {}
+    # Teilhashes je Merkmalsobjekt, für diese Auswertung: Ein Merkmal, das
+    # unverändert durch den Stapel reist, wird einmal gehasht, nicht je Schritt.
+    feature_memo: FeatureMemo = {}
     findings: list[Finding] = []
     # Grenzen gelten auch für Ausdrücke (Gesamtreview B-15): ``max=60`` mit
     # ``=@a*10`` ergab 600, und niemand sagte etwas. Die Eingabe prüft der
@@ -820,6 +825,7 @@ def _evaluate(
                 getattr(prepared_objects[object_id].mesh, "cavity", None),
                 features=prepared_objects[object_id].features,
                 check_cancelled=token.raise_if_cancelled,
+                memo=feature_memo,
             )
             # Wächst nur, wird nie geleert: Genau darin liegt der Wert (siehe
             # ``EvaluationResult.object_names``).
@@ -898,6 +904,14 @@ def _evaluate(
             solvers[operation.id] = result.solver
         completed.append(operation.id)
         if cached is None:
+            # **In den Cache geht die rohe Ausgabe, nicht die vorbereitete.**
+            # Ein Treffer läuft danach wie ein frischer Schritt durch
+            # `_with_features`; mit schon vorbereiteten Merkmalen war das
+            # nicht idempotent (Weg 3, 21.09.2026: zwei Kugeln hießen beim
+            # warmen Lauf anders als beim kalten). Was die Operation ihrem
+            # Ergebnis an Merkmalen des Eingangs mitgibt — Dreiecksnummern
+            # eines anderen Netzes eingeschlossen —, liest der Plattencodec
+            # deshalb so zurück, wie es hier steht.
             pending.append((key, result, not watched.used))
 
     token.raise_if_cancelled()
@@ -1819,7 +1833,7 @@ def _answer_matches(
                 )
                 if scope is not None:
                     question += "\n\n" + tr(
-                        "Dieser Schritt hat den exakten Körper neu gebaut. Wähle die "
+                        "Dieser Schritt hat den exakten Körper neu gebaut. Wählen Sie die "
                         "aktuelle Fläche, die den bisherigen Bezug fortführt."
                     )
                 if len(claims) > 1:
@@ -1845,9 +1859,7 @@ def _answer_matches(
                     decisions[old_id] = chosen
                     occupied.add(chosen)
                 else:
-                    raise AmbiguityError(
-                        _("Die Zuordnung ist nicht mehr gültig. Wähle die Bezüge erneut aus.")
-                    )
+                    raise AmbiguityError(MAPPING_NO_LONGER_VALID)
         assert decisions is not None
         proposed = mapping_with_decisions(
             matched, claims, decisions, check_cancelled=watch.raise_if_cancelled
@@ -2013,7 +2025,7 @@ def _with_features(
                 raise AmbiguityError(
                     _(
                         "Die bisherigen Flächenbezüge sind am exakten Körper nicht eindeutig. "
-                        "Wähle die betroffenen Flächen im Folgeschritt erneut aus."
+                        "Wählen Sie die betroffenen Flächen im Folgeschritt erneut aus."
                     ),
                     candidates=tuple(sorted(set(matched.ambiguous) & referenced)),
                 )
@@ -2063,8 +2075,8 @@ def _with_features(
             raise NativeReferenceLost(
                 _(
                     "Dieser Schritt baut den exakten Körper neu, und ein späterer Bezug "
-                    "auf eine seiner Flächen ist danach nicht belegt. Wähle die Fläche "
-                    "dort neu, oder nimm den Schritt mit Strg+Z zurück."
+                    "auf eine seiner Flächen ist danach nicht belegt. Wählen Sie die Fläche "
+                    "dort neu, oder nehmen Sie den Schritt mit Strg+Z zurück."
                 ),
                 references=tuple(FeatureRef(entry.id, name) for name in sorted(lost)),
                 values={
@@ -2209,6 +2221,27 @@ def _with_features(
                 object_id=entry.id,
                 op_id=operation.id,
                 values={"dropped": left_out},
+            )
+        )
+
+    # **Und ein Einschluss, den die Erkennung nicht lesen konnte, steht ebenso
+    # hier.** ``detect`` liest Schalenpaare über die native Differenz; wo die
+    # nicht antwortet, fehlt der Lufteinschluss im Baum, und der Kunde
+    # druckte das Teil, ohne von der Luft darin zu wissen (Paket C, 21.09.2026).
+    unreadable = unreadable_void_shells(mesh)
+    if unreadable:
+        findings.append(
+            Finding(
+                code="perceive.voids_unreadable",
+                severity="warning",
+                message=_(
+                    "Dieses Modell besteht aus mehreren Schalen, und ob eine davon ein "
+                    "Lufteinschluss ist, ließ sich nicht sicher lesen. Reparieren Sie das "
+                    "Netz, oder prüfen Sie es im Slicer auf eingeschlossene Luft."
+                ),
+                object_id=entry.id,
+                op_id=operation.id,
+                values={"shells": unreadable},
             )
         )
 

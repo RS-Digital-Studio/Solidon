@@ -2513,7 +2513,12 @@ def test_duplicating_a_countersunk_bore_copies_its_sink(profile: Profile) -> Non
     assert sorted(f.kind for f in copies.values()) == ["cone", "hole"], list(copies)
     assert set(copies) == {"hole_2", "cone_2"}, list(copies)
     for name in (bore, cone):
-        assert out.features[name] == entry.features[name], "das Original bleibt, wie es war"
+        # Ort und Maß bleiben; die Dreiecksnummern des alten Netzes reisen
+        # nicht mit, die Oberfläche holt sich die Auswertung an der Erkennung
+        # (``prepare_ops._without_old_triangles``).
+        assert out.features[name] == dataclasses.replace(
+            entry.features[name], face_indices=(), surface_patches=()
+        ), "das Original bleibt, wie es war"
     new_bore = copies["hole_2"]
     assert tuple(float(v) for v in new_bore.params["centre"]) == pytest.approx(
         (20.0, 0.0, -2.0), abs=0.01

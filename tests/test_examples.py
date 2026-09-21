@@ -8,6 +8,7 @@ vor einem neuen Nutzer.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import Final
 
@@ -17,11 +18,41 @@ from app.core import examples
 from app.core.knowledge import profiles
 from app.core.registry import REGISTRY
 from app.core.scene import History, evaluate
-from app.core.scene.project import ProjectSources, load
+from app.core.scene.evaluate import EvaluationResult
+from app.core.scene.project import Project, ProjectSources, load
 from app.core.types import Profile
 from app.core.units import EPS_GEOM
 from app.i18n import SOURCE_LANGUAGE, set_language
 from app.i18n.catalog import install_language
+
+
+def _profile_of(project: Project) -> Profile:
+    return profiles.make_profile(
+        project.document.printer or "centauri-carbon-2", project.document.material or "petg"
+    )
+
+
+@pytest.fixture(scope="module")
+def evaluated() -> Callable[[str], tuple[Project, EvaluationResult]]:
+    """Jedes Beispiel einmal je Modul geöffnet und ausgewertet — mit seinem Profil.
+
+    74 Tests werteten dieselben elf Beispiele frisch aus, 43 Sekunden je Lauf
+    (Leistungsdurchsicht, 21.09.2026). Die Auswertung ist eine reine Funktion,
+    ihr Ergebnis unveränderlich; wer am Dokument dreht (Undo, Parameter),
+    lädt weiter selbst.
+    """
+    opened: dict[str, tuple[Project, EvaluationResult]] = {}
+
+    def get(example_id: str) -> tuple[Project, EvaluationResult]:
+        if example_id not in opened:
+            project = load(examples.directory() / f"{example_id}.p3d")
+            result = evaluate(
+                project.document, _profile_of(project), sources=ProjectSources(project)
+            )
+            opened[example_id] = (project, result)
+        return opened[example_id]
+
+    return get
 
 
 def test_there_is_one_example_per_way() -> None:
@@ -80,18 +111,8 @@ def test_all_three_are_installed() -> None:
 
 
 @pytest.mark.parametrize("example", examples.EXAMPLES, ids=lambda entry: entry.id)
-def test_an_example_opens_and_computes(example: examples.Example, profile: Profile) -> None:
-    path = examples.directory() / example.filename
-    project = load(path)
-
-    result = evaluate(
-        project.document,
-        profiles.make_profile(
-            project.document.printer or "centauri-carbon-2",
-            project.document.material or "petg",
-        ),
-        sources=ProjectSources(project),
-    )
+def test_an_example_opens_and_computes(example: examples.Example, evaluated) -> None:
+    _project, result = evaluated(example.id)
 
     assert result.complete, [str(f.message) for f in result.scene.report.findings]
     assert result.scene.objects
@@ -291,7 +312,7 @@ def test_no_example_ships_a_duplicate_operation_id(example: examples.Example) ->
 
 @pytest.mark.parametrize("example", examples.EXAMPLES, ids=lambda entry: entry.id)
 def test_no_example_shows_a_corpus_filename_as_an_object_name(
-    example: examples.Example, profile: Profile
+    example: examples.Example, evaluated
 ) -> None:
     """Das erste Objekt, das ein Demonutzer sah, hieß „plate_holes".
 
@@ -303,15 +324,7 @@ def test_no_example_shows_a_corpus_filename_as_an_object_name(
     Geprüft wird die Form, nicht ein einzelner Name: ein Objektname mit
     Unterstrich oder Dateiendung ist keiner, den jemand geschrieben hat.
     """
-    project = load(examples.directory() / example.filename)
-    result = evaluate(
-        project.document,
-        profiles.make_profile(
-            project.document.printer or "centauri-carbon-2",
-            project.document.material or "petg",
-        ),
-        sources=ProjectSources(project),
-    )
+    _project, result = evaluated(example.id)
 
     for entry in result.scene.objects.values():
         # **Geprüft wird die angezeigte Fassung**, deshalb ``str``. Seit
@@ -327,7 +340,7 @@ def test_no_example_shows_a_corpus_filename_as_an_object_name(
         assert name.strip() == name and name, "ein Name ohne Text ist keiner"
 
 
-def test_no_example_greets_with_a_contradiction(profile: Profile) -> None:
+def test_no_example_greets_with_a_contradiction(evaluated) -> None:
     """Ein Beispiel ist Dokumentation. Was darin warnt, ist eine Aussage über
     die Anwendung — und die erste, die ein neuer Nutzer liest.
 
@@ -351,15 +364,7 @@ def test_no_example_greets_with_a_contradiction(profile: Profile) -> None:
     """
     verboten = {"ingest.not_watertight", "ingest.small_components", "fit.violated"}
     for entry in examples.EXAMPLES:
-        project = load(examples.directory() / entry.filename)
-        result = evaluate(
-            project.document,
-            profiles.make_profile(
-                project.document.printer or "centauri-carbon-2",
-                project.document.material or "petg",
-            ),
-            sources=ProjectSources(project),
-        )
+        _project, result = evaluated(entry.id)
         erlaubt = set(_ERLAUBTE_BEGRUESSUNG.get(entry.id, {}))
         found = {
             finding.code
@@ -384,9 +389,6 @@ _ERLAUBTE_BEGRUESSUNG: Final[dict[str, dict[str, str]]] = {
         # — sie ist Teil dessen, was es vorführt.
         "repair.components_removed": "zeigt, was Weg 3 mit erzeugten Netzen tut",
     },
-    "dose-mit-deckel": {
-        "fit.pose_unknown": "Dose und Deckel zeigen getrennte Drucklagen, keine geprüfte Montage",
-    },
     "passung-nach-materialwechsel": {
         # **Hier ist die Warnung der Inhalt.** Das Beispiel führt vor, was
         # geschieht, wenn ein Deckel aus weicherem Material kommen soll: Er
@@ -395,18 +397,22 @@ _ERLAUBTE_BEGRUESSUNG: Final[dict[str, dict[str, str]]] = {
         # kein Makel, sondern die Ausgangslage, und der Weg daraus ist ein
         # Klick auf die Meldung und eine Zahl.
         "fit.violated": "ist der Inhalt des Beispiels, nicht sein Fehler",
-        "fit.pose_unknown": "die angeordneten Einzelteile belegen auch nach Undo keine Einbaulage",
     },
 }
 
 
 @pytest.mark.parametrize("example_id", ["dose-mit-deckel", "passung-nach-materialwechsel"])
-def test_the_lid_examples_keep_their_print_layout_and_the_open_assembly_proof(
-    example_id: str, profile: Profile
+def test_the_lid_examples_keep_their_print_layout_without_a_pose_finding(
+    example_id: str, evaluated
 ) -> None:
-    """Die Ausnahme ist an echte getrennte Drucklagen gebunden, nicht nur an einen Code."""
-    project = load(examples.directory() / f"{example_id}.p3d")
-    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    """Getrennt zum Drucken angeordnet ist die Einbaulage nicht modelliert — und
+    das ist kein Befund. Bis zum 21.09.2026 begrüßte „Dose mit Deckel“ mit einer
+    Warnung, die niemand beheben konnte (*Anordnen* zieht die Teile gerade
+    auseinander), und der Bericht des Passungsbeispiels trug zwei Warnungen statt
+    der einen, um die es geht."""
+    from app.core.scene import fits as fit_check
+
+    project, result = evaluated(example_id)
     assert result.complete
     assert len(project.document.fits) == 1
     fit = project.document.fits[0]
@@ -420,25 +426,19 @@ def test_the_lid_examples_keep_their_print_layout_and_the_open_assembly_proof(
         for axis in (0, 1)
     )
     assert first.plate != second.plate or apart, "the example must actually show separate parts"
-    findings = {
-        finding.code: finding
-        for finding in result.scene.report.findings
-        if finding.code.startswith("fit.")
-    }
-    assert set(findings) == (
-        {"fit.pose_unknown"}
-        if example_id == "dose-mit-deckel"
-        else {"fit.pose_unknown", "fit.violated"}
+    codes = [
+        finding.code for finding in result.scene.report.findings if finding.code.startswith("fit.")
+    ]
+    assert codes == ([] if example_id == "dose-mit-deckel" else ["fit.violated"])
+    assert fit_check.overlap(result.scene, result.scene.fits[0]) is None, (
+        "an untested assembly has no measured overlap"
     )
-    pending = findings["fit.pose_unknown"]
-    assert pending.severity == "warning"
-    assert pending.values["fit"] == fit.name
-    assert {pending.values["a"], pending.values["b"]} == {first.id, second.id}
-    assert "overlap_mm3" not in pending.values, "an untested assembly has no measured overlap"
 
 
-def test_material_undo_restores_the_allowance_but_not_an_assembly_proof(profile: Profile) -> None:
-    """Das Materialspiel wird wieder passend, die getrennte Drucklage bleibt sichtbar offen."""
+def test_material_undo_restores_the_allowance_and_leaves_the_report_empty(
+    profile: Profile,
+) -> None:
+    """Das Materialspiel wird wieder passend, und dann steht zur Passung nichts mehr da."""
     project = load(examples.directory() / "passung-nach-materialwechsel.p3d")
 
     def fit_codes() -> set[str]:
@@ -446,15 +446,15 @@ def test_material_undo_restores_the_allowance_but_not_an_assembly_proof(profile:
         assert result.complete
         return {f.code for f in result.scene.report.findings if f.code.startswith("fit.")}
 
-    assert fit_codes() == {"fit.violated", "fit.pose_unknown"}
+    assert fit_codes() == {"fit.violated"}
     history = History(project.document)
     history.undo()
-    assert fit_codes() == {"fit.pose_unknown"}
+    assert fit_codes() == set()
     history.redo()
-    assert fit_codes() == {"fit.violated", "fit.pose_unknown"}
+    assert fit_codes() == {"fit.violated"}
 
 
-def test_no_example_greets_the_customer_with_a_warning(profile: Profile) -> None:
+def test_no_example_greets_the_customer_with_a_warning(evaluated) -> None:
     """Was ein Beispiel beim Öffnen sagt, ist das Erste, was ein Kunde von
     Solidon liest — und es sagt mehr über die Anwendung als jede Zeile im
     Handbuch.
@@ -482,15 +482,7 @@ def test_no_example_greets_the_customer_with_a_warning(profile: Profile) -> None
     offen: list[str] = []
     unnoetig: list[str] = []
     for entry in examples.EXAMPLES:
-        project = load(examples.directory() / entry.filename)
-        result = evaluate(
-            project.document,
-            profiles.make_profile(
-                project.document.printer or "centauri-carbon-2",
-                project.document.material or "petg",
-            ),
-            sources=ProjectSources(project),
-        )
+        _project, result = evaluated(entry.id)
         erlaubt = _ERLAUBTE_BEGRUESSUNG.get(entry.id, {})
         gesehen = {
             finding.code
@@ -524,10 +516,11 @@ def test_no_example_greets_the_customer_with_a_warning(profile: Profile) -> None
     )
 
 
-def test_the_split_example_does_not_ask_for_work_it_already_did(profile: Profile) -> None:
+def test_the_split_example_does_not_ask_for_work_it_already_did(
+    profile: Profile, evaluated
+) -> None:
     """„Aushöhlen und teilen“ endet fertig angeordnet und ohne Restauftrag."""
-    project = load(examples.directory() / "aushoehlen-und-teilen.p3d")
-    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    project, result = evaluated("aushoehlen-und-teilen")
 
     codes = {finding.code for finding in result.scene.report.findings}
     assert "prepare.halves_in_place" not in codes, (
@@ -600,17 +593,13 @@ def test_every_example_can_still_be_built() -> None:
     """
     from tools import make_examples
 
-    gebaut = {
-        "way_one": make_examples.way_one,
-        "way_two": make_examples.way_two,
-        "way_three": make_examples.way_three,
-        "way_four": make_examples.way_four,
-        "housing": make_examples.housing,
-        "two_colour_sign": make_examples.two_colour_sign,
-        "calibration_plate": make_examples.calibration_plate,
-        "hollow_and_split": make_examples.hollow_and_split,
-        "box_with_lid": make_examples.box_with_lid,
-    }
+    # Dieselbe Zuordnung wie der Bau — nicht eine zweite Liste, die neun von
+    # elf kennt: ``sketched_plate`` und ``fit_after_material_change`` fehlten
+    # hier vom 31.08. bis zum 21.09.2026.
+    gebaut = make_examples.BUILDERS
+    assert set(gebaut) == {entry.id for entry in examples.EXAMPLES}, (
+        "jedes Beispiel hat genau eine Bau-Funktion, und keine baut ein Beispiel, das es nicht gibt"
+    )
 
     gescheitert: list[str] = []
     for name, funktion in gebaut.items():
@@ -624,7 +613,7 @@ def test_every_example_can_still_be_built() -> None:
 
 @pytest.mark.parametrize("example", examples.EXAMPLES, ids=lambda entry: entry.id)
 def test_no_feature_sits_outside_the_body_it_belongs_to(
-    example: examples.Example, profile: Profile
+    example: examples.Example, evaluated
 ) -> None:
     """Ein benanntes Merkmal wandert mit seinem Körper mit (§21.2).
 
@@ -645,8 +634,7 @@ def test_no_feature_sits_outside_the_body_it_belongs_to(
     der Oberfläche sitzen und dort einen halben Millimeter danebenliegen, ohne
     dass etwas falsch wäre.
     """
-    project = load(examples.directory() / example.filename)
-    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    project, result = evaluated(example.id)
 
     daneben: list[str] = []
     for object_id, entry in result.scene.objects.items():
@@ -756,3 +744,39 @@ def test_a_finding_value_that_names_a_body_follows_the_language(profile: Profile
     assert "Deckel" not in gezeigt, (
         f"der Befund nennt den Körper im englischen Fenster weiter deutsch: {gezeigt!r}"
     )
+
+
+@pytest.mark.parametrize("example", examples.EXAMPLES, ids=lambda entry: entry.id)
+def test_every_example_reopens_from_the_disk_cache_without_a_miss(
+    example: examples.Example, tmp_path: Path
+) -> None:
+    """Zweimal über denselben Plattencache geöffnet, trifft der zweite Lauf jeden
+    Schritt — bis auf die, deren Körper exakt sind, denn die liegen nur im
+    Speicher (§30). Bis zum 21.09.2026 verwarf der Codec den Bausteinwirt von
+    „Dose mit Deckel" bei jedem Öffnen als beschädigt: Seine Merkmale trugen
+    Dreiecksnummern des Eingangsnetzes, und die Kabeldurchführung wurde jedes
+    Mal neu gerechnet."""
+    from app.core.geom.mesh import MeshCodec
+    from app.core.scene.cache import DiskCache, ResultCache
+
+    project = load(examples.directory() / example.filename)
+    profile = _profile_of(project)
+    sources = ProjectSources(project)
+    first = ResultCache(disk=DiskCache(codec=MeshCodec(), directory=tmp_path / "cache"))
+    cold = evaluate(project.document, profile, sources=sources, cache=first)
+    assert cold.complete
+    reopened = load(examples.directory() / example.filename)
+    second = ResultCache(disk=DiskCache(codec=MeshCodec(), directory=tmp_path / "cache"))
+    warm = evaluate(reopened.document, profile, sources=ProjectSources(reopened), cache=second)
+    assert warm.complete
+    assert second.statistics.disk_hits + second.statistics.misses == len(project.document.ops)
+    if any(entry.kind == "brep" for entry in cold.scene.objects.values()):
+        # Exakte Körper schreibt der Codec nicht (§30); ihre Schritte rechnet
+        # der zweite Lauf neu, und nur die.
+        assert 1 <= second.statistics.misses <= len(project.document.ops), example.id
+    else:
+        assert second.statistics.misses == 0, (
+            f"{example.id}: {second.statistics.misses} Fehltreffer beim zweiten Öffnen"
+        )
+    assert warm.object_hashes == cold.object_hashes
+    assert warm.scene.report == cold.scene.report

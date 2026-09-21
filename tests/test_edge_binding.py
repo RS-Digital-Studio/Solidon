@@ -748,7 +748,8 @@ def test_an_edge_answer_survives_save_and_load() -> None:
 def test_the_v29_example_carries_an_edge_answer_and_v28_migrates_unchanged() -> None:
     folder = Path(__file__).parent / "data" / "projects"
     project = load(folder / "example_v29.p3d")
-    assert project.document.format_version == FORMAT_VERSION == 29
+    # Das Beispiel trägt seine Fassung im Namen; ``FORMAT_VERSION`` läuft weiter.
+    assert project.document.format_version == FORMAT_VERSION >= 29
     records = project.document.ops[1].matches
     (key,) = records
     assert (
@@ -763,3 +764,20 @@ def test_the_v29_example_carries_an_edge_answer_and_v28_migrates_unchanged() -> 
     assert older.document.format_version == FORMAT_VERSION
     assert older.document.ops[0].matches == raw["ops"][0]["matches"]
     assert not older.document.ops[1].matches
+
+
+def test_edges_of_is_remembered_at_the_mesh_and_forgets_with_its_geometry() -> None:
+    """Die Auswertung bindet die Kanten vor dem Cache, die Operation verkettet dieselben
+    Züge gleich darauf noch einmal — am Lochblech 20 mal 20 zweimal 201 ms (Review,
+    21.09.2026). Gemerkt wird am Netz selbst, und mit dessen Geometrie verfällt es."""
+    mesh = MeshData.of(trimesh.creation.box((10.0, 6.0, 4.0)))
+    first = edges_of(mesh)
+    second = edges_of(mesh)
+    assert first == second and first is not second, "jeder Aufrufer bekommt seine eigene Liste"
+    assert any(key.startswith("solidon_edges_") for key in mesh.raw._cache.cache)
+    mesh.raw.vertices[:, 2] *= 2.0
+    taller = edges_of(mesh)
+    assert len(taller) == len(first)
+    assert sum(edge.length for edge in taller) > sum(edge.length for edge in first), (
+        "nach einer Geometrieänderung wird neu verkettet, nicht aus dem Gedächtnis gelesen"
+    )

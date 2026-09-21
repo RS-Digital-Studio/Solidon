@@ -628,8 +628,8 @@ def test_the_fit_tour_leads_out_of_the_warning() -> None:
     **Die beiden sind nicht dasselbe, und der alte Fehler saß genau dazwischen.**
     ``_walk`` fragt die ``done``-Funktion; die kann quittieren, während die
     Warnung noch steht. Hier wird gemessen, was der Kunde sieht: eine Warnung
-    zum Material beim Öffnen, keine Materialwarnung nach einem Undo. Der
-    Hinweis auf die ungeprüfte Einbaulage der getrennten Druckteile bleibt.
+    zum Material beim Öffnen, keine Warnung nach einem Undo — die getrennt
+    angeordneten Druckteile sind kein Befund.
 
     Geprüft wird der Befundcode und nicht die Zahl allein — „genau eine
     Warnung" wäre auch erfüllt, wenn es eine andere wäre.
@@ -648,11 +648,11 @@ def test_the_fit_tour_leads_out_of_the_warning() -> None:
             if finding.severity in ("warning", "error")
         ]
 
-    assert warnungen() == ["fit.violated", "fit.pose_unknown"]
+    assert warnungen() == ["fit.violated"]
 
     history.undo()
 
-    assert warnungen() == ["fit.pose_unknown"], "Undo belegt keine Montage der getrennten Teile"
+    assert warnungen() == [], "nach dem Undo steht keine Warnung mehr im Bericht"
 
 
 def test_the_fit_tour_names_the_numbers_the_report_shows() -> None:

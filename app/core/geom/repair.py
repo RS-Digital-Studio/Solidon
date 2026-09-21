@@ -499,14 +499,21 @@ def self_intersecting_faces(
             low[first, 1:] > high[second, 1:], axis=1
         )
         first, second = first[~apart], second[~apart]
-        for one, other in zip(first, second, strict=True):
-            if int(one) in hit and int(other) in hit:
+        # **Und die Paare selbst als Feld, nicht eine je Schleifenrunde.** Die
+        # Schleife über die verbliebenen Paare kostete an der Netzfehlerkarte
+        # 605 ms für 992 und 1,5 s für 9974 Dreiecke (Review, 21.09.2026);
+        # Möller-Trumbore über ``(m, 3, 3)`` rechnet dieselben Ecken zugleich.
+        for start in range(0, len(first), _PAIR_BLOCK):
+            ones = first[start : start + _PAIR_BLOCK]
+            others = second[start : start + _PAIR_BLOCK]
+            one, other = corners[ones], corners[others]
+            candidates = ~_share_a_corner(one, other)
+            if not candidates.any():
                 continue
-            if _share_a_corner(corners[one], corners[other]):
-                continue
-            if _triangles_cross(corners[one], corners[other]):
-                hit.add(int(one))
-                hit.add(int(other))
+            one, other = one[candidates], other[candidates]
+            crossed = _edges_pierce(one, other) | _edges_pierce(other, one)
+            hit.update(int(index) for index in ones[candidates][crossed])
+            hit.update(int(index) for index in others[candidates][crossed])
     return tuple(sorted(hit))
 
 
@@ -514,37 +521,39 @@ def self_intersecting_faces(
 #: Paarbildung trägt, klein genug, dass die Indexfelder in den Cache passen.
 _SWEEP_BLOCK: Final = 4096
 
-
-def _share_a_corner(one: np.ndarray, other: np.ndarray) -> bool:
-    """Teilen sich die zwei Dreiecke eine Ecke? Dann berühren sie einander."""
-    return bool(np.any(np.all(np.isclose(one[:, None, :], other[None, :, :]), axis=2)))
-
-
-def _triangles_cross(one: np.ndarray, other: np.ndarray) -> bool:
-    """Durchstößt eine Kante des einen die Fläche des anderen — in beide
-    Richtungen gefragt, denn ein Dreieck kann ganz im anderen liegen."""
-    return _edges_pierce(one, other) or _edges_pierce(other, one)
+#: Wie viele Dreieckspaare Möller-Trumbore auf einmal rechnet — die
+#: Zwischenfelder je Paar sind drei Kanten mal drei Koordinaten.
+_PAIR_BLOCK: Final = 65536
 
 
-def _edges_pierce(edges_of: np.ndarray, face: np.ndarray) -> bool:
-    """Möller-Trumbore für die drei Kanten eines Dreiecks gegen ein zweites.
+def _share_a_corner(one: np.ndarray, other: np.ndarray) -> np.ndarray:
+    """Teilen sich die zwei Dreiecke eines Paars eine Ecke? Dann berühren sie
+    einander — je Paar über ``(m, 3, 3)``."""
+    close = np.all(np.isclose(one[:, :, None, :], other[:, None, :, :]), axis=3)
+    return np.any(close, axis=(1, 2))
+
+
+def _edges_pierce(edges_of: np.ndarray, face: np.ndarray) -> np.ndarray:
+    """Möller-Trumbore für die drei Kanten eines Dreiecks gegen ein zweites, je Paar.
 
     Ein Treffer zählt nur **innerhalb** der Strecke und **innerhalb** des
     Dreiecks; die Ränder bleiben draußen (``EPS_GEOM``), denn eine Kante, die
     genau auf einer Fläche endet, berührt sie und läuft nicht hindurch.
+    ``edges_of`` und ``face`` sind ``(m, 3, 3)``; zurück kommt je Paar, ob
+    eine der drei Kanten die Fläche durchstößt.
     """
     starts = edges_of
-    directions = np.roll(edges_of, -1, axis=0) - edges_of
-    first, second = face[1] - face[0], face[2] - face[0]
-    normals = np.cross(directions, second)
-    determinants = normals @ first
+    directions = np.roll(edges_of, -1, axis=1) - edges_of
+    first, second = face[:, 1] - face[:, 0], face[:, 2] - face[:, 0]
+    normals = np.cross(directions, second[:, None, :])
+    determinants = np.einsum("mij,mj->mi", normals, first)
     parallel = np.abs(determinants) <= EPS_GEOM
     safe = np.where(parallel, 1.0, determinants)
-    offsets = starts - face[0]
-    u = np.einsum("ij,ij->i", offsets, normals) / safe
-    crossed = np.cross(offsets, first)
-    v = np.einsum("ij,ij->i", directions, crossed) / safe
-    t = (crossed @ second) / safe
+    offsets = starts - face[:, None, 0]
+    u = np.einsum("mij,mij->mi", offsets, normals) / safe
+    crossed = np.cross(offsets, first[:, None, :])
+    v = np.einsum("mij,mij->mi", directions, crossed) / safe
+    t = np.einsum("mij,mj->mi", crossed, second) / safe
     inside = (
         ~parallel
         & (u > EPS_GEOM)
@@ -553,7 +562,7 @@ def _edges_pierce(edges_of: np.ndarray, face: np.ndarray) -> bool:
         & (t > EPS_GEOM)
         & (t < 1.0 - EPS_GEOM)
     )
-    return bool(np.any(inside))
+    return np.any(inside, axis=1)
 
 
 def resolve_self_intersections(mesh: MeshData) -> tuple[MeshData, bool]:

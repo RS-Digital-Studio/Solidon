@@ -55,6 +55,10 @@ def _deviation_entry() -> SceneObject:
 
 
 def test_deviation_map_keeps_original_order_known_coverage_and_a_real_witness() -> None:
+    """Die Formabweichung hält die Dreiecksreihenfolge, zählt Unbekanntes als NaN und zeigt auf ein
+    wirkliches Dreieck: Zeuge, Ort und Abstand gehören zum größten belegten Wert, das Intervall
+    umschließt ihn.
+    """
     entry = _deviation_entry()
     before = entry.mesh.raw.vertices.copy(), entry.mesh.raw.faces.copy()
     updates = []
@@ -78,6 +82,9 @@ def test_deviation_map_keeps_original_order_known_coverage_and_a_real_witness() 
 
 
 def test_conflicting_surface_claims_remain_unknown_and_identical_ones_do_not() -> None:
+    """Zwei Flächen, die dasselbe Dreieck mit verschiedenen Ebenen beanspruchen, machen es
+    unbekannt; zwei mit derselben Ebene nicht.
+    """
     entry = _deviation_entry()
     original = entry.features["compound"]
     repeated = replace(original, id="same")
@@ -95,6 +102,9 @@ def test_conflicting_surface_claims_remain_unknown_and_identical_ones_do_not() -
 
 @pytest.mark.parametrize("missing", [True, False])
 def test_unproved_surface_map_has_no_zero_claim_or_location(missing: bool) -> None:
+    """Ohne belegte Fläche gibt es keine Null als Abweichung, kein Intervall, keinen Zeugen und
+    keinen Ort, auf den ein Befund zeigen könnte — nur Unbekanntes.
+    """
     entry = _deviation_entry()
     original = entry.features["compound"]
     invalid = replace(original.surface_patches[0], params={"centre": (0.0, 0.0, 0.0)})
@@ -112,6 +122,9 @@ def test_unproved_surface_map_has_no_zero_claim_or_location(missing: bool) -> No
 
 @pytest.mark.parametrize("source", ["native", "facets", "fit"])
 def test_deviation_source_comes_from_evaluated_patch_not_body_kind(source: str) -> None:
+    """Woher die Bezugsfläche stammt — exakte Fläche, eingepasste Fläche, geprüfte Ebene —, sagt
+    die Fläche selbst, nicht die Bauart des Körpers; die Karte nennt es in ihrer Notiz.
+    """
     entry = _deviation_entry()
     original = entry.features["compound"]
     entry.features = {
@@ -129,6 +142,9 @@ def test_deviation_source_comes_from_evaluated_patch_not_body_kind(source: str) 
 
 
 def test_identical_carriers_keep_all_used_sources_and_ignore_only_unknown_sources() -> None:
+    """Trägt ein Körper Flächen mehrerer Herkünfte, nennt die Notiz jede benutzte und keine
+    unbenutzte; ein Dreieck ohne belegte Fläche bleibt das eine Unbekannte.
+    """
     entry = _deviation_entry()
     original = entry.features["compound"]
     plane = original.surface_patches[0]
@@ -166,6 +182,9 @@ def test_deviation_measures_the_filled_triangle_instead_of_its_vertices_or_centr
 
 
 def test_equal_deviation_extrema_never_point_between_disconnected_faces() -> None:
+    """Zwei getrennte Flächen mit gleich großer Abweichung: Der Zeuge liegt auf einer von beiden,
+    nie dazwischen — und der Kamerapunkt ist der Zeuge.
+    """
     entry = _deviation_entry()
     feature = entry.features["compound"]
     patch = replace(
@@ -181,6 +200,9 @@ def test_equal_deviation_extrema_never_point_between_disconnected_faces() -> Non
 
 @pytest.mark.parametrize("when", [0.0, 0.1, 0.99, 1.0])
 def test_deviation_progress_cancellation_never_returns_a_partial_map(when: float) -> None:
+    """Ein Abbruch zu jedem Zeitpunkt des Fortschritts liefert keine halbe Karte, sondern die
+    Ausnahme.
+    """
     from app.core.errors import OperationCancelled
     from app.core.scene.cancel import CancelSignal
 
@@ -230,6 +252,9 @@ def test_a_profile_free_distance_grid_depends_on_geometry() -> None:
 
 
 def test_the_wall_map_measures_the_plate(profile: Profile) -> None:
+    """Die Wandstärkenkarte einer Platte trägt je Dreieck einen Wert in Millimetern, nennt ihre
+    Auflösung und misst die Dicke der Platte darin.
+    """
     entry = object_with(plate())
     analysis = maps.build("wall", entry, profile=profile)
 
@@ -309,6 +334,7 @@ def test_the_map_agrees_with_the_measuring_tool() -> None:
 
 
 def test_a_thick_block_is_thick_everywhere() -> None:
+    """Ein massiver Klotz hat nirgends eine dünne Stelle."""
     block = MeshData.of(trimesh.creation.box(extents=(20.0, 20.0, 20.0)))
     analysis = maps.wall_thickness_map(block)
 
@@ -320,6 +346,9 @@ def test_a_thick_block_is_thick_everywhere() -> None:
 
 
 def test_a_cube_has_no_overhang_worth_the_name() -> None:
+    """Senkrechte Wände und ein Boden auf der Platte: Die Überhangkarte eines Würfels hebt nichts
+    hervor.
+    """
     analysis = maps.overhang_map(cube())
 
     assert analysis.unit == "°"
@@ -338,6 +367,9 @@ def test_a_tilted_face_is_measured_not_guessed() -> None:
 
 
 def test_steep_faces_are_the_ones_highlighted() -> None:
+    """Nur Flächen, die steiler nach unten zeigen als die Überhanggrenze, werden markiert — ein
+    Kegel auf seiner Grundfläche hängt mit 63 Grad über.
+    """
     cone = MeshData.of(trimesh.creation.cone(radius=20.0, height=10.0, sections=32))
     analysis = maps.overhang_map(apply(cone, rotation("x", 180.0)))
 
@@ -350,6 +382,7 @@ def test_steep_faces_are_the_ones_highlighted() -> None:
 
 
 def test_the_defect_map_finds_the_open_edges() -> None:
+    """Die Fehlerkarte markiert die Dreiecke an den offenen Kanten eines Netzes mit Loch."""
     broken = normalise(read_mesh((MESHES / "broken_open.stl").read_bytes(), ".stl"), "mm").mesh
     analysis = maps.defect_map(broken)
 
@@ -358,6 +391,7 @@ def test_the_defect_map_finds_the_open_edges() -> None:
 
 
 def test_a_clean_body_has_a_clean_map() -> None:
+    """Ein geschlossener Körper ohne Fehler hat eine Fehlerkarte, die nichts hervorhebt."""
     analysis = maps.defect_map(cube())
 
     assert analysis.highlighted == ()
@@ -492,6 +526,9 @@ def test_every_feature_gets_its_own_level() -> None:
 
 
 def test_the_fit_map_marks_the_violated_pair(profile: Profile) -> None:
+    """Die Passungskarte hebt genau das Paar hervor, dessen Passung verletzt ist, und lässt das
+    gültige Paar in Ruhe.
+    """
     entry = object_with(plate())
     scene = Scene(objects={"obj_1": entry}, profile=profile)
     scene.fits.append(
@@ -574,6 +611,7 @@ def test_fit_map_distinguishes_proof_and_uncertainty_for_both_partners(
 
 
 def test_without_fits_the_map_stays_empty(profile: Profile) -> None:
+    """Ohne Passungen gibt es nichts zu markieren."""
     entry = object_with(plate())
     scene = Scene(objects={"obj_1": entry}, profile=profile)
 
@@ -607,6 +645,9 @@ def _table() -> MeshData:
 
 
 def test_a_body_on_the_plate_needs_nothing(profile: Profile) -> None:
+    """Ein Körper, der flach auf der Platte steht, braucht keine Stütze — die Stützkarte hebt
+    nichts hervor.
+    """
     analysis = maps.build("support", object_with(plate()), profile=profile)
 
     assert analysis.highlighted == ()
@@ -678,6 +719,9 @@ def test_a_map_runs_through_while_nobody_cancels(profile: Profile) -> None:
 
 
 def test_a_finding_picks_its_map() -> None:
+    """Jeder Befundcode führt zu der Karte, die seine Stelle zeigt — und ein Befund ohne Ort zu
+    keiner.
+    """
     assert maps.map_for(Finding(code="fit.violated", severity="warning", message="x")) == "fits"
     assert maps.map_for(Finding(code="perceive.orphaned", severity="info", message="x")) is None, (
         "ein verlorenes Merkmal hat im aktuellen Körper keine Fläche mehr, "
@@ -700,6 +744,9 @@ def test_a_finding_picks_its_map() -> None:
 
 
 def test_the_camera_target_is_the_centre_of_what_is_marked(profile: Profile) -> None:
+    """Der Kamerapunkt eines Befunds ist die Mitte der markierten Dreiecke, nicht die des Körpers;
+    ohne Markierung gibt es keinen.
+    """
     entry = object_with(plate())
     analysis = maps.build("wall", entry, profile=profile)
     assert maps.focus_point(entry, analysis) is None, "nothing marked, nowhere to fly"
@@ -720,6 +767,7 @@ def test_the_camera_target_is_the_centre_of_what_is_marked(profile: Profile) -> 
 
 
 def test_a_finding_without_a_place_falls_back_to_its_features() -> None:
+    """Nennt ein Befund keine Dreiecke, zeigt die Kamera auf seine Merkmale."""
     entry = object_with(plate())
     finding = Finding(code="fit.violated", severity="warning", message="x", feature_ids=("hole_2",))
 
@@ -729,6 +777,7 @@ def test_a_finding_without_a_place_falls_back_to_its_features() -> None:
 
 
 def test_a_finding_that_points_nowhere_stays_that_way() -> None:
+    """Ein Befund ohne Dreiecke und ohne Merkmale hat keinen Ort, und die Karte erfindet keinen."""
     entry = object_with(cube())
     assert maps.location_of(entry, Finding(code="x", severity="info", message="y")) is None
 
@@ -752,6 +801,7 @@ def test_a_huge_body_is_refused_rather_than_ground_through(profile: Profile) -> 
 
 
 def test_features_without_faces_do_not_fall_over() -> None:
+    """Merkmale ohne Flächenindizes lassen die Ortsbestimmung nicht abstürzen."""
     entry = SceneObject(
         id="obj_1",
         name="x",

@@ -726,8 +726,14 @@ def repair_object(ctx: OpContext) -> OpResult:
                 object_id=source.id,
             )
         )
+    # **Was nicht repariert wurde, bleibt, was es war.** Ein exakter Körper
+    # ging bis zum 21.09.2026 auch dann als Netz zurück, wenn die Reparatur
+    # nichts zu tun fand — Strg+Umschalt+R an einem STEP machte aus dem
+    # Körper Dreiecke und sagte „nichts zu reparieren" (Review, tests-3).
+    # Geändert hat die Reparatur nur, was sie geändert hat; der Eingang
+    # behält Kern und Merkmale.
     return OpResult(
-        outputs=[dataclasses.replace(source, mesh=result.mesh)],
+        outputs=[source if not result.changed else dataclasses.replace(source, mesh=result.mesh)],
         findings=findings,
     )
 

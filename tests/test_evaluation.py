@@ -2616,3 +2616,56 @@ def test_a_model_that_is_no_freeform_gets_no_such_finding(
     )
 
     assert [item.code for item in findings if item.code == "perceive.freeform"] == []
+
+
+def test_shells_the_recognition_could_not_read_become_a_warning(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein Einschluss, der fehlt, weil sein Schalenpaar nicht lesbar war, fehlt nicht still.
+
+    ``detect`` liest Schalenpaare über die native Differenz; wo die nicht
+    antwortet, gab es bis zum 21.09.2026 leere Gruppen und keinen Satz — der
+    Kunde druckte das Teil, ohne von der Luft darin zu wissen (Regel 17).
+    """
+    from importlib import import_module
+
+    evaluate_module = import_module("app.core.scene.evaluate")
+    from app.core.types import Operation, SceneObject
+
+    monkeypatch.setattr(evaluate_module, "detect", lambda mesh, **kwargs: dict(_many_features(3)))
+    monkeypatch.setattr(evaluate_module, "freeform_dropped", lambda mesh: 0)
+    monkeypatch.setattr(evaluate_module, "unreadable_void_shells", lambda mesh: 2)
+
+    entry = SceneObject(id="obj_1", name="Gehäuse", mesh=_small_body())
+    findings: list[Finding] = []
+    evaluate_module._with_features(
+        entry, {}, Operation(id=1, op="thicken"), lambda q, c: c[0], findings
+    )
+
+    unreadable = [item for item in findings if item.code == "perceive.voids_unreadable"]
+    assert len(unreadable) == 1, [item.code for item in findings]
+    assert unreadable[0].severity == "warning"
+    assert unreadable[0].values["shells"] == 2
+    assert unreadable[0].object_id == "obj_1" and unreadable[0].op_id == 1
+    gesagt = str(unreadable[0].message)
+    assert "Schalen" in gesagt and "Slicer" in gesagt, gesagt
+
+
+def test_readable_shells_get_no_such_warning(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Die Gegenrichtung: Wo jedes Schalenpaar gelesen wurde, steht kein Satz."""
+    from importlib import import_module
+
+    evaluate_module = import_module("app.core.scene.evaluate")
+    from app.core.types import Operation, SceneObject
+
+    monkeypatch.setattr(evaluate_module, "detect", lambda mesh, **kwargs: dict(_many_features(3)))
+    monkeypatch.setattr(evaluate_module, "freeform_dropped", lambda mesh: 0)
+    monkeypatch.setattr(evaluate_module, "unreadable_void_shells", lambda mesh: 0)
+
+    entry = SceneObject(id="obj_1", name="Teil", mesh=_small_body())
+    findings: list[Finding] = []
+    evaluate_module._with_features(
+        entry, {}, Operation(id=1, op="thicken"), lambda q, c: c[0], findings
+    )
+
+    assert [item.code for item in findings if item.code == "perceive.voids_unreadable"] == []

@@ -59,42 +59,37 @@ DEFAULT_TRIANGLE_BUDGET: Final = 20_000_000
 #: Obergrenze des Platten-Caches; die ältesten Einträge gehen zuerst.
 DEFAULT_DISK_BUDGET_BYTES: Final = 2 * 1024 * 1024 * 1024
 
-#: Die Kompatibilität umfasst Geometrie und erzeugte Merkmalsauskunft, darunter
-#: exakte Blindböden, Gewinde und eindeutige Innen-/Außenrollen für Passungen.
-#: Merkmalsänderungen wie zusammengefasste Langlochwände und radial bearbeitbare
-#: Zylinderwände verlangen auch für bereits gespeicherte Ergebnisse neue Auskunft.
-#: Ebenso lokale Flächenrollen, kleine Funktionsflächen und aufgelöste kurze Gewinde.
-#: Derselbe Stand geht in den Operationshash ein und entwertet die Speicherebene.
-#: Lokale Merkmale und transformierte Suchumfänge sowie gerichtete B-Rep-
-#: Gewinde benötigen ebenfalls frische Geometrie- und Merkmalsauskünfte.
-#: Maßgeänderte Sackböden müssen mit ihrer vollständigen Fläche neu zugeordnet werden.
-#: Ein Materialslot trägt seit dem 19.09.2026 seine weiteren Farben
-#: (``extra_colours``); ein alter Eintrag ohne sie ist kein gültiger Stand.
-#: Native Flächenhistorie und ungerundete Integrale ersetzen alte Tessellierungs-
-#: und Maßauskünfte auch in vernetzten Folgeergebnissen.
-#: NURBS-Träger liefern ihre bestätigten Ebenen und Zylinder aus der Originalform;
-#: leere frühere Auskünfte dürfen keine Folgeoperation aus dem Cache weitertragen.
-#: Innenräume tragen vollständige Luftgrenzen und ziehen Materialinseln ab;
-#: frühere fehlende Innenräume und Phantombohrungen werden neu erkannt.
-#: Native Merkmale erhalten außerdem dieselbe eindeutige Erzeugerzuordnung
-#: wie Netzmerkmale; alte Auskünfte ohne diesen Bezug werden neu ausgewertet.
-#: Konturmaße, native Ringmerkmale und native Filamentflächen brauchen ihre
-#: vollständigen Mess- und Attributdaten auch nach dem Wiederöffnen.
-#: Rundflächenmaße, rationale Kugelträger und die ausdrückliche Herkunft jedes
-#: Maßes ersetzen frühere gerundete oder nicht belegte Merkmalsauskünfte.
-#: Teilträger und ihre Originaldreiecke ersetzen alte Auskünfte ohne Formbezug.
-#: Konkurrierende bisherige Merkmale dürfen keine zufällige Identität aus
-#: alten Folgeergebnissen übernehmen; ihre Antworten gelten als ganze Gruppe.
-#: Folgehashes tragen die tatsächliche Bindung samt aktuellen Flächenträgern;
-#: dieselben reservierten Namen allein belegen kein unverändertes Ergebnis.
-#: Belegte Übergänge alter Merkmale (``continuations``) gehören zum Ergebnis:
-#: Ein älterer Eintrag ohne das Feld kennt keinen Beleg und wird neu gerechnet,
-#: statt dass ein warmer Treffer einen Bezug still für verloren erklärt.
-#: 22 (20.09.2026, P2.5): ein gemessenes Gewinde trägt Händigkeit, Gangzahl,
-#: Vorschub, Kamm- und Grundradius und seine Wendelabweichung — ein Eintrag
-#: ohne sie sagt dem Steckbrief „Drehrichtung nicht gemessen“ über ein
-#: Gewinde, das längst gemessen ist.
-CACHE_FORMAT_VERSION: Final = 22
+#: Der Stand der Geometrie- und Merkmalsauskunft, den ein Eintrag tragen muss.
+#: Derselbe Stand geht in den Operationshash ein und entwertet die
+#: Speicherebene; alte Einträge sind Fehltreffer. Was ihn bisher hob, in der
+#: Reihenfolge der Änderungen — die letzten beiden mit Nummer:
+#:
+#: - exakte Blindböden, Gewinde und eindeutige Innen-/Außenrollen für Passungen;
+#: - zusammengefasste Langlochwände und radial bearbeitbare Zylinderwände;
+#: - lokale Flächenrollen, kleine Funktionsflächen und aufgelöste kurze Gewinde;
+#: - lokale Merkmale, transformierte Suchumfänge und gerichtete B-Rep-Gewinde;
+#: - maßgeänderte Sackböden mit ihrer vollständigen Fläche;
+#: - die weiteren Farben eines Materialslots (``extra_colours``, 19.09.2026);
+#: - native Flächenhistorie und ungerundete Integrale statt alter
+#:   Tessellierungs- und Maßauskünfte, auch in vernetzten Folgeergebnissen;
+#: - bestätigte Ebenen und Zylinder aus NURBS-Trägern — leere frühere
+#:   Auskünfte tragen keine Folgeoperation weiter;
+#: - Innenräume mit vollständigen Luftgrenzen ohne Materialinseln;
+#: - dieselbe eindeutige Erzeugerzuordnung für native wie für Netzmerkmale;
+#: - vollständige Mess- und Attributdaten für Konturmaße, native Ringmerkmale
+#:   und native Filamentflächen;
+#: - Rundflächenmaße, rationale Kugelträger und die ausdrückliche Herkunft
+#:   jedes Maßes;
+#: - Teilträger und ihre Originaldreiecke;
+#: - Antworten konkurrierender bisheriger Merkmale als ganze Gruppe;
+#: - Folgehashes mit der tatsächlichen Bindung samt aktuellen Flächenträgern;
+#: - belegte Übergänge alter Merkmale (``continuations``): ein Eintrag ohne das
+#:   Feld kennt keinen Beleg und wird neu gerechnet;
+#: - 22 (20.09.2026, P2.5): ein gemessenes Gewinde trägt Händigkeit, Gangzahl,
+#:   Vorschub, Kamm- und Grundradius und seine Wendelabweichung;
+#: - 23 (21.09.2026): `object_hash` hasht Dreiecksnummern als Bytes und
+#:   Fließkommawerte über `float()` — dieselbe Auskunft, ein anderer Schlüssel.
+CACHE_FORMAT_VERSION: Final = 23
 
 
 @dataclass(frozen=True, slots=True)
@@ -405,6 +400,22 @@ def _continuations_from_data(
     return tuple(result)
 
 
+def _warm_figures(mesh: Mesh) -> None:
+    """Volumen, Fläche, Dichtheit und Teilezahl einmal hier anfassen — im Arbeiter.
+
+    Ein Netz von der Platte kommt mit kalten Kennzahlen, und wer sie zuerst
+    liest, ist der Hauptthread: der Objektbaum (`describe_selection`), die
+    Faktenzeile und die Prüfliste. An `dense_1m.stl` waren das beim zweiten
+    Öffnen 1,5 Sekunden im Fenster — Trägheitstensor, Zusammenhang und
+    Dichtheit —, während der erste Lauf sie längst im Arbeiter gerechnet
+    hatte (Review, 21.09.2026). trimesh merkt sich die Zahlen am Netz; hier
+    gerechnet, liest das Fenster sie nur noch ab.
+    """
+    with suppress(Exception):
+        for figure in ("volume", "area", "is_watertight", "component_count"):
+            getattr(mesh, figure)
+
+
 def _feature_from_data(data: dict[str, Any], *, face_count: int | None = None) -> Feature:
     indices = tuple(data["face_indices"])
     return Feature(
@@ -620,14 +631,26 @@ class DiskCache:
             objects_list = []
             for entry in data["objects"]:
                 mesh = self.codec.loads((folder / entry["mesh"]).read_bytes())
+                _warm_figures(mesh)
                 objects_list.append(
                     SceneObject(
                         id=entry["id"],
                         name=_name_from_data(entry["name"]),
                         mesh=mesh,
                         kind=entry["kind"],
+                        # **Nicht gegen die Dreieckszahl des gespeicherten Netzes
+                        # prüfen.** Hier liegt die rohe Ausgabe der Operation, und
+                        # die trägt rechtmäßig Merkmale ihres Eingangs mit
+                        # Nummern des Eingangsnetzes — der Bausteinwirt nach der
+                        # Vereinigung, das Reparieren; erst `_with_features`
+                        # bindet sie an das neue Netz, beim Treffer wie beim
+                        # frischen Lauf. Mit der Prüfung verwarf der Cache jeden
+                        # solchen Eintrag: „Dose mit Deckel" rechnete die
+                        # Kabeldurchführung bei jedem Öffnen neu (Review,
+                        # 21.09.2026). Trägervertrag und Zugehörigkeit der
+                        # Nummern zum Merkmal bleiben geprüft.
                         features={
-                            key_: _feature_from_data(value, face_count=mesh.triangle_count)
+                            key_: _feature_from_data(value)
                             for key_, value in entry["features"].items()
                         },
                         material_slots=[_slot_from_data(slot) for slot in entry["material_slots"]],

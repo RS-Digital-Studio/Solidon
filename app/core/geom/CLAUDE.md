@@ -5,7 +5,10 @@ Gerechnet wird gegen `manifold3d` und `trimesh`.
 
 `transform.moved_object` führt analytische Merkmalteilträger zusammen mit
 der Form weiter. Native Neutessellierung ordnet jeden Teilträger über die
-tatsächlichen alten und neuen Topologieflächen zu. Ein unbelegter Ausschnitt
+tatsächlichen alten und neuen Topologieflächen zu — über die Umkehrabbildung
+Fläche → Dreiecke, die `_triangles_by_face` je exaktem Körper einmal baut und
+in `solid._cache` ablegt (statt je Merkmal über alle Dreiecke zu suchen: 124
+Suchläufe an 31 Merkmalen, Review 21.09.2026). Ein unbelegter Ausschnitt
 einer nativen Fläche entfällt als Träger, statt zur ganzen Fläche zu wachsen.
 Punkte, Normalen, gerichtete Kegelnappen und Radien werden anschließend
 einmal über `perceive.surfaces` transformiert; der Operationsabbruch reicht
@@ -21,6 +24,22 @@ stehen (Bereichslauf, 21.09.2026).
 
 `deviation.deviation_bounds` prüft ausgefüllte Originaldreiecke gegen einen
 bereits belegten analytischen `SurfacePatch`, ohne neue Formeinpassung.
+**Gerechnet wird je Trägerart für alle Dreiecke zugleich** (`_Batch`,
+`deviation_bounds_grouped` für viele Träger in einem Aufruf, Ergebnis als
+`DeviationTable` aus Arrays): Die Array-Klammern `_Bands`/`_A` tragen dieselbe
+Zusage wie `_I` — Summe, Produkt und Quotient um mindestens ein ULP nach außen
+gerundet (arithmetisch, `|x|·2⁻⁵¹ + 5·10⁻³²⁴`, weil `np.nextafter` das
+Dreißigfache kostet), jede Wurzel durch exaktes Quadrieren nach Dekker
+bestätigt, unter `2⁻⁹⁶⁸` die exakten Zweierpotenzen als Schranke. Das Dreieck
+ist die letzte Achse (`(…, 3, n)`), damit jede Operation über zusammenhängende
+Zeilen läuft. Der Stapel rechnet nur unter `_BATCH_MAGNITUDE`, wo nichts
+überläuft; Ebene, Kugel, Zylinder und Kegel enden dort, der Torus bekommt
+seine Zeugen und die Rechteckklammer, und nur ein Torusdreieck über der
+Zielbreite geht — solange das Budget des Trägers reicht — den skalaren
+Kantenweg. Gemessen am 21.09.2026: Lochplatte 449 → 11 ms, Lochblech 10 mal 10
+10,8 s → 132 ms, Dose mit Deckel 11,8 s → 98 ms, Ring 2,4 s → 127 ms bei
+identischen Klammern. Was bleibt: Das Torusbudget gilt je Aufruf, und an
+2304 Ringdreiecken teilen es sich alle — die Klammer dort ist 0,65 mm breit.
 Ebene, Zylinder, gerichteter Kegel, Kugel und Ringtorus teilen gerichtete
 Zahlenklammern und echte baryzentrische Zeugen. Deren zwei Floatparameter
 bezeichnen eine exakte reelle Kombination der Originalecken; gerundete
@@ -72,6 +91,20 @@ umschreibende Hüllwerkzeuge behalten ihre geometrisch nötige Sehnenzugabe.
 `thread_body`-Erzeuger mit `handedness="right"`. Das Innenwerkzeug ändert den
 Materialbereich, nicht den Drehsinn. Lageänderungen benutzen weiterhin den
 gemeinsamen Merkmaltransformationsweg, die Paarprüfung liegt in `scene.fits`.
+
+Was ein Merkmalsschritt am Netz nur weiterreicht, geht ohne Dreiecksnummern
+hinaus (`_without_old_triangles`, an jeder Netzausgabe von Versetzen,
+Verdoppeln, Drehen, Ändern, Entfernen, Verschließen, Abschneiden und dem
+Trichter `_torus_result`): Die Vereinigung nummeriert neu, und die alten
+Nummern bezeichneten fremde Dreiecke; die Auswertung gibt die Oberfläche an
+der neuen Erkennung zurück. Die Regel steht in `.claude/rules/operationen.md`.
+
+Ein Ring oder Gewinde ohne gemessene Achse hat keine Lage: `_torus_axis`
+sagt mit `FEATURE_WITHOUT_AXIS` ab (bis zum 21.09.2026 stand still die
+Z-Achse da). Und die vier exakten Verdoppelungen — Hohlraum, Kette,
+Flächenkörper, Ring — enden in `_exact_copy_result`, dem Gegenstück zu
+`_exact_cavity_result`; der verlorene Durchgang wird dort für jede Kopie
+gefragt, nicht nur für die einzelne Bohrung.
 
 **Wulst und Kehle** (Torusmerkmale) tragen seit P2.6 dieselben fünf
 Handlungen wie Bohrung und Zapfen — `prepare_ops._move_torus` und
@@ -313,6 +346,14 @@ stehen. Gedreht wird um die Mitte des gewählten Abschnitts. Nur `slot_hole`
 sagt an einer Kette weiter ab.
 
 Die Regeln stehen in `.claude/rules/operationen.md`.
+
+`repair.self_intersecting_faces` rechnet nach dem Sweep jedes Dreieckspaar als
+Feld (`_share_a_corner`, `_edges_pierce` über `(m, 3, 3)`, Möller-Trumbore
+vektorisiert) — Lochplatte 507 → 10 ms, ihre zweifache Unterteilung 5,3 s →
+185 ms, dieselben acht Dreiecke der zwei durcheinanderlaufenden Quader. Und
+`ops.repair_object` gibt einen Eingang, an dem nichts zu reparieren war,
+unverändert zurück: Ein exakter Körper bleibt exakt, statt als Netz mit
+„nichts zu reparieren" zurückzukommen.
 
 `repair()` übernimmt Verschweißen und Dreiecksbereinigung nur, wenn ein
 geschlossener Eingang danach geschlossen bleibt. Andernfalls bleiben das
@@ -597,7 +638,11 @@ Ebenen an einer gesperrten Sichtfläche gescheitert sind — daran unterscheidet
 `split.blocked_by_protection`) ·
 `pins.py` (Passstifte; Auto Split wählt die Form aus Fügefläche und
 Materialtiefe und hält den Kleberhinweis als Operationsparameter fest) ·
-`orient.py`
+`orient.py` (Kandidatenlagen aus Hülle und größten Flächen; `extreme_points`
+hält je Netz die äußersten Ecken, `turned_extents` dreht nur sie, und
+`_Placed` kennt die Hüllbox einer Kandidatenlage, bevor ein Dreieck bewegt
+ist — die Suche über zweihundert Lagen kopiert das Netz nur dort, wo eine
+Sperrfläche die Projektion verlangt)
 
 **Die Nummer eines zerlegten Teils hängt an der Geometrie, nicht am Rauschen.**
 `_loose_parts` ordnet nach Volumen — aber nach dem **gerundeten Verhältnis zum
@@ -892,7 +937,11 @@ Zwillingspaar (`MENU_TWINS`) — dort wählt der **Kunde**, hier der Körper, un
 für ein Netz gibt es den exakten Weg gar nicht (§30).
 
 `edges.py` — die Kanten eines Netzes als **Züge**, mit denselben Schlüsseln,
-die der exakte Kern vergibt. **Und die eine Stelle, an der beide Kerne ihre
+die der exakte Kern vergibt. `edges_of` merkt sich die Züge im Cache des
+Netzes (wie `MeshData.component_count`; der Cache verfällt mit der
+Geometrie): Die Auswertung bindet ein Kantenfeld vor dem Cache am Eingang,
+und die Operation verkettete dieselben Züge gleich darauf ein zweites Mal —
+am Lochblech 20 mal 20 ein warmer Kantenschritt von 434 statt 91 ms. **Und die eine Stelle, an der beide Kerne ihre
 Kanten für die Auswertung hergeben** (P1.4c.4b): `edges_in_kernel` liefert
 die Liste, die die Operation gleich sieht — Topologie am exakten Körper,
 Züge am Netz, mit `on_mesh` immer das Netz —, `indices_in_kernel` die

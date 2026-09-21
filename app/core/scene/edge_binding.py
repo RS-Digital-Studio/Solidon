@@ -48,10 +48,11 @@ from app.core.geom.edges import (
     same_edge,
     wanted,
 )
+from app.core.perceive.match_decisions import MAPPING_NO_LONGER_VALID
 from app.core.perceive.match_records import edge_answer_key, validate_edge_answer
 from app.core.registry import OperationSpec
 from app.core.types import AskFn, ObjectId, Operation, ParamSpec, SceneObject, Vec3
-from app.i18n import _, tr
+from app.i18n import tr
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -249,7 +250,7 @@ def _ask_for_each(
         tokens = [target.token for target in targets]
         question = tr(
             "Körper „{object}“: Die gewählte Kante {key} ist nicht eindeutig — {count} Kanten "
-            "tragen diesen Schlüssel. Wähle die gemeinte Kante."
+            "tragen diesen Schlüssel. Wählen Sie die gemeinte Kante."
         ).format(object=str(source.name), key=key, count=len(matches))
         try:
             if announce is not None:
@@ -260,9 +261,7 @@ def _ask_for_each(
             if announce is not None:
                 announce(())
         if chosen not in tokens:
-            raise AmbiguityError(
-                _("Die Zuordnung ist nicht mehr gültig. Wähle die Bezüge erneut aus.")
-            )
+            raise AmbiguityError(MAPPING_NO_LONGER_VALID)
         decisions[key] = matches[tokens.index(chosen)]
     return decisions
 
@@ -354,7 +353,5 @@ def edge_answer_record(
             check_cancelled=check_cancelled,
         )
     except ValueError as error:
-        raise AmbiguityError(
-            _("Die Zuordnung ist nicht mehr gültig. Wähle die Bezüge erneut aus.")
-        ) from error
+        raise AmbiguityError(MAPPING_NO_LONGER_VALID) from error
     return record

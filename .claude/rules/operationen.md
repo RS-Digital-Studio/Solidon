@@ -447,13 +447,34 @@ Achse (`test_turning_a_countersunk_bore_takes_its_sink_along`).
 **Wer eine Kette nur versetzt, verlängert den exakten Körper an seinen
 Mündungen** (`_past_the_mouths`). Das Werkzeug aus Kennzahlen stand am
 15.09.2026 einen Tag lang auch hier — und trug je Versetzen bis zu 0,9 mm³ mehr
-ab, als der Pfropfen zurückgab: Sein Vieleck umschreibt den Kreis
-(`_polygon_gain`), die echten Flächen füllen nur den Kreis (sieben Tests der
-Senkungsübergänge rot). Jetzt bekommt jeder ebene Deckel des Flächenkörpers,
-vor dem entlang seines Rands keine Materialseite liegt, einen Kragen von
-`FEATURE_OVERLAP` — das ist die Mündung; der Boden eines Sacklochs und die
-Ringstufe einer Zylindersenkung bleiben bündig, sonst würde die Bohrung tiefer
-oder die Stufe abgetragen (0,18 mm³, an der Stufe gemessen).
+ab, als der Pfropfen zurückgab: Sein Vieleck umschrieb den Kreis, die echten
+Flächen füllen nur den Kreis (sieben Tests der Senkungsübergänge rot). Jetzt
+bekommt jeder ebene Deckel des Flächenkörpers, vor dem entlang seines Rands
+keine Materialseite liegt, einen Kragen von `FEATURE_OVERLAP` — das ist die
+Mündung; der Boden eines Sacklochs und die Ringstufe einer Zylindersenkung
+bleiben bündig, sonst würde die Bohrung tiefer oder die Stufe abgetragen
+(0,18 mm³, an der Stufe gemessen). **Und am exakten Körper stellt der Einlauf
+dieselbe Frage** (`_BoreEntrance.open`, `_entrance_is_open`): Eine Senkung,
+deren Mündung unter der Oberfläche liegt, ist ein vergrabener Hohlraum mit
+einem Deckel aus Material, und ein Werkzeug, das dort um die Zugabe über die
+Ebene hinausreicht, trug bei jedem Versetzen ein Scheibchen ab — 1,33 mm³ an
+Ø 9,2 (Review, 21.09.2026).
+
+**Und was das Schließen an der alten Stelle zurücklässt, wird zusammengelegt**
+(`_without_scars`): Der Stopfen endet an der Hülle in den Deckelflächen, und
+die Vereinigung ließ seine Kappen dort als Dreiecke in der Ebene stehen — je
+Versetzen rund 270, 796 → 1042 → 1308 → 1576 → 1852 an der Lochplatte nach
+vier Zügen, und jeder spätere Schritt rechnete mit. `Manifold.simplify` legt
+sie zusammen, übernommen nur unter der Zusicherung von `boolean._tidied`:
+dicht, gleiches Volumen, weniger Dreiecke; sonst bleibt die rohe Vereinigung.
+Das Netz wird dabei neu nummeriert — **und eine Operation gibt nur Merkmale
+ihres Ausgangsnetzes zurück** (`_without_old_triangles`): Was sie nur
+weiterreicht, verliert Flächennummern und Teilträger, Ort und Maß bleiben; die
+Oberfläche gibt die Auswertung an der neuen Erkennung zurück (`_with_features`,
+„Der Name bleibt, die aktuelle Oberfläche geht mit"). Mit den alten Nummern
+hielt `cavity_chain_state_at` eine unberührte Bohrung für unlesbar, und das
+Verdoppeln nach dem Entfernen sagte ab. Dieselbe Regel gilt für den Wirt eines
+Bausteins (`parts.ops._merged_features`).
 
 **Und eine Bohrung, in deren Zylinder Material steht, ist keine** —
 `hole_is_clear` fragt die Dreiecksmitten des Körpers zwischen den Mündungen
@@ -467,7 +488,12 @@ von Punkten, die zwischen zwölf Stegen hindurchsah, sondern nach jeder
 Oberfläche im Zylinder. Und ob man durch eine Bohrung **hindurchsieht**,
 entscheidet ihre ganze Mündung, nicht ihre Achse: Über der Achse des Bechers
 Ø 116 lag kein Dreieck, weil im Boden eine Bohrung Ø 8 sitzt (`_is_through`,
-`THROUGH_RINGS`).
+`THROUGH_RINGS`). **Und die Antwort wird je Körper und Bohrung einmal
+gerechnet** (`features.remembered`, wie `relations.cavity_surface_indices`):
+Das Merkmalfenster fragt sie bei jedem Klick zweimal, und an der Lochplatte
+mit 360 000 Dreiecken kostete jede Antwort 90 ms, weil die Endebenen dafür
+eine Kopie des Netzes verschweißen — der Bohrungsklick 258 → 83 ms
+(22.09.2026). Der Merker stirbt mit dem Körper.
 
 Die allgemeine Form, weil sie über diesen Fall hinausgeht: **Wer aus einer
 Zahl auf einen Sachverhalt schließt, schreibt dazu, unter welcher Bedingung
@@ -496,14 +522,22 @@ der Baum zeigte danach zwei Bohrungen übereinander.
 `trimesh.creation.cylinder` baut ein **eingeschriebenes** Vieleck: Der
 angegebene Durchmesser ist sein Umkreis, seine Flanken liegen um
 `cos(π/sections)` weiter innen. Wer aus einem **gemessenen** Maß ein Werkzeug
-baut, das dieses Maß wiederherstellen soll, rechnet den Unterschied dazu
-(`_polygon_gain`) — sonst schrumpft die Bohrung bei jedem Zyklus: gemessen
-7,9848 vor dem Zug, 7,9696 danach, also 0,015 mm je Durchgang.
+baut, das dieses Maß wiederherstellen soll, verliert deshalb bei jedem Zyklus
+ein Stück: gemessen 7,9848 vor dem Zug, 7,9696 danach, also 0,015 mm je
+Durchgang. Eine Zugabe dagegen (`_polygon_gain`, bis db7d1a5c) war die
+zweite Näherung über der ersten. Was heute trägt: Eine wiederhergestellte
+Bohrung oder ein Langloch nimmt das **gemessene Konturmaß** ohne
+Vieleckkorrektur, und `_tool_for` schneidet mit dem tatsächlichen Wandmantel
+der Bohrung an seinen Randringen; `_placing_tool` trennt das maßhaltige
+Setzen vom vergrößerten Werkzeug zum Schließen. Nur ein Werkzeug, das die
+Kontur wirklich **umschreiben** muss — der Stopfen in `_closed_at` —, bekommt
+die geometrisch nötige Sehnenzugabe (`units.inscribed_ratio`). Nachgemessen
+am 21.09.2026: Ø 5,20000 hält über vier Versetzungen der Lochplatte.
 
-Dass das nie auffiel, hat einen Grund, und der ist Zufall: Die Zugabe aus §39
-(`FEATURE_OVERLAP`, 0,02 mm) hat bei den üblichen Durchmessern dieselbe
-Größenordnung wie der Vieleckverlust und deckt ihn zu. Wer sie weglässt — weil
-sein Werkzeug exakt sein muss —, verliert diese Deckung mit.
+Dass der Verlust lange nicht auffiel, hat einen Grund, und der ist Zufall: Die
+Zugabe aus §39 (`FEATURE_OVERLAP`, 0,02 mm) hat bei den üblichen Durchmessern
+dieselbe Größenordnung wie der Vieleckverlust und deckt ihn zu. Wer sie
+weglässt — weil sein Werkzeug exakt sein muss —, verliert diese Deckung mit.
 
 ## Toleranzen sind Durchmessermaße
 
@@ -911,18 +945,17 @@ Vier Dinge daran, alle gemessen:
   ist, steht anders fest: `moved_hole` ist erst wahr, wenn die Mitte wirklich
   wandert.
 
-**Und die Vieleckzugabe gehört dazu**, denn das Maß ist ein gemessenes: Ein
-eingeschriebenes 48-Eck ist schmaler als sein Umkreis, und ohne die Zugabe
-schrumpfte die Bohrung bei jedem Versetzen (gemessen: 7,9848 vorher, 7,9696
-danach; mit Zugabe 7,9867). Am exakten Körper entfällt sie — dort ist der
-Zylinder ein Zylinder.
+**Und das Maß bleibt das gemessene**, ohne Vieleckzugabe: Das Werkzeug an der
+neuen Stelle ist der tatsächliche Wandmantel der Bohrung, und ein
+eingeschriebenes 48-Eck, das ein zweites Mal als 48-Eck gesetzt wird, ist
+dasselbe 48-Eck — Ø 5,20000 vor und nach vier Versetzungen (21.09.2026). Die
+Zugabe von früher (siehe „Ein Vieleck aus einem gemessenen Durchmesser ist
+enger als er") ist gefallen, mit ihr der Unterschied zwischen stehendem und
+versetztem Weg. Am exakten Körper ist der Zylinder ohnehin ein Zylinder.
 
-**Der versetzte Weg trifft das Sollmaß damit genauer als der stehende**, und
-das ist kein Fehler, sondern die Zugabe: An einer Ø-6-Bohrung, auf 8,0 mit
-Materialtoleranz geändert, kommen stehend 8,1844 und versetzt 8,2020 heraus.
-Der Toleranzbefund (`bore.compensated`) wird dabei **eigens** angehängt —
-`drill` erzeugt ihn nur bei `compensate=True`, und der versetzte Aufruf setzt
-`False`, weil `cut` sie schon trägt.
+Der Toleranzbefund (`bore.compensated`) wird beim Versetzen **eigens**
+angehängt — `drill` erzeugt ihn nur bei `compensate=True`, und der versetzte
+Aufruf setzt `False`, weil `cut` sie schon trägt.
 
 **Ein Langloch ist parametrisch.** Es steht seit dem 11.09.2026 in
 `PARAMETRIC_KINDS`, und `_feature_solid` zieht seinen Umriss auf statt einen
@@ -1064,7 +1097,10 @@ eine Karte sagt, was wo liegt, eine Regel, was zu halten ist.
   einen von der Operation selbst ausgestellten Übergang
   (`OpResult.feature_continuations`). Diesen stellt nur aus, wer die
   Änderungsabsicht geometrisch nachgewiesen hat — `resize_hole` über
-  `_preserved_exact_features` —, und nur für Paare, die der Anspruchsschluss
+  `_preserved_exact_features`, und jede exakte Merkmalshandlung über
+  `_exact_features_after` (Versetzen, Verdoppeln, Drehen, Entfernen, Senken,
+  Verschließen in `_exact_cavity_result` und `_exact_copy_result`, das
+  Gewinde in `_thread_result`) —, und nur für Paare, die der Anspruchsschluss
   tatsächlich freigegeben hat. Die Auswertung errät ihn weder aus dem
   Operationsnamen noch aus gleichen Kennungen, `created_by` oder
   `provenance`; `touches_features` ist kein Erhaltungsflag. Der Beleg reist

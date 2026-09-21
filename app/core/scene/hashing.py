@@ -18,6 +18,8 @@ import json
 from collections.abc import Callable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
+import numpy as np
+
 from app.core.scene import cache
 from app.core.types import Feature, Operation, Profile, Quality
 
@@ -29,8 +31,11 @@ def _canonical(value: Any) -> Any:
     """Macht aus einem Wert etwas, das json jedes Mal gleich hinschreibt."""
     if isinstance(value, float):
         # repr behält die volle doppelte Genauigkeit; Rundung hier würde
-        # verschiedene Läufe zusammenwerfen.
-        return ["f", repr(value)]
+        # verschiedene Läufe zusammenwerfen. ``float()`` davor, weil ein
+        # ``np.float64`` sich als ``np.float64(1.5)`` schreibt und nach der
+        # Rundreise durch den Plattencache als ``1.5`` — derselbe Wert, zwei
+        # Hashes, und jeder Treffer nach dem Wiederöffnen ein Fehltreffer.
+        return ["f", repr(float(value))]
     if isinstance(value, Mapping):
         return {str(key): _canonical(value[key]) for key in sorted(value, key=str)}
     if isinstance(value, str | bytes):
@@ -102,6 +107,37 @@ def operation_hash(
     )
 
 
+#: Teilhashes je Merkmalsobjekt innerhalb einer Auswertung: die Kennung des
+#: Objekts, das Objekt selbst (damit die Kennung nicht wiedervergeben wird)
+#: und sein Hash.
+FeatureMemo = dict[int, tuple[Feature, bytes]]
+
+
+def _index_bytes(indices: Sequence[int]) -> bytes:
+    """Dreiecksindizes als rohe Bytes statt als JSON-Liste.
+
+    Ein Lochblech 20 mal 20 trägt 406 Merkmale mit 156 824 Indizes; als
+    JSON-Text gehasht kostete das 88,7 ms je Auswertung, warm 74 Prozent
+    eines Kantenschritts (Review, 21.09.2026). Ein ``int64``-Feld ist über
+    Prozesse und Plattformen dieselbe Bytefolge.
+    """
+    return np.asarray(indices, dtype=np.int64).tobytes()
+
+
+def feature_digest(feature: Feature, name: str) -> bytes:
+    """Der Teilhash eines Merkmals unter seinem Namen — derselbe Codec wie auf der Platte."""
+    data = cache.feature_to_data(feature)
+    indices = data.pop("face_indices")
+    patches = data.pop("surface_patches")
+    checksum = hashlib.sha256(bytes.fromhex(digest(name, data)))
+    checksum.update(_index_bytes(indices))
+    for patch in patches:
+        patch_indices = patch.pop("face_indices")
+        checksum.update(bytes.fromhex(digest(patch)))
+        checksum.update(_index_bytes(patch_indices))
+    return checksum.digest()
+
+
 def object_hash(
     operation_key: str,
     position: int,
@@ -110,8 +146,14 @@ def object_hash(
     *,
     features: Mapping[str, Feature] | None = None,
     check_cancelled: Callable[[], None] | None = None,
+    memo: FeatureMemo | None = None,
 ) -> str:
-    """Die Ausgabe samt tatsächlicher Merkmalsbindung für nachfolgende Operationen."""
+    """Die Ausgabe samt tatsächlicher Merkmalsbindung für nachfolgende Operationen.
+
+    ``memo`` hält die Teilhashes je Merkmalsobjekt für eine Auswertung: Ein
+    Merkmal, das unverändert durch fünf Schritte reist, ist fünfmal dasselbe
+    Objekt (``_inherited_features`` reicht es durch) und wird einmal gehasht.
+    """
     if check_cancelled is not None:
         check_cancelled()
     cavity_key = None
@@ -129,10 +171,15 @@ def object_hash(
         for name in sorted(features):
             if check_cancelled is not None:
                 check_cancelled()
-            value = cache.feature_to_data(features[name])
-            if check_cancelled is not None:
-                check_cancelled()
-            checksum.update(bytes.fromhex(digest(name, value)))
+            feature = features[name]
+            remembered = memo.get(id(feature)) if memo is not None else None
+            if remembered is not None and remembered[0] is feature and remembered[0].id == name:
+                part = remembered[1]
+            else:
+                part = feature_digest(feature, name)
+                if memo is not None and feature.id == name:
+                    memo[id(feature)] = (feature, part)
+            checksum.update(part)
         feature_key = checksum.hexdigest()
     key = digest(operation_key, position, sorted(reserved_feature_ids), cavity_key, feature_key)
     if check_cancelled is not None:

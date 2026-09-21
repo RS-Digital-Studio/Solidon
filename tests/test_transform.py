@@ -817,3 +817,49 @@ def test_the_reported_matrix_lands_the_input_on_the_result(profile: Profile) -> 
     assert laid.bounds.centre == pytest.approx(result.outputs[0].mesh.bounds.centre, abs=1e-6), (
         "die gemeldete Matrix zeigt woanders hin als der Körper liegt"
     )
+
+
+def test_moving_an_exact_body_maps_faces_to_triangles_once_per_body(monkeypatch) -> None:
+    """Die Umkehrabbildung Fläche → Dreiecke entsteht je Körper einmal und liegt in seinem
+    Cache; ``Solid.triangles_of_face`` sucht sonst je Merkmal über alle Dreiecke — an
+    einer Platte mit 31 Merkmalen 124 Suchläufe, 63 von 130 ms (Review, 21.09.2026)."""
+    import numpy as np
+
+    from app.core.geom.transform import moved_object
+    from app.core.types import SceneObject
+    from tests.helpers import exact_kernel
+
+    exact_kernel()
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+    from app.core.brep.kernel import Solid
+
+    body = edit.box(30.0, 20.0, 8.0)
+    for x in (-8.0, 0.0, 8.0):
+        body = edit.cut_bore(
+            body, position=(x, 0.0, 4.0), direction=(0.0, 0.0, 1.0), diameter=3.0, depth=20.0
+        )
+    entry = SceneObject(
+        id="obj_1", name="Platte", mesh=body, kind="brep", features=dict(features_of(body))
+    )
+    assert len(entry.features) >= 9
+    searches: list[int] = []
+    original = Solid.triangles_of_face
+
+    def counted(self, face_index):
+        searches.append(face_index)
+        return original(self, face_index)
+
+    monkeypatch.setattr(Solid, "triangles_of_face", counted)
+    matrix = np.eye(4)
+    matrix[:3, 3] = (5.0, -3.0, 2.0)
+    moved = moved_object(entry, matrix)
+    assert searches == [], "keine Suche je Merkmal über alle Dreiecke"
+    assert "triangles_by_face" in body._cache and "triangles_by_face" in moved.mesh._cache
+    assert set(moved.features) == set(entry.features)
+    for name, feature in entry.features.items():
+        after = moved.features[name]
+        assert len(after.face_indices) == len(feature.face_indices)
+        assert (
+            after.params.get("centre") != feature.params.get("centre") or not feature.face_indices
+        )

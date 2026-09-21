@@ -61,7 +61,7 @@ from app.i18n import TranslatableText, _
 
 #: Der eine Satz für eine ausdrückliche Kantenauswahl, die es so nicht gibt —
 #: am Netz wie im exakten Kern (``brep.kernel.Solid.checked_edge_indices``).
-EDGE_SELECTION_REJECTED = _("Wähle die Kante am Körper neu und wiederhole die Änderung.")
+EDGE_SELECTION_REJECTED = _("Wählen Sie die Kante am Körper neu und wiederholen Sie die Änderung.")
 
 _log = get_logger(__name__)
 
@@ -240,7 +240,11 @@ def edge_key(entry: HasPlacement) -> str:
     bei einer Unterteilung derselben Segmente erhalten; die Polygonlänge
     dagegen weicht von der exakten Kreislänge ab.
     """
-    placement = _placement_key(entry)
+    return _key_from_placement(entry, _placement_key(entry))
+
+
+def _key_from_placement(entry: HasPlacement, placement: str) -> str:
+    """Der Schlüssel aus dem schon gerechneten Lageschlüssel — Ringe tragen ihre Größe."""
     if math.dist(entry.direction, (0.0, 0.0, 0.0)) <= EPS_GEOM:
         return f"{placement}:r:{_unsigned_zero(entry.extent, 2):.2f}"
     return placement
@@ -288,8 +292,31 @@ def edges_of(mesh: MeshData, angle: float = SHARP_EDGE_ANGLE) -> list[MeshEdge]:
     Offene Ränder bleiben deshalb hier außen vor — an einem Loch im Netz gibt
     es keine zwei Flächen, zwischen denen eine Rundung säße; was dort hilft,
     ist die Reparatur.
+
+    **Gemerkt am Netz selbst**, wie ``MeshData.component_count``: Die
+    Auswertung löst ein Kantenfeld vor dem Cache am Eingang auf
+    (``scene.edge_binding``), und die Operation verkettet dieselben Züge
+    gleich darauf ein zweites Mal (``_worked_edges``) — am Lochblech 20 mal 20
+    zweimal 201 ms für 812 Züge, an der Kumiko-Platte 729 und 181 ms für
+    27 912 (Review, 21.09.2026). Der Cache des Netzes verfällt mit dessen
+    Geometrie; ``MeshEdge`` ist eingefroren, die Liste bekommt jeder Aufrufer
+    als eigene Kopie.
     """
     raw = mesh.raw
+    cache = getattr(raw, "_cache", None)
+    key = f"solidon_edges_{float(angle)!r}"
+    if cache is not None:
+        cache.verify()
+        if key in cache:
+            return list(cache[key])
+    found = _edges_of(raw, angle)
+    if cache is not None:
+        cache[key] = tuple(found)
+    return found
+
+
+def _edges_of(raw: Any, angle: float) -> list[MeshEdge]:
+    """Die Züge eines ``trimesh.Trimesh`` — die Rechnung hinter :func:`edges_of`."""
     angles = np.asarray(raw.face_adjacency_angles, dtype=float)
     if not len(angles):
         return []
@@ -535,9 +562,11 @@ def described_by_key[AnyEdge: SelectableEdge](
     """
     described: dict[str, list[AnyEdge]] = {}
     for entry in edges:
-        key = edge_key(entry)
-        described.setdefault(key, []).append(entry)
+        # Der Lageschlüssel einmal je Kante — ``edge_key`` rechnete ihn ein
+        # zweites Mal, und an 812 Zügen war das die Hälfte der Bindung.
         legacy = _placement_key(entry)
+        key = _key_from_placement(entry, legacy)
+        described.setdefault(key, []).append(entry)
         if legacy != key:
             described.setdefault(legacy, []).append(entry)
     return described

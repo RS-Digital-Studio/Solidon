@@ -14,7 +14,7 @@ from __future__ import annotations
 import math
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
-from typing import Literal, cast
+from typing import Any, Literal, cast
 
 import numpy as np
 
@@ -178,6 +178,39 @@ def moved_body(mesh: Mesh, matrix: np.ndarray, *, cancelled: CancelToken | None 
     return apply(as_mesh_data(mesh), matrix)
 
 
+#: Eine Fläche ohne Dreiecke — der Vorgabewert der Umkehrabbildung.
+_NO_TRIANGLES: np.ndarray = np.empty(0, dtype=np.int64)
+
+
+def _triangles_by_face(solid: Any) -> dict[int, np.ndarray]:
+    """Fläche → Dreiecke der Tessellation, einmal je exaktem Körper.
+
+    ``Solid.triangles_of_face`` sucht je Aufruf über alle Dreiecke; beim
+    Bewegen einer Platte mit 31 Merkmalen waren das 124 Suchläufe über 4312
+    Dreiecke für alten und neuen Körper, 63 von 130 ms (Review, 21.09.2026).
+    Die Umkehrabbildung entsteht hier einmal aus derselben Zuordnung, die der
+    Kern je Dreieck führt, und liegt im Cache des Körpers — der mit dessen
+    Tessellation neu entsteht.
+    """
+    from app.core.brep.kernel import _FACE_ATTRIBUTE
+
+    cached = solid._cache.get("triangles_by_face")
+    if cached is not None:
+        return cast(dict[int, np.ndarray], cached)
+    source = np.asarray(solid.raw.face_attributes.get(_FACE_ATTRIBUTE, ()), dtype=np.int64)
+    table: dict[int, np.ndarray] = {}
+    if len(source) == solid.triangle_count and len(source):
+        order = np.argsort(source, kind="stable")
+        faces, starts = np.unique(source[order], return_index=True)
+        ends = np.append(starts[1:], len(order))
+        table = {
+            int(face): order[start:end]
+            for face, start, end in zip(faces.tolist(), starts.tolist(), ends.tolist(), strict=True)
+        }
+    solid._cache["triangles_by_face"] = table
+    return table
+
+
 def moved_object(
     source: SceneObject, matrix: np.ndarray, *, cancelled: CancelToken | None = None
 ) -> SceneObject:
@@ -205,6 +238,16 @@ def moved_object(
         if solid is source.mesh:
             return source
         body = solid
+        before = _triangles_by_face(source.mesh)
+        after = _triangles_by_face(solid)
+
+        def triangles_of(table: dict[int, np.ndarray], faces: Sequence[int]) -> set[int]:
+            return {
+                int(index)
+                for face in faces
+                for index in table.get(int(face), _NO_TRIANGLES).tolist()
+            }
+
         for name, feature in features.items():
             if cancelled is not None:
                 cancelled.raise_if_cancelled()
@@ -212,13 +255,13 @@ def moved_object(
                 continue
             selected = set(feature.face_indices)
             native_faces = source.mesh.faces_of_triangles(feature.face_indices)
-            complete = {
-                index for face in native_faces for index in source.mesh.triangles_of_face(face)
-            }
+            complete = triangles_of(before, native_faces)
             if selected != complete:
                 raise GeometryError(
                     _("Diese Teilauswahl lässt sich beim Verformen nicht eindeutig nachführen."),
-                    detail=_("Wähle vollständige Flächen aus und wiederhole die Änderung."),
+                    detail=_(
+                        "Wählen Sie vollständige Flächen aus und wiederholen Sie die Änderung."
+                    ),
                     suggestions=(CORRECT_INPUT, CANCEL),
                 )
             patches = []
@@ -228,9 +271,7 @@ def moved_object(
                 ):
                     continue
                 patch_faces = source.mesh.faces_of_triangles(patch.face_indices)
-                patch_complete = {
-                    index for face in patch_faces for index in source.mesh.triangles_of_face(face)
-                }
+                patch_complete = triangles_of(before, patch_faces)
                 if patch_complete != set(patch.face_indices):
                     # Die neue Tessellierung besitzt keine belegte Abbildung
                     # eines willkürlichen Ausschnitts einer nativen Fläche.
@@ -239,11 +280,7 @@ def moved_object(
                     replace(
                         patch,
                         face_indices=tuple(
-                            sorted(
-                                index
-                                for face in patch_faces
-                                for index in solid.triangles_of_face(face_map[face])
-                            )
+                            sorted(triangles_of(after, [face_map[face] for face in patch_faces]))
                         ),
                     )
                 )
@@ -251,11 +288,7 @@ def moved_object(
                 feature,
                 surface_patches=tuple(patches),
                 face_indices=tuple(
-                    sorted(
-                        index
-                        for face in native_faces
-                        for index in solid.triangles_of_face(face_map[face])
-                    )
+                    sorted(triangles_of(after, [face_map[face] for face in native_faces]))
                 ),
             )
     else:

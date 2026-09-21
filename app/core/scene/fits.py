@@ -13,6 +13,7 @@ Projekte erreichen, die vor ihr gebaut wurden.
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass
 
 import numpy as np
 
@@ -331,13 +332,13 @@ def _check_one(scene: Scene, fit: Fit, profile: Profile, cancelled: CancelToken)
             )
         ]
         if fit.kind == "flush":
-            findings.append(_check_geometry(scene, fit, first, second, fit.a, fit.b, cancelled))
+            findings.extend(_geometry_findings(scene, fit, first, second, fit.a, fit.b, cancelled))
         return findings
 
     if fit.kind == "flush":
         return [
             *_check_flush(fit, first, second),
-            _check_geometry(scene, fit, first, second, fit.a, fit.b, cancelled),
+            *_geometry_findings(scene, fit, first, second, fit.a, fit.b, cancelled),
         ]
 
     hole, pin = _sort_by_kind(first, second)
@@ -360,13 +361,13 @@ def _check_one(scene: Scene, fit: Fit, profile: Profile, cancelled: CancelToken)
     hole_ref, pin_ref = (fit.a, fit.b) if hole is first else (fit.b, fit.a)
     wanted, materials = _wanted(scene, fit, hole_ref, pin_ref, profile)
     actual = hole_diameter - pin_diameter
-    geometry = _check_geometry(scene, fit, hole, pin, hole_ref, pin_ref, cancelled)
+    geometry = _geometry_findings(scene, fit, hole, pin, hole_ref, pin_ref, cancelled)
     if abs(actual - wanted) <= FIT_TOLERANCE:
         if fit.kind in {"clearance", "press"}:
             uncertainty = _mesh_clearance(fit, hole, pin, hole_ref, wanted)
             if uncertainty is not None:
-                return [uncertainty, geometry]
-        return [geometry]
+                return [uncertainty, *geometry]
+        return geometry
 
     return [
         Finding(
@@ -386,7 +387,7 @@ def _check_one(scene: Scene, fit: Fit, profile: Profile, cancelled: CancelToken)
             object_id=hole_ref.object_id,
             feature_ids=(hole_ref.feature_id,),
         ),
-        geometry,
+        *geometry,
     ]
 
 
@@ -424,7 +425,90 @@ def _shared_pose(first: SceneObject, second: SceneObject, hole: Feature, pin: Fe
     return overlap > EPS_GEOM
 
 
-def _check_geometry(
+@dataclass(frozen=True)
+class GeometryProbe:
+    """Was die Körperprobe einer Passung gemessen hat — Zahlen ohne Urteil.
+
+    ``source`` sagt, woran gemessen wurde: ``native`` an zwei exakten Körpern,
+    ``mesh`` an zwei Netzen, ``mixed`` am Netzzwilling eines exakten Körpers
+    neben einem Netz — dann ist die Zahl eine Näherung.
+    """
+
+    source: str
+    overlap_mm3: float
+
+    @property
+    def intersects(self) -> bool:
+        return self.overlap_mm3 > 0.0
+
+
+def _pose_proven(
+    scene: Scene,
+    fit: Fit,
+    first_feature: Feature,
+    second_feature: Feature,
+    first_ref: FeatureRef,
+    second_ref: FeatureRef,
+) -> bool:
+    """Ob die Lage der zwei Körper zueinander die Einbaulage der Passung ist.
+
+    Zwei Teile nebeneinander auf dem Bett, ein Deckel auf einer anderen Platte,
+    zwei Flächen desselben Körpers: Dort ist die Einbaulage nicht modelliert,
+    und eine Probe der Körper sagte nichts über die Passung. Bündige Flächen
+    brauchen keine radiale Lage — zwei verschiedene Körper auf derselben
+    Platte genügen; ein radiales Paar muss koaxial mit überlappender
+    Einstecktiefe stehen (`_shared_pose`).
+    """
+    first, second = scene.objects[first_ref.object_id], scene.objects[second_ref.object_id]
+    if fit.kind == "flush":
+        return first.id != second.id and first.plate == second.plate
+    return _shared_pose(first, second, first_feature, second_feature)
+
+
+def _probe(first: SceneObject, second: SceneObject, cancelled: CancelToken) -> GeometryProbe:
+    """Die starre Verschneidung zweier Körper in ihrer aktuellen Lage."""
+    from app.core.geom.measure import body_overlap
+
+    kinds = (kind_of(first.mesh), kind_of(second.mesh))
+    source = "native" if kinds == ("brep", "brep") else "mesh" if kinds[0] == kinds[1] else "mixed"
+    cancelled.raise_if_cancelled()
+    volume = body_overlap(first.mesh, second.mesh, cancelled=cancelled)
+    cancelled.raise_if_cancelled()
+    return GeometryProbe(source=source, overlap_mm3=volume)
+
+
+def overlap(
+    scene: Scene, fit: Fit, *, cancelled: CancelToken | None = None
+) -> GeometryProbe | None:
+    """Die Körperprobe einer Passung als Zahl — die eigene Auskunft für die
+    Passungskarte und jeden, der das gemessene Volumen braucht, ohne den
+    Prüfbericht zu lesen.
+
+    ``None`` heißt: Ein Merkmal fehlt, das Paar ist nicht messbar oder die
+    Einbaulage ist nicht belegt (`_pose_proven`) — dann gibt es keine Zahl,
+    und der Prüfbericht trägt dazu auch keinen Befund. Ein Fehler des Kerns
+    wird hier nicht verschluckt: Im Bericht heißt er `fit.geometry_failed`,
+    hier ist er die Ausnahme selbst.
+    """
+    first, second = resolve(scene, fit.a), resolve(scene, fit.b)
+    if first is None or second is None:
+        return None
+    first_ref, second_ref = fit.a, fit.b
+    if fit.kind != "flush":
+        try:
+            hole, _pin = _sort_by_kind(first, second)
+        except ValueError:
+            return None
+        if hole is not first:
+            first, second = second, first
+            first_ref, second_ref = second_ref, first_ref
+    if not _pose_proven(scene, fit, first, second, first_ref, second_ref):
+        return None
+    token = cancelled if cancelled is not None else NeverCancelled()
+    return _probe(scene.objects[first_ref.object_id], scene.objects[second_ref.object_id], token)
+
+
+def _geometry_findings(
     scene: Scene,
     fit: Fit,
     first_feature: Feature,
@@ -432,10 +516,30 @@ def _check_geometry(
     first_ref: FeatureRef,
     second_ref: FeatureRef,
     cancelled: CancelToken,
-) -> Finding:
-    """Eine gemeinsame Körperprobe; bündige Ebenen brauchen keine radiale Einbaulage."""
-    from app.core.geom.measure import body_overlap
+) -> list[Finding]:
+    """Die Körperprobe in belegter Einbaulage — und ohne belegte Lage nichts.
 
+    Bis zum 21.09.2026 stand hier für jede Passung ein Befund: eine Warnung
+    „Einbaulage nicht belegt" an zwei Teilen, die zum Drucken nebeneinander
+    liegen — nicht behebbar, denn *Anordnen* zieht sie gerade auseinander —,
+    und ein Hinweis „überschneiden sich nicht" an jeder gelungenen Passung.
+    Damit begrüßten „Dose mit Deckel" und „Passung nach Materialwechsel" mit
+    einer Warnung, und ein Teil mit einer Passung war nie „druckbereit"
+    (Regel: eine Warnung, die im Normalfall kommt, ist keine Warnung mehr).
+
+    Jetzt entsteht ein Befund nur, wenn die Probe etwas zu sagen hat:
+
+    * Überschneidung zweier gleichartiger Körper — `fit.collision`, Warnung.
+    * Gemischte Zwillinge — `fit.geometry_approximate`: Warnung bei
+      Überschneidung, sonst Hinweis, denn die Zahl ist eine Netznäherung.
+    * Presspassung — `fit.press_unverified`, Hinweis: Übermaß ist dort
+      vorgesehen, und eine starre Probe belegt weder Montage noch Verformung.
+    * Kernfehler — `fit.geometry_failed`, Warnung.
+
+    Eine leere Verschneidung ist kein Befund; die Zahl dazu gibt `overlap`.
+    """
+    if not _pose_proven(scene, fit, first_feature, second_feature, first_ref, second_ref):
+        return []
     first, second = scene.objects[first_ref.object_id], scene.objects[second_ref.object_id]
     values: dict[str, float | str | TranslatableText] = {
         "fit": fit.name,
@@ -444,120 +548,96 @@ def _check_geometry(
     }
     severity: Severity = "warning"
     flush = fit.kind == "flush"
-    if flush and (first.id == second.id or first.plate != second.plate):
-        code = "fit.pose_unknown"
-        values["reason"] = "same_body" if first.id == second.id else "different_plates"
-        message = (
-            _(
-                "Beide Flächen gehören zum selben Körper. Für eine Überschneidungsprobe "
-                "zwischen zwei Körpern zwei verschiedene Körper wählen."
-            )
-            if first.id == second.id
-            else _(
-                "Diese Körper liegen auf verschiedenen Druckplatten. Für eine gemeinsame "
-                "Körperprobe beide auf derselben Platte anordnen."
-            )
-        )
-    elif not flush and not _shared_pose(first, second, first_feature, second_feature):
-        code = "fit.pose_unknown"
+    try:
+        probe = _probe(first, second, cancelled)
+    except OperationCancelled:
+        raise
+    except PROGRAMMING_ERRORS:
+        raise
+    except Exception as problem:  # Native Kerne haben eigene Fehlerklassen.
+        cancelled.raise_if_cancelled()
+        _log.warning("fit geometry probe failed: %s", problem)
+        code = "fit.geometry_failed"
+        values["reason"] = str(problem)
         message = _(
-            "Die Einbaulage dieser Passung ist nicht belegt. Beide Merkmale auf derselben "
-            "Platte koaxial und mit überlappender Einstecktiefe ausrichten."
+            "Die Körper dieser Passung konnten geometrisch nicht geprüft werden. "
+            "Geschlossene gültige Körper verwenden oder die Geometrie erneut prüfen."
         )
     else:
-        kinds = (kind_of(first.mesh), kind_of(second.mesh))
-        native = kinds == ("brep", "brep")
-        mixed = kinds[0] != kinds[1]
-        values["geometry_source"] = "native" if native else "mixed" if mixed else "mesh"
-        try:
-            cancelled.raise_if_cancelled()
-            volume = body_overlap(first.mesh, second.mesh, cancelled=cancelled)
-            cancelled.raise_if_cancelled()
-        except OperationCancelled:
-            raise
-        except PROGRAMMING_ERRORS:
-            raise
-        except Exception as problem:  # Native Kerne haben eigene Fehlerklassen.
-            cancelled.raise_if_cancelled()
-            _log.warning("fit geometry probe failed: %s", problem)
-            code = "fit.geometry_failed"
-            values["reason"] = str(problem)
-            message = _(
-                "Die Körper dieser Passung konnten geometrisch nicht geprüft werden. "
-                "Geschlossene gültige Körper verwenden oder die Geometrie erneut prüfen."
-            )
-        else:
-            values["overlap_mm3"] = volume
-            values["intersects"] = volume > 0.0
-            if fit.kind == "press":
-                code = "fit.press_unverified"
-                message = _(
+        values["geometry_source"] = probe.source
+        values["overlap_mm3"] = probe.overlap_mm3
+        values["intersects"] = probe.intersects
+        mixed = probe.source == "mixed"
+        if fit.kind == "press":
+            code = "fit.press_unverified"
+            severity = "info"
+            message = (
+                _(
                     "Bei einer Presspassung ist Übermaß vorgesehen. Diese starre Körperprobe "
                     "bestätigt weder die Montage noch die Verformung; "
                     "auch Boden und Schulter prüfen."
                 )
-            elif mixed:
-                code = "fit.geometry_approximate"
-                if flush:
-                    message = (
-                        _(
-                            "Die Netznäherung zeigt eine Überschneidung in der aktuellen Lage. "
-                            "Die exakten Körper und die Auflösung der Näherung prüfen."
-                        )
-                        if volume > 0.0
-                        else _(
-                            "Die Netznäherung zeigt in der aktuellen Lage keine Überschneidung. "
-                            "Ein Flächenkontakt und der Montageweg sind damit nicht nachgewiesen; "
-                            "die exakten Körper separat prüfen."
-                        )
-                    )
-                else:
-                    message = (
-                        _(
-                            "Die Netznäherung zeigt eine Überschneidung in dieser Einbaulage. "
-                            "Die exakten Körper und die Auflösung der Näherung prüfen."
-                        )
-                        if volume > 0.0
-                        else _(
-                            "Die Netznäherung zeigt in dieser Einbaulage keine Überschneidung. "
-                            "Die exakten Körper und den Montageweg separat prüfen."
-                        )
-                    )
-            elif volume > 0.0:
-                code = "fit.collision"
+                if probe.intersects
+                else _(
+                    "Bei einer Presspassung ist Übermaß vorgesehen, doch in dieser Einbaulage "
+                    "überschneiden sich die Körper nicht. Die tatsächlichen Konturen und die "
+                    "Einstecktiefe prüfen."
+                )
+            )
+        elif mixed:
+            code = "fit.geometry_approximate"
+            if not probe.intersects:
+                severity = "info"
+            if flush:
                 message = (
                     _(
-                        "Die Körper überschneiden sich in der aktuellen Lage. "
-                        "Die gesamten Körper und ihre Platzierung prüfen."
+                        "Die Netznäherung zeigt eine Überschneidung in der aktuellen Lage. "
+                        "Die exakten Körper und die Auflösung der Näherung prüfen."
                     )
-                    if flush
+                    if probe.intersects
                     else _(
-                        "Die Körper überschneiden sich in dieser Einbaulage. Einstecktiefe, "
-                        "Boden, Schulter und die tatsächlichen Konturen prüfen."
+                        "Die Netznäherung zeigt in der aktuellen Lage keine Überschneidung. "
+                        "Ein Flächenkontakt und der Montageweg sind damit nicht nachgewiesen; "
+                        "die exakten Körper separat prüfen."
                     )
                 )
             else:
-                code = "fit.geometry_clear"
-                severity = "info"
                 message = (
                     _(
-                        "In der aktuellen Lage überschneiden sich die Körper nicht. "
-                        "Ein Flächenkontakt und der Montageweg sind damit nicht nachgewiesen."
+                        "Die Netznäherung zeigt eine Überschneidung in dieser Einbaulage. "
+                        "Die exakten Körper und die Auflösung der Näherung prüfen."
                     )
-                    if flush
+                    if probe.intersects
                     else _(
-                        "In dieser Einbaulage überschneiden sich die Körper nicht. Montageweg "
-                        "und Druckverhalten separat prüfen."
+                        "Die Netznäherung zeigt in dieser Einbaulage keine Überschneidung. "
+                        "Die exakten Körper und den Montageweg separat prüfen."
                     )
                 )
-    return Finding(
-        code=code,
-        severity=severity,
-        message=message,
-        values=values,
-        object_id=first_ref.object_id,
-        feature_ids=(first_ref.feature_id,),
-    )
+        elif probe.intersects:
+            code = "fit.collision"
+            message = (
+                _(
+                    "Die Körper überschneiden sich in der aktuellen Lage. "
+                    "Die gesamten Körper und ihre Platzierung prüfen."
+                )
+                if flush
+                else _(
+                    "Die Körper überschneiden sich in dieser Einbaulage. Einstecktiefe, "
+                    "Boden, Schulter und die tatsächlichen Konturen prüfen."
+                )
+            )
+        else:
+            return []
+    return [
+        Finding(
+            code=code,
+            severity=severity,
+            message=message,
+            values=values,
+            object_id=first_ref.object_id,
+            feature_ids=(first_ref.feature_id,),
+        )
+    ]
 
 
 def _mesh_clearance(

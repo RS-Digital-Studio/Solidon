@@ -188,11 +188,20 @@ def _comparison_parts(
         ]
         for mesh, group in zip((before, after), groups, strict=True)
     ]
-    if any(
-        not part.is_watertight or not part.raw.is_winding_consistent or part.volume <= 0.0
-        for side in parts
-        for part in side
-    ):
+    # Ein Vergleichsteil ohne Fläche — lauter entartete Dreiecke — hat das
+    # Volumen null, und trimesh teilt für den Schwerpunkt dadurch: ``invalid
+    # value`` aus numpy, kein Befund (Review, 21.09.2026). Ein solches Teil
+    # ist kein Materialstück, und die Antwort darunter bleibt dieselbe.
+    with np.errstate(divide="ignore", invalid="ignore"):
+        degenerate = any(
+            part.triangle_count == 0
+            or not part.is_watertight
+            or not part.raw.is_winding_consistent
+            or part.volume <= 0.0
+            for side in parts
+            for part in side
+        )
+    if degenerate:
         return [before], [after], []
     first, second = parts
     candidates: dict[int, list[int]] = {}

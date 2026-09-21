@@ -16,11 +16,13 @@ schließen den Wert ein: ab dem ersten Folgeterm fallen die Beträge für
 from __future__ import annotations
 
 import math
-from collections.abc import Iterable, Iterator, Sequence
+from collections.abc import Callable, Iterable, Iterator, Sequence
 from contextlib import suppress
 from dataclasses import dataclass
 from fractions import Fraction
-from typing import Final, cast
+from typing import Any, Final, cast
+
+import numpy as np
 
 from app.core.scene.cancel import NeverCancelled
 from app.core.types import CancelToken, SurfacePatch, Vec3
@@ -41,6 +43,52 @@ class FacetDeviation:
     upper_mm: float
     witness_uv: _UV
     converged: bool
+
+
+@dataclass(frozen=True, slots=True)
+class DeviationTable:
+    """Dieselben Klammern für viele Dreiecke als Arrays — ``nan``, wo nichts belegt ist.
+
+    Die Karte fasst kein Dreieck einzeln an; 41 000 Ergebnisobjekte zu bauen
+    und wieder auszulesen kostete mehr als die Rechnung selbst.
+    """
+
+    lower_mm: np.ndarray
+    upper_mm: np.ndarray
+    witness_uv: np.ndarray
+    converged: np.ndarray
+
+    @property
+    def known(self) -> np.ndarray:
+        return np.isfinite(self.lower_mm) & np.isfinite(self.upper_mm)
+
+    def sliced(self, start: int, stop: int) -> DeviationTable:
+        return DeviationTable(
+            self.lower_mm[start:stop],
+            self.upper_mm[start:stop],
+            self.witness_uv[start:stop],
+            self.converged[start:stop],
+        )
+
+    @classmethod
+    def joined(cls, tables: Sequence[DeviationTable], count: int) -> DeviationTable:
+        if not tables:
+            return cls.empty(count)
+        return cls(
+            np.concatenate([table.lower_mm for table in tables]),
+            np.concatenate([table.upper_mm for table in tables]),
+            np.concatenate([table.witness_uv for table in tables]),
+            np.concatenate([table.converged for table in tables]),
+        )
+
+    @classmethod
+    def empty(cls, count: int = 0) -> DeviationTable:
+        return cls(
+            np.full(count, np.nan),
+            np.full(count, np.nan),
+            np.zeros((count, 2)),
+            np.zeros(count, bool),
+        )
 
 
 def _down(value: float) -> float:
@@ -218,9 +266,7 @@ class _Surface:
             h = self.sine * z - self.cosine * rho
             t = self.sine * rho + self.cosine * z
             return (h.square() + _I(min(t.lo, 0.0), min(t.hi, 0.0)).square()).sqrt()
-        return (
-            ((rho - self.radius).square() + z.square()).sqrt().__sub__(self.tube_radius).absolute()
-        )
+        return (((rho - self.radius).square() + z.square()).sqrt() - self.tube_radius).absolute()
 
 
 def _prepare(patch: SurfacePatch, cancelled: CancelToken) -> _Surface | None:
@@ -760,9 +806,794 @@ def _tighten(facet: _Facet, epsilon: float) -> None:
         _torus(facet, radial, radius, closest, epsilon)
 
 
+# --- Alle Dreiecke einer Trägerart zugleich ----------------------------------------
+#
+# Bis zum 21.09.2026 lief jedes Dreieck einzeln durch die skalaren Klammern
+# oben: 605 124 ``_I``-Objekte für 796 Dreiecke, 200 bis 800 Dreiecke je
+# Sekunde, die Karte „Formabweichung" an einem Lochblech 10 mal 10 in einer
+# knappen Minute. Die Rechnung je Dreieck ist für Ebene, Kugel, Zylinder und
+# Kegel geschlossen — Ecken, Lotfußpunkte, Achsentreffer, Stützebenen —, und
+# genau das rechnet ``_Batch`` für alle Dreiecke einer Trägerart zugleich in
+# NumPy, mit den Trägerparametern je Dreieck: Ein Lochblech mit hundert
+# Bohrungen ist ein Stapel, nicht hundert. Die Zusage bleibt dieselbe:
+# ``_Bands`` rundet jede Summe, jedes Produkt und jeden Quotienten wie ``_I``
+# um ein ULP nach außen und bestätigt jede Wurzel durch exaktes Quadrieren;
+# ein Dreieck, dessen Rechnung nicht endlich bleibt, geht den skalaren Weg.
+# Der Torus bekommt hier seine Zeugen und die Rechteckklammer; verfeinert wird
+# nur, was danach noch über der Zielbreite liegt — auf dem skalaren Kantenweg
+# mit dem gemeinsamen Budget je Träger.
+
+_SPLIT: Final = 134217729.0  # 2**27 + 1, Veltkamp-Aufspaltung
+_EXACT_PRODUCT_FLOOR: Final = (
+    2.0**-968
+)  # unter der kleinsten Normalzahl mal 2⁵⁴ verliert Dekker Bits
+_TINY_ROOT: Final = 2.0**-484  # exakt, und sein Quadrat ist genau die Schwelle darüber
+_CHUNK: Final = 8192
+_ULP_STEP: Final = 2.0**-51
+_SMALLEST: Final = 5e-324
+#: Bis hierhin läuft in den Formeln des Stapels nichts über (höchstens zwei
+#: Produkte vor einer Normierung); größere Zahlen gehen den skalaren Weg.
+_BATCH_MAGNITUDE: Final = 1e100
+_CORNER_UV: Final = np.array(_CORNERS, dtype=np.float64)
+
+
+def _up_array(value: np.ndarray) -> np.ndarray:
+    """Mindestens ein ULP nach oben — mit Fließkomma-Arithmetik statt ``np.nextafter``.
+
+    ``np.nextafter`` kostet je Element das Dreißigfache einer Multiplikation
+    (gemessen 21.09.2026: 0,58 gegen 0,017 ms an 86 400 Werten). Der Schritt
+    ``|x|·2⁻⁵¹`` ist für jedes endliche ``x ≠ 0`` mindestens ein ULP und
+    höchstens zwei — für ``x`` in ``[2ᵉ, 2ᵉ⁺¹)`` ist das ULP ``2ᵉ⁻⁵²``, der
+    Schritt liegt zwischen ``2ᵉ⁻⁵¹`` und ``2ᵉ⁻⁵⁰`` —, und eine Summe, die um
+    mindestens ein ULP über ``x`` liegt, rundet nie unter ``x`` plus ein ULP,
+    denn das ist selbst ein Float. Die kleinste Denormalzahl daneben hebt
+    auch die Null. Die Klammer wird damit um höchstens ein ULP breiter als
+    mit ``nextafter``; ``tests/test_surface_deviation.py`` misst die Breite.
+
+    Überlauf gibt es hier nicht: Der Stapel rechnet nur, was unter
+    ``_BATCH_MAGNITUDE`` liegt, und ``nan`` — aus einem Quotienten durch eine
+    Klammer um null, den ``__truediv__`` vermerkt — überlebt jedes Minimum
+    und Maximum bis ins Ergebnis.
+    """
+    out = np.abs(value)
+    out *= _ULP_STEP
+    out += _SMALLEST
+    out += value
+    return out
+
+
+def _down_array(value: np.ndarray) -> np.ndarray:
+    out = np.abs(value)
+    out *= _ULP_STEP
+    out += _SMALLEST
+    np.subtract(value, out, out=out)
+    return out
+
+
+def _exact_square(value: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """``value²`` exakt als Summe ``product + error`` (Dekker), ohne Über- und Unterlauf."""
+    product = value * value
+    scaled = _SPLIT * value
+    high = scaled - (scaled - value)
+    low = value - high
+    error = ((high * high - product) + 2.0 * high * low) + low * low
+    return product, error
+
+
+def _root_certified(result: np.ndarray, value: np.ndarray, upper: bool) -> np.ndarray:
+    """Ob ``result²`` exakt auf der verlangten Seite von ``value`` liegt."""
+    product, error = _exact_square(result)
+    representable = (product == 0.0) | (product >= _EXACT_PRODUCT_FLOOR)
+    if upper:
+        ok = (product > value) | ((product == value) & (error >= 0.0))
+    else:
+        ok = (product < value) | ((product == value) & (error <= 0.0))
+    return np.asarray(ok & representable, dtype=bool)
+
+
+class _Bands:
+    """Gerichtete Zahlenklammern als Arrays — dieselbe Zusage wie ``_I`` für viele Dreiecke.
+
+    Jede Rechenart trägt die Rundungsregel ihres skalaren Zwillings. Was
+    dabei nicht endlich bleibt, bleibt es bis zum Ergebnis — NumPy trägt
+    ``inf`` und ``nan`` durch jede Summe, jedes Produkt und jedes Minimum
+    weiter, und die Fallunterscheidungen unten sind so geschrieben, dass keine
+    davon einen solchen Wert verschluckt. Was ``_I`` als Ausnahme wirft — ein
+    Quotient durch eine Klammer um null, eine unbestätigte Wurzel —, wird je
+    Dreieck vermerkt (``bad``): Die erste Achse jedes Arrays ist das Dreieck,
+    und diese Dreiecke rechnet der skalare Weg nach.
+    """
+
+    def __init__(self, count: int) -> None:
+        self.count = count
+        self.bad = np.zeros(count, dtype=bool)
+
+    def flag(self, invalid: np.ndarray) -> None:
+        if not np.any(invalid):
+            return
+        if invalid.ndim == 0 or invalid.shape[0] != self.count:
+            self.bad[:] = True
+            return
+        self.bad |= invalid.reshape(invalid.shape[0], -1).any(axis=1)
+
+    def number(self, value: np.ndarray | float) -> _A:
+        array = np.asarray(value, dtype=np.float64)
+        return _A(self, array, array, True)
+
+    def root(self, value: np.ndarray, upper: bool) -> np.ndarray:
+        """Wie ``_sqrt_bound``: den Vorschlag durch exaktes Quadrieren bestätigen.
+
+        Unterhalb von ``_EXACT_PRODUCT_FLOOR`` ist das Quadrat nicht mehr exakt
+        darstellbar — dort ist ``2⁻⁴⁸⁴`` die Obergrenze, denn sein Quadrat ist
+        genau die Schwelle, und null die Untergrenze. Eine Klammer um null
+        hebt ihren oberen Rand um ein ULP auf eine Denormalzahl, und deren
+        Wurzel muss genauso bestätigt sein wie jede andere.
+        """
+        result = np.sqrt(value)
+        for _ in range(8):
+            certified = _root_certified(result, value, upper)
+            if certified.all():
+                return result
+            step = _up_array(result) if upper else np.maximum(0.0, _down_array(result))
+            result = np.where(certified, result, step)
+        certified = _root_certified(result, value, upper)
+        if upper:
+            small = value <= _EXACT_PRODUCT_FLOOR
+            result = np.where(certified, result, np.where(small, _TINY_ROOT, result))
+            certified |= small
+        else:
+            result = np.where(certified, result, 0.0)
+            certified = certified | (value >= 0.0)
+        self.flag(~certified)
+        return result
+
+
+class _A:
+    """Ein Array von Klammern ``[lo, hi]``; die Operatoren lesen wie an ``_I``.
+
+    ``exact`` heißt: beide Ränder sind dieselbe Zahl — ein Eckpunkt, ein
+    Parameter, eine Konstante. Ein Produkt mit einer exakten Zahl braucht zwei
+    Produkte statt vier, und Schnitte und eingefügte Achsen erhalten die
+    Eigenschaft; jede Rechnung nimmt sie.
+    """
+
+    __slots__ = ("bands", "exact", "hi", "lo")
+
+    def __init__(self, bands: _Bands, lo: np.ndarray, hi: np.ndarray, exact: bool = False) -> None:
+        self.bands = bands
+        self.lo = lo
+        self.hi = hi
+        self.exact = exact
+
+    def _other(self, value: _A | float) -> _A:
+        if isinstance(value, _A):
+            return value
+        return self.bands.number(value)
+
+    def __getitem__(self, key: Any) -> _A:
+        return _A(self.bands, self.lo[key], self.hi[key], self.exact)
+
+    def __add__(self, other: _A | float) -> _A:
+        other = self._other(other)
+        return _A(self.bands, _down_array(self.lo + other.lo), _up_array(self.hi + other.hi))
+
+    def __neg__(self) -> _A:
+        return _A(self.bands, -self.hi, -self.lo)
+
+    def __sub__(self, other: _A | float) -> _A:
+        return self + -self._other(other)
+
+    def __mul__(self, other: _A | float) -> _A:
+        other = self._other(other)
+        if other.exact:
+            first, second = self.lo * other.lo, self.hi * other.lo
+            low, high = np.minimum(first, second), np.maximum(first, second)
+        elif self.exact:
+            first, second = self.lo * other.lo, self.lo * other.hi
+            low, high = np.minimum(first, second), np.maximum(first, second)
+        else:
+            first, second = self.lo * other.lo, self.lo * other.hi
+            third, fourth = self.hi * other.lo, self.hi * other.hi
+            low = np.minimum(np.minimum(first, second), np.minimum(third, fourth))
+            high = np.maximum(np.maximum(first, second), np.maximum(third, fourth))
+        return _A(self.bands, _down_array(low), _up_array(high))
+
+    def __truediv__(self, other: _A | float) -> _A:
+        other = self._other(other)
+        through_zero = (other.lo <= 0.0) & (other.hi >= 0.0)
+        self.bands.flag(np.broadcast_to(through_zero, np.broadcast(self.lo, other.lo).shape))
+        safe_lo = np.where(through_zero, 1.0, other.lo)
+        if other.exact:
+            first, second = self.lo / safe_lo, self.hi / safe_lo
+            low, high = np.minimum(first, second), np.maximum(first, second)
+        else:
+            safe_hi = np.where(through_zero, 1.0, other.hi)
+            first, second = self.lo / safe_lo, self.lo / safe_hi
+            third, fourth = self.hi / safe_lo, self.hi / safe_hi
+            low = np.minimum(np.minimum(first, second), np.minimum(third, fourth))
+            high = np.maximum(np.maximum(first, second), np.maximum(third, fourth))
+        return _A(self.bands, _down_array(low), _up_array(high))
+
+    def square(self) -> _A:
+        straddles = (self.lo <= 0.0) & (self.hi >= 0.0)
+        first, second = self.lo * self.lo, self.hi * self.hi
+        low = np.where(straddles, 0.0, np.minimum(first, second))
+        return _A(
+            self.bands, np.maximum(0.0, _down_array(low)), _up_array(np.maximum(first, second))
+        )
+
+    def absolute(self) -> _A:
+        straddles = (self.lo <= 0.0) & (self.hi >= 0.0)
+        first, second = np.abs(self.lo), np.abs(self.hi)
+        return _A(
+            self.bands,
+            np.where(straddles, 0.0, np.minimum(first, second)),
+            np.maximum(first, second),
+        )
+
+    def sqrt(self) -> _A:
+        self.bands.flag(self.hi < 0.0)
+        return _A(
+            self.bands,
+            self.bands.root(np.maximum(0.0, self.lo), False),
+            self.bands.root(np.maximum(0.0, self.hi), True),
+        )
+
+    @property
+    def middle(self) -> np.ndarray:
+        return self.lo / 2.0 + self.hi / 2.0
+
+    def negative_part(self) -> _A:
+        """``[min(lo, 0), min(hi, 0)]`` — der Anteil hinter der Kegelspitze."""
+        return _A(self.bands, np.minimum(self.lo, 0.0), np.minimum(self.hi, 0.0))
+
+    def unsqueeze(self, axis: int) -> _A:
+        """Eine Achse einfügen, damit Parameter je Dreieck gegen Proben je Dreieck laufen."""
+        return _A(
+            self.bands, np.expand_dims(self.lo, axis), np.expand_dims(self.hi, axis), self.exact
+        )
+
+
+def _a_dot(a: _A, b: _A) -> _A:
+    return a[..., 0, :] * b[..., 0, :] + a[..., 1, :] * b[..., 1, :] + a[..., 2, :] * b[..., 2, :]
+
+
+def _a_cross(a: _A, b: _A) -> _A:
+    parts = (
+        a[..., 1, :] * b[..., 2, :] - a[..., 2, :] * b[..., 1, :],
+        a[..., 2, :] * b[..., 0, :] - a[..., 0, :] * b[..., 2, :],
+        a[..., 0, :] * b[..., 1, :] - a[..., 1, :] * b[..., 0, :],
+    )
+    return _A(
+        a.bands,
+        np.stack([part.lo for part in parts], axis=-2),
+        np.stack([part.hi for part in parts], axis=-2),
+    )
+
+
+def _a_norm(vector: _A) -> _A:
+    """Wie ``_norm``: erst durch die größte Komponente teilen, dann Wurzel, dann zurück."""
+    bands = vector.bands
+    magnitude = vector.absolute().hi.max(axis=-2)
+    # ``nan`` muss den Weg zum Ergebnis behalten: Nur eine exakte Null wird
+    # zur Null, alles andere rechnet weiter.
+    zero = magnitude == 0.0
+    safe = np.where(zero, 1.0, magnitude)
+    divided = vector / bands.number(safe).unsqueeze(-2)
+    squares = divided.square()
+    summed = squares[..., 0, :] + squares[..., 1, :] + squares[..., 2, :]
+    result = summed.sqrt() * bands.number(safe)
+    return _A(
+        bands,
+        np.where(zero, 0.0, np.maximum(0.0, result.lo)),
+        np.where(zero, 0.0, result.hi),
+    )
+
+
+def _legal_uv_array(u: np.ndarray, v: np.ndarray) -> np.ndarray:
+    """Wie ``_legal_uv``: jeder Vorschlag wird ein echter Punkt, die Summe steigt nie über eins."""
+    finite = np.isfinite(u) & np.isfinite(v)
+    u = np.where(finite, np.clip(u, 0.0, 1.0), 0.0)
+    v = np.where(finite, np.clip(v, 0.0, 1.0), 0.0)
+    remaining = 1.0 - u
+    # Bei u >= 1/2 ist 1 - u exakt (Sterbenz), sonst genau dann, wenn die
+    # Probe zurück auf u führt; andernfalls liegt der nächstkleinere Float
+    # sicher unter der wahren Differenz.
+    exact = (remaining < 0.5) | ((1.0 - remaining) == u)
+    ceiling = np.where(exact, remaining, np.nextafter(remaining, -np.inf))
+    v = np.maximum(0.0, np.minimum(v, ceiling))
+    return np.stack([u, v])
+
+
+def _edge_uv_array(first: int, second: int, value: np.ndarray) -> np.ndarray:
+    a, b = _CORNER_UV[first], _CORNER_UV[second]
+    return _legal_uv_array(a[0] + value * (b[0] - a[0]), a[1] + value * (b[1] - a[1]))
+
+
+def _rows(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """Skalarprodukt über die Komponentenachse — die vorletzte."""
+    return np.asarray(np.einsum("...cn,...cn->...n", a, b))
+
+
+class _Batch:
+    """``_Facet`` und ``_tighten`` für alle Dreiecke einer Trägerart zugleich.
+
+    ``owner`` nennt je Dreieck seinen Träger; Ursprung, Achse, Radien und
+    Kegelwinkel liegen deshalb als Arrays je Dreieck vor. **Das Dreieck ist
+    die letzte Achse**: Vektoren haben die Gestalt ``(…, 3, n)``, Skalare
+    ``(…, n)``. So läuft jede Operation über zusammenhängende Zeilen der
+    Länge n — mit ``(n, 3)`` war der innere Schleifenlauf drei Elemente lang,
+    und ein Produkt kostete das Dreißigfache (gemessen 21.09.2026).
+    """
+
+    def __init__(
+        self, kind: str, surfaces: Sequence[_Surface], owner: np.ndarray, triangles: np.ndarray
+    ) -> None:
+        self.kind = kind
+        self.count = len(triangles)
+        bands = self.bands = _Bands(self.count)
+
+        def scalars(values: Sequence[_I]) -> _A:
+            lo = np.array([entry.lo for entry in values])[owner]
+            hi = np.array([entry.hi for entry in values])[owner]
+            return _A(bands, lo, hi)
+
+        def vectors(values: Sequence[Sequence[_I]]) -> _A:
+            lo = np.array([[entry.lo for entry in row] for row in values])[owner]
+            hi = np.array([[entry.hi for entry in row] for row in values])[owner]
+            return _A(bands, np.ascontiguousarray(lo.T), np.ascontiguousarray(hi.T))
+
+        self.origin = vectors([surface.origin for surface in surfaces])
+        self.axis = vectors([surface.axis for surface in surfaces])
+        self.axis_size = scalars([surface.axis_size for surface in surfaces])
+        self.radius = scalars([surface.radius for surface in surfaces])
+        self.tube_radius = scalars([surface.tube_radius for surface in surfaces])
+        self.sine = scalars([surface.sine for surface in surfaces])
+        self.cosine = scalars([surface.cosine for surface in surfaces])
+        corners = np.ascontiguousarray(np.transpose(triangles, (1, 2, 0)))
+        self.points = bands.number(corners) - self.origin
+        self.edges = (self.points[1] - self.points[0], self.points[2] - self.points[0])
+        # Die Probentafel: uv je Probe und Dreieck, Gültigkeit, Abstandsklammer.
+        self.sample_uv: list[np.ndarray] = []
+        self.sample_valid: list[np.ndarray] = []
+        self.sample_value: list[_A] = []
+        self.upper = np.full(self.count, np.inf)
+        self._initial()
+
+    # --- Proben ------------------------------------------------------------------
+
+    def point(self, uv: np.ndarray, corner: int | None = None) -> _A:
+        if corner is not None:
+            return self.points[corner]
+        u = self.bands.number(uv[0])
+        v = self.bands.number(uv[1])
+        return self.points[0] + self.edges[0] * u + self.edges[1] * v
+
+    def sample(
+        self, uv: np.ndarray, valid: np.ndarray | None = None, corner: int | None = None
+    ) -> _A:
+        """Eine Probe je Dreieck: ihr Abstand wird gemerkt, der beste wird der Zeuge."""
+        mask = np.ones(self.count, dtype=bool) if valid is None else valid
+        uv = np.where(mask, _legal_uv_array(uv[0], uv[1]), 0.0)
+        value = self.distance(self.point(uv, corner))
+        self.sample_uv.append(uv)
+        self.sample_valid.append(mask)
+        self.sample_value.append(value)
+        return value
+
+    def _initial(self) -> None:
+        """Wie ``_Facet.__init__``: drei Ecken, eine Mitte, und die grobe globale Klammer."""
+        quarter = np.full((2, self.count), 0.25)
+        for corner in (0, 1, 2, None):
+            uv = (
+                np.broadcast_to(_CORNER_UV[corner][:, None], (2, self.count)).copy()
+                if corner is not None
+                else quarter
+            )
+            value = self.sample(uv, corner=corner)
+            position = self.point(uv, corner)
+            # Die Summe der Beträge ist nie kleiner als die Länge: eine gültige
+            # Obergrenze ohne Wurzel, und die grobe Anfangsklammer trägt bei
+            # keiner Trägerart das Ergebnis — sie hält nur den Rückfall endlich.
+            around = (self.points - position).absolute().hi
+            radius = _up_array(_up_array(around[:, 0] + around[:, 1]) + around[:, 2])
+            self.upper = np.minimum(self.upper, _up_array(value.hi + radius.max(axis=0)))
+
+    # --- Abstände ----------------------------------------------------------------
+
+    def axial(self, point: _A) -> _A:
+        return _a_dot(point, self.axis) / self.axis_size
+
+    def radial(self, point: _A) -> _A:
+        return _a_cross(point, self.axis) * (self.bands.number(1.0) / self.axis_size)
+
+    def distance(self, point: _A) -> _A:
+        """Wie ``_Surface.distance``, für ``(…, 3, n)``-Punkte."""
+        kind = self.kind
+        if kind == "sphere":
+            return (_a_norm(point) - self.radius).absolute()
+        z = self.axial(point)
+        if kind == "plane":
+            return z.absolute()
+        rho = _a_norm(self.radial(point))
+        if kind == "cylinder":
+            return (rho - self.radius).absolute()
+        if kind == "cone":
+            h = self.sine * z - self.cosine * rho
+            t = self.sine * rho + self.cosine * z
+            return (h.square() + t.negative_part().square()).sqrt()
+        return (((rho - self.radius).square() + z.square()).sqrt() - self.tube_radius).absolute()
+
+    # --- Vorschläge --------------------------------------------------------------
+
+    def closest_proposals(self, points: _A) -> list[tuple[np.ndarray, np.ndarray]]:
+        """Wie ``_closest_proposals``: Ecken, Lotfußpunkte der Kanten, Fußpunkt der Ebene."""
+        count = self.count
+        proposals: list[tuple[np.ndarray, np.ndarray]] = [
+            (
+                np.broadcast_to(_CORNER_UV[index][:, None], (2, count)).copy(),
+                np.ones(count, dtype=bool),
+            )
+            for index in range(3)
+        ]
+        floats = points.middle
+        scale = np.abs(floats).max(axis=(0, 1))
+        scaled_ok = scale > 0.0
+        scaled = floats / np.where(scaled_ok, scale, 1.0)
+        for first, second in _EDGES:
+            a, b = scaled[first], scaled[second]
+            edge = b - a
+            size = _rows(edge, edge)
+            ok = scaled_ok & (size > 0.0)
+            value = -_rows(a, edge) / np.where(ok, size, 1.0)
+            value = np.clip(np.where(ok, value, 0.0), 0.0, 1.0)
+            proposals.append((_edge_uv_array(first, second, value), ok))
+        projected, ok = self.barycentric(floats, np.zeros((3, count)))
+        proposals.append((projected, ok & scaled_ok))
+        return proposals
+
+    @staticmethod
+    def barycentric(points: np.ndarray, target: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        """Wie ``_barycentric``: nur ein Probenvorschlag, keine obere Schranke."""
+        vectors = points - target
+        scale = np.abs(vectors).max(axis=(0, 1))
+        ok = (scale > 0.0) & np.isfinite(scale)
+        a, b, c = vectors / np.where(ok, scale, 1.0)
+        e, f = b - a, c - a
+        ee, ef, ff = _rows(e, e), _rows(e, f), _rows(f, f)
+        ae, af = _rows(a, e), _rows(a, f)
+        determinant = ee * ff - ef * ef
+        ok &= determinant > 0.0
+        safe = np.where(ok, determinant, 1.0)
+        return _legal_uv_array((af * ef - ae * ff) / safe, (ae * ef - af * ee) / safe), ok
+
+    def affine(self, points: _A, uv: np.ndarray) -> _A:
+        u = self.bands.number(uv[0])
+        v = self.bands.number(uv[1])
+        return points[0] + (points[1] - points[0]) * u + (points[2] - points[0]) * v
+
+    def support_radius(self, points: _A, direction: np.ndarray) -> np.ndarray:
+        """Wie ``_support_radius``: jede Richtung stützt eine gültige Ebene zum Ursprung."""
+        vector = self.bands.number(direction)
+        size = _a_norm(vector)
+        # Nicht ``size.lo > 0``: Ein ``nan`` muss den Weg ins Ergebnis behalten.
+        useless = size.lo <= 0.0
+        safe = _A(self.bands, np.where(useless, 1.0, size.lo), np.where(useless, 1.0, size.hi))
+        ratio = _a_dot(points, vector) / safe
+        return np.where(useless, 0.0, np.maximum(0.0, ratio.lo.min(axis=0)))
+
+    def radius_range(self, points: _A) -> tuple[_A, np.ndarray]:
+        """Wie ``_radius_range``: Stützradius nach unten, Eckennorm nach oben, nächste Probe."""
+        lower = np.zeros(self.count)
+        closest = np.zeros((2, self.count))
+        minimum = np.full(self.count, np.inf)
+        for uv, valid in self.closest_proposals(points):
+            self.sample(uv, valid)
+            point = self.affine(points, uv)
+            size = _a_norm(point)
+            better = valid & (size.hi < minimum)
+            minimum = np.where(better, size.hi, minimum)
+            closest = np.where(better, uv, closest)
+            support = self.support_radius(points, point.middle)
+            lower = np.maximum(lower, np.where(valid, support, 0.0))
+        upper = _a_norm(points).hi.max(axis=0)
+        return _A(self.bands, lower, upper), closest
+
+    def axis_proposal(self) -> tuple[np.ndarray, np.ndarray]:
+        """Der Achsentreffer im Dreieck als Probe — hier nur Zeuge, keine Schranke."""
+        e1, e2 = self.edges[0].middle, self.edges[1].middle
+        normal = np.cross(e1, e2, axis=0)
+        axis = self.axis.middle
+        denominator = _rows(normal, axis)
+        ok = np.any(normal != 0.0, axis=0) & (denominator != 0.0)
+        first = self.points[0].middle
+        height = _rows(normal, first)
+        point = axis * (height / np.where(ok, denominator, 1.0))
+        relative = point - first
+        aa, ab, bb = _rows(e1, e1), _rows(e1, e2), _rows(e2, e2)
+        ea, eb = _rows(relative, e1), _rows(relative, e2)
+        determinant = aa * bb - ab * ab
+        ok &= determinant > 0.0
+        safe = np.where(ok, determinant, 1.0)
+        u, v = (ea * bb - eb * ab) / safe, (eb * aa - ea * ab) / safe
+        ok &= (u >= 0.0) & (v >= 0.0) & (u + v <= 1.0)
+        return _legal_uv_array(u, v), ok
+
+    # --- Je Trägerart --------------------------------------------------------------
+
+    def tighten(self) -> None:
+        kind = self.kind
+        if kind == "plane":
+            corners = np.stack([value.hi for value in self.sample_value[:3]])
+            self.upper = np.minimum(self.upper, corners.max(axis=0))
+            return
+        radial = self.points if kind == "sphere" else self.radial(self.points)
+        radius, closest = self.radius_range(radial)
+        if kind in {"sphere", "cylinder"}:
+            self.upper = np.minimum(self.upper, (radius - self.radius).absolute().hi)
+        elif kind == "cone":
+            self.cone(radial, closest)
+        else:
+            self.torus(radial, radius, closest)
+
+    def cone(self, radial: _A, closest: np.ndarray) -> None:
+        """Wie ``_cone``: konkave Stützebenen umfassen H global, Kandidaten liefern die Zeugen."""
+        count = self.count
+        z = self.axial(self.points)
+        q = radial.middle
+        axial = z.middle
+        sine, cosine = self.sine.middle, self.cosine.middle
+        for first, second in _EDGES:
+            p, v = q[first], q[second] - q[first]
+            a, b = _rows(v, v), _rows(p, v)
+            ok = a > 0.0
+            safe_a = np.where(ok, a, 1.0)
+            u0 = -b / safe_a
+            self.sample(_edge_uv_array(first, second, np.clip(np.where(ok, u0, 0.0), 0.0, 1.0)), ok)
+            cross = np.cross(p, v, axis=0)
+            delta = _rows(cross, cross)
+            k = (axial[second] - axial[first]) * sine / cosine
+            steep = ok & (a > k * k)
+            denominator = np.where(steep, safe_a * safe_a * (safe_a - k * k), 1.0)
+            root = u0 + k * np.sqrt(np.maximum(0.0, delta / denominator))
+            inside = steep & (root >= 0.0) & (root <= 1.0)
+            self.sample(_edge_uv_array(first, second, np.where(inside, root, 0.0)), inside)
+        axis_uv, axis_ok = self.axis_proposal()
+        self.sample(axis_uv, axis_ok)
+        directions: list[tuple[np.ndarray, np.ndarray]] = [
+            (self.affine(radial, uv).middle, valid)
+            for uv, valid in zip(self.sample_uv, self.sample_valid, strict=True)
+        ]
+        directions.append((np.zeros((3, count)), np.ones(count, dtype=bool)))
+        # Am Achsenmaximum darf die Norm jeden Untergradienten aus der Einheitskugel
+        # haben. Die Schnittpunkte der drei linearen Stützbedingungen liefern die
+        # nötigen Vorschläge, ihre Zulässigkeit wird durch Normieren hergestellt.
+        best_z = self.axial(self.point(closest)).middle
+        slope = sine / cosine
+        offsets = slope * (axial - best_z)
+        for first, second in _EDGES:
+            left_vector, right_vector = q[first], q[second]
+            aa = _rows(left_vector, left_vector)
+            ab = _rows(left_vector, right_vector)
+            bb = _rows(right_vector, right_vector)
+            ok = aa > 0.0
+            directions.append(((offsets[first] / np.where(ok, aa, 1.0)) * left_vector, ok))
+            determinant = aa * bb - ab * ab
+            ok = determinant > 0.0
+            safe = np.where(ok, determinant, 1.0)
+            left = (offsets[first] * bb - offsets[second] * ab) / safe
+            right = (offsets[second] * aa - offsets[first] * ab) / safe
+            directions.append((left * left_vector + right * right_vector, ok))
+        h_upper = np.full(count, np.inf)
+        for direction, valid in directions:
+            valid = valid & np.isfinite(direction).all(axis=0)
+            vector = self.bands.number(np.where(valid, direction, 0.0))
+            size = _a_norm(vector)
+            # Auch die mathematisch normierte Richtung wird als Klammer gerechnet.
+            scale = _A(self.bands, np.maximum(1.0, size.lo), np.maximum(1.0, size.hi))
+            unit = vector * (self.bands.number(1.0) / scale)
+            projected = _a_dot(radial, unit)
+            bound = (self.sine * z - self.cosine * projected).hi.max(axis=0)
+            h_upper = np.where(valid, np.minimum(h_upper, bound), h_upper)
+        rho = _a_norm(radial)
+        h = self.sine * z - self.cosine * rho
+        t = self.sine * rho + self.cosine * z
+        outside = (h.negative_part().square() + t.negative_part().square()).sqrt().hi.max(axis=0)
+        self.upper = np.minimum(self.upper, np.maximum(0.0, np.maximum(outside, h_upper)))
+
+    def torus(self, radial: _A, radius: _A, closest: np.ndarray) -> None:
+        """Wie ``_torus`` vor der Verfeinerung: Ringzeugen und die Rechteckklammer."""
+        start = self.affine(radial, closest).middle
+        ring = self.radius.middle
+        corners = radial.middle
+        for index in range(3):
+            delta = corners[index] - start
+            a, b = _rows(delta, delta), _rows(start, delta)
+            c = _rows(start, start) - ring * ring
+            discriminant = b * b - a * c
+            ok = (a > 0.0) & (discriminant >= 0.0)
+            root = np.sqrt(np.maximum(0.0, discriminant))
+            for sign in (-1.0, 1.0):
+                value = (-b + sign * root) / np.where(ok, a, 1.0)
+                inside = ok & (value >= 0.0) & (value <= 1.0)
+                corner_uv = _CORNER_UV[index]
+                uv = _legal_uv_array(
+                    closest[0] + value * (corner_uv[0] - closest[0]),
+                    closest[1] + value * (corner_uv[1] - closest[1]),
+                )
+                self.sample(uv, inside)
+        heights = self.axial(self.points)
+        height = _A(self.bands, heights.lo.min(axis=0), heights.hi.max(axis=0))
+        # Dies ist auch für fast horizontale Ebenen gültig, ohne einen Winkel auf
+        # null zu setzen: der ganze tatsächliche Höhenbereich bleibt enthalten.
+        rectangle = ((radius - self.radius).square() + height.square()).sqrt()
+        self.upper = np.minimum(self.upper, (rectangle - self.tube_radius).absolute().hi)
+
+    # --- Ergebnis ------------------------------------------------------------------
+
+    def results(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Untergrenze samt Zeuge aus der Probentafel, Obergrenze aus den Schranken."""
+        values = np.stack(
+            [
+                np.where(valid, value.lo, -np.inf)
+                for value, valid in zip(self.sample_value, self.sample_valid, strict=True)
+            ]
+        )
+        best = values.argmax(axis=0)
+        everyone = np.arange(self.count)
+        lower = np.maximum(0.0, values[best, everyone])
+        uv = np.stack(self.sample_uv)[best, :, everyone]
+        witness = np.where((lower > 0.0)[:, None], uv, 0.0)
+        return lower, self.upper, witness
+
+
+def _triangle_array(triangles: Iterable[Triangle] | np.ndarray) -> np.ndarray:
+    if isinstance(triangles, np.ndarray):
+        array = np.asarray(triangles, dtype=np.float64)
+    else:
+        array = np.asarray(list(triangles), dtype=np.float64)
+    if array.size == 0:
+        return np.zeros((0, 3, 3))
+    if array.ndim != 3 or array.shape[1:] != (3, 3):
+        raise ValueError("Dreiecke werden als (n, 3, 3)-Feld aus Ecken erwartet.")
+    return array
+
+
+def _scalar_result(surface: _Surface, triangle: Triangle, epsilon: float) -> FacetDeviation | None:
+    """Ein einzelnes Dreieck über die skalaren Klammern — Sonderfälle und Torusverfeinerung."""
+    try:
+        facet = _Facet(triangle, surface)
+        # Eine numerisch offene Kandidatenrechnung löscht keinen
+        # bereits gesicherten globalen Ausgangsnachweis.
+        with suppress(ArithmeticError):
+            _tighten(facet, epsilon)
+        # Auch eine überlaufende Lipschitzsumme darf nach offener
+        # Verfeinerung nicht als unendliche Ergebnisklammer erscheinen.
+        bounds = _I(facet.lower, facet.upper)
+    except ArithmeticError:
+        return None
+    return FacetDeviation(
+        bounds.lo, bounds.hi, facet.witness, _up(bounds.hi - bounds.lo) <= epsilon
+    )
+
+
+def _within_batch_magnitude(surface: _Surface) -> bool:
+    """Ob Ursprung, Achse und Radien klein genug für den Stapel sind."""
+    bounds = [
+        *surface.origin,
+        *surface.axis,
+        surface.axis_size,
+        surface.radius,
+        surface.tube_radius,
+    ]
+    return all(max(abs(value.lo), abs(value.hi)) < _BATCH_MAGNITUDE for value in bounds)
+
+
+def _bounded(
+    surfaces: Sequence[_Surface | None],
+    owner: np.ndarray,
+    triangles: np.ndarray,
+    epsilon: float,
+    token: CancelToken,
+    progress: Callable[[int, int], None] | None,
+) -> Iterator[DeviationTable]:
+    """Je Block eine Tafel in Reihenfolge; Träger ohne Vorbereitung liefern unbekannt.
+
+    Der Stapel füllt, was er sicher rechnen kann; die übrigen Dreiecke —
+    Torus über der Zielbreite, Zahlen über ``_BATCH_MAGNITUDE``, ein
+    vermerkter Quotient — rechnet der skalare Weg einzeln nach, mit dem
+    Abbruch zwischen je zwei Dreiecken.
+    """
+    kinds = {surface.patch.kind for surface in surfaces if surface is not None}
+    assert len(kinds) <= 1, "ein Stapel je Trägerart"
+    kind = next(iter(kinds), "")
+    prepared = np.array([surface is not None for surface in surfaces], dtype=bool)
+    batchable = np.array(
+        [surface is not None and _within_batch_magnitude(surface) for surface in surfaces],
+        dtype=bool,
+    )
+    live = [
+        surface
+        for surface, ok in zip(surfaces, batchable, strict=True)
+        if ok and surface is not None
+    ]
+    live_index = np.cumsum(batchable) - 1
+    total = len(triangles)
+    for start in range(0, total, _CHUNK):
+        token.raise_if_cancelled()
+        chunk = triangles[start : start + _CHUNK]
+        chunk_owner = owner[start : start + _CHUNK]
+        finite = np.isfinite(chunk).all(axis=(1, 2)) & prepared[chunk_owner]
+        batched = (
+            finite & (np.abs(chunk).max(axis=(1, 2)) < _BATCH_MAGNITUDE) & batchable[chunk_owner]
+        )
+        count = len(chunk)
+        lower = np.full(count, np.nan)
+        upper = np.full(count, np.nan)
+        witness = np.zeros((count, 2))
+        if batched.any():
+            # Der Stapel rechnet alle Dreiecke des Blocks; was er nicht
+            # übernehmen darf, steht auf null und wird danach nicht gelesen.
+            with np.errstate(all="ignore"):
+                batch = _Batch(
+                    kind,
+                    live,
+                    live_index[np.where(batched, chunk_owner, np.flatnonzero(batchable)[0])],
+                    np.where(batched[:, None, None], chunk, 0.0),
+                )
+                token.raise_if_cancelled()
+                batch.tighten()
+                batch_lower, batch_upper, batch_witness = batch.results()
+            valid = (
+                batched
+                & ~batch.bands.bad
+                & np.isfinite(batch_lower)
+                & np.isfinite(batch_upper)
+                & (batch_lower <= batch_upper)
+            )
+            trusted = valid
+            if kind == "torus":
+                trusted = valid & (_up_array(batch_upper - batch_lower) <= epsilon)
+            lower[trusted] = batch_lower[trusted]
+            upper[trusted] = batch_upper[trusted]
+            witness[trusted] = batch_witness[trusted]
+            remaining = finite & ~trusted
+        else:
+            valid = np.zeros(count, dtype=bool)
+            remaining = finite
+        for index in np.flatnonzero(remaining):
+            token.raise_if_cancelled()
+            surface = surfaces[int(chunk_owner[index])]
+            assert surface is not None
+            if valid[index] and surface.refinements < 3:
+                # Das Budget des Trägers ist verbraucht: Der skalare Weg gäbe
+                # dieselbe Rechteckklammer zurück, die der Stapel schon hat.
+                lower[index], upper[index] = batch_lower[index], batch_upper[index]
+                witness[index] = batch_witness[index]
+                continue
+            triangle = cast(
+                Triangle, tuple(tuple(float(v) for v in point) for point in chunk[index])
+            )
+            result = _scalar_result(surface, triangle, epsilon)
+            if result is not None:
+                lower[index], upper[index] = result.lower_mm, result.upper_mm
+                witness[index] = result.witness_uv
+        token.raise_if_cancelled()
+        with np.errstate(invalid="ignore"):
+            converged = _up_array(upper - lower) <= epsilon
+        yield DeviationTable(lower, upper, witness, converged & np.isfinite(lower))
+        if progress is not None:
+            progress(min(total, start + _CHUNK), total)
+
+
+def _checked_epsilon(epsilon_mm: float) -> None:
+    if isinstance(epsilon_mm, bool) or not math.isfinite(epsilon_mm) or epsilon_mm <= 0.0:
+        raise ValueError("Die numerische Zielbreite muss endlich und positiv sein.")
+
+
 def deviation_bounds(
     patch: SurfacePatch,
-    triangles: Iterable[Triangle],
+    triangles: Iterable[Triangle] | np.ndarray,
     *,
     epsilon_mm: float,
     cancelled: CancelToken | None = None,
@@ -772,35 +1603,97 @@ def deviation_bounds(
     ``None`` bezeichnet ungültige oder nicht endlich einschließbare Daten,
     niemals einen gemessenen Nullabstand. Die Zuordnung zum Patch übernimmt der
     Aufrufer. Ein Abbruch wird durchgereicht, auch während der Vorbereitung.
+
+    Die Dreiecke kommen als Tupel oder als ``(n, 3, 3)``-Feld; gerechnet wird
+    für alle zugleich (``_Batch``), und nur ein Torusdreieck über der
+    Zielbreite oder ein Dreieck, dessen Rechnung der Stapel nicht übernehmen
+    darf, geht den skalaren Weg. Für viele Träger derselben Art nimmt
+    `deviation_bounds_grouped` alle in einen Stapel und gibt Tafeln zurück.
     """
-    if isinstance(epsilon_mm, bool) or not math.isfinite(epsilon_mm) or epsilon_mm <= 0.0:
-        raise ValueError("Die numerische Zielbreite muss endlich und positiv sein.")
+    _checked_epsilon(epsilon_mm)
     token = cancelled if cancelled is not None else NeverCancelled()
     token.raise_if_cancelled()
     try:
         surface = _prepare(patch, token)
     except ArithmeticError:
         surface = None
-    for triangle in triangles:
-        token.raise_if_cancelled()
-        result = None
-        if surface is not None:
-            try:
-                facet = _Facet(triangle, surface)
-                # Eine numerisch offene Kandidatenrechnung löscht keinen
-                # bereits gesicherten globalen Ausgangsnachweis.
-                with suppress(ArithmeticError):
-                    _tighten(facet, epsilon_mm)
-                # Auch eine überlaufende Lipschitzsumme darf nach offener
-                # Verfeinerung nicht als unendliche Ergebnisklammer erscheinen.
-                bounds = _I(facet.lower, facet.upper)
-                result = FacetDeviation(
-                    bounds.lo,
-                    bounds.hi,
-                    facet.witness,
-                    _up(bounds.hi - bounds.lo) <= epsilon_mm,
+    array = _triangle_array(triangles)
+    for table in _bounded(
+        [surface], np.zeros(len(array), dtype=np.intp), array, epsilon_mm, token, None
+    ):
+        known = table.known
+        for index in range(len(known)):
+            token.raise_if_cancelled()
+            yield (
+                FacetDeviation(
+                    float(table.lower_mm[index]),
+                    float(table.upper_mm[index]),
+                    (float(table.witness_uv[index, 0]), float(table.witness_uv[index, 1])),
+                    bool(table.converged[index]),
                 )
-            except ArithmeticError:
-                pass
-        token.raise_if_cancelled()
-        yield result
+                if known[index]
+                else None
+            )
+
+
+def deviation_bounds_grouped(
+    patches: Sequence[SurfacePatch],
+    triangles: Sequence[np.ndarray],
+    *,
+    epsilon_mm: float,
+    cancelled: CancelToken | None = None,
+    progress: Callable[[int, int], None] | None = None,
+) -> list[DeviationTable]:
+    """Dieselbe Klammer je Dreieck für viele Träger — je Trägerart ein Stapel.
+
+    ``triangles[i]`` sind die Dreiecke des Trägers ``patches[i]`` als
+    ``(n, 3, 3)``-Feld; zurück kommt je Träger eine `DeviationTable` in
+    derselben Reihenfolge. ``progress`` erfährt nach jedem Block, wie viele
+    Dreiecke von allen fertig sind. Das Verfeinerungsbudget des Torus gilt
+    weiter je Träger.
+    """
+    _checked_epsilon(epsilon_mm)
+    if len(patches) != len(triangles):
+        raise ValueError("Je Träger genau ein Dreiecksfeld.")
+    token = cancelled if cancelled is not None else NeverCancelled()
+    token.raise_if_cancelled()
+    surfaces: list[_Surface | None] = []
+    for patch in patches:
+        try:
+            surfaces.append(_prepare(patch, token))
+        except ArithmeticError:
+            surfaces.append(None)
+    arrays = [_triangle_array(entry) for entry in triangles]
+    results: list[DeviationTable | None] = [None] * len(patches)
+    total = sum(len(entry) for entry in arrays)
+    done = 0
+    by_kind: dict[str, list[int]] = {}
+    for index, patch in enumerate(patches):
+        by_kind.setdefault(patch.kind, []).append(index)
+    for members in by_kind.values():
+        stacked = np.concatenate([arrays[index] for index in members])
+        owner = np.concatenate(
+            [
+                np.full(len(arrays[index]), position, dtype=np.intp)
+                for position, index in enumerate(members)
+            ]
+        )
+        offset = done
+
+        def report(count: int, _total: int, offset: int = offset) -> None:
+            if progress is not None:
+                progress(offset + count, total)
+
+        tables = list(
+            _bounded(
+                [surfaces[index] for index in members], owner, stacked, epsilon_mm, token, report
+            )
+        )
+        joined = DeviationTable.joined(tables, len(stacked))
+        cursor = 0
+        for index in members:
+            size = len(arrays[index])
+            results[index] = joined.sliced(cursor, cursor + size)
+            cursor += size
+        done += len(stacked)
+    return [table if table is not None else DeviationTable.empty() for table in results]

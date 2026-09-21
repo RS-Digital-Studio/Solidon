@@ -876,18 +876,35 @@ def normalise(
             )
         )
 
-    diagonal = float(np.linalg.norm(body.extents)) if len(body.faces) else 0.0
+    # Die Diagonale direkt aus den Ecken: ``body.extents`` läuft über
+    # ``bounds`` und die über die referenzierten Ecken — am 1,3-M-Netz 135 ms
+    # für ein Minimum und ein Maximum (Review, 21.09.2026).
+    vertices = np.asarray(body.vertices, dtype=np.float64)
+    diagonal = (
+        float(np.linalg.norm(vertices.max(axis=0) - vertices.min(axis=0)))
+        if len(body.faces)
+        else 0.0
+    )
 
     # 2 — Eckpunkte verschweißen, mit einer Toleranz, die der Modellgröße folgt.
     welded = False
+    # Ob das Netz vor einem Schritt dicht war, wird je Netz einmal gefragt
+    # und danach weitergereicht: ``is_watertight`` kostet am 1,3-M-Netz
+    # 330 ms, und ein Verschweißen, das nichts zusammenlegt, ändert die
+    # Antwort nicht. Eine Dreieckssuppe — jede Ecke genau einmal gebraucht,
+    # wie jede STL sie speichert — ist nie dicht, ohne dass jemand zählt.
+    closed: bool | None = None
+    if len(body.faces) and len(body.vertices) == 3 * len(body.faces):
+        closed = False
     if weld and len(body.faces):
         progress(0.2, str(_("Punkte verschweißen")))
         before = len(body.vertices)
-        was_closed = bool(body.is_watertight)
+        was_closed = bool(body.is_watertight) if closed is None else closed
         tolerance = weld_tolerance(diagonal)
         unwelded = body.copy() if was_closed else None
         body.merge_vertices(digits_vertex=weld_digits(tolerance))
         welded = len(body.vertices) < before
+        closed = was_closed if not welded else None
         # **Ein Verschweißen, das das Netz aufreißt, wird zurückgenommen.**
         #
         # Zwei Punkte, die dichter beieinanderliegen als die Toleranz, gehören
@@ -901,6 +918,7 @@ def normalise(
         if welded and unwelded is not None and not body.is_watertight:
             body = unwelded
             welded = False
+            closed = True
             findings.append(
                 Finding(
                     code="ingest.weld_skipped",
@@ -927,7 +945,8 @@ def normalise(
     if remove_degenerate and len(body.faces):
         progress(0.4, str(_("Entartete Dreiecke entfernen")))
         before = len(body.faces)
-        was_closed = bool(body.is_watertight)
+        was_closed = bool(body.is_watertight) if closed is None else closed
+        closed = was_closed
         intact = body.copy() if was_closed else None
         intact_slots = slots
         keep = body.nondegenerate_faces(height=EPS_GEOM)
@@ -940,6 +959,8 @@ def normalise(
             slots = slots[np.asarray(unique, dtype=bool)]
         body.remove_unreferenced_vertices()
         removed = before - len(body.faces)
+        if removed:
+            closed = None
         # **Dasselbe Zurücknehmen wie beim Verschweißen, aus demselben Grund.**
         #
         # In einem geschlossenen Netz ist jedes Dreieck an zwei Kanten der
@@ -961,6 +982,7 @@ def normalise(
             body = intact
             slots = intact_slots
             removed = 0
+            closed = True
             findings.append(
                 Finding(
                     code="ingest.degenerate_kept",
@@ -992,14 +1014,19 @@ def normalise(
                 )
             )
 
-    # 4 — Normalen und Orientierung.
+    # 4 — Normalen und Orientierung. Ob etwas korrigiert wurde, sagen die
+    # Dreiecke selbst — ein Vergleich vorher/nachher —, nicht zwei Volumina:
+    # ``body.volume`` rechnet den ganzen Trägheitstensor, 490 ms am 1,3-M-Netz,
+    # für eine Frage nach dem Vorzeichen.
+    if closed is None and len(body.faces):
+        closed = bool(body.is_watertight)
     if unify_normals and len(body.faces):
         progress(0.6, str(_("Außenseiten angleichen")))
-        was_volume = float(body.volume)
+        faces_before = np.array(body.faces, copy=True)
         trimesh.repair.fix_winding(body)
-        if body.is_watertight:
+        if closed:
             trimesh.repair.fix_inversion(body)
-        if was_volume < 0.0 <= float(body.volume):
+        if not np.array_equal(np.asarray(body.faces), faces_before):
             findings.append(
                 Finding(
                     code="ingest.normals_flipped",
@@ -1026,7 +1053,18 @@ def normalise(
     if too_fine is not None:
         findings.append(too_fine)
 
-    if not body.is_watertight and len(body.faces):
+    if len(body.faces):
+        # Die Kennzahlen, die das Fenster gleich liest — Volumen, Fläche,
+        # Dichtheit, Teilezahl — sind hier im Arbeiter gerechnet und liegen im
+        # Cache des Netzes; der Hauptthread liest sie nur noch ab.
+        cache = getattr(body, "_cache", None)
+        if cache is not None:
+            cache.verify()
+            cache["is_watertight"] = bool(closed)
+            cache["solidon_component_count"] = components
+        for figure in ("volume", "area"):
+            getattr(body, figure)
+    if not closed and len(body.faces):
         findings.append(
             Finding(
                 code="ingest.not_watertight",

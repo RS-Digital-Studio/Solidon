@@ -12,7 +12,7 @@ import trimesh
 from app.core.errors import OperationCancelled
 from app.core.geom.mesh import MeshData
 from app.core.scene import CancelSignal
-from app.core.scene.fits import check
+from app.core.scene.fits import check, overlap
 from app.core.types import Feature, FeatureRef, Fit, Profile, Scene, SceneObject
 
 
@@ -93,21 +93,27 @@ def test_flush_planes_and_full_body_overlap_are_independent(
     )
     native_before = native_bytes(native_scene)
     findings = check(scene, profile)
-    code = (
-        "fit.geometry_approximate"
-        if kind.startswith("mixed")
-        else "fit.collision"
-        if volume
-        else "fit.geometry_clear"
-    )
-    assert [finding.code for finding in findings] == (["fit.violated"] if violated else []) + [code]
-    found = findings[-1]
-    assert found.values["geometry_source"] == ("mixed" if kind.startswith("mixed") else kind)
-    assert found.values["overlap_mm3"] == pytest.approx(volume, abs=1e-9)
-    assert found.values["intersects"] is (volume > 0.0)
-    assert found.severity == ("info" if code == "fit.geometry_clear" else "warning")
-    if not volume:
-        assert "Flächenkontakt" in str(found.message) and "nicht nachgewiesen" in str(found.message)
+    expected = ["fit.violated"] if violated else []
+    if kind.startswith("mixed"):
+        # Eine Näherung sagt es immer — als Warnung bei Überschneidung, sonst als Hinweis.
+        expected.append("fit.geometry_approximate")
+    elif volume:
+        expected.append("fit.collision")
+    assert [finding.code for finding in findings] == expected
+    probe = overlap(scene, scene.fits[0])
+    assert probe is not None
+    assert probe.source == ("mixed" if kind.startswith("mixed") else kind)
+    assert probe.overlap_mm3 == pytest.approx(volume, abs=1e-9)
+    assert probe.intersects is (volume > 0.0)
+    if kind.startswith("mixed") or volume:
+        found = findings[-1]
+        assert found.values["geometry_source"] == probe.source
+        assert found.values["overlap_mm3"] == pytest.approx(volume, abs=1e-9)
+        assert found.values["intersects"] is (volume > 0.0)
+        assert found.severity == ("warning" if volume else "info")
+        if not volume:
+            assert "Flächenkontakt" in str(found.message)
+            assert "nicht nachgewiesen" in str(found.message)
     assert native_bytes(native_scene) == native_before
     for name, mesh in meshes.items():
         np.testing.assert_array_equal(mesh.vertices, before[name][0])
@@ -119,7 +125,9 @@ def test_flush_planes_and_full_body_overlap_are_independent(
 def test_flush_without_two_bodies_in_one_plate_has_no_volume_result(
     profile: Profile, monkeypatch: pytest.MonkeyPatch, reason: str
 ) -> None:
-    """Unvergleichbare Platten und zwei Ebenen eines Körpers sind keine Körperkollision."""
+    """Unvergleichbare Platten und zwei Ebenen eines Körpers sind keine Körperkollision —
+    und auch kein Befund: Die Lage ist nicht modelliert, also gibt es nichts zu melden.
+    """
     from app.core.geom import measure
 
     scene = flush_pair(profile, offset=(0.0, 0.0, 0.0))
@@ -146,11 +154,8 @@ def test_flush_without_two_bodies_in_one_plate_has_no_volume_result(
         pytest.fail("there is no applicable shared body pose")
 
     monkeypatch.setattr(measure, "body_overlap", forbidden)
-    found = check(scene, profile)
-    assert [finding.code for finding in found] == ["fit.pose_unknown"]
-    assert found[0].values["reason"] == reason
-    assert "overlap_mm3" not in found[0].values and "intersects" not in found[0].values
-    assert "koaxial" not in str(found[0].message)
+    assert check(scene, profile) == []
+    assert overlap(scene, scene.fits[0]) is None
 
 
 @pytest.mark.parametrize("normal", [None, (0.0, 0.0, 0.0), (float("nan"), 0.0, 1.0)])
@@ -205,10 +210,12 @@ def pair(profile: Profile, *, segments: int = 256, angle: float = 0.0) -> Scene:
 
 
 def geometry_finding(scene: Scene):
-    """Die Körperprobe bleibt neben einem möglichen Nennmaßbefund sichtbar."""
+    """Der Körperbefund neben einem möglichen Nennmaßbefund — oder None, wenn die
+    Probe nichts zu sagen hat: keine belegte Lage oder keine Überschneidung.
+    """
     found = [finding for finding in check(scene, scene.profile) if finding.code != "fit.violated"]
-    assert len(found) == 1
-    return found[0]
+    assert len(found) <= 1
+    return found[0] if found else None
 
 
 def test_fine_pin_intersects_coarse_socket_despite_matching_diameters(profile: Profile) -> None:
@@ -218,7 +225,7 @@ def test_fine_pin_intersects_coarse_socket_despite_matching_diameters(profile: P
         for key, entry in scene.objects.items()
     }
     finding = geometry_finding(scene)
-    assert finding.code == "fit.collision"
+    assert finding is not None and finding.code == "fit.collision"
     # Kreisabschnitt hinter jeder der 16 Innenkanten. Die Sehnen des Stifts
     # entfernen höchstens dessen gesamte Kreis-Polygon-Flächendifferenz.
     radius, apothem = 14.8, 15.0 * math.cos(math.pi / 16)
@@ -231,18 +238,26 @@ def test_fine_pin_intersects_coarse_socket_despite_matching_diameters(profile: P
         np.testing.assert_array_equal(entry.mesh.raw.faces, before[key][1])
 
 
-@pytest.mark.parametrize(
-    "angle, expected", [(0.0, "fit.geometry_clear"), (math.pi / 16, "fit.collision")]
-)
+@pytest.mark.parametrize("angle, expected", [(0.0, None), (math.pi / 16, "fit.collision")])
 def test_polygon_phase_changes_collision_without_changing_diameter(
-    profile: Profile, angle: float, expected: str
+    profile: Profile, angle: float, expected: str | None
 ) -> None:
-    finding = geometry_finding(pair(profile, segments=16, angle=angle))
-    assert finding.code == expected
+    """Dieselben Durchmesser, zwei Drehlagen: einmal frei — kein Befund, die Zahl
+    sagt null —, einmal eine Kollision der Ecken."""
+    scene = pair(profile, segments=16, angle=angle)
+    finding = geometry_finding(scene)
+    assert (finding.code if finding is not None else None) == expected
+    probe = overlap(scene, scene.fits[0])
+    assert probe is not None
+    assert probe.intersects is (expected is not None)
 
 
 @pytest.mark.parametrize("change", ["plate", "apart", "no_axis", "no_depth", "axially_apart"])
-def test_unproven_installation_pose_is_not_clear(profile: Profile, change: str) -> None:
+def test_unproven_installation_pose_is_no_finding_and_no_number(
+    profile: Profile, change: str
+) -> None:
+    """Andere Platte, weit auseinander, ohne Achse oder Tiefe: keine Lage, kein Befund,
+    keine Zahl — bis zum 21.09.2026 stand hier eine unbehebbare Warnung."""
     scene = pair(profile, segments=16)
     pin = scene.objects["pin"]
     feature = pin.features["mating"]
@@ -258,7 +273,8 @@ def test_unproven_installation_pose_is_not_clear(profile: Profile, change: str) 
     else:
         params.pop("axis" if change == "no_axis" else "length")
     scene.objects["pin"] = replace(pin, features={"mating": replace(feature, params=params)})
-    assert geometry_finding(scene).code == "fit.pose_unknown"
+    assert geometry_finding(scene) is None
+    assert overlap(scene, scene.fits[0]) is None
 
 
 def test_open_mesh_is_failed_not_a_valid_empty_intersection(profile: Profile) -> None:
@@ -268,10 +284,14 @@ def test_open_mesh_is_failed_not_a_valid_empty_intersection(profile: Profile) ->
     scene.objects["pin"] = replace(
         pin, mesh=MeshData(trimesh.Trimesh(mesh.vertices, mesh.faces[:-1], process=False))
     )
-    assert geometry_finding(scene).code == "fit.geometry_failed"
+    failed = geometry_finding(scene)
+    assert failed is not None and failed.code == "fit.geometry_failed"
 
 
 def test_press_probe_does_not_approve_all_interference(profile: Profile) -> None:
+    """Übermaß ist bei einer Presspassung vorgesehen — die Probe sagt als Hinweis,
+    dass sie weder Montage noch Verformung belegt, und nennt die gemessene
+    Überschneidung; eine Warnung an jeder Presspassung wäre Lärm."""
     scene = pair(profile)
     scene.fits = [replace(scene.fits[0], kind="press", tolerance=-0.1)]
     pin = scene.objects["pin"]
@@ -280,9 +300,10 @@ def test_press_probe_does_not_approve_all_interference(profile: Profile) -> None
     pin.features["mating"] = replace(feature, params={**feature.params, "diameter": 30.1})
     assert not any(item.code == "fit.violated" for item in check(scene, profile))
     finding = geometry_finding(scene)
-    assert finding.code == "fit.press_unverified"
-    assert finding.severity == "warning"
+    assert finding is not None and finding.code == "fit.press_unverified"
+    assert finding.severity == "info"
     assert finding.values["overlap_mm3"] > 0.0
+    assert "weder die Montage noch die Verformung" in str(finding.message)
 
 
 def test_clear_polygon_pose_does_not_erase_contour_uncertainty(profile: Profile) -> None:
@@ -298,10 +319,7 @@ def test_clear_polygon_pose_does_not_erase_contour_uncertainty(profile: Profile)
                 "radial_max": radius,
             },
         )
-    assert [item.code for item in check(scene, profile)] == [
-        "fit.mesh_uncertain",
-        "fit.geometry_clear",
-    ]
+    assert [item.code for item in check(scene, profile)] == ["fit.mesh_uncertain"]
 
 
 def test_cancelled_probe_never_returns_clear(profile: Profile) -> None:
@@ -352,9 +370,15 @@ def test_native_full_bodies_include_floor_and_preserve_input(profile: Profile, f
     scene = native_pair(profile, floor=floor)
     before = native_bytes(scene)
     found = geometry_finding(scene)
-    assert found.code == ("fit.collision" if floor else "fit.geometry_clear")
-    assert found.values["geometry_source"] == "native"
-    assert found.values["overlap_mm3"] == pytest.approx(math.pi * 14.8**2 if floor else 0.0)
+    probe = overlap(scene, scene.fits[0])
+    assert probe is not None and probe.source == "native"
+    assert probe.overlap_mm3 == pytest.approx(math.pi * 14.8**2 if floor else 0.0)
+    if floor:
+        assert found is not None and found.code == "fit.collision"
+        assert found.values["geometry_source"] == "native"
+        assert found.values["overlap_mm3"] == pytest.approx(math.pi * 14.8**2)
+    else:
+        assert found is None, "no overlap, no finding"
     assert native_bytes(scene) == before
 
 
@@ -363,9 +387,11 @@ def test_mixed_probe_is_explicitly_a_mesh_approximation(profile: Profile, native
     scene = pair(profile)
     scene.objects[native_side] = native_pair(profile).objects[native_side]
     found = geometry_finding(scene)
-    assert found.code == "fit.geometry_approximate"
+    assert found is not None and found.code == "fit.geometry_approximate"
     assert found.values["geometry_source"] == "mixed"
     assert found.values["intersects"] is (native_side == "pin")
+    # Eine Näherung ohne Überschneidung ist ein Hinweis, mit einer eine Warnung.
+    assert found.severity == ("warning" if native_side == "pin" else "info")
 
 
 @pytest.mark.parametrize("deflection", [0.01, 0.1])
@@ -392,6 +418,7 @@ def test_native_rotation_and_tessellation_resolution_preserve_full_body_result(
         )
     before = native_bytes(scene)
     actual = geometry_finding(scene)
+    assert actual is not None and expected is not None
     assert actual.code == expected.code == "fit.collision"
     assert actual.values["overlap_mm3"] == pytest.approx(expected.values["overlap_mm3"], rel=1e-8)
     assert native_bytes(scene) == before
@@ -415,6 +442,7 @@ def test_common_rigid_transform_and_subdivision_preserve_collision(
             params={**feature.params, "centre": tuple(matrix[:3, 3]), "axis": tuple(matrix[:3, 2])},
         )
     found = geometry_finding(scene)
+    assert found is not None and original is not None
     assert found.code == original.code
     assert found.values["overlap_mm3"] == pytest.approx(original.values["overlap_mm3"], rel=1e-8)
 
@@ -477,7 +505,7 @@ def test_kernel_error_is_not_clear_and_no_repair_is_attempted(
     monkeypatch.setattr(importlib.import_module("app.core.geom.boolean"), "boolean", fail)
     scene = flush_pair(profile) if flush else pair(profile)
     found = geometry_finding(scene)
-    assert found.code == "fit.geometry_failed"
+    assert found is not None and found.code == "fit.geometry_failed"
     assert "overlap_mm3" not in found.values and "intersects" not in found.values
     assert calls == [("intersection", ("direct",), True)]
 
@@ -630,7 +658,8 @@ def test_invalid_native_input_is_never_accepted_by_either_probe(
     if mixed:
         source = flush_pair(profile) if flush else pair(profile)
         scene.objects["socket"] = source.objects["socket"]
-    assert geometry_finding(scene).code == "fit.geometry_failed"
+    failed = geometry_finding(scene)
+    assert failed is not None and failed.code == "fit.geometry_failed"
 
 
 @pytest.mark.parametrize("flush", [False, True])
@@ -656,7 +685,8 @@ def test_native_kernel_failure_after_build_preserves_original_bytes(
             raise RuntimeError("forced native failure after build")
 
     monkeypatch.setattr(kernel, "boolean_builder", FailAfterBuild)
-    assert geometry_finding(scene).code == "fit.geometry_failed"
+    failed = geometry_finding(scene)
+    assert failed is not None and failed.code == "fit.geometry_failed"
     assert native_bytes(scene) == before
 
 
@@ -741,17 +771,20 @@ def test_flush_missing_reference_stays_an_error(profile: Profile) -> None:
 
 
 @pytest.mark.parametrize(
-    ("kind", "offset", "plate", "caption"),
+    ("kind", "offset", "plate", "codes", "caption"),
     [
-        ("mesh", (20.0, 0.0, 0.0), 0, "Teil einer Passung"),
-        ("native", (5.0, 0.0, 0.0), 0, "Passung verletzt"),
-        ("mixed_1", (20.0, 0.0, 0.0), 0, "Passung prüfen"),
-        ("mesh", (5.0, 0.0, 0.0), 1, "Passung prüfen"),
-        ("mesh", (0.0, 0.0, 0.3), 0, "Passung verletzt"),
+        ("mesh", (20.0, 0.0, 0.0), 0, [], "Teil einer Passung"),
+        ("native", (5.0, 0.0, 0.0), 0, ["fit.collision"], "Passung verletzt"),
+        # Die Näherung ohne Überschneidung ist ein Hinweis, und ein Hinweis färbt
+        # die Karte nicht um.
+        ("mixed_1", (20.0, 0.0, 0.0), 0, ["fit.geometry_approximate"], "Teil einer Passung"),
+        # Zwei Platten: keine Lage, kein Befund — und damit auch nichts zu prüfen.
+        ("mesh", (5.0, 0.0, 0.0), 1, [], "Teil einer Passung"),
+        ("mesh", (0.0, 0.0, 0.3), 0, ["fit.violated", "fit.collision"], "Passung verletzt"),
     ],
 )
 def test_flush_report_reaches_map_digest_agent_and_either_export_partner(
-    profile: Profile, kind: str, offset, plate: int, caption: str
+    profile: Profile, kind: str, offset, plate: int, codes: list[str], caption: str
 ) -> None:
     """Die Verbraucher sehen die echten Prüfergebnisse ohne neue eigene Geometrieprobe."""
     from app.core.agent import checks
@@ -767,7 +800,7 @@ def test_flush_report_reaches_map_digest_agent_and_either_export_partner(
     document = Document(format_version=1, app_version="0.0.1", fits=list(scene.fits))
     text = digest(scene, document)
     fit_findings = list(scene.report.findings)
-    assert fit_findings
+    assert [finding.code for finding in fit_findings] == codes
     for finding in fit_findings:
         assert ("verletzt" if finding.code == "fit.violated" else str(finding.message)) in text
     result = EvaluationResult(scene=scene)
@@ -815,8 +848,9 @@ def test_flush_document_movement_cache_reopen_and_undo_preserve_both_checks(
     current = [
         finding for finding in moved.scene.report.findings if finding.code.startswith("fit.")
     ]
-    assert [finding.code for finding in current] == ["fit.violated", "fit.geometry_clear"]
-    assert current[-1].values["overlap_mm3"] == pytest.approx(0.0)
+    assert [finding.code for finding in current] == ["fit.violated"]
+    probe = overlap(moved.scene, moved.scene.fits[0])
+    assert probe is not None and probe.overlap_mm3 == pytest.approx(0.0)
     assert (
         evaluate(document, profile, registry=registry, cache=cache).scene.report
         == moved.scene.report

@@ -228,9 +228,10 @@ liegt dafür in der Funktion — `export → scene` ist eine **träge** Kante un
 steht so in `tests/test_core_package_direction.py`.
 
 `check_before_export(..., cancelled=...)` reicht denselben Abbruchvertrag an
-die aktuelle Körperprobe aus `scene.fits.check` weiter. Gültige leere
-Verschneidung, Kollision, unbekannte Einbaulage und gemischte Netznäherung
-werden wie in der Auswertung berichtet; ein Abbruch liefert keinen halben
+die aktuelle Körperprobe aus `scene.fits.check` weiter. Kollision und
+gemischte Netznäherung werden wie in der Auswertung berichtet — eine leere
+Verschneidung und eine unbelegte Einbaulage sind kein Befund (21.09.2026);
+ein Abbruch liefert keinen halben
 Exportbericht. Eine Passungsbeziehung wird für jeden ausgewählten Partner
 gemeldet, auch wenn nur der Stift und nicht die im Befund fokussierte Öffnung
 exportiert wird. Unbeteiligte Körper übernehmen diesen Befund nicht.

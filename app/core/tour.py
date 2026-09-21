@@ -734,9 +734,10 @@ TOURS: Final[tuple[Tour, ...]] = (
             TourStep(
                 shows="report",
                 text=_(
-                    "Die Passung steht auch im Prüfbericht. Dose und Deckel liegen "
-                    "getrennt zum Drucken; ihre Einbaulage ist deshalb noch ungeprüft. "
-                    "Das Materialprofil bestimmt das vorgesehene Spiel."
+                    "Zur Passung steht nichts im Prüfbericht: Das Spiel stimmt mit dem "
+                    "Materialprofil überein, und eine verletzte Passung stünde hier als "
+                    "Warnung. Dose und Deckel liegen getrennt zum Drucken; die Körper in "
+                    "Einbaulage werden erst geprüft, wenn sie ineinanderstehen."
                 ),
             ),
         ),
@@ -753,9 +754,8 @@ TOURS: Final[tuple[Tour, ...]] = (
         intro=_(
             "Dieses Beispiel zeigt eine Warnung zum Materialspiel: Der Deckel soll "
             "aus weichem TPU kommen, doch das vorgesehene Spiel reicht dafür nicht "
-            "aus. Die Teile liegen getrennt zum Drucken. Deshalb bleibt zusätzlich "
-            "ihre Einbaulage ungeprüft. Die nächsten Schritte zeigen, wie Sie die "
-            "Materialwarnung in einem Zug beheben."
+            "aus. Die nächsten Schritte zeigen, wie Sie die Warnung in einem Zug "
+            "beheben."
         ),
         steps=(
             TourStep(
@@ -764,8 +764,7 @@ TOURS: Final[tuple[Tour, ...]] = (
                     "Die Meldung zur Passung vergleicht das vorhandene Spiel mit "
                     "dem Materialprofil: bei einer Dose aus PLA 0,20 mm, für den "
                     "TPU-Deckel 0,35 mm. Bei anderen Materialien gelten die Zahlen "
-                    "im Prüfbericht. Der weitere Hinweis betrifft die ungeprüfte "
-                    "Einbaulage der getrennten Teile."
+                    "im Prüfbericht."
                 ),
             ),
             TourStep(
@@ -792,10 +791,9 @@ TOURS: Final[tuple[Tour, ...]] = (
                 shows="history",
                 text=_(
                     "Der letzte Schritt heißt „Deckel aus TPU“. Nehmen Sie ihn mit "
-                    "Strg+Z zurück: Die Warnung zum Materialspiel verschwindet. Der "
-                    "Hinweis auf die ungeprüfte Einbaulage bleibt: Die Teile liegen "
-                    "weiterhin getrennt zum Drucken. Alternativ können Sie das "
-                    "Spiel anpassen und das weiche Material behalten."
+                    "Strg+Z zurück: Die Warnung zum Materialspiel verschwindet, und "
+                    "zur Passung steht nichts mehr im Prüfbericht. Alternativ können "
+                    "Sie das Spiel anpassen und das weiche Material behalten."
                 ),
                 done=_op_gone("set_material"),
             ),

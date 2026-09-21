@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from app.core.scene.cache import CachedResult, DiskCache, ResultCache
+from app.core.scene.cache import CACHE_FORMAT_VERSION, CachedResult, DiskCache, ResultCache
 from app.core.scene.hashing import digest, object_hash, operation_hash, profile_key
 from app.core.types import Mesh, Operation, Profile, SceneObject
 from app.i18n import TranslatableText
@@ -229,13 +229,18 @@ def test_original_surface_carriers_survive_both_cache_levels(tmp_path: Path) -> 
         ("face_indices", [[1]]),
         ("face_indices", [1, 1]),
         ("face_indices", [0]),
-        ("face_indices", [10]),
     ],
 )
 def test_invalid_surface_carrier_drops_the_disk_result(
     tmp_path: Path, field: str, value: object
 ) -> None:
-    """Beschädigte Träger liefern weder erfundene Nullabweichungen noch einen Absturz."""
+    """Beschädigte Träger liefern weder erfundene Nullabweichungen noch einen Absturz.
+
+    Eine Dreiecksnummer jenseits des gespeicherten Netzes steht nicht mehr in
+    dieser Liste: Der Cache trägt die **rohe** Ausgabe einer Operation, und die
+    darf Merkmale ihres Eingangs mit dessen Nummern durchreichen (siehe
+    ``test_a_result_that_carries_its_input_features_comes_back_from_the_disk``).
+    """
     disk = DiskCache(codec=FakeCodec(), directory=tmp_path)
     disk.put("carriers", surface_result())
     index = disk._folder("carriers") / "objects.json"
@@ -244,6 +249,41 @@ def test_invalid_surface_carrier_drops_the_disk_result(
     index.write_text(json.dumps(data), encoding="utf-8")
     assert disk.get("carriers") is None
     assert not index.exists()
+
+
+def test_a_result_that_carries_its_input_features_comes_back_from_the_disk(
+    tmp_path: Path,
+) -> None:
+    """Der Bausteinwirt gibt nach der Vereinigung die Merkmale seines Eingangs zurück —
+    mit Dreiecksnummern des Eingangsnetzes, die über das neue Netz hinausreichen.
+    Bis zum 21.09.2026 verwarf der Plattencodec jeden solchen Eintrag als beschädigt,
+    und „Dose mit Deckel" rechnete die Kabeldurchführung bei jedem Öffnen neu."""
+    from app.core.types import Feature, SurfacePatch
+
+    carried = Feature(
+        "hole_1",
+        "hole",
+        "detected",
+        {"diameter": 4.0, "centre": (0.0, 0.0, 0.0), "axis": (0.0, 0.0, 1.0)},
+        (40_284, 40_285),
+        surface_patches=(
+            SurfacePatch(
+                "cylinder",
+                {"centre": (0.0, 0.0, 0.0), "axis": (0.0, 0.0, 1.0), "radius": 2.0},
+                (40_284, 40_285),
+                "fit",
+            ),
+        ),
+    )
+    host = dataclasses.replace(make_object("obj_1", triangles=10), features={"hole_1": carried})
+    disk = DiskCache(codec=FakeCodec(), directory=tmp_path)
+    disk.put("host", CachedResult(objects=(host,)))
+    fresh = disk.get("host")
+    assert fresh is not None, "the raw output must come back as it was written"
+    restored = fresh.objects[0].features["hole_1"]
+    assert restored.face_indices == carried.face_indices
+    assert restored.surface_patches == carried.surface_patches
+    assert restored.params["diameter"] == carried.params["diameter"]
 
 
 def test_surface_indices_share_the_existing_memory_budget() -> None:
@@ -668,11 +708,16 @@ def test_old_results_without_fit_roles_are_recomputed(tmp_path: Path) -> None:
     assert restored.objects[0].features["rim"].params["fit_role"] == "outer"
 
 
-@pytest.mark.parametrize("previous_version", [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18])
+@pytest.mark.parametrize("previous_version", range(5, CACHE_FORMAT_VERSION))
 def test_old_recognition_results_are_not_read_from_disk(
     tmp_path: Path, previous_version: int
 ) -> None:
-    """Auch ein vorhandener Eintrag der letzten Erkennungsversion ist veraltet."""
+    """Auch ein vorhandener Eintrag der letzten Erkennungsversion ist veraltet.
+
+    Die Liste kommt aus ``CACHE_FORMAT_VERSION`` selbst: Von Hand geführt endete
+    sie bei 18, während der Stand längst 22 war — der Docstring versprach die
+    letzte Version, und geprüft wurde sie nicht.
+    """
     disk = DiskCache(codec=FakeCodec(), directory=tmp_path)
     disk.put("recognition", result())
     index = disk._folder("recognition") / "objects.json"
@@ -684,7 +729,7 @@ def test_old_recognition_results_are_not_read_from_disk(
 
 
 @pytest.mark.parametrize("reopen", [False, True], ids=["memory", "disk"])
-@pytest.mark.parametrize("previous_version", [5, 6, 7, 11, 12, 13, 14, 15, 16, 17, 18])
+@pytest.mark.parametrize("previous_version", [5, CACHE_FORMAT_VERSION - 1])
 def test_recognition_revision_recomputes_a_warm_project_cache(
     tmp_path: Path,
     profile: Profile,
@@ -1849,3 +1894,22 @@ def test_a_failing_cache_folder_does_not_take_the_result_with_it(
     disk.put("key", CachedResult(objects=(make_object("obj_1", triangles=42),)))  # wirft nicht
 
     assert disk.get("key") is None, "abgelegt wurde nichts — und das ist die ganze Folge"
+
+
+def test_disk_results_come_back_with_warm_figures(tmp_path: Path) -> None:
+    """Volumen, Fläche, Dichtheit und Teilezahl sind nach dem Lesen von der Platte
+    schon gerechnet — im Arbeiter, nicht erst im Fenster. An ``dense_1m.stl``
+    kostete das zweite Öffnen sonst 1,5 Sekunden im Hauptthread (Review,
+    21.09.2026)."""
+    import trimesh
+
+    from app.core.geom.mesh import MeshCodec, MeshData
+
+    body = SceneObject("obj_1", "Teil", MeshData.of(trimesh.creation.box()))
+    disk = DiskCache(codec=MeshCodec(), directory=tmp_path)
+    disk.put("figures", CachedResult(objects=(body,)))
+    fresh = disk.get("figures")
+    assert fresh is not None
+    figures = fresh.objects[0].mesh.raw._cache
+    for name in ("mass_properties", "area", "is_watertight", "solidon_component_count"):
+        assert name in figures, f"{name} must already be known when the window asks"

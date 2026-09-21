@@ -1530,6 +1530,35 @@ def _between_the_mouths(mesh: MeshData, feature: Feature, centre: Vec3) -> MeshD
     return MeshData.of(cut)
 
 
+def _without_old_triangles(
+    features: Mapping[FeatureId, Feature], *, without: Iterable[FeatureId] = ()
+) -> dict[FeatureId, Feature]:
+    """Die durchgereichten Merkmale, wie ein neu gebautes Netz sie trägt: ohne Dreiecksnummern.
+
+    Eine Boolesche nummeriert die Dreiecke neu, und :func:`_without_scars`
+    vernetzt die Deckflächen danach ganz neu. Flächennummern und Teilträger
+    eines Merkmals, das die Operation nur weiterreicht, bezeichnen am Ergebnis
+    fremde Dreiecke: An der Lochplatte hielt ``cavity_chain_state_at`` die
+    verbliebene Bohrung danach für unlesbar, und das Verdoppeln sagte ab
+    (``test_prepare``, 21.09.2026). Eine Operation gibt nur Merkmale ihres
+    Ausgangsnetzes zurück — Ort und Maß bleiben, die Oberfläche gibt ihnen die
+    Auswertung an der neuen Erkennung zurück (``evaluate._with_features``, „Der
+    Name bleibt, die aktuelle Oberfläche geht mit"). Dieselbe Regel gilt in
+    ``parts.ops._merged_features`` für den Wirt eines Bausteins. ``without``
+    nennt, was die Operation entfernt hat.
+    """
+    gone = set(without)
+    return {
+        name: (
+            dataclasses.replace(feature, face_indices=(), surface_patches=())
+            if feature.face_indices or feature.surface_patches
+            else feature
+        )
+        for name, feature in features.items()
+        if name not in gone
+    }
+
+
 def _closed_at(
     mesh: MeshData,
     feature: Feature,
@@ -1622,13 +1651,68 @@ def _closed_at(
                 seed=seed,
                 cancelled=cancelled,
             ).mesh
-    return boolean(
+    outcome = boolean(
         "union" if cavity else "difference",
         [mesh, tool],
         quality=quality,
         seed=seed,
         cancelled=cancelled,
     )
+    return _without_scars(outcome) if cavity else outcome
+
+
+def _without_scars(outcome: BooleanOutcome) -> BooleanOutcome:
+    """Die koplanaren Narben eines Stopfens entfernen — nur, wenn das Netz es hält.
+
+    Ein Stopfen, der eine Bohrung schließt, endet an der Hülle des Teils in
+    den Deckelflächen; die Vereinigung lässt dort seine Kappen als Dreiecke
+    in der Ebene stehen. Je Versetzen blieben so rund 270 Dreiecke zurück —
+    796, 1042, 1308, 1576, 1852 an der Lochplatte nach vier Zügen (Review,
+    21.09.2026) — und mit ihnen wuchs jeder spätere Schritt.
+
+    ``Manifold.simplify`` legt koplanare Dreiecke zusammen. Übernommen wird
+    das wie in ``boolean._tidied`` nur unter der Zusicherung von ``repair()``:
+    Das Netz bleibt dicht, das Volumen ändert sich nicht (``EPS_GEOM``), und
+    es werden wirklich weniger Dreiecke. Sonst bleibt die rohe Vereinigung —
+    dieselbe Vorsicht, aus der ``_tidied`` das Werkzeug meidet: Es vernetzt
+    ebene Flächen neu, und wo es eine Haut stehen ließe, sagt das Volumen es.
+    Die Slots gehen danach wie nach jeder Booleschen von der nächsten
+    Eingangsfläche auf die neuen Dreiecke über.
+    """
+    import manifold3d
+
+    from app.core.geom.attributes import transfer
+
+    joined = outcome.mesh
+    raw = joined.raw
+    if len(raw.faces) == 0 or not raw.is_watertight:
+        return outcome
+    try:
+        body = manifold3d.Manifold(
+            manifold3d.Mesh64(
+                np.require(raw.vertices, dtype=np.float64, requirements=("C", "W")),
+                np.require(raw.faces, dtype=np.uint64, requirements=("C", "W")),
+            )
+        )
+        if body.status() != manifold3d.Error.NoError:
+            return outcome
+        built = body.simplify(EPS_GEOM).to_mesh64()
+    except Exception:  # Der Kern hat eigene Fehlerklassen; die rohe Vereinigung bleibt.
+        return outcome
+    candidate = trimesh.Trimesh(
+        vertices=np.array(built.vert_properties[:, :3], dtype=np.float64, copy=True),
+        faces=np.array(built.tri_verts, dtype=np.int64, copy=True),
+        process=False,
+    )
+    if (
+        len(candidate.faces) == 0
+        or len(candidate.faces) >= len(raw.faces)
+        or not candidate.is_watertight
+        or not is_close(float(candidate.volume), joined.volume)
+    ):
+        return outcome
+    simplified = transfer(MeshData.of(candidate), [joined])
+    return dataclasses.replace(outcome, mesh=simplified)
 
 
 def _tool_for(
@@ -2210,7 +2294,7 @@ def _place_oriented_feature(ctx: OpContext, *, duplicate: bool) -> OpResult:
         nothing = without_effect(source.mesh, placed.mesh, kind, ctx.profile)
         if nothing is not None:
             findings.append(nothing)
-    features = dict(source.features)
+    features = _without_old_triangles(source.features)
     reserved = {*source.reserved_feature_ids, *source.features}
     set_features: list[Feature] = []
     for related in geometry.related:
@@ -2425,6 +2509,14 @@ THREAD_WITHOUT_LENGTH: Final = _(
     "oder setzen Sie es als Baustein neu."
 )
 
+#: Ein Ring oder Gewinde ohne gemessene Achse hat keine Lage, an der ein
+#: Werkzeug ansetzen könnte — bis zum 21.09.2026 stand dann still die Z-Achse
+#: da, und der Ring wurde an einer Stelle bearbeitet, die niemand gemessen hat.
+FEATURE_WITHOUT_AXIS: Final = _(
+    "Dieses Merkmal nennt keine Achse. Wählen Sie ein erkanntes Merkmal mit gemessener "
+    "Achse oder erkennen Sie die Merkmale neu."
+)
+
 #: Das Bausteingewinde hat einen Gang je Umlauf (``build.threaded``); ein zweigängiges
 #: neu zu schneiden machte still ein eingängiges daraus — dieselbe Absage wie links.
 THREAD_MULTI_START: Final = _(
@@ -2514,11 +2606,34 @@ def hole_is_clear(mesh: MeshData, feature: Feature) -> bool:
 
     Ohne Maße gilt die Bohrung als leer — dann entscheidet der Körper aus
     ihren Flächen.
+
+    **Gemerkt je Körper und Bohrung** (``features.remembered``): Das
+    Merkmalfenster fragt es bei jedem Klick auf eine Bohrung zweimal
+    (``actions.no_own_body``), und jede Antwort kostete an der Lochplatte mit
+    360 000 Dreiecken 90 ms — die Endebenen verschweißen dafür eine Kopie des
+    Netzes. Die Antwort ist eine reine Funktion aus Netz, Flächen, Achse, Mitte
+    und Maßen; sie stirbt mit dem Körper.
     """
     radius = float(feature.params.get("diameter", 0.0)) / 2.0
     depth = float(feature.params.get("depth", 0.0))
     if radius <= EPS_GEOM or depth <= EPS_GEOM:
         return True
+    from app.core.perceive.features import remembered
+
+    centre = tuple(float(value) for value in feature.params["centre"])
+    axis = tuple(float(value) for value in feature.params.get("axis", (0.0, 0.0, 1.0)))
+    clear: bool = remembered(
+        "hole_is_clear",
+        mesh.raw,
+        feature.face_indices,
+        lambda: _hole_is_clear_read(mesh, feature, radius, depth),
+        extra=(feature.kind, centre, axis, radius, depth),
+    )
+    return clear
+
+
+def _hole_is_clear_read(mesh: MeshData, feature: Feature, radius: float, depth: float) -> bool:
+    """Der Rumpf von :func:`hole_is_clear` — die Rechnung über die Dreiecksmitten."""
     centre = np.asarray(feature.params["centre"], dtype=np.float64)
     axis = np.asarray(feature.params.get("axis", (0.0, 0.0, 1.0)), dtype=np.float64)
     axis /= max(float(np.linalg.norm(axis)), EPS_GEOM)
@@ -2709,11 +2824,11 @@ def move_feature(ctx: OpContext) -> OpResult:
             seed=ctx.seed,
             cancelled=ctx.cancelled,
         )
-        features = dict(source.features)
+        features = _without_old_triangles(source.features)
         for related in chain:
             related_centre = np.asarray(related.params["centre"], dtype=float) + travel
             features[related.id] = dataclasses.replace(
-                related,
+                features[related.id],
                 params={
                     **related.params,
                     "centre": tuple(float(value) for value in related_centre),
@@ -2748,12 +2863,13 @@ def move_feature(ctx: OpContext) -> OpResult:
             seed=ctx.seed,
             cancelled=ctx.cancelled,
         )
+        features = _without_old_triangles(source.features)
         moved = dataclasses.replace(
-            feature,
+            features[feature.id],
             params={**feature.params, "centre": target},
             provenance="generated",
         )
-        features = {**source.features, feature.id: moved}
+        features[feature.id] = moved
         through_feature = feature
         through_target = target
         set_features = [moved]
@@ -3010,6 +3126,8 @@ def duplicate_feature(ctx: OpContext) -> OpResult:
         id=_free_feature_id(source, feature.kind),
         params={**feature.params, "centre": target},
         provenance="generated",
+        face_indices=(),
+        surface_patches=(),
     )
     findings += _edge_findings(body, [copy])
     return OpResult(
@@ -3017,7 +3135,7 @@ def duplicate_feature(ctx: OpContext) -> OpResult:
             dataclasses.replace(
                 source,
                 mesh=placed.mesh,
-                features={**source.features, copy.id: copy},
+                features={**_without_old_triangles(source.features), copy.id: copy},
                 reserved_feature_ids=tuple(
                     sorted({*source.reserved_feature_ids, *source.features, copy.id})
                 ),
@@ -3099,6 +3217,8 @@ def _duplicate_cavity_chain(
             id=name,
             params={**member.params, "centre": tuple(float(value) for value in moved)},
             provenance="generated",
+            face_indices=(),
+            surface_patches=(),
         )
     findings += _edge_findings(body, list(copies.values()))
     bore = next(iter(copies.values()))
@@ -3120,7 +3240,7 @@ def _duplicate_cavity_chain(
             dataclasses.replace(
                 source,
                 mesh=placed.mesh,
-                features={**source.features, **copies},
+                features={**_without_old_triangles(source.features), **copies},
                 reserved_feature_ids=tuple(sorted(taken)),
             )
         ],
@@ -3334,7 +3454,7 @@ def remove_feature(ctx: OpContext) -> OpResult:
         )
         gone = (feature.id,)
 
-    remaining = {name: entry for name, entry in source.features.items() if name not in gone}
+    remaining = _without_old_triangles(source.features, without=gone)
     findings = [
         *closed.findings,
         Finding(
@@ -3513,6 +3633,8 @@ def rotate_feature(ctx: OpContext) -> OpResult:
         spun,
         params={**spun.params, "axis": turned_axis},
         provenance="generated",
+        face_indices=(),
+        surface_patches=(),
     )
     # **Derselbe Befund wie beim Versetzen, und er fehlte hier.** Eine gekippte
     # Bohrung trifft die Gegenseite nicht mehr: Gemessen am 03.09.2026 an einer
@@ -3538,7 +3660,7 @@ def rotate_feature(ctx: OpContext) -> OpResult:
             dataclasses.replace(
                 source,
                 mesh=placed.mesh,
-                features={**source.features, feature.id: moved},
+                features={**_without_old_triangles(source.features), feature.id: moved},
             )
         ],
         findings=findings,
@@ -3622,7 +3744,7 @@ def _rotate_cavity_chain(
         cancelled=ctx.cancelled,
     )
 
-    features = dict(source.features)
+    features = _without_old_triangles(source.features)
     for member in chain:
         spun = _with_turned_direction(member, axis, angle)
         centre = matrix[:3, :3] @ (np.asarray(member.params["centre"], dtype=float) - pivot) + pivot
@@ -3634,6 +3756,8 @@ def _rotate_cavity_chain(
                 "axis": _turned(member, axis, angle),
             },
             provenance="generated",
+            face_indices=(),
+            surface_patches=(),
         )
     bore = features[chain[0].id]
     bore_centre = cast(Vec3, tuple(float(value) for value in bore.params["centre"]))
@@ -4089,13 +4213,15 @@ def resize_feature(ctx: OpContext) -> OpResult:
         feature,
         params={**feature.params, "diameter": params.diameter},
         provenance="generated",
+        face_indices=(),
+        surface_patches=(),
     )
     return OpResult(
         outputs=[
             dataclasses.replace(
                 source,
                 mesh=placed.mesh,
-                features={**source.features, feature.id: changed},
+                features={**_without_old_triangles(source.features), feature.id: changed},
             )
         ],
         findings=[
@@ -4578,7 +4704,7 @@ def resize_hole(ctx: OpContext) -> OpResult:
         )
     carried = {
         name: entry
-        for name, entry in source.features.items()
+        for name, entry in _without_old_triangles(source.features).items()
         if entry.provenance == "generated" and name != feature.id
     }
     # Findet sich die geänderte Bohrung nicht wieder, bleibt der Körper und
@@ -4870,7 +4996,7 @@ def slot_hole(ctx: OpContext) -> OpResult:
     # Die Merkmale, die bleiben — ohne das, aus dem gerade ein Langloch wird.
     carried = {
         name: entry
-        for name, entry in source.features.items()
+        for name, entry in _without_old_triangles(source.features).items()
         if entry.provenance == "generated" and name != feature.id
     }
     # **Nur beim ersten Zug.** Aus einem Langloch wird kein Langloch — es wird
@@ -5489,12 +5615,20 @@ class _EntranceSection:
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class _BoreEntrance:
-    """Eine eindeutige, nach außen weiter werdende Bohrungsfolge."""
+    """Eine eindeutige, nach außen weiter werdende Bohrungsfolge.
+
+    ``open`` sagt, ob das äußere Ende eine Mündung ist. Eine Senkung, deren
+    Mündung unter der Oberfläche liegt, ist ein vergrabener Hohlraum mit einem
+    Deckel aus Material — und ein Werkzeug, das dort um die Zugabe aus §39
+    über die Ebene hinausreicht, trägt bei jedem Versetzen ein Scheibchen ab
+    (1,33 mm³ an Ø 9,2, Review 21.09.2026).
+    """
 
     chain: tuple[Feature, ...]
     origin: Vec3
     axis: Vec3
     sections: tuple[_EntranceSection, ...]
+    open: bool = True
 
 
 def _entrance_error() -> ValidationError:
@@ -5608,7 +5742,50 @@ def bore_entrance(
         else:
             raise _entrance_error()
         sections.append(_EntranceSection(entry, lower, upper, start, end, inner, outer, shoulder))
-    return _BoreEntrance(chain, origin, axis, tuple(sections))
+    return _BoreEntrance(
+        chain,
+        origin,
+        axis,
+        tuple(sections),
+        _entrance_is_open(mesh, origin, direction, sections[-1]),
+    )
+
+
+def _entrance_is_open(
+    mesh: MeshData, origin: Vec3, direction: NDArray[np.float64], last: _EntranceSection
+) -> bool:
+    """Ob das äußere Ende der Kette eine Mündung ist — dieselbe Probe wie an den
+    Deckeln des Flächenkörpers (`_mouth_is_open`): Luft vor dem ganzen Rand.
+
+    Der Rand liegt **auf der Randebene**, nicht auf einem Kreis quer zur
+    Achse: Eine Mündung in einer schrägen Fläche ist eine Ellipse, und ein
+    Kegel wird zum Rand hin weiter. Je Umfangsrichtung schneidet die Mantel-
+    linie die Ebene an genau einer Stelle.
+    """
+    from app.core.sketch.planes import frame_of
+
+    frame = frame_of((float(direction[0]), float(direction[1]), float(direction[2])), origin)
+    angles = np.linspace(0.0, 2.0 * math.pi, BORE_SECTIONS, endpoint=False)
+    radial = np.outer(np.cos(angles), np.asarray(frame.x_axis, dtype=float)) + np.outer(
+        np.sin(angles), np.asarray(frame.y_axis, dtype=float)
+    )
+    normal = np.asarray(last.upper.normal, dtype=float)
+    normal /= np.linalg.norm(normal)
+    anchor = np.asarray(origin, dtype=float)
+    # Radius entlang der Achse: r(t) = a + b·t — beim Zylinder fest, beim
+    # Kegel mit seiner Steigung.
+    slope = 0.0
+    if last.feature.kind == "cone" and last.end > last.start + EPS_GEOM:
+        slope = (last.outer_radius - last.inner_radius) / (last.end - last.start)
+    offset = last.outer_radius - slope * last.end
+    along_normal = float(normal @ direction)
+    radial_normal = radial @ normal
+    denominator = along_normal + slope * radial_normal
+    if np.any(np.abs(denominator) <= EPS_GEOM):
+        return True
+    t = (last.upper.position - float(normal @ anchor) - offset * radial_normal) / denominator
+    rim = anchor + np.outer(t, direction) + radial * (offset + slope * t)[:, None]
+    return _mouth_is_open(mesh, rim, normal)
 
 
 def _entrance_tools(
@@ -5624,7 +5801,7 @@ def _entrance_tools(
         radius = section.inner_radius + delta
         lower = section.lower
         upper = section.upper
-        if not filling and (index == 0 or index == len(members) - 1):
+        if not filling and entrance.open and (index == 0 or index == len(members) - 1):
             upper = dataclasses.replace(upper, position=upper.position + FEATURE_OVERLAP)
         if section.feature.kind == "cone":
             slope = (section.outer_radius - section.inner_radius) / (section.end - section.start)
@@ -5789,7 +5966,7 @@ def _resize_bore_entrance(
     changed_ids = {entry.id for entry in entrance.chain}
     preserved = {
         name: entry
-        for name, entry in source.features.items()
+        for name, entry in _without_old_triangles(source.features).items()
         if entry.provenance == "generated" and name not in changed_ids
     }
     for target in targets.values():
@@ -6608,30 +6785,53 @@ def _exact_duplicate_cavity(
     nothing = without_effect(solid, placed, "difference", ctx.profile)
     if nothing is not None:
         findings.append(nothing)
+    return _exact_copy_result(ctx, source, placed, [copy], findings)
+
+
+def _exact_copy_result(
+    ctx: OpContext,
+    source: SceneObject,
+    placed: Any,
+    copies: Sequence[Feature],
+    findings: list[Finding],
+) -> OpResult:
+    """Das gemeinsame Ende der vier exakten Verdoppelungen — Hohlraum, Kette,
+    Flächenkörper und Ring: prüfen, erkennen, der Kopie ihren Namen geben,
+    Durchgang melden, Bezüge belegen.
+
+    Die Kopie ist die frische Erkennung an der Zielstelle; sie bekommt den
+    Namen, den die Zählung freigibt — nicht den, den die Erkennung zufällig
+    vergab, und keinen, der reserviert ist. Bis zum 21.09.2026 stand dieser
+    Block viermal wörtlich da, und nur einer der vier fragte nach dem
+    verlorenen Durchgang.
+    """
     checked = _exact_body_checked(placed)
     features, continued, _lost = _exact_features_after(
         source, checked, expected=None, cancelled=ctx.cancelled
     )
-    # Die Kopie ist die frische Erkennung an der Zielstelle; sie bekommt den
-    # Namen, den die Zählung freigibt — nicht den, den die Erkennung zufällig
-    # vergab, und keinen, der reserviert ist.
-    fresh = [
-        name
-        for name, entry in features.items()
-        if name not in source.features
-        and entry.kind == feature.kind
-        and _sits_at(entry, copy, checked.bounds.diagonal)
-    ]
-    if len(fresh) == 1 and fresh[0] != copy.id:
-        features[copy.id] = dataclasses.replace(features.pop(fresh[0]), id=copy.id)
-    elif not fresh:
-        findings.append(_cavity_lost_finding("duplicate_feature", copy))
-    if (
-        copy.id in features
-        and copy.params.get("through")
-        and not features[copy.id].params.get("through")
-    ):
-        findings.append(_through_lost_finding("duplicate_feature", copy, target))
+    diagonal = checked.bounds.diagonal
+    copy_ids = {copy.id for copy in copies}
+    for copy in copies:
+        fresh = [
+            name
+            for name, entry in features.items()
+            if name not in source.features
+            and name not in copy_ids
+            and entry.kind == copy.kind
+            and _sits_at(entry, copy, diagonal)
+        ]
+        if len(fresh) == 1 and fresh[0] != copy.id:
+            features[copy.id] = dataclasses.replace(features.pop(fresh[0]), id=copy.id)
+        elif not fresh and copy.id not in features:
+            findings.append(_cavity_lost_finding("duplicate_feature", copy))
+        if (
+            copy.id in features
+            and copy.params.get("through")
+            and not features[copy.id].params.get("through")
+        ):
+            findings.append(
+                _through_lost_finding("duplicate_feature", copy, _bore_vector(copy, "centre"))
+            )
     return OpResult(
         outputs=[
             dataclasses.replace(
@@ -6640,7 +6840,7 @@ def _exact_duplicate_cavity(
                 kind="brep",
                 features=features,
                 reserved_feature_ids=tuple(
-                    sorted({*source.reserved_feature_ids, *source.features, copy.id})
+                    sorted({*source.reserved_feature_ids, *source.features, *copy_ids})
                 ),
             )
         ],
@@ -6935,42 +7135,7 @@ def _exact_duplicate_chain(
     nothing = without_effect(solid, placed, "difference", ctx.profile)
     if nothing is not None:
         findings.append(nothing)
-    checked = _exact_body_checked(placed)
-    features, continued, _found = _exact_features_after(
-        source, checked, expected=None, cancelled=ctx.cancelled
-    )
-    diagonal = checked.bounds.diagonal
-    for copy in copies:
-        fresh = [
-            name
-            for name, entry in features.items()
-            if name not in source.features
-            and name not in {c.id for c in copies}
-            and entry.kind == copy.kind
-            and _sits_at(entry, copy, diagonal)
-        ]
-        if len(fresh) == 1 and fresh[0] != copy.id:
-            features[copy.id] = dataclasses.replace(features.pop(fresh[0]), id=copy.id)
-        elif not fresh and copy.id not in features:
-            findings.append(_cavity_lost_finding("duplicate_feature", copy))
-    return OpResult(
-        outputs=[
-            dataclasses.replace(
-                source,
-                mesh=checked,
-                kind="brep",
-                features=features,
-                reserved_feature_ids=tuple(sorted(taken)),
-            )
-        ],
-        findings=findings,
-        feature_continuations=(
-            tuple(
-                FeatureContinuation(FeatureRef(source.id, old_id), new_id)
-                for old_id, new_id in continued
-            ),
-        ),
-    )
+    return _exact_copy_result(ctx, source, placed, copies, findings)
 
 
 def _exact_rotate_chain(
@@ -7303,41 +7468,7 @@ def _exact_duplicate_by_faces(
     nothing = without_effect(solid, placed, change, ctx.profile)
     if nothing is not None:
         findings.append(nothing)
-    checked = _exact_body_checked(placed)
-    features, continued, _lost = _exact_features_after(
-        source, checked, expected=None, cancelled=ctx.cancelled
-    )
-    fresh = [
-        name
-        for name, entry in features.items()
-        if name not in source.features
-        and entry.kind == feature.kind
-        and _sits_at(entry, copy, checked.bounds.diagonal)
-    ]
-    if len(fresh) == 1 and fresh[0] != copy.id:
-        features[copy.id] = dataclasses.replace(features.pop(fresh[0]), id=copy.id)
-    elif not fresh:
-        findings.append(_cavity_lost_finding("duplicate_feature", copy))
-    return OpResult(
-        outputs=[
-            dataclasses.replace(
-                source,
-                mesh=checked,
-                kind="brep",
-                features=features,
-                reserved_feature_ids=tuple(
-                    sorted({*source.reserved_feature_ids, *source.features, copy.id})
-                ),
-            )
-        ],
-        findings=findings,
-        feature_continuations=(
-            tuple(
-                FeatureContinuation(FeatureRef(source.id, old_id), new_id)
-                for old_id, new_id in continued
-            ),
-        ),
-    )
+    return _exact_copy_result(ctx, source, placed, [copy], findings)
 
 
 def _exact_remove_by_faces(
@@ -7412,10 +7543,21 @@ def _torus_refusal(feature: Feature, *, whole: bool) -> ValidationError:
 
 
 def _torus_axis(feature: Feature, axis: Vec3 | None = None) -> np.ndarray:
+    """Die Einheitsachse des Rings oder Gewindes — ohne gemessene Achse die Absage.
+
+    Wie `_thread_frame` bei einer fehlenden Strecke: Eine Achse, die niemand
+    gemessen hat, wird nicht geraten (Regel 21).
+    """
     direction = np.asarray(axis if axis is not None else _bore_vector(feature, "axis"), dtype=float)
     length = float(np.linalg.norm(direction))
-    if length <= EPS_GEOM:
-        return np.array([0.0, 0.0, 1.0])
+    if not math.isfinite(length) or length <= EPS_GEOM:
+        raise ValidationError(
+            field="at_feature",
+            detail=FEATURE_WITHOUT_AXIS,
+            values={"feature": feature.id, "kind": feature.kind},
+            constraint="not_movable",
+            suggestions=(CHANGE_SELECTION, CANCEL),
+        )
     return direction / length
 
 
@@ -7676,7 +7818,10 @@ def _torus_result(
     return OpResult(
         outputs=[
             dataclasses.replace(
-                source, mesh=placed.mesh, features=features, reserved_feature_ids=reserved
+                source,
+                mesh=placed.mesh,
+                features=_without_old_triangles(features),
+                reserved_feature_ids=reserved,
             )
         ],
         findings=findings,
@@ -7746,41 +7891,7 @@ def _duplicate_torus(
         nothing = without_effect(solid, placed_solid, change, ctx.profile)
         if nothing is not None:
             findings.append(nothing)
-        checked = _exact_body_checked(placed_solid)
-        features, continued, _lost = _exact_features_after(
-            source, checked, expected=None, cancelled=ctx.cancelled
-        )
-        fresh = [
-            name
-            for name, entry in features.items()
-            if name not in source.features
-            and entry.kind == feature.kind
-            and _sits_at(entry, copy, checked.bounds.diagonal)
-        ]
-        if len(fresh) == 1 and fresh[0] != copy.id:
-            features[copy.id] = dataclasses.replace(features.pop(fresh[0]), id=copy.id)
-        elif not fresh:
-            findings.append(_cavity_lost_finding("duplicate_feature", copy))
-        return OpResult(
-            outputs=[
-                dataclasses.replace(
-                    source,
-                    mesh=checked,
-                    kind="brep",
-                    features=features,
-                    reserved_feature_ids=tuple(
-                        sorted({*source.reserved_feature_ids, *source.features, copy.id})
-                    ),
-                )
-            ],
-            findings=findings,
-            feature_continuations=(
-                tuple(
-                    FeatureContinuation(FeatureRef(source.id, old_id), new_id)
-                    for old_id, new_id in continued
-                ),
-            ),
-        )
+        return _exact_copy_result(ctx, source, placed_solid, [copy], findings)
     body = as_mesh_data(source.mesh)
     placed = _torus_placed_mesh(ctx, body, feature, target)
     findings = [*placed.findings]
@@ -9021,7 +9132,7 @@ def plug_hole(ctx: OpContext) -> OpResult:
             seed=ctx.seed,
             cancelled=ctx.cancelled,
         )
-        remaining = {name: found for name, found in source.features.items() if name != feature.id}
+        remaining = _without_old_triangles(source.features, without=(feature.id,))
         return OpResult(
             outputs=[dataclasses.replace(source, mesh=filled.mesh, features=remaining)],
             solver=filled.solver,
@@ -10118,7 +10229,11 @@ def cut_away(ctx: OpContext) -> OpResult:
             constraint="no_split",
         )
     features, _dropped = _features_after_split(source.features, plane)
-    return OpResult(outputs=[dataclasses.replace(source, mesh=kept.mesh, features=features)])
+    return OpResult(
+        outputs=[
+            dataclasses.replace(source, mesh=kept.mesh, features=_without_old_triangles(features))
+        ]
+    )
 
 
 def _halves_still_together(source: SceneObject) -> Finding:
@@ -11088,7 +11203,7 @@ def _after_the_fillet(source: SceneObject, name: str, outcome: Any) -> OpResult:
     bleibt, obwohl die Geometrie fort ist, wird später als Passungsfehler
     gemeldet — und dann sucht der Kunde an einem Teil, das in Ordnung ist.
     """
-    kept = {key: value for key, value in source.features.items() if key != name}
+    kept = _without_old_triangles(source.features, without=(name,))
     return OpResult(
         outputs=[dataclasses.replace(source, mesh=outcome.mesh, features=kept)],
         solver=outcome.solver,

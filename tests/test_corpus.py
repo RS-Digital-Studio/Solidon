@@ -19,6 +19,7 @@ from app.core.ingest import threemf
 from app.core.ingest.loader import normalise, read_model
 from app.core.knowledge import profiles
 from app.core.scene import History, OperationDraft, evaluate
+from app.core.scene import fits as fit_check
 from app.core.scene.project import ProjectSources, load
 from app.core.types import Profile
 from app.core.units import EPS_GEOM
@@ -150,13 +151,15 @@ def test_the_assembly_holds_with_the_material_it_was_built_for(profile: Profile)
 
     assert result.complete
     codes = {finding.code for finding in result.scene.report.findings}
-    assert {code for code in codes if code.startswith("fit.")} == {"fit.geometry_clear"}, (
-        "PETG is what both the circle dimensions and the mesh clearance were chosen for"
+    assert not {code for code in codes if code.startswith("fit.")}, (
+        "PETG is what both the circle dimensions and the mesh clearance were chosen for — "
+        "a fit that holds is no finding"
     )
-    proof = next(f for f in result.scene.report.findings if f.code == "fit.geometry_clear")
-    assert proof.severity == "info"
-    assert proof.values["overlap_mm3"] == pytest.approx(0.0)
-    assert proof.values["intersects"] is False
+    proof = fit_check.overlap(result.scene, result.scene.fits[0])
+    assert proof is not None, "the assembled pose is proven, so the probe has a number"
+    assert proof.source == "mesh"
+    assert proof.overlap_mm3 == pytest.approx(0.0)
+    assert proof.intersects is False
     assert "bore.compensated" in codes, "and the bore says it was widened"
 
 
@@ -182,7 +185,7 @@ def test_the_fit_notices_when_the_ground_moves() -> None:
         for finding in result.scene.report.findings
         if finding.code.startswith("fit.")
     }
-    assert set(findings) == {"fit.mesh_uncertain", "fit.geometry_clear"}
+    assert set(findings) == {"fit.mesh_uncertain"}
     uncertainty = findings["fit.mesh_uncertain"]
     assert uncertainty.severity == "warning"
     assert uncertainty.values["fit"] == "stift_1"
@@ -191,8 +194,10 @@ def test_the_fit_notices_when_the_ground_moves() -> None:
     )
     assert uncertainty.values["clearance_max_mm"] == pytest.approx(0.20, abs=EPS_GEOM)
     assert uncertainty.values["expected"] == "0.25 mm"
-    assert findings["fit.geometry_clear"].values["overlap_mm3"] == pytest.approx(0.0)
-    assert findings["fit.geometry_clear"].values["intersects"] is False
+    proof = fit_check.overlap(result.scene, result.scene.fits[0])
+    assert proof is not None
+    assert proof.overlap_mm3 == pytest.approx(0.0)
+    assert proof.intersects is False
 
 
 def test_the_pair_points_at_features_that_exist(profile: Profile) -> None:
