@@ -193,7 +193,11 @@ ihre Kurzhilfe erklärt die Darstellung von Rundungen.
 `FeaturePanel` und Platzierungsträger trennen `block_apply(reason)` von der
 Dokumentsperre: Vorschauwartezeit sperrt nur Übernehmen, Felder und Abbrechen
 bleiben zugänglich. Stehen Maße im Bild (`set_measuring`), trägt die
-Maßgruppe Übernehmen und Abbrechen, die Knöpfe unten im Panel sind verborgen.
+Maßgruppe Übernehmen und Abbrechen, die Knöpfe unten im Panel sind verborgen —
+und mit ihnen der Block der Handlung, deren Maße im Bild stehen (Strich und
+Zeile je Handlung in `_blocks`; RM-199, Robert: „durchmesser ist ja im
+viewport, kann im merkmalpanel entfernt werden"). Die übrigen Handlungen des
+Merkmals bleiben, und mit dem Ende des Messens kommt der Block zurück.
 Ohne Messen steht *Abbrechen* unten, solange eine Feldvorschau aus dem Panel
 wartet — ein Merkposten oder eine angeforderte Vorschau, nicht der Auftrag,
 den das Anzeigen eines Merkmals ohnehin bindet (`offer_cancel`,

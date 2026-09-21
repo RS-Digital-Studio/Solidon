@@ -3723,6 +3723,62 @@ def _hole_fields_in_placement(window: MainWindow) -> tuple[str, str, Any, dict[s
     return object_id, hole, flow, fields
 
 
+def test_the_measures_in_the_view_take_their_twins_out_of_the_panel(window: MainWindow) -> None:
+    """Was im Bild steht, steht rechts nicht noch einmal (Robert, 21.09.2026, RM-199).
+
+    „durchmesser ist ja im viewport, kann im merkmalpanel entfernt werden":
+    Solange die Maßgruppe an der gewählten Bohrung steht, fielen Durchmesser,
+    Umfang und Koordinaten von *Bohrung ändern* rechts bisher nur in die
+    Sperre — zwei Stellen für dieselbe Zahl, von denen eine nichts annahm. Jetzt
+    geht der Block mit dem Messen und kommt mit seinem Ende zurück; die übrigen
+    Handlungen des Merkmals bleiben, wo sie waren.
+    """
+    from render_fakes import RecordingRenderer
+
+    from app.ui.labels import LengthSpin
+
+    window.viewport.renderer = RecordingRenderer(size=(900, 600))
+    window.open_path(MESHES / "plate_holes.stl")
+    assert window.session.wait_for_idle(30_000)
+    result = window.session.evaluate_now()
+    object_id, entry = next(iter(result.scene.objects.items()))
+    hole = next(name for name, feature in entry.features.items() if feature.kind == "hole")
+    window.object_tree.select_feature(object_id, hole)
+    for _ in range(40):
+        QApplication.processEvents()
+    panel = window.feature_panel
+
+    def shown() -> set[str]:
+        return {
+            field.accessibleName()
+            for field in panel.findChildren(LengthSpin)
+            if field.isVisibleTo(panel)
+        }
+
+    flow = window._quiet_placement
+    assert flow is not None and flow.active and panel._measuring, "die Maße stehen im Bild"
+    assert flow._measure_group is not None
+    in_view = {
+        field.accessibleName()
+        for field in flow._measure_group.findChildren(LengthSpin)
+        if "Bohrung ändern" in field.accessibleName()
+    }
+    assert "Bohrung ändern — Durchmesser" in in_view, "der Durchmesser steht im Bild"
+    assert not any("Bohrung ändern" in name for name in shown()), (
+        "rechts steht kein Zwilling davon: " + ", ".join(sorted(shown()))
+    )
+    assert any("Merkmal verschieben" in name for name in shown()), "die übrigen Handlungen bleiben"
+
+    window.end_quiet_placement()
+    for _ in range(10):
+        QApplication.processEvents()
+
+    assert not panel._measuring
+    assert {"Bohrung ändern — Durchmesser", "Bohrung ändern — X"} <= shown(), (
+        "mit dem Ende des Messens stehen die Felder wieder rechts"
+    )
+
+
 @pytest.mark.parametrize("position_source", ["view", "panel", "normal"])
 def test_panel_dimensions_and_placement_position_are_adopted_together(
     window: MainWindow, position_source: str

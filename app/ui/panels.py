@@ -5310,6 +5310,9 @@ class FeaturePanel(QWidget):
         self._fit_choice: QComboBox | None = None
         self._fit_reason = ""
         self._runs: dict[str, _Handling] = {}
+        self._blocks: dict[str, tuple[QWidget | None, QWidget]] = {}
+        """Je Handlungsschlüssel ihr Strich und ihre Zeile — was weggeht, solange
+        ihre Maße im Bild stehen (:meth:`set_measuring`, RM-199)."""
         self._texture_fields: dict[str, Any] = {}
         self._part_fields: dict[str, Any] = {}
         """Das Parameterschema des gezeigten Bausteins — für gebundene Werte.
@@ -5365,6 +5368,7 @@ class FeaturePanel(QWidget):
         self._fit_button = None
         self._fit_choice = None
         self._runs.clear()
+        self._blocks.clear()
         self._texture_fields.clear()
         self._part_fields.clear()
         self._parameter_values.clear()
@@ -5538,10 +5542,11 @@ class FeaturePanel(QWidget):
         for action in _folded(actions):
             if action.op is None and getattr(action, "step", None) is None:
                 continue
-            self._separate()
+            line = self._separate()
             row = self._build_action(action)
             self._rows.insertWidget(self._rows.count() - 1, row)
             self._built.append(row)
+            self._blocks[next(reversed(self._runs))] = (line, row)
 
         # **Wo nichts gilt, steht der Weg, der gilt.** An einer Fläche ist
         # jede der vier Handlungen abgelehnt — dort setzen dafür
@@ -6474,7 +6479,7 @@ class FeaturePanel(QWidget):
                 return stops[-1]
         return None
 
-    def _separate(self) -> None:
+    def _separate(self) -> QWidget | None:
         """Zieht einen Strich vor die nächste Handlung — außer vor die erste.
 
         Eine Handlung ist ein Block aus Überschrift, Feldern und (seit dem
@@ -6485,10 +6490,11 @@ class FeaturePanel(QWidget):
         strich"). Vor der ersten wäre er ein Strich gegen nichts.
         """
         if not self._built:
-            return
+            return None
         line = rule(self)
         self._rows.insertWidget(self._rows.count() - 1, line)
         self._built.append(line)
+        return line
 
     def _arm(self, key: str) -> None:
         """Sagt dem Knopf unten, welche Zeile er meint.
@@ -6694,6 +6700,19 @@ class FeaturePanel(QWidget):
         self._cancel.setVisible(
             self._cancel_offered and not self._measuring and self._apply_stands()
         )
+        # **Was im Bild steht, steht rechts nicht noch einmal** (Robert,
+        # 21.09.2026: „durchmesser ist ja im viewport, kann im merkmalpanel
+        # entfernt werden", RM-199). Bis dahin blieben Durchmesser, Umfang und
+        # Koordinaten als gesperrte Zwillinge stehen — zwei Stellen für
+        # dieselbe Zahl, von denen eine nichts annahm. Der Block geht mit dem
+        # Messen und kommt mit seinem Ende zurück; die übrigen Handlungen
+        # bleiben, wo sie waren.
+        for key, (line, row) in self._blocks.items():
+            entry = self._runs.get(key)
+            twin = self._measuring and entry is not None and entry.op == self._measure_op
+            row.setVisible(not twin)
+            if line is not None:
+                line.setVisible(not twin)
 
     def offer_cancel(self, offered: bool) -> None:
         """Ob *Abbrechen* steht: solange eine Vorschau aus diesem Panel wartet.
