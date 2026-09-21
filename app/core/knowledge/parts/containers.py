@@ -2,30 +2,32 @@
 
 from __future__ import annotations
 
-import math
 from typing import cast
 
 import numpy as np
 
-from app.core.deferred import trimesh
 from app.core.errors import ValidationError
 from app.core.geom.boolean import BOOLEAN_OVERLAP
 from app.core.geom.mesh import MeshData
 from app.core.knowledge.parts import shapes
 from app.core.knowledge.parts.build import face, pin, result, subtract, union
 from app.core.knowledge.parts.registry import PartChange, WallRequirement, register_part
+from app.core.knowledge.parts.shapes import Form
 from app.core.registry import op_params, param
-from app.core.types import BaseParams, PartResult
-from app.core.units import EPS_GEOM, MAX_FACET_SAG
+from app.core.types import BaseParams, MeasureSource, PartResult
+from app.core.units import EPS_GEOM
 from app.i18n import TranslatableText, _
 
 _ADDED = PartChange("1", "2026-09-15", "Parametrische Organizer-Bausteine aus dem Modellkorpus.")
 
 
-def rounded_prism(width: float, depth: float, height: float, radius: float) -> MeshData:
-    """Gerundetes Rechteck in Float64 nativ extrudieren; Außenmaße bleiben exakt."""
-    import manifold3d
+def rounded_prism(width: float, depth: float, height: float, radius: float) -> Form:
+    """Gerundetes Rechteck aufziehen; die Außenmaße bleiben in beiden Kernen exakt.
 
+    Die Form ist :func:`shapes.rounded_box` — am Netz nach ``MAX_FACET_SAG``
+    in Sehnen zerlegt, exakt vier Viertelkreise (P2.7). Hier steht nur die
+    Prüfung der Maße, weil ihr Vorschlag zu den Feldern des Organizers gehört.
+    """
     if (
         min(width, depth, height) <= EPS_GEOM
         or radius < 0
@@ -39,49 +41,31 @@ def rounded_prism(width: float, depth: float, height: float, radius: float) -> M
                 "oder vergrößern Sie den Körper."
             ),
         )
-    if radius <= EPS_GEOM:
-        return shapes.mesh_only(shapes.box(width, depth, height))
-    step = 2 * math.acos(max(0.0, 1 - MAX_FACET_SAG / radius))
-    count = max(4, math.ceil(math.pi / (2 * step)))
-    vertices: list[tuple[float, float]] = []
-    for quadrant, (cx, cy) in enumerate(
-        (
-            (width / 2 - radius, depth / 2 - radius),
-            (-width / 2 + radius, depth / 2 - radius),
-            (-width / 2 + radius, -depth / 2 + radius),
-            (width / 2 - radius, -depth / 2 + radius),
-        )
-    ):
-        for angle in np.linspace(quadrant * math.pi / 2, (quadrant + 1) * math.pi / 2, count + 1):
-            point = (cx + radius * math.cos(angle), cy + radius * math.sin(angle))
-            if not vertices or math.dist(point, vertices[-1]) > EPS_GEOM:
-                vertices.append(point)
-    section = manifold3d.CrossSection([vertices])
-    built = section.extrude(height).to_mesh64()
-    return MeshData.of(
-        trimesh.Trimesh(
-            vertices=np.array(built.vert_properties[:, :3], copy=True),
-            faces=np.array(built.tri_verts, copy=True),
-            process=False,
-        )
-    )
+    return shapes.rounded_box(width, depth, height, radius)
 
 
-def _moved(mesh: MeshData, z: float) -> MeshData:
-    """Eine neu gebaute Form versetzen, ohne ihr Eingangsnetz zu verändern."""
-    raw = mesh.raw.copy()
-    raw.apply_translation((0, 0, z))
-    return MeshData.of(raw)
+def _horizontal_area(form: Form, z: float, *, up: bool = True) -> float:
+    """Die reale ebene Fläche auf Höhe ``z``, Rundungen und ausgesparte Mitte eingeschlossen.
 
+    Am Netz die Summe der Dreiecke mit dieser Normale in dieser Höhe; exakt das
+    Integral über die ebenen Flächen dort (``brep.canonical.horizontal_area``) —
+    dieselbe Frage, je Kern beantwortet, und :func:`_measured` sagt, von welchem.
+    """
+    if not isinstance(form, MeshData):
+        from app.core.brep.canonical import horizontal_area
 
-def _horizontal_area(mesh: MeshData, z: float, *, up: bool = True) -> float:
-    """Die reale ebene Fläche zählen, einschließlich Rundungen und ausgesparter Mitte."""
+        return horizontal_area(form, z, up=up)
     normal = np.asarray((0, 0, 1 if up else -1))
-    raw = mesh.raw
+    raw = form.raw
     mask = (np.linalg.norm(raw.face_normals - normal, axis=1) <= EPS_GEOM) & (
         np.abs(raw.triangles_center[:, 2] - z) <= EPS_GEOM
     )
     return float(raw.area_faces[mask].sum())
+
+
+def _measured() -> dict[str, MeasureSource]:
+    """Woher eine gezählte Fläche stammt: aus den Dreiecken oder aus dem Integral des Kerns."""
+    return {"area": "native" if shapes.building_exact() else "facets"}
 
 
 @op_params
@@ -179,7 +163,7 @@ def organizer_tray(raw: BaseParams) -> PartResult:
         params.height - params.floor + BOOLEAN_OVERLAP,
         max(0, params.radius - params.wall),
     )
-    body = shapes.mesh_only(subtract(base, _moved(cavity, params.floor)))
+    body = subtract(base, shapes.moved(cavity, (0.0, 0.0, params.floor)))
     area = _horizontal_area(body, params.floor)
     return result(
         body,
@@ -188,14 +172,14 @@ def organizer_tray(raw: BaseParams) -> PartResult:
             _horizontal_area(body, 0, up=False),
             (0, 0, 0),
             (0, 0, -1),
-            measure_sources={"area": "facets"},
+            measure_sources=_measured(),
         ),
-        face("floor", area, (0, 0, params.floor), measure_sources={"area": "facets"}),
+        face("floor", area, (0, 0, params.floor), measure_sources=_measured()),
         face(
             "rim",
             _horizontal_area(body, params.height),
             (0, (params.depth - params.wall) / 2, params.height),
-            measure_sources={"area": "facets"},
+            measure_sources=_measured(),
         ),
     )
 
@@ -329,19 +313,17 @@ def organizer_rim(raw: BaseParams) -> PartResult:
         p.height + 2 * BOOLEAN_OVERLAP,
         max(0, p.radius - p.thickness),
     )
-    mesh = subtract(base, _moved(cut, -BOOLEAN_OVERLAP))
+    mesh = subtract(base, shapes.moved(cut, (0.0, 0.0, -BOOLEAN_OVERLAP)))
     # Der Montageursprung liegt auf Material. In der Mitte der Öffnung
     # bliebe ein an eine kleine Fläche gesetzter Rand ein schwebender Körper.
-    anchored = mesh.raw.copy()
-    anchored.apply_translation((0, -(p.depth - p.thickness) / 2, 0))
-    mesh = MeshData.of(anchored)
+    mesh = shapes.moved(mesh, (0.0, -(p.depth - p.thickness) / 2.0, 0.0))
     return result(
         mesh,
         face(
             "rim",
             _horizontal_area(mesh, p.height),
             (0, 0, p.height),
-            measure_sources={"area": "facets"},
+            measure_sources=_measured(),
         ),
     )
 
@@ -413,8 +395,8 @@ def organizer_foot(raw: BaseParams) -> PartResult:
     # Der vorhandene Standfuß fasst bei Fase=0 automatisch. Der Steckfuß
     # verspricht dagegen einen zylindrischen Flansch wie die Vorlagen.
     base = shapes.cylinder(p.diameter, p.height)
-    peg = _moved(shapes.mesh_only(shapes.cylinder(p.pin_diameter, p.pin_length)), p.height)
-    mesh = shapes.mesh_only(union(base, peg))
+    peg = shapes.moved(shapes.cylinder(p.pin_diameter, p.pin_length), (0.0, 0.0, p.height))
+    mesh = union(base, peg)
     return result(
         mesh,
         face(
@@ -422,13 +404,13 @@ def organizer_foot(raw: BaseParams) -> PartResult:
             _horizontal_area(mesh, 0, up=False),
             (0, 0, 0),
             (0, 0, -1),
-            measure_sources={"area": "facets"},
+            measure_sources=_measured(),
         ),
         face(
             "seat",
             _horizontal_area(mesh, p.height),
             ((p.diameter + p.pin_diameter) / 4, 0, p.height),
-            measure_sources={"area": "facets"},
+            measure_sources=_measured(),
         ),
         pin("pin", p.pin_diameter, (0, 0, p.height + p.pin_length / 2), length=p.pin_length),
     )

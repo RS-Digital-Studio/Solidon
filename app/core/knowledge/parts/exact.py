@@ -29,6 +29,7 @@ from typing import TYPE_CHECKING, Any, Final
 
 from app.core.errors import CANCEL, CORRECT_INPUT, GeometryError
 from app.core.types import Finding, Point2, Vec3
+from app.core.units import EPS_GEOM
 from app.i18n import _
 
 if TYPE_CHECKING:
@@ -81,6 +82,34 @@ def cylinder(diameter: float, height: float) -> Solid:
 def box(width: float, depth: float, height: float) -> Solid:
     """In X und Y zentriert, auf Z = 0 stehend — wie ``shapes.box``."""
     return _edit().box(width, depth, height)  # type: ignore[no-any-return]
+
+
+#: Die Einheitsrichtungen der vier Quadrantenanfänge — ohne Winkelfunktion,
+#: damit ein Bogenende exakt auf der Geraden liegt, die es berührt.
+_QUADRANTS: Final = ((1.0, 0.0), (0.0, 1.0), (-1.0, 0.0), (0.0, -1.0))
+
+
+def rounded_box(width: float, depth: float, height: float, radius: float) -> Solid:
+    """Vier Strecken und vier echte Viertelkreise um die Eckmitten aus ``shapes``."""
+    from app.core.knowledge.parts.shapes import rounded_corners
+    from app.core.sketch.profile import Profile, ProfileSegment
+
+    corners = rounded_corners(width, depth, radius)
+    diagonal = math.sqrt(0.5) * radius
+    segments = []
+    for quadrant, (cx, cy) in enumerate(corners):
+        (ax, ay), (bx, by) = _QUADRANTS[quadrant], _QUADRANTS[(quadrant + 1) % 4]
+        start = (cx + ax * radius, cy + ay * radius)
+        end = (cx + bx * radius, cy + by * radius)
+        via = (cx + (ax + bx) * diagonal, cy + (ay + by) * diagonal)
+        segments.append(ProfileSegment("arc", start, end, via=via))
+        nx, ny = corners[(quadrant + 1) % 4]
+        following = (nx + bx * radius, ny + by * radius)
+        # Bei vollem Radius fallen zwei Bögen zusammen; eine Strecke ohne
+        # Länge wäre eine entartete Kante.
+        if math.dist(end, following) > EPS_GEOM:
+            segments.append(ProfileSegment("line", end, following))
+    return _profiles().extrude(Profile(segments=tuple(segments)), height)  # type: ignore[no-any-return]
 
 
 def hexagon(width: float, height: float) -> Solid:

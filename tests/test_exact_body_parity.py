@@ -751,6 +751,15 @@ EXACT_PARTS = frozenset(
         "wall_mount",
         "profile_clamp_liner",
         "profile_clamp_shell",
+        "rib",
+        "gusset",
+        "profile_tongue",
+        "cable_gland",
+        "cable_clip",
+        "organizer_tray",
+        "organizer_divider",
+        "organizer_rim",
+        "organizer_foot",
     }
 )
 for _part, (_dimensions, _effect, _height) in PART_CASES.items():

@@ -1072,6 +1072,17 @@ EXACT_PARTS: Final = frozenset(
         "wall_mount",
         "profile_clamp_liner",
         "profile_clamp_shell",
+        # Struktur und Kabel
+        "rib",
+        "gusset",
+        "profile_tongue",
+        "cable_gland",
+        "cable_clip",
+        # Organizer
+        "organizer_tray",
+        "organizer_divider",
+        "organizer_rim",
+        "organizer_foot",
     }
 )
 

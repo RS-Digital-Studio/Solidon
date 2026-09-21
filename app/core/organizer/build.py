@@ -10,6 +10,7 @@ from shapely.ops import unary_union
 
 from app.core.geom.boolean import BOOLEAN_OVERLAP, boolean
 from app.core.geom.mesh import MeshData
+from app.core.knowledge.parts import shapes
 from app.core.knowledge.parts.build import face
 from app.core.knowledge.parts.containers import rounded_prism
 from app.core.organizer.layout import OrganizerLayout, Rect
@@ -31,7 +32,7 @@ class OrganizerBuild:
 
 def _tool(rect: Rect, radius: float, bottom: float, top: float) -> MeshData:
     """Einen frischen Schneidkörper im gemeinsamen lokalen Rahmen platzieren."""
-    mesh = rounded_prism(rect.width, rect.depth, top - bottom, radius)
+    mesh = shapes.mesh_only(rounded_prism(rect.width, rect.depth, top - bottom, radius))
     raw = mesh.raw.copy()
     raw.apply_translation((*rect.centre, bottom))
     return MeshData.of(raw)
@@ -97,7 +98,7 @@ def build_organizer(
     """Alle Fachräume gemeinsam abziehen; Zwischenräume nicht einzeln erkennen."""
     if cancelled is not None:
         cancelled.raise_if_cancelled()
-    base = rounded_prism(layout.width, layout.depth, layout.height, layout.radius)
+    base = shapes.mesh_only(rounded_prism(layout.width, layout.depth, layout.height, layout.radius))
     outside = MultiPoint(np.asarray(base.raw.vertices)[:, :2]).convex_hull
     cutters: list[MeshData] = []
     features: dict[str, Feature] = dict(

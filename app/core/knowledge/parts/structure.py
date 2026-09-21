@@ -21,7 +21,6 @@ import numpy as np
 
 from app.core.errors import ValidationError
 from app.core.geom.boolean import BOOLEAN_OVERLAP
-from app.core.geom.mesh import MeshData
 from app.core.knowledge import standards
 from app.core.knowledge.parts import shapes
 from app.core.knowledge.parts.build import bore, face, result, subtract, union
@@ -34,6 +33,7 @@ from app.core.knowledge.parts.registry import (
     WallRequirement,
     register_part,
 )
+from app.core.knowledge.parts.shapes import Form
 from app.core.registry import op_params, param, play_param
 from app.core.types import BaseParams, PartResult
 from app.core.units import EPS_GEOM
@@ -634,14 +634,19 @@ def cable_clip(raw: BaseParams) -> PartResult:
 
     diameter = params.diameter or entry.outer
     inner = diameter + params.play
-    # Gleich ausgerichtete 48-Ecke messen zwischen ihren parallelen Facetten
-    # nur ``wall * cos(pi / SEGMENTS)``. Die analytische Gegenkorrektur plus
-    # zwei Geometrietoleranzen und zwei Float32-Einheiten am Außenradius hält
-    # auch die größte Boolesche Repräsentation innerhalb des Nennmaßes.
-    float32_reserve = 2.0 * float(np.spacing(np.float32(inner / 2.0 + params.wall)))
-    faceted_wall = (params.wall + 2.0 * EPS_GEOM + float32_reserve) / math.cos(
-        math.pi / shapes.SEGMENTS
-    )
+    if shapes.building_exact():
+        # Ein Kreis ist exakt ein Kreis: Die Bügelwand ist genau ``wall``
+        # (Bericht P2.7, Abschnitt 5.2 — die Korrektur gilt dem Netz).
+        faceted_wall = params.wall
+    else:
+        # Gleich ausgerichtete 48-Ecke messen zwischen ihren parallelen Facetten
+        # nur ``wall * cos(pi / SEGMENTS)``. Die analytische Gegenkorrektur plus
+        # zwei Geometrietoleranzen und zwei Float32-Einheiten am Außenradius hält
+        # auch die größte Boolesche Repräsentation innerhalb des Nennmaßes.
+        float32_reserve = 2.0 * float(np.spacing(np.float32(inner / 2.0 + params.wall)))
+        faceted_wall = (params.wall + 2.0 * EPS_GEOM + float32_reserve) / math.cos(
+            math.pi / shapes.SEGMENTS
+        )
     outer = inner + 2.0 * faceted_wall
     base = params.wall
     centre = base + inner / 2.0
@@ -654,11 +659,11 @@ def cable_clip(raw: BaseParams) -> PartResult:
             "grip", closed, constraint="feasible", values={"diameter": diameter, "grip": grip}
         )
 
-    def lying(diameter: float, length: float) -> MeshData:
+    def lying(diameter: float, length: float) -> Form:
         """Ein Zylinder mit der Achse in Y — das Kabel läuft längs, nicht quer."""
         upright = shapes.cylinder(diameter, length)
         centred = shapes.moved(upright, (0.0, 0.0, -length / 2.0))
-        return shapes.mesh_only(shapes.turned(centred, 90.0, (1.0, 0.0, 0.0)))
+        return shapes.turned(centred, 90.0, (1.0, 0.0, 0.0))
 
     ring = subtract(
         shapes.moved(lying(outer, params.width), (0.0, 0.0, centre)),

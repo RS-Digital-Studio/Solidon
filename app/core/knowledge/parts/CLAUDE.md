@@ -50,8 +50,9 @@ exakter Körper keine Dreiecke). Drei Grenzen dabei:
   eine Netzoperation braucht — das sind die Stellen, an denen ihre Gruppe den
   exakten Weg noch schuldet. Unter dem exakten Kern kommen sie nie dran:
   `ops.EXACT_PARTS` lässt nur Bausteine dorthin, deren Beschreibung ohne sie
-  auskommt (heute Verbindungen, Mechanik und Befestigung), alle anderen nehmen am exakten
-  Träger den Netzweg samt Konvertierungsmeldung wie bisher. Die Paritätstabelle
+  auskommt (heute alle Gruppen bis auf die Dichtungen und die Kalibrierung),
+  alle anderen nehmen am exakten Träger den Netzweg samt Konvertierungsmeldung
+  wie bisher. Die Paritätstabelle
   (`tests/test_exact_body_parity.py`, `KEEP` statt `MESH`) ist die Abnahme je
   Gruppe.
 - **Ein Gewinde ist exakt ein genähter Körper, kein Gang plus Kern.**
@@ -76,7 +77,7 @@ exakter Körper keine Dreiecke). Drei Grenzen dabei:
 | `mechanics.py` | Mechanik — was sich bewegt und verbindet: Scharniere, Gewinde |
 | `mounting.py` | Halterungen — was etwas an etwas anderem hält |
 | `structure.py` | Struktur — versteifen, hindurchführen, anbinden |
-| `containers.py` | Organizer-Wanne, Teilungswand, Rand und separater Steckfuß; exakte Außenmaße, unabhängiger Boden und reale ebene Merkmalsflächen |
+| `containers.py` | Organizer-Wanne, Teilungswand, Rand und separater Steckfuß; exakte Außenmaße, unabhängiger Boden und reale ebene Merkmalsflächen — am Netz aus Dreiecken gezählt (`facets`), exakt als Integral über die ebenen Flächen (`native`, `brep.canonical.horizontal_area`); die gerundete Wanne ist `shapes.rounded_box` |
 | `profile_clamps.py` | Einzelne Klemmschale und wechselbare Einlage mit gezeichneter Gegen- bzw. Sitzkontur; der gemeinsame Vierkörperweg liegt in `geom/profile_clamp_ops.py` |
 | `seals.py` | Abtragende Dichtnut und separate rechteckige/runde Dichtung aus einem gemeinsamen geschlossenen Skizzenweg; tatsächliche Kontakt-, Boden- und Manteldreiecke |
 | `testbodies.py` | Prüfkörper für die Kalibrierung (§28.3) |
@@ -89,7 +90,7 @@ exakter Körper keine Dreiecke). Drei Grenzen dabei:
 | `builtin.py` | Lädt die mitgelieferten Gruppen einmalig; `bootstrap.load_operations()` ruft `builtin.load()` vor der Op-Erzeugung, der Paketimport selbst registriert nichts |
 | `ops.py` | **Jeder Baustein wird zusätzlich eine Operation** (§24.1, §10) |
 | `build.py` | Gemeinsamer Boden für jeden Baustein: Vereinigen, Abziehen, Schneiden, `threaded`, Verbund und `form_of` — je Kern |
-| `shapes.py` | Kleine Formen, aus denen die Bausteine gebaut werden; `building`/`building_exact` wählen den Kern, `mesh_only` benennt die Netzstellen |
+| `shapes.py` | Kleine Formen, aus denen die Bausteine gebaut werden, darunter `rounded_box` (Sehnen nach `MAX_FACET_SAG` am Netz, vier Viertelkreise exakt, Eckmitten aus `rounded_corners` für beide); `building`/`building_exact` wählen den Kern, `mesh_only` benennt die Netzstellen |
 | `section.py` | Querschnitte mit zwei Auswertern (P2.7): `manifold3d.CrossSection` fürs Netz und die Prüfungen, eine ebene Fläche des exakten Kerns für die Geometrie — Versatz, Differenz, Ohren, Hälfte, Prisma; die Profilklemmen bauen daraus |
 | `exact.py` | Die exakten Zwillinge der Formen und Operationen aus `shapes`/`build` (P2.7) — `Solid` mit demselben Rahmen, Vereinigung mit Körperzahl-Prüfung und Stufenleiter auf Kopien |
 | `range_check.py` | Der Bereichstest in der Anwendung |

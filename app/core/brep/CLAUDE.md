@@ -679,7 +679,7 @@ Anwendung gegen die installierte Bindung.
 | `edit.py` | Einen Körper formen |
 | `features.py` | Merkmale aus der Topologie (§30, §21) |
 | `thread.py` | Gewinde an importierter Geometrie: Kantenzüge nach Bogenlänge, Achse eingepasst, Vorschub und Händigkeit aus der Wendelregression, Gangzahl aus der Periodizität (§21.1, P2.5) |
-| `canonical.py` | Geprüfte Ebenen-, Zylinder-, Kugel- und Ringträger mit wirklichen Flächengrenzen (§30, §21) |
+| `canonical.py` | Geprüfte Ebenen-, Zylinder-, Kugel- und Ringträger mit wirklichen Flächengrenzen (§30, §21); `horizontal_area` summiert die ebenen Flächen einer Höhe in einer Richtung — die exakte Seite der gezählten Organizer-Flächen (P2.7) |
 | `properties.py` | Gemeinsame native Integrale mit geprüftem Rückfall für getrimmte NURBS (§30, §11) |
 | `step.py` | STEP hinein und hinaus |
 

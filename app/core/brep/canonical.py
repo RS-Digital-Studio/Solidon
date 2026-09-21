@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -13,6 +13,9 @@ from app.core.errors import PROGRAMMING_ERRORS, OperationCancelled
 from app.core.log import get_logger
 from app.core.types import CancelToken, Vec3
 from app.core.units import EPS_GEOM
+
+if TYPE_CHECKING:
+    from app.core.brep.kernel import Solid
 
 _log = get_logger(__name__)
 
@@ -766,3 +769,38 @@ def describe(face: Any, *, cancelled: CancelToken | None = None) -> Surface | No
     except Exception:
         _log.debug("canonical surface description could not be resolved", exc_info=True)
         return None
+
+
+def horizontal_area(solid: Solid, z: float, *, up: bool = True) -> float:
+    """Die Summe der ebenen Flächen auf Höhe ``z``, nach oben oder nach unten gerichtet.
+
+    Das exakte Gegenstück zur Dreieckszählung der Organizer-Bausteine
+    (``knowledge/parts/containers._horizontal_area``): Dort zählt jedes
+    Dreieck mit dieser Normale in dieser Höhe, hier jede ebene Fläche — die
+    gerundeten Ecken und eine ausgesparte Mitte eingeschlossen, als Integral
+    statt als Summe von Sehnen. Die Richtung ist die der Fläche, nicht die des
+    Trägers: Die Ebene kennt ihre Achse, die Orientierung der Fläche dreht sie
+    um — ohne Innenprobe, damit keine Fläche still ausgelassen wird.
+    """
+    from OCP.BRepAdaptor import BRepAdaptor_Surface
+    from OCP.GeomAbs import GeomAbs_Plane
+    from OCP.TopAbs import TopAbs_REVERSED
+
+    from app.core.brep.properties import properties
+
+    sign = 1.0 if up else -1.0
+    total = 0.0
+    for face in solid.faces():
+        adaptor = BRepAdaptor_Surface(face)
+        if adaptor.GetType() != GeomAbs_Plane:
+            continue
+        plane = adaptor.Plane()
+        outward = float(plane.Axis().Direction().Z())
+        if face.Orientation() == TopAbs_REVERSED:
+            outward = -outward
+        if abs(outward - sign) > EPS_GEOM:
+            continue
+        if abs(float(plane.Location().Z()) - z) > EPS_GEOM:
+            continue
+        total += properties(face, "surface").mass
+    return total

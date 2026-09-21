@@ -25,6 +25,7 @@ from app.core.knowledge.parts.fasteners import INSERT_LEAD_IN
 from app.core.knowledge.parts.ops import EXACT_PARTS
 from app.core.knowledge.parts.registry import PARTS
 from app.core.knowledge.parts.shapes import building
+from app.core.knowledge.parts.structure import MIN_RIB, RIB_SHARE
 from app.core.types import Profile, SceneObject
 from tests.test_missing_ops import run
 
@@ -96,11 +97,11 @@ def _thread_volume(diameter: float, pitch: float, length: float, *, internal: bo
     return math.pi * root**2 * length + 2.0 * math.pi * moment * (length / pitch)
 
 
-def _host() -> SceneObject:
+def _host(size: tuple[float, float, float] = HOST) -> SceneObject:
     from app.core.brep import edit
     from app.core.brep.features import features_of
 
-    body = edit.box(*HOST)
+    body = edit.box(*size)
     return SceneObject(
         id="obj_1", name="Träger", mesh=body, kind="brep", features=features_of(body)
     )
@@ -109,12 +110,16 @@ def _host() -> SceneObject:
 # --- die Gruppe ------------------------------------------------------------------
 
 
-def test_the_exact_groups_are_fasteners_mechanics_and_mounting() -> None:
+#: Die Dichtungen bauen noch am Netz — Band und Schnur folgen (P2.7f).
+SEALS = {"seal_groove", "seal_gasket"}
+
+
+def test_the_exact_groups_are_all_but_the_seals_and_the_calibration() -> None:
     builtin.load()
-    groups = {
-        spec.name for spec in PARTS.all() if spec.group in {"fasteners", "mechanics", "mounting"}
-    }
-    assert groups == EXACT_PARTS
+    exact_groups = {"fasteners", "mechanics", "mounting", "structure", "routing"}
+    groups = {spec.name for spec in PARTS.all() if spec.group in exact_groups}
+    assert groups - SEALS == EXACT_PARTS
+    assert groups >= SEALS
 
 
 # --- die Grundformen: Zwillinge ---------------------------------------------------------
@@ -125,6 +130,7 @@ def test_the_exact_groups_are_fasteners_mechanics_and_mounting() -> None:
     [
         ("cylinder", lambda: shapes.cylinder(6.0, 10.0), FACET),
         ("box", lambda: shapes.box(4.0, 6.0, 8.0), 1.0),
+        ("rounded_box_square", lambda: shapes.rounded_box(4.0, 6.0, 8.0, 0.0), 1.0),
         ("hexagon", lambda: shapes.hexagon(8.0, 5.0), 1.0),
         ("dovetail", lambda: shapes.dovetail(8.0, 5.0), 1.0),
         ("cone", lambda: shapes.cone(10.0, 4.0, 3.0), FACET),
@@ -995,3 +1001,324 @@ def test_a_clamp_shell_grows_on_an_exact_host(profile: Profile) -> None:
     assert {"profile_clamp_shell_front", "profile_clamp_shell_back"} <= set(
         grown.outputs[0].features
     )
+
+
+# --- Struktur, Kabel und Organizer -------------------------------------------------------------
+
+
+def _rounded_area(width: float, depth: float, radius: float) -> float:
+    """Ein Rechteck mit vier Viertelkreisen an den Ecken."""
+    return width * depth - (4.0 - math.pi) * radius**2
+
+
+def _strip_area(radius: float, half_width: float) -> float:
+    """Die Fläche eines Kreises innerhalb ``|x| <= half_width``."""
+    return 2.0 * (
+        half_width * math.sqrt(radius**2 - half_width**2)
+        + radius**2 * math.asin(half_width / radius)
+    )
+
+
+def test_a_rounded_box_is_four_true_quarter_circles_exactly() -> None:
+    _kernel()
+    mesh = shapes.rounded_box(40.0, 30.0, 15.0, 4.0)
+    assert isinstance(mesh, MeshData)
+    with building("brep"):
+        exact = _sound(shapes.rounded_box(40.0, 30.0, 15.0, 4.0))
+    assert exact.volume == pytest.approx(_rounded_area(40.0, 30.0, 4.0) * 15.0, rel=1e-9)
+    # Vier Ebenen, vier Zylinder, Boden und Deckel.
+    assert exact.face_count == 10
+    assert exact.bounds.minimum == pytest.approx((-20.0, -15.0, 0.0), abs=1e-9)
+    assert exact.bounds.maximum == pytest.approx((20.0, 15.0, 15.0), abs=1e-9)
+    assert exact.bounds.minimum == pytest.approx(mesh.bounds.minimum, abs=1e-6)
+    assert exact.bounds.maximum == pytest.approx(mesh.bounds.maximum, abs=1e-6)
+    # Die Sehnen liegen innerhalb der Bögen: Das Netz ist um die Ecken leichter.
+    assert 0.999 < mesh.volume / exact.volume < 1.0
+    _roundtrip(exact)
+
+
+def test_a_fully_rounded_box_is_a_cylinder_without_a_degenerate_edge() -> None:
+    _kernel()
+    with building("brep"):
+        exact = _sound(shapes.rounded_box(10.0, 10.0, 4.0, 5.0))
+    assert exact.volume == pytest.approx(math.pi * 25.0 * 4.0, rel=1e-9)
+    _roundtrip(exact)
+
+
+def test_rib_exact_is_the_bar_and_two_ramps_of_the_mesh() -> None:
+    _kernel()
+    values = {"length": 20.0, "height": 10.0, "wall": 2.0, "thickness": 0.0, "fillet": 2.0}
+    produced = _built("rib", True, **values)
+    rib = _sound(produced.mesh)
+    mesh = _built("rib", False, **values).mesh
+    thickness = max(2.0 * RIB_SHARE, min(2.0, MIN_RIB))
+    assert rib.volume == pytest.approx(thickness * (20.0 * 10.0 + 2.0**2), rel=1e-9)
+    assert mesh.volume == pytest.approx(rib.volume, rel=1e-9)
+    assert rib.bounds.minimum == pytest.approx((-thickness / 2.0, -12.0, 0.0), abs=1e-9)
+    assert rib.bounds.maximum == pytest.approx((thickness / 2.0, 12.0, 10.0), abs=1e-9)
+    assert produced.features["rib_1"].params["normal"] == (1.0, 0.0, 0.0)
+    _roundtrip(rib)
+
+
+def test_gusset_exact_is_the_same_wedge_as_the_mesh() -> None:
+    _kernel()
+    values = {"legs": 12.0, "thickness": 2.0, "wall": 2.0}
+    produced = _built("gusset", True, **values)
+    gusset = _sound(produced.mesh)
+    mesh = _built("gusset", False, **values).mesh
+    assert gusset.volume == pytest.approx(2.0 * 12.0**2 / 2.0, rel=1e-9)
+    assert mesh.volume == pytest.approx(gusset.volume, rel=1e-9)
+    assert gusset.face_count == 5
+    assert gusset.bounds.minimum == pytest.approx((-1.0, 0.0, 0.0), abs=1e-9)
+    assert gusset.bounds.maximum == pytest.approx((1.0, 12.0, 12.0), abs=1e-9)
+    assert produced.features["gusset_1"].params["centre"] == (0.0, 6.0, 0.0)
+    _roundtrip(gusset)
+
+
+def test_profile_tongue_exact_is_neck_and_tapered_head_from_the_table() -> None:
+    _kernel()
+    entry = standards.profile_slot("2020")
+    values = {"size": "2020", "length": 20.0, "lead_in": 1.5, "play": 0.2, "head": 0.0}
+    produced = _built("profile_tongue", True, **values)
+    tongue = _sound(produced.mesh)
+    mesh = _built("profile_tongue", False, **values).mesh
+    neck_width, head_width = entry.slot - 0.2, entry.core - 0.2
+    neck_height, head_height = entry.lip + 0.2, entry.depth - 0.4
+    # Der Kopf: volle Breite in der Mitte, an beiden Enden über die Schräge auf Halsbreite.
+    head_area = head_width * (20.0 - 3.0) + (head_width + neck_width) * 1.5
+    expected = neck_width * 20.0 * neck_height + head_area * head_height
+    assert tongue.volume == pytest.approx(expected, rel=1e-9)
+    assert mesh.volume == pytest.approx(expected, rel=1e-9)
+    assert tongue.bounds.maximum == pytest.approx(
+        (head_width / 2.0, 10.0, neck_height + head_height), abs=1e-9
+    )
+    feature = produced.features["tongue_1"]
+    assert feature.params["normal"] == (0.0, 0.0, -1.0)
+    assert feature.params["centre"][2] == pytest.approx(neck_height)
+    _roundtrip(tongue)
+
+
+def test_cable_gland_exact_is_bore_and_relief_channel_under_the_mouth() -> None:
+    _kernel()
+    values = {
+        "size": "cable-5",
+        "diameter": 0.0,
+        "wall": 3.0,
+        "play": 0.2,
+        "strain_relief": True,
+        "relief_gap": 4.0,
+    }
+    produced = _built("cable_gland", True, **values)
+    tool = _sound(produced.mesh)
+    mesh = _built("cable_gland", False, **values).mesh
+    diameter = standards.tube("cable-5").outer + 0.2
+    radius = diameter / 2.0
+    bore = math.pi * radius**2 * (3.0 + 2.0 * BOOLEAN_OVERLAP)
+    channel = 4.0 * 2.5 * diameter * diameter
+    shared = BOOLEAN_OVERLAP * _strip_area(radius, 2.0)
+    assert tool.volume == pytest.approx(bore + channel - shared, rel=1e-9)
+    # Unter der Mündung: die Bohrung ragt um die Überlappung heraus, der Kanal endet tief.
+    assert tool.bounds.maximum[2] == pytest.approx(BOOLEAN_OVERLAP, abs=1e-9)
+    assert tool.bounds.minimum[2] == pytest.approx(-3.0 - diameter, abs=1e-9)
+    assert tool.bounds.maximum[0] == pytest.approx(radius, abs=1e-9)
+    # Nur die Bohrung ist am Netz facettiert.
+    assert (mesh.volume - channel) / (tool.volume - channel) == pytest.approx(FACET, rel=1e-3)
+    assert produced.features["bore_1"].params["centre"][2] == pytest.approx(-1.5)
+    assert produced.features["relief_1"].params["normal"] == (-1.0, 0.0, 0.0)
+    _roundtrip(tool)
+
+
+def test_cable_clip_exact_keeps_exactly_its_wall_and_opens_by_the_grip() -> None:
+    _kernel()
+    values = {
+        "size": "cable-5",
+        "diameter": 0.0,
+        "width": 8.0,
+        "wall": 2.0,
+        "grip": 0.0,
+        "play": 0.2,
+    }
+    produced = _built("cable_clip", True, **values)
+    clip = _sound(produced.mesh)
+    mesh = _built("cable_clip", False, **values).mesh
+    cable = standards.tube("cable-5").outer
+    inner = cable + 0.2
+    small, big = inner / 2.0, inner / 2.0 + 2.0
+    gap = cable - 2.0 * (cable / 5.0)
+    centre = 2.0 + small
+    # Exakt ist die Bügelwand genau ``wall``; das Netz trägt die Facettenkorrektur.
+    assert clip.bounds.maximum[0] == pytest.approx(big, abs=1e-9)
+    assert mesh.bounds.maximum[0] > big + 1e-4
+    # Der höchste Punkt ist der Rand der Öffnung, nicht der Scheitel des Bügels.
+    assert clip.bounds.maximum[2] == pytest.approx(
+        centre + math.sqrt(big**2 - (gap / 2.0) ** 2), abs=1e-9
+    )
+    ring = math.pi * (big**2 - small**2)
+    mouth = (_strip_area(big, gap / 2.0) - _strip_area(small, gap / 2.0)) / 2.0
+    # Der Ring taucht bis zur Standfläche in den Sockel: das Kreissegment unter der Sockeloberseite.
+    sunk = big**2 * math.acos(small / big) - small * math.sqrt(big**2 - small**2)
+    expected = 2.0 * big * 8.0 * 2.0 + (ring - mouth - sunk) * 8.0
+    assert clip.volume == pytest.approx(expected, rel=1e-9)
+    assert abs(mesh.volume / clip.volume - 1.0) < 0.01
+    seat = produced.features["seat_1"]
+    assert seat.params["centre"] == (0.0, 0.0, 2.0)
+    assert seat.params["normal"] == (0.0, 0.0, 1.0)
+    _roundtrip(clip)
+
+
+def test_organizer_tray_exact_has_eight_cylinder_faces_and_native_face_areas() -> None:
+    _kernel()
+    values = {
+        "width": 120.0,
+        "depth": 80.0,
+        "height": 40.0,
+        "wall": 3.0,
+        "floor": 3.0,
+        "radius": 8.0,
+    }
+    produced = _built("organizer_tray", True, **values)
+    tray = _sound(produced.mesh)
+    mesh = _built("organizer_tray", False, **values)
+    outer, inner = _rounded_area(120.0, 80.0, 8.0), _rounded_area(114.0, 74.0, 5.0)
+    assert tray.volume == pytest.approx(outer * 40.0 - inner * 37.0, rel=1e-9)
+    # Außen und innen je vier Ebenen und vier Zylinder, dazu Boden, Bodenfläche und Rand.
+    assert tray.face_count == 19
+    assert tray.bounds.minimum == pytest.approx((-60.0, -40.0, 0.0), abs=1e-9)
+    assert tray.bounds.maximum == pytest.approx((60.0, 40.0, 40.0), abs=1e-9)
+    assert abs(mesh.mesh.volume / tray.volume - 1.0) < 1e-3
+    features = produced.features
+    assert features["base"].params["area"] == pytest.approx(outer, rel=1e-9)
+    assert features["floor"].params["area"] == pytest.approx(inner, rel=1e-9)
+    assert features["rim"].params["area"] == pytest.approx(outer - inner, rel=1e-9)
+    assert features["floor"].params["centre"] == (0, 0, 3.0)
+    for name in ("base", "floor", "rim"):
+        assert features[name].measure_sources["area"] == "native"
+        assert mesh.features[name].measure_sources["area"] == "facets"
+    # Das Netz zählt dieselbe Fläche aus Dreiecken — bis auf die Sehnen der Ecken.
+    assert mesh.features["rim"].params["area"] == pytest.approx(outer - inner, rel=1e-3)
+    _roundtrip(tray)
+
+
+def test_organizer_divider_exact_is_the_box_of_the_mesh() -> None:
+    _kernel()
+    values = {"length": 30.0, "height": 15.0, "thickness": 3.0}
+    produced = _built("organizer_divider", True, **values)
+    divider = _sound(produced.mesh)
+    assert divider.volume == pytest.approx(30.0 * 3.0 * 15.0, rel=1e-9)
+    assert _built("organizer_divider", False, **values).mesh.volume == pytest.approx(
+        divider.volume, rel=1e-9
+    )
+    assert produced.features["front"].params["normal"] == (0, -1, 0)
+    _roundtrip(divider)
+
+
+def test_organizer_rim_exact_stands_on_material_with_its_analytic_volume() -> None:
+    _kernel()
+    values = {"width": 40.0, "depth": 30.0, "height": 3.0, "thickness": 3.0, "radius": 4.0}
+    produced = _built("organizer_rim", True, **values)
+    rim = _sound(produced.mesh)
+    outer, inner = _rounded_area(40.0, 30.0, 4.0), _rounded_area(34.0, 24.0, 1.0)
+    assert rim.volume == pytest.approx((outer - inner) * 3.0, rel=1e-9)
+    # Um die halbe Tiefe minus die halbe Randbreite nach hinten: der Ursprung liegt auf dem Rand.
+    assert rim.bounds.minimum == pytest.approx((-20.0, -28.5, 0.0), abs=1e-9)
+    assert rim.bounds.maximum == pytest.approx((20.0, 1.5, 3.0), abs=1e-9)
+    feature = produced.features["rim"]
+    assert feature.params["area"] == pytest.approx(outer - inner, rel=1e-9)
+    assert feature.params["centre"] == (0, 0, 3.0)
+    assert feature.measure_sources["area"] == "native"
+    _roundtrip(rim)
+
+
+def test_organizer_foot_exact_is_flange_and_pin_with_native_ring_areas() -> None:
+    _kernel()
+    values = {"diameter": 18.0, "height": 11.0, "pin_diameter": 13.0, "pin_length": 8.0}
+    produced = _built("organizer_foot", True, **values)
+    foot = _sound(produced.mesh)
+    mesh = _built("organizer_foot", False, **values).mesh
+    assert foot.volume == pytest.approx(math.pi * (9.0**2 * 11.0 + 6.5**2 * 8.0), rel=1e-9)
+    assert mesh.volume / foot.volume == pytest.approx(FACET, rel=1e-9)
+    assert foot.bounds.maximum == pytest.approx((9.0, 9.0, 19.0), abs=1e-9)
+    features = produced.features
+    assert features["base"].params["area"] == pytest.approx(math.pi * 81.0, rel=1e-9)
+    assert features["seat"].params["area"] == pytest.approx(math.pi * (81.0 - 6.5**2), rel=1e-9)
+    assert features["pin"].params["diameter"] == 13.0
+    assert features["pin"].params["centre"] == (0, 0, 15.0)
+    _roundtrip(foot)
+
+
+def test_a_rib_and_a_cable_clip_grow_on_an_exact_host(profile: Profile) -> None:
+    _kernel()
+    host = _host()
+    grown = run(
+        "insert_rib",
+        host,
+        profile,
+        length=20.0,
+        height=10.0,
+        wall=2.0,
+        thickness=0.0,
+        fillet=2.0,
+        **ON_TOP,
+    )
+    body = _sound(grown.outputs[0].mesh)
+    assert grown.outputs[0].kind == "brep"
+    thickness = max(2.0 * RIB_SHARE, min(2.0, MIN_RIB))
+    # Die Rippe sinkt um die Überlappung ein: der Riegel voll, die Rampen verjüngt.
+    sunk = thickness * (
+        20.0 * BOOLEAN_OVERLAP + 2.0 * (2.0 * BOOLEAN_OVERLAP - BOOLEAN_OVERLAP**2 / 2.0)
+    )
+    expected = HOST[0] * HOST[1] * HOST[2] + thickness * (20.0 * 10.0 + 4.0) - sunk
+    assert body.volume == pytest.approx(expected, rel=1e-9)
+    assert "rib_rib_1" in grown.outputs[0].features
+    clipped = run(
+        "insert_cable_clip",
+        host,
+        profile,
+        size="cable-5",
+        diameter=0.0,
+        width=8.0,
+        wall=2.0,
+        grip=0.0,
+        **ON_TOP,
+    )
+    clip = _sound(clipped.outputs[0].mesh)
+    assert clipped.outputs[0].kind == "brep"
+    assert clip.volume > HOST[0] * HOST[1] * HOST[2]
+    assert "cable_clip_seat_1" in clipped.outputs[0].features
+
+
+def test_a_cable_gland_builds_its_relief_block_behind_an_exact_wall(profile: Profile) -> None:
+    _kernel()
+    wall = 3.0
+    host = _host((100.0, 100.0, wall))
+    cut = run(
+        "insert_cable_gland",
+        host,
+        profile,
+        size="cable-5",
+        diameter=0.0,
+        wall=wall,
+        strain_relief=True,
+        relief_gap=4.0,
+        x=0.0,
+        y=0.0,
+        z=wall,
+        nx=0.0,
+        ny=0.0,
+        nz=1.0,
+    )
+    body = _sound(cut.outputs[0].mesh)
+    assert cut.outputs[0].kind == "brep"
+    features = cut.outputs[0].features
+    diameter = features["cable_gland_bore_1"].params["diameter"]
+    radius = diameter / 2.0
+    # Der Klemmblock wächst unter der Wand, dann schneiden Bohrung und Kanal.
+    support = (diameter + 2.0 * wall) * (2.5 * diameter + 2.0 * wall) * diameter
+    bore = math.pi * radius**2 * (wall + BOOLEAN_OVERLAP)
+    channel = 4.0 * 2.5 * diameter * diameter
+    shared = BOOLEAN_OVERLAP * _strip_area(radius, 2.0)
+    expected = 100.0 * 100.0 * wall + support - bore - channel + shared
+    assert body.volume == pytest.approx(expected, rel=1e-9)
+    assert body.bounds.minimum[2] == pytest.approx(-diameter, abs=1e-9)
+    assert body.bounds.maximum[2] == pytest.approx(wall, abs=1e-9)
+    assert "cable_gland_relief_1" in features

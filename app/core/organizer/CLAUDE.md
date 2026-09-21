@@ -8,7 +8,7 @@ Solidon-Maßausdrücke, niemals Quelltext oder freie Geometriegesten.
 |---|---|
 | `serialize.py` | Geschlossener, begrenzter Parser; unveränderliche Knoten, kanonischer Text und ein Referenzsammler für Cache, Rezepte und Parameteranzeige |
 | `layout.py` | Innen-/Außenbezug, lichte Fächer, tatsächliche Wandabschnitte, Modulrahmen und daraus abgeleitete Fußpunkte |
-| `build.py` | Gemeinsamer Boolescher Bau; echte Bodenflächen und vorhandene Seiten/Oberkanten der Teilungswände mit stabilen Provenienz-IDs |
+| `build.py` | Gemeinsamer Boolescher Bau am Netz (`shapes.mesh_only` um jede gerundete Form — der Organizer als Ganzes geht erst mit P2.8 auf den exakten Kern); echte Bodenflächen und vorhandene Seiten/Oberkanten der Teilungswände mit stabilen Provenienz-IDs |
 | `ops.py` | `create_organizer`, vollständige acht Parameter und Übersetzung desselben Layoutwerts in ein Szenenobjekt |
 
 Innenbezug verlangt passende gemeinsame Maße benachbarter Teilungen. Außenbezug

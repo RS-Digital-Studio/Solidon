@@ -28,6 +28,7 @@ from app.core.errors import InternalError
 from app.core.geom import lathe, transform
 from app.core.geom.mesh import MeshData
 from app.core.types import Finding, Point2, Vec3
+from app.core.units import EPS_GEOM, MAX_FACET_SAG
 
 if TYPE_CHECKING:
     from app.core.brep.kernel import Solid
@@ -155,6 +156,57 @@ def box(width: float, depth: float, height: float) -> Form:
     body = trimesh.creation.box(extents=(width, depth, height))
     body.apply_translation([0.0, 0.0, height / 2.0])
     return MeshData.of(body)
+
+
+def rounded_corners(width: float, depth: float, radius: float) -> tuple[Point2, ...]:
+    """Die vier Bogenmitten eines gerundeten Rechtecks, im Quadrantenumlauf ab +X/+Y.
+
+    Einmal hier, damit Netz und exakter Kern ihre Bögen um dieselben Punkte
+    schlagen — der Zwilling in ``exact.py`` liest sie von hier.
+    """
+    return (
+        (width / 2.0 - radius, depth / 2.0 - radius),
+        (-width / 2.0 + radius, depth / 2.0 - radius),
+        (-width / 2.0 + radius, -depth / 2.0 + radius),
+        (width / 2.0 - radius, -depth / 2.0 + radius),
+    )
+
+
+def rounded_box(width: float, depth: float, height: float, radius: float) -> Form:
+    """Ein Quader mit vier gerundeten senkrechten Kanten — der Rahmen von :func:`box`.
+
+    Die Form der Organizer-Wanne und ihres Randes. Am Netz ein aufgezogener
+    Umriss, dessen Ecken nach ``MAX_FACET_SAG`` in Sehnen zerlegt sind, in
+    Float64 nativ über ``manifold3d``; exakt vier echte Viertelkreise. Die
+    Außenmaße bleiben in beiden Kernen exakt: Jeder Sehnenpunkt liegt auf dem
+    Bogen, und der Bogen berührt die Geraden. Ein Radius von null ist der
+    Quader. Ob der Radius in den Körper passt, prüft der Aufrufer — die Absage
+    dazu gehört zu seinen Feldern (``containers.rounded_prism``).
+    """
+    if radius <= EPS_GEOM:
+        return box(width, depth, height)
+    if building_exact():
+        from app.core.knowledge.parts import exact as twins
+
+        return twins.rounded_box(width, depth, height, radius)
+    import manifold3d
+
+    step = 2 * math.acos(max(0.0, 1 - MAX_FACET_SAG / radius))
+    count = max(4, math.ceil(math.pi / (2 * step)))
+    vertices: list[tuple[float, float]] = []
+    for quadrant, (cx, cy) in enumerate(rounded_corners(width, depth, radius)):
+        for angle in np.linspace(quadrant * math.pi / 2, (quadrant + 1) * math.pi / 2, count + 1):
+            point = (cx + radius * math.cos(angle), cy + radius * math.sin(angle))
+            if not vertices or math.dist(point, vertices[-1]) > EPS_GEOM:
+                vertices.append(point)
+    built = manifold3d.CrossSection([vertices]).extrude(height).to_mesh64()
+    return MeshData.of(
+        trimesh.Trimesh(
+            vertices=np.array(built.vert_properties[:, :3], copy=True),
+            faces=np.array(built.tri_verts, copy=True),
+            process=False,
+        )
+    )
 
 
 def hexagon(width: float, height: float) -> Form:
