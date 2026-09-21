@@ -1258,6 +1258,14 @@ gemeinsam sind, sagt `Pair.shared` im Kern. Ein Paarwechsel tauscht sie
 vollständig — was stehenbliebe, verspräche eine Wirkung, die die andere Hälfte
 nicht kennt.
 
+**Ist eine der zwei Stellen ein Gewinde, bleibt der Dialog zu** (P2.6,
+Entscheidung 15): Das Gegenstück ist das gegengleiche Gewinde am anderen
+Teil, im Maß des vorhandenen — ein Dialog wäre eine Frage ohne
+Antwortmöglichkeit. `MainWindow._thread_among` erkennt die Lage,
+`Session.create_thread_counterpart` legt Schritt und Gewindepassung an
+(`core/counterpart.thread_counterpart_draft`), und die Absagen des Kerns —
+kein Tabellenmaß, linksgängig, dasselbe Teil — kommen als Fehlerdialog.
+
 `Session.create_counterpart` übernimmt beide Hälften und hängt nach der
 Auswertung die Passung an dieselbe Transaktion. Erst danach läuft die
 gemeinsame Änderungsnachbereitung: Das Projekt gilt als ungespeichert, die

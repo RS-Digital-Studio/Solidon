@@ -282,3 +282,70 @@ def test_the_dialog_shows_the_shared_measurements_of_the_chosen_pair(
         assert "diameter" not in werte, "was die Hälften nicht teilen, steht nicht da"
     finally:
         dialog.deleteLater()
+
+
+def test_a_thread_brings_its_half_and_the_dialog_stays_closed(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ist eine der zwei Stellen ein Gewinde, gibt es nichts zu wählen (P2.6, Entscheidung 15).
+
+    Das Gegenstück ist das gegengleiche Gewinde am anderen Teil, im Maß des
+    vorhandenen — der Dialog bliebe eine Frage ohne Antwortmöglichkeit und
+    wird deshalb gar nicht geöffnet. Gemessen wird der ganze Weg vom Klick:
+    ein Verlaufsschritt, ein Innengewinde M6 auf der zweiten Platte, eine
+    Gewindepassung zwischen beiden.
+    """
+    from app.ui import counterpart_dialog as module
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        first, second = _two_plates(window)
+        window.session.history.apply(
+            "Bolzen auf der ersten Platte",
+            [
+                OperationDraft(
+                    op="insert_printed_thread",
+                    inputs=(first,),
+                    params={"size": "M6", "length": 8.0, "internal": False, "z": 10.0},
+                )
+            ],
+        )
+        window.session.evaluate_now()
+        result = window.session.last_result
+        assert result is not None
+        threads = [
+            name
+            for name, feature in result.scene.objects[first].features.items()
+            if feature.kind == "thread" and feature.provenance == "generated"
+        ]
+        assert len(threads) == 1
+        window.object_tree.select_features(
+            ((first, threads[0]), (second, _top_face(window, second)))
+        )
+        QApplication.processEvents()
+
+        def no_dialog(self: object) -> int:
+            raise AssertionError("am Gewinde gibt es nichts zu wählen — kein Dialog")
+
+        monkeypatch.setattr(module.CounterpartDialog, "exec", no_dialog)
+        document = window.session.project.document
+        before = len(document.transactions)
+
+        window.action_counterpart()
+
+        assert len(document.transactions) == before + 1, "das Gegenstück ist eine Handlung"
+        step = document.ops[-1]
+        assert step.op == "insert_printed_thread" and step.inputs == (second,)
+        assert step.params["size"] == "M6" and step.params["internal"] is True
+        assert step.params["at_feature"] == _top_face(window, second)
+        assert len(document.fits) == 1 and document.fits[0].kind == "thread"
+        passung = document.fits[0]
+        assert passung.a.object_id == first and passung.a.feature_id == threads[0]
+        result = window.session.last_result
+        assert result is not None
+        assert passung.b.feature_id in result.scene.objects[passung.b.object_id].features
+    finally:
+        release = getattr(type(window), "release", None)
+        if release is not None:
+            release(window)
+        window.deleteLater()

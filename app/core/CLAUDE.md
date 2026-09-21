@@ -44,7 +44,7 @@ nicht hinein. Eine deklarierte Maßvorgabe erzeugt noch keinen Trägernachweis.
 
 | Datei | Rolle |
 |---|---|
-| `types.py` | Die Verträge (§9): `Mesh`, `Scene`, `SceneObject`, `OpContext`, `OpResult`, `Feature`, `Profile`. Signaturen stehen fest, bevor ein Modul entsteht |
+| `types.py` | Die Verträge (§9): `Mesh`, `Scene`, `SceneObject`, `OpContext`, `OpResult`, `Feature`, `Profile`. Signaturen stehen fest, bevor ein Modul entsteht. Dazu die zwei Fragen, die an einem Merkmal nur einmal beantwortet werden: `is_a_cavity` und `thread_is_left_handed` (belegt links heißt gesetzt oder nativ gelesen; der Netzleser rät die Händigkeit am gedruckten Profil) |
 | `build_area.py` | Tatsächliche Druckkontur, Sperrzonen, Druckhöhe und Auftragsrand für Anordnung, Orientierung und Ausgabe (§29) |
 | `errors.py` | Die Ausnahmen-Hierarchie (§33.1). Jede trägt mindestens eine `Action` — ein Fehler endet nie mit „fehlgeschlagen" |
 | `units.py` | Millimeter, doppelte Genauigkeit, die drei benannten Toleranzen (§11). Fließkommavergleich über `is_close`/`is_zero`, nie mit `==`. **Und die Winkelfunktionen, die auf jeder Maschine dieselbe Zahl geben** — `circle_point`, `inscribed_ratio`, `exact_cos`/`exact_sin` und ihre Gradgeschwister, gerechnet über `decimal` (RM-187) |
@@ -133,6 +133,18 @@ Sie entsteht bei der Auswertung (`evaluate._renamed`), nicht beim Anlegen des
 Schritts. Deshalb sind es dort zwei Aufrufe: `apply_counterpart` legt die
 Geometrie an, `attach_fit` liest die Namen aus der gerechneten Szene und hängt
 die Passung an dieselbe Transaktion.
+**Und ein Gewinde bringt seine Hälfte mit** (P2.6, Entscheidung 15): Die
+drei Paare setzen beide Hälften neu; ein eingelesener Bolzen oder ein
+gedrucktes Gewinde hat seine schon. `thread_counterpart_draft` macht aus dem
+vorhandenen Gewinde den einen Schritt — das gegengleiche Bausteingewinde am
+anderen Teil, im **Tabellenmaß** (`thread_size_for`, Grenze
+`THREAD_SIZE_REACH` gegen die Normteiltabelle; ein Gewinde Ø 6,4 mit
+Steigung 1,1 wird nicht still zu M6, sondern nennt die nächste Größe) —,
+`apply_thread_counterpart` legt ihn an, `attach_thread_fit` hängt die
+Gewindepassung zwischen dem vorhandenen und dem neuen an dieselbe
+Transaktion. `_made_feature` nimmt dabei das **erzeugte** Merkmal des
+Schritts, nicht das daneben erkannte: Am Netz liest die Erkennung über
+denselben Gängen ein zweites, gemessenes Gewinde mit demselben Stamm.
 Dieser Schritt muss beim Nachtragen weiterhin der letzte sein. Ein inzwischen
 geänderter Verlauf bleibt unangetastet und bekommt einen erklärenden Befund.
 

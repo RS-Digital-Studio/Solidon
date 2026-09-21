@@ -7952,6 +7952,24 @@ class MainWindow(QMainWindow):
             return
         (first_object, first_feature), (second_object, second_feature) = chosen
 
+        # **Ein Gewinde bringt seine Hälfte mit** (P2.6, Entscheidung 15): Ist
+        # eine der zwei Stellen ein Gewinde, gibt es nichts zu wählen — das
+        # Gegenstück ist das gegengleiche Gewinde am anderen Teil, im Maß des
+        # vorhandenen, und die Passung hängt daran.
+        thread = self._thread_among((first_object, first_feature), (second_object, second_feature))
+        if thread is not None:
+            (thread_object, thread_feature), (other_object, other_feature) = thread
+            try:
+                applied = self.session.create_thread_counterpart(
+                    thread_feature, thread_object, other_object, {"at_feature": other_feature}
+                )
+            except AppError as error:
+                show_error(error, self)
+                return
+            for finding in applied.findings:
+                self.announce(str(finding.message))
+            return
+
         dialog = CounterpartDialog(
             feature_label(first_feature, self._feature_of(first_object, first_feature)),
             feature_label(second_feature, self._feature_of(second_object, second_feature)),
@@ -8017,6 +8035,16 @@ class MainWindow(QMainWindow):
 
         for finding in applied.findings:
             self.announce(str(finding.message))
+
+    def _thread_among(
+        self, first: tuple[str, str], second: tuple[str, str]
+    ) -> tuple[tuple[str, Any], tuple[str, str]] | None:
+        """Ist eine der zwei Stellen ein Gewinde: (Teil, Gewinde) und (Teil, andere Stelle)."""
+        for mine, other in ((first, second), (second, first)):
+            feature = self._feature_of(*mine)
+            if feature is not None and feature.kind == "thread":
+                return (mine[0], feature), other
+        return None
 
     def _counterpart_targets(self) -> tuple[tuple[str, str], tuple[str, str]] | None:
         """Die zwei markierten Stellen — je eine an zwei **verschiedenen** Teilen.

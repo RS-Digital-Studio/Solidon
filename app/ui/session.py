@@ -31,7 +31,14 @@ from app.core.agent.proposal import Proposal
 from app.core.agent.session import AgentSession
 from app.core.backends.llm import LLMBackend, first_available
 from app.core.backends.mesh import GeneratedMesh
-from app.core.counterpart import CounterpartApplied, Pair, apply_counterpart, attach_fit
+from app.core.counterpart import (
+    CounterpartApplied,
+    Pair,
+    apply_counterpart,
+    apply_thread_counterpart,
+    attach_fit,
+    attach_thread_fit,
+)
 from app.core.errors import (
     CANCEL,
     CANCEL_SPLIT,
@@ -844,6 +851,9 @@ class Session(QObject):
         Lizenz, die freigegebenen Maße, die benannten Stellen — und reicht die
         Importquittung weiter, damit ein fremder Baustein fremd bleibt."""
         self._worker: _EvaluationWorker | None = None
+        # Ein Arbeiter, der bei einem synchronen Lauf noch rechnete: Sein
+        # Ergebnis ist danach älter als der Stand, den ``evaluate_now`` liefert.
+        self._superseded: _EvaluationWorker | None = None
         self._plan: _PlanWorker | None = None
         """Der laufende Einleseplan (§2.8) — siehe ``import_payload_async``."""
         self._agent: _AgentWorker | None = None
@@ -2315,6 +2325,27 @@ class Session(QObject):
             self._changed()
         return applied
 
+    def create_thread_counterpart(
+        self,
+        feature: Any,
+        first_object: str,
+        second_object: str,
+        second_place: Mapping[str, Any],
+    ) -> CounterpartApplied:
+        """Das Gegenstück zu einem vorhandenen Gewinde samt Passung, eine Änderung (P2.6)."""
+        refusal = self.halt_in_the_way()
+        if refusal is not None:
+            raise refusal
+        applied = apply_thread_counterpart(
+            self.project.document, feature, first_object, second_object, second_place
+        )
+        try:
+            result = self.evaluate_now()
+            attach_thread_fit(self.project.document, applied, feature, result.scene)
+        finally:
+            self._changed()
+        return applied
+
     def preview_async(
         self,
         then: Any,
@@ -2725,8 +2756,17 @@ class Session(QObject):
         self.evaluate_async()
 
     def evaluate_now(self) -> EvaluationResult:
-        """Synchroner Durchlauf, für Kommandozeile, Tests und Export (§38)."""
+        """Synchroner Durchlauf, für Kommandozeile, Tests und Export (§38).
+
+        **Ein Arbeiter, der jetzt noch läuft, ist danach überholt.** Er rechnet
+        am Stand, den er beim Start bekam, und der ist spätestens jetzt alt;
+        meldete er sich nach diesem Lauf, überschriebe er das frische Ergebnis
+        mit dem des Stands davor — gemessen am 21.09.2026: Nach einem
+        Bausteinschritt und diesem Lauf stand im Objektbaum die Szene ohne den
+        Baustein, und das Fenster hielt eine markierte Zeile für nicht gewählt.
+        """
         self.cancel_signal.reset()
+        self._superseded = self._worker
         result = self.run_evaluation("fine")
         self.last_result = result
         # Die grobe Kopie gehört der Szene, aus der sie entstand. Ohne dieses
@@ -3245,8 +3285,18 @@ class Session(QObject):
         """
         return finished is not None and finished is not self._worker
 
+    def _stale(self, finished: _EvaluationWorker | None) -> bool:
+        """Ob das **Ergebnis** dieses Laufs nicht mehr gilt.
+
+        Überholt ist er, wenn ein neuerer ihn ersetzt hat (:meth:`_outdated`)
+        oder ein synchroner Lauf ihn eingeholt hat (``_superseded``). Nur die
+        Meldung wird verworfen; aufräumen — Leine, ``busyChanged``, das Feld —
+        muss ``_on_thread_done`` ihn trotzdem, sonst bliebe die Anzeige stehen.
+        """
+        return self._outdated(finished) or (finished is not None and finished is self._superseded)
+
     def _on_finished(self, result: Any, finished: _EvaluationWorker | None = None) -> None:
-        if self._outdated(finished):
+        if self._stale(finished):
             # §15.3: stehen bleibt der letzte **gültige** Stand. Das Ergebnis
             # eines überholten Laufs gehört zu einem Dokument, das es nicht
             # mehr gibt — es einzublenden hieß, die leere Szene des neuen
@@ -3291,7 +3341,7 @@ class Session(QObject):
         self.sceneChanged.emit(result)
 
     def _on_failed(self, error: Any, finished: _EvaluationWorker | None = None) -> None:
-        if self._outdated(finished):
+        if self._stale(finished):
             # Der Fehler gilt einem Stapel, an dem niemand mehr arbeitet. Ins
             # Protokoll gehört er trotzdem — nur nicht als Dialog vor einem
             # Lauf, der gerade gut läuft.

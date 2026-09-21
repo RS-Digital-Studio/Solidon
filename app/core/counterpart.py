@@ -36,12 +36,14 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any, Final
 
-from app.core.errors import CORRECT_INPUT, ValidationError
+from app.core.errors import CANCEL, CHANGE_SELECTION, CORRECT_INPUT, ValidationError
+from app.core.knowledge import standards
 from app.core.log import get_logger
 from app.core.scene.fits import active_fits
 from app.core.scene.history import History, OperationDraft, change_for
 from app.core.types import (
     Document,
+    Feature,
     FeatureRef,
     Finding,
     Fit,
@@ -51,6 +53,7 @@ from app.core.types import (
     Origin,
     Scene,
     TransactionId,
+    thread_is_left_handed,
 )
 from app.i18n import _
 
@@ -342,6 +345,197 @@ def attach_fit(
     return applied
 
 
+# --- Das Gegenstück zu einem Gewinde, das schon da ist (P2.6, Entscheidung 15) ---------------
+#
+# Die drei Paare oben setzen **beide** Hälften neu. Ein eingelesener Bolzen
+# oder ein gedrucktes Gewinde hat seine Hälfte schon: Was fehlt, ist das
+# Gegenstück am anderen Teil — zum Außengewinde das Innengewinde, zum
+# Innengewinde der Bolzen —, und die Passung dazwischen. Das Maß kommt aus dem
+# Gewinde selbst, und weil das Bausteingewinde nach der Normteiltabelle baut
+# (§24.2), muss es ein Tabellenmaß treffen: Ein Gewinde Ø 6,4 mit Steigung 1,1
+# wird nicht still zu M6 (Konzept §13.4).
+
+#: Wie nah Durchmesser und Steigung an einem Tabellenmaß liegen müssen —
+#: beides deutlich unter dem halben Abstand zweier Nachbargrößen der Tabelle
+#: (M2 → M2.5: 0,5 im Durchmesser, 0,05 in der Steigung), damit kein Maß
+#: zwei Größen trifft; ``tests/test_thread_counterpart.py`` hält das gegen die
+#: Tabelle. Keine Fertigungstoleranz, sondern eine Erkennungsgrenze wie
+#: ``units.match_tolerance``.
+THREAD_SIZE_REACH: Final = (0.2, 0.02)
+
+
+def thread_size_for(feature: Feature) -> str:
+    """Das Normmaß zu einem Gewinde — oder die Absage, die die nächste Größe nennt."""
+    diameter = float(feature.params.get("diameter", 0.0))
+    pitch = float(feature.params.get("pitch", 0.0))
+    nearest: tuple[float, str] | None = None
+    for size in standards.screw_sizes():
+        screw = standards.screw(size)
+        if (
+            abs(screw.nominal - diameter) <= THREAD_SIZE_REACH[0]
+            and abs(screw.pitch - pitch) <= THREAD_SIZE_REACH[1]
+        ):
+            return size
+        distance = abs(screw.nominal - diameter) + abs(screw.pitch - pitch)
+        if nearest is None or distance < nearest[0]:
+            nearest = (distance, size)
+    raise ValidationError(
+        field="at_feature",
+        detail=_(
+            "Zu diesem Gewinde passt kein Normmaß aus der Tabelle. "
+            "Setzen Sie das Gegenstück als Baustein mit der nächsten Größe."
+        ),
+        values={
+            "feature": feature.id,
+            "diameter": diameter,
+            "pitch": pitch,
+            "nearest": nearest[1] if nearest is not None else "",
+        },
+        constraint="no_standard_size",
+        suggestions=(CHANGE_SELECTION, CANCEL),
+    )
+
+
+def thread_counterpart_draft(
+    feature: Feature, second_object: ObjectId, second_place: Mapping[str, Any]
+) -> OperationDraft:
+    """Der eine Schritt: das gegengleiche Bausteingewinde am anderen Teil, im Tabellenmaß."""
+    if feature.kind != "thread":
+        raise ValidationError(
+            field="at_feature",
+            detail=_("Das Gegenstück zum Gewinde braucht ein Gewinde als Ausgang."),
+            value=feature.id,
+            constraint="not_a_thread",
+            suggestions=(CHANGE_SELECTION, CANCEL),
+        )
+    if thread_is_left_handed(feature):
+        raise ValidationError(
+            field="at_feature",
+            detail=_(
+                "Ein Rechtsgewinde und ein Linksgewinde greifen nicht ineinander. Ein Gegenstück "
+                "zu einem Linksgewinde gibt es aus der Bibliothek nicht."
+            ),
+            value=feature.id,
+            constraint="left_handed",
+            suggestions=(CHANGE_SELECTION, CANCEL),
+        )
+    size = thread_size_for(feature)
+    length = float(feature.params.get("length", 0.0))
+    params: dict[str, Any] = {
+        "size": size,
+        "internal": not bool(feature.params.get("internal", False)),
+        **dict(second_place),
+    }
+    if length > 0.0:
+        params["length"] = length
+    return OperationDraft(op="insert_printed_thread", inputs=(second_object,), params=params)
+
+
+def apply_thread_counterpart(
+    document: Document,
+    feature: Feature,
+    first_object: ObjectId,
+    second_object: ObjectId,
+    second_place: Mapping[str, Any],
+    *,
+    origin: Origin | None = None,
+) -> CounterpartApplied:
+    """Setzt das Gegenstück zu einem vorhandenen Gewinde — ein Schritt, eine Transaktion.
+
+    Wie :func:`apply_counterpart`, nur dass die erste Hälfte schon steht: Es
+    entsteht ein Bausteingewinde am zweiten Teil, und :func:`attach_thread_fit`
+    hängt danach die Passung zwischen dem vorhandenen und dem neuen Gewinde an
+    dieselbe Transaktion.
+    """
+    if first_object == second_object:
+        raise ValidationError(
+            field="second_object",
+            detail=_(
+                "Ein Gegenstück braucht zwei verschiedene Teile — Stift und Bohrung "
+                "im selben Körper wären ein Loch neben einem Zapfen."
+            ),
+            value=str(second_object),
+            constraint="same_object",
+            suggestions=(CORRECT_INPUT,),
+        )
+    draft = thread_counterpart_draft(feature, second_object, second_place)
+    history = History(document)
+    applied = history.apply(_("Gegenstück zum Gewinde"), [draft], origin or Origin(by="user"))
+    step = document.ops[-1]
+    made = [step.outputs[0]] if step.outputs else []
+    _log.info("thread counterpart for %s/%s: %s", first_object, feature.id, ", ".join(made) or "?")
+    return CounterpartApplied(
+        object_ids=[first_object, *made],
+        op_ids=(step.id,),
+        transaction=applied.id,
+    )
+
+
+def attach_thread_fit(
+    document: Document, applied: CounterpartApplied, feature: Feature, scene: Scene
+) -> CounterpartApplied:
+    """Die Passung zwischen dem vorhandenen Gewinde und dem neuen — nach der Auswertung."""
+    if len(applied.object_ids) < 2 or not applied.op_ids:
+        _log.info("thread counterpart: %d output(s), no fit", len(applied.object_ids))
+        return applied
+    last = document.transactions[-1] if document.transactions else None
+    if last is None or last.id != applied.transaction:
+        applied.findings.append(
+            Finding(
+                code="parts.counterpart_unpaired",
+                severity="warning",
+                message=_(
+                    "Der Verlauf hat sich seit dem Einsetzen geändert. Die Passung wurde "
+                    "nicht nachgetragen. Prüfen Sie die beiden Hälften im aktuellen Modell "
+                    "und tragen Sie die Passung bei Bedarf im Auswahlfenster ein."
+                ),
+                values={"pair": "thread"},
+            )
+        )
+        return applied
+    first_object, second_object = applied.object_ids[0], applied.object_ids[1]
+    made = _made_feature(scene, second_object, applied.op_ids[0], "printed_thread", "thread")
+    existing = scene.objects.get(first_object)
+    if made is None or existing is None or feature.id not in existing.features:
+        applied.findings.append(
+            Finding(
+                code="parts.counterpart_unpaired",
+                severity="info",
+                message=_(
+                    "Die beiden Hälften stehen, eine Passung dazwischen gibt es "
+                    "nicht: Eines der Merkmale ist unter seinem Namen nicht zu "
+                    "finden. Sie lässt sich im Auswahlfenster nachtragen."
+                ),
+                values={"pair": "thread"},
+            )
+        )
+        return applied
+    fit = Fit(
+        name=_unused_name(document, "thread"),
+        a=FeatureRef(first_object, feature.id),
+        b=FeatureRef(second_object, made),
+        kind="thread",
+        tolerance="auto:",
+    )
+    changes = change_for(document, fits=[*document.fits, fit])
+    document.transactions[-1] = dataclasses.replace(last, changes=changes)
+    document.fits.append(fit)
+    applied.fit = fit if fit in active_fits(document) else None
+    applied.findings.append(
+        Finding(
+            code="parts.counterpart_fit",
+            severity="info",
+            message=_(
+                "Beide Hälften sind als Passung eingetragen — sie werden zusammen "
+                "geprüft, und der Slicer bekommt dafür die genauere Außenwand."
+            ),
+            values={"fit": fit.name, "tolerance": str(fit.tolerance)},
+        )
+    )
+    _log.info("thread counterpart: %s ↔ %s as fit %s", feature.id, made, fit.name)
+    return applied
+
+
 def _made_feature(
     scene: Scene, object_id: ObjectId, op_id: OpId, part: str, wanted: str
 ) -> str | None:
@@ -367,12 +561,20 @@ def _made_feature(
     if entry is None:
         return None
     stems = (f"{part}_{wanted}", wanted)
-    for name, feature in entry.features.items():
-        if feature.created_by != op_id:
-            continue
-        if any(name == stem or name.startswith(f"{stem}_") for stem in stems):
+    found = [
+        (name, feature)
+        for name, feature in entry.features.items()
+        if feature.created_by == op_id
+        and any(name == stem or name.startswith(f"{stem}_") for stem in stems)
+    ]
+    # **Das erzeugte Merkmal, nicht das daneben erkannte.** Ein gedrucktes
+    # Gewinde am Netz trägt neben dem Merkmal des Bausteins auch das, was die
+    # Erkennung über denselben Gängen liest — gleicher Schritt, gleicher
+    # Stamm, gemessene Zahlen statt der gesetzten (P2.6, 21.09.2026).
+    for name, feature in found:
+        if feature.provenance == "generated":
             return name
-    return None
+    return found[0][0] if found else None
 
 
 def _unused_name(document: Document, key: str) -> str:

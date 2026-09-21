@@ -864,6 +864,18 @@ Vorgängers über dem Modell, das gerade lud (§15.3). `Session._outdated`
 beantwortet die Frage für alle vier Abschluss-Slots; ein Aufruf ohne Absender
 (Tests, Kommandozeile) gilt als aktuell.
 
+**Und ein synchroner Lauf holt einen laufenden Arbeiter ein** (21.09.2026).
+`evaluate_now` rechnet am Dokument von jetzt; ein Arbeiter, der dabei noch
+läuft, rechnet am Stand seines Starts — meldete er sich danach, überschriebe
+er das frische Ergebnis mit dem älteren. Gemessen an einem Bausteinschritt
+mit anschließendem `evaluate_now`: Im Objektbaum stand die Szene ohne den
+Baustein, und ein Fenstertest hing im Dialog „zwei Stellen markieren“, weil
+die markierte Zeile im alten Baum nicht stand. `evaluate_now` merkt sich den
+laufenden Arbeiter als `_superseded`, und `_stale` verwirft dessen
+**Ergebnis** in `_on_finished` und `_on_failed` — nur das Ergebnis:
+`_on_thread_done` räumt ihn weiter auf (Leine, Feld, `busyChanged`), sonst
+bliebe die Anzeige stehen.
+
 **Ein Ersetzen ist dabei kein Aufhören.** Steht `_rerun_pending`, folgt der
 nächste Lauf sofort — dann wird kein `False` gemeldet, sonst flackert die
 Anzeige beim Ziehen an einem Schieber im Sekundentakt. Dieselbe Begründung,
