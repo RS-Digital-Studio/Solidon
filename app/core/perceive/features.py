@@ -20,6 +20,7 @@ from __future__ import annotations
 import hashlib
 import itertools
 import math
+import weakref
 from collections import Counter, OrderedDict
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
@@ -829,6 +830,7 @@ def forget_cache() -> None:
     _FEATURE_CACHE.clear()
     _CACHE_INDICES.clear()
     _FREEFORM_DROPPED.clear()
+    _SUPPORT_CACHE.clear()
 
 
 def _one_body(mesh: MeshData) -> MeshData:
@@ -3247,6 +3249,15 @@ def _facets_standing_apart(
     20.09.2026). Ein Fleck aus ``n`` Dreiecken hat ``3n`` Kanten; jede innere
     Nachbarschaft deckt zwei, jede äußere eine.
 
+    **Und was hinter der Naht liegt, ist selbst eine Fläche.** Der Nocken
+    stößt an allen Seiten an Flächen, die nicht zu ihm gehören — seine vier
+    Seiten, die Platte. Auf einer verrauschten Freiform sind zwei zufällig
+    ebene Dreiecke ringsum scharf geknickt, weil das Rauschen jeden Knick
+    scharf macht, und hinter jeder Naht liegt ein Dreieck, das zu keinem
+    Fleck gehört: gemessen am 21.09.2026 an der Freiform mit 200 000
+    Dreiecken, zwei „Flächen" von 0,22 und 0,16 mm². Eine Naht zu einem
+    Dreieck ohne Fleck ist deshalb kein Beleg, sondern eine Absage.
+
     Ein Durchgang über die Nachbarschaft, nicht einer je Fleck: An einem Netz
     mit einer Million Dreiecken zählt das.
     """
@@ -3259,7 +3270,7 @@ def _facets_standing_apart(
     angles = np.degrees(np.asarray(body.face_adjacency_angles, dtype=float))
     first, second = owner[pairs[:, 0]], owner[pairs[:, 1]]
     boundary = first != second
-    soft = boundary & (angles < CURVATURE_LIMIT)
+    soft = boundary & ((angles < CURVATURE_LIMIT) | (first < 0) | (second < 0))
     disqualified = {int(index) for index in first[soft]} | {int(index) for index in second[soft]}
     disqualified.discard(-1)
     counted = np.zeros(len(facets), dtype=np.int64)
@@ -3964,6 +3975,76 @@ def _one_vertex_fan(
     return bool(len(close)) and connected(np.vstack((neighbours, unique[close])))
 
 
+def _connected_fans(
+    corners: np.ndarray,
+    reverse: np.ndarray,
+    order: np.ndarray,
+    offsets: np.ndarray,
+    candidates: np.ndarray,
+    check_cancelled: Callable[[], None] | None,
+) -> np.ndarray:
+    """Für jede Ecke auf einmal: Ist der Graph ihrer Nachbarn zusammenhängend?
+
+    Dieselbe Frage wie ``connected`` in :func:`_one_vertex_fan`, für alle
+    Kandidaten in einem Zug: Knoten sind die Paare (Ecke, Nachbar), Kanten die
+    Gegenkanten der Dreiecke um die Ecke, und ein Fächer hängt zusammen, wenn
+    seine Ecke genau eine Komponente trägt. Wer hier ``False`` bekommt, geht
+    den Einzelweg mit dem Strahlenvergleich — die Antwort ist dieselbe, nur
+    die Reihenfolge der Arbeit eine andere.
+    """
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.csgraph import connected_components
+
+    connected = np.zeros(len(candidates), dtype=bool)
+    wanted = np.flatnonzero(candidates)
+    if not len(wanted):
+        return connected
+    if check_cancelled is not None:
+        check_cancelled()
+    counts = offsets[wanted + 1] - offsets[wanted]
+    occurrences = np.concatenate([order[offsets[index] : offsets[index + 1]] for index in wanted])
+    centre = np.repeat(wanted, counts)
+    rows, local = occurrences // 3, occurrences % 3
+    first = corners[rows, (local + 1) % 3]
+    second = corners[rows, (local + 2) % 3]
+    stride = np.int64(len(candidates))
+    keys = np.concatenate(
+        (centre.astype(np.int64) * stride + first, centre.astype(np.int64) * stride + second)
+    )
+    unique, node = np.unique(keys, return_inverse=True)
+    node = node.ravel()
+    half = len(first)
+    if check_cancelled is not None:
+        check_cancelled()
+    graph = coo_matrix(
+        (np.ones(half, dtype=np.int8), (node[:half], node[half:])), shape=(len(unique), len(unique))
+    )
+    _count, labels = connected_components(graph, directed=False)
+    owner = (unique // stride).astype(np.intp)
+    pairs = np.unique(np.column_stack((owner, labels)), axis=0)
+    components = np.bincount(pairs[:, 0], minlength=len(candidates))
+    connected[wanted] = components[wanted] == 1
+    return connected
+
+
+#: Die zuletzt gelesenen Stützpunkte je Netz und Fleck (:func:`_surface_support`).
+#: Acht Fragen an denselben Fleck — Kugel, Kegel, Zylinder, große Facetten —
+#: lasen die Ikosphäre mit 327 680 Dreiecken achtmal, je über eine Sekunde
+#: (gemessen am 21.09.2026). Der Schlüssel ist die Identität des Netzes und
+#: der Abdruck der Flächenliste; die Geometrie dahinter ist unveränderlich
+#: (Regel 3). **Nicht der Datenhash des Netzes:** trimesh rechnet ihn bei
+#: jeder Frage neu, 0,4 ms an 200 000 Dreiecken — an der Freiform mit 9 589
+#: Fragen waren das vier Sekunden, mehr als die Lesungen selbst. Der schwache
+#: Verweis daneben sagt, ob hinter der Identität noch dasselbe Netz steht.
+_SUPPORT_CACHE: OrderedDict[
+    tuple[int, bytes], tuple[weakref.ref[trimesh.Trimesh], _SurfaceSupport | None]
+] = OrderedDict()
+
+#: Wie viele Stützpunktlesungen gehalten werden — ein Fleck je Frage, die
+#: Fragen kommen nacheinander, mehr als eine Handvoll Flecken liegt nie an.
+SUPPORT_CACHE_LIMIT = 8
+
+
 def _surface_support(
     body: trimesh.Trimesh,
     patch: list[int],
@@ -3980,6 +4061,27 @@ def _surface_support(
         check_cancelled()
     if len(patch) < MIN_PATCH_FACES:
         return None
+    key = (
+        id(body),
+        hashlib.blake2b(np.asarray(patch, dtype=np.int64).tobytes(), digest_size=16).digest(),
+    )
+    remembered = _SUPPORT_CACHE.get(key)
+    if remembered is not None and remembered[0]() is body:
+        _SUPPORT_CACHE.move_to_end(key)
+        return remembered[1]
+    support = _read_surface_support(body, patch, check_cancelled)
+    _SUPPORT_CACHE[key] = (weakref.ref(body), support)
+    while len(_SUPPORT_CACHE) > SUPPORT_CACHE_LIMIT:
+        _SUPPORT_CACHE.popitem(last=False)
+    return support
+
+
+def _read_surface_support(
+    body: trimesh.Trimesh,
+    patch: list[int],
+    check_cancelled: Callable[[], None] | None,
+) -> _SurfaceSupport | None:
+    """Die Lesung selbst — :func:`_surface_support` merkt sie sich."""
     triangles = np.asarray(body.triangles[patch], dtype=float)
     normals = np.asarray(body.face_normals[patch], dtype=float)
     areas = np.asarray(body.area_faces[patch], dtype=float)
@@ -3990,8 +4092,19 @@ def _surface_support(
         or areas.sum() <= EPS_GEOM**2
     ):
         return None
-    points, reverse = np.unique(triangles.reshape(-1, 3), axis=0, return_inverse=True)
-    reverse = reverse.ravel()
+    # **Erst die Ecken des Netzes, dann die deckungsgleichen darunter.** Die
+    # Eindeutigkeit der Koordinaten über alle 3n Dreiecksecken sortierte an
+    # der Ikosphäre mit 327 680 Dreiecken 983 040 Zeilen; die Ecken, die das
+    # Netz selbst kennt, sind ein Sechstel davon, und deckungsgleiche
+    # STL-Punkte fallen unter ihnen genauso zusammen. Das Ergebnis ist
+    # dasselbe sortierte Punktfeld mit derselben Zuordnung.
+    used, corner_of = np.unique(
+        np.asarray(body.faces[patch], dtype=np.int64).ravel(), return_inverse=True
+    )
+    points, vertex_of = np.unique(
+        np.asarray(body.vertices[used], dtype=float), axis=0, return_inverse=True
+    )
+    reverse = vertex_of.ravel()[corner_of.ravel()]
     corners = reverse.reshape(-1, 3)
     repeated = np.repeat(normals, 3, axis=0)
     occurrence = np.arange(len(reverse))
@@ -4018,7 +4131,28 @@ def _surface_support(
     np.logical_or.at(round_corners, reverse, third)
     order = np.argsort(reverse, kind="stable")
     offsets = np.r_[0, np.cumsum(np.bincount(reverse, minlength=len(points)))]
-    for index in np.flatnonzero(ridges):
+    # **Alle Fächer auf einmal, die Einzelprüfung nur für die zerrissenen.**
+    # Je Netzecke in Python zu fragen, ob ihr Fächer zusammenhängt, kostete an
+    # der Ikosphäre mit 327 680 Dreiecken 1,3 Millionen Aufrufe und 37 der 39
+    # Sekunden der Erkennung (gemessen am 21.09.2026 gegen das Ziel von einer
+    # Sekunde aus §31). An einem geschlossenen Netz hängt jeder Fächer
+    # zusammen; die Ausnahme — T-Unterteilungen, doppelte Punkte — verdient
+    # den teuren Weg, die Regel nicht.
+    # **Und an einem geschlossenen Netz hängt jeder innere Fächer zusammen.**
+    # Eine Ecke, deren sämtliche Dreiecke im Fleck liegen, trägt an einem
+    # wasserdichten, gleich orientierten Netz genau einen Ring — die Frage
+    # stellt sich nur am Rand des Flecks, wo der Ring angeschnitten ist, und
+    # bei zusammengelegten deckungsgleichen Punkten, deren Ring das Netz
+    # nicht kennt. An der Ikosphäre ist der Fleck das ganze Netz: keine Ecke
+    # am Rand, keine Frage (gemessen am 21.09.2026: 0,5 s je Lesung).
+    asked = ridges.copy()
+    if len(points) == len(used) and bool(body.is_watertight) and bool(body.is_winding_consistent):
+        degree = np.asarray(body.vertex_degree, dtype=np.int64)[used]
+        degree_of_point = np.empty(len(points), dtype=np.int64)
+        degree_of_point[vertex_of.ravel()] = degree
+        asked &= np.bincount(reverse, minlength=len(points)) != degree_of_point
+    torn = asked & ~_connected_fans(corners, reverse, order, offsets, asked, check_cancelled)
+    for index in np.flatnonzero(torn):
         if check_cancelled is not None:
             check_cancelled()
         occurrences = order[offsets[index] : offsets[index + 1]]

@@ -607,6 +607,18 @@ betroffenen Körper und erzeugenden Schritt; eine Karte bleibt aus. Andere
   getrennte Fächer und entgegengesetzte Doppelflächen teilen ihre Stützung
   nicht. Für nicht konforme Unterteilung werden nur die örtlich gleichen
   Kantenstrahlen im Leseindex verbunden. Das Originalnetz bleibt unverändert.
+  **Gelesen wird je Netz und Fleck einmal** (`_SUPPORT_CACHE`, Identität
+  plus Abdruck der Flächenliste, nicht der Datenhash — trimesh rechnet ihn
+  je Frage neu): Acht Fragen an denselben Fleck lasen die Ikosphäre mit
+  327 680 Dreiecken achtmal. Der Fächer einer Ecke wird für alle Ecken auf
+  einmal geprüft (`_connected_fans`, Komponenten über die Paare Ecke–Nachbar)
+  und an einem wasserdichten, gleich orientierten Netz nur am Rand des Flecks
+  — innen hängt er von selbst zusammen; der Einzelweg mit dem Strahlenvergleich
+  bleibt den zerrissenen. Die Punkte kommen aus den Ecken des Netzes, nicht
+  aus allen 3n Dreiecksecken, deckungsgleiche fallen unter ihnen zusammen.
+  Gemessen am 21.09.2026: 22,8 s → 2,2 s an der Ikosphäre (Ziel §31: 1 s,
+  Marke der 0.4.4: 0,84 s — der Rest steckt in der Verfeinerung der
+  Kandidaten, siehe unten).
   Beim Kegel dürfen nachgewiesene gemeinsame Mantellinien auch echte
   Trimmpunkte liefern. Beliebige Sehnenränder werden nicht dazu erklärt.
 - **Ein Kandidat ist noch kein Endmaß.** Kegel, Kugel und Torus verfeinern
@@ -896,7 +908,11 @@ betroffenen Körper und erzeugenden Schritt; eine Karte bleibt aus. Andere
   `CURVATURE_LIMIT`, **jede Randkante mit einem Nachbarn** (an
   `plate_countersunk.stl` stoßen die Mantelstreifen der Bohrung per
   T-Stoß aneinander, und ohne diese Bedingung galt jeder zweite als
-  Fläche), nichts davon auf einer Rundung, kein Streifen
+  Fläche), **hinter jeder Naht ein Dreieck, das selbst zu einem Fleck
+  gehört** (auf der verrauschten Freiform mit 200 000 Dreiecken sind zwei
+  zufällig ebene Dreiecke ringsum scharf geknickt und grenzen an nichts, das
+  eine Fläche wäre — zwei „Flächen" von 0,22 und 0,16 mm², gemessen am
+  21.09.2026), nichts davon auf einer Rundung, kein Streifen
   (`_facets_standing_apart`, gelesen von `_large_facet_faces` und
   `_planar_face_entries`, auch bei der lokalen Rollenprüfung). Der
   1-mm-Nocken auf einer Platte hat so am Netz dieselben fünf Flächen wie
