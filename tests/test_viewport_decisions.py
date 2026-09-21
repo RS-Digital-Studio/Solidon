@@ -4007,10 +4007,17 @@ def test_a_finding_gets_a_mark_that_goes_away_again(qt_app: QApplication) -> Non
     # wird und nicht nur der Wechsel auf ein neues Ergebnis.
     Viewport.mark_finding(blind, (10.0, 5.0, 2.0), "Wandstärke 0,8 mm")
 
-    Viewport._hide_finding_mark(blind)
-    assert standing() == [], f"nach der Frist steht nichts mehr: {standing()}"
+    # Der öffentliche Weg räumt sie ebenso ab wie der Fristablauf; das Fenster
+    # nimmt ihn statt des privaten ``_hide_finding_mark`` (Review Fenster #15).
+    assert Viewport.has_finding_mark(blind), "vor dem Abräumen steht eine Marke"
+    assert Viewport.finding_mark(blind) == ((10.0, 5.0, 2.0), "Wandstärke 0,8 mm", ""), (
+        "der öffentliche Leser gibt Ort, Titel und Körper — das Fenster liest kein Feld mehr"
+    )
+    Viewport.clear_finding_mark(blind)
+    assert standing() == [], f"nach dem Abräumen steht nichts mehr: {standing()}"
     assert blind._finding_actors == [], "und die Liste ist leer"
-    assert blind._finding_mark is None, "auch der semantische Zustand ist abgelaufen"
+    assert blind._finding_mark is None, "auch der semantische Zustand ist abgeräumt"
+    assert not Viewport.has_finding_mark(blind), "und die Auskunft sagt es"
 
     # Die Frist ist kurz genug, dass niemand sie für einen Zustand hält, und
     # lang genug, um die Stelle nach dem Flug zu finden.
@@ -6637,15 +6644,81 @@ def test_preview_labels_and_contours_follow_only_the_surviving_features(
     assert len(viewport._feature_label_data) == 1
     assert "16" in viewport._feature_label_data[0][1]
     assert "geschätzt" in viewport._feature_label_data[0][1]
-    assert "geschätzt" in viewport.toolTip()
-    assert viewport.accessibleDescription() == viewport.toolTip()
+    # Die Auswahl spricht zum Bildschirmleser, nicht zum Zeiger: Ein Tooltip
+    # für ein bloß gewähltes Merkmal stünde überall im Bild (seit 21.09.2026
+    # nur noch am gehoverten Merkmal, und ohne statusTip an der Ansicht).
+    assert "geschätzt" in viewport.accessibleDescription()
+    assert not viewport.toolTip() and not viewport.statusTip()
     contour = renderer.item_of("feature-outline:obj_1")
     assert np.ptp(contour.points[:, 0]) == pytest.approx(80.0)
     viewport.hold_before(True)
     assert len(viewport._feature_label_data) == 2
-    assert "geschätzt" not in viewport.toolTip()
+    assert "geschätzt" not in viewport.accessibleDescription()
     contour = renderer.item_of("feature-outline:obj_1")
     assert np.ptp(contour.points[:, 0]) == pytest.approx(40.0)
+
+
+def test_the_hint_at_the_pointer_belongs_to_the_hovered_feature_and_never_to_the_status_bar(
+    qt_app: QApplication,
+) -> None:
+    """Der Tooltip gehört dem Merkmal unter dem Zeiger; einen statusTip trägt die Ansicht nie.
+
+    Bis zum 21.09.2026 setzte ``_redraw_features`` beides auch für ein bloß
+    gewähltes Merkmal an das ganze Widget: Der Tooltip stand überall im
+    Bild, und der ``statusTip`` ging beim Betreten der Ansicht als
+    ``QStatusTipEvent`` an die Statuszeile — ihr ``showMessage`` verdrängt
+    dort die eigenen Widgets (Maße, Ankündigung) durch drei Zeilen
+    Merkmalstext (Sonde ``probe_statustip.py``). Der Bildschirmleser bekommt
+    den Hinweis weiter, auch für die Auswahl.
+    """
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    viewport.renderer = RecordingRenderer()
+    viewport.show_scene(_scene_with_two_holes())
+    viewport.select("obj_1")
+    viewport.select_features(("hole_2",))
+    assert "8" in viewport.accessibleDescription(), "die Auswahl spricht zum Bildschirmleser"
+    assert not viewport.toolTip(), "aber nicht zum Zeiger — der steht nirgends"
+    assert not viewport.statusTip(), "und nie zur Statuszeile"
+
+    viewport._set_hover_target("obj_1", "hole_1")
+    assert "5" in viewport.toolTip(), "unter dem Zeiger liegt Bohrung 1 — die sagt der Tooltip"
+    assert "8" not in viewport.toolTip(), "und nicht die Auswahl daneben"
+    assert not viewport.statusTip()
+
+    viewport._set_hover_target(None, None)
+    assert not viewport.toolTip(), "der Zeiger ist weg, der Tooltip mit ihm"
+    assert "8" in viewport.accessibleDescription(), "die Auswahl bleibt hörbar"
+
+
+def test_selecting_the_same_feature_refs_again_rebuilds_nothing(qt_app: QApplication) -> None:
+    """Dieselben Merkmale noch einmal sind kein Aufbau.
+
+    Das Fenster setzt die Paarwahl bei jeder Auswahl neu; an einer
+    360k-Platte kostete jeder Durchlauf von ``_redraw_features`` 0,12 s
+    (Review Fenster #12). Stehen die Refs schon — ohne Kante und Bausteingriff
+    dazwischen —, zeichnet die Ansicht nichts neu; andere Refs tun es.
+    """
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    renderer = RecordingRenderer()
+    viewport.renderer = renderer
+    viewport.show_scene(_scene_with_two_holes())
+    viewport.select("obj_1")
+    viewport.select_feature_refs((("obj_1", "hole_1"),))
+    assert viewport._selected_feature_refs == (("obj_1", "hole_1"),)
+    drawn = len(renderer.drawn)
+    renders = renderer.renders
+
+    viewport.select_feature_refs((("obj_1", "hole_1"),))
+    assert len(renderer.drawn) == drawn and renderer.renders == renders, "nichts neu gezeichnet"
+    assert viewport._selected_feature_refs == (("obj_1", "hole_1"),)
+
+    viewport.select_feature_refs((("obj_1", "hole_2"),))
+    assert len(renderer.drawn) > drawn, "andere Refs bauen wie immer"
+    assert viewport._selected_feature == "hole_2"
 
 
 def test_a_recoloured_preview_covers_the_body_in_its_new_colours(qt_app: QApplication) -> None:
@@ -8004,9 +8077,14 @@ def test_the_edges_of_a_collision_question_are_drawn_as_labelled_lines(
     )
     assert np.allclose(second["item"].points[:, 0], 0.004)
     assert kinds["candidate-labels"] == "labels"
-    assert renderer.labelled[-1] == [edge_label(left), edge_label(right)]
+    # Die zwei Beschriftungen sind gleich (vier Tausendstel Abstand sagt kein
+    # Text) und lägen übereinander — deshalb „(1)/(2)", damit nicht eine die
+    # andere verdeckt (Review Tests #6). Unterscheiden tut die Breite.
     assert edge_label(left) == edge_label(right), (
-        "vier Tausendstel sind in der Beschriftung nicht zu sehen — die Linie muss es sagen"
+        "vier Tausendstel sind in der Beschriftung nicht zu sehen — die Breite unterscheidet"
+    )
+    assert renderer.labelled[-1] == [f"{edge_label(left)} (1)", f"{edge_label(right)} (2)"], (
+        "gleiche Beschriftungen übereinander bekommen einen Zusatz"
     )
 
     # Merkmal und Kante in derselben Kandidatenverwaltung: Die Bohrung hier

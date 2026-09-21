@@ -9,7 +9,7 @@ from typing import Any
 import numpy as np
 import pytest
 import trimesh
-from PySide6.QtCore import QLocale, QThread, Signal
+from PySide6.QtCore import QLocale, QPointF, QThread, Signal
 from PySide6.QtWidgets import QApplication, QWidget
 
 from app.core.geom.mesh import MeshData
@@ -17,6 +17,7 @@ from app.core.knowledge.parts.ops import depth_field
 from app.core.registry import REGISTRY
 from app.core.scene.history import OperationDraft
 from app.core.scene.project import load, save
+from app.ui.labels import LengthSpin
 from app.ui.op_dialog import OperationDialog
 from app.ui.placement_flow import _PICK_IN_MODEL, PlacementFlow
 from app.ui.render.api import PointerEvent
@@ -24,15 +25,31 @@ from app.ui.session import Session
 
 
 class _Item:
-    def __init__(self) -> None:
+    def __init__(self, points: Any = None, capacity: int | None = None) -> None:
         self.visible = True
         self.matrix = np.eye(4)
+        self.points = np.zeros((0, 3)) if points is None else np.asarray(points, dtype=float)
+        #: Platz in den Puffern (Vertrag ``capacity``) — ``update_points``
+        #: darf dann weniger bringen, und der Test zählt die Tausche.
+        self.capacity = capacity
+        self.updates = 0
+        self.colour: str | None = None
 
     def set_visible(self, visible: bool) -> None:
         self.visible = visible
 
     def set_matrix(self, matrix: np.ndarray) -> None:
         self.matrix = matrix
+
+    def set_colour(self, colour: str) -> None:
+        self.colour = colour
+
+    def update_points(self, points: Any) -> None:
+        fresh = np.asarray(points, dtype=float).reshape(-1, 3)
+        if self.capacity is not None and len(fresh) > self.capacity:
+            raise ValueError(f"{len(fresh)} Punkte für eine Kapazität von {self.capacity}")
+        self.points = fresh
+        self.updates += 1
 
 
 class _Renderer:
@@ -48,12 +65,12 @@ class _Renderer:
         self.removed: list[Any] = []
 
     def add_surface(self, *_args: Any, **_kwargs: Any) -> _Item:
-        item = _Item()
+        item = _Item(_args[0] if _args else None, _kwargs.get("capacity"))
         self.surfaces.append({"args": _args, "item": item, **_kwargs})
         return item
 
     def add_lines(self, points: Any, **kwargs: Any) -> _Item:
-        item = _Item()
+        item = _Item(points, kwargs.get("capacity"))
         self.lines.append({"points": np.asarray(points, dtype=float), "item": item, **kwargs})
         return item
 
@@ -394,6 +411,9 @@ def test_reference_choice_changes_no_position_and_keeps_the_selected_edge_on_dra
     assert controller._reference_boxes[0].isVisibleTo(viewport)
     assert controller._canvas.references
     assert "Außenkante" in controller._measures[0].prefix()
+    # Der Name für den Bildschirmleser trägt denselben Bezug wie das Präfix
+    # (Review Ansicht #12), nicht mehr das einmalige „Abstand zu Kante 1".
+    assert "Außenkante" in controller._measures[0].accessibleName()
 
 
 def test_reference_pick_rejects_foreign_body_and_early_enter_never_commits(flow):
@@ -418,9 +438,15 @@ def test_reference_pick_rejects_foreign_body_and_early_enter_never_commits(flow)
     assert dialog.values() == before
     assert session.project.document is document
     viewport.hit = object_id, point, cell, ray
+    # Das erste Escape nimmt nur den Bezugswahlmodus zurück, nicht den Entwurf
+    # (Review Ansicht #10): Der Fluss bleibt aktiv, die Wartestellung geht.
+    QTest.keyClick(viewport, Qt.Key.Key_Escape)
+    assert controller.active, "der Entwurf bleibt — nur die Bezugswahl ist zurück"
+    assert controller._reference_pick is None
+    assert controller._surface is original, "und die Stelle bleibt"
+    # Das zweite Escape geht dann wie immer zurück.
     QTest.keyClick(viewport, Qt.Key.Key_Escape)
     assert not controller.active
-    assert controller._reference_pick is None
     assert session.project.document is document
 
 
@@ -1214,7 +1240,11 @@ def test_feature_hover_reuses_the_body_prepared_outside_qt(
         controller.start()
         assert session.wait_for_idle(30_000)
         for _ in range(3):
-            _point(controller, session)
+            # Am Merkmal nimmt der Fluss die freie Bewegung nicht (seit dem
+            # 21.09.2026 gehört sie dem Hover der Ansicht) — und rechnet
+            # darauf erst recht nichts.
+            assert not controller.pointer(PointerEvent("move", 320, 240))
+            assert session.wait_for_idle(30_000)
             assert controller._surface is not None
             assert controller._tool_context is not None
             assert controller._set_values()
@@ -1876,8 +1906,15 @@ def test_neither_a_drag_nor_a_click_beside_the_grip_sends_the_measures_aiming(
         assert not flow.pointer(PointerEvent("press", 200, 200, button="left")), (
             "der Auswahlwächter entscheidet, der Fluss startet keine neue Flächensuche"
         )
-        assert flow.pointer(PointerEvent("move", 200, 200)), (
-            "nur die freie Bewegung bleibt bei ihr — keine Vorschau am Zeiger"
+        # Die freie Bewegung nimmt der Fluss nicht — sie gehört dem Hover der
+        # Ansicht (bis zum 21.09.2026 verschluckte er sie, und bei gewählter
+        # Bohrung gab es keinen Tooltip mehr). Vorschau am Zeiger gibt es
+        # trotzdem keine: kein wartender Klick, kein laufender Zeitgeber.
+        assert not flow.pointer(PointerEvent("move", 200, 200)), (
+            "die freie Bewegung bleibt der Ansicht — der Fluss meldet sie nicht als seine"
+        )
+        assert flow._pending is None and not flow._timer.isActive(), (
+            "und sie löst keine Vorschau am Zeiger aus"
         )
     finally:
         for open_dialog in window.findChildren(OperationDialog):
@@ -3149,6 +3186,299 @@ def test_a_drag_at_the_chosen_hole_pulls_the_slot_instead_of_moving_the_body(
         window.release()
 
 
+def test_a_press_on_the_chosen_hole_places_the_part_that_sits_in_it(
+    qt_app: QApplication,
+) -> None:
+    """Sitzt ein Baustein aus dem Dialog in der gewählten Bohrung, setzt ein Druck aufs Loch ihn um.
+
+    Die Einpressbuchse sitzt in der gewählten Bohrung, die Knöpfe des
+    Langlochs stehen nicht (der Dialog hat die Platzierung, nicht die
+    Maßgruppe). Seit dem 21.09.2026 galt „Loch ist der Griff" auch hier: Der
+    Druck lieh sich einen Langlochgriff, der Zug wuchs zum Langloch, und der
+    Fluss bekam nie einen Klick (Sonde ``probe_pull_during_dialog.py``). Das
+    Loch ist nur dann der Griff, wenn Knöpfe und Platzierung zusammen da
+    sind — oder zusammen fehlen.
+    """
+    from app.ui.render.api import Pick, PointerEvent
+
+    window = _window_with_a_renderer()
+    try:
+        object_id, hole = _a_selected_hole(window)
+        # Der Dialog übernimmt die Platzierung; die stillen Maße gehen vorher.
+        window.end_quiet_placement()
+        QApplication.processEvents()
+        _dialog, flow = _a_part_placement(window, "insert_heatset_m4")
+        viewport = window.viewport
+        assert viewport._slot_handle is None and viewport._placement_pointer is not None, (
+            "Dialogplatzierung ohne Langlochknöpfe — die Lage, um die es geht"
+        )
+        entry = window.session.last_result.scene.objects[object_id]
+        feature = entry.features[hole]
+        centre = feature.params["centre"]
+        top = (float(centre[0]), float(centre[1]), float(entry.mesh.bounds.maximum[2]))
+        renderer = viewport.renderer
+        x, y, _depth = renderer.world_to_display(top)
+        x, y = round(x), round(y)
+        renderer.picks[(x, y)] = Pick(
+            top, viewport._actors[object_id], int(feature.face_indices[0])
+        )
+
+        viewport._on_pointer(PointerEvent("press", x, y, button="left"))
+        assert viewport._slot_handle is None and not viewport._slot_borrowed, (
+            "kein geliehener Langlochgriff — der Druck gehört der Platzierung"
+        )
+        viewport._on_pointer(PointerEvent("move", x + 14, y + 4, buttons=frozenset({"left"})))
+        viewport._on_pointer(PointerEvent("release", x + 14, y + 4, button="left"))
+        assert not viewport.slot_drag_waits(), "kein Langlochzug wartet"
+        assert flow._pending is not None and flow._pending[:2] == (x + 14, y + 4), (
+            "der Fluss setzt den Baustein dorthin, wo losgelassen wurde"
+        )
+    finally:
+        for open_dialog in window.findChildren(OperationDialog):
+            open_dialog.reject()
+        QApplication.processEvents()
+        window.release()
+
+
+def test_a_redraw_during_a_grip_drag_keeps_the_grip_and_the_drag(qt_app: QApplication) -> None:
+    """Wer am Griff zieht, zieht weiter — auch wenn der Fluss dazwischen neu zeichnet.
+
+    Radraste, Vorschau oder ein Overlay, das seine Größe ändert: Jedes davon
+    lässt den Fluss neu zeichnen, und ``grip_placement`` baute den Griff bis
+    zum 21.09.2026 bedingungslos neu — auch einen im Zug. Der neue kannte den
+    Zug nicht, die nächste Bewegung wurde ein Kameraschwenk, und beim
+    Loslassen kam keine Stelle (Sonde ``probe_grip_drag.py``).
+    """
+    from app.ui.render.api import PointerEvent
+
+    window = _window_with_a_renderer()
+    try:
+        _a_selected_hole(window)
+        flow = _measures_in_the_view(window)
+        assert flow is not None and flow.active
+        viewport = window.viewport
+        grip = viewport._placement_grip
+        assert grip is not None
+        viewport.renderer.item_picks[(400, 300)] = grip.items[0]
+        tool = flow._tool
+        assert tool is not None
+        viewport._on_pointer(PointerEvent("move", 400, 300))
+        viewport._on_pointer(PointerEvent("press", 400, 300, button="left"))
+        assert grip.pressing, "der Zug hat begonnen"
+        before = tool.matrix()[:3, 3].copy()
+
+        # Mitten im Zug zeichnet der Fluss neu — wie nach einer Radraste.
+        viewport.cameraMoved.emit()
+        QApplication.processEvents()
+        assert viewport._placement_grip is grip, "derselbe Griff steht noch"
+        assert grip.pressing, "und er ist noch im Zug"
+
+        viewport._on_pointer(PointerEvent("move", 440, 300, buttons=frozenset({"left"})))
+        assert not np.allclose(tool.matrix()[:3, 3], before), "die Bewegung zieht das Werkzeug"
+        dragged: list[Any] = []
+        viewport.placementDragged.connect(dragged.append)
+        viewport._on_pointer(PointerEvent("release", 440, 300, button="left"))
+        assert dragged, "und das Loslassen meldet die Stelle"
+    finally:
+        window.end_quiet_placement()
+        QApplication.processEvents()
+        window.release()
+
+
+def test_a_grip_that_still_fits_is_kept_across_a_redraw(qt_app: QApplication) -> None:
+    """Ein Griff, der schon passt, wird nicht abgebaut und neu gebaut.
+
+    Gleiches Ziel, gleiche Ringe, gleicher Maßstab, gleiche Matrix: Der neue
+    stünde genau da, wo der alte steht. Jedes ``redraw`` — je Kamerageste,
+    Radraste, Tastendruck in einem Feld — kostete bis zum 21.09.2026 sechs
+    Renderer-Objekte für nichts (gemessen 5,7 ms von 22). Versetzt der Zug
+    das Ziel, kommt ein frischer Griff — er rechnet gegen die Matrix, die
+    sein Ziel beim Anhängen hatte.
+    """
+    window = _window_with_a_renderer()
+    try:
+        _a_selected_hole(window)
+        flow = _measures_in_the_view(window)
+        assert flow is not None and flow.active
+        viewport = window.viewport
+        grip = viewport._placement_grip
+        assert grip is not None
+        flow.redraw()
+        assert viewport._placement_grip is grip, "derselbe Griff nach einem Neuzeichnen"
+        assert not set(grip.items) & set(viewport.renderer.removed), "nichts davon abgebaut"
+
+        tool = flow._tool
+        assert tool is not None
+        moved = tool.matrix()
+        moved[0, 3] += 3.0
+        tool.set_matrix(moved)
+        viewport.grip_placement(tool, rotation=False)
+        assert viewport._placement_grip is not grip, "ein versetztes Ziel bekommt einen frischen"
+    finally:
+        window.end_quiet_placement()
+        QApplication.processEvents()
+        window.release()
+
+
+def test_the_wheel_over_a_floating_measure_field_zooms_unless_the_field_has_focus(
+    qt_app: QApplication,
+) -> None:
+    """Eine Radraste über einem schwebenden Maßfeld ist Zoom — bis jemand hineinklickt.
+
+    Die Felder schweben über dem Bild, und Qt gibt eine Raste über einem
+    Drehfeld dem Feld: Bis zum 21.09.2026 verstellte sie das Maß um einen
+    Millimeter und band den Entwurf, wo der Kunde zoomen wollte (Sonde
+    ``probe_wheel_over_field.py``). Dieselbe Regel wie im Merkmalfenster
+    (``wheel_needs_focus``): ohne Fokus geht die Raste weiter, mit Fokus
+    dreht sie den Wert.
+    """
+    from PySide6.QtCore import QPoint, Qt
+    from PySide6.QtGui import QWheelEvent
+    from PySide6.QtTest import QTest
+
+    def wheel(field: QWidget) -> QWheelEvent:
+        local = QPointF(field.width() / 2, field.height() / 2)
+        return QWheelEvent(
+            local,
+            field.mapToGlobal(local.toPoint()).toPointF(),
+            QPoint(0, 0),
+            QPoint(0, 120),
+            Qt.MouseButton.NoButton,
+            Qt.KeyboardModifier.NoModifier,
+            Qt.ScrollPhase.NoScrollPhase,
+            False,
+        )
+
+    window = _window_with_a_renderer()
+    try:
+        _a_selected_hole(window)
+        flow = _measures_in_the_view(window)
+        assert flow is not None and flow.active
+        fields = [
+            *flow._measures,
+            *flow._centre_measures,
+            flow._depth_measure,
+            *(editor for editor in flow._measure_targets if isinstance(editor, LengthSpin)),
+        ]
+        assert flow._measure_group is not None
+        assert len(fields) > 5, "die fünf eigenen Felder und die Editoren der Maßgruppe"
+        for field in fields:
+            assert field.focusPolicy() == Qt.FocusPolicy.StrongFocus, field.objectName()
+
+        field = flow._measures[0]
+        assert field.isVisibleTo(window.viewport) and not field.hasFocus()
+        value = field.value_mm()
+        event = wheel(field)
+        QApplication.sendEvent(field, event)
+        QApplication.processEvents()
+        assert not event.isAccepted(), "die Raste geht weiter — an die Ansicht, die zoomt"
+        assert field.value_mm() == pytest.approx(value), "das Maß steht"
+        assert not flow.dialog.begun, "und kein Entwurf ist begonnen"
+
+        window.show()
+        window.activateWindow()
+        QApplication.processEvents()
+        QTest.mouseClick(field.lineEdit(), Qt.MouseButton.LeftButton)
+        QApplication.processEvents()
+        assert field.hasFocus(), "der Klick ins Feld gibt ihm den Fokus"
+        QApplication.sendEvent(field, wheel(field))
+        QApplication.processEvents()
+        assert field.value_mm() != pytest.approx(value), "mit Fokus dreht die Raste den Wert"
+        assert flow.dialog.begun
+    finally:
+        window.end_quiet_placement()
+        QApplication.processEvents()
+        window.release()
+
+
+def test_a_drag_at_a_foreign_tool_grip_leaves_the_other_flow_alone(qt_app: QApplication) -> None:
+    """Zwei Flüsse an einer Ansicht: Der Zug am Griff des einen bewegt den anderen nicht.
+
+    Die Signale der Ansicht sind ungerichtet — ``placementDragStarted`` und
+    ``placementDragged`` kommen bei jedem Fluss an. Stehen die stillen Maße
+    einer Bohrung und ein Baustein aus dem Dialog, der in ihr sitzt, verschob
+    ein Zug am Bausteingriff bis zum 21.09.2026 auch den stillen Fluss: Der
+    Bohrungsentwurf war begonnen und an eine fremde Stelle gebunden (Sonde
+    ``probe_two_flows.py``: stiller Fluss x = −6,53 statt −25). Der Griff
+    sagt, wessen Werkzeug er trägt; der Fluss hört nur auf den eigenen.
+    """
+    window = _window_with_a_renderer()
+    try:
+        _a_selected_hole(window)
+        flow = _measures_in_the_view(window)
+        assert flow is not None and flow.active and flow._surface is not None
+        viewport = window.viewport
+        host = flow.dialog
+        before = tuple(flow._surface.point)
+        foreign = _Item()
+        moved = np.eye(4)
+        moved[:3, 3] = (before[0] + 18.0, before[1], before[2])
+
+        # Der Griff der Ansicht hängt an einem fremden Werkzeug.
+        viewport._placement_grip_item = foreign
+        viewport.placementDragStarted.emit()
+        viewport.placementDragged.emit(moved)
+        QApplication.processEvents()
+        assert not host.begun, "der fremde Zug beginnt den eigenen Entwurf nicht"
+        assert tuple(flow._surface.point) == pytest.approx(before), "und versetzt ihn nicht"
+
+        # Am eigenen Werkzeug gilt derselbe Zug.
+        viewport._placement_grip_item = flow._tool
+        viewport.placementDragStarted.emit()
+        viewport.placementDragged.emit(moved)
+        QApplication.processEvents()
+        assert host.begun, "der eigene Zug beginnt den Entwurf"
+        assert flow._surface.point[0] == pytest.approx(before[0] + 18.0, abs=0.1), (
+            "und versetzt ihn"
+        )
+    finally:
+        window.end_quiet_placement()
+        QApplication.processEvents()
+        window.release()
+
+
+def test_a_camera_move_with_measures_in_the_view_draws_exactly_one_frame(
+    qt_app: QApplication,
+) -> None:
+    """Radraste, Zugende, Ruhen der 3D-Maus, Ansichtswahl: je eines ein Bild — nicht zwei oder drei.
+
+    Bis zum 21.09.2026 zeichnete der Navigator die Raste, dann hörte die
+    Maßtinte ``cameraMoved`` und zeichnete noch einmal; am Zugende kamen
+    Einrasten, Schatten und Tinte auf drei Bilder (gemessen 21,7 ms je Raste
+    zusätzlich). Jetzt meldet, wer die Kamera bewegt, zuerst — die Hörer legen
+    ihre Punkte neu und zeichnen nicht — und zeichnet danach genau einmal.
+    """
+    from app.ui.render.api import PointerEvent
+
+    window = _window_with_a_renderer()
+    try:
+        _a_selected_hole(window)
+        flow = _measures_in_the_view(window)
+        assert flow is not None and flow.active and flow._canvas.shown
+        viewport = window.viewport
+        renderer = viewport.renderer
+        # Der Navigator entsteht mit dem Renderer; die Attrappe kam nach dem
+        # Fensterbau, also hier ausdrücklich.
+        viewport.set_navigation(viewport._scheme)
+        assert viewport._navigator is not None
+        ink = flow._canvas.items[0]
+
+        for label, move in (
+            ("Radraste", lambda: viewport._on_pointer(PointerEvent("wheel", 300, 200, delta=1.0))),
+            ("Zugende", lambda: viewport._navigator._calls.on_end()),
+            ("3D-Maus ruht", viewport.settle_camera),
+            ("Ansichtswahl", lambda: viewport.view_from("front")),
+        ):
+            renders, updates = renderer.renders, ink.updates
+            move()
+            assert renderer.renders == renders + 1, f"{label}: genau ein Bild"
+            assert ink.updates == updates + 1, f"{label}: und die Tinte liegt neu"
+    finally:
+        window.end_quiet_placement()
+        QApplication.processEvents()
+        window.release()
+
+
 def test_a_blocked_grip_keeps_the_knobs_only_when_the_caller_says_so(
     qt_app: QApplication,
 ) -> None:
@@ -3341,6 +3671,113 @@ def test_mesh_measure_waits_until_its_real_difference_has_been_drawn(
         flow._measure_accept.click()
         assert window.session.wait_for_idle(30_000)
         assert len(window.session.project.document.ops) == steps + 1
+    finally:
+        window.end_quiet_placement()
+        QApplication.processEvents()
+        window.release()
+
+
+def test_an_early_accept_in_the_measure_group_waits_for_the_preview_and_applies_once(
+    qt_app: QApplication, monkeypatch: Any
+) -> None:
+    """Wert tippen, sofort Übernehmen, Vorschau kommt — genau ein Schritt, ohne zweiten Klick.
+
+    ``can_accept`` verneint, solange die erwartete Vorschau nicht steht; bis
+    zum 22.09.2026 verfiel der Klick stumm, und wer nach dem Tippen sofort
+    übernahm, musste es nach dem Bild noch einmal tun. Der Träger meldet den
+    frühen Klick jetzt über ``preview_defer`` an das Fenster, das ihn an die
+    Freigabe hängt (``_PreviewApproval.pending_click``) und nach dem Bild
+    einmal ausführt.
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    window = _window_with_a_renderer()
+    try:
+        _a_selected_hole(window)
+        flow = _measures_in_the_view(window)
+        assert flow is not None and flow.active
+        assert flow.dialog.preview_defer is not None, "das Fenster hängt seinen Haken an"
+        show = window.viewport.show_difference
+        waiting: list[Any] = []
+        monkeypatch.setattr(window.viewport, "show_difference", waiting.append)
+        field = flow._measure_group.findChildren(LengthSpin)[0]
+        field.lineEdit().selectAll()
+        QTest.keyClicks(
+            field.lineEdit(), QLocale().toString(round(field.value_mm() + 0.5, 2), "f", 2)
+        )
+        QTest.keyClick(field.lineEdit(), Qt.Key.Key_Return)
+        window._feature_preview.stop()
+        window._preview_feature_change()
+        assert window.session.wait_for_idle(30_000)
+        approval = window._preview_approval
+        assert approval is not None and approval.required and not approval.displayed
+        assert waiting and not flow.dialog.can_accept()
+        steps = len(window.session.project.document.ops)
+
+        flow._measure_accept.click()
+        assert len(window.session.project.document.ops) == steps, "vor dem Bild kein Schritt"
+        assert approval.pending_click is not None, "der Klick wartet an der Freigabe"
+
+        show(waiting[-1])
+        QApplication.processEvents()
+        assert window.session.wait_for_idle(30_000)
+        for _ in range(40):
+            QApplication.processEvents()
+        assert len(window.session.project.document.ops) == steps + 1, "genau ein Schritt"
+    finally:
+        window.end_quiet_placement()
+        QApplication.processEvents()
+        window.release()
+
+
+def test_a_refused_click_in_the_view_says_so_and_keeps_the_selection(qt_app: QApplication) -> None:
+    """Begonnene Maßgruppe, Klick auf ein anderes Merkmal: der Satz kommt, die Auswahl bleibt.
+
+    Bis zum 22.09.2026 verschluckten ``_select_at``, Rechtsklick und Linksklick
+    den Klick stumm; nur der Menüweg sprach (Review Fenster #6). Die Ansicht
+    ruft jetzt ``selection_refused`` — einmal je Klick —, und das Fenster sagt
+    den Satz.
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    from app.ui.render.api import Pick
+
+    window = _window_with_a_renderer()
+    try:
+        object_id, hole = _a_selected_hole(window)
+        flow = _measures_in_the_view(window)
+        assert flow is not None and flow.active
+        field = flow._measure_group.findChildren(LengthSpin)[0]
+        QTest.mouseClick(field.lineEdit(), Qt.MouseButton.LeftButton)
+        assert flow.dialog.begun
+        viewport = window.viewport
+        refusals: list[None] = []
+        viewport.selection_refused = lambda: refusals.append(None)
+        assert not viewport.user_selection_allowed(), "die begonnene Maßgruppe hält die Auswahl"
+
+        entry = window.session.last_result.scene.objects[object_id]
+        other = next(
+            identifier
+            for identifier, feature in entry.features.items()
+            if feature.kind == "hole" and identifier != hole
+        )
+        centre = entry.features[other].params["centre"]
+        top = (float(centre[0]), float(centre[1]), float(entry.mesh.bounds.maximum[2]))
+        x, y, _depth = viewport.renderer.world_to_display(top)
+        x, y = round(x), round(y)
+        viewport.renderer.picks[(x, y)] = Pick(
+            top, viewport._actors[object_id], int(entry.features[other].face_indices[0])
+        )
+
+        viewport._on_left_click(x, y)
+        assert len(refusals) == 1, "der Linksklick sagt es einmal"
+        viewport._on_right_click(x, y)
+        assert len(refusals) == 2, "der Rechtsklick ebenso"
+        assert viewport._select_at(top) is True and len(refusals) == 3
+        assert window.object_tree.selected_feature() == hole, "die Auswahl steht unverändert"
+        assert flow.active and flow.dialog.begun
     finally:
         window.end_quiet_placement()
         QApplication.processEvents()

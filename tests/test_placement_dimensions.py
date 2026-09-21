@@ -14,6 +14,7 @@ import numpy as np
 import pytest
 import trimesh
 from PySide6.QtCore import QPoint, QPointF, QRect
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QApplication, QFrame, QLabel, QVBoxLayout, QWidget
 from shapely.geometry import Polygon
 
@@ -44,7 +45,10 @@ def test_dimension_ink_lives_in_the_renderer_and_leaves_with_the_surface(
     Renderfenster; die Maske hatte je schräger Linie ein Rechteck je Bildzeile,
     und bei 1682 Rechtecken verlor der Vulkan-Treiber das Gerät. Jetzt gehen
     Unterlage, Striche, Pfeile und Marken als Elemente vor dem Material in den
-    Renderer — und mit der Fläche kommen sie wieder heraus.
+    Renderer — **dieselben Elemente bei jedem Aufbau, mit neuen Punkten**:
+    Je Kamerageste zehn Elemente abzuräumen und neu anzulegen kostete zwölf
+    von zweiundzwanzig Millisekunden an Pipelines (gemessen 21.09.2026). Ohne
+    Fläche sind sie ausgeblendet, mit dem Fluss kommen sie heraus.
     """
     flow, session, viewport, dialog = _layout(qt_app, (900, 600), 1.0, "bottom")
     viewport.renderer.world_to_display = lambda point: (80 + point[0] * 20, 80 + point[1] * 20, 0.5)
@@ -61,7 +65,11 @@ def test_dimension_ink_lives_in_the_renderer_and_leaves_with_the_surface(
         assert any(entry["name"] == "dimension_arrowheads" for entry in renderer.surfaces)
         # Die Unterlage liegt unter der Tinte: zuerst angelegt, zuerst gezeichnet.
         assert names.index("dimension_backdrop") < names.index("dimension_lines")
+        assert all(entry["capacity"] for entry in (*renderer.lines, *renderer.surfaces)), (
+            "jedes Element hält Platz — damit der nächste Aufbau nur Zahlen tauscht"
+        )
         first_items = [entry["item"] for entry in (*renderer.lines, *renderer.surfaces)]
+        before = [entry["item"].points.copy() for entry in renderer.lines]
 
         viewport.renderer.world_to_display = lambda point: (
             380 + point[0] * 20,
@@ -69,17 +77,25 @@ def test_dimension_ink_lives_in_the_renderer_and_leaves_with_the_surface(
             0.5,
         )
         flow.redraw()
-        assert all(item in renderer.removed for item in first_items), (
-            "die alte Maßlage gibt ihre Elemente zurück"
+        assert not renderer.removed, "die alte Maßlage gibt kein Element zurück"
+        assert [entry["item"] for entry in (*renderer.lines, *renderer.surfaces)] == first_items, (
+            "dieselben Elemente stehen im Renderer"
         )
-        assert len(
-            [entry for entry in renderer.lines if entry["name"].startswith("dimension_")]
-        ) == len([name for name in names if name.startswith("dimension_")])
+        assert all(item.updates >= 1 for item in first_items), "und alle bekamen neue Punkte"
+        assert any(
+            entry["item"].points.shape != old.shape or not np.allclose(entry["item"].points, old)
+            for entry, old in zip(renderer.lines, before, strict=True)
+        ), "die Punkte sind die der neuen Maßlage"
 
         flow._surface = None
         flow.redraw()
         assert not canvas.shown, "ohne Fläche steht keine Tinte im Bild"
-        assert not [entry for entry in renderer.lines if entry["name"].startswith("dimension_")]
+        assert not any(item.visible for item in first_items), "die Elemente sind ausgeblendet"
+        assert not renderer.removed, "und bleiben für den nächsten Aufbau"
+        flow.dispose()
+        assert all(item in renderer.removed for item in first_items), (
+            "mit dem Fluss kommen sie aus dem Renderer"
+        )
     finally:
         flow.dispose()
         session.release()
@@ -170,12 +186,12 @@ def test_placement_ghost_uses_a_filled_surface_without_tessellation_edges(
     flow, session, viewport, dialog = _layout(qt_app, (900, 600), 1.0, "bottom")
     styles = []
 
-    def add_surface(_points, _faces, *, name, style):
+    def add_surface(_points, _faces, *, name, style, capacity=None):
         # Pfeile und Marken der Maßtinte kommen denselben Weg — gezählt wird
         # hier nur der Werkzeugkörper.
         if name == "surface_placement_tool":
             styles.append(style)
-        return _Item()
+        return _Item(_points, capacity)
 
     # Ein bereits vorbereiteter Körper genügt; geprüft wird hier allein seine
     # Übergabe an den gemeinsamen Renderer-Vertrag, ohne GPU und zweite Geometrie.
@@ -200,6 +216,38 @@ def test_placement_ghost_uses_a_filled_surface_without_tessellation_edges(
         viewport.close()
 
 
+def test_dimension_ink_stays_below_the_grip_and_the_knobs(qt_app: QApplication) -> None:
+    """Alle Tinte trägt DRAW_ORDER = -1: unter Griff, Knöpfen und Umriss, die bei 0 liegen.
+
+    pygfx sortiert die Deckschicht nach Ordnung und dann nach dem Abstand des
+    Objektursprungs; der Ursprung der Tinte ist die Welt. Ohne die Ordnung
+    hinge es davon ab, wo die Platte im Bauraum steht, ob die Maßlinien über
+    oder unter dem Griff lägen — und die Linien mit Unterlage verdeckten dann
+    den Griff (Robert, 11.09.2026: „das verschieben ist auch schwer durch die
+    maßlinien zu treffen"). Der Renderer schreibt die Ordnung seit dem
+    21.09.2026 mit, damit ein Test sie überhaupt lesen kann (Review Tests #8).
+    """
+    from tests.test_surface_placement_ui import _Viewport
+
+    viewport = _Viewport()
+    renderer = viewport.renderer
+    canvas = _Dimensions(viewport)
+    canvas.lines = [(QPointF(20, 40), QPointF(180, 40))]
+    canvas.leaders = [(QPointF(20, 60), QPointF(180, 90))]
+    canvas.outline = [QPointF(40, 40), QPointF(80, 40), QPointF(60, 80)]
+    canvas.outline_colour = QColor("#ff8800")
+    try:
+        canvas.refresh()
+        for entry in renderer.lines:
+            assert entry["draw_order"] == _Dimensions.DRAW_ORDER, entry["name"]
+        for entry in renderer.surfaces:
+            assert entry["style"].draw_order == _Dimensions.DRAW_ORDER, entry["name"]
+        assert _Dimensions.DRAW_ORDER == -1, "unter Griff und Knöpfen (die bei 0 liegen)"
+    finally:
+        canvas.dispose()
+        viewport.close()
+
+
 def test_a_dimension_line_swallowed_by_the_grip_is_drawn_whole(qt_app: QApplication) -> None:
     """Eine Maßlinie, die ganz im Griff läge, kommt ganz — mit beiden Pfeilen.
 
@@ -217,14 +265,21 @@ def test_a_dimension_line_swallowed_by_the_grip_is_drawn_whole(qt_app: QApplicat
     canvas.clearing = (QPointF(100, 100), 50.0)
     short = (QPointF(100, 100), QPointF(130, 100))
     long = (QPointF(100, 100), QPointF(300, 100))
+
+    def arrowheads() -> int:
+        # Je Pfeil ein Dreieck mit eigenen drei Ecken — das Element hält
+        # Platz, gezählt wird, was zuletzt geschrieben wurde.
+        heads = [
+            entry for entry in viewport.renderer.surfaces if entry["name"] == "dimension_arrowheads"
+        ]
+        assert len(heads) == 1
+        return len(heads[0]["item"].points) // 3
+
     try:
         canvas.lines = [short]
         canvas.refresh()
         assert canvas.segments == [short], "die verschluckte Linie steht ganz"
-        heads = [
-            entry for entry in viewport.renderer.surfaces if entry["name"] == "dimension_arrowheads"
-        ]
-        assert len(heads) == 1 and len(heads[0]["args"][1]) == 2, "mit beiden Pfeilen"
+        assert arrowheads() == 2, "mit beiden Pfeilen"
 
         canvas.lines = [long]
         canvas.refresh()
@@ -233,10 +288,7 @@ def test_a_dimension_line_swallowed_by_the_grip_is_drawn_whole(qt_app: QApplicat
         assert start.x() == pytest.approx(150.0) and end == QPointF(300, 100), (
             "die lange Linie verliert nur das Stück im Griff"
         )
-        heads = [
-            entry for entry in viewport.renderer.surfaces if entry["name"] == "dimension_arrowheads"
-        ]
-        assert len(heads) == 1 and len(heads[0]["args"][1]) == 1, "und den Pfeil darin"
+        assert arrowheads() == 1, "und den Pfeil darin"
 
         # Drei Bildpunkte über den Rand hinaus wären ein Stummel ohne Pfeil —
         # bei etwas anderem Zoom dieselbe Lage wie die verschluckte Linie.
@@ -244,37 +296,74 @@ def test_a_dimension_line_swallowed_by_the_grip_is_drawn_whole(qt_app: QApplicat
         canvas.lines = [stub]
         canvas.refresh()
         assert canvas.segments == [stub], "kürzer als ein Pfeil heißt: die ganze Linie"
-        heads = [
-            entry for entry in viewport.renderer.surfaces if entry["name"] == "dimension_arrowheads"
-        ]
-        assert len(heads) == 1 and len(heads[0]["args"][1]) == 2, "mit beiden Pfeilen"
+        assert arrowheads() == 2, "mit beiden Pfeilen"
     finally:
-        canvas.hide()
+        canvas.dispose()
         viewport.close()
 
 
-def test_moving_dimension_ink_swaps_its_renderer_items(qt_app: QApplication) -> None:
-    """Jeder Aufbau tauscht die Elemente aus — nichts sammelt sich im Renderer an."""
+def test_moving_dimension_ink_keeps_its_renderer_items_and_swaps_their_points(
+    qt_app: QApplication,
+) -> None:
+    """Jeder Aufbau schreibt in dieselben sieben Elemente — nichts sammelt sich an.
+
+    Bis zum 21.09.2026 tauschte jeder Aufbau zehn Elemente aus; pygfx baute
+    je neuem Element eine Pipeline, zwölf Millisekunden je Kamerageste. Jetzt
+    halten die Elemente Platz (``capacity``), und nur wenn er reißt,
+    entstehen alle sieben neu — auf das Doppelte des Bedarfs, in ihrer
+    Reihenfolge.
+    """
     from tests.test_surface_placement_ui import _Viewport
 
     viewport = _Viewport()
+    renderer = viewport.renderer
     canvas = _Dimensions(viewport)
     canvas.lines = [(QPointF(20, 40), QPointF(180, 40))]
     canvas.leaders = [(QPointF(20, 60), QPointF(180, 90))]
     try:
         canvas.refresh()
-        first = [entry["item"] for entry in (*viewport.renderer.lines, *viewport.renderer.surfaces)]
-        assert first, "die erste Tinte steht im Renderer"
+        first = [entry["item"] for entry in (*renderer.lines, *renderer.surfaces)]
+        assert len(first) == 7, "vier Linien, drei Flächen"
+        assert [entry["name"] for entry in renderer.lines] == [
+            "dimension_backdrop",
+            "dimension_lines",
+            "dimension_leaders",
+            "dimension_outline",
+        ]
+        assert [entry["name"] for entry in renderer.surfaces] == [
+            "dimension_mark_rim",
+            "dimension_arrowheads",
+            "dimension_marks",
+        ]
         assert canvas.shown
+        lines_item = renderer.lines[1]["item"]
+        outline_item = renderer.lines[3]["item"]
+        assert lines_item.visible and not outline_item.visible, (
+            "ein Element ohne Punkte ist ausgeblendet, nicht abgeräumt"
+        )
         canvas.lines = [(QPointF(20, 140), QPointF(180, 140))]
         canvas.refresh()
-        assert all(item in viewport.renderer.removed for item in first)
-        second = [
-            entry["item"] for entry in (*viewport.renderer.lines, *viewport.renderer.surfaces)
-        ]
-        assert second and not set(second) & set(first)
+        assert not renderer.removed, "kein Element ging zurück"
+        assert [entry["item"] for entry in (*renderer.lines, *renderer.surfaces)] == first
+        assert lines_item.updates == 1 and lines_item.points.shape == (2, 3), "neue Punkte"
         canvas.hide()
-        assert not canvas.shown and not viewport.renderer.lines and not viewport.renderer.surfaces
+        assert not canvas.shown and not any(item.visible for item in first)
+        assert not renderer.removed, "ausgeblendet heißt: bereit für den nächsten Aufbau"
+
+        # Reißt eine Kapazität, entstehen alle sieben neu — in Reihenfolge.
+        many = [(QPointF(20, 20 + 6 * index), QPointF(180, 20 + 6 * index)) for index in range(400)]
+        canvas.lines = many
+        canvas.refresh()
+        assert all(item in renderer.removed for item in first), "alle sieben gingen zurück"
+        second = [entry["item"] for entry in (*renderer.lines, *renderer.surfaces)]
+        assert len(second) == 7 and not set(second) & set(first)
+        assert [entry["name"] for entry in renderer.lines][:2] == [
+            "dimension_backdrop",
+            "dimension_lines",
+        ], "in derselben Reihenfolge"
+        assert renderer.lines[1]["capacity"] >= 2 * 800, "auf das Doppelte des Bedarfs"
+        canvas.dispose()
+        assert all(item in renderer.removed for item in second)
     finally:
         viewport.close()
 

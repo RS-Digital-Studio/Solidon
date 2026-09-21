@@ -291,6 +291,11 @@ class NavigatorCallbacks(NamedTuple):
     ``start``, ob die Geste dem Körper gehört. ``on_end`` kommt nach jeder
     abgeschlossenen Kamerabewegung — Drehen, Schieben, Zoomen —, dort hängen
     Schatten und ``cameraMoved`` (bisher ``EndInteractionEvent``).
+    ``on_camera`` kommt nach einer Bewegung ohne Zugende, dem Radzoom —
+    **und der Empfänger zeichnet das Bild**, nicht der Navigator: Er meldet
+    die Bewegung erst und zeichnet dann einmal. Bis zum 21.09.2026 zeichnete
+    der Navigator vor der Meldung und die Hörer der Meldung noch einmal — zwei
+    Bilder je Raste.
     """
 
     on_context: Callable[[int, int], None]
@@ -581,7 +586,8 @@ class Navigator:
         after = self._renderer.display_to_world(x, y, self._renderer.focal_depth())
         if before is not None and after is not None:
             self._shift_camera(tuple(before[axis] - after[axis] for axis in range(3)))
-        self._renderer.render()
+        # Das Bild zeichnet der Empfänger, nachdem er die Bewegung gemeldet
+        # hat (``NavigatorCallbacks``) — eines je Raste.
         self._calls.on_camera()
 
     def _shift_camera(self, shift: Sequence[float]) -> None:

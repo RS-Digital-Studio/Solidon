@@ -298,3 +298,22 @@ Was davon als Regel bleibt:
 * **Die Tabelle `_NAVIGATION` ist ohne Fenster prüfbar.** `tests/test_navigator.py`
   fährt sie gegen ein Renderer-Doppel — welches Schema auf welche Taste was
   tut, und wo die Kamera danach steht.
+
+## Wer die Kamera bewegt, meldet zuerst und zeichnet danach einmal (21.09.2026)
+
+Eine Kamerabewegung meldet sich über `cameraMoved` (Radzoom über `on_camera`,
+Zugende über `on_end`, 3D-Maus über `settle_camera`, die Ansichtsknöpfe über
+`view_from`). Wer diese Meldung sendet, **zeichnet danach genau ein Bild** —
+und nicht davor.
+
+Bis zum 21.09.2026 war es umgekehrt: Der Navigator zeichnete die Radraste,
+dann hörte die Maßtinte `cameraMoved` und zeichnete noch einmal; am Zugende
+kamen Einrasten, Schatten und Tinte auf drei Bilder (21,7 ms je Raste
+zusätzlich). Die Regel löst das an einer Stelle: Die Hörer von `cameraMoved`
+legen ihre Punkte neu und zeichnen **nicht** selbst (`PlacementFlow._camera_moved`
+ruft `redraw(draw=False)`), und die Ansicht zeichnet nach der Meldung das eine
+Bild. `set_camera_pose(…, draw=False)`, `_redraw_shadows(draw=False)` und
+`_settle_sketch_view(draw=False)` geben das Bild dem Aufrufer;
+`test_surface_placement_ui.py::test_a_camera_move_with_measures_in_the_view_draws_exactly_one_frame`
+hält für Radraste, Zugende, 3D-Maus und Ansichtswahl fest, dass es genau
+eines bleibt.

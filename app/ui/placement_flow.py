@@ -54,7 +54,7 @@ from app.core.types import Feature, SceneObject, Vec3
 from app.core.units import EPS_GEOM
 from app.i18n import tr
 from app.ui.icons import icon
-from app.ui.labels import LengthSpin, feature_name, length
+from app.ui.labels import LengthSpin, feature_name, length, wheel_needs_focus
 from app.ui.leash import stop_watching_the_dying
 from app.ui.palette import DIFF_PALETTES
 from app.ui.render.api import Item, PointerEvent, Renderer, SurfaceStyle
@@ -135,6 +135,14 @@ class PlacementHost(Protocol):
     requires_displayed_preview: bool
     """Ob dieser Eingabeweg unabhängig von der Körperart eine Vorschau verlangt."""
     preview_check: Callable[[], bool] | None
+    preview_defer: Callable[[], None] | None
+    """Ein Klick auf Übernehmen **vor** der Vorschau wartet auf sie.
+
+    ``can_accept`` verneint, solange die erwartete Vorschau nicht steht; ohne
+    diesen Haken ging der Klick stumm verloren, und wer nach dem Tippen sofort
+    übernahm, musste ein zweites Mal klicken (Review Fenster, 22.09.2026).
+    Das Fenster hängt hier den wartenden Klick an die Freigabe
+    (``_PreviewApproval.pending_click``); ``None`` heißt: kein Warten."""
 
     def block_apply(self, reason: str | None) -> None: ...
 
@@ -196,6 +204,7 @@ class QuietHost(QObject):
         self._finished = False
         self._blocked_reason: str | None = None
         self.preview_check: Callable[[], bool] | None = None
+        self.preview_defer: Callable[[], None] | None = None
         self._known = frozenset(known) if known is not None else None
         """Welche Namen die Operation kennt — oder ``None`` für alle.
 
@@ -480,13 +489,23 @@ class _Dimensions:
 
     Die Listen tragen Bildkoordinaten in logischen Bildpunkten; ``refresh``
     legt sie über ``display_to_world`` auf eine Tiefe vor der Kamera und
-    tauscht die Elemente des Renderers aus. Innerhalb der Tinte ist die
-    Reihenfolge die Zeichenreihenfolge — was zuerst angelegt wird, liegt
-    unten. Gegen Griff und Knöpfe trägt sie ``DRAW_ORDER``: pygfx sortiert
-    die Deckschicht nach Ordnung und dann nach dem Abstand des Objektursprungs
-    zur Kamera, und der Ursprung der Tinte ist die Welt — ob sie über oder
-    unter einem Knopf läge, hinge sonst davon ab, wo die Platte im Bauraum
-    steht.
+    schreibt sie in **sieben dauerhafte Elemente** des Renderers — vier
+    Linien (Unterlage, Striche, Zuordnungen, Umriss) und drei Flächen
+    (Markenrand, Pfeile, Marken), jedes mit fester Kapazität
+    (``Renderer.add_lines(capacity=…)``). Bis zum 21.09.2026 räumte jeder
+    Aufbau zehn Elemente ab und legte zehn neue an; pygfx baut je neuem
+    Element eine Pipeline, und das kostete zwölf von zweiundzwanzig
+    Millisekunden je Kamerageste, Radraste und Tastendruck in einem Feld
+    (Sonde ``measure_ink_churn.py``). Jetzt tauscht ``update_points`` nur die
+    Zahlen; neu entstehen die Elemente erst, wenn eine Kapazität reißt — dann
+    alle sieben zusammen, damit ihre Reihenfolge bleibt.
+
+    Innerhalb der Tinte ist die Reihenfolge die Zeichenreihenfolge — was
+    zuerst angelegt wird, liegt unten. Gegen Griff und Knöpfe trägt sie
+    ``DRAW_ORDER``: pygfx sortiert die Deckschicht nach Ordnung und dann nach
+    dem Abstand des Objektursprungs zur Kamera, und der Ursprung der Tinte
+    ist die Welt — ob sie über oder unter einem Knopf läge, hinge sonst davon
+    ab, wo die Platte im Bauraum steht.
     """
 
     #: Wo die Tinte im Tiefenbereich liegt — mitten drin, weit weg von beiden
@@ -501,6 +520,23 @@ class _Dimensions:
     DRAW_ORDER: Final = -1
     #: Ein Stück Maßlinie, das kürzer ist als sein Pfeil, ist kein Maß mehr.
     LEAST_PIECE: Final = 2 * SPACE
+    #: Die Linienelemente in Zeichenreihenfolge, mit Breite und Anfangsplatz
+    #: in Punkten. Die Unterlage trägt alle Striche, die Zuordnungen sind
+    #: gestrichelt und darum viele kurze Stücke; die Kapazität ist so
+    #: bemessen, dass eine gewöhnliche Platzierung nie neu anlegt.
+    LINE_ELEMENTS: Final = (
+        ("dimension_backdrop", 4.0, 2048),
+        ("dimension_lines", 2.0, 256),
+        ("dimension_leaders", 1.5, 2048),
+        ("dimension_outline", 2.0, 256),
+    )
+    #: Die Flächenelemente in Zeichenreihenfolge, mit Anfangsplatz in Ecken —
+    #: drei je Dreieck, jede Marke ein Fächer aus vierzehn Dreiecken.
+    SURFACE_ELEMENTS: Final = (
+        ("dimension_mark_rim", 768),
+        ("dimension_arrowheads", 96),
+        ("dimension_marks", 768),
+    )
 
     def __init__(self, viewport: QWidget) -> None:
         self._viewport = viewport
@@ -529,27 +565,44 @@ class _Dimensions:
         #: Bildkoordinaten, nach Aussparung und Strichelung — für Tests, die
         #: fragen, wo Tinte liegt, ohne ein Bild aufzunehmen.
         self.segments: list[tuple[QPointF, QPointF]] = []
-        self._items: list[Item] = []
+        #: Die dauerhaften Elemente je Name, ihre Kapazität und ihre Farbe —
+        #: leer, bis der erste Aufbau sie anlegt.
+        self._items: dict[str, Item] = {}
+        self._capacities: dict[str, int] = {
+            **{name: capacity for name, _width, capacity in self.LINE_ELEMENTS},
+            **dict(self.SURFACE_ELEMENTS),
+        }
+        self._colours: dict[str, str] = {}
+        self._shown = False
 
     # --- Zustand, wie ihn der Fluss braucht -----------------------------------------
 
     @property
     def shown(self) -> bool:
         """Ob gerade Tinte im Bild steht."""
-        return bool(self._items)
+        return self._shown
+
+    @property
+    def items(self) -> tuple[Item, ...]:
+        """Die dauerhaften Elemente in Zeichenreihenfolge — für Tests."""
+        return tuple(self._items.values())
 
     def hide(self) -> None:
-        """Alle Elemente aus dem Renderer nehmen — die Listen bleiben."""
-        renderer = getattr(self._viewport, "renderer", None)
-        for item in self._items:
-            if renderer is not None:
-                renderer.remove(item)
-        self._items = []
+        """Alle Elemente ausblenden — sie bleiben im Renderer, die Listen bleiben."""
+        for item in self._items.values():
+            item.set_visible(False)
+        self._shown = False
         self.segments = []
 
     def dispose(self) -> None:
         """Beim Abbau des Flusses — nichts bleibt im Renderer zurück."""
         self.hide()
+        renderer = getattr(self._viewport, "renderer", None)
+        if renderer is not None:
+            for item in self._items.values():
+                renderer.remove(item)
+        self._items = {}
+        self._colours = {}
 
     # --- Geometrie in Bildkoordinaten ------------------------------------------------
 
@@ -648,7 +701,7 @@ class _Dimensions:
     # --- Zeichnen ---------------------------------------------------------------------
 
     def refresh(self) -> None:
-        """Die Elemente des Renderers gegen die aktuellen Listen tauschen.
+        """Die Listen in die Elemente des Renderers schreiben.
 
         Unterlage zuerst, dann die Striche, dann Pfeile und Marken: eine
         helle beziehungsweise dunkle Unterlage hält dieselbe Linie auf dem
@@ -658,9 +711,9 @@ class _Dimensions:
         bleiben sie ohne Farbe unterscheidbar (Regel 18). Gezeichnet wird
         nach Aussparung des Griffs.
         """
-        self.hide()
         renderer = cast("Renderer | None", getattr(self._viewport, "renderer", None))
         if renderer is None:
+            self.hide()
             return
         solid: list[tuple[QPointF, QPointF]] = []
         heads: list[QPolygonF] = []
@@ -692,6 +745,7 @@ class _Dimensions:
         ]
         self.segments = [*solid, *dashed, *ring]
         if not self.segments and not heads and not marks:
+            self.hide()
             return
         # **Drei Aufrufe statt zweitausend.** In einer festen Tiefe ist der
         # Weltpunkt hinter einem Bildpunkt affin in den Bildkoordinaten (die
@@ -706,90 +760,108 @@ class _Dimensions:
             for x, y in ((0.0, 0.0), (step, 0.0), (0.0, step))
         ]
         if any(point is None for point in basis):
+            self.hide()
             return
         origin = np.asarray(basis[0], dtype=np.float64)
         along_x = (np.asarray(basis[1], dtype=np.float64) - origin) / step
         along_y = (np.asarray(basis[2], dtype=np.float64) - origin) / step
 
         def world_of(points: Sequence[QPointF]) -> np.ndarray:
+            if not points:
+                return np.zeros((0, 3), dtype=np.float64)
             screen = np.asarray([(point.x(), point.y()) for point in points], dtype=np.float64)
             screen *= ratio
             return origin + screen[:, :1] * along_x + screen[:, 1:] * along_y
 
-        def line_points(segments: Sequence[tuple[QPointF, QPointF]]) -> np.ndarray | None:
-            if not segments:
-                return None
+        def line_points(segments: Sequence[tuple[QPointF, QPointF]]) -> np.ndarray:
             return world_of([point for start, end in segments for point in (start, end)])
 
-        def surface(polygons: Sequence[QPolygonF]) -> tuple[np.ndarray, np.ndarray] | None:
-            corners: list[QPointF] = []
-            faces: list[tuple[int, int, int]] = []
+        def corners(polygons: Sequence[QPolygonF]) -> np.ndarray:
+            # Jedes Dreieck mit eigenen drei Ecken: So bleibt die Topologie
+            # der Fläche fest (Dreieck *k* nutzt die Ecken 3k bis 3k+2), und
+            # der Renderer zeichnet genau so viele, wie Ecken kommen.
+            flat: list[QPointF] = []
             for polygon in polygons:
                 ring_points = polygon.toList()
-                base = len(corners)
-                corners.extend(ring_points)
                 for index in range(1, len(ring_points) - 1):
-                    faces.append((base, base + index, base + index + 1))
-            if not faces:
-                return None
-            return world_of(corners), np.asarray(faces, dtype=np.int64)
+                    flat.extend((ring_points[0], ring_points[index], ring_points[index + 1]))
+            return world_of(flat)
 
         palette = self._viewport.palette()
         colour = palette.text().color().name()
         backdrop = palette.window().color().name()
-        items: list[Item] = []
-        underlay = line_points(self.segments)
-        if underlay is not None:
-            items.append(
-                renderer.add_lines(
-                    underlay,
-                    name="dimension_backdrop",
-                    colour=backdrop,
-                    width=4.0,
-                    keep_in_front=True,
-                    draw_order=self.DRAW_ORDER,
-                )
-            )
         outline_colour = self.outline_colour.name() if self.outline_colour is not None else colour
-        for name, segments, width, tint in (
-            ("dimension_lines", solid, 2.0, colour),
-            ("dimension_leaders", dashed, 1.5, colour),
-            ("dimension_outline", ring, 2.0, outline_colour),
+        wanted: dict[str, tuple[np.ndarray, str]] = {
+            "dimension_backdrop": (line_points(self.segments), backdrop),
+            "dimension_lines": (line_points(solid), colour),
+            "dimension_leaders": (line_points(dashed), colour),
+            "dimension_outline": (line_points(ring), outline_colour),
+            # Der Rand der Marke kommt nach den Linien: Er deckt das Ende der
+            # Zuordnungslinie ab, damit die Marke frei steht und der Strich
+            # nicht bis in sie hineinläuft.
+            "dimension_mark_rim": (
+                corners([self._disc(point, self.MARK + self.MARK_RIM) for point in marks]),
+                backdrop,
+            ),
+            "dimension_arrowheads": (corners(heads), colour),
+            "dimension_marks": (corners([self._disc(point, self.MARK) for point in marks]), colour),
+        }
+        # **Reißt eine Kapazität, entstehen alle sieben neu** — auf das
+        # Doppelte des Bedarfs, und in ihrer Reihenfolge: Ein einzelnes neues
+        # Element käme im Renderer ans Ende und läge über allem, was nach ihm
+        # gedacht war.
+        if not self._items or any(
+            len(points) > self._capacities[name] for name, (points, _tint) in wanted.items()
         ):
-            points = line_points(segments)
-            if points is not None:
-                items.append(
-                    renderer.add_lines(
-                        points,
-                        name=name,
-                        colour=tint,
-                        width=width,
-                        keep_in_front=True,
-                        draw_order=self.DRAW_ORDER,
-                    )
-                )
-        # Der Rand der Marke kommt nach den Linien: Er deckt das Ende der
-        # Zuordnungslinie ab, damit die Marke frei steht und der Strich nicht
-        # bis in sie hineinläuft.
-        rim = surface([self._disc(point, self.MARK + self.MARK_RIM) for point in marks])
-        if rim is not None:
-            items.append(self._surface(renderer, "dimension_mark_rim", rim, backdrop))
-        for name, polygons in (
-            ("dimension_arrowheads", heads),
-            ("dimension_marks", [self._disc(point, self.MARK) for point in marks]),
-        ):
-            built = surface(polygons)
-            if built is not None:
-                items.append(self._surface(renderer, name, built, colour))
-        self._items = items
+            for name, (points, _tint) in wanted.items():
+                self._capacities[name] = max(self._capacities[name], 2 * len(points))
+            self._rebuild(renderer, wanted)
+        else:
+            for name, (points, tint) in wanted.items():
+                item = self._items[name]
+                if self._colours[name] != tint:
+                    item.set_colour(tint)
+                    self._colours[name] = tint
+                item.update_points(points)
+                item.set_visible(len(points) > 0)
+        self._shown = True
+
+    def _rebuild(self, renderer: Renderer, wanted: Mapping[str, tuple[np.ndarray, str]]) -> None:
+        """Alle Elemente neu anlegen — in Zeichenreihenfolge, mit den heutigen Kapazitäten."""
+        for item in self._items.values():
+            renderer.remove(item)
+        self._items = {}
+        self._colours = {}
+        for name, width, _capacity in self.LINE_ELEMENTS:
+            points, tint = wanted[name]
+            self._items[name] = renderer.add_lines(
+                points,
+                name=name,
+                colour=tint,
+                width=width,
+                keep_in_front=True,
+                draw_order=self.DRAW_ORDER,
+                capacity=self._capacities[name],
+            )
+            self._colours[name] = tint
+            self._items[name].set_visible(len(points) > 0)
+        for name, _capacity in self.SURFACE_ELEMENTS:
+            points, tint = wanted[name]
+            self._items[name] = self._surface(
+                renderer, name, points, tint, capacity=self._capacities[name]
+            )
+            self._colours[name] = tint
+            self._items[name].set_visible(len(points) > 0)
 
     @classmethod
     def _surface(
-        cls, renderer: Renderer, name: str, built: tuple[np.ndarray, np.ndarray], tint: str
+        cls, renderer: Renderer, name: str, corners: np.ndarray, tint: str, *, capacity: int
     ) -> Item:
-        vertices, faces = built
+        # Ein Vielfaches von drei — je Dreieck eigene Ecken (``corners``).
+        capacity = 3 * max(1, -(-capacity // 3))
+        faces = np.arange(capacity, dtype=np.int64).reshape(-1, 3)
         return renderer.add_surface(
-            vertices,
+            corners,
             faces,
             name=name,
             style=SurfaceStyle(
@@ -800,6 +872,7 @@ class _Dimensions:
                 keep_in_front=True,
                 draw_order=cls.DRAW_ORDER,
             ),
+            capacity=capacity,
         )
 
 
@@ -995,6 +1068,12 @@ class PlacementFlow(QObject):
             )
             field.setToolTip(tr("Abstand ändern; die Position bleibt dabei auf dieser Fläche."))
             self._watch_field(field)
+            # **Das Rad dreht ein Feld erst mit Fokus** — nach dem eigenen
+            # Filter angemeldet, damit es vor ihm gefragt wird: Die Felder
+            # schweben über dem Bild, und eine Radraste darüber meinte bis zum
+            # 21.09.2026 den Zoom, verstellte aber das Maß und band den
+            # Entwurf (Sonde ``probe_wheel_over_field.py``).
+            wheel_needs_focus(field)
             field.valueChangedMm.connect(self._distance_changed)
             field.hide()
         #: Die Tiefe als Zahl — dasselbe Feld wie die Kantenabstände, damit
@@ -1008,6 +1087,7 @@ class PlacementFlow(QObject):
         self._depth_measure.setAccessibleName(tr("Tiefe der Bohrung"))
         self._depth_measure.setToolTip(tr("Tiefe eintippen oder mit der Maus ziehen."))
         self._watch_field(self._depth_measure)
+        wheel_needs_focus(self._depth_measure)
         self._depth_measure.valueChangedMm.connect(self._depth_typed)
         self._depth_measure.hide()
         #: Was an Wand stehen bleibt — das Gegenstück zur Tiefe. Eine Zahl und
@@ -1029,6 +1109,7 @@ class PlacementFlow(QObject):
             field.setPrefix(tr("Mitte {number}: ").format(number=index + 1))
             field.setToolTip(tr("Der Maßpfeil zeigt die Richtung auf dieser Fläche."))
             self._watch_field(field)
+            wheel_needs_focus(field)
             field.valueChangedMm.connect(self._centre_changed)
             field.hide()
         self._reference_pick: int | None = None
@@ -1077,7 +1158,7 @@ class PlacementFlow(QObject):
         render_widget = getattr(self.viewport.renderer, "widget", None)
         if render_widget is not None:
             self._watch(render_widget)
-        self.viewport.cameraMoved.connect(self.redraw)
+        self.viewport.cameraMoved.connect(self._camera_moved)
         # **Der Langlochzug endet mit einem Aufbau.** Sein Umriss ersetzt den
         # runden der Mündung, und die Maßlinien bleiben — ohne diesen Aufbau
         # stand der runde Umriss neben dem gezogenen, bis die Kamera das
@@ -1088,7 +1169,7 @@ class PlacementFlow(QObject):
         self.viewport.sceneApplied.connect(self._scene_applied)
         self.viewport.previewDragged.connect(self._dragged_in_preview)
         self.viewport.placementDragged.connect(self._dragged_at_the_tool)
-        self.viewport.placementDragStarted.connect(self._begin_edit)
+        self.viewport.placementDragStarted.connect(self._drag_started_in_the_view)
         self.viewport.set_preview_gizmo(_grips_its_preview(self.spec_of()))
         self.refresh_available()
         # **Wer eine platzierbare Operation wählt, will platzieren.** Der Weg
@@ -1279,6 +1360,27 @@ class PlacementFlow(QObject):
         """Eine Nutzergeste beginnt den stillen Entwurf, nie seine bloße Anzeige."""
         if not self._disposed and self.active and isinstance(self.dialog, QuietHost):
             self.dialog.begin_edit()
+
+    def _grip_belongs_to_another_flow(self) -> bool:
+        """Ob der Platzierungsgriff der Ansicht an einem fremden Werkzeug hängt.
+
+        Die Signale der Ansicht sind ungerichtet: ``placementDragged`` und
+        ``placementDragStarted`` kommen bei jedem Fluss an, der an derselben
+        Ansicht hängt. Stehen zwei — die stillen Maße einer Bohrung und ein
+        Baustein aus dem Dialog, der in ihr sitzt —, verschob ein Zug am
+        Bausteingriff bis zum 21.09.2026 auch den stillen Fluss und band den
+        Bohrungsentwurf an eine fremde Stelle (Sonde ``probe_two_flows.py``).
+        Der Griff sagt, wessen Werkzeug er trägt; ohne Griff (Knopf oder
+        Griff der Auswahl) gehört die Geste jedem.
+        """
+        gripped = getattr(self.viewport, "_placement_grip_item", None)
+        return gripped is not None and gripped is not self._tool
+
+    def _drag_started_in_the_view(self) -> None:
+        """Ein Zug an Griff oder Knopf beginnt den Entwurf — den eigenen."""
+        if self._grip_belongs_to_another_flow():
+            return
+        self._begin_edit()
 
     def _show_input_for_edit(self) -> None:
         """Bei erneuter Feldbetätigung die belegte historische Eingabe zurückholen."""
@@ -1586,7 +1688,19 @@ class PlacementFlow(QObject):
         self._measure_interpret = None
         self._measure_refresh = None
         if isValid(self.viewport):
-            self.viewport.placementDragStarted.disconnect(self._begin_edit)
+            # **Alle Verbindungen zur Ansicht, nicht nur eine.** Bis zum
+            # 21.09.2026 löste der Abbau allein ``placementDragStarted``; die
+            # fünf anderen hielten den Fluss am Leben und riefen ``redraw``
+            # bei jeder Kamerageste in einen Fluss, der sich für abgebaut
+            # hielt — die Wache ``_disposed`` fing es, aber der Aufruf blieb.
+            self.viewport.cameraMoved.disconnect(self._camera_moved)
+            self.viewport.slotProposed.disconnect(self._after_slot_proposal)
+            self.viewport.sceneApplied.disconnect(self._scene_applied)
+            self.viewport.previewDragged.disconnect(self._dragged_in_preview)
+            self.viewport.placementDragged.disconnect(self._dragged_at_the_tool)
+            self.viewport.placementDragStarted.disconnect(self._drag_started_in_the_view)
+        self.session.sceneChanged.disconnect(self._scene_changed)
+        self.session.projectChanged.disconnect(self._document_changed)
         if isinstance(self.dialog, QuietHost):
             self.dialog.reject()
         for widget in self._widgets():
@@ -1647,7 +1761,15 @@ class PlacementFlow(QObject):
             # ins Bild gehört der Auswahl, wie ohne Platzierung auch. Trifft er
             # etwas anderes, wechselt die Auswahl, und die Platzierung geht mit
             # ihr (``MainWindow._on_feature_selected``).
-            return event.kind == "move" and not event.buttons
+            #
+            # **Und die freie Bewegung nimmt sie auch nicht.** Bis zum
+            # 21.09.2026 gab sie dafür ``True`` zurück — nichts geschah damit,
+            # aber der Viewport hielt die Bewegung für verbraucht und fragte
+            # nie, was unter dem Zeiger liegt: Bei gewählter Bohrung gab es
+            # keinen Hover und keinen Tooltip mehr (``_note_pointer`` kam nie
+            # an die Reihe). Die Platzierung will hier nichts von der Maus;
+            # also sagt sie es.
+            return False
         if event.kind == "leave":
             return True
         confirm = event.kind == "release" and event.button == "left"
@@ -1755,8 +1877,8 @@ class PlacementFlow(QObject):
             return True
         away = max(abs(event.x - self._pressed_at[0]), abs(event.y - self._pressed_at[1]))
         self._pressed_at = None
-        schwelle = float(QApplication.startDragDistance()) * self.viewport._device_ratio()
-        return bool(away <= schwelle)
+        threshold = float(QApplication.startDragDistance()) * self.viewport._device_ratio()
+        return bool(away <= threshold)
 
     def _still_committing(self) -> bool:
         """Steht wirklich noch ein Klick aus, der gesetzt werden will?
@@ -2158,6 +2280,8 @@ class PlacementFlow(QObject):
         """
         if self._disposed or not self.active or self._surface is None or self._deepening:
             return
+        if self._grip_belongs_to_another_flow():
+            return
         self._begin_edit()
         shown = np.asarray(matrix, dtype=np.float64)[:3, 3]
         point = self.viewport.scene_point_of(
@@ -2526,6 +2650,21 @@ class PlacementFlow(QObject):
         # Derselbe unveränderte Wertauftrag fordert wieder seine volle Vorschau.
         self.dialog.valuesChanged.emit()
 
+    def _cancel_reference_pick(self) -> bool:
+        """Den Bezugswahlmodus verlassen, ohne den Entwurf zu verwerfen — wahr, wenn einer lief.
+
+        Der Modus wartet auf einen Klick auf den gewünschten Bezug
+        (:meth:`_reference_selected` mit ``_PICK_IN_MODEL``). Ein Escape darin
+        meint „doch nicht" und nicht „alles zurück": Die Maße, die Stelle und
+        der bisherige Bezug bleiben, nur die Wartestellung geht.
+        """
+        if self._reference_pick is None:
+            return False
+        self._reference_pick = None
+        self._reference_message = tr("Bezugswahl abgebrochen; der bisherige Bezug bleibt.")
+        self.redraw()
+        return True
+
     def _pick_reference(self, x: int, y: int) -> None:
         """Nur die sichtbare ursprüngliche Trägerfläche ist ein zulässiger Treffer."""
         if self._reference_pick is None or self._prepared is None or not self._display_ready():
@@ -2815,6 +2954,12 @@ class PlacementFlow(QObject):
         # Die endgültigen Werte können gerade eine neue Vorschau angefordert
         # haben. Ihre Sperre wird geprüft, bevor die Platzierung verschwindet.
         if not self.dialog.can_accept():
+            # **Der frühe Klick hängt an der Vorschau, statt zu verfallen.**
+            # Der Träger meldet ihn dem Fenster (``preview_defer``), und das
+            # übernimmt, sobald das Bild steht — genau einmal.
+            defer = getattr(self.dialog, "preview_defer", None)
+            if defer is not None:
+                defer()
             return
         self.dialog.accept()
 
@@ -3267,14 +3412,32 @@ class PlacementFlow(QObject):
                     return True
                 if event.type() == QEvent.Type.KeyPress:
                     if event.key() == Qt.Key.Key_Escape:
-                        self.back()
+                        # **Das erste Escape nimmt nur den Bezugswahlmodus
+                        # zurück.** Wer einen Bezug wählen wollte und es sich
+                        # anders überlegt, verliert damit nicht den ganzen
+                        # Entwurf: ``back`` verwarf ihn (``reject``), und die
+                        # Maße waren weg (Review Ansicht #10). Steht kein
+                        # Pickmodus, geht Escape wie bisher zurück.
+                        if not self._cancel_reference_pick():
+                            self.back()
                     else:
                         if watched in self._field_targets:
                             self._begin_edit()
                         self._accept_values(allow_pending=False)
                     return True
+            # **Eine Radraste beginnt den Entwurf nur an einem Feld mit
+            # Fokus.** Die Editoren aus ``set_measure_fields`` tragen ihren
+            # ``wheel_needs_focus``-Filter seit dem Merkmalfenster — aber
+            # der kam vor diesem hier und wird deshalb nach ihm gefragt; ohne
+            # die Frage war der Entwurf begonnen, bevor die Raste zum Zoom
+            # weiterging.
             if watched in self._field_targets and (
-                event.type() in (QEvent.Type.MouseButtonPress, QEvent.Type.Wheel)
+                event.type() == QEvent.Type.MouseButtonPress
+                or (
+                    event.type() == QEvent.Type.Wheel
+                    and isinstance(watched, QWidget)
+                    and watched.hasFocus()
+                )
                 or (
                     isinstance(event, QFocusEvent)
                     and event.type() == QEvent.Type.FocusIn
@@ -3343,7 +3506,16 @@ class PlacementFlow(QObject):
             return None
         return body
 
-    def redraw(self) -> None:
+    def _camera_moved(self) -> None:
+        """Die Kamera steht anders: Felder und Tinte neu legen — das Bild zeichnet die Ansicht.
+
+        Wer ``cameraMoved`` sendet, zeichnet danach genau einmal
+        (``kamera.md``). Bis zum 21.09.2026 zeichnete der Fluss hier selbst,
+        und je Radraste kamen zwei Bilder und je Zugende drei.
+        """
+        self.redraw(draw=False)
+
+    def redraw(self, *, draw: bool = True) -> None:
         if not self.active or self._disposed:
             return
         # Ohne gemeinsame Fachgruppe hat die Langlochvorschau ihren eigenen
@@ -3356,7 +3528,8 @@ class PlacementFlow(QObject):
                 if item is not None:
                     item.set_visible(False)
             self.viewport.grip_placement(None)
-            self.viewport._draw()
+            if draw:
+                self.viewport._draw()
             return
         self._show_bar()
         area = self.viewport.rect()
@@ -3476,7 +3649,8 @@ class PlacementFlow(QObject):
                 )
                 self._measure_box.raise_()
             self.viewport.grip_placement(None)
-            self.viewport._draw()
+            if draw:
+                self.viewport._draw()
             return
         point = np.asarray(surface.point, dtype=np.float64)
         if self._tool is not None:
@@ -3625,7 +3799,14 @@ class PlacementFlow(QObject):
                 for number, reference in enumerate(self._prepared.edges, 1)
                 if reference.id == edge.id
             )
-            field.setPrefix(self._reference_name(edge.kind, number) + ": ")
+            reference_name = self._reference_name(edge.kind, number)
+            field.setPrefix(reference_name + ": ")
+            # **Der Name für den Bildschirmleser zieht mit.** Er stand einmalig
+            # als „Abstand zu Kante 1/2" im Aufbau der Felder; das Präfix nennt
+            # aber den wirklichen Bezug (Außenkante 3, Achse 2 …) und wechselt
+            # mit ihm (Review Ansicht #12). Ohne Nachziehen sagte die
+            # Vorlesehilfe etwas anderes als das Bild.
+            field.setAccessibleName(tr("Abstand zu {reference}").format(reference=reference_name))
             if not self._keep_field_text(field):
                 with QSignalBlocker(field):
                     bound = max(self._prepared_mesh.bounds.diagonal, abs(edge.distance), 1.0)
@@ -3833,4 +4014,5 @@ class PlacementFlow(QObject):
         self._bar.raise_()
         for widget in (*self._measures, *self._centre_measures, self._centre, *shown):
             widget.raise_()
-        self.viewport._draw()
+        if draw:
+            self.viewport._draw()

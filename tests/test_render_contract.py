@@ -589,6 +589,109 @@ def test_polylines_chain_exactly_the_points_they_are_told_to(renderer: Renderer)
     assert not lit((25.0, 20.0, 0.0)), "zwischen Kette und Paar liegt nichts"
 
 
+def test_an_item_with_capacity_draws_only_what_it_was_given(renderer: Renderer) -> None:
+    """Ein Element mit Kapazität zeigt genau die gelieferten Punkte — nicht mehr, nicht den Rest.
+
+    Die Maßtinte legt je Kamerageste Striche, Pfeile und Marken neu (RM-198),
+    und jedes neue Element kostete eine Pipeline: rund zwölf Millisekunden je
+    Aufbau für zehn Elemente (gemessen 21.09.2026). Mit ``capacity`` bleiben
+    Puffer und Pipeline, ``update_points`` tauscht Zahlen — auch weniger als
+    beim Anlegen. Was hier am Bild geprüft wird: Der ungenutzte Rest der
+    Puffer zeichnet nichts, das Gelieferte alles, und ein Element vorn zählt
+    nicht in den Hüllquader der Szene.
+    """
+    look_down(renderer, (0.0, 40.0, 0.0, 40.0, 0.0, 1.0))
+    image = renderer.screenshot()
+
+    def lit(world: tuple[float, float, float]) -> bool:
+        x, y, _depth = renderer.world_to_display(world)
+        patch = image[round(y) - 2 : round(y) + 3, round(x) - 2 : round(x) + 3]
+        return bool((patch[:, :, 0] > 200).any() and (patch[:, :, 1] > 200).any())
+
+    lines = renderer.add_lines(
+        np.array([[0.0, 30.0, 0.0], [40.0, 30.0, 0.0]]),
+        name="ink",
+        colour="#ffff00",
+        width=4,
+        keep_in_front=True,
+        capacity=8,
+    )
+    triangles = np.arange(9).reshape(-1, 3)
+    marks = renderer.add_surface(
+        np.array([[0.0, 0.0, 0.0], [10.0, 0.0, 0.0], [0.0, 10.0, 0.0]]),
+        triangles,
+        name="marks",
+        style=SurfaceStyle(colour="#ffff00", lighting=False, keep_in_front=True),
+        capacity=9,
+    )
+    image = renderer.screenshot()
+    assert lit((20.0, 30.0, 0.0)), "der gelieferte Strich"
+    assert lit((2.0, 2.0, 0.0)), "das gelieferte Dreieck"
+    assert not lit((20.0, 10.0, 0.0)) and not lit((35.0, 35.0, 0.0)), "sonst nichts"
+
+    box = renderer._scene_bounds()
+    assert box is None or box[1] - box[0] <= 20.0 + 1e-6, (
+        "ein Element vorn weitet den Hüllquader der Szene nicht"
+    )
+
+    # Weniger Punkte: ein kürzerer Strich, kein Dreieck.
+    lines.update_points(np.array([[0.0, 30.0, 0.0], [10.0, 30.0, 0.0]]))
+    marks.update_points(np.zeros((0, 3)))
+    image = renderer.screenshot()
+    assert lit((5.0, 30.0, 0.0)) and not lit((30.0, 30.0, 0.0)), "nur der kurze Strich"
+    assert not lit((2.0, 2.0, 0.0)), "kein Dreieck mehr"
+
+    # Mehr Punkte, bis zur Kapazität: zwei Striche, drei Dreiecke.
+    lines.update_points(
+        np.array(
+            [
+                [0.0, 30.0, 0.0],
+                [10.0, 30.0, 0.0],
+                [30.0, 30.0, 0.0],
+                [40.0, 30.0, 0.0],
+                [0.0, 20.0, 0.0],
+                [40.0, 20.0, 0.0],
+                [np.nan, np.nan, np.nan],
+                [np.nan, np.nan, np.nan],
+            ]
+        )
+    )
+    marks.update_points(
+        np.array(
+            [
+                [30.0, 0.0, 0.0],
+                [40.0, 0.0, 0.0],
+                [30.0, 10.0, 0.0],
+                [30.0, 30.0, 0.0],
+                [40.0, 30.0, 0.0],
+                [30.0, 40.0, 0.0],
+                [0.0, 0.0, 0.0],
+                [10.0, 0.0, 0.0],
+                [0.0, 10.0, 0.0],
+            ]
+        )
+    )
+    image = renderer.screenshot()
+    assert lit((5.0, 30.0, 0.0)) and lit((35.0, 30.0, 0.0)) and lit((20.0, 20.0, 0.0))
+    assert not lit((20.0, 30.0, 0.0)), "zwischen den zwei Strichen liegt nichts"
+    assert lit((32.0, 2.0, 0.0)) and lit((32.0, 32.0, 0.0)) and lit((2.0, 2.0, 0.0))
+
+    with pytest.raises(ValueError):
+        lines.update_points(np.zeros((9, 3)))
+    with pytest.raises(ValueError):
+        renderer.add_surface(
+            np.zeros((3, 3)),
+            triangles[:1],
+            name="lit",
+            style=SurfaceStyle(colour="#ffff00", lighting=True),
+            capacity=3,
+        )
+    with pytest.raises(ValueError):
+        renderer.add_lines(
+            np.zeros((4, 3)), name="chains", colour="#ffff00", polylines=[2, 2], capacity=4
+        )
+
+
 def test_backfaces_take_their_own_colour_opacity_or_vanish(renderer: Renderer) -> None:
     """Eine Bohrungsmarkierung zeigt ihre Innenwand von beiden Öffnungen
     durchscheinend (`ansicht.md`); die Druckplatte wirft ihre Rückseite weg,

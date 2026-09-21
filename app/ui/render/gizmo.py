@@ -49,6 +49,9 @@ TIP_RADIUS_SHARE = 0.05
 #: in Bildpunkten bleiben bei jedem Zoom greifbar.
 RING_WIDTH = 4.0
 RING_SEGMENTS = 64
+#: Um wie viel der gewünschte Maßstab vom gebauten abweichen darf, bevor der
+#: Griff neu entsteht (:meth:`Gizmo.fits`) — ein Hundertstel Pfeillänge.
+SCALE_TOLERANCE = 0.01
 
 
 def _unit(vector: Sequence[float]) -> np.ndarray:
@@ -136,6 +139,7 @@ class Gizmo:
         self._origin = np.asarray(origin if origin is not None else target.centre(), dtype=float)
         self._axes = np.eye(3) if axes is None else _validated(axes)
         self._rotation = rotation
+        self._scale = float(scale)
         self._cached = target.matrix()
         self._length = float(target.length())
         self._arrow_length = self._length * scale * ARROW_SHARE
@@ -197,6 +201,28 @@ class Gizmo:
         self._rings.clear()
         self._selected = None
         self.pressing = False
+
+    def fits(self, target: Item, *, rotation: bool, scale: float) -> bool:
+        """Ob dieser Griff für ``target`` so gebaut ist, wie er jetzt gebraucht würde.
+
+        Wahr, wenn Ziel, Ringe, Maßstab **und die Matrix des Ziels** die
+        sind, mit denen er entstand. Der Griff rechnet jeden Zug gegen die
+        Matrix, die sein Ziel beim Anhängen hatte — ein Ziel, das seither
+        versetzt wurde, braucht einen frischen Griff, eines, das steht, nicht.
+        Wer die Antwort liest, spart sich Abbau und Aufbau von sechs
+        Renderer-Objekten je Zeichnen (``viewport.grip_placement``).
+
+        Der Maßstab gilt auf ein Prozent: Er hängt am Zoom, und in der
+        Perspektive ändert schon eine Drehung der Kamera den Abstand zum
+        Ziel um Bruchteile — ein Pfeil, der um ein Hundertstel zu lang ist,
+        sieht wie derselbe Pfeil aus, ein neu gebauter kostet sechs Objekte.
+        """
+        return (
+            target is self.target
+            and rotation == self._rotation
+            and math.isclose(scale, self._scale, rel_tol=SCALE_TOLERANCE, abs_tol=0.0)
+            and np.array_equal(self._cached, target.matrix())
+        )
 
     @property
     def arrow_length(self) -> float:

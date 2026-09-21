@@ -146,6 +146,65 @@ def test_feature_edges_are_the_creases_and_the_open_rims() -> None:
     assert feature_edges(roof, np.zeros((0, 3), dtype=int), 30.0).shape == (0, 3)
 
 
+def test_feature_edges_match_a_row_wise_reference_on_a_dense_mesh() -> None:
+    """Der Zahlenschlüssel liefert dieselben Kanten wie der Zeilenvergleich (Leistung B10).
+
+    ``feature_edges`` fand die geteilten Kanten bis zum 21.09.2026 über
+    ``np.unique(edges, axis=0)`` — ein Zeilenvergleich, 333 ms bei 200 000
+    Dreiecken im Qt-Hauptthread. Der Ersatz kodiert jede Kante als
+    ``klein·n + groß`` und sortiert diese Zahlen. Hier steht ein dichtes
+    Gitternetz aus vielen geteilten Kanten und einem Knick gegen die
+    langsame, aber offensichtlich richtige Rechnung; eine falsche Kodierung
+    (zu kleines ``n``, Kollisionen) fiele hier auf.
+    """
+    import numpy as np
+
+    from app.ui.render.edges import feature_edges
+
+    rows = cols = 12
+    xs, ys = np.meshgrid(np.arange(cols, dtype=float), np.arange(rows, dtype=float))
+    # Eine Faltung entlang der Mitte, damit es scharfe Kanten gibt.
+    zs = np.where(xs <= cols / 2, 0.0, (xs - cols / 2))
+    verts = np.column_stack([xs.ravel(), ys.ravel(), zs.ravel()])
+    faces = []
+    for r in range(rows - 1):
+        for c in range(cols - 1):
+            a = r * cols + c
+            faces.append((a, a + 1, a + cols))
+            faces.append((a + 1, a + cols + 1, a + cols))
+    faces = np.asarray(faces, dtype=np.int64)
+
+    def reference(angle: float) -> set[tuple[int, int]]:
+        edges = np.concatenate([faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [2, 0]]])
+        edges.sort(axis=1)
+        owners = np.tile(np.arange(len(faces)), 3)
+        unique, inverse = np.unique(edges, axis=0, return_inverse=True)
+        inverse = np.asarray(inverse).ravel()
+        corners = verts[faces]
+        normals = np.cross(corners[:, 1] - corners[:, 0], corners[:, 2] - corners[:, 0])
+        normals /= np.linalg.norm(normals, axis=1)[:, None]
+        keep: set[tuple[int, int]] = set()
+        for u, edge in enumerate(unique):
+            members = owners[inverse == u]
+            if len(members) == 1:
+                keep.add((int(edge[0]), int(edge[1])))
+            elif len(members) == 2:
+                cos = float(np.clip(np.dot(normals[members[0]], normals[members[1]]), -1, 1))
+                if np.degrees(np.arccos(cos)) >= angle:
+                    keep.add((int(edge[0]), int(edge[1])))
+        return keep
+
+    for angle in (30.0, 100.0):
+        got = feature_edges(verts, faces, angle).reshape(-1, 2, 3)
+        # Jede zurückgegebene Kante als Indexpaar wiederfinden.
+        lookup = {tuple(np.round(point, 6)): index for index, point in enumerate(verts)}
+        pairs = {
+            tuple(sorted((lookup[tuple(np.round(a, 6))], lookup[tuple(np.round(b, 6))])))
+            for a, b in got
+        }
+        assert pairs == reference(angle), f"Winkel {angle}"
+
+
 def test_the_pointer_finds_the_edge_it_points_at_and_the_nearer_of_two() -> None:
     """Welche Kante ein Klick meint — die Rechnung hinter dem Anklicken.
 

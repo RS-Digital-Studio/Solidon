@@ -68,6 +68,7 @@ class _FlatRenderer(Renderer):
         name: str,
         style: SurfaceStyle,
         cell_colours: CellColours | None = None,
+        capacity: int | None = None,
     ) -> Item:
         raise NotImplementedError
 
@@ -83,6 +84,7 @@ class _FlatRenderer(Renderer):
         connected: bool = False,
         polylines: Sequence[int] | None = None,
         draw_order: int = 0,
+        capacity: int | None = None,
     ) -> Item:
         raise NotImplementedError
 

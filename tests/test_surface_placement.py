@@ -13,6 +13,7 @@ from app.core.geom.transform import apply, rotation
 from app.core.registry import REGISTRY
 from app.core.scene import placement
 from app.core.types import Feature
+from tests.helpers import exact_kernel
 
 
 def _top(mesh):
@@ -50,7 +51,7 @@ def test_original_face_adjacency_cache_follows_mesh_changes():
 @pytest.mark.parametrize("slotted", [False, True])
 def test_blind_feature_from_below_finds_its_actual_mouth(slotted):
     """Die kanonisch positive Achse verlegt die Mündung nicht auf den Sacklochboden."""
-    from app.core.brep import edit
+    edit = exact_kernel()
     from app.core.geom.mesh import as_mesh_data
     from app.core.perceive.features import detect
 
@@ -454,7 +455,7 @@ def test_inner_reference_is_explicit_and_automatic_references_prefer_the_outer_b
 @pytest.mark.parametrize("native", [False, True])
 def test_real_slot_offers_its_measured_centre_and_axis(native):
     """Beide Körperarten liefern die Langlochachse aus der tatsächlichen Richtung."""
-    from app.core.brep import edit
+    edit = exact_kernel()
     from app.core.brep.features import features_of
     from app.core.geom.mesh import as_mesh_data
     from app.core.perceive.features import detect
@@ -520,7 +521,7 @@ def test_reference_extension_is_not_claimed_as_a_wall_distance():
 
 def test_seated_slot_preserves_other_openings_and_their_real_references():
     """Nur die eigene Öffnung wird zum Platzieren gefüllt; fremde Ausschnitte bleiben frei."""
-    from app.core.brep import edit
+    edit = exact_kernel()
     from app.core.brep.features import features_of
     from app.core.geom.mesh import as_mesh_data
 
@@ -1505,6 +1506,8 @@ def test_a_feature_without_an_axis_gets_no_distances():
 
 def _bore_history(profile, kind, **values):
     """Eine echte Bohrung mit ursprünglichem Schritt, nicht nur hingeschriebener Herkunft."""
+    if kind == "brep":
+        exact_kernel()
     from app.core.scene import History, OperationDraft
     from app.core.scene.evaluate import evaluate
     from app.core.scene.project import ProjectSources, new_project

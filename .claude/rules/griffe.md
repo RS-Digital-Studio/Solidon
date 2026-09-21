@@ -398,6 +398,18 @@ Was davon bleibt, sind zwei Regeln:
   Fangschwelle blieb. Deshalb wird der Griff nach jedem Zug **frisch gebaut**:
   Er rechnet gegen die Matrix, mit der er anfing, und ein stehen gelassener
   Griff hinge nach der Auswertung an einem Element, das nicht mehr im Bild ist.
+* **`Gizmo.fits` sagt, wann ein frischer Griff dasselbe ergäbe.** Der
+  Platzierungsfluss zeichnet je Kamerageste neu und hängte den Bewegungsgriff
+  dabei jedes Mal ab und wieder an — sechs Renderer-Objekte für nichts (5,7 ms
+  von 22 je `redraw`, 21.09.2026). `grip_placement` behält ihn jetzt, wenn er
+  am selben Ziel hängt und entweder im Zug ist (`grip.pressing`) oder passt:
+  gleiches Ziel, gleiche Ringe, gleicher Maßstab (auf ein Hundertstel,
+  `SCALE_TOLERANCE` — der Maßstab hängt am Zoom und wandert in der Perspektive
+  mit jeder Kameradrehung) und **gleiche Matrix** (`np.array_equal` gegen die
+  gemerkte Matrix des Ziels). Beides sind genau die Fälle, in denen die Regel
+  „immer frisch" nichts verlöre: Im Zug hat sich die Matrix seit dem Greifen
+  nicht geändert, bei einem passenden Griff steht das Ziel unbewegt. Ein Griff
+  **im Zug** neu zu bauen kostete den Zug — aus ihm wurde ein Kameraschwenk.
 
 ### Frei drehen, aber 45 Grad treffen
 

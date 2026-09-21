@@ -276,7 +276,16 @@ class Item(ABC):
 
     @abstractmethod
     def update_points(self, points: np.ndarray) -> None:
-        """Dieselbe Topologie, andere Ecken — die Vorschau beim Formen (§18.11)."""
+        """Dieselbe Topologie, andere Ecken — die Vorschau beim Formen (§18.11).
+
+        Ein Element mit Kapazität (``capacity`` an :meth:`Renderer.add_lines`
+        und :meth:`Renderer.add_surface`) nimmt hier **bis zu** so viele
+        Punkte, auch weniger als beim Anlegen, und tauscht nur Zahlen in
+        seinen Puffern — keine neue Geometrie, keine neue Pipeline. Mehr als
+        die Kapazität ist ein Fehler an der Aufrufstelle: Wer mehr braucht,
+        legt das Element neu an. Ohne Kapazität muss die Zahl der Punkte die
+        des Anlegens sein.
+        """
 
     @abstractmethod
     def set_line_width(self, width: float) -> None: ...
@@ -311,7 +320,20 @@ class Renderer(ABC):
         name: str,
         style: SurfaceStyle,
         cell_colours: CellColours | None = None,
-    ) -> Item: ...
+        capacity: int | None = None,
+    ) -> Item:
+        """Eine Fläche aus Ecken ``(n, 3)`` und Dreiecken ``(m, 3)``.
+
+        **Mit ``capacity`` hält das Element Platz für so viele Ecken** und
+        :meth:`Item.update_points` tauscht danach nur Zahlen, nie die
+        Geometrie. ``faces`` beschreibt dann die Topologie bis zur Kapazität;
+        gezeichnet werden die vorderen Dreiecke, deren Ecken alle unter der
+        gelieferten Punktzahl liegen — die Dreiecke stehen also in der
+        Reihenfolge ihrer höchsten Ecke. Ein solches Element ist unbeleuchtet
+        (``lighting`` muss aus sein) und ohne Zellfarben: Die Maßtinte, die
+        je Kamerageste ihre Pfeile und Marken neu legt (RM-198), braucht
+        genau das, und mehr wäre eine Beleuchtung, die niemand nachrechnet.
+        """
 
     @abstractmethod
     def add_lines(
@@ -326,11 +348,16 @@ class Renderer(ABC):
         connected: bool = False,
         polylines: Sequence[int] | None = None,
         draw_order: int = 0,
+        capacity: int | None = None,
     ) -> Item:
         """Linien: je zwei Punkte ein Stück, mit ``connected`` eine Kette,
         mit ``polylines`` mehrere Ketten dieser Längen hintereinander.
         ``draw_order`` wie bei :class:`SurfaceStyle` — nur vorn, kleinere
-        Zahl unten."""
+        Zahl unten. **Mit ``capacity`` hält das Element Platz für so viele
+        Punkte**, und :meth:`Item.update_points` darf danach weniger bringen
+        — nur Zahlen wechseln, keine Geometrie (siehe dort). Nicht zusammen
+        mit ``polylines``: Deren Trenner sitzen zwischen den Punkten, und
+        eine wechselnde Kettenzahl wäre eine neue Topologie."""
 
     @abstractmethod
     def add_points(

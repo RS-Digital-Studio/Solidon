@@ -3519,6 +3519,12 @@ class Viewport(QWidget):
     """Die 3D-Ansicht, oder ein schlichter Hinweis, wenn kein Renderer zu bauen ist."""
 
     selection_allowed: Callable[[], bool] | None = None
+    #: Was die Ansicht sagt, wenn ``selection_allowed`` einen Klick verweigert —
+    #: das Fenster hängt hier seinen Satz an („Die aktuelle Änderung zuerst
+    #: übernehmen oder abbrechen"). Bis zum 22.09.2026 verschluckten
+    #: ``_select_at``, Rechtsklick und Linksklick den Klick stumm; nur der
+    #: Menüweg sprach (Review Fenster #6).
+    selection_refused: Callable[[], None] | None = None
 
     measurementTaken = Signal(object)
     """A finished measurement — carries a ``Measurement``."""
@@ -4562,22 +4568,30 @@ class Viewport(QWidget):
         """Was ein durchlässiges Kind hier ablädt, gehört der Renderfläche.
 
         **Der Fund** (Robert, 09.09.2026: „hab bohrung setzen angeklickt und
-        3 mal auf den körper geklickt nichts passiert"): Die Maßfläche der
-        Platzierung liegt über der Renderfläche und trägt seit dem Umriss Tinte
-        genau dort, wo man zielt. Sie steht auf ``WA_TransparentForMouseEvents``
-        — und **das reicht den Klick an den Vorfahren weiter, nicht seitwärts
-        an ein Geschwister**. Die Renderfläche ist ein Geschwister und ein
-        natives Fenster dazu; in der Auslieferungskette des Klicks tauchte sie
-        gar nicht auf, gemessen über einen Ereignisfilter an der Anwendung:
+        3 mal auf den körper geklickt nichts passiert"): Über der Renderfläche
+        liegen durchlässige Kinder — die Überlagerungen der Platzierung und
+        der Werkzeugzeilen —, und ein solches Kind steht auf
+        ``WA_TransparentForMouseEvents``. **Das reicht den Klick an den
+        Vorfahren weiter, nicht seitwärts an ein Geschwister.** Die
+        Renderfläche ist ein Geschwister und ein natives Fenster dazu; in der
+        Auslieferungskette des Klicks tauchte sie gar nicht auf, gemessen über
+        einen Ereignisfilter an der Anwendung:
 
-            MouseButtonPress an _Dimensions (durchlässig=True)
+            MouseButtonPress an einem durchlässigen Kind (durchlässig=True)
             MouseButtonPress an Viewport
             MouseButtonPress an QStackedWidget …
 
-        Hier endet der Klick also, und hier wird er weitergereicht. Vorher trug
-        die Maske nur schmale Maßlinien, meist neben der Klickstelle — daher
+        Hier endet der Klick also, und hier wird er weitergereicht.
+
+        **Die Maßtinte gehört seit RM-198 nicht mehr dazu.** Bis zum
+        21.09.2026 stand sie als maskiertes Widget über der Renderfläche und
+        trug nur schmale Maßlinien, meist neben der Klickstelle — daher
         „einmal hat es geklappt von 20 klicks": Es ging, wenn man knapp neben
-        den Kreis traf.
+        den Kreis traf. Jetzt sind Striche, Pfeile und Marken Elemente **im**
+        Renderer (siehe ``placement_flow._Dimensions``); der Klick trifft
+        sofort die Renderfläche. Das Weiterreichen bleibt trotzdem: Die
+        Zahlenfelder und die Werkzeugzeilen liegen weiter als durchlässige
+        oder bedienbare Kinder darüber.
         """
         if not self._hand_to_the_renderer("press", event):
             super().mousePressEvent(event)
@@ -4722,13 +4736,18 @@ class Viewport(QWidget):
         if (
             event.kind == "press"
             and event.button == "left"
-            and (self._slot_handle is None or self._placement_pointer is not None)
+            and (self._slot_handle is None) == (self._placement_pointer is None)
             and self._pull_at_the_hole(event)
         ):
             # Das Loch ist der Griff — auch wenn seine zwei Knöpfe schon stehen,
             # weil die Maße im Bild sind (``_choose_measure_action``): Ein Druck
             # zwischen die Knöpfe ging bis zum 21.09.2026 an die Platzierung
-            # und setzte das Loch um, statt es in die Länge zu ziehen.
+            # und setzte das Loch um, statt es in die Länge zu ziehen. **Aber
+            # nur, wenn Knöpfe und Platzierung zusammen da sind oder zusammen
+            # fehlen.** Eine Dialogplatzierung ohne Knöpfe — die Einpressbuchse
+            # sitzt in der gewählten Bohrung — will den Druck aufs Loch selbst:
+            # Er setzt den Baustein um. Bis zum 21.09.2026 lieh sich der Druck
+            # dort einen Langlochgriff und zog, statt zu setzen.
             if self._placement_pointer is not None and self._slot_handle is not None:
                 self.placementDragStarted.emit()
             return
@@ -5095,6 +5114,32 @@ class Viewport(QWidget):
         removed = self._remove_finding_actors()
         if render and removed and self.renderer is not None:
             self.renderer.render()
+
+    def clear_finding_mark(self) -> None:
+        """Die Warnungsmarke von außen abräumen — der öffentliche Weg zu :meth:`_hide_finding_mark`.
+
+        Das Fenster nimmt die Marke an mehreren Stellen zurück (ein neuer
+        Schritt, ein Wechsel der Auswahl, das Schließen einer Karte). Es griff
+        dafür auf ``_hide_finding_mark`` und ``_finding_mark`` zu — private
+        Namen quer über die Schichtgrenze. Der Viewport bietet den Weg jetzt
+        selbst an; ob eine Marke steht, sagt :meth:`has_finding_mark`.
+        """
+        self._hide_finding_mark()
+
+    def has_finding_mark(self) -> bool:
+        """Ob gerade eine Warnungsmarke gemerkt ist — Auskunft ohne Zugriff aufs Feld."""
+        return self._finding_mark is not None
+
+    def finding_mark(self) -> tuple[Vec3, str, str] | None:
+        """Die gemerkte Warnungsmarke — Szenenort, Titel, Körper — oder ``None``.
+
+        Für das Fenster, das nach einem Einheitenwechsel dieselbe Marke mit
+        neuem Text setzt (``_refresh_map_units``): Es las dafür
+        ``_finding_mark`` direkt. Der Ort ist dasselbe Objekt, das
+        :meth:`mark_finding` bekam — wer ihn mit ``is`` gegen den Zeugen der
+        Karte hält, tut das weiter.
+        """
+        return self._finding_mark
 
     def _prepare_finding_mark(self, result: EvaluationResult | None) -> bool:
         """Ob dieselbe Auswertung ihre aktive Marke erneut zeichnen darf."""
@@ -8259,11 +8304,13 @@ class Viewport(QWidget):
             )
         )
         # Nah heran heißt: die Nahebene neu legen, sonst schneidet sie ins
-        # Material — und der Schatten gehört zur neuen Blickrichtung.
+        # Material — und der Schatten gehört zur neuen Blickrichtung. Die
+        # Meldung geht vor dem Bild hinaus (``kamera.md``): Wer sie hört,
+        # legt seine Punkte in den neuen Tiefenbereich, gezeichnet wird einmal.
         self.renderer.reset_clipping_range()
-        self._draw()
-        self._redraw_shadows()
         self.cameraMoved.emit()
+        self._redraw_shadows(draw=False)
+        self._draw()
 
     def _scene_size(self) -> float:
         if self._result is None or not self._result.scene.objects:
@@ -8469,6 +8516,18 @@ class Viewport(QWidget):
             and (entry := result.scene.objects.get(object_id)) is not None
             and feature_id in entry.features
         )
+        if (
+            chosen
+            and chosen == self._selected_feature_refs
+            and self._selected_edge is None
+            and self._part_grip is None
+        ):
+            # **Dieselben Merkmale noch einmal sind kein Aufbau.** Das Fenster
+            # setzt die Paarwahl bei jeder Auswahl neu; an einer 360k-Platte
+            # kostete jeder Durchlauf von ``_redraw_features`` 0,12 s (Review
+            # Fenster #12). Ein Kantenwahl oder ein Bausteingriff dazwischen
+            # hätte den Zustand verändert — dann läuft der Aufbau wie immer.
+            return
         self._remember_feature_refs(chosen)
         self._refresh_feature_selection()
 
@@ -8692,7 +8751,6 @@ class Viewport(QWidget):
         if self.renderer is None:
             return
         self.setToolTip("")
-        self.setStatusTip("")
         if self._snap_shown is None:
             self.setAccessibleDescription("")
         self._redraw_feature_patch()
@@ -8749,17 +8807,27 @@ class Viewport(QWidget):
             if feature_id not in entry.features:
                 continue
             feature = entry.features[feature_id]
-            if (object_id, feature_id) == (
-                self._hovered_object,
-                self._hovered_feature,
-            ) or (not self.toolTip() and (object_id, feature_id) in selected_refs):
+            hovered_now = (object_id, feature_id) == (self._hovered_object, self._hovered_feature)
+            if hovered_now or (
+                not self.accessibleDescription() and (object_id, feature_id) in selected_refs
+            ):
                 hint = "\n".join(
                     text
                     for text in (feature_label(feature_id, feature), feature_measure_tip(feature))
                     if text
                 )
-                self.setToolTip(hint)
-                self.setStatusTip(hint)
+                # **Der Tooltip gehört dem Merkmal unter dem Zeiger, sonst
+                # niemandem.** Bis zum 21.09.2026 trug die ganze Ansicht den
+                # Hinweis des bloß gewählten Merkmals — er stand überall im
+                # Bild, auch über leerem Bauraum. Und einen ``statusTip`` trägt
+                # die Ansicht gar nicht mehr: Qt schickt ihn beim Betreten als
+                # ``QStatusTipEvent`` an die Statuszeile, und deren
+                # ``showMessage`` verdrängt die eigenen Widgets dort — drei
+                # Zeilen Merkmalstext statt Maße und Ankündigung. Der
+                # Bildschirmleser bekommt den Hinweis weiter, auch für die
+                # Auswahl: Für ihn ist er die zweite Kodierung (Regel 18).
+                if hovered_now:
+                    self.setToolTip(hint)
                 if self._snap_shown is None:
                     self.setAccessibleDescription(hint)
             explicit = (object_id, feature_id) in selected_refs or (object_id, feature_id) == (
@@ -9313,7 +9381,7 @@ class Viewport(QWidget):
             self._candidate_actors.append(
                 self.renderer.add_labels(
                     np.asarray([point for point, _text in marks], dtype=float),
-                    [text for _point, text in marks],
+                    _distinct_labels([text for _point, text in marks]),
                     name="candidate-labels",
                     style=LabelStyle(
                         text_colour=CANDIDATE_COLOUR, font_size=12, always_visible=True
@@ -9328,9 +9396,16 @@ class Viewport(QWidget):
         """Eine Kante einer Kollisionsfrage als Linie vor dem Material.
 
         Zwei Kandidaten liegen hier vier Tausendstel auseinander; die Farbe
-        allein unterschiede sie nicht (Regel 18). Deshalb die Beschriftung
-        mit Lage, Länge und Ort — und die betonte Kante breiter, wie die
-        gewählte Kante daneben.
+        allein unterschiede sie nicht (Regel 18). **Die zweite Kodierung ist
+        die Breite**: die betonte Kante ist so breit wie die gewählte Kante
+        daneben, die andere so breit wie eine gewöhnliche Körperkante — das
+        sieht man auch dort, wo vier Tausendstel keinen Farbunterschied
+        ergeben. Die Beschriftung nennt Lage, Länge und Ort und ist für
+        **beide gleich**, weil sie an derselben Stelle liegen; sie taugt
+        deshalb nicht zum Unterscheiden (der Docstring behauptete das bis zum
+        21.09.2026, Review Tests #6). Liegen zwei gleiche Beschriftungen
+        übereinander, hängt :func:`_distinct_labels` „(1)/(2)" an, damit nicht
+        eine die andere verdeckt.
         """
         if self.renderer is None or self._result is None or len(candidate.points) < 2:
             return
@@ -11616,11 +11691,36 @@ class Viewport(QWidget):
         sonst an derselben Stelle: Der eine auf der gewählten Fläche, der
         andere auf dem Baustein, der gerade darauf sitzt — zwei Sätze Pfeile
         übereinander, und der untere verschöbe die Fläche statt des Bausteins.
-        Frisch gebaut bei jedem Aufruf, aus dem Grund, der bei ``set_gizmo``
-        steht: Der Griff rechnet gegen die Matrix, die sein Ziel beim Anhängen
-        hatte, und der Fluss setzt den Körper bei jedem Zeichnen neu.
+        Frisch gebaut, sobald sich etwas geändert hat, aus dem Grund, der bei
+        ``set_gizmo`` steht: Der Griff rechnet gegen die Matrix, die sein Ziel
+        beim Anhängen hatte, und der Fluss setzt den Körper bei jedem Zeichnen
+        neu. **Zwei Ausnahmen, beide seit dem 21.09.2026:**
+
+        * **Ein Griff im Zug bleibt.** Der Fluss zeichnet auch mitten in
+          einem Zug neu — eine Radraste, eine Vorschau, ein Overlay, das seine
+          Größe ändert —, und ein frischer Griff kennt den Zug nicht: Aus dem
+          Zug wurde ein Kameraschwenk, und beim Loslassen kam keine Stelle
+          (Sonde ``probe_grip_drag.py``).
+        * **Ein Griff, der schon passt, bleibt.** Gleiches Ziel, gleiche
+          Ringe, gleicher Maßstab, gleiche Matrix (:meth:`Gizmo.fits`) — dann
+          stünde der neue genau da, wo der alte steht, und Abbau und Aufbau
+          kosteten sechs Renderer-Objekte je Kamerageste (gemessen 5,7 ms von
+          22 je ``redraw``).
         """
         grip = self._placement_grip
+        if (
+            grip is not None
+            and item is not None
+            and grip.target is item
+            and (
+                grip.pressing
+                or (
+                    self.renderer is not None
+                    and grip.fits(item, rotation=rotation, scale=self._gizmo_scale_for(item))
+                )
+            )
+        ):
+            return
         self._placement_grip = None
         if grip is not None:
             grip.remove()
@@ -13302,6 +13402,8 @@ class Viewport(QWidget):
         focal_point: tuple[float, float, float],
         view_up: tuple[float, float, float],
         parallel_scale: float | None = None,
+        *,
+        draw: bool = True,
     ) -> None:
         """Eine Kamerastellung setzen und einmal zeichnen — der eine Weg, auf
         dem die 3D-Maus und die Flugtasten die Ansicht anfassen (§2.9).
@@ -13309,7 +13411,8 @@ class Viewport(QWidget):
         Wer nah heranfährt, schneidet sonst die Nahebene ins Teil: Der Vertrag
         verspricht kein Nachlegen der Schnittebenen von selbst
         (``reset_clipping_range`` ist ein eigener Aufruf, wie unter VTK), also
-        wird es hier gesagt.
+        wird es hier gesagt. Mit ``draw=False`` bleibt das Bild dem Aufrufer —
+        wer danach ``cameraMoved`` sendet, zeichnet nach der Meldung selbst.
         """
         if self.renderer is None:
             return
@@ -13323,7 +13426,8 @@ class Viewport(QWidget):
         if parallel_scale is not None:
             self.renderer.set_parallel_scale(float(parallel_scale))
         self.renderer.reset_clipping_range()
-        self._draw()
+        if draw:
+            self._draw()
 
     def camera_pose(self) -> tuple[Vec3, Vec3, Vec3, float | None]:
         """Standort, Blickpunkt, Oben — und der Parallelmaßstab, wenn die
@@ -13342,8 +13446,9 @@ class Viewport(QWidget):
         """
         if self.renderer is None:
             return
-        self._redraw_shadows()
         self.cameraMoved.emit()
+        self._redraw_shadows(draw=False)
+        self._draw()
 
     def view_from(self, direction: str) -> None:
         """Eine der sieben Kameravorgaben (§18.1) — gedreht um den Blickpunkt.
@@ -13450,8 +13555,8 @@ class Viewport(QWidget):
             self.renderer.set_parallel_scale(scale)
         self._sketch_occlusion_shift = (0.0, 0.0, 0.0)
         self._apply_sketch_occlusion()
-        self.renderer.render()
         self.cameraMoved.emit()
+        self._draw()
 
     def set_zone_margins(self, left: int, right: int, bottom: int = 0) -> None:
         """Die schwebenden Karten melden, welchen Bildraum sie verdecken.
@@ -14241,8 +14346,9 @@ class Viewport(QWidget):
         )
         if moved is pose:
             return
-        self.set_camera_pose(moved.position, moved.focal_point, moved.view_up)
+        self.set_camera_pose(moved.position, moved.focal_point, moved.view_up, draw=False)
         self.cameraMoved.emit()
+        self._draw()
 
     def tilt_camera(self, step: int) -> None:
         """Die Ansicht um *step* Bildpunkte nach oben oder unten kippen (§2.9).
@@ -14269,8 +14375,9 @@ class Viewport(QWidget):
         turned = camera_step(pose, Motion(rx=step * TILT_PER_PIXEL), TILT_STEP_SECONDS)
         if turned is pose:
             return
-        self.set_camera_pose(turned.position, turned.focal_point, turned.view_up)
+        self.set_camera_pose(turned.position, turned.focal_point, turned.view_up, draw=False)
         self.cameraMoved.emit()
+        self._draw()
 
     def set_navigation(self, scheme: NavigationScheme) -> None:
         """Das Navigationsschema (§2.9) setzen — am Navigator, der die Kamera
@@ -14304,6 +14411,7 @@ class Viewport(QWidget):
         also von dort weiter und nicht von vorn.
         """
         if not self.user_selection_allowed():
+            self._refuse_selection()
             return
         # **Der Skizzenmodus kommt vor allem anderen**, wie beim Linksklick:
         # Ein Rechtsklick beim Zeichnen meint eine Stelle der Zeichenebene und
@@ -14348,6 +14456,17 @@ class Viewport(QWidget):
         guard = getattr(self, "selection_allowed", None)
         return guard is None or bool(guard())
 
+    def _refuse_selection(self) -> None:
+        """Der Klick wird gehalten — und die Ansicht sagt es über ``selection_refused``.
+
+        Einmal je Klick: Die drei Klickwege (:meth:`_on_left_click`,
+        :meth:`_on_right_click`, :meth:`_select_at`) prüfen die Wache je
+        einmal und kehren dann zurück; ein Weg erreicht den nächsten nicht.
+        """
+        refused = getattr(self, "selection_refused", None)
+        if refused is not None:
+            refused()
+
     def _select_at(self, point: Vec3, *, direct: bool = False, add: bool = False) -> bool:
         """Was ein Klick auswählt: der Körper, und eine Stufe tiefer sein
         Merkmal (§18.5). Gibt zurück, ob ein Merkmal dabei war.
@@ -14370,6 +14489,7 @@ class Viewport(QWidget):
         weiß, welche Taste lag, der Objektbaum, was schon gewählt ist.
         """
         if not self.user_selection_allowed():
+            self._refuse_selection()
             return True
         object_id, feature_id = self._click_target(point, direct=direct, add=add)
         self.objectPicked.emit(object_id or "", add)
@@ -15344,6 +15464,7 @@ class Viewport(QWidget):
                 self.sketchPointPicked.emit(hit)
             return
         if self._means_a_feature() and not self.user_selection_allowed():
+            self._refuse_selection()
             return
         point = self._aim_at(x, y) if self._means_a_feature() else self._world_at(x, y)
         if point is None:
@@ -15418,6 +15539,31 @@ def _detached(mesh: Any) -> MeshData:
     """
     source = as_mesh_data(mesh)
     return source.replacing(source.raw.copy())
+
+
+def _distinct_labels(texts: Sequence[str]) -> list[str]:
+    """Gleiche Beschriftungen unterscheidbar machen — „(1)", „(2)" je Wiederholung.
+
+    Zwei Kandidaten einer Kollisionsfrage können dieselbe Zeile tragen (Lage,
+    Länge, Ort stimmen bis auf vier Tausendstel überein) und liegen dann im
+    Bild übereinander: Man sähe eine Beschriftung, wo zwei Kandidaten stehen,
+    und wüsste nicht, dass es zwei sind (Regel 18, Review Tests #6). Die
+    Breite der Linie unterscheidet sie schon; der Zusatz gibt auch der
+    Beschriftung ihre Eindeutigkeit zurück. Kommt eine Zeile nur einmal vor,
+    bleibt sie, wie sie ist.
+    """
+    counts: dict[str, int] = {}
+    for text in texts:
+        counts[text] = counts.get(text, 0) + 1
+    seen: dict[str, int] = {}
+    result: list[str] = []
+    for text in texts:
+        if counts[text] > 1:
+            seen[text] = seen.get(text, 0) + 1
+            result.append(f"{text} ({seen[text]})")
+        else:
+            result.append(text)
+    return result
 
 
 def _triangle_faces(count: int) -> Any:
@@ -15545,9 +15691,13 @@ def _weak_callbacks(view: Viewport) -> NavigatorCallbacks:
 
     def on_camera() -> None:
         # Der Radzoom endet ohne Zugende — dieser Rückruf ist sein Meldeweg.
+        # **Erst melden, dann ein Bild.** Wer ``cameraMoved`` hört — die
+        # Maßtinte —, legt seine Punkte neu und zeichnet nicht selbst; das
+        # eine Bild kommt danach von hier (Regel in ``kamera.md``).
         found = weak()
         if found is not None:
             found.cameraMoved.emit()
+            found._draw()
 
     def on_tilt(step: int) -> None:
         found = weak()
@@ -15556,12 +15706,15 @@ def _weak_callbacks(view: Viewport) -> NavigatorCallbacks:
 
     def on_end() -> None:
         # Dreh-, Kipp- und Schiebezüge enden hier: nahe Hauptansicht
-        # einrasten, Schatten nachziehen, die Bewegung melden.
+        # einrasten, Schatten nachziehen, die Bewegung melden — und dann
+        # **ein** Bild. Bis zum 21.09.2026 zeichneten Einrasten und Schatten
+        # je eines und die Maßtinte nach der Meldung ein drittes.
         found = weak()
         if found is not None:
-            found._settle_sketch_view()
-            found._redraw_shadows()
+            found._settle_sketch_view(draw=False)
+            found._redraw_shadows(draw=False)
             found.cameraMoved.emit()
+            found._draw()
 
     return NavigatorCallbacks(
         on_context,

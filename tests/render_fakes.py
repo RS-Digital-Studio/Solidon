@@ -49,6 +49,12 @@ class RecordingItem(Item):
         #: Ob die Dreiecksfarben gelten — der echte Renderer schaltet dafür
         #: ``material.color_mode``, hier wird es nur gemerkt.
         self.face_colours_visible = True
+        #: Platz in den Puffern, wenn das Element mit ``capacity`` entstand —
+        #: dann darf ``update_points`` weniger Punkte bringen (Vertrag).
+        self.capacity: int | None = None
+        #: Wie oft die Punkte getauscht wurden — ein Test, der „dieselben
+        #: Elemente, neue Punkte" prüft, liest hier.
+        self.updates = 0
 
     def set_visible(self, visible: bool) -> None:
         self._visible = bool(visible)
@@ -103,9 +109,15 @@ class RecordingItem(Item):
 
     def update_points(self, points: np.ndarray) -> None:
         fresh = np.asarray(points, dtype=float).reshape(-1, 3)
-        if len(fresh) != len(self.points):
+        if self.capacity is not None:
+            if len(fresh) > self.capacity:
+                raise ValueError(
+                    f"{self.name}: {len(fresh)} Punkte für eine Kapazität von {self.capacity}"
+                )
+        elif len(fresh) != len(self.points):
             raise ValueError(f"{self.name}: {len(fresh)} Punkte für {len(self.points)}")
         self.points = fresh
+        self.updates += 1
 
     def set_line_width(self, width: float) -> None:
         self.line_width = float(width)
@@ -224,12 +236,30 @@ class RecordingRenderer(Renderer):
         name: str,
         style: SurfaceStyle,
         cell_colours: CellColours | None = None,
+        capacity: int | None = None,
     ) -> Item:
+        if capacity is not None:
+            if style.lighting or cell_colours is not None:
+                raise ValueError(
+                    f"{name}: ein Element mit Kapazität ist unbeleuchtet und ohne Zellfarben"
+                )
+            if len(np.asarray(vertices).reshape(-1, 3)) > capacity:
+                raise ValueError(f"{name}: mehr Ecken als die Kapazität {capacity}")
         item = RecordingItem(name, vertices, style.colour, style.opacity)
         item.pickable = style.pickable
+        item.capacity = capacity
         self.meshes.append((np.asarray(vertices, dtype=float), np.asarray(faces)))
         self.drawn.append(
-            ("surface", {"name": name, "style": style, "cell_colours": cell_colours, "item": item})
+            (
+                "surface",
+                {
+                    "name": name,
+                    "style": style,
+                    "cell_colours": cell_colours,
+                    "capacity": capacity,
+                    "item": item,
+                },
+            )
         )
         self.items.append(item)
         return item
@@ -246,10 +276,17 @@ class RecordingRenderer(Renderer):
         connected: bool = False,
         polylines: Sequence[int] | None = None,
         draw_order: int = 0,
+        capacity: int | None = None,
     ) -> Item:
+        if capacity is not None:
+            if polylines is not None:
+                raise ValueError(f"{name}: Kapazität und Ketten schließen einander aus")
+            if len(np.asarray(points).reshape(-1, 3)) > capacity:
+                raise ValueError(f"{name}: mehr Punkte als die Kapazität {capacity}")
         item = RecordingItem(name, points, colour)
         item.pickable = pickable
         item.line_width = float(width)
+        item.capacity = capacity
         self.drawn.append(
             (
                 "lines",
@@ -261,6 +298,11 @@ class RecordingRenderer(Renderer):
                     "keep_in_front": keep_in_front,
                     "connected": connected,
                     "polylines": list(polylines) if polylines is not None else None,
+                    # Bis zum 21.09.2026 verschluckte die Attrappe die
+                    # Ordnung — kein Test konnte fragen, ob die Maßtinte
+                    # unter Griff und Knöpfen liegt.
+                    "draw_order": draw_order,
+                    "capacity": capacity,
                     "item": item,
                 },
             )

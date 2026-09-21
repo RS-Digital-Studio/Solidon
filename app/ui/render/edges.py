@@ -31,15 +31,30 @@ def feature_edges(vertices: np.ndarray, faces: np.ndarray, angle: float) -> np.n
     edges = np.concatenate([triangles[:, [0, 1]], triangles[:, [1, 2]], triangles[:, [2, 0]]])
     edges.sort(axis=1)
     owners = np.tile(np.arange(len(triangles)), 3)
-    unique, inverse, counts = np.unique(edges, axis=0, return_inverse=True, return_counts=True)
-    inverse = np.asarray(inverse).ravel()
+    # **Ein Zahlenschlüssel statt eines Zeilenvergleichs.** ``np.unique`` mit
+    # ``axis=0`` vergleicht die Kanten paarweise Spalte für Spalte und sortiert
+    # ein Feld von Zeilen — bei 200 000 Dreiecken 333 ms, im Qt-Hauptthread je
+    # Auswertung (Review Leistung B10). Jede Kante ist nach dem Sortieren ein
+    # Paar ``(klein, groß)`` mit beiden Indizes unter der Eckenzahl ``n``; als
+    # ``klein·n + groß`` wird sie eine Zahl, eindeutig und in ``int64`` (bei
+    # 1,3 Mio. Ecken ist ``n²`` rund 1,7·10¹² — weit unter der Grenze). Ein
+    # einziger ``argsort`` über diese Zahlen ersetzt den Zeilenvergleich (73 ms).
+    key = edges[:, 0] * len(points) + edges[:, 1]
+    order = np.argsort(key, kind="stable")
+    sorted_key = key[order]
+    first_of_group = np.empty(len(sorted_key), dtype=bool)
+    first_of_group[0] = True
+    np.not_equal(sorted_key[1:], sorted_key[:-1], out=first_of_group[1:])
+    starts = np.flatnonzero(first_of_group)
+    counts = np.diff(np.append(starts, len(sorted_key)))
+    unique = edges[order[starts]]
     chosen = counts == 1
     shared = np.flatnonzero(counts == 2)
     if len(shared):
-        order = np.argsort(inverse, kind="stable")
-        starts = np.searchsorted(inverse[order], shared)
-        first = owners[order[starts]]
-        second = owners[order[starts + 1]]
+        # Die zwei Nachbarn einer geteilten Kante stehen im sortierten Feld
+        # direkt hintereinander, am Gruppenanfang und einen weiter.
+        first = owners[order[starts[shared]]]
+        second = owners[order[starts[shared] + 1]]
         normals = _face_normals(points, triangles)
         cosine = np.clip(np.einsum("ij,ij->i", normals[first], normals[second]), -1.0, 1.0)
         sharp = np.degrees(np.arccos(cosine)) >= float(angle)

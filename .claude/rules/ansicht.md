@@ -923,6 +923,15 @@ Drei Dinge daran sind tragend:
   je Bild selbst nach dem Abstand zur Kamera; sein `set_draw_order` legt
   keine eigene Reihenfolge darüber, weil die gemessen genau das aufhöbe.)
 
+**Und der Hüllquader der Szene zählt nicht mit, was vorn liegt** (21.09.2026).
+`_scene_bounds` (der Rahmen für *Alles zeigen* und den Tiefenbereich) nahm
+bis dahin jedes sichtbare Geometrie-Element mit. Griff, Knöpfe, Marken und
+die Maßtinte zeichnen aber ohne Tiefentest (`keep_in_front`), und die Tinte
+sitzt auf einer Ebene mitten im Tiefenbereich: Sie weitete den Quader auf
+ihre Ebene und den Tiefenbereich auf 42 statt 80 an der Lochplatte, und
+*Alles zeigen* rahmte eine Ebene statt des Modells. `GfxItem.in_front` (aus
+`keep_in_front` beim Anlegen) nimmt diese Elemente aus dem Quader heraus.
+
 ### Die Druckplatte scheint durch, wenn etwas darunter liegt
 
 Ein Teil unter der Platte war **vollständig** unsichtbar: `culling = "back"`
@@ -1027,6 +1036,19 @@ Millionen, von denen drei über der Schwelle liegen. Der Verdacht war
 falsch: `_for_display` kostet beim ersten Aufbau 1044 ms und danach **0 ms**,
 weil `DISPLAY_CACHE_KEPT` (4) für diese drei reicht. Wer die Schwelle
 angefasst hätte, hätte nichts gewonnen.
+
+**Und die Suche selbst zählt in Zahlen, nicht in Zeilen** (21.09.2026,
+Leistung B10). `feature_edges` (`render/edges.py`) fand die geteilten Kanten
+über `np.unique(edges, axis=0)` — einen Zeilenvergleich, der ein Feld von
+Kantenpaaren sortiert: 333 ms bei 200 000 Dreiecken, im Qt-Hauptthread je
+Auswertung. Jede Kante ist nach `edges.sort(axis=1)` ein Paar `(klein, groß)`
+mit beiden Indizes unter der Eckenzahl `n`; als `klein·n + groß` wird sie
+eine `int64`-Zahl, eindeutig (bei 1,3 Mio. Ecken ist `n²` rund 1,7·10¹², weit
+unter der Grenze). Ein `argsort` über diese Zahlen ersetzt den Zeilenvergleich
+(57 ms). `test_render_shapes.py::test_feature_edges_match_a_row_wise_reference_on_a_dense_mesh`
+hält den Zahlenschlüssel gegen die langsame, offensichtlich richtige Rechnung
+— eine falsche Kodierung (zu kleines `n`, Kollisionen) fiele dort auf. Die
+`face_components` daneben (`_shadow_hulls_for`) bleiben Sache des Kerns.
 
 ### Jeder Ansichts-Setter prüft auf Änderung
 
@@ -1172,12 +1194,26 @@ Zeichenfläche war ein halber Millimeter fein, weil `MIN_GRID_PX` auf sieben
 stand — ein Wert, der bei kleinem Fenster nie auffiel. Wer eine Ansicht ändert,
 sieht sie bei **beiden** Enden an: der Mindestgröße und dem vollen Bildschirm.
 
-**Der Griff wird nie weiterbenutzt, immer frisch gebaut.** Er rechnet gegen
-die Matrix seines Ziels beim Greifen und merkt sie sich über den Zug — ein
-stehen gelassener Griff wendete den vorigen Zug beim nächsten doppelt an, und
-nach einer Auswertung hinge er an einem Element, das nicht mehr im Bild ist.
-Das galt für PyVistas Widget und gilt für `gizmo.Gizmo` genauso, weil die
-Rechnung dieselbe ist. Und die Attrappen der Suite (`tests/render_fakes.py`)
+**Der Griff wird nie weiterbenutzt, immer frisch gebaut — mit zwei
+Ausnahmen.** Er rechnet gegen die Matrix seines Ziels beim Greifen und merkt
+sie sich über den Zug — ein stehen gelassener Griff wendete den vorigen Zug
+beim nächsten doppelt an, und nach einer Auswertung hinge er an einem Element,
+das nicht mehr im Bild ist. Das galt für PyVistas Widget und gilt für
+`gizmo.Gizmo` genauso, weil die Rechnung dieselbe ist.
+
+Seit dem 21.09.2026 baut `Viewport.grip_placement` ihn trotzdem **nicht** neu,
+wenn er an demselben Ziel hängt und (a) gerade im Zug ist (`grip.pressing`)
+oder (b) ohnehin passte: gleiches Ziel, gleiche Ringe, gleicher Maßstab,
+gleiche Matrix (`Gizmo.fits`, siehe `griffe.md`). Der Widerspruch zur Regel
+ist keiner: Beide Ausnahmen sind genau die Fälle, in denen ein frischer Griff
+**dasselbe** ergäbe — im Zug hat sich die Matrix seit dem Greifen nicht
+geändert (der Zug rechnet ja gegen sie), und bei (b) steht das Ziel unbewegt.
+Was die Regel verbietet, ist ein Griff, der einen **vergangenen** Zug noch
+in sich trägt; den gibt es hier nicht. Der Fluss der Platzierung zeichnet je
+Kamerageste neu und hängte den Griff dabei jedes Mal ab und wieder an — sechs
+Renderer-Objekte für nichts (5,7 ms von 22 je `redraw`), und ein Griff im Zug
+verlor den Zug (aus dem Zug wurde ein Kameraschwenk). `grip.pressing` und
+`Gizmo.fits` heilen beides. Und die Attrappen der Suite (`tests/render_fakes.py`)
 erben vom Vertrag, und der ist abstrakt: Eine Methode, die es dort nicht gibt,
 gibt es auch in der Attrappe nicht. Das ist die Lehre aus dem `Off()`, das es
 an PyVistas Widget nie gab — der `AttributeError` verschwand in Qts
@@ -1195,6 +1231,34 @@ fest, dass kein Zugende den Navigator neu baut. Und der Skaliergriff
 `pick_item`, Zug in der Kameraebene über `ray_plane_hit`, Ergebnis beim
 Loslassen —, und wer das Interaktionsmuster an einer Stelle ändert, ändert es
 an beiden.
+
+## Die Maßtinte hält ihre Elemente und tauscht nur Punkte (RM-198, 21.09.2026)
+
+Die Maßtinte der Platzierung (`placement_flow._Dimensions`) zeichnet Striche,
+Pfeile und Marken als Elemente **im** Renderer, seit sie kein maskiertes
+Widget mehr ist (der Grund steht am Anfang von RM-198: die Fenstermaske riss
+über Vulkan das Gerät). Sie liegt vor dem Material (`keep_in_front`), unter
+Griff und Knöpfen (`DRAW_ORDER = -1`).
+
+**Sieben dauerhafte Elemente, nicht zehn neue je Aufbau.** Vier Linien
+(Unterlage, Striche, Zuordnungen, Umriss) und drei Flächen (Markenrand,
+Pfeile, Marken) entstehen einmal mit fester Kapazität; jeder Aufbau schreibt
+nur neue Punkte hinein (`Item.update_points`, der Renderer tauscht die Zahlen
+in den Puffern, ohne neue Geometrie). Bis zum 21.09.2026 räumte jeder Aufbau
+zehn Elemente ab und legte zehn neue an — pygfx baut je neuem Element eine
+Pipeline, und das kostete zwölf von zweiundzwanzig Millisekunden je
+Kamerageste, Radraste und Tastendruck in einem Feld. Danach: `refresh` 0,66
+statt 4,0 ms, `redraw` 7,7 statt 22 ms.
+
+**Die Kapazität ist der Vertrag** (`api.py`, `add_lines(capacity=…)` und
+`add_surface(capacity=…)`): Das Element hält Platz für so viele Punkte,
+`update_points` bringt **bis zu** so viele — auch weniger —, der ungenutzte
+Rest der Puffer steht auf NaN und zeichnet nichts (pygfx lässt nichtendliche
+Punkte aus dem Hüllquader und über `draw_range` aus dem Bild). Ein Element mit
+Kapazität ist unbeleuchtet und ohne Zellfarben; mehr wäre eine Beleuchtung,
+die niemand nachrechnet. Reißt eine Kapazität, entstehen **alle sieben** neu —
+auf das Doppelte des Bedarfs, in ihrer Reihenfolge, sonst käme ein einzelnes
+neues Element im Renderer ans Ende und läge über allem.
 
 ## Die Skizze ist Vordergrund, der Körper Zusammenhang (29.08.2026)
 

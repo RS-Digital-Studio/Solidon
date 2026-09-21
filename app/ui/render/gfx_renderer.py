@@ -250,6 +250,16 @@ class GfxItem(Item):
         #: Polylinien tragen zusätzliche NaN-Trenner, die keine Quellpunkte sind.
         self.point_map: np.ndarray | None = None
         self.point_count: int | None = None
+        #: Platz in den Puffern, wenn das Element mit ``capacity`` entstand —
+        #: dann tauscht :meth:`update_points` Zahlen statt Geometrie.
+        self.capacity: int | None = None
+        #: Die höchste Ecke je Dreieck, bei einer Fläche mit Kapazität: Daraus
+        #: folgt, wie viele Dreiecke die gelieferten Punkte tragen.
+        self._face_limit: np.ndarray | None = None
+        #: Ob das Element ohne Tiefentest vorn liegt (``keep_in_front``). Solche
+        #: Elemente sitzen am Körper oder mitten im Tiefenbereich; im
+        #: Hüllquader der Szene zählen sie nicht mit.
+        self.in_front = False
         self.changed: Callable[[], None] | None = None
         #: Der zuletzt gerechnete Hüllquader; jede Änderung am Item verwirft ihn.
         self._bounds: Bounds | None = None
@@ -371,6 +381,9 @@ class GfxItem(Item):
     def update_points(self, points: np.ndarray) -> None:
         source = np.asarray(points, dtype=float).reshape(-1, 3)
         fresh = _positions(points)
+        if self.capacity is not None:
+            self._refill(source, fresh)
+            return
         if self.point_count is not None and len(fresh) != self.point_count:
             raise ValueError(f"{self.name}: {len(fresh)} Punkte für {self.point_count}")
         if self.point_map is not None:
@@ -389,11 +402,50 @@ class GfxItem(Item):
             if id(geometry) in replacements:
                 obj.geometry = replacements[id(geometry)]
                 continue
-            current.set_data(fresh)
             # Normalen und Hüllquader hängen an den Ecken; ein neues Netz
-            # rechnet beides frisch, ein überschriebenes nicht zuverlässig.
+            # rechnet beides frisch. Bis zum 21.09.2026 stand davor noch ein
+            # ``set_data`` in den alten Puffer — der ging mit der alten
+            # Geometrie sofort verloren, die Zeile war umsonst.
             obj.geometry = _geometry_like(geometry, fresh)
             replacements[id(geometry)] = obj.geometry
+        self._changed()
+
+    def _refill(self, source: np.ndarray, fresh: np.ndarray) -> None:
+        """Die Punkte in die vorhandenen Puffer schreiben — Kapazität statt Geometrie.
+
+        Die Puffer bleiben, und damit bleiben Pipeline und Bindungen des
+        Shaders: pygfx baut beides je Geometrie, und je Aufbau der Maßtinte
+        kosteten zehn neue Elemente rund zwölf Millisekunden Pipelines
+        (gemessen 21.09.2026, ``measure_ink_churn.py``). Gezeichnet wird über
+        ``draw_range`` nur, was geliefert wurde; der Rest der Puffer steht
+        auf NaN, damit der Hüllquader ihn nicht mitzählt (pygfx lässt
+        nichtendliche Punkte aus).
+        """
+        assert self.capacity is not None
+        count = len(fresh)
+        if count > self.capacity:
+            raise ValueError(f"{self.name}: {count} Punkte für eine Kapazität von {self.capacity}")
+        faces_used: int | None = None
+        if self._face_limit is not None:
+            beyond = np.flatnonzero(self._face_limit >= count)
+            faces_used = int(beyond[0]) if len(beyond) else len(self._face_limit)
+        seen: set[int] = set()
+        for obj in self._geometry_holders():
+            if hasattr(obj, "_solidon_positions"):
+                obj._solidon_positions = source
+            geometry = obj.geometry
+            if id(geometry) in seen:
+                continue
+            seen.add(id(geometry))
+            buffer = geometry.positions
+            data = buffer.data
+            data[:count] = fresh
+            data[count:] = np.nan
+            buffer.update_full()
+            buffer.draw_range = (0, count)
+            indices = getattr(geometry, "indices", None)
+            if faces_used is not None and indices is not None:
+                indices.draw_range = (0, faces_used)
         self._changed()
 
     def set_line_width(self, width: float) -> None:
@@ -932,6 +984,7 @@ class GfxRenderer(Renderer):
         name: str,
         style: SurfaceStyle,
         cell_colours: CellColours | None = None,
+        capacity: int | None = None,
     ) -> Item:
         gfx = self._gfx
         positions = _positions(vertices)
@@ -939,15 +992,41 @@ class GfxRenderer(Renderer):
         fields: dict[str, Any] = {"positions": positions, "indices": indices}
         if cell_colours is not None:
             fields["colors"] = _face_colours(cell_colours, len(indices))
-        # **Die Punktnormalen entstehen hier, einmal.** Ohne sie rechnet pygfx
-        # sie beim ersten Bild selbst — und zwar je Shader, der die Geometrie
-        # anfragt: Ein Körper mit Kanten (`solid_edges`) hängt zwei Meshes an
-        # dieselbe ``Geometry``, und beide lösen den Lauf aus. Gezählt am
-        # Tetraeder: ohne Kanten einer, mit Kanten zwei, mit mitgegebenen
-        # Normalen keiner; am 3,15-Millionen-Netz kostet ein Lauf rund 0,7 s
-        # (06.09.2026). Gerechnet wird mit derselben Funktion, die pygfx
-        # nähme, das Bild ändert sich also um nichts.
-        fields["normals"] = _normals(positions, indices)
+        face_limit: np.ndarray | None = None
+        if capacity is not None:
+            # **Mit Kapazität: Puffer in voller Größe, Normalen null.** Das
+            # Element ist unbeleuchtet (Vertrag), und die Normalen würden bei
+            # jedem ``update_points`` veralten — also gibt es keine, die
+            # jemand für richtig halten könnte.
+            if style.lighting or cell_colours is not None:
+                raise ValueError(
+                    f"{name}: ein Element mit Kapazität ist unbeleuchtet und ohne Zellfarben"
+                )
+            if len(positions) > capacity:
+                raise ValueError(
+                    f"{name}: {len(positions)} Ecken für eine Kapazität von {capacity}"
+                )
+            padded = np.full((int(capacity), 3), np.nan, dtype=np.float32)
+            padded[: len(positions)] = positions
+            fields["positions"] = padded
+            fields["normals"] = np.zeros((int(capacity), 3), dtype=np.float32)
+            face_limit = (
+                indices.max(axis=1).astype(np.int64)
+                if len(indices)
+                else np.zeros(0, dtype=np.int64)
+            )
+            if len(face_limit) and int(face_limit.max()) >= capacity:
+                raise ValueError(f"{name}: ein Dreieck zeigt über die Kapazität von {capacity}")
+        else:
+            # **Die Punktnormalen entstehen hier, einmal.** Ohne sie rechnet
+            # pygfx sie beim ersten Bild selbst — und zwar je Shader, der die
+            # Geometrie anfragt: Ein Körper mit Kanten (`solid_edges`) hängt
+            # zwei Meshes an dieselbe ``Geometry``, und beide lösen den Lauf
+            # aus. Gezählt am Tetraeder: ohne Kanten einer, mit Kanten zwei,
+            # mit mitgegebenen Normalen keiner; am 3,15-Millionen-Netz kostet
+            # ein Lauf rund 0,7 s (06.09.2026). Gerechnet wird mit derselben
+            # Funktion, die pygfx nähme, das Bild ändert sich also um nichts.
+            fields["normals"] = _normals(positions, indices)
         geometry = gfx.Geometry(**fields)
         side = "front" if (style.cull_backfaces or style.backface_colour is not None) else "both"
         material = self._material(style, style.colour, style.opacity, side)
@@ -989,6 +1068,13 @@ class GfxRenderer(Renderer):
         item = GfxItem(
             name, root, objects, style.colour, opacity=style.opacity, pickable=style.pickable
         )
+        item.in_front = style.keep_in_front
+        if capacity is not None:
+            item.capacity = int(capacity)
+            item._face_limit = face_limit
+            # Gezeichnet werden nur die Dreiecke, die die gelieferten Ecken
+            # tragen — derselbe Weg wie bei ``update_points``.
+            item._refill(np.asarray(vertices, dtype=float).reshape(-1, 3), positions)
         # Die Gruppe trägt die Ordnung: pygfx sortiert nach Warteschlange,
         # Gruppenordnung, Objektordnung und dann erst nach dem Abstand des
         # Ursprungs — so liegt, was ``draw_order`` sagt, vor dem Zufall der
@@ -1038,12 +1124,25 @@ class GfxRenderer(Renderer):
         connected: bool = False,
         polylines: Sequence[int] | None = None,
         draw_order: int = 0,
+        capacity: int | None = None,
     ) -> Item:
         gfx = self._gfx
         from app.ui.render.gfx_lines import DepthLineMaterial, DepthLineSegmentMaterial
 
         positions = _positions(points)
         point_map: np.ndarray | None = None
+        if capacity is not None:
+            if polylines is not None:
+                raise ValueError(f"{name}: Kapazität und Ketten schließen einander aus")
+            if len(positions) > capacity:
+                raise ValueError(
+                    f"{name}: {len(positions)} Punkte für eine Kapazität von {capacity}"
+                )
+            # Puffer in voller Größe, der Rest NaN — ``_refill`` setzt gleich
+            # den Zeichenbereich auf das Gelieferte.
+            padded = np.full((int(capacity), 3), np.nan, dtype=np.float32)
+            padded[: len(positions)] = positions
+            positions = padded
         extra: dict[str, Any] = {"pick_write": bool(pickable), "depth_compare": "<="}
         if keep_in_front:
             extra["depth_test"] = False
@@ -1089,6 +1188,10 @@ class GfxRenderer(Renderer):
         item = GfxItem(name, root, [line], colour, pickable=pickable)
         item.point_map = point_map
         item.point_count = len(positions)
+        item.in_front = keep_in_front
+        if capacity is not None:
+            item.capacity = int(capacity)
+            item._refill(np.asarray(points, dtype=float).reshape(-1, 3), _positions(points))
         return self._register(item)
 
     def add_points(
@@ -1112,7 +1215,9 @@ class GfxRenderer(Renderer):
         root = gfx.Group()
         root.add(dots)
         dots._solidon_mesh = True
-        return self._register(GfxItem(name, root, [dots], colour, pickable=pickable))
+        item = GfxItem(name, root, [dots], colour, pickable=pickable)
+        item.in_front = keep_in_front
+        return self._register(item)
 
     def add_labels(
         self, points: np.ndarray, texts: Sequence[str], *, name: str, style: LabelStyle
@@ -1313,13 +1418,20 @@ class GfxRenderer(Renderer):
         Aufruf. Beschriftungen zählen nicht mit — wie VTKs 2D-Aktoren —, denn
         ihre Anker verschiebt das Layout in jedem Bild; jede Änderung an einem
         Geometrie-Item verwirft den Cache (:meth:`_invalidate_scene`).
+
+        **Und was vorn liegt, zählt auch nicht mit.** Griff, Knöpfe, Marken
+        und die Maßtinte zeichnen ohne Tiefentest; sie sitzen am Körper oder
+        — die Tinte — auf einer Ebene mitten im Tiefenbereich. Zählte die
+        Tinte mit, weitete sie den Quader auf ihre Ebene und den
+        Tiefenbereich auf 42 statt 80 an der Lochplatte (gemessen
+        21.09.2026), und *Alles zeigen* rahmte eine Ebene statt des Modells.
         """
         if self._bounds_cache is not None:
             return self._bounds_cache[1]
         boxes = [
             item.bounds()
             for item in set(self._items.values())
-            if item.visible() and not isinstance(item, GfxLabels)
+            if item.visible() and not isinstance(item, GfxLabels) and not item.in_front
         ]
         boxes = [box for box in boxes if box[1] > box[0] or box[3] > box[2] or box[5] > box[4]]
         bounds: Bounds | None = None
