@@ -87,6 +87,14 @@ Vier Sachen daran sind Entscheidungen und keine Bequemlichkeit:
   Auswahlwechsel, Szenenaufbau (`drop_move_proposal`). Anlass: Robert,
   11.09.2026, „das langloch ziehe und dann das langloch nochmal über das gizmo
   verschieben will ist es wie abbrechen".
+* **Und die Maße bleiben dabei im Bild.** Die Länge wächst um die Mitte, die
+  Kantenmaße gelten ihr weiter; `PlacementFlow.redraw` hält Linien und Felder
+  der gebundenen Maßgruppe, solange der Zug wartet, und zeichnet sie bei jeder
+  Kameradrehung neu — nur der runde Umriss der Mündung weicht dem gezogenen
+  des Griffs. Bis zum 21.09.2026 nahm sie die nächste Kameradrehung mit
+  (Robert: „wenn wir das langloch ziehen und dann die ansicht drehen sind die
+  maße weg"). Ohne Maßgruppe — beim Setzen eines neuen Werkzeugs aus dem
+  Dialog — tritt die Platzierung weiter ganz zurück.
 * **Am Merkmal zielt die Platzierung nie.** Bis zum Abend des 11.09.2026 war
   ein Klick neben dem Griff die Ansage, „woanders hinzuwollen": Die
   Platzierung löste sich vom Merkmal, die Bohrungsvorschau klebte am Zeiger

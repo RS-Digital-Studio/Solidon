@@ -1777,8 +1777,13 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Abnahme: Weg 1 öffnen, eine Bohrung anklicken — kein *Bezug ändern* im
   Bild; jede Beschriftung steht frei neben dem Körper, ihre Verbindung endet
   in der Mitte der Maßlinie, keine zwei Verbindungen kreuzen sich, und am
-  Loch stehen die zwei Knöpfe zum Langloch. Offen: die Fensterabnahme beim
-  Release. Gehört zur laufenden Arbeit an P0.3/P0.4.
+  Loch stehen die zwei Knöpfe zum Langloch; nach einem Zug zum Langloch
+  bleiben Maße und Felder stehen und folgen der Kamera (Robert, 21.09.2026
+  abends: „wenn wir das langloch ziehen und dann die ansicht drehen sind die
+  maße weg" — der wartende Zug blendete die gebundene Maßgruppe beim nächsten
+  Aufbau aus; `test_the_measures_stay_in_the_view_while_a_pulled_slot_waits`).
+  Offen: die Fensterabnahme beim Release. Gehört zur laufenden Arbeit an
+  P0.3/P0.4.
 
 <a id="rm-198"></a>
 

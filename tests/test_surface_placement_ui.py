@@ -90,6 +90,7 @@ class _Viewport(QWidget):
     previewDragged = Signal(object)  # noqa: N815 — Qt-Schnittstelle
     placementDragged = Signal(object)  # noqa: N815 — Qt-Schnittstelle
     placementDragStarted = Signal()  # noqa: N815 — Qt-Schnittstelle
+    slotProposed = Signal(str, float, float)  # noqa: N815 — Qt-Schnittstelle
 
     def __init__(self) -> None:
         super().__init__()
@@ -3138,6 +3139,73 @@ def test_a_drag_at_the_chosen_hole_pulls_the_slot_instead_of_moving_the_body(
         assert armed is not None and armed.op == "slot_hole", "rechts wartet der Vorschlag"
         assert np.allclose(window.viewport._actors[object_id].matrix(), np.eye(4)), (
             "der Körper ist nicht verschoben"
+        )
+    finally:
+        window.end_quiet_placement()
+        QApplication.processEvents()
+        window.release()
+
+
+def test_the_measures_stay_in_the_view_while_a_pulled_slot_waits(qt_app: QApplication) -> None:
+    """Nach dem Zug zum Langloch bleiben die Maße stehen — auch wenn die Kamera dreht.
+
+    Die Länge wächst um die Mitte; die Kantenmaße gelten ihr weiter. Bis zum
+    21.09.2026 blendete der wartende Zug Felder und Linien der gebundenen
+    Maßgruppe aus, sobald irgendetwas neu zeichnete: Nach dem Zug standen sie
+    noch, und die nächste Kameradrehung nahm sie mit (Robert: „wenn wir das
+    langloch ziehen und dann die ansicht drehen sind die maße weg"). Der runde
+    Umriss der Mündung tritt dabei zurück — den gezogenen zeigt der Griff.
+    """
+    from app.ui.render.api import Pick, PointerEvent
+
+    window = _window_with_a_renderer()
+    try:
+        object_id, hole = _a_selected_hole(window)
+        flow = window._quiet_placement
+        assert flow is not None and flow.active and flow._canvas.shown
+        assert flow._canvas.outline, "vor dem Zug steht der runde Umriss der Mündung"
+        shown_fields = [field for field in flow._measures if not field.isHidden()]
+        assert shown_fields, "und die Kantenmaße stehen"
+
+        entry = window.session.last_result.scene.objects[object_id]
+        feature = entry.features[hole]
+        centre = feature.params["centre"]
+        top = (float(centre[0]), float(centre[1]), float(entry.mesh.bounds.maximum[2]))
+        renderer = window.viewport.renderer
+        x, y, _depth = renderer.world_to_display(top)
+        x, y = round(x), round(y)
+        renderer.picks[(x, y)] = Pick(
+            top, window.viewport._actors[object_id], int(feature.face_indices[0])
+        )
+        for event in (
+            PointerEvent("move", x, y),
+            PointerEvent("press", x, y, button="left"),
+            PointerEvent("move", x + 14, y + 4, buttons=frozenset({"left"})),
+            PointerEvent("release", x + 14, y + 4, button="left"),
+        ):
+            window.viewport._on_pointer(event)
+            QApplication.processEvents()
+        for _ in range(120):
+            QApplication.processEvents()
+            window.session.wait_for_idle()
+        assert window.viewport.slot_drag_waits(), "der Zug zum Langloch wartet"
+        assert flow is window._quiet_placement and flow.active, "die Maßgruppe steht weiter"
+
+        def lage() -> tuple[bool, int, int, int]:
+            return (
+                flow._canvas.shown,
+                len([field for field in flow._measures if not field.isHidden()]),
+                len(flow._canvas.lines),
+                len(flow._canvas.outline),
+            )
+
+        assert lage() == (True, len(shown_fields), len(flow._canvas.lines), 0), (
+            "nach dem Zug: Linien und Felder stehen, der runde Umriss ist weg"
+        )
+        window.viewport.cameraMoved.emit()
+        QApplication.processEvents()
+        assert lage() == (True, len(shown_fields), len(flow._canvas.lines), 0), (
+            "und die Kamera nimmt sie nicht mit"
         )
     finally:
         window.end_quiet_placement()

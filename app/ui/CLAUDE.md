@@ -818,10 +818,16 @@ mit demselben `_halt_reason`, der Menü, Werkzeugzeile und Befehlspalette
 sperrt; sie überlebt den Neuaufbau der Zeilen und fällt nach einem Undo ohne
 Neuauswahl.
 
-Solange ein Langlochzug wartet (`slot_drag_waits`), blendet `PlacementFlow`
-seine Platzierungsfelder und Vorschau aus und nimmt keine Platzierungsklicks
-an. Escape stellt die bisherige Platzierungsabsicht wieder dar; das
-Übernehmen verwendet weiterhin den einen Langlochschritt.
+Solange ein Langlochzug wartet (`slot_drag_waits`), nimmt `PlacementFlow`
+keine Platzierungsklicks an. Die Platzierung eines **neuen** Werkzeugs aus
+dem Dialog tritt dabei ganz zurück — Felder, Vorschau, Leiste. Die
+**gebundene Maßgruppe** am gewählten Loch bleibt dagegen stehen, mit Linien
+und Feldern, und zeichnet bei jeder Kameradrehung neu (21.09.2026, Robert:
+„wenn wir das langloch ziehen und dann die ansicht drehen sind die maße
+weg"); nur der runde Umriss der Mündung weicht dem gezogenen des Griffs, und
+`slotProposed` löst den Aufbau gleich beim Loslassen aus. Escape stellt die
+bisherige Platzierungsabsicht wieder dar; das Übernehmen verwendet weiterhin
+den einen Langlochschritt.
 
 **Ein gewähltes Merkmal bekommt seinen Griff ohne Werkzeug.** Der Schalter
 gehört dem Werkzeug *Bewegen* und gilt dem ganzen Körper — dort trägt der

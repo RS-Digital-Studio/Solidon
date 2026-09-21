@@ -1030,6 +1030,11 @@ class PlacementFlow(QObject):
         if render_widget is not None:
             self._watch(render_widget)
         self.viewport.cameraMoved.connect(self.redraw)
+        # **Der Langlochzug endet mit einem Aufbau.** Sein Umriss ersetzt den
+        # runden der Mündung, und die Maßlinien bleiben — ohne diesen Aufbau
+        # stand der runde Umriss neben dem gezogenen, bis die Kamera das
+        # nächste Mal zeichnete.
+        self.viewport.slotProposed.connect(self._after_slot_proposal)
         self.session.sceneChanged.connect(self._scene_changed)
         self.session.projectChanged.connect(self._document_changed)
         self.viewport.sceneApplied.connect(self._scene_applied)
@@ -1539,6 +1544,10 @@ class PlacementFlow(QObject):
         for widget in self._widgets():
             widget.deleteLater()
         self._canvas.deleteLater()
+
+    def _after_slot_proposal(self, *_args: object) -> None:
+        """Ein gezogenes Langloch wartet — die Maße bleiben und zeichnen neu."""
+        self.redraw()
 
     def _show_bar(self) -> None:
         """Die Leiste unten zeigen — außer der Träger trägt seine Werte schon.
@@ -3350,10 +3359,20 @@ class PlacementFlow(QObject):
             and self._display_ready()
         )
         tool_valid = valid and self._tool_context is not None and not self._tool_busy
+        # **Ein wartender Langlochzug nimmt der gebundenen Maßgruppe nichts.**
+        # Die Länge wächst um die Mitte, die Kantenmaße gelten ihr weiter, und
+        # der Zug am Bewegungsgriff führt sie danach mit (`move_to`). Bis zum
+        # 21.09.2026 blendete der wartende Zug Felder und Linien aus, sobald
+        # irgendetwas neu zeichnete — nach dem Zug standen sie noch, und die
+        # nächste Kameradrehung nahm sie mit (Robert: „wenn wir das langloch
+        # ziehen und dann die ansicht drehen sind die maße weg"). Ohne
+        # Maßgruppe — die Platzierung eines neuen Werkzeugs aus dem Dialog —
+        # tritt sie weiter zurück; das entscheidet der Beginn von ``redraw``.
+        slot_waits = self.viewport.slot_drag_waits()
         local_visible = (
             valid
             and (self._change_op is None or self._showing_input)
-            and not self.viewport.slot_drag_waits()
+            and (not slot_waits or self._measure_group is not None)
         )
         # **Gefragt wird das vorbereitete Werkzeug, nicht der gezeichnete
         # Körper.** Ob gesetzt werden kann, hängt daran, dass die Geometrie
@@ -3460,7 +3479,9 @@ class PlacementFlow(QObject):
         outline = (
             placement.mouth_outline(self._tool_context) if self._tool_context is not None else ()
         )
-        if outline:
+        # Wartet ein Langlochzug, steht sein Umriss im Bild (`SlotHandle`);
+        # der runde der Mündung sagte daneben etwas Falsches.
+        if outline and not slot_waits:
             axis_u = np.asarray(surface.frame.x_axis, dtype=np.float64)
             axis_v = np.asarray(surface.frame.y_axis, dtype=np.float64)
             self._canvas.outline = [
