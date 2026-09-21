@@ -969,3 +969,79 @@ def test_public_pointer_delivery_uses_the_renderers_normal_event_path(renderer, 
     assert delivered.buttons == frozenset({"right"})
     assert delivered.shift and delivered.ctrl and not delivered.alt
     assert event.isAccepted()
+
+
+@pytest.mark.parametrize("far_origin", [False, True])
+def test_draw_order_beats_the_distance_of_the_origin_in_the_overlay(
+    renderer: GfxRenderer, far_origin: bool
+) -> None:
+    """Von zwei Flächen vor dem Material liegt die mit der kleineren Ordnung unten.
+
+    pygfx sortiert die Deckschicht nach dem Abstand des Objektursprungs zur
+    Kamera; die Maßtinte hat ihren Ursprung in der Welt, ein Knopf seinen an
+    der Bohrung. Ob die Tinte über oder unter dem Knopf lag, hing damit davon
+    ab, wo die Platte im Bauraum steht (Review 21.09.2026). ``draw_order``
+    entscheidet vorher: in beiden Lagen des Knopfs liegt die Tinte unten.
+    """
+    from tests.test_render_contract import same
+
+    plate_vertices, plate_faces = plate(0.0, 40.0)
+    ink = renderer.add_surface(
+        plate_vertices,
+        plate_faces,
+        name="ink",
+        style=SurfaceStyle(
+            colour="#ff0000", lighting=False, pickable=False, keep_in_front=True, draw_order=-1
+        ),
+    )
+    # Der Knopf: dieselbe Fläche, aber mit eigenem Ursprung — einmal näher an
+    # der Kamera als der Weltursprung, einmal weit dahinter. Ohne
+    # ``draw_order`` liegt er in der zweiten Lage unter der Tinte (gemessen:
+    # Rot statt Blau in der Bildmitte).
+    shift = (0.0, 0.0, -600.0 if far_origin else 5.0)
+    knob = renderer.add_surface(
+        plate_vertices - np.asarray(shift),
+        plate_faces,
+        name="knob",
+        style=SurfaceStyle(colour="#0000ff", lighting=False, pickable=False, keep_in_front=True),
+    )
+    knob.set_position(shift)
+    look_down(renderer, ink.bounds())
+    image = renderer.screenshot()
+    height, width = image.shape[:2]
+    centre = image[height // 2, width // 2, :3]
+    assert same(tuple(int(value) for value in centre), (0, 0, 255)), (
+        f"der Knopf liegt über der Tinte, gleich wo sein Ursprung steht: {centre}"
+    )
+
+
+@pytest.mark.parametrize("parallel", [False, True])
+def test_display_to_world_is_affine_in_a_fixed_depth(renderer: GfxRenderer, parallel: bool) -> None:
+    """Drei Bildpunkte in einer Tiefe legen alle anderen fest — die Maßtinte rechnet so.
+
+    Die Tiefenebene liegt parallel zum Bild, und dort bildet die Projektion
+    linear ab — perspektivisch wie orthografisch. `_Dimensions.refresh` holt
+    deshalb drei Weltpunkte und rechnet den Rest; hier steht die Zusage des
+    Vertrags an einer schräg stehenden Kamera.
+    """
+    renderer.set_parallel_projection(parallel)
+    renderer.set_camera_pose(CameraPose((70.0, -90.0, 55.0), (10.0, 12.0, 8.0), (0.0, 0.0, 1.0)))
+    renderer.reset_camera((-20.0, 40.0, -20.0, 40.0, -20.0, 40.0))
+    depth = 0.5
+    step = 256.0
+    basis = [
+        renderer.display_to_world(x, y, depth) for x, y in ((0.0, 0.0), (step, 0.0), (0.0, step))
+    ]
+    assert all(point is not None for point in basis)
+    origin = np.asarray(basis[0], dtype=float)
+    along_x = (np.asarray(basis[1], dtype=float) - origin) / step
+    along_y = (np.asarray(basis[2], dtype=float) - origin) / step
+    rng = np.random.default_rng(21)
+    width, height = renderer.view_size()
+    for x, y in rng.uniform((0.0, 0.0), (width, height), size=(24, 2)):
+        direct = renderer.display_to_world(float(x), float(y), depth)
+        assert direct is not None
+        derived = origin + x * along_x + y * along_y
+        assert np.allclose(direct, derived, atol=1e-6 * max(1.0, float(np.abs(direct).max()))), (
+            f"{(x, y)}: {direct} gegen {derived}"
+        )

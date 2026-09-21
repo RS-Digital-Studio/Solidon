@@ -49,6 +49,7 @@ from app.core.knowledge.profiles import for_object
 from app.core.log import get_logger
 from app.core.registry import OperationSpec
 from app.core.scene import placement
+from app.core.sketch.profile import strictly_crossing
 from app.core.types import Feature, SceneObject, Vec3
 from app.core.units import EPS_GEOM
 from app.i18n import tr
@@ -383,21 +384,19 @@ def _grips_its_preview(spec: OperationSpec) -> bool:
 
 
 def _crosses(a: tuple[QPointF, QPointF], b: tuple[QPointF, QPointF]) -> bool:
-    """Ob zwei Strecken einander schneiden — echte Kreuzung, keine Berührung."""
+    """Ob zwei Strecken einander schneiden — echte Kreuzung, keine Berührung.
 
-    def side(p: QPointF, q: QPointF, r: QPointF) -> float:
-        return (q.x() - p.x()) * (r.y() - p.y()) - (q.y() - p.y()) * (r.x() - p.x())
-
-    d1 = side(b[0], b[1], a[0])
-    d2 = side(b[0], b[1], a[1])
-    d3 = side(a[0], a[1], b[0])
-    d4 = side(a[0], a[1], b[1])
-    return ((d1 > 0) != (d2 > 0)) and ((d3 > 0) != (d4 > 0)) and 0 not in (d1, d2, d3, d4)
+    Die Rechnung steht im Kern (`profile.strictly_crossing`, mit der Toleranz
+    der Skizzenprofile); hier wird nur von ``QPointF`` übersetzt.
+    """
+    return strictly_crossing(
+        (a[0].x(), a[0].y()), (a[1].x(), a[1].y()), (b[0].x(), b[0].y()), (b[1].x(), b[1].y())
+    )
 
 
 def _untangle(
     positions: dict[QWidget, QRect],
-    pending: Sequence[tuple[QWidget, QPointF, tuple[QPointF, QPointF]]],
+    pending: Sequence[tuple[QWidget, QPointF, QPointF]],
     bounds: QRect,
     obstacles: Sequence[QRect],
 ) -> None:
@@ -410,10 +409,11 @@ def _untangle(
     Felder an den fremden Plätzen ins Bild passen, keinem Hindernis und keinem
     dritten Feld zu nahe kommen und danach weniger Kreuzungen stehen — so lange,
     bis kein Tausch mehr etwas bringt. Fünf Felder sind zehn Paare; das kostet
-    nichts.
+    nichts. Wo die Linie eines Feldes endet, sagt ``pending`` — dieselbe
+    Stelle, an der ``redraw`` sie zeichnet, nicht eine zweite Herleitung.
     """
-    anchors = {widget: (start + end) / 2 for widget, _wanted, (start, end) in pending}
-    widgets = [widget for widget, _wanted, _line in pending if widget in positions]
+    anchors = {widget: anchor for widget, _wanted, anchor in pending}
+    widgets = [widget for widget, _wanted, _anchor in pending if widget in positions]
 
     def leader(widget: QWidget, rect: QRect) -> tuple[QPointF, QPointF]:
         return (QPointF(rect.center()), anchors[widget])
@@ -480,9 +480,13 @@ class _Dimensions:
 
     Die Listen tragen Bildkoordinaten in logischen Bildpunkten; ``refresh``
     legt sie über ``display_to_world`` auf eine Tiefe vor der Kamera und
-    tauscht die Elemente des Renderers aus. Reihenfolge ist Zeichenreihenfolge:
-    pygfx sortiert die Deckschicht nach Reihe, Ordnung und Abstand, und die
-    sind hier für alle gleich — was zuerst angelegt wird, liegt unten.
+    tauscht die Elemente des Renderers aus. Innerhalb der Tinte ist die
+    Reihenfolge die Zeichenreihenfolge — was zuerst angelegt wird, liegt
+    unten. Gegen Griff und Knöpfe trägt sie ``DRAW_ORDER``: pygfx sortiert
+    die Deckschicht nach Ordnung und dann nach dem Abstand des Objektursprungs
+    zur Kamera, und der Ursprung der Tinte ist die Welt — ob sie über oder
+    unter einem Knopf läge, hinge sonst davon ab, wo die Platte im Bauraum
+    steht.
     """
 
     #: Wo die Tinte im Tiefenbereich liegt — mitten drin, weit weg von beiden
@@ -493,6 +497,10 @@ class _Dimensions:
     #: Die Marke an beiden Enden einer Zuordnungslinie und ihr Rand.
     MARK: Final = 3.5
     MARK_RIM: Final = 1.5
+    #: Unter Griff, Knöpfen und Umriss des Griffs, die bei 0 liegen.
+    DRAW_ORDER: Final = -1
+    #: Ein Stück Maßlinie, das kürzer ist als sein Pfeil, ist kein Maß mehr.
+    LEAST_PIECE: Final = 2 * SPACE
 
     def __init__(self, viewport: QWidget) -> None:
         self._viewport = viewport
@@ -517,8 +525,6 @@ class _Dimensions:
         #: durch die maßlinien zu treffen/sehen"). Der Umriss bleibt: Er zeigt
         #: das Loch, und das gehört unter den Griff.
         self.clearing: tuple[QPointF, float] | None = None
-        #: Die Fläche, auf die die Tinte beschränkt ist — das Bild der Ansicht.
-        self.area = QRect()
         #: Was zuletzt wirklich gezeichnet wurde: die Striche in
         #: Bildkoordinaten, nach Aussparung und Strichelung — für Tests, die
         #: fragen, wo Tinte liegt, ohne ein Bild aufzunehmen.
@@ -532,9 +538,6 @@ class _Dimensions:
         """Ob gerade Tinte im Bild steht."""
         return bool(self._items)
 
-    def set_area(self, area: QRect) -> None:
-        self.area = QRect(area)
-
     def hide(self) -> None:
         """Alle Elemente aus dem Renderer nehmen — die Listen bleiben."""
         renderer = getattr(self._viewport, "renderer", None)
@@ -544,7 +547,8 @@ class _Dimensions:
         self._items = []
         self.segments = []
 
-    def deleteLater(self) -> None:  # noqa: N802 — dieselbe Geste wie bei den Widgets daneben
+    def dispose(self) -> None:
+        """Beim Abbau des Flusses — nichts bleibt im Renderer zurück."""
         self.hide()
 
     # --- Geometrie in Bildkoordinaten ------------------------------------------------
@@ -585,7 +589,9 @@ class _Dimensions:
         Linie fehlt, sagt nicht mehr, wohin es geht: Nach dem Zug zum Langloch
         greift der Griff über Knöpfe und Umriss hinaus, und die 10 mm zur
         Außenkante lagen ganz darin (Robert, 21.09.2026: „manche maßlinien
-        fehlen aber").
+        fehlen aber"). **Und ganz heißt: bis auf einen Pfeil.** Ein Stück
+        kürzer als ``LEAST_PIECE`` wäre ein Stummel ohne Pfeil — bei etwas
+        anderem Zoom dieselbe Lage —, also kommt auch dann die ganze Linie.
         """
         if self.clearing is None:
             return [(start, end)]
@@ -609,10 +615,11 @@ class _Dimensions:
             pieces.append((start, start + vector * min(first, 1.0)))
         if second < 1.0:
             pieces.append((start + vector * max(second, 0.0), end))
+        least = self.LEAST_PIECE * self.LEAST_PIECE
         kept = [
             (head, tail)
             for head, tail in pieces
-            if QPointF.dotProduct(tail - head, tail - head) >= 1.0
+            if QPointF.dotProduct(tail - head, tail - head) >= least
         ]
         return kept or [(start, end)]
 
@@ -686,34 +693,46 @@ class _Dimensions:
         self.segments = [*solid, *dashed, *ring]
         if not self.segments and not heads and not marks:
             return
-        ratio = float(self._viewport.devicePixelRatioF())
-        depth = self.DEPTH
+        # **Drei Aufrufe statt zweitausend.** In einer festen Tiefe ist der
+        # Weltpunkt hinter einem Bildpunkt affin in den Bildkoordinaten (die
+        # Tiefenebene liegt parallel zum Bild, und dort bildet die Projektion
+        # linear ab — `Renderer.display_to_world` sagt das zu); je Punkt die
+        # Kameramatrix zu invertieren kostete 15 ms je Aufbau, und der läuft
+        # bei jeder Radraste und jedem Tastendruck in einem Feld.
+        ratio = renderer.device_ratio()
+        step = 256.0
+        basis = [
+            renderer.display_to_world(x, y, self.DEPTH)
+            for x, y in ((0.0, 0.0), (step, 0.0), (0.0, step))
+        ]
+        if any(point is None for point in basis):
+            return
+        origin = np.asarray(basis[0], dtype=np.float64)
+        along_x = (np.asarray(basis[1], dtype=np.float64) - origin) / step
+        along_y = (np.asarray(basis[2], dtype=np.float64) - origin) / step
 
-        def world(point: QPointF) -> Vec3 | None:
-            return renderer.display_to_world(point.x() * ratio, point.y() * ratio, depth)
+        def world_of(points: Sequence[QPointF]) -> np.ndarray:
+            screen = np.asarray([(point.x(), point.y()) for point in points], dtype=np.float64)
+            screen *= ratio
+            return origin + screen[:, :1] * along_x + screen[:, 1:] * along_y
 
         def line_points(segments: Sequence[tuple[QPointF, QPointF]]) -> np.ndarray | None:
-            rows: list[Vec3] = []
-            for start, end in segments:
-                head, tail = world(start), world(end)
-                if head is not None and tail is not None:
-                    rows.extend((head, tail))
-            return np.asarray(rows, dtype=np.float64) if rows else None
+            if not segments:
+                return None
+            return world_of([point for start, end in segments for point in (start, end)])
 
         def surface(polygons: Sequence[QPolygonF]) -> tuple[np.ndarray, np.ndarray] | None:
-            vertices: list[Vec3] = []
+            corners: list[QPointF] = []
             faces: list[tuple[int, int, int]] = []
             for polygon in polygons:
-                corners = [world(corner) for corner in polygon.toList()]
-                if any(corner is None for corner in corners):
-                    continue
-                base = len(vertices)
-                vertices.extend(corner for corner in corners if corner is not None)
-                for index in range(1, len(corners) - 1):
+                ring_points = polygon.toList()
+                base = len(corners)
+                corners.extend(ring_points)
+                for index in range(1, len(ring_points) - 1):
                     faces.append((base, base + index, base + index + 1))
             if not faces:
                 return None
-            return np.asarray(vertices, dtype=np.float64), np.asarray(faces, dtype=np.int64)
+            return world_of(corners), np.asarray(faces, dtype=np.int64)
 
         palette = self._viewport.palette()
         colour = palette.text().color().name()
@@ -728,11 +747,9 @@ class _Dimensions:
                     colour=backdrop,
                     width=4.0,
                     keep_in_front=True,
+                    draw_order=self.DRAW_ORDER,
                 )
             )
-        rim = surface([self._disc(point, self.MARK + self.MARK_RIM) for point in marks])
-        if rim is not None:
-            items.append(self._surface(renderer, "dimension_mark_rim", rim, backdrop))
         outline_colour = self.outline_colour.name() if self.outline_colour is not None else colour
         for name, segments, width, tint in (
             ("dimension_lines", solid, 2.0, colour),
@@ -743,9 +760,20 @@ class _Dimensions:
             if points is not None:
                 items.append(
                     renderer.add_lines(
-                        points, name=name, colour=tint, width=width, keep_in_front=True
+                        points,
+                        name=name,
+                        colour=tint,
+                        width=width,
+                        keep_in_front=True,
+                        draw_order=self.DRAW_ORDER,
                     )
                 )
+        # Der Rand der Marke kommt nach den Linien: Er deckt das Ende der
+        # Zuordnungslinie ab, damit die Marke frei steht und der Strich nicht
+        # bis in sie hineinläuft.
+        rim = surface([self._disc(point, self.MARK + self.MARK_RIM) for point in marks])
+        if rim is not None:
+            items.append(self._surface(renderer, "dimension_mark_rim", rim, backdrop))
         for name, polygons in (
             ("dimension_arrowheads", heads),
             ("dimension_marks", [self._disc(point, self.MARK) for point in marks]),
@@ -755,9 +783,9 @@ class _Dimensions:
                 items.append(self._surface(renderer, name, built, colour))
         self._items = items
 
-    @staticmethod
+    @classmethod
     def _surface(
-        renderer: Renderer, name: str, built: tuple[np.ndarray, np.ndarray], tint: str
+        cls, renderer: Renderer, name: str, built: tuple[np.ndarray, np.ndarray], tint: str
     ) -> Item:
         vertices, faces = built
         return renderer.add_surface(
@@ -765,7 +793,12 @@ class _Dimensions:
             faces,
             name=name,
             style=SurfaceStyle(
-                colour=tint, lighting=False, show_edges=False, pickable=False, keep_in_front=True
+                colour=tint,
+                lighting=False,
+                show_edges=False,
+                pickable=False,
+                keep_in_front=True,
+                draw_order=cls.DRAW_ORDER,
             ),
         )
 
@@ -1010,7 +1043,7 @@ class PlacementFlow(QObject):
         # Die Wahl bleibt erreichbar, wo sie niemanden stört: als Kontextmenü
         # des Maßes (Rechtsklick oder Menütaste, `_reference_menu`), gebaut je
         # Aufruf und danach weggeräumt. Der Rahmen um das Feld bleibt: Er ist,
-        # was `redraw` an die Maßlinie legt und was die Maske freihält.
+        # was `redraw` an die Maßlinie legt und die Verteilung freihält.
         for index, reference_field in enumerate((*self._measures, self._centre)):
             box = QWidget(self.viewport)
             layout = QHBoxLayout(box)
@@ -1558,7 +1591,7 @@ class PlacementFlow(QObject):
             self.dialog.reject()
         for widget in self._widgets():
             widget.deleteLater()
-        self._canvas.deleteLater()
+        self._canvas.dispose()
 
     def _after_slot_proposal(self, *_args: object) -> None:
         """Ein gezogenes Langloch wartet — die Maße bleiben und zeichnen neu."""
@@ -3327,7 +3360,6 @@ class PlacementFlow(QObject):
             return
         self._show_bar()
         area = self.viewport.rect()
-        self._canvas.set_area(area)
         room = area.adjusted(ROOMY, ROOMY, -ROOMY, -ROOMY)
         overlay = getattr(self.window, "overlay", None)
         for role in ("left", "right", "bottom"):
@@ -3506,7 +3538,7 @@ class PlacementFlow(QObject):
                 DIFF_PALETTES[getattr(self.viewport, "_diff_palette", "blue_orange")].removed.colour
             )
 
-        pending: list[tuple[QWidget, QPointF, tuple[QPointF, QPointF]]] = []
+        pending: list[tuple[QWidget, QPointF, QPointF]] = []
 
         def place(widget: QWidget, start: QPointF, end: QPointF) -> None:
             # **In der Tiefenstufe steht kein Kantenmaß mehr.** Die Schleife
@@ -3522,7 +3554,15 @@ class PlacementFlow(QObject):
             if isinstance(widget, QLabel):
                 widget.setWordWrap(True)
             widget.adjustSize()
-            pending.append((widget, (start + end) / 2, (start, end)))
+            # **Die Verbindung geht zur Mitte der Maßlinie** (Robert, 21.09.2026:
+            # „schöner wäre noch wenn die linien von den maßen zu den
+            # mittellinien jeweils gehen"). Bis dahin endete sie am
+            # nächstgelegenen Punkt der Linie — bei einem Feld neben dem Körper
+            # ist das ihr Ende, und zwei Felder zeigten auf denselben Eckpunkt.
+            # Der Anker steht hier einmal; ``_untangle`` und die Schleife unten
+            # lesen ihn, statt ihn je neu herzuleiten.
+            anchor = (start + end) / 2
+            pending.append((widget, anchor, anchor))
 
         if self._measure_group is not None:
             place(self._measure_box, screen(surface.point), screen(surface.point))
@@ -3737,10 +3777,10 @@ class PlacementFlow(QObject):
                 # Platz, statt ein weiteres Feld am unteren Rand zu stapeln.
                 positions.clear()
                 x, y, row_height = bounds.left(), bounds.top(), 0
-                for pending_widget, _wanted, _line in pending:
+                for pending_widget, _wanted, _anchor in pending:
                     if x > bounds.left() and x + pending_widget.width() > bounds.right() + 1:
                         x, y, row_height = bounds.left(), y + row_height + SPACE, 0
-                    platz = QRect(x, y, pending_widget.width(), pending_widget.height())
+                    slot = QRect(x, y, pending_widget.width(), pending_widget.height())
                     # **Auch die Notlage weicht dem Setzpunkt aus — solange
                     # danach noch Platz ist.** Sonst gälte die Zusage „man
                     # sieht, wohin man setzt" genau dort nicht, wo es eng wird.
@@ -3750,13 +3790,13 @@ class PlacementFlow(QObject):
                     # ``test_dimension_fields_do_not_overlap_at_zoomed_view_edges``:
                     # y = 20009 bei 600 px Höhe). Dann ist Überdecken das
                     # kleinere Übel — ein Feld außerhalb des Bildes ist keines.
-                    unten = blocked.bottom() + SPACE + 1
-                    if platz.intersects(blocked) and (
-                        unten + pending_widget.height() - 1 <= bounds.bottom()
+                    below = blocked.bottom() + SPACE + 1
+                    if slot.intersects(blocked) and (
+                        below + pending_widget.height() - 1 <= bounds.bottom()
                     ):
-                        x, y, row_height = bounds.left(), unten, 0
-                        platz = QRect(x, y, pending_widget.width(), pending_widget.height())
-                    positions[pending_widget] = platz
+                        x, y, row_height = bounds.left(), below, 0
+                        slot = QRect(x, y, pending_widget.width(), pending_widget.height())
+                    positions[pending_widget] = slot
                     x += pending_widget.width() + SPACE
                     row_height = max(row_height, pending_widget.height())
                 break
@@ -3771,18 +3811,12 @@ class PlacementFlow(QObject):
             positions[widget] = chosen
             occupied.append(chosen)
         _untangle(positions, pending, bounds, obstacles)
-        for widget, _wanted, (start, end) in pending:
+        for widget, _wanted, anchor in pending:
             rect = positions[widget]
             widget.move(rect.topLeft())
             widget.show()
             widget.raise_()
             middle = QPointF(rect.center())
-            # **Die Verbindung geht zur Mitte der Maßlinie** (Robert, 21.09.2026:
-            # „schöner wäre noch wenn die linien von den maßen zu den
-            # mittellinien jeweils gehen"). Bis dahin endete sie am
-            # nächstgelegenen Punkt der Linie — bei einem Feld neben dem Körper
-            # ist das ihr Ende, und zwei Felder zeigten auf denselben Eckpunkt.
-            anchor = (start + end) / 2
             direction = anchor - middle
             ratios = [1.0]
             if direction.x():
@@ -3790,11 +3824,10 @@ class PlacementFlow(QObject):
             if direction.y():
                 ratios.append(rect.height() / (2 * abs(direction.y())))
             self._canvas.leaders.append((middle + direction * min(ratios), anchor))
-        # **Die Felder der Tiefenstufe gehören in beide Listen.** Aus der Maske
-        # genommen, damit die Maßfläche nicht über ihnen liegt, und **nach** der
-        # Leiste gehoben, damit sie erreichbar bleiben: Sie steht unten mittig,
-        # und das Tiefenfeld sitzt darüber (Robert, 09.09.2026: „wenn ich die
-        # tiefe setz, komm ich nicht in das bearbeitenfeld von der maßeinheit").
+        # **Die Felder der Tiefenstufe werden nach der Leiste gehoben**, damit
+        # sie erreichbar bleiben: Sie steht unten mittig, und das Tiefenfeld
+        # sitzt darüber (Robert, 09.09.2026: „wenn ich die tiefe setz, komm
+        # ich nicht in das bearbeitenfeld von der maßeinheit").
         shown = [widget for widget in (self._depth_measure, self._rest) if widget.isVisible()]
         self._canvas.refresh()
         self._bar.raise_()

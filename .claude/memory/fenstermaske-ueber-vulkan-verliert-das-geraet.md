@@ -14,11 +14,12 @@ neben dem Körper, und die Verbindungslinien dorthin liefen **schräg** — die
 1682 Rechtecke statt einiger Dutzend. Gemessen: 1380 liefen, 1682 rissen; unter
 `WGPU_BACKEND_TYPE=D3D12` lief alles. Vulkan ist auf der RTX 4080 der Standard.
 
-**Why:** Qt setzt eine Fenstermaske als Region auf das native Fenster, und
+**Why:** Gemessen ist nur die Rechteckzahl; der Mechanismus ist eine
+Vermutung: Qt setzt eine Fenstermaske als Region auf das native Fenster, und
 das native wgpu-Fenster darunter (rendercanvas, Vulkan-Swapchain) wird bei
-jeder Maskenänderung mit einer Clip-Region neu komponiert. Irgendwo in Treiber
-oder Compositor gibt es dafür eine Grenze, und sie meldet sich nicht als
-Fehler, sondern als verlorenes Gerät beim nächsten Frame. Ein Deckel über die
+jeder Maskenänderung mit einer Clip-Region neu komponiert — irgendwo in
+Treiber oder Compositor gibt es dafür eine Grenze, und sie meldet sich nicht
+als Fehler, sondern als verlorenes Gerät beim nächsten Frame. Ein Deckel über die
 Rechteckzahl (Linien in Treppen bündeln) hielt das Gerät, zeichnete aber graue
 Treppen an weißen Kanten und kostete je Aufbau eine Rasterung — Robert: „warum
 haben wir jetzt so graue linien", „performancetechnisch auch ganz schlecht".
@@ -31,9 +32,9 @@ haben wir jetzt so graue linien", „performancetechnisch auch ganz schlecht".
   (Overlaykarten). Schräge Linien in einer Maske sind der Fall, der reißt.
 - **Ein Riss ohne Fehler davor ist eine Treiber- oder Ressourcengrenze**, keine
   Logikfrage. Bisect über Commits mit einer Sonde, die den echten Startweg
-  fährt (`probe_main.py`: `app.ui.app.main`, Bohrung über den Baum wählen,
-  „LEBT" nach fünf Sekunden), und die Grenze halbieren — ein Wert statt einer
-  Vermutung.
+  fährt (eine Sitzungsdatei, nicht im Repository: `app.ui.app.main` mit Weg
+  1, Bohrung über den Baum wählen, „LEBT" nach fünf Sekunden drucken), und
+  die Grenze halbieren — ein Wert statt einer Vermutung.
 - **Das Backend ist eine Variable der Messung.** `WGPU_BACKEND_TYPE=D3D12`
   als Gegenprobe; dass Solidon auf Windows D3D12 wählen könnte, ist RM-198 und
   offen — die Wurzel ist mit der Tinte im Renderer behoben.

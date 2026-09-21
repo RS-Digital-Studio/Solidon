@@ -7,6 +7,9 @@ paths:
   # nicht zu sehen, obwohl sie über seine Dateien sprechen.
   - "app/ui/render/**/*.py"
   - "app/ui/qt_platform.py"
+  # Die Maßtinte rechnet seit dem 21.09.2026 mit ``display_to_world`` und dem
+  # Geräteverhältnis — und lud diese Regel bis dahin nie.
+  - "app/ui/placement_flow.py"
   - "app/ui/overlay.py"
   - "app/ui/cursors.py"
   - "app/ui/analysis_bar.py"

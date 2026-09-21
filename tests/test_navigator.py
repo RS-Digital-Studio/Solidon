@@ -82,6 +82,7 @@ class _FlatRenderer(Renderer):
         keep_in_front: bool = False,
         connected: bool = False,
         polylines: Sequence[int] | None = None,
+        draw_order: int = 0,
     ) -> Item:
         raise NotImplementedError
 

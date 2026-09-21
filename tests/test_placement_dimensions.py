@@ -88,10 +88,15 @@ def test_dimension_ink_lives_in_the_renderer_and_leaves_with_the_surface(
 
 
 @pytest.mark.parametrize("with_centre", [False, True])
-def test_dimension_ink_leaves_the_actual_value_and_caption_rectangles_clear(
+def test_dimension_fields_stay_visible_widgets_over_the_ink(
     qt_app: QApplication, with_centre: bool
 ) -> None:
-    """Zahlen und Mittelpunkttext bleiben Qt-Fenster über dem Bild; die Tinte liegt darunter."""
+    """Zahlen und Mittelpunkttext bleiben Qt-Fenster über dem Bild; die Tinte liegt darunter.
+
+    Geprüft wird, dass die Tinte im Renderer steht und die Felder sichtbar
+    sind — nicht mehr eine Freihaltung ihrer Rechtecke: Die gab es nur bei der
+    Fenstermaske, und die ist mit RM-198 gefallen.
+    """
     flow, session, viewport, dialog = _layout(qt_app, (900, 600), 1.0, "bottom")
     if not with_centre:
         flow._centre_id = ""
@@ -136,9 +141,9 @@ def test_leaders_swap_their_fields_until_none_of_them_cross(qt_app: QApplication
         aside: QRect(300, 10, 100, 30),
     }
     pending = [
-        (upper, QPointF(), (QPointF(200, 200), QPointF(200, 200))),
-        (lower, QPointF(), (QPointF(200, 100), QPointF(200, 100))),
-        (aside, QPointF(), (QPointF(350, 300), QPointF(350, 300))),
+        (upper, QPointF(), QPointF(200, 200)),
+        (lower, QPointF(), QPointF(200, 100)),
+        (aside, QPointF(), QPointF(350, 300)),
     ]
     assert _crosses((QPointF(60, 25), QPointF(200, 200)), (QPointF(60, 75), QPointF(200, 100)))
     _untangle(positions, pending, QRect(0, 0, 600, 400), [])
@@ -232,6 +237,17 @@ def test_a_dimension_line_swallowed_by_the_grip_is_drawn_whole(qt_app: QApplicat
             entry for entry in viewport.renderer.surfaces if entry["name"] == "dimension_arrowheads"
         ]
         assert len(heads) == 1 and len(heads[0]["args"][1]) == 1, "und den Pfeil darin"
+
+        # Drei Bildpunkte über den Rand hinaus wären ein Stummel ohne Pfeil —
+        # bei etwas anderem Zoom dieselbe Lage wie die verschluckte Linie.
+        stub = (QPointF(100, 100), QPointF(153, 100))
+        canvas.lines = [stub]
+        canvas.refresh()
+        assert canvas.segments == [stub], "kürzer als ein Pfeil heißt: die ganze Linie"
+        heads = [
+            entry for entry in viewport.renderer.surfaces if entry["name"] == "dimension_arrowheads"
+        ]
+        assert len(heads) == 1 and len(heads[0]["args"][1]) == 2, "mit beiden Pfeilen"
     finally:
         canvas.hide()
         viewport.close()
@@ -280,7 +296,6 @@ def test_resizing_a_dimension_field_does_not_mix_nested_line_lists(qt_app: QAppl
         assert len({(a.x(), a.y(), b.x(), b.y()) for a, b in flow._canvas.lines}) == 2
         viewport.resize(960, 640)
         qt_app.processEvents()
-        assert flow._canvas.area == viewport.rect(), "die echte Ansichtsgröße wird weiter verfolgt"
         assert len(flow._canvas.lines) == len(flow._canvas.leaders) == 2
     finally:
         flow.dispose()

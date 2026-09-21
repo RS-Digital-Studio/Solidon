@@ -397,13 +397,19 @@ def _crosses_approximately(loop: Profile) -> bool:
 
     for index, one in enumerate(pieces):
         for other in pieces[index + 1 :]:
-            if _strictly_crossing(one[0], one[1], other[0], other[1]):
+            if strictly_crossing(one[0], one[1], other[0], other[1]):
                 return True
     return False
 
 
-def _strictly_crossing(a: Point2, b: Point2, c: Point2, d: Point2) -> bool:
-    """Ob die Strecken AB und CD sich echt schneiden — Berührung zählt nicht."""
+def strictly_crossing(a: Point2, b: Point2, c: Point2, d: Point2) -> bool:
+    """Ob die Strecken AB und CD sich echt schneiden — Berührung zählt nicht.
+
+    Öffentlich, weil die Oberfläche dieselbe Frage stellt — die Zuordnungslinien
+    der Maßfelder (`placement_flow._untangle`) —, und zwei Herleitungen
+    derselben Auskunft waren am 21.09.2026 schon auseinander (Toleranz hier,
+    exakter Vergleich dort; `zwillinge.md`).
+    """
 
     def side(tail: Point2, head: Point2, point: Point2) -> float:
         return (head[0] - tail[0]) * (point[1] - tail[1]) - (head[1] - tail[1]) * (

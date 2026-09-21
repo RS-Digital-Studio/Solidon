@@ -81,6 +81,10 @@ class SurfaceStyle:
     geringfügig zur Kamera. Sie liegt dadurch sichtbar auf derselben Fläche,
     bleibt aber hinter davorliegenden Körpern verborgen. Weltpunkte und
     Pickkoordinaten bleiben unverändert.
+    ``draw_order`` ordnet, was ohne Tiefentest vorn gezeichnet wird: Von zwei
+    Flächen mit ``keep_in_front`` liegt die mit der kleineren Zahl unten,
+    gleich wo ihr Ursprung steht — die Maßtinte (minus eins) unter Griff und Knöpfen
+    (0). Mit Tiefentest sagt die Zahl nichts.
     """
 
     colour: Colour = "#b9c4d0"
@@ -101,6 +105,7 @@ class SurfaceStyle:
     keep_in_front: bool = False
     cull_backfaces: bool = False
     coplanar_overlay: bool = False
+    draw_order: int = 0
 
 
 @dataclass(frozen=True)
@@ -320,9 +325,12 @@ class Renderer(ABC):
         keep_in_front: bool = False,
         connected: bool = False,
         polylines: Sequence[int] | None = None,
+        draw_order: int = 0,
     ) -> Item:
         """Linien: je zwei Punkte ein Stück, mit ``connected`` eine Kette,
-        mit ``polylines`` mehrere Ketten dieser Längen hintereinander."""
+        mit ``polylines`` mehrere Ketten dieser Längen hintereinander.
+        ``draw_order`` wie bei :class:`SurfaceStyle` — nur vorn, kleinere
+        Zahl unten."""
 
     @abstractmethod
     def add_points(
@@ -412,7 +420,13 @@ class Renderer(ABC):
 
     @abstractmethod
     def display_to_world(self, x: float, y: float, depth: float) -> Vec3 | None:
-        """Der Weltpunkt hinter einem Bildpunkt in dieser Tiefe."""
+        """Der Weltpunkt hinter einem Bildpunkt in dieser Tiefe.
+
+        **In einer festen Tiefe affin in den Bildkoordinaten**, perspektivisch
+        wie orthografisch: Die Tiefenebene liegt parallel zum Bild, und dort
+        bildet die Projektion linear ab. Wer viele Bildpunkte in derselben
+        Tiefe braucht, holt drei und rechnet den Rest (`_Dimensions.refresh`).
+        """
 
     def focal_depth(self) -> float:
         """Die Tiefe der Fokusebene — dort spannt ein Zoom das Bild auf."""

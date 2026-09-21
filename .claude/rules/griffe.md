@@ -107,12 +107,19 @@ Vier Sachen daran sind Entscheidungen und keine Bequemlichkeit:
   Auswahlstufe, wie jedes Werkzeug: Ein wartender Langlochzug und ein
   vorgeschlagenes Versetzen werden verworfen, gerechnet ist bis dahin nichts;
   die Auswahl bleibt, das nächste Escape geht die Stufe zurück.
-* **Die Maßlinien weichen dem Griff.** Sie laufen alle in der Mitte des
-  Merkmals zusammen, und dort sitzen Pfeile und Ringe; die Maßfläche spart
-  die Griffspanne aus ihrer Maske aus (`_Dimensions.clearing`, aus
-  `gizmo_reach()` wie die Felder). Der Umriss des Lochs bleibt darunter
-  sichtbar. Anlass: „das verschieben ist auch schwer durch die maßlinien zu
-  treffen/sehen".
+* **Die Maßlinien weichen dem Griff — soweit sie über ihn hinausreichen.**
+  Sie laufen alle in der Mitte des Merkmals zusammen, und dort sitzen Pfeile
+  und Ringe; die Maßtinte lässt das Stück in der Griffspanne weg
+  (`_Dimensions.clearing`, aus `gizmo_reach()` wie die Felder — die Aussparung
+  ist seit der Tinte im Renderer Kosmetik, die Striche nehmen keinen Klick
+  an). Eine Linie, von der außerhalb weniger als ein Pfeil bliebe, kommt
+  dagegen ganz, mit beiden Pfeilen: Nach dem Zug zum Langloch greift der
+  Griff über Knöpfe und Umriss hinaus, und ein Maß ohne Linie sagt nicht,
+  wohin es geht (Robert, 21.09.2026: „manche maßlinien fehlen aber"). Der
+  Umriss des Lochs bleibt darunter sichtbar; gegen Griff und Knöpfe trägt
+  die Tinte `draw_order` unter null, damit die Lage der Platte im Bauraum
+  nicht entscheidet, was oben liegt. Anlass: „das verschieben ist auch schwer
+  durch die maßlinien zu treffen/sehen".
 * **Ein Baustein sitzt sofort, und am gesetzten Baustein hängt ein Griff.**
   Ein Baustein aus dem Katalog geht von selbst in die Platzierung — und seit
   dem 11.09.2026 sitzt er dort ohne Klick auf der gewählten Fläche, sonst auf

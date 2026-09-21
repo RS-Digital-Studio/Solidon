@@ -50,11 +50,13 @@ belegtes Rechteck, mit demselben Abstand wie um den Setzpunkt; die Felder
 rücken an den nächsten freien Platz daneben, die Verbindungslinie je Feld
 sagt, welches Maß es bemaßt — sie endet in der **Mitte** der Maßlinie, nicht
 am nächstgelegenen Punkt. Füllt der Körper das ganze Bild, gilt die alte
-Regel — ein Feld außerhalb des Bildes ist keines. Und keine zwei
-Verbindungen kreuzen sich (Robert: „aufpassen dass sich die maßlinien nicht
-kreuzen"): `_untangle` tauscht nach der Platzsuche paarweise die Plätze
-zweier Felder, solange das Kreuzungen spart und beide am fremden Platz frei
-stehen (`_crosses` je Paar von Strecken).
+Regel — ein Feld außerhalb des Bildes ist keines. Und Verbindungen kreuzen
+sich nicht, soweit ein Tausch es löst (Robert: „aufpassen dass sich die
+maßlinien nicht kreuzen"): `_untangle` tauscht nach der Platzsuche paarweise
+die Plätze zweier Felder, solange das Kreuzungen spart und beide am fremden
+Platz frei stehen; ein breites Feld über zwei schmalen behält seine
+Kreuzung. Ob zwei Strecken sich schneiden, sagt der Kern
+(`profile.strictly_crossing`), nicht eine zweite Rechnung hier.
 
 **Die Maßtinte liegt im Renderer, nicht als Widget über ihm** (`_Dimensions`,
 RM-198). Bis zum 21.09.2026 war sie ein maskiertes Qt-Widget über der nativen
@@ -66,8 +68,12 @@ und `add_surface` mit `keep_in_front` in den Renderer, wie die
 Merkmalslinien; die Zahlenfelder bleiben Qt-Fenster und liegen ohnehin über
 dem Bild. Die Listen der Klasse tragen logische Bildpunkte, `refresh` legt
 sie über `display_to_world` auf eine feste Tiefe und tauscht die Elemente je
-Aufbau aus; `segments` sagt Tests, wo Tinte liegt. Die Overlaykarten tragen
-weiter Masken — runde Ecken, wenige Rechtecke. Die Aussparung um den Griff
+Aufbau aus; `segments` sagt Tests, wo Tinte liegt. Je Aufbau holt sie drei
+Weltpunkte und rechnet den Rest affin (`Renderer.display_to_world` sagt das
+zu; je Punkt die Kamera zu invertieren kostete 15 ms je Aufbau), das
+Geräteverhältnis kommt vom Renderer (`device_ratio`, `ansicht.md`), und
+gegen Griff und Knöpfe trägt sie `draw_order` unter null. Die Overlaykarten
+tragen weiter Masken — runde Ecken, wenige Rechtecke. Die Aussparung um den Griff
 (`clearing`, aus `Viewport.gizmo_reach`) ist seither Kosmetik — die Tinte
 ist nicht anklickbar —, und eine Linie, die ganz darin läge, kommt ganz, mit
 beiden Pfeilen: Nach dem Zug zum Langloch greift der Griff über Knöpfe und
@@ -1019,9 +1025,10 @@ Die Maßtinte — Linien, Pfeilspitzen, Zuordnungsmarken — liegt im Renderer
 (`_Dimensions`, oben unter RM-198); ein Qt-Widget mit Maske über der
 pygfx-Renderfläche gibt es seit dem 21.09.2026 nicht mehr, und ein
 vollflächiges `WA_NoSystemBackground`-Widget darüber bleibt ausgeschlossen.
-Die Zahlenfelder sind Qt-Fenster und liegen von sich aus über dem Bild; die
-Tinte spart ihre Rechtecke beim Verteilen aus (`occupied`), nicht über eine
-Maske. Die gefüllte Werkzeugvorschau zeigt ihre Oberfläche ohne
+Die Zahlenfelder sind Qt-Fenster und liegen von sich aus über dem Bild —
+deckend, ohne Maske; `occupied` hält beim Verteilen die **Felder** von
+Setzpunkt, Griff, Körper und voneinander fern, die Tinte darunter spart
+nichts aus. Die gefüllte Werkzeugvorschau zeigt ihre Oberfläche ohne
 innere Dreieckskanten.
 Resize eigener Maßfelder ist ein Layoutergebnis und startet keinen weiteren
 Aufbau; nur Viewport und Rendererwidget verändern die verfügbare Fläche.

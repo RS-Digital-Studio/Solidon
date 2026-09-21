@@ -989,6 +989,11 @@ class GfxRenderer(Renderer):
         item = GfxItem(
             name, root, objects, style.colour, opacity=style.opacity, pickable=style.pickable
         )
+        # Die Gruppe trägt die Ordnung: pygfx sortiert nach Warteschlange,
+        # Gruppenordnung, Objektordnung und dann erst nach dem Abstand des
+        # Ursprungs — so liegt, was ``draw_order`` sagt, vor dem Zufall der
+        # Lage im Bauraum.
+        root.render_order = float(style.draw_order)
         if style.show_edges and not style.wireframe:
             # **Die Kanten zeichnet die GPU aus demselben Netz.** Ein zweites
             # Mesh im Drahtgittermodus teilt Geometrie und Tiefe mit der
@@ -1032,6 +1037,7 @@ class GfxRenderer(Renderer):
         keep_in_front: bool = False,
         connected: bool = False,
         polylines: Sequence[int] | None = None,
+        draw_order: int = 0,
     ) -> Item:
         gfx = self._gfx
         from app.ui.render.gfx_lines import DepthLineMaterial, DepthLineSegmentMaterial
@@ -1078,6 +1084,7 @@ class GfxRenderer(Renderer):
             )
         root = gfx.Group()
         root.add(line)
+        root.render_order = float(draw_order)
         line._solidon_mesh = True
         item = GfxItem(name, root, [line], colour, pickable=pickable)
         item.point_map = point_map

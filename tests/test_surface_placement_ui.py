@@ -62,6 +62,9 @@ class _Renderer:
         self.lines = [entry for entry in self.lines if entry["item"] is not item]
         self.surfaces = [entry for entry in self.surfaces if entry["item"] is not item]
 
+    def device_ratio(self) -> float:
+        return 1.0
+
     def display_to_world(self, x: float, y: float, _depth: float) -> tuple[float, float, float]:
         """Die Umkehrung von ``world_to_display`` in der Ebene z = 0."""
         scale = _Viewport.SCALE * self.viewport.zoom()
@@ -3166,6 +3169,8 @@ def test_the_measures_stay_in_the_view_while_a_pulled_slot_waits(qt_app: QApplic
         assert flow._canvas.outline, "vor dem Zug steht der runde Umriss der Mündung"
         shown_fields = [field for field in flow._measures if not field.isHidden()]
         assert shown_fields, "und die Kantenmaße stehen"
+        lines_before = len(flow._canvas.lines)
+        assert lines_before, "mit ihren Maßlinien"
 
         entry = window.session.last_result.scene.objects[object_id]
         feature = entry.features[hole]
@@ -3199,12 +3204,12 @@ def test_the_measures_stay_in_the_view_while_a_pulled_slot_waits(qt_app: QApplic
                 len(flow._canvas.outline),
             )
 
-        assert lage() == (True, len(shown_fields), len(flow._canvas.lines), 0), (
+        assert lage() == (True, len(shown_fields), lines_before, 0), (
             "nach dem Zug: Linien und Felder stehen, der runde Umriss ist weg"
         )
         window.viewport.cameraMoved.emit()
         QApplication.processEvents()
-        assert lage() == (True, len(shown_fields), len(flow._canvas.lines), 0), (
+        assert lage() == (True, len(shown_fields), lines_before, 0), (
             "und die Kamera nimmt sie nicht mit"
         )
     finally:
