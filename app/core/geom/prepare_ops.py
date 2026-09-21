@@ -600,7 +600,7 @@ def drill_hole(ctx: OpContext) -> OpResult:
 #: Materie. Gemessen an beiden Kernen: versetzt nach (25|15) auf die Stelle,
 #: gedreht von 30 auf 75 Grad, verdoppelt, entfernt — das Volumen des Ganzen
 #: bleibt jeweils auf ein Zehntausendstel gleich.
-MOVABLE_KINDS: Final = ("hole", "pin", "cone", "sphere", "void", "slot")
+MOVABLE_KINDS: Final = ("hole", "pin", "cone", "sphere", "void", "slot", "torus")
 
 #: Was sich zu **verdoppeln** lohnt — dasselbe ohne den Einschluss.
 #:
@@ -611,7 +611,7 @@ MOVABLE_KINDS: Final = ("hole", "pin", "cone", "sphere", "void", "slot")
 #: eingegossenen Magneten), legt man die zweite über den Baustein an, mit
 #: Maßen, und nicht als Kopie einer gemessenen Fläche (Robert, 10.09.2026:
 #: „verdoppeln ist aber bei Hohlräumen sinnlos").
-DUPLICABLE_KINDS: Final = ("hole", "pin", "cone", "sphere", "slot")
+DUPLICABLE_KINDS: Final = ("hole", "pin", "cone", "sphere", "slot", "torus")
 
 #: Die Arten, deren Kennzahlen den Körper genau beschreiben.
 #:
@@ -1682,6 +1682,11 @@ def _tool_for(
         built = _past_the_mouths(mesh, built)
     if built is None and feature.kind in PARAMETRIC_KINDS:
         return _feature_solid(feature, centre, scale=scale, axis=axis, oversize=oversize)
+    if built is None and feature.kind == "torus":
+        # Der Ring am Schaft beschnitten — der Wulst ohne den Schaft, die Kehle
+        # nur darin; ein Sockel wäre hier der Schaft selbst.
+        built = _torus_tool_mesh(mesh, feature)
+        rooted = False
 
     if built is None:
         built = _feature_body(mesh, feature, alone=alone)
@@ -2378,6 +2383,21 @@ def _movable_feature(source: SceneObject, name: str, op: str) -> Feature:
 #: Dort trägt weiter nur der gemessene Weg über Zahlen: ein Stopfen mit dem
 #: Durchmesser der Senkung über die volle Wandstärke schließt beides in einem
 #: Zug.
+#: Warum an einem Ring nichts einzeln geht: Seine Ringfläche ist der ganze
+#: Körper — ein Ring als eigener Körper, kein Wulst auf einem Schaft.
+TORUS_IS_THE_BODY: Final = _("Dieser Ring ist der ganze Körper. Bewegen Sie den Körper.")
+
+#: Und der Fall daneben: Die Ringfläche hat Ränder, aber der Körper geht
+#: hinter ihr nicht weiter — ein Torusstück, hinter dem sich die Nachbarn
+#: nicht treffen (exakt: das Defeaturing gibt auf), oder Randringe, die keine
+#: zwei gleichen Kreise um die Achse sind (am Netz).
+TORUS_NOT_SEPARABLE: Final = _(
+    "Diese Ringfläche lässt sich nicht vom Körper trennen. "
+    "Wählen Sie den ganzen Wulst oder die ganze Kehle."
+)
+
+TORUS_TUBE_TOO_WIDE: Final = _("Der Rohrdurchmesser muss kleiner als der Ringdurchmesser sein.")
+
 NO_OWN_BODY: Final = _(
     "Dieses Merkmal geht in einen anderen Hohlraum über, etwa eine Senkung in ihre "
     "Bohrung. Verschließen Sie beide zusammen mit „Bohrung verschließen“ und setzen "
@@ -2545,7 +2565,7 @@ _NO_MOUTH_TO_GRIP: Final = _(
     deterministic=False,
     doc=_(
         "Versetzt ein erkanntes Merkmal an eine andere Stelle: Bohrung, Langloch, "
-        "Zapfen, Senkung, Verjüngung, Kuppel, Pfanne oder Lufteinschluss."
+        "Zapfen, Senkung, Verjüngung, Kuppel, Pfanne, Wulst, Kehle oder Lufteinschluss."
     ),
 )
 def move_feature(ctx: OpContext) -> OpResult:
@@ -2607,6 +2627,8 @@ def move_feature(ctx: OpContext) -> OpResult:
             values={"feature": feature.id},
             constraint="not_movable",
         )
+    if feature.kind == "torus":
+        return _move_torus(ctx, source, feature, centre, target)
     if source.kind == "brep" and chain is None and feature.kind in EXACT_CAVITY_KINDS:
         return _exact_move_cavity(ctx, source, feature, centre, target)
     if source.kind == "brep" and chain is not None:
@@ -2841,7 +2863,7 @@ class DuplicateFeatureParams(FeaturePlacementParams):
     deterministic=False,
     doc=_(
         "Legt ein erkanntes Merkmal ein zweites Mal an: Bohrung, Langloch, Zapfen, "
-        "Senkung, Verjüngung, Kuppel oder Pfanne."
+        "Senkung, Verjüngung, Kuppel, Pfanne, Wulst oder Kehle."
     ),
 )
 def duplicate_feature(ctx: OpContext) -> OpResult:
@@ -2904,6 +2926,8 @@ def duplicate_feature(ctx: OpContext) -> OpResult:
             values={"feature": feature.id},
             constraint="not_movable",
         )
+    if feature.kind == "torus":
+        return _duplicate_torus(ctx, source, feature, target)
     if source.kind == "brep" and chain is not None:
         return _exact_duplicate_chain(ctx, source, feature, chain, target)
     if chain is not None:
@@ -3160,8 +3184,8 @@ class RemoveFeatureParams(BaseParams):
     deterministic=False,
     doc=_(
         "Entfernt ein erkanntes Merkmal: Bohrung, Langloch, Zapfen, Senkung, "
-        "Verjüngung, Kuppel, Pfanne oder Rundung — und füllt einen Lufteinschluss "
-        "mit Material."
+        "Verjüngung, Kuppel, Pfanne, Wulst, Kehle oder Rundung — und füllt einen "
+        "Lufteinschluss mit Material."
     ),
 )
 def remove_feature(ctx: OpContext) -> OpResult:
@@ -3190,6 +3214,8 @@ def remove_feature(ctx: OpContext) -> OpResult:
     body = as_mesh_data(source.mesh)
     cavity = is_a_cavity(feature)
     chain = _cavity_chain_of(body, feature, source.features)
+    if feature.kind == "torus":
+        return _remove_torus(ctx, source, feature)
     if source.kind == "brep" and chain is None and feature.kind in EXACT_CAVITY_KINDS:
         return _exact_remove_cavity(ctx, source, feature)
     if source.kind == "brep" and chain is None and feature.kind in EXACT_FACE_KINDS:
@@ -3350,12 +3376,12 @@ class RotateFeatureParams(BaseParams):
     # sähe sie aus wie vorher, und eine Handlung ohne Wirkung ist schlechter
     # als keine (Roberts „alles, was bei den jeweiligen sinnvoll ist").
     # Das Langloch dreht dabei seine Mittellinie mit (``_with_turned_direction``).
-    applies_to=["hole", "pin", "cone", "slot"],
+    applies_to=["hole", "pin", "cone", "slot", "torus"],
     touches_features=True,
     deterministic=False,
     doc=_(
         "Kippt ein erkanntes Merkmal um seine Mitte: Bohrung, Langloch, Zapfen, "
-        "Senkung oder Verjüngung."
+        "Senkung, Verjüngung, Wulst oder Kehle."
     ),
 )
 def rotate_feature(ctx: OpContext) -> OpResult:
@@ -3416,6 +3442,8 @@ def rotate_feature(ctx: OpContext) -> OpResult:
             values={"feature": feature.id},
             constraint="not_movable",
         )
+    if feature.kind == "torus":
+        return _rotate_torus(ctx, source, feature, centre, turned_axis)
     if source.kind == "brep" and chain is not None:
         return _exact_rotate_chain(ctx, source, feature, chain, params.axis, params.angle)
     if chain is not None:
@@ -3904,6 +3932,17 @@ class ResizeFeatureParams(BaseParams):
         placement="front",
         doc=_("Der neue Durchmesser. Beim Anklicken steht hier sein gemessener."),
     )
+    tube_diameter: float = param(
+        title=_("Rohrdurchmesser"),
+        default=0.0,
+        unit="mm",
+        minimum=0.0,
+        placement="advanced",
+        doc=_(
+            "Nur an einem Ring: die Dicke des Wulstes oder die Breite der Kehle. "
+            "Null lässt sie unverändert."
+        ),
+    )
 
 
 @register_op(
@@ -3918,12 +3957,12 @@ class ResizeFeatureParams(BaseParams):
     # den exakten Kern und einer Materialkompensation, die für ein Loch gilt und
     # für einen Zapfen andersherum liefe. Die beiden überschneiden sich deshalb
     # nicht, und ``perceive.actions`` legt sie zu **einer** Zeile zusammen.
-    applies_to=["pin", "cone", "sphere", "fillet"],
+    applies_to=["pin", "cone", "sphere", "fillet", "torus"],
     touches_features=True,
     deterministic=False,
     doc=_(
         "Ändert den Durchmesser eines erkannten Merkmals: Zapfen, Senkung, "
-        "Verjüngung, Kuppel, Pfanne — oder den Radius einer Rundung."
+        "Verjüngung, Kuppel, Pfanne, Wulst oder Kehle — oder den Radius einer Rundung."
     ),
 )
 def resize_feature(ctx: OpContext) -> OpResult:
@@ -3949,6 +3988,8 @@ def resize_feature(ctx: OpContext) -> OpResult:
     centre: Vec3 = (measured[0], measured[1], measured[2])
     previous = float(feature.params.get("diameter", 0.0))
     _reject_oversized("diameter", params.diameter, source.mesh)
+    if feature.kind == "torus":
+        return _resize_torus(ctx, source, feature, centre, params.diameter, params.tube_diameter)
 
     if is_close(params.diameter, previous):
         return OpResult(
@@ -7290,6 +7331,570 @@ def _exact_remove_by_faces(
         gone=(feature.id,),
         findings=findings,
         reserve=True,
+    )
+
+
+# --- Wulst und Kehle: ein Ring am Schaft, in beiden Kernen (P2.6) --------------------------
+#
+# Ein Torusmerkmal ist ein Wulst (Material) oder eine Kehle (Hohlraum) auf
+# einem Schaft. Sein Werkzeug ist der **volle Ring** aus seinen Kennzahlen:
+# vereinigt für den Wulst, abgezogen für die Kehle — was vom Ring im Schaft
+# liegt, ist dort ohnehin Material oder wird ohnehin weggenommen. Nur das
+# **Schließen an der alten Stelle** braucht mehr: Der volle Ring nähme dem
+# Schaft eine Rille (Wulst) beziehungsweise setzte ihm einen Ring auf (Kehle).
+# Exakt nimmt ``edit.defeatured`` die Ringfläche weg und lässt den Schaft
+# weiterlaufen; am Netz wird der Ring an den Randringen der Ringfläche
+# beschnitten (``_torus_tool_mesh``). Gemessen am Schaft Ø 20 mal 40 mit Wulst
+# und Kehle R 10 / r 3: Entfernen trifft das Schaftvolumen auf 10⁻¹⁶,
+# Versetzen um -8 das alte Volumen auf 10⁻¹⁶, in beiden Kernen (21.09.2026).
+#
+# Ein Ring, der der ganze Körper ist, hat keinen Schaft: Das Defeaturing gibt
+# ihn unverändert zurück, am Netz hat seine Fläche keinen Rand — dann sagt die
+# Absage, dass der Körper zu bewegen ist. Ein Torusstück, hinter dem sich die
+# Nachbarn nicht treffen, ist nicht abzutrennen (Konzept §13.2: „ein nicht
+# abtrennbarer Torusanteil ist kein vollständiges Ringwerkzeug").
+
+
+def _torus_refusal(feature: Feature, *, whole: bool) -> ValidationError:
+    return ValidationError(
+        field="at_feature",
+        detail=TORUS_IS_THE_BODY if whole else TORUS_NOT_SEPARABLE,
+        values={"feature": feature.id, "kind": feature.kind},
+        constraint="not_movable",
+        suggestions=(CHANGE_SELECTION, CANCEL),
+    )
+
+
+def _torus_axis(feature: Feature, axis: Vec3 | None = None) -> np.ndarray:
+    direction = np.asarray(axis if axis is not None else _bore_vector(feature, "axis"), dtype=float)
+    length = float(np.linalg.norm(direction))
+    if length <= EPS_GEOM:
+        return np.array([0.0, 0.0, 1.0])
+    return direction / length
+
+
+def _torus_measures(
+    feature: Feature, ring_diameter: float | None, tube_diameter: float | None
+) -> tuple[float, float]:
+    """Ring- und Rohrdurchmesser — die genannten oder die des Merkmals, geprüft."""
+    ring = ring_diameter or _bore_number(feature, "diameter")
+    tube = tube_diameter or _bore_number(feature, "tube_diameter")
+    if tube <= EPS_GEOM or tube >= ring - EPS_GEOM:
+        raise ValidationError(
+            field="tube_diameter",
+            detail=TORUS_TUBE_TOO_WIDE,
+            values={"feature": feature.id, "diameter": ring, "tube_diameter": tube},
+            constraint="torus_tube",
+            suggestions=(CORRECT_INPUT, CANCEL),
+        )
+    return ring, tube
+
+
+def _torus_rims(
+    mesh: MeshData, feature: Feature
+) -> tuple[Any, np.ndarray, list[np.ndarray], list[list[int]]]:
+    """Der Ausschnitt der Ringfläche, seine Randkanten und die zwei Randringe als Umläufe.
+
+    Wulst und Kehle enden in zwei Kreisen auf dem Schaft, beide quer zur
+    Achse und mit demselben Radius. Ohne Rand ist die Ringfläche der ganze
+    Körper; mit anderen Rändern ist der Ring nicht abzutrennen — dann wird
+    nichts geraten. Zurück kommen der Ausschnitt (mit eigenen Eckpunkten),
+    seine Randkanten, je Ring die Randkanten und je Ring der Umlauf seiner
+    Eckpunkte in Kantenfolge.
+    """
+    raw = mesh.raw
+    chosen = np.unique(np.asarray(feature.face_indices, dtype=np.int64))
+    if chosen.size == 0 or int(chosen.max()) >= len(raw.faces):
+        raise _torus_refusal(feature, whole=False)
+    patch = trimesh.Trimesh(
+        vertices=raw.vertices, faces=np.asarray(raw.faces)[chosen], process=False
+    )
+    patch.remove_unreferenced_vertices()
+    patch.merge_vertices()
+    edges = patch.edges_sorted
+    single = trimesh.grouping.group_rows(  # type: ignore[no-untyped-call]
+        edges, require_count=1
+    )
+    rim = edges[single]
+    rings = list(trimesh.graph.connected_components(rim)) if len(rim) else []
+    if not rings:
+        raise _torus_refusal(feature, whole=True)
+    if len(rings) != 2:
+        raise _torus_refusal(feature, whole=False)
+    axis = _torus_axis(feature)
+    centre = np.asarray(_bore_vector(feature, "centre"), dtype=float)
+    points = np.asarray(patch.vertices, dtype=float)
+    ring_edges: list[np.ndarray] = []
+    loops: list[list[int]] = []
+    radii: list[float] = []
+    for component in rings:
+        members = np.asarray(component, dtype=np.int64)
+        belongs = np.isin(rim[:, 0], members) & np.isin(rim[:, 1], members)
+        own = rim[belongs]
+        if len(own) < 3:
+            raise _torus_refusal(feature, whole=False)
+        relative = points[members] - centre
+        along = relative @ axis
+        radial = np.linalg.norm(relative - np.outer(along, axis), axis=1)
+        if (
+            float(along.max() - along.min()) > FLAT_RIM
+            or float(radial.max() - radial.min()) > FLAT_RIM
+        ):
+            raise _torus_refusal(feature, whole=False)
+        loop = _ring_in_order([(int(a), int(b)) for a, b in own])
+        if len(loop) != len(members):
+            raise _torus_refusal(feature, whole=False)
+        ring_edges.append(own)
+        loops.append(loop)
+        radii.append(float(units.exact_mean(radial.tolist())))
+    if abs(radii[0] - radii[1]) > FLAT_RIM:
+        raise _torus_refusal(feature, whole=False)
+    return patch, rim, ring_edges, loops
+
+
+def _torus_ring_mesh(
+    centre: Vec3, axis: Vec3, ring_diameter: float, tube_diameter: float
+) -> MeshData:
+    """Der volle Ring als Netz — das Werkzeug zum Setzen, wie ``brep.edit.torus``."""
+    body = trimesh.creation.torus(
+        major_radius=ring_diameter / 2.0,
+        minor_radius=tube_diameter / 2.0,
+        major_sections=2 * FEATURE_SECTIONS,
+        minor_sections=FEATURE_SECTIONS,
+    )
+    direction = np.asarray(axis, dtype=float)
+    transform.moved(body, np.asarray(transform.rotation_between((0.0, 0.0, 1.0), direction)))
+    body.apply_translation(np.asarray(centre, dtype=float))
+    return MeshData.of(body)
+
+
+def _torus_shaft_core(
+    patch: Any, ring_edges: list[np.ndarray], loops: list[list[int]], axis: np.ndarray
+) -> MeshData:
+    """Der Schaftkern zwischen den Randringen: ein Band zwischen den Umläufen, je Ring ein Deckel.
+
+    Das Band ist der Schaft, wo ihn die Ringfläche verdeckt — unsichtbar, also
+    darf es ein Reißverschluss zwischen zwei Umläufen mit verschiedener
+    Eckenzahl sein. Die Deckel sind dieselben Fächer wie in
+    :func:`_body_from_faces`, damit sie sich in der Booleschen gegenseitig
+    aufheben.
+    """
+    points = np.asarray(patch.vertices, dtype=float)
+    hubs = [np.array(units.exact_centre(points[loop].tolist()), dtype=np.float64) for loop in loops]
+    vertices = [points, hubs[0].reshape(1, 3), hubs[1].reshape(1, 3)]
+    hub_index = [len(points), len(points) + 1]
+    faces: list[np.ndarray] = []
+    for edges, hub in zip(ring_edges, hub_index, strict=True):
+        faces.append(np.column_stack([edges[:, 0], edges[:, 1], np.full(len(edges), hub)]))
+    # Der Reißverschluss: beide Umläufe nach dem Winkel um die Achse geordnet
+    # und Kante für Kante verbunden.
+    into_frame = np.asarray(transform.rotation_between(axis, (0.0, 0.0, 1.0)))[:3, :3]
+    ordered: list[list[int]] = []
+    for loop, middle in zip(loops, hubs, strict=True):
+        local = (into_frame @ (points[loop] - middle).T).T
+        angles = np.arctan2(local[:, 1], local[:, 0])
+        order = np.argsort(angles)
+        ordered.append([loop[int(i)] for i in order])
+    first, second = ordered
+    band: list[list[int]] = []
+    i = j = 0
+    n1, n2 = len(first), len(second)
+    angle_of = {}
+    for loop, middle in zip(loops, hubs, strict=True):
+        local = (into_frame @ (points[loop] - middle).T).T
+        for index, angle in zip(loop, np.arctan2(local[:, 1], local[:, 0]), strict=True):
+            angle_of[int(index)] = float(angle)
+    while i < n1 or j < n2:
+        a, b = first[i % n1], second[j % n2]
+        next_a, next_b = first[(i + 1) % n1], second[(j + 1) % n2]
+        angle_a = angle_of[next_a] + (2.0 * math.pi if i + 1 >= n1 else 0.0)
+        angle_b = angle_of[next_b] + (2.0 * math.pi if j + 1 >= n2 else 0.0)
+        if i < n1 and (j >= n2 or angle_a <= angle_b):
+            band.append([a, next_a, b])
+            i += 1
+        else:
+            band.append([a, next_b, b])
+            j += 1
+    faces.append(np.asarray(band, dtype=np.int64))
+    core = trimesh.Trimesh(vertices=np.vstack(vertices), faces=np.vstack(faces), process=True)
+    trimesh.repair.fix_normals(core)  # type: ignore[no-untyped-call]
+    return MeshData.of(core)
+
+
+def _torus_tool_mesh(mesh: MeshData, feature: Feature) -> MeshData:
+    """Wulst oder Kehle als Netzwerkzeug an ihrer Stelle — aus den eigenen Dreiecken.
+
+    Ein parametrischer Ring deckt sich nie mit der vorhandenen Ringfläche
+    (andere Tessellierung) und hinterließe Splitter. Der Wulst ist deshalb der
+    Körper aus den Dreiecken der Ringfläche mit zwei Deckeln
+    (:func:`_body_from_faces`) **ohne** den Schaftkern zwischen den Randringen,
+    die Kehle der Schaftkern **ohne** diesen Körper (:func:`_torus_shaft_core`).
+    Beschnitten wird nur zum Schließen an der alten Stelle; gesetzt wird der
+    volle Ring (:func:`_torus_ring_mesh`), wie im exakten Kern.
+    """
+    patch, _rim, ring_edges, loops = _torus_rims(mesh, feature)
+    own = _body_from_faces(mesh, feature.face_indices, allowed_rings=(2,))
+    if own is None:
+        raise _torus_refusal(feature, whole=False)
+    core = _torus_shaft_core(patch, ring_edges, loops, _torus_axis(feature))
+    if not core.is_watertight or core.component_count != 1:
+        raise _torus_refusal(feature, whole=False)
+    cavity = is_a_cavity(feature)
+    return boolean("difference", [core, own] if cavity else [own, core], quality="fine").mesh
+
+
+def _exact_without_torus(source: SceneObject, feature: Feature) -> Any:
+    """Der exakte Körper ohne Wulst oder Kehle — der Schaft läuft durch."""
+    from app.core.brep import edit
+
+    solid = _exact_body(source)
+    native = solid.faces_of_triangles(feature.face_indices) if feature.face_indices else ()
+    healed = edit.defeatured(solid, native) if native else None
+    if healed is None:
+        whole = bool(native) and len(set(native)) == solid.face_count
+        raise _torus_refusal(feature, whole=whole)
+    return healed
+
+
+def _exact_torus_tool(
+    feature: Feature,
+    centre: Vec3,
+    axis: Vec3 | None = None,
+    *,
+    ring_diameter: float | None = None,
+    tube_diameter: float | None = None,
+) -> Any:
+    from app.core.brep import edit
+
+    ring, tube = _torus_measures(feature, ring_diameter, tube_diameter)
+    direction = _torus_axis(feature, axis)
+    return edit.torus(
+        centre, (float(direction[0]), float(direction[1]), float(direction[2])), ring, tube
+    )
+
+
+def _torus_closed_mesh(ctx: OpContext, source: SceneObject, feature: Feature) -> BooleanOutcome:
+    """Das Netz ohne Wulst oder Kehle: der beschnittene Ring abgetragen beziehungsweise gefüllt."""
+    body = as_mesh_data(source.mesh)
+    tool = _torus_tool_mesh(body, feature)
+    return boolean(
+        "union" if is_a_cavity(feature) else "difference",
+        [body, tool],
+        quality=ctx.quality,
+        seed=ctx.seed,
+        cancelled=ctx.cancelled,
+    )
+
+
+def _torus_placed_mesh(
+    ctx: OpContext,
+    base: MeshData,
+    feature: Feature,
+    centre: Vec3,
+    axis: Vec3 | None = None,
+    *,
+    ring_diameter: float | None = None,
+    tube_diameter: float | None = None,
+) -> BooleanOutcome:
+    """Der volle Ring an ``centre`` mit ``axis`` — Wulst vereinigt, Kehle abgezogen."""
+    ring, tube = _torus_measures(feature, ring_diameter, tube_diameter)
+    direction = _torus_axis(feature, axis)
+    tool = _torus_ring_mesh(
+        centre, (float(direction[0]), float(direction[1]), float(direction[2])), ring, tube
+    )
+    return boolean(
+        "difference" if is_a_cavity(feature) else "union",
+        [base, tool],
+        quality=ctx.quality,
+        seed=ctx.seed,
+        cancelled=ctx.cancelled,
+    )
+
+
+def _torus_result(
+    source: SceneObject,
+    placed: BooleanOutcome,
+    features: dict[str, Feature],
+    findings: list[Finding],
+    *,
+    reserve: bool = False,
+    copy_id: str | None = None,
+) -> OpResult:
+    reserved = source.reserved_feature_ids
+    if reserve or copy_id is not None:
+        reserved = tuple(
+            sorted(
+                {*source.reserved_feature_ids, *source.features, *([copy_id] if copy_id else [])}
+            )
+        )
+    return OpResult(
+        outputs=[
+            dataclasses.replace(
+                source, mesh=placed.mesh, features=features, reserved_feature_ids=reserved
+            )
+        ],
+        findings=findings,
+        solver=placed.solver,
+    )
+
+
+def _move_torus(
+    ctx: OpContext, source: SceneObject, feature: Feature, centre: Vec3, target: Vec3
+) -> OpResult:
+    """Wulst oder Kehle versetzen: an der alten Stelle der Schaft, an der neuen der Ring."""
+    from app.core.brep import edit
+
+    cavity = is_a_cavity(feature)
+    moved = dataclasses.replace(
+        feature, params={**feature.params, "centre": target}, provenance="generated"
+    )
+    ctx.progress(
+        0.1,
+        str(_("Das Merkmal wird an seiner alten Stelle geschlossen …"))
+        if cavity
+        else str(_("Das Merkmal wird an seiner alten Stelle abgetragen …")),
+    )
+    if source.kind == "brep":
+        healed = _exact_without_torus(source, feature)
+        ctx.progress(0.6, str(_("Das Merkmal wird an seiner neuen Stelle gesetzt …")))
+        exact = edit.unified(
+            edit.boolean(
+                "difference" if cavity else "union", [healed, _exact_torus_tool(feature, target)]
+            )
+        )
+        return _exact_cavity_result(
+            ctx, source, exact, op="move_feature", expected=moved, findings=[]
+        )
+    closed = _torus_closed_mesh(ctx, source, feature)
+    ctx.progress(0.6, str(_("Das Merkmal wird an seiner neuen Stelle gesetzt …")))
+    placed = _torus_placed_mesh(ctx, closed.mesh, feature, target)
+    return _torus_result(
+        source,
+        placed,
+        {**source.features, feature.id: moved},
+        [*closed.findings, *placed.findings],
+    )
+
+
+def _duplicate_torus(
+    ctx: OpContext, source: SceneObject, feature: Feature, target: Vec3
+) -> OpResult:
+    """Wulst oder Kehle ein zweites Mal setzen — der volle Ring an der neuen Stelle."""
+    from app.core.brep import edit
+
+    cavity = is_a_cavity(feature)
+    copy = dataclasses.replace(
+        feature,
+        id=_free_feature_id(source, feature.kind),
+        params={**feature.params, "centre": target},
+        provenance="generated",
+    )
+    ctx.progress(0.2, str(_("Das Merkmal wird an der neuen Stelle angelegt …")))
+    change: BooleanKind = "difference" if cavity else "union"
+    if source.kind == "brep":
+        solid = _exact_body(source)
+        placed_solid = edit.unified(
+            edit.boolean(change, [solid, _exact_torus_tool(feature, target)])
+        )
+        findings: list[Finding] = []
+        nothing = without_effect(solid, placed_solid, change, ctx.profile)
+        if nothing is not None:
+            findings.append(nothing)
+        checked = _exact_body_checked(placed_solid)
+        features, continued, _lost = _exact_features_after(
+            source, checked, expected=None, cancelled=ctx.cancelled
+        )
+        fresh = [
+            name
+            for name, entry in features.items()
+            if name not in source.features
+            and entry.kind == feature.kind
+            and _sits_at(entry, copy, checked.bounds.diagonal)
+        ]
+        if len(fresh) == 1 and fresh[0] != copy.id:
+            features[copy.id] = dataclasses.replace(features.pop(fresh[0]), id=copy.id)
+        elif not fresh:
+            findings.append(_cavity_lost_finding("duplicate_feature", copy))
+        return OpResult(
+            outputs=[
+                dataclasses.replace(
+                    source,
+                    mesh=checked,
+                    kind="brep",
+                    features=features,
+                    reserved_feature_ids=tuple(
+                        sorted({*source.reserved_feature_ids, *source.features, copy.id})
+                    ),
+                )
+            ],
+            findings=findings,
+            feature_continuations=(
+                tuple(
+                    FeatureContinuation(FeatureRef(source.id, old_id), new_id)
+                    for old_id, new_id in continued
+                ),
+            ),
+        )
+    body = as_mesh_data(source.mesh)
+    placed = _torus_placed_mesh(ctx, body, feature, target)
+    findings = [*placed.findings]
+    nothing = without_effect(source.mesh, placed.mesh, change, ctx.profile)
+    if nothing is not None:
+        findings.append(nothing)
+    return _torus_result(
+        source, placed, {**source.features, copy.id: copy}, findings, copy_id=copy.id
+    )
+
+
+def _rotate_torus(
+    ctx: OpContext, source: SceneObject, feature: Feature, centre: Vec3, turned_axis: Vec3
+) -> OpResult:
+    """Wulst oder Kehle kippen — um die eigene Achse gedreht bleibt ein Ring, was er ist."""
+    from app.core.brep import edit
+
+    old_axis = _torus_axis(feature)
+    new_axis = _torus_axis(feature, turned_axis)
+    if abs(float(old_axis @ new_axis)) >= 1.0 - EPS_GEOM:
+        return OpResult(
+            outputs=[source],
+            findings=[
+                Finding(
+                    code="rotate_feature.unchanged",
+                    severity="info",
+                    message=_("Um seine eigene Achse gedreht sieht ein Ring aus wie vorher."),
+                    feature_ids=(feature.id,),
+                )
+            ],
+        )
+    cavity = is_a_cavity(feature)
+    turned = dataclasses.replace(
+        feature, params={**feature.params, "axis": turned_axis}, provenance="generated"
+    )
+    ctx.progress(
+        0.1,
+        str(_("Das Merkmal wird an seiner alten Stelle geschlossen …"))
+        if cavity
+        else str(_("Das Merkmal wird an seiner alten Stelle abgetragen …")),
+    )
+    if source.kind == "brep":
+        healed = _exact_without_torus(source, feature)
+        ctx.progress(0.6, str(_("Das Merkmal wird gedreht gesetzt …")))
+        exact = edit.unified(
+            edit.boolean(
+                "difference" if cavity else "union",
+                [healed, _exact_torus_tool(feature, centre, turned_axis)],
+            )
+        )
+        return _exact_cavity_result(
+            ctx, source, exact, op="rotate_feature", expected=turned, findings=[]
+        )
+    closed = _torus_closed_mesh(ctx, source, feature)
+    ctx.progress(0.6, str(_("Das Merkmal wird gedreht gesetzt …")))
+    placed = _torus_placed_mesh(ctx, closed.mesh, feature, centre, turned_axis)
+    return _torus_result(
+        source,
+        placed,
+        {**source.features, feature.id: turned},
+        [*closed.findings, *placed.findings],
+    )
+
+
+def _remove_torus(ctx: OpContext, source: SceneObject, feature: Feature) -> OpResult:
+    """Wulst abtragen oder Kehle füllen — der Schaft läuft durch."""
+    cavity = is_a_cavity(feature)
+    ctx.progress(
+        0.2,
+        str(_("Das Merkmal wird geschlossen …"))
+        if cavity
+        else str(_("Das Merkmal wird abgetragen …")),
+    )
+    findings = [
+        Finding(
+            code="remove_feature.gone",
+            severity="info",
+            message=_(
+                "Das Merkmal ist entfernt. Spätere Schritte und Passungen, die auf es "
+                "verweisen, finden es nicht mehr."
+            ),
+            feature_ids=(feature.id,),
+            values={"feature": feature.id, "kind": feature.kind, "removed": 1},
+        )
+    ]
+    if source.kind == "brep":
+        healed = _exact_without_torus(source, feature)
+        return _exact_cavity_result(
+            ctx,
+            source,
+            healed,
+            op="remove_feature",
+            expected=None,
+            gone=(feature.id,),
+            findings=findings,
+            reserve=True,
+        )
+    closed = _torus_closed_mesh(ctx, source, feature)
+    remaining = {name: entry for name, entry in source.features.items() if name != feature.id}
+    return _torus_result(source, closed, remaining, [*closed.findings, *findings], reserve=True)
+
+
+def _resize_torus(
+    ctx: OpContext,
+    source: SceneObject,
+    feature: Feature,
+    centre: Vec3,
+    ring_diameter: float,
+    tube_diameter: float,
+) -> OpResult:
+    """Ring- oder Rohrdurchmesser ändern: der alte Ring geht, der neue kommt."""
+    from app.core.brep import edit
+
+    ring, tube = _torus_measures(feature, ring_diameter, tube_diameter)
+    if is_close(ring, _bore_number(feature, "diameter")) and is_close(
+        tube, _bore_number(feature, "tube_diameter")
+    ):
+        return OpResult(
+            outputs=[source],
+            findings=[
+                Finding(
+                    code="resize_feature.unchanged",
+                    severity="info",
+                    message=_("Das Merkmal hat dieses Maß schon."),
+                    feature_ids=(feature.id,),
+                )
+            ],
+        )
+    cavity = is_a_cavity(feature)
+    changed = dataclasses.replace(
+        feature,
+        params={**feature.params, "diameter": ring, "tube_diameter": tube},
+        provenance="generated",
+    )
+    ctx.progress(0.1, str(_("Das Merkmal wird an seiner alten Stelle geschlossen …")))
+    if source.kind == "brep":
+        healed = _exact_without_torus(source, feature)
+        ctx.progress(0.6, str(_("Das Merkmal wird mit dem neuen Maß gesetzt …")))
+        exact = edit.unified(
+            edit.boolean(
+                "difference" if cavity else "union",
+                [
+                    healed,
+                    _exact_torus_tool(feature, centre, ring_diameter=ring, tube_diameter=tube),
+                ],
+            )
+        )
+        return _exact_cavity_result(
+            ctx, source, exact, op="resize_feature", expected=changed, findings=[]
+        )
+    closed = _torus_closed_mesh(ctx, source, feature)
+    ctx.progress(0.6, str(_("Das Merkmal wird mit dem neuen Maß gesetzt …")))
+    placed = _torus_placed_mesh(
+        ctx, closed.mesh, feature, centre, ring_diameter=ring, tube_diameter=tube
+    )
+    return _torus_result(
+        source,
+        placed,
+        {**source.features, feature.id: changed},
+        [*closed.findings, *placed.findings],
     )
 
 

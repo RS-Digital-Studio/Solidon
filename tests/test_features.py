@@ -2091,19 +2091,15 @@ def test_the_operation_refuses_exactly_what_the_panel_greys_out() -> None:
                     )
 
 
-def test_a_torus_is_told_it_belongs_to_what_it_encircles() -> None:
-    """Ein Ring fiel bis zum 03.09.2026 in den Auffangsatz.
+def test_a_torus_carries_the_five_handlings_and_only_the_slot_is_refused() -> None:
+    """Ein Ring fiel bis zum 03.09.2026 in den Auffangsatz, und bis zum 21.09.2026 stand
+    an ihm jede Zeile grau: „hat nichts, woran sich einzeln etwas ändern ließe".
 
-    ``torus`` wird erkannt — ``detect_tori`` liefert ihn, und der Objektbaum
-    nennt ihn *Kehle* oder *Wulst* —, stand aber in keiner der beiden
-    Gründetabellen. Das Panel sagte deshalb „Für diese Art von Merkmal gibt es
-    noch keine Handlung", viermal, ohne Grund und ohne Ausweg. Der Satz war
-    nicht falsch, er war leer.
-
-    Ein Ring ist fast nie für sich da: Er ist eine Rille um eine Bohrung oder
-    ein Wulst um einen Zapfen. Versetzt man ihn allein, läge die Rille neben
-    ihrer Bohrung — und genau das sagt die Zeile jetzt, samt dem Weg, der
-    stattdessen geht.
+    Seit P2.6 tragen Wulst und Kehle Versetzen, Ändern, Drehen, Verdoppeln und
+    Entfernen in beiden Kernen (``prepare_ops._move_torus`` und Geschwister).
+    Was bleibt, ist das Langloch — gezogen wird ein Loch, und ein Ring hat
+    keines — mit seinem eigenen Satz, und der Ring, der der ganze Körper ist
+    (``tests/test_torus_feature_ops.py``).
     """
     from app.core.bootstrap import load_operations
     from app.core.perceive.actions import actions_for
@@ -2114,16 +2110,33 @@ def test_a_torus_is_told_it_belongs_to_what_it_encircles() -> None:
         id="torus_1",
         kind="torus",
         provenance="detected",
-        params={"centre": (0.0, 0.0, 0.0), "axis": (0.0, 0.0, 1.0), "diameter": 12.0},
+        params={
+            "centre": (0.0, 0.0, 0.0),
+            "axis": (0.0, 0.0, 1.0),
+            "diameter": 12.0,
+            "tube_diameter": 3.0,
+            "recess": False,
+        },
     )
 
     actions = actions_for(ring)
 
-    assert actions, "auch hier steht etwas"
-    assert all(entry.op is None for entry in actions), [entry.op for entry in actions]
-    assert any("Rille" in str(entry.reason) for entry in actions), [
-        str(entry.reason) for entry in actions
+    offered = {entry.op for entry in actions if entry.op is not None}
+    assert offered == {
+        "move_feature",
+        "resize_feature",
+        "rotate_feature",
+        "duplicate_feature",
+        "remove_feature",
+    }, [(entry.op, str(entry.reason)) for entry in actions]
+    refused = [entry for entry in actions if entry.op is None]
+    assert len(refused) == 1 and "Ring" in str(refused[0].reason), [
+        str(entry.reason) for entry in refused
     ]
+    # Das Feld für die Rohrdicke steht mit dem gemessenen Wert da.
+    resize = next(entry for entry in actions if entry.op == "resize_feature")
+    tube = next(field for field in resize.fields if field.name == "tube_diameter")
+    assert tube.value == 3.0
 
 
 def test_the_panel_offers_duplicating_beside_the_original() -> None:

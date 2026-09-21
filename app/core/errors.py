@@ -318,6 +318,8 @@ _RANGE_CONSTRAINTS: Final = frozenset(
         # Anzahlen mit Unter- oder Obergrenze.
         "corner_count",
         "pattern_count",
+        # Der Rohrdurchmesser eines Rings muss unter seinem Ringdurchmesser bleiben (P2.6).
+        "torus_tube",
         # Ein Winkelmaß der Skizze: „zwischen null und 180 Grad" nennt beide
         # Grenzen wörtlich, und über dem Satz stünde sonst der vage Titel.
         "angle_range",

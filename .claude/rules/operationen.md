@@ -839,6 +839,22 @@ an den wirklichen Randebenen, beim Kippen um den Überstand der Neigung nach
 außen gerückt; „nur das gewählte Merkmal“ einer Kette geht wie am Netz erst
 ganz zu und schneidet dann frisch, was bleibt.
 
+**Und seit P2.6 gilt es für Wulst und Kehle** (21.09.2026): Ein Torusmerkmal
+trägt dieselben fünf Handlungen, und das Werkzeug ist in beiden Kernen der
+volle Ring aus den Kennzahlen (`brep.edit.torus`, `prepare_ops._torus_ring_mesh`)
+— vereinigt der Wulst, abgezogen die Kehle. **Nur das Schließen an der alten
+Stelle ist je Kern anders**, weil der volle Ring dem Schaft eine Rille
+nähme: exakt streicht `brep.edit.defeatured` die Ringfläche, am Netz ist der
+Wulst der Körper aus den eigenen Dreiecken der Ringfläche ohne den Schaftkern
+zwischen den Randringen (`_torus_tool_mesh`). **Ein parametrisches Werkzeug
+deckt sich nie mit einer vorhandenen Fläche des Netzes** — der erste Versuch
+mit einem Netzring hinterließ 679 Splitter; wer am Netz etwas schließt,
+nimmt die Dreiecke, die schon da sind. Ein Ring, der der ganze Körper ist,
+sagt es (`TORUS_IS_THE_BODY`) statt zu raten; um seine eigene Achse gedreht
+bleibt ein Ring, was er ist (Konzept §13.4), und ein quer gestellter Wulst
+zerfällt in zwei Lappen — dann meldet `feature_lost`, dass die Kennung nicht
+weiterlief.
+
 Vier Dinge daran, alle gemessen:
 
 * **An der neuen Stelle wird gebohrt, nicht geändert.** Dort ist volles

@@ -109,6 +109,65 @@ def cylinder(diameter: float, height: float) -> Solid:
     return Solid(BRepPrimAPI_MakeCylinder(diameter / 2.0, height).Shape())
 
 
+def torus(centre: Vec3, axis: Vec3, ring_diameter: float, tube_diameter: float) -> Solid:
+    """Ein voller Ring um eine Achse durch einen Punkt — das Werkzeug eines Torusmerkmals (P2.6).
+
+    Ein Wulst wird damit vereinigt, eine Kehle damit geschnitten. Was vom Ring
+    im Schaft liegt, ist dort ohnehin Material beziehungsweise wird ohnehin
+    weggenommen — der Ring braucht keinen Zuschnitt auf den Schaft, anders als
+    am Netz (``prepare_ops._torus_tool_mesh``).
+    """
+    require()
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakeTorus
+    from OCP.gp import gp_Ax2, gp_Dir, gp_Pnt
+
+    frame = gp_Ax2(gp_Pnt(*centre), gp_Dir(*axis))
+    return Solid(BRepPrimAPI_MakeTorus(frame, ring_diameter / 2.0, tube_diameter / 2.0).Shape())
+
+
+def defeatured(
+    solid: Solid, face_indices: Sequence[int], *, cancelled: CancelToken | None = None
+) -> Solid | None:
+    """Die Flächen weggenommen, die Nachbarn verlängert — oder ``None`` (P2.6).
+
+    Dasselbe ``BRepAlgoAPI_Defeaturing`` wie in :func:`unround`, für die
+    Ringflächen eines Wulstes oder einer Kehle: Der Kern kennt die Torusfläche
+    als Ding und weiß, dass der Schaft darunter weitergeht. Gemessen an einem
+    Schaft Ø 20 mit Wulst und mit Kehle R 10 / r 3: Nach dem Wegnehmen bleibt
+    der Zylinder mit seinem Volumen auf 10⁻¹⁶. Was der Kern nicht wegnehmen
+    kann — einen ganzen Ring, dessen Fläche der ganze Körper ist, oder ein
+    Torusstück, hinter dem sich die Nachbarn nicht treffen —, gibt er
+    unverändert zurück; dann ist es ``None``, und der Aufrufer sagt, was das
+    Merkmal ist. Gearbeitet wird an einer privaten Kopie (§21.2).
+    """
+    require()
+    from OCP.BRepAlgoAPI import BRepAlgoAPI_Defeaturing
+    from OCP.collections import List_TopoDS_Shape
+
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+    indices = solid.checked_face_indices(face_indices, cancelled=cancelled)
+    if not indices:
+        return None
+    working = replace(solid)
+    faces = working.faces()
+    chosen = List_TopoDS_Shape()
+    for index in indices:
+        chosen.Append(faces[working._copied_faces[index]])
+    builder = BRepAlgoAPI_Defeaturing()
+    builder.SetShape(working.shape)
+    builder.AddFacesToRemove(chosen)
+    builder.Build()
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+    if not builder.IsDone():
+        return None
+    result = working.replacing(builder.Shape(), history=builder, cancelled=cancelled)
+    if result.face_count == working.face_count and is_close(result.volume, working.volume):
+        return None
+    return result
+
+
 def _seam_edges(solid: Solid) -> Any:
     """Die Nahtkanten des Körpers — als OCCT-Menge, einmal je Körper.
 

@@ -73,6 +73,19 @@ umschreibende Hüllwerkzeuge behalten ihre geometrisch nötige Sehnenzugabe.
 Materialbereich, nicht den Drehsinn. Lageänderungen benutzen weiterhin den
 gemeinsamen Merkmaltransformationsweg, die Paarprüfung liegt in `scene.fits`.
 
+**Wulst und Kehle** (Torusmerkmale) tragen seit P2.6 dieselben fünf
+Handlungen wie Bohrung und Zapfen — `prepare_ops._move_torus` und
+Geschwister, je Kern. Das Werkzeug ist der volle Ring aus den Kennzahlen
+(`_torus_ring_mesh`, exakt `brep.edit.torus`): vereinigt der Wulst,
+abgezogen die Kehle. Nur das Schließen an der alten Stelle braucht mehr:
+exakt `brep.edit.defeatured`, am Netz der Körper aus den eigenen Dreiecken
+der Ringfläche ohne den Schaftkern zwischen den Randringen
+(`_torus_tool_mesh`, `_torus_shaft_core`) — ein parametrischer Ring deckt
+sich nie mit der vorhandenen Ringfläche und hinterließ Splitter. Ein Ring,
+der der ganze Körper ist, sagt es (`TORUS_IS_THE_BODY`); ein Torusstück,
+hinter dem der Schaft nicht weitergeht, ist nicht abzutrennen
+(`TORUS_NOT_SEPARABLE`).
+
 `contours.section_of` übernimmt einen gezeichneten Querschnitt mit allen
 Innenringen unabhängig von der Umlaufrichtung; ungültige Konturen werden
 nicht still repariert. `polygons_of` gibt alle Komponenten mitsamt ihren

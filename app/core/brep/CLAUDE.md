@@ -557,6 +557,21 @@ aus den ganz gewählten Schalen eines Einschlusses seine Luft — die größte
 Schale als Körper ohne die Inseln, dieselbe Bauart wie in
 `features._void_features`.
 
+## Ein Wulst ist ein Ring, den man wegnehmen und wieder aufsetzen kann (P2.6)
+
+`torus` baut den vollen Ring um eine Achse durch einen Punkt — das Werkzeug
+eines Torusmerkmals, vereinigt für den Wulst, abgezogen für die Kehle.
+`defeatured` gibt `BRepAlgoAPI_Defeaturing` die Ringflächen und lässt den
+Kern die Nachbarn verlängern, wie `unround` bei der Rundung; gemessen am
+Schaft Ø 20 × 40 mit Wulst und Kehle R 10 / r 3 bleibt der Zylinder mit
+seinem Volumen auf 10⁻¹⁶. Was der Kern nicht wegnehmen kann — den Ring, der
+der ganze Körper ist, oder ein Torusstück ohne heilbare Nachbarn —, gibt er
+unverändert zurück, und `defeatured` antwortet `None` statt mit demselben
+Körper. Gearbeitet wird an einer privaten Kopie mit Builder-Historie, damit
+Filamentgrenzen mitkommen (§21.2). Wer damit ein Gewinde wegnehmen will,
+bekommt denselben Körper zurück: Die Gangflächen haben keine Nachbarn, die
+sich zum Kern schließen — das Gewinde geht seinen eigenen Weg (P2.6, offen).
+
 ## Eine Rundung wegnehmen heißt, ihre Fläche zu streichen
 
 `unround` gibt `BRepAlgoAPI_Defeaturing` die Rundungsfläche, und der Kern

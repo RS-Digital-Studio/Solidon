@@ -164,7 +164,29 @@ NOT_APPLICABLE_HERE: Final[dict[tuple[str, str], TranslatableText]] = {
         "Ein Langloch ist ein Hohlraum und keine Materie. Seine Breite ändert "
         "„Bohrung ändern“, Länge und Richtung „Zum Langloch ziehen“."
     ),
+    ("torus", "slot_hole"): _(
+        "Gezogen wird ein Loch. Ein Ring hat keine Bohrung, die länger würde."
+    ),
 }
+
+#: Warum an einem Ring, der der ganze Körper ist, jede Handlung absagt: Seine
+#: Ringfläche hat keinen Schaft, von dem sie sich trennen ließe — die
+#: Operation sagt dasselbe (``prepare_ops.TORUS_IS_THE_BODY``). Ohne Verb,
+#: denn ``_folded`` legt die Zeilen zusammen.
+TORUS_IS_THE_WHOLE_BODY: Final = _(
+    "Ein Ring, der der ganze Körper ist, lässt sich nicht einzeln versetzen, "
+    "ändern, drehen, verdoppeln oder entfernen. Bewegen Sie den Körper."
+)
+
+
+def torus_is_the_body(feature: Feature, mesh: MeshData | None) -> TranslatableText | None:
+    """Der Satz, wenn die Ringfläche jedes Dreieck des Körpers beansprucht — sonst ``None``."""
+    if feature.kind != "torus" or mesh is None or not feature.face_indices:
+        return None
+    if len(set(feature.face_indices)) >= mesh.triangle_count:
+        return TORUS_IS_THE_WHOLE_BODY
+    return None
+
 
 #: Was statt der Handlung hilft, je Merkmalsart, für die keine gilt.
 #:
@@ -207,12 +229,11 @@ NOT_APPLICABLE: Final[dict[str, TranslatableText]] = {
         "hat nichts, was sich bewegen, messen oder herausnehmen ließe. Mit "
         "„Reparieren“ wird sie geschlossen."
     ),
-    "torus": _(
-        "Eine einzelne Ringfläche hat nichts, woran sich einzeln etwas ändern "
-        "ließe — sie gehört zu der Rille oder dem Wulst, aus dem sie entstanden "
-        "ist. Für eine andere Lage bewegen Sie den ganzen Körper; für eine neue "
-        "Rille oder einen Wulst nehmen Sie einen Ring als Werkzeug."
-    ),
+    # **Der Ring stand hier bis zum 21.09.2026** — „hat nichts, woran sich
+    # einzeln etwas ändern ließe". Seit P2.6 tragen Wulst und Kehle alle fünf
+    # Handlungen in beiden Kernen (``prepare_ops._move_torus`` und
+    # Geschwister); was bleibt, ist der Ring, der der ganze Körper ist
+    # (:func:`torus_is_the_body`), und das Langloch (``NOT_APPLICABLE_HERE``).
     # **Das Langloch stand hier bis zum 11.09.2026** — „die Handlungen hier
     # rechnen mit einem Durchmesser und träfen seine Flanken nicht". Sie tun es
     # nicht mehr: Sein Werkzeugkörper wird aufgezogen wie beim Schneiden, und
@@ -304,6 +325,7 @@ _FROM_FEATURE: Final[dict[str, FeatureValueSource]] = {
     "y": ("centre", 1),
     "z": ("centre", 2),
     "diameter": ("diameter", None),
+    "tube_diameter": ("tube_diameter", None),
     "depth": ("depth", None),
     # Die Länge eines Langlochs hat kein gemessenes Gegenstück — die Bohrung
     # hat noch keines. Genommen wird ihr Durchmesser, und
@@ -572,7 +594,7 @@ def actions_for(
     """
     actions: list[FeatureAction] = []
     edge_blocked = fillet_blocked(feature, features, mesh)
-    piece_blocked = cone_piece_blocked(feature)
+    piece_blocked = cone_piece_blocked(feature) or torus_is_the_body(feature, mesh)
     # **Die Kette einmal gefragt, für alle Zeilen.** Was der Aufrufer mitbringt,
     # gilt; sonst fragt das Netz — und dieselbe Antwort speist die Sperre am
     # geteilten Hohlraum (*Zum Langloch ziehen*) und die am Merkmal ohne
