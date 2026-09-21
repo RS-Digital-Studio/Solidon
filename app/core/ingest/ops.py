@@ -24,6 +24,7 @@ from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.geom.transform import apply, rotation, scaling, translation
 from app.core.ingest import outline, threemf
 from app.core.ingest.loader import (
+    PLAUSIBLE_MIN_MM,
     IngestResult,
     bed_offset,
     check_limits,
@@ -229,6 +230,19 @@ def load(ctx: OpContext) -> OpResult:
     # steht, geht weiter vor: Wer die Einheit von Hand setzt, korrigiert auch
     # eine Datei, die sich irrt.
     stated = _stated_unit(payload, suffix, params.coordinates) if params.unit == "auto" else None
+    # **Was ein Format vorschreibt, ist keine Aussage der Datei** (20.09.2026).
+    # Eine 3MF trägt ihre Einheit als Attribut; glTF hat keines, die
+    # Spezifikation legt Meter fest — und ein Generator wie TripoSG schreibt
+    # seinen Einheitswürfel hinein, ohne je Meter gemeint zu haben. Roberts
+    # Drache kam so mit 1,9 Metern Höhe an, und die Erkennung rechnete Minuten
+    # an einem Modell, das niemand drucken kann. Ist die Meter-Lesart nicht
+    # plausibel, wird gefragt (Regel 21), und Meter steht als erste Antwort
+    # dabei, weil das Format sie behauptet.
+    doubted: LengthUnit | None = None
+    if stated is not None and _a_format_convention(suffix, params.coordinates):
+        reach = plausible_reach(ctx.profile.printer.build_volume)
+        if not PLAUSIBLE_MIN_MM <= to_mm(biggest.diagonal, stated[1]) <= reach:
+            doubted, stated = stated[1], None
     if stated is not None:
         declared, unit, factor = stated
         # Nicht aufgeschrieben: Die Datei sagt es beim nächsten Mal wieder, und
@@ -249,7 +263,7 @@ def load(ctx: OpContext) -> OpResult:
                 )
             )
     else:
-        unit = _unit_for(ctx, params, biggest)
+        unit = _unit_for(ctx, params, biggest, doubted=doubted)
         # §15.7: Wurde die Einheit erfragt, wird sie aufgeschrieben. Ohne das
         # käme die Frage bei jeder Auswertung wieder — und mit einem Cache, der
         # länger lebt als die Sitzung, käme sie irgendwann *nicht* wieder, und
@@ -528,22 +542,48 @@ def unit_question(size: Vec3, candidates: Sequence[LengthUnit]) -> str:
     return "\n".join(lines)
 
 
-def _unit_for(ctx: OpContext, params: LoadParams, bounds: BoundingBox) -> LengthUnit:
+def _a_format_convention(suffix: str, coordinates: str) -> bool:
+    """Ob die Einheit aus der Spezifikation des Formats kommt und nicht aus der Datei."""
+    return coordinates == "gltf" and suffix.lower() in (".glb", ".gltf")
+
+
+def _unit_for(
+    ctx: OpContext, params: LoadParams, bounds: BoundingBox, *, doubted: LengthUnit | None = None
+) -> LengthUnit:
     """Nimmt die gespeicherte Einheit — oder lässt die Heuristik laufen und
     fragt, wenn sie sich nicht sicher ist.
+
+    ``doubted`` ist die Einheit, die das Format behauptet und die an diesem
+    Modell nicht plausibel ist. Dann wird immer gefragt, und sie steht als
+    erste Antwort da: Wer sie wirklich meinte, wählt sie; wer den
+    Einheitswürfel eines Generators geladen hat, sieht daneben, wie groß das
+    Modell in jeder anderen Lesart wäre.
     """
     if params.unit != "auto":
         return cast(LengthUnit, params.unit)
 
     guess = detect_unit(bounds.diagonal, plausible_reach(ctx.profile.printer.build_volume))
-    if guess.unit is not None:
-        return guess.unit
+    if doubted is None:
+        if guess.unit is not None:
+            return guess.unit
+        candidates = guess.candidates
+        question = unit_question(bounds.size, candidates)
+    else:
+        candidates = (doubted, *(unit for unit in guess.candidates if unit != doubted))
+        question = "\n".join(
+            (
+                str(
+                    _(
+                        "glTF rechnet in Metern, doch ein Modell aus einem Generator bringt "
+                        "meist keine Größe mit."
+                    )
+                ),
+                unit_question(bounds.size, candidates),
+            )
+        )
 
-    choices = [str(unit) for unit in guess.candidates]
-    answer = ctx.ask(
-        unit_question(bounds.size, guess.candidates),
-        choices,
-    )
+    choices = [str(unit) for unit in candidates]
+    answer = ctx.ask(question, choices)
     if answer not in choices:
         raise ValidationError(
             field="unit",

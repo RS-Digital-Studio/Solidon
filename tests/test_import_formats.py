@@ -393,3 +393,58 @@ def test_v24_generator_glb_keeps_its_geometry_after_migration(profile: Profile) 
     old_raw = read_model(project.sources["src_1"], ".glb")
     assert np.array_equal(raw_mesh.raw.vertices, old_raw.raw.vertices)
     assert np.array_equal(raw_mesh.raw.faces, old_raw.raw.faces)
+
+
+def test_a_generator_glb_in_a_unit_cube_is_asked_about_its_unit(profile: Profile) -> None:
+    """glTF legt Meter fest — ein Generator schreibt seinen Einheitswürfel hinein.
+
+    Roberts Drache aus TripoSG (20.09.2026): 1,4 × 1,9 × 1,1 in der Datei, als
+    Meter gelesen ein Modell von 1,9 Metern Höhe, und die Erkennung rechnete
+    Minuten an etwas, das kein Drucker fasst. Ist die Meter-Lesart nicht
+    plausibel, fragt der Ladeschritt (Regel 21) — mit Meter als erster
+    Antwort, weil das Format sie behauptet, und den plausiblen Lesarten
+    daneben. Die Antwort wird aufgeschrieben wie jede Einheitenantwort.
+    """
+    body = trimesh.creation.box(extents=(1.4, 1.9, 1.1))
+    payload = _bytes(trimesh.Scene(body).export(file_type="glb"))
+    project = new_project("centauri-carbon-2", "petg")
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/body.glb", sha256=""
+    )
+    project.sources["src_1"] = payload
+    plan = import_plan("src_1", "body.glb", payload)
+    assert not plan.asks_unit, "die Vorabfrage bleibt aus — gefragt wird im Ladeschritt"
+    History(project.document).apply(plan.title, [plan.draft])
+    asked: list[tuple[str, list[str]]] = []
+
+    def ask(question: str, choices: list[str]) -> str:
+        asked.append((question, choices))
+        return "cm"
+
+    result = evaluate(project.document, profile, sources=ProjectSources(project), ask=ask)
+
+    assert result.complete, result.scene.report.findings
+    assert len(asked) == 1, "genau eine Frage, nicht eine je Auswertung"
+    question, choices = asked[0]
+    assert choices[0] == "m", "was das Format behauptet, steht als erste Antwort da"
+    assert "cm" in choices and "mm" in choices, "und die anderen Lesarten daneben"
+    assert "1900" in question, "die Meter-Lesart zeigt ihre Größe"
+    mesh = result.scene.objects["obj_1"].mesh
+    assert sorted(mesh.bounds.size) == pytest.approx([11.0, 14.0, 19.0])
+    assert result.answers[project.document.ops[0].id] == {"unit": "cm"}, (
+        "die Antwort wird aufgeschrieben, damit die Frage nicht wiederkommt (§15.7)"
+    )
+    assert not any(
+        finding.code == "ingest.declared_unit" for finding in result.scene.report.findings
+    ), "eine erfragte Einheit ist keine Umrechnung nach Angabe der Datei"
+
+
+def test_a_glb_of_printable_size_is_still_read_in_metres_without_a_question(
+    profile: Profile,
+) -> None:
+    """Die Gegenprobe: Wo Meter plausibel sind, bleibt es beim Vertrag des Formats."""
+    payload = _bytes(
+        trimesh.Scene(trimesh.creation.box(extents=(0.02, 0.016, 0.012))).export(file_type="glb")
+    )
+    _project, mesh = _evaluated_import(payload, ".glb", profile)
+    assert sorted(mesh.bounds.size) == pytest.approx([12.0, 16.0, 20.0])

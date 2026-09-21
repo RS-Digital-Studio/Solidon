@@ -122,6 +122,12 @@ deren gespeicherte Undo-Fassungen und rohe Generatorquellen behalten
 `legacy_raw`; die gemeinsame Migration gilt auch für Rezeptdokumente.
 Eine explizite Einheit hat Vorrang. Der Rohleser und die separate
 Zielgrößenskalierung ändern ihren Vertrag dadurch nicht.
+**Die Meter-Lesart wird nicht geglaubt, wenn sie unplausibel ist.** glTF
+schreibt Meter vor, aber die Datei sagt es nicht selbst; ein Generator
+liefert den Einheitswürfel. Fällt das Modell in Metern unter zehn Millimeter
+oder über die doppelte Bauraumdiagonale, stellt der Ladeschritt die
+Einheitenfrage mit Meter als erster Antwort (Regel 21). Eine 3MF-Einheit ist
+dagegen eine Aussage der Datei und wird ohne Frage angewandt.
 
 **ZIP-Dubletten dürfen nur bei bytegleichem Inhalt passieren.** Alle Einträge
 zählen vor dem Inhaltsvergleich zu Archivanzahl, Entpackgröße und

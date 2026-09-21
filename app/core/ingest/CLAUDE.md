@@ -86,6 +86,13 @@ Nullwirkung ersetzt sie nicht.
 - **Neue GLB-/GLTF-Importe speichern `coordinates="gltf"`.** `load` dreht
   die bereits vom Leser angewandten Knoten aus Y-oben nach Z-oben und liest
   die Formateinheit Meter. Eine ausdrücklich gesetzte Einheit geht vor.
+  **Meter sind eine Vorschrift des Formats, keine Aussage der Datei**
+  (`_a_format_convention`): Ist die Meter-Lesart am Modell nicht plausibel
+  (`PLAUSIBLE_MIN_MM` bis `plausible_reach`), fragt `_unit_for` mit Meter als
+  erster Antwort und den plausiblen Lesarten daneben — ein Generator wie
+  TripoSG schreibt seinen Einheitswürfel in die Datei, und als Meter gelesen
+  war Roberts Drache 1,9 m hoch (20.09.2026). Die 3MF-Einheit bleibt davon
+  unberührt; sie steht als Attribut in der Datei.
   `legacy_raw` erhält alte importierte und erzeugte Quellen; der Rohleser
   ändert sie nicht. Die Zielgröße eines Generatormodells bleibt der eigene
   Schritt `fit_to_size` und wird nicht in die Einheitenumrechnung eingerechnet.
