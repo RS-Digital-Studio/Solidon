@@ -1879,8 +1879,11 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   des konkret eingesetzten TripoSG-Modellstands vollständig dokumentieren und die im NOTICE
   genannten HunyuanDiT-/FlashVDM-Bedingungen gezielt fachlich beziehungsweise mit VAST klären.
   Git-Commit, TripoSG-Gewichte und BiRefNet-Revision sind bereits gepinnt; LICENSE und NOTICE werden
-  übernommen. Abnahme: nachvollziehbare Zuordnung jedes eingesetzten Bestandteils zu Revision,
-  Lizenz und geklärten Bedingungen. Der bestehende Weg bleibt erhalten.
+  übernommen. Seit dem 21.09.2026 holt die Einrichtung auf Wunsch auch das Bildmodell für den
+  Weg aus Text (`sd_xl_base_1.0.safetensors`, Revision `46216598`, CreativeML Open RAIL++-M von
+  Stability AI; die Nutzungsausschlüsse des Anhangs gelten dem Nutzer, das Handbuch nennt sie) —
+  es gehört mit in dieselbe Kanzleifrage. Abnahme: nachvollziehbare Zuordnung jedes eingesetzten
+  Bestandteils zu Revision, Lizenz und geklärten Bedingungen. Der bestehende Weg bleibt erhalten.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#p9--säule-b-und-farbe).
 

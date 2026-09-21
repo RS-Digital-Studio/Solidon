@@ -1957,8 +1957,13 @@ def test_the_sizes_in_the_progress_text_match_the_constants() -> None:
 
     quelle = Path(comfy_setup.__file__).read_text(encoding="utf-8")
 
-    # Die deutsche Quelle schreibt Dezimalkommas: „7,5 GB".
-    erwartet_gb = f"{comfy_setup.WEIGHT_GIGABYTES:g}".replace(".", ",")
+    # Die deutsche Quelle schreibt Dezimalkommas: „7,5 GB". Seit dem
+    # 21.09.2026 gibt es zwei Downloads in Gigabyte — die Gewichte und das
+    # Bildmodell —, und jeder Text muss eine der beiden Konstanten nennen.
+    erwartet_gb = {
+        f"{comfy_setup.WEIGHT_GIGABYTES:g}".replace(".", ","),
+        f"{comfy_setup.IMAGE_MODEL_GIGABYTES:g}".replace(".", ","),
+    }
     erwartet_mb = f"{comfy_setup.BACKGROUND_MEGABYTES:g}"
 
     gb_texte = re.findall(r'_\("([^"]*\bGB\b[^"]*)"\)', quelle)
@@ -1969,8 +1974,8 @@ def test_the_sizes_in_the_progress_text_match_the_constants() -> None:
 
     for text in gb_texte:
         zahlen = re.findall(r"\d+(?:,\d+)?(?=\s*GB)", text)
-        assert erwartet_gb in zahlen, (
-            f"{text!r} nennt {zahlen}, WEIGHT_GIGABYTES sagt {erwartet_gb}"
+        assert erwartet_gb & set(zahlen), (
+            f"{text!r} nennt {zahlen}, die Konstanten sagen {sorted(erwartet_gb)}"
         )
     for text in mb_texte:
         zahlen = re.findall(r"\d+(?:,\d+)?(?=\s*MB)", text)
@@ -2888,3 +2893,101 @@ def test_weight_replacement_preserves_the_previous_installation_on_failure(
             exec(comfy_setup._FETCH_WEIGHTS, {})
         assert (target / "model_index.json").read_text(encoding="utf-8") == "alt"
         assert not comfy_setup.weights_present(tmp_path)
+
+
+def test_the_image_model_is_fetched_with_a_fixed_revision_and_hash(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Das Bildmodell für den Textweg holt Solidon seit dem 21.09.2026 selbst.
+
+    Robert tippte einen Satz, und der Dialog verlangte ein Bild — das Modell
+    sollte der Kunde selbst besorgen. Jetzt geht es denselben Weg wie das
+    Freistell-Modell: eine Datei, fester Stand, gestreamte Prüfsumme, Tausch am
+    Ziel erst nach der Prüfung — nach ``models/checkpoints``, wo ComfyUI seine
+    Bildmodelle sucht.
+    """
+    from app.core.backends import comfy_setup
+
+    monkeypatch.setattr(comfy_setup, "scratch_dir", lambda name: tmp_path / name)
+    monkeypatch.setattr(comfy_setup, "_space_or_stop", lambda *_args, **_kwargs: None)
+    commands: list[list[str]] = []
+    monkeypatch.setattr(
+        comfy_setup,
+        "_run_repeatedly",
+        lambda command, *_args, **_kwargs: commands.append(command),
+    )
+    comfyui = tmp_path / "ComfyUI"
+
+    comfy_setup.fetch_image_model(comfyui, Path("python"))
+
+    command = commands[0]
+    assert command[3] == comfy_setup._FETCH_FILE, "derselbe Weg wie das Freistell-Modell"
+    assert command[4] == str(comfyui / "models" / "checkpoints")
+    assert command[5:7] == [comfy_setup.IMAGE_MODEL_REPO, comfy_setup.IMAGE_MODEL_FILE]
+    assert command[-2:] == [
+        "462165984030d82259a11f4367a4eed129e94a7b",
+        "31e35c80fc4829d14f90153f4c74cd59c90b779f6afe05a74cd6120b893f7e5b",
+    ]
+
+    # Und nur, wenn keines da ist — ein Juggernaut zählt wie das Basismodell.
+    (comfyui / "models" / "checkpoints").mkdir(parents=True, exist_ok=True)
+    (comfyui / "models" / "checkpoints" / "juggernautXL.safetensors").write_bytes(b"x")
+    assert comfy_setup.image_model_present(comfyui)
+    comfy_setup.fetch_image_model(comfyui, Path("python"))
+    assert len(commands) == 1, "ein vorhandenes Bildmodell wird nicht noch einmal geladen"
+
+
+def test_the_image_model_checks_both_disks_before_it_downloads(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Dieselbe Platzprüfung wie bei den Gewichten — Zwischenordner und Ziel."""
+    from app.core.backends import comfy_setup
+
+    monkeypatch.setattr(comfy_setup, "scratch_dir", lambda name: tmp_path / name)
+    monkeypatch.setattr(comfy_setup, "_run_repeatedly", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(comfy_setup, "free_gigabytes", lambda _where: 1.0)
+
+    with pytest.raises(comfy_setup.SetupFailed, match="models/checkpoints"):
+        comfy_setup.fetch_image_model(tmp_path / "ComfyUI", Path("python"))
+
+
+def test_the_setup_fetches_the_image_model_only_when_asked(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Sieben Gigabyte für einen Weg, den ein Foto umgeht — nur auf Wunsch.
+
+    Und erst nach den Gewichten: Wer abbricht, hat den Bildweg vollständig.
+    """
+    from app.core.backends import comfy_setup
+
+    comfyui = tmp_path / "ComfyUI"
+    (comfyui / "custom_nodes").mkdir(parents=True)
+    monkeypatch.setattr(comfy_setup, "find_python", lambda _folder: Path("python"))
+    steps: list[str] = []
+    for name in ("fetch_triposg", "patch_sources", "install_packages", "nodes_load"):
+        monkeypatch.setattr(comfy_setup, name, lambda *_a, _n=name, **_k: steps.append(_n))
+    monkeypatch.setattr(
+        comfy_setup, "fetch_background", lambda *_a, **_k: steps.append("background")
+    )
+    monkeypatch.setattr(comfy_setup, "fetch_weights", lambda *_a, **_k: steps.append("weights"))
+    monkeypatch.setattr(
+        comfy_setup, "fetch_image_model", lambda *_a, **_k: steps.append("image_model")
+    )
+    monkeypatch.setattr(comfy_setup, "weights_present", lambda _c: True)
+
+    result = comfy_setup.setup(comfyui, weights=True)
+    assert "image_model" not in steps, "ohne Wunsch bleibt das Bildmodell liegen"
+    assert result.done and not result.image_model
+
+    steps.clear()
+    (comfyui / "models" / "checkpoints").mkdir(parents=True)
+    (comfyui / "models" / "checkpoints" / "sd_xl_base_1.0.safetensors").write_bytes(b"x")
+    result = comfy_setup.setup(comfyui, weights=True, image_model=True)
+    assert steps[-3:] == ["background", "weights", "image_model"], "zuletzt, nach den Gewichten"
+    assert result.done and result.image_model
+
+    steps.clear()
+    result = comfy_setup.setup(comfyui, weights=False, image_model=True)
+    assert "image_model" not in steps, "ohne Gewichte nur die Knoten — auch kein Bildmodell"
+    assert result.image_model, "was da ist, wird trotzdem gemeldet"

@@ -50,16 +50,17 @@ TICK_MS = 1000
 
 
 class _Worker(Worker):
-    """Die Einrichtung: git, pip, und ein Download von 7,5 GB."""
+    """Die Einrichtung: git, pip, und ein Download von 7,5 GB — auf Wunsch zwei."""
 
     done = Signal(object)
     failed = Signal(str)
     step = Signal(str)
 
-    def __init__(self, comfyui: str, weights: bool) -> None:
+    def __init__(self, comfyui: str, weights: bool, image_model: bool) -> None:
         super().__init__()
         self._comfyui = comfyui
         self._weights = weights
+        self._image_model = image_model
         self._stop = False
 
     def cancel(self) -> None:
@@ -70,6 +71,7 @@ class _Worker(Worker):
             result = comfy_setup.setup(
                 self._comfyui or None,
                 weights=self._weights,
+                image_model=self._image_model,
                 progress=lambda entry: self.step.emit(str(entry)),
                 cancelled=lambda: self._stop,
             )
@@ -82,7 +84,13 @@ class _Worker(Worker):
 class ComfySetupDialog(QDialog):
     """Knoten, Quelltext, Pakete und Gewichte — in einem Lauf."""
 
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(self, parent: QWidget | None = None, *, image_model: bool | None = None) -> None:
+        """``image_model`` belegt das Häkchen fürs Bildmodell vor.
+
+        ``None`` heißt: an, wenn keines da ist. Wer aus dem Erzeugungsdialog
+        kommt, weil ihm für den Weg aus Text genau dieses Modell fehlt, will
+        es; wer nur die Knoten nachzieht, sieht das Häkchen und entscheidet.
+        """
         super().__init__(parent)
         self.setWindowTitle(tr("ComfyUI einrichten"))
         self.setMinimumWidth(560)
@@ -125,6 +133,19 @@ class ComfySetupDialog(QDialog):
         if found is not None and comfy_setup.weights_present(found):
             self.weights.setText(tr("Modell ist schon da"))
             self.weights.setEnabled(False)
+        # **Das Bildmodell als eigenes Häkchen** (21.09.2026). Es braucht nur
+        # der Weg aus Text, und es sind sieben Gigabyte — deshalb nicht still
+        # mit den Gewichten, sondern benannt, mit Größe, abwählbar. Robert
+        # tippte einen Satz und las, dass ein Bild verlangt wird: Bis dahin
+        # holte Solidon dieses Modell gar nicht.
+        self.image_model = QCheckBox(
+            tr("Bildmodell für den Weg aus Text laden — rund 6,9 GB"), self
+        )
+        image_model_there = found is not None and comfy_setup.image_model_present(found)
+        self.image_model.setChecked(not image_model_there if image_model is None else image_model)
+        if image_model_there:
+            self.image_model.setText(tr("Bildmodell ist schon da"))
+            self.image_model.setEnabled(False)
 
         self.state = QLabel(self)
         self.state.setWordWrap(True)
@@ -155,6 +176,7 @@ class ComfySetupDialog(QDialog):
         layout.addWidget(intro)
         layout.addLayout(row)
         layout.addWidget(self.weights)
+        layout.addWidget(self.image_model)
         layout.addWidget(self.start_button, alignment=Qt.AlignmentFlag.AlignLeft)
         layout.addWidget(self.progress)
         layout.addWidget(self.state)
@@ -199,7 +221,11 @@ class ComfySetupDialog(QDialog):
         self._show_elapsed()
         self._tick.start()
 
-        worker = _Worker(self.folder.text().strip(), self.weights.isChecked())
+        worker = _Worker(
+            self.folder.text().strip(),
+            self.weights.isChecked(),
+            self.image_model.isChecked() and self.image_model.isEnabled(),
+        )
         worker.step.connect(self._note_step)
         worker.done.connect(self._finished)
         worker.failed.connect(self._refused)

@@ -73,16 +73,17 @@ BACKGROUND_FILE: Final = "background_removal/birefnet.safetensors"
 BACKGROUND_REVISION: Final = "5a1bd8ae750548f8cd42e3c8afa854fd3eba0fb1"
 BACKGROUND_SHA256: Final = "9ab37426bf4de0567af6b5d21b16151357149139362e6e8992021b8ce356a154"
 
-#: Das Bildmodell für den **Textweg** — und der einzige Posten dieser Liste,
-#: den Solidon **nicht** selbst holt.
+#: Das Bildmodell für den **Textweg** — auf Wunsch geholt, nicht ungefragt.
 #:
-#: **Warum es hier steht, obwohl nichts es lädt.** Aus Text wird erst ein Bild,
-#: und dafür braucht ComfyUI ein SDXL-Modell unter ``models/checkpoints``. Wer
-#: nur Bilder mitbringt, braucht es nie — sieben Gigabyte für einen Weg, den
-#: ein vorhandenes Foto umgeht, gehören nicht in jede Installation. Bis zum
-#: 30.08.2026 stand deshalb nirgends, **welches**: Der Erzeugungsdialog sagte,
-#: dass eines fehlt, das Handbuch nannte es „ComfyUIs eigene Sache", und der
-#: Kunde stand vor einer Auskunft ohne Weg.
+#: Aus Text wird erst ein Bild, und dafür braucht ComfyUI ein SDXL-Modell
+#: unter ``models/checkpoints``. Wer nur Bilder mitbringt, braucht es nie —
+#: sieben Gigabyte für einen Weg, den ein vorhandenes Foto umgeht, gehören
+#: nicht in jede Installation. Bis zum 21.09.2026 holte Solidon es deshalb
+#: **gar nicht**: Der Erzeugungsdialog nannte Datei und Ordner, und der Kunde
+#: sollte sie selbst besorgen. Robert tippte einen Satz und las, dass ein
+#: Bild verlangt wird — „comfyUI wollten wir auch ohne Bild". Seither steht
+#: das Bildmodell als eigenes Häkchen in der Einrichtung (:func:`setup`,
+#: ``image_model``), mit Revision und Prüfsumme wie die zwei anderen.
 #:
 #: Genannt wird das Basismodell und kein Feintuning: Es ist das, was die
 #: Rollenauflösung in :data:`app.core.backends.mesh.MODEL_ROLES` über ``sd_xl``
@@ -94,6 +95,14 @@ BACKGROUND_SHA256: Final = "9ab37426bf4de0567af6b5d21b16151357149139362e6e899202
 IMAGE_MODEL_REPO: Final = "stabilityai/stable-diffusion-xl-base-1.0"
 IMAGE_MODEL_FILE: Final = "sd_xl_base_1.0.safetensors"
 IMAGE_MODEL_GIGABYTES: Final = 6.9
+#: Der Modellstand, an dem Datei und Prüfsumme hängen — abgelesen am
+#: 21.09.2026 über die Hugging-Face-API (``?blobs=true``): der Commit des
+#: Repositoriums und der SHA-256 der LFS-Datei, 6 938 078 334 Byte.
+IMAGE_MODEL_REVISION: Final = "462165984030d82259a11f4367a4eed129e94a7b"
+IMAGE_MODEL_SHA256: Final = "31e35c80fc4829d14f90153f4c74cd59c90b779f6afe05a74cd6120b893f7e5b"
+#: Was für das Bildmodell frei sein muss — dieselbe Rechnung wie bei
+#: :data:`NEEDED_GIGABYTES`: die Datei und Luft für das Zwischenlager.
+IMAGE_MODEL_NEEDED_GIGABYTES: Final = 8.5
 
 #: Wohin es gehört, von ComfyUIs Ordner aus gerechnet. Als Konstante, weil
 #: derselbe Pfad in drei Sätzen steht — Dialog, Handbuch, Fehlermeldung.
@@ -287,6 +296,7 @@ class Result:
     comfyui: Path
     nodes: Path
     weights: bool
+    image_model: bool = False
     reason: TranslatableText | str = ""
 
     @property
@@ -1227,7 +1237,9 @@ def _gigabytes_in(folder: Path) -> float:
     return total / 1_000_000_000
 
 
-def _space_or_stop(where: Path) -> None:
+def _space_or_stop(
+    where: Path, needed: float = NEEDED_GIGABYTES, destination: str = "models/triposg"
+) -> None:
     """Hält an, wenn der Datenträger dieses Ordners die Gewichte nicht fasst.
 
     **Was schon liegt, zählt mit.** Ein abgebrochener Download hinterlässt seine
@@ -1244,7 +1256,7 @@ def _space_or_stop(where: Path) -> None:
     verschiedenen Datenträgern.
     """
     free = free_gigabytes(where) + _gigabytes_in(where)
-    if free >= NEEDED_GIGABYTES:
+    if free >= needed:
         return
     raise SetupFailed(
         str(
@@ -1252,9 +1264,63 @@ def _space_or_stop(where: Path) -> None:
                 "Auf dem Datenträger von {drive} sind {free:.1f} GB frei, gebraucht "
                 "werden {needed:.0f}. Schaffen Sie dort Platz — geladen wird in den "
                 "Zwischenordner, und von dort wandern die Gewichte nach "
-                "models/triposg; beide Orte müssen sie fassen."
+                "{folder}; beide Orte müssen sie fassen."
             )
-        ).format(drive=where, free=free, needed=NEEDED_GIGABYTES)
+        ).format(drive=where, free=free, needed=needed, folder=destination)
+    )
+
+
+def image_model_present(comfyui: Path) -> bool:
+    """Liegt ein Bildmodell da? Welches, entscheidet die Rolle.
+
+    Dieselbe Frage wie bei :func:`background_present`, und aus demselben Grund
+    an den Ordner gestellt und nicht an unsere Datei: Wer ein Juggernaut oder
+    Dreamshaper hat, hat eines — die Rollenauflösung in
+    :data:`app.core.backends.mesh.MODEL_ROLES` nimmt es dann auch. Beide
+    Endungen, die ComfyUI als Checkpoint anbietet.
+    """
+    folder = comfyui / IMAGE_MODEL_FOLDER
+    if not folder.is_dir():
+        return False
+    return any(folder.glob("*.safetensors")) or any(folder.glob("*.ckpt"))
+
+
+def fetch_image_model(
+    comfyui: Path,
+    python: Path,
+    progress: ProgressFn = _silent,
+    cancelled: CancelledFn | None = None,
+) -> None:
+    """Das Bildmodell für den Textweg holen — rund 6,9 GB, und nur wenn keines da ist.
+
+    Derselbe Weg wie beim Freistell-Modell (:data:`_FETCH_FILE`): eine Datei,
+    feste Revision, gestreamte Prüfsumme, Tausch am Ziel erst nach der
+    Prüfung. Und dieselbe Platzprüfung wie bei den Gewichten, an beiden Orten
+    — Zwischenordner und Ziel liegen regelmäßig auf verschiedenen Datenträgern.
+    """
+    if image_model_present(comfyui):
+        return
+    target = comfyui / IMAGE_MODEL_FOLDER
+    scratch = scratch_dir("dl-image")
+    _space_or_stop(scratch, IMAGE_MODEL_NEEDED_GIGABYTES, IMAGE_MODEL_FOLDER)
+    _space_or_stop(target, IMAGE_MODEL_NEEDED_GIGABYTES, IMAGE_MODEL_FOLDER)
+    target.mkdir(parents=True, exist_ok=True)
+    _run_repeatedly(
+        [
+            str(python),
+            "-s",
+            "-c",
+            _FETCH_FILE,
+            str(target),
+            IMAGE_MODEL_REPO,
+            IMAGE_MODEL_FILE,
+            str(scratch),
+            IMAGE_MODEL_REVISION,
+            IMAGE_MODEL_SHA256,
+        ],
+        _("Bildmodell für den Weg aus Text laden — rund 6,9 GB, das dauert"),
+        progress,
+        cancelled,
     )
 
 
@@ -1389,10 +1455,16 @@ def setup(
     comfyui: str | Path | None = None,
     *,
     weights: bool = True,
+    image_model: bool = False,
     progress: ProgressFn = _silent,
     cancelled: CancelledFn | None = None,
 ) -> Result:
     """Alle Schritte, in dieser Reihenfolge. Wirft :class:`SetupFailed`.
+
+    ``image_model`` holt zusätzlich das Bildmodell für den Weg aus Text — als
+    eigener Wunsch, denn es braucht nur dieser Weg, und es sind sieben
+    Gigabyte. Ohne ``weights`` bleibt auch das Bildmodell liegen: Die Gewichte
+    sind der Kernweg, und wer sie nicht will, richtet gerade nur die Knoten ein.
 
     Abgebrochen wird **auch mitten in einem Schritt** — der Download der
     Gewichte dauert eine halbe Stunde, und ein Abbrechen, das erst danach
@@ -1418,7 +1490,12 @@ def setup(
         # nach einer halben Stunde Download.
         nodes_load(found, python, target, progress, cancelled)
         if not weights:
-            return Result(comfyui=found, nodes=target, weights=weights_present(found))
+            return Result(
+                comfyui=found,
+                nodes=target,
+                weights=weights_present(found),
+                image_model=image_model_present(found),
+            )
         if cancelled is not None and cancelled():
             return _stopped(found, target)
         # Das Kleine zuerst: 445 MB gegen 7,5 GB. Wer abbricht, hat dann
@@ -1427,13 +1504,19 @@ def setup(
         if cancelled is not None and cancelled():
             return _stopped(found, target)
         fetch_weights(found, python, progress, cancelled)
+        if image_model:
+            if cancelled is not None and cancelled():
+                return _stopped(found, target)
+            # Zuletzt, weil es der einzige Posten ist, den nur ein Weg braucht:
+            # Wer hier abbricht, hat den Bildweg vollständig.
+            fetch_image_model(found, python, progress, cancelled)
     except Cancelled:
         # **Der Abbruch mitten im Schritt**, nicht nur zwischen zweien: Der
         # Download der Gewichte dauert eine halbe Stunde, und ein Abbrechen,
         # das erst danach wirkt, ist keines.
         return _stopped(found, target)
     _log.info("comfy setup finished in %s", found)
-    return Result(comfyui=found, nodes=target, weights=True)
+    return Result(comfyui=found, nodes=target, weights=True, image_model=image_model_present(found))
 
 
 def _stopped(comfyui: Path, nodes: Path) -> Result:
@@ -1441,5 +1524,6 @@ def _stopped(comfyui: Path, nodes: Path) -> Result:
         comfyui=comfyui,
         nodes=nodes,
         weights=weights_present(comfyui),
+        image_model=image_model_present(comfyui),
         reason=_("Abgebrochen. Was schon da ist, bleibt — ein neuer Lauf setzt fort."),
     )

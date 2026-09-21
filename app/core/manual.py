@@ -1794,15 +1794,16 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "Dann laufen fünf Schritte: Knoten hinlegen, den festgelegten "
             "TripoSG-Quelltext holen, zwei Stellen darin richten, die fehlenden "
             "Pakete nachziehen — und **nachsehen, ob ComfyUI die Knoten laden "
-            "kann**. Auf Wunsch folgt das Modell mit rund 7,5 GB. Bricht die "
+            "kann**. Auf Wunsch folgt das Modell mit rund 7,5 GB, und für den "
+            "Weg aus Text das Bildmodell mit rund 6,9 GB. Bricht die "
             "Verbindung ab, setzt ein neuer Lauf dort fort, wo er stand.\n\n"
             "**Danach ComfyUI einmal neu starten.** Es liest seine Knoten beim "
             "Start; ohne den Neustart bleibt *Modell erzeugen* ausgegraut, "
             "obwohl alles an seinem Platz liegt.\n\n"
-            "Für den Weg über **Text** kommt ein SDXL-Modell unter "
-            "`models/checkpoints` dazu. Für den Weg über ein **Bild** wird "
-            "keines gebraucht. Welches geprüfte Modell gemeint ist und woher "
-            "es kommt, steht im nächsten Kapitel.\n\n"
+            "Der Weg über **Text** braucht dazu das Bildmodell — das Häkchen "
+            "in der Einrichtung. Der Weg über ein **Bild** kommt ohne aus. "
+            "Welche Modelle das sind und woher sie kommen, steht im nächsten "
+            "Kapitel.\n\n"
             "**Wie lange es dauert, entscheidet die Grafikkarte.** Solidon "
             "zeigt die verstrichene Zeit und wartet, solange ComfyUI rechnet. "
             "Bricht etwas ab, steht der Satz von ComfyUI samt dem betroffenen "
@@ -2594,10 +2595,11 @@ def models_text() -> str:
             "",
             str(
                 _(
-                    "Laufen in ComfyUI, nebeneinander. Zwei davon richtet Solidon "
-                    "selbst ein — in der Liste der zusätzlichen Programme steht in "
+                    "Laufen in ComfyUI, nebeneinander, und alle drei richtet "
+                    "Solidon ein — in der Liste der zusätzlichen Programme steht in "
                     "der Zeile von ComfyUI *Knoten und Modell einrichten …*. Das "
-                    "dritte brauchen Sie nur für den Weg aus Text."
+                    "dritte braucht nur der Weg aus Text; es ist deshalb ein "
+                    "eigenes Häkchen."
                 )
             ),
             "",
@@ -2616,26 +2618,32 @@ def models_text() -> str:
             "| {wofuer} | SDXL | {groesse} | {woher} |".format(
                 wofuer=_("Aus Text erst ein Bild"),
                 groesse=f"{decimal(comfy_setup.IMAGE_MODEL_GIGABYTES, 1)} GB",
-                woher=_("selbst, siehe unten"),
+                woher=_("richtet Solidon ein, auf Wunsch"),
             ),
             "",
-            f"### {_('Das Bildmodell selbst hinlegen')}",
+            f"### {_('Das Bildmodell')}",
             "",
             str(
                 _(
                     "Nur für den Weg aus Text. Wer ein Foto oder eine Zeichnung "
                     "mitbringt, braucht es nie — und sieben Gigabyte für einen Weg, "
                     "den ein vorhandenes Bild umgeht, lädt Solidon niemandem "
-                    "ungefragt herunter."
+                    "ungefragt herunter. Deshalb ist es in der Einrichtung ein "
+                    "eigenes Häkchen; fehlt es beim Erzeugen, führt der Knopf "
+                    "*Bildmodell einrichten …* direkt dorthin."
                 )
             ),
             "",
             str(
                 _(
-                    "Geprüft ist **{file}** aus dem Verzeichnis *{source}* auf "
-                    "Hugging Face. Die Datei gehört nach *{folder}* im Ordner von "
-                    "ComfyUI; danach ComfyUI einmal neu starten, und *Modell "
-                    "erzeugen* nimmt auch einen Satz statt eines Bildes an."
+                    "Geholt wird **{file}** aus dem Verzeichnis *{source}* auf "
+                    "Hugging Face, in einem festen Stand und mit Prüfsumme, nach "
+                    "*{folder}* im Ordner von ComfyUI. Wer es lieber selbst "
+                    "hinlegt, legt es dorthin; danach ComfyUI einmal neu starten, "
+                    "und *Modell erzeugen* nimmt auch einen Satz statt eines "
+                    "Bildes an. Seine Lizenz ist die CreativeML Open RAIL++-M von "
+                    "Stability AI; was sie an Nutzung ausschließt, steht in ihrem "
+                    "Anhang und gilt dem, der das Modell benutzt."
                 )
             ).format(
                 file=comfy_setup.IMAGE_MODEL_FILE,

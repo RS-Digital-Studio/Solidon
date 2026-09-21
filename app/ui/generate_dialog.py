@@ -41,7 +41,7 @@ from app.core.backends import comfy_setup, mesh
 from app.core.backends.mesh import ComfyBackend, GeneratedMesh, MeshBackend
 from app.core.errors import CANCEL, AppError, InternalError, OperationCancelled
 from app.core.log import get_logger
-from app.i18n import tr
+from app.i18n import format_decimal, tr
 from app.ui.ai_disclosure import DisclosureResult, ensure_ai_disclosure
 from app.ui.dialogs import show_error, spoken_values
 from app.ui.labels import UNEXPECTED_CRASH, volume
@@ -578,8 +578,13 @@ class GenerateDialog(QDialog):
         return worker.wait(timeout_ms) if worker is not None else True
 
     def _ask_for_setup(self) -> None:
-        """Der Knopf führt dorthin, wo die Lage zu beheben ist."""
-        if self._readiness is mesh.Readiness.NO_NODES:
+        """Der Knopf führt dorthin, wo die Lage zu beheben ist.
+
+        Ein fehlendes Bildmodell ist seit dem 21.09.2026 dieselbe Handlung wie
+        fehlende Knoten: die Einrichtung, die es holt — nicht die Liste der
+        Programme, in der ComfyUI längst als installiert steht.
+        """
+        if self._readiness in (mesh.Readiness.NO_NODES, mesh.Readiness.NO_MODEL):
             self.nodesRequested.emit()
         else:
             self.setupRequested.emit()
@@ -633,26 +638,18 @@ class GenerateDialog(QDialog):
             )
             self.setup.setText(tr("Knoten und Modell einrichten …"))
         elif self._readiness is mesh.Readiness.NO_MODEL:
-            # **Der Satz nannte, was fehlt, und ließ offen, welches.** „Ein
-            # SDXL-Modell unter models/checkpoints" ist wahr und schickt
-            # jemanden suchen, der nicht weiß, wonach — es gibt Dutzende, und
-            # die Hälfte davon löst eine andere Aufgabe. Der Name steht seit
-            # dem 30.08.2026 in ``comfy_setup``, damit Dialog und Handbuch
-            # dieselbe Datei nennen; hier wird er eingesetzt, denn ein
-            # Platzhalter ist in der Oberfläche richtig und nur im Kern falsch.
+            # **Der Satz nannte Datei und Ordner, und der Kunde sollte sie
+            # selbst besorgen.** Seit dem 21.09.2026 holt die Einrichtung das
+            # Bildmodell, also steht hier der Knopf dorthin und die Größe, die
+            # er kostet — und weiter der Weg, der es umgeht.
             self.state.setText(
                 tr(
-                    "Das Zusatzprogramm ist bereit für den Weg aus einem Bild; für den "
-                    "Weg aus Text fehlt noch das Bildmodell. Ein Bild zu wählen umgeht "
-                    "es. Sonst: "
-                    "„{file}“ nach „{folder}“ legen und ComfyUI neu starten — im "
-                    "Handbuch steht es unter „Welche Modelle Solidon benutzt“."
-                ).format(
-                    file=comfy_setup.IMAGE_MODEL_FILE,
-                    folder=comfy_setup.IMAGE_MODEL_FOLDER,
-                )
+                    "Für den Weg aus Text fehlt noch das Bildmodell, rund {size} GB — "
+                    "Solidon lädt es in der Einrichtung. Ein Bild zu wählen geht auch "
+                    "ohne."
+                ).format(size=format_decimal(comfy_setup.IMAGE_MODEL_GIGABYTES, 1))
             )
-            self.setup.setText(tr("Zusätzliche Programme …"))
+            self.setup.setText(tr("Bildmodell einrichten …"))
         elif self._readiness is mesh.Readiness.UNKNOWN:
             self.state.setText(
                 tr(
