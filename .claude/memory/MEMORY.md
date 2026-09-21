@@ -51,6 +51,7 @@
 - [Fehlertexte ohne Platzhalter](fehlertexte-ohne-platzhalter.md) · [Fehlertexte nur Titel](fehlertexte-nur-titel.md) · [Session.apply meldet](session-apply-meldet-statt-zu-werfen.md) — Titel, detail, Signal statt try.
 - [Ops am Stück](ops-reihendurchlauf-kundensicht.md) · [Register zählen](register-zaehlen-load-operations.md) · [Rezept ist der Fund](rezept-ist-der-fund-op-ist-die-ursache.md) · [Arbeiter verlegt die Wartezeit](arbeiter-verlegt-die-wartezeit-ans-ende.md) — load_operations(); zwei Enden.
 - [Knopf und Handlung](knopf-und-handlung-fragen-verschieden.md) · [Reparatur vor den Fehler](reparatur-muss-vor-den-fehler.md) · [Kette endet am letzten Glied](eine-kette-endet-am-letzten-glied.md) · [Architektur-Sonde](architektur-sonde-type-checking.md) — Klickketten bis zum Ende.
+- [Fenstermaske über Vulkan verliert das Gerät](fenstermaske-ueber-vulkan-verliert-das-geraet.md) — schräge Linien in einer QRegion-Maske über der wgpu-Fläche: ab ~1400 Rechtecken „Parent device is lost“; Tinte in den Renderer, D3D12 als Gegenprobe.
 
 ## Messen und Prüfen
 

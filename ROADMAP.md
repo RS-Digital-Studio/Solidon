@@ -90,7 +90,10 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-175 — Bauplan §30.1 um Winkel, gleich, Mittelpunkt, Vieleck und Langloch nachtragen](#rm-175) | Bedienung und Darstellung | Robert sagt den Nachtrag an; sechs Sätze liegen im Bericht W2 |
 | [RM-192 — Sieben Fenstertests des Merkmalfensters sind am HEAD rot](#rm-192) | Bedienung und Darstellung | `test_feature_panel.py`: Feldzugriff, Abbrechen-Knopf, Nennmaß-Hinweis, Tab-Reihenfolge und zwei Bausteinvorschauen — gemessen am 20.09.2026 in einem Arbeitsbaum, vor der nächsten Release-Abnahme beheben |
 | [RM-194 — Elf Werteschlüssel ohne Beschriftung, zwei Beschriftungen ohne Schlüssel](#rm-194) | Bedienung und Darstellung | `test_value_labels.py` (Fensterdatei) ist am HEAD rot: `clearance_max_mm`, `clearance_min_mm`, `geometry_source`, `intersects` (`fits.py`), `input_name`, `input_object`, `outputs`, `step` (`evaluate.py`), `mapped_triangles` (`kernel.py`), `middle` (`edit.py`), `references` (`errors.py`) ohne Eintrag in `_VALUE_NAMES`; `clearance_max_mm`, `clearance_min_mm` als Beschriftung ohne Schlüssel — gemessen am 20.09.2026 in einem frischen Arbeitsbaum am HEAD `9b8efa8c`, vor der nächsten Release-Abnahme beheben |
-| [RM-197 — Maßeditor im Bild: kein Bezugswechsel am Etikett, Beschriftungen mit Abstand zum Modell](#rm-197) | Bedienung und Darstellung | Umgesetzt in `ebba075e`: Auswahlfeld gefallen, Bezugswechsel als Kontextmenü des Maßes, Felder neben dem Körper; offen ist Roberts Blick an Weg 1 auf dem Hauptbaum und die Fensterabnahme beim Release |
+| [RM-197 — Maßeditor im Bild: kein Bezugswechsel am Etikett, Beschriftungen mit Abstand zum Modell](#rm-197) | Bedienung und Darstellung | Umgesetzt in `ebba075e` (Auswahlfeld gefallen, Bezugswechsel als Kontextmenü des Maßes, Felder neben dem Körper) in `ad3deadd` (Verbindung zur Linienmitte, keine kreuzenden Zuordnungslinien; die Maßtinte zieht in den Renderer, weil `ebba075e` an Weg 1 beim Wählen einer Bohrung riss, RM-198) und `bd310fa5` (die Langlochknöpfe bleiben am gewählten Loch); offen ist die Fensterabnahme beim Release |
+| [RM-198 — Eine feine Fenstermaske über der Vulkan-Fläche verliert das Gerät](#rm-198) | Bedienung und Darstellung | Gemessen am 21.09.2026 an Weg 1: 1682 Rechtecke in der Maske der Maßfläche, und der Vulkan-Treiber der RTX 4080 meldet „Parent device is lost"; 1380 liefen, D3D12 lief immer. Behoben an der Wurzel: Die Maßtinte liegt seit `ad3deadd` im Renderer, die Maske ist weg; offen bleibt nur die Frage, ob Windows D3D12 als Backend bekommt — die Karten tragen kleine Masken und sind nicht betroffen |
+| [RM-199 — Der Durchmesser steht doppelt: im Bild und rechts im Auswahlfenster](#rm-199) | Bedienung und Darstellung | Robert, 21.09.2026: „durchmesser ist ja im viewport kann im merkmalpanel/auswahlpanel entfernt werden" — die gesperrten Zwillingsfelder der Maßgruppe (`Bohrung ändern` mit Durchmesser, Änderungsumfang, X/Y/Z) fallen rechts weg, solange die Maße im Bild stehen — umgesetzt in `b25167fd` durch die CAD-Sitzung (`FeaturePanel._blocks`, `set_measuring` nimmt den Block der Handlung im Bild weg und bringt ihn zurück); offen ist die Fensterabnahme beim Release |
+| [RM-200 — Ein Zug am Griff soll flüssig sein](#rm-200) | Bedienung und Darstellung | Robert, 21.09.2026: „das verschieben über gizmo ist auch noch nicht flüssig". Gemessen am 21.09. an Weg 1 im echten Fenster: Platzierungsgriff 13 ms je Bewegung, Langlochknopf 32 ms (zwei Bilder je Bewegung) — seit `bd310fa5` 21 ms (eines); je Bild kosten 12 bis 17 ms den Durchgang mit Umgebungsverdeckung. Offen: Roberts Geste nachstellen und die Verdeckung während eines Zugs aussetzen |
 | [RM-195 — Der Gewindebolzen vereinigt Sweep und Kern noch mit der Fuzzy-Leiter](#rm-195) | Geometrie, Erkennung und Druckvorbereitung | `profiles.threaded_rod` (*Gewindebolzen*, `thread_exact`) geht weiter den Weg Sweep, Zuschnitt, Fuzzy-Leiter mit Untergrenze — bis zu 94 s (M10 × 1,5, L4) und die Stufe je Größe woanders; `helical_thread` näht dieselbe Sache in 30 ms — den Erzeuger darauf stellen, ISO-nahes Profil beibehalten (keine Maßänderung), `test_sketch_ops.py`, `test_exact_thread_features.py`, `test_brep.py` nachmessen |
 | [RM-196 — Ein exaktes Gewinde einzusetzen dauert acht bis dreizehn Sekunden](#rm-196) | Geometrie, Erkennung und Druckvorbereitung | Gemessen am 21.09.2026: Gewinde 8,2 s, Schraube 13,1 s, Mutter 9,0 s am exakten Träger (Netz 0,04 bis 0,07 s), Bauplan §31 verlangt unter 2 s. Der Bau selbst kostet 0,3 s; die Sekunden stecken in `edit.transformed` (zwei konvergierte Volumenintegrale je Bewegung, `INTEGRAL_RELATIVE_ERROR` 1e-9, an BSpline-Flanken je etwa fünf Sekunden) und im Volumen des Ergebnisses für `without_effect` — eine starre Bewegung erhält das Volumen, das Integral belegt dort nichts; vor der Release-Abnahme beheben oder gegen §31 ausweisen |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären |
@@ -1743,12 +1746,107 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   und `test_placement_dimensions` grün, der neue Test wird ohne die
   Körpersperre rot.
 
+  **Und `ebba075e` riss an Weg 1 beim Wählen einer Bohrung** — nicht die
+  Commits der CAD-Sitzung, wie zuerst gemeldet: Die Felder neben dem Körper
+  machen die Verbindungslinien lang, die Fenstermaske der Maßfläche bekommt
+  1682 Rechtecke, und der Vulkan-Treiber verliert das Gerät (RM-198, dort
+  die Messung). Ein gerasterter Deckel darüber kostete graue Treppen an
+  jeder schrägen Linie und je Bild vier Durchläufe über alle Rechtecke
+  (Robert: „performancetechnisch auch ganz schlecht") und ist nicht
+  eingecheckt. `ad3deadd` zieht die Maßtinte in den Renderer
+  (`_Dimensions` ohne Widget und Maske) und führt die Verbindung zur
+  **Mitte** der Maßlinie (Robert, 21.09.2026: „schöner wäre noch wenn die
+  linien von den maßen zu den mittellinien jeweils gehen"); die Probe über
+  den echten Startweg (Weg 1 laden, Bohrung über den Baum wählen) überlebt
+  seither, vorher riss sie dreimal von drei.
+
+  **Zwei Nachträge vom selben Nachmittag:** Die Zuordnungslinien kreuzen sich
+  nicht mehr (Robert: „aufpassen dass sich die maßlinien nicht kreuzen") —
+  `_untangle` tauscht paarweise die Plätze zweier Felder, solange das
+  Kreuzungen spart und beide an den fremden Plätzen frei stehen. Und die
+  **Langlochknöpfe stehen wieder am gewählten Loch** (Robert: „wo sind
+  eigentlich die markierungen um es zum langloch zu ziehen?"): Seit dem
+  Maßeditor sperrte die stille Platzierung den Merkmalsgriff und nahm die
+  Knöpfe mit — am Stand `89a0de3a` fehlten sie genauso, geprüft mit zwei
+  Bildern derselben Lage. Seit `bd310fa5` lässt `Viewport.set_gizmo` in diesen Lagen nur
+  Pfeile, Ringe und Würfel weg (`only_knobs`); Flächenscheibe und Knöpfe
+  bleiben, und `grip_placement` baut sie nach dem ersten Griff wieder auf.
+  Dazu zeichnet der Langlochknopf während des Zugs nicht mehr selbst
+  (RM-200).
+
   Abnahme: Weg 1 öffnen, eine Bohrung anklicken — kein *Bezug ändern* im
-  Bild; jede Beschriftung steht frei neben dem Körper, und aus dem Bild geht
-  hervor, welche Linie sie bemaßt. Offen: Roberts Blick auf dem Hauptbaum
-  (der Abriss beim Klick auf die Bohrung, gemeldet an die CAD-Sitzung, stand
-  dem noch im Weg) und die Fensterabnahme beim Release. Gehört zur laufenden
-  Arbeit an P0.3/P0.4.
+  Bild; jede Beschriftung steht frei neben dem Körper, ihre Verbindung endet
+  in der Mitte der Maßlinie, keine zwei Verbindungen kreuzen sich, und am
+  Loch stehen die zwei Knöpfe zum Langloch. Offen: die Fensterabnahme beim
+  Release. Gehört zur laufenden Arbeit an P0.3/P0.4.
+
+<a id="rm-198"></a>
+
+- [~] **RM-198 — Eine feine Fenstermaske über der Vulkan-Fläche verliert das
+  Gerät.** Gefunden am 21.09.2026 beim Nachstellen von RM-197: Beim Wählen
+  einer Bohrung an Weg 1 riss die Anwendung mit „Error in wgpuQueueSubmit:
+  Validation Error — Parent device is lost", ohne Validierungsfehler oder
+  Verlustmeldung davor, auch mit wgpu-Protokoll auf Debug. Eingegrenzt über
+  eine Probe auf dem echten Startweg (`main()`, Weg 1 als Datei, Bohrung
+  über den Baum gewählt), je Schritt dreimal: Ohne die Fenstermaske der
+  Maßfläche (`_Dimensions.setMask`) lebt der Prozess; mit derselben Maske
+  unter D3D12 (`WGPU_BACKEND_TYPE=D3D12`) lebt er; unter Vulkan reißt er
+  bei 1682 Rechtecken in der Maske und lebt bei 1380 und bei 415. Jede
+  schräge Linie liefert ein Rechteck je Bildzeile — mit Feldern neben dem
+  Körper sind die Verbindungslinien lang, und die Zahl kippt.
+
+  **Behoben an der Wurzel:** Die Maßtinte zieht in den Renderer, wie die
+  Merkmalslinien — `_Dimensions` ist kein Widget mehr und trägt keine Maske;
+  Unterlage, Striche, Pfeile und Marken gehen über `add_lines` und
+  `add_surface` mit `keep_in_front` ins Bild. Ein gerasterter Deckel über der
+  Maske war zuerst gebaut und ist verworfen: graue Treppen an jeder schrägen
+  Linie und je Bild vier Durchläufe über alle Rechtecke (Robert:
+  „performancetechnisch auch ganz schlecht"). Die Probe über den echten
+  Startweg überlebt seither (zweimal), das Bild ist sauber
+  (`test_dimension_ink_lives_in_the_renderer_and_leaves_with_the_surface`).
+
+  **Was bleibt:** Die Overlaykarten tragen Masken mit runden Ecken — wenige
+  Rechtecke, nicht betroffen. Ob Windows D3D12 als Backend bekommt, wo es da
+  ist (unter D3D12 gab es den Fall nie), ist eine eigene Entscheidung und
+  kein Muss mehr.
+
+<a id="rm-199"></a>
+
+- [~] **RM-199 — Der Durchmesser steht doppelt: im Bild und rechts im
+  Auswahlfenster.** Robert, 21.09.2026, mit dem Maßeditor an Weg 1:
+  „durchmesser ist ja im viewport kann im merkmalpanel/auswahlpanel entfernt
+  werden". Die Maßgruppe im Bild trägt Durchmesser, Änderungsumfang, X, Y, Z
+  und Materialtoleranz; rechts im Auswahlfenster stehen dieselben Felder als
+  gesperrte Zwillinge (`FeaturePanel`, „Panelgegenstücke sind gesperrt"). Was
+  im Bild steht, fällt rechts weg, solange die Maße im Bild stehen; kommt der
+  Editor zu, kommen die Felder zurück. `panels.py` und `main_window.py` liegen
+  bei der CAD-Sitzung (P0.3, RM-188) — dort eingelöst, in `b25167fd`: Das
+  Merkmalfenster merkt sich je Handlung ihren Block aus Strich und Zeile
+  (`FeaturePanel._blocks`); `set_measuring(True, op=…)` nimmt den Block der
+  Handlung weg, deren Maße im Bild stehen, `set_measuring(False)` bringt ihn
+  zurück, die übrigen Handlungen des Merkmals bleiben. Gemessen an Weg 1 mit
+  `plate_holes.stl`: nach dem Wählen der Bohrung steht rechts kein Feld von
+  *Bohrung ändern* mehr, *Merkmal verschieben* schon; nach
+  `end_quiet_placement` stehen Durchmesser und Koordinaten wieder
+  (`test_ui.py::test_the_measures_in_the_view_take_their_twins_out_of_the_panel`).
+  Abnahme, offen beim Release: Bohrung an Weg 1 wählen, rechts kein
+  Durchmesser, keine Koordinaten; Escape, und sie stehen wieder.
+
+<a id="rm-200"></a>
+
+- [ ] **RM-200 — Ein Zug am Griff soll flüssig sein.** Robert, 21.09.2026:
+  „das verschieben über gizmo ist auch noch nicht flüssig". Gemessen am
+  21.09.2026 im echten Fenster an Weg 1 (`cProfile` im Prozess, echte Maus,
+  je 118 Bewegungen): ein Zug am **Platzierungsgriff** kostet 13 ms je
+  Bewegung, davon 12 ms das Bild (`_draw_with_occlusion`); ein Zug am
+  **Langlochknopf** kostete 32 ms, weil Knopf und Merkmalsmarke je ein eigenes
+  Bild anforderten — seit `bd310fa5` eines (21 ms). Was bleibt,
+  ist der Durchgang mit Umgebungsverdeckung: 12 bis 17 ms je Bild bei 3163 ×
+  1259 Bildpunkten, also 60 Bilder je Sekunde und nicht mehr. Offen: Roberts
+  Geste nachstellen (welcher Griff, und ob das Loslassen hängt — der
+  Werkzeugkörper wird danach im Arbeiter neu gebaut) und die
+  Umgebungsverdeckung während eines Zugs aussetzen, wie sie unter einer
+  Analysekarte schon weicht (`ansicht.md`).
 
 <a id="rm-070"></a>
 
