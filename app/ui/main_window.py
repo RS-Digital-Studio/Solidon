@@ -13959,7 +13959,7 @@ class MainWindow(QMainWindow):
         self._quiet_placement = flow
         self._quiet_target = target
         self._quiet_order = prepare
-        self.viewport.set_feature_gizmo_blocked(op != "slot_hole")
+        self.viewport.set_feature_gizmo_blocked(op != "slot_hole", knobs=True)
 
         def show_values() -> None:
             window = window_ref()

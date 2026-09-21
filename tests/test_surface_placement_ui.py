@@ -3149,6 +3149,39 @@ def test_a_drag_at_the_chosen_hole_pulls_the_slot_instead_of_moving_the_body(
         window.release()
 
 
+def test_a_blocked_grip_keeps_the_knobs_only_when_the_caller_says_so(
+    qt_app: QApplication,
+) -> None:
+    """Die Griffsperre allein nimmt die Knöpfe mit; nur der Maßeditor sagt ``knobs=True``.
+
+    Der Erkennungsdialog und eine Textur über der ganzen Fläche sperren
+    denselben Griff und wollen keinen Knopf — ein Zug daran endete in
+    ``slotProposed`` und damit im Merkmalfenster, mitten im fremden Dialog.
+    """
+    window = _window_with_a_renderer()
+    try:
+        _a_selected_hole(window)
+        viewport = window.viewport
+        assert viewport._slot_handle is not None, "der Maßeditor sagt es an"
+        viewport.set_feature_gizmo_blocked(True)
+        assert viewport._slot_handle is None and viewport._gizmo is None, (
+            "dieselbe Sperre ohne Ansage nimmt die Knöpfe mit"
+        )
+        viewport.set_feature_gizmo_blocked(True, knobs=True)
+        assert viewport._slot_handle is not None and viewport._gizmo is None, (
+            "mit Ansage stehen sie wieder — ohne Pfeile"
+        )
+        viewport.set_feature_gizmo_blocked(False)
+        assert viewport._slot_handle is None and viewport._gizmo is None, (
+            "der Platzierungsgriff des Editors ersetzt den Griff der Auswahl, "
+            "und ohne Ansage steht auch kein Knopf"
+        )
+    finally:
+        window.end_quiet_placement()
+        QApplication.processEvents()
+        window.release()
+
+
 def test_the_measures_stay_in_the_view_while_a_pulled_slot_waits(qt_app: QApplication) -> None:
     """Nach dem Zug zum Langloch bleiben die Maße stehen — auch wenn die Kamera dreht.
 

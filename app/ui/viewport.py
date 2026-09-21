@@ -4030,6 +4030,9 @@ class Viewport(QWidget):
         Baustein ginge dabei mit, obwohl der Baustein noch steht."""
         self._gizmo_wanted = False
         self._feature_gizmo_blocked = False
+        #: Ob die Langlochknöpfe trotz gesperrtem Griff stehen — sagt der
+        #: Aufrufer der Sperre, nicht die Sperre selbst.
+        self._knobs_stay = False
         """Ob der Gizmo eingeschaltet ist — unabhängig davon, ob gerade einer
         im Bild steht. Der Griff selbst wird bei jedem Auswahl- und
         Szenenwechsel neu angehängt; dieser Schalter sagt, ob überhaupt."""
@@ -11182,13 +11185,18 @@ class Viewport(QWidget):
         gibt es keinen, und ein Test, der sich dort überspringt, prüft nie
         etwas.
         """
-        if self._gizmo is None:
+        # Der Platzierungsgriff am Werkzeugkörper zählt wie der Griff der
+        # Auswahl: Seine Pfeile reichen über die Werkzeughülle hinaus, die die
+        # Platzierung selbst freihält, und ein Feld über der Spitze machte
+        # sie tot.
+        grip = self._gizmo if self._gizmo is not None else self._placement_grip
+        if grip is None:
             return self._slot_handle.clearance if self._slot_handle is not None else None
-        reach = self._gizmo.reach
+        reach = grip.reach
         if self._slot_handle is not None:
             centre, radius = self._slot_handle.clearance
-            reach = max(reach, math.dist(self._gizmo.origin, centre) + radius)
-        return self._gizmo.origin, reach
+            reach = max(reach, math.dist(grip.origin, centre) + radius)
+        return grip.origin, reach
 
     def gizmo_target(self) -> Feature | None:
         """Die Fläche, an der der Gizmo hängt — oder ``None`` für das Objekt.
@@ -11284,11 +11292,22 @@ class Viewport(QWidget):
         needed = ("centre", "axis", "diameter")
         return feature if all(feature.params.get(name) is not None for name in needed) else None
 
-    def set_feature_gizmo_blocked(self, blocked: bool) -> None:
-        """Ein fester Flächenbezug erlaubt während der Eingabe keinen Bewegungsgriff."""
-        if self._feature_gizmo_blocked == blocked:
+    def set_feature_gizmo_blocked(self, blocked: bool, *, knobs: bool = False) -> None:
+        """Ein fester Flächenbezug erlaubt während der Eingabe keinen Bewegungsgriff.
+
+        ``knobs`` sagt, ob die zwei Langlochknöpfe trotzdem stehen — das
+        will der Maßeditor an einer gewählten Bohrung (Robert, 21.09.2026:
+        „wo sind eigentlich die markierungen um es zum langloch zu ziehen?"),
+        nicht aber der Erkennungsdialog oder eine Textur über der ganzen
+        Fläche, die dieselbe Sperre setzen. Aus der Sperre allein war das
+        nicht abzuleiten: Ein Zug am Knopf endet in ``slotProposed`` und
+        damit im Merkmalfenster, mitten in einem fremden Dialog.
+        """
+        stay = blocked and knobs
+        if self._feature_gizmo_blocked == blocked and self._knobs_stay == stay:
             return
         self._feature_gizmo_blocked = blocked
+        self._knobs_stay = stay
         self.set_gizmo(self._gizmo_wanted)
 
     def set_gizmo(self, active: bool) -> None:
@@ -11365,12 +11384,17 @@ class Viewport(QWidget):
         # dem Maßeditor (20.09.2026) fielen sie mit dem Bewegungsgriff, und
         # ein gewähltes Loch hatte im Bild nichts mehr, woran man es zum
         # Langloch zieht. Was in diesen Lagen entfällt, sind Pfeile, Ringe und
-        # Würfel; Flächenscheibe und Knöpfe bleiben.
-        only_knobs = self._feature_gizmo_blocked or self._placement_grip_item is not None
+        # Würfel; Flächenscheibe und Knöpfe bleiben — **wo der Aufrufer der
+        # Sperre es gesagt hat** (``knobs=True``). Der Erkennungsdialog und
+        # eine Textur über der ganzen Fläche sperren denselben Griff und
+        # wollen keinen Knopf; ohne Ansage bleibt es beim Abnehmen.
+        blocked = self._feature_gizmo_blocked or self._placement_grip_item is not None
+        only_knobs = blocked and self._knobs_stay
         if (
             (not active and marked is None)
             or self._selected is None
             or self._preview_gizmo_wanted
+            or (blocked and not only_knobs)
             or (only_knobs and slotted is None)
         ):
             self.gizmoStatus.emit("")
@@ -11412,9 +11436,7 @@ class Viewport(QWidget):
                 release_callback=self._on_gizmo_released,
                 interact_callback=self._on_gizmo_interacted,
             )
-        if marked is None and only_knobs:
-            pass
-        elif marked is None:
+        if marked is None:
             # Das dritte Drittel von §18.11: Der Griff verschiebt und dreht,
             # der Würfel skaliert. **Nur am ganzen Objekt** — ein Merkmal hat
             # keine Größe, die dieser Würfel ändern könnte: Eine Fläche kennt

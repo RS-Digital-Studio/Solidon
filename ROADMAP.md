@@ -1776,7 +1776,8 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
   Abnahme: Weg 1 öffnen, eine Bohrung anklicken — kein *Bezug ändern* im
   Bild; jede Beschriftung steht frei neben dem Körper, ihre Verbindung endet
-  in der Mitte der Maßlinie, keine zwei Verbindungen kreuzen sich, und am
+  in der Mitte der Maßlinie, Verbindungen kreuzen sich nicht, soweit ein
+  Tausch es löst, und am
   Loch stehen die zwei Knöpfe zum Langloch; nach einem Zug zum Langloch
   bleiben Maße und Felder stehen und folgen der Kamera (Robert, 21.09.2026
   abends: „wenn wir das langloch ziehen und dann die ansicht drehen sind die
@@ -1786,8 +1787,27 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   („manche maßlinien fehlen aber": Nach dem Zug greift der Griff über Knöpfe
   und Umriss hinaus, die 10 mm zur Außenkante lagen ganz darin;
   `test_a_dimension_line_swallowed_by_the_grip_is_drawn_whole`).
-  Offen: die Fensterabnahme beim Release. Gehört zur laufenden Arbeit an
-  P0.3/P0.4.
+  **Review der fünf Commits am Abend des 21.09.2026** (elf Befunde, alle
+  eingearbeitet): ein Stück Maßlinie kürzer als ein Pfeil zählt wie
+  verschluckt (`LEAST_PIECE`, sonst ein Stummel ohne Pfeil bei anderem Zoom);
+  die Kreuzungsprüfung kommt aus dem Kern (`profile.strictly_crossing`, der
+  Zwilling in der Oberfläche rechnete ohne Toleranz); das Geräteverhältnis vom
+  Renderer statt vom Widget, und `placement_flow.py` lädt seither
+  `ansicht.md`; die Langlochknöpfe stehen bei gesperrtem Griff nur, wo der
+  Aufrufer es sagt (`set_feature_gizmo_blocked(..., knobs=True)` — der
+  Erkennungsdialog und die Ganzflächentextur sperren denselben Griff und
+  bekamen sonst Knöpfe, deren Zug im Merkmalfenster endete); die Tinte liegt
+  über `draw_order` unter Griff und Knöpfen, statt dass der Weltursprung
+  entscheidet (Vertrag `SurfaceStyle.draw_order`, `add_lines(draw_order=)`,
+  am echten Renderer gemessen: ohne Ordnung kippt die ferne Lage); je Aufbau
+  drei `display_to_world`-Aufrufe statt 1760 (affin in fester Tiefe, am
+  Renderer geprüft; vorher 15 ms je Radraste); der Anker der Verbindungslinie
+  steht einmal in `pending`; der Rand der Marke kommt nach den Linien; ein
+  toter Zweig in `set_gizmo`, das wirkungslose `area`, ein Test mit
+  Selbstvergleich und zwei deutsche Bezeichner (`platz`, `unten`, seit dem
+  09.09. in der Notlage der Platzsuche) sind weg; `gizmo_reach` kennt den
+  Platzierungsgriff. Offen: die Fensterabnahme beim Release. Gehört zur
+  laufenden Arbeit an P0.3/P0.4.
 
 <a id="rm-198"></a>
 
