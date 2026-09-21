@@ -1781,7 +1781,11 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   bleiben Maße und Felder stehen und folgen der Kamera (Robert, 21.09.2026
   abends: „wenn wir das langloch ziehen und dann die ansicht drehen sind die
   maße weg" — der wartende Zug blendete die gebundene Maßgruppe beim nächsten
-  Aufbau aus; `test_the_measures_stay_in_the_view_while_a_pulled_slot_waits`).
+  Aufbau aus; `test_the_measures_stay_in_the_view_while_a_pulled_slot_waits`),
+  und eine Maßlinie, die ganz in der Aussparung des Griffs läge, kommt ganz
+  („manche maßlinien fehlen aber": Nach dem Zug greift der Griff über Knöpfe
+  und Umriss hinaus, die 10 mm zur Außenkante lagen ganz darin;
+  `test_a_dimension_line_swallowed_by_the_grip_is_drawn_whole`).
   Offen: die Fensterabnahme beim Release. Gehört zur laufenden Arbeit an
   P0.3/P0.4.
 

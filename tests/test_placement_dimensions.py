@@ -195,6 +195,48 @@ def test_placement_ghost_uses_a_filled_surface_without_tessellation_edges(
         viewport.close()
 
 
+def test_a_dimension_line_swallowed_by_the_grip_is_drawn_whole(qt_app: QApplication) -> None:
+    """Eine Maßlinie, die ganz im Griff läge, kommt ganz — mit beiden Pfeilen.
+
+    Die Aussparung um den Griff ist Kosmetik, die Tinte nimmt keinen Klick an.
+    Nach dem Zug zum Langloch greift der Griff über Knöpfe und Umriss hinaus,
+    und die 10 mm zur Außenkante lagen ganz darin: ein Feld mit Zahl, aber
+    ohne Linie (Robert, 21.09.2026: „manche maßlinien fehlen aber"). Eine
+    Linie, die über den Griff hinausreicht, verliert weiter nur das Stück im
+    Griff — und den Pfeil, der darin steht.
+    """
+    from tests.test_surface_placement_ui import _Viewport
+
+    viewport = _Viewport()
+    canvas = _Dimensions(viewport)
+    canvas.clearing = (QPointF(100, 100), 50.0)
+    short = (QPointF(100, 100), QPointF(130, 100))
+    long = (QPointF(100, 100), QPointF(300, 100))
+    try:
+        canvas.lines = [short]
+        canvas.refresh()
+        assert canvas.segments == [short], "die verschluckte Linie steht ganz"
+        heads = [
+            entry for entry in viewport.renderer.surfaces if entry["name"] == "dimension_arrowheads"
+        ]
+        assert len(heads) == 1 and len(heads[0]["args"][1]) == 2, "mit beiden Pfeilen"
+
+        canvas.lines = [long]
+        canvas.refresh()
+        assert len(canvas.segments) == 1
+        ((start, end),) = canvas.segments
+        assert start.x() == pytest.approx(150.0) and end == QPointF(300, 100), (
+            "die lange Linie verliert nur das Stück im Griff"
+        )
+        heads = [
+            entry for entry in viewport.renderer.surfaces if entry["name"] == "dimension_arrowheads"
+        ]
+        assert len(heads) == 1 and len(heads[0]["args"][1]) == 1, "und den Pfeil darin"
+    finally:
+        canvas.hide()
+        viewport.close()
+
+
 def test_moving_dimension_ink_swaps_its_renderer_items(qt_app: QApplication) -> None:
     """Jeder Aufbau tauscht die Elemente aus — nichts sammelt sich im Renderer an."""
     from tests.test_surface_placement_ui import _Viewport

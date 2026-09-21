@@ -578,7 +578,15 @@ class _Dimensions:
         )
 
     def _outside_the_clearing(self, start: QPointF, end: QPointF) -> list[tuple[QPointF, QPointF]]:
-        """Das Stück Strecke, das nicht im Griff liegt — null, ein oder zwei Teile."""
+        """Das Stück Strecke, das nicht im Griff liegt — ein oder zwei Teile.
+
+        **Eine Strecke, die ganz im Griff läge, kommt ganz.** Die Aussparung
+        ist Kosmetik — die Tinte nimmt keinen Klick an —, und ein Maß, dessen
+        Linie fehlt, sagt nicht mehr, wohin es geht: Nach dem Zug zum Langloch
+        greift der Griff über Knöpfe und Umriss hinaus, und die 10 mm zur
+        Außenkante lagen ganz darin (Robert, 21.09.2026: „manche maßlinien
+        fehlen aber").
+        """
         if self.clearing is None:
             return [(start, end)]
         centre, radius = self.clearing
@@ -592,7 +600,7 @@ class _Dimensions:
         c = QPointF.dotProduct(offset, offset) - radius * radius
         discriminant = b * b - 4.0 * square * c
         if discriminant <= 0.0:
-            return [] if c < 0.0 else [(start, end)]
+            return [(start, end)]
         root = math.sqrt(discriminant)
         first = (-b - root) / (2.0 * square)
         second = (-b + root) / (2.0 * square)
@@ -601,11 +609,12 @@ class _Dimensions:
             pieces.append((start, start + vector * min(first, 1.0)))
         if second < 1.0:
             pieces.append((start + vector * max(second, 0.0), end))
-        return [
+        kept = [
             (head, tail)
             for head, tail in pieces
             if QPointF.dotProduct(tail - head, tail - head) >= 1.0
         ]
+        return kept or [(start, end)]
 
     def _in_the_clearing(self, point: QPointF) -> bool:
         if self.clearing is None:
@@ -647,7 +656,19 @@ class _Dimensions:
         if renderer is None:
             return
         solid: list[tuple[QPointF, QPointF]] = []
-        for start, end in (*self.lines, *self.references):
+        heads: list[QPolygonF] = []
+        for start, end in self.lines:
+            pieces = self._outside_the_clearing(start, end)
+            solid.extend(pieces)
+            # Eine Linie, die ganz kommt, bringt beide Pfeile mit — auch dort,
+            # wo sie im Griff stehen; sonst nur die außerhalb.
+            whole = pieces == [(start, end)]
+            heads.extend(
+                polygon
+                for polygon in self._arrowheads(start, end)
+                if whole or not self._in_the_clearing(polygon.toList()[0])
+            )
+        for start, end in self.references:
             solid.extend(self._outside_the_clearing(start, end))
         dashed: list[tuple[QPointF, QPointF]] = []
         for start, end in (*self.leaders, *self.extensions):
@@ -656,12 +677,6 @@ class _Dimensions:
         ring: list[tuple[QPointF, QPointF]] = []
         if len(self.outline) >= 3 and self.outline_colour is not None:
             ring = list(zip(self.outline, [*self.outline[1:], self.outline[0]], strict=True))
-        heads = [
-            polygon
-            for start, end in self.lines
-            for polygon in self._arrowheads(start, end)
-            if not self._in_the_clearing(polygon.toList()[0])
-        ]
         marks = [
             point
             for start, end in self.leaders

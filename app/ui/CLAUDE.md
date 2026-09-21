@@ -67,7 +67,12 @@ Merkmalslinien; die Zahlenfelder bleiben Qt-Fenster und liegen ohnehin über
 dem Bild. Die Listen der Klasse tragen logische Bildpunkte, `refresh` legt
 sie über `display_to_world` auf eine feste Tiefe und tauscht die Elemente je
 Aufbau aus; `segments` sagt Tests, wo Tinte liegt. Die Overlaykarten tragen
-weiter Masken — runde Ecken, wenige Rechtecke.
+weiter Masken — runde Ecken, wenige Rechtecke. Die Aussparung um den Griff
+(`clearing`, aus `Viewport.gizmo_reach`) ist seither Kosmetik — die Tinte
+ist nicht anklickbar —, und eine Linie, die ganz darin läge, kommt ganz, mit
+beiden Pfeilen: Nach dem Zug zum Langloch greift der Griff über Knöpfe und
+Umriss hinaus, und ein Maß von 10 mm zur Außenkante hatte sonst ein Feld,
+aber keine Linie (Robert, 21.09.2026: „manche maßlinien fehlen aber").
 Wer eine Zahl in ein Maßfeld tippt, wird dabei nicht überschrieben: Jeder
 Tastendruck geht als Wert in den Entwurf, und die zwei Rückwege — Maßgruppe
 und Merkmalfenster — schreiben während des Lesens nichts zurück
