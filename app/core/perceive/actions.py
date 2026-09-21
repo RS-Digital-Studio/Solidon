@@ -133,6 +133,14 @@ ACTION_ORDER: Final[tuple[tuple[str, ...], ...]] = (
 #: versetzen, ändern und entfernen — nur nicht drehen, denn sie hat keine
 #: Lage. Der Satz aus :data:`NOT_APPLICABLE` („von einer Kugelfläche ist
 #: gemessen …") wäre dort schlicht falsch.
+#: Ein Gewinde trägt seit P2.6 Ändern und Entfernen (``prepare_ops._resize_thread``,
+#: ``_remove_thread``); versetzt, gedreht oder verdoppelt wird der Körper oder die
+#: Bohrung, auf der es sitzt — ein Satz für die drei Zeilen.
+THREAD_STAYS_WHERE_IT_IS: Final = _(
+    "Ein Gewinde sitzt an seinem Schaft oder in seiner Bohrung. "
+    "Versetzen, drehen oder verdoppeln Sie den Körper oder die Bohrung."
+)
+
 NOT_APPLICABLE_HERE: Final[dict[tuple[str, str], TranslatableText]] = {
     ("sphere", "rotate_feature"): _(
         "Eine Kugelfläche hat keine Lage, die sich drehen ließe — gedreht sähe sie aus wie vorher."
@@ -167,6 +175,10 @@ NOT_APPLICABLE_HERE: Final[dict[tuple[str, str], TranslatableText]] = {
     ("torus", "slot_hole"): _(
         "Gezogen wird ein Loch. Ein Ring hat keine Bohrung, die länger würde."
     ),
+    ("thread", "slot_hole"): _("Gezogen wird ein Loch. Ein Gewinde wird nicht länglich."),
+    ("thread", "move_feature"): THREAD_STAYS_WHERE_IT_IS,
+    ("thread", "duplicate_feature"): THREAD_STAYS_WHERE_IT_IS,
+    ("thread", "rotate_feature"): THREAD_STAYS_WHERE_IT_IS,
 }
 
 #: Warum an einem Ring, der der ganze Körper ist, jede Handlung absagt: Seine
@@ -241,18 +253,15 @@ NOT_APPLICABLE: Final[dict[str, TranslatableText]] = {
     # Bohrung (RM-153). Der Satz ist gefallen, nicht verschoben.
     # **Der Fallback stand hier bis zum 10.09.2026**, und er sagte nichts:
     # „Für diese Art von Merkmal gibt es noch keine Handlung." Ein Ende ohne
-    # Weg nach vorn ist genau das, was Regel 17 verbietet — und einen Weg gibt
-    # es: Ein Gewinde entsteht in einem Baustein (§24.1), und dessen Schritt
-    # steht in ``Feature.created_by``. Nur ein **erkanntes** Gewinde, das aus
-    # einer fremden Datei kommt, hat keinen; für das nennt der Satz den
-    # zweiten Weg.
-    "thread": _(
-        "Ein Gewinde ist eine Wendelfläche und trägt kein einzelnes Maß, das "
-        "sich ändern ließe. Stammt es aus einem Baustein, ändern Sie es über "
-        "„Diesen Schritt ändern“. In einem eingelesenen Modell hilft „Bohrung "
-        "verschließen“ ohne gewähltes Merkmal, mit Lage und Durchmesser von "
-        "Hand — danach setzen Sie ein neues Gewinde."
-    ),
+    # Weg nach vorn ist genau das, was Regel 17 verbietet. An seine Stelle trat
+    # ein Satz über das Gewinde — „trägt kein einzelnes Maß, das sich ändern
+    # ließe", mit dem Verweis auf den Bausteinschritt in ``Feature.created_by``
+    # —, und **der stand hier bis zum 21.09.2026**: Seit P2.6 ändert *Merkmal
+    # ändern* Durchmesser und Steigung und *Merkmal entfernen* nimmt außen den
+    # Gang und schließt innen die Bohrung (``prepare_ops._resize_thread``,
+    # ``_remove_thread``); Versetzen, Drehen und Verdoppeln sagen ihren Satz in
+    # ``NOT_APPLICABLE_HERE``, und ein erkanntes Gewinde aus einer fremden
+    # Datei braucht keinen Schritt mehr, auf den man zeigen könnte.
     # **Der erste Entwurf sperrte hier alles, und das war messbar falsch.** Er
     # begründete es damit, an einen eingeschlossenen Hohlraum komme kein
     # Werkzeug heran — dabei versetzt
@@ -326,6 +335,7 @@ _FROM_FEATURE: Final[dict[str, FeatureValueSource]] = {
     "z": ("centre", 2),
     "diameter": ("diameter", None),
     "tube_diameter": ("tube_diameter", None),
+    "pitch": ("pitch", None),
     "depth": ("depth", None),
     # Die Länge eines Langlochs hat kein gemessenes Gegenstück — die Bohrung
     # hat noch keines. Genommen wird ihr Durchmesser, und
@@ -540,6 +550,21 @@ def _action_field(entry: Any, feature: Feature, op: str) -> ActionField:
     )
 
 
+def _carried_by(entry: Any, feature: Feature) -> bool:
+    """Trägt das Merkmal die Kennzahl, aus der dieses Feld liest?
+
+    Ein Feld, das nur eine Merkmalsart kennt — die Rohrdicke des Rings, die
+    Steigung des Gewindes —, stand sonst an jedem änderbaren Merkmal mit
+    „0 mm“: eine Frage ohne Gegenstand (Review, 21.09.2026). Was das Merkmal
+    nicht misst und wofür das Schema nichts vorgibt, ist dort kein Feld.
+    Eine Vorgabe ungleich null bleibt: Sie ist eine Aussage, kein Messwert.
+    """
+    source = feature_value_source(entry.name, feature)
+    if source is None or source[0] in feature.params:
+        return True
+    return bool(getattr(entry, "default", None))
+
+
 def _fields_of(spec: Any, feature: Feature) -> tuple[ActionField, ...]:
     """Die Felder einer Operation — ohne die Merkmalskennung.
 
@@ -556,6 +581,7 @@ def _fields_of(spec: Any, feature: Feature) -> tuple[ActionField, ...]:
         # mit eigenem Maß ``nx`` nennt sie anders, und die blieben sonst stehen.
         if entry.kind not in {"feature", "features"}
         and entry.name not in normal_fields_of(spec)
+        and _carried_by(entry, feature)
         # Was die Operation selbst erfragt, ist hier kein Feld: Die Antwort
         # entsteht beim Ausführen und gilt nur, wo die Frage einen Gegenstand
         # hat (:func:`~app.core.registry.surfaces.asked_fields`). *Merkmal

@@ -452,7 +452,8 @@ _NOT_A_RANGE = frozenset(
         "no_shapes", "no_size", "no_sources", "no_split", "no_split_target", "no_triangles",
         "not_a_face", "not_a_hole", "not_a_mesh", "not_a_number", "not_an_archive",
         "not_a_project", "private_destination",
-        "not_a_twin", "not_movable", "not_outline", "not_step", "not_upright", "one_body",
+        "left_handed", "not_a_twin", "not_movable", "not_outline", "not_step", "not_upright",
+        "one_body", "multi_start",
         # Eine Öffnungsfläche, die zu einem anderen Körper gehört, schräg liegt
         # oder innen sitzt (RM-087): eine andere Fläche ist der Weg, keine Zahl.
         "foreign_feature", "not_axis_aligned", "not_outside",

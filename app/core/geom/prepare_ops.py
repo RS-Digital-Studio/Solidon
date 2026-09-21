@@ -112,6 +112,7 @@ from app.core.types import (
     SolverInfo,
     Vec3,
     is_a_cavity,
+    thread_is_left_handed,
     vec3_or_none,
 )
 from app.core.units import (
@@ -2398,6 +2399,30 @@ TORUS_NOT_SEPARABLE: Final = _(
 
 TORUS_TUBE_TOO_WIDE: Final = _("Der Rohrdurchmesser muss kleiner als der Ringdurchmesser sein.")
 
+#: Das Bausteingewinde ist rechtsgängig (``shapes.thread_body``); ein linkes
+#: neu zu schneiden hieße, es zu spiegeln — das tut hier niemand still.
+THREAD_LEFT_HANDED: Final = _(
+    "Ein linksgängiges Gewinde lässt sich hier nicht neu schneiden. Setzen Sie es als Baustein neu."
+)
+
+#: Die Gangtiefe ist ``RIDGE_SHARE`` Steigungen; über dem halben Nennmaß bliebe außen
+#: kein Kern und innen keine Bohrung — dieselbe Ungleichung für beide Seiten.
+THREAD_PITCH_TOO_STEEP: Final = _(
+    "Die Steigung passt nicht zum Durchmesser. Wählen Sie eine kleinere Steigung."
+)
+
+#: Ein Gewinde ohne bewendelte Strecke hat keinen Ort, an dem ein Werkzeug ansetzt.
+THREAD_WITHOUT_LENGTH: Final = _(
+    "Dieses Gewinde nennt keine Strecke. Ändern Sie den Schritt, der es erzeugt hat, "
+    "oder setzen Sie es als Baustein neu."
+)
+
+#: Das Bausteingewinde hat einen Gang je Umlauf (``build.threaded``); ein zweigängiges
+#: neu zu schneiden machte still ein eingängiges daraus — dieselbe Absage wie links.
+THREAD_MULTI_START: Final = _(
+    "Ein mehrgängiges Gewinde lässt sich hier nicht neu schneiden. Setzen Sie es als Baustein neu."
+)
+
 NO_OWN_BODY: Final = _(
     "Dieses Merkmal geht in einen anderen Hohlraum über, etwa eine Senkung in ihre "
     "Bohrung. Verschließen Sie beide zusammen mit „Bohrung verschließen“ und setzen "
@@ -3179,13 +3204,13 @@ class RemoveFeatureParams(BaseParams):
     params=RemoveFeatureParams,
     consumes=1,
     produces=1,
-    applies_to=[*MOVABLE_KINDS, "fillet"],
+    applies_to=[*MOVABLE_KINDS, "fillet", "thread"],
     touches_features=True,
     deterministic=False,
     doc=_(
         "Entfernt ein erkanntes Merkmal: Bohrung, Langloch, Zapfen, Senkung, "
-        "Verjüngung, Kuppel, Pfanne, Wulst, Kehle oder Rundung — und füllt einen "
-        "Lufteinschluss mit Material."
+        "Verjüngung, Kuppel, Pfanne, Wulst, Kehle, Gewinde oder Rundung — und füllt "
+        "einen Lufteinschluss mit Material."
     ),
 )
 def remove_feature(ctx: OpContext) -> OpResult:
@@ -3216,6 +3241,8 @@ def remove_feature(ctx: OpContext) -> OpResult:
     chain = _cavity_chain_of(body, feature, source.features)
     if feature.kind == "torus":
         return _remove_torus(ctx, source, feature)
+    if feature.kind == "thread":
+        return _remove_thread(ctx, source, feature)
     if source.kind == "brep" and chain is None and feature.kind in EXACT_CAVITY_KINDS:
         return _exact_remove_cavity(ctx, source, feature)
     if source.kind == "brep" and chain is None and feature.kind in EXACT_FACE_KINDS:
@@ -3943,6 +3970,14 @@ class ResizeFeatureParams(BaseParams):
             "Null lässt sie unverändert."
         ),
     )
+    pitch: float = param(
+        title=_("Steigung"),
+        default=0.0,
+        unit="mm",
+        minimum=0.0,
+        placement="advanced",
+        doc=_("Nur an einem Gewinde: die neue Steigung. Null lässt sie unverändert."),
+    )
 
 
 @register_op(
@@ -3957,12 +3992,13 @@ class ResizeFeatureParams(BaseParams):
     # den exakten Kern und einer Materialkompensation, die für ein Loch gilt und
     # für einen Zapfen andersherum liefe. Die beiden überschneiden sich deshalb
     # nicht, und ``perceive.actions`` legt sie zu **einer** Zeile zusammen.
-    applies_to=["pin", "cone", "sphere", "fillet", "torus"],
+    applies_to=["pin", "cone", "sphere", "fillet", "torus", "thread"],
     touches_features=True,
     deterministic=False,
     doc=_(
         "Ändert den Durchmesser eines erkannten Merkmals: Zapfen, Senkung, "
-        "Verjüngung, Kuppel, Pfanne, Wulst oder Kehle — oder den Radius einer Rundung."
+        "Verjüngung, Kuppel, Pfanne, Wulst oder Kehle — den Durchmesser und die "
+        "Steigung eines Gewindes, den Radius einer Rundung."
     ),
 )
 def resize_feature(ctx: OpContext) -> OpResult:
@@ -3990,6 +4026,8 @@ def resize_feature(ctx: OpContext) -> OpResult:
     _reject_oversized("diameter", params.diameter, source.mesh)
     if feature.kind == "torus":
         return _resize_torus(ctx, source, feature, centre, params.diameter, params.tube_diameter)
+    if feature.kind == "thread":
+        return _resize_thread(ctx, source, feature, params.diameter, params.pitch)
 
     if is_close(params.diameter, previous):
         return OpResult(
@@ -7896,6 +7934,509 @@ def _resize_torus(
         {**source.features, feature.id: changed},
         [*closed.findings, *placed.findings],
     )
+
+
+# --- Gewinde: ändern und verschließen, in beiden Kernen (P2.6) --------------------------------
+#
+# Ein Gewinde ist eine bewendelte Strecke auf einem Schaft (außen) oder in
+# einer Bohrung (innen), mit Mitte, Achse, Durchmesser, Steigung und Länge.
+# Gearbeitet wird mit demselben Bausteingewinde wie beim Einsetzen
+# (``build.threaded``, ``shapes.ridge_profile``), je Kern: **außen** nimmt
+# das Entfernen den Gang zwischen Fuß- und Kammradius weg und lässt den Kern
+# als glatten Schaft stehen; das Ändern nimmt die ganze Strecke als
+# Hüllzylinder weg und vereinigt das neue Gewinde auf derselben Achse.
+# **Innen** füllt das Entfernen die Strecke mit einem Zylinder über dem
+# Kammradius — „Gewinde verschließen“ —, das Ändern füllt und schneidet mit
+# dem neuen Innenwerkzeug. Gemessen an einer Platte 40 auf 40 auf 10 mit
+# einem M6 mal 1 darauf und darin (21.09.2026): Gang weg auf 5 · 10⁻¹⁰,
+# Hülle weg exakt, M8 mal 1,25 gesetzt auf 5 · 10⁻⁶ (das ist die
+# Nähgenauigkeit des Gewindes
+# selbst), Loch verschlossen exakt, auf M8 geschnitten auf 10⁻⁸; am Netz
+# dieselben Schritte auf 3 · 10⁻⁴ gegen exakt, und beide Kerne erkennen das
+# neue Gewinde danach mit 8,0 / 1,25.
+#
+# **Die Enden sind je nach Nachbarschaft anders.** Hinter einem Ende liegt
+# Material (der Sockel eines aufgesetzten Gewindes, der Schaft eines Bolzens)
+# oder Luft (die freie Spitze, die Mündung eines Gewindelochs). Ein
+# aufgesetztes Bausteingewinde ist um ``BOOLEAN_OVERLAP`` in seinen Sockel
+# eingesunken: Dort endet das äußere Werkzeug diese Spanne vor dem Sockel,
+# sonst bliebe im Sockel ein Ring von einem Hundertstel. Wo Luft ist, reicht
+# das äußere Werkzeug darüber hinaus (keine Haut an der Spitze), das innere
+# **nicht** (kein Zapfen an der Mündung — dieselbe Lehre wie bei ``fill_bore``).
+
+
+def _thread_frame(feature: Feature) -> tuple[np.ndarray, np.ndarray, float]:
+    """Mitte, Einheitsachse und bewendelte Länge — oder die Absage ohne Strecke."""
+    raw_length = feature.params.get("length", 0.0)
+    length = float(raw_length) if isinstance(raw_length, int | float) else 0.0
+    if not math.isfinite(length) or length <= EPS_GEOM:
+        raise ValidationError(
+            field="at_feature",
+            detail=THREAD_WITHOUT_LENGTH,
+            values={"feature": feature.id, "kind": feature.kind},
+            constraint="not_movable",
+            suggestions=(CHANGE_SELECTION, CANCEL),
+        )
+    centre = np.asarray(_bore_vector(feature, "centre"), dtype=float)
+    return centre, _torus_axis(feature), length
+
+
+def _thread_corners(feature: Feature, source: SceneObject) -> tuple[np.ndarray, np.ndarray] | None:
+    """Die Ecken der eigenen Dreiecke eines erkannten Netzgewindes: entlang der Achse, radial.
+
+    Der Netzleser nennt Durchmesser, Steigung, Mitte und Strecke aus einem
+    Fit über Dreiecksmitten — und der liegt am ISO-Korpus radial um die
+    Sehnenhöhe innerhalb der Kammecken und axial um 0,08 mm neben der Stange
+    (21.09.2026: 51 Kammsplitter, dann eine Scheibe am unteren Ende). Die
+    Ecken sagen, wo das Gewinde wirklich ist. Ein exakter Körper und ein
+    erzeugtes Gewinde brauchen das nicht: Dort sind die Zahlen die Wahrheit.
+    """
+    if source.kind == "brep" or not feature.face_indices:
+        return None
+    raw = as_mesh_data(source.mesh).raw
+    corners = np.unique(np.asarray(raw.faces)[list(feature.face_indices)])
+    relative = np.asarray(raw.vertices)[corners] - np.asarray(
+        _bore_vector(feature, "centre"), dtype=float
+    )
+    axis = _torus_axis(feature)
+    along = relative @ axis
+    return along, np.linalg.norm(relative - np.outer(along, axis), axis=1)
+
+
+def _thread_bounds(feature: Feature, source: SceneObject) -> tuple[float, float]:
+    """Innerer und äußerer Radius der Gänge: gemessen, sonst aus dem Profil.
+
+    Sortiert, nicht benannt: Der exakte Leser nennt am Innengewinde den
+    Grund ``root`` und die Bohrung ``crest`` — gegenläufig zu
+    ``shapes.ridge_profile``, wo innen der Fuß auf der Bohrung liegt. Wer
+    „Fuß“ allein nähme, hätte je Quelle einen anderen Radius.
+
+    Am Netz kommen die Grenzen eines **erkannten** Gewindes aus seinen eigenen
+    Ecken, nicht aus dem Fit: Der misst an Dreiecksmitten, und die liegen um
+    die Sehnenhöhe innerhalb der Kammecken — eine Hülle auf dem gemessenen
+    Kamm ließ am ISO-Korpus 51 Kammsplitter außerhalb stehen (21.09.2026).
+    """
+    from app.core.knowledge.parts import shapes
+
+    params = feature.params
+    if "root_radius" in params and "crest_radius" in params:
+        radii = (float(params["root_radius"]), float(params["crest_radius"]))
+    else:
+        profile = shapes.ridge_profile(
+            _tool_diameter(
+                _bore_number(feature, "diameter"),
+                _bore_number(feature, "pitch"),
+                internal=bool(params.get("internal", False)),
+            ),
+            _bore_number(feature, "pitch"),
+            internal=bool(params.get("internal", False)),
+        )
+        radii = (profile[0][0], max(radial for radial, _axial in profile))
+    inner, outer = min(radii), max(radii)
+    corners = _thread_corners(feature, source)
+    if corners is not None:
+        along, radial = corners
+        outer = max(outer, float(radial.max()))
+        # Der Talgrund: nur Ecken, die eine Steigung von den Enden entfernt
+        # liegen — die Stirnflächen der Stange zählen ihre Ecken sonst mit,
+        # und ihr innerster Ring lag am ISO-Korpus bei 1,70 statt 2,39.
+        clear = (float(along.max()) - float(along.min())) / 2.0 - _bore_number(feature, "pitch")
+        middle = (float(along.max()) + float(along.min())) / 2.0
+        deep = radial[np.abs(along - middle) < clear]
+        if deep.size and float(deep.min()) > EPS_GEOM:
+            inner = min(inner, float(deep.min()))
+    return inner, outer
+
+
+def _tool_diameter(diameter: float, pitch: float, *, internal: bool) -> float:
+    """Das Maß, in dem ``build.threaded`` rechnet: außen der Kamm, innen die Bohrung.
+
+    Ein Merkmal nennt innen die **Gewindebezeichnung**, also den Grund-Ø der
+    Gänge — so schreibt es der Baustein (``fasteners._printed_thread`` baut mit
+    ``nominal minus zwei Tiefen`` und meldet ``nominal``), so liest es der exakte
+    Kern (``2·max(crest, root)``), so misst es das Netz. Das Werkzeug will die
+    Bohrung darunter. Ohne diese Umrechnung wurde aus einer M6-Mutter beim
+    Ändern der Steigung eine mit Bohrung Ø 6 (Review, 21.09.2026).
+    """
+    from app.core.knowledge.parts import shapes
+
+    return diameter - 2.0 * pitch * shapes.RIDGE_SHARE if internal else diameter
+
+
+def _thread_checked(feature: Feature, diameter: float, pitch: float) -> tuple[float, float]:
+    """Der neue Durchmesser und die neue Steigung — die genannten oder die des Gewindes, geprüft."""
+    from app.core.knowledge.parts import shapes
+
+    if thread_is_left_handed(feature):
+        raise ValidationError(
+            field="at_feature",
+            detail=THREAD_LEFT_HANDED,
+            values={"feature": feature.id, "handedness": feature.params.get("handedness")},
+            constraint="left_handed",
+            suggestions=(CHANGE_SELECTION, CANCEL),
+        )
+    starts = feature.params.get("starts", 1)
+    if isinstance(starts, int | float) and starts > 1:
+        raise ValidationError(
+            field="at_feature",
+            detail=THREAD_MULTI_START,
+            values={"feature": feature.id, "starts": int(starts)},
+            constraint="multi_start",
+            suggestions=(CHANGE_SELECTION, CANCEL),
+        )
+    wanted_pitch = pitch or _bore_number(feature, "pitch")
+    if wanted_pitch <= EPS_GEOM or wanted_pitch * shapes.RIDGE_SHARE >= diameter / 2.0 - EPS_GEOM:
+        raise ValidationError(
+            field="pitch",
+            detail=THREAD_PITCH_TOO_STEEP,
+            values={"feature": feature.id, "diameter": diameter, "pitch": wanted_pitch},
+            constraint="thread_pitch",
+            suggestions=(CORRECT_INPUT, CANCEL),
+        )
+    return diameter, wanted_pitch
+
+
+def _material_at(source: SceneObject, point: np.ndarray) -> bool:
+    """Liegt dieser Punkt im Material des Körpers — je Kern gefragt.
+
+    Am Netz über ``mesh.on_surface`` und die Normale des nächsten Dreiecks —
+    nicht ``trimesh.contains``, das durch ``rtree`` führt (die Lehre von
+    ``prepare._flank_is_open``).
+    """
+    if source.kind == "brep":
+        from OCP.BRepClass3d import BRepClass3d_SolidClassifier
+        from OCP.gp import gp_Pnt
+        from OCP.TopAbs import TopAbs_IN, TopAbs_ON
+
+        classifier = BRepClass3d_SolidClassifier(
+            _exact_body(source).shape, gp_Pnt(*(float(v) for v in point)), EPS_GEOM
+        )
+        return classifier.State() in (TopAbs_IN, TopAbs_ON)
+    from app.core.geom.mesh import on_surface
+
+    raw = as_mesh_data(source.mesh).raw
+    flat = np.asarray(point, dtype=float).reshape(1, 3)
+    closest, _distance, triangle = on_surface(raw, flat)
+    outward = float(np.dot(flat[0] - closest[0], np.asarray(raw.face_normals)[triangle[0]]))
+    return outward <= EPS_GEOM
+
+
+def _thread_span(
+    source: SceneObject, feature: Feature, *, outside: bool, internal: bool
+) -> tuple[np.ndarray, np.ndarray, float, float, float, float]:
+    """Mitte, Achse, Anfang und Ende der Gänge und die Enden des Werkzeugs — alles entlang
+    der Achse, relativ zur Mitte.
+
+    ``outside`` sagt, ob das Werkzeug abträgt (Gang weg, Hülle weg, neu
+    schneiden) oder füllt; ``internal``, ob das Gewinde in einer Bohrung sitzt.
+    Hinter einem Ende mit **Material** endet nur das abtragende Werkzeug eines
+    aufgesetzten Bausteingewindes um ``BOOLEAN_OVERLAP`` früher — es ist um
+    diese Spanne in seinen Sockel eingesunken, und darüber hinaus schnitte es
+    ihn an; jedes andere abtragende Werkzeug endet dort bündig, und ein
+    Stopfen greift um die Spanne ins Material, sonst bleibt eine Scheibe der
+    Gänge als eingeschlossener Hohlraum stehen (Review, 21.09.2026: 0,28 mm³
+    in zwei Teilen). Hinter **Luft** reicht das abtragende Werkzeug hinaus, der
+    Stopfen nicht (kein Zapfen an der Mündung — die Lehre von ``fill_bore``).
+    """
+    centre, axis, length = _thread_frame(feature)
+    low, high = -length / 2.0, length / 2.0
+    corners = _thread_corners(feature, source)
+    if corners is not None:
+        # Die Strecke aus den Ecken: Der Fit legt Mitte und Länge daneben —
+        # am ISO-Korpus 0,08 mm über das obere Ende hinaus.
+        along = corners[0]
+        low, high = float(along.min()), float(along.max())
+    sunk = feature.provenance == "generated" and not internal
+    ends = []
+    for sign, edge in ((-1.0, low), (1.0, high)):
+        probe = centre + axis * (edge + sign * 2.0 * BOOLEAN_OVERLAP)
+        material = _material_at(source, probe)
+        if material:
+            reach = (-BOOLEAN_OVERLAP if sunk else 0.0) if outside else BOOLEAN_OVERLAP
+        else:
+            reach = BOOLEAN_OVERLAP if outside else 0.0
+        ends.append(edge + sign * reach)
+    return centre, axis, low, high, ends[0], ends[1]
+
+
+def _along_axis(centre: np.ndarray, axis: np.ndarray, body: Any, start: float) -> Any:
+    """Einen entlang Z ab null gebauten Körper auf die Achse legen, mit dem Anfang bei ``start``."""
+    from app.core.geom.ops import as_transform
+
+    turn = np.asarray(transform.rotation_between((0.0, 0.0, 1.0), axis), dtype=float)
+    origin = centre + axis * start
+    matrix = translation((float(origin[0]), float(origin[1]), float(origin[2]))) @ turn
+    if isinstance(body, MeshData):
+        raw = body.raw.copy()
+        transform.moved(raw, matrix)
+        return MeshData.of(raw)
+    from app.core.brep import edit
+
+    return edit.transformed(body, as_transform(matrix))
+
+
+def _shapes_moved(body: Any, along: float) -> Any:
+    """Ein Werkzeug entlang Z verschoben — die Netzseite von ``edit.moved``."""
+    from app.core.knowledge.parts import shapes
+
+    return shapes.moved(body, (0.0, 0.0, along))
+
+
+def _thread_cylinder(diameter: float, height: float, kind: str) -> Any:
+    """Ein Zylinder ab null entlang Z, je Kern — Hülle, Stopfen oder Kernstab eines Gewindes."""
+    from app.core.knowledge.parts import shapes
+
+    if kind == "brep":
+        with shapes.building("brep"):
+            return shapes.cylinder(diameter, height)
+    return shapes.cylinder(diameter, height)
+
+
+def _thread_body(diameter: float, pitch: float, length: float, *, internal: bool, kind: str) -> Any:
+    """Kern und Gang des Bausteingewindes ab null entlang Z, je Kern."""
+    from app.core.knowledge.parts import build, shapes
+
+    if kind == "brep":
+        with shapes.building("brep"):
+            return build.threaded(diameter, pitch, length, internal=internal)
+    return build.threaded(diameter, pitch, length, internal=internal)
+
+
+def _combined(
+    source: SceneObject,
+    ctx: OpContext,
+    kind: BooleanKind,
+    base: Any,
+    tool: Any,
+    *,
+    allow_empty: bool = False,
+) -> Any:
+    """Eine Boolesche je Kern: exakt über ``edit``, am Netz über die Rückfallkette."""
+    if source.kind == "brep":
+        from app.core.brep import edit
+
+        return edit.unified(edit.boolean(kind, [base, tool]))
+    return boolean(
+        kind,
+        [base, tool],
+        quality=ctx.quality,
+        seed=ctx.seed,
+        cancelled=ctx.cancelled,
+        allow_empty=allow_empty,
+    )
+
+
+def _thread_result(
+    ctx: OpContext,
+    source: SceneObject,
+    body: Any,
+    feature: Feature,
+    changed: Feature | None,
+    findings: list[Finding],
+) -> OpResult:
+    """Das Ende beider Gewindehandlungen: prüfen, Merkmale fortführen, das neue benennen.
+
+    Am exakten Körper sucht ``_exact_features_after`` das geänderte Gewinde an
+    seiner Stelle und stellt den Übergang nur aus, wenn es dort steht — ein
+    behaupteter Übergang ließ die native Erkennung daneben ein zweites
+    Gewinde unter frischem Namen anlegen (Review, 21.09.2026: ``thread_1``
+    erkannt neben ``thread_2`` gesetzt). Gefunden trägt es die gesetzten
+    Zahlen weiter, nicht die gelesenen: Provenienz schlägt Erkennung (§21.2).
+    """
+    if source.kind == "brep":
+        checked = _exact_body_checked(body)
+        features, continued, lost = _exact_features_after(
+            source, checked, expected=changed, gone=(feature.id,), cancelled=ctx.cancelled
+        )
+        if changed is not None:
+            if changed.id in lost:
+                findings.append(_cavity_lost_finding("resize_feature", changed))
+            else:
+                features = {**features, changed.id: changed}
+        return OpResult(
+            outputs=[
+                dataclasses.replace(
+                    source,
+                    mesh=checked,
+                    kind="brep",
+                    features=features,
+                    reserved_feature_ids=tuple(
+                        sorted({*source.reserved_feature_ids, *source.features})
+                    ),
+                )
+            ],
+            findings=findings,
+            feature_continuations=(
+                tuple(
+                    FeatureContinuation(FeatureRef(source.id, old_id), new_id)
+                    for old_id, new_id in continued
+                ),
+            ),
+        )
+    features = {name: entry for name, entry in source.features.items() if name != feature.id}
+    if changed is not None:
+        features[changed.id] = changed
+    return _torus_result(source, body, features, [*body.findings, *findings], reserve=True)
+
+
+def _remove_thread(ctx: OpContext, source: SceneObject, feature: Feature) -> OpResult:
+    """Gewinde entfernen: außen auf den Kern zurück, innen die Bohrung schließen."""
+    internal = bool(feature.params.get("internal", False))
+    centre, axis, _low, _high, start, stop = _thread_span(
+        source, feature, outside=not internal, internal=internal
+    )
+    inner, outer = _thread_bounds(feature, source)
+    reach = stop - start
+    base = _exact_body(source) if source.kind == "brep" else as_mesh_data(source.mesh)
+    if internal:
+        ctx.progress(0.2, str(_("Das Merkmal wird geschlossen …")))
+        # Der Stopfen greift um den Überlapp ins Material: Bündig mit dem Kamm
+        # der Gänge zerfiel die Vereinigung am Netz in 454 Splitter (21.09.2026).
+        plug = _thread_cylinder(2.0 * outer + 2.0 * BOOLEAN_OVERLAP, reach, source.kind)
+        body = _combined(source, ctx, "union", base, _along_axis(centre, axis, plug, start))
+    else:
+        ctx.progress(0.2, str(_("Das Merkmal wird abgetragen …")))
+        # Ein **gemessener** Fußradius trägt die Unsicherheit des Lesers: Ein
+        # Kernwerkzeug genau darauf ließ am ISO-Korpus exakt eine Rille von der
+        # Tiefe dieser Unsicherheit stehen und am Netz 52 Splitter zwischen
+        # Sehne und Talgrund (21.09.2026). Der Kern bleibt deshalb um den
+        # Überlapp unter dem gemessenen Fuß; ein gesetzter Fuß ist exakt.
+        core_radius = inner if feature.provenance == "generated" else inner - BOOLEAN_OVERLAP
+        sleeve = _thread_cylinder(2.0 * outer + 2.0 * BOOLEAN_OVERLAP, reach, source.kind)
+        core = _thread_cylinder(2.0 * core_radius, reach + 2.0 * BOOLEAN_OVERLAP, source.kind)
+        if source.kind == "brep":
+            from app.core.brep import edit
+
+            ring: Any = edit.boolean(
+                "difference", [sleeve, edit.moved(core, (0.0, 0.0, -BOOLEAN_OVERLAP))]
+            )
+        else:
+            ring = boolean(
+                "difference",
+                [sleeve, _shapes_moved(core, -BOOLEAN_OVERLAP)],
+                quality=ctx.quality,
+                seed=ctx.seed,
+                cancelled=ctx.cancelled,
+            ).mesh
+        body = _combined(source, ctx, "difference", base, _along_axis(centre, axis, ring, start))
+    findings = [
+        Finding(
+            code="remove_feature.gone",
+            severity="info",
+            message=_(
+                "Das Gewinde ist entfernt: außen bleibt der Kern, innen ist die Bohrung "
+                "geschlossen. Spätere Schritte, die auf es verweisen, finden es nicht mehr."
+            ),
+            feature_ids=(feature.id,),
+            values={"feature": feature.id, "kind": feature.kind, "removed": 1},
+        )
+    ]
+    return _thread_result(ctx, source, body, feature, None, findings)
+
+
+def _resize_thread(
+    ctx: OpContext, source: SceneObject, feature: Feature, diameter: float, pitch: float
+) -> OpResult:
+    """Gewinde ändern: die Strecke leeren beziehungsweise füllen, dann neu schneiden."""
+    internal = bool(feature.params.get("internal", False))
+    diameter, pitch = _thread_checked(feature, diameter, pitch)
+    if is_close(diameter, _bore_number(feature, "diameter")) and is_close(
+        pitch, _bore_number(feature, "pitch")
+    ):
+        return OpResult(
+            outputs=[source],
+            findings=[
+                Finding(
+                    code="resize_feature.unchanged",
+                    severity="info",
+                    message=_("Das Merkmal hat dieses Maß schon."),
+                    feature_ids=(feature.id,),
+                )
+            ],
+        )
+    centre, axis, low, high, start, stop = _thread_span(
+        source, feature, outside=not internal, internal=internal
+    )
+    length = high - low
+    _inner, outer = _thread_bounds(feature, source)
+    reach = stop - start
+    base = _exact_body(source) if source.kind == "brep" else as_mesh_data(source.mesh)
+    ctx.progress(0.1, str(_("Das Merkmal wird an seiner alten Stelle geschlossen …")))
+    if internal:
+        # Der Stopfen greift um den Überlapp ins Material: Bündig mit dem Kamm
+        # der Gänge zerfiel die Vereinigung am Netz in 454 Splitter (21.09.2026).
+        plug = _thread_cylinder(2.0 * outer + 2.0 * BOOLEAN_OVERLAP, reach, source.kind)
+        cleared = _combined(source, ctx, "union", base, _along_axis(centre, axis, plug, start))
+        ctx.progress(0.6, str(_("Das Merkmal wird mit dem neuen Maß gesetzt …")))
+        # Das Innenwerkzeug reicht an einer Mündung um die Überlappung hinaus,
+        # damit dort keine Haut bleibt; an einem Grund endet es bündig. Und es
+        # rechnet in der Bohrung, nicht in der Bezeichnung (``_tool_diameter``).
+        _c, _a, _lo, _hi, tap_start, tap_stop = _thread_span(
+            source, feature, outside=True, internal=True
+        )
+        tap = _thread_body(
+            _tool_diameter(diameter, pitch, internal=True),
+            pitch,
+            tap_stop - tap_start,
+            internal=True,
+            kind=source.kind,
+        )
+        base_after = cleared.mesh if source.kind != "brep" else cleared
+        body = _combined(
+            source, ctx, "difference", base_after, _along_axis(centre, axis, tap, tap_start)
+        )
+    else:
+        envelope = _thread_cylinder(2.0 * outer + 2.0 * BOOLEAN_OVERLAP, reach, source.kind)
+        # Ein Gewinde kann der ganze Körper sein — eine Gewindestange, ein
+        # eingelesener Bolzen ohne Kopf. Dann nimmt die Hülle alles, und das
+        # neue Gewinde ist danach allein der Körper (gemessen am ISO-Korpus,
+        # 21.09.2026: am Netz „Es bleibt kein Körper übrig“, exakt ein leerer).
+        cleared = _combined(
+            source,
+            ctx,
+            "difference",
+            base,
+            _along_axis(centre, axis, envelope, start),
+            allow_empty=True,
+        )
+        ctx.progress(0.6, str(_("Das Merkmal wird mit dem neuen Maß gesetzt …")))
+        fresh = _along_axis(
+            centre,
+            axis,
+            _thread_body(diameter, pitch, length, internal=False, kind=source.kind),
+            low,
+        )
+        if source.kind != "brep" and cleared.mesh.triangle_count == 0:
+            body = BooleanOutcome(
+                mesh=fresh, solver=cleared.solver, findings=list(cleared.findings)
+            )
+        else:
+            base_after = cleared.mesh if source.kind != "brep" else cleared
+            body = _combined(source, ctx, "union", base_after, fresh)
+    changed = dataclasses.replace(
+        feature,
+        params={
+            key: value
+            for key, value in {
+                **feature.params,
+                "diameter": diameter,
+                "pitch": pitch,
+                "lead": pitch,
+                "handedness": "right",
+            }.items()
+            if key not in ("root_radius", "crest_radius", "depth", "turns", "uncertainty", "starts")
+        },
+        measure_sources={
+            **dict.fromkeys(("diameter", "pitch", "centre", "axis", "length"), "parameter")
+        },
+        provenance="generated",
+        face_indices=(),
+        surface_patches=(),
+    )
+    findings: list[Finding] = []
+    if source.kind != "brep":
+        findings.extend(cleared.findings)
+    return _thread_result(ctx, source, body, feature, changed, findings)
 
 
 def _exact_rotate_pin(

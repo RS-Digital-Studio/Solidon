@@ -855,6 +855,36 @@ bleibt ein Ring, was er ist (Konzept §13.4), und ein quer gestellter Wulst
 zerfällt in zwei Lappen — dann meldet `feature_lost`, dass die Kennung nicht
 weiterlief.
 
+**Und ein Gewinde wird geändert und verschlossen, nicht bewegt** (P2.6,
+21.09.2026): *Merkmal ändern* setzt Durchmesser und Steigung mit dem
+Bausteingewinde neu (`build.threaded`, außen Hülle weg und neu vereinigt,
+innen gefüllt und neu geschnitten), *Merkmal entfernen* nimmt außen den Gang
+bis auf den Kern und schließt innen die Bohrung — je Kern mit denselben
+Werkzeugen. **Die Enden fragen die Nachbarschaft** (`_thread_span`): Hinter
+Material endet ein eingesunkenes Bausteingewinde um `BOOLEAN_OVERLAP` früher
+(sonst ein Ring von einem Hundertstel im Sockel), in der Luft reicht das
+äußere Werkzeug hinaus und das innere nicht (sonst ein Zapfen an der Mündung,
+die Lehre von `fill_bore`). Das neue Gewinde ist aus seinen Zahlen bekannt
+und wird so benannt; die Erkennung sucht es an seiner Stelle und belegt den
+Bezug (`_exact_features_after` mit `expected`), statt ihn zu behaupten — ein
+behaupteter ließ daneben ein zweites Gewinde unter frischem Namen stehen.
+**Innen nennt ein Merkmal die Gewindebezeichnung**, also den Grund-Ø der
+Gänge (so schreibt es der Baustein, so lesen es beide Kerne); das Werkzeug
+rechnet in der Bohrung darunter (`_tool_diameter`) — ohne die Umrechnung
+wurde aus einer M6-Mutter beim Ändern der Steigung eine mit Bohrung Ø 6
+(Review, 21.09.2026). **Ein erkanntes Gewinde am Netz misst sich an seinen
+Ecken** (`_thread_corners`): Der Fit über Dreiecksmitten liegt radial
+innerhalb der Kammecken und axial neben der Stange; auf den gemessenen Kamm
+gesetzt blieben 51 Splitter, auf die gemessene Mitte eine Scheibe. Der
+Netzleser rät außerdem die Händigkeit am gedruckten Profil — deshalb sperrt
+nur ein **belegtes** Linksgewinde (`types.thread_is_left_handed`: gesetzt
+oder nativ gelesen), und ein mehrgängiges sagt ab, statt still eingängig zu
+werden. Linksgängig, mehrgängig, eine Steigung ohne Kern und ein Gewinde
+ohne Strecke sind Absagen mit Vorschlag. Und ein Feld, das nur eine
+Merkmalsart trägt — Rohrdicke, Steigung — steht nur an ihr
+(`actions._carried_by`): „Steigung 0 mm“ an einem Zapfen ist eine Frage
+ohne Gegenstand.
+
 Vier Dinge daran, alle gemessen:
 
 * **An der neuen Stelle wird gebohrt, nicht geändert.** Dort ist volles

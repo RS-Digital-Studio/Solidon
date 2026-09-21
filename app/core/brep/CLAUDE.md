@@ -570,7 +570,9 @@ unverändert zurück, und `defeatured` antwortet `None` statt mit demselben
 Körper. Gearbeitet wird an einer privaten Kopie mit Builder-Historie, damit
 Filamentgrenzen mitkommen (§21.2). Wer damit ein Gewinde wegnehmen will,
 bekommt denselben Körper zurück: Die Gangflächen haben keine Nachbarn, die
-sich zum Kern schließen — das Gewinde geht seinen eigenen Weg (P2.6, offen).
+sich zum Kern schließen — das Gewinde geht seinen eigenen Weg über
+Hüllzylinder, Füllzylinder und das Bausteingewinde (`geom/prepare_ops`,
+`_remove_thread`/`_resize_thread`).
 
 ## Eine Rundung wegnehmen heißt, ihre Fläche zu streichen
 

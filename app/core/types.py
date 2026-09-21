@@ -448,6 +448,26 @@ def measure_status(feature: Feature, name: str) -> MeasureStatus:
     return MeasureStatus("estimated" if source == "fit" else "exact", source, available=True)
 
 
+def thread_is_left_handed(feature: Feature) -> bool:
+    """Ist dieses Gewinde belegt linksgängig?
+
+    Belegt heißt: gesetzt (ein Baustein sagt es, ``parameter``) oder am
+    exakten Körper gelesen (``native``). Der Netzleser rät die Händigkeit an
+    einem gedruckten, abgeflachten Profil falsch — gemessen am 21.09.2026 an
+    ``build.threaded(6, 1, 8)``, dem Gewinde, das diese Anwendung selbst baut:
+    Netz „left“, exakt „right“ — und ``tests/test_thread_import.py`` sagt
+    seit P2.5, dass der Netzweg die Händigkeit nicht kennt. Eine Auskunft aus
+    ``fit`` zählt deshalb nicht: Wer sie sperren ließe, sperrte am Netz jedes
+    gedruckte Gewinde. Die eine Stelle für beide Fragenden — das Neuschneiden
+    (``geom.prepare_ops``) und das Gegenstück (``counterpart``).
+    """
+    if feature.kind != "thread":
+        return False
+    if str(feature.params.get("handedness", "right")) == "right":
+        return False
+    return feature.measure_sources.get("handedness", "parameter") != "fit"
+
+
 def is_a_cavity(feature: Feature) -> bool:
     """Ist dieses Merkmal ein Hohlraum oder Materie?
 

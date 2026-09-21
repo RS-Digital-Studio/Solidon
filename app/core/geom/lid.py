@@ -899,6 +899,9 @@ def screw_lid(ctx: OpContext) -> OpResult:
             "centre": (centre_x, centre_y, z + params.height / 2.0),
             "axis": (0.0, 0.0, 1.0),
             "internal": False,
+            # Die bewendelte Strecke — ohne sie hätten Ändern und Entfernen
+            # (P2.6) am Halsgewinde keinen Ort, an dem ein Werkzeug ansetzt.
+            "length": params.height,
         },
     )
     cap_thread = Feature(
@@ -909,9 +912,12 @@ def screw_lid(ctx: OpContext) -> OpResult:
             "diameter": round(major, 4),
             "pitch": round(params.pitch, 4),
             "handedness": "right",
-            "centre": (0.0, 0.0, params.height / 2.0),
+            "centre": (0.0, 0.0, (params.height + SKIRT_RELIEF) / 2.0),
             "axis": (0.0, 0.0, 1.0),
             "internal": True,
+            # Die Rille läuft über die ganze Schürze (``_screw_cap``): Höhe plus
+            # Entlastung, und die Mitte liegt in ihrer Mitte.
+            "length": params.height + SKIRT_RELIEF,
         },
     )
 

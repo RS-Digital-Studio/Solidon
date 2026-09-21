@@ -86,6 +86,38 @@ der der ganze Körper ist, sagt es (`TORUS_IS_THE_BODY`); ein Torusstück,
 hinter dem der Schaft nicht weitergeht, ist nicht abzutrennen
 (`TORUS_NOT_SEPARABLE`).
 
+**Ein Gewinde** trägt Ändern und Entfernen (`_resize_thread`, `_remove_thread`):
+außen nimmt das Entfernen den Gang zwischen Fuß- und Kammradius weg und
+lässt den Kern stehen, das Ändern nimmt die bewendelte Strecke als
+Hüllzylinder weg und vereinigt das Bausteingewinde (`build.threaded`) auf
+derselben Achse; innen füllt das Entfernen die Strecke über dem Kammradius
+(„Gewinde verschließen“), das Ändern füllt und schneidet mit dem neuen
+Innenwerkzeug. Die Enden entscheidet `_thread_span` an der Nachbarschaft:
+Material dahinter, Luft dahinter, und nur ein eingesunkenes aufgesetztes
+Bausteingewinde endet um `BOOLEAN_OVERLAP` vor seinem Sockel — ein Stopfen
+greift hinter Material um dieselbe Spanne hinein. Ein Merkmal nennt innen
+die **Gewindebezeichnung** (den Grund-Ø der Gänge), das Werkzeug rechnet in
+der Bohrung darunter (`_tool_diameter`). Ein **erkanntes** Gewinde am Netz
+sagt Grenzen und Strecke über seine eigenen Ecken (`_thread_corners`,
+`_thread_bounds`) — der Fit über Dreiecksmitten liegt radial innerhalb der
+Kammecken und axial neben der Stange —, und sein Kern bleibt um den Überlapp
+unter dem gemessenen Fuß. Ist das Gewinde der ganze Körper, nimmt die Hülle
+alles, und das neue Gewinde ist danach allein der Körper. Linksgängig
+(belegt, `types.thread_is_left_handed`), mehrgängig und ohne Strecke sind
+Absagen mit Vorschlag. Versetzt, gedreht oder verdoppelt wird nicht das
+Gewinde, sondern der Körper oder die Bohrung.
+
+**Filament nehmen Wulst, Kehle und Gewinde seit P2.6 wie eine Fläche an**
+(`paint_slot`, `clear_filament`): Der Ring und ein erkanntes Gewinde nennen
+ihre Dreiecke selbst; ein **erzeugtes** Gewinde nennt keine, denn der
+Baustein sagt nur Achse, Mitte, Durchmesser, Steigung und Länge (§24.1).
+`paint.feature_triangles` beantwortet das für beide Operationen: Die Flächen
+des erzeugten Gewindes sind alle Dreiecke in seiner Hülle — radial bis zum
+Kamm, axial über die bewendelte Strecke — ohne die Deckel quer zur Achse,
+also ohne die Spitze und ohne den Sockel, auf dem es sitzt. Am exakten
+Körper sind das ganze native Flächen (die Flanken liegen ganz in der Hülle,
+die Deckel ganz außerhalb), und `validate_full_faces` prüft es beim Färben.
+
 `contours.section_of` übernimmt einen gezeichneten Querschnitt mit allen
 Innenringen unabhängig von der Umlaufrichtung; ungültige Konturen werden
 nicht still repariert. `polygons_of` gibt alle Komponenten mitsamt ihren
