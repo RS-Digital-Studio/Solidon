@@ -11,6 +11,14 @@ Punkte, Normalen, gerichtete Kegelnappen und Radien werden anschließend
 einmal über `perceive.surfaces` transformiert; der Operationsabbruch reicht
 bis in diese Zuordnung. Netztransformationen erhalten die Dreiecksreihenfolge.
 
+`transform.rotation_about` (und `rotation` um eine Hauptachse) rechnet die
+Drehmatrix aus den exakten Winkelfunktionen in `units` (RM-187): Ein rechter
+Winkel und eine halbe Drehung sind exakt, und `knowledge/parts/shapes.turned`
+nimmt dieselbe Matrix wie `exact.turned`. Mit `math.sin(math.radians(180))`
+lag eine um 180 Grad gedrehte Rampe um 10⁻¹⁶ neben der Stirnfläche ihrer
+Rippe, und die Vereinigung ließ beide Flächen als Doppelwand ohne Dicke
+stehen (Bereichslauf, 21.09.2026).
+
 `deviation.deviation_bounds` prüft ausgefüllte Originaldreiecke gegen einen
 bereits belegten analytischen `SurfacePatch`, ohne neue Formeinpassung.
 Ebene, Zylinder, gerichteter Kegel, Kugel und Ringtorus teilen gerichtete

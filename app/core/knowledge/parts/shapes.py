@@ -554,7 +554,6 @@ def turned(mesh: Form, degrees: float, axis: Vec3 = (0.0, 0.0, 1.0)) -> Form:
 
         return twins.turned(mesh, degrees, axis)
     body = mesh.raw.copy()
-    transform.moved(
-        body, trimesh.transformations.rotation_matrix(math.radians(degrees), np.asarray(axis))
-    )
+    # Dieselbe Matrix wie der exakte Zwilling — exakt bei 90 und 180 Grad.
+    transform.moved(body, transform.rotation_about(axis, (0.0, 0.0, 0.0), degrees))
     return mesh.replacing(body)

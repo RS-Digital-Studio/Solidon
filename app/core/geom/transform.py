@@ -21,7 +21,7 @@ import numpy as np
 from app.core.deferred import trimesh
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.types import CancelToken, Mesh, SceneObject, Transform, Vec3
-from app.core.units import EPS_DISPLAY, EPS_GEOM
+from app.core.units import EPS_DISPLAY, EPS_GEOM, exact_cos_degrees, exact_sin_degrees
 
 Axis = Literal["x", "y", "z"]
 Anchor = Literal["centre", "origin", "bed"]
@@ -53,12 +53,7 @@ def translation(offset: Vec3) -> np.ndarray:
 
 
 def rotation(axis: Axis, degrees: float, about: Vec3 = (0.0, 0.0, 0.0)) -> np.ndarray:
-    return np.asarray(
-        trimesh.transformations.rotation_matrix(
-            math.radians(degrees), np.asarray(AXIS_VECTORS[axis], dtype=float), np.asarray(about)
-        ),
-        dtype=float,
-    )
+    return rotation_about(AXIS_VECTORS[axis], about, degrees)
 
 
 def scaling(factors: Vec3, about: Vec3 = (0.0, 0.0, 0.0)) -> np.ndarray:
@@ -410,11 +405,37 @@ def rotation_about(direction: Vec3, origin: Vec3, degrees: float) -> np.ndarray:
     Hier und nicht in der Ansicht, weil die Ansicht keine Geometrie rechnet
     (§8) — sie braucht die Matrix, um einen laufenden Zug auf seine Raste zu
     ziehen, und das ist eine Drehung wie jede andere.
+
+    **Aus den exakten Winkelfunktionen** (`units.exact_cos_degrees`,
+    `exact_sin_degrees`, RM-187), nicht aus ``math.sin(math.radians(…))``:
+    Der Sinus von 180 Grad ist dort 1,2 · 10⁻¹⁶ statt null, und eine um 180
+    Grad gedrehte Rampe lag mit ihrer Rückseite um dieses Haar neben der
+    Stirnfläche der Rippe, an die sie gehört — die Vereinigung ließ beide
+    Flächen als Doppelwand ohne Dicke stehen, und der Bereichslauf der Rippe
+    meldete an sechs Ecken Selbstdurchdringung (21.09.2026). Ein rechter
+    Winkel und eine halbe Drehung sind hier exakt, und beide Kerne drehen
+    mit derselben Matrix (``knowledge/parts/shapes.turned`` und ``exact.turned``).
     """
-    return np.asarray(
-        trimesh.transformations.rotation_matrix(math.radians(degrees), direction, origin),
+    axis = np.asarray(direction, dtype=float)
+    length = float(np.linalg.norm(axis))
+    if length <= EPS_GEOM:
+        raise ValueError("a rotation axis needs a direction")
+    x, y, z = axis / length
+    cos, sin = exact_cos_degrees(degrees), exact_sin_degrees(degrees)
+    rest = 1.0 - cos
+    turn = np.array(
+        [
+            [cos + x * x * rest, x * y * rest - z * sin, x * z * rest + y * sin],
+            [y * x * rest + z * sin, cos + y * y * rest, y * z * rest - x * sin],
+            [z * x * rest - y * sin, z * y * rest + x * sin, cos + z * z * rest],
+        ],
         dtype=float,
     )
+    matrix = np.eye(4)
+    matrix[:3, :3] = turn
+    centre = np.asarray(origin, dtype=float)
+    matrix[:3, 3] = centre - turn @ centre
+    return matrix
 
 
 def along_normal(offset: Vec3, normal: Vec3) -> float:
