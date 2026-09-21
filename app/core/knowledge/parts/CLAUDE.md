@@ -50,7 +50,7 @@ exakter Körper keine Dreiecke). Drei Grenzen dabei:
   eine Netzoperation braucht — das sind die Stellen, an denen ihre Gruppe den
   exakten Weg noch schuldet. Unter dem exakten Kern kommen sie nie dran:
   `ops.EXACT_PARTS` lässt nur Bausteine dorthin, deren Beschreibung ohne sie
-  auskommt (heute die Gruppe Verbindungen), alle anderen nehmen am exakten
+  auskommt (heute die Gruppen Verbindungen und Mechanik), alle anderen nehmen am exakten
   Träger den Netzweg samt Konvertierungsmeldung wie bisher. Die Paritätstabelle
   (`tests/test_exact_body_parity.py`, `KEEP` statt `MESH`) ist die Abnahme je
   Gruppe.

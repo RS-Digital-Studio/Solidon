@@ -109,10 +109,10 @@ def _host() -> SceneObject:
 # --- die Gruppe ------------------------------------------------------------------
 
 
-def test_the_fastener_group_is_the_one_that_builds_exactly() -> None:
+def test_the_exact_groups_are_fasteners_and_mechanics() -> None:
     builtin.load()
-    fasteners = {spec.name for spec in PARTS.all() if spec.group == "fasteners"}
-    assert fasteners == EXACT_PARTS
+    groups = {spec.name for spec in PARTS.all() if spec.group in {"fasteners", "mechanics"}}
+    assert groups == EXACT_PARTS
 
 
 # --- die Grundformen: Zwillinge ---------------------------------------------------------
@@ -487,3 +487,211 @@ def test_a_mesh_host_keeps_the_mesh_path(profile: Profile) -> None:
     )
     assert isinstance(outcome.outputs[0].mesh, MeshData)
     assert outcome.outputs[0].mesh.volume < HOST[0] * HOST[1] * HOST[2]
+
+
+# --- die Mechanik: Volumen gegen Analytik, Richtung, Merkmale, STEP ------------------------------
+
+
+def _polygon_area(points: list[tuple[float, float]]) -> float:
+    corners = [*points, points[0]]
+    return abs(sum(x_a * y_b - x_b * y_a for (x_a, y_a), (x_b, y_b) in pairwise(corners))) / 2.0
+
+
+def test_bearing_seat_exact_matches_its_analytic_volume() -> None:
+    _kernel()
+    entry = standards.bearing("608")
+    produced = _built("bearing_seat", True, size="608", removable=False, grip=0.1, extra_depth=0.0)
+    tool = _sound(produced.mesh)
+    diameter = entry.outer - 0.1
+    depth = entry.width
+    assert tool.volume == pytest.approx(
+        math.pi * (diameter / 2.0) ** 2 * (depth + BOOLEAN_OVERLAP), rel=1e-9
+    )
+    assert tool.bounds.maximum[2] == pytest.approx(BOOLEAN_OVERLAP, abs=1e-9)
+    assert tool.bounds.minimum[2] == pytest.approx(-depth, abs=1e-9)
+    assert "seat_1" in produced.features
+    mesh = _built("bearing_seat", False, size="608", removable=False, grip=0.1, extra_depth=0.0)
+    assert mesh.mesh.volume / tool.volume == pytest.approx(FACET, rel=1e-6)
+    _roundtrip(tool)
+
+
+def test_a_round_dowel_pin_exact_carries_its_chamfer_at_the_top() -> None:
+    _kernel()
+    diameter, length, chamfer = 6.0, 8.0, 0.6
+    values = {"diameter": diameter, "length": length, "kind": "pin", "chamfer": chamfer}
+    pin_body = _sound(_built("dowel", True, **values, shape="round").mesh)
+    radius = diameter / 2.0
+    # Der Fasenring nimmt oben ``chamfer`` hoch alles außerhalb des Kegels weg.
+    expected = math.pi * radius**2 * (length - chamfer) + _frustum(
+        diameter, diameter - 2.0 * chamfer, chamfer
+    )
+    assert pin_body.volume == pytest.approx(expected, rel=1e-9)
+    assert pin_body.bounds.minimum[2] == pytest.approx(0.0, abs=1e-9)
+    assert pin_body.bounds.maximum[2] == pytest.approx(length, abs=1e-9)
+    assert pin_body.bounds.maximum[0] == pytest.approx(radius, abs=1e-9)
+    _roundtrip(pin_body)
+    for shape in ("hex", "dovetail"):
+        body = _sound(_built("dowel", True, **values, shape=shape).mesh)
+        mesh = _built("dowel", False, **values, shape=shape).mesh
+        assert body.bounds.maximum[2] == pytest.approx(length, abs=1e-9), shape
+        # Umkreis: keine Form ragt über den Nenn-Durchmesser hinaus (§24.1).
+        assert max(body.bounds.maximum[0], body.bounds.maximum[1]) <= radius + 1e-9, shape
+        assert FACET - 0.01 < mesh.volume / body.volume <= 1.0 + 1e-9, shape
+        _roundtrip(body)
+
+
+def test_a_dowel_bore_exact_lies_under_the_mouth_and_widens_there() -> None:
+    _kernel()
+    diameter, length, chamfer = 4.0, 8.0, 0.6
+    produced = _built(
+        "dowel", True, diameter=diameter, length=length, kind="bore", chamfer=chamfer, play=0.0
+    )
+    tool = _sound(produced.mesh)
+    radius = diameter / 2.0
+    expected = (
+        math.pi * radius**2 * length
+        + _frustum(diameter, diameter + 2.0 * chamfer, chamfer)
+        - math.pi * radius**2 * chamfer
+    )
+    assert tool.volume == pytest.approx(expected, rel=1e-9)
+    assert tool.bounds.maximum[2] == pytest.approx(0.0, abs=1e-9)
+    assert tool.bounds.minimum[2] == pytest.approx(-length, abs=1e-9)
+    assert tool.bounds.maximum[0] == pytest.approx(radius + chamfer, abs=1e-9)
+    assert "bore_1" in produced.features
+
+
+def test_hinge_eye_exact_keeps_exactly_its_wall_without_the_facet_correction() -> None:
+    """Am Netz wächst der Außendurchmesser um die Facettenkorrektur, exakt nicht."""
+    _kernel()
+    values = {"pin": 3.0, "width": 8.0, "reach": 8.0, "wall": 2.0, "play": 0.2}
+    produced = _built("hinge_eye", True, **values)
+    body = _sound(produced.mesh)
+    bore_width = 3.2
+    outer = bore_width + 2.0 * 2.0
+    # Liegender Zylinder über der Lasche: die untere Hälfte liegt im Kasten.
+    expected = (
+        math.pi * (outer / 2.0) ** 2 * 8.0 / 2.0
+        + 8.0 * 8.0 * outer
+        - math.pi * (bore_width / 2.0) ** 2 * 8.0
+    )
+    assert body.volume == pytest.approx(expected, rel=1e-9)
+    assert body.bounds.maximum[1] == pytest.approx(8.0 + outer / 2.0, abs=1e-9)
+    assert body.bounds.maximum[2] == pytest.approx(outer, abs=1e-9)
+    eye = produced.features["eye_1"]
+    assert eye.params["axis"] == (1.0, 0.0, 0.0)
+    mesh = _built("hinge_eye", False, **values).mesh
+    assert mesh.bounds.maximum[2] > body.bounds.maximum[2]  # die Korrektur, nur am Netz
+    _roundtrip(body)
+
+
+def test_latch_exact_is_the_same_wedge_as_the_mesh() -> None:
+    _kernel()
+    values = {"width": 6.0, "depth": 1.0, "height": 3.0}
+    body = _sound(_built("latch", True, **values, negative=False).mesh)
+    mesh = _built("latch", False, **values, negative=False).mesh
+    assert body.volume == pytest.approx(6.0 * 1.0 * 3.0 / 2.0, rel=1e-9)
+    assert mesh.volume == pytest.approx(body.volume, rel=1e-9)
+    assert body.bounds.minimum == pytest.approx(mesh.bounds.minimum, abs=1e-9)
+    assert body.bounds.maximum == pytest.approx(mesh.bounds.maximum, abs=1e-9)
+    assert body.bounds.minimum[2] == pytest.approx(0.0, abs=1e-9)
+    assert body.bounds.maximum[2] == pytest.approx(3.0, abs=1e-9)
+    negative = _sound(_built("latch", True, **values, negative=True, play=0.2).mesh)
+    assert negative.volume > body.volume
+
+
+def test_living_hinge_exact_matches_its_analytic_volume() -> None:
+    _kernel()
+    values = {"width": 30.0, "leaf": 15.0, "thickness": 2.0, "film": 0.4, "gap": 1.5}
+    produced = _built("living_hinge", True, **values)
+    body = _sound(produced.mesh)
+    assert body.volume == pytest.approx(30.0 * 31.5 * 2.0 - 30.0 * 1.5 * 1.6, rel=1e-9)
+    assert _built("living_hinge", False, **values).mesh.volume == pytest.approx(
+        body.volume, rel=1e-9
+    )
+    assert produced.features["hinge_1"].params["centre"][2] == pytest.approx(0.2)
+    _roundtrip(body)
+
+
+def test_snap_connector_exact_pin_and_bore_match_the_mesh_and_the_analytic_pocket() -> None:
+    _kernel()
+    values = {"diameter": 6.0, "length": 9.0, "play": 0.2}
+    pin_body = _sound(_built("snap_connector", True, **values, kind="pin").mesh)
+    assert _built("snap_connector", False, **values, kind="pin").mesh.volume == pytest.approx(
+        pin_body.volume, rel=1e-9
+    )
+    assert pin_body.bounds.maximum[2] == pytest.approx(9.0, abs=1e-9)
+    produced = _built("snap_connector", True, **values, kind="bore")
+    tool = _sound(produced.mesh)
+    # Dieselbe Rechnung wie im Baustein: Tasche minus Rastkante.
+    play = 0.2
+    room = math.sqrt(6.0**2 - (0.8 + play) ** 2)
+    thickness = min(9.0 / 10.0, (room - play) / 3.0)
+    across = 3.0 * thickness + play
+    width = max(0.8, math.sqrt(6.0**2 - across**2) - play)
+    run = thickness / math.tan(math.radians(35.0))
+    catch = 9.0 - run
+    depth = 9.0 + shapes.SEAT_RELIEF
+    expected = (width + play) * across * depth - (width + play) * thickness * catch
+    assert tool.volume == pytest.approx(expected, rel=1e-9)
+    assert tool.bounds.maximum[2] == pytest.approx(0.0, abs=1e-9)
+    assert "catch_1" in produced.features
+    _roundtrip(tool)
+
+
+def test_snap_fit_exact_is_one_side_profile_with_the_hook_on_top() -> None:
+    _kernel()
+    values = {"width": 8.0, "length": 16.0, "thickness": 1.6, "hook": 1.2, "lead_angle": 35.0}
+    produced = _built("snap_fit", True, **values)
+    body = _sound(produced.mesh)
+    hook_height = 1.2 / math.tan(math.radians(35.0))
+    arm = max(16.0, 1.6 * 10.0, hook_height)
+    half = 0.8
+    points = [(-half, 0.0), (half, 0.0), (half, arm - hook_height), (half + 1.2, arm), (-half, arm)]
+    assert body.volume == pytest.approx(8.0 * _polygon_area(points), rel=1e-9)
+    assert body.bounds.maximum[2] == pytest.approx(arm, abs=1e-9)
+    assert body.bounds.maximum[1] == pytest.approx(half + 1.2, abs=1e-9)
+    assert body.bounds.minimum[0] == pytest.approx(-4.0, abs=1e-9)
+    assert _built("snap_fit", False, **values).mesh.volume == pytest.approx(body.volume, rel=1e-9)
+    assert produced.features["hook_1"].params["normal"] == (0.0, 0.0, -1.0)
+    _roundtrip(body)
+
+
+def test_barrel_hinge_exact_is_two_bodies_with_air_between_them() -> None:
+    _kernel()
+    values = {"pin": 4.0, "width": 24.0, "reach": 12.0, "wall": 2.5, "play": 0.3}
+    produced = _built("barrel_hinge", True, **values)
+    hinge = _sound(produced.mesh, bodies=2)
+    mesh = _built("barrel_hinge", False, **values).mesh
+    assert mesh.component_count == 2
+    gap = 0.3
+    outer = 4.0 + 2.0 * (gap + 2.5)
+    assert hinge.bounds.maximum[2] == pytest.approx(outer / 2.0 + 2.0 + gap + 2.5, abs=1e-9)
+    assert hinge.bounds.minimum == pytest.approx(mesh.bounds.minimum, abs=1e-6)
+    assert hinge.bounds.maximum == pytest.approx(mesh.bounds.maximum, abs=1e-6)
+    assert FACET - 0.01 < mesh.volume / hinge.volume < 1.0
+    assert produced.features["hinge_1"].params["axis"] == (1.0, 0.0, 0.0)
+    _roundtrip(hinge)
+
+
+def test_a_snap_fit_grows_on_an_exact_host_and_a_bearing_seat_cuts_it(profile: Profile) -> None:
+    _kernel()
+    host = _host()
+    grown = run(
+        "insert_snap_fit",
+        host,
+        profile,
+        width=8.0,
+        length=16.0,
+        thickness=1.6,
+        hook=1.2,
+        lead_angle=35.0,
+        **ON_TOP,
+    )
+    body = _sound(grown.outputs[0].mesh)
+    assert grown.outputs[0].kind == "brep"
+    assert body.volume > HOST[0] * HOST[1] * HOST[2]
+    assert {"snap_fit_arm_1", "snap_fit_hook_1"} <= set(grown.outputs[0].features)
+    cut = run("insert_bearing_seat", host, profile, size="608", removable=False, **ON_TOP)
+    seat = _sound(cut.outputs[0].mesh)
+    assert seat.volume < HOST[0] * HOST[1] * HOST[2]
+    assert "bearing_seat_seat_1" in cut.outputs[0].features

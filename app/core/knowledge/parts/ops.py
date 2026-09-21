@@ -1047,7 +1047,24 @@ def _merged_features(
 #: (``tests/test_exact_body_parity.py``) ihn als ``KEEP`` führt. Was nicht hier
 #: steht, nimmt den Netzweg samt Konvertierungsmeldung, wie bisher.
 EXACT_PARTS: Final = frozenset(
-    {"screw_hole", "heatset_m4", "nut_trap", "printed_thread", "printed_screw", "printed_nut"}
+    {
+        # Verbindungen
+        "screw_hole",
+        "heatset_m4",
+        "nut_trap",
+        "printed_thread",
+        "printed_screw",
+        "printed_nut",
+        # Mechanik
+        "barrel_hinge",
+        "bearing_seat",
+        "dowel",
+        "hinge_eye",
+        "latch",
+        "living_hinge",
+        "snap_connector",
+        "snap_fit",
+    }
 )
 
 

@@ -729,7 +729,22 @@ STANDALONE = (
 #: Die Bausteine, die an einem exakten Träger exakt bauen (P2.7) — die Abnahme je
 #: Gruppe ist der Wechsel ihrer Zeilen von ``MESH`` nach ``KEEP``.
 EXACT_PARTS = frozenset(
-    {"screw_hole", "heatset_m4", "nut_trap", "printed_thread", "printed_screw", "printed_nut"}
+    {
+        "screw_hole",
+        "heatset_m4",
+        "nut_trap",
+        "printed_thread",
+        "printed_screw",
+        "printed_nut",
+        "barrel_hinge",
+        "bearing_seat",
+        "dowel",
+        "hinge_eye",
+        "latch",
+        "living_hinge",
+        "snap_connector",
+        "snap_fit",
+    }
 )
 for _part, (_dimensions, _effect, _height) in PART_CASES.items():
     CASES.append(

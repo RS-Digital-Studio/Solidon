@@ -166,15 +166,34 @@ def tapered_bar(width: float, narrow: float, length: float, height: float, taper
     return _profiles().extrude(_polygon(outline), height)  # type: ignore[no-any-return]
 
 
-def wedge(width: float, depth: float, height: float, tip: float = 0.0) -> Solid:
-    """Die Rampe aus ``shapes.wedge``: Tiefe entlang Y, Höhe entlang Z, Breite quer über X."""
-    outline: list[Point2] = [(0.0, 0.0), (depth, 0.0), (tip, height), (0.0, height)]
-    if tip <= 0.0:
-        outline = [(0.0, 0.0), (depth, 0.0), (0.0, height)]
+def prism_across(outline: Sequence[Point2], width: float) -> Solid:
+    """Der Seitenriss aus ``shapes.prism_across``: in YZ gezeichnet, quer über X aufgezogen."""
     # In YZ gezeichnet (x → Y, y → Z) und entlang +X aufgezogen, dann zentriert —
     # dieselbe Lage, die das Netz über seine Umlegematrix erreicht.
     body = _profiles().extrude(_polygon(outline), width, "plane:yz")
     return _edit().moved(body, (-width / 2.0, 0.0, 0.0))  # type: ignore[no-any-return]
+
+
+def rounded_dovetail(diameter: float, length: float) -> Solid:
+    """Der gerundete Schwalbenschwanz aus ``shapes.rounded_dovetail`` mit echtem Bogen."""
+    from app.core.knowledge.parts.shapes import DOVETAIL_ARC, DOVETAIL_START
+    from app.core.sketch.profile import Profile, ProfileSegment
+
+    radius = diameter / 2.0
+
+    def on_circle(angle: float) -> Point2:
+        return (radius * math.cos(angle), radius * math.sin(angle))
+
+    start = on_circle(DOVETAIL_START)
+    end = on_circle(DOVETAIL_START + DOVETAIL_ARC)
+    via = on_circle(DOVETAIL_START + DOVETAIL_ARC / 2.0)
+    profile = Profile(
+        segments=(
+            ProfileSegment("arc", start, end, via=via),
+            ProfileSegment("line", end, start),
+        )
+    )
+    return _profiles().extrude(profile, length)  # type: ignore[no-any-return]
 
 
 def threaded(

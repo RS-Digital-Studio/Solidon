@@ -15,16 +15,12 @@ from __future__ import annotations
 import math
 from typing import Final, cast
 
-import numpy as np
-
 from app.core import units
 from app.core.errors import ValidationError
-from app.core.geom import transform
 from app.core.geom.boolean import BOOLEAN_OVERLAP
-from app.core.geom.mesh import MeshData
 from app.core.knowledge import standards
 from app.core.knowledge.parts import shapes
-from app.core.knowledge.parts.build import bore, face, pin, result, subtract, union
+from app.core.knowledge.parts.build import bore, compound, face, pin, result, subtract, union
 from app.core.knowledge.parts.registry import (
     FACE_GIVES_DIRECTION,
     MATERIAL_OF_TARGET,
@@ -33,6 +29,7 @@ from app.core.knowledge.parts.registry import (
     WallRequirement,
     register_part,
 )
+from app.core.knowledge.parts.shapes import Form
 from app.core.registry import GRIP_TITLE, op_params, param, play_param
 from app.core.types import BaseParams, PartResult
 from app.core.units import DEGREE_UNIT, EPS_GEOM
@@ -269,7 +266,7 @@ def _snap_fit_body(
     thickness: float,
     hook: float,
     hook_height: float,
-) -> MeshData:
+) -> Form:
     """Federarm und Anlaufkeil als ein einziger extrudierter Umriss.
 
     Zwei überlappende Prismen ließen bei extrem langen, dünnen Armen trotz
@@ -277,10 +274,6 @@ def _snap_fit_body(
     enthält dieselbe Form ohne innere Grenzfläche: Der Arm endet oben in der
     Haltefläche, der Keil läuft darunter bis zur Armseite zurück.
     """
-    from shapely.geometry import Polygon
-
-    from app.core.deferred import trimesh
-
     half = thickness / 2.0
     points = [(-half, 0.0), (half, 0.0)]
     # Bei gleicher Keil- und Armlänge fällt die Schulter mit der unteren Ecke
@@ -289,23 +282,7 @@ def _snap_fit_body(
     if hook_height < length:
         points.append((half, length - hook_height))
     points.extend(((half + hook, length), (-half, length)))
-    outline = Polygon(points)
-    body = trimesh.creation.extrude_polygon(outline, height=width)
-    # Der Umriss liegt in XY und wächst entlang Z. Gesucht sind Tiefe auf Y,
-    # Höhe auf Z und die Extrusion mittig entlang X.
-    transform.moved(
-        body,
-        np.asarray(
-            (
-                (0.0, 0.0, 1.0, -width / 2.0),
-                (1.0, 0.0, 0.0, 0.0),
-                (0.0, 1.0, 0.0, 0.0),
-                (0.0, 0.0, 0.0, 1.0),
-            ),
-            dtype=np.float64,
-        ),
-    )
-    return MeshData.of(body)
+    return shapes.prism_across(points, width)
 
 
 @op_params
@@ -592,11 +569,9 @@ def dowel(raw: BaseParams) -> PartResult:
         # nach oben, und die Fase bricht seine Oberkante.
         body = _profile(params.shape, diameter, params.length)
         if chamfer > 0.0:
-            body = shapes.mesh_only(
-                subtract(
-                    body,
-                    shapes.moved(_ring(diameter, chamfer), (0.0, 0.0, params.length - chamfer)),
-                )
+            body = subtract(
+                body,
+                shapes.moved(_ring(diameter, chamfer), (0.0, 0.0, params.length - chamfer)),
             )
         return result(
             body,
@@ -609,23 +584,21 @@ def dowel(raw: BaseParams) -> PartResult:
     # also nach draußen; abgetragen wurde damit nichts als die Fase, die
     # zufällig unter dem Ursprung lag. Gemessen an einem Klotz von 30 auf 30
     # auf 20: minus 28,6 mm³, wo ein Loch von 9 mm Tiefe hätte stehen sollen.
-    body = shapes.mesh_only(
-        shapes.moved(_profile(params.shape, diameter, params.length), (0.0, 0.0, -params.length))
-    )
+    body = shapes.moved(_profile(params.shape, diameter, params.length), (0.0, 0.0, -params.length))
     if chamfer > 0.0:
         # Eine Senkung an der Mündung, nach oben weiter werdend — das ist, was
         # eine Fase an einem Loch tut. Vorher verengte sie sich zur Mündung
         # hin, was aus einer Einführung eine Sperre gemacht hätte, wenn sie je
         # im Material gelegen hätte.
         lead = shapes.cone(diameter, diameter + 2.0 * chamfer, chamfer)
-        body = shapes.mesh_only(union(body, shapes.moved(lead, (0.0, 0.0, -chamfer))))
+        body = union(body, shapes.moved(lead, (0.0, 0.0, -chamfer)))
     return result(
         body,
         bore("bore_1", diameter, (0.0, 0.0, -params.length / 2.0), depth=params.length),
     )
 
 
-def _profile(shape: str, diameter: float, length: float) -> MeshData:
+def _profile(shape: str, diameter: float, length: float) -> Form:
     """Der Querschnitt eines Verbinders, auf ``length`` hochgezogen.
 
     **``diameter`` ist immer der Umkreis**, also der Kreis, in den die Form
@@ -649,33 +622,10 @@ def _profile(shape: str, diameter: float, length: float) -> MeshData:
     if shape == "hex":
         # Schlüsselweite aus dem Umkreis: beim Sechskant ist sie das
         # √3/2-fache.
-        return shapes.mesh_only(shapes.hexagon(diameter * math.sqrt(3.0) / 2.0, length))
+        return shapes.hexagon(diameter * math.sqrt(3.0) / 2.0, length)
     if shape == "dovetail":
-        return _rounded_dovetail(diameter, length)
-    return shapes.mesh_only(shapes.cylinder(diameter, length))
-
-
-def _rounded_dovetail(diameter: float, length: float) -> MeshData:
-    """Ein gerundeter Schwalbenschwanz innerhalb seines Nenn-Umkreises.
-
-    Ein Trapez mit gleicher Breite und Tiefe kann in seinem Umkreis höchstens
-    ``diameter / √2`` stark sein. Bei der kleinsten Vorgabe waren das 0,707 mm
-    und damit weniger als zwei Extrusionsbahnen. Hier bleibt die große
-    Kreisbogen-Seite stehen; nur der rückwärtige 60-Grad-Bogen wird durch
-    seine Sehne ersetzt. Diese Sehne bildet den schmalen Einstieg, der Bogen
-    dahinter den Formschluss. Alle Punkte bleiben auf oder innerhalb des
-    unveränderten Nenn-Umkreises.
-    """
-    from shapely.geometry import Polygon
-
-    from app.core.deferred import trimesh
-
-    radius = diameter / 2.0
-    retained_arc = 5.0 * math.pi / 3.0
-    arc_steps = round(shapes.SEGMENTS * retained_arc / (2.0 * math.pi))
-    angles = [-math.pi / 3.0 + retained_arc * step / arc_steps for step in range(arc_steps + 1)]
-    outline = [(radius * math.cos(angle), radius * math.sin(angle)) for angle in angles]
-    return MeshData.of(trimesh.creation.extrude_polygon(Polygon(outline), height=length))
+        return shapes.rounded_dovetail(diameter, length)
+    return shapes.cylinder(diameter, length)
 
 
 #: Was eine 0,4er Düse als tragende Wand ablegen kann: zwei Außenwände. Ein
@@ -1017,14 +967,18 @@ def hinge_eye(raw: BaseParams) -> PartResult:
     # Kehrwert gleicht ausschließlich diese Repräsentationsabweichung aus;
     # zwei Geometrietoleranzen halten die Boolesche Rundung innerhalb des
     # zugesagten Nennmaßes.
-    faceted_wall = (params.wall + 2.0 * EPS_GEOM) / units.inscribed_ratio(shapes.SEGMENTS)
-    outer = bore_width + 2.0 * faceted_wall
+    # Exakt ist der Kreis ein Kreis, und die Wand ist genau ``wall``
+    # (Bericht P2.7, Abschnitt 5.2); die Korrektur gilt dem Netz allein.
+    wall = params.wall
+    if not shapes.building_exact():
+        wall = (params.wall + 2.0 * EPS_GEOM) / units.inscribed_ratio(shapes.SEGMENTS)
+    outer = bore_width + 2.0 * wall
 
-    def lying(diameter: float, length: float) -> MeshData:
+    def lying(diameter: float, length: float) -> Form:
         """Ein Zylinder mit der Achse in X — die Drehachse des Scharniers."""
         upright = shapes.cylinder(diameter, length)
         centred = shapes.moved(upright, (0.0, 0.0, -length / 2.0))
-        return shapes.mesh_only(shapes.turned(centred, 90.0, (0.0, 1.0, 0.0)))
+        return shapes.turned(centred, 90.0, (0.0, 1.0, 0.0))
 
     eye_body = shapes.moved(lying(outer, params.width), (0.0, params.reach, outer / 2.0))
     # Die Lasche reicht bis in die Mitte des Auges hinein: Zwei Körper, die sich
@@ -1171,21 +1125,21 @@ def barrel_hinge(raw: BaseParams) -> PartResult:
     # abzüglich des halben Spalts.
     half = (params.width - gap) / 2.0
 
-    def lying(diameter: float, length: float, x: float) -> MeshData:
+    def lying(diameter: float, length: float, x: float) -> Form:
         """Ein Zylinder mit der Achse in X — die Drehachse des Scharniers."""
         upright = shapes.cylinder(diameter, length)
         centred = shapes.moved(upright, (0.0, 0.0, -length / 2.0))
         turned = shapes.turned(centred, 90.0, (0.0, 1.0, 0.0))
-        return shapes.mesh_only(shapes.moved(turned, (x, params.reach, outer / 2.0)))
+        return shapes.moved(turned, (x, params.reach, outer / 2.0))
 
-    def lug(length: float, x: float) -> MeshData:
+    def lug(length: float, x: float) -> Form:
         """Die Lasche unter einem Auge, bis in dessen Mitte hinein.
 
         Bis in die Mitte, nicht bis an den Rand: Zwei Körper, die sich nur
         berühren, sind der Fall, an dem eine Boolesche Operation bricht (§39).
         """
         body = shapes.box(length, params.reach, outer)
-        return shapes.mesh_only(shapes.moved(body, (x, params.reach / 2.0, 0.0)))
+        return shapes.moved(body, (x, params.reach / 2.0, 0.0))
 
     # Links: Lasche und Auge, dazu der Bolzen über die volle Breite.
     left = union(
@@ -1201,8 +1155,10 @@ def barrel_hinge(raw: BaseParams) -> PartResult:
         right, lying(params.pin + 2.0 * gap, params.width + 2.0 * BOOLEAN_OVERLAP, 0.0)
     )
 
+    # Zwei Körper, die einander nicht berühren — erklärt (``bodies=2``), also
+    # ein Verbund und keine Vereinigung, die nichts vereinigt.
     return result(
-        union(left, right),
+        compound(left, right),
         # Die Drehachse als Bohrung benannt, wie beim Scharnierauge: Wer etwas
         # daran ausrichtet, meint die Achse und nicht die Lasche.
         bore(

@@ -16,7 +16,7 @@ Kern und braucht seine Zeile.
 from __future__ import annotations
 
 import math
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import TYPE_CHECKING, Literal
@@ -104,6 +104,11 @@ SEGMENTS = 48
 #: anderen Zahl sind ein Paar, das sich nicht zusammenschrauben lässt — und in
 #: keiner Hälfte für sich zu sehen.
 RIDGE_SHARE = 0.55
+
+#: Der gerundete Schwalbenschwanz behält vom Vollkreis 300 Grad — von minus
+#: 60 Grad an gezählt; die fehlenden 60 Grad ersetzt seine Sehne.
+DOVETAIL_START = -math.pi / 3.0
+DOVETAIL_ARC = 5.0 * math.pi / 3.0
 
 #: Wo der flache Kamm eines Gangs beginnt, als Anteil der Steigung: Die
 #: untere Flanke läuft vom Fuß bei null bis hierher, der Kamm liegt dann bis
@@ -308,14 +313,24 @@ def wedge(width: float, depth: float, height: float, tip: float = 0.0) -> Form:
     auf null fielen zwei dieser Ecken zusammen, und ein Körper mit einer
     entarteten Fläche ist nicht wasserdicht (§24.3).
     """
+    outline: list[Point2] = [(0.0, 0.0), (depth, 0.0), (tip, height), (0.0, height)]
+    if tip <= 0.0:
+        outline = [(0.0, 0.0), (depth, 0.0), (0.0, height)]
+    return prism_across(outline, width)
+
+
+def prism_across(outline: Sequence[Point2], width: float) -> Form:
+    """Ein Seitenriss, quer über X aufgezogen und zentriert.
+
+    Der Umriss liegt in YZ — sein x ist die Tiefe entlang Y, sein y die Höhe
+    entlang Z — und wird über ``width`` entlang X extrudiert, mittig. Die
+    Rampe, der Federarm mit seinem Haken und jeder andere Körper, der aus
+    einem Seitenriss besteht, entstehen so ohne innere Grenzfläche.
+    """
     if building_exact():
         from app.core.knowledge.parts import exact as twins
 
-        return twins.wedge(width, depth, height, tip)
-    outline = [(0.0, 0.0), (depth, 0.0), (tip, height), (0.0, height)]
-    if tip <= 0.0:
-        outline = [(0.0, 0.0), (depth, 0.0), (0.0, height)]
-
+        return twins.prism_across(outline, width)
     body = trimesh.creation.extrude_polygon(_polygon(np.array(outline)), height=width)
     # Der Umriss liegt in XY und wuchs entlang Z; ihn so drehen, dass die Tiefe
     # entlang Y läuft, die Höhe entlang Z und die Extrusion quer über X,
@@ -332,6 +347,29 @@ def wedge(width: float, depth: float, height: float, tip: float = 0.0) -> Form:
         ),
     )
     return MeshData.of(body)
+
+
+def rounded_dovetail(diameter: float, length: float) -> Form:
+    """Ein gerundeter Schwalbenschwanz innerhalb seines Nenn-Umkreises.
+
+    Ein Trapez mit gleicher Breite und Tiefe kann in seinem Umkreis höchstens
+    ``diameter / √2`` stark sein. Bei der kleinsten Vorgabe waren das 0,707 mm
+    und damit weniger als zwei Extrusionsbahnen. Hier bleibt die große
+    Kreisbogen-Seite stehen; nur der rückwärtige 60-Grad-Bogen wird durch
+    seine Sehne ersetzt. Diese Sehne bildet den schmalen Einstieg, der Bogen
+    dahinter den Formschluss. Alle Punkte bleiben auf oder innerhalb des
+    unveränderten Nenn-Umkreises. Exakt ist der Bogen ein Bogen; am Netz sind
+    es ``SEGMENTS`` Sehnen je Vollkreis.
+    """
+    if building_exact():
+        from app.core.knowledge.parts import exact as twins
+
+        return twins.rounded_dovetail(diameter, length)
+    radius = diameter / 2.0
+    arc_steps = round(SEGMENTS * DOVETAIL_ARC / (2.0 * math.pi))
+    angles = [DOVETAIL_START + DOVETAIL_ARC * step / arc_steps for step in range(arc_steps + 1)]
+    outline = [(radius * math.cos(angle), radius * math.sin(angle)) for angle in angles]
+    return MeshData.of(trimesh.creation.extrude_polygon(_polygon(np.array(outline)), height=length))
 
 
 def ridge_profile(

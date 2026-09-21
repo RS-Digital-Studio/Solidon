@@ -110,14 +110,20 @@ def threaded(
 
 
 def compound(*parts: Form) -> Form:
-    """Mehrere Körper in einem Objekt, ohne sie zu verschweißen — nur am exakten Kern.
+    """Mehrere Körper in einem Objekt, ohne sie zu verschweißen — je Kern.
 
-    Das Netz hat dafür ``ops._concatenated_with_slots``; ein Baustein ruft
-    diese Funktion nur unter ``shapes.building_exact()``.
+    Ein Baustein, der erklärt aus mehreren Körpern besteht (``PartSpec.bodies``,
+    das Bolzenscharnier), sagt es hier statt über eine Vereinigung, die nichts
+    vereinigt: Am Netz ist das dieselbe Boolesche Vereinigung — Körper, die
+    sich nicht berühren, bleiben darin getrennte Komponenten —, exakt ein
+    Verbund (``exact.compound``), der die Teile als Körper nebeneinander trägt.
     """
-    from app.core.knowledge.parts import exact as twins
+    plain = _meshes(list(parts))
+    if plain is None:
+        from app.core.knowledge.parts import exact as twins
 
-    return twins.compound(*_solids(list(parts)))
+        return twins.compound(*_solids(list(parts)))
+    return boolean("union", plain, quality="fine").mesh
 
 
 def form_of(produced: PartResult) -> Form:
