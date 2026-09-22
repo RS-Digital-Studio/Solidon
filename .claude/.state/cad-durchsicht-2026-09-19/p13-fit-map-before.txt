@@ -1,0 +1,76 @@
+FFFFFFFFF                                                                [100%]
+================================== FAILURES ===================================
+_ test_fit_map_distinguishes_proof_and_uncertainty_for_both_partners[fit.geometry_clear-info-Teil einer Passung] _
+tests\test_maps.py:407: in test_fit_map_distinguishes_proof_and_uncertainty_for_both_partners
+    assert result.categories[int(result.values[0])] == caption
+E   AssertionError: assert 'Passung verletzt' == 'Teil einer Passung'
+E     
+E     - Teil einer Passung
+E     + Passung verletzt
+_ test_fit_map_distinguishes_proof_and_uncertainty_for_both_partners[fit.pose_unknown-warning-Passung pr\xfcfen] _
+tests\test_maps.py:407: in test_fit_map_distinguishes_proof_and_uncertainty_for_both_partners
+    assert result.categories[int(result.values[0])] == caption
+E   AssertionError: assert 'Passung verletzt' == 'Passung prüfen'
+E     
+E     - Passung prüfen
+E     + Passung verletzt
+_ test_fit_map_distinguishes_proof_and_uncertainty_for_both_partners[fit.geometry_failed-warning-Passung pr\xfcfen] _
+tests\test_maps.py:407: in test_fit_map_distinguishes_proof_and_uncertainty_for_both_partners
+    assert result.categories[int(result.values[0])] == caption
+E   AssertionError: assert 'Passung verletzt' == 'Passung prüfen'
+E     
+E     - Passung prüfen
+E     + Passung verletzt
+_ test_fit_map_distinguishes_proof_and_uncertainty_for_both_partners[fit.geometry_approximate-warning-Passung pr\xfcfen] _
+tests\test_maps.py:407: in test_fit_map_distinguishes_proof_and_uncertainty_for_both_partners
+    assert result.categories[int(result.values[0])] == caption
+E   AssertionError: assert 'Passung verletzt' == 'Passung prüfen'
+E     
+E     - Passung prüfen
+E     + Passung verletzt
+_ test_fit_map_distinguishes_proof_and_uncertainty_for_both_partners[fit.press_unverified-warning-Passung pr\xfcfen] _
+tests\test_maps.py:407: in test_fit_map_distinguishes_proof_and_uncertainty_for_both_partners
+    assert result.categories[int(result.values[0])] == caption
+E   AssertionError: assert 'Passung verletzt' == 'Passung prüfen'
+E     
+E     - Passung prüfen
+E     + Passung verletzt
+_ test_fit_map_distinguishes_proof_and_uncertainty_for_both_partners[fit.mesh_uncertain-warning-Passung pr\xfcfen] _
+tests\test_maps.py:407: in test_fit_map_distinguishes_proof_and_uncertainty_for_both_partners
+    assert result.categories[int(result.values[0])] == caption
+E   AssertionError: assert 'Passung verletzt' == 'Passung prüfen'
+E     
+E     - Passung prüfen
+E     + Passung verletzt
+_ test_fit_map_distinguishes_proof_and_uncertainty_for_both_partners[fit.collision-warning-Passung verletzt] _
+tests\test_maps.py:407: in test_fit_map_distinguishes_proof_and_uncertainty_for_both_partners
+    assert result.categories[int(result.values[0])] == caption
+E   AssertionError: assert 'Teil einer Passung' == 'Passung verletzt'
+E     
+E     - Passung verletzt
+E     + Teil einer Passung
+_ test_fit_map_distinguishes_proof_and_uncertainty_for_both_partners[fit.violated-warning-Passung verletzt] _
+tests\test_maps.py:407: in test_fit_map_distinguishes_proof_and_uncertainty_for_both_partners
+    assert result.categories[int(result.values[0])] == caption
+E   AssertionError: assert 'Teil einer Passung' == 'Passung verletzt'
+E     
+E     - Passung verletzt
+E     + Teil einer Passung
+_ test_fit_map_distinguishes_proof_and_uncertainty_for_both_partners[fit.pitch_mismatch-warning-Passung verletzt] _
+tests\test_maps.py:407: in test_fit_map_distinguishes_proof_and_uncertainty_for_both_partners
+    assert result.categories[int(result.values[0])] == caption
+E   AssertionError: assert 'Teil einer Passung' == 'Passung verletzt'
+E     
+E     - Passung verletzt
+E     + Teil einer Passung
+=========================== short test summary info ===========================
+FAILED tests/test_maps.py::test_fit_map_distinguishes_proof_and_uncertainty_for_both_partners[fit.geometry_clear-info-Teil einer Passung]
+FAILED tests/test_maps.py::test_fit_map_distinguishes_proof_and_uncertainty_for_both_partners[fit.pose_unknown-warning-Passung pr\xfcfen]
+FAILED tests/test_maps.py::test_fit_map_distinguishes_proof_and_uncertainty_for_both_partners[fit.geometry_failed-warning-Passung pr\xfcfen]
+FAILED tests/test_maps.py::test_fit_map_distinguishes_proof_and_uncertainty_for_both_partners[fit.geometry_approximate-warning-Passung pr\xfcfen]
+FAILED tests/test_maps.py::test_fit_map_distinguishes_proof_and_uncertainty_for_both_partners[fit.press_unverified-warning-Passung pr\xfcfen]
+FAILED tests/test_maps.py::test_fit_map_distinguishes_proof_and_uncertainty_for_both_partners[fit.mesh_uncertain-warning-Passung pr\xfcfen]
+FAILED tests/test_maps.py::test_fit_map_distinguishes_proof_and_uncertainty_for_both_partners[fit.collision-warning-Passung verletzt]
+FAILED tests/test_maps.py::test_fit_map_distinguishes_proof_and_uncertainty_for_both_partners[fit.violated-warning-Passung verletzt]
+FAILED tests/test_maps.py::test_fit_map_distinguishes_proof_and_uncertainty_for_both_partners[fit.pitch_mismatch-warning-Passung verletzt]
+9 failed, 46 deselected in 0.98s

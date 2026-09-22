@@ -1,0 +1,18 @@
+--- Ø0,5 unerkannt: detect -> {'face': 6}
+Dreiecke der Oberseite: 52
+PreparedSurface: {'frame': {'origin': 'tuple[3]', 'x_axis': 'tuple[3]', 'y_axis': 'tuple[3]', 'normal': 'tuple[3]'}, 'planar': 'True', 'face_indices': 'tuple[52] erste: 15', 'edges': 'tuple[52] erste: EdgeReference', 'centres': 'tuple[0]', 'area': '<POLYGON ((0 0, 0 20, 20 20, 20 0, 0 0), (9.75 10, 9.752 9.967, 9.759 9.935,...>'}
+  edges: 52
+SurfacePlacement: {'point': 'tuple[3] erste: 0.3', 'normal': 'tuple[3] erste: 0.0', 'frame': {'origin': 'tuple[3]', 'x_axis': 'tuple[3]', 'y_axis': 'tuple[3]', 'normal': 'tuple[3]'}, 'planar': 'True', 'face_indices': 'tuple[52] erste: 15', 'edges': 'tuple[2] erste: EdgeReference', 'centres': 'tuple[0]'}
+  edges: tuple[2] erste: {'id': "'edge_33'", 'start': 'tuple[3]', 'end': 'tuple[3]', 'inward': 'tuple[3]', 'distance': '0.17389096038240942'}
+      {'id': "'edge_33'", 'start': 'tuple[3]', 'end': 'tuple[3]', 'inward': 'tuple[3]', 'distance': '0.17389096038240942'}
+      {'id': "'edge_34'", 'start': 'tuple[3]', 'end': 'tuple[3]', 'inward': 'tuple[3]', 'distance': '0.17389096038240942'}
+--- Ø5,2 erkannt: detect -> {'hole': 1, 'face': 6}
+Dreiecke der Oberseite: 52
+PreparedSurface: {'frame': {'origin': 'tuple[3]', 'x_axis': 'tuple[3]', 'y_axis': 'tuple[3]', 'normal': 'tuple[3]'}, 'planar': 'True', 'face_indices': 'tuple[52] erste: 15', 'edges': 'tuple[4] erste: EdgeReference', 'centres': 'tuple[1] erste: tuple[2]', 'area': '<POLYGON ((0 0, 0 20, 20 20, 20 0, 0 0), (8.162 8.162, 8.417 7.937, 8.7 7.74...>'}
+  edges: 4
+Traceback (most recent call last):
+  File "C:\Users\rober\AppData\Local\Temp\claude\F--3D-Druck\5ca747ec-0459-40fe-920f-cdebfc9668c5\scratchpad\s5_placement.py", line 44, in <module>
+    placement = at_point(prepared, (0.3, 0.3, 2.0))
+  File "F:\3D Druck\app\core\scene\placement.py", line 1053, in at_point
+    raise _placement_error()
+app.core.errors.ValidationError: Die Eingabe war so nicht verwendbar.: Dieser Punkt liegt außerhalb der gewählten Fläche. Wählen Sie einen Punkt auf dem Material oder ändern Sie die Abstände.

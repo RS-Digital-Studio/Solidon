@@ -1,0 +1,52 @@
+FF..                                                                     [100%]
+================================== FAILURES ===================================
+_________ test_nurbs_sphere_keeps_its_measures_at_remote_coordinates __________
+app\core\brep\properties.py:641: in properties
+    _spanned_surface(face, cancelled=cancelled)
+app\core\brep\properties.py:301: in _spanned_surface
+    raise _unresolved_integral()
+E   app.core.errors.GeometryError: Die Geometrie ließ die Operation nicht zu.: Die Fläche oder das Volumen lässt sich an dieser exakten Form nicht zuverlässig bestimmen. Verkleinern Sie die Änderung oder wählen Sie eine andere Ausgangsform.
+
+During handling of the above exception, another exception occurred:
+tests\test_brep_surfaces.py:149: in test_nurbs_sphere_keeps_its_measures_at_remote_coordinates
+    found = [feature for feature in features_of(source).values() if feature.kind == "sphere"]
+                                    ^^^^^^^^^^^^^^^^^^^
+app\core\brep\features.py:129: in features_of
+    described = _describe(
+app\core\brep\features.py:824: in _describe
+    props = properties(face, "surface", cancelled=cancelled)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app\core\brep\properties.py:650: in properties
+    measured.append(_uv_surface(face, cancelled=cancelled))
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app\core\brep\properties.py:529: in _uv_surface
+    moments, error = _uv_moments(face, origin, size, "surface", cancelled=cancelled)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app\core\brep\properties.py:476: in _uv_moments
+    values, error, info = quad_vec(
+.venv\Lib\site-packages\scipy\integrate\_quad_vec.py:330: in quad_vec
+    ig, err, rnd = _quadrature(x1, x2, f, norm_func)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv\Lib\site-packages\scipy\integrate\_quad_vec.py:610: in _quadrature_gk21
+    return _quadrature_gk(a, b, f, norm_func, x, w, v)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv\Lib\site-packages\scipy\integrate\_quad_vec.py:511: in _quadrature_gk
+    ff = f(c + h*x[i])
+         ^^^^^^^^^^^^^
+app\core\brep\properties.py:457: in along_boundary
+    raise _unresolved_integral()
+E   app.core.errors.GeometryError: Die Geometrie ließ die Operation nicht zu.: Die Fläche oder das Volumen lässt sich an dieser exakten Form nicht zuverlässig bestimmen. Verkleinern Sie die Änderung oder wählen Sie eine andere Ausgangsform.
+________ test_narrow_nurbs_bulge_cannot_hide_behind_a_sphere_candidate ________
+tests\test_brep_surfaces.py:185: in test_narrow_nurbs_bulge_cannot_hide_behind_a_sphere_candidate
+    assert abs(np.linalg.norm(measured.Coord()) - 8.123456789) > EPS_GEOM
+E   AssertionError: assert np.float64(0.0) > 1e-06
+E    +  where np.float64(0.0) = abs((np.float64(8.123456789) - 8.123456789))
+E    +    where np.float64(8.123456789) = <function norm at 0x000001487196E9B0>((5.65806310337646, 0.9907557820093905, 5.7441513821777965))
+E    +      where <function norm at 0x000001487196E9B0> = <module 'numpy.linalg' from 'F:\\3D Druck\\.venv\\Lib\\site-packages\\numpy\\linalg\\__init__.py'>.norm
+E    +        where <module 'numpy.linalg' from 'F:\\3D Druck\\.venv\\Lib\\site-packages\\numpy\\linalg\\__init__.py'> = np.linalg
+E    +      and   (5.65806310337646, 0.9907557820093905, 5.7441513821777965) = Coord()
+E    +        where Coord = <OCP.OCP.gp.gp_Pnt object at 0x000001482B43FDB0>.Coord
+=========================== short test summary info ===========================
+FAILED tests/test_brep_surfaces.py::test_nurbs_sphere_keeps_its_measures_at_remote_coordinates
+FAILED tests/test_brep_surfaces.py::test_narrow_nurbs_bulge_cannot_hide_behind_a_sphere_candidate
+2 failed, 2 passed, 71 deselected in 6.49s

@@ -1,0 +1,49 @@
+P1.2: Mittelpunkt und Materialseite analytischer R8-Kugelabschnitte
+HEAD: 7eea517fc6102496ae081d8e5c6ae158fbc63029; Tessellierung: 0.05 mm
+Soll: Kugelzentrum = Translation; beide massiven Abschnitte recess=False.
+
+hemisphere_origin
+  Sollmittelpunkt: [0.0, 0.0, 0.0]
+  Native Kugeln: [{"id": "sphere_1", "centre_mm": [0.0, -9.519618637022538e-16, 3.9999999999999996], "centre_error_mm": 3.9999999999999996, "diameter_mm": 16.0, "recess": true, "face_count": 872}]
+  Mesh-Kugeln: [{"id": "sphere_1", "centre_mm": [0.000981890376273678, 1.9880488055993835e-15, 0.01628165996290054], "centre_error_mm": 0.016311240291852037, "diameter_mm": 15.9251, "recess": false, "face_count": 872}]
+  Mesh-Arten: {'face': 1, 'sphere': 1}
+  Originalerhalt: {'builder_source': True, 'native_after_features': True, 'native_after_tessellation': True, 'native_after_mesh_detect': True, 'mesh_after_detect': True}
+  Vertragsverletzungen: ['native_sphere_centre', 'native_sphere_role', 'mesh_sphere_centre']
+hemisphere_translated
+  Sollmittelpunkt: [37.0, -19.0, 83.0]
+  Native Kugeln: [{"id": "sphere_1", "centre_mm": [37.0, -19.0, 87.0], "centre_error_mm": 4.0, "diameter_mm": 16.0, "recess": true, "face_count": 872}]
+  Mesh-Kugeln: [{"id": "sphere_1", "centre_mm": [37.00098189037627, -19.000000000000007, 83.0162816599629], "centre_error_mm": 0.016311240291851138, "diameter_mm": 15.9251, "recess": false, "face_count": 872}]
+  Mesh-Arten: {'face': 1, 'sphere': 1}
+  Originalerhalt: {'builder_source': True, 'native_after_features': True, 'native_after_tessellation': True, 'native_after_mesh_detect': True, 'mesh_after_detect': True}
+  Vertragsverletzungen: ['native_sphere_centre', 'native_sphere_role', 'mesh_sphere_centre']
+hemisphere_rotated_translated
+  Sollmittelpunkt: [37.0, -19.0, 83.0]
+  Native Kugeln: [{"id": "sphere_1", "centre_mm": [39.231289738852915, -20.358335914812297, 86.02923581845666], "centre_error_mm": 4.000000000000004, "diameter_mm": 16.0, "recess": true, "face_count": 872}]
+  Mesh-Kugeln: []
+  Mesh-Arten: {'curved_face': 1, 'face': 1}
+  Originalerhalt: {'builder_source': True, 'native_after_features': True, 'native_after_tessellation': True, 'native_after_mesh_detect': True, 'mesh_after_detect': True}
+  Vertragsverletzungen: ['native_sphere_centre', 'native_sphere_role', 'mesh_sphere_count']
+upper_cap_origin
+  Sollmittelpunkt: [0.0, 0.0, 0.0]
+  Native Kugeln: [{"id": "sphere_1", "centre_mm": [-2.220446049250313e-15, -6.726748787476087e-16, 6.0000000000000036], "centre_error_mm": 6.0000000000000036, "diameter_mm": 16.0, "recess": true, "face_count": 540}]
+  Mesh-Kugeln: []
+  Mesh-Arten: {'curved_face': 1, 'face': 1}
+  Originalerhalt: {'builder_source': True, 'native_after_features': True, 'native_after_tessellation': True, 'native_after_mesh_detect': True, 'mesh_after_detect': True}
+  Vertragsverletzungen: ['native_sphere_centre', 'native_sphere_role', 'mesh_sphere_count']
+upper_cap_translated
+  Sollmittelpunkt: [37.0, -19.0, 83.0]
+  Native Kugeln: [{"id": "sphere_1", "centre_mm": [37.0, -19.0, 89.0], "centre_error_mm": 6.0, "diameter_mm": 16.0, "recess": true, "face_count": 540}]
+  Mesh-Kugeln: []
+  Mesh-Arten: {'curved_face': 1, 'face': 1}
+  Originalerhalt: {'builder_source': True, 'native_after_features': True, 'native_after_tessellation': True, 'native_after_mesh_detect': True, 'mesh_after_detect': True}
+  Vertragsverletzungen: ['native_sphere_centre', 'native_sphere_role', 'mesh_sphere_count']
+upper_cap_rotated_translated
+  Sollmittelpunkt: [37.0, -19.0, 83.0]
+  Native Kugeln: [{"id": "sphere_1", "centre_mm": [40.346934608279376, -21.037503872218444, 87.54385372768498], "centre_error_mm": 6.000000000000002, "diameter_mm": 16.0, "recess": true, "face_count": 540}]
+  Mesh-Kugeln: []
+  Mesh-Arten: {'curved_face': 1, 'face': 1}
+  Originalerhalt: {'builder_source': True, 'native_after_features': True, 'native_after_tessellation': True, 'native_after_mesh_detect': True, 'mesh_after_detect': True}
+  Vertragsverletzungen: ['native_sphere_centre', 'native_sphere_role', 'mesh_sphere_count']
+
+Geprüfte Produktquellen während der Sonde unverändert: True
+Exit: 1 (1 bedeutet beobachtete Vertragsverletzungen, kein grüner Prüflauf).

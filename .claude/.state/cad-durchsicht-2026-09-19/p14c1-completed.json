@@ -1,0 +1,19 @@
+{
+  "product_commit": "875c403341bdf89544723f4b75cfe5d90ee5e588",
+  "gate": "C:\\Users\\rober\\AppData\\Local\\Temp\\solidon-cad-native-faces-final-66ffb8dac3bd4ad6ab40a9479030ab33",
+  "core": {
+    "passed": 13025,
+    "skipped": 26,
+    "seconds": 527.18,
+    "exit": 0
+  },
+  "exits": {
+    "ruff": 0,
+    "format": 0,
+    "mypy": 0,
+    "suite": 0
+  },
+  "p25_commit": "",
+  "p25_status": "?? konzepte/nachweise-cad-p2-5/",
+  "handoff": "konzepte/uebergabe-cad-2026-09-20.md"
+}

@@ -1,0 +1,76 @@
+FF                                                                       [100%]
+================================== FAILURES ===================================
+_____ test_final_organizer_surface_proof_keeps_the_original_cancel_token ______
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x000001D8E9903360>
+
+    def test_final_organizer_surface_proof_keeps_the_original_cancel_token(monkeypatch):
+        from app.core.errors import OperationCancelled
+        from app.core.organizer import build
+        from app.core.scene.cancel import CancelSignal
+    
+        layout = resolve_layout(
+            grid_layout(1, 1, wall=3, radius=0), {}, width=100, depth=80, height=40, wall=3, floor=4, radius=0
+        )
+        token = CancelSignal()
+        original = build.planar_patch
+    
+        def cancel_inside(*args, **kwargs):
+            token.cancel()
+            return original(*args, **kwargs)
+    
+        monkeypatch.setattr(build, "planar_patch", cancel_inside)
+>       with pytest.raises(OperationCancelled):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE OperationCancelled
+
+tests\test_organizer_build.py:35: Failed
+________ test_named_groove_floor_proof_keeps_the_original_cancel_token ________
+
+profile = Profile(printer=PrinterProfile(id='centauri-carbon-2', title='Elegoo Centauri Carbon 2', build_volume=(256.0, 256.0, 2...alibration_printer='', calibration_nozzle_diameter=0.0, calibration_layer_height=0.0, calibration_extrusion_width=0.0))
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x000001D8B90D23F0>
+
+    def test_named_groove_floor_proof_keeps_the_original_cancel_token(profile, monkeypatch):
+        from app.core.errors import OperationCancelled
+        from app.core.perceive import surfaces
+        from app.core.scene.cancel import CancelSignal
+    
+        token = CancelSignal()
+        original = surfaces.planar_patch
+        checked = []
+    
+        def cancel_inside(*args, **kwargs):
+            checked.append(True)
+            assert kwargs.get("check_cancelled") is not None
+            token.cancel()
+            return original(*args, **kwargs)
+    
+        monkeypatch.setattr(surfaces, "planar_patch", cancel_inside)
+        with pytest.raises(OperationCancelled):
+>           run(cube(), profile=profile, cancelled=token)
+
+tests\test_seal_ops.py:82: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\test_seal_ops.py:50: in run
+    return create_seal(
+app\core\geom\seal_ops.py:505: in create_seal
+    body = _named_floor(
+app\core\geom\seal_ops.py:307: in _named_floor
+    surface = planar_patch(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+args = (MeshData(raw=<trimesh.Trimesh(vertices.shape=(386, 3), faces.shape=(768, 3))>, slots=(), cavity=None), (211, 212, 213, 223, 224, 225, ...), (2.336490441656952e-09, -1.750247978625039e-16, 8.000000000000002), (0.0, 0.0, 1.0))
+kwargs = {}
+
+    def cancel_inside(*args, **kwargs):
+        checked.append(True)
+>       assert kwargs.get("check_cancelled") is not None
+E       AssertionError: assert None is not None
+E        +  where None = <built-in method get of dict object at 0x000001D8F0B93980>('check_cancelled')
+E        +    where <built-in method get of dict object at 0x000001D8F0B93980> = {}.get
+
+tests\test_seal_ops.py:76: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/test_organizer_build.py::test_final_organizer_surface_proof_keeps_the_original_cancel_token
+FAILED tests/test_seal_ops.py::test_named_groove_floor_proof_keeps_the_original_cancel_token
+2 failed, 42 deselected in 1.38s

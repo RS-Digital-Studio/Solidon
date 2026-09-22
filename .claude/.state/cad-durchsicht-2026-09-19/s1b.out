@@ -1,0 +1,56 @@
+create_brep_box [primitive] requires_kind= applies_to=() produces=1 consumes=0
+     x=0.0, y=0.0, z=0.0, nx=0.0, ny=0.0, nz=0.0, angle=0.0, width=40.0, depth=30.0, height=20.0, name=''
+drill_brep_hole [holes] requires_kind=brep applies_to=('face',) produces=1 consumes=1
+     diameter=5.0, x=0.0, y=0.0, z=0.0, axis='z', nx=0.0, ny=0.0, nz=0.0, depth=0.0, slotted=False, slot_length=10.0, slot_angle=0.0, widening_diameter=0.0, widening_depth=0.0, transition_angle=90.0, anchor='mouth', compensate=True
+drill_hole [holes] requires_kind= applies_to=('face',) produces=1 consumes=1
+     diameter=5.0, x=0.0, y=0.0, z=0.0, axis='z', nx=0.0, ny=0.0, nz=0.0, depth=0.0, slotted=False, slot_length=10.0, slot_angle=0.0, widening_diameter=0.0, widening_depth=0.0, transition_angle=90.0, anchor='mouth', compensate=True
+fillet_edges [shaping] requires_kind= applies_to=() produces=1 consumes=1
+     radius=2.0, edges='vertical', edge_keys=''
+chamfer_edges [shaping] requires_kind= applies_to=() produces=1 consumes=1
+     distance=1.0, edges='vertical', edge_keys=''
+shell_exact [shaping] requires_kind=brep applies_to=() produces=1 consumes=1
+     wall=2.0
+hollow_object [prepare] requires_kind= applies_to=() produces=1 consumes=1
+     wall=2.0, open_top=False, open_at='', vents=1, vent_diameter=4.0
+insert_heatset_m4 [parts] requires_kind= applies_to=('hole', 'face') produces=1 consumes=1
+     size='M3', lead_in=True, extra_depth=0.5, x=0.0, y=0.0, z=0.0, nx=0.0, ny=0.0, nz=0.0, axis='z', angle=0.0, at_feature='', at_features=()
+countersink_hole [holes] requires_kind= applies_to=('hole', 'cone') produces=1 consumes=1
+     diameter=8.4, angle=90.0, x=0.0, y=0.0, z=0.0, axis='z', anchor='mouth'
+resize_hole [holes] requires_kind= applies_to=('hole', 'slot') produces=1 consumes=1
+     diameter=5.0, at_feature='', entrance_mode='keep', x=None, y=None, z=None, compensate=False
+slot_hole [holes] requires_kind= applies_to=('hole', 'slot') produces=1 consumes=1
+     slot_length=20.0, slot_angle=0.0, at_feature='', x=None, y=None, z=None
+move_feature [holes] requires_kind= applies_to=('hole', 'pin', 'cone', 'sphere', 'void', 'slot') produces=1 consumes=1
+     nx=0.0, ny=0.0, nz=0.0, at_feature='', x=0.0, y=0.0, z=0.0
+rotate_feature [holes] requires_kind= applies_to=('hole', 'pin', 'cone', 'slot') produces=1 consumes=1
+     at_feature='', axis='x', angle=90.0
+duplicate_feature [holes] requires_kind= applies_to=('hole', 'pin', 'cone', 'sphere', 'slot') produces=1 consumes=1
+     nx=0.0, ny=0.0, nz=0.0, at_feature='', x=0.0, y=0.0, z=0.0
+remove_feature [holes] requires_kind= applies_to=('hole', 'pin', 'cone', 'sphere', 'void', 'slot', 'fillet') produces=1 consumes=1
+     at_feature='', sections='ask'
+plug_hole [holes] requires_kind= applies_to=('hole',) produces=1 consumes=1
+     at_feature='', diameter=5.0, x=0.0, y=0.0, z=0.0, axis='z', depth=0.0, anchor='mouth', compensate=True
+assign_slot [colour] requires_kind= applies_to=() produces=1 consumes=1
+     slot=0, name='', colour='', material_type='', slicer_profile=''
+paint_slot [colour] requires_kind= applies_to=('face', 'curved_face') produces=1 consumes=1
+     slot=1, at_feature='', colour='', name='', material_type='', slicer_profile='', replace_filament=False
+slots_from_texture [colour] requires_kind= applies_to=() produces=1 consumes=1
+     filaments=4
+scale_object [transform] requires_kind= applies_to=() produces=1 consumes=1
+     factor=1.0, fx=0.0, fy=0.0, fz=0.0, about='centre', pivot_x=0.0, pivot_y=0.0, pivot_z=0.0, keep_on_bed=False
+fit_to_size [transform] requires_kind= applies_to=() produces=1 consumes=1
+     largest=100.0, about='centre'
+mirror_object [transform] requires_kind= applies_to=() produces=1 consumes=1
+     axis='x', about='centre'
+create_torus [primitive] requires_kind= applies_to=() produces=1 consumes=0
+     x=0.0, y=0.0, z=0.0, nx=0.0, ny=0.0, nz=0.0, angle=0.0, outer_diameter=40.0, tube_diameter=8.0, segments=48, name=''
+create_cylinder [primitive] requires_kind= applies_to=() produces=1 consumes=0
+     x=0.0, y=0.0, z=0.0, nx=0.0, ny=0.0, nz=0.0, angle=0.0, diameter=20.0, height=20.0, segments=48, name=''
+sketch_pocket [sketch] requires_kind= applies_to=('face',) produces=1 consumes=1
+     shape='rectangle', length=20.0, width=10.0, depth=5.0, count=6, columns=4, rows=3, hole_diameter=4.0, through=False, x=0.0, y=0.0, z=0.0, corners=6, region=0, sketch=''
+sketch_extrude [sketch] requires_kind= applies_to=() produces=1 consumes=0
+     shape='rectangle', length=40.0, width=20.0, height=10.0, count=6, columns=4, rows=3, hole_diameter=4.0, corners=6, region=0, up_to='', name='', sketch=''
+draft_faces [shaping] requires_kind= applies_to=() produces=1 consumes=1
+     angle=2.0
+push_face [shaping] requires_kind= applies_to=('face',) produces=1 consumes=1
+     distance=2.0, face='', nx=0.0, ny=0.0, nz=1.0

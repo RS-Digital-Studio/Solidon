@@ -1,0 +1,46 @@
+REGISTRY dir: ['all', 'by_category', 'by_shortcut', 'clear', 'for_feature', 'get', 'has', 'register', 'remove', 'replace_state']
+bootstrap.load_operations -> <class 'NoneType'> ?
+REGISTRY.all() -> 132
+Spec-Typ: <class 'app.core.registry.registry.OperationSpec'> Felder: ['applies_to', 'cache_version', 'category', 'caveat', 'consumes', 'deterministic', 'doc', 'fn', 'icon', 'keeps_inputs', 'material_params', 'minimum_inputs', 'name', 'params', 'produces', 'produces_from', 'reads_other_bodies', 'requires_body', 'requires_kind', 'requires_seed', 'reversible', 'shortcut', 'takes_whole_scene', 'title', 'touches_features', 'unchanged_effect', 'whole_scene']
+Kategorien: 15 {'transform': 9, 'surface': 3, 'scene': 6, 'colour': 4, 'shaping': 6, 'boolean': 4, 'mesh': 9, 'prepare': 9, 'holes': 12, 'primitive': 10, 'parts': 48, 'label': 2, 'sketch': 6, 'import': 3, 'repair': 1}
+reversible alle: True
+Anzahl Ops: 132
+  scale_object: params unlesbar TypeError("'type' object is not iterable"): <class 'app.core.geom.ops.ScaleParams'>
+  fit_to_size: params unlesbar TypeError("'type' object is not iterable"): <class 'app.core.geom.ops.FitToSizeParams'>
+  mirror_object: params unlesbar TypeError("'type' object is not iterable"): <class 'app.core.geom.ops.MirrorParams'>
+  drill_brep_hole: params unlesbar TypeError("'type' object is not iterable"): <class 'app.core.geom.prepare_ops.DrillParams'>
+  countersink_hole: params unlesbar TypeError("'type' object is not iterable"): <class 'app.core.geom.prepare_ops.CountersinkParams'>
+  insert_heatset_m4: params unlesbar TypeError("'type' object is not iterable"): <class 'app.core.knowledge.parts.ops.HeatsetM4OpParams'>
+  resize_hole: params unlesbar TypeError("'type' object is not iterable"): <class 'app.core.geom.prepare_ops.ResizeHoleParams'>
+  slot_hole: params unlesbar TypeError("'type' object is not iterable"): <class 'app.core.geom.prepare_ops.SlotHoleParams'>
+  move_feature: params unlesbar TypeError("'type' object is not iterable"): <class 'app.core.geom.prepare_ops.MoveFeatureParams'>
+  plug_hole: params unlesbar TypeError("'type' object is not iterable"): <class 'app.core.geom.prepare_ops.PlugParams'>
+  assign_slot: params unlesbar TypeError("'type' object is not iterable"): <class 'app.core.geom.colour_ops.AssignSlotParams'>
+  paint_slot: params unlesbar TypeError("'type' object is not iterable"): <class 'app.core.geom.paint.PaintParams'>
+  fillet_edges: params unlesbar TypeError("'type' object is not iterable"): <class 'app.core.geom.edge_ops.FilletParams'>
+  shell_exact: params unlesbar TypeError("'type' object is not iterable"): <class 'app.core.brep.ops.ShellParams'>
+  hollow_object: params unlesbar TypeError("'type' object is not iterable"): <class 'app.core.geom.prepare_ops.HollowParams'>
+  sketch_pocket: params unlesbar TypeError("'type' object is not iterable"): <class 'app.core.sketch.ops.SketchPocketParams'>
+  sketch_extrude: params unlesbar TypeError("'type' object is not iterable"): <class 'app.core.sketch.ops.SketchExtrudeParams'>
+  create_torus: params unlesbar TypeError("'type' object is not iterable"): <class 'app.core.geom.primitive_ops.TorusParams'>
+  create_cylinder: params unlesbar TypeError("'type' object is not iterable"): <class 'app.core.geom.primitive_ops.CylinderParams'>
+  remove_feature: params unlesbar TypeError("'type' object is not iterable"): <class 'app.core.geom.prepare_ops.RemoveFeatureParams'>
+PARTS.all(): 35
+FeatureKind: 12 ('hole', 'face', 'edge_loop', 'pin', 'cone', 'sphere', 'torus', 'thread', 'fillet', 'void', 'slot', 'curved_face')
+_CONSTRAINT_TARGETS: (15, ['angle', 'coincident', 'diameter', 'distance', 'equal', 'fixed', 'horizontal', 'midpoint', 'parallel', 'perpendicular', 'radius', 'reference', 'symmetric', 'tangent', 'vertical'])
+app.core.sketch.edit.project(sketch: 'Sketch', mesh: 'object', frame: 'object' = None) -> 'Sketch'
+app.core.sketch.planes.frame_of(normal: 'Vec3', origin: 'Vec3') -> 'PlaneFrame'
+app.core.scene.placement.prepare_surface(mesh: 'MeshData', face_index: 'int', features: 'Mapping[str, Feature] | None' = None) -> 'PreparedSurface'
+app.core.scene.placement.at_point(prepared: 'PreparedSurface', point: 'Vec3') -> 'SurfacePlacement'
+app.core.scene.placement.point_with_distances(prepared: 'PreparedSurface', placement: 'SurfacePlacement', distances: 'tuple[float, float]') -> 'SurfacePlacement'
+app.core.brep.edit.edge_key(entry: 'EdgeInfo') -> 'str'
+app.core.brep.edit.edges_of(solid: 'Solid') -> 'list[EdgeInfo]'
+app.core.brep.edit.transformed(solid: 'Solid', matrix: 'Transform') -> 'Solid'
+app.core.brep.edit.box(width: 'float', depth: 'float', height: 'float') -> 'Solid'
+app.core.brep.edit.cut_bore(solid: 'Solid', *, position: 'Vec3', direction: 'Vec3', diameter: 'float', depth: 'float') -> 'Solid'
+app.core.perceive.features.detect_holes(mesh: 'MeshData', cylinders: 'Cylinders | None' = None, cones: 'Cones | None' = None) -> 'list[Feature]'
+app.core.perceive.features.detect(mesh: 'MeshData', *, check_cancelled: 'Callable[[], None] | None' = None) -> 'dict[FeatureId, Feature]'
+app.core.perceive.features.detect_faces(mesh: 'MeshData', *, planar: 'set[int] | None' = None, check_cancelled: 'Callable[[], None] | None' = None) -> 'list[Feature]'
+app.core.perceive.features.forget_cache() -> 'None'
+edge_key in: ['app.core.brep.edit']
+forget_cache anderswo: ['CACHE_INDEX_LIMIT', 'CACHE_LIMIT', '_CACHE_INDICES', '_FEATURE_CACHE', '__cached__', 'forget_cache']

@@ -1,0 +1,561 @@
+{
+  "command": ".venv/Scripts/python.exe .claude/.state/cad-durchsicht-2026-09-19/p12-native-sphere-probe.py",
+  "head": "7eea517fc6102496ae081d8e5c6ae158fbc63029",
+  "python": "3.14.7 (tags/v3.14.7:823f032, Aug  5 2026, 10:51:32) [MSC v.1944 64 bit (AMD64)]",
+  "versions": {
+    "cadquery-ocp-novtk": "8.0.1.0.0",
+    "cadquery-ocp-proxy": "8.0.1.0.0",
+    "numpy": "2.5.3",
+    "scipy": "1.18.1",
+    "trimesh": "5.1.0"
+  },
+  "source_sha256_before": {
+    "app/core/brep/features.py": "2dce14c770d107f5f2e7d34ab7b881d38e2092cab795ec573f3bbff300b76c06",
+    "app/core/brep/canonical.py": "59be676378af6b6b044595384e33140c93518855c700bc57536ba4097cf3c34a",
+    "app/core/brep/kernel.py": "b2f1b03237e49517ec137882115116cfb49921ae17760a996cadb49a50fcc2b3",
+    "app/core/brep/properties.py": "727269b270d99768e187156a27c6a7b519feb0b19d8d9d324304c43130480f55",
+    "app/core/perceive/features.py": "ccb69a589ee272a13dae1e68cc12b9013cb1036dd8ad281ef1531e3d16a32c36",
+    "app/core/geom/mesh.py": "4556235dbdd0639dc70e6c6ebe5d95acbbe32cb86d19338e5221ea7f136bfe46"
+  },
+  "units": "mm",
+  "deflection_mm": 0.05,
+  "seed": null,
+  "tolerance_mm": 1e-06,
+  "scope": "Reine analytische Kernsonde; keine Fenster-, Leistungs- oder Releaseprüfung.",
+  "cases": [
+    {
+      "case": "hemisphere_origin",
+      "radius_mm": 8.0,
+      "lower_z_before_transform_mm": 0.0,
+      "rotation_axis": [
+        0.4364357804719848,
+        0.8728715609439696,
+        -0.2182178902359924
+      ],
+      "rotation_radians": 0.0,
+      "translation_mm": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "expected_centre_mm": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "expected_recess": false,
+      "expected_surface_centroid_mm": [
+        0.0,
+        0.0,
+        4.0
+      ],
+      "expected_volume_mm3": 1072.330292425316,
+      "measured_native_volume_mm3": 1072.3302924253162,
+      "native_source_spheres": [
+        {
+          "radius_mm": 8.0,
+          "centre_mm": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      ],
+      "triangle_count": 912,
+      "native": {
+        "kind_counts": {
+          "face": 1,
+          "sphere": 1
+        },
+        "spheres": [
+          {
+            "id": "sphere_1",
+            "centre_mm": [
+              0.0,
+              -9.519618637022538e-16,
+              3.9999999999999996
+            ],
+            "centre_error_mm": 3.9999999999999996,
+            "diameter_mm": 16.0,
+            "recess": true,
+            "face_count": 872
+          }
+        ],
+        "sphere_missing": false
+      },
+      "mesh": {
+        "kind_counts": {
+          "face": 1,
+          "sphere": 1
+        },
+        "spheres": [
+          {
+            "id": "sphere_1",
+            "centre_mm": [
+              0.000981890376273678,
+              1.9880488055993835e-15,
+              0.01628165996290054
+            ],
+            "centre_error_mm": 0.016311240291852037,
+            "diameter_mm": 15.9251,
+            "recess": false,
+            "face_count": 872
+          }
+        ],
+        "sphere_missing": false
+      },
+      "original_preserved": {
+        "builder_source": true,
+        "native_after_features": true,
+        "native_after_tessellation": true,
+        "native_after_mesh_detect": true,
+        "mesh_after_detect": true
+      },
+      "native_sha256_before": "7cd5004f7f78d5dceb699d81a0d8f8a2993b216c2f423264e778e7d3e761e38f",
+      "native_sha256_after": "7cd5004f7f78d5dceb699d81a0d8f8a2993b216c2f423264e778e7d3e761e38f",
+      "violations": [
+        "native_sphere_centre",
+        "native_sphere_role",
+        "mesh_sphere_centre"
+      ]
+    },
+    {
+      "case": "hemisphere_translated",
+      "radius_mm": 8.0,
+      "lower_z_before_transform_mm": 0.0,
+      "rotation_axis": [
+        0.4364357804719848,
+        0.8728715609439696,
+        -0.2182178902359924
+      ],
+      "rotation_radians": 0.0,
+      "translation_mm": [
+        37.0,
+        -19.0,
+        83.0
+      ],
+      "expected_centre_mm": [
+        37.0,
+        -19.0,
+        83.0
+      ],
+      "expected_recess": false,
+      "expected_surface_centroid_mm": [
+        37.0,
+        -19.0,
+        87.0
+      ],
+      "expected_volume_mm3": 1072.330292425316,
+      "measured_native_volume_mm3": 1072.3302924253162,
+      "native_source_spheres": [
+        {
+          "radius_mm": 8.0,
+          "centre_mm": [
+            37.0,
+            -19.0,
+            83.0
+          ]
+        }
+      ],
+      "triangle_count": 912,
+      "native": {
+        "kind_counts": {
+          "face": 1,
+          "sphere": 1
+        },
+        "spheres": [
+          {
+            "id": "sphere_1",
+            "centre_mm": [
+              37.0,
+              -19.0,
+              87.0
+            ],
+            "centre_error_mm": 4.0,
+            "diameter_mm": 16.0,
+            "recess": true,
+            "face_count": 872
+          }
+        ],
+        "sphere_missing": false
+      },
+      "mesh": {
+        "kind_counts": {
+          "face": 1,
+          "sphere": 1
+        },
+        "spheres": [
+          {
+            "id": "sphere_1",
+            "centre_mm": [
+              37.00098189037627,
+              -19.000000000000007,
+              83.0162816599629
+            ],
+            "centre_error_mm": 0.016311240291851138,
+            "diameter_mm": 15.9251,
+            "recess": false,
+            "face_count": 872
+          }
+        ],
+        "sphere_missing": false
+      },
+      "original_preserved": {
+        "builder_source": true,
+        "native_after_features": true,
+        "native_after_tessellation": true,
+        "native_after_mesh_detect": true,
+        "mesh_after_detect": true
+      },
+      "native_sha256_before": "9d050759a10acd583a87b94946a439fad78176b90cd1ba1b1e4591c6b60ef184",
+      "native_sha256_after": "9d050759a10acd583a87b94946a439fad78176b90cd1ba1b1e4591c6b60ef184",
+      "violations": [
+        "native_sphere_centre",
+        "native_sphere_role",
+        "mesh_sphere_centre"
+      ]
+    },
+    {
+      "case": "hemisphere_rotated_translated",
+      "radius_mm": 8.0,
+      "lower_z_before_transform_mm": 0.0,
+      "rotation_axis": [
+        0.4364357804719848,
+        0.8728715609439696,
+        -0.2182178902359924
+      ],
+      "rotation_radians": 0.73,
+      "translation_mm": [
+        37.0,
+        -19.0,
+        83.0
+      ],
+      "expected_centre_mm": [
+        37.0,
+        -19.0,
+        83.0
+      ],
+      "expected_recess": false,
+      "expected_surface_centroid_mm": [
+        39.231289738852915,
+        -20.358335914812297,
+        86.02923581845666
+      ],
+      "expected_volume_mm3": 1072.330292425316,
+      "measured_native_volume_mm3": 1072.3302924253162,
+      "native_source_spheres": [
+        {
+          "radius_mm": 8.0,
+          "centre_mm": [
+            37.0,
+            -19.0,
+            83.0
+          ]
+        }
+      ],
+      "triangle_count": 912,
+      "native": {
+        "kind_counts": {
+          "face": 1,
+          "sphere": 1
+        },
+        "spheres": [
+          {
+            "id": "sphere_1",
+            "centre_mm": [
+              39.231289738852915,
+              -20.358335914812297,
+              86.02923581845666
+            ],
+            "centre_error_mm": 4.000000000000004,
+            "diameter_mm": 16.0,
+            "recess": true,
+            "face_count": 872
+          }
+        ],
+        "sphere_missing": false
+      },
+      "mesh": {
+        "kind_counts": {
+          "curved_face": 1,
+          "face": 1
+        },
+        "spheres": [],
+        "sphere_missing": true
+      },
+      "original_preserved": {
+        "builder_source": true,
+        "native_after_features": true,
+        "native_after_tessellation": true,
+        "native_after_mesh_detect": true,
+        "mesh_after_detect": true
+      },
+      "native_sha256_before": "3d7cf04f373f184ead8311f8a846e967664dd6043df666f7d9aa56d9ba536dc2",
+      "native_sha256_after": "3d7cf04f373f184ead8311f8a846e967664dd6043df666f7d9aa56d9ba536dc2",
+      "violations": [
+        "native_sphere_centre",
+        "native_sphere_role",
+        "mesh_sphere_count"
+      ]
+    },
+    {
+      "case": "upper_cap_origin",
+      "radius_mm": 8.0,
+      "lower_z_before_transform_mm": 4.0,
+      "rotation_axis": [
+        0.4364357804719848,
+        0.8728715609439696,
+        -0.2182178902359924
+      ],
+      "rotation_radians": 0.0,
+      "translation_mm": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "expected_centre_mm": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "expected_recess": false,
+      "expected_surface_centroid_mm": [
+        0.0,
+        0.0,
+        6.0
+      ],
+      "expected_volume_mm3": 335.1032163829113,
+      "measured_native_volume_mm3": 335.10321638291083,
+      "native_source_spheres": [
+        {
+          "radius_mm": 8.0,
+          "centre_mm": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      ],
+      "triangle_count": 580,
+      "native": {
+        "kind_counts": {
+          "face": 1,
+          "sphere": 1
+        },
+        "spheres": [
+          {
+            "id": "sphere_1",
+            "centre_mm": [
+              -2.220446049250313e-15,
+              -6.726748787476087e-16,
+              6.0000000000000036
+            ],
+            "centre_error_mm": 6.0000000000000036,
+            "diameter_mm": 16.0,
+            "recess": true,
+            "face_count": 540
+          }
+        ],
+        "sphere_missing": false
+      },
+      "mesh": {
+        "kind_counts": {
+          "curved_face": 1,
+          "face": 1
+        },
+        "spheres": [],
+        "sphere_missing": true
+      },
+      "original_preserved": {
+        "builder_source": true,
+        "native_after_features": true,
+        "native_after_tessellation": true,
+        "native_after_mesh_detect": true,
+        "mesh_after_detect": true
+      },
+      "native_sha256_before": "3f57a307747b2cdc49057b8777ffc4c78d2f18dcdf8eddf46cd40b84c669a37b",
+      "native_sha256_after": "3f57a307747b2cdc49057b8777ffc4c78d2f18dcdf8eddf46cd40b84c669a37b",
+      "violations": [
+        "native_sphere_centre",
+        "native_sphere_role",
+        "mesh_sphere_count"
+      ]
+    },
+    {
+      "case": "upper_cap_translated",
+      "radius_mm": 8.0,
+      "lower_z_before_transform_mm": 4.0,
+      "rotation_axis": [
+        0.4364357804719848,
+        0.8728715609439696,
+        -0.2182178902359924
+      ],
+      "rotation_radians": 0.0,
+      "translation_mm": [
+        37.0,
+        -19.0,
+        83.0
+      ],
+      "expected_centre_mm": [
+        37.0,
+        -19.0,
+        83.0
+      ],
+      "expected_recess": false,
+      "expected_surface_centroid_mm": [
+        37.0,
+        -19.0,
+        89.0
+      ],
+      "expected_volume_mm3": 335.1032163829113,
+      "measured_native_volume_mm3": 335.1032163829108,
+      "native_source_spheres": [
+        {
+          "radius_mm": 8.0,
+          "centre_mm": [
+            37.0,
+            -19.0,
+            83.0
+          ]
+        }
+      ],
+      "triangle_count": 580,
+      "native": {
+        "kind_counts": {
+          "face": 1,
+          "sphere": 1
+        },
+        "spheres": [
+          {
+            "id": "sphere_1",
+            "centre_mm": [
+              37.0,
+              -19.0,
+              89.0
+            ],
+            "centre_error_mm": 6.0,
+            "diameter_mm": 16.0,
+            "recess": true,
+            "face_count": 540
+          }
+        ],
+        "sphere_missing": false
+      },
+      "mesh": {
+        "kind_counts": {
+          "curved_face": 1,
+          "face": 1
+        },
+        "spheres": [],
+        "sphere_missing": true
+      },
+      "original_preserved": {
+        "builder_source": true,
+        "native_after_features": true,
+        "native_after_tessellation": true,
+        "native_after_mesh_detect": true,
+        "mesh_after_detect": true
+      },
+      "native_sha256_before": "fd9dab81d79e7221bb88ed12aed1386ce5a4a903fccdef821f381cd171ed9de6",
+      "native_sha256_after": "fd9dab81d79e7221bb88ed12aed1386ce5a4a903fccdef821f381cd171ed9de6",
+      "violations": [
+        "native_sphere_centre",
+        "native_sphere_role",
+        "mesh_sphere_count"
+      ]
+    },
+    {
+      "case": "upper_cap_rotated_translated",
+      "radius_mm": 8.0,
+      "lower_z_before_transform_mm": 4.0,
+      "rotation_axis": [
+        0.4364357804719848,
+        0.8728715609439696,
+        -0.2182178902359924
+      ],
+      "rotation_radians": 0.73,
+      "translation_mm": [
+        37.0,
+        -19.0,
+        83.0
+      ],
+      "expected_centre_mm": [
+        37.0,
+        -19.0,
+        83.0
+      ],
+      "expected_recess": false,
+      "expected_surface_centroid_mm": [
+        40.346934608279376,
+        -21.037503872218444,
+        87.54385372768498
+      ],
+      "expected_volume_mm3": 335.1032163829113,
+      "measured_native_volume_mm3": 335.1032163829105,
+      "native_source_spheres": [
+        {
+          "radius_mm": 8.0,
+          "centre_mm": [
+            37.0,
+            -19.0,
+            83.0
+          ]
+        }
+      ],
+      "triangle_count": 580,
+      "native": {
+        "kind_counts": {
+          "face": 1,
+          "sphere": 1
+        },
+        "spheres": [
+          {
+            "id": "sphere_1",
+            "centre_mm": [
+              40.346934608279376,
+              -21.037503872218444,
+              87.54385372768498
+            ],
+            "centre_error_mm": 6.000000000000002,
+            "diameter_mm": 16.0,
+            "recess": true,
+            "face_count": 540
+          }
+        ],
+        "sphere_missing": false
+      },
+      "mesh": {
+        "kind_counts": {
+          "curved_face": 1,
+          "face": 1
+        },
+        "spheres": [],
+        "sphere_missing": true
+      },
+      "original_preserved": {
+        "builder_source": true,
+        "native_after_features": true,
+        "native_after_tessellation": true,
+        "native_after_mesh_detect": true,
+        "mesh_after_detect": true
+      },
+      "native_sha256_before": "ac1674c08599bde4e8912c98912b656ed7053da3c24c6bee59a50163e9e3212d",
+      "native_sha256_after": "ac1674c08599bde4e8912c98912b656ed7053da3c24c6bee59a50163e9e3212d",
+      "violations": [
+        "native_sphere_centre",
+        "native_sphere_role",
+        "mesh_sphere_count"
+      ]
+    }
+  ],
+  "source_sha256_after": {
+    "app/core/brep/features.py": "2dce14c770d107f5f2e7d34ab7b881d38e2092cab795ec573f3bbff300b76c06",
+    "app/core/brep/canonical.py": "59be676378af6b6b044595384e33140c93518855c700bc57536ba4097cf3c34a",
+    "app/core/brep/kernel.py": "b2f1b03237e49517ec137882115116cfb49921ae17760a996cadb49a50fcc2b3",
+    "app/core/brep/properties.py": "727269b270d99768e187156a27c6a7b519feb0b19d8d9d324304c43130480f55",
+    "app/core/perceive/features.py": "ccb69a589ee272a13dae1e68cc12b9013cb1036dd8ad281ef1531e3d16a32c36",
+    "app/core/geom/mesh.py": "4556235dbdd0639dc70e6c6ebe5d95acbbe32cb86d19338e5221ea7f136bfe46"
+  },
+  "product_sources_unchanged_during_probe": true,
+  "exit_code": 1
+}

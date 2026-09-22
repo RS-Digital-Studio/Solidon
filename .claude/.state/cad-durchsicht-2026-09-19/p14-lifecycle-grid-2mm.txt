@@ -1,0 +1,129 @@
+tests/test_matching_lifecycle.py
+
+$ -q -p tools.list_windowed_tests -p no:cacheprovider tests/test_matching_lifecycle.py
+F.                                                                       [100%]
+================================== FAILURES ===================================
+_ test_over_a_thousand_real_faces_keep_their_identity_through_project_lifecycle[facets] _
+
+exact = False
+profile = Profile(printer=PrinterProfile(id='centauri-carbon-2', title='Elegoo Centauri Carbon 2', build_volume=(256.0, 256.0, 2...alibration_printer='', calibration_nozzle_diameter=0.0, calibration_layer_height=0.0, calibration_extrusion_width=0.0))
+tmp_path = WindowsPath('C:/Users/rober/AppData/Local/Temp/pytest-of-rober/pytest-24527/test_over_a_thousand_real_face0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x000001DB165CCB00>
+
+    @pytest.mark.parametrize("exact", [False, True], ids=["facets", "native"])
+    def test_over_a_thousand_real_faces_keep_their_identity_through_project_lifecycle(
+        exact: bool, profile: Profile, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Die Testfreigabe umgeht nur die noch beim Release zu messende Zahlengrenze.
+    
+        Import, Erkennung, Zuordnung, Transformation, Cache und Historie laufen
+        unverändert. Der Fall belegt Identität und Quellen, keine Laufzeit oder
+        tragfähige neue Produktionsgrenze. Native Transformationen dürfen ihre
+        bereits belegte Topologie unmittelbar mitnehmen.
+        """
+        evaluation = importlib.import_module("app.core.scene.evaluate")
+        monkeypatch.setattr(evaluation, "FEATURE_LIMIT_COUNT", 1056)
+        load_operations()
+        payload, suffix, operation = _grid_source(exact)
+        project = new_project("centauri-carbon-2", "petg")
+        project.sources["src_1"] = payload
+        project.document.sources["src_1"] = Source(
+            id="src_1", kind="import", path=f"sources/grid.{suffix}", sha256=""
+        )
+        history = History(project.document)
+        params = {"source": "src_1"}
+        if not exact:
+            params["unit"] = "mm"
+        history.apply("Flächenraster laden", [OperationDraft(op=operation, params=params)])
+        directory = tmp_path / "cache"
+    
+        def cache() -> ResultCache:
+            """Ein neuer Speichercache liest denselben echten Plattencache."""
+            return ResultCache(disk=DiskCache(codec=MeshCodec(), directory=directory))
+    
+        active = cache()
+        matched_counts: list[tuple[int, int]] = []
+        original_match = evaluation.match
+    
+        def recorded_match(old: Any, new: Any, *args: Any, **kwargs: Any) -> Any:
+            """Der Zähler belegt den echten Anschluss, das Ergebnis bleibt unverändert."""
+            matched_counts.append((len(old), len(new)))
+            return original_match(old, new, *args, **kwargs)
+    
+        monkeypatch.setattr(evaluation, "match", recorded_match)
+    
+        def run(current: Any, remembered: ResultCache, offset: np.ndarray) -> Any:
+            """Jede einzelne Fläche bleibt am gleichen Würfel und auf derselben Seite."""
+            result = evaluate(
+                current.document, profile, sources=ProjectSources(current), cache=remembered
+            )
+            assert result.complete
+            assert len(result.scene.objects) == 1
+            assert not {"perceive.orphaned", "perceive.too_many"} & {
+                finding.code for finding in result.scene.report.findings
+            }
+            body = result.scene.objects["obj_1"]
+            assert body.kind == ("brep" if exact else "mesh")
+            assert body.mesh.volume == pytest.approx(176.0 * 2.0**3)
+            assert len(body.features) == 1056
+            if original:
+                assert body.features.keys() == original.keys()
+            for name, feature in body.features.items():
+                assert feature.kind == "face"
+                assert feature.params["area"] == pytest.approx(2.0**2)
+                assert feature.measure_sources["area"] == ("native" if exact else "facets")
+                assert feature.surface_patches
+                assert feature.created_by is None
+                if original:
+                    assert feature.params["centre"] == pytest.approx(
+                        np.asarray(original[name].params["centre"]) + offset
+                    )
+                    assert feature.params["normal"] == pytest.approx(original[name].params["normal"])
+                for patch in feature.surface_patches:
+                    assert patch.kind == "plane"
+                    assert patch.source == ("native" if exact else "facets")
+                    assert set(patch.face_indices) <= set(feature.face_indices)
+            return body.features
+    
+        original: dict[str, Any] = {}
+        zero = np.zeros(3)
+        original = run(project, active, zero)
+        assert run(project, active, zero) == original
+        history.apply(
+            "Raster verschieben",
+            [OperationDraft(op="translate_object", inputs=("obj_1",), params={"dx": 7.0, "dy": -4.0})],
+        )
+        offset = np.array((7.0, -4.0, 0.0))
+>       changed = run(project, active, offset)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_matching_lifecycle.py:135: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\test_matching_lifecycle.py:95: in run
+    result = evaluate(
+app\core\scene\evaluate.py:205: in evaluate
+    result = _evaluate(
+app\core\scene\evaluate.py:601: in _evaluate
+    prepared_objects[object_id] = _with_features(
+app\core\scene\evaluate.py:1808: in _with_features
+    matched = match(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+old = {'face_1': Feature(id='face_1', kind='face', provenance='detected', params={'area': 4.0, 'normal': (-1.0, 0.0, 0.0), '...='plane', params={'centre': (8.0, -2.0, 1.0), 'axis': (-0.0, 1.0, 0.0)}, face_indices=(9, 7), source='facets'),)), ...}
+new = {'face_1': Feature(id='face_1', kind='face', provenance='detected', params={'area': 4.0, 'normal': (-1.0, 0.0, 0.0), '...='plane', params={'centre': (8.0, -2.0, 1.0), 'axis': (-0.0, 1.0, 0.0)}, face_indices=(9, 7), source='facets'),)), ...}
+args = ((38.0, 42.0, 1.0), 110.95945205344158)
+kwargs = {'check_cancelled': <bound method NeverCancelled.raise_if_cancelled of <app.core.scene.cancel.NeverCancelled object at 0x000001DB65CD02D0>>}
+
+    def recorded_match(old: Any, new: Any, *args: Any, **kwargs: Any) -> Any:
+        """Der Zähler belegt den echten Anschluss, das Ergebnis bleibt unverändert."""
+        matched_counts.append((len(old), len(new)))
+>       return original_match(old, new, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: match() got an unexpected keyword argument 'check_cancelled'
+
+tests\test_matching_lifecycle.py:89: TypeError
+=========================== short test summary info ===========================
+FAILED tests/test_matching_lifecycle.py::test_over_a_thousand_real_faces_keep_their_identity_through_project_lifecycle[facets]
+1 failed, 1 passed in 9.00s
+
+--> ROT  Exit 1  1 failed, 1 passed in 9.00s

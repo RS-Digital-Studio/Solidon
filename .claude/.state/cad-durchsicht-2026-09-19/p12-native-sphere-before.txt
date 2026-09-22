@@ -1,0 +1,1358 @@
+FFFFFFFFFFFFFFFFFFFFFFFF                                                 [100%]
+================================== FAILURES ===================================
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[shift-False-0.0-0.03] _
+
+deviation = 0.03, lower = 0.0, recess = False, placement = 'shift'
+
+    @pytest.mark.parametrize("deviation", [0.03, 0.15])
+    @pytest.mark.parametrize("lower", [0.0, math.pi / 6.0])
+    @pytest.mark.parametrize("recess", [False, True])
+    @pytest.mark.parametrize("placement", ["shift", "oblique", "mirror"])
+    def test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side(
+        deviation: float, lower: float, recess: bool, placement: str
+    ) -> None:
+        """Kalottenzentrum und Materialseite hängen weder am Flächenschwerpunkt noch an der Lage."""
+        from OCP.BRepAdaptor import BRepAdaptor_Surface
+        from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
+        from OCP.BRepCheck import BRepCheck_Analyzer
+        from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox, BRepPrimAPI_MakeSphere
+        from OCP.GeomAbs import GeomAbs_Sphere
+        from OCP.gp import gp_Ax1, gp_Ax2, gp_Dir, gp_Pnt, gp_Trsf, gp_Vec
+    
+        radius = 8.123456789
+        shape = BRepPrimAPI_MakeSphere(radius, lower, math.pi / 2.0).Shape()
+        bottom = radius * math.sin(lower)
+        top = radius
+        expected_volume = math.pi * (radius**2 * (top - bottom) - (top**3 - bottom**3) / 3)
+        if recess:
+            top = (radius + bottom) / 2.0
+            stock = BRepPrimAPI_MakeBox(gp_Pnt(-12, -12, bottom - 2), 24, 24, top - bottom + 2)
+            cut = boolean_builder("difference", stock.Shape(), shape)
+            cut.Build()
+            assert cut.IsDone()
+            shape = cut.Shape()
+            expected_volume = 24**2 * (top - bottom + 2) - math.pi * (
+                radius**2 * (top - bottom) - (top**3 - bottom**3) / 3
+            )
+        transform = gp_Trsf()
+        if placement == "oblique":
+            transform.SetRotation(gp_Ax1(gp_Pnt(), gp_Dir(1, 2, -0.5)), 0.73)
+        elif placement == "mirror":
+            transform.SetMirror(gp_Ax2(gp_Pnt(), gp_Dir(1, 2, -0.5)))
+        transform.SetTranslationPart(gp_Vec(37, -19, 83))
+        source = Solid(BRepBuilderAPI_Transform(shape, transform, True).Shape(), deviation)
+        assert BRepCheck_Analyzer(source.shape).IsValid()
+        assert source.volume == pytest.approx(expected_volume, rel=1e-10)
+        before = _bytes(source.shape)
+        spheres = [feature for feature in features_of(source).values() if feature.kind == "sphere"]
+        assert len(spheres) == 1
+        sphere = spheres[0]
+>       assert sphere.params["diameter"] == pytest.approx(2 * radius, abs=EPS_GEOM, rel=0)
+E       assert 16.2469 == 16.246913578 ± 1.0e-06
+E         
+E         comparison failed
+E         Obtained: 16.2469
+E         Expected: 16.246913578 ± 1.0e-06
+
+tests\test_brep_surfaces.py:74: AssertionError
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[shift-False-0.0-0.15] _
+
+deviation = 0.15, lower = 0.0, recess = False, placement = 'shift'
+
+    @pytest.mark.parametrize("deviation", [0.03, 0.15])
+    @pytest.mark.parametrize("lower", [0.0, math.pi / 6.0])
+    @pytest.mark.parametrize("recess", [False, True])
+    @pytest.mark.parametrize("placement", ["shift", "oblique", "mirror"])
+    def test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side(
+        deviation: float, lower: float, recess: bool, placement: str
+    ) -> None:
+        """Kalottenzentrum und Materialseite hängen weder am Flächenschwerpunkt noch an der Lage."""
+        from OCP.BRepAdaptor import BRepAdaptor_Surface
+        from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
+        from OCP.BRepCheck import BRepCheck_Analyzer
+        from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox, BRepPrimAPI_MakeSphere
+        from OCP.GeomAbs import GeomAbs_Sphere
+        from OCP.gp import gp_Ax1, gp_Ax2, gp_Dir, gp_Pnt, gp_Trsf, gp_Vec
+    
+        radius = 8.123456789
+        shape = BRepPrimAPI_MakeSphere(radius, lower, math.pi / 2.0).Shape()
+        bottom = radius * math.sin(lower)
+        top = radius
+        expected_volume = math.pi * (radius**2 * (top - bottom) - (top**3 - bottom**3) / 3)
+        if recess:
+            top = (radius + bottom) / 2.0
+            stock = BRepPrimAPI_MakeBox(gp_Pnt(-12, -12, bottom - 2), 24, 24, top - bottom + 2)
+            cut = boolean_builder("difference", stock.Shape(), shape)
+            cut.Build()
+            assert cut.IsDone()
+            shape = cut.Shape()
+            expected_volume = 24**2 * (top - bottom + 2) - math.pi * (
+                radius**2 * (top - bottom) - (top**3 - bottom**3) / 3
+            )
+        transform = gp_Trsf()
+        if placement == "oblique":
+            transform.SetRotation(gp_Ax1(gp_Pnt(), gp_Dir(1, 2, -0.5)), 0.73)
+        elif placement == "mirror":
+            transform.SetMirror(gp_Ax2(gp_Pnt(), gp_Dir(1, 2, -0.5)))
+        transform.SetTranslationPart(gp_Vec(37, -19, 83))
+        source = Solid(BRepBuilderAPI_Transform(shape, transform, True).Shape(), deviation)
+        assert BRepCheck_Analyzer(source.shape).IsValid()
+        assert source.volume == pytest.approx(expected_volume, rel=1e-10)
+        before = _bytes(source.shape)
+        spheres = [feature for feature in features_of(source).values() if feature.kind == "sphere"]
+        assert len(spheres) == 1
+        sphere = spheres[0]
+>       assert sphere.params["diameter"] == pytest.approx(2 * radius, abs=EPS_GEOM, rel=0)
+E       assert 16.2469 == 16.246913578 ± 1.0e-06
+E         
+E         comparison failed
+E         Obtained: 16.2469
+E         Expected: 16.246913578 ± 1.0e-06
+
+tests\test_brep_surfaces.py:74: AssertionError
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[shift-False-0.5235987755982988-0.03] _
+
+deviation = 0.03, lower = 0.5235987755982988, recess = False
+placement = 'shift'
+
+    @pytest.mark.parametrize("deviation", [0.03, 0.15])
+    @pytest.mark.parametrize("lower", [0.0, math.pi / 6.0])
+    @pytest.mark.parametrize("recess", [False, True])
+    @pytest.mark.parametrize("placement", ["shift", "oblique", "mirror"])
+    def test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side(
+        deviation: float, lower: float, recess: bool, placement: str
+    ) -> None:
+        """Kalottenzentrum und Materialseite hängen weder am Flächenschwerpunkt noch an der Lage."""
+        from OCP.BRepAdaptor import BRepAdaptor_Surface
+        from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
+        from OCP.BRepCheck import BRepCheck_Analyzer
+        from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox, BRepPrimAPI_MakeSphere
+        from OCP.GeomAbs import GeomAbs_Sphere
+        from OCP.gp import gp_Ax1, gp_Ax2, gp_Dir, gp_Pnt, gp_Trsf, gp_Vec
+    
+        radius = 8.123456789
+        shape = BRepPrimAPI_MakeSphere(radius, lower, math.pi / 2.0).Shape()
+        bottom = radius * math.sin(lower)
+        top = radius
+        expected_volume = math.pi * (radius**2 * (top - bottom) - (top**3 - bottom**3) / 3)
+        if recess:
+            top = (radius + bottom) / 2.0
+            stock = BRepPrimAPI_MakeBox(gp_Pnt(-12, -12, bottom - 2), 24, 24, top - bottom + 2)
+            cut = boolean_builder("difference", stock.Shape(), shape)
+            cut.Build()
+            assert cut.IsDone()
+            shape = cut.Shape()
+            expected_volume = 24**2 * (top - bottom + 2) - math.pi * (
+                radius**2 * (top - bottom) - (top**3 - bottom**3) / 3
+            )
+        transform = gp_Trsf()
+        if placement == "oblique":
+            transform.SetRotation(gp_Ax1(gp_Pnt(), gp_Dir(1, 2, -0.5)), 0.73)
+        elif placement == "mirror":
+            transform.SetMirror(gp_Ax2(gp_Pnt(), gp_Dir(1, 2, -0.5)))
+        transform.SetTranslationPart(gp_Vec(37, -19, 83))
+        source = Solid(BRepBuilderAPI_Transform(shape, transform, True).Shape(), deviation)
+        assert BRepCheck_Analyzer(source.shape).IsValid()
+        assert source.volume == pytest.approx(expected_volume, rel=1e-10)
+        before = _bytes(source.shape)
+        spheres = [feature for feature in features_of(source).values() if feature.kind == "sphere"]
+        assert len(spheres) == 1
+        sphere = spheres[0]
+>       assert sphere.params["diameter"] == pytest.approx(2 * radius, abs=EPS_GEOM, rel=0)
+E       assert 16.2469 == 16.246913578 ± 1.0e-06
+E         
+E         comparison failed
+E         Obtained: 16.2469
+E         Expected: 16.246913578 ± 1.0e-06
+
+tests\test_brep_surfaces.py:74: AssertionError
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[shift-False-0.5235987755982988-0.15] _
+
+deviation = 0.15, lower = 0.5235987755982988, recess = False
+placement = 'shift'
+
+    @pytest.mark.parametrize("deviation", [0.03, 0.15])
+    @pytest.mark.parametrize("lower", [0.0, math.pi / 6.0])
+    @pytest.mark.parametrize("recess", [False, True])
+    @pytest.mark.parametrize("placement", ["shift", "oblique", "mirror"])
+    def test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side(
+        deviation: float, lower: float, recess: bool, placement: str
+    ) -> None:
+        """Kalottenzentrum und Materialseite hängen weder am Flächenschwerpunkt noch an der Lage."""
+        from OCP.BRepAdaptor import BRepAdaptor_Surface
+        from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
+        from OCP.BRepCheck import BRepCheck_Analyzer
+        from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox, BRepPrimAPI_MakeSphere
+        from OCP.GeomAbs import GeomAbs_Sphere
+        from OCP.gp import gp_Ax1, gp_Ax2, gp_Dir, gp_Pnt, gp_Trsf, gp_Vec
+    
+        radius = 8.123456789
+        shape = BRepPrimAPI_MakeSphere(radius, lower, math.pi / 2.0).Shape()
+        bottom = radius * math.sin(lower)
+        top = radius
+        expected_volume = math.pi * (radius**2 * (top - bottom) - (top**3 - bottom**3) / 3)
+        if recess:
+            top = (radius + bottom) / 2.0
+            stock = BRepPrimAPI_MakeBox(gp_Pnt(-12, -12, bottom - 2), 24, 24, top - bottom + 2)
+            cut = boolean_builder("difference", stock.Shape(), shape)
+            cut.Build()
+            assert cut.IsDone()
+            shape = cut.Shape()
+            expected_volume = 24**2 * (top - bottom + 2) - math.pi * (
+                radius**2 * (top - bottom) - (top**3 - bottom**3) / 3
+            )
+        transform = gp_Trsf()
+        if placement == "oblique":
+            transform.SetRotation(gp_Ax1(gp_Pnt(), gp_Dir(1, 2, -0.5)), 0.73)
+        elif placement == "mirror":
+            transform.SetMirror(gp_Ax2(gp_Pnt(), gp_Dir(1, 2, -0.5)))
+        transform.SetTranslationPart(gp_Vec(37, -19, 83))
+        source = Solid(BRepBuilderAPI_Transform(shape, transform, True).Shape(), deviation)
+        assert BRepCheck_Analyzer(source.shape).IsValid()
+        assert source.volume == pytest.approx(expected_volume, rel=1e-10)
+        before = _bytes(source.shape)
+        spheres = [feature for feature in features_of(source).values() if feature.kind == "sphere"]
+        assert len(spheres) == 1
+        sphere = spheres[0]
+>       assert sphere.params["diameter"] == pytest.approx(2 * radius, abs=EPS_GEOM, rel=0)
+E       assert 16.2469 == 16.246913578 ± 1.0e-06
+E         
+E         comparison failed
+E         Obtained: 16.2469
+E         Expected: 16.246913578 ± 1.0e-06
+
+tests\test_brep_surfaces.py:74: AssertionError
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[shift-True-0.0-0.03] _
+
+deviation = 0.03, lower = 0.0, recess = True, placement = 'shift'
+
+    @pytest.mark.parametrize("deviation", [0.03, 0.15])
+    @pytest.mark.parametrize("lower", [0.0, math.pi / 6.0])
+    @pytest.mark.parametrize("recess", [False, True])
+    @pytest.mark.parametrize("placement", ["shift", "oblique", "mirror"])
+    def test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side(
+        deviation: float, lower: float, recess: bool, placement: str
+    ) -> None:
+        """Kalottenzentrum und Materialseite hängen weder am Flächenschwerpunkt noch an der Lage."""
+        from OCP.BRepAdaptor import BRepAdaptor_Surface
+        from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
+        from OCP.BRepCheck import BRepCheck_Analyzer
+        from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox, BRepPrimAPI_MakeSphere
+        from OCP.GeomAbs import GeomAbs_Sphere
+        from OCP.gp import gp_Ax1, gp_Ax2, gp_Dir, gp_Pnt, gp_Trsf, gp_Vec
+    
+        radius = 8.123456789
+        shape = BRepPrimAPI_MakeSphere(radius, lower, math.pi / 2.0).Shape()
+        bottom = radius * math.sin(lower)
+        top = radius
+        expected_volume = math.pi * (radius**2 * (top - bottom) - (top**3 - bottom**3) / 3)
+        if recess:
+            top = (radius + bottom) / 2.0
+            stock = BRepPrimAPI_MakeBox(gp_Pnt(-12, -12, bottom - 2), 24, 24, top - bottom + 2)
+            cut = boolean_builder("difference", stock.Shape(), shape)
+            cut.Build()
+            assert cut.IsDone()
+            shape = cut.Shape()
+            expected_volume = 24**2 * (top - bottom + 2) - math.pi * (
+                radius**2 * (top - bottom) - (top**3 - bottom**3) / 3
+            )
+        transform = gp_Trsf()
+        if placement == "oblique":
+            transform.SetRotation(gp_Ax1(gp_Pnt(), gp_Dir(1, 2, -0.5)), 0.73)
+        elif placement == "mirror":
+            transform.SetMirror(gp_Ax2(gp_Pnt(), gp_Dir(1, 2, -0.5)))
+        transform.SetTranslationPart(gp_Vec(37, -19, 83))
+        source = Solid(BRepBuilderAPI_Transform(shape, transform, True).Shape(), deviation)
+        assert BRepCheck_Analyzer(source.shape).IsValid()
+        assert source.volume == pytest.approx(expected_volume, rel=1e-10)
+        before = _bytes(source.shape)
+        spheres = [feature for feature in features_of(source).values() if feature.kind == "sphere"]
+        assert len(spheres) == 1
+        sphere = spheres[0]
+>       assert sphere.params["diameter"] == pytest.approx(2 * radius, abs=EPS_GEOM, rel=0)
+E       assert 16.2469 == 16.246913578 ± 1.0e-06
+E         
+E         comparison failed
+E         Obtained: 16.2469
+E         Expected: 16.246913578 ± 1.0e-06
+
+tests\test_brep_surfaces.py:74: AssertionError
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[shift-True-0.0-0.15] _
+
+deviation = 0.15, lower = 0.0, recess = True, placement = 'shift'
+
+    @pytest.mark.parametrize("deviation", [0.03, 0.15])
+    @pytest.mark.parametrize("lower", [0.0, math.pi / 6.0])
+    @pytest.mark.parametrize("recess", [False, True])
+    @pytest.mark.parametrize("placement", ["shift", "oblique", "mirror"])
+    def test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side(
+        deviation: float, lower: float, recess: bool, placement: str
+    ) -> None:
+        """Kalottenzentrum und Materialseite hängen weder am Flächenschwerpunkt noch an der Lage."""
+        from OCP.BRepAdaptor import BRepAdaptor_Surface
+        from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
+        from OCP.BRepCheck import BRepCheck_Analyzer
+        from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox, BRepPrimAPI_MakeSphere
+        from OCP.GeomAbs import GeomAbs_Sphere
+        from OCP.gp import gp_Ax1, gp_Ax2, gp_Dir, gp_Pnt, gp_Trsf, gp_Vec
+    
+        radius = 8.123456789
+        shape = BRepPrimAPI_MakeSphere(radius, lower, math.pi / 2.0).Shape()
+        bottom = radius * math.sin(lower)
+        top = radius
+        expected_volume = math.pi * (radius**2 * (top - bottom) - (top**3 - bottom**3) / 3)
+        if recess:
+            top = (radius + bottom) / 2.0
+            stock = BRepPrimAPI_MakeBox(gp_Pnt(-12, -12, bottom - 2), 24, 24, top - bottom + 2)
+            cut = boolean_builder("difference", stock.Shape(), shape)
+            cut.Build()
+            assert cut.IsDone()
+            shape = cut.Shape()
+            expected_volume = 24**2 * (top - bottom + 2) - math.pi * (
+                radius**2 * (top - bottom) - (top**3 - bottom**3) / 3
+            )
+        transform = gp_Trsf()
+        if placement == "oblique":
+            transform.SetRotation(gp_Ax1(gp_Pnt(), gp_Dir(1, 2, -0.5)), 0.73)
+        elif placement == "mirror":
+            transform.SetMirror(gp_Ax2(gp_Pnt(), gp_Dir(1, 2, -0.5)))
+        transform.SetTranslationPart(gp_Vec(37, -19, 83))
+        source = Solid(BRepBuilderAPI_Transform(shape, transform, True).Shape(), deviation)
+        assert BRepCheck_Analyzer(source.shape).IsValid()
+        assert source.volume == pytest.approx(expected_volume, rel=1e-10)
+        before = _bytes(source.shape)
+        spheres = [feature for feature in features_of(source).values() if feature.kind == "sphere"]
+        assert len(spheres) == 1
+        sphere = spheres[0]
+>       assert sphere.params["diameter"] == pytest.approx(2 * radius, abs=EPS_GEOM, rel=0)
+E       assert 16.2469 == 16.246913578 ± 1.0e-06
+E         
+E         comparison failed
+E         Obtained: 16.2469
+E         Expected: 16.246913578 ± 1.0e-06
+
+tests\test_brep_surfaces.py:74: AssertionError
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[shift-True-0.5235987755982988-0.03] _
+
+deviation = 0.03, lower = 0.5235987755982988, recess = True, placement = 'shift'
+
+    @pytest.mark.parametrize("deviation", [0.03, 0.15])
+    @pytest.mark.parametrize("lower", [0.0, math.pi / 6.0])
+    @pytest.mark.parametrize("recess", [False, True])
+    @pytest.mark.parametrize("placement", ["shift", "oblique", "mirror"])
+    def test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side(
+        deviation: float, lower: float, recess: bool, placement: str
+    ) -> None:
+        """Kalottenzentrum und Materialseite hängen weder am Flächenschwerpunkt noch an der Lage."""
+        from OCP.BRepAdaptor import BRepAdaptor_Surface
+        from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
+        from OCP.BRepCheck import BRepCheck_Analyzer
+        from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox, BRepPrimAPI_MakeSphere
+        from OCP.GeomAbs import GeomAbs_Sphere
+        from OCP.gp import gp_Ax1, gp_Ax2, gp_Dir, gp_Pnt, gp_Trsf, gp_Vec
+    
+        radius = 8.123456789
+        shape = BRepPrimAPI_MakeSphere(radius, lower, math.pi / 2.0).Shape()
+        bottom = radius * math.sin(lower)
+        top = radius
+        expected_volume = math.pi * (radius**2 * (top - bottom) - (top**3 - bottom**3) / 3)
+        if recess:
+            top = (radius + bottom) / 2.0
+            stock = BRepPrimAPI_MakeBox(gp_Pnt(-12, -12, bottom - 2), 24, 24, top - bottom + 2)
+            cut = boolean_builder("difference", stock.Shape(), shape)
+            cut.Build()
+            assert cut.IsDone()
+            shape = cut.Shape()
+            expected_volume = 24**2 * (top - bottom + 2) - math.pi * (
+                radius**2 * (top - bottom) - (top**3 - bottom**3) / 3
+            )
+        transform = gp_Trsf()
+        if placement == "oblique":
+            transform.SetRotation(gp_Ax1(gp_Pnt(), gp_Dir(1, 2, -0.5)), 0.73)
+        elif placement == "mirror":
+            transform.SetMirror(gp_Ax2(gp_Pnt(), gp_Dir(1, 2, -0.5)))
+        transform.SetTranslationPart(gp_Vec(37, -19, 83))
+        source = Solid(BRepBuilderAPI_Transform(shape, transform, True).Shape(), deviation)
+        assert BRepCheck_Analyzer(source.shape).IsValid()
+        assert source.volume == pytest.approx(expected_volume, rel=1e-10)
+        before = _bytes(source.shape)
+        spheres = [feature for feature in features_of(source).values() if feature.kind == "sphere"]
+        assert len(spheres) == 1
+        sphere = spheres[0]
+>       assert sphere.params["diameter"] == pytest.approx(2 * radius, abs=EPS_GEOM, rel=0)
+E       assert 16.2469 == 16.246913578 ± 1.0e-06
+E         
+E         comparison failed
+E         Obtained: 16.2469
+E         Expected: 16.246913578 ± 1.0e-06
+
+tests\test_brep_surfaces.py:74: AssertionError
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[shift-True-0.5235987755982988-0.15] _
+
+deviation = 0.15, lower = 0.5235987755982988, recess = True, placement = 'shift'
+
+    @pytest.mark.parametrize("deviation", [0.03, 0.15])
+    @pytest.mark.parametrize("lower", [0.0, math.pi / 6.0])
+    @pytest.mark.parametrize("recess", [False, True])
+    @pytest.mark.parametrize("placement", ["shift", "oblique", "mirror"])
+    def test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side(
+        deviation: float, lower: float, recess: bool, placement: str
+    ) -> None:
+        """Kalottenzentrum und Materialseite hängen weder am Flächenschwerpunkt noch an der Lage."""
+        from OCP.BRepAdaptor import BRepAdaptor_Surface
+        from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
+        from OCP.BRepCheck import BRepCheck_Analyzer
+        from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox, BRepPrimAPI_MakeSphere
+        from OCP.GeomAbs import GeomAbs_Sphere
+        from OCP.gp import gp_Ax1, gp_Ax2, gp_Dir, gp_Pnt, gp_Trsf, gp_Vec
+    
+        radius = 8.123456789
+        shape = BRepPrimAPI_MakeSphere(radius, lower, math.pi / 2.0).Shape()
+        bottom = radius * math.sin(lower)
+        top = radius
+        expected_volume = math.pi * (radius**2 * (top - bottom) - (top**3 - bottom**3) / 3)
+        if recess:
+            top = (radius + bottom) / 2.0
+            stock = BRepPrimAPI_MakeBox(gp_Pnt(-12, -12, bottom - 2), 24, 24, top - bottom + 2)
+            cut = boolean_builder("difference", stock.Shape(), shape)
+            cut.Build()
+            assert cut.IsDone()
+            shape = cut.Shape()
+            expected_volume = 24**2 * (top - bottom + 2) - math.pi * (
+                radius**2 * (top - bottom) - (top**3 - bottom**3) / 3
+            )
+        transform = gp_Trsf()
+        if placement == "oblique":
+            transform.SetRotation(gp_Ax1(gp_Pnt(), gp_Dir(1, 2, -0.5)), 0.73)
+        elif placement == "mirror":
+            transform.SetMirror(gp_Ax2(gp_Pnt(), gp_Dir(1, 2, -0.5)))
+        transform.SetTranslationPart(gp_Vec(37, -19, 83))
+        source = Solid(BRepBuilderAPI_Transform(shape, transform, True).Shape(), deviation)
+        assert BRepCheck_Analyzer(source.shape).IsValid()
+        assert source.volume == pytest.approx(expected_volume, rel=1e-10)
+        before = _bytes(source.shape)
+        spheres = [feature for feature in features_of(source).values() if feature.kind == "sphere"]
+        assert len(spheres) == 1
+        sphere = spheres[0]
+>       assert sphere.params["diameter"] == pytest.approx(2 * radius, abs=EPS_GEOM, rel=0)
+E       assert 16.2469 == 16.246913578 ± 1.0e-06
+E         
+E         comparison failed
+E         Obtained: 16.2469
+E         Expected: 16.246913578 ± 1.0e-06
+
+tests\test_brep_surfaces.py:74: AssertionError
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[oblique-False-0.0-0.03] _
+
+deviation = 0.03, lower = 0.0, recess = False, placement = 'oblique'
+
+    @pytest.mark.parametrize("deviation", [0.03, 0.15])
+    @pytest.mark.parametrize("lower", [0.0, math.pi / 6.0])
+    @pytest.mark.parametrize("recess", [False, True])
+    @pytest.mark.parametrize("placement", ["shift", "oblique", "mirror"])
+    def test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side(
+        deviation: float, lower: float, recess: bool, placement: str
+    ) -> None:
+        """Kalottenzentrum und Materialseite hängen weder am Flächenschwerpunkt noch an der Lage."""
+        from OCP.BRepAdaptor import BRepAdaptor_Surface
+        from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
+        from OCP.BRepCheck import BRepCheck_Analyzer
+        from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox, BRepPrimAPI_MakeSphere
+        from OCP.GeomAbs import GeomAbs_Sphere
+        from OCP.gp import gp_Ax1, gp_Ax2, gp_Dir, gp_Pnt, gp_Trsf, gp_Vec
+    
+        radius = 8.123456789
+        shape = BRepPrimAPI_MakeSphere(radius, lower, math.pi / 2.0).Shape()
+        bottom = radius * math.sin(lower)
+        top = radius
+        expected_volume = math.pi * (radius**2 * (top - bottom) - (top**3 - bottom**3) / 3)
+        if recess:
+            top = (radius + bottom) / 2.0
+            stock = BRepPrimAPI_MakeBox(gp_Pnt(-12, -12, bottom - 2), 24, 24, top - bottom + 2)
+            cut = boolean_builder("difference", stock.Shape(), shape)
+            cut.Build()
+            assert cut.IsDone()
+            shape = cut.Shape()
+            expected_volume = 24**2 * (top - bottom + 2) - math.pi * (
+                radius**2 * (top - bottom) - (top**3 - bottom**3) / 3
+            )
+        transform = gp_Trsf()
+        if placement == "oblique":
+            transform.SetRotation(gp_Ax1(gp_Pnt(), gp_Dir(1, 2, -0.5)), 0.73)
+        elif placement == "mirror":
+            transform.SetMirror(gp_Ax2(gp_Pnt(), gp_Dir(1, 2, -0.5)))
+        transform.SetTranslationPart(gp_Vec(37, -19, 83))
+        source = Solid(BRepBuilderAPI_Transform(shape, transform, True).Shape(), deviation)
+        assert BRepCheck_Analyzer(source.shape).IsValid()
+        assert source.volume == pytest.approx(expected_volume, rel=1e-10)
+        before = _bytes(source.shape)
+        spheres = [feature for feature in features_of(source).values() if feature.kind == "sphere"]
+        assert len(spheres) == 1
+        sphere = spheres[0]
+>       assert sphere.params["diameter"] == pytest.approx(2 * radius, abs=EPS_GEOM, rel=0)
+E       assert 16.2469 == 16.246913578 ± 1.0e-06
+E         
+E         comparison failed
+E         Obtained: 16.2469
+E         Expected: 16.246913578 ± 1.0e-06
+
+tests\test_brep_surfaces.py:74: AssertionError
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[oblique-False-0.0-0.15] _
+
+deviation = 0.15, lower = 0.0, recess = False, placement = 'oblique'
+
+    @pytest.mark.parametrize("deviation", [0.03, 0.15])
+    @pytest.mark.parametrize("lower", [0.0, math.pi / 6.0])
+    @pytest.mark.parametrize("recess", [False, True])
+    @pytest.mark.parametrize("placement", ["shift", "oblique", "mirror"])
+    def test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side(
+        deviation: float, lower: float, recess: bool, placement: str
+    ) -> None:
+        """Kalottenzentrum und Materialseite hängen weder am Flächenschwerpunkt noch an der Lage."""
+        from OCP.BRepAdaptor import BRepAdaptor_Surface
+        from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
+        from OCP.BRepCheck import BRepCheck_Analyzer
+        from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox, BRepPrimAPI_MakeSphere
+        from OCP.GeomAbs import GeomAbs_Sphere
+        from OCP.gp import gp_Ax1, gp_Ax2, gp_Dir, gp_Pnt, gp_Trsf, gp_Vec
+    
+        radius = 8.123456789
+        shape = BRepPrimAPI_MakeSphere(radius, lower, math.pi / 2.0).Shape()
+        bottom = radius * math.sin(lower)
+        top = radius
+        expected_volume = math.pi * (radius**2 * (top - bottom) - (top**3 - bottom**3) / 3)
+        if recess:
+            top = (radius + bottom) / 2.0
+            stock = BRepPrimAPI_MakeBox(gp_Pnt(-12, -12, bottom - 2), 24, 24, top - bottom + 2)
+            cut = boolean_builder("difference", stock.Shape(), shape)
+            cut.Build()
+            assert cut.IsDone()
+            shape = cut.Shape()
+            expected_volume = 24**2 * (top - bottom + 2) - math.pi * (
+                radius**2 * (top - bottom) - (top**3 - bottom**3) / 3
+            )
+        transform = gp_Trsf()
+        if placement == "oblique":
+            transform.SetRotation(gp_Ax1(gp_Pnt(), gp_Dir(1, 2, -0.5)), 0.73)
+        elif placement == "mirror":
+            transform.SetMirror(gp_Ax2(gp_Pnt(), gp_Dir(1, 2, -0.5)))
+        transform.SetTranslationPart(gp_Vec(37, -19, 83))
+        source = Solid(BRepBuilderAPI_Transform(shape, transform, True).Shape(), deviation)
+        assert BRepCheck_Analyzer(source.shape).IsValid()
+        assert source.volume == pytest.approx(expected_volume, rel=1e-10)
+        before = _bytes(source.shape)
+        spheres = [feature for feature in features_of(source).values() if feature.kind == "sphere"]
+        assert len(spheres) == 1
+        sphere = spheres[0]
+>       assert sphere.params["diameter"] == pytest.approx(2 * radius, abs=EPS_GEOM, rel=0)
+E       assert 16.2469 == 16.246913578 ± 1.0e-06
+E         
+E         comparison failed
+E         Obtained: 16.2469
+E         Expected: 16.246913578 ± 1.0e-06
+
+tests\test_brep_surfaces.py:74: AssertionError
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[oblique-False-0.5235987755982988-0.03] _
+
+deviation = 0.03, lower = 0.5235987755982988, recess = False
+placement = 'oblique'
+
+    @pytest.mark.parametrize("deviation", [0.03, 0.15])
+    @pytest.mark.parametrize("lower", [0.0, math.pi / 6.0])
+    @pytest.mark.parametrize("recess", [False, True])
+    @pytest.mark.parametrize("placement", ["shift", "oblique", "mirror"])
+    def test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side(
+        deviation: float, lower: float, recess: bool, placement: str
+    ) -> None:
+        """Kalottenzentrum und Materialseite hängen weder am Flächenschwerpunkt noch an der Lage."""
+        from OCP.BRepAdaptor import BRepAdaptor_Surface
+        from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
+        from OCP.BRepCheck import BRepCheck_Analyzer
+        from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox, BRepPrimAPI_MakeSphere
+        from OCP.GeomAbs import GeomAbs_Sphere
+        from OCP.gp import gp_Ax1, gp_Ax2, gp_Dir, gp_Pnt, gp_Trsf, gp_Vec
+    
+        radius = 8.123456789
+        shape = BRepPrimAPI_MakeSphere(radius, lower, math.pi / 2.0).Shape()
+        bottom = radius * math.sin(lower)
+        top = radius
+        expected_volume = math.pi * (radius**2 * (top - bottom) - (top**3 - bottom**3) / 3)
+        if recess:
+            top = (radius + bottom) / 2.0
+            stock = BRepPrimAPI_MakeBox(gp_Pnt(-12, -12, bottom - 2), 24, 24, top - bottom + 2)
+            cut = boolean_builder("difference", stock.Shape(), shape)
+            cut.Build()
+            assert cut.IsDone()
+            shape = cut.Shape()
+            expected_volume = 24**2 * (top - bottom + 2) - math.pi * (
+                radius**2 * (top - bottom) - (top**3 - bottom**3) / 3
+            )
+        transform = gp_Trsf()
+        if placement == "oblique":
+            transform.SetRotation(gp_Ax1(gp_Pnt(), gp_Dir(1, 2, -0.5)), 0.73)
+        elif placement == "mirror":
+            transform.SetMirror(gp_Ax2(gp_Pnt(), gp_Dir(1, 2, -0.5)))
+        transform.SetTranslationPart(gp_Vec(37, -19, 83))
+        source = Solid(BRepBuilderAPI_Transform(shape, transform, True).Shape(), deviation)
+        assert BRepCheck_Analyzer(source.shape).IsValid()
+        assert source.volume == pytest.approx(expected_volume, rel=1e-10)
+        before = _bytes(source.shape)
+        spheres = [feature for feature in features_of(source).values() if feature.kind == "sphere"]
+        assert len(spheres) == 1
+        sphere = spheres[0]
+>       assert sphere.params["diameter"] == pytest.approx(2 * radius, abs=EPS_GEOM, rel=0)
+E       assert 16.2469 == 16.246913578 ± 1.0e-06
+E         
+E         comparison failed
+E         Obtained: 16.2469
+E         Expected: 16.246913578 ± 1.0e-06
+
+tests\test_brep_surfaces.py:74: AssertionError
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[oblique-False-0.5235987755982988-0.15] _
+
+deviation = 0.15, lower = 0.5235987755982988, recess = False
+placement = 'oblique'
+
+    @pytest.mark.parametrize("deviation", [0.03, 0.15])
+    @pytest.mark.parametrize("lower", [0.0, math.pi / 6.0])
+    @pytest.mark.parametrize("recess", [False, True])
+    @pytest.mark.parametrize("placement", ["shift", "oblique", "mirror"])
+    def test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side(
+        deviation: float, lower: float, recess: bool, placement: str
+    ) -> None:
+        """Kalottenzentrum und Materialseite hängen weder am Flächenschwerpunkt noch an der Lage."""
+        from OCP.BRepAdaptor import BRepAdaptor_Surface
+        from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
+        from OCP.BRepCheck import BRepCheck_Analyzer
+        from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox, BRepPrimAPI_MakeSphere
+        from OCP.GeomAbs import GeomAbs_Sphere
+        from OCP.gp import gp_Ax1, gp_Ax2, gp_Dir, gp_Pnt, gp_Trsf, gp_Vec
+    
+        radius = 8.123456789
+        shape = BRepPrimAPI_MakeSphere(radius, lower, math.pi / 2.0).Shape()
+        bottom = radius * math.sin(lower)
+        top = radius
+        expected_volume = math.pi * (radius**2 * (top - bottom) - (top**3 - bottom**3) / 3)
+        if recess:
+            top = (radius + bottom) / 2.0
+            stock = BRepPrimAPI_MakeBox(gp_Pnt(-12, -12, bottom - 2), 24, 24, top - bottom + 2)
+            cut = boolean_builder("difference", stock.Shape(), shape)
+            cut.Build()
+            assert cut.IsDone()
+            shape = cut.Shape()
+            expected_volume = 24**2 * (top - bottom + 2) - math.pi * (
+                radius**2 * (top - bottom) - (top**3 - bottom**3) / 3
+            )
+        transform = gp_Trsf()
+        if placement == "oblique":
+            transform.SetRotation(gp_Ax1(gp_Pnt(), gp_Dir(1, 2, -0.5)), 0.73)
+        elif placement == "mirror":
+            transform.SetMirror(gp_Ax2(gp_Pnt(), gp_Dir(1, 2, -0.5)))
+        transform.SetTranslationPart(gp_Vec(37, -19, 83))
+        source = Solid(BRepBuilderAPI_Transform(shape, transform, True).Shape(), deviation)
+        assert BRepCheck_Analyzer(source.shape).IsValid()
+        assert source.volume == pytest.approx(expected_volume, rel=1e-10)
+        before = _bytes(source.shape)
+        spheres = [feature for feature in features_of(source).values() if feature.kind == "sphere"]
+        assert len(spheres) == 1
+        sphere = spheres[0]
+>       assert sphere.params["diameter"] == pytest.approx(2 * radius, abs=EPS_GEOM, rel=0)
+E       assert 16.2469 == 16.246913578 ± 1.0e-06
+E         
+E         comparison failed
+E         Obtained: 16.2469
+E         Expected: 16.246913578 ± 1.0e-06
+
+tests\test_brep_surfaces.py:74: AssertionError
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[oblique-True-0.0-0.03] _
+
+deviation = 0.03, lower = 0.0, recess = True, placement = 'oblique'
+
+    @pytest.mark.parametrize("deviation", [0.03, 0.15])
+    @pytest.mark.parametrize("lower", [0.0, math.pi / 6.0])
+    @pytest.mark.parametrize("recess", [False, True])
+    @pytest.mark.parametrize("placement", ["shift", "oblique", "mirror"])
+    def test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side(
+        deviation: float, lower: float, recess: bool, placement: str
+    ) -> None:
+        """Kalottenzentrum und Materialseite hängen weder am Flächenschwerpunkt noch an der Lage."""
+        from OCP.BRepAdaptor import BRepAdaptor_Surface
+        from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
+        from OCP.BRepCheck import BRepCheck_Analyzer
+        from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox, BRepPrimAPI_MakeSphere
+        from OCP.GeomAbs import GeomAbs_Sphere
+        from OCP.gp import gp_Ax1, gp_Ax2, gp_Dir, gp_Pnt, gp_Trsf, gp_Vec
+    
+        radius = 8.123456789
+        shape = BRepPrimAPI_MakeSphere(radius, lower, math.pi / 2.0).Shape()
+        bottom = radius * math.sin(lower)
+        top = radius
+        expected_volume = math.pi * (radius**2 * (top - bottom) - (top**3 - bottom**3) / 3)
+        if recess:
+            top = (radius + bottom) / 2.0
+            stock = BRepPrimAPI_MakeBox(gp_Pnt(-12, -12, bottom - 2), 24, 24, top - bottom + 2)
+            cut = boolean_builder("difference", stock.Shape(), shape)
+            cut.Build()
+            assert cut.IsDone()
+            shape = cut.Shape()
+            expected_volume = 24**2 * (top - bottom + 2) - math.pi * (
+                radius**2 * (top - bottom) - (top**3 - bottom**3) / 3
+            )
+        transform = gp_Trsf()
+        if placement == "oblique":
+            transform.SetRotation(gp_Ax1(gp_Pnt(), gp_Dir(1, 2, -0.5)), 0.73)
+        elif placement == "mirror":
+            transform.SetMirror(gp_Ax2(gp_Pnt(), gp_Dir(1, 2, -0.5)))
+        transform.SetTranslationPart(gp_Vec(37, -19, 83))
+        source = Solid(BRepBuilderAPI_Transform(shape, transform, True).Shape(), deviation)
+        assert BRepCheck_Analyzer(source.shape).IsValid()
+        assert source.volume == pytest.approx(expected_volume, rel=1e-10)
+        before = _bytes(source.shape)
+        spheres = [feature for feature in features_of(source).values() if feature.kind == "sphere"]
+        assert len(spheres) == 1
+        sphere = spheres[0]
+>       assert sphere.params["diameter"] == pytest.approx(2 * radius, abs=EPS_GEOM, rel=0)
+E       assert 16.2469 == 16.246913578 ± 1.0e-06
+E         
+E         comparison failed
+E         Obtained: 16.2469
+E         Expected: 16.246913578 ± 1.0e-06
+
+tests\test_brep_surfaces.py:74: AssertionError
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[oblique-True-0.0-0.15] _
+
+deviation = 0.15, lower = 0.0, recess = True, placement = 'oblique'
+
+    @pytest.mark.parametrize("deviation", [0.03, 0.15])
+    @pytest.mark.parametrize("lower", [0.0, math.pi / 6.0])
+    @pytest.mark.parametrize("recess", [False, True])
+    @pytest.mark.parametrize("placement", ["shift", "oblique", "mirror"])
+    def test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side(
+        deviation: float, lower: float, recess: bool, placement: str
+    ) -> None:
+        """Kalottenzentrum und Materialseite hängen weder am Flächenschwerpunkt noch an der Lage."""
+        from OCP.BRepAdaptor import BRepAdaptor_Surface
+        from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
+        from OCP.BRepCheck import BRepCheck_Analyzer
+        from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox, BRepPrimAPI_MakeSphere
+        from OCP.GeomAbs import GeomAbs_Sphere
+        from OCP.gp import gp_Ax1, gp_Ax2, gp_Dir, gp_Pnt, gp_Trsf, gp_Vec
+    
+        radius = 8.123456789
+        shape = BRepPrimAPI_MakeSphere(radius, lower, math.pi / 2.0).Shape()
+        bottom = radius * math.sin(lower)
+        top = radius
+        expected_volume = math.pi * (radius**2 * (top - bottom) - (top**3 - bottom**3) / 3)
+        if recess:
+            top = (radius + bottom) / 2.0
+            stock = BRepPrimAPI_MakeBox(gp_Pnt(-12, -12, bottom - 2), 24, 24, top - bottom + 2)
+            cut = boolean_builder("difference", stock.Shape(), shape)
+            cut.Build()
+            assert cut.IsDone()
+            shape = cut.Shape()
+            expected_volume = 24**2 * (top - bottom + 2) - math.pi * (
+                radius**2 * (top - bottom) - (top**3 - bottom**3) / 3
+            )
+        transform = gp_Trsf()
+        if placement == "oblique":
+            transform.SetRotation(gp_Ax1(gp_Pnt(), gp_Dir(1, 2, -0.5)), 0.73)
+        elif placement == "mirror":
+            transform.SetMirror(gp_Ax2(gp_Pnt(), gp_Dir(1, 2, -0.5)))
+        transform.SetTranslationPart(gp_Vec(37, -19, 83))
+        source = Solid(BRepBuilderAPI_Transform(shape, transform, True).Shape(), deviation)
+        assert BRepCheck_Analyzer(source.shape).IsValid()
+        assert source.volume == pytest.approx(expected_volume, rel=1e-10)
+        before = _bytes(source.shape)
+        spheres = [feature for feature in features_of(source).values() if feature.kind == "sphere"]
+        assert len(spheres) == 1
+        sphere = spheres[0]
+>       assert sphere.params["diameter"] == pytest.approx(2 * radius, abs=EPS_GEOM, rel=0)
+E       assert 16.2469 == 16.246913578 ± 1.0e-06
+E         
+E         comparison failed
+E         Obtained: 16.2469
+E         Expected: 16.246913578 ± 1.0e-06
+
+tests\test_brep_surfaces.py:74: AssertionError
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[oblique-True-0.5235987755982988-0.03] _
+
+deviation = 0.03, lower = 0.5235987755982988, recess = True
+placement = 'oblique'
+
+    @pytest.mark.parametrize("deviation", [0.03, 0.15])
+    @pytest.mark.parametrize("lower", [0.0, math.pi / 6.0])
+    @pytest.mark.parametrize("recess", [False, True])
+    @pytest.mark.parametrize("placement", ["shift", "oblique", "mirror"])
+    def test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side(
+        deviation: float, lower: float, recess: bool, placement: str
+    ) -> None:
+        """Kalottenzentrum und Materialseite hängen weder am Flächenschwerpunkt noch an der Lage."""
+        from OCP.BRepAdaptor import BRepAdaptor_Surface
+        from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
+        from OCP.BRepCheck import BRepCheck_Analyzer
+        from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox, BRepPrimAPI_MakeSphere
+        from OCP.GeomAbs import GeomAbs_Sphere
+        from OCP.gp import gp_Ax1, gp_Ax2, gp_Dir, gp_Pnt, gp_Trsf, gp_Vec
+    
+        radius = 8.123456789
+        shape = BRepPrimAPI_MakeSphere(radius, lower, math.pi / 2.0).Shape()
+        bottom = radius * math.sin(lower)
+        top = radius
+        expected_volume = math.pi * (radius**2 * (top - bottom) - (top**3 - bottom**3) / 3)
+        if recess:
+            top = (radius + bottom) / 2.0
+            stock = BRepPrimAPI_MakeBox(gp_Pnt(-12, -12, bottom - 2), 24, 24, top - bottom + 2)
+            cut = boolean_builder("difference", stock.Shape(), shape)
+            cut.Build()
+            assert cut.IsDone()
+            shape = cut.Shape()
+            expected_volume = 24**2 * (top - bottom + 2) - math.pi * (
+                radius**2 * (top - bottom) - (top**3 - bottom**3) / 3
+            )
+        transform = gp_Trsf()
+        if placement == "oblique":
+            transform.SetRotation(gp_Ax1(gp_Pnt(), gp_Dir(1, 2, -0.5)), 0.73)
+        elif placement == "mirror":
+            transform.SetMirror(gp_Ax2(gp_Pnt(), gp_Dir(1, 2, -0.5)))
+        transform.SetTranslationPart(gp_Vec(37, -19, 83))
+        source = Solid(BRepBuilderAPI_Transform(shape, transform, True).Shape(), deviation)
+        assert BRepCheck_Analyzer(source.shape).IsValid()
+        assert source.volume == pytest.approx(expected_volume, rel=1e-10)
+        before = _bytes(source.shape)
+        spheres = [feature for feature in features_of(source).values() if feature.kind == "sphere"]
+        assert len(spheres) == 1
+        sphere = spheres[0]
+>       assert sphere.params["diameter"] == pytest.approx(2 * radius, abs=EPS_GEOM, rel=0)
+E       assert 16.2469 == 16.246913578 ± 1.0e-06
+E         
+E         comparison failed
+E         Obtained: 16.2469
+E         Expected: 16.246913578 ± 1.0e-06
+
+tests\test_brep_surfaces.py:74: AssertionError
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[oblique-True-0.5235987755982988-0.15] _
+
+deviation = 0.15, lower = 0.5235987755982988, recess = True
+placement = 'oblique'
+
+    @pytest.mark.parametrize("deviation", [0.03, 0.15])
+    @pytest.mark.parametrize("lower", [0.0, math.pi / 6.0])
+    @pytest.mark.parametrize("recess", [False, True])
+    @pytest.mark.parametrize("placement", ["shift", "oblique", "mirror"])
+    def test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side(
+        deviation: float, lower: float, recess: bool, placement: str
+    ) -> None:
+        """Kalottenzentrum und Materialseite hängen weder am Flächenschwerpunkt noch an der Lage."""
+        from OCP.BRepAdaptor import BRepAdaptor_Surface
+        from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
+        from OCP.BRepCheck import BRepCheck_Analyzer
+        from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox, BRepPrimAPI_MakeSphere
+        from OCP.GeomAbs import GeomAbs_Sphere
+        from OCP.gp import gp_Ax1, gp_Ax2, gp_Dir, gp_Pnt, gp_Trsf, gp_Vec
+    
+        radius = 8.123456789
+        shape = BRepPrimAPI_MakeSphere(radius, lower, math.pi / 2.0).Shape()
+        bottom = radius * math.sin(lower)
+        top = radius
+        expected_volume = math.pi * (radius**2 * (top - bottom) - (top**3 - bottom**3) / 3)
+        if recess:
+            top = (radius + bottom) / 2.0
+            stock = BRepPrimAPI_MakeBox(gp_Pnt(-12, -12, bottom - 2), 24, 24, top - bottom + 2)
+            cut = boolean_builder("difference", stock.Shape(), shape)
+            cut.Build()
+            assert cut.IsDone()
+            shape = cut.Shape()
+            expected_volume = 24**2 * (top - bottom + 2) - math.pi * (
+                radius**2 * (top - bottom) - (top**3 - bottom**3) / 3
+            )
+        transform = gp_Trsf()
+        if placement == "oblique":
+            transform.SetRotation(gp_Ax1(gp_Pnt(), gp_Dir(1, 2, -0.5)), 0.73)
+        elif placement == "mirror":
+            transform.SetMirror(gp_Ax2(gp_Pnt(), gp_Dir(1, 2, -0.5)))
+        transform.SetTranslationPart(gp_Vec(37, -19, 83))
+        source = Solid(BRepBuilderAPI_Transform(shape, transform, True).Shape(), deviation)
+        assert BRepCheck_Analyzer(source.shape).IsValid()
+        assert source.volume == pytest.approx(expected_volume, rel=1e-10)
+        before = _bytes(source.shape)
+        spheres = [feature for feature in features_of(source).values() if feature.kind == "sphere"]
+        assert len(spheres) == 1
+        sphere = spheres[0]
+>       assert sphere.params["diameter"] == pytest.approx(2 * radius, abs=EPS_GEOM, rel=0)
+E       assert 16.2469 == 16.246913578 ± 1.0e-06
+E         
+E         comparison failed
+E         Obtained: 16.2469
+E         Expected: 16.246913578 ± 1.0e-06
+
+tests\test_brep_surfaces.py:74: AssertionError
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[mirror-False-0.0-0.03] _
+
+deviation = 0.03, lower = 0.0, recess = False, placement = 'mirror'
+
+    @pytest.mark.parametrize("deviation", [0.03, 0.15])
+    @pytest.mark.parametrize("lower", [0.0, math.pi / 6.0])
+    @pytest.mark.parametrize("recess", [False, True])
+    @pytest.mark.parametrize("placement", ["shift", "oblique", "mirror"])
+    def test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side(
+        deviation: float, lower: float, recess: bool, placement: str
+    ) -> None:
+        """Kalottenzentrum und Materialseite hängen weder am Flächenschwerpunkt noch an der Lage."""
+        from OCP.BRepAdaptor import BRepAdaptor_Surface
+        from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
+        from OCP.BRepCheck import BRepCheck_Analyzer
+        from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox, BRepPrimAPI_MakeSphere
+        from OCP.GeomAbs import GeomAbs_Sphere
+        from OCP.gp import gp_Ax1, gp_Ax2, gp_Dir, gp_Pnt, gp_Trsf, gp_Vec
+    
+        radius = 8.123456789
+        shape = BRepPrimAPI_MakeSphere(radius, lower, math.pi / 2.0).Shape()
+        bottom = radius * math.sin(lower)
+        top = radius
+        expected_volume = math.pi * (radius**2 * (top - bottom) - (top**3 - bottom**3) / 3)
+        if recess:
+            top = (radius + bottom) / 2.0
+            stock = BRepPrimAPI_MakeBox(gp_Pnt(-12, -12, bottom - 2), 24, 24, top - bottom + 2)
+            cut = boolean_builder("difference", stock.Shape(), shape)
+            cut.Build()
+            assert cut.IsDone()
+            shape = cut.Shape()
+            expected_volume = 24**2 * (top - bottom + 2) - math.pi * (
+                radius**2 * (top - bottom) - (top**3 - bottom**3) / 3
+            )
+        transform = gp_Trsf()
+        if placement == "oblique":
+            transform.SetRotation(gp_Ax1(gp_Pnt(), gp_Dir(1, 2, -0.5)), 0.73)
+        elif placement == "mirror":
+            transform.SetMirror(gp_Ax2(gp_Pnt(), gp_Dir(1, 2, -0.5)))
+        transform.SetTranslationPart(gp_Vec(37, -19, 83))
+        source = Solid(BRepBuilderAPI_Transform(shape, transform, True).Shape(), deviation)
+        assert BRepCheck_Analyzer(source.shape).IsValid()
+        assert source.volume == pytest.approx(expected_volume, rel=1e-10)
+        before = _bytes(source.shape)
+        spheres = [feature for feature in features_of(source).values() if feature.kind == "sphere"]
+        assert len(spheres) == 1
+        sphere = spheres[0]
+>       assert sphere.params["diameter"] == pytest.approx(2 * radius, abs=EPS_GEOM, rel=0)
+E       assert 16.2469 == 16.246913578 ± 1.0e-06
+E         
+E         comparison failed
+E         Obtained: 16.2469
+E         Expected: 16.246913578 ± 1.0e-06
+
+tests\test_brep_surfaces.py:74: AssertionError
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[mirror-False-0.0-0.15] _
+
+deviation = 0.15, lower = 0.0, recess = False, placement = 'mirror'
+
+    @pytest.mark.parametrize("deviation", [0.03, 0.15])
+    @pytest.mark.parametrize("lower", [0.0, math.pi / 6.0])
+    @pytest.mark.parametrize("recess", [False, True])
+    @pytest.mark.parametrize("placement", ["shift", "oblique", "mirror"])
+    def test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side(
+        deviation: float, lower: float, recess: bool, placement: str
+    ) -> None:
+        """Kalottenzentrum und Materialseite hängen weder am Flächenschwerpunkt noch an der Lage."""
+        from OCP.BRepAdaptor import BRepAdaptor_Surface
+        from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
+        from OCP.BRepCheck import BRepCheck_Analyzer
+        from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox, BRepPrimAPI_MakeSphere
+        from OCP.GeomAbs import GeomAbs_Sphere
+        from OCP.gp import gp_Ax1, gp_Ax2, gp_Dir, gp_Pnt, gp_Trsf, gp_Vec
+    
+        radius = 8.123456789
+        shape = BRepPrimAPI_MakeSphere(radius, lower, math.pi / 2.0).Shape()
+        bottom = radius * math.sin(lower)
+        top = radius
+        expected_volume = math.pi * (radius**2 * (top - bottom) - (top**3 - bottom**3) / 3)
+        if recess:
+            top = (radius + bottom) / 2.0
+            stock = BRepPrimAPI_MakeBox(gp_Pnt(-12, -12, bottom - 2), 24, 24, top - bottom + 2)
+            cut = boolean_builder("difference", stock.Shape(), shape)
+            cut.Build()
+            assert cut.IsDone()
+            shape = cut.Shape()
+            expected_volume = 24**2 * (top - bottom + 2) - math.pi * (
+                radius**2 * (top - bottom) - (top**3 - bottom**3) / 3
+            )
+        transform = gp_Trsf()
+        if placement == "oblique":
+            transform.SetRotation(gp_Ax1(gp_Pnt(), gp_Dir(1, 2, -0.5)), 0.73)
+        elif placement == "mirror":
+            transform.SetMirror(gp_Ax2(gp_Pnt(), gp_Dir(1, 2, -0.5)))
+        transform.SetTranslationPart(gp_Vec(37, -19, 83))
+        source = Solid(BRepBuilderAPI_Transform(shape, transform, True).Shape(), deviation)
+        assert BRepCheck_Analyzer(source.shape).IsValid()
+        assert source.volume == pytest.approx(expected_volume, rel=1e-10)
+        before = _bytes(source.shape)
+        spheres = [feature for feature in features_of(source).values() if feature.kind == "sphere"]
+        assert len(spheres) == 1
+        sphere = spheres[0]
+>       assert sphere.params["diameter"] == pytest.approx(2 * radius, abs=EPS_GEOM, rel=0)
+E       assert 16.2469 == 16.246913578 ± 1.0e-06
+E         
+E         comparison failed
+E         Obtained: 16.2469
+E         Expected: 16.246913578 ± 1.0e-06
+
+tests\test_brep_surfaces.py:74: AssertionError
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[mirror-False-0.5235987755982988-0.03] _
+
+deviation = 0.03, lower = 0.5235987755982988, recess = False
+placement = 'mirror'
+
+    @pytest.mark.parametrize("deviation", [0.03, 0.15])
+    @pytest.mark.parametrize("lower", [0.0, math.pi / 6.0])
+    @pytest.mark.parametrize("recess", [False, True])
+    @pytest.mark.parametrize("placement", ["shift", "oblique", "mirror"])
+    def test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side(
+        deviation: float, lower: float, recess: bool, placement: str
+    ) -> None:
+        """Kalottenzentrum und Materialseite hängen weder am Flächenschwerpunkt noch an der Lage."""
+        from OCP.BRepAdaptor import BRepAdaptor_Surface
+        from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
+        from OCP.BRepCheck import BRepCheck_Analyzer
+        from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox, BRepPrimAPI_MakeSphere
+        from OCP.GeomAbs import GeomAbs_Sphere
+        from OCP.gp import gp_Ax1, gp_Ax2, gp_Dir, gp_Pnt, gp_Trsf, gp_Vec
+    
+        radius = 8.123456789
+        shape = BRepPrimAPI_MakeSphere(radius, lower, math.pi / 2.0).Shape()
+        bottom = radius * math.sin(lower)
+        top = radius
+        expected_volume = math.pi * (radius**2 * (top - bottom) - (top**3 - bottom**3) / 3)
+        if recess:
+            top = (radius + bottom) / 2.0
+            stock = BRepPrimAPI_MakeBox(gp_Pnt(-12, -12, bottom - 2), 24, 24, top - bottom + 2)
+            cut = boolean_builder("difference", stock.Shape(), shape)
+            cut.Build()
+            assert cut.IsDone()
+            shape = cut.Shape()
+            expected_volume = 24**2 * (top - bottom + 2) - math.pi * (
+                radius**2 * (top - bottom) - (top**3 - bottom**3) / 3
+            )
+        transform = gp_Trsf()
+        if placement == "oblique":
+            transform.SetRotation(gp_Ax1(gp_Pnt(), gp_Dir(1, 2, -0.5)), 0.73)
+        elif placement == "mirror":
+            transform.SetMirror(gp_Ax2(gp_Pnt(), gp_Dir(1, 2, -0.5)))
+        transform.SetTranslationPart(gp_Vec(37, -19, 83))
+        source = Solid(BRepBuilderAPI_Transform(shape, transform, True).Shape(), deviation)
+        assert BRepCheck_Analyzer(source.shape).IsValid()
+        assert source.volume == pytest.approx(expected_volume, rel=1e-10)
+        before = _bytes(source.shape)
+        spheres = [feature for feature in features_of(source).values() if feature.kind == "sphere"]
+        assert len(spheres) == 1
+        sphere = spheres[0]
+>       assert sphere.params["diameter"] == pytest.approx(2 * radius, abs=EPS_GEOM, rel=0)
+E       assert 16.2469 == 16.246913578 ± 1.0e-06
+E         
+E         comparison failed
+E         Obtained: 16.2469
+E         Expected: 16.246913578 ± 1.0e-06
+
+tests\test_brep_surfaces.py:74: AssertionError
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[mirror-False-0.5235987755982988-0.15] _
+
+deviation = 0.15, lower = 0.5235987755982988, recess = False
+placement = 'mirror'
+
+    @pytest.mark.parametrize("deviation", [0.03, 0.15])
+    @pytest.mark.parametrize("lower", [0.0, math.pi / 6.0])
+    @pytest.mark.parametrize("recess", [False, True])
+    @pytest.mark.parametrize("placement", ["shift", "oblique", "mirror"])
+    def test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side(
+        deviation: float, lower: float, recess: bool, placement: str
+    ) -> None:
+        """Kalottenzentrum und Materialseite hängen weder am Flächenschwerpunkt noch an der Lage."""
+        from OCP.BRepAdaptor import BRepAdaptor_Surface
+        from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
+        from OCP.BRepCheck import BRepCheck_Analyzer
+        from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox, BRepPrimAPI_MakeSphere
+        from OCP.GeomAbs import GeomAbs_Sphere
+        from OCP.gp import gp_Ax1, gp_Ax2, gp_Dir, gp_Pnt, gp_Trsf, gp_Vec
+    
+        radius = 8.123456789
+        shape = BRepPrimAPI_MakeSphere(radius, lower, math.pi / 2.0).Shape()
+        bottom = radius * math.sin(lower)
+        top = radius
+        expected_volume = math.pi * (radius**2 * (top - bottom) - (top**3 - bottom**3) / 3)
+        if recess:
+            top = (radius + bottom) / 2.0
+            stock = BRepPrimAPI_MakeBox(gp_Pnt(-12, -12, bottom - 2), 24, 24, top - bottom + 2)
+            cut = boolean_builder("difference", stock.Shape(), shape)
+            cut.Build()
+            assert cut.IsDone()
+            shape = cut.Shape()
+            expected_volume = 24**2 * (top - bottom + 2) - math.pi * (
+                radius**2 * (top - bottom) - (top**3 - bottom**3) / 3
+            )
+        transform = gp_Trsf()
+        if placement == "oblique":
+            transform.SetRotation(gp_Ax1(gp_Pnt(), gp_Dir(1, 2, -0.5)), 0.73)
+        elif placement == "mirror":
+            transform.SetMirror(gp_Ax2(gp_Pnt(), gp_Dir(1, 2, -0.5)))
+        transform.SetTranslationPart(gp_Vec(37, -19, 83))
+        source = Solid(BRepBuilderAPI_Transform(shape, transform, True).Shape(), deviation)
+        assert BRepCheck_Analyzer(source.shape).IsValid()
+        assert source.volume == pytest.approx(expected_volume, rel=1e-10)
+        before = _bytes(source.shape)
+        spheres = [feature for feature in features_of(source).values() if feature.kind == "sphere"]
+        assert len(spheres) == 1
+        sphere = spheres[0]
+>       assert sphere.params["diameter"] == pytest.approx(2 * radius, abs=EPS_GEOM, rel=0)
+E       assert 16.2469 == 16.246913578 ± 1.0e-06
+E         
+E         comparison failed
+E         Obtained: 16.2469
+E         Expected: 16.246913578 ± 1.0e-06
+
+tests\test_brep_surfaces.py:74: AssertionError
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[mirror-True-0.0-0.03] _
+
+deviation = 0.03, lower = 0.0, recess = True, placement = 'mirror'
+
+    @pytest.mark.parametrize("deviation", [0.03, 0.15])
+    @pytest.mark.parametrize("lower", [0.0, math.pi / 6.0])
+    @pytest.mark.parametrize("recess", [False, True])
+    @pytest.mark.parametrize("placement", ["shift", "oblique", "mirror"])
+    def test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side(
+        deviation: float, lower: float, recess: bool, placement: str
+    ) -> None:
+        """Kalottenzentrum und Materialseite hängen weder am Flächenschwerpunkt noch an der Lage."""
+        from OCP.BRepAdaptor import BRepAdaptor_Surface
+        from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
+        from OCP.BRepCheck import BRepCheck_Analyzer
+        from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox, BRepPrimAPI_MakeSphere
+        from OCP.GeomAbs import GeomAbs_Sphere
+        from OCP.gp import gp_Ax1, gp_Ax2, gp_Dir, gp_Pnt, gp_Trsf, gp_Vec
+    
+        radius = 8.123456789
+        shape = BRepPrimAPI_MakeSphere(radius, lower, math.pi / 2.0).Shape()
+        bottom = radius * math.sin(lower)
+        top = radius
+        expected_volume = math.pi * (radius**2 * (top - bottom) - (top**3 - bottom**3) / 3)
+        if recess:
+            top = (radius + bottom) / 2.0
+            stock = BRepPrimAPI_MakeBox(gp_Pnt(-12, -12, bottom - 2), 24, 24, top - bottom + 2)
+            cut = boolean_builder("difference", stock.Shape(), shape)
+            cut.Build()
+            assert cut.IsDone()
+            shape = cut.Shape()
+            expected_volume = 24**2 * (top - bottom + 2) - math.pi * (
+                radius**2 * (top - bottom) - (top**3 - bottom**3) / 3
+            )
+        transform = gp_Trsf()
+        if placement == "oblique":
+            transform.SetRotation(gp_Ax1(gp_Pnt(), gp_Dir(1, 2, -0.5)), 0.73)
+        elif placement == "mirror":
+            transform.SetMirror(gp_Ax2(gp_Pnt(), gp_Dir(1, 2, -0.5)))
+        transform.SetTranslationPart(gp_Vec(37, -19, 83))
+        source = Solid(BRepBuilderAPI_Transform(shape, transform, True).Shape(), deviation)
+        assert BRepCheck_Analyzer(source.shape).IsValid()
+        assert source.volume == pytest.approx(expected_volume, rel=1e-10)
+        before = _bytes(source.shape)
+        spheres = [feature for feature in features_of(source).values() if feature.kind == "sphere"]
+        assert len(spheres) == 1
+        sphere = spheres[0]
+>       assert sphere.params["diameter"] == pytest.approx(2 * radius, abs=EPS_GEOM, rel=0)
+E       assert 16.2469 == 16.246913578 ± 1.0e-06
+E         
+E         comparison failed
+E         Obtained: 16.2469
+E         Expected: 16.246913578 ± 1.0e-06
+
+tests\test_brep_surfaces.py:74: AssertionError
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[mirror-True-0.0-0.15] _
+
+deviation = 0.15, lower = 0.0, recess = True, placement = 'mirror'
+
+    @pytest.mark.parametrize("deviation", [0.03, 0.15])
+    @pytest.mark.parametrize("lower", [0.0, math.pi / 6.0])
+    @pytest.mark.parametrize("recess", [False, True])
+    @pytest.mark.parametrize("placement", ["shift", "oblique", "mirror"])
+    def test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side(
+        deviation: float, lower: float, recess: bool, placement: str
+    ) -> None:
+        """Kalottenzentrum und Materialseite hängen weder am Flächenschwerpunkt noch an der Lage."""
+        from OCP.BRepAdaptor import BRepAdaptor_Surface
+        from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
+        from OCP.BRepCheck import BRepCheck_Analyzer
+        from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox, BRepPrimAPI_MakeSphere
+        from OCP.GeomAbs import GeomAbs_Sphere
+        from OCP.gp import gp_Ax1, gp_Ax2, gp_Dir, gp_Pnt, gp_Trsf, gp_Vec
+    
+        radius = 8.123456789
+        shape = BRepPrimAPI_MakeSphere(radius, lower, math.pi / 2.0).Shape()
+        bottom = radius * math.sin(lower)
+        top = radius
+        expected_volume = math.pi * (radius**2 * (top - bottom) - (top**3 - bottom**3) / 3)
+        if recess:
+            top = (radius + bottom) / 2.0
+            stock = BRepPrimAPI_MakeBox(gp_Pnt(-12, -12, bottom - 2), 24, 24, top - bottom + 2)
+            cut = boolean_builder("difference", stock.Shape(), shape)
+            cut.Build()
+            assert cut.IsDone()
+            shape = cut.Shape()
+            expected_volume = 24**2 * (top - bottom + 2) - math.pi * (
+                radius**2 * (top - bottom) - (top**3 - bottom**3) / 3
+            )
+        transform = gp_Trsf()
+        if placement == "oblique":
+            transform.SetRotation(gp_Ax1(gp_Pnt(), gp_Dir(1, 2, -0.5)), 0.73)
+        elif placement == "mirror":
+            transform.SetMirror(gp_Ax2(gp_Pnt(), gp_Dir(1, 2, -0.5)))
+        transform.SetTranslationPart(gp_Vec(37, -19, 83))
+        source = Solid(BRepBuilderAPI_Transform(shape, transform, True).Shape(), deviation)
+        assert BRepCheck_Analyzer(source.shape).IsValid()
+        assert source.volume == pytest.approx(expected_volume, rel=1e-10)
+        before = _bytes(source.shape)
+        spheres = [feature for feature in features_of(source).values() if feature.kind == "sphere"]
+        assert len(spheres) == 1
+        sphere = spheres[0]
+>       assert sphere.params["diameter"] == pytest.approx(2 * radius, abs=EPS_GEOM, rel=0)
+E       assert 16.2469 == 16.246913578 ± 1.0e-06
+E         
+E         comparison failed
+E         Obtained: 16.2469
+E         Expected: 16.246913578 ± 1.0e-06
+
+tests\test_brep_surfaces.py:74: AssertionError
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[mirror-True-0.5235987755982988-0.03] _
+
+deviation = 0.03, lower = 0.5235987755982988, recess = True
+placement = 'mirror'
+
+    @pytest.mark.parametrize("deviation", [0.03, 0.15])
+    @pytest.mark.parametrize("lower", [0.0, math.pi / 6.0])
+    @pytest.mark.parametrize("recess", [False, True])
+    @pytest.mark.parametrize("placement", ["shift", "oblique", "mirror"])
+    def test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side(
+        deviation: float, lower: float, recess: bool, placement: str
+    ) -> None:
+        """Kalottenzentrum und Materialseite hängen weder am Flächenschwerpunkt noch an der Lage."""
+        from OCP.BRepAdaptor import BRepAdaptor_Surface
+        from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
+        from OCP.BRepCheck import BRepCheck_Analyzer
+        from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox, BRepPrimAPI_MakeSphere
+        from OCP.GeomAbs import GeomAbs_Sphere
+        from OCP.gp import gp_Ax1, gp_Ax2, gp_Dir, gp_Pnt, gp_Trsf, gp_Vec
+    
+        radius = 8.123456789
+        shape = BRepPrimAPI_MakeSphere(radius, lower, math.pi / 2.0).Shape()
+        bottom = radius * math.sin(lower)
+        top = radius
+        expected_volume = math.pi * (radius**2 * (top - bottom) - (top**3 - bottom**3) / 3)
+        if recess:
+            top = (radius + bottom) / 2.0
+            stock = BRepPrimAPI_MakeBox(gp_Pnt(-12, -12, bottom - 2), 24, 24, top - bottom + 2)
+            cut = boolean_builder("difference", stock.Shape(), shape)
+            cut.Build()
+            assert cut.IsDone()
+            shape = cut.Shape()
+            expected_volume = 24**2 * (top - bottom + 2) - math.pi * (
+                radius**2 * (top - bottom) - (top**3 - bottom**3) / 3
+            )
+        transform = gp_Trsf()
+        if placement == "oblique":
+            transform.SetRotation(gp_Ax1(gp_Pnt(), gp_Dir(1, 2, -0.5)), 0.73)
+        elif placement == "mirror":
+            transform.SetMirror(gp_Ax2(gp_Pnt(), gp_Dir(1, 2, -0.5)))
+        transform.SetTranslationPart(gp_Vec(37, -19, 83))
+        source = Solid(BRepBuilderAPI_Transform(shape, transform, True).Shape(), deviation)
+        assert BRepCheck_Analyzer(source.shape).IsValid()
+        assert source.volume == pytest.approx(expected_volume, rel=1e-10)
+        before = _bytes(source.shape)
+        spheres = [feature for feature in features_of(source).values() if feature.kind == "sphere"]
+        assert len(spheres) == 1
+        sphere = spheres[0]
+>       assert sphere.params["diameter"] == pytest.approx(2 * radius, abs=EPS_GEOM, rel=0)
+E       assert 16.2469 == 16.246913578 ± 1.0e-06
+E         
+E         comparison failed
+E         Obtained: 16.2469
+E         Expected: 16.246913578 ± 1.0e-06
+
+tests\test_brep_surfaces.py:74: AssertionError
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[mirror-True-0.5235987755982988-0.15] _
+
+deviation = 0.15, lower = 0.5235987755982988, recess = True
+placement = 'mirror'
+
+    @pytest.mark.parametrize("deviation", [0.03, 0.15])
+    @pytest.mark.parametrize("lower", [0.0, math.pi / 6.0])
+    @pytest.mark.parametrize("recess", [False, True])
+    @pytest.mark.parametrize("placement", ["shift", "oblique", "mirror"])
+    def test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side(
+        deviation: float, lower: float, recess: bool, placement: str
+    ) -> None:
+        """Kalottenzentrum und Materialseite hängen weder am Flächenschwerpunkt noch an der Lage."""
+        from OCP.BRepAdaptor import BRepAdaptor_Surface
+        from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
+        from OCP.BRepCheck import BRepCheck_Analyzer
+        from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox, BRepPrimAPI_MakeSphere
+        from OCP.GeomAbs import GeomAbs_Sphere
+        from OCP.gp import gp_Ax1, gp_Ax2, gp_Dir, gp_Pnt, gp_Trsf, gp_Vec
+    
+        radius = 8.123456789
+        shape = BRepPrimAPI_MakeSphere(radius, lower, math.pi / 2.0).Shape()
+        bottom = radius * math.sin(lower)
+        top = radius
+        expected_volume = math.pi * (radius**2 * (top - bottom) - (top**3 - bottom**3) / 3)
+        if recess:
+            top = (radius + bottom) / 2.0
+            stock = BRepPrimAPI_MakeBox(gp_Pnt(-12, -12, bottom - 2), 24, 24, top - bottom + 2)
+            cut = boolean_builder("difference", stock.Shape(), shape)
+            cut.Build()
+            assert cut.IsDone()
+            shape = cut.Shape()
+            expected_volume = 24**2 * (top - bottom + 2) - math.pi * (
+                radius**2 * (top - bottom) - (top**3 - bottom**3) / 3
+            )
+        transform = gp_Trsf()
+        if placement == "oblique":
+            transform.SetRotation(gp_Ax1(gp_Pnt(), gp_Dir(1, 2, -0.5)), 0.73)
+        elif placement == "mirror":
+            transform.SetMirror(gp_Ax2(gp_Pnt(), gp_Dir(1, 2, -0.5)))
+        transform.SetTranslationPart(gp_Vec(37, -19, 83))
+        source = Solid(BRepBuilderAPI_Transform(shape, transform, True).Shape(), deviation)
+        assert BRepCheck_Analyzer(source.shape).IsValid()
+        assert source.volume == pytest.approx(expected_volume, rel=1e-10)
+        before = _bytes(source.shape)
+        spheres = [feature for feature in features_of(source).values() if feature.kind == "sphere"]
+        assert len(spheres) == 1
+        sphere = spheres[0]
+>       assert sphere.params["diameter"] == pytest.approx(2 * radius, abs=EPS_GEOM, rel=0)
+E       assert 16.2469 == 16.246913578 ± 1.0e-06
+E         
+E         comparison failed
+E         Obtained: 16.2469
+E         Expected: 16.246913578 ± 1.0e-06
+
+tests\test_brep_surfaces.py:74: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[shift-False-0.0-0.03]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[shift-False-0.0-0.15]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[shift-False-0.5235987755982988-0.03]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[shift-False-0.5235987755982988-0.15]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[shift-True-0.0-0.03]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[shift-True-0.0-0.15]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[shift-True-0.5235987755982988-0.03]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[shift-True-0.5235987755982988-0.15]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[oblique-False-0.0-0.03]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[oblique-False-0.0-0.15]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[oblique-False-0.5235987755982988-0.03]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[oblique-False-0.5235987755982988-0.15]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[oblique-True-0.0-0.03]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[oblique-True-0.0-0.15]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[oblique-True-0.5235987755982988-0.03]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[oblique-True-0.5235987755982988-0.15]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[mirror-False-0.0-0.03]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[mirror-False-0.0-0.15]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[mirror-False-0.5235987755982988-0.03]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[mirror-False-0.5235987755982988-0.15]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[mirror-True-0.0-0.03]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[mirror-True-0.0-0.15]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[mirror-True-0.5235987755982988-0.03]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[mirror-True-0.5235987755982988-0.15]
+24 failed, 21 deselected in 1.73s

@@ -1,0 +1,115 @@
+Grundlage: kind=brep features={'hole': 1, 'face': 6}
+HOLE=hole_1 FACE=face_1
+boolean    blend_union                      FEHLER       -                      0.0s   ValidationError: Die Eingabe war so nicht verwendbar.: Die Operation erwartet eine andere Anzahl an Objekten.
+colour     assign_slot                      netz         ['mesh']/[7]           0.0s   bore.compensated,evaluate.exact_became_mesh
+colour     clear_filament                   netz         ['mesh']/[7]           0.0s   bore.compensated,evaluate.exact_became_mesh
+colour     paint_slot                       netz         ['mesh']/[7]           0.0s   bore.compensated,colour.painted,evaluate.exact_became_mesh
+colour     slots_from_texture               exakt        ['brep']/[7]           0.0s   bore.compensated,colour.no_texture
+holes      countersink_hole                 netz         ['mesh']/[8]           0.0s   bore.compensated,evaluate.exact_became_mesh
+evaluation stopped at op 3: op.detect_region.ValidationError: Die gewählte Stelle liegt nicht mehr auf dieser Fläche. Wählen Sie sie erneut.
+holes      drill_hole                       netz         ['mesh']/[7]           0.0s   bore.compensated,evaluate.exact_became_mesh
+holes      duplicate_feature                netz         ['mesh']/[9]           0.0s   bore.compensated,duplicate_feature.no_longer_through,evaluate.exact_became_mesh
+holes      move_feature                     netz         ['mesh']/[8]           0.0s   bore.compensated,evaluate.exact_became_mesh,move_feature.no_longer_through
+holes      plug_hole                        netz         ['mesh']/[6]           0.0s   bore.compensated,evaluate.exact_became_mesh,perceive.orphaned
+holes      remove_feature                   netz         ['mesh']/[6]           0.0s   bore.compensated,evaluate.exact_became_mesh,perceive.orphaned,remove_feature.gone
+evaluation stopped at op 3: op.resize_feature.ValidationError: Dafür ist „Bohrung ändern“ da.
+holes      resize_hole                      exakt        ['brep']/[7]           0.0s   bore.compensated
+holes      rotate_feature                   netz         ['mesh']/[8]           0.1s   bore.compensated,evaluate.exact_became_mesh,feature.body_split,rotate_feature.no_longer_through
+holes      slot_hole                        exakt        ['brep']/[7]           0.0s   bore.compensated,slot_hole.feature_renamed
+evaluation stopped at op 3: op.label_text.ValidationError: Dieser Parameter fehlt.
+mesh       brep_to_mesh                     netz         ['mesh']/[7]           0.0s   bore.compensated,brep.converted,evaluate.exact_became_mesh
+mesh       decimate_mesh                    netz         ['mesh']/[7]           0.0s   bore.compensated,evaluate.exact_became_mesh,mesh.already_below_target,mesh.deviation
+mesh       pose_armature                    netz         ['mesh']/[7]           0.0s   bore.compensated,evaluate.exact_became_mesh,pose.no_armature
+mesh       remesh_mesh                      netz         ['mesh']/[7]           0.2s   bore.compensated,evaluate.exact_became_mesh,mesh.remesh_dense,mesh.remeshed
+mesh       remesh_uniform                   netz         ['mesh']/[7]           0.0s   bore.compensated,evaluate.exact_became_mesh,mesh.deviation,mesh.evened
+mesh       sculpt_strokes                   netz         ['mesh']/[7]           0.0s   bore.compensated,evaluate.exact_became_mesh,sculpt.empty
+mesh       smooth_mesh                      netz         ['mesh']/[19]          0.0s   arrange.above_bed,bore.compensated,evaluate.exact_became_mesh,mesh.deviation,mesh.smooth_shrank,perceive.orphaned
+mesh       subdivide_surface                netz         ['mesh']/[7]           0.2s   bore.compensated,evaluate.exact_became_mesh,mesh.deviation,mesh.subdivided
+evaluation stopped at op 3: op.thicken.ValidationError: Dieser Körper ist schon geschlossen — eine zweite Haut darüber wäre keine Wand, sondern eine Verdopplung. Eine einzelne Wand dicker macht „Fläche versetzen“; einen Hohlraum legt „Aushöhlen“ an.
+evaluation stopped at op 3: op.create_lid.ValidationError: Der Körper ist auf dieser Höhe massiv — es gibt nichts zu verschließen.
+parts      insert_barrel_hinge              netz         ['mesh']/[19]          0.0s   bore.compensated,evaluate.exact_became_mesh,perceive.orphaned
+parts      insert_bearing_seat              netz         ['mesh']/[9]           0.0s   bore.compensated,evaluate.exact_became_mesh,perceive.orphaned
+parts      insert_cable_clip                netz         ['mesh']/[18]          0.0s   bore.compensated,evaluate.exact_became_mesh,perceive.orphaned
+parts      insert_cable_gland               netz         ['mesh']/[21]          0.0s   bore.compensated,evaluate.exact_became_mesh
+parts      insert_dowel                     netz         ['mesh']/[10]          0.0s   bore.compensated,evaluate.exact_became_mesh
+parts      insert_fit_ladder                netz         ['mesh']/[46]          0.1s   bore.compensated,evaluate.exact_became_mesh,perceive.orphaned
+parts      insert_foot                      netz         ['mesh']/[11]          0.0s   bore.compensated,evaluate.exact_became_mesh,perceive.orphaned
+parts      insert_gusset                    netz         ['mesh']/[10]          0.0s   bore.compensated,evaluate.exact_became_mesh
+parts      insert_heatset_m4                netz         ['mesh']/[10]          0.0s   bore.compensated,evaluate.exact_became_mesh,perceive.orphaned
+parts      insert_hinge_eye                 netz         ['mesh']/[12]          0.0s   bore.compensated,evaluate.exact_became_mesh,perceive.orphaned
+parts      insert_keyhole                   netz         ['mesh']/[20]          0.0s   bore.compensated,evaluate.exact_became_mesh,perceive.orphaned
+parts      insert_latch                     netz         ['mesh']/[10]          0.0s   bore.compensated,evaluate.exact_became_mesh
+parts      insert_living_hinge              netz         ['mesh']/[16]          0.0s   bore.compensated,evaluate.exact_became_mesh,parts.standing_on_edge,perceive.orphaned
+parts      insert_magnet_pocket             netz         ['mesh']/[10]          0.0s   bore.compensated,evaluate.exact_became_mesh,perceive.orphaned
+parts      insert_nut_trap                  netz         ['mesh']/[17]          0.0s   bore.compensated,evaluate.exact_became_mesh
+parts      insert_organizer_divider         netz         ['mesh']/[16]          0.0s   bore.compensated,evaluate.exact_became_mesh,perceive.orphaned
+parts      insert_organizer_foot            netz         ['mesh']/[14]          0.0s   bore.compensated,evaluate.exact_became_mesh,perceive.orphaned
+parts      insert_organizer_rim             netz         ['mesh']/[27]          0.0s   bore.compensated,evaluate.exact_became_mesh,perceive.orphaned
+parts      insert_organizer_tray            netz         ['mesh']/[26]          0.0s   bore.compensated,evaluate.exact_became_mesh,perceive.orphaned
+parts      insert_overhang_fan              netz         ['mesh']/[45]          0.0s   bore.compensated,evaluate.exact_became_mesh,feature.body_split,parts.hanging_loose,perceive.orphaned
+parts      insert_pegboard_hook             netz         ['mesh']/[35]          0.0s   bore.compensated,evaluate.exact_became_mesh,feature.body_split,parts.hanging_loose
+parts      insert_printed_nut               netz         ['mesh']/[16]          0.1s   bore.compensated,evaluate.exact_became_mesh,feature.body_split
+parts      insert_printed_screw             netz         ['mesh']/[16]          0.2s   bore.compensated,evaluate.exact_became_mesh,feature.body_split,perceive.orphaned
+parts      insert_printed_thread            netz         ['mesh']/[9]           0.2s   bore.compensated,evaluate.exact_became_mesh,perceive.orphaned
+evaluation stopped at op 3: op.insert_profile_clamp_liner.ValidationError: Dieser Parameter fehlt.
+evaluation stopped at op 3: op.insert_profile_clamp_shell.ValidationError: Dieser Parameter fehlt.
+parts      insert_profile_tongue            netz         ['mesh']/[21]          0.0s   bore.compensated,evaluate.exact_became_mesh,perceive.orphaned
+parts      insert_rib                       netz         ['mesh']/[12]          0.0s   bore.compensated,evaluate.exact_became_mesh
+parts      insert_screw_hole                netz         ['mesh']/[10]          0.0s   bore.compensated,evaluate.exact_became_mesh
+evaluation stopped at op 3: op.insert_seal_gasket.ValidationError: Dieser Parameter fehlt.
+evaluation stopped at op 3: op.insert_seal_groove.ValidationError: Dieser Parameter fehlt.
+parts      insert_snap_connector            netz         ['mesh']/[14]          0.0s   bore.compensated,evaluate.exact_became_mesh
+parts      insert_snap_fit                  netz         ['mesh']/[14]          0.0s   bore.compensated,evaluate.exact_became_mesh,part.spring_overloaded
+parts      insert_wall_ladder               netz         ['mesh']/[42]          0.0s   bore.compensated,evaluate.exact_became_mesh,perceive.orphaned
+parts      insert_wall_mount                netz         ['mesh']/[20]          0.0s   bore.compensated,evaluate.exact_became_mesh,perceive.orphaned
+parts      replace_profile_liners           FEHLER       -                      0.0s   ValidationError: Die Eingabe war so nicht verwendbar.: Die Operation erwartet eine andere Anzahl an Objekten.
+evaluation stopped at op 3: op.screw_lid.ValidationError: Der Körper ist auf dieser Höhe massiv — es gibt nichts zu verschließen.
+prepare    compensate_first_layer           netz         ['mesh']/[16]          0.0s   bore.compensated,evaluate.exact_became_mesh,prepare.elephant_foot
+evaluation stopped at op 3: op.create_seal.ValidationError: Dieser Parameter fehlt.
+evaluation stopped at op 3: op.cut_away.ValidationError: Diese Ebene schneidet nichts vom Objekt ab.
+prepare    hollow_object                    netz         ['mesh']/[8]           0.1s   bore.compensated,evaluate.exact_became_mesh,hollow.done
+prepare    set_material                     exakt        ['brep']/[7]           0.0s   bore.compensated
+evaluation stopped at op 3: op.split_bodies.ValidationError: Der Körper besteht aus einem Stück; es gibt nichts zu zerlegen.
+evaluation stopped at op 3: op.split_line.ValidationError: Diese Ebene teilt das Objekt nicht.
+evaluation stopped at op 3: op.split_pinned.ValidationError: Diese Ebene teilt das Objekt nicht.
+prepare    test_piece                       netz         ['mesh']/[7]           0.0s   bore.compensated,evaluate.exact_became_mesh,perceive.orphaned,prepare.test_piece
+repair     repair                           netz         ['mesh']/[7]           0.0s   bore.compensated,evaluate.exact_became_mesh,repair.nothing_to_do
+scene      arrange_bed                      exakt        ['brep']/[7]           0.0s   arrange.already_arranged,bore.compensated
+scene      check_collisions                 exakt        ['brep']/[7]           0.0s   bore.compensated
+scene      check_join_path                  FEHLER       -                      0.0s   ValidationError: Die Eingabe war so nicht verwendbar.: Die Operation erwartet eine andere Anzahl an Objekten.
+scene      duplicate_object                 exakt        ['brep', 'brep']/[7, 7] 0.0s   arrange.bodies_in_one_place,bore.compensated
+evaluation stopped at op 3: op.rename_object.ValidationError: Dieser Parameter fehlt.
+shaping    bead_edges                       netz         ['mesh']/[11]          0.0s   bore.compensated,brep.converted,evaluate.exact_became_mesh
+shaping    chamfer_edges                    exakt        ['brep']/[11]          0.2s   bore.compensated
+shaping    draft_faces                      exakt        ['brep']/[7]           0.0s   bore.compensated
+shaping    fillet_edges                     exakt        ['brep']/[11]          0.2s   bore.compensated
+shaping    push_face                        exakt        ['brep']/[11]          0.0s   bore.compensated
+shaping    shell_exact                      exakt        ['brep']/[14]          0.0s   bore.compensated,hollow.done
+evaluation stopped at op 3: op.field_cut.ValidationError: Dieser Parameter fehlt.
+sketch     sketch_pocket                    exakt        ['brep']/[12]          0.0s   bore.compensated
+surface    apply_texture                    netz         ['mesh']/[7]           0.3s   bore.compensated,evaluate.exact_became_mesh,feature.body_split,perceive.orphaned,texture.fell_apart
+evaluation stopped at op 3: op.displace_image.ValidationError: Dieser Parameter fehlt.
+evaluation stopped at op 3: op.lattice_fill.ValidationError: Der Innenraum lässt sich nicht eindeutig bestimmen. Den Körper mit Aushöhlen vorbereiten oder ein Modell mit geschlossener Innenfläche wählen.
+evaluation stopped at op 3: op.align_to_feature.ValidationError: Dieser Parameter fehlt.
+transform  fit_to_size                      netz         ['mesh']/[14]          0.0s   bore.compensated,evaluate.exact_became_mesh,transform.fitted
+transform  mirror_object                    exakt        ['brep']/[0]           0.0s   bore.compensated
+transform  orient_for_print                 exakt        ['brep']/[7]           0.0s   bore.compensated,orient.searched
+transform  pattern                          exakt        ['brep', 'brep', 'brep', 'brep']/[7, 0, 0, 0] 0.0s   bore.compensated
+transform  place_on_bed                     exakt        ['brep']/[7]           0.0s   bore.compensated
+transform  rotate_object                    exakt        ['brep']/[7]           0.0s   bore.compensated
+transform  scale_object                     netz         ['mesh']/[14]          0.0s   bore.compensated,evaluate.exact_became_mesh
+transform  translate_object                 exakt        ['brep']/[7]           0.0s   bore.compensated
+
+Zusammenfassung: Counter({'netz': 57, 'erzeugt': 27, 'ANGEHALTEN': 21, 'exakt': 19, 'FEHLER': 3, 'übersprungen: braucht mehrere Eingänge': 3})
+netz (57): ['assign_slot', 'clear_filament', 'paint_slot', 'countersink_hole', 'drill_hole', 'duplicate_feature', 'move_feature', 'plug_hole', 'remove_feature', 'rotate_feature', 'brep_to_mesh', 'decimate_mesh', 'pose_armature', 'remesh_mesh', 'remesh_uniform', 'sculpt_strokes', 'smooth_mesh', 'subdivide_surface', 'insert_barrel_hinge', 'insert_bearing_seat', 'insert_cable_clip', 'insert_cable_gland', 'insert_dowel', 'insert_fit_ladder', 'insert_foot', 'insert_gusset', 'insert_heatset_m4', 'insert_hinge_eye', 'insert_keyhole', 'insert_latch', 'insert_living_hinge', 'insert_magnet_pocket', 'insert_nut_trap', 'insert_organizer_divider', 'insert_organizer_foot', 'insert_organizer_rim', 'insert_organizer_tray', 'insert_overhang_fan', 'insert_pegboard_hook', 'insert_printed_nut', 'insert_printed_screw', 'insert_printed_thread', 'insert_profile_tongue', 'insert_rib', 'insert_screw_hole', 'insert_snap_connector', 'insert_snap_fit', 'insert_wall_ladder', 'insert_wall_mount', 'compensate_first_layer', 'hollow_object', 'test_piece', 'repair', 'bead_edges', 'apply_texture', 'fit_to_size', 'scale_object']
+exakt (19): ['slots_from_texture', 'resize_hole', 'slot_hole', 'set_material', 'arrange_bed', 'check_collisions', 'duplicate_object', 'chamfer_edges', 'draft_faces', 'fillet_edges', 'push_face', 'shell_exact', 'sketch_pocket', 'mirror_object', 'orient_for_print', 'pattern', 'place_on_bed', 'rotate_object', 'translate_object']
+nach Kategorie netz: Counter({'parts': 31, 'mesh': 8, 'holes': 7, 'colour': 3, 'prepare': 3, 'transform': 2, 'repair': 1, 'shaping': 1, 'surface': 1})
+
+Kundenweg §5.1:
+  fillet_edges: kind=brep features=11 Befunde=[]
+  shell_exact: kind=brep features=22 Befunde=[]
+  insert_heatset_m4: kind=mesh features=25 Befunde=[('evaluate.exact_became_mesh', 'info')]
+  countersink_hole: kind=mesh features=25 Befunde=[('evaluate.exact_became_mesh', 'info')]
+
+create_box + scale fx=2: kind=mesh features=10 Flächeninhalte=[300.0, 300.0, 400.0, 400.0, 800.0, 800.0, 1200.0, 1200.0, 2400.0, 2400.0]
+create_brep_box + scale fx=2: kind=mesh features=10 Flächeninhalte=[300.0, 300.0, 400.0, 400.0, 800.0, 800.0, 1200.0, 1200.0, 2400.0, 2400.0]

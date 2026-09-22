@@ -1,0 +1,5 @@
+tests/test_brep_surfaces.py
+tests/test_brep_voids.py
+
+$ -q -p tools.list_windowed_tests -p no:cacheprovider tests/test_brep_surfaces.py tests/test_brep_voids.py
+--> grün  Exit 0  129 passed in 46.08s

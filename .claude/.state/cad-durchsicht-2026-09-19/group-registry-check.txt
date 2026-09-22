@@ -1,0 +1,86 @@
+tests/test_registry_consistency.py
+
+$ -q -m not performance -p no:cacheprovider tests/test_registry_consistency.py
+........................................................................ [  7%]
+........................................................................ [ 15%]
+........................................................................ [ 22%]
+........................................................................ [ 30%]
+........................................................................ [ 37%]
+........................................................................ [ 45%]
+........................................................................ [ 52%]
+........................................................................ [ 60%]
+........................................................................ [ 67%]
+........................................................................ [ 75%]
+........................................................................ [ 83%]
+........................................................................ [ 90%]
+........................................................................ [ 98%]
+.............F...                                                        [100%]
+================================== FAILURES ===================================
+_______________ test_the_rule_file_counts_the_caveats_it_claims _______________
+
+    def test_the_rule_file_counts_the_caveats_it_claims() -> None:
+        """Eine Zahl in einer Regeldatei altert genauso still wie eine in einer Mail.
+    
+        `.claude/rules/oberflaeche.md` nannte „Zwölf Operationen tragen einen
+        ``caveat``". Gemessen am 29.08.2026 waren es **sechsundzwanzig** von
+        fünfundneunzig — mehr als das Doppelte, und niemand hat es bemerkt, weil
+        eine Doku-Zahl niemandem auffällt, solange sie plausibel klingt. Gefunden
+        hat sie eine Nachbarsitzung beim Bauen einer ganz anderen Prüfung.
+    
+        Der Fehler war dabei nicht die falsche Zahl, sondern dass sie **ungeprüft**
+        dastand. Dieselbe Klammer, die `test_changelog.py` seit demselben Abend um
+        die Presseentwürfe legt, gehört deshalb auch hierher: Wer eine Operation
+        mit ``caveat`` hinzufügt, zieht den Satz nach oder bekommt einen roten Lauf.
+    
+        Geprüft werden **beide** Zahlen des Satzes — die mit ``caveat`` und die
+        Gesamtzahl. Eine davon allein wäre die Hälfte der Aussage.
+        """
+        # **Gesucht wird in allen Regeldateien, nicht in einer benannten.** Der
+        # Satz stand in ``oberflaeche.md`` und ist am 18.09.2026 mit dem Abschnitt
+        # über die Grenzen der Oberfläche nach ``grenzen.md`` gezogen; der Test
+        # blieb zurück und war ab diesem Tag rot — nicht weil eine Zahl falsch
+        # war, sondern weil er an einem Dateinamen hing. Eine Regeldatei darf
+        # umziehen; die Zahl darin muss stimmen.
+        regeln = sorted((Path(__file__).resolve().parent.parent / ".claude" / "rules").glob("*.md"))
+        assert regeln, "das Regelverzeichnis ist leer"
+    
+        muster = re.compile(r"([A-Za-zäöüß]+) von ([A-Za-zäöüß]+)\s*\n?\s*Operationen tragen einen")
+        treffer = [
+            (regel, satz)
+            for regel in regeln
+            if (satz := muster.search(regel.read_text(encoding="utf-8")))
+        ]
+        assert treffer, (
+            "der Satz über die caveat-Zahl steht in keiner Regeldatei mehr — "
+            "wurde er umformuliert, gehört diese Prüfung mit ihm umgeschrieben"
+        )
+        assert len(treffer) == 1, (
+            f"der Satz steht in mehreren Regeldateien: {[regel.name for regel, _ in treffer]} — "
+            "zwei Fassungen derselben Zahl laufen auseinander"
+        )
+        regel, satz = treffer[0]
+        genannt_mit = _ZAHLWORT.get(satz.group(1).lower())
+        genannt_alle = _ZAHLWORT.get(satz.group(2).lower())
+        assert genannt_mit is not None and genannt_alle is not None, (
+            f"unbekanntes Zahlwort in {regel.name}: {satz.group(1)!r} von {satz.group(2)!r} — "
+            f"in _ZAHLWORT eintragen"
+        )
+    
+        load_operations()
+        alle = REGISTRY.all()
+        mit_caveat = [spec.name for spec in alle if spec.caveat]
+        assert alle, "leeres Register — dann prüft dieser Test nichts"
+    
+>       assert genannt_alle == len(alle), (
+            f"{regel.name} nennt {genannt_alle} Operationen, das Register hat {len(alle)}"
+        )
+E       AssertionError: grenzen.md nennt 132 Operationen, das Register hat 133
+E       assert 132 == 133
+E        +  where 133 = len((OperationSpec(name='align_to_feature', title=TranslatableText(msgid='An Merkmal ausrichten', context=None, values=Non...erden dabei weicher. Wo eine Passung sitzt, gehört die gewöhnliche Vereinigung hin.', context=None, values=None)), ...))
+
+tests\test_registry_consistency.py:985: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/test_registry_consistency.py::test_the_rule_file_counts_the_caveats_it_claims
+1 failed, 952 passed in 3.19s
+
+--> ROT  Exit 1  1 failed, 952 passed in 3.19s

@@ -1,0 +1,9 @@
+analytisch valid: True features_of: {'face': 6, 'hole': 1}
+nurbs valid: True features_of: {}
+nurbs-step-rundreise valid: True features_of: {}
+Methoden: ['IsCircle', 'IsCone', 'IsCylinder', 'IsEllipse', 'IsLine', 'IsPlane', 'IsSphere']
+CanonicalRecognition am NURBS-STEP-Körper: {'plane': 6, 'cylinder': 1} Zylinderdurchmesser: [5.999999999999634] max GetGap: 3.5270177956208376e-13
+Solidon features_of am NURBS-Torus: {}
+Solidon features_of am analytischen Torus: {}
+SurfToAnaSurf: Geom_ToroidalSurface gap: 3.399531182602658e-14
+   R: 15.000000000000009 r: 2.9999999999999987

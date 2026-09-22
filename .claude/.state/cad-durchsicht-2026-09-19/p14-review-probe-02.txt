@@ -1,0 +1,8 @@
+scipy: 1.18.1
+numpy: 2.5.3
+different-mapped-old-id
+matrix: [[0.0, 0.0, 1000000.0], [1000000.0, 1000000.0, 0.0], [1000000.0, 1000000.0, 0.0], [1000000.0, 1000000.0, 0.0]]
+components: [([0], [0, 1]), ([1, 2, 3], [2])]
+global: {'mapping': {'old_2': 'new_2'}, 'orphaned': ('old_3', 'old_1'), 'ambiguous': {'old_0': ('new_0', 'new_1')}, 'fresh': ('new_0', 'new_1')}
+local: {'mapping': {'old_1': 'new_2'}, 'orphaned': ('old_2', 'old_3'), 'ambiguous': {'old_0': ('new_0', 'new_1')}, 'fresh': ('new_0', 'new_1')}
+assignments: ((np.int64(0), np.int64(0)), (np.int64(1), np.int64(1)), (np.int64(2), np.int64(2))) ((np.int64(0), np.int64(0)), (np.int64(1), np.int64(2)))

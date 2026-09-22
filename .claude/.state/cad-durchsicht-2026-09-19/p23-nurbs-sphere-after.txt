@@ -1,0 +1,340 @@
+........................FFFFFFFFFFFFFFFFFFFFFFFF                         [100%]
+================================== FAILURES ===================================
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-shift-False-0.0-0.03] _
+tests\test_brep_surfaces.py:97: in test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side
+    assert expected_faces and set(sphere.face_indices) == expected_faces
+E   AssertionError: assert ({0, 1, 2, 3, 4, 5, ...} and {0, 1, 2, 3, 4, 5, ...} == {0, 1, 2, 3, 4, 5, ...}
+E     
+E     Extra items in the right set:
+E     3456
+E     3457
+E     3458
+E     3459
+E     3460...
+E     
+E     ...Full output truncated (49 lines hidden), use '-vv' to show)
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-shift-False-0.0-0.15] _
+tests\test_brep_surfaces.py:97: in test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side
+    assert expected_faces and set(sphere.face_indices) == expected_faces
+E   AssertionError: assert ({0, 1, 2, 3, 4, 5, ...} and {0, 1, 2, 3, 4, 5, ...} == {0, 1, 2, 3, 4, 5, ...}
+E     
+E     Extra items in the right set:
+E     975
+E     976
+E     977
+E     978
+E     979...
+E     
+E     ...Full output truncated (41 lines hidden), use '-vv' to show)
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-shift-False-0.5235987755982988-0.03] _
+tests\test_brep_surfaces.py:97: in test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side
+    assert expected_faces and set(sphere.face_indices) == expected_faces
+E   AssertionError: assert ({0, 1, 2, 3, 4, 5, ...} and {0, 1, 2, 3, 4, 5, ...} == {0, 1, 2, 3, 4, 5, ...}
+E     
+E     Extra items in the right set:
+E     2193
+E     2194
+E     2195
+E     2196
+E     2197...
+E     
+E     ...Full output truncated (45 lines hidden), use '-vv' to show)
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-shift-False-0.5235987755982988-0.15] _
+tests\test_brep_surfaces.py:97: in test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side
+    assert expected_faces and set(sphere.face_indices) == expected_faces
+E   AssertionError: assert ({0, 1, 2, 3, 4, 5, ...} and {0, 1, 2, 3, 4, 5, ...} == {0, 1, 2, 3, 4, 5, ...}
+E     
+E     Extra items in the right set:
+E     640
+E     641
+E     642
+E     643
+E     644...
+E     
+E     ...Full output truncated (43 lines hidden), use '-vv' to show)
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-shift-True-0.0-0.03] _
+tests\test_brep_surfaces.py:97: in test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side
+    assert expected_faces and set(sphere.face_indices) == expected_faces
+E   AssertionError: assert ({0, 1, 2, 3, 4, 5, ...} and {65, 66, 67, 68, 69, 70, ...} == {0, 1, 2, 3, 4, 5, ...}
+E     
+E     Extra items in the right set:
+E     0
+E     1
+E     2
+E     3
+E     4...
+E     
+E     ...Full output truncated (114 lines hidden), use '-vv' to show)
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-shift-True-0.0-0.15] _
+tests\test_brep_surfaces.py:97: in test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side
+    assert expected_faces and set(sphere.face_indices) == expected_faces
+E   AssertionError: assert ({0, 1, 2, 3, 4, 5, ...} and {63, 64, 65, 66, 67, 68, ...} == {0, 1, 2, 3, 4, 5, ...}
+E     
+E     Extra items in the right set:
+E     0
+E     1
+E     2
+E     3
+E     4...
+E     
+E     ...Full output truncated (104 lines hidden), use '-vv' to show)
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-shift-True-0.5235987755982988-0.03] _
+tests\test_brep_surfaces.py:97: in test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side
+    assert expected_faces and set(sphere.face_indices) == expected_faces
+E   AssertionError: assert ({0, 1, 2, 3, 4, 5, ...} and {62, 63, 64, 65, 66, 67, ...} == {0, 1, 2, 3, 4, 5, ...}
+E     
+E     Extra items in the right set:
+E     0
+E     1
+E     2
+E     3
+E     4...
+E     
+E     ...Full output truncated (107 lines hidden), use '-vv' to show)
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-shift-True-0.5235987755982988-0.15] _
+tests\test_brep_surfaces.py:97: in test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side
+    assert expected_faces and set(sphere.face_indices) == expected_faces
+E   AssertionError: assert ({0, 1, 2, 3, 4, 5, ...} and {62, 63, 64, 65, 66, 67, ...} == {0, 1, 2, 3, 4, 5, ...}
+E     
+E     Extra items in the right set:
+E     0
+E     1
+E     2
+E     3
+E     4...
+E     
+E     ...Full output truncated (105 lines hidden), use '-vv' to show)
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-oblique-False-0.0-0.03] _
+tests\test_brep_surfaces.py:97: in test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side
+    assert expected_faces and set(sphere.face_indices) == expected_faces
+E   AssertionError: assert ({0, 1, 2, 3, 4, 5, ...} and {0, 1, 2, 3, 4, 5, ...} == {0, 1, 2, 3, 4, 5, ...}
+E     
+E     Extra items in the right set:
+E     3456
+E     3457
+E     3458
+E     3459
+E     3460...
+E     
+E     ...Full output truncated (49 lines hidden), use '-vv' to show)
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-oblique-False-0.0-0.15] _
+tests\test_brep_surfaces.py:97: in test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side
+    assert expected_faces and set(sphere.face_indices) == expected_faces
+E   AssertionError: assert ({0, 1, 2, 3, 4, 5, ...} and {0, 1, 2, 3, 4, 5, ...} == {0, 1, 2, 3, 4, 5, ...}
+E     
+E     Extra items in the right set:
+E     973
+E     974
+E     975
+E     976
+E     977...
+E     
+E     ...Full output truncated (41 lines hidden), use '-vv' to show)
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-oblique-False-0.5235987755982988-0.03] _
+tests\test_brep_surfaces.py:97: in test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side
+    assert expected_faces and set(sphere.face_indices) == expected_faces
+E   AssertionError: assert ({0, 1, 2, 3, 4, 5, ...} and {0, 1, 2, 3, 4, 5, ...} == {0, 1, 2, 3, 4, 5, ...}
+E     
+E     Extra items in the right set:
+E     2195
+E     2196
+E     2197
+E     2198
+E     2199...
+E     
+E     ...Full output truncated (45 lines hidden), use '-vv' to show)
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-oblique-False-0.5235987755982988-0.15] _
+tests\test_brep_surfaces.py:97: in test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side
+    assert expected_faces and set(sphere.face_indices) == expected_faces
+E   AssertionError: assert ({0, 1, 2, 3, 4, 5, ...} and {0, 1, 2, 3, 4, 5, ...} == {0, 1, 2, 3, 4, 5, ...}
+E     
+E     Extra items in the right set:
+E     640
+E     641
+E     642
+E     643
+E     644...
+E     
+E     ...Full output truncated (43 lines hidden), use '-vv' to show)
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-oblique-True-0.0-0.03] _
+tests\test_brep_surfaces.py:97: in test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side
+    assert expected_faces and set(sphere.face_indices) == expected_faces
+E   AssertionError: assert ({0, 1, 2, 3, 4, 5, ...} and {65, 66, 67, 68, 69, 70, ...} == {0, 1, 2, 3, 4, 5, ...}
+E     
+E     Extra items in the right set:
+E     0
+E     1
+E     2
+E     3
+E     4...
+E     
+E     ...Full output truncated (114 lines hidden), use '-vv' to show)
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-oblique-True-0.0-0.15] _
+tests\test_brep_surfaces.py:97: in test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side
+    assert expected_faces and set(sphere.face_indices) == expected_faces
+E   AssertionError: assert ({0, 1, 2, 3, 4, 5, ...} and {63, 64, 65, 66, 67, 68, ...} == {0, 1, 2, 3, 4, 5, ...}
+E     
+E     Extra items in the right set:
+E     0
+E     1
+E     2
+E     3
+E     4...
+E     
+E     ...Full output truncated (104 lines hidden), use '-vv' to show)
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-oblique-True-0.5235987755982988-0.03] _
+tests\test_brep_surfaces.py:97: in test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side
+    assert expected_faces and set(sphere.face_indices) == expected_faces
+E   AssertionError: assert ({0, 1, 2, 3, 4, 5, ...} and {62, 63, 64, 65, 66, 67, ...} == {0, 1, 2, 3, 4, 5, ...}
+E     
+E     Extra items in the right set:
+E     0
+E     1
+E     2
+E     3
+E     4...
+E     
+E     ...Full output truncated (107 lines hidden), use '-vv' to show)
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-oblique-True-0.5235987755982988-0.15] _
+tests\test_brep_surfaces.py:97: in test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side
+    assert expected_faces and set(sphere.face_indices) == expected_faces
+E   AssertionError: assert ({0, 1, 2, 3, 4, 5, ...} and {62, 63, 64, 65, 66, 67, ...} == {0, 1, 2, 3, 4, 5, ...}
+E     
+E     Extra items in the right set:
+E     0
+E     1
+E     2
+E     3
+E     4...
+E     
+E     ...Full output truncated (105 lines hidden), use '-vv' to show)
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-mirror-False-0.0-0.03] _
+tests\test_brep_surfaces.py:97: in test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side
+    assert expected_faces and set(sphere.face_indices) == expected_faces
+E   AssertionError: assert ({0, 1, 2, 3, 4, 5, ...} and {0, 1, 2, 3, 4, 5, ...} == {0, 1, 2, 3, 4, 5, ...}
+E     
+E     Extra items in the right set:
+E     3456
+E     3457
+E     3458
+E     3459
+E     3460...
+E     
+E     ...Full output truncated (49 lines hidden), use '-vv' to show)
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-mirror-False-0.0-0.15] _
+tests\test_brep_surfaces.py:97: in test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side
+    assert expected_faces and set(sphere.face_indices) == expected_faces
+E   AssertionError: assert ({0, 1, 2, 3, 4, 5, ...} and {0, 1, 2, 3, 4, 5, ...} == {0, 1, 2, 3, 4, 5, ...}
+E     
+E     Extra items in the right set:
+E     965
+E     966
+E     967
+E     968
+E     969...
+E     
+E     ...Full output truncated (41 lines hidden), use '-vv' to show)
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-mirror-False-0.5235987755982988-0.03] _
+tests\test_brep_surfaces.py:97: in test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side
+    assert expected_faces and set(sphere.face_indices) == expected_faces
+E   AssertionError: assert ({0, 1, 2, 3, 4, 5, ...} and {0, 1, 2, 3, 4, 5, ...} == {0, 1, 2, 3, 4, 5, ...}
+E     
+E     Extra items in the right set:
+E     2193
+E     2194
+E     2195
+E     2196
+E     2197...
+E     
+E     ...Full output truncated (45 lines hidden), use '-vv' to show)
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-mirror-False-0.5235987755982988-0.15] _
+tests\test_brep_surfaces.py:97: in test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side
+    assert expected_faces and set(sphere.face_indices) == expected_faces
+E   AssertionError: assert ({0, 1, 2, 3, 4, 5, ...} and {0, 1, 2, 3, 4, 5, ...} == {0, 1, 2, 3, 4, 5, ...}
+E     
+E     Extra items in the right set:
+E     640
+E     641
+E     642
+E     643
+E     644...
+E     
+E     ...Full output truncated (43 lines hidden), use '-vv' to show)
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-mirror-True-0.0-0.03] _
+tests\test_brep_surfaces.py:97: in test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side
+    assert expected_faces and set(sphere.face_indices) == expected_faces
+E   AssertionError: assert ({0, 1, 2, 3, 4, 5, ...} and {65, 66, 67, 68, 69, 70, ...} == {0, 1, 2, 3, 4, 5, ...}
+E     
+E     Extra items in the right set:
+E     0
+E     1
+E     2
+E     3
+E     4...
+E     
+E     ...Full output truncated (114 lines hidden), use '-vv' to show)
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-mirror-True-0.0-0.15] _
+tests\test_brep_surfaces.py:97: in test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side
+    assert expected_faces and set(sphere.face_indices) == expected_faces
+E   AssertionError: assert ({0, 1, 2, 3, 4, 5, ...} and {63, 64, 65, 66, 67, 68, ...} == {0, 1, 2, 3, 4, 5, ...}
+E     
+E     Extra items in the right set:
+E     0
+E     1
+E     2
+E     3
+E     4...
+E     
+E     ...Full output truncated (104 lines hidden), use '-vv' to show)
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-mirror-True-0.5235987755982988-0.03] _
+tests\test_brep_surfaces.py:97: in test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side
+    assert expected_faces and set(sphere.face_indices) == expected_faces
+E   AssertionError: assert ({0, 1, 2, 3, 4, 5, ...} and {62, 63, 64, 65, 66, 67, ...} == {0, 1, 2, 3, 4, 5, ...}
+E     
+E     Extra items in the right set:
+E     0
+E     1
+E     2
+E     3
+E     4...
+E     
+E     ...Full output truncated (107 lines hidden), use '-vv' to show)
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-mirror-True-0.5235987755982988-0.15] _
+tests\test_brep_surfaces.py:97: in test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side
+    assert expected_faces and set(sphere.face_indices) == expected_faces
+E   AssertionError: assert ({0, 1, 2, 3, 4, 5, ...} and {62, 63, 64, 65, 66, 67, ...} == {0, 1, 2, 3, 4, 5, ...}
+E     
+E     Extra items in the right set:
+E     0
+E     1
+E     2
+E     3
+E     4...
+E     
+E     ...Full output truncated (105 lines hidden), use '-vv' to show)
+=========================== short test summary info ===========================
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-shift-False-0.0-0.03]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-shift-False-0.0-0.15]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-shift-False-0.5235987755982988-0.03]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-shift-False-0.5235987755982988-0.15]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-shift-True-0.0-0.03]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-shift-True-0.0-0.15]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-shift-True-0.5235987755982988-0.03]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-shift-True-0.5235987755982988-0.15]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-oblique-False-0.0-0.03]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-oblique-False-0.0-0.15]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-oblique-False-0.5235987755982988-0.03]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-oblique-False-0.5235987755982988-0.15]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-oblique-True-0.0-0.03]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-oblique-True-0.0-0.15]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-oblique-True-0.5235987755982988-0.03]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-oblique-True-0.5235987755982988-0.15]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-mirror-False-0.0-0.03]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-mirror-False-0.0-0.15]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-mirror-False-0.5235987755982988-0.03]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-mirror-False-0.5235987755982988-0.15]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-mirror-True-0.0-0.03]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-mirror-True-0.0-0.15]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-mirror-True-0.5235987755982988-0.03]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-mirror-True-0.5235987755982988-0.15]
+24 failed, 24 passed, 23 deselected in 21.35s

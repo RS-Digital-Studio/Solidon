@@ -1,0 +1,222 @@
+diff --git a/tests/test_prepare.py b/tests/test_prepare.py
+--- a/tests/test_prepare.py
++++ b/tests/test_prepare.py
+@@ -5703,3 +5703,218 @@
+     assert "bore.over_the_edge" in [f.code for f in widened.findings]
+     modest = _run_op("resize_feature", entry, profile, at_feature=cone, diameter=8.0)
+     assert "bore.over_the_edge" not in [f.code for f in modest.findings]
++
++
++def _double_plate_with_roundings(*, sharp_level: float | None = None) -> SceneObject:
++    """Der bestehende Doppelplatten-Prüfkörper, wahlweise ohne eine Rundung.
++
++    Wie in test_mesh_edges.test_coaxial_fillets_are_edited_at_the_selected_height:
++    zwei Platten 20 × 20 × 10 bei Z=0/20, verbunden durch einen mittigen Steg
++    Ø4. Der Sollkörper entsteht direkt aus seinen ursprünglichen Kanten;
++    weder remove_feature noch unround baut ihn.
++    """
++    kernel = pytest.importorskip("app.core.brep.kernel")
++    if not kernel.available():
++        pytest.skip("OpenCASCADE is an optional dependency")
++    from app.core.brep import edit
++    from app.core.brep.features import features_of
++
++    plates = []
++    for bottom in (0.0, 20.0):
++        blank = edit.box(20.0, 20.0, 10.0)
++        upright = [edge for edge in edit.edges_of(blank) if edge.upright]
++        assert len(upright) == 4
++        keys = [
++            edit.edge_key(edge)
++            for edge in upright
++            if not (
++                sharp_level is not None
++                and math.isclose(bottom + 5.0, sharp_level, abs_tol=EPS_GEOM)
++                and edge.middle[0] > 0.0
++                and edge.middle[1] > 0.0
++            )
++        ]
++        rounded = edit.fillet(blank, 1.0, "named", keys)
++        plates.append(edit.moved(rounded, (0.0, 0.0, bottom)))
++    body = edit.boolean("union", [*plates, edit.cylinder(4.0, 30.0)])
++    return SceneObject(
++        id="obj_1",
++        name="Doppelplatte",
++        mesh=body,
++        kind="brep",
++        features=features_of(body),
++    )
++
++
++def _native_rounding_bytes(entry: SceneObject) -> bytes:
++    """Hält auch native Topologie, Randkurven und Kennzeichen der Eingabe fest."""
++    import io
++
++    from OCP.BRepTools import BRepTools
++
++    stream = io.BytesIO()
++    BRepTools.Write_s(entry.mesh.shape, stream)
++    return stream.getvalue()
++
++
++def _assert_same_native_rounding_form(actual: SceneObject, expected: SceneObject) -> None:
++    """Beide gerichteten Differenzen müssen leer sein, nicht nur gleich groß."""
++    from OCP.BRepGProp import BRepGProp
++    from OCP.GProp import GProp_GProps
++
++    from app.core.brep.kernel import boolean_builder, copy_shape
++
++    for first, second in ((actual, expected), (expected, actual)):
++        first_shape, _ = copy_shape(first.mesh.shape)
++        second_shape, _ = copy_shape(second.mesh.shape)
++        difference = boolean_builder("difference", first_shape, second_shape)
++        difference.Build()
++        assert difference.IsDone(), "ohne gültige Differenz ist die Form nicht verglichen"
++        measured = GProp_GProps()
++        BRepGProp.VolumeProperties_s(difference.Shape(), measured)
++        assert measured.Mass() == pytest.approx(0.0, abs=EPS_GEOM), (
++            "Material liegt an einer anderen Stelle als im unabhängig gebauten Sollkörper"
++        )
++
++
++@pytest.mark.parametrize("height", [5.0, 25.0], ids=["lower", "upper"])
++@pytest.mark.parametrize("stale_centre", [False, True], ids=["current-centre", "stale-centre"])
++def test_remove_feature_uses_the_selected_native_rounding_carrier(
++    profile: Profile, height: float, stale_centre: bool
++) -> None:
++    """Die wirkliche Auswahl schlägt eine veraltete geometrische Ortsauskunft.
++
++    Beide Rundungen besitzen dieselbe Achse und R1. Im Gegenfall nennt die
++    Ortsauskunft sogar die andere Platte; die vollständigen Originaldreiecke
++    belegen weiterhin eindeutig die gewählte Rundung. Eine erneute Nähesuche
++    nimmt dort die falsche weg und kann trotzdem dasselbe Volumen liefern.
++    """
++    from shapely.geometry import Point
++
++    from app.core.brep.features import features_of
++    from app.core.brep.kernel import Solid
++    from app.core.slice.analysis import cross_section
++
++    source = _double_plate_with_roundings()
++    body = source.mesh
++    assert isinstance(body, Solid)
++    roundings = [feature for feature in source.features.values() if feature.kind == "fillet"]
++    assert len(roundings) == 8
++    coaxial = sorted(
++        (
++            feature
++            for feature in roundings
++            if feature.params["centre"][0] > 0.0 and feature.params["centre"][1] > 0.0
++        ),
++        key=lambda feature: feature.params["centre"][2],
++    )
++    assert len(coaxial) == 2
++    assert [feature.params["centre"][2] for feature in coaxial] == pytest.approx([5.0, 25.0])
++    chosen = next(
++        feature
++        for feature in coaxial
++        if math.isclose(feature.params["centre"][2], height, abs_tol=EPS_GEOM)
++    )
++    other = next(feature for feature in coaxial if feature.id != chosen.id)
++    original_triangles = chosen.face_indices
++    carrier = body.complete_faces_of_triangles(original_triangles)
++    assert len(carrier) == 1
++    assert set(original_triangles) == set(body.triangles_of_face(carrier[0]))
++    assert not set(original_triangles).intersection(other.face_indices)
++    if stale_centre:
++        chosen = dataclasses.replace(
++            chosen, params={**chosen.params, "centre": other.params["centre"]}
++        )
++        source = dataclasses.replace(source, features={**source.features, chosen.id: chosen})
++    before = _native_rounding_bytes(source)
++    before_features = dict(source.features)
++
++    outcome = _run_op("remove_feature", source, profile, at_feature=chosen.id, sections="single")
++
++    assert len(outcome.outputs) == 1
++    changed = outcome.outputs[0]
++    assert changed.id == source.id and changed.kind == "brep"
++    assert isinstance(changed.mesh, Solid)
++    assert changed.mesh.is_closed and changed.mesh.solid_count == 1
++    assert not any(finding.converts_exact_body for finding in outcome.findings)
++    expected = _double_plate_with_roundings(sharp_level=height)
++    _assert_same_native_rounding_form(changed, expected)
++    remaining = [
++        feature for feature in features_of(changed.mesh).values() if feature.kind == "fillet"
++    ]
++    assert len(remaining) == 7
++
++    # Die Probe liegt außerhalb des Viertelkreises um (9, 9), aber innerhalb
++    # der scharfen Ecke: 0,75² + 0,75² > 1². Sie ist weit genug vom Bogen weg,
++    # dass die zulässige Sehne dieselbe Innen-/Außenantwort geben muss.
++    for level in (5.0, 25.0):
++        section = cross_section(as_mesh_data(changed.mesh), level)
++        assert section is not None and not section.is_empty
++        for x, y in ((9.75, 9.75), (-9.75, 9.75), (9.75, -9.75), (-9.75, -9.75)):
++            restored = x > 0.0 and y > 0.0 and math.isclose(level, height, abs_tol=EPS_GEOM)
++            assert section.contains(Point(x, y)) is restored
++    corner = 1.0 - math.pi / 4.0
++    assert changed.mesh.volume == pytest.approx(body.volume + 10.0 * corner, abs=EPS_GEOM)
++    assert source.mesh is body
++    assert source.features == before_features
++    assert source.features[chosen.id].face_indices == original_triangles
++    assert _native_rounding_bytes(source) == before
++
++
++@pytest.mark.parametrize("selection", ["empty", "partial", "foreign", "plane", "two-roundings"])
++def test_remove_feature_rejects_unproven_native_rounding_triangles(
++    profile: Profile, selection: str
++) -> None:
++    """Ein guter Mittelpunkt ersetzt keine gültige vollständige Flächenauswahl.
++
++    Fremd bedeutet hier nachweislich außerhalb des aktuellen Dreiecksraums;
++    eine Integerliste allein trägt keine weitergehende Körperidentität.
++    Vollständige fremde Träger am selben Körper werden zusätzlich als Ebene
++    und als zweite Rundung geprüft. Alle Fälle müssen vor einer Ausgabe halten.
++    """
++    from app.core.brep.kernel import Solid
++    from app.core.errors import GeometryError, ValidationError
++
++    source = _double_plate_with_roundings()
++    body = source.mesh
++    assert isinstance(body, Solid)
++    roundings = sorted(
++        (
++            feature
++            for feature in source.features.values()
++            if feature.kind == "fillet"
++            and feature.params["centre"][0] > 0.0
++            and feature.params["centre"][1] > 0.0
++        ),
++        key=lambda feature: feature.params["centre"][2],
++    )
++    assert len(roundings) == 2
++    chosen, other = roundings
++    assert len(chosen.face_indices) > 1
++    assert len(body.complete_faces_of_triangles(chosen.face_indices)) == 1
++    if selection == "empty":
++        indices = ()
++    elif selection == "partial":
++        indices = chosen.face_indices[:-1]
++    elif selection == "foreign":
++        indices = (*chosen.face_indices, body.triangle_count)
++    elif selection == "plane":
++        plane = next(feature for feature in source.features.values() if feature.kind == "face")
++        assert len(body.complete_faces_of_triangles(plane.face_indices)) == 1
++        indices = plane.face_indices
++    else:
++        indices = tuple(sorted(set(chosen.face_indices).union(other.face_indices)))
++        assert len(body.complete_faces_of_triangles(indices)) == 2
++    damaged = dataclasses.replace(chosen, face_indices=indices)
++    source = dataclasses.replace(source, features={**source.features, chosen.id: damaged})
++    before = _native_rounding_bytes(source)
++    before_features = dict(source.features)
++    expected_error = ValidationError if selection in {"partial", "foreign"} else GeometryError
++
++    with pytest.raises(expected_error) as refused:
++        _run_op("remove_feature", source, profile, at_feature=chosen.id, sections="single")
++
++    assert refused.value.suggestions
++    assert source.mesh is body
++    assert source.features == before_features
++    assert _native_rounding_bytes(source) == before

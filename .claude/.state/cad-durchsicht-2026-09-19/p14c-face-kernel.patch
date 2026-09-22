@@ -1,0 +1,199 @@
+diff --git a/app/core/brep/kernel.py b/app/core/brep/kernel.py
+--- a/app/core/brep/kernel.py
++++ b/app/core/brep/kernel.py
+@@ -21,6 +21,7 @@
+ 
+ from collections.abc import Sequence
+ from dataclasses import dataclass, field, replace
++from numbers import Integral
+ from operator import index as integer_index
+ from typing import Any, cast
+ 
+@@ -415,6 +416,39 @@
+ 
+     def edges(self) -> list[Any]:
+         return self._explore("edge")
++
++    def checked_face_indices(
++        self, indices: Sequence[int], *, cancelled: CancelToken | None = None
++    ) -> tuple[int, ...]:
++        """Prüft eine nichtleere Menge aktueller nativer Indizes ohne Tessellierung.
++
++        Der Aufrufer belegt zuvor den aktuellen Eigentümer und gegebenenfalls
++        die vollständige Dreiecksabdeckung. Die Länge der geprüften bijektiven
++        Kopierabbildung ist zugleich die Anzahl unserer nativen Flächen.
++        """
++        if cancelled is not None:
++            cancelled.raise_if_cancelled()
++        selected: set[int] = set()
++        for value in indices:
++            if cancelled is not None:
++                cancelled.raise_if_cancelled()
++            if (
++                isinstance(value, bool)
++                or not isinstance(value, Integral)
++                or not 0 <= value < len(self._copied_faces)
++            ):
++                raise ValidationError(
++                    detail=_("Wähle vollständige Flächen aus und wiederhole die Änderung.")
++                )
++            selected.add(int(value))
++        if not selected:
++            raise ValidationError(
++                detail=_("Wähle vollständige Flächen aus und wiederhole die Änderung.")
++            )
++        result = tuple(sorted(selected))
++        if cancelled is not None:
++            cancelled.raise_if_cancelled()
++        return result
+ 
+     # --- die tessellierten Antworten --------------------------------------------
+ 
+diff --git a/app/core/brep/profiles.py b/app/core/brep/profiles.py
+--- a/app/core/brep/profiles.py
++++ b/app/core/brep/profiles.py
+@@ -12,7 +12,7 @@
+ from __future__ import annotations
+ 
+ import math
+-from collections.abc import Callable
++from collections.abc import Callable, Sequence
+ from dataclasses import replace
+ from typing import Any, Final
+ 
+@@ -1082,6 +1082,7 @@
+     distance: float,
+     centre: tuple[float, float, float] | None = None,
+     *,
++    selected_faces: Sequence[int] | None = None,
+     cancelled: CancelToken | None = None,
+ ) -> Solid:
+     """Versetzt eine Fläche — oder alle einer Richtung — entlang ihrer Normalen.
+@@ -1092,6 +1093,11 @@
+     die Nachbarwände mit, statt eine Stufe zu hinterlassen — das Prisma hat
+     genau die Kontur der Fläche, die es fortsetzt.
+ 
++    ``selected_faces`` benennt vollständige aktuelle Topologieflächen des
++    Eingabe-Solids. Ihre eigenen Normalen bestimmen die Bewegung; Richtung
++    und Mitte suchen nur im älteren Modus ``None`` nach einer Fläche.
++    Eine ausdrückliche leere oder ungültige Auswahl wechselt nie den Modus.
++
+     **Nicht** über ``BRepOffsetAPI_MakeOffsetShape``: das war der erste Versuch
+     und versetzt *alle* Flächen des Körpers. Eine Ausnahmeliste nimmt es zwar
+     entgegen, aber ``PerformByJoin`` liest sie nicht — der Quader wurde in
+@@ -1109,17 +1115,41 @@
+         )
+     if cancelled is not None:
+         cancelled.raise_if_cancelled()
++    indices = (
++        None
++        if selected_faces is None
++        else solid.checked_face_indices(selected_faces, cancelled=cancelled)
++    )
+     working = replace(solid)
+-    wanted = _facing(working, direction, cancelled=cancelled)
+-    if not wanted:
+-        raise ValidationError(
+-            "nx",
+-            _("In diese Richtung zeigt keine ebene Fläche dieses Körpers."),
+-            value=direction,
+-            constraint="no_face",
+-        )
+-    if centre is not None:
+-        wanted = _nearest_face(working, wanted, centre, cancelled=cancelled)
++    if cancelled is not None:
++        cancelled.raise_if_cancelled()
++    if indices is None:
++        wanted = _facing(working, direction, cancelled=cancelled)
++        if not wanted:
++            raise ValidationError(
++                "nx",
++                _("In diese Richtung zeigt keine ebene Fläche dieses Körpers."),
++                value=direction,
++                constraint="no_face",
++            )
++        if centre is not None:
++            wanted = _nearest_face(working, wanted, centre, cancelled=cancelled)
++    else:
++        faces = working.faces()
++        wanted = []
++        for index in indices:
++            if cancelled is not None:
++                cancelled.raise_if_cancelled()
++            face = faces[working._copied_faces[index]]
++            surface = describe_surface(face, cancelled=cancelled)
++            if not isinstance(surface, PlaneSurface):
++                raise ValidationError(
++                    detail=_(
++                        "Nicht jede gewählte Fläche ist als eben erkannt. "
++                        "Wähle zum Versetzen vollständige ebene Flächen."
++                    )
++                )
++            wanted.append((face, surface.normal))
+ 
+     outcome = working
+     for face, normal in wanted:
+diff --git a/app/core/brep/edit.py b/app/core/brep/edit.py
+--- a/app/core/brep/edit.py
++++ b/app/core/brep/edit.py
+@@ -1094,7 +1094,12 @@
+ 
+ 
+ def unround(
+-    solid: Solid, centre: Vec3, radius: float, *, cancelled: CancelToken | None = None
++    solid: Solid,
++    centre: Vec3,
++    radius: float,
++    *,
++    selected_faces: Sequence[int] | None = None,
++    cancelled: CancelToken | None = None,
+ ) -> Solid:
+     """Nimmt eine Verrundung weg und stellt die scharfe Kante her (§30).
+ 
+@@ -1104,17 +1109,42 @@
+     23884,115 mm³ nach dem Wegnehmen einer, analytisch 23845,487 + 1,9314·20 —
+     dieselbe Zahl auf vier Stellen, in 18 ms.
+ 
+-    Gesucht wird die Fläche über ihre **Lage** und ihren Radius, nicht über
+-    einen Index: Ein Index in die Topologie verschiebt sich, sobald davor etwas
+-    anderes passiert (§21.2, derselbe Grund wie bei :func:`edge_key`).
++    Ohne ausdrückliche Auswahl wird die Fläche wie bisher über Lage und
++    Radius gesucht. ``selected_faces`` benennt dagegen genau eine vollständige
++    aktuelle Zylinderfläche mit diesem Radius. Ihr Index gehört ausschließlich
++    zum Eingabe-Solid und wird durch dessen private Kopie nachgeführt (§21.2).
++    Eine leere, mehrteilige oder unpassende Auswahl löst keine Ersatzsuche aus.
+     """
+     require()
+     from OCP.BRepAlgoAPI import BRepAlgoAPI_Defeaturing
+ 
+     if cancelled is not None:
+         cancelled.raise_if_cancelled()
++    indices = (
++        None
++        if selected_faces is None
++        else solid.checked_face_indices(selected_faces, cancelled=cancelled)
++    )
++    if indices is not None and len(indices) != 1:
++        raise GeometryError(
++            detail=_("Wähle genau eine vollständige Rundungsfläche mit dem bisherigen Radius."),
++            suggestions=(CORRECT_INPUT, CANCEL),
++        )
+     working = replace(solid)
+-    face = _cylinder_at(working, centre, radius, cancelled=cancelled)
++    if cancelled is not None:
++        cancelled.raise_if_cancelled()
++    if indices is None:
++        face = _cylinder_at(working, centre, radius, cancelled=cancelled)
++    else:
++        face = working.faces()[working._copied_faces[indices[0]]]
++        surface = describe_surface(face, cancelled=cancelled)
++        if not isinstance(surface, CylinderSurface) or not is_close(
++            float(surface.cylinder.Radius()), radius
++        ):
++            raise GeometryError(
++                detail=_("Wähle genau eine vollständige Rundungsfläche mit dem bisherigen Radius."),
++                suggestions=(CORRECT_INPUT, CANCEL),
++            )
+     if face is None:
+         raise GeometryError(
+             detail=_(

@@ -1,0 +1,5 @@
+tests/test_core_package_direction.py
+tests/test_organizer_build.py
+
+$ -q -p tools.list_windowed_tests -p no:cacheprovider tests/test_core_package_direction.py tests/test_organizer_build.py
+--> grün  Exit 0  11 passed in 4.55s

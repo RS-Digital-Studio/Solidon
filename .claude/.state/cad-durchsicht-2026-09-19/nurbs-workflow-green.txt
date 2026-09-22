@@ -1,0 +1,4 @@
+tests/test_brep_import_workflow.py
+
+$ -q -m not performance -p no:cacheprovider tests/test_brep_import_workflow.py
+--> grün  Exit 0  4 passed in 14.16s

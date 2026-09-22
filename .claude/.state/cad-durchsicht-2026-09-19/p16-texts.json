@@ -1,0 +1,138 @@
+[
+  {
+    "source": "Formabweichung",
+    "en": "Shape deviation",
+    "es": "Desviación de forma",
+    "fr": "Écart de forme",
+    "it": "Scostamento di forma",
+    "pt": "Desvio de forma"
+  },
+  {
+    "source": "Zeigt die Abweichung der Dreiecksflächen von ihrer zugeordneten Form.",
+    "en": "Shows how triangular faces deviate from their reference shape.",
+    "es": "Muestra la desviación de las caras triangulares respecto a su forma de referencia.",
+    "fr": "Montre l’écart des faces triangulaires par rapport à leur forme de référence.",
+    "it": "Mostra lo scostamento delle facce triangolari dalla forma di riferimento.",
+    "pt": "Mostra o desvio das faces triangulares em relação à sua forma de referência."
+  },
+  {
+    "source": "Ausgewertete Dreiecksflächen: {known} von {total}",
+    "en": "Triangular faces evaluated: {known} of {total}",
+    "es": "Caras triangulares evaluadas: {known} de {total}",
+    "fr": "Faces triangulaires évaluées : {known} sur {total}",
+    "it": "Facce triangolari valutate: {known} su {total}",
+    "pt": "Faces triangulares avaliadas: {known} de {total}"
+  },
+  {
+    "source": "Obergrenzen je Dreiecksfläche",
+    "en": "Upper bounds for each triangular face",
+    "es": "Límites superiores por cara triangular",
+    "fr": "Bornes supérieures par face triangulaire",
+    "it": "Limiti superiori per ogni faccia triangolare",
+    "pt": "Limites superiores por face triangular"
+  },
+  {
+    "source": "Größter Abstand der ausgewerteten Flächen: {lower} bis {upper}",
+    "en": "Greatest distance on the evaluated faces: {lower} to {upper}",
+    "es": "Mayor distancia en las caras evaluadas: de {lower} a {upper}",
+    "fr": "Plus grande distance sur les faces évaluées : de {lower} à {upper}",
+    "it": "Distanza massima sulle facce valutate: da {lower} a {upper}",
+    "pt": "Maior distância nas faces avaliadas: de {lower} a {upper}"
+  },
+  {
+    "source": "Berechnete Spanne je Dreiecksfläche: höchstens {bound}",
+    "en": "Computed interval width per triangular face: at most {bound}",
+    "es": "Anchura del intervalo calculado por cara triangular: como máximo {bound}",
+    "fr": "Largeur de l’intervalle calculé par face triangulaire : au plus {bound}",
+    "it": "Ampiezza dell’intervallo calcolato per faccia triangolare: al massimo {bound}",
+    "pt": "Largura do intervalo calculado por face triangular: no máximo {bound}"
+  },
+  {
+    "source": "Keine Abweichungswerte bestimmbar. Wählen Sie einen anderen Körper.",
+    "en": "No deviation values could be determined. Select another body.",
+    "es": "No se pudieron determinar valores de desviación. Seleccionar otro cuerpo.",
+    "fr": "Aucune valeur d’écart n’a pu être déterminée. Sélectionnez un autre corps.",
+    "it": "Non è stato possibile determinare valori di scostamento. Selezionare un altro corpo.",
+    "pt": "Não foi possível determinar valores de desvio. Selecionar outro corpo."
+  },
+  {
+    "source": "Die Spanne beschreibt nur, wie genau der Abstand berechnet wurde. Sie ist keine Fertigungstoleranz.",
+    "en": "The interval width only describes how accurately the distance was computed. It is not a manufacturing tolerance.",
+    "es": "La anchura del intervalo solo indica con qué precisión se calculó la distancia. No es una tolerancia de fabricación.",
+    "fr": "La largeur de l’intervalle décrit uniquement la précision du calcul de la distance. Ce n’est pas une tolérance de fabrication.",
+    "it": "L’ampiezza dell’intervallo descrive solo la precisione con cui è stata calcolata la distanza. Non è una tolleranza di fabbricazione.",
+    "pt": "A largura do intervalo descreve apenas a precisão com que a distância foi calculada. Não é uma tolerância de fabrico."
+  },
+  {
+    "source": "Bricht die Berechnung der Analysekarte ab. Das Modell bleibt unverändert.",
+    "en": "Cancels the analysis map calculation. The model remains unchanged.",
+    "es": "Cancela el cálculo del mapa de análisis. El modelo no se modifica.",
+    "fr": "Annule le calcul de la carte d’analyse. Le modèle reste inchangé.",
+    "it": "Annulla il calcolo della mappa di analisi. Il modello rimane invariato.",
+    "pt": "Cancela o cálculo do mapa de análise. O modelo permanece inalterado."
+  },
+  {
+    "source": "Die Berechnung der Analysekarte wurde abgebrochen.",
+    "en": "The analysis map calculation was cancelled.",
+    "es": "Se canceló el cálculo del mapa de análisis.",
+    "fr": "Le calcul de la carte d’analyse a été annulé.",
+    "it": "Il calcolo della mappa di analisi è stato annullato.",
+    "pt": "O cálculo do mapa de análise foi cancelado."
+  },
+  {
+    "source": "Wählen Sie einen anderen Körper oder schließen Sie die Karte.",
+    "en": "Select another body or close the map.",
+    "es": "Seleccionar otro cuerpo o cerrar el mapa.",
+    "fr": "Sélectionnez un autre corps ou fermez la carte.",
+    "it": "Selezionare un altro corpo o chiudere la mappa.",
+    "pt": "Selecionar outro corpo ou fechar o mapa."
+  },
+  {
+    "source": "Größter gefundener Abstand: {value}",
+    "en": "Greatest distance found: {value}",
+    "es": "Mayor distancia encontrada: {value}",
+    "fr": "Plus grande distance trouvée : {value}",
+    "it": "Distanza massima trovata: {value}",
+    "pt": "Maior distância encontrada: {value}"
+  },
+  {
+    "source": "Formabweichung eingrenzen …",
+    "en": "Bounding shape deviation …",
+    "es": "Acotando la desviación de forma…",
+    "fr": "Calcul des bornes de l’écart de forme…",
+    "it": "Calcolo dei limiti dello scostamento di forma…",
+    "pt": "A determinar os limites do desvio de forma…"
+  },
+  {
+    "source": "Obere Abstandsgrenzen ganzer Dreiecksflächen zur belegten Form. Am exakten Körper wird seine Darstellung geprüft; die Originalform bleibt unverändert.",
+    "en": "Upper distance bounds for complete triangular faces relative to their established reference shape. For an exact body, its display is checked; the original shape remains unchanged.",
+    "es": "Límites superiores de distancia de las caras triangulares completas a su forma de referencia comprobada. En un cuerpo exacto se comprueba su representación; la forma original no se modifica.",
+    "fr": "Bornes supérieures de distance des faces triangulaires entières à leur forme de référence établie. Pour un corps exact, sa représentation est vérifiée ; la forme d’origine reste inchangée.",
+    "it": "Limiti superiori di distanza delle facce triangolari complete dalla forma di riferimento accertata. Per un corpo esatto viene verificata la rappresentazione; la forma originale rimane invariata.",
+    "pt": "Limites superiores de distância das faces triangulares completas à sua forma de referência comprovada. Num corpo exato, verifica-se a sua representação; a forma original permanece inalterada."
+  },
+  {
+    "source": "Obere Abstandsgrenzen ganzer Dreiecksflächen zur belegten Form; keine neue Einpassung.",
+    "en": "Upper distance bounds for complete triangular faces relative to their established reference shape; no new fitting.",
+    "es": "Límites superiores de distancia de las caras triangulares completas a su forma de referencia comprobada; sin realizar un nuevo ajuste.",
+    "fr": "Bornes supérieures de distance des faces triangulaires entières à leur forme de référence établie ; sans nouvel ajustement.",
+    "it": "Limiti superiori di distanza delle facce triangolari complete dalla forma di riferimento accertata; senza un nuovo adattamento.",
+    "pt": "Limites superiores de distância das faces triangulares completas à sua forma de referência comprovada; sem efetuar um novo ajuste."
+  },
+  {
+    "source": "kein eindeutiger oder numerisch begrenzbarer Formbezug",
+    "en": "no unambiguous shape reference or computable numerical bounds",
+    "es": "sin una referencia de forma inequívoca o sin límites numéricos calculables",
+    "fr": "référence de forme ambiguë ou bornes numériques impossibles à calculer",
+    "it": "riferimento di forma ambiguo o limiti numerici non calcolabili",
+    "pt": "sem referência de forma inequívoca ou sem limites numéricos calculáveis"
+  },
+  {
+    "source": "Die Formabweichung belegter Flächen lässt sich in der Analysekarte prüfen.",
+    "en": "The shape deviation of faces with an established reference can be checked in the analysis map.",
+    "es": "La desviación de forma de las caras con una referencia comprobada se puede consultar en el mapa de análisis.",
+    "fr": "L’écart de forme des faces dont la référence est établie peut être vérifié dans la carte d’analyse.",
+    "it": "Lo scostamento di forma delle facce con un riferimento accertato può essere verificato nella mappa di analisi.",
+    "pt": "O desvio de forma das faces com uma referência comprovada pode ser verificado no mapa de análise."
+  }
+]

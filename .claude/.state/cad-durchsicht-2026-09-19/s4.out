@@ -1,0 +1,10 @@
+detect_holes: True forget_cache: True
+Soll Ø5.2 n=16: gemessen 5.1113  Abweichung -0.0887  Formel 5.1113  Inkreis 5.1001
+Soll Ø5.2 n=24: gemessen 5.1605  Abweichung -0.0395  Formel 5.1605  Inkreis 5.1555
+Soll Ø5.2 n=48: gemessen 5.1901  Abweichung -0.0099  Formel 5.1901  Inkreis 5.1889
+Soll Ø15.0 n=16: gemessen 14.7441  Abweichung -0.2559  Formel 14.7441  Inkreis 14.7118
+Soll Ø30.0 n=16: gemessen 29.4882  Abweichung -0.5118  Formel 29.4882  Inkreis 29.4236
+Soll Ø30.0 n=24: gemessen 29.7720  Abweichung -0.2280  Formel 29.7720  Inkreis 29.7433
+Soll Ø50.0 n=32: gemessen 49.7860  Abweichung -0.2140  Formel 49.7860  Inkreis 49.7592
+Soll Ø5.2 n=8: KEINE Bohrung erkannt
+Soll Ø5.2 n=12: KEINE Bohrung erkannt

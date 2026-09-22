@@ -1,0 +1,17 @@
+transform: ['AXIS_VECTORS', 'Anchor', 'Axis', 'EPS_DISPLAY', 'EPS_GEOM', 'Literal', 'Mesh', 'MeshData', 'Sequence', 'Transform', 'TransformSteps', 'Vec3', 'along_normal', 'anchor_point', 'annotations', 'apply', 'as_mesh_data', 'cast', 'dataclass', 'decompose_transform', 'is_rigid', 'math', 'moved', 'moved_body', 'moved_points', 'np', 'place_on_bed', 'replace', 'rotation', 'rotation_about']
+edge_key Quelle: def edge_key(entry: EdgeInfo) -> str:
+    """Der stabile Verweis auf **eine** Kante (E4, RM-147, §21).
+
+    Eine Kante hat keine Kennung, die eine zweite Auswertung überlebt: Ihr
+    nativer Handle gehört dem Lauf, der ihn erzeugt hat, und ihr Platz in
+    ``solid.edges()`` verschiebt sich, sobald eine Operation davor etwas
+    ändert. Beides in eine Projektdatei zu schreiben hieße, beim nächsten
+    Öffnen eine andere Kante zu verrunden — still.
+
+    Der Schlüssel kommt deshalb aus der **Geometrie**: Mittelpunkt und
+    Richtung, auf hundertstel Millimeter beziehungsweise drei Stellen
+    ger
+matrix: ndarray
+vorher : 12 ['e:-20.00,-15.00,10.00:0.000,0.000,1.000', 'e:-20.00,0.00,20.00:0.000,1.000,0.000', 'e:-20.00,15.00,10.00:0.000,0.000,1.000']
+nachher: 12 ['e:-19.00,-13.00,13.00:0.000,0.000,1.000', 'e:-19.00,2.00,23.00:0.000,1.000,0.000', 'e:-19.00,17.00,13.00:0.000,0.000,1.000']
+gemeinsam: 0

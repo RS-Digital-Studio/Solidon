@@ -1,0 +1,120 @@
+FF                                                                       [100%]
+================================== FAILURES ===================================
+________ test_an_offset_nurbs_skin_keeps_its_analytic_integrals[11.0] _________
+
+radius = 11.0
+
+    @pytest.mark.parametrize("radius", [11.0, 13.0])
+    def test_an_offset_nurbs_skin_keeps_its_analytic_integrals(radius: float) -> None:
+        """Der zweite Radialschritt misst die ganze Offset-Haut statt eines nativen Fehlwerts."""
+        from OCP.BRepBuilderAPI import BRepBuilderAPI_Copy, BRepBuilderAPI_NurbsConvert
+        from OCP.BRepLib import BRepLib
+        from OCP.BRepOffsetAPI import BRepOffsetAPI_MakeThickSolid
+        from OCP.BRepPrimAPI import BRepPrimAPI_MakeCylinder
+        from OCP.TopoDS import TopoDS
+    
+        height, turn, target = 17.0, math.radians(184.0), 12.5
+        annulus = edit.boolean(
+            "difference",
+            [
+                Solid(BRepPrimAPI_MakeCylinder(16.0, height, turn).Shape()),
+                Solid(BRepPrimAPI_MakeCylinder(12.0, height, turn).Shape()),
+            ],
+        )
+        source = Solid(BRepBuilderAPI_NurbsConvert(annulus.shape, True).Shape())
+        inner = min(
+            (feature for feature in features_of(source).values() if feature.kind == "fillet"),
+            key=lambda feature: feature.params["radius"],
+        )
+        changed = edit.reround(source, inner.params["centre"], 12.0, radius)
+        selected = edit._cylinder_at(changed, inner.params["centre"], radius)
+        assert selected is not None
+        private = BRepBuilderAPI_Copy(selected, True, False).Shape()
+        builder = BRepOffsetAPI_MakeThickSolid()
+        builder.MakeThickSolidBySimple(private, radius - target)
+        assert builder.IsDone()
+        shape = TopoDS.Solid(builder.Shape())
+        assert BRepLib.OrientClosedSolid_s(shape)
+        skin = Solid(shape)
+        assert skin.is_closed and skin.solid_count == 1
+    
+        low, high = sorted((radius, target))
+        sector_area = turn * (high**2 - low**2) / 2.0
+        expected_volume = height * sector_area
+        expected_area = (
+            height * turn * (low + high) + 2.0 * height * (high - low) + 2.0 * sector_area
+        )
+        centre = (
+            (high**3 - low**3) * math.sin(turn) / (3.0 * sector_area),
+            (high**3 - low**3) * (1.0 - math.cos(turn)) / (3.0 * sector_area),
+            height / 2.0,
+        )
+>       assert skin.volume == pytest.approx(expected_volume, abs=EPS_GEOM)
+E       assert 964.3233149494819 == 962.2174699169938 ± 1.0e-06
+E         
+E         comparison failed
+E         Obtained: 964.3233149494819
+E         Expected: 962.2174699169938 ± 1.0e-06
+
+tests\test_brep.py:358: AssertionError
+________ test_an_offset_nurbs_skin_keeps_its_analytic_integrals[13.0] _________
+
+radius = 13.0
+
+    @pytest.mark.parametrize("radius", [11.0, 13.0])
+    def test_an_offset_nurbs_skin_keeps_its_analytic_integrals(radius: float) -> None:
+        """Der zweite Radialschritt misst die ganze Offset-Haut statt eines nativen Fehlwerts."""
+        from OCP.BRepBuilderAPI import BRepBuilderAPI_Copy, BRepBuilderAPI_NurbsConvert
+        from OCP.BRepLib import BRepLib
+        from OCP.BRepOffsetAPI import BRepOffsetAPI_MakeThickSolid
+        from OCP.BRepPrimAPI import BRepPrimAPI_MakeCylinder
+        from OCP.TopoDS import TopoDS
+    
+        height, turn, target = 17.0, math.radians(184.0), 12.5
+        annulus = edit.boolean(
+            "difference",
+            [
+                Solid(BRepPrimAPI_MakeCylinder(16.0, height, turn).Shape()),
+                Solid(BRepPrimAPI_MakeCylinder(12.0, height, turn).Shape()),
+            ],
+        )
+        source = Solid(BRepBuilderAPI_NurbsConvert(annulus.shape, True).Shape())
+        inner = min(
+            (feature for feature in features_of(source).values() if feature.kind == "fillet"),
+            key=lambda feature: feature.params["radius"],
+        )
+        changed = edit.reround(source, inner.params["centre"], 12.0, radius)
+        selected = edit._cylinder_at(changed, inner.params["centre"], radius)
+        assert selected is not None
+        private = BRepBuilderAPI_Copy(selected, True, False).Shape()
+        builder = BRepOffsetAPI_MakeThickSolid()
+        builder.MakeThickSolidBySimple(private, radius - target)
+        assert builder.IsDone()
+        shape = TopoDS.Solid(builder.Shape())
+        assert BRepLib.OrientClosedSolid_s(shape)
+        skin = Solid(shape)
+        assert skin.is_closed and skin.solid_count == 1
+    
+        low, high = sorted((radius, target))
+        sector_area = turn * (high**2 - low**2) / 2.0
+        expected_volume = height * sector_area
+        expected_area = (
+            height * turn * (low + high) + 2.0 * height * (high - low) + 2.0 * sector_area
+        )
+        centre = (
+            (high**3 - low**3) * math.sin(turn) / (3.0 * sector_area),
+            (high**3 - low**3) * (1.0 - math.cos(turn)) / (3.0 * sector_area),
+            height / 2.0,
+        )
+>       assert skin.volume == pytest.approx(expected_volume, abs=EPS_GEOM)
+E       assert 348.7977947689569 == 348.0361061401893 ± 1.0e-06
+E         
+E         comparison failed
+E         Obtained: 348.7977947689569
+E         Expected: 348.0361061401893 ± 1.0e-06
+
+tests\test_brep.py:358: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/test_brep.py::test_an_offset_nurbs_skin_keeps_its_analytic_integrals[11.0]
+FAILED tests/test_brep.py::test_an_offset_nurbs_skin_keeps_its_analytic_integrals[13.0]
+2 failed, 176 deselected in 5.68s

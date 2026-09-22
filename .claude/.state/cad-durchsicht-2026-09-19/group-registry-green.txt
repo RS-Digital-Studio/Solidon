@@ -1,0 +1,4 @@
+tests/test_registry_consistency.py
+
+$ -q -m not performance -p no:cacheprovider tests/test_registry_consistency.py
+--> grün  Exit 0  953 passed in 3.00s

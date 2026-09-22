@@ -1,0 +1,10 @@
+holes: [(-3.0, 'hole_1'), (3.0, 'hole_2')]
+first marker x / right with warm cache / right with fresh cache: -3.0 3.0 3.0
+calls after left: {'make': 1, 'change': 1, 'use': 1} after warm right: {'make': 1, 'change': 1, 'use': 2}
+cache accesses left: [('6b6b051cac5e47281ae2bc31343c5d53', False), ('28cc02ed0d2a1e86baba8d2f91e6fd95', False), ('453e3cdc01972ab3466d7a3189785953', False)]
+cache accesses right: [('6b6b051cac5e47281ae2bc31343c5d53', True), ('28cc02ed0d2a1e86baba8d2f91e6fd95', True), ('28dcbb5417998b7ac05d3c2572abac51', False)]
+left output hashes: {'obj_1': '78bb1a27ae62da82e43f97d0cf0e99c6', 'obj_2': '35cbe88162728df324cfa6c046f8e8c9', 'obj_3': 'ae1c2f424bbc6a134eae6f68babb8ed7'}
+right output hashes: {'obj_1': '62217d6b63d07c27b088756a8f3e873b', 'obj_2': '82eb82a240239f16eb21f102cbf6c5e3', 'obj_3': '4683874014dda8bdeab372c5a1a00b21'}
+reserved IDs: ('before_1', 'before_2', 'face_1', 'face_2', 'face_3', 'face_4', 'face_5', 'face_6') ('before_1', 'before_2', 'face_1', 'face_2', 'face_3', 'face_4', 'face_5', 'face_6')
+saved decisions left: {2: {'group:["obj_1",["before_1","before_2"]]': {'object_id': 'obj_1', 'old_ids': ['before_1', 'before_2'], 'candidates': [{'fingerprint': {'kind': 'hole', 'relative': [-0.033408, 0.0, 0.0], 'axis': [0.0, 0.0, 1.0], 'diameter': 2.0, 'directional': False}, 'claims': ['before_1', 'before_2']}, {'fingerprint': {'kind': 'hole', 'relative': [0.033408, 0.0, 0.0], 'axis': [0.0, 0.0, 1.0], 'diameter': 2.0, 'directional': False}, 'claims': ['before_1', 'before_2']}], 'decisions': {'before_1': {'candidate': 0}, 'before_2': {'candidate': 1}}}}}
+saved decisions right: {2: {'group:["obj_1",["before_1","before_2"]]': {'object_id': 'obj_1', 'old_ids': ['before_1', 'before_2'], 'candidates': [{'fingerprint': {'kind': 'hole', 'relative': [-0.033408, 0.0, 0.0], 'axis': [0.0, 0.0, 1.0], 'diameter': 2.0, 'directional': False}, 'claims': ['before_1', 'before_2']}, {'fingerprint': {'kind': 'hole', 'relative': [0.033408, 0.0, 0.0], 'axis': [0.0, 0.0, 1.0], 'diameter': 2.0, 'directional': False}, 'claims': ['before_1', 'before_2']}], 'decisions': {'before_1': {'candidate': 1}, 'before_2': {'candidate': 0}}}}}

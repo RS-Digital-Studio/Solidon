@@ -1,0 +1,8 @@
+tests/test_organizer_build.py
+tests/test_seal_flow.py
+tests/test_seal_ops.py
+
+Zurückgestellt: Fensterdateien nur mit --release; Leistung separat beim Release.
+  tests/test_seal_flow.py
+$ -q -p tools.list_windowed_tests -p no:cacheprovider tests/test_organizer_build.py tests/test_seal_ops.py
+--> grün  Exit 0  44 passed in 8.21s

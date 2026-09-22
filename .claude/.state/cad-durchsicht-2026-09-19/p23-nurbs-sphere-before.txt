@@ -1,0 +1,148 @@
+........................FFFFFFFFFFFFFFFFFFFFFFFF                         [100%]
+================================== FAILURES ===================================
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-shift-False-0.0-0.03] _
+tests\test_brep_surfaces.py:77: in test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side
+    assert len(spheres) == 1
+E   assert 0 == 1
+E    +  where 0 = len([])
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-shift-False-0.0-0.15] _
+tests\test_brep_surfaces.py:77: in test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side
+    assert len(spheres) == 1
+E   assert 0 == 1
+E    +  where 0 = len([])
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-shift-False-0.5235987755982988-0.03] _
+tests\test_brep_surfaces.py:77: in test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side
+    assert len(spheres) == 1
+E   assert 0 == 1
+E    +  where 0 = len([])
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-shift-False-0.5235987755982988-0.15] _
+tests\test_brep_surfaces.py:77: in test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side
+    assert len(spheres) == 1
+E   assert 0 == 1
+E    +  where 0 = len([])
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-shift-True-0.0-0.03] _
+tests\test_brep_surfaces.py:77: in test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side
+    assert len(spheres) == 1
+E   assert 0 == 1
+E    +  where 0 = len([])
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-shift-True-0.0-0.15] _
+tests\test_brep_surfaces.py:77: in test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side
+    assert len(spheres) == 1
+E   assert 0 == 1
+E    +  where 0 = len([])
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-shift-True-0.5235987755982988-0.03] _
+tests\test_brep_surfaces.py:77: in test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side
+    assert len(spheres) == 1
+E   assert 0 == 1
+E    +  where 0 = len([])
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-shift-True-0.5235987755982988-0.15] _
+tests\test_brep_surfaces.py:77: in test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side
+    assert len(spheres) == 1
+E   assert 0 == 1
+E    +  where 0 = len([])
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-oblique-False-0.0-0.03] _
+tests\test_brep_surfaces.py:77: in test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side
+    assert len(spheres) == 1
+E   assert 0 == 1
+E    +  where 0 = len([])
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-oblique-False-0.0-0.15] _
+tests\test_brep_surfaces.py:77: in test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side
+    assert len(spheres) == 1
+E   assert 0 == 1
+E    +  where 0 = len([])
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-oblique-False-0.5235987755982988-0.03] _
+tests\test_brep_surfaces.py:77: in test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side
+    assert len(spheres) == 1
+E   assert 0 == 1
+E    +  where 0 = len([])
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-oblique-False-0.5235987755982988-0.15] _
+tests\test_brep_surfaces.py:77: in test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side
+    assert len(spheres) == 1
+E   assert 0 == 1
+E    +  where 0 = len([])
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-oblique-True-0.0-0.03] _
+tests\test_brep_surfaces.py:77: in test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side
+    assert len(spheres) == 1
+E   assert 0 == 1
+E    +  where 0 = len([])
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-oblique-True-0.0-0.15] _
+tests\test_brep_surfaces.py:77: in test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side
+    assert len(spheres) == 1
+E   assert 0 == 1
+E    +  where 0 = len([])
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-oblique-True-0.5235987755982988-0.03] _
+tests\test_brep_surfaces.py:77: in test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side
+    assert len(spheres) == 1
+E   assert 0 == 1
+E    +  where 0 = len([])
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-oblique-True-0.5235987755982988-0.15] _
+tests\test_brep_surfaces.py:77: in test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side
+    assert len(spheres) == 1
+E   assert 0 == 1
+E    +  where 0 = len([])
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-mirror-False-0.0-0.03] _
+tests\test_brep_surfaces.py:77: in test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side
+    assert len(spheres) == 1
+E   assert 0 == 1
+E    +  where 0 = len([])
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-mirror-False-0.0-0.15] _
+tests\test_brep_surfaces.py:77: in test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side
+    assert len(spheres) == 1
+E   assert 0 == 1
+E    +  where 0 = len([])
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-mirror-False-0.5235987755982988-0.03] _
+tests\test_brep_surfaces.py:77: in test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side
+    assert len(spheres) == 1
+E   assert 0 == 1
+E    +  where 0 = len([])
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-mirror-False-0.5235987755982988-0.15] _
+tests\test_brep_surfaces.py:77: in test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side
+    assert len(spheres) == 1
+E   assert 0 == 1
+E    +  where 0 = len([])
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-mirror-True-0.0-0.03] _
+tests\test_brep_surfaces.py:77: in test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side
+    assert len(spheres) == 1
+E   assert 0 == 1
+E    +  where 0 = len([])
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-mirror-True-0.0-0.15] _
+tests\test_brep_surfaces.py:77: in test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side
+    assert len(spheres) == 1
+E   assert 0 == 1
+E    +  where 0 = len([])
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-mirror-True-0.5235987755982988-0.03] _
+tests\test_brep_surfaces.py:77: in test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side
+    assert len(spheres) == 1
+E   assert 0 == 1
+E    +  where 0 = len([])
+_ test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-mirror-True-0.5235987755982988-0.15] _
+tests\test_brep_surfaces.py:77: in test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side
+    assert len(spheres) == 1
+E   assert 0 == 1
+E    +  where 0 = len([])
+=========================== short test summary info ===========================
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-shift-False-0.0-0.03]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-shift-False-0.0-0.15]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-shift-False-0.5235987755982988-0.03]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-shift-False-0.5235987755982988-0.15]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-shift-True-0.0-0.03]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-shift-True-0.0-0.15]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-shift-True-0.5235987755982988-0.03]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-shift-True-0.5235987755982988-0.15]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-oblique-False-0.0-0.03]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-oblique-False-0.0-0.15]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-oblique-False-0.5235987755982988-0.03]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-oblique-False-0.5235987755982988-0.15]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-oblique-True-0.0-0.03]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-oblique-True-0.0-0.15]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-oblique-True-0.5235987755982988-0.03]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-oblique-True-0.5235987755982988-0.15]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-mirror-False-0.0-0.03]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-mirror-False-0.0-0.15]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-mirror-False-0.5235987755982988-0.03]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-mirror-False-0.5235987755982988-0.15]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-mirror-True-0.0-0.03]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-mirror-True-0.0-0.15]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-mirror-True-0.5235987755982988-0.03]
+FAILED tests/test_brep_surfaces.py::test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side[True-mirror-True-0.5235987755982988-0.15]
+24 failed, 24 passed, 23 deselected in 21.56s

@@ -1,0 +1,9 @@
+FAIL: Teilgruppe freigegeben: {"a": "x"}
+Traceback (most recent call last):
+FAIL: Gruppe trotz besetztem nichtgewähltem Kandidaten freigegeben: {"a": "y", "b": null}
+FAIL: Nichtendliche aktuelle Geometrie wiedererkannt: {"a": "x", "b": null}
+FINDINGS: partial_group, occupied_unselected_candidate, nonfinite_current_geometry
+  File "F:\3D Druck\.claude\.state\cad-durchsicht-2026-09-19\p14b-answer-review-probe.py", line 64, in <module>
+    assert not failures, "Die Gegenfälle verletzen den vollständigen Antwortvertrag."
+           ^^^^^^^^^^^^
+AssertionError: Die Gegenfälle verletzen den vollständigen Antwortvertrag.

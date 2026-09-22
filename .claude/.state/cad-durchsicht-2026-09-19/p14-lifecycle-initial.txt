@@ -1,0 +1,122 @@
+tests/test_matching_lifecycle.py
+
+$ -q -p tools.list_windowed_tests -p no:cacheprovider tests/test_matching_lifecycle.py
+F.                                                                       [100%]
+================================== FAILURES ===================================
+_ test_over_a_thousand_real_faces_keep_their_identity_through_project_lifecycle[facets] _
+
+exact = False
+profile = Profile(printer=PrinterProfile(id='centauri-carbon-2', title='Elegoo Centauri Carbon 2', build_volume=(256.0, 256.0, 2...alibration_printer='', calibration_nozzle_diameter=0.0, calibration_layer_height=0.0, calibration_extrusion_width=0.0))
+tmp_path = WindowsPath('C:/Users/rober/AppData/Local/Temp/pytest-of-rober/pytest-24525/test_over_a_thousand_real_face0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x0000020E46D5C9D0>
+
+    @pytest.mark.parametrize("exact", [False, True], ids=["facets", "native"])
+    def test_over_a_thousand_real_faces_keep_their_identity_through_project_lifecycle(
+        exact: bool, profile: Profile, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Die Testfreigabe umgeht nur die noch beim Release zu messende Zahlengrenze.
+    
+        Import, Erkennung, Zuordnung, Transformation, Cache und Historie laufen
+        unverändert. Der Fall belegt Identität und Quellen, keine Laufzeit oder
+        tragfähige neue Produktionsgrenze. Native Transformationen dürfen ihre
+        bereits belegte Topologie unmittelbar mitnehmen.
+        """
+        evaluation = importlib.import_module("app.core.scene.evaluate")
+        monkeypatch.setattr(evaluation, "FEATURE_LIMIT_COUNT", 1056)
+        load_operations()
+        payload, suffix, operation = _grid_source(exact)
+        project = new_project("centauri-carbon-2", "petg")
+        project.sources["src_1"] = payload
+        project.document.sources["src_1"] = Source(
+            id="src_1", kind="import", path=f"sources/grid.{suffix}", sha256=""
+        )
+        history = History(project.document)
+        params = {"source": "src_1"}
+        if not exact:
+            params["unit"] = "mm"
+        history.apply("Flächenraster laden", [OperationDraft(op=operation, params=params)])
+        directory = tmp_path / "cache"
+    
+        def cache() -> ResultCache:
+            """Ein neuer Speichercache liest denselben echten Plattencache."""
+            return ResultCache(disk=DiskCache(codec=MeshCodec(), directory=directory))
+    
+        active = cache()
+        matched_counts: list[tuple[int, int]] = []
+        original_match = evaluation.match
+    
+        def recorded_match(old: Any, new: Any, *args: Any, **kwargs: Any) -> Any:
+            """Der Zähler belegt den echten Anschluss, das Ergebnis bleibt unverändert."""
+            matched_counts.append((len(old), len(new)))
+            return original_match(old, new, *args, **kwargs)
+    
+        monkeypatch.setattr(evaluation, "match", recorded_match)
+    
+        def run(current: Any, remembered: ResultCache, factor: float, offset: np.ndarray) -> Any:
+            """Jede einzelne Fläche bleibt am gleichen Würfel und auf derselben Seite."""
+            result = evaluate(
+                current.document, profile, sources=ProjectSources(current), cache=remembered
+            )
+            assert result.complete
+            assert len(result.scene.objects) == 1
+            assert not {"perceive.orphaned", "perceive.too_many"} & {
+                finding.code for finding in result.scene.report.findings
+            }
+            body = result.scene.objects["obj_1"]
+            assert body.kind == ("brep" if exact else "mesh")
+            assert body.mesh.volume == pytest.approx(176.0 * factor**3)
+            assert len(body.features) == 1056
+            assert body.features.keys() == original.keys() if original else True
+            for name, feature in body.features.items():
+                assert feature.kind == "face"
+                assert feature.params["area"] == pytest.approx(factor**2)
+                assert feature.measure_sources["area"] == ("native" if exact else "facets")
+                assert feature.surface_patches
+                assert feature.created_by is None
+                if original:
+                    assert feature.params["centre"] == pytest.approx(
+                        np.asarray(original[name].params["centre"]) * factor + offset
+                    )
+                    assert feature.params["normal"] == pytest.approx(original[name].params["normal"])
+                for patch in feature.surface_patches:
+                    assert patch.kind == "plane"
+                    assert patch.source == ("native" if exact else "facets")
+                    assert set(patch.face_indices) <= set(feature.face_indices)
+            return body.features
+    
+        original: dict[str, Any] = {}
+        zero = np.zeros(3)
+>       original = run(project, active, 1.0, zero)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_matching_lifecycle.py:127: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+current = Project(document=Document(format_version=26, app_version='0.4.4', libs={}, parts_version='0', printer='centauri-carbon...8A\x00\x004B\x00\x00\x80?\x00\x00\xf8A\x00\x008B\x00\x00\x00\x00\x00\x00'}, report=Report(findings=()), thumbnail=None)
+remembered = <app.core.scene.cache.ResultCache object at 0x0000020E46DE0590>
+factor = 1.0, offset = array([0., 0., 0.])
+
+    def run(current: Any, remembered: ResultCache, factor: float, offset: np.ndarray) -> Any:
+        """Jede einzelne Fläche bleibt am gleichen Würfel und auf derselben Seite."""
+        result = evaluate(
+            current.document, profile, sources=ProjectSources(current), cache=remembered
+        )
+        assert result.complete
+        assert len(result.scene.objects) == 1
+        assert not {"perceive.orphaned", "perceive.too_many"} & {
+            finding.code for finding in result.scene.report.findings
+        }
+        body = result.scene.objects["obj_1"]
+        assert body.kind == ("brep" if exact else "mesh")
+        assert body.mesh.volume == pytest.approx(176.0 * factor**3)
+>       assert len(body.features) == 1056
+E       AssertionError: assert 0 == 1056
+E        +  where 0 = len({})
+E        +    where {} = SceneObject(id='obj_1', name='grid', mesh=MeshData(raw=<trimesh.Trimesh(vertices.shape=(1408, 3), faces.shape=(2112, 3...nd='mesh', features={}, material_slots=[], material=None, plate=0, created_by=1, visible=True, reserved_feature_ids=()).features
+
+tests\test_matching_lifecycle.py:106: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/test_matching_lifecycle.py::test_over_a_thousand_real_faces_keep_their_identity_through_project_lifecycle[facets]
+1 failed, 1 passed in 6.42s
+
+--> ROT  Exit 1  1 failed, 1 passed in 6.42s
