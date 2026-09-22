@@ -11,52 +11,48 @@ Hello All3DP team,
 
 a pitch with a five-minute test at the end of it.
 
-Open any downloaded STL that carries a honeycomb pattern, a knurl or a set of
-ribs in a mesh tool, and you get hundreds of individual faces. There is
-nothing useful to edit — the pattern was never stored as a structure, only as
-geometry.
+Open any downloaded STL with a honeycomb pattern or a knurl in a mesh tool and
+you get a few hundred separate faces. There is nothing useful to edit, because
+the pattern was never stored as a structure. It is only geometry that happens
+to look like one.
 
-Solidon3D 0.5.0 recognises it as one feature: a pattern with pitch, cell width
-and depth, a single entry in the object tree. One click removes it; three
-numbers set it again, and the cells stay where they were. This also works
-around a handle: a texture on a cylinder follows the curvature, so the grooves
-are equally deep everywhere and the pattern closes around the circumference
-without a seam — the pitch moves to the value that divides evenly, and Solidon
-says which one.
+Solidon3D 0.5.0 recognises it as one feature, with pitch, cell width and
+depth, a single entry in the object tree. One click removes it, three numbers
+set it again, and the cells stay where they were. It works around a handle
+too: there the pattern is measured in the unrolled surface, so the grooves are
+equally deep everywhere and the circumference closes without a seam.
 
-Underneath sits the larger change of this release: the mesh becomes an exact
-body. Primitives are now built with real faces and edges, and holes, slots,
-countersinks, bosses, beads, grooves and threads stay exact when you move,
-duplicate, rotate or remove them. STEP goes in and comes back out cleanly. The
-four options that used to switch between mesh and exact kernels are gone —
-there is no kernel choice in the interface any more.
+In case Solidon3D has not crossed your desk: it sits between the downloaded
+model and the slicer. Click a hole and its dimensions appear on the model
+itself, distances to the edges, centre, diameter, as fields you type into. Set
+8 instead of 6 and the countersink moves with it. Pick a fit for the screw,
+read the check report before you export, and send the file to the slicer you
+already use.
 
-Also in this release:
+There is no good way to do that today. In Fusion the imported STL is a lump of
+triangles the CAD tools cannot grip, so you rebuild the part. The mesh tools
+that could edit them are gone, Meshmixer and Microsoft's 3D Builder both
+discontinued. And the parametric customisers on model platforms only help when
+the author anticipated the parameter you need.
 
-* Dimensions appear on the model itself: click a hole and type its distances to
-  the edges, its centre and its diameter, with a live preview.
-* An existing thread gets its counterpart on the other part at the press of a
-  button, in a table size, and as a fit.
-* Resin printers are supported, with pixel size and minimum wall in the
-  profile.
-* A model with open areas is closed while it is read instead of merely being
-  reported.
-* Speed: a 200,000-triangle plate is recognised in one second; moving or
-  rotating it answers in half a second instead of eight.
+Underneath the pattern sits the real change of this release: the mesh becomes
+an exact body. Holes, countersinks and threads stay real faces and edges when
+you move or duplicate them, and STEP goes in and comes back out cleanly. The
+options that used to switch between mesh and exact kernels are gone.
 
-That is 70 user-visible changes in this release; 896 since the first 0.1 demo.
+One thing your readers may care about more than any of that: clearance is not
+entered as a number but as a reference to the material. You write "clearance
+for PETG" instead of a value in millimetres, and switching to PLA changes the
+clearance with it. Print the supplied tolerance ladder, measure it, and the
+profile matches your own printer from then on.
 
-If you want to try it: download any model with a knurl, click the pattern in
-the object tree, and set a different pitch. That is the one-minute version of
-this story.
+Nothing is needed from me to try it: the demo is free and complete. Download
+any model with a knurl, click the pattern in the object tree and set a
+different pitch. I am happy to send print-resolution images or the models I
+used.
 
-Solidon3D is a desktop application for Windows, macOS and Linux. One-time
-purchase, no subscription, no account: after a single activation it runs fully
-offline. Interface and manual are available in six languages, and there is a
-demo.
-
-I am happy to provide a review licence, print-resolution images or answers to
-any question directly.
+Solidon3D runs on Windows, macOS and Linux, in six languages, with no account
+and no network.
 
 Best regards
 Robert Schneider

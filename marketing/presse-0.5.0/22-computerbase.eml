@@ -12,37 +12,46 @@ Sehr geehrte Redaktion,
 anbei eine Pressemitteilung zur Fassung 0.5.0 von Solidon3D, einer
 Desktop-Anwendung für Windows, macOS und Linux.
 
+Wofür die Anwendung da ist
+
+Solidon3D sitzt zwischen dem heruntergeladenen 3D-Modell und dem Slicer. Man
+zieht eine Datei hinein, ändert Maße, setzt Bohrungen, wählt Passungen, und vor
+dem Export prüft das Programm die Druckbarkeit und nennt den Grund für jeden
+Befund. CAD-Kenntnisse sind nicht nötig. Gebaut ist die Anwendung für den
+häufigsten Fall im 3D-Druck: Man lädt ein Modell herunter, und es passt fast.
+
+Für diesen Fall gibt es bisher keinen guten Weg. CAD-Programme wie Fusion oder
+FreeCAD nehmen eine STL an, aber ihre Werkzeuge greifen an Dreiecken nicht, das
+Teil wird neu konstruiert. Netzwerkzeuge können schneiden und reparieren, aber
+nicht maßhaltig ändern, und die beiden bekanntesten sind eingestellt, Meshmixer
+und der 3D Builder von Microsoft. Parametrisierer auf Modellplattformen
+funktionieren nur, wenn der Autor den benötigten Parameter vorgesehen hat.
+Solidon liest stattdessen aus dem Dreiecksnetz, was der Konstrukteur gemeint
+hat, und führt es als benannte, änderbare Merkmale.
+
 Der Kern der Fassung
 
-Solidon3D nimmt heruntergeladene 3D-Modelle (STL, 3MF, OBJ, STEP und weitere)
-und macht sie ohne CAD-Kenntnisse bearbeitbar. Bisher blieb das Ergebnis einer
-Bearbeitung ein Dreiecksnetz. Mit 0.5.0 entstehen Grundkörper mit echten
-Flächen und Kanten, und sie bleiben exakt: Bohrung, Langloch, Senkung, Zapfen,
-Wulst, Kehle und Gewinde überstehen Versetzen, Verdoppeln, Drehen und
-Entfernen ohne Umwandlung. STEP geht sauber hinein und hinaus.
+Bisher blieb das Ergebnis einer Bearbeitung ein Dreiecksnetz. Mit 0.5.0
+entstehen Grundkörper mit echten Flächen und Kanten, und sie bleiben exakt:
+Bohrungen, Senkungen und Gewinde überstehen Verschieben, Verdoppeln, Drehen
+und Entfernen ohne Umwandlung. STEP geht sauber hinein und hinaus.
 
-Technisch laufen dafür zwei Geometriekerne unter einer Oberfläche — ein
-Netzkern und ein exakter B-Rep-Kern. Die vier Optionen, mit denen sich das
-bisher umschalten ließ, sind entfallen: Es gibt keine Kernwahl mehr für den
-Nutzer. Solidon hält den exakten Körper, solange es geht, und benennt die
-Grenze, wo nicht. Bestehende Projekte rechnen unverändert weiter.
+Technisch laufen dafür zwei Geometriekerne unter einer Oberfläche, ein
+Netzkern und ein exakter B-Rep-Kern. Die Optionen, mit denen sich das bisher
+umschalten ließ, sind entfallen; es gibt keine Kernwahl mehr für den Nutzer.
+Solidon hält den exakten Körper, solange es geht, und benennt die Grenze, wo
+nicht. Bestehende Projekte rechnen unverändert weiter.
 
 Weitere Neuerungen
 
-* Ein Wabenmuster, Rändel, Rippen, Wellen oder Noppen stehen als ein Merkmal
-  mit Teilung, Zellbreite und Tiefe im Objektbaum statt als Hunderte Flächen
-  und lassen sich entfernen oder neu setzen, auch um einen Griff herum.
-* Maße erscheinen direkt am Modell mit Zahlenfeldern und Vorschau beim Tippen,
-  statt in einem vorgelagerten Dialog.
-* Resin-Drucker werden unterstützt, mit Pixelgröße und Mindestwand im Profil.
-* Ein Modell mit offenen Stellen wird beim Einlesen geschlossen, statt nur
-  gemeldet zu werden.
-* Deutlich höhere Geschwindigkeit: Eine Lochplatte mit 200 000 Dreiecken ist
-  in einer Sekunde erkannt, Verschieben und Drehen antworten in einer halben
-  Sekunde statt in acht, der Programmstart dauert die Hälfte.
-
-Insgesamt 70 für Nutzer sichtbare Änderungen in dieser Fassung; seit der
-ersten 0.1-Demo führt der Changelog 896.
+Ein Wabenmuster, Rändel oder eine Rippenstruktur steht als ein Merkmal mit
+Teilung, Zellbreite und Tiefe im Objektbaum statt als hunderte Flächen und
+lässt sich entfernen oder neu setzen, auch um einen Griff herum. Maße
+erscheinen direkt am Modell mit Zahlenfeldern und Vorschau beim Tippen, statt
+in einem vorgelagerten Dialog. Resin-Drucker werden unterstützt, mit
+Pixelgröße und Mindestwand im Profil. Ein Modell mit offenen Stellen wird beim
+Einlesen geschlossen, statt nur gemeldet zu werden. Und die Anwendung ist
+spürbar schneller geworden, im Erkennen wie im Bewegen großer Modelle.
 
 Zum Produkt
 
@@ -51,18 +60,11 @@ Stufen, kein Abo. Nach einmaliger Freischaltung läuft die Anwendung ohne Netz
 vollständig; es gibt kein Konto, keine Telemetrie und keinen Serverzwang. Ein
 Arbeitsrechner ohne Netz lässt sich über eine Datei und ein zweites Gerät
 freischalten. KI-Funktionen sind vorhanden, abschaltbar und wahlweise lokal.
-Oberfläche und Handbuch liegen in sechs Sprachen vor. Eine Demo steht bereit.
+Oberfläche und Handbuch liegen in sechs Sprachen vor.
 
-Bildmaterial in Druckauflösung und eine Testlizenz stelle ich auf Anfrage
-bereit.
-
-Solidon3D ist eine Desktop-Anwendung für Windows, macOS und Linux. Einmalkauf,
-kein Abo, kein Konto: Nach einer einmaligen Freischaltung läuft sie ohne Netz
-vollständig. Oberfläche und Handbuch liegen in sechs Sprachen vor, eine Demo
-steht bereit.
-
-Für Rückfragen, Testlizenzen oder Bildmaterial in Druckauflösung melden Sie
-sich gern direkt bei mir.
+Bis Ende Oktober läuft die Demo, kostenlos und vollständig; zum Prüfen der
+Angaben ist also nichts von mir nötig. Bildmaterial in Druckauflösung stelle
+ich auf Anfrage bereit.
 
 Viele Grüße
 Robert Schneider

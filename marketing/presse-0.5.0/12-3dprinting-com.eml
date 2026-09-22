@@ -1,7 +1,7 @@
 From: Solidon3D <marketing@solidon3d.de>
 To: service@3dprinting.com
 Reply-To: marketing@solidon3d.de
-Subject: Possible update to your software guide: Solidon3D now does a STEP round trip
+Subject: Possible update to your software guide: Solidon3D now does a full round trip
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
 Content-Transfer-Encoding: 8bit
@@ -12,42 +12,39 @@ Hello 3Dprinting.com team,
 a targeted suggestion for your software overview rather than a general pitch.
 
 Solidon3D sits in a category that is hard to place: it is not a CAD system and
-not a mesh editor. It takes downloaded models (STL, 3MF, OBJ, STEP and others)
-and makes them editable at feature level without CAD knowledge — move a hole,
-change a countersink, add a thread that actually fits.
+not a mesh editor. It takes a downloaded model and lets you edit it at feature
+level without CAD knowledge. Click a hole and its dimensions appear on the
+model itself, type 8 instead of 6 and the countersink follows, pick a fit for
+the screw, read the check report before you export, hand the file to the
+slicer you already use.
 
 With version 0.5.0 one line in any comparison table changes: the result is no
-longer a mesh. Primitives are built with real faces and edges; holes, slots,
-countersinks, bosses, beads, grooves and threads stay exact through moving,
-duplicating, rotating and removing; and STEP goes in and comes back out
-cleanly. So a part edited in Solidon can be carried into a CAD system.
+longer a mesh. Holes, countersinks and threads stay exact through moving,
+duplicating and removing, and STEP goes in and comes back out cleanly, so a
+part edited in Solidon can be carried into a CAD system.
 
-The other entries that may be relevant for a guide:
+That is also the reason the category exists at all. CAD packages accept an STL
+but cannot grip triangles. Mesh tools edit triangles but never return exact
+surfaces, and the two that came closest are discontinued, Meshmixer and
+Microsoft's 3D Builder. Parametric customisers only work when the original
+author anticipated the parameter.
 
-* Licensing: one-time purchase in three tiers, no subscription. After a single
-  activation the application runs fully offline — no account, no telemetry, no
-  server requirement. A machine without a network connection can be activated
-  via a file and a second device.
-* Platforms: Windows, macOS and Linux, with native Linux packages.
-* Languages: interface and complete manual in six languages.
-* AI: present, optional, and able to run locally on the user's own GPU. No
-  feature depends on it except the chat itself.
-* Printing side: printer profiles including resin devices with pixel size and
-  minimum wall, printability checks, orientation search, plate layout and
-  handover to common slicers.
+Other entries that may be relevant for a guide. Licensing is a one-time
+purchase in three tiers with no subscription; after a single activation the
+application runs fully offline, with no account, no telemetry and no server
+requirement, and a machine without a network connection can be activated via a
+file and a second device. Platforms are Windows, macOS and Linux, with native
+Linux packages. Interface and complete manual are available in six languages.
+AI is present, optional, and able to run locally on the user's own GPU, with
+no feature depending on it except the chat itself. On the printing side there
+are printer profiles including resin devices with pixel size and minimum wall,
+printability checks that name the cause rather than just the symptom,
+orientation search, plate layout and handover to the common slicers. And
+clearances are entered as a reference to the material rather than as a number,
+with profiles you can calibrate to your own printer from printed test pieces.
 
-70 user-visible changes in this release; 896 since the first 0.1 demo.
-
-If a screenshot or a review licence would help to place the entry, I will
-provide either.
-
-Solidon3D is a desktop application for Windows, macOS and Linux. One-time
-purchase, no subscription, no account: after a single activation it runs fully
-offline. Interface and manual are available in six languages, and there is a
-demo.
-
-I am happy to provide a review licence, print-resolution images or answers to
-any question directly.
+The demo is free and complete, so anything above can be verified directly. If
+a screenshot would help to place the entry, I will provide one.
 
 Best regards
 Robert Schneider

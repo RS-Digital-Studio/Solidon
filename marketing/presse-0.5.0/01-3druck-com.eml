@@ -9,59 +9,54 @@ X-Unsent: 1
 
 Hallo liebes 3Druck-Team,
 
-Sie haben Solidon3D am 23. August ausführlich vorgestellt, und im Nachgang kam
-das Update, dass erkannte Merkmale bearbeitbar wurden. Deshalb auch diesmal
-keine zweite Produktvorstellung, sondern nur der Schritt, der seither
-dazugekommen ist — und es ist der größte bisher.
+Sie hatten Solidon3D im August vorgestellt. Inzwischen ist 0.5.0 fertig, und
+darin steckt der Schritt, auf den die Arbeit des letzten halben Jahres
+hinauslief.
 
-Damals blieb das Ergebnis einer Bearbeitung ein Netz. Wer es als STEP in ein
-CAD trug, bekam Dreiecke zurück. Seit 0.5.0 entstehen Grundkörper mit echten
-Flächen und Kanten, und Bohrung, Langloch, Senkung, Zapfen, Wulst, Kehle und
-Gewinde bleiben am exakten Körper exakt, wenn man sie versetzt, verdoppelt,
-dreht oder entfernt. STEP geht sauber hinein und hinaus.
+Kurz, was das Programm macht, falls es zwischendurch untergegangen ist: Man
+zieht eine heruntergeladene STL hinein und klickt eine Bohrung an. Solidon
+zeigt ihre Maße direkt am Modell, also Abstände zu den Kanten, Mitte,
+Durchmesser, als Felder zum Tippen. Man setzt 8 statt 6, und die Senkung geht
+mit. Dann wählt man eine Passung für die Schraube, lässt den Prüfbericht
+laufen und schickt die Datei an den Slicer, den man ohnehin benutzt.
 
-Der Punkt, der es von einer Funktionsliste unterscheidet: Der Haken „Flächen
-und Kanten später bearbeiten" ist gefallen. Es gibt keine Kernwahl mehr in der
-Oberfläche. Der Nutzer entscheidet nicht zwischen zwei Betriebsarten, er
-arbeitet einfach; Solidon hält den exakten Körper, solange es geht, und sagt
-es, wenn es nicht geht. Alte Projekte rechnen unverändert weiter.
+Bisher kam dabei hinten wieder ein Dreiecksnetz heraus. Jetzt nicht mehr.
+Bohrungen, Senkungen und Gewinde bleiben echte Flächen und Kanten, auch wenn
+man sie verschiebt oder verdoppelt, und das Ergebnis lässt sich als STEP in
+ein CAD tragen. Die Umschalter zwischen den beiden Betriebsarten sind aus der
+Oberfläche verschwunden; wo der exakte Körper nicht zu halten ist, sagt
+Solidon es, statt still umzuwandeln.
 
-Das zweite, das sich gut zeigen lässt:
+Warum das sonst niemand anbietet: Fusion nimmt eine STL an, aber die
+CAD-Werkzeuge greifen an Dreiecken nicht, man konstruiert das Teil neu. Die
+Netzwerkzeuge, die man früher genommen hätte, gibt es nicht mehr, Meshmixer
+und der 3D Builder sind beide eingestellt. Und die Parametrisierer auf den
+Modellseiten helfen nur, wenn der Autor den Parameter vorgesehen hat, den man
+gerade braucht.
 
-* Ein Wabenmuster, ein Rändel, Rippen, Wellen oder Noppen standen im
-  Objektbaum bisher als Hunderte einzelner Flächen. Jetzt stehen sie als ein
-  Muster mit Teilung, Zellbreite und Tiefe — auch um einen Griff herum. Mit
-  einem Klick entfernt, mit drei Zahlen neu gesetzt; die Zellen bleiben, wo
-  sie waren.
-* Eine Textur um einen Zylinder folgt der Rundung: Rillen sind überall gleich
-  tief, und ein Muster um den ganzen Umfang schließt ohne Naht. Die Teilung
-  rückt dafür auf das Maß, das aufgeht.
-* Wer eine Bohrung anklickt, bekommt ihre Maße im Bild statt in einem Dialog:
-  Abstände zu den Kanten, Mitte und Durchmesser als Zahlenfelder zum Tippen,
-  mit Vorschau. Den Bezug eines Maßes wechselt ein Rechtsklick.
-* Ein Gewinde bekommt sein Gegenstück am anderen Teil auf Knopfdruck, im
-  Tabellenmaß und als eine Passung.
-* Resin-Drucker sind da. Exakte Körper werden für sie so fein vernetzt, wie
-  ihre Pixel es verlangen; der Prüfbericht nennt das Maß.
-* Ein Modell mit 200 000 Dreiecken zu verschieben oder zu drehen antwortet in
-  einer halben Sekunde statt in acht. Eine glatte Freiform, deren Erkennung
-  vorher Minuten brauchte, ist in Sekunden gelesen.
+Das schönste Beispiel dieser Fassung ist ein Rändel an einem Griff. Im Netz
+sind das ein paar hundert Flächen, an denen sich nichts Sinnvolles ändern
+lässt. Solidon zeigt es als ein Muster mit Teilung, Zellbreite und Tiefe, und
+man setzt es mit drei Zahlen neu. Um den Zylinder herum wird es in der
+Abwicklung gerechnet, damit die Rillen überall gleich tief sind und der Umfang
+ohne Naht aufgeht.
 
-Insgesamt sind es 70 für Nutzer sichtbare Änderungen in dieser Fassung; seit
-der ersten 0.1-Demo führt der Changelog 896.
+Das Zweite, was im Alltag mehr zählt: Der Prüfbericht sagt den Grund dazu.
+Nicht "Überhang", sondern welche Insel in welcher Lage Stützmaterial kostet
+und wie weit man das Teil drehen müsste, damit sie verschwindet. Ein Slicer
+misst das auch, aber erst, wenn sich am Teil nichts mehr ändern lässt. Und das
+Spiel einer Passung trägt man nicht als Zahl ein, sondern als Verweis auf das
+Material, also "Spiel für PETG". Wer die mitgelieferte Toleranzleiter druckt
+und nachmisst, stellt das Profil auf den eigenen Drucker ein.
 
-Wenn Sie es nachmessen möchten: Laden Sie ein beliebiges Modell mit Rändel
-oder Wabenmuster herunter, klicken Sie das Muster im Objektbaum an und setzen
-Sie eine andere Teilung. Das ist der Versuch, der den Unterschied in einer
-Minute zeigt.
+Zum Ausprobieren brauchen Sie nichts von mir: Die Demo ist kostenlos und
+vollständig. Laden Sie ein Modell mit Rändel oder Wabenmuster herunter,
+klicken Sie das Muster im Objektbaum an und setzen Sie eine andere Teilung.
+Wenn Sie Bildmaterial in Druckauflösung oder Antworten zu einer bestimmten
+Stelle brauchen, melden Sie sich gern.
 
-Solidon3D ist eine Desktop-Anwendung für Windows, macOS und Linux. Einmalkauf,
-kein Abo, kein Konto: Nach einer einmaligen Freischaltung läuft sie ohne Netz
-vollständig. Oberfläche und Handbuch liegen in sechs Sprachen vor, eine Demo
-steht bereit.
-
-Für Rückfragen, Testlizenzen oder Bildmaterial in Druckauflösung melden Sie
-sich gern direkt bei mir.
+Solidon3D läuft auf Windows, macOS und Linux, in sechs Sprachen, ohne Konto
+und ohne Netz.
 
 Viele Grüße
 Robert Schneider

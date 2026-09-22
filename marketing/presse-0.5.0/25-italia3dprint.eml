@@ -12,52 +12,48 @@ Gentile redazione,
 una proposta per un software che parla italiano per intero: interfaccia e
 manuale completo, non solo i menu.
 
-Solidon3D è un'applicazione desktop che apre modelli 3D scaricati (STL, 3MF,
-OBJ, STEP e altri) e ne rende modificabili le caratteristiche senza conoscenze
-di CAD: spostare un foro, cambiare uno svasato, aggiungere una filettatura che
-combacia davvero.
+Solidon3D è un'applicazione desktop che sta fra il modello scaricato e lo
+slicer. Si clicca un foro e le sue quote compaiono sul modello stesso, cioè le
+distanze dai bordi, il centro e il diametro, come campi in cui scrivere. Si
+mette 8 al posto di 6 e la svasatura segue. Poi si sceglie un accoppiamento
+per la vite, si legge il rapporto di controllo prima dell'esportazione e il
+file va allo slicer che si usa già. Non servono conoscenze di CAD.
+
+Per questo caso finora non c'era una buona strada. I programmi CAD accettano
+una STL ma i loro strumenti non fanno presa sui triangoli, quindi il pezzo si
+ricostruisce. Gli strumenti per mesh che ci riuscivano non esistono più,
+Meshmixer e il 3D Builder di Microsoft. E i configuratori parametrici sui siti
+dei modelli funzionano solo se l'autore ha previsto il parametro che serve.
 
 La versione 0.5.0 è il passo più grande finora. Fino a ora il risultato di una
-modifica restava una mesh di triangoli; adesso è un corpo esatto. I solidi di
-base nascono con facce e spigoli veri, e foro, asola, svasatura, perno,
-toro, gola e filettatura restano esatti quando li sposta, li duplica, li ruota
-o li rimuove. Lo STEP entra ed esce pulito. Sotto l'interfaccia lavorano due
-motori geometrici, e le quattro opzioni che permettevano di scegliere fra loro
-sono state tolte: il programma mantiene il corpo esatto finché può e dice
+modifica restava una mesh di triangoli; adesso è un corpo esatto. Fori,
+svasature e filettature restano facce e spigoli veri quando li sposta, li
+duplica o li rimuove, e lo STEP entra ed esce pulito. Sotto l'interfaccia
+lavorano due motori geometrici, e le opzioni che permettevano di scegliere fra
+loro sono state tolte: il programma mantiene il corpo esatto finché può e dice
 quando non può.
 
-La novità più evidente a schermo riguarda i motivi. Un motivo a nido d'ape,
-una zigrinatura, delle nervature o dei bottoni riempivano l'albero degli
-oggetti con centinaia di facce. Ora sono una sola caratteristica con passo,
-larghezza di cella e profondità: un clic la rimuove, tre numeri la rimettono, e
-le celle restano dov'erano. Anche attorno a un'impugnatura: una texture su un
-cilindro segue la curvatura, quindi le scanalature sono ovunque ugualmente
-profonde e il motivo si chiude senza giunzione lungo la circonferenza — il
-passo si sposta sul valore che divide esattamente, e il programma dice quale.
+La novità più evidente a schermo riguarda i motivi. Un motivo a nido d'ape o
+una zigrinatura riempivano l'albero degli oggetti con centinaia di facce. Ora
+sono una sola caratteristica con passo, larghezza di cella e profondità: un
+clic la rimuove, tre numeri la rimettono, e le celle restano dov'erano. Anche
+attorno a un'impugnatura, dove il motivo viene misurato nello sviluppo della
+superficie, così le scanalature sono ovunque ugualmente profonde e la
+circonferenza si chiude senza giunzione.
 
-Inoltre in questa versione:
+Un dettaglio che ai vostri lettori interessa forse più di tutto il resto: il
+gioco di un accoppiamento non si scrive come numero, ma come riferimento al
+materiale. Si sceglie "gioco per PETG" invece di due decimi di millimetro, e
+passando al PLA il gioco cambia con esso. Stampando la scala di tolleranze
+fornita e misurandola, il profilo si adatta alla propria stampante.
 
-* Le quote compaiono direttamente sul modello: clicchi un foro e scrive le
-  distanze dai bordi, il centro e il diametro, con anteprima immediata.
-* Una filettatura esistente riceve la sua controparte sull'altro pezzo con un
-  pulsante, in misura di tabella e come accoppiamento.
-* Le stampanti a resina ci sono, con dimensione del pixel e spessore minimo di
-  parete nel profilo.
-* Un modello con zone aperte viene chiuso durante la lettura invece di essere
-  soltanto segnalato.
-* Spostare o ruotare un modello da 200 000 triangoli risponde in mezzo secondo
-  invece che in otto.
-
-Sono 70 modifiche visibili per l'utente in questa versione; 896 dalla prima
-demo 0.1.
-
-Solidon3D è uno sviluppo indipendente dalla Germania: desktop per Windows,
-macOS e Linux, acquisto una tantum senza abbonamento, e dopo un'unica
-attivazione funziona completamente senza rete, senza account e senza
-telemetria. Interfaccia e manuale in sei lingue, italiano compreso.
-
-Resto a disposizione per una licenza di prova, immagini in alta risoluzione o
+La demo è gratuita e completa fino a fine ottobre, quindi non serve nulla da
+parte mia per provare. Resto a disposizione per immagini in alta risoluzione o
 qualsiasi domanda.
+
+Solidon3D è uno sviluppo indipendente dalla Germania, per Windows, macOS e
+Linux, senza account e senza rete. Interfaccia e manuale in sei lingue,
+italiano compreso.
 
 Cordiali saluti
 Robert Schneider

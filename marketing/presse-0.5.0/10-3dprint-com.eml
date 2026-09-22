@@ -1,7 +1,7 @@
 From: Solidon3D <marketing@solidon3d.de>
 To: info@3dprint.com
 Reply-To: marketing@solidon3d.de
-Subject: Story lead: a pattern that a file format never stored, edited as one object
+Subject: Story lead: a pattern that a file format never stored, edited anyway
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
 Content-Transfer-Encoding: 8bit
@@ -15,36 +15,39 @@ A downloaded STL of a knurled handle contains no knurl. It contains a few
 hundred triangles that happen to look like one. That is why no tool lets you
 make the grooves deeper: there is nothing to change, only geometry to redraw.
 
-Solidon3D 0.5.0 recognises the pattern itself — a honeycomb, knurl, set of
-ribs, waves or knobs — and presents it as one feature with pitch, cell width
-and depth. One click removes it; three numbers set it again, with the cells
-staying where they were. Around a cylinder the pattern is measured in the
-unrolled surface, so the grooves are equally deep everywhere and the pattern
-closes around the circumference without a seam; the pitch moves to the value
-that divides evenly, and the software says which one.
+Solidon3D 0.5.0 recognises the pattern itself and presents it as one feature
+with pitch, cell width and depth. One click removes it, three numbers set it
+again, and the cells stay where they were. Around a cylinder the pattern is
+measured in the unrolled surface, so the grooves are equally deep everywhere
+and the circumference closes without a seam.
 
-The structural change behind it: the mesh becomes an exact body. Primitives
-are built with real faces and edges, and holes, slots, countersinks, bosses,
-beads, grooves and threads stay exact through moving, duplicating, rotating
-and removing. STEP goes in and comes back out cleanly, so the result can be
-carried into a CAD system instead of arriving as triangles again. The options
-that used to switch between the mesh and the exact kernel are gone.
+For context, since the category is hard to place: Solidon3D sits between the
+downloaded model and the slicer. Click a hole and its dimensions appear on the
+model, type 8 instead of 6 and the countersink follows, pick a fit for the
+screw, read the check report, hand the file to the slicer you already use. It
+is built for the most common job in 3D printing, adapting a downloaded model
+that almost fits, and there is currently no good tool for that. CAD packages
+accept an STL but cannot grip triangles. The mesh tools that could edit them
+are discontinued, Meshmixer and Microsoft's 3D Builder. Parametric customisers
+need an author who anticipated the parameter.
 
-Other items from this release: dimensions are edited directly on the model
-with a live preview; an existing thread gets its counterpart on the other part
-at the press of a button, in a table size and as a fit; resin printers are
-supported; a model with open areas is closed while it is read; and moving a
-200,000-triangle model answers in half a second instead of eight.
+The structural change behind the pattern work: the mesh becomes an exact body.
+Holes, countersinks and threads stay real faces and edges through moving,
+duplicating and removing, and STEP goes in and comes back out cleanly, so the
+result can be carried into a CAD system instead of arriving as triangles
+again. The options that used to switch between the mesh and the exact kernel
+are gone.
 
-70 user-visible changes in this release, 896 since the first 0.1 demo.
+Other items worth a line: an existing thread gets its counterpart on the
+mating part at the press of a button, in a table size and as a fit; resin
+printers are supported with pixel size and minimum wall; and a model with open
+areas is closed while it is read.
 
-Solidon3D is a desktop application for Windows, macOS and Linux. One-time
-purchase, no subscription, no account: after a single activation it runs fully
-offline. Interface and manual are available in six languages, and there is a
-demo.
+The demo is free and complete, so you can try any of this straight away.
+Print-resolution images and the models I used are available on request.
 
-I am happy to provide a review licence, print-resolution images or answers to
-any question directly.
+Solidon3D runs on Windows, macOS and Linux, in six languages, with no account
+and no network.
 
 Best regards
 Robert Schneider

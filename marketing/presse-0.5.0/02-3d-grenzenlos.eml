@@ -9,50 +9,52 @@ X-Unsent: 1
 
 Sehr geehrte Redaktion,
 
-ein Vorschlag mit einem Bild, das sich selbst erklärt.
+ein Themenvorschlag mit einem Bild, das sich selbst erklärt.
 
-Wer eine heruntergeladene STL mit Wabenmuster, Rändel oder Rippen in einem
-Netzwerkzeug öffnet, sieht Hunderte einzelner Flächen. Ändern lässt sich daran
-nichts Sinnvolles — das Muster ist als Struktur nirgends gespeichert, es ist
-nur Geometrie.
+Wer eine heruntergeladene STL mit Wabenmuster oder Rändel in einem Netzwerkzeug
+öffnet, sieht ein paar hundert einzelne Flächen. Ändern lässt sich daran nichts
+Sinnvolles, denn das Muster ist als Struktur nirgends gespeichert. Es ist nur
+Geometrie, die so aussieht.
 
-Solidon3D 0.5.0 erkennt es als ein Merkmal: ein Muster mit Teilung,
-Zellbreite und Tiefe, im Objektbaum als ein Eintrag. Mit einem Klick entfernt,
-mit drei Zahlen neu gesetzt, und die Zellen bleiben, wo sie waren. Auch um
-einen Griff herum: Eine Textur um einen Zylinder folgt der Rundung, Rillen
-sind überall gleich tief, und ein Muster um den ganzen Umfang schließt ohne
-Naht — die Teilung rückt dafür auf das Maß, das aufgeht.
+Solidon3D 0.5.0 erkennt es als ein Merkmal, mit Teilung, Zellbreite und Tiefe,
+als einen Eintrag im Objektbaum. Ein Klick entfernt es, drei Zahlen setzen es
+neu, und die Zellen bleiben, wo sie waren. Auch um einen Griff herum: Da wird
+das Muster in der Abwicklung gerechnet, damit die Rillen überall gleich tief
+sind und der Umfang ohne Naht aufgeht.
 
-Der zweite große Schritt dieser Fassung ist unsichtbarer, aber er ist der
-Grund, warum das erste überhaupt trägt: Aus dem Netz wird ein exakter Körper.
-Grundkörper entstehen mit echten Flächen und Kanten; Bohrung, Langloch,
-Senkung, Zapfen, Wulst, Kehle und Gewinde bleiben exakt, wenn man sie
-versetzt, verdoppelt, dreht oder entfernt; STEP geht sauber hinein und hinaus.
-Eine Wahl zwischen zwei Betriebsarten gibt es in der Oberfläche nicht mehr.
+Falls Solidon3D bei Ihnen nicht auf dem Schirm ist: Die Anwendung sitzt
+zwischen dem heruntergeladenen Modell und dem Slicer. Man klickt eine Bohrung
+an, ihre Maße stehen am Modell, man tippt 8 statt 6, und die Senkung geht mit.
+Für die Schraube wählt man eine Passung, der Prüfbericht sagt vor dem Export,
+was dem Druck im Weg steht, und die Datei geht an den Slicer, den man schon
+hat. Gebaut ist das für den häufigsten Fall im 3D-Druck: Man lädt ein Modell
+herunter, und es passt fast.
 
-Dazu in dieser Fassung:
+Dafür gibt es bisher keinen guten Weg. In Fusion ist die importierte STL ein
+Klumpen aus Dreiecken, an dem die CAD-Werkzeuge nicht greifen. Die
+Netzwerkzeuge, die man sonst genommen hätte, sind eingestellt, Meshmixer wie
+der 3D Builder von Microsoft. Und die Parametrisierer auf den Modellplattformen
+helfen nur, wenn der Autor den passenden Parameter vorgesehen hat.
 
-* Maße erscheinen direkt am Modell: Bohrung anklicken, Abstände zu den Kanten,
-  Mitte und Durchmesser als Zahlenfelder, Vorschau beim Tippen.
-* Resin-Drucker mit eigenem Profil, Pixelgröße und Mindestwand.
-* Ein Modell mit offenen Stellen wird beim Einlesen geschlossen, statt nur
-  gemeldet zu werden.
-* Verschieben und Drehen eines Modells mit 200 000 Dreiecken antworten in
-  einer halben Sekunde statt in acht.
+Unter dem Muster steckt der eigentliche Schritt dieser Fassung: Aus dem Netz
+wird ein exakter Körper. Bohrungen, Senkungen und Gewinde bleiben echte
+Flächen und Kanten, auch beim Verschieben oder Verdoppeln, und STEP geht sauber
+hinein und hinaus. Eine Wahl zwischen zwei Betriebsarten gibt es in der
+Oberfläche nicht mehr.
 
-70 für Nutzer sichtbare Änderungen in dieser Fassung, 896 seit der ersten
-0.1-Demo.
+Und noch etwas, das Ihre Leser im Alltag vermutlich mehr merken als alles
+andere: Das Spiel einer Passung trägt man nicht als Zahl ein, sondern als
+Verweis auf das Material. Also "Spiel für PETG" statt einer Zehntelangabe. Wer
+auf PLA wechselt, bekommt das Spiel für PLA, und wer es genauer haben will,
+druckt die mitgelieferte Toleranzleiter und stellt das Profil auf den eigenen
+Drucker ein.
 
-Solidon3D ist eine deutsche Einzelentwicklung: Desktop, Einmalkauf, kein Abo,
-kein Konto, nach der Freischaltung offline vollständig nutzbar.
+Zum Ausprobieren ist nichts nötig: Die Demo ist kostenlos und vollständig.
+Bildmaterial in Druckauflösung und die verwendeten Modelle stelle ich gern
+bereit.
 
-Solidon3D ist eine Desktop-Anwendung für Windows, macOS und Linux. Einmalkauf,
-kein Abo, kein Konto: Nach einer einmaligen Freischaltung läuft sie ohne Netz
-vollständig. Oberfläche und Handbuch liegen in sechs Sprachen vor, eine Demo
-steht bereit.
-
-Für Rückfragen, Testlizenzen oder Bildmaterial in Druckauflösung melden Sie
-sich gern direkt bei mir.
+Solidon3D ist eine Einzelentwicklung aus Deutschland, für Windows, macOS und
+Linux, in sechs Sprachen, ohne Konto und ohne Netz.
 
 Viele Grüße
 Robert Schneider

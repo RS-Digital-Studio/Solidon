@@ -20,11 +20,12 @@ die Texte: Sie sind für 0.5.0 geschrieben und nicht umgeschrieben.
 >    Jede Mail nennt nur, was zu ihrem Versandtag gebaut *und* abgenommen ist;
 >    die Abschnitte unter „Was als Nächstes kommt" sind als Ausblick
 >    gekennzeichnet und dürfen nicht als Funktion gelesen werden.
-> 3. **Die Zahlen stimmen.** `tests/test_changelog.py::test_the_press_drafts_count_the_same_changes`
->    hält die Änderungszahl in den Entwürfen gegen den Changelog. Erlaubt sind
->    genau zwei Werte: die Punkte dieser Fassung (**70**) und die Summe über
->    alle Fassungen (**896**). Wer den Changelog ergänzt, bekommt einen roten
->    Lauf statt einer falschen Zahl in einer Mail an eine Redaktion.
+> 3. **Die Zahlen stimmen.** Seit der Überarbeitung vom 22.09.2026 steht in
+>    keinem Entwurf mehr eine Änderungszahl: Eine Redaktion liest eine
+>    Geschichte, keine Messreihe (Entscheidung Robert). Der Wächter
+>    `tests/test_changelog.py::test_the_press_drafts_count_the_same_changes`
+>    bleibt scharf für den Fall, dass wieder eine hineinkommt. Erlaubt wären
+>    dann genau zwei Werte, die Punkte dieser Fassung und die Summe über alle.
 
 ## Die Geschichte dieser Welle
 
@@ -82,17 +83,33 @@ der Prüfbericht eigens, damit der Nutzer nachsehen kann.
 - **Keine geschlossene Sicherheits- oder Lizenzlücke.** Dieselbe Regel wie im
   Changelog: Der Satz erzählt jedem, der eine ältere Fassung hat, wo der Hebel
   sitzt.
-- **Keine Zahl je Fassung außer den beiden erlaubten.** Sie altert mit jedem
-  Wartungsschritt; der Test oben hält sie fest.
+- **Keine Änderungszahlen und keine Messwerte.** Millisekunden und
+  Dreieckszahlen gehören in den Changelog, nicht in eine Pressemail; sie
+  verwirren mehr, als sie belegen (Robert, 22.09.2026).
+- **Keine Testlizenzen.** Bis Ende Oktober läuft die Demo, kostenlos und
+  vollständig. Jeder Entwurf sagt das und verweist darauf, statt etwas
+  anzubieten, das es in dieser Phase gar nicht gibt.
 - **Keine Ankündigung als Funktion.** Was noch nicht abgenommen ist, steht als
   Ausblick und heißt auch so.
 
-## „Seit 0.1" in den Anschreiben
+## Was jeder Entwurf enthält
 
-Seit der ersten öffentlichen 0.1-Demo. Der Changelog führt **896 ausgewählte,
-für Nutzer sichtbare Änderungen** über neunzehn Fassungen, davon **70 in
-0.5.0**. Die Zahl ist kein Commit-Zähler und wird in den Mails auch nicht so
-dargestellt.
+Seit der Überarbeitung vom 22.09.2026 tragen alle fünfundzwanzig dieselben
+vier Dinge, je Empfänger anders formuliert:
+
+1. **Was Solidon3D ist**, und zwar als Handlung statt als Kategorie: Bohrung
+   anklicken, Maße stehen am Modell, 8 statt 6 tippen, die Senkung geht mit,
+   Passung wählen, Prüfbericht lesen, Datei an den eigenen Slicer.
+2. **Warum es das sonst nicht gibt**: Fusion nimmt eine STL an, aber die
+   CAD-Werkzeuge greifen an Dreiecken nicht. Meshmixer und der 3D Builder sind
+   eingestellt. Die Parametrisierer brauchen einen Autor, der den Parameter
+   vorgesehen hat.
+3. **Der Vorteil über die Neuerung hinaus**: Der Prüfbericht nennt den Grund,
+   solange sich am Teil noch etwas ändern lässt, und eine Toleranz ist ein
+   Verweis auf das Material statt einer Zahl, mit Profilen, die sich am
+   eigenen Drucker kalibrieren lassen.
+4. **Die Demo**, kostenlos und vollständig bis Ende Oktober, statt eines
+   Lizenzangebots.
 
 ## Verteiler
 

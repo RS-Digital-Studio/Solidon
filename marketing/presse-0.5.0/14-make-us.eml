@@ -12,43 +12,39 @@ Hello Make: team,
 a workshop pitch that ends with something you can hold.
 
 Take any downloaded handle with a knurled grip. In a mesh tool the knurl is a
-carpet of hundreds of faces; making the grooves deeper means redrawing the
-part.
-
-In Solidon3D 0.5.0 the knurl is one feature in the object tree, with pitch,
-cell width and depth. Change three numbers and it is reapplied — and because a
-pattern on a cylinder is measured in the unrolled surface, the grooves are
+carpet of hundreds of faces, and making the grooves deeper means redrawing the
+part. In Solidon3D 0.5.0 the knurl is one feature in the object tree, with
+pitch, cell width and depth. Change three numbers and it is reapplied. Because
+a pattern on a cylinder is measured in the unrolled surface, the grooves are
 equally deep all the way round and the pattern closes without a seam. Print
-the original and the modified grip, and you have a direct comparison of grip
+the original and the modified grip and you have a direct comparison of grip
 and surface finish.
 
+For context: Solidon3D sits between the downloaded model and the slicer. Click
+a hole and its dimensions appear on the model, type 8 instead of 6 and the
+countersink follows, pick a fit for the screw, read the check report, hand the
+file to the slicer you already use. No CAD knowledge needed.
+
 The more interesting half for a maker audience is what the part is afterwards:
-still an exact body. As of this release, primitives are built with real faces
-and edges, and holes, slots, countersinks, bosses, beads, grooves and threads
-stay exact through moving, duplicating, rotating and removing. STEP goes in and
-comes back out cleanly, so the result can be carried into a CAD system rather
-than arriving as triangles.
+still an exact body. Holes, countersinks and threads stay real faces and edges
+through moving, duplicating and removing, and STEP goes in and comes back out
+cleanly. That closes a gap that has been open for years, because CAD packages
+accept an STL but cannot grip triangles, and the mesh tools that could edit
+them are discontinued.
 
-Two more things that suit a workshop piece:
+If the article involves a screw or a press fit, one detail is worth a
+paragraph of its own. Clearance is not entered as a number but as a reference
+to the material, so "clearance for PETG" rather than a value in millimetres.
+Print the supplied tolerance ladder, measure it, set the profile, and every
+fit in every project uses your printer's numbers from then on. Threads,
+inserts, nut traps and magnet pockets come from standards tables rather than
+from a guess.
 
-* An existing thread gets its counterpart on the other part at the press of a
-  button, in a table size and as a fit. The starting point may be an imported
-  thread: Solidon measures pitch, starts, handedness and nominal diameter, and
-  refuses when no table size matches instead of rounding.
-* Dimensions are edited on the model itself — click a hole, type its distance
-  to the edge, watch the preview.
+The demo is free and complete, so nothing is needed from me to run the test. I
+am happy to send print-resolution images or the models I used.
 
-I am happy to provide a review licence and the models used. If you would
-rather use a file from your own archive, better still: that is exactly the case
-the recognition was built for.
-
-Solidon3D is a desktop application for Windows, macOS and Linux. One-time
-purchase, no subscription, no account: after a single activation it runs fully
-offline. Interface and manual are available in six languages, and there is a
-demo.
-
-I am happy to provide a review licence, print-resolution images or answers to
-any question directly.
+Solidon3D runs on Windows, macOS and Linux, in six languages, with no account
+and no network.
 
 Best regards
 Robert Schneider
