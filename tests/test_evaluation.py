@@ -2721,7 +2721,12 @@ def test_a_plate_with_a_pocket_pattern_keeps_its_holes() -> None:
     zu verschweißen. Die Grenze von tausend stammte aus der Zeit der
     quadratischen Zuordnung. Hier dieselbe Gestalt im Kleinen: 220 Taschen und
     zwei Bohrungen, über tausend Merkmale — und die Bohrungen bleiben.
+
+    Die Taschen sind jede anders tief, in gewürfelter Folge: Gleich tiefe
+    Taschen im Raster wären seit RM-207 **ein** Muster mit sieben Merkmalen
+    daneben, und der Test prüfte nichts mehr über tausend.
     """
+    import random
     from importlib import import_module
 
     import trimesh
@@ -2734,9 +2739,12 @@ def test_a_plate_with_a_pocket_pattern_keeps_its_holes() -> None:
     plate = trimesh.creation.box(extents=(100.0, 60.0, 8.0))
     plate.apply_translation((0.0, 0.0, 4.0))
     tools = []
+    depths = [1.0 + 0.1 * (index % 20) for index in range(220)]
+    random.Random(7).shuffle(depths)
     for column in range(22):
         for row in range(10):
-            pocket = trimesh.creation.box(extents=(2.4, 2.4, 3.0))
+            depth = depths[column * 10 + row]
+            pocket = trimesh.creation.box(extents=(2.4, 2.4, depth))
             pocket.apply_translation((-47.0 + column * 4.4, -25.0 + row * 5.0, 8.0))
             tools.append(pocket)
     for x in (-40.0, 40.0):

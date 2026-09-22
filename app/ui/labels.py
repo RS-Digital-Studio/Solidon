@@ -2072,6 +2072,14 @@ def feature_name(feature_id: FeatureId, feature: Feature) -> str:
         if bool(feature.params.get("inner", False)):
             return tr("Gerundete Seite innen")
         return tr("Gerundete Seite")
+    # **Mit Nummer, wie die Bohrung** — und mit dem Stil als Namen: „Wabenmuster
+    # 1", nicht „Muster 1", denn der Stil ist, was der Kunde sieht. Derselbe
+    # Name wie im Steckbrief (``perceive/digest.py``).
+    if feature.kind == "pattern":
+        from app.core.perceive.digest import pattern_style_name
+
+        style = pattern_style_name(str(feature.params.get("style", "other")))
+        return f"{style} {feature_id.rsplit('_', 1)[-1]}"
     if feature.kind == "hole":
         name = tr("Sackbohrung") if feature.params.get("through") is False else tr("Bohrung")
         # Angeschnitten: Ein Nachbar hat den Mantel geöffnet (P1.5) — dasselbe
@@ -2281,6 +2289,12 @@ def feature_measure(feature: Feature) -> str:
     # will, ist, wie viel Luft im Teil steckt.
     if feature.kind == "void":
         return measure_text(feature, "volume", format_value=volume)
+    # Zahl und Teilung, wie man ein Muster bestellt: „196 · 10,4 mm". Die
+    # Zellbreite und die Tiefe stehen im Panel und im Steckbrief.
+    if feature.kind == "pattern":
+        count = int(params.get("count", 0))
+        pitch = measure_text(feature, "pitch")
+        return f"{count} {tr('Zellen')} · {pitch}" if pitch else f"{count} {tr('Zellen')}"
     # Wie bei ``feature_name`` oben: Seit alle elf Arten ein Maß haben,
     # hält mypy diese Zeile für unerreichbar — und **das ist die
     # Bestätigung, dass die Verzweigung vollständig ist**. Sie bleibt

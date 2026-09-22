@@ -35,6 +35,7 @@ from app.core.geom.mesh import MeshData, face_components, fully_stitched, unique
 from app.core.geom.repair import merge_vertices
 from app.core.log import get_logger
 from app.core.perceive.helix import Helix, find_helices
+from app.core.perceive.patterns import patterns_instead_of_cells
 from app.core.perceive.slots import ACROSS_THE_AXIS, PARALLEL_AXES, slots_instead_of_half_bores
 from app.core.perceive.surfaces import clipped_patches, planar_patch
 from app.core.types import Feature, FeatureId, SurfacePatch, Vec3, is_a_cavity
@@ -818,6 +819,7 @@ DETECTABLE_KINDS: frozenset[str] = frozenset(
         "void",
         "slot",
         "curved_face",
+        "pattern",
     }
 )
 
@@ -1097,6 +1099,10 @@ def detect(
         # die Quelle: Zwei Stellen, die dieselbe Frage stellen, geben eines
         # Tages zwei Antworten.
         worth_naming = _fillets_worth_naming(mesh, fitted.fillets)
+        # Die Flächen zuerst ohne Träger und Innenlage — was das Muster gleich
+        # verschluckt, braucht beides nie (:func:`_face_candidates`).
+        face_entries = _planar_face_entries(mesh, planar=planar, check_cancelled=check_cancelled)
+        face_entries.sort(key=lambda entry: (-round(entry[1], 4), _corner_key(mesh.raw, entry[0])))
         found: dict[FeatureId, Feature] = {}
         for phase in (
             lambda: detect_holes(mesh, fitted.cylinders, fitted.cones),
@@ -1105,7 +1111,7 @@ def detect(
             lambda: detect_cones(mesh, fitted.cones, check_cancelled=check_cancelled),
             lambda: sphere_features,
             lambda: torus_features,
-            lambda: detect_faces(mesh, planar=planar, check_cancelled=check_cancelled),
+            lambda: _face_candidates(mesh.raw, face_entries),
             lambda: detect_edge_loops(mesh),
         ):
             if check_cancelled is not None:
@@ -1135,6 +1141,18 @@ def detect(
             ],
             check_cancelled=check_cancelled,
         )
+        if check_cancelled is not None:
+            check_cancelled()
+        # **Nach dem Langloch und vor dem Einschluss.** Nach dem Langloch,
+        # weil eine Reihe Langlöcher Langlöcher bleibt (``slot`` bildet keine
+        # Zelle); vor dem Einschluss, weil der die Träger seiner Flächen
+        # einsammelt — und die bekommen die Flächen erst, wenn feststeht,
+        # welche bleiben (:func:`_faces_finished_in`): Ein dichtes Rändel hat
+        # 32 000 Flächen, nach dem Falten sieben (§21.1, RM-207).
+        found = patterns_instead_of_cells(mesh, found, check_cancelled=check_cancelled)
+        if check_cancelled is not None:
+            check_cancelled()
+        found = _faces_finished_in(mesh, found, face_entries, check_cancelled)
         if check_cancelled is not None:
             check_cancelled()
         # **Vor dem Freiformfilter, und das ist keine Reihenfolge nach Gefühl.**
@@ -6856,17 +6874,27 @@ def detect_faces(
     # Flächen unterscheiden sich im Netz gern in der zwölften Stelle, und dann
     # entschiede wieder diese Stelle.
     entries.sort(key=lambda entry: (-round(entry[1], 4), _corner_key(body, entry[0])))
+    return _finished_faces(mesh, _face_candidates(body, entries), entries, check_cancelled)
 
+
+#: Die Facetten einer Flächensuche, für das Fertigstellen der Flächen, die
+#: nach dem Musterfalten übrig sind — siehe :func:`_face_candidates`.
+FaceEntries = list[tuple[np.ndarray, float, np.ndarray]]
+
+
+def _face_candidates(body: trimesh.Trimesh, entries: FaceEntries) -> list[Feature]:
+    """Die Flächen mit Name, Fläche, Normale und Mitte — ohne Träger und Innenlage.
+
+    Träger (:func:`planar_patch`) und Innenlage (:func:`_face_roles`) kosten
+    je Fläche, und ein dichtes Rändel hat 32 000 Flächen, von denen nach dem
+    Musterfalten sieben bleiben (22.09.2026: 3,7 und 2,9 s von 17). Deshalb
+    entstehen die Flächen in zwei Schritten: erst alle, billig, dann die, die
+    bleiben, fertig (:func:`_finished_faces`). Wer :func:`detect_faces` ruft,
+    bekommt beides in einem.
+    """
     features: list[Feature] = []
     for number, (facet, area, centre) in enumerate(entries, start=1):
         normal = body.face_normals[facet[0]]
-        plane = planar_patch(
-            mesh,
-            facet,
-            (float(centre[0]), float(centre[1]), float(centre[2])),
-            (float(normal[0]), float(normal[1]), float(normal[2])),
-            check_cancelled=check_cancelled,
-        )
         features.append(
             Feature(
                 id=f"face_{number}",
@@ -6879,14 +6907,50 @@ def detect_faces(
                     "centre": (float(centre[0]), float(centre[1]), float(centre[2])),
                 },
                 face_indices=tuple(int(index) for index in facet),
-                surface_patches=(plane,) if plane is not None else (),
             )
         )
-    roles = _face_roles(mesh, features, entries, check_cancelled)
+    return features
+
+
+def _finished_faces(
+    mesh: MeshData,
+    features: Sequence[Feature],
+    entries: FaceEntries,
+    check_cancelled: Callable[[], None] | None,
+) -> list[Feature]:
+    """Träger und Innenlage für diese Flächen — die Facetten aller bleiben die Zeugen."""
+    finished: list[Feature] = []
+    for feature in features:
+        if check_cancelled is not None:
+            check_cancelled()
+        centre = feature.params["centre"]
+        normal = feature.params["normal"]
+        plane = planar_patch(
+            mesh,
+            np.asarray(feature.face_indices, dtype=np.int64),
+            (float(centre[0]), float(centre[1]), float(centre[2])),
+            (float(normal[0]), float(normal[1]), float(normal[2])),
+            check_cancelled=check_cancelled,
+        )
+        finished.append(replace(feature, surface_patches=(plane,) if plane is not None else ()))
+    roles = _face_roles(mesh, finished, entries, check_cancelled)
     return [
         replace(feature, params={**feature.params, "inner": roles[feature.id]})
-        for feature in features
+        for feature in finished
     ]
+
+
+def _faces_finished_in(
+    mesh: MeshData,
+    found: Mapping[FeatureId, Feature],
+    entries: FaceEntries,
+    check_cancelled: Callable[[], None] | None,
+) -> dict[FeatureId, Feature]:
+    """Dieselbe Merkmalsliste, die übrigen Flächen fertig — Reihenfolge und Namen bleiben."""
+    pending = [feature for feature in found.values() if feature.kind == "face"]
+    finished = _finished_faces(mesh, pending, entries, check_cancelled)
+    done = {feature.id: feature for feature in finished}
+    return {name: done.get(name, feature) for name, feature in found.items()}
 
 
 def face_roles(
@@ -6970,18 +7034,85 @@ def _face_roles(
             outlines[other] = footprint.convex_hull
         return outlines[other]
 
+    # **Gleichgerichtete Flächen fragen einen Baum, nicht jede Fläche jede.**
+    # Ein Kreuzrändel mit 6 645 Rauten trägt 32 140 Wände in vier Richtungen;
+    # jede Wand hatte rund 770 parallele Kandidaten, und die Frage „deckt
+    # eine davon meine Mitte?" lief blockweise über alle — 24,7 Millionen
+    # Konturen, 32 von 40 s der Erkennung (22.09.2026). Flächen mit
+    # **derselben** Normalen (auf sechs Stellen) teilen dieselbe Ebenenbasis,
+    # und dann ist die Frage eine an einen STRtree über ihre Konturen:
+    # dieselbe Antwort, denn die Kontur in der eigenen Basis um die eigene
+    # Mitte ist die Kontur in der gemeinsamen Basis um den Ursprung, nur
+    # verschoben. Was nur *fast* gleichgerichtet ist (bis
+    # :data:`PARALLEL_FACE_COSINE`), geht weiter den blockweisen Weg — dort
+    # trägt jede Kontur ihre eigene Basis, und eine gemeinsame verschöbe den
+    # Punkt um bis zu 14 mm auf 100.
+    keys = np.round(normals, 6)
+    unique_keys, key_of = np.unique(keys, axis=0, return_inverse=True)
+    key_of = np.asarray(key_of).ravel()
+    key_index = {tuple(row): number for number, row in enumerate(unique_keys.tolist())}
+    trees: dict[int, tuple[Any, np.ndarray]] = {}
+
+    def tree_of(key: int) -> tuple[Any, np.ndarray]:
+        """Der Baum über die Konturen aller Flächen einer Richtung, einmal gebaut."""
+        if key not in trees:
+            members = np.flatnonzero(key_of == key)
+            # Eine Basis für alle — die des ersten Mitglieds. Nahe der
+            # Hilfsvektorgrenze wählten zwei fast gleiche Normalen sonst zwei
+            # verschiedene Basen, und der Punkt läge in der falschen Kontur.
+            along, across = basis_u[members[0]], basis_v[members[0]]
+            hulls = []
+            for other in members:
+                corners = vertices[np.unique(faces[entries[int(other)][0]])]
+                hulls.append(
+                    MultiPoint(np.column_stack((corners @ along, corners @ across))).convex_hull
+                )
+            trees[key] = (shapely.STRtree(hulls), members)
+        return trees[key]
+
+    # Welche anderen Richtungen einer Richtung noch nahe genug sind — eine
+    # Frage je Richtungspaar, nicht je Fläche: Vier Wandrichtungen und zwei
+    # Deckel sind sechs, die Flächen sind 32 000.
+    unit_normals = unique_keys / np.maximum(np.linalg.norm(unique_keys, axis=1), EPS_GEOM)[:, None]
+    near = (unit_normals @ unit_normals.T > PARALLEL_FACE_COSINE) & ~np.eye(
+        len(unique_keys), dtype=bool
+    )
     roles: dict[FeatureId, bool] = {}
     for feature in features:
         if check_cancelled is not None:
             check_cancelled()
         normal = np.asarray(feature.params["normal"], dtype=float)
         centre = np.asarray(feature.params["centre"], dtype=float)
-        candidates = np.flatnonzero(
-            (entry_shells == shell[feature.face_indices[0]])
-            & (normals @ normal > PARALLEL_FACE_COSINE)
-            & ((centres - centre) @ normal > EPS_GEOM)
-        )
+        own_shell = shell[feature.face_indices[0]]
         inner = False
+        own_key = key_index.get(tuple(np.round(normal, 6).tolist()))
+        if own_key is not None:
+            tree, members = tree_of(own_key)
+            axis = members[0]
+            flat = [[float(centre @ basis_u[axis]), float(centre @ basis_v[axis])]]
+            point = shapely.points(flat)[0]
+            # ``covered_by``: der Punkt, den eine Kontur des Baums deckt — das
+            # Prädikat gilt vom Anfragepunkt aus, nicht von der Kontur.
+            for other in members[tree.query(point, predicate="covered_by")]:
+                if (
+                    entry_shells[other] == own_shell
+                    and float((centres[other] - centre) @ normal) > EPS_GEOM
+                    and (eligible is None or eligible(entries[int(other)][0]))
+                ):
+                    inner = True
+                    break
+        if inner:
+            roles[feature.id] = True
+            continue
+        if own_key is not None and not near[own_key].any():
+            # Keine zweite Richtung nahe der eigenen: nichts mehr zu fragen —
+            # und keine Maske über alle Flächen für eine leere Antwort.
+            roles[feature.id] = False
+            continue
+        same_shell = entry_shells == own_shell
+        above = (centres - centre) @ normal > EPS_GEOM
+        alike = normals @ normal > PARALLEL_FACE_COSINE
+        candidates = np.flatnonzero(same_shell & alike & above & (key_of != own_key))
         # **Blockweise, nicht ein Punkt und ein ``covers`` je Kandidat** —
         # und wie bisher nur bis zum ersten Treffer: Am Kumiko-Gitter mit
         # 7 295 Flächen hat jede Fläche rund 200 parallele Kandidaten, und

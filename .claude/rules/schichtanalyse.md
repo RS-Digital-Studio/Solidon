@@ -714,6 +714,32 @@ ein Stadion mit Weg 0,00005 mm, angenommen, weil der Weg nur größer als
   `CYLINDER_SPREAD` auf dem schon eingepassten Zylinder liegt
   (`features._lies_on_the_cylinder`). Sonst bleibt der vierte Bogen einer
   Bohrung draußen, weil ein Fit über mehr Punkte immer etwas mehr streut.
+* **Viele gleiche Zellen sind ein Muster, und die Grenze zur Bohrung ist
+  eine Entscheidung** (`perceive/patterns.py`, RM-207): Ein Gitter ab neun
+  deckungsgleichen Zellen (Streifen ab sechs), eine Streuung gleich tiefer
+  Zellen ab vierundzwanzig (Rauschen ab vierzig — ein Schild mit zwei
+  Dutzend erhabenen Buchstaben sah in der Korpusprobe genauso aus). Runde
+  Zellen werden nur als Noppe gefaltet, wenn sie blind und höchstens doppelt
+  so tief wie breit sind, erst ab zwanzig und nur im Wabengitter, in dem
+  `apply_texture` Noppen setzt: Ein Lochblech mit 81 durchgehenden Bohrungen
+  bleibt 81 Bohrungen, zwölf Magnettaschen bleiben Taschen, 25 im
+  Quadratraster auch — an allen gelten die Bohrungshandlungen, und die nähme
+  ein Muster ihnen weg. Sechseckige Löcher haben keine und werden auch
+  durchgehend zum Muster; in einem Gitter, das Solidon so nicht zeichnet,
+  heißen sie `other` und lassen sich entfernen, nicht neu setzen. Jeder Stil
+  wird nur in seinem Gitter neu gezeichnet (`_GENERATOR_LATTICE`). Gefaltet
+  wird nach allen Einzelformen und **vor** dem
+  Freiformfilter, sonst zählen tausend Zellwände als Rundformen-Anteil. Was
+  ein Muster ausmacht, steht am Netz: Mündung, Tiefe, Seite, Teilung — kein
+  Verweis auf einen Trägernamen, der beim Umbenennen altert. Der Träger darf
+  ein Zylinder sein: gemessen wird dann in seiner Abwicklung, und ein Muster
+  trägt Achse und Durchmesser statt nur einer Normalen. Wer einen Körper auf
+  den Mantel legt — den Stopfen, der eine Zelle füllt —, legt ihn auf dessen
+  Facetten, nicht auf den Kreis: Bündig mit dem Kreis stand er zwischen zwei
+  Ecken über der Facette, und die Stufe machte aus dem Mantel hundert
+  Flächen. Ein Werkzeug, das nur die Ecken biegt, hat seinen Boden in der
+  Mitte um die Sehnenabweichung tiefer als am Rand — erst teilen, dann
+  biegen.
 * **Die Langlochsuche rechnet je Bogen, nicht je Paar.** Flutung, Flanken
   und Stadionfit hängen an Bogen und Achse (`slots._Reach`), und die Maske
   einer Achse ist ihr Schlüssel, nicht die gerundete Achse allein. Ein

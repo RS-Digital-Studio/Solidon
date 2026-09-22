@@ -24,6 +24,7 @@ from app.core.errors import (
     CHOOSE_PRINTER,
     CORRECT_INPUT,
     RECOUNT_AND_RETRY,
+    REPAIR_AND_RETRY,
     RESIZE_THE_WIDENING,
     SPLIT_AND_RETRY,
     SPLIT_MODEL,
@@ -128,6 +129,7 @@ from app.core.units import (
 from app.i18n import TranslatableText, _
 
 if TYPE_CHECKING:
+    from app.core.perceive.patterns import Field
     from app.core.perceive.relations import CavityState
 
 _AXES = tuple(AXIS_NORMALS)
@@ -3333,13 +3335,13 @@ class RemoveFeatureParams(BaseParams):
     params=RemoveFeatureParams,
     consumes=1,
     produces=1,
-    applies_to=[*MOVABLE_KINDS, "fillet", "thread"],
+    applies_to=[*MOVABLE_KINDS, "fillet", "thread", "pattern"],
     touches_features=True,
     deterministic=False,
     doc=_(
         "Entfernt ein erkanntes Merkmal: Bohrung, Langloch, Zapfen, Senkung, "
-        "Verjüngung, Kuppel, Pfanne, Wulst, Kehle, Gewinde oder Rundung — und füllt "
-        "einen Lufteinschluss mit Material."
+        "Verjüngung, Kuppel, Pfanne, Wulst, Kehle, Gewinde, Rundung oder Muster — und "
+        "füllt einen Lufteinschluss mit Material."
     ),
 )
 def remove_feature(ctx: OpContext) -> OpResult:
@@ -3362,6 +3364,10 @@ def remove_feature(ctx: OpContext) -> OpResult:
     if _is_a_fillet(source, params.at_feature):
         return _drop_the_fillet(ctx, source, params.at_feature)
     feature = _movable_feature(source, params.at_feature, "remove_feature")
+    if feature.kind == "pattern":
+        # Vor der Hohlraumkette: Ein Muster hat keine, und seine Mitte liegt
+        # auf der Trägerebene, nicht in einem Hohlraum.
+        return _remove_pattern(ctx, source, feature)
     measured = [float(value) for value in feature.params["centre"]]
     centre: Vec3 = (measured[0], measured[1], measured[2])
 
@@ -4109,7 +4115,32 @@ class ResizeFeatureParams(BaseParams):
         unit="mm",
         minimum=0.0,
         placement="advanced",
-        doc=_("Nur an einem Gewinde: die neue Steigung. Null lässt sie unverändert."),
+        doc=_(
+            "An einem Gewinde die neue Steigung, an einem Muster die neue Teilung — der "
+            "Abstand von Zelle zu Zelle. Null lässt sie unverändert."
+        ),
+    )
+    cell_width: float = param(
+        title=_("Zellbreite"),
+        default=0.0,
+        unit="mm",
+        minimum=0.0,
+        placement="advanced",
+        doc=_(
+            "Nur an einem Muster: die neue Breite einer Zelle — Schlüsselweite der Wabe, "
+            "Breite der Rippe, Durchmesser der Noppe. Null lässt sie unverändert."
+        ),
+    )
+    cell_depth: float = param(
+        title=_("Zelltiefe"),
+        default=0.0,
+        unit="mm",
+        minimum=0.0,
+        placement="advanced",
+        doc=_(
+            "Nur an einem Muster: wie tief die Zellen werden, vertieft wie erhaben. "
+            "Null lässt sie unverändert."
+        ),
     )
 
 
@@ -4126,13 +4157,14 @@ class ResizeFeatureParams(BaseParams):
     # den exakten Kern und einer Materialkompensation, die für ein Loch gilt und
     # für einen Zapfen andersherum liefe. Die beiden überschneiden sich deshalb
     # nicht, und ``perceive.actions`` legt sie zu **einer** Zeile zusammen.
-    applies_to=["pin", "cone", "sphere", "fillet", "torus", "thread"],
+    applies_to=["pin", "cone", "sphere", "fillet", "torus", "thread", "pattern"],
     touches_features=True,
     deterministic=False,
     doc=_(
         "Ändert den Durchmesser eines erkannten Merkmals: Zapfen, Senkung, "
         "Verjüngung, Kuppel, Pfanne, Wulst oder Kehle — den Durchmesser und die "
-        "Steigung eines Gewindes, den Radius einer Rundung."
+        "Steigung eines Gewindes, den Radius einer Rundung, Teilung, Zellbreite und "
+        "Tiefe eines Musters."
     ),
 )
 def resize_feature(ctx: OpContext) -> OpResult:
@@ -4162,6 +4194,10 @@ def resize_feature(ctx: OpContext) -> OpResult:
         return _resize_torus(ctx, source, feature, centre, params.diameter, params.tube_diameter)
     if feature.kind == "thread":
         return _resize_thread(ctx, source, feature, params.diameter, params.pitch)
+    if feature.kind == "pattern":
+        return _resize_pattern(
+            ctx, source, feature, params.pitch, params.cell_width, params.cell_depth
+        )
 
     if is_close(params.diameter, previous):
         return OpResult(
@@ -8748,6 +8784,312 @@ def _remove_thread(ctx: OpContext, source: SceneObject, feature: Feature) -> OpR
         )
     ]
     return _thread_result(ctx, source, body, feature, None, findings)
+
+
+#: Warum ein Muster, das Solidon nicht selbst zeichnet, nicht geändert wird.
+PATTERN_NOT_DRAWABLE: Final = _(
+    "Dieses Muster ist keines, das Solidon zeichnet — Wabe, Rändel, Rippe, Welle, "
+    "Noppe, Voronoi oder Rauschen. Seine Zellen lassen sich nicht neu setzen; "
+    "„Merkmal entfernen“ füllt sie."
+)
+
+#: Warum die Zellen eines Musters am Netz nicht nachgezeichnet werden konnten.
+PATTERN_NOT_READABLE: Final = _(
+    "Die Zellen dieses Musters lassen sich am Netz nicht nachzeichnen — ihre Ränder "
+    "schließen sich nicht zu Umrissen. Reparieren Sie das Netz und versuchen Sie es "
+    "dann noch einmal."
+)
+
+
+def _pattern_plug(source: SceneObject, feature: Feature) -> MeshData:
+    """Der Körper, der die Zellen eines Musters füllt oder abträgt — oder der Satz dazu."""
+    from app.core.perceive.patterns import plug_for
+
+    plug = plug_for(as_mesh_data(source.mesh), feature, source.features)
+    if plug is None:
+        # Der Satz nennt das Reparieren — dann steht es auch als Handlung da,
+        # wie an jeder anderen Stelle, die das Netz nicht lesen konnte.
+        raise ValidationError(
+            field="at_feature",
+            detail=PATTERN_NOT_READABLE,
+            values={"feature": feature.id},
+            constraint="not_movable",
+            suggestions=(REPAIR_AND_RETRY, CANCEL),
+        )
+    return plug
+
+
+def _pattern_cleared(ctx: OpContext, source: SceneObject, feature: Feature) -> BooleanOutcome:
+    """Der Körper ohne sein Muster: vertiefte Zellen gefüllt, erhabene abgetragen.
+
+    Am Netz, auch an einem exakten Körper — wie ``apply_texture`` selbst, das
+    ein Muster nur als Netz aufbringt (``result_kind="mesh"``): Was als Netz
+    kam, geht als Netz.
+    """
+    engraved = feature.params.get("mode") != "raised"
+    ctx.progress(
+        0.2,
+        str(_("Die Zellen werden gefüllt …") if engraved else _("Die Zellen werden abgetragen …")),
+    )
+    return boolean(
+        "union" if engraved else "difference",
+        [as_mesh_data(source.mesh), _pattern_plug(source, feature)],
+        quality=ctx.quality,
+        seed=ctx.seed,
+        cancelled=ctx.cancelled,
+    )
+
+
+def _remove_pattern(ctx: OpContext, source: SceneObject, feature: Feature) -> OpResult:
+    """Ein Muster entfernen: jede Zelle an ihrer Mündung schließen (§21.1, RM-207)."""
+    cleared = _pattern_cleared(ctx, source, feature)
+    count = int(feature.params.get("count", 0)) + int(feature.params.get("partial", 0))
+    findings = [
+        *cleared.findings,
+        Finding(
+            code="remove_feature.gone",
+            severity="info",
+            message=_(
+                "Das Muster ist entfernt: {count} Zellen sind geschlossen. Spätere Schritte "
+                "und Passungen, die auf es verweisen, finden es nicht mehr.",
+                count=count,
+            ),
+            feature_ids=(feature.id,),
+            values={"feature": feature.id, "kind": feature.kind, "removed": 1, "cells": count},
+        ),
+    ]
+    return OpResult(
+        outputs=[
+            dataclasses.replace(
+                source,
+                mesh=cleared.mesh,
+                features=_without_old_triangles(source.features, without=(feature.id,)),
+                reserved_feature_ids=tuple(
+                    sorted({*source.reserved_feature_ids, *source.features})
+                ),
+            )
+        ],
+        findings=findings,
+        solver=cleared.solver,
+    )
+
+
+def _pattern_anchor(feature: Feature, field: Field) -> tuple[float, float] | None:
+    """Die Mitte einer gelesenen Zelle in den Achsen des Feldes — wohin eine neue Zelle kommt."""
+    anchor = feature.params.get("anchor")
+    if anchor is None:
+        return None
+    return field.flat(anchor)
+
+
+def _resize_pattern(
+    ctx: OpContext,
+    source: SceneObject,
+    feature: Feature,
+    pitch: float,
+    cell_width: float,
+    cell_depth: float,
+) -> OpResult:
+    """Ein Muster mit neuer Teilung, Zellbreite oder Tiefe: schließen, dann neu zeichnen.
+
+    Derselbe Weg wie beim Gewinde — an der alten Stelle schließen, mit dem
+    neuen Maß setzen —, und das Neue zeichnet dieselbe Funktion, die
+    ``apply_texture`` benutzt (``texture_ops.flat_tool``): Ein gelesenes
+    Muster wird mit seinem Stil, seinem Feld, seiner Drehung und seiner
+    Zellbreite wieder erzeugt, nicht mit den Vorgaben der Operation, und das
+    Feld legt es ab, wo es lag — auf der Ebene oder um den Zylinder
+    (``patterns.Field.placed``). Null in einem Feld heißt: so lassen, wie
+    gemessen.
+    """
+    from app.core.geom.texture_ops import (
+        STRIP_PATTERNS,
+        cell_width_for,
+        check_printable,
+        flat_tool,
+        wrap_pitch,
+    )
+    from app.core.perceive.patterns import GENERATOR_OF, field_outline
+
+    style = str(feature.params.get("style", "other"))
+    generator = GENERATOR_OF.get(style)
+    if generator is None:
+        raise ValidationError(
+            field="at_feature",
+            detail=PATTERN_NOT_DRAWABLE,
+            values={"feature": feature.id, "style": style},
+            constraint="not_movable",
+            suggestions=(CANCEL,),
+        )
+    measured_pitch = float(feature.params.get("pitch", 0.0))
+    measured_width = float(feature.params.get("cell_width", 0.0))
+    measured_depth = float(feature.params.get("cell_depth", 0.0))
+    new_pitch = pitch if pitch > 0.0 else measured_pitch
+    new_width = cell_width if cell_width > 0.0 else measured_width
+    new_depth = cell_depth if cell_depth > 0.0 else measured_depth
+    if (
+        is_close(new_pitch, measured_pitch)
+        and is_close(new_width, measured_width)
+        and is_close(new_depth, measured_depth)
+    ):
+        return OpResult(
+            outputs=[source],
+            findings=[
+                Finding(
+                    code="resize_feature.unchanged",
+                    severity="info",
+                    message=_("Das Merkmal hat dieses Maß schon."),
+                    feature_ids=(feature.id,),
+                )
+            ],
+        )
+    _reject_oversized("pitch", new_pitch, source.mesh, kind="length")
+    # Voronoi und Rauschen kennen keine Zellbreite — ihre Zellen sind so groß,
+    # wie die Dichte sie macht (``texture_ops.pattern_shapes``). Und eine
+    # Breite, die die Teilung nicht hergibt, wird begrenzt und gesagt: Die
+    # Wand zwischen zwei Zellen bleibt so breit wie das kleinste Detail des
+    # Druckers (E1: die Bahn bei FDM, der Bildpunkt bei Resin) — dünner
+    # druckt sie nicht, und ``check_printable`` fragt nur nach dem Steg der
+    # Vorgabe, nicht nach der gemessenen Zelle.
+    printer = ctx.profile.printer
+    detail = printer.smallest_detail
+    drawn_width = cell_width_for(generator, new_pitch, new_width, wall=detail)
+    limited = drawn_width is not None and not is_close(drawn_width, new_width)
+    if drawn_width is not None and drawn_width < detail:
+        raise ValidationError(
+            "cell_width",
+            _(
+                "Bei dieser Zellbreite sind die Zellen schmaler als ein Bildpunkt — sie "
+                "werden nicht belichtet. Der Bildpunkt misst „nozzle_mm“."
+            )
+            if printer.is_resin
+            else _(
+                "Bei dieser Zellbreite sind die Zellen schmaler als die Düse — sie werden "
+                "nicht gedruckt. Die Düse misst „nozzle_mm“."
+            ),
+            value=drawn_width,
+            constraint="nozzle_width",
+            values={"nozzle_mm": detail, "cell_width": drawn_width},
+            suggestions=[dataclasses.replace(CORRECT_INPUT, label=_("Zellbreite vergrößern"))],
+        )
+    # Dieselbe Frage wie beim Aufbringen (E1), mit der gezeichneten Zelle:
+    # Steg oder Rille, je nachdem, was an diesem Stil schmaler ist.
+    check_printable(generator, new_pitch, new_depth, ctx.profile.printer, cell=drawn_width)
+
+    cleared = _pattern_cleared(ctx, source, feature)
+    ctx.progress(0.6, str(_("Das Muster wird mit dem neuen Maß gesetzt …")))
+    field = field_outline(as_mesh_data(source.mesh), feature, source.features)
+    if field.around > 0.0:
+        # Einmal um den Zylinder geht die Teilung im Umfang auf — wie beim
+        # Aufbringen (``texture_ops.wrap_pitch``), sonst träfe an der Naht
+        # die letzte Zelle auf die erste.
+        new_pitch = wrap_pitch(generator, new_pitch, field.around / math.pi, field.around)
+    engraved = feature.params.get("mode") != "raised"
+    through = bool(feature.params.get("through", False))
+    anchor = _pattern_anchor(feature, field)
+    # Durchgehend bleibt es nur mit der gemessenen Tiefe — die ist die Dicke
+    # des Körpers. Wer an einem durchgehenden Muster eine Tiefe setzt, macht
+    # es blind, und das Merkmal sagt das danach auch.
+    still_through = through and cell_depth <= 0.0
+    flat = flat_tool(
+        field.outline,
+        pattern=generator,
+        pitch=new_pitch,
+        # Eine durchgehende Zelle wird durch die Rückseite hindurch
+        # geschnitten: Ein Werkzeug, das bündig mit ihr endet, ließe dort eine
+        # Haut stehen, sobald die Rechnung nicht mehr exakt ist. Anders als der
+        # Stopfen darf das Schneidwerkzeug über den Körper hinausreichen.
+        depth=new_depth + BOOLEAN_OVERLAP if still_through else new_depth,
+        mode="engraved" if engraved else "raised",
+        seed=ctx.seed or 0,
+        # Die gezeichnete Breite, nicht die verlangte: Aus ihr rechnet
+        # ``tool_in_outline`` die Wand, um die ganze Zellen vom Rand
+        # wegbleiben — mit 9 mm verlangt bei 6 mm Teilung wäre die Wand
+        # negativ, also keine, und die Zellen schnitten die Seitenwand an.
+        cell=drawn_width,
+        wall=detail,
+        # Ganze Zellen, wo das Muster nur ganze hatte — und immer, wo es
+        # durchgeht: Eine angeschnittene wäre dort eine Kerbe (Review,
+        # 22.09.2026: ein blindes Feld nahe der Kante kerbte beim Neuzeichnen
+        # mit weiterer Teilung die Seitenwände). Nicht bei Streifen: Ihre
+        # Länge ist die des Feldes, und ein Steg, der am Feldrand endet, ist
+        # ganz — als ganze Zelle im Umriss gefordert, entstünde keiner.
+        whole_cells=generator not in STRIP_PATTERNS
+        and (through or int(feature.params.get("partial", 0)) == 0),
+        anchor=anchor,
+        clearance=field.frame.clearance,
+        around=field.around,
+    )
+    tool = field.placed(flat)
+    placed = boolean(
+        "difference" if engraved else "union",
+        [cleared.mesh, tool],
+        quality=ctx.quality,
+        seed=ctx.seed,
+        cancelled=ctx.cancelled,
+    )
+    params_after = {
+        **feature.params,
+        "pitch": new_pitch,
+        "cell_depth": new_depth,
+        "through": still_through,
+    }
+    sources_after = {**feature.measure_sources, "pitch": "parameter", "cell_depth": "parameter"}
+    if drawn_width is not None:
+        params_after["cell_width"] = drawn_width
+        sources_after["cell_width"] = "parameter"
+    changed = dataclasses.replace(
+        feature,
+        params=params_after,
+        measure_sources=sources_after,
+        face_indices=(),
+        surface_patches=(),
+    )
+    findings = [
+        *cleared.findings,
+        *placed.findings,
+        Finding(
+            code="resize_feature.pattern",
+            severity="info",
+            message=(
+                _(
+                    "Das Muster ist neu gesetzt: Teilung {pitch}, Zellbreite {width}, "
+                    "Tiefe {depth}.",
+                    pitch=format_length(new_pitch),
+                    width=format_length(drawn_width),
+                    depth=format_length(new_depth),
+                )
+                if drawn_width is not None
+                else _(
+                    "Das Muster ist neu gesetzt: Teilung {pitch}, Tiefe {depth}.",
+                    pitch=format_length(new_pitch),
+                    depth=format_length(new_depth),
+                )
+            ),
+            feature_ids=(feature.id,),
+            values={"feature": feature.id, "pitch": new_pitch},
+        ),
+    ]
+    if limited and drawn_width is not None:
+        findings.append(
+            Finding(
+                code="resize_feature.cell_width_limited",
+                severity="info",
+                message=_(
+                    "Die Zellbreite ist auf {width} begrenzt: Bei dieser Teilung bliebe sonst "
+                    "keine Wand zwischen den Zellen.",
+                    width=format_length(drawn_width),
+                ),
+                feature_ids=(feature.id,),
+                values={"feature": feature.id, "cell_width": drawn_width},
+            )
+        )
+    remaining = _without_old_triangles(source.features, without=(feature.id,))
+    remaining[feature.id] = changed
+    return OpResult(
+        outputs=[dataclasses.replace(source, mesh=placed.mesh, features=remaining)],
+        findings=findings,
+        solver=placed.solver,
+    )
 
 
 def _resize_thread(

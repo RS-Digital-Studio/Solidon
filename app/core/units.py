@@ -396,6 +396,43 @@ def format_length_bound(value_mm: float, unit: LengthUnit = "mm", *, upper: bool
     return f"{text} {unit}"
 
 
+#: Unter welcher Länge ein Kreuzprodukt als parallel gilt — dieselbe Zahl,
+#: mit der ``sketch.planes`` seit je rechnet.
+PLANE_PARALLEL: Final[float] = 1e-9
+
+
+def plane_axes(
+    normal: Sequence[float],
+) -> tuple[tuple[float, float, float], tuple[float, float, float]] | None:
+    """Die zwei Achsen in einer Ebene zu ihrer Normalen — die Wahl von ``frame_of``.
+
+    Die erste Achse ist das Kreuzprodukt aus Z und der Normalen, außer die
+    Normale zeigt selbst nach Z — dann ist sie X. So wird die waagerechte
+    Fläche zur globalen XY-Ebene, und dieselbe Skizze liegt auf Tisch und
+    Deckel gleich herum. ``sketch.planes.frame_of`` baut seinen Rahmen
+    daraus, ``perceive.patterns`` liest die Feldlage eines Musters darin —
+    zwei Leser, eine Regel, und die Wahrnehmung importiert keine Skizze.
+    ``None``, wenn die Normale keine Länge hat.
+    """
+    length = math.sqrt(normal[0] ** 2 + normal[1] ** 2 + normal[2] ** 2)
+    if length < PLANE_PARALLEL:
+        return None
+    unit = (normal[0] / length, normal[1] / length, normal[2] / length)
+    x_axis = (-unit[1], unit[0], 0.0)  # Kreuzprodukt Z mit n
+    reach = math.sqrt(x_axis[0] ** 2 + x_axis[1] ** 2)
+    if reach < PLANE_PARALLEL:
+        x_axis = (unit[2], 0.0, -unit[0])  # Kreuzprodukt Y mit n
+        reach = math.sqrt(x_axis[0] ** 2 + x_axis[2] ** 2)
+    x_axis = (x_axis[0] / reach, x_axis[1] / reach, x_axis[2] / reach)
+    y_axis = (
+        unit[1] * x_axis[2] - unit[2] * x_axis[1],
+        unit[2] * x_axis[0] - unit[0] * x_axis[2],
+        unit[0] * x_axis[1] - unit[1] * x_axis[0],
+    )
+    span = math.sqrt(y_axis[0] ** 2 + y_axis[1] ** 2 + y_axis[2] ** 2)
+    return x_axis, (y_axis[0] / span, y_axis[1] / span, y_axis[2] / span)
+
+
 def positive_axis(axis: Sequence[float]) -> tuple[float, float, float]:
     """Eine gemessene Achse mit festem Vorzeichen: erste größte Betragskomponente positiv.
 

@@ -525,6 +525,7 @@ FEATURE_TITLES: Final[dict[str, TranslatableText]] = {
     "void": _("Lufteinschluss"),
     "slot": _("Langloch"),
     "curved_face": _("Gerundete Seite"),
+    "pattern": _("Muster"),
     # Kuppel oder Pfanne, je nach Richtung — in der Faktenzeile steht die
     # Art, und die heißt in den Absagen des Auswahlfensters genauso.
     "sphere": _("Kugelfläche"),

@@ -1422,6 +1422,23 @@ Außenwand trägt das Merkmal zusätzlich Bogenmitte, Mündungsmitte und
 gefüllt. Solange der Ausschnitt eindeutig wiedererkannt wird, bleibt seine
 Kennung erhalten; eine gekreuzte Aussparung muss dagegen kein Langloch sein.
 
+**Muster** (`pattern`) sind viele gleiche Zellen auf einer ebenen Fläche —
+die acht Stile, die *Textur aufbringen* (§25) zeichnet, unter ihrem eigenen
+Namen, dazu ein Gitter aus Zellen, das Solidon so nicht zeichnet. Eine Zelle
+ist, was zwischen zwei Trägerflächen oder unter einer liegt: Wände, Boden,
+Krone. Gemeldet werden Stil, Zahl, Teilung, Zellbreite, Tiefe, ob vertieft,
+erhaben oder durchgehend, Feld, Richtung und Mitte; die Zellen selbst
+verschwinden aus dem Baum, die Trägerfläche bleibt. Ein Gitter braucht neun
+deckungsgleiche Zellen (Streifen sechs), eine Streuung ohne Gitter
+vierundzwanzig (Rauschen vierzig). **Runde Zellen bleiben Bohrungen**, wenn
+sie durchgehen oder tief sind — ein Lochblech ist Bohrungen, an denen die
+Bohrungshandlungen gelten; nur flache blinde Noppen ab zwanzig im Wabengitter
+werden zum Muster. Ein Muster trägt *Merkmal ändern* (Teilung, Zellbreite, Tiefe — das
+Muster wird geschlossen und mit demselben Stil neu gezeichnet) und *Merkmal
+entfernen* (jede Zelle an ihrer Mündung geschlossen); versetzt, gedreht oder
+verdoppelt wird die Fläche, nicht das Muster. Muster auf gewölbten Trägern
+(ein Rändel um einen Griff) sind offen.
+
 **Lufteinschlüsse** (`void`) sind geschlossene Innenschalen ohne Weg nach
 außen — was ein Negativkörper hinterlässt, den ein fremdes Werkzeug mitschrieb
 und nie abzog. Vier Tore: das Netz ist dicht, sein Umlaufsinn einheitlich, es

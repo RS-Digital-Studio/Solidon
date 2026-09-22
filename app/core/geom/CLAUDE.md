@@ -613,7 +613,32 @@ Vorschau und Operation. `coverage="whole_face"` bindet die gewählte ebene
 Fläche über ihre Kennung, schneidet die Musterpolygone an ihren tatsächlichen
 Dreiecken zu und hält Innenringe sowie konkave Ränder frei. Die Drehung gilt
 innerhalb dieser festen Kontur. `rectangle` bleibt die Vorgabe für vorhandene
-Operationen mit freier Position und Breite/Höhe.
+Operationen mit freier Position und Breite/Höhe. Beide Wege enden in
+`tool_in_outline()`, das auch *Merkmal ändern* an einem gelesenen Muster
+ruft (`prepare_ops._resize_pattern`): mit dem gelesenen Stil, Feld und
+Winkel, und mit `cell=` der gemessenen Zellbreite — `pattern_shapes()`
+rechnet daraus je Stil den Anteil an der Teilung, `cell_width_for()` sagt,
+was Teilung und Drucker davon zulassen: Die Wand zwischen zwei Zellen bleibt
+so breit wie sein kleinstes Detail (`wall=`, die Bahn bei FDM, der Bildpunkt
+bei Resin — `PrinterProfile.smallest_detail`), und die Berührgrenze ist je Stil eine andere
+(`_max_share`: Rauten berühren sich schon bei 1/√2). Überlappende Umrisse (die Streuflecken des
+Rauschens) führt `_merged()` vor dem Extrudieren zusammen; getrennt
+extrudiert ließen sie doppelte Dreiecke auf der Deckfläche zurück. Das
+flache Werkzeug selbst baut `flat_tool()`; `tool_in_outline()` legt es auf
+die Ebene, ein gelesenes Muster legt es über `perceive.patterns.Field.placed`
+ab — auch um einen Zylinder.
+
+**Um einen Zylinder** (`wrap="cylinder"`) teilt `refined_for_bending()` das
+Feld vorher so fein, dass jede Sehne höchstens `BEND_SAG` unter dem Bogen
+hängt (`mesh_ops.refined`, der exakte Kern, konform und je Schale getrennt),
+und `wrapped()` biegt danach die Ecken: Rillenböden und Kronen folgen dem
+Zylinder, die Tiefe bleibt die verlangte. Ein Feld, das den Umfang erreicht,
+bekommt über `wrap_pitch()` die Teilung, mit der es aufgeht (Finding
+`texture.pitch_wrapped`), wird über mehr als eine Runde gezeichnet und je
+Zelle einmal gewählt (`_one_turn()`) — an der Naht wird keine Zelle
+geschnitten, denn zwei an `±π·R` getrennte Hälften verschweißt die Boolesche
+Rechnung nicht zuverlässig. `STRIP_PATTERNS` sind die Stile, deren Zelle so
+lang ist wie das Feld.
 
 Die fünf analytischen Grundkörper entstehen lokal über
 `primitive_local_tool()`. Operation und temporäre Oberflächenvorschau beziehen

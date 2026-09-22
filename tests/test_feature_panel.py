@@ -1009,6 +1009,85 @@ def test_pressing_an_action_names_the_operation_and_its_feature(qt_app: QApplica
     assert set(params) >= {"at_feature", "x", "y", "z"}
 
 
+def test_a_honeycomb_pattern_stands_in_the_panel_with_its_own_fields(qt_app: QApplication) -> None:
+    """Die Abnahme am Halter im Fenster (RM-207): angeklickt steht das Muster mit
+    Teilung, Zellbreite und Tiefe da, Ändern und Entfernen gehen an genau dieses
+    Merkmal, und was nicht gilt, steht grau mit Satz.
+
+    Der Halter selbst liegt nicht im Korpus; seine Zahlen (9 mm Schlüsselweite,
+    10,4 mm Teilung, durchgehend) stehen als Wabenplatte nach, wie in
+    ``tests/test_pattern_features.py``.
+    """
+    import trimesh
+    from shapely.geometry import Polygon
+
+    from app.core.geom.boolean import boolean
+    from app.core.scene.cancel import NeverCancelled
+    from app.ui.labels import feature_label
+
+    pitch, across_flats, thickness = 10.4, 9.0, 20.0
+    columns, rows = 6, 4
+    body = MeshData.of(
+        trimesh.creation.box(
+            extents=(
+                columns * pitch + 1.5 * pitch,
+                rows * pitch * 3**0.5 / 2 + 1.5 * pitch,
+                thickness,
+            )
+        )
+    )
+    radius = across_flats / 3**0.5
+    cells = []
+    for row in range(rows):
+        for column in range(columns):
+            x = (column - (columns - 1) / 2.0) * pitch + (pitch / 2.0 if row % 2 else 0.0)
+            y = (row - (rows - 1) / 2.0) * pitch * 3**0.5 / 2
+            corners = [
+                (
+                    x + radius * math.cos(math.radians(60.0 * k)),
+                    y + radius * math.sin(math.radians(60.0 * k)),
+                )
+                for k in range(6)
+            ]
+            prism = trimesh.creation.extrude_polygon(Polygon(corners), height=thickness + 2.0)
+            prism.apply_translation((0.0, 0.0, -thickness / 2.0 - 1.0))
+            cells.append(prism)
+    tools = MeshData.of(trimesh.util.concatenate(cells))
+    mesh = boolean("difference", [body, tools], quality="fine", cancelled=NeverCancelled()).mesh
+    found = features.detect(mesh)
+    identifier, pattern = next(
+        (key, value) for key, value in found.items() if value.kind == "pattern"
+    )
+    assert pattern.params["count"] == columns * rows
+
+    panel = FeaturePanel()
+    panel.show_feature(identifier, pattern, features=found, mesh=mesh)
+
+    # Die Felder des Musters — und nur die: Teilung, Zellbreite, Zelltiefe.
+    fields = [
+        widget
+        for widget in panel.findChildren(QWidget)
+        if isinstance(widget, LengthSpin | NumberSpin) and widget.isVisibleTo(panel)
+    ]
+    names = [field.accessibleName() for field in fields]
+    assert any("Teilung" in name for name in names), names
+    assert any("Zellbreite" in name for name in names), names
+    assert any("Zelltiefe" in name for name in names), names
+    assert not any("Durchmesser" in name for name in names), names
+    assert "Merkmal ändern" in buttons(panel) and "Merkmal entfernen" in buttons(panel), buttons(
+        panel
+    )
+    assert feature_label(identifier, pattern).startswith("Wabenmuster 1")
+
+    seen: list[tuple[str, dict[str, object]]] = []
+    panel.operationRequested.connect(lambda op, params: seen.append((op, params)))
+    press(panel, "Merkmal entfernen")
+    assert seen and seen[0][0] == "remove_feature" and seen[0][1]["at_feature"] == identifier
+    press(panel, "Merkmal ändern")
+    assert seen[-1][0] == "resize_feature" and seen[-1][1]["at_feature"] == identifier
+    assert math.isclose(float(seen[-1][1]["pitch"]), pitch, abs_tol=0.01)
+
+
 def test_a_linked_countersink_is_named_before_the_bore_moves(qt_app: QApplication) -> None:
     """Das Panel sagt vor dem Klick, dass beide Teile des Hohlraums mitgehen."""
     bore = Feature(

@@ -61,6 +61,7 @@ FeatureKind = Literal[
     "void",
     "slot",
     "curved_face",
+    "pattern",
 ]
 """Die Arten, die ein Merkmal haben kann.
 

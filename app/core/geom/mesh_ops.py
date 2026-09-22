@@ -744,6 +744,26 @@ def _as_mesh(mesh: MeshData, solid: Any) -> MeshData:
     return transfer(MeshData.of(body), [mesh], tolerance=math.inf)
 
 
+def refined(mesh: MeshData, edge: float) -> MeshData:
+    """Jede Kante höchstens ``edge`` lang — konform, und jede Schale bleibt ihre eigene.
+
+    Wie :func:`uniform` ohne Vereinfachung, nur ohne das Verschweißen danach:
+    ``_as_mesh`` legt zusammenfallende Ecken zusammen, und zwei Schalen, die
+    sich in einem Punkt berühren — zwei Zellen eines Musters am Feldrand —,
+    hingen danach an einer Kante mit drei Dreiecken, und der Körper war
+    nicht mehr geschlossen (22.09.2026: 29 Rippen, danach 23 Körper und ein
+    Schnitt auf der Voxelstufe). Für ein Werkzeug, das gleich gebogen wird,
+    zählt nur, dass jede Schale dicht bleibt.
+    """
+    built = _as_solid(mesh).refine_to_length(edge).to_mesh64()
+    body = trimesh.Trimesh(
+        vertices=np.asarray(built.vert_properties[:, :3], dtype=float),
+        faces=np.asarray(built.tri_verts, dtype=np.int64),
+        process=False,
+    )
+    return mesh.replacing(body)
+
+
 def uniform(mesh: MeshData, edge: float, deviation: float) -> MeshData:
     """Gleichmäßige Kantenlängen — nach oben wie nach unten.
 

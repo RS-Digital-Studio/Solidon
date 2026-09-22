@@ -33,6 +33,12 @@ it into `website/version.json`.
 - A closed model releases its memory; before, a few hundred megabytes per model stayed behind.
 - A model with many small faces, such as a honeycomb pattern, keeps its bores and fillets. Before, it showed no feature at all.
 
+### Patterns
+
+- A honeycomb, a knurl, ribs, waves or dimples appear in the tree as one pattern with pitch, cell width and depth — around a handle too. Before, they were hundreds of faces.
+- A pattern can be removed with one click or set again with a new pitch, cell width and depth. The cells stay where they were.
+- A texture around a cylinder follows the curve: grooves are equally deep everywhere, and a pattern around the full circumference closes without a seam. The pitch moves to the value that fits.
+
 ### Editing on the exact model
 
 - Primitives are always created with true faces and edges. The checkbox “Edit faces and edges later” is gone; old projects compute unchanged.

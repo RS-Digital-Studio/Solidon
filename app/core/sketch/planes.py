@@ -20,6 +20,7 @@ from collections.abc import Iterable, Sequence
 
 from app.core.errors import Action, ValidationError
 from app.core.types import PlaneFrame, Point2, SceneObject, Vec3
+from app.core.units import plane_axes
 from app.i18n import _
 
 #: Zwei Richtungen gelten als parallel, wenn ihr Kreuzprodukt darunter liegt.
@@ -80,12 +81,14 @@ def frame_of(normal: Vec3, origin: Vec3) -> PlaneFrame:
     einen Winkel, den niemand erklären kann.
     """
     unit = _normalised(normal)
-    x_axis = _cross((0.0, 0.0, 1.0), unit)
-    if _length(x_axis) < _PARALLEL:
-        x_axis = _cross((0.0, 1.0, 0.0), unit)
-    x_axis = _normalised(x_axis)
-    y_axis = _normalised(_cross(unit, x_axis))
-    return PlaneFrame(origin=origin, x_axis=x_axis, y_axis=y_axis, normal=unit)
+    # Die Achsen selbst rechnet ``units.plane_axes`` — dieselbe Regel liest
+    # die Wahrnehmung für die Feldlage eines Musters, ohne diese Datei.
+    axes = plane_axes(unit)
+    if axes is None:  # pragma: no cover - _normalised hat die Länge schon geprüft
+        raise ValidationError(
+            "plane", _("Diese Fläche hat keine brauchbare Richtung."), value=str(normal)
+        )
+    return PlaneFrame(origin=origin, x_axis=axes[0], y_axis=axes[1], normal=unit)
 
 
 def is_feature_plane(plane: str) -> bool:

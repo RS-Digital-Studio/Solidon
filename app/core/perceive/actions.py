@@ -231,6 +231,11 @@ NOT_APPLICABLE: Final[dict[str, TranslatableText]] = {
         "brauchen eine Ebene; was an ihr geht, ist das Filament: „Filament auf "
         "eine Fläche“ färbt sie, „Filament entfernen“ nimmt es wieder."
     ),
+    "pattern": _(
+        "Ein Muster liegt auf seiner Fläche und hat dort seinen Platz; versetzt, "
+        "gedreht oder verdoppelt wird die Fläche oder der Körper. „Merkmal ändern“ "
+        "setzt Teilung, Zellbreite und Tiefe neu, „Merkmal entfernen“ füllt die Zellen."
+    ),
     "fillet": _(
         "Eine Verrundung gehört zu ihrer Kante und hat ohne sie keine Lage. "
         "Bewegt oder kopiert man sie allein, bliebe die Kante scharf und die "
@@ -337,6 +342,8 @@ _FROM_FEATURE: Final[dict[str, FeatureValueSource]] = {
     "tube_diameter": ("tube_diameter", None),
     "pitch": ("pitch", None),
     "depth": ("depth", None),
+    "cell_width": ("cell_width", None),
+    "cell_depth": ("cell_depth", None),
     # Die Länge eines Langlochs hat kein gemessenes Gegenstück — die Bohrung
     # hat noch keines. Genommen wird ihr Durchmesser, und
     # :data:`_SHIFTED_BY` legt denselben noch einmal darauf: Vorbelegt steht
@@ -534,9 +541,17 @@ def _action_field(entry: Any, feature: Feature, op: str) -> ActionField:
     derived = (op, entry.name) in _SHIFTED_BY and not (
         feature.kind == "slot" and entry.name == "slot_length" and not feature.params.get("open")
     )
+    label = entry.title
+    if radius:
+        label = _("Radius")
+    elif feature.kind == "pattern" and entry.name == "pitch":
+        # Dasselbe Feld, ein anderes Wort: Ein Gewinde hat eine Steigung, ein
+        # Muster eine Teilung — so heißt sie im Baum, im Steckbrief und beim
+        # Aufbringen, und so soll sie im Merkmalfenster heißen.
+        label = _("Teilung")
     return ActionField(
         name=entry.name,
-        label=_("Radius") if radius else entry.title,
+        label=label,
         unit=str(entry.unit or ""),
         value=_value_of(entry, feature, op),
         kind=_kind_of(entry),
@@ -550,6 +565,12 @@ def _action_field(entry: Any, feature: Feature, op: str) -> ActionField:
     )
 
 
+#: Felder, die an einer Art keinen Gegenstand haben, obwohl ihre Vorgabe
+#: nicht null ist: Der Durchmesser von *Merkmal ändern* steht auf 8 mm, und
+#: ein Muster hat keinen — seine Maße sind Teilung, Zellbreite und Tiefe.
+_NOT_A_FIELD: Final[frozenset[tuple[str, str]]] = frozenset({("pattern", "diameter")})
+
+
 def _carried_by(entry: Any, feature: Feature) -> bool:
     """Trägt das Merkmal die Kennzahl, aus der dieses Feld liest?
 
@@ -557,8 +578,12 @@ def _carried_by(entry: Any, feature: Feature) -> bool:
     Steigung des Gewindes —, stand sonst an jedem änderbaren Merkmal mit
     „0 mm“: eine Frage ohne Gegenstand (Review, 21.09.2026). Was das Merkmal
     nicht misst und wofür das Schema nichts vorgibt, ist dort kein Feld.
-    Eine Vorgabe ungleich null bleibt: Sie ist eine Aussage, kein Messwert.
+    Eine Vorgabe ungleich null bleibt: Sie ist eine Aussage, kein Messwert —
+    außer die Art sagt ausdrücklich, dass sie das Maß nicht hat
+    (:data:`_NOT_A_FIELD`).
     """
+    if (feature.kind, entry.name) in _NOT_A_FIELD:
+        return False
     source = feature_value_source(entry.name, feature)
     if source is None or source[0] in feature.params:
         return True
@@ -675,6 +700,15 @@ def actions_for(
                     ),
                 )
             )
+        elif (
+            fitting is not None
+            and fitting.name == "resize_feature"
+            and feature.kind == "pattern"
+            and (not_drawable := _pattern_not_drawable(feature)) is not None
+        ):
+            # Ein Gitter aus Zellen, das Solidon so nicht zeichnet, lässt sich
+            # nicht neu setzen — derselbe Satz wie beim Übernehmen, nur vorher.
+            actions.append(FeatureAction(title=fitting.title, op=None, reason=not_drawable))
         elif fitting is not None and (
             shared := _shares_its_cavity(
                 fitting.name,
@@ -748,6 +782,22 @@ _NEED_AN_OWN_BODY: Final = (
     "remove_feature",
     "resize_feature",
 )
+
+
+def _pattern_not_drawable(feature: Feature) -> TranslatableText | None:
+    """Warum *Merkmal ändern* an diesem Muster grau steht — oder ``None``.
+
+    Nur ein **genannter** Stil außerhalb der acht sperrt; ein Merkmal ohne
+    Stil ist keines aus der Erkennung, und die Zeile bleibt, was die
+    Registertabelle sagt (``test_the_operation_refuses_exactly_what_the_panel_greys_out``).
+    """
+    from app.core.geom.prepare_ops import PATTERN_NOT_DRAWABLE
+    from app.core.perceive.patterns import GENERATOR_OF
+
+    style = feature.params.get("style")
+    if style is None or str(style) in GENERATOR_OF:
+        return None
+    return PATTERN_NOT_DRAWABLE
 
 
 def no_own_body(

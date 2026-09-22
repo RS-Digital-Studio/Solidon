@@ -33,6 +33,12 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Um modelo fechado liberta a sua memória; antes ficavam algumas centenas de megabytes por modelo.
 - Um modelo com muitas faces pequenas, como um padrão em favo de mel, mantém os seus furos e arredondamentos. Antes não mostrava uma única característica.
 
+### Padrões
+
+- Um favo de mel, um recartilhado, nervuras, ondas ou saliências aparecem na árvore como um padrão com passo, largura de célula e profundidade — também à volta de um punho. Antes eram centenas de faces.
+- Um padrão remove-se com um clique ou volta a pôr-se com novo passo, largura de célula e profundidade. As células ficam onde estavam.
+- Uma textura à volta de um cilindro segue a curvatura: as ranhuras têm a mesma profundidade, e um padrão à volta de toda a circunferência fecha sem costura. O passo passa para o valor que fecha.
+
 ### Editar no modelo exato
 
 - Os corpos básicos são sempre criados com faces e arestas reais. A opção «Editar faces e arestas mais tarde» desapareceu; projetos antigos calculam-se sem alterações.
