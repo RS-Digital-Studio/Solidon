@@ -782,12 +782,39 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   die 34 gelungenen Läufe rechnen weiter einzeln, und damit bleibt jedes gefundene Merkmal Zahl
   für Zahl, wie es ist.
 
+  **Gemessen bringt er 35,6 Prozent, nicht 77.** Von den 21,66 Sekunden der Schale entfallen
+  14,56 auf Kegelfits; überspringbar sind 1 325 Flecken mit zusammen 7,71 Sekunden, und die
+  Kennzahl kostet 0,26. Bleiben 14,2 Sekunden — ein Faktor 1,53, und damit ist die Abnahme
+  „unter fünf Sekunden" **nicht** erreicht. Die Zahl 77 Prozent zählte Flecken, nicht Zeit: Die
+  Wiederholungen sind zum Teil billige Flecken, die teuren stehen einzeln.
+
+  Geteilt wird dabei ausschließlich die **Kegelantwort**, und nur wenn sie leer war. Das ist
+  nicht Sparsamkeit, sondern Notwendigkeit: `classify` legt auch dann Kandidaten ab, wenn es
+  `False` zurückgibt — eine Kugel mit gutem Rückstand landet in `spheres`, ein Ring in `tori`,
+  und beide tragen später die Freiformauskunft. Wer den ganzen Fleck überspringt, nimmt sie mit.
+  Verlangt man dagegen, dass **kein** Fit etwas geliefert hat, schrumpft die Ersparnis auf 3,6
+  Prozent. Mit der leeren Kegelantwort allein geht `classify` in denselben Zylinderzweig wie
+  heute, und alles Weitere läuft unverändert.
+
   Der Preis ist an Körpern ohne Wiederholung zu messen und nicht zu verschweigen:
   `garden-hose-holder.3mf` hat bei 2 744 Flecken **acht** Geschwister (0,3 Prozent),
-  `countercleaner.3mf` 13 von 293. Die Kennzahl wird deshalb je Fleck gerechnet, wenn `classify`
-  ihn in der Hand hat, und nur für Flecken bis 96 Punkte — ein Riesenfleck bezahlt sie nie, denn
-  alle paarweisen Abstände kosten quadratisch. Für Riesenflecken greift stattdessen die
-  Hautregel aus RM-193.
+  `countercleaner.3mf` 13 von 293 — dort kostet die Kennzahl 0,29 s und spart nichts. Sie wird
+  deshalb je Fleck gerechnet, wenn `classify` ihn in der Hand hat, und nur für Flecken bis 96
+  Punkte — ein Riesenfleck bezahlt sie nie, denn alle paarweisen Abstände kosten quadratisch. Für
+  Riesenflecken greift stattdessen die Hautregel aus RM-193.
+
+  **Ein zwölfter Hebel ist verlustfrei und ungleich verteilt.** `classify` fragt den Kegel zuerst
+  nicht wegen seines Rückstands, sondern wegen seines Winkels: Liegt er unter `CONE_MIN_ANGLE`,
+  geht es in den Zylinderzweig. Der Winkel aber steht **vor** dem Löser fest — `_fit_cone_read`
+  liest ihn aus den Normalen und übergibt ihn als sechste Startgröße. Wo der Startwinkel klein
+  genug ist, darf der Löser entfallen. Gemessen an `Elegoo_erster_Druck.3mf`: Läufe, die im
+  Zylinderzweig enden, starten bei median 0,241 Grad, solche mit Kegelzweig frühestens bei 6,28 —
+  eine Schranke bei 5 Grad spart dort **45,6 Prozent verlustfrei**. An `garden-hose-holder.3mf`
+  liegt die verlustfreie Schranke bei 0,88 Grad (4,7 Prozent), an der Kumiko-Schale hilft sie
+  nicht: Dort starten beide Seiten bei median 87,5 beziehungsweise 88,3 Grad, weil die Schale aus
+  fast ebenen Splitterflecken besteht — eine Schranke von unten trifft 21 von 1 127 Läufen (2,8
+  Prozent). Eine feste Schranke von 0,5 Grad ist überall verlustfrei und spart 2,7 / 2,7 / 40,6
+  Prozent.
 
   **Eine Einschränkung, die zuerst geklärt werden muss:** Drei der 445 Klassen gehen
   uneinheitlich aus — deckungsgleiche Flecken, bei denen der eine einen Kegel von 45,20 Grad
@@ -796,8 +823,16 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   sondern in seiner Lage im Raum. Das ist RM-210, und solange es offen ist, ist auch das
   Abnahmekriterium dieses Punktes nicht scharf.
 
-  Abnahme: Die Erkennung eines Gittermodells mit rund 100 000 Dreiecken unter fünf Sekunden, das
-  §31-Ziel für 200 000 Dreiecke belegt oder begründet angepasst, und an allen Modellen des Korpus
+  **Was das zusammen heißt, und es ist eine Entscheidung für Robert:** Die zwölf Hebel zusammen
+  bringen die Schale von 21,7 auf etwa 13,5 Sekunden. Die Abnahme „unter fünf Sekunden" ist mit
+  keiner Änderung am Löser erreichbar, denn 1 127 Kegelfits an 1 412 Splitterflecken sind die
+  Aufgabe selbst. Wer die fünf Sekunden will, muss die Flecken loswerden — also die Frage stellen,
+  warum ein Gitter aus 95 000 Dreiecken überhaupt 1 412 gekrümmte Flecken von median sieben
+  Dreiecken hat. Das ist ein anderer Punkt als dieser.
+
+  Abnahme: Entscheidung über den Kongruenzhebel (35,6 Prozent an Mustern, zwei uneinheitliche
+  Klassen, 0,8 Prozent Preis an Körpern ohne Wiederholung) und den Startwinkel (verlustfrei);
+  das §31-Ziel für 200 000 Dreiecke belegt oder begründet angepasst; an allen Modellen des Korpus
   dieselben Merkmale wie heute — mit der Einschränkung aus RM-210. Gehört zum Leistungsstrang
   RM-208.
 
