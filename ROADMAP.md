@@ -1796,14 +1796,26 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   (Teilung, Zellbreite, Zelltiefe, Ändern und Entfernen an diesem Merkmal —
   und „Teilung", nicht „Steigung"); die vier Fensterdateien dazu einzeln
   gefahren: 80, 178, 217 und 649 bestanden. Drei Punkte dafür im Changelog
-  0.5.0 in sechs Sprachen. Entwicklungstor danach (22.09.2026): Sammelgruppe 13 600 bestanden, 48 übersprungen; Ruff, Format und mypy je 0; 84 Mustertests. **Offen:** ein dichtes Noppenfeld mit 266 000 Dreiecken
-  braucht vor dem Muster 28 s, und die gehen an 2 042 Zylindereinpassungen
-  der Grunderkennung — vorbestehend, kein Teil des Musters. Und nach dem
-  Neuzeichnen um den ganzen Umfang bleibt eine Mantelfacette (28 Dreiecke,
-  10 mm²) als eigene Fläche im Baum stehen: Sie berührt kein gekrümmtes
-  Dreieck mehr und fällt damit aus der Rückgewinnung in
-  `features._large_facet_faces` — die offene Stelle, die dort im Kommentar
-  steht, nicht eine des Musters.
+  0.5.0 in sechs Sprachen. Entwicklungstor danach (22.09.2026): Sammelgruppe 13 600 bestanden, 48 übersprungen; Ruff, Format und mypy je 0; 86 Mustertests. **Die beiden Reste danach zugemacht** (Robert am
+  22.09.2026: „207 und alles andere soll noch vor 0.5.0 fertig sein"): Ein
+  Mantelstück zwischen zwei Rillen ist Mantel und keine Fläche — dass ein
+  Streifen zur Rundung gehört, sagte allein die Naht zu seinen Nachbarn, und
+  wo links und rechts eine Nut liegt, hat er die nicht mehr. Jetzt entscheidet
+  die Lage, und erst dort, wo die Einpassungen stehen
+  (`_faces_on_a_round_wall`): Normale senkrecht zur Achse, Ecken auf dem
+  Mantel, Dreiecksmitten nicht tiefer als eine Tessellierung darunter. Der
+  dritte Punkt trennt den Streifen von einer Abflachung, deren Ecken ebenfalls
+  auf dem Mantel liegen — sie sind sein Schnittkreis — und deren Mitte 7,4 mm
+  darunter. Und die Zylinderflecken fragen einander nicht mehr einzeln, ob sie
+  dieselbe Wand sind: Seite, Radius, Achsrichtung und Kollinearität stehen in
+  den Fits und werden für alle Gemerkten auf einmal beantwortet, die axiale
+  Überlappung entscheidet wie bisher. Am Noppenfeld mit 1 403 Kuppen
+  (173 000 Dreiecke) waren es 984 906 Einzelfragen und 10,9 von 14 s; jetzt
+  0,09 s fürs Zusammenfassen und 4,0 statt 11,7 s für die ganze Erkennung, mit
+  Stück für Stück identischem Ergebnis am Noppenfeld und an allen 23 Dateien
+  des Korpus (der Messwert gehört zu RM-208 und steht dort nicht noch einmal).
+  Entwicklungstor danach: 13 644 bestanden, 48 übersprungen; Ruff, Format und
+  mypy je 0.
 
 <a id="rm-208"></a>
 
