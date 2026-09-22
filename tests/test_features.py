@@ -1584,7 +1584,10 @@ def test_a_changed_mesh_is_examined_again() -> None:
     assert heights_after != heights_before, "das verschobene Netz bekam die alte Antwort"
 
 
-@pytest.mark.parametrize("phase", ["fit_cone", "detect_faces", "_shapes_on_a_freeform"])
+# ``_face_candidates`` statt ``detect_faces``: Die Erkennung baut ihre Flächen
+# seit RM-207 in zwei Schritten (erst alle, billig; nach dem Musterfalten die
+# übrigen fertig), und ``detect_faces`` ist der Weg für Aufrufer von außen.
+@pytest.mark.parametrize("phase", ["fit_cone", "_face_candidates", "_shapes_on_a_freeform"])
 def test_cancelled_recognition_does_not_fill_the_caches(
     monkeypatch: pytest.MonkeyPatch, phase: str
 ) -> None:
