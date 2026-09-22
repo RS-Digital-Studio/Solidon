@@ -21,14 +21,14 @@ braucht.
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
-from typing import NoReturn
+from typing import Final, NoReturn
 
 import numpy as np
 
 from app.core.deferred import trimesh
 from app.core.errors import PROGRAMMING_ERRORS, BooleanFailedError, NotManifoldError
 from app.core.geom import lathe
-from app.core.geom.boolean import boolean, deepest
+from app.core.geom.boolean import BooleanOutcome, boolean, deepest
 from app.core.geom.mesh import MeshData
 from app.core.geom.repair import open_edge_count
 from app.core.log import get_logger
@@ -145,7 +145,7 @@ def hollow(
     _step(progress, cancelled, 0.4, _("Hohlraum ausschneiden"))
     try:
         outcome = boolean("difference", [mesh, cavity], quality=quality, cancelled=cancelled)
-        enclosed = boolean("intersection", [mesh, cavity], quality=quality, cancelled=cancelled)
+        enclosed = _enclosed_cavity(mesh, cavity, outcome, before, quality, cancelled)
     except BooleanFailedError as failure:
         _the_hull_or_the_chain(mesh, failure)
     body = outcome.mesh
@@ -306,6 +306,51 @@ def below_printable_wall(wall: float, profile: Profile | None) -> Finding | None
         message=_("Die Wand ist dünner, als der Drucker sie legen kann."),
         values={"wall_mm": round(wall, 2), "least_mm": round(least, 2)},
     )
+
+
+#: Wie weit das entfernte Volumen vom Werkzeugvolumen abweichen darf, damit
+#: der Hohlraum als ganz im Körper liegend gilt — ein Millionstel, also weit
+#: unter jeder Fertigungstoleranz und weit über dem Rundungsrauschen einer
+#: exakten Booleschen Rechnung (gemessen an vier Körpern: die Abweichung lag
+#: bei 10⁻¹² bis 10⁻⁹ des Werkzeugvolumens).
+ENCLOSED_TOLERANCE: Final = 1e-6
+
+#: Die Stufen der Rückfallkette, deren Volumen man trauen darf. Die
+#: Voxelstufe rundet auf ihr Raster; dort sagt ein Volumenvergleich nichts.
+EXACT_STAGES: Final[frozenset[str]] = frozenset({"direct", "welded", "jittered"})
+
+
+def _enclosed_cavity(
+    mesh: MeshData,
+    cavity: MeshData,
+    outcome: BooleanOutcome,
+    before: float,
+    quality: Quality,
+    cancelled: CancelToken | None,
+) -> BooleanOutcome:
+    """Der eingeschlossene Hohlraum — gerechnet nur, wenn er nicht das Werkzeug ist.
+
+    **Der Regelfall ist, dass er es ist.** Das Werkzeug entsteht aus der um
+    die Wandstärke geschrumpften Hülle und liegt damit ganz im Körper; der
+    Schnitt gibt es dann Dreieck für Dreieck zurück (gemessen am 22.09.2026:
+    26 968 Dreiecke hinein, 26 968 heraus). Er kostete trotzdem 1,16 von
+    5,7 Sekunden am Baum mit 197 120 Dreiecken, ein Fünftel der Operation.
+
+    Gefragt wird deshalb zuerst das **Volumen**: Hat die Differenz genau so
+    viel weggenommen, wie das Werkzeug misst, lag es ganz innen. Das gilt nur
+    für die exakten Stufen der Rückfallkette — die Voxelstufe rundet auf ihr
+    Raster, und ein Vergleich sagte dort nichts. Wo die Antwort nicht
+    eindeutig ist, wird geschnitten wie bisher: ein Hohlraum, der die Wand
+    durchbricht, ist kleiner als sein Werkzeug, und genau das muss der
+    Prüfbericht sehen.
+    """
+    strategy = outcome.solver.strategy if outcome.solver is not None else None
+    if strategy in EXACT_STAGES and outcome.solver is not None:
+        removed = before - outcome.mesh.volume
+        volume = cavity.volume
+        if volume > EPS_GEOM and abs(removed - volume) <= ENCLOSED_TOLERANCE * volume:
+            return BooleanOutcome(mesh=cavity, findings=[], solver=outcome.solver)
+    return boolean("intersection", [mesh, cavity], quality=quality, cancelled=cancelled)
 
 
 def hollowed(wall: float, removed_mm3: float) -> Finding:

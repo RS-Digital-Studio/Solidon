@@ -29677,6 +29677,46 @@ alles andere soll noch vor 0.5.0 fertig sein"). Gebaut auf `rm-207-muster`, am
   1 412 gekrümmte Flecken von median sieben Dreiecken, und jeder bekommt Kegel-, Kugel- und
   Ringeinpassung. Was daraus folgt, steht als RM-209.
 
+<a id="rm-045"></a>
+
+- [x] **RM-045 — Drei Laufzeitkosten des Geometriereviews messen.** Gemessen am
+  22.09.2026; von den drei Posten ist einer verschwunden, einer klein und einer
+  ein Fünftel einer Operation.
+
+  **Die Formkopien in `Solid.__post_init__` sind kein Posten mehr.** `copy_shape`
+  skaliert linear mit der Flächenzahl und kostet am exakten Quader mit sechs
+  Flächen 0,1 ms, mit 18 Flächen 0,2 ms, mit 46 Flächen 0,4 ms und mit 106
+  Flächen 1,0 ms; der ganze `Solid`-Aufbau liegt gleichauf. Ein Körper mit
+  hundert Flächen ist ein großes Teil, und eine Millisekunde je Kopie ist
+  nichts, was ein Kundenweg spürt.
+
+  **`cavity_chains` im Qt-Hauptthread ist seit RM-208 vorgewärmt.** Der
+  Arbeiter rechnet die Ketten je Körper, der Objektbaum liest sie aus dem
+  Merker des Netzes. Gemessen kostet der kalte Aufruf am Besenhalter (59 740
+  Dreiecke, 62 Merkmale) 43 ms und danach 0,1 ms; an der Lochplatte 2,4 ms und
+  0,0 ms; an der Kumiko-Schale mit 7 325 Merkmalen 0,2 ms — dort gibt es keine
+  Hohlraumketten, und die Suche ist billig. Im Hauptthread bleibt damit das
+  Lesen.
+
+  **Die zusätzliche Innenraumrechnung beim Aushöhlen war ein Fünftel der
+  Operation — und ist weg.** Das Aushöhlen rechnete zwei Boolesche: die
+  Differenz für den Körper und einen Schnitt für den eingeschlossenen
+  Hohlraum. Der Schnitt gab das Werkzeug Dreieck für Dreieck zurück (26 968
+  hinein, 26 968 heraus), denn das Werkzeug entsteht aus der um die Wandstärke
+  geschrumpften Hülle und liegt im Körper. Gemessen: 0,05 s von 0,2 s an der
+  Figur, 0,17 s von 2,5 s am Besenhalter, 1,16 s von 5,7 s am Baum mit 197 120
+  Dreiecken. `hollow._enclosed_cavity` fragt jetzt zuerst das Volumen — hat die
+  Differenz genau so viel weggenommen, wie das Werkzeug misst, ist der Hohlraum
+  das Werkzeug. Das gilt nur für die exakten Stufen der Rückfallkette; die
+  Voxelstufe rundet auf ihr Raster, und dort wird geschnitten wie bisher, ebenso
+  wo ein Werkzeug über den Körper hinausreicht (beides als Test). Der Hohlraum
+  kommt danach unverändert heraus: gleiche Dreieckszahl, gleiches Volumen.
+
+  **Die Maschine war nicht ruhig.** Zwei andere Sitzungen rechneten parallel,
+  und die Gesamtzeiten des Aushöhlens streuten dadurch zwischen 4,5 und 7,7 s
+  am selben Körper. Belastbar ist deshalb die Zeit der entfallenen Operation
+  selbst, nicht die Differenz zweier Gesamtläufe.
+
 <a id="rm-079"></a>
 
 - [x] **RM-079 — Zeilenlängen der Website über alle Sprachen prüfen.** Die Textbreiten der Website

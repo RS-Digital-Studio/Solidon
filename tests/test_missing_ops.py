@@ -590,6 +590,33 @@ def test_the_hull_is_named_at_every_boolean_of_the_hollowing(
 
     # Und jede Boolesche des Aushöhlens steht unter dem Helfer — der
     # Deckelschnitt eingeschlossen, den kein Netz aus dem Korpus erreicht.
+    #
+    # **Gezählt wird nicht bis drei, sondern verglichen.** Die dritte
+    # Boolesche steht seit dem 22.09.2026 in ``_enclosed_cavity``, im ``try``
+    # gerufen und damit geschützt — eine feste Zahl im Block hätte sie
+    # verloren. Gefragt ist ohnehin nicht „wie viele", sondern „jede": Was
+    # ``hollow`` und seine Helfer an Booleschen erreichen können, muss unter
+    # demselben Satz stehen.
+    helpers = {
+        node.name: node
+        for node in ast.walk(ast.parse(inspect.getsource(module)))
+        if isinstance(node, ast.FunctionDef)
+    }
+
+    def reached(start: ast.AST, seen: set[str] | None = None) -> list[str]:
+        """Die Aufrufe eines Blocks, samt derer in den Helfern, die er ruft."""
+        seen = set() if seen is None else seen
+        found: list[str] = []
+        for call in ast.walk(start):
+            if not isinstance(call, ast.Call) or not isinstance(call.func, ast.Name):
+                continue
+            name = call.func.id
+            found.append(name)
+            if name in helpers and name not in seen:
+                seen.add(name)
+                found.extend(reached(helpers[name], seen))
+        return found
+
     tree = ast.parse(inspect.getsource(module.hollow))
     guarded: list[str] = []
     for node in ast.walk(tree):
@@ -603,20 +630,11 @@ def test_the_hull_is_named_at_every_boolean_of_the_hollowing(
             for call in ast.walk(handler)
         )
         if handled:
-            guarded.extend(
-                call.func.id
-                for call in ast.walk(ast.Module(body=node.body, type_ignores=[]))
-                if isinstance(call, ast.Call) and isinstance(call.func, ast.Name)
-            )
-    every_call = [
-        call.func.id
-        for call in ast.walk(tree)
-        if isinstance(call, ast.Call)
-        and isinstance(call.func, ast.Name)
-        and call.func.id in ("boolean", "_vent")
-    ]
+            guarded.extend(reached(ast.Module(body=node.body, type_ignores=[])))
+    every_call = [name for name in reached(tree) if name in ("boolean", "_vent")]
     assert every_call, "hollow ruft die Kette — sonst prüft dieser Test nichts"
-    assert guarded.count("boolean") == every_call.count("boolean") == 3, (guarded, every_call)
+    assert every_call.count("boolean") >= 3, every_call
+    assert guarded.count("boolean") == every_call.count("boolean"), (guarded, every_call)
     assert guarded.count("_vent") == every_call.count("_vent") == 1
 
 

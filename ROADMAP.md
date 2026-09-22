@@ -60,7 +60,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-024 — Gespeicherte Zuordnungsantworten im echten Konfliktfall abnehmen](#rm-024) | Geometrie, Erkennung und Druckvorbereitung | Der Rundlauf steht; gemessen fehlt ein Korpuskörper, dessen erneute Erkennung wirklich mehrdeutig wird |
 | [RM-041 — Innenraum importierter entlüfteter Hohlkörper klären](#rm-041) | Geometrie, Erkennung und Druckvorbereitung | Schätzweg oder dokumentierte Grenze des Innenraums entscheiden |
 | [RM-209 — Die Rundform-Einpassung an Gittermodellen](#rm-209) | Geometrie, Erkennung und Druckvorbereitung | 673 von 1 430 Löserläufen enden am Auswertungslimit und liefern nichts; ein Gitter mit 95 000 Dreiecken braucht 22 s. Zwei Hebel geprüft und verworfen (Rang am Start, `lm`) |
-| [RM-045 — Drei Laufzeitkosten des Geometriereviews messen](#rm-045) | Geometrie, Erkennung und Druckvorbereitung | Aushöhlen, Formkopien und Innenraumketten getrennt vermessen |
 | [RM-076 — Topologieverlust beim Reduzieren von Eule und Spiderman beheben](#rm-076) | Geometrie, Erkennung und Druckvorbereitung | Eule und Spiderman mit Zielreihe und Topologievergleich reproduzieren |
 | [RM-077 — Reduzierungsziel bei Körpern mit Durchbrüchen erreichen](#rm-077) | Geometrie, Erkennung und Druckvorbereitung | Zielreihen an Körpern mit Durchbrüchen gegen den vorhandenen Rückfall messen |
 | [RM-078 — Ladezeit generierter Beispielmodelle an der Orientierung messen](#rm-078) | Geometrie, Erkennung und Druckvorbereitung | Eulenprojekt ohne Fremdlast öffnen und teure Schritte zuordnen |
@@ -759,15 +758,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Abnahme: Die Erkennung eines Gittermodells mit rund 100 000 Dreiecken unter fünf Sekunden, das
   §31-Ziel für 200 000 Dreiecke belegt oder begründet angepasst, und an allen Modellen des Korpus
   dieselben Merkmale wie heute. Gehört zum Leistungsstrang RM-208.
-
-<a id="rm-045"></a>
-
-- [ ] **RM-045 — Drei Laufzeitkosten des Geometriereviews messen.** Zusätzliche Innenraumrechnung
-  beim Aushöhlen, Formkopien in `Solid.__post_init__` und `cavity_chains` im Qt-Hauptthread jeweils
-  mit einem repräsentativen Modell messen. Abnahme: Zeit und Spitzenbedarf dokumentiert, nötige
-  Optimierungen geometrisch geprüft und längere UI-Arbeit außerhalb des Hauptthreads.
-
-  [Bisheriger Befund](ROADMAP-ARCHIV.md#die-abnahme-des-gesamt-reviews-06092026).
 
 <a id="rm-076"></a>
 

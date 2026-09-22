@@ -152,6 +152,77 @@ def test_a_hollow_wall_holds_where_the_face_stands_slanted() -> None:
     )
 
 
+def test_the_cavity_is_the_tool_when_the_tool_lies_inside() -> None:
+    """Der Hohlraum, den das Aushöhlen mitgibt, ist das Werkzeug selbst — ohne zweiten Schnitt.
+
+    Das Werkzeug entsteht aus der um die Wandstärke geschrumpften Hülle und
+    liegt damit im Körper; der Schnitt gab es Dreieck für Dreieck zurück und
+    kostete am Baum mit 197 120 Dreiecken 1,16 von 5,7 Sekunden (22.09.2026,
+    RM-045). Geprüft wird, was der Kunde davon hat: derselbe Hohlraum.
+    """
+    result = hollow(turned_cube(angle=0.0), 3.0, vents=0)
+
+    assert result.mesh.cavity is not None
+    outer = result.mesh.bounds
+    inner = result.mesh.cavity.bounds
+    # Der Hohlraum steht ringsum um die Wandstärke zurück und ist geschlossen.
+    assert result.mesh.cavity.is_watertight
+    for axis in range(3):
+        assert inner.minimum[axis] > outer.minimum[axis] + 2.0, axis
+        assert inner.maximum[axis] < outer.maximum[axis] - 2.0, axis
+    # Und er misst, was die Operation als entfernt meldet — die gerundete
+    # Kubikzentimeterzahl des Befundes, also auf ein Zehntel genau.
+    removed = value_of(result.findings, "hollow.done", "removed_cm3")
+    assert math.isclose(result.mesh.cavity.volume / 1000.0, removed, abs_tol=0.05)
+
+
+def test_the_enclosed_cavity_costs_no_second_boolean(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Und der Weg dorthin bleibt kurz: Beim Aushöhlen läuft keine zweite Boolesche
+    für den Hohlraum.
+
+    Das Ergebnis allein hielte das nicht fest — mit Schnitt kommt derselbe
+    Hohlraum heraus, nur eine Sekunde später (RM-045). Gezählt wird deshalb,
+    was gerechnet wird.
+    """
+    from app.core.geom import hollow as module
+
+    kinds: list[str] = []
+    original = module.boolean
+
+    def counted(kind: str, meshes: list[Any], **kwargs: Any) -> Any:
+        kinds.append(kind)
+        return original(kind, meshes, **kwargs)
+
+    monkeypatch.setattr(module, "boolean", counted)
+    hollow(turned_cube(angle=0.0), 3.0, vents=0)
+
+    assert "intersection" not in kinds, kinds
+    assert kinds.count("difference") >= 1, kinds
+
+
+def test_a_tool_that_reaches_out_of_the_body_is_cut_after_all() -> None:
+    """Die Gegenprobe: Was herausragt, wird geschnitten — sonst stünde ein Hohlraum
+    im Körper, den es dort nicht gibt.
+
+    Gefragt ist ``_enclosed_cavity`` mit einem Werkzeug, das über den Körper
+    hinausreicht; das entfernte Volumen ist dann kleiner als das Werkzeug, und
+    die Abkürzung darf nicht greifen.
+    """
+    from app.core.geom.boolean import boolean
+    from app.core.geom.hollow import _enclosed_cavity
+    from app.core.geom.mesh import MeshData
+
+    body = MeshData.of(trimesh.creation.box(extents=(20.0, 20.0, 20.0)))
+    tool = trimesh.creation.box(extents=(10.0, 10.0, 40.0))
+    cavity = MeshData.of(tool)
+    outcome = boolean("difference", [body, cavity], quality="fine")
+
+    enclosed = _enclosed_cavity(body, cavity, outcome, body.volume, "fine", None)
+
+    assert enclosed.mesh.volume < cavity.volume, "der Schnitt ist kleiner als das Werkzeug"
+    assert math.isclose(enclosed.mesh.volume, 10.0 * 10.0 * 20.0, rel_tol=1e-6)
+
+
 def test_the_flat_ceiling_stays_where_it_was() -> None:
     """Die Gegenprobe zur Kugelerosion: Achsparallel darf sich nichts ändern.
 
