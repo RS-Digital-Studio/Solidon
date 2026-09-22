@@ -54,6 +54,15 @@ _log = get_logger(__name__)
 #: der Radius darf um diesen Anteil streuen, bevor die Einpassung abgelehnt wird.
 CYLINDER_TOLERANCE = 0.08
 
+#: Welche Merkmale eine runde Wand haben, auf der eine ebene Fläche liegen
+#: kann: Bohrung und Zapfen (:func:`_faces_on_a_round_wall`).
+ROUND_WALL_KINDS: Final[frozenset[str]] = frozenset({"hole", "pin"})
+
+#: Wie weit die Normale einer Fläche von der Senkrechten zu einer Achse
+#: abweichen darf, damit sie auf deren Mantel liegen kann — der Kosinus, also
+#: rund drei Grad.
+PLANE_ON_A_WALL: Final = 0.05
+
 #: Und wie weit die Punkte **absolut** vom eingepassten Kreis abweichen dürfen,
 #: gemessen in Sehnenhöhen der Polygonnäherung — siehe
 #: :attr:`CylinderFit.spread`.
@@ -1153,6 +1162,9 @@ def detect(
         if check_cancelled is not None:
             check_cancelled()
         found = _faces_finished_in(mesh, found, face_entries, check_cancelled)
+        if check_cancelled is not None:
+            check_cancelled()
+        found = _faces_on_a_round_wall(mesh, found, check_cancelled=check_cancelled)
         if check_cancelled is not None:
             check_cancelled()
         # **Vor dem Freiformfilter, und das ist keine Reihenfolge nach Gefühl.**
@@ -6938,6 +6950,105 @@ def _finished_faces(
         replace(feature, params={**feature.params, "inner": roles[feature.id]})
         for feature in finished
     ]
+
+
+def _faces_on_a_round_wall(
+    mesh: MeshData,
+    found: Mapping[FeatureId, Feature],
+    *,
+    check_cancelled: Callable[[], None] | None = None,
+) -> dict[FeatureId, Feature]:
+    """Eine ebene Fläche auf dem Mantel eines erkannten Zylinders gehört ihm.
+
+    Ein Mantelstreifen ist eine Facette der Rundung und keine Fläche. Das
+    sagt sonst die Naht zu seinen Nachbarn (:func:`_curved_faces`): Zwischen
+    zwei Facetten steht ein kleiner Winkel, und daran hängt die ganze
+    Rückgewinnung in :func:`_large_facet_faces`. **Wo links und rechts eine
+    Nut liegt, hat ein Streifen diese Naht nicht mehr** — er grenzt nur noch
+    an Wände unter 90 Grad. Nach dem Neuzeichnen eines umlaufenden Musters
+    blieb so ein Streifen von 0,45 mm Breite und 10 mm² als eigene Fläche im
+    Baum stehen (22.09.2026, RM-207); im Bild ist er ein Stück Mantel.
+
+    Gefragt wird deshalb die **Lage**, und erst hier, wo die Einpassungen
+    stehen: Die Normale der Fläche steht senkrecht auf der Achse, ihre Ecken
+    liegen auf dem Mantel, und ihre Dreiecksmitten sinken nicht tiefer als
+    eine Tessellierung darunter (:data:`units.MAX_FACET_SAG`). Der dritte
+    Punkt trennt sie von einer **Abflachung**: Deren Ecken liegen ebenfalls
+    auf dem Mantel — sie sind sein Schnittkreis —, ihre Mitte aber
+    Millimeter darunter (gemessen am 22.09.2026 an einem Zylinder Ø 30 mit
+    einer Abflachung von 449 mm²: Ecken 0,0007 mm, Mitten 7,4 mm).
+    """
+    walls = [
+        feature
+        for feature in found.values()
+        if feature.kind in ROUND_WALL_KINDS and "axis" in feature.params and feature.face_indices
+    ]
+    faces = [
+        feature for feature in found.values() if feature.kind == "face" and feature.face_indices
+    ]
+    if not walls or not faces:
+        return dict(found)
+    body = _one_body(mesh).raw
+    points = np.asarray(body.vertices, dtype=float)
+    triangles = np.asarray(body.faces, dtype=np.int64)
+    centres = np.asarray(body.triangles_center, dtype=float)
+    axes = np.array([feature.params["axis"] for feature in walls], dtype=float)
+    axes = axes / np.maximum(np.linalg.norm(axes, axis=1), EPS_GEOM)[:, None]
+    origins = np.array([feature.params["centre"] for feature in walls], dtype=float)
+    radii = np.array([float(feature.params.get("diameter", 0.0)) / 2.0 for feature in walls])
+    swallowed: dict[FeatureId, list[int]] = {}
+    for feature in faces:
+        if check_cancelled is not None:
+            check_cancelled()
+        normal = np.asarray(feature.params.get("normal", (0.0, 0.0, 0.0)), dtype=float)
+        centre = np.asarray(feature.params.get("centre", (0.0, 0.0, 0.0)), dtype=float)
+        # Zwei billige Fragen an alle Mäntel auf einmal: Steht die Fläche
+        # tangential, und liegt ihre Mitte auf dem Radius? Erst was beides
+        # besteht, wird Ecke für Ecke geprüft.
+        offset = centre - origins
+        beside = offset - axes * (offset * axes).sum(axis=1)[:, None]
+        near = (np.abs(axes @ normal) <= PLANE_ON_A_WALL) & (
+            np.abs(np.linalg.norm(beside, axis=1) - radii) <= units.MAX_FACET_SAG
+        )
+        indices = np.asarray(feature.face_indices, dtype=np.int64)
+        indices = indices[(indices >= 0) & (indices < len(triangles))]
+        if not near.any() or indices.size == 0:
+            continue
+        corners = points[np.unique(triangles[indices])]
+        for number in np.flatnonzero(near):
+            axis, origin, radius = axes[number], origins[number], radii[number]
+            if radius <= EPS_GEOM:
+                continue
+            reach = np.linalg.norm(_beside_axis(corners - origin, axis), axis=1)
+            if float(np.abs(reach - radius).max()) > units.MAX_FACET_SAG:
+                continue
+            sunk = np.linalg.norm(_beside_axis(centres[indices] - origin, axis), axis=1)
+            if float((radius - sunk).max()) > units.MAX_FACET_SAG:
+                continue
+            swallowed.setdefault(walls[int(number)].id, []).extend(int(index) for index in indices)
+            break
+    if not swallowed:
+        return dict(found)
+    taken = {name for name, feature in found.items() if feature.kind == "face"}
+    kept: dict[FeatureId, Feature] = {}
+    for name, feature in found.items():
+        if name in swallowed:
+            kept[name] = replace(
+                feature,
+                face_indices=tuple(sorted({*feature.face_indices, *swallowed[name]})),
+            )
+            continue
+        if feature.kind == "face" and name in taken:
+            own = set(feature.face_indices)
+            if any(own <= set(indices) for indices in swallowed.values()):
+                continue
+        kept[name] = feature
+    return kept
+
+
+def _beside_axis(offset: np.ndarray, axis: np.ndarray) -> np.ndarray:
+    """Der Anteil eines Versatzes quer zur Achse — der Abstand davon ist der Radius."""
+    return np.asarray(offset - np.outer(offset @ axis, axis), dtype=float)
 
 
 def _faces_finished_in(

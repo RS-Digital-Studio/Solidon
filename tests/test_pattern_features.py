@@ -952,6 +952,42 @@ def test_a_full_turn_redrawn_has_no_seam() -> None:
     assert after.params["partial"] == 0
 
 
+def test_no_strip_of_the_shell_stays_behind_as_a_face() -> None:
+    """Ein Mantelstück zwischen zwei Rillen ist Mantel, keine Fläche.
+
+    Es hat zu beiden Seiten eine Nut und damit keine Naht mehr zu einer
+    Nachbarfacette — die Rundung erkennt es nicht mehr an ihr, und es stand
+    nach dem Neuzeichnen als Fläche von 10 mm² im Baum (RM-207).
+    """
+    out, _findings = wrapped("rib", "engraved", CIRCUMFERENCE)
+    read = only_pattern(out.features)
+    redrawn, _findings = run_op("resize_feature", out, at_feature=read.id, pitch=4.0)
+    # Der Stift und die zwei Stirnflächen — mehr steht am Rohr nicht.
+    assert kinds(redrawn.features) == {"pin": 1, "face": 2, "pattern": 1}, kinds(redrawn.features)
+    faces = [f for f in redrawn.features.values() if f.kind == "face"]
+    assert all(abs(f.params["normal"][2]) > 0.99 for f in faces), [f.params for f in faces]
+
+
+def test_a_flat_on_a_cylinder_stays_a_face() -> None:
+    """Die Gegenprobe: Eine Abflachung hat ihre Ecken auf dem Mantel und bleibt trotzdem.
+
+    Ihr Rand **ist** der Schnittkreis, also liegt jede Ecke auf dem Radius —
+    erst ihre Mitte sagt, dass sie Millimeter darunter liegt.
+    """
+    shape = trimesh.creation.cylinder(radius=15.0, height=30.0, sections=96)
+    cut = trimesh.creation.box(extents=(40.0, 40.0, 40.0))
+    cut.apply_translation((0.0, 33.0, 0.0))
+    flattened = MeshData.of(trimesh.boolean.difference([shape, cut]))
+    found = detect(flattened)
+    flat = [
+        feature
+        for feature in found.values()
+        if feature.kind == "face" and abs(feature.params["normal"][1] - 1.0) < 0.01
+    ]
+    assert len(flat) == 1, kinds(found)
+    assert flat[0].params["area"] > 100.0
+
+
 def test_a_wrapped_pattern_travels_with_its_axis_when_moved() -> None:
     """Achse und Mitte reisen mit der Bewegung (§21.2), der Durchmesser bleibt."""
     from app.core.perceive.matching import moved_features
