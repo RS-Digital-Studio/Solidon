@@ -58,8 +58,9 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-190 — Druckoptimal ausrichten dreht einen Körper nicht, und der Fall ist nicht nachgestellt](#rm-190) | Geometrie, Erkennung und Druckvorbereitung | Zwölf Körper aus Korpus, Downloads und Roberts Regal drehen richtig; den Körper und die Schrittfolge von Robert holen, an denen die Suche stehen bleibt |
 | [RM-191 — PrusaSlicer verbraucht für dieselbe Übergabe ein Drittel mehr Material](#rm-191) | Geometrie, Erkennung und Druckvorbereitung | Die neun Platten des Regals je Slicer gegen die Prusa-Ausgabe aufschlüsseln: Stützen, Wände oder Füllung — und die Übergabe der Prusa-Schlüssel danach ergänzen |
 | [RM-024 — Gespeicherte Zuordnungsantworten im echten Konfliktfall abnehmen](#rm-024) | Geometrie, Erkennung und Druckvorbereitung | Der Rundlauf steht; gemessen fehlt ein Korpuskörper, dessen erneute Erkennung wirklich mehrdeutig wird |
-| [RM-209 — Die Rundform-Einpassung an Gittermodellen](#rm-209) | Geometrie, Erkennung und Druckvorbereitung | Zehn Hebel gemessen, neun tot: Nicht der Löser ist zu langsam, sondern 1 093 von 1 127 Kegelfits sind vergeblich. Der zehnte trägt — 77 Prozent der Flecken eines Gitters sind deckungsgleich |
-| [RM-210 — Die Erkennung hängt von der Lage des Körpers ab](#rm-210) | Geometrie, Erkennung und Druckvorbereitung | Dasselbe Modell um 13,7 mm verschoben verliert einen Kegel und eine Verrundung; gedreht kommen fünf dazu. Die Kippstelle ist ein einzelner Fleck mit gleichem Startwert — Entscheidung über „am Limit heißt verworfen" steht aus |
+| [RM-209 — Die Rundform-Einpassung an Gittermodellen](#rm-209) | Geometrie, Erkennung und Druckvorbereitung | Gebaut am 22.09.2026: drei Regeln gegen Läufe, die nur am Limit noch antworten. Die Zeitzahlen sind zurückgezogen (unter Fremdlast gemessen) und werden ruhig neu erhoben; die Merkmalsbilanz steht |
+| [RM-210 — Die Erkennung hängt von der Lage des Körpers ab](#rm-210) | Geometrie, Erkennung und Druckvorbereitung | Die Verschiebung ist behoben (RM-209), die Drehung nicht: 16 von 39 echten Modellen liefern gedreht andere Merkmale. Die Kippstelle sitzt in den Verrundungen — **Entscheidung über einen Mindestbogen steht bei Robert**, drei Wege mit Zahlen im Punkt |
+| [RM-211 — Drei Verrundungen mit derselben Mitte tragen eine geratene Nummer](#rm-211) | Geometrie, Erkennung und Druckvorbereitung | Die Merkmalsnummer ist eine Provenienz-ID (§21.2) und wird nur nach der Mitte vergeben; konzentrische Verrundungen haben dieselbe. Gemessen an vier Clips aus `CC2-Werkzeugbox`: sechzehn Merkmale mit identischen Werten, andere Namen, sobald sich an der Erkennung irgendetwas ändert. Eine Passung auf `fillet_1` zeigt danach auf eine andere Rundung. Weg: den Schlüssel entscheidbar machen (Durchmesser, Länge), Korpusabnahme über alle Nummern |
 | [RM-078 — Ladezeit generierter Beispielmodelle an der Orientierung messen](#rm-078) | Geometrie, Erkennung und Druckvorbereitung | Eulenprojekt ohne Fremdlast öffnen und teure Schritte zuordnen |
 | [RM-080 — Restumfang der Trennen-Serie mit aktuellem Code abgleichen](#rm-080) | Geometrie, Erkennung und Druckvorbereitung | Die Sichtflächen-Sperre ist zu Ende gebaut; offen bleiben schräge Ebenen, Symmetrie, globale Schnittfolgen und das Schaustück |
 | [RM-086 — Achsenkonvention beim GLB-Import mit Migration klären](#rm-086) | Geometrie, Erkennung und Druckvorbereitung | GLB-Achsenkonvention mit Herkunft und Migration festlegen |
@@ -72,7 +73,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-164 — Creality Print: Erkennung steht, der Konsolenlauf ist ungeprüft](#rm-164) | Geometrie, Erkennung und Druckvorbereitung | Slicer einrichten, dann Öffnen- und Konsolenweg mit mehreren Spulen abnehmen |
 | [RM-166 — Ergebnisnetze aus Mesh-Ops an einer STL überstehen keinen Weld](#rm-166) | Geometrie, Erkennung und Druckvorbereitung | Der Weld ist behoben und als Kundenweg getestet; offen bleiben das Flackern der Tetraederecke auf dem Linux-Runner und das Beispielarchiv der Werkstattfilme |
 | [RM-181 — Handlungsliste und Baugruppenladen an dichten Netzen weiter vermessen](#rm-181) | Geometrie, Erkennung und Druckvorbereitung | Die Langlochsuche ist gebaut (126 s → 9 s); offen sind `actions_for` mit Netz (0,14 s je Merkmal) und die Ladezeit einer Baugruppe mit vielen Körpern |
-| [RM-193 — Die Erkennung an einer glatten Generator-Freiform kostet Minuten für null Merkmale](#rm-193) | Geometrie, Erkennung und Druckvorbereitung | Entschieden und gebaut am 22.09.2026: Die Haut — der Fleck über der halben Oberfläche, der keine Grundform ist und in Splitter zerfällt — wird nicht mehr Splitter für Splitter eingepasst, ihre Stücke von Gewicht schon (Zapfen, Verrundung bleiben); das Freiformurteil kommt aus der Haut. Drache 482 → 37,7 → 4,2 s, Schüssel 7,3 → 3,0 s (unter Fremdlast, gleiche Merkmale). Offen: §31 verlangt 1 s je 200 000 — was bleibt, sind die vier Fits über den ganzen gekrümmten Fleck in `_large_facet_faces` und noch einmal in `_fitted` (je 0,5 s Kegel an 300 000 Dreiecken) |
+| [RM-193 — Die Erkennung an einer glatten Generator-Freiform kostet Minuten für null Merkmale](#rm-193) | Geometrie, Erkennung und Druckvorbereitung | Entschieden und gebaut am 22.09.2026: Die Haut — der Fleck über der halben Oberfläche, der keine Grundform ist und in Splitter zerfällt — wird nicht mehr Splitter für Splitter eingepasst, ihre Stücke von Gewicht schon (Zapfen, Verrundung bleiben); das Freiformurteil kommt aus der Haut. Drache 482 → 37,7 → 4,2 s, Schüssel 7,3 → 3,0 s (unter Fremdlast, gleiche Merkmale). Vierte Fassung nach einem Korpusfund: Das Urteil zählt nur Flecken **ohne** Grundform — drei Bowlingkugeln verloren sonst ihre Kugel (Rückstand 0,0 über 65 024 Dreiecke), und schon im alten Stand hing es an der Fleckreihenfolge. Zwei Runden statt einer, Drache 4,02 → 3,83 s. Offen: §31 verlangt 1 s je 200 000, gemessen sind 3,83 — es bleibt `_large_facet_faces` (1,2 s am Drachen) und der Löser selbst (RM-209). Zwei Abkürzungen sind gemessen und verworfen: nur den Zylinder fragen (kostet die Bowlingkugel) und die Stichprobe an Riesenflecken (ändert die Erkennung) |
 | [RM-201 — Ein hohler Körper hält die 300 ms der Schichtanalyse nicht](#rm-201) | Geometrie, Erkennung und Druckvorbereitung | Die neue Leistungsmarke `slice_medium_hollow` (200 000 Dreiecke, Wand 1,5 mm) misst 1,5 s für §31 „300 ms": 3 658 Puffer, 796 Differenzen und 718 STRtree-Anfragen je Lauf — die Stufen je Schicht stapeln oder das Ziel für Schalen neu fassen |
 | [RM-208 — Die Kundenwege Verschieben, Bearbeiten, Erkennen und Vorschau auf Zeit](#rm-208) | Geometrie, Erkennung und Druckvorbereitung | Am 22.09.2026 an einer Platte mit 204 000 Dreiecken gemessen und umgebaut: Verschieben 8,6 → 0,5 s, Bohrung 8,3 → 1,8 s, Klick auf eine Bohrung 1,9 → 0,2 s, Vorschau je Zahl 2,2 → 0,04 s ab der zweiten, Erkennung 1,1 → 0,99 s (Kundenmodell 21 → 7,3 s). Dritte Runde: das exakte Vorspiel der Dezimierung (Nadelplatte 11,6 → 0,3 s, erste Vorschau am Fächerexport unter einer Sekunde), `max_distance_to_surface` misst nur, was das Maximum heben kann (Besenhalter 2,9 → 0,25 s), die Freiformhaut (RM-193, Kundenmodell 3,0 s), und der Korpus `F:\3D Dateien` alt gegen neu — Ergebnis im Block |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Der Mac ist gefahren; die Zoom-Dämpfung ist seit dem 16.09. eine Rampe statt einer Klippe und am Gerät zu bestätigen; offen bleiben Linux, die 3DxWare-Mausemulation und die Bildrate an 1 Mio. Dreiecken |
@@ -749,6 +750,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   | Merker auf `_ridge_endpoints` | 0,9 % | der Abschnitt ist zu billig |
   | Schranke auf die Spitzenwanderung | 0,4 % | vergebliche Läufe bleiben bei Weite 2,66 |
   | Sieb über Residuenzeilen oder Startkondition | 0,0–1,8 % verlustfrei | gültige Kegel haben dieselbe Untergrenze sechs |
+  | Sieb über die Normalenspreizung des Flecks | 93 % bei 5° | nimmt 1 217 von 1 302 Formen mit |
 
   Zwei ältere Sätze gehören richtiggestellt. **Die Kegelspitze wandert nicht ins Unendliche:**
   Gemessen liegt sie in den vergeblichen Läufen bei Weite 2,66 (90 % unter 3,38), in den
@@ -768,12 +770,49 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   die 34 gelungenen Läufe rechnen weiter einzeln, und damit bleibt jedes gefundene Merkmal Zahl
   für Zahl, wie es ist.
 
+  **Gemessen bringt er 35,6 Prozent, nicht 77.** Von den 21,66 Sekunden der Schale entfallen
+  14,56 auf Kegelfits; überspringbar sind 1 325 Flecken mit zusammen 7,71 Sekunden, und die
+  Kennzahl kostet 0,26. Bleiben 14,2 Sekunden — ein Faktor 1,53, und damit ist die Abnahme
+  „unter fünf Sekunden" **nicht** erreicht. Die Zahl 77 Prozent zählte Flecken, nicht Zeit: Die
+  Wiederholungen sind zum Teil billige Flecken, die teuren stehen einzeln.
+
+  Geteilt wird dabei ausschließlich die **Kegelantwort**, und nur wenn sie leer war. Das ist
+  nicht Sparsamkeit, sondern Notwendigkeit: `classify` legt auch dann Kandidaten ab, wenn es
+  `False` zurückgibt — eine Kugel mit gutem Rückstand landet in `spheres`, ein Ring in `tori`,
+  und beide tragen später die Freiformauskunft. Wer den ganzen Fleck überspringt, nimmt sie mit.
+  Verlangt man dagegen, dass **kein** Fit etwas geliefert hat, schrumpft die Ersparnis auf 3,6
+  Prozent. Mit der leeren Kegelantwort allein geht `classify` in denselben Zylinderzweig wie
+  heute, und alles Weitere läuft unverändert.
+
   Der Preis ist an Körpern ohne Wiederholung zu messen und nicht zu verschweigen:
   `garden-hose-holder.3mf` hat bei 2 744 Flecken **acht** Geschwister (0,3 Prozent),
-  `countercleaner.3mf` 13 von 293. Die Kennzahl wird deshalb je Fleck gerechnet, wenn `classify`
-  ihn in der Hand hat, und nur für Flecken bis 96 Punkte — ein Riesenfleck bezahlt sie nie, denn
-  alle paarweisen Abstände kosten quadratisch. Für Riesenflecken greift stattdessen die
-  Hautregel aus RM-193.
+  `countercleaner.3mf` 13 von 293 — dort kostet die Kennzahl 0,29 s und spart nichts. Sie wird
+  deshalb je Fleck gerechnet, wenn `classify` ihn in der Hand hat, und nur für Flecken bis 96
+  Punkte — ein Riesenfleck bezahlt sie nie, denn alle paarweisen Abstände kosten quadratisch. Für
+  Riesenflecken greift stattdessen die Hautregel aus RM-193.
+
+  **Ein zwölfter Hebel ist verlustfrei und ungleich verteilt.** `classify` fragt den Kegel zuerst
+  nicht wegen seines Rückstands, sondern wegen seines Winkels: Liegt er unter `CONE_MIN_ANGLE`,
+  geht es in den Zylinderzweig. Der Winkel aber steht **vor** dem Löser fest — `_fit_cone_read`
+  liest ihn aus den Normalen und übergibt ihn als sechste Startgröße. Wo der Startwinkel klein
+  genug ist, darf der Löser entfallen. Gemessen an `Elegoo_erster_Druck.3mf`: Läufe, die im
+  Zylinderzweig enden, starten bei median 0,241 Grad, solche mit Kegelzweig frühestens bei 6,28 —
+  eine Schranke bei 5 Grad spart dort **45,6 Prozent verlustfrei**. An `garden-hose-holder.3mf`
+  liegt die verlustfreie Schranke bei 0,88 Grad (4,7 Prozent), an der Kumiko-Schale hilft sie
+  nicht: Dort starten beide Seiten bei median 87,5 beziehungsweise 88,3 Grad, weil die Schale aus
+  fast ebenen Splitterflecken besteht — eine Schranke von unten trifft 21 von 1 127 Läufen (2,8
+  Prozent). Eine feste Schranke von 0,5 Grad ist überall verlustfrei und spart 2,7 / 2,7 / 40,6
+  Prozent.
+
+  **Der dreizehnte Hebel wäre der schönste gewesen und ist der klarste Fehlschlag.** Die Schale
+  besteht aus fast ebenen Splittern: 98 Prozent ihrer Flecken haben weniger als fünf Grad
+  Normalenspreizung, median 3,7 — an `Elegoo_erster_Druck.3mf` sind es median 58,4 Grad. Das Maß
+  steht vor allen vier Fits fest und kostet 0,02 ms je Fleck. Es trennt trotzdem nicht: Die
+  Flecken **mit** Form haben an der Schale median 4,23 Grad, die ohne median 2,63 — die Formen
+  liegen also im *oberen* Teil derselben engen Verteilung, und ihre Untergrenze (1,22 Grad) liegt
+  unter der der stummen (1,60). Eine Schranke bei fünf Grad spart 93 Prozent und nimmt 1 217 von
+  1 302 Formen mit. Der Grund ist die Tessellierung: Wie weit die Normalen eines Verrundungs-
+  splitters streuen, sagt etwas über die Zahl seiner Segmente und nichts über seine Form.
 
   **Eine Einschränkung, die zuerst geklärt werden muss:** Drei der 445 Klassen gehen
   uneinheitlich aus — deckungsgleiche Flecken, bei denen der eine einen Kegel von 45,20 Grad
@@ -782,10 +821,74 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   sondern in seiner Lage im Raum. Das ist RM-210, und solange es offen ist, ist auch das
   Abnahmekriterium dieses Punktes nicht scharf.
 
-  Abnahme: Die Erkennung eines Gittermodells mit rund 100 000 Dreiecken unter fünf Sekunden, das
-  §31-Ziel für 200 000 Dreiecke belegt oder begründet angepasst, und an allen Modellen des Korpus
-  dieselben Merkmale wie heute — mit der Einschränkung aus RM-210. Gehört zum Leistungsstrang
-  RM-208.
+  **Gebaut am 22.09.2026, Freigabe Robert („alles abarbeiten"): drei Hebel.** Ein Lauf, der sein
+  Auswertungsbudget ausschöpft, gibt nichts zurück; ein Fleck unter `CONE_START_ANGLE` = 0,5 Grad
+  bekommt keinen Kegellöser; und deckungsgleiche Flecken teilen die leere Kegelantwort
+  (`_rigid_key`). Gemessen an **37 echten Modellen** aus `F:\3D Dateien`, jedes einmal vorher und
+  einmal nachher:
+
+  **Die Zeitzahlen dieses Punktes sind zurückgezogen und werden neu gemessen** (22.09.2026).
+  Der erste Vorher-Lauf lief von 18:46 bis 18:51 und damit mitten im Korpuslauf der
+  Nachbarsitzung, die auf derselben Maschine zwei Unterprozesse über 176 Dateien fuhr. Alle
+  Vorher-Zeiten sind dadurch zu hoch, und der gemeldete Median von 1,73× ist nicht falsch,
+  sondern **unbekannt**. Aufgefallen ist es an einem Ausreißer: `1x1-bin.stl` stand mit 2,10 s
+  vorher und 0,08 s nachher, und derselbe Körper braucht in beiden Ständen ruhig gemessen 0,086
+  beziehungsweise 0,078 Sekunden. Die Lehre daraus ist nicht „unter Fremdlast messen ist
+  schlecht" — das stand schon fest —, sondern: Eine zu schöne Zahl, für die es auch noch eine
+  plausible Erklärung gibt („das ist der Umbau des Kollegen"), wird erst recht nicht
+  hinterfragt. Die Erklärung hat den Fehler stabilisiert statt ihn aufzudecken.
+
+  **Die Merkmalsbilanz ist davon unberührt**, denn sie vergleicht Antworten und keine Zeiten.
+  Vier der 37 Modelle ändern Merkmale, und zwar nach oben: An
+  `Elegoo_erster_Druck.3mf` fallen zwei Verrundungen (R4,2) und ein Kegel weg, dafür kommt eine
+  Verrundung mit R2,98 und Rückstand 0,0 dazu; am Gartenschlauchhalter fällt ein Kegel mit
+  Rückstand 0,0137 und es kommen eine Verrundung (R7,24) und ein Kegel mit Rückstand 0,0047 dazu;
+  an der Kumiko-Schale fällt ein Kegel. Die neuen Merkmale haben durchweg kleinere Rückstände als
+  die verlorenen — was wegfällt, stand an der Kippe.
+
+  **Das §31-Ziel bleibt offen.** Die Schale steht bei 12,6 Sekunden, verlangt sind unter fünf.
+  1 127 Kegelfits an 1 412 Splitterflecken sind die Aufgabe selbst; wer die fünf Sekunden will,
+  muss die Flecken loswerden — also fragen, warum ein Gitter aus 95 000 Dreiecken überhaupt
+  1 412 gekrümmte Flecken von median sieben Dreiecken hat. Das ist ein anderer Punkt als dieser.
+
+  Abnahme: das §31-Ziel für 200 000 Dreiecke belegt oder begründet angepasst. Gehört zum
+  Leistungsstrang RM-208.
+
+<a id="rm-211"></a>
+
+- [ ] **RM-211 — Eine Merkmalsnummer wird nur nach der Mitte vergeben, und konzentrische
+  Rundungen haben dieselbe.** Gefunden am 22.09.2026 bei der Korpusabnahme von RM-193: Vier
+  Clips aus `CC2-Werkzeugbox_Druckbereit.3mf` und `CC2工具收纳盒E.3mf` (je 1 656 Dreiecke)
+  lieferten vor und nach dem Umbau **dieselben sechzehn Merkmale mit denselben Werten — und
+  andere Namen**:
+
+  | | alt | neu |
+  |---|---|---|
+  | `fillet_1` | 142 Dreiecke | 88 |
+  | `fillet_2` | 88 | 54 |
+  | `fillet_3` | 54 | 142 |
+
+  Alle drei sitzen auf derselben Mitte `[99,6893 · 119,0005 · 3,8]`. Sortiert wird am Ende
+  von `_fitted` nach `(centre[0], centre[1], centre[2])` auf drei Nachkommastellen; bei
+  gleicher Mitte ist der Vergleich unentschieden, und weil `list.sort` stabil ist, entscheidet
+  die Reihenfolge der Flecken. **Das ist derselbe Fehler, den derselbe Code für Bohrungen
+  schon behoben hat** — dort steht im Kommentar: „welche von beiden `hole_1` wurde, hing an
+  der Reihenfolge der Flecken. Genau das darf eine Provenienz-ID nicht (§21.2)." Die Lösung
+  war damals, alle drei Achsen in den Schlüssel zu nehmen; gegen *konzentrische* Rundungen
+  hilft das nicht.
+
+  **Der Kunde merkt es an der Passung.** Eine Passung, die auf `fillet_1` zeigt, zeigt nach
+  jeder Änderung an der Erkennung womöglich auf eine andere Rundung — ohne Befund, ohne
+  Meldung, mit unveränderten Zahlen im Merkmalfenster. Gefunden wurde es nur, weil ein Umbau
+  die Fleckreihenfolge verschob; es liegt aber seit jeher da und trifft jede künftige
+  Änderung genauso.
+
+  Weg: Den Schlüssel entscheidbar machen — nach der Mitte die Maße, die eine Rundung von
+  ihrer konzentrischen Nachbarin unterscheiden (Durchmesser, Länge), und dasselbe für
+  Zylinder, Kegel, Kugeln und Ringe prüfen, die denselben Schlüssel benutzen. Abnahme: der
+  Korpus `F:D Dateien` mit **Namen** verglichen, nicht nur mit Werten — die bisherigen
+  Läufe vergleichen die Merkmalsliste ohne Kennung und hätten den Fall nicht gesehen, wenn
+  er nicht zufällig als einziger Unterschied dagestanden hätte.
 
 <a id="rm-210"></a>
 
@@ -831,10 +934,71 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   verschieden gelesen werden — die Zusage „Plattformen funktionieren gleich" ist damit nicht
   eingelöst.
 
-  Abnahme: Entscheidung über die Regel „am Limit heißt verworfen"; die Verrundungen ebenso
-  eingegrenzt wie die Kegel; danach entweder die Erkennung gegen starre Bewegungen abgesichert
-  oder die Grenze der Zusage dokumentiert. Ein Test, der einen Korpuskörper verschoben und
-  gedreht einliest und dieselbe Merkmalsmenge verlangt.
+  **Die Regel ist seit dem 22.09.2026 gebaut (RM-209), und sie trägt genau so weit, wie sie
+  kann.** Gemessen an 39 echten Modellen, beide Stände als fester Commit in eigenen Bäumen
+  (`4fa4d38f` gegen `6c3b1e5c`), jedes Modell dreimal bewegt:
+
+  | Bewegung | vorher | nachher |
+  |---|---|---|
+  | ungleichmäßig verschoben | 1 | 1 |
+  | gleichmäßig verschoben | 3 | **0** |
+  | gedreht | 16 | 16 |
+  | betroffene Bewegungen | 20 | **17** |
+
+  **Die Zahl der betroffenen Modelle bleibt 16 — dieselben sechzehn.** Was sinkt, ist die Zahl
+  der Bewegungen, unter denen sie kippen: Die gleichmäßige Verschiebung ist vollständig
+  behoben, `Elegoo_erster_Druck.3mf` und `elegoo_grease_tool.3mf` wackeln nur noch beim Drehen,
+  am Gartenschlauchhalter fällt eine von drei Bewegungen weg. Das passt zur Ursache: Ein Lauf
+  am Auswertungslimit kippt, wenn sich die Koordinaten leicht verschieben; eine Drehung ändert
+  mehr und trifft andere Schwellen — vor allem die der Verrundungen, und die kennen keinen
+  Löser.
+
+  Ein früherer Zwischenstand meldete an `countercleaner.3mf` und `bottom-double.stl` **neue**
+  Lageabhängigkeit. Das war ein Messfehler derselben Familie: Der Vorher-Lauf lief, während die
+  Nachbarsitzung ihren Umbau noch ungestaged im Baum hatte. Gegen feste Commits gemessen
+  verschlechtert sich kein Modell.
+
+  **Die Entscheidung, die offen ist: ein Mindestbogen für Rundformen.** Sie ist keine
+  Numerikfrage, sondern eine über das Erzeugnis, und deshalb steht sie hier und wird nicht
+  nebenbei gebaut. Was heute passiert: Ein Fleck aus acht Dreiecken mit 0,03 Millimetern
+  Wölbung zeigt 2,8 Grad eines Kreises, und daraus extrapoliert die Einpassung einen Radius von
+  99 Millimetern. Die Grenze dafür ist `FLAT_ANGLE` = 0,5 Grad, und daran kommt so ein Fleck
+  bequem vorbei. Für einen Drucker ist das keine Rundung, sondern eine Kante.
+
+  Gemessen, wieviel Kreis eine Verrundung zeigt:
+
+  | Herkunft | überstrichener Bogen |
+  |---|---|
+  | `block_with_rounded_edge.stl` (konstruiert) | 86,25° |
+  | `desk-organizer-v3`, die zwei echten | 82,7° bis 85,9° |
+  | `drill-holder.3mf`, 26 gemeldete | median 151,5°, kleinste 4,6° |
+  | die wackelnden Flecken | 2,0° bis 18,3° |
+
+  Drei Wege, und jeder kostet etwas anderes:
+
+  * **Nichts ändern.** Die Artefakte bleiben, und mit ihnen die Drehabhängigkeit an sechzehn
+    von 39 Modellen.
+  * **Konservativ, etwa 5 Grad.** Trifft am Organizer alle sechs wackelnden Flecken und keine
+    der zwei echten Verrundungen. An `drill-holder.3mf` kostet es vier der 26 gemeldeten, an
+    `Blessed+Family+–+Heart+Script+Decor.3mf` — einem Zierschild mit Schriftzug — sechs von 29.
+  * **Streng, etwa 30 Grad.** Dann bleiben nur konstruierte Verrundungen übrig. Am Zierschild
+    fielen 18 der 29 weg; ob das ein Verlust ist oder eine Bereinigung, hängt daran, ob seine
+    Verrundungen mit median 15 Grad überhaupt gewollt sind.
+
+  Eine feste Schranke trennt **nicht überall**: Am Zierschild überlappen die Bereiche
+  vollständig (gemeldet ab 2,0 Grad, wackelig bis 18,3). Wer sie einführt, entscheidet also
+  auch, dass an solchen Körpern weniger gemeldet wird.
+
+  Abnahme: Entscheidung über den Mindestbogen; danach die Verrundungen ebenso eingegrenzt wie
+  die Kegel — die Kippstelle ist bekannt (`_cylinder_contour`, `hull.geom_type`) —, und
+  entweder die Erkennung gegen starre Bewegungen abgesichert oder die Grenze der Zusage
+  dokumentiert. Ein Test, der einen Korpuskörper verschoben und gedreht einliest und
+  dieselbe Merkmalsmenge verlangt, steht seit dem 22.09.2026 in
+  `tests/test_fit_stability.py` — **er ist heute grün und bleibt stumpf**, solange kein
+  eingecheckter Körper den Fall trägt: Alle 34 Korpuskörper sind stabil, weil sie analytisch
+  gebaut sind. Zwei Versuche, einen wackelnden zu konstruieren (ein Feld gefaster Sechsecke,
+  ein Feld verrundeter Bohrungsmündungen, beide auch durch eine STL geschickt), sind
+  gescheitert: Der Effekt ist statistisch und braucht tausende Flecken an der Kippe.
 
 <a id="rm-078"></a>
 
@@ -1561,8 +1725,26 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   * **implementiert, Release-Abnahme offen** P2.8 — Umschalten: die vier Kernwahl-Haken fallen, Aushöhlen nach Entscheidungstabelle, alte Projekte unverändert. **`6a4918b5`** (Konzept §10.1, Entscheidung 4 vom 17.09.2026): `registry.MENU_TWINS` wird beim Laden nach der Verfügbarkeit des exakten Kerns gebaut — faul, beim ersten Zugriff über `menu_twins()`, denn die Antwort lädt OpenCASCADE (334 Module, 0,43 s je Import des Registers); `exact_kernel_present` ohne Paketkante — die fünf Grundkörper aus `PRIMITIVE_TWINS` sichtbar exakt und versteckt als Netz, ohne Kern umgekehrt; Kegel, Kugel und Ring bekommen ihre exakten Erzeuger (`create_brep_cone`, `_sphere`, `_torus` über `edit.cone`, `edit.sphere`, `edit.torus`), der exakte Quader den Bezugspunkt `anchor`, `ANCHORS` und `tube_fits_the_ring` stehen einmal in `primitive_ops`. *Bohrung setzen* und *Aushöhlen* fragen die Körperart ihres Eingangs (`drill_hole` ruft `drill_brep_hole`, `hollow_object` ruft `shell_exact` nach der Tabelle aus §10.1 — `exactly_hollowable`: Oberseite offen, keine andere Öffnung, keine Entlüftung; sonst der Netzweg mit `evaluate.exact_became_mesh`); ihre exakten Zwillinge bleiben für alte Projekte und den Verlauf registriert und versteckt. `TWIN_TOGGLES`, `_EXACT_TOGGLE`, `_HOLLOW_TOGGLE`, `_lock_twin_toggle` und `_twin_toggle_hint` sind weg, vier Sätze aus sechs Katalogen mit ihnen; der Menüweg eines versteckten Zwillings nennt den Weg (`twin_way`). Der Kernwechsel eines gespeicherten Schritts steht im Kontextmenü des Verlaufs (`HistoryPanel.kernelSwitchRequested`, `MainWindow.switch_kernel`, Sätze aus `registry.kernel_switch_label` — Nutzen, nie Rechenkern; nur an den fünf Grundkörpern, denn Bohren und Aushöhlen entscheidet der Körper selbst, und in den exakten Kern nur, wenn er da ist — sonst kein Eintrag) und `History.change_kernel` wirft `needs_exact` mit der Zahl der Schritte, die sonst anhielten; `exact_names()` ist die eine Antwort dafür in Verlauf und Fenster. Aus dem Review vom 21.09.2026 dazu: `create_brep_cone` mit gleichen Radien baut einen Zylinder statt einer Absage aus OpenCASCADE; die Vorschau am Körper (`placement._creation_tool`) kennt die exakten Erzeuger über ihren Netz-Zwilling; die Palette findet alle zehn unter „exakt“; der Agent liest am versteckten Zwilling „Zweite Wahl“ mit dem Eintrag im Menü; fünf Kundentexte und der Handbuchabsatz zu STEP zeigen auf den Verlauf statt auf den Haken, und `kind_requirement` nennt am Netz-Werkzeug *Flächenbearbeitung beenden* statt der fehlenden Kurven. **Gemessen** (`tests/test_kernel_switch.py`, 18 Tests): Richtung der Paare mit und ohne Kern, alte `create_box`-Schritte bleiben Netz, Bohrung am exakten Körper exakt ohne Haken (Volumen auf 10⁻⁶), Aushöhlen nach den drei Zeilen der Tabelle, Kegel, Kugel und Ring gegen die Analytik auf 10⁻⁶ und gegen ihre Netz-Zwillinge auf zwei Prozent an derselben Stelle, Anker und Drehung des Quaders gegen den Netz-Zwilling auf 10⁻⁶, der Kegel mit gleichen Radien, die Vorschau der fünf exakten Erzeuger, der Wechsel im Verlauf mit der Sperre des Kerns und nur an Grundkörpern, das Register ohne OpenCASCADE im Import; im Fenster (`test_ui.py`) der Eintrag am Quaderschritt, nicht an der Bohrung, hin und zurück mit Undo; die Paritätstabelle führt `drill_hole` und `hollow_object` am exakten Körper als `KEEP`, drei Regeldateien zählen 136 Operationen und 1231 Parameter. Endtor: 13421 bestanden, 48 übersprungen, Ruff, Format und mypy je 0 (Arbeitsbaum am HEAD mit nur diesen Dateien). **Offen aus P2.8:** die übrigen Erzeuger (`create_seal`, Organizer, Skizze, Text) rechnen weiter am Netz und sagen es (`shapes.mesh_only`); die Fenstertests laufen mit dem Release-Tor.
   * **Fensterabnahme 21.09. (`f0e61621`)** — der erste Release-Lauf seit dem 20.09.2026, und er war rot: 110 Fensterfälle in fünfzehn Dateien (74 im ersten Lauf, 36 in `test_ui` und den Viewport-Dateien, hinter denen der Lauf stand). Gemessen am Stand vor P2.8 (`2c70d9a7`, zweiter Arbeitsbaum, beide `FAILED`-Listen mit `comm` verglichen): sechs kamen von P2.8, der Rest aus den Commits des 20.09. (`064e3095`, `1fc131a6`, `102d4bf7`, `5d451fe7`, `851f913a`, `db7d1a5c`), deren Fenstertests nie mit ihrem eigenen Code gefahren worden waren. **Elf Funde in der Anwendung**, alle behoben: Tippen in ein Maßfeld im Bild verzehnfachte die Zahl (zwei Rückwege schrieben während des Lesens formatiert zurück, `reading` in `_place_from_feature_panel`); die Freigabe der Vorschau kam nie, wo ein exakter Körper vernetzt wurde, ein Körper erst im Vorschlag entstand, keine 3D-Ansicht da war oder die Antwort während der Auswertung verfiel (`shown`, `_resume_preview_after_idle`, `differenceApplied` ohne Renderer); *Flächenbearbeitung beenden* galt der Vorschau als leer und ging als Absage hinaus (`_preview_outcome`); ein Quader aus der Befehlspalette über dem Startbildschirm hatte einen freien Übernehmen-Knopf, der nichts tat — die Sitzung war nie ausgewertet (`_begin_from_the_start_screen`: der Anfang ersetzt das offene Projekt, wie beim Einfügen von dort); eine Koordinate senkrecht zur Fläche aus der Maßgruppe verlor ihre Zahl beim Ende der Platzierung (`_hand_quiet_placement_to_panel`); ein Einheitenwechsel rechnete die Analysekarte neu und ein Abbruch hielt nicht (`_map_cancelled_for`); Enter im Fragedialog verwarf die Frage (Fokus auf Abbrechen, `make_primary`); ein Feld ohne Wert im Schritt wanderte mit seiner Vorgabe hinein (`untouched_defaults`); Tabulator, Langlochzug bei stehenden Knöpfen und `DeferredDelete` im Ereignisfilter; und der Absturzbericht als modaler Dialog hielt die Suite offscreen ohne rotes Wort an — der Hänger, den `CLAUDE.md` seit dem 16.08. als nativen Abriss führt, war zur Hälfte das (`report_error` geht offscreen ins Protokoll); und ein freigegebener Objektbaum fing noch an zu zeichnen — der zurückgestellte Start seines Zeichners feuerte nach dem Warten, der Thread überlebte den Prozess (Exit 127 nach „60 passed“; `ObjectTree.release` leert den Vorrat, `MainWindow.release` ruft es). Dazu ein nativer Abriss über dreizehn Portionen (`test_placement_dimensions`, Exit 139, seit `102d4bf7`): Der Aufbau setzte `_surface` ohne `_prepared`, was die Anwendung nie tut, und aus dem `AttributeError` im Ereignisfilter beim Anzeigen wurde unter PySide ein Abriss ohne Traceback — gefunden mit `git bisect` und `sys.settrace`. Dazu dreizehn Wertbeschriftungen, die Tour mit drei Hinweisen und dem Sprung in den Prüfbericht. Die übrigen Tests hielten überholte Stände fest und stehen auf der geltenden Regel mit Datum und Grund (Übernehmen erst nach der dargestellten Vorschau, auch in der Maßgruppe; gestellte Merkmale mit `measure_sources`; der Hinweis auf die Formabweichung in der Kopfzeile des Prüfberichts; drei Knöpfe unten im Merkmalfenster). Release-Tor: Sammelgruppe 13.421 bestanden, 48 übersprungen; Fensterdateien in getrennten Prozessen 18.482 bestanden, 18 rot — genau die Handbuchfälle; Ruff, Format und mypy je 0 (Arbeitsbaum am HEAD mit nur diesen Dateien). **Offen:** `test_manual` und die Handbuchabsätze in `test_wording` (18 Fälle) bis zum nächsten Paketbau. **Entschieden und umgesetzt (`e5ac389a`):** Das Abbrechen des Merkmalfensters hat wieder eine Aufgabe — es steht, solange eine Feldvorschau aus dem Panel wartet, und verwirft sie ohne Schritt und ohne Rückfrage (`offer_cancel`, `_cancel_from_feature_panel`); und der Hinweis auf die Formabweichung ist ein Befund mit Maß geworden (`evaluate.check_form_deviation`: `fit_error` über `units.MAX_FACET_SAG`, am schlimmsten Merkmal, als Weg in die Karte nach §18.4) statt eines Satzes an jedem Körper — ein Quader erreicht wieder „Keine Befunde. Das Teil ist druckbereit.“, die erste Tour nennt wieder zwei Hinweise, die Karte selbst bleibt in der Analyseleiste für jeden. **Und die Leistung ist rot** (`pytest -m performance` im Torbaum, ohne Fremdlast: 38 bestanden, 2 rot), beide seit dem 20.09.: `test_smooth_feature_detection_keeps_its_existing_regression_mark` misst 22,8 s statt unter 10 (Ziel 1 s; `git bisect` mit beiden Tests als Sonde: erster roter Stand `851f913a`, am Tag 0.4.4 noch 3,5 s für beide zusammen), und `test_feature_detection_on_a_freeform_tracks_the_real_customer_path` findet an der Freiform eine Fläche von 0,22 mm², wo keine sein darf (rot zwischen `5d451fe7` und `38e11e09`). Beides gehört zu P1.2 und ist dort vermerkt.
   * **Review über alle Änderungen seit 0.4.4 (21./22.09.2026), eingearbeitet und mit 0.5.0 draußen** — zehn Prüfer nach Gebiet, 148 Befunde, sechs Pakete, jeder Leistungsfund gemessen, jeder Test am Stand davor rot. Exakter Kern: Volumen und Fläche nativ aus dem knotenzerlegten Verbund (STEP-Körper 7–16 s → 0,2 s), starre Bewegungen ohne Integral, Merkmale und Flächenkennzahlen je Körper gemerkt (`features_of` am NURBS-M6 19,6 → 0,9 s), der Gewindeleser mit grober und feiner Abtastung (749 → 97 ms), Gewindebolzen genäht (RM-195), Gewinde einsetzen unter einer halben Sekunde (RM-196), die Aufweitung über einer Durchgangsbohrung an beiden Kernen `through=False`. Netzkern und Szene: die Passung meldet nur Gemessenes (keine `pose_unknown`-Warnung mehr), die Formabweichung gestapelt (Dose mit Deckel 11,8 s → 98 ms), Hash und Cache (Format 23, Kanten je Netz gemerkt, Weg 1 warm 25 → 7 ms), das Schließen an der alten Stelle ohne Narben (796 statt 1852 Dreiecke), eine vergrabene Senkung ohne Volumenverlust, ein Ring ohne Achse sagt ab, Selbstdurchdringung als Feld (5,3 s → 185 ms), Einlesen zählt Kennzahlen einmal, unlesbare Einschlüsse als Warnung. Erkennung: Antworten hängen am Körper und sterben mit ihm (369 MiB tot gehalten → 0), Einschlüsse per Strahltest (1,18 → 0,13 s), ein Kegel zwischen zwei Langlöchern bleibt Kegel, Flächenrollen blockweise, ein Fleck fragt nur seine Ringe (Drache 54,5 → 37,7 s), Bohrungsklick an der 360k-Platte 1,0 → 0,25 s. Fenster und Start: Regel 19 auch feldlos, Gegenstücke asynchron, kein Dialog vor einer exakten Vereinigung, `exact_kernel_present` ohne Import, Start 2,85 → 1,42 s, Hinweise ohne Blase, ein Zug am Modell hält den Vorschlag, der Sitzungsstand rollt nach einem angehaltenen Zug zurück (`halted`). Ansicht: RM-197 bis RM-200. Schichtanalyse und Orientierung: die Suche dreht nur die äußersten Ecken (1,3 M Dreiecke 35 → 5,4 s), `ring_area` einmal, der Keil an jeder fünften Schicht, drei neue Leistungsmarken, `test_parts` 160 → 83 s, `tests.helpers.exact_kernel` mit CI-Wächter, die Paritätstabelle gegen das Register geprüft. Dazu 36 Kundentexte in der Sie-Form und sechs Kataloge nachgezogen. Was offen blieb, steht als RM-201 bis RM-206 im Register; RM-192 und RM-194 sind mit `f0e61621` zu.
-  * **offen** P3.1 — Ebenenvertrag: Versatz-, Dreipunkt- und Neigungsebene gehören der Skizze
-  * **offen** P3.2 — Rahmen, Referenzauflösung, Cache und Verwaisung über sämtliche Verbraucher
+  * **implementiert, Release-Abnahme offen** P3.1 — `02b93253`: Der Ebenenvertrag steht.
+    `offset:<basis>:<abstand>` liegt parallel zur Basis, `tilt:<basis>:<achse>:<winkel>` ist um
+    deren erste oder zweite Achse gekippt, `through:<p>;<p>;<p>` geht durch drei Punkte. Die
+    Basis darf selbst abgeleitet sein (bis `MAX_PLANE_DEPTH`), Abstand und Winkel dürfen
+    Maßausdrücke aus §13 tragen. **Die Basis steht vorn und der Zusatz hinten**, weil eine
+    Flächenebene selbst Doppelpunkte trägt; das Maß prüft schon der Parser, sonst läse
+    `offset:plane:xy` als Basis „plane" mit dem Abstand „xy". Beim Kippen dreht die Zeichnung
+    mit, bei drei Punkten zeigt die erste Achse vom ersten zum zweiten. `frame_for_plane`
+    schweigt, wenn sich eine Ebene nicht auflösen lässt (eine Ansicht ohne Parameter ist kein
+    Fehlerfall), `frame_for_sketch` sagt warum. Bauplan §30.1 nennt die drei Formen;
+    38 Fälle in `tests/test_sketch_planes.py`, Rundreise durch die Projektdatei eingeschlossen,
+    alte Angaben unverändert lesbar. Oberfläche folgt mit P3.3.
+  * **teilweise umgesetzt** P3.2 — `a1b9b735` schließt die zwei Lücken, die der Vertrag
+    aufgerissen hatte: Ein Projektparameter im Abstand einer Ebene zählt jetzt zu den
+    Abhängigkeiten der Skizze (ohne ihn bliebe nach einer Parameteränderung das alte Ergebnis
+    im Cache und die Zeichnung auf der alten Höhe), und `standing_on_feature` geht durch alle
+    Ableitungen bis zur Fläche — die Verwaisungsprüfung fragte nur `is_feature_plane` und hätte
+    eine Skizze auf einer Versatzebene ihre Fläche verlieren lassen, ohne es zu melden. Offen
+    bleiben Rahmen und Referenzauflösung über die **übrigen** Verbraucher (`up_to`,
+    Feldschnitt, Dichtungswege) sowie dauerhafte Bezüge.
   * **offen** P3.3 — „Neue Ebene …“ mit Art-Auswahl, Menüort vorher benannt
   * **offen** P3.4 — Flächenkontur als eigene Handlung, Außen- und Innenränder
   * **offen** P3.5 — exakter Ebenenschnitt über `BRepAlgoAPI_Section`
@@ -1727,14 +1909,78 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   `test_evaluation.py` (Befund ohne weggelassene Formen). Regel in
   `.claude/rules/schichtanalyse.md`.
 
+  **Vierte Fassung, am selben Tag, und sie kam aus dem Korpus: erst der Fit, dann das
+  Urteil.** Drei Bowlingkugeln aus `BowlingGame.3mf` verloren ihr einziges Merkmal — eine
+  Kugel Ø 17,5 über 65 024 Dreiecke, Rückstand 0,0. Eine Bowlingkugel ist **ein** Fleck über
+  die ganze Oberfläche, und sie zerfällt nach Krümmung in 662 Stücke, 659 davon Splitter:
+  Wer diese Stücke fürs Hauturteil zählt, erklärt eine mathematisch perfekte Kugel zur Haut
+  einer Figur, und `is_a_freeform(skin=True)` nimmt sie anschließend weg. Ein Donut, ein
+  Kegel, ein Ball — jede Grundform, die ein ganzes Modell ist, zerfällt wie eine Figur. **Nur
+  der Fit trennt sie.**
+
+  Der Fehler lag nicht erst in der Beschleunigung, sondern schon in der dritten Fassung, und
+  er war reihenfolgeabhängig: Das Urteil fiel beim *ersten* Fleck ohne Form und zählte dabei
+  jeden zerfallenden Fleck mit, auch einen, der längst eine Grundform ergeben hatte. Bei der
+  Bowlingkugel fiel es nie, weil ihr einziger Fleck sofort eine Kugel ergab — ein Körper mit
+  derselben Kugel und einem kleinen unlesbaren Fleck daneben wäre zur Freiform geworden, wenn
+  der kleine Fleck zufällig vorne stand. Nachgestellt an einer Kugel auf einem Sockel: glatt
+  `sphere`, `pin`, `face`; mit 0,02 mm Rauschen auf 15 mm Radius nur noch `face`.
+
+  `_fitted` läuft deshalb in **zwei Runden** statt einer: erst `classify` über alle Flecken,
+  dann die Nachtrennung über die gescheiterten — und **nur deren Fläche** entscheidet über
+  die Haut. Das ist dieselbe Regel wie zuvor, nur mit dem Zusatz, der schon in
+  `.claude/rules/schichtanalyse.md` stand und im Code fehlte: *Flecken ohne Grundform.* Das
+  Urteil hängt jetzt an keiner Reihenfolge mehr, und `worth_splitting` trennt enger nach als
+  vorher (nur die gescheiterten statt aller Flecken ab `MIN_PATCH_FACES`).
+
+  Ruhig gemessen, drei Läufe, Median: Bowlingkugel 0,19 → 0,20 s mit ihrer Kugel zurück;
+  Drache 4,02 → 3,83 s; gähnende Katze 8,62 → 8,17 s. Entwicklungstor grün (13 681 bestanden,
+  26 übersprungen). Nachweise: `test_features.py`
+  (`test_a_ball_that_is_the_whole_body_stays_a_ball` an Kugel **und** Torus,
+  `test_the_skin_judgement_only_counts_patches_without_a_shape`).
+
+  **Die Breitenabnahme ist gefahren** — `cb157bf4` gegen `4fa4d38f`, beide als eigener
+  Worktree (ein erster Lauf war wertlos, weil er den Arbeitsbaum als „neu" nahm und ein
+  fremder Commit mitten hineinlief): **489 Körper, 479 zeichengleich, zehn abweichend, kein
+  Fehler**, Erkennung 1 107,6 gegen 1 127,3 s. Die zehn sind der Effekt, den die Regel
+  vorhergesagt hatte — die Stücke eines gescheiterten Flecks kommen jetzt nach *allen* ganzen
+  Flecken, also sieht `_cylinder_beside_a_torus` eine vollständigere Kandidatenliste:
+
+  * **Vier Clips (1 656 Dreiecke): nur die Nummerierung.** Dieselben sechzehn Merkmale mit
+    denselben Werten, andere Namen. Die Ursache ist **kein** Fehler dieses Umbaus, sondern
+    einer im Bestand, den er sichtbar macht — siehe RM-211.
+  * **Ein Kegel mehr** am Gartenschlauchhalter (152 Dreiecke, halber Winkel 71°, 409 → 410).
+  * **Verrundungsgrenzen verschieben sich** an drei Körpern: Beckenreiniger 60 → 62
+    (drei Verrundungen werden fünf kleinere), Flaschenhalter 444 → 445, Kumiko-Schale
+    7 325 → 7 322. Dieselben Rundungen, anders geschnitten; welche der beiden Fassungen die
+    bessere Grenze zieht, ist an der Geometrie nicht entschieden und wäre eine eigene
+    Messung.
+
+  Die Bilanz bleibt: Ein Korrektheitsfehler an drei Kugeln ist behoben, zehn von 489 Körpern
+  verschieben Merkmalsgrenzen, und keiner verliert eines ohne Ersatz.
+
+  **Und ein Weg dorthin ist gemessen und wieder ausgebaut.** „Auf der Haut wird nur der
+  Zylinder gefragt" — Kegel, Kugel und Ring verwirft `_shapes_on_a_freeform` dort ohnehin,
+  und am Riesenfleck des Drachen kosten alle vier Fits 1 332 ms gegen 255 für den Zylinder
+  allein. Das brachte 0,6 s am Drachen und **kostete die Bowlingkugel ihre Kugel**: Um zu
+  wissen, ob ein Riesenfleck Haut ist oder selbst eine Grundform, muss man ihn einpassen.
+  Die Abkürzung setzt genau das voraus, was sie sparen will. Zurückgebaut; 0,6 s sind kein
+  Merkmal wert, das einem Kunden verschwindet.
+
+  **Zwei weitere Wege, gemessen und verworfen.** Die Fits an Riesenflecken auf eine
+  gleichmäßige Stichprobe zu stützen — `FIT_SOLVER_POINTS` eine Stufe früher, schon bei der
+  Datenaufbereitung — ist zeitlich verlockend (1 108 → 157 ms am selben Fleck) und **ändert
+  die Erkennung**: An der Waschschüssel gibt ein Fleck mit 89 230 Dreiecken ganz gerechnet
+  einen Ring und mit 4 096 Stützpunkten keinen; einer mit 86 761 gibt ganz gerechnet keinen
+  Kegel, mit 16 384 aber einen. Dieselbe Familie wie die neun Hebel aus RM-209.
+
   **Offen bleibt §31.** Eine Sekunde je 200 000 Dreiecke hieße 1,6 s am Drachen; gemessen
-  sind 4,2. Was bleibt, mit Zahlen: `_large_facet_faces` 1,2 s (vier Fits über den ganzen
-  gekrümmten Fleck mit 300 000 Dreiecken, der Kegel allein 0,5 s, davon 0,3 s
-  `_surface_support`), `_fitted` 3,3 s unter dem Profiler (52 `classify`, davon zwei an
-  Flecken mit 307 059 und 190 707 Dreiecken; `fit_cone` 1,4 s, `_surface_support` 0,5 s,
-  `find_helices` 0,4 s, `_curvature_jumps` 0,3 s). Der nächste Schritt ist der Fit an
-  Riesenflecken selbst — Stützpunkte statt aller Ecken in `_surface_support` und
-  `_ridge_endpoints` —, nicht eine weitere Regel.
+  sind 4,2 auf ruhiger Maschine. Was bleibt, mit Zahlen — alle aus demselben belasteten Lauf,
+  in dem die Erkennung 8,4 → 7,4 s ging: `_large_facet_faces` 2,2 s, denn es fittet dieselben
+  Formen über seine eigenen Kandidatenflecken, und dort ist das Hauturteil noch nicht gefällt;
+  `_fitted` 5,2 s (52 `classify`, `fit_cone` 1,7 s, `_surface_support` 0,8 s, `find_helices`
+  0,7 s, `_curvature_jumps` 0,3 s). Der nächste Schritt wäre, `_large_facet_faces` dieselbe
+  Auskunft zu geben — und danach bleibt der Löser selbst (RM-209).
 
   [Befund](ROADMAP-ARCHIV.md#ein-drache-aus-triposg-19-meter-acht-minuten-kein-merkmal-20092026).
 

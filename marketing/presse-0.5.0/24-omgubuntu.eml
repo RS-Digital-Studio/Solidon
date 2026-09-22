@@ -1,0 +1,51 @@
+From: Solidon3D <marketing@solidon3d.de>
+To: contact@omgubuntu.co.uk
+Reply-To: marketing@solidon3d.de
+Subject: App tip: a native Linux CAD-adjacent tool that works offline, no subscription
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+X-Unsent: 1
+
+Hello OMG! Ubuntu team,
+
+an app tip for the Linux desktop, with the details your readers usually ask
+for first.
+
+Solidon3D edits downloaded 3D models without CAD knowledge. Click a hole in a
+printable part and its dimensions appear on the model itself, type 8 instead
+of 6 and the countersink follows, pick a fit for the screw, read the check
+report, hand the file to the slicer you already use. It ships as a Flatpak and
+an AppImage for Linux, alongside Windows and macOS builds. One-time purchase,
+no subscription. After a single activation it runs fully offline: no account,
+no telemetry, no server requirement. A machine with no network connection can
+be activated via a file and a second device.
+
+Version 0.5.0 is a large step. Until now an edited model came back out as a
+triangle mesh; now it is an exact body with real faces and edges, and holes,
+countersinks and threads stay exact when they are moved, duplicated or
+removed. STEP goes in and comes back out cleanly, so the result can be carried
+into FreeCAD or any other CAD tool.
+
+That is also why the program exists. FreeCAD and Fusion accept an STL but
+their tools do not grip triangles, and the mesh tools that could edit them are
+discontinued. Adapting a downloaded part so it fits something has been without
+a proper tool for years.
+
+The most immediately visible change: a honeycomb pattern, a knurl or a set of
+ribs is recognised as one feature with pitch, cell width and depth instead of
+hundreds of faces, and can be removed with a click or reapplied with three
+numbers, including around a cylindrical handle.
+
+There is an assistant with AI features. It is optional, can be switched off
+entirely, and can run locally on your own GPU, so nothing is required to leave
+the machine.
+
+Interface and manual are in six languages. The demo is free and complete until
+the end of October, so there is nothing to request from me to try it.
+
+Best regards
+Robert Schneider
+RS Digital — Solidon3D
+marketing@solidon3d.de
+https://solidon3d.de

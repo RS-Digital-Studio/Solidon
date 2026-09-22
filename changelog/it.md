@@ -32,6 +32,7 @@ scrive in `website/version.json`.
 - Se un modello è fatto di più gusci e non si può leggere con certezza se uno di essi intrappola aria, il rapporto lo dice come avviso.
 - Un modello chiuso libera la sua memoria; prima restavano occupati alcune centinaia di megabyte per modello.
 - Un modello con molte facce piccole, come un motivo a nido d'ape, conserva i suoi fori e raccordi. Prima non mostrava nemmeno una caratteristica.
+- Un campo di 1400 bottoni viene riconosciuto in quattro secondi invece che in dodici.
 
 ### Motivi
 
@@ -93,6 +94,7 @@ scrive in `website/version.json`.
 
 - Un assieme importato si può appoggiare sul piano come un tutto con un clic. Le parti mantengono la loro posizione reciproca.
 - Un glTF senza una dimensione plausibile non viene più creduto in metri. Solidon chiede l'unità e mostra le misure per ogni lettura.
+- Un modello con zone aperte viene chiuso durante la lettura invece di essere solo segnalato: buchi, facce invertite, spigoli con tre facce. Le aperture grandi sono indicate a parte nel rapporto.
 - Un pezzo cavo importato si può riempire con un reticolo: Solidon determina il vano interno attraverso lo sfiato e dice di averlo determinato così.
 - Ridurre i triangoli non lacera più i modelli chiusi. Dove la forma non consente altro, il rapporto indica in quante parti il modello si è diviso.
 - Ridurre i triangoli raggiunge ora il suo obiettivo anche su boccole, anelli e scatole con aperture.
@@ -105,6 +107,10 @@ scrive in `website/version.json`.
 - Solidon si avvia nella metà del tempo.
 - Con una caratteristica selezionata il suggerimento resta, e un'indicazione sulla maniglia non cancella più l'ultima conferma.
 - Se un passaggio dell'assistente ferma la valutazione, la proposta lo ritira del tutto e mostra lo stato precedente.
+- Spostare o ruotare un modello da 200 000 triangoli risponde in mezzo secondo invece che in otto.
+- Annulla risponde subito invece che dopo due secondi e mezzo.
+- Mentre digita un numero l'anteprima compare in mezzo secondo, ognuna successiva in un ottavo di quel tempo.
+- Svuotare calcola un quinto più in fretta.
 
 ## 0.4.4
 

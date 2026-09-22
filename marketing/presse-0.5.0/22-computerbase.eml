@@ -1,0 +1,73 @@
+From: Solidon3D <marketing@solidon3d.de>
+To: presse@computerbase.de
+Reply-To: marketing@solidon3d.de
+Subject: Pressemitteilung: Solidon3D 0.5.0 — zwei Geometriekerne unter einer Oberfläche
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+X-Unsent: 1
+
+Sehr geehrte Redaktion,
+
+anbei eine Pressemitteilung zur Fassung 0.5.0 von Solidon3D, einer
+Desktop-Anwendung für Windows, macOS und Linux.
+
+Wofür die Anwendung da ist
+
+Solidon3D sitzt zwischen dem heruntergeladenen 3D-Modell und dem Slicer. Man
+zieht eine Datei hinein, ändert Maße, setzt Bohrungen, wählt Passungen, und vor
+dem Export prüft das Programm die Druckbarkeit und nennt den Grund für jeden
+Befund. CAD-Kenntnisse sind nicht nötig. Gebaut ist die Anwendung für den
+häufigsten Fall im 3D-Druck: Man lädt ein Modell herunter, und es passt fast.
+
+Für diesen Fall gibt es bisher keinen guten Weg. CAD-Programme wie Fusion oder
+FreeCAD nehmen eine STL an, aber ihre Werkzeuge greifen an Dreiecken nicht, das
+Teil wird neu konstruiert. Netzwerkzeuge können schneiden und reparieren, aber
+nicht maßhaltig ändern, und die beiden bekanntesten sind eingestellt, Meshmixer
+und der 3D Builder von Microsoft. Parametrisierer auf Modellplattformen
+funktionieren nur, wenn der Autor den benötigten Parameter vorgesehen hat.
+Solidon liest stattdessen aus dem Dreiecksnetz, was der Konstrukteur gemeint
+hat, und führt es als benannte, änderbare Merkmale.
+
+Der Kern der Fassung
+
+Bisher blieb das Ergebnis einer Bearbeitung ein Dreiecksnetz. Mit 0.5.0
+entstehen Grundkörper mit echten Flächen und Kanten, und sie bleiben exakt:
+Bohrungen, Senkungen und Gewinde überstehen Verschieben, Verdoppeln, Drehen
+und Entfernen ohne Umwandlung. STEP geht sauber hinein und hinaus.
+
+Technisch laufen dafür zwei Geometriekerne unter einer Oberfläche, ein
+Netzkern und ein exakter B-Rep-Kern. Die Optionen, mit denen sich das bisher
+umschalten ließ, sind entfallen; es gibt keine Kernwahl mehr für den Nutzer.
+Solidon hält den exakten Körper, solange es geht, und benennt die Grenze, wo
+nicht. Bestehende Projekte rechnen unverändert weiter.
+
+Weitere Neuerungen
+
+Ein Wabenmuster, Rändel oder eine Rippenstruktur steht als ein Merkmal mit
+Teilung, Zellbreite und Tiefe im Objektbaum statt als hunderte Flächen und
+lässt sich entfernen oder neu setzen, auch um einen Griff herum. Maße
+erscheinen direkt am Modell mit Zahlenfeldern und Vorschau beim Tippen, statt
+in einem vorgelagerten Dialog. Resin-Drucker werden unterstützt, mit
+Pixelgröße und Mindestwand im Profil. Ein Modell mit offenen Stellen wird beim
+Einlesen geschlossen, statt nur gemeldet zu werden. Und die Anwendung ist
+spürbar schneller geworden, im Erkennen wie im Bewegen großer Modelle.
+
+Zum Produkt
+
+Solidon3D ist eine Einzelentwicklung aus Deutschland. Einmalkauf in drei
+Stufen, kein Abo. Nach einmaliger Freischaltung läuft die Anwendung ohne Netz
+vollständig; es gibt kein Konto, keine Telemetrie und keinen Serverzwang. Ein
+Arbeitsrechner ohne Netz lässt sich über eine Datei und ein zweites Gerät
+freischalten. KI-Funktionen sind vorhanden, abschaltbar und wahlweise lokal.
+Oberfläche und Handbuch liegen in sechs Sprachen vor.
+
+Bis Ende Oktober läuft die Demo, kostenlos und vollständig; zum Prüfen der
+Angaben ist also nichts von mir nötig. Bildmaterial in Druckauflösung stelle
+ich auf Anfrage bereit.
+
+Viele Grüße
+Robert Schneider
+RS Digital — Solidon3D
+marketing@solidon3d.de
+https://solidon3d.de

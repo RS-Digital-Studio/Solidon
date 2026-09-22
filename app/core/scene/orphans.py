@@ -250,16 +250,21 @@ def feature_ref_of_sketch(text: str) -> FeatureRef | None:
     """
     if not text:
         return None
-    from app.core.sketch.planes import feature_plane_parts, is_feature_plane
+    from app.core.sketch.planes import feature_plane_parts, standing_on_feature
     from app.core.sketch.serialize import sketch_from_text
 
     try:
         plane = sketch_from_text(text).plane
     except Exception:
         return None
-    if not is_feature_plane(plane):
+    # **Durch die Ableitungen hindurch** (§30.1): Eine Versatzebene über einer
+    # Fläche hängt an dieser Fläche genauso wie eine Skizze, die direkt darauf
+    # liegt. ``is_feature_plane`` allein sähe das nicht und ließe eine Skizze
+    # zurück, die auf nichts mehr steht.
+    standing = standing_on_feature(plane)
+    if standing is None:
         return None
-    object_id, feature_id = feature_plane_parts(plane)
+    object_id, feature_id = feature_plane_parts(standing)
     return FeatureRef(object_id, feature_id)
 
 

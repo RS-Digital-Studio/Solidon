@@ -1,0 +1,56 @@
+From: Solidon3D <marketing@solidon3d.de>
+To: redaktion@t3n.de
+Reply-To: marketing@solidon3d.de
+Subject: Deutsches Indie-Projekt: CAD-taugliche Bearbeitung ohne Abo und ohne Cloud
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+X-Unsent: 1
+
+Hallo t3n-Team,
+
+ein Vorschlag aus der Ecke, über die Sie regelmäßig schreiben: unabhängige
+Software, Einmalkauf, kein Abo, keine Cloud-Pflicht.
+
+Solidon3D ist eine Desktop-Anwendung für Windows, macOS und Linux, entwickelt
+von einer Person in Deutschland. Sie sitzt zwischen dem heruntergeladenen
+3D-Modell und dem Slicer. Man klickt eine Bohrung an, ihre Maße stehen am
+Modell, man tippt 8 statt 6, und die Senkung geht mit. Dann eine Passung für
+die Schraube, der Prüfbericht vor dem Export, und die Datei geht an den
+Slicer, den man schon hat. CAD muss man dafür nicht können. Nach einmaliger
+Freischaltung läuft alles ohne Netz; es gibt kein Konto, keine Telemetrie und
+keinen Serverzwang. Die KI-Funktionen sind abschaltbar und laufen wahlweise
+lokal auf der eigenen Grafikkarte.
+
+Der Markt dafür ist merkwürdig leer. Fusion und FreeCAD nehmen eine STL an,
+aber ihre Werkzeuge greifen an Dreiecken nicht, also konstruiert man neu. Die
+Netzwerkzeuge, die es konnten, sind eingestellt, Meshmixer und der 3D Builder
+von Microsoft. Bleiben die Parametrisierer auf den Modellseiten, die nur
+funktionieren, wenn der Autor den passenden Parameter vorgesehen hat.
+
+Die Fassung 0.5.0 ist der bisher größte Schritt. Bisher blieb das Ergebnis
+einer Bearbeitung ein Dreiecksnetz. Jetzt entstehen echte Flächen und Kanten,
+und sie bleiben es, auch wenn man eine Bohrung verschiebt oder ein Gewinde
+verdoppelt. STEP geht sauber hinein und hinaus, die Wahl zwischen zwei
+Betriebsarten ist aus der Oberfläche verschwunden.
+
+Das Bildmotiv dieser Fassung ist das Muster. Ein Wabenmuster oder ein Rändel
+steht nicht mehr als hunderte Flächen im Baum, sondern als ein Merkmal mit
+Teilung, Zellbreite und Tiefe, das sich mit einem Klick entfernen und mit drei
+Zahlen neu setzen lässt, auch um einen Griff herum.
+
+Wenn Sie über das Geschäftsmodell schreiben wollen: Bis Ende Oktober läuft die
+Demo, kostenlos und vollständig. Danach kostet die Anwendung einmalig,
+gestaffelt in drei Stufen, mit Freischaltung je Gerät; ein Rechner ohne Netz
+lässt sich über eine Datei und ein zweites Gerät aktivieren. Kein Abo, kein
+Funktionsentzug, wenn die Verbindung fehlt. Fusion kostet gewerblich rund 700
+Euro im Jahr, und die kostenlose Privatnutzung ist auf zehn aktive Dokumente
+begrenzt.
+
+Für Rückfragen oder Bildmaterial melden Sie sich gern direkt bei mir.
+
+Viele Grüße
+Robert Schneider
+RS Digital — Solidon3D
+marketing@solidon3d.de
+https://solidon3d.de

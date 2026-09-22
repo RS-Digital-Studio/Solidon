@@ -1,0 +1,61 @@
+From: Solidon3D <marketing@solidon3d.de>
+To: info@fabbaloo.com
+Reply-To: marketing@solidon3d.de
+Subject: Release lead: Solidon3D 0.5.0 turns a downloaded mesh into an exact body
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+X-Unsent: 1
+
+Hello Fabbaloo team,
+
+a release lead that may fit your coverage of the software side of AM.
+
+Solidon3D sits between the downloaded model and the slicer. Click a hole and
+its dimensions appear on the model, type 8 instead of 6 and the countersink
+follows, pick a fit for the screw, read the check report, send the file to the
+slicer you already use. No CAD knowledge required. Until now the result of an
+edit was always a triangle mesh: useful for printing, useless for anyone who
+wanted to carry the part into a CAD system.
+
+Version 0.5.0 changes that. Holes, countersinks and threads stay real faces
+and edges when they are moved, duplicated or removed, and STEP goes in and
+comes back out cleanly. Two geometry kernels now run under one interface, and
+the options that used to switch between them have been removed. Solidon keeps
+the exact body as long as it can and says so when it cannot; existing projects
+keep computing unchanged.
+
+The reason this matters is the shape of the current market. CAD packages
+accept an STL but their tools do not grip triangles, so the part gets rebuilt.
+Mesh tools edit triangles and never hand back exact surfaces, and the two best
+known ones, Meshmixer and Microsoft's 3D Builder, have been discontinued for
+years. Parametric customisers only work when the original author anticipated
+the parameter. The most common job in printing, adapting a downloaded part so
+it fits something, has been without a proper tool.
+
+Worth noting is what is not claimed. Solidon does not reconstruct a CAD model
+from arbitrary triangles. It recognises features, carries them forward exactly
+where that is possible, and names the limit where it is not. Every dimension
+states in the feature window whether it was measured on the mesh, fitted to a
+surface, or taken from a construction step.
+
+The second thing that separates Solidon from its neighbours matters more day
+to day: the check report gives the reason. Not "warning: overhang", but which
+island in which layer will cost support material and how far the part would
+have to be turned. A slicer measures this too, but only once the part is
+finished. The same idea runs through clearances, which are entered as a
+reference to the material rather than as a number, with profiles you can
+calibrate to your own printer by printing and measuring the supplied test
+pieces.
+
+The demo is free and complete, so nothing is needed from me to try it. Images
+in print resolution are available on request.
+
+Solidon3D is an independent development from Germany, for Windows, macOS and
+Linux, in six languages, with no account and no network.
+
+Best regards
+Robert Schneider
+RS Digital — Solidon3D
+marketing@solidon3d.de
+https://solidon3d.de

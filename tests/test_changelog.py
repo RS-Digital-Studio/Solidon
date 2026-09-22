@@ -321,8 +321,21 @@ def test_the_press_drafts_count_the_same_changes() -> None:
             if zahl not in erlaubt
         ]
 
-    assert gefundene_zahlen >= 4, (
-        f"nur {gefundene_zahlen} Zahlen gefunden — das Muster greift nicht mehr, "
-        f"oder die Entwürfe nennen keine Zahl mehr"
+    # **Die Selbstprobe gehört an eine eigene Zeile, nicht an die Entwürfe.**
+    # Hier stand „mindestens vier Zahlen gefunden": Der Test sollte merken,
+    # wenn sein Muster ins Leere greift, und nahm dafür an, dass jeder Entwurf
+    # eine Zahl nennt. Am 22.09.2026 nennt keiner mehr eine — eine Redaktion
+    # liest eine Geschichte und keine Messreihe (Entscheidung Robert), und
+    # damit war die Selbstprobe eine zweite Zusage über den Inhalt der Mails,
+    # die so niemand gemeint hatte. Geprüft wird das Muster jetzt an einer
+    # Probe, die im Test steht; die Entwürfe dürfen schweigen.
+    probe = "41 für Nutzer sichtbare Änderungen; insgesamt 4711 seit der ersten Demo."
+    erkannt = [
+        int(treffer)
+        for wort in ZAEHLWORTE
+        for treffer in re.findall(rf"(\d{{2,4}})\s+{re.escape(wort)}", probe)
+    ] + [int(treffer) for treffer in NACKTE_ZAHL.findall(probe)]
+    assert 41 in erkannt and 4711 in erkannt, (
+        f"das Muster greift nicht mehr: aus der Probe kam {erkannt}"
     )
     assert not funde, "\n".join(funde)

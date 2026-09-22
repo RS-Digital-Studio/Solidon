@@ -1,0 +1,58 @@
+From: Solidon3D <marketing@solidon3d.de>
+To: contact@3dnatives.com
+Reply-To: marketing@solidon3d.de
+Subject: Pitch: editing downloaded meshes at feature level, localised in six languages
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+X-Unsent: 1
+
+Hello 3Dnatives team,
+
+a pitch with a detail that may matter for your multilingual editions:
+Solidon3D ships its interface and its complete manual in six languages,
+German, English, Spanish, French, Italian and Portuguese. Not a machine
+translation of the menus, but the manual as well.
+
+The product is a desktop application that sits between a downloaded 3D model
+and the slicer. Click a hole and its dimensions appear on the model itself,
+type 8 instead of 6 and the countersink follows, pick a fit for the screw,
+read the check report before you export, hand the file to the slicer you
+already use. No CAD knowledge required.
+
+That fills a gap that has been open for years. CAD packages accept an STL but
+their tools cannot grip triangles, so the part gets rebuilt. The mesh tools
+that could edit them are discontinued, Meshmixer and Microsoft's 3D Builder.
+Parametric customisers only work when the original author anticipated the
+parameter.
+
+Version 0.5.0 is the largest step so far. Until now the result of an edit was
+a triangle mesh; now it is an exact body. Holes, countersinks and threads stay
+exact when they are moved, duplicated or removed, and STEP goes in and comes
+back out cleanly. Two geometry kernels run under one interface and the options
+that used to switch between them are gone; the software keeps the exact body
+where it can and names the limit where it cannot.
+
+The most visual addition: a honeycomb pattern, knurl or set of ribs is
+recognised as one feature with pitch, cell width and depth instead of hundreds
+of faces. One click removes it, three numbers set it again, including around a
+handle, where the pattern is measured in the unrolled surface so the grooves
+are equally deep and the circumference closes without a seam.
+
+Also worth a line: clearance is entered as a reference to the material rather
+than as a number, and the material profiles can be calibrated to a specific
+printer from printed test pieces. Change the material and every fit in the
+project follows.
+
+The demo is free and complete, so anything above can be checked directly.
+Print-resolution images are available on request.
+
+Solidon3D is an independent development from Germany, for Windows, macOS and
+Linux, fully usable offline after a single activation, with no account and no
+telemetry.
+
+Best regards
+Robert Schneider
+RS Digital — Solidon3D
+marketing@solidon3d.de
+https://solidon3d.de

@@ -32,6 +32,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Se um modelo é composto por várias cascas e não se consegue ler com segurança se alguma prende ar, o relatório di-lo como aviso.
 - Um modelo fechado liberta a sua memória; antes ficavam algumas centenas de megabytes por modelo.
 - Um modelo com muitas faces pequenas, como um padrão em favo de mel, mantém os seus furos e arredondamentos. Antes não mostrava uma única característica.
+- Um campo de 1400 saliências é reconhecido em quatro segundos em vez de doze.
 
 ### Padrões
 
@@ -93,6 +94,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 
 - Um conjunto importado pode ser assente na mesa como um todo com um clique. As peças mantêm a sua posição relativa.
 - Um glTF sem um tamanho plausível já não é tomado como metros. O Solidon pergunta a unidade e mostra as medidas para cada leitura.
+- Um modelo com zonas abertas é fechado ao ser lido em vez de apenas comunicado: buracos na malha, faces invertidas, arestas com três faces. As aberturas grandes são indicadas à parte no relatório.
 - Uma peça oca importada pode ser preenchida com uma treliça: o Solidon determina o espaço interior através do respiro e diz que o determinou assim.
 - Reduzir triângulos já não rasga modelos fechados. Onde a forma não permite outra coisa, o relatório indica em quantas partes o modelo se dividiu.
 - Reduzir triângulos alcança agora o seu objetivo também em casquilhos, anéis e caixas com aberturas.
@@ -105,6 +107,10 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O Solidon arranca em metade do tempo.
 - Com uma característica selecionada a dica mantém-se, e uma indicação sobre a pega já não apaga a última confirmação.
 - Se um passo do assistente parar a avaliação, a proposta retira-o por completo e mostra o estado anterior.
+- Mover ou rodar um modelo com 200 000 triângulos responde em meio segundo em vez de oito.
+- Anular responde de imediato em vez de após dois segundos e meio.
+- Enquanto escreve um número, a pré-visualização surge em meio segundo, e cada seguinte num oitavo desse tempo.
+- Esvaziar calcula um quinto mais depressa.
 
 ## 0.4.4
 

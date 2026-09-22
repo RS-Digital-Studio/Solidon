@@ -1,0 +1,56 @@
+From: Solidon3D <marketing@solidon3d.de>
+To: laura.griffiths@rapidnews.com
+Reply-To: marketing@solidon3d.de
+Subject: Editorial lead: dimension provenance and an exact body from a downloaded mesh
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+X-Unsent: 1
+
+Hello Laura,
+
+an editorial lead on a point that tends to be glossed over in this software
+category: where a dimension comes from.
+
+Solidon3D reads downloaded meshes and makes their features editable without
+CAD. Click a hole, its dimensions appear on the model, type a new diameter and
+the countersink follows, pick a fit for the screw, read the check report
+before export. With version 0.5.0 two things changed that are relevant for a
+manufacturing readership.
+
+First, the result is an exact body. Holes, countersinks and threads stay real
+faces and edges when they are moved, duplicated or removed, and STEP goes in
+and comes back out cleanly. Two geometry kernels run under one interface, and
+the options that used to expose that choice have been removed; the software
+keeps the exact body where it can and names the limit where it cannot, rather
+than converting silently.
+
+Second, and this is the part I would offer as the angle: every dimension
+states its provenance. The feature window says whether a value was measured on
+the mesh, fitted to a surface, or taken from the construction step that
+created it. For anyone documenting a part, that distinction is the difference
+between a number and a specification. In the same spirit, a recognised feature
+keeps its identity through edits. Closing a hole and drilling a new one
+produces identical geometry but a different feature, and any fit pointing at
+it loses its reference, while moving it does not.
+
+The same thinking runs through the tolerances. A clearance is not a number in
+the model but a reference to the material, and the material profile can be
+calibrated against printed test pieces, so a documented fit carries the
+printer it was verified on rather than a value someone remembered.
+
+Other items: a honeycomb pattern or knurl is recognised as one feature with
+pitch, cell width and depth; an imported thread is measured, so pitch, starts,
+handedness and nominal diameter, and can have its counterpart generated in a
+table size as a fit; resin printers are supported with pixel size and minimum
+wall; fits are checked on the real bodies in their assembled position.
+
+Solidon3D is an independent development from Germany, desktop, fully usable
+offline after a single activation. The demo is free and complete, so any of
+the above can be checked directly.
+
+Best regards
+Robert Schneider
+RS Digital — Solidon3D
+marketing@solidon3d.de
+https://solidon3d.de

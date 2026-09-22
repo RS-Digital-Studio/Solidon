@@ -1,0 +1,62 @@
+From: Solidon3D <marketing@solidon3d.de>
+To: 3dprint@tech-center.com
+Reply-To: marketing@solidon3d.de
+Subject: Proposta: modificare una STL scaricata senza CAD, con interfaccia in italiano
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+X-Unsent: 1
+
+Gentile redazione,
+
+una proposta per un software che parla italiano per intero: interfaccia e
+manuale completo, non solo i menu.
+
+Solidon3D è un'applicazione desktop che sta fra il modello scaricato e lo
+slicer. Si clicca un foro e le sue quote compaiono sul modello stesso, cioè le
+distanze dai bordi, il centro e il diametro, come campi in cui scrivere. Si
+mette 8 al posto di 6 e la svasatura segue. Poi si sceglie un accoppiamento
+per la vite, si legge il rapporto di controllo prima dell'esportazione e il
+file va allo slicer che si usa già. Non servono conoscenze di CAD.
+
+Per questo caso finora non c'era una buona strada. I programmi CAD accettano
+una STL ma i loro strumenti non fanno presa sui triangoli, quindi il pezzo si
+ricostruisce. Gli strumenti per mesh che ci riuscivano non esistono più,
+Meshmixer e il 3D Builder di Microsoft. E i configuratori parametrici sui siti
+dei modelli funzionano solo se l'autore ha previsto il parametro che serve.
+
+La versione 0.5.0 è il passo più grande finora. Fino a ora il risultato di una
+modifica restava una mesh di triangoli; adesso è un corpo esatto. Fori,
+svasature e filettature restano facce e spigoli veri quando li sposta, li
+duplica o li rimuove, e lo STEP entra ed esce pulito. Sotto l'interfaccia
+lavorano due motori geometrici, e le opzioni che permettevano di scegliere fra
+loro sono state tolte: il programma mantiene il corpo esatto finché può e dice
+quando non può.
+
+La novità più evidente a schermo riguarda i motivi. Un motivo a nido d'ape o
+una zigrinatura riempivano l'albero degli oggetti con centinaia di facce. Ora
+sono una sola caratteristica con passo, larghezza di cella e profondità: un
+clic la rimuove, tre numeri la rimettono, e le celle restano dov'erano. Anche
+attorno a un'impugnatura, dove il motivo viene misurato nello sviluppo della
+superficie, così le scanalature sono ovunque ugualmente profonde e la
+circonferenza si chiude senza giunzione.
+
+Un dettaglio che ai vostri lettori interessa forse più di tutto il resto: il
+gioco di un accoppiamento non si scrive come numero, ma come riferimento al
+materiale. Si sceglie "gioco per PETG" invece di due decimi di millimetro, e
+passando al PLA il gioco cambia con esso. Stampando la scala di tolleranze
+fornita e misurandola, il profilo si adatta alla propria stampante.
+
+La demo è gratuita e completa fino a fine ottobre, quindi non serve nulla da
+parte mia per provare. Resto a disposizione per immagini in alta risoluzione o
+qualsiasi domanda.
+
+Solidon3D è uno sviluppo indipendente dalla Germania, per Windows, macOS e
+Linux, senza account e senza rete. Interfaccia e manuale in sei lingue,
+italiano compreso.
+
+Cordiali saluti
+Robert Schneider
+RS Digital — Solidon3D
+marketing@solidon3d.de
+https://solidon3d.de

@@ -1,0 +1,61 @@
+From: Solidon3D <marketing@solidon3d.de>
+To: editors@all3dp.com
+Reply-To: marketing@solidon3d.de
+Subject: Pitch: a honeycomb pattern as one editable feature, not a carpet of faces
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+X-Unsent: 1
+
+Hello All3DP team,
+
+a pitch with a five-minute test at the end of it.
+
+Open any downloaded STL with a honeycomb pattern or a knurl in a mesh tool and
+you get a few hundred separate faces. There is nothing useful to edit, because
+the pattern was never stored as a structure. It is only geometry that happens
+to look like one.
+
+Solidon3D 0.5.0 recognises it as one feature, with pitch, cell width and
+depth, a single entry in the object tree. One click removes it, three numbers
+set it again, and the cells stay where they were. It works around a handle
+too: there the pattern is measured in the unrolled surface, so the grooves are
+equally deep everywhere and the circumference closes without a seam.
+
+In case Solidon3D has not crossed your desk: it sits between the downloaded
+model and the slicer. Click a hole and its dimensions appear on the model
+itself, distances to the edges, centre, diameter, as fields you type into. Set
+8 instead of 6 and the countersink moves with it. Pick a fit for the screw,
+read the check report before you export, and send the file to the slicer you
+already use.
+
+There is no good way to do that today. In Fusion the imported STL is a lump of
+triangles the CAD tools cannot grip, so you rebuild the part. The mesh tools
+that could edit them are gone, Meshmixer and Microsoft's 3D Builder both
+discontinued. And the parametric customisers on model platforms only help when
+the author anticipated the parameter you need.
+
+Underneath the pattern sits the real change of this release: the mesh becomes
+an exact body. Holes, countersinks and threads stay real faces and edges when
+you move or duplicate them, and STEP goes in and comes back out cleanly. The
+options that used to switch between mesh and exact kernels are gone.
+
+One thing your readers may care about more than any of that: clearance is not
+entered as a number but as a reference to the material. You write "clearance
+for PETG" instead of a value in millimetres, and switching to PLA changes the
+clearance with it. Print the supplied tolerance ladder, measure it, and the
+profile matches your own printer from then on.
+
+Nothing is needed from me to try it: the demo is free and complete. Download
+any model with a knurl, click the pattern in the object tree and set a
+different pitch. I am happy to send print-resolution images or the models I
+used.
+
+Solidon3D runs on Windows, macOS and Linux, in six languages, with no account
+and no network.
+
+Best regards
+Robert Schneider
+RS Digital — Solidon3D
+marketing@solidon3d.de
+https://solidon3d.de

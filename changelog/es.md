@@ -33,6 +33,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Si un modelo consta de varias cáscaras y no se puede leer con seguridad si alguna encierra aire, el informe lo indica como advertencia.
 - Un modelo cerrado libera su memoria; antes quedaban unos cientos de megabytes por modelo.
 - Un modelo con muchas caras pequeñas, como un patrón de panal, conserva sus taladros y redondeos. Antes no mostraba ni una sola característica.
+- Un campo de 1400 tetones se reconoce en cuatro segundos en lugar de doce.
 
 ### Patrones
 
@@ -94,6 +95,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 
 - Un conjunto importado se puede colocar sobre la cama como un todo con un clic. Las piezas conservan su posición relativa.
 - Un glTF sin un tamaño plausible ya no se toma por metros. Solidon pregunta la unidad y muestra las medidas de cada lectura.
+- Un modelo con zonas abiertas se cierra al leerlo en vez de solo avisarlo: agujeros en la malla, caras invertidas, aristas con tres caras. Las aberturas grandes se nombran aparte en el informe.
 - Una pieza hueca importada se puede rellenar con una celosía: Solidon determina el hueco interior a través del respiradero y dice que lo ha determinado así.
 - Reducir triángulos ya no rompe los modelos cerrados. Donde la forma no permite otra cosa, el informe indica en cuántas piezas se ha dividido el modelo.
 - Reducir triángulos alcanza ahora su objetivo también en casquillos, anillos y carcasas con aberturas.
@@ -106,6 +108,10 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Solidon arranca en la mitad de tiempo.
 - Con una característica seleccionada se mantiene la descripción emergente, y una indicación sobre el asa ya no borra el último acuse.
 - Si un paso del asistente detiene la evaluación, la propuesta lo retira por completo y muestra el estado anterior.
+- Mover o girar un modelo de 200 000 triángulos responde en medio segundo en lugar de ocho.
+- Deshacer responde al instante en lugar de tras dos segundos y medio.
+- Al teclear un número la vista previa aparece en medio segundo, y cada siguiente en un octavo de ese tiempo.
+- Vaciar calcula una quinta parte más rápido.
 
 ## 0.4.4
 

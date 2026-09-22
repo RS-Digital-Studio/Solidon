@@ -477,7 +477,13 @@ _NOT_A_RANGE = frozenset(
         "unknown_feature", "unknown_format", "unknown_object", "unknown_parameter",
         "unknown_placeholder", "unknown_region", "unknown_shape", "unknown_source",
         "unknown_target",
-        "unknown_transaction", "unreadable", "unsupported_compression", "unsupported_format",
+        "unknown_transaction", "unreadable",
+        # Eine Zeichenebene, die sich nicht lesen lässt (§30.1): Der Anlass
+        # steht in ``values`` — eine fehlende Achse, drei Punkte auf einer
+        # Geraden, ein Abstand, der kein Maß ist. Keiner davon ist eine Zahl
+        # außerhalb ihres Bereichs, und alle führen zu derselben Handlung.
+        "unreadable_plane",
+        "unsupported_compression", "unsupported_format",
         "undo", "unsafe_url", "unwritable", "userinfo",
         "value_not_allowed", "web_page",
     }

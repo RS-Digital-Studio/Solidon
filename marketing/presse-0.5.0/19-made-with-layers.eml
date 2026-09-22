@@ -1,0 +1,52 @@
+From: Solidon3D <marketing@solidon3d.de>
+To: im2404@toms3d.org
+Reply-To: marketing@solidon3d.de
+Subject: Testidee für 0.5.0: Rändel an einem heruntergeladenen Griff neu setzen
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+X-Unsent: 1
+
+Hallo Tom,
+
+eine Testidee, die sich an einem veröffentlichten Bau nachvollziehen lässt.
+Einen Vorabzugang braucht es nicht, die Fassung ist öffentlich und die Demo
+vollständig.
+
+Nehmen Sie ein beliebiges heruntergeladenes Modell mit Rändel, Wabenmuster
+oder Rippen. In jedem Netzwerkzeug ist das ein Teppich aus Flächen. Solidon3D
+0.5.0 zeigt es als ein Merkmal im Objektbaum, mit Teilung, Zellbreite und
+Tiefe. Ein Klick entfernt es, drei Zahlen setzen es neu, und die Zellen
+bleiben, wo sie waren. Um einen Zylinder wird das Muster in der Abwicklung
+gemessen, damit die Rillen überall gleich tief sind und der Umfang ohne Naht
+aufgeht.
+
+Der Teil, der sich für Ihre Art von Test anbietet, ist die Gegenprobe: den
+Griff einmal mit dem ursprünglichen und einmal mit dem neu gesetzten Rändel
+drucken und Griffigkeit und Oberflächenbild vergleichen. Und nachmessen, ob
+das Muster wirklich gleichmäßig ist. Das ist die Zusage, die Solidon gibt.
+
+Falls das Programm bei Ihnen noch nicht gelaufen ist: Es sitzt zwischen dem
+heruntergeladenen Modell und dem Slicer. Bohrung anklicken, die Maße stehen am
+Modell, 8 statt 6 tippen, die Senkung geht mit, Passung für die Schraube
+wählen, Prüfbericht lesen, Datei an den eigenen Slicer. Der Prüfbericht nennt
+dabei den Grund, also welche Insel in welcher Lage Stützmaterial kostet und
+wie weit das Teil zu drehen wäre. Ein Slicer misst das auch, aber erst, wenn
+sich am Teil nichts mehr ändern lässt.
+
+Darunter steckt der eigentliche Schritt dieser Fassung: Das Teil bleibt ein
+exakter Körper. Bohrungen, Senkungen und Gewinde überstehen Verschieben und
+Verdoppeln als echte Flächen, STEP geht sauber hinein und hinaus, und eine
+Wahl zwischen zwei Betriebsarten gibt es nicht mehr. Damit füllt Solidon eine
+Lücke, die seit Jahren offen ist, denn Fusion nimmt eine STL zwar an, aber die
+CAD-Werkzeuge greifen an Dreiecken nicht, und Meshmixer wie der 3D Builder
+sind eingestellt.
+
+Solidon3D läuft auf Windows, macOS und Linux, in sechs Sprachen, ohne Konto
+und ohne Netz. Bildmaterial und die Beispielmodelle schicke ich gern.
+
+Viele Grüße
+Robert Schneider
+RS Digital — Solidon3D
+marketing@solidon3d.de
+https://solidon3d.de

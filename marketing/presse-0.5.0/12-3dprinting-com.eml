@@ -1,0 +1,53 @@
+From: Solidon3D <marketing@solidon3d.de>
+To: service@3dprinting.com
+Reply-To: marketing@solidon3d.de
+Subject: Possible update to your software guide: Solidon3D now does a full round trip
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+X-Unsent: 1
+
+Hello 3Dprinting.com team,
+
+a targeted suggestion for your software overview rather than a general pitch.
+
+Solidon3D sits in a category that is hard to place: it is not a CAD system and
+not a mesh editor. It takes a downloaded model and lets you edit it at feature
+level without CAD knowledge. Click a hole and its dimensions appear on the
+model itself, type 8 instead of 6 and the countersink follows, pick a fit for
+the screw, read the check report before you export, hand the file to the
+slicer you already use.
+
+With version 0.5.0 one line in any comparison table changes: the result is no
+longer a mesh. Holes, countersinks and threads stay exact through moving,
+duplicating and removing, and STEP goes in and comes back out cleanly, so a
+part edited in Solidon can be carried into a CAD system.
+
+That is also the reason the category exists at all. CAD packages accept an STL
+but cannot grip triangles. Mesh tools edit triangles but never return exact
+surfaces, and the two that came closest are discontinued, Meshmixer and
+Microsoft's 3D Builder. Parametric customisers only work when the original
+author anticipated the parameter.
+
+Other entries that may be relevant for a guide. Licensing is a one-time
+purchase in three tiers with no subscription; after a single activation the
+application runs fully offline, with no account, no telemetry and no server
+requirement, and a machine without a network connection can be activated via a
+file and a second device. Platforms are Windows, macOS and Linux, with native
+Linux packages. Interface and complete manual are available in six languages.
+AI is present, optional, and able to run locally on the user's own GPU, with
+no feature depending on it except the chat itself. On the printing side there
+are printer profiles including resin devices with pixel size and minimum wall,
+printability checks that name the cause rather than just the symptom,
+orientation search, plate layout and handover to the common slicers. And
+clearances are entered as a reference to the material rather than as a number,
+with profiles you can calibrate to your own printer from printed test pieces.
+
+The demo is free and complete, so anything above can be verified directly. If
+a screenshot would help to place the entry, I will provide one.
+
+Best regards
+Robert Schneider
+RS Digital — Solidon3D
+marketing@solidon3d.de
+https://solidon3d.de
