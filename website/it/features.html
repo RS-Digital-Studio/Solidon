@@ -80,8 +80,8 @@
         <div class="shot">
           <div class="stage">
             <div class="chrome" aria-hidden="true"><i></i><i></i><i></i></div>
-            <a href="../bilder/beleg-fenster-it.png?v=84124be0">
-              <img src="../bilder/beleg-fenster-it.png?v=84124be0" width="2560" height="1392" fetchpriority="high"
+            <a href="../bilder/beleg-fenster-it.png?v=7b7fa5fe">
+              <img src="../bilder/beleg-fenster-it.png?v=7b7fa5fe" width="2560" height="1392" fetchpriority="high"
                    alt="La finestra principale di Solidon3D: a sinistra l'albero degli oggetti con parametri e cronologia, al centro la vista 3D, a destra il rapporto di verifica">
             </a>
           </div>
@@ -269,7 +269,7 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../bilder/beleg-skizze-it.png?v=003212c5"><img src="../bilder/beleg-skizze-it.png?v=003212c5" width="2560" height="1392" loading="lazy" decoding="async"
+            <a href="../bilder/beleg-skizze-it.png?v=90e36ab1"><img src="../bilder/beleg-skizze-it.png?v=90e36ab1" width="2560" height="1392" loading="lazy" decoding="async"
                  alt="La modalità schizzo nella finestra principale: si disegna nella vista stessa, la griglia sta sopra il modello con un rettangolo quotato e un cerchio; in basso la barra flottante con gli strumenti di disegno, il passo della griglia, la riga «Piano di disegno: faccia su Insegna — 2247 mm²» e i pulsanti dei vincoli; a destra la scheda con i tredici vincoli del disegno"></a>
           </div>
           <figcaption>Si disegna nella vista — sulla faccia su cui hai fatto clic.</figcaption>
@@ -378,7 +378,7 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../handbuch/it/own-part.png?v=934ca316"><img src="../handbuch/it/own-part.png?v=934ca316" width="520" height="920" loading="lazy" decoding="async"
+            <a href="../handbuch/it/own-part.png?v=b5eaa030"><img src="../handbuch/it/own-part.png?v=b5eaa030" width="520" height="920" loading="lazy" decoding="async"
                  alt="La finestra «Salva la selezione come blocco»: in alto nome, gruppo e descrizione, sotto per ogni parametro l'etichetta, l'unità, il valore minimo e massimo, il valore predefinito e il suo posto nella finestra, poi i punti selezionabili con i loro nomi nella ricetta — in basso il pulsante «Crea blocco»"></a>
           </div>
           <figcaption>La finestra chiede cinque cose — e calcola l'intero intervallo prima di salvare.</figcaption>
@@ -592,13 +592,13 @@
           loro valore dal profilo del materiale, invece di sparire nel
           modello come costante. Davanti stanno i due o tre valori che si
           cambiano davvero — il resto vive sotto «Altre impostazioni».</p>
-          <p class="note">132 operazioni, tutte sullo stesso schema:
+          <p class="note">136 operazioni, tutte sullo stesso schema:
           <b>menu, menu contestuale, riga di comando e chat leggono la
           stessa dichiarazione.</b></p>
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../handbuch/it/op-dialog.png?v=3f39f5ce"><img src="../handbuch/it/op-dialog.png?v=3f39f5ce" width="520" height="216" loading="lazy" decoding="async"
+            <a href="../handbuch/it/op-dialog.png?v=8b2f1f2e"><img src="../handbuch/it/op-dialog.png?v=8b2f1f2e" width="520" height="290" loading="lazy" decoding="async"
                  alt="Il dialogo «Pratica un foro» con diametro e posizione X, un pulsante fx dietro ogni campo numerico e la sezione chiusa «Altre impostazioni»"></a>
           </div>
           <figcaption>Il dialogo di un'operazione — davanti i due o tre
@@ -730,10 +730,11 @@
     <div class="wrap">
       <h2>Altri strumenti per il tuo pezzo</h2>
       <div class="tool-grid">
-        <details class="tool-card" id="grundkoerper" data-operations="create_box create_brep_box create_brep_cylinder create_cone create_cylinder create_sphere create_torus drill_brep_hole drill_hole intersect_objects subtract_objects union_objects">
+        <details class="tool-card" id="grundkoerper" data-operations="create_box create_brep_box create_brep_cone create_brep_cylinder create_brep_sphere create_brep_torus create_cone create_cylinder create_sphere create_torus drill_brep_hole drill_hole intersect_objects subtract_objects union_objects">
           <summary>Combinare solidi di base</summary>
           <div class="tool-content"><p>Crea parallelepipedi, cilindri, sfere, coni e
-        anelli, uniscili, sottraili o conservane l’intersezione. Posiziona un foro
+        anelli con facce e spigoli reali, uniscili, sottraili o conservane
+        l’intersezione. Posiziona un foro
         direttamente sulla faccia scelta.
         Crea un foro con svasatura o allargamento cilindrico in un solo passo, con
         diametro, profondità e angolo di transizione regolabili.</p></div>
@@ -803,11 +804,11 @@
         collegati nel progetto; le scorte di filamento vengono gestite tra tutti i
         progetti nel <a href="#filamentlager">magazzino filamenti</a>.</p></div>
         </details>
-        <details class="tool-card" id="druckvorbereitung" data-operations="arrange_bed check_collisions orient_for_print place_on_bed">
+        <details class="tool-card" id="druckvorbereitung" data-operations="arrange_bed check_collisions orient_for_print place_group_on_bed place_on_bed">
           <summary>Disporre il piatto e verificare la stampa</summary>
-          <div class="tool-content"><p>Appoggia i pezzi sul piano, trova
-        un orientamento favorevole, disponili sul piatto e verifica le
-        sovrapposizioni. Il passaggio diretto allo slicer include le impostazioni
+          <div class="tool-content"><p>Appoggia i pezzi sul piano — un assieme importato anche per intero,
+        con la posizione reciproca dei suoi pezzi —, trova un orientamento
+        favorevole, disponili sul piatto e verifica le sovrapposizioni. Il passaggio diretto allo slicer include le impostazioni
         adatte; il G-code importato permette poi una controverifica con origine
         chiaramente indicata.</p></div>
         </details>

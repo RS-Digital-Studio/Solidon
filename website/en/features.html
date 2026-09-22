@@ -78,8 +78,8 @@
         <div class="shot">
           <div class="stage">
             <div class="chrome" aria-hidden="true"><i></i><i></i><i></i></div>
-            <a href="../bilder/beleg-fenster-en.png?v=b923f31a">
-              <img src="../bilder/beleg-fenster-en.png?v=b923f31a" width="2560" height="1392" fetchpriority="high"
+            <a href="../bilder/beleg-fenster-en.png?v=9be86eac">
+              <img src="../bilder/beleg-fenster-en.png?v=9be86eac" width="2560" height="1392" fetchpriority="high"
                    alt="The Solidon3D main window: object tree with parameters and history on the left, the 3D view in the middle, the inspection report on the right">
             </a>
           </div>
@@ -265,7 +265,7 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../bilder/beleg-skizze-en.png?v=525e7897"><img src="../bilder/beleg-skizze-en.png?v=525e7897" width="2560" height="1392" loading="lazy" decoding="async"
+            <a href="../bilder/beleg-skizze-en.png?v=22275270"><img src="../bilder/beleg-skizze-en.png?v=22275270" width="2560" height="1392" loading="lazy" decoding="async"
                  alt="The sketch mode inside the main window: you draw in the view itself, the grid lies over the model with a dimensioned rectangle and a circle; at the bottom the floating bar with drawing tools, grid width, the line “Sketch plane: face on Sign — 2247 mm²” and the constraint buttons; on the right the Constraints tab with the thirteen constraints of the drawing"></a>
           </div>
           <figcaption>You draw in the view — on the face you clicked.</figcaption>
@@ -372,7 +372,7 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../handbuch/en/own-part.png?v=20f89b4d"><img src="../handbuch/en/own-part.png?v=20f89b4d" width="520" height="920" loading="lazy" decoding="async"
+            <a href="../handbuch/en/own-part.png?v=e139ec31"><img src="../handbuch/en/own-part.png?v=e139ec31" width="520" height="920" loading="lazy" decoding="async"
                  alt="The dialog “Save selection as a part”: name, group and description at the top, below them per parameter the label, unit, smallest and largest value, default and its place in the dialog, then the clickable features with their names in the recipe — at the bottom the button “Create part”"></a>
           </div>
           <figcaption>The dialog asks five things — and computes the whole range before it saves.</figcaption>
@@ -583,13 +583,13 @@
           value from the material profile rather than disappearing into the
           model as a constant. The two or three values you actually change
           are up front — the rest lives under “More settings”.</p>
-          <p class="note">132 operations, all built the same way:
+          <p class="note">136 operations, all built the same way:
           <b>menu, context menu, command line and chat read the same
           declaration.</b></p>
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../handbuch/en/op-dialog.png?v=702435d3"><img src="../handbuch/en/op-dialog.png?v=702435d3" width="520" height="232" loading="lazy" decoding="async"
+            <a href="../handbuch/en/op-dialog.png?v=7786cd66"><img src="../handbuch/en/op-dialog.png?v=7786cd66" width="520" height="306" loading="lazy" decoding="async"
                  alt="The “Drill hole” dialog with diameter and position X, an fx button behind every number field and the collapsed “More settings” section"></a>
           </div>
           <figcaption>An operation dialog — the two or three values you
@@ -716,10 +716,10 @@
     <div class="wrap">
       <h2>More tools for your part</h2>
       <div class="tool-grid">
-        <details class="tool-card" id="grundkoerper" data-operations="create_box create_brep_box create_brep_cylinder create_cone create_cylinder create_sphere create_torus drill_brep_hole drill_hole intersect_objects subtract_objects union_objects">
+        <details class="tool-card" id="grundkoerper" data-operations="create_box create_brep_box create_brep_cone create_brep_cylinder create_brep_sphere create_brep_torus create_cone create_cylinder create_sphere create_torus drill_brep_hole drill_hole intersect_objects subtract_objects union_objects">
           <summary>Combine basic solids</summary>
-          <div class="tool-content"><p>Create boxes, cylinders, spheres, cones and rings, join
-        or subtract them, or keep their intersection. Place a hole directly on the
+          <div class="tool-content"><p>Create boxes, cylinders, spheres, cones and rings with true
+        faces and edges, join or subtract them, or keep their intersection. Place a hole directly on the
         selected face.
         Create a hole with a countersink or cylindrical counterbore in one step, with
         adjustable diameter, depth and transition angle.</p></div>
@@ -784,10 +784,11 @@
         project; your filament stock is managed across projects in the
         <a href="#filamentlager">filament inventory</a>.</p></div>
         </details>
-        <details class="tool-card" id="druckvorbereitung" data-operations="arrange_bed check_collisions orient_for_print place_on_bed">
+        <details class="tool-card" id="druckvorbereitung" data-operations="arrange_bed check_collisions orient_for_print place_group_on_bed place_on_bed">
           <summary>Arrange the plate and check the print</summary>
-          <div class="tool-content"><p>Place parts on the bed, find a suitable
-        orientation, arrange them on the plate and check for overlaps. Direct slicer
+          <div class="tool-content"><p>Place parts on the bed — an imported assembly as a whole, keeping
+        its parts in position to each other —, find a suitable orientation,
+        arrange them on the plate and check for overlaps. Direct slicer
         hand-over includes matching settings; imported G-code then provides a
         cross-check with its own clearly identified source.</p></div>
         </details>

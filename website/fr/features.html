@@ -78,8 +78,8 @@
         <div class="shot">
           <div class="stage">
             <div class="chrome" aria-hidden="true"><i></i><i></i><i></i></div>
-            <a href="../bilder/beleg-fenster-fr.png?v=57fd1126">
-              <img src="../bilder/beleg-fenster-fr.png?v=57fd1126" width="2560" height="1392" fetchpriority="high"
+            <a href="../bilder/beleg-fenster-fr.png?v=e708dfc3">
+              <img src="../bilder/beleg-fenster-fr.png?v=e708dfc3" width="2560" height="1392" fetchpriority="high"
                    alt="La fenêtre principale de Solidon3D&nbsp;: à gauche l'arbre des objets avec les paramètres et l'historique, au centre la vue 3D, à droite le rapport de contrôle">
             </a>
           </div>
@@ -270,7 +270,7 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../bilder/beleg-skizze-fr.png?v=d421a316"><img src="../bilder/beleg-skizze-fr.png?v=d421a316" width="2560" height="1392" loading="lazy" decoding="async"
+            <a href="../bilder/beleg-skizze-fr.png?v=4c40c890"><img src="../bilder/beleg-skizze-fr.png?v=4c40c890" width="2560" height="1392" loading="lazy" decoding="async"
                  alt="Le mode esquisse dans la fenêtre principale&nbsp;: on dessine dans la vue elle-même, la grille recouvre le modèle avec un rectangle coté et un cercle&nbsp;; en bas, la barre flottante avec les outils de dessin, le pas de la grille, la ligne «&nbsp;Plan de dessin&nbsp;: face sur Enseigne — 2247&nbsp;mm²&nbsp;» et les boutons de contraintes&nbsp;; à droite, l'onglet avec les treize contraintes du dessin"></a>
           </div>
           <figcaption>On dessine dans la vue — sur la face que l'on a cliquée.</figcaption>
@@ -381,7 +381,7 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../handbuch/fr/own-part.png?v=67ed3744"><img src="../handbuch/fr/own-part.png?v=67ed3744" width="520" height="920" loading="lazy" decoding="async"
+            <a href="../handbuch/fr/own-part.png?v=fefc26c7"><img src="../handbuch/fr/own-part.png?v=fefc26c7" width="520" height="920" loading="lazy" decoding="async"
                  alt="Le dialogue «&nbsp;Enregistrer la sélection comme bloc&nbsp;»&nbsp;: en haut le nom, le groupe et la description, en dessous pour chaque paramètre le libellé, l'unité, les valeurs minimale et maximale, la valeur par défaut et sa place dans le dialogue, puis les emplacements cliquables avec leurs noms dans la recette — en bas le bouton «&nbsp;Créer le bloc&nbsp;»"></a>
           </div>
           <figcaption>Le dialogue pose cinq questions — et calcule toute la plage avant d'enregistrer.</figcaption>
@@ -596,13 +596,13 @@
           de disparaître dans le modèle comme constantes. Devant, les deux ou
           trois valeurs qu'on change vraiment — le reste vit sous
           «&nbsp;Autres réglages&nbsp;».</p>
-          <p class="note">132 opérations, toutes sur le même modèle&nbsp;:
+          <p class="note">136 opérations, toutes sur le même modèle&nbsp;:
           <b>menu, menu contextuel, ligne de commande et chat lisent la même
           déclaration.</b></p>
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../handbuch/fr/op-dialog.png?v=cf25d033"><img src="../handbuch/fr/op-dialog.png?v=cf25d033" width="520" height="232" loading="lazy" decoding="async"
+            <a href="../handbuch/fr/op-dialog.png?v=a4ec570a"><img src="../handbuch/fr/op-dialog.png?v=a4ec570a" width="520" height="306" loading="lazy" decoding="async"
                  alt="Le dialogue «&nbsp;Percer un trou&nbsp;» avec le diamètre et la position X, un bouton fx derrière chaque champ numérique et la section repliée «&nbsp;Autres réglages&nbsp;»"></a>
           </div>
           <figcaption>Le dialogue d'une opération — devant, les deux ou trois
@@ -735,10 +735,11 @@
     <div class="wrap">
       <h2>D’autres outils pour votre pièce</h2>
       <div class="tool-grid">
-        <details class="tool-card" id="grundkoerper" data-operations="create_box create_brep_box create_brep_cylinder create_cone create_cylinder create_sphere create_torus drill_brep_hole drill_hole intersect_objects subtract_objects union_objects">
+        <details class="tool-card" id="grundkoerper" data-operations="create_box create_brep_box create_brep_cone create_brep_cylinder create_brep_sphere create_brep_torus create_cone create_cylinder create_sphere create_torus drill_brep_hole drill_hole intersect_objects subtract_objects union_objects">
           <summary>Assembler des solides simples</summary>
           <div class="tool-content"><p>Créer des pavés, cylindres, sphères, cônes et
-        anneaux, les unir, les soustraire ou conserver leur intersection. Placer un
+        anneaux avec de vraies faces et arêtes, les unir, les soustraire ou
+        conserver leur intersection. Placer un
         perçage directement sur la face choisie.
         Créer un perçage avec fraisure ou lamage cylindrique en une seule étape, avec
         diamètre, profondeur et angle de transition réglables.</p></div>
@@ -809,11 +810,11 @@
         ; le stock de filaments est géré pour l’ensemble des projets dans le
         <a href="#filamentlager">stock de filament</a>.</p></div>
         </details>
-        <details class="tool-card" id="druckvorbereitung" data-operations="arrange_bed check_collisions orient_for_print place_on_bed">
+        <details class="tool-card" id="druckvorbereitung" data-operations="arrange_bed check_collisions orient_for_print place_group_on_bed place_on_bed">
           <summary>Disposer le plateau et vérifier l’impression</summary>
-          <div class="tool-content"><p>Poser les pièces sur le lit,
-        trouver une orientation favorable, les répartir sur le plateau et vérifier
-        les chevauchements. L’envoi direct au trancheur emporte les réglages adaptés
+          <div class="tool-content"><p>Poser les pièces sur le lit — un assemblage importé aussi d’un bloc,
+        avec la position de ses pièces entre elles —, trouver une orientation
+        favorable, les répartir sur le plateau et vérifier les chevauchements. L’envoi direct au trancheur emporte les réglages adaptés
         ; le G-code importé fournit ensuite une contre-vérification dont l’origine
         reste clairement indiquée.</p></div>
         </details>

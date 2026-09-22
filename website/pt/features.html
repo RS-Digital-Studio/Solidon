@@ -80,8 +80,8 @@
         <div class="shot">
           <div class="stage">
             <div class="chrome" aria-hidden="true"><i></i><i></i><i></i></div>
-            <a href="../bilder/beleg-fenster-pt.png?v=1df4e9fe">
-              <img src="../bilder/beleg-fenster-pt.png?v=1df4e9fe" width="2560" height="1392" fetchpriority="high"
+            <a href="../bilder/beleg-fenster-pt.png?v=dc223fb3">
+              <img src="../bilder/beleg-fenster-pt.png?v=dc223fb3" width="2560" height="1392" fetchpriority="high"
                    alt="A janela principal do Solidon3D: à esquerda a árvore de objetos com parâmetros e histórico, ao centro a vista 3D, à direita o relatório de verificação">
             </a>
           </div>
@@ -271,7 +271,7 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../bilder/beleg-skizze-pt.png?v=0eb575cb"><img src="../bilder/beleg-skizze-pt.png?v=0eb575cb" width="2560" height="1392" loading="lazy" decoding="async"
+            <a href="../bilder/beleg-skizze-pt.png?v=52c6f504"><img src="../bilder/beleg-skizze-pt.png?v=52c6f504" width="2560" height="1392" loading="lazy" decoding="async"
                  alt="O modo de esboço na janela principal: desenha-se na própria vista, a grelha fica sobre o modelo com um retângulo cotado e um círculo; em baixo, a barra flutuante com as ferramentas de desenho, o passo da grelha, a linha «Plano de desenho: face em Letreiro — 2247 mm²» e os botões de restrição; à direita, o separador com as treze restrições do desenho"></a>
           </div>
           <figcaption>Desenha-se na vista — na face em que clicou.</figcaption>
@@ -381,7 +381,7 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../handbuch/pt/own-part.png?v=14b49eec"><img src="../handbuch/pt/own-part.png?v=14b49eec" width="520" height="920" loading="lazy" decoding="async"
+            <a href="../handbuch/pt/own-part.png?v=81780b51"><img src="../handbuch/pt/own-part.png?v=81780b51" width="520" height="920" loading="lazy" decoding="async"
                  alt="A caixa de diálogo «Guardar a seleção como bloco»: em cima nome, grupo e descrição, por baixo, por cada parâmetro, a etiqueta, a unidade, o valor mínimo e máximo, a predefinição e o seu lugar na caixa, depois os pontos clicáveis com os seus nomes na receita — em baixo o botão «Criar bloco»"></a>
           </div>
           <figcaption>A caixa de diálogo pergunta cinco coisas — e calcula todo o intervalo antes de guardar.</figcaption>
@@ -593,13 +593,13 @@
           buscar o seu valor ao perfil de material, em vez de desaparecerem
           no modelo como constantes. À frente estão os dois ou três valores
           que se muda de facto — o resto vive em «Mais definições».</p>
-          <p class="note">132 operações, todas com o mesmo padrão:
+          <p class="note">136 operações, todas com o mesmo padrão:
           <b>menu, menu de contexto, linha de comandos e chat veem a mesma
           declaração.</b></p>
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../handbuch/pt/op-dialog.png?v=e5fd32e1"><img src="../handbuch/pt/op-dialog.png?v=e5fd32e1" width="520" height="232" loading="lazy" decoding="async"
+            <a href="../handbuch/pt/op-dialog.png?v=4ba44c88"><img src="../handbuch/pt/op-dialog.png?v=4ba44c88" width="520" height="306" loading="lazy" decoding="async"
                  alt="O diálogo «Abrir furo» com diâmetro e posição X, um botão fx atrás de cada campo numérico e a secção recolhida «Mais definições»"></a>
           </div>
           <figcaption>O diálogo de uma operação — à frente os dois ou três
@@ -729,10 +729,11 @@
     <div class="wrap">
       <h2>Mais ferramentas para a sua peça</h2>
       <div class="tool-grid">
-        <details class="tool-card" id="grundkoerper" data-operations="create_box create_brep_box create_brep_cylinder create_cone create_cylinder create_sphere create_torus drill_brep_hole drill_hole intersect_objects subtract_objects union_objects">
+        <details class="tool-card" id="grundkoerper" data-operations="create_box create_brep_box create_brep_cone create_brep_cylinder create_brep_sphere create_brep_torus create_cone create_cylinder create_sphere create_torus drill_brep_hole drill_hole intersect_objects subtract_objects union_objects">
           <summary>Combinar sólidos básicos</summary>
           <div class="tool-content"><p>Criar paralelepípedos, cilindros, esferas, cones e
-        anéis, uni-los, subtraí-los ou conservar a sua interseção. Colocar um furo
+        anéis com faces e arestas reais, uni-los, subtraí-los ou conservar a
+        sua interseção. Colocar um furo
         diretamente na face escolhida.
         Criar um furo com escareado ou alargamento cilíndrico num só passo, com
         diâmetro, profundidade e ângulo de transição ajustáveis.</p></div>
@@ -801,10 +802,11 @@
         adequados ficam ligados no projeto; o stock de filamentos é gerido entre
         todos os projetos no <a href="#filamentlager">inventário de filamentos</a>.</p></div>
         </details>
-        <details class="tool-card" id="druckvorbereitung" data-operations="arrange_bed check_collisions orient_for_print place_on_bed">
+        <details class="tool-card" id="druckvorbereitung" data-operations="arrange_bed check_collisions orient_for_print place_group_on_bed place_on_bed">
           <summary>Organizar a placa e verificar a impressão</summary>
-          <div class="tool-content"><p>Assentar peças na cama, encontrar
-        uma orientação favorável, distribuí-las na placa e verificar sobreposições. A
+          <div class="tool-content"><p>Assentar peças na cama — um conjunto importado também por inteiro,
+        com a posição das suas peças entre si —, encontrar uma orientação
+        favorável, distribuí-las na placa e verificar sobreposições. A
         passagem direta para o fatiador inclui as definições adequadas; o G-code
         importado permite depois uma contraprova com a sua origem claramente
         identificada.</p></div>

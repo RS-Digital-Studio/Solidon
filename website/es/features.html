@@ -78,8 +78,8 @@
         <div class="shot">
           <div class="stage">
             <div class="chrome" aria-hidden="true"><i></i><i></i><i></i></div>
-            <a href="../bilder/beleg-fenster-es.png?v=d8b44ce4">
-              <img src="../bilder/beleg-fenster-es.png?v=d8b44ce4" width="2560" height="1392" fetchpriority="high"
+            <a href="../bilder/beleg-fenster-es.png?v=db43d346">
+              <img src="../bilder/beleg-fenster-es.png?v=db43d346" width="2560" height="1392" fetchpriority="high"
                    alt="La ventana principal de Solidon3D: a la izquierda el árbol de objetos con parámetros e historial, en el centro la vista 3D, a la derecha el informe de comprobación">
             </a>
           </div>
@@ -268,7 +268,7 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../bilder/beleg-skizze-es.png?v=accad1ba"><img src="../bilder/beleg-skizze-es.png?v=accad1ba" width="2560" height="1392" loading="lazy" decoding="async"
+            <a href="../bilder/beleg-skizze-es.png?v=fb3c7f44"><img src="../bilder/beleg-skizze-es.png?v=fb3c7f44" width="2560" height="1392" loading="lazy" decoding="async"
                  alt="El modo boceto en la ventana principal: se dibuja en la propia vista, la cuadrícula queda sobre el modelo con un rectángulo acotado y un círculo; abajo, la barra flotante con las herramientas de dibujo, el paso de la cuadrícula, la línea «Plano de dibujo: cara en Letrero — 2247 mm²» y los botones de restricciones; a la derecha, la pestaña con las trece restricciones del dibujo"></a>
           </div>
           <figcaption>Se dibuja en la vista — sobre la cara en la que has hecho clic.</figcaption>
@@ -378,7 +378,7 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../handbuch/es/own-part.png?v=4cb374c6"><img src="../handbuch/es/own-part.png?v=4cb374c6" width="520" height="920" loading="lazy" decoding="async"
+            <a href="../handbuch/es/own-part.png?v=f3e3f94d"><img src="../handbuch/es/own-part.png?v=f3e3f94d" width="520" height="920" loading="lazy" decoding="async"
                  alt="El diálogo «Guardar la selección como bloque»: arriba nombre, grupo y descripción, debajo por cada parámetro la etiqueta, la unidad, el valor mínimo y máximo, el valor por defecto y su lugar en el diálogo, después los puntos seleccionables con sus nombres en la receta — abajo el botón «Crear bloque»"></a>
           </div>
           <figcaption>El diálogo pregunta cinco cosas — y calcula todo el rango antes de guardar.</figcaption>
@@ -594,13 +594,13 @@
           desaparecer en el modelo como constantes. Delante están los dos o
           tres valores que de verdad se cambian — el resto vive bajo «Más
           ajustes».</p>
-          <p class="note">132 operaciones, todas con el mismo patrón:
+          <p class="note">136 operaciones, todas con el mismo patrón:
           <b>menú, menú contextual, línea de comandos y chat leen la misma
           declaración.</b></p>
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../handbuch/es/op-dialog.png?v=3165e77d"><img src="../handbuch/es/op-dialog.png?v=3165e77d" width="520" height="232" loading="lazy" decoding="async"
+            <a href="../handbuch/es/op-dialog.png?v=d5a9eb6e"><img src="../handbuch/es/op-dialog.png?v=d5a9eb6e" width="520" height="306" loading="lazy" decoding="async"
                  alt="El diálogo «Hacer un taladro» con diámetro y posición X, un botón fx detrás de cada campo numérico y la sección plegada «Más ajustes»"></a>
           </div>
           <figcaption>El diálogo de una operación — delante los dos o tres
@@ -731,10 +731,10 @@
     <div class="wrap">
       <h2>Más herramientas para tu pieza</h2>
       <div class="tool-grid">
-        <details class="tool-card" id="grundkoerper" data-operations="create_box create_brep_box create_brep_cylinder create_cone create_cylinder create_sphere create_torus drill_brep_hole drill_hole intersect_objects subtract_objects union_objects">
+        <details class="tool-card" id="grundkoerper" data-operations="create_box create_brep_box create_brep_cone create_brep_cylinder create_brep_sphere create_brep_torus create_cone create_cylinder create_sphere create_torus drill_brep_hole drill_hole intersect_objects subtract_objects union_objects">
           <summary>Combinar sólidos básicos</summary>
-          <div class="tool-content"><p>Crea prismas, cilindros, esferas, conos y anillos,
-        únelos, réstalos o conserva su intersección. Coloca un taladro directamente
+          <div class="tool-content"><p>Crea prismas, cilindros, esferas, conos y anillos con caras
+        y aristas reales, únelos, réstalos o conserva su intersección. Coloca un taladro directamente
         sobre la cara elegida.
         Crea un taladro con avellanado o ensanchamiento cilíndrico en un solo paso,
         con diámetro, profundidad y ángulo de transición ajustables.</p></div>
@@ -805,11 +805,11 @@
         filamentos se gestiona entre proyectos en el
         <a href="#filamentlager">inventario de filamentos</a>.</p></div>
         </details>
-        <details class="tool-card" id="druckvorbereitung" data-operations="arrange_bed check_collisions orient_for_print place_on_bed">
+        <details class="tool-card" id="druckvorbereitung" data-operations="arrange_bed check_collisions orient_for_print place_group_on_bed place_on_bed">
           <summary>Distribuir la placa y comprobar la impresión</summary>
-          <div class="tool-content"><p>Coloca piezas sobre la cama,
-        busca una orientación favorable, distribúyelas en la placa y comprueba
-        solapamientos. El envío directo al laminador incluye los ajustes adecuados;
+          <div class="tool-content"><p>Coloca piezas sobre la cama —un conjunto importado también entero,
+        con la posición de sus piezas entre sí—, busca una orientación
+        favorable, distribúyelas en la placa y comprueba solapamientos. El envío directo al laminador incluye los ajustes adecuados;
         después, el G-code importado permite contrastar el resultado con su origen
         claramente identificado.</p></div>
         </details>
