@@ -59,7 +59,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-191 — PrusaSlicer verbraucht für dieselbe Übergabe ein Drittel mehr Material](#rm-191) | Geometrie, Erkennung und Druckvorbereitung | Die neun Platten des Regals je Slicer gegen die Prusa-Ausgabe aufschlüsseln: Stützen, Wände oder Füllung — und die Übergabe der Prusa-Schlüssel danach ergänzen |
 | [RM-024 — Gespeicherte Zuordnungsantworten im echten Konfliktfall abnehmen](#rm-024) | Geometrie, Erkennung und Druckvorbereitung | Der Rundlauf steht; gemessen fehlt ein Korpuskörper, dessen erneute Erkennung wirklich mehrdeutig wird |
 | [RM-041 — Innenraum importierter entlüfteter Hohlkörper klären](#rm-041) | Geometrie, Erkennung und Druckvorbereitung | Schätzweg oder dokumentierte Grenze des Innenraums entscheiden |
-| [RM-209 — Die Rundform-Einpassung an Gittermodellen](#rm-209) | Geometrie, Erkennung und Druckvorbereitung | Zehn Hebel gemessen, neun tot: Nicht der Löser ist zu langsam, sondern 1 093 von 1 127 Kegelfits sind vergeblich. Der zehnte trägt — 77 Prozent der Flecken eines Gitters sind deckungsgleich |
+| [RM-209 — Die Rundform-Einpassung an Gittermodellen](#rm-209) | Geometrie, Erkennung und Druckvorbereitung | Dreizehn Hebel gemessen, elf tot: Nicht der Löser ist zu langsam, sondern 1 093 von 1 127 Kegelfits sind vergeblich. Es bleiben 35,6 Prozent aus deckungsgleichen Flecken und ein verlustfreier Startwinkel — die fünf Sekunden trägt beides nicht |
 | [RM-210 — Die Erkennung hängt von der Lage des Körpers ab](#rm-210) | Geometrie, Erkennung und Druckvorbereitung | Dasselbe Modell um 13,7 mm verschoben verliert einen Kegel und eine Verrundung; gedreht kommen fünf dazu. Die Kippstelle ist ein einzelner Fleck mit gleichem Startwert — Entscheidung über „am Limit heißt verworfen" steht aus |
 | [RM-076 — Topologieverlust beim Reduzieren von Eule und Spiderman beheben](#rm-076) | Geometrie, Erkennung und Druckvorbereitung | Eule und Spiderman mit Zielreihe und Topologievergleich reproduzieren |
 | [RM-077 — Reduzierungsziel bei Körpern mit Durchbrüchen erreichen](#rm-077) | Geometrie, Erkennung und Druckvorbereitung | Zielreihen an Körpern mit Durchbrüchen gegen den vorhandenen Rückfall messen |
@@ -763,6 +763,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   | Merker auf `_ridge_endpoints` | 0,9 % | der Abschnitt ist zu billig |
   | Schranke auf die Spitzenwanderung | 0,4 % | vergebliche Läufe bleiben bei Weite 2,66 |
   | Sieb über Residuenzeilen oder Startkondition | 0,0–1,8 % verlustfrei | gültige Kegel haben dieselbe Untergrenze sechs |
+  | Sieb über die Normalenspreizung des Flecks | 93 % bei 5° | nimmt 1 217 von 1 302 Formen mit |
 
   Zwei ältere Sätze gehören richtiggestellt. **Die Kegelspitze wandert nicht ins Unendliche:**
   Gemessen liegt sie in den vergeblichen Läufen bei Weite 2,66 (90 % unter 3,38), in den
@@ -816,6 +817,16 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Prozent). Eine feste Schranke von 0,5 Grad ist überall verlustfrei und spart 2,7 / 2,7 / 40,6
   Prozent.
 
+  **Der dreizehnte Hebel wäre der schönste gewesen und ist der klarste Fehlschlag.** Die Schale
+  besteht aus fast ebenen Splittern: 98 Prozent ihrer Flecken haben weniger als fünf Grad
+  Normalenspreizung, median 3,7 — an `Elegoo_erster_Druck.3mf` sind es median 58,4 Grad. Das Maß
+  steht vor allen vier Fits fest und kostet 0,02 ms je Fleck. Es trennt trotzdem nicht: Die
+  Flecken **mit** Form haben an der Schale median 4,23 Grad, die ohne median 2,63 — die Formen
+  liegen also im *oberen* Teil derselben engen Verteilung, und ihre Untergrenze (1,22 Grad) liegt
+  unter der der stummen (1,60). Eine Schranke bei fünf Grad spart 93 Prozent und nimmt 1 217 von
+  1 302 Formen mit. Der Grund ist die Tessellierung: Wie weit die Normalen eines Verrundungs-
+  splitters streuen, sagt etwas über die Zahl seiner Segmente und nichts über seine Form.
+
   **Eine Einschränkung, die zuerst geklärt werden muss:** Drei der 445 Klassen gehen
   uneinheitlich aus — deckungsgleiche Flecken, bei denen der eine einen Kegel von 45,20 Grad
   liefert und der andere keinen. Eine stärkere Kennzahl trennt sie nicht (gleiche Abstandsmenge,
@@ -823,7 +834,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   sondern in seiner Lage im Raum. Das ist RM-210, und solange es offen ist, ist auch das
   Abnahmekriterium dieses Punktes nicht scharf.
 
-  **Was das zusammen heißt, und es ist eine Entscheidung für Robert:** Die zwölf Hebel zusammen
+  **Was das zusammen heißt, und es ist eine Entscheidung für Robert:** Die dreizehn Hebel zusammen
   bringen die Schale von 21,7 auf etwa 13,5 Sekunden. Die Abnahme „unter fünf Sekunden" ist mit
   keiner Änderung am Löser erreichbar, denn 1 127 Kegelfits an 1 412 Splitterflecken sind die
   Aufgabe selbst. Wer die fünf Sekunden will, muss die Flecken loswerden — also die Frage stellen,
