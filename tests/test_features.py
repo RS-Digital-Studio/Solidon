@@ -4080,6 +4080,39 @@ def test_a_patch_on_the_same_cylinder_joins_it_even_when_the_fit_spreads_more() 
     assert angular_span(body, merged[0][0], merged[0][1]) > 300.0
 
 
+def test_a_third_patch_joins_the_wall_that_the_first_two_already_made() -> None:
+    """Der dritte Bogen findet die Wand, die die ersten zwei schon gemacht haben.
+
+    Seit dem 22.09.2026 sucht :func:`_merged_cylinders` seine Kandidaten über
+    vier Spalten statt über eine Schleife (Seite, Radius, Achsrichtung,
+    Kollinearität — an einem Noppenfeld mit 1 403 Kuppen waren es 984 906
+    Einzelfragen und 10,9 von 14 s der Erkennung). Der Fall, der dabei
+    schiefgehen kann, ist genau dieser: Was schon zusammengefasst wurde, muss
+    dem nächsten Stück weiter als Kandidat erscheinen.
+    """
+    from app.core.perceive.features import _merged_cylinders, angular_span, fit_cylinder
+
+    body = trimesh.creation.cylinder(radius=15.0, height=4.0, sections=72)
+    # Drei Bögen derselben Wand: 45 Grad, 45 Grad und der Rest.
+    first_arc, rest = _mantle_split_by_angle(body, 45.0)
+    second_arc = [face for face in rest if _angle_of(body, face) < 90.0]
+    third_arc = [face for face in rest if _angle_of(body, face) >= 90.0]
+    assert first_arc and second_arc and third_arc, "ohne drei Bögen misst dieser Test nichts"
+    fits = [(fit_cylinder(body, arc), arc) for arc in (first_arc, second_arc, third_arc)]
+    assert all(fit is not None for fit, _arc in fits)
+
+    merged = _merged_cylinders(body, MeshData.of(body), [(fit, arc) for fit, arc in fits])
+
+    assert len(merged) == 1, "drei Bögen derselben Wand sind ein Zylinder"
+    assert angular_span(body, merged[0][0], merged[0][1]) > 300.0
+
+
+def _angle_of(body: trimesh.Trimesh, face: int) -> float:
+    """Der Winkel der Dreiecksmitte um die Z-Achse, in Grad von 0 bis 360."""
+    centre = np.asarray(body.triangles_center, dtype=float)[face]
+    return float(math.degrees(math.atan2(centre[1], centre[0])) % 360.0)
+
+
 def test_a_patch_on_a_different_cylinder_stays_apart() -> None:
     """Die Gegenprobe zur Regel darüber: Fünf Prozent Radius liegen innerhalb der
     Toleranz von ``_same_cylinder`` und trotzdem nicht auf der Wand."""

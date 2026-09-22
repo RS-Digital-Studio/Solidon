@@ -2346,10 +2346,37 @@ def _merged_cylinders(
         return found
 
     merged: Cylinders = []
+    # **Die Kandidaten kommen aus vier Spalten, nicht aus einer Schleife.**
+    # Jeder neue Fleck fragte bisher jeden schon gemerkten einzeln, ob sie
+    # dieselbe Fläche sind — bei einem Noppenfeld mit 1 403 Kuppen sind das
+    # 984 906 Aufrufe und 10,9 von 14 Sekunden der Erkennung (22.09.2026).
+    # Drei der vier Fragen in :func:`_same_cylinder` stehen in den Fits
+    # selbst — Seite, Radius, Achsrichtung und Kollinearität —, und die
+    # lassen sich für alle Gemerkten auf einmal beantworten. Gefragt wird
+    # danach nur, wer sie besteht; die Antwort ist dieselbe, nur die
+    # Reihenfolge der Fragen ist eine andere.
+    axes = np.zeros((len(found), 3))
+    centres = np.zeros((len(found), 3))
+    radii = np.zeros(len(found))
+    inward = np.zeros(len(found), dtype=bool)
+    axis_cosine = math.cos(math.radians(SINK_AXIS_LIMIT))
     for fit, patch in found:
         if check_cancelled is not None:
             check_cancelled()
-        for index, (other, gathered) in enumerate(merged):
+        axis = np.asarray(fit.axis, dtype=float)
+        centre = np.asarray(fit.centre, dtype=float)
+        count = len(merged)
+        scale = np.maximum(radii[:count], fit.radius)
+        offset = centre - centres[:count]
+        across = offset - axes[:count] * (offset * axes[:count]).sum(axis=1)[:, None]
+        alike = (
+            (inward[:count] == fit.inward)
+            & (np.abs(radii[:count] - fit.radius) <= scale * CYLINDER_TOLERANCE)
+            & (np.abs(axes[:count] @ axis) >= axis_cosine)
+            & (np.linalg.norm(across, axis=1) <= scale * SINK_FIT_LIMIT)
+        )
+        for index in (int(number) for number in np.flatnonzero(alike)):
+            other, gathered = merged[index]
             if not _same_cylinder(body, (fit, patch), (other, gathered)):
                 continue
             together = gathered + patch
@@ -2388,8 +2415,24 @@ def _merged_cylinders(
                 )
             ):
                 merged[index] = (again, together)
+                # Die Spalten beschreiben, was gemerkt ist: Nach dem
+                # Zusammenfassen steht dort der gemeinsame Fit. Gemessen ist
+                # das nie entscheidend gewesen — unter den Toleranzen von
+                # `_same_cylinder` wandert ein Fit über derselben Wand kaum,
+                # und eine Probe ohne diese vier Zeilen fiel an keinem der
+                # 23 Korpusmodelle und keinem Test auf. Eine Spalte, die
+                # einen verworfenen Fit beschreibt, wäre trotzdem eine
+                # zweite Wahrheit.
+                axes[index] = np.asarray(again.axis, dtype=float)
+                centres[index] = np.asarray(again.centre, dtype=float)
+                radii[index] = again.radius
+                inward[index] = again.inward
                 break
         else:
+            axes[len(merged)] = axis
+            centres[len(merged)] = centre
+            radii[len(merged)] = fit.radius
+            inward[len(merged)] = fit.inward
             merged.append((fit, patch))
     return merged
 
