@@ -1722,7 +1722,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Abstands zum Ringkreis je Dreieck). Abnahme: die Klammer am Ring aus
   `test_surface_deviation.py` unter 0,01 mm, die übrigen Klammern unverändert.
 
-
 <a id="rm-208"></a>
 
 - [~] **RM-208 — Die Kundenwege Verschieben, Bearbeiten, Erkennen und Vorschau auf Zeit.**

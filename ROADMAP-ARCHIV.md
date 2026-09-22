@@ -25,6 +25,8 @@ für den Rückstand glauben darf, ist das Register in `ROADMAP.md`.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-09-22 | [Der Import schließt, was offen ist (22.09.2026)](#der-import-schließt-was-offen-ist-22092026) |
+| 2026-09-22 | [Ein Wabenmuster ist ein Merkmal, nicht 1 199 Flächen (22.09.2026)](#ein-wabenmuster-ist-ein-merkmal-nicht-1-199-flächen-22092026) |
 | 2026-09-22 | [Resin-Stufe 1 und die Exportauflösung (22.09.2026)](#resin-stufe-1-und-die-exportauflösung-22092026) |
 | 2026-09-22 | [Das Muster, die Grenze der Erkennung und drei Reste (22.09.2026)](#das-muster-die-grenze-der-erkennung-und-drei-reste-22092026) |
 | 2026-09-22 | [Das Review über alle Änderungen seit 0.4.4 (21./22.09.2026)](#das-review-über-alle-änderungen-seit-044-2122092026) |
@@ -8439,7 +8441,7 @@ Arbeit gilt ausschließlich `ROADMAP.md`.
 | RM-076 — `decimate_mesh` erzeugt an 3as Eule nicht-mannigfaltige Kanten — der einzige echte Reduzierer-Fehler des Dreierpakets | weiter offen → [RM-076](ROADMAP.md#rm-076) | app/core/geom/mesh_ops.py:121–160 übernimmt erfolgreich dezimierte Geometrie weiter ungeprüft; _simplification_findings meldet Schäden. Tests/test_subdivision.py:443ff prüft Meldung bei Dichtheitsverlust, nicht dessen Vermeidung. RM129 betrifft denselben Produktionsweg. |
 | RM-077 — Der Reduzierer erreicht bei Euler-0-Körpern sein Ziel nicht | weiter offen → [RM-077](ROADMAP.md#rm-077) | app/core/geom/mesh_ops.py:137–140 schaltet erst bei len(reduced.faces) >= source.triangle_count um; :947ff beschreibt Euler-0-Stillstand weiterhin. tests/test_subdivision.py:372–400 belegt Rückfall an dichtem Zylinder, nicht am ursprünglichen Ringfall. Die pauschale Forderung nach einem anderen Reduzierer ist überholt. |
 | RM-078 — Ein generiertes Modell zu öffnen kostet eine Minute — der Punkt ist echt, die Ursache war falsch zugeordnet | weiter offen → [RM-078](ROADMAP.md#rm-078) | Der Originalpunkt korrigiert seine 61,77 s selbst auf 9,4–18,5 s und widerlegt 574/909 CPU-s als Öffnungszeiten. 3a787a57 und spätere Änderungen betreffen Orientierung, Einlesen und Auswertung; eine neue isolierte Öffnungsabnahme liegt hier nicht vor. |
-| RM-079 — 61 Prozent der mehrzeiligen Texte der Startseite laufen über 75 Zeichen | weiter offen → [RM-079](ROADMAP.md#rm-079) | website/style.css besitzt weiterhin viele lokale max-width/ch-Regeln, aber keine gemeinsame main-p/main-li-Grenze. Die historischen 48/79 und 153 Zeichen wurden nicht neu gemessen und dürfen nur als Anlass stehen. |
+| RM-079 — 61 Prozent der mehrzeiligen Texte der Startseite laufen über 75 Zeichen | weiter offen → [RM-079](ROADMAP-ARCHIV.md#rm-079) | website/style.css besitzt weiterhin viele lokale max-width/ch-Regeln, aber keine gemeinsame main-p/main-li-Grenze. Die historischen 48/79 und 153 Zeichen wurden nicht neu gemessen und dürfen nur als Anlass stehen. |
 | RM-080 — Die Trennen-Serie abarbeiten — Reihenfolge T1 → T5 → T4 → T2 → T3 → | weiter offen → [RM-080](ROADMAP.md#rm-080) | app/core/geom/autosplit.py berücksichtigt _support_after_cut und best_face_candidate; tests/test_autosplit.py:587ff prüft automatische Schwalbenschwänze. protect existiert im Kern (:239,:494ff), aber kein entsprechender Dokumentwert in app/core/types.py oder Bedienanschluss in main_window/split_bar. T1/T5 sind historisch abgeschlossen. |
 | RM-081 — Die Ollama-Serie abarbeiten — O1 zuerst (sofort machbar, kein | weiter offen → [RM-081](ROADMAP.md#rm-081) | app/core/backends/llm.py:968 nutzt inzwischen qwen3:14b; :1020/:1032 warmhalten 60s/30s, :1236 CPU-Kopplung, :1920ff CPU-Hinweis. tools/check_local_model.py und measure_local_model.py existieren. O1, alte Modellvorgabe und O6-Auftrag sind überholt; O2/O3 und vollständige aktuelle Messreihe bleiben. |
 | RM-082 — Beide Aktionen auf der echten Startfläche bauen und live prüfen | erledigt | app/ui/start_screen.py enthält feedbackRequested/supportRequested und beide Aktionskarten. tests/test_start_screen.py:657ff prüft Signale und QAccessible-Namen; :714ff beide Themen und 1920×1080, 1040×760, 800×600, 640×720 samt Mindesthöhe 44. Vorhandene Rückmeldung ist integriert, kein neu zu bauender Weg. |
@@ -23136,7 +23138,7 @@ Rechtstexte stehen nach `665cfceb` auf 73. Die übrigen Textseiten:
 | Startseite | 101 |
 | ki-modelle.html | 101 |
 
-- **Historischer Befund RM-079 (weiter offen; aktuelle Aufgabe [RM-079](ROADMAP.md#rm-079)):** **61 Prozent der mehrzeiligen Texte der Startseite laufen über 75
+- **Historischer Befund RM-079 (abgeschlossen am 14.09.2026; der Nachweis steht unten in diesem Abschnitt):** **61 Prozent der mehrzeiligen Texte der Startseite laufen über 75
       Zeichen** (72, exakt gemessen @1440: 48 von 79 Elementen, längste
       Zeile 153; nur 34 tragen irgendeine max-width; Italienisch getrennt
       gemessen — es ist nicht die Sprache, es ist die fehlende Begrenzung).
@@ -23163,6 +23165,32 @@ Rechtstexte stehen nach `665cfceb` auf 73. Die übrigen Textseiten:
       Karten-Layouts zu brechen; Absatz-genau messen, dann die Grenze setzen.
 
 ---
+
+**Abgeschlossen am 14.09.2026** — der Punkt stand bis dahin in der
+Arbeitsliste und ist am 22.09.2026 hierher gewandert:
+
+<a id="rm-079"></a>
+
+- [x] **RM-079 — Zeilenlängen der Website über alle Sprachen prüfen.** Die Textbreiten der Website
+  als gemeinsame Regel überprüfen und verbleibende überlange Absätze begrenzen. Abnahme:
+  tatsächliche Zeilenlängen in allen sechs Sprachen bei schmalen und breiten Fenstern; Karten und
+  Spalten dürfen nicht durch eine pauschale Regel unnötig schmal werden.
+
+  **Gemessen und behoben am 14.09.2026.** Drei Sonden in QtWebEngine
+  (`.claude/.state/rm-079-website-320-2026-09-14/`) haben alle 42 Seiten bei 320 Punkt Breite
+  geladen. `body { overflow: clip }` verhinderte das Rollen und verschluckte stumm, was nicht
+  passte: vier deutsche Überschriften mit einem Wort breiter als der Schirm („Allgemeine
+  Geschäftsbedingungen“ 79 Punkt über dem Rahmen, „Datenschutzerklärung“ 59,
+  „Widerrufsbelehrung“ und „Systemvoraussetzungen“ je 23) und die Sprachliste, die bei 320 bis
+  479 Punkt bei −21 begann, weil sie mit `right: 0` am links stehenden Griff hing. Behoben in
+  `website/style.css`: Überschriften trennen nach Sprache (`hyphens: auto`, unter 40rem dazu
+  `overflow-wrap: anywhere`), die Sprachliste öffnet unter 30rem nach rechts. Nachher: keine
+  Überschrift über ihrem Kasten, die Liste bei 320 Punkt zwischen 78 und 230, auf jeder Seite
+  `scrollWidth` gleich `clientWidth`; breite Fenster unverändert (bei 1000 Punkt bliebe `left: 0`
+  acht Punkt vor dem Rand, deshalb gilt die Regel nur unter 30rem). Die übrigen Sprachen haben
+  keine so langen Wörter. `tests/test_website.py` 388 grün nach `tools/stamp_assets.py`.
+
+  [Bisheriger Befund](ROADMAP-ARCHIV.md#die-zeilen-laufen-zu-lang-31082026).
 
 ## Sinnvolles Trennen — die Serie (31.08.2026)
 
@@ -29335,6 +29363,72 @@ RM-201 bis RM-206 im Register.
 
 ---
 
+## Der Import schließt, was offen ist (22.09.2026)
+
+Robert, nach einer Suchmaschinen-Übersicht über Meshmixer und JustFixSTL: „Die
+können wir ja alle sauber und schnell beheben oder? … Dann sauber beheben am
+besten beim Import … Alles dann bei der Reparatur beheben."
+
+**Was vorher war.** `unify_normals` richtete die Flächen, `stitch_t_junctions`
+vernähte T-Kreuzungen — und `trimesh.repair.fill_holes` schloss Ringe aus drei
+und vier Kanten. Alles darüber blieb offen; verzweigte Kanten wurden nur benannt
+(„das ist kein Loch, sondern eine Verzweigung"), ohne eine Handlung dazu; und der
+Import meldete „Das Modell ist nicht geschlossen. Reparieren schließt die offenen
+Stellen." — ein Hinweis auf einen Knopf, den der Kunde erst finden musste, und
+ein Modell, das bis dahin nicht druckbar war.
+
+**Was gebaut wurde**, alles in `geom/repair.py`, und vom Import
+(`ingest/loader.normalise`) wie von der Operation gefahren:
+
+* `resolve_branching_edges` — an einer Kante mit drei Nachbarn liegen Flächen
+  übereinander. Gemessen an Roberts Waschschüssel (215 073 Dreiecke, eine
+  verzweigte Kante): zwei Flächen mit **null Grad** zueinander, 0,0003 mm² neben
+  0,27 mm². Die kleinste geht, und zwar iterativ, weil eine Fläche an zwei
+  solchen Kanten beim Fallen eine dritte auslöst (gähnende Katze: 27 Kanten in
+  einem Durchgang, danach keine mehr).
+* `split_pinched_vertices` — zwei Löcher, die sich eine Ecke teilen, geben dort
+  vier Randkanten, und die Verkettung kann nicht entscheiden, welcher Rand zu
+  welchem gehört. Die Flächen wissen es: Ihre Fächer an der Ecke bekommen je eine
+  eigene Kopie, am selben Ort, also ändert sich nichts an der Form.
+* `boundary_loops` + `fill_boundary_loops` — die Ränder werden **ungerichtet**
+  verkettet, denn die Wicklung ist an dieser Stelle der Kette noch nicht
+  einheitlich (an der Katze ließen sich gerichtet 60 von 75 Randkanten verketten;
+  bei den übrigen zeigten zwei Kanten in dieselbe Ecke). Die Richtung kommt danach
+  aus dem Dreieck an der ersten Kante — ohne diesen Schritt kam ein Würfel mit
+  4 000 mm³ statt 8 000 zurück. Gefüllt wird mit Ohren in der Ausgleichsebene; wo
+  deren Sehnen auf Kanten treffen, die schon zwei Flächen tragen, tritt der Fächer
+  über die Ringmitte an ihre Stelle, denn seine inneren Kanten sind immer neu.
+  **Keine Füllung legt eine Fläche auf eine Kante mit zwei Nachbarn** — sonst
+  entstehen aus Löchern Verzweigungen (Katze: 15 geschlossene Ringe, neun neue
+  verzweigte Kanten).
+* Eine Öffnung über `FILL_LOOP_SHARE` der Oberfläche wird **geschlossen und
+  gemeldet** (`repair.wide_hole_filled`, Warnung): Dort ist eine Fläche
+  entstanden, die im Modell nicht war. Als **Verbot** taugte die Zahl nicht, und
+  der Körper, der es zeigt, ist der schlichteste — ein Würfel aus zwölf Dreiecken
+  trägt je Dreieck neun Prozent seiner Oberfläche, und ein einziges fehlendes
+  Dreieck läge über jeder Schwelle, die eine fehlende Wand ausschließen soll.
+
+**Die Abnahme am Korpus `F:\3D Dateien`** (171 Dateien, 484 Körper, je Datei ein
+Unterprozess über den Ladeweg der Anwendung): 366 Körper kamen dicht herein,
+**118 offene gehen geschlossen heraus, keiner bleibt offen**, kein Fehler, 108 s
+für alle zusammen. Die langsamsten sind die größten: gähnende Katze (452 314
+Dreiecke) 16 s, Piratenschiff-Baugruppe (1 223 836) 10 s, Mausoleum-Drache
+(2 330 374) 9,5 s — letzterer war schon dicht, das ist reines Einlesen. Die
+Warnung über eine große Öffnung traf keinen einzigen Korpuskörper: Dort gab es
+Lücken in der Vernetzung, keine fehlenden Wände. An `broken_open.stl` trifft sie,
+und dafür steht ein Test.
+
+**Ein Fehler auf dem Weg, den nur die Messung zeigte.** Nach der Reparatur stand
+`closed` auf `None`, und die Zeile darunter schrieb `bool(None)` in den Cache des
+Netzes: Ein geschlossener Körper meldete sich als offen — sichtbar erst, als ein
+Korpuskörper mit null offenen und null verzweigten Kanten als „nicht dicht" in der
+Auswertung stand.
+
+**Fünf Zusagen sind umgeschrieben**, weil die Entscheidung sie ablöst: `repair`
+und der Import schließen auch eine fehlende Wand, statt sie zu melden
+(`test_repair.py`, `test_geometry_review.py`, `test_ingest.py`). Sechs neue Tests
+halten Ringfüller, Wicklung, Kantenprüfung, Verzweigung und Sanduhr fest.
+
 ## Resin-Stufe 1 und die Exportauflösung (22.09.2026)
 
 Gebaut nach `konzepte/konzept-resin-2026-08.md` §4 mit den zwei Präzisierungen
@@ -29438,14 +29532,15 @@ abbildet, darf ihr nicht fehlen.
   behält sein Feld „Feinheit" für den Fall, dass ein Netz im Dokument
   gemeint ist.
 
-## Das Muster, die Grenze der Erkennung und drei Reste (22.09.2026)
+---
 
-Robert am 22.09.2026: „alle texturen dann erkennbar machen usw und vollständiger
-review", danach „Offene abarbeiten wir wollen einen Stand um 0.5.0 haben und
-alles soll funktionieren nichts verschieben" und schließlich „207 und alles
-andere soll noch vor 0.5.0 fertig sein". Was daraus wurde, steht hier mit
-seinen Messwerten; die Arbeit selbst liegt in main ab `1d41a345`. Was offen
-blieb, steht als RM-209 im Register.
+## Ein Wabenmuster ist ein Merkmal, nicht 1 199 Flächen (22.09.2026)
+
+Roberts Auftrag am Schraubendreherhalter („alle texturen dann erkennbar machen
+usw und vollständiger review") und sein Nachsatz am selben Abend („207 und
+alles andere soll noch vor 0.5.0 fertig sein"). Gebaut auf `rm-207-muster`, am
+22.09.2026 nach 0.5.0 in `main` gemergt (`2061def3`), die zwei Reste mit
+`0e1c2993` hinterher; der Zweig ist danach entfernt worden.
 
 <a id="rm-207"></a>
 
