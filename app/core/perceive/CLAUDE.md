@@ -514,11 +514,34 @@ unberührt; das Budget gilt nur der Karte.
 | `features.py` | Merkmalserkennung (§21.1): Flächenformen einpassen und benennen; `detect_voids` belegt Hohlräume ohne Weg nach außen über vier Tore |
 | `helix.py` | Wendelflächen (§21.1): Achse, Steigung, Gangtiefe. Ein eingelesener Bolzen bringt sonst je nach Größe drei bis zwanzig Merkmale mit, die es nicht gibt — die Flanke eines Gewindegangs ist örtlich eine Kegelfläche und passt sich sauber ein. Wo eine Wendel liegt, steht danach **ein** `thread` statt vieler Erfundener. Welche Einpassungen eine Wendel verschluckt, sagt `features.without_phantoms_on` für beide Kerne — der exakte Leser `brep.thread` ruft dieselbe Regel |
 | `slots.py` | Langlöcher (§21.1): zwei Halbzylinder, zwei ebene Flanken, ein Merkmal. Dieselbe Bauart wie `helix.py` und aus demselben Grund — die Einpassung findet darin zwei Verrundungen, und der Kunde sah zwei Rundungen, wo eine Öffnung ist |
-| `relations.py` | Nachbarschaften zwischen Merkmalen (§21.1, §21.2): Was zusammengehört und was daraus folgt. Heute das koaxiale Rohr — eine Bohrung und das Material um sie herum, mit der Wand dazwischen. Am Langloch ist das die **dünnste** Wand: Der Weg der Mittellinie geht zur Hälfte ab, denn dort sitzen die Enden. Eine Regel (`_sleeve_between`), drei Auskünfte: `sleeve_at` fragt für **ein** Merkmal; `sleeves_of` liefert die dünnste Wand an **jeder** Merkmalszeile des Steckbriefs; `thinnest_sleeve` liefert das Minimum für die Wandprüfung. Beide Körperabfragen lesen die Maße je Merkmal einmal und teilen dieselbe Paarprüfung (RM-127). Und wem ein Dreieck gehört, das zwei Merkmale beanspruchen, sagt `cell_owner_table` (innerstes bei Verschachtelung, `CONTESTED` bei Widerspruch) — der Viewport liest es für den Klick im Bild |
+| `relations.py` | Nachbarschaften zwischen Merkmalen (§21.1, §21.2): Was zusammengehört und was daraus folgt. Die Randringe der Hohlraumketten (`_cavity_links`) liegen im Cache des Netzes unter einem Schlüssel aus Name, Art und Flächen — **ohne Lage**, damit `geom.transform.apply` den Eintrag an die bewegte Kopie weiterreichen kann; `session._warm_metrics` fragt sie im Arbeiter, bevor der Objektbaum sie im Hauptfaden liest. Der vollständige Flächenvergleich zweier Ausschnitte (`_same_surface_patch`) fragt erst die Ecken über den Suchbaum und misst nur an Dreiecken, was weiter als die Sehnenhöhe von jeder Ecke liegt — vier gleich vernetzte Bohrungen kosteten je Klick 1,6 s im Hauptfaden, jetzt eine Baumabfrage. Heute das koaxiale Rohr — eine Bohrung und das Material um sie herum, mit der Wand dazwischen. Am Langloch ist das die **dünnste** Wand: Der Weg der Mittellinie geht zur Hälfte ab, denn dort sitzen die Enden. Eine Regel (`_sleeve_between`), drei Auskünfte: `sleeve_at` fragt für **ein** Merkmal; `sleeves_of` liefert die dünnste Wand an **jeder** Merkmalszeile des Steckbriefs; `thinnest_sleeve` liefert das Minimum für die Wandprüfung. Beide Körperabfragen lesen die Maße je Merkmal einmal und teilen dieselbe Paarprüfung (RM-127). Und wem ein Dreieck gehört, das zwei Merkmale beanspruchen, sagt `cell_owner_table` (innerstes bei Verschachtelung, `CONTESTED` bei Widerspruch) — der Viewport liest es für den Klick im Bild |
 | `maps.py` | Analysekarten (§18.4). Die Netzfehlerkarte hat **drei** Stufen, und die dritte ist die einzige räumliche: offene und verzweigte Kanten stehen in der Kantentabelle, eine **Durchdringung** nicht — zwei Wände, die einander schneiden, haben lauter saubere Kanten mit je zwei Flächen (`repair.self_intersecting_faces`, RM-143) |
 | `digest.py` | Der Steckbrief der Szene für den Agenten (§23). Unter der Auswahlzeile steht seit P1.5, was das Merkmalfenster zur gewählten Stelle weiß (`_selection_lines`): die Hohlraumkette oder der Grund „nicht sicher einzeln“, und je Mitgliedschaft eine Zeile der Handlungsgruppen — gleiche Merkmale mit Umfang, unsichere mit Grund; Handlungen mit derselben Mitgliedschaft teilen eine Zeile (§26.1) |
 | `matching.py` | Merkmalsbezeichner über Operationen hinweg stabil halten (§21.2, §21.3) |
 | `actions.py` | Was der Kunde mit einem erkannten Merkmal tun kann — und was nicht, mit Grund. Die Liste fürs Merkmalspanel, **aus dem Register abgeleitet** (§10, §21); `reason_against` beantwortet dieselbe Frage für den Kern |
+
+## Was die Erkennung sich merkt — und woher
+
+`detect` legt jede vollständige Erkennung unter dem Abdruck ihres Netzes ab
+(`_mesh_key`: Ecken und Dreiecke, `blake2b`; der Abdruck selbst liegt im
+Cache des Netzes und wird je Netz einmal gerechnet). Vier Nebentabellen gehen
+mit — Flächenindizes als Gewicht der Verdrängung, weggelassene Rundformen
+(`freeform_dropped`), das Freiformurteil (`recognised_as_freeform`), unlesbare
+Schalen (`unreadable_void_shells`) —, und `_remember` führt alle fünf
+zusammen. Zwei Leser kommen ohne Rechnung aus:
+
+- **`carry_detection`** überträgt die Erkennung eines Netzes auf seine starr
+  bewegte Kopie, wenn drei Belege stehen — starre Matrix, dieselben Dreiecke
+  über denselben Eckennummern, jede Ecke dort, wo die Matrix sie hinbewegt
+  (`MOVED_TWIN_TOLERANCE`). Die Maße folgen der Bewegung über
+  `matching.transformed_features`; bleibt eines hinter ihr zurück, wird
+  nichts übertragen. Die Auswertung ruft es vor jeder Erkennung eines
+  bewegten Körpers (`scene.evaluate._with_features`, `source_mesh`): Ein
+  Verschieben oder Drehen an 204 000 Dreiecken kostete davor 1,3 s
+  Neuerkennung für eine Antwort, die bis auf die Lage schon dastand.
+- **`known_detection`** gibt die gemerkte Antwort oder `None` — für die
+  Live-Vorschau, die Geometrie zeigt und keine Merkmale braucht
+  (`evaluate(..., detect_features=False)`).
 
 ## Die Sache mit der Stabilität
 
@@ -641,6 +664,12 @@ betroffenen Körper und erzeugenden Schritt; eine Karte bleibt aus. Andere
   getrennte Fächer und entgegengesetzte Doppelflächen teilen ihre Stützung
   nicht. Für nicht konforme Unterteilung werden nur die örtlich gleichen
   Kantenstrahlen im Leseindex verbunden. Das Originalnetz bleibt unverändert.
+  Die Fragen je Facette — Größe, Fläche, ob sie ein gerundetes Dreieck
+  trägt — beantwortet `_facet_table` für alle Facetten mit einem
+  `bincount` statt je Dreieck einer Mengenfrage (115 000 davon an der
+  unterteilten Lochplatte); die Mündungsprüfung einer Bohrung
+  (`_mouth_covered`) fragt alle Stichpunkte in einem Feld ``(Dreiecke,
+  Punkte)`` statt in einer Schleife.
   **Gelesen wird je Netz und Fleck einmal** (`remembered`: je Frage ein
   eigener Merker mit Identität des Netzes plus Abdruck der Flächenliste als
   Schlüssel — nicht der Datenhash, trimesh rechnet ihn je Frage neu; die
@@ -665,10 +694,18 @@ betroffenen Körper und erzeugenden Schritt; eine Karte bleibt aus. Andere
   der andere Faden den Schlüssel (21.09.2026).
   Der Fächer einer Ecke wird über die Bogenzahl aus dem Nachbarindex gezählt
   (`_fan_arcs`: Dreiecke minus innere Nähte, ein offener Bogen zählt eins,
-  ein geschlossener Ring an einem wasserdichten Netz null); der Einzelweg mit
-  dem Strahlenvergleich bleibt den zerrissenen. Die Punkte kommen aus den
-  Ecken des Netzes ohne Sortierung, und wo das Netz keine deckungsgleichen
-  Ecken hat (`_coincident_vertices`, einmal je Körper), ist jede Ecke ihr
+  ein geschlossener Ring an einem wasserdichten Netz null); die zerrissenen
+  fragt `_fans_connected` **alle auf einmal** — ein Graph aus Knoten
+  „(Ecke, Nachbar)" für alle Ecken, dessen Komponenten eine Markenweitergabe
+  in NumPy findet (kein `scipy`-Graph: dessen Aufbau kostete zwei
+  Millisekunden je Aufruf, 219-mal je Erkennung an Flecken mit zwanzig
+  Ecken) —, und nur wer dort auseinanderfällt, geht den Einzelweg mit dem
+  Strahlenvergleich (`_one_vertex_fan`, an der Schüssel mit 215 000
+  Dreiecken 368 217 Aufrufe und 5,8 Sekunden, bevor es so war). Die Punkte
+  kommen aus den Ecken des Netzes ohne Sortierung; wo das Netz
+  deckungsgleiche Ecken hat, legt `_canonical_vertices` sie **einmal je
+  Körper** zusammen, und die Lesung liest je Fleck nur Nummern
+  (`_coincident_vertices` fragt dieselbe Tabelle) — sonst ist jede Ecke ihr
   eigener Punkt. Gemessen am 21.09.2026, allein auf Roberts Maschine:
   Ikosphäre 22,8 → 1,4 s, Lochplatte mit 204 000 Dreiecken 1,4 → 1,0 s,
   Taschenplatte 1,3 → 0,95 s, verrauschte Freiform 5,9 → 4,3 s (Ziel §31:
@@ -683,7 +720,13 @@ betroffenen Körper und erzeugenden Schritt; eine Karte bleibt aus. Andere
   Trimmpunkte liefern. Beliebige Sehnenränder werden nicht dazu erklärt.
 - **Ein Kandidat ist noch kein Endmaß.** Kegel, Kugel und Torus verfeinern
   ihre Maße gemeinsam mit dem geometrischen Punktabstand in zentrierten,
-  skalierten Koordinaten. Der begrenzte Löser muss konvergieren und alle
+  skalierten Koordinaten. **Der Löser rechnet an höchstens
+  `FIT_SOLVER_POINTS` Stützpunkten** (jeder k-te der koordinatensortierten,
+  die belegte Kegelspitze bleibt darin); Residuum und Punktfehler lesen
+  danach jeden belegten Punkt. Sechs Kegelgrößen aus hunderttausend Punkten
+  sind keine bessere Antwort als aus viertausend — die Schüssel mit 215 000
+  Dreiecken trägt ihre Haut als einen Fleck, und zwei Kegelfits daran
+  kosteten 1,95 der 2,7 Sekunden der Facettenfrage (22.09.2026). Der begrenzte Löser muss konvergieren und alle
   freien Größen bestimmen; unvollständige oder rangdefiziente Ergebnisse
   werden nicht veröffentlicht. Die Ableitung bringt jedes Residuum geschlossen
   mit (`jacobian` an `_refined_fit`): dasselbe Minimum, ohne die numerische
@@ -714,6 +757,25 @@ betroffenen Körper und erzeugenden Schritt; eine Karte bleibt aus. Andere
   Bohrung, Zapfen und Fläche bleiben. `freeform_dropped` nennt der Auswertung
   die Zahl für den Befund `perceive.freeform`. Die Regel steht in
   `.claude/rules/schichtanalyse.md`.
+- **Die Haut einer Freiform wird nicht in ihre Splitter zerlegt und
+  eingepasst** (RM-193). Das Urteil fällt **einmal je Körper**, direkt nach
+  `_split_patches_by_curvature` und bevor ein Splitstück gelesen ist: Welcher
+  Anteil der Oberfläche liegt in Flecken, die in `FREEFORM_SPLINTERS` oder
+  mehr Stücke unter `FREEFORM_PIECE_SHARE` zerfallen? Über
+  `FREEFORM_SKIN_SHARE` ist der Körper eine Figur, ein Scan, ein erzeugtes
+  Netz (`Fitted.freeform_skin`, `recognised_as_freeform`) — dann werden von
+  diesen Flecken nur die Stücke von Gewicht eingepasst (der tangential
+  eingeblendete Zapfen, die Verrundung, die Kugelecke), und der Befund
+  `perceive.freeform` kommt auch mit null weggelassenen Formen. Darunter
+  bleibt alles, wie es war. Über **alle** Flecken zusammen, weil die
+  Zauberturm-Figuren ihre Haut in zwei Flecken tragen (44 und 32 Prozent),
+  und **vor** der Schleife, damit die Reihenfolge der Einpassungen bleibt:
+  Ein zurückgestellter Fleck füllt die Ringkandidaten in anderer Folge, und
+  `_cylinder_beside_a_torus` fand danach andere Zylinder. Kapsel, Ellipsoid
+  und Buchstabenbogen zerfallen nicht und bleiben, was sie waren. Drache aus
+  TripoSG 37,7 → 4,2 s, Roberts Schüssel 7,3 → 2,9 s, Zauberturm-Figuren
+  41 bis 132 s → 6 bis 13 s, Katze 26 → 6,5 s — unter Fremdlast, mit
+  denselben Merkmalen.
 - **Eine Kugel braucht vier bestimmte Unbekannte.** Hat ihr lineares System
   nicht Rang vier, bleibt mindestens eine Mittelpunktkoordinate offen. Das ist
   bei senkrecht extrudierten Kurvenwänden der Regelfall; ihr Kugelfit hängt

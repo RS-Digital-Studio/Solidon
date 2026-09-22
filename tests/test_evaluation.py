@@ -1434,12 +1434,264 @@ def test_a_result_that_came_from_a_question_stays_out_of_the_long_lived_cache() 
         return recorder.written
 
     # `cube_clean.stl` ist eindeutig Millimeter — keine Rückfrage, also darf es
-    # über die Sitzung hinaus.
-    assert run("cube_clean.stl") == [True]
+    # über die Sitzung hinaus. Zwei Einträge, weil ``unit: auto`` beantwortet
+    # wird: einer unter dem Schlüssel dieses Laufs, einer unter dem, den die
+    # festgehaltene Antwort beim nächsten Lauf erzeugt — beide mit derselben
+    # Herkunftsregel.
+    assert run("cube_clean.stl") == [True, True]
     # `bracket_inch.stl` ist zwischen Zoll und Zentimeter mehrdeutig und fragt.
-    assert run("bracket_inch.stl") == [False], (
+    assert run("bracket_inch.stl") == [False, False], (
         "ein Ergebnis, für das gefragt wurde, darf nicht über die Sitzung hinaus"
     )
+
+
+def _plate_project():
+    """Ein Projekt mit der Lochplatte, geladen und ausgewertet — mit Register."""
+    from pathlib import Path
+
+    from app.core.bootstrap import load_operations
+    from app.core.knowledge.profiles import make_profile
+    from app.core.scene import History, OperationDraft, ResultCache
+    from app.core.scene.evaluate import evaluate
+    from app.core.scene.project import ProjectSources, new_project
+    from app.core.types import Source
+
+    load_operations()
+    meshes = Path(__file__).parent / "data" / "meshes"
+    profile = make_profile("centauri-carbon-2", "petg")
+    project = new_project("centauri-carbon-2", "petg")
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/plate_holes.stl", sha256=""
+    )
+    project.sources["src_1"] = (meshes / "plate_holes.stl").read_bytes()
+    history = History(project.document)
+    history.apply("Import", [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})])
+    cache = ResultCache()
+    sources = ProjectSources(project)
+    first = evaluate(project.document, profile, sources=sources, cache=cache)
+    return project, history, profile, cache, sources, first
+
+
+def _detections(monkeypatch) -> list[int]:
+    """Zählt, wie oft die Erkennung wirklich rechnet — am Kern der Facettenfrage."""
+    from importlib import import_module
+
+    features = import_module("app.core.perceive.features")
+    runs: list[int] = []
+    original = features._large_facet_faces
+
+    def counted(*args, **kwargs):
+        runs.append(1)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(features, "_large_facet_faces", counted)
+    return runs
+
+
+def test_a_preview_does_not_detect_features_nobody_reads(monkeypatch) -> None:
+    """``detect_features=False``: Der geänderte Körper wird nicht neu erkannt.
+
+    Die Live-Vorschau des Dialogs zeigt Geometrie und Differenz. An 204 000
+    Dreiecken kostete die Erkennung je getippter Zahl 1,1 der 2,2 Sekunden
+    (gemessen am 22.09.2026) — für Merkmale, die kein Bild zeigt und die
+    beim Übernehmen ohnehin neu entstehen.
+    """
+    from app.core.perceive.features import forget_cache
+    from app.core.scene import OperationDraft
+    from app.core.scene.evaluate import evaluate
+
+    project, history, profile, cache, sources, first = _plate_project()
+    body = project.document.ops[0].outputs[0]
+    assert len(first.scene.objects[body].features) == 10
+    history.apply(
+        "Bohren", [OperationDraft(op="drill_hole", inputs=(body,), params={"diameter": 6.0})]
+    )
+    forget_cache()
+    runs = _detections(monkeypatch)
+
+    preview = evaluate(
+        project.document, profile, sources=sources, cache=cache, detect_features=False
+    )
+
+    assert preview.stopped_at is None
+    assert runs == [], "die Vorschau rechnet keine Erkennung"
+    drilled = preview.scene.objects[project.document.ops[-1].outputs[0]]
+    assert all(feature.provenance != "detected" for feature in drilled.features.values()), (
+        "ohne Erkennung trägt der gebohrte Körper keine erkannten Merkmale"
+    )
+    assert not [
+        finding for finding in preview.scene.report.findings if finding.code == "perceive.orphaned"
+    ], "ohne Zuordnung gibt es keine Waisen"
+
+    # Was der Merker kennt, kommt trotzdem: die genaue Auswertung danach
+    # erkennt, und eine zweite Vorschau desselben Netzes trägt ihre Merkmale.
+    exact = evaluate(project.document, profile, sources=sources, cache=cache)
+    computed = len(runs)
+    assert computed >= 1, "die genaue Auswertung erkennt"
+    again = evaluate(project.document, profile, sources=sources, cache=cache, detect_features=False)
+    assert len(runs) == computed, "der Merker antwortet, nicht die Erkennung"
+    assert set(again.scene.objects[project.document.ops[-1].outputs[0]].features) == set(
+        exact.scene.objects[project.document.ops[-1].outputs[0]].features
+    )
+
+
+def test_a_preview_still_detects_where_a_later_step_needs_the_feature(monkeypatch) -> None:
+    """Braucht ein Folgeschritt ein Merkmal des Körpers, wird trotzdem erkannt."""
+    from app.core.perceive.features import forget_cache
+    from app.core.scene import OperationDraft
+    from app.core.scene.evaluate import evaluate
+
+    project, history, profile, cache, sources, _first = _plate_project()
+    body = project.document.ops[0].outputs[0]
+    history.apply(
+        "Bohren", [OperationDraft(op="drill_hole", inputs=(body,), params={"diameter": 6.0})]
+    )
+    drilled_id = project.document.ops[-1].outputs[0]
+    history.apply(
+        "Bohrung ändern",
+        [
+            OperationDraft(
+                op="resize_hole",
+                inputs=(drilled_id,),
+                params={"at_feature": "hole_1", "diameter": 7.0},
+            )
+        ],
+    )
+    forget_cache()
+    runs = _detections(monkeypatch)
+
+    preview = evaluate(
+        project.document, profile, sources=sources, cache=cache, detect_features=False
+    )
+
+    assert preview.stopped_at is None, "der Bezug auf hole_1 ist eingelöst"
+    assert len(runs) >= 1, "der gebohrte Körper wurde erkannt, weil hole_1 gebraucht wird"
+
+
+def test_coarse_steps_before_a_changed_step_rebuild_the_stack_without_gaps(monkeypatch) -> None:
+    """Die grobe Vorschaustufe beim Ändern eines Schritts (§15.4, §2.8).
+
+    Die Verkleinerung steht in der Dokumentkopie **vor** dem geänderten
+    Schritt; die Schritte danach rücken auf, die Kopie bleibt lückenlos, und
+    der geänderte Schritt rechnet auf dem groben Netz. Bis zum 22.09.2026 blieb
+    dieser Weg genau: an 204 000 Dreiecken 1,1 s je getippter Zahl, mit der
+    Stufe 40 ms ab der zweiten.
+    """
+    import copy
+
+    from app.core.scene import OperationDraft
+    from app.core.scene.evaluate import evaluate
+    from app.ui import session as session_module
+
+    project, history, profile, cache, sources, _first = _plate_project()
+    body = project.document.ops[0].outputs[0]
+    history.apply(
+        "Bohren", [OperationDraft(op="drill_hole", inputs=(body,), params={"diameter": 6.0})]
+    )
+    drill = project.document.ops[-1]
+    scene = evaluate(project.document, profile, sources=sources, cache=cache).scene
+    original_triangles = scene.objects[body].mesh.triangle_count
+    # Die Schwelle am kleinen Korpus erzwingen; das Ziel bleibt über dem
+    # Boden, unter dem die Operation nichts anfasst.
+    monkeypatch.setattr(session_module, "COARSE_PREVIEW_ABOVE", 1)
+    monkeypatch.setattr(session_module, "COARSE_PREVIEW_TARGET", 600)
+
+    working = copy.deepcopy(project.document)
+    index = next(number for number, entry in enumerate(working.ops) if entry.id == drill.id)
+    inserted = session_module._coarse_steps_before(working, index, scene)
+
+    assert [entry.op for entry in inserted] == ["decimate_mesh"]
+    assert inserted[0].inputs == (body,) and inserted[0].outputs == (body,)
+    ids = [int(entry.id) for entry in working.ops]
+    assert ids == list(range(ids[0], ids[0] + len(ids))), "keine Lücke, keine Doppelung"
+    assert working.ops[index].op == "decimate_mesh"
+    assert working.ops[index + 1].op == "drill_hole"
+    assert working.ops[index + 1].params == drill.params, "der Schritt selbst bleibt"
+    # Das Original ist unberührt.
+    assert [entry.op for entry in project.document.ops] == ["load", "drill_hole"]
+
+    result = evaluate(working, profile, sources=sources, cache=cache, detect_features=False)
+    assert result.stopped_at is None, "die Kopie rechnet mit dem eingefügten Schritt durch"
+    assert set(result.completed) == {entry.id for entry in working.ops}
+    assert result.scene.objects[body].mesh.triangle_count <= original_triangles
+
+
+def test_no_coarse_step_for_a_small_body_or_a_whole_face_texture(monkeypatch) -> None:
+    import copy
+
+    from app.core.scene import OperationDraft
+    from app.core.scene.evaluate import evaluate
+    from app.ui import session as session_module
+
+    project, history, profile, cache, sources, _first = _plate_project()
+    body = project.document.ops[0].outputs[0]
+    history.apply(
+        "Bohren", [OperationDraft(op="drill_hole", inputs=(body,), params={"diameter": 6.0})]
+    )
+    scene = evaluate(project.document, profile, sources=sources, cache=cache).scene
+    working = copy.deepcopy(project.document)
+    # Unter der Schwelle: nichts.
+    assert session_module._coarse_steps_before(working, 1, scene) == []
+    assert [entry.op for entry in working.ops] == ["load", "drill_hole"]
+    # Über der Schwelle, aber ein Texturschritt mit Flächenbezug: nichts.
+    monkeypatch.setattr(session_module, "COARSE_PREVIEW_ABOVE", 1)
+    working.ops[1] = dataclasses.replace(
+        working.ops[1], op="apply_texture", params={"coverage": "whole_face"}
+    )
+    assert session_module._coarse_steps_before(working, 1, scene) == []
+
+
+def test_a_recorded_answer_does_not_cost_the_import_a_second_time() -> None:
+    """§15.7 und §31: Die festgehaltene Antwort ändert den Schlüssel des
+    Schritts — und das Ergebnis liegt schon darunter.
+
+    Bis zum 22.09.2026 lief der Import nach ``record_answers`` ein zweites Mal:
+    ``unit: auto`` wurde zu ``unit: mm``, der Schlüssel ein anderer, der Cache
+    kannte nur den alten. Gemessen an 204 000 Dreiecken kostete der erste
+    Folgeschritt 2,7 s Import, die längst gerechnet dastand — und auf der Platte
+    lag ein Eintrag, nach dem beim Wiederöffnen nie wieder jemand fragte, weil
+    dort die Antwort im Dokument steht und nicht die Frage.
+    """
+    from pathlib import Path
+
+    from app.core.bootstrap import load_operations
+    from app.core.knowledge.profiles import make_profile
+    from app.core.scene import History, OperationDraft, ResultCache
+    from app.core.scene.evaluate import evaluate
+    from app.core.scene.project import ProjectSources, new_project
+    from app.core.types import Source
+
+    load_operations()
+    meshes = Path(__file__).parent / "data" / "meshes"
+    profile = make_profile("centauri-carbon-2", "petg")
+    project = new_project("centauri-carbon-2", "petg")
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/plate_holes.stl", sha256=""
+    )
+    project.sources["src_1"] = (meshes / "plate_holes.stl").read_bytes()
+    history = History(project.document)
+    history.apply("Import", [OperationDraft(op="load", params={"source": "src_1", "unit": "auto"})])
+    cache = ResultCache()
+    sources = ProjectSources(project)
+
+    first = evaluate(project.document, profile, sources=sources, cache=cache)
+    assert first.answers, "ohne festgehaltene Antwort misst der Test nichts"
+    assert history.record_answers(first.answers), "die Antwort muss den Schritt ändern"
+    assert project.document.ops[0].params["unit"] == "mm"
+    assert cache.statistics.misses == 1
+
+    body = project.document.ops[0].outputs[0]
+    history.apply(
+        "Verschieben",
+        [OperationDraft(op="translate_object", inputs=(body,), params={"dx": 5.0})],
+    )
+    second = evaluate(project.document, profile, sources=sources, cache=cache)
+
+    assert second.stopped_at is None
+    assert cache.statistics.hits == 1, (
+        "der Import kommt unter dem beantworteten Schlüssel aus dem Cache"
+    )
+    assert cache.statistics.misses == 2, "neu gerechnet wird nur das Verschieben"
 
 
 def test_the_answer_to_a_question_lands_in_the_stack() -> None:
@@ -2647,6 +2899,36 @@ def test_what_the_recognition_left_out_on_a_freeform_is_said(
     assert "gekrümmt" in gesagt, f"und er nennt nicht, was gemessen wurde: {gesagt}"
 
 
+def test_a_skin_without_dropped_shapes_still_gets_the_freeform_finding(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """RM-193: Die Splitter einer Haut werden nicht eingepasst, also lässt die
+    Erkennung dort nichts weg — der Kunde sieht trotzdem keine Rundformen
+    auf seiner Figur und soll lesen, warum (Regel 17)."""
+    from importlib import import_module
+
+    evaluate_module = import_module("app.core.scene.evaluate")
+    from app.core.types import Operation, SceneObject
+
+    monkeypatch.setattr(evaluate_module, "detect", lambda mesh, **kwargs: dict(_many_features(3)))
+    monkeypatch.setattr(evaluate_module, "freeform_dropped", lambda mesh: 0)
+    monkeypatch.setattr(evaluate_module, "recognised_as_freeform", lambda mesh: True)
+
+    entry = SceneObject(id="obj_1", name="Drache", mesh=_small_body())
+    findings: list[Finding] = []
+    evaluate_module._with_features(
+        entry, {}, Operation(id=1, op="thicken"), lambda q, c: c[0], findings
+    )
+
+    freeform = [item for item in findings if item.code == "perceive.freeform"]
+    assert len(freeform) == 1, [item.code for item in findings]
+    assert freeform[0].values["dropped"] == 0
+    gesagt = str(freeform[0].message)
+    assert "weggelassen" not in gesagt and "fand" not in gesagt, (
+        f"der Satz behauptet eine Suche, die nicht stattfand: {gesagt}"
+    )
+
+
 def test_a_model_that_is_no_freeform_gets_no_such_finding(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -2658,6 +2940,7 @@ def test_a_model_that_is_no_freeform_gets_no_such_finding(
 
     monkeypatch.setattr(evaluate_module, "detect", lambda mesh, **kwargs: dict(_many_features(3)))
     monkeypatch.setattr(evaluate_module, "freeform_dropped", lambda mesh: 0)
+    monkeypatch.setattr(evaluate_module, "recognised_as_freeform", lambda mesh: False)
 
     entry = SceneObject(id="obj_1", name="Teil", mesh=_small_body())
     findings: list[Finding] = []

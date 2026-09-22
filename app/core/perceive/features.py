@@ -31,7 +31,7 @@ import numpy as np
 
 from app.core import units
 from app.core.deferred import cKDTree, least_squares, trimesh
-from app.core.geom.mesh import MeshData, face_components, fully_stitched
+from app.core.geom.mesh import MeshData, face_components, fully_stitched, unique_edges
 from app.core.geom.repair import merge_vertices
 from app.core.log import get_logger
 from app.core.perceive.helix import Helix, find_helices
@@ -225,6 +225,35 @@ ROUND_FIT_EVALUATIONS: Final = 100
 #: Dimensionslose Lösergenauigkeit im auf Einheitsgröße skalierten Rahmen.
 #: Aus der Float64-Auflösung abgeleitet, nicht aus einem Fertigungsspiel.
 ROUND_FIT_PRECISION: Final = float(np.finfo(float).eps ** 0.75)
+
+#: An wie vielen Stützpunkten der Löser einer Rundform höchstens rechnet.
+#:
+#: Sechs Kegelgrößen aus hunderttausend Punkten sind keine bessere Antwort
+#: als aus viertausend gleichmäßig verteilten — sie sind dieselbe, ein
+#: Rundungsrauschen später und ein Vielfaches teurer: Die Schüssel mit
+#: 215 000 Dreiecken trägt ihre Haut als einen Fleck, und zwei Kegelfits
+#: daran kosteten 1,95 der 2,7 Sekunden der Facettenfrage (22.09.2026). Die
+#: Auswahl ist deterministisch — jeder k-te der koordinatensortierten
+#: Punkte, also räumlich gestreut —, und **gemessen wird danach an allen**:
+#: Residuum und Punktfehler lesen jeden belegten Punkt, nicht die Auswahl.
+#: Eine Rechengrenze, keine Geometrietoleranz.
+FIT_SOLVER_POINTS: Final = 4096
+
+
+def _solver_rows(count: int, *, keep: int | None = None) -> np.ndarray | None:
+    """Die Zeilen, an denen der Löser rechnet — ``None`` heißt: alle.
+
+    ``keep`` ist eine Zeile, die in der Auswahl stehen muss (die belegte
+    Spitze eines Kegels); sie kommt hinten dazu, wenn der Schritt sie nicht
+    ohnehin trifft.
+    """
+    if count <= FIT_SOLVER_POINTS:
+        return None
+    step = -(-count // FIT_SOLVER_POINTS)
+    rows = np.arange(0, count, step, dtype=np.int64)
+    if keep is not None and keep % step != 0:
+        rows = np.append(rows, keep)
+    return rows
 
 
 @dataclass(frozen=True, slots=True)
@@ -715,6 +744,51 @@ FREEFORM_ROUND_SHARE: Final = 0.7
 #: brachte (96 an der Katze).
 FREEFORM_ROUND_COUNT: Final = 12
 
+#: Ab welchem Anteil an der Oberfläche die **zerfallende Fläche** eines
+#: Körpers seine Haut ist (RM-193, Entscheidung Robert 22.09.2026): die
+#: gekrümmten Flecken, auf die keine Grundform passt und die nach Krümmung in
+#: Splitter zerfallen (:data:`FREEFORM_SPLINTERS` Stücke unter
+#: :data:`FREEFORM_PIECE_SHARE`), über **alle** Flecken zusammen. Darüber ist
+#: der Körper eine Figur, ein Scan, ein erzeugtes Netz, und seine Splitter
+#: werden nicht eingepasst.
+#:
+#: **Zwei Drittel, und dazwischen liegt eine breite Lücke** — gemessen am
+#: 22.09.2026 an ``F:\3D Dateien`` (170 Dateien, 464 Körper): Konstruiertes
+#: liegt bei null bis 60 Prozent, und die vier höchsten Fälle sind ein Rohr
+#: mit Gewinde (Pool-Brunnen, 57 und 60), ein Scraper-Griff (51) und ein
+#: Wandhalter (55); Figuren, Scans und erzeugte Netze liegen bei 71 bis 94
+#: (Katze 71, Zauberturm 75 bis 88 — in **zwei** Flecken zu 44 und 32
+#: Prozent, deshalb die Summe —, Schüssel 89, Drache 93, Retro-Maus 94). Die
+#: Schwelle sitzt in der Lücke, näher an den Figuren als an der Mitte: Ein
+#: konstruiertes Teil, das hier durchrutscht, verliert seine Verrundungen und
+#: Senkungen; eine Figur, die es nicht tut, kostet nur Zeit — und wird von
+#: der Zählung darunter (:func:`is_a_freeform`) weiter gefangen. Eine Kapsel
+#: oder ein Ring liegen bei hundert Prozent gekrümmter Fläche, zerfallen aber
+#: nicht (ein Stück) und bleiben, was sie sind.
+FREEFORM_SKIN_SHARE: Final = 0.65
+
+#: Wie viele Splitter — Stücke unter :data:`FREEFORM_PIECE_SHARE` — die
+#: Nachtrennung aus einem Fleck machen muss, damit er zur formlosen Fläche
+#: zählt und mit seinen Stücken wartet. Gemessen am 22.09.2026: der Drache aus TripoSG 27 554
+#: Splitter, Roberts Schüssel 2 670, der Scan-Körper der Tests 1 640; ein
+#: Buchstabe, eine Kapsel, ein Ellipsoid, ``generated_figure.stl`` null bis
+#: einen. Eine gestaltete Fläche zerfällt in Stücke von Gewicht, Rauschen in
+#: Splitter — hundert liegt eine Größenordnung über dem einen und eine unter
+#: den 1 640.
+FREEFORM_SPLINTERS: Final = 100
+
+#: Wie groß ein Splitstück einer Haut sein muss, damit es eingepasst wird —
+#: als Anteil an der Oberfläche des Körpers. Ein Splitter aus sieben bis
+#: fünfzig Dreiecken einer glatten Haut ist ihre Tesselierung, nicht ihre
+#: Form: Seine Normalen spreizen drei Grad, und aus drei Grad bestimmt kein
+#: Löser eine Achse (2 275 Kegelverfeinerungen am Drachen, alle ``None``, 33
+#: der 37 Sekunden für null Merkmale). Ein tangential eingeblendeter Zapfen
+#: oder eine Verrundung auf einer Haut ist dagegen ein Stück von Gewicht: Ein
+#: Zapfen Ø 10 auf einer Figur von 100 000 mm² liegt bei drei Tausendsteln
+#: und wird weiter eingepasst; am Drachen bleiben 23 Stücke, an der Schüssel
+#: 13.
+FREEFORM_PIECE_SHARE: Final = 0.001
+
 #: Was auf einer Freiform keine Merkmale sind: die vier eingepassten
 #: Rundformen. Bohrung und Zapfen bleiben — eine Zylindereinpassung verlangt
 #: Normalen senkrecht zur Achse und einen engen Kreis, das erfüllt eine
@@ -787,6 +861,13 @@ _FREEFORM_DROPPED: OrderedDict[bytes, int] = OrderedDict()
 #: die Zahl.
 _UNREADABLE_VOIDS: OrderedDict[bytes, int] = OrderedDict()
 
+#: Je Eintrag, ob :func:`detect` das Modell als Freiform eingestuft hat.
+#: Neben :data:`_FREEFORM_DROPPED`, weil die Zahl allein es nicht mehr sagt:
+#: Seit RM-193 werden die Splitter einer Haut gar nicht erst eingepasst, und
+#: eine Freiform kann so null weggelassene Rundformen tragen — der Befund
+#: der Auswertung fragt über :func:`recognised_as_freeform` nach dem Urteil.
+_FREEFORM: OrderedDict[bytes, bool] = OrderedDict()
+
 #: Wie viele Zwischenkörper der Cache behält. Eine Auswertung untersucht nicht
 #: nur die fertigen Objekte, sondern nach jeder Operation deren damaliges Netz.
 #: Der gemessene Kundenverlauf hat bei 163 Operationen 132 verschiedene Netze;
@@ -829,13 +910,31 @@ def _mesh_key(mesh: MeshData) -> bytes:
 
     Kostet 1,4 bis 1,8 Prozent eines Erkennungslaufs (gemessen an 1 280 und
     81 920 Dreiecken) — der Preis dafür, die Frage überhaupt stellen zu dürfen.
+
+    **Und er wird je Netz einmal gezahlt.** Die Auswertung fragt nach jedem
+    Schritt dieselben Netze wieder — ``detect``, ``freeform_dropped``,
+    ``unreadable_void_shells``, dazu die Übertragung auf ein bewegtes Netz —,
+    und jede Frage rechnete den Abdruck neu: 9 ms an 204 000 Dreiecken, sechs
+    Aufrufe je Auswertung (gemessen am 22.09.2026). Abgelegt wird er im Cache
+    des Netzes selbst, der mit dessen Geometrie verfällt — dieselbe Ablage wie
+    ``MeshData.component_count``, aus demselben Grund: Ein eigenes Feld gibt es
+    an der eingefrorenen Klasse nicht, und ``id()`` wäre der Fehler von oben.
     """
     body = mesh.raw
-    return hashlib.blake2b(
+    cache = getattr(body, "_cache", None)
+    if cache is not None:
+        cache.verify()
+        known = cache.cache.get("solidon_mesh_key")
+        if known is not None:
+            return bytes(known)
+    key = hashlib.blake2b(
         np.ascontiguousarray(body.vertices, dtype=np.float64).tobytes()
         + np.ascontiguousarray(body.faces, dtype=np.int64).tobytes(),
         digest_size=16,
     ).digest()
+    if cache is not None:
+        cache["solidon_mesh_key"] = key
+    return key
 
 
 def forget_cache() -> None:
@@ -843,6 +942,7 @@ def forget_cache() -> None:
     _FEATURE_CACHE.clear()
     _CACHE_INDICES.clear()
     _FREEFORM_DROPPED.clear()
+    _FREEFORM.clear()
     _UNREADABLE_VOIDS.clear()
     with _MEMORY_LOCK:
         _SUPPORT_CACHE.clear()
@@ -1052,8 +1152,11 @@ def detect(
         found = _partial_bores_marked(mesh, found, check_cancelled=check_cancelled)
         if check_cancelled is not None:
             check_cancelled()
+        freeform = is_a_freeform(
+            found, unpublished_round_shapes=unpublished_round_shapes, skin=fitted.freeform_skin
+        )
         found, left_out = _shapes_on_a_freeform(
-            found, unpublished_round_shapes=unpublished_round_shapes
+            found, unpublished_round_shapes=unpublished_round_shapes, skin=fitted.freeform_skin
         )
         if check_cancelled is not None:
             check_cancelled()
@@ -1062,12 +1165,46 @@ def detect(
         # und ebenen Flächen an glatter, gerundeter Oberfläche übrig bleibt —
         # deshalb nach allen anderen und nach dem Freiformfilter: Auf einer
         # Figur wäre die ganze Haut eine einzige Seite, und die sagt nichts.
-        if not left_out:
+        if not freeform:
             for feature in detect_curved_faces(mesh, found, check_cancelled=check_cancelled):
                 found[feature.id] = feature
     if check_cancelled is not None:
         check_cancelled()
-    _log.info("detected %d features, %d left out as freeform", len(found), left_out)
+    _log.info(
+        "detected %d features, %d left out as freeform%s",
+        len(found),
+        left_out,
+        " (skin)" if fitted.freeform_skin else "",
+    )
+    _remember(key, found, left_out, unreadable, freeform)
+    return dict(found)
+
+
+def known_detection(mesh: MeshData) -> dict[FeatureId, Feature] | None:
+    """Die gemerkte Erkennung dieses Netzes — oder ``None``, ohne zu rechnen.
+
+    Für Aufrufer, die eine Antwort nehmen, wenn sie dasteht, und sonst ohne
+    auskommen: die Live-Vorschau eines Dialogs zeigt Geometrie, keine
+    Merkmale, und eine Erkennung von einer Sekunde je getippter Zahl wäre
+    dort eine Sekunde für nichts (``scene.evaluate``, ``detect_features``).
+    """
+    known = _FEATURE_CACHE.get(_mesh_key(mesh))
+    if known is None:
+        return None
+    _FEATURE_CACHE.move_to_end(_mesh_key(mesh))
+    return dict(known)
+
+
+def _remember(
+    key: bytes, found: dict[FeatureId, Feature], left_out: int, unreadable: int, freeform: bool
+) -> None:
+    """Eine vollständige Erkennung unter dem Abdruck ihres Netzes ablegen.
+
+    Die drei Nebentabellen werden zusammen mit dem Ergebnis geführt, damit
+    Verdrängung und Nachfrage dieselben Einträge sehen — ob die Antwort
+    gerechnet wurde (:func:`detect`) oder von einem bewegten Zwilling stammt
+    (:func:`carry_detection`), ist für die Ablage dasselbe.
+    """
     _FEATURE_CACHE[key] = found
     _CACHE_INDICES[key] = sum(
         len(feature.face_indices)
@@ -1075,6 +1212,7 @@ def detect(
         for feature in found.values()
     )
     _FREEFORM_DROPPED[key] = left_out
+    _FREEFORM[key] = freeform
     _UNREADABLE_VOIDS[key] = unreadable
     while len(_FEATURE_CACHE) > CACHE_LIMIT or sum(_CACHE_INDICES.values()) > CACHE_INDEX_LIMIT:
         if len(_FEATURE_CACHE) == 1:
@@ -1087,8 +1225,93 @@ def detect(
         oldest, _ = _FEATURE_CACHE.popitem(last=False)
         _CACHE_INDICES.pop(oldest, None)
         _FREEFORM_DROPPED.pop(oldest, None)
+        _FREEFORM.pop(oldest, None)
         _UNREADABLE_VOIDS.pop(oldest, None)
-    return dict(found)
+
+
+#: Wie weit eine Ecke des bewegten Netzes von der rechnerisch bewegten Ecke
+#: des Quellnetzes liegen darf, damit beide dasselbe Netz sind — in
+#: Millimetern. Eine Rechengrenze, keine Geometrietoleranz: ``moved_body``
+#: multipliziert dieselben Zahlen mit derselben Matrix, und was dabei
+#: auseinanderläuft, sind die letzten Bits einer Summe — an einem Körper von
+#: einem Meter rund 1e-10. Die Grenze liegt drei Größenordnungen darüber und
+#: sechs unter dem, was irgendeine Erkennung als Unterschied sähe.
+MOVED_TWIN_TOLERANCE: Final = 1e-7
+
+
+def carry_detection(
+    source: MeshData,
+    moved: MeshData,
+    transform: Any,
+    *,
+    check_cancelled: Callable[[], None] | None = None,
+) -> bool:
+    """Die gemerkte Erkennung eines Netzes auf seine starr bewegte Kopie übertragen.
+
+    §21.2 verlangt, dass ein Merkmal nach *Verschieben* oder *Drehen* dasselbe
+    bleibt — und bis zum 22.09.2026 wurde das teuer eingelöst: Die Erkennung
+    lief am bewegten Netz vollständig neu, und die Zuordnung fand danach heraus,
+    dass alles beim Alten war. Gemessen 1,3 s je Verschieben an 204 000
+    Dreiecken, 3,9 s an einer Freiform mit 200 000 — für eine Antwort, die
+    bis auf die Lage schon dastand.
+
+    Übertragen wird nur unter Beleg, nicht auf Zusage der Operation: Die
+    Matrix ist starr (``is_rigid``), das bewegte Netz trägt **dieselben
+    Dreiecke** über denselben Eckennummern, und jede Ecke liegt dort, wo die
+    Matrix die Ecke des Quellnetzes hinbewegt (:data:`MOVED_TWIN_TOLERANCE`).
+    Damit gelten die Dreiecksnummern der gemerkten Merkmale unverändert, und
+    ihre Maße folgen der Bewegung über :func:`transformed_features` — dieselbe
+    Rechnung, mit der ``moved_object`` die mitgeführten Merkmale nachführt.
+    Bleibt dabei ein Merkmal hinter der Bewegung zurück (kein ``exact``), wird
+    nichts übertragen, und die Erkennung rechnet wie zuvor.
+
+    Der Rückgabewert sagt, ob ``detect`` das bewegte Netz jetzt aus dem
+    Merker beantwortet; die Nebentabellen — weggelassene Rundformen, unlesbare
+    Schalen — wandern mit, denn beides sind Eigenschaften der Form, nicht der
+    Lage.
+    """
+    from app.core.geom.transform import is_rigid
+    from app.core.perceive.matching import transformed_features
+
+    if check_cancelled is not None:
+        check_cancelled()
+    source_key = _mesh_key(source)
+    known = _FEATURE_CACHE.get(source_key)
+    if known is None:
+        return False
+    matrix = np.asarray(transform, dtype=float)
+    if not is_rigid(matrix):
+        return False
+    source_faces = np.asarray(source.raw.faces)
+    moved_faces = np.asarray(moved.raw.faces)
+    if source_faces.shape != moved_faces.shape or not np.array_equal(source_faces, moved_faces):
+        return False
+    source_vertices = np.asarray(source.raw.vertices, dtype=float)
+    moved_vertices = np.asarray(moved.raw.vertices, dtype=float)
+    if source_vertices.shape != moved_vertices.shape:
+        return False
+    expected = source_vertices @ matrix[:3, :3].T + matrix[:3, 3]
+    if not np.allclose(moved_vertices, expected, rtol=0.0, atol=MOVED_TWIN_TOLERANCE):
+        return False
+    if check_cancelled is not None:
+        check_cancelled()
+    moved_key = _mesh_key(moved)
+    if moved_key in _FEATURE_CACHE:
+        _FEATURE_CACHE.move_to_end(moved_key)
+        return True
+    carried = transformed_features(known, transform, mesh=moved, check_cancelled=check_cancelled)
+    if set(carried.exact) != set(known):
+        return False
+    _FEATURE_CACHE.move_to_end(source_key)
+    _remember(
+        moved_key,
+        dict(carried.candidates),
+        _FREEFORM_DROPPED.get(source_key, 0),
+        _UNREADABLE_VOIDS.get(source_key, 0),
+        _FREEFORM.get(source_key, False),
+    )
+    _log.info("carried %d features onto a moved twin", len(known))
+    return True
 
 
 # --- Gewinde ---------------------------------------------------------------------
@@ -1283,16 +1506,32 @@ def sits_at_the_mouth_of(bore: Feature, wider: Feature) -> bool:
 # --- Freiformen ------------------------------------------------------------------
 
 
-def is_a_freeform(found: Mapping[FeatureId, Feature], *, unpublished_round_shapes: int = 0) -> bool:
+def is_a_freeform(
+    found: Mapping[FeatureId, Feature],
+    *,
+    unpublished_round_shapes: int = 0,
+    skin: bool = False,
+) -> bool:
     """Ob diese Merkmalsliste von einer Freiform stammt.
 
-    Zwei Zahlen, beide an den gefundenen Flecken gezählt: Wie viele Kugeln und
-    Ringe es sind (:data:`FREEFORM_ROUND_COUNT`) und welchen Anteil sie an
+    Zuerst die Haut: Liegt über :data:`FREEFORM_SKIN_SHARE` der Oberfläche in
+    gekrümmten Flecken ohne Grundform, die nach Krümmung in Splitter zerfallen
+    (``skin`` aus :class:`Fitted`), ist der Körper eine Freiform — gleich, wie
+    viele Rundformen die Ränder hergaben. Das ist seit RM-193 das Urteil für
+    die glatte Haut, deren Splitter nicht mehr eingepasst werden und deshalb
+    auch keine Rundformen mehr zählen.
+
+    Dann zwei Zahlen, beide an den gefundenen Flecken gezählt: Wie viele Kugeln
+    und Ringe es sind (:data:`FREEFORM_ROUND_COUNT`) und welchen Anteil sie an
     allen Merkmalen haben (:data:`FREEFORM_ROUND_SHARE`). Algebraische Kugel-
     und Toruskandidaten, die für ein bearbeitbares Merkmal zu schlecht bestimmt
     sind, reisen dafür nur als Zahl mit. Die Kegel zählen hier **nicht** mit,
     weil sie auf Konstruiertem häufig und echt sind (Nozzle-Box: 22 Senkungen).
+    Diese Zählung trägt weiter die verrauschte Freiform, die schon bei der
+    30-Grad-Trennung in Tausende Flecken zerfällt und keine Haut hat.
     """
+    if skin:
+        return True
     total = len(found) + unpublished_round_shapes
     if not total:
         return False
@@ -1306,6 +1545,7 @@ def _shapes_on_a_freeform(
     found: dict[FeatureId, Feature],
     *,
     unpublished_round_shapes: int = 0,
+    skin: bool = False,
 ) -> tuple[dict[FeatureId, Feature], int]:
     """Auf einer Freiform bleiben Bohrung, Zapfen, Fläche und Gewinde — die
     Rundformen gehen.
@@ -1358,7 +1598,7 @@ def _shapes_on_a_freeform(
     Was ohne diesen Beleg bleibt, geht weiter: die 51 Kegel des Bogens, sechs
     Verrundungen und ein Ring.
     """
-    if not is_a_freeform(found, unpublished_round_shapes=unpublished_round_shapes):
+    if not is_a_freeform(found, unpublished_round_shapes=unpublished_round_shapes, skin=skin):
         return found, 0
     bores = [
         feature
@@ -1383,6 +1623,18 @@ def freeform_dropped(mesh: MeshData) -> int:
     damit immer den frischen Eintrag.
     """
     return _FREEFORM_DROPPED.get(_mesh_key(mesh), 0)
+
+
+def recognised_as_freeform(mesh: MeshData) -> bool:
+    """Ob :func:`detect` dieses Netz als Freiform eingestuft hat.
+
+    ``False`` für jedes konstruierte Teil — und für ein Netz, das ``detect``
+    noch nicht gesehen hat. Die Auswertung fragt unmittelbar nach ``detect``
+    und macht zusammen mit :func:`freeform_dropped` einen Befund daraus: Eine
+    Haut ohne eingepasste Splitter hat nichts weggelassen und ist trotzdem
+    eine Freiform, auf der keine Rundformen geführt werden.
+    """
+    return _FREEFORM.get(_mesh_key(mesh), False)
 
 
 def unreadable_void_shells(mesh: MeshData) -> int:
@@ -1433,6 +1685,11 @@ class Fitted(NamedTuple):
     stadiums: Stadiums
     """Mäntel, deren Querschnitt ein Stadion ist — Langlöcher aus einem Stück
     (:class:`StadiumFit`)."""
+    freeform_skin: bool = False
+    """Ob der Körper eine Haut trägt: in Splitter zerfallende Fläche über
+    :data:`FREEFORM_SKIN_SHARE` der Oberfläche, über alle Flecken zusammen.
+    Dann ist das Modell eine Freiform (:func:`is_a_freeform`), und seine
+    Splitter wurden nicht eingepasst."""
 
 
 def _cylinders(mesh: MeshData) -> Cylinders:
@@ -1505,6 +1762,9 @@ def _fitted(
         spheres: Spheres = []
         tori = _TorusCandidates(len(body.faces))
         stadiums: Stadiums = []
+        areas = np.asarray(body.area_faces, dtype=float)
+        total_area = float(areas.sum())
+        freeform_skin = False
 
         def classify(patch: list[int]) -> bool:
             """Die erste Form, die auf diesen Fleck passt — oder keine."""
@@ -1616,12 +1876,58 @@ def _fitted(
                     worth_splitting=big_enough,
                     check_cancelled=check_cancelled,
                 )
+                # **Hier fällt das Urteil über die Haut** (RM-193, Entscheidung
+                # Robert 22.09.2026), einmal je Körper und bevor ein einziges
+                # Splitstück gelesen ist: Welcher Anteil der Oberfläche liegt in
+                # Flecken, die nach Krümmung in Splitter zerfallen
+                # (:data:`FREEFORM_SPLINTERS` Stücke unter
+                # :data:`FREEFORM_PIECE_SHARE`)? Über :data:`FREEFORM_SKIN_SHARE`
+                # ist der Körper eine Figur, ein Scan, ein erzeugtes Netz — dann
+                # werden von diesen Flecken nur die Stücke von Gewicht
+                # eingepasst.
+                #
+                # **Vor der Schleife und nicht darin**, damit die Reihenfolge
+                # der Einpassungen bleibt, wie sie war: Wer einen Fleck
+                # zurückstellt, füllt die Ringkandidaten in anderer Folge, und
+                # ``_cylinder_beside_a_torus`` findet danach andere Zylinder
+                # (gemessen am Korpus: zwei Kegel mehr am Gartenschlauchhalter,
+                # zwei Verrundungen mehr am Beckenreiniger).
+                freeform_skin = (
+                    sum(
+                        float(areas[entry].sum())
+                        for entry, pieces in zip(patches, curvature_splits, strict=True)
+                        if len(pieces) > 1
+                        and sum(
+                            1
+                            for piece in pieces
+                            if float(areas[piece].sum()) < total_area * FREEFORM_PIECE_SHARE
+                        )
+                        >= FREEFORM_SPLINTERS
+                    )
+                    > total_area * FREEFORM_SKIN_SHARE
+                )
             if check_cancelled is not None:
                 check_cancelled()
             pieces = curvature_splits[patch_index]
+            split_apart = len(pieces) > 1
+            if split_apart and freeform_skin:
+                # Die Haut einer Figur wird nicht in ihre Splitter zerlegt und
+                # eingepasst: am Drachen 27 554 Stücke aus zwei bis fünfzig
+                # Dreiecken mit drei Grad Normalenspreizung, deren Achse kein
+                # Löser bestimmen kann — 33 der 37 Sekunden für null Merkmale.
+                # Eingepasst wird, was Gewicht hat: der tangential
+                # eingeblendete Zapfen, die Verrundung, die Kugelecke (am
+                # Drachen 23 Stücke). Was die Haut an Bohrungen und Flächen
+                # trägt, liegt an ihren Rändern und ist längst ein eigener
+                # Fleck.
+                pieces = [
+                    piece
+                    for piece in pieces
+                    if float(areas[piece].sum()) >= total_area * FREEFORM_PIECE_SHARE
+                ]
             # Jedes Stück wird gefragt, nicht nur bis zum ersten Treffer — die
             # Liste ist Absicht, kein ``any`` mit Kurzschluss.
-            classified = [classify(piece) for piece in pieces] if len(pieces) > 1 else []
+            classified = [classify(piece) for piece in pieces] if split_apart else []
             for piece, known in zip(pieces, classified, strict=False):
                 if not known:
                     separated = _cylinder_beside_a_torus(
@@ -1707,7 +2013,7 @@ def _fitted(
                     round(entry[0].centre[2], 3),
                 )
             )
-        return Fitted(found, cones, spheres, rings, fillets, helices, stadiums)
+        return Fitted(found, cones, spheres, rings, fillets, helices, stadiums, freeform_skin)
 
 
 def detect_holes(
@@ -3491,14 +3797,13 @@ def _facets_standing_apart_read(
     np.add.at(counted, first[inner & (first >= 0)], 2)
     np.add.at(counted, first[boundary & (first >= 0)], 1)
     np.add.at(counted, second[boundary & (second >= 0)], 1)
+    _members, _owner, sizes, touches_curved = _facet_table(facets, len(body.faces), curved)
+    eligible = (counted == 3 * sizes) & ~touches_curved
+    if disqualified:
+        eligible[np.fromiter(disqualified, dtype=np.int64, count=len(disqualified))] = False
     apart: set[int] = set()
-    for number, facet in enumerate(facets):
-        if number in disqualified or any(int(index) in curved for index in facet):
-            continue
-        if int(counted[number]) != 3 * len(facet):
-            continue
-        members = [int(index) for index in facet]
-        if _a_sliver(body, members):
+    for number in np.flatnonzero(eligible).tolist():
+        if _a_sliver(body, [int(index) for index in facets[number]]):
             continue
         apart.add(number)
     return apart
@@ -3514,6 +3819,30 @@ def _all_but(count: int, left_out: set[int]) -> list[int]:
     if left_out:
         mask[np.fromiter(left_out, dtype=np.int64, count=len(left_out))] = False
     return np.flatnonzero(mask).tolist()
+
+
+def _facet_table(
+    facets: Sequence[np.ndarray], face_count: int, curved: set[int]
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Alle Facetten als vier Felder: Mitglieder, Besitzer je Mitglied,
+    Größe je Facette und ob eine Facette ein gerundetes Dreieck trägt.
+
+    Dieselbe Bauart wie :func:`_facet_areas`, für die Fragen, die
+    :func:`_large_facet_faces_read` und :func:`_facets_standing_apart_read`
+    je Facette stellen — einmal gebaut statt je Frage eine Schleife.
+    """
+    sizes = np.fromiter((len(facet) for facet in facets), dtype=np.int64, count=len(facets))
+    members = (
+        np.concatenate([np.asarray(facet, dtype=np.int64) for facet in facets])
+        if len(facets)
+        else np.zeros(0, dtype=np.int64)
+    )
+    owner = np.repeat(np.arange(len(facets)), sizes)
+    curved_mask = np.zeros(face_count, dtype=bool)
+    if curved:
+        curved_mask[np.fromiter(curved, dtype=np.int64, count=len(curved))] = True
+    touches_curved = np.bincount(owner, weights=curved_mask[members], minlength=len(facets)) > 0
+    return members, owner, sizes, touches_curved
 
 
 def _facet_areas(body: trimesh.Trimesh, facets: Sequence[np.ndarray]) -> list[float]:
@@ -3612,15 +3941,23 @@ def _large_facet_faces_read(
     # Der Anteil statt des Vorkommens trennt es nicht: die Streifen liegen bei
     # 0,00 bis 0,85, die echte Deckfläche bei 0,15.
     apart = _facets_standing_apart(body, facets, curved)
-    planar = {
-        int(index)
-        for number, (facet, area) in enumerate(zip(facets, areas, strict=True))
-        if len(facet) >= MIN_FLAT_FACES
-        or area >= broad
-        or (area >= MIN_FACE_AREA and not any(int(index) in curved for index in facet))
-        or number in apart
-        for index in facet
-    }
+    # **Je Facette eine Zahl, nicht je Dreieck eine Mengenfrage.** Die
+    # Comprehensions darunter fragten an der unterteilten Lochplatte
+    # 115 000-mal ``index in curved`` (gemessen am 22.09.2026: 60 ms je
+    # Erkennung); ``_facet_table`` beantwortet „berührt die Facette eine
+    # Rundung" für alle Facetten mit einem ``bincount``.
+    members, owner, sizes, touches_curved = _facet_table(facets, len(body.faces), curved)
+    area_of = np.asarray(areas, dtype=float)
+    stands_apart = np.zeros(len(facets), dtype=bool)
+    if apart:
+        stands_apart[np.fromiter(apart, dtype=np.int64, count=len(apart))] = True
+    planar_facets = (
+        (sizes >= MIN_FLAT_FACES)
+        | (area_of >= broad)
+        | ((area_of >= MIN_FACE_AREA) & ~touches_curved)
+        | stands_apart
+    )
+    planar = set(members[planar_facets[owner]].tolist())
     # Viele Dreiecke machen aus einem Mantelstreifen noch keine eigenständige
     # Ebene. Das gilt auch dann, wenn der Streifen breiter als
     # ``MIN_SURFACE_WIDTH`` ist: Der Boolesche Kern unterteilt einen
@@ -3633,13 +3970,12 @@ def _large_facet_faces_read(
     # kann eine Rundung berühren, ergibt aber keinen vollständigen Zylinder.
     # Auch eine breite Facette muss den vollständigen Rundträgernachweis
     # erfüllen. Ein kleines Teilstück darf ihren Rest nicht verschlucken.
-    recoverable = {
-        int(index)
-        for facet, area in zip(facets, areas, strict=True)
-        if len(facet) >= MIN_FLAT_FACES
-        and (_a_sliver(body, list(facet)) or any(int(face) in curved for face in facet))
-        for index in facet
-    }
+    recoverable_facets = np.zeros(len(facets), dtype=bool)
+    for number in np.flatnonzero(sizes >= MIN_FLAT_FACES).tolist():
+        recoverable_facets[number] = bool(touches_curved[number]) or _a_sliver(
+            body, [int(index) for index in facets[number]]
+        )
+    recoverable = set(members[recoverable_facets[owner]].tolist())
     if not recoverable or (requested is not None and requested.isdisjoint(recoverable)):
         return planar
     protected = planar - recoverable
@@ -4028,8 +4364,8 @@ def _radial_boundaries_are_planar(
     ):
         return False
     faces = np.asarray(body.faces)[patch]
-    edges = np.sort(np.concatenate((faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [2, 0]])), axis=1)
-    edges, count = np.unique(edges, axis=0, return_counts=True)
+    edges = np.concatenate((faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [2, 0]]))
+    edges, count = unique_edges(edges, return_counts=True)
     if (count > 2).any():
         return False
     boundary = edges[count == 1]
@@ -4515,15 +4851,80 @@ def _coincident_vertices(body: trimesh.Trimesh) -> bool:
     Ein geschweißtes Netz hat keine, und die Frage kostet einmal so viel wie
     eine Lesung des ganzen Körpers, nicht einmal je Fleck.
     """
-    result: bool = remembered(
-        "coincident",
+    canonical = _canonical_vertices(body)
+    return bool(int(canonical.max()) + 1 < len(canonical)) if len(canonical) else False
+
+
+def _canonical_vertices(body: trimesh.Trimesh) -> np.ndarray:
+    """Je Ecke die Nummer ihres Punkts — deckungsgleiche Ecken teilen sie.
+
+    Die Nummern folgen der lexikographischen Ordnung der Koordinaten, also
+    genau der Reihenfolge, die ``np.unique(vertices, axis=0)`` je Fleck
+    lieferte. Einmal je Körper gerechnet statt einmal je Fleck: An der
+    Schüssel mit 215 000 Dreiecken und deckungsgleichen Ecken sortierte jede
+    der 443 Lesungen ihre Punkte als Zeilen (gemessen am 22.09.2026).
+    """
+    result: np.ndarray = remembered(
+        "canonical_vertices",
         body,
         (),
-        lambda: bool(
-            len(np.unique(np.asarray(body.vertices, dtype=float), axis=0)) < len(body.vertices)
-        ),
+        lambda: np.asarray(
+            np.unique(np.asarray(body.vertices, dtype=float), axis=0, return_inverse=True)[1],
+            dtype=np.int64,
+        ).reshape(-1),
     )
     return result
+
+
+def _fans_connected(
+    points_count: int, vertex: np.ndarray, first: np.ndarray, second: np.ndarray
+) -> np.ndarray:
+    """Für viele Ecken auf einmal: Trägt der Link jeder Ecke einen zusammenhängenden Graphen?
+
+    Dieselbe Frage wie ``connected`` in :func:`_one_vertex_fan`, gestellt an
+    alle Ecken zugleich: Je Vorkommen einer Ecke ``vertex`` in einem Dreieck
+    verbindet eine Kante dessen zwei andere Ecken ``first`` und ``second``.
+    Alle Kanten aller Ecken bilden **einen** Graphen, in dem jeder Knoten
+    ``(Ecke, Nachbar)`` heißt, und eine Ecke hängt zusammen, wenn ihre Knoten
+    eine Komponente bilden. Der Einzelweg in Python kostete an der Schüssel
+    368 217 Aufrufe und 5,8 der 21 Sekunden der Erkennung (22.09.2026).
+
+    **Die Komponenten findet eine Markenweitergabe in NumPy**, kein
+    ``scipy``-Graph: Jeder Knoten trägt zu Beginn seine eigene Nummer, jede
+    Kante gibt die kleinere Nummer an beide Enden weiter, bis sich nichts
+    mehr ändert. Ein Fächer ist ein Kreis oder Bogen aus wenigen Dreiecken,
+    also braucht es so viele Runden wie der halbe Fächer lang ist — sieben
+    an einer Ecke mit zwölf Dreiecken. Der Graph über ``coo_matrix`` und
+    ``connected_components`` kostete je Aufruf zwei Millisekunden Aufbau,
+    219-mal je Erkennung an der Schüssel, bei Flecken mit zwanzig Ecken.
+
+    Zurück kommt je Ecke in ``np.unique(vertex)``-Reihenfolge, ob ihr Fächer
+    zusammenhängt — die Ecken selbst gibt der Aufrufer über ``np.unique``.
+    """
+    owners = np.asarray(vertex, dtype=np.int64)
+    keys = np.concatenate((owners * points_count + first, owners * points_count + second))
+    nodes, numbered = np.unique(keys, return_inverse=True)
+    numbered = numbered.reshape(-1)
+    half = len(owners)
+    left, right = numbered[:half], numbered[half:]
+    labels = np.arange(len(nodes), dtype=np.int64)
+    while True:
+        lowest = np.minimum(labels[left], labels[right])
+        before = labels.copy()
+        np.minimum.at(labels, left, lowest)
+        np.minimum.at(labels, right, lowest)
+        if np.array_equal(labels, before):
+            break
+    node_owner = nodes // points_count
+    # Je Ecke die Zahl ihrer Komponenten: verschiedene (Ecke, Marke)-Paare,
+    # als eine Zahl kodiert — die Marke ist eine Knotennummer, also kleiner
+    # als die Knotenzahl.
+    pairs = np.unique(node_owner * len(nodes) + labels)
+    seen_owners, counts = np.unique(pairs // len(nodes), return_counts=True)
+    ordered = np.unique(owners)
+    connected = np.ones(len(ordered), dtype=bool)
+    connected[np.searchsorted(ordered, seen_owners)] = counts == 1
+    return connected
 
 
 def _read_surface_support(
@@ -4559,7 +4960,14 @@ def _read_surface_support(
     corner_of = renumbered[flat_corners]
     all_vertices = np.asarray(body.vertices, dtype=float)
     if _coincident_vertices(body):
-        points, vertex_of = np.unique(all_vertices[used], axis=0, return_inverse=True)
+        # Über die Punktnummern des Körpers, nicht über die Koordinaten des
+        # Flecks: dieselben Punkte in derselben Reihenfolge, ohne je Fleck
+        # Zeilen zu sortieren (:func:`_canonical_vertices`).
+        canonical = _canonical_vertices(body)
+        distinct, vertex_of = np.unique(canonical[used], return_inverse=True)
+        representative = np.full(int(canonical.max()) + 1, -1, dtype=np.int64)
+        representative[canonical[used][::-1]] = used[::-1]
+        points = all_vertices[representative[distinct]]
     else:
         # **Ohne deckungsgleiche Ecken ist jede Ecke ihr eigener Punkt** — die
         # Sortierung der Koordinaten je Fleck entfällt; sie kostete an 2 843
@@ -4629,7 +5037,23 @@ def _read_surface_support(
                 else np.zeros(len(points), dtype=bool)
             )
             torn &= (arcs_of_point != 1) & ~whole
-    for index in np.flatnonzero(torn):
+    open_fans = np.flatnonzero(torn)
+    if len(open_fans):
+        # Alle zerrissenen Ecken in einem Zug (:func:`_fans_connected`); nur
+        # wer dort auseinanderfällt, geht den Einzelweg mit dem
+        # Strahlenvergleich der T-Unterteilungen.
+        if check_cancelled is not None:
+            check_cancelled()
+        occurrence_of = np.flatnonzero(torn[reverse])
+        rows, local = occurrence_of // 3, occurrence_of % 3
+        whole_fans = _fans_connected(
+            len(points),
+            reverse[occurrence_of],
+            corners[rows, (local + 1) % 3],
+            corners[rows, (local + 2) % 3],
+        )
+        open_fans = open_fans[~whole_fans]
+    for index in open_fans:
         if check_cancelled is not None:
             check_cancelled()
         occurrences = order[offsets[index] : offsets[index + 1]]
@@ -4654,8 +5078,7 @@ def _ridge_endpoints(
     support: _SurfaceSupport, check_cancelled: Callable[[], None] | None = None
 ) -> np.ndarray:
     """Kollineare Zwischenpunkte tragen kein zweites Maß einer Mantellinie."""
-    edges = np.sort(support.corners[:, ((0, 1), (1, 2), (2, 0))].reshape(-1, 2), axis=1)
-    edges = np.unique(edges, axis=0)
+    (edges,) = unique_edges(support.corners[:, ((0, 1), (1, 2), (2, 0))].reshape(-1, 2))
     directions = support.points[edges[:, 1]] - support.points[edges[:, 0]]
     lengths = np.linalg.norm(directions, axis=1)
     unit = directions / np.where(lengths > EPS_GEOM, lengths, 1.0)[:, None]
@@ -4831,6 +5254,13 @@ def _fit_cone_read(
     initial_axis = axis
     first, second = _plane_basis(initial_axis)
     at_apex = np.flatnonzero(np.linalg.norm(samples - apex, axis=1) <= EPS_GEOM / scale)
+    # Der Löser rechnet an einer Auswahl der Stützpunkte, die Spitze bleibt
+    # darin (:data:`FIT_SOLVER_POINTS`); die Kennzahlen unten lesen alle.
+    rows = _solver_rows(len(samples), keep=int(at_apex[0]) if len(at_apex) else None)
+    solving = samples if rows is None else samples[rows]
+    solving_apex = (
+        at_apex if rows is None or not len(at_apex) else np.flatnonzero(rows == int(at_apex[0]))
+    )
 
     def parameters(values: np.ndarray) -> tuple[np.ndarray, np.ndarray, float]:
         """Die Achse besitzt genau zwei Freiheitsgrade, keine freie Länge."""
@@ -4840,26 +5270,26 @@ def _fit_cone_read(
     def residual(values: np.ndarray) -> np.ndarray:
         """Geometrischer Abstand zum Kegel; eine belegte Spitze bleibt ein Punkt."""
         tip, direction, angle = parameters(values)
-        relative = samples - tip
+        relative = solving - tip
         along = relative @ direction
         radial = _row_lengths(relative - along[:, None] * direction)
         errors = radial * math.cos(angle) - along * math.sin(angle)
-        if len(at_apex):
-            errors = np.r_[errors, tip - samples[at_apex[0]]]
+        if len(solving_apex):
+            errors = np.r_[errors, tip - solving[solving_apex[0]]]
         return np.asarray(errors, dtype=float)
 
     def jacobian(values: np.ndarray) -> np.ndarray:
         """Die Ableitung des Kegelabstands nach Spitze, Achsneigung und Winkel."""
         tip, direction, angle = parameters(values)
         raw_direction = initial_axis + first * values[3] + second * values[4]
-        relative = samples - tip
+        relative = solving - tip
         along = relative @ direction
         perpendicular = relative - along[:, None] * direction
         radial = _row_lengths(perpendicular)
         safe = np.where(radial > EPS_GEOM, radial, EPS_GEOM)
         unit = perpendicular / safe[:, None]
         cosine, sine = math.cos(angle), math.sin(angle)
-        columns = np.empty((len(samples), 6))
+        columns = np.empty((len(solving), 6))
         columns[:, :3] = -cosine * unit + sine * direction
         length = _length(raw_direction)
         for column, basis in ((3, first), (4, second)):
@@ -4868,7 +5298,7 @@ def _fit_cone_read(
             d_radial = -along * (unit @ turned)
             columns[:, column] = cosine * d_radial - sine * d_along
         columns[:, 5] = -radial * sine - along * cosine
-        if len(at_apex):
+        if len(solving_apex):
             apex_rows = np.zeros((3, 6))
             apex_rows[:, :3] = np.eye(3)
             columns = np.vstack((columns, apex_rows))
@@ -4962,17 +5392,19 @@ def _fit_sphere_read(
     square = float(solution[3] + solution[:3] @ solution[:3])
     if square <= 0.0:
         return None
+    rows = _solver_rows(len(local))
+    solving = local if rows is None else local[rows]
 
-    def residual(values: np.ndarray) -> np.ndarray:
+    def residual(values: np.ndarray, at: np.ndarray = solving) -> np.ndarray:
         """Radialer Abstand der belegten Punkte in der lokalen Längeneinheit."""
-        return np.asarray(_row_lengths(local - values[:3]) - values[3], dtype=float)
+        return np.asarray(_row_lengths(at - values[:3]) - values[3], dtype=float)
 
     def jacobian(values: np.ndarray) -> np.ndarray:
         """Die Ableitung des radialen Abstands nach Mittelpunkt und Radius."""
-        relative = local - values[:3]
+        relative = solving - values[:3]
         distance = _row_lengths(relative)
         safe = np.where(distance > EPS_GEOM, distance, EPS_GEOM)
-        columns = np.empty((len(local), 4))
+        columns = np.empty((len(solving), 4))
         columns[:, :3] = -relative / safe[:, None]
         columns[:, 3] = -1.0
         return columns
@@ -4987,12 +5419,13 @@ def _fit_sphere_read(
     agreement = np.einsum(
         "ij,ij->i", support.normals, (support.centres - origin) - fitted[:3] * scale
     )
+    errors = np.abs(residual(fitted, local))
     return SphereFit(
         centre=(float(centre[0]), float(centre[1]), float(centre[2])),
         radius=radius,
-        residual=float(np.abs(residual(fitted)).mean()) * scale / radius,
+        residual=float(errors.mean()) * scale / radius,
         recess=float(agreement @ support.areas) < 0.0,
-        fit_error=float(np.abs(residual(fitted)).max()) * scale,
+        fit_error=float(errors.max()) * scale,
     )
 
 
@@ -5034,16 +5467,18 @@ def _fit_torus_read(
     local = (points - origin) / scale
     initial_axis = np.asarray(initial.axis)
     first, second = _plane_basis(initial_axis)
+    rows = _solver_rows(len(local))
+    solving = local if rows is None else local[rows]
 
     def parameters(values: np.ndarray) -> tuple[np.ndarray, np.ndarray, float, float]:
         """Ringmitte, zweiachsige Richtung und beide positiven Radien."""
         direction = initial_axis + first * values[3] + second * values[4]
         return values[:3], direction / _length(direction), float(values[5]), float(values[6])
 
-    def residual(values: np.ndarray) -> np.ndarray:
+    def residual(values: np.ndarray, at: np.ndarray = solving) -> np.ndarray:
         """Geometrischer Abstand zum Meridiankreis an jedem belegten Netzpunkt."""
         centre, direction, ring, tube = parameters(values)
-        relative = local - centre
+        relative = at - centre
         along = relative @ direction
         radial = _row_lengths(relative - along[:, None] * direction)
         return np.asarray(np.hypot(radial - ring, along) - tube, dtype=float)
@@ -5052,7 +5487,7 @@ def _fit_torus_read(
         """Die Ableitung des Meridianabstands nach Mitte, Achsneigung und Radien."""
         centre, direction, ring, _tube = parameters(values)
         raw_direction = initial_axis + first * values[3] + second * values[4]
-        relative = local - centre
+        relative = solving - centre
         along = relative @ direction
         perpendicular = relative - along[:, None] * direction
         radial = _row_lengths(perpendicular)
@@ -5061,7 +5496,7 @@ def _fit_torus_read(
         offset = radial - ring
         distance = np.hypot(offset, along)
         safe = np.where(distance > EPS_GEOM, distance, EPS_GEOM)
-        columns = np.empty((len(local), 7))
+        columns = np.empty((len(solving), 7))
         columns[:, :3] = -unit * (offset / safe)[:, None] - (along / safe)[:, None] * direction
         length = _length(raw_direction)
         for column, basis in ((3, first), (4, second)):
@@ -5651,22 +6086,23 @@ def _mouth_covered(
         ]
     )
 
-    def turn(edge: np.ndarray, towards: np.ndarray) -> np.ndarray:
-        """Das Kreuzprodukt zweier ebener Vektoren — von Hand, weil ``np.cross``
-        seit NumPy 2 nur noch dreidimensional rechnet."""
-        return np.asarray(edge[:, 0] * towards[:, 1] - edge[:, 1] * towards[:, 0], dtype=float)
-
-    for point in samples:
-        first, second, third = flat[:, 0] - point, flat[:, 1] - point, flat[:, 2] - point
-        side_a = turn(second - first, -first)
-        side_b = turn(third - second, -second)
-        side_c = turn(first - third, -third)
-        covers = ((side_a >= 0.0) & (side_b >= 0.0) & (side_c >= 0.0)) | (
-            (side_a <= 0.0) & (side_b <= 0.0) & (side_c <= 0.0)
-        )
-        if bool(covers.any()):
-            return True
-    return False
+    # Alle Stichpunkte in einem Zug: ``(Dreiecke, Punkte)`` statt einer
+    # Schleife über die Punkte mit je zehn Feldoperationen — an der
+    # unterteilten Lochplatte 50 der 180 ms der Durchgangsfrage (22.09.2026).
+    # Das Kreuzprodukt zweier ebener Vektoren von Hand, weil ``np.cross`` seit
+    # NumPy 2 nur noch dreidimensional rechnet.
+    corners_a, corners_b, corners_c = flat[:, 0], flat[:, 1], flat[:, 2]
+    edge_ab, edge_bc, edge_ca = corners_b - corners_a, corners_c - corners_b, corners_a - corners_c
+    first = samples[None, :, :] - corners_a[:, None, :]
+    second = samples[None, :, :] - corners_b[:, None, :]
+    third = samples[None, :, :] - corners_c[:, None, :]
+    side_a = edge_ab[:, None, 0] * first[:, :, 1] - edge_ab[:, None, 1] * first[:, :, 0]
+    side_b = edge_bc[:, None, 0] * second[:, :, 1] - edge_bc[:, None, 1] * second[:, :, 0]
+    side_c = edge_ca[:, None, 0] * third[:, :, 1] - edge_ca[:, None, 1] * third[:, :, 0]
+    covers = ((side_a >= 0.0) & (side_b >= 0.0) & (side_c >= 0.0)) | (
+        (side_a <= 0.0) & (side_b <= 0.0) & (side_c <= 0.0)
+    )
+    return bool(covers.any())
 
 
 def _surface_owners(body: trimesh.Trimesh) -> np.ndarray:

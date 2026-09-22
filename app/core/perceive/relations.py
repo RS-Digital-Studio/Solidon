@@ -32,7 +32,7 @@ from numpy.typing import NDArray
 
 from app.core import units
 from app.core.deferred import cKDTree, trimesh
-from app.core.geom.mesh import MeshData
+from app.core.geom.mesh import MeshData, unique_edges
 from app.core.log import get_logger
 from app.core.perceive.actions import ACTION_ORDER, feature_value_source
 from app.core.perceive.features import (
@@ -625,8 +625,8 @@ def _face_boundary_rings(
     if not len(indices) or indices.min() < 0 or indices.max() >= len(body.faces):
         return None
     faces = np.asarray(body.faces)[indices]
-    edges = np.sort(np.concatenate((faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [2, 0]])), axis=1)
-    unique, count = np.unique(edges, axis=0, return_counts=True)
+    edges = np.concatenate((faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [2, 0]]))
+    unique, count = unique_edges(edges, return_counts=True)
     if (count > 2).any():
         return None
     boundary = unique[count == 1]
@@ -944,15 +944,16 @@ def _candidate_key(candidates: Mapping[FeatureId, Feature]) -> tuple[Any, ...]:
     Die Flächen gehen als Hash ein, nicht als Liste: Ein Merkmal trägt
     tausende Nummern, und der Schlüssel soll billiger sein als die Rechnung,
     die er spart.
+
+    **Und keine Lage.** Bis zum 22.09.2026 standen Achse und Mitte mit im
+    Schlüssel; damit war der Eintrag nach jedem Verschieben wertlos, obwohl
+    die Antwort — welche Ringe welche Merkmale teilen — an der Lage nicht
+    hängt: Gelesen werden Dreiecksnummern, und Achsen nur im Verhältnis
+    zueinander. Am selben Netz meinen gleiche Flächen dieselbe Geometrie, und
+    ``geom.transform.apply`` reicht den Eintrag an die bewegte Kopie weiter.
     """
     return tuple(
-        (
-            name,
-            candidate.kind,
-            hash(tuple(candidate.face_indices)),
-            repr(candidate.params.get("axis")),
-            repr(candidate.params.get("centre")),
-        )
+        (name, candidate.kind, hash(tuple(candidate.face_indices)))
         for name, candidate in sorted(candidates.items())
     )
 
@@ -1857,14 +1858,22 @@ def _read_surface_patch(scope: tuple[Feature, ...], body: trimesh.Trimesh) -> _S
         or int(indices.max()) >= len(body.faces)
     ):
         return None
-    triangles = np.asarray(body.triangles, dtype=np.float64)[indices] - centre
-    if not np.isfinite(triangles).all():
+    # Die Ecken über ihre Nummern im Netz zusammengelegt, nicht über ihre
+    # Koordinaten: ``np.unique`` über Zeilen sortiert Strukturen und kostete
+    # an 36 000 Ecken 150 ms je Bohrung — ein Klick auf eine von vier
+    # Bohrungen zahlte das vierfach im Hauptthread (gemessen am 22.09.2026).
+    # Das Netz ist hier bereits ``_one_body``, also verschweißt; zwei Nummern
+    # an derselben Stelle wären zwei Ecken im Suchbaum, und das ist erlaubt.
+    corners = np.asarray(body.faces, dtype=np.int64)[indices]
+    used, inverse = np.unique(corners.ravel(), return_inverse=True)
+    points = np.asarray(body.vertices, dtype=np.float64)[used] - centre
+    if not np.isfinite(points).all():
         return None
-    points, inverse = np.unique(triangles.reshape(-1, 3), axis=0, return_inverse=True)
+    inverse = np.asarray(inverse, dtype=np.int64).reshape(-1, 3)
     return _SurfacePatch(
         points=cast(NDArray[np.float64], points),
-        triangles=cast(NDArray[np.float64], triangles),
-        corners=np.asarray(inverse, dtype=np.int64).reshape(-1, 3),
+        triangles=cast(NDArray[np.float64], points[inverse]),
+        corners=inverse,
     )
 
 
@@ -1881,13 +1890,28 @@ def _same_surface_patch(reference: _SurfacePatch, candidate: _SurfacePatch) -> b
     kleiner als die Anzeigeauflösung wäre für eine Fläche aus Dreiecken keine
     Auskunft, sondern Zufall. Die Maße selbst vergleicht davor
     :func:`_dimension_comparison` mit :data:`EPS_DISPLAY`.
+
+    **Erst die Ecken, dann die Dreiecke.** Eine Ecke, die näher als die
+    Sehnenhöhe an einer Ecke der Gegenfläche liegt, liegt erst recht so nah an
+    deren Fläche — für sie ist die Frage beantwortet, ohne ein Dreieck zu
+    messen. Vier Bohrungen desselben Musters tragen dieselbe Vernetzung, dort
+    trifft das jede Ecke, und der Vergleich kostet eine Baumabfrage statt
+    300 000 Punkt-Dreieck-Paare: An der unterteilten Lochplatte 1,6 s je
+    Klick auf eine Bohrung, im Qt-Hauptthread (gemessen am 22.09.2026). Nur
+    was weiter weg liegt — eine andere Unterteilung derselben Fläche — geht
+    den Weg über die Dreiecke.
     """
     for own, other in ((reference, candidate), (candidate, reference)):
-        distances = _distance_to_surface(own.points, other, NEAREST_CORNERS)
+        to_corners = np.asarray(other.points_tree.query(own.points, k=1)[0], dtype=np.float64)
+        unsettled = np.flatnonzero(to_corners > units.MAX_FACET_SAG)
+        if not len(unsettled):
+            continue
+        remaining = own.points[unsettled]
+        distances = _distance_to_surface(remaining, other, NEAREST_CORNERS)
         outside = distances > units.MAX_FACET_SAG
         if outside.any():
             distances[outside] = _distance_to_surface(
-                own.points[outside], other, NEAREST_CORNERS * 4
+                remaining[outside], other, NEAREST_CORNERS * 4
             )
             if bool((distances > units.MAX_FACET_SAG).any()):
                 return False

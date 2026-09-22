@@ -760,6 +760,127 @@ def test_without_the_motion_a_rotation_would_lose_them() -> None:
     assert result.orphaned, "positions alone cannot follow a turn"
 
 
+def test_a_moved_twin_takes_its_features_from_the_memory(monkeypatch) -> None:
+    """Verschieben und Drehen rechnen die Erkennung nicht neu (§21.2, §31).
+
+    Bis zum 22.09.2026 lief ``detect`` am bewegten Netz vollständig — 1,3 s an
+    204 000 Dreiecken je Schritt —, und die Zuordnung fand danach heraus, dass
+    alles beim Alten war. Jetzt überträgt ``carry_detection`` den Merker des
+    Eingangs auf den bewegten Zwilling, und ``detect`` trifft. Gemessen wird
+    am Kern der Erkennung: Läuft er trotzdem, ist die Übertragung ausgefallen.
+    """
+    import importlib
+
+    from app.core.geom.transform import rotation
+    from app.core.perceive.features import carry_detection, detect, forget_cache
+
+    features = importlib.import_module("app.core.perceive.features")
+    forget_cache()
+    mesh = body("plate_holes.stl")
+    known = detect(mesh)
+    assert len(known) == 10
+
+    matrix = rotation("z", 40.0) @ translation((12.0, -7.5, 3.0))
+    moved = apply(mesh, matrix)
+    cells = tuple(tuple(float(value) for value in row) for row in matrix)
+    assert carry_detection(mesh, moved, cells)
+
+    def never(*_args, **_kwargs):
+        raise AssertionError("die Erkennung darf am bewegten Zwilling nicht rechnen")
+
+    monkeypatch.setattr(features, "_large_facet_faces", never)
+    found = detect(moved)
+
+    assert set(found) == set(known)
+    for name, feature in known.items():
+        carried = found[name]
+        assert carried.kind == feature.kind
+        assert carried.face_indices == feature.face_indices, "dieselben Dreiecke"
+        if "centre" in feature.params:
+            expected = matrix[:3, :3] @ np.asarray(feature.params["centre"]) + matrix[:3, 3]
+            assert np.allclose(carried.params["centre"], expected, atol=1e-6)
+        if "diameter" in feature.params:
+            assert carried.params["diameter"] == pytest.approx(feature.params["diameter"])
+
+
+def test_carrying_needs_the_proof_not_the_promise() -> None:
+    """Ohne Beleg wird nichts übertragen: andere Dreiecke, Skalierung, kein Merker."""
+    from app.core.geom.transform import scaling
+    from app.core.perceive.features import carry_detection, detect, forget_cache
+
+    forget_cache()
+    mesh = body("plate_holes.stl")
+    shift = translation((5.0, 0.0, 0.0))
+    cells = tuple(tuple(float(value) for value in row) for row in shift)
+    # Kein Eintrag im Merker: nichts zu übertragen.
+    assert not carry_detection(mesh, apply(mesh, shift), cells)
+    detect(mesh)
+    # Eine Skalierung ist keine starre Bewegung.
+    grown = scaling((2.0, 2.0, 2.0))
+    assert not carry_detection(
+        mesh, apply(mesh, grown), tuple(tuple(float(v) for v in row) for row in grown)
+    )
+    # Dieselbe Matrix, aber ein anderes Netz dahinter.
+    other = body("cube_clean.stl")
+    assert not carry_detection(mesh, apply(other, shift), cells)
+    # Die Matrix stimmt nicht mit der Lage der Ecken überein.
+    elsewhere = apply(mesh, translation((5.0, 1.0, 0.0)))
+    assert not carry_detection(mesh, elsewhere, cells)
+    # Und mit Beleg geht es.
+    assert carry_detection(mesh, apply(mesh, shift), cells)
+
+
+def test_the_evaluation_carries_features_across_a_translation(profile) -> None:
+    """Der Weg durch die Auswertung: Verschieben erkennt nicht neu, die Namen bleiben."""
+    import importlib
+
+    from app.core.perceive.features import forget_cache
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.project import ProjectSources, new_project
+    from app.core.types import Source
+
+    features = importlib.import_module("app.core.perceive.features")
+    forget_cache()
+    project = new_project("centauri-carbon-2", "petg")
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/plate_holes.stl", sha256=""
+    )
+    project.sources["src_1"] = (MESHES / "plate_holes.stl").read_bytes()
+    history = History(project.document)
+    history.apply("Laden", [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})])
+    sources = ProjectSources(project)
+    first = evaluate(project.document, profile, sources=sources)
+    body_id = project.document.ops[-1].outputs[0]
+    before = first.scene.objects[body_id].features
+    assert len(before) == 10
+
+    history.apply(
+        "Verschieben",
+        [OperationDraft(op="translate_object", inputs=(body_id,), params={"dx": 10.0, "dy": 5.0})],
+    )
+    runs: list[int] = []
+    original = features._large_facet_faces
+
+    def counted(*args, **kwargs):
+        runs.append(1)
+        return original(*args, **kwargs)
+
+    features._large_facet_faces = counted
+    try:
+        second = evaluate(project.document, profile, sources=sources)
+    finally:
+        features._large_facet_faces = original
+
+    assert second.stopped_at is None
+    after = second.scene.objects[project.document.ops[-1].outputs[0]].features
+    assert set(after) == set(before), "dieselben Namen nach dem Verschieben"
+    assert runs == [], "die Erkennung lief am bewegten Netz nicht noch einmal"
+    for name, feature in before.items():
+        if "centre" in feature.params:
+            expected = np.asarray(feature.params["centre"]) + np.asarray((10.0, 5.0, 0.0))
+            assert np.allclose(after[name].params["centre"], expected, atol=1e-6)
+
+
 def test_a_transform_operation_reports_what_it_did() -> None:
     """Die Matrix kommt aus der Operation, nicht aus einem Vergleich danach."""
     from app.core.registry import REGISTRY

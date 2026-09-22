@@ -955,7 +955,13 @@ def moved_features(
                     else turn @ original
                 )
                 length = float(np.linalg.norm(direction))
-                if length > EPS_GEOM:
+                # Nur ein Einheitsvektor wird wieder einer. Die Normale einer
+                # gerundeten Seite ist das flächengewichtete Mittel und an einem
+                # geschlossenen Mantel entsprechend kurz (``detect_curved_faces``);
+                # sie auf eins zu strecken machte aus der mitgeführten Erkennung
+                # eine andere Auskunft als die frische am bewegten Netz
+                # (gemessen am 22.09.2026 an 19 von 125 Körpern des Korpus).
+                if length > EPS_GEOM and abs(float(np.linalg.norm(original)) - 1.0) <= EPS_GEOM:
                     direction = direction / length
                 params[key] = (float(direction[0]), float(direction[1]), float(direction[2]))
         if feature.kind == "thread" and float(np.linalg.det(turn)) < 0.0:

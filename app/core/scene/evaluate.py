@@ -45,9 +45,12 @@ from app.core.knowledge.profiles import analysis_limits, for_process
 from app.core.log import get_logger
 from app.core.perceive.features import (
     DETECTABLE_KINDS,
+    carry_detection,
     centre_of,
     detect,
     freeform_dropped,
+    known_detection,
+    recognised_as_freeform,
     unreadable_void_shells,
 )
 from app.core.perceive.local import FEATURE_LIMIT_TRIANGLES as FEATURE_LIMIT_TRIANGLES
@@ -99,6 +102,7 @@ from app.core.types import (
     FeatureId,
     FeatureRef,
     Finding,
+    Mesh,
     ObjectId,
     OpContext,
     Operation,
@@ -247,8 +251,16 @@ def evaluate(
     registry: Registry | None = None,
     sources: SourceAccess | None = None,
     question_context: QuestionContext | None = None,
+    detect_features: bool = True,
 ) -> EvaluationResult:
-    """Rechnet die Szene, die das Dokument beschreibt."""
+    """Rechnet die Szene, die das Dokument beschreibt.
+
+    ``detect_features=False`` ist der Weg der Live-Vorschau: Merkmale werden
+    dann nur noch dort neu erkannt, wo ein späterer Schritt oder eine Passung
+    sie braucht; was der Merker kennt, kommt trotzdem. Die Szene einer solchen
+    Auswertung trägt an frisch gerechneten Körpern keine erkannten Merkmale
+    und ist damit kein Dokumentstand — sie ist ein Bild.
+    """
     result = _evaluate(
         document,
         profile,
@@ -260,6 +272,7 @@ def evaluate(
         registry=registry,
         sources=sources,
         question_context=question_context,
+        detect_features=detect_features,
     )
     try:
         usage = parameter_uses(document, registry) if document.parameters else {}
@@ -280,6 +293,7 @@ def _evaluate(
     registry: Registry | None,
     sources: SourceAccess | None,
     question_context: QuestionContext | None,
+    detect_features: bool = True,
 ) -> EvaluationResult:
     """Geometrie und Befunde auswerten; auch ein Halt erhält anschließend Verwendungsdaten."""
     profile = for_process(profile, document.print_settings)
@@ -657,8 +671,39 @@ def _evaluate(
             # ein Ergebnis von der Platte niemanden gefragt hat. Wer es unten
             # liest, liest an einem Objekt, das nur so heißt wie das, das er
             # meint.
+            answered_key: str | None = None
             if produced.answered:
                 answers[operation.id] = dict(produced.answered)
+                # **Und das Ergebnis liegt gleich unter dem Schlüssel, den die
+                # Antwort beim nächsten Lauf erzeugt.** ``record_answers``
+                # schreibt sie in die Parameter des Schritts, und damit ist
+                # sein Schlüssel ein anderer: ``unit: auto`` wird ``unit: mm``.
+                # Bis zum 22.09.2026 lief der ganze Import deshalb nach dem
+                # ersten Folgeschritt ein zweites Mal — 2,7 s an 204 000
+                # Dreiecken, an einer 63-MB-Baugruppe die vierzehn Sekunden
+                # des Zählens noch einmal —, und auf der Platte lag ein
+                # Eintrag, nach dem nie wieder jemand fragte: Beim Wiederöffnen
+                # steht die Antwort im Dokument, nicht die Frage (§31, Projekt
+                # öffnen aus Plattencache). Der Schlüssel entsteht auf demselben
+                # Weg wie beim nächsten Lauf, nicht durch Einsetzen in den
+                # gehashten Satz: ``resolve_params`` entscheidet über Typ und
+                # Form eines Werts, und ein zweiter Weg dorthin wäre ein
+                # zweiter Ort, an dem die Auflösung nachgebaut wäre.
+                answered_key = _key_after_answers(
+                    operation,
+                    spec,
+                    produced.answered,
+                    values,
+                    sources,
+                    objects,
+                    hashes,
+                    binding.context,
+                    profile,
+                    quality,
+                    material_profiles,
+                )
+                if answered_key == key:
+                    answered_key = None
             result = CachedResult(
                 objects=tuple(produced.outputs),
                 findings=tuple(produced.findings),
@@ -794,6 +839,12 @@ def _evaluate(
                     # gilt: roher Schlüssel plus Ausgabeindex — nicht der
                     # Objekthash danach, der die Wahl selbst enthielte.
                     scope=f"{key}:{index}",
+                    # Der Eingang an derselben Stelle, wenn es einen gibt:
+                    # Bei einer gemeldeten Bewegung der Beleg, dass die
+                    # Ausgabe sein bewegter Zwilling ist. Ob er es ist,
+                    # prüft ``carry_detection`` am Netz, nicht am Index.
+                    source_mesh=inputs[index].mesh if index < len(inputs) else None,
+                    detect_features=detect_features,
                 )
             except AppError as error:
                 # Die Zuordnung fragt, wenn sie mehrere Kandidaten sieht
@@ -921,6 +972,13 @@ def _evaluate(
             # eines anderen Netzes eingeschlossen —, liest der Plattencodec
             # deshalb so zurück, wie es hier steht.
             pending.append((key, result, not watched.used))
+            if answered_key is not None:
+                # Dieselbe Herkunftsregel für beide Schlüssel: Was ohne Frage
+                # entstand, darf auf die Platte; was eine Frage brauchte,
+                # bleibt in der Sitzung — auch unter dem beantworteten
+                # Schlüssel, denn ob **jede** Frage des Schritts festgehalten
+                # wurde, weiß nur die Operation.
+                pending.append((answered_key, result, not watched.used))
 
     token.raise_if_cancelled()
     scene = Scene(
@@ -1928,9 +1986,17 @@ def _with_features(
     needed: Mapping[FeatureId, tuple[str, ...]] | None = None,
     continuations: Sequence[FeatureContinuation] = (),
     scope: str | None = None,
+    source_mesh: Mesh | None = None,
+    detect_features: bool = True,
 ) -> SceneObject:
     """Merkmale neu erkennen und die alten Bezeichner behalten, wo sie noch
     passen.
+
+    ``source_mesh`` ist das Netz des Eingangs, aus dem diese Ausgabe entstand —
+    bei einer gemeldeten Bewegung der Beleg dafür, dass nicht neu erkannt
+    werden muss (:func:`carry_detection`). ``detect_features=False`` lässt
+    die Erkennung aus, wo kein späterer Schritt und keine Passung ein Merkmal
+    dieses Körpers braucht (siehe :func:`evaluate`).
 
     ``needed`` nennt die alten Merkmale dieses Körpers, die **nach** dieser
     Operation noch jemand braucht, je mit dem Verbraucher; ohne die Angabe
@@ -2187,7 +2253,36 @@ def _with_features(
             check_cancelled=watch.raise_if_cancelled,
         )
     else:
-        detected = detect(mesh, check_cancelled=watch.raise_if_cancelled)
+        # **Ein bewegtes Netz wird nicht neu untersucht.** Meldet die
+        # Operation eine starre Bewegung und ist die Ausgabe belegbar das
+        # bewegte Eingangsnetz — dieselben Dreiecke, jede Ecke dort, wo die
+        # Matrix sie hinbewegt —, dann stehen seine Merkmale schon im Merker
+        # des Eingangs und werden dorthin übertragen; ``detect`` trifft
+        # danach. Die Zuordnung darunter läuft unverändert und findet, was
+        # sie bis zum 22.09.2026 nach 1,3 s Neuerkennung auch fand: alles
+        # beim Alten. Ohne Beleg — anderes Netz, Skalierung, kein Eintrag im
+        # Merker — rechnet die Erkennung wie zuvor.
+        if transform is not None and isinstance(source_mesh, MeshData):
+            carry_detection(source_mesh, mesh, transform, check_cancelled=watch.raise_if_cancelled)
+        if not detect_features and not referenced and not needed:
+            # **Die Vorschau rechnet keine Erkennung, die niemand liest.**
+            # Der Dialog zeigt Geometrie und Differenz; die Erkennung am
+            # geänderten Körper kostete je getippter Zahl an 204 000
+            # Dreiecken 1,1 der 2,2 Sekunden (gemessen am 22.09.2026) und
+            # war beim Übernehmen ohnehin ein Merker-Treffer für genau ein
+            # Netz — das letzte. Was der Merker kennt, kommt trotzdem;
+            # sonst bleibt der Körper bei dem, was die Operation ausgab, ohne
+            # Zuordnung und ohne Waisenbefund, wie bei ``perceive.too_many``.
+            remembered_features = known_detection(mesh)
+            if remembered_features is None:
+                return (
+                    dataclasses.replace(entry, features=output_features)
+                    if feature_movement is not None
+                    else entry
+                )
+            detected = remembered_features
+        else:
+            detected = detect(mesh, check_cancelled=watch.raise_if_cancelled)
     watch.raise_if_cancelled()
 
     # **Was auf einer Freiform weggelassen wurde, steht hier, nicht nirgends.**
@@ -2198,7 +2293,7 @@ def _with_features(
     # fände nirgends den Grund (Regel 17); ein Merkmal, das still verschwindet,
     # ist schlimmer als eines, das dasteht.
     left_out = freeform_dropped(mesh)
-    if left_out:
+    if left_out or recognised_as_freeform(mesh):
         findings.append(
             Finding(
                 code="perceive.freeform",
@@ -2220,11 +2315,16 @@ def _with_features(
                 # und die Lücke zwischen Nozzle-Box (59 Prozent) und Retro-Maus
                 # (77 Prozent) ist schmal; zwei Sätze, deren Grenze niemand
                 # nachmisst, sind schlechter als einer, der wahr ist.
+                # **Und der Satz gilt auch ohne eine einzige weggelassene Form**
+                # (RM-193): Die Splitter einer glatten Haut werden gar nicht
+                # erst eingepasst, also fand die Erkennung dort nichts, das sie
+                # weglassen könnte — und geführt werden Rundformen auf ihr
+                # trotzdem nicht.
                 message=_(
-                    "Die Oberfläche dieses Modells ist überwiegend gekrümmt. Kugeln, "
-                    "Ringe, Kegel und Verrundungen, die die Erkennung darin fand, sind "
-                    "an einer solchen Fläche keine Merkmale und wurden weggelassen; "
-                    "Bohrungen, Zapfen und ebene Flächen bleiben."
+                    "Die Oberfläche dieses Modells ist überwiegend gekrümmt. Auf einer "
+                    "solchen Fläche sind Kugeln, Ringe, Kegel und Verrundungen keine "
+                    "Merkmale und werden nicht geführt; Bohrungen, Zapfen und ebene "
+                    "Flächen bleiben."
                 ),
                 object_id=entry.id,
                 op_id=operation.id,
@@ -2737,6 +2837,54 @@ class _WatchedAsk:
     def __call__(self, question: str, choices: list[str]) -> str:
         self.used = True
         return self._ask(question, choices)
+
+
+def _key_after_answers(
+    operation: Operation,
+    spec: Any,
+    answered: Mapping[str, Any],
+    values: Mapping[ParameterName, float],
+    sources: SourceAccess | None,
+    objects: Mapping[ObjectId, SceneObject],
+    hashes: Mapping[ObjectId, str],
+    binding_context: Mapping[str, Any],
+    profile: Profile,
+    quality: Quality,
+    material_profiles: Mapping[str, Profile],
+) -> str | None:
+    """Der Schlüssel, den dieser Schritt trägt, sobald seine Antworten in den
+    Parametern stehen (§15.7) — oder ``None``, wenn er sich nicht bilden lässt.
+
+    Gebaut wie der Schlüssel des nächsten Laufs: aus den zusammengeführten
+    Parametern über ``resolve_params``, den Kontext und ``operation_hash``.
+    Scheitert die Auflösung — eine Antwort, die kein gültiger Parameterwert
+    ist —, gibt es keinen zweiten Schlüssel; der nächste Lauf meldet den
+    Fehler dann selbst, und hier rät niemand.
+    """
+    try:
+        resolved = expressions.resolve_params({**operation.params, **answered}, values)
+    except AppError:
+        return None
+    hashed = _with_nested_context(
+        spec.params,
+        resolved,
+        values,
+        sources,
+        objects,
+        hashes,
+        reads_other_bodies=spec.reads_other_bodies,
+    )
+    if binding_context:
+        hashed = {**hashed, **binding_context}
+    return operation_hash(
+        operation,
+        hashed,
+        [hashes[entry] for entry in operation.inputs],
+        profile,
+        quality,
+        implementation_version=spec.cache_version,
+        material_profiles=material_profiles,
+    )
 
 
 def _with_nested_context(
