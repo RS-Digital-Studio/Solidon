@@ -15,7 +15,7 @@ import json
 import math
 import zipfile
 from dataclasses import dataclass, field
-from typing import Final
+from typing import Any, Final
 
 import numpy as np
 
@@ -294,6 +294,43 @@ def fully_stitched(mesh: trimesh.Trimesh) -> bool:
     return len(mesh.faces) > 0 and 2 * len(mesh.face_adjacency) >= 3 * len(mesh.faces)
 
 
+def unique_edges(
+    edges: np.ndarray, *, return_counts: bool = False, return_inverse: bool = False
+) -> tuple[np.ndarray, ...]:
+    """Die verschiedenen Kanten einer Kantenliste — über eine Zahl je Kante.
+
+    ``np.unique(edges, axis=0)`` sortiert Zeilen als Strukturen und ist an
+    180 000 Kanten viermal langsamer als dieselbe Frage an einer Kantennummer
+    ``a·n + b`` (gemessen am 22.09.2026: 70 gegen 16 ms). Die Randringe der
+    Merkmalsketten stellten sie je Facette, und an der unterteilten Lochplatte
+    kostete jeder Szenenaufbau im Objektbaum 0,4 s allein damit.
+
+    Die Kanten werden je Zeile aufsteigend sortiert, die Nummer ist eindeutig,
+    solange ``n²`` in ``int64`` passt — bei drei Milliarden Ecken. Zurück
+    kommen die Kanten selbst, in derselben Reihenfolge, die ``np.unique`` über
+    die Achse liefern würde, dann auf Wunsch Zähler und Rückabbildung.
+    """
+    ordered = np.sort(np.asarray(edges, dtype=np.int64).reshape(-1, 2), axis=1)
+    if not len(ordered):
+        results: list[np.ndarray] = [ordered]
+        if return_inverse:
+            results.append(np.zeros(0, dtype=np.int64))
+        if return_counts:
+            results.append(np.zeros(0, dtype=np.int64))
+        return tuple(results)
+    width = int(ordered.max()) + 1
+    codes = ordered[:, 0] * width + ordered[:, 1]
+    _codes, first, inverse, counts = np.unique(
+        codes, return_index=True, return_inverse=True, return_counts=True
+    )
+    results = [ordered[first]]
+    if return_inverse:
+        results.append(np.asarray(inverse).reshape(-1))
+    if return_counts:
+        results.append(counts)
+    return tuple(results)
+
+
 def face_components(mesh: trimesh.Trimesh) -> list[np.ndarray]:
     """Zusammenhängende Komponenten als Dreiecksindizes.
 
@@ -393,16 +430,198 @@ def on_surface(
 
     Der Baum entsteht je Aufruf und wird nicht am Netz zwischengespeichert —
     der von ``trimesh`` gecachte ``rtree``-Index war genau die Stelle, unter
-    der der beschädigte Speicher lag.
+    der der beschädigte Speicher lag. Wer dasselbe Netz in mehreren Portionen
+    fragt, baut ihn einmal (:class:`_SurfaceIndex`); so misst
+    :func:`max_distance_to_surface`.
     """
+    return _nearest_on(_SurfaceIndex.of(body), np.asarray(points, dtype=float).reshape(-1, 3))
+
+
+@dataclass(frozen=True)
+class _SurfaceIndex:
+    """Das Netz, wie :func:`on_surface` es befragt — einmal gebaut, beliebig oft gefragt.
+
+    Dreiecke, Schwerpunkte, die Spanne je Dreieck (Schwerpunkt zur fernsten
+    Ecke), die Quader um jedes Dreieck und der ``cKDTree`` über den
+    Schwerpunkten. Kein Zustand, der sich ändert; das Netz selbst wird nicht
+    angefasst.
+    """
+
+    triangles: np.ndarray
+    centroids: np.ndarray
+    span: np.ndarray
+    lows: np.ndarray
+    highs: np.ndarray
+    tree: object
+    body: trimesh.Trimesh
+
+    @classmethod
+    def of(cls, body: trimesh.Trimesh) -> _SurfaceIndex:
+        from scipy.spatial import cKDTree
+
+        triangles = np.asarray(body.triangles, dtype=float)
+        centroids = triangles.mean(axis=1)
+        return cls(
+            triangles=triangles,
+            centroids=centroids,
+            span=np.linalg.norm(triangles - centroids[:, None, :], axis=2).max(axis=1),
+            lows=triangles.min(axis=1),
+            highs=triangles.max(axis=1),
+            tree=cKDTree(centroids),
+            body=body,
+        )
+
+    def bound(self, queries: np.ndarray, *, neighbours: int = 1) -> np.ndarray:
+        """Je Punkt eine obere Schranke für seinen Abstand zur Oberfläche: der
+        kleinste exakte Abstand zu den Dreiecken der ``neighbours`` nächsten
+        Schwerpunkte.
+
+        Einer genügt der Suche in :func:`_nearest_on`; mehrere machen die
+        Schranke enger, wo der nächste Schwerpunkt nicht zum nächsten Dreieck
+        gehört — an Nadeldreiecken die Regel, denn deren Schwerpunkt liegt
+        weit von ihren Enden. Immer endlich — ein Dreieck ohne Fläche macht
+        die exakte Rechnung zu NaN, und dann tritt Abstand zum Schwerpunkt
+        plus Spanne an seine Stelle (die Gründe stehen in :func:`_nearest_on`).
+        """
+        from trimesh.triangles import closest_point as closest_on
+
+        tree: Any = self.tree
+        count = min(neighbours, len(self.triangles))
+        _, ring = tree.query(queries, k=count)
+        ring = np.asarray(ring, dtype=np.int64).reshape(len(queries), count)
+        asked = np.repeat(queries, count, axis=0)
+        with np.errstate(invalid="ignore", divide="ignore"):
+            spots = closest_on(self.triangles[ring.ravel()], asked)
+        gaps = np.linalg.norm(asked - spots, axis=1)
+        loose = (
+            np.linalg.norm(asked - self.centroids[ring.ravel()], axis=1) + self.span[ring.ravel()]
+        )
+        gaps = np.where(np.isfinite(gaps), gaps, loose)
+        return np.asarray(gaps.reshape(len(queries), count).min(axis=1), dtype=float)
+
+    def bound_at_corners(self, queries: np.ndarray, *, neighbours: int = 4) -> np.ndarray:
+        """Dieselbe Schranke über die Dreiecke an den ``neighbours`` nächsten
+        Ecken des Netzes — die Ergänzung zu :meth:`bound` für **große**
+        Dreiecke.
+
+        Ein Punkt mitten auf einer großen ebenen Facette hat Abstand null zu
+        ihr, aber ihr Schwerpunkt liegt weit weg, und acht nähere Schwerpunkte
+        gehören zu kleinen Dreiecken daneben (:meth:`bound` bleibt dort über
+        null). Die nächste **Ecke** des Netzes ist dagegen fast immer eine
+        Ecke genau dieser Facette, und ihre Dreiecke enthalten sie.
+        ``inf``, wo ein Punkt keine Ecke mit Dreieck findet.
+        """
+        from scipy.spatial import cKDTree
+        from trimesh.triangles import closest_point as closest_on
+
+        vertices = np.asarray(self.body.vertices, dtype=float)
+        faces = np.asarray(self.body.faces, dtype=np.int64)
+        if not len(vertices) or not len(faces):
+            return np.full(len(queries), np.inf)
+        # Je Ecke ihre Dreiecke, dicht abgelegt: ``vertex_faces`` von ``trimesh``
+        # füllt jede Zeile auf den größten Grad auf, und die Nabe eines Fächers
+        # mit zweihundert Dreiecken macht daraus zweihundert Spalten für jede
+        # Ecke des Netzes.
+        by_vertex = np.argsort(faces.ravel(), kind="stable") // 3
+        degree = np.bincount(faces.ravel(), minlength=len(vertices))
+        starts = np.concatenate(([0], np.cumsum(degree)))
+        count = min(neighbours, len(vertices))
+        _, near = cKDTree(vertices).query(queries, k=count)
+        near = np.asarray(near, dtype=np.int64).reshape(len(queries), count)
+        owners = np.repeat(np.arange(len(queries), dtype=np.int64), degree[near].sum(axis=1))
+        corners = near.ravel()
+        runs = degree[corners]
+        offsets = np.arange(int(runs.sum()), dtype=np.int64) - np.repeat(
+            np.cumsum(runs) - runs, runs
+        )
+        chosen = by_vertex[np.repeat(starts[corners], runs) + offsets]
+        asked = queries[owners]
+        with np.errstate(invalid="ignore", divide="ignore"):
+            spots = closest_on(self.triangles[chosen], asked)
+        gaps = np.linalg.norm(asked - spots, axis=1)
+        loose = np.linalg.norm(asked - self.centroids[chosen], axis=1) + self.span[chosen]
+        gaps = np.where(np.isfinite(gaps), gaps, loose)
+        bound = np.full(len(queries), np.inf)
+        np.minimum.at(bound, owners, gaps)
+        return bound
+
+
+def max_distance_to_surface(body: trimesh.Trimesh, points: np.ndarray) -> float:
+    """Der größte Abstand, den einer der Punkte zur Oberfläche hat — exakt,
+    aber nur dort ausgerechnet, wo er das Maximum noch heben kann.
+
+    :func:`on_surface` beantwortet je Punkt drei Fragen; die Abweichungsmessung
+    einer Dezimierung stellt nur eine, und die nur einmal: Wie weit liegt der
+    fernste Punkt weg? Dafür genügt die Schranke aus :meth:`_SurfaceIndex.bound`
+    für jeden Punkt, der sie nicht überbieten kann. Die Punkte werden nach
+    ihrer Schranke absteigend in wachsenden Portionen exakt gemessen; sobald
+    die größte verbleibende Schranke unter dem bisher gemessenen Maximum liegt,
+    kann kein Punkt danach das Maximum noch heben, und die Messung endet.
+
+    Das ist keine Näherung: Jeder Abstand ist höchstens seine Schranke, und
+    gemessen wird, bis die Schranken kleiner sind als ein gemessener Abstand —
+    oder als das Rundungsrauschen der Koordinaten, unter dem kein Maximum
+    mehr eines ist.
+    Was es spart, sind die Nadeldreiecke: An einem CAD-Export eines
+    Besenhalters (59 740 Dreiecke, 97 Prozent Nadeln) misst die Dezimierung
+    29 856 alte Ecken gegen 13 202 neue Dreiecke — vollständig 2,3 s, weil
+    jede Ecke unter den Kugeln langer Dreiecke Hunderte Bewerber hat; hier
+    tragen 78 Prozent der Ecken eine Schranke unter dem Maximum und werden nie
+    exakt gemessen (22.09.2026).
+    """
+    queries = np.asarray(points, dtype=float).reshape(-1, 3)
+    if not len(queries) or not len(body.faces):
+        return 0.0
+    index = _SurfaceIndex.of(body)
+    bound = index.bound(queries)
+    # Der Boden ist das Rundungsrauschen der Koordinaten: Ein Punkt, der
+    # rechnerisch 1e-16 mm neben einer Facette liegt, auf der er sitzt, hebt
+    # kein Maximum, das jemand liest — derselbe Maßstab wie in
+    # :func:`app.core.geom.mesh_ops.deviation`.
+    roundoff = (
+        8
+        * np.finfo(np.float64).eps
+        * max(float(np.max(np.abs(index.triangles))), float(np.max(np.abs(queries))), 1.0)
+    )
+    highest = 0.0
+    portion = 256
+    rounds = 0
+    # Wer die Schranke des bisher Gemessenen nicht überbietet, kann das
+    # Maximum nicht heben.
+    alive = np.flatnonzero(bound > max(highest, roundoff))
+    while len(alive):
+        if rounds == 1:
+            # Nach dem ersten Maß lohnt die engere Schranke: Sie kostet acht
+            # exakte Abstände je Punkt, aber nur für die, die noch im Rennen
+            # sind — und lässt die meisten davon ausscheiden.
+            asked = queries[alive]
+            bound[alive] = np.minimum.reduce(
+                [bound[alive], index.bound(asked, neighbours=8), index.bound_at_corners(asked)]
+            )
+            alive = alive[bound[alive] > max(highest, roundoff)]
+            if not len(alive):
+                break
+        chosen = alive[np.argsort(-bound[alive], kind="stable")[:portion]]
+        _spot, distance, _triangle = _nearest_on(index, queries[chosen])
+        highest = max(highest, float(distance.max()))
+        bound[chosen] = distance
+        portion *= 2
+        rounds += 1
+        alive = np.flatnonzero(bound > max(highest, roundoff))
+    return highest
+
+
+def _nearest_on(
+    index: _SurfaceIndex, queries: np.ndarray
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Der Rumpf von :func:`on_surface` über einem gebauten Index."""
     from scipy.spatial import cKDTree
     from trimesh.triangles import closest_point as closest_on
 
-    queries = np.asarray(points, dtype=float).reshape(-1, 3)
-    triangles = np.asarray(body.triangles, dtype=float)
-    centroids = triangles.mean(axis=1)
-    span = np.linalg.norm(triangles - centroids[:, None, :], axis=2).max(axis=1)
-    tree = cKDTree(centroids)
+    triangles = index.triangles
+    centroids = index.centroids
+    span = index.span
+    tree: Any = index.tree
 
     # Die Schranke: exakter Abstand zum Dreieck mit dem nächsten Schwerpunkt.
     _, nearest = tree.query(queries)
@@ -442,48 +661,117 @@ def on_surface(
     # Suche unter anderen großen Dreiecken. ``frexp`` liefert Zweierpotenzen
     # ohne eine zweite, in Millimetern festgeschriebene Wahrheit.
     exponents = np.frexp(span)[1]
-    parts: list[list[np.ndarray]] = [[] for _ in range(len(queries))]
+    # **Kein Gang je Abfragepunkt, und keine Python-Liste je Punkt.**
+    # ``query_ball_point`` gab je Punkt eine Liste zurück — an 51 000 Ecken
+    # der Lochplatte mit 204 000 Dreiecken sechzehn Millionen Zahlen als
+    # Objekte, vier Sekunden allein dafür, dann je Punkt ein ``sort``
+    # (gemessen am 22.09.2026: 7,7 s für eine Abweichungsmessung). Die Paare
+    # kommen jetzt als dünn besetzte Matrix aus dem Baum
+    # (``sparse_distance_matrix``, C), in Portionen begrenzter Paarzahl, und
+    # ein einziges ``lexsort`` stellt dieselbe stabile Reihenfolge her.
+    #
+    # **Und zwei Siebe, beide exakt.** Die Kugel eines Bands fragt mit der
+    # größten Spanne seiner Mitglieder; je Dreieck gilt seine eigene — wer
+    # weiter weg liegt als Schranke plus Spanne, unterbietet sie nicht. Und
+    # der Abstand zum Quader um ein Dreieck ist nie größer als der zum
+    # Dreieck: Liegt der Quader weiter weg als die Schranke, ist das Dreieck
+    # kein Bewerber. An den Nadeldreiecken der Lochplatte — lang, dünn, große
+    # Spanne — lässt der Quader von 8,7 Millionen Paaren einen Bruchteil übrig.
+    owners_by_band: list[np.ndarray] = []
+    candidates_by_band: list[np.ndarray] = []
+    lows = index.lows
+    highs = index.highs
+    budget = 2_000_000
     for exponent in np.unique(exponents):
         indices = np.flatnonzero(exponents == exponent)
         band_tree = tree if len(indices) == len(triangles) else cKDTree(centroids[indices])
-        found = band_tree.query_ball_point(queries, bound + float(span[indices].max()))
-        for row, local in enumerate(found):
-            if len(local):
-                parts[row].append(indices[np.asarray(local, dtype=np.int64)])
+        radius = bound + float(span[indices].max())
+        lengths = np.asarray(
+            band_tree.query_ball_point(queries, radius, return_length=True), dtype=np.int64
+        )
+        if not lengths.any():
+            continue
+        # **Portionen mit gleichem Radius, bis auf die Spanne.** Die Matrix
+        # fragt mit einem Radius je Portion; ein Punkt weit weg vom Netz neben
+        # einem darauf zöge für beide den großen Radius — und ein ferner
+        # Punkt sieht schon mit ein paar Millimetern mehr das ganze Netz statt
+        # seines zugewandten Rands. Nach Radius sortiert, und eine Portion
+        # reicht nur so weit, wie der Radius um höchstens eine Spanne wächst;
+        # kleine Portionen (ferne, vereinzelte Punkte) gehen den alten
+        # Listenweg, der dort schnell ist.
+        band_span = float(span[indices].max())
+        by_radius = np.argsort(radius, kind="stable")
+        sorted_radius = radius[by_radius]
+        cumulative = np.cumsum(lengths[by_radius])
+        first = 0
+        while first < len(queries):
+            before_first = int(cumulative[first - 1]) if first else 0
+            last = int(np.searchsorted(cumulative, before_first + budget, side="right"))
+            last = min(
+                last,
+                int(np.searchsorted(sorted_radius, sorted_radius[first] + band_span, side="right")),
+            )
+            last = max(last, first + 1)
+            chosen = by_radius[first:last]
+            if last - first < 64:
+                found = band_tree.query_ball_point(queries[chosen], radius[chosen])
+                rows = np.repeat(chosen, lengths[chosen])
+                columns = indices[
+                    np.concatenate([np.asarray(local, dtype=np.int64) for local in found])
+                    if len(found)
+                    else np.zeros(0, dtype=np.int64)
+                ]
+                reach = np.linalg.norm(centroids[columns] - queries[rows], axis=1)
+            else:
+                block = cKDTree(queries[chosen])
+                pairs = block.sparse_distance_matrix(
+                    band_tree, float(sorted_radius[last - 1]), output_type="coo_matrix"
+                )
+                rows = chosen[np.asarray(pairs.row, dtype=np.int64)]
+                columns = indices[np.asarray(pairs.col, dtype=np.int64)]
+                reach = np.asarray(pairs.data, dtype=float)
+            possible = (reach <= radius[rows]) & (reach <= bound[rows] + span[columns])
+            rows, columns = rows[possible], columns[possible]
+            if len(rows):
+                gap = np.maximum(
+                    np.maximum(lows[columns] - queries[rows], queries[rows] - highs[columns]), 0.0
+                )
+                possible = np.linalg.norm(gap, axis=1) <= bound[rows]
+                rows, columns = rows[possible], columns[possible]
+            owners_by_band.append(rows)
+            candidates_by_band.append(columns)
+            first = last
+    # Der nächste Schwerpunkt bleibt immer Kandidat: Er trägt die Schranke
+    # selbst, und ein Nullabstand zu ihm stünde in der Matrix nicht.
+    owners_by_band.append(np.arange(len(queries), dtype=np.int64))
+    candidates_by_band.append(np.asarray(nearest, dtype=np.int64))
+    all_owners = np.concatenate(owners_by_band)
+    all_candidates = np.concatenate(candidates_by_band)
 
-    # Der bisherige einzelne Baum gab seine Kandidaten nach Dreiecksnummer
-    # geordnet zurück. Die Bandreihenfolge darf an einer exakt geteilten Kante
-    # nicht plötzlich den anderen Materialslot gewinnen lassen, deshalb wird
-    # dieselbe stabile Reihenfolge ausdrücklich wiederhergestellt.
-    grouped = [np.sort(np.concatenate(entries)) for entries in parts]
-    counts = np.fromiter((len(group) for group in grouped), dtype=np.int64, count=len(grouped))
-
-    # In Portionen mit begrenzter Paarzahl: Liegen die Punkte weit weg vom
-    # Netz, deckt jede Kugel fast alle Schwerpunkte — bei tausend Punkten
-    # gegen ein dichtes Netz wären das Milliarden Paare auf einmal im
-    # Speicher. Die Grenze kostet im Normalfall nichts, denn dort bleibt es
-    # bei einer einzigen Portion.
-    budget = 2_000_000
+    # **Der Sieger je Punkt ohne Sortierung.** Der bisherige einzelne Baum
+    # gab seine Kandidaten nach Dreiecksnummer geordnet zurück, und bei
+    # gleichem Abstand — an einer exakt geteilten Kante — gewann der erste,
+    # also die kleinste Nummer. Dieselbe Antwort gibt die Reduktion je Punkt:
+    # kleinster Abstand, darunter kleinste Nummer (``np.minimum.at``), in
+    # Portionen begrenzter Paarzahl, denn weit weg vom Netz deckt jede Kugel
+    # fast alle Schwerpunkte, und tausend Punkte gegen ein dichtes Netz wären
+    # Milliarden Paare auf einmal. Ein ``lexsort`` über neun Millionen Paare
+    # kostete davor 1,5 der 4 Sekunden.
     closest = np.empty_like(queries)
-    distance = np.empty(len(queries), dtype=float)
-    triangle = np.empty(len(queries), dtype=np.int64)
-    lower = 0
-    while lower < len(queries):
-        upper, pairs = lower, 0
-        while upper < len(queries) and (pairs == 0 or pairs + counts[upper] <= budget):
-            pairs += int(counts[upper])
-            upper += 1
-        rows = np.arange(lower, upper)
-        owners = np.repeat(rows - lower, counts[rows])
-        candidates = np.concatenate([grouped[row] for row in rows]).astype(np.int64)
+    distance = np.full(len(queries), np.inf, dtype=float)
+    unset = np.int64(len(triangles))
+    triangle = np.full(len(queries), unset, dtype=np.int64)
+    for lower in range(0, len(all_owners), budget):
+        owners = all_owners[lower : lower + budget]
+        candidates = all_candidates[lower : lower + budget]
         with np.errstate(invalid="ignore", divide="ignore"):
-            spots = closest_on(triangles[candidates], queries[rows][owners])
+            spots = closest_on(triangles[candidates], queries[owners])
         # **Dasselbe entartete Dreieck, eine Stufe später.** Oben rettet der
         # Ersatz für die Schranke die Kandidatensuche; hier gäbe dieselbe
         # Division durch null einen NaN-Abstand. Solange ein gesunder Kandidat
-        # danebensteht, verliert der NaN von selbst — ``lexsort`` sortiert ihn
-        # ans Ende. Ist er der **einzige**, käme ohne diese Zeilen ein NaN als
-        # Ergebnis heraus, und der Kunde läse „Abweichung: nan mm".
+        # danebensteht, verliert der NaN von selbst — ein NaN ist nie kleiner.
+        # Ist er der **einzige**, käme ohne diese Zeilen ein NaN als Ergebnis
+        # heraus, und der Kunde läse „Abweichung: nan mm".
         #
         # Ein flaches Dreieck ist geometrisch die Vereinigung seiner drei
         # Kanten. Auf die nächste davon zu projizieren bleibt deshalb auch bei
@@ -492,7 +780,7 @@ def on_surface(
         broken = ~np.isfinite(spots).all(axis=1)
         if broken.any():
             corners = triangles[candidates[broken]]
-            asked = queries[rows][owners][broken]
+            asked = queries[owners[broken]]
             starts = corners
             edges = np.roll(corners, -1, axis=1) - starts
             squared = np.einsum("nij,nij->ni", edges, edges)
@@ -507,13 +795,18 @@ def on_surface(
             projections = starts + along[:, :, None] * edges
             nearest_edge = np.linalg.norm(projections - asked[:, None, :], axis=2).argmin(axis=1)
             spots[broken] = projections[np.arange(len(projections)), nearest_edge]
-        gaps = np.linalg.norm(queries[rows][owners] - spots, axis=1)
-        order = np.lexsort((gaps, owners))
-        best = order[np.searchsorted(owners[order], np.arange(len(rows)), side="left")]
-        closest[rows] = spots[best]
-        distance[rows] = gaps[best]
-        triangle[rows] = candidates[best]
-        lower = upper
+        gaps = np.linalg.norm(queries[owners] - spots, axis=1)
+        before = distance.copy()
+        np.minimum.at(distance, owners, gaps)
+        # Wo diese Portion den Abstand verbessert hat, zählt die bisherige
+        # Nummer nicht mehr; wo er gleich blieb, entscheidet weiter die kleinste.
+        triangle[distance < before] = unset
+        tied = gaps == distance[owners]
+        np.minimum.at(triangle, owners[tied], candidates[tied])
+        # Wer nach dieser Portion Bestwert und kleinste Nummer trägt, setzt
+        # den Ort; ein späterer Block mit besserem Abstand überschreibt ihn.
+        won = tied & (candidates == triangle[owners])
+        closest[owners[won]] = spots[won]
     return closest, distance, triangle
 
 

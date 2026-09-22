@@ -226,13 +226,13 @@ def render_preview(meshes: Iterable[object], theme: str = "light") -> str:
     """
     from app.core import drawing
     from app.core.geom.mesh import MeshData, concatenated
-    from app.core.geom.mesh_ops import decimate
+    from app.core.geom.mesh_ops import decimate_for_display
 
     raw = [mesh.raw for mesh in meshes]  # type: ignore[attr-defined]
     if not raw:
         return ""
     body = concatenated(raw) if len(raw) > 1 else raw[0]
-    reduced = decimate(MeshData.of(body), PREVIEW_TRIANGLES)
+    reduced = decimate_for_display(MeshData.of(body), PREVIEW_TRIANGLES)
     tone = drawing.palette(theme).solid  # type: ignore[arg-type]
     return drawing.project(
         reduced.raw,

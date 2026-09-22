@@ -539,8 +539,18 @@ verwendet denselben Kern und unterscheidet Kontakt von dünnem Schnittvolumen.
 
 `mesh.py` (die Mesh-Hülle um den Geometriekern, §9; `read_mesh` liest nur, was
 trimesh zu einem Körper macht — kein 3MF, kein Dateiformatwissen darüber
-hinaus, das liegt in `ingest/`) · `boolean.py` (die Kette
-oben) · `repair.py` (Netze reparieren — und dort zwei Nachbarn, die man leicht
+hinaus, das liegt in `ingest/`; `unique_edges` beantwortet „welche Kanten,
+wie oft" über eine Kantennummer statt über `np.unique(axis=0)` — viermal
+schneller an 180 000 Kanten, und die Randringe der Merkmalsketten, die
+Rückwand-Prüfung der Bausteine und die Fleckennachbarschaft fragen es)
+· `boolean.py` (die Kette
+oben) · `difference.py` (die Differenzansicht §18.7 — sie beschneidet beide
+Körper zuerst auf den Quader, in dem sich ihre Häute unterscheiden
+(`_changed_region`: Ecken über den Suchbaum zugeordnet, Dreiecke als
+Nummer in kanonischer Drehung verglichen); die Differenz liegt in dessen
+Hülle, und zwei Schnitte an einer Platte mit 204 000 Dreiecken kosten so
+25 statt 366 ms — bleibt die Box über der Hälfte der gemeinsamen Hülle,
+rechnet sie am ganzen Körper) · `repair.py` (Netze reparieren — und dort zwei Nachbarn, die man leicht
 verwechselt: `remove_small_components` misst die **Fläche** gegen die größte
 Komponente und wirft lose Fragmente, `remove_hollow_shells` misst das
 **Volumen** gegen null und wirft Flächenpaare ohne Dicke; ein Bauteil von
@@ -562,7 +572,13 @@ in Flucht bringen)
 
 `transform.moved_object` führt Körper und Merkmale gemeinsam in den
 Ergebnisraum. Transformationen, Muster, Druckausrichtung und Anordnung
-verwenden denselben Weg. Ein exakter Körper bleibt auch bei ungleichmäßiger
+verwenden denselben Weg. `transform.apply` gibt der bewegten Kopie mit, was
+das Quellnetz über seine Topologie schon wusste (`_carry_cache`:
+Nachbarschaften, Kanten, Teilezahl, Fleckennachbarschaft; bei starrer
+Bewegung auch Facetten, Winkel, Flächen, gedrehte Normalen und die Randringe
+der Merkmalsketten) — `copy()` gäbe ein Netz mit leerem Gedächtnis, und die
+Auswertung fragte danach alles neu. Bei einer Spiegelung wandert nichts mit:
+Der Umlaufsinn dreht sich, die Kantentabellen stimmten nicht mehr. Ein exakter Körper bleibt auch bei ungleichmäßiger
 Skalierung exakt; sein Anker kommt aus den nativen Grenzen. Die Historie des
 nativen Builders ordnet vollständige alte Topologieflächen den neuen Flächen
 zu, deren aktuelle Dreiecke anschließend die Auswahl tragen. Teilmengen einer
@@ -1117,6 +1133,49 @@ Kappen; die übergebenen Eckpunkte und der ursprüngliche Körper bleiben erhalt
 in ein Filament färben) · `texture.py` (von einer Textur zu druckbaren Slots)
 · `label_ops.py` (Text und Logos auf einer Fläche; die Schriften dazu liegen
 in `data/fonts/`)
+
+**`mesh.on_surface` sucht ohne `rtree`** — und seit dem 22.09.2026 ohne
+eine Python-Liste je Abfragepunkt: Die Kandidaten kommen je Größenband als
+dünn besetzte Matrix aus dem Baum (`sparse_distance_matrix`, in Portionen
+gleichen Radius; vereinzelte ferne Punkte gehen den Listenweg), zwei exakte
+Siebe (Spanne je Dreieck, Abstand zum Quader um das Dreieck) lassen an
+Nadeldreiecken einen Bruchteil übrig, und der Sieger je Punkt kommt aus
+`np.minimum.at` statt aus einem `lexsort` über Millionen Paare — kleinster
+Abstand, darunter kleinste Nummer, dieselbe Antwort wie zuvor. Der Index
+dahinter (`_SurfaceIndex`: Dreiecke, Schwerpunkte, Spannen, Quader, Baum)
+wird einmal gebaut und beliebig oft gefragt. Und `mesh_ops.deviation` stellt
+nur **eine** Frage, das Maximum: `mesh.max_distance_to_surface` misst exakt,
+aber nur die Punkte, deren Schranke das Maximum noch heben kann — erst die
+Schranke aus dem nächsten Schwerpunkt, nach dem ersten Maß die engere aus
+acht Schwerpunkten und den Dreiecken an den nächsten Ecken
+(`bound_at_corners`, für große Dreiecke mit fernem Schwerpunkt), dann in
+wachsenden Portionen exakt, bis keine Schranke mehr über dem Gemessenen liegt
+(am Besenhalter mit 97 Prozent Nadeln: 2,9 → 0,25 s). Was neben einer alten
+Ecke liegt, wird gar nicht gefragt: Der exakte Kern lässt beim Vereinfachen
+Ecken weg statt sie zu verschieben, und ein Punkt auf einer Ecke hat
+Abstand null.
+
+**Zwei Dezimierungen, zwei Zusagen.** `mesh_ops.decimate` ist die der
+Operation: Zielzahl, Solvername, beidseitig gemessene Abweichung, Volumen-
+und Wasserdichtheitsprüfung. Vor jedem Solver läuft das exakte Vorspiel
+(`_exactly_flattened`): `manifold3d.simplify(0)` nimmt die Ecken heraus,
+deren Nachbarschaft eben oder gerade ist — punktgleiche Oberfläche, jede
+neue Ecke eine alte, geprüft an Dichtheit, Teilzahl und Volumen
+(`FLATTEN_VOLUME_NOISE`); reicht das allein unter das Ziel, heißt der Solver
+`"exact"`. Die viermal unterteilte Lochplatte: 203 776 → 814 Dreiecke in
+110 ms, wo `fast_simplification` vier Sekunden stillstand und der Rückfall
+danach elf brauchte. Danach der Rückfall auf den exakten Kern, sobald
+`fast_simplification` das Ziel um mehr als das Doppelte verfehlt
+(`DECIMATE_MISS`): An CAD-Exporten mit echten Nadeln — ein Zylinder aus
+2 048 Sektionen, der Besenhalter — nimmt sein Flip-Schutz kein Dreieck weg,
+und dort findet auch das Vorspiel nichts, weil jede Ecke etwas beschreibt.
+`mesh_ops.decimate_for_display` ist die des Bildschirms — Vorschaubild im
+Objektbaum, Anzeige ab der Schwelle aus §31, Beispielbilder, Stellvertreter
+der Orientierungssuche: erst der exakte Kern nach Sehnenfehler
+(`units.MAX_FACET_SAG` als Start, je Schritt vervierfacht), dann das
+Zusammenlegen im Raster für Netze, die der Kern nicht nimmt
+(`_clustered_for_display`). Keine Zielzahl, keine Messung, eine Antwort in
+rund hundert Millisekunden an 200 000 Dreiecken.
 
 **Eine Beschriftung sieht überall gleich aus, oder sie ist keine.** Ein Projekt
 wandert zwischen Rechnern, und eine Systemschrift, die es hier gibt und dort

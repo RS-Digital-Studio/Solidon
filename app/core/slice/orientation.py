@@ -12,7 +12,7 @@ from shapely.geometry import Polygon as ShapelyPolygon
 
 from app.core.deferred import trimesh
 from app.core.geom.mesh import MeshData
-from app.core.geom.mesh_ops import decimate
+from app.core.geom.mesh_ops import decimate_for_display
 from app.core.geom.orient import (
     AXES,
     MAX_FACE_CANDIDATES,
@@ -300,7 +300,7 @@ def search_proxy(mesh: MeshData) -> MeshData:
     """
     if mesh.triangle_count <= SEARCH_TRIANGLES:
         return mesh
-    return decimate(mesh, SEARCH_TRIANGLES)
+    return decimate_for_display(mesh, SEARCH_TRIANGLES)
 
 
 def settled(baseline: Candidate, floor: float, footprint: float, best_footprint: float) -> bool:

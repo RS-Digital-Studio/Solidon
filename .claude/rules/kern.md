@@ -49,6 +49,22 @@ Bits einer Summe in anderer Reihenfolge.
 `geom/mesh.py` und `geom/orient.py` dürfen Qhull behalten: Sie fragen einmal je
 Körper.
 
+## `np.unique(…, axis=0)` an Kanten oder Ecken gehört nicht in eine Schleife
+
+Dieselbe Bauart wie oben, eine Bibliothek weiter: `np.unique` über eine Achse
+sortiert Zeilen als Strukturen und ist an 180 000 Kanten viermal langsamer
+als dieselbe Frage an einer Zahl je Kante (gemessen am 22.09.2026: 70 gegen
+16 ms). Die Randringe der Merkmalsketten stellten sie je Facette, und an der
+unterteilten Lochplatte kostete jeder Szenenaufbau des Objektbaums 0,4 s
+allein damit; die Fleckenlesung sortierte je Fleck ihre Ecken als Zeilen.
+
+Für Kanten nimmt der Kern `geom.mesh.unique_edges` (Kantennummer `a·n + b`,
+gleiche Reihenfolge, Zähler und Rückabbildung auf Wunsch); für Ecken eine
+einmal je Körper gebildete Punktnummer (`perceive.features._canonical_vertices`)
+und danach nur noch `np.unique` über Nummern. Wer eine Zellnummer aus
+Koordinaten bildet (`mesh_ops._clustered_once`), macht dasselbe. Einmal je
+Körper — `geom/repair.py`, `geom/orient.py` — bleibt `axis=0` in Ordnung.
+
 **Und die Regel gilt eine Ebene höher genauso** (16.09.2026). Die
 Schattenprojektion der Ansicht rechnete ihre ebene Hülle selbst über
 `scipy.spatial.ConvexHull` — je Körper, je Hüllstück und je Auffangfläche, an
