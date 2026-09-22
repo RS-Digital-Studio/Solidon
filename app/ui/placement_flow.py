@@ -19,6 +19,7 @@ from PySide6.QtCore import (
     QPoint,
     QPointF,
     QRect,
+    QRectF,
     QSignalBlocker,
     Qt,
     QTimer,
@@ -438,6 +439,30 @@ def _old_places_still_serve(
         if (QPointF(rect.center()) - wanted[widget]).manhattanLength() > leeway:
             return False
     return _crossings(previous, pending) <= _crossings(positions, pending)
+
+
+def _clear_of_lines(rect: QRect, lines: Sequence[tuple[QPointF, QPointF]]) -> bool:
+    """Ob kein Strich der Tinte durch das um ``SPACE`` gewachsene Feld läuft.
+
+    Ein Feld über einer Maßlinie verdeckt, was es beschriftet — und über einer
+    fremden, was ein anderes beschriftet. Geprüft wird die Strecke gegen das
+    Rechteck: ein Endpunkt darin, oder ein Schnitt mit einer seiner vier
+    Kanten.
+    """
+    grown = QRectF(rect.adjusted(-SPACE, -SPACE, SPACE, SPACE))
+    corners = (
+        grown.topLeft(),
+        grown.topRight(),
+        grown.bottomRight(),
+        grown.bottomLeft(),
+    )
+    edges = tuple(zip(corners, (*corners[1:], corners[0]), strict=True))
+    for start, end in lines:
+        if grown.contains(start) or grown.contains(end):
+            return False
+        if any(_crosses((start, end), edge) for edge in edges):
+            return False
+    return True
 
 
 def _holds_focus(field: QWidget, focused: QWidget | None) -> bool:
@@ -3573,7 +3598,14 @@ class PlacementFlow(QObject):
         self, screen: Callable[[Vec3], QPointF], bounds: QRect, margin: int
     ) -> QRect | None:
         """Die projizierte Hülle des Trägers, um ``margin`` erweitert — oder
-        ``None``, wenn neben ihr kein Platz im Bild bleibt.
+        ``None``, sobald der Körper über das Bild hinausragt.
+
+        **Neben dem Körper, solange man ihn ganz sieht** (Robert, 22.09.2026).
+        Ein Körper, der ins Bild passt, lässt ringsum Platz, und dort stehen die
+        Felder besser als auf ihm (RM-197). Ragt er hinaus — der Halter mit
+        220 mm, nah herangezoomt —, gibt es dieses Ringsum nicht mehr, und
+        die Felder gehören an ihre Maßlinien, auf den Körper; die Linien
+        selbst bleiben frei.
 
         Acht Ecken des Hüllquaders, geklemmt wie der Setzpunkt: Eine sehr nahe
         Kamera projiziert jenseits von int32.
@@ -3590,12 +3622,10 @@ class PlacementFlow(QObject):
                 return None
             xs.append(max(bounds.left() - margin, min(round(shown.x()), bounds.right() + margin)))
             ys.append(max(bounds.top() - margin, min(round(shown.y()), bounds.bottom() + margin)))
-        body = QRect(QPoint(min(xs), min(ys)), QPoint(max(xs), max(ys))).adjusted(
-            -margin, -margin, margin, margin
-        )
-        if body.contains(bounds):
+        hull = QRect(QPoint(min(xs), min(ys)), QPoint(max(xs), max(ys)))
+        if not bounds.contains(hull):
             return None
-        return body
+        return hull.adjusted(-margin, -margin, margin, margin)
 
     def _camera_moved(self) -> None:
         """Die Kamera steht anders: Felder und Tinte neu legen — das Bild zeichnet die Ansicht.
@@ -4023,21 +4053,54 @@ class PlacementFlow(QObject):
         # Platz daneben, und die Verbindungslinie sagt, welches Maß sie
         # bemaßen. Füllt der Körper das ganze Bild, gilt die alte Regel: Ein
         # Feld außerhalb des Bildes ist keines.
+        # **Neben dem Körper, solange man ihn ganz sieht** (Robert, 22.09.2026,
+        # am Schraubendreherhalter: „wo welches maß hinkommt seh ich immer noch
+        # nicht" — „solange man den körper vollständig sieht"). Die Hülle als
+        # Hindernis (RM-197) schob auf einem Teil, das über das Bild hinausragt,
+        # jedes Feld an den Bildrand — dreihundert Punkte von seiner Maßlinie
+        # weg, mit Verbindungslinien quer über das ganze Teil. Ragt der Körper
+        # aus dem Bild, stehen die Felder an ihrer Maßlinie, auf dem Körper —
+        # und nie über einer Linie (``_clear_of_lines``): Das war der Grund für
+        # den Abstand.
         body = self._body_on_screen(screen, bounds, room_around)
         if body is not None:
             occupied.append(body)
+        # Das Vorschauband oben deckt sonst zwei Felder zu.
+        banner = getattr(self.viewport, "banner", None)
+        if isinstance(banner, QWidget) and banner.isVisibleTo(self.viewport):
+            occupied.append(banner.geometry())
         obstacles = list(occupied)
+        ink = [*self._canvas.lines, *self._canvas.references, *self._canvas.extensions]
         positions: dict[QWidget, QRect] = {}
         for widget, wanted, _line in sorted(pending, key=lambda entry: -entry[0].width()):
             width, height = widget.width(), widget.height()
             left, right = bounds.left(), bounds.right() - width + 1
             top, bottom = bounds.top(), bounds.bottom() - height + 1
-            xs = {left, right, max(left, min(round(wanted.x() - width / 2), right))}
-            ys = {top, bottom, max(top, min(round(wanted.y() - height / 2), bottom))}
+            middle_x = max(left, min(round(wanted.x() - width / 2), right))
+            middle_y = max(top, min(round(wanted.y() - height / 2), bottom))
+            xs = {left, right, middle_x}
+            ys = {top, bottom, middle_y}
+            # Die Plätze unmittelbar neben der Linienmitte — darüber, darunter,
+            # links, rechts, und je ein, zwei Feldhöhen weiter — sind die ersten
+            # Kandidaten: Dort steht ein Maß, wie man es von einer Zeichnung
+            # kennt, und dort findet es einen Platz neben den Linien.
+            for step in (1, 2, 3):
+                xs.update(
+                    (
+                        round(wanted.x()) - step * (width + SPACE),
+                        round(wanted.x()) + (step - 1) * (width + SPACE) + SPACE + 1,
+                    )
+                )
+                ys.update(
+                    (
+                        round(wanted.y()) - step * (height + SPACE),
+                        round(wanted.y()) + (step - 1) * (height + SPACE) + SPACE + 1,
+                    )
+                )
             for taken in occupied:
                 xs.update((taken.left() - width - SPACE, taken.right() + SPACE + 1))
                 ys.update((taken.top() - height - SPACE, taken.bottom() + SPACE + 1))
-            candidates = [
+            admissible = [
                 QRect(x, y, width, height)
                 for x in xs
                 for y in ys
@@ -4050,6 +4113,9 @@ class PlacementFlow(QObject):
                     for taken in occupied
                 )
             ]
+            # Frei von Linien, wenn es geht; sonst frei von Hindernissen — ein
+            # Feld über einem Strich ist besser als eines, das nirgends steht.
+            candidates = [rect for rect in admissible if _clear_of_lines(rect, ink)] or admissible
             if not candidates:
                 # Fünf Felder passen im unterstützten Desktopbereich in wenige
                 # Zeilen. Diese feste Anordnung löst einen ungünstigen früheren

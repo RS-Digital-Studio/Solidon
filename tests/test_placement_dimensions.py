@@ -511,11 +511,15 @@ def test_the_dimension_fields_leave_the_movement_handle_alone(qt_app: QApplicati
         widgets = [*flow._reference_boxes[:2], *flow._centre_measures, flow._reference_boxes[2]]
         frei = [widget.geometry() for widget in widgets]
 
-        viewport.handle = ((10.0, 10.0, 0.0), 30.0)
+        # Der Griff reicht über den Körper samt seinem Freiraum hinaus (36 mm bei
+        # 20 mm halber Platte und 10 mm Freiraum): Seit dem 22.09.2026 stehen
+        # die Felder neben dem ganz sichtbaren Körper, und ein kleinerer Griff
+        # träfe dort gar kein Feld — die Gegenprobe unten misst dann nichts.
+        viewport.handle = ((10.0, 10.0, 0.0), 36.0)
         flow.redraw()
         qt_app.processEvents()
         mitte = viewport.renderer.world_to_display((10.0, 10.0, 0.0))
-        rand = viewport.renderer.world_to_display((40.0, 10.0, 0.0))
+        rand = viewport.renderer.world_to_display((46.0, 10.0, 0.0))
         weite = round(math.hypot(rand[0] - mitte[0], rand[1] - mitte[1]))
         griff = QRect(
             round(mitte[0]) - weite, round(mitte[1]) - weite, 2 * weite + 1, 2 * weite + 1
@@ -889,6 +893,89 @@ def test_the_measure_with_the_focus_lights_up_in_the_view(qt_app: QApplication) 
         flow.redraw()
         assert len(flow._canvas.focus) == 1 and flow._canvas.focus[0] in flow._canvas.lines
         assert flow._canvas.focus[0] != line, "jetzt leuchtet das andere Maß"
+    finally:
+        flow.dispose()
+        session.release()
+        dialog.close()
+        viewport.close()
+
+
+def test_fields_stand_at_their_lines_when_the_body_outgrows_the_view(
+    qt_app: QApplication,
+) -> None:
+    """Ragt der Körper über das Bild hinaus, stehen die Felder an ihrer Maßlinie
+    (Robert, 22.09.2026: „wo welches maß hinkommt seh ich immer noch nicht" —
+    „solange man den körper vollständig sieht").
+
+    Am Halter mit 220 mm, nah herangezoomt, schob die Hülle als Hindernis jedes
+    Feld an den Bildrand, dreihundert Punkte von seiner Linie weg. Jetzt: kurze
+    Verbindungen, kein Feld über einer Linie, keines unter dem Vorschauband.
+    """
+    from app.ui.placement_flow import _clear_of_lines
+
+    flow, session, viewport, dialog = _layout(qt_app, (900, 600), 1.0, "bottom")
+    try:
+        flow._tool_context = PlacementTool(
+            MeshData(trimesh.creation.cylinder(radius=2.5, height=10))
+        )
+        # Dreißig Bildpunkte je Millimeter: Die 40-mm-Platte ist 1200 Punkte
+        # breit und ragt an beiden Seiten aus dem 900 Punkte breiten Bild.
+        viewport.renderer.world_to_display = lambda point: (
+            450 + (point[0] - 10) * 30,
+            300 + (point[1] - 10) * 30,
+            0.5,
+        )
+        flow.redraw()
+        qt_app.processEvents()
+        fields = [*flow._reference_boxes[:2], *flow._centre_measures, flow._reference_boxes[2]]
+        ink = [*flow._canvas.lines, *flow._canvas.references, *flow._canvas.extensions]
+        assert ink, "ohne Tinte misst der Test nichts"
+        for field in fields:
+            assert field.isVisible(), field.objectName()
+            assert _clear_of_lines(field.geometry(), ink), (field.objectName(), field.geometry())
+        # Nicht weiter als anderthalb Feldbreiten: Es steht neben seiner Linie
+        # und nicht am Bildrand — ein Feld an einer Ecke des Bildes hängt an
+        # seiner eigenen Breite, mehr nicht.
+        widest = max(field.width() for field in fields)
+        for tail, anchor in flow._canvas.leaders:
+            assert (tail - anchor).manhattanLength() <= 1.5 * widest, (
+                "die Verbindung ist kurz — das Feld steht an seiner Linie",
+                tail,
+                anchor,
+            )
+    finally:
+        flow.dispose()
+        session.release()
+        dialog.close()
+        viewport.close()
+
+
+def test_no_field_hides_under_the_preview_banner(qt_app: QApplication) -> None:
+    """Das Vorschauband oben deckte zwei Felder zu (Robert, 22.09.2026)."""
+    from PySide6.QtWidgets import QLabel
+
+    flow, session, viewport, dialog = _layout(qt_app, (900, 600), 1.0, "top")
+    try:
+        flow._tool_context = PlacementTool(
+            MeshData(trimesh.creation.cylinder(radius=2.5, height=10))
+        )
+        banner = QLabel("Vorschau — noch nicht übernommen", viewport)
+        banner.setGeometry(0, 0, 900, 60)
+        banner.show()
+        viewport.banner = banner
+        viewport.renderer.world_to_display = lambda point: (
+            450 + (point[0] - 10) * 30,
+            80 + (point[1] - 10) * 30,
+            0.5,
+        )
+        flow.redraw()
+        qt_app.processEvents()
+        fields = [*flow._reference_boxes[:2], *flow._centre_measures, flow._reference_boxes[2]]
+        for field in fields:
+            assert not field.geometry().intersects(banner.geometry()), (
+                field.objectName(),
+                field.geometry(),
+            )
     finally:
         flow.dispose()
         session.release()
