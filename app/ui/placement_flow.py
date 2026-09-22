@@ -404,50 +404,80 @@ def _crosses(a: tuple[QPointF, QPointF], b: tuple[QPointF, QPointF]) -> bool:
     )
 
 
-def _old_places_still_serve(
-    previous: Mapping[QWidget, QRect],
-    positions: Mapping[QWidget, QRect],
-    pending: Sequence[tuple[QWidget, QPointF, QPointF]],
+def _fits(
+    widget: QWidget,
+    rect: QRect,
+    layout: Mapping[QWidget, QRect],
     bounds: QRect,
     obstacles: Sequence[QRect],
 ) -> bool:
-    """Ob die Plätze des letzten Aufbaus den neuen ersetzen dürfen.
+    """Ob ein Feld an diesem Platz steht: im Bild, keinem Hindernis und keinem
+    anderen Feld der Anordnung zu nahe — die eine Prüfung für Platzsuche,
+    Stehregel und Entwirren."""
+    if not bounds.contains(rect):
+        return False
+    grown = rect.adjusted(-SPACE, -SPACE, SPACE, SPACE)
+    if any(grown.intersects(taken) for taken in obstacles):
+        return False
+    return not any(grown.intersects(other) for key, other in layout.items() if key is not widget)
 
-    Dieselben Felder in derselben Größe, jedes im Bild, keinem Hindernis und
-    keinem anderen Feld zu nahe, keines weiter von seinem Maß entfernt als der
-    neue Platz plus :data:`STICKY_FIELDS` Feldhöhen — und nicht mehr
-    Kreuzungen als die neue Anordnung. Die Kreuzungen zählt dieselbe Rechnung
-    wie :func:`_untangle`.
+
+def _places_that_still_serve(
+    previous: Mapping[QWidget, QRect],
+    fresh: Mapping[QWidget, QRect],
+    pending: Sequence[tuple[QWidget, QPointF, QPointF]],
+    bounds: QRect,
+    obstacles: Sequence[QRect],
+    ink: Sequence[tuple[QPointF, QPointF]],
+) -> dict[QWidget, QRect]:
+    """Die Plätze des letzten Aufbaus, die ein Feld behalten darf — je Feld.
+
+    Dasselbe Feld in derselben Größe, im Bild, keinem Hindernis und keinem
+    anderen **behaltenen** Feld zu nahe, nicht weiter von seinem Maß entfernt
+    als der neue Platz plus :data:`STICKY_FIELDS` Feldhöhen — und nicht über
+    einer fremden Maßlinie, wenn der neue Platz frei davon wäre. Entschieden wird je
+    Feld: Bis zum 22.09.2026 verwarf ein einziger getroffener Platz alle, und
+    dann tauschte das Entwirren (Review: +1,2 mm am Setzpunkt, zwei Felder
+    391 und 409 Punkte gesprungen). Die Felder, die nicht bleiben dürfen,
+    sucht der Aufbau um die behaltenen herum neu.
     """
-    if not previous or set(previous) != set(positions):
-        return False
     wanted = {widget: want for widget, want, _anchor in pending}
-    if any(widget not in wanted for widget in positions):
-        return False
-    for widget, rect in previous.items():
-        fresh = positions[widget]
-        if rect.size() != fresh.size() or not bounds.contains(rect):
-            return False
-        grown = rect.adjusted(-SPACE, -SPACE, SPACE, SPACE)
-        if any(grown.intersects(taken) for taken in obstacles):
-            return False
-        if any(grown.intersects(previous[other]) for other in previous if other is not widget):
-            return False
-        leeway = (QPointF(fresh.center()) - wanted[widget]).manhattanLength() + (
+    anchors = {widget: anchor for widget, _want, anchor in pending}
+    kept: dict[QWidget, QRect] = {}
+    for widget, _want, _anchor in pending:
+        rect = previous.get(widget)
+        new = fresh.get(widget)
+        if rect is None or new is None or rect.size() != new.size():
+            continue
+        if not _fits(widget, rect, kept, bounds, obstacles):
+            continue
+        leeway = (QPointF(new.center()) - wanted[widget]).manhattanLength() + (
             STICKY_FIELDS * rect.height()
         )
         if (QPointF(rect.center()) - wanted[widget]).manhattanLength() > leeway:
-            return False
-    return _crossings(previous, pending) <= _crossings(positions, pending)
+            continue
+        foreign = [
+            line
+            for line in ink
+            if ((line[0] + line[1]) / 2 - anchors[widget]).manhattanLength() > 1.0
+        ]
+        if not _clear_of_lines(rect, foreign) and _clear_of_lines(new, foreign):
+            continue
+        kept[widget] = rect
+    return kept
 
 
 def _clear_of_lines(rect: QRect, lines: Sequence[tuple[QPointF, QPointF]]) -> bool:
     """Ob kein Strich der Tinte durch das um ``SPACE`` gewachsene Feld läuft.
 
-    Ein Feld über einer Maßlinie verdeckt, was es beschriftet — und über einer
-    fremden, was ein anderes beschriftet. Geprüft wird die Strecke gegen das
-    Rechteck: ein Endpunkt darin, oder ein Schnitt mit einer seiner vier
-    Kanten.
+    Ein Feld über einer Maßlinie verdeckt, was es beschriftet — und über der
+    Verbindung eines anderen, wohin jenes gehört. Geprüft wird die Strecke
+    gegen das Rechteck: ein Endpunkt darin, oder ein Schnitt mit einer seiner
+    vier Kanten. Gemieden werden die **Maßlinien und Verbindungen**, nicht
+    die Bezugskanten und Verlängerungen: Die laufen über die ganze
+    Plattenkante, und ein Feld, das breiter ist als der Abstand der Bohrung
+    zur Kante, träfe sie an jedem nahen Platz — dann gewann ein ferner freier
+    Platz, dreihundert Punkte vom Maß weg (Review 22.09.2026).
     """
     grown = QRectF(rect.adjusted(-SPACE, -SPACE, SPACE, SPACE))
     corners = (
@@ -470,15 +500,22 @@ def _holds_focus(field: QWidget, focused: QWidget | None) -> bool:
     return focused is not None and (focused is field or field.isAncestorOf(focused))
 
 
-def _crossings(
+def _leaders_of(
     layout: Mapping[QWidget, QRect], pending: Sequence[tuple[QWidget, QPointF, QPointF]]
-) -> int:
-    """Wie oft sich die Zuordnungslinien einer Anordnung kreuzen."""
-    lines = [
+) -> list[tuple[QPointF, QPointF]]:
+    """Die Verbindungen einer Anordnung — von der Feldmitte zum Anker des Maßes."""
+    return [
         (QPointF(layout[widget].center()), anchor)
         for widget, _wanted, anchor in pending
         if widget in layout
     ]
+
+
+def _crossings(
+    layout: Mapping[QWidget, QRect], pending: Sequence[tuple[QWidget, QPointF, QPointF]]
+) -> int:
+    """Wie oft sich die Zuordnungslinien einer Anordnung kreuzen."""
+    lines = _leaders_of(layout, pending)
     return sum(
         1
         for index, first in enumerate(lines)
@@ -505,31 +542,10 @@ def _untangle(
     nichts. Wo die Linie eines Feldes endet, sagt ``pending`` — dieselbe
     Stelle, an der ``redraw`` sie zeichnet, nicht eine zweite Herleitung.
     """
-    anchors = {widget: anchor for widget, _wanted, anchor in pending}
     widgets = [widget for widget, _wanted, _anchor in pending if widget in positions]
 
-    def leader(widget: QWidget, rect: QRect) -> tuple[QPointF, QPointF]:
-        return (QPointF(rect.center()), anchors[widget])
-
-    def crossings(layout: dict[QWidget, QRect]) -> int:
-        lines = [leader(widget, layout[widget]) for widget in widgets]
-        return sum(
-            1
-            for index, first in enumerate(lines)
-            for second in lines[index + 1 :]
-            if _crosses(first, second)
-        )
-
-    def fits(widget: QWidget, rect: QRect, layout: dict[QWidget, QRect]) -> bool:
-        if not bounds.contains(rect):
-            return False
-        grown = rect.adjusted(-SPACE, -SPACE, SPACE, SPACE)
-        if any(grown.intersects(taken) for taken in obstacles):
-            return False
-        return not any(grown.intersects(layout[other]) for other in widgets if other is not widget)
-
     for _round in range(len(widgets) * len(widgets)):
-        now = crossings(positions)
+        now = _crossings(positions, pending)
         if now == 0:
             return
         improved = False
@@ -539,11 +555,11 @@ def _untangle(
                 swapped = dict(positions)
                 swapped[first] = QRect(b.topLeft(), a.size())
                 swapped[second] = QRect(a.topLeft(), b.size())
-                if not fits(first, swapped[first], swapped) or not fits(
-                    second, swapped[second], swapped
+                if not _fits(first, swapped[first], swapped, bounds, obstacles) or not _fits(
+                    second, swapped[second], swapped, bounds, obstacles
                 ):
                     continue
-                if crossings(swapped) < now:
+                if _crossings(swapped, pending) < now:
                     positions.update(swapped)
                     improved = True
                     break
@@ -573,16 +589,16 @@ class _Dimensions:
 
     Die Listen tragen Bildkoordinaten in logischen Bildpunkten; ``refresh``
     legt sie über ``display_to_world`` auf eine Tiefe vor der Kamera und
-    schreibt sie in **sieben dauerhafte Elemente** des Renderers — vier
-    Linien (Unterlage, Striche, Zuordnungen, Umriss) und drei Flächen
-    (Markenrand, Pfeile, Marken), jedes mit fester Kapazität
+    schreibt sie in **acht dauerhafte Elemente** des Renderers — fünf
+    Linien (Unterlage, Striche, Zuordnungen, Umriss, das leuchtende Maß) und
+    drei Flächen (Markenrand, Pfeile, Marken), jedes mit fester Kapazität
     (``Renderer.add_lines(capacity=…)``). Bis zum 21.09.2026 räumte jeder
     Aufbau zehn Elemente ab und legte zehn neue an; pygfx baut je neuem
     Element eine Pipeline, und das kostete zwölf von zweiundzwanzig
     Millisekunden je Kamerageste, Radraste und Tastendruck in einem Feld
     (Sonde ``measure_ink_churn.py``). Jetzt tauscht ``update_points`` nur die
     Zahlen; neu entstehen die Elemente erst, wenn eine Kapazität reißt — dann
-    alle sieben zusammen, damit ihre Reihenfolge bleibt.
+    alle acht zusammen, damit ihre Reihenfolge bleibt.
 
     Innerhalb der Tinte ist die Reihenfolge die Zeichenreihenfolge — was
     zuerst angelegt wird, liegt unten. Gegen Griff und Knöpfe trägt sie
@@ -1033,7 +1049,7 @@ class PlacementFlow(QObject):
         self._serial = 0
         self._pending: tuple[int, int, bool] | None = None
         #: Wo jedes Maßfeld beim letzten Aufbau stand — der Platz bleibt, solange
-        #: er frei ist und das Maß nicht weit gewandert ist (``_STICKY``).
+        #: er frei ist und das Maß nicht weit gewandert ist (``STICKY_FIELDS``).
         self._field_slots: dict[QWidget, QRect] = {}
         self._surface_busy = False
         self._tool_busy = False
@@ -1388,6 +1404,13 @@ class PlacementFlow(QObject):
         pulled = self.viewport.waiting_slot_drag(str(feature_id))
         return None if pulled is None else (float(pulled[0]), float(pulled[1]))
 
+    def _slot_drag_takes_the_accept(self) -> bool:
+        """Ob Übernehmen der Maßgruppe das gezogene Langloch meint — die Frage des Fensters."""
+        takes = getattr(self.window, "slot_drag_takes_the_accept", None)
+        if takes is None:
+            return False
+        return bool(takes(self.spec_of().name, self.dialog.values()))
+
     def _refresh_measure_actions(self) -> None:
         """Die gesetzte Sperre darstellen, ohne den Vorschauwächter erneut aufzurufen."""
         if self._disposed:
@@ -1396,9 +1419,12 @@ class PlacementFlow(QObject):
         reason = host.blocked_reason if isinstance(host, QuietHost) else None
         begun = not isinstance(host, QuietHost) or host.begun
         # Ein wartender Langlochzug macht den Knopf frei — die Sperre gilt der
-        # gebundenen Handlung, und die läuft dann nicht. Ist die Gruppe selbst
-        # an *Zum Langloch ziehen* gebunden, gilt ihr eigener Weg.
-        pulled = self._pulled_slot() is not None and self.spec_of().name != "slot_hole"
+        # gebundenen Handlung, und die läuft dann nicht. Ob Übernehmen den Zug
+        # meint, sagt **eine** Stelle (``MainWindow.slot_drag_takes_the_accept``):
+        # nicht, wenn die Gruppe selbst an *Zum Langloch ziehen* gebunden ist,
+        # und nicht, wenn die Felder einen anderen Durchmesser tragen — dann
+        # kommt erst der Durchmesser, und der Zug ist danach zu wiederholen.
+        pulled = self._slot_drag_takes_the_accept()
         if pulled:
             reason = None
             begun = True
@@ -1441,6 +1467,10 @@ class PlacementFlow(QObject):
         # rechts die einzigen sind.
         if pulled:
             information = tr("Übernehmen zieht die Bohrung zum Langloch.")
+        elif self._pulled_slot() is not None and self.spec_of().name != "slot_hole":
+            information = tr(
+                "Der Durchmesser wird übernommen. Ziehen Sie das Langloch danach erneut."
+            )
         self._measure_note.setText(
             "\n".join(filter(None, (reason, self._reference_message, information)))
         )
@@ -3076,26 +3106,27 @@ class PlacementFlow(QObject):
         # mit der Stelle aus den Feldern — die Sperre der gebundenen Handlung
         # („hat bereits diesen Durchmesser") gilt ihm nicht.
         apply_placed = getattr(self.window, "_apply_placed_feature", None)
-        if (
-            self._pulled_slot() is not None
-            and apply_placed is not None
-            and self.spec_of().name != "slot_hole"
-        ):
+        if apply_placed is not None and self._slot_drag_takes_the_accept():
             # Die Stelle kommt aus der Fläche, ohne den Träger zu beschreiben:
             # ``take_placement`` meldete Werte, und die Meldung band die
             # gebundene Handlung neu — nach dem Langlochauftrag, über ihn.
             values = dict(self.dialog.values())
             if self._surface is not None and self._tool_context is not None:
                 source, feature = self._source_feature()
-                values.update(
-                    placement.surface_values(
-                        self.spec_of(),
-                        self._surface,
-                        feature=feature,
-                        source=source,
-                        prepared_tool=self._tool_context,
-                    )
+                placed = placement.surface_values(
+                    self.spec_of(),
+                    self._surface,
+                    feature=feature,
+                    source=source,
+                    prepared_tool=self._tool_context,
                 )
+                # Nur, was die Operation kennt — dieselbe Grenze wie
+                # ``QuietHost.take_placement``: ``surface_values`` liefert auch
+                # ``nx``/``ny``/``nz``, und *Bohrung ändern* lehnt sie ab
+                # („Diesen Parameter gibt es bei dieser Operation nicht",
+                # Review 22.09.2026).
+                known = {entry.name for entry in self.spec_of().params.spec()}
+                values.update({name: value for name, value in placed.items() if name in known})
             # Während des Abschlusses sind Befehle erlaubt, wie beim Übernehmen
             # des Trägers selbst (``MainWindow._quiet_selection_allowed``) —
             # sonst hielte die begonnene Änderung ihren eigenen Langlochschritt an.
@@ -3638,7 +3669,7 @@ class PlacementFlow(QObject):
                 self._serial += 1
             if event.type() in (QEvent.Type.FocusIn, QEvent.Type.FocusOut) and any(
                 watched is field or (isinstance(watched, QWidget) and field.isAncestorOf(watched))
-                for field in (*self._measures, *self._centre_measures)
+                for field in (*self._measures, *self._centre_measures, self._depth_measure)
             ):
                 # Das Maß zum Feld leuchtet, solange das Feld den Fokus hat —
                 # der Fokus ist nach dem Ereignis gesetzt, das Bild folgt.
@@ -3689,7 +3720,14 @@ class PlacementFlow(QObject):
         hull = QRect(QPoint(min(xs), min(ys)), QPoint(max(xs), max(ys)))
         if not bounds.contains(hull):
             return None
-        return hull.adjusted(-margin, -margin, margin, margin)
+        body = hull.adjusted(-margin, -margin, margin, margin)
+        # Lässt der Freiraum um den Körper nirgends Platz im Bild — der Körper
+        # passt gerade so hinein —, gilt die alte Regel weiter: Ein Feld
+        # außerhalb des Bildes ist keines. Ohne diesen Ausgang standen beim
+        # Heranzoomen alle Felder in der Notreihe oben links (Review 22.09.2026).
+        if body.contains(bounds):
+            return None
+        return body
 
     def _camera_moved(self) -> None:
         """Die Kamera steht anders: Felder und Tinte neu legen — das Bild zeichnet die Ansicht.
@@ -3944,6 +3982,8 @@ class PlacementFlow(QObject):
                 mouth = screen(surface.point)
                 tip = screen(tuple(point - axis * depth))
                 self._canvas.lines.append((mouth, tip))
+                if _holds_focus(self._depth_measure, focused):
+                    self._canvas.focus.append((mouth, tip))
                 # **An seiner Maßlinie, wie jedes Kantenmaß.** Über der Leiste
                 # allein stand es als Fremdkörper da: Dieselbe Rolle, dieselbe
                 # Gestalt (Robert, 09.09.2026: „das maßfeld ist immer noch
@@ -4107,25 +4147,19 @@ class PlacementFlow(QObject):
                     1,
                 ).adjusted(-around, -around, around, around)
             )
-        # **Und der Körper selbst bleibt frei** (Robert, 21.09.2026, RM-197:
-        # „einen weiteren abstand zum modell und linien … damit es nicht stört
-        # und ich auch weiß wo etwas hingeht"). Jedes Feld wollte in die Mitte
-        # seiner Maßlinie, und die läuft über die Platte: Drei Beschriftungen
-        # standen auf dem Teil, zwei davon aufeinander. Die projizierte Hülle
-        # des Trägers wird deshalb als belegt geführt, mit demselben Abstand
-        # wie um den Setzpunkt — die Felder rücken an den nächsten freien
-        # Platz daneben, und die Verbindungslinie sagt, welches Maß sie
-        # bemaßen. Füllt der Körper das ganze Bild, gilt die alte Regel: Ein
-        # Feld außerhalb des Bildes ist keines.
-        # **Neben dem Körper, solange man ihn ganz sieht** (Robert, 22.09.2026,
-        # am Schraubendreherhalter: „wo welches maß hinkommt seh ich immer noch
-        # nicht" — „solange man den körper vollständig sieht"). Die Hülle als
-        # Hindernis (RM-197) schob auf einem Teil, das über das Bild hinausragt,
-        # jedes Feld an den Bildrand — dreihundert Punkte von seiner Maßlinie
-        # weg, mit Verbindungslinien quer über das ganze Teil. Ragt der Körper
-        # aus dem Bild, stehen die Felder an ihrer Maßlinie, auf dem Körper —
-        # und nie über einer Linie (``_clear_of_lines``): Das war der Grund für
-        # den Abstand.
+        # **Der Körper bleibt frei, solange man ihn ganz sieht.** Jedes Feld
+        # wollte in die Mitte seiner Maßlinie, und die läuft über die Platte:
+        # Drei Beschriftungen standen auf dem Teil, zwei davon aufeinander
+        # (Robert, 21.09.2026, RM-197: „einen weiteren abstand zum modell und
+        # linien … damit es nicht stört und ich auch weiß wo etwas hingeht").
+        # Die projizierte Hülle des Trägers ist deshalb ein Hindernis, mit
+        # demselben Abstand wie um den Setzpunkt — aber nur, solange der Körper
+        # ganz im Bild steht und ringsum Platz lässt (Robert, 22.09.2026, am
+        # Schraubendreherhalter: „wo welches maß hinkommt seh ich immer noch
+        # nicht" — „solange man den körper vollständig sieht"). Ragt er hinaus
+        # oder füllt er das Bild, stehen die Felder an ihrer Maßlinie, auf dem
+        # Körper — und möglichst nicht über einer Maßlinie oder fremden
+        # Verbindung (``_clear_of_lines``): Das war der Grund für den Abstand.
         body = self._body_on_screen(screen, bounds, room_around)
         if body is not None:
             occupied.append(body)
@@ -4134,104 +4168,160 @@ class PlacementFlow(QObject):
         if isinstance(banner, QWidget) and banner.isVisibleTo(self.viewport):
             occupied.append(banner.geometry())
         obstacles = list(occupied)
-        ink = [*self._canvas.lines, *self._canvas.references, *self._canvas.extensions]
-        positions: dict[QWidget, QRect] = {}
-        for widget, wanted, _line in sorted(pending, key=lambda entry: -entry[0].width()):
-            width, height = widget.width(), widget.height()
-            left, right = bounds.left(), bounds.right() - width + 1
-            top, bottom = bounds.top(), bounds.bottom() - height + 1
-            middle_x = max(left, min(round(wanted.x() - width / 2), right))
-            middle_y = max(top, min(round(wanted.y() - height / 2), bottom))
-            xs = {left, right, middle_x}
-            ys = {top, bottom, middle_y}
-            # Die Plätze unmittelbar neben der Linienmitte — darüber, darunter,
-            # links, rechts, und je ein, zwei Feldhöhen weiter — sind die ersten
-            # Kandidaten: Dort steht ein Maß, wie man es von einer Zeichnung
-            # kennt, und dort findet es einen Platz neben den Linien.
-            for step in (1, 2, 3):
-                xs.update(
-                    (
-                        round(wanted.x()) - step * (width + SPACE),
-                        round(wanted.x()) + (step - 1) * (width + SPACE) + SPACE + 1,
+        ink: list[tuple[QPointF, QPointF]] = list(self._canvas.lines)
+
+        def find_places(
+            targets: Sequence[tuple[QWidget, QPointF, QPointF]],
+            taken: Sequence[QRect],
+            drawn: Sequence[tuple[QPointF, QPointF]],
+        ) -> dict[QWidget, QRect] | None:
+            """Jedem Feld den nächsten freien Platz — oder nichts, wenn eines
+            nirgends steht. Die Verbindung eines gesetzten Feldes ist für die
+            nächsten Tinte, damit keines über ihr steht."""
+            taken = list(taken)
+            drawn = list(drawn)
+            found: dict[QWidget, QRect] = {}
+            for widget, wanted, anchor in sorted(targets, key=lambda entry: -entry[0].width()):
+                width, height = widget.width(), widget.height()
+                left, right = bounds.left(), bounds.right() - width + 1
+                top, bottom = bounds.top(), bounds.bottom() - height + 1
+                middle_x = max(left, min(round(wanted.x() - width / 2), right))
+                middle_y = max(top, min(round(wanted.y() - height / 2), bottom))
+                xs = {left, right, middle_x}
+                ys = {top, bottom, middle_y}
+                # Die Plätze unmittelbar neben der Linienmitte — darüber,
+                # darunter, links, rechts, und je ein, zwei Feldhöhen weiter —
+                # sind die ersten Kandidaten: Dort steht ein Maß, wie man es von
+                # einer Zeichnung kennt, und dort findet es einen Platz neben
+                # den Linien.
+                for step in (1, 2, 3):
+                    xs.update(
+                        (
+                            round(wanted.x()) - step * (width + SPACE),
+                            round(wanted.x()) + (step - 1) * (width + SPACE) + SPACE + 1,
+                        )
                     )
-                )
-                ys.update(
-                    (
-                        round(wanted.y()) - step * (height + SPACE),
-                        round(wanted.y()) + (step - 1) * (height + SPACE) + SPACE + 1,
+                    ys.update(
+                        (
+                            round(wanted.y()) - step * (height + SPACE),
+                            round(wanted.y()) + (step - 1) * (height + SPACE) + SPACE + 1,
+                        )
                     )
-                )
-            for taken in occupied:
-                xs.update((taken.left() - width - SPACE, taken.right() + SPACE + 1))
-                ys.update((taken.top() - height - SPACE, taken.bottom() + SPACE + 1))
-            admissible = [
-                QRect(x, y, width, height)
-                for x in xs
-                for y in ys
-                if left <= x <= right
-                and top <= y <= bottom
-                and not any(
-                    QRect(x, y, width, height).intersects(
-                        taken.adjusted(-SPACE, -SPACE, SPACE, SPACE)
+                for rect in taken:
+                    xs.update((rect.left() - width - SPACE, rect.right() + SPACE + 1))
+                    ys.update((rect.top() - height - SPACE, rect.bottom() + SPACE + 1))
+                admissible = [
+                    QRect(x, y, width, height)
+                    for x in xs
+                    for y in ys
+                    if left <= x <= right
+                    and top <= y <= bottom
+                    and not any(
+                        QRect(x, y, width, height).intersects(
+                            rect.adjusted(-SPACE, -SPACE, SPACE, SPACE)
+                        )
+                        for rect in taken
                     )
-                    for taken in occupied
-                )
-            ]
-            # Frei von Linien, wenn es geht; sonst frei von Hindernissen — ein
-            # Feld über einem Strich ist besser als eines, das nirgends steht.
-            candidates = [rect for rect in admissible if _clear_of_lines(rect, ink)] or admissible
-            if not candidates:
-                # Fünf Felder passen im unterstützten Desktopbereich in wenige
-                # Zeilen. Diese feste Anordnung löst einen ungünstigen früheren
-                # Platz, statt ein weiteres Feld am unteren Rand zu stapeln.
-                positions.clear()
-                x, y, row_height = bounds.left(), bounds.top(), 0
-                for pending_widget, _wanted, _anchor in pending:
-                    if x > bounds.left() and x + pending_widget.width() > bounds.right() + 1:
-                        x, y, row_height = bounds.left(), y + row_height + SPACE, 0
+                ]
+                if not admissible:
+                    return None
+
+                def rank(rect: QRect, wanted: QPointF = wanted) -> tuple[float, int, int]:
+                    return ((QPointF(rect.center()) - wanted).manhattanLength(), rect.y(), rect.x())
+
+                # Frei von fremder Tinte, wenn es nicht zu weit führt: Ein
+                # linienfreier Platz gewinnt nur, wenn er höchstens
+                # ``STICKY_FIELDS`` Feldhöhen weiter vom Maß liegt als der
+                # nächste zulässige — sonst stand ein Feld dreihundert Punkte
+                # von seiner Linie weg, nur um einen Strich nicht zu decken
+                # (Review 22.09.2026). Ein Feld über einem Strich ist besser als
+                # eines, das nirgends steht.
+                nearest = min(admissible, key=rank)
+                chosen = nearest
+                # Die eigene Maßlinie zählt nicht: Auf einer Zeichnung sitzt die
+                # Zahl auf ihrer Linie; gemieden wird, was ein anderes Maß
+                # beschriftet. Die eigene ist die, deren Mitte der Anker ist.
+                foreign = [
+                    line
+                    for line in drawn
+                    if ((line[0] + line[1]) / 2 - anchor).manhattanLength() > 1.0
+                ]
+                clear = [rect for rect in admissible if _clear_of_lines(rect, foreign)]
+                if clear:
+                    best = min(clear, key=rank)
+                    if rank(best)[0] <= rank(nearest)[0] + STICKY_FIELDS * height:
+                        chosen = best
+                found[widget] = chosen
+                taken.append(chosen)
+                drawn.append((QPointF(chosen.center()), anchor))
+            return found
+
+        def emergency_rows() -> dict[QWidget, QRect]:
+            """Fünf Felder passen im unterstützten Desktopbereich in wenige
+            Zeilen. Diese feste Anordnung löst einen ungünstigen früheren
+            Platz, statt ein weiteres Feld am unteren Rand zu stapeln."""
+            rows: dict[QWidget, QRect] = {}
+            x, y, row_height = bounds.left(), bounds.top(), 0
+            for pending_widget, _wanted, _anchor in pending:
+                if x > bounds.left() and x + pending_widget.width() > bounds.right() + 1:
+                    x, y, row_height = bounds.left(), y + row_height + SPACE, 0
+                slot = QRect(x, y, pending_widget.width(), pending_widget.height())
+                # **Auch die Notlage weicht dem Setzpunkt aus — solange danach
+                # noch Platz ist.** Sonst gälte die Zusage „man sieht, wohin
+                # man setzt" genau dort nicht, wo es eng wird. Die Grenze ist
+                # keine Feinheit: Bei starkem Zoom füllt die Vorschau das ganze
+                # Bild, und ein Ausweichen darunter schöbe die Felder aus der
+                # Ansicht heraus (gemessen an
+                # ``test_dimension_fields_do_not_overlap_at_zoomed_view_edges``:
+                # y = 20009 bei 600 px Höhe). Dann ist Überdecken das kleinere
+                # Übel — ein Feld außerhalb des Bildes ist keines.
+                below = blocked.bottom() + SPACE + 1
+                if slot.intersects(blocked) and (
+                    below + pending_widget.height() - 1 <= bounds.bottom()
+                ):
+                    x, y, row_height = bounds.left(), below, 0
                     slot = QRect(x, y, pending_widget.width(), pending_widget.height())
-                    # **Auch die Notlage weicht dem Setzpunkt aus — solange
-                    # danach noch Platz ist.** Sonst gälte die Zusage „man
-                    # sieht, wohin man setzt" genau dort nicht, wo es eng wird.
-                    # Die Grenze ist keine Feinheit: Bei starkem Zoom füllt die
-                    # Vorschau das ganze Bild, und ein Ausweichen darunter
-                    # schöbe die Felder aus der Ansicht heraus (gemessen an
-                    # ``test_dimension_fields_do_not_overlap_at_zoomed_view_edges``:
-                    # y = 20009 bei 600 px Höhe). Dann ist Überdecken das
-                    # kleinere Übel — ein Feld außerhalb des Bildes ist keines.
-                    below = blocked.bottom() + SPACE + 1
-                    if slot.intersects(blocked) and (
-                        below + pending_widget.height() - 1 <= bounds.bottom()
-                    ):
-                        x, y, row_height = bounds.left(), below, 0
-                        slot = QRect(x, y, pending_widget.width(), pending_widget.height())
-                    positions[pending_widget] = slot
-                    x += pending_widget.width() + SPACE
-                    row_height = max(row_height, pending_widget.height())
-                break
-            chosen = min(
-                candidates,
-                key=lambda rect: (
-                    (QPointF(rect.center()) - wanted).manhattanLength(),
-                    rect.y(),
-                    rect.x(),
-                ),
+                rows[pending_widget] = slot
+                x += pending_widget.width() + SPACE
+                row_height = max(row_height, pending_widget.height())
+            return rows
+
+        fresh = find_places(pending, occupied, ink)
+        if fresh is None:
+            positions = emergency_rows()
+        else:
+            _untangle(fresh, pending, bounds, obstacles)
+            positions = fresh
+            # **Die Felder bleiben stehen, wo sie standen** (Robert, 22.09.2026:
+            # „danach springen sie auch alle und tauschen sich"). Jeder Aufbau
+            # suchte jedem Feld den nächsten freien Platz neu, und nach jedem
+            # getippten Wert — die Bohrung einen Millimeter weiter — lagen die
+            # Kandidaten anders, die Felder sprangen, ``_untangle`` tauschte.
+            # Der Platz des letzten Aufbaus gilt je Feld weiter, solange er
+            # frei und im Bild ist, dem Maß nicht deutlich ferner liegt als der
+            # neue und keine Maßlinie deckt, die der neue freiließe; die
+            # übrigen Felder finden um die stehenden herum ihren Platz. Nur
+            # wenn das mehr Kreuzungen brächte als die frische Anordnung, gilt
+            # die frische: Wer Zahlen tippt, will die Felder wiederfinden,
+            # nicht suchen.
+            kept = _places_that_still_serve(
+                self._field_slots, fresh, pending, bounds, obstacles, ink
             )
-            positions[widget] = chosen
-            occupied.append(chosen)
-        _untangle(positions, pending, bounds, obstacles)
-        # **Die Felder bleiben stehen, wo sie standen** (Robert, 22.09.2026:
-        # „danach springen sie auch alle und tauschen sich"). Jeder Aufbau
-        # suchte jedem Feld den nächsten freien Platz neu, und nach jedem
-        # getippten Wert — die Bohrung einen Millimeter weiter — lagen die
-        # Kandidaten anders, die Felder sprangen, ``_untangle`` tauschte. Die
-        # Plätze des letzten Aufbaus gelten weiter, solange sie frei und im
-        # Bild sind, keinem Maß deutlich ferner liegen als die neuen und nicht
-        # mehr Kreuzungen haben: Wer Zahlen tippt, will die Felder
-        # wiederfinden, nicht suchen. Eine Kameradrehung legt alles anders,
-        # und dann ordnet der Aufbau neu.
-        if _old_places_still_serve(self._field_slots, positions, pending, bounds, obstacles):
-            positions.update(self._field_slots)
+            if kept:
+                rest = [entry for entry in pending if entry[0] not in kept]
+                standing = [*obstacles, *kept.values()]
+                placed = (
+                    find_places(
+                        rest, [*occupied, *kept.values()], [*ink, *_leaders_of(kept, pending)]
+                    )
+                    if rest
+                    else {}
+                )
+                if placed is not None:
+                    _untangle(placed, rest, bounds, standing)
+                    merged = {**kept, **placed}
+                    if _crossings(merged, pending) <= _crossings(fresh, pending):
+                        positions = merged
         self._field_slots = dict(positions)
         for widget, _wanted, anchor in pending:
             rect = positions[widget]

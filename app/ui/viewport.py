@@ -11555,7 +11555,7 @@ class Viewport(QWidget):
             return
         length = feature.params.get("length") or float(diameter)
         angle = slot_angle_of(feature, (float(axis[0]), float(axis[1]), float(axis[2])))
-        waiting = self._slot_waiting if self._slot_target == feature.id else None
+        waiting = self.waiting_slot_drag(feature.id)
         if waiting is not None:
             # Der Zug wartet noch: Der neue Griff zeigt ihn, nicht das Merkmal
             # — mit dem Umriss, den der Zug hinterlassen hat.
@@ -12664,8 +12664,9 @@ class Viewport(QWidget):
             )
         ):
             return (float(handle.length), float(handle.angle))
-        if self._slot_target == feature.id and self._slot_waiting is not None:
-            return self._slot_waiting
+        waiting = self.waiting_slot_drag(feature.id)
+        if waiting is not None:
+            return waiting
         length = feature.params.get("length")
         axis = feature.params.get("axis")
         if feature.kind != "slot" or length is None or axis is None:
