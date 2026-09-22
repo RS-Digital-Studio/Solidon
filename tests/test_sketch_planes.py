@@ -19,7 +19,10 @@ import math
 import pytest
 import trimesh
 
+from app.core.bootstrap import load_operations
 from app.core.errors import ValidationError
+from app.core.registry import REGISTRY
+from app.core.scene.cancel import NeverCancelled
 from app.core.scene.orphans import feature_ref_of_sketch
 from app.core.sketch.planes import (
     BASE_FRAMES,
@@ -43,7 +46,16 @@ from app.core.sketch.serialize import (
     sketch_parameter_references,
     sketch_to_text,
 )
-from app.core.types import Feature, SceneObject, Sketch, Vec3
+from app.core.types import (
+    Feature,
+    OpContext,
+    Parameter,
+    Scene,
+    SceneObject,
+    Sketch,
+    SketchElement,
+    Vec3,
+)
 
 
 def _plate(normal: Vec3 = (0.0, 0.0, 1.0), centre: Vec3 = (0.0, 0.0, 8.0)) -> SceneObject:
@@ -373,3 +385,66 @@ def test_the_orphan_check_sees_the_face_under_a_derived_plane() -> None:
 
     assert reference is not None
     assert (reference.object_id, reference.feature_id) == ("obj_1", "face_1")
+
+
+# --- Und die Operation zeichnet wirklich dort (RM-188 P3.1, Ende zu Ende) --------
+
+
+def _on_plane(plane: str, parameters: dict[str, Parameter] | None = None) -> object:
+    """Ein Quader aus einer gezeichneten Skizze auf der genannten Ebene."""
+    sketch = sketch_to_text(
+        Sketch(
+            plane=plane,
+            elements=(
+                SketchElement(kind="line", points=((0.0, 0.0), (10.0, 0.0))),
+                SketchElement(kind="line", points=((10.0, 0.0), (10.0, 10.0))),
+                SketchElement(kind="line", points=((10.0, 10.0), (0.0, 10.0))),
+                SketchElement(kind="line", points=((0.0, 10.0), (0.0, 0.0))),
+            ),
+            constraints=(),
+        )
+    )
+    spec = REGISTRY.get("sketch_extrude")
+    result = spec.fn(
+        OpContext(
+            scene=Scene(objects={}, parameters=parameters or {}),
+            inputs=[],
+            params=spec.params(sketch=sketch, height=4.0),
+            profile=None,
+            quality="fine",
+            seed=None,
+            progress=lambda fraction, text: None,
+            ask=lambda question, choices: choices[0],
+            cancelled=NeverCancelled(),
+        )
+    )
+    return result.outputs[0].mesh
+
+
+def test_a_body_really_stands_on_its_offset_plane() -> None:
+    """Der Beweis, dass der Vertrag kein Papier ist.
+
+    Bis zum 22.09.2026 gab ``_frame_of`` für alles, was keine Flächenebene war,
+    ``None`` zurück — der B-Rep-Kern nahm dann seine eigene Grundebene, und die
+    Zeichnung läge auf z = 0 statt zwanzig Millimeter darüber. Der Ebenenvertrag
+    wäre eine Angabe gewesen, die niemand einlöst.
+    """
+    load_operations()
+    flat = _on_plane("plane:xy")
+    lifted = _on_plane(offset_plane("plane:xy", 20.0))
+
+    assert flat.bounds.minimum[2] == pytest.approx(0.0, abs=1e-9)
+    assert lifted.bounds.minimum[2] == pytest.approx(20.0, abs=1e-9)
+    assert lifted.bounds.maximum[2] == pytest.approx(24.0, abs=1e-9)
+    assert lifted.volume == pytest.approx(flat.volume, rel=1e-9), "nur die Höhe ändert sich"
+
+
+def test_a_body_reads_the_project_parameter_of_its_plane() -> None:
+    """Und der Abstand darf ein Projektparameter sein (§13)."""
+    load_operations()
+    body = _on_plane(
+        offset_plane("plane:xy", "=@sockel + 2"),
+        {"sockel": Parameter(name="sockel", value=6.0, unit="mm")},
+    )
+
+    assert body.bounds.minimum[2] == pytest.approx(8.0, abs=1e-9)
