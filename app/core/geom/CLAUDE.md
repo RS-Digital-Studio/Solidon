@@ -1302,9 +1302,17 @@ tatsächlich ausgehöhlten Innenraums. Sie hat höchstens eine Ebene und reist
 als eigene Vertex-/Flächentabellen im NPZ-Cache. `transform.apply` führt
 dieselbe Matrix auf beiden Netzen aus; sonstige Geometrieänderungen verwerfen
 die Auskunft, solange kein belegbarer Folgeraum berechnet wird.
-`lattice_fill` beschneidet das Gitter auf diesen Raum. Ohne Auskunft sind nur
-geschlossene, nach innen gerichtete Innenschalen eine eindeutige Grundlage.
-Ein Hüllquader oder eine konvexe Hülle ersetzt keinen Innenraum.
+`lattice_fill` beschneidet das Gitter auf diesen Raum. Ohne Auskunft sind
+geschlossene, nach innen gerichtete Innenschalen die Grundlage — und wo auch
+die fehlen, die **Entlüftung**: Ein ausgehöhlter Körper, der als STL draußen
+war, hat eine Schale, weil die Entlüftungsbohrung außen und innen verbindet.
+`_cavity_mesh` schließt die erkannten durchgehenden Bohrungen probeweise
+(`_bore_solid`, mit der Zugabe aus `prepare.FEATURE_OVERLAP` — zwei
+zusammenfallende Zylinderflächen schließt keine Boolesche zuverlässig), und
+was danach eingeschlossen ist, ist der Innenraum; der Befund
+`lattice.cavity_from_vents` sagt es, und `labels.body_facts` sperrt den
+Menüeintrag deshalb nicht mehr. Ein Hüllquader oder eine konvexe Hülle
+ersetzt weiterhin keinen Innenraum.
 
 Neuvernetzung überträgt Slots über `attributes.transfer`; Skulptur-Etappen
 verwenden das verlustfreie NPZ statt STL. Beim Lesen aus Projektquellen werden

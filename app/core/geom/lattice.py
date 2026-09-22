@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import dataclasses
 import math
+from collections.abc import Mapping
 from dataclasses import replace
 from typing import Final, cast
 
@@ -36,10 +37,13 @@ from app.core.registry import op_params, param, register_op
 from app.core.types import (
     BaseParams,
     CancelToken,
+    Feature,
+    FeatureId,
     Finding,
     OpContext,
     OpResult,
     Profile,
+    Quality,
     Vec3,
 )
 from app.core.units import EPS_GEOM
@@ -349,7 +353,7 @@ def lattice_fill(ctx: OpContext) -> OpResult:
 
     source = ctx.inputs[0]
     body = as_mesh_data(source.mesh)
-    cavity = _cavity_mesh(body)
+    cavity, vented = _cavity_mesh(body, source.features, quality=ctx.quality)
     if cavity is None:
         raise ValidationError(
             "structure",
@@ -407,6 +411,7 @@ def lattice_fill(ctx: OpContext) -> OpResult:
         findings=[
             *inside.findings,
             *filled.findings,
+            *([_cavity_from_vents(vented)] if vented else []),
             Finding(
                 code="lattice.filled",
                 severity="info",
@@ -416,14 +421,70 @@ def lattice_fill(ctx: OpContext) -> OpResult:
     )
 
 
-def _cavity_mesh(body: MeshData) -> MeshData | None:
-    """Eine belegte Schnittgeometrie oder geschlossene, nach innen gerichtete Schalen.
+def _cavity_from_vents(bores: tuple[str, ...]) -> Finding:
+    """Der Befund zum geschätzten Innenraum — er nennt, worüber geschätzt wurde."""
+    return Finding(
+        code="lattice.cavity_from_vents",
+        severity="info",
+        message=_(
+            "Der Innenraum ist über die Entlüftung bestimmt: {count} durchgehende "
+            "Bohrungen wurden dafür probeweise geschlossen. Das Gitter sitzt in dem "
+            "Raum, der danach eingeschlossen war.",
+            count=len(bores),
+        ),
+        feature_ids=bores,
+        values={"bores": len(bores)},
+    )
 
-    Entlüftete Importnetze verraten ihre frühere Außenhülle nicht eindeutig.
-    Die Auskunft der Aushöhlen-Operation bleibt deshalb getrennt erhalten.
+
+def _cavity_mesh(
+    body: MeshData,
+    features: Mapping[FeatureId, Feature] | None = None,
+    *,
+    quality: Quality = "fine",
+) -> tuple[MeshData | None, tuple[FeatureId, ...]]:
+    """Der Innenraum und, wenn er geschätzt ist, die Bohrungen, über die es ging.
+
+    Drei Wege, in dieser Reihenfolge. Die **belegte** Schnittgeometrie aus dem
+    Aushöhlen ist die beste Auskunft: Dort weiß die Operation, was sie
+    herausgenommen hat. Sonst die geschlossenen, nach innen gerichteten
+    **Schalen** eines Körpers mit getrennter Innenfläche.
+
+    **Und wenn beides fehlt, die Entlüftung** (RM-041): Ein ausgehöhlter
+    Körper, der einmal als STL hinausging und wieder hereinkam, hat keine
+    Schnittgeometrie mehr und **eine** Schale — Außen- und Innenfläche hängen
+    über die Entlüftungsbohrung zusammen, und genau deshalb fand die Suche
+    oben nichts. Werden die durchgehenden Bohrungen probeweise geschlossen,
+    zerfällt die Oberfläche wieder in außen und innen, und was dann
+    eingeschlossen ist, ist der Innenraum. Geschätzt ist daran die Annahme,
+    dass diese Bohrungen Entlüftungen sind und kein Durchgang; deshalb sagt
+    der Aufrufer es (:func:`_cavity_from_vents`), statt es zu verschweigen.
+    Ohne erkannte Bohrungen bleibt es bei der Absage.
     """
     if body.cavity is not None:
-        return body.cavity
+        return body.cavity, ()
+    found = _inner_shells(body)
+    if found is not None:
+        return found, ()
+    bores = tuple(
+        sorted(
+            name
+            for name, feature in (features or {}).items()
+            if feature.kind == "hole" and feature.params.get("through")
+        )
+    )
+    if not bores:
+        return None, ()
+    from app.core.geom.boolean import boolean
+
+    plugs = [_bore_solid((features or {})[name]) for name in bores]
+    closed = boolean("union", [body, *plugs], quality=quality, allow_empty=True)
+    inner = _inner_shells(closed.mesh)
+    return (inner, bores) if inner is not None else (None, ())
+
+
+def _inner_shells(body: MeshData) -> MeshData | None:
+    """Die geschlossenen, nach innen gerichteten Schalen eines Körpers."""
     cavities: list[MeshData] = []
     for shell in body.raw.split(only_watertight=False):
         if shell.is_watertight and shell.volume < -EPS_GEOM:
@@ -431,3 +492,39 @@ def _cavity_mesh(body: MeshData) -> MeshData | None:
             inner.invert()
             cavities.append(MeshData.of(inner))
     return MeshData.of(concatenated([inner.raw for inner in cavities])) if cavities else None
+
+
+def _bore_solid(feature: Feature) -> MeshData:
+    """Der Zylinder, der diese Bohrung ausfüllt — beidseits über den Körper hinaus.
+
+    Die Länge kommt nicht aus der gemessenen Tiefe: Sie endet an der Wand, und
+    ein Stopfen, der dort endet, lässt eine Haut stehen. Und der Durchmesser
+    bekommt die Zugabe aus ``prepare.FEATURE_OVERLAP``: Zwei zusammenfallende
+    Zylinderflächen sind für eine Boolesche Rechnung kein Fall, den sie
+    zuverlässig schließt — ohne Zugabe blieb die Bohrungswand als Spalt
+    stehen, und die Oberfläche war danach immer noch eine (§39).
+    """
+    from app.core.geom.prepare import FEATURE_OVERLAP
+
+    axis = np.asarray(feature.params.get("axis", (0.0, 0.0, 1.0)), dtype=float)
+    length = float(np.linalg.norm(axis))
+    axis = axis / length if length > EPS_GEOM else np.array([0.0, 0.0, 1.0])
+    centre = np.asarray(feature.params.get("centre", (0.0, 0.0, 0.0)), dtype=float)
+    diameter = float(feature.params.get("diameter", 0.0)) + FEATURE_OVERLAP
+    depth = float(feature.params.get("depth", 0.0))
+    # So lang wie die Bohrung, plus die Zugabe an beiden Enden: Ein Stopfen,
+    # der weiter reicht, steht als Zapfen im Hohlraum und macht ihn kleiner,
+    # als er ist (gemessen: 86 mm³ von 36 977 an der entlüfteten Dose).
+    reach = depth + 4.0 * FEATURE_OVERLAP if depth > EPS_GEOM else diameter * 4.0
+    plug = trimesh.creation.cylinder(radius=diameter / 2.0, height=reach, sections=48)
+    matrix = np.eye(4)
+    first, second = units.plane_axes((float(axis[0]), float(axis[1]), float(axis[2]))) or (
+        (1.0, 0.0, 0.0),
+        (0.0, 1.0, 0.0),
+    )
+    matrix[:3, :3] = np.column_stack(
+        (np.asarray(first, dtype=float), np.asarray(second, dtype=float), axis)
+    )
+    matrix[:3, 3] = centre
+    plug.apply_transform(matrix)
+    return MeshData.of(plug)

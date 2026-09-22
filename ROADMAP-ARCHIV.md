@@ -29677,6 +29677,42 @@ alles andere soll noch vor 0.5.0 fertig sein"). Gebaut auf `rm-207-muster`, am
   1 412 gekrümmte Flecken von median sieben Dreiecken, und jeder bekommt Kegel-, Kugel- und
   Ringeinpassung. Was daraus folgt, steht als RM-209.
 
+<a id="rm-041"></a>
+
+- [x] **RM-041 — Innenraum importierter entlüfteter Hohlkörper klären.** Gelöst am
+  22.09.2026 über die Entlüftung selbst, mit ausgewiesenem Befund.
+
+  **Der Fall, und warum er keiner sein müsste.** Ein Körper, den *Aushöhlen*
+  gemacht hat, trägt seinen Innenraum als Schnittgeometrie am Netz. Geht er
+  einmal als STL hinaus und kommt wieder herein, ist die Auskunft weg — und die
+  Oberfläche ist **eine** Schale, weil die Entlüftungsbohrung außen und innen
+  verbindet. Die Suche nach geschlossenen, nach innen gerichteten Schalen fand
+  deshalb nichts, und *Gitter füllen* sagte „Der Innenraum lässt sich nicht
+  eindeutig bestimmen".
+
+  **Der Schätzweg:** Die erkannten durchgehenden Bohrungen werden probeweise
+  geschlossen (`lattice._bore_solid`), und was danach eingeschlossen ist, ist
+  der Innenraum. Gemessen an der entlüfteten Dose (40 mm, 3 mm Wand): 36 976,16
+  gegen 36 976,67 mm³ des echten Hohlraums — ein Tausendstel Prozent. Zwei
+  Dinge waren dafür nötig und stehen als Kommentar am Code: Der Stopfen braucht
+  die Zugabe aus `prepare.FEATURE_OVERLAP` (zwei zusammenfallende
+  Zylinderflächen schließt keine Boolesche zuverlässig — ohne sie blieb die
+  Oberfläche eine), und er ist nur so lang wie die Bohrung, sonst steht er als
+  Zapfen im Hohlraum und macht ihn um 86 mm³ kleiner.
+
+  **Geschätzt heißt gesagt:** `lattice.cavity_from_vents` nennt die Zahl der
+  geschlossenen Bohrungen und dass das Gitter in dem Raum sitzt, der danach
+  eingeschlossen war. Das Handbuch sagt denselben Satz vor dem Klick, und
+  `labels.body_facts` sperrt den Menüeintrag nicht mehr, wo die Operation es
+  kann — eine durchgehende Bohrung lässt die Hohlraumfrage offen statt sie zu
+  verneinen (Regel gilt je Bedienort).
+
+  **Abnahme:** Am eingelesenen entlüfteten Körper füllt das Gitter den
+  Innenraum, die Außenmaße bleiben auf ein Millionstel gleich, und das Volumen
+  wächst um weniger als der Hohlraum fasst — kein Material außerhalb
+  (`tests/test_lattice.py`). Ohne erkannte Bohrung und ohne Innenschale bleibt
+  es bei der Absage; der Test dazu stand schon und steht weiter.
+
 <a id="rm-045"></a>
 
 - [x] **RM-045 — Drei Laufzeitkosten des Geometriereviews messen.** Gemessen am

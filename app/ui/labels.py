@@ -1846,6 +1846,15 @@ def body_facts(entry: SceneObject) -> BodyFacts:
     wiederholen.
     """
     hollow = any(feature.kind == "void" for feature in entry.features.values())
+    # **Eine durchgehende Bohrung lässt die Frage offen.** Ein ausgehöhlter
+    # Körper, der einmal als STL draußen war, ist eine Komponente ohne
+    # ``void`` — und *Gitter füllen* kann ihn trotzdem, weil es den Innenraum
+    # über die geschlossene Entlüftung bestimmt (RM-041, `lattice._cavity_mesh`).
+    # Wo die Operation es kann, darf das Menü nicht sperren.
+    vented = any(
+        feature.kind == "hole" and feature.params.get("through")
+        for feature in entry.features.values()
+    )
     mesh = entry.mesh
     if not isinstance(mesh, MeshData):
         return BodyFacts(closed=None, pieces=None, cavity=True if hollow else None)
@@ -1857,11 +1866,13 @@ def body_facts(entry: SceneObject) -> BodyFacts:
     # ist eine zweite Komponente; wo es zwei gibt und die Wahrnehmung keinen
     # Einschluss gemeldet hat, kann sie ihn auch übersehen haben (offene
     # Außenhülle, verkehrter Umlaufsinn) — dann entscheidet die Operation.
-    return BodyFacts(
-        closed=bool(mesh.raw.is_watertight),
-        pieces=pieces,
-        cavity=True if hollow else (False if pieces <= 1 else None),
-    )
+    if hollow:
+        known: bool | None = True
+    elif vented:
+        known = None
+    else:
+        known = False if pieces <= 1 else None
+    return BodyFacts(closed=bool(mesh.raw.is_watertight), pieces=pieces, cavity=known)
 
 
 def body_requirement(spec: Any, facts: BodyFacts | None) -> str | None:

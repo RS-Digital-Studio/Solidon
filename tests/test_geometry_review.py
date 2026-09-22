@@ -423,8 +423,11 @@ def test_a_vented_cavity_is_still_a_cavity() -> None:
     vented = hollow(cube(standing=True), 3.0, vents=1).mesh
     assert len(vented.raw.split(only_watertight=False)) == 1, "eine einzige Schale"
 
-    vented_cavity, sealed_cavity = _cavity_mesh(vented), _cavity_mesh(sealed)
+    # Seit RM-041 gibt ``_cavity_mesh`` dazu die Bohrungen, über die geschätzt
+    # wurde — hier keine: Beide Körper tragen ihre Schnittgeometrie noch.
+    (vented_cavity, over), (sealed_cavity, _none) = _cavity_mesh(vented), _cavity_mesh(sealed)
     assert vented_cavity is not None and sealed_cavity is not None
+    assert over == ()
     assert np.asarray(vented_cavity.bounds.minimum) == pytest.approx(
         np.asarray(sealed_cavity.bounds.minimum), abs=0.6
     )
@@ -446,7 +449,7 @@ def test_a_vented_body_can_be_filled_with_a_lattice(profile: Profile) -> None:
 
 def test_a_solid_body_still_has_no_cavity() -> None:
     """Die Gegenprobe: der Vollkörper darf nicht plötzlich einen bekommen."""
-    assert _cavity_mesh(cube()) is None
+    assert _cavity_mesh(cube()) == (None, ())
 
 
 # --- C-9: eine Bewegung verlor zwei Felder --------------------------------------

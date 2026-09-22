@@ -249,6 +249,82 @@ def test_an_imported_vented_shell_without_cavity_data_is_refused() -> None:
         )
 
 
+def test_a_vented_import_finds_its_cavity_through_the_vent() -> None:
+    """RM-041: Ein ausgehöhlter Körper, der einmal als STL draußen war, füllt sich wieder.
+
+    Er hat keine Schnittgeometrie mehr und **eine** Schale — Außen- und
+    Innenfläche hängen über die Entlüftung zusammen. Werden die erkannten
+    durchgehenden Bohrungen probeweise geschlossen, zerfällt die Oberfläche
+    wieder, und der eingeschlossene Raum ist der Innenraum: gemessen 36 976,16
+    gegen 36 976,67 mm³ des echten, also ein Tausendstel Prozent daneben.
+    """
+    from app.core.geom.hollow import hollow
+    from app.core.geom.mesh import read_mesh
+    from app.core.ingest import loader
+    from app.core.perceive.features import detect
+
+    shell = hollow(MeshData.of(trimesh.creation.box((40, 40, 40))), 3.0, vents=1).mesh
+    assert shell.cavity is not None, "die Voraussetzung: frisch kennt die Operation den Hohlraum"
+    exported = shell.raw.export(file_type="stl")
+    imported = loader.normalise(
+        read_mesh(exported if isinstance(exported, bytes) else exported.encode(), ".stl"), "mm"
+    ).mesh
+    assert imported.cavity is None
+    assert len(imported.raw.split(only_watertight=False)) == 1, (
+        "die Entlüftung verbindet die Schalen — sonst prüft dieser Fall nichts"
+    )
+    entry = SceneObject(id="obj_1", name="Import", mesh=imported, features=detect(imported))
+    outside = imported.bounds.size
+    before = imported.volume
+
+    result = run(entry, structure="cubic", cell=8.0, wall=1.0)
+
+    body = result.outputs[0].mesh
+    assert body.bounds.size == pytest.approx(outside, abs=1e-6), "von außen unverändert"
+    assert body.volume > before, "im Hohlraum steht jetzt Material"
+    assert body.volume < before + shell.cavity.volume, "und nicht mehr als der Hohlraum fasst"
+    said = [finding for finding in result.findings if finding.code == "lattice.cavity_from_vents"]
+    assert said and said[0].values["bores"] == 1, [finding.code for finding in result.findings]
+
+
+def test_the_menu_does_not_lock_what_the_operation_can_do() -> None:
+    """Menü und Rechnung sagen dasselbe: Eine durchgehende Bohrung lässt die
+    Hohlraumfrage offen, und *Gitter füllen* bleibt anklickbar.
+
+    Bis zum 22.09.2026 sperrte der Eintrag an einem entlüfteten Import mit
+    ``NO_CAVITY``, während die Operation ihn seit demselben Tag füllen kann —
+    zwei Antworten auf eine Frage, je nach Bedienort.
+    """
+    from app.core.geom.hollow import hollow
+    from app.core.types import Feature
+    from app.ui.labels import body_facts, body_requirement
+
+    shell = hollow(MeshData.of(trimesh.creation.box((40, 40, 40))), 3.0, vents=1).mesh
+    plain = MeshData.of(shell.raw.copy())
+    assert len(plain.raw.split(only_watertight=False)) == 1, (
+        "der entlüftete Import ist eine Komponente — sonst prüft der Test etwas anderes"
+    )
+    vent = Feature(
+        id="hole_1",
+        kind="hole",
+        provenance="detected",
+        params={
+            "diameter": 4.0,
+            "centre": (0.0, 0.0, -18.75),
+            "axis": (0.0, 0.0, 1.0),
+            "depth": 2.5,
+            "through": True,
+        },
+    )
+    spec = REGISTRY.get("lattice_fill")
+
+    ohne = body_facts(SceneObject(id="obj_1", name="Import", mesh=plain))
+    mit = body_facts(SceneObject(id="obj_1", name="Import", mesh=plain, features={"hole_1": vent}))
+
+    assert ohne.cavity is False and body_requirement(spec, ohne) is not None
+    assert mit.cavity is None and body_requirement(spec, mit) is None
+
+
 def test_cavity_metadata_is_not_recursively_serialized() -> None:
     import dataclasses
 
