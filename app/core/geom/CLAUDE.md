@@ -601,7 +601,22 @@ was Teilung und Düse davon zulassen: Die Wand zwischen zwei Zellen bleibt
 eine Düse breit (`wall=`), und die Berührgrenze ist je Stil eine andere
 (`_max_share`: Rauten berühren sich schon bei 1/√2). Überlappende Umrisse (die Streuflecken des
 Rauschens) führt `_merged()` vor dem Extrudieren zusammen; getrennt
-extrudiert ließen sie doppelte Dreiecke auf der Deckfläche zurück.
+extrudiert ließen sie doppelte Dreiecke auf der Deckfläche zurück. Das
+flache Werkzeug selbst baut `flat_tool()`; `tool_in_outline()` legt es auf
+die Ebene, ein gelesenes Muster legt es über `perceive.patterns.Field.placed`
+ab — auch um einen Zylinder.
+
+**Um einen Zylinder** (`wrap="cylinder"`) teilt `refined_for_bending()` das
+Feld vorher so fein, dass jede Sehne höchstens `BEND_SAG` unter dem Bogen
+hängt (`mesh_ops.refined`, der exakte Kern, konform und je Schale getrennt),
+und `wrapped()` biegt danach die Ecken: Rillenböden und Kronen folgen dem
+Zylinder, die Tiefe bleibt die verlangte. Ein Feld, das den Umfang erreicht,
+bekommt über `wrap_pitch()` die Teilung, mit der es aufgeht (Finding
+`texture.pitch_wrapped`), wird über mehr als eine Runde gezeichnet und je
+Zelle einmal gewählt (`_one_turn()`) — an der Naht wird keine Zelle
+geschnitten, denn zwei an `±π·R` getrennte Hälften verschweißt die Boolesche
+Rechnung nicht zuverlässig. `STRIP_PATTERNS` sind die Stile, deren Zelle so
+lang ist wie das Feld.
 
 Die fünf analytischen Grundkörper entstehen lokal über
 `primitive_local_tool()`. Operation und temporäre Oberflächenvorschau beziehen

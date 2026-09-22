@@ -517,15 +517,22 @@ def _feature_line(feature_id: str, feature: Feature) -> str:
     if feature.kind == "pattern":
         # Stil, Zahl, Teilung, Zellbreite und Tiefe — das, womit ``apply_texture``
         # das Muster neu zeichnete; die Normale sagt, auf welcher Seite es liegt.
-        normal = _vector_measure(feature, "normal", _axis_name)
+        # Um einen Zylinder stattdessen dessen Durchmesser und Achse.
         side = tr("erhaben") if params.get("mode") == "raised" else tr("vertieft")
         if params.get("through"):
             side = tr("durchgehend")
+        if params.get("carrier") == "cylinder":
+            where = (
+                f"{tr('um Zylinder')} {_measure(feature, 'carrier_diameter', prefix='Ø ')}, "
+                f"{tr('Achse')} {_vector_measure(feature, 'carrier_axis', _axis_name)}"
+            )
+        else:
+            where = f"{tr('Normale')} {_vector_measure(feature, 'normal', _axis_name)}"
         return (
             f"{feature_id}  {pattern_style_name(str(params.get('style', 'other')))} "
             f"{int(params.get('count', 0))} {tr('Zellen')}, {tr('Teilung')} "
             f"{_measure(feature, 'pitch')}, {tr('Zellbreite')} {_measure(feature, 'cell_width')}, "
-            f"{tr('Tiefe')} {_measure(feature, 'cell_depth')}, {side}, {tr('Normale')} {normal}{at}"
+            f"{tr('Tiefe')} {_measure(feature, 'cell_depth')}, {side}, {where}{at}"
         )
     if feature.kind == "cone":
         # Der Öffnungswinkel steht vorn, weil er die Sache benennt: „90 Grad"

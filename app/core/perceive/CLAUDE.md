@@ -215,13 +215,21 @@ ops.py        ──> gespeicherter Erkennungsauftrag `detect_region`
 
 ## Muster (`patterns.py`)
 
-Viele gleiche Zellen auf einer ebenen Fläche sind **ein** Merkmal
+Viele gleiche Zellen auf einer Fläche sind **ein** Merkmal
 (`pattern`, §21.1, RM-207) — die acht Stile von `geom.texture_ops.PATTERNS`
 unter ihrem eigenen Namen, dazu `other` für ein Gitter, das Solidon so nicht
 zeichnet. Eine Zelle ist ein zusammenhängendes Stück aus kleinen Merkmalen
 **und unbesessenen Dreiecken** (die Wände einer Welle nennt die Flächensuche
-nicht), das nur an große ebene Träger grenzt; gemessen werden Mündung
-(konvexe Hülle in der Trägerebene), Tiefe, Seite und Umriss. Ein **Gitter**
+nicht), das nur an große Träger grenzt — ebene Flächen, oder einen Stift, um
+den ein Muster läuft (`CARRIER_KINDS`); gemessen werden Mündung (konvexe
+Hülle in der **Abwicklung** des Trägers, `Frame`), Tiefe, Seite und Umriss.
+Die Abwicklung ist auf der Ebene das Blatt ihrer Achsen, um den Zylinder
+Umfang und Achse mit dem Abstand zum Radius als Höhe; ihre Naht legt
+`_CellMeasure.seam_between` in die größte Lücke zwischen den Zellen, und ein
+gelesenes Muster trägt seine Normale als erste Achse (`frame_for`: Mitte auf
+dem Zylinder, Naht gegenüber, dazu `carrier_axis` und `carrier_diameter`).
+Was auf dem Träger liegt, gehört dem Träger, auch ohne Namen, und was ein
+Stift beim Einpassen an Wandstücken mitnahm, der Zelle. Ein **Gitter**
 aus deckungsgleichen Zellen liefert Teilung und Richtung über die nächsten
 Nachbarn (Streifen über ihre Achse, `_rows_of`), eine **Streuung** gleich
 tiefer Zellen ohne Gitter ist Voronoi oder Rauschen mit der Dichte als
@@ -236,12 +244,17 @@ unterscheidet (`_LATTICE_TURNS`). Angeschnittene Randzellen zählen als `partial
 quer zueinander grenzt, bleibt ein `EdgePiece`, bis ein Muster es an seinem
 Träger nachmisst —, und `coverage` sagt, ob das Feld den Träger bis auf eine
 halbe Teilung füllt (`whole_face`) oder ein Rechteck ist. `anchor` ist die
-Mitte einer ganzen Zelle: Beim Neuzeichnen kommt dort wieder eine hin. `mouths_of` zeichnet die Zellmündungen am Netz nach,
-`plug_for` baut daraus den Stopfen (bündig mit der Trägerebene, bei
-durchgehenden Zellen auf beiden Seiten), `field_outline` den Umriss fürs
-Neuzeichnen — beides brauchen `remove_feature` und `resize_feature` in
-`geom/prepare_ops.py`. Den Träger findet `carrier_of` über Ebene und
-Normale, nie über eine Kennung: Die altert beim Umbenennen.
+Mitte einer ganzen Zelle: Beim Neuzeichnen kommt dort wieder eine hin.
+`mouths_of` zeichnet die Zellmündungen am Netz nach, `plug_for` baut daraus
+den Stopfen (bündig mit der Trägerebene, bei durchgehenden Zellen auf beiden
+Seiten; um den Zylinder auf dessen **Facetten** gelegt, `Frame.facets`, an
+jeder Facettengrenze geteilt und um einen Saum breiter als die Mündung),
+`field_outline` das `Field` fürs Neuzeichnen — Umriss, Abwicklung und der
+Weg zurück (`Field.placed` biegt das flache Werkzeug um die Achse; `around`
+sagt, ob das Feld einmal herumreicht und der Umriss periodisch gilt). Beides
+brauchen `remove_feature` und `resize_feature` in `geom/prepare_ops.py`. Den
+Träger findet `carrier_of` über Ebene und Normale beziehungsweise Achse und
+Durchmesser, nie über eine Kennung: Die altert beim Umbenennen.
 
 ## Lokale Erkennung großer Netze
 

@@ -39,7 +39,7 @@ from app.core.types import (
     SceneObject,
     Vec3,
 )
-from app.core.units import DEGREE_UNIT, EPS_GEOM
+from app.core.units import DEGREE_UNIT, EPS_GEOM, format_length, is_close
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -65,6 +65,13 @@ LAND_SHARE: Final = 0.5
 #: Wie groß eine Wabenzelle im Verhältnis zu ihrer Teilung wird. Etwas unter
 #: eins, damit zwischen den Zellen eine Wand stehen bleibt statt einer Kante.
 HEX_FILL: Final = 0.85
+
+#: Wie groß eine Noppe im Verhältnis zu ihrer Teilung wird — aus demselben
+#: Grund unter eins. Bis zum 22.09.2026 war ihr Durchmesser die Teilung
+#: selbst: Die Noppen berührten sich in Punkten, die Deckfläche zerfiel in
+#: Inseln, und ein um 90 Grad gedrehtes Noppenfeld las die Erkennung als
+#: 35 Bohrungen, 5 Langlöcher und 16 Rundungen statt als ein Muster.
+DIMPLE_FILL: Final = 0.8
 
 #: Wie fein eine Welle in Segmente zerfällt. Acht Stützstellen je Periode ist
 #: die Grenze, unter der man die Ecken sieht — darüber wächst nur die Datei.
@@ -219,11 +226,11 @@ def _diamonds(width: float, height: float, pitch: float, share: float = LAND_SHA
     return _clip(shapes, width, height)
 
 
-def _dimples(width: float, height: float, pitch: float, share: float = LAND_SHARE) -> list[Any]:
+def _dimples(width: float, height: float, pitch: float, fill: float = DIMPLE_FILL) -> list[Any]:
     """Noppen: runde Erhebungen im Raster, versetzt wie eine Wabe."""
     from shapely.geometry import Point
 
-    radius = pitch / 2.0 * share * 2.0
+    radius = pitch / 2.0 * fill
     step_y = pitch * math.sqrt(3.0) / 2.0
     shapes: list[Any] = []
     row = 0
@@ -336,7 +343,7 @@ def pattern_shapes(
     if pattern == "hexagon":
         return _hexagons(width, height, pitch, fill=share)
     if pattern == "dimple":
-        return _dimples(width, height, pitch, share=share)
+        return _dimples(width, height, pitch, fill=share)
     if pattern == "voronoi":
         return _voronoi(width, height, pitch, seed)
     return _noise(width, height, pitch, seed)
@@ -362,7 +369,7 @@ def _max_share(pattern: str, pitch: float, wall: float) -> float:
     misst — die Umkehrung der Erzeuger oben: Bei Rippe, Rändel und Welle ist
     die Rille ``1 - share`` Teilungen breit. Die Wabe misst über die Flächen
     nur ``√3/2`` ihres ``fill`` — Sechsecke mit ``fill = 2/√3`` füllten das
-    Gitter lückenlos. Die Noppe ist ``2·share`` Teilungen breit. Und beim
+    Gitter lückenlos. Die Noppe ist ``fill`` Teilungen breit. Und beim
     Kreuzrändel berühren sich die Rauten schon bei ``1/√2``: Ihre halbe
     Diagonale ist ``share·Teilung/√2``, die Nachbarn in der Reihe liegen eine
     Teilung auseinander, die in der nächsten Reihe eine halbe Diagonale
@@ -373,8 +380,6 @@ def _max_share(pattern: str, pitch: float, wall: float) -> float:
     open_share = min(MAX_CELL_SHARE, 1.0 - wall / pitch)
     if pattern == "hexagon":
         return open_share * 2.0 / math.sqrt(3.0)
-    if pattern == "dimple":
-        return open_share / 2.0
     if pattern == "knurl_diamond":
         return min(MAX_CELL_SHARE, 1.0 - math.sqrt(2.0) * wall / pitch) / math.sqrt(2.0)
     return open_share
@@ -385,20 +390,18 @@ def _cell_share(pattern: str, pitch: float, cell: float | None, wall: float = 0.
 
     Die Umkehrung dessen, was die Erzeuger oben aus dem Anteil machen: Die
     Rippe ist ``share`` Teilungen breit, die Raute des Kreuzrändels ebenso
-    (ihre Seite ist ``share``·Teilung), die Noppe ``2·share``, die Wabe misst
-    über die Flächen ``√3·fill``·Teilung/2, das Wellenband trägt neben dem
-    Steg zweimal die Amplitude von einer Viertelteilung. Eine Breite, die
+    (ihre Seite ist ``share``·Teilung), die Noppe ``fill`` Teilungen, die
+    Wabe misst über die Flächen ``√3·fill``·Teilung/2, das Wellenband trägt
+    neben dem Steg zweimal die Amplitude von einer Viertelteilung. Eine Breite, die
     keine Wand mehr ließe — keine geometrisch, oder keine, die die Maschine
     druckt (``wall``) —, wird auf :func:`_max_share` begrenzt; eine, die
     nichts ließe, wird abgewiesen.
     """
     if cell is None:
-        return HEX_FILL if pattern == "hexagon" else LAND_SHARE
+        return {"hexagon": HEX_FILL, "dimple": DIMPLE_FILL}.get(pattern, LAND_SHARE)
     require_positive("cell_width", cell)
     if pattern == "hexagon":
         share = 2.0 * cell / (math.sqrt(3.0) * pitch)
-    elif pattern == "dimple":
-        share = cell / (2.0 * pitch)
     elif pattern == "wave":
         share = (cell - pitch / 2.0) / pitch
     else:
@@ -430,29 +433,69 @@ def cell_width_for(
     share = _cell_share(pattern, pitch, cell, wall)
     if pattern == "hexagon":
         return share * math.sqrt(3.0) * pitch / 2.0
-    if pattern == "dimple":
-        return 2.0 * share * pitch
     if pattern == "wave":
         return share * pitch + pitch / 2.0
     return share * pitch
 
 
-def check_printable(pattern: str, pitch: float, depth: float, printer: PrinterProfile) -> None:
+def narrowest_structure(pattern: str, pitch: float, cell: float | None = None) -> float:
+    """Die schmalste Stelle eines Musters — Steg oder Rille, je nachdem, was schmaler ist.
+
+    Je Stil anders, denn je Stil liegt die Rille woanders: Bei Rippe, gerader
+    Rändel und Welle ist sie ``1 - share`` Teilungen breit (die Wellenbänder
+    schwingen gemeinsam), beim Kreuzrändel liegt der Nachbar der nächsten
+    Reihe eine halbe Diagonale weiter — ``Teilung/√2 - share·Teilung``, bei
+    der Vorgabe ein Fünftel der Teilung, nicht die Hälfte —, bei der Wabe
+    ``Teilung - Schlüsselweite``, bei der Noppe ``Teilung - Durchmesser``.
+    Voronoi-Zellen stehen ``0,16`` Teilungen auseinander (``_voronoi``
+    schrumpft jede um ``0,08``), die Streuflecken des Rauschens sind
+    mindestens ``0,3`` Teilungen breit und dürfen sich berühren. Und die Zelle
+    selbst zählt mit: Ein Steg schmaler als die Düse wird ebenso wenig
+    gedruckt wie eine Rille.
+    """
+    if pattern == "voronoi":
+        return 0.16 * pitch
+    if pattern == "noise":
+        return 0.3 * pitch
+    share = _cell_share(pattern, pitch, cell)
+    width = cell_width_for(pattern, pitch, cell) or pitch * share
+    if pattern == "knurl_diamond":
+        groove = pitch / math.sqrt(2.0) - share * pitch
+    elif pattern in {"hexagon", "dimple"}:
+        groove = pitch - width
+    else:
+        groove = pitch * (1.0 - share)
+    return max(min(groove, width), 0.0)
+
+
+def check_printable(
+    pattern: str,
+    pitch: float,
+    depth: float,
+    printer: PrinterProfile,
+    *,
+    cell: float | None = None,
+) -> None:
     """Ob dieses Muster auf dieser Maschine überhaupt entsteht (E1).
 
     Zwei Fragen, beide beantwortbar, ohne etwas zu rechnen:
 
     * Ist die schmalste Struktur breiter als die Düse? Was schmaler ist, wird
-      nicht gedruckt — es verschwindet, und das Teil kommt glatt heraus.
+      nicht gedruckt — es verschwindet, und das Teil kommt glatt heraus. Wo
+      sie liegt, weiß :func:`narrowest_structure` je Stil — bis zum 22.09.2026
+      galt für alle acht die halbe Teilung, und die Rille des Kreuzrändels ist
+      ein Fünftel.
     * Ist die Prägung tiefer als eine Schicht? Was flacher ist, fällt beim
       Runden der Schichthöhe weg.
 
     Ein Fehler nennt beides Mal, was jetzt möglich ist (Regel 17): die Zahl,
     die passen würde, steht in der Meldung.
     """
-    narrowest = pitch * LAND_SHARE
+    narrowest = narrowest_structure(pattern, pitch, cell)
     if narrowest < printer.nozzle_diameter:
-        needed = printer.nozzle_diameter / LAND_SHARE
+        # Die Teilung, bei der dieselbe Stelle so breit wie die Düse wäre —
+        # alles am Muster wächst mit der Teilung.
+        needed = pitch * printer.nozzle_diameter / max(narrowest, EPS_GEOM)
         raise ValidationError(
             "pitch",
             _(
@@ -723,6 +766,64 @@ def _wrap_beyond_body(body: Any, wrap_diameter: float) -> Finding | None:
     )
 
 
+#: Die Muster aus Streifen — ihre Zelle ist so lang wie das Feld, und ob sie
+#: ganz ist, sagt das Feld, nicht die Zelle.
+STRIP_PATTERNS: Final[frozenset[str]] = frozenset({"rib", "wave", "knurl_straight"})
+
+#: Wie weit sich ein Muster entlang der ersten Feldachse wiederholt, in
+#: Teilungen: Die Stege des geraden Rändels laufen unter 45 Grad, und quer zu
+#: ihnen liegt die Teilung — entlang der Achse ist es die Diagonale.
+_PERIOD_ALONG_X: Final[dict[str, float]] = {"knurl_straight": math.sqrt(2.0)}
+
+
+def wrap_pitch(pattern: str, pitch: float, diameter: float, width: float) -> float:
+    """Die Teilung, mit der ein Muster um den ganzen Umfang aufgeht.
+
+    Ein Feld, das den Umfang erreicht, endet an der Naht, und dort trifft
+    seine letzte Zelle auf seine erste. Der Umfang geht selten in Teilungen
+    auf; bis zum 22.09.2026 überlagerten sich dort zwei versetzte Spalten zu
+    Klumpen, die keine Zelle mehr waren — die Erkennung ließ sie aus, das
+    Entfernen ließ sie stehen. Deshalb rückt die Teilung auf den nächsten
+    Teiler des Umfangs: um höchstens eine halbe Periode auf die Zahl der
+    Perioden, bei 31 auf Ø 30 ein Prozent. Ein Feld, das nicht herumreicht,
+    behält seine Teilung; Voronoi und Rauschen haben keine.
+    """
+    if pattern in {"voronoi", "noise"} or diameter <= EPS_GEOM or pitch <= EPS_GEOM:
+        return pitch
+    circumference = math.pi * diameter
+    if width < circumference - EPS_GEOM:
+        return pitch
+    factor = _PERIOD_ALONG_X.get(pattern, 1.0)
+    count = max(1, round(circumference / (pitch * factor)))
+    return circumference / count / factor
+
+
+def _one_turn(shapes: list[Any], circumference: float, period: float) -> list[Any]:
+    """Von einem Feld, das weiter als der Umfang reicht, jede Zelle genau einmal — ganz.
+
+    Am Umfang angeschnittene Zellen sind die Falle der Naht: Zwei Hälften, an
+    ``±π·R`` getrennt und dort wieder aufeinandergebogen, verschweißt die
+    Boolesche Rechnung nicht zuverlässig — am Wabenmuster blieb eine Haut
+    von 16 mm² zwischen den Halbzellen stehen und teilte den Stift in zwei
+    (22.09.2026). Deshalb wird nicht geschnitten, sondern gewählt: Ein
+    Fenster von einer Umfangslänge, und jede Zelle, deren Mitte darin liegt,
+    bleibt ganz — auch die, die über das Fensterende hinausreicht, denn ihr
+    Gegenstück am anderen Ende fällt heraus. Die Fensterkanten liegen eine
+    Viertelperiode neben einer Zellmitte: Die Mitten stehen in halben
+    Perioden, und keine fällt auf eine Kante.
+    """
+    if not shapes:
+        return shapes
+    centres = np.array([shape.centroid.x for shape in shapes], dtype=float)
+    nearest = float(centres[int(np.argmin(np.abs(centres + circumference / 2.0)))])
+    start = nearest - period / 4.0
+    return [
+        shape
+        for shape, x in zip(shapes, centres, strict=True)
+        if start <= x < start + circumference
+    ]
+
+
 def sagitta(diameter: float, pitch: float) -> float:
     """Wie weit die Sehne unter dem Bogen zurückbleibt.
 
@@ -743,6 +844,31 @@ def sagitta(diameter: float, pitch: float) -> float:
     return radius - math.sqrt(max(0.0, radius * radius - half * half))
 
 
+#: Wie weit die Sehnen eines um einen Zylinder gebogenen Körpers unter dem
+#: Bogen liegen dürfen — ein Viertel dessen, was der Kern beim Tessellieren
+#: zulässt, damit ein Boden auf dem Zylinder und die Facetten des Körpers
+#: zusammen unter der Einpassungstoleranz eines Stifts bleiben.
+BEND_SAG: Final = units.MAX_FACET_SAG / 4.0
+
+
+def refined_for_bending(body: MeshData, radius: float, sag: float = BEND_SAG) -> MeshData:
+    """Jede Kante so kurz, dass sie um diesen Radius gebogen dem Bogen folgt.
+
+    Der exakte Netzkern teilt (``mesh_ops.refined``): konform, jede Schale
+    bleibt geschlossen — ``trimesh`` ließe an der Naht zwischen verschieden
+    oft geteilten Flächen offene Kanten zurück. Die Kantenlänge folgt aus
+    der Sehnenabweichung ``sag`` und dem Radius: :data:`BEND_SAG`, oder die
+    der Facetten des Trägers, wenn der gebogene Körper Teil seines Mantels
+    wird — ein Stopfen, der die Zellen füllt, muss so fein sein wie der
+    Mantel um ihn, sonst passt auf den Mantel danach kein Zylinder mehr.
+    """
+    from app.core.geom.mesh_ops import refined
+
+    sag = min(max(sag, BEND_SAG / 4.0), BEND_SAG)
+    edge = 2.0 * math.sqrt(max(2.0 * radius * sag - sag**2, EPS_GEOM))
+    return refined(body, edge)
+
+
 def wrapped(body: MeshData, diameter: float) -> MeshData:
     """Biegt ein flaches Musterfeld um einen Zylinder.
 
@@ -757,15 +883,17 @@ def wrapped(body: MeshData, diameter: float) -> MeshData:
     Normalen einer Fläche: ``place`` dreht Z dorthin. Für den stehenden Griff
     ist das die Vorgabe, und niemand muss etwas eintragen.
 
-    Verbogen wird das fertige Feld, nicht jedes Element einzeln. Die Prismen
-    eines Musters sind klein gegen den Umfang, ihre Kanten bleiben also gerade
-    genug; ein Element, das über einen nennenswerten Teil des Umfangs liefe,
-    wäre kein Muster mehr, sondern ein Bauteil.
+    Gebogen werden die Ecken — und damit die Flächen dazwischen dem Zylinder
+    folgen, teilt der exakte Kern vorher jede Kante, bis ihre Sehne höchstens
+    :data:`BEND_SAG` unter dem Bogen hängt (:func:`refined_for_bending`).
+    Bis zum 22.09.2026 blieben die Elemente gerade: Der Boden einer Rille war
+    in der Mitte um die Sehnenabweichung tiefer als an den Rändern, die Krone
+    einer Raute flach, und die Wände zweier Nachbarn kippten gegeneinander.
 
-    Ein Feld breiter als der Umfang läuft mehrfach herum und überlagert sich
-    selbst. Das wird nicht abgeschnitten: die Boolesche Vereinigung danach räumt
-    es auf, und eine Abweisung hieße, jemanden zum Rechnen zu zwingen, wo die
-    Anwendung es kann.
+    Ein Feld breiter als der Umfang endet an der Naht — ``texture_tool``
+    schneidet die Elemente dort ab, bevor sie hierherkommen. Bis zum
+    22.09.2026 lief es mehrfach herum und überlagerte sich selbst; die
+    Vereinigung räumte das auf, aber zu Klumpen, die keine Zelle mehr waren.
     """
     import numpy as np
     import trimesh
@@ -786,6 +914,7 @@ def wrapped(body: MeshData, diameter: float) -> MeshData:
             ],
         )
     radius = diameter / 2.0
+    body = refined_for_bending(body, radius)
     points = np.asarray(body.raw.vertices, dtype=float)
     theta = points[:, 0] / radius
     reach = radius + points[:, 2]
@@ -861,8 +990,58 @@ def tool_in_outline(
 
     ``outline`` ist ein ``shapely``-Umriss in den Achsen von ``basis`` mit
     ``origin`` als Nullpunkt — die Fläche samt ihren Aussparungen beim Muster
-    bis zum Rand, das Feld eines gelesenen Musters beim Ändern
-    (``prepare_ops._resize_pattern``). Beide Wege bauen dasselbe Werkzeug.
+    bis zum Rand. Das Werkzeug selbst baut :func:`flat_tool`; hier wird es
+    auf die Ebene gelegt. Ein gelesenes Muster legt es beim Ändern selbst ab
+    (``perceive.patterns.Field.placed``) — auf eine Ebene oder um einen
+    Zylinder —, mit demselben flachen Werkzeug.
+    """
+    from app.core.geom.transform import apply
+
+    body = flat_tool(
+        outline,
+        pattern=pattern,
+        pitch=pitch,
+        depth=depth,
+        mode=mode,
+        seed=seed,
+        cell=cell,
+        wall=wall,
+        whole_cells=whole_cells,
+        anchor=anchor,
+    )
+    matrix = np.eye(4)
+    matrix[:3, :3] = basis
+    matrix[:3, 3] = np.asarray(origin, dtype=float)
+    return apply(body, matrix)
+
+
+def flat_tool(
+    outline: Any,
+    *,
+    pattern: str,
+    pitch: float,
+    depth: float,
+    mode: str,
+    seed: int = 0,
+    cell: float | None = None,
+    wall: float = 0.0,
+    whole_cells: bool = False,
+    anchor: tuple[float, float] | None = None,
+    clearance: float = 0.0,
+    around: float = 0.0,
+) -> MeshData:
+    """Der Werkzeugkörper eines Musters, am Umriss abgeschnitten, in dessen Achsen.
+
+    ``around`` ist der Umfang, wenn der Umriss einmal um einen Zylinder
+    reicht: Dann wird das Muster über mehr als eine Runde gezeichnet und je
+    Zelle einmal gewählt (:func:`_one_turn`), und der Umriss gilt periodisch —
+    eine Zelle über der Naht wird nicht an ihr geschnitten.
+
+    Die Fläche liegt bei ``z = 0``: Erhaben steht das Werkzeug darüber und
+    reicht um den Überlapp hinein, vertieft steht es darunter und reicht um
+    den Überlapp heraus. ``clearance`` verlängert dieses Hineinreichen — um
+    einen Zylinder um die Sehnenabweichung seiner Facetten, sonst träfe ein
+    Boden, der bündig mit dem Radius läge, die Facetten nur an ihren Ecken.
 
     ``whole_cells`` lässt nur Zellen zu, die ganz im Umriss liegen — und um
     eine halbe Wand vom Rand entfernt, damit die Außenwand so dick wird wie
@@ -881,7 +1060,7 @@ def tool_in_outline(
 
     from app.core.geom.boolean import BOOLEAN_OVERLAP
     from app.core.geom.label_ops import label_solid
-    from app.core.geom.transform import apply
+    from app.core.geom.transform import apply, translation
 
     low_x, low_y, high_x, high_y = outline.bounds
     centre_x, centre_y = (low_x + high_x) / 2.0, (low_y + high_y) / 2.0
@@ -893,6 +1072,9 @@ def tool_in_outline(
     # des Rasters hängt an der Feldgröße, und ``apply_texture`` zeichnet mit
     # derselben Fassung dasselbe Bild.
     margin = 2.0 * pitch if anchor is not None else 0.0
+    period = pitch * _PERIOD_ALONG_X.get(pattern, 1.0)
+    if around > 0.0:
+        margin = 2.0 * (period + high_y - low_y)
     shapes = pattern_shapes(
         pattern,
         high_x - low_x + margin,
@@ -915,11 +1097,18 @@ def tool_in_outline(
         )
         shift_x = anchor[0] - nearest.centroid.x
         shift_y = anchor[1] - nearest.centroid.y
+    shapes = [affinity.translate(shape, shift_x, shift_y) for shape in shapes]
+    if around > 0.0:
+        shapes = _one_turn(shapes, around, period)
+        # Der Umriss gilt periodisch: Eine Zelle, die über sein Ende
+        # hinausreicht, findet ihn dahinter wieder.
+        outline = unary_union(
+            [outline, affinity.translate(outline, around), affinity.translate(outline, -around)]
+        )
     clipped: list[Any] = []
     wall = max(pitch - cell, 0.0) if cell is not None else 0.0
     inside = outline.buffer(-wall / 2.0) if whole_cells and wall > EPS_GEOM else outline
-    for shape in shapes:
-        moved = affinity.translate(shape, shift_x, shift_y)
+    for moved in shapes:
         if whole_cells:
             if inside.contains(moved):
                 clipped.append(moved)
@@ -940,7 +1129,7 @@ def tool_in_outline(
         for part in getattr(merged, "geoms", [merged])
         if part.geom_type == "Polygon" and part.area > EPS_GEOM
     ]
-    body = label_solid(regions, depth + BOOLEAN_OVERLAP)
+    body = label_solid(regions, depth + BOOLEAN_OVERLAP + clearance)
     if body is None:
         raise ValidationError(
             "pattern",
@@ -948,11 +1137,8 @@ def tool_in_outline(
             value=pattern,
             constraint="no_shapes",
         )
-    lift = -BOOLEAN_OVERLAP if mode == "raised" else -depth
-    matrix = np.eye(4)
-    matrix[:3, :3] = basis
-    matrix[:3, 3] = np.asarray(origin, dtype=float) + basis[:, 2] * lift
-    return apply(body, matrix)
+    lift = -BOOLEAN_OVERLAP - clearance if mode == "raised" else -depth
+    return apply(body, translation((0.0, 0.0, lift)))
 
 
 def _merged(shapes: list[Any]) -> list[Any]:
@@ -985,11 +1171,21 @@ def texture_tool(source: SceneObject, params: TextureParams, seed: int = 0) -> M
 
     if params.coverage == "whole_face":
         return _face_texture_tool(source, params, seed)
+    pitch = params.pitch
+    circumference = math.pi * params.wrap_diameter
+    around = params.wrap == "cylinder" and params.width >= circumference - EPS_GEOM
+    if params.wrap == "cylinder":
+        pitch = wrap_pitch(params.pattern, pitch, params.wrap_diameter, params.width)
+    period = pitch * _PERIOD_ALONG_X.get(params.pattern, 1.0)
     shapes = pattern_shapes(
         params.pattern,
-        params.width,
+        # Umlaufend über mehr als eine Runde gezeichnet und dann je Zelle
+        # gewählt (:func:`_one_turn`): So weit über den Umfang hinaus, dass
+        # keine gewählte Zelle vom Feldrand angeschnitten ist — ein Steg
+        # unter 45 Grad reicht eine halbe Feldhöhe zur Seite.
+        circumference + 2.0 * (period + params.height) if around else params.width,
         params.height,
-        params.pitch,
+        pitch,
         # Der Startwert kommt aus dem Kontext, nicht aus einem eigenen Feld
         # (Regel 9): der Stapel führt ihn, die Kommandozeile bietet ihn für
         # jede nicht-deterministische Operation ohnehin an, und ein zweiter
@@ -997,6 +1193,8 @@ def texture_tool(source: SceneObject, params: TextureParams, seed: int = 0) -> M
         # gemerkt, dass es einen zu viel gab.
         seed=seed,
     )
+    if around:
+        shapes = _one_turn(shapes, circumference, period)
     if not shapes:
         raise ValidationError(
             "pattern",
@@ -1005,7 +1203,16 @@ def texture_tool(source: SceneObject, params: TextureParams, seed: int = 0) -> M
             constraint="no_shapes",
         )
 
-    body = label_solid(_merged(shapes), params.depth + BOOLEAN_OVERLAP)
+    # Um einen Zylinder reicht das Werkzeug um die Sehnenabweichung der
+    # Facetten weiter hinein (erhaben) beziehungsweise heraus (vertieft): Die
+    # Facetten des Körpers hängen unter dem Radius, und ein Boden bündig mit
+    # ihm träfe sie nur an den Ecken — die Vereinigung fände eine Berührung
+    # statt einer gemeinsamen Fläche, der Schnitt ließe die Rille an den
+    # Enden zu (32 Rillen um ein Rohr, 32 Lufteinschlüsse, 22.09.2026). Die
+    # Tiefe selbst bleibt, was verlangt war: Bis zum selben Tag rückte der
+    # Boden einer Rille um dieselbe Abweichung hinauf, aus 0,8 mm wurden 0,725.
+    clearance = sagitta(params.wrap_diameter, pitch) if params.wrap == "cylinder" else 0.0
+    body = label_solid(_merged(shapes), params.depth + BOOLEAN_OVERLAP + clearance)
     if body is None:
         raise ValidationError(
             "pattern",
@@ -1017,14 +1224,7 @@ def texture_tool(source: SceneObject, params: TextureParams, seed: int = 0) -> M
     # Erhaben steht die Tiefe über der Fläche, nur die Überlappung reicht
     # hinein; vertieft andersherum — sonst nähme der Schnitt die Überlappung
     # weg und ließe das Muster als Kratzer zurück.
-    lift = -BOOLEAN_OVERLAP if params.mode == "raised" else -params.depth
-    if params.wrap == "cylinder":
-        # Ein gebogenes Prisma behält seinen **ebenen** Boden: die Sehne unter
-        # dem Bogen. In der Mitte des Elements steht der Boden damit über der
-        # Zylinderfläche, und die Vereinigung fände dort keine gemeinsame
-        # Fläche, sondern eine Berührung. Der Ausgleich ist die
-        # Sehnenabweichung selbst.
-        lift -= sagitta(params.wrap_diameter, params.pitch)
+    lift = -BOOLEAN_OVERLAP - clearance if params.mode == "raised" else -params.depth
     body = apply(body, translation((0.0, 0.0, lift)))
     if params.wrap == "cylinder":
         body = wrapped(body, params.wrap_diameter)
@@ -1040,7 +1240,9 @@ def texture_tool(source: SceneObject, params: TextureParams, seed: int = 0) -> M
 @register_op(
     name="apply_texture",
     result_kind="mesh",
-    cache_version="1",
+    # 2 seit dem 22.09.2026: Die Noppen der Vorgabe berühren sich nicht mehr
+    # (``DIMPLE_FILL``) — dieselben Werte zeichnen ein anderes Bild.
+    cache_version="2",
     title=_("Textur aufbringen"),
     category="surface",
     params=TextureParams,
@@ -1100,6 +1302,26 @@ def apply_texture(ctx: OpContext) -> OpResult:
         beyond = _wrap_beyond_body(body_mesh, params.wrap_diameter)
         if beyond is not None:
             findings.append(beyond)
+        pitch = wrap_pitch(params.pattern, params.pitch, params.wrap_diameter, params.width)
+        if not is_close(pitch, params.pitch):
+            findings.append(
+                Finding(
+                    code="texture.pitch_wrapped",
+                    severity="info",
+                    message=_(
+                        "Die Teilung ist auf {pitch} gerückt, damit das Muster um den Umfang "
+                        "aufgeht — {count} Teilungen um Ø {diameter}.",
+                        pitch=format_length(pitch),
+                        count=round(math.pi * params.wrap_diameter / pitch),
+                        diameter=format_length(params.wrap_diameter),
+                    ),
+                    values={
+                        "pitch_mm": round(pitch, 4),
+                        "requested_mm": round(params.pitch, 4),
+                        "diameter_mm": round(params.wrap_diameter, 3),
+                    },
+                )
+            )
 
     _log.info("textured with %r, %s", params.pattern, params.mode)
     return OpResult(

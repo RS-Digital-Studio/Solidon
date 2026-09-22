@@ -22,7 +22,7 @@ from app.core.bootstrap import load_operations
 from app.core.errors import ValidationError
 from app.core.geom.boolean import boolean
 from app.core.geom.mesh import MeshData, as_mesh_data
-from app.core.geom.texture_ops import PATTERNS
+from app.core.geom.texture_ops import PATTERNS, wrap_pitch
 from app.core.perceive import patterns
 from app.core.perceive.actions import actions_for
 from app.core.perceive.digest import _feature_line
@@ -268,11 +268,37 @@ def test_the_cell_width_is_what_the_generator_drew() -> None:
         "hexagon": 4.0 / 2.0 * 0.85 * math.sqrt(3.0),
         "knurl_diamond": 4.0 * 0.5,
         "rib": 4.0 * 0.5,
-        "dimple": 4.0,
+        "dimple": 4.0 * 0.8,
     }
     for pattern, width in expected.items():
         read = only_pattern(textured(pattern, "engraved").features)
         assert math.isclose(read.params["cell_width"], width, rel_tol=0.01), (pattern, read.params)
+
+
+def test_a_turned_dimple_field_is_one_pattern_and_not_bores_and_slots() -> None:
+    """Die Noppen der Vorgabe berührten sich; gedreht zerfiel die Deckfläche in Inseln.
+
+    Gemessen im Review (22.09.2026): ``dimple`` mit ``angle=90`` auf 30 mal
+    20 ergab 35 Bohrungen, 5 Langlöcher und 16 Rundungen. Seit die Noppe eine
+    Wand hat (``DIMPLE_FILL``), ist es ein Muster — unter jedem Winkel.
+    """
+    entry = SceneObject(id="obj_1", name="Platte", mesh=plate())
+    out, _findings = run_op(
+        "apply_texture",
+        entry,
+        pattern="dimple",
+        pitch=4.0,
+        depth=1.0,
+        mode="engraved",
+        width=30.0,
+        height=20.0,
+        angle=90.0,
+        z=PLATE[2] / 2.0,
+        nz=1.0,
+    )
+    read = only_pattern(out.features)
+    assert read.params["style"] == "dimple"
+    assert kinds(out.features) == {"face": 6, "pattern": 1}, kinds(out.features)
 
 
 def test_a_straight_knurl_keeps_its_field_and_its_angle() -> None:
@@ -655,7 +681,7 @@ def test_an_unreadable_pattern_offers_the_repair(monkeypatch: pytest.MonkeyPatch
     from app.core.errors import REPAIR_AND_RETRY
     from app.core.perceive import patterns as module
 
-    monkeypatch.setattr(module, "plug_for", lambda mesh, feature: None)
+    monkeypatch.setattr(module, "plug_for", lambda mesh, feature, features=None: None)
     entry = textured("hexagon", "engraved")
     read = only_pattern(entry.features)
     with pytest.raises(ValidationError) as refused:
@@ -776,3 +802,177 @@ def test_overlapping_noise_blobs_leave_one_clean_top_face() -> None:
     top = [face for face in faces if face.params["normal"][2] > 0.99]
     assert len(top) == 1, [face.params["area"] for face in top]
     assert top[0].params["area"] < PLATE[0] * PLATE[1]
+
+
+# --- Um einen Zylinder ---------------------------------------------------------------
+
+#: Der Griff: Ø 30, 30 lang, in 96 Facetten — die Sehnenabweichung liegt unter
+#: der Erkennungsauflösung, wie bei jedem Zylinder, den der Kern selbst baut.
+CYLINDER_DIAMETER = 30.0
+CYLINDER_LENGTH = 30.0
+CIRCUMFERENCE = math.pi * CYLINDER_DIAMETER
+
+#: Vier Muster um den Griff: Kreuzrändel und Noppen erhaben, Rippen und Waben
+#: vertieft — drei einmal ganz herum, die Noppen als Feld von 40 mm Breite.
+AROUND = [
+    ("knurl_diamond", "raised", CIRCUMFERENCE),
+    ("rib", "engraved", CIRCUMFERENCE),
+    ("hexagon", "engraved", CIRCUMFERENCE),
+    ("dimple", "raised", 40.0),
+]
+
+
+def cylinder() -> MeshData:
+    return MeshData.of(
+        trimesh.creation.cylinder(
+            radius=CYLINDER_DIAMETER / 2.0, height=CYLINDER_LENGTH, sections=96
+        )
+    )
+
+
+def wrapped(
+    pattern: str, mode: str, width: float, *, pitch: float = 3.0, depth: float = 0.8
+) -> tuple[SceneObject, list[Finding]]:
+    """Ein Muster um den Griff, wie ``apply_texture`` es mit ``wrap="cylinder"`` legt."""
+    entry = SceneObject(id="obj_1", name="Griff", mesh=cylinder())
+    return run_op(
+        "apply_texture",
+        entry,
+        pattern=pattern,
+        pitch=pitch,
+        depth=depth,
+        mode=mode,
+        width=width,
+        height=20.0,
+        wrap="cylinder",
+        wrap_diameter=CYLINDER_DIAMETER,
+        z=0.0,
+    )
+
+
+@pytest.mark.parametrize("pattern,mode,width", AROUND)
+def test_a_texture_around_a_cylinder_is_one_pattern_on_the_pin(
+    pattern: str, mode: str, width: float
+) -> None:
+    """Der Träger ist ein Stift, das Gitter liegt in seiner Abwicklung, die Zahlen stimmen."""
+    out, _findings = wrapped(pattern, mode, width)
+    read = only_pattern(out.features)
+    params = read.params
+    assert params["style"] == pattern
+    assert params["mode"] == mode
+    assert params["carrier"] == "cylinder"
+    assert math.isclose(params["carrier_diameter"], CYLINDER_DIAMETER, abs_tol=0.05)
+    assert np.allclose(np.abs(params["carrier_axis"]), (0.0, 0.0, 1.0), atol=1e-3)
+    assert math.isclose(
+        params["pitch"], wrap_pitch(pattern, 3.0, CYLINDER_DIAMETER, width), abs_tol=0.02
+    )
+    assert math.isclose(params["cell_depth"], 0.8, abs_tol=0.02)
+    assert math.isclose(params["height"], 20.0, abs_tol=0.5)
+    # Die Mitte liegt auf dem Zylinder, die Normale zeigt dort radial nach außen.
+    centre = np.asarray(params["centre"], dtype=float)
+    assert math.isclose(math.hypot(centre[0], centre[1]), CYLINDER_DIAMETER / 2.0, abs_tol=0.02)
+    radial = np.array([centre[0], centre[1], 0.0]) / math.hypot(centre[0], centre[1])
+    assert np.allclose(params["normal"], radial, atol=1e-3)
+    # Die Zellen gehen im Muster auf; der Stift und die zwei Stirnflächen bleiben.
+    assert kinds(out.features) == {"pin": 1, "face": 2, "pattern": 1}, kinds(out.features)
+    carrier = patterns.carrier_of(read, out.features)
+    assert carrier is not None and carrier.kind == "pin"
+
+
+def test_a_full_turn_closes_at_the_seam_with_a_pitch_that_fits_and_says_so() -> None:
+    """31 Rillen um Ø 30: die Teilung rückt von 3 auf 3,04, und keine Zelle ist angeschnitten."""
+    out, findings = wrapped("rib", "engraved", CIRCUMFERENCE)
+    said = [finding for finding in findings if finding.code == "texture.pitch_wrapped"]
+    assert said, [finding.code for finding in findings]
+    assert math.isclose(said[0].values["pitch_mm"], CIRCUMFERENCE / 31, abs_tol=1e-3)
+    read = only_pattern(out.features)
+    assert read.params["count"] == 31
+    assert read.params["partial"] == 0
+    assert math.isclose(read.params["pitch"], CIRCUMFERENCE / 31, abs_tol=0.01)
+
+
+def test_a_field_that_does_not_reach_around_keeps_its_pitch() -> None:
+    out, findings = wrapped("dimple", "raised", 40.0)
+    assert not any(finding.code == "texture.pitch_wrapped" for finding in findings)
+    read = only_pattern(out.features)
+    assert math.isclose(read.params["pitch"], 3.0, abs_tol=0.01)
+    assert math.isclose(read.params["width"], 40.0, abs_tol=0.5)
+
+
+@pytest.mark.parametrize("pattern,mode,width", AROUND)
+def test_removing_a_wrapped_pattern_gives_the_plain_cylinder_back(
+    pattern: str, mode: str, width: float
+) -> None:
+    """Die Stopfen liegen auf den Facetten des Mantels — danach ist er wieder ein Zylinder."""
+    out, _findings = wrapped(pattern, mode, width)
+    read = only_pattern(out.features)
+    plain, findings = run_op("remove_feature", out, at_feature=read.id)
+    # Das Vieleck, nicht der Kreis: 96 Facetten haben ein Volumen, und das kommt zurück.
+    assert math.isclose(plain.mesh.volume, cylinder().volume, abs_tol=0.05), plain.mesh.volume
+    assert kinds(plain.features) == {"pin": 1, "face": 2}, kinds(plain.features)
+    assert read.id not in plain.features
+    gone = [finding for finding in findings if finding.code == "remove_feature.gone"]
+    assert gone and gone[0].values["cells"] == read.params["count"] + read.params["partial"]
+
+
+@pytest.mark.parametrize(
+    "pattern,mode,width,new_pitch",
+    [
+        ("rib", "engraved", CIRCUMFERENCE, 4.0),
+        ("hexagon", "engraved", CIRCUMFERENCE, 4.0),
+        ("dimple", "raised", 40.0, 4.0),
+    ],
+)
+def test_resizing_a_wrapped_pattern_redraws_around_the_cylinder(
+    pattern: str, mode: str, width: float, new_pitch: float
+) -> None:
+    """Neu gezeichnet um dieselbe Achse: derselbe Stil, die neue Teilung, der Stift bleibt."""
+    out, _findings = wrapped(pattern, mode, width)
+    read = only_pattern(out.features)
+    redrawn, findings = run_op("resize_feature", out, at_feature=read.id, pitch=new_pitch)
+    after = only_pattern(redrawn.features)
+    assert after.params["style"] == pattern
+    assert after.params["carrier"] == "cylinder"
+    expected = wrap_pitch(pattern, new_pitch, CYLINDER_DIAMETER, width)
+    assert math.isclose(after.params["pitch"], expected, abs_tol=0.02), after.params["pitch"]
+    assert math.isclose(after.params["cell_width"], read.params["cell_width"], abs_tol=0.02)
+    assert math.isclose(after.params["cell_depth"], read.params["cell_depth"], abs_tol=0.02)
+    assert after.params["count"] < read.params["count"], "weiter auseinander heißt weniger"
+    assert kinds(redrawn.features)["pin"] == 1, kinds(redrawn.features)
+    assert any(finding.code == "resize_feature.pattern" for finding in findings)
+
+
+def test_a_full_turn_redrawn_has_no_seam() -> None:
+    """24 Rillen mit 3,93 — und an der Naht keine halbe, keine doppelte."""
+    out, _findings = wrapped("rib", "engraved", CIRCUMFERENCE)
+    read = only_pattern(out.features)
+    redrawn, _findings = run_op("resize_feature", out, at_feature=read.id, pitch=4.0)
+    after = only_pattern(redrawn.features)
+    assert after.params["count"] == 24
+    assert after.params["partial"] == 0
+
+
+def test_a_wrapped_pattern_travels_with_its_axis_when_moved() -> None:
+    """Achse und Mitte reisen mit der Bewegung (§21.2), der Durchmesser bleibt."""
+    from app.core.perceive.matching import moved_features
+
+    out, _findings = wrapped("dimple", "raised", 40.0)
+    read = only_pattern(out.features)
+    turn = np.eye(4)
+    turn[:3, :3] = [[1.0, 0.0, 0.0], [0.0, 0.0, -1.0], [0.0, 1.0, 0.0]]
+    turn[:3, 3] = (5.0, -2.0, 9.0)
+    after = moved_features(out.features, turn)[read.id]
+    assert np.allclose(np.abs(after.params["carrier_axis"]), (0.0, 1.0, 0.0), atol=1e-6)
+    expected = turn[:3, :3] @ np.asarray(read.params["centre"]) + turn[:3, 3]
+    assert np.allclose(after.params["centre"], expected)
+    assert np.allclose(after.params["normal"], turn[:3, :3] @ np.asarray(read.params["normal"]))
+    assert math.isclose(after.params["carrier_diameter"], read.params["carrier_diameter"])
+
+
+def test_the_digest_names_the_cylinder_a_wrapped_pattern_runs_around() -> None:
+    out, _findings = wrapped("rib", "engraved", CIRCUMFERENCE)
+    read = only_pattern(out.features)
+    line = _feature_line(read.id, read)
+    assert "Rippenmuster" in line
+    assert "Ø 30.00 mm" in line, line
+    assert "Achse" in line

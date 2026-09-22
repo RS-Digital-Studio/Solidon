@@ -514,6 +514,30 @@ def test_a_sensible_texture_passes() -> None:
     texture_ops.check_printable("rib", pitch=2.0, depth=0.5, printer=NOZZLE)
 
 
+def test_the_narrowest_groove_is_asked_per_style() -> None:
+    """Die Rille des Kreuzrändels ist ein Fünftel der Teilung, nicht die Hälfte.
+
+    Bis zum 22.09.2026 fragte E1 für alle acht Muster ``pitch·LAND_SHARE``:
+    Ein Kreuzrändel mit 1,5 mm Teilung galt als druckbar (0,75 gegen 0,4 mm
+    Düse), und seine Rillen von 0,31 mm verschwanden im Druck.
+    """
+    from app.core.geom.texture_ops import narrowest_structure
+
+    assert math.isclose(narrowest_structure("rib", 2.0), 1.0)
+    assert math.isclose(narrowest_structure("knurl_diamond", 2.0), 2.0 / math.sqrt(2.0) - 1.0)
+    across_flats = 4.0 / 2.0 * 0.85 * math.sqrt(3.0)
+    assert math.isclose(narrowest_structure("hexagon", 4.0), 4.0 - across_flats)
+    assert math.isclose(narrowest_structure("dimple", 4.0), 4.0 * 0.2)
+    texture_ops.check_printable("knurl_diamond", pitch=2.0, depth=0.5, printer=NOZZLE)
+    with pytest.raises(ValidationError) as problem:
+        texture_ops.check_printable("knurl_diamond", pitch=1.5, depth=0.5, printer=NOZZLE)
+    assert problem.value.field == "pitch"
+    assert problem.value.values["needed_mm"] > 1.5
+    # Eine Zelle schmaler als die Düse zählt genauso — die Rille ist dann nicht das Engste.
+    with pytest.raises(ValidationError):
+        texture_ops.check_printable("rib", pitch=4.0, depth=0.5, printer=NOZZLE, cell=0.3)
+
+
 # --- die Operation gegen einen echten Körper ------------------------------------
 
 
@@ -651,6 +675,34 @@ def test_a_pattern_that_falls_off_the_body_is_reported() -> None:
     assert int(apart.values["before"]) == 1, "der Träger war vorher schon zerteilt"
     assert int(apart.values["after"]) > 1, "nichts ist abgefallen — der Test misst nichts"
     assert apart.severity == "error", "lose Stücke sind kein Schönheitsfehler"
+
+
+def test_an_engraved_wrap_cuts_grooves_and_leaves_no_air_pockets() -> None:
+    """Vertieft um ein Rohr: Rillen, keine Lufteinschlüsse.
+
+    Der Sehnenausgleich galt bis zum 22.09.2026 nur dem erhabenen Boden; der
+    vertiefte Deckel rückte damit um dieselbe Abweichung **unter** die Fläche,
+    und aus 32 Rillen um ein Rohr wurden 32 Einschlüsse.
+    """
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.perceive.features import detect
+
+    result = _on_cylinder(
+        30.0,
+        pattern="rib",
+        pitch=3.0,
+        depth=0.8,
+        mode="engraved",
+        wrap="cylinder",
+        wrap_diameter=30.0,
+        width=math.pi * 30.0,
+        height=20.0,
+        z=0.0,
+    )
+    body = as_mesh_data(result.outputs[0].mesh)
+    assert body.volume < math.pi * 15.0**2 * 30.0 - 1.0, "die Rillen sind geschnitten"
+    kinds = {feature.kind for feature in detect(body).values()}
+    assert "void" not in kinds, kinds
 
 
 def test_a_pattern_that_holds_says_nothing_about_parts() -> None:

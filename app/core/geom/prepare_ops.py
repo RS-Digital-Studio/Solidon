@@ -129,6 +129,7 @@ from app.core.units import (
 from app.i18n import TranslatableText, _
 
 if TYPE_CHECKING:
+    from app.core.perceive.patterns import Field
     from app.core.perceive.relations import CavityState
 
 _AXES = tuple(AXIS_NORMALS)
@@ -8720,7 +8721,7 @@ def _pattern_plug(source: SceneObject, feature: Feature) -> MeshData:
     """Der Körper, der die Zellen eines Musters füllt oder abträgt — oder der Satz dazu."""
     from app.core.perceive.patterns import plug_for
 
-    plug = plug_for(as_mesh_data(source.mesh), feature)
+    plug = plug_for(as_mesh_data(source.mesh), feature, source.features)
     if plug is None:
         # Der Satz nennt das Reparieren — dann steht es auch als Handlung da,
         # wie an jeder anderen Stelle, die das Netz nicht lesen konnte.
@@ -8789,15 +8790,12 @@ def _remove_pattern(ctx: OpContext, source: SceneObject, feature: Feature) -> Op
     )
 
 
-def _pattern_anchor(
-    feature: Feature, basis: np.ndarray, origin: Vec3
-) -> tuple[float, float] | None:
+def _pattern_anchor(feature: Feature, field: Field) -> tuple[float, float] | None:
     """Die Mitte einer gelesenen Zelle in den Achsen des Feldes — wohin eine neue Zelle kommt."""
     anchor = feature.params.get("anchor")
     if anchor is None:
         return None
-    local = (np.asarray(anchor, dtype=float) - np.asarray(origin, dtype=float)) @ basis
-    return float(local[0]), float(local[1])
+    return field.flat(anchor)
 
 
 def _resize_pattern(
@@ -8812,12 +8810,20 @@ def _resize_pattern(
 
     Derselbe Weg wie beim Gewinde — an der alten Stelle schließen, mit dem
     neuen Maß setzen —, und das Neue zeichnet dieselbe Funktion, die
-    ``apply_texture`` benutzt (``texture_ops.tool_in_outline``): Ein
-    gelesenes Muster wird mit seinem Stil, seinem Feld, seiner Drehung und
-    seiner Zellbreite wieder erzeugt, nicht mit den Vorgaben der Operation.
-    Null in einem Feld heißt: so lassen, wie gemessen.
+    ``apply_texture`` benutzt (``texture_ops.flat_tool``): Ein gelesenes
+    Muster wird mit seinem Stil, seinem Feld, seiner Drehung und seiner
+    Zellbreite wieder erzeugt, nicht mit den Vorgaben der Operation, und das
+    Feld legt es ab, wo es lag — auf der Ebene oder um den Zylinder
+    (``patterns.Field.placed``). Null in einem Feld heißt: so lassen, wie
+    gemessen.
     """
-    from app.core.geom.texture_ops import cell_width_for, check_printable, tool_in_outline
+    from app.core.geom.texture_ops import (
+        STRIP_PATTERNS,
+        cell_width_for,
+        check_printable,
+        flat_tool,
+        wrap_pitch,
+    )
     from app.core.perceive.patterns import GENERATOR_OF, field_outline
 
     style = str(feature.params.get("style", "other"))
@@ -8853,7 +8859,6 @@ def _resize_pattern(
             ],
         )
     _reject_oversized("pitch", new_pitch, source.mesh, kind="length")
-    check_printable(generator, new_pitch, new_depth, ctx.profile.printer)
     # Voronoi und Rauschen kennen keine Zellbreite — ihre Zellen sind so groß,
     # wie die Dichte sie macht (``texture_ops.pattern_shapes``). Und eine
     # Breite, die die Teilung nicht hergibt, wird begrenzt und gesagt: Die
@@ -8875,21 +8880,27 @@ def _resize_pattern(
             values={"nozzle_mm": nozzle, "cell_width": drawn_width},
             suggestions=[dataclasses.replace(CORRECT_INPUT, label=_("Zellbreite vergrößern"))],
         )
+    # Dieselbe Frage wie beim Aufbringen (E1), mit der gezeichneten Zelle:
+    # Steg oder Rille, je nachdem, was an diesem Stil schmaler ist.
+    check_printable(generator, new_pitch, new_depth, ctx.profile.printer, cell=drawn_width)
 
     cleared = _pattern_cleared(ctx, source, feature)
     ctx.progress(0.6, str(_("Das Muster wird mit dem neuen Maß gesetzt …")))
-    outline, basis, origin = field_outline(as_mesh_data(source.mesh), feature, source.features)
+    field = field_outline(as_mesh_data(source.mesh), feature, source.features)
+    if field.around > 0.0:
+        # Einmal um den Zylinder geht die Teilung im Umfang auf — wie beim
+        # Aufbringen (``texture_ops.wrap_pitch``), sonst träfe an der Naht
+        # die letzte Zelle auf die erste.
+        new_pitch = wrap_pitch(generator, new_pitch, field.around / math.pi, field.around)
     engraved = feature.params.get("mode") != "raised"
     through = bool(feature.params.get("through", False))
-    anchor = _pattern_anchor(feature, basis, origin)
+    anchor = _pattern_anchor(feature, field)
     # Durchgehend bleibt es nur mit der gemessenen Tiefe — die ist die Dicke
     # des Körpers. Wer an einem durchgehenden Muster eine Tiefe setzt, macht
     # es blind, und das Merkmal sagt das danach auch.
     still_through = through and cell_depth <= 0.0
-    tool = tool_in_outline(
-        outline,
-        basis,
-        origin,
+    flat = flat_tool(
+        field.outline,
         pattern=generator,
         pitch=new_pitch,
         # Eine durchgehende Zelle wird durch die Rückseite hindurch
@@ -8908,10 +8919,16 @@ def _resize_pattern(
         # Ganze Zellen, wo das Muster nur ganze hatte — und immer, wo es
         # durchgeht: Eine angeschnittene wäre dort eine Kerbe (Review,
         # 22.09.2026: ein blindes Feld nahe der Kante kerbte beim Neuzeichnen
-        # mit weiterer Teilung die Seitenwände).
-        whole_cells=through or int(feature.params.get("partial", 0)) == 0,
+        # mit weiterer Teilung die Seitenwände). Nicht bei Streifen: Ihre
+        # Länge ist die des Feldes, und ein Steg, der am Feldrand endet, ist
+        # ganz — als ganze Zelle im Umriss gefordert, entstünde keiner.
+        whole_cells=generator not in STRIP_PATTERNS
+        and (through or int(feature.params.get("partial", 0)) == 0),
         anchor=anchor,
+        clearance=field.frame.clearance,
+        around=field.around,
     )
+    tool = field.placed(flat)
     placed = boolean(
         "difference" if engraved else "union",
         [cleared.mesh, tool],

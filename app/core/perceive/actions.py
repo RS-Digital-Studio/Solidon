@@ -541,9 +541,17 @@ def _action_field(entry: Any, feature: Feature, op: str) -> ActionField:
     derived = (op, entry.name) in _SHIFTED_BY and not (
         feature.kind == "slot" and entry.name == "slot_length" and not feature.params.get("open")
     )
+    label = entry.title
+    if radius:
+        label = _("Radius")
+    elif feature.kind == "pattern" and entry.name == "pitch":
+        # Dasselbe Feld, ein anderes Wort: Ein Gewinde hat eine Steigung, ein
+        # Muster eine Teilung — so heißt sie im Baum, im Steckbrief und beim
+        # Aufbringen, und so soll sie im Merkmalfenster heißen.
+        label = _("Teilung")
     return ActionField(
         name=entry.name,
-        label=_("Radius") if radius else entry.title,
+        label=label,
         unit=str(entry.unit or ""),
         value=_value_of(entry, feature, op),
         kind=_kind_of(entry),

@@ -682,7 +682,15 @@ ein Stadion mit Weg 0,00005 mm, angenommen, weil der Weg nur größer als
   wird nach allen Einzelformen und **vor** dem
   Freiformfilter, sonst zählen tausend Zellwände als Rundformen-Anteil. Was
   ein Muster ausmacht, steht am Netz: Mündung, Tiefe, Seite, Teilung — kein
-  Verweis auf einen Trägernamen, der beim Umbenennen altert.
+  Verweis auf einen Trägernamen, der beim Umbenennen altert. Der Träger darf
+  ein Zylinder sein: gemessen wird dann in seiner Abwicklung, und ein Muster
+  trägt Achse und Durchmesser statt nur einer Normalen. Wer einen Körper auf
+  den Mantel legt — den Stopfen, der eine Zelle füllt —, legt ihn auf dessen
+  Facetten, nicht auf den Kreis: Bündig mit dem Kreis stand er zwischen zwei
+  Ecken über der Facette, und die Stufe machte aus dem Mantel hundert
+  Flächen. Ein Werkzeug, das nur die Ecken biegt, hat seinen Boden in der
+  Mitte um die Sehnenabweichung tiefer als am Rand — erst teilen, dann
+  biegen.
 * **Die Langlochsuche rechnet je Bogen, nicht je Paar.** Flutung, Flanken
   und Stadionfit hängen an Bogen und Achse (`slots._Reach`), und die Maske
   einer Achse ist ihr Schlüssel, nicht die gerundete Achse allein. Ein

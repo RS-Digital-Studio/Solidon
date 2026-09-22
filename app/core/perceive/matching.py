@@ -946,7 +946,14 @@ def moved_features(
                 point = np.asarray(params[key], dtype=float)
                 carried = matrix @ np.array([*point, 1.0])
                 params[key] = (float(carried[0]), float(carried[1]), float(carried[2]))
-        for key in ("axis", "normal", "direction", "opening_normal", "profile_clamp_y"):
+        for key in (
+            "axis",
+            "normal",
+            "direction",
+            "opening_normal",
+            "profile_clamp_y",
+            "carrier_axis",
+        ):
             if key in params:
                 original = np.asarray(params[key], dtype=float)
                 direction = (
@@ -1026,6 +1033,7 @@ def transformed_features(
         "height",
         "cell_width",
         "cell_depth",
+        "carrier_diameter",
         "travel",
         "fit_error",
         "radial_min",
