@@ -59,7 +59,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-191 — PrusaSlicer verbraucht für dieselbe Übergabe ein Drittel mehr Material](#rm-191) | Geometrie, Erkennung und Druckvorbereitung | Die neun Platten des Regals je Slicer gegen die Prusa-Ausgabe aufschlüsseln: Stützen, Wände oder Füllung — und die Übergabe der Prusa-Schlüssel danach ergänzen |
 | [RM-024 — Gespeicherte Zuordnungsantworten im echten Konfliktfall abnehmen](#rm-024) | Geometrie, Erkennung und Druckvorbereitung | Der Rundlauf steht; gemessen fehlt ein Korpuskörper, dessen erneute Erkennung wirklich mehrdeutig wird |
 | [RM-041 — Innenraum importierter entlüfteter Hohlkörper klären](#rm-041) | Geometrie, Erkennung und Druckvorbereitung | Schätzweg oder dokumentierte Grenze des Innenraums entscheiden |
-| [RM-042 — Leistungsgrenze der Merkmalserkennung bis eine Million Dreiecke klären](#rm-042) | Geometrie, Erkennung und Druckvorbereitung | Großen Korpus messen und belegte Erkennungsgrenze mit §31 abgleichen |
+| [RM-209 — Die Rundform-Einpassung an Gittermodellen](#rm-209) | Geometrie, Erkennung und Druckvorbereitung | 673 von 1 430 Löserläufen enden am Auswertungslimit und liefern nichts; ein Gitter mit 95 000 Dreiecken braucht 22 s. Zwei Hebel geprüft und verworfen (Rang am Start, `lm`) |
 | [RM-045 — Drei Laufzeitkosten des Geometriereviews messen](#rm-045) | Geometrie, Erkennung und Druckvorbereitung | Aushöhlen, Formkopien und Innenraumketten getrennt vermessen |
 | [RM-076 — Topologieverlust beim Reduzieren von Eule und Spiderman beheben](#rm-076) | Geometrie, Erkennung und Druckvorbereitung | Eule und Spiderman mit Zielreihe und Topologievergleich reproduzieren |
 | [RM-077 — Reduzierungsziel bei Körpern mit Durchbrüchen erreichen](#rm-077) | Geometrie, Erkennung und Druckvorbereitung | Zielreihen an Körpern mit Durchbrüchen gegen den vorhandenen Rückfall messen |
@@ -78,7 +78,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-193 — Die Erkennung an einer glatten Generator-Freiform kostet Minuten für null Merkmale](#rm-193) | Geometrie, Erkennung und Druckvorbereitung | Entschieden und gebaut am 22.09.2026: Die Haut — der Fleck über der halben Oberfläche, der keine Grundform ist und in Splitter zerfällt — wird nicht mehr Splitter für Splitter eingepasst, ihre Stücke von Gewicht schon (Zapfen, Verrundung bleiben); das Freiformurteil kommt aus der Haut. Drache 482 → 37,7 → 4,2 s, Schüssel 7,3 → 3,0 s (unter Fremdlast, gleiche Merkmale). Offen: §31 verlangt 1 s je 200 000 — was bleibt, sind die vier Fits über den ganzen gekrümmten Fleck in `_large_facet_faces` und noch einmal in `_fitted` (je 0,5 s Kegel an 300 000 Dreiecken) |
 | [RM-201 — Ein hohler Körper hält die 300 ms der Schichtanalyse nicht](#rm-201) | Geometrie, Erkennung und Druckvorbereitung | Die neue Leistungsmarke `slice_medium_hollow` (200 000 Dreiecke, Wand 1,5 mm) misst 1,5 s für §31 „300 ms": 3 658 Puffer, 796 Differenzen und 718 STRtree-Anfragen je Lauf — die Stufen je Schicht stapeln oder das Ziel für Schalen neu fassen |
 | [RM-202 — Die Formabweichung am Ring schließt nur auf 0,65 mm](#rm-202) | Geometrie, Erkennung und Druckvorbereitung | Das Verfeinerungsbudget des Torus gilt je Aufruf; an einem Ring bleibt die Klammer 0,65 mm breit, wo Ebene, Zylinder, Kugel und Kegel geschlossen rechnen — Budget je Dreieck oder eine geschlossene Kandidatenmenge für den Torus |
-| [RM-207 — Ein Wabenmuster ist ein Merkmal, nicht 1 199 Flächen](#rm-207) | Geometrie, Erkennung und Druckvorbereitung | Gebaut auf `rm-207-muster`, geht mit 0.5.0 hinaus: die acht Texturen von *Textur aufbringen* und jedes Gitter gleicher Zellen sind ein `pattern` mit Teilung, Zellbreite, Tiefe und Feld — auf Ebenen und um Zylinder; *Merkmal entfernen* füllt die Zellen, *Merkmal ändern* zeichnet sie neu; das Merkmalfenster zeigt es am Halter. Offen: ein dichtes Noppenfeld (266 000 Dreiecke) braucht vor dem Muster 28 s für 2 042 Zylindereinpassungen |
 | [RM-208 — Die Kundenwege Verschieben, Bearbeiten, Erkennen und Vorschau auf Zeit](#rm-208) | Geometrie, Erkennung und Druckvorbereitung | Am 22.09.2026 an einer Platte mit 204 000 Dreiecken gemessen und umgebaut: Verschieben 8,6 → 0,5 s, Bohrung 8,3 → 1,8 s, Klick auf eine Bohrung 1,9 → 0,2 s, Vorschau je Zahl 2,2 → 0,04 s ab der zweiten, Erkennung 1,1 → 0,99 s (Kundenmodell 21 → 7,3 s). Dritte Runde: das exakte Vorspiel der Dezimierung (Nadelplatte 11,6 → 0,3 s, erste Vorschau am Fächerexport unter einer Sekunde), `max_distance_to_surface` misst nur, was das Maximum heben kann (Besenhalter 2,9 → 0,25 s), die Freiformhaut (RM-193, Kundenmodell 3,0 s), und der Korpus `F:\3D Dateien` alt gegen neu — Ergebnis im Block |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Der Mac ist gefahren; die Zoom-Dämpfung ist seit dem 16.09. eine Rampe statt einer Klippe und am Gerät zu bestätigen; offen bleiben Linux, die 3DxWare-Mausemulation und die Bildrate an 1 Mio. Dreiecken |
 | [RM-203 — Die Ansicht rechnet je Bild und je Klick, was sie je Auswertung rechnen könnte](#rm-203) | Bedienung und Darstellung | Kanten und Schattenhüllen entstehen je Auswertung im Hauptthread (200 000 Dreiecke: 57 + 71 ms) statt im `_SceneMeshWorker`; `_redraw_feature_patch` kostet an einer Fläche der 360k-Platte 0,41 s; `show_scene` läuft am historischen Bohrschritt je Tastendruck; der Zeiger ruht 16 ms nicht, bevor er fragt — jeden Posten am echten Renderer messen, dann verlegen |
@@ -740,15 +739,26 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#die-abnahme-des-gesamt-reviews-06092026).
 
-<a id="rm-042"></a>
+<a id="rm-209"></a>
 
-- [ ] **RM-042 — Leistungsgrenze der Merkmalserkennung bis eine Million Dreiecke klären.**
-  `FEATURE_LIMIT_TRIANGLES` steht weiterhin auf 1.000.000. Erkennung am benannten großen Korpus auf
-  ruhiger Maschine messen und §31 mit dem Ergebnis abgleichen; andernfalls Grenze auf einen
-  tatsächlich belegten Wert setzen. Abnahme: dokumentierte Laufzeit und Spitzenbedarf, Grenzmeldung
-  oberhalb des freigegebenen Bereichs.
+- [ ] **RM-209 — Die Rundform-Einpassung an Gittermodellen: 47 Prozent der Löserläufe sind
+  vergeblich.** Gemessen am 22.09.2026 an vier echten Modellen (1 430 Löserläufe): 673 davon
+  enden am Auswertungslimit (`ROUND_FIT_EVALUATIONS` = 100, Status 0) und liefern danach `None` —
+  je Lauf rund zehn Millisekunden, zusammen 6,2 der 8,7 Sekunden, die der Löser kostet. Die
+  gelungenen Läufe brauchen median 19 Auswertungen, zu 90 Prozent höchstens 26, im Einzelfall 88.
+  An der Kumiko-Schale sind es 1 412 Flecken von median sieben Dreiecken, aus denen am Ende 27
+  Verrundungen und drei Kegel werden; die Erkennung dauert 22,2 s (RM-042).
 
-  [Bisheriger Befund](ROADMAP-ARCHIV.md#die-abnahme-des-gesamt-reviews-06092026).
+  **Zwei Hebel sind geprüft und verworfen, das gehört zum Befund:** Der Rang der Jacobi-Matrix am
+  Startpunkt trennt nicht — bei allen 1 430 Läufen ist sie dort bestimmt, die Unbestimmtheit
+  entsteht erst unterwegs (die Kegelspitze wandert ins Unendliche). Und `method="lm"` ist mit
+  3,8 statt 8,7 Sekunden zwar 2,3-mal schneller, liefert aber andere Antworten: zehn Läufe, die
+  heute gelingen, scheitern damit, sechs andersherum, und im Einzelfall liegen die Parameter um
+  5,9·10⁵ auseinander. Ein schnellerer Löser ist hier eine andere Erkennung.
+
+  Abnahme: Die Erkennung eines Gittermodells mit rund 100 000 Dreiecken unter fünf Sekunden, das
+  §31-Ziel für 200 000 Dreiecke belegt oder begründet angepasst, und an allen Modellen des Korpus
+  dieselben Merkmale wie heute. Gehört zum Leistungsstrang RM-208.
 
 <a id="rm-045"></a>
 
@@ -1712,110 +1722,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Abstands zum Ringkreis je Dreieck). Abnahme: die Klammer am Ring aus
   `test_surface_deviation.py` unter 0,01 mm, die übrigen Klammern unverändert.
 
-<a id="rm-207"></a>
-
-- [~] **RM-207 — Ein Wabenmuster ist ein Merkmal, nicht 1 199 Flächen.**
-  Robert, 22.09.2026, am Schraubendreherhalter mit Wabenmuster: „alle
-  texturen dann erkennbar machen usw und vollständiger review". Die Erkennung
-  sah 1 199 ebene Flächen — 1 170 davon die Wände von 195 Sechsecken, 9 mm
-  Schlüsselweite, 20 mm tief, 10,4 mm Teilung — und nichts daran hieß Wabe.
-  Gebaut auf dem Zweig `rm-207-muster` (`607a796a`; der Hauptbaum war bis
-  0.5.0 gesperrt): `perceive/patterns.py` liest **Zellen** — zusammenhängende
-  Stücke kleiner Merkmale und unbesessener Dreiecke an einer großen ebenen
-  Trägerfläche —, misst Mündung, Tiefe und Seite am Netz und macht aus einem
-  **Gitter** deckungsgleicher Zellen (ab neun, Streifen ab sechs, Noppen ab
-  zwanzig) oder einer **Streuung** gleich tiefer Zellen (ab vierundzwanzig,
-  Rauschen ab vierzig) ein Merkmal `pattern`: Stil unter dem Namen von
-  `apply_texture` (Rippe, Welle, Rändel gerade und über Kreuz, Wabe, Noppe,
-  Voronoi, Rauschen — dazu `other`), Zahl, Teilung, Zellbreite, Tiefe,
-  vertieft/erhaben/durchgehend, Feld, Winkel und ob es die Fläche füllt.
-  Runde Zellen bleiben Bohrungen, wenn sie durchgehen oder tief sind
-  (Entscheidung: ein Lochblech behält seine Bohrungshandlungen). *Merkmal
-  entfernen* baut aus den nachgezeichneten Mündungen Prismen, bündig mit der
-  Trägerebene (bei durchgehenden Zellen beidseitig), und füllt oder trägt ab;
-  *Merkmal ändern* schließt und zeichnet mit Teilung, Zellbreite und Tiefe
-  über `texture_ops.tool_in_outline` neu — mit der gelesenen Zellbreite
-  (`pattern_shapes(cell=…)`), dem gelesenen Feld und Winkel, bei
-  durchgehenden Zellen nur ganze. Dazu ein Fehler in `texture_tool`:
-  Überlappende Streuflecken wurden getrennt extrudiert und ließen doppelte
-  Deckflächen zurück (2 773 Dreiecke mit 2 908 mm² auf 1 200) — jetzt
-  vereinigt wie beim Weg über die ganze Fläche. Gemessen: der Halter 196
-  Zellen, Teilung 10,40, Schlüsselweite 9,00, Tiefe 20,00, durchgehend, 16
-  statt 1 199 Flächen; alle acht Texturen erkannt, entfernt (Volumen exakt
-  zurück auf die Platte) und geändert; Korpusprobe über 193 Dateien: der
-  Halter, eine Taschentuchbox mit sieben Wellenrillen, und ein Schild mit 24
-  Buchstaben als „Rauschen" — daher die Vierzig. Kosten: 0,4 ms je Zelle
-  (6 645 Rauten in 2,8 s; die Grunderkennung davor braucht 25 s für 32 000
-  Flächen, und das ist der eigentliche Posten). Das Review (22.09.2026,
-  `solidon3d-review`) fand sieben Fehler, alle behoben: ein unbesessenes
-  Dreieck verschluckte über `names[-1]` die kleinste Fläche des Körpers; die
-  Zellbreitengrenze galt je Stil falsch (253 Rauten zu einem Umriss, 9-mm-
-  Waben des Halters auf 8,83 begrenzt) und fragt jetzt die Düse; das Werkzeug
-  nahm die verlangte statt der gezeichneten Breite; ein Wabengitter unter
-  90 Grad bekam ein fremdes Feld; eine Rippenreihe zerfiel am schräg
-  abgeschnittenen Stummel; Noppen außerhalb des Wabengitters wären als Wabe
-  neu gezeichnet worden; und drei Kleinere. Danach die drei Entscheidungen
-  des Reviews eingelöst: `whole_face` erst ab einer halben Teilung Rand
-  (Zellen, die der Körperrand anschneidet, gehören seither als `EdgePiece`
-  zum Muster), das Feld eines Rechtecks mit dem Träger geschnitten, ganze
-  Zellen wo das Muster nur ganze hatte, ein `anchor` hält beim Neuzeichnen
-  eine Zelle an ihrem Platz (sonst wurden aus sechs Rippen fünf und zwei
-  Stummel), und *Merkmal ändern* steht an einem fremden Gitter grau.
-  Entwicklungstor am Zweig (22.09.2026): Sammelgruppe 13 574 bestanden, 48
-  übersprungen; Ruff, Format und mypy je 0; 67 Mustertests. **Am selben Tag
-  nachgezogen, nichts verschoben (Entscheidung Robert: „alles soll
-  funktionieren"):** Muster auf **Zylindern** — der Träger ist ein Stift,
-  gemessen wird in seiner Abwicklung (`Frame`: Umfang und Achse, die Höhe
-  zum Radius; die Naht in der größten Lücke zwischen den Zellen), das Merkmal
-  trägt `carrier_axis` und `carrier_diameter`, seine Mitte liegt auf dem
-  Zylinder und die Normale radial. Entfernen legt die Stopfen auf die
-  **Facetten** des Mantels, an jeder Facettengrenze geteilt (`Frame.facets`,
-  `split_by_plane` des exakten Kerns): bündig mit dem Kreis stand die Stufe
-  am Rand mit Wänden quer zur Achse, und der Mantel war danach kein Zylinder
-  mehr (135 Flächen statt eines Stifts). Ändern biegt das flache Werkzeug
-  um die Achse (`Field.placed`) und zeichnet ein Feld über den ganzen Umfang
-  periodisch. Dazu `apply_texture` selbst: `wrapped` teilt das Feld vor dem
-  Biegen (`refined_for_bending`, `mesh_ops.refined` — konform und je Schale
-  getrennt; Rillen sind überall gleich tief, aus 0,8 wurden vorher 0,725),
-  ein Feld über den Umfang bekommt die Teilung, die aufgeht (`wrap_pitch`,
-  Finding `texture.pitch_wrapped`, 3,04 statt 3 um Ø 30), und wird je Zelle
-  einmal gewählt statt an der Naht geschnitten (`_one_turn`: zwei
-  aufeinandergebogene Hälften verschweißte die Rechnung nicht — 16 mm² Haut,
-  der Stift in zwei). Gemessen an Ø 30 mal 30: Kreuzrändel erhaben, Rippen
-  und Waben vertieft einmal herum, Noppen als Feld — alle vier erkannt
-  (Tiefe 0,80), entfernt (das Volumen exakt das Vieleck, danach ein Stift
-  und zwei Flächen) und mit neuer Teilung neu gesetzt (24 statt 31 Rillen,
-  keine halbe an der Naht). Die Grunderkennung an dichten Texturen: Flächen
-  entstehen in zwei Schritten (`_face_candidates`; Träger und Innenlage nur
-  für die, die das Muster nicht verschluckt), gleichgerichtete Flächen
-  fragen einen STRtree (`_face_roles`) — das dichte Kreuzrändel von 40 auf
-  2,6 s, die Wabe von 25 auf 3,2 s. E1 fragt je Stil nach der schmalsten
-  Stelle (`narrowest_structure`; Kreuzrändel ein Fünftel der Teilung), die
-  Noppen der Vorgabe halten Abstand (`DIMPLE_FILL`, das gedrehte Feld ist
-  ein Muster). Die Fensterabnahme am Halter steht als Test im Merkmalfenster
-  (Teilung, Zellbreite, Zelltiefe, Ändern und Entfernen an diesem Merkmal —
-  und „Teilung", nicht „Steigung"); die vier Fensterdateien dazu einzeln
-  gefahren: 80, 178, 217 und 649 bestanden. Drei Punkte dafür im Changelog
-  0.5.0 in sechs Sprachen. Entwicklungstor danach (22.09.2026): Sammelgruppe 13 600 bestanden, 48 übersprungen; Ruff, Format und mypy je 0; 86 Mustertests. **Die beiden Reste danach zugemacht** (Robert am
-  22.09.2026: „207 und alles andere soll noch vor 0.5.0 fertig sein"): Ein
-  Mantelstück zwischen zwei Rillen ist Mantel und keine Fläche — dass ein
-  Streifen zur Rundung gehört, sagte allein die Naht zu seinen Nachbarn, und
-  wo links und rechts eine Nut liegt, hat er die nicht mehr. Jetzt entscheidet
-  die Lage, und erst dort, wo die Einpassungen stehen
-  (`_faces_on_a_round_wall`): Normale senkrecht zur Achse, Ecken auf dem
-  Mantel, Dreiecksmitten nicht tiefer als eine Tessellierung darunter. Der
-  dritte Punkt trennt den Streifen von einer Abflachung, deren Ecken ebenfalls
-  auf dem Mantel liegen — sie sind sein Schnittkreis — und deren Mitte 7,4 mm
-  darunter. Und die Zylinderflecken fragen einander nicht mehr einzeln, ob sie
-  dieselbe Wand sind: Seite, Radius, Achsrichtung und Kollinearität stehen in
-  den Fits und werden für alle Gemerkten auf einmal beantwortet, die axiale
-  Überlappung entscheidet wie bisher. Am Noppenfeld mit 1 403 Kuppen
-  (173 000 Dreiecke) waren es 984 906 Einzelfragen und 10,9 von 14 s; jetzt
-  0,09 s fürs Zusammenfassen und 4,0 statt 11,7 s für die ganze Erkennung, mit
-  Stück für Stück identischem Ergebnis am Noppenfeld und an allen 23 Dateien
-  des Korpus (der Messwert gehört zu RM-208 und steht dort nicht noch einmal).
-  Entwicklungstor danach: 13 644 bestanden, 48 übersprungen; Ruff, Format und
-  mypy je 0.
 
 <a id="rm-208"></a>
 
@@ -1915,8 +1821,8 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
     (`carry_detection`) gibt an 370 von 458 Körpern dieselbe Antwort wie eine frische
     Erkennung; die 88 übrigen sind Zahlen in der letzten Stelle und keine anderen Merkmale.
 
-
 ## Bedienung und Darstellung
+
 <a id="rm-197"></a>
 
 - [~] **RM-197 — Maßeditor im Bild: kein Bezugswechsel am Etikett,
@@ -2258,29 +2164,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Abnahme: reproduzierbarer Klickweg und Bildbeleg mit dem aktuellen Renderer.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#der-zeichenmodus-und-der-viewport-bekommen-ihre-durchsicht-30082026).
-
-<a id="rm-079"></a>
-
-- [x] **RM-079 — Zeilenlängen der Website über alle Sprachen prüfen.** Die Textbreiten der Website
-  als gemeinsame Regel überprüfen und verbleibende überlange Absätze begrenzen. Abnahme:
-  tatsächliche Zeilenlängen in allen sechs Sprachen bei schmalen und breiten Fenstern; Karten und
-  Spalten dürfen nicht durch eine pauschale Regel unnötig schmal werden.
-
-  **Gemessen und behoben am 14.09.2026.** Drei Sonden in QtWebEngine
-  (`.claude/.state/rm-079-website-320-2026-09-14/`) haben alle 42 Seiten bei 320 Punkt Breite
-  geladen. `body { overflow: clip }` verhinderte das Rollen und verschluckte stumm, was nicht
-  passte: vier deutsche Überschriften mit einem Wort breiter als der Schirm („Allgemeine
-  Geschäftsbedingungen“ 79 Punkt über dem Rahmen, „Datenschutzerklärung“ 59,
-  „Widerrufsbelehrung“ und „Systemvoraussetzungen“ je 23) und die Sprachliste, die bei 320 bis
-  479 Punkt bei −21 begann, weil sie mit `right: 0` am links stehenden Griff hing. Behoben in
-  `website/style.css`: Überschriften trennen nach Sprache (`hyphens: auto`, unter 40rem dazu
-  `overflow-wrap: anywhere`), die Sprachliste öffnet unter 30rem nach rechts. Nachher: keine
-  Überschrift über ihrem Kasten, die Liste bei 320 Punkt zwischen 78 und 230, auf jeder Seite
-  `scrollWidth` gleich `clientWidth`; breite Fenster unverändert (bei 1000 Punkt bliebe `left: 0`
-  acht Punkt vor dem Rand, deshalb gilt die Regel nur unter 30rem). Die übrigen Sprachen haben
-  keine so langen Wörter. `tests/test_website.py` 388 grün nach `tools/stamp_assets.py`.
-
-  [Bisheriger Befund](ROADMAP-ARCHIV.md#die-zeilen-laufen-zu-lang-31082026).
 
 <a id="rm-084"></a>
 
