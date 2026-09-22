@@ -52,6 +52,19 @@ _log = get_logger(__name__)
 #: Drucker kennt, soll keinen erfinden.
 NOISE_VOLUME = 1e-3
 
+#: Ab welchem Anteil der gemeinsamen Hülle die Änderungsbox den Vergleich
+#: **nicht** mehr verkleinert. Ein Beschnitt kostet zwei Boolesche Schnitte
+#: mit einem Quader; er lohnt, wenn das Ergebnis deutlich kleiner ist als der
+#: ganze Körper — bei einer Hälfte nicht mehr. Eine Rechengrenze.
+CHANGED_REGION_SHARE = 0.5
+
+#: Wie weit die Änderungsbox über die geänderten Dreiecke hinausreicht, als
+#: Anteil ihrer eigenen Diagonale. Zwei fast deckungsgleiche Häute sind der
+#: schlimmste Fall eines Booleschen Kerns (``wartezeit.md``); eine Boxwand,
+#: die genau auf einer Deckfläche des Körpers liegt, wäre genau das. Fünf
+#: Prozent schieben sie ins Freie, ohne den Beschnitt spürbar zu vergrößern.
+CHANGED_REGION_MARGIN = 0.05
+
 
 @dataclass(slots=True)
 class Difference:
@@ -146,6 +159,7 @@ def compare(
     der keinen Drucker kennt, soll keinen erfinden.
     """
     entry = Difference(object_id="", noise_volume=_noise(profile))
+    before, after = _clipped_to_the_change(before, after, quality)
     first, second, common = _comparison_parts(before, after)
     added = _cut_parts(second, first, common, quality)
     removed = _cut_parts(first, second, common, quality)
@@ -166,6 +180,137 @@ def compare(
             )
         )
     return entry
+
+
+def _clipped_to_the_change(
+    before: MeshData, after: MeshData, quality: Quality
+) -> tuple[MeshData, MeshData]:
+    """Beide Körper auf den Quader beschnitten, in dem sie sich unterscheiden.
+
+    Die Differenz zweier Körper liegt dort, wo ihre Häute verschieden sind:
+    Ein Dreieck, das beide Netze mit derselben Orientierung tragen, hat auf
+    derselben Seite Material und ist kein Rand von ``A - B`` oder ``B - A``.
+    Jede Komponente der Differenz ist deshalb von geänderten Dreiecken
+    begrenzt und liegt in deren Hülle. Bis zum 22.09.2026 schnitt der
+    Vergleich trotzdem die ganzen Körper gegeneinander — an einer Platte mit
+    204 000 Dreiecken, an der sich ein Bohrdurchmesser um einen Millimeter
+    änderte, zweimal 183 ms Kern für eine Differenz aus 1 148 Dreiecken;
+    beschnitten auf die Änderungsbox kosten beide Schnitte zusammen 25 ms
+    (:func:`_changed_region`).
+
+    Beschnitten wird über dieselbe Kette wie jede Boolesche Operation, mit
+    einem Quader, der um :data:`CHANGED_REGION_MARGIN` über die geänderten
+    Dreiecke hinausreicht. Reicht die Box über :data:`CHANGED_REGION_SHARE`
+    der gemeinsamen Hülle, bleibt es beim ganzen Körper; scheitert ein
+    Schnitt, ebenso — der Vergleich verliert dann Zeit, nie eine Antwort.
+    """
+    region = _changed_region(before, after)
+    if region is None:
+        return before, after
+    low, high = region
+    whole_low = np.minimum(before.raw.bounds[0], after.raw.bounds[0])
+    whole_high = np.maximum(before.raw.bounds[1], after.raw.bounds[1])
+    whole = float(np.prod(np.maximum(whole_high - whole_low, 0.0)))
+    if whole <= 0.0 or float(np.prod(high - low)) > whole * CHANGED_REGION_SHARE:
+        return before, after
+    box = MeshData.of(
+        cast(
+            trimesh.Trimesh,
+            trimesh.creation.box(extents=high - low, transform=_translation((low + high) / 2.0)),
+        )
+    )
+    try:
+        clipped_before = boolean("intersection", [before, box], quality=quality, allow_empty=True)
+        clipped_after = boolean("intersection", [after, box], quality=quality, allow_empty=True)
+    except PROGRAMMING_ERRORS:
+        raise
+    except Exception as problem:  # Kerne scheitern auf kerneigene Arten
+        _log.info("difference falls back to the whole bodies: %s", problem)
+        return before, after
+    return clipped_before.mesh, clipped_after.mesh
+
+
+def _translation(offset: np.ndarray) -> np.ndarray:
+    """Eine 4x4-Verschiebung — ohne den Umweg über ``geom.transform``, das
+    diese Datei nicht kennt."""
+    matrix = np.eye(4)
+    matrix[:3, 3] = offset
+    return matrix
+
+
+#: Wie viele Ecken ein Körper haben darf, damit drei Eckennummern in eine
+#: ``int64``-Dreiecksnummer passen (``n³ < 2⁶³``). Darüber gibt es keine
+#: Änderungsbox, und der Vergleich läuft am ganzen Körper.
+_CODED_VERTEX_LIMIT = 2_000_000
+
+
+def _changed_region(before: MeshData, after: MeshData) -> tuple[np.ndarray, np.ndarray] | None:
+    """Der Quader um die Dreiecke, die nicht beide Körper gleich tragen.
+
+    Die Ecken des zweiten Körpers werden auf die des ersten abgebildet
+    (Suchbaum, Abstand im Rundungsrauschen), jedes Dreieck bekommt eine
+    Nummer aus seinen drei Ecken in kanonischer Drehung — die Orientierung
+    bleibt, ein umgedrehtes Dreieck ist ein anderes —, und was nur eine
+    Seite trägt, spannt die Box. ``None``, wenn nichts oder alles gleich ist.
+    """
+    from scipy.spatial import cKDTree
+
+    first_vertices = np.asarray(before.raw.vertices, dtype=np.float64)
+    second_vertices = np.asarray(after.raw.vertices, dtype=np.float64)
+    if not len(first_vertices) or not len(second_vertices):
+        return None
+    if max(len(first_vertices), len(second_vertices)) > _CODED_VERTEX_LIMIT:
+        return None
+    roundoff = (
+        8
+        * np.finfo(np.float64).eps
+        * max(
+            float(np.max(np.abs(first_vertices))),
+            float(np.max(np.abs(second_vertices))),
+            np.finfo(np.float64).tiny,
+        )
+    )
+    distances, nearest = cKDTree(first_vertices).query(second_vertices)
+    mapped = np.where(distances <= roundoff, nearest, -1).astype(np.int64)
+    first_faces = np.asarray(before.raw.faces, dtype=np.int64)
+    second_faces = mapped[np.asarray(after.raw.faces, dtype=np.int64)]
+    placeable = (second_faces >= 0).all(axis=1)
+    count = len(first_vertices)
+    first_codes = _triangle_codes(first_faces, count)
+    second_codes = _triangle_codes(second_faces[placeable], count)
+    # Ein Dreieck steht je Körper einmal; kommt seine Nummer in der
+    # Vereinigung zweimal vor, tragen es beide. Ein ``unique`` über die
+    # Vereinigung statt zweimal ``isin`` — 30 statt 80 ms an 400 000 Nummern.
+    _codes, inverse, counts = np.unique(
+        np.concatenate((first_codes, second_codes)), return_inverse=True, return_counts=True
+    )
+    shared = counts[inverse.reshape(-1)] > 1
+    only_first = ~shared[: len(first_codes)]
+    only_second = np.ones(len(second_faces), dtype=bool)
+    only_second[np.flatnonzero(placeable)[shared[len(first_codes) :]]] = False
+    if not only_first.any() and not only_second.any():
+        return None
+    corners = [
+        np.asarray(before.raw.triangles, dtype=np.float64)[only_first].reshape(-1, 3),
+        np.asarray(after.raw.triangles, dtype=np.float64)[only_second].reshape(-1, 3),
+    ]
+    changed = np.concatenate([part for part in corners if len(part)])
+    low, high = changed.min(axis=0), changed.max(axis=0)
+    margin = max(float(np.linalg.norm(high - low)) * CHANGED_REGION_MARGIN, roundoff)
+    return low - margin, high + margin
+
+
+def _triangle_codes(faces: np.ndarray, count: int) -> np.ndarray:
+    """Eine Zahl je Dreieck aus seinen Eckennummern — in kanonischer Drehung,
+    also mit der kleinsten Nummer vorn und der Umlaufrichtung erhalten."""
+    if not len(faces):
+        return np.zeros(0, dtype=np.int64)
+    start = np.argmin(faces, axis=1)
+    rows = np.arange(len(faces))
+    a = faces[rows, start]
+    b = faces[rows, (start + 1) % 3]
+    c = faces[rows, (start + 2) % 3]
+    return np.asarray((a * count + b) * count + c, dtype=np.int64)
 
 
 def _comparison_parts(

@@ -114,15 +114,105 @@ def moved(body: object, matrix: np.ndarray) -> None:
         body.faces = np.fliplr(np.asarray(body.faces))  # type: ignore[attr-defined]
 
 
+#: Was ``trimesh`` an einem Netz gemerkt hat und was eine Bewegung nicht
+#: ändert — dieselbe Liste, die ``Trimesh.apply_transform`` behält, dazu
+#: Solidons eigene Einträge derselben Art: die Teilezahl und die Nachbarschaft
+#: der Flecken (``scene.placement``), beide nach Ort gruppiert, und der Ort
+#: bewegt sich mit.
+_TOPOLOGY_IN_CACHE: tuple[str, ...] = (
+    "face_adjacency",
+    "face_adjacency_edges",
+    "face_adjacency_unshared",
+    "edges",
+    "edges_face",
+    "edges_sorted",
+    "edges_unique",
+    "edges_unique_idx",
+    "edges_unique_inverse",
+    "edges_sparse",
+    "body_count",
+    "faces_unique_edges",
+    "euler_number",
+    "solidon_component_count",
+    "solidon_patch_adjacency",
+)
+
+#: Was zusätzlich eine **starre** Bewegung überlebt: Winkel, Radien und
+#: Flächen zwischen Nachbardreiecken, die Facetten, die Flächeninhalte — und
+#: die Randringe der Merkmalsketten (``perceive.relations``), deren Schlüssel
+#: seit dem 22.09.2026 keine Lage mehr nennt.
+_METRIC_IN_CACHE: tuple[str, ...] = (
+    "face_adjacency_angles",
+    "face_adjacency_convex",
+    "face_adjacency_projections",
+    "face_adjacency_radius",
+    "face_adjacency_span",
+    "facets",
+    "facets_area",
+    "facets_boundary",
+    "facets_normal",
+    "area_faces",
+    "area",
+    "solidon_cavity_links",
+)
+
+
+def _carry_cache(source: trimesh.Trimesh, body: trimesh.Trimesh, matrix: np.ndarray) -> None:
+    """Was das Quellnetz über sich wusste und die Bewegung nicht ändert, weiß
+    die bewegte Kopie sofort.
+
+    ``copy()`` gibt ein Netz mit leerem Gedächtnis, und die Auswertung fragte
+    danach alles neu: Nachbarschaften, Facetten, Teilezahl, Randringe — an der
+    unterteilten Lochplatte 107 ms Teilezahl, 102 ms Facetten, 188 ms Ringe je
+    Verschieben, für Antworten, die am Quellnetz schon dastanden (gemessen am
+    22.09.2026). ``Trimesh.apply_transform`` behält seine Topologie genauso;
+    hier kommt hinzu, was eine starre Bewegung obendrein erhält.
+
+    **Eine Spiegelung dreht den Umlaufsinn**, und damit die Richtung jeder
+    Kante — die Kantentabellen des Quellnetzes stimmen dann nicht mehr. Bei
+    negativer Determinante wird nichts übertragen; gespiegelt wird selten, und
+    ein falscher Eintrag wäre teurer als jede Ersparnis. Die Normalen werden
+    wie bei ``trimesh`` mitgedreht, nicht neu gerechnet.
+    """
+    cells = np.asarray(matrix, dtype=np.float64)
+    if float(np.linalg.det(cells[:3, :3])) < 0.0:
+        return
+    kept = getattr(source, "_cache", None)
+    target = getattr(body, "_cache", None)
+    if kept is None or target is None:
+        return
+    kept.verify()
+    names = list(_TOPOLOGY_IN_CACHE)
+    rigid = is_rigid(cells)
+    if rigid:
+        names.extend(_METRIC_IN_CACHE)
+    carried = {name: kept.cache[name] for name in names if name in kept.cache}
+    if rigid:
+        turn = cells[:3, :3]
+        for name in ("face_normals", "vertex_normals"):
+            if name in kept.cache:
+                carried[name] = np.asarray(kept.cache[name], dtype=np.float64) @ turn.T
+    if not carried:
+        return
+    target.verify()
+    target.cache.update(carried)
+    # Den Stempel auf den bewegten Stand setzen, sonst wirft die nächste
+    # Prüfung alles weg, was eben übernommen wurde.
+    target.id_set()
+
+
 def apply(mesh: MeshData, matrix: np.ndarray) -> MeshData:
     """Gibt eine transformierte Kopie zurück. Die Eingabe wird nie
     angefasst (AGENTS.md Regel 3).
 
     Bewegt wird über :func:`moved` und nicht über ``apply_transform``, damit
-    dieselbe Bewegung auf jeder Maschine dieselben Zahlen gibt (RM-187).
+    dieselbe Bewegung auf jeder Maschine dieselben Zahlen gibt (RM-187). Was
+    das Quellnetz über seine Topologie wusste, nimmt die Kopie mit
+    (:func:`_carry_cache`).
     """
     body = mesh.raw.copy()
     moved(body, matrix)
+    _carry_cache(mesh.raw, body, matrix)
     return replace(
         mesh.replacing(body),
         cavity=apply(mesh.cavity, matrix) if mesh.cavity is not None else None,

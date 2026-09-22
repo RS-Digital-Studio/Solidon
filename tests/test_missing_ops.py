@@ -143,6 +143,123 @@ def test_decimation_does_not_tear_an_unwelded_body_apart(target: int) -> None:
     assert after.volume / 1000.0 == pytest.approx(268.0, abs=1.0)
 
 
+def needle_plate() -> MeshData:
+    """Die Lochplatte, viermal unterteilt: 203 776 Dreiecke mit Fächern um jede Bohrung.
+
+    Der Körper, an dem ``fast_simplification`` stillsteht — sein Flip-Schutz
+    lehnt jeden Kollaps ab, der ein spitzes Dreieck spitzer macht, und an den
+    Fächern um eine Bohrung ist jeder Kollaps so einer (gemessen am 22.09.2026:
+    vier Sekunden, 197 458 Dreiecke bleiben).
+    """
+    mesh = normalise(read_mesh((MESHES / "plate_holes.stl").read_bytes(), ".stl"), "mm").mesh
+    raw = mesh.raw
+    for _step in range(4):
+        vertices, faces = trimesh.remesh.subdivide(raw.vertices, raw.faces)
+        raw = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
+    return MeshData.of(raw)
+
+
+def test_the_display_decimation_gets_past_a_needle_plate() -> None:
+    """Ein Bild von einem CAD-Export darf nicht am Quadrik-Solver hängen bleiben."""
+    plate = needle_plate()
+    assert plate.triangle_count == 203_776
+
+    small = mesh_ops.decimate_for_display(plate, 600)
+
+    assert small.triangle_count <= 600, "das Ziel eines Vorschaubilds"
+    assert small.is_watertight, "der exakte Kern gibt einen geschlossenen Körper zurück"
+    assert small.volume == pytest.approx(plate.volume, rel=0.02), "dieselbe Platte"
+
+
+def test_the_display_decimation_takes_an_open_mesh_too() -> None:
+    """Ohne Volumen kein Kern — dann legt das Raster zusammen, und ein Bild kommt trotzdem."""
+    ball = trimesh.creation.icosphere(subdivisions=6, radius=40.0)
+    keep = ball.triangles_center[:, 2] < 30.0
+    open_mesh = trimesh.Trimesh(vertices=ball.vertices, faces=ball.faces[keep], process=False)
+    assert not open_mesh.is_watertight
+    bowl = MeshData.of(open_mesh)
+
+    small = mesh_ops.decimate_for_display(bowl, 600)
+
+    assert small.triangle_count < bowl.triangle_count // 10
+    assert np.allclose(small.bounds.minimum, bowl.bounds.minimum, atol=2.0)
+    assert np.allclose(small.bounds.maximum, bowl.bounds.maximum, atol=2.0)
+
+
+def test_the_display_decimation_carries_the_slots() -> None:
+    """§20: Wer für die Anzeige dezimiert, behält die Farben je Dreieck."""
+    ball = trimesh.creation.icosphere(subdivisions=5, radius=20.0)
+    upper = ball.triangles_center[:, 2] > 0.0
+    slotted = MeshData.of(ball, slots=tuple(int(flag) for flag in upper))
+
+    small = mesh_ops.decimate_for_display(slotted, 600)
+
+    assert small.triangle_count <= 600
+    assert len(small.slots) == small.triangle_count
+    centres = small.raw.triangles_center
+    clear = np.abs(centres[:, 2]) > 2.0
+    expected = (centres[clear, 2] > 0.0).astype(int)
+    assert np.array_equal(np.asarray(small.slots)[clear], expected)
+
+
+def test_a_small_body_is_not_decimated_for_display() -> None:
+    body = MeshData.of(trimesh.creation.icosphere(subdivisions=2, radius=20.0))
+    assert mesh_ops.decimate_for_display(body, 600) is body
+
+
+def test_redundant_corners_go_exactly_before_any_solver_runs() -> None:
+    """Das Vorspiel an der Nadelplatte (§25, Netz): 203 776 Dreiecke aus
+    unterteilten Fächern, und keine der Ecken beschreibt etwas — sie liegen
+    alle auf ebenen Nachbarschaften. Der exakte Kern nimmt sie heraus, ohne
+    eine zu bewegen; danach ist das Ziel erreicht, und kein Solver hat die
+    Form angefasst. Bis zum 22.09.2026 stand ``fast_simplification`` hier vier
+    Sekunden still, und der Rückfall maß danach elf.
+    """
+    plate = needle_plate()
+
+    reduced, solver, measured = mesh_ops._decimate_with_solver(plate, 5_000)
+
+    assert solver == "exact", "kein Solver, nur das exakte Vorspiel"
+    assert reduced.triangle_count < plate.triangle_count // 100
+    assert reduced.is_watertight and reduced.component_count == plate.component_count
+    assert reduced.volume == pytest.approx(plate.volume, rel=1e-12)
+    assert measured == (0.0, 0.0), "gemessen: jede neue Ecke ist eine alte"
+    # Und wirklich keine Ecke bewegt: Die neuen Ecken sind eine Teilmenge der alten.
+    old_corners = {tuple(row) for row in np.round(plate.raw.vertices, 9).tolist()}
+    new_corners = {tuple(row) for row in np.round(reduced.raw.vertices, 9).tolist()}
+    assert new_corners <= old_corners
+
+
+def test_the_prelude_leaves_a_body_alone_that_has_nothing_redundant() -> None:
+    """Eine Kugel trägt keine Ecke auf einer ebenen Nachbarschaft — das
+    Vorspiel findet nichts und reicht nichts weiter; der erste Solver
+    arbeitet wie bisher."""
+    ball = MeshData.of(trimesh.creation.icosphere(subdivisions=5, radius=40.0))
+
+    assert mesh_ops._exactly_flattened(ball, None) is None
+    reduced, solver, _measured = mesh_ops._decimate_with_solver(ball, 2_000)
+    assert solver == "fast_simplification"
+    assert reduced.triangle_count <= 2_000
+
+
+def test_the_operation_falls_back_when_the_quadric_solver_misses_the_target() -> None:
+    """``decimate_mesh`` an echten Nadeln: Ein Zylinder aus 2 048 Sektionen
+    trägt lange Seitendreiecke, deren Ecken alle etwas beschreiben — das
+    Vorspiel findet nichts, der erste Solver bleibt weit über dem Ziel, und
+    das gilt als Stillstand, nicht als Ergebnis. Der Kern-Rückfall bringt ihn
+    unter das Ziel und misst die Abweichung beidseitig.
+    """
+    pipe = MeshData.of(trimesh.creation.cylinder(radius=10.0, height=100.0, sections=2048))
+
+    reduced, solver, measured = mesh_ops._decimate_with_solver(pipe, 2_048)
+
+    assert solver == "manifold", "der zweite Solver, weil der erste das Ziel weit verfehlt"
+    assert reduced.triangle_count <= 2_048
+    assert measured is not None and 0.0 <= measured[0] <= measured[1]
+    assert measured[1] <= max(pipe.bounds.diagonal, 1.0) * mesh_ops.DEVIATION_WARN
+    assert reduced.is_watertight
+
+
 def test_a_welded_body_is_not_welded_again() -> None:
     """Verschweißt wird nur, wo es nötig ist — es kostet vierzig Prozent.
 
@@ -1219,7 +1336,11 @@ def test_a_simplification_that_missed_its_target_by_far_says_so() -> None:
 
     before = MeshData.of(tube)
     assert before.raw.euler_number == 0, "der Fall lebt vom Durchgangsloch"
-    after = mesh_ops.decimate(before, 600)
+    # Der erste Solver allein, nicht ``decimate``: Seit dem 22.09.2026 gilt
+    # ein weit verfehltes Ziel dort als Stillstand, und der zweite Solver
+    # bringt das Rohr auf 576. Der Befund darunter gehört zu dem Fall, in dem
+    # auch der nicht greift — und der lässt sich am ersten Solver messen.
+    after = before.replacing(before.raw.simplify_quadric_decimation(face_count=600))
 
     assert after.triangle_count > 600 * 10, (
         f"ohne verfehltes Ziel prüft dieser Test nichts: {after.triangle_count}"

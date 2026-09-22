@@ -104,6 +104,7 @@ from app.core.types import (
     FeatureId,
     Finding,
     Fit,
+    Operation,
     OpId,
     Origin,
     Parameter,
@@ -191,6 +192,8 @@ def _warm_metrics(result: EvaluationResult, cancelled: CancelSignal) -> None:
     mit kaltem Gedächtnis; wo er sie nicht vorwärmt, tut es diese Schleife —
     ein zweites Mal kostet sie nichts.
     """
+    from app.core.perceive.relations import cavity_chains
+
     for entry in result.scene.objects.values():
         cancelled.raise_if_cancelled()
         mesh = entry.mesh
@@ -200,6 +203,20 @@ def _warm_metrics(result: EvaluationResult, cancelled: CancelSignal) -> None:
             except Exception as problem:  # eine Kennzahl, die nicht geht, sagt es später am Ort
                 _log.info("metric %s of %s not available: %s", name, entry.id, problem)
                 break
+        # **Und die Merkmalsketten des Objektbaums.** ``ObjectTree.show_scene``
+        # fragt je Körper ``cavity_chains``, und die Antwort liegt danach im
+        # Cache des Netzes (``relations._cavity_links``) — aber der erste
+        # Aufruf kam aus dem Hauptthread: 414 ms je Szenenaufbau an der
+        # unterteilten Lochplatte, bei jedem Verschieben wieder, weil ein
+        # bewegtes Netz ein neues Netz ist (gemessen am 22.09.2026). Hier
+        # gerechnet, dort gelesen — dieselbe Frage mit denselben Merkmalen,
+        # sonst trifft der Merker nicht.
+        if len(entry.features) > 1:
+            cancelled.raise_if_cancelled()
+            try:
+                cavity_chains(entry.features, as_mesh_data(mesh))
+            except Exception as problem:  # die Ketten sagen es später am Ort
+                _log.info("cavity chains of %s not available: %s", entry.id, problem)
 
 
 class _EvaluationWorker(Worker):
@@ -579,6 +596,57 @@ def _triangles_of(scene: Any) -> int:
     return sum(int(getattr(entry.mesh, "triangle_count", 0)) for entry in scene.objects.values())
 
 
+def _coarse_steps_before(working: Any, index: int, scene: Any) -> list[Operation]:
+    """Verkleinerungsschritte **vor** den Schritt an ``index`` einer Dokumentkopie legen.
+
+    Das Gegenstück zu :func:`_coarse_drafts` für das Ändern eines Schritts
+    (§15.4): Dort hängen die Verkleinerungen ans Ende des Stapels, hier
+    müssen sie vor den geänderten Schritt, damit **er** auf dem groben Netz
+    rechnet. Ein Stapel kennt keine Lücken zwischen seinen Nummern; die
+    Schritte ab ``index`` rücken um so viele Nummern auf, wie Verkleinerungen
+    davor kommen, und die neuen Schritte nehmen die frei gewordenen. Das geht
+    nur in der Kopie, die niemand speichert — Transaktionen und Verweise auf
+    Schrittnummern bleiben dort unbenutzt, ``evaluate`` liest nur den Stapel.
+
+    Verkleinert wird je Netz-Eingang des Schritts über der Schwelle, gemessen
+    an der Szene, die das Fenster zeigt: Ob ein Körper vor dem Schritt schon
+    so groß war, ist ohne Auswertung nicht zu wissen, und ein Schritt an einem
+    Körper unter dem Ziel gibt ihn unverändert zurück. Ein Textur-Schritt mit
+    Flächenbezug bleibt aus demselben Grund genau wie bei den Entwürfen.
+    Zurück kommen die eingefügten Schritte; leer, wenn es nichts zu
+    verkleinern gibt.
+    """
+    step = working.ops[index]
+    if step.op == "apply_texture" and step.params.get("coverage") == "whole_face":
+        return []
+    targets = [
+        object_id
+        for object_id in step.inputs
+        if (entry := scene.objects.get(object_id)) is not None
+        and kind_of(entry.mesh) == "mesh"
+        and int(getattr(entry.mesh, "triangle_count", 0)) > COARSE_PREVIEW_ABOVE
+    ]
+    if not targets:
+        return []
+    shift = len(targets)
+    first_id = int(step.id)
+    working.ops[index:] = [
+        dataclasses.replace(entry, id=OpId(int(entry.id) + shift)) for entry in working.ops[index:]
+    ]
+    inserted = [
+        Operation(
+            id=OpId(first_id + offset),
+            op="decimate_mesh",
+            inputs=(object_id,),
+            outputs=(object_id,),
+            params={"triangles": COARSE_PREVIEW_TARGET},
+        )
+        for offset, object_id in enumerate(targets)
+    ]
+    working.ops[index:index] = inserted
+    return inserted
+
+
 def _coarse_drafts(scene: Any) -> list[OperationDraft]:
     """Welche Körper vor der Vorschau verkleinert werden — und womit.
 
@@ -916,7 +984,7 @@ class Session(QObject):
         self._split_cancel_confirmed = False
         """Ob der Abbruch des aktuellen Split-Arbeiters schon bestätigt wurde."""
         self._previews: list[_PreviewWorker] = []
-        self._coarse_scene: tuple[Any, Any] | None = None
+        self._coarse_scene: tuple[Any, OpId | None, Any] | None = None
         """Die zuletzt verkleinerte Szene davor, samt der Szene, zu der sie
         gehört (§2.8).
 
@@ -2485,6 +2553,9 @@ class Session(QObject):
                     if advised is None
                     else (lambda action: worker.advised.emit(generation, action))
                 ),
+                # Der Dialog zeigt Geometrie und Differenz, keine Merkmale:
+                # Eine Erkennung je getippter Zahl wäre eine Sekunde für nichts.
+                detect_features=False,
             )
 
         # Was jetzt noch rechnet, rechnet für eine Frage von gestern: die
@@ -3058,8 +3129,13 @@ class Session(QObject):
         cancelled: Any = None,
         coarsened: Any = None,
         counselled: Any = None,
+        detect_features: bool = True,
     ) -> tuple[Any, SceneDifference | None, str]:
         """:meth:`preview_scene`, dazu der Grund, wenn es keine Vorschau gibt.
+
+        ``detect_features=False`` lässt die Merkmalserkennung aus, wo kein
+        späterer Schritt sie braucht — der Weg des Dialogs, dessen Bild
+        Geometrie und Differenz zeigt und keine Merkmale (``evaluate``).
 
         ``coarsened`` schaltet die **grobe Stufe** frei (§2.8): Oberhalb von
         :data:`COARSE_PREVIEW_ABOVE` rechnet die Vorschau auf einer
@@ -3094,6 +3170,7 @@ class Session(QObject):
             # eigener Katalogeintrag für einen unsichtbaren Namen wäre eine
             # Zeile in fünf Sprachen für nichts.
             reduced = tuple(History(working).apply(_("Vorschau"), coarse).ops)
+        changed_id: OpId | None = change_op
         if change_op is not None:
             history = History(working)
             if change_name is None:
@@ -3103,6 +3180,22 @@ class Session(QObject):
             changed_index = next(
                 index for index, entry in enumerate(working.ops) if entry.id == change_op
             )
+            if coarsened is not None and before is not None:
+                # **Die grobe Stufe auch beim Ändern eines Schritts** (22.09.2026).
+                # Bis dahin blieb dieser Weg genau — die Verkleinerung musste
+                # vor den geänderten Schritt, und ``History.apply`` hängt an.
+                # Sie steht jetzt in der Kopie vor ihm, mit aufgerückten
+                # Nummern (``_coarse_steps_before``); ``changed_id`` ist danach
+                # die Nummer des geänderten Schritts in dieser Kopie.
+                inserted = _coarse_steps_before(working, changed_index, before)
+                if inserted:
+                    reduced = tuple(entry.id for entry in inserted)
+                    coarse = [
+                        OperationDraft(op=entry.op, params=dict(entry.params), inputs=entry.inputs)
+                        for entry in inserted
+                    ]
+                    changed_index += len(inserted)
+                    changed_id = working.ops[changed_index].id
             previewed: tuple[OpId, ...] = tuple(entry.id for entry in working.ops[changed_index:])
         else:
             transaction = History(working).apply(
@@ -3133,6 +3226,7 @@ class Session(QObject):
             # Agent und Vorschau in eigenen Fäden laufen.
             cache=self.cache,
             cancelled=cancelled or NeverCancelled(),
+            detect_features=detect_features,
         )
         if reduced and result.stopped_at in reduced:
             # **Das Verkleinern selbst hat angehalten.** Dann ist die grobe
@@ -3148,6 +3242,7 @@ class Session(QObject):
                 changes=changes,
                 cancelled=cancelled,
                 counselled=counselled,
+                detect_features=detect_features,
             )
         if result.stopped_at is not None:
             # Eine angehaltene Kette ist keine Vorschau: die leere Differenz
@@ -3172,7 +3267,7 @@ class Session(QObject):
             # hat — und die Rechnung darüber dauerte zehn bis fünfzig
             # Sekunden statt einer halben, weil zwei fast deckungsgleiche
             # Häute der schlimmste Fall für jeden Booleschen Kern sind.
-            coarse_before = self._coarse_before(before, coarse, ask, cancelled)
+            coarse_before = self._coarse_before(before, coarse, ask, cancelled, change_op=change_op)
             if coarse_before is None:
                 return self._preview_outcome(
                     drafts,
@@ -3184,6 +3279,7 @@ class Session(QObject):
                     changes=changes,
                     cancelled=cancelled,
                     counselled=counselled,
+                    detect_features=detect_features,
                 )
             coarsened(_triangles_of(before))
             before = coarse_before
@@ -3192,11 +3288,11 @@ class Session(QObject):
             difference.findings = tuple(
                 finding for finding in result.scene.report.findings if finding.op_id in previewed
             )
-            if change_op is not None and change_name is not None and before is not None:
+            if changed_id is not None and change_name is not None and before is not None:
                 # Ein Erzeuger hat keinen exakten Eingang. Sein Wechsel zum
                 # Netz-Zwilling wird erst zwischen den beiden Dokumentständen
                 # sichtbar und muss trotzdem vor dem Übernehmen benannt werden.
-                changed = next(entry for entry in working.ops if entry.id == change_op)
+                changed = next(entry for entry in working.ops if entry.id == changed_id)
                 covered = {
                     finding.object_id
                     for finding in difference.findings
@@ -3238,7 +3334,13 @@ class Session(QObject):
         return result.scene, difference, ""
 
     def _coarse_before(
-        self, before: Any, coarse: list[OperationDraft], ask: Any, cancelled: Any
+        self,
+        before: Any,
+        coarse: list[OperationDraft],
+        ask: Any,
+        cancelled: Any,
+        *,
+        change_op: OpId | None = None,
     ) -> Any:
         """Die Szene davor, auf genau denselben verkleinerten Netzen.
 
@@ -3247,16 +3349,25 @@ class Session(QObject):
         kostet einmal je Auswertung; danach liegt jeder Schritt im Cache, und
         eine Zahl im Dialog zu ändern kostet nur noch die Operation selbst.
 
+        ``change_op`` nennt den geänderten Schritt: Dann stehen die
+        Verkleinerungen wie in der Vorschau **vor** ihm
+        (:func:`_coarse_steps_before`) statt am Ende des Stapels, und der
+        Schritt selbst bleibt, wie er im Dokument steht.
+
         Gibt ``None`` zurück, wenn das Verkleinern nicht durchkommt — dann
         rechnet der Aufrufer genau.
         """
         held = self._coarse_scene
-        if held is not None and held[0] is before:
-            return held[1]
+        if held is not None and held[0] is before and held[1] == change_op:
+            return held[2]
         import copy
 
         base = copy.deepcopy(self.project.document)
-        History(base).apply(_("Vorschau"), coarse)
+        if change_op is None:
+            History(base).apply(_("Vorschau"), coarse)
+        else:
+            index = next(number for number, entry in enumerate(base.ops) if entry.id == change_op)
+            _coarse_steps_before(base, index, before)
         result = evaluate(
             base,
             self.profile,
@@ -3268,7 +3379,7 @@ class Session(QObject):
         )
         if result.stopped_at is not None:
             return None
-        self._coarse_scene = (before, result.scene)
+        self._coarse_scene = (before, change_op, result.scene)
         return result.scene
 
     def accept_proposal(self, preview: ProposalPreview) -> Transaction | None:

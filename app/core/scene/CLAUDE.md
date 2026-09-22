@@ -248,6 +248,29 @@ das Ergebnis beeinflusst, nur in der Sitzung leben; eine Rückfrage-Antwort
 kommt über `OpResult.answered` in den Stapel zurück, so wie es die
 Rückfallstufe tut.
 
+**Und die Antwort ändert den Schlüssel des Schritts — das Ergebnis liegt
+schon darunter.** `record_answers` schreibt `unit: mm` an die Stelle von
+`unit: auto`; der Schritt hat danach einen anderen Operations-Hash, und bis
+zum 22.09.2026 lief der Import beim nächsten Schritt ein zweites Mal.
+`_key_after_answers` bildet den Schlüssel des nächsten Laufs auf demselben
+Weg (`resolve_params` über die zusammengeführten Parameter, dann
+`operation_hash`) und legt das Ergebnis auch dort ab, mit derselben
+Herkunftsregel für die Platte. Erst damit trifft „Projekt öffnen aus
+Plattencache" (§31) ein importiertes Modell überhaupt: Beim Wiederöffnen
+steht die Antwort im Dokument, nicht die Frage.
+
+**Was `_with_features` sonst noch spart.** Meldet eine Operation eine
+Bewegung, bekommt `_with_features` den Eingang derselben Stelle
+(`source_mesh`) und ruft `perceive.features.carry_detection`: Ist die Ausgabe
+belegbar der starr bewegte Zwilling, trifft `detect` danach den Merker statt
+zu rechnen (§21.2 ohne die 1,3 s Neuerkennung je Verschieben). Und
+`evaluate(..., detect_features=False)` — der Weg der Live-Vorschau — lässt
+die Erkennung aus, wo kein späterer Schritt und keine Passung ein Merkmal
+des Körpers braucht: Der Körper behält, was die Operation ausgab, ohne
+Zuordnung und ohne Waisenbefund, wie bei `perceive.too_many`; was der Merker
+kennt, kommt trotzdem. Die Szene einer solchen Auswertung ist ein Bild, kein
+Dokumentstand.
+
 Auch beim nachträglichen Ändern von Operationseingängen gilt der Zustand
 unmittelbar vor diesem Schritt: bereits verbrauchte und erst später erzeugte
 Objekte sind keine zulässigen Eingänge. Verlauf und Auswertung prüfen dieselbe

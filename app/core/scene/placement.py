@@ -33,7 +33,7 @@ from typing import TYPE_CHECKING, Any, Final
 import numpy as np
 
 from app.core.errors import CORRECT_INPUT, ValidationError
-from app.core.geom.mesh import MeshData, as_mesh_data
+from app.core.geom.mesh import MeshData, as_mesh_data, unique_edges
 from app.core.log import get_logger
 from app.core.registry import OperationSpec
 from app.core.types import (
@@ -817,8 +817,9 @@ def _welded_adjacency(raw: Any, vertices: Any) -> dict[int, list[int]]:
             return cached
     _, inverse = np.unique(vertices, axis=0, return_inverse=True)
     faces = inverse[np.asarray(raw.faces, dtype=np.int64)]
-    edges = np.sort(faces[:, [[0, 1], [1, 2], [2, 0]]].reshape(-1, 2), axis=1)
-    _, edge_ids = np.unique(edges, axis=0, return_inverse=True)
+    _, edge_ids = unique_edges(
+        faces[:, [[0, 1], [1, 2], [2, 0]]].reshape(-1, 2), return_inverse=True
+    )
     owners: dict[int, list[int]] = {}
     for index, edge_id in enumerate(edge_ids):
         owners.setdefault(int(edge_id), []).append(index // 3)

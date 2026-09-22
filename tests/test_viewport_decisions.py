@@ -107,7 +107,7 @@ def test_large_preview_prepares_the_complete_result_and_changes_outside_qt(
         return mesh
 
     monkeypatch.setattr(module, "DISPLAY_DECIMATION_ABOVE", 1)
-    monkeypatch.setattr(module, "decimate", prepare)
+    monkeypatch.setattr(module, "decimate_for_display", prepare)
     if section:
         view._section = SectionPlane.along("z", 0.0)
     difference = SceneDifference(
@@ -164,7 +164,7 @@ def test_a_cancelled_large_preview_cannot_restore_its_geometry(
     original = _scene_with_two_holes()
     view.show_scene(original)
     monkeypatch.setattr(module, "DISPLAY_DECIMATION_ABOVE", 1)
-    monkeypatch.setattr(module, "decimate", lambda mesh, _target: mesh)
+    monkeypatch.setattr(module, "decimate_for_display", lambda mesh, _target: mesh)
     difference = SceneDifference(
         entries={"obj_1": Difference("obj_1", result=original.scene.objects["obj_1"])}
     )
@@ -199,7 +199,7 @@ def test_large_preview_failure_keeps_the_original_and_the_next_value_recovers(
     def fail(_mesh: Any, _target: int) -> Any:
         raise RuntimeError("kontrollierter Aufbereitungsfehler")
 
-    monkeypatch.setattr(module, "decimate", fail)
+    monkeypatch.setattr(module, "decimate_for_display", fail)
     try:
         view.show_difference(
             SceneDifference(
@@ -211,7 +211,7 @@ def test_large_preview_failure_keeps_the_original_and_the_next_value_recovers(
         assert "erneut" in view.banner.note.text()
         assert not view._cover_actors
         assert view._actors["obj_1"].visible()
-        monkeypatch.setattr(module, "decimate", lambda mesh, _target: mesh)
+        monkeypatch.setattr(module, "decimate_for_display", lambda mesh, _target: mesh)
         view.show_difference(
             SceneDifference(
                 entries={"obj_1": Difference("obj_1", result=original.scene.objects["obj_1"])}
@@ -254,7 +254,7 @@ def test_a_new_preview_wins_even_when_the_previous_preparation_finishes_last(
         return mesh
 
     monkeypatch.setattr(module, "DISPLAY_DECIMATION_ABOVE", 1)
-    monkeypatch.setattr(module, "decimate", prepare)
+    monkeypatch.setattr(module, "decimate_for_display", prepare)
     try:
         view.show_difference(SceneDifference(entries={"obj_1": Difference("obj_1", result=body)}))
         assert entered.wait(1)
@@ -763,7 +763,7 @@ def test_a_heavy_scene_is_prepared_outside_the_qt_thread(
         return mesh
 
     monkeypatch.setattr(viewport_module, "DISPLAY_DECIMATION_ABOVE", 0)
-    monkeypatch.setattr(viewport_module, "decimate", observed)
+    monkeypatch.setattr(viewport_module, "decimate_for_display", observed)
 
     viewport.show_scene(new)
     worker = viewport._scene_worker
@@ -799,7 +799,7 @@ def test_viewport_cleanup_cancels_a_running_preparation(
         return mesh
 
     monkeypatch.setattr(viewport_module, "DISPLAY_DECIMATION_ABOVE", 0)
-    monkeypatch.setattr(viewport_module, "decimate", delayed)
+    monkeypatch.setattr(viewport_module, "decimate_for_display", delayed)
     viewport.show_scene(_scene_with_two_holes())
     worker = viewport._scene_worker
     assert worker is not None and started.wait(1.0)
@@ -833,7 +833,7 @@ def test_viewport_cleanup_rejects_a_result_already_waiting_in_qt(
         applied.append(result)
 
     monkeypatch.setattr(viewport_module, "DISPLAY_DECIMATION_ABOVE", 0)
-    monkeypatch.setattr(viewport_module, "decimate", lambda mesh, _target: mesh)
+    monkeypatch.setattr(viewport_module, "decimate_for_display", lambda mesh, _target: mesh)
     monkeypatch.setattr(viewport, "_apply_scene", apply)
 
     viewport.show_scene(new)
@@ -882,7 +882,7 @@ def test_a_view_change_does_not_replace_the_pending_scene_with_the_old_one(
         applied.append(result)
 
     monkeypatch.setattr(viewport_module, "DISPLAY_DECIMATION_ABOVE", 0)
-    monkeypatch.setattr(viewport_module, "decimate", delayed)
+    monkeypatch.setattr(viewport_module, "decimate_for_display", delayed)
     monkeypatch.setattr(viewport, "_apply_scene", apply)
 
     viewport.show_scene(new)
@@ -7740,7 +7740,9 @@ def test_scene_worker_owns_its_mesh_and_evicts_the_least_recently_used_display(
         from app.core.geom.section import SectionPlane
 
         viewport._section = SectionPlane.along("z", 0.0)
-    monkeypatch.setattr(module, "decimate" if preparation == "decimation" else "cut", inspect)
+    monkeypatch.setattr(
+        module, "decimate_for_display" if preparation == "decimation" else "cut", inspect
+    )
     result = EvaluationResult(
         Scene(objects={name: SceneObject(name, name, mesh) for name in ("hot", "new")}),
         object_hashes={"hot": "hot-hash", "new": "new-hash"},

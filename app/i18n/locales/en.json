@@ -1536,7 +1536,7 @@
   "Die Nummer steht auf dem Lager. Daneben zeigt Solidon Innenmaß, Außenmaß und Breite.": "The number is printed on the bearing. Next to it, Solidon shows the bore, outside diameter and width.",
   "Die Nummerierungsangaben des Rezepts sind ungültig.": "The numbering references of the recipe are invalid.",
   "Die Nutgröße der Schiene — bei den üblichen Profilen die Zahl im Namen.": "The slot size of the rail — on the usual extrusions it is the number in the name.",
-  "Die Oberfläche dieses Modells ist überwiegend gekrümmt. Kugeln, Ringe, Kegel und Verrundungen, die die Erkennung darin fand, sind an einer solchen Fläche keine Merkmale und wurden weggelassen; Bohrungen, Zapfen und ebene Flächen bleiben.": "The surface of this model is largely curved. Spheres, tori, cones and fillets that the recognition found in it are not features on such a surface and were left out; bores, pins and flat faces remain.",
+  "Die Oberfläche dieses Modells ist überwiegend gekrümmt. Auf einer solchen Fläche sind Kugeln, Ringe, Kegel und Verrundungen keine Merkmale und werden nicht geführt; Bohrungen, Zapfen und ebene Flächen bleiben.": "The surface of this model is largely curved. On such a surface, spheres, tori, cones and fillets are not features and are not listed; bores, pins and flat faces remain.",
   "Die Oberfläche konnte hier nicht getroffen werden. Wählen Sie die Stelle erneut.": "The surface could not be reached here. Select the location again.",
   "Die Oberfläche vor diesem Schritt wird vorbereitet …": "Preparing the surface as it was before this step …",
   "Die Oberfläche wird noch vorbereitet. Einen Moment warten.": "The surface is still being prepared. Please wait a moment.",

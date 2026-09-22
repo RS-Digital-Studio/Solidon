@@ -4567,6 +4567,45 @@ def test_a_partial_preview_says_so_instead_of_showing_nothing(window: MainWindow
         type(window.viewport).mark_preview = echt
 
 
+def test_changing_a_step_previews_on_the_coarse_twin(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die grobe Stufe greift auch beim Ändern eines Schritts — beide Seiten
+    auf demselben groben Netz, und die Differenz zeigt die Änderung."""
+    from app.ui import session as session_module
+
+    object_id = select(window)
+    window.session.apply(
+        "Bohren",
+        [OperationDraft(op="drill_hole", inputs=(object_id,), params={"diameter": 4.0})],
+    )
+    assert window.session.wait_for_idle()
+    drill = window.session.project.document.ops[-1]
+    monkeypatch.setattr(session_module, "COARSE_PREVIEW_ABOVE", 1)
+    monkeypatch.setattr(session_module, "COARSE_PREVIEW_TARGET", 600)
+    reported: list[int] = []
+
+    scene, difference, reason = window.session._preview_outcome(
+        [],
+        change_op=drill.id,
+        change_values={"diameter": 6.0},
+        coarsened=reported.append,
+        detect_features=False,
+    )
+
+    assert reason == ""
+    assert reported, "die Stufe meldet die Dreieckszahl davor"
+    assert difference is not None and difference.changed
+    entry = difference.entries[object_id]
+    assert entry.removed_volume > 1.0, "von 4 auf 6 mm nimmt die Bohrung Material"
+    assert entry.added_volume < entry.removed_volume
+    # Am kleinen Korpus gibt die Platte selbst nichts her (796 Dreiecke, jede
+    # Bohrung ein 48-Eck) — was hier zählt, ist der Weg: Die Stufe hat sich
+    # gemeldet, die Differenz ist die der Änderung, das Dokument unberührt.
+    assert scene.objects[object_id].mesh.triangle_count > 0
+    assert [entry.op for entry in window.session.project.document.ops] == ["load", "drill_hole"]
+
+
 def test_a_preview_from_the_dialog_is_dropped_at_a_document_change(window: MainWindow) -> None:
     """Der Abbau am Dokumentwechsel räumt auch die Vorschau des Dialogs.
 

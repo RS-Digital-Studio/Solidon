@@ -661,7 +661,17 @@ bevor es jemand wusste:
 - **Der Auswertungsarbeiter fasst die Kennzahlen an** (`_warm_metrics`):
   Volumen, Oberfläche, Wasserdichtheit und Teilezahl jedes Körpers sind
   danach gemerkt, und `describe_selection`, `_measure_up` und `_update_facts`
-  lesen im Hauptthread nur noch.
+  lesen im Hauptthread nur noch. Dazu die Hohlraumketten des Objektbaums
+  (`relations.cavity_chains`): `show_scene` fragt sie je Körper, die Antwort
+  liegt im Cache des Netzes — der erste Aufruf kam aus dem Hauptthread und
+  kostete an einer Platte mit 204 000 Dreiecken 414 ms je Szenenaufbau.
+- **Die Live-Vorschau des Dialogs erkennt keine Merkmale** (`preview_async`
+  → `_preview_outcome(detect_features=False)`): Sie zeigt Geometrie und
+  Differenz, und die Erkennung am geänderten Körper kostete je getippter Zahl
+  an 204 000 Dreiecken 1,1 der 2,2 Sekunden. Der Agentenweg (`preview_scene`)
+  erkennt weiter — sein Steckbrief liest die Merkmale. Und die grobe Stufe
+  greift auch beim Ändern eines Schritts (`_coarse_steps_before`, Regel in
+  `wartezeit.md`): 40 ms je getippter Zahl ab der zweiten.
 - **Die Modellfrage läuft im Arbeiter** (`_BackendProbe` im Fenster): Bis
   `backend_known` steht, sagt der Chat „Sprachmodell wird gesucht …";
   `set_agent_backend` beantwortet sie, auch mit „keins".

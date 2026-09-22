@@ -23,7 +23,7 @@ import numpy as np
 from app.core.deferred import trimesh
 from app.core.errors import CANCEL, CORRECT_INPUT, Action, NotManifoldError, ValidationError
 from app.core.geom.attributes import transfer
-from app.core.geom.mesh import MeshData, as_mesh_data, on_surface
+from app.core.geom.mesh import MeshData, as_mesh_data, max_distance_to_surface, unique_edges
 from app.core.geom.repair import merge_vertices
 from app.core.log import get_logger
 from app.core.registry import op_params, param, register_op
@@ -73,7 +73,22 @@ SIMPLIFY_SEARCH_STEPS = 32
 #: für dasselbe Ergebnis. Auch das ist eine Rechengrenze, keine Toleranz.
 SIMPLIFY_SEARCH_RESOLUTION = 1e-3
 
-SimplificationSolver = Literal["none", "fast_simplification", "manifold"]
+#: Ab welchem Vielfachen des Ziels ein Dezimierungsergebnis als verfehlt
+#: gilt und der zweite Solver drankommt. Zwei: Wer die Hälfte des Weges nicht
+#: schafft, steht — ein Netz, das knapp über dem Ziel liegt, weil seine Form
+#: nicht weniger hergibt, bleibt dagegen sein eigenes Ergebnis.
+DECIMATE_MISS = 2
+
+#: Womit die Anzeige-Dezimierung beginnt: der Sehnenfehler, mit dem der
+#: exakte Kern tesselliert (``units.MAX_FACET_SAG``) — ein Netz, das so
+#: aussieht wie ein B-Rep-Körper auf dem Bildschirm. Reicht das nicht für das
+#: Ziel, vervierfacht sich die Toleranz je Schritt; :data:`DISPLAY_SEARCH_STEPS`
+#: begrenzt die Suche. Fünf Schritte tragen von 0,05 auf 51 mm — mehr Abweichung
+#: sieht kein Bild von zwanzig Pixeln als Verlust.
+DISPLAY_TOLERANCE_GROWTH = 4.0
+DISPLAY_SEARCH_STEPS = 6
+
+SimplificationSolver = Literal["none", "exact", "fast_simplification", "manifold"]
 SimplificationDeviation = tuple[float, float]
 
 
@@ -86,10 +101,29 @@ def deviation(before: MeshData, after: MeshData) -> float:
     """
     if not after.triangle_count or not before.triangle_count:
         return 0.0
-    _closest, distance, _triangle = on_surface(
-        before.raw, np.asarray(after.raw.vertices, dtype=float)
+    from scipy.spatial import cKDTree
+
+    points = np.asarray(after.raw.vertices, dtype=float)
+    # **Ein Punkt auf einer Ecke des alten Netzes hat Abstand null** — und
+    # der exakte Kern lässt beim Vereinfachen Ecken weg, statt sie zu
+    # verschieben: Jede Ecke des Ergebnisses ist eine des Ausgangs. Sie noch
+    # gegen die Dreiecke zu messen kostete an der Lochplatte mit 204 000
+    # Dreiecken drei Sekunden für lauter Nullen (gemessen am 22.09.2026).
+    # Gemessen wird nur, was neben einer Ecke liegt; Rundungsrauschen der
+    # Koordinaten ist der Maßstab, kein Fertigungsspiel.
+    old_vertices = np.asarray(before.raw.vertices, dtype=float)
+    roundoff = (
+        8
+        * np.finfo(np.float64).eps
+        * max(float(np.max(np.abs(old_vertices))), float(np.max(np.abs(points))), 1.0)
     )
-    return float(np.max(distance)) if len(distance) else 0.0
+    to_vertex, _index = cKDTree(old_vertices).query(points)
+    off_vertex = np.asarray(to_vertex, dtype=float) > roundoff
+    if not off_vertex.any():
+        return 0.0
+    # Gefragt ist **eine** Zahl, das Maximum — und die kostet an Nadeldreiecken
+    # nur dort, wo eine Ecke es noch heben kann (:func:`max_distance_to_surface`).
+    return max_distance_to_surface(before.raw, points[off_vertex])
 
 
 def decimate(mesh: MeshData, target: int) -> MeshData:
@@ -127,15 +161,49 @@ def _decimate_with_solver(
 
     Der öffentliche Helfer darüber behält seinen bisherigen Vertrag. Die
     Operation braucht zusätzlich den Namen, damit ein Rückfall nicht still als
-    dasselbe Verfahren erscheint.
+    dasselbe Verfahren erscheint. ``"exact"`` heißt: Das Vorspiel
+    (:func:`_exactly_flattened`) hat allein schon unter das Ziel geführt, und
+    kein Solver hat die Form angefasst.
     """
     if mesh.triangle_count <= max(target, DECIMATE_FLOOR):
         return mesh, "none", None
     source = _welded_for_simplify(mesh)
     if cancelled is not None:
         cancelled.raise_if_cancelled()
+    # **Erst das Exakte, dann das Verlustbehaftete.** Ein CAD-Export mit
+    # unterteilten Fächern trägt Ecken, die nichts beschreiben — sie liegen auf
+    # einer ebenen oder geraden Nachbarschaft. Der exakte Kern nimmt sie ohne
+    # jede Abweichung heraus, und was danach bleibt, ist klein genug für jeden
+    # Solver: die viermal unterteilte Lochplatte 203 776 → 814 Dreiecke in
+    # 110 ms, wo ``fast_simplification`` vier Sekunden stillstand und der
+    # Rückfall danach elf brauchte (gemessen am 22.09.2026).
+    flattened = _exactly_flattened(source, cancelled)
+    if flattened is not None:
+        _log.info(
+            "removed %d redundant triangles exactly",
+            source.triangle_count - flattened.triangle_count,
+        )
+        if flattened.triangle_count <= max(target, DECIMATE_FLOOR):
+            # Gemessen wird die Richtung, die der Befund nennt — wie bei den
+            # beiden Solvern. Die Gegenrichtung (jede alte Ecke gegen die neue
+            # Fläche) belegen hier Bauart und Prüfung statt Messung: Der Kern
+            # hat Ecken weggelassen und keine bewegt, und
+            # :func:`_exactly_flattened` hat Volumen, Dichtheit und Teilzahl
+            # verglichen. Sie zu messen kostete an der Lochplatte 1,2 der 1,5 s
+            # für eine Zahl, die kein Befund liest.
+            forward = deviation(source, flattened)
+            return flattened, "exact", (forward, forward)
+        source = flattened
     reduced = source.raw.simplify_quadric_decimation(face_count=target)
-    if len(reduced.faces) >= source.triangle_count:
+    # **Auch ein weit verfehltes Ziel ist ein Stillstand.** ``fast_simplification``
+    # kommt an einem CAD-Export mit Nadeldreiecken nicht voran — an der
+    # Lochplatte mit 203 776 Dreiecken blieben nach vier Sekunden 197 458
+    # stehen, und weil das weniger als vorher war, galt es hier als Erfolg
+    # (gemessen am 22.09.2026). Sein Flip-Schutz lehnt jeden Kollaps ab, der
+    # ein spitzes Dreieck noch spitzer macht, und aus einer Fächerfläche um
+    # eine Bohrung wird so nie etwas anderes. Der Rückfall greift deshalb,
+    # sobald das Ergebnis mehr als das Doppelte des Ziels behält.
+    if len(reduced.faces) >= source.triangle_count or len(reduced.faces) > target * DECIMATE_MISS:
         fallback = _manifold_decimation(source, target, cancelled)
         if fallback is not None:
             fallback_mesh, measured = fallback
@@ -157,6 +225,161 @@ def _decimate_with_solver(
         "fast_simplification",
         None,
     )
+
+
+def decimate_for_display(mesh: MeshData, target: int, *, sag: float | None = None) -> MeshData:
+    """Weniger Dreiecke für ein Bild — in Millisekunden und an jedem Netz.
+
+    ``sag`` ist der Sehnenfehler in Millimetern, mit dem der erste Weg
+    beginnt; ohne Angabe der des exakten Kerns (``units.MAX_FACET_SAG``). Ein
+    Vorschaubild von 48 Pixeln darf gröber anfangen als die Anzeige — was
+    unter einem Viertel Pixel liegt, zeichnet kein Bild.
+
+    Was hier herauskommt, sieht der Bildschirm: das Vorschaubild im
+    Objektbaum, die Anzeige ab der Schwelle aus §31, die Beispielbilder, der
+    Stellvertreter der Orientierungssuche. Keiner davon braucht die Zusagen
+    von :func:`decimate` — Solvername, beidseitig gemessene Abweichung,
+    Volumenprüfung —, jeder braucht eine Antwort, bevor der Kunde wartet.
+
+    **Warum nicht derselbe Weg wie die Operation:** ``fast_simplification``
+    steht an CAD-Exporten mit Nadeldreiecken still (siehe
+    :func:`_decimate_with_solver`), und zwar erst nach hundert Durchgängen
+    über das ganze Netz — an der Lochplatte mit 203 776 Dreiecken vier
+    Sekunden für ein Vorschaubild, das danach aus 197 458 Dreiecken gezeichnet
+    wurde (1,5 s SVG, 0,8 s Rendern im Hauptthread; gemessen am 22.09.2026,
+    Robert: das Verschieben eines Körpers dauerte acht Sekunden).
+
+    Zwei Wege, der Reihe nach:
+
+    1. **Der exakte Kern nach Toleranz.** ``manifold3d`` vereinfacht ein
+       geschlossenes Netz in einem Durchgang (78 ms an 203 776 Dreiecken) und
+       garantiert die Abweichung statt einer Zahl. Begonnen wird mit dem
+       Sehnenfehler, mit dem der Kern selbst tesselliert; reicht das nicht,
+       wächst die Toleranz je Schritt (:data:`DISPLAY_TOLERANCE_GROWTH`).
+    2. **Zusammenlegen im Raster**, wo der Kern das Netz nicht nimmt — offen,
+       verschränkt, eine Dreieckssuppe: :func:`_clustered_for_display` legt
+       Ecken derselben Rasterzelle zusammen, ein Gang über alle Punkte, ohne
+       Schleife über Dreiecke. Was dann noch über dem Ziel liegt, bekommt
+       ``fast_simplification`` — an einem geclusterten Netz gibt es die
+       Nadeln nicht mehr, an denen es steht.
+
+    Die Slots reisen wie bei :func:`decimate` ohne Grenze mit (§20).
+    """
+    if mesh.triangle_count <= max(target, DECIMATE_FLOOR):
+        return mesh
+    reduced = _display_manifold_decimation(mesh, target, sag)
+    if reduced is None:
+        reduced = _clustered_for_display(mesh, target, sag)
+    _log.info("display: %d to %d triangles", mesh.triangle_count, reduced.triangle_count)
+    return reduced
+
+
+def _display_manifold_decimation(mesh: MeshData, target: int, sag: float | None) -> MeshData | None:
+    """Der erste Weg von :func:`decimate_for_display` — oder ``None``.
+
+    ``None`` heißt: Der Kern nimmt das Netz nicht, oder es kommt in
+    :data:`DISPLAY_SEARCH_STEPS` Schritten nicht unter das Ziel. Letzteres
+    passiert an Netzen, die der Kern annimmt, obwohl sie nicht geschlossen
+    sind — dort fällt die Dreieckszahl mit wachsender Toleranz nicht, sondern
+    springt (gemessen an einer offenen Schüssel mit 215 074 Dreiecken: 12 614
+    bei 0,67 mm, 78 740 bei 3,3 mm). Ein Schritt, der nichts einbringt, beendet
+    die Suche deshalb sofort: Sechs vergebliche Läufe kosteten dort 600 ms,
+    bevor der zweite Weg drankam.
+    """
+    from app.core.units import MAX_FACET_SAG
+
+    try:
+        solid = _as_solid(mesh)
+    except NotManifoldError:
+        return None
+    tolerance = sag if sag is not None and sag > 0.0 else MAX_FACET_SAG
+    best = None
+    for _step in range(DISPLAY_SEARCH_STEPS):
+        candidate = solid.simplify(tolerance)
+        if candidate.is_empty():
+            break
+        if best is not None and candidate.num_tri() >= best.num_tri():
+            break
+        best = candidate
+        if candidate.num_tri() <= target:
+            break
+        tolerance *= DISPLAY_TOLERANCE_GROWTH
+    if best is None or best.num_tri() > target or best.num_tri() >= mesh.triangle_count:
+        return None
+    return _as_mesh(mesh, best)
+
+
+def _clustered_for_display(mesh: MeshData, target: int, sag: float | None) -> MeshData:
+    """Ecken derselben Rasterzelle werden eine — der zweite Weg von
+    :func:`decimate_for_display`.
+
+    Die Zellkante ist die Sehne, mit der der erste Weg begonnen hätte
+    (``sag``, sonst ``units.MAX_FACET_SAG``), mindestens aber ein
+    Vierhundertstel der längsten Seite — feiner unterscheidet kein Bild, und
+    ein Raster ohne Untergrenze wäre an einem winzigen Netz keines. Jede Ecke
+    wird durch die Mitte der **benutzten** Ecken ihrer Zelle ersetzt — Ecken,
+    die kein Dreieck nennt, ziehen sonst die Mitte dorthin, wo keine Fläche
+    ist —, Dreiecke mit zwei gleichen Ecken fallen, doppelte bleiben einmal.
+    Liegt das Ergebnis noch weit über dem Ziel, verdoppelt sich die Zelle,
+    bis sie ein Viertel des Körpers misst: Ein Gang kostet an 215 000
+    Dreiecken 30 ms, der Quadrik-Solver blieb an derselben Schüssel bei 2 778
+    Dreiecken stehen und brauchte dafür eine halbe Sekunde.
+
+    Das ist kein Verfahren für Geometrie — eine Kante wandert um bis zu eine
+    Zelle —, aber eines für ein Bild, dessen Pixel gröber sind.
+    """
+    from app.core.units import MAX_FACET_SAG
+
+    body = mesh.raw
+    faces = np.asarray(body.faces, dtype=np.int64)
+    used, compact = np.unique(faces, return_inverse=True)
+    vertices = np.asarray(body.vertices, dtype=float)[used]
+    faces = compact.reshape(faces.shape)
+    low = vertices.min(axis=0)
+    span = float(np.max(vertices.max(axis=0) - low))
+    cell = sag if sag is not None and sag > 0.0 else MAX_FACET_SAG
+    cell = max(cell, span / 400.0, 1e-9)
+    merged, mapped = _clustered_once(vertices, faces, low, cell)
+    # Verdoppeln bis unter das Ziel — oder bis eine Zelle ein Viertel des
+    # Körpers misst; gröber ist kein Bild mehr, sondern ein Klotz.
+    while (
+        len(mapped) > target * DECIMATE_MISS
+        and len(mapped) > DECIMATE_FLOOR
+        and cell * 2.0 <= span / 4.0
+    ):
+        cell *= 2.0
+        merged, mapped = _clustered_once(vertices, faces, low, cell)
+    reduced = trimesh.Trimesh(vertices=merged, faces=mapped, process=False)
+    return transfer(MeshData.of(reduced), [mesh], tolerance=math.inf)
+
+
+def _clustered_once(
+    vertices: np.ndarray, faces: np.ndarray, low: np.ndarray, cell: float
+) -> tuple[np.ndarray, np.ndarray]:
+    """Ein Durchgang des Zusammenlegens: neue Ecken und die Dreiecke darauf."""
+    grid = np.floor((vertices - low) / cell).astype(np.int64)
+    # Eine Zellnummer statt dreier Koordinaten: ``np.unique`` über eine Achse
+    # sortiert Zeilen als Strukturen und kostet an 107 000 Ecken 150 ms, die
+    # eindimensionale Fassung ein Zehntel davon.
+    extent = grid.max(axis=0) + 1
+    cell_ids = grid[:, 0] + extent[0] * (grid[:, 1] + extent[1] * grid[:, 2])
+    _cells, inverse, counts = np.unique(cell_ids, return_inverse=True, return_counts=True)
+    inverse = inverse.reshape(-1)
+    merged = np.zeros((len(counts), 3), dtype=float)
+    np.add.at(merged, inverse, vertices)
+    merged /= counts[:, None]
+    mapped = inverse[faces]
+    alive = (
+        (mapped[:, 0] != mapped[:, 1])
+        & (mapped[:, 1] != mapped[:, 2])
+        & (mapped[:, 0] != mapped[:, 2])
+    )
+    mapped = mapped[alive]
+    corners = len(counts)
+    ordered = np.sort(mapped, axis=1)
+    triangle_ids = ordered[:, 0] + corners * (ordered[:, 1] + corners * ordered[:, 2])
+    _unique_ids, first = np.unique(triangle_ids, return_index=True)
+    return merged, mapped[np.sort(first)]
 
 
 #: Ab welchem Verhältnis Punkte zu Dreiecken ein Netz als unverschweißt gilt.
@@ -199,6 +422,53 @@ def _welded_for_simplify(mesh: MeshData) -> MeshData:
     welded, gone = merge_vertices(mesh)
     _log.info("welded %d vertices before simplifying", gone)
     return welded
+
+
+#: Unter welchem Anteil entfernter Dreiecke das exakte Vorspiel als
+#: wirkungslos gilt und sein Ergebnis nicht weitergereicht wird. Der Kern
+#: findet an fast jedem Netz ein paar exakt redundante Ecken (die Kugel aus
+#: 81 920 Dreiecken: keine, ein Zylinder aus 2 048: vier); für vier Dreiecke
+#: das Netz neu zu bauen und die Slots zu übertragen wäre Arbeit für nichts.
+FLATTEN_MIN_SHARE = 0.05
+
+#: Wie weit das Volumen nach dem Vorspiel vom Eingang abweichen darf: nur um
+#: das Rundungsrauschen der Volumensumme. Gemessen an der viermal
+#: unterteilten Lochplatte: 0,0 mm³ von 31 322 — die Schranke ist eine
+#: Rechengrenze, keine Geometrietoleranz.
+FLATTEN_VOLUME_NOISE = 1e-9
+
+
+def _exactly_flattened(mesh: MeshData, cancelled: CancelToken | None) -> MeshData | None:
+    """Das Netz ohne seine exakt redundanten Ecken — oder ``None``.
+
+    ``manifold3d.simplify(0)`` nimmt nur Ecken heraus, deren Nachbarschaft
+    eben oder gerade ist: Die Oberfläche bleibt punktgleich, jede Ecke des
+    Ergebnisses ist eine des Eingangs. Deshalb ist es kein Solver, sondern
+    ein Vorspiel — es kostet keine Form und braucht keine Abweichungsgrenze.
+
+    ``None`` heißt: kein geschlossener Körper, der Kern nimmt das Netz nicht,
+    oder es gab weniger als :data:`FLATTEN_MIN_SHARE` zu holen.
+    """
+    if not mesh.raw.is_volume:
+        return None
+    try:
+        solid = _as_solid(mesh)
+    except NotManifoldError:
+        return None
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+    flat = solid.simplify(0.0)
+    if flat.is_empty() or flat.num_tri() > mesh.triangle_count * (1.0 - FLATTEN_MIN_SHARE):
+        return None
+    result = _as_mesh(mesh, flat)
+    if not result.is_watertight or result.component_count != mesh.component_count:
+        return None
+    # Punktgleiche Oberflächen haben dasselbe Volumen — bis auf das Rauschen
+    # der Summe über hunderttausend Dreiecke. Ein Kern, der hier mehr als das
+    # verlöre, hätte Form verloren, und das wäre kein Vorspiel mehr.
+    if abs(result.volume - mesh.volume) > max(abs(mesh.volume), 1.0) * FLATTEN_VOLUME_NOISE:
+        return None
+    return result
 
 
 def _manifold_decimation(
@@ -594,6 +864,8 @@ def decimate_mesh(ctx: OpContext) -> OpResult:
         source.id,
         moved=measured[0] if measured is not None else None,
     )
+    # „exact" ist kein Rückfall: Es hat nur weggenommen, was die Form ohnehin
+    # nicht beschrieb, und die gemessene Abweichung steht im Befund darüber.
     if solver == "manifold":
         findings.insert(
             0,
@@ -1245,8 +1517,7 @@ def _thickened(mesh: MeshData, thickness: float) -> MeshData:
     # Normalen in den Körper hinein.
     flipped = faces[:, ::-1] + count
 
-    edges = np.sort(np.asarray(body.edges, dtype=np.int64), axis=1)
-    unique, counts = np.unique(edges, axis=0, return_counts=True)
+    unique, counts = unique_edges(np.asarray(body.edges, dtype=np.int64), return_counts=True)
     border = unique[counts == 1]
     walls = [[first, second, second + count, first + count] for first, second in border.tolist()]
     quads = np.asarray(

@@ -737,13 +737,13 @@ def test_a_dense_body_is_judged_on_a_smaller_twin(monkeypatch: pytest.MonkeyPatc
     from app.core.slice import orientation
 
     seen: list[int] = []
-    original = orientation.decimate
+    original = orientation.decimate_for_display
 
     def recording(mesh: MeshData, target: int) -> MeshData:
         seen.append(mesh.triangle_count)
         return original(mesh, target)
 
-    monkeypatch.setattr(orientation, "decimate", recording)
+    monkeypatch.setattr(orientation, "decimate_for_display", recording)
     dense = trimesh.creation.icosphere(subdivisions=5, radius=15.0)
     dense = trimesh.util.concatenate([dense, trimesh.creation.box(extents=(60.0, 60.0, 2.0))])
     body = MeshData.of(dense)

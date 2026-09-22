@@ -75,10 +75,11 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-164 — Creality Print: Erkennung steht, der Konsolenlauf ist ungeprüft](#rm-164) | Geometrie, Erkennung und Druckvorbereitung | Slicer einrichten, dann Öffnen- und Konsolenweg mit mehreren Spulen abnehmen |
 | [RM-166 — Ergebnisnetze aus Mesh-Ops an einer STL überstehen keinen Weld](#rm-166) | Geometrie, Erkennung und Druckvorbereitung | Der Weld ist behoben und als Kundenweg getestet; offen bleiben das Flackern der Tetraederecke auf dem Linux-Runner und das Beispielarchiv der Werkstattfilme |
 | [RM-181 — Handlungsliste und Baugruppenladen an dichten Netzen weiter vermessen](#rm-181) | Geometrie, Erkennung und Druckvorbereitung | Die Langlochsuche ist gebaut (126 s → 9 s); offen sind `actions_for` mit Netz (0,14 s je Merkmal) und die Ladezeit einer Baugruppe mit vielen Körpern |
-| [RM-193 — Die Erkennung an einer glatten Generator-Freiform kostet Minuten für null Merkmale](#rm-193) | Geometrie, Erkennung und Druckvorbereitung | Der Drache aus TripoSG braucht seit dem Review 37,7 s statt 482 (ein Fleck fragt nur die Ringe, an die er grenzt; die Flächenrollen blockweise); was bleibt, sind 2 275 Kegelverfeinerungen an Stücken, deren Achse aus den Normalen nicht bestimmbar ist. Zu entscheiden von Robert: eine Freiformentscheidung **vor** der Nachtrennung — ein Fleck über der Hälfte der Oberfläche, der keine Grundform ist, wird nicht in Stücke geteilt und eingepasst; das kostet tangential eingeblendete Zapfen |
+| [RM-193 — Die Erkennung an einer glatten Generator-Freiform kostet Minuten für null Merkmale](#rm-193) | Geometrie, Erkennung und Druckvorbereitung | Entschieden und gebaut am 22.09.2026: Die Haut — der Fleck über der halben Oberfläche, der keine Grundform ist und in Splitter zerfällt — wird nicht mehr Splitter für Splitter eingepasst, ihre Stücke von Gewicht schon (Zapfen, Verrundung bleiben); das Freiformurteil kommt aus der Haut. Drache 482 → 37,7 → 4,2 s, Schüssel 7,3 → 3,0 s (unter Fremdlast, gleiche Merkmale). Offen: §31 verlangt 1 s je 200 000 — was bleibt, sind die vier Fits über den ganzen gekrümmten Fleck in `_large_facet_faces` und noch einmal in `_fitted` (je 0,5 s Kegel an 300 000 Dreiecken) |
 | [RM-201 — Ein hohler Körper hält die 300 ms der Schichtanalyse nicht](#rm-201) | Geometrie, Erkennung und Druckvorbereitung | Die neue Leistungsmarke `slice_medium_hollow` (200 000 Dreiecke, Wand 1,5 mm) misst 1,5 s für §31 „300 ms": 3 658 Puffer, 796 Differenzen und 718 STRtree-Anfragen je Lauf — die Stufen je Schicht stapeln oder das Ziel für Schalen neu fassen |
 | [RM-202 — Die Formabweichung am Ring schließt nur auf 0,65 mm](#rm-202) | Geometrie, Erkennung und Druckvorbereitung | Das Verfeinerungsbudget des Torus gilt je Aufruf; an einem Ring bleibt die Klammer 0,65 mm breit, wo Ebene, Zylinder, Kugel und Kegel geschlossen rechnen — Budget je Dreieck oder eine geschlossene Kandidatenmenge für den Torus |
 | [RM-207 — Ein Wabenmuster ist ein Merkmal, nicht 1 199 Flächen](#rm-207) | Geometrie, Erkennung und Druckvorbereitung | Gebaut auf `rm-207-muster`, geht mit 0.5.0 hinaus: die acht Texturen von *Textur aufbringen* und jedes Gitter gleicher Zellen sind ein `pattern` mit Teilung, Zellbreite, Tiefe und Feld — auf Ebenen und um Zylinder; *Merkmal entfernen* füllt die Zellen, *Merkmal ändern* zeichnet sie neu; das Merkmalfenster zeigt es am Halter. Offen: ein dichtes Noppenfeld (266 000 Dreiecke) braucht vor dem Muster 28 s für 2 042 Zylindereinpassungen |
+| [RM-208 — Die Kundenwege Verschieben, Bearbeiten, Erkennen und Vorschau auf Zeit](#rm-208) | Geometrie, Erkennung und Druckvorbereitung | Am 22.09.2026 an einer Platte mit 204 000 Dreiecken gemessen und umgebaut: Verschieben 8,6 → 0,5 s, Bohrung 8,3 → 1,8 s, Klick auf eine Bohrung 1,9 → 0,2 s, Vorschau je Zahl 2,2 → 0,04 s ab der zweiten, Erkennung 1,1 → 0,99 s (Kundenmodell 21 → 7,3 s). Dritte Runde: das exakte Vorspiel der Dezimierung (Nadelplatte 11,6 → 0,3 s, erste Vorschau am Fächerexport unter einer Sekunde), `max_distance_to_surface` misst nur, was das Maximum heben kann (Besenhalter 2,9 → 0,25 s), die Freiformhaut (RM-193, Kundenmodell 3,0 s), und der Korpus `F:\3D Dateien` alt gegen neu — Ergebnis im Block |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Der Mac ist gefahren; die Zoom-Dämpfung ist seit dem 16.09. eine Rampe statt einer Klippe und am Gerät zu bestätigen; offen bleiben Linux, die 3DxWare-Mausemulation und die Bildrate an 1 Mio. Dreiecken |
 | [RM-203 — Die Ansicht rechnet je Bild und je Klick, was sie je Auswertung rechnen könnte](#rm-203) | Bedienung und Darstellung | Kanten und Schattenhüllen entstehen je Auswertung im Hauptthread (200 000 Dreiecke: 57 + 71 ms) statt im `_SceneMeshWorker`; `_redraw_feature_patch` kostet an einer Fläche der 360k-Platte 0,41 s; `show_scene` läuft am historischen Bohrschritt je Tastendruck; der Zeiger ruht 16 ms nicht, bevor er fragt — jeden Posten am echten Renderer messen, dann verlegen |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | `show_feature` leert und baut je Auswahl achtzehn Widgets neu (`_build_action`, 80 ms je Klick); `_settle_lock` ist seit dem Review ohne `findChildren`. Weg: `_Handling` mutabel mit `entries/widgets/fixed`, Wiederverwendung je (Operation, Felder, Schritt, Gruppengröße), Werte über `refresh_feature_fields` |
@@ -882,6 +883,13 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   | Freiform 200 000 Dreiecke (organisch) | 1,400 s | **1,004 s** | 0 |
   | Lochplatte 203 776 Dreiecke (mechanisch) | 0,649 s | **0,508 s** | 10 |
 
+  Stand 22.09.2026 (RM-208): Die Marken gelten den linearen Fits; mit der Verfeinerung an
+  Stützpunkten (P1.2) kostet die Lochplatte 1,1 s und die Freiform 3,9 s. Am organischen
+  Kundenmodell „washing bowl" (215 073 Dreiecke) ging die Erkennung von 21 auf 9,6 s, als die
+  Fächerfrage der zerrissenen Ecken auf einmal statt je Ecke gestellt wurde
+  (`_fans_connected`) und deckungsgleiche Ecken einmal je Körper zusammenfielen
+  (`_canonical_vertices`); was bleibt, sind die 372 Kegel-, 352 Ring- und 325 Kugelfits.
+
   Merkmale und IDs an sieben Körpern zeichengleich — die beiden Referenzfälle, `plate_holes`,
   `post_with_fillet`, `plate_countersunk`, `plate_chamfer_and_taper` und `torus_ring`. Nachweis:
   vier Fälle in `tests/test_curvature_split_components.py` und `tests/test_features.py`, vier
@@ -1600,7 +1608,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-193"></a>
 
-- [ ] **RM-193 — Die Erkennung an einer glatten Generator-Freiform kostet Minuten für null
+- [~] **RM-193 — Die Erkennung an einer glatten Generator-Freiform kostet Minuten für null
   Merkmale.** Roberts Drache aus ComfyUI/TripoSG (20.09.2026; 325 244 Dreiecke, wasserdicht,
   eine Komponente, als GLB importiert): `detect` brauchte 482 s und fand kein Merkmal, die
   Anwendung stand so lange bei „Merkmale erkennen“. 264 s davon war die Kerbenschließung vom
@@ -1627,13 +1635,50 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   ist gemessen unsicher (Erinnerung „Lineares Sieb vor der Verfeinerung ist unsicher"), ein
   Anfangsrang-Test wäre dasselbe Sieb.
 
-  Zu entscheiden von Robert: eine Freiformentscheidung **vor** der Nachtrennung (ein Fleck
-  über der Hälfte der Oberfläche, der keine Grundform ist, wird nicht in Stücke geteilt und
-  eingepasst — was er an Bohrungen und Flächen trägt, liegt an seinen Rändern und bleibt).
-  Der Preis: tangential eingeblendete Zapfen auf einer Freiform würden nicht mehr gefunden.
-  Abnahme: der Drache unter §31 oder eine belegte Grenze mit Befund; `generated_figure.stl`
-  daraufhin prüfen, ob es die glatte Gestalt deckt, sonst einen glatten Generatorkörper in den
-  Leistungskorpus; die verrauschten Fälle bleiben.
+  **Entschieden und gebaut (22.09.2026, Robert: „mach das beste für alle draußen, auch für
+  den Zahntechniker").** Nicht die Fassung „kein Split", sondern eine, die den Zapfen behält.
+  Das Urteil fällt einmal je Körper, direkt nach `_split_patches_by_curvature` und bevor ein
+  Splitstück gelesen ist: Welcher Anteil der Oberfläche liegt in Flecken, die in hundert oder
+  mehr Stücke unter einem Tausendstel der Oberfläche zerfallen (`FREEFORM_SPLINTERS`,
+  `FREEFORM_PIECE_SHARE`)? Über zwei Dritteln (`FREEFORM_SKIN_SHARE`) ist der Körper eine
+  Figur, ein Scan, ein erzeugtes Netz (`Fitted.freeform_skin`, `recognised_as_freeform`) —
+  dann werden von diesen Flecken nur die Stücke von Gewicht eingepasst: Zapfen, Verrundung,
+  Kugelecke. Darunter bleibt alles, wie es war.
+
+  **Drei Fassungen, jede am Korpus gemessen und die ersten beiden dort gescheitert** — die
+  Zahlen stehen in `.claude/rules/schichtanalyse.md`: „der größte Fleck über der Hälfte"
+  verpasste die Zauberturm-Figuren (Haut in zwei Flecken zu 44 und 32 Prozent, 93 statt 11 s)
+  und machte einen konstruierten Wandhalter zur Freiform (16 → 9 Merkmale); „alle Flecken
+  zusammen über der Hälfte, mit Zurückstellen" nahm einem Pool-Rohr mit Gewinde seine sieben
+  Verrundungen und zwei Ringe (57 Prozent zerfallende Fläche) und verschob durch die geänderte
+  Fleckenreihenfolge die Zylindersuche (zwei Kegel mehr am Gartenschlauchhalter, zwei
+  Verrundungen mehr am Beckenreiniger). Die dritte fällt das Urteil vor der Schleife und
+  setzt die Schwelle in die gemessene Lücke: Konstruiertes null bis 60 Prozent, Figuren 71 bis
+  94.
+
+  Gemessen: Drache 27 577 Stücke, 23 mit Gewicht, 27 554 Splitter; Schüssel 2 683/13/2 670;
+  Scan-Körper der Tests 1 712/72/1 640 — gegen Kapsel, Ellipsoid, Buchstabe „S",
+  `generated_figure.stl` mit null bis einem Splitter, die keine Haut sind und ihre gerundeten
+  Seiten behalten. Der Befund `perceive.freeform` kommt auch mit null weggelassenen Formen,
+  und sein Satz behauptet keine Suche mehr, die nicht stattfand (Kataloge in sechs Sprachen
+  nachgezogen).
+
+  **Zahlen, alle unter Fremdlast (Release-Lauf der Nachbarsitzung):** Drache 37,7 → 4,2 s
+  bei null Merkmalen wie zuvor; Schüssel 7,3 → 3,0 s bei 65 Merkmalen wie zuvor; Korpus
+  (`tests/data/meshes`, `_scan_like_blob`, Buchstaben, Kapsel) Merkmal für Merkmal gleich.
+  Nachweise: `test_features.py` (`test_a_skin_of_splinters_is_not_fitted_piece_by_piece`,
+  `test_a_smooth_body_over_half_its_surface_is_no_skin_without_splinters`),
+  `test_evaluation.py` (Befund ohne weggelassene Formen). Regel in
+  `.claude/rules/schichtanalyse.md`.
+
+  **Offen bleibt §31.** Eine Sekunde je 200 000 Dreiecke hieße 1,6 s am Drachen; gemessen
+  sind 4,2. Was bleibt, mit Zahlen: `_large_facet_faces` 1,2 s (vier Fits über den ganzen
+  gekrümmten Fleck mit 300 000 Dreiecken, der Kegel allein 0,5 s, davon 0,3 s
+  `_surface_support`), `_fitted` 3,3 s unter dem Profiler (52 `classify`, davon zwei an
+  Flecken mit 307 059 und 190 707 Dreiecken; `fit_cone` 1,4 s, `_surface_support` 0,5 s,
+  `find_helices` 0,4 s, `_curvature_jumps` 0,3 s). Der nächste Schritt ist der Fit an
+  Riesenflecken selbst — Stützpunkte statt aller Ecken in `_surface_support` und
+  `_ridge_endpoints` —, nicht eine weitere Regel.
 
   [Befund](ROADMAP-ARCHIV.md#ein-drache-aus-triposg-19-meter-acht-minuten-kein-merkmal-20092026).
 
@@ -1759,6 +1804,105 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Dreieck mehr und fällt damit aus der Rückgewinnung in
   `features._large_facet_faces` — die offene Stelle, die dort im Kommentar
   steht, nicht eine des Musters.
+
+<a id="rm-208"></a>
+
+- [~] **RM-208 — Die Kundenwege Verschieben, Bearbeiten, Erkennen und Vorschau auf Zeit.**
+  Robert am 22.09.2026: „mach einen kompletten performancefix von merkmalen, operationen,
+  verschieben, bearbeiten, erkennen … und ob alles überhaupt nötig ist". Gemessen am echten
+  Fenster (offscreen, `MainWindow` wie die Anwendung) an der viermal unterteilten Lochplatte
+  (203 776 Dreiecke, vier Bohrungen) und am Kundenmodell „washing bowl" (215 073 Dreiecke,
+  offen, 113 Merkmale), je Schritt bis das Fenster wieder still ist:
+
+  | Weg | vorher | nachher | was weggefallen ist |
+  |---|---:|---:|---|
+  | Öffnen (Platte) | 7,2 s | 2,6 s | Vorschaubild 5,5 s (siehe unten); `load` lief nach der Einheitenantwort ein zweites Mal |
+  | Verschieben | 8,6 s | 0,5 s | Erkennung am bewegten Netz (`carry_detection`), Vorschaubild, Import, Ketten und Kennzahlen am bewegten Netz (`transform._carry_cache`) |
+  | Drehen | 8,5 s | 0,6 s | dasselbe |
+  | Bohren | 8,3 s | 1,8 s | Vorschaubild; was bleibt, ist die Erkennung am neuen Netz |
+  | Undo | 2,6 s | 0,2 s | Vorschaubild |
+  | Klick auf eine Bohrung | 1,9 s | 0,2 s | vollständiger Flächenvergleich der vier Bohrungen (`_same_surface_patch` fragt erst die Ecken), Punkte je Bohrung als Zeilen sortiert |
+  | Vorschau je getippter Zahl (Bohrung ändern) | 2,2 s | 1,1 s | Erkennung am Vorschaukörper (`detect_features=False`) |
+  | Verschieben, Kundenmodell | ≈ 23 s | 0,5 s | wie oben |
+  | Erkennung, Kundenmodell | ≈ 21 s | 9,6 s | Fächerfrage in Python (368 217 Aufrufe), Ecken je Fleck als Zeilen sortiert |
+
+  Die Ursachen, jede mit Beleg im Code: `fast_simplification` steht an CAD-Exporten mit
+  Fächern um jede Bohrung still (vier Sekunden, 197 458 von 203 776 Dreiecken bleiben) — das
+  Vorschaubild des Objektbaums lief darüber und zeichnete danach ein SVG aus 197 000 Dreiecken
+  (`mesh_ops.decimate_for_display`, Rückfall der Operation bei weit verfehltem Ziel);
+  `record_answers` änderte den Schlüssel des Importschritts, und der Cache kannte nur den alten
+  (`evaluate._key_after_answers`); die Erkennung lief nach jedem Verschieben vollständig, obwohl
+  die Zuordnung danach nichts anderes fand als vorher (`features.carry_detection`); die
+  Hohlraumketten des Objektbaums entstanden im Hauptthread und ihr Schlüssel nannte die Lage
+  (`relations._candidate_key`, `session._warm_metrics`); `np.unique(axis=0)` an Kanten und
+  Ecken (`mesh.unique_edges`, `features._canonical_vertices`). Nachweise:
+  `test_matching.py` (bewegter Zwilling, Beleg statt Zusage, der Weg durch die Auswertung),
+  `test_evaluation.py` (beantworteter Schlüssel, Vorschau ohne Erkennung, Erkennung wo ein
+  Folgeschritt sie braucht), `test_missing_ops.py` (Nadelplatte, offenes Netz, Slots, Rückfall
+  der Operation).
+
+  **Zweite Runde am selben Tag** („dann sauber das offene abarbeiten"): Der Löser der
+  Rundformen rechnet an höchstens `FIT_SOLVER_POINTS` Stützpunkten und misst danach an
+  allen (`_large_facet_faces` an der Schüssel 2,7 → 1,0 s); die Fächerfrage läuft ohne
+  `scipy`-Graph; Facettenfragen und Mündungsprüfung sind Felder statt Schleifen; die
+  Differenzansicht beschneidet beide Körper auf die Änderungsbox (`compare` 0,64 → 0,25 s);
+  die grobe Vorschaustufe greift auch beim Ändern eines Schritts (`_coarse_steps_before`,
+  40 ms je Zahl ab der zweiten); `on_surface` sammelt seine Kandidaten als Matrix und
+  siebt exakt (7,7 → 4,1 s an 51 000 Ecken gegen die Nadelplatte), und `deviation` misst
+  nur, was neben einer alten Ecke liegt. Ergebnisse der Erkennung an acht Körpern
+  zeichengleich; Erkennung Platte 0,99 s, Kundenmodell 7,3 s.
+
+  **Dritte Runde** („alles sauber abgearbeitet, nichts mehr offen oder verschoben"):
+
+  * *Die erste Vorschau am Fächerexport.* Keine Entscheidung über Entwurfsqualität mehr
+    nötig — die Operation bleibt genau und ist trotzdem schnell: Vor jedem Solver läuft das
+    exakte Vorspiel (`_exactly_flattened`, `manifold3d.simplify(0)`), das Ecken auf ebenen
+    und geraden Nachbarschaften herausnimmt, ohne eine zu bewegen — geprüft an Dichtheit,
+    Teilzahl und Volumen. Nadelplatte 203 776 → 814 Dreiecke, `_decimate_with_solver`
+    11,6 → 0,32 s; Solver `"exact"`. Am Sitzungsweg (Öffnen, Bohren, Durchmesser tippen)
+    kostet die erste Vorschau 8,3 → 0,57 s, jede weitere 0,13 s (unter Fremdlast). An echten
+    Nadeln (Zylinder aus 2 048 Sektionen, Besenhalter mit 97 Prozent Nadeln) findet es
+    nichts, und der Kern-Rückfall bleibt.
+  * *Die Abweichungsmessung.* `mesh.max_distance_to_surface` stellt die eine Frage der
+    Dezimierung — das Maximum — und misst exakt nur die Punkte, deren Schranke es noch heben
+    kann: Schranke aus dem nächsten Schwerpunkt, nach dem ersten Maß die engere aus acht
+    Schwerpunkten und den Dreiecken an den nächsten Ecken, dann in wachsenden Portionen.
+    Besenhalter-Ecken gegen seine Kernvereinfachung 2,9 → 0,25 s, Kugeln 0,24 → 0,09 s;
+    `on_surface` selbst baut seinen Index einmal (`_SurfaceIndex`). Der Rückfall am
+    Besenhalter 3,9 → 1,4 s, am Zylinder 2 048 unter 0,8 s.
+  * *Das Kundenmodell.* Die Freiformhaut aus RM-193: 7,3 → 3,0 s unter Fremdlast, 65
+    Merkmale wie zuvor. Die Abnahme „unter drei Sekunden" ist damit an der Grenze und auf
+    ruhiger Maschine zu bestätigen; §31 (eine Sekunde) bleibt bei RM-193 offen, mit Zahlen.
+  * *Die Übertragung der Erkennung.* Beim Vergleich am Korpus fiel auf, dass
+    `moved_features` jede Richtung auf eins streckte — die Normale einer gerundeten Seite ist
+    aber das flächengewichtete Mittel und kurz; eine mitgeführte Erkennung sagte damit etwas
+    anderes als eine frische am bewegten Netz (19 von 125 Körpern). Nur Einheitsvektoren
+    werden wieder welche.
+  * *Der Korpus `F:\3D Dateien`, gefahren* — 170 Modelldateien (STL, 3MF, STEP, GLB, bis
+    67 MB), je Datei ein Unterprozess am alten Stand (Worktree am HEAD) und einer am neuen,
+    beide über den Ladeweg der `load`-Operation (3MF je Körper, STEP über
+    `brep.features.features_of`, sonst `read_model`, jeder Körper durch `normalise`):
+    **463 Körper, 455 zeichengleich** — Art, Kennung, Dreiecksmenge und jeder Parameter auf
+    vier Nachkommastellen. Erkennung über alle Körper **2 907 → 1 017 s**; die größten
+    Einzelwerte: Piratenschiff-Baugruppe (1 223 836 Dreiecke) 476 → 36 s, Desk-Gangster-Katze
+    (1 440 046) 287 → 27 s, Zauberturm-Figuren 42 bis 99 → 5 bis 11 s, Mausoleum-Drache
+    (2 330 374) 154 → 37 s.
+
+    Die acht Abweichungen, jede geprüft: **sechs Figurenteile** (drei Katzenspielzeuge, zwei
+    Teile eines Katzen-Handyhalters, ein Möbelstück aus `chufang.3mf`) verlieren ihre einzige
+    „gerundete Seite", weil sie jetzt als Freiform gelten — genau das, was die Regel sagt (auf
+    einer Figur wäre die ganze Haut eine Seite, und die sagt nichts); **ein Möbelstück**
+    verliert dazu drei Verrundungen und einen Ring aus demselben Grund; und am
+    **Pool-Brunnen-Rohr** stehen dieselben 32 Merkmale mit denselben Kennungen, aber zwei
+    Ring-Ausreißer (Durchmesser 19,7 m und 16,9 m an einem 130-mm-Teil) wandern um 0,7
+    Prozent in ihrer Mitte, weil der Löser an 4 096 statt 9 716 Stützpunkten rechnet.
+
+    Zwei Beobachtungen nebenbei: Der **alte** Stand riss am Drachen einmal von drei Läufen
+    nativ ab (Zugriffsverletzung bei 2,33 Mio. Dreiecken, kein Python-Traceback) — der neue
+    lief dreimal sauber. Und die Übertragung der Erkennung auf ein bewegtes Netz
+    (`carry_detection`) gibt an 370 von 458 Körpern dieselbe Antwort wie eine frische
+    Erkennung; die 88 übrigen sind Zahlen in der letzten Stelle und keine anderen Merkmale.
+
 
 ## Bedienung und Darstellung
 <a id="rm-197"></a>

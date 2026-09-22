@@ -731,9 +731,16 @@ def thumbnail(
     für Genauigkeit, die kein Bildschirm zeigt.
     """
     from app.core.geom.mesh import MeshData
-    from app.core.geom.mesh_ops import decimate
+    from app.core.geom.mesh_ops import decimate_for_display
 
-    small = decimate(MeshData.of(mesh), PREVIEW_FACES)
+    # Der Anzeigeweg, nicht die Operation: ``decimate`` stand an der
+    # Lochplatte mit 203 776 Dreiecken vier Sekunden still und lieferte danach
+    # 197 458 — das Bild kostete 6,3 s (22.09.2026). Begonnen wird mit einem
+    # Viertel Pixel als Sehnenfehler; was darunter liegt, zeichnet kein Bild.
+    body = MeshData.of(mesh)
+    small = decimate_for_display(
+        body, PREVIEW_FACES, sag=body.bounds.diagonal / (4.0 * max(size, 1))
+    )
     colours = palette(theme)
     tone = colours.subtractive if subtractive else colours.solid
     return project(small.raw, size, tone, theme=theme)

@@ -502,6 +502,55 @@ dazu:
   Rand der Flecken (Knick oder Ebene) trennen nicht; beides ist gemessen und
   steht am Modul.
 
+### Die Haut wird nicht in Splitter zerlegt (22.09.2026, RM-193)
+
+Roberts Drache aus TripoSG (325 244 Dreiecke) ist bei der 30-Grad-Trennung
+**ein** Fleck mit 93 Prozent der Oberfläche; die Nachtrennung nach Krümmung
+machte daraus 27 577 Stücke, Median zwei Dreiecke, und jedes ging durch
+Zylinder, Kegel, Kugel und Torus — 33 der 37 Sekunden für null Merkmale, und
+am Ende verwarf der Filter oben ohnehin alles. Entscheidung Robert: das Beste
+für alle draußen, auch für den Zahntechniker.
+
+* **Die Haut ist die zerfallende Fläche über zwei Dritteln der
+  Oberfläche** — Flecken ohne Grundform, die nach Krümmung in
+  `FREEFORM_SPLINTERS` oder mehr Stücke unter `FREEFORM_PIECE_SHARE`
+  zerfallen, **über alle Flecken zusammen** (`FREEFORM_SKIN_SHARE`). Die
+  Summe, weil die Zauberturm-Figuren ihre Haut in zwei Flecken tragen (44 und
+  32 Prozent); die zwei Drittel, weil darunter Konstruiertes liegt: ein Rohr
+  mit Gewinde bei 57 und 60, ein Scraper-Griff bei 51, ein Wandhalter bei 55
+  — mit einer Schwelle von der Hälfte verloren alle drei ihre Verrundungen,
+  Senkungen und Ringe. Figuren, Scans und erzeugte Netze liegen bei 71 bis 94.
+* **Das Urteil fällt einmal je Körper, vor der Schleife über die Flecken**,
+  direkt nach `_split_patches_by_curvature`. Nicht je Fleck darin und nicht
+  über zurückgestellte Flecken: Wer einen Fleck zurückstellt, füllt die
+  Ringkandidaten in anderer Folge, und `_cylinder_beside_a_torus` findet
+  danach andere Zylinder (gemessen: zwei Kegel mehr am Gartenschlauchhalter,
+  zwei Verrundungen mehr am Beckenreiniger, eine Verrundung weniger an einem
+  Bildschirmdeckel).
+* **Gelesen werden die Stücke von Gewicht, die Splitter nur ohne Haut.** So
+  bleiben der tangential eingeblendete Zapfen und die Verrundung auf einer
+  Figur Kandidaten, und ein konstruiertes Teil verliert nichts: Fällt das
+  Urteil gegen die Haut, wird gelesen wie bisher. Was die Haut an Bohrungen
+  und Flächen trägt, liegt an ihren Rändern und ist längst ein eigener Fleck.
+* **Das Urteil kommt aus der Haut, nicht mehr nur aus der Zählung.** Ohne
+  eingepasste Splitter zählt eine Freiform kaum Rundformen; `is_a_freeform`
+  nimmt deshalb `Fitted.freeform_skin` vor die Zählung, und die Zählung
+  trägt weiter die verrauschte Freiform ohne Haut (120 610 Flecken). Der
+  Befund `perceive.freeform` kommt seit dem auch mit null weggelassenen
+  Formen (`recognised_as_freeform`), und sein Satz behauptet keine Suche
+  mehr, die nicht stattfand.
+* **Wer eine der drei Zahlen anfasst, misst an beiden Seiten** — an der
+  zerfallenden Fläche des Korpus `F:\3D Dateien` (170 Dateien, 464 Körper):
+  Konstruiertes null bis 60 Prozent, mit den vier höchsten Fällen Pool-Rohr
+  57 und 60, Wandhalter 55, Scraper-Griff 51; Figuren, Scans und erzeugte
+  Netze 71 bis 94 (Katze 71, Zauberturm 75 bis 88, Schüssel 89, Drache 93,
+  Retro-Maus 94). Der Scan-Körper der Tests liegt mit 63,6 Prozent **unter**
+  der Schwelle und wird weiter ganz gelesen — sein Urteil kommt aus der
+  Zählung, und der Test dazu patcht die Schwelle, weil er die Mechanik prüft
+  und nicht die Zahl. Und an den Splittern selbst: Drache 27 554, Schüssel
+  7 385, Scan-Körper 1 640 gegen Kapsel, Ellipsoid, Buchstabe und
+  `generated_figure.stl` mit null bis einem.
+
 ### Was an einer Bohrung hängt, bleibt (10.09.2026)
 
 Die Lücke oben ist schmal, und am 10.09.2026 ist ein Modell hineingefallen:

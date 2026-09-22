@@ -3215,8 +3215,15 @@ def test_without_the_freeform_rule_the_same_scan_keeps_only_supported_round_shap
     monkeypatch: pytest.MonkeyPatch,
     with_sphere: bool,
 ) -> None:
-    """Nur eine unabhängig gebaute Kugel belegt eine Rundform im verrauschten Scan."""
+    """Nur eine unabhängig gebaute Kugel belegt eine Rundform im verrauschten Scan.
+
+    Beide Freiformregeln sind hier aus: die Zählung der Rundformen und die
+    Haut aus Splittern (RM-193) — der Scan-Körper trägt einen Fleck über der
+    Hälfte seiner Oberfläche mit 1 640 Splittern und wäre sonst eine Freiform,
+    bevor eine einzige Rundform gezählt ist.
+    """
     monkeypatch.setattr(features_module, "FREEFORM_ROUND_COUNT", 10**6)
+    monkeypatch.setattr(features_module, "FREEFORM_SPLINTERS", 10**9)
     forget_cache()
     scan = _scan_like_blob()
     if with_sphere:
@@ -3267,6 +3274,72 @@ def _blob_with_a_countersunk_bore() -> MeshData:
     sink = trimesh.creation.cone(radius=5.0, height=5.0, sections=64)
     sink.apply_translation((0.0, 0.0, -12.0))
     return MeshData.of(trimesh.boolean.difference([blob, bore, sink]))
+
+
+def test_a_skin_of_splinters_is_not_fitted_piece_by_piece(monkeypatch: pytest.MonkeyPatch) -> None:
+    """RM-193, Entscheidung Robert 22.09.2026: Der Fleck über der halben
+    Oberfläche, auf den keine Grundform passt und der nach Krümmung in
+    Splitter zerfällt, ist die Haut einer Freiform. Seine Splitter werden
+    nicht mehr eingepasst — am Drachen aus TripoSG 27 554 Stücke, 33 der 37
+    Sekunden für null Merkmale —, seine Stücke von Gewicht schon, und das
+    Urteil über das Modell kommt aus der Haut, nicht aus einer Zählung.
+
+    Gezählt werden die Kegeleinpassungen, denn die sind der Preis: Am
+    Scan-Körper der Tests (1 640 Splitter in einem Fleck, dazu 1 222 kleine
+    Flecken, die weiter ganz gelesen werden) fallen sie um ein Drittel
+    (364 → 230), und das Ergebnis bleibt Merkmal für Merkmal dasselbe.
+
+    **Die Schwelle steht hier auf der Hälfte statt auf zwei Dritteln**, denn
+    der Scan-Körper liegt mit 63,6 Prozent zerfallender Fläche knapp darunter
+    — geprüft wird die Mechanik, nicht die Zahl. Die Zahl selbst ist an
+    ``F:D Dateien`` kalibriert und steht an der Konstanten; ein Körper, der
+    unter ihr bleibt, verliert nichts, sondern wird gelesen wie zuvor und von
+    der Zählung beurteilt — genau das tut dieser hier ohne den Patch.
+    """
+    monkeypatch.setattr(features_module, "FREEFORM_SKIN_SHARE", 0.5)
+    mesh = _scan_like_blob()
+    original = features_module.fit_cone
+    calls: list[int] = []
+
+    def counted(*args: object, **kwargs: object) -> object:
+        calls.append(1)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(features_module, "fit_cone", counted)
+
+    forget_cache()
+    with_skin = detect(mesh)
+    fits_with_skin = len(calls)
+    assert features_module.recognised_as_freeform(mesh), "die Haut macht das Modell zur Freiform"
+    assert features_module._fitted(mesh).freeform_skin
+
+    calls.clear()
+    monkeypatch.setattr(features_module, "FREEFORM_SPLINTERS", 10**9)
+    forget_cache()
+    without_skin = detect(mesh)
+    fits_without_skin = len(calls)
+
+    assert fits_with_skin < fits_without_skin * 0.7, (fits_with_skin, fits_without_skin)
+    assert {f.id: (f.kind, f.face_indices) for f in with_skin.values()} == {
+        f.id: (f.kind, f.face_indices) for f in without_skin.values()
+    }, "dieselben Merkmale, mit und ohne den Umweg über die Splitter"
+
+
+def test_a_smooth_body_over_half_its_surface_is_no_skin_without_splinters() -> None:
+    """Die Gegenrichtung: Kapsel, Ellipsoid und der Bogen eines Buchstabens
+    liegen mit ihrem gekrümmten Fleck über der Hälfte, zerfallen aber in ein
+    bis fünf Stücke von Gewicht — keine Haut, kein Freiformurteil, und ihre
+    gerundeten Seiten bleiben, was sie waren."""
+    for name, mesh in (
+        ("Kapsel", MeshData.of(trimesh.creation.capsule(radius=8.0, height=30.0, count=(48, 48)))),
+        ("Ellipsoid", _curvature_patch_family(1)),
+        ("Buchstabe S", _letter("S")),
+    ):
+        forget_cache()
+        found = detect(mesh)
+        assert not features_module._fitted(mesh).freeform_skin, name
+        assert not features_module.recognised_as_freeform(mesh), name
+        assert any(f.kind == "curved_face" for f in found.values()), name
 
 
 def test_a_freeform_keeps_the_countersink_that_hangs_on_a_bore() -> None:

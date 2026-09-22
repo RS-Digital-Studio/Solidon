@@ -493,6 +493,47 @@ def test_on_surface_matches_the_exact_answer_without_any_index() -> None:
         assert triangle.dtype == np.int64
 
 
+def test_the_largest_distance_is_the_largest_of_the_full_answer() -> None:
+    """``max_distance_to_surface`` misst nicht jeden Punkt — und antwortet doch,
+    was ``on_surface`` über alle Punkte als Maximum gibt.
+
+    Drei Lagen wie im Vergleich darüber, dazu die zwei Körper, an denen die
+    Abkürzung ihren Zweck hat: ein Zylinder aus langen Seitendreiecken
+    (Nadeln, deren Schwerpunkt weit von ihren Enden liegt) und eine Platte
+    aus wenigen großen Dreiecken, gefragt mit den Ecken ihrer feinen
+    Unterteilung — dort liegt jeder Punkt auf der Fläche, aber weder der
+    nächste Schwerpunkt noch die nächste Ecke gehört zum Dreieck, auf dem er
+    sitzt.
+    """
+    from app.core.geom.mesh import max_distance_to_surface, on_surface
+
+    rng = np.random.default_rng(23)
+    box = trimesh.creation.box((40.0, 30.0, 6.0))
+    fine = box.subdivide().subdivide().subdivide()
+    cases = [
+        (
+            trimesh.creation.icosphere(subdivisions=3, radius=15.0),
+            rng.uniform(-30.0, 30.0, (300, 3)),
+        ),
+        (
+            trimesh.creation.cylinder(radius=8.0, height=40.0, sections=256),
+            rng.normal(0.0, 12.0, (400, 3)),
+        ),
+        (
+            trimesh.creation.cylinder(radius=8.0, height=40.0, sections=256),
+            trimesh.creation.cylinder(radius=8.0, height=40.0, sections=48).vertices,
+        ),
+        (box, np.asarray(fine.vertices, dtype=float)),
+        (box, np.vstack([fine.vertices[:200], rng.uniform(100.0, 200.0, (5, 3))])),
+    ]
+    for body, points in cases:
+        _spot, distance, _tri = on_surface(body, points)
+        assert max_distance_to_surface(body, points) == pytest.approx(
+            float(distance.max()), abs=1e-12, rel=0
+        )
+    assert max_distance_to_surface(box, np.zeros((0, 3))) == 0.0
+
+
 def _trimesh_still_breaks_on_a_zero_length_edge() -> bool:
     """Gibt ``closest_point`` für ein Dreieck ohne Fläche noch ``nan`` zurück?
 

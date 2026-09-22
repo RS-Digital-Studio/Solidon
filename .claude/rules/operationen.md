@@ -1137,6 +1137,29 @@ eine Karte sagt, was wo liegt, eine Regel, was zu halten ist.
   Geometrie und Merkmalsmetadaten gehören zu dieser Kompatibilitätsgrenze.
   Ein exakter mitgeführter
   Innenraum zählt zum Speicherbudget und zur Objektidentität.
+- **Eine festgehaltene Antwort legt ihr Ergebnis unter beiden Schlüsseln ab**
+  (22.09.2026). Wer über `OpResult.answered` etwas in die Parameter schreibt,
+  ändert damit den Schlüssel seines Schritts; die Auswertung bildet den
+  Schlüssel des nächsten Laufs auf demselben Weg (`_key_after_answers`) und
+  legt das Ergebnis auch dort ab — mit derselben Herkunftsregel für die
+  Platte. Sonst läuft der Schritt nach der ersten Antwort ein zweites Mal,
+  und auf der Platte liegt ein Eintrag, nach dem beim Wiederöffnen niemand
+  fragt. Wer den Schlüssel anderswo nachbaut statt über `resolve_params`,
+  baut einen zweiten Ort, an dem die Auflösung steht.
+- **Eine bewegte Kopie wird nicht neu untersucht.** Meldet eine Operation
+  `transform`, gibt die Auswertung der Merkmalsbindung das Eingangsnetz
+  derselben Stelle mit, und `perceive.features.carry_detection` überträgt
+  die gemerkte Erkennung — unter Beleg am Netz (starre Matrix, dieselben
+  Dreiecke, jede Ecke am bewegten Ort), nie auf Zusage der Operation.
+  `geom.transform.apply` reicht dazu die Topologie im Cache des Netzes
+  weiter. Eine Operation, die einen Körper nur bewegt, geht deshalb durch
+  `moved_object`/`apply` und meldet ihre Matrix; wer eine Bewegung anders
+  baut, verliert beides.
+- **Die Live-Vorschau erkennt nur, was jemand braucht.** `evaluate(...,
+  detect_features=False)` ist der Weg des Dialogs; er lässt die Erkennung
+  aus, wo kein späterer Schritt und keine Passung ein Merkmal des Körpers
+  nennt. Eine Szene daraus ist ein Bild und wird nie zum Dokumentstand — wer
+  Merkmale aus einer Vorschau liest (der Agent), ruft den genauen Weg.
 
 - **Die Merkmalerkennung nimmt bis zu eine Million Dreiecke je Körper an.**
   `FEATURE_LIMIT_TRIANGLES` begrenzt die Auswertung; Importhinweise und

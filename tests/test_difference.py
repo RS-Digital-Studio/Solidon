@@ -41,6 +41,86 @@ def test_a_body_that_shrank_shows_the_removed_volume() -> None:
     assert difference.added_volume < 1.0
 
 
+def test_a_local_change_is_compared_inside_its_box_with_the_same_answer(monkeypatch) -> None:
+    """Der Vergleich beschneidet beide Körper auf die Änderungsbox — und die
+    Volumina sind dieselben wie am ganzen Körper.
+
+    An 204 000 Dreiecken kostete der Vergleich zweier Bohrdurchmesser 0,64 s,
+    zwei Boolesche Differenzen über die ganze Platte für 1 148 Dreiecke
+    Unterschied; beschnitten sind es 0,25 s (22.09.2026). Ob wirklich
+    beschnitten wurde, sagt die Zahl der Booleschen Aufrufe: vier statt zwei.
+    """
+    from importlib import import_module
+
+    from app.core.bootstrap import load_operations
+    from app.core.geom.prepare import drill
+    from app.core.knowledge.profiles import make_profile
+
+    load_operations()
+    difference_module = import_module("app.core.geom.difference")
+    profile = make_profile("centauri-carbon-2", "petg")
+    # Zweimal unterteilt, damit die Bohrung nur ihre Umgebung neu vernetzt:
+    # An der groben Platte reichen die Fächer um das Loch bis zum Rand, jedes
+    # Deckdreieck gilt als geändert, und die Box ist die ganze Platte.
+    raw = plate().raw
+    for _step in range(2):
+        vertices, faces = trimesh.remesh.subdivide(raw.vertices, raw.faces)
+        raw = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
+    body = MeshData.of(raw)
+    top = float(body.bounds.maximum[2])
+    before = drill(body, position=(0.0, 0.0, top), axis="z", diameter=4.0, profile=profile).mesh
+    after = drill(body, position=(0.0, 0.0, top), axis="z", diameter=5.0, profile=profile).mesh
+
+    calls: list[str] = []
+    original = difference_module.boolean
+
+    def counted(kind, bodies, **kwargs):
+        calls.append(kind)
+        return original(kind, bodies, **kwargs)
+
+    monkeypatch.setattr(difference_module, "boolean", counted)
+    clipped = compare(before, after, profile=profile)
+    assert calls.count("intersection") == 2, "beide Körper werden auf die Änderungsbox beschnitten"
+
+    monkeypatch.setattr(difference_module, "_changed_region", lambda *_args: None)
+    whole = compare(before, after, profile=profile)
+
+    assert clipped.removed_volume == pytest.approx(whole.removed_volume, rel=1e-6)
+    assert clipped.added_volume == pytest.approx(whole.added_volume, rel=1e-6)
+    assert clipped.removed_volume > 1.0, "eine Bohrung von 4 auf 5 mm nimmt Material"
+    assert clipped.changed
+
+
+def test_a_change_over_half_the_body_is_compared_whole(monkeypatch) -> None:
+    """Wächst der Körper überall, spart die Box nichts — dann bleibt es beim ganzen."""
+    from importlib import import_module
+
+    difference_module = import_module("app.core.geom.difference")
+    calls: list[str] = []
+    original = difference_module.boolean
+
+    def counted(kind, bodies, **kwargs):
+        calls.append(kind)
+        return original(kind, bodies, **kwargs)
+
+    monkeypatch.setattr(difference_module, "boolean", counted)
+    difference = compare(cube(20.0), cube(24.0))
+
+    assert "intersection" not in calls
+    assert difference.added_volume == pytest.approx(24.0**3 - 20.0**3, rel=0.02)
+
+
+def test_the_changed_region_of_identical_bodies_is_none() -> None:
+    from importlib import import_module
+
+    difference_module = import_module("app.core.geom.difference")
+    body = plate()
+    assert difference_module._changed_region(body, body) is None
+    moved = apply(body, translation((0.0, 0.0, 30.0)))
+    low, high = difference_module._changed_region(body, moved)
+    assert np.all(low <= body.bounds.minimum) and np.all(high >= moved.bounds.maximum)
+
+
 def test_a_body_that_did_not_change_is_not_a_failed_computation() -> None:
     """Ein Vergleich, der nichts findet, hat nichts zu melden.
 
