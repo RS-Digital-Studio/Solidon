@@ -152,6 +152,11 @@ Abnahmeprüfung (§40).
 - **Ziehen und Ablegen funktioniert überall** — auf das Fenster, auf den
   Viewport, auf den Objektbaum.
 - **Die Erstinbetriebnahme fragt das Nötigste**: Sprache und Drucker.
+  Die Druckerliste ist nach Verfahren gruppiert (§38): Filamentdrucker und
+  Resin-Drucker stehen in **einer** Liste, der Kunde wählt seine Maschine und
+  schaltet nichts um. Ein eigener Drucker fragt sein Verfahren und nur die
+  Maße dazu — Düse und Düsenzahl oder Pixelgröße und Mindestwand; das
+  Vorgabematerial folgt dem Verfahren, ein Harzbad beginnt nicht mit PLA.
   Erkannte Slicer-Filamente stehen im Filamentlager zur bewussten Übernahme bereit;
   ein nicht zugeordneter Typ bleibt ausdrücklich unbekannt. Keine zweite
   Materialfrage und keine stillschweigende PLA-Zuordnung. Zusatzprogramme
@@ -341,6 +346,9 @@ Prüfung prüft jede gefundene Datei, nicht die englische.
 | Rückfallkette | `solver chain` | Stufen bei gescheiterter Boolescher Op |
 | Passung | `Fit` | benannte Beziehung zweier Features |
 | Profil | `Profile` | Drucker- oder Materialeinstellungen |
+| Verfahren | `technology` | wie ein Drucker Material zu einem Körper macht: `fdm` legt Bahnen aus einer Düse, `resin` belichtet Schichten in einem Harzbad (§38) |
+| Saugglocke | `cupping` | ein nach unten offener Hohlraum, der beim Abziehen von der Folie Unterdruck zieht — Resin-Befund der zweiten Stufe (§22.2) |
+| Abflussöffnung | `drain` | die Bohrung, durch die ungehärtetes Harz aus einem ausgehöhlten Körper abläuft (§25) |
 | Regelsammlung | `rules` | Druckregeln für Agent und Prüfungen |
 | Bausteindatei | `part_file` | lokaler, offline geprüfter Import und Export eines Bausteinrezepts |
 | Lizenz | `licence` | Nutzungsrechte an einer Bausteindatei; das Dataclass-Feld und der Dateischlüssel heißen `license`, der Parametername bleibt wegen der Builtin-Schattung `licence` |
@@ -2174,6 +2182,16 @@ danach kommt.
 **Formate**: STL binär, **3MF mit Objektnamen, Anordnung und Farbgruppen**,
 OBJ, PLY, GLB zum Zeigen, STEP bei B-Rep-Objekten.
 
+**Ein exakter Körper geht so fein hinaus, wie das Verfahren des Druckers es
+verlangt.** Die Abweichung der Dreiecke von den Flächen ist ein Achtel des
+kleinsten Details des Druckers — Bahnbreite oder Pixel —, nach oben gedeckelt
+von der Zahl, mit der der Kern selbst tesselliert (§30): Für eine 0,4er Düse
+bleibt es bei der Vernetzung des Kerns, ein Resin-Drucker mit 50-µm-Pixeln
+bekommt eine feinere. Das ist keine Wahl im Dialog, sondern eine Vorgabe aus
+dem Profil (§2.4); der Prüfbericht nennt das Maß, wenn neu vernetzt wurde.
+Anzeige und Erkennung bleiben bei der Vernetzung des Kerns — die Datei geht
+in den Slicer, das Bild nicht.
+
 **Namensschema** bei mehreren Teilen, konfigurierbar, Vorgabe
 `<projekt>_<objekt>_1von3.stl`. Objektnamen werden dateisystemtauglich
 gemacht, ohne unkenntlich zu werden.
@@ -2182,6 +2200,17 @@ gemacht, ohne unkenntlich zu werden.
 exportierte Datei öffnen. Ordner, Format und Übergabeart werden je Projekt
 gemerkt. Solidon benutzt den installierten Slicer als externes Programm und
 liefert ihn nicht mit.
+
+**Die zweite Übergabeart braucht keine Übersetzung.** Ein Programm, dessen
+Einstellungen Solidon nicht kennt — der Hersteller-Slicer eines
+Resin-Druckers, ChituBox, Lychee —, bekommt die Datei in sein Fenster und
+sonst nichts: kein Profil, keine Konfiguration, kein Konsolenlauf, kein
+Rücklesen. Es bekommt STL, das eine Format, das jeder Slicer liest, um den
+Ursprung, denn einen Bauraum, zu dessen Ecke sich verschieben ließe, kennt
+Solidon dort nicht. Der Konsolenweg sagt für ein solches Programm ab und
+nennt den Weg über das Fenster. An einem Resin-Drucker reisen keine
+Druckeinstellungen mit der Datei — der Satz ist ein FDM-Vertrag, und ein
+Resin-Slicer liest ihn nicht.
 
 Prozesswerte und Filamentzuordnungen werden aus den gespeicherten
 Druckeinstellungen des Projekts aufgelöst. Jeder Materialslot verwendet sein
@@ -2852,6 +2881,28 @@ weiter: Empfänger einer Eingabe erkennbar machen und externe Übermittlung nur
   beim ersten Start niemand Bauraummaße abtippt; eigene Profile werden davon
   abgeleitet. Der Startsatz ist eine Datentabelle wie die Normteile (§24.2)
   und wird genauso gepflegt.
+
+  **Ein Drucker trägt sein Verfahren** (`technology`, §4.2), und das
+  Verfahren entscheidet, welche Felder gelten. Ein Filamentdrucker (`fdm`)
+  führt Düse, Bahnbreite, Schichthöhe und die Heizgrenzen von Düse und Bett;
+  ein Resin-Drucker (`resin`) führt statt Düse und Bahn die **Pixelgröße** —
+  das kleinste Detail, das er abbildet — und eine **eigene Mindestwand**, denn
+  bei Resin ist die Grenze Stabilität, nicht Auflösung; Düse, Bahn und
+  Heizgrenzen stehen bei ihm auf null, damit kein Leser mit einer Düse
+  rechnet, die es nicht gibt. Beiden gemeinsam sind Bauraum und Schichthöhe,
+  und der Bauraum ist bei Resin der wichtigere Wert: Die Bauräume sind klein,
+  und die Bauraumfrage ist die häufigste Resin-Fehlerquelle — deshalb stehen
+  zwei generische Resin-Geräte nach Bauraum im Startsatz. Ein Profil ohne
+  Verfahrensangabe ist ein Filamentdrucker: jedes vor der Trennung angelegte
+  Profil lädt unverändert, ohne Migration. Auch ein **Material** gehört zu
+  einem Verfahren — ein Filament zu `fdm`, ein Harz zu `resin` —, und ein
+  Drucker nimmt nur Material seines Verfahrens an. Was der Kern aus dem
+  Profil herleitet — Mindestwand, kleinstes druckbares Volumen, kleinste
+  Standfläche, Exportauflösung (§29) —, leitet er je Verfahren her, an genau
+  einer Stelle; die Verbraucher fragen die Herleitung und nicht die Düse.
+  Bis zum 22.09.2026 setzte Solidon einen FDM-Drucker voraus, ohne je danach
+  zu fragen — Regel 21 in ihrer stillsten Form, als Voreinstellung statt als
+  Ausnahme (Resin-Konzept, `konzepte/konzept-resin-2026-08.md`).
 - **Paketierung.** PyInstaller bündelt die Anwendung. ComfyUI, Ollama und
   Slicer werden separat eingerichtet. Verfügbarkeit wird ohne Blockade des
   Starts geprüft; fehlende optionale Programme werden an ihrer Funktion
@@ -2886,9 +2937,16 @@ ist ein offener Fund, keine Ausnahme vom Bauplan.
 
 Was sich als Baustein fassen lässt, wandert aus der Sammlung in die Bibliothek.
 Eine im Werkzeug durchgesetzte Regel ist verlässlicher als eine nur
-beschriebene. Neue Druckverfahren brauchen ausdrücklich passende
-Geltungsbereiche; die beschlossene FDM-/Resin-Trennung steht in
-[RM-071](ROADMAP.md#rm-071). Noch fehlende Verhaltensmessungen stehen in
+beschriebene. **Eine Regel, die für ein Verfahren gegenstandslos ist, bekommt
+keinen anderen Wert, sondern einen Geltungsbereich.** Düse, Bahn, Brücke,
+Brim, Filamentwechsel und Elefantenfuß aus gequetschtem Kunststoff gibt es
+in einem Harzbad nicht; die Befunde des Prüfberichts dazu schweigen an einem
+Resin-Drucker seit der ersten Stufe der FDM-/Resin-Trennung
+([RM-071](ROADMAP-ARCHIV.md#rm-071)). Die Regeln dieser Sammlung tragen
+ihren Geltungsbereich mit der zweiten Stufe — Saugglocken, Abflussöffnungen
+und das Kriterium, das für Harz an die Stelle des Überhangwinkels tritt —,
+und jede solche Änderung wird nach dem Verfahren oben gemessen. Noch
+fehlende Verhaltensmessungen stehen in
 [RM-014](ROADMAP.md#rm-014), [RM-016](ROADMAP.md#rm-016) und
 [RM-069](ROADMAP.md#rm-069).
 

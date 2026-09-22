@@ -29406,8 +29406,10 @@ abbildet, darf ihr nicht fehlen.
   mit Ansage:** Saugglocken, Abflussöffnungen, der Überhangwinkel (Konzept
   §5, Stufe 2); die Regelsammlung des Agenten (§5.3, Agenten-Suite vorher
   und nachher); die Bauplan-Verortung aus Konzept §7 (§4.2 `technology`,
-  §38 Felder je Verfahren, §29 Formatempfehlung) — der Bauplan wird nur mit
-  Ansage geändert und steht hier als offener Nachtrag für Robert; der
+  §38 Felder je Verfahren, §29 Formatempfehlung) — auf Roberts Ansage
+  „Bauplannachtrag“ vom selben Tag nachgetragen, dazu §39 mit dem
+  Grundsatz, dass eine gegenstandslose Regel einen Geltungsbereich bekommt
+  und keinen anderen Wert; der
   Textursatz auf den Funktionsseiten der Website spricht weiter von der
   Düse (er beschreibt den FDM-Fall, für Resin sagt der Kern „Bildpunkt").
   Die Abnahme am echten Fenster (Erststart mit Resin-Gerät, Druckdialog am

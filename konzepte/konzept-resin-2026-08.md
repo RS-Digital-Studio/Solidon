@@ -3,8 +3,8 @@
 Stand 30.08.2026. **Stufe 1 gebaut am 22.09.2026** (RM-071, Nachweis im
 Archiv der Roadmap); was in §4 steht, ist im Code — mit den zwei
 Präzisierungen der Beratschlagung: zwei generische Geräte nach Bauraum, und
-B4 in Stufe 1. Die Bauplan-Verortung aus §7 steht als Nachtrag für Robert
-aus. Stufe 2 (§5) ist Entwurf.
+B4 in Stufe 1. Die Bauplan-Verortung aus §7 ist nachgetragen (Roberts
+Ansage vom selben Tag): §4.2, §2.3, §29, §38, §39. Stufe 2 (§5) ist Entwurf.
 
 Anlass: Eine Kundenanfrage aus dem Dentalbereich (R. W. D., 30.08.2026 —
 exocad/3shape beruflich, FDM- und Resindrucker privat) fragte nach einer
