@@ -65,6 +65,7 @@ dans `website/version.json`.
 - Avec « Emmener la fraisure et les épaulements », le perçage se déplace aussi par les cotes. Fût et fraisure se déplacent ensemble, en une étape.
 - Si Solidon refuse une cote, la raison s’affiche au-dessus de l’aperçu au lieu d’un simple « n’a pas pu être calculé ».
 - Les champs de cote restent où ils étaient quand vous changez une valeur. La cote dont vous éditez le champ s’allume dans la vue.
+- Les poignées du trou oblong agissent aussi pendant que les cotes du perçage sont dans la vue : Appliquer étire alors le trou oblong.
 
 ### Vérifier et imprimer
 

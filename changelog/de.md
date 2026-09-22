@@ -89,6 +89,7 @@ Nutzen da und sonst nichts.
 - Bei „Senkung und Stufen mitnehmen“ lässt sich die Bohrung auch über die Maße versetzen. Schaft und Senkung wandern zusammen, in einem Schritt.
 - Lehnt Solidon ein Maß ab, steht der Grund über der Vorschau, nicht mehr nur „konnte nicht berechnet werden“.
 - Die Maßfelder bleiben stehen, wo sie standen, wenn Sie einen Wert ändern. Das Maß, in dessen Feld Sie tippen, leuchtet im Bild.
+- Die Knöpfe zum Langloch wirken auch, während die Maße der Bohrung im Bild stehen: Übernehmen zieht dann das Langloch.
 
 ### Prüfen und Drucken
 

@@ -14069,7 +14069,37 @@ class MainWindow(QMainWindow):
         self._apply_placed_feature(op, params)
 
     def _apply_placed_feature(self, op: str, params: Mapping[str, Any]) -> bool:
-        """Nur den gebundenen, sichtbar geprüften Auftrag übernehmen."""
+        """Nur den gebundenen, sichtbar geprüften Auftrag übernehmen.
+
+        **Wartet ein gezogenes Langloch, meint Übernehmen das Langloch.** Die
+        Maßgruppe an einer Bohrung ist an *Bohrung ändern* gebunden; wer die
+        Knöpfe zum Langloch zieht, bekam beim Übernehmen die gebundene
+        Handlung mit unverändertem Durchmesser — „Die Bohrung hat bereits
+        diesen Durchmesser", und das Langloch blieb ein Umriss (Robert,
+        22.09.2026: „warum geht zum langloch nicht mehr"). Der Zug geht jetzt
+        denselben Weg wie das Übernehmen im Merkmalfenster
+        (:meth:`Viewport.apply_slot_drag`), mit der Stelle aus den Feldern.
+        Ist daneben auch der Durchmesser neu, kommt erst er — das Langloch
+        nimmt keinen Durchmesser — und der Zug wartet auf das nächste
+        Übernehmen; die Statuszeile sagt es.
+        """
+        if op != "slot_hole" and self._quiet_target is not None and self._quiet_target[1]:
+            pulled = self.viewport.waiting_slot_drag(str(self._quiet_target[1]))
+            if pulled is not None:
+                if not self._diameter_changed(op, params):
+                    place = (
+                        (float(params["x"]), float(params["y"]), float(params["z"]))
+                        if all(params.get(name) is not None for name in ("x", "y", "z"))
+                        else None
+                    )
+                    self.viewport.apply_slot_drag(pulled[0], pulled[1], place)
+                    return True
+                self.announce(
+                    tr(
+                        "Der Durchmesser wird übernommen. Das gezogene Langloch wartet "
+                        "auf ein weiteres Übernehmen."
+                    )
+                )
         order = self._prepare_feature_order(op, params)
         if order is None or not self._preview_can_apply(
             self._quiet_host or self.feature_panel,
@@ -14083,6 +14113,22 @@ class MainWindow(QMainWindow):
         if not committed:
             self._feature_to_keep, self._resume_near, self._measures_to_resume = remembered
         return committed
+
+    def _diameter_changed(self, op: str, params: Mapping[str, Any]) -> bool:
+        """Ob die Felder einen anderen Durchmesser tragen als das gebundene Merkmal."""
+        if op != "resize_hole" or params.get("diameter") is None or self._quiet_target is None:
+            return False
+        result = self.session.last_result
+        entry = result.scene.objects.get(self._quiet_target[0]) if result is not None else None
+        feature = (
+            entry.features.get(str(self._quiet_target[1]))
+            if entry is not None and self._quiet_target[1]
+            else None
+        )
+        current = feature.params.get("diameter") if feature is not None else None
+        if current is None:
+            return True
+        return not is_close(float(params["diameter"]), float(current), EPS_DISPLAY)
 
     def _place_from_feature_panel(self, op: str, params: dict[str, Any]) -> None:
         """Eine passive Maßgruppe bindet beim ersten Eingriff ihren vollständigen Auftrag."""

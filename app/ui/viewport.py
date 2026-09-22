@@ -12391,6 +12391,12 @@ class Viewport(QWidget):
                 )
                 self._repaint_preview()
 
+    def waiting_slot_drag(self, feature_id: str) -> tuple[float, float] | None:
+        """Länge und Richtung des Zugs, der an diesem Merkmal wartet — sonst nichts."""
+        if not self._slot_target or self._slot_target != feature_id:
+            return None
+        return self._slot_waiting
+
     def slot_drag_waits(self) -> bool:
         """Ob ein gezogenes Langloch auf seine Bestätigung wartet.
 

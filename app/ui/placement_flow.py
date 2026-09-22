@@ -1372,6 +1372,22 @@ class PlacementFlow(QObject):
         ):
             self._measure_refresh(self.dialog.values())
 
+    def _pulled_slot(self) -> tuple[float, float] | None:
+        """Länge und Richtung des Langlochzugs, der am gebundenen Merkmal wartet.
+
+        Die Maßgruppe an einer Bohrung ist an *Bohrung ändern* gebunden; die
+        Knöpfe zum Langloch gehören zum selben Loch. Wartet dort ein Zug, meint
+        das Übernehmen der Gruppe ihn (Robert, 22.09.2026: „warum geht zum
+        langloch nicht mehr").
+        """
+        if not isinstance(self.dialog, QuietHost):
+            return None
+        feature_id = self.dialog.values().get("at_feature")
+        if not feature_id:
+            return None
+        pulled = self.viewport.waiting_slot_drag(str(feature_id))
+        return None if pulled is None else (float(pulled[0]), float(pulled[1]))
+
     def _refresh_measure_actions(self) -> None:
         """Die gesetzte Sperre darstellen, ohne den Vorschauwächter erneut aufzurufen."""
         if self._disposed:
@@ -1379,6 +1395,13 @@ class PlacementFlow(QObject):
         host = self.dialog
         reason = host.blocked_reason if isinstance(host, QuietHost) else None
         begun = not isinstance(host, QuietHost) or host.begun
+        # Ein wartender Langlochzug macht den Knopf frei — die Sperre gilt der
+        # gebundenen Handlung, und die läuft dann nicht. Ist die Gruppe selbst
+        # an *Zum Langloch ziehen* gebunden, gilt ihr eigener Weg.
+        pulled = self._pulled_slot() is not None and self.spec_of().name != "slot_hole"
+        if pulled:
+            reason = None
+            begun = True
         allowed = (
             self.active
             and (
@@ -1416,6 +1439,8 @@ class PlacementFlow(QObject):
         # Vorschau verdrängte bis zum 21.09.2026 den Satz, dass es an dieser
         # Stelle keine Flächenmaße gibt — und der erklärt, warum die Felder
         # rechts die einzigen sind.
+        if pulled:
+            information = tr("Übernehmen zieht die Bohrung zum Langloch.")
         self._measure_note.setText(
             "\n".join(filter(None, (reason, self._reference_message, information)))
         )
@@ -3045,6 +3070,45 @@ class PlacementFlow(QObject):
         ):
             return
         self._accept_pending = False
+        # **Ein wartender Langlochzug geht vor.** Die Gruppe ist an *Bohrung
+        # ändern* gebunden; der Zug wird über denselben Weg eingelöst wie das
+        # Übernehmen im Merkmalfenster (``MainWindow._apply_placed_feature``),
+        # mit der Stelle aus den Feldern — die Sperre der gebundenen Handlung
+        # („hat bereits diesen Durchmesser") gilt ihm nicht.
+        apply_placed = getattr(self.window, "_apply_placed_feature", None)
+        if (
+            self._pulled_slot() is not None
+            and apply_placed is not None
+            and self.spec_of().name != "slot_hole"
+        ):
+            # Die Stelle kommt aus der Fläche, ohne den Träger zu beschreiben:
+            # ``take_placement`` meldete Werte, und die Meldung band die
+            # gebundene Handlung neu — nach dem Langlochauftrag, über ihn.
+            values = dict(self.dialog.values())
+            if self._surface is not None and self._tool_context is not None:
+                source, feature = self._source_feature()
+                values.update(
+                    placement.surface_values(
+                        self.spec_of(),
+                        self._surface,
+                        feature=feature,
+                        source=source,
+                        prepared_tool=self._tool_context,
+                    )
+                )
+            # Während des Abschlusses sind Befehle erlaubt, wie beim Übernehmen
+            # des Trägers selbst (``MainWindow._quiet_selection_allowed``) —
+            # sonst hielte die begonnene Änderung ihren eigenen Langlochschritt an.
+            host = self.dialog
+            was_committing = getattr(host, "committing", False)
+            if isinstance(host, QuietHost):
+                host.committing = True
+            try:
+                apply_placed(self.spec_of().name, values)
+            finally:
+                if isinstance(host, QuietHost):
+                    host.committing = was_committing
+            return
         # **Der Klick legt die Stelle fest, nicht das ganze Loch.** Wer eine
         # Bohrung setzt, hat danach noch eine Tiefe einzustellen; bis zum
         # 09.09.2026 wurde sie mit der Vorgabe gesetzt — bei ``depth = 0``

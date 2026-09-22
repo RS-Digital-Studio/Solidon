@@ -64,6 +64,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Com «Levar escareado e degraus», o furo também se desloca através das cotas. Haste e escareado movem-se juntos, num só passo.
 - Se o Solidon recusar uma cota, o motivo aparece sobre a pré-visualização em vez de apenas «não foi possível calcular».
 - Os campos de cota ficam onde estavam quando altera um valor. A cota em cujo campo escreve acende-se na vista.
+- Os botões para o rasgo também funcionam enquanto as cotas do furo estão na vista: Aplicar puxa então o rasgo.
 
 ### Verificar e imprimir
 
