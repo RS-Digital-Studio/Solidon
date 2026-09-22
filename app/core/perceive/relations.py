@@ -244,14 +244,18 @@ class _Measured:
     500 Bohrungen, 500 koaxiale Zapfen      2087 ms    476 ms
     ======================================  ========  =======
 
-    Die letzte Zeile ist ein gebauter Fall und kein gemessener Kunde — sie
-    steht hier als **Obergrenze** für das Gepaarte: Oberhalb von
-    ``scene.evaluate.FEATURE_LIMIT_COUNT`` (fünftausend) hängt die Auswertung
-    gar keine Merkmale mehr ein, und schlimmer als halb Hohlraum und halb
-    Materie wird die Paarung nicht — ein Wabenmuster bringt tausend ebene
-    Flächen mit, aber keine Ketten. Was echte Modelle mitbringen, liegt zwei
-    Größenordnungen darunter: über die zwanzig Netze des Korpus gemessen sind
-    es höchstens **16** Merkmale.
+    Die letzte Zeile ist ein gebauter Fall und kein gemessener Kunde. Eine
+    **Obergrenze** war sie nur, solange ``scene.evaluate.FEATURE_LIMIT_COUNT``
+    bei tausend stand: Mit fünftausend (22.09.2026) kostete halb Hohlraum,
+    halb Materie als Paarung jede gegen jede **22 Sekunden** — nach jeder
+    Auswertung und im Steckbrief im Hauptfaden (Review 22.09.2026). Seither
+    wählt :func:`_all_sleeves` die Kandidaten über die Mitten vor: Ein Rohr
+    liegt mit seiner Mitte höchstens ``r · SINK_FIT_LIMIT`` quer und eine
+    halbe Summe der Tiefen längs von der Bohrungsmitte entfernt, und ein
+    ``cKDTree`` über die Zapfenmitten gibt je Bohrung nur diese zurück; die
+    Paarprüfung selbst bleibt dieselbe. Was echte Modelle mitbringen, liegt
+    ohnehin zwei Größenordnungen darunter: über die zwanzig Netze des Korpus
+    gemessen sind es höchstens **16** Merkmale.
     """
 
     feature: Feature
@@ -401,13 +405,36 @@ def sleeve_at(feature: Feature, features: Mapping[FeatureId, Feature]) -> Sleeve
 
 
 def _all_sleeves(features: Mapping[FeatureId, Feature]) -> Iterable[Sleeve]:
-    """Alle belegten Rohrpaare, mit einmal gelesenen Maßen je Merkmal."""
+    """Alle belegten Rohrpaare, mit einmal gelesenen Maßen je Merkmal.
+
+    Gepaart wird nur, was nach Lage überhaupt ein Rohr sein kann: Der Mantel
+    muss mit seiner Mitte innerhalb von ``r · SINK_FIT_LIMIT`` quer und einer
+    halben Summe beider Tiefen längs zur Bohrungsmitte liegen, sonst gibt
+    :func:`_sleeve_between` ohnehin nichts zurück (``reach``,
+    :func:`_overlap`). Die Kugel um die Bohrungsmitte mit der Summe beider
+    Schranken enthält deshalb jeden Partner; die längste Manteltiefe steht
+    für alle, damit ein Baum die Frage für alle Bohrungen zugleich beantwortet.
+    Die Reihenfolge der Kandidaten bleibt die der Merkmale — bei gleicher
+    Wandstärke entscheidet sie, wie bisher.
+    """
     measured = [entry for entry in map(_measured, features.values()) if entry is not None]
     hollow = [entry for entry in measured if entry.inside]
     solid = [entry for entry in measured if not entry.inside]
-    for bore in hollow:
-        for wall in solid:
-            found = _sleeve_between(bore, wall)
+    if not hollow or not solid:
+        return
+    tree = cKDTree(np.asarray([entry.centre for entry in solid], dtype=float))
+    longest = max(entry.depth for entry in solid)
+    centres = np.asarray([entry.centre for entry in hollow], dtype=float)
+    radii = np.asarray(
+        [
+            entry.diameter / 2.0 * SINK_FIT_LIMIT + (entry.depth + longest) / 2.0 + EPS_GEOM
+            for entry in hollow
+        ],
+        dtype=float,
+    )
+    for bore, near in zip(hollow, tree.query_ball_point(centres, radii), strict=True):
+        for index in sorted(near):
+            found = _sleeve_between(bore, solid[index])
             if found is not None:
                 yield found
 

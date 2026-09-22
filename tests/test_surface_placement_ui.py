@@ -3581,6 +3581,183 @@ def test_the_measures_stay_in_the_view_while_a_pulled_slot_waits(qt_app: QApplic
         window.release()
 
 
+def test_accepting_the_measures_takes_a_pulled_slot_along(qt_app: QApplication) -> None:
+    """Übernehmen in der Maßgruppe meint das gezogene Langloch (Robert, 22.09.2026:
+    „warum geht zum langloch nicht mehr").
+
+    Die Gruppe ist an *Bohrung ändern* gebunden; ihr Übernehmen fuhr die
+    gebundene Handlung mit unverändertem Durchmesser — „Die Bohrung hat bereits
+    diesen Durchmesser" — und das Langloch blieb ein Umriss. Jetzt entsteht
+    daraus der Langlochschritt, mit der Stelle aus den Feldern.
+    """
+    from app.ui.render.api import Pick, PointerEvent
+
+    window = _window_with_a_renderer()
+    try:
+        object_id, hole = _a_selected_hole(window)
+        flow = window._quiet_placement
+        assert flow is not None and flow.active and flow.spec_of().name == "resize_hole"
+        entry = window.session.last_result.scene.objects[object_id]
+        feature = entry.features[hole]
+        centre = feature.params["centre"]
+        top = (float(centre[0]), float(centre[1]), float(entry.mesh.bounds.maximum[2]))
+        renderer = window.viewport.renderer
+        x, y, _depth = renderer.world_to_display(top)
+        x, y = round(x), round(y)
+        renderer.picks[(x, y)] = Pick(
+            top, window.viewport._actors[object_id], int(feature.face_indices[0])
+        )
+        for event in (
+            PointerEvent("move", x, y),
+            PointerEvent("press", x, y, button="left"),
+            PointerEvent("move", x + 14, y + 4, buttons=frozenset({"left"})),
+            PointerEvent("release", x + 14, y + 4, button="left"),
+        ):
+            window.viewport._on_pointer(event)
+            QApplication.processEvents()
+        for _ in range(120):
+            QApplication.processEvents()
+            window.session.wait_for_idle()
+        assert window.viewport.slot_drag_waits(), "der Zug zum Langloch wartet"
+        pulled = window.viewport.waiting_slot_drag(hole)
+        assert pulled is not None and pulled[0] > 0.0
+
+        before = len(window.session.project.document.ops)
+        flow.accept()
+        for _ in range(200):
+            QApplication.processEvents()
+            window.session.wait_for_idle()
+            if len(window.session.project.document.ops) > before:
+                break
+        steps = window.session.project.document.ops
+        assert len(steps) == before + 1, "genau ein Schritt"
+        assert steps[-1].op == "slot_hole", steps[-1].op
+        assert steps[-1].params["slot_length"] == pytest.approx(pulled[0])
+        assert not window.viewport.slot_drag_waits(), "der Zug ist eingelöst"
+        assert not any(step.op == "resize_hole" for step in steps[before:]), (
+            "kein Schritt mit unverändertem Durchmesser"
+        )
+    finally:
+        window.end_quiet_placement()
+        QApplication.processEvents()
+        window.release()
+
+
+def test_a_new_diameter_beside_a_pulled_slot_is_one_step_with_the_new_width(
+    qt_app: QApplication,
+) -> None:
+    """Ein Zug wartet, und die Felder tragen einen neuen Durchmesser: Übernehmen
+    macht daraus **einen** Schritt — *Zum Langloch ziehen* mit der Stelle und
+    der neuen Breite (Entscheidung Robert, 22.09.2026: „Ja eine transaktion").
+
+    Zwei Funde des Reviews vom selben Tag stehen dahinter: Die Route mischte
+    ``surface_values`` ungefiltert in die Werte, und *Bohrung ändern* lehnte
+    ``nx``/``ny``/``nz`` ab — kein Schritt, der Zug stand weiter. Und die
+    Statuszeile versprach ein zweites Übernehmen, das nichts vorfindet: Der
+    Szenenaufbau nach dem Schritt verwirft den Zug. Zwei Schritte in einer
+    Transaktion gingen auch nicht — das Langloch heißt nach dem Zug neu, und
+    der zweite Schritt kennte seinen Namen erst nach der Auswertung. Jetzt:
+    ein Übernehmen, ein Schritt, ein Strg+Z.
+    """
+    from app.ui.render.api import Pick, PointerEvent
+
+    window = _window_with_a_renderer()
+    said: list[str] = []
+    original_announce = window.announce
+
+    def spy(text: str, *args: object, **kwargs: object) -> None:
+        said.append(str(text))
+        original_announce(text, *args, **kwargs)
+
+    window.announce = spy  # type: ignore[method-assign]
+    try:
+        object_id, hole = _a_selected_hole(window)
+        flow = window._quiet_placement
+        assert flow is not None and flow.active and flow.spec_of().name == "resize_hole"
+        entry = window.session.last_result.scene.objects[object_id]
+        feature = entry.features[hole]
+        centre = feature.params["centre"]
+        top = (float(centre[0]), float(centre[1]), float(entry.mesh.bounds.maximum[2]))
+        renderer = window.viewport.renderer
+        x, y, _depth = renderer.world_to_display(top)
+        x, y = round(x), round(y)
+        renderer.picks[(x, y)] = Pick(
+            top, window.viewport._actors[object_id], int(feature.face_indices[0])
+        )
+        for event in (
+            PointerEvent("move", x, y),
+            PointerEvent("press", x, y, button="left"),
+            PointerEvent("move", x + 14, y + 4, buttons=frozenset({"left"})),
+            PointerEvent("release", x + 14, y + 4, button="left"),
+        ):
+            window.viewport._on_pointer(event)
+            QApplication.processEvents()
+        for _ in range(120):
+            QApplication.processEvents()
+            window.session.wait_for_idle()
+        pulled = window.viewport.waiting_slot_drag(hole)
+        assert pulled is not None and pulled[0] > 0.0, "der Zug wartet"
+        assert "zieht die Bohrung zum Langloch" in flow._measure_note.text()
+
+        fields = {
+            field.accessibleName().rsplit(" — ", 1)[-1]: field
+            for field in flow._measure_group.findChildren(LengthSpin)
+            if "Bohrung ändern" in field.accessibleName()
+        }
+        wider = float(feature.params["diameter"]) + 1.0
+        fields["Durchmesser"].set_value_mm(wider)
+        for _ in range(200):
+            QApplication.processEvents()
+            window.session.wait_for_idle()
+        assert not window.slot_drag_takes_the_accept("resize_hole", flow.dialog.values())
+        assert "ändert die Breite" in flow._measure_note.text(), flow._measure_note.text()
+
+        before = len(window.session.project.document.ops)
+        transactions = len(window.session.project.document.transactions)
+        flow.accept()
+        for _ in range(300):
+            QApplication.processEvents()
+            window.session.wait_for_idle()
+            if len(window.session.project.document.ops) > before:
+                break
+        for _ in range(60):
+            QApplication.processEvents()
+            window.session.wait_for_idle()
+        document = window.session.project.document
+        steps = document.ops
+        assert [step.op for step in steps[before:]] == ["slot_hole"], (
+            [step.op for step in steps[before:]],
+            said,
+        )
+        assert len(document.transactions) == transactions + 1, "eine Transaktion"
+        assert document.transactions[-1].ops == (steps[-1].id,)
+        assert steps[-1].params["slot_length"] == pytest.approx(pulled[0])
+        assert steps[-1].params["at_feature"] == hole
+        assert steps[-1].params["diameter"] == pytest.approx(wider)
+        assert steps[-1].params["x"] == pytest.approx(float(centre[0]), abs=0.05)
+        assert not window.viewport.slot_drag_waits(), "der Zug ist eingelöst"
+        # Das Ergebnis ist ein Langloch mit der neuen Breite.
+        result = window.session.last_result
+        assert result is not None and result.stopped_at is None
+        slots = [f for f in result.scene.objects[object_id].features.values() if f.kind == "slot"]
+        assert len(slots) == 1 and hole not in result.scene.objects[object_id].features
+        assert slots[0].params["diameter"] == pytest.approx(wider, abs=0.05)
+        assert slots[0].params["length"] == pytest.approx(pulled[0], abs=0.1)
+        assert not any("wartet auf ein weiteres" in text for text in said), said
+        assert not any("Ziehen Sie das Langloch danach erneut" in text for text in said), said
+        assert not any("Diesen Parameter gibt es" in text for text in said), said
+        # Und ein Strg+Z nimmt beides.
+        window.session.undo()
+        for _ in range(120):
+            QApplication.processEvents()
+            window.session.wait_for_idle()
+        assert len(window.session.project.document.ops) == before
+    finally:
+        window.end_quiet_placement()
+        QApplication.processEvents()
+        window.release()
+
+
 @pytest.mark.parametrize("begun", [False, True], ids=["passive", "begun"])
 @pytest.mark.parametrize("where", ["tree", "viewport"])
 def test_real_selection_clicks_keep_only_a_begun_measure_draft(

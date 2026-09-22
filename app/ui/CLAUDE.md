@@ -44,19 +44,46 @@ eine dauerhafte Kantenassoziation wird nicht behauptet (§18.11, §19).
 Die Fokuskette folgt dem Auge: die zwei Kantenmaße, dann die Mitten
 (`setTabOrder` beim Aufbau).
 
-**Und die Felder stehen neben dem Körper, nicht auf ihm** (RM-197, dieselbe
-Entscheidung): `_body_on_screen` führt die projizierte Hülle des Trägers als
-belegtes Rechteck, mit demselben Abstand wie um den Setzpunkt; die Felder
-rücken an den nächsten freien Platz daneben, die Verbindungslinie je Feld
-sagt, welches Maß es bemaßt — sie endet in der **Mitte** der Maßlinie, nicht
-am nächstgelegenen Punkt. Füllt der Körper das ganze Bild, gilt die alte
-Regel — ein Feld außerhalb des Bildes ist keines. Und Verbindungen kreuzen
-sich nicht, soweit ein Tausch es löst (Robert: „aufpassen dass sich die
+**Und die Felder stehen neben dem Körper, solange man ihn ganz sieht**
+(RM-197, und Robert am Halter, 22.09.2026: „solange man den körper
+vollständig sieht"): `_body_on_screen` führt die projizierte Hülle des
+Trägers als belegtes Rechteck, mit demselben Abstand wie um den Setzpunkt —
+aber nur, wenn die Hülle ganz im Maßraum liegt und ihr Freiraum dort noch
+Platz lässt; ragt der Körper hinaus oder füllt er das Bild, stehen die Felder
+an ihrer Maßlinie, auf dem Körper (Kandidaten um die Linienmitte, je eine
+bis drei Feldhöhen weiter). Die Verbindungslinie je Feld sagt, welches Maß
+es bemaßt — sie endet in der **Mitte** der Maßlinie, nicht am
+nächstgelegenen Punkt. Ein Feld deckt möglichst keine **fremde** Maßlinie
+und keine fremde Verbindung (`_clear_of_lines`; die eigene Linie zählt nicht,
+auf ihr sitzt die Zahl wie auf einer Zeichnung), aber es wandert dafür
+höchstens `STICKY_FIELDS` Feldhöhen weiter als der nächste zulässige Platz —
+Bezugskanten und Verlängerungen sind lang und bleiben erkennbar, wenn ein
+Feld ein Stück davon deckt. Das Vorschauband ist ein Hindernis. **Die
+Felder bleiben stehen** (Robert: „danach springen sie auch alle und tauschen
+sich"): `_places_that_still_serve` behält je Feld den Platz des letzten
+Aufbaus (`_field_slots`), solange er frei, im Bild, nahe am Maß und nicht
+über fremder Tinte ist, die der neue Platz freiließe; die übrigen Felder
+finden um die stehenden herum ihren Platz, und nur mehr Kreuzungen als in
+der frischen Anordnung geben die frische frei. Verbindungen kreuzen sich
+nicht, soweit ein Tausch es löst (Robert: „aufpassen dass sich die
 maßlinien nicht kreuzen"): `_untangle` tauscht nach der Platzsuche paarweise
 die Plätze zweier Felder, solange das Kreuzungen spart und beide am fremden
-Platz frei stehen; ein breites Feld über zwei schmalen behält seine
-Kreuzung. Ob zwei Strecken sich schneiden, sagt der Kern
-(`profile.strictly_crossing`), nicht eine zweite Rechnung hier.
+Platz frei stehen (`_fits`, `_crossings` — dieselben Funktionen wie die
+Stehregel); ein breites Feld über zwei schmalen behält seine Kreuzung. Ob
+zwei Strecken sich schneiden, sagt der Kern (`profile.strictly_crossing`),
+nicht eine zweite Rechnung hier. **Das Maß mit dem Fokus leuchtet**
+(`dimension_focus`, Akzentfarbe und breiterer Strich — Regel 18): Wer in ein
+Feld klickt, sieht im Bild Maßlinie, Bezugskante und Verbindung dazu, auch
+in der Tiefenstufe. **Und Übernehmen der Maßgruppe meint das gezogene
+Langloch**, wenn an der gebundenen Bohrung ein Zug wartet
+(`Viewport.waiting_slot_drag`, `MainWindow.slot_drag_takes_the_accept` — die
+eine Antwort für Weiche, Notiz und Knopf): dann geht der Abschluss den Weg
+des Merkmalfensters (`apply_slot_drag`) mit der Stelle aus den Feldern.
+Trägt das Feld daneben einen neuen Durchmesser, wird daraus **ein** Schritt
+(Entscheidung Robert, 22.09.2026): *Zum Langloch ziehen* mit der Stelle und
+der neuen Breite (`_slot_with_width`, `SlotHoleParams.diameter`) — zwei
+Schritte gingen nicht, weil das Langloch nach dem Zug neu heißt und der
+zweite seinen Namen erst nach der Auswertung kennte.
 
 **Die Maßtinte liegt im Renderer, nicht als Widget über ihm** (`_Dimensions`,
 RM-198). Bis zum 21.09.2026 war sie ein maskiertes Qt-Widget über der nativen
@@ -68,7 +95,7 @@ und `add_surface` mit `keep_in_front` in den Renderer, wie die
 Merkmalslinien; die Zahlenfelder bleiben Qt-Fenster und liegen ohnehin über
 dem Bild. Die Listen der Klasse tragen logische Bildpunkte, `refresh` legt
 sie über `display_to_world` auf eine feste Tiefe — **in Renderer-Elemente
-mit fester Kapazität** (vier Linien- und drei Flächenelemente, NaN-gepolsterte
+mit fester Kapazität** (fünf Linien- und drei Flächenelemente, NaN-gepolsterte
 Segmentpuffer, kollabierte Dreiecke), die je Aufbau nur `set_data` in place
 bekommen; neu entstehen sie erst, wenn die Kapazität reißt (Review Ansicht #7:
 10 Elemente je Aufbau entfernt und angelegt kosteten 12 der 22 ms je

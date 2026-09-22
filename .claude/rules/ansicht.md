@@ -1240,8 +1240,9 @@ Widget mehr ist (der Grund steht am Anfang von RM-198: die Fenstermaske riss
 über Vulkan das Gerät). Sie liegt vor dem Material (`keep_in_front`), unter
 Griff und Knöpfen (`DRAW_ORDER = -1`).
 
-**Sieben dauerhafte Elemente, nicht zehn neue je Aufbau.** Vier Linien
-(Unterlage, Striche, Zuordnungen, Umriss) und drei Flächen (Markenrand,
+**Acht dauerhafte Elemente, nicht zehn neue je Aufbau.** Fünf Linien
+(Unterlage, Striche, Zuordnungen, Umriss, das leuchtende Maß mit dem Fokus)
+und drei Flächen (Markenrand,
 Pfeile, Marken) entstehen einmal mit fester Kapazität; jeder Aufbau schreibt
 nur neue Punkte hinein (`Item.update_points`, der Renderer tauscht die Zahlen
 in den Puffern, ohne neue Geometrie). Bis zum 21.09.2026 räumte jeder Aufbau
@@ -1256,7 +1257,7 @@ statt 4,0 ms, `redraw` 7,7 statt 22 ms.
 Rest der Puffer steht auf NaN und zeichnet nichts (pygfx lässt nichtendliche
 Punkte aus dem Hüllquader und über `draw_range` aus dem Bild). Ein Element mit
 Kapazität ist unbeleuchtet und ohne Zellfarben; mehr wäre eine Beleuchtung,
-die niemand nachrechnet. Reißt eine Kapazität, entstehen **alle sieben** neu —
+die niemand nachrechnet. Reißt eine Kapazität, entstehen **alle acht** neu —
 auf das Doppelte des Bedarfs, in ihrer Reihenfolge, sonst käme ein einzelnes
 neues Element im Renderer ans Ende und läge über allem.
 

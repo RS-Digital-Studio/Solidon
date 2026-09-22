@@ -107,6 +107,7 @@ from app.core.types import (
     OpContext,
     OpResult,
     PlaneFrame,
+    Profile,
     ProgressFn,
     Quality,
     SceneObject,
@@ -4372,7 +4373,9 @@ OPEN_BODY_DETAIL: Final = _(
 
 @register_op(
     name="resize_hole",
-    cache_version="6",
+    # 7: ``follow`` mit Stelle bewegt um die Differenz zur alten Mitte und
+    # trägt die Befunde des neuen Orts (22.09.2026).
+    cache_version="7",
     title=_("Bohrung ändern"),
     category="holes",
     params=ResizeHoleParams,
@@ -4420,7 +4423,9 @@ def resize_hole(ctx: OpContext) -> OpResult:
     _reject_oversized("diameter", params.diameter, source.mesh)
     through = bool(feature.params.get("through", False))
     cut = bore_diameter(params.diameter, ctx.profile, params.compensate)
-    if is_close(cut, previous) and not moved_hole:
+    if bore_is_unchanged(feature, params.diameter, ctx.profile, params.compensate) and (
+        not moved_hole
+    ):
         return OpResult(outputs=[source], findings=[_unchanged_bore(cut)])
     if params.entrance_mode == "follow":
         entrance = bore_entrance(source.mesh, feature, source.features)
@@ -4428,7 +4433,7 @@ def resize_hole(ctx: OpContext) -> OpResult:
             resized = _resize_bore_entrance(ctx, feature, entrance, cut)
             if not moved_hole:
                 return resized
-            return _moved_after_resizing(ctx, resized, feature.id, centre)
+            return _moved_after_resizing(ctx, resized, feature, entrance, centre, measured_centre)
     # **Am Langloch ist der Durchmesser die Breite, und die Länge folgt daraus**
     # (RM-156). Gerechnet wird über den **Weg** und nicht über die Länge: Er ist
     # der Grund, aus dem es Langlöcher gibt, und wer ihn beim Verbreitern
@@ -4861,6 +4866,28 @@ class SlotHoleParams(BaseParams):
             "der Bohrung; leer heißt, sie bleibt, wo sie ist."
         ),
     )
+    diameter: float | None = param(
+        title=_("Breite"),
+        default=None,
+        optional=True,
+        unit="mm",
+        minimum=0.2,
+        placement="front",
+        doc=_(
+            "Die Breite des Langlochs. Leer heißt: so breit wie die Bohrung gemessen "
+            "ist. Mit einer Zahl wird das Langloch in einem Schritt gezogen und auf "
+            "diese Breite gebracht."
+        ),
+    )
+    compensate: bool = param(
+        title=_("Materialtoleranz berücksichtigen"),
+        default=False,
+        placement="advanced",
+        doc=_(
+            "Vergrößert das gewählte Fertigmaß um den Wert aus dem Materialprofil. "
+            "Aus bleibt das gemessene Maß unverändert."
+        ),
+    )
 
 
 #: Die Arten, aus denen ein Langloch werden kann.
@@ -4888,7 +4915,8 @@ SLOT_FEATURE_RENAMED: Final = _(
 
 @register_op(
     name="slot_hole",
-    cache_version="4",
+    # 5: die Breite als eigener Parameter (22.09.2026).
+    cache_version="5",
     # **Kein „Bohrung zum Langloch".** Der Titel stand so, solange die
     # Operation nur an einer Bohrung galt; seit die Erkennung Langlöcher findet
     # (:mod:`app.core.perceive.slots`), gilt sie auch an einem und hieße dort
@@ -4914,7 +4942,14 @@ def slot_hole(ctx: OpContext) -> OpResult:
     """Dieselbe Formänderung für Netze und für exakte Körper.
 
     Der Durchmesser bleibt, wie er gemessen wurde; eingetragen werden Länge und
-    Richtung.
+    Richtung — **und wahlweise die Breite** (Entscheidung Robert, 22.09.2026:
+    „Ja eine transaktion"). Wer an den Knöpfen zieht und daneben einen neuen
+    Durchmesser eintippt, bekommt beides als **einen** Schritt: Die alte
+    Öffnung wird geschlossen und das Langloch in der neuen Breite geschnitten,
+    ein Strg+Z nimmt beides. Zwei Schritte gingen nicht: Das Langloch heißt
+    nach dem ersten Zug neu (``SLOT_FEATURE_RENAMED``), und einen zweiten
+    Schritt an einen Namen zu hängen, den erst die Auswertung vergibt, wäre
+    Raten (Regel 21).
 
     **Ein bestehendes Langloch geht denselben Weg.** Seine Mitte, seine Achse
     und seine Breite stehen im Merkmal wie bei einer Bohrung; was dazukommt,
@@ -4973,7 +5008,14 @@ def slot_hole(ctx: OpContext) -> OpResult:
     measured = _bore_vector(feature, "centre")
     centre = _named_place(params.x, params.y, params.z, measured) or measured
     axis = _bore_vector(feature, "axis")
-    diameter = _bore_number(feature, "diameter")
+    measured_diameter = _bore_number(feature, "diameter")
+    diameter = measured_diameter
+    if params.diameter is not None:
+        _reject_oversized("diameter", params.diameter, source.mesh)
+        diameter = bore_diameter(params.diameter, ctx.profile, params.compensate)
+    # Eine andere Breite schließt die alte Öffnung wie ein Versetzen — sonst
+    # bliebe ein schmaleres Langloch in der weiteren Bohrung stehen.
+    widened = not is_close(diameter, measured_diameter)
     depth = _bore_number(feature, "depth")
     through = bool(feature.params.get("through", False))
     # **Gefragt wird gegen den gemessenen Durchmesser**, denn gegen ihn misst
@@ -5057,7 +5099,7 @@ def slot_hole(ctx: OpContext) -> OpResult:
     # war ein Kreuz (gemessen 15.09.2026 an der Platte: 397 mm³ mehr abgetragen,
     # kein Langloch mehr erkannt). Geschlossen wird die Öffnung, wie sie liegt.
     moved = not all(is_close(a, b) for a, b in zip(centre, measured, strict=True))
-    closes_the_old = moved or turning is not None
+    closes_the_old = moved or turning is not None or widened
     # **Die Zugabe gilt dem ersten Zug.** Sie hält den Langlochkörper von der
     # runden Bohrungswand fern, an die er sich sonst entlang zweier Linien
     # legte (:data:`prepare.FEATURE_OVERLAP`). An einem Langloch, das schon
@@ -5068,7 +5110,11 @@ def slot_hole(ctx: OpContext) -> OpResult:
     # von 5,1901, am exakten Körper je Zug genau die Zugabe (Fund des
     # Reviews). Wer ein Langloch dreimal nachzieht, soll dieselbe Schraube
     # hindurchbekommen wie nach dem ersten Mal.
-    overlap = FEATURE_OVERLAP if feature.kind == "hole" else 0.0
+    # In einer anderen Breite steht die alte Wand nicht mehr, wo das Werkzeug
+    # läge — die Öffnung ist geschlossen, das Werkzeug schneidet in Material.
+    overlap = FEATURE_OVERLAP if feature.kind == "hole" and not widened else 0.0
+    if params.diameter is not None:
+        said.extend(compensation_findings(params.diameter, diameter, params.compensate))
 
     if source.kind == "brep":
         from app.core.brep import edit
@@ -5091,7 +5137,7 @@ def slot_hole(ctx: OpContext) -> OpResult:
                 started,
                 position=measured,
                 direction=axis,
-                diameter=diameter,
+                diameter=measured_diameter,
                 depth=depth,
                 length=_bore_number(feature, "length") if feature.kind == "slot" else 0.0,
                 angle_deg=slot_angle_of(feature, axis) if feature.kind == "slot" else 0.0,
@@ -5875,8 +5921,44 @@ def _entrance_mesh_tool(
     return boolean("union", tools, quality=ctx.quality, seed=ctx.seed, cancelled=ctx.cancelled)
 
 
+#: Befunde des Einlauf-Neuschnitts, die den **alten** Ort beschreiben —
+#: Nachbarwand, Rand, Zerfall. Nach dem Versetzen steht dort Material, und für
+#: die neue Stelle gilt eine eigene Messung (Review 22.09.2026: „dünne Wand"
+#: gemeldet, wo die Bohrungen am neuen Ort ineinander übergingen).
+PLACE_BOUND_FINDINGS: Final = frozenset(
+    {
+        "bore.neighbour_opened",
+        "bore.neighbour_wall_thin",
+        "bore.over_the_edge",
+        "bore.splits_the_body",
+    }
+)
+
+
+def bore_is_unchanged(
+    feature: Feature, diameter: float, profile: Profile, compensate: bool
+) -> bool:
+    """Ob dieser Durchmesser die Bohrung so lässt, wie sie ist — die Frage,
+    mit der *Bohrung ändern* absagt („hat bereits diesen Durchmesser").
+
+    Gestellt wird sie nach der Toleranzkorrektur (``bore_diameter``) und mit
+    der Geometrietoleranz, denn so entscheidet die Operation. Das Fenster
+    fragt hier dieselbe Antwort ab, bevor es einen wartenden Langlochzug dem
+    Übernehmen zurechnet: Bis zum 22.09.2026 verglich es den rohen Feldwert
+    mit der Anzeigetoleranz, und mit eingeschalteter Korrektur sagte es
+    „gleich", wo der Kern „anders" sagte (Review).
+    """
+    cut = bore_diameter(diameter, profile, compensate)
+    return is_close(cut, _bore_number(feature, "diameter"))
+
+
 def _moved_after_resizing(
-    ctx: OpContext, resized: OpResult, feature_id: FeatureId, centre: Vec3
+    ctx: OpContext,
+    resized: OpResult,
+    feature: Feature,
+    entrance: _BoreEntrance,
+    centre: Vec3,
+    measured: Vec3,
 ) -> OpResult:
     """Den neu geschnittenen Einlauf samt Kette an die genannte Stelle bringen.
 
@@ -5891,25 +5973,109 @@ def _moved_after_resizing(
     einem Schritt: erst der Einlauf mit dem neuen Durchmesser an der alten
     Stelle, dann die ganze Hohlraumkette — Schaft und Senkung — über dieselbe
     Maschinerie wie *Merkmal verschieben* an die neue. Kennungen und Passungen
-    reisen mit, die tiefste Stufe beider Läufe steht im Ergebnis (§39).
+    reisen mit, die tiefste Stufe beider Läufe steht im Ergebnis (§17.2).
+
+    Vier Dinge, die der erste Wurf nicht tat (Review 22.09.2026):
+
+    - **Die Bewegung ist die Differenz zur alten Mitte.** Der Neuschnitt misst
+      die Bohrung neu, und an einer schrägen Mündung wandert ihre Mitte axial;
+      wer die genannten Zahlen als Ziel nähme, schöbe die Kette um diese
+      Wanderung mit — 0,245 mm an der schrägen Senkbohrung, ungefragt.
+    - **Die ganze Kette muss wiedererkannt sein**, sonst versetzte der zweite
+      Schritt den Schaft allein oder gar nichts, und die genannte Stelle
+      wäre still verworfen (Regel 21).
+    - **Befunde über den alten Ort fallen**, die Nachbarwand wird am neuen
+      gemessen — wie beim Versetzen ohne Einlauf.
+    - **Der Übergang reist mit** (§21.2): Der exakte Kern belegt beim
+      Versetzen, dass ``hole_1`` und ``cone_1`` weiterleben; ohne diesen
+      Beleg hielt der nächste Schritt, der die Bohrung braucht, die Kette an.
     """
     body = resized.outputs[0]
-    if feature_id not in body.features:
-        return resized
+    missing = [entry.id for entry in entrance.chain if entry.id not in body.features]
+    if missing:
+        raise GeometryError(
+            title=_("Die Bohrung ließ sich nach dem Ändern nicht versetzen."),
+            detail=_(
+                "Nach dem Neuschnitt des Einlaufs wurde die Hohlraumkette nicht "
+                "vollständig wiedererkannt. Ändern Sie den Durchmesser ohne Stelle "
+                "und versetzen Sie danach mit „Merkmal verschieben“."
+            ),
+            suggestions=(CORRECT_INPUT, CANCEL),
+            values={"missing": missing},
+        )
+    travel = np.asarray(centre, dtype=float) - np.asarray(measured, dtype=float)
+    now = np.asarray(body.features[feature.id].params["centre"], dtype=float) + travel
     inner = dataclasses.replace(
         ctx,
         inputs=[body],
         params=cast(Any, MoveFeatureParams)(
-            at_feature=feature_id, x=centre[0], y=centre[1], z=centre[2]
+            at_feature=feature.id, x=float(now[0]), y=float(now[1]), z=float(now[2])
         ),
+        # Der Neuschnitt meldet keinen Fortschritt; der zweite Schritt füllt
+        # die zweite Hälfte statt bei einem Zehntel neu anzufangen.
+        progress=lambda fraction, text: ctx.progress(0.5 + fraction / 2.0, text),
     )
     moved = move_feature(inner)
+    result = moved.outputs[0]
+    findings = [entry for entry in resized.findings if entry.code not in PLACE_BOUND_FINDINGS]
+    findings.extend(moved.findings)
+    source = ctx.inputs[0]
+    cavity = _paired_cavity_body(
+        as_mesh_data(body.mesh), *(body.features[entry.id] for entry in entrance.chain)
+    )
+    if cavity is not None:
+        shifted = cavity.raw.copy()
+        shifted.apply_translation(travel)
+        findings.extend(_neighbour_bore_findings(source, feature, MeshData.of(shifted), ctx))
+    findings.extend(split_findings(as_mesh_data(source.mesh), as_mesh_data(result.mesh)))
     return OpResult(
         outputs=moved.outputs,
         solver=deepest((resized.solver, moved.solver)),
-        findings=[*resized.findings, *moved.findings],
-        answered={**resized.answered, **moved.answered},
+        findings=findings,
+        # Nur der Neuschnitt könnte gefragt haben; eine Antwort des inneren
+        # Schritts hieße einen Parameter von *Merkmal verschieben* und gehört
+        # nicht in den Stapel von *Bohrung ändern* (§15.7).
+        answered=dict(resized.answered),
+        feature_continuations=_continued_through(source, resized, moved),
     )
+
+
+def _continued_through(
+    source: SceneObject, first: OpResult, second: OpResult
+) -> tuple[tuple[FeatureContinuation, ...], ...]:
+    """Die belegten Übergänge zweier Schritte hintereinander, als einer.
+
+    Was der erste Schritt belegt, wird über den zweiten weitergeführt; was
+    nur der zweite belegt, gilt für Merkmale, die schon am Eingang standen —
+    die Auswertung kennt nur diese (``_checked_continuations``). Belegt keiner
+    etwas, bleibt es leer: Der Netzkern stellt keine Übergänge aus.
+    """
+    known = source.features
+    final = second.outputs[0].features
+    onward = {
+        entry.source.feature_id: entry.target
+        for entries in second.feature_continuations
+        for entry in entries
+    }
+    continued: list[FeatureContinuation] = []
+    sources: set[FeatureId] = set()
+    targets: set[FeatureId] = set()
+    for entries in first.feature_continuations:
+        for entry in entries:
+            old_id = entry.source.feature_id
+            target = onward.get(entry.target, entry.target)
+            if old_id in known and target in final and target not in targets:
+                continued.append(FeatureContinuation(FeatureRef(source.id, old_id), target))
+                sources.add(old_id)
+                targets.add(target)
+    for old_id, new_id in onward.items():
+        if old_id in known and old_id not in sources and new_id in final and new_id not in targets:
+            continued.append(FeatureContinuation(FeatureRef(source.id, old_id), new_id))
+            sources.add(old_id)
+            targets.add(new_id)
+    if not continued:
+        return ()
+    return (tuple(continued),)
 
 
 def _resize_bore_entrance(
@@ -6069,10 +6235,25 @@ def _resize_bore_entrance(
     findings.extend(split_findings(original, as_mesh_data(changed)))
     params = cast(ResizeHoleParams, ctx.params)
     findings.extend(compensation_findings(params.diameter, diameter, params.compensate))
+    # Der Beleg für die bewusst geänderten Abschnitte reist mit dem Ergebnis
+    # (§21.2) — wie beim Ändern ohne Einlauf. Ohne ihn hielt am exakten Körper
+    # der nächste Schritt, der die Bohrung braucht, die Kette an
+    # (``NativeReferenceLost``, Review 22.09.2026). Am Netz belegt die
+    # Zuordnung die Kennungen selbst.
+    continued = (
+        tuple(
+            FeatureContinuation(FeatureRef(source.id, name), name)
+            for name in targets
+            if name in preserved and name in source.features
+        )
+        if source.kind == "brep"
+        else ()
+    )
     return OpResult(
         outputs=[dataclasses.replace(source, mesh=changed, features=preserved)],
         findings=findings,
         solver=deepest(stages),
+        feature_continuations=(continued,) if continued else (),
     )
 
 

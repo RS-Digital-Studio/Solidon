@@ -1141,7 +1141,8 @@ eine Karte sagt, was wo liegt, eine Regel, was zu halten ist.
 - **Die Merkmalerkennung nimmt bis zu eine Million Dreiecke je Körper an.**
   `FEATURE_LIMIT_TRIANGLES` begrenzt die Auswertung; Importhinweise und
   Generator-Reduktion lesen dieselbe Grenze. Karten, Darstellung und die
-  höchstens tausend zuzuordnenden Merkmale haben eigene Leistungsbudgets.
+  höchstens `FEATURE_LIMIT_COUNT` (fünftausend seit dem 22.09.2026)
+  zuzuordnenden Merkmale haben eigene Leistungsbudgets.
   Eine Anhebung wird an echten feinen Netzen einschließlich der oberen
   Gegenprobe gemessen; die Geometrie wird für die Erkennung nicht reduziert.
 - **`OpContext.scene` ist nur lesend** (Regel 3). Ops erzeugen Objekte, sie

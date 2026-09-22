@@ -14068,8 +14068,84 @@ class MainWindow(QMainWindow):
         """Der wartende Klick, sobald das Bild steht (``_apply_when_previewed``)."""
         self._apply_placed_feature(op, params)
 
+    def slot_drag_takes_the_accept(self, op: str, params: Mapping[str, Any]) -> bool:
+        """Ob Übernehmen an der gebundenen Bohrung das gezogene Langloch meint.
+
+        Nur, wenn ein Zug an genau diesem Merkmal wartet, die Handlung nicht
+        selbst *Zum Langloch ziehen* ist und die Felder keinen anderen
+        Durchmesser tragen — sonst kommt erst der Durchmesser. Die eine
+        Antwort für die Weiche des Übernehmens, die Notiz und den Knopf der
+        Maßgruppe (``PlacementFlow``): Bis zum 22.09.2026 fragte der Fluss
+        nur nach dem Zug, und Notiz und Knopf versprachen das Langloch, wo
+        das Übernehmen den Durchmesser nahm (Review).
+        """
+        if op == "slot_hole" or self._quiet_target is None or not self._quiet_target[1]:
+            return False
+        if self.viewport.waiting_slot_drag(str(self._quiet_target[1])) is None:
+            return False
+        return not self._diameter_changed(op, params)
+
+    def _slot_with_width(
+        self,
+        feature_id: str,
+        pulled: tuple[float, float],
+        values: Mapping[str, Any],
+        inputs: tuple[ObjectId, ...],
+    ) -> _PreviewOrder:
+        """Der gezogene Zug und der neue Durchmesser als **ein** Schritt: *Zum
+        Langloch ziehen* mit der Stelle aus den Feldern und der neuen Breite.
+
+        Zwei Schritte gingen nicht — das Langloch heißt nach dem ersten Zug
+        neu, und der zweite Schritt kennte seinen Namen erst nach der
+        Auswertung. ``slot_hole`` nimmt die Breite deshalb selbst
+        (``SlotHoleParams.diameter``), samt Toleranzausgleich aus den Feldern.
+        """
+        place = (
+            (float(values["x"]), float(values["y"]), float(values["z"]))
+            if all(values.get(name) is not None for name in ("x", "y", "z"))
+            else self.viewport.proposed_centre(feature_id)
+        )
+        slot: dict[str, Any] = {
+            "at_feature": feature_id,
+            "slot_length": float(pulled[0]),
+            "slot_angle": float(pulled[1]),
+            "diameter": float(values["diameter"]),
+            "compensate": bool(values.get("compensate", False)),
+        }
+        if place is not None:
+            slot.update({"x": float(place[0]), "y": float(place[1]), "z": float(place[2])})
+        return _PreviewOrder(drafts=(OperationDraft(op="slot_hole", inputs=inputs, params=slot),))
+
     def _apply_placed_feature(self, op: str, params: Mapping[str, Any]) -> bool:
-        """Nur den gebundenen, sichtbar geprüften Auftrag übernehmen."""
+        """Nur den gebundenen, sichtbar geprüften Auftrag übernehmen.
+
+        **Wartet ein gezogenes Langloch, meint Übernehmen das Langloch.** Die
+        Maßgruppe an einer Bohrung ist an *Bohrung ändern* gebunden; wer die
+        Knöpfe zum Langloch zieht, bekam beim Übernehmen die gebundene
+        Handlung mit unverändertem Durchmesser — „Die Bohrung hat bereits
+        diesen Durchmesser", und das Langloch blieb ein Umriss (Robert,
+        22.09.2026: „warum geht zum langloch nicht mehr"). Der Zug geht jetzt
+        denselben Weg wie das Übernehmen im Merkmalfenster
+        (:meth:`Viewport.apply_slot_drag`), mit der Stelle aus den Feldern.
+        Ist daneben auch der Durchmesser neu, werden beide **ein Schritt**
+        (Entscheidung Robert, 22.09.2026: „Ja eine transaktion"): *Zum
+        Langloch ziehen* mit der Stelle und der neuen Breite — der gebundene
+        Auftrag (``prepare`` der stillen Platzierung, :meth:`_slot_with_width`)
+        trägt ihn, die Vorschau zeigt ihn, ein Strg+Z nimmt ihn. Bis dahin kam
+        erst der Durchmesser, und der Zug war danach zu wiederholen, weil der
+        Szenenaufbau ihn verwirft.
+        """
+        target = self._quiet_target
+        if target is not None and self.slot_drag_takes_the_accept(op, params):
+            pulled = self.viewport.waiting_slot_drag(str(target[1]))
+            if pulled is not None:
+                place = (
+                    (float(params["x"]), float(params["y"]), float(params["z"]))
+                    if all(params.get(name) is not None for name in ("x", "y", "z"))
+                    else None
+                )
+                self.viewport.apply_slot_drag(pulled[0], pulled[1], place)
+                return True
         order = self._prepare_feature_order(op, params)
         if order is None or not self._preview_can_apply(
             self._quiet_host or self.feature_panel,
@@ -14083,6 +14159,34 @@ class MainWindow(QMainWindow):
         if not committed:
             self._feature_to_keep, self._resume_near, self._measures_to_resume = remembered
         return committed
+
+    def _diameter_changed(self, op: str, params: Mapping[str, Any]) -> bool:
+        """Ob die Felder einen anderen Durchmesser tragen als das gebundene Merkmal.
+
+        Die Antwort gibt der Kern (``prepare_ops.bore_is_unchanged``), mit der
+        Toleranzkorrektur und der Toleranz, mit der *Bohrung ändern* selbst
+        absagt — nicht ein zweiter Vergleich mit eigener Schwelle.
+        """
+        from app.core.geom.prepare_ops import bore_is_unchanged
+        from app.core.knowledge.profiles import for_object
+
+        if op != "resize_hole" or params.get("diameter") is None or self._quiet_target is None:
+            return False
+        result = self.session.last_result
+        entry = result.scene.objects.get(self._quiet_target[0]) if result is not None else None
+        feature = (
+            entry.features.get(str(self._quiet_target[1]))
+            if entry is not None and self._quiet_target[1]
+            else None
+        )
+        if feature is None or feature.params.get("diameter") is None:
+            return True
+        return not bore_is_unchanged(
+            feature,
+            float(params["diameter"]),
+            for_object(self.session.profile, entry),
+            bool(params.get("compensate", False)),
+        )
 
     def _place_from_feature_panel(self, op: str, params: dict[str, Any]) -> None:
         """Eine passive Maßgruppe bindet beim ersten Eingriff ihren vollständigen Auftrag."""
@@ -14186,6 +14290,10 @@ class MainWindow(QMainWindow):
                 )
                 if changed is not None:
                     return changed
+            if op == "resize_hole" and feature_id:
+                pulled = window.viewport.waiting_slot_drag(feature_id)
+                if pulled is not None and window._diameter_changed(op, values):
+                    return window._slot_with_width(feature_id, pulled, values, inputs)
             return _PreviewOrder(
                 drafts=(OperationDraft(op=op, inputs=inputs, params=dict(values)),)
             )

@@ -19,6 +19,7 @@ import math
 from collections.abc import Iterable
 from pathlib import Path
 
+import numpy as np
 import pytest
 import trimesh
 from shapely.geometry import Polygon
@@ -38,6 +39,25 @@ from app.core.types import Feature, Finding, OpContext, Profile, Scene, SceneObj
 def plate() -> MeshData:
     """60 x 40 x 10 mm, wasserdicht."""
     return MeshData.of(trimesh.creation.box(extents=(60.0, 40.0, 10.0)))
+
+
+def _inside(mesh: MeshData, points: list[tuple[float, float, float]]) -> np.ndarray:
+    """Innen/Außen aus der Summe der orientierten Raumwinkel — ohne ``rtree``."""
+    inside = []
+    for point in points:
+        directions = np.asarray(mesh.raw.triangles) - np.asarray(point)
+        directions /= np.linalg.norm(directions, axis=2)[:, :, None]
+        first, second, third = directions.transpose(1, 0, 2)
+        numerator = np.einsum("ij,ij->i", first, np.cross(second, third))
+        denominator = (
+            1.0
+            + np.einsum("ij,ij->i", first, second)
+            + np.einsum("ij,ij->i", second, third)
+            + np.einsum("ij,ij->i", third, first)
+        )
+        angle = 2.0 * np.arctan2(numerator, denominator).sum()
+        inside.append(abs(angle) > 2.0 * np.pi)
+    return np.asarray(inside)
 
 
 def slotted(profile: Profile, **values: float | str) -> MeshData:
@@ -743,18 +763,24 @@ def test_a_slot_offers_the_one_operation_that_fits_it() -> None:
     # Länge, Richtung — **und die Stelle**: Seit dem 10.09.2026 führt
     # ``slot_hole`` seine Mitte selbst, damit es dieselbe Flächenplatzierung
     # bekommt wie *Bohrung setzen* (Robert: „einfach wie wenn ich eine bohrung
-    # setze"). Die drei Felder tragen den gemessenen Ort.
+    # setze"). Die drei Felder tragen den gemessenen Ort. **Und die Breite**
+    # (22.09.2026, Entscheidung Robert: Zug und neuer Durchmesser sind ein
+    # Schritt): vorbelegt mit der gemessenen, damit Übernehmen ohne Hinsehen
+    # nichts ändert; der Toleranzausgleich dazu wie bei *Bohrung ändern*.
     assert {field.name for field in zeile.fields} == {
         "slot_length",
         "slot_angle",
         "x",
         "y",
         "z",
+        "diameter",
+        "compensate",
     }
     werte = {field.name: field.value for field in zeile.fields}
     assert (werte["x"], werte["y"], werte["z"]) == pytest.approx((0.0, 0.0, 0.0)), (
         "die Stelle steht auf der gemessenen Mitte, nicht auf dem Ursprung von irgendwo"
     )
+    assert werte["diameter"] == pytest.approx(float(slot.params["diameter"]))
     assert quick_names(1, "slot") == (), "was als Feld dasteht, wird kein zweiter Knopf"
 
 
@@ -1023,6 +1049,85 @@ def test_a_slot_moves_and_closes_the_place_it_came_from(profile: Profile) -> Non
     geblieben = run_op("slot_hole", entry, profile, at_feature=bore, slot_length=20.0)
     stehend = next(feature for feature in geblieben.features.values() if feature.kind == "slot")
     assert stehend.params["centre"] == pytest.approx((10.0, 5.0, 0.0), abs=0.05)
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+@pytest.mark.parametrize("width", [8.0, 4.0], ids=["breiter", "schmaler"])
+def test_a_slot_can_be_pulled_and_widened_in_one_step(
+    profile: Profile, kind: str, width: float
+) -> None:
+    """Zug und neue Breite sind **ein** Schritt (Entscheidung Robert, 22.09.2026:
+    „Ja eine transaktion").
+
+    Wer an den Knöpfen zieht und daneben einen neuen Durchmesser eintippt,
+    bekam erst den Durchmesser und musste danach neu ziehen — zwei Schritte
+    gingen nicht, weil das Langloch nach dem ersten Zug neu heißt. Jetzt nimmt
+    *Zum Langloch ziehen* die Breite selbst: Die alte Öffnung wird
+    geschlossen, das Langloch in der neuen Breite geschnitten — auch in einer
+    schmaleren, wo sonst die weitere Bohrung um das schmale Langloch stünde.
+
+    Sollwerte aus dem Aufbau: Bohrung Ø 6 bei (0, 0), Gesamtlänge 20 über
+    beide runden Enden (x = ±10), Breite 8 beziehungsweise 4; das Volumen
+    ist 24 000 − 10 · (Breite · (20 − Breite) + π · Breite² / 4).
+    """
+    if kind == "brep":
+        pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+        from app.core.brep import edit
+        from app.core.brep.features import features_of
+        from app.core.geom.mesh import as_mesh_data
+
+        solid = edit.cut_bore(
+            edit.box(90.0, 60.0, 10.0),
+            position=(0.0, 0.0, 5.0),
+            direction=(0.0, 0.0, 1.0),
+            diameter=6.0,
+            depth=10.0,
+        )
+        entry = SceneObject(
+            id="obj_1", name="Platte", mesh=solid, kind="brep", features=features_of(solid)
+        )
+        body_of = as_mesh_data
+    else:
+        mesh = drill(
+            plate(),
+            profile=profile,
+            position=(0.0, 0.0, 5.0),
+            axis="z",
+            diameter=6.0,
+            compensate=False,
+        ).mesh
+        entry = SceneObject(id="obj_1", name="Platte", mesh=mesh, features=detect(mesh))
+
+        def body_of(value):
+            return value
+
+    bore = next(name for name, feature in entry.features.items() if feature.kind == "hole")
+
+    pulled, findings = run_op_with_findings(
+        "slot_hole", entry, profile, at_feature=bore, slot_length=20.0, diameter=width
+    )
+
+    codes = [found.code for found in findings]
+    assert "slot_hole.feature_lost" not in codes, codes
+    slots = [feature for feature in pulled.features.values() if feature.kind == "slot"]
+    assert len(slots) == 1 and "hole" not in [f.kind for f in pulled.features.values()]
+    slot = slots[0]
+    assert slot.params["diameter"] == pytest.approx(width, abs=0.05)
+    assert slot.params["length"] == pytest.approx(20.0, abs=0.1)
+    # Die Geometrie: an den Enden und quer offen in der neuen Breite, daneben
+    # Material — auch dort, wo die alte Bohrung Ø 6 weiter war als das
+    # schmale Langloch.
+    body = body_of(pulled.mesh)
+    half = width / 2.0
+    mid = (float(body.bounds.minimum[2]) + float(body.bounds.maximum[2])) / 2.0
+    open_points = [(10.0 - 0.3, 0.0, mid), (0.0, half - 0.2, mid), (0.0, 0.0, mid)]
+    solid_points = [(0.0, half + 0.3, mid), (10.0 + 0.4, 0.0, mid)]
+    assert not _inside(body, open_points).any(), "offen in der neuen Breite"
+    assert _inside(body, solid_points).all(), "daneben Material"
+    expected = float(np.prod(body.bounds.size)) - 10.0 * (
+        width * (20.0 - width) + math.pi * width**2 / 4.0
+    )
+    assert body.raw.volume == pytest.approx(expected, rel=0.01)
 
 
 @pytest.mark.parametrize("diameter", [2.0, 5.0, 12.0, 20.0, 40.0])

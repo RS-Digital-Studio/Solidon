@@ -64,6 +64,7 @@ it into `website/version.json`.
 - With “Take countersink and steps along”, the bore can also be moved via the dimensions. Shaft and countersink move together, in one step.
 - If Solidon refuses a dimension, the reason stands above the preview instead of just “could not be computed”.
 - The dimension fields stay where they were when you change a value. The dimension whose field you type in lights up in the view.
+- The slot knobs also work while the bore’s dimensions stand in the view: Apply then pulls the slot — with a new diameter beside it in one step, at the new width.
 
 ### Checking and printing
 

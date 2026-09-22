@@ -2394,7 +2394,9 @@ def test_too_many_features_stop_the_matching_and_say_so(monkeypatch: pytest.Monk
     Die Dreiecksgrenze daneben schützt davor nicht — sie zählt Dreiecke, und
     zwischen Dreiecken und Merkmalen liegt kein fester Faktor. Gemessen kostet
     ``match`` bei 250 Merkmalen 0,63 s, bei 1 000 knapp zehn und bei 2 000
-    vierzig; ein echtes Modell des Korpus bringt höchstens sechzehn mit.
+    vierzig — vor der Vektorisierung; heute 0,3 s bei 1 000 und 0,9 s bei
+    5 000 (22.09.2026), und die Grenze steht bei fünftausend. Ein echtes
+    Modell des Korpus bringt höchstens sechzehn mit.
 
     Geprüft wird beides: dass **kein** ``match`` läuft (nicht nur, dass es
     schneller ist), und dass ein Befund sagt, warum. Ohne den zweiten Teil wäre

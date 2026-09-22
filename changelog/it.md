@@ -64,6 +64,7 @@ scrive in `website/version.json`.
 - Con «Porta con sé svasatura e gradini» il foro si sposta anche tramite le quote. Gambo e svasatura si muovono insieme, in un solo passaggio.
 - Se Solidon rifiuta una quota, il motivo compare sopra l’anteprima invece del solo «non è stato possibile calcolare».
 - I campi quota restano dove erano quando cambiate un valore. La quota nel cui campo scrivete si illumina nella vista.
+- Le manopole per l’asola funzionano anche mentre le quote del foro stanno nella vista: Applica trasforma allora il foro in asola — con un nuovo diametro accanto in un solo passo, nella nuova larghezza.
 
 ### Verificare e stampare
 

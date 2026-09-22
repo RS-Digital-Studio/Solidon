@@ -357,7 +357,10 @@ Maß-/Kern-/Scopewechsel, mehrere Ein-/Ausgabekörper, Gruppenabbruch und der
 gemeinsame Agentenweg. Bei Verlust kein Teiloutput und kein halber Antwortsatz.
 **`FEATURE_LIMIT_COUNT` bleibt 1000**, bis der gesonderte Release-Leistungsnachweis
 eine Änderung trägt. Direkte 1056-Flächen-Testprojekte sind keine Freigabe
-einer erhöhten Produktionsgrenze.
+einer erhöhten Produktionsgrenze. *(Stand 22.09.2026: auf fünftausend
+angehoben, `d3e7fc30`, mit Messungen an der Zuordnung — 5 000 Merkmale
+0,9 s — und an der Rohrpaarung, die dafür ihre Kandidaten vorwählt;
+die Release-Abnahme misst die neue Zahl. Siehe RM-197 im Register.)*
 
 ### 5.4 Danach P1.5
 

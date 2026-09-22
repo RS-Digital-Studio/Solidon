@@ -32,7 +32,7 @@ from app.core.scene.placement import (
 from app.core.types import PlaneFrame, Scene, SceneObject
 from app.ui.op_dialog import OperationDialog
 from app.ui.overlay import OverlayHost
-from app.ui.placement_flow import PlacementFlow, _crosses, _Dimensions, _untangle
+from app.ui.placement_flow import SPACE, PlacementFlow, _crosses, _Dimensions, _untangle
 from app.ui.session import Session
 from tests.test_surface_placement_ui import _Item, _Viewport
 
@@ -183,13 +183,15 @@ def test_leaders_swap_their_fields_until_none_of_them_cross(qt_app: QApplication
 def test_old_field_places_serve_until_a_slot_is_taken_or_the_view_turns(
     qt_app: QApplication,
 ) -> None:
-    """Die Anordnung des letzten Aufbaus gilt weiter — bis etwas dagegen spricht.
+    """Der Platz des letzten Aufbaus gilt je Feld weiter — bis etwas dagegen spricht.
 
-    Vier Gründe, sie zu verlassen: ein Hindernis auf einem alten Platz, ein
+    Fünf Gründe, ihn zu verlassen: ein Hindernis auf dem alten Platz, ein
     Platz außerhalb des Bildes, ein Maß, das weit weg gewandert ist (die
-    Kamera), oder mehr Kreuzungen als in der neuen Anordnung.
+    Kamera), eine Maßlinie unter dem alten Platz, die der neue freiließe —
+    und ein anderes behaltenes Feld, das ihn belegt. Jeder Grund trifft nur
+    das eine Feld: Bis zum 22.09.2026 verwarf ein getroffener Platz alle.
     """
-    from app.ui.placement_flow import _old_places_still_serve
+    from app.ui.placement_flow import _places_that_still_serve
 
     upper, lower = QWidget(), QWidget()
     previous = {upper: QRect(10, 10, 100, 30), lower: QRect(10, 60, 100, 30)}
@@ -199,30 +201,35 @@ def test_old_field_places_serve_until_a_slot_is_taken_or_the_view_turns(
         (lower, QPointF(200, 75), QPointF(200, 75)),
     ]
     bounds = QRect(0, 0, 600, 400)
-    assert _old_places_still_serve(previous, fresh, pending, bounds, [])
-    assert not _old_places_still_serve({}, fresh, pending, bounds, []), "beim ersten Aufbau"
-    assert not _old_places_still_serve(previous, fresh, pending, bounds, [QRect(0, 0, 50, 50)]), (
-        "ein Hindernis auf dem alten Platz"
-    )
-    assert not _old_places_still_serve(previous, fresh, pending, QRect(20, 0, 600, 400), []), (
-        "ein alter Platz außerhalb des Bildes"
-    )
+    assert _places_that_still_serve(previous, fresh, pending, bounds, [], []) == previous
+    assert not _places_that_still_serve({}, fresh, pending, bounds, [], []), "beim ersten Aufbau"
+    # Ein Hindernis auf dem oberen Platz lässt das untere Feld stehen.
+    assert _places_that_still_serve(
+        previous, fresh, pending, bounds, [QRect(0, 0, 50, 50)], []
+    ) == {lower: previous[lower]}
+    # Ein Bild, das den oberen Platz nicht mehr fasst, ebenso.
+    assert _places_that_still_serve(previous, fresh, pending, QRect(0, 40, 600, 360), [], []) == {
+        lower: previous[lower]
+    }
     turned = [
         (upper, QPointF(500, 350), QPointF(500, 350)),
         (lower, QPointF(500, 300), QPointF(500, 300)),
     ]
     far = {upper: QRect(380, 335, 100, 30), lower: QRect(380, 285, 100, 30)}
-    assert not _old_places_still_serve(previous, far, turned, bounds, []), (
+    assert not _places_that_still_serve(previous, far, turned, bounds, [], []), (
         "nach einer Kameradrehung liegen die Maße weit weg"
     )
-    crossed = [
-        (upper, QPointF(200, 75), QPointF(200, 75)),
-        (lower, QPointF(200, 25), QPointF(200, 25)),
-    ]
-    swapped = {upper: QRect(40, 60, 100, 30), lower: QRect(40, 10, 100, 30)}
-    assert not _old_places_still_serve(previous, swapped, crossed, bounds, []), (
-        "die alte Anordnung kreuzt, die neue nicht"
-    )
+    # Eine Maßlinie unter dem alten oberen Platz, die der neue freiließe.
+    through_upper = [(QPointF(0, 25), QPointF(30, 25))]
+    assert _places_that_still_serve(previous, fresh, pending, bounds, [], through_upper) == {
+        lower: previous[lower]
+    }
+    # Zwei alte Plätze, die einander belegen: Der erste in der Reihenfolge
+    # der Felder bleibt, der zweite weicht.
+    stacked = {upper: QRect(10, 10, 100, 30), lower: QRect(10, 20, 100, 30)}
+    assert _places_that_still_serve(stacked, fresh, pending, bounds, [], []) == {
+        upper: stacked[upper]
+    }
     for widget in (upper, lower):
         widget.deleteLater()
 
@@ -511,11 +518,15 @@ def test_the_dimension_fields_leave_the_movement_handle_alone(qt_app: QApplicati
         widgets = [*flow._reference_boxes[:2], *flow._centre_measures, flow._reference_boxes[2]]
         frei = [widget.geometry() for widget in widgets]
 
-        viewport.handle = ((10.0, 10.0, 0.0), 30.0)
+        # Der Griff reicht über den Körper samt seinem Freiraum hinaus (36 mm bei
+        # 20 mm halber Platte und 10 mm Freiraum): Seit dem 22.09.2026 stehen
+        # die Felder neben dem ganz sichtbaren Körper, und ein kleinerer Griff
+        # träfe dort gar kein Feld — die Gegenprobe unten misst dann nichts.
+        viewport.handle = ((10.0, 10.0, 0.0), 36.0)
         flow.redraw()
         qt_app.processEvents()
         mitte = viewport.renderer.world_to_display((10.0, 10.0, 0.0))
-        rand = viewport.renderer.world_to_display((40.0, 10.0, 0.0))
+        rand = viewport.renderer.world_to_display((46.0, 10.0, 0.0))
         weite = round(math.hypot(rand[0] - mitte[0], rand[1] - mitte[1]))
         griff = QRect(
             round(mitte[0]) - weite, round(mitte[1]) - weite, 2 * weite + 1, 2 * weite + 1
@@ -834,6 +845,46 @@ def test_dimension_fields_keep_their_places_when_the_spot_moves_a_little(
             moved_by = (after[name].topLeft() - rect.topLeft()).manhattanLength()
             assert moved_by <= 6, (name, rect, after[name])
 
+        # **Und nah herangezoomt, wo der Körper über das Bild ragt** (Review
+        # 22.09.2026): Dreißig Punkte je Millimeter, der Setzpunkt in drei
+        # Schritten um 1,2 mm — das Sperrrechteck des Setzpunkts wandert dabei
+        # in ein Feld hinein. Bis dahin löste ein getroffener Platz **alle**,
+        # zwei Felder sprangen 391 und 409 Punkte und tauschten. Jetzt folgt
+        # jedes Feld höchstens dem Weg des Setzpunkts, und keines nimmt den
+        # Platz eines anderen.
+        viewport.renderer.world_to_display = lambda point: (
+            450 + (point[0] - 10) * 30,
+            300 + (point[1] - 10) * 30,
+            0.5,
+        )
+        flow._surface = dataclasses.replace(flow._surface, point=(10, 10, 0))
+        flow.redraw()
+        close = {field.objectName(): field.geometry() for field in fields}
+        for step in (1, 2, 3):
+            flow._surface = dataclasses.replace(flow._surface, point=(10 + 0.4 * step, 10, 0))
+            flow.redraw()
+            now = {field.objectName(): field.geometry() for field in fields}
+            for name, rect in close.items():
+                moved_by = (now[name].topLeft() - rect.topLeft()).manhattanLength()
+                assert moved_by <= 12 * step + 1, (step, name, rect, now[name])
+                others = [
+                    (now[name].topLeft() - other.topLeft()).manhattanLength()
+                    for other_name, other in close.items()
+                    if other_name != name
+                ]
+                assert all(moved_by <= distance for distance in others), (
+                    "ein Feld steht auf dem alten Platz eines anderen",
+                    step,
+                    name,
+                )
+        viewport.renderer.world_to_display = lambda point: (
+            450 + point[0] * 6,
+            300 + point[1] * 6,
+            0.5,
+        )
+        flow._surface = dataclasses.replace(flow._surface, point=(11, 10, 0))
+        flow.redraw()
+
         # Und weit weg neu: Die Kamera schwenkt, alles liegt anders.
         viewport.renderer.world_to_display = lambda point: (
             450 + point[1] * 6,
@@ -882,6 +933,12 @@ def test_the_measure_with_the_focus_lights_up_in_the_view(qt_app: QApplication) 
         assert reference in flow._canvas.references and line in flow._canvas.lines
         assert lit["item"].visible
         assert lit["colour"] == viewport.palette().highlight().color().name()
+        # Regel 18: nicht allein über die Farbe — das leuchtende Maß ist auch
+        # der breitere Strich.
+        plain = next(
+            entry for entry in viewport.renderer.lines if entry["name"] == "dimension_lines"
+        )
+        assert lit["width"] > plain["width"], (lit["width"], plain["width"])
 
         centre_field = flow._centre_measures[0]
         centre_field.setFocus()
@@ -889,6 +946,157 @@ def test_the_measure_with_the_focus_lights_up_in_the_view(qt_app: QApplication) 
         flow.redraw()
         assert len(flow._canvas.focus) == 1 and flow._canvas.focus[0] in flow._canvas.lines
         assert flow._canvas.focus[0] != line, "jetzt leuchtet das andere Maß"
+    finally:
+        flow.dispose()
+        session.release()
+        dialog.close()
+        viewport.close()
+
+
+def test_fields_stand_at_their_lines_when_the_body_outgrows_the_view(
+    qt_app: QApplication,
+) -> None:
+    """Ragt der Körper über das Bild hinaus, stehen die Felder an ihrer Maßlinie
+    (Robert, 22.09.2026: „wo welches maß hinkommt seh ich immer noch nicht" —
+    „solange man den körper vollständig sieht").
+
+    Am Halter mit 220 mm, nah herangezoomt, schob die Hülle als Hindernis jedes
+    Feld an den Bildrand, dreihundert Punkte von seiner Linie weg. Jetzt: kurze
+    Verbindungen, kein Feld über einer Maßlinie, keines unter dem Vorschauband.
+
+    Ob ein Feld eine Linie deckt, misst der Test selbst — eine Abtastung der
+    Strecke gegen das Rechteck —, nicht die Funktion des Prüflings; und „kurz"
+    heißt fünf Feldhöhen — ein Feld unter dem Sperrrechteck des Setzpunkts
+    und einem zweiten Feld —, nicht anderthalb Feldbreiten (468 Punkte
+    offscreen, Review 22.09.2026: 208 und 336 Punkte bestanden das).
+    """
+    flow, session, viewport, dialog = _layout(qt_app, (900, 600), 1.0, "bottom")
+    try:
+        flow._tool_context = PlacementTool(
+            MeshData(trimesh.creation.cylinder(radius=2.5, height=10))
+        )
+        # Dreißig Bildpunkte je Millimeter: Die 40-mm-Platte ist 1200 Punkte
+        # breit und ragt an beiden Seiten aus dem 900 Punkte breiten Bild.
+        viewport.renderer.world_to_display = lambda point: (
+            450 + (point[0] - 10) * 30,
+            300 + (point[1] - 10) * 30,
+            0.5,
+        )
+        flow.redraw()
+        qt_app.processEvents()
+        fields = [*flow._reference_boxes[:2], *flow._centre_measures, flow._reference_boxes[2]]
+        lines = list(flow._canvas.lines)
+        assert lines, "ohne Tinte misst der Test nichts"
+        # Kein Feld über einer **fremden** Maßlinie: Die eigene ist die, an
+        # deren Mitte seine Verbindung endet — dort sitzt die Zahl wie auf
+        # einer Zeichnung.
+        anchors = [anchor for _tail, anchor in flow._canvas.leaders]
+        for field in fields:
+            assert field.isVisible(), field.objectName()
+            middle = QPointF(field.geometry().center())
+            own = min(anchors, key=lambda anchor: (anchor - middle).manhattanLength())
+            for line in lines:
+                if ((line[0] + line[1]) / 2 - own).manhattanLength() <= 1.0:
+                    continue
+                assert not _line_touches(line, field.geometry()), (
+                    field.objectName(),
+                    field.geometry(),
+                    line,
+                )
+        # Nicht weiter als fünf Feldhöhen: Es steht neben seiner Linie und
+        # nicht am Bildrand.
+        tallest = max(field.height() for field in fields)
+        for tail, anchor in flow._canvas.leaders:
+            assert (tail - anchor).manhattanLength() <= 5 * tallest + SPACE, (
+                "die Verbindung ist kurz — das Feld steht an seiner Linie",
+                tail,
+                anchor,
+            )
+    finally:
+        flow.dispose()
+        session.release()
+        dialog.close()
+        viewport.close()
+
+
+def test_a_body_that_just_fits_the_view_keeps_the_fields_at_their_lines(
+    qt_app: QApplication,
+) -> None:
+    """Passt der Körper gerade so ins Bild, deckt sein Freiraum alles — dann gilt
+    die alte Regel, nicht die Notreihe.
+
+    Zwischen „ganz sichtbar mit Platz ringsum" und „ragt hinaus" liegt die Lage,
+    die jedes Heranzoomen durchläuft: Die Hülle steht im Maßraum, die Hülle
+    plus Rand nicht. Ohne den zweiten Ausgang von ``_body_on_screen`` deckte
+    das Hindernis das ganze Bild, und alle fünf Felder standen in der
+    Notreihe oben links, mit Verbindungen von 447 bis 749 Punkten (Review
+    22.09.2026).
+    """
+    flow, session, viewport, dialog = _layout(qt_app, (900, 600), 1.0, "bottom")
+    try:
+        flow._tool_context = PlacementTool(
+            MeshData(trimesh.creation.cylinder(radius=2.5, height=10))
+        )
+        # Die 40-mm-Platte auf 860 mal 500 Punkte: Hülle x 20…880, y 30…530 —
+        # im Maßraum, aber mit dem Rand darüber hinaus.
+        viewport.renderer.world_to_display = lambda point: (
+            450 + point[0] * 21.5,
+            280 + point[1] * 12.5,
+            0.5,
+        )
+        flow.redraw()
+        qt_app.processEvents()
+        fields = [*flow._reference_boxes[:2], *flow._centre_measures, flow._reference_boxes[2]]
+        tallest = max(field.height() for field in fields)
+        assert len(flow._canvas.leaders) >= len(fields)
+        for tail, anchor in flow._canvas.leaders:
+            assert (tail - anchor).manhattanLength() <= 5 * tallest + SPACE, (
+                "die Felder stehen an ihren Linien, nicht in der Notreihe",
+                tail,
+                anchor,
+            )
+    finally:
+        flow.dispose()
+        session.release()
+        dialog.close()
+        viewport.close()
+
+
+def test_no_field_hides_under_the_preview_banner(qt_app: QApplication) -> None:
+    """Das Vorschauband oben deckte zwei Felder zu (Robert, 22.09.2026)."""
+    from PySide6.QtWidgets import QLabel
+
+    flow, session, viewport, dialog = _layout(qt_app, (900, 600), 1.0, "top")
+    try:
+        flow._tool_context = PlacementTool(
+            MeshData(trimesh.creation.cylinder(radius=2.5, height=10))
+        )
+        banner = QLabel("Vorschau — noch nicht übernommen", viewport)
+        banner.setGeometry(0, 0, 900, 60)
+        banner.show()
+        viewport.banner = banner
+        viewport.renderer.world_to_display = lambda point: (
+            450 + (point[0] - 10) * 30,
+            80 + (point[1] - 10) * 30,
+            0.5,
+        )
+        flow.redraw()
+        qt_app.processEvents()
+        fields = [*flow._reference_boxes[:2], *flow._centre_measures, flow._reference_boxes[2]]
+        for field in fields:
+            assert not field.geometry().intersects(banner.geometry()), (
+                field.objectName(),
+                field.geometry(),
+            )
+        # Die Gegenprobe: Ohne das Band als Hindernis läge mindestens ein Feld
+        # darunter — sonst hätte der Test nichts gemessen (Review 22.09.2026).
+        viewport.banner = None
+        flow._field_slots = {}
+        flow.redraw()
+        qt_app.processEvents()
+        assert any(field.geometry().intersects(banner.geometry()) for field in fields), (
+            "das Band war nie im Weg — die Probe misst nichts"
+        )
     finally:
         flow.dispose()
         session.release()
@@ -996,6 +1204,18 @@ def test_placement_refreshes_when_only_a_nested_project_measure_changes(
         session.release()
         dialog.close()
         viewport.close()
+
+
+def _line_touches(line: tuple[QPointF, QPointF], rect: QRect) -> bool:
+    """Ob die Strecke das Rechteck berührt — abgetastet in hundert Schritten."""
+    start, end = line
+    for step in range(101):
+        share = step / 100.0
+        x = start.x() + (end.x() - start.x()) * share
+        y = start.y() + (end.y() - start.y()) * share
+        if rect.left() <= x <= rect.right() + 1 and rect.top() <= y <= rect.bottom() + 1:
+            return True
+    return False
 
 
 def _layout(

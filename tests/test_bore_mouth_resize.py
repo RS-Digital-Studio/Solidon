@@ -407,6 +407,8 @@ def test_follow_at_a_new_place_moves_shaft_and_countersink_together(
         OpContext(
             scene=Scene(objects={source.id: source}),
             inputs=[source],
+            # z = 6: die Schaftmitte aus dem Profil (2 … 10) — die Kette wandert
+            # nur in der Ebene, und genau das prüft der Achslagentest darunter.
             params=spec.params(
                 at_feature=hole.id, diameter=8.0, entrance_mode="follow", x=7.0, y=-4.0, z=6.0
             ),
@@ -431,6 +433,130 @@ def test_follow_at_a_new_place_moves_shaft_and_countersink_together(
     sink = next(f for f in changed.features.values() if f.kind == "cone")
     assert tuple(sink.params["centre"])[:2] == pytest.approx((7.0, -4.0), abs=0.05)
     assert sink.params["diameter"] == pytest.approx(12.0, abs=0.05)
+    # Am glatten Fall meldet der Doppelschritt nichts — Befunde des alten
+    # Orts reisen nicht mit (Review 22.09.2026).
+    assert not [f for f in result.findings if f.severity != "info"], result.findings
+    if kind == "brep":
+        # Der belegte Übergang beider Abschnitte reist mit; ohne ihn hielt der
+        # nächste Schritt, der die Bohrung braucht, die Kette an.
+        assert len(result.feature_continuations) == 1
+        continued = {c.source.feature_id: c.target for c in result.feature_continuations[0]}
+        assert continued == {hole.id: hole.id, sink.id: sink.id}
+
+
+def test_follow_at_a_new_place_keeps_the_axial_level_of_the_recut(profile: Profile) -> None:
+    """Die Bewegung ist die Differenz zur alten Mitte, nicht die genannte Zahl.
+
+    An der schrägen Mündung wandert die gemessene Mitte des Schafts beim
+    Neuschnitt axial (Review 22.09.2026: 0,245 mm). Wer die Felder mit der
+    alten Mitte vorbelegt und nur x ändert, will die Kette in der Ebene
+    versetzen — Schaft und Senkung stehen danach auf derselben Höhe wie nach
+    demselben Neuschnitt ohne Stelle.
+    """
+    mesh, features, hole = _sloping_bore()
+    centre = tuple(float(v) for v in hole.params["centre"])
+    still = _operation(
+        "resize_hole",
+        mesh,
+        features,
+        hole,
+        profile,
+        diameter=11.0,
+        compensate=False,
+        entrance_mode="follow",
+    )
+    moved = _operation(
+        "resize_hole",
+        mesh,
+        features,
+        hole,
+        profile,
+        diameter=11.0,
+        compensate=False,
+        entrance_mode="follow",
+        x=centre[0] + 3.0,
+        y=centre[1],
+        z=centre[2],
+    )
+    for kind in ("hole", "cone"):
+        before = next(f for f in still.outputs[0].features.values() if f.kind == kind)
+        after = next(f for f in moved.outputs[0].features.values() if f.kind == kind)
+        assert after.params["centre"][2] == pytest.approx(before.params["centre"][2], abs=1e-3), (
+            kind
+        )
+        assert after.params["centre"][0] == pytest.approx(
+            before.params["centre"][0] + 3.0, abs=0.05
+        )
+
+
+def test_follow_at_a_new_place_measures_the_neighbour_wall_there(profile: Profile) -> None:
+    """Der Nachbarbefund gilt dem neuen Ort — nicht dem, an dem jetzt Material steht.
+
+    Die schräge Bohrung Ø 9 → 11 um 3 mm auf die Nachbarbohrung Ø 9,5 bei
+    x = 12 zu: neuer Rand bei 8,5, Nachbarrand bei 7,25 — die Bohrungen gehen
+    ineinander über. Der Neuschnitt am alten Ort fand dort 1,75 mm Wand und
+    meldete „dünn"; das ist eine Aussage über eine Stelle, die es danach nicht
+    mehr gibt.
+    """
+    mesh, features, hole = _sloping_bore()
+    centre = tuple(float(v) for v in hole.params["centre"])
+    result = _operation(
+        "resize_hole",
+        mesh,
+        features,
+        hole,
+        profile,
+        diameter=11.0,
+        compensate=False,
+        entrance_mode="follow",
+        x=centre[0] + 3.0,
+        y=centre[1],
+        z=centre[2],
+    )
+    codes = [f.code for f in result.findings]
+    assert "bore.neighbour_opened" in codes, codes
+    assert "bore.neighbour_wall_thin" not in codes, codes
+
+
+def test_follow_at_a_new_place_refuses_when_the_chain_is_not_found_again(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Wird die Kette nach dem Neuschnitt nicht wiedererkannt, sagt der Schritt ab.
+
+    Vorher: die Senkung fehlte in der Merkmalskarte, ``move_feature`` sah keine
+    Kette und versetzte den Schaft allein — oder die Bohrung fehlte, und die
+    genannte Stelle wurde still verworfen (Regel 21). Jetzt trägt die Absage
+    den Rückweg.
+    """
+    from app.core.errors import GeometryError
+    from app.core.geom import prepare_ops
+
+    mesh, features, hole = _sloping_bore()
+    centre = tuple(float(v) for v in hole.params["centre"])
+    original = prepare_ops._recognised_resized_feature
+
+    def only_the_shaft(changed, target, expected, **kwargs):
+        if target.kind == "cone":
+            return None
+        return original(changed, target, expected, **kwargs)
+
+    monkeypatch.setattr(prepare_ops, "_recognised_resized_feature", only_the_shaft)
+    with pytest.raises(GeometryError) as caught:
+        _operation(
+            "resize_hole",
+            mesh,
+            features,
+            hole,
+            profile,
+            diameter=11.0,
+            compensate=False,
+            entrance_mode="follow",
+            x=centre[0] + 3.0,
+            y=centre[1],
+            z=centre[2],
+        )
+    assert caught.value.values["missing"]
+    assert caught.value.suggestions
 
 
 def test_follow_default_is_explicit_only_for_a_suitable_feature_action(profile: Profile) -> None:

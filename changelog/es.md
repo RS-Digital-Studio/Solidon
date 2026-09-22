@@ -65,6 +65,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Con «Llevar avellanado y escalones», el taladro también se puede desplazar mediante las cotas. Vástago y avellanado se mueven juntos, en un solo paso.
 - Si Solidon rechaza una cota, el motivo aparece sobre la vista previa en lugar de solo «no se pudo calcular».
 - Los campos de cota se quedan donde estaban cuando cambia un valor. La cota en cuyo campo escribe se ilumina en la vista.
+- Los tiradores para la ranura también funcionan mientras las cotas del taladro están en la vista: Aplicar estira entonces la ranura — con un diámetro nuevo al lado en un solo paso, con el nuevo ancho.
 
 ### Comprobar e imprimir
 
