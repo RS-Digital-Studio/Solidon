@@ -29,3 +29,25 @@ saubere Zahlen zur falschen Frage — und in einem Baum, den gerade andere
 läuft, setzt zuerst `sys.path.insert(0, <baum>)` (oder liest `PROBE_ROOT`)
 und prüft einmal `app.__file__`, bevor es misst. Siehe
 [[hilfsmodul-verstellt-den-suchpfad]] und [[messung-traegt-nur-am-ort-ihrer-messung]].
+
+**Der Vorsatz allein reicht nicht — das ausgefuehrte Skript setzt den Pfad
+selbst.** Am 22.09.2026 stand die Regel hier und war befolgt: Der Aufruf
+lautete `python -c "sys.path.insert(0, worktree); exec(open(sonde).read())"`.
+Die Sonde brachte ihren eigenen `sys.path.insert(0, r"F:D Druck")` mit, und
+der lief **nach** meinem. Gemessen wurde der Hauptbaum. Zwei Minuten lang sah
+die Ausgabe plausibel aus; aufgefallen ist es erst an einem Wert, der nicht
+zum Stand passte.
+
+**Deshalb: Der Baum ist ein Argument, und die Herkunft wird gedruckt.**
+
+    TREE = sys.argv[1]
+    sys.path.insert(0, TREE)
+    ...
+    where = str(Path(F.__file__).resolve())
+    if not where.startswith(str(Path(TREE).resolve())):
+        raise SystemExit(f"falscher Baum geladen: {where}")
+    print(f"gemessen wird {where}")
+
+Die gedruckte Zeile ist der eigentliche Gewinn, nicht die Prüfung: Sie macht
+eine stille Annahme sichtbar, auch wenn sie stimmt — und in der Ausgabedatei
+steht sie noch, wenn man die Zahlen eine Stunde später liest.

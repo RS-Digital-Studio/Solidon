@@ -44,3 +44,27 @@ lassen — und er kennt seine Sache besser.
 Verwandt: [[gemessene-frage-ist-nicht-die-gestellte]] (dieselbe Wurzel, ohne
 den Verstärker durch Bestätigung) und
 [[voraussetzung-im-namen-statt-hergestellt]].
+
+---
+
+## Eine Erklärung verstärkt genauso — und sie kommt ohne zweite Sitzung aus
+
+Am 22.09.2026 meldete meine Messung einen Faktor 27 an einem kleinen Körper:
+2,10 Sekunden vorher, 0,08 nachher. Die Zahl war zu schön, und ich hatte sofort
+eine Erklärung dafür — die Nachbarsitzung hatte am Vortag denselben Codepfad
+umgebaut, also schrieb ich ihr den Ausreißer zu. Das war plausibel, kollegial
+und falsch: Derselbe Körper braucht in **beiden** Ständen ruhig gemessen 0,08
+Sekunden. Mein Vorher-Lauf lief in ihrem Korpusfenster, und **alle** meine
+Vorher-Zeiten waren zu hoch, nicht nur dieser eine.
+
+**Why:** Hier war kein zweiter Messwert der Verstärker, sondern eine
+Geschichte. Eine unerklärte zu schöne Zahl bleibt ein Stachel; eine erklärte
+ist erledigt. Die Erklärung hat den Fehler nicht aufgedeckt, sondern
+stabilisiert — und weil sie jemand anderem etwas zuschrieb, fühlte sie sich
+auch noch großzügig an.
+
+**How to apply:** Wenn eine Zahl besser ausfällt als erwartet und sofort eine
+Erklärung zur Hand ist, ist das kein Grund weiterzugehen, sondern einer
+stehenzubleiben. Die Gegenprobe ist billig und dauert eine Minute: **denselben
+Körper in beiden Ständen einzeln messen**, nicht im Korpuslauf. Verwandt:
+[[leistungstests-fremdlast]] und [[messung-traegt-nur-am-ort-ihrer-messung]].
