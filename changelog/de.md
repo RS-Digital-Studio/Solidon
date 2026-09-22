@@ -112,11 +112,15 @@ Nutzen da und sonst nichts.
 - Getrennt liegende Druckteile bekommen keine Warnung zur Einbaulage mehr. Die Passung meldet nur, was sie gemessen hat.
 - Die Orientierungssuche an einem Modell mit über einer Million Dreiecken dauert fünf Sekunden statt einer halben Minute.
 - Sehr kleine Abstände stehen in der Analysekarte als Dezimalzahl, nicht als Zehnerpotenz.
+- Die Formabweichung an Rundungen und Ringen ist so genau wie an Ebenen und Zylindern — und die Karte rechnet dabei schneller als vorher.
 
 ### Einlesen
 
 - Eine eingelesene Baugruppe lässt sich mit einem Klick als Ganzes auf das Bett setzen. Die Teile behalten ihre Lage zueinander.
 - Ein glTF ohne plausible Größe wird nicht mehr in Metern geglaubt. Solidon fragt nach der Einheit und zeigt die Maße je Lesart.
+- Ein eingelesenes ausgehöhltes Teil lässt sich mit einem Gitter füllen: Solidon bestimmt den Innenraum über die Entlüftungsbohrung und sagt, dass es ihn so bestimmt hat.
+- Dreiecke verringern zerreißt geschlossene Modelle nicht mehr. Wo die Form es nicht anders zulässt, nennt der Prüfbericht die Zahl der Teile, in die das Modell zerfallen ist.
+- Dreiecke verringern erreicht sein Ziel jetzt auch an Hülsen, Ringen und Gehäusen mit Durchbrüchen.
 
 ### Bedienung und System
 

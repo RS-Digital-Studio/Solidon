@@ -87,11 +87,15 @@ scrive in `website/version.json`.
 - Le parti separate per la stampa non ricevono più un avviso sulla posizione di montaggio. L'accoppiamento segnala solo ciò che ha misurato.
 - La ricerca dell'orientamento su un modello con oltre un milione di triangoli richiede cinque secondi invece di mezzo minuto.
 - Le distanze molto piccole compaiono nella mappa di analisi come decimali, non come potenze di dieci.
+- Lo scostamento di forma su raccordi e anelli è preciso come su piani e cilindri, e la mappa si calcola più rapidamente di prima.
 
 ### Importare
 
 - Un assieme importato si può appoggiare sul piano come un tutto con un clic. Le parti mantengono la loro posizione reciproca.
 - Un glTF senza una dimensione plausibile non viene più creduto in metri. Solidon chiede l'unità e mostra le misure per ogni lettura.
+- Un pezzo cavo importato si può riempire con un reticolo: Solidon determina il vano interno attraverso lo sfiato e dice di averlo determinato così.
+- Ridurre i triangoli non lacera più i modelli chiusi. Dove la forma non consente altro, il rapporto indica in quante parti il modello si è diviso.
+- Ridurre i triangoli raggiunge ora il suo obiettivo anche su boccole, anelli e scatole con aperture.
 
 ### Uso e sistema
 

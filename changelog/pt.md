@@ -87,11 +87,15 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Peças separadas para imprimir deixam de receber um aviso sobre a posição de montagem. O ajuste comunica apenas o que mediu.
 - A procura de orientação num modelo com mais de um milhão de triângulos demora cinco segundos em vez de meio minuto.
 - Distâncias muito pequenas aparecem no mapa de análise como decimais, não como potências de dez.
+- O desvio de forma em arredondamentos e anéis é tão preciso como em planos e cilindros, e o mapa é calculado mais depressa do que antes.
 
 ### Importar
 
 - Um conjunto importado pode ser assente na mesa como um todo com um clique. As peças mantêm a sua posição relativa.
 - Um glTF sem um tamanho plausível já não é tomado como metros. O Solidon pergunta a unidade e mostra as medidas para cada leitura.
+- Uma peça oca importada pode ser preenchida com uma treliça: o Solidon determina o espaço interior através do respiro e diz que o determinou assim.
+- Reduzir triângulos já não rasga modelos fechados. Onde a forma não permite outra coisa, o relatório indica em quantas partes o modelo se dividiu.
+- Reduzir triângulos alcança agora o seu objetivo também em casquilhos, anéis e caixas com aberturas.
 
 ### Utilização e sistema
 

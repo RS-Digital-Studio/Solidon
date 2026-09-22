@@ -87,11 +87,15 @@ it into `website/version.json`.
 - Parts lying apart for printing no longer get a warning about their assembled position. The fit reports only what it has measured.
 - The orientation search on a model with over a million triangles takes five seconds instead of half a minute.
 - Very small distances appear in the analysis map as decimals, not as powers of ten.
+- Shape deviation on fillets and rings is now as precise as on planes and cylinders — and the map computes faster than before.
 
 ### Importing
 
 - An imported assembly can be placed on the bed as a whole with one click. The parts keep their position relative to each other.
 - A glTF without a plausible size is no longer believed to be in metres. Solidon asks for the unit and shows the dimensions for each reading.
+- An imported hollowed part can be filled with a lattice: Solidon finds the cavity through the vent hole and says that this is how it found it.
+- Reducing triangles no longer tears closed models apart. Where the shape allows nothing else, the report names the number of parts the model fell into.
+- Reducing triangles now reaches its target on sleeves, rings and housings with openings as well.
 
 ### Operation and system
 

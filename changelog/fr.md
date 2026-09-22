@@ -88,11 +88,15 @@ dans `website/version.json`.
 - Les pièces posées séparément pour l'impression ne reçoivent plus d'avertissement sur leur position de montage. L'ajustement ne signale que ce qu'il a mesuré.
 - La recherche d'orientation sur un modèle de plus d'un million de triangles prend cinq secondes au lieu d'une demi-minute.
 - Les très petites distances apparaissent dans la carte d'analyse en décimales, pas en puissances de dix.
+- L'écart de forme sur les congés et les anneaux est aussi précis que sur les plans et les cylindres, et la carte se calcule plus vite qu'avant.
 
 ### Importer
 
 - Un assemblage importé se pose sur le plateau d'un seul clic, comme un tout. Les pièces gardent leur position les unes par rapport aux autres.
 - Un glTF sans taille plausible n'est plus cru en mètres. Solidon demande l'unité et montre les cotes pour chaque lecture.
+- Une pièce creuse importée peut être remplie d'une structure en treillis : Solidon détermine le volume intérieur par l'évent et indique qu'il l'a déterminé ainsi.
+- Réduire les triangles ne déchire plus les modèles fermés. Là où la forme ne permet rien d'autre, le rapport indique en combien de morceaux le modèle s'est séparé.
+- Réduire les triangles atteint désormais sa cible aussi sur les douilles, les anneaux et les boîtiers percés.
 
 ### Utilisation et système
 
