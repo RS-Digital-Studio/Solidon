@@ -23,7 +23,12 @@ ops.py        Extrudieren, Rotieren, Ausschneiden — die Skizzen-Operationen
 ```
 
 `planes.py` beantwortet die Frage davor: **wo** die Skizze liegt — auf einer
-Grundebene oder auf einer Fläche des Modells.
+Grundebene, auf einer Fläche des Modells oder auf einer abgeleiteten Ebene:
+parallel versetzt, gekippt oder durch drei Punkte gelegt (§30.1). Die
+abgeleiteten gehören **der Skizze** und stehen in keinem Objektbaum; sie sind
+eine Zeichenkette im Parameter, deren Abstand ein Projektparameter sein darf.
+`frame_for_plane` schweigt, wenn sie sich nicht auflösen lässt (eine Ansicht
+ohne Parameter ist kein Fehlerfall), `frame_for_sketch` sagt warum.
 
 Die Merkmalsauskunft exakter Ergebnisse erhält denselben Abbruchauftrag wie
 die erzeugende Operation. `_created` und `cut_regions` reichen `ctx.cancelled`

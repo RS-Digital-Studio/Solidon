@@ -16,7 +16,9 @@ wäre der Fall, für den §21 die stabilen IDs eingeführt hat.
 from __future__ import annotations
 
 import math
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass
+from typing import Final
 
 from app.core.errors import Action, ValidationError
 from app.core.types import PlaneFrame, Point2, SceneObject, Vec3
@@ -120,6 +122,171 @@ def feature_plane_parts(plane: str) -> tuple[str, str]:
     return "", payload
 
 
+#: Wie eine abgeleitete Ebene geschrieben wird (Bauplan §30.1).
+#:
+#: ``offset:<basis>:<abstand>`` — parallel zur Basis, um ``<abstand>`` entlang
+#: ihrer Normalen verschoben. ``tilt:<basis>:<achse>:<winkel>`` — die Basis um
+#: ihre eigene erste oder zweite Achse gekippt. ``through:<p>;<p>;<p>`` — durch
+#: drei Punkte in Weltkoordinaten, je ``x,y,z``.
+#:
+#: **Die Basis steht vorn und der Zusatz hinten**, weil die Basis selbst
+#: Doppelpunkte trägt (``feature:<obj>:<face>``): Von hinten gelesen ist die
+#: Teilung eindeutig, von vorn wäre sie es nicht. Ein Abstand oder Winkel darf
+#: ein Maßausdruck aus §13 sein (``@wand``, ``=@wand * 2``); Ausdrücke
+#: enthalten keinen Doppelpunkt, die Grammatik kennt keinen.
+OFFSET_PREFIX: Final = "offset:"
+TILT_PREFIX: Final = "tilt:"
+THROUGH_PREFIX: Final = "through:"
+
+#: Wie oft eine Ebene auf einer anderen stehen darf.
+#:
+#: Eine Versatzebene über einer Neigungsebene über einer Fläche ist eine
+#: sinnvolle Konstruktion; vier Stufen hat noch niemand gebraucht. Die Grenze
+#: steht nicht gegen den Nutzer, sondern gegen eine beschädigte Projektdatei,
+#: die sich selbst als Basis nennt — ohne sie liefe die Auflösung endlos.
+MAX_PLANE_DEPTH: Final = 4
+
+#: Welche Achse der Basis eine Neigungsebene kippt.
+TILT_AXES: Final = ("x", "y")
+
+
+@dataclass(frozen=True, slots=True)
+class OffsetPlane:
+    """Eine Ebene parallel zu ``base``, um ``distance`` entlang ihrer Normalen."""
+
+    base: str
+    distance: str
+
+
+@dataclass(frozen=True, slots=True)
+class TiltPlane:
+    """``base``, gekippt um ihre eigene ``axis`` (``x`` oder ``y``) um ``angle`` Grad."""
+
+    base: str
+    axis: str
+    angle: str
+
+
+@dataclass(frozen=True, slots=True)
+class ThroughPlane:
+    """Die Ebene durch drei Punkte; die erste Achse zeigt vom ersten zum zweiten."""
+
+    points: tuple[Vec3, Vec3, Vec3]
+
+
+DerivedPlane = OffsetPlane | TiltPlane | ThroughPlane
+
+
+def is_derived_plane(plane: str) -> bool:
+    """Ob diese Angabe auf einer anderen Ebene steht oder aus Punkten entsteht."""
+    return plane.startswith((OFFSET_PREFIX, TILT_PREFIX, THROUGH_PREFIX))
+
+
+def _point_from(text: str, field: str) -> Vec3:
+    parts = text.split(",")
+    if len(parts) != 3:
+        raise _unreadable(field, text, "point_needs_three_numbers")
+    try:
+        first, second, third = (float(part) for part in parts)
+    except ValueError:
+        raise _unreadable(field, text, "point_is_not_a_number") from None
+    if not all(math.isfinite(value) for value in (first, second, third)):
+        raise _unreadable(field, text, "point_is_not_a_number")
+    return (first, second, third)
+
+
+def _unreadable(field: str, value: str, reason: str) -> ValidationError:
+    """Eine Ebenenangabe, die niemand lesen kann — ein Fall, viele Anlässe.
+
+    Die Beschränkung heißt für alle gleich, denn für den, der davorsitzt, ist
+    es dieselbe Lage: Die Zeichenebene ist unbrauchbar, und weiter geht es über
+    eine andere. **Der genaue Anlass steht in ``values``**, wo er hingehört —
+    ein eigener Beschränkungsname je Schreibfehler machte fünfzehn daraus, und
+    keiner davon beschriebe eine andere Handlung.
+    """
+    return ValidationError(
+        field,
+        _("Diese Zeichenebene lässt sich nicht lesen."),
+        value=value,
+        constraint="unreadable_plane",
+        values={"reason": reason},
+        suggestions=[
+            Action(id="sketch.pick_plane", label=_("Eine andere Ebene wählen"), primary=True),
+            Action(
+                id="sketch.use_global_plane", label=_("Auf einer der drei Grundebenen zeichnen")
+            ),
+        ],
+    )
+
+
+def measure_is_readable(text: str) -> bool:
+    """Ob dieser Text als Länge oder Winkel durchgeht — Zahl oder Maßausdruck (§13).
+
+    Die Prüfung steht **im Parser** und nicht erst in der Rechnung: Sonst läse
+    ``offset:plane:xy`` als Basis ``plane`` mit dem Abstand ``xy``, und eine
+    unvollständige Angabe würde zu einer anderen, die zufällig aufgeht.
+    """
+    from app.core import expressions
+
+    if expressions.is_expression(text):
+        try:
+            expressions.check(text)
+        except ValidationError:
+            return False
+        return True
+    try:
+        return math.isfinite(float(text))
+    except ValueError:
+        return False
+
+
+def derived_plane(plane: str, field: str = "plane") -> DerivedPlane | None:
+    """Die Teile einer abgeleiteten Ebene — oder ``None`` für Grundebene und Fläche.
+
+    Gelesen wird von **hinten**: Der Zusatz steht am Ende, die Basis davor und
+    darf selbst Doppelpunkte tragen. Was sich nicht lesen lässt, ist ein Fehler
+    mit Vorschlag und keine stille Rückgabe von ``None`` — eine Skizze, deren
+    Ebene niemand versteht, liegt sonst irgendwo.
+    """
+    if plane.startswith(OFFSET_PREFIX):
+        base, separator, distance = plane.removeprefix(OFFSET_PREFIX).rpartition(":")
+        if not separator or not base or not measure_is_readable(distance):
+            raise _unreadable(field, plane, "offset_needs_base_and_distance")
+        return OffsetPlane(base=base, distance=distance)
+    if plane.startswith(TILT_PREFIX):
+        rest, separator, angle = plane.removeprefix(TILT_PREFIX).rpartition(":")
+        base, inner, axis = rest.rpartition(":")
+        if not separator or not inner or not base or not measure_is_readable(angle):
+            raise _unreadable(field, plane, "tilt_needs_base_axis_and_angle")
+        if axis not in TILT_AXES:
+            raise _unreadable(field, plane, "tilt_axis_is_x_or_y")
+        return TiltPlane(base=base, axis=axis, angle=angle)
+    if plane.startswith(THROUGH_PREFIX):
+        written = plane.removeprefix(THROUGH_PREFIX).split(";")
+        if len(written) != 3:
+            raise _unreadable(field, plane, "through_needs_three_points")
+        first, second, third = (_point_from(entry, field) for entry in written)
+        return ThroughPlane(points=(first, second, third))
+    return None
+
+
+def offset_plane(base: str, distance: str | float) -> str:
+    """Eine Versatzebene benennen."""
+    return f"{OFFSET_PREFIX}{base}:{distance}"
+
+
+def tilt_plane(base: str, axis: str, angle: str | float) -> str:
+    """Eine Neigungsebene benennen."""
+    return f"{TILT_PREFIX}{base}:{axis}:{angle}"
+
+
+def through_plane(points: Sequence[Vec3]) -> str:
+    """Eine Dreipunktebene benennen."""
+    return THROUGH_PREFIX + ";".join(
+        ",".join(repr(float(value)) for value in point) for point in points
+    )
+
+
 def frame_for(
     plane: str,
     objects: Iterable[SceneObject],
@@ -211,7 +378,11 @@ BASE_FRAMES: dict[str, PlaneFrame] = {
 }
 
 
-def frame_for_plane(plane: str, objects: Iterable[SceneObject] = ()) -> PlaneFrame | None:
+def frame_for_plane(
+    plane: str,
+    objects: Iterable[SceneObject] = (),
+    values: Mapping[str, float] | None = None,
+) -> PlaneFrame | None:
     """Der Rahmen zu **jeder** Ebenenangabe — Grundebene oder Fläche.
 
     :func:`frame_for` beantwortet nur ``feature:<id>``, und die drei
@@ -224,13 +395,160 @@ def frame_for_plane(plane: str, objects: Iterable[SceneObject] = ()) -> PlaneFra
     meldet; eine Ausnahme wäre hier zu scharf, denn eine Ansicht, die nichts
     zeichnen kann, ist kein Fehlerfall (Regel 17 gilt der Handlung, nicht dem
     Bild).
+
+    ``values`` trägt die aufgelösten Projektparameter. Eine abgeleitete Ebene
+    darf ihren Abstand als Maßausdruck schreiben (``@wand``), und ohne die
+    Werte lässt er sich nicht ausrechnen — dann kommt ``None`` zurück, wie bei
+    einer fehlenden Fläche. Eine Ansicht ohne Parameter ist kein Fehlerfall,
+    eine Auswertung ohne sie schon; die meldet :func:`frame_for_sketch`.
     """
+    if is_derived_plane(plane):
+        try:
+            return _derived_frame(plane, objects, values, field="plane", depth=0)
+        except ValidationError:
+            return None
     if is_feature_plane(plane):
         try:
             return frame_for(plane, objects)
         except ValidationError:
             return None
     return BASE_FRAMES.get(plane)
+
+
+def frame_for_sketch(
+    plane: str,
+    objects: Iterable[SceneObject] = (),
+    values: Mapping[str, float] | None = None,
+    field: str = "plane",
+) -> PlaneFrame:
+    """Wie :func:`frame_for_plane`, aber mit Begründung statt ``None``.
+
+    Der Unterschied ist die Rolle des Aufrufers: Eine Ansicht, die nichts
+    zeichnen kann, schweigt; eine Operation, die nicht rechnen kann, sagt
+    warum und was hilft (Regel 17).
+    """
+    if is_derived_plane(plane):
+        return _derived_frame(plane, objects, values, field=field, depth=0)
+    if is_feature_plane(plane):
+        return frame_for(plane, objects, field=field)
+    frame = BASE_FRAMES.get(plane)
+    if frame is None:
+        raise _unreadable(field, plane, "unknown_plane")
+    return frame
+
+
+def _measure(text: str, values: Mapping[str, float] | None, field: str) -> float:
+    """Eine Zahl oder ein Maßausdruck aus §13 — nie ein ausgeführter Ausdruck.
+
+    Der eigene Auswerter kennt vier Funktionen und keine Namen ohne ``@``;
+    was seine Grammatik nicht enthält, kann in einer fremden Projektdatei
+    nicht stehen (Regel 10).
+    """
+    from app.core import expressions
+
+    if expressions.is_expression(text):
+        if values is None:
+            raise _unreadable(field, text, "expression_without_parameters")
+        try:
+            return expressions.evaluate(text, values)
+        except ValidationError as error:
+            raise _unreadable(field, text, "expression_is_not_a_measure") from error
+    try:
+        value = float(text)
+    except ValueError:
+        raise _unreadable(field, text, "measure_is_not_a_number") from None
+    if not math.isfinite(value):
+        raise _unreadable(field, text, "measure_is_not_a_number")
+    return value
+
+
+def _turned(vector: Vec3, axis: Vec3, radians: float) -> Vec3:
+    """Rodrigues' Drehung eines Vektors um eine Achse durch den Ursprung."""
+    cosine, sine = math.cos(radians), math.sin(radians)
+    crossed = _cross(axis, vector)
+    along = _dot(axis, vector) * (1.0 - cosine)
+    return (
+        vector[0] * cosine + crossed[0] * sine + axis[0] * along,
+        vector[1] * cosine + crossed[1] * sine + axis[1] * along,
+        vector[2] * cosine + crossed[2] * sine + axis[2] * along,
+    )
+
+
+def _derived_frame(
+    plane: str,
+    objects: Iterable[SceneObject],
+    values: Mapping[str, float] | None,
+    field: str,
+    depth: int,
+) -> PlaneFrame:
+    """Der Rahmen einer abgeleiteten Ebene, rekursiv über ihre Basis."""
+    if depth >= MAX_PLANE_DEPTH:
+        raise _unreadable(field, plane, "plane_stands_on_itself")
+    described = derived_plane(plane, field)
+    if described is None:  # pragma: no cover - der Aufrufer hat schon gefragt
+        raise _unreadable(field, plane, "unknown_plane")
+
+    if isinstance(described, ThroughPlane):
+        first, second, third = described.points
+        along = (second[0] - first[0], second[1] - first[1], second[2] - first[2])
+        across = (third[0] - first[0], third[1] - first[1], third[2] - first[2])
+        normal = _cross(along, across)
+        if _length(normal) < _PARALLEL or _length(along) < _PARALLEL:
+            # Drei Punkte auf einer Geraden spannen keine Ebene auf, und zwei
+            # gleiche Punkte erst recht nicht. Beides ist im Zeichenfenster
+            # leicht passiert und muss gesagt werden, statt eine beliebige
+            # Ebene zu liefern.
+            raise _unreadable(field, plane, "points_are_on_one_line")
+        unit = _normalised(normal)
+        x_axis = _normalised(along)
+        # Die erste Achse zeigt vom ersten zum zweiten Punkt — das ist die
+        # Richtung, die der Zeichnende selbst gewählt hat. Die zweite folgt
+        # rechtshändig daraus, statt aus der Normalen gerechnet zu werden.
+        return PlaneFrame(origin=first, x_axis=x_axis, y_axis=_cross(unit, x_axis), normal=unit)
+
+    base = _base_frame(described.base, objects, values, field, depth)
+    if isinstance(described, OffsetPlane):
+        distance = _measure(described.distance, values, field)
+        return PlaneFrame(
+            origin=(
+                base.origin[0] + base.normal[0] * distance,
+                base.origin[1] + base.normal[1] * distance,
+                base.origin[2] + base.normal[2] * distance,
+            ),
+            x_axis=base.x_axis,
+            y_axis=base.y_axis,
+            normal=base.normal,
+        )
+
+    radians = math.radians(_measure(described.angle, values, field))
+    # **Gekippt wird um eine Achse der Basis, und die Zeichnung dreht mit.**
+    # Wer stattdessen nur die Normale kippt und die Achsen neu rechnet, dreht
+    # die Skizze um einen Winkel, den niemand erklären kann — dasselbe
+    # Argument wie in :func:`frame_of`.
+    turn = base.x_axis if described.axis == "x" else base.y_axis
+    return PlaneFrame(
+        origin=base.origin,
+        x_axis=_turned(base.x_axis, turn, radians),
+        y_axis=_turned(base.y_axis, turn, radians),
+        normal=_turned(base.normal, turn, radians),
+    )
+
+
+def _base_frame(
+    base: str,
+    objects: Iterable[SceneObject],
+    values: Mapping[str, float] | None,
+    field: str,
+    depth: int,
+) -> PlaneFrame:
+    if is_derived_plane(base):
+        return _derived_frame(base, objects, values, field, depth + 1)
+    if is_feature_plane(base):
+        return frame_for(base, objects, field=field)
+    frame = BASE_FRAMES.get(base)
+    if frame is None:
+        raise _unreadable(field, base, "unknown_base_plane")
+    return frame
 
 
 def image_normal(frame: PlaneFrame) -> Vec3:

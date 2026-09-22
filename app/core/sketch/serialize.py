@@ -190,9 +190,28 @@ def resolve_sketch_values(text: str, parameters: Mapping[str, float] | None = No
 
 
 def _known_plane(plane: str) -> bool:
-    """Eine Grundebene oder eine alte beziehungsweise eindeutige Flächenebene."""
+    """Eine Grundebene, eine Flächenebene oder eine abgeleitete Ebene (§30.1).
+
+    Geprüft wird die **Schreibweise**, nicht die Existenz: Ob die Fläche noch
+    da ist und ob der Abstand sich ausrechnen lässt, entscheidet erst die
+    Auswertung mit der Szene und den Parametern in der Hand. Hier geht es
+    darum, ob in der Projektdatei überhaupt eine Ebene steht.
+    """
     if plane in ("plane:xy", "plane:xz", "plane:yz"):
         return True
+    from app.core.sketch import planes
+
+    if planes.is_derived_plane(plane):
+        try:
+            described = planes.derived_plane(plane)
+        except ValidationError:
+            return False
+        if described is None:  # pragma: no cover - is_derived_plane hat schon gefragt
+            return False
+        if isinstance(described, planes.ThroughPlane):
+            return True
+        # Das Maß hat der Parser schon geprüft; hier bleibt die Basis.
+        return _known_plane(described.base)
     prefix, separator, feature_id = plane.partition(":")
     return prefix == "feature" and bool(separator) and bool(feature_id)
 

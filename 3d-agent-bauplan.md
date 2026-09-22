@@ -641,7 +641,15 @@ Die Typaliase und ihre Bedeutung gehören zu diesem Vertrag:
   Punktliste, `value` trägt einen Maßausdruck aus §13. Die Skizzenebene ist
   `plane:xy`, `plane:xz`, `plane:yz` oder
   `feature:<object_id>:<feature_id>`. Die Kurzform `feature:<id>` bleibt
-  für ältere Skizzendaten lesbar.
+  für ältere Skizzendaten lesbar. Dazu drei **abgeleitete** Ebenen, die auf
+  einer davon stehen: `offset:<basis>:<abstand>` parallel entlang der
+  Normalen, `tilt:<basis>:<achse>:<winkel>` um die erste oder zweite Achse
+  der Basis gekippt (`achse` ist `x` oder `y`), und
+  `through:<p>;<p>;<p>` durch drei Punkte in Weltkoordinaten, je `x,y,z`.
+  Die Basis steht vorn und der Zusatz hinten, weil die Basis selbst
+  Doppelpunkte trägt; `abstand` und `winkel` dürfen Maßausdrücke aus §13
+  sein. Eine abgeleitete Ebene gehört **der Skizze**, die sie benutzt, und
+  ist kein Objekt im Baum.
 - `progress(fraction, text)` meldet den Fortschritt;
   `ask(question, choices)` liefert die gewählte Antwort. `sources` vermittelt
   den Zugriff auf Projektquellen ohne globale Ablage.
