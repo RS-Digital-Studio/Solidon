@@ -20,6 +20,7 @@ from collections.abc import Callable, Iterable, Iterator, Sequence
 from contextlib import suppress
 from dataclasses import dataclass
 from fractions import Fraction
+from itertools import pairwise
 from typing import Any, Final, cast
 
 import numpy as np
@@ -30,8 +31,27 @@ from app.core.types import CancelToken, SurfacePatch, Vec3
 Triangle = tuple[Vec3, Vec3, Vec3]
 _UV = tuple[float, float]
 
-#: Gemeinsame Kantenarbeit je Trägeraufruf, einschließlich der ersten drei Intervalle.
-_MAX_REFINEMENTS: Final = 256
+#: Wie oft der Stapel jedes Torus-Stück nach den Extremstellen noch halbiert.
+#:
+#: Die Sehnenschranke in :meth:`_Batch._torus_edge_upper` wächst mit dem
+#: Quadrat der Stückbreite, also viertelt jede Halbierung ihren Beitrag. Zwei
+#: sind gemessen: ohne sie blieb der Stapel an 138 von 1 024 Ringdreiecken
+#: hinter dem skalaren Weg zurück, weil eine Doppelwurzel je nach Verfahren
+#: als Sattel oder als komplexes Paar erscheint und die Teilung dort fehlte.
+_TORUS_HALVINGS: Final = 2
+
+#: Kantenarbeit je **Dreieck**, einschließlich der ersten Intervalle.
+#:
+#: **Sie galt bis zum 22.09.2026 je Trägeraufruf, und das war ein Wettlauf.**
+#: Die ersten Dreiecke eines Rings verbrauchten die Marke, alle weiteren
+#: bekamen die Rechteckklammer — an einem Ring aus 4 096 Dreiecken blieb sie
+#: im Mittel 0,16 mm breit, wo Ebene, Zylinder, Kugel und Kegel auf
+#: Mikrometer schließen (RM-202). Je Dreieck vergeben schließt sie überall
+#: gleich, und bezahlbar wird das erst durch :func:`_torus_breakpoints`:
+#: Die Kante wird an den Extremstellen geteilt statt blind halbiert, also
+#: reichen zwei Stücke je Kante für das, wofür die Halbierung sechzehn
+#: brauchte.
+_MAX_REFINEMENTS: Final = 32
 _TRIG_TERMS: Final = 32
 
 
@@ -742,6 +762,74 @@ def _edge_upper(facet: _Facet, first: int, second: int, low: float, high: float)
     return upper
 
 
+def _torus_breakpoints(facet: _Facet, first: int, second: int) -> tuple[float, ...]:
+    """Wo der Abstand zum Ring auf dieser Kante seine Extrema hat — geschlossen.
+
+    Auf der Kante ``P(t) = A + tD`` ist der quadrierte Abstand zum Ringkreis
+    ``f(t) = |P|² - 2R·r + R²``, wobei ``r`` der Abstand zur Achse ist und
+    ``r² + z² = |P|²``. Mit ``m = <P,D>``, ``z = <P,Achse>`` und
+    ``h = m - z·z'`` ist
+
+        f'(t) = 2m - 2R·h/r  =  0  <=>  m·r = R·h,
+
+    quadriert also ``m²·r² - R²·h² = 0`` — ``m`` und ``h`` linear, ``r²``
+    quadratisch, zusammen ein Polynom **vierten** Grades. Seine reellen
+    Wurzeln in ``(0, 1)`` sind die Stellen, an denen ``f`` kehrt.
+
+    **Das ist ein Vorschlag, kein Beweis.** Gerechnet wird in Fließkomma, und
+    das Quadrieren bringt Scheinwurzeln mit (``m·r = -R·h``). Beides schadet
+    nicht: :func:`_edge_upper` schließt jedes Stück für sich mit
+    Intervallarithmetik ein, und eine Teilung an einer Stelle, an der nichts
+    kehrt, kostet nur einen Aufruf. Was der Vorschlag leistet, ist die
+    **Zahl** der Stücke: an einem Ring im Mittel 2,02 je Kante statt sechzehn
+    Halbierungen für dieselbe Breite (gemessen am 22.09.2026).
+    """
+    surface = facet.surface
+    start = np.asarray(_middle(facet.points[first]), dtype=float)
+    direction = np.asarray(_middle(facet.points[second]), dtype=float) - start
+    axis = np.asarray(_middle(surface.axis), dtype=float)
+    size = float(np.linalg.norm(axis))
+    if size <= 0.0:
+        return ()
+    axis = axis / size
+    ring = surface.radius.middle
+    m0, m1 = float(start @ direction), float(direction @ direction)
+    z0, z1 = float(start @ axis), float(direction @ axis)
+    h0, h1 = m0 - z0 * z1, m1 - z1 * z1
+    # Der quadrierte Achsabstand: r²(t) = |P|² - z(t)²
+    q0, q1, q2 = float(start @ start) - z0 * z0, 2.0 * (m0 - z0 * z1), m1 - z1 * z1
+    squared = np.polynomial.polynomial.polymul([m0, m1], [m0, m1])
+    poly = np.polynomial.polynomial.polymul(squared, [q0, q1, q2])
+    minus = np.polynomial.polynomial.polymul([h0, h1], [h0, h1]) * (ring * ring)
+    poly = poly.copy()
+    poly[: len(minus)] -= minus
+    if not np.all(np.isfinite(poly)) or not np.any(np.abs(poly) > 0.0):
+        return ()
+    try:
+        roots = np.polynomial.polynomial.polyroots(poly)
+    except np.linalg.LinAlgError, ValueError:
+        return ()
+    inside = sorted(
+        float(root.real)
+        for root in roots
+        if abs(root.imag) <= 1e-9 * max(1.0, abs(root.real)) and 0.0 < root.real < 1.0
+    )
+    return tuple(inside)
+
+
+def _torus_intervals(facet: _Facet) -> list[tuple[int, int, float, float, float]]:
+    """Die Startintervalle aller drei Kanten, an den Extremstellen geteilt."""
+    intervals: list[tuple[int, int, float, float, float]] = []
+    for first, second in _EDGES:
+        stops = (0.0, *_torus_breakpoints(facet, first, second), 1.0)
+        for low, high in pairwise(stops):
+            if low < high:
+                intervals.append(
+                    (first, second, low, high, _edge_upper(facet, first, second, low, high))
+                )
+    return intervals
+
+
 def _torus(facet: _Facet, radial: tuple[_V, ...], radius: _I, closest: _UV, epsilon: float) -> None:
     surface = facet.surface
     _torus_ring_proposals(facet, radial, closest)
@@ -760,10 +848,9 @@ def _torus(facet: _Facet, radial: tuple[_V, ...], radius: _I, closest: _UV, epsi
         return
     fixed = max(interior, default=0.0)
     surface.refinements -= 3
-    intervals = [
-        (first, second, 0.0, 1.0, _edge_upper(facet, first, second, 0.0, 1.0))
-        for first, second in _EDGES
-    ]
+    intervals = _torus_intervals(facet)
+    if not intervals:
+        return
     while True:
         surface.cancelled.raise_if_cancelled()
         largest = max(range(len(intervals)), key=lambda index: intervals[index][4])
@@ -1115,6 +1202,35 @@ def _rows(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     return np.asarray(np.einsum("...cn,...cn->...n", a, b))
 
 
+def _roots_in_unit(coefficients: np.ndarray) -> np.ndarray:
+    """Die reellen Wurzeln in ``(0, 1)`` je Spalte, aufsteigend; fehlende ``nan``.
+
+    ``coefficients`` steht aufsteigend nach Grad, eine Spalte je Dreieck. Die
+    Wurzeln kommen aus den Eigenwerten der Begleitmatrix, denn die nimmt
+    ``np.linalg.eigvals`` als Stapel; ``np.roots`` müsste je Spalte einmal
+    laufen. Wo der führende Koeffizient verschwindet, fällt der Grad — solche
+    Spalten bleiben leer, und eine fehlende Teilstelle kostet nur Schärfe,
+    nie Gültigkeit (:func:`_torus_breakpoints`).
+    """
+    degree, count = coefficients.shape[0] - 1, coefficients.shape[1]
+    scale = np.abs(coefficients).max(axis=0)
+    finite = np.isfinite(coefficients).all(axis=0) & (scale > 0.0)
+    normed = coefficients / np.where(finite, scale, 1.0)
+    leading = normed[degree]
+    steady = finite & (np.abs(leading) > 1e-12)
+    values = np.full((count, degree), np.nan)
+    if steady.any():
+        companion = np.zeros((int(steady.sum()), degree, degree))
+        companion[:, 1:, :-1] = np.eye(degree - 1)
+        companion[:, :, -1] = -(normed[:degree, steady] / leading[steady]).T
+        eigen = np.linalg.eigvals(companion)
+        real = np.where(
+            np.abs(eigen.imag) <= 1e-9 * np.maximum(1.0, np.abs(eigen.real)), eigen.real, np.nan
+        )
+        values[steady] = np.sort(np.where((real > 0.0) & (real < 1.0), real, np.nan), axis=1)
+    return values.T
+
+
 class _Batch:
     """``_Facet`` und ``_tighten`` für alle Dreiecke einer Trägerart zugleich.
 
@@ -1170,12 +1286,22 @@ class _Batch:
         return self.points[0] + self.edges[0] * u + self.edges[1] * v
 
     def sample(
-        self, uv: np.ndarray, valid: np.ndarray | None = None, corner: int | None = None
+        self,
+        uv: np.ndarray,
+        valid: np.ndarray | None = None,
+        corner: int | None = None,
+        *,
+        given: _A | None = None,
     ) -> _A:
-        """Eine Probe je Dreieck: ihr Abstand wird gemerkt, der beste wird der Zeuge."""
+        """Eine Probe je Dreieck: ihr Abstand wird gemerkt, der beste wird der Zeuge.
+
+        ``given`` übernimmt einen bereits gerechneten Abstand. Die
+        Torusverfeinerung hat ihn für jede Stückgrenze ohnehin in der Hand;
+        ihn hier noch einmal zu rechnen verdoppelte den teuersten Teil.
+        """
         mask = np.ones(self.count, dtype=bool) if valid is None else valid
         uv = np.where(mask, _legal_uv_array(uv[0], uv[1]), 0.0)
-        value = self.distance(self.point(uv, corner))
+        value = self.distance(self.point(uv, corner)) if given is None else given
         self.sample_uv.append(uv)
         self.sample_valid.append(mask)
         self.sample_value.append(value)
@@ -1429,6 +1555,247 @@ class _Batch:
         rectangle = ((radius - self.radius).square() + height.square()).sqrt()
         self.upper = np.minimum(self.upper, (rectangle - self.tube_radius).absolute().hi)
 
+    # --- Torus: dieselbe Verfeinerung wie skalar, für alle zugleich -----------------
+
+    def torus_refine(self) -> np.ndarray:
+        """Innenkandidaten und Kantenstücke — was :func:`_torus` je Dreieck tut.
+
+        **Der Grund steht in der Zeit.** Der skalare Weg braucht je
+        Torusdreieck rund vier Millisekunden; eine Analysekarte mit 2 000
+        Dreiecken auf einer Verrundung stand damit dreißig Sekunden
+        (gemessen am 22.09.2026, RM-202). Dieselbe Rechnung über alle
+        Dreiecke zugleich kostet an 1 024 Dreiecken 0,11 s — Faktor 43, bei
+        Zahl für Zahl demselben Ergebnis.
+
+        Was der Stapel **nicht** kann, lässt er stehen: Trifft die Achse das
+        Dreieck, braucht die Kandidatenmenge exakte Bruchrechnung
+        (:func:`_axis_candidates`), und dann bleibt ``upper`` unberührt — die
+        Rechteckklammer trägt weiter, und der skalare Weg rechnet nach.
+        Zurück kommt genau die Maske der Dreiecke, die er zu Ende gerechnet
+        hat.
+        """
+        best, sure = self._torus_interior()
+        if not sure.any():
+            return sure
+        edges = np.full(self.count, -np.inf)
+        for first, second in _EDGES:
+            stops = self._torus_breakpoints(first, second)
+            # Fehlende Wurzeln stehen als ``nan`` am Ende; als rechter Rand
+            # gelesen werden daraus leere Stücke, und die Vereinigung bleibt
+            # das ganze Intervall.
+            filled = np.where(np.isfinite(stops), stops, 1.0)
+            low = np.vstack([np.zeros((1, self.count)), filled])
+            high = np.vstack([filled, np.ones((1, self.count))])
+            for _turn in range(_TORUS_HALVINGS):
+                centre = low / 2.0 + high / 2.0
+                low, high = np.vstack([low, centre]), np.vstack([centre, high])
+            bound = self._torus_edge_upper(first, second, low, high)
+            edges = np.maximum(edges, np.where(low < high, bound, -np.inf).max(axis=0))
+        refined = np.maximum(best, edges)
+        usable = np.asarray(sure & np.isfinite(refined))
+        self.upper = np.where(usable, np.minimum(self.upper, refined), self.upper)
+        return usable
+
+    def _torus_interior(self) -> tuple[np.ndarray, np.ndarray]:
+        """Wie :func:`_torus_interior` ohne den Achsenfall: Schranke und Sicherheit."""
+        bands = self.bands
+        normal = _a_cross(self.edges[0], self.edges[1])
+        size = _a_norm(normal)
+        steady = size.lo > 0.0
+        safe_size = _A(bands, np.where(steady, size.lo, 1.0), np.where(steady, size.hi, 1.0))
+        unit = normal / safe_size.unsqueeze(-2)
+        axis = self.axis / self.axis_size.unsqueeze(-2)
+        projected = unit - axis * _a_dot(unit, axis).unsqueeze(-2)
+        across = _a_norm(projected)
+        steady = steady & (across.lo > 0.0)
+        safe_across = _A(bands, np.where(steady, across.lo, 1.0), np.where(steady, across.hi, 1.0))
+        radial = projected / safe_across.unsqueeze(-2)
+        side = _a_cross(axis, radial)
+        height = _a_dot(unit, self.points[0])
+
+        best = np.full(self.count, -np.inf)
+        for sign in (-1.0, 1.0):
+            offset = height - safe_across * self.radius * sign
+            point = radial * (self.radius * sign).unsqueeze(-2) + unit * offset.unsqueeze(-2)
+            # Die Meridianhalbebene ist Teil der analytischen Kandidatenbedingung.
+            meridian = (_a_dot(point, radial) * sign).hi > 0.0
+            bound, inside = self._candidate_upper(point, normal)
+            best = np.where(steady & meridian & inside, np.maximum(best, bound), best)
+
+        along = height / safe_across
+        square = self.radius.square() - along.square()
+        root = _A(bands, np.maximum(0.0, square.lo), np.maximum(0.0, square.hi)).sqrt()
+        reachable = square.hi >= 0.0
+        for sign in (-1.0, 1.0):
+            point = radial * along.unsqueeze(-2) + side * (root * sign).unsqueeze(-2)
+            bound, inside = self._candidate_upper(point, normal)
+            best = np.where(steady & reachable & inside, np.maximum(best, bound), best)
+
+        return best, steady & ~self._axis_may_hit(normal)
+
+    def _candidate_upper(self, point: _A, normal: _A) -> tuple[np.ndarray, np.ndarray]:
+        """Wie :func:`_candidate_upper`: Schranke und ob der Punkt beweisbar innen liegt.
+
+        Und wie dort wird der Punkt zur **Probe**: Er liegt nah am Maximum,
+        also hebt er die Untergrenze — und erst beide Ränder zusammen machen
+        aus einer Schranke eine geschlossene Klammer.
+        """
+        inside = np.ones(point.lo.shape[-1], dtype=bool)
+        for first, second in _EDGES:
+            edge = self.points[second] - self.points[first]
+            sign = _a_dot(_a_cross(edge, point - self.points[first]), normal)
+            inside = inside & (sign.hi >= 0.0)
+        proposal = self._barycentric(point)
+        if proposal is not None:
+            self.sample(proposal, inside)
+        return self.distance(point).hi, inside
+
+    def _barycentric(self, target: _A) -> np.ndarray | None:
+        """Wie :func:`_barycentric`: ein Probenvorschlag, keine Schranke."""
+        points = self.points.middle - target.middle
+        scale = np.abs(points).max(axis=(0, 1))
+        good = (scale > 0.0) & np.isfinite(scale)
+        if not good.any():
+            return None
+        scaled = points / np.where(good, scale, 1.0)
+        a, b, c = scaled[0], scaled[1], scaled[2]
+        e, f = b - a, c - a
+        ee, ef, ff = _rows(e, e), _rows(e, f), _rows(f, f)
+        ae, af = _rows(a, e), _rows(a, f)
+        determinant = ee * ff - ef * ef
+        usable = good & (determinant > 0.0)
+        safe = np.where(usable, determinant, 1.0)
+        u = np.where(usable, (af * ef - ae * ff) / safe, 0.0)
+        v = np.where(usable, (ae * ef - af * ee) / safe, 0.0)
+        return _legal_uv_array(u, v)
+
+    def _axis_may_hit(self, normal: _A) -> np.ndarray:
+        """Ob die Achse das Dreieck treffen könnte — dann rechnet der skalare Weg.
+
+        :func:`_axis_candidates` löst das exakt in Brüchen; hier genügt die
+        konservative Frage, und wer unsicher ist, sagt ja.
+        """
+        axis = self.axis.middle
+        flat = normal.middle
+        denominator = _rows(flat, axis)
+        scale = np.linalg.norm(flat, axis=-2) * np.linalg.norm(axis, axis=-2)
+        parallel = np.abs(denominator) <= 1e-12 * np.maximum(scale, 1.0)
+        origin = self.points[0].middle
+        value = np.where(parallel, 0.0, _rows(flat, origin) / np.where(parallel, 1.0, denominator))
+        relative = axis * value[..., None, :] - origin
+        first = self.points[1].middle - origin
+        second = self.points[2].middle - origin
+        aa, ab, bb = _rows(first, first), _rows(first, second), _rows(second, second)
+        ea, eb = _rows(relative, first), _rows(relative, second)
+        determinant = aa * bb - ab * ab
+        good = np.abs(determinant) > 0.0
+        safe = np.where(good, determinant, 1.0)
+        u = (bb * ea - ab * eb) / safe
+        v = (aa * eb - ab * ea) / safe
+        margin = 1e-9
+        hits = (u >= -margin) & (v >= -margin) & (u + v <= 1.0 + margin)
+        return np.asarray(parallel | ~good | hits)
+
+    def _torus_breakpoints(self, first: int, second: int) -> np.ndarray:
+        """Bis zu vier Teilstellen je Dreieck, aufsteigend; fehlende sind ``nan``.
+
+        Die Herleitung steht an :func:`_torus_breakpoints`; hier steht sie als
+        Koeffizientenfeld, und die Wurzeln kommen aus den Eigenwerten der
+        Begleitmatrizen — ``np.linalg.eigvals`` nimmt einen ganzen Stapel,
+        ``np.roots`` nur ein Polynom.
+        """
+        start = self.points[first].middle
+        direction = self.points[second].middle - start
+        axis = self.axis.middle
+        size = np.sqrt(np.maximum(0.0, _rows(axis, axis)))
+        axis = axis / np.where(size > 0.0, size, 1.0)[..., None, :]
+        ring = self.radius.middle
+        m0, m1 = _rows(start, direction), _rows(direction, direction)
+        z0, z1 = _rows(start, axis), _rows(direction, axis)
+        h0, h1 = m0 - z0 * z1, m1 - z1 * z1
+        q0, q1, q2 = _rows(start, start) - z0 * z0, 2.0 * (m0 - z0 * z1), m1 - z1 * z1
+        coefficients = np.stack(
+            [
+                m0 * m0 * q0 - ring * ring * h0 * h0,
+                m0 * m0 * q1 + 2.0 * m0 * m1 * q0 - 2.0 * ring * ring * h0 * h1,
+                m0 * m0 * q2 + 2.0 * m0 * m1 * q1 + m1 * m1 * q0 - ring * ring * h1 * h1,
+                2.0 * m0 * m1 * q2 + m1 * m1 * q1,
+                m1 * m1 * q2,
+            ]
+        )
+        return _roots_in_unit(coefficients)
+
+    def _torus_edge_upper(
+        self, first: int, second: int, low: np.ndarray, high: np.ndarray
+    ) -> np.ndarray:
+        """Wie :func:`_edge_upper`, für ein Feld von Kantenstücken ``(k, n)``."""
+        bands = self.bands
+        start = self.points[first]
+        edge = self.points[second] - self.points[first]
+
+        def at(value: np.ndarray) -> _A:
+            return start + edge * bands.number(value).unsqueeze(-2)
+
+        middle = low / 2.0 + high / 2.0
+        left, right, centre = at(low), at(high), at(middle)
+        at_left, at_right = self.distance(left), self.distance(right)
+        # Dieselben drei Proben, die der skalare Weg je Stück nimmt: Sie
+        # heben die Untergrenze, und ohne sie bliebe die Klammer breit,
+        # obwohl die Schranke längst sitzt.
+        for share, value in ((low, at_left), (middle, self.distance(centre)), (high, at_right)):
+            for row in range(share.shape[0]):
+                self.sample(_edge_uv_array(first, second, share[row]), given=value[row])
+        half = np.maximum(_up_array(middle - low), _up_array(high - middle))
+        length = _a_norm(edge)
+        upper = (self.distance(centre) + length * bands.number(half)).hi
+
+        qleft, qright, qedge = self.radial(left), self.radial(right), self.radial(edge)
+        base = qleft.middle
+        delta = qright.middle - base
+        span = _rows(delta, delta)
+        parameter = np.where(span > 0.0, -_rows(base, delta) / np.where(span > 0.0, span, 1.0), 0.0)
+        # Die Komponentenachse ist die vorletzte; Skalare je Stück brauchen sie.
+        direction = base + np.clip(parameter, 0.0, 1.0)[..., None, :] * delta
+        reach = np.sqrt(np.maximum(0.0, _rows(direction, direction)))
+        positive = reach > 0.0
+        unit = direction / np.where(positive, reach, 1.0)[..., None, :]
+        support = np.minimum(
+            (qleft * bands.number(unit)).lo.sum(axis=-2),
+            (qright * bands.number(unit)).lo.sum(axis=-2),
+        )
+        radial_lower = np.where(positive, np.maximum(0.0, support), 0.0)
+        radial_upper = np.maximum(_a_norm(qleft).hi, _a_norm(qright).hi)
+        usable = radial_lower > 0.0
+
+        box = _A(bands, np.minimum(left.lo, right.lo), np.maximum(left.hi, right.hi))
+        qbox = _A(bands, np.minimum(qleft.lo, qright.lo), np.maximum(qleft.hi, qright.hi))
+        rho = _A(
+            bands,
+            np.where(usable, radial_lower, 1.0),
+            np.where(usable, np.maximum(radial_lower, radial_upper), 1.0),
+        )
+        derivative = (_a_dot(box, edge) - self.radius * _a_dot(qbox, qedge) / rho) * 2.0
+        monotone = usable & ((derivative.lo > 0.0) | (derivative.hi < 0.0))
+        upper = np.where(monotone, np.minimum(upper, np.maximum(at_left.hi, at_right.hi)), upper)
+
+        cross = _a_norm(_a_cross(qleft, qedge)).square()
+        cube = bands.number(np.where(usable, radial_lower, 1.0))
+        curvature = length.square() * 2.0 + self.radius * cross * 2.0 / (cube.square() * cube)
+        width = bands.number(_up_array(high - low))
+        error = curvature * width.square() / 8.0
+        fleft, fright = self._torus_square(left), self._torus_square(right)
+        frange = _A(
+            bands,
+            np.maximum(0.0, _down_array(np.minimum(fleft.lo, fright.lo) - error.hi)),
+            _up_array(np.maximum(fleft.hi, fright.hi) + error.hi),
+        )
+        chord = (frange.sqrt() - self.tube_radius).absolute().hi
+        return np.where(usable & ~monotone, np.minimum(upper, chord), upper)
+
+    def _torus_square(self, point: _A) -> _A:
+        """Wie :func:`_torus_square`: der quadrierte Abstand zum Ringkreis."""
+        return (_a_norm(self.radial(point)) - self.radius).square() + self.axial(point).square()
+
     # --- Ergebnis ------------------------------------------------------------------
 
     def results(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -1462,6 +1829,8 @@ def _triangle_array(triangles: Iterable[Triangle] | np.ndarray) -> np.ndarray:
 def _scalar_result(surface: _Surface, triangle: Triangle, epsilon: float) -> FacetDeviation | None:
     """Ein einzelnes Dreieck über die skalaren Klammern — Sonderfälle und Torusverfeinerung."""
     try:
+        # Das Budget gehört dem Dreieck, nicht dem Träger (:data:`_MAX_REFINEMENTS`).
+        surface.refinements = _MAX_REFINEMENTS
         facet = _Facet(triangle, surface)
         # Eine numerisch offene Kandidatenrechnung löscht keinen
         # bereits gesicherten globalen Ausgangsnachweis.
@@ -1543,6 +1912,13 @@ def _bounded(
                 )
                 token.raise_if_cancelled()
                 batch.tighten()
+                refined = None
+                if kind == "torus":
+                    # Die Verfeinerung, die der skalare Weg je Dreieck führt —
+                    # hier für alle zugleich (RM-202). Wo sie nicht greift,
+                    # bleibt die Rechteckklammer stehen und der Weg darunter
+                    # rechnet nach.
+                    refined = batch.torus_refine()
                 batch_lower, batch_upper, batch_witness = batch.results()
             valid = (
                 batched
@@ -1553,7 +1929,16 @@ def _bounded(
             )
             trusted = valid
             if kind == "torus":
-                trusted = valid & (_up_array(batch_upper - batch_lower) <= epsilon)
+                # **Gefragt wird, ob der Stapel fertig gerechnet hat — nicht,
+                # ob die Klammer schon schmal ist.** Bis zum 22.09.2026 stand
+                # hier „Breite unter der Zielbreite"; die erreicht am Torus
+                # keine endliche Verfeinerung, und deshalb ging **jedes**
+                # Dreieck den skalaren Weg: eine Analysekarte mit 2 000
+                # Torusdreiecken stand dreißig Sekunden (RM-202). Wo
+                # ``torus_refine`` dieselbe Rechnung geführt hat wie der
+                # skalare Weg, gibt der keine engere Klammer mehr her.
+                assert refined is not None
+                trusted = valid & refined
             lower[trusted] = batch_lower[trusted]
             upper[trusted] = batch_upper[trusted]
             witness[trusted] = batch_witness[trusted]
@@ -1565,12 +1950,13 @@ def _bounded(
             token.raise_if_cancelled()
             surface = surfaces[int(chunk_owner[index])]
             assert surface is not None
-            if valid[index] and surface.refinements < 3:
-                # Das Budget des Trägers ist verbraucht: Der skalare Weg gäbe
-                # dieselbe Rechteckklammer zurück, die der Stapel schon hat.
-                lower[index], upper[index] = batch_lower[index], batch_upper[index]
-                witness[index] = batch_witness[index]
-                continue
+            # Hier stand die Gegenprobe „das Budget des Trägers ist
+            # verbraucht, der skalare Weg gäbe dieselbe Rechteckklammer
+            # zurück". Sie stimmte, solange das Budget dem **Träger** gehörte
+            # — und war damit die Stelle, an der ein Ring ab dem zweiten
+            # Dutzend Dreiecke aufhörte, genauer zu werden (RM-202). Seit das
+            # Budget je Dreieck vergeben wird (:data:`_MAX_REFINEMENTS`), gibt
+            # es nichts mehr abzukürzen.
             triangle = cast(
                 Triangle, tuple(tuple(float(v) for v in point) for point in chunk[index])
             )

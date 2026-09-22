@@ -7,7 +7,9 @@ from decimal import Decimal, localcontext
 from fractions import Fraction
 from itertools import pairwise
 
+import numpy as np
 import pytest
+import trimesh
 
 from app.core.geom.deviation import deviation_bounds
 from app.core.types import SurfacePatch
@@ -219,12 +221,64 @@ def test_cone_uses_only_its_directed_nappe(height, direction):
     assert Decimal(result.lower_mm) <= expected <= Decimal(result.upper_mm)
 
 
-def test_refinement_is_shared_and_exhaustion_keeps_a_finite_valid_interval(monkeypatch):
+def test_every_carrier_closes_its_bracket_on_its_own_body() -> None:
+    """RM-202: Der Ring schloss als Einziger nicht — 0,16 mm, wo die anderen null hatten.
+
+    Gemessen am 22.09.2026 an einem Ring aus 4 096 Dreiecken: Ebene,
+    Zylinder, Kugel und Kegel klammerten jedes Dreieck auf Mikrometer ein, der
+    Torus blieb im Mittel 0,16 mm und schlimmstenfalls 0,30 mm breit. Zwei
+    Ursachen, beide behoben: Das Verfeinerungsbudget gehörte dem **Träger**,
+    also bekamen die ersten Dreiecke alles und der Rest nichts; und die Kante
+    wurde blind halbiert, statt an den Stellen geteilt zu werden, an denen der
+    Abstand kehrt (``_torus_breakpoints``).
+
+    Geprüft wird der Ring selbst — der Träger, an dem es auffiel — und
+    daneben ein Zylinder, damit ein Rückschritt an den übrigen Trägern hier
+    ebenfalls rot wird.
+    """
+    ring = trimesh.creation.torus(
+        major_radius=10.0, minor_radius=3.0, major_sections=48, minor_sections=24
+    )
+    triangles = np.asarray(ring.triangles, dtype=float)
+    torus = patch("torus", tube_radius=3.0)
+    breiten = [
+        entry.upper_mm - entry.lower_mm
+        for entry in deviation_bounds(torus, triangles, epsilon_mm=1e-6)
+        if entry is not None
+    ]
+    assert len(breiten) == len(triangles)
+    assert max(breiten) < 0.01, f"breiteste Klammer am Ring: {max(breiten):.6f} mm"
+
+    tube = trimesh.creation.cylinder(radius=10.0, height=20.0, sections=64)
+    walls = np.asarray(tube.triangles, dtype=float)
+    cylinder = patch("cylinder")
+    andere = [
+        entry.upper_mm - entry.lower_mm
+        for entry in deviation_bounds(cylinder, walls, epsilon_mm=1e-6)
+        if entry is not None
+    ]
+    assert max(andere) <= 1e-9, f"der Zylinder schloss immer: {max(andere):.12f} mm"
+
+
+def test_refinement_is_per_triangle_and_exhaustion_keeps_a_finite_valid_interval(monkeypatch):
+    """Das Budget gehört dem Dreieck, und ein erschöpftes liefert trotzdem eine Klammer.
+
+    **Bis zum 22.09.2026 galt es je Aufruf, und dieser Test schrieb das fest.**
+    Er war damit die Stelle, an der ein Ring seine Genauigkeit verlor: Die
+    ersten Dreiecke verbrauchten die gemeinsame Marke, alle weiteren bekamen
+    die Rechteckklammer — an 4 096 Ringdreiecken im Mittel 0,16 mm breit, wo
+    Ebene, Zylinder, Kugel und Kegel auf Mikrometer schließen (RM-202).
+
+    Was bleibt und hier geprüft wird, ist die Zusicherung dahinter: Ein
+    aufgebrauchtes Budget endet nie mit einer unendlichen oder ungültigen
+    Klammer, und jedes Dreieck bekommt dieselbe Arbeit — der zwanzigste ist so
+    genau wie der erste.
+    """
     from app.core.geom import deviation
 
     monkeypatch.setattr(deviation, "_MAX_REFINEMENTS", 5)
+    calls: list[tuple] = []
     original = deviation._edge_upper
-    calls = []
 
     def counted(*args):
         calls.append(args[1:])
@@ -234,11 +288,19 @@ def test_refinement_is_shared_and_exhaustion_keeps_a_finite_valid_interval(monke
     carrier = patch("torus", tube_radius=5.0)
     triangle = ((12.0, -5.0, -5.0), (12.0, 5.0, -5.0), (12.0, 0.0, 5.0))
     result = list(deviation_bounds(carrier, [triangle] * 20, epsilon_mm=1e-12))
-    assert len(calls) <= 5  # Drei anfängliche Kanten plus zwei Kinder, für den ganzen Aufruf.
     assert len(result) == 20
     for entry in result:
         assert entry is not None and entry.lower_mm <= 3.0 <= entry.upper_mm
-    assert not result[-1].converged
+        assert math.isfinite(entry.upper_mm), "ein aufgebrauchtes Budget endet nicht im Unendlichen"
+    # Zwanzig gleiche Dreiecke, zwanzig gleiche Klammern — der Beleg dafür,
+    # dass keines das Budget eines anderen verbraucht. Vorher trug das letzte
+    # die rohe Rechteckklammer, und genau deshalb stand hier einmal
+    # ``assert not result[-1].converged``: Mit fünf gemeinsamen Schritten kam
+    # es nie ans Ziel. Seit die Kante an ihren Extremstellen geteilt wird
+    # (``_torus_breakpoints``), schließt es auch mit fünf.
+    breiten = {round(entry.upper_mm - entry.lower_mm, 12) for entry in result}
+    assert len(breiten) == 1, breiten
+    assert calls, "die Kantenarbeit läuft — sonst prüft der Test nichts"
 
 
 def test_cancel_during_preparation_and_between_original_triangles_propagates():

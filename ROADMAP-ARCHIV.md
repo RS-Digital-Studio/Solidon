@@ -29677,6 +29677,59 @@ alles andere soll noch vor 0.5.0 fertig sein"). Gebaut auf `rm-207-muster`, am
   1 412 gekrümmte Flecken von median sieben Dreiecken, und jeder bekommt Kegel-, Kugel- und
   Ringeinpassung. Was daraus folgt, steht als RM-209.
 
+<a id="rm-202"></a>
+
+- [x] **RM-202 — Die Formabweichung am Ring schließt nur auf 0,65 mm.** Gelöst
+  am 22.09.2026 — zwei Ursachen, und die zweite machte die erste erst
+  bezahlbar.
+
+  **Das Budget gehörte dem Träger.** `_MAX_REFINEMENTS` galt je Aufruf: Die
+  ersten Dreiecke eines Rings verbrauchten die Marke, alle weiteren bekamen
+  die rohe Rechteckklammer. Gemessen an einem Ring aus 4 096 Dreiecken blieb
+  sie im Mittel 0,16 mm und schlimmstenfalls 0,30 mm breit, während Ebene,
+  Zylinder, Kugel und Kegel am selben Körper jedes Dreieck auf null
+  einschlossen. Je Dreieck vergeben schließt sie überall gleich.
+
+  **Aber je Dreieck kostet, und zwar zu viel.** Mit dem alten, blind
+  halbierenden Kantenweg brauchte ein Torusdreieck vier bis fünfzehn
+  Millisekunden; die Analysekarte einer Verrundung
+  (`post_with_fillet.stl`, 2 015 Torusdreiecke) stand damit **30,3 Sekunden**.
+  Zwei Schritte haben das behoben:
+
+  1. **Geteilt wird an den Extremstellen, nicht in der Mitte.** Auf einer
+     Kante ist der quadrierte Abstand zum Ringkreis `|P|² - 2R·r + R²`; seine
+     Ableitung verschwindet, wo `m·r = R·h` gilt, quadriert also an den
+     Wurzeln von `m²·r² - R²·h² = 0` — ein Polynom vierten Grades
+     (`_torus_breakpoints`). Zwei Stücke je Kante leisten damit, wofür die
+     Halbierung sechzehn brauchte. Die Wurzeln sind ein **Vorschlag**, kein
+     Beweis: Die Intervallarithmetik schließt jedes Stück selbst ein, und
+     eine Teilung an der falschen Stelle kostet einen Aufruf.
+  2. **Dieselbe Rechnung im Stapel** (`_Batch.torus_refine`): Innenkandidaten,
+     Teilstellen und Kantenschranke über alle Dreiecke zugleich, die Wurzeln
+     aus einem einzigen `np.linalg.eigvals` über die Begleitmatrizen. An
+     1 024 Dreiecken 0,11 s gegen 4,5 s skalar, Zahl für Zahl dasselbe
+     Ergebnis. Den skalaren Weg geht nur noch, wessen Achse das Dreieck
+     treffen könnte — dort braucht die Kandidatenmenge exakte Bruchrechnung.
+
+  **Abnahme, gemessen:**
+
+  | | vorher | jetzt |
+  |---|---|---|
+  | Klammer am Ring (4 096 Dreiecke) | 0,296649 mm max / 0,160593 median | **0,002118 / 0,001049** |
+  | Ebene, Zylinder, Kugel, Kegel | 0,000000 | **unverändert 0,000000** |
+  | Analysekarte `post_with_fillet.stl` | 30,3 s (Budget je Dreieck, skalar) | **0,53 s** |
+  | Analysekarte Rucksackhalter | 1,15 s | **0,11 s** |
+
+  Die Karte ist also **genauer und schneller zugleich**: Vorher rechnete jedes
+  Torusdreieck skalar nach, weil der Stapel seine Klammer nie unter die
+  Zielbreite brachte; diese Frage stellt `_bounded` nicht mehr, sondern die
+  richtige — hat der Stapel zu Ende gerechnet?
+
+  Nachweis: `tests/test_surface_deviation.py::test_every_carrier_closes_its_bracket_on_its_own_body`
+  (gegen den alten Stand rot) und der umgeschriebene Nachbar
+  `test_refinement_is_per_triangle_and_exhaustion_keeps_a_finite_valid_interval`,
+  der die alte Regel festschrieb — 0,65 mm standen in einem grünen Test.
+
 <a id="rm-076"></a>
 
 <a id="rm-129"></a>

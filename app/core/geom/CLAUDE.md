@@ -33,13 +33,26 @@ Dreißigfache kostet), jede Wurzel durch exaktes Quadrieren nach Dekker
 bestätigt, unter `2⁻⁹⁶⁸` die exakten Zweierpotenzen als Schranke. Das Dreieck
 ist die letzte Achse (`(…, 3, n)`), damit jede Operation über zusammenhängende
 Zeilen läuft. Der Stapel rechnet nur unter `_BATCH_MAGNITUDE`, wo nichts
-überläuft; Ebene, Kugel, Zylinder und Kegel enden dort, der Torus bekommt
-seine Zeugen und die Rechteckklammer, und nur ein Torusdreieck über der
-Zielbreite geht — solange das Budget des Trägers reicht — den skalaren
-Kantenweg. Gemessen am 21.09.2026: Lochplatte 449 → 11 ms, Lochblech 10 mal 10
-10,8 s → 132 ms, Dose mit Deckel 11,8 s → 98 ms, Ring 2,4 s → 127 ms bei
-identischen Klammern. Was bleibt: Das Torusbudget gilt je Aufruf, und an
-2304 Ringdreiecken teilen es sich alle — die Klammer dort ist 0,65 mm breit.
+überläuft; Ebene, Kugel, Zylinder und Kegel enden dort, **und der Torus seit
+dem 22.09.2026 auch**: `torus_refine` führt im Stapel dieselbe Rechnung, die
+`_torus` skalar je Dreieck führt — die vier glatten Innenkandidaten und die
+Kantenstücke. Geteilt wird dabei nicht blind, sondern an den Stellen, an denen
+der Abstand kehrt: `_torus_breakpoints` löst dafür eine Quartik
+(`m²·r² - R²·h² = 0`, Wurzeln aus den Eigenwerten der Begleitmatrizen, im
+Stapel für alle Dreiecke in einem `np.linalg.eigvals`), und `_TORUS_HALVINGS`
+halbiert jedes Stück noch zweimal, weil die Sehnenschranke mit dem Quadrat der
+Stückbreite fällt. Den skalaren Weg geht nur noch, wessen Achse das Dreieck
+treffen könnte — dort braucht die Kandidatenmenge exakte Bruchrechnung
+(`_axis_candidates`). Gemessen am 21.09.2026: Lochplatte 449 → 11 ms,
+Lochblech 10 mal 10 10,8 s → 132 ms, Dose mit Deckel 11,8 s → 98 ms, Ring
+2,4 s → 127 ms bei identischen Klammern.
+**Und das Verfeinerungsbudget gehört dem Dreieck, nicht dem Träger**
+(`_MAX_REFINEMENTS`). Bis zum 22.09.2026 galt es je Aufruf: Die ersten
+Dreiecke eines Rings verbrauchten es, alle weiteren bekamen die
+Rechteckklammer — an 4 096 Ringdreiecken im Mittel 0,16 mm breit, wo die
+übrigen Träger auf Mikrometer schließen. Jetzt sind es 0,0021 mm, und die
+Analysekarte einer Verrundung rechnet in 0,53 s statt 30 (RM-202).
+
 Ebene, Zylinder, gerichteter Kegel, Kugel und Ringtorus teilen gerichtete
 Zahlenklammern und echte baryzentrische Zeugen. Deren zwei Floatparameter
 bezeichnen eine exakte reelle Kombination der Originalecken; gerundete

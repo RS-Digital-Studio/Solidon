@@ -101,6 +101,7 @@
 - [Mittel über Symmetrisches entscheidet nach Rauschen](mittel-ueber-symmetrisches-entscheidet-nach-rauschen.md) — vertieft/erhaben aus dem Mittel gegen die Mittelebene: an einer durchgehenden Zelle 10⁻¹⁵ mal so, mal so; erst fragen, ob die Frage eine Antwort hat.
 - [Bündig heißt bündig mit dem Netz](buendig-heisst-buendig-mit-dem-netz.md) · [Naht: wählen, nicht schneiden](naht-nicht-schneiden-sondern-waehlen.md) — Stopfen auf die Facetten, an ihren Grenzen geteilt; Teilung zum Teiler des Umfangs, je Zelle einmal ganz.
 - [Ziel erreicht ≠ heil angekommen](ziel-erreicht-heisst-nicht-heil-angekommen.md) — die Annahmeprüfung maß nur die Zielzahl; je gewaltsamer das Verfahren, desto stiller.
+- [Geteiltes Budget bedient die Reihenfolge](geteiltes-budget-bedient-die-reihenfolge.md) — 256 Verfeinerungen je Träger statt je Dreieck: die ersten bekamen alles, kein Test wurde rot.
 
 ## Shell und Git
 

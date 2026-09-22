@@ -74,7 +74,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-181 — Handlungsliste und Baugruppenladen an dichten Netzen weiter vermessen](#rm-181) | Geometrie, Erkennung und Druckvorbereitung | Die Langlochsuche ist gebaut (126 s → 9 s); offen sind `actions_for` mit Netz (0,14 s je Merkmal) und die Ladezeit einer Baugruppe mit vielen Körpern |
 | [RM-193 — Die Erkennung an einer glatten Generator-Freiform kostet Minuten für null Merkmale](#rm-193) | Geometrie, Erkennung und Druckvorbereitung | Entschieden und gebaut am 22.09.2026: Die Haut — der Fleck über der halben Oberfläche, der keine Grundform ist und in Splitter zerfällt — wird nicht mehr Splitter für Splitter eingepasst, ihre Stücke von Gewicht schon (Zapfen, Verrundung bleiben); das Freiformurteil kommt aus der Haut. Drache 482 → 37,7 → 4,2 s, Schüssel 7,3 → 3,0 s (unter Fremdlast, gleiche Merkmale). Offen: §31 verlangt 1 s je 200 000 — was bleibt, sind die vier Fits über den ganzen gekrümmten Fleck in `_large_facet_faces` und noch einmal in `_fitted` (je 0,5 s Kegel an 300 000 Dreiecken) |
 | [RM-201 — Ein hohler Körper hält die 300 ms der Schichtanalyse nicht](#rm-201) | Geometrie, Erkennung und Druckvorbereitung | Die neue Leistungsmarke `slice_medium_hollow` (200 000 Dreiecke, Wand 1,5 mm) misst 1,5 s für §31 „300 ms": 3 658 Puffer, 796 Differenzen und 718 STRtree-Anfragen je Lauf — die Stufen je Schicht stapeln oder das Ziel für Schalen neu fassen |
-| [RM-202 — Die Formabweichung am Ring schließt nur auf 0,65 mm](#rm-202) | Geometrie, Erkennung und Druckvorbereitung | Das Verfeinerungsbudget des Torus gilt je Aufruf; an einem Ring bleibt die Klammer 0,65 mm breit, wo Ebene, Zylinder, Kugel und Kegel geschlossen rechnen — Budget je Dreieck oder eine geschlossene Kandidatenmenge für den Torus |
 | [RM-208 — Die Kundenwege Verschieben, Bearbeiten, Erkennen und Vorschau auf Zeit](#rm-208) | Geometrie, Erkennung und Druckvorbereitung | Am 22.09.2026 an einer Platte mit 204 000 Dreiecken gemessen und umgebaut: Verschieben 8,6 → 0,5 s, Bohrung 8,3 → 1,8 s, Klick auf eine Bohrung 1,9 → 0,2 s, Vorschau je Zahl 2,2 → 0,04 s ab der zweiten, Erkennung 1,1 → 0,99 s (Kundenmodell 21 → 7,3 s). Dritte Runde: das exakte Vorspiel der Dezimierung (Nadelplatte 11,6 → 0,3 s, erste Vorschau am Fächerexport unter einer Sekunde), `max_distance_to_surface` misst nur, was das Maximum heben kann (Besenhalter 2,9 → 0,25 s), die Freiformhaut (RM-193, Kundenmodell 3,0 s), und der Korpus `F:\3D Dateien` alt gegen neu — Ergebnis im Block |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Der Mac ist gefahren; die Zoom-Dämpfung ist seit dem 16.09. eine Rampe statt einer Klippe und am Gerät zu bestätigen; offen bleiben Linux, die 3DxWare-Mausemulation und die Bildrate an 1 Mio. Dreiecken |
 | [RM-203 — Die Ansicht rechnet je Bild und je Klick, was sie je Auswertung rechnen könnte](#rm-203) | Bedienung und Darstellung | Kanten und Schattenhüllen entstehen je Auswertung im Hauptthread (200 000 Dreiecke: 57 + 71 ms) statt im `_SceneMeshWorker`; `_redraw_feature_patch` kostet an einer Fläche der 360k-Platte 0,41 s; `show_scene` läuft am historischen Bohrschritt je Tastendruck; der Zeiger ruht 16 ms nicht, bevor er fragt — jeden Posten am echten Renderer messen, dann verlegen |
@@ -1755,19 +1754,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   oder das Ziel für Schalen mit Begründung neu fassen. Abnahme: die Marke
   unter 300 ms auf der Referenzmaschine ohne Fremdlast, oder ein Satz in §31,
   der Schalen ausnimmt und sagt, warum.
-
-<a id="rm-202"></a>
-
-- [ ] **RM-202 — Die Formabweichung am Ring schließt nur auf 0,65 mm.**
-  Gefunden am 21.09.2026 im Review (Paket B), beim Stapeln der
-  Formabweichung: Ebene, Zylinder, Kugel und Kegel rechnen ihre Klammer
-  geschlossen (Ecken, Lotfußpunkte, Achsentreffer); der Torus verfeinert,
-  und sein Budget gilt je Aufruf — an einem Ring bleibt die Klammer 0,65 mm
-  breit, wo die übrigen Träger auf Mikrometer schließen. Vorbestehend, nicht
-  vom Stapeln. Weg: Budget je Dreieck statt je Aufruf, oder eine
-  geschlossene Kandidatenmenge für den Torus (Punkte größten und kleinsten
-  Abstands zum Ringkreis je Dreieck). Abnahme: die Klammer am Ring aus
-  `test_surface_deviation.py` unter 0,01 mm, die übrigen Klammern unverändert.
 
 <a id="rm-208"></a>
 
