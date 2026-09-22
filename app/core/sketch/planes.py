@@ -270,6 +270,32 @@ def derived_plane(plane: str, field: str = "plane") -> DerivedPlane | None:
     return None
 
 
+def standing_on_feature(plane: str) -> str | None:
+    """Die Flächenebene, auf der diese Angabe steht — durch alle Ableitungen hindurch.
+
+    Eine Versatzebene über einer Fläche hängt an dieser Fläche genauso wie die
+    Skizze, die direkt darauf liegt: Verschwindet sie, ist die Ebene
+    heimatlos. Wer nur :func:`is_feature_plane` fragt, sieht das nicht — und
+    die Verwaisungsprüfung ließe eine Skizze zurück, die auf nichts mehr steht.
+
+    ``None`` heißt: Diese Ebene steht auf der Welt (Grundebene, drei Punkte)
+    oder ist unlesbar.
+    """
+    for _step in range(MAX_PLANE_DEPTH + 1):
+        if is_feature_plane(plane):
+            return plane
+        if not is_derived_plane(plane):
+            return None
+        try:
+            described = derived_plane(plane)
+        except ValidationError:
+            return None
+        if described is None or isinstance(described, ThroughPlane):
+            return None
+        plane = described.base
+    return None
+
+
 def offset_plane(base: str, distance: str | float) -> str:
     """Eine Versatzebene benennen."""
     return f"{OFFSET_PREFIX}{base}:{distance}"

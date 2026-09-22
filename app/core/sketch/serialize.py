@@ -164,11 +164,34 @@ def sketch_parameter_references(text: str, *, strict: bool = False) -> frozenset
         for constraint in sketch.constraints:
             if constraint.value:
                 found |= references(constraint.value)
+        # **Auch die Ebene liest Parameter** (§30.1): Eine Versatzebene
+        # ``offset:<basis>:@wand`` hängt an ``wand`` genauso wie ein Maß in der
+        # Zeichnung. Ohne diese Zeile bliebe nach einer Parameteränderung das
+        # alte Ergebnis im Cache stehen, und die Skizze läge weiter auf der
+        # alten Höhe — sichtbar erst beim nächsten vollständigen Neurechnen.
+        found |= plane_parameter_references(sketch.plane)
     except ValidationError:
         if strict:
             raise
         return frozenset()
     return frozenset(found)
+
+
+def plane_parameter_references(plane: str) -> frozenset[str]:
+    """Projektparameter, die im Abstand oder Winkel einer Ebene stehen.
+
+    Rekursiv über die Basis, denn eine Versatzebene darf auf einer
+    Neigungsebene stehen und beide dürfen ein Maß tragen.
+    """
+    from app.core.sketch import planes
+
+    if not planes.is_derived_plane(plane):
+        return frozenset()
+    described = planes.derived_plane(plane)
+    if described is None or isinstance(described, planes.ThroughPlane):
+        return frozenset()
+    measure = described.distance if isinstance(described, planes.OffsetPlane) else described.angle
+    return references(measure) | plane_parameter_references(described.base)
 
 
 def resolve_sketch_values(text: str, parameters: Mapping[str, float] | None = None) -> str:

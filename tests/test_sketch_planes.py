@@ -20,6 +20,7 @@ import pytest
 import trimesh
 
 from app.core.errors import ValidationError
+from app.core.scene.orphans import feature_ref_of_sketch
 from app.core.sketch.planes import (
     BASE_FRAMES,
     MAX_PLANE_DEPTH,
@@ -32,11 +33,16 @@ from app.core.sketch.planes import (
     frame_for_sketch,
     is_derived_plane,
     offset_plane,
+    standing_on_feature,
     through_plane,
     tilt_plane,
     to_world,
 )
-from app.core.sketch.serialize import sketch_from_text, sketch_to_text
+from app.core.sketch.serialize import (
+    sketch_from_text,
+    sketch_parameter_references,
+    sketch_to_text,
+)
 from app.core.types import Feature, SceneObject, Sketch, Vec3
 
 
@@ -294,3 +300,76 @@ def test_a_damaged_plane_never_becomes_a_sketch(plane: str) -> None:
 
     with pytest.raises(ValidationError):
         sketch_from_text(written)
+
+
+# --- Was an einer Ebene hängt, muss auffallen (RM-188 P3.2) ----------------------
+
+
+def test_a_plane_parameter_reaches_the_cache_key() -> None:
+    """Ein Abstand aus einem Projektparameter zählt wie ein Maß in der Zeichnung.
+
+    Ohne diese Abhängigkeit bliebe nach einer Parameteränderung das alte
+    Ergebnis im Cache stehen, und die Skizze läge weiter auf der alten Höhe —
+    sichtbar erst beim nächsten vollständigen Neurechnen (§15).
+    """
+    written = sketch_to_text(
+        Sketch(plane=offset_plane("plane:xy", "=@wand * 2"), elements=(), constraints=())
+    )
+
+    assert sketch_parameter_references(written) == frozenset({"wand"})
+
+
+def test_a_plane_parameter_is_found_through_every_derivation() -> None:
+    """Auch wenn die Ebene auf einer anderen steht, die selbst ein Maß trägt."""
+    plane = offset_plane(tilt_plane("plane:xy", "x", "@neigung"), "@hoehe")
+    written = sketch_to_text(Sketch(plane=plane, elements=(), constraints=()))
+
+    assert sketch_parameter_references(written) == frozenset({"neigung", "hoehe"})
+
+
+def test_a_plane_without_parameters_depends_on_none() -> None:
+    """Die Gegenprobe — sonst hinge jede Skizze an allem."""
+    written = sketch_to_text(
+        Sketch(plane=offset_plane("plane:xy", 20.0), elements=(), constraints=())
+    )
+
+    assert sketch_parameter_references(written) == frozenset()
+
+
+@pytest.mark.parametrize(
+    ("plane", "expected"),
+    [
+        ("plane:xy", None),
+        ("feature:obj_1:face_1", "feature:obj_1:face_1"),
+        ("offset:feature:obj_1:face_1:20", "feature:obj_1:face_1"),
+        ("tilt:feature:obj_1:face_1:x:30", "feature:obj_1:face_1"),
+        ("offset:tilt:feature:obj_1:face_1:x:30:5", "feature:obj_1:face_1"),
+        ("offset:plane:xy:20", None),
+        ("through:0,0,0;1,0,0;0,1,0", None),
+    ],
+)
+def test_a_derived_plane_still_stands_on_its_face(plane: str, expected: str | None) -> None:
+    """Verschwindet die Fläche, ist auch die Ebene darüber heimatlos.
+
+    Die Verwaisungsprüfung fragte bis zum 22.09.2026 nur ``is_feature_plane``
+    und sah durch eine Ableitung nicht hindurch — eine Skizze auf einer
+    Versatzebene hätte ihre Fläche verlieren können, ohne dass es jemand
+    meldet.
+    """
+    assert standing_on_feature(plane) == expected
+
+
+def test_the_orphan_check_sees_the_face_under_a_derived_plane() -> None:
+    """Und die Prüfung selbst, nicht nur ihr Baustein."""
+    written = sketch_to_text(
+        Sketch(
+            plane=offset_plane(feature_plane("obj_1", "face_1"), 5.0),
+            elements=(),
+            constraints=(),
+        )
+    )
+
+    reference = feature_ref_of_sketch(written)
+
+    assert reference is not None
+    assert (reference.object_id, reference.feature_id) == ("obj_1", "face_1")
