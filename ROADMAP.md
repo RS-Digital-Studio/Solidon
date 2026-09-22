@@ -60,7 +60,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-024 — Gespeicherte Zuordnungsantworten im echten Konfliktfall abnehmen](#rm-024) | Geometrie, Erkennung und Druckvorbereitung | Der Rundlauf steht; gemessen fehlt ein Korpuskörper, dessen erneute Erkennung wirklich mehrdeutig wird |
 | [RM-041 — Innenraum importierter entlüfteter Hohlkörper klären](#rm-041) | Geometrie, Erkennung und Druckvorbereitung | Schätzweg oder dokumentierte Grenze des Innenraums entscheiden |
 | [RM-209 — Die Rundform-Einpassung an Gittermodellen](#rm-209) | Geometrie, Erkennung und Druckvorbereitung | Zehn Hebel gemessen, neun tot: Nicht der Löser ist zu langsam, sondern 1 093 von 1 127 Kegelfits sind vergeblich. Der zehnte trägt — 77 Prozent der Flecken eines Gitters sind deckungsgleich |
-| [RM-210 — Die Erkennung hängt von der Lage des Körpers ab](#rm-210) | Geometrie, Erkennung und Druckvorbereitung | Dasselbe Modell um 13,7 mm verschoben verliert einen Kegel und eine Verrundung; gedreht kommen fünf dazu. Ursache und Reichweite bestimmen |
+| [RM-210 — Die Erkennung hängt von der Lage des Körpers ab](#rm-210) | Geometrie, Erkennung und Druckvorbereitung | Dasselbe Modell um 13,7 mm verschoben verliert einen Kegel und eine Verrundung; gedreht kommen fünf dazu. Die Kippstelle ist ein einzelner Fleck mit gleichem Startwert — Entscheidung über „am Limit heißt verworfen" steht aus |
 | [RM-076 — Topologieverlust beim Reduzieren von Eule und Spiderman beheben](#rm-076) | Geometrie, Erkennung und Druckvorbereitung | Eule und Spiderman mit Zielreihe und Topologievergleich reproduzieren |
 | [RM-077 — Reduzierungsziel bei Körpern mit Durchbrüchen erreichen](#rm-077) | Geometrie, Erkennung und Druckvorbereitung | Zielreihen an Körpern mit Durchbrüchen gegen den vorhandenen Rückfall messen |
 | [RM-078 — Ladezeit generierter Beispielmodelle an der Orientierung messen](#rm-078) | Geometrie, Erkennung und Druckvorbereitung | Eulenprojekt ohne Fremdlast öffnen und teure Schritte zuordnen |
@@ -814,19 +814,41 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
   **Die Gegenprobe ist gefahren und sie ist sauber:** Zweimal hintereinander am unveränderten
   Körper erkannt, kommen beide Male dieselben Merkmale heraus. Die Erkennung ist deterministisch;
-  was sie nicht ist, ist unabhängig von der Lage. Der Grund liegt nahe — Fließkommaarithmetik ist
-  weder dreh- noch verschiebungsinvariant, und die Rundformeinpassung rechnet in Weltkoordinaten
-  —, aber welche Schwelle konkret kippt, ist nicht gemessen. Die Verrundungen stellen die
-  Mehrzahl der Abweichungen, sie kommen nicht aus `fit_cone`.
+  was sie nicht ist, ist unabhängig von der Lage.
+
+  **Die Kippstelle ist bis auf den einzelnen Fleck eingegrenzt.** Bei der Verschiebung um 13,7 mm
+  zerfällt der Körper in exakt dieselben Flecken, und von 202 Kegelfits antwortet genau **einer**
+  anders — ein Fleck mit 32 Dreiecken, hier ein Kegel von 53,501825 Grad mit Rückstand 4,957·10⁻⁴,
+  dort keiner. Sein Startwert ist in beiden Lagen Bit für Bit derselbe, denn `_fit_cone_read`
+  zentriert auf den Schwerpunkt und normiert auf die Fleckausdehnung; die Verschiebung fällt also
+  heraus. Was bleibt, ist die Rundung in `support.points - origin`: Bei großen Koordinaten ist
+  diese Differenz nicht exakt. Und beide Läufe brauchen hundert Auswertungen — der Fleck stand
+  ohnehin an der Kippe.
+
+  **Daraus folgt der Vorschlag, und er ist fachlich begründet statt numerisch: Ein Fit, der sein
+  Auswertungsbudget ausschöpft, hat nicht konvergiert.** Ob am Ende trotzdem ein Ergebnis
+  dasteht, entscheidet dann die Lage des Körpers — es ist keine Aussage über die Geometrie. Wer
+  ihn verwirft, verliert keine Erkenntnis, sondern einen Zufall. Über die 71 Korpusdateien
+  gemessen trifft die Regel sehr wenig: Von 173 Läufen an `Elegoo_erster_Druck.3mf` enden 49 am
+  Limit, aber nur **einer** davon mit Ergebnis; an `countercleaner.3mf` sind es 6 von 167, an
+  `garden-hose-holder.3mf` 14 von 1 276. Vier Dateien ändern sich, und an der ersten sind es
+  **genau die beiden Merkmale, die beim Verschieben ohnehin verschwinden** — `cone_7` und
+  `fillet_21`. Die Regel trifft also, was sie treffen soll. Zeit spart sie kaum (14,5 → 13,0 s an
+  `countercleaner.3mf`), denn der Lauf läuft trotzdem; sie macht das Kriterium scharf, an dem
+  RM-209 und RM-208 messen.
+
+  Offen bleibt die Mehrzahl der Abweichungen: Die Verrundungen stellen sie, und die kommen nicht
+  aus `fit_cone`.
 
   Was daran wiegt: Ein Kunde, der sein Teil auf der Platte anders ablegt, bekommt einen anderen
   Steckbrief. Und da ARM anders rundet als x86, kann dasselbe Modell auf zwei Rechnern
   verschieden gelesen werden — die Zusage „Plattformen funktionieren gleich" ist damit nicht
   eingelöst.
 
-  Abnahme: Ursache benannt und an der Schwelle belegt, die kippt; danach entweder die Erkennung
-  gegen starre Bewegungen abgesichert oder die Grenze der Zusage dokumentiert. Ein Test, der
-  einen Korpuskörper verschoben und gedreht einliest und dieselbe Merkmalsmenge verlangt.
+  Abnahme: Entscheidung über die Regel „am Limit heißt verworfen"; die Verrundungen ebenso
+  eingegrenzt wie die Kegel; danach entweder die Erkennung gegen starre Bewegungen abgesichert
+  oder die Grenze der Zusage dokumentiert. Ein Test, der einen Korpuskörper verschoben und
+  gedreht einliest und dieselbe Merkmalsmenge verlangt.
 
 <a id="rm-076"></a>
 
