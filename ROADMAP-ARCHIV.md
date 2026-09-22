@@ -8438,8 +8438,8 @@ Arbeit gilt ausschließlich `ROADMAP.md`.
 | RM-073 — Roberts Produktentscheidung | weiter offen → [RM-073](#rm-073) | Produktentscheidung ist laut ursprünglichem Punkt offen. Die aktuelle Roadmapprüfung autorisiert keine Löschung historischer Releases. |
 | RM-074 — Die neun V-Pakete abarbeiten — je Paket Zahlen, Gegenproben und | weiter offen → [RM-074](ROADMAP.md#rm-074) | ROADMAP.before.md:13878–13886 führt V1–V9 als fertig; V6 nennt den Warnprojekt-Nachweis ausdrücklich als einzigen Anschluss. VTK-spezifische alte Belege ersetzen keine pygfx-Abnahme. |
 | RM-075 — Die dreizehn G-Pakete abarbeiten — je Paket Belegbild vorher und | erledigt | ROADMAP.before.md:14043ff: G1–G18 samt G13-Kleinserie erledigt oder begründet gegenstandslos. G6 enthält den fertigen Ruhezustands-Wächter 9ed68323, trotz veralteter Statuszelle. Der behauptete Ablaufdatum-Akzent wurde im G13/B26-Text widerlegt; neuere Filamenthöhen-Funde sind eigenständige Punkte. |
-| RM-076 — `decimate_mesh` erzeugt an 3as Eule nicht-mannigfaltige Kanten — der einzige echte Reduzierer-Fehler des Dreierpakets | weiter offen → [RM-076](ROADMAP.md#rm-076) | app/core/geom/mesh_ops.py:121–160 übernimmt erfolgreich dezimierte Geometrie weiter ungeprüft; _simplification_findings meldet Schäden. Tests/test_subdivision.py:443ff prüft Meldung bei Dichtheitsverlust, nicht dessen Vermeidung. RM129 betrifft denselben Produktionsweg. |
-| RM-077 — Der Reduzierer erreicht bei Euler-0-Körpern sein Ziel nicht | weiter offen → [RM-077](ROADMAP.md#rm-077) | app/core/geom/mesh_ops.py:137–140 schaltet erst bei len(reduced.faces) >= source.triangle_count um; :947ff beschreibt Euler-0-Stillstand weiterhin. tests/test_subdivision.py:372–400 belegt Rückfall an dichtem Zylinder, nicht am ursprünglichen Ringfall. Die pauschale Forderung nach einem anderen Reduzierer ist überholt. |
+| RM-076 — `decimate_mesh` erzeugt an 3as Eule nicht-mannigfaltige Kanten — der einzige echte Reduzierer-Fehler des Dreierpakets | gelöst 22.09.2026 → [RM-076](#rm-076) | app/core/geom/mesh_ops.py:121–160 übernimmt erfolgreich dezimierte Geometrie weiter ungeprüft; _simplification_findings meldet Schäden. Tests/test_subdivision.py:443ff prüft Meldung bei Dichtheitsverlust, nicht dessen Vermeidung. RM129 betrifft denselben Produktionsweg. |
+| RM-077 — Der Reduzierer erreicht bei Euler-0-Körpern sein Ziel nicht | gelöst 22.09.2026 → [RM-077](#rm-077) | app/core/geom/mesh_ops.py:137–140 schaltet erst bei len(reduced.faces) >= source.triangle_count um; :947ff beschreibt Euler-0-Stillstand weiterhin. tests/test_subdivision.py:372–400 belegt Rückfall an dichtem Zylinder, nicht am ursprünglichen Ringfall. Die pauschale Forderung nach einem anderen Reduzierer ist überholt. |
 | RM-078 — Ein generiertes Modell zu öffnen kostet eine Minute — der Punkt ist echt, die Ursache war falsch zugeordnet | weiter offen → [RM-078](ROADMAP.md#rm-078) | Der Originalpunkt korrigiert seine 61,77 s selbst auf 9,4–18,5 s und widerlegt 574/909 CPU-s als Öffnungszeiten. 3a787a57 und spätere Änderungen betreffen Orientierung, Einlesen und Auswertung; eine neue isolierte Öffnungsabnahme liegt hier nicht vor. |
 | RM-079 — 61 Prozent der mehrzeiligen Texte der Startseite laufen über 75 Zeichen | weiter offen → [RM-079](ROADMAP-ARCHIV.md#rm-079) | website/style.css besitzt weiterhin viele lokale max-width/ch-Regeln, aber keine gemeinsame main-p/main-li-Grenze. Die historischen 48/79 und 153 Zeichen wurden nicht neu gemessen und dürfen nur als Anlass stehen. |
 | RM-080 — Die Trennen-Serie abarbeiten — Reihenfolge T1 → T5 → T4 → T2 → T3 → | weiter offen → [RM-080](ROADMAP.md#rm-080) | app/core/geom/autosplit.py berücksichtigt _support_after_cut und best_face_candidate; tests/test_autosplit.py:587ff prüft automatische Schwalbenschwänze. protect existiert im Kern (:239,:494ff), aber kein entsprechender Dokumentwert in app/core/types.py oder Bedienanschluss in main_window/split_bar. T1/T5 sind historisch abgeschlossen. |
@@ -8491,7 +8491,7 @@ Arbeit gilt ausschließlich `ROADMAP.md`.
 | RM-126 — Zwei rote Tests sind Altlast und gehören keiner Änderung von heute | erledigt | 76838903 korrigiert den falschen Rangfolge-Sollwert in tests/test_autosplit.py anhand aller fertigen Halbschalen und behebt die verlorene Schnittschicht. THIRD-PARTY-NOTICES.md:18/1857 enthält hidapi; f19eb7bd erneuert die Lizenzbeilage. Der Commit 76838903 dokumentiert das vollständige Tor; hier nicht als neuer Testlauf ausgegeben. |
 | RM-127 — Nach einer Änderung prüft niemand, ob die Wand noch druckbar ist | weiter offen → [RM-127](#rm-127) | app/core/geom/hollow.py:257 meldet nur den eigenen Aushöhlungsfall. In scene/evaluate.py wurde keine allgemeine Endzustandsprüfung für sleeve_at/wall_below_nozzle gefunden. Die von Robert verworfene bloße Änderungsmeldung wird nicht erneut beauftragt. |
 | RM-128 — Zwanzig der 26 erkannten Merkmale des Besenhalters lassen sich nicht bearbeiten | weiter offen → [RM-128](ROADMAP.md#rm-128) | Aktuelle prepare_ops.py unterstützt gezielt bewegliche Bohrungen/Zapfen und verweist für Verrundungen auf andere Grenzen. Die historischen 20/26 wurden nach späteren Erkennungs-/Auswahländerungen nicht neu gemessen und sind kein aktueller Bestandszähler. |
-| RM-129 — Dezimieren kann die Dichtheit kosten | zusammengeführt → [RM-076](ROADMAP.md#rm-076) | app/core/geom/mesh_ops.py:121–160 hat weiterhin keinen topologiesichernden Nachlauf bei erfolgreicher fast_simplification. Das ist derselbe Reparaturauftrag wie RM076, ergänzt um den Mehrkomponentenfall. |
+| RM-129 — Dezimieren kann die Dichtheit kosten | gelöst 22.09.2026 → [RM-076](#rm-076) | app/core/geom/mesh_ops.py:121–160 hat weiterhin keinen topologiesichernden Nachlauf bei erfolgreicher fast_simplification. Das ist derselbe Reparaturauftrag wie RM076, ergänzt um den Mehrkomponentenfall. |
 | RM-130 — Ein reiner Import macht das Projekt „geändert" | weiter offen → [RM-130](#rm-130) | app/ui/session.py importiert weiter über die History; modified bleibt ein Vergleich des Dokumentzustands. Der aktuelle Dateiweg ist single-file und es gibt keinen gesondert belegten View-only-Status. |
 | RM-131 — Siebzehn Teile eines Modells kosten siebzehn Vorgänge | weiter offen → [RM-131](ROADMAP.md#rm-131) | Roberts ausdrückliche Zurückstellung vom 04.09.2026 gilt. main_window.py:4448 verwendet getOpenFileName; Drop verarbeitet accepted_path; session.py:1335/1394 behandelt nur first_model besonders. Kein Auftrag zur sofortigen Erweiterung. |
 | RM-132 — Freiformerkennung liegt noch über dem Ein-Sekunden-Ziel | weiter offen → [RM-132](ROADMAP.md#rm-132) | tests/test_performance.py enthält inzwischen beide zusätzlichen Fälle; :556 nennt 1,41 s synthetisch und 1,52 s organisch. Die Korpuslücke ist geschlossen, das strengere Ziel bleibt laut Punkt ausdrücklich offen. |
@@ -22567,7 +22567,7 @@ ganze Kette, und drei Befunde blieben übrig — alle gemessen (3a), keiner
 gebaut. Der Einleser-Fall selbst (Entfernen entarteter Dreiecke riss
 geschlossene Netze auf) ist mit `4b6a1d97` behoben; diese drei stehen noch:
 
-- **Historischer Befund RM-076 (weiter offen; aktuelle Aufgabe [RM-076](ROADMAP.md#rm-076)):** **`decimate_mesh` erzeugt an 3as Eule nicht-mannigfaltige Kanten —
+- **Historischer Befund RM-076 (gelöst am 22.09.2026, siehe [RM-076](#rm-076)):** **`decimate_mesh` erzeugt an 3as Eule nicht-mannigfaltige Kanten —
       der einzige echte Reduzierer-Fehler des Dreierpakets** (72s Zerlegung,
       31.08.): sauber hinein, defekt heraus, die Zahl **wächst** mit der
       Tiefe (150k/100k sauber, 60k → 2, 30k → 4); an vier Korpusmodellen
@@ -22577,7 +22577,7 @@ geschlossene Netze auf) ist mit `4b6a1d97` behoben; diese drei stehen noch:
       statt gegen das **Ziel** — ein 124-fach verfehltes Ziel schwieg, je
       kräftiger reduziert, desto seltener sagte es jemand; Schwelle jetzt
       „Vielfaches des Ziels" (1,5), neuer Test war vor dem Fix rot.
-- **Historischer Befund RM-077 (weiter offen; aktuelle Aufgabe [RM-077](ROADMAP.md#rm-077)):** **Der Reduzierer erreicht bei Euler-0-Körpern sein Ziel nicht** —
+- **Historischer Befund RM-077 (gelöst am 22.09.2026, siehe [RM-077](#rm-077)):** **Der Reduzierer erreicht bei Euler-0-Körpern sein Ziel nicht** —
       jede Hülse, jeder Ring, jedes Gehäuse mit Durchbruch bleibt bei
       74 592 Dreiecken stehen, ohne entartetes Dreieck und ohne offene
       Kante (trimesh-Verhalten). Dass er aufgibt, ist vertretbar; seit
@@ -24762,7 +24762,7 @@ die alles andere erklärt:
   Punkt weiter oben („Verrundung und Fase gehen auf einem Netz nicht"); für
   Flächen gibt es keinen.
 
-- **Historischer Befund RM-129 (zusammengeführt; aktuelle Aufgabe [RM-076](ROADMAP.md#rm-076)):** **Dezimieren kann die Dichtheit kosten.** Der Spiderman (885 570
+- **Historischer Befund RM-129 (gelöst am 22.09.2026 mit [RM-076](#rm-076)):** **Dezimieren kann die Dichtheit kosten.** Der Spiderman (885 570
   Dreiecke, geschlossen, mit sehr kleinen Einzelteilen) kommt aus
   `decimate(120 000)` **offen** zurück; `obj_13_Assembly_B` und `dense_1m` aus
   demselben Lauf bleiben geschlossen. Damit führt der Weg, der die
@@ -29676,6 +29676,89 @@ alles andere soll noch vor 0.5.0 fertig sein"). Gebaut auf `rm-207-muster`, am
   Dreiecken braucht 22,2 s, also siebenmal so lange wie ein Baum mit dem Doppelten: Es zerfällt in
   1 412 gekrümmte Flecken von median sieben Dreiecken, und jeder bekommt Kegel-, Kugel- und
   Ringeinpassung. Was daraus folgt, steht als RM-209.
+
+<a id="rm-076"></a>
+
+<a id="rm-129"></a>
+
+- [x] **RM-076 — Topologieverlust beim Reduzieren von Eule und Spiderman beheben.**
+  Gelöst am 22.09.2026, zusammen mit dem zusammengeführten RM-129.
+
+  **Es war eine fehlende Frage, kein kaputter Solver.** ``_decimate_with_solver``
+  rief den exakten Kern nur, wenn ``fast_simplification`` die *Dreieckszahl*
+  nicht schaffte. Ob danach noch ein Körper da ist, fragte niemand — und genau
+  das ist der Fall: An der erzeugten Eule kamen bei 150 000 Dreiecken zehn
+  offene Teile mit elf verzweigten Kanten aus einem geschlossenen
+  Einzelkörper, am Voronoi-Spiderman bei 30 000 zwölf Teile statt zwei. Das
+  Ziel war jedes Mal punktgenau getroffen, und im Bericht stand, die Fläche
+  habe sich kaum verschoben.
+
+  **Die Abnahmereihe** (Netze aus `F:\3D Dateien`, über den Ladeweg der
+  Anwendung, Zahlen vorher → nachher):
+
+  | Körper | Ziel | vorher | jetzt |
+  |---|---|---|---|
+  | Eule (325 244) | 150 000 | 10 Teile, 11 verzweigt, offen | **148 564, 1 Teil, dicht, 0,0012 mm** |
+  | Eule | 100 000 | 10 Teile, 11 verzweigt, offen | **99 300, 1 Teil, dicht, 0,0027 mm** |
+  | Eule | 60 000 | 13 Teile, 13 verzweigt, offen | **59 712, 1 Teil, dicht, 0,0035 mm** |
+  | Eule | 30 000 | 13 Teile, 12 verzweigt, offen | unverändert — **und gemeldet** |
+  | Spiderman (885 570) | 120 000 | 2 Teile, 1 verzweigt, offen | unverändert — **und gemeldet** |
+
+  Der Rückfall prüft sein eigenes Ergebnis auf Dichtheit, Teilzahl, Volumen
+  und Abweichung, gibt also nur Heiles her. Wo seine Abweichungsgrenze das
+  Ziel nicht trägt — Voronoi-Stege, Kumiko-Gitter, die Eule bei 30 000 —,
+  lehnt er ab, und das ist die ehrliche Antwort: Gemessen an denselben
+  Körpern verliert auch ``simplify`` bei größerer Toleranz Form (Spiderman
+  21 114 → 15 960 mm³ bei einfacher Grenze), es gibt dort schlicht nichts
+  Heiles in dieser Größe.
+
+  **Dann erfährt es wenigstens der Kunde.** „Offen" und „zerfallen" sind zwei
+  Dinge, und über das zweite schwieg der Bericht — die Stückzahl merkt man
+  sonst erst im Slicer. `mesh.components_split` nennt sie und verspricht
+  nichts: Gemessen setzt *Reparieren* den Spiderman wieder zu einem Teil
+  zusammen, vom Kumiko-Gitter bleiben 94 Teile und ein Drittel weniger
+  Volumen.
+
+  **Der Testfall liegt im Repository**, nicht auf einer Platte: eine
+  durchbrochene Kugelschale (`test_subdivision._sieve`, vierzig Bohrungen,
+  0,25 s Bauzeit) zeigt beide Hälften — bei 80 % des Eingangs zerreißt der
+  erste Solver und der Rückfall rettet, bei 50 % zerreißt er und der Befund
+  sagt es. Beide Tests waren gegen den alten Stand rot.
+
+<a id="rm-077"></a>
+
+- [x] **RM-077 — Reduzierungsziel bei Körpern mit Durchbrüchen erreichen.**
+  Gelöst am 22.09.2026 — es war eine Schwelle.
+
+  **Der historische Befund ist überholt.** Er sagte, der Rückfall greife nur,
+  wenn das erste Verfahren *gar keine* Dreiecke entfernt; seit dem exakten
+  Vorspiel und `DECIMATE_MISS` galt „mehr als das Doppelte des Ziels". Genau
+  daran blieb der Besenhalter hängen: 59 740 Dreiecke, Ziel 30 000, der erste
+  Solver kam auf 59 100 — das 1,97-fache, knapp unter der Schwelle. Derselbe
+  Rückfall erreichte daneben **29 094 Dreiecke mit 0,0012 mm Abweichung**,
+  drei Teile, dicht, in einer halben Sekunde.
+
+  Gefragt wird jetzt nach dem **Ziel** statt nach einem Vielfachen davon. Das
+  kostet nichts, wo nichts zu holen ist: Der Rückfall lehnt in einem einzigen
+  ``simplify``-Lauf ab, wenn seine Abweichungsgrenze das Ziel nicht trägt
+  (0,09 bis 2,15 s an den gemessenen Körpern), und ein Netz, dessen Form nicht
+  weniger hergibt, bleibt weiter sein eigenes Ergebnis mit
+  `mesh.not_simplified`.
+
+  **Die Zielreihen für Euler-0-Körper** (jeder Eingang geschlossen, ein Teil;
+  Genus über die Euler-Charakteristik gemessen):
+
+  | Körper | Eingang | 50 000 | 20 000 | 5 000 | 1 000 |
+  |---|---|---|---|---|---|
+  | Hülse 20/12 mm, Genus 1 | 262 144 | 1 024 exakt | 1 024 | 1 024 | 736 manifold |
+  | Platte mit 5 Bohrungen, Genus 5 | 335 872 | 1 318 exakt | 1 318 | 1 318 | 1 000 |
+  | Torus, Genus 1 | 65 536 | — | 20 000 | 5 000 | 1 000 |
+
+  Jedes Ziel erreicht, Genus und Dichtheit gehalten, Abweichung höchstens
+  0,2952 mm am gröbsten Torusziel — das exakte Vorspiel nimmt an
+  unterteilten CAD-Netzen ohnehin alles weg, was keine Form beschreibt. Der
+  ursprüngliche Stillstand bei 74 592 Dreiecken ist an keinem dieser Körper
+  mehr reproduzierbar.
 
 <a id="rm-041"></a>
 

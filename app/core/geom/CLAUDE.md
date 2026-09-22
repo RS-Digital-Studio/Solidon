@@ -1195,11 +1195,19 @@ neue Ecke eine alte, geprüft an Dichtheit, Teilzahl und Volumen
 (`FLATTEN_VOLUME_NOISE`); reicht das allein unter das Ziel, heißt der Solver
 `"exact"`. Die viermal unterteilte Lochplatte: 203 776 → 814 Dreiecke in
 110 ms, wo `fast_simplification` vier Sekunden stillstand und der Rückfall
-danach elf brauchte. Danach der Rückfall auf den exakten Kern, sobald
-`fast_simplification` das Ziel um mehr als das Doppelte verfehlt
-(`DECIMATE_MISS`): An CAD-Exporten mit echten Nadeln — ein Zylinder aus
+danach elf brauchte. Danach der Rückfall auf den exakten Kern, und zwar an
+**zwei** Fragen: wenn `fast_simplification` das Ziel verfehlt, und wenn sein
+Ergebnis kein Körper mehr ist (`_lost_body` — nicht mehr geschlossen oder in
+mehr Teile zerfallen). An CAD-Exporten mit echten Nadeln — ein Zylinder aus
 2 048 Sektionen, der Besenhalter — nimmt sein Flip-Schutz kein Dreieck weg,
 und dort findet auch das Vorspiel nichts, weil jede Ecke etwas beschreibt.
+An dünnwandigen Gittern zieht er dagegen Kanten zusammen, die nicht
+zusammengehören: erzeugte Eule 150 000 → zehn offene Teile statt eines,
+Voronoi-Spiderman bei 30 000 zwölf statt zwei. Der Rückfall prüft sein eigenes
+Ergebnis auf Dichtheit, Teilzahl, Volumen und Abweichung, gibt also nur Heiles
+her — die Eule rettet er bei 150 000 und 60 000 vollständig. Wo er ablehnt,
+bleibt das zerrissene Ergebnis stehen und `_deviation_findings` sagt es
+(`mesh.not_watertight`, `mesh.components_split`).
 `mesh_ops.decimate_for_display` ist die des Bildschirms — Vorschaubild im
 Objektbaum, Anzeige ab der Schwelle aus §31, Beispielbilder, Stellvertreter
 der Orientierungssuche: erst der exakte Kern nach Sehnenfehler

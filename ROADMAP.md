@@ -59,8 +59,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-191 — PrusaSlicer verbraucht für dieselbe Übergabe ein Drittel mehr Material](#rm-191) | Geometrie, Erkennung und Druckvorbereitung | Die neun Platten des Regals je Slicer gegen die Prusa-Ausgabe aufschlüsseln: Stützen, Wände oder Füllung — und die Übergabe der Prusa-Schlüssel danach ergänzen |
 | [RM-024 — Gespeicherte Zuordnungsantworten im echten Konfliktfall abnehmen](#rm-024) | Geometrie, Erkennung und Druckvorbereitung | Der Rundlauf steht; gemessen fehlt ein Korpuskörper, dessen erneute Erkennung wirklich mehrdeutig wird |
 | [RM-209 — Die Rundform-Einpassung an Gittermodellen](#rm-209) | Geometrie, Erkennung und Druckvorbereitung | 673 von 1 430 Löserläufen enden am Auswertungslimit und liefern nichts; ein Gitter mit 95 000 Dreiecken braucht 22 s. Zwei Hebel geprüft und verworfen (Rang am Start, `lm`) |
-| [RM-076 — Topologieverlust beim Reduzieren von Eule und Spiderman beheben](#rm-076) | Geometrie, Erkennung und Druckvorbereitung | Eule und Spiderman mit Zielreihe und Topologievergleich reproduzieren |
-| [RM-077 — Reduzierungsziel bei Körpern mit Durchbrüchen erreichen](#rm-077) | Geometrie, Erkennung und Druckvorbereitung | Zielreihen an Körpern mit Durchbrüchen gegen den vorhandenen Rückfall messen |
 | [RM-078 — Ladezeit generierter Beispielmodelle an der Orientierung messen](#rm-078) | Geometrie, Erkennung und Druckvorbereitung | Eulenprojekt ohne Fremdlast öffnen und teure Schritte zuordnen |
 | [RM-080 — Restumfang der Trennen-Serie mit aktuellem Code abgleichen](#rm-080) | Geometrie, Erkennung und Druckvorbereitung | Die Sichtflächen-Sperre ist zu Ende gebaut; offen bleiben schräge Ebenen, Symmetrie, globale Schnittfolgen und das Schaustück |
 | [RM-086 — Achsenkonvention beim GLB-Import mit Migration klären](#rm-086) | Geometrie, Erkennung und Druckvorbereitung | GLB-Achsenkonvention mit Herkunft und Migration festlegen |
@@ -748,27 +746,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   §31-Ziel für 200 000 Dreiecke belegt oder begründet angepasst, und an allen Modellen des Korpus
   dieselben Merkmale wie heute. Gehört zum Leistungsstrang RM-208.
 
-<a id="rm-076"></a>
-
-- [ ] **RM-076 — Topologieverlust beim Reduzieren von Eule und Spiderman beheben.** Die neu
-  entstehenden nicht-mannigfaltigen Kanten der generierten Eule und den Dichtheitsverlust kleiner
-  Komponenten beim Spiderman am aktuellen Vereinfacher reproduzieren und beheben. Abnahme: Eule über
-  150k/100k/60k/30k, Spiderman bei 120k, Eingangs-/Ausgangstopologie und Komponentenzahl
-  dokumentiert; geschlossene Eingänge bleiben druckbar oder die Operation bietet einen
-  nachvollziehbaren Rückweg.
-
-  [Bisheriger Befund](ROADMAP-ARCHIV.md#befunde-aus-dem-weg-dreh-31082026).
-
-<a id="rm-077"></a>
-
-- [ ] **RM-077 — Reduzierungsziel bei Körpern mit Durchbrüchen erreichen.** Den Stopp der
-  Vereinfachung an Hülsen, Ringen und Gehäusen mit Durchbrüchen gegen den vorhandenen
-  Manifold-Rückfall nachmessen. Der Rückfall greift bisher nur, wenn das erste Verfahren gar keine
-  Dreiecke entfernt. Abnahme: dokumentierte Zielreihen für Euler-0-Körper, begrenzte Formabweichung
-  und klare Meldung bei unerreichbarem Ziel; erst danach über eine Erweiterung entscheiden.
-
-  [Bisheriger Befund](ROADMAP-ARCHIV.md#befunde-aus-dem-weg-dreh-31082026).
-
 <a id="rm-078"></a>
 
 - [ ] **RM-078 — Ladezeit generierter Beispielmodelle an der Orientierung messen.** Die Öffnungszeit
@@ -1242,7 +1219,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
     Drillholder-Bohrungen: Import, Erkennung, Maßänderung, Vorschau, Ergebnis,
     Undo/Redo und je eigener Bildnachweis. Kernläufe ersetzen diese Abnahme nicht.
   - Einheitliche abschließende Leistungsreihe, erstes sichtbares Modell und
-    getrennte Stufenmessung; Topologie beim Reduzieren bewahren (RM-076/RM-077).
+    getrennte Stufenmessung.
   - Puppenhaus-/Schrankparameter sowie Mehrdateien und Plattengruppen.
   - Weitere funktionale Gruppen: Kammer, Gewinde/Einlauf, Bajonett/Rastung,
     Dichtweg/Kanal, Scharnier, Schrift/Einlage und Steckaufnahme/Anschlag.

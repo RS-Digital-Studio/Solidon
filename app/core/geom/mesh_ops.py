@@ -73,10 +73,16 @@ SIMPLIFY_SEARCH_STEPS = 32
 #: für dasselbe Ergebnis. Auch das ist eine Rechengrenze, keine Toleranz.
 SIMPLIFY_SEARCH_RESOLUTION = 1e-3
 
-#: Ab welchem Vielfachen des Ziels ein Dezimierungsergebnis als verfehlt
-#: gilt und der zweite Solver drankommt. Zwei: Wer die Hälfte des Weges nicht
-#: schafft, steht — ein Netz, das knapp über dem Ziel liegt, weil seine Form
-#: nicht weniger hergibt, bleibt dagegen sein eigenes Ergebnis.
+#: Wie nah am Ziel ein Bild aufhören darf, gröber zu werden
+#: (:func:`_clustered_for_display`): beim Doppelten. Ein Vorschaubild von
+#: 48 Pixeln unterscheidet 60 000 Dreiecke nicht von 30 000, und jeder
+#: weitere Durchgang legt Ecken zusammen, die niemand zählt.
+#:
+#: **Für die Operation galt dieselbe Zahl, und dort war sie falsch.** Bis
+#: zum 22.09.2026 entschied sie, wann der zweite Solver drankommt — der
+#: Besenhalter blieb damit bei 59 100 statt 30 000 stehen, weil 59 100 knapp
+#: unter dem Doppelten liegt, während der Rückfall daneben 29 094 erreicht
+#: (RM-077). Die Operation fragt jetzt nach dem Ziel selbst.
 DECIMATE_MISS = 2
 
 #: Womit die Anzeige-Dezimierung beginnt: der Sehnenfehler, mit dem der
@@ -195,15 +201,36 @@ def _decimate_with_solver(
             return flattened, "exact", (forward, forward)
         source = flattened
     reduced = source.raw.simplify_quadric_decimation(face_count=target)
-    # **Auch ein weit verfehltes Ziel ist ein Stillstand.** ``fast_simplification``
+    # **Auch ein verfehltes Ziel ist ein Stillstand.** ``fast_simplification``
     # kommt an einem CAD-Export mit Nadeldreiecken nicht voran — an der
     # Lochplatte mit 203 776 Dreiecken blieben nach vier Sekunden 197 458
     # stehen, und weil das weniger als vorher war, galt es hier als Erfolg
     # (gemessen am 22.09.2026). Sein Flip-Schutz lehnt jeden Kollaps ab, der
     # ein spitzes Dreieck noch spitzer macht, und aus einer Fächerfläche um
-    # eine Bohrung wird so nie etwas anderes. Der Rückfall greift deshalb,
-    # sobald das Ergebnis mehr als das Doppelte des Ziels behält.
-    if len(reduced.faces) >= source.triangle_count or len(reduced.faces) > target * DECIMATE_MISS:
+    # eine Bohrung wird so nie etwas anderes.
+    #
+    # Gefragt wird nach dem **Ziel**, nicht nach einem Vielfachen davon: Der
+    # Rückfall lehnt in einem einzigen ``simplify``-Lauf ab, wenn seine
+    # Abweichungsgrenze das Ziel nicht trägt, und ein Netz, dessen Form nicht
+    # weniger hergibt, bleibt damit weiter sein eigenes Ergebnis. Was die
+    # frühere Schwelle kostete, steht an :data:`DECIMATE_MISS`.
+    #
+    # **Und die zweite Frage wurde nie gestellt: Ist das Ergebnis überhaupt
+    # noch ein Körper?** Der erste Solver kennt keine Topologie. An der
+    # erzeugten Eule kamen aus einem geschlossenen Einzelkörper zehn Teile mit
+    # elf verzweigten Kanten heraus, am Voronoi-Spiderman zwölf statt zwei
+    # (gemessen am 22.09.2026, RM-076) — und im Bericht stand dazu nur, dass
+    # sich die Fläche kaum verschoben hat. Der Rückfall prüft Dichtheit,
+    # Teilzahl, Volumen und Abweichung, bevor er etwas hergibt; wo er ein
+    # Ergebnis hat, ist es heil. Die Eule rettet er bei 150 000 und 60 000
+    # Dreiecken vollständig. Am Spiderman und am Kumiko-Gitter lehnt er ab —
+    # dann bleibt das zerrissene Ergebnis stehen, und :func:`_deviation_findings`
+    # sagt, was daraus geworden ist.
+    if (
+        len(reduced.faces) >= source.triangle_count
+        or len(reduced.faces) > target
+        or _lost_body(source, source.replacing(reduced))
+    ):
         fallback = _manifold_decimation(source, target, cancelled)
         if fallback is not None:
             fallback_mesh, measured = fallback
@@ -469,6 +496,25 @@ def _exactly_flattened(mesh: MeshData, cancelled: CancelToken | None) -> MeshDat
     if abs(result.volume - mesh.volume) > max(abs(mesh.volume), 1.0) * FLATTEN_VOLUME_NOISE:
         return None
     return result
+
+
+def _lost_body(before: MeshData, after: MeshData) -> bool:
+    """Ob aus einem Körper etwas geworden ist, das keiner mehr ist.
+
+    Zwei Achsen, und die zweite ist nicht die erste: Ein Netz, dessen Kanten
+    nicht mehr genau zwei Flächen tragen, ist nicht mehr geschlossen — das
+    deckt die verzweigten Kanten mit ab, denn ``trimesh`` nennt ein Netz mit
+    einer dreifach belegten Kante nicht wasserdicht. Ein Körper kann aber
+    auch in Teile zerfallen, die **je für sich** geschlossen sind; dann sagt
+    die erste Frage nichts und die zweite alles.
+
+    Dieselben zwei Fragen prüfen :func:`_exactly_flattened` und
+    :func:`_manifold_decimation` an ihrem eigenen Ergebnis, bevor sie es
+    hergeben.
+    """
+    if before.is_watertight and not after.is_watertight:
+        return True
+    return after.component_count > before.component_count
 
 
 def _manifold_decimation(
@@ -874,7 +920,8 @@ def decimate_mesh(ctx: OpContext) -> OpResult:
                 severity="info",
                 message=_(
                     "Das Netz wurde mit einer formtreuen Ersatzmethode vereinfacht, "
-                    "weil das erste Verfahren keine Dreiecke entfernen konnte."
+                    "weil das erste Verfahren das Ziel verfehlt oder den Körper "
+                    "zerrissen hätte."
                 ),
                 object_id=source.id,
                 values={
@@ -1387,6 +1434,33 @@ def _deviation_findings(
                 ),
                 object_id=object_id,
                 values={"before": before.triangle_count, "after": after.triangle_count},
+            )
+        )
+    # **Offen und zerfallen sind zwei Dinge, und das zweite merkt der Kunde
+    # erst im Slicer.** Am Voronoi-Spiderman machte *Dreiecke verringern* auf
+    # 30 000 aus zwei Teilen zwölf, am Kumiko-Gitter aus einem 2 054 (RM-076);
+    # der Bericht nannte die offene Naht und schwieg über die Stückzahl.
+    # Reparieren hilft unterschiedlich weit — den Spiderman setzt es wieder
+    # zusammen, vom Gitter bleiben 94 Teile und ein Drittel weniger Volumen —,
+    # also verspricht der Satz nichts, sondern nennt beide Wege.
+    if after.component_count > before.component_count:
+        findings.append(
+            Finding(
+                code="mesh.components_split",
+                severity="warning",
+                message=_(
+                    "Der Körper ist dabei in {count} Teile zerfallen. „Reparieren“ setzt "
+                    "zusammen, was noch zusammenpasst; bleibt zu viel übrig, war das Ziel "
+                    "zu niedrig.",
+                    count=after.component_count,
+                ),
+                object_id=object_id,
+                values={
+                    "before_components": before.component_count,
+                    "after_components": after.component_count,
+                    "before": before.triangle_count,
+                    "after": after.triangle_count,
+                },
             )
         )
     return findings

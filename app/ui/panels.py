@@ -495,6 +495,10 @@ FINDING_ACTIONS: dict[str, tuple[Action, ...]] = {
     # Vereinfachen einer Ente — geschlossen hinein, offen heraus, und im
     # Bericht stand nur, dass sich die Fläche kaum verschoben hat.
     "mesh.not_watertight": (REPAIR_AND_RETRY, SHOW_LOCATIONS),
+    # Der Zwilling daneben: dieselbe Netzoperation, andere Frage — nicht „offen",
+    # sondern „in wie viele Teile". Dieselben zwei Handlungen, weil dieselbe
+    # Reparatur hilft und die Defektkarte zeigt, wo es auseinanderging.
+    "mesh.components_split": (REPAIR_AND_RETRY, SHOW_LOCATIONS),
     # Reparieren hat getan, was ohne erfundene Fläche möglich war. Ein
     # zweiter Reparaturlauf und Kanten verfeinern führen von hier nur zurück;
     # die Defektkarte zeigt dagegen die Kanten, die wirklich übrig sind.

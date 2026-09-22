@@ -431,6 +431,127 @@ def test_manifold_fallback_does_not_run_after_successful_fast_simplification(
     assert after.triangle_count <= 800
 
 
+def _sieve() -> MeshData:
+    """Eine durchbrochene Kugelschale — das Fehlerbild von RM-076 im Kleinen.
+
+    Vierzig Bohrungen durch eine 3 mm starke Schale lassen dünne Stege
+    zwischen den Löchern stehen, und genau daran zieht
+    ``simplify_quadric_decimation`` Kanten zusammen, die nicht
+    zusammengehören: Aus einem geschlossenen Einzelkörper werden mehrere
+    offene Teile. Dieselbe Sache, die an der erzeugten Eule und am
+    Voronoi-Spiderman gemessen wurde (22.09.2026) — nur baut dieser Körper in
+    einer Viertelsekunde und liegt im Repository.
+
+    Das exakte Vorspiel findet hier nichts: Jede Ecke beschreibt eine
+    Krümmung, und die Facetten der Bohrungen stehen einzeln. Der erste Solver
+    kommt also wirklich dran.
+    """
+    outer = trimesh.creation.icosphere(subdivisions=4, radius=20.0)
+    inner = trimesh.creation.icosphere(subdivisions=4, radius=17.0)
+    shell = trimesh.boolean.difference([outer, inner], engine="manifold")
+    bores = []
+    directions = np.random.default_rng(7).normal(size=(40, 3))
+    for direction in directions / np.linalg.norm(directions, axis=1)[:, None]:
+        bore = trimesh.creation.cylinder(radius=2.0, height=60.0, sections=32)
+        bore.apply_transform(trimesh.geometry.align_vectors([0.0, 0.0, 1.0], direction))
+        bores.append(bore)
+    return MeshData.of(trimesh.boolean.difference([shell, *bores], engine="manifold"))
+
+
+def test_a_body_the_first_solver_tears_apart_goes_to_the_fallback(profile: Profile) -> None:
+    """RM-076: Der zweite Solver kommt auch, wenn der erste das Ziel *erreicht*.
+
+    Bis zum 22.09.2026 wurde nur eine Frage gestellt — schafft
+    ``fast_simplification`` die Dreieckszahl? Die andere, ob danach noch ein
+    Körper da ist, stellte niemand, und sie ist die wichtigere: Gemessen an
+    der erzeugten Eule kamen aus einem geschlossenen Einzelkörper bei 150 000
+    Dreiecken zehn Teile mit elf verzweigten Kanten, am Voronoi-Spiderman
+    zwölf Teile statt zwei. Das Ziel war jedes Mal punktgenau getroffen.
+
+    Der Rückfall prüft Dichtheit, Teilzahl, Volumen und Abweichung an seinem
+    eigenen Ergebnis. Wo er eines hat, ist es heil — an der Eule rettet er
+    150 000 und 60 000 vollständig, hier dasselbe Bild an einem Körper, der
+    im Repository liegt.
+    """
+    sieve = _sieve()
+    assert sieve.is_watertight and sieve.component_count == 1, "der Ausgangspunkt"
+    target = int(sieve.triangle_count * 0.8)
+    direct = sieve.replacing(sieve.raw.simplify_quadric_decimation(face_count=target))
+    assert len(direct.raw.faces) <= target, "der erste Solver erreicht sein Ziel — darum geht es"
+    assert not direct.is_watertight, "und zerreißt den Körper dabei; sonst prüft der Test nichts"
+
+    result = run("decimate_mesh", object_of(sieve), profile, triangles=target)
+
+    after = result.outputs[0].mesh
+    assert after.is_watertight, "heil heraus, nicht nur klein"
+    assert after.component_count == 1
+    assert after.triangle_count <= target
+    fallback = next(f for f in result.findings if f.code == "mesh.simplification_fallback")
+    assert fallback.values["solver"] == "manifold"
+    assert "mesh.components_split" not in [entry.code for entry in result.findings]
+
+
+def test_a_body_that_falls_apart_while_being_simplified_says_so(profile: Profile) -> None:
+    """RM-076: Kann auch der Rückfall nicht, erfährt es wenigstens der Kunde.
+
+    Offen und zerfallen sind zwei Dinge, und über das zweite schwieg der
+    Bericht. Am Voronoi-Spiderman machte *Dreiecke verringern* auf 30 000 aus
+    zwei Teilen zwölf, am Kumiko-Gitter aus einem 2 054 — und gemeldet wurde
+    die offene Naht. Die Stückzahl merkt der Kunde sonst erst im Slicer.
+
+    Hier dasselbe: Bei der Hälfte trägt die Abweichungsgrenze des Rückfalls
+    das Ziel nicht mehr, er lehnt ab, und das zerrissene Ergebnis bleibt
+    stehen. Der Satz verspricht deshalb nichts — Reparieren setzt zusammen,
+    was noch zusammenpasst, und mehr sagt er nicht.
+    """
+    sieve = _sieve()
+    target = sieve.triangle_count // 2
+
+    result = run("decimate_mesh", object_of(sieve), profile, triangles=target)
+
+    after = result.outputs[0].mesh
+    assert after.component_count > sieve.component_count, "der Fall dieses Tests"
+    split = next(f for f in result.findings if f.code == "mesh.components_split")
+    assert split.severity == "warning"
+    assert split.values["before_components"] == sieve.component_count
+    assert split.values["after_components"] == after.component_count
+    assert str(after.component_count) in str(split.message)
+
+
+def test_a_target_missed_by_less_than_double_reaches_the_fallback(profile: Profile) -> None:
+    """RM-077: Der Besenhalter blieb bei 59 100 statt 30 000 stehen.
+
+    Der Rückfall kam bis zum 22.09.2026 erst, wenn das Ergebnis mehr als das
+    **Doppelte** des Ziels behielt — und 59 100 liegt knapp darunter. Daneben
+    erreichte derselbe Rückfall 29 094 Dreiecke mit 0,0012 mm Abweichung, also
+    das Ziel und die Form. Die Schwelle war die einzige Ursache.
+
+    Hier derselbe Fall aus dem Korpus: der dicht triangulierte Zylinder, an
+    dem der erste Solver steht, mit einer Kugel daneben, an der er etwas
+    findet. Zusammen bleibt er bei 1 442 statt 1 200 — das 1,2-fache, unter
+    der alten Schwelle. Gefragt wird jetzt nach dem Ziel selbst; wo der
+    Rückfall auch nicht weiterkommt, lehnt er in einem einzigen Lauf ab, und
+    ein Netz, dessen Form nicht weniger hergibt, bleibt sein eigenes Ergebnis
+    (``test_a_simplification_that_changed_nothing_says_so``).
+    """
+    ball = trimesh.creation.icosphere(subdivisions=4, radius=8.0)
+    ball.apply_translation((60.0, 0.0, 0.0))
+    pair = MeshData.of(trimesh.util.concatenate([corpus("dense_cylinder.stl").raw.copy(), ball]))
+    target = 1_200
+    direct = pair.raw.simplify_quadric_decimation(face_count=target)
+    assert target < len(direct.faces) <= 2 * target, (
+        "der erste Solver muss knapp danebenliegen — sonst prüft der Test die alte Schwelle nicht"
+    )
+
+    result = run("decimate_mesh", object_of(pair), profile, triangles=target)
+
+    after = result.outputs[0].mesh
+    assert after.triangle_count <= target
+    assert after.component_count == pair.component_count
+    fallback = next(f for f in result.findings if f.code == "mesh.simplification_fallback")
+    assert fallback.values["solver"] == "manifold"
+
+
 def _hollow_sphere(profile: Profile) -> MeshData:
     """Eine dünnwandige Hohlkugel — der Fall, in dem Vereinfachen wehtut.
 

@@ -56,3 +56,18 @@ Verwandt: [[gemessene-frage-ist-nicht-die-gestellte]] (dieselbe Wurzel im
 Messen) und [[zwei-schwellen-eine-frage]] (dort liegt zwischen zwei Schwellen
 ein Bereich, in dem beide Antworten falsch sind — hier steht eine Schwelle auf
 der falschen Achse).
+
+**Nachtrag 22.09.2026, dieselbe Funktion, eine Schwelle weiter.** `SIMPLIFY_MISSED`
+steht seit dem 31.08. auf der richtigen Achse. Nebenan entschied `DECIMATE_MISS`
+dieselbe Frage für den *Rückfall*: „Ergebnis über dem **Doppelten** des Ziels →
+zweiter Solver." Die Achse stimmte diesmal, nur der Abstand war geraten — und
+der Besenhalter fiel exakt in die Lücke: 59 740 Dreiecke, Ziel 30 000, Ergebnis
+59 100. Das 1,97-fache, knapp darunter, also kein Rückfall. Derselbe Rückfall
+erreichte daneben 29 094 Dreiecke mit 0,0012 mm Abweichung.
+
+**Die Lehre ist eine andere als oben:** Ein Toleranzband vor einem *Rückfall*
+ist fast immer überflüssig. Es soll Arbeit sparen — aber der Rückfall lehnt
+selbst ab, wenn er nichts Besseres kann, und zwar billig (hier ein einziger
+`simplify`-Lauf, 0,09 bis 2,15 s an den gemessenen Körpern). Wer ihn vorab
+ausschließt, rät, was er geleistet hätte. **Vor einem Weg, der sein eigenes
+Ergebnis prüft, braucht es keinen Türsteher, der schätzt.**
