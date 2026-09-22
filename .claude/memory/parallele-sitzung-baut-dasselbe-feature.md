@@ -18,6 +18,9 @@ Zweig. Robert entschied: der Zweig trägt es, meine Fassung liegt zum
 Vergleich auf `muster-ringe` (b09fb2d4) — **und der Zweig fällt, sobald
 `rm-207-muster` in main ist** (Robert, 22.09.2026: „Deinen Baum kannst du
 dann entfernen wenn die andere es macht"): lokal und auf origin löschen.
+Beides ist am selben Abend geschehen — RM-207 ging mit `2061def3` in main,
+`muster-ringe` und später `rm-207-muster` samt ihren Worktrees sind weg, und
+der Punkt steht im Archiv.
 
 **Why:** Robert arbeitet mit mehreren Sitzungen zugleich und vergibt eine
 Sache manchmal zweimal, ohne es zu merken. Zwei Umsetzungen kosten einen

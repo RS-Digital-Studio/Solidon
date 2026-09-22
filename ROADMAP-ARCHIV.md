@@ -25,6 +25,8 @@ für den Rückstand glauben darf, ist das Register in `ROADMAP.md`.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-09-22 | [Der Import schließt, was offen ist (22.09.2026)](#der-import-schließt-was-offen-ist-22092026) |
+| 2026-09-22 | [Ein Wabenmuster ist ein Merkmal, nicht 1 199 Flächen (22.09.2026)](#ein-wabenmuster-ist-ein-merkmal-nicht-1-199-flächen-22092026) |
 | 2026-09-22 | [Resin-Stufe 1 und die Exportauflösung (22.09.2026)](#resin-stufe-1-und-die-exportauflösung-22092026) |
 | 2026-09-22 | [Das Review über alle Änderungen seit 0.4.4 (21./22.09.2026)](#das-review-über-alle-änderungen-seit-044-2122092026) |
 | 2026-09-20 | [Ein Drache aus TripoSG: 1,9 Meter, acht Minuten, kein Merkmal (20.09.2026)](#ein-drache-aus-triposg-19-meter-acht-minuten-kein-merkmal-20092026) |
@@ -8438,7 +8440,7 @@ Arbeit gilt ausschließlich `ROADMAP.md`.
 | RM-076 — `decimate_mesh` erzeugt an 3as Eule nicht-mannigfaltige Kanten — der einzige echte Reduzierer-Fehler des Dreierpakets | weiter offen → [RM-076](ROADMAP.md#rm-076) | app/core/geom/mesh_ops.py:121–160 übernimmt erfolgreich dezimierte Geometrie weiter ungeprüft; _simplification_findings meldet Schäden. Tests/test_subdivision.py:443ff prüft Meldung bei Dichtheitsverlust, nicht dessen Vermeidung. RM129 betrifft denselben Produktionsweg. |
 | RM-077 — Der Reduzierer erreicht bei Euler-0-Körpern sein Ziel nicht | weiter offen → [RM-077](ROADMAP.md#rm-077) | app/core/geom/mesh_ops.py:137–140 schaltet erst bei len(reduced.faces) >= source.triangle_count um; :947ff beschreibt Euler-0-Stillstand weiterhin. tests/test_subdivision.py:372–400 belegt Rückfall an dichtem Zylinder, nicht am ursprünglichen Ringfall. Die pauschale Forderung nach einem anderen Reduzierer ist überholt. |
 | RM-078 — Ein generiertes Modell zu öffnen kostet eine Minute — der Punkt ist echt, die Ursache war falsch zugeordnet | weiter offen → [RM-078](ROADMAP.md#rm-078) | Der Originalpunkt korrigiert seine 61,77 s selbst auf 9,4–18,5 s und widerlegt 574/909 CPU-s als Öffnungszeiten. 3a787a57 und spätere Änderungen betreffen Orientierung, Einlesen und Auswertung; eine neue isolierte Öffnungsabnahme liegt hier nicht vor. |
-| RM-079 — 61 Prozent der mehrzeiligen Texte der Startseite laufen über 75 Zeichen | weiter offen → [RM-079](ROADMAP.md#rm-079) | website/style.css besitzt weiterhin viele lokale max-width/ch-Regeln, aber keine gemeinsame main-p/main-li-Grenze. Die historischen 48/79 und 153 Zeichen wurden nicht neu gemessen und dürfen nur als Anlass stehen. |
+| RM-079 — 61 Prozent der mehrzeiligen Texte der Startseite laufen über 75 Zeichen | weiter offen → [RM-079](ROADMAP-ARCHIV.md#rm-079) | website/style.css besitzt weiterhin viele lokale max-width/ch-Regeln, aber keine gemeinsame main-p/main-li-Grenze. Die historischen 48/79 und 153 Zeichen wurden nicht neu gemessen und dürfen nur als Anlass stehen. |
 | RM-080 — Die Trennen-Serie abarbeiten — Reihenfolge T1 → T5 → T4 → T2 → T3 → | weiter offen → [RM-080](ROADMAP.md#rm-080) | app/core/geom/autosplit.py berücksichtigt _support_after_cut und best_face_candidate; tests/test_autosplit.py:587ff prüft automatische Schwalbenschwänze. protect existiert im Kern (:239,:494ff), aber kein entsprechender Dokumentwert in app/core/types.py oder Bedienanschluss in main_window/split_bar. T1/T5 sind historisch abgeschlossen. |
 | RM-081 — Die Ollama-Serie abarbeiten — O1 zuerst (sofort machbar, kein | weiter offen → [RM-081](ROADMAP.md#rm-081) | app/core/backends/llm.py:968 nutzt inzwischen qwen3:14b; :1020/:1032 warmhalten 60s/30s, :1236 CPU-Kopplung, :1920ff CPU-Hinweis. tools/check_local_model.py und measure_local_model.py existieren. O1, alte Modellvorgabe und O6-Auftrag sind überholt; O2/O3 und vollständige aktuelle Messreihe bleiben. |
 | RM-082 — Beide Aktionen auf der echten Startfläche bauen und live prüfen | erledigt | app/ui/start_screen.py enthält feedbackRequested/supportRequested und beide Aktionskarten. tests/test_start_screen.py:657ff prüft Signale und QAccessible-Namen; :714ff beide Themen und 1920×1080, 1040×760, 800×600, 640×720 samt Mindesthöhe 44. Vorhandene Rückmeldung ist integriert, kein neu zu bauender Weg. |
@@ -23135,7 +23137,7 @@ Rechtstexte stehen nach `665cfceb` auf 73. Die übrigen Textseiten:
 | Startseite | 101 |
 | ki-modelle.html | 101 |
 
-- **Historischer Befund RM-079 (weiter offen; aktuelle Aufgabe [RM-079](ROADMAP.md#rm-079)):** **61 Prozent der mehrzeiligen Texte der Startseite laufen über 75
+- **Historischer Befund RM-079 (abgeschlossen am 14.09.2026; der Nachweis steht unten in diesem Abschnitt):** **61 Prozent der mehrzeiligen Texte der Startseite laufen über 75
       Zeichen** (72, exakt gemessen @1440: 48 von 79 Elementen, längste
       Zeile 153; nur 34 tragen irgendeine max-width; Italienisch getrennt
       gemessen — es ist nicht die Sprache, es ist die fehlende Begrenzung).
@@ -23162,6 +23164,32 @@ Rechtstexte stehen nach `665cfceb` auf 73. Die übrigen Textseiten:
       Karten-Layouts zu brechen; Absatz-genau messen, dann die Grenze setzen.
 
 ---
+
+**Abgeschlossen am 14.09.2026** — der Punkt stand bis dahin in der
+Arbeitsliste und ist am 22.09.2026 hierher gewandert:
+
+<a id="rm-079"></a>
+
+- [x] **RM-079 — Zeilenlängen der Website über alle Sprachen prüfen.** Die Textbreiten der Website
+  als gemeinsame Regel überprüfen und verbleibende überlange Absätze begrenzen. Abnahme:
+  tatsächliche Zeilenlängen in allen sechs Sprachen bei schmalen und breiten Fenstern; Karten und
+  Spalten dürfen nicht durch eine pauschale Regel unnötig schmal werden.
+
+  **Gemessen und behoben am 14.09.2026.** Drei Sonden in QtWebEngine
+  (`.claude/.state/rm-079-website-320-2026-09-14/`) haben alle 42 Seiten bei 320 Punkt Breite
+  geladen. `body { overflow: clip }` verhinderte das Rollen und verschluckte stumm, was nicht
+  passte: vier deutsche Überschriften mit einem Wort breiter als der Schirm („Allgemeine
+  Geschäftsbedingungen“ 79 Punkt über dem Rahmen, „Datenschutzerklärung“ 59,
+  „Widerrufsbelehrung“ und „Systemvoraussetzungen“ je 23) und die Sprachliste, die bei 320 bis
+  479 Punkt bei −21 begann, weil sie mit `right: 0` am links stehenden Griff hing. Behoben in
+  `website/style.css`: Überschriften trennen nach Sprache (`hyphens: auto`, unter 40rem dazu
+  `overflow-wrap: anywhere`), die Sprachliste öffnet unter 30rem nach rechts. Nachher: keine
+  Überschrift über ihrem Kasten, die Liste bei 320 Punkt zwischen 78 und 230, auf jeder Seite
+  `scrollWidth` gleich `clientWidth`; breite Fenster unverändert (bei 1000 Punkt bliebe `left: 0`
+  acht Punkt vor dem Rand, deshalb gilt die Regel nur unter 30rem). Die übrigen Sprachen haben
+  keine so langen Wörter. `tests/test_website.py` 388 grün nach `tools/stamp_assets.py`.
+
+  [Bisheriger Befund](ROADMAP-ARCHIV.md#die-zeilen-laufen-zu-lang-31082026).
 
 ## Sinnvolles Trennen — die Serie (31.08.2026)
 
@@ -29334,6 +29362,72 @@ RM-201 bis RM-206 im Register.
 
 ---
 
+## Der Import schließt, was offen ist (22.09.2026)
+
+Robert, nach einer Suchmaschinen-Übersicht über Meshmixer und JustFixSTL: „Die
+können wir ja alle sauber und schnell beheben oder? … Dann sauber beheben am
+besten beim Import … Alles dann bei der Reparatur beheben."
+
+**Was vorher war.** `unify_normals` richtete die Flächen, `stitch_t_junctions`
+vernähte T-Kreuzungen — und `trimesh.repair.fill_holes` schloss Ringe aus drei
+und vier Kanten. Alles darüber blieb offen; verzweigte Kanten wurden nur benannt
+(„das ist kein Loch, sondern eine Verzweigung"), ohne eine Handlung dazu; und der
+Import meldete „Das Modell ist nicht geschlossen. Reparieren schließt die offenen
+Stellen." — ein Hinweis auf einen Knopf, den der Kunde erst finden musste, und
+ein Modell, das bis dahin nicht druckbar war.
+
+**Was gebaut wurde**, alles in `geom/repair.py`, und vom Import
+(`ingest/loader.normalise`) wie von der Operation gefahren:
+
+* `resolve_branching_edges` — an einer Kante mit drei Nachbarn liegen Flächen
+  übereinander. Gemessen an Roberts Waschschüssel (215 073 Dreiecke, eine
+  verzweigte Kante): zwei Flächen mit **null Grad** zueinander, 0,0003 mm² neben
+  0,27 mm². Die kleinste geht, und zwar iterativ, weil eine Fläche an zwei
+  solchen Kanten beim Fallen eine dritte auslöst (gähnende Katze: 27 Kanten in
+  einem Durchgang, danach keine mehr).
+* `split_pinched_vertices` — zwei Löcher, die sich eine Ecke teilen, geben dort
+  vier Randkanten, und die Verkettung kann nicht entscheiden, welcher Rand zu
+  welchem gehört. Die Flächen wissen es: Ihre Fächer an der Ecke bekommen je eine
+  eigene Kopie, am selben Ort, also ändert sich nichts an der Form.
+* `boundary_loops` + `fill_boundary_loops` — die Ränder werden **ungerichtet**
+  verkettet, denn die Wicklung ist an dieser Stelle der Kette noch nicht
+  einheitlich (an der Katze ließen sich gerichtet 60 von 75 Randkanten verketten;
+  bei den übrigen zeigten zwei Kanten in dieselbe Ecke). Die Richtung kommt danach
+  aus dem Dreieck an der ersten Kante — ohne diesen Schritt kam ein Würfel mit
+  4 000 mm³ statt 8 000 zurück. Gefüllt wird mit Ohren in der Ausgleichsebene; wo
+  deren Sehnen auf Kanten treffen, die schon zwei Flächen tragen, tritt der Fächer
+  über die Ringmitte an ihre Stelle, denn seine inneren Kanten sind immer neu.
+  **Keine Füllung legt eine Fläche auf eine Kante mit zwei Nachbarn** — sonst
+  entstehen aus Löchern Verzweigungen (Katze: 15 geschlossene Ringe, neun neue
+  verzweigte Kanten).
+* Eine Öffnung über `FILL_LOOP_SHARE` der Oberfläche wird **geschlossen und
+  gemeldet** (`repair.wide_hole_filled`, Warnung): Dort ist eine Fläche
+  entstanden, die im Modell nicht war. Als **Verbot** taugte die Zahl nicht, und
+  der Körper, der es zeigt, ist der schlichteste — ein Würfel aus zwölf Dreiecken
+  trägt je Dreieck neun Prozent seiner Oberfläche, und ein einziges fehlendes
+  Dreieck läge über jeder Schwelle, die eine fehlende Wand ausschließen soll.
+
+**Die Abnahme am Korpus `F:\3D Dateien`** (171 Dateien, 484 Körper, je Datei ein
+Unterprozess über den Ladeweg der Anwendung): 366 Körper kamen dicht herein,
+**118 offene gehen geschlossen heraus, keiner bleibt offen**, kein Fehler, 108 s
+für alle zusammen. Die langsamsten sind die größten: gähnende Katze (452 314
+Dreiecke) 16 s, Piratenschiff-Baugruppe (1 223 836) 10 s, Mausoleum-Drache
+(2 330 374) 9,5 s — letzterer war schon dicht, das ist reines Einlesen. Die
+Warnung über eine große Öffnung traf keinen einzigen Korpuskörper: Dort gab es
+Lücken in der Vernetzung, keine fehlenden Wände. An `broken_open.stl` trifft sie,
+und dafür steht ein Test.
+
+**Ein Fehler auf dem Weg, den nur die Messung zeigte.** Nach der Reparatur stand
+`closed` auf `None`, und die Zeile darunter schrieb `bool(None)` in den Cache des
+Netzes: Ein geschlossener Körper meldete sich als offen — sichtbar erst, als ein
+Korpuskörper mit null offenen und null verzweigten Kanten als „nicht dicht" in der
+Auswertung stand.
+
+**Fünf Zusagen sind umgeschrieben**, weil die Entscheidung sie ablöst: `repair`
+und der Import schließen auch eine fehlende Wand, statt sie zu melden
+(`test_repair.py`, `test_geometry_review.py`, `test_ingest.py`). Sechs neue Tests
+halten Ringfüller, Wicklung, Kantenprüfung, Verzweigung und Sanduhr fest.
+
 ## Resin-Stufe 1 und die Exportauflösung (22.09.2026)
 
 Gebaut nach `konzepte/konzept-resin-2026-08.md` §4 mit den zwei Präzisierungen
@@ -29436,3 +29530,118 @@ abbildet, darf ihr nicht fehlen.
   will, ändert die Pixelgröße seines Profils. *Flächenbearbeitung beenden*
   behält sein Feld „Feinheit" für den Fall, dass ein Netz im Dokument
   gemeint ist.
+
+---
+
+## Ein Wabenmuster ist ein Merkmal, nicht 1 199 Flächen (22.09.2026)
+
+Roberts Auftrag am Schraubendreherhalter („alle texturen dann erkennbar machen
+usw und vollständiger review") und sein Nachsatz am selben Abend („207 und
+alles andere soll noch vor 0.5.0 fertig sein"). Gebaut auf `rm-207-muster`, am
+22.09.2026 nach 0.5.0 in `main` gemergt (`2061def3`), die zwei Reste mit
+`0e1c2993` hinterher; der Zweig ist danach entfernt worden.
+
+<a id="rm-207"></a>
+
+- [x] **RM-207 — Ein Wabenmuster ist ein Merkmal, nicht 1 199 Flächen.**
+  Robert, 22.09.2026, am Schraubendreherhalter mit Wabenmuster: „alle
+  texturen dann erkennbar machen usw und vollständiger review". Die Erkennung
+  sah 1 199 ebene Flächen — 1 170 davon die Wände von 195 Sechsecken, 9 mm
+  Schlüsselweite, 20 mm tief, 10,4 mm Teilung — und nichts daran hieß Wabe.
+  Gebaut auf dem Zweig `rm-207-muster` (`607a796a`; der Hauptbaum war bis
+  0.5.0 gesperrt): `perceive/patterns.py` liest **Zellen** — zusammenhängende
+  Stücke kleiner Merkmale und unbesessener Dreiecke an einer großen ebenen
+  Trägerfläche —, misst Mündung, Tiefe und Seite am Netz und macht aus einem
+  **Gitter** deckungsgleicher Zellen (ab neun, Streifen ab sechs, Noppen ab
+  zwanzig) oder einer **Streuung** gleich tiefer Zellen (ab vierundzwanzig,
+  Rauschen ab vierzig) ein Merkmal `pattern`: Stil unter dem Namen von
+  `apply_texture` (Rippe, Welle, Rändel gerade und über Kreuz, Wabe, Noppe,
+  Voronoi, Rauschen — dazu `other`), Zahl, Teilung, Zellbreite, Tiefe,
+  vertieft/erhaben/durchgehend, Feld, Winkel und ob es die Fläche füllt.
+  Runde Zellen bleiben Bohrungen, wenn sie durchgehen oder tief sind
+  (Entscheidung: ein Lochblech behält seine Bohrungshandlungen). *Merkmal
+  entfernen* baut aus den nachgezeichneten Mündungen Prismen, bündig mit der
+  Trägerebene (bei durchgehenden Zellen beidseitig), und füllt oder trägt ab;
+  *Merkmal ändern* schließt und zeichnet mit Teilung, Zellbreite und Tiefe
+  über `texture_ops.tool_in_outline` neu — mit der gelesenen Zellbreite
+  (`pattern_shapes(cell=…)`), dem gelesenen Feld und Winkel, bei
+  durchgehenden Zellen nur ganze. Dazu ein Fehler in `texture_tool`:
+  Überlappende Streuflecken wurden getrennt extrudiert und ließen doppelte
+  Deckflächen zurück (2 773 Dreiecke mit 2 908 mm² auf 1 200) — jetzt
+  vereinigt wie beim Weg über die ganze Fläche. Gemessen: der Halter 196
+  Zellen, Teilung 10,40, Schlüsselweite 9,00, Tiefe 20,00, durchgehend, 16
+  statt 1 199 Flächen; alle acht Texturen erkannt, entfernt (Volumen exakt
+  zurück auf die Platte) und geändert; Korpusprobe über 193 Dateien: der
+  Halter, eine Taschentuchbox mit sieben Wellenrillen, und ein Schild mit 24
+  Buchstaben als „Rauschen" — daher die Vierzig. Kosten: 0,4 ms je Zelle
+  (6 645 Rauten in 2,8 s; die Grunderkennung davor braucht 25 s für 32 000
+  Flächen, und das ist der eigentliche Posten). Das Review (22.09.2026,
+  `solidon3d-review`) fand sieben Fehler, alle behoben: ein unbesessenes
+  Dreieck verschluckte über `names[-1]` die kleinste Fläche des Körpers; die
+  Zellbreitengrenze galt je Stil falsch (253 Rauten zu einem Umriss, 9-mm-
+  Waben des Halters auf 8,83 begrenzt) und fragt jetzt die Düse; das Werkzeug
+  nahm die verlangte statt der gezeichneten Breite; ein Wabengitter unter
+  90 Grad bekam ein fremdes Feld; eine Rippenreihe zerfiel am schräg
+  abgeschnittenen Stummel; Noppen außerhalb des Wabengitters wären als Wabe
+  neu gezeichnet worden; und drei Kleinere. Danach die drei Entscheidungen
+  des Reviews eingelöst: `whole_face` erst ab einer halben Teilung Rand
+  (Zellen, die der Körperrand anschneidet, gehören seither als `EdgePiece`
+  zum Muster), das Feld eines Rechtecks mit dem Träger geschnitten, ganze
+  Zellen wo das Muster nur ganze hatte, ein `anchor` hält beim Neuzeichnen
+  eine Zelle an ihrem Platz (sonst wurden aus sechs Rippen fünf und zwei
+  Stummel), und *Merkmal ändern* steht an einem fremden Gitter grau.
+  Entwicklungstor am Zweig (22.09.2026): Sammelgruppe 13 574 bestanden, 48
+  übersprungen; Ruff, Format und mypy je 0; 67 Mustertests. **Am selben Tag
+  nachgezogen, nichts verschoben (Entscheidung Robert: „alles soll
+  funktionieren"):** Muster auf **Zylindern** — der Träger ist ein Stift,
+  gemessen wird in seiner Abwicklung (`Frame`: Umfang und Achse, die Höhe
+  zum Radius; die Naht in der größten Lücke zwischen den Zellen), das Merkmal
+  trägt `carrier_axis` und `carrier_diameter`, seine Mitte liegt auf dem
+  Zylinder und die Normale radial. Entfernen legt die Stopfen auf die
+  **Facetten** des Mantels, an jeder Facettengrenze geteilt (`Frame.facets`,
+  `split_by_plane` des exakten Kerns): bündig mit dem Kreis stand die Stufe
+  am Rand mit Wänden quer zur Achse, und der Mantel war danach kein Zylinder
+  mehr (135 Flächen statt eines Stifts). Ändern biegt das flache Werkzeug
+  um die Achse (`Field.placed`) und zeichnet ein Feld über den ganzen Umfang
+  periodisch. Dazu `apply_texture` selbst: `wrapped` teilt das Feld vor dem
+  Biegen (`refined_for_bending`, `mesh_ops.refined` — konform und je Schale
+  getrennt; Rillen sind überall gleich tief, aus 0,8 wurden vorher 0,725),
+  ein Feld über den Umfang bekommt die Teilung, die aufgeht (`wrap_pitch`,
+  Finding `texture.pitch_wrapped`, 3,04 statt 3 um Ø 30), und wird je Zelle
+  einmal gewählt statt an der Naht geschnitten (`_one_turn`: zwei
+  aufeinandergebogene Hälften verschweißte die Rechnung nicht — 16 mm² Haut,
+  der Stift in zwei). Gemessen an Ø 30 mal 30: Kreuzrändel erhaben, Rippen
+  und Waben vertieft einmal herum, Noppen als Feld — alle vier erkannt
+  (Tiefe 0,80), entfernt (das Volumen exakt das Vieleck, danach ein Stift
+  und zwei Flächen) und mit neuer Teilung neu gesetzt (24 statt 31 Rillen,
+  keine halbe an der Naht). Die Grunderkennung an dichten Texturen: Flächen
+  entstehen in zwei Schritten (`_face_candidates`; Träger und Innenlage nur
+  für die, die das Muster nicht verschluckt), gleichgerichtete Flächen
+  fragen einen STRtree (`_face_roles`) — das dichte Kreuzrändel von 40 auf
+  2,6 s, die Wabe von 25 auf 3,2 s. E1 fragt je Stil nach der schmalsten
+  Stelle (`narrowest_structure`; Kreuzrändel ein Fünftel der Teilung), die
+  Noppen der Vorgabe halten Abstand (`DIMPLE_FILL`, das gedrehte Feld ist
+  ein Muster). Die Fensterabnahme am Halter steht als Test im Merkmalfenster
+  (Teilung, Zellbreite, Zelltiefe, Ändern und Entfernen an diesem Merkmal —
+  und „Teilung", nicht „Steigung"); die vier Fensterdateien dazu einzeln
+  gefahren: 80, 178, 217 und 649 bestanden. Drei Punkte dafür im Changelog
+  0.5.0 in sechs Sprachen. Entwicklungstor danach (22.09.2026): Sammelgruppe 13 600 bestanden, 48 übersprungen; Ruff, Format und mypy je 0; 86 Mustertests. **Die beiden Reste danach zugemacht** (Robert am
+  22.09.2026: „207 und alles andere soll noch vor 0.5.0 fertig sein"): Ein
+  Mantelstück zwischen zwei Rillen ist Mantel und keine Fläche — dass ein
+  Streifen zur Rundung gehört, sagte allein die Naht zu seinen Nachbarn, und
+  wo links und rechts eine Nut liegt, hat er die nicht mehr. Jetzt entscheidet
+  die Lage, und erst dort, wo die Einpassungen stehen
+  (`_faces_on_a_round_wall`): Normale senkrecht zur Achse, Ecken auf dem
+  Mantel, Dreiecksmitten nicht tiefer als eine Tessellierung darunter. Der
+  dritte Punkt trennt den Streifen von einer Abflachung, deren Ecken ebenfalls
+  auf dem Mantel liegen — sie sind sein Schnittkreis — und deren Mitte 7,4 mm
+  darunter. Und die Zylinderflecken fragen einander nicht mehr einzeln, ob sie
+  dieselbe Wand sind: Seite, Radius, Achsrichtung und Kollinearität stehen in
+  den Fits und werden für alle Gemerkten auf einmal beantwortet, die axiale
+  Überlappung entscheidet wie bisher. Am Noppenfeld mit 1 403 Kuppen
+  (173 000 Dreiecke) waren es 984 906 Einzelfragen und 10,9 von 14 s; jetzt
+  0,09 s fürs Zusammenfassen und 4,0 statt 11,7 s für die ganze Erkennung, mit
+  Stück für Stück identischem Ergebnis am Noppenfeld und an allen 23 Dateien
+  des Korpus (der Messwert gehört zu RM-208 und steht dort nicht noch einmal).
+  Entwicklungstor danach: 13 644 bestanden, 48 übersprungen; Ruff, Format und
+  mypy je 0.
