@@ -60,7 +60,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-024 — Gespeicherte Zuordnungsantworten im echten Konfliktfall abnehmen](#rm-024) | Geometrie, Erkennung und Druckvorbereitung | Der Rundlauf steht; gemessen fehlt ein Korpuskörper, dessen erneute Erkennung wirklich mehrdeutig wird |
 | [RM-041 — Innenraum importierter entlüfteter Hohlkörper klären](#rm-041) | Geometrie, Erkennung und Druckvorbereitung | Schätzweg oder dokumentierte Grenze des Innenraums entscheiden |
 | [RM-209 — Die Rundform-Einpassung an Gittermodellen](#rm-209) | Geometrie, Erkennung und Druckvorbereitung | Gebaut am 22.09.2026: drei Regeln gegen Läufe, die nur am Limit noch antworten. Die Zeitzahlen sind zurückgezogen (unter Fremdlast gemessen) und werden ruhig neu erhoben; die Merkmalsbilanz steht |
-| [RM-210 — Die Erkennung hängt von der Lage des Körpers ab](#rm-210) | Geometrie, Erkennung und Druckvorbereitung | Dasselbe Modell um 13,7 mm verschoben verliert einen Kegel und eine Verrundung; gedreht kommen fünf dazu. Die Kippstelle ist ein einzelner Fleck mit gleichem Startwert — Entscheidung über „am Limit heißt verworfen" steht aus |
+| [RM-210 — Die Erkennung hängt von der Lage des Körpers ab](#rm-210) | Geometrie, Erkennung und Druckvorbereitung | Die Verschiebung ist behoben (RM-209), die Drehung nicht: 16 von 39 echten Modellen liefern gedreht andere Merkmale. Die Kippstelle sitzt in den Verrundungen — **Entscheidung über einen Mindestbogen steht bei Robert**, drei Wege mit Zahlen im Punkt |
 | [RM-076 — Topologieverlust beim Reduzieren von Eule und Spiderman beheben](#rm-076) | Geometrie, Erkennung und Druckvorbereitung | Eule und Spiderman mit Zielreihe und Topologievergleich reproduzieren |
 | [RM-077 — Reduzierungsziel bei Körpern mit Durchbrüchen erreichen](#rm-077) | Geometrie, Erkennung und Druckvorbereitung | Zielreihen an Körpern mit Durchbrüchen gegen den vorhandenen Rückfall messen |
 | [RM-078 — Ladezeit generierter Beispielmodelle an der Orientierung messen](#rm-078) | Geometrie, Erkennung und Druckvorbereitung | Eulenprojekt ohne Fremdlast öffnen und teure Schritte zuordnen |
@@ -935,10 +935,41 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Nachbarsitzung ihren Umbau noch ungestaged im Baum hatte. Gegen feste Commits gemessen
   verschlechtert sich kein Modell.
 
-  Abnahme: die Verrundungen ebenso eingegrenzt wie die Kegel — die Kippstelle ist bekannt
-  (`_cylinder_contour`, `hull.geom_type`), die Entscheidung über den Mindestbogen steht bei
-  Robert; danach entweder die Erkennung gegen starre Bewegungen abgesichert oder die Grenze der
-  Zusage dokumentiert. Ein Test, der einen Korpuskörper verschoben und gedreht einliest und
+  **Die Entscheidung, die offen ist: ein Mindestbogen für Rundformen.** Sie ist keine
+  Numerikfrage, sondern eine über das Erzeugnis, und deshalb steht sie hier und wird nicht
+  nebenbei gebaut. Was heute passiert: Ein Fleck aus acht Dreiecken mit 0,03 Millimetern
+  Wölbung zeigt 2,8 Grad eines Kreises, und daraus extrapoliert die Einpassung einen Radius von
+  99 Millimetern. Die Grenze dafür ist `FLAT_ANGLE` = 0,5 Grad, und daran kommt so ein Fleck
+  bequem vorbei. Für einen Drucker ist das keine Rundung, sondern eine Kante.
+
+  Gemessen, wieviel Kreis eine Verrundung zeigt:
+
+  | Herkunft | überstrichener Bogen |
+  |---|---|
+  | `block_with_rounded_edge.stl` (konstruiert) | 86,25° |
+  | `desk-organizer-v3`, die zwei echten | 82,7° bis 85,9° |
+  | `drill-holder.3mf`, 26 gemeldete | median 151,5°, kleinste 4,6° |
+  | die wackelnden Flecken | 2,0° bis 18,3° |
+
+  Drei Wege, und jeder kostet etwas anderes:
+
+  * **Nichts ändern.** Die Artefakte bleiben, und mit ihnen die Drehabhängigkeit an sechzehn
+    von 39 Modellen.
+  * **Konservativ, etwa 5 Grad.** Trifft am Organizer alle sechs wackelnden Flecken und keine
+    der zwei echten Verrundungen. An `drill-holder.3mf` kostet es vier der 26 gemeldeten, an
+    `Blessed+Family+–+Heart+Script+Decor.3mf` — einem Zierschild mit Schriftzug — sechs von 29.
+  * **Streng, etwa 30 Grad.** Dann bleiben nur konstruierte Verrundungen übrig. Am Zierschild
+    fielen 18 der 29 weg; ob das ein Verlust ist oder eine Bereinigung, hängt daran, ob seine
+    Verrundungen mit median 15 Grad überhaupt gewollt sind.
+
+  Eine feste Schranke trennt **nicht überall**: Am Zierschild überlappen die Bereiche
+  vollständig (gemeldet ab 2,0 Grad, wackelig bis 18,3). Wer sie einführt, entscheidet also
+  auch, dass an solchen Körpern weniger gemeldet wird.
+
+  Abnahme: Entscheidung über den Mindestbogen; danach die Verrundungen ebenso eingegrenzt wie
+  die Kegel — die Kippstelle ist bekannt (`_cylinder_contour`, `hull.geom_type`) —, und
+  entweder die Erkennung gegen starre Bewegungen abgesichert oder die Grenze der Zusage
+  dokumentiert. Ein Test, der einen Korpuskörper verschoben und gedreht einliest und
   dieselbe Merkmalsmenge verlangt, steht seit dem 22.09.2026 in
   `tests/test_fit_stability.py` — **er ist heute grün und bleibt stumpf**, solange kein
   eingecheckter Körper den Fall trägt: Alle 34 Korpuskörper sind stabil, weil sie analytisch
