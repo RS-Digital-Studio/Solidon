@@ -1816,7 +1816,14 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   `bore_is_unchanged`), und bei neuem Durchmesser sagt die Statuszeile die
   Wahrheit — der Zug ist danach zu wiederholen, der Szenenaufbau verwirft
   ihn; das Tiefenfeld leuchtet mit; Portugiesisch sagt „furo oblongo" wie
-  am Knopf. Jeder neue Test am Stand davor rot. Offen: die Abnahme am
+  am Knopf — auch im Changelog. Zwei Nebenbefunde außerhalb der vier
+  Commits, beide behoben: Nach dem Einlauf-Neuschnitt am exakten Körper
+  fehlten die Flächen des Körpers im Baum (`_exact_rest_carried`), und eine
+  ohne Einlauf versetzte Bohrung meldete die aufgerissene Nachbarwand nicht
+  (`drill` gibt sein Werkzeug heraus; am Halter und am Bohrerhalter aus
+  `F:D Dateien` nachgestellt — ein STEP mit Senkbohrung liegt dort nicht,
+  der exakte Fall bleibt am gebauten Körper geprüft). Jeder neue Test am
+  Stand davor rot. Offen: die Abnahme am
   echten Fenster beim Release 0.5.0 — dazu die Stufe an der Grenze „ganz
   sichtbar" (ein Punkt über den Maßraum, und die Felder wechseln die Seite).
   **Zug und Durchmesser sind ein Schritt** (Entscheidung Robert am selben
