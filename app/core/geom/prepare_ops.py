@@ -4763,8 +4763,13 @@ def resize_hole(ctx: OpContext) -> OpResult:
         )
     findings = [*closed_first, *result.findings, *moved_findings]
     findings.extend(_widening_findings(source, feature, params.diameter))
-    if result.cutting_tool is not None and cut > previous:
-        findings.extend(_neighbour_bore_findings(source, feature, result.cutting_tool, ctx))
+    # Auch eine versetzte Bohrung kann eine Nachbarwand aufreißen — bis zum
+    # 22.09.2026 fragte nur die Vergrößerung, und ``drill`` gab sein Werkzeug
+    # nicht heraus (Review, A3).
+    if result.cutting_tool is not None and (cut > previous or moved_hole):
+        findings.extend(
+            _neighbour_bore_findings(source, feature, result.cutting_tool, ctx, moved=moved_hole)
+        )
     if resized_feature is None:
         findings.append(_bore_no_longer_a_feature(feature, result.diameter))
     return OpResult(
@@ -5307,9 +5312,18 @@ def slot_hole(ctx: OpContext) -> OpResult:
 
 
 def _neighbour_bore_findings(
-    source: SceneObject, feature: Feature, tool: MeshData, ctx: OpContext
+    source: SceneObject,
+    feature: Feature,
+    tool: MeshData,
+    ctx: OpContext,
+    *,
+    moved: bool = False,
 ) -> list[Finding]:
-    """Nur eine durch diese Vergrößerung geschwächte Nachbarwand melden.
+    """Nur eine durch diese Vergrößerung — oder diese Stelle — geschwächte
+    Nachbarwand melden.
+
+    ``moved`` sagt, dass das Werkzeug an einer neuen Stelle steht; der Satz
+    nennt dann die Stelle als Ausweg, nicht den Durchmesser.
 
     Der Hüllquader sortiert entfernte Kandidaten aus. Den Abstand bestimmen
     die echten, an ihren Endringen geschlossenen Hohlräume und das tatsächlich
@@ -5365,27 +5379,45 @@ def _neighbour_bore_findings(
             Finding(
                 code="bore.neighbour_opened" if opened else "bore.neighbour_wall_thin",
                 severity="warning",
-                message=(
-                    _(
-                        "Diese Vergrößerung verbindet die Bohrung mit einem benachbarten "
-                        "Hohlraum. Wählen Sie einen kleineren Durchmesser, um die Trennwand "
-                        "zu erhalten."
-                    )
-                    if opened
-                    else _(
-                        "Durch diese Vergrößerung bleiben zum benachbarten Hohlraum nur "
-                        "{thickness:.2f} mm Wand. Das Materialprofil verlangt mindestens "
-                        "{minimum:.2f} mm. Wählen Sie einen kleineren Durchmesser.",
-                        thickness=after_gap,
-                        minimum=threshold,
-                    )
-                ),
+                message=_neighbour_message(opened, moved, after_gap, threshold),
                 feature_ids=(feature.id, neighbour.id),
                 values={"thickness": after_gap, "minimum": threshold, "previous": before_gap},
                 suggestions=(CORRECT_INPUT,),
             )
         )
     return findings
+
+
+def _neighbour_message(
+    opened: bool, moved: bool, thickness: float, minimum: float
+) -> TranslatableText:
+    """Der Satz zur Nachbarwand: was sie schwächt, und was der Kunde ändern kann."""
+    if moved and opened:
+        return _(
+            "An dieser Stelle verbindet sich die Bohrung mit einem benachbarten Hohlraum. "
+            "Wählen Sie eine andere Stelle, um die Trennwand zu erhalten."
+        )
+    if moved:
+        return _(
+            "An dieser Stelle bleiben zum benachbarten Hohlraum nur {thickness:.2f} mm "
+            "Wand. Das Materialprofil verlangt mindestens {minimum:.2f} mm. Wählen Sie "
+            "eine andere Stelle.",
+            thickness=thickness,
+            minimum=minimum,
+        )
+    if opened:
+        return _(
+            "Diese Vergrößerung verbindet die Bohrung mit einem benachbarten "
+            "Hohlraum. Wählen Sie einen kleineren Durchmesser, um die Trennwand "
+            "zu erhalten."
+        )
+    return _(
+        "Durch diese Vergrößerung bleiben zum benachbarten Hohlraum nur "
+        "{thickness:.2f} mm Wand. Das Materialprofil verlangt mindestens "
+        "{minimum:.2f} mm. Wählen Sie einen kleineren Durchmesser.",
+        thickness=thickness,
+        minimum=minimum,
+    )
 
 
 def _widening_findings(source: SceneObject, feature: Feature, diameter: float) -> list[Finding]:
@@ -6027,7 +6059,9 @@ def _moved_after_resizing(
     if cavity is not None:
         shifted = cavity.raw.copy()
         shifted.apply_translation(travel)
-        findings.extend(_neighbour_bore_findings(source, feature, MeshData.of(shifted), ctx))
+        findings.extend(
+            _neighbour_bore_findings(source, feature, MeshData.of(shifted), ctx, moved=True)
+        )
     findings.extend(split_findings(as_mesh_data(source.mesh), as_mesh_data(result.mesh)))
     return OpResult(
         outputs=moved.outputs,
@@ -6236,6 +6270,10 @@ def _resize_bore_entrance(
     findings.extend(split_findings(original, as_mesh_data(changed)))
     params = cast(ResizeHoleParams, ctx.params)
     findings.extend(compensation_findings(params.diameter, diameter, params.compensate))
+    if source.kind == "brep":
+        preserved = _exact_rest_carried(
+            source.features, found, preserved, changed_ids, as_mesh_data(changed)
+        )
     # Der Beleg für die bewusst geänderten Abschnitte reist mit dem Ergebnis
     # (§21.2) — wie beim Ändern ohne Einlauf. Ohne ihn hielt am exakten Körper
     # der nächste Schritt, der die Bohrung braucht, die Kette an
@@ -6256,6 +6294,52 @@ def _resize_bore_entrance(
         solver=deepest(stages),
         feature_continuations=(continued,) if continued else (),
     )
+
+
+def _exact_rest_carried(
+    previous: Mapping[FeatureId, Feature],
+    detected: Mapping[FeatureId, Feature],
+    kept: Mapping[FeatureId, Feature],
+    changed_ids: set[FeatureId],
+    body: MeshData,
+) -> dict[FeatureId, Feature]:
+    """Die Merkmale des exakten Körpers, die der Einlauf-Neuschnitt nicht
+    berührt hat — Flächen, Kanten, Verrundungen —, unter ihren alten Namen.
+
+    ``_resize_bore_entrance`` baut den exakten Körper neu und behielt nur die
+    erzeugten Merkmale und die wiedererkannte Kette: Die sechs Flächen einer
+    Platte waren nach *Bohrung ändern* mit Einlauf aus dem Objektbaum
+    verschwunden, und mit Stelle kamen sie über *Merkmal verschieben* zurück
+    — zwei Fassungen desselben Schritts, zwei Merkmalskarten (Review
+    22.09.2026, A2). Der Weg ohne Einlauf ordnet die frische Topologie zu
+    (``_preserved_exact_features``); hier dasselbe für alles, was nicht auf
+    den Dreiecken der Kette liegt.
+    """
+    from app.core.perceive.matching import apply_mapping, match
+
+    covered = {index for entry in kept.values() for index in entry.face_indices}
+    rest = {
+        name: entry
+        for name, entry in detected.items()
+        if not covered.intersection(entry.face_indices)
+    }
+    if not rest:
+        return dict(kept)
+    known = {
+        name: entry
+        for name, entry in previous.items()
+        if name not in changed_ids and name not in kept and entry.provenance == "detected"
+    }
+    matched = match(known, rest, body.bounds.centre, body.bounds.diagonal)
+    merged = dict(kept)
+    for name, entry in apply_mapping(rest, matched, previous=known).items():
+        target = name
+        number = 1
+        while target in merged:
+            target = FeatureId(f"{entry.kind}_{number}")
+            number += 1
+        merged[target] = dataclasses.replace(entry, id=target)
+    return merged
 
 
 def _entrance_edge_findings(
@@ -8862,22 +8946,29 @@ def _resize_pattern(
     # Voronoi und Rauschen kennen keine Zellbreite — ihre Zellen sind so groß,
     # wie die Dichte sie macht (``texture_ops.pattern_shapes``). Und eine
     # Breite, die die Teilung nicht hergibt, wird begrenzt und gesagt: Die
-    # Wand zwischen zwei Zellen bleibt so breit wie die Düse (E1) — dünner
+    # Wand zwischen zwei Zellen bleibt so breit wie das kleinste Detail des
+    # Druckers (E1: die Bahn bei FDM, der Bildpunkt bei Resin) — dünner
     # druckt sie nicht, und ``check_printable`` fragt nur nach dem Steg der
     # Vorgabe, nicht nach der gemessenen Zelle.
-    nozzle = ctx.profile.printer.nozzle_diameter
-    drawn_width = cell_width_for(generator, new_pitch, new_width, wall=nozzle)
+    printer = ctx.profile.printer
+    detail = printer.smallest_detail
+    drawn_width = cell_width_for(generator, new_pitch, new_width, wall=detail)
     limited = drawn_width is not None and not is_close(drawn_width, new_width)
-    if drawn_width is not None and drawn_width < nozzle:
+    if drawn_width is not None and drawn_width < detail:
         raise ValidationError(
             "cell_width",
             _(
+                "Bei dieser Zellbreite sind die Zellen schmaler als ein Bildpunkt — sie "
+                "werden nicht belichtet. Der Bildpunkt misst „nozzle_mm“."
+            )
+            if printer.is_resin
+            else _(
                 "Bei dieser Zellbreite sind die Zellen schmaler als die Düse — sie werden "
                 "nicht gedruckt. Die Düse misst „nozzle_mm“."
             ),
             value=drawn_width,
             constraint="nozzle_width",
-            values={"nozzle_mm": nozzle, "cell_width": drawn_width},
+            values={"nozzle_mm": detail, "cell_width": drawn_width},
             suggestions=[dataclasses.replace(CORRECT_INPUT, label=_("Zellbreite vergrößern"))],
         )
     # Dieselbe Frage wie beim Aufbringen (E1), mit der gezeichneten Zelle:
@@ -8915,7 +9006,7 @@ def _resize_pattern(
         # wegbleiben — mit 9 mm verlangt bei 6 mm Teilung wäre die Wand
         # negativ, also keine, und die Zellen schnitten die Seitenwand an.
         cell=drawn_width,
-        wall=nozzle,
+        wall=detail,
         # Ganze Zellen, wo das Muster nur ganze hatte — und immer, wo es
         # durchgeht: Eine angeschnittene wäre dort eine Kerbe (Review,
         # 22.09.2026: ein blindes Feld nahe der Kante kerbte beim Neuzeichnen

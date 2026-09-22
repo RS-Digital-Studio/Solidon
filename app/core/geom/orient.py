@@ -577,7 +577,12 @@ def orient_for_print(
             },
         )
     ]
-    if best.overhang > best.footprint:
+    # Die 45-Grad-Regel gilt der Düse: Was sie nicht mehr trägt, braucht
+    # Stützen. Ein Resinteil hängt ohnehin an Stützen, und ob es welche
+    # braucht, entscheidet dort die Saugglocke, nicht der Überhang
+    # (Resin-Konzept §5.3, Stufe 2) — bis dahin sagt die Heuristik zu
+    # Resin nichts, was nicht gilt.
+    if best.overhang > best.footprint and not (printer is not None and printer.is_resin):
         findings.append(
             Finding(
                 code="orient.support_likely",

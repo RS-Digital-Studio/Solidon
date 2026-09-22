@@ -445,7 +445,15 @@ Vorschauen vorbehalten, die tatsächlich kein Ergebnis liefern.
 
 `FirstRunDialog` fragt Slicer vor Drucker; `_PrinterSurvey` liest passende
 Profile außerhalb des Qt-Hauptthreads und verwirft Antworten früherer Auswahlen.
-„Benutzerdefiniert“ sammelt Name, Bauraum und Düse direkt im Formular.
+„Benutzerdefiniert“ sammelt Name, Verfahren, Bauraum und die Maße des
+Verfahrens direkt im Formular — Düse und Düsenzahl bei FDM, Pixelgröße und
+Mindestwand bei Resin (`_technology_changed` blendet die fremden Zeilen
+aus). Die Druckerliste ist nach Verfahren gruppiert (`_group_printers`:
+nicht wählbare Köpfe, nur wenn beide Gruppen da sind); die Resin-Geräte
+hängen an keinem FDM-Slicer und bleiben stehen, wenn ein Slicer die Liste
+filtert, und ein Programm ohne Familie bekommt den Satz, dass Solidon seine
+Drucker nicht kennt. Das Vorgabematerial folgt dem Drucker
+(`profiles.material_for`).
 `custom_printer_draft` und `restore_custom_printer_draft` erhalten ungespeicherte
 Eingaben beim Sprachwechsel. `inventoryRequested` öffnet nach Übernahme der
 Einrichtung das Filamentlager über das Hauptfenster.
@@ -1267,7 +1275,7 @@ behalten ihre Seite. Vorbelegte Richtungswerte ändern ihre Schemaseite nicht.
 |---|---|
 | `op_dialog.py` | **Wird aus dem Parameterschema erzeugt** (§10, §2.4). Kein Dialog wird von Hand gebaut — wer einen tippt, hat das Register umgangen. `block_apply(reason)` sperrt *Übernehmen* von außen mit Grund — für das Band, dessen Grund eine Handlung trägt. `offer_naming=True` hängt vorn den Haken *Maße als Parameter anlegen* an, `names_dimensions()` liest ihn; die Parameter legt das Fenster an (`_named_dimensions`, §13) |
 | `dialogs.py` | Fragen und Fehler (§2.7), Freischaltung mit Online- und Dateiweg sowie freiwillige Förderung über PayPal oder GoFundMe |
-| `print_settings_dialog.py` | Druckeinstellungen, Analyse des Ausgabeumfangs im tatsächlichen Schichtraster, slotbezogene Empfehlungen und Slicer-Übergabe (§29) |
+| `print_settings_dialog.py` | Druckeinstellungen, Analyse des Ausgabeumfangs im tatsächlichen Schichtraster, slotbezogene Empfehlungen und Slicer-Übergabe (§29). An einem Resin-Drucker zeigt er nur, was gilt (`_reduce_for_resin`, `_fit_to_technology` nach einem Druckerwechsel): Drucker, Material, Platten, Programm und *Im Slicer öffnen* als Hauptknopf — Stufe, Wände, Füllung, Vorschläge, Düse, Slicen und Druckdatei sind verborgen, `settings_for_export` gibt keine Werte mit. Ein Programm ohne Familie (`other`) sperrt Slicen mit Grund und lässt Öffnen frei |
 | `print_disclosure.py` | Der Hinweis davor: dass diese Werte Erfahrungswerte sind und mit einer 3MF mitreisen — und die Wahl, ob sie das sollen (§29) |
 | weitere | `settings_dialog` · `generate_dialog` (Weg 3) · `recipe_dialog` · `variants_dialog` · `comfy_dialog` · `install_dialog` · `support_dialog` · `update_dialog` · `changes_dialog` |
 

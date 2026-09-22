@@ -1243,7 +1243,14 @@ def drill(
         )
         findings.extend(split_findings(mesh, result))
         findings.extend(compensation_findings(diameter, cut_diameter, compensate))
-        return BoreResult(result, outcome.solver, cut_diameter, findings)
+        # Das Werkzeug im Weltraum, für die Nachbarprüfung des Aufrufers —
+        # ``resize_hole`` versetzt eine Bohrung über diesen Weg, und bis zum
+        # 22.09.2026 blieb ohne Werkzeug die aufgerissene Nachbarwand ungesagt.
+        world_tool = cylinder.copy()
+        transform.moved(world_tool, to_world)
+        return BoreResult(
+            result, outcome.solver, cut_diameter, findings, cutting_tool=MeshData.of(world_tool)
+        )
     height = _through_length(mesh, axis) * 2.0 if through else depth
     cylinder = drill_tool(
         diameter=diameter,
@@ -1299,7 +1306,11 @@ def drill(
     findings.extend(split_findings(mesh, outcome.mesh))
     findings.extend(compensation_findings(diameter, cut_diameter, compensate))
     return BoreResult(
-        mesh=outcome.mesh, solver=outcome.solver, diameter=cut_diameter, findings=findings
+        mesh=outcome.mesh,
+        solver=outcome.solver,
+        diameter=cut_diameter,
+        findings=findings,
+        cutting_tool=MeshData.of(cylinder),
     )
 
 

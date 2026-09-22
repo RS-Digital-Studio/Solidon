@@ -89,7 +89,10 @@ DEFAULT_DISK_BUDGET_BYTES: Final = 2 * 1024 * 1024 * 1024
 #:   Vorschub, Kamm- und Grundradius und seine Wendelabweichung;
 #: - 23 (21.09.2026): `object_hash` hasht Dreiecksnummern als Bytes und
 #:   Fließkommawerte über `float()` — dieselbe Auskunft, ein anderer Schlüssel.
-CACHE_FORMAT_VERSION: Final = 23
+#: - 24 (22.09.2026, RM-071): der Profilschlüssel trägt das Druckverfahren,
+#:   Pixelgröße und Mindestwand des Druckers — ein auf Resin umgestelltes
+#:   Projekt rechnet seine Befunde neu statt sie aus dem FDM-Cache zu holen.
+CACHE_FORMAT_VERSION: Final = 24
 
 
 @dataclass(frozen=True, slots=True)

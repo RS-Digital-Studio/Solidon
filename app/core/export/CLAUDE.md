@@ -8,7 +8,7 @@ Die Regeln stehen in `.claude/rules/dateiformat.md`.
 
 | Datei | Rolle |
 |---|---|
-| `writer.py` | Export und **die Prüfung, die davor läuft** (§29, §16.3); `default_scheme` nennt das Namensmuster, nach dem ohne eigene Angabe benannt wird — das Fenster zeigt es im Dateidialog (RM-141) |
+| `writer.py` | Export und **die Prüfung, die davor läuft** (§29, §16.3); `default_scheme` nennt das Namensmuster, nach dem ohne eigene Angabe benannt wird — das Fenster zeigt es im Dateidialog (RM-141). `mesh_for_export` vernetzt einen exakten Körper so fein, wie das Verfahren des Druckers es verlangt (`Profile.export_deflection`: ein Achtel des kleinsten Details, gedeckelt von der Zahl des Kerns — FDM bleibt bei 0,05 mm, ein Resin-Drucker mit 50-µm-Pixeln bekommt 0,006), an allen drei Stellen des Schreibers; `export.tessellated` nennt das Maß. Bei einem Resin-Drucker lässt `write_assembly` den FDM-Satz fallen: keine Haftungs- und Filamentbefunde, keine Beilage |
 | `threemf.py` | 3MF **schreiben** — ein Körper oder eine Baugruppe, mit Farbgruppen und Slicer-Beilagen (§20, §29). Gelesen wird in `ingest/threemf.py` |
 | `handover.py` | Übergabe an den Slicer (§29, §28.1) |
 | `slicer_keys.py` | Wie eine Solidon-Einstellung in **jedem** Slicer heißt |
@@ -180,10 +180,16 @@ vier verschiedene Namen hat. Eine Übersetzungstabelle an einer Stelle ist der
 Preis dafür, dass §29 überhaupt einlösbar ist — verstreute Sonderfälle wären
 es nicht.
 
-Drei Familien decken sechs Programme ab: `prusa` (PrusaSlicer, SuperSlicer),
+Drei Familien übersetzen: `prusa` (PrusaSlicer, SuperSlicer),
 `orca` (OrcaSlicer, Bambu Studio, ElegooSlicer, **Creality Print** ab Version 6)
 und `cura` (CuraEngine). `FLAVOUR_BY_NAME` ordnet über den Dateinamen zu;
-`flavour_of` ist die einzige Stelle, an der ein Programm zu einer Familie wird.
+`flavour_of` ist die einzige Stelle, an der ein Programm zu einer Familie wird
+— und was es nicht kennt, ist seit RM-071 die vierte Familie `other`: ein
+Programm, das die Datei nur ins Fenster bekommt (§29, zweite Übergabeart;
+ChituBox, Lychee, die Hersteller-Slicer der Resin-Drucker). `detect` wirft
+nicht mehr; jedes Prädikat antwortet für `other` mit „nein“, es bekommt STL
+um den Ursprung, `slice_model` und `write_config` sagen mit Vorschlag ab
+(`_refuse_untranslated`), und `only_opens` ist die Frage dazu.
 
 ## Der Slicer wird gerufen, nie mitgeliefert
 

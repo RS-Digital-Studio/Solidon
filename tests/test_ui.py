@@ -8560,6 +8560,29 @@ def test_the_settings_dialog_writes_every_value_back(qt_app: QApplication) -> No
     assert settings.check_for_updates
 
 
+def test_the_settings_dialog_offers_only_the_materials_of_the_chosen_technology(
+    qt_app: QApplication,
+) -> None:
+    """RM-071: Ein Harzdrucker bietet Harze an, ein Filamentdrucker Filamente —
+    und die Vorgabe folgt dem Wechsel, statt PLA in ein Harzbad zu stellen."""
+    from app.core.knowledge import profiles
+    from app.ui.settings_dialog import SettingsDialog
+
+    settings = UiSettings()
+    dialog = SettingsDialog(settings)
+    offered = {str(dialog.material.itemData(i)) for i in range(dialog.material.count())}
+    assert "pla" in offered and "resin" not in offered
+
+    dialog.printer.setCurrentIndex(dialog.printer.findData(profiles.DEFAULT_RESIN_PRINTER))
+    offered = {str(dialog.material.itemData(i)) for i in range(dialog.material.count())}
+    assert offered == {"resin"}
+    dialog.apply_to(settings)
+    assert (settings.printer, settings.material) == (profiles.DEFAULT_RESIN_PRINTER, "resin")
+
+    dialog.printer.setCurrentIndex(dialog.printer.findData("prusa-mk4s"))
+    assert str(dialog.material.currentData()) == "pla"
+
+
 def test_a_language_change_requests_a_new_settings_dialog(qt_app: QApplication) -> None:
     """Die gewählte Sprache fordert denselben Neuaufbau wie die ersten Schritte an."""
     from app.ui.first_run import LANGUAGE_CHANGED

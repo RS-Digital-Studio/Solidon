@@ -6,6 +6,12 @@
 # abgeleitet.
 #
 # Alle Längen in Millimetern. extrusion_width ist ohne Angabe Düse * 1,05.
+# technology ist ohne Angabe "fdm" — jedes vor dem 22.09.2026 angelegte Profil
+# ist damit ein FDM-Drucker, ohne Migration. Ein Resin-Drucker trägt
+# technology = "resin" und statt Düse und Bahnbreite die Pixelgröße
+# (pixel_size, XY in mm) und seine Mindestwand (minimum_wall); layer_height
+# ist dort die Belichtungsschicht. Düsenfelder in einem Resin-Profil werden
+# nicht gelesen.
 # nozzles zählt die Düsen, die zugleich drucken — ohne Angabe eine. Eine
 # Wechselstation (AMS, CFS) macht daraus keine zweite: Sie spült bei jedem
 # Filamentwechsel. Wer einen Prusa XL mit mehreren Köpfen oder einen IDEX
@@ -195,3 +201,30 @@ extrusion_width = 0.42
 enclosed = false
 bed_temperature_max = 100
 nozzle_temperature_max = 300
+
+# --- Resin (MSLA) --------------------------------------------------------------
+#
+# Zwei generische Geräte, nach Bauraum, denn die Bauraumfrage ist die häufigste
+# Resin-Fehlerquelle (Entscheidung 30.08.2026): klein wie Elegoo Mars und
+# Anycubic Photon Mono, groß wie Elegoo Saturn und Anycubic Photon M. Bett-
+# und Düsentemperaturen gibt es nicht; die Felder bleiben weg.
+
+[generic-resin-130]
+title = "Allgemeiner Resin-Drucker 130 mm"
+vendor = ""
+technology = "resin"
+build_volume = [130.0, 80.0, 160.0]
+layer_height = 0.05
+pixel_size = 0.05
+minimum_wall = 0.4
+enclosed = true
+
+[generic-resin-220]
+title = "Allgemeiner Resin-Drucker 220 mm"
+vendor = ""
+technology = "resin"
+build_volume = [220.0, 120.0, 220.0]
+layer_height = 0.05
+pixel_size = 0.05
+minimum_wall = 0.4
+enclosed = true

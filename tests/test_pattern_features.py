@@ -640,14 +640,14 @@ def test_the_holders_own_cells_are_not_limited() -> None:
 
 
 def test_the_wall_between_limited_cells_is_the_nozzle() -> None:
-    """Begrenzt heißt: so breit, dass die Wand dazwischen noch druckt — eine Düse."""
+    """Begrenzt heißt: so breit, dass die Wand dazwischen noch druckt — eine Bahn breit."""
     mesh, _count = honeycomb_plate()
     entry = SceneObject(id="obj_1", name="Halter", mesh=mesh, features=detect(mesh))
     read = only_pattern(entry.features)
     out, _findings = run_op("resize_feature", entry, at_feature=read.id, pitch=6.0)
     after = only_pattern(out.features)
     wall = 6.0 - after.params["cell_width"]
-    assert math.isclose(wall, NOZZLE.nozzle_diameter, abs_tol=0.02), wall
+    assert math.isclose(wall, NOZZLE.smallest_detail, abs_tol=0.02), wall
 
 
 def test_a_tighter_diamond_knurl_keeps_a_wall_between_its_cells() -> None:

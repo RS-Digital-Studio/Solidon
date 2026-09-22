@@ -331,16 +331,26 @@ class CalibrationDialog(QDialog):
         process_note.setWordWrap(True)
         if process is not None:
             printer = process.printer
-            process_note.setText(
-                tr("Wand und Überhang gelten nur für diese Druckbedingungen:")
-                + "\n"
-                + f"{printer.title} · {current.title}\n"
-                + tr("Düse")
+            # Der Prozess des Verfahrens: Bei Resin gibt es keine Düse und
+            # keine Bahn — dort sind es Schichthöhe und Bildpunkt (RM-071).
+            conditions = (
+                tr("Schichthöhe")
+                + f" {format_decimal(printer.layer_height)} mm · "
+                + tr("Pixelgröße")
+                + f" {format_decimal(printer.pixel_size)} mm"
+                if printer.is_resin
+                else tr("Düse")
                 + f" {format_decimal(printer.nozzle_diameter)} mm · "
                 + tr("Schichthöhe")
                 + f" {format_decimal(printer.layer_height)} mm · "
                 + tr("Linienbreite")
                 + f" {format_decimal(printer.extrusion_width)} mm"
+            )
+            process_note.setText(
+                tr("Wand und Überhang gelten nur für diese Druckbedingungen:")
+                + "\n"
+                + f"{printer.title} · {current.title}\n"
+                + conditions
             )
         else:
             process_note.setText(tr("Wählen Sie zuerst den Drucker der Probe im Projekt aus."))

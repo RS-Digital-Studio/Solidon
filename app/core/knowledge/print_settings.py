@@ -173,10 +173,23 @@ def resolve(profile: Profile, quality: QualityPreset = DEFAULT_QUALITY) -> Print
     stuff = _material_table(profile.material.id)
     printer = profile.printer
 
-    scale = printer.nozzle_diameter / REFERENCE_NOZZLE
-    ceiling = printer.nozzle_diameter * MAX_LAYER_RATIO
-    layer_height = min(float(stage["layer_height"]) * scale, ceiling)
-    first_layer = min(float(stage["first_layer_height"]) * scale, ceiling)
+    if printer.is_resin:
+        # Ein Resin-Drucker hat keine Düse, an der die Stufe ihre Schichthöhe
+        # skalieren könnte: Er belichtet in der Schichthöhe seines Profils,
+        # und sein kleinstes Detail ist der Bildpunkt. Alles Weitere in
+        # diesem Satz — Wände, Füllung, Temperaturen — ist ein FDM-Vertrag,
+        # den kein Resin-Slicer liest; der Satz bleibt vollständig, damit
+        # jeder Leser einen bekommt, aber er reist nicht in eine Übergabe
+        # (``handover`` übersetzt für Resin nichts, Resin-Konzept §4).
+        layer_height = first_layer = printer.layer_height
+        line_width = first_layer_line_width = printer.pixel_size
+    else:
+        scale = printer.nozzle_diameter / REFERENCE_NOZZLE
+        ceiling = printer.nozzle_diameter * MAX_LAYER_RATIO
+        layer_height = min(float(stage["layer_height"]) * scale, ceiling)
+        first_layer = min(float(stage["first_layer_height"]) * scale, ceiling)
+        line_width = printer.extrusion_width
+        first_layer_line_width = round(printer.extrusion_width * 1.07, 3)
 
     return PrintSettings(
         id=f"{quality}-{profile.material.id}",
@@ -185,8 +198,8 @@ def resolve(profile: Profile, quality: QualityPreset = DEFAULT_QUALITY) -> Print
         layers=LayerSettings(
             layer_height=round(layer_height, 3),
             first_layer_height=round(first_layer, 3),
-            line_width=printer.extrusion_width,
-            first_layer_line_width=round(printer.extrusion_width * 1.07, 3),
+            line_width=line_width,
+            first_layer_line_width=first_layer_line_width,
         ),
         shell=ShellSettings(
             wall_count=int(stage["wall_count"]),

@@ -323,9 +323,14 @@ sagt der Schritt ab, mit dem Rückweg), mit den Befunden des neuen Orts
 statt des alten (`PLACE_BOUND_FINDINGS`) und mit den Übergängen beider
 Läufe als einem (`_continued_through`). Der Einlauf-Neuschnitt selbst
 belegt am exakten Kern seine Übergänge — ohne sie hielt der nächste Schritt,
-der die Bohrung braucht, die Kette an. Ob ein Durchmesser die Bohrung so
-lässt, wie sie ist, sagt `bore_is_unchanged` — die Operation und das Fenster
-fragen dieselbe Antwort.
+der die Bohrung braucht, die Kette an — und trägt die übrige Topologie des
+neu gebauten Körpers unter ihren alten Namen weiter (`_exact_rest_carried`;
+bis dahin waren die sechs Flächen der Platte nach dem Neuschnitt aus dem
+Baum verschwunden). Ob ein Durchmesser die Bohrung so lässt, wie sie ist,
+sagt `bore_is_unchanged` — die Operation und das Fenster fragen dieselbe
+Antwort. Und die Nachbarwand wird auch beim **Versetzen** gefragt, nicht nur
+beim Vergrößern: `drill` gibt sein Werkzeug heraus, und der Satz nennt dann
+die Stelle als Ausweg (`_neighbour_message`, `moved=True`).
 
 Nach geometrisch bestätigter Zuordnung erhält `_with_nominal_bore` bekannte
 Operationsmaße, damit der Fit an Dreiecksmitten Durchmesser und Senkungswinkel
@@ -597,8 +602,9 @@ Operationen mit freier Position und Breite/Höhe. Beide Wege enden in
 ruft (`prepare_ops._resize_pattern`): mit dem gelesenen Stil, Feld und
 Winkel, und mit `cell=` der gemessenen Zellbreite — `pattern_shapes()`
 rechnet daraus je Stil den Anteil an der Teilung, `cell_width_for()` sagt,
-was Teilung und Düse davon zulassen: Die Wand zwischen zwei Zellen bleibt
-eine Düse breit (`wall=`), und die Berührgrenze ist je Stil eine andere
+was Teilung und Drucker davon zulassen: Die Wand zwischen zwei Zellen bleibt
+so breit wie sein kleinstes Detail (`wall=`, die Bahn bei FDM, der Bildpunkt
+bei Resin — `PrinterProfile.smallest_detail`), und die Berührgrenze ist je Stil eine andere
 (`_max_share`: Rauten berühren sich schon bei 1/√2). Überlappende Umrisse (die Streuflecken des
 Rauschens) führt `_merged()` vor dem Extrudieren zusammen; getrennt
 extrudiert ließen sie doppelte Dreiecke auf der Deckfläche zurück. Das
@@ -768,6 +774,14 @@ Damit bleibt am exakten Körper keine Merkmalshandlung mehr, die vernetzt;
 noch tun (Netzwerkzeuge wie Glätten und Dezimieren, siehe die
 Paritätstabelle).
 
+**`slot_hole` nimmt seit dem 22.09.2026 auch eine Breite entgegen**
+(`diameter`, leer heißt „so breit wie gemessen"; `compensate` wie bei
+`resize_hole`): Ein Zug an den Knöpfen und ein neuer Durchmesser in den
+Feldern sind damit **ein** Schritt (Entscheidung Robert). Eine andere Breite
+schließt die alte Öffnung wie ein Versetzen und schneidet ohne Zugabe — sonst
+stünde ein schmaleres Langloch in der weiteren Bohrung. Zwei Schritte gingen
+nicht: Das Langloch heißt nach dem ersten Zug neu (`SLOT_FEATURE_RENAMED`),
+und der zweite Schritt kennte seinen Namen erst nach der Auswertung.
 **`slot_hole` und `resize_hole` nehmen dabei eine Stelle entgegen** (`x/y/z`,
 **leer** heißt „lass es, wo es ist" — `_named_place` beantwortet das für beide,
 und die Felder sind `optional`, weil die Null an einer Koordinate die Mitte des
@@ -778,14 +792,6 @@ alte Stelle — am Netz über `_closed_at`, am exakten Körper über
 (`_slot_turned`, seit dem 15.09.2026): Ein Langloch in neuer Richtung war bis
 dahin ein zweites quer über dem ersten, mit Warnung — jetzt ist es ein
 gedrehtes, und `slot_hole.turned` sagt den Winkel. **Geschnitten und nicht
-**`slot_hole` nimmt seit dem 22.09.2026 auch eine Breite entgegen**
-(`diameter`, leer heißt „so breit wie gemessen"; `compensate` wie bei
-`resize_hole`): Ein Zug an den Knöpfen und ein neuer Durchmesser in den
-Feldern sind damit **ein** Schritt (Entscheidung Robert). Eine andere Breite
-schließt die alte Öffnung wie ein Versetzen und schneidet ohne Zugabe — sonst
-stünde ein schmaleres Langloch in der weiteren Bohrung. Zwei Schritte gingen
-nicht: Das Langloch heißt nach dem ersten Zug neu (`SLOT_FEATURE_RENAMED`),
-und der zweite Schritt kennte seinen Namen erst nach der Auswertung.
 geändert**: `resize_bore` verglich dort die zwei Durchmesser, fand sie gleich
 und gab den Körper unverändert zurück; gemessen am 10.09.2026 blieb das Loch
 bei (−20 | −10) und der Befund sagte „Die Bohrung hat bereits diesen

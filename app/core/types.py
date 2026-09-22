@@ -262,8 +262,18 @@ class BRepBody(Protocol):
     def shape(self) -> Any:
         """Das kerneigene Objekt. Außerhalb des B-Rep-Pakets liest es niemand."""
 
-    def to_mesh(self) -> Any:
-        """Die Einbahntür aus §30: Dreiecke aus dem exakten Körper."""
+    @property
+    def deflection(self) -> float:
+        """Wie weit die Dreiecke der eigenen Vernetzung von der Fläche
+        abweichen dürfen, in mm — die Zahl, mit der ``to_mesh()`` ohne Angabe
+        tesselliert."""
+
+    def to_mesh(self, *, deflection: float | None = None) -> Any:
+        """Die Einbahntür aus §30: Dreiecke aus dem exakten Körper.
+
+        Ohne Angabe die eigene Vernetzung; mit ``deflection`` eine feinere
+        oder gröbere, wie der Export sie für das Verfahren des Druckers
+        braucht (:attr:`Profile.export_deflection`)."""
 
     @property
     def solid_count(self) -> int:
@@ -685,9 +695,30 @@ class Fit:
     """Gilt nur, solange dieser Operationsparameter positiv ist, etwa ein Deckelkragen."""
 
 
+PrintTechnology = Literal["fdm", "resin"]
+"""Das Druckverfahren eines Druckers (§38; Resin-Konzept §4).
+
+``fdm`` legt Bahnen aus einer Düse, ``resin`` belichtet Schichten in einem
+Harzbad. Der Unterschied ist kein Zahlenwert, sondern ein **Geltungsbereich**:
+Düse, Bahnbreite, Brücken, Elefantenfuß, Brim und Filamentwechsel gibt es
+beim einen und nicht beim anderen. Bis zum 22.09.2026 setzte Solidon den
+FDM-Drucker voraus, ohne je danach zu fragen — Regel 21 in ihrer stillsten
+Form: nicht geraten in einer Ausnahme, sondern geraten als Voreinstellung.
+"""
+
+
 @dataclass(frozen=True, slots=True)
 class PrinterProfile:
-    """Bauraum und Düsendaten. Nie fest im Code (§38)."""
+    """Bauraum und Verfahrensdaten. Nie fest im Code (§38).
+
+    Was gilt, entscheidet ``technology``: Bei ``fdm`` tragen Düse,
+    Schichthöhe und Bahnbreite; bei ``resin`` stehen Düse und Bahnbreite auf
+    **null** — dieses Verfahren hat keine —, und an ihre Stelle treten
+    Pixelgröße und die eigene Mindestwand. Wer eine der FDM-Zahlen liest,
+    ohne das Verfahren zu fragen, rechnet bei Resin mit null; dass daraus kein
+    Satz über eine Düse wird, prüft ``tests/test_resin.py`` über den
+    Befundkatalog.
+    """
 
     id: str
     title: str
@@ -695,6 +726,20 @@ class PrinterProfile:
     nozzle_diameter: float = 0.4
     layer_height: float = 0.2
     extrusion_width: float = 0.42
+    technology: PrintTechnology = "fdm"
+    """Das Druckverfahren. Ein Profil ohne Angabe — jedes bis zum 22.09.2026
+    angelegte — ist ein FDM-Drucker, und zwar ohne Migration."""
+    pixel_size: float = 0.0
+    """Resin: die Kantenlänge eines Bildpunkts in XY in mm — das kleinste
+    Detail, das dieser Drucker abbildet. Bei FDM null: dort ist das kleinste
+    Detail die Bahnbreite (:attr:`smallest_detail`)."""
+    minimum_wall: float = 0.0
+    """Resin: die Mindestwand in mm, die dieses Verfahren stehen lässt.
+
+    Bei Resin ist die Grenze Stabilität, nicht Auflösung — ein Pixel breit
+    ließe sich belichten, hielte aber weder das Waschen noch das Abziehen
+    von der Folie aus. Bei FDM null: dort sind es zwei Bahnbreiten
+    (:attr:`Profile.minimum_wall_thickness`)."""
     enclosed: bool = False
     """Geschlossener Bauraum — entscheidet, ob ASA und ABS überhaupt
     sinnvoll sind."""
@@ -723,6 +768,22 @@ class PrinterProfile:
     legen (§29). Zwei Düsen (IDEX, H2D) drucken zwei Filamente ohne Spülgang,
     ein Werkzeugwechsler mit fünf Köpfen fünf.
     """
+
+    @property
+    def is_resin(self) -> bool:
+        """Belichtet dieser Drucker Harz? Die eine Frage hinter jedem Geltungsbereich."""
+        return self.technology == "resin"
+
+    @property
+    def smallest_detail(self) -> float:
+        """Das kleinste Detail, das dieser Drucker in der Ebene abbildet, in mm.
+
+        FDM: die Bahnbreite — schmaler wird keine Spur. Resin: die
+        Pixelgröße. Beides ist dieselbe Frage an zwei Verfahren, und sie
+        wird hier einmal beantwortet, damit die Analysekarte, die Beschriftung
+        und die Textur nicht jede für sich die Düse fragen (Regel 7, §38).
+        """
+        return self.pixel_size if self.is_resin else self.extrusion_width
 
 
 @dataclass(frozen=True, slots=True)
@@ -769,6 +830,14 @@ class MaterialProfile:
     calibration_layer_height: float = 0.0
     calibration_extrusion_width: float = 0.0
     """Druckprozess der Wand- und Überhangprobe; fehlende Angaben übernehmen keine Messung."""
+    technology: PrintTechnology = "fdm"
+    """Zu welchem Verfahren das Material gehört: ein Filament zu ``fdm``, ein
+    Harz zu ``resin``. Ein Drucker nimmt nur Material seines Verfahrens an —
+    PLA in einem Harzbad wäre eine FDM-Aussage vor dem ersten Klick."""
+
+    def fits(self, printer: PrinterProfile) -> bool:
+        """Ob dieses Material in diesen Drucker gehört — dasselbe Verfahren."""
+        return self.technology == printer.technology
 
 
 @dataclass(frozen=True, slots=True)
@@ -780,8 +849,19 @@ class Profile:
 
     @property
     def has_process_calibration(self) -> bool:
-        """Ob die gespeicherte Druckprobe unter denselben Profilbedingungen entstand."""
+        """Ob die gespeicherte Druckprobe unter denselben Profilbedingungen entstand.
+
+        Bei Resin ist der Prozess Drucker und Schichthöhe — eine Düse und
+        eine Bahn, die er nicht hat, können auch nicht abweichen.
+        """
         material, printer = self.material, self.printer
+        if printer.is_resin:
+            measured = material.calibration_layer_height
+            return (
+                material.calibration_printer == printer.id
+                and measured > 0.0
+                and math.isclose(measured, printer.layer_height, rel_tol=1e-9, abs_tol=1e-12)
+            )
         return material.calibration_printer == printer.id and all(
             measured > 0.0 and math.isclose(measured, current, rel_tol=1e-9, abs_tol=1e-12)
             for measured, current in (
@@ -793,7 +873,14 @@ class Profile:
 
     @property
     def minimum_wall_thickness(self) -> float:
-        """Die gemessene Mindestwand; ohne passende Probe zwei Extrusionsbreiten."""
+        """Die gemessene Mindestwand; ohne passende Probe zwei Extrusionsbreiten
+        — und bei Resin die Mindestwand des Druckerprofils.
+
+        Bei Resin ist die Grenze keine Frage der Auflösung, sondern der
+        Stabilität — ohne Probe steht sie im Profil des Druckers
+        (Resin-Konzept §4); eine Probe für denselben Drucker und dieselbe
+        Schichthöhe gilt auch dort.
+        """
         measured = self.material.minimum_wall
         if (
             self.has_process_calibration
@@ -802,6 +889,8 @@ class Profile:
             and measured > 0.0
         ):
             return measured
+        if self.printer.is_resin:
+            return self.printer.minimum_wall
         return 2.0 * self.printer.extrusion_width
 
     @property
@@ -824,8 +913,12 @@ class Profile:
         Gemessen an der Düse und nicht an einer Zahl im Code, weil dieselbe
         Geometrie an einer 0,8er Düse eine andere Antwort verdient (Regel 7,
         §38).
+
+        Bei Resin ist es ein belichtetes Voxel — ein Pixel im Quadrat mal
+        eine Schichthöhe. Dieselbe Frage, dasselbe Prinzip, ein anderes
+        Verfahren.
         """
-        return self.printer.extrusion_width**2 * self.printer.layer_height
+        return self.printer.smallest_detail**2 * self.printer.layer_height
 
     @property
     def smallest_first_layer(self) -> float:
@@ -853,8 +946,37 @@ class Profile:
         Düse ist dieselbe Fläche eine andere. Ein Teil, dessen **jede** Lage
         darunter bleibt, wird davon nicht abgelehnt — dann tragen alle
         Kandidaten dieselbe Antwort, und es bleibt beim alten Vergleich.
+
+        **Bei Resin null**, und null heißt in der Orientierungssuche „nicht
+        gefragt": Ein Resinteil steht nicht auf einer ersten Schicht, es hängt
+        an Stützen oder klebt mit seiner ganzen Fläche an der Plattform — die
+        Standbedingung einer Düse hat dort keinen Gegenstand.
         """
+        if self.printer.is_resin:
+            return 0.0
         return (10.0 * self.printer.extrusion_width) ** 2
+
+    @property
+    def export_deflection(self) -> float:
+        """Wie weit ein Dreieck beim Export eines exakten Körpers von der
+        echten Fläche abweichen darf, in mm (§29, §30).
+
+        Aus dem Verfahren und nicht als Zahl im Code: Was der Drucker nicht
+        abbildet, muss die Datei nicht tragen, und was er abbildet, darf ihr
+        nicht fehlen. Ein Achtel des kleinsten Details — bei einer 0,4er
+        Düse die 0,05 mm, mit denen der Kern ohnehin tesselliert
+        (``units.MAX_FACET_SAG``); bei 50 µm Pixeln 0,006 mm, denn dort
+        wird eine Facette von fünf Hundertsteln als Stufe sichtbar. Nach
+        oben deckelt die Zahl des Kerns: Gröber als er selbst rechnet, wird
+        keine Datei. Ohne ein kleinstes Detail — Pixelgröße null in einem
+        selbst angelegten Resin-Profil — bleibt es bei der Zahl des Kerns.
+        """
+        from app.core.units import MAX_FACET_SAG
+
+        detail = self.printer.smallest_detail
+        if detail <= 0.0:
+            return MAX_FACET_SAG
+        return min(MAX_FACET_SAG, detail / 8.0)
 
 
 # --- Druckeinstellungen (§29) --------------------------------------------------

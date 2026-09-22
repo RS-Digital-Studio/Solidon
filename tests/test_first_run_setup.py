@@ -10,6 +10,7 @@ import pytest
 
 pytest.importorskip("PySide6")
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication, QFileDialog
 
 from app.core import discover
@@ -17,6 +18,46 @@ from app.core.knowledge import profiles
 from app.ui import first_run
 from app.ui.first_run import FirstRunDialog
 from app.ui.settings import UiSettings
+
+
+def _grouped_titles(dialog: FirstRunDialog) -> list[list[str]]:
+    """Die Druckerliste, wie der Kunde sie liest: je Verfahren eine Gruppe.
+
+    Ein Gruppenkopf trennt; „Benutzerdefiniert …" steht als eigene letzte
+    Gruppe. Innerhalb jeder Gruppe ist die Liste nach Titel sortiert (RM-071).
+    """
+    groups: list[list[str]] = [[]]
+    for row in range(dialog.printer.count()):
+        data = str(dialog.printer.itemData(row) or "")
+        if data == first_run._GROUP_HEADER:
+            groups.append([])
+            continue
+        if data == "__custom__":
+            groups.append([dialog.printer.itemText(row)])
+            continue
+        groups[-1].append(dialog.printer.itemText(row))
+    return [group for group in groups if group]
+
+
+def _assert_grouped_and_sorted(dialog: FirstRunDialog) -> None:
+    groups = _grouped_titles(dialog)
+    assert groups[-1] == [dialog.printer.itemText(dialog.printer.findData("__custom__"))]
+    for group in groups[:-1]:
+        assert group == sorted(group, key=str.casefold), group
+    # Die Resin-Geräte stehen als eigene Gruppe hinter den FDM-Druckern,
+    # nie dazwischen — der Kopf ist nicht wählbar.
+    known = profiles.printer_profiles()
+    technologies = [
+        [known[str(dialog.printer.itemData(row))].technology]
+        for row in range(dialog.printer.count())
+        if str(dialog.printer.itemData(row) or "") in known
+    ]
+    flat = [entry[0] for entry in technologies]
+    assert flat == sorted(flat, key=("fdm", "resin").index)
+    for row in range(dialog.printer.count()):
+        if str(dialog.printer.itemData(row) or "") == first_run._GROUP_HEADER:
+            item = dialog.printer.model().item(row)
+            assert not item.flags() & Qt.ItemFlag.ItemIsSelectable
 
 
 @pytest.fixture
@@ -50,14 +91,20 @@ def test_selected_slicer_filters_printers_and_keeps_custom_choice(
         assert setup_dialog.printer.findData(excluded) < 0
         assert setup_dialog.printer.findData("__custom__") >= 0
         assert setup_dialog.printer.isEnabled()
-        titles = [setup_dialog.printer.itemText(row) for row in range(setup_dialog.printer.count())]
-        assert titles == sorted(titles, key=str.casefold)
+        # Die Resin-Geräte hängen an keinem FDM-Slicer und bleiben stehen.
+        assert setup_dialog.printer.findData("generic-resin-130") >= 0
+        _assert_grouped_and_sorted(setup_dialog)
 
 
 def test_failed_slicer_worker_keeps_saved_custom_printers_and_current_choice(
     setup_dialog: FirstRunDialog, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Ein unbekannter Slicer verbirgt weder eigene Drucker noch deren aktuelle Auswahl."""
+    """Ein unbekannter Slicer verbirgt weder eigene Drucker noch deren aktuelle Auswahl.
+
+    Seit dem 22.09.2026 ist ein unbekanntes Programm kein Fehler mehr, sondern
+    die Familie ``other`` (RM-071): Die Erhebung läuft durch und nennt keine
+    Drucker, und der Satz darunter sagt, warum.
+    """
     monkeypatch.setattr(profiles, "user_profiles_dir", lambda: tmp_path)
     template = profiles.printer(profiles.DEFAULT_PRINTER)
     first = profiles.save_printer(replace(template, id="user-workshop", title="Werkstatt"))
@@ -72,7 +119,7 @@ def test_failed_slicer_worker_keeps_saved_custom_printers_and_current_choice(
     assert setup_dialog.printer.currentData() == first.id
     assert setup_dialog.printer.findData(second.id) >= 0
     assert setup_dialog.printer.findData("__custom__") >= 0
-    assert "anderen Slicer" in setup_dialog.printer_state.text()
+    assert "kennt Solidon nicht" in setup_dialog.printer_state.text()
 
 
 def test_slicer_profile_search_stays_outside_the_gui_thread(
@@ -234,8 +281,40 @@ def test_custom_printer_is_saved_with_entered_dimensions_before_inventory_opens(
     assert entry.build_volume == pytest.approx((315, 270, 420))
     assert entry.nozzle_diameter == pytest.approx(0.6)
     assert chosen[0] in profiles.user_printer_profiles()
-    titles = [setup_dialog.printer.itemText(row) for row in range(setup_dialog.printer.count())]
-    assert titles == sorted(titles, key=str.casefold)
+    _assert_grouped_and_sorted(setup_dialog)
+
+
+def test_a_custom_resin_printer_is_saved_with_pixel_and_wall_and_starts_with_resin(
+    setup_dialog: FirstRunDialog, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein eigener Resin-Drucker trägt Pixel und Mindestwand, keine Düse — und
+    das Projekt danach beginnt mit Harz, nicht mit PLA (RM-071, Abnahme 5)."""
+    monkeypatch.setattr(profiles, "user_profiles_dir", lambda: tmp_path)
+    setup_dialog.printer.setCurrentIndex(setup_dialog.printer.findData("__custom__"))
+    setup_dialog.printer_name.setText("Mars im Keller")
+    setup_dialog.printer_technology.setCurrentIndex(
+        setup_dialog.printer_technology.findData("resin")
+    )
+    assert setup_dialog.printer_pixel.isVisibleTo(setup_dialog.custom_printer)
+    assert not setup_dialog.printer_nozzle.isVisibleTo(setup_dialog.custom_printer)
+    for field, value in zip(setup_dialog.printer_dimensions, (143, 90, 175), strict=True):
+        field.setValue(value)
+    setup_dialog.printer_pixel.setValue(0.035)
+    setup_dialog.printer_wall.setValue(0.5)
+    draft = setup_dialog.custom_printer_draft()
+    assert draft is not None and draft.technology == "resin"
+
+    setup_dialog.apply_to(setup_dialog.settings)
+    entry = profiles.printer(setup_dialog.settings.printer)
+    assert entry.is_resin
+    assert entry.build_volume == pytest.approx((143, 90, 175))
+    assert entry.pixel_size == pytest.approx(0.035)
+    assert entry.minimum_wall == pytest.approx(0.5)
+    assert entry.nozzle_diameter == 0.0 and entry.extrusion_width == 0.0
+    assert setup_dialog.settings.material == profiles.DEFAULT_RESIN_MATERIAL
+    # Wer den Drucker ausgesucht hat, bekommt sein Verfahren im Bestand wieder.
+    profiles.reload()
+    assert profiles.printer(entry.id).is_resin
 
 
 def test_empty_custom_printer_name_keeps_the_dialog_open(

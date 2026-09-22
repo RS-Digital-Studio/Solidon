@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QSignalBlocker, Qt
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -262,11 +262,14 @@ class SettingsDialog(QDialog):
             {key: str(entry.title) for key, entry in by_title(profiles.printer_profiles())},
         )
         _select(self.printer, settings.printer or profiles.DEFAULT_PRINTER)
-        self.material = _choices(
-            self,
-            {key: str(entry.title) for key, entry in by_title(profiles.material_profiles())},
+        # Die Materialliste folgt dem Verfahren des Druckers: Ein Harzdrucker
+        # bietet Harze an, ein Filamentdrucker Filamente — PLA in einem
+        # Harzbad wäre eine Vorgabe, die kein Projekt je drucken kann (RM-071).
+        self.material = QComboBox(self)
+        self._fill_materials(settings.material or profiles.DEFAULT_MATERIAL)
+        self.printer.currentIndexChanged.connect(
+            lambda _index: self._fill_materials(str(self.material.currentData() or ""))
         )
-        _select(self.material, settings.material or profiles.DEFAULT_MATERIAL)
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel, self
@@ -351,8 +354,22 @@ class SettingsDialog(QDialog):
         settings.spacemouse_speed = int(self.spacemouse_speed.value())
         settings.spacemouse_invert = self.spacemouse_invert.isChecked()
         settings.printer = str(self.printer.currentData())
-        settings.material = str(self.material.currentData())
+        settings.material = profiles.material_for(
+            settings.printer, str(self.material.currentData())
+        )
         return settings
+
+    def _fill_materials(self, wanted: str) -> None:
+        """Nur die Materialien des gewählten Verfahrens, das bisherige gewählt,
+        wo es passt — sonst die Vorgabe des Verfahrens."""
+        printer_id = str(self.printer.currentData() or "")
+        printer = profiles.printer_profiles().get(printer_id)
+        with QSignalBlocker(self.material):
+            self.material.clear()
+            for key, entry in by_title(profiles.material_profiles()):
+                if printer is None or entry.fits(printer):
+                    self.material.addItem(str(entry.title), key)
+            _select(self.material, profiles.material_for(printer_id, wanted))
 
     def _reset_disclosure(self) -> None:
         """Merkt die Wahl bis zum Speichern; Abbrechen verändert noch nichts."""

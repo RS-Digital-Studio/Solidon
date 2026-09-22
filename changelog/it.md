@@ -74,6 +74,10 @@ scrive in `website/version.json`.
 
 ### Verificare e stampare
 
+- Le stampanti a resina sono arrivate: due apparecchi generici per volume di stampa stanno nell'elenco, e una propria si crea con dimensione del pixel e parete minima.
+- Un progetto a resina non riceve più consigli su ugello, brim o ponti, e la parete minima viene dal profilo della stampante.
+- Il file si apre in qualsiasi programma, anche nello slicer di un produttore di resina di cui Solidon non conosce le impostazioni.
+- I corpi esatti vengono maglati tanto fini quanto i pixel di una stampante a resina richiedono; il rapporto indica la misura.
 - Gli accoppiamenti verificano i corpi reali nella loro posizione di montaggio. L'esportazione si può annullare prima.
 - Lo scostamento di forma mostra quali facce di una mesh si trovano a quale distanza dall'originale.
 - Se uno spessore di parete si assottiglia a cuneo, Solidon lo dice e consiglia di stampare prima la parete esterna.

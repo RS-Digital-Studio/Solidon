@@ -242,7 +242,7 @@ def plan_export(
     suffix = FORMAT_SUFFIX[export_format]
 
     try:
-        entries = _entries_for(objects, pattern, project_name, count, suffix)
+        entries = _entries_for(objects, pattern, project_name, count, suffix, profile)
     except KeyError as problem:
         # **Ein Schema ist eine Eingabe des Nutzers**, in der Kommandozeile
         # getippt und im Dialog eintragbar — ``{name}`` statt ``{object}`` ist
@@ -265,21 +265,21 @@ def plan_export(
             constraint="broken_scheme",
             values={"known": _KNOWN_FIELDS},
         ) from problem
-    return ExportPlan(
-        entries=entries,
-        findings=tuple(checked)
+    findings = (
+        list(checked)
         if checked is not None
-        else tuple(
-            check_before_export(
-                objects,
-                profile,
-                sources or {},
-                export_format,
-                scene=scene,
-                document=document,
-            )
-        ),
+        else check_before_export(
+            objects,
+            profile,
+            sources or {},
+            export_format,
+            scene=scene,
+            document=document,
+        )
     )
+    if export_format != "step":
+        findings += _tessellation_finding(objects, profile)
+    return ExportPlan(entries=entries, findings=tuple(findings))
 
 
 def default_scheme(objects: Sequence[SceneObject]) -> str:
@@ -297,7 +297,12 @@ def default_scheme(objects: Sequence[SceneObject]) -> str:
 
 
 def _entries_for(
-    objects: list[SceneObject], pattern: str, project_name: str, count: int, suffix: str
+    objects: list[SceneObject],
+    pattern: str,
+    project_name: str,
+    count: int,
+    suffix: str,
+    profile: Profile,
 ) -> tuple[ExportEntry, ...]:
     """Die geplanten Dateien. Ausgelagert, weil das Schema scheitern darf und
     der Aufrufer den Fehlgriff benennen soll.
@@ -324,7 +329,7 @@ def _entries_for(
                 )
             )
             + suffix,
-            mesh=as_mesh_data(entry.mesh),
+            mesh=mesh_for_export(entry.mesh, profile),
             slots=threemf.slots_for_object(entry),
             # Steht als Objektname **in** der 3MF-Datei, ist also Dateiinhalt
             # und keine Anzeige — dieselbe Regel wie beim Dateinamen darüber.
@@ -918,6 +923,67 @@ def _is_exact(body: Mesh | None) -> bool:
     return body is not None and kind_of(body) == "brep"
 
 
+def mesh_for_export(body: Mesh, profile: Profile) -> MeshData:
+    """Die Dreiecke, die in die Datei gehen — bei einem exakten Körper so fein,
+    wie das Verfahren des Druckers sie braucht (§29, §30).
+
+    Ein exakter Körper trägt seine eigene Vernetzung, gerechnet mit der Zahl
+    des Kerns (``units.MAX_FACET_SAG``, 0,05 mm). Für eine 0,4er Düse ist das
+    fein genug; ein Resin-Drucker mit 50 µm Pixeln bildet eine Facette von
+    fünf Hundertsteln als Stufe ab. Der Export vernetzt deshalb neu, wenn das
+    Profil eine feinere Abweichung verlangt als die, die der Körper hat
+    (:attr:`Profile.export_deflection`) — und nur dann: Gröber als der Körper
+    wird keine Datei, und ein Netz bleibt, was es ist.
+
+    Die Anzeige und die Erkennung bleiben bei der Vernetzung des Körpers;
+    das hier ist die Datei, und die geht in den Slicer.
+    """
+    if not isinstance(body, BRepBody):
+        return as_mesh_data(body)
+    wanted = profile.export_deflection
+    if wanted >= body.deflection - EPS_GEOM:
+        return as_mesh_data(body)
+    tessellated = body.to_mesh(deflection=wanted)
+    if not isinstance(tessellated, MeshData):
+        return as_mesh_data(body)
+    _log.info(
+        "tessellated an exact body for export at %.4f mm instead of %.4f mm",
+        wanted,
+        body.deflection,
+    )
+    return tessellated
+
+
+def _tessellation_finding(objects: Sequence[SceneObject], profile: Profile) -> list[Finding]:
+    """Sagt, mit welcher Abweichung die exakten Körper in die Datei gegangen sind.
+
+    Nur wo es einen Unterschied gibt: Ein Netz wird nicht neu vernetzt, und
+    ein exakter Körper, dessen eigene Vernetzung schon fein genug ist, auch
+    nicht. Eine Zeile für alle, nicht je Körper — zwölf gleiche Sätze verdrängen
+    andere (§26.1).
+    """
+    wanted = profile.export_deflection
+    finer = [
+        entry
+        for entry in objects
+        if isinstance(entry.mesh, BRepBody) and wanted < entry.mesh.deflection - EPS_GEOM
+    ]
+    if not finer:
+        return []
+    return [
+        Finding(
+            code="export.tessellated",
+            severity="info",
+            message=_(
+                "Die exakten Körper wurden für diesen Drucker feiner vernetzt: Die "
+                "Dreiecke weichen höchstens {deflection} von den Flächen ab.",
+                deflection=format_length(wanted),
+            ),
+            values={"deflection_mm": wanted, "objects": len(finer)},
+        )
+    ]
+
+
 def _written(target: Path, payload: bytes) -> Path:
     """Schreibt eine Datei und macht aus einem ``OSError`` einen ``AppError``.
 
@@ -1085,10 +1151,20 @@ def write_assembly(
             chosen, profile, sources or {}, "3mf", scene=scene, document=document
         )
     )
+    if profile.printer.is_resin:
+        # Ein Resin-Slicer liest keine FDM-Werte, und die Befunde dazu —
+        # Haftungsränder, Filamentwechsel, ein Brim je Teil — haben dort
+        # keinen Gegenstand. Die Datei geht als reine Geometrie hinaus
+        # (Resin-Konzept §4, B4).
+        settings = None
+    # Einmal je Körper vernetzt, für Prüfung, STL und 3MF dieselben Dreiecke
+    # — ein exakter Körper so fein, wie der Drucker es braucht.
+    exported = {entry.id: mesh_for_export(entry.mesh, profile) for entry in chosen}
+    findings += _tessellation_finding(chosen, profile)
     if settings is not None:
         # Was erst auf der Platte auffiele: Haftungsränder, die ineinander
         # laufen, und der Preis zweier Filamente in einem Auftrag.
-        meshes = [as_mesh_data(entry.mesh) for entry in chosen]
+        meshes = [exported[entry.id] for entry in chosen]
         from app.core.export import handover
 
         findings += handover.setting_limitations(flavour)
@@ -1102,7 +1178,7 @@ def write_assembly(
     # die Schlüssel wie der Grund kommen aus demselben Aufruf. Auch ein Format
     # ohne Einstellungen je Teil muss den unerfüllten Vorschlag benennen.
     part_advice = {
-        entry.id: _part_settings(as_mesh_data(entry.mesh), settings, flavour) for entry in chosen
+        entry.id: _part_settings(exported[entry.id], settings, flavour) for entry in chosen
     }
     findings += _part_setting_findings(
         [advice for _keys, own in part_advice.values() for advice in own], applied=not as_stl
@@ -1125,14 +1201,14 @@ def write_assembly(
             findings += handover.unreachable_overrides(settings, known, configured, profile=profile)
         target = _written(
             directory / (given_name(project_name, "projekt") + ".stl"),
-            _cura_assembly(chosen, bed),
+            _cura_assembly([exported[entry.id] for entry in chosen], bed),
         )
         _log.info("exported %d object(s) as one STL to %s", len(chosen), target.name)
         return target, findings
 
     parts = [
         threemf.AssemblyPart(
-            mesh=as_mesh_data(entry.mesh),
+            mesh=exported[entry.id],
             name=source_text(entry.name),
             slots=threemf.slots_for_object(entry),
             settings=part_advice[entry.id][0],
@@ -1257,7 +1333,7 @@ def _plate_config(
     return handover.values_for(effective, profile, flavour)
 
 
-def _cura_assembly(objects: Sequence[SceneObject], bed: tuple[float, float] | None) -> bytes:
+def _cura_assembly(meshes: Sequence[MeshData], bed: tuple[float, float] | None) -> bytes:
     """Dieselbe Platte als ein STL — der einzige Weg zu ``CuraEngine``.
 
     Die 3MF-Seite von Cura sitzt in seiner Oberfläche, nicht in der Maschine
@@ -1278,8 +1354,8 @@ def _cura_assembly(objects: Sequence[SceneObject], bed: tuple[float, float] | No
     Bett platziert; ``needs_bed_translation("cura")`` ist daher falsch.
     """
     bodies = []
-    for entry in objects:
-        body = as_mesh_data(entry.mesh).raw.copy()
+    for entry in meshes:
+        body = entry.raw.copy()
         if bed is not None:
             body.apply_translation((bed[0] / 2.0, bed[1] / 2.0, 0.0))
         bodies.append(body)

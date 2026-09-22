@@ -285,9 +285,14 @@ def narrowest_bead(profile: Profile) -> float:
     wird von dort geholt, weil zwei Schwellen für dieselbe Frage dazwischen
     einen Bereich ließen, in dem beide Antworten falsch sind — der Kommentar
     dort sagt es für die andere Seite mit denselben Worten.
+
+    Bei Resin ist die schmalste Bahn ein Bildpunkt: Was schmaler ist, wird
+    nicht belichtet.
     """
     from app.core.slice.advise import NARROW_LINE_SHARE
 
+    if profile.printer.is_resin:
+        return profile.printer.pixel_size
     return NARROW_LINE_SHARE * profile.printer.nozzle_diameter
 
 

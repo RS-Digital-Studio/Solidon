@@ -52,15 +52,19 @@ def digest(*parts: Any) -> str:
 
 
 def profile_key(profile: Profile) -> str:
-    """Was an einem Profil ein Ergebnis ändern kann: Toleranzen und
-    Düsengeometrie."""
+    """Was an einem Profil ein Ergebnis ändern kann: Toleranzen,
+    Düsengeometrie — und das Verfahren, denn ein auf Resin umgestelltes
+    Projekt darf seine Befunde nicht aus dem FDM-Cache holen."""
     printer = profile.printer
     material = profile.material
     return digest(
         printer.id,
+        printer.technology,
         printer.nozzle_diameter,
         printer.layer_height,
         printer.extrusion_width,
+        printer.pixel_size,
+        printer.minimum_wall,
         printer.build_volume,
         printer.printable_area,
         printer.bed_exclusions,

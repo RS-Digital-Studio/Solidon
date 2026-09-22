@@ -868,10 +868,34 @@ def test_the_slicer_family_is_recognised_by_name(name: str, expected: str | None
     assert slicer_keys.flavour_of(name) == expected
 
 
-def test_an_unknown_program_is_refused_with_a_way_out() -> None:
+def test_an_unknown_program_only_opens_and_refuses_the_console_with_a_way_out(
+    tmp_path: Path,
+) -> None:
+    """Ein Programm ohne Familie bekommt die Datei ins Fenster — und sonst nichts.
+
+    Bis zum 22.09.2026 lehnte schon ``detect`` ab, und damit scheiterte auch
+    das bloße Öffnen, das keine Übersetzung braucht: Ein Resin-Slicer kam nie
+    an die Reihe (RM-071). Jetzt ist es die Familie ``other``; der
+    Konsolenweg sagt an seiner Stelle ab, mit Vorschlag (Regel 17).
+    """
+    setup = handover.detect(Path("ChituBox.exe"))
+    assert setup.flavour == "other"
+    assert handover.only_opens(setup)
+    assert handover.window_program(setup.executable) == setup.executable
+
+    profile = profiles.make_profile("generic-resin-130", "resin")
+    settings = print_settings.resolve(profile)
     with pytest.raises(ExternalToolError) as raised:
-        handover.detect(Path("notepad.exe"))
+        handover.write_config(settings, profile, setup, tmp_path)
     assert raised.value.suggestions, "Regel 17: jede Ausnahme trägt einen Vorschlag"
+    assert not list(tmp_path.iterdir()), "für other wird keine Konfiguration geschrieben"
+    with pytest.raises(ExternalToolError) as raised:
+        handover.slice_model(tmp_path / "teil.stl", settings, profile, setup)
+    assert raised.value.suggestions
+    # Und die Maschinenseite hat für dieses Programm keinen Befund: Es gibt
+    # kein Profil, das fehlen könnte.
+    assert handover.machine_missing(setup, profile) == []
+    assert handover.setting_limitations("other") == []
 
 
 def test_a_prusa_config_stands_on_its_own(tmp_path: Path) -> None:

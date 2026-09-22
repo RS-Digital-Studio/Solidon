@@ -518,8 +518,9 @@ def test_the_narrowest_groove_is_asked_per_style() -> None:
     """Die Rille des Kreuzrändels ist ein Fünftel der Teilung, nicht die Hälfte.
 
     Bis zum 22.09.2026 fragte E1 für alle acht Muster ``pitch·LAND_SHARE``:
-    Ein Kreuzrändel mit 1,5 mm Teilung galt als druckbar (0,75 gegen 0,4 mm
-    Düse), und seine Rillen von 0,31 mm verschwanden im Druck.
+    Ein Kreuzrändel mit 1,5 mm Teilung galt als druckbar (0,75 gegen 0,42 mm
+    Bahnbreite), und seine Rillen von 0,31 mm verschwanden im Druck. Gefragt
+    wird das kleinste Detail des Druckers — die Bahn, nicht die Düse.
     """
     from app.core.geom.texture_ops import narrowest_structure
 
@@ -528,7 +529,8 @@ def test_the_narrowest_groove_is_asked_per_style() -> None:
     across_flats = 4.0 / 2.0 * 0.85 * math.sqrt(3.0)
     assert math.isclose(narrowest_structure("hexagon", 4.0), 4.0 - across_flats)
     assert math.isclose(narrowest_structure("dimple", 4.0), 4.0 * 0.2)
-    texture_ops.check_printable("knurl_diamond", pitch=2.0, depth=0.5, printer=NOZZLE)
+    assert narrowest_structure("knurl_diamond", 2.1) > NOZZLE.smallest_detail
+    texture_ops.check_printable("knurl_diamond", pitch=2.1, depth=0.5, printer=NOZZLE)
     with pytest.raises(ValidationError) as problem:
         texture_ops.check_printable("knurl_diamond", pitch=1.5, depth=0.5, printer=NOZZLE)
     assert problem.value.field == "pitch"

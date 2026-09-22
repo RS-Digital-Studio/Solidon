@@ -100,3 +100,26 @@ calibrated = false
 youngs_modulus = 25.0
 yield_strength = 9.0
 layer_bond_ratio = 0.6
+
+# --- Harz ----------------------------------------------------------------------
+#
+# Das Material eines Resin-Projekts. Kein Filament: Löcher kommen nahe am
+# Nennmaß, ein Elefantenfuß entsteht durch Überbelichtung der ersten Schichten
+# und nicht durch eine gequetschte Bahn, und der Schrumpf ist der des
+# Nachhärtens. Richtwerte gängiger Standardharze (405 nm) aus Datenblättern:
+# E-Modul 1,5–2,5 GPa, Zugfestigkeit 35–55 MPa, Schrumpf 0,5–0,8 %. Belichtet
+# ist das Teil in der Ebene und quer dazu nahezu gleich fest — der Lagenfaktor
+# steht deshalb höher als bei den Filamenten, aber nicht auf eins.
+
+[resin]
+title = "Standardharz"
+technology = "resin"
+clearance = 0.10
+press = -0.03
+hole_compensation = 0.05
+elephant_foot = 0.10
+shrinkage = 0.006
+calibrated = false
+youngs_modulus = 2000.0
+yield_strength = 40.0
+layer_bond_ratio = 0.85

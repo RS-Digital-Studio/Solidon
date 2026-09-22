@@ -15,7 +15,7 @@ Rechenwegs, nicht Beiwerk.
 
 | Datei | Rolle |
 |---|---|
-| `profiles.py` | Drucker- und Materialprofile (§38). **Hier stehen die Toleranzen**, auf die `auto:<material>` verweist |
+| `profiles.py` | Drucker- und Materialprofile (§38). **Hier stehen die Toleranzen**, auf die `auto:<material>` verweist. Seit RM-071 trägt ein Drucker sein **Verfahren** (`technology`, `fdm` oder `resin`; ohne Angabe FDM, ohne Migration) und ein Material seines (`MaterialProfile.fits`); `default_material_for` und `material_for` halten beide zusammen — PLA gegen Harz, wenn das Verfahren wechselt, sonst nie. Ein Resin-Profil hat Düse, Bahn und Heiztemperaturen auf **null** und dafür `pixel_size` und `minimum_wall`; die Vorgaben dafür (`RESIN_*`) und die Vorlage `DEFAULT_RESIN_PRINTER` stehen oben im Modul |
 | `standards.py` | Normteilmaße (§24.2) — M3, M4, Einpressbuchsen, Lager |
 | `strength.py` | Blattfederrechnung für Schnapphaken und Klemmzungen; mechanische Kennwerte aus dem Materialprofil |
 | `print_settings.py` | Löst Stufe + Material + Drucker zu Einstellungen auf (§29) |
@@ -39,8 +39,8 @@ Die Module hier **laden und lösen auf**; die Werte selbst liegen daneben:
 
 | Datei | Inhalt |
 |---|---|
-| `printers.toml` | Druckerprofile |
-| `materials.toml` | Materialprofile — hier stehen die Toleranzen |
+| `printers.toml` | Druckerprofile — sechzehn FDM-Geräte und zwei Resin-Geräte nach Bauraum (`technology = "resin"`, Pixelgröße und Mindestwand statt Düse und Bahn) |
+| `materials.toml` | Materialprofile — hier stehen die Toleranzen; `resin` ist das Harz, mit `technology = "resin"` |
 | `print_settings.toml` | Druckeinstellungen je Stufe |
 | `standards.toml` | Normteilmaße |
 | `rules.toml` | **Die Regelsammlung des Agenten** (§39) |

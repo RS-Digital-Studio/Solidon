@@ -518,6 +518,91 @@ def test_follow_at_a_new_place_measures_the_neighbour_wall_there(profile: Profil
     assert "bore.neighbour_wall_thin" not in codes, codes
 
 
+def test_follow_on_the_exact_core_keeps_the_faces_of_the_body(profile: Profile) -> None:
+    """Nach *Bohrung ändern* mit Einlauf stehen die Flächen des Körpers noch im Baum.
+
+    Der Einlauf-Neuschnitt baut den exakten Körper neu und behielt nur die
+    erzeugten Merkmale und die wiedererkannte Kette: Die sechs Flächen der
+    Platte waren danach weg — nichts mehr zum Anklicken, kein Bohren auf der
+    Fläche (Review 22.09.2026, A2). Mit Stelle kamen sie über *Merkmal
+    verschieben* zurück; zwei Fassungen desselben Schritts, zwei
+    Merkmalskarten. Jetzt ordnet der Neuschnitt die übrige Topologie zu wie
+    der Weg ohne Einlauf, unter den alten Namen.
+    """
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+    from app.core.sketch.planes import frame_of
+
+    exact = edit.bore_profile(
+        edit.box(30.0, 24.0, 12.0),
+        [(0.0, 2.0), (3.0, 2.0), (3.0, 10.0), (5.0, 12.0), (0.0, 12.0), (0.0, 2.0)],
+        frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 0.0)),
+    )
+    features = features_of(exact)
+    hole = next(f for f in features.values() if f.kind == "hole")
+    faces_before = {name for name, f in features.items() if f.kind == "face"}
+    assert len(faces_before) >= 6, "die Platte hat sechs Flächen und den Boden der Bohrung"
+    source = SceneObject(id="obj_1", name="Senkbohrung", kind="brep", mesh=exact, features=features)
+    spec = REGISTRY.get("resize_hole")
+    result = spec.fn(
+        OpContext(
+            scene=Scene(objects={source.id: source}),
+            inputs=[source],
+            params=spec.params(at_feature=hole.id, diameter=8.0, entrance_mode="follow"),
+            profile=profile,
+            quality="fine",
+            seed=7,
+            progress=lambda fraction, text: None,
+            ask=lambda question, choices: choices[0],
+            cancelled=NeverCancelled(),
+        )
+    )
+    after = result.outputs[0].features
+    faces_after = {name for name, f in after.items() if f.kind == "face"}
+    # Die sechs Außenflächen behalten ihren Namen; der Boden der Bohrung ist
+    # neu geschnitten und darf einen neuen tragen.
+    outer = {
+        name
+        for name in faces_before
+        if abs(float(features[name].params["area"]) - 3.0**2 * math.pi) > 1.0
+    }
+    assert outer <= faces_after, sorted(outer - faces_after)
+    assert hole.id in after and after[hole.id].kind == "hole"
+    assert len(after) == len(features), (sorted(features), sorted(after))
+
+
+def test_moving_a_bore_without_the_entrance_reports_the_neighbour_it_opens(
+    profile: Profile,
+) -> None:
+    """Auch ohne Einlauf sagt *Bohrung ändern* mit neuer Stelle, dass die Nachbarwand aufreißt.
+
+    Die Nachbarprüfung lief nur bei einer Vergrößerung, und ``drill`` gab sein
+    Werkzeug nicht heraus: Eine versetzte Bohrung, die in die Nachbarbohrung
+    hineinläuft, kam ohne ein Wort (Review 22.09.2026, A3; am Halter und am
+    Bohrerhalter aus ``F:\3D Dateien`` nachgestellt). Der Satz nennt die
+    Stelle als Ausweg, nicht den Durchmesser.
+    """
+    mesh, features, hole = _sloping_bore()
+    centre = tuple(float(v) for v in hole.params["centre"])
+    result = _operation(
+        "resize_hole",
+        mesh,
+        features,
+        hole,
+        profile,
+        diameter=9.0,
+        compensate=False,
+        entrance_mode="keep",
+        x=centre[0] + 4.0,
+        y=centre[1],
+        z=centre[2],
+    )
+    opened = [f for f in result.findings if f.code == "bore.neighbour_opened"]
+    assert opened, [f.code for f in result.findings]
+    assert "Stelle" in str(opened[0].message), str(opened[0].message)
+    assert "Durchmesser" not in str(opened[0].message)
+
+
 def test_follow_at_a_new_place_refuses_when_the_chain_is_not_found_again(
     profile: Profile, monkeypatch: pytest.MonkeyPatch
 ) -> None:

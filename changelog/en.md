@@ -74,6 +74,10 @@ it into `website/version.json`.
 
 ### Checking and printing
 
+- Resin printers have arrived: two generic devices by build volume are in the printer list, and your own can be added with pixel size and minimum wall.
+- A resin project no longer gets advice about nozzle, brim or bridges, and the minimum wall comes from the printer profile.
+- The file can be opened in any program, including a resin manufacturer's slicer whose settings Solidon does not know.
+- Exact bodies are meshed as finely as a resin printer's pixels demand; the report names the figure.
 - Fits check the real bodies in their assembled position. The export can be cancelled beforehand.
 - The shape deviation shows which faces of a meshing lie how far from the original.
 - When a wall thickness tapers off like a wedge, Solidon says so and advises printing the outer wall first.

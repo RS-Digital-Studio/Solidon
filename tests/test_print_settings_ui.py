@@ -777,7 +777,9 @@ def test_slicing_greys_out_before_the_click_when_the_licence_ran_out(
     # nachgereichte Antwort den Pfad darunter, und der Knopf ist aus dem
     # falschen Grund grau.
     assert dialog.wait_for_slicers(), "die Slicersuche kam nicht zurück"
-    dialog._slicer_path = Path("fake-slicer")
+    # Ein Name mit Familie: Ein Programm ohne Familie sperrt Slicen seit
+    # RM-071 aus eigenem Grund, und der stünde hier vor der Lizenz.
+    dialog._slicer_path = Path("prusa-slicer-console")
     dialog._show_slicer_state()
 
     assert not dialog.slice_button.isEnabled(), "abgelaufen sperrt vor dem Klick"
@@ -814,7 +816,7 @@ def test_slicing_greys_out_until_the_profiles_are_chosen(
     """
     dialog = PrintSettingsDialog(session, UiSettings())
     assert dialog.wait_for_slicers(), "die Slicersuche kam nicht zurück"
-    dialog._slicer_path = Path("fake-orca")
+    dialog._slicer_path = Path("orca-slicer")
     dialog._needs_profiles = True
     dialog._profiles_pending = True
     dialog._show_slicer_state()
@@ -4701,6 +4703,11 @@ def test_the_list_of_ignored_settings_matches_what_the_slicers_take() -> None:
         return None
 
     for flavour in slicer_keys.TABLES:
+        if flavour == "other":
+            # Ein Programm ohne Familie bekommt nichts übersetzt — jedes Feld
+            # ist dort „nicht übernommen", und ``takes`` sagt es ohne Liste.
+            assert all(not slicer_keys.takes(flavour, field.path) for field in FIELDS)
+            continue
         measured: set[str] = set()
         checked = 0
         for field in FIELDS:
@@ -5789,3 +5796,61 @@ def test_top_surface_speed_uses_its_context_in_the_built_dialog(
         built.close()
         built.deleteLater()
         set_language(previous)
+
+
+def test_a_resin_printer_reduces_the_dialog_to_what_applies_and_a_switch_brings_it_back(
+    qt_app: QApplication, session: Session
+) -> None:
+    """RM-071: An einem Resin-Drucker zeigt der Dialog nur, was gilt — und ein
+    Wechsel auf einen Filamentdrucker bringt Stufe, Felder, Vorschläge und
+    Slicen zurück, samt dem Material des Verfahrens."""
+    session.start_new(profiles.DEFAULT_RESIN_PRINTER, profiles.DEFAULT_RESIN_MATERIAL)
+    assert session.profile.printer.is_resin
+    dialog = PrintSettingsDialog(session, UiSettings())
+    assert dialog.wait_for_slicers(), "die Slicersuche kam nicht zurück"
+    try:
+        hidden = (
+            dialog.front_box,
+            dialog.tabs_box,
+            dialog.advice_box,
+            dialog.quality,
+            dialog.nozzle,
+            dialog.nozzle_count,
+            dialog.share_settings,
+            dialog.slice_button,
+            dialog.save_button,
+            dialog.search,
+        )
+        assert all(widget.isHidden() for widget in hidden)
+        assert not dialog.open_button.isHidden() and not dialog.printer_choice.isHidden()
+        assert dialog.filament_label.text() == tr("Material")
+        assert dialog.open_button.font().bold(), "Öffnen ist der Hauptknopf"
+        # Keine FDM-Werte in einer Datei für ein Harzbad.
+        assert (
+            settings_for_export(
+                session.project.document,
+                session.profile,
+                UiSettings(print_settings_in_files=True),
+            )
+            is None
+        )
+        # Und kein Rat: die Liste bleibt leer, ohne dass ein Arbeiter rechnet.
+        assert dialog._advice_entries == [] and not dialog._advice_pending
+
+        dialog.printer_choice.setCurrentIndex(dialog.printer_choice.findData("centauri-carbon-2"))
+        assert not session.profile.printer.is_resin
+        assert session.profile.material.id == profiles.DEFAULT_MATERIAL, (
+            "PLA statt Harz, sobald ein Filamentdrucker dasteht"
+        )
+        assert all(not widget.isHidden() for widget in hidden)
+        assert dialog.filament_label.text() == tr("Filamente")
+
+        dialog.printer_choice.setCurrentIndex(
+            dialog.printer_choice.findData(profiles.DEFAULT_RESIN_PRINTER)
+        )
+        assert session.profile.printer.is_resin
+        assert session.profile.material.id == profiles.DEFAULT_RESIN_MATERIAL
+        assert all(widget.isHidden() for widget in hidden)
+    finally:
+        dialog.close()
+        dialog.deleteLater()

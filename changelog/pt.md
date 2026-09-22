@@ -28,7 +28,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Ficheiros STEP com superfícies de forma livre mantêm os furos editáveis, mesmo depois de guardar, reabrir e anular.
 - Após uma alteração, cada característica que ainda existe mantém o seu nome. Se duas candidatas entram em questão, o Solidon pergunta em vez de adivinhar.
 - Um clique num furo de um modelo com 360 000 triângulos responde num quarto do tempo.
-- Um escareado que toca dois rasgos por igual continua a ser uma face cónica em vez de desaparecer num deles.
+- Um escareado que toca dois furos oblongos por igual continua a ser uma face cónica em vez de desaparecer num deles.
 - Se um modelo é composto por várias cascas e não se consegue ler com segurança se alguma prende ar, o relatório di-lo como aviso.
 - Um modelo fechado liberta a sua memória; antes ficavam algumas centenas de megabytes por modelo.
 - Um modelo com muitas faces pequenas, como um padrão em favo de mel, mantém os seus furos e arredondamentos. Antes não mostrava uma única característica.
@@ -70,10 +70,14 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Com «Levar escareado e degraus», o furo também se desloca através das cotas. Haste e escareado movem-se juntos, num só passo.
 - Se o Solidon recusar uma cota, o motivo aparece sobre a pré-visualização em vez de apenas «não foi possível calcular».
 - Os campos de cota ficam onde estavam quando altera um valor. A cota em cujo campo escreve acende-se na vista.
-- Os botões para o rasgo também funcionam enquanto as cotas do furo estão na vista: Aplicar puxa então o rasgo — com um diâmetro novo ao lado num só passo, na nova largura.
+- Os botões para o furo oblongo também funcionam enquanto as cotas do furo estão na vista: Aplicar puxa então o furo oblongo — com um diâmetro novo ao lado num só passo, na nova largura.
 
 ### Verificar e imprimir
 
+- As impressoras de resina chegaram: dois aparelhos genéricos por volume de impressão estão na lista, e uma própria cria-se com tamanho do píxel e parede mínima.
+- Um projeto de resina já não recebe conselhos sobre bico, brim ou pontes, e a parede mínima vem do perfil da impressora.
+- O ficheiro abre-se em qualquer programa, também no slicer de um fabricante de resina cujas definições o Solidon não conhece.
+- Os corpos exatos são malhados tão finos quanto os píxeis de uma impressora de resina exigem; o relatório indica a medida.
 - Os ajustes verificam os corpos reais na sua posição de montagem. A exportação pode ser cancelada antes.
 - O desvio de forma mostra que faces de uma malha estão a que distância do original.
 - Quando uma espessura de parede se estreita em cunha, o Solidon diz-o e aconselha imprimir primeiro a parede exterior.
@@ -148,7 +152,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 ### Construção
 
 - Os organizadores permitem medidas ligadas, divisórias editáveis individualmente e células repetidas. Tabuleiro, rebordo, fundo e pé ampliam a biblioteca.
-- Os campos de furos, rasgos e hexágonos seguem uma região desenhada. Respeitam áreas reservadas, margens e pontes mínimas.
+- Os campos de furos, furos oblongos e hexágonos seguem uma região desenhada. Respeitam áreas reservadas, margens e pontes mínimas.
 - As abraçadeiras de perfil incluem duas carcaças e dois insertos ajustados. Admitem perfis redondos, ovais ou desenhados; os insertos podem ser substituídos depois.
 - Um desenho fechado ou uma abertura escolhida cria uma ranhura e uma junta separada. Pode ajustar materiais, secção e saliência; as paredes restantes são verificadas.
 - Os padrões de superfície chegam ao limite da face e deixam os furos livres. Os padrões existentes podem ser editados diretamente no painel de seleção.
@@ -250,18 +254,18 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 
 ### Furar e posicionar
 
-- Ao colocar um furo, uma caixa transforma-o num rasgo: indica o comprimento e a direção, e a pré-visualização mostra ambos.
-- Um furo que já está no modelo pode ser esticado depois até formar um rasgo — o diâmetro mantém-se como foi medido.
-- O rasgo é alargado pela tolerância do material em todo o seu comprimento. O curso que um parafuso tem lá dentro continua a ser o que indicou.
-- Se um rasgo ultrapassar a aresta numa das pontas, o Solidon avisa, mesmo quando o seu centro está bem dentro do material.
-- Um rasgo consta na árvore de objetos como rasgo, com a sua largura e o seu comprimento — também num modelo que abriu e que outra pessoa desenhou.
-- Um rasgo existente pode ser esticado depois, e a sua direção mantém-se onde estava.
-- Um furo ou um rasgo selecionado ajusta-se diretamente na vista com «Ajustar na vista»: uma pega para deslocar e rodar, botões para esticar, cotas a arestas e centros.
-- Só «Aplicar», à direita, faz disso um passo; Escape descarta. Um rasgo esticado mostra o seu comprimento e mantém a sua forma quando o desloca pela pega.
+- Ao colocar um furo, uma caixa transforma-o num furo oblongo: indica o comprimento e a direção, e a pré-visualização mostra ambos.
+- Um furo que já está no modelo pode ser esticado depois até formar um furo oblongo — o diâmetro mantém-se como foi medido.
+- O furo oblongo é alargado pela tolerância do material em todo o seu comprimento. O curso que um parafuso tem lá dentro continua a ser o que indicou.
+- Se um furo oblongo ultrapassar a aresta numa das pontas, o Solidon avisa, mesmo quando o seu centro está bem dentro do material.
+- Um furo oblongo consta na árvore de objetos como furo oblongo, com a sua largura e o seu comprimento — também num modelo que abriu e que outra pessoa desenhou.
+- Um furo oblongo existente pode ser esticado depois, e a sua direção mantém-se onde estava.
+- Um furo ou um furo oblongo selecionado ajusta-se diretamente na vista com «Ajustar na vista»: uma pega para deslocar e rodar, botões para esticar, cotas a arestas e centros.
+- Só «Aplicar», à direita, faz disso um passo; Escape descarta. Um furo oblongo esticado mostra o seu comprimento e mantém a sua forma quando o desloca pela pega.
 - Um campo de coordenada vazio significa agora «deixa o furo onde está». Assim pode colocar-se um no centro da peça, o único sítio que antes não alcançava.
 - Um furo desloca-se com «Alterar furo» agora também no corpo exato — e na malha move-se mesmo. Se sair para lá da aresta, o Solidon diz que já não é um furo.
-- A largura de um rasgo altera-se com «Alterar furo». O curso que um parafuso tem lá dentro mantém-se.
-- Se um furo ou um rasgo atravessar a peça por completo, de modo que ela se desfaz em pedaços, o relatório di-lo — em vez de dizer apenas que o furo ultrapassa a aresta.
+- A largura de um furo oblongo altera-se com «Alterar furo». O curso que um parafuso tem lá dentro mantém-se.
+- Se um furo ou um furo oblongo atravessar a peça por completo, de modo que ela se desfaz em pedaços, o relatório di-lo — em vez de dizer apenas que o furo ultrapassa a aresta.
 
 ### Reconhecimento
 

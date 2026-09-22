@@ -346,7 +346,7 @@ def build(
 
     if kind == "wall":
         return wall_thickness_map(
-            mesh, wall, default_pitch(mesh, profile.printer.extrusion_width if profile else None)
+            mesh, wall, default_pitch(mesh, profile.printer.smallest_detail if profile else None)
         )
     if kind == "overhang":
         return overhang_map(mesh, angle)
@@ -365,7 +365,7 @@ def build(
         profile.printer.layer_height if profile else 0.2,
         budget,
         overhang_angle=angle,
-        pitch=default_pitch(mesh, profile.printer.extrusion_width if profile else None),
+        pitch=default_pitch(mesh, profile.printer.smallest_detail if profile else None),
     )
 
 
@@ -633,14 +633,15 @@ def solid_field(
     )
 
 
-def default_pitch(mesh: MeshData, extrusion_width: float | None = None) -> float:
-    """Eine halbe Extrusionsbreite, aber nie mehr Schritte, als das Raster
+def default_pitch(mesh: MeshData, detail: float | None = None) -> float:
+    """Ein halbes kleinstes Detail — eine halbe Bahnbreite bei FDM, ein
+    halber Bildpunkt bei Resin —, aber nie mehr Schritte, als das Raster
     zulässt. Ohne Druckerprofil bestimmt allein die Modellgröße die Auflösung;
     es wird keine Düse angenommen.
     """
     diagonal = float(mesh.bounds.diagonal)
     return max(
-        extrusion_width / 2.0 if extrusion_width is not None else 0.0,
+        detail / 2.0 if detail is not None else 0.0,
         diagonal / MAX_GRID_STEPS,
         EPS_GEOM,
     )

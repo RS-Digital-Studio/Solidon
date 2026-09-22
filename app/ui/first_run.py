@@ -30,6 +30,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from PySide6.QtCore import QCoreApplication, QSignalBlocker, Qt, QTimer, Signal
+from PySide6.QtGui import QStandardItemModel
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -56,6 +57,7 @@ from app.core.export import slicer_profiles
 from app.core.export.handover import detect
 from app.core.knowledge import profiles
 from app.core.log import get_logger
+from app.core.types import PrintTechnology
 from app.i18n import language_name, set_language, tr
 from app.i18n.catalog import available_languages, install_language
 from app.ui.icons import icon
@@ -110,12 +112,49 @@ class _Survey(Worker):
 
 
 @dataclass(frozen=True, slots=True)
+class CustomPrinterDraft:
+    """Ein noch ungespeicherter eigener Drucker, wie er beim Sprachwechsel
+    von einem Dialog in den nächsten reist.
+
+    Die Verfahrensfelder reisen beide mit, gleich welches gewählt ist: Wer
+    zwischen FDM und Resin hin- und herschaltet, findet seine Zahlen wieder.
+    """
+
+    identifier: str
+    name: str
+    dimensions: tuple[float, float, float]
+    technology: PrintTechnology
+    nozzle: float
+    nozzles: int
+    pixel_size: float
+    minimum_wall: float
+
+
+#: Woran ein Gruppenkopf in der Druckerliste zu erkennen ist — kein Drucker,
+#: nicht wählbar, nur die Überschrift des Verfahrens darunter.
+_GROUP_HEADER = "__group__"
+
+#: Die Reihenfolge der Gruppen. FDM zuerst, weil es die häufigere Wahl ist;
+#: ein Resin-Kunde findet seine Gruppe darunter.
+_TECHNOLOGY_ORDER: tuple[PrintTechnology, ...] = ("fdm", "resin")
+
+
+def _group_title(technology: PrintTechnology) -> str:
+    """Der Kopf über einer Gruppe — derselbe Satz wie in der Verfahrenswahl."""
+    return tr("Resin — Harz") if technology == "resin" else tr("FDM — Filament")
+
+
+@dataclass(frozen=True, slots=True)
 class PrinterChoices:
     """Die belegten Drucker eines bestimmten Slicers."""
 
     executable: Path
     identifiers: tuple[str, ...]
     suggested: str
+    translated: bool = True
+    """Ob Solidon die Profile dieses Programms überhaupt liest. Ein
+    Programm ohne Familie (``other``) nennt keine Drucker — nicht, weil dort
+    keine wären, sondern weil Solidon seinen Bestand nicht kennt."""
 
 
 class _PrinterSurvey(Worker):
@@ -144,7 +183,9 @@ class _PrinterSurvey(Worker):
         suggested = slicer_profiles.printer_for(
             slicer_profiles.chosen_machine(flavour, self.executable), known
         )
-        self.done.emit(PrinterChoices(self.executable, identifiers, suggested))
+        self.done.emit(
+            PrinterChoices(self.executable, identifiers, suggested, translated=flavour != "other")
+        )
 
 
 class ToolRow(QWidget):
@@ -298,6 +339,7 @@ class FirstRunDialog(QDialog):
         for identifier, printer in by_title(profiles.printer_profiles()):
             self._insert_printer_choice(str(printer.title), identifier)
         self._insert_printer_choice(tr("Benutzerdefiniert …"), "__custom__")
+        self._group_printers()
         # Erst die Slicerwahl startet das Lesen seiner Druckerprofile. Bis
         # dahin bleibt die gespeicherte Vorgabe stehen; fremde Installationen
         # liefern weder einen Drucker noch ein Material für diese Auswahl.
@@ -311,9 +353,19 @@ class FirstRunDialog(QDialog):
         self.printer_name = QLineEdit(self.custom_printer)
         self.printer_name.setPlaceholderText(tr("Name Ihres Druckers"))
         custom_form.addRow(tr("Name"), self.printer_name)
+        # Das Verfahren entscheidet, welche Maße darunter gefragt werden:
+        # Düse und Düsenzahl bei FDM, Pixelgröße und Mindestwand bei Resin
+        # (Resin-Konzept §4). Ein Feld, das für das gewählte Verfahren
+        # nichts bedeutet, steht nicht da.
+        self.printer_technology = QComboBox(self.custom_printer)
+        self.printer_technology.addItem(tr("FDM — Filament"), userData="fdm")
+        self.printer_technology.addItem(tr("Resin — Harz"), userData="resin")
+        self.printer_technology.currentIndexChanged.connect(self._technology_changed)
+        custom_form.addRow(tr("Verfahren"), self.printer_technology)
         self.printer_dimensions: list[NumberSpin] = []
         dimensions = QHBoxLayout()
         template = profiles.printer(profiles.DEFAULT_PRINTER)
+        resin_template = profiles.printer(profiles.DEFAULT_RESIN_PRINTER)
         for label, value in zip(
             (tr("Breite"), tr("Tiefe"), tr("Höhe")), template.build_volume, strict=True
         ):
@@ -347,6 +399,31 @@ class FirstRunDialog(QDialog):
             )
         )
         custom_form.addRow(tr("Düsen"), self.printer_nozzles)
+        self.printer_pixel = NumberSpin(self.custom_printer)
+        self.printer_pixel.setRange(0.005, 1.0)
+        self.printer_pixel.setDecimals(3)
+        self.printer_pixel.setSingleStep(0.005)
+        self.printer_pixel.setSuffix(" " + tr("mm"))
+        self.printer_pixel.setValue(resin_template.pixel_size)
+        self.printer_pixel.setToolTip(
+            tr("Die Kantenlänge eines Bildpunkts — das kleinste Detail, das der Drucker abbildet.")
+        )
+        custom_form.addRow(tr("Pixelgröße"), self.printer_pixel)
+        self.printer_wall = NumberSpin(self.custom_printer)
+        self.printer_wall.setRange(0.05, 10.0)
+        self.printer_wall.setDecimals(2)
+        self.printer_wall.setSingleStep(0.1)
+        self.printer_wall.setSuffix(" " + tr("mm"))
+        self.printer_wall.setValue(resin_template.minimum_wall)
+        self.printer_wall.setToolTip(
+            tr("Die dünnste Wand, die dieses Harz nach Waschen und Härten stehen lässt.")
+        )
+        custom_form.addRow(tr("Mindestwand"), self.printer_wall)
+        self._technology_rows = {
+            "fdm": (self.printer_nozzle, self.printer_nozzles),
+            "resin": (self.printer_pixel, self.printer_wall),
+        }
+        self._technology_changed()
         self.custom_printer.hide()
 
         basics = QGroupBox(tr("Grundlagen"), self)
@@ -682,8 +759,10 @@ class FirstRunDialog(QDialog):
         if chosen:
             discover.remember_path("slicer", chosen)
         # Keine Frage mehr, aber weiterhin ein vollständiger Projektvorgabensatz:
-        # Bis ein Filamentprofil seinen Typ liefert, gilt die dokumentierte Kernvorgabe.
-        settings.material = settings.material or profiles.DEFAULT_MATERIAL
+        # Bis ein Filamentprofil seinen Typ liefert, gilt die dokumentierte
+        # Kernvorgabe — die des Verfahrens: Ein Resin-Drucker beginnt mit Harz
+        # und nicht mit PLA, und wer das Verfahren wechselt, wechselt sie mit.
+        settings.material = profiles.material_for(settings.printer, settings.material)
 
     def _fill_tools(self, states: tuple[tools.ToolState, ...]) -> None:
         """Eine Zeile je Programm, neu gebaut statt neu beschriftet.
@@ -743,6 +822,24 @@ class FirstRunDialog(QDialog):
         self.accept()
         self.inventoryRequested.emit()
 
+    def _technology_changed(self) -> None:
+        """Nur die Maße des gewählten Verfahrens stehen im Formular.
+
+        Ein Formular ist ein ``QFormLayout``: Die Beschriftung hängt an
+        ihrem Feld, und ``setRowVisible`` nimmt beide zusammen aus dem Bild.
+        """
+        chosen = self.custom_technology()
+        form = self.custom_printer.layout()
+        assert isinstance(form, QFormLayout)
+        for technology, fields in self._technology_rows.items():
+            for field in fields:
+                form.setRowVisible(field, technology == chosen)
+        self._grow_soon()
+
+    def custom_technology(self) -> PrintTechnology:
+        """Das Verfahren des eigenen Druckers, wie es gerade gewählt ist."""
+        return "resin" if self.printer_technology.currentData() == "resin" else "fdm"
+
     def _printer_changed(self) -> None:
         """Eigene Druckerdaten stehen direkt unter der entsprechenden Auswahl."""
         custom = self.printer.currentData() == "__custom__"
@@ -760,19 +857,31 @@ class FirstRunDialog(QDialog):
             self.printer_state.setText(tr("Geben Sie Ihrem Drucker einen Namen."))
             self.printer_name.setFocus()
             return False
-        template = profiles.printer(profiles.DEFAULT_PRINTER)
-        nozzle = self.printer_nozzle.value()
         width, depth, height = (field.value() for field in self.printer_dimensions)
-        entry = replace(
-            template,
-            id=self._custom_identifier,
-            title=name,
-            build_volume=(width, depth, height),
-            nozzle_diameter=nozzle,
-            nozzles=self.printer_nozzles.value(),
-            layer_height=min(template.layer_height, nozzle / 2),
-            extrusion_width=nozzle * template.extrusion_width / template.nozzle_diameter,
-        )
+        if self.custom_technology() == "resin":
+            # Vom allgemeinen Resin-Gerät abgeleitet: Verfahren, Schichthöhe
+            # und die Nullen für Düse und Bahn kommen von dort.
+            entry = replace(
+                profiles.printer(profiles.DEFAULT_RESIN_PRINTER),
+                id=self._custom_identifier,
+                title=name,
+                build_volume=(width, depth, height),
+                pixel_size=self.printer_pixel.value(),
+                minimum_wall=self.printer_wall.value(),
+            )
+        else:
+            template = profiles.printer(profiles.DEFAULT_PRINTER)
+            nozzle = self.printer_nozzle.value()
+            entry = replace(
+                template,
+                id=self._custom_identifier,
+                title=name,
+                build_volume=(width, depth, height),
+                nozzle_diameter=nozzle,
+                nozzles=self.printer_nozzles.value(),
+                layer_height=min(template.layer_height, nozzle / 2),
+                extrusion_width=nozzle * template.extrusion_width / template.nozzle_diameter,
+            )
         try:
             profiles.save_printer(entry)
         except (AppError, OSError) as problem:
@@ -789,30 +898,35 @@ class FirstRunDialog(QDialog):
         self._suggested_printer = entry.id
         return True
 
-    def custom_printer_draft(self) -> tuple[str, str, tuple[float, float, float], float] | None:
+    def custom_printer_draft(self) -> CustomPrinterDraft | None:
         """Noch ungespeicherte eigene Druckerdaten reisen beim Sprachwechsel mit."""
         if self.printer.currentData() != "__custom__":
             return None
         width, depth, height = (field.value() for field in self.printer_dimensions)
-        return (
-            self._custom_identifier,
-            self.printer_name.text(),
-            (width, depth, height),
-            self.printer_nozzle.value(),
+        return CustomPrinterDraft(
+            identifier=self._custom_identifier,
+            name=self.printer_name.text(),
+            dimensions=(width, depth, height),
+            technology=self.custom_technology(),
+            nozzle=self.printer_nozzle.value(),
+            nozzles=self.printer_nozzles.value(),
+            pixel_size=self.printer_pixel.value(),
+            minimum_wall=self.printer_wall.value(),
         )
 
-    def restore_custom_printer_draft(
-        self, draft: tuple[str, str, tuple[float, float, float], float] | None
-    ) -> None:
+    def restore_custom_printer_draft(self, draft: CustomPrinterDraft | None) -> None:
         """Stellt den Entwurf im neu übersetzten Dialog wieder her."""
         if draft is None:
             return
-        identifier, name, dimensions, nozzle = draft
-        self._custom_identifier = identifier
-        self.printer_name.setText(name)
-        for field, value in zip(self.printer_dimensions, dimensions, strict=True):
+        self._custom_identifier = draft.identifier
+        self.printer_name.setText(draft.name)
+        for field, value in zip(self.printer_dimensions, draft.dimensions, strict=True):
             field.setValue(value)
-        self.printer_nozzle.setValue(nozzle)
+        _select(self.printer_technology, draft.technology)
+        self.printer_nozzle.setValue(draft.nozzle)
+        self.printer_nozzles.setValue(draft.nozzles)
+        self.printer_pixel.setValue(draft.pixel_size)
+        self.printer_wall.setValue(draft.minimum_wall)
         _select(self.printer, "__custom__")
 
     def _fill_slicers(self, found: tuple[Path, ...]) -> None:
@@ -857,22 +971,92 @@ class FirstRunDialog(QDialog):
         self._leash.start(worker)
 
     def _insert_printer_choice(self, title: str, identifier: str) -> None:
-        """Jeder Eintrag steht nach sichtbarem Titel sortiert, auch ein eigener Drucker."""
+        """Jeder Eintrag steht in der Gruppe seines Verfahrens nach sichtbarem
+        Titel sortiert, auch ein eigener Drucker; „Benutzerdefiniert …" am Ende.
+
+        Die Gruppenköpfe setzt :meth:`_group_printers` danach — hier wird nur
+        einsortiert, und zwar hinter alle Drucker des Verfahrens davor.
+        """
+        order = list(_TECHNOLOGY_ORDER)
+        rank = len(order) if identifier == "__custom__" else order.index(_technology_of(identifier))
+
+        def rank_of(index: int) -> int:
+            data = str(self.printer.itemData(index) or "")
+            if data == "__custom__":
+                return len(order)
+            found = _technology_of(data)
+            return order.index(found) if found in order else len(order)
+
         position = next(
             (
                 index
                 for index in range(self.printer.count())
-                if self.printer.itemText(index).casefold() > title.casefold()
+                if str(self.printer.itemData(index) or "") != _GROUP_HEADER
+                and (
+                    rank_of(index) > rank
+                    or (
+                        rank_of(index) == rank
+                        and self.printer.itemText(index).casefold() > title.casefold()
+                    )
+                )
             ),
             self.printer.count(),
         )
         with QSignalBlocker(self.printer):
             self.printer.insertItem(position, title, userData=identifier)
+        self._group_printers()
+
+    def _group_printers(self) -> None:
+        """Ein Kopf je Verfahren über seiner Gruppe — nicht wählbar, nur gelesen.
+
+        Der Kunde wählt seine Maschine aus derselben Liste wie alle anderen,
+        schaltet nichts um und muss nichts wissen (Resin-Konzept §4): Der Kopf
+        sagt, welches Verfahren die Drucker darunter haben, und ist über
+        seine Rolle als Kopf hinaus nichts — kein Eintrag, keine Antwort.
+        """
+        model = self.printer.model()
+        assert isinstance(model, QStandardItemModel)
+        with QSignalBlocker(self.printer):
+            for index in reversed(range(self.printer.count())):
+                if str(self.printer.itemData(index) or "") == _GROUP_HEADER:
+                    self.printer.removeItem(index)
+            present = {
+                _technology_of(str(self.printer.itemData(index) or ""))
+                for index in range(self.printer.count())
+                if str(self.printer.itemData(index) or "") != "__custom__"
+            }
+            if len(present) < 2:
+                # Eine einzige Gruppe braucht keinen Kopf: Ein Slicer, der
+                # nur FDM-Drucker kennt, zeigt sie wie bisher.
+                return
+            for technology in _TECHNOLOGY_ORDER:
+                first = next(
+                    (
+                        index
+                        for index in range(self.printer.count())
+                        if str(self.printer.itemData(index) or "") not in {"__custom__", ""}
+                        and _technology_of(str(self.printer.itemData(index))) == technology
+                    ),
+                    None,
+                )
+                if first is None:
+                    continue
+                self.printer.insertItem(first, _group_title(technology), userData=_GROUP_HEADER)
+                item = model.item(first)
+                if item is not None:
+                    item.setFlags(Qt.ItemFlag.NoItemFlags)
 
     def _fill_printers(self, identifiers: tuple[str, ...], suggested: str = "") -> None:
         """Nur passende Drucker anbieten und eine weiterhin passende Wahl erhalten."""
         chosen = str(self.printer.currentData() or "")
-        allowed = set(identifiers) | {profiles.DEFAULT_PRINTER}
+        # Die Resin-Drucker hängen an keinem FDM-Slicer: Ein Slicer, der
+        # seine Drucker nennt, filtert die FDM-Liste — und lässt die andere
+        # Gruppe stehen, denn sie kommt aus dem eigenen Bestand.
+        allowed = (
+            set(identifiers)
+            | {profiles.DEFAULT_PRINTER}
+            | {name for name, entry in profiles.printer_profiles().items() if entry.is_resin}
+        )
         preferred = chosen
         if suggested and (
             chosen == self._suggested_printer or (chosen not in allowed and chosen != "__custom__")
@@ -900,7 +1084,18 @@ class FirstRunDialog(QDialog):
         if str(found.executable) != self.slicer.currentData():
             return
         self._fill_printers(found.identifiers, found.suggested)
-        self.printer_state.clear()
+        if found.translated:
+            self.printer_state.clear()
+        else:
+            # Kein Fehler und kein leerer Satz: Das Programm ist da, nur seine
+            # Drucker kennt Solidon nicht — der Kunde wählt seinen aus der
+            # Liste oder legt ihn an (Regel 17).
+            self.printer_state.setText(
+                tr(
+                    "Die Drucker dieses Programms kennt Solidon nicht. Wählen Sie Ihren "
+                    "Drucker aus der Liste oder richten Sie ihn selbst ein."
+                )
+            )
         self._grow_soon()
 
     def _printers_failed(self, detail: str) -> None:
@@ -921,6 +1116,13 @@ def _select(box: QComboBox, identifier: str) -> None:
     index = box.findData(identifier)
     if index >= 0:
         box.setCurrentIndex(index)
+
+
+def _technology_of(identifier: str) -> PrintTechnology:
+    """Das Verfahren eines Druckers aus dem Bestand; ein Unbekannter ist FDM —
+    so rechnet die Szene ohne ihn auch."""
+    known = profiles.printer_profiles().get(identifier)
+    return known.technology if known is not None else "fdm"
 
 
 def _chat_text() -> str:

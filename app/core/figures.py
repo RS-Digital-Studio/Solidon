@@ -444,6 +444,15 @@ def _wall(theme: Theme) -> str:
         width=30,
         colour=colours.muted,
     )
+    # Das Bild zeigt die Düse; ein Resin-Drucker hat keine, und der Satz
+    # sagt, woher seine Grenze kommt (RM-071).
+    canvas.wrapped(
+        236,
+        192,
+        str(_("Beim Resin-Drucker steht die Mindestwand selbst im Profil.")),
+        width=30,
+        colour=colours.muted,
+    )
     return canvas.svg()
 
 
