@@ -1479,9 +1479,9 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "arbeiten nur mit dem Slicer ihres Herstellers, und dessen "
             "Einstellungen kennt Solidon nicht — es braucht sie auch nicht: "
             "*Im Slicer öffnen* gibt die Datei in das Fenster des Programms, "
-            "gleich welches; *Exportieren* legt sie ab. Ein exakter Körper wird "
-            "dafür so fein vernetzt, wie die Pixel es verlangen; der "
-            "Prüfbericht nennt das Maß."
+            "gleich welches; *Exportieren* legt sie ab. Wo Solidon die Form "
+            "genau kennt, löst es sie dafür so fein auf, wie die Bildpunkte "
+            "es verlangen; der Prüfbericht nennt das Maß."
         ),
     ),
     Page(
