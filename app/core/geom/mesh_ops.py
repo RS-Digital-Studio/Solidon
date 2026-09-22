@@ -28,7 +28,7 @@ from app.core.geom.repair import merge_vertices
 from app.core.log import get_logger
 from app.core.registry import op_params, param, register_op
 from app.core.types import BaseParams, CancelToken, Finding, OpContext, OpResult, Severity
-from app.core.units import DEGREE_UNIT
+from app.core.units import DEGREE_UNIT, VOLUME_SUM_NOISE
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -458,12 +458,6 @@ def _welded_for_simplify(mesh: MeshData) -> MeshData:
 #: das Netz neu zu bauen und die Slots zu übertragen wäre Arbeit für nichts.
 FLATTEN_MIN_SHARE = 0.05
 
-#: Wie weit das Volumen nach dem Vorspiel vom Eingang abweichen darf: nur um
-#: das Rundungsrauschen der Volumensumme. Gemessen an der viermal
-#: unterteilten Lochplatte: 0,0 mm³ von 31 322 — die Schranke ist eine
-#: Rechengrenze, keine Geometrietoleranz.
-FLATTEN_VOLUME_NOISE = 1e-9
-
 
 def _exactly_flattened(mesh: MeshData, cancelled: CancelToken | None) -> MeshData | None:
     """Das Netz ohne seine exakt redundanten Ecken — oder ``None``.
@@ -493,7 +487,7 @@ def _exactly_flattened(mesh: MeshData, cancelled: CancelToken | None) -> MeshDat
     # Punktgleiche Oberflächen haben dasselbe Volumen — bis auf das Rauschen
     # der Summe über hunderttausend Dreiecke. Ein Kern, der hier mehr als das
     # verlöre, hätte Form verloren, und das wäre kein Vorspiel mehr.
-    if abs(result.volume - mesh.volume) > max(abs(mesh.volume), 1.0) * FLATTEN_VOLUME_NOISE:
+    if abs(result.volume - mesh.volume) > max(abs(mesh.volume), 1.0) * VOLUME_SUM_NOISE:
         return None
     return result
 

@@ -1707,11 +1707,23 @@ def _without_scars(outcome: BooleanOutcome) -> BooleanOutcome:
         faces=np.array(built.tri_verts, dtype=np.int64, copy=True),
         process=False,
     )
+    # **Ein Volumen wird nicht mit einer Längentoleranz geprüft.** Hier stand
+    # ``is_close``, und das vergleicht auf ``EPS_GEOM`` genau — einen
+    # Mikrometer, gegen einen Körper von 21 190 Kubikmillimetern gehalten.
+    # Die Volumensumme über 66 000 Dreiecke rauscht stärker: Beim Entfernen
+    # eines Wabenmusters lagen rohe Vereinigung und zusammengelegtes Netz
+    # 7·10⁻⁶ mm³ auseinander, und verworfen wurde dabei ausgerechnet das
+    # **genauere** von beiden — es traf das Zylindervolumen exakt, die rohe
+    # Vereinigung nicht (gemessen am 22.09.2026). Geprüft wird deshalb am
+    # Rauschen der Summe — ``units.VOLUME_SUM_NOISE``, dieselbe Schranke, mit
+    # der ``mesh_ops._exactly_flattened`` sein Vorspiel abnimmt; was eine
+    # stehengebliebene Haut kostet, liegt um Größenordnungen darüber.
+    noise = max(abs(joined.volume), 1.0) * units.VOLUME_SUM_NOISE
     if (
         len(candidate.faces) == 0
         or len(candidate.faces) >= len(raw.faces)
         or not candidate.is_watertight
-        or not is_close(float(candidate.volume), joined.volume)
+        or abs(float(candidate.volume) - joined.volume) > noise
     ):
         return outcome
     simplified = transfer(MeshData.of(candidate), [joined])
@@ -8831,12 +8843,22 @@ def _pattern_cleared(ctx: OpContext, source: SceneObject, feature: Feature) -> B
         0.2,
         str(_("Die Zellen werden gefüllt …") if engraved else _("Die Zellen werden abgetragen …")),
     )
-    return boolean(
-        "union" if engraved else "difference",
-        [as_mesh_data(source.mesh), _pattern_plug(source, feature)],
-        quality=ctx.quality,
-        seed=ctx.seed,
-        cancelled=ctx.cancelled,
+    # **Die Narben müssen weg, sonst wächst das Netz beim Aufräumen.** Ein
+    # Muster hat viele Zellen, und jede hinterlässt beim Schließen ihre
+    # Schnittkanten: Gemessen am Noppenfeld um den Griff 26 094 Dreiecke mit
+    # Muster und 66 522 ohne — das Entfernen machte das Netz zweieinhalbmal
+    # so groß wie das Aufbringen. Mit dem Zusammenlegen sind es 380, und der
+    # rohe Zylinder hatte 384. Das ist nicht nur eine Zahl: An 66 522
+    # Dreiecken zerlegte die Merkmalserkennung denselben Mantel auf Linux in
+    # 46 Flecken und auf Windows in einen Zapfen (CI seit `2061def3`).
+    return _without_scars(
+        boolean(
+            "union" if engraved else "difference",
+            [as_mesh_data(source.mesh), _pattern_plug(source, feature)],
+            quality=ctx.quality,
+            seed=ctx.seed,
+            cancelled=ctx.cancelled,
+        )
     )
 
 

@@ -1202,6 +1202,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     # Wächter nur Wörterbücher sah und keine Aufrufe.
     "action": _("Handlung"),
     "affected": _("Betroffene Transaktionen"),
+    "after_components": _("Teile danach"),
     "anchor": _("Bezugspunkt"),
     "announced": _("Angekündigt"),
     "answer": _("Antwortanfang"),
@@ -1209,7 +1210,11 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "at": _("Position auf dem Fügeweg"),
     "at_feature": _("Bezugsmerkmal"),
     "attempted": _("Versuchte Stufen"),
+    "before_components": _("Teile vorher"),
     "bodies": _("Körper"),
+    "bores": _("Geschlossene Bohrungen"),
+    "cell_width": _("Zellbreite"),
+    "cells": _("Zellen"),
     "centre": _("Mittelpunkt"),
     "constraints": _("Bedingungen"),
     "drop": _("Einhängeweg"),
@@ -1495,6 +1500,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "starts": _("Gänge"),
     "status": _("Zustand"),
     "step": _("Schritt"),
+    "style": _("Stil"),
     "steps": _("Schritte"),
     "stress": _("Biegespannung"),
     "strokes": _("Striche"),
@@ -1526,6 +1532,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     # :data:`_VALUE_UNITS` ist — ohne sie läse der Kunde „Gewartet: 10" und
     # wüsste nicht, ob Sekunden oder Minuten gemeint sind.
     "waited_minutes": _("Gewartet (Minuten)"),
+    "walls": _("Wände"),
     "wall": _("Wandstärke"),
     "wanted": _("Gewünscht"),
     "window": _("Fenster"),

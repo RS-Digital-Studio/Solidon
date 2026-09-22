@@ -400,6 +400,15 @@ def format_length_bound(value_mm: float, unit: LengthUnit = "mm", *, upper: bool
 #: mit der ``sketch.planes`` seit je rechnet.
 PLANE_PARALLEL: Final[float] = 1e-9
 
+#: Wie weit zwei Volumen desselben Körpers auseinanderliegen dürfen, wenn nur
+#: die Vernetzung eine andere ist: um das Rauschen der Summe, als Anteil des
+#: Volumens. **Eine Rechengrenze, keine Geometrietoleranz** — deshalb steht
+#: hier eine Zahl und kein Verweis ins Materialprofil. Eine Volumensumme über
+#: hunderttausend Dreiecke ist auf ihre letzten Stellen nicht verlässlich; ein
+#: Kern, der mehr als das verlöre, hätte Form verloren. Gemessen an der
+#: viermal unterteilten Lochplatte: 0,0 mm³ von 31 322.
+VOLUME_SUM_NOISE: Final[float] = 1e-9
+
 
 def plane_axes(
     normal: Sequence[float],

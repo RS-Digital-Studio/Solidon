@@ -1205,7 +1205,7 @@ und Wasserdichtheitsprüfung. Vor jedem Solver läuft das exakte Vorspiel
 (`_exactly_flattened`): `manifold3d.simplify(0)` nimmt die Ecken heraus,
 deren Nachbarschaft eben oder gerade ist — punktgleiche Oberfläche, jede
 neue Ecke eine alte, geprüft an Dichtheit, Teilzahl und Volumen
-(`FLATTEN_VOLUME_NOISE`); reicht das allein unter das Ziel, heißt der Solver
+(`units.VOLUME_SUM_NOISE`); reicht das allein unter das Ziel, heißt der Solver
 `"exact"`. Die viermal unterteilte Lochplatte: 203 776 → 814 Dreiecke in
 110 ms, wo `fast_simplification` vier Sekunden stillstand und der Rückfall
 danach elf brauchte. Danach der Rückfall auf den exakten Kern, und zwar an
