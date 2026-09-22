@@ -79,6 +79,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-193 — Die Erkennung an einer glatten Generator-Freiform kostet Minuten für null Merkmale](#rm-193) | Geometrie, Erkennung und Druckvorbereitung | Der Drache aus TripoSG braucht seit dem Review 37,7 s statt 482 (ein Fleck fragt nur die Ringe, an die er grenzt; die Flächenrollen blockweise); was bleibt, sind 2 275 Kegelverfeinerungen an Stücken, deren Achse aus den Normalen nicht bestimmbar ist. Zu entscheiden von Robert: eine Freiformentscheidung **vor** der Nachtrennung — ein Fleck über der Hälfte der Oberfläche, der keine Grundform ist, wird nicht in Stücke geteilt und eingepasst; das kostet tangential eingeblendete Zapfen |
 | [RM-201 — Ein hohler Körper hält die 300 ms der Schichtanalyse nicht](#rm-201) | Geometrie, Erkennung und Druckvorbereitung | Die neue Leistungsmarke `slice_medium_hollow` (200 000 Dreiecke, Wand 1,5 mm) misst 1,5 s für §31 „300 ms": 3 658 Puffer, 796 Differenzen und 718 STRtree-Anfragen je Lauf — die Stufen je Schicht stapeln oder das Ziel für Schalen neu fassen |
 | [RM-202 — Die Formabweichung am Ring schließt nur auf 0,65 mm](#rm-202) | Geometrie, Erkennung und Druckvorbereitung | Das Verfeinerungsbudget des Torus gilt je Aufruf; an einem Ring bleibt die Klammer 0,65 mm breit, wo Ebene, Zylinder, Kugel und Kegel geschlossen rechnen — Budget je Dreieck oder eine geschlossene Kandidatenmenge für den Torus |
+| [RM-207 — Ein Wabenmuster ist ein Merkmal, nicht 1 199 Flächen](#rm-207) | Geometrie, Erkennung und Druckvorbereitung | Gebaut auf `rm-207-muster` (`607a796a`): die acht Texturen von *Textur aufbringen* und jedes Gitter gleicher Zellen sind ein `pattern` mit Teilung, Zellbreite, Tiefe und Feld; *Merkmal entfernen* füllt die Zellen, *Merkmal ändern* zeichnet sie neu. Offen: Release-Abnahme am Halter, Muster auf gewölbten Trägern, die Grunderkennung an dichten Texturen (25 s für 32 000 Flächen) |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Der Mac ist gefahren; die Zoom-Dämpfung ist seit dem 16.09. eine Rampe statt einer Klippe und am Gerät zu bestätigen; offen bleiben Linux, die 3DxWare-Mausemulation und die Bildrate an 1 Mio. Dreiecken |
 | [RM-203 — Die Ansicht rechnet je Bild und je Klick, was sie je Auswertung rechnen könnte](#rm-203) | Bedienung und Darstellung | Kanten und Schattenhüllen entstehen je Auswertung im Hauptthread (200 000 Dreiecke: 57 + 71 ms) statt im `_SceneMeshWorker`; `_redraw_feature_patch` kostet an einer Fläche der 360k-Platte 0,41 s; `show_scene` läuft am historischen Bohrschritt je Tastendruck; der Zeiger ruht 16 ms nicht, bevor er fragt — jeden Posten am echten Renderer messen, dann verlegen |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | `show_feature` leert und baut je Auswahl achtzehn Widgets neu (`_build_action`, 80 ms je Klick); `_settle_lock` ist seit dem Review ohne `findChildren`. Weg: `_Handling` mutabel mit `entries/widgets/fixed`, Wiederverwendung je (Operation, Felder, Schritt, Gruppengröße), Werte über `refresh_feature_fields` |
@@ -1676,6 +1677,68 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   geschlossene Kandidatenmenge für den Torus (Punkte größten und kleinsten
   Abstands zum Ringkreis je Dreieck). Abnahme: die Klammer am Ring aus
   `test_surface_deviation.py` unter 0,01 mm, die übrigen Klammern unverändert.
+
+<a id="rm-207"></a>
+
+- [~] **RM-207 — Ein Wabenmuster ist ein Merkmal, nicht 1 199 Flächen.**
+  Robert, 22.09.2026, am Schraubendreherhalter mit Wabenmuster: „alle
+  texturen dann erkennbar machen usw und vollständiger review". Die Erkennung
+  sah 1 199 ebene Flächen — 1 170 davon die Wände von 195 Sechsecken, 9 mm
+  Schlüsselweite, 20 mm tief, 10,4 mm Teilung — und nichts daran hieß Wabe.
+  Gebaut auf dem Zweig `rm-207-muster` (`607a796a`; der Hauptbaum war bis
+  0.5.0 gesperrt): `perceive/patterns.py` liest **Zellen** — zusammenhängende
+  Stücke kleiner Merkmale und unbesessener Dreiecke an einer großen ebenen
+  Trägerfläche —, misst Mündung, Tiefe und Seite am Netz und macht aus einem
+  **Gitter** deckungsgleicher Zellen (ab neun, Streifen ab sechs, Noppen ab
+  zwanzig) oder einer **Streuung** gleich tiefer Zellen (ab vierundzwanzig,
+  Rauschen ab vierzig) ein Merkmal `pattern`: Stil unter dem Namen von
+  `apply_texture` (Rippe, Welle, Rändel gerade und über Kreuz, Wabe, Noppe,
+  Voronoi, Rauschen — dazu `other`), Zahl, Teilung, Zellbreite, Tiefe,
+  vertieft/erhaben/durchgehend, Feld, Winkel und ob es die Fläche füllt.
+  Runde Zellen bleiben Bohrungen, wenn sie durchgehen oder tief sind
+  (Entscheidung: ein Lochblech behält seine Bohrungshandlungen). *Merkmal
+  entfernen* baut aus den nachgezeichneten Mündungen Prismen, bündig mit der
+  Trägerebene (bei durchgehenden Zellen beidseitig), und füllt oder trägt ab;
+  *Merkmal ändern* schließt und zeichnet mit Teilung, Zellbreite und Tiefe
+  über `texture_ops.tool_in_outline` neu — mit der gelesenen Zellbreite
+  (`pattern_shapes(cell=…)`), dem gelesenen Feld und Winkel, bei
+  durchgehenden Zellen nur ganze. Dazu ein Fehler in `texture_tool`:
+  Überlappende Streuflecken wurden getrennt extrudiert und ließen doppelte
+  Deckflächen zurück (2 773 Dreiecke mit 2 908 mm² auf 1 200) — jetzt
+  vereinigt wie beim Weg über die ganze Fläche. Gemessen: der Halter 196
+  Zellen, Teilung 10,40, Schlüsselweite 9,00, Tiefe 20,00, durchgehend, 16
+  statt 1 199 Flächen; alle acht Texturen erkannt, entfernt (Volumen exakt
+  zurück auf die Platte) und geändert; Korpusprobe über 193 Dateien: der
+  Halter, eine Taschentuchbox mit sieben Wellenrillen, und ein Schild mit 24
+  Buchstaben als „Rauschen" — daher die Vierzig. Kosten: 0,4 ms je Zelle
+  (6 645 Rauten in 2,8 s; die Grunderkennung davor braucht 25 s für 32 000
+  Flächen, und das ist der eigentliche Posten). Das Review (22.09.2026,
+  `solidon3d-review`) fand sieben Fehler, alle behoben: ein unbesessenes
+  Dreieck verschluckte über `names[-1]` die kleinste Fläche des Körpers; die
+  Zellbreitengrenze galt je Stil falsch (253 Rauten zu einem Umriss, 9-mm-
+  Waben des Halters auf 8,83 begrenzt) und fragt jetzt die Düse; das Werkzeug
+  nahm die verlangte statt der gezeichneten Breite; ein Wabengitter unter
+  90 Grad bekam ein fremdes Feld; eine Rippenreihe zerfiel am schräg
+  abgeschnittenen Stummel; Noppen außerhalb des Wabengitters wären als Wabe
+  neu gezeichnet worden; und drei Kleinere. Danach die drei Entscheidungen
+  des Reviews eingelöst: `whole_face` erst ab einer halben Teilung Rand
+  (Zellen, die der Körperrand anschneidet, gehören seither als `EdgePiece`
+  zum Muster), das Feld eines Rechtecks mit dem Träger geschnitten, ganze
+  Zellen wo das Muster nur ganze hatte, ein `anchor` hält beim Neuzeichnen
+  eine Zelle an ihrem Platz (sonst wurden aus sechs Rippen fünf und zwei
+  Stummel), und *Merkmal ändern* steht an einem fremden Gitter grau.
+  Entwicklungstor am Zweig (22.09.2026): Sammelgruppe 13 574 bestanden, 48 übersprungen; Ruff, Format und mypy je 0; 67 Mustertests. Fenster und Leistung bleiben beim Release. **Offen:** die Release-Abnahme am Halter im Fenster; Muster auf
+  gewölbten Trägern (`apply_texture` mit `wrap="cylinder"` — der Träger ist
+  ein Zylinder, das Gitter liegt in der Abwicklung); die Grunderkennung an
+  dichten Texturen (32 140 Flächen an 105 000 Dreiecken kosten 25 s, bevor
+  das Muster sie auf sieben Merkmale faltet); zwei vorbestehende Funde des
+  Reviews an `apply_texture` selbst, beide eine Entscheidung: E1
+  (`check_printable`) prüft nur `pitch·LAND_SHARE`, nicht die schmalste
+  Rille des Stils (Kreuzrändel 0,21 Teilungen), und die Noppen der Vorgabe
+  berühren sich (Radius = Teilung/2), weshalb ein um 90 Grad gedrehtes
+  Noppenfeld auf 30 mal 20 in 35 Bohrungen, 5 Langlöcher und 16 Rundungen
+  zerfällt statt in ein Muster — die Deckfläche zerfällt in Inseln. Beides
+  änderte, was `apply_texture` bei gleichen Werten zeichnet (`cache_version`).
 
 ## Bedienung und Darstellung
 <a id="rm-197"></a>
