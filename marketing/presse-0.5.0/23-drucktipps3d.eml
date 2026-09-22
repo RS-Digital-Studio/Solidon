@@ -1,0 +1,53 @@
+From: Solidon3D <marketing@solidon3d.de>
+To: stephan@drucktipps3d.de
+Reply-To: marketing@solidon3d.de
+Subject: Themenvorschlag: Muster ändern und Maße im Bild — ein Fünf-Minuten-Praxistest
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+X-Unsent: 1
+
+Hallo Stephan,
+
+ein Vorschlag für einen kurzen Praxistest, der ohne Einarbeitung auskommt.
+
+Solidon3D 0.5.0 ist draußen. Zwei Dinge lassen sich in fünf Minuten zeigen:
+
+Erstens, das Muster. Ein heruntergeladenes Modell mit Wabenmuster, Rändel oder
+Rippen zeigt im Objektbaum nicht mehr Hunderte Flächen, sondern ein Merkmal
+mit Teilung, Zellbreite und Tiefe. Ein Klick entfernt es, drei Zahlen setzen
+es neu. Um einen Griff herum wird es in der Abwicklung gemessen: Die Rillen
+sind überall gleich tief, und der Umfang schließt ohne Naht.
+
+Zweitens, die Maße im Bild. Eine Bohrung anklicken, und ihre Maße stehen am
+Modell: Abstände zu den Kanten, Mitte, Durchmesser, als Felder zum Tippen, mit
+Vorschau. Der Bezug eines Maßes — Kante, Mitte oder Achse — wechselt per
+Rechtsklick oder durch Anklicken im Modell. Kein Dialog davor, keine doppelten
+Felder rechts im Panel.
+
+Unter der Oberfläche steckt der eigentliche Schritt dieser Fassung: Das Teil
+bleibt ein exakter Körper. Bohrung, Langloch, Senkung, Zapfen, Wulst, Kehle
+und Gewinde überstehen Versetzen, Verdoppeln, Drehen und Entfernen exakt; STEP
+geht sauber hinein und hinaus. Für Ihre Leser heißt das: Was aus Solidon
+herauskommt, lässt sich in einem CAD weiterverwenden.
+
+Für die Werkstatt außerdem interessant: Resin-Drucker sind da (mit Pixelgröße
+und Mindestwand), ein Modell mit offenen Stellen wird beim Einlesen
+geschlossen statt nur gemeldet, und ein Gewinde bekommt sein Gegenstück am
+anderen Teil auf Knopfdruck im Tabellenmaß.
+
+Eine Testlizenz und die Beispielmodelle stelle ich gern bereit.
+
+Solidon3D ist eine Desktop-Anwendung für Windows, macOS und Linux. Einmalkauf,
+kein Abo, kein Konto: Nach einer einmaligen Freischaltung läuft sie ohne Netz
+vollständig. Oberfläche und Handbuch liegen in sechs Sprachen vor, eine Demo
+steht bereit.
+
+Für Rückfragen, Testlizenzen oder Bildmaterial in Druckauflösung melden Sie
+sich gern direkt bei mir.
+
+Viele Grüße
+Robert Schneider
+RS Digital — Solidon3D
+marketing@solidon3d.de
+https://solidon3d.de

@@ -1,0 +1,54 @@
+From: Solidon3D <marketing@solidon3d.de>
+To: editor@3dadept.com
+Reply-To: marketing@solidon3d.de
+Subject: Editorial lead: bounded recognition and optional local AI in a desktop AM tool
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+X-Unsent: 1
+
+Hello 3D ADEPT team,
+
+an editorial lead on a design decision rather than a feature list.
+
+Solidon3D reads downloaded 3D models and makes their features editable without
+CAD knowledge. Two boundaries in the product may be worth a paragraph.
+
+The first is bounded recognition. The software shows only what a printer can
+actually produce: features below the resolution of the process are not listed.
+On a downloaded hose holder this removes several hundred entries from the
+object tree that were measurement noise. The point is not the number — it is
+that a tool of this kind has to decide what it does not say, or the result is
+an inventory nobody can use.
+
+The second is bounded AI. There is an assistant, it can drive the same
+operations the menus do, and it is entirely optional: every function of the
+software works without it, it can be switched off, and it can run locally on
+the user's own GPU rather than in a service. Nothing is sent anywhere by
+default; after a single activation the application runs fully offline, with no
+account and no telemetry.
+
+The release itself, briefly: with 0.5.0 an imported mesh becomes an exact
+body. Holes, slots, countersinks, bosses, beads, grooves and threads stay
+exact through moving, duplicating, rotating and removing, and STEP round-trips
+cleanly. The options that used to switch between the mesh and the exact kernel
+have been removed. A honeycomb pattern or knurl is now one feature with pitch,
+cell width and depth instead of hundreds of faces. Resin printers are
+supported. Recognition is several times faster.
+
+70 user-visible changes in this release; 896 since the first 0.1 demo.
+Interface and manual in six languages.
+
+Solidon3D is a desktop application for Windows, macOS and Linux. One-time
+purchase, no subscription, no account: after a single activation it runs fully
+offline. Interface and manual are available in six languages, and there is a
+demo.
+
+I am happy to provide a review licence, print-resolution images or answers to
+any question directly.
+
+Best regards
+Robert Schneider
+RS Digital — Solidon3D
+marketing@solidon3d.de
+https://solidon3d.de

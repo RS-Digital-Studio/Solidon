@@ -1,0 +1,61 @@
+From: Solidon3D <marketing@solidon3d.de>
+To: pressemitteilung@3d-grenzenlos.de
+Reply-To: marketing@solidon3d.de
+Subject: Themenvorschlag: Ein Wabenmuster ist ein Merkmal, kein Flächenteppich
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+X-Unsent: 1
+
+Sehr geehrte Redaktion,
+
+ein Vorschlag mit einem Bild, das sich selbst erklärt.
+
+Wer eine heruntergeladene STL mit Wabenmuster, Rändel oder Rippen in einem
+Netzwerkzeug öffnet, sieht Hunderte einzelner Flächen. Ändern lässt sich daran
+nichts Sinnvolles — das Muster ist als Struktur nirgends gespeichert, es ist
+nur Geometrie.
+
+Solidon3D 0.5.0 erkennt es als ein Merkmal: ein Muster mit Teilung,
+Zellbreite und Tiefe, im Objektbaum als ein Eintrag. Mit einem Klick entfernt,
+mit drei Zahlen neu gesetzt, und die Zellen bleiben, wo sie waren. Auch um
+einen Griff herum: Eine Textur um einen Zylinder folgt der Rundung, Rillen
+sind überall gleich tief, und ein Muster um den ganzen Umfang schließt ohne
+Naht — die Teilung rückt dafür auf das Maß, das aufgeht.
+
+Der zweite große Schritt dieser Fassung ist unsichtbarer, aber er ist der
+Grund, warum das erste überhaupt trägt: Aus dem Netz wird ein exakter Körper.
+Grundkörper entstehen mit echten Flächen und Kanten; Bohrung, Langloch,
+Senkung, Zapfen, Wulst, Kehle und Gewinde bleiben exakt, wenn man sie
+versetzt, verdoppelt, dreht oder entfernt; STEP geht sauber hinein und hinaus.
+Eine Wahl zwischen zwei Betriebsarten gibt es in der Oberfläche nicht mehr.
+
+Dazu in dieser Fassung:
+
+* Maße erscheinen direkt am Modell: Bohrung anklicken, Abstände zu den Kanten,
+  Mitte und Durchmesser als Zahlenfelder, Vorschau beim Tippen.
+* Resin-Drucker mit eigenem Profil, Pixelgröße und Mindestwand.
+* Ein Modell mit offenen Stellen wird beim Einlesen geschlossen, statt nur
+  gemeldet zu werden.
+* Verschieben und Drehen eines Modells mit 200 000 Dreiecken antworten in
+  einer halben Sekunde statt in acht.
+
+70 für Nutzer sichtbare Änderungen in dieser Fassung, 896 seit der ersten
+0.1-Demo.
+
+Solidon3D ist eine deutsche Einzelentwicklung: Desktop, Einmalkauf, kein Abo,
+kein Konto, nach der Freischaltung offline vollständig nutzbar.
+
+Solidon3D ist eine Desktop-Anwendung für Windows, macOS und Linux. Einmalkauf,
+kein Abo, kein Konto: Nach einer einmaligen Freischaltung läuft sie ohne Netz
+vollständig. Oberfläche und Handbuch liegen in sechs Sprachen vor, eine Demo
+steht bereit.
+
+Für Rückfragen, Testlizenzen oder Bildmaterial in Druckauflösung melden Sie
+sich gern direkt bei mir.
+
+Viele Grüße
+Robert Schneider
+RS Digital — Solidon3D
+marketing@solidon3d.de
+https://solidon3d.de

@@ -1,0 +1,65 @@
+From: Solidon3D <marketing@solidon3d.de>
+To: editors@all3dp.com
+Reply-To: marketing@solidon3d.de
+Subject: Pitch: a honeycomb pattern as one editable feature, not a carpet of faces
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+X-Unsent: 1
+
+Hello All3DP team,
+
+a pitch with a five-minute test at the end of it.
+
+Open any downloaded STL that carries a honeycomb pattern, a knurl or a set of
+ribs in a mesh tool, and you get hundreds of individual faces. There is
+nothing useful to edit — the pattern was never stored as a structure, only as
+geometry.
+
+Solidon3D 0.5.0 recognises it as one feature: a pattern with pitch, cell width
+and depth, a single entry in the object tree. One click removes it; three
+numbers set it again, and the cells stay where they were. This also works
+around a handle: a texture on a cylinder follows the curvature, so the grooves
+are equally deep everywhere and the pattern closes around the circumference
+without a seam — the pitch moves to the value that divides evenly, and Solidon
+says which one.
+
+Underneath sits the larger change of this release: the mesh becomes an exact
+body. Primitives are now built with real faces and edges, and holes, slots,
+countersinks, bosses, beads, grooves and threads stay exact when you move,
+duplicate, rotate or remove them. STEP goes in and comes back out cleanly. The
+four options that used to switch between mesh and exact kernels are gone —
+there is no kernel choice in the interface any more.
+
+Also in this release:
+
+* Dimensions appear on the model itself: click a hole and type its distances to
+  the edges, its centre and its diameter, with a live preview.
+* An existing thread gets its counterpart on the other part at the press of a
+  button, in a table size, and as a fit.
+* Resin printers are supported, with pixel size and minimum wall in the
+  profile.
+* A model with open areas is closed while it is read instead of merely being
+  reported.
+* Speed: a 200,000-triangle plate is recognised in one second; moving or
+  rotating it answers in half a second instead of eight.
+
+That is 70 user-visible changes in this release; 896 since the first 0.1 demo.
+
+If you want to try it: download any model with a knurl, click the pattern in
+the object tree, and set a different pitch. That is the one-minute version of
+this story.
+
+Solidon3D is a desktop application for Windows, macOS and Linux. One-time
+purchase, no subscription, no account: after a single activation it runs fully
+offline. Interface and manual are available in six languages, and there is a
+demo.
+
+I am happy to provide a review licence, print-resolution images or answers to
+any question directly.
+
+Best regards
+Robert Schneider
+RS Digital — Solidon3D
+marketing@solidon3d.de
+https://solidon3d.de

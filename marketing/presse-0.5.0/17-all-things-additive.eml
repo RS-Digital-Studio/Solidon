@@ -1,0 +1,58 @@
+From: Solidon3D <marketing@solidon3d.de>
+To: editorial@allthingsadditive.com
+Reply-To: marketing@solidon3d.de
+Subject: Software workflow: exact bodies from imported meshes, through to material-aware 3MF
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+X-Unsent: 1
+
+Hello All Things Additive team,
+
+a workflow story that runs from an imported file to a print-ready 3MF.
+
+Solidon3D takes a downloaded model, recognises its features — holes, slots,
+countersinks, bosses, threads, and now patterns such as honeycombs and knurls
+— and lets them be edited without CAD knowledge. Version 0.5.0 closes the gap
+that made the workflow one-way: the result is now an exact body. Primitives
+are built with real faces and edges, features stay exact through moving,
+duplicating, rotating and removing, and STEP goes in and comes back out
+cleanly.
+
+The downstream half is where it may fit your coverage:
+
+* Filament colours stay on exact bodies and follow every new meshing, so a
+  multi-material part survives editing.
+* Fits are checked on the real bodies in their assembled position, and the
+  export can be cancelled before it runs.
+* Exact bodies are meshed for the target printer — for a resin device as
+  finely as its pixels require, and the check report names the value.
+* The shape deviation map shows which faces of a meshing lie how far from the
+  original.
+* Handover to common slicers is direct, and the file can also be opened in a
+  resin vendor tool whose settings Solidon does not know.
+
+In this release the printing side also gained resin printers proper: two
+generic devices by build volume, plus user-defined devices with pixel size and
+minimum wall. A resin project no longer receives advice about nozzles, brims
+or bridges.
+
+70 user-visible changes in this release; 896 since the first 0.1 demo.
+
+Solidon3D is an independent development from Germany, desktop for Windows,
+macOS and Linux, one-time purchase, fully usable offline after a single
+activation.
+
+Solidon3D is a desktop application for Windows, macOS and Linux. One-time
+purchase, no subscription, no account: after a single activation it runs fully
+offline. Interface and manual are available in six languages, and there is a
+demo.
+
+I am happy to provide a review licence, print-resolution images or answers to
+any question directly.
+
+Best regards
+Robert Schneider
+RS Digital — Solidon3D
+marketing@solidon3d.de
+https://solidon3d.de

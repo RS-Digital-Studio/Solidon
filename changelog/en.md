@@ -32,6 +32,7 @@ it into `website/version.json`.
 - If a model consists of several shells and it cannot be read reliably whether one of them traps air, the report says so as a warning.
 - A closed model releases its memory; before, a few hundred megabytes per model stayed behind.
 - A model with many small faces, such as a honeycomb pattern, keeps its bores and fillets. Before, it showed no feature at all.
+- A field of 1,400 knobs is recognised in four seconds instead of twelve.
 
 ### Patterns
 
@@ -92,6 +93,7 @@ it into `website/version.json`.
 
 - An imported assembly can be placed on the bed as a whole with one click. The parts keep their position relative to each other.
 - A glTF without a plausible size is no longer believed to be in metres. Solidon asks for the unit and shows the dimensions for each reading.
+- A model with open areas is closed while it is read instead of merely reported: holes in the mesh, reversed faces, edges with three faces. Large openings are named separately in the check report.
 
 ### Operation and system
 
@@ -101,6 +103,10 @@ it into `website/version.json`.
 - Solidon starts in half the time.
 - With a feature selected, the tooltip remains, and a hint about the handle no longer wipes the last receipt.
 - If a step of the assistant halts the evaluation, the proposal takes it back entirely and shows the state before.
+- Moving or rotating a model with 200,000 triangles answers in half a second instead of eight.
+- Undo answers immediately instead of after two and a half seconds.
+- While you type a number the preview appears after half a second, each further one after an eighth of that.
+- Hollowing out computes a fifth faster.
 
 ## 0.4.4
 

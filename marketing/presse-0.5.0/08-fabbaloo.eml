@@ -1,0 +1,63 @@
+From: Solidon3D <marketing@solidon3d.de>
+To: info@fabbaloo.com
+Reply-To: marketing@solidon3d.de
+Subject: Release lead: Solidon3D 0.5.0 turns a downloaded mesh into an exact body
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+X-Unsent: 1
+
+Hello Fabbaloo team,
+
+a release lead that may fit your coverage of the software side of AM.
+
+Solidon3D takes downloaded 3D models and makes them editable without CAD
+knowledge. Until now the result of an edit was always a triangle mesh: useful
+for printing, useless for anyone who wanted to carry the part into a CAD
+system.
+
+Version 0.5.0 changes that. Primitives are built with real faces and edges,
+and holes, slots, countersinks, bosses, beads, grooves and threads stay exact
+when they are moved, duplicated, rotated or removed. STEP goes in and comes
+back out cleanly. Two geometry kernels — a mesh kernel and an exact B-Rep
+kernel — now run under one interface, and the four options that used to switch
+between them have been removed. There is no kernel choice for the user any
+more: Solidon keeps the exact body as long as it can, and says so when it
+cannot. Existing projects keep computing unchanged.
+
+What is worth noting is what is not claimed: Solidon does not reconstruct a
+CAD model from arbitrary triangles. It recognises features, carries them
+forward exactly where that is possible, and names the limit where it is not.
+The provenance of every dimension is stated in the feature window — measured,
+fitted, or taken from the construction step.
+
+Further changes:
+
+* A honeycomb pattern, knurl, set of ribs, waves or knobs is now one feature
+  with pitch, cell width and depth instead of hundreds of faces, and can be
+  removed or reapplied — including around a handle.
+* Dimensions appear on the model with editable fields and a live preview.
+* Resin printers are supported; exact bodies are meshed as finely as their
+  pixels require, and the check report names the value.
+* Recognition is several times faster, and moving a 200,000-triangle model
+  answers in half a second instead of eight.
+
+70 user-visible changes in this release, 896 since the first 0.1 demo.
+
+Solidon3D is an independent development from Germany: desktop, one-time
+purchase, fully usable offline after a single activation, no account, no
+telemetry.
+
+Solidon3D is a desktop application for Windows, macOS and Linux. One-time
+purchase, no subscription, no account: after a single activation it runs fully
+offline. Interface and manual are available in six languages, and there is a
+demo.
+
+I am happy to provide a review licence, print-resolution images or answers to
+any question directly.
+
+Best regards
+Robert Schneider
+RS Digital — Solidon3D
+marketing@solidon3d.de
+https://solidon3d.de

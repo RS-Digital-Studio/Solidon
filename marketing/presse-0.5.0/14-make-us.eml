@@ -1,0 +1,57 @@
+From: Solidon3D <marketing@solidon3d.de>
+To: editor@make.co
+Reply-To: marketing@solidon3d.de
+Subject: Workshop pitch: reset the knurl on a downloaded handle, keep the part exact
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+X-Unsent: 1
+
+Hello Make: team,
+
+a workshop pitch that ends with something you can hold.
+
+Take any downloaded handle with a knurled grip. In a mesh tool the knurl is a
+carpet of hundreds of faces; making the grooves deeper means redrawing the
+part.
+
+In Solidon3D 0.5.0 the knurl is one feature in the object tree, with pitch,
+cell width and depth. Change three numbers and it is reapplied — and because a
+pattern on a cylinder is measured in the unrolled surface, the grooves are
+equally deep all the way round and the pattern closes without a seam. Print
+the original and the modified grip, and you have a direct comparison of grip
+and surface finish.
+
+The more interesting half for a maker audience is what the part is afterwards:
+still an exact body. As of this release, primitives are built with real faces
+and edges, and holes, slots, countersinks, bosses, beads, grooves and threads
+stay exact through moving, duplicating, rotating and removing. STEP goes in and
+comes back out cleanly, so the result can be carried into a CAD system rather
+than arriving as triangles.
+
+Two more things that suit a workshop piece:
+
+* An existing thread gets its counterpart on the other part at the press of a
+  button, in a table size and as a fit. The starting point may be an imported
+  thread: Solidon measures pitch, starts, handedness and nominal diameter, and
+  refuses when no table size matches instead of rounding.
+* Dimensions are edited on the model itself — click a hole, type its distance
+  to the edge, watch the preview.
+
+I am happy to provide a review licence and the models used. If you would
+rather use a file from your own archive, better still: that is exactly the case
+the recognition was built for.
+
+Solidon3D is a desktop application for Windows, macOS and Linux. One-time
+purchase, no subscription, no account: after a single activation it runs fully
+offline. Interface and manual are available in six languages, and there is a
+demo.
+
+I am happy to provide a review licence, print-resolution images or answers to
+any question directly.
+
+Best regards
+Robert Schneider
+RS Digital — Solidon3D
+marketing@solidon3d.de
+https://solidon3d.de

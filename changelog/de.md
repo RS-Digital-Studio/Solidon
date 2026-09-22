@@ -57,6 +57,7 @@ Nutzen da und sonst nichts.
 - Besteht ein Modell aus mehreren Schalen und lässt sich nicht sicher lesen, ob eine davon Luft einschließt, steht das als Warnung im Prüfbericht.
 - Ein geschlossenes Modell gibt seinen Speicher frei; vorher blieben einige hundert Megabyte je Modell liegen.
 - Ein Modell mit vielen kleinen Flächen, etwa einem Wabenmuster, behält seine Bohrungen und Rundungen. Vorher stand es ohne ein einziges Merkmal da.
+- Ein Noppenfeld mit 1 400 Kuppen erkennt sich in vier Sekunden statt in zwölf.
 
 ### Muster
 
@@ -117,6 +118,7 @@ Nutzen da und sonst nichts.
 
 - Eine eingelesene Baugruppe lässt sich mit einem Klick als Ganzes auf das Bett setzen. Die Teile behalten ihre Lage zueinander.
 - Ein glTF ohne plausible Größe wird nicht mehr in Metern geglaubt. Solidon fragt nach der Einheit und zeigt die Maße je Lesart.
+- Ein Modell mit offenen Stellen wird beim Einlesen geschlossen, statt nur gemeldet: Löcher im Netz, umgekehrte Flächen, Kanten mit drei Flächen. Große Öffnungen nennt der Prüfbericht eigens.
 
 ### Bedienung und System
 
@@ -126,6 +128,10 @@ Nutzen da und sonst nichts.
 - Solidon startet in der Hälfte der Zeit.
 - Bei einem gewählten Merkmal bleibt der Tooltip erhalten, und ein Hinweis zum Griff wischt die letzte Quittung nicht mehr weg.
 - Hält ein Schritt des Assistenten die Auswertung an, nimmt der Vorschlag ihn ganz zurück und zeigt den Stand davor.
+- Ein Modell mit 200 000 Dreiecken zu verschieben oder zu drehen antwortet in einer halben Sekunde statt in acht.
+- Rückgängig antwortet sofort statt nach zweieinhalb Sekunden.
+- Beim Tippen einer Zahl steht die Vorschau nach einer halben Sekunde, jede weitere nach einem Achtel davon.
+- Aushöhlen rechnet ein Fünftel schneller.
 
 ## 0.4.4
 

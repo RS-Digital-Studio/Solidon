@@ -1,0 +1,53 @@
+From: Solidon3D <marketing@solidon3d.de>
+To: sales@makersmuse.com
+Reply-To: marketing@solidon3d.de
+Subject: Independent review offer: reset a knurl on a downloaded model, keep it exact
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+X-Unsent: 1
+
+Hello Angus and team,
+
+an offer for an independent review, with the framing your contact page asks
+for: this is a manual modelling tool, and the test I am proposing involves no
+AI at all.
+
+Solidon3D reads downloaded 3D models and makes their features editable without
+CAD knowledge. The test that shows the difference in a few minutes: open any
+model with a knurled grip or a honeycomb panel. In a mesh tool that is a few
+hundred faces and nothing to edit. In Solidon 0.5.0 it is one feature with
+pitch, cell width and depth — removed with a click, reapplied with three
+numbers. On a cylinder the pattern is measured in the unrolled surface, so the
+grooves are equally deep all the way round and the pattern closes without a
+seam.
+
+The structural change of this release is that the part stays exact: primitives
+are built with real faces and edges, and holes, slots, countersinks, bosses,
+beads, grooves and threads survive moving, duplicating, rotating and removing
+without being converted to triangles. STEP goes in and comes back out cleanly,
+so the result can be checked in a CAD system rather than judged by eye.
+
+On the AI question, so it is stated plainly rather than discovered later:
+there is an assistant in the product. It is optional, it can be switched off,
+it can run locally on your own GPU, and no function of the software depends on
+it. The review I am asking for is of the modelling tool.
+
+Solidon3D runs on Windows, macOS and Linux, is a one-time purchase with no
+subscription, and works fully offline after a single activation — no account,
+no telemetry. A review licence is available on request, and the demo is
+complete enough for the test above if you would rather not hold a licence.
+
+Solidon3D is a desktop application for Windows, macOS and Linux. One-time
+purchase, no subscription, no account: after a single activation it runs fully
+offline. Interface and manual are available in six languages, and there is a
+demo.
+
+I am happy to provide a review licence, print-resolution images or answers to
+any question directly.
+
+Best regards
+Robert Schneider
+RS Digital — Solidon3D
+marketing@solidon3d.de
+https://solidon3d.de

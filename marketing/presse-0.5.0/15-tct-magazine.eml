@@ -1,0 +1,60 @@
+From: Solidon3D <marketing@solidon3d.de>
+To: laura.griffiths@rapidnews.com
+Reply-To: marketing@solidon3d.de
+Subject: Editorial lead: dimension provenance and an exact body from an imported mesh
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+X-Unsent: 1
+
+Hello Laura,
+
+an editorial lead on a point that tends to be glossed over in this software
+category: where a dimension comes from.
+
+Solidon3D reads downloaded meshes and makes their features editable without
+CAD. With version 0.5.0 two things changed that are relevant for a
+manufacturing readership.
+
+First, the result is an exact body. Primitives are built with real faces and
+edges, and holes, slots, countersinks, bosses, beads, grooves and threads stay
+exact when they are moved, duplicated, rotated or removed. STEP goes in and
+comes back out cleanly. Two geometry kernels run under one interface, and the
+options that used to expose that choice have been removed — the software keeps
+the exact body where it can and names the limit where it cannot, rather than
+converting silently.
+
+Second, and this is the part I would offer as the angle: every dimension
+states its provenance. The feature window says whether a value was measured on
+the mesh, fitted to a surface, or taken from the construction step that
+created it. For anyone documenting a part, that distinction is the difference
+between a number and a specification. In the same spirit, a recognised feature
+keeps its identity through edits: closing a hole and drilling a new one
+produces identical geometry but a different feature, and any fit pointing at
+it loses its reference — moving it does not.
+
+Other items: a honeycomb pattern, knurl or rib structure is recognised as one
+feature with pitch, cell width and depth; an imported thread is measured
+(pitch, starts, handedness, nominal diameter) and can have its counterpart
+generated in a table size as a fit; resin printers are supported with pixel
+size and minimum wall; fits are checked on the real bodies in their assembled
+position.
+
+70 user-visible changes in this release; 896 since the first 0.1 demo.
+
+Solidon3D is an independent development from Germany, desktop, one-time
+purchase, fully usable offline after a single activation.
+
+Solidon3D is a desktop application for Windows, macOS and Linux. One-time
+purchase, no subscription, no account: after a single activation it runs fully
+offline. Interface and manual are available in six languages, and there is a
+demo.
+
+I am happy to provide a review licence, print-resolution images or answers to
+any question directly.
+
+Best regards
+Robert Schneider
+RS Digital — Solidon3D
+marketing@solidon3d.de
+https://solidon3d.de

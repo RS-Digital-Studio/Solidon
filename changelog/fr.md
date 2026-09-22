@@ -33,6 +33,7 @@ dans `website/version.json`.
 - Si un modèle se compose de plusieurs coques et qu'on ne peut pas lire avec certitude si l'une d'elles emprisonne de l'air, le rapport le dit sous forme d'avertissement.
 - Un modèle fermé libère sa mémoire ; avant, quelques centaines de mégaoctets par modèle restaient occupés.
 - Un modèle avec beaucoup de petites faces, comme un motif en nid d'abeille, garde ses perçages et ses congés. Avant, il n'affichait aucune caractéristique.
+- Un champ de 1 400 picots est reconnu en quatre secondes au lieu de douze.
 
 ### Motifs
 
@@ -93,6 +94,7 @@ dans `website/version.json`.
 
 - Un assemblage importé se pose sur le plateau d'un seul clic, comme un tout. Les pièces gardent leur position les unes par rapport aux autres.
 - Un glTF sans taille plausible n'est plus cru en mètres. Solidon demande l'unité et montre les cotes pour chaque lecture.
+- Un modèle aux zones ouvertes est refermé à la lecture au lieu d'être seulement signalé : trous, faces inversées, arêtes à trois faces. Les grandes ouvertures sont nommées à part dans le rapport.
 
 ### Utilisation et système
 
@@ -102,6 +104,10 @@ dans `website/version.json`.
 - Solidon démarre en deux fois moins de temps.
 - Avec une caractéristique sélectionnée, l'infobulle reste, et une indication sur la poignée n'efface plus le dernier accusé.
 - Si une étape de l'assistant arrête l'évaluation, la proposition la retire entièrement et montre l'état précédent.
+- Déplacer ou faire pivoter un modèle de 200 000 triangles répond en une demi-seconde au lieu de huit.
+- Annuler répond immédiatement au lieu de deux secondes et demie.
+- Pendant que vous tapez un nombre, l'aperçu apparaît en une demi-seconde, chaque suivant en un huitième de ce temps.
+- L'évidement calcule un cinquième plus vite.
 
 ## 0.4.4
 

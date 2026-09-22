@@ -1,0 +1,69 @@
+From: Solidon3D <marketing@solidon3d.de>
+To: press@golem.de
+Reply-To: marketing@solidon3d.de
+Subject: Themenvorschlag: CAD-Werkzeug ohne Kernwahl — Netz und exakter Körper tun dasselbe
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+X-Unsent: 1
+
+Sehr geehrte Redaktion,
+
+ein Themenvorschlag mit einem technischen Kern, der über die übliche
+Funktionsliste hinausgeht.
+
+3D-Werkzeuge zerfallen in zwei Lager. CAD-Programme rechnen mit exakten
+Flächen und können mit einer heruntergeladenen STL wenig anfangen.
+Netzwerkzeuge rechnen mit Dreiecken und geben nie exakte Flächen zurück. Wer
+beides braucht, wechselt das Programm — und verliert dabei die
+Bearbeitbarkeit.
+
+Solidon3D 0.5.0 hat beide Kerne unter einer Oberfläche, und zwar ohne dass der
+Nutzer es merkt. Die vier Optionen, mit denen man bisher zwischen ihnen wählen
+konnte, sind gefallen. Grundkörper entstehen mit echten Flächen und Kanten;
+Bohrung, Langloch, Senkung, Zapfen, Wulst, Kehle und Gewinde bleiben am
+exakten Körper exakt, wenn man sie versetzt, verdoppelt, dreht oder entfernt;
+alle Bausteine der Bibliothek bauen exakt; STEP geht sauber hinein und hinaus.
+Wo eine Operation den exakten Körper nicht halten kann, sagt Solidon es, statt
+still umzuwandeln. Alte Projekte rechnen unverändert weiter.
+
+Interessant ist auch, was dabei nicht behauptet wird: Solidon rekonstruiert
+kein CAD-Modell aus beliebigen Dreiecken. Es erkennt Merkmale, rechnet sie
+exakt weiter, wo es geht, und benennt die Grenze, wo nicht. Die Herkunft eines
+Maßes steht im Merkmalfenster — gemessen, eingepasst oder aus dem
+Konstruktionsschritt.
+
+Weitere Punkte dieser Fassung:
+
+* Ein Wabenmuster, ein Rändel oder eine Rippenstruktur steht als ein Merkmal
+  mit Teilung, Zellbreite und Tiefe im Baum statt als Hunderte Flächen — und
+  lässt sich entfernen oder neu setzen, auch um einen Griff herum.
+* Maße erscheinen direkt am Modell, mit Zahlenfeldern und Vorschau beim
+  Tippen, statt in einem vorgelagerten Dialog.
+* Importierte Gewinde werden vermessen: Steigung, Gangzahl, Rechts- oder
+  Linksgang, Nenndurchmesser. Auch gespiegelte Teile behalten die Händigkeit.
+* Die Erkennung ist um ein Vielfaches schneller: Eine Lochplatte mit 200 000
+  Dreiecken steht in einer Sekunde, ein Modell zu verschieben antwortet in
+  einer halben statt in acht.
+
+70 für Nutzer sichtbare Änderungen in dieser Fassung, 896 seit der ersten
+0.1-Demo.
+
+Zur Einordnung: Solidon3D ist eine Einzelentwicklung aus Deutschland, Desktop
+für Windows, macOS und Linux, Einmalkauf ohne Abo, nach einmaliger
+Freischaltung ohne Netz und ohne Konto vollständig nutzbar. Die KI-Funktionen
+sind abschaltbar, laufen wahlweise lokal und sind für nichts Voraussetzung.
+
+Solidon3D ist eine Desktop-Anwendung für Windows, macOS und Linux. Einmalkauf,
+kein Abo, kein Konto: Nach einer einmaligen Freischaltung läuft sie ohne Netz
+vollständig. Oberfläche und Handbuch liegen in sechs Sprachen vor, eine Demo
+steht bereit.
+
+Für Rückfragen, Testlizenzen oder Bildmaterial in Druckauflösung melden Sie
+sich gern direkt bei mir.
+
+Viele Grüße
+Robert Schneider
+RS Digital — Solidon3D
+marketing@solidon3d.de
+https://solidon3d.de

@@ -1,0 +1,61 @@
+From: Solidon3D <marketing@solidon3d.de>
+To: info@voxelmatters.com
+Reply-To: marketing@solidon3d.de
+Subject: Follow-up to your Solidon3D article: the mesh became an exact body
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+X-Unsent: 1
+
+Hello VoxelMatters team,
+
+you covered Solidon3D in detail on 22 August, so this is not a second product
+introduction — only what has genuinely been added since the state you
+described.
+
+At the time, the result of an edit was a triangle mesh. As of 0.5.0 it is an
+exact body: primitives are built with real faces and edges, and holes, slots,
+countersinks, bosses, beads, grooves and threads stay exact when they are
+moved, duplicated, rotated or removed. STEP goes in and comes back out
+cleanly.
+
+The part that changes the story rather than extending the feature list is that
+the choice disappeared. Two geometry kernels run under one interface, and the
+four options that used to switch between them have been removed. The user does
+not decide between two modes; Solidon keeps the exact body as long as it can
+and says so when it cannot. Existing projects keep computing unchanged.
+
+The second addition is the one that photographs well: a honeycomb pattern, a
+knurl, ribs, waves or knobs used to fill the object tree with hundreds of
+faces. They are now one feature with pitch, cell width and depth — removed
+with a click, reapplied with three numbers, including around a handle. A
+texture on a cylinder follows the curvature, so grooves are equally deep
+everywhere and the pattern closes around the circumference without a seam.
+
+Shorter items:
+
+* Dimensions are edited on the model itself, with a live preview, instead of
+  in a dialog placed in front of it.
+* An existing thread gets its counterpart on the other part at the press of a
+  button, in a table size and as a fit.
+* Resin printers are supported, with pixel size and minimum wall.
+* A model with open areas is closed while it is read instead of merely
+  reported.
+* Recognition is several times faster; moving a 200,000-triangle model answers
+  in half a second instead of eight.
+
+70 user-visible changes in this release; 896 since the first 0.1 demo.
+
+Solidon3D is a desktop application for Windows, macOS and Linux. One-time
+purchase, no subscription, no account: after a single activation it runs fully
+offline. Interface and manual are available in six languages, and there is a
+demo.
+
+I am happy to provide a review licence, print-resolution images or answers to
+any question directly.
+
+Best regards
+Robert Schneider
+RS Digital — Solidon3D
+marketing@solidon3d.de
+https://solidon3d.de

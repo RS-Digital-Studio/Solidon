@@ -1,0 +1,53 @@
+From: Solidon3D <marketing@solidon3d.de>
+To: info@3dprint.com
+Reply-To: marketing@solidon3d.de
+Subject: Story lead: a pattern that a file format never stored, edited as one object
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+X-Unsent: 1
+
+Hello 3DPrint.com team,
+
+a story lead built around a single, visual idea.
+
+A downloaded STL of a knurled handle contains no knurl. It contains a few
+hundred triangles that happen to look like one. That is why no tool lets you
+make the grooves deeper: there is nothing to change, only geometry to redraw.
+
+Solidon3D 0.5.0 recognises the pattern itself — a honeycomb, knurl, set of
+ribs, waves or knobs — and presents it as one feature with pitch, cell width
+and depth. One click removes it; three numbers set it again, with the cells
+staying where they were. Around a cylinder the pattern is measured in the
+unrolled surface, so the grooves are equally deep everywhere and the pattern
+closes around the circumference without a seam; the pitch moves to the value
+that divides evenly, and the software says which one.
+
+The structural change behind it: the mesh becomes an exact body. Primitives
+are built with real faces and edges, and holes, slots, countersinks, bosses,
+beads, grooves and threads stay exact through moving, duplicating, rotating
+and removing. STEP goes in and comes back out cleanly, so the result can be
+carried into a CAD system instead of arriving as triangles again. The options
+that used to switch between the mesh and the exact kernel are gone.
+
+Other items from this release: dimensions are edited directly on the model
+with a live preview; an existing thread gets its counterpart on the other part
+at the press of a button, in a table size and as a fit; resin printers are
+supported; a model with open areas is closed while it is read; and moving a
+200,000-triangle model answers in half a second instead of eight.
+
+70 user-visible changes in this release, 896 since the first 0.1 demo.
+
+Solidon3D is a desktop application for Windows, macOS and Linux. One-time
+purchase, no subscription, no account: after a single activation it runs fully
+offline. Interface and manual are available in six languages, and there is a
+demo.
+
+I am happy to provide a review licence, print-resolution images or answers to
+any question directly.
+
+Best regards
+Robert Schneider
+RS Digital — Solidon3D
+marketing@solidon3d.de
+https://solidon3d.de

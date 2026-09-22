@@ -1,0 +1,56 @@
+From: Solidon3D <marketing@solidon3d.de>
+To: contact@omgubuntu.co.uk
+Reply-To: marketing@solidon3d.de
+Subject: App tip: a native Linux CAD-adjacent tool that works offline, no account
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+X-Unsent: 1
+
+Hello OMG! Ubuntu team,
+
+an app tip for the Linux desktop, with the details your readers usually ask
+for first.
+
+Solidon3D is a desktop application for editing downloaded 3D models without
+CAD knowledge — move a hole in a printable part, change a countersink, add a
+thread that fits. It ships as a Flatpak and an AppImage for Linux, alongside
+Windows and macOS builds. One-time purchase, no subscription. After a single
+activation it runs fully offline: no account, no telemetry, no server
+requirement. A machine with no network connection can be activated via a file
+and a second device.
+
+Version 0.5.0 is a large step. Until now an edited model came back out as a
+triangle mesh; now it is an exact body with real faces and edges, and holes,
+slots, countersinks, bosses, beads, grooves and threads stay exact when they
+are moved, duplicated, rotated or removed. STEP goes in and comes back out
+cleanly, so the result can be carried into FreeCAD or any other CAD tool.
+
+The most immediately visible change: a honeycomb pattern, a knurl or a set of
+ribs is recognised as one feature with pitch, cell width and depth instead of
+hundreds of faces, and can be removed with a click or reapplied with three
+numbers — including around a cylindrical handle.
+
+Two more that matter in daily use: dimensions are edited on the model itself
+with a live preview, and the application starts in half the time it used to.
+
+There is an assistant with AI features. It is optional, can be switched off
+entirely, and can run locally on your own GPU — nothing is required to leave
+the machine.
+
+70 user-visible changes in this release; 896 since the first 0.1 demo.
+Interface and manual in six languages. A demo is available.
+
+Solidon3D is a desktop application for Windows, macOS and Linux. One-time
+purchase, no subscription, no account: after a single activation it runs fully
+offline. Interface and manual are available in six languages, and there is a
+demo.
+
+I am happy to provide a review licence, print-resolution images or answers to
+any question directly.
+
+Best regards
+Robert Schneider
+RS Digital — Solidon3D
+marketing@solidon3d.de
+https://solidon3d.de
