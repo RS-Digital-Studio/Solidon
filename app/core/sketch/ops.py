@@ -24,7 +24,14 @@ from app.core.errors import CORRECT_INPUT, Action, GeometryError, ValidationErro
 from app.core.geom.boolean import without_effect
 from app.core.registry import NAME_DOC, op_params, param, register_op
 from app.core.sketch import planes, shapes
-from app.core.sketch.planes import frame_for, frame_of, height_to, is_feature_plane
+from app.core.sketch.planes import (
+    frame_for,
+    frame_for_sketch,
+    frame_of,
+    height_to,
+    is_derived_plane,
+    is_feature_plane,
+)
 from app.core.sketch.profile import (
     Profile,
     bounds_of,
@@ -132,9 +139,14 @@ def _sketch_profile(shape: str, length: float, width: float, corners: int) -> Pr
     return profile_of(solve_sketch(sketch))
 
 
+def _parameter_values(ctx: OpContext) -> dict[str, float]:
+    """Die aufgelösten Projektparameter — für die Maße der Zeichnung und ihre Ebene."""
+    return {name: entry.value for name, entry in ctx.scene.parameters.items()}
+
+
 def _solved_drawing(ctx: OpContext, sketch_text: str, findings: list[Finding]) -> SolvedSketch:
     """Löst eine Zeichnung einmal und nimmt ihre freien Maße in den Bericht mit."""
-    values = {name: entry.value for name, entry in ctx.scene.parameters.items()}
+    values = _parameter_values(ctx)
     solved = solve_sketch(sketch_from_text(sketch_text), values)
     if solved.free_dof > 0:
         findings.append(
@@ -171,14 +183,20 @@ def _plane_of(sketch_text: str) -> str:
 
 
 def _frame_of(ctx: OpContext, plane: str) -> PlaneFrame | None:
-    """Der Rahmen einer Flächenebene, sonst nichts.
+    """Der Rahmen jeder Ebene, die der B-Rep-Kern nicht selbst kennt.
 
     ``None`` heißt nicht „unbekannt", sondern „eine der drei Hauptebenen" —
     die kennt der B-Rep-Kern selbst, und ihm die Szene zu reichen, damit er
-    nachschlägt, was feststeht, wäre eine Abhängigkeit ohne Gegenwert."""
-    if not is_feature_plane(plane):
+    nachschlägt, was feststeht, wäre eine Abhängigkeit ohne Gegenwert.
+
+    **Eine abgeleitete Ebene gehört ausdrücklich dazu** (§30.1): Sie steht in
+    keiner Tabelle des Kerns, und ohne diesen Rahmen läge die Zeichnung auf
+    der Grundebene statt zwanzig Millimeter darüber — der Vertrag wäre eine
+    Angabe, die niemand einlöst. Ihr Abstand darf ein Projektparameter sein,
+    deshalb reisen die Werte mit."""
+    if not (is_feature_plane(plane) or is_derived_plane(plane)):
         return None
-    return frame_for(plane, ctx.scene.objects.values())
+    return frame_for_sketch(plane, ctx.scene.objects.values(), _parameter_values(ctx))
 
 
 def _regions_for(
