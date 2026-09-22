@@ -35,6 +35,7 @@ from app.core.geom.mesh import MeshData, face_components, fully_stitched
 from app.core.geom.repair import merge_vertices
 from app.core.log import get_logger
 from app.core.perceive.helix import Helix, find_helices
+from app.core.perceive.patterns import patterns_instead_of_cells
 from app.core.perceive.slots import ACROSS_THE_AXIS, PARALLEL_AXES, slots_instead_of_half_bores
 from app.core.perceive.surfaces import clipped_patches, planar_patch
 from app.core.types import Feature, FeatureId, SurfacePatch, Vec3, is_a_cavity
@@ -744,6 +745,7 @@ DETECTABLE_KINDS: frozenset[str] = frozenset(
         "void",
         "slot",
         "curved_face",
+        "pattern",
     }
 )
 
@@ -1050,6 +1052,14 @@ def detect(
         if check_cancelled is not None:
             check_cancelled()
         found = _partial_bores_marked(mesh, found, check_cancelled=check_cancelled)
+        if check_cancelled is not None:
+            check_cancelled()
+        # **Nach allen Einzelformen und vor dem Freiformfilter.** Ein Muster
+        # besteht aus dem, was die Einpassung je Zelle gefunden hat — Wände,
+        # Böden, Sackbohrungen —, und verschluckt es; und seine Zellen zählten
+        # sonst beim Urteil über das ganze Modell mit, obwohl sie zu einem
+        # Feld gehören (§21.1, RM-207).
+        found = patterns_instead_of_cells(mesh, found, check_cancelled=check_cancelled)
         if check_cancelled is not None:
             check_cancelled()
         found, left_out = _shapes_on_a_freeform(

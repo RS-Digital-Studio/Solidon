@@ -941,7 +941,7 @@ def moved_features(
         if check_cancelled is not None:
             check_cancelled()
         params = dict(feature.params)
-        for key in ("centre", "position", "arc_centre", "mouth_centre"):
+        for key in ("centre", "position", "arc_centre", "mouth_centre", "anchor"):
             if key in params:
                 point = np.asarray(params[key], dtype=float)
                 carried = matrix @ np.array([*point, 1.0])
@@ -1024,6 +1024,8 @@ def transformed_features(
         "pitch",
         "width",
         "height",
+        "cell_width",
+        "cell_depth",
         "travel",
         "fit_error",
         "radial_min",
