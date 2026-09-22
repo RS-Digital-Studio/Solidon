@@ -2565,6 +2565,18 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Baustein für die Selbstdurchdringung, `test_parts.py` unter 60 s auf der
   Referenzmaschine.
 
+  **Gemessen am 22.09.2026, bevor jemand die eine durch die andere ersetzt:**
+  Beide Fassungen antworten an `broken_selfint`, `cube_clean`, `plate_holes`
+  und `torus_ring` gleich, und die Feldfassung ist zwischen 100- und 200-mal
+  schneller (`plate_holes` 3,93 s → 0,023 s, `torus_ring` 8,15 s → 0,040 s).
+  **Einen Fall findet sie aber nicht:** zwei deckungsgleiche Dreiecke in
+  derselben Ebene. `repair.self_intersecting_faces` prüft Kante-durch-Fläche,
+  und eine koplanare Überlappung durchstößt nichts; `_IntersectionCheck` hat
+  dafür `_coplanar_overlap`. Wer die Fassungen zusammenlegt, nimmt diesen
+  Zweig mit — sonst geht der Bereichsprüfung genau der Fall verloren, für den
+  sie da ist: zwei Bausteinflächen, die an einer Ecke des Parameterbereichs
+  aufeinanderfallen.
+
 <a id="rm-020"></a>
 
 - [ ] **RM-020 — Sicherung der eigenständigen Druckprojekte belegen.** Den Sicherungsweg für das
