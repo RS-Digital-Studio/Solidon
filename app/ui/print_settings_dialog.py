@@ -1020,8 +1020,13 @@ def settings_for_export(
     Kern (``writer._plate_settings`` gibt bei ``None`` ein leeres Verzeichnis
     zurück) war von der Anwendung aus nicht erreichbar, weil hier immer
     aufgelöst wurde.
+
+    * **Und ein Resin-Drucker gibt nie welche mit** (RM-071): Der Satz ist ein
+      FDM-Vertrag — Wände, Füllung, Düsentemperatur —, und ein Resin-Slicer
+      liest ihn nicht. Was er läse, wäre eine Aussage über eine Düse, die
+      es nicht gibt.
     """
-    if not ui_settings.print_settings_in_files:
+    if not ui_settings.print_settings_in_files or profile.printer.is_resin:
         return None
     stored = document.print_settings
     quality = ui_settings.print_quality
@@ -1084,10 +1089,9 @@ def remembered_setup(
     chosen_with = settings.slicer_profile_slicer
     if chosen_with and str(found) != chosen_with:
         return None
-    try:
-        setup = handover.detect(found)
-    except AppError:
-        # Ein unbekanntes Programm ist hier kein Fehler, sondern eine
+    setup = handover.detect(found)
+    if handover.only_opens(setup):
+        # Ein Programm ohne Familie ist hier kein Fehler, sondern eine
         # Auskunft weniger: geschrieben wird trotzdem, nur ohne Systemprofil.
         return None
     filament = (
@@ -2480,15 +2484,19 @@ class PrintSettingsDialog(QDialog):
         # ``_build_state`` — dort, wo der Kunde sie braucht.
         self._make_plate_row()
         layout.addLayout(self._build_head())
-        layout.addWidget(self._build_front())
+        self.front_box = self._build_front()
+        layout.addWidget(self.front_box)
         # **Über der Klappe, nicht darin.** Wer sucht, weiß gerade nicht, wo
         # das Gesuchte steht — ein Suchfeld in „Weitere Einstellungen" fände
         # nur, wer den Bereich schon offen hat. Es steht deshalb frei darüber
         # und klappt selbst auf, wenn der Treffer dahinter liegt.
-        layout.addLayout(self._build_search())
-        layout.addWidget(self._build_tabs(), 1)
+        self.search_row = self._build_search()
+        layout.addLayout(self.search_row)
+        self.tabs_box = self._build_tabs()
+        layout.addWidget(self.tabs_box, 1)
         layout.addWidget(self._build_slicer())
-        layout.addWidget(self._build_advice())
+        self.advice_box = self._build_advice()
+        layout.addWidget(self.advice_box)
         layout.addWidget(self._build_state())
         self.usage_notice = UsageNotice(ui_settings, self)
         self.usage_notice.changed.connect(self._refresh_advice)
@@ -2496,6 +2504,8 @@ class PrintSettingsDialog(QDialog):
         layout.addWidget(self._build_buttons())
 
         self._load_into_editors()
+        if session.profile.printer.is_resin:
+            self._reduce_for_resin()
         self._refresh_advice()
         # **Erst die Suche anmelden, dann die Profile.** Beide Wege enden in
         # :meth:`_show_slicer_state`, und die muss den Wartezustand schon
@@ -2646,6 +2656,7 @@ class PrintSettingsDialog(QDialog):
 
         quality_label = QLabel(tr("Qualität"), self)
         quality_label.setBuddy(self.quality)
+        self.quality_label = quality_label
         printer_label = QLabel(tr("Drucker"), self)
         printer_label.setBuddy(self.printer_choice)
         # **Weder „Düse" noch „Düsendurchmesser".** Das erste ist in diesem
@@ -2659,10 +2670,13 @@ class PrintSettingsDialog(QDialog):
         # vorgelesen wird der ``accessibleName``.
         nozzle_label = QLabel(tr("Düse ⌀"), self)
         nozzle_label.setBuddy(self.nozzle)
+        self.nozzle_label = nozzle_label
         nozzle_count_label = QLabel(tr("Düsen"), self)
         nozzle_count_label.setBuddy(self.nozzle_count)
+        self.nozzle_count_label = nozzle_count_label
         filament_label = QLabel(tr("Filamente"), self)
         filament_label.setBuddy(self.material_link)
+        self.filament_label = filament_label
 
         # Drei kurze, vollständige Zeilen statt einer überbreiten Kopfzeile:
         # Der Dialog ist in Handbuch und Laptopansicht nur 520 bis 620 px breit.
@@ -2690,6 +2704,68 @@ class PrintSettingsDialog(QDialog):
         head.setColumnStretch(1, 1)
         head.setColumnStretch(3, 2)
         return head
+
+    def _fit_to_technology(self) -> None:
+        """Nach einem Druckerwechsel: die FDM-Abschnitte weg, wenn Harz
+        gewählt ist, und zurück, wenn wieder ein Filamentdrucker dasteht."""
+        if self.session.profile.printer.is_resin:
+            self._reduce_for_resin()
+            return
+        for widget in self._fdm_only_widgets():
+            widget.show()
+        self.filament_label.setText(tr("Filamente"))
+        self.material_link.setText(tr("Filamente …"))
+        make_primary(self.open_button if self.settings.handover == "open" else self.slice_button)
+        self.setMinimumSize(560, 640)
+        self._show_slicer_state()
+
+    def _fdm_only_widgets(self) -> list[QWidget]:
+        """Was nur an einem Filamentdrucker etwas bedeutet."""
+        widgets: list[QWidget] = [
+            self.quality_label,
+            self.quality,
+            self.share_settings,
+            self.nozzle_label,
+            self.nozzle,
+            self.nozzle_count_label,
+            self.nozzle_count,
+            self.front_box,
+            self.tabs_box,
+            self.advice_box,
+            self.slice_button,
+            self.save_button,
+        ]
+        for index in range(self.search_row.count()):
+            item = self.search_row.itemAt(index)
+            widget = item.widget() if item is not None else None
+            if widget is not None:
+                widgets.append(widget)
+        return widgets
+
+    def _reduce_for_resin(self) -> None:
+        """Was ein Resin-Drucker von diesem Dialog braucht — und was nicht.
+
+        Ein Resin-Slicer liest keine FDM-Werte: Stufe, Wände, Füllung, Kühlung,
+        Stützen und Haftung sind dort ohne Gegenstand, und die Vorschläge dazu
+        auch (Resin-Konzept B4). Was bleibt, ist der Weg zur Datei — Drucker,
+        Material, Platten, das Programm und *Im Slicer öffnen*. Der
+        Konsolenlauf rechnet einen G-Code, den es für Harz nicht gibt, und
+        die Druckdatei daraus auch nicht.
+
+        Verborgen, nicht abgebaut: Die Felder gehören weiter zum Dialog, und
+        ein Wechsel des Druckers in der Kopfzeile baut ihn neu auf. Ein
+        Feld, das für das gewählte Verfahren nichts bedeutet, steht nicht da
+        (`oberflaeche.md`: „Ein Feld ohne Wirkung steht nicht da").
+        """
+        for widget in self._fdm_only_widgets():
+            widget.hide()
+        # Harz ist kein Filament — dieselbe Zeile, das Wort des Verfahrens.
+        self.filament_label.setText(tr("Material"))
+        self.material_link.setText(tr("Material …"))
+        # Ohne Konsolenlauf ist Öffnen der einzige Weg — und damit der
+        # Hauptknopf, gleich was das Projekt gemerkt hat.
+        make_primary(self.open_button)
+        self.setMinimumSize(560, 360)
 
     def _share_toggled(self, on: bool) -> None:
         """Die Wahl gilt für die Anwendung, nicht für dieses Projekt (§29).
@@ -2826,7 +2902,9 @@ class PrintSettingsDialog(QDialog):
 
         **Das Material bleibt dabei, wie es ist.** Es wird hier nicht mehr
         gewählt (es kommt aus der Spule), und der Drucker geht es nichts an —
-        wer die Maschine wechselt, wechselt nicht das Filament.
+        wer die Maschine wechselt, wechselt nicht das Filament. **Außer das
+        Verfahren wechselt**: PLA in einem Harzbad wäre eine FDM-Aussage,
+        und dann gilt die Vorgabe des Verfahrens (`profiles.material_for`).
 
         **Was der Kunde selbst gesetzt hat, überlebt den Wechsel.** Hier stand
         ein blankes ``resolve``, und das warf jeden übersteuerten und jeden
@@ -2855,15 +2933,18 @@ class PrintSettingsDialog(QDialog):
         }
 
         document = self.session.project.document
+        printer_id = str(self.printer_choice.currentData())
         self.session.change_scene_profile(
-            str(self.printer_choice.currentData()),
-            document.material or profiles.DEFAULT_MATERIAL,
+            printer_id,
+            profiles.material_for(printer_id, document.material or profiles.DEFAULT_MATERIAL),
         )
         # Die Düse gehört dem Gerät: Ein Wechsel zeigt die seine, nicht die
         # des vorigen. Ohne diese Zeile stünde im Feld weiter 0,6, während
         # der neu gewählte Drucker mit 0,4 rechnet.
         self._show_nozzle()
         self._show_nozzle_count()
+        # Und ein Wechsel des Verfahrens zeigt nur noch, was gilt.
+        self._fit_to_technology()
         settings = self._resolved(self.settings.quality)
         for path, value in chosen.items():
             settings = print_settings.with_path(settings, path, value)
@@ -3581,9 +3662,10 @@ class PrintSettingsDialog(QDialog):
         if found is None:
             self._show_slicer_state()
             return
-        try:
-            flavour = handover.detect(found).flavour
-        except AppError:
+        flavour = handover.detect(found).flavour
+        if flavour == "other":
+            # Kein Bestand, den Solidon lesen könnte — und keine Box, die
+            # das behauptete.
             self.slicer_box.setVisible(False)
             self._show_slicer_state()
             return
@@ -4643,6 +4725,16 @@ class PrintSettingsDialog(QDialog):
             reason = searching
         elif found is None:
             reason = no_slicer
+        elif slicer_keys.flavour_of(found.name) is None:
+            # Ein Programm ohne Familie bekommt die Datei nur ins Fenster
+            # (§29, zweite Übergabeart): Solidon kennt seine Kommandozeile
+            # nicht und übersetzt nichts — der Öffnen-Knopf daneben bleibt.
+            reason = str(
+                tr(
+                    "Solidon kennt die Kommandozeile dieses Programms nicht — öffnen Sie "
+                    "die Datei in seinem Fenster."
+                )
+            )
         elif found is not None:
             # Die dritte Hürde derselben Bauart: Ein Slicer der Orca-Familie
             # ohne gewähltes Profil lehnt jeden Auftrag ab — das stand bisher
@@ -5292,6 +5384,14 @@ class PrintSettingsDialog(QDialog):
         """Höchstens ein Arbeiter rechnet; ersetzte Aufträge laufen erst aus."""
         if self._settling or not self._advice_pending or not self._plate_bodies():
             return
+        if self.session.profile.printer.is_resin:
+            # Jede Regel des Rats spricht über Düse, Bahn, Bett oder Lüfter —
+            # für Harz gegenstandslos (Resin-Konzept B4). Die Schichtanalyse
+            # dafür zu rechnen wäre Sekunden für eine leere Liste.
+            self._advice_pending = False
+            self._advice_entries = []
+            self._show_advice()
+            return
         if self.session.busy or (
             self._advice_worker is not None and self._advice_worker.isRunning()
         ):
@@ -5739,11 +5839,7 @@ class PrintSettingsDialog(QDialog):
         found = self._slicer_path
         if found is None:
             return None
-        try:
-            setup = handover.detect(found)
-        except AppError as problem:
-            show_error(problem, self)
-            return None
+        setup = handover.detect(found)
         return replace(
             setup,
             machine_profile=str(self.machine_choice.currentData() or ""),
