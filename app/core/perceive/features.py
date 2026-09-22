@@ -1870,72 +1870,83 @@ def _fitted(
             return False
 
         patches = _connected_patches(body, curved)
-        curvature_splits: list[list[list[int]]] | None = None
+
+        def splinters_in(pieces: list[list[int]]) -> int:
+            """Wie viele Stücke unter :data:`FREEFORM_PIECE_SHARE` der Oberfläche liegen."""
+            return sum(
+                1
+                for piece in pieces
+                if float(areas[piece].sum()) < total_area * FREEFORM_PIECE_SHARE
+            )
+
+        # **Erst jeder Fleck als Ganzes.** Was hier eine Form ergibt, ist
+        # fertig und zählt für das Urteil unten nicht mehr mit.
+        unresolved: list[int] = []
         for patch_index, patch in enumerate(patches):
             if check_cancelled is not None:
                 check_cancelled()
-            if len(patch) < MIN_PATCH_FACES or classify(patch):
+            if len(patch) < MIN_PATCH_FACES:
                 continue
-            # **Zweite Runde für das, was nichts ergeben hat.** Eine Verrundung
-            # schließt tangential an, also trennt kein Knick sie ab — Mantel und
-            # Kehle einer Säule liegen in einem Fleck, auf den keine Form passt.
-            # Nachgetrennt wird deshalb nur hier: Wo etwas erkannt wurde, bleibt
-            # es, wie es ist (siehe :func:`_split_patches_by_curvature`).
-            #
-            # Die Krümmung und der Nachbarschaftsindex gehen beide über den ganzen
-            # Körper. Beim ersten Fehlschlag werden sie einmal für alle ursprünglichen
-            # Flecken gebaut. Die Splitstücke werden trotzdem sofort klassifiziert;
-            # damit bleibt auch die bisherige Reihenfolge der Einpassungen erhalten.
-            if curvature_splits is None:
-                if check_cancelled is not None:
-                    check_cancelled()
-                jumps = _curvature_jumps(body)
-                # Nur die Flecken, deren Stücke unten überhaupt gelesen werden
-                # (RM-132) — ein Stück ist nie größer als sein Fleck, und ein
-                # Fleck unter ``MIN_PATCH_FACES`` kommt an ``classify`` nicht
-                # vorbei.
-                big_enough = np.fromiter(
-                    (len(entry) >= MIN_PATCH_FACES for entry in patches),
-                    dtype=bool,
-                    count=len(patches),
+            if not classify(patch):
+                unresolved.append(patch_index)
+
+        # **Dann die Nachtrennung — und mit ihr das Urteil über die Haut**
+        # (RM-193, Entscheidung Robert 22.09.2026). Eine Verrundung schließt
+        # tangential an, also trennt kein Knick sie ab: Mantel und Kehle einer
+        # Säule liegen in einem Fleck, auf den keine Form passt. Nachgetrennt
+        # wird deshalb nur, was nichts ergeben hat — wo eine Form erkannt
+        # wurde, bleibt es, wie es ist (siehe
+        # :func:`_split_patches_by_curvature`).
+        #
+        # **Und genau diese Flecken zählt auch das Urteil**: Welcher Anteil
+        # der Oberfläche liegt in Flecken *ohne Grundform*, die nach Krümmung
+        # in :data:`FREEFORM_SPLINTERS` oder mehr Stücke unter
+        # :data:`FREEFORM_PIECE_SHARE` zerfallen? Über
+        # :data:`FREEFORM_SKIN_SHARE` ist der Körper eine Figur, ein Scan, ein
+        # erzeugtes Netz — dann werden von diesen Flecken nur die Stücke von
+        # Gewicht eingepasst.
+        #
+        # **Der Zusatz „ohne Grundform" kostete am 22.09.2026 drei Kugeln.**
+        # Eine Bowlingkugel aus `BowlingGame.3mf` ist ein einziger Fleck über
+        # 65 024 Dreiecke mit Rückstand 0,0 — und sie zerfällt nach Krümmung
+        # in 662 Stücke, 659 davon Splitter. Wer sie mitzählt, erklärt eine
+        # perfekte Kugel zur Haut und nimmt sie mit :func:`is_a_freeform` weg.
+        # Dasselbe an einer Kugel auf einem Sockel mit 0,02 mm Rauschen: Kugel
+        # und Zapfen verschwanden. Ein Donut, ein Kegel, ein Ball — jede
+        # Grundform, die ein ganzes Modell ist, zerfällt nach Krümmung wie
+        # eine Figur. Nur der Fit trennt sie, also entscheidet er zuerst.
+        curvature_splits: list[list[list[int]]] = []
+        if unresolved:
+            if check_cancelled is not None:
+                check_cancelled()
+            jumps = _curvature_jumps(body)
+            # Nur die Flecken, deren Stücke unten überhaupt gelesen werden
+            # (RM-132) — ein Stück ist nie größer als sein Fleck.
+            worth_splitting = np.zeros(len(patches), dtype=bool)
+            worth_splitting[np.fromiter(unresolved, dtype=np.intp, count=len(unresolved))] = True
+            curvature_splits = _split_patches_by_curvature(
+                body,
+                patches,
+                jumps,
+                worth_splitting=worth_splitting,
+                check_cancelled=check_cancelled,
+            )
+            freeform_skin = (
+                sum(
+                    float(areas[patches[index]].sum())
+                    for index in unresolved
+                    if len(curvature_splits[index]) > 1
+                    and splinters_in(curvature_splits[index]) >= FREEFORM_SPLINTERS
                 )
-                curvature_splits = _split_patches_by_curvature(
-                    body,
-                    patches,
-                    jumps,
-                    worth_splitting=big_enough,
-                    check_cancelled=check_cancelled,
-                )
-                # **Hier fällt das Urteil über die Haut** (RM-193, Entscheidung
-                # Robert 22.09.2026), einmal je Körper und bevor ein einziges
-                # Splitstück gelesen ist: Welcher Anteil der Oberfläche liegt in
-                # Flecken, die nach Krümmung in Splitter zerfallen
-                # (:data:`FREEFORM_SPLINTERS` Stücke unter
-                # :data:`FREEFORM_PIECE_SHARE`)? Über :data:`FREEFORM_SKIN_SHARE`
-                # ist der Körper eine Figur, ein Scan, ein erzeugtes Netz — dann
-                # werden von diesen Flecken nur die Stücke von Gewicht
-                # eingepasst.
-                #
-                # **Vor der Schleife und nicht darin**, damit die Reihenfolge
-                # der Einpassungen bleibt, wie sie war: Wer einen Fleck
-                # zurückstellt, füllt die Ringkandidaten in anderer Folge, und
-                # ``_cylinder_beside_a_torus`` findet danach andere Zylinder
-                # (gemessen am Korpus: zwei Kegel mehr am Gartenschlauchhalter,
-                # zwei Verrundungen mehr am Beckenreiniger).
-                freeform_skin = (
-                    sum(
-                        float(areas[entry].sum())
-                        for entry, pieces in zip(patches, curvature_splits, strict=True)
-                        if len(pieces) > 1
-                        and sum(
-                            1
-                            for piece in pieces
-                            if float(areas[piece].sum()) < total_area * FREEFORM_PIECE_SHARE
-                        )
-                        >= FREEFORM_SPLINTERS
-                    )
-                    > total_area * FREEFORM_SKIN_SHARE
-                )
+                > total_area * FREEFORM_SKIN_SHARE
+            )
+
+        # **Zuletzt die Stücke.** Sie kommen nach allen ganzen Flecken und
+        # nicht mehr unmittelbar nach ihrem eigenen: Das Urteil über die Haut
+        # muss vorher stehen, sonst hinge es daran, welcher Fleck zuerst
+        # scheitert.
+        for patch_index in unresolved:
+            patch = patches[patch_index]
             if check_cancelled is not None:
                 check_cancelled()
             pieces = curvature_splits[patch_index]

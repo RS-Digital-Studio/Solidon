@@ -527,6 +527,24 @@ für alle draußen, auch für den Zahntechniker.
   danach andere Zylinder (gemessen: zwei Kegel mehr am Gartenschlauchhalter,
   zwei Verrundungen mehr am Beckenreiniger, eine Verrundung weniger an einem
   Bildschirmdeckel).
+* **Gezählt wird nur, was keine Grundform ergeben hat — und das steht erst
+  fest, wenn jeder Fleck einmal eingepasst wurde.** `_fitted` läuft deshalb in
+  zwei Runden: erst `classify` über alle Flecken, dann die Nachtrennung über
+  die gescheiterten, dann deren Stücke. Der Preis dafür, es früher zu wollen,
+  ist am 22.09.2026 gemessen: Drei Bowlingkugeln aus `BowlingGame.3mf` sind je
+  **ein** Fleck über 65 024 Dreiecke mit einer Kugel vom Rückstand 0,0, und
+  sie zerfallen nach Krümmung in 662 Stücke, 659 davon Splitter. Ein Donut,
+  ein Kegel, ein Ball — jede Grundform, die ein ganzes Modell ist, zerfällt
+  wie eine Figur. **Nur der Fit trennt sie.** Ohne diesen Zusatz verlor auch
+  eine Kugel auf einem Sockel mit 0,02 mm Rauschen ihre Kugel und ihren
+  Zapfen.
+* **Eine Abkürzung ist gemessen und ausgebaut: „auf der Haut nur den Zylinder
+  fragen".** Kegel, Kugel und Ring verwirft der Filter dort ohnehin, und am
+  Riesenfleck des Drachen (307 059 Dreiecke) kosten alle vier Fits 1 332 ms
+  gegen 255 für den Zylinder allein — 0,6 s an der ganzen Erkennung. Sie
+  setzt aber voraus, was sie sparen will: Dass ein Fleck die Haut ist und
+  nicht selbst eine Grundform, weiß man erst nach dem Fit. Die Bowlingkugel
+  hat sie gekostet.
 * **Gelesen werden die Stücke von Gewicht, die Splitter nur ohne Haut.** So
   bleiben der tangential eingeblendete Zapfen und die Verrundung auf einer
   Figur Kandidaten, und ein konstruiertes Teil verliert nichts: Fällt das

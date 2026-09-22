@@ -820,6 +820,19 @@ betroffenen Körper und erzeugenden Schritt; eine Karte bleibt aus. Andere
   TripoSG 37,7 → 4,2 s, Roberts Schüssel 7,3 → 2,9 s, Zauberturm-Figuren
   41 bis 132 s → 6 bis 13 s, Katze 26 → 6,5 s — unter Fremdlast, mit
   denselben Merkmalen.
+- **Das Urteil zählt nur Flecken ohne Grundform, und es fällt in einer
+  eigenen Runde.** `_fitted` läuft zweistufig: erst `classify` über alle
+  Flecken, dann `_split_patches_by_curvature` über die gescheiterten, dann
+  deren Stücke. Vorher fiel das Urteil beim ersten Fleck ohne Form und zählte
+  jeden zerfallenden Fleck mit — auch einen, der längst eine Kugel ergeben
+  hatte. Drei Bowlingkugeln aus `BowlingGame.3mf` verloren so ihre Kugel
+  (Ø 17,5, Rückstand 0,0 über 65 024 Dreiecke, 662 Stücke nach Krümmung, 659
+  Splitter), und an einer Kugel auf einem Sockel mit 0,02 mm Rauschen fielen
+  Kugel und Zapfen. Ein Donut, ein Kegel, ein Ball: Jede Grundform, die ein
+  ganzes Modell ist, zerfällt nach Krümmung wie eine Figur — nur der Fit
+  trennt sie, also entscheidet er zuerst. Nebenbei hängt das Urteil damit an
+  keiner Fleckreihenfolge mehr, und `worth_splitting` trennt enger nach:
+  Drache 4,02 → 3,83 s, Katze 8,62 → 8,17 s.
 - **Eine Kugel braucht vier bestimmte Unbekannte.** Hat ihr lineares System
   nicht Rang vier, bleibt mindestens eine Mittelpunktkoordinate offen. Das ist
   bei senkrecht extrudierten Kurvenwänden der Regelfall; ihr Kugelfit hängt

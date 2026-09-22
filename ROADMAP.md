@@ -75,7 +75,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-164 — Creality Print: Erkennung steht, der Konsolenlauf ist ungeprüft](#rm-164) | Geometrie, Erkennung und Druckvorbereitung | Slicer einrichten, dann Öffnen- und Konsolenweg mit mehreren Spulen abnehmen |
 | [RM-166 — Ergebnisnetze aus Mesh-Ops an einer STL überstehen keinen Weld](#rm-166) | Geometrie, Erkennung und Druckvorbereitung | Der Weld ist behoben und als Kundenweg getestet; offen bleiben das Flackern der Tetraederecke auf dem Linux-Runner und das Beispielarchiv der Werkstattfilme |
 | [RM-181 — Handlungsliste und Baugruppenladen an dichten Netzen weiter vermessen](#rm-181) | Geometrie, Erkennung und Druckvorbereitung | Die Langlochsuche ist gebaut (126 s → 9 s); offen sind `actions_for` mit Netz (0,14 s je Merkmal) und die Ladezeit einer Baugruppe mit vielen Körpern |
-| [RM-193 — Die Erkennung an einer glatten Generator-Freiform kostet Minuten für null Merkmale](#rm-193) | Geometrie, Erkennung und Druckvorbereitung | Entschieden und gebaut am 22.09.2026: Die Haut — der Fleck über der halben Oberfläche, der keine Grundform ist und in Splitter zerfällt — wird nicht mehr Splitter für Splitter eingepasst, ihre Stücke von Gewicht schon (Zapfen, Verrundung bleiben); das Freiformurteil kommt aus der Haut. Drache 482 → 37,7 → 4,2 s, Schüssel 7,3 → 3,0 s (unter Fremdlast, gleiche Merkmale). Offen: §31 verlangt 1 s je 200 000 — was bleibt, sind die vier Fits über den ganzen gekrümmten Fleck in `_large_facet_faces` und noch einmal in `_fitted` (je 0,5 s Kegel an 300 000 Dreiecken) |
+| [RM-193 — Die Erkennung an einer glatten Generator-Freiform kostet Minuten für null Merkmale](#rm-193) | Geometrie, Erkennung und Druckvorbereitung | Entschieden und gebaut am 22.09.2026: Die Haut — der Fleck über der halben Oberfläche, der keine Grundform ist und in Splitter zerfällt — wird nicht mehr Splitter für Splitter eingepasst, ihre Stücke von Gewicht schon (Zapfen, Verrundung bleiben); das Freiformurteil kommt aus der Haut. Drache 482 → 37,7 → 4,2 s, Schüssel 7,3 → 3,0 s (unter Fremdlast, gleiche Merkmale). Vierte Fassung nach einem Korpusfund: Das Urteil zählt nur Flecken **ohne** Grundform — drei Bowlingkugeln verloren sonst ihre Kugel (Rückstand 0,0 über 65 024 Dreiecke), und schon im alten Stand hing es an der Fleckreihenfolge. Zwei Runden statt einer, Drache 4,02 → 3,83 s. Offen: §31 verlangt 1 s je 200 000, gemessen sind 3,83 — es bleibt `_large_facet_faces` (1,2 s am Drachen) und der Löser selbst (RM-209). Zwei Abkürzungen sind gemessen und verworfen: nur den Zylinder fragen (kostet die Bowlingkugel) und die Stichprobe an Riesenflecken (ändert die Erkennung) |
 | [RM-201 — Ein hohler Körper hält die 300 ms der Schichtanalyse nicht](#rm-201) | Geometrie, Erkennung und Druckvorbereitung | Die neue Leistungsmarke `slice_medium_hollow` (200 000 Dreiecke, Wand 1,5 mm) misst 1,5 s für §31 „300 ms": 3 658 Puffer, 796 Differenzen und 718 STRtree-Anfragen je Lauf — die Stufen je Schicht stapeln oder das Ziel für Schalen neu fassen |
 | [RM-202 — Die Formabweichung am Ring schließt nur auf 0,65 mm](#rm-202) | Geometrie, Erkennung und Druckvorbereitung | Das Verfeinerungsbudget des Torus gilt je Aufruf; an einem Ring bleibt die Klammer 0,65 mm breit, wo Ebene, Zylinder, Kugel und Kegel geschlossen rechnen — Budget je Dreieck oder eine geschlossene Kandidatenmenge für den Torus |
 | [RM-208 — Die Kundenwege Verschieben, Bearbeiten, Erkennen und Vorschau auf Zeit](#rm-208) | Geometrie, Erkennung und Druckvorbereitung | Am 22.09.2026 an einer Platte mit 204 000 Dreiecken gemessen und umgebaut: Verschieben 8,6 → 0,5 s, Bohrung 8,3 → 1,8 s, Klick auf eine Bohrung 1,9 → 0,2 s, Vorschau je Zahl 2,2 → 0,04 s ab der zweiten, Erkennung 1,1 → 0,99 s (Kundenmodell 21 → 7,3 s). Dritte Runde: das exakte Vorspiel der Dezimierung (Nadelplatte 11,6 → 0,3 s, erste Vorschau am Fächerexport unter einer Sekunde), `max_distance_to_surface` misst nur, was das Maximum heben kann (Besenhalter 2,9 → 0,25 s), die Freiformhaut (RM-193, Kundenmodell 3,0 s), und der Korpus `F:\3D Dateien` alt gegen neu — Ergebnis im Block |
@@ -1808,14 +1808,65 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   `test_evaluation.py` (Befund ohne weggelassene Formen). Regel in
   `.claude/rules/schichtanalyse.md`.
 
+  **Vierte Fassung, am selben Tag, und sie kam aus dem Korpus: erst der Fit, dann das
+  Urteil.** Drei Bowlingkugeln aus `BowlingGame.3mf` verloren ihr einziges Merkmal — eine
+  Kugel Ø 17,5 über 65 024 Dreiecke, Rückstand 0,0. Eine Bowlingkugel ist **ein** Fleck über
+  die ganze Oberfläche, und sie zerfällt nach Krümmung in 662 Stücke, 659 davon Splitter:
+  Wer diese Stücke fürs Hauturteil zählt, erklärt eine mathematisch perfekte Kugel zur Haut
+  einer Figur, und `is_a_freeform(skin=True)` nimmt sie anschließend weg. Ein Donut, ein
+  Kegel, ein Ball — jede Grundform, die ein ganzes Modell ist, zerfällt wie eine Figur. **Nur
+  der Fit trennt sie.**
+
+  Der Fehler lag nicht erst in der Beschleunigung, sondern schon in der dritten Fassung, und
+  er war reihenfolgeabhängig: Das Urteil fiel beim *ersten* Fleck ohne Form und zählte dabei
+  jeden zerfallenden Fleck mit, auch einen, der längst eine Grundform ergeben hatte. Bei der
+  Bowlingkugel fiel es nie, weil ihr einziger Fleck sofort eine Kugel ergab — ein Körper mit
+  derselben Kugel und einem kleinen unlesbaren Fleck daneben wäre zur Freiform geworden, wenn
+  der kleine Fleck zufällig vorne stand. Nachgestellt an einer Kugel auf einem Sockel: glatt
+  `sphere`, `pin`, `face`; mit 0,02 mm Rauschen auf 15 mm Radius nur noch `face`.
+
+  `_fitted` läuft deshalb in **zwei Runden** statt einer: erst `classify` über alle Flecken,
+  dann die Nachtrennung über die gescheiterten — und **nur deren Fläche** entscheidet über
+  die Haut. Das ist dieselbe Regel wie zuvor, nur mit dem Zusatz, der schon in
+  `.claude/rules/schichtanalyse.md` stand und im Code fehlte: *Flecken ohne Grundform.* Das
+  Urteil hängt jetzt an keiner Reihenfolge mehr, und `worth_splitting` trennt enger nach als
+  vorher (nur die gescheiterten statt aller Flecken ab `MIN_PATCH_FACES`).
+
+  Ruhig gemessen, drei Läufe, Median: Bowlingkugel 0,19 → 0,20 s mit ihrer Kugel zurück;
+  Drache 4,02 → 3,83 s; gähnende Katze 8,62 → 8,17 s. Entwicklungstor grün (13 681 bestanden,
+  26 übersprungen). Nachweise: `test_features.py`
+  (`test_a_ball_that_is_the_whole_body_stays_a_ball` an Kugel **und** Torus,
+  `test_the_skin_judgement_only_counts_patches_without_a_shape`).
+
+  **Offen ist die Breitenabnahme am Korpus**, und sie hat eine benannte Frage: Die Stücke
+  eines gescheiterten Flecks werden jetzt nach *allen* ganzen Flecken eingepasst statt
+  unmittelbar nach ihrem eigenen. Die zweite Fassung hatte beim Zurückstellen ganzer Flecken
+  zwei Kegel mehr am Gartenschlauchhalter und zwei Verrundungen mehr am Beckenreiniger
+  gefunden, weil `_cylinder_beside_a_torus` die Ringkandidaten in anderer Folge sieht. Ob das
+  hier ebenso greift, sagt der Lauf über `F:D Dateien` (489 Körper) — er läuft.
+
+  **Und ein Weg dorthin ist gemessen und wieder ausgebaut.** „Auf der Haut wird nur der
+  Zylinder gefragt" — Kegel, Kugel und Ring verwirft `_shapes_on_a_freeform` dort ohnehin,
+  und am Riesenfleck des Drachen kosten alle vier Fits 1 332 ms gegen 255 für den Zylinder
+  allein. Das brachte 0,6 s am Drachen und **kostete die Bowlingkugel ihre Kugel**: Um zu
+  wissen, ob ein Riesenfleck Haut ist oder selbst eine Grundform, muss man ihn einpassen.
+  Die Abkürzung setzt genau das voraus, was sie sparen will. Zurückgebaut; 0,6 s sind kein
+  Merkmal wert, das einem Kunden verschwindet.
+
+  **Zwei weitere Wege, gemessen und verworfen.** Die Fits an Riesenflecken auf eine
+  gleichmäßige Stichprobe zu stützen — `FIT_SOLVER_POINTS` eine Stufe früher, schon bei der
+  Datenaufbereitung — ist zeitlich verlockend (1 108 → 157 ms am selben Fleck) und **ändert
+  die Erkennung**: An der Waschschüssel gibt ein Fleck mit 89 230 Dreiecken ganz gerechnet
+  einen Ring und mit 4 096 Stützpunkten keinen; einer mit 86 761 gibt ganz gerechnet keinen
+  Kegel, mit 16 384 aber einen. Dieselbe Familie wie die neun Hebel aus RM-209.
+
   **Offen bleibt §31.** Eine Sekunde je 200 000 Dreiecke hieße 1,6 s am Drachen; gemessen
-  sind 4,2. Was bleibt, mit Zahlen: `_large_facet_faces` 1,2 s (vier Fits über den ganzen
-  gekrümmten Fleck mit 300 000 Dreiecken, der Kegel allein 0,5 s, davon 0,3 s
-  `_surface_support`), `_fitted` 3,3 s unter dem Profiler (52 `classify`, davon zwei an
-  Flecken mit 307 059 und 190 707 Dreiecken; `fit_cone` 1,4 s, `_surface_support` 0,5 s,
-  `find_helices` 0,4 s, `_curvature_jumps` 0,3 s). Der nächste Schritt ist der Fit an
-  Riesenflecken selbst — Stützpunkte statt aller Ecken in `_surface_support` und
-  `_ridge_endpoints` —, nicht eine weitere Regel.
+  sind 4,2 auf ruhiger Maschine. Was bleibt, mit Zahlen — alle aus demselben belasteten Lauf,
+  in dem die Erkennung 8,4 → 7,4 s ging: `_large_facet_faces` 2,2 s, denn es fittet dieselben
+  Formen über seine eigenen Kandidatenflecken, und dort ist das Hauturteil noch nicht gefällt;
+  `_fitted` 5,2 s (52 `classify`, `fit_cone` 1,7 s, `_surface_support` 0,8 s, `find_helices`
+  0,7 s, `_curvature_jumps` 0,3 s). Der nächste Schritt wäre, `_large_facet_faces` dieselbe
+  Auskunft zu geben — und danach bleibt der Löser selbst (RM-209).
 
   [Befund](ROADMAP-ARCHIV.md#ein-drache-aus-triposg-19-meter-acht-minuten-kein-merkmal-20092026).
 

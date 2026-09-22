@@ -3327,6 +3327,66 @@ def test_a_skin_of_splinters_is_not_fitted_piece_by_piece(monkeypatch: pytest.Mo
     }, "dieselben Merkmale, mit und ohne den Umweg über die Splitter"
 
 
+def test_a_ball_that_is_the_whole_body_stays_a_ball() -> None:
+    """Ein Körper, der selbst eine Grundform ist, wird keine Freiform.
+
+    Der Fall kam am 22.09.2026 aus dem Korpus: Die drei Bowlingkugeln aus
+    ``BowlingGame.3mf`` sind je **ein** Fleck über 65 024 Dreiecke, auf den
+    eine Kugel mit Rückstand 0,0 passt — und sie zerfallen nach Krümmung
+    trotzdem in 662 Stücke, 659 davon Splitter. Wer diese Stücke fürs
+    Hauturteil zählt, erklärt eine mathematisch perfekte Kugel zur Haut einer
+    Figur, und :func:`is_a_freeform` nimmt sie anschließend weg: ein Merkmal
+    weniger, ohne dass irgendetwas an der Kugel unsicher wäre.
+
+    Ein Donut, ein Kegel, ein Ball — jede Grundform, die ein ganzes Modell
+    ist, zerfällt nach Krümmung wie eine Figur. Nur der Fit trennt sie, also
+    entscheidet er zuerst: Gezählt wird für die Haut nur, was **keine**
+    Grundform ergeben hat.
+    """
+    for body, expected in (
+        (trimesh.creation.icosphere(subdivisions=5, radius=8.75), "sphere"),
+        (trimesh.creation.torus(major_radius=20.0, minor_radius=6.0, major_sections=180), "torus"),
+    ):
+        mesh = MeshData.of(body)
+        forget_cache()
+        found = detect(mesh)
+        kinds = sorted(feature.kind for feature in found.values())
+        assert not features_module.recognised_as_freeform(mesh), (
+            f"{expected}: ein Körper, der selbst eine Grundform ist, ist keine Freiform"
+        )
+        assert expected in kinds, f"{expected} erwartet, gefunden: {kinds}"
+
+
+def test_the_skin_judgement_only_counts_patches_without_a_shape(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Das Urteil über die Haut fällt **nach** der ersten Runde, nicht darin.
+
+    Solange es beim ersten Fleck ohne Form fiel, hing es an der Reihenfolge:
+    Derselbe Körper mit einer Kugel und einem kleinen unlesbaren Fleck wurde
+    zur Freiform, wenn der kleine Fleck zufällig vorne stand, und blieb eine
+    Kugel, wenn er hinten stand. Jetzt läuft erst ``classify`` über alle
+    Flecken, dann die Nachtrennung über die gescheiterten — und nur deren
+    Fläche entscheidet.
+
+    Geprüft an der Nachtrennung: Sie darf nur mit den Flecken laufen, auf die
+    nichts gepasst hat.
+    """
+    seen: list[int] = []
+    original = features_module._split_patches_by_curvature
+
+    def watching(body, patches, jump, *, worth_splitting=None, **kwargs):  # type: ignore[no-untyped-def]
+        seen.append(0 if worth_splitting is None else int(worth_splitting.sum()))
+        return original(body, patches, jump, worth_splitting=worth_splitting, **kwargs)
+
+    monkeypatch.setattr(features_module, "_split_patches_by_curvature", watching)
+    mesh = MeshData.of(trimesh.creation.icosphere(subdivisions=5, radius=8.75))
+    forget_cache()
+    detect(mesh)
+
+    assert not seen, "auf die Kugel passte eine Form — nachgetrennt wird nichts"
+
+
 def test_a_smooth_body_over_half_its_surface_is_no_skin_without_splinters() -> None:
     """Die Gegenrichtung: Kapsel, Ellipsoid und der Bogen eines Buchstabens
     liegen mit ihrem gekrümmten Fleck über der Hälfte, zerfallen aber in ein
