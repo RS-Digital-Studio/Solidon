@@ -59,7 +59,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-191 — PrusaSlicer verbraucht für dieselbe Übergabe ein Drittel mehr Material](#rm-191) | Geometrie, Erkennung und Druckvorbereitung | Die neun Platten des Regals je Slicer gegen die Prusa-Ausgabe aufschlüsseln: Stützen, Wände oder Füllung — und die Übergabe der Prusa-Schlüssel danach ergänzen |
 | [RM-024 — Gespeicherte Zuordnungsantworten im echten Konfliktfall abnehmen](#rm-024) | Geometrie, Erkennung und Druckvorbereitung | Der Rundlauf steht; gemessen fehlt ein Korpuskörper, dessen erneute Erkennung wirklich mehrdeutig wird |
 | [RM-041 — Innenraum importierter entlüfteter Hohlkörper klären](#rm-041) | Geometrie, Erkennung und Druckvorbereitung | Schätzweg oder dokumentierte Grenze des Innenraums entscheiden |
-| [RM-209 — Die Rundform-Einpassung an Gittermodellen](#rm-209) | Geometrie, Erkennung und Druckvorbereitung | Gebaut am 22.09.2026: über 37 echte Modelle 220,2 → 142,4 s, median 1,73× und bis 27×. Offen bleibt das §31-Ziel — die Kumiko-Schale steht bei 12,6 s statt unter fünf |
+| [RM-209 — Die Rundform-Einpassung an Gittermodellen](#rm-209) | Geometrie, Erkennung und Druckvorbereitung | Gebaut am 22.09.2026: drei Regeln gegen Läufe, die nur am Limit noch antworten. Die Zeitzahlen sind zurückgezogen (unter Fremdlast gemessen) und werden ruhig neu erhoben; die Merkmalsbilanz steht |
 | [RM-210 — Die Erkennung hängt von der Lage des Körpers ab](#rm-210) | Geometrie, Erkennung und Druckvorbereitung | Dasselbe Modell um 13,7 mm verschoben verliert einen Kegel und eine Verrundung; gedreht kommen fünf dazu. Die Kippstelle ist ein einzelner Fleck mit gleichem Startwert — Entscheidung über „am Limit heißt verworfen" steht aus |
 | [RM-076 — Topologieverlust beim Reduzieren von Eule und Spiderman beheben](#rm-076) | Geometrie, Erkennung und Druckvorbereitung | Eule und Spiderman mit Zielreihe und Topologievergleich reproduzieren |
 | [RM-077 — Reduzierungsziel bei Körpern mit Durchbrüchen erreichen](#rm-077) | Geometrie, Erkennung und Druckvorbereitung | Zielreihen an Körpern mit Durchbrüchen gegen den vorhandenen Rückfall messen |
@@ -840,16 +840,19 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   (`_rigid_key`). Gemessen an **37 echten Modellen** aus `F:\3D Dateien`, jedes einmal vorher und
   einmal nachher:
 
-  | | vorher | nachher | Faktor |
-  |---|---|---|---|
-  | alle 37 zusammen | 220,2 s | 142,4 s | median **1,73×** |
-  | Kumiko-Schale (94 990 Dreiecke) | 27,2 s | 12,6 s | 2,15× |
-  | `Elegoo_erster_Druck.3mf` (227 244) | 9,8 s | 4,4 s | 2,23× |
-  | `desk-organizer-v3` (10 086) | 1,9 s | 0,6 s | 3,12× |
-  | `1x1-bin.stl` (1 944) | 2,1 s | 0,08 s | 27,3× |
+  **Die Zeitzahlen dieses Punktes sind zurückgezogen und werden neu gemessen** (22.09.2026).
+  Der erste Vorher-Lauf lief von 18:46 bis 18:51 und damit mitten im Korpuslauf der
+  Nachbarsitzung, die auf derselben Maschine zwei Unterprozesse über 176 Dateien fuhr. Alle
+  Vorher-Zeiten sind dadurch zu hoch, und der gemeldete Median von 1,73× ist nicht falsch,
+  sondern **unbekannt**. Aufgefallen ist es an einem Ausreißer: `1x1-bin.stl` stand mit 2,10 s
+  vorher und 0,08 s nachher, und derselbe Körper braucht in beiden Ständen ruhig gemessen 0,086
+  beziehungsweise 0,078 Sekunden. Die Lehre daraus ist nicht „unter Fremdlast messen ist
+  schlecht" — das stand schon fest —, sondern: Eine zu schöne Zahl, für die es auch noch eine
+  plausible Erklärung gibt („das ist der Umbau des Kollegen"), wird erst recht nicht
+  hinterfragt. Die Erklärung hat den Fehler stabilisiert statt ihn aufzudecken.
 
-  Der schlechteste Wert ist 0,87× an einem Körper von 2 736 Dreiecken — zwei Hundertstelsekunden,
-  also Messrauschen. **Vier der 37 Modelle ändern Merkmale, und zwar nach oben:** An
+  **Die Merkmalsbilanz ist davon unberührt**, denn sie vergleicht Antworten und keine Zeiten.
+  Vier der 37 Modelle ändern Merkmale, und zwar nach oben: An
   `Elegoo_erster_Druck.3mf` fallen zwei Verrundungen (R4,2) und ein Kegel weg, dafür kommt eine
   Verrundung mit R2,98 und Rückstand 0,0 dazu; am Gartenschlauchhalter fällt ein Kegel mit
   Rückstand 0,0137 und es kommen eine Verrundung (R7,24) und ein Kegel mit Rückstand 0,0047 dazu;
@@ -908,10 +911,40 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   verschieden gelesen werden — die Zusage „Plattformen funktionieren gleich" ist damit nicht
   eingelöst.
 
-  Abnahme: Entscheidung über die Regel „am Limit heißt verworfen"; die Verrundungen ebenso
-  eingegrenzt wie die Kegel; danach entweder die Erkennung gegen starre Bewegungen abgesichert
-  oder die Grenze der Zusage dokumentiert. Ein Test, der einen Korpuskörper verschoben und
-  gedreht einliest und dieselbe Merkmalsmenge verlangt.
+  **Die Regel ist seit dem 22.09.2026 gebaut (RM-209), und sie trägt genau so weit, wie sie
+  kann.** Gemessen an 39 echten Modellen, beide Stände als fester Commit in eigenen Bäumen
+  (`4fa4d38f` gegen `6c3b1e5c`), jedes Modell dreimal bewegt:
+
+  | Bewegung | vorher | nachher |
+  |---|---|---|
+  | ungleichmäßig verschoben | 1 | 1 |
+  | gleichmäßig verschoben | 3 | **0** |
+  | gedreht | 16 | 16 |
+  | betroffene Bewegungen | 20 | **17** |
+
+  **Die Zahl der betroffenen Modelle bleibt 16 — dieselben sechzehn.** Was sinkt, ist die Zahl
+  der Bewegungen, unter denen sie kippen: Die gleichmäßige Verschiebung ist vollständig
+  behoben, `Elegoo_erster_Druck.3mf` und `elegoo_grease_tool.3mf` wackeln nur noch beim Drehen,
+  am Gartenschlauchhalter fällt eine von drei Bewegungen weg. Das passt zur Ursache: Ein Lauf
+  am Auswertungslimit kippt, wenn sich die Koordinaten leicht verschieben; eine Drehung ändert
+  mehr und trifft andere Schwellen — vor allem die der Verrundungen, und die kennen keinen
+  Löser.
+
+  Ein früherer Zwischenstand meldete an `countercleaner.3mf` und `bottom-double.stl` **neue**
+  Lageabhängigkeit. Das war ein Messfehler derselben Familie: Der Vorher-Lauf lief, während die
+  Nachbarsitzung ihren Umbau noch ungestaged im Baum hatte. Gegen feste Commits gemessen
+  verschlechtert sich kein Modell.
+
+  Abnahme: die Verrundungen ebenso eingegrenzt wie die Kegel — die Kippstelle ist bekannt
+  (`_cylinder_contour`, `hull.geom_type`), die Entscheidung über den Mindestbogen steht bei
+  Robert; danach entweder die Erkennung gegen starre Bewegungen abgesichert oder die Grenze der
+  Zusage dokumentiert. Ein Test, der einen Korpuskörper verschoben und gedreht einliest und
+  dieselbe Merkmalsmenge verlangt, steht seit dem 22.09.2026 in
+  `tests/test_fit_stability.py` — **er ist heute grün und bleibt stumpf**, solange kein
+  eingecheckter Körper den Fall trägt: Alle 34 Korpuskörper sind stabil, weil sie analytisch
+  gebaut sind. Zwei Versuche, einen wackelnden zu konstruieren (ein Feld gefaster Sechsecke,
+  ein Feld verrundeter Bohrungsmündungen, beide auch durch eine STL geschickt), sind
+  gescheitert: Der Effekt ist statistisch und braucht tausende Flecken an der Kippe.
 
 <a id="rm-076"></a>
 
