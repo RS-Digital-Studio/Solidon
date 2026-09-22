@@ -59,7 +59,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-191 — PrusaSlicer verbraucht für dieselbe Übergabe ein Drittel mehr Material](#rm-191) | Geometrie, Erkennung und Druckvorbereitung | Die neun Platten des Regals je Slicer gegen die Prusa-Ausgabe aufschlüsseln: Stützen, Wände oder Füllung — und die Übergabe der Prusa-Schlüssel danach ergänzen |
 | [RM-024 — Gespeicherte Zuordnungsantworten im echten Konfliktfall abnehmen](#rm-024) | Geometrie, Erkennung und Druckvorbereitung | Der Rundlauf steht; gemessen fehlt ein Korpuskörper, dessen erneute Erkennung wirklich mehrdeutig wird |
 | [RM-041 — Innenraum importierter entlüfteter Hohlkörper klären](#rm-041) | Geometrie, Erkennung und Druckvorbereitung | Schätzweg oder dokumentierte Grenze des Innenraums entscheiden |
-| [RM-209 — Die Rundform-Einpassung an Gittermodellen](#rm-209) | Geometrie, Erkennung und Druckvorbereitung | 673 von 1 430 Löserläufen enden am Auswertungslimit und liefern nichts; ein Gitter mit 95 000 Dreiecken braucht 22 s. Zwei Hebel geprüft und verworfen (Rang am Start, `lm`) |
+| [RM-209 — Die Rundform-Einpassung an Gittermodellen](#rm-209) | Geometrie, Erkennung und Druckvorbereitung | Zehn Hebel gemessen, neun tot: Nicht der Löser ist zu langsam, sondern 1 093 von 1 127 Kegelfits sind vergeblich. Der zehnte trägt — 77 Prozent der Flecken eines Gitters sind deckungsgleich |
+| [RM-210 — Die Erkennung hängt von der Lage des Körpers ab](#rm-210) | Geometrie, Erkennung und Druckvorbereitung | Dasselbe Modell um 13,7 mm verschoben verliert einen Kegel und eine Verrundung; gedreht kommen fünf dazu. Ursache und Reichweite bestimmen |
 | [RM-076 — Topologieverlust beim Reduzieren von Eule und Spiderman beheben](#rm-076) | Geometrie, Erkennung und Druckvorbereitung | Eule und Spiderman mit Zielreihe und Topologievergleich reproduzieren |
 | [RM-077 — Reduzierungsziel bei Körpern mit Durchbrüchen erreichen](#rm-077) | Geometrie, Erkennung und Druckvorbereitung | Zielreihen an Körpern mit Durchbrüchen gegen den vorhandenen Rückfall messen |
 | [RM-078 — Ladezeit generierter Beispielmodelle an der Orientierung messen](#rm-078) | Geometrie, Erkennung und Druckvorbereitung | Eulenprojekt ohne Fremdlast öffnen und teure Schritte zuordnen |
@@ -740,24 +741,92 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-209"></a>
 
-- [ ] **RM-209 — Die Rundform-Einpassung an Gittermodellen: 47 Prozent der Löserläufe sind
-  vergeblich.** Gemessen am 22.09.2026 an vier echten Modellen (1 430 Löserläufe): 673 davon
-  enden am Auswertungslimit (`ROUND_FIT_EVALUATIONS` = 100, Status 0) und liefern danach `None` —
-  je Lauf rund zehn Millisekunden, zusammen 6,2 der 8,7 Sekunden, die der Löser kostet. Die
-  gelungenen Läufe brauchen median 19 Auswertungen, zu 90 Prozent höchstens 26, im Einzelfall 88.
-  An der Kumiko-Schale sind es 1 412 Flecken von median sieben Dreiecken, aus denen am Ende 27
-  Verrundungen und drei Kegel werden; die Erkennung dauert 22,2 s (RM-042).
+- [ ] **RM-209 — Die Rundform-Einpassung an Gittermodellen: der Löser ist nicht zu langsam,
+  sondern wird zu oft gefragt.** An der Kumiko-Schale (94 990 Dreiecke, 7 325 Merkmale, 19,0 s)
+  kostet `fit_cone` 12,47 s und damit zwei Drittel der Erkennung; `fit_sphere` 1,69 s,
+  `fit_cylinder` 1,30 s, `fit_torus` 0,38 s. Von 1 127 Kegelläufen schöpfen **1 093 die hundert
+  Auswertungen exakt aus** und liefern danach `None` — je Lauf 10,07 ms. Die 34 Läufe mit
+  Ergebnis brauchen median vierzig Auswertungen und zusammen 0,23 s. Der Aufbau davor ist
+  unschuldig: `_surface_support` 0,65 s, `_cone_support_points` 0,22 s, `_ridge_endpoints` 0,17 s.
 
-  **Zwei Hebel sind geprüft und verworfen, das gehört zum Befund:** Der Rang der Jacobi-Matrix am
-  Startpunkt trennt nicht — bei allen 1 430 Läufen ist sie dort bestimmt, die Unbestimmtheit
-  entsteht erst unterwegs (die Kegelspitze wandert ins Unendliche). Und `method="lm"` ist mit
-  3,8 statt 8,7 Sekunden zwar 2,3-mal schneller, liefert aber andere Antworten: zehn Läufe, die
-  heute gelingen, scheitern damit, sechs andersherum, und im Einzelfall liegen die Parameter um
-  5,9·10⁵ auseinander. Ein schnellerer Löser ist hier eine andere Erkennung.
+  **Neun Hebel sind gemessen und verworfen, und das ist der eigentliche Befund.** Alle neun
+  ändern die Erkennung oder sparen nichts:
+
+  | Hebel | Wirkung | Warum verworfen |
+  |---|---|---|
+  | Sieb aus Fleckmerkmalen vor dem Fit | 0,07 s | trifft 7 von 1 093 |
+  | `x_scale="jac"` | keine | 300 Läufe anders |
+  | Lockere Toleranzen (`eps**0.5`) | 0,66 s von 28 | 243 Läufe anders |
+  | Eigener Levenberg-Marquardt in NumPy | 2,4× | 2 045 von 2 272 Läufen anders |
+  | Schranke auf den Startwinkel | keine | gültige Kegel starten bei 88,4° |
+  | Budget 40 statt 100 | 1,2–2,1× | 10 von 71 Korpusdateien anders |
+  | Merker auf `_ridge_endpoints` | 0,9 % | der Abschnitt ist zu billig |
+  | Schranke auf die Spitzenwanderung | 0,4 % | vergebliche Läufe bleiben bei Weite 2,66 |
+  | Sieb über Residuenzeilen oder Startkondition | 0,0–1,8 % verlustfrei | gültige Kegel haben dieselbe Untergrenze sechs |
+
+  Zwei ältere Sätze gehören richtiggestellt. **Die Kegelspitze wandert nicht ins Unendliche:**
+  Gemessen liegt sie in den vergeblichen Läufen bei Weite 2,66 (90 % unter 3,38), in den
+  gelungenen bei 0,98 — der Löser divergiert nicht, er kriecht. Und die Unbestimmtheit entsteht
+  nicht aus zu wenigen Stützpunkten: Ein Lauf **mit** Ergebnis hat an drei von vier Modellen
+  minimal sechs Residuenzeilen, genau so viele wie ein vergeblicher; die Schranke steht in
+  `_fit_cone_read` bereits dort, wo sie hingehört.
+
+  **Der zehnte Hebel trägt, und er setzt an der Zahl der Läufe an statt an ihrer Dauer.** Ein
+  Gitter besteht aus wiederholten Zellen: An der Kumiko-Schale sind von 1 990 eingepassten
+  Flecken nur 445 verschieden, gemessen an der sortierten Menge aller paarweisen Punktabstände —
+  **77,3 Prozent sind Wiederholungen**, und 1 515 von ihnen gehören zu einer Klasse, deren
+  Vertreter keinen Kegel liefert. Die Kennzahl kostet 0,06 ms je Fleck gegen 10,07 ms je
+  vergeblichem Lauf, und sie ist nicht einmal unscharf: Bei einem Nanometer Gitterweite entstehen
+  dieselben 445 Klassen wie bei einem Mikrometer, das Muster ist also exakt kopiert. Wer nichts
+  geliefert hat, liefert auch am deckungsgleichen Nachbarn nichts — geteilt wird nur das Nein,
+  die 34 gelungenen Läufe rechnen weiter einzeln, und damit bleibt jedes gefundene Merkmal Zahl
+  für Zahl, wie es ist.
+
+  Der Preis ist an Körpern ohne Wiederholung zu messen und nicht zu verschweigen:
+  `garden-hose-holder.3mf` hat bei 2 744 Flecken **acht** Geschwister (0,3 Prozent),
+  `countercleaner.3mf` 13 von 293. Die Kennzahl wird deshalb je Fleck gerechnet, wenn `classify`
+  ihn in der Hand hat, und nur für Flecken bis 96 Punkte — ein Riesenfleck bezahlt sie nie, denn
+  alle paarweisen Abstände kosten quadratisch. Für Riesenflecken greift stattdessen die
+  Hautregel aus RM-193.
+
+  **Eine Einschränkung, die zuerst geklärt werden muss:** Drei der 445 Klassen gehen
+  uneinheitlich aus — deckungsgleiche Flecken, bei denen der eine einen Kegel von 45,20 Grad
+  liefert und der andere keinen. Eine stärkere Kennzahl trennt sie nicht (gleiche Abstandsmenge,
+  gleiche Kantenlängen je Dreieck, gleiche Windung), der Unterschied liegt also nicht im Fleck,
+  sondern in seiner Lage im Raum. Das ist RM-210, und solange es offen ist, ist auch das
+  Abnahmekriterium dieses Punktes nicht scharf.
 
   Abnahme: Die Erkennung eines Gittermodells mit rund 100 000 Dreiecken unter fünf Sekunden, das
   §31-Ziel für 200 000 Dreiecke belegt oder begründet angepasst, und an allen Modellen des Korpus
-  dieselben Merkmale wie heute. Gehört zum Leistungsstrang RM-208.
+  dieselben Merkmale wie heute — mit der Einschränkung aus RM-210. Gehört zum Leistungsstrang
+  RM-208.
+
+<a id="rm-210"></a>
+
+- [ ] **RM-210 — Dasselbe Modell, anders im Raum gelegt, ergibt andere Merkmale.** Gemessen am
+  22.09.2026: `Elegoo_erster_Druck.3mf` (227 244 Dreiecke) liefert 166 Merkmale. Derselbe Körper
+  um 13,7 mm verschoben — keine Drehung, keine Skalierung — liefert 164: ein Kegel und eine
+  Verrundung fehlen. Um 90 Grad um die Z-Achse gedreht ebenfalls 164, um 37 Grad um (1,2,3)
+  dagegen 171, also fünf Verrundungen und ein Kegel mehr. An der Kumiko-Schale sind es 7 325
+  gegen 7 320 (gedreht um 90 Grad) und 7 327 (gedreht um 37 Grad). `countercleaner.3mf` bleibt
+  bei 60 Merkmalen, aber seine Verrundungsradien wandern in der vierten Nachkommastelle
+  (1,199937 → 1,199869 mm).
+
+  **Die Gegenprobe ist gefahren und sie ist sauber:** Zweimal hintereinander am unveränderten
+  Körper erkannt, kommen beide Male dieselben Merkmale heraus. Die Erkennung ist deterministisch;
+  was sie nicht ist, ist unabhängig von der Lage. Der Grund liegt nahe — Fließkommaarithmetik ist
+  weder dreh- noch verschiebungsinvariant, und die Rundformeinpassung rechnet in Weltkoordinaten
+  —, aber welche Schwelle konkret kippt, ist nicht gemessen. Die Verrundungen stellen die
+  Mehrzahl der Abweichungen, sie kommen nicht aus `fit_cone`.
+
+  Was daran wiegt: Ein Kunde, der sein Teil auf der Platte anders ablegt, bekommt einen anderen
+  Steckbrief. Und da ARM anders rundet als x86, kann dasselbe Modell auf zwei Rechnern
+  verschieden gelesen werden — die Zusage „Plattformen funktionieren gleich" ist damit nicht
+  eingelöst.
+
+  Abnahme: Ursache benannt und an der Schwelle belegt, die kippt; danach entweder die Erkennung
+  gegen starre Bewegungen abgesichert oder die Grenze der Zusage dokumentiert. Ein Test, der
+  einen Korpuskörper verschoben und gedreht einliest und dieselbe Merkmalsmenge verlangt.
 
 <a id="rm-076"></a>
 
