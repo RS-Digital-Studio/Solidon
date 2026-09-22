@@ -40,18 +40,38 @@ def generated_body() -> bytes:
 
     PLY, weil es die Farben je Fläche behält, mit denen ein erzeugtes Modell
     ankommt — und genau diese Farben muss §20 in Filamente verwandeln.
+
+    **Die Farbgrenze halbiert die Schale, und zwar nach ihrer Fläche** — das
+    ist eine Messung: Am Mittelwert der Dreiecksschwerpunkte hing die
+    Aufteilung an der Vernetzung und kippte, sobald sich eine Fläche änderte.
+    Als die Reparatur beim Import (22.09.2026) drei Dreiecke ergänzte, fiel
+    eine der beiden Farbgruppen unter die Fläche, ab der ein Filament noch
+    eines ist — aus zwei wurde eines, und der Test maß die Dreieckszahl statt
+    die Quantisierung. Nach der Fläche der Schale geteilt tragen beide
+    Gruppen etwa die Hälfte von ihr, gleich wie das Netz vernetzt ist — und
+    beide überleben, dass der Krümel in der Kette als Kleinstteil wegfällt.
     """
     shell = trimesh.load_mesh(MESHES / "broken_open.stl", process=False)
     crumb = trimesh.creation.box(extents=(0.4, 0.4, 0.4))
     crumb.apply_translation([40.0, 40.0, 0.0])
     body = trimesh.util.concatenate([shell, crumb])
 
+    # Die Grenze, die **die Schale** nach Fläche halbiert: Ihre Dreiecke nach
+    # der Lage sortieren und dort schneiden, wo die halbe Oberfläche erreicht
+    # ist. Nicht über den ganzen Körper, denn der Krümel fällt in der Kette als
+    # Kleinstteil weg (``repair.components_removed``) — läge die Grenze
+    # zwischen ihm und der Schale, bliebe danach eine Farbe übrig.
     middle = body.triangles_center[:, 0]
+    shell_middle = shell.triangles_center[:, 0]
+    shell_areas = np.asarray(shell.area_faces, dtype=float)
+    order = np.argsort(shell_middle)
+    reached = np.searchsorted(np.cumsum(shell_areas[order]), shell_areas.sum() / 2.0)
+    across = float(shell_middle[order[min(int(reached), len(order) - 1)]])
     shades = np.linspace(0, 1, len(body.faces))
     colours = np.zeros((len(body.faces), 4), dtype=np.uint8)
     colours[:, 3] = 255
-    colours[:, 0] = (255 * (middle > middle.mean())).astype(np.uint8)
-    colours[:, 2] = (255 * (middle <= middle.mean())).astype(np.uint8)
+    colours[:, 0] = (255 * (middle > across)).astype(np.uint8)
+    colours[:, 2] = (255 * (middle <= across)).astype(np.uint8)
     # Ein wenig Rauschen auf dem Grünkanal: eine Darstellung hält die
     # auseinander, ein Drucker nicht — und die Quantisierung muss die sein, die
     # das sagt.

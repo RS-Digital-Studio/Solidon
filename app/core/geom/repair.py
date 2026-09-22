@@ -304,6 +304,528 @@ def _slots_after_fill(source: MeshData, body: trimesh.Trimesh) -> tuple[int, ...
     return tuple(slots)
 
 
+#: Ab welchem Anteil an der Oberfläche eine geschlossene Öffnung eine Warnung
+#: wert ist. **Gefüllt wird sie trotzdem** (Entscheidung Robert, 22.09.2026:
+#: „alles bei der Reparatur beheben"), denn der Kunde will drucken, und ein
+#: Loch, das die Reparatur stehen lässt, hilft ihm nicht — aber er soll wissen,
+#: dass dort eine Fläche entstanden ist, die im Modell nicht war, und den
+#: Schritt mit Strg+Z zurücknehmen können.
+#:
+#: **Als Verbot taugte die Zahl nicht**, und der Körper, der es zeigt, ist der
+#: schlichteste: Ein Würfel aus zwölf Dreiecken trägt je Dreieck neun Prozent
+#: seiner Oberfläche. Ein einziges fehlendes Dreieck läge damit über jeder
+#: Schwelle, die eine fehlende Wand ausschließen soll — und genau das ist ein
+#: Loch, wie es kleiner nicht geht.
+FILL_LOOP_SHARE: Final = 0.05
+
+#: Wie viele Randkanten der Füller höchstens verkettet. Darüber ist das Netz
+#: kein Körper mit Löchern mehr, sondern eine Dreieckssuppe — dann sagt der
+#: Bericht das, statt eine halbe Stunde lang Ringe zu bauen. Dieselbe
+#: Größenordnung wie :data:`MAX_STITCH_EDGES`, aus demselben Grund.
+MAX_FILL_EDGES: Final = 65536
+
+#: Wie oft die Verzweigungsauflösung höchstens durchläuft. Eine Fläche, die an
+#: zwei verzweigten Kanten hing, löst beim Fallen eine dritte aus; drei
+#: Durchgänge reichten am ganzen Korpus (die Katze braucht zwei), und jeder
+#: weitere kostet einen Gang über alle Kanten.
+BRANCHING_ROUNDS: Final = 4
+
+#: Wie oft der Ringfüller höchstens durchläuft, aus demselben Grund wie
+#: :data:`BRANCHING_ROUNDS`: Ein geschlossener Ring legt den nächsten frei.
+FILL_ROUNDS: Final = 4
+
+
+def boundary_loops(mesh: MeshData) -> list[list[int]]:
+    """Die Randkanten zu Ringen verkettet — je Ring seine Eckennummern, in
+    Umlaufrichtung.
+
+    Eine Randkante gehört zu genau einem Dreieck; in einem Netz ohne
+    Verzweigungen am Rand trifft an jeder Randecke genau eine Kante herein und
+    eine heraus, und die Kette schließt sich. Wo das nicht gilt — eine Ecke,
+    an der drei Ränder zusammenlaufen —, wird die Kette an dieser Ecke
+    abgebrochen und nicht geraten (Regel 21): Der Ring bleibt ungefüllt, und
+    der Bericht sagt, wie viele Kanten offen blieben.
+
+    **Verkettet wird ungerichtet.** Der Rand eines Dreiecks läuft ``a → b``,
+    und in einem einheitlich gewickelten Netz läuft der Ring ihm entgegen —
+    nur ist die Wicklung an dieser Stelle der Kette noch nicht einheitlich
+    (``unify_normals`` kommt danach, und es braucht ein geschlossenes Netz, um
+    gut zu arbeiten). Gemessen an einer heruntergeladenen Katze: Von 75
+    Randkanten ließen sich gerichtet 60 verketten; bei den übrigen 15 zeigten
+    zwei Kanten in dieselbe Ecke, weil dort eine Fläche falsch herum liegt.
+    Ungerichtet sind es alle — jede Randecke trägt genau zwei Randkanten, und
+    der Ring ist eindeutig. Wohin ein Dreieck über dem Ring zeigt, entscheidet
+    ``unify_normals`` danach für das ganze Netz.
+    """
+    body = mesh.raw
+    single = trimesh.grouping.group_rows(body.edges_sorted, require_count=1)
+    if not len(single) or len(single) > MAX_FILL_EDGES:
+        return []
+    directed = np.asarray(body.edges, dtype=np.int64)[single]
+    neighbours: dict[int, list[int]] = {}
+    for start, end in directed.tolist():
+        neighbours.setdefault(int(start), []).append(int(end))
+        neighbours.setdefault(int(end), []).append(int(start))
+    # Eine Randecke mit mehr als zwei Randkanten ist eine Sanduhr: Dort laufen
+    # zwei Ränder zusammen, und welcher zu welchem gehört, ist nicht ablesbar.
+    # Sie wird nicht geraten (Regel 21) — ihre Ringe bleiben offen, und der
+    # Bericht nennt die Kanten.
+    # Die Richtung kommt aus dem Dreieck an der ersten Kante: Läuft sein Rand
+    # ``a → b``, läuft der Ring ``b → a``, und ein Dreieck über dem Ring zeigt
+    # nach außen wie sein Nachbar. Wo die Wicklung uneinheitlich ist, hat sie
+    # ``unify_normals`` danach ohnehin zu richten — aber wo sie stimmt, soll
+    # die Füllung sie nicht verderben: Ein falsch herum geschlossener Würfel
+    # meldet die Hälfte seines Volumens.
+    forward = {(int(start), int(end)) for start, end in directed.tolist()}
+    seen: set[int] = set()
+    loops: list[list[int]] = []
+    for first in neighbours:
+        if first in seen or len(neighbours[first]) != 2:
+            continue
+        loop = [first]
+        seen.add(first)
+        node = neighbours[first][0]
+        while node != first:
+            if node in seen or len(neighbours.get(node, ())) != 2:
+                loop = []
+                break
+            seen.add(node)
+            loop.append(node)
+            options = neighbours[node]
+            node = options[0] if options[0] != loop[-2] else options[1]
+        if len(loop) >= 3:
+            if (loop[0], loop[1]) in forward:
+                loop.reverse()
+            loops.append(loop)
+    return loops
+
+
+def split_pinched_vertices(mesh: MeshData) -> tuple[MeshData, int]:
+    """Ecken auftrennen, in denen zwei Ränder zusammenlaufen.
+
+    Eine Randecke trägt normalerweise genau zwei Randkanten — eine herein,
+    eine hinaus —, und der Ring um ein Loch ist damit eindeutig. Wo vier
+    zusammenlaufen, berühren sich zwei Löcher in einem Punkt: eine Sanduhr.
+    Die Verkettung kann dort nicht entscheiden, welcher Rand zu welchem
+    gehört, und lässt beide offen (Regel 21).
+
+    Auflösbar ist es ohne Raten, denn die **Flächen** wissen es: Die Dreiecke
+    an der Ecke zerfallen in Fächer, die sich über gemeinsame Kanten
+    berühren. Jeder Fächer bekommt seine eigene Kopie der Ecke — am selben
+    Ort, also ändert sich nichts an der Form —, und danach hat jede Kopie
+    ihre zwei Randkanten. Gemessen an einer heruntergeladenen Katze mit
+    452 314 Dreiecken: drei solche Ecken, und mit ihnen schließen sich die
+    letzten fünfzehn Randkanten.
+    """
+    body = mesh.raw
+    single = trimesh.grouping.group_rows(body.edges_sorted, require_count=1)
+    if not len(single) or len(single) > MAX_FILL_EDGES:
+        return mesh, 0
+    border = np.asarray(body.edges, dtype=np.int64)[single]
+    corners, counts = np.unique(border.ravel(), return_counts=True)
+    pinched = corners[counts > 2]
+    if not len(pinched):
+        return mesh, 0
+
+    faces = np.asarray(body.faces, dtype=np.int64).copy()
+    points = np.asarray(body.vertices, dtype=float)
+    extra: list[np.ndarray] = []
+    split = 0
+    for corner in pinched.tolist():
+        rows = np.flatnonzero((faces == corner).any(axis=1))
+        if len(rows) < 2:
+            continue
+        # Die Fächer: Flächen, die sich an dieser Ecke eine Kante teilen,
+        # gehören zusammen. Gesucht wird über die zwei anderen Ecken je Fläche.
+        groups: list[set[int]] = []
+        for row in rows.tolist():
+            others = {int(value) for value in faces[row] if int(value) != corner}
+            touching = [index for index, group in enumerate(groups) if group & others]
+            if not touching:
+                groups.append(set(others) | {-row - 1})
+                continue
+            first = touching[0]
+            groups[first] |= others | {-row - 1}
+            for other in reversed(touching[1:]):
+                groups[first] |= groups.pop(other)
+        if len(groups) < 2:
+            continue
+        # Der erste Fächer behält die Ecke; jeder weitere bekommt eine Kopie.
+        for group in groups[1:]:
+            replacement = len(points) + len(extra)
+            extra.append(points[corner])
+            for marker in group:
+                if marker >= 0:
+                    continue
+                row = -marker - 1
+                faces[row] = np.where(faces[row] == corner, replacement, faces[row])
+            split += 1
+
+    if not split:
+        return mesh, 0
+    vertices = np.vstack([points, np.asarray(extra, dtype=float)])
+    opened = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
+    # Die Flächen sind dieselben, nur ihre Ecken sind neu nummeriert — also
+    # reist auch ihre Farbe unverändert mit (§20, und der Grund steht bei
+    # :func:`_carried_colours`).
+    _carried_colours(body, opened, np.arange(len(faces), dtype=np.int64))
+    _log.info("split %d pinched vertex fan(s)", split)
+    return MeshData.of(opened, slots=mesh.slots), split
+
+
+def _carried_colours(source: trimesh.Trimesh, target: trimesh.Trimesh, origin: np.ndarray) -> None:
+    """Die Flächenfarben des Ausgangs auf das reparierte Netz, Fläche für Fläche.
+
+    **Ein Netz, das seine Farben verliert, verliert seine Filamente** (§20).
+    Ein erzeugter Körper kommt farbig aus dem Generator (PLY je Fläche), und
+    *Farben zu Filamenten* liest genau diese Werte; ein neu gebautes
+    ``trimesh.Trimesh`` hat sie nicht, und aus zwei Filamenten wurde eines.
+    ``origin`` sagt je neuer Fläche, von welcher alten sie erbt —
+    ``len(source.faces)`` für eine, die es vorher nicht gab.
+    """
+    visual = getattr(source, "visual", None)
+    colours = getattr(visual, "face_colors", None) if visual is not None else None
+    if colours is None:
+        return
+    colours = np.asarray(colours)
+    if colours.ndim != 2 or len(colours) != len(source.faces):
+        return
+    # Eine neue Fläche ohne Vorbild bekommt die häufigste Farbe des Körpers —
+    # sie liegt in einer Wand, die es schon gab.
+    fallback = colours[0]
+    taken = np.where(
+        (origin < len(colours))[:, None], colours[np.minimum(origin, len(colours) - 1)], fallback
+    )
+    # ``visual`` ist entweder ``ColorVisuals`` oder ``TextureVisuals``; nur das
+    # erste kennt Flächenfarben, und nur dorthin gehören sie.
+    if hasattr(target.visual, "face_colors"):
+        target.visual.face_colors = taken  # type: ignore[union-attr]
+
+
+def _loop_fan(loop: list[int], middle: int) -> np.ndarray:
+    """Der Fächer über einen Punkt in der Ringmitte.
+
+    Er erfindet einen Punkt, aber keinen Ort: Die Mitte liegt in der Ebene der
+    Ecken, die das Loch umgeben. Dafür sind **alle** seine inneren Kanten neu
+    — er kann keine Kante treffen, die schon zwei Flächen trägt, und ist
+    deshalb die Antwort für jeden Ring, dessen Ecken anderswo bereits
+    verbunden sind (gemessen an einer heruntergeladenen Katze: acht von
+    fünfzehn Ringen).
+    """
+    return np.asarray(
+        [[loop[index], loop[(index + 1) % len(loop)], middle] for index in range(len(loop))],
+        dtype=np.int64,
+    )
+
+
+def _loop_triangles(points: np.ndarray, loop: list[int]) -> np.ndarray:
+    """Dreiecke über einem Randring, in seiner Umlaufrichtung.
+
+    Drei Ecken sind ein Dreieck. Darüber wird in der Ausgleichsebene des Rings
+    geohrt (*ear clipping*): Wer eine Ecke findet, deren Dreieck im Inneren
+    liegt und keine andere Ecke einschließt, schneidet sie ab. Das Verfahren
+    ist für jeden einfachen Ring vollständig; bleibt es stecken — ein Ring,
+    der sich in seiner Ebene selbst schneidet, weil das Loch stark gewölbt ist
+    —, tritt der Fächer über die Ringmitte an seine Stelle. Er erfindet einen
+    Punkt, aber keinen Ort: Die Mitte liegt in der Ebene der Ecken, die das
+    Loch umgeben.
+    """
+    ring = points[loop]
+    if len(loop) == 3:
+        return np.asarray([loop], dtype=np.int64)
+
+    # Die Ausgleichsebene: kleinste Singulärrichtung der zentrierten Ecken.
+    centre = ring.mean(axis=0)
+    local = ring - centre
+    normal = np.linalg.svd(local, full_matrices=False)[2][-1]
+    basis_u = np.cross(normal, (1.0, 0.0, 0.0) if abs(normal[0]) < 0.9 else (0.0, 1.0, 0.0))
+    length = float(np.linalg.norm(basis_u))
+    if length <= EPS_GEOM:
+        return np.zeros((0, 3), dtype=np.int64)
+    basis_u = basis_u / length
+    flat = np.column_stack((local @ basis_u, local @ np.cross(normal, basis_u)))
+    # Ein Ring, der gegen den Uhrzeigersinn läuft, hat positive Fläche; sonst
+    # spiegelt das Ohren die Innen-Außen-Frage.
+    ahead = np.roll(flat, -1, axis=0)
+    signed = float((flat[:, 0] * ahead[:, 1] - flat[:, 1] * ahead[:, 0]).sum()) / 2.0
+    order = list(range(len(loop))) if signed >= 0.0 else list(reversed(range(len(loop))))
+
+    def inside(first: int, second: int, third: int) -> bool:
+        """Liegt eine andere Ecke im Dreieck (first, second, third)?"""
+        corners = flat[[first, second, third]]
+        edges = np.roll(corners, -1, axis=0) - corners
+        others = [index for index in order if index not in (first, second, third)]
+        if not others:
+            return False
+        offsets = flat[others][:, None, :] - corners[None, :, :]
+        side = edges[None, :, 0] * offsets[:, :, 1] - edges[None, :, 1] * offsets[:, :, 0]
+        return bool(np.any(np.all(side >= -EPS_GEOM, axis=1)))
+
+    ears: list[list[int]] = []
+    rest = list(order)
+    stuck = 0
+    while len(rest) > 3 and stuck <= len(rest):
+        first, second, third = rest[0], rest[1], rest[2]
+        corners = flat[[first, second, third]]
+        first_edge = corners[1] - corners[0]
+        second_edge = corners[2] - corners[1]
+        turn = float(first_edge[0] * second_edge[1] - first_edge[1] * second_edge[0])
+        if turn > EPS_GEOM and not inside(first, second, third):
+            ears.append([loop[first], loop[second], loop[third]])
+            rest.pop(1)
+            stuck = 0
+        else:
+            rest.append(rest.pop(0))
+            stuck += 1
+    if len(rest) == 3 and stuck <= len(rest):
+        ears.append([loop[rest[0]], loop[rest[1]], loop[rest[2]]])
+        return np.asarray(ears, dtype=np.int64)
+
+    # Der Fächer über die Mitte, mit einer Ecke mehr: Sie steht am Ende der
+    # Punktliste, und der Aufrufer hängt sie an.
+    return _loop_fan(loop, len(points))
+
+
+def fill_boundary_loops(mesh: MeshData) -> tuple[MeshData, int, int]:
+    """Schließt jeden Randring, der ein Loch ist — und lässt stehen, was eine
+    fehlende Wand ist.
+
+    Der Unterschied zu ``trimesh.repair.fill_holes``, das bis zum 22.09.2026
+    an dieser Stelle stand: Jenes schließt Ringe aus drei und vier Kanten und
+    lehnt alles darüber ab (sein Fächer gilt nur für konvexe Ränder, und es
+    weiß nicht, ob der Rand konvex ist). Ein Modell aus dem Netz hat aber
+    Ringe aus fünf, zwanzig, hundert Kanten, und die blieben offen — beim
+    Kunden stand danach „Die Reparatur schließt kleine Löcher, kann fehlende
+    Wände aber nicht ersetzen" über einem Loch von drei Millimetern.
+
+    Zurück kommt der Körper, wie viele Ringe geschlossen wurden und wie viele
+    davon groß genug für eine Warnung waren (:data:`FILL_LOOP_SHARE`). Die
+    Materialslots der neuen Dreiecke erben vom Nachbarn am Ring (§20).
+    """
+    # **Erst die Sanduhren, dann die Ringe.** Zwei Löcher, die sich eine Ecke
+    # teilen, geben dort vier Randkanten, und die Kette bricht ab: Am
+    # zweifach unterteilten Würfel bleiben zwei fehlende Dreiecke ungefüllt,
+    # solange die Ecke nicht aufgetrennt ist.
+    mesh, _pinched = split_pinched_vertices(mesh)
+    loops = boundary_loops(mesh)
+    if not loops:
+        return mesh, 0, 0
+
+    body = mesh.raw
+    points = np.asarray(body.vertices, dtype=float)
+    limit = float(body.area) * FILL_LOOP_SHARE
+    # Welcher Slot an welcher Randkante hängt: Die neuen Dreiecke bekommen
+    # den ihres Nachbarn, damit eine geschlossene Tasche nicht in einer
+    # anderen Farbe dasteht als die Wand um sie herum.
+    single = trimesh.grouping.group_rows(body.edges_sorted, require_count=1)
+    slots = np.asarray(mesh.slots, dtype=np.int64) if mesh.slots else None
+    slot_at: dict[tuple[int, int], int] = {}
+    neighbour_of: dict[tuple[int, int], int] = {}
+    directed = np.asarray(body.edges, dtype=np.int64)[single]
+    for row, (start, end) in enumerate(directed.tolist()):
+        owner = int(single[row]) // 3
+        neighbour_of[(int(end), int(start))] = owner
+        if slots is not None and len(slots) == len(body.faces):
+            slot_at[(int(end), int(start))] = int(slots[owner])
+
+    # **Wie viele Nachbarn jede Kante schon hat.** Eine Füllung, die ein
+    # Dreieck auf eine Kante mit zwei Nachbarn legt, macht aus einem Loch eine
+    # Verzweigung — gemessen an einer heruntergeladenen Katze: 15 Ringe
+    # geschlossen, neun Kanten mit drei Flächen entstanden. Die Ecken eines
+    # Randrings sind oft schon anders verbunden, als der Ring nahelegt.
+    taken: dict[tuple[int, int], int] = {}
+    for first, second in np.asarray(body.edges_sorted, dtype=np.int64).tolist():
+        key = (int(first), int(second))
+        taken[key] = taken.get(key, 0) + 1
+
+    added: list[np.ndarray] = []
+    added_slots: list[int] = []
+    extra_points: list[np.ndarray] = []
+    filled = 0
+    too_wide = 0
+    blocked = 0
+    for loop in loops:
+        ring = points[loop]
+        # Die Fläche des Rings, gemessen über sein Umlaufintegral — dieselbe
+        # Zahl, die ein Dreiecksnetz über dem Ring hätte.
+        centre = ring.mean(axis=0)
+        spanned = (
+            float(
+                np.linalg.norm(
+                    np.cross(ring - centre, np.roll(ring, -1, axis=0) - centre), axis=1
+                ).sum()
+            )
+            / 2.0
+        )
+        wide_here = spanned > limit
+        # Erst die Ohren, und wenn ihre Sehnen an Kanten stoßen, die schon zwei
+        # Flächen tragen, der Fächer über die Mitte: Seine inneren Kanten sind
+        # immer neu.
+        chosen: np.ndarray | None = None
+        needs_middle = False
+        for attempt in (_loop_triangles(points, loop), _loop_fan(loop, len(points))):
+            if not len(attempt):
+                continue
+            middle_here = bool(int(attempt.max()) >= len(points))
+            pieces = (
+                np.where(attempt == len(points), len(points) + len(extra_points), attempt)
+                if middle_here
+                else attempt
+            )
+            # Keine Fläche auf eine Kante, die schon zwei trägt — und keine zweimal.
+            wanted: dict[tuple[int, int], int] = {}
+            for piece in pieces.tolist():
+                for index in range(3):
+                    key = (int(piece[index]), int(piece[(index + 1) % 3]))
+                    edge = (min(key), max(key))
+                    wanted[edge] = wanted.get(edge, 0) + 1
+            if any(taken.get(edge, 0) + count > 2 for edge, count in wanted.items()):
+                continue
+            for edge, count in wanted.items():
+                taken[edge] = taken.get(edge, 0) + count
+            chosen = pieces
+            needs_middle = middle_here
+            break
+        if chosen is None:
+            blocked += 1
+            continue
+        pieces = chosen
+        if needs_middle:
+            extra_points.append(centre)
+        added.append(pieces)
+        if wide_here:
+            too_wide += 1
+        for piece in pieces.tolist():
+            neighbour = slot_at.get((int(piece[0]), int(piece[1])))
+            added_slots.append(neighbour if neighbour is not None else 0)
+        filled += 1
+
+    if not added:
+        return mesh, 0, 0
+
+    vertices = (
+        np.vstack([points, np.asarray(extra_points, dtype=float)]) if extra_points else points
+    )
+    faces = np.vstack([np.asarray(body.faces, dtype=np.int64), np.vstack(added)])
+    patched = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
+    # Die alten Flächen behalten ihre Farbe, die neuen erben die ihres Nachbarn
+    # am Ring — wie die Materialslots darüber (§20).
+    origin = np.concatenate(
+        [
+            np.arange(len(body.faces), dtype=np.int64),
+            np.fromiter(
+                (
+                    neighbour_of.get((int(piece[0]), int(piece[1])), len(body.faces))
+                    for group in added
+                    for piece in group.tolist()
+                ),
+                dtype=np.int64,
+                count=sum(len(group) for group in added),
+            ),
+        ]
+    )
+    _carried_colours(body, patched, origin)
+    slot_values: tuple[int, ...] = ()
+    if slots is not None and len(slots) == len(body.faces):
+        slot_values = tuple(int(value) for value in (*slots.tolist(), *added_slots))
+    _log.info(
+        "filled %d boundary loop(s), %d of them wide, %d would branch", filled, too_wide, blocked
+    )
+    return MeshData.of(patched, slots=slot_values), filled, too_wide
+
+
+def resolve_branching_edges(mesh: MeshData) -> tuple[MeshData, int]:
+    """Kanten, an denen mehr als zwei Flächen zusammenlaufen, wieder zu Kanten
+    mit zwei Flächen machen.
+
+    Das zweite Maß von „nicht geschlossen" (:func:`branching_edge_count`), und
+    das, für das es bis zum 22.09.2026 keine Handlung gab: Der Bericht sagte
+    „An einer Kante treffen mehr als zwei Flächen zusammen — das ist kein
+    Loch, sondern eine Verzweigung", und danach stand der Kunde allein da.
+
+    **Was dort wirklich liegt, ist übereinandergeklapptes Material.** Gemessen
+    an Roberts Waschschüssel (215 073 Dreiecke, eine verzweigte Kante) und an
+    einer heruntergeladenen Katze (452 314 Dreiecke, 27 verzweigte Kanten):
+    An jeder dieser Kanten stehen zwei Flächen mit **null Grad** zueinander —
+    zwei Dreiecke, die aufeinanderliegen, ohne deckungsgleich zu sein (sonst
+    hätte :func:`remove_doubled_faces` sie gefangen) — und eine dritte, die die
+    echte Wand ist. Die Flächen sind winzig: 0,0003 mm² neben 0,27 mm².
+
+    Entfernt wird deshalb je Kante die **kleinste** anliegende Fläche, und nur
+    so viele, bis die Kante zwei Nachbarn hat. Das Ergebnis wird gemessen, nicht
+    geglaubt: Wird die Verzweigungszahl nicht kleiner oder reißt das Netz weiter
+    auf, als die entfernten Dreiecke erklären, bleibt der Schritt aus. Was er
+    öffnet, schließt der Ringfüller danach — deshalb steht er vor ihm.
+
+    **Und er läuft mehrmals**: Eine Fläche, die zwei verzweigte Kanten trug,
+    löst beim Fallen eine dritte aus. Gemessen an einer heruntergeladenen Katze
+    mit 452 314 Dreiecken: 27 Verzweigungen im ersten Durchgang, 11 im zweiten,
+    danach keine mehr.
+    """
+    total = 0
+    for _round in range(BRANCHING_ROUNDS):
+        mesh, resolved = _resolve_branching_once(mesh)
+        if not resolved:
+            break
+        total += resolved
+    return mesh, total
+
+
+def _resolve_branching_once(mesh: MeshData) -> tuple[MeshData, int]:
+    """Ein Durchgang von :func:`resolve_branching_edges`."""
+    body = mesh.raw
+    groups = trimesh.grouping.group_rows(body.edges_sorted, require_count=None)
+    branching = [group for group in groups if len(group) > 2]
+    if not branching:
+        return mesh, 0
+
+    areas = np.asarray(body.area_faces, dtype=float)
+    doomed: set[int] = set()
+    for group in branching:
+        faces = sorted({int(row) // 3 for row in group}, key=lambda index: float(areas[index]))
+        # Zwei Nachbarn darf die Kante behalten; alles darüber geht, kleinste
+        # Fläche zuerst.
+        for index in faces[: max(len(faces) - 2, 0)]:
+            doomed.add(index)
+    if not doomed:
+        return mesh, 0
+
+    keep = np.ones(len(body.faces), dtype=bool)
+    keep[np.fromiter(doomed, dtype=np.int64, count=len(doomed))] = False
+    trimmed = body.copy()
+    trimmed.update_faces(keep)
+    trimmed.remove_unreferenced_vertices()
+    slots: tuple[int, ...] = ()
+    if mesh.slots and len(mesh.slots) == len(body.faces):
+        slots = tuple(int(value) for value in np.asarray(mesh.slots, dtype=np.int64)[keep])
+    candidate = MeshData.of(trimmed, slots=slots)
+    # **Die Probe:** Die Verzweigung muss weg sein, und das Netz darf dabei
+    # nicht mehr aufreißen, als der Ringfüller danach wieder schließt. Ein
+    # Dreieck weniger heißt bis zu drei offene Kanten mehr — mehr als das ist
+    # kein Auflösen, sondern ein Loch.
+    opened = open_edge_count(candidate) - open_edge_count(mesh)
+    if branching_edge_count(candidate) >= len(branching) or opened > 3 * len(doomed):
+        return mesh, 0
+    _log.info("resolved %d branching edge(s) by dropping %d face(s)", len(branching), len(doomed))
+    return candidate, len(branching)
+
+
+def _filled_with_count(mesh: MeshData) -> tuple[MeshData, bool, int]:
+    """Wie :func:`fill_holes` ohne Vernähen, aber mit der Zahl der großen
+    Öffnungen für den Bericht."""
+    before = open_edge_count(mesh)
+    if not before:
+        return mesh, False, 0
+    working = mesh
+    wide = 0
+    for _round in range(FILL_ROUNDS):
+        working, closed_loops, wide_here = fill_boundary_loops(working)
+        wide += wide_here
+        if not closed_loops:
+            break
+    return working, open_edge_count(working) < before, wide
+
+
 def fill_holes(mesh: MeshData, stitch: bool = True) -> tuple[MeshData, bool]:
     """Schließt offene Kanten. Nur kleine Löcher — eine fehlende Wand kann
     trimesh nicht überbrücken.
@@ -329,15 +851,21 @@ def fill_holes(mesh: MeshData, stitch: bool = True) -> tuple[MeshData, bool]:
     body = working.raw.copy()
     if body.is_watertight:
         return mesh, False
-    before = open_edge_count(mesh)
     if stitch:
         working, _seams = stitch_t_junctions(working)
         body = working.raw.copy()
         if body.is_watertight:
             return working, True
-    trimesh.repair.fill_holes(body)
-    filled = MeshData.of(body, slots=_slots_after_fill(working, body))
-    return filled, open_edge_count(filled) < before
+    # **Der eigene Ringfüller, nicht der von trimesh.** Jener schließt Ringe
+    # aus drei und vier Kanten, lehnt alles darüber ab (sein Fächer gilt nur
+    # für konvexe Ränder, und er weiß nicht, ob der Rand konvex ist) — und er
+    # prüft nicht, ob die Ecken des Rings schon anders verbunden sind: An
+    # einer heruntergeladenen Katze machte er aus zwei Löchern zwei
+    # Verzweigungen. :func:`fill_boundary_loops` verkettet die Ränder selbst,
+    # ohrt sie in ihrer Ausgleichsebene und legt keine Fläche auf eine Kante,
+    # die schon zwei trägt.
+    filled, worked, _wide = _filled_with_count(working)
+    return filled, worked
 
 
 def remove_hollow_shells(mesh: MeshData) -> tuple[MeshData, int]:
@@ -601,7 +1129,25 @@ def resolve_self_intersections(mesh: MeshData) -> tuple[MeshData, bool]:
         return mesh, False
     if rebuilt is None or not len(rebuilt.faces):
         return mesh, False
-    return transfer(MeshData.of(rebuilt), [mesh]), True
+    # **Die Farben reisen mit, wie die Slots.** Der Kern baut das Netz neu, und
+    # ein neu gebautes ``trimesh.Trimesh`` hat keine Flächenfarben — ein
+    # erzeugter Körper kommt aber farbig aus dem Generator, und *Farben zu
+    # Filamenten* liest genau diese Werte (§20). Bis zum 22.09.2026 fiel das
+    # nicht auf, weil dieser Schritt an einem offenen Netz gar nicht lief;
+    # seit die Kette auch fehlende Wände schließt, läuft er — und aus zwei
+    # Filamenten wurde eines. Zugeordnet wird über die nächste alte Fläche,
+    # genau wie ``transfer`` es für die Slots tut.
+    resolved = transfer(MeshData.of(rebuilt), [mesh])
+    _carried_colours(mesh.raw, resolved.raw, _nearest_old_face(mesh.raw, resolved.raw))
+    return resolved, True
+
+
+def _nearest_old_face(source: trimesh.Trimesh, target: trimesh.Trimesh) -> np.ndarray:
+    """Je neuer Fläche die alte, die ihrem Schwerpunkt am nächsten liegt."""
+    from app.core.geom.mesh import on_surface
+
+    _spot, _distance, face = on_surface(source, np.asarray(target.triangles_center, dtype=float))
+    return np.asarray(face, dtype=np.int64)
 
 
 def _tears_it_further(before: MeshData, after: MeshData) -> bool:
@@ -742,6 +1288,30 @@ def repair(
             )
 
     if holes:
+        # **Zuerst die Verzweigungen, dann die Löcher.** Eine Kante mit drei
+        # Nachbarn ist kein Loch, und der Füller kann sie nicht sehen; was das
+        # Auflösen öffnet, schließt er dagegen gleich mit.
+        result.mesh, unbranched = resolve_branching_edges(result.mesh)
+        if unbranched:
+            result.changed = True
+            result.findings.append(
+                Finding(
+                    code="repair.branching_resolved",
+                    severity="info",
+                    message=_(
+                        "An {edges} Kanten lagen Flächen übereinander — die überzähligen "
+                        "wurden entfernt.",
+                        edges=unbranched,
+                    )
+                    if unbranched > 1
+                    else _(
+                        "An einer Kante lagen Flächen übereinander — die überzählige wurde "
+                        "entfernt."
+                    ),
+                    values={"edges": unbranched},
+                )
+            )
+
         # Getrennt gemeldet, weil es ein anderer Defekt mit anderer Antwort
         # ist: eine Naht ist eine Fläche, der ein Punkt fehlte, ein Loch eine
         # Fläche, die fehlte. Wer den Bericht liest, erkennt, ob sein Modell
@@ -766,8 +1336,30 @@ def repair(
         # `stitch=False`: das Vernähen ist gerade gelaufen — es erneut zu
         # zahlen war der gemessene Faktor 2,1 auf dem Normalfall „Reparieren
         # an einem heruntergeladenen Modell".
-        result.mesh, closed = fill_holes(result.mesh, stitch=False)
+        result.mesh, closed, wide_holes = _filled_with_count(result.mesh)
         open_after = open_edge_count(result.mesh)
+        if wide_holes:
+            # **Eine große Öffnung wird geschlossen und gesagt.** Dort ist eine
+            # Fläche entstanden, die im Modell nicht war — beim halben Würfel
+            # ist das der ganze Deckel. Wer das nicht wollte, nimmt den Schritt
+            # mit Strg+Z zurück; wer es wollte, druckt.
+            result.findings.append(
+                Finding(
+                    code="repair.wide_hole_filled",
+                    severity="warning",
+                    message=_(
+                        "{walls} große Öffnungen wurden geschlossen — prüfen Sie, ob dort "
+                        "wirklich eine Fläche hingehört.",
+                        walls=wide_holes,
+                    )
+                    if wide_holes > 1
+                    else _(
+                        "Eine große Öffnung wurde geschlossen — prüfen Sie, ob dort wirklich "
+                        "eine Fläche hingehört."
+                    ),
+                    values={"walls": wide_holes},
+                )
+            )
         if closed:
             result.changed = True
             result.findings.append(
@@ -839,7 +1431,7 @@ def repair(
         # — und der Bericht sprach von fehlenden Wänden. Wer danach nach einem
         # Loch sucht, findet keines und hält die Anwendung für kaputt.
         open_edges = open_edge_count(result.mesh)
-        branching = branching_edge_count(result.mesh) if not open_edges else 0
+        branching = branching_edge_count(result.mesh)
         result.findings.append(
             Finding(
                 code="repair.still_branching" if branching else "repair.still_open",
@@ -850,6 +1442,13 @@ def repair(
                 # ehrliche Grenze erklärt, warum der Rest bleibt; die
                 # Oberfläche führt von dort zu den betroffenen Stellen (§2.7).
                 message=_(
+                    "An {edges} Kanten liegen weiterhin Flächen übereinander, und an "
+                    "{open_edges} Stellen ist das Netz offen.",
+                    edges=branching,
+                    open_edges=open_edges,
+                )
+                if branching and open_edges
+                else _(
                     "An einer Kante treffen mehr als zwei Flächen zusammen — das ist kein "
                     "Loch, sondern eine Verzweigung."
                 )

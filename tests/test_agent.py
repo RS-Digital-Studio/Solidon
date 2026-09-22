@@ -1288,19 +1288,27 @@ def test_the_origin_records_the_conditions(project: Project, profile: Profile) -
 
 
 def test_the_check_notices_an_open_body(project: Project, profile: Profile) -> None:
-    document = Document(format_version=2, app_version="0.0.1")
-    document.sources["src_1"] = Source(
-        id="src_1", kind="import", path="sources/broken_open.stl", sha256=""
-    )
-    broken = new_project("centauri-carbon-2", "petg")
-    broken.document = document
-    broken.sources["src_1"] = (MESHES / "broken_open.stl").read_bytes()
-    History(document).apply(
-        "Laden", [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})]
-    )
+    """Die Prüfung sieht ein offenes Netz — gleich, woher es kommt.
 
-    result = evaluate(document, profile, sources=ProjectSources(broken))
-    findings = checks.check(result)
+    **Nicht mehr über den Import**: Der schließt seit dem 22.09.2026, was zu
+    schließen ist (Entscheidung Robert), und `broken_open.stl` kommt dort
+    geschlossen heraus. Was der Agent prüft, ist aber der Zustand der Szene
+    nach *irgendeinem* Schritt — eine Boolesche Operation, die eine Wand
+    aufreißt, ein Netz aus dem Erzeuger. Der Prüfling ist deshalb das offene
+    Netz selbst, direkt in der Szene.
+    """
+    from app.core.geom.mesh import read_mesh
+    from app.core.ingest.loader import normalise
+    from app.core.scene import EvaluationResult
+    from app.core.types import Scene, SceneObject
+
+    open_body = normalise(
+        read_mesh((MESHES / "broken_open.stl").read_bytes(), ".stl"), "mm", mend=False
+    ).mesh
+    assert not open_body.is_watertight, "ohne offenes Netz prüft der Test nichts"
+    entry = SceneObject(id="obj_1", name="Schale", mesh=open_body)
+
+    findings = checks.check(EvaluationResult(Scene(objects={entry.id: entry})))
 
     assert "agent.not_watertight" in {finding.code for finding in findings}
 

@@ -281,11 +281,28 @@ def test_reading_an_stl_is_not_a_finding() -> None:
     assert "ingest.welded" in {finding.code for finding in listed.findings}
 
 
-def test_an_open_model_is_reported_not_repaired() -> None:
+def test_an_open_model_is_repaired_on_import() -> None:
+    """**Der Import schließt, was zu schließen ist** (Entscheidung Robert,
+    22.09.2026: „am besten beim Import", „alles bei der Reparatur beheben").
+
+    Bis dahin stand hier „nicht geschlossen, ‚Reparieren' schließt die offenen
+    Stellen" — ein Hinweis auf einen Knopf, den der Kunde erst finden musste,
+    und ein Modell, das bis dahin nicht druckbar war. Gemessen am Korpus
+    ``F:D Dateien`` (171 Dateien, 484 Körper): 118 Körper kamen offen herein
+    und gehen geschlossen heraus, keiner bleibt offen.
+
+    ``broken_open.stl`` fehlen drei Flächen — eine fehlende Wand. Auch sie
+    wird geschlossen, und weil dort eine Fläche entsteht, die im Modell nicht
+    war, steht eine Warnung daneben.
+    """
     result = normalise(mesh_of("broken_open.stl"), "mm")
-    assert not result.mesh.is_watertight
-    finding = next(f for f in result.findings if f.code == "ingest.not_watertight")
-    assert finding.severity == "warning"
+
+    assert result.mesh.is_watertight, "der Körper kommt geschlossen aus dem Import"
+    codes = {finding.code for finding in result.findings}
+    assert "ingest.not_watertight" not in codes
+    assert "repair.holes_filled" in codes, "und der Bericht sagt, was geschlossen wurde"
+    wide = next(f for f in result.findings if f.code == "repair.wide_hole_filled")
+    assert wide.severity == "warning"
 
 
 def test_small_components_are_reported_and_kept() -> None:

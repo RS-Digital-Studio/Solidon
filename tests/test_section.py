@@ -89,7 +89,9 @@ def test_an_open_model_is_cut_but_reported_as_uncapped() -> None:
     """Ein offener Körper lässt sich nicht ehrlich deckeln — also wird es
     nicht vorgetäuscht (§18.2).
     """
-    body = normalise(read_mesh((MESHES / "broken_open.stl").read_bytes(), ".stl"), "mm").mesh
+    body = normalise(
+        read_mesh((MESHES / "broken_open.stl").read_bytes(), ".stl"), "mm", mend=False
+    ).mesh
     result = cut(body, SectionPlane.along("z", 0.0))
 
     assert not result.capped

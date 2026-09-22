@@ -113,6 +113,33 @@ Modell besteht aus mehreren Teilen." trägt seither die Handlung, die es
 nahelegt (`SPLIT_BODIES`, `panels.FINDING_ACTIONS`) — ein Angebot, keine
 Ausführung.
 
+**Und sie schließt, was offen ist** (Entscheidung Robert, 22.09.2026: „am
+besten beim Import", „alles bei der Reparatur beheben"). Bis dahin meldete der
+Import „Das Modell ist nicht geschlossen. Reparieren schließt die offenen
+Stellen." — ein Hinweis auf einen Knopf, den der Kunde erst finden musste, und
+ein Modell, das bis dahin nicht druckbar war. Jetzt läuft `geom.repair.repair`
+an derselben Stelle, mit denselben Schritten, die die Operation fährt, und
+**nur**, wenn es etwas zu tun gibt: Ein geschlossener Körper geht ohne eine
+Messung durch, ein unverschweißtes Netz wird gar nicht erst gefragt (dort ist
+jede Kante ein Rand, und `weld=False` heißt: nicht anfassen). Gemessen am
+Korpus `F:\3D Dateien` (171 Dateien, 484 Körper): 366 kamen dicht herein,
+**118 offene gehen geschlossen heraus, keiner bleibt offen**, 108 s für alle
+zusammen.
+
+Drei Sätze dazu:
+
+* **Was geschlossen wurde, steht im Bericht** — mit Zahl (`repair.holes_filled`,
+  `repair.branching_resolved`), und eine Öffnung über `FILL_LOOP_SHARE` der
+  Oberfläche zusätzlich als **Warnung** (`repair.wide_hole_filled`): Dort ist
+  eine Fläche entstanden, die im Modell nicht war. Am Korpus traf das keinen
+  einzigen Körper; an `broken_open.stl` trifft es zu, und dafür steht der Test.
+* **Die Antwort auf „ist es dicht" gilt danach neu.** Sie liegt im Cache des
+  Netzes, den der Hauptthread abliest; ein `None` an dieser Stelle wurde dort
+  zu `False`, und ein geschlossener Körper meldete sich als offen.
+* **Die Reparatur bleibt eine Operation.** Wer sie am Stapel sieht, sieht auch
+  hier dieselben Befunde — und wer das Ergebnis nicht will, nimmt den
+  Ladeschritt mit Strg+Z zurück.
+
 Die Eingangsstufe ist die Op `load`, damit ihre Parameter im Stack sichtbar
 und änderbar bleiben.
 

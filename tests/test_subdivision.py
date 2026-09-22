@@ -61,8 +61,10 @@ def corpus(name: str) -> MeshData:
     Dreieck einzeln, und ohne das Verschweißen hat ``plate_holes`` 796
     Komponenten statt einer. Ein Geometrietest, der damit rechnet, misst die
     Datei und nicht die Operation.
+    ``mend=False``: Diese Tests messen, was ein Defekt auslöst — ein Import,
+    der ihn vorher behebt (seit dem 22.09.2026), nähme ihnen den Gegenstand.
     """
-    return normalise(read_mesh((MESHES / name).read_bytes(), ".stl"), "mm").mesh
+    return normalise(read_mesh((MESHES / name).read_bytes(), ".stl"), "mm", mend=False).mesh
 
 
 def run(

@@ -385,7 +385,9 @@ def test_a_face_knows_where_it_looks() -> None:
 
 
 def test_an_open_model_reports_its_edges() -> None:
-    broken = normalise(read_mesh((MESHES / "broken_open.stl").read_bytes(), ".stl"), "mm").mesh
+    broken = normalise(
+        read_mesh((MESHES / "broken_open.stl").read_bytes(), ".stl"), "mm", mend=False
+    ).mesh
     loops = detect_edge_loops(broken)
 
     assert loops and loops[0].kind == "edge_loop"

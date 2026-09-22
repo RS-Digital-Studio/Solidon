@@ -516,7 +516,9 @@ def test_hollowing_an_open_hull_names_the_hull_and_offers_repair(profile: Profil
     from app.core.errors import REPAIR_AND_RETRY, NotManifoldError
     from app.core.geom.repair import repair
 
-    figure = normalise(read_mesh((MESHES / "generated_figure.stl").read_bytes(), ".stl"), "mm").mesh
+    figure = normalise(
+        read_mesh((MESHES / "generated_figure.stl").read_bytes(), ".stl"), "mm", mend=False
+    ).mesh
     assert not figure.is_watertight, "die Voraussetzung des Falls"
 
     with pytest.raises(NotManifoldError) as caught:
@@ -569,7 +571,9 @@ def test_the_hull_is_named_at_every_boolean_of_the_hollowing(
     assert chain.value is failure, "an einer dichten Hülle bleibt die Kette der Grund"
 
     # Der Weg: Hohlraum und Einschluss bestehen, die Entlüftung reißt.
-    figure = normalise(read_mesh((MESHES / "generated_figure.stl").read_bytes(), ".stl"), "mm").mesh
+    figure = normalise(
+        read_mesh((MESHES / "generated_figure.stl").read_bytes(), ".stl"), "mm", mend=False
+    ).mesh
     assert not figure.is_watertight
 
     def passes(kind: str, meshes: list[MeshData], **kwargs: object) -> BooleanOutcome:

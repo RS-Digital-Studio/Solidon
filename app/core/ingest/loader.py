@@ -832,11 +832,17 @@ def normalise(
     weld_is_reading: bool = False,
     remove_degenerate: bool = True,
     unify_normals: bool = True,
+    mend: bool = True,
     place_on_bed: bool = False,
     centre: bool = False,
     progress: ProgressFn = _silent,
 ) -> IngestResult:
     """Führt die sechs Schritte aus und meldet, was sie getan haben.
+
+    ``mend`` schließt offene Stellen (Schritt 4b). Abschalten lässt es sich für
+    Prüfungen, die ein offenes Netz **brauchen** — die Fehlerkarte, der Schnitt
+    ohne Deckel, die Warnung des Aushöhlens: Sie messen, was ein Defekt
+    auslöst, und ein Import, der ihn vorher behebt, nimmt ihnen den Gegenstand.
 
     ``weld_is_reading`` sagt, dass das Verschweißen zum **Lesen** des Formats
     gehört und kein Befund ist: Eine STL speichert jedes Dreieck mit eigenen
@@ -1035,6 +1041,52 @@ def normalise(
                 )
             )
 
+    # 4b — **Offene Stellen schließen, statt nur davon zu berichten**
+    # (Entscheidung Robert, 22.09.2026: „am besten beim Import", „alles bei der
+    # Reparatur beheben"). Bis dahin stand im Prüfbericht „Das Modell ist nicht
+    # geschlossen. Reparieren schließt die offenen Stellen." — ein Hinweis auf
+    # einen Knopf, den der Kunde erst finden musste, und ein Modell, das bis
+    # dahin nicht druckbar war.
+    #
+    # Gelaufen wird der Weg der Operation (:func:`app.core.geom.repair.repair`)
+    # mit denselben Schritten, die hier ohnehin anstehen — verzweigte Kanten
+    # auflösen, Ränder vernähen, Ringe schließen —, und nur, wenn es etwas zu
+    # tun gibt: Ein geschlossener Körper geht ohne eine einzige Messung durch.
+    # Die Befunde der Reparatur reisen in denselben Bericht; was sie schließt,
+    # steht dort mit Zahl, und eine große Öffnung mit einer Warnung.
+    #
+    # **Nur an einem verschweißten Netz.** Eine Dreieckssuppe — jede Ecke genau
+    # einmal gebraucht, wie jede STL sie speichert — hat keine offenen Ränder,
+    # sondern nur offene Ränder: Jede ihrer Kanten gehört zu einem Dreieck.
+    # Dort etwas zu schließen hieße, das Netz zu erfinden, und wer ``weld=False``
+    # sagt, will genau das nicht.
+    if mend and weld and len(body.faces) and (closed is False or not body.is_watertight):
+        from app.core.geom.repair import repair as repair_mesh
+
+        progress(0.7, str(_("Offene Stellen schließen")))
+        mended = repair_mesh(
+            MeshData(raw=body, slots=tuple(int(slot) for slot in slots))
+            if slots is not None and len(slots) == len(body.faces)
+            else mesh.replacing(body),
+            # Was hier schon gelaufen ist, läuft nicht zweimal.
+            weld=False,
+            degenerate=False,
+            normals=False,
+        )
+        if mended.changed:
+            body = mended.mesh.raw
+            slots = (
+                np.asarray(mended.mesh.slots, dtype=int)
+                if mended.mesh.slots and len(mended.mesh.slots) == len(body.faces)
+                else None
+            )
+            # **Und die Antwort auf „ist es dicht" gilt neu.** Sie steht weiter
+            # unten im Cache des Netzes, das der Hauptthread abliest; ein
+            # ``None`` an dieser Stelle wurde dort zu ``False``, und ein
+            # geschlossener Körper meldete sich als offen.
+            closed = bool(body.is_watertight)
+            findings.extend(mended.findings)
+
     # 5 — Komponenten. Kleine werden gemeldet, nie still verworfen.
     progress(0.8, str(_("Komponenten zählen")))
     components = _count_components(body, findings)
@@ -1065,6 +1117,8 @@ def normalise(
         for figure in ("volume", "area"):
             getattr(body, figure)
     if not closed and len(body.faces):
+        # Der Satz steht nur noch, wo die Reparatur oben nicht durchkam — sie
+        # läuft vorher und schließt, was zu schließen ist.
         findings.append(
             Finding(
                 code="ingest.not_watertight",

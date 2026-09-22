@@ -37,6 +37,14 @@ Nullwirkung ersetzt sie nicht.
 
 - **Einheiten**: STL trägt keine. Erkannt wird aus der Größe, und bei
   Mehrdeutigkeit **wird gefragt** (`ctx.ask`, Regel 21) — nicht geraten.
+- **Offene Stellen werden geschlossen, nicht gemeldet.** `normalise` ruft
+  `geom.repair.repair` (ohne die Schritte, die es selbst schon gefahren hat),
+  sobald ein verschweißtes Netz nicht dicht ist: verzweigte Kanten auflösen,
+  Sanduhr-Ecken auftrennen, Ränder vernähen, Ringe schließen. Am Korpus
+  `F:D Dateien` gehen damit 118 von 484 Körpern geschlossen heraus, die
+  offen hereinkamen, und keiner bleibt offen. Die Befunde der Reparatur reisen
+  in denselben Bericht; die Regel und ihre drei Sätze stehen in
+  `.claude/rules/dateiformat.md`.
 - **3MF ist eine Baugruppe**, kein Körper. Sie kommt als mehrere Objekte an.
 - **Gleich benannte ZIP-Einträge** prüft `loader.check_unpacked` erst nach
   sämtlichen Archivgrenzen blockweise auf bytegleichen Inhalt. Alle Kopien

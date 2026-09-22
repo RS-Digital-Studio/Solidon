@@ -383,7 +383,9 @@ def test_steep_faces_are_the_ones_highlighted() -> None:
 
 def test_the_defect_map_finds_the_open_edges() -> None:
     """Die Fehlerkarte markiert die Dreiecke an den offenen Kanten eines Netzes mit Loch."""
-    broken = normalise(read_mesh((MESHES / "broken_open.stl").read_bytes(), ".stl"), "mm").mesh
+    broken = normalise(
+        read_mesh((MESHES / "broken_open.stl").read_bytes(), ".stl"), "mm", mend=False
+    ).mesh
     analysis = maps.defect_map(broken)
 
     assert analysis.highlighted, "the missing wall leaves open edges behind"

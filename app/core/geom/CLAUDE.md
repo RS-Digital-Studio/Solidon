@@ -550,7 +550,13 @@ Körper zuerst auf den Quader, in dem sich ihre Häute unterscheiden
 Nummer in kanonischer Drehung verglichen); die Differenz liegt in dessen
 Hülle, und zwei Schnitte an einer Platte mit 204 000 Dreiecken kosten so
 25 statt 366 ms — bleibt die Box über der Hälfte der gemeinsamen Hülle,
-rechnet sie am ganzen Körper) · `repair.py` (Netze reparieren — und dort zwei Nachbarn, die man leicht
+rechnet sie am ganzen Körper) · `repair.py` (Netze reparieren: verzweigte Kanten
+auflösen (`resolve_branching_edges` — dort liegen Flächen übereinander, die
+kleinste geht), Sanduhr-Ecken auftrennen (`split_pinched_vertices` — zwei
+Löcher, die sich eine Ecke teilen, sind zwei Ringe), Ränder vernähen und
+Ringe schließen (`boundary_loops` + `fill_boundary_loops`: Ohren in der
+Ausgleichsebene, Fächer über die Ringmitte als Rückfall, und **keine Fläche
+auf eine Kante, die schon zwei trägt**) — und dort zwei Nachbarn, die man leicht
 verwechselt: `remove_small_components` misst die **Fläche** gegen die größte
 Komponente und wirft lose Fragmente, `remove_hollow_shells` misst das
 **Volumen** gegen null und wirft Flächenpaare ohne Dicke; ein Bauteil von

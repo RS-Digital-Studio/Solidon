@@ -51,8 +51,13 @@ MESHES = Path(__file__).parent / "data" / "meshes"
 
 
 def body(name: str = "cube_clean.stl"):
-    """Auf dem Bett, wohin ein Teil kurz vor dem Export gehört."""
-    return place_on_bed(normalise(read_mesh((MESHES / name).read_bytes(), ".stl"), "mm").mesh)
+    """Auf dem Bett, wohin ein Teil kurz vor dem Export gehört.
+
+    ``mend=False``: Der Export prüft, was ein Defekt auslöst — ein Import, der
+    ihn vorher behebt, nähme den Prüflingen ihren Gegenstand."""
+    return place_on_bed(
+        normalise(read_mesh((MESHES / name).read_bytes(), ".stl"), "mm", mend=False).mesh
+    )
 
 
 def scene_object(object_id: str = "obj_1", name: str = "Halterung", mesh=None) -> SceneObject:
@@ -211,7 +216,9 @@ def test_an_open_part_is_reported_but_not_blocked(profile: Profile) -> None:
     tut.
     """
     open_body = place_on_bed(
-        normalise(read_mesh((MESHES / "broken_open.stl").read_bytes(), ".stl"), "mm").mesh
+        normalise(
+            read_mesh((MESHES / "broken_open.stl").read_bytes(), ".stl"), "mm", mend=False
+        ).mesh
     )
     plan = plan_export([scene_object(mesh=open_body)], project_name="P", profile=profile)
 

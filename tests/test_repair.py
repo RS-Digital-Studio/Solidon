@@ -4,17 +4,22 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import numpy as np
 import pytest
 import trimesh
 
 from app.core.geom.mesh import MeshData, read_mesh
 from app.core.geom.repair import (
+    branching_edge_count,
+    fill_boundary_loops,
     fill_holes,
     merge_vertices,
     open_edge_count,
     remove_degenerate_faces,
     remove_small_components,
     repair,
+    resolve_branching_edges,
+    split_pinched_vertices,
     stitch_t_junctions,
     unify_normals,
 )
@@ -199,20 +204,160 @@ def test_filling_a_hole_keeps_existing_face_slots() -> None:
     assert closed.slots[: with_hole.triangle_count] == with_hole.slots
 
 
-def test_filling_reaches_its_limit_on_a_missing_wall() -> None:
-    """§34: broken_open.stl fehlen drei Flächen — das ist eine Wand, kein Loch.
+def _cube_with_a_hole(missing: int) -> MeshData:
+    """Ein zweimal unterteilter Würfel, dem oben ``missing`` Dreiecke fehlen."""
+    body = trimesh.creation.box(extents=(20.0, 20.0, 20.0)).subdivide().subdivide()
+    top = np.flatnonzero(body.triangles_center[:, 2] > 9.9)[:missing]
+    body.update_faces(~np.isin(np.arange(len(body.faces)), top))
+    body.remove_unreferenced_vertices()
+    return MeshData.of(body)
 
-    Dreiecksgroße Löcher werden geschlossen; eine fehlende Wand ist das, wofür
-    die Voxelstufe der Rückfallkette da ist (§17.2). Bis dahin sagt der Befund
-    es klar.
+
+@pytest.mark.parametrize("missing", [1, 2, 4, 8])
+def test_the_ring_filler_closes_a_hole_of_any_size(missing: int) -> None:
+    """Der Füller verkettet die Randkanten selbst und schließt jeden Ring.
+
+    ``trimesh.repair.fill_holes`` schließt Ringe aus drei und vier Kanten und
+    lehnt alles darüber ab — ein Loch aus acht fehlenden Dreiecken blieb damit
+    offen, und im Prüfbericht stand „kann fehlende Wände nicht ersetzen" über
+    einer Lücke von drei Millimetern.
+
+    Das Volumen belegt, dass nichts Neues entstanden ist: Die Füllung liegt in
+    der Fläche, die vorher dort war.
+    """
+    mesh = _cube_with_a_hole(missing)
+    assert not mesh.is_watertight
+
+    filled, closed, _wide = fill_boundary_loops(mesh)
+
+    assert closed >= 1
+    assert filled.is_watertight, f"{missing} fehlende Dreiecke bleiben offen"
+    assert filled.volume == pytest.approx(8000.0, rel=1e-9)
+
+
+def test_the_ring_filler_keeps_the_winding_of_its_neighbours() -> None:
+    """Ein Deckel, der falsch herum liegt, halbiert das Volumen.
+
+    Gemessen am 22.09.2026: Der Ring wird ungerichtet verkettet — sonst
+    scheitert die Kette dort, wo die Wicklung des Netzes uneinheitlich ist —,
+    und seine Richtung kommt danach aus dem Dreieck an der ersten Kante.
+    Ohne diesen Schritt kam der Würfel mit 4 000 mm³ statt 8 000 zurück.
+    """
+    filled, _closed, _wide = fill_boundary_loops(_cube_with_a_hole(1))
+
+    assert filled.volume == pytest.approx(8000.0, rel=1e-9)
+    assert filled.raw.volume > 0.0, "die Füllung zeigt nach außen wie ihre Nachbarn"
+
+
+def test_the_ring_filler_never_makes_a_branching_edge() -> None:
+    """Eine Füllung darf keine Fläche auf eine Kante legen, die schon zwei trägt.
+
+    Der Fall stammt von einer heruntergeladenen Katze (452 314 Dreiecke): Die
+    Ecken mancher Randringe sind anderswo bereits verbunden, und die
+    Ohren-Triangulierung legte ihre Sehne genau darauf — aus fünfzehn
+    geschlossenen Ringen wurden neun Kanten mit drei Flächen. Wo das droht,
+    tritt der Fächer über die Ringmitte an ihre Stelle.
+    """
+    mesh = _cube_with_a_hole(8)
+
+    filled, closed, _wide = fill_boundary_loops(mesh)
+
+    assert closed >= 1
+    assert branching_edge_count(filled) == 0, "geschlossen heißt nicht verzweigt"
+
+
+def test_a_wide_opening_is_filled_and_counted() -> None:
+    """Der halbe Würfel: Die Öffnung wird geschlossen und als groß gezählt."""
+    body = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
+    body.update_faces(body.triangles_center[:, 2] < 9.9)
+    body.remove_unreferenced_vertices()
+
+    filled, closed, wide = fill_boundary_loops(MeshData.of(body))
+
+    assert closed == 1 and wide == 1, "geschlossen, und als große Öffnung gezählt"
+    assert filled.is_watertight
+
+
+def test_branching_edges_are_resolved_by_dropping_the_smallest_face() -> None:
+    """Zwei Flächen übereinander an einer Kante — die kleinere geht.
+
+    Gemessen an Roberts Waschschüssel (215 073 Dreiecke): eine verzweigte
+    Kante, drei Flächen, zwei davon mit **null Grad** zueinander und
+    0,0003 mm² gegen 0,27 mm². Ohne diesen Schritt meldete der Bericht „das ist
+    kein Loch, sondern eine Verzweigung" und bot keine Handlung an.
+    """
+    body = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+    extra = np.asarray(body.faces[:1])
+    doubled = trimesh.Trimesh(
+        vertices=body.vertices.copy(),
+        faces=np.vstack([np.asarray(body.faces), extra]),
+        process=False,
+    )
+    mesh = MeshData.of(doubled)
+    assert branching_edge_count(mesh) > 0
+
+    resolved, edges = resolve_branching_edges(mesh)
+
+    assert edges > 0
+    assert branching_edge_count(resolved) == 0
+    assert resolved.triangle_count == mesh.triangle_count - 1
+
+
+def test_a_pinched_vertex_is_split_so_its_rings_can_close() -> None:
+    """Zwei Löcher, die sich in einer Ecke berühren, sind zwei Ringe.
+
+    An einer solchen Ecke laufen vier Randkanten zusammen; welcher Rand zu
+    welchem gehört, ist der Kette nicht ablesbar, und beide Löcher blieben
+    offen. Die Flächen wissen es: Ihre Fächer an der Ecke bekommen je eine
+    eigene Kopie — am selben Ort, also ändert sich nichts an der Form.
+    """
+    body = trimesh.creation.box(extents=(20.0, 20.0, 20.0)).subdivide()
+    centres = body.triangles_center
+    top = np.flatnonzero(centres[:, 2] > 9.9)
+    # Zwei Dreiecke der Deckfläche, die sich nur in einer Ecke berühren.
+    corners = [set(map(int, body.faces[index])) for index in top]
+    pair = next(
+        (first, second)
+        for position, first in enumerate(top)
+        for second in top[position + 1 :]
+        if len(corners[list(top).index(first)] & corners[list(top).index(second)]) == 1
+    )
+    body.update_faces(~np.isin(np.arange(len(body.faces)), np.asarray(pair)))
+    body.remove_unreferenced_vertices()
+    mesh = MeshData.of(body)
+    assert not mesh.is_watertight
+
+    split, count = split_pinched_vertices(mesh)
+
+    assert count >= 1, "die Ecke wurde aufgetrennt"
+    filled, _closed, _wide = fill_boundary_loops(split)
+    assert filled.is_watertight, "und danach schließen beide Löcher"
+    assert filled.volume == pytest.approx(8000.0, rel=1e-9)
+
+
+def test_a_missing_wall_is_closed_and_said_so() -> None:
+    """§34: ``broken_open.stl`` fehlen drei Flächen — eine Wand, kein Loch.
+
+    **Bis zum 22.09.2026 blieb sie offen**, und der Befund sagte, warum. Das
+    war der falsche Dienst: Der Kunde will drucken, und ein Modell, das die
+    Reparatur mit einem Loch zurückgibt, hilft ihm nicht (Entscheidung Robert:
+    „alles bei der Reparatur beheben"). Geschlossen wird jetzt auch die Wand —
+    und weil dort eine Fläche entsteht, die im Modell nicht war, sagt es eine
+    **Warnung**, die den Blick darauf lenkt; zurücknehmen lässt sich der
+    Schritt mit Strg+Z.
     """
     body, _welded = merge_vertices(raw("broken_open.stl"))
     assert open_edge_count(body) > 0
 
     result = repair(body)
 
-    assert not result.mesh.is_watertight
-    assert "repair.still_open" in {finding.code for finding in result.findings}
+    assert result.mesh.is_watertight, "der Körper kommt geschlossen zurück"
+    codes = {finding.code for finding in result.findings}
+    assert "repair.wide_hole_filled" in codes, "und die große Öffnung steht als Warnung da"
+    assert "repair.still_open" not in codes
+    wide = next(f for f in result.findings if f.code == "repair.wide_hole_filled")
+    assert wide.severity == "warning"
+    assert "prüfen" in str(wide.message).lower()
 
 
 def test_filling_a_closed_body_changes_nothing() -> None:
@@ -305,7 +450,7 @@ def test_repair_runs_as_an_operation(document: Document, profile: Profile) -> No
 
     assert result.complete
     codes = {finding.code for finding in result.scene.report.findings}
-    assert "repair.still_open" in codes, "the missing wall is reported, not glossed over"
+    assert "repair.wide_hole_filled" in codes, "die geschlossene Wand steht im Bericht"
     assert result.scene.objects["obj_1"].created_by == 2, "the repair produced the object"
 
 
@@ -563,11 +708,14 @@ def test_a_skipped_step_says_so_in_the_report() -> None:
     Satz, Kanten verfeinern schließe den Körper zuverlässig, obwohl genau
     diese Operation ein offenes Netz zurückweist und Reparieren empfiehlt.
 
-    ``broken_open`` ist der Körper, den auch die ganze Kette nicht zu einem
-    Volumen macht — gemessen an sechs Dateien des Korpus, und er ist die
-    einzige davon.
+    Gefahren wird das mit abgeschaltetem Löcherschließen, denn seit dem
+    22.09.2026 schließt die Kette auch eine fehlende Wand (siehe
+    ``test_a_missing_wall_is_closed_and_said_so``) — und ein geschlossener
+    Körper überspringt nichts mehr. Wer die Löcher auslässt, hat den Fall, um
+    den es hier geht: ein offenes Netz, dessen Selbstdurchdringungen nicht
+    geprüft werden können.
     """
-    result = repair(raw("broken_open.stl"), self_intersections=True)
+    result = repair(raw("broken_open.stl"), holes=False, self_intersections=True)
 
     by_code = {finding.code: finding for finding in result.findings}
     assert "repair.self_intersections_skipped" in by_code

@@ -316,25 +316,37 @@ def half_open() -> MeshData:
 
 
 def test_filling_holes_reports_filling_and_not_watertightness() -> None:
-    """``fill_holes`` meldete „ist jetzt dicht" und hieß „hat gefüllt"."""
+    """``fill_holes`` meldete „ist jetzt dicht" und hieß „hat gefüllt".
+
+    Der Unterschied bleibt, auch wenn der Ringfüller seit dem 22.09.2026 beide
+    Löcher dieses Körpers schließt: Gemessen wird an den offenen Kanten, nicht
+    an der Dichtheit. Ein Körper, dessen Ringe sich nicht verketten lassen,
+    wird gefüllt und bleibt offen — dafür steht der Rückgabewert.
+    """
     mesh = half_open()
     before = open_edge_count(mesh)
 
     filled, changed = fill_holes(mesh)
 
-    assert changed is True, "ein Loch wurde geschlossen"
-    assert not filled.is_watertight, "und das andere nicht"
+    assert changed is True, "gefüllt wurde"
     assert open_edge_count(filled) < before
+    assert open_edge_count(filled) == 0, "und hier reichte es bis zum geschlossenen Körper"
 
 
-def test_repair_never_says_nothing_to_do_and_still_open(profile: Profile) -> None:
-    """Eine Teilreparatur nennt Erfolg und Rest, ohne den Nutzer zurückzuschicken.
+def test_repair_names_the_success_and_the_wide_hole(profile: Profile) -> None:
+    """Eine Reparatur nennt Erfolg und Preis, ohne den Nutzer zurückzuschicken.
 
-    Der Prüfling beginnt mit neunzehn offenen Kanten. Drei davon kann der
-    Füller schließen, sechzehn bleiben: Aus „Offene Stellen wurden
-    geschlossen" allein wurde deshalb eine falsche Vollzugsmeldung. Noch
-    schlimmer war der Folgesatz „Kanten verfeinern schließt es" — diese
-    Operation weist ein offenes Netz zurück und empfiehlt wieder Reparieren.
+    Der Prüfling beginnt mit neunzehn offenen Kanten in zwei Ringen. Bis zum
+    22.09.2026 schloss der Füller drei davon und ließ sechzehn stehen, und aus
+    „Offene Stellen wurden geschlossen" allein wurde eine falsche
+    Vollzugsmeldung; noch schlimmer war der Folgesatz „Kanten verfeinern
+    schließt es" — diese Operation weist ein offenes Netz zurück und empfiehlt
+    wieder Reparieren.
+
+    Der Ringfüller schließt jetzt beide. Der Bericht sagt damit zweierlei: wie
+    viele Kanten geschlossen wurden, und dass eine der Öffnungen groß genug
+    war, um sie anzusehen — dort ist eine Fläche entstanden, die im Modell
+    nicht war.
     """
     entry = SceneObject(id="obj_1", name="Halb offen", mesh=half_open())
     before = open_edge_count(entry.mesh)
@@ -344,23 +356,21 @@ def test_repair_never_says_nothing_to_do_and_still_open(profile: Profile) -> Non
     )
 
     codes = [finding.code for finding in result.findings]
-    assert "repair.still_open" in codes
+    assert "repair.wide_hole_filled" in codes, "die große Öffnung steht als Warnung da"
     assert "repair.nothing_to_do" not in codes, "ein Widerspruch in derselben Liste"
     assert "repair.holes_filled" in codes
     filled = next(finding for finding in result.findings if finding.code == "repair.holes_filled")
-    remaining = next(finding for finding in result.findings if finding.code == "repair.still_open")
+    wide = next(finding for finding in result.findings if finding.code == "repair.wide_hole_filled")
     after = open_edge_count(result.outputs[0].mesh)
     assert filled.values == {"before": before, "after": after}
     assert (
         str(filled.message)
         == f"{before - after} von {before} offenen Kanten geschlossen; {after} bleiben offen."
     )
-    assert before > after > 0, "der Prüfling braucht einen Teilerfolg mit ehrlichem Rest"
-    assert remaining.values["open_edges"] == after
-    assert str(remaining.message) == (
-        "Die Reparatur schließt kleine Löcher, kann fehlende Wände aber nicht ersetzen."
-    )
-    assert "Kanten verfeinern" not in str(remaining.message)
+    assert before > 0 and after == 0, "der Prüfling kommt geschlossen heraus"
+    assert "repair.still_open" not in codes
+    assert wide.severity == "warning" and wide.values["walls"] >= 1
+    assert "Kanten verfeinern" not in str(wide.message)
 
 
 def test_a_complete_hole_repair_counts_every_open_edge(profile: Profile) -> None:
