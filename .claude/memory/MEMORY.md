@@ -20,6 +20,7 @@
 - [Nur das Nötigste](tests-und-rendern-nur-das-noetigste.md) · [Zwei Läufe](zwei-laeufe-nach-jeder-code-aenderung.md) · [Review vollständig](review-immer-vollstaendig.md)
 - [Push und Pull selbst](git-push-pull-selbststaendig.md) · [Version vor jedem Bau](version-vor-jedem-bau-erhoehen.md) · [Changelog vor dem Sprung](changelog-vor-dem-versionssprung.md) · [Wächter nach dem Sprung](changelog-waechter-nach-dem-versionssprung.md) · [Kein zweites Tor vor dem Tag](kein-zweites-tor-vor-dem-tag.md) — Merge, kein Rebase; bump_version.
 - [Serverstand sofort prüfen](serverstand-sofort-selbst-pruefen.md) · [Freies Gebiet](freies-gebiet-einfach-machen.md) · [Weitergabe: die Handlung](weitergabe-die-handlung-entscheidet.md)
+- [Repo nur beim Release öffentlich](repository-ist-nur-beim-release-oeffentlich.md) — rote CI-Kurzläufe mit Abrechnungsmeldung sind der Normalzustand, kein Befund.
 - [Übersetzung neu](uebersetzung-neu-statt-flicken.md) · [Weg nie bis zum Ende](weg-nie-bis-zum-ende-gemessen.md) · [Mehrsitzungs-Setup ausgebaut](mehrsitzungs-setup-ist-ausgebaut.md) · [Rechtemodus bleibt bypass](rechtemodus-bleibt-bypass.md)
 
 ## Produkt und Entscheidungen
