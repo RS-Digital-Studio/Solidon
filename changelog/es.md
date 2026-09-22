@@ -69,6 +69,10 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 
 ### Comprobar e imprimir
 
+- Han llegado las impresoras de resina: dos equipos genéricos por volumen de impresión están en la lista, y una propia se puede crear con tamaño de píxel y pared mínima.
+- Un proyecto de resina ya no recibe consejos sobre boquilla, brim o puentes, y la pared mínima viene del perfil de la impresora.
+- El archivo se puede abrir en cualquier programa, también en el slicer de un fabricante de resina cuyos ajustes Solidon no conoce.
+- Los cuerpos exactos se mallan tan finos como lo exigen los píxeles de una impresora de resina; el informe nombra la medida.
 - Los ajustes comprueban los cuerpos reales en su posición de montaje. La exportación se puede cancelar antes.
 - La desviación de forma muestra qué caras de un mallado están a qué distancia del original.
 - Si un grosor de pared se estrecha en cuña, Solidon lo dice y aconseja imprimir primero la pared exterior.

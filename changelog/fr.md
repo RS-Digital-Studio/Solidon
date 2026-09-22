@@ -69,6 +69,10 @@ dans `website/version.json`.
 
 ### Vérifier et imprimer
 
+- Les imprimantes résine sont là : deux appareils génériques par volume d'impression figurent dans la liste, et la vôtre se crée avec taille de pixel et paroi minimale.
+- Un projet résine ne reçoit plus de conseils sur la buse, le brim ou les ponts, et la paroi minimale vient du profil de l'imprimante.
+- Le fichier s'ouvre dans n'importe quel programme, y compris le slicer d'un fabricant de résine dont Solidon ne connaît pas les réglages.
+- Les corps exacts sont maillés aussi finement que les pixels d'une imprimante résine l'exigent ; le rapport indique la valeur.
 - Les ajustements vérifient les vrais corps dans leur position de montage. L'export peut être annulé avant.
 - L'écart de forme montre quelles faces d'un maillage se trouvent à quelle distance de l'original.
 - Quand une épaisseur de paroi s'amincit en coin, Solidon le dit et conseille d'imprimer la paroi extérieure en premier.

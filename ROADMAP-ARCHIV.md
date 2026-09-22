@@ -25,6 +25,7 @@ für den Rückstand glauben darf, ist das Register in `ROADMAP.md`.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-09-22 | [Resin-Stufe 1 und die Exportauflösung (22.09.2026)](#resin-stufe-1-und-die-exportauflösung-22092026) |
 | 2026-09-22 | [Das Review über alle Änderungen seit 0.4.4 (21./22.09.2026)](#das-review-über-alle-änderungen-seit-044-2122092026) |
 | 2026-09-20 | [Ein Drache aus TripoSG: 1,9 Meter, acht Minuten, kein Merkmal (20.09.2026)](#ein-drache-aus-triposg-19-meter-acht-minuten-kein-merkmal-20092026) |
 | 2026-09-15 | [Vierunddreißig Modelle aus dem Netz: Erkennung, Bearbeitung, Leistung (15.09.2026)](#vierunddreißig-modelle-aus-dem-netz-erkennung-bearbeitung-leistung-15092026) |
@@ -29331,3 +29332,105 @@ RM-201 bis RM-206 im Register.
   Befunds `perceive.voids_unreadable`: `test_value_labels.py` 231 bestanden,
   Exit 0.
 
+---
+
+## Resin-Stufe 1 und die Exportauflösung (22.09.2026)
+
+Gebaut nach `konzepte/konzept-resin-2026-08.md` §4 mit den zwei Präzisierungen
+der Beratschlagung vom 30.08.2026 (zwei generische Geräte nach Bauraum, B4 in
+Stufe 1), auf Roberts „Mach du das alles einfach" vom 22.09.2026. Dazu die
+Exportauflösung, die im selben Auftrag stand und dieselbe Frage beantwortet:
+Was der Drucker nicht abbildet, muss die Datei nicht tragen, und was er
+abbildet, darf ihr nicht fehlen.
+
+<a id="rm-071"></a>
+
+- [x] **RM-071 — Beschlossene Resin-Stufe 1 umsetzen.** Weg B: `technology`
+  im Druckerprofil (`PrinterProfile.technology`, Vorgabe `fdm` — ein
+  Nutzerprofil ohne Angabe lädt als FDM, ohne Migration, geprüft), dazu
+  `pixel_size` und `minimum_wall`; bei Resin stehen Düse, Bahnbreite und die
+  zwei Heiztemperaturen auf null, damit ein Leser, der das Verfahren nicht
+  fragt, nicht mit einer 0,4er Düse rechnet. Zwei Geräte in `printers.toml`
+  (`generic-resin-130`: 130 × 80 × 160, `generic-resin-220`: 220 × 120 × 220,
+  je 50 µm Pixel und Schicht, 0,4 mm Mindestwand nach den
+  Hersteller-Leitfäden für ungestützte Wände) und ein Harz in
+  `materials.toml` (`resin`, `technology = "resin"`); `MaterialProfile.fits`
+  und `profiles.material_for` halten Material und Drucker zusammen —
+  Erststart, Einstellungen und Druckerwechsel im Dialog wechseln PLA gegen
+  Harz, wenn das Verfahren wechselt, und sonst nie. **Die zwei zentralen
+  Eigenschaften** (B2) leiten sich her: `minimum_wall_thickness` aus dem
+  Profil (oder einer Probe für denselben Drucker und dieselbe Schichthöhe —
+  `has_process_calibration` bindet bei Resin an die Schicht, nicht an eine
+  Düse), `smallest_printable_volume` als Pixel² × Schicht,
+  `smallest_first_layer` null (die Orientierungssuche liest null als „nicht
+  gefragt"), `PrinterProfile.smallest_detail` als die eine Antwort für
+  Analysekarte, Beschriftung und Textur. **Die neun Befunde aus B4** haben
+  ihren Geltungsbereich: `advise` und `warnings_for` sind bei Resin leer
+  (jede Regel dort spricht über Düse, Bett, Lüfter oder Rückzug),
+  `orient.support_likely` schweigt (die 45-Grad-Regel gilt der Düse; was
+  Harz braucht, sagt Stufe 2), `write_assembly` lässt bei Resin den
+  FDM-Satz fallen (Haftung, Filamentwechsel, Brim je Teil), `hollow` meldet
+  unter der Grenze `hollow.wall_below_minimum` statt `…_nozzle`.
+  `prepare.elephant_foot` entsteht nur, wenn der Kunde *Elefantenfuß
+  ausgleichen* selbst wählt — mit dem Betrag des Harzes aus dem
+  Materialprofil (überbelichtete erste Schichten), also kein Geltungsbereich
+  nötig. Steckbrief nennt „(Resin)" am Drucker, `hashing.profile_key` trägt
+  Verfahren, Pixel und Mindestwand (Cache-Format 24). **Oberfläche:** Der
+  Erststart gruppiert die Liste nach Verfahren (nicht wählbare Köpfe; die
+  Resin-Geräte hängen an keinem FDM-Slicer und bleiben bei gefilterter
+  Liste stehen), „Benutzerdefiniert" fragt das Verfahren und zeigt nur die
+  Maße dazu; der Druckdialog verbirgt an einem Resin-Drucker Stufe, Wände,
+  Füllung, Vorschläge, Düse, Slicen und Druckdatei
+  (`_reduce_for_resin`/`_fit_to_technology`), „Filamente" heißt „Material",
+  *Im Slicer öffnen* ist der Hauptknopf; `settings_for_export` gibt bei Resin
+  keine Werte mit; die Materialliste der Einstellungen folgt dem Drucker.
+  **Übergabe per Öffnen ohne Übersetzung:** `SlicerFlavour` kennt `other`
+  — `detect` wirft nicht mehr, jedes Prädikat antwortet „nein",
+  `slice_model` und `write_config` sagen ab (mit Vorschlag), das Öffnen
+  läuft; ein Programm ohne Familie bekommt STL um den Ursprung. Website
+  (FAQ und Statistik in sechs Sprachen: achtzehn Profile, zwei davon
+  Resin), Handbuch (eigene Seite „Harz statt Filament", Druckertabelle mit
+  Verfahren, kleinstem Detail und Mindestwand), Abbildung der Mindestwand,
+  Changelog 0.5.0 und 23 Katalogtexte in fünf Sprachen. Tests:
+  `tests/test_resin.py` (fünfzehn Fälle über die acht Abnahmepunkte,
+  darunter Weg 1 mit Resin-Profil gegen den Befundkatalog),
+  `test_first_run_setup.py` (Gruppen, eigener Resin-Drucker),
+  `test_export.py` (Prädikattabelle mit `other`), `test_print_settings.py`
+  (ein Programm, das nur öffnet). **An den echten Modellen aus
+  `F:\3D Dateien` nachgefahren** (Roberts Vorgabe): 40 Dateien über den
+  Importweg der Kommandozeile mit Resin-Profil — Laden, Orientieren,
+  Exportprüfung, Baugruppe —, 19 verschiedene Befundcodes, keiner der neun
+  FDM-Codes darunter; sechzehn Modelle passen nicht in den kleinen
+  Resin-Bauraum, und die Orientierungssuche sagt es
+  (`NoFittingOrientationError`) statt zu raten. **Nicht in dieser Stufe,
+  mit Ansage:** Saugglocken, Abflussöffnungen, der Überhangwinkel (Konzept
+  §5, Stufe 2); die Regelsammlung des Agenten (§5.3, Agenten-Suite vorher
+  und nachher); die Bauplan-Verortung aus Konzept §7 (§4.2 `technology`,
+  §38 Felder je Verfahren, §29 Formatempfehlung) — der Bauplan wird nur mit
+  Ansage geändert und steht hier als offener Nachtrag für Robert; der
+  Textursatz auf den Funktionsseiten der Website spricht weiter von der
+  Düse (er beschreibt den FDM-Fall, für Resin sagt der Kern „Bildpunkt").
+  Die Abnahme am echten Fenster (Erststart mit Resin-Gerät, Druckdialog am
+  Resin-Projekt, Öffnen in einem Programm ohne Familie) folgt beim Release.
+
+- [x] **Exportauflösung.** Ein exakter Körper trug beim Export seine eigene
+  Vernetzung — die des Kerns, 0,05 mm Abweichung (`units.MAX_FACET_SAG`),
+  für eine 0,4er Düse fein genug und an 50-µm-Pixeln eine sichtbare Stufe.
+  `Profile.export_deflection` ist ein Achtel des kleinsten Details des
+  Druckers, nach oben von der Zahl des Kerns gedeckelt (FDM bleibt bei
+  0,05; Resin 0,00625; ohne Pixelgröße die Zahl des Kerns);
+  `writer.mesh_for_export` vernetzt einen exakten Körper neu, wenn das
+  Profil feiner verlangt als der Körper hat — an allen drei Stellen des
+  Schreibers (Plan, Baugruppe, das STL für ein Programm ohne Familie),
+  Anzeige und Erkennung bleiben bei der Vernetzung des Körpers —, und der
+  Befund `export.tessellated` nennt das Maß einmal je Export. `BRepBody`
+  trägt dafür `deflection` und `to_mesh(deflection=)`. Gemessen an den
+  fünf STEP-Körpern aus `F:\3D Dateien`: `build_tray_v3.step` 14 614 →
+  48 274 Dreiecke, `carpet-corner-clip.step` 4 154 → 8 186, die drei
+  `Cat_*.stp` 2 030 → 6 038, 2 800 → 8 492, 7 726 → 15 656; die Kugel im
+  Test liegt damit auf 0,5 % am analytischen Volumen statt auf 1,5 %.
+  Keine Wahl im Dialog — die Zahl kommt aus dem Drucker (§2.4: „Eine gute
+  Vorgabe ist mehr wert als eine gute Einstellmöglichkeit"); wer sie ändern
+  will, ändert die Pixelgröße seines Profils. *Flächenbearbeitung beenden*
+  behält sein Feld „Feinheit" für den Fall, dass ein Netz im Dokument
+  gemeint ist.

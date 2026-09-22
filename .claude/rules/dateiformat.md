@@ -201,6 +201,21 @@ PrusaSlicers „All objects are outside of the print volume" kam aus dem
 Widerspruch zwischen verschobenen Teilen und zentriert erklärtem Bett. Wer
 das eine ändert, ändert das andere mit — beides fragt dasselbe Prädikat.
 
+**Ein Programm ohne Familie bekommt STL um den Ursprung** (`other`, seit
+RM-071). Es ist das eine Format, das jeder Slicer liest — auch der
+rudimentäre Hersteller-Slicer eines Resin-Druckers —, und einen Bauraum,
+zu dessen Ecke sich verschieben ließe, kennt Solidon dort nicht. Übersetzt
+wird nichts, gerechnet wird nichts: Der Konsolenweg sagt für diese Familie
+ab, das Öffnen läuft.
+
+**Und ein exakter Körper geht so fein hinaus, wie der Drucker es braucht.**
+`writer.mesh_for_export` fragt `Profile.export_deflection` — ein Achtel des
+kleinsten Details, gedeckelt von der Zahl des Kerns — und vernetzt neu, wenn
+das Profil feiner verlangt als der Körper hat. Anzeige und Erkennung bleiben
+bei der Vernetzung des Körpers; die Datei geht in den Slicer, und an
+50-µm-Pixeln ist eine Facette von fünf Hundertsteln eine Stufe. Der Befund
+`export.tessellated` sagt es einmal je Export, nie je Körper.
+
 ## Die drei Stufen der Übergabe
 
 Was ein Slicer bekommt, entsteht in dieser Reihenfolge, und `values_for` ist

@@ -93,6 +93,10 @@ Nutzen da und sonst nichts.
 
 ### Prüfen und Drucken
 
+- Resin-Drucker sind da: Zwei allgemeine Geräte nach Bauraum stehen in der Druckerliste, ein eigener lässt sich mit Pixelgröße und Mindestwand anlegen.
+- Ein Resin-Projekt bekommt keine Ratschläge zu Düse, Brim oder Brücken mehr, und die Mindestwand kommt aus dem Druckerprofil.
+- Die Datei lässt sich in jedem Programm öffnen, auch im Slicer eines Resin-Herstellers, dessen Einstellungen Solidon nicht kennt.
+- Exakte Körper werden für einen Resin-Drucker so fein vernetzt, wie seine Pixel es verlangen; der Prüfbericht nennt das Maß.
 - Passungen prüfen die wirklichen Körper in ihrer Einbaulage. Der Export lässt sich vorher abbrechen.
 - Die Formabweichung zeigt, welche Flächen einer Vernetzung wie weit vom Original entfernt liegen.
 - Läuft eine Wandstärke keilförmig aus, sagt Solidon es und rät, die Außenwand zuerst zu drucken.

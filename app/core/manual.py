@@ -1451,6 +1451,34 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
         ),
     ),
     Page(
+        key="resin",
+        summary=_("Was an einem Resin-Drucker anders ist — und was Solidon dort weglässt."),
+        title=_("Harz statt Filament: Resin-Drucker"),
+        body=_(
+            "Ein Resin-Drucker belichtet Schichten in einem Harzbad; eine Düse, "
+            "eine Bahn, einen Elefantenfuß aus gequetschtem Kunststoff gibt es "
+            "dort nicht. Solidon fragt deshalb beim ersten Start nach dem "
+            "Drucker und nicht nach dem Verfahren: Zwei Resin-Drucker stehen in "
+            "derselben Liste wie die Filamentdrucker, nach Bauraum — klein wie "
+            "Mars und Photon Mono, groß wie Saturn und Photon M —, und ein "
+            "eigener lässt sich mit Bauraum, Pixelgröße und Mindestwand "
+            "anlegen.\n\n"
+            "**Was dann anders gilt.** Die Mindestwand kommt aus dem "
+            "Druckerprofil, nicht aus zwei Bahnen einer Düse; das kleinste "
+            "Detail ist der Bildpunkt. Der Prüfbericht schweigt über Brücken, "
+            "Brim, Filamentwechsel und Düsentemperaturen — für Harz "
+            "gegenstandslos —, und der Druckdialog zeigt nur, was gilt: "
+            "Drucker, Material, Platten und das Programm.\n\n"
+            "**Der Weg zum Drucker ist die Datei.** Viele Resin-Drucker "
+            "arbeiten nur mit dem Slicer ihres Herstellers, und dessen "
+            "Einstellungen kennt Solidon nicht — es braucht sie auch nicht: "
+            "*Im Slicer öffnen* gibt die Datei in das Fenster des Programms, "
+            "gleich welches; *Exportieren* legt sie ab. Ein exakter Körper wird "
+            "dafür so fein vernetzt, wie die Pixel es verlangen; der "
+            "Prüfbericht nennt das Maß."
+        ),
+    ),
+    Page(
         key="export",
         summary=_("Anordnen, prüfen, exportieren — und was jedes Format mitnimmt."),
         title=_("Auf das Bett und hinaus"),
@@ -2280,24 +2308,30 @@ def profiles_text() -> str:
         str(
             _(
                 "Der eingestellte Drucker entscheidet, was auf das Bett passt und ab "
-                "wann eine Wand zu dünn ist — zwei Extrusionsbahnen sind die Grenze."
+                "wann eine Wand zu dünn ist — beim Filamentdrucker zwei Bahnen der "
+                "Düse, beim Resin-Drucker die Mindestwand seines Profils. Das kleinste "
+                "Detail ist dort die Düse, hier der Bildpunkt."
             )
         )
     )
     lines.append("")
     lines.append(
-        f"| {_('Drucker')} | {_('Bauraum')} | {_('Düse')} | {_('Schichthöhe')} "
-        f"| {_('Extrusionsbreite')} | {_('geschlossen')} |"
+        f"| {_('Drucker')} | {_('Verfahren')} | {_('Bauraum')} | {_('Schichthöhe')} "
+        f"| {_('Kleinstes Detail')} | {_('Mindestwand')} | {_('geschlossen')} |"
     )
-    lines.append("|---|---|---|---|---|---|")
+    lines.append("|---|---|---|---|---|---|---|")
     for printer in printer_profiles().values():
         x, y, z = printer.build_volume
         enclosed = _("ja") if printer.enclosed else _("nein")
+        technology = _("Resin") if printer.is_resin else _("Filament")
+        # Die Mindestwand des Profils ohne Material: zwei Bahnen bei FDM, die
+        # eigene Grenze bei Resin — dieselbe Herleitung wie in der Prüfung.
+        wall = printer.minimum_wall if printer.is_resin else 2.0 * printer.extrusion_width
+        detail = printer.pixel_size if printer.is_resin else printer.nozzle_diameter
         lines.append(
-            f"| {printer.title} | {x:.0f} × {y:.0f} × {z:.0f} "
-            f"| {decimal(printer.nozzle_diameter, 2)} "
-            f"| {decimal(printer.layer_height, 2)} | {decimal(printer.extrusion_width, 2)} "
-            f"| {enclosed} |"
+            f"| {printer.title} | {technology} | {x:.0f} × {y:.0f} × {z:.0f} "
+            f"| {decimal(printer.layer_height, 2)} | {decimal(detail, 2)} "
+            f"| {decimal(wall, 2)} | {enclosed} |"
         )
     lines.append("")
 

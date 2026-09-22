@@ -103,6 +103,7 @@ Was nur diese Datei weiß:
 | Budget §31, Schwelle 25 % | `test_performance.py` (`-m performance`) |
 | Abhängigkeiten gegen die Freigabeliste | `test_licences.py` |
 | Die vier Hauptwege Ende zu Ende | `test_way_one.py` … `test_way_four.py` |
+| Trägt ein Resin-Drucker sein Verfahren, kommen die zwei zentralen Eigenschaften und die Exportauflösung daraus, schweigen die neun FDM-Befunde an einem Resin-Projekt, folgt das Material dem Drucker, und öffnet ein Programm ohne Familie nur? | `test_resin.py` — die acht Abnahmepunkte aus Konzept §9, Stufe 1; Weg 1 mit Resin-Profil gegen den Befundkatalog |
 | 39 Referenzanfragen an den Agenten | `test_agent_suite.py`, Fälle in `agent_cases.py`, das Modell mit vorgeschriebenen Antworten in `scripted_backend.py` |
 | Importiert jede Schicht nur nach unten — `core` nie `ui`/`cli`, `i18n` gar nichts? | `test_layer_direction.py` |
 | Und eine Ebene tiefer: welches Kernpaket importiert welches, eifrig oder träge? | `test_core_package_direction.py` — jede eifrige und jede träge Kante eingefroren, dazu der Kreis aus acht Paketen; eine neue Kante ist eine Entscheidung, eine abgebaute verschwindet aus der Liste |

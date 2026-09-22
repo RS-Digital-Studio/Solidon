@@ -61,7 +61,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-041 — Innenraum importierter entlüfteter Hohlkörper klären](#rm-041) | Geometrie, Erkennung und Druckvorbereitung | Schätzweg oder dokumentierte Grenze des Innenraums entscheiden |
 | [RM-042 — Leistungsgrenze der Merkmalserkennung bis eine Million Dreiecke klären](#rm-042) | Geometrie, Erkennung und Druckvorbereitung | Großen Korpus messen und belegte Erkennungsgrenze mit §31 abgleichen |
 | [RM-045 — Drei Laufzeitkosten des Geometriereviews messen](#rm-045) | Geometrie, Erkennung und Druckvorbereitung | Aushöhlen, Formkopien und Innenraumketten getrennt vermessen |
-| [RM-071 — Beschlossene Resin-Stufe 1 umsetzen](#rm-071) | Geometrie, Erkennung und Druckvorbereitung | Druckverfahren im Profil, zwei Resin-Bauräume und FDM-Regelbereiche bauen |
 | [RM-076 — Topologieverlust beim Reduzieren von Eule und Spiderman beheben](#rm-076) | Geometrie, Erkennung und Druckvorbereitung | Eule und Spiderman mit Zielreihe und Topologievergleich reproduzieren |
 | [RM-077 — Reduzierungsziel bei Körpern mit Durchbrüchen erreichen](#rm-077) | Geometrie, Erkennung und Druckvorbereitung | Zielreihen an Körpern mit Durchbrüchen gegen den vorhandenen Rückfall messen |
 | [RM-078 — Ladezeit generierter Beispielmodelle an der Orientierung messen](#rm-078) | Geometrie, Erkennung und Druckvorbereitung | Eulenprojekt ohne Fremdlast öffnen und teure Schritte zuordnen |
@@ -757,16 +756,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Optimierungen geometrisch geprüft und längere UI-Arbeit außerhalb des Hauptthreads.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#die-abnahme-des-gesamt-reviews-06092026).
-
-<a id="rm-071"></a>
-
-- [ ] **RM-071 — Beschlossene Resin-Stufe 1 umsetzen.** Das Druckverfahren gehört ins Druckerprofil;
-  zwei generische Resin-Bauräume und die Geltungsbereiche der FDM-Regeln gehören zur ersten Stufe.
-  Abnahme: Ein Resin-Profil bekommt passende Bauraumprüfung und keine FDM-spezifischen
-  Brim-/Düsenratschläge; Datei vorbereiten und an den Herstellerslicer übergeben bleibt der
-  Hauptweg. Cupping und Drain-Bohrungen gehören in Stufe 2.
-
-  [Bisheriger Befund](ROADMAP-ARCHIV.md#eine-kundenanfrage-aus-dem-dentalbereich-30082026).
 
 <a id="rm-076"></a>
 

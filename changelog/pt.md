@@ -68,6 +68,10 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 
 ### Verificar e imprimir
 
+- As impressoras de resina chegaram: dois aparelhos genéricos por volume de impressão estão na lista, e uma própria cria-se com tamanho do píxel e parede mínima.
+- Um projeto de resina já não recebe conselhos sobre bico, brim ou pontes, e a parede mínima vem do perfil da impressora.
+- O ficheiro abre-se em qualquer programa, também no slicer de um fabricante de resina cujas definições o Solidon não conhece.
+- Os corpos exatos são malhados tão finos quanto os píxeis de uma impressora de resina exigem; o relatório indica a medida.
 - Os ajustes verificam os corpos reais na sua posição de montagem. A exportação pode ser cancelada antes.
 - O desvio de forma mostra que faces de uma malha estão a que distância do original.
 - Quando uma espessura de parede se estreita em cunha, o Solidon diz-o e aconselha imprimir primeiro a parede exterior.
