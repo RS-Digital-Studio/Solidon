@@ -51,7 +51,7 @@ from app.core.geom.mesh import (
     hull_planes,
     ray_span_in_hull,
 )
-from app.core.geom.mesh_ops import decimate
+from app.core.geom.mesh_ops import decimate_for_display
 from app.core.geom.prepare import shortest_slot
 from app.core.geom.section import SectionPlane, clip_triangles, cut, plane_patch
 from app.core.geom.transform import (
@@ -3494,7 +3494,7 @@ class _SceneMeshWorker(Worker):
                 return
             mesh = source
             if cache_key is not None:
-                mesh = decimate(mesh, DISPLAY_DECIMATION_TARGET)
+                mesh = decimate_for_display(mesh, DISPLAY_DECIMATION_TARGET)
                 if self._was_cancelled():
                     return
                 cached[cache_key] = mesh
@@ -6676,7 +6676,7 @@ class Viewport(QWidget):
         key = _display_key(object_id, mesh, identity)
         found = self._display_cache.pop(key, None)
         if found is None:
-            found = decimate(mesh, DISPLAY_DECIMATION_TARGET)
+            found = decimate_for_display(mesh, DISPLAY_DECIMATION_TARGET)
         # Die zuletzt gezeigten behalten, den ältesten verdrängen: ein
         # dezimiertes Netz ist teuer zu halten — aber genau eines zu halten
         # hieß, dass zwei große Körper einander bei jedem Aufbau verdrängten.

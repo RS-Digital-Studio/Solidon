@@ -285,12 +285,35 @@ jede weitere Zahl im Dialog, also mit gefülltem Cache):
 | 327 680 | 3,25 s | 1,43 s | **0,52 s** |
 | 813 600 | 6,19 s | 3,54 s | **0,41 s** |
 
-**Zwei Wege bleiben genau, und beide mit Absicht.** Der Agentenvorschlag geht
-über `preview_scene` ohne den Rückruf — er antwortet ohnehin nicht in
-Millisekunden, und sein Bild steht, bis jemand es annimmt. Und das
-**Ändern eines Schritts** (`change_op`) ebenfalls: Die Verkleinerung müsste
-dort vor den geänderten Schritt, und `History.apply` hängt an. Das ist der
-offene Rest dieser Stufe.
+**Ein Weg bleibt genau, mit Absicht.** Der Agentenvorschlag geht über
+`preview_scene` ohne den Rückruf — er antwortet ohnehin nicht in
+Millisekunden, und sein Bild steht, bis jemand es annimmt.
+
+**Das Ändern eines Schritts** (`change_op`) nimmt die Stufe seit dem
+22.09.2026: Die Verkleinerung steht in der Dokumentkopie **vor** dem
+geänderten Schritt (`_coarse_steps_before` — die Schritte danach rücken um so
+viele Nummern auf, wie Verkleinerungen davor kommen; das geht nur in der
+Kopie, die niemand speichert, und `evaluate` liest nur den Stapel), und
+`_coarse_before` rechnet die Vorher-Seite mit demselben eingefügten Schritt
+am ungeänderten Wert, gemerkt je Szene und Schritt. Gemessen am Ändern eines
+Bohrdurchmessers an 204 000 Dreiecken: 1,1 s je getippter Zahl davor, 40 ms
+ab der zweiten — die erste trägt die Verkleinerung selbst. **Und die ist an
+einem CAD-Export mit Fächern teuer:** `decimate_mesh` steht dort im
+Quadrik-Solver vier Sekunden still und misst danach im Kern-Rückfall die
+Abweichung (rund acht Sekunden für die erste Zahl). Ob die Operation in
+Entwurfsqualität den Weg der Anzeige nehmen darf — Kern nach Toleranz, ohne
+Messung —, ist eine Entscheidung von Robert (RM-208).
+
+**Und die Vorschau des Dialogs erkennt keine Merkmale** (22.09.2026).
+`preview_async` reicht `detect_features=False` bis in `evaluate`: Die
+Erkennung läuft dann nur noch dort, wo ein späterer Schritt oder eine Passung
+ein Merkmal des Körpers braucht; was der Merker kennt, kommt trotzdem.
+Gemessen am Ändern eines Bohrdurchmessers an 204 000 Dreiecken: 2,2 s je
+getippter Zahl, davon 1,1 s Erkennung am geänderten Körper — für Merkmale, die
+kein Bild zeigt und die beim Übernehmen ohnehin neu entstehen. Danach 1,1 s;
+was bleibt, sind die Operation (0,35 s) und `compare_scenes` (0,25 s seit dem
+Beschnitt auf die Änderungsbox, `geom.difference`). Der Agentenweg über
+`preview_scene` erkennt weiter, sein Steckbrief liest die Merkmale.
 
 Scheitert das Verkleinern — zu wenige Dreiecke, ein Körper, der keiner ist —,
 hält die Kette an seinem eigenen Schritt an, und `_preview_outcome` rechnet
@@ -825,6 +848,17 @@ Drei Sätze, die über diesen Fall hinausgehen:
   jedes Bild einzeln (`_ThumbnailWorker.drawn`), die Zeilen kommen also
   weiter nacheinander nach. Ein Signal am Ende hätte dieselbe Rechnung und
   vier Sekunden leere Zeilen.
+* **Ein Bild wird nicht wie eine Operation dezimiert.** `drawing.thumbnail`
+  rief `mesh_ops.decimate`, den Weg der Operation *Netz vereinfachen* — und
+  der steht an CAD-Exporten mit Fächern um jede Bohrung still:
+  `fast_simplification` lehnt dort jeden Kollaps ab, nach vier Sekunden
+  waren an der Lochplatte mit 203 776 Dreiecken noch 197 458 da, das SVG
+  daraus kostete 1,5 s und sein Rendern 0,8 s im Hauptthread (22.09.2026,
+  Robert: Verschieben dauerte acht Sekunden). Ein Bild, die Anzeige ab der
+  Schwelle aus §31, die Beispielbilder und der Stellvertreter der
+  Orientierungssuche nehmen `mesh_ops.decimate_for_display`: den exakten Kern
+  nach Sehnenfehler, dann das Raster — rund hundert Millisekunden, an jedem
+  Netz.
 * **Freigegeben heißt: nichts mehr anfangen.** `show_scene` stellt den Start
   des Zeichners mit `singleShot(0)` zurück. `ObjectTree.release` leert den
   Vorrat, bevor es wartet, und `MainWindow.release` ruft es — sonst startete
