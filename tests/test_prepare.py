@@ -5779,6 +5779,40 @@ def test_a_widened_countersink_over_the_edge_says_so(profile: Profile) -> None:
     assert "bore.over_the_edge" not in [f.code for f in modest.findings]
 
 
+def test_the_axis_leaves_the_box_where_the_box_is_even_from_its_face() -> None:
+    """Eine Mitte **auf** der Oberseite und eine Achse mit Rauschen quer dazu:
+    Beide Austritte liegen auf dem Hüllquader, nicht bei z = 3·10¹⁷.
+
+    Der Fall der Senkung aus dem Test darüber, nur ohne Plattform im Spiel.
+    Die Achse stammt wörtlich aus ihrer Erkennung; ihre Querkomponenten sind
+    Rauschen, und welches Rauschen, entscheidet die Maschine. Der kleinste
+    positive Abstand zu sechs Ebenen war dann der zur Seitenebene über diese
+    Komponente, und was die Mündungsprüfung an einem Punkt so weit draußen
+    antwortete, fiel auf macOS anders aus als hier (CI, 22.09.2026).
+    """
+    from app.core.geom import prepare_ops
+
+    plate = trimesh.creation.box(extents=(40.0, 40.0, 10.0))
+    plate.apply_translation((0.0, 0.0, 5.0))
+    body = MeshData.of(plate)
+    centre = np.array([15.0, 3.3859242816583746e-16, 10.0])
+    axis: Vec3 = (-3.098678714863417e-17, 6.491124453255798e-17, 1.0)
+
+    exits = prepare_ops._axis_exits(body, centre, axis)
+
+    assert len(exits) == 2, exits
+    (top, top_inward), (bottom, bottom_inward) = exits
+    lower, upper = np.asarray(body.bounds.minimum), np.asarray(body.bounds.maximum)
+    for point in (top, bottom):
+        assert bool(np.all(point >= lower - EPS_GEOM)), point
+        assert bool(np.all(point <= upper + EPS_GEOM)), point
+    assert math.isclose(float(top[2]), 10.0, abs_tol=EPS_GEOM), top
+    assert math.isclose(float(bottom[2]), 0.0, abs_tol=EPS_GEOM), bottom
+    # Die Richtung zeigt von jedem Austritt in den Körper, auch dort, wo der
+    # Austritt die Mitte selbst ist — ``centre - exit`` wäre dort null.
+    assert float(top_inward[2]) < 0.0 < float(bottom_inward[2])
+
+
 def _double_plate_with_roundings(*, sharp_level: float | None = None) -> SceneObject:
     """Der bestehende Doppelplatten-Prüfkörper, wahlweise ohne eine Rundung.
 

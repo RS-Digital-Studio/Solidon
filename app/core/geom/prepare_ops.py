@@ -1392,11 +1392,11 @@ def _edge_findings(body: MeshData, placed: Iterable[Feature]) -> list[Finding]:
         # und die Vorprüfung am Hüllquader sieht nur die Scheibe an dem Punkt,
         # den sie bekommt — an der Mitte einer um 60° gedrehten Bohrung war
         # alles im Kasten, ihr unterer Austritt lag 2,3 mm neben der Platte.
-        for exit_point in _axis_exits(body, centre, _feature_direction(feature)):
+        for exit_point, inward in _axis_exits(body, centre, _feature_direction(feature)):
             found = mouth_over_the_edge(
                 body,
                 cast(Vec3, tuple(float(value) for value in exit_point)),
-                cast(Vec3, tuple(float(value) for value in centre - exit_point)),
+                cast(Vec3, tuple(float(value) for value in inward)),
                 diameter,
             )
             if found:
@@ -1425,10 +1425,27 @@ def _edge_findings(body: MeshData, placed: Iterable[Feature]) -> list[Finding]:
     return []
 
 
-def _axis_exits(body: MeshData, centre: np.ndarray, direction: Vec3) -> list[np.ndarray]:
+def _axis_exits(
+    body: MeshData, centre: np.ndarray, direction: Vec3
+) -> list[tuple[np.ndarray, np.ndarray]]:
     """Die zwei Punkte, an denen die Gerade durch ``centre`` entlang ``direction``
-    den Hüllquader des Körpers verlässt — leer, wenn die Mitte außerhalb liegt
-    oder die Richtung keine ist."""
+    den Hüllquader des Körpers verlässt, je mit der Richtung von dort in den
+    Körper — leer, wenn die Mitte außerhalb liegt oder die Richtung keine ist.
+
+    **Je Achse Eintritt und Austritt, nicht der kleinste von sechs Schnitten.**
+    Hier stand der kleinste positive Abstand zu irgendeiner der sechs Ebenen,
+    und das stimmt nur, solange die Mitte echt innen liegt. Eine Senkung hat
+    ihre Mitte an der Mündung, also **auf** der Oberseite: Der Abstand dorthin
+    ist null und fiel heraus, und übrig blieb der Schnitt mit einer
+    Seitenebene über die Rauschkomponente der Achse — bei einer Achse von
+    (-3·10⁻¹⁷, 6·10⁻¹⁷, 1) ein Austritt bei z = 3·10¹⁷. Was die Mündungsprüfung
+    an einem solchen Punkt antwortet, ist Rechenmüll, und er fiel je Plattform
+    anders: Auf macOS meldete eine auf Ø 8 geänderte Senkung, die mit 19 mm
+    in einer 20 mm breiten Platte liegt, „über die Kante" (CI, 22.09.2026).
+    Mit Eintritt und Austritt je Achse liefert eine Rauschkomponente nur
+    ±10¹⁷ und gewinnt nie, und eine Mitte auf der Fläche ist ihr eigener
+    Austritt.
+    """
     axis = np.asarray(direction, dtype=np.float64)
     length = float(np.linalg.norm(axis))
     if length <= EPS_GEOM:
@@ -1441,16 +1458,17 @@ def _axis_exits(body: MeshData, centre: np.ndarray, direction: Vec3) -> list[np.
     with np.errstate(divide="ignore", invalid="ignore"):
         to_lower = (lower - centre) / axis
         to_upper = (upper - centre) / axis
-    steps = np.concatenate((to_lower, to_upper))
-    steps = steps[np.isfinite(steps)]
-    forward = steps[steps > EPS_GEOM]
-    backward = steps[steps < -EPS_GEOM]
-    exits = []
-    if len(forward):
-        exits.append(centre + axis * float(forward.min()))
-    if len(backward):
-        exits.append(centre + axis * float(backward.max()))
-    return exits
+    # Eine Achse, zu der die Richtung genau parallel läuft, begrenzt nichts:
+    # Die Mitte liegt in ihrer Schicht, und die Division gibt ±inf oder nan.
+    bounded = np.isfinite(to_lower) & np.isfinite(to_upper)
+    if not bool(bounded.any()):
+        return []
+    forward = float(np.maximum(to_lower, to_upper)[bounded].min())
+    backward = float(np.minimum(to_lower, to_upper)[bounded].max())
+    return [
+        (centre + axis * max(forward, 0.0), -axis),
+        (centre + axis * min(backward, 0.0), axis.copy()),
+    ]
 
 
 def _throughness_lost(
