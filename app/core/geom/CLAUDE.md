@@ -314,7 +314,18 @@ Füllkörper bildet das alte Profil nach, damit er keine tieferen Nachbarlöcher
 unter der weiten Senkung füllt. Hinterschnitte, Verzweigungen, doppelte Ränder,
 versetzte Stufen und ungeklärte Profile nennen die vorhandene `keep`-Wahl.
 Ein einzelner Zylinder behandelt beide Umfänge gleich. Eine gleichzeitige
-Lageänderung mit Einlauf nennt den separaten Weg über `move_feature`.
+Lageänderung mit Einlauf läuft als **ein** Schritt (`_moved_after_resizing`,
+22.09.2026): erst der Neuschnitt an der alten Stelle, dann die ganze Kette
+über die Maschinerie von `move_feature` an die neue — bewegt um die
+Differenz zur alten Mitte (der Neuschnitt lässt sie an einer schrägen
+Mündung axial wandern), nur wenn die ganze Kette wiedererkannt ist (sonst
+sagt der Schritt ab, mit dem Rückweg), mit den Befunden des neuen Orts
+statt des alten (`PLACE_BOUND_FINDINGS`) und mit den Übergängen beider
+Läufe als einem (`_continued_through`). Der Einlauf-Neuschnitt selbst
+belegt am exakten Kern seine Übergänge — ohne sie hielt der nächste Schritt,
+der die Bohrung braucht, die Kette an. Ob ein Durchmesser die Bohrung so
+lässt, wie sie ist, sagt `bore_is_unchanged` — die Operation und das Fenster
+fragen dieselbe Antwort.
 
 Nach geometrisch bestätigter Zuordnung erhält `_with_nominal_bore` bekannte
 Operationsmaße, damit der Fit an Dreiecksmitten Durchmesser und Senkungswinkel
