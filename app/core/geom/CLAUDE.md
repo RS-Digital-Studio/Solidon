@@ -581,7 +581,16 @@ Vorschau und Operation. `coverage="whole_face"` bindet die gewählte ebene
 Fläche über ihre Kennung, schneidet die Musterpolygone an ihren tatsächlichen
 Dreiecken zu und hält Innenringe sowie konkave Ränder frei. Die Drehung gilt
 innerhalb dieser festen Kontur. `rectangle` bleibt die Vorgabe für vorhandene
-Operationen mit freier Position und Breite/Höhe.
+Operationen mit freier Position und Breite/Höhe. Beide Wege enden in
+`tool_in_outline()`, das auch *Merkmal ändern* an einem gelesenen Muster
+ruft (`prepare_ops._resize_pattern`): mit dem gelesenen Stil, Feld und
+Winkel, und mit `cell=` der gemessenen Zellbreite — `pattern_shapes()`
+rechnet daraus je Stil den Anteil an der Teilung, `cell_width_for()` sagt,
+was Teilung und Düse davon zulassen: Die Wand zwischen zwei Zellen bleibt
+eine Düse breit (`wall=`), und die Berührgrenze ist je Stil eine andere
+(`_max_share`: Rauten berühren sich schon bei 1/√2). Überlappende Umrisse (die Streuflecken des
+Rauschens) führt `_merged()` vor dem Extrudieren zusammen; getrennt
+extrudiert ließen sie doppelte Dreiecke auf der Deckfläche zurück.
 
 Die fünf analytischen Grundkörper entstehen lokal über
 `primitive_local_tool()`. Operation und temporäre Oberflächenvorschau beziehen

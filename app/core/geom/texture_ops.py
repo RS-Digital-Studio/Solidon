@@ -102,12 +102,14 @@ def _clip(shapes: list[Any], width: float, height: float) -> list[Any]:
     return kept
 
 
-def _ribs(width: float, height: float, pitch: float, diagonal: float = 0.0) -> list[Any]:
+def _ribs(
+    width: float, height: float, pitch: float, diagonal: float = 0.0, share: float = LAND_SHARE
+) -> list[Any]:
     """Parallele Stege, wahlweise gedreht — die Grundlage von Rippe und Rändel."""
     from shapely import affinity
     from shapely.geometry import box
 
-    land = pitch * LAND_SHARE
+    land = pitch * share
     # Über die Diagonale hinaus, damit auch gedreht nichts fehlt.
     reach = math.hypot(width, height)
     columns = np.arange(-reach, reach + pitch, pitch)
@@ -117,7 +119,7 @@ def _ribs(width: float, height: float, pitch: float, diagonal: float = 0.0) -> l
     return _clip(strips, width, height)
 
 
-def _waves(width: float, height: float, pitch: float) -> list[Any]:
+def _waves(width: float, height: float, pitch: float, share: float = LAND_SHARE) -> list[Any]:
     """Wellen: sinusförmige Bänder statt flachgedeckelter Stege.
 
     Der Unterschied zu Rippen ist genau dieser — SindriCAD hatte beide Muster
@@ -127,7 +129,7 @@ def _waves(width: float, height: float, pitch: float) -> list[Any]:
     """
     from shapely.geometry import Polygon
 
-    land = pitch * LAND_SHARE
+    land = pitch * share
     amplitude = pitch / 4.0
     # Das Raster ist an der Periode verankert, damit auch ihre Maxima und
     # Minima getroffen werden. Eine feste Punktzahl aliasierte hohe Felder
@@ -159,11 +161,11 @@ def _waves(width: float, height: float, pitch: float) -> list[Any]:
     return _clip(shapes, width, height)
 
 
-def _hexagons(width: float, height: float, pitch: float) -> list[Any]:
+def _hexagons(width: float, height: float, pitch: float, fill: float = HEX_FILL) -> list[Any]:
     """Wabe: versetzte Sechsecke, flache Seite oben."""
     from shapely.geometry import Polygon
 
-    radius = pitch / 2.0 * HEX_FILL
+    radius = pitch / 2.0 * fill
     step_y = pitch * math.sqrt(3.0) / 2.0
     shapes: list[Any] = []
     row = 0
@@ -189,7 +191,7 @@ def _hexagons(width: float, height: float, pitch: float) -> list[Any]:
     return _clip(shapes, width, height)
 
 
-def _diamonds(width: float, height: float, pitch: float) -> list[Any]:
+def _diamonds(width: float, height: float, pitch: float, share: float = LAND_SHARE) -> list[Any]:
     """Kreuzrändel: Rauten im versetzten Raster.
 
     **Nicht** zwei gekreuzte Stegsätze übereinandergelegt — das gibt ein
@@ -202,7 +204,7 @@ def _diamonds(width: float, height: float, pitch: float) -> list[Any]:
     """
     from shapely.geometry import Polygon
 
-    half = pitch / 2.0 * LAND_SHARE * math.sqrt(2.0)
+    half = pitch / 2.0 * share * math.sqrt(2.0)
     shapes: list[Any] = []
     row = 0
     y = -height / 2.0 - pitch
@@ -217,11 +219,11 @@ def _diamonds(width: float, height: float, pitch: float) -> list[Any]:
     return _clip(shapes, width, height)
 
 
-def _dimples(width: float, height: float, pitch: float) -> list[Any]:
+def _dimples(width: float, height: float, pitch: float, share: float = LAND_SHARE) -> list[Any]:
     """Noppen: runde Erhebungen im Raster, versetzt wie eine Wabe."""
     from shapely.geometry import Point
 
-    radius = pitch / 2.0 * LAND_SHARE * 2.0
+    radius = pitch / 2.0 * share * 2.0
     step_y = pitch * math.sqrt(3.0) / 2.0
     shapes: list[Any] = []
     row = 0
@@ -286,12 +288,31 @@ def _noise(width: float, height: float, pitch: float, seed: int) -> list[Any]:
 
 
 def pattern_shapes(
-    pattern: str, width: float, height: float, pitch: float, seed: int = 0
+    pattern: str,
+    width: float,
+    height: float,
+    pitch: float,
+    seed: int = 0,
+    *,
+    cell: float | None = None,
+    wall: float = 0.0,
 ) -> list[Any]:
     """Die Polygone eines Musters, mittig um den Ursprung in der XY-Ebene.
 
     Die Umrisse sind exakt — sie werden gleich zu Prismen und danach zu einem
     Körper, nicht zu einem Bild.
+
+    ``cell`` ist die Breite einer Zelle, wie die Erkennung sie misst
+    (``perceive.patterns``: Schlüsselweite der Wabe, Breite von Rippe und
+    Raute, Durchmesser der Noppe, Breite des Wellenbands über seine
+    Amplitude). Ohne Angabe gilt der Anteil, den das Muster von sich aus
+    hat — so entsteht ein gelesenes Muster mit seinen eigenen Zellen wieder,
+    nicht mit denen der Vorgabe; der Halter mit 9 mm Waben bei 10,4 Teilung
+    bekäme sonst 7,7 mm Waben und Wände von 2,7 statt 1,4 mm. Voronoi und
+    Rauschen kennen keine Zellbreite: Ihre Zellen sind so groß, wie die Dichte
+    sie macht. ``wall`` ist die schmalste Wand, die zwischen zwei Zellen
+    bleiben muss — die Düse, wenn eine Maschine bekannt ist; die Zellbreite
+    wird darauf begrenzt (:func:`_cell_share`).
     """
     if pattern not in PATTERNS:
         raise ValidationError(
@@ -303,21 +324,117 @@ def pattern_shapes(
     require_positive("pitch", pitch)
     require_positive("width", width)
     require_positive("height", height)
+    share = _cell_share(pattern, pitch, cell, wall)
     if pattern == "rib":
-        return _ribs(width, height, pitch)
+        return _ribs(width, height, pitch, share=share)
     if pattern == "wave":
-        return _waves(width, height, pitch)
+        return _waves(width, height, pitch, share=share)
     if pattern == "knurl_straight":
-        return _ribs(width, height, pitch, diagonal=45.0)
+        return _ribs(width, height, pitch, diagonal=45.0, share=share)
     if pattern == "knurl_diamond":
-        return _diamonds(width, height, pitch)
+        return _diamonds(width, height, pitch, share=share)
     if pattern == "hexagon":
-        return _hexagons(width, height, pitch)
+        return _hexagons(width, height, pitch, fill=share)
     if pattern == "dimple":
-        return _dimples(width, height, pitch)
+        return _dimples(width, height, pitch, share=share)
     if pattern == "voronoi":
         return _voronoi(width, height, pitch, seed)
     return _noise(width, height, pitch, seed)
+
+
+#: Wie nah eine Zelle an ihren Nachbarn heranreichen darf, als Anteil des
+#: Abstands zwischen ihnen — knapp darunter, sonst stünde zwischen zwei
+#: Zellen keine Wand mehr, sondern eine Kante, und das Muster zerfiele beim
+#: Drucken zu einer Fläche.
+MAX_CELL_SHARE: Final = 0.98
+
+
+def _max_share(pattern: str, pitch: float, wall: float) -> float:
+    """Der größte Anteil, bei dem zwischen zwei Zellen noch eine Wand steht.
+
+    Zwei Grenzen, die engere gilt. Die eine ist die Geometrie: Der Abstand
+    zweier Zellen ist ``1 - MAX_CELL_SHARE`` ihres Nachbarabstands, sonst
+    berühren sie sich. Die andere ist die Maschine: ``wall`` ist die
+    schmalste Wand, die sie druckt (E1, die Düse) — null heißt: nur die
+    Geometrie fragt.
+
+    Je Muster anders gerechnet, weil der Anteil je Muster etwas anderes
+    misst — die Umkehrung der Erzeuger oben: Bei Rippe, Rändel und Welle ist
+    die Rille ``1 - share`` Teilungen breit. Die Wabe misst über die Flächen
+    nur ``√3/2`` ihres ``fill`` — Sechsecke mit ``fill = 2/√3`` füllten das
+    Gitter lückenlos. Die Noppe ist ``2·share`` Teilungen breit. Und beim
+    Kreuzrändel berühren sich die Rauten schon bei ``1/√2``: Ihre halbe
+    Diagonale ist ``share·Teilung/√2``, die Nachbarn in der Reihe liegen eine
+    Teilung auseinander, die in der nächsten Reihe eine halbe Diagonale
+    weiter — deren Rille ist die schmalere, um ``√2``. Ein Anteil von 0,98
+    ließe dort alle Rauten zu einer Fläche verschmelzen (gemessen am
+    22.09.2026: 253 Rauten, ein Umriss).
+    """
+    open_share = min(MAX_CELL_SHARE, 1.0 - wall / pitch)
+    if pattern == "hexagon":
+        return open_share * 2.0 / math.sqrt(3.0)
+    if pattern == "dimple":
+        return open_share / 2.0
+    if pattern == "knurl_diamond":
+        return min(MAX_CELL_SHARE, 1.0 - math.sqrt(2.0) * wall / pitch) / math.sqrt(2.0)
+    return open_share
+
+
+def _cell_share(pattern: str, pitch: float, cell: float | None, wall: float = 0.0) -> float:
+    """Der Anteil an der Teilung, der diese Zellbreite ergibt — je Muster anders gerechnet.
+
+    Die Umkehrung dessen, was die Erzeuger oben aus dem Anteil machen: Die
+    Rippe ist ``share`` Teilungen breit, die Raute des Kreuzrändels ebenso
+    (ihre Seite ist ``share``·Teilung), die Noppe ``2·share``, die Wabe misst
+    über die Flächen ``√3·fill``·Teilung/2, das Wellenband trägt neben dem
+    Steg zweimal die Amplitude von einer Viertelteilung. Eine Breite, die
+    keine Wand mehr ließe — keine geometrisch, oder keine, die die Maschine
+    druckt (``wall``) —, wird auf :func:`_max_share` begrenzt; eine, die
+    nichts ließe, wird abgewiesen.
+    """
+    if cell is None:
+        return HEX_FILL if pattern == "hexagon" else LAND_SHARE
+    require_positive("cell_width", cell)
+    if pattern == "hexagon":
+        share = 2.0 * cell / (math.sqrt(3.0) * pitch)
+    elif pattern == "dimple":
+        share = cell / (2.0 * pitch)
+    elif pattern == "wave":
+        share = (cell - pitch / 2.0) / pitch
+    else:
+        share = cell / pitch
+    if share <= 0.0:
+        raise ValidationError(
+            "cell_width",
+            _("Eine Zelle dieser Breite bleibt bei dieser Teilung nicht übrig."),
+            value=cell,
+            constraint="minimum",
+            suggestions=[replace(CORRECT_INPUT, label=_("Zellbreite vergrößern"))],
+        )
+    return min(share, _max_share(pattern, pitch, wall))
+
+
+def cell_width_for(
+    pattern: str, pitch: float, cell: float | None, *, wall: float = 0.0
+) -> float | None:
+    """Die Zellbreite, die dieses Muster bei dieser Teilung wirklich bekommt.
+
+    Die Umkehrung von :func:`_cell_share` nach der Begrenzung: Wer 9 mm
+    Waben bei 6 mm Teilung verlangt, bekommt so breite, wie die Teilung
+    zulässt — bei einer Wand von ``wall`` dazwischen, der Düse — und soll
+    das lesen, nicht raten. Voronoi und Rauschen haben keine Zellbreite und
+    geben ``None``.
+    """
+    if pattern in {"voronoi", "noise"}:
+        return None
+    share = _cell_share(pattern, pitch, cell, wall)
+    if pattern == "hexagon":
+        return share * math.sqrt(3.0) * pitch / 2.0
+    if pattern == "dimple":
+        return 2.0 * share * pitch
+    if pattern == "wave":
+        return share * pitch + pitch / 2.0
+    return share * pitch
 
 
 def check_printable(pattern: str, pitch: float, depth: float, printer: PrinterProfile) -> None:
@@ -678,17 +795,13 @@ def wrapped(body: MeshData, diameter: float) -> MeshData:
 
 def _face_texture_tool(source: SceneObject, params: TextureParams, seed: int) -> MeshData:
     """Schneidet Musterpolygone am tatsächlichen Flächenumriss samt Lochrändern ab."""
-    from shapely import affinity
     from shapely.geometry import Polygon
     from shapely.ops import unary_union
 
     from app.core.errors import CANCEL, CHANGE_SELECTION, GeometryError
-    from app.core.geom.boolean import BOOLEAN_OVERLAP
     from app.core.geom.face_ops import _chosen_face, _no_face
     from app.core.geom.faces import _triangles_of, face_normal
-    from app.core.geom.label_ops import label_solid
     from app.core.geom.mesh import as_mesh_data
-    from app.core.geom.transform import apply
     from app.core.sketch.planes import frame_of
 
     feature = _chosen_face(source, params.face)
@@ -717,12 +830,101 @@ def _face_texture_tool(source: SceneObject, params: TextureParams, seed: int) ->
             suggestions=(CHANGE_SELECTION, CANCEL),
         )
     outline = unary_union([Polygon(triangle[:, :2]) for triangle in local])
+    return tool_in_outline(
+        outline,
+        basis,
+        cast(Vec3, tuple(float(value) for value in origin)),
+        pattern=params.pattern,
+        pitch=params.pitch,
+        depth=params.depth,
+        mode=params.mode,
+        seed=seed,
+    )
+
+
+def tool_in_outline(
+    outline: Any,
+    basis: np.ndarray,
+    origin: Vec3,
+    *,
+    pattern: str,
+    pitch: float,
+    depth: float,
+    mode: str,
+    seed: int = 0,
+    cell: float | None = None,
+    wall: float = 0.0,
+    whole_cells: bool = False,
+    anchor: tuple[float, float] | None = None,
+) -> MeshData:
+    """Der Werkzeugkörper eines Musters, am Umriss abgeschnitten, in Weltkoordinaten.
+
+    ``outline`` ist ein ``shapely``-Umriss in den Achsen von ``basis`` mit
+    ``origin`` als Nullpunkt — die Fläche samt ihren Aussparungen beim Muster
+    bis zum Rand, das Feld eines gelesenen Musters beim Ändern
+    (``prepare_ops._resize_pattern``). Beide Wege bauen dasselbe Werkzeug.
+
+    ``whole_cells`` lässt nur Zellen zu, die ganz im Umriss liegen — und um
+    eine halbe Wand vom Rand entfernt, damit die Außenwand so dick wird wie
+    die Wände zwischen den Zellen: Eine durchgehende Zelle, die der Rand
+    anschneidet, wäre eine Kerbe in der Seitenwand — der Halter mit seinen
+    196 Waben hat keine, und er soll nach dem Ändern der Teilung auch keine
+    bekommen.
+
+    ``anchor`` ist ein Punkt in den Achsen des Umrisses, auf den eine Zelle
+    genau zu liegen kommt: Die Mitte einer gelesenen Zelle, damit ein Muster
+    mit neuer Tiefe an derselben Stelle steht wie vorher, statt am Feldrand
+    neu zu beginnen.
+    """
+    from shapely import affinity
+    from shapely.ops import unary_union
+
+    from app.core.geom.boolean import BOOLEAN_OVERLAP
+    from app.core.geom.label_ops import label_solid
+    from app.core.geom.transform import apply
+
     low_x, low_y, high_x, high_y = outline.bounds
     centre_x, centre_y = (low_x + high_x) / 2.0, (low_y + high_y) / 2.0
-    shapes = pattern_shapes(params.pattern, high_x - low_x, high_y - low_y, params.pitch, seed)
+    # Mit Anker das Feld um eine Teilung je Seite größer als der Umriss: Die
+    # Erzeuger schneiden am Feldrand ab, und der Anker rückt das Raster um
+    # bis zu eine halbe Teilung — eine am Feldrand halbierte Zelle läge danach
+    # ganz im Umriss und gälte als ganze (Review, 22.09.2026: halbe Sechsecke
+    # als Durchbrüche). Ohne Anker bleibt das Feld der Umriss, denn die Lage
+    # des Rasters hängt an der Feldgröße, und ``apply_texture`` zeichnet mit
+    # derselben Fassung dasselbe Bild.
+    margin = 2.0 * pitch if anchor is not None else 0.0
+    shapes = pattern_shapes(
+        pattern,
+        high_x - low_x + margin,
+        high_y - low_y + margin,
+        pitch,
+        seed,
+        cell=cell,
+        wall=wall,
+    )
+    shift_x, shift_y = centre_x, centre_y
+    if anchor is not None and shapes:
+        # Die Zelle, die dem Anker am nächsten liegt, kommt genau auf ihn —
+        # höchstens eine halbe Teilung Weg, und alle anderen rücken mit.
+        nearest = min(
+            shapes,
+            key=lambda shape: (
+                (shape.centroid.x + centre_x - anchor[0]) ** 2
+                + (shape.centroid.y + centre_y - anchor[1]) ** 2
+            ),
+        )
+        shift_x = anchor[0] - nearest.centroid.x
+        shift_y = anchor[1] - nearest.centroid.y
     clipped: list[Any] = []
+    wall = max(pitch - cell, 0.0) if cell is not None else 0.0
+    inside = outline.buffer(-wall / 2.0) if whole_cells and wall > EPS_GEOM else outline
     for shape in shapes:
-        cut = affinity.translate(shape, centre_x, centre_y).intersection(outline)
+        moved = affinity.translate(shape, shift_x, shift_y)
+        if whole_cells:
+            if inside.contains(moved):
+                clipped.append(moved)
+            continue
+        cut = moved.intersection(outline)
         clipped.extend(
             part
             for part in getattr(cut, "geoms", [cut])
@@ -738,19 +940,41 @@ def _face_texture_tool(source: SceneObject, params: TextureParams, seed: int) ->
         for part in getattr(merged, "geoms", [merged])
         if part.geom_type == "Polygon" and part.area > EPS_GEOM
     ]
-    body = label_solid(regions, params.depth + BOOLEAN_OVERLAP)
+    body = label_solid(regions, depth + BOOLEAN_OVERLAP)
     if body is None:
         raise ValidationError(
             "pattern",
             _("Aus diesem Muster entstand nichts — die Teilung passt nicht ins Feld."),
-            value=params.pattern,
+            value=pattern,
             constraint="no_shapes",
         )
-    lift = -BOOLEAN_OVERLAP if params.mode == "raised" else -params.depth
+    lift = -BOOLEAN_OVERLAP if mode == "raised" else -depth
     matrix = np.eye(4)
     matrix[:3, :3] = basis
-    matrix[:3, 3] = origin + basis[:, 2] * lift
+    matrix[:3, 3] = np.asarray(origin, dtype=float) + basis[:, 2] * lift
     return apply(body, matrix)
+
+
+def _merged(shapes: list[Any]) -> list[Any]:
+    """Überlappende Umrisse zu einem, bevor sie Prismen werden.
+
+    Die Streuflecken des Rauschens dürfen sich überlappen — als Umriss. Als
+    zwei Prismen übereinander waren sie ein Werkzeug, das sich selbst
+    durchdringt, und die Differenz damit ließ auf der Deckfläche doppelte
+    Dreiecke zurück: 2 773 Dreiecke mit 2 908 mm² auf einer Fläche von
+    1 200 (gemessen am 22.09.2026, Rauschen mit 2 mm Teilung auf 40 mal 30).
+    Die Flächensuche fand diese Deckfläche nicht mehr, und die Erkennung
+    damit kein Muster. Der Weg über die ganze Fläche führte dieselben
+    Umrisse längst zusammen; hier fehlte es.
+    """
+    from shapely.ops import unary_union
+
+    merged = unary_union(shapes).simplify(EPS_GEOM, preserve_topology=True)
+    return [
+        part
+        for part in getattr(merged, "geoms", [merged])
+        if part.geom_type == "Polygon" and part.area > EPS_GEOM
+    ]
 
 
 def texture_tool(source: SceneObject, params: TextureParams, seed: int = 0) -> MeshData:
@@ -781,7 +1005,7 @@ def texture_tool(source: SceneObject, params: TextureParams, seed: int = 0) -> M
             constraint="no_shapes",
         )
 
-    body = label_solid(shapes, params.depth + BOOLEAN_OVERLAP)
+    body = label_solid(_merged(shapes), params.depth + BOOLEAN_OVERLAP)
     if body is None:
         raise ValidationError(
             "pattern",
