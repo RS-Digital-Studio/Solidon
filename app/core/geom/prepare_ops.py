@@ -4831,6 +4831,28 @@ class SlotHoleParams(BaseParams):
             "der Bohrung; leer heißt, sie bleibt, wo sie ist."
         ),
     )
+    diameter: float | None = param(
+        title=_("Breite"),
+        default=None,
+        optional=True,
+        unit="mm",
+        minimum=0.2,
+        placement="front",
+        doc=_(
+            "Die Breite des Langlochs. Leer heißt: so breit wie die Bohrung gemessen "
+            "ist. Mit einer Zahl wird das Langloch in einem Schritt gezogen und auf "
+            "diese Breite gebracht."
+        ),
+    )
+    compensate: bool = param(
+        title=_("Materialtoleranz berücksichtigen"),
+        default=False,
+        placement="advanced",
+        doc=_(
+            "Vergrößert das gewählte Fertigmaß um den Wert aus dem Materialprofil. "
+            "Aus bleibt das gemessene Maß unverändert."
+        ),
+    )
 
 
 #: Die Arten, aus denen ein Langloch werden kann.
@@ -4858,7 +4880,8 @@ SLOT_FEATURE_RENAMED: Final = _(
 
 @register_op(
     name="slot_hole",
-    cache_version="4",
+    # 5: die Breite als eigener Parameter (22.09.2026).
+    cache_version="5",
     # **Kein „Bohrung zum Langloch".** Der Titel stand so, solange die
     # Operation nur an einer Bohrung galt; seit die Erkennung Langlöcher findet
     # (:mod:`app.core.perceive.slots`), gilt sie auch an einem und hieße dort
@@ -4884,7 +4907,14 @@ def slot_hole(ctx: OpContext) -> OpResult:
     """Dieselbe Formänderung für Netze und für exakte Körper.
 
     Der Durchmesser bleibt, wie er gemessen wurde; eingetragen werden Länge und
-    Richtung.
+    Richtung — **und wahlweise die Breite** (Entscheidung Robert, 22.09.2026:
+    „Ja eine transaktion"). Wer an den Knöpfen zieht und daneben einen neuen
+    Durchmesser eintippt, bekommt beides als **einen** Schritt: Die alte
+    Öffnung wird geschlossen und das Langloch in der neuen Breite geschnitten,
+    ein Strg+Z nimmt beides. Zwei Schritte gingen nicht: Das Langloch heißt
+    nach dem ersten Zug neu (``SLOT_FEATURE_RENAMED``), und einen zweiten
+    Schritt an einen Namen zu hängen, den erst die Auswertung vergibt, wäre
+    Raten (Regel 21).
 
     **Ein bestehendes Langloch geht denselben Weg.** Seine Mitte, seine Achse
     und seine Breite stehen im Merkmal wie bei einer Bohrung; was dazukommt,
@@ -4943,7 +4973,14 @@ def slot_hole(ctx: OpContext) -> OpResult:
     measured = _bore_vector(feature, "centre")
     centre = _named_place(params.x, params.y, params.z, measured) or measured
     axis = _bore_vector(feature, "axis")
-    diameter = _bore_number(feature, "diameter")
+    measured_diameter = _bore_number(feature, "diameter")
+    diameter = measured_diameter
+    if params.diameter is not None:
+        _reject_oversized("diameter", params.diameter, source.mesh)
+        diameter = bore_diameter(params.diameter, ctx.profile, params.compensate)
+    # Eine andere Breite schließt die alte Öffnung wie ein Versetzen — sonst
+    # bliebe ein schmaleres Langloch in der weiteren Bohrung stehen.
+    widened = not is_close(diameter, measured_diameter)
     depth = _bore_number(feature, "depth")
     through = bool(feature.params.get("through", False))
     # **Gefragt wird gegen den gemessenen Durchmesser**, denn gegen ihn misst
@@ -5027,7 +5064,7 @@ def slot_hole(ctx: OpContext) -> OpResult:
     # war ein Kreuz (gemessen 15.09.2026 an der Platte: 397 mm³ mehr abgetragen,
     # kein Langloch mehr erkannt). Geschlossen wird die Öffnung, wie sie liegt.
     moved = not all(is_close(a, b) for a, b in zip(centre, measured, strict=True))
-    closes_the_old = moved or turning is not None
+    closes_the_old = moved or turning is not None or widened
     # **Die Zugabe gilt dem ersten Zug.** Sie hält den Langlochkörper von der
     # runden Bohrungswand fern, an die er sich sonst entlang zweier Linien
     # legte (:data:`prepare.FEATURE_OVERLAP`). An einem Langloch, das schon
@@ -5038,7 +5075,11 @@ def slot_hole(ctx: OpContext) -> OpResult:
     # von 5,1901, am exakten Körper je Zug genau die Zugabe (Fund des
     # Reviews). Wer ein Langloch dreimal nachzieht, soll dieselbe Schraube
     # hindurchbekommen wie nach dem ersten Mal.
-    overlap = FEATURE_OVERLAP if feature.kind == "hole" else 0.0
+    # In einer anderen Breite steht die alte Wand nicht mehr, wo das Werkzeug
+    # läge — die Öffnung ist geschlossen, das Werkzeug schneidet in Material.
+    overlap = FEATURE_OVERLAP if feature.kind == "hole" and not widened else 0.0
+    if params.diameter is not None:
+        said.extend(compensation_findings(params.diameter, diameter, params.compensate))
 
     if source.kind == "brep":
         from app.core.brep import edit
@@ -5061,7 +5102,7 @@ def slot_hole(ctx: OpContext) -> OpResult:
                 started,
                 position=measured,
                 direction=axis,
-                diameter=diameter,
+                diameter=measured_diameter,
                 depth=depth,
                 length=_bore_number(feature, "length") if feature.kind == "slot" else 0.0,
                 angle_deg=slot_angle_of(feature, axis) if feature.kind == "slot" else 0.0,

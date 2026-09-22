@@ -79,9 +79,11 @@ Langloch**, wenn an der gebundenen Bohrung ein Zug wartet
 (`Viewport.waiting_slot_drag`, `MainWindow.slot_drag_takes_the_accept` — die
 eine Antwort für Weiche, Notiz und Knopf): dann geht der Abschluss den Weg
 des Merkmalfensters (`apply_slot_drag`) mit der Stelle aus den Feldern.
-Trägt das Feld daneben einen neuen Durchmesser, kommt erst er, und der Zug
-ist danach zu wiederholen — der Szenenaufbau verwirft ihn; Notiz und
-Statuszeile sagen genau das.
+Trägt das Feld daneben einen neuen Durchmesser, wird daraus **ein** Schritt
+(Entscheidung Robert, 22.09.2026): *Zum Langloch ziehen* mit der Stelle und
+der neuen Breite (`_slot_with_width`, `SlotHoleParams.diameter`) — zwei
+Schritte gingen nicht, weil das Langloch nach dem Zug neu heißt und der
+zweite seinen Namen erst nach der Auswertung kennte.
 
 **Die Maßtinte liegt im Renderer, nicht als Widget über ihm** (`_Dimensions`,
 RM-198). Bis zum 21.09.2026 war sie ein maskiertes Qt-Widget über der nativen

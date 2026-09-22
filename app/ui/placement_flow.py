@@ -1468,9 +1468,9 @@ class PlacementFlow(QObject):
         if pulled:
             information = tr("Übernehmen zieht die Bohrung zum Langloch.")
         elif self._pulled_slot() is not None and self.spec_of().name != "slot_hole":
-            information = tr(
-                "Der Durchmesser wird übernommen. Ziehen Sie das Langloch danach erneut."
-            )
+            # Zug und neuer Durchmesser: eine Transaktion aus zwei Schritten
+            # (Entscheidung Robert, 22.09.2026).
+            information = tr("Übernehmen zieht die Bohrung zum Langloch und ändert die Breite.")
         self._measure_note.setText(
             "\n".join(filter(None, (reason, self._reference_message, information)))
         )

@@ -1818,10 +1818,15 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   ihn; das Tiefenfeld leuchtet mit; Portugiesisch sagt „furo oblongo" wie
   am Knopf. Jeder neue Test am Stand davor rot. Offen: die Abnahme am
   echten Fenster beim Release 0.5.0 — dazu die Stufe an der Grenze „ganz
-  sichtbar" (ein Punkt über den Maßraum, und die Felder wechseln die Seite)
-  und die Frage, ob Zug und Durchmesser **eine** Transaktion werden sollen
-  (`slot_hole`, dann `resize_hole` am Langloch; Entscheidung Robert).
-  Gehört zur laufenden Arbeit an P0.3/P0.4.
+  sichtbar" (ein Punkt über den Maßraum, und die Felder wechseln die Seite).
+  **Zug und Durchmesser sind ein Schritt** (Entscheidung Robert am selben
+  Tag: „Ja eine transaktion"): `slot_hole` nimmt die Breite selbst
+  (`diameter`, `compensate`), die stille Platzierung baut daraus den einen
+  Auftrag (`_slot_with_width`); zwei Schritte in einer Transaktion gingen
+  nicht, weil das Langloch nach dem Zug neu heißt und der zweite Schritt
+  seinen Namen erst nach der Auswertung kennte. Tests an beiden Kernen,
+  breiter und schmaler, und im Fenster mit Strg+Z. Gehört zur laufenden
+  Arbeit an P0.3/P0.4.
 
 <a id="rm-198"></a>
 

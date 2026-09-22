@@ -3643,18 +3643,21 @@ def test_accepting_the_measures_takes_a_pulled_slot_along(qt_app: QApplication) 
         window.release()
 
 
-def test_a_new_diameter_beside_a_pulled_slot_applies_the_diameter_and_says_so(
+def test_a_new_diameter_beside_a_pulled_slot_is_one_step_with_the_new_width(
     qt_app: QApplication,
 ) -> None:
     """Ein Zug wartet, und die Felder tragen einen neuen Durchmesser: Übernehmen
-    nimmt den Durchmesser, sagt einmal, dass das Langloch danach neu zu ziehen
-    ist — und die Notiz der Gruppe verspricht nicht das Langloch.
+    macht daraus **einen** Schritt — *Zum Langloch ziehen* mit der Stelle und
+    der neuen Breite (Entscheidung Robert, 22.09.2026: „Ja eine transaktion").
 
-    Zwei Funde des Reviews vom 22.09.2026: Die Route mischte ``surface_values``
-    ungefiltert in die Werte, und *Bohrung ändern* lehnte ``nx``/``ny``/``nz``
-    ab („Diesen Parameter gibt es bei dieser Operation nicht") — kein Schritt,
-    der Zug stand weiter. Und die Statuszeile versprach ein zweites Übernehmen,
-    das nichts vorfindet: Der Szenenaufbau nach dem Schritt verwirft den Zug.
+    Zwei Funde des Reviews vom selben Tag stehen dahinter: Die Route mischte
+    ``surface_values`` ungefiltert in die Werte, und *Bohrung ändern* lehnte
+    ``nx``/``ny``/``nz`` ab — kein Schritt, der Zug stand weiter. Und die
+    Statuszeile versprach ein zweites Übernehmen, das nichts vorfindet: Der
+    Szenenaufbau nach dem Schritt verwirft den Zug. Zwei Schritte in einer
+    Transaktion gingen auch nicht — das Langloch heißt nach dem Zug neu, und
+    der zweite Schritt kennte seinen Namen erst nach der Auswertung. Jetzt:
+    ein Übernehmen, ein Schritt, ein Strg+Z.
     """
     from app.ui.render.api import Pick, PointerEvent
 
@@ -3692,7 +3695,8 @@ def test_a_new_diameter_beside_a_pulled_slot_applies_the_diameter_and_says_so(
         for _ in range(120):
             QApplication.processEvents()
             window.session.wait_for_idle()
-        assert window.viewport.waiting_slot_drag(hole) is not None, "der Zug wartet"
+        pulled = window.viewport.waiting_slot_drag(hole)
+        assert pulled is not None and pulled[0] > 0.0, "der Zug wartet"
         assert "zieht die Bohrung zum Langloch" in flow._measure_note.text()
 
         fields = {
@@ -3706,10 +3710,10 @@ def test_a_new_diameter_beside_a_pulled_slot_applies_the_diameter_and_says_so(
             QApplication.processEvents()
             window.session.wait_for_idle()
         assert not window.slot_drag_takes_the_accept("resize_hole", flow.dialog.values())
-        assert "zieht die Bohrung zum Langloch" not in flow._measure_note.text()
-        assert "Ziehen Sie das Langloch danach erneut" in flow._measure_note.text()
+        assert "ändert die Breite" in flow._measure_note.text(), flow._measure_note.text()
 
         before = len(window.session.project.document.ops)
+        transactions = len(window.session.project.document.transactions)
         flow.accept()
         for _ in range(300):
             QApplication.processEvents()
@@ -3719,15 +3723,35 @@ def test_a_new_diameter_beside_a_pulled_slot_applies_the_diameter_and_says_so(
         for _ in range(60):
             QApplication.processEvents()
             window.session.wait_for_idle()
-        steps = window.session.project.document.ops
-        assert len(steps) == before + 1, [step.op for step in steps[before:]]
-        assert steps[-1].op == "resize_hole", steps[-1].op
+        document = window.session.project.document
+        steps = document.ops
+        assert [step.op for step in steps[before:]] == ["slot_hole"], (
+            [step.op for step in steps[before:]],
+            said,
+        )
+        assert len(document.transactions) == transactions + 1, "eine Transaktion"
+        assert document.transactions[-1].ops == (steps[-1].id,)
+        assert steps[-1].params["slot_length"] == pytest.approx(pulled[0])
+        assert steps[-1].params["at_feature"] == hole
         assert steps[-1].params["diameter"] == pytest.approx(wider)
-        assert not window.viewport.slot_drag_waits(), "der Zug hat den Schritt nicht überlebt"
-        told = [text for text in said if "Ziehen Sie das Langloch danach erneut" in text]
-        assert len(told) == 1, said
+        assert steps[-1].params["x"] == pytest.approx(float(centre[0]), abs=0.05)
+        assert not window.viewport.slot_drag_waits(), "der Zug ist eingelöst"
+        # Das Ergebnis ist ein Langloch mit der neuen Breite.
+        result = window.session.last_result
+        assert result is not None and result.stopped_at is None
+        slots = [f for f in result.scene.objects[object_id].features.values() if f.kind == "slot"]
+        assert len(slots) == 1 and hole not in result.scene.objects[object_id].features
+        assert slots[0].params["diameter"] == pytest.approx(wider, abs=0.05)
+        assert slots[0].params["length"] == pytest.approx(pulled[0], abs=0.1)
         assert not any("wartet auf ein weiteres" in text for text in said), said
+        assert not any("Ziehen Sie das Langloch danach erneut" in text for text in said), said
         assert not any("Diesen Parameter gibt es" in text for text in said), said
+        # Und ein Strg+Z nimmt beides.
+        window.session.undo()
+        for _ in range(120):
+            QApplication.processEvents()
+            window.session.wait_for_idle()
+        assert len(window.session.project.document.ops) == before
     finally:
         window.end_quiet_placement()
         QApplication.processEvents()

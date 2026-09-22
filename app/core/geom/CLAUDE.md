@@ -754,6 +754,14 @@ alte Stelle — am Netz über `_closed_at`, am exakten Körper über
 (`_slot_turned`, seit dem 15.09.2026): Ein Langloch in neuer Richtung war bis
 dahin ein zweites quer über dem ersten, mit Warnung — jetzt ist es ein
 gedrehtes, und `slot_hole.turned` sagt den Winkel. **Geschnitten und nicht
+**`slot_hole` nimmt seit dem 22.09.2026 auch eine Breite entgegen**
+(`diameter`, leer heißt „so breit wie gemessen"; `compensate` wie bei
+`resize_hole`): Ein Zug an den Knöpfen und ein neuer Durchmesser in den
+Feldern sind damit **ein** Schritt (Entscheidung Robert). Eine andere Breite
+schließt die alte Öffnung wie ein Versetzen und schneidet ohne Zugabe — sonst
+stünde ein schmaleres Langloch in der weiteren Bohrung. Zwei Schritte gingen
+nicht: Das Langloch heißt nach dem ersten Zug neu (`SLOT_FEATURE_RENAMED`),
+und der zweite Schritt kennte seinen Namen erst nach der Auswertung.
 geändert**: `resize_bore` verglich dort die zwei Durchmesser, fand sie gleich
 und gab den Körper unverändert zurück; gemessen am 10.09.2026 blieb das Loch
 bei (−20 | −10) und der Befund sagte „Die Bohrung hat bereits diesen

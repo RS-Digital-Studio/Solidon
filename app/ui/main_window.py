@@ -14066,7 +14066,7 @@ class MainWindow(QMainWindow):
 
     def _apply_placed_feature_later(self, op: str, params: Mapping[str, Any]) -> None:
         """Der wartende Klick, sobald das Bild steht (``_apply_when_previewed``)."""
-        self._apply_placed_feature(op, params, repeated=True)
+        self._apply_placed_feature(op, params)
 
     def slot_drag_takes_the_accept(self, op: str, params: Mapping[str, Any]) -> bool:
         """Ob Übernehmen an der gebundenen Bohrung das gezogene Langloch meint.
@@ -14085,9 +14085,38 @@ class MainWindow(QMainWindow):
             return False
         return not self._diameter_changed(op, params)
 
-    def _apply_placed_feature(
-        self, op: str, params: Mapping[str, Any], *, repeated: bool = False
-    ) -> bool:
+    def _slot_with_width(
+        self,
+        feature_id: str,
+        pulled: tuple[float, float],
+        values: Mapping[str, Any],
+        inputs: tuple[ObjectId, ...],
+    ) -> _PreviewOrder:
+        """Der gezogene Zug und der neue Durchmesser als **ein** Schritt: *Zum
+        Langloch ziehen* mit der Stelle aus den Feldern und der neuen Breite.
+
+        Zwei Schritte gingen nicht — das Langloch heißt nach dem ersten Zug
+        neu, und der zweite Schritt kennte seinen Namen erst nach der
+        Auswertung. ``slot_hole`` nimmt die Breite deshalb selbst
+        (``SlotHoleParams.diameter``), samt Toleranzausgleich aus den Feldern.
+        """
+        place = (
+            (float(values["x"]), float(values["y"]), float(values["z"]))
+            if all(values.get(name) is not None for name in ("x", "y", "z"))
+            else self.viewport.proposed_centre(feature_id)
+        )
+        slot: dict[str, Any] = {
+            "at_feature": feature_id,
+            "slot_length": float(pulled[0]),
+            "slot_angle": float(pulled[1]),
+            "diameter": float(values["diameter"]),
+            "compensate": bool(values.get("compensate", False)),
+        }
+        if place is not None:
+            slot.update({"x": float(place[0]), "y": float(place[1]), "z": float(place[2])})
+        return _PreviewOrder(drafts=(OperationDraft(op="slot_hole", inputs=inputs, params=slot),))
+
+    def _apply_placed_feature(self, op: str, params: Mapping[str, Any]) -> bool:
         """Nur den gebundenen, sichtbar geprüften Auftrag übernehmen.
 
         **Wartet ein gezogenes Langloch, meint Übernehmen das Langloch.** Die
@@ -14098,13 +14127,13 @@ class MainWindow(QMainWindow):
         22.09.2026: „warum geht zum langloch nicht mehr"). Der Zug geht jetzt
         denselben Weg wie das Übernehmen im Merkmalfenster
         (:meth:`Viewport.apply_slot_drag`), mit der Stelle aus den Feldern.
-        Ist daneben auch der Durchmesser neu, kommt erst er — das Langloch
-        nimmt keinen Durchmesser —, und der Zug ist danach zu wiederholen:
-        Der Szenenaufbau nach dem Schritt verwirft ihn
-        (``Viewport.drop_move_proposal``), ein „wartet auf das nächste
-        Übernehmen" wäre eine Zusage, die nichts vorfindet (Review
-        22.09.2026). Die Statuszeile sagt es einmal — nicht noch einmal, wenn
-        der Klick auf die Vorschau gewartet hat.
+        Ist daneben auch der Durchmesser neu, werden beide **ein Schritt**
+        (Entscheidung Robert, 22.09.2026: „Ja eine transaktion"): *Zum
+        Langloch ziehen* mit der Stelle und der neuen Breite — der gebundene
+        Auftrag (``prepare`` der stillen Platzierung, :meth:`_slot_with_width`)
+        trägt ihn, die Vorschau zeigt ihn, ein Strg+Z nimmt ihn. Bis dahin kam
+        erst der Durchmesser, und der Zug war danach zu wiederholen, weil der
+        Szenenaufbau ihn verwirft.
         """
         target = self._quiet_target
         if target is not None and self.slot_drag_takes_the_accept(op, params):
@@ -14117,16 +14146,6 @@ class MainWindow(QMainWindow):
                 )
                 self.viewport.apply_slot_drag(pulled[0], pulled[1], place)
                 return True
-        elif (
-            not repeated
-            and op != "slot_hole"
-            and target is not None
-            and target[1]
-            and self.viewport.waiting_slot_drag(str(target[1])) is not None
-        ):
-            self.announce(
-                tr("Der Durchmesser wird übernommen. Ziehen Sie das Langloch danach erneut.")
-            )
         order = self._prepare_feature_order(op, params)
         if order is None or not self._preview_can_apply(
             self._quiet_host or self.feature_panel,
@@ -14271,6 +14290,10 @@ class MainWindow(QMainWindow):
                 )
                 if changed is not None:
                     return changed
+            if op == "resize_hole" and feature_id:
+                pulled = window.viewport.waiting_slot_drag(feature_id)
+                if pulled is not None and window._diameter_changed(op, values):
+                    return window._slot_with_width(feature_id, pulled, values, inputs)
             return _PreviewOrder(
                 drafts=(OperationDraft(op=op, inputs=inputs, params=dict(values)),)
             )
