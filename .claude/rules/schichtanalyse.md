@@ -520,13 +520,19 @@ für alle draußen, auch für den Zahntechniker.
   mit Gewinde bei 57 und 60, ein Scraper-Griff bei 51, ein Wandhalter bei 55
   — mit einer Schwelle von der Hälfte verloren alle drei ihre Verrundungen,
   Senkungen und Ringe. Figuren, Scans und erzeugte Netze liegen bei 71 bis 94.
-* **Das Urteil fällt einmal je Körper, vor der Schleife über die Flecken**,
-  direkt nach `_split_patches_by_curvature`. Nicht je Fleck darin und nicht
-  über zurückgestellte Flecken: Wer einen Fleck zurückstellt, füllt die
-  Ringkandidaten in anderer Folge, und `_cylinder_beside_a_torus` findet
-  danach andere Zylinder (gemessen: zwei Kegel mehr am Gartenschlauchhalter,
-  zwei Verrundungen mehr am Beckenreiniger, eine Verrundung weniger an einem
-  Bildschirmdeckel).
+* **Das Urteil fällt einmal je Körper, zwischen den beiden Runden** — nach
+  `classify` über alle Flecken und nach `_split_patches_by_curvature` über die
+  gescheiterten, vor dem ersten Splitstück. Nicht je Fleck und nicht beim
+  ersten Fehlschlag: Dann hinge es daran, welcher Fleck zuerst scheitert.
+* **Dass die Stücke dadurch zurückgestellt werden, kostet an zehn von 489
+  Korpuskörpern Merkmalsgrenzen — gemessen, nicht geschätzt.** Wer ein Stück
+  später einpasst, zeigt ihm eine vollständigere Ringkandidatenliste, und
+  `_cylinder_beside_a_torus` entscheidet daraufhin anders: am
+  Gartenschlauchhalter ein Kegel mehr, am Beckenreiniger werden aus drei
+  Verrundungen fünf kleinere, an der Kumiko-Schale drei weniger. Dieselben
+  Rundungen, anders geschnitten. Das ist der Preis dafür, dass das Urteil
+  nicht mehr an der Reihenfolge hängt; wer die Runden wieder verschränkt,
+  bekommt die Reihenfolgeabhängigkeit zurück und die Bowlingkugel dazu.
 * **Gezählt wird nur, was keine Grundform ergeben hat — und das steht erst
   fest, wenn jeder Fleck einmal eingepasst wurde.** `_fitted` läuft deshalb in
   zwei Runden: erst `classify` über alle Flecken, dann die Nachtrennung über

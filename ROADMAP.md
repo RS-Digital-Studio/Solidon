@@ -61,6 +61,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-041 — Innenraum importierter entlüfteter Hohlkörper klären](#rm-041) | Geometrie, Erkennung und Druckvorbereitung | Schätzweg oder dokumentierte Grenze des Innenraums entscheiden |
 | [RM-209 — Die Rundform-Einpassung an Gittermodellen](#rm-209) | Geometrie, Erkennung und Druckvorbereitung | Gebaut am 22.09.2026: drei Regeln gegen Läufe, die nur am Limit noch antworten. Die Zeitzahlen sind zurückgezogen (unter Fremdlast gemessen) und werden ruhig neu erhoben; die Merkmalsbilanz steht |
 | [RM-210 — Die Erkennung hängt von der Lage des Körpers ab](#rm-210) | Geometrie, Erkennung und Druckvorbereitung | Die Verschiebung ist behoben (RM-209), die Drehung nicht: 16 von 39 echten Modellen liefern gedreht andere Merkmale. Die Kippstelle sitzt in den Verrundungen — **Entscheidung über einen Mindestbogen steht bei Robert**, drei Wege mit Zahlen im Punkt |
+| [RM-211 — Drei Verrundungen mit derselben Mitte tragen eine geratene Nummer](#rm-211) | Geometrie, Erkennung und Druckvorbereitung | Die Merkmalsnummer ist eine Provenienz-ID (§21.2) und wird nur nach der Mitte vergeben; konzentrische Verrundungen haben dieselbe. Gemessen an vier Clips aus `CC2-Werkzeugbox`: sechzehn Merkmale mit identischen Werten, andere Namen, sobald sich an der Erkennung irgendetwas ändert. Eine Passung auf `fillet_1` zeigt danach auf eine andere Rundung. Weg: den Schlüssel entscheidbar machen (Durchmesser, Länge), Korpusabnahme über alle Nummern |
 | [RM-076 — Topologieverlust beim Reduzieren von Eule und Spiderman beheben](#rm-076) | Geometrie, Erkennung und Druckvorbereitung | Eule und Spiderman mit Zielreihe und Topologievergleich reproduzieren |
 | [RM-077 — Reduzierungsziel bei Körpern mit Durchbrüchen erreichen](#rm-077) | Geometrie, Erkennung und Druckvorbereitung | Zielreihen an Körpern mit Durchbrüchen gegen den vorhandenen Rückfall messen |
 | [RM-078 — Ladezeit generierter Beispielmodelle an der Orientierung messen](#rm-078) | Geometrie, Erkennung und Druckvorbereitung | Eulenprojekt ohne Fremdlast öffnen und teure Schritte zuordnen |
@@ -866,6 +867,42 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
   Abnahme: das §31-Ziel für 200 000 Dreiecke belegt oder begründet angepasst. Gehört zum
   Leistungsstrang RM-208.
+
+<a id="rm-211"></a>
+
+- [ ] **RM-211 — Eine Merkmalsnummer wird nur nach der Mitte vergeben, und konzentrische
+  Rundungen haben dieselbe.** Gefunden am 22.09.2026 bei der Korpusabnahme von RM-193: Vier
+  Clips aus `CC2-Werkzeugbox_Druckbereit.3mf` und `CC2工具收纳盒E.3mf` (je 1 656 Dreiecke)
+  lieferten vor und nach dem Umbau **dieselben sechzehn Merkmale mit denselben Werten — und
+  andere Namen**:
+
+  | | alt | neu |
+  |---|---|---|
+  | `fillet_1` | 142 Dreiecke | 88 |
+  | `fillet_2` | 88 | 54 |
+  | `fillet_3` | 54 | 142 |
+
+  Alle drei sitzen auf derselben Mitte `[99,6893 · 119,0005 · 3,8]`. Sortiert wird am Ende
+  von `_fitted` nach `(centre[0], centre[1], centre[2])` auf drei Nachkommastellen; bei
+  gleicher Mitte ist der Vergleich unentschieden, und weil `list.sort` stabil ist, entscheidet
+  die Reihenfolge der Flecken. **Das ist derselbe Fehler, den derselbe Code für Bohrungen
+  schon behoben hat** — dort steht im Kommentar: „welche von beiden `hole_1` wurde, hing an
+  der Reihenfolge der Flecken. Genau das darf eine Provenienz-ID nicht (§21.2)." Die Lösung
+  war damals, alle drei Achsen in den Schlüssel zu nehmen; gegen *konzentrische* Rundungen
+  hilft das nicht.
+
+  **Der Kunde merkt es an der Passung.** Eine Passung, die auf `fillet_1` zeigt, zeigt nach
+  jeder Änderung an der Erkennung womöglich auf eine andere Rundung — ohne Befund, ohne
+  Meldung, mit unveränderten Zahlen im Merkmalfenster. Gefunden wurde es nur, weil ein Umbau
+  die Fleckreihenfolge verschob; es liegt aber seit jeher da und trifft jede künftige
+  Änderung genauso.
+
+  Weg: Den Schlüssel entscheidbar machen — nach der Mitte die Maße, die eine Rundung von
+  ihrer konzentrischen Nachbarin unterscheiden (Durchmesser, Länge), und dasselbe für
+  Zylinder, Kegel, Kugeln und Ringe prüfen, die denselben Schlüssel benutzen. Abnahme: der
+  Korpus `F:D Dateien` mit **Namen** verglichen, nicht nur mit Werten — die bisherigen
+  Läufe vergleichen die Merkmalsliste ohne Kennung und hätten den Fall nicht gesehen, wenn
+  er nicht zufällig als einziger Unterschied dagestanden hätte.
 
 <a id="rm-210"></a>
 
@@ -1937,12 +1974,25 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   (`test_a_ball_that_is_the_whole_body_stays_a_ball` an Kugel **und** Torus,
   `test_the_skin_judgement_only_counts_patches_without_a_shape`).
 
-  **Offen ist die Breitenabnahme am Korpus**, und sie hat eine benannte Frage: Die Stücke
-  eines gescheiterten Flecks werden jetzt nach *allen* ganzen Flecken eingepasst statt
-  unmittelbar nach ihrem eigenen. Die zweite Fassung hatte beim Zurückstellen ganzer Flecken
-  zwei Kegel mehr am Gartenschlauchhalter und zwei Verrundungen mehr am Beckenreiniger
-  gefunden, weil `_cylinder_beside_a_torus` die Ringkandidaten in anderer Folge sieht. Ob das
-  hier ebenso greift, sagt der Lauf über `F:D Dateien` (489 Körper) — er läuft.
+  **Die Breitenabnahme ist gefahren** — `cb157bf4` gegen `4fa4d38f`, beide als eigener
+  Worktree (ein erster Lauf war wertlos, weil er den Arbeitsbaum als „neu" nahm und ein
+  fremder Commit mitten hineinlief): **489 Körper, 479 zeichengleich, zehn abweichend, kein
+  Fehler**, Erkennung 1 107,6 gegen 1 127,3 s. Die zehn sind der Effekt, den die Regel
+  vorhergesagt hatte — die Stücke eines gescheiterten Flecks kommen jetzt nach *allen* ganzen
+  Flecken, also sieht `_cylinder_beside_a_torus` eine vollständigere Kandidatenliste:
+
+  * **Vier Clips (1 656 Dreiecke): nur die Nummerierung.** Dieselben sechzehn Merkmale mit
+    denselben Werten, andere Namen. Die Ursache ist **kein** Fehler dieses Umbaus, sondern
+    einer im Bestand, den er sichtbar macht — siehe RM-211.
+  * **Ein Kegel mehr** am Gartenschlauchhalter (152 Dreiecke, halber Winkel 71°, 409 → 410).
+  * **Verrundungsgrenzen verschieben sich** an drei Körpern: Beckenreiniger 60 → 62
+    (drei Verrundungen werden fünf kleinere), Flaschenhalter 444 → 445, Kumiko-Schale
+    7 325 → 7 322. Dieselben Rundungen, anders geschnitten; welche der beiden Fassungen die
+    bessere Grenze zieht, ist an der Geometrie nicht entschieden und wäre eine eigene
+    Messung.
+
+  Die Bilanz bleibt: Ein Korrektheitsfehler an drei Kugeln ist behoben, zehn von 489 Körpern
+  verschieben Merkmalsgrenzen, und keiner verliert eines ohne Ersatz.
 
   **Und ein Weg dorthin ist gemessen und wieder ausgebaut.** „Auf der Haut wird nur der
   Zylinder gefragt" — Kegel, Kugel und Ring verwirft `_shapes_on_a_freeform` dort ohnehin,
