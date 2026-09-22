@@ -74,10 +74,22 @@ def test_starting_set_is_present() -> None:
 
 
 def test_every_printer_has_a_plausible_build_volume() -> None:
+    """Jeder Drucker trägt einen Bauraum und die Maße seines Verfahrens.
+
+    FDM: Düse und Bahn. Resin: Pixel und Mindestwand, und Düse wie Bahn auf
+    null — dieses Verfahren hat keine (RM-071).
+    """
     for identifier, printer in profiles.printer_profiles().items():
         width, depth, height = printer.build_volume
         assert min(width, depth, height) > 50.0, identifier
         assert max(width, depth, height) < 1000.0, identifier
+        if printer.is_resin:
+            assert printer.nozzle_diameter == 0.0, identifier
+            assert printer.extrusion_width == 0.0, identifier
+            assert 0.0 < printer.pixel_size <= 0.1, identifier
+            assert 0.0 < printer.minimum_wall <= 1.0, identifier
+            assert 0.0 < printer.layer_height <= 0.1, identifier
+            continue
         assert printer.nozzle_diameter > 0.0, identifier
         assert printer.extrusion_width >= printer.nozzle_diameter, identifier
 

@@ -325,7 +325,8 @@ def check_printable(pattern: str, pitch: float, depth: float, printer: PrinterPr
 
     Zwei Fragen, beide beantwortbar, ohne etwas zu rechnen:
 
-    * Ist die schmalste Struktur breiter als die Düse? Was schmaler ist, wird
+    * Ist die schmalste Struktur breiter als das kleinste Detail des Druckers
+      — die Düse bei FDM, der Bildpunkt bei Resin? Was schmaler ist, wird
       nicht gedruckt — es verschwindet, und das Teil kommt glatt heraus.
     * Ist die Prägung tiefer als eine Schicht? Was flacher ist, fällt beim
       Runden der Schichthöhe weg.
@@ -334,18 +335,25 @@ def check_printable(pattern: str, pitch: float, depth: float, printer: PrinterPr
     die passen würde, steht in der Meldung.
     """
     narrowest = pitch * LAND_SHARE
-    if narrowest < printer.nozzle_diameter:
-        needed = printer.nozzle_diameter / LAND_SHARE
+    detail = printer.smallest_detail
+    if narrowest < detail:
+        needed = detail / LAND_SHARE
         raise ValidationError(
             "pitch",
             _(
+                "Bei dieser Teilung sind die Stege schmaler als ein Bildpunkt — sie "
+                "werden nicht belichtet. Die Teilung muss mindestens so groß sein wie "
+                "in „needed_mm“ angegeben."
+            )
+            if printer.is_resin
+            else _(
                 "Bei dieser Teilung sind die Stege schmaler als die Düse — sie werden "
                 "nicht gedruckt. Die Teilung muss mindestens so groß sein wie in "
                 "„needed_mm“ angegeben."
             ),
             value=pitch,
             constraint="nozzle_width",
-            values={"needed_mm": round(needed, 2), "nozzle_mm": printer.nozzle_diameter},
+            values={"needed_mm": round(needed, 2), "nozzle_mm": detail},
             suggestions=[replace(CORRECT_INPUT, label=_("Teilung vergrößern"))],
         )
     if depth < printer.layer_height:

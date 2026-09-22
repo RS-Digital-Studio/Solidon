@@ -435,16 +435,37 @@ def machine_missing(setup: SlicerSetup, profile: Profile) -> list[Finding]:
 
 
 def detect(executable: Path | str) -> SlicerSetup:
-    """Was für ein Slicer das ist. Erkennt an seinem Namen (§29)."""
+    """Was für ein Slicer das ist. Erkennt an seinem Namen (§29).
+
+    Ein Programm, dessen Namen Solidon nicht kennt, ist seit dem 22.09.2026
+    kein Fehler mehr, sondern die Familie ``other``: Es bekommt die Datei ins
+    Fenster und sonst nichts. Bis dahin scheiterte schon das bloße Öffnen an
+    einer Übersetzung, die beim Öffnen niemand braucht — ein Resin-Slicer
+    kam damit nie an die Reihe (Resin-Konzept §4). Dass der Konsolenlauf für
+    diese Familie nicht führt, sagt :func:`slice_model` an seiner Stelle.
+    """
     path = Path(executable)
     flavour = slicer_keys.flavour_of(path.name)
-    if flavour is None:
+    return SlicerSetup(executable=path, flavour=flavour or "other")
+
+
+def only_opens(setup: SlicerSetup) -> bool:
+    """Bekommt dieses Programm die Datei nur ins Fenster — ohne Profil,
+    Konfiguration und Konsolenlauf?"""
+    return setup.flavour == "other"
+
+
+def _refuse_untranslated(setup: SlicerSetup) -> None:
+    """Der Konsolenweg gibt es für ein Programm ohne Familie nicht (§29)."""
+    if only_opens(setup):
         raise ExternalToolError(
-            tool=path.name,
-            detail=_("Solidon kennt die Kommandozeile dieses Programms nicht."),
+            tool=setup.name,
+            detail=_(
+                "Solidon kennt die Kommandozeile dieses Programms nicht. Öffnen Sie die "
+                "Datei in seinem Fenster oder wählen Sie einen anderen Slicer."
+            ),
             suggestions=(CHOOSE_SLICER, EXPORT_ONLY),
         )
-    return SlicerSetup(executable=path, flavour=flavour)
 
 
 def as_mapping(settings: PrintSettings, flavour: SlicerFlavour) -> dict[str, str]:
@@ -1305,6 +1326,7 @@ def write_config(
     Profilnamen (``MaterialSlot.material``), wird der als Unterlage genommen;
     sonst gilt für alle das eine aus dem ``setup``.
     """
+    _refuse_untranslated(setup)
     setup = replace(setup, machine_profile=machine_for(setup, profile))
 
     # Gerechnet wird in dem Zweig, der es braucht: Die Orca-Familie schreibt
@@ -2910,6 +2932,7 @@ def slice_model(
     """
     if cancelled is not None:
         cancelled.raise_if_cancelled()
+    _refuse_untranslated(setup)
     # §2 C: die Druckdatei ist ein herausgegebenes Ergebnis — wie der Export.
     activation.require(activation.SLICER)
     # Absolut, bevor irgendetwas damit geschieht: der Lauf unten setzt sein

@@ -1250,6 +1250,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "solver": _("Rechenstufe"),
     "stopped_at": _("Angehalten bei Schritt"),
     "taken": _("Vergeben"),
+    "technology": _("Verfahren"),
     "thickness": _("Wandstärke"),
     "tool": _("Programm"),
     "actual": _("Tatsächlich"),
@@ -1297,6 +1298,9 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "dependencies": _("Begleitdateien"),
     "dependency": _("Begleitdatei"),
     "depth": _("Tiefe"),
+    # ``export.tessellated``: wie weit die Dreiecke der Exportvernetzung von
+    # den Flächen des exakten Körpers abweichen dürfen (RM-071).
+    "deflection": _("Größte Abweichung"),
     "deviation": _("Abweichung"),
     # ``perceive.freeform``: wie viele Rundformen die Erkennung auf einer
     # Freiform wegließ — der Kunde liest die Zahl im Prüfbericht.

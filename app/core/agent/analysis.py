@@ -159,10 +159,14 @@ def _printability(chosen: dict[str, SceneObject], profile: Profile) -> list[str]
             facts.append(f"{len(islands)} {tr('Inseln (ab mm)')}: {heights}")
         if spans > 0.0:
             facts.append(f"{tr('längste Brücke')} {format_length(spans)}")
-        if thinnest is not None and thinnest < profile.printer.nozzle_diameter * 2.0:
+        # Gegen die Mindestwand des Profils, nicht gegen zwei Düsen: Das war
+        # dieselbe Zahl in einer zweiten Herleitung — und bei Resin gibt es
+        # keine Düse, die Grenze steht dort im Druckerprofil.
+        least = profile.minimum_wall_thickness
+        if thinnest is not None and thinnest < least:
             facts.append(
                 f"{tr('dünnste Struktur')} {format_length(thinnest)} "
-                f"({tr('Düse')} {format_length(profile.printer.nozzle_diameter)})"
+                f"({tr('Mindestwand')} {format_length(least)})"
             )
         lines.append(f"{object_id}: " + ", ".join(facts))
     return lines

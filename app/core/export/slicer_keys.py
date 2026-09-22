@@ -24,7 +24,19 @@ from typing import Final, Literal, NamedTuple
 
 from app.i18n import TranslatableText, _
 
-SlicerFlavour = Literal["prusa", "orca", "cura"]
+SlicerFlavour = Literal["prusa", "orca", "cura", "other"]
+"""Die Familie eines Slicers — und ``other`` für jedes Programm, dessen
+Einstellungen Solidon nicht übersetzt.
+
+``other`` ist die zweite Übergabeart aus §29 in Reinform: Das Programm
+bekommt die geschriebene Datei in sein Fenster und sonst nichts — kein
+Profil, keine Konfiguration, kein Konsolenlauf, kein Rücklesen. Bis zum
+22.09.2026 verlangte schon das bloße Öffnen eine Familie, die übersetzt, und
+ein Resin-Slicer (ChituBox, Lychee, die Hersteller-Slicer) scheiterte daran,
+obwohl er dafür nichts brauchte (Resin-Konzept §4). Jedes Prädikat unten
+antwortet für ``other`` mit „nein“, und :func:`app.core.export.handover.slice_model`
+sagt, dass dieser Weg dort nicht führt.
+"""
 
 #: In welches Profil des Slicers ein Wert gehört.
 #:
@@ -708,6 +720,7 @@ ADHESION_KEYS: Final[dict[SlicerFlavour, dict[str, tuple[str, ...]]]] = {
         "brim": ("brim_width",),
         "raft": ("raft_surface_layers",),
     },
+    "other": {},
 }
 
 
@@ -720,6 +733,7 @@ TABLES: Final[dict[SlicerFlavour, tuple[Entry, ...]]] = {
     "prusa": _entries(PRUSA),
     "orca": _entries(ORCA),
     "cura": _entries(CURA),
+    "other": (),
 }
 
 
@@ -813,6 +827,7 @@ NOT_TAKEN_BY: Final[dict[SlicerFlavour, frozenset[str]]] = {
             "filament.cost_per_kg",
         }
     ),
+    "other": frozenset(),
 }
 
 
@@ -825,8 +840,11 @@ def takes(flavour: SlicerFlavour, path: str) -> bool:
     einem Regler ziehen zu lassen, der bei seinem Slicer nichts tut.
 
     Die Antwort steht in :data:`NOT_TAKEN_BY` und ist gemessen; warum sie
-    nicht aus den Tabellen kommen kann, steht dort.
+    nicht aus den Tabellen kommen kann, steht dort. Ein Programm ohne Familie
+    nimmt nichts entgegen — es bekommt die Datei und keinen Wert.
     """
+    if flavour == "other":
+        return False
     return path not in NOT_TAKEN_BY[flavour]
 
 
@@ -853,9 +871,12 @@ def needs_bed_translation(flavour: SlicerFlavour) -> bool:
     """Muss Solidon die Eingabe vor der Übergabe zur Bettecke verschieben?
 
     CuraEngine verschiebt ein zentriertes STL selbst um die halbe Bettgröße;
-    Prusa- und Orca-Projekte erhalten bereits Maschinenkoordinaten.
+    Prusa- und Orca-Projekte erhalten bereits Maschinenkoordinaten. Ein
+    Programm, das Solidon nur öffnet, bekommt die Teile um den Ursprung: Es
+    ordnet beim Laden selbst an, und ein Bauraum, den Solidon nicht kennt,
+    hat auch keine Ecke, zu der sich verschieben ließe.
     """
-    return flavour != "cura"
+    return flavour not in {"cura", "other"}
 
 
 # --- Was eine Familie kann, und was sie von uns braucht -------------------------
@@ -984,8 +1005,10 @@ def has_readable_profiles(flavour: SlicerFlavour) -> bool:
     Für ``prusa`` nicht, und das ist kein Mangel: Eine PrusaSlicer-``.ini``
     läuft eigenständig, sobald Düse und Bettform darin stehen, und die
     schreibt Solidon selbst (§29). Es gibt dort also nichts auszuwählen.
+    Für ``other`` auch nicht — Solidon kennt den Bestand dieses Programms
+    nicht und liest ihn nicht.
     """
-    return flavour != "prusa"
+    return flavour in {"orca", "cura"}
 
 
 def reads_assembly_file(flavour: SlicerFlavour) -> bool:
@@ -997,8 +1020,12 @@ def reads_assembly_file(flavour: SlicerFlavour) -> bool:
     Es bekommt ein STL mit allen Teilen der Platte; Namen und Materialslots
     liest es ohnehin nicht, und seine Einstellungen kommen über die
     Kommandozeile.
+
+    Ein Programm, das Solidon nur öffnet, bekommt aus demselben Grund STL:
+    Es ist das eine Format, das jeder Slicer liest — auch der rudimentäre
+    Hersteller-Slicer eines Resin-Druckers, dessen 3MF-Seite niemand kennt.
     """
-    return flavour != "cura"
+    return flavour not in {"cura", "other"}
 
 
 def knows_plates(flavour: SlicerFlavour) -> bool:

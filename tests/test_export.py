@@ -45,6 +45,7 @@ from app.core.types import (
     Source,
     SourceOrigin,
 )
+from app.core.units import MAX_FACET_SAG
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -1542,31 +1543,40 @@ def test_every_flavour_answers_every_property() -> None:
     Gegenprobe gefahren: Jedes der Prädikate einmal auf ``True`` festgenagelt,
     jedes Mal wird diese Tabelle rot.
     """
+    # ``other`` ist seit dem 22.09.2026 die vierte Familie: ein Programm, dem
+    # Solidon nur die Datei ins Fenster gibt (RM-071). Es antwortet auf jede
+    # Eigenschaft mit „nein" — bis auf die Bettkoordinaten, die eine Aussage
+    # über einen G-Code sind, den es nie schreibt.
     expected: dict[str, dict[SlicerFlavour, bool]] = {
         # Seit dem 05.09.2026 jede: Der Drucker misst von der Ecke, gleich
         # welcher Slicer die Datei schreibt (CORE-17, siehe das Prädikat).
-        "wants_bed_coordinates": {"prusa": True, "orca": True, "cura": True},
-        "needs_bed_translation": {"prusa": True, "orca": True, "cura": False},
-        "has_user_profile_tree": {"prusa": False, "orca": True, "cura": False},
-        "has_filament_profiles": {"prusa": False, "orca": True, "cura": False},
-        "reads_settings_from_project_file": {"prusa": False, "orca": True, "cura": False},
-        "names_its_own_output": {"prusa": False, "orca": True, "cura": False},
-        "has_readable_profiles": {"prusa": False, "orca": True, "cura": True},
-        "reads_assembly_file": {"prusa": True, "orca": True, "cura": False},
-        "takes_a_machine_profile": {"prusa": False, "orca": True, "cura": False},
+        "wants_bed_coordinates": {"prusa": True, "orca": True, "cura": True, "other": True},
+        "needs_bed_translation": {"prusa": True, "orca": True, "cura": False, "other": False},
+        "has_user_profile_tree": {"prusa": False, "orca": True, "cura": False, "other": False},
+        "has_filament_profiles": {"prusa": False, "orca": True, "cura": False, "other": False},
+        "reads_settings_from_project_file": {
+            "prusa": False,
+            "orca": True,
+            "cura": False,
+            "other": False,
+        },
+        "names_its_own_output": {"prusa": False, "orca": True, "cura": False, "other": False},
+        "has_readable_profiles": {"prusa": False, "orca": True, "cura": True, "other": False},
+        "reads_assembly_file": {"prusa": True, "orca": True, "cura": False, "other": False},
+        "takes_a_machine_profile": {"prusa": False, "orca": True, "cura": False, "other": False},
         # **Die einzige Zeile, in der Cura allein steht**, und sie fehlte hier,
         # bis die Vollständigkeitsprüfung darunter sie ans Licht holte: Nur
         # neben CuraEngine liegt eine Datei, die jeden gültigen Schlüssel nennt
         # (``fdmprinter.def.json``). Sie ist dort die einzige Gegenprobe, die
         # es gibt, denn CuraEngine schreibt seine wirksame Konfiguration nicht
         # in den G-Code — Prusa und Orca tun es und prüfen sich damit selbst.
-        "has_key_definitions": {"prusa": False, "orca": False, "cura": True},
+        "has_key_definitions": {"prusa": False, "orca": False, "cura": True, "other": False},
         # Mehrere Platten in einer Projektdatei — die Orca-Familie speichert
         # ihre Projekte so; PrusaSlicer und Cura kennen eine Platte je Datei.
-        "knows_plates": {"prusa": False, "orca": True, "cura": False},
+        "knows_plates": {"prusa": False, "orca": True, "cura": False, "other": False},
     }
     flavours = set(get_args(SlicerFlavour))
-    assert len(flavours) >= 3, f"zu wenige Familien gefunden: {flavours}"
+    assert len(flavours) >= 4, f"zu wenige Familien gefunden: {flavours}"
 
     for name, answers in expected.items():
         assert set(answers) == flavours, f"{name}: Tabelle und Literal weichen ab"
@@ -1631,10 +1641,14 @@ def _solid(object_id: str = "obj_2", name: str = "Flansch") -> SceneObject:
             return object()
 
         @property
+        def deflection(self) -> float:
+            return MAX_FACET_SAG
+
+        @property
         def solid_count(self) -> int:
             return 1
 
-        def to_mesh(self) -> object:
+        def to_mesh(self, *, deflection: float | None = None) -> object:
             return body()
 
     return SceneObject(id=object_id, name=name, mesh=Attrappe())  # type: ignore[arg-type]

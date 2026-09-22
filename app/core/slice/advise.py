@@ -183,7 +183,15 @@ def advise(
     Passung sagt, dass zwei Flächen aufeinandergehen, ein Verbinderdurchmesser
     sagt, wie dick der Zapfen dabei ist — und nur die zweite Angabe lässt sich
     gegen die Bahnbreite rechnen.
+
+    **Für einen Resin-Drucker bleibt die Liste leer.** Jede Regel hier spricht
+    über Düse, Bahn, Bett, Lüfter oder Rückzug — für Resin nicht falsch
+    justiert, sondern gegenstandslos. Ein Bericht, in dem neun von zwanzig
+    Zeilen fürs eigene Verfahren leer laufen, wirkt nicht hochwertig, sondern
+    unaufmerksam (Resin-Konzept B4).
     """
+    if profile.printer.is_resin:
+        return []
     advice: list[SettingAdvice] = []
     advice += _from_machine(settings, profile)
     advice += _from_material(settings, profile)
@@ -1129,8 +1137,14 @@ def warnings_for(
 
     Herkunft ``internal``: das ist geschlossen aus Profil und Maschine, nicht
     aus einer geslicten Datei gemessen (Regel 14).
+
+    Und für Resin nichts — aus demselben Grund wie bei :func:`advise`: ASA
+    ist ein Filament, das Bett heizt kein Harz, und eine Brücke gibt es in
+    einem Harzbad nicht (Resin-Konzept B4).
     """
     findings: list[Finding] = []
+    if profile.printer.is_resin:
+        return findings
 
     if profile.material.id in WARPING_MATERIALS and not profile.printer.enclosed:
         findings.append(

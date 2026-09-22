@@ -297,6 +297,11 @@ def _source_lines(document: Document) -> list[str]:
 def _scene_line(scene: Scene) -> str:
     profile = scene.profile
     printer = profile.printer.id if profile else "-"
+    # Das Verfahren steht dabei, wo es nicht das übliche ist: Ohne das Wort
+    # schlüge der Agent Elefantenfuß-Ausgleich und Brim für ein Harzbad vor
+    # (Resin-Konzept §10).
+    if profile is not None and profile.printer.is_resin:
+        printer = f"{printer} ({tr('Resin')})"
     material = profile.material.id if profile else "-"
     state = ""
     if profile is not None:

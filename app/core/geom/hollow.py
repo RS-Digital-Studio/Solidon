@@ -289,6 +289,17 @@ def below_printable_wall(wall: float, profile: Profile | None) -> Finding | None
     least = profile.minimum_wall_thickness
     if wall >= least - EPS_GEOM:
         return None
+    # Dieselbe Frage, zwei Verfahren: Bei Resin gibt es keine Düse, die eine
+    # Bahn legt — die Wand bricht beim Waschen oder reißt von der Folie. Ein
+    # eigener Code, damit der Befundkatalog eines Resin-Projekts keine Düse
+    # nennt (Resin-Konzept B4).
+    if profile.printer.is_resin:
+        return Finding(
+            code="hollow.wall_below_minimum",
+            severity="warning",
+            message=_("Die Wand ist dünner, als dieser Drucker sie stehen lässt."),
+            values={"wall_mm": round(wall, 2), "least_mm": round(least, 2)},
+        )
     return Finding(
         code="hollow.wall_below_nozzle",
         severity="warning",

@@ -19,7 +19,7 @@ import tempfile
 from collections.abc import Mapping
 from dataclasses import asdict, replace
 from pathlib import Path
-from typing import Any, Final
+from typing import Any, Final, cast, get_args
 
 from app.core.errors import FileWriteError, ValidationError
 from app.core.knowledge.tables import read_table
@@ -31,6 +31,7 @@ from app.core.types import (
     MaterialProfile,
     PrinterProfile,
     PrintSettings,
+    PrintTechnology,
     Profile,
     SceneObject,
     Tolerance,
@@ -41,6 +42,24 @@ _log = get_logger(__name__)
 
 DEFAULT_PRINTER: Final = "generic-220"
 DEFAULT_MATERIAL: Final = "pla"
+
+#: Das allgemeine Resin-Gerät — die Vorlage, von der ein eigener Resin-Drucker
+#: abgeleitet wird, wie ``DEFAULT_PRINTER`` für FDM.
+DEFAULT_RESIN_PRINTER: Final = "generic-resin-130"
+
+#: Das Material, mit dem ein neues Projekt an einem Resin-Drucker beginnt.
+#: Ein Filament wäre dort eine FDM-Aussage vor dem ersten Klick.
+DEFAULT_RESIN_MATERIAL: Final = "resin"
+
+#: Vorgaben für ein Resin-Profil, dem die Tabelle nichts sagt — dieselbe Rolle
+#: wie die 0,4er Düse und die 0,2er Schicht bei FDM: der Bestand der Tabelle
+#: und der übliche Drucker. 50 µm Schicht und Pixel sind die Werkseinstellung
+#: der verbreiteten MSLA-Geräte; 0,4 mm Wand ist die Untergrenze, die
+#: Hersteller-Leitfäden für freistehende Wände nennen (Formlabs: 0,3 mm
+#: gestützt, 0,4 mm ungestützt), nicht die, mit der ein Teil auch hält.
+RESIN_LAYER_HEIGHT: Final = 0.05
+RESIN_PIXEL_SIZE: Final = 0.05
+RESIN_MINIMUM_WALL: Final = 0.4
 
 _DATA_DIR: Final = Path(__file__).parent / "data"
 
@@ -77,17 +96,35 @@ def _printer_from_table(identifier: str, table: Mapping[str, Any], source: Path)
             detail=_("Die Druckkontur ist ungültig. Prüfen Sie das Druckerprofil."),
             values={"file": str(source)},
         ) from exc
-    nozzle = float(table.get("nozzle_diameter", 0.4))
+    technology = str(table.get("technology", "fdm"))
+    if technology not in get_args(PrintTechnology):
+        raise ValidationError(
+            field=f"{identifier}.technology",
+            detail=_("Das Druckverfahren muss „fdm“ oder „resin“ sein."),
+            values={"file": str(source), "technology": technology},
+        )
+    resin = technology == "resin"
+    # Ein Resin-Drucker hat keine Düse und keine Bahn: Beide Zahlen stehen
+    # auf null, damit ein Leser, der das Verfahren nicht fragt, nicht mit
+    # einer 0,4er Düse rechnet, die es nicht gibt. Die Schichthöhe hat er —
+    # eine andere, deshalb eine eigene Vorgabe.
+    nozzle = 0.0 if resin else float(table.get("nozzle_diameter", 0.4))
     result = PrinterProfile(
         id=identifier,
         title=str(table.get("title", identifier)),
         build_volume=(float(volume[0]), float(volume[1]), float(volume[2])),
         nozzle_diameter=nozzle,
-        layer_height=float(table.get("layer_height", 0.2)),
-        extrusion_width=float(table.get("extrusion_width", round(nozzle * 1.05, 3))),
+        layer_height=float(table.get("layer_height", RESIN_LAYER_HEIGHT if resin else 0.2)),
+        extrusion_width=(
+            0.0 if resin else float(table.get("extrusion_width", round(nozzle * 1.05, 3)))
+        ),
+        technology=cast(PrintTechnology, technology),
+        pixel_size=float(table.get("pixel_size", RESIN_PIXEL_SIZE)) if resin else 0.0,
+        minimum_wall=float(table.get("minimum_wall", RESIN_MINIMUM_WALL)) if resin else 0.0,
         enclosed=bool(table.get("enclosed", False)),
-        bed_temperature_max=int(table.get("bed_temperature_max", 100)),
-        nozzle_temperature_max=int(table.get("nozzle_temperature_max", 260)),
+        # Und keine Heizung: Ein Harzbad hat weder Bett noch Düse zu wärmen.
+        bed_temperature_max=0 if resin else int(table.get("bed_temperature_max", 100)),
+        nozzle_temperature_max=0 if resin else int(table.get("nozzle_temperature_max", 260)),
         vendor=str(table.get("vendor", "")),
         printable_area=contour,
         bed_exclusions=exclusions,
@@ -133,6 +170,7 @@ def _material_from_table(
             calibration_nozzle_diameter=float(table.get("calibration_nozzle_diameter", 0.0)),
             calibration_layer_height=float(table.get("calibration_layer_height", 0.0)),
             calibration_extrusion_width=float(table.get("calibration_extrusion_width", 0.0)),
+            technology=_material_technology(identifier, table, source),
         )
     except KeyError as missing:
         raise ValidationError(
@@ -198,12 +236,15 @@ def save_printer(profile: PrinterProfile) -> PrinterProfile:
         raise ValidationError(
             field="printer.title", detail=_("Geben Sie Ihrem Drucker einen Namen.")
         )
-    measurements = (*profile.build_volume, profile.nozzle_diameter)
+    measurements: tuple[float, ...]
+    if profile.is_resin:
+        measurements = (*profile.build_volume, profile.pixel_size, profile.minimum_wall)
+        complaint = _("Bauraum, Pixelgröße und Mindestwand müssen größer als null sein.")
+    else:
+        measurements = (*profile.build_volume, profile.nozzle_diameter)
+        complaint = _("Bauraum und Düsendurchmesser müssen größer als null sein.")
     if not all(math.isfinite(value) and value > 0 for value in measurements):
-        raise ValidationError(
-            field="printer.build_volume",
-            detail=_("Bauraum und Düsendurchmesser müssen größer als null sein."),
-        )
+        raise ValidationError(field="printer.build_volume", detail=complaint)
     target = user_profiles_dir() / "printers.toml"
     table = _read_table(target) if target.is_file() else {}
     values = {
@@ -298,14 +339,65 @@ def material(identifier: str) -> MaterialProfile:
     return profiles[identifier]
 
 
+def _material_technology(
+    identifier: str, table: Mapping[str, Any], source: Path
+) -> PrintTechnology:
+    """Das Verfahren eines Materials; ohne Angabe ein Filament."""
+    technology = str(table.get("technology", "fdm"))
+    if technology not in get_args(PrintTechnology):
+        raise ValidationError(
+            field=f"{identifier}.technology",
+            detail=_("Das Druckverfahren muss „fdm“ oder „resin“ sein."),
+            values={"file": str(source), "technology": technology},
+        )
+    return cast(PrintTechnology, technology)
+
+
 def make_profile(printer_id: str = DEFAULT_PRINTER, material_id: str = DEFAULT_MATERIAL) -> Profile:
     """Das Paar, für das eine Szene gerechnet wird."""
     return Profile(printer=printer(printer_id), material=material(material_id))
 
 
+def default_material_for(printer_id: str) -> str:
+    """Das Material, mit dem ein neues Projekt an diesem Drucker beginnt.
+
+    PLA an einem FDM-Drucker, Harz an einem Resin-Drucker — und ein
+    unbekannter Drucker bleibt bei PLA, denn dann rechnet die Szene ohnehin
+    mit dem allgemeinen FDM-Gerät. Erststart und Druckerwechsel fragen hier,
+    damit ein Resin-Projekt nicht mit einem Filament beginnt, das es nie
+    druckt (Resin-Konzept §4).
+    """
+    known = printer_profiles().get(printer_id)
+    if known is not None and known.is_resin:
+        return DEFAULT_RESIN_MATERIAL
+    return DEFAULT_MATERIAL
+
+
+def material_for(printer_id: str, current: str) -> str:
+    """Das Material, das an diesem Drucker gilt: das bisherige, wenn es zu
+    seinem Verfahren passt, sonst die Vorgabe des Verfahrens.
+
+    Wer die Maschine wechselt, wechselt nicht das Filament — solange die neue
+    Maschine ein Filament druckt. Von FDM auf Resin umgestellt bliebe PLA in
+    einem Harzbad stehen, und jeder Satz über das Material wäre falsch.
+    """
+    known = printer_profiles().get(printer_id)
+    chosen = material_profiles().get(current)
+    if known is None:
+        return current or DEFAULT_MATERIAL
+    if chosen is not None and chosen.fits(known):
+        return current
+    return default_material_for(printer_id)
+
+
 def for_process(profile: Profile, settings: PrintSettings | None) -> Profile:
-    """Bezieht Prozessmessungen auf das tatsächliche Druckraster des Projekts."""
-    if settings is None:
+    """Bezieht Prozessmessungen auf das tatsächliche Druckraster des Projekts.
+
+    Bei Resin bleibt das Profil, wie es ist: Dort gibt es kein Bahnraster,
+    das eine Messung binden könnte, und die Werte des FDM-Satzes würden die
+    Nullen einer Düse überschreiben, die es nicht gibt.
+    """
+    if settings is None or profile.printer.is_resin:
         return profile
     return replace(
         profile,
