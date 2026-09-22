@@ -1753,7 +1753,12 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   gefahren: 80, 178, 217 und 649 bestanden. Drei Punkte dafür im Changelog
   0.5.0 in sechs Sprachen. Entwicklungstor danach (22.09.2026): Sammelgruppe 13 600 bestanden, 48 übersprungen; Ruff, Format und mypy je 0; 84 Mustertests. **Offen:** ein dichtes Noppenfeld mit 266 000 Dreiecken
   braucht vor dem Muster 28 s, und die gehen an 2 042 Zylindereinpassungen
-  der Grunderkennung — vorbestehend, kein Teil des Musters.
+  der Grunderkennung — vorbestehend, kein Teil des Musters. Und nach dem
+  Neuzeichnen um den ganzen Umfang bleibt eine Mantelfacette (28 Dreiecke,
+  10 mm²) als eigene Fläche im Baum stehen: Sie berührt kein gekrümmtes
+  Dreieck mehr und fällt damit aus der Rückgewinnung in
+  `features._large_facet_faces` — die offene Stelle, die dort im Kommentar
+  steht, nicht eine des Musters.
 
 ## Bedienung und Darstellung
 <a id="rm-197"></a>
