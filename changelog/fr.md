@@ -34,6 +34,12 @@ dans `website/version.json`.
 - Un modèle fermé libère sa mémoire ; avant, quelques centaines de mégaoctets par modèle restaient occupés.
 - Un modèle avec beaucoup de petites faces, comme un motif en nid d'abeille, garde ses perçages et ses congés. Avant, il n'affichait aucune caractéristique.
 
+### Motifs
+
+- Un nid d'abeille, un moletage, des nervures, des vagues ou des picots apparaissent dans l'arbre comme un seul motif avec pas, largeur de cellule et profondeur — autour d'une poignée aussi.
+- Un motif se supprime d'un clic ou se repose avec un nouveau pas, une nouvelle largeur de cellule et une nouvelle profondeur. Les cellules restent où elles étaient.
+- Une texture autour d'un cylindre suit la courbure : les rainures ont partout la même profondeur, et un motif sur toute la circonférence se referme sans couture. Le pas passe à la valeur qui convient.
+
 ### Modifier sur le modèle exact
 
 - Les corps de base sont toujours créés avec de vraies faces et arêtes. La case « Modifier faces et arêtes plus tard » a disparu ; les anciens projets se calculent sans changement.

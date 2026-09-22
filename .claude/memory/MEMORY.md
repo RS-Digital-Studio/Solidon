@@ -95,6 +95,7 @@
 - [trimesh-Hash ist kein Merkerschlüssel](trimesh-hash-ist-kein-merkerschluessel.md) — hash(mesh) rechnet je Aufruf (0,44 ms an 200k Dreiecken); id + weakref; je Frage ein eigener Merker, sonst verdrängt die häufige Frage die seltene.
 - [Korpusprobe vor einer neuen Merkmalsart](korpusprobe-vor-einer-neuen-merkmalsart.md) — 193 Dateien, drei Treffer: Halter richtig, ein Schild mit 24 Buchstaben als „Rauschen"; die Fehltreffer stehen in Modellen, die kein Test baut.
 - [Mittel über Symmetrisches entscheidet nach Rauschen](mittel-ueber-symmetrisches-entscheidet-nach-rauschen.md) — vertieft/erhaben aus dem Mittel gegen die Mittelebene: an einer durchgehenden Zelle 10⁻¹⁵ mal so, mal so; erst fragen, ob die Frage eine Antwort hat.
+- [Bündig heißt bündig mit dem Netz](buendig-heisst-buendig-mit-dem-netz.md) · [Naht: wählen, nicht schneiden](naht-nicht-schneiden-sondern-waehlen.md) — Stopfen auf die Facetten, an ihren Grenzen geteilt; Teilung zum Teiler des Umfangs, je Zelle einmal ganz.
 
 ## Shell und Git
 

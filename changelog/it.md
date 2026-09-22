@@ -33,6 +33,12 @@ scrive in `website/version.json`.
 - Un modello chiuso libera la sua memoria; prima restavano occupati alcune centinaia di megabyte per modello.
 - Un modello con molte facce piccole, come un motivo a nido d'ape, conserva i suoi fori e raccordi. Prima non mostrava nemmeno una caratteristica.
 
+### Motivi
+
+- Un nido d'ape, una zigrinatura, nervature, onde o bugne compaiono nell'albero come un motivo con passo, larghezza di cella e profondità, anche intorno a un'impugnatura. Prima erano centinaia di facce.
+- Un motivo si rimuove con un clic o si rimette con nuovo passo, larghezza di cella e profondità. Le celle restano dov'erano.
+- Una texture intorno a un cilindro segue la curvatura: le scanalature sono ugualmente profonde, e un motivo lungo tutta la circonferenza si chiude senza giunzione. Il passo va al valore che torna.
+
 ### Modificare sul modello esatto
 
 - I corpi base nascono sempre con facce e spigoli reali. La casella «Modificare facce e spigoli più tardi» è sparita; i progetti vecchi si calcolano senza cambiamenti.

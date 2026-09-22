@@ -34,6 +34,12 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Un modelo cerrado libera su memoria; antes quedaban unos cientos de megabytes por modelo.
 - Un modelo con muchas caras pequeñas, como un patrón de panal, conserva sus taladros y redondeos. Antes no mostraba ni una sola característica.
 
+### Patrones
+
+- Un panal, un moleteado, nervios, ondas u hoyuelos aparecen en el árbol como un patrón con paso, ancho de celda y profundidad, también alrededor de un mango. Antes eran cientos de caras.
+- Un patrón se elimina con un clic o se vuelve a poner con nuevo paso, ancho de celda y profundidad. Las celdas se quedan donde estaban.
+- Una textura alrededor de un cilindro sigue la curvatura: las ranuras tienen la misma profundidad y un patrón en toda la circunferencia cierra sin costura. El paso se ajusta al valor que encaja.
+
 ### Editar sobre el modelo exacto
 
 - Los cuerpos básicos se crean siempre con caras y aristas reales. La casilla «Editar caras y aristas más tarde» ha desaparecido; los proyectos antiguos se calculan sin cambios.

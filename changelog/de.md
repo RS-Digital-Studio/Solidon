@@ -58,6 +58,12 @@ Nutzen da und sonst nichts.
 - Ein geschlossenes Modell gibt seinen Speicher frei; vorher blieben einige hundert Megabyte je Modell liegen.
 - Ein Modell mit vielen kleinen Flächen, etwa einem Wabenmuster, behält seine Bohrungen und Rundungen. Vorher stand es ohne ein einziges Merkmal da.
 
+### Muster
+
+- Ein Wabenmuster, ein Rändel, Rippen, Wellen oder Noppen stehen im Baum als ein Muster mit Teilung, Zellbreite und Tiefe — auch um einen Griff. Vorher waren es Hunderte Flächen.
+- Ein Muster lässt sich mit einem Klick entfernen oder mit neuer Teilung, Zellbreite und Tiefe neu setzen. Die Zellen bleiben, wo sie waren.
+- Eine Textur um einen Zylinder folgt der Rundung: Rillen sind überall gleich tief, und ein Muster um den ganzen Umfang schließt ohne Naht. Die Teilung rückt dafür auf das Maß, das aufgeht.
+
 ### Bearbeiten am exakten Modell
 
 - Grundkörper entstehen immer mit echten Flächen und Kanten. Der Haken „Flächen und Kanten später bearbeiten“ ist gefallen; alte Projekte rechnen unverändert.

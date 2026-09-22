@@ -79,7 +79,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-193 — Die Erkennung an einer glatten Generator-Freiform kostet Minuten für null Merkmale](#rm-193) | Geometrie, Erkennung und Druckvorbereitung | Der Drache aus TripoSG braucht seit dem Review 37,7 s statt 482 (ein Fleck fragt nur die Ringe, an die er grenzt; die Flächenrollen blockweise); was bleibt, sind 2 275 Kegelverfeinerungen an Stücken, deren Achse aus den Normalen nicht bestimmbar ist. Zu entscheiden von Robert: eine Freiformentscheidung **vor** der Nachtrennung — ein Fleck über der Hälfte der Oberfläche, der keine Grundform ist, wird nicht in Stücke geteilt und eingepasst; das kostet tangential eingeblendete Zapfen |
 | [RM-201 — Ein hohler Körper hält die 300 ms der Schichtanalyse nicht](#rm-201) | Geometrie, Erkennung und Druckvorbereitung | Die neue Leistungsmarke `slice_medium_hollow` (200 000 Dreiecke, Wand 1,5 mm) misst 1,5 s für §31 „300 ms": 3 658 Puffer, 796 Differenzen und 718 STRtree-Anfragen je Lauf — die Stufen je Schicht stapeln oder das Ziel für Schalen neu fassen |
 | [RM-202 — Die Formabweichung am Ring schließt nur auf 0,65 mm](#rm-202) | Geometrie, Erkennung und Druckvorbereitung | Das Verfeinerungsbudget des Torus gilt je Aufruf; an einem Ring bleibt die Klammer 0,65 mm breit, wo Ebene, Zylinder, Kugel und Kegel geschlossen rechnen — Budget je Dreieck oder eine geschlossene Kandidatenmenge für den Torus |
-| [RM-207 — Ein Wabenmuster ist ein Merkmal, nicht 1 199 Flächen](#rm-207) | Geometrie, Erkennung und Druckvorbereitung | Gebaut auf `rm-207-muster` (`607a796a`): die acht Texturen von *Textur aufbringen* und jedes Gitter gleicher Zellen sind ein `pattern` mit Teilung, Zellbreite, Tiefe und Feld; *Merkmal entfernen* füllt die Zellen, *Merkmal ändern* zeichnet sie neu. Offen: Release-Abnahme am Halter, Muster auf gewölbten Trägern, die Grunderkennung an dichten Texturen (25 s für 32 000 Flächen) |
+| [RM-207 — Ein Wabenmuster ist ein Merkmal, nicht 1 199 Flächen](#rm-207) | Geometrie, Erkennung und Druckvorbereitung | Gebaut auf `rm-207-muster`, geht mit 0.5.0 hinaus: die acht Texturen von *Textur aufbringen* und jedes Gitter gleicher Zellen sind ein `pattern` mit Teilung, Zellbreite, Tiefe und Feld — auf Ebenen und um Zylinder; *Merkmal entfernen* füllt die Zellen, *Merkmal ändern* zeichnet sie neu; das Merkmalfenster zeigt es am Halter. Offen: ein dichtes Noppenfeld (266 000 Dreiecke) braucht vor dem Muster 28 s für 2 042 Zylindereinpassungen |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Der Mac ist gefahren; die Zoom-Dämpfung ist seit dem 16.09. eine Rampe statt einer Klippe und am Gerät zu bestätigen; offen bleiben Linux, die 3DxWare-Mausemulation und die Bildrate an 1 Mio. Dreiecken |
 | [RM-203 — Die Ansicht rechnet je Bild und je Klick, was sie je Auswertung rechnen könnte](#rm-203) | Bedienung und Darstellung | Kanten und Schattenhüllen entstehen je Auswertung im Hauptthread (200 000 Dreiecke: 57 + 71 ms) statt im `_SceneMeshWorker`; `_redraw_feature_patch` kostet an einer Fläche der 360k-Platte 0,41 s; `show_scene` läuft am historischen Bohrschritt je Tastendruck; der Zeiger ruht 16 ms nicht, bevor er fragt — jeden Posten am echten Renderer messen, dann verlegen |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | `show_feature` leert und baut je Auswahl achtzehn Widgets neu (`_build_action`, 80 ms je Klick); `_settle_lock` ist seit dem Review ohne `findChildren`. Weg: `_Handling` mutabel mit `entries/widgets/fixed`, Wiederverwendung je (Operation, Felder, Schritt, Gruppengröße), Werte über `refresh_feature_fields` |
@@ -1727,18 +1727,44 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Zellen wo das Muster nur ganze hatte, ein `anchor` hält beim Neuzeichnen
   eine Zelle an ihrem Platz (sonst wurden aus sechs Rippen fünf und zwei
   Stummel), und *Merkmal ändern* steht an einem fremden Gitter grau.
-  Entwicklungstor am Zweig (22.09.2026): Sammelgruppe 13 574 bestanden, 48 übersprungen; Ruff, Format und mypy je 0; 67 Mustertests. Fenster und Leistung bleiben beim Release. **Offen:** die Release-Abnahme am Halter im Fenster; Muster auf
-  gewölbten Trägern (`apply_texture` mit `wrap="cylinder"` — der Träger ist
-  ein Zylinder, das Gitter liegt in der Abwicklung); die Grunderkennung an
-  dichten Texturen (32 140 Flächen an 105 000 Dreiecken kosten 25 s, bevor
-  das Muster sie auf sieben Merkmale faltet); zwei vorbestehende Funde des
-  Reviews an `apply_texture` selbst, beide eine Entscheidung: E1
-  (`check_printable`) prüft nur `pitch·LAND_SHARE`, nicht die schmalste
-  Rille des Stils (Kreuzrändel 0,21 Teilungen), und die Noppen der Vorgabe
-  berühren sich (Radius = Teilung/2), weshalb ein um 90 Grad gedrehtes
-  Noppenfeld auf 30 mal 20 in 35 Bohrungen, 5 Langlöcher und 16 Rundungen
-  zerfällt statt in ein Muster — die Deckfläche zerfällt in Inseln. Beides
-  änderte, was `apply_texture` bei gleichen Werten zeichnet (`cache_version`).
+  Entwicklungstor am Zweig (22.09.2026): Sammelgruppe 13 574 bestanden, 48
+  übersprungen; Ruff, Format und mypy je 0; 67 Mustertests. **Am selben Tag
+  nachgezogen, nichts verschoben (Entscheidung Robert: „alles soll
+  funktionieren"):** Muster auf **Zylindern** — der Träger ist ein Stift,
+  gemessen wird in seiner Abwicklung (`Frame`: Umfang und Achse, die Höhe
+  zum Radius; die Naht in der größten Lücke zwischen den Zellen), das Merkmal
+  trägt `carrier_axis` und `carrier_diameter`, seine Mitte liegt auf dem
+  Zylinder und die Normale radial. Entfernen legt die Stopfen auf die
+  **Facetten** des Mantels, an jeder Facettengrenze geteilt (`Frame.facets`,
+  `split_by_plane` des exakten Kerns): bündig mit dem Kreis stand die Stufe
+  am Rand mit Wänden quer zur Achse, und der Mantel war danach kein Zylinder
+  mehr (135 Flächen statt eines Stifts). Ändern biegt das flache Werkzeug
+  um die Achse (`Field.placed`) und zeichnet ein Feld über den ganzen Umfang
+  periodisch. Dazu `apply_texture` selbst: `wrapped` teilt das Feld vor dem
+  Biegen (`refined_for_bending`, `mesh_ops.refined` — konform und je Schale
+  getrennt; Rillen sind überall gleich tief, aus 0,8 wurden vorher 0,725),
+  ein Feld über den Umfang bekommt die Teilung, die aufgeht (`wrap_pitch`,
+  Finding `texture.pitch_wrapped`, 3,04 statt 3 um Ø 30), und wird je Zelle
+  einmal gewählt statt an der Naht geschnitten (`_one_turn`: zwei
+  aufeinandergebogene Hälften verschweißte die Rechnung nicht — 16 mm² Haut,
+  der Stift in zwei). Gemessen an Ø 30 mal 30: Kreuzrändel erhaben, Rippen
+  und Waben vertieft einmal herum, Noppen als Feld — alle vier erkannt
+  (Tiefe 0,80), entfernt (das Volumen exakt das Vieleck, danach ein Stift
+  und zwei Flächen) und mit neuer Teilung neu gesetzt (24 statt 31 Rillen,
+  keine halbe an der Naht). Die Grunderkennung an dichten Texturen: Flächen
+  entstehen in zwei Schritten (`_face_candidates`; Träger und Innenlage nur
+  für die, die das Muster nicht verschluckt), gleichgerichtete Flächen
+  fragen einen STRtree (`_face_roles`) — das dichte Kreuzrändel von 40 auf
+  2,6 s, die Wabe von 25 auf 3,2 s. E1 fragt je Stil nach der schmalsten
+  Stelle (`narrowest_structure`; Kreuzrändel ein Fünftel der Teilung), die
+  Noppen der Vorgabe halten Abstand (`DIMPLE_FILL`, das gedrehte Feld ist
+  ein Muster). Die Fensterabnahme am Halter steht als Test im Merkmalfenster
+  (Teilung, Zellbreite, Zelltiefe, Ändern und Entfernen an diesem Merkmal —
+  und „Teilung", nicht „Steigung"); die vier Fensterdateien dazu einzeln
+  gefahren: 80, 178, 217 und 649 bestanden. Drei Punkte dafür im Changelog
+  0.5.0 in sechs Sprachen. Entwicklungstor danach (22.09.2026): Sammelgruppe 13 600 bestanden, 48 übersprungen; Ruff, Format und mypy je 0; 84 Mustertests. **Offen:** ein dichtes Noppenfeld mit 266 000 Dreiecken
+  braucht vor dem Muster 28 s, und die gehen an 2 042 Zylindereinpassungen
+  der Grunderkennung — vorbestehend, kein Teil des Musters.
 
 ## Bedienung und Darstellung
 <a id="rm-197"></a>
