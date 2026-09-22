@@ -32,6 +32,7 @@ dans `website/version.json`.
 - Une fraisure qui touche deux trous oblongs à égalité reste une face conique au lieu de disparaître dans l'un des deux.
 - Si un modèle se compose de plusieurs coques et qu'on ne peut pas lire avec certitude si l'une d'elles emprisonne de l'air, le rapport le dit sous forme d'avertissement.
 - Un modèle fermé libère sa mémoire ; avant, quelques centaines de mégaoctets par modèle restaient occupés.
+- Un modèle avec beaucoup de petites faces, comme un motif en nid d'abeille, garde ses perçages et ses congés. Avant, il n'affichait aucune caractéristique.
 
 ### Modifier sur le modèle exact
 

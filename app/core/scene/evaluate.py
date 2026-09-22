@@ -140,10 +140,18 @@ _log = get_logger(__name__)
 #: seinen Bezeichner, und daran hängen Operationen und Passungen (§21.2) — eine
 #: enge Grenze schnitte ein Lochblech mit sechshundert Bohrungen ab, das
 #: legitim ist. Gefangen werden soll der Ausreißer, nicht der Alltag.
-#: Die Produktgrenze bleibt bis zur Release-Abnahme unverändert. Dazu gehören
-#: der dichte Rückfall der Zuordnung und alle nachfolgenden Verbraucher; ein
-#: funktionaler Lebenslauftest oberhalb der Grenze ersetzt diese Abnahme nicht.
-FEATURE_LIMIT_COUNT = 1_000
+#:
+#: **Tausend war der Alltag** (22.09.2026): Roberts Schraubendreherhalter mit
+#: Wabenmuster — 7 956 Dreiecke, sauber verschweißt — bringt 1 199 ebene
+#: Flächen, sechs Verrundungen, vier Bohrungen mit Senkung mit, und Solidon
+#: zeigte davon nichts, mit dem Rat, das Modell zu verschweißen. Die Grenze
+#: stammte aus der Zeit der quadratischen Zuordnung; die heutige ordnet
+#: gemessen 800 Merkmale in 0,28 s zu, 2 500 in 0,40 s und 4 000 in 0,65 s.
+#: Der Halter selbst: Bohrung setzen 0,8 s, Verschieben 1,2 s mit allen 1 213
+#: Merkmalen — unter den zwei Sekunden aus §31. Fünftausend fängt weiter den
+#: Ausreißer (eine ungeschweißte STL mit einem Merkmal je Dreieck), nicht mehr
+#: das Muster.
+FEATURE_LIMIT_COUNT = 5_000
 
 
 @dataclass(frozen=True, slots=True)
@@ -2249,8 +2257,9 @@ def _with_features(
     # Dreiecksgrenze oben zählt Dreiecke; diese zählt, was daraus geworden ist,
     # und die zwei hängen nicht aneinander. Ein ungeschweißtes Netz weit
     # unterhalb der Dreiecksgrenze brachte ein Merkmal je Dreieck mit, und die
-    # Zuordnung darunter ist quadratisch in deren Zahl (siehe
-    # ``FEATURE_LIMIT_COUNT``).
+    # Zuordnung darunter war quadratisch in deren Zahl (siehe
+    # ``FEATURE_LIMIT_COUNT`` — die Grenze liegt seit dem Wabenmuster so, dass
+    # ein ehrliches Muster darunter bleibt).
     #
     # **Gar keine Zuordnung und nicht eine halbe.** Die erkannten Merkmale
     # trotzdem einzuhängen wäre die verlockende Hälfte — und die falsche: Ihre
@@ -2265,9 +2274,9 @@ def _with_features(
                 code="perceive.too_many",
                 severity="info",
                 message=_(
-                    "Dieses Modell hat zu viele einzelne Merkmale, um sie über die "
-                    "Schritte hinweg zuzuordnen. Verschweißen Sie es beim Laden, oder "
-                    "reparieren Sie es."
+                    "Dieses Modell hat mehr einzelne Merkmale, als Solidon über die "
+                    "Schritte hinweg zuordnet. Ist es ungeschweißt, verschweißen Sie es "
+                    "beim Laden; sonst bleibt es ohne Merkmale bearbeitbar."
                 ),
                 object_id=entry.id,
                 op_id=operation.id,

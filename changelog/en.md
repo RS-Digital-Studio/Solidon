@@ -31,6 +31,7 @@ it into `website/version.json`.
 - A countersink touching two slots equally stays a cone face instead of vanishing into one of them.
 - If a model consists of several shells and it cannot be read reliably whether one of them traps air, the report says so as a warning.
 - A closed model releases its memory; before, a few hundred megabytes per model stayed behind.
+- A model with many small faces, such as a honeycomb pattern, keeps its bores and fillets. Before, it showed no feature at all.
 
 ### Editing on the exact model
 

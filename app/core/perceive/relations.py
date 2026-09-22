@@ -245,10 +245,11 @@ class _Measured:
     ======================================  ========  =======
 
     Die letzte Zeile ist ein gebauter Fall und kein gemessener Kunde — sie
-    steht hier als **Obergrenze**: Oberhalb von
-    ``scene.evaluate.FEATURE_LIMIT_COUNT`` (tausend) hängt die Auswertung gar
-    keine Merkmale mehr ein, und schlimmer als halb Hohlraum und halb Materie
-    wird die Paarung nicht. Was echte Modelle mitbringen, liegt zwei
+    steht hier als **Obergrenze** für das Gepaarte: Oberhalb von
+    ``scene.evaluate.FEATURE_LIMIT_COUNT`` (fünftausend) hängt die Auswertung
+    gar keine Merkmale mehr ein, und schlimmer als halb Hohlraum und halb
+    Materie wird die Paarung nicht — ein Wabenmuster bringt tausend ebene
+    Flächen mit, aber keine Ketten. Was echte Modelle mitbringen, liegt zwei
     Größenordnungen darunter: über die zwanzig Netze des Korpus gemessen sind
     es höchstens **16** Merkmale.
     """

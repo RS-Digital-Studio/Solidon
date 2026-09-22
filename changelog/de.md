@@ -56,6 +56,7 @@ Nutzen da und sonst nichts.
 - Eine Senkung, die zwei Langlöcher gleich berührt, bleibt eine Kegelfläche, statt in einem der beiden zu verschwinden.
 - Besteht ein Modell aus mehreren Schalen und lässt sich nicht sicher lesen, ob eine davon Luft einschließt, steht das als Warnung im Prüfbericht.
 - Ein geschlossenes Modell gibt seinen Speicher frei; vorher blieben einige hundert Megabyte je Modell liegen.
+- Ein Modell mit vielen kleinen Flächen, etwa einem Wabenmuster, behält seine Bohrungen und Rundungen. Vorher stand es ohne ein einziges Merkmal da.
 
 ### Bearbeiten am exakten Modell
 

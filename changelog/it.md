@@ -31,6 +31,7 @@ scrive in `website/version.json`.
 - Una svasatura che tocca due asole in modo uguale resta una faccia conica invece di sparire in una delle due.
 - Se un modello è fatto di più gusci e non si può leggere con certezza se uno di essi intrappola aria, il rapporto lo dice come avviso.
 - Un modello chiuso libera la sua memoria; prima restavano occupati alcune centinaia di megabyte per modello.
+- Un modello con molte facce piccole, come un motivo a nido d'ape, conserva i suoi fori e raccordi. Prima non mostrava nemmeno una caratteristica.
 
 ### Modificare sul modello esatto
 

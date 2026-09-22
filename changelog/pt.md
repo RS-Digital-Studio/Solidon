@@ -31,6 +31,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Um escareado que toca dois rasgos por igual continua a ser uma face cónica em vez de desaparecer num deles.
 - Se um modelo é composto por várias cascas e não se consegue ler com segurança se alguma prende ar, o relatório di-lo como aviso.
 - Um modelo fechado liberta a sua memória; antes ficavam algumas centenas de megabytes por modelo.
+- Um modelo com muitas faces pequenas, como um padrão em favo de mel, mantém os seus furos e arredondamentos. Antes não mostrava uma única característica.
 
 ### Editar no modelo exato
 

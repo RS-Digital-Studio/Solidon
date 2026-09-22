@@ -32,6 +32,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Un avellanado que toca dos ranuras por igual sigue siendo una cara cónica en lugar de desaparecer en una de ellas.
 - Si un modelo consta de varias cáscaras y no se puede leer con seguridad si alguna encierra aire, el informe lo indica como advertencia.
 - Un modelo cerrado libera su memoria; antes quedaban unos cientos de megabytes por modelo.
+- Un modelo con muchas caras pequeñas, como un patrón de panal, conserva sus taladros y redondeos. Antes no mostraba ni una sola característica.
 
 ### Editar sobre el modelo exacto
 

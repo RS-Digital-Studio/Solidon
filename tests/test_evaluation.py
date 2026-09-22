@@ -2458,6 +2458,54 @@ def test_a_model_below_the_feature_limit_is_matched_as_before(
     )
 
 
+def test_a_plate_with_a_pocket_pattern_keeps_its_holes() -> None:
+    """Ein Muster aus tausend ebenen Flächen ist Alltag, kein Ausreißer.
+
+    Roberts Schraubendreherhalter mit Wabenmuster (22.09.2026): 7 956 Dreiecke,
+    verschweißt, 1 199 ebene Flächen, sechs Verrundungen, vier Bohrungen mit
+    Senkung — und die Auswertung hängte **nichts** ein, mit dem Rat, das Modell
+    zu verschweißen. Die Grenze von tausend stammte aus der Zeit der
+    quadratischen Zuordnung. Hier dieselbe Gestalt im Kleinen: 220 Taschen und
+    zwei Bohrungen, über tausend Merkmale — und die Bohrungen bleiben.
+    """
+    from importlib import import_module
+
+    import trimesh
+
+    from app.core.geom.boolean import boolean
+    from app.core.geom.mesh import MeshData
+    from app.core.types import Operation, SceneObject
+
+    evaluate_module = import_module("app.core.scene.evaluate")
+    plate = trimesh.creation.box(extents=(100.0, 60.0, 8.0))
+    plate.apply_translation((0.0, 0.0, 4.0))
+    tools = []
+    for column in range(22):
+        for row in range(10):
+            pocket = trimesh.creation.box(extents=(2.4, 2.4, 3.0))
+            pocket.apply_translation((-47.0 + column * 4.4, -25.0 + row * 5.0, 8.0))
+            tools.append(pocket)
+    for x in (-40.0, 40.0):
+        bore = trimesh.creation.cylinder(radius=3.0, height=20.0, sections=48)
+        bore.apply_translation((x, 25.0, 4.0))
+        tools.append(bore)
+    cut = boolean("difference", [MeshData.of(plate), MeshData.of(trimesh.util.concatenate(tools))])
+    entry = SceneObject(id="obj_1", name="Halter", mesh=cut.mesh)
+
+    findings: list[Finding] = []
+    result = evaluate_module._with_features(
+        entry, {}, Operation(id=1, op="load"), lambda q, c: c[0], findings
+    )
+
+    assert [item.code for item in findings if item.code == "perceive.too_many"] == []
+    kinds = [feature.kind for feature in result.features.values()]
+    assert kinds.count("hole") == 2, "die zwei Bohrungen neben dem Muster"
+    assert kinds.count("face") > evaluate_module.FEATURE_LIMIT_COUNT // 5, (
+        "ohne das Muster prüft der Test nur eine Platte mit zwei Löchern"
+    )
+    assert len(kinds) > 1_000, "die alte Grenze — darunter wäre der Fall nie aufgefallen"
+
+
 def test_the_recognition_can_be_cancelled(monkeypatch: pytest.MonkeyPatch) -> None:
     """§2.8: Was rechnet, ist abbrechbar — auch die Erkennung.
 
