@@ -249,6 +249,15 @@ ROUND_FIT_PRECISION: Final = float(np.finfo(float).eps ** 0.75)
 #: Eine Rechengrenze, keine Geometrietoleranz.
 FIT_SOLVER_POINTS: Final = 4096
 
+#: Bis zu wie vielen Punkten ein Fleck seine Deckungsgleichheit ausweist.
+#:
+#: Die Kennzahl in :func:`_rigid_key` steht auf **allen** paarweisen
+#: Punktabständen und kostet damit quadratisch. Für einen Splitterfleck aus
+#: sieben Dreiecken ist das ein Zehntel einer Millisekunde, für die Haut einer
+#: Figur mit dreihunderttausend wäre es teurer als jede Einpassung, die sie
+#: spart. Darüber bekommt ein Fleck keine Kennzahl und wird einzeln gerechnet.
+RIGID_KEY_POINTS: Final = 96
+
 
 def _solver_rows(count: int, *, keep: int | None = None) -> np.ndarray | None:
     """Die Zeilen, an denen der Löser rechnet — ``None`` heißt: alle.
@@ -264,6 +273,51 @@ def _solver_rows(count: int, *, keep: int | None = None) -> np.ndarray | None:
     if keep is not None and keep % step != 0:
         rows = np.append(rows, keep)
     return rows
+
+
+def _rigid_key(body: trimesh.Trimesh, patch: Sequence[int]) -> tuple[Any, ...] | None:
+    """Woran zwei Flecken als dasselbe Stück Geometrie zu erkennen sind.
+
+    Ein Muster besteht aus wiederholten Zellen, und seine Streben sind
+    deckungsgleich bis auf eine starre Bewegung: An der Kumiko-Schale sind von
+    1 990 eingepassten Flecken nur 445 verschieden (22.09.2026). Weil ein
+    Kegelwinkel, ein Rückstand und eine Güte unter Drehung und Verschiebung
+    unverändert bleiben, ist die zweite Einpassung dieselbe Rechnung mit
+    denselben Zahlen.
+
+    Die Kennzahl steht deshalb auf der sortierten Menge **aller** paarweisen
+    Punktabstände, dazu den Kantenlängen jedes einzelnen Dreiecks: Abstände
+    überleben eine starre Bewegung, und die Dreiecke trennen dieselbe
+    Punktwolke mit anderer Vernetzung. Gerundet wird auf :data:`EPS_GEOM` —
+    gröber ginge auch, aber nicht genauer: Bei einem Nanometer entstehen
+    dieselben Klassen wie bei einem Mikrometer, das Muster ist also exakt
+    kopiert und nicht bloß ähnlich.
+
+    ``None`` heißt: Dieser Fleck weist sich nicht aus — er ist zu klein zum
+    Einpassen oder zu groß für die quadratischen Kosten
+    (:data:`RIGID_KEY_POINTS`).
+    """
+    if len(patch) < MIN_PATCH_FACES:
+        return None
+    corners = np.asarray(body.faces, dtype=np.int64)[list(patch)]
+    used = np.unique(corners)
+    if len(used) > RIGID_KEY_POINTS or len(used) < 3:
+        return None
+    points = np.asarray(body.vertices, dtype=float)
+    local = points[used]
+    upper = np.triu_indices(len(used), k=1)
+    gaps = np.sort(_row_lengths((local[:, None, :] - local[None, :, :])[upper]))
+    triangle = points[corners]
+    sides = np.sort(np.linalg.norm(triangle - triangle[:, (1, 2, 0), :], axis=2), axis=1)
+    shape = np.round(sides / EPS_GEOM).astype(np.int64)
+    # Die Dreiecke tragen keine Reihenfolge, also werden sie in eine gebracht:
+    # erst jedes für sich (die drei Kanten aufsteigend), dann alle zusammen.
+    return (
+        len(patch),
+        len(used),
+        np.round(gaps / EPS_GEOM).astype(np.int64).tobytes(),
+        shape[np.lexsort(shape.T[::-1])].tobytes(),
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -464,6 +518,23 @@ CONE_MIN_ANGLE = 5.0
 #: Und ab wann er wieder keiner ist: bei 85 Grad Halbwinkel liegt der Fleck
 #: fast in einer Ebene, und Ebenen erkennt :func:`detect_faces`.
 CONE_MAX_ANGLE = 85.0
+
+#: Ab welchem **gemessenen** Winkel die Einpassung überhaupt beginnt.
+#:
+#: :data:`CONE_MIN_ANGLE` fragt den verfeinerten Winkel, und um ihn zu
+#: bekommen, läuft der Löser. Der Winkel steht aber schon vorher da:
+#: :func:`_fit_cone_read` liest ihn aus den Normalen, bevor es verfeinert —
+#: er ist der ``asin`` ihres mittleren Versatzes zur Achse. Liegt er unter
+#: einem halben Grad, stehen die Normalen praktisch senkrecht auf der Achse,
+#: und das ist ein Zylinder; der Löser würde hundert Auswertungen lang
+#: bestätigen, was die Normalen schon sagen, und `classify` ginge danach in
+#: denselben Zweig.
+#:
+#: Ein Zehntel von :data:`CONE_MIN_ANGLE`, und an drei echten Modellen
+#: gemessen: Der kleinste Startwinkel, aus dem noch ein Kegel wurde, war 0,88
+#: Grad (22.09.2026). Keine Fertigungstoleranz, sondern die Auflösung, ab der
+#: eine Schräge eine Schräge ist.
+CONE_START_ANGLE = 0.5
 
 #: Wie gut ein Fleck zum eingepassten Kegel passen muss.
 #:
@@ -1795,6 +1866,11 @@ def _fitted(
         areas = np.asarray(body.area_faces, dtype=float)
         total_area = float(areas.sum())
         freeform_skin = False
+        #: Kennzahlen von Flecken, an denen der Kegel nichts hergab. Wer
+        #: deckungsgleich zu einem davon ist, bekommt dieselbe leere Antwort,
+        #: ohne dass der Löser noch einmal hundert Auswertungen dafür braucht
+        #: (:func:`_rigid_key`).
+        no_cone_here: set[tuple[Any, ...]] = set()
 
         def classify(patch: list[int]) -> bool:
             """Die erste Form, die auf diesen Fleck passt — oder keine."""
@@ -1816,7 +1892,22 @@ def _fitted(
             # der Achse, beim Kegel um ``sin`` des Halbwinkels daneben.
             #
             # Also: Die Form kommt aus dem Winkel, die Güte aus dem Rückstand.
-            cone = fit_cone(body, patch, check_cancelled=check_cancelled)
+            #
+            # **Ein Muster fragt dieselbe Frage hundertfach.** Die Streben eines
+            # Gitters sind deckungsgleich, und ein Kegelwinkel ändert sich unter
+            # einer starren Bewegung nicht: Wo der Kegel schon an einem
+            # deckungsgleichen Fleck nichts hergab, gibt er auch hier nichts her.
+            # Geteilt wird nur dieses Nein — ein gefundener Kegel wird weiterhin
+            # einzeln gerechnet, denn seine Achse und seine Spitze liegen woanders.
+            # An der Kumiko-Schale sind 1 325 der 1 990 Kegelfits Wiederholungen
+            # und kosten 7,71 der 21,66 Sekunden (22.09.2026).
+            shape = _rigid_key(body, patch)
+            if shape is not None and shape in no_cone_here:
+                cone = None
+            else:
+                cone = fit_cone(body, patch, check_cancelled=check_cancelled)
+                if cone is None and shape is not None:
+                    no_cone_here.add(shape)
             if check_cancelled is not None:
                 check_cancelled()
             if cone is not None and cone.half_angle >= CONE_MIN_ANGLE:
@@ -5265,6 +5356,16 @@ def _refined_fit(
     )
     if not result.success or not np.isfinite(result.x).all() or not np.isfinite(result.fun).all():
         return None
+    # **Wer sein Budget ausschöpft, hat nicht gerechnet, sondern aufgehört**
+    # (RM-210). Ein Lauf am Limit steht irgendwo im Tal, und ob `success`
+    # dort noch zufällig gesetzt ist, entscheidet die letzte Stelle — also die
+    # Lage des Körpers im Raum: Derselbe Fleck aus 32 Dreiecken lieferte um
+    # 13,7 mm verschoben einen Kegel von 53,50 Grad und an seinem Platz
+    # keinen, bei Bit für Bit gleichem Startwert (gemessen am 22.09.2026).
+    # Eine Antwort, die von der Lage abhängt, ist keine Aussage über die
+    # Geometrie.
+    if result.nfev >= ROUND_FIT_EVALUATIONS:
+        return None
     singular = np.linalg.svd(result.jac, compute_uv=False)
     # Unterhalb dieser Grenze verstärkt die Lösung Float64-Rauschen über
     # dessen halbe signifikante Stellen hinaus. Fachliche Krümmungs- und
@@ -5321,6 +5422,13 @@ def _fit_cone_read(
     offset = float(normal_mean @ axis)
     half_angle = math.asin(min(1.0, abs(offset)))
     if half_angle <= EPS_GEOM:
+        return None
+    # **Der Winkel steht hier schon, und darunter gibt es nichts zu verfeinern**
+    # (:data:`CONE_START_ANGLE`). Die Normalen stehen dann praktisch senkrecht
+    # auf der Achse — das ist ein Zylinder, und den fragt `classify` gleich
+    # danach ohnehin. An `Elegoo_erster_Druck.3mf` sparte das 45,6 Prozent der
+    # Kegelzeit, ohne einen einzigen Kegel zu verlieren (22.09.2026).
+    if math.degrees(half_angle) < CONE_START_ANGLE:
         return None
     points = support.points - origin
     # Eine gerade Naht zweier Mantelfacetten ist nur dann eine zusätzliche

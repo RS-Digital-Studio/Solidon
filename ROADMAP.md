@@ -59,7 +59,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-191 — PrusaSlicer verbraucht für dieselbe Übergabe ein Drittel mehr Material](#rm-191) | Geometrie, Erkennung und Druckvorbereitung | Die neun Platten des Regals je Slicer gegen die Prusa-Ausgabe aufschlüsseln: Stützen, Wände oder Füllung — und die Übergabe der Prusa-Schlüssel danach ergänzen |
 | [RM-024 — Gespeicherte Zuordnungsantworten im echten Konfliktfall abnehmen](#rm-024) | Geometrie, Erkennung und Druckvorbereitung | Der Rundlauf steht; gemessen fehlt ein Korpuskörper, dessen erneute Erkennung wirklich mehrdeutig wird |
 | [RM-041 — Innenraum importierter entlüfteter Hohlkörper klären](#rm-041) | Geometrie, Erkennung und Druckvorbereitung | Schätzweg oder dokumentierte Grenze des Innenraums entscheiden |
-| [RM-209 — Die Rundform-Einpassung an Gittermodellen](#rm-209) | Geometrie, Erkennung und Druckvorbereitung | Dreizehn Hebel gemessen, elf tot: Nicht der Löser ist zu langsam, sondern 1 093 von 1 127 Kegelfits sind vergeblich. Es bleiben 35,6 Prozent aus deckungsgleichen Flecken und ein verlustfreier Startwinkel — die fünf Sekunden trägt beides nicht |
+| [RM-209 — Die Rundform-Einpassung an Gittermodellen](#rm-209) | Geometrie, Erkennung und Druckvorbereitung | Gebaut am 22.09.2026: über 37 echte Modelle 220,2 → 142,4 s, median 1,73× und bis 27×. Offen bleibt das §31-Ziel — die Kumiko-Schale steht bei 12,6 s statt unter fünf |
 | [RM-210 — Die Erkennung hängt von der Lage des Körpers ab](#rm-210) | Geometrie, Erkennung und Druckvorbereitung | Dasselbe Modell um 13,7 mm verschoben verliert einen Kegel und eine Verrundung; gedreht kommen fünf dazu. Die Kippstelle ist ein einzelner Fleck mit gleichem Startwert — Entscheidung über „am Limit heißt verworfen" steht aus |
 | [RM-076 — Topologieverlust beim Reduzieren von Eule und Spiderman beheben](#rm-076) | Geometrie, Erkennung und Druckvorbereitung | Eule und Spiderman mit Zielreihe und Topologievergleich reproduzieren |
 | [RM-077 — Reduzierungsziel bei Körpern mit Durchbrüchen erreichen](#rm-077) | Geometrie, Erkennung und Druckvorbereitung | Zielreihen an Körpern mit Durchbrüchen gegen den vorhandenen Rückfall messen |
@@ -834,18 +834,35 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   sondern in seiner Lage im Raum. Das ist RM-210, und solange es offen ist, ist auch das
   Abnahmekriterium dieses Punktes nicht scharf.
 
-  **Was das zusammen heißt, und es ist eine Entscheidung für Robert:** Die dreizehn Hebel zusammen
-  bringen die Schale von 21,7 auf etwa 13,5 Sekunden. Die Abnahme „unter fünf Sekunden" ist mit
-  keiner Änderung am Löser erreichbar, denn 1 127 Kegelfits an 1 412 Splitterflecken sind die
-  Aufgabe selbst. Wer die fünf Sekunden will, muss die Flecken loswerden — also die Frage stellen,
-  warum ein Gitter aus 95 000 Dreiecken überhaupt 1 412 gekrümmte Flecken von median sieben
-  Dreiecken hat. Das ist ein anderer Punkt als dieser.
+  **Gebaut am 22.09.2026, Freigabe Robert („alles abarbeiten"): drei Hebel.** Ein Lauf, der sein
+  Auswertungsbudget ausschöpft, gibt nichts zurück; ein Fleck unter `CONE_START_ANGLE` = 0,5 Grad
+  bekommt keinen Kegellöser; und deckungsgleiche Flecken teilen die leere Kegelantwort
+  (`_rigid_key`). Gemessen an **37 echten Modellen** aus `F:\3D Dateien`, jedes einmal vorher und
+  einmal nachher:
 
-  Abnahme: Entscheidung über den Kongruenzhebel (35,6 Prozent an Mustern, zwei uneinheitliche
-  Klassen, 0,8 Prozent Preis an Körpern ohne Wiederholung) und den Startwinkel (verlustfrei);
-  das §31-Ziel für 200 000 Dreiecke belegt oder begründet angepasst; an allen Modellen des Korpus
-  dieselben Merkmale wie heute — mit der Einschränkung aus RM-210. Gehört zum Leistungsstrang
-  RM-208.
+  | | vorher | nachher | Faktor |
+  |---|---|---|---|
+  | alle 37 zusammen | 220,2 s | 142,4 s | median **1,73×** |
+  | Kumiko-Schale (94 990 Dreiecke) | 27,2 s | 12,6 s | 2,15× |
+  | `Elegoo_erster_Druck.3mf` (227 244) | 9,8 s | 4,4 s | 2,23× |
+  | `desk-organizer-v3` (10 086) | 1,9 s | 0,6 s | 3,12× |
+  | `1x1-bin.stl` (1 944) | 2,1 s | 0,08 s | 27,3× |
+
+  Der schlechteste Wert ist 0,87× an einem Körper von 2 736 Dreiecken — zwei Hundertstelsekunden,
+  also Messrauschen. **Vier der 37 Modelle ändern Merkmale, und zwar nach oben:** An
+  `Elegoo_erster_Druck.3mf` fallen zwei Verrundungen (R4,2) und ein Kegel weg, dafür kommt eine
+  Verrundung mit R2,98 und Rückstand 0,0 dazu; am Gartenschlauchhalter fällt ein Kegel mit
+  Rückstand 0,0137 und es kommen eine Verrundung (R7,24) und ein Kegel mit Rückstand 0,0047 dazu;
+  an der Kumiko-Schale fällt ein Kegel. Die neuen Merkmale haben durchweg kleinere Rückstände als
+  die verlorenen — was wegfällt, stand an der Kippe.
+
+  **Das §31-Ziel bleibt offen.** Die Schale steht bei 12,6 Sekunden, verlangt sind unter fünf.
+  1 127 Kegelfits an 1 412 Splitterflecken sind die Aufgabe selbst; wer die fünf Sekunden will,
+  muss die Flecken loswerden — also fragen, warum ein Gitter aus 95 000 Dreiecken überhaupt
+  1 412 gekrümmte Flecken von median sieben Dreiecken hat. Das ist ein anderer Punkt als dieser.
+
+  Abnahme: das §31-Ziel für 200 000 Dreiecke belegt oder begründet angepasst. Gehört zum
+  Leistungsstrang RM-208.
 
 <a id="rm-210"></a>
 
