@@ -26,3 +26,13 @@ Skript, das nur Dateien anfasst, deren HEAD-Stand kein CR trägt
 (`data.replace(b"\r\n", b"\n")`). Die Prosa selbst prüft ein AST-Vergleich
 (Docstrings entfernt) gegen HEAD: „nur Prosa“ oder „Code geändert“ je Datei.
 Siehe [[der-nachbar-findet-den-fehler]].
+
+**Nachtrag 22.09.2026 — auch das eigene Patch-Skript tut es.** Ein Python-
+Skript, das eine Datei mit `read_text` liest, ersetzt und mit `write_text`
+zurückschreibt, wandelt unter Windows jedes LF in CRLF (`newline=None`
+heißt `os.linesep`). Drei Dateien standen so vollständig auf CRLF, bevor
+`git diff --stat` es sagte. Immer `write_text(..., newline="\n")`; zurück
+geht es wie oben mit `data.replace(b"\r\n", b"\n")`. Und der Text dieses
+Nachtrags selbst kam zweimal über ein Bash-Heredoc mit echten Zeilenumbrüchen
+statt `\n` in den Backticks an — deutschen Text und Escape-Folgen schreibt das
+Write-Werkzeug, nicht die Shell ([[heredoc-frisst-den-backslash]]).

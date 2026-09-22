@@ -56,6 +56,7 @@
 ## Messen und Prüfen
 
 - [Nachricht ist ein Satzende](nachricht-ist-ein-satzende.md) · [Prüfstand ohne Profil](pruefstand-ohne-profil-meldet-fremden-fehler.md)
+- [Kundenweg im Fenster messen](kundenweg-im-fenster-messen-nicht-im-kern.md)
 - [Saubere Messung, falsche Frage](saubere-messung-falsche-frage.md) · [Gemessene Frage](gemessene-frage-ist-nicht-die-gestellte.md) · [Bestätigung verstärkt](bestaetigung-verstaerkt-die-fehlannahme.md) · [Am Eingang drehen](am-eingang-drehen.md)
 - [Was die Suite nicht findet](was-die-suite-nicht-findet.md) · [Lehre schützt ihre Gestalt](lehre-schuetzt-nur-ihre-eigene-gestalt.md) · [Benannte Falle](benannte-falle-schuetzt-nicht.md) · [Geprüft fühlt sich vollständig an](geprueft-fuehlt-sich-wie-vollstaendig-an.md)
 - [Begrenzt am falschen Maß](begrenzt-am-falschen-mass.md) · [Schranke aus einem Messwert](schranke-aus-einem-messwert-ist-geraten.md) · [Obergrenze ≠ Zusicherung](obergrenze-ist-keine-zusicherung.md) · [Zwei Schwellen](zwei-schwellen-eine-frage.md) · [Schwelle, falsche Achse](schwelle-misst-die-falsche-achse.md)
@@ -63,9 +64,11 @@
 - [Texte altern](texte-altern-mit-ihrer-grenze.md) · [Verweis ins Leere](verweis-auf-nichtexistierendes.md) · [Docstring, ungefahrener Weg](docstring-nennt-den-weg-den-der-test-nicht-faehrt.md) · [Zwei Dinge, eines geprüft](zwei-dinge-nur-eines-geprueft.md)
 - [Wächter sieht nur Getanes](waechter-sieht-nur-das-getane.md) · [Regel gilt weiter](regel-gilt-weiter-als-gemeint.md) · [Wächter zählt das Falsche](waechter-zaehlt-das-falsche.md) · [Wächter-Reichweite](waechter-reichweite-nur-im-kommentar.md) · [Wächter lesen Kommentare](waechter-lesen-kommentare-mit.md)
 - [Verkürzung ist Messung](jede-verkuerzung-ist-eine-messung.md) · [Suche prüft Trefferzahl](suche-prueft-ihre-eigene-trefferzahl.md) · [Iterierte die Schlüssel](messung-iterierte-die-schluessel.md) · [Versatz sieht aus wie viele](versatz-sieht-aus-wie-viele-abweichungen.md)
+- [Prüfstand nimmt den Ladeweg der Anwendung](pruefstand-nimmt-den-ladeweg-der-anwendung.md) — normalise wie die load-Operation; read_mesh allein gab scheinbare Abweichungen.
 - [Testprojekt trifft nicht](testprojekt-trifft-den-fall-nicht.md) · [Voraussetzung nur im Namen](voraussetzung-im-namen-statt-hergestellt.md) · [Nachstellung](pruefstand-misst-seine-nachstellung.md) · [Sollwert aus dem Prüfling](sollwert-aus-dem-pruefling.md)
 - [Eigene Toleranz, fremde Netze](eigene-toleranz-gilt-nicht-fuer-fremde-netze.md) · [Attrappenwert = Rückfallwert](attrappenwert-gleich-rueckfallwert.md)
 - [Lineares Sieb vor der Verfeinerung ist unsicher](lineares-sieb-vor-der-verfeinerung-ist-unsicher.md)
+- [Schranke statt Antwort je Punkt](schranke-statt-antwort-je-punkt.md) — Maximum: exakt nur, was die Schranke heben kann; Nadeln 2,9 → 0,25 s; BVH und Raster gemessen, kein Gewinn.
 - [Natives Volumen mit Bezugspunkt](natives-volumen-mit-bezugspunkt.md)
 - [Fuzzy-Vereinigung ist chaotisch](fuzzy-vereinigung-ist-chaotisch.md)
 - [Gegenprobe bei neuer Bauart](gegenprobe-bei-geaenderter-bauart.md) · [Mutation trifft nicht](mutation-die-den-fall-nicht-trifft.md) · [Fix macht nicht grün](fix-der-nicht-gruen-macht.md) · [Test auf Abwesenheit](test-der-eine-abwesenheit-festschreibt.md)
