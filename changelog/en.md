@@ -61,6 +61,9 @@ it into `website/version.json`.
 - Choosing a hole could make the 3D view fail on some graphics cards. That is fixed.
 - A drag on the handle survives a redraw in the middle of the drag, and a wheel click over a dimension field zooms the view instead of changing the dimension.
 - The first Escape while picking a reference only takes back the pick; the typed values stay.
+- With “Take countersink and steps along”, the bore can also be moved via the dimensions. Shaft and countersink move together, in one step.
+- If Solidon refuses a dimension, the reason stands above the preview instead of just “could not be computed”.
+- The dimension fields stay where they were when you change a value. The dimension whose field you type in lights up in the view.
 
 ### Checking and printing
 

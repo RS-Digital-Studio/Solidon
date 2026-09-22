@@ -61,6 +61,9 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Ao escolher um furo, a vista 3D podia falhar em algumas placas gráficas. Está corrigido.
 - Um arrasto na pega sobrevive a um redesenho a meio do arrasto, e um passo da roda sobre um campo de cota amplia a vista em vez de alterar a cota.
 - O primeiro Escape ao escolher uma referência retira apenas a escolha; os valores digitados mantêm-se.
+- Com «Levar escareado e degraus», o furo também se desloca através das cotas. Haste e escareado movem-se juntos, num só passo.
+- Se o Solidon recusar uma cota, o motivo aparece sobre a pré-visualização em vez de apenas «não foi possível calcular».
+- Os campos de cota ficam onde estavam quando altera um valor. A cota em cujo campo escreve acende-se na vista.
 
 ### Verificar e imprimir
 

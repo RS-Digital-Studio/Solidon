@@ -62,6 +62,9 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Al elegir un agujero, la vista 3D podía fallar en algunas tarjetas gráficas. Está corregido.
 - Un arrastre en el asa sobrevive a un redibujado en mitad del arrastre, y un paso de rueda sobre un campo de cota amplía la vista en lugar de cambiar la cota.
 - El primer Escape al elegir una referencia solo retira la elección; los valores tecleados se conservan.
+- Con «Llevar avellanado y escalones», el taladro también se puede desplazar mediante las cotas. Vástago y avellanado se mueven juntos, en un solo paso.
+- Si Solidon rechaza una cota, el motivo aparece sobre la vista previa en lugar de solo «no se pudo calcular».
+- Los campos de cota se quedan donde estaban cuando cambia un valor. La cota en cuyo campo escribe se ilumina en la vista.
 
 ### Comprobar e imprimir
 

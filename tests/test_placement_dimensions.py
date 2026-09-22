@@ -6,6 +6,7 @@ Kein Renderer und keine Geometrieoperation werden für diese Anordnung benötigt
 
 from __future__ import annotations
 
+import dataclasses
 import math
 from itertools import combinations
 from types import SimpleNamespace
@@ -179,6 +180,53 @@ def test_leaders_swap_their_fields_until_none_of_them_cross(qt_app: QApplication
         widget.deleteLater()
 
 
+def test_old_field_places_serve_until_a_slot_is_taken_or_the_view_turns(
+    qt_app: QApplication,
+) -> None:
+    """Die Anordnung des letzten Aufbaus gilt weiter — bis etwas dagegen spricht.
+
+    Vier Gründe, sie zu verlassen: ein Hindernis auf einem alten Platz, ein
+    Platz außerhalb des Bildes, ein Maß, das weit weg gewandert ist (die
+    Kamera), oder mehr Kreuzungen als in der neuen Anordnung.
+    """
+    from app.ui.placement_flow import _old_places_still_serve
+
+    upper, lower = QWidget(), QWidget()
+    previous = {upper: QRect(10, 10, 100, 30), lower: QRect(10, 60, 100, 30)}
+    fresh = {upper: QRect(40, 10, 100, 30), lower: QRect(40, 60, 100, 30)}
+    pending = [
+        (upper, QPointF(200, 25), QPointF(200, 25)),
+        (lower, QPointF(200, 75), QPointF(200, 75)),
+    ]
+    bounds = QRect(0, 0, 600, 400)
+    assert _old_places_still_serve(previous, fresh, pending, bounds, [])
+    assert not _old_places_still_serve({}, fresh, pending, bounds, []), "beim ersten Aufbau"
+    assert not _old_places_still_serve(previous, fresh, pending, bounds, [QRect(0, 0, 50, 50)]), (
+        "ein Hindernis auf dem alten Platz"
+    )
+    assert not _old_places_still_serve(previous, fresh, pending, QRect(20, 0, 600, 400), []), (
+        "ein alter Platz außerhalb des Bildes"
+    )
+    turned = [
+        (upper, QPointF(500, 350), QPointF(500, 350)),
+        (lower, QPointF(500, 300), QPointF(500, 300)),
+    ]
+    far = {upper: QRect(380, 335, 100, 30), lower: QRect(380, 285, 100, 30)}
+    assert not _old_places_still_serve(previous, far, turned, bounds, []), (
+        "nach einer Kameradrehung liegen die Maße weit weg"
+    )
+    crossed = [
+        (upper, QPointF(200, 75), QPointF(200, 75)),
+        (lower, QPointF(200, 25), QPointF(200, 25)),
+    ]
+    swapped = {upper: QRect(40, 60, 100, 30), lower: QRect(40, 10, 100, 30)}
+    assert not _old_places_still_serve(previous, swapped, crossed, bounds, []), (
+        "die alte Anordnung kreuzt, die neue nicht"
+    )
+    for widget in (upper, lower):
+        widget.deleteLater()
+
+
 def test_placement_ghost_uses_a_filled_surface_without_tessellation_edges(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -305,12 +353,12 @@ def test_a_dimension_line_swallowed_by_the_grip_is_drawn_whole(qt_app: QApplicat
 def test_moving_dimension_ink_keeps_its_renderer_items_and_swaps_their_points(
     qt_app: QApplication,
 ) -> None:
-    """Jeder Aufbau schreibt in dieselben sieben Elemente — nichts sammelt sich an.
+    """Jeder Aufbau schreibt in dieselben acht Elemente — nichts sammelt sich an.
 
     Bis zum 21.09.2026 tauschte jeder Aufbau zehn Elemente aus; pygfx baute
     je neuem Element eine Pipeline, zwölf Millisekunden je Kamerageste. Jetzt
     halten die Elemente Platz (``capacity``), und nur wenn er reißt,
-    entstehen alle sieben neu — auf das Doppelte des Bedarfs, in ihrer
+    entstehen alle acht neu — auf das Doppelte des Bedarfs, in ihrer
     Reihenfolge.
     """
     from tests.test_surface_placement_ui import _Viewport
@@ -323,12 +371,13 @@ def test_moving_dimension_ink_keeps_its_renderer_items_and_swaps_their_points(
     try:
         canvas.refresh()
         first = [entry["item"] for entry in (*renderer.lines, *renderer.surfaces)]
-        assert len(first) == 7, "vier Linien, drei Flächen"
+        assert len(first) == 8, "fünf Linien, drei Flächen"
         assert [entry["name"] for entry in renderer.lines] == [
             "dimension_backdrop",
             "dimension_lines",
             "dimension_leaders",
             "dimension_outline",
+            "dimension_focus",
         ]
         assert [entry["name"] for entry in renderer.surfaces] == [
             "dimension_mark_rim",
@@ -350,13 +399,13 @@ def test_moving_dimension_ink_keeps_its_renderer_items_and_swaps_their_points(
         assert not canvas.shown and not any(item.visible for item in first)
         assert not renderer.removed, "ausgeblendet heißt: bereit für den nächsten Aufbau"
 
-        # Reißt eine Kapazität, entstehen alle sieben neu — in Reihenfolge.
+        # Reißt eine Kapazität, entstehen alle acht neu — in Reihenfolge.
         many = [(QPointF(20, 20 + 6 * index), QPointF(180, 20 + 6 * index)) for index in range(400)]
         canvas.lines = many
         canvas.refresh()
-        assert all(item in renderer.removed for item in first), "alle sieben gingen zurück"
+        assert all(item in renderer.removed for item in first), "alle acht gingen zurück"
         second = [entry["item"] for entry in (*renderer.lines, *renderer.surfaces)]
-        assert len(second) == 7 and not set(second) & set(first)
+        assert len(second) == 8 and not set(second) & set(first)
         assert [entry["name"] for entry in renderer.lines][:2] == [
             "dimension_backdrop",
             "dimension_lines",
@@ -743,6 +792,103 @@ def test_dimension_fields_stand_beside_the_body_and_keep_their_leaders(
         for _tail, anchor in flow._canvas.leaders:
             near = min((anchor - target).manhattanLength() for target in targets)
             assert near < 1.0, ("Verbindung endet nicht an einer Linienmitte", anchor)
+    finally:
+        flow.dispose()
+        session.release()
+        dialog.close()
+        viewport.close()
+
+
+def test_dimension_fields_keep_their_places_when_the_spot_moves_a_little(
+    qt_app: QApplication,
+) -> None:
+    """Ein getippter Wert lässt die Felder stehen (Robert, 22.09.2026: „danach
+    springen sie auch alle und tauschen sich").
+
+    Jeder Aufbau suchte jedem Feld den nächsten freien Platz neu; der Setzpunkt
+    einen Millimeter weiter, und die Kandidaten lagen anders. Ein Feld behält
+    seinen Platz, solange er frei ist und das Maß nicht weit gewandert ist —
+    erst ein großer Sprung, etwa eine Kameradrehung, ordnet neu.
+    """
+    flow, session, viewport, dialog = _layout(qt_app, (900, 600), 1.0, "bottom")
+    try:
+        flow._tool_context = PlacementTool(
+            MeshData(trimesh.creation.cylinder(radius=2.5, height=10))
+        )
+        viewport.renderer.world_to_display = lambda point: (
+            450 + point[0] * 6,
+            300 + point[1] * 6,
+            0.5,
+        )
+        flow.redraw()
+        fields = [*flow._reference_boxes[:2], *flow._centre_measures, flow._reference_boxes[2]]
+        before = {field.objectName(): field.geometry() for field in fields}
+
+        # Der Setzpunkt wandert einen Millimeter — sechs Bildpunkte. Die Felder
+        # folgen höchstens diesem Stück; keines springt an eine andere Kante,
+        # keines tauscht mit einem anderen den Platz.
+        flow._surface = dataclasses.replace(flow._surface, point=(11, 10, 0))
+        flow.redraw()
+        after = {field.objectName(): field.geometry() for field in fields}
+        for name, rect in before.items():
+            moved_by = (after[name].topLeft() - rect.topLeft()).manhattanLength()
+            assert moved_by <= 6, (name, rect, after[name])
+
+        # Und weit weg neu: Die Kamera schwenkt, alles liegt anders.
+        viewport.renderer.world_to_display = lambda point: (
+            450 + point[1] * 6,
+            300 - point[0] * 6,
+            0.5,
+        )
+        flow.redraw()
+        moved = {field.objectName(): field.geometry() for field in fields}
+        assert moved != before, "nach einer Kameradrehung ordnet sich das Bild neu"
+    finally:
+        flow.dispose()
+        session.release()
+        dialog.close()
+        viewport.close()
+
+
+def test_the_measure_with_the_focus_lights_up_in_the_view(qt_app: QApplication) -> None:
+    """Wer in ein Maßfeld klickt, sieht im Bild, was er ändert (Robert,
+    22.09.2026: „ich hab hier auch keine ahnung wo welcher wert hingeht").
+
+    Ein Kantenmaß leuchtet mit seiner Maßlinie **und** seiner Bezugskante, ein
+    Mittenmaß mit seiner Linie; ohne Fokus leuchtet nichts. Gezeichnet wird es
+    als eigenes Element über allen anderen, in der Akzentfarbe.
+    """
+    flow, session, viewport, dialog = _layout(qt_app, (900, 600), 1.0, "bottom")
+    try:
+        flow._tool_context = PlacementTool(
+            MeshData(trimesh.creation.cylinder(radius=2.5, height=10))
+        )
+        viewport.renderer.world_to_display = lambda point: (
+            450 + point[0] * 6,
+            300 + point[1] * 6,
+            0.5,
+        )
+        flow.redraw()
+        assert flow._canvas.focus == [], "ohne Fokus leuchtet nichts"
+        lit = next(entry for entry in viewport.renderer.lines if entry["name"] == "dimension_focus")
+        assert not lit["item"].visible
+
+        edge_field = flow._measures[0]
+        edge_field.setFocus()
+        qt_app.processEvents()
+        flow.redraw()
+        assert len(flow._canvas.focus) == 2, "Bezugskante und Maßlinie"
+        reference, line = flow._canvas.focus
+        assert reference in flow._canvas.references and line in flow._canvas.lines
+        assert lit["item"].visible
+        assert lit["colour"] == viewport.palette().highlight().color().name()
+
+        centre_field = flow._centre_measures[0]
+        centre_field.setFocus()
+        qt_app.processEvents()
+        flow.redraw()
+        assert len(flow._canvas.focus) == 1 and flow._canvas.focus[0] in flow._canvas.lines
+        assert flow._canvas.focus[0] != line, "jetzt leuchtet das andere Maß"
     finally:
         flow.dispose()
         session.release()

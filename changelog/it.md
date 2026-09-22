@@ -61,6 +61,9 @@ scrive in `website/version.json`.
 - Scegliendo un foro, la vista 3D poteva cadere su alcune schede grafiche. È risolto.
 - Un trascinamento sulla maniglia sopravvive a un ridisegno a metà trascinamento, e uno scatto della rotella sopra un campo di quota ingrandisce la vista invece di cambiare la quota.
 - Il primo Esc durante la scelta di un riferimento ritira solo la scelta; i valori digitati restano.
+- Con «Porta con sé svasatura e gradini» il foro si sposta anche tramite le quote. Gambo e svasatura si muovono insieme, in un solo passaggio.
+- Se Solidon rifiuta una quota, il motivo compare sopra l’anteprima invece del solo «non è stato possibile calcolare».
+- I campi quota restano dove erano quando cambiate un valore. La quota nel cui campo scrivete si illumina nella vista.
 
 ### Verificare e stampare
 

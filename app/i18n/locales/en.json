@@ -5883,7 +5883,6 @@
   "Ändern": "Modify",
   "Ändern Sie den Wert von Breite — etwa auf 90. Das ganze Teil folgt sofort, und die Schraubenlöcher bleiben, wo sie hingehören.": "Change the value of Width — to 90, say. The whole part follows at once, and the screw holes stay where they belong.",
   "Ändern Sie links den Parameter Wandstärke — etwa auf 10. Boden und Bausteine folgen; die Buchse sitzt weiter bündig.": "Change the parameter Wall thickness on the left — to 10, say. Base and parts follow; the insert still sits flush.",
-  "Ändern Sie zuerst den Durchmesser mit Einlauf. Verschieben Sie das Merkmal danach über „Merkmal verschieben“.": "First change the diameter including the entry. Then use “Move feature” to reposition the feature.",
   "Ändern Sie „Durchmesser“ auf 80: Der Umriss folgt, die Tasche bleibt in ihrem Verhältnis, und beides bleibt rund. Genau dafür ist eine Bedingung da — sie überlebt die Änderung, ein Punkt nicht.": "Set “Diameter” to 80: the outline follows, the pocket keeps its proportion, and both stay round. That is what a constraint is for — it survives the change, a point does not.",
   "Ändern …": "Change …",
   "Ändert den Durchmesser einer erkannten Bohrung — an einem Langloch seine Breite; der Weg der Schraube bleibt, die Enden wachsen mit.": "Changes the diameter of a recognised hole — on a slot its width; the screw's travel stays, the ends grow with it.",

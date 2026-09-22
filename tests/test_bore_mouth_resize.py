@@ -376,6 +376,63 @@ def test_follow_keeps_the_countersink_width_angle_and_blind_floor(
         assert changed.mesh.volume == pytest.approx(expected, abs=1e-5)
 
 
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+def test_follow_at_a_new_place_moves_shaft_and_countersink_together(
+    profile: Profile, kind: str
+) -> None:
+    """Ein Kantenmaß ändern heißt: die Bohrung samt Senkung dorthin, in einem Schritt.
+
+    Roberts Schraubendreherhalter (22.09.2026): Bei „Senkung und Stufen
+    mitnehmen" luden die Maßfelder im Bild zum Versetzen ein, und der Kern sagte
+    ab — „erst den Durchmesser, dann *Merkmal verschieben*". Jetzt läuft beides
+    als ein Schritt: der Einlauf neu geschnitten, die Kette an der neuen Stelle,
+    an der alten Material, die Kennung dieselbe.
+    """
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.sketch.planes import frame_of
+
+    exact = edit.bore_profile(
+        edit.box(30.0, 24.0, 12.0),
+        [(0.0, 2.0), (3.0, 2.0), (3.0, 10.0), (5.0, 12.0), (0.0, 12.0), (0.0, 2.0)],
+        frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 0.0)),
+    )
+    body = exact if kind == "brep" else as_mesh_data(exact)
+    features = features_of(exact) if kind == "brep" else detect(body)
+    hole = next(f for f in features.values() if f.kind == "hole")
+    source = SceneObject(id="obj_1", name="Senkbohrung", kind=kind, mesh=body, features=features)
+    spec = REGISTRY.get("resize_hole")
+    result = spec.fn(
+        OpContext(
+            scene=Scene(objects={source.id: source}),
+            inputs=[source],
+            params=spec.params(
+                at_feature=hole.id, diameter=8.0, entrance_mode="follow", x=7.0, y=-4.0, z=6.0
+            ),
+            profile=profile,
+            quality="fine",
+            seed=7,
+            progress=lambda fraction, text: None,
+            ask=lambda question, choices: choices[0],
+            cancelled=NeverCancelled(),
+        )
+    )
+    changed = result.outputs[0]
+    mesh = as_mesh_data(changed.mesh)
+    assert mesh.is_watertight
+    # An der alten Stelle ist Material, an der neuen Schaft und Senkung.
+    assert _contains(mesh, [(0.0, 0.0, 6.0), (0.0, 0.0, 11.5)]).all()
+    assert not _contains(mesh, [(7.0, -4.0, 6.0), (7.0 + 4.0 + 1.5, -4.0, 11.9)]).any()
+    assert _contains(mesh, [(7.0 + 4.0 + 2.5, -4.0, 11.9)]).all(), "die Senkung folgt dem Maß"
+    moved = changed.features[hole.id]
+    assert moved.kind == "hole" and moved.params["diameter"] == pytest.approx(8.0, abs=0.05)
+    assert tuple(moved.params["centre"])[:2] == pytest.approx((7.0, -4.0), abs=0.05)
+    sink = next(f for f in changed.features.values() if f.kind == "cone")
+    assert tuple(sink.params["centre"])[:2] == pytest.approx((7.0, -4.0), abs=0.05)
+    assert sink.params["diameter"] == pytest.approx(12.0, abs=0.05)
+
+
 def test_follow_default_is_explicit_only_for_a_suitable_feature_action(profile: Profile) -> None:
     """Alte Operationen behalten keep; die belegte Senkbohrung bietet follow an."""
     from app.core.perceive.actions import actions_for

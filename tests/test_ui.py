@@ -3791,6 +3791,34 @@ def test_the_measures_in_the_view_take_their_twins_out_of_the_panel(window: Main
     )
 
 
+def test_a_refused_measure_shows_the_reason_of_the_core_not_a_generic_sentence(
+    window: MainWindow,
+) -> None:
+    """Hält die Kette an, steht ihr Befund über der Vorschau — nicht „konnte nicht
+    berechnet werden" (Robert, 22.09.2026, am Halter mit Senkung).
+
+    Der Arbeiter meldet erst ``explained`` mit dem Befund und dann ``done``
+    ohne Bild; der zweite Ruf überschrieb den ersten mit dem allgemeinen Satz.
+    """
+    from PySide6.QtTest import QTest
+
+    _object_id, _hole, flow, fields = _hole_fields_in_placement(window)
+    fields["Durchmesser"].set_value_mm(5000.0)
+    assert window.session.wait_for_idle(30_000)
+    banner = window.viewport.banner
+    for _ in range(300):
+        QTest.qWait(50)
+        window.session.wait_for_idle(1_000)
+        if "Vielfaches" in banner.note.text() or "berechnet" in banner.note.text():
+            break
+    assert "übersteigt den Körper um ein Vielfaches" in banner.note.text(), banner.note.text()
+    assert "konnte nicht berechnet werden" not in banner.note.text()
+    assert window._preview_reason == banner.note.text().removeprefix(
+        tr("Keine Vorschau: {reason}").format(reason="")
+    ), "Band und gemerkter Grund sind derselbe Satz"
+    assert flow.active, "die Maßgruppe bleibt stehen — der Wert lässt sich korrigieren"
+
+
 @pytest.mark.parametrize("position_source", ["view", "panel", "normal"])
 def test_panel_dimensions_and_placement_position_are_adopted_together(
     window: MainWindow, position_source: str

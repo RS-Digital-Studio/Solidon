@@ -403,6 +403,65 @@ def _crosses(a: tuple[QPointF, QPointF], b: tuple[QPointF, QPointF]) -> bool:
     )
 
 
+def _old_places_still_serve(
+    previous: Mapping[QWidget, QRect],
+    positions: Mapping[QWidget, QRect],
+    pending: Sequence[tuple[QWidget, QPointF, QPointF]],
+    bounds: QRect,
+    obstacles: Sequence[QRect],
+) -> bool:
+    """Ob die Plätze des letzten Aufbaus den neuen ersetzen dürfen.
+
+    Dieselben Felder in derselben Größe, jedes im Bild, keinem Hindernis und
+    keinem anderen Feld zu nahe, keines weiter von seinem Maß entfernt als der
+    neue Platz plus :data:`STICKY_FIELDS` Feldhöhen — und nicht mehr
+    Kreuzungen als die neue Anordnung. Die Kreuzungen zählt dieselbe Rechnung
+    wie :func:`_untangle`.
+    """
+    if not previous or set(previous) != set(positions):
+        return False
+    wanted = {widget: want for widget, want, _anchor in pending}
+    if any(widget not in wanted for widget in positions):
+        return False
+    for widget, rect in previous.items():
+        fresh = positions[widget]
+        if rect.size() != fresh.size() or not bounds.contains(rect):
+            return False
+        grown = rect.adjusted(-SPACE, -SPACE, SPACE, SPACE)
+        if any(grown.intersects(taken) for taken in obstacles):
+            return False
+        if any(grown.intersects(previous[other]) for other in previous if other is not widget):
+            return False
+        leeway = (QPointF(fresh.center()) - wanted[widget]).manhattanLength() + (
+            STICKY_FIELDS * rect.height()
+        )
+        if (QPointF(rect.center()) - wanted[widget]).manhattanLength() > leeway:
+            return False
+    return _crossings(previous, pending) <= _crossings(positions, pending)
+
+
+def _holds_focus(field: QWidget, focused: QWidget | None) -> bool:
+    """Ob das Feld oder eines seiner Kinder (das Eingabefeld der Drehbox) den Fokus hat."""
+    return focused is not None and (focused is field or field.isAncestorOf(focused))
+
+
+def _crossings(
+    layout: Mapping[QWidget, QRect], pending: Sequence[tuple[QWidget, QPointF, QPointF]]
+) -> int:
+    """Wie oft sich die Zuordnungslinien einer Anordnung kreuzen."""
+    lines = [
+        (QPointF(layout[widget].center()), anchor)
+        for widget, _wanted, anchor in pending
+        if widget in layout
+    ]
+    return sum(
+        1
+        for index, first in enumerate(lines)
+        for second in lines[index + 1 :]
+        if _crosses(first, second)
+    )
+
+
 def _untangle(
     positions: dict[QWidget, QRect],
     pending: Sequence[tuple[QWidget, QPointF, QPointF]],
@@ -529,6 +588,7 @@ class _Dimensions:
         ("dimension_lines", 2.0, 256),
         ("dimension_leaders", 1.5, 2048),
         ("dimension_outline", 2.0, 256),
+        ("dimension_focus", 3.5, 256),
     )
     #: Die Flächenelemente in Zeichenreihenfolge, mit Anfangsplatz in Ecken —
     #: drei je Dreieck, jede Marke ein Fächer aus vierzehn Dreiecken.
@@ -544,6 +604,12 @@ class _Dimensions:
         self.leaders: list[tuple[QPointF, QPointF]] = []
         self.references: list[tuple[QPointF, QPointF]] = []
         self.extensions: list[tuple[QPointF, QPointF]] = []
+        #: Was zum Maß gehört, dessen Feld gerade den Fokus hat — seine
+        #: Maßlinie, seine Bezugskante, seine Verbindung —, in der Akzentfarbe
+        #: über allem anderen (Robert, 22.09.2026: „ich hab hier auch keine
+        #: ahnung wo welcher wert hingeht"). Wer in ein Feld klickt, sieht im
+        #: Bild, was er ändert.
+        self.focus: list[tuple[QPointF, QPointF]] = []
         #: Der Umriss, mit dem das Werkzeug die Oberfläche trifft — ein
         #: geschlossener Zug in Bildkoordinaten. Bei einer Bohrung der Kreis
         #: ihrer Mündung (Befund Robert, 09.09.2026: „es reicht mir, wenn ich
@@ -737,6 +803,9 @@ class _Dimensions:
         ring: list[tuple[QPointF, QPointF]] = []
         if len(self.outline) >= 3 and self.outline_colour is not None:
             ring = list(zip(self.outline, [*self.outline[1:], self.outline[0]], strict=True))
+        lit: list[tuple[QPointF, QPointF]] = []
+        for start, end in self.focus:
+            lit.extend(self._outside_the_clearing(start, end))
         marks = [
             point
             for start, end in self.leaders
@@ -791,11 +860,13 @@ class _Dimensions:
         colour = palette.text().color().name()
         backdrop = palette.window().color().name()
         outline_colour = self.outline_colour.name() if self.outline_colour is not None else colour
+        accent = palette.highlight().color().name()
         wanted: dict[str, tuple[np.ndarray, str]] = {
             "dimension_backdrop": (line_points(self.segments), backdrop),
             "dimension_lines": (line_points(solid), colour),
             "dimension_leaders": (line_points(dashed), colour),
             "dimension_outline": (line_points(ring), outline_colour),
+            "dimension_focus": (line_points(lit), accent),
             # Der Rand der Marke kommt nach den Linien: Er deckt das Ende der
             # Zuordnungslinie ab, damit die Marke frei steht und der Strich
             # nicht bis in sie hineinläuft.
@@ -876,6 +947,11 @@ class _Dimensions:
         )
 
 
+#: Um wie viel näher ein neuer Platz am Maß liegen muss, bevor ein Maßfeld
+#: seinen alten verlässt — in Vielfachen der Feldhöhe (``PlacementFlow``).
+STICKY_FIELDS: Final = 2.0
+
+
 class PlacementFlow(QObject):
     """Eine laufende Platzierung gehört genau einem vorhandenen Träger.
 
@@ -931,6 +1007,9 @@ class PlacementFlow(QObject):
             self._watch(zone)
         self._serial = 0
         self._pending: tuple[int, int, bool] | None = None
+        #: Wo jedes Maßfeld beim letzten Aufbau stand — der Platz bleibt, solange
+        #: er frei ist und das Maß nicht weit gewandert ist (``_STICKY``).
+        self._field_slots: dict[QWidget, QRect] = {}
         self._surface_busy = False
         self._tool_busy = False
         self._tool_again = False
@@ -3468,6 +3547,13 @@ class PlacementFlow(QObject):
                 self._pending = None
                 self._commit_pending = False
                 self._serial += 1
+            if event.type() in (QEvent.Type.FocusIn, QEvent.Type.FocusOut) and any(
+                watched is field or (isinstance(watched, QWidget) and field.isAncestorOf(watched))
+                for field in (*self._measures, *self._centre_measures)
+            ):
+                # Das Maß zum Feld leuchtet, solange das Feld den Fokus hat —
+                # der Fokus ist nach dem Ereignis gesetzt, das Bild folgt.
+                QTimer.singleShot(0, self._redraw_for_focus)
             if event.type() == QEvent.Type.Resize and (
                 watched is self.viewport
                 or watched is getattr(self.viewport.renderer, "widget", None)
@@ -3477,6 +3563,11 @@ class PlacementFlow(QObject):
                 # mitten im Aufbau würde mehrere Linienlisten vermischen.
                 self.redraw()
         return super().eventFilter(watched, event)
+
+    def _redraw_for_focus(self) -> None:
+        """Die Tinte nach einem Fokuswechsel nachziehen — ohne toten Fluss."""
+        if self.active and not self._disposed:
+            self.redraw()
 
     def _body_on_screen(
         self, screen: Callable[[Vec3], QPointF], bounds: QRect, margin: int
@@ -3606,6 +3697,8 @@ class PlacementFlow(QObject):
         self._canvas.leaders = []
         self._canvas.references = []
         self._canvas.extensions = []
+        self._canvas.focus = []
+        focused = QApplication.focusWidget()
         self._canvas.outline = []
         # **Jede Stufe zeigt ihr eigenes Maß.** Die Kantenabstände gehören der
         # Fläche, auf der gesetzt wird — in der Tiefenstufe ist die entschieden,
@@ -3786,7 +3879,8 @@ class PlacementFlow(QObject):
             self._rest.hide()
 
         for index, edge in enumerate(surface.edges[:2]):
-            self._canvas.references.append((screen(edge.start), screen(edge.end)))
+            reference = (screen(edge.start), screen(edge.end))
+            self._canvas.references.append(reference)
             extension = placement.reference_extension(edge, surface.point)
             if extension is not None:
                 self._canvas.extensions.append((screen(extension[0]), screen(extension[1])))
@@ -3794,6 +3888,8 @@ class PlacementFlow(QObject):
             start, end = screen(tuple(foot)), screen(surface.point)
             self._canvas.lines.append((start, end))
             field = self._measures[index]
+            if _holds_focus(field, focused):
+                self._canvas.focus.extend((reference, (start, end)))
             number = next(
                 number
                 for number, reference in enumerate(self._prepared.edges, 1)
@@ -3827,6 +3923,8 @@ class PlacementFlow(QObject):
             for index, field in enumerate(self._centre_measures):
                 start, end = screen(vertices[index]), screen(vertices[index + 1])
                 self._canvas.lines.append((start, end))
+                if _holds_focus(field, focused):
+                    self._canvas.focus.append((start, end))
                 if not self._keep_field_text(field):
                     with QSignalBlocker(field):
                         bound = max(self._prepared_mesh.bounds.diagonal, 1.0)
@@ -3992,6 +4090,19 @@ class PlacementFlow(QObject):
             positions[widget] = chosen
             occupied.append(chosen)
         _untangle(positions, pending, bounds, obstacles)
+        # **Die Felder bleiben stehen, wo sie standen** (Robert, 22.09.2026:
+        # „danach springen sie auch alle und tauschen sich"). Jeder Aufbau
+        # suchte jedem Feld den nächsten freien Platz neu, und nach jedem
+        # getippten Wert — die Bohrung einen Millimeter weiter — lagen die
+        # Kandidaten anders, die Felder sprangen, ``_untangle`` tauschte. Die
+        # Plätze des letzten Aufbaus gelten weiter, solange sie frei und im
+        # Bild sind, keinem Maß deutlich ferner liegen als die neuen und nicht
+        # mehr Kreuzungen haben: Wer Zahlen tippt, will die Felder
+        # wiederfinden, nicht suchen. Eine Kameradrehung legt alles anders,
+        # und dann ordnet der Aufbau neu.
+        if _old_places_still_serve(self._field_slots, positions, pending, bounds, obstacles):
+            positions.update(self._field_slots)
+        self._field_slots = dict(positions)
         for widget, _wanted, anchor in pending:
             rect = positions[widget]
             widget.move(rect.topLeft())

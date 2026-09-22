@@ -62,6 +62,9 @@ dans `website/version.json`.
 - Choisir un perçage pouvait faire tomber la vue 3D sur certaines cartes graphiques. C'est corrigé.
 - Un glissement sur la poignée survit à un rafraîchissement en plein glissement, et un cran de molette au-dessus d'un champ de cote zoome la vue au lieu de modifier la cote.
 - Le premier Échap pendant le choix d'une référence ne retire que le choix ; les valeurs saisies restent.
+- Avec « Emmener la fraisure et les épaulements », le perçage se déplace aussi par les cotes. Fût et fraisure se déplacent ensemble, en une étape.
+- Si Solidon refuse une cote, la raison s’affiche au-dessus de l’aperçu au lieu d’un simple « n’a pas pu être calculé ».
+- Les champs de cote restent où ils étaient quand vous changez une valeur. La cote dont vous éditez le champ s’allume dans la vue.
 
 ### Vérifier et imprimer
 

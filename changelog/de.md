@@ -86,6 +86,9 @@ Nutzen da und sonst nichts.
 - Beim Wählen einer Bohrung konnte die 3D-Ansicht auf manchen Grafikkarten ausfallen. Das ist behoben.
 - Ein Zug am Griff übersteht ein Bild mitten im Zug, und eine Radraste über einem Maßfeld zoomt die Ansicht, statt das Maß zu verstellen.
 - Das erste Escape bei der Bezugswahl nimmt nur die Wahl zurück; die getippten Werte bleiben.
+- Bei „Senkung und Stufen mitnehmen“ lässt sich die Bohrung auch über die Maße versetzen. Schaft und Senkung wandern zusammen, in einem Schritt.
+- Lehnt Solidon ein Maß ab, steht der Grund über der Vorschau, nicht mehr nur „konnte nicht berechnet werden“.
+- Die Maßfelder bleiben stehen, wo sie standen, wenn Sie einen Wert ändern. Das Maß, in dessen Feld Sie tippen, leuchtet im Bild.
 
 ### Prüfen und Drucken
 

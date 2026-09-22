@@ -15764,11 +15764,25 @@ class MainWindow(QMainWindow):
                 approval.pending_click = None
                 self.announce(reason)
 
+        told: list[str] = []
+
         def failed(_detail: Any) -> None:
-            """Ein fehlendes Ergebnis bleibt gesperrt und nennt den nächsten Handgriff."""
-            reason = tr(
-                "Die Vorschau konnte nicht berechnet werden. Ändern Sie die Werte "
-                "oder öffnen Sie die Bearbeitung erneut."
+            """Ein fehlendes Ergebnis bleibt gesperrt und nennt den nächsten Handgriff.
+
+            **Der Grund, den der Arbeiter schon genannt hat, bleibt stehen.**
+            Hält die Kette an, kommt erst ``explained`` mit dem Befund des
+            Schritts und dann ``done`` ohne Bild — und dieser Satz hier
+            überschrieb den Befund mit „konnte nicht berechnet werden" (Robert,
+            22.09.2026, am Halter: die Absage des Kerns stand nirgends). Der
+            allgemeine Satz gilt nur, wenn niemand etwas Besseres weiß.
+            """
+            reason = (
+                told[-1]
+                if told
+                else tr(
+                    "Die Vorschau konnte nicht berechnet werden. Ändern Sie die Werte "
+                    "oder öffnen Sie die Bearbeitung erneut."
+                )
             )
             if approval.required is not False:
                 approval.problem = reason
@@ -15778,6 +15792,7 @@ class MainWindow(QMainWindow):
 
         def explained(reason: str) -> None:
             """Eine fachliche Absage kann ein nachgereichtes leeres Bild nicht aufheben."""
+            told.append(reason)
             if approval.required is not False:
                 approval.problem = reason
             self._preview_explained(reason)

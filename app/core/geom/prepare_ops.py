@@ -4390,16 +4390,10 @@ def resize_hole(ctx: OpContext) -> OpResult:
     if params.entrance_mode == "follow":
         entrance = bore_entrance(source.mesh, feature, source.features)
         if entrance is not None:
-            if moved_hole:
-                raise ValidationError(
-                    field="entrance_mode",
-                    detail=_(
-                        "Ändern Sie zuerst den Durchmesser mit Einlauf. Verschieben Sie "
-                        "das Merkmal danach über „Merkmal verschieben“."
-                    ),
-                    suggestions=(CORRECT_INPUT, CANCEL),
-                )
-            return _resize_bore_entrance(ctx, feature, entrance, cut)
+            resized = _resize_bore_entrance(ctx, feature, entrance, cut)
+            if not moved_hole:
+                return resized
+            return _moved_after_resizing(ctx, resized, feature.id, centre)
     # **Am Langloch ist der Durchmesser die Breite, und die Länge folgt daraus**
     # (RM-156). Gerechnet wird über den **Weg** und nicht über die Länge: Er ist
     # der Grund, aus dem es Langlöcher gibt, und wer ihn beim Verbreitern
@@ -5844,6 +5838,43 @@ def _entrance_mesh_tool(
             raise _entrance_error()
         tools.append(tool)
     return boolean("union", tools, quality=ctx.quality, seed=ctx.seed, cancelled=ctx.cancelled)
+
+
+def _moved_after_resizing(
+    ctx: OpContext, resized: OpResult, feature_id: FeatureId, centre: Vec3
+) -> OpResult:
+    """Den neu geschnittenen Einlauf samt Kette an die genannte Stelle bringen.
+
+    **Bis zum 22.09.2026 sagte *Bohrung ändern* hier ab** („Ändern Sie zuerst
+    den Durchmesser mit Einlauf. Verschieben Sie das Merkmal danach über
+    *Merkmal verschieben*") — und die Maßfelder im Bild luden zu genau dieser
+    Bewegung ein: Wer an Roberts Schraubendreherhalter bei „Senkung und Stufen
+    mitnehmen" ein Kantenmaß änderte, bekam keine Vorschau und keinen Grund.
+    Ein Umweg, den die Oberfläche selbst anbietet, ist keine Absage wert.
+
+    Der Weg ist die Reihenfolge, die der alte Satz dem Kunden zumutete, nur in
+    einem Schritt: erst der Einlauf mit dem neuen Durchmesser an der alten
+    Stelle, dann die ganze Hohlraumkette — Schaft und Senkung — über dieselbe
+    Maschinerie wie *Merkmal verschieben* an die neue. Kennungen und Passungen
+    reisen mit, die tiefste Stufe beider Läufe steht im Ergebnis (§39).
+    """
+    body = resized.outputs[0]
+    if feature_id not in body.features:
+        return resized
+    inner = dataclasses.replace(
+        ctx,
+        inputs=[body],
+        params=cast(Any, MoveFeatureParams)(
+            at_feature=feature_id, x=centre[0], y=centre[1], z=centre[2]
+        ),
+    )
+    moved = move_feature(inner)
+    return OpResult(
+        outputs=moved.outputs,
+        solver=deepest((resized.solver, moved.solver)),
+        findings=[*resized.findings, *moved.findings],
+        answered={**resized.answered, **moved.answered},
+    )
 
 
 def _resize_bore_entrance(
