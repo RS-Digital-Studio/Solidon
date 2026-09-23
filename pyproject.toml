@@ -65,6 +65,10 @@ geom = [
   "fast-simplification>=0.1.9",
   # SVG-Pfade hinter dem Zeichnungsimport (§25). MIT; DXF liest trimesh selbst.
   "svg.path>=6.3",
+  # Schriftkonturen für Netz und exakten Kern sowie DejaVu-Schriften.
+  # Seit 3.8 mit eigenen Typdateien für die strikte Kernprüfung;
+  # direkte Laufzeitabhängigkeit, auch ohne VTK. LicenseRef-Matplotlib.
+  "matplotlib>=3.8",
 ]
 # Desktop-Hülle. PySide6 ist LGPL und bleibt dynamisch gelinkt (§36).
 ui = [

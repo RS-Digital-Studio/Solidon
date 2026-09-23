@@ -540,6 +540,34 @@ def test_the_pinned_set_is_read_completely() -> None:
         assert not version.startswith(("<", ">", "=")), f"{name} ist keine feste Version: {version}"
 
 
+def test_the_geometry_extra_provides_real_lettering_contours() -> None:
+    """Der Schriftlieferant gehört in den Installationsauftrag und liefert beide Konturarten.
+
+    Ein Constraint installiert kein Paket. Eine gewachsene Umgebung darf die
+    fehlende direkte Abhängigkeit nicht durch einen früheren VTK-Bestand verdecken.
+    """
+    from packaging.requirements import Requirement
+
+    requirements = map(Requirement, _pyproject()["project"]["optional-dependencies"]["geom"])
+    declared = {normal(entry.name): entry for entry in requirements}
+    assert "matplotlib" in declared, "Schriftkonturen brauchen Matplotlib direkt im Extra geom"
+    font_engine = declared["matplotlib"]
+    assert font_engine.marker is None, "Schriftkonturen werden auf jeder Plattform benötigt"
+    assert pinned()["matplotlib"][1] in font_engine.specifier
+
+    from matplotlib.textpath import TextPath
+
+    from app.core.brep.lettering import glyph_contours
+    from app.core.geom.label_ops import font_properties, outlines
+
+    font = "DejaVu Sans"
+    path = TextPath((0.0, 0.0), "B", size=10.0, prop=font_properties(font))
+    assert len(glyph_contours(path)) == 3
+    filled = outlines("B", 10.0, font)
+    assert len(filled) == 1 and filled[0].is_valid
+    assert len(filled[0].interiors) == 2
+
+
 def test_names_compare_the_way_the_index_compares_them() -> None:
     """`svg.path`, `svg_path` und `SVG-Path` sind dasselbe Paket (PEP 503)."""
     assert normal("svg.path") == normal("svg_path") == normal("SVG-Path") == "svg-path"
