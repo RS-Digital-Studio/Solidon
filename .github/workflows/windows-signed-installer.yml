@@ -1,0 +1,96 @@
+# Windows-Anwendung lokal signieren, Installer hier bauen, Setup lokal signieren.
+# Dieser manuelle Lauf besitzt keine Signierschlüssel. Sämtlicher ausgeführter
+# Repositorycode stammt vom selben Commit wie der erfolgreiche Hauptbaulauf.
+name: Windows-Installer aus signierter Anwendung
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_run_id:
+        description: "Erfolgreicher main-Lauf von build.yml mit Signierarchiv"
+        required: true
+        type: string
+      source_commit:
+        description: "Vollständige Commit-SHA des Quelllaufs und dieses Workflows"
+        required: true
+        type: string
+      app_version:
+        description: "Version der gebauten und lokal signierten Anwendung"
+        required: true
+        type: string
+      draft_release_id:
+        description: "Numerische ID des unveröffentlichten Entwurfs mit EXE und Signaturakte"
+        required: true
+        type: string
+      signed_app_sha256:
+        description: "SHA-256 der lokal signierten Solidon3D.exe"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: windows-signed-installer-${{ inputs.build_run_id }}
+  cancel-in-progress: false
+
+jobs:
+  installer:
+    if: github.ref == 'refs/heads/main'
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Workflowstand auschecken
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14.7"
+      - name: Abhängigkeit der vorhandenen Übergabeprüfer
+        run: python -m pip install -c constraints.txt packaging
+
+      - name: Herkunft, Archiv und lokale Anwendungssignatur prüfen
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN_ID: ${{ inputs.build_run_id }}
+          SOURCE_COMMIT: ${{ inputs.source_commit }}
+          SOURCE_VERSION: ${{ inputs.app_version }}
+          DRAFT_RELEASE_ID: ${{ inputs.draft_release_id }}
+          SIGNED_APP_SHA256: ${{ inputs.signed_app_sha256 }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python -m tools.windows_signed_installer prepare --work "$env:RUNNER_TEMP/windows-installer"
+          if ($LASTEXITCODE -ne 0) { throw "Die gebundene signierte Anwendung wurde nicht freigegeben." }
+
+      - name: Festen Inno-Setup-7-Compiler bereitstellen
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # Unveränderliche Herstellerveröffentlichung, SHA-256 am Asset geprüft.
+          $download = Join-Path $env:RUNNER_TEMP 'innosetup-7.1.0-x64.exe'
+          Invoke-WebRequest -Uri 'https://github.com/jrsoftware/issrc/releases/download/is-7_1_0/innosetup-7.1.0-x64.exe' -OutFile $download
+          $digest = (Get-FileHash -LiteralPath $download -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($digest -ne '0362a383ed217d4c4239b5933866dd96d3eb2102737da92f80f6057a4b40df2f') { throw "Der Inno-Setup-Download hat eine andere Prüfsumme." }
+          $folder = Join-Path $env:RUNNER_TEMP 'inno-7'
+          $process = Start-Process -FilePath $download -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/CURRENTUSER', ('/DIR="' + $folder + '"')) -Wait -PassThru -WindowStyle Hidden
+          if ($process.ExitCode -ne 0) { throw "Inno Setup 7 konnte nicht eingerichtet werden." }
+
+      - name: Installer bauen und Rückgabe binden
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python -m tools.windows_signed_installer build --work "$env:RUNNER_TEMP/windows-installer" --compiler "$env:RUNNER_TEMP/inno-7/ISCC.exe" --output "$env:RUNNER_TEMP/windows-installer-output"
+          if ($LASTEXITCODE -ne 0) { throw "Der Windows-Installerbau ist nicht freigegeben." }
+          'Der Installer enthält die geprüfte signierte Anwendung. Die Setup-Datei selbst muss lokal signiert und anschließend erneut geprüft werden; dieses Artefakt wird nicht veröffentlicht.' >> $env:GITHUB_STEP_SUMMARY
+
+      - name: Installer ausschließlich zur lokalen Setupsignatur übergeben
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: solidon3d-windows-installer-signing-input
+          path: ${{ runner.temp }}/windows-installer-output/*
+          if-no-files-found: error
+          retention-days: 7

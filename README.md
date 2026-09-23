@@ -191,10 +191,14 @@ Verknüpfung.
 Ergebnis ist ein Ordner unter `dist/Solidon3D`. Die Bauläufe für Windows,
 Linux und beide Mac-Architekturen stehen in `.github/workflows/build.yml`; sie
 laufen erst, wenn die Suite auf den vorgesehenen Plattformen grün ist. Das
-Windows-Paket wird dort gebaut, aber lokal signiert: `tools/sign_release.py`
-holt die prüfsummengebundene Übergabe des Laufs, signiert Anwendung und
-Setup-Datei mit dem Certum-Zertifikat und legt das Ergebnis unter `dist/`.
-Der Baulauf selbst liefert ein unsigniertes Paket mit sichtbarer Warnung.
+Windows-Paket wird dort gebaut und in zwei Schritten lokal signiert:
+`tools/sign_release.py` holt zunächst die prüfsummengebundene Anwendung aus
+dem Baulauf und signiert sie mit dem Certum-Zertifikat. Der Workflow
+`.github/workflows/windows-signed-installer.yml` baut daraus den Installer
+in CI. Anschließend signiert und prüft das lokale Werkzeug auch die
+Setup-Datei. Ab Version 0.5.0 werden für Windows nur die signierte Anwendung
+und Setup-Datei veröffentlicht; die genaue Übergabe steht in
+`Signierung/README.md`.
 
 Aus demselben Ordner entstehen unter Linux drei Formate. Das **tar.gz** ist der
 Bau selbst; das **AppImage** ist eine Datei, die ohne Installation läuft, und

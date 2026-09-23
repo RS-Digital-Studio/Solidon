@@ -4,7 +4,7 @@ description: Signiergeheimnisse gehören nicht in den Baujob; eine prüfsummenge
 metadata:
   node_type: memory
   type: project
-  modified: 2026-09-02T00:00:00.000Z
+  modified: 2026-09-23T00:00:00.000Z
 ---
 
 Ein Job mit `id-token: write` gibt jedem darin laufenden Schritt die
@@ -16,14 +16,23 @@ diesen Raum nicht.
 Solidon trennt deshalb Bauen und Signieren vollständig. Der Paketjob hat nur
 `contents: read` und bindet den vollständigen Windows-App-Baum samt
 Installer-Eingängen als relative Pfadliste mit SHA-256
-(`solidon3d-windows-signing-input`). **Windows verlässt damit die CI:** Seit
-dem 02.09.2026 (Entscheidung Robert) gibt es dort keinen Azure- und keinen
-PFX-Weg mehr. Das Certum-Zertifikat liegt in der SimplySign-Cloud und verlangt
-einen Einmalcode vom Handy; `tools/sign_release.py` prüft das Archiv, jede
-Prüfsumme und die Produktangaben, signiert die Anwendung, baut den Installer,
-signiert die Setup-Datei und hält bei jeder Abweichung an, bevor ein
-Zertifikat ins Spiel kommt. Die CI baut aus derselben Übergabe den
-unsignierten Installer für Demo und Releaseprüfung.
+(`solidon3d-windows-signing-input`). **Nur die Windows-Signaturen verlassen
+die CI:** Anwendung und Installer werden beide dort gebaut (Entscheidung
+Robert für 0.5.0, 23.09.2026). Das Certum-Zertifikat liegt in der
+SimplySign-Cloud und verlangt einen Einmalcode vom Handy. Die lokale Phase
+`application` von `tools/sign_release.py` prüft die Herkunft aus einem
+erfolgreichen manuellen main-Lauf, das frisch geladene Archiv, jede Prüfsumme
+und die Produktangaben, bevor sie die Anwendung signiert.
+
+Ein unveröffentlichter Release-Entwurf transportiert ausschließlich die
+signierte EXE und ihre Herkunftsakte zurück zur CI. Der separate Workflow
+`windows-signed-installer.yml` prüft denselben Quellcommit, Archiv und
+Anwendung samt Herausgeber und Zeitstempel und baut den Installer ohne
+Signierschlüssel. Die lokale Phase `installer` bindet dessen Rückgabe und
+den verbliebenen Eingangsbaum erneut an die ursprüngliche CI-Übergabe,
+signiert die Setup-Datei und prüft die endgültige Releaseakte. Die genaue
+Aufrufkette steht in `Signierung/README.md`. Der unsignierte Installer des
+gewöhnlichen Hauptbaulaufs bleibt ein internes Prüfpaket.
 
 macOS bleibt in der CI, mit derselben Grenze: Developer-ID-Appsignatur,
 ungeschützter Paketbau und Developer-ID-Installersignatur sind drei Jobs. Die

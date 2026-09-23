@@ -5,22 +5,28 @@ Die CI baut die Anwendung und legt sie als prüfsummengebundenes Archiv ab
 sondern hier: Das Certum-Zertifikat liegt in der SimplySign-Cloud, und
 SimplySign verlangt einen Einmalcode vom Handy — ein Weg, den GitHub Actions
 nicht gehen kann und nicht gehen soll (``Signierung/README.md``). Dieses
-Werkzeug fährt die Kette am Stück und hält bei jeder abweichenden Prüfsumme an:
+Werkzeug signiert in zwei Phasen und hält bei jeder abweichenden Prüfsumme an:
 
-    Archiv prüfen → entpacken → Übergabe gegen Produkt und Prüfsummen prüfen
-    → Anwendung signieren und prüfen → Übergabe neu binden → Installer bauen
-    → Setup-Datei signieren und prüfen → Prüfsumme daneben schreiben
+    Archiv prüfen → lokale Voraussetzungen prüfen → entpacken
+    → Übergabe gegen Produkt und Prüfsummen prüfen
+    → Anwendung signieren und prüfen → Herkunft für die CI schreiben
+    → Installer in der CI bauen lassen → CI-Rückweg prüfen
+    → Setup-Datei lokal signieren und prüfen → Prüfsumme daneben schreiben
     → Release-Evidenz neu schreiben und die Releaseakte prüfen
 
 Der letzte Schritt ist derselbe wie im CI-Prüfjob, nur gegen den signierten
 Installer: Die Evidenz nennt den Hash des äußeren Pakets, und das ist nach
 der Signatur ein anderes als das, das die CI geprüft hat.
 
-    python tools/sign_release.py --subject "Robert Schneider"
-    python tools/sign_release.py --run 123456789 --subject "Robert Schneider"
+    python tools/sign_release.py --check --subject "Name im Zertifikat"
+    python tools/sign_release.py --phase application --run 123 --thumbprint <SHA-1>
+    python tools/sign_release.py --phase installer --installer-run 456 --thumbprint <SHA-1>
+
+``--check`` liest nur lokale Voraussetzungen. Sichtbarkeit und Schlüsselzuordnung
+belegen weder eine aktive Cloud-Sitzung noch eine erfolgreiche Signatur.
 
 Voraussetzungen: SimplySign Desktop verbunden, ``signtool`` aus dem Windows SDK
-und Inno Setup (7 oder 6) installiert; für ``--run`` die GitHub-Kommandozeile ``gh``.
+und die GitHub-Kommandozeile ``gh``. Inno Setup läuft ausschließlich in der CI.
 Das Ergebnis liegt unter ``dist/`` neben seiner ``.sha256`` — von dort geht
 es wie bisher weiter mit ``make_download.py``.
 """
@@ -29,6 +35,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import shutil
 import stat
@@ -36,6 +43,8 @@ import subprocess
 import sys
 import tempfile
 import zipfile
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -56,6 +65,12 @@ from tools.make_sbom import ARTIFACT_SBOM_NAME
 
 ROOT = Path(__file__).resolve().parent.parent
 ARTIFACT_NAME = "solidon3d-windows-signing-input"
+INSTALLER_ARTIFACT_NAME = "solidon3d-windows-installer-signing-input"
+APPLICATION_METADATA = "windows-application-signature.json"
+INSTALLER_METADATA = "windows-installer-build.json"
+REPOSITORY = "RS-Digital-Studio/Solidon"
+BUILD_WORKFLOW = ".github/workflows/build.yml"
+INSTALLER_WORKFLOW = ".github/workflows/windows-signed-installer.yml"
 ARCHIVE_NAME = "windows-signing-input.zip"
 DEFAULT_ARCHIVE = ROOT / "dist" / ARCHIVE_NAME
 DEFAULT_STAGE = ROOT / "build" / "signing"
@@ -95,6 +110,41 @@ FIXED_PRODUCT: dict[str, object] = {
 _ARCHIVE_LINE = re.compile(rf"^([0-9a-f]{{64}})  {re.escape(ARCHIVE_NAME)}$")
 _DIGEST = re.compile(r"^[0-9a-f]{64}$")
 _VERSION = re.compile(r"^\d+\.\d+\.\d+$")
+_CODE_SIGNING_OID = "1.3.6.1.5.5.7.3.3"
+# Fester, ausschließlich lesender Befehl: Nutzereingaben werden erst in Python
+# ausgewertet. HasPrivateKey liest nur die Zuordnung, niemals den Schlüssel.
+_POWERSHELL_PREFIX = r"""
+$ErrorActionPreference = 'Stop'
+[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
+$securityModule = 'Modules\Microsoft.PowerShell.Security\Microsoft.PowerShell.Security.psd1'
+Import-Module (Join-Path $PSHOME $securityModule)
+"""
+_CERTIFICATE_SCRIPT = (
+    _POWERSHELL_PREFIX
+    + r"""
+$certificates = @(Get-ChildItem -LiteralPath 'Cert:\CurrentUser\My' | ForEach-Object {
+    [PSCustomObject]@{
+        Thumbprint = $_.Thumbprint
+        Subject = $_.Subject
+        NotBefore = $_.NotBefore.ToUniversalTime().ToString('o')
+        NotAfter = $_.NotAfter.ToUniversalTime().ToString('o')
+        HasPrivateKey = $_.HasPrivateKey
+        EnhancedKeyUsage = @($_.EnhancedKeyUsageList | ForEach-Object { $_.ObjectId })
+    }
+})
+ConvertTo-Json -InputObject $certificates -Depth 3 -Compress
+"""
+)
+_SIGNATURE_SCRIPT = (
+    _POWERSHELL_PREFIX
+    + r"""
+$signature = Get-AuthenticodeSignature -LiteralPath $env:SOLIDON_SIGNATURE_PATH
+[PSCustomObject]@{
+    Status = $signature.Status.ToString()
+    Thumbprint = $signature.SignerCertificate.Thumbprint
+} | ConvertTo-Json -Compress
+"""
+)
 
 #: Der Prozessaufruf, den die Tests austauschen, um signtool, ISCC und gh
 #: nachzustellen, ohne sie zu haben.
@@ -103,6 +153,26 @@ _run = subprocess.run
 
 class SigningError(RuntimeError):
     """Ein Halt in der Kette — die Meldung sagt, was zu tun ist."""
+
+
+@dataclass(frozen=True)
+class Certificate:
+    """Öffentliche Metadaten und Schlüsselzuordnung im persönlichen Speicher."""
+
+    thumbprint: str
+    subject: str
+    not_before: datetime
+    not_after: datetime
+    has_private_key: bool
+    enhanced_key_usage: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class SigningEnvironment:
+    """Geprüfte Werkzeuge und die feste Identität für beide Signaturen."""
+
+    signtool: Path
+    certificate: Certificate
 
 
 def _step(title: str) -> None:
@@ -118,7 +188,18 @@ def download_handoff(run_id: str, target: Path) -> Path:
         )
     target.mkdir(parents=True, exist_ok=True)
     completed = _run(
-        ["gh", "run", "download", run_id, "-n", ARTIFACT_NAME, "-D", str(target)],
+        [
+            "gh",
+            "run",
+            "download",
+            run_id,
+            "--repo",
+            REPOSITORY,
+            "-n",
+            ARTIFACT_NAME,
+            "-D",
+            str(target),
+        ],
         check=False,
     )
     if completed.returncode != 0:
@@ -138,7 +219,12 @@ def verify_archive(archive: Path) -> str:
             f"python tools/sign_release.py --run <lauf> … oder das Artefakt {ARTIFACT_NAME} "
             "aus dem CI-Lauf dorthin laden."
         )
-    line = checksum.read_text(encoding="ascii").strip()
+    try:
+        line = checksum.read_text(encoding="ascii").strip()
+    except (OSError, UnicodeError) as exc:
+        raise SigningError(
+            f"Unlesbare Archiv-Prüfsumme in {checksum.name} — Artefakt neu laden."
+        ) from exc
     match = _ARCHIVE_LINE.match(line)
     if match is None:
         raise SigningError(f"Ungültige Archiv-Prüfsumme in {checksum.name} — Artefakt neu laden.")
@@ -299,20 +385,160 @@ def find_signtool(explicit: Path | None = None) -> Path:
     )
 
 
-def _identity_arguments(subject: str | None, thumbprint: str | None) -> list[str]:
-    if thumbprint:
-        return ["/sha1", thumbprint]
-    if subject:
-        return ["/n", subject]
+def normalize_thumbprint(thumbprint: str) -> str:
+    """Normalisiert kopierte SHA-1-Fingerabdrücke und lehnt andere Werte ab."""
+    normalized = re.sub(r"[\s:\-\u200e\u200f]", "", thumbprint).upper()
+    if re.fullmatch(r"[0-9A-F]{40}", normalized) is None:
+        raise SigningError(
+            "Ungültiger Fingerabdruck — --thumbprint muss genau 40 Hexadezimalstellen "
+            "des SHA-1-Fingerabdrucks im Zertifikatspeicher enthalten."
+        )
+    return normalized
+
+
+def _certificate_selector(
+    subject: str | None, thumbprint: str | None
+) -> tuple[str | None, str | None]:
+    """Verlangt genau eine ausdrückliche Zertifikatswahl vor jedem Seiteneffekt."""
+    if subject is not None and thumbprint is not None:
+        raise SigningError("Nur --subject oder --thumbprint angeben, nicht beide zugleich.")
+    if thumbprint is not None:
+        return None, normalize_thumbprint(thumbprint)
+    if subject is not None and subject.strip():
+        return subject.strip(), None
     raise SigningError("Zertifikat nicht benannt — --subject <Name> oder --thumbprint <SHA-1>.")
+
+
+def _read_powershell_json(script: str, environment: dict[str, str] | None = None) -> Any:
+    """Führt eine feste lesende Vorlage aus; zusätzliche Werte reisen nur in der Umgebung."""
+    powershell = shutil.which("powershell.exe")
+    if powershell is None:
+        raise SigningError("Windows PowerShell fehlt — powershell.exe auf dem PATH bereitstellen.")
+    try:
+        completed = _run(
+            [
+                powershell,
+                "-NoLogo",
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                script,
+            ],
+            check=False,
+            capture_output=True,
+            encoding="utf-8",
+            timeout=30,
+            env=environment,
+        )
+    except (OSError, subprocess.TimeoutExpired, UnicodeError) as exc:
+        raise SigningError(
+            "Windows PowerShell konnte die Signierdaten nicht lesen — Windows PowerShell, "
+            "Dateipfad und persönlichen Zertifikatspeicher prüfen, dann --check erneut starten."
+        ) from exc
+    if completed.returncode != 0:
+        raise SigningError(
+            "Windows PowerShell konnte die Signierdaten nicht lesen — Dateipfad und "
+            "persönlichen Zertifikatspeicher prüfen, dann --check erneut starten."
+        )
+    try:
+        return json.loads(completed.stdout)
+    except (ValueError, TypeError) as exc:
+        raise SigningError(
+            "Windows PowerShell lieferte keine lesbaren Signierdaten — Dateipfad und "
+            "persönlichen Zertifikatspeicher prüfen, dann --check erneut starten."
+        ) from exc
+
+
+def read_certificates() -> list[Certificate]:
+    """Liest ausschließlich Metadaten aus CurrentUser/My über Windows PowerShell."""
+    try:
+        records = _read_powershell_json(_CERTIFICATE_SCRIPT)
+        if not isinstance(records, list):
+            raise ValueError("Keine Zertifikatsliste")
+        certificates = []
+        for record in records:
+            if not isinstance(record, dict) or not all(
+                isinstance(record.get(key), str)
+                for key in ("Thumbprint", "Subject", "NotBefore", "NotAfter")
+            ):
+                raise ValueError("Unvollständige Zertifikatsmetadaten")
+            usages = record.get("EnhancedKeyUsage")
+            if (
+                not isinstance(record.get("HasPrivateKey"), bool)
+                or not isinstance(usages, list)
+                or not all(isinstance(usage, str) for usage in usages)
+            ):
+                raise ValueError("Ungültige Schlüsselzuordnung oder EKU-Liste")
+            not_before = datetime.fromisoformat(record["NotBefore"])
+            not_after = datetime.fromisoformat(record["NotAfter"])
+            if not_before.tzinfo is None or not_after.tzinfo is None or not_before >= not_after:
+                raise ValueError("Ungültiger Gültigkeitszeitraum")
+            certificates.append(
+                Certificate(
+                    normalize_thumbprint(record["Thumbprint"]),
+                    record["Subject"],
+                    not_before,
+                    not_after,
+                    record["HasPrivateKey"],
+                    tuple(usages),
+                )
+            )
+        return certificates
+    except (ValueError, TypeError) as exc:
+        raise SigningError(
+            "Windows PowerShell lieferte keine lesbaren Zertifikatsmetadaten — "
+            "CurrentUser/My prüfen, dann --check erneut starten."
+        ) from exc
+
+
+def check_prerequisites(
+    *, subject: str | None, thumbprint: str | None, signtool: Path | None = None
+) -> SigningEnvironment:
+    """Prüft lokale Voraussetzungen ohne Archivzugriff, Schreibzugriff oder Signatur."""
+    subject, thumbprint = _certificate_selector(subject, thumbprint)
+    if sys.platform != "win32":
+        raise SigningError(
+            "Die lokale Signierung braucht Windows — auf dem Signierrechner starten."
+        )
+    tool = find_signtool(signtool)
+    matches = [
+        certificate
+        for certificate in read_certificates()
+        if certificate.thumbprint == thumbprint
+        or (subject is not None and subject.casefold() in certificate.subject.casefold())
+    ]
+    if not matches:
+        raise SigningError(
+            "Kein passendes Zertifikat in CurrentUser/My — SimplySign Desktop verbinden "
+            "und --subject oder --thumbprint mit dem persönlichen Zertifikatspeicher abgleichen."
+        )
+    now = datetime.now(UTC)
+    usable = [
+        certificate
+        for certificate in matches
+        if certificate.not_before <= now <= certificate.not_after
+        and certificate.has_private_key
+        and _CODE_SIGNING_OID in certificate.enhanced_key_usage
+    ]
+    if len(usable) > 1:
+        raise SigningError(
+            "Mehrere gültige Code-Signing-Zertifikate passen — das gewünschte "
+            "Zertifikat mit --thumbprint eindeutig auswählen."
+        )
+    if not usable:
+        raise SigningError(
+            "Kein aktuell gültiges Code-Signing-Zertifikat mit privater Schlüsselzuordnung "
+            "gefunden — Gültigkeitszeitraum, Code-Signing-EKU und HasPrivateKey in "
+            "CurrentUser/My prüfen; SimplySign Desktop verbinden und --check wiederholen."
+        )
+    return SigningEnvironment(tool, usable[0])
 
 
 def sign_file(
     signtool: Path,
     target: Path,
     *,
-    subject: str | None,
-    thumbprint: str | None,
+    thumbprint: str,
     timestamp_url: str,
 ) -> None:
     """Signiert eine Datei mit Zeitstempel und prüft die Signatur sofort."""
@@ -325,7 +551,8 @@ def sign_file(
         timestamp_url,
         "/td",
         "SHA256",
-        *_identity_arguments(subject, thumbprint),
+        "/sha1",
+        normalize_thumbprint(thumbprint),
         "/d",
         APP_NAME,
         "/du",
@@ -338,10 +565,36 @@ def sign_file(
             "verbunden und das Zertifikat im Windows-Zertifikatspeicher sichtbar? "
             "Bei mehreren Zertifikaten --thumbprint statt --subject."
         )
-    if _run([str(signtool), "verify", "/pa", "/v", str(target)], check=False).returncode != 0:
+    verify_file(signtool, target)
+    verify_signature_identity(target, thumbprint)
+
+
+def verify_file(signtool: Path, target: Path) -> None:
+    """Prüft alle Signaturen samt Zeitstempel; auch ein Warnexit hält die Kette an."""
+    command = [str(signtool), "verify", "/pa", "/all", "/tw", "/v", str(target)]
+    if _run(command, check=False).returncode != 0:
         raise SigningError(
-            f"Die Signatur von {target.name} ist ungültig — die Datei wird nicht weitergegeben. "
-            "Zertifikatskette und Zeitstempel prüfen (signtool verify /pa /v)."
+            f"Die Signatur von {target.name} ist ungültig oder ihr Zeitstempel fehlt — "
+            "die Datei wird nicht weitergegeben. Zertifikatskette und Zeitstempel prüfen "
+            "(signtool verify /pa /all /tw /v)."
+        )
+
+
+def verify_signature_identity(target: Path, expected_thumbprint: str) -> None:
+    """Bindet eine gültige Authenticode-Signatur an den ausdrücklich gewählten Herausgeber."""
+    expected = normalize_thumbprint(expected_thumbprint)
+    record = _read_powershell_json(
+        _SIGNATURE_SCRIPT, {**os.environ, "SOLIDON_SIGNATURE_PATH": str(target.resolve())}
+    )
+    if (
+        not isinstance(record, dict)
+        or record.get("Status") != "Valid"
+        or not isinstance(record.get("Thumbprint"), str)
+        or normalize_thumbprint(record["Thumbprint"]) != expected
+    ):
+        raise SigningError(
+            f"Die Signatur von {target.name} gehört nicht gültig zum gewählten Zertifikat — "
+            "Herausgeber und Fingerabdruck prüfen, dann die Datei erneut signieren."
         )
 
 
@@ -357,12 +610,12 @@ def rebind_handoff(stage: Path, handoff: dict[str, Any]) -> None:
     )
 
 
-def build_installer(stage: Path, handoff: dict[str, Any]) -> Path:
-    """Baut die Setup-Datei mit Inno Setup aus dem signierten Arbeitsordner."""
-    compiler = make_installer.find_compiler()
+def build_installer(stage: Path, handoff: dict[str, Any], compiler: Path | None = None) -> Path:
+    """Baut ausschließlich im CI-Einstieg die Setup-Datei aus dem signierten Arbeitsordner."""
+    compiler = compiler or make_installer.find_compiler()
     if compiler is None:
         raise SigningError(
-            "Inno Setup (7 oder 6) nicht gefunden — installieren "
+            "Inno Setup (7 oder 6) nicht gefunden — im CI-Baujob installieren "
             "(winget install JRSoftware.InnoSetup) oder ISCC auf den PATH legen."
         )
     resolved = {key: resolve_handoff_path(stage, str(handoff[key])) for key in FIXED_PATHS}
@@ -465,9 +718,173 @@ def release_check(stage: Path, handoff: dict[str, Any], setup: Path, evidence: P
         )
 
 
-def run(
+def verify_ci_run(run_id: str, workflow: str) -> dict[str, Any]:
+    """Bindet einen erfolgreichen GitHub-Lauf an Repository, Workflow und Commit."""
+    if re.fullmatch(r"[1-9][0-9]*", run_id) is None:
+        raise SigningError(
+            "Ungültige CI-Laufnummer — die numerische ID aus GitHub Actions angeben."
+        )
+    if shutil.which("gh") is None:
+        raise SigningError("GitHub CLI fehlt — gh installieren und für das Repository anmelden.")
+    try:
+        completed = _run(
+            ["gh", "api", f"repos/{REPOSITORY}/actions/runs/{run_id}"],
+            check=False,
+            capture_output=True,
+            encoding="utf-8",
+            timeout=30,
+        )
+    except (OSError, UnicodeError, subprocess.TimeoutExpired) as exc:
+        raise SigningError(
+            "CI-Lauf nicht lesbar — gh-Anmeldung und Verbindung prüfen, dann erneut starten."
+        ) from exc
+    try:
+        record = json.loads(completed.stdout)
+        if (
+            completed.returncode != 0
+            or not isinstance(record, dict)
+            or str(record.get("id")) != run_id
+            or record.get("status") != "completed"
+            or record.get("conclusion") != "success"
+            or record.get("event") != "workflow_dispatch"
+            or record.get("head_branch") != "main"
+            or record.get("path") != workflow
+            or record.get("repository", {}).get("full_name") != REPOSITORY
+            or record.get("head_repository", {}).get("full_name") != REPOSITORY
+            or re.fullmatch(r"[0-9a-fA-F]{40}", str(record.get("head_sha", ""))) is None
+        ):
+            raise ValueError("Lauf passt nicht")
+    except (ValueError, TypeError, AttributeError) as exc:
+        raise SigningError(
+            f"CI-Lauf {run_id} ist kein erfolgreich abgeschlossener Lauf von {workflow} "
+            f"in {REPOSITORY} — passenden Lauf in GitHub Actions auswählen."
+        ) from exc
+    return record
+
+
+def signing_metadata(value: object) -> dict[str, Any]:
+    """Prüft den kleinen Herkunftsvertrag beider CI-Übergaben vollständig."""
+    keys = {
+        "schema_version",
+        "app_version",
+        "source_run_id",
+        "source_commit",
+        "source_archive_sha256",
+        "unsigned_application_sha256",
+        "signed_application_sha256",
+        "certificate_thumbprint",
+    }
+    if (
+        not isinstance(value, dict)
+        or set(value) != keys
+        or type(value.get("schema_version")) is not int
+        or value.get("schema_version") != 1
+    ):
+        raise SigningError(
+            "Die Signierherkunft ist unvollständig — die Anwendungsphase neu starten."
+        )
+    if (
+        not isinstance(value["app_version"], str)
+        or _VERSION.fullmatch(value["app_version"]) is None
+        or not isinstance(value["source_run_id"], str)
+        or re.fullmatch(r"[1-9][0-9]*", value["source_run_id"]) is None
+        or not isinstance(value["source_commit"], str)
+        or re.fullmatch(r"[0-9a-f]{40}", value["source_commit"]) is None
+        or not isinstance(value["certificate_thumbprint"], str)
+        or re.fullmatch(r"[0-9A-F]{40}", value["certificate_thumbprint"]) is None
+        or any(
+            not isinstance(value[key], str) or _DIGEST.fullmatch(value[key]) is None
+            for key in (
+                "source_archive_sha256",
+                "unsigned_application_sha256",
+                "signed_application_sha256",
+            )
+        )
+    ):
+        raise SigningError("Die Signierherkunft ist ungültig — die Anwendungsphase neu starten.")
+    return value
+
+
+def _publish_pair(source: Path, companion: Path, output_dir: Path) -> Path:
+    """Prüft beide Kopien vollständig, bevor die sichtbare Datei ersetzt wird."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    result = output_dir / source.name
+    expected_hash = _sha256(source)
+    with tempfile.TemporaryDirectory(prefix=".signing-output-", dir=output_dir) as directory:
+        staged = Path(directory) / source.name
+        staged_companion = Path(directory) / companion.name
+        shutil.copy2(source, staged)
+        shutil.copy2(companion, staged_companion)
+        if (
+            _sha256(staged) != expected_hash
+            or staged_companion.read_bytes() != companion.read_bytes()
+        ):
+            raise SigningError(
+                "Die abschließende Kopie stimmt nicht mit der signierten Datei überein. "
+                "Freien Speicher und Datenträger prüfen; die bisherige Datei bleibt erhalten."
+            )
+        staged.replace(result)
+        try:
+            staged_companion.replace(output_dir / companion.name)
+        except OSError:
+            (output_dir / companion.name).unlink(missing_ok=True)
+            raise
+    return result
+
+
+def sign_application(
     *,
-    archive: Path,
+    run_id: str,
+    stage: Path,
+    subject: str | None,
+    thumbprint: str | None,
+    timestamp_url: str,
+    signtool: Path | None,
+    output_dir: Path,
+) -> Path:
+    """Signiert ausschließlich die Anwendung aus einem erfolgreichen CI-Bau."""
+    subject, thumbprint = _certificate_selector(subject, thumbprint)
+    source = verify_ci_run(run_id, BUILD_WORKFLOW)
+    with tempfile.TemporaryDirectory(prefix=".application-input-") as directory:
+        archive = download_handoff(run_id, Path(directory))
+        _step(f"Archiv prüfen: {archive}")
+        archive_hash = verify_archive(archive)
+        environment = check_prerequisites(subject=subject, thumbprint=thumbprint, signtool=signtool)
+        _step(f"Entpacken nach {stage}")
+        extract_archive(archive, stage)
+    tool = environment.signtool
+    thumbprint = environment.certificate.thumbprint
+    _step("Übergabe gegen Produkt und Prüfsummen prüfen")
+    handoff = load_handoff(stage)
+    verify_inputs(stage, handoff)
+    application = resolve_handoff_path(stage, str(handoff["application"]))
+    unsigned_hash = _sha256(application)
+    _step(f"Anwendung signieren: {application.name} ({handoff['app_version']})")
+    sign_file(tool, application, thumbprint=thumbprint, timestamp_url=timestamp_url)
+    metadata = {
+        "schema_version": 1,
+        "app_version": handoff["app_version"],
+        "source_run_id": run_id,
+        "source_commit": source["head_sha"].lower(),
+        "source_archive_sha256": archive_hash,
+        "unsigned_application_sha256": unsigned_hash,
+        "signed_application_sha256": _sha256(application),
+        "certificate_thumbprint": thumbprint,
+    }
+    handoff["signing"] = metadata
+    rebind_handoff(stage, handoff)
+    with tempfile.TemporaryDirectory(prefix=".application-output-") as directory:
+        companion = Path(directory) / APPLICATION_METADATA
+        companion.write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
+        result = _publish_pair(application, companion, output_dir)
+    print(f"Signierte Anwendung für den CI-Installerbau: {result}")
+    print(f"Herkunft: {output_dir / APPLICATION_METADATA}")
+    return result
+
+
+def sign_installer(
+    *,
+    installer_run_id: str,
     stage: Path,
     subject: str | None,
     thumbprint: str | None,
@@ -476,65 +893,146 @@ def run(
     evidence: Path,
     output_dir: Path,
 ) -> Path:
-    """Fährt die ganze Kette und liefert den signierten Installer unter ``output_dir``."""
-    _identity_arguments(subject, thumbprint)
-    # Erst der Eingang, dann das Werkzeug: Wer ohne Archiv startet, soll das
-    # Archiv genannt bekommen und nicht ein fehlendes signtool — und die Suite
-    # läuft auch auf macOS, wo es keines gibt.
-    _step(f"Archiv prüfen: {archive}")
-    verify_archive(archive)
-    tool = find_signtool(signtool)
-    _step(f"Entpacken nach {stage}")
-    extract_archive(archive, stage)
-    _step("Übergabe gegen Produkt und Prüfsummen prüfen")
+    """Prüft den CI-Rückweg, signiert ausschließlich dessen Setup und belegt das Ergebnis."""
+    subject, thumbprint = _certificate_selector(subject, thumbprint)
     handoff = load_handoff(stage)
     verify_inputs(stage, handoff)
+    metadata = signing_metadata(handoff.get("signing"))
     application = resolve_handoff_path(stage, str(handoff["application"]))
-    _step(f"Anwendung signieren: {application.name} ({handoff['app_version']})")
-    sign_file(
-        tool, application, subject=subject, thumbprint=thumbprint, timestamp_url=timestamp_url
-    )
-    rebind_handoff(stage, handoff)
-    _step("Installer bauen")
-    setup = build_installer(stage, handoff)
-    _step(f"Setup-Datei signieren: {setup.name}")
-    sign_file(tool, setup, subject=subject, thumbprint=thumbprint, timestamp_url=timestamp_url)
-    checksum = write_checksum(setup)
-    _step("Release-Evidenz schreiben und Releaseakte prüfen")
-    release_check(stage, handoff, setup, evidence)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    result = output_dir / setup.name
-    expected_hash = _sha256(setup)
-    with tempfile.TemporaryDirectory(prefix=".signing-output-", dir=output_dir) as directory:
-        staged = Path(directory) / setup.name
-        staged_checksum = Path(directory) / checksum.name
-        shutil.copy2(setup, staged)
-        shutil.copy2(checksum, staged_checksum)
-        if _sha256(staged) != expected_hash or staged_checksum.read_text(encoding="ascii") != (
-            f"{expected_hash}  {setup.name}\n"
+    if metadata["app_version"] != handoff["app_version"] or (
+        metadata["signed_application_sha256"] != _sha256(application)
+    ):
+        raise SigningError(
+            "Der Anwendungsstand passt nicht zur Herkunft — Anwendungsphase neu starten."
+        )
+    source = verify_ci_run(metadata["source_run_id"], BUILD_WORKFLOW)
+    installer_run = verify_ci_run(installer_run_id, INSTALLER_WORKFLOW)
+    if any(
+        record["head_sha"].lower() != metadata["source_commit"]
+        for record in (source, installer_run)
+    ):
+        raise SigningError(
+            "CI-Commits und Signierherkunft weichen ab — passenden Installerlauf auswählen."
+        )
+    # Die umgebundene lokale Übergabe ist kein unabhängiger Herkunftsnachweis.
+    # Auch der unveränderte Restbaum bleibt an den ursprünglichen CI-Eingang gebunden.
+    with tempfile.TemporaryDirectory(prefix=".source-input-") as directory:
+        archive = download_handoff(metadata["source_run_id"], Path(directory))
+        if verify_archive(archive) != metadata["source_archive_sha256"]:
+            raise SigningError(
+                "Der ursprüngliche CI-Eingang weicht ab — die Anwendungsphase neu starten."
+            )
+        with zipfile.ZipFile(archive) as zipped:
+            try:
+                original = json.loads(zipped.read(HANDOFF_NAME))
+            except (KeyError, ValueError) as exc:
+                raise SigningError(
+                    "Die ursprüngliche CI-Übergabe fehlt — den Anwendungsbau prüfen."
+                ) from exc
+        restored = {key: value for key, value in handoff.items() if key != "signing"}
+        restored["input_sha256"] = {
+            **handoff["input_sha256"],
+            handoff["application"]: metadata["unsigned_application_sha256"],
+        }
+        if original != restored:
+            raise SigningError(
+                "Der lokale Arbeitsstand weicht von der CI-Herkunft ab — "
+                "Anwendungsphase neu starten."
+            )
+    environment = check_prerequisites(subject=subject, thumbprint=thumbprint, signtool=signtool)
+    expected_identity = metadata["certificate_thumbprint"]
+    if environment.certificate.thumbprint != expected_identity:
+        raise SigningError(
+            "Anderes Signierzertifikat gewählt — denselben Fingerabdruck "
+            "wie für die Anwendung angeben."
+        )
+    verify_file(environment.signtool, application)
+    verify_signature_identity(application, expected_identity)
+    with tempfile.TemporaryDirectory(prefix=".installer-input-") as downloaded:
+        folder = Path(downloaded)
+        completed = _run(
+            [
+                "gh",
+                "run",
+                "download",
+                installer_run_id,
+                "--repo",
+                REPOSITORY,
+                "-n",
+                INSTALLER_ARTIFACT_NAME,
+                "-D",
+                str(folder),
+            ],
+            check=False,
+        )
+        if completed.returncode != 0:
+            raise SigningError(
+                "Die CI-Installerübergabe fehlt — erfolgreichen Installerlauf und Artefakt prüfen."
+            )
+        setup_name = str(handoff["setup_filename"])
+        expected_names = {setup_name, setup_name + ".sha256", INSTALLER_METADATA}
+        if {path.name for path in folder.iterdir()} != expected_names or any(
+            not path.is_file() or path.is_symlink() for path in folder.iterdir()
         ):
             raise SigningError(
-                "Die abschließende Kopie stimmt nicht mit dem signierten Installer überein. "
-                "Freien Speicher und Datenträger prüfen; der bisherige Installer bleibt erhalten."
+                "Unerwartete Dateien in der CI-Installerübergabe — Artefakt neu bauen lassen."
             )
-        staged.replace(result)
+        package = folder / setup_name
+        package_hash = _sha256(package)
         try:
-            staged_checksum.replace(output_dir / checksum.name)
-        except OSError:
-            # Nach dem Paketwechsel darf keine alte Prüfsumme daneben stehen.
-            (output_dir / checksum.name).unlink(missing_ok=True)
-            raise
+            returned = json.loads((folder / INSTALLER_METADATA).read_text(encoding="utf-8"))
+            checksum_line = (folder / (setup_name + ".sha256")).read_text(encoding="ascii").strip()
+        except ValueError as exc:
+            raise SigningError(
+                "Unlesbare Installerherkunft — CI-Installerlauf erneut ausführen."
+            ) from exc
+        if returned != {**metadata, "installer_sha256": package_hash} or (
+            checksum_line != f"{package_hash}  {setup_name}"
+        ):
+            raise SigningError(
+                "CI-Installer, Prüfsumme und Signierherkunft weichen ab — "
+                "passenden CI-Rückweg laden."
+            )
+        with tempfile.TemporaryDirectory(prefix=".installer-signing-", dir=stage) as directory:
+            setup = Path(directory) / setup_name
+            shutil.copy2(package, setup)
+            if _sha256(setup) != package_hash:
+                raise SigningError(
+                    "Die Installerkopie weicht ab — Datenträger prüfen und erneut starten."
+                )
+            sign_file(
+                environment.signtool,
+                setup,
+                thumbprint=expected_identity,
+                timestamp_url=timestamp_url,
+            )
+            checksum = write_checksum(setup)
+            release_check(stage, handoff, setup, evidence)
+            result = _publish_pair(setup, checksum, output_dir)
     print(f"Signierter Installer: {result}")
-    print(f"Prüfsumme: {output_dir / checksum.name}")
+    print(f"Prüfsumme: {output_dir / (result.name + '.sha256')}")
     return result
+
+
+def run(**arguments: object) -> Path:
+    """Hält Aufrufer des alten lokalen Komplettbaus vor jeder Änderung an."""
+    raise SigningError(
+        "Die CI baut den Installer — --phase application oder --phase installer wählen."
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument(
+        "--check", action="store_true", help="nur lokale Voraussetzungen lesen; nichts signieren"
+    )
     parser.add_argument("--run", metavar="LAUF", help="CI-Laufnummer; holt das Artefakt mit gh")
-    parser.add_argument("--archive", type=Path, default=DEFAULT_ARCHIVE)
+    parser.add_argument("--installer-run", metavar="LAUF", help="CI-Lauf des Installerbaus")
+    parser.add_argument("--phase", choices=("application", "installer"))
     parser.add_argument("--stage", type=Path, default=DEFAULT_STAGE)
-    parser.add_argument("--subject", help="Name im Zertifikat, wie ihn signtool /n erwartet")
+    parser.add_argument(
+        "--subject", help="eindeutiger Teil des Zertifikatsnamens in CurrentUser/My"
+    )
     parser.add_argument(
         "--thumbprint", help="SHA-1 des Zertifikats, wenn der Name nicht eindeutig ist"
     )
@@ -549,23 +1047,52 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--output", type=Path, default=OUTPUT_DIR)
     arguments = parser.parse_args(argv)
     try:
-        archive = arguments.archive
-        if arguments.run:
-            archive = download_handoff(arguments.run, archive.parent)
-        run(
-            archive=archive,
-            stage=arguments.stage,
-            subject=arguments.subject,
-            thumbprint=arguments.thumbprint,
-            timestamp_url=arguments.timestamp,
-            signtool=arguments.signtool,
-            evidence=arguments.release_evidence,
-            output_dir=arguments.output,
-        )
+        subject, thumbprint = _certificate_selector(arguments.subject, arguments.thumbprint)
+        if arguments.check:
+            if arguments.run or arguments.installer_run or arguments.phase:
+                raise SigningError("--check und CI-Phasen nicht kombinieren — getrennt aufrufen.")
+            environment = check_prerequisites(
+                subject=subject, thumbprint=thumbprint, signtool=arguments.signtool
+            )
+            certificate = environment.certificate
+            print(f"SignTool: {environment.signtool}")
+            print(f"Zertifikat in CurrentUser/My: {certificate.subject}")
+            print(f"SHA-1: {certificate.thumbprint}")
+            print(f"Gültig bis: {certificate.not_after.isoformat()}")
+            print(
+                "Lokale Voraussetzungen vorhanden; HasPrivateKey bestätigt die Zuordnung. "
+                "Dies ist kein Cloud-Signiertest: SimplySign-Sitzung, Zeitstempeldienst "
+                "und tatsächliche Signatur sind damit noch nicht geprüft."
+            )
+            return 0
+        common = {
+            "stage": arguments.stage,
+            "subject": subject,
+            "thumbprint": thumbprint,
+            "timestamp_url": arguments.timestamp,
+            "signtool": arguments.signtool,
+            "output_dir": arguments.output,
+        }
+        if arguments.phase == "application":
+            if not arguments.run or arguments.installer_run:
+                raise SigningError("Für --phase application genau --run <Bau-Lauf> angeben.")
+            sign_application(run_id=arguments.run, **common)
+        elif arguments.phase == "installer":
+            if not arguments.installer_run or arguments.run:
+                raise SigningError("Für --phase installer genau --installer-run <Lauf> angeben.")
+            sign_installer(
+                installer_run_id=arguments.installer_run,
+                evidence=arguments.release_evidence,
+                **common,
+            )
+        else:
+            raise SigningError(
+                "Zuerst --phase application wählen; nach dem CI-Installerbau --phase installer."
+            )
     except SigningError as problem:
         print(problem)
         return 1
-    except OSError, zipfile.BadZipFile:
+    except OSError, UnicodeError, zipfile.BadZipFile, subprocess.TimeoutExpired:
         print(
             "Die Signierdateien ließen sich nicht vollständig lesen oder ablegen. "
             "Eingangsarchiv, freien Speicher und Schreibrechte prüfen, dann erneut starten."

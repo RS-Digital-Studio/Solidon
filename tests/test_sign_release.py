@@ -10,8 +10,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shutil
 import subprocess
+import sys
 import zipfile
+from dataclasses import replace
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -19,6 +23,21 @@ import pytest
 from tools import make_installer, sign_release
 
 APP = make_installer.APP_NAME
+THUMBPRINT = "AB" * 20
+SUBJECT = "CN=Beispiel Herausgeber, O=Beispiel"
+
+
+def _certificate() -> sign_release.Certificate:
+    """Liefert eine zeitlich stabile öffentliche Zertifikatsattrappe ohne Schlüssel."""
+    now = datetime.now(UTC)
+    return sign_release.Certificate(
+        THUMBPRINT,
+        SUBJECT,
+        now - timedelta(days=1),
+        now + timedelta(days=1),
+        True,
+        ("1.3.6.1.5.5.7.3.3",),
+    )
 
 
 def _sha256(path: Path) -> str:
@@ -79,13 +98,36 @@ class FakeTools:
     def __init__(self) -> None:
         self.calls: list[list[str]] = []
         self.verify_fails = False
+        self.verify_warns = False
         self.evidence_fails = False
         self.application_signed_when_packed: bool | None = None
+        self.installer_files: dict[str, bytes] = {}
+        self.application_archive: Path | None = None
+        self.downloads: list[list[str]] = []
+        self.signature_checks: list[tuple[Path, str]] = []
 
     def __call__(self, command: list[str], *, check: bool) -> subprocess.CompletedProcess[bytes]:
         assert check is False
-        self.calls.append(list(command))
         name = Path(command[0]).name.lower()
+        if name == "gh" and command[1:3] == ["run", "download"]:
+            self.downloads.append(command)
+            folder = Path(command[command.index("-D") + 1])
+            artifact = command[command.index("-n") + 1]
+            if artifact == sign_release.ARTIFACT_NAME:
+                assert self.application_archive is not None
+                for path in (
+                    self.application_archive,
+                    self.application_archive.with_suffix(".zip.sha256"),
+                ):
+                    if not path.exists():
+                        return subprocess.CompletedProcess(command, 1)
+                    (folder / path.name).write_bytes(path.read_bytes())
+                return subprocess.CompletedProcess(command, 0)
+            assert artifact == sign_release.INSTALLER_ARTIFACT_NAME
+            for filename, content in self.installer_files.items():
+                (folder / filename).write_bytes(content)
+            return subprocess.CompletedProcess(command, 0)
+        self.calls.append(list(command))
         if len(command) > 1 and command[1].endswith("make_licence_notices.py"):
             if self.evidence_fails:
                 return subprocess.CompletedProcess(command, 1)
@@ -103,9 +145,10 @@ class FakeTools:
             target.write_bytes(target.read_bytes() + self.SIGNATURE)
             return subprocess.CompletedProcess(command, 0)
         if name == "signtool.exe" and command[1] == "verify":
+            assert command[2:-1] == ["/pa", "/all", "/tw", "/v"]
             signed = Path(command[-1]).read_bytes().endswith(self.SIGNATURE)
             return subprocess.CompletedProcess(
-                command, 0 if signed and not self.verify_fails else 1
+                command, 2 if self.verify_warns else (0 if signed and not self.verify_fails else 1)
             )
         if name == "iscc.exe":
             defines = dict(part[2:].split("=", 1) for part in command[1:-1])
@@ -117,39 +160,96 @@ class FakeTools:
             return subprocess.CompletedProcess(command, 0)
         raise AssertionError(f"unerwarteter Aufruf: {command}")
 
+    def verify_identity(self, target: Path, expected_thumbprint: str) -> None:
+        """Stellt die zweite Windows-Prüfung dar, ohne einen echten Zertifikatspeicher zu lesen."""
+        assert target.read_bytes().endswith(self.SIGNATURE)
+        assert expected_thumbprint == THUMBPRINT or expected_thumbprint == "CD" * 20
+        self.signature_checks.append((target, expected_thumbprint))
+
+
+def _ci_record(run_id: str, workflow: str) -> dict[str, object]:
+    """Ein vollständig beendeter Lauf aus demselben Commit und Repository."""
+    return {
+        "id": int(run_id),
+        "status": "completed",
+        "conclusion": "success",
+        "event": "workflow_dispatch",
+        "head_branch": "main",
+        "path": workflow,
+        "head_sha": "12" * 20,
+        "repository": {"full_name": sign_release.REPOSITORY},
+        "head_repository": {"full_name": sign_release.REPOSITORY},
+    }
+
 
 @pytest.fixture
 def signing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, object]:
     tree = _product_tree(tmp_path / "ci", monkeypatch)
     archive = _pack(tree, tmp_path / "download")
     tools = FakeTools()
+    tools.application_archive = archive
     monkeypatch.setattr(sign_release, "_run", tools)
     monkeypatch.setattr(sign_release, "find_signtool", lambda explicit=None: Path("signtool.exe"))
     monkeypatch.setattr(make_installer, "find_compiler", lambda: Path("ISCC.exe"))
     monkeypatch.setattr(sign_release, "ROOT", tmp_path / "repo")
+    monkeypatch.setattr(sign_release.sys, "platform", "win32")
+    monkeypatch.setattr(sign_release, "read_certificates", lambda: [_certificate()])
+    monkeypatch.setattr(sign_release, "verify_signature_identity", tools.verify_identity)
+    monkeypatch.setattr(sign_release, "verify_ci_run", _ci_record)
+    original_which = sign_release.shutil.which
+    monkeypatch.setattr(
+        sign_release.shutil, "which", lambda name: "gh" if name == "gh" else original_which(name)
+    )
+    monkeypatch.setattr(
+        sign_release, "build_installer", lambda *args: pytest.fail("Lokaler CI-Bau")
+    )
     return {
         "archive": archive,
         "stage": tmp_path / "stage",
         "output": tmp_path / "out",
+        "application_output": tmp_path / "application-output",
         "evidence": tmp_path / "repo" / "build" / "release-evidence.json",
         "tools": tools,
         "tree": tree,
     }
 
 
-def _go(signing: dict[str, object], **overrides: object) -> Path:
+def _application_phase(signing: dict[str, object], **overrides: object) -> dict[str, object]:
+    """Signiert die Anwendung und stellt die getrennte Antwort des CI-Installerbaus her."""
     arguments: dict[str, object] = {
-        "archive": signing["archive"],
         "stage": signing["stage"],
-        "subject": "Robert Schneider",
+        "subject": "Beispiel Herausgeber",
         "thumbprint": None,
         "timestamp_url": sign_release.TIMESTAMP_URL,
         "signtool": None,
-        "evidence": signing["evidence"],
-        "output_dir": signing["output"],
+        "run_id": "123",
+        "output_dir": signing["application_output"],
     }
     arguments.update(overrides)
-    return sign_release.run(**arguments)  # type: ignore[arg-type]
+    application = sign_release.sign_application(**arguments)  # type: ignore[arg-type]
+    metadata = json.loads((application.parent / sign_release.APPLICATION_METADATA).read_text())
+    content = b"CI Setup:" + application.read_bytes()
+    setup_name = f"{APP}-Setup-{make_installer.APP_VERSION}.exe"
+    digest = hashlib.sha256(content).hexdigest()
+    tools = signing["tools"]
+    assert isinstance(tools, FakeTools)
+    tools.application_signed_when_packed = application.read_bytes().endswith(FakeTools.SIGNATURE)
+    tools.installer_files = {
+        setup_name: content,
+        setup_name + ".sha256": f"{digest}  {setup_name}\n".encode("ascii"),
+        sign_release.INSTALLER_METADATA: json.dumps(
+            {**metadata, "installer_sha256": digest}
+        ).encode(),
+    }
+    arguments.pop("run_id")
+    arguments.update(
+        installer_run_id="456", evidence=signing["evidence"], output_dir=signing["output"]
+    )
+    return arguments
+
+
+def _go(signing: dict[str, object], **overrides: object) -> Path:
+    return sign_release.sign_installer(**_application_phase(signing, **overrides))  # type: ignore[arg-type]
 
 
 def _repack(signing: dict[str, object], mutate: object) -> None:
@@ -165,7 +265,7 @@ def _repack(signing: dict[str, object], mutate: object) -> None:
 def test_the_chain_signs_the_application_before_the_installer_and_binds_everything(
     signing: dict[str, object],
 ) -> None:
-    """Signieren, prüfen, bauen, signieren, prüfen — in dieser Reihenfolge, nichts dazwischen."""
+    """Zwei lokale Signierphasen um den CI-Bau; das lokale Werkzeug baut nie selbst."""
     result = _go(signing)
     tools = signing["tools"]
     assert isinstance(tools, FakeTools)
@@ -179,7 +279,7 @@ def test_the_chain_signs_the_application_before_the_installer_and_binds_everythi
     assert steps == [
         ("signtool.exe", "sign"),
         ("signtool.exe", "verify"),
-        ("iscc.exe", steps[2][1]),
+        ("signtool.exe", "verify"),
         ("signtool.exe", "sign"),
         ("signtool.exe", "verify"),
         ("notices", "--write-evidence"),
@@ -198,9 +298,12 @@ def test_the_chain_signs_the_application_before_the_installer_and_binds_everythi
         sign_release.TIMESTAMP_URL,
         "/td",
         "SHA256",
-        "/n",
+        "/sha1",
     ]
-    assert sign_call[9] == "Robert Schneider"
+    assert sign_call[9] == THUMBPRINT
+    setup_sign_call = tools.calls[3]
+    assert setup_sign_call[9] == THUMBPRINT
+    assert "/n" not in sign_call and "/a" not in sign_call
     assert sign_call[-1].endswith(f"{APP}.exe")
 
     assert result.name == f"{APP}-Setup-{make_installer.APP_VERSION}.exe"
@@ -371,6 +474,501 @@ def test_a_thumbprint_replaces_the_subject_name(signing: dict[str, object]) -> N
     assert "/n" not in tools.calls[0]
 
 
+@pytest.mark.parametrize(
+    ("failure", "message"),
+    [
+        ("missing", "Kein passendes Zertifikat"),
+        ("expired", "Kein aktuell gültiges"),
+        ("future", "Kein aktuell gültiges"),
+        ("public-only", "HasPrivateKey"),
+        ("wrong-usage", "Code-Signing"),
+        ("ambiguous", "Mehrere gültige"),
+    ],
+)
+def test_unusable_certificates_stop_before_extraction_and_signing(
+    signing: dict[str, object], monkeypatch: pytest.MonkeyPatch, failure: str, message: str
+) -> None:
+    """Ein ungeeigneter Speicherbestand verlangt eine Korrektur vor jeder Dateimutierung."""
+    certificate = _certificate()
+    now = datetime.now(UTC)
+    certificates = {
+        "missing": [],
+        "expired": [
+            replace(
+                certificate, not_before=now - timedelta(days=2), not_after=now - timedelta(days=1)
+            )
+        ],
+        "future": [replace(certificate, not_before=now + timedelta(hours=1))],
+        "public-only": [replace(certificate, has_private_key=False)],
+        "wrong-usage": [replace(certificate, enhanced_key_usage=("1.3.6.1.5.5.7.3.1",))],
+        "ambiguous": [certificate, replace(certificate, thumbprint="CD" * 20)],
+    }[failure]
+    monkeypatch.setattr(sign_release, "read_certificates", lambda: certificates)
+    with pytest.raises(sign_release.SigningError, match=message):
+        _go(signing)
+    assert not Path(signing["stage"]).exists()  # type: ignore[arg-type]
+    assert not Path(signing["output"]).exists()  # type: ignore[arg-type]
+    tools = signing["tools"]
+    assert isinstance(tools, FakeTools)
+    assert tools.calls == []
+
+
+def test_a_thumbprint_resolves_two_current_certificates(
+    signing: dict[str, object], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der ausdrückliche Fingerabdruck wählt bei gleichem Namen genau das gewünschte Zertifikat."""
+    chosen = replace(_certificate(), thumbprint="CD" * 20)
+    monkeypatch.setattr(sign_release, "read_certificates", lambda: [_certificate(), chosen])
+    _go(signing, subject=None, thumbprint="\u200e" + ":".join(["cd"] * 20) + " ")
+    tools = signing["tools"]
+    assert isinstance(tools, FakeTools)
+    calls = [call for call in tools.calls if call[1] == "sign"]
+    assert len(calls) == 2
+    assert all(call[call.index("/sha1") + 1] == chosen.thumbprint for call in calls)
+
+
+def test_expired_names_do_not_obscure_the_one_valid_code_signing_certificate(
+    signing: dict[str, object], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein abgelaufener Vorgänger ist keine zweite verwendbare Identität."""
+    current = _certificate()
+    expired = replace(
+        current,
+        thumbprint="CD" * 20,
+        not_before=current.not_before - timedelta(days=2),
+        not_after=current.not_before,
+    )
+    monkeypatch.setattr(sign_release, "read_certificates", lambda: [expired, current])
+    result = sign_release.check_prerequisites(subject="beispiel herausgeber", thumbprint=None)
+    assert result.certificate == current
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        [],
+        ["--subject", " "],
+        ["--thumbprint", ""],
+        ["--thumbprint", "AB" * 19],
+        ["--thumbprint", "AG" * 20],
+        ["--subject", "Beispiel", "--thumbprint", THUMBPRINT],
+    ],
+)
+def test_invalid_selectors_stop_before_a_download(
+    monkeypatch: pytest.MonkeyPatch, arguments: list[str]
+) -> None:
+    """Auch --run beginnt bei einer unklaren Identität noch keinen Download."""
+
+    def forbidden(*args: object, **kwargs: object) -> None:
+        pytest.fail("Ungültige Auswahl hat eine externe Aktion erreicht")
+
+    monkeypatch.setattr(sign_release, "download_handoff", forbidden)
+    monkeypatch.setattr(sign_release, "check_prerequisites", forbidden)
+    assert sign_release.main(["--run", "123", *arguments]) == 1
+
+
+def test_the_local_phases_do_not_need_inno(
+    signing: dict[str, object], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Nur die CI benötigt den Paketierer; lokal wird dessen Suche nie ausgelöst."""
+    monkeypatch.setattr(make_installer, "find_compiler", lambda: pytest.fail("Lokale Inno-Suche"))
+    _go(signing)
+    tools = signing["tools"]
+    assert isinstance(tools, FakeTools)
+    assert not any(Path(call[0]).name.lower() == "iscc.exe" for call in tools.calls)
+
+
+def test_check_reads_prerequisites_without_an_archive_or_file_changes(
+    signing: dict[str, object],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Der lokale Vorabcheck liest Werkzeuge und Metadaten, selbst wenn kein Archiv existiert."""
+
+    def forbidden(*args: object, **kwargs: object) -> None:
+        pytest.fail("--check hat die Archiv- oder Signierkette erreicht")
+
+    for name in ("verify_archive", "extract_archive", "download_handoff", "sign_file", "run"):
+        monkeypatch.setattr(sign_release, name, forbidden)
+    before = {path: path.read_bytes() for path in tmp_path.rglob("*") if path.is_file()}
+    capsys.readouterr()
+    assert (
+        sign_release.main(
+            [
+                "--check",
+                "--subject",
+                "Beispiel Herausgeber",
+            ]
+        )
+        == 0
+    )
+    assert {path: path.read_bytes() for path in tmp_path.rglob("*") if path.is_file()} == before
+    text = capsys.readouterr().out
+    assert "kein Cloud-Signiertest" in text
+    assert "HasPrivateKey" in text
+    assert THUMBPRINT in text
+    assert not Path(signing["stage"]).exists()  # type: ignore[arg-type]
+    tools = signing["tools"]
+    assert isinstance(tools, FakeTools)
+    assert tools.calls == []
+
+
+def test_check_refuses_a_ci_download(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Der reine Check darf nicht versehentlich mit --run nach außen greifen."""
+
+    def forbidden(*args: object, **kwargs: object) -> None:
+        pytest.fail("--check --run darf keine Aktion ausführen")
+
+    monkeypatch.setattr(sign_release, "download_handoff", forbidden)
+    monkeypatch.setattr(sign_release, "check_prerequisites", forbidden)
+    assert sign_release.main(["--check", "--run", "123", "--thumbprint", THUMBPRINT]) == 1
+
+
+def test_check_requires_windows(
+    signing: dict[str, object], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Auch eine scheinbar vorhandene Werkzeugkette ersetzt keinen Windows-Zertifikatspeicher."""
+    monkeypatch.setattr(sign_release.sys, "platform", "linux")
+    with pytest.raises(sign_release.SigningError, match="Windows"):
+        sign_release.check_prerequisites(subject=None, thumbprint=THUMBPRINT)
+
+
+def test_check_requires_signtool(
+    signing: dict[str, object], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein fehlendes Signierwerkzeug lässt auch den reinen Check rot werden."""
+
+    def missing(explicit: Path | None = None) -> Path:
+        raise sign_release.SigningError("Windows SDK installieren")
+
+    monkeypatch.setattr(sign_release, "find_signtool", missing)
+    assert sign_release.main(["--check", "--thumbprint", THUMBPRINT]) == 1
+
+
+def test_a_missing_timestamp_warning_blocks_the_installer(signing: dict[str, object]) -> None:
+    """SignTools Warnexit 2 ist bei /tw ein Halt, auch wenn die Signatur selbst gültig ist."""
+    tools = signing["tools"]
+    assert isinstance(tools, FakeTools)
+    tools.verify_warns = True
+    with pytest.raises(sign_release.SigningError, match="Zeitstempel"):
+        _go(signing)
+    assert [call[1] for call in tools.calls] == ["sign", "verify"]
+    assert tools.application_signed_when_packed is None
+
+
+def _certificate_record() -> dict[str, object]:
+    """Bildet die feste JSON-Ausgabe von Windows PowerShell nach."""
+    certificate = _certificate()
+    return {
+        "Thumbprint": certificate.thumbprint,
+        "Subject": certificate.subject,
+        "NotBefore": certificate.not_before.isoformat(),
+        "NotAfter": certificate.not_after.isoformat(),
+        "HasPrivateKey": certificate.has_private_key,
+        "EnhancedKeyUsage": list(certificate.enhanced_key_usage),
+    }
+
+
+def test_certificate_reader_uses_only_a_fixed_read_only_powershell_command(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Namen sind Daten; auch Shellzeichen eines Subjects gelangen nie in den PS-Befehl."""
+    record = _certificate_record()
+    record["Subject"] = "CN=Beispiel; $(Write-Output fremd)"
+    calls: list[list[str]] = []
+
+    def process(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        calls.append(command)
+        assert kwargs == {
+            "check": False,
+            "capture_output": True,
+            "encoding": "utf-8",
+            "timeout": 30,
+            "env": None,
+        }
+        return subprocess.CompletedProcess(command, 0, json.dumps([record]))
+
+    monkeypatch.setattr(sign_release, "_run", process)
+    monkeypatch.setattr(sign_release.shutil, "which", lambda name: "powershell.exe")
+    records = sign_release.read_certificates()
+    assert len(records) == 1
+    assert records[0].subject == record["Subject"]
+    assert records[0].has_private_key is True
+    assert records[0].enhanced_key_usage == ("1.3.6.1.5.5.7.3.3",)
+    assert calls == [
+        [
+            "powershell.exe",
+            "-NoLogo",
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            sign_release._CERTIFICATE_SCRIPT,
+        ]
+    ]
+    script = calls[0][-1]
+    assert "Cert:\\CurrentUser\\My" in script
+    assert str(record["Subject"]) not in script
+    assert ".PrivateKey" not in script
+    assert "Export-Certificate" not in script and "Import-Certificate" not in script
+
+
+@pytest.mark.parametrize(
+    ("result", "status"),
+    [
+        ("not JSON", 0),
+        ("null", 0),
+        ('{"Thumbprint": "AB"}', 0),
+        ("[{}]", 0),
+        ("[]", 1),
+    ],
+)
+def test_certificate_reader_rejects_failed_or_malformed_responses(
+    monkeypatch: pytest.MonkeyPatch, result: str, status: int
+) -> None:
+    """Ein leeres Ergebnis ist nur bei erfolgreichem Lesen eine gültige Auskunft."""
+    monkeypatch.setattr(sign_release.shutil, "which", lambda name: "powershell.exe")
+    monkeypatch.setattr(
+        sign_release,
+        "_run",
+        lambda *args, **kwargs: subprocess.CompletedProcess([], status, result),
+    )
+    with pytest.raises(sign_release.SigningError, match="PowerShell"):
+        sign_release.read_certificates()
+
+
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [
+        ("HasPrivateKey", "False"),
+        ("EnhancedKeyUsage", "1.3.6.1.5.5.7.3.3"),
+        ("NotBefore", "2026-01-01T00:00:00"),
+        ("NotAfter", "invalid"),
+        ("Thumbprint", "not a hash"),
+    ],
+)
+def test_certificate_reader_rejects_malformed_metadata(
+    monkeypatch: pytest.MonkeyPatch, key: str, value: str
+) -> None:
+    """Strings werden weder als Schlüsselbesitz noch als Datum oder Fingerabdruck geraten."""
+    record = {**_certificate_record(), key: value}
+    monkeypatch.setattr(sign_release.shutil, "which", lambda name: "powershell.exe")
+    monkeypatch.setattr(
+        sign_release,
+        "_run",
+        lambda *args, **kwargs: subprocess.CompletedProcess([], 0, json.dumps([record])),
+    )
+    with pytest.raises(sign_release.SigningError):
+        sign_release.read_certificates()
+
+
+def test_certificate_reader_reports_an_empty_store(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ein erreichbarer leerer Speicher bleibt von einer kaputten Abfrage unterscheidbar."""
+    monkeypatch.setattr(sign_release.shutil, "which", lambda name: "powershell.exe")
+    monkeypatch.setattr(
+        sign_release, "_run", lambda *args, **kwargs: subprocess.CompletedProcess([], 0, "[]")
+    )
+    assert sign_release.read_certificates() == []
+
+
+def test_certificate_reader_turns_a_timeout_into_a_next_step(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein hängender Speicherzugriff bleibt begrenzt und endet ohne Traceback."""
+    monkeypatch.setattr(sign_release.shutil, "which", lambda name: "powershell.exe")
+
+    def process(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        raise subprocess.TimeoutExpired("powershell.exe", 30)
+
+    monkeypatch.setattr(sign_release, "_run", process)
+    with pytest.raises(sign_release.SigningError, match="--check erneut"):
+        sign_release.read_certificates()
+
+
+def test_windows_powershell_reads_native_certificate_eku_without_touching_the_store() -> None:
+    """Ein öffentlicher Prüf-DER belegt den echten PowerShell-EKU-Datentyp ohne Nutzerzertifikat."""
+    if sys.platform != "win32" or shutil.which("powershell.exe") is None:
+        pytest.skip("Windows PowerShell erforderlich")
+    fixture = r"""
+$ErrorActionPreference = 'Stop'
+$testKey = [System.Security.Cryptography.RSACng]::new(2048)
+$testRequest = [System.Security.Cryptography.X509Certificates.CertificateRequest]::new(
+    'CN=Isolierter EKU-Test', $testKey,
+    [System.Security.Cryptography.HashAlgorithmName]::SHA256,
+    [System.Security.Cryptography.RSASignaturePadding]::Pkcs1
+)
+$testOids = [System.Security.Cryptography.OidCollection]::new()
+[void]$testOids.Add([System.Security.Cryptography.Oid]::new('1.3.6.1.5.5.7.3.3'))
+$testEku = [System.Security.Cryptography.X509Certificates.X509EnhancedKeyUsageExtension]::new(
+    $testOids, $false
+)
+$testRequest.CertificateExtensions.Add($testEku)
+$testSigned = $testRequest.CreateSelfSigned(
+    [DateTimeOffset]::UtcNow.AddDays(-1), [DateTimeOffset]::UtcNow.AddDays(1)
+)
+$testCertificate = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new(
+    $testSigned.Export([System.Security.Cryptography.X509Certificates.X509ContentType]::Cert)
+)
+"""
+    script = (
+        fixture
+        + sign_release._CERTIFICATE_SCRIPT.replace(
+            "Get-ChildItem -LiteralPath 'Cert:\\CurrentUser\\My'", "$testCertificate"
+        )
+        + "\n$testCertificate.Dispose(); $testSigned.Dispose(); $testKey.Dispose()"
+    )
+    records = sign_release._read_powershell_json(script)
+    assert len(records) == 1
+    assert records[0]["EnhancedKeyUsage"] == ["1.3.6.1.5.5.7.3.3"]
+    assert records[0]["HasPrivateKey"] is False
+
+
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [
+        ("id", 999),
+        ("status", "in_progress"),
+        ("conclusion", "failure"),
+        ("event", "push"),
+        ("event", "pull_request"),
+        ("head_branch", "release"),
+        ("path", ".github/workflows/other.yml"),
+        ("head_sha", "not-a-commit"),
+        ("repository", {"full_name": "foreign/repo"}),
+        ("head_repository", {"full_name": "foreign/repo"}),
+    ],
+)
+def test_ci_run_requires_the_exact_successful_manual_main_workflow(
+    monkeypatch: pytest.MonkeyPatch, key: str, value: object
+) -> None:
+    """Ein fremder oder nur teilfertiger Lauf kann keine lokale Signatur autorisieren."""
+    record = {**_ci_record("123", sign_release.BUILD_WORKFLOW), key: value}
+    monkeypatch.setattr(sign_release.shutil, "which", lambda name: "gh")
+    monkeypatch.setattr(
+        sign_release,
+        "_run",
+        lambda *args, **kwargs: subprocess.CompletedProcess([], 0, json.dumps(record)),
+    )
+    with pytest.raises(sign_release.SigningError, match="CI-Lauf"):
+        sign_release.verify_ci_run("123", sign_release.BUILD_WORKFLOW)
+
+
+def test_ci_metadata_timeout_reports_the_next_step(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ein API-Hänger bleibt ein erklärter Halt, kein Traceback."""
+    monkeypatch.setattr(sign_release.shutil, "which", lambda name: "gh")
+
+    def timeout(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        raise subprocess.TimeoutExpired("gh", 30)
+
+    monkeypatch.setattr(sign_release, "_run", timeout)
+    with pytest.raises(sign_release.SigningError, match="gh-Anmeldung"):
+        sign_release.verify_ci_run("123", sign_release.BUILD_WORKFLOW)
+
+
+@pytest.mark.parametrize(
+    "problem", ["extra", "missing", "hash", "provenance", "checksum", "encoding"]
+)
+def test_installer_ci_return_must_match_the_application_provenance(
+    signing: dict[str, object], problem: str
+) -> None:
+    """Unvollständige, veränderte und fremde Rückwege erreichen keine Setup-Signatur."""
+    arguments = _application_phase(signing)
+    tools = signing["tools"]
+    assert isinstance(tools, FakeTools)
+    name = f"{APP}-Setup-{make_installer.APP_VERSION}.exe"
+    if problem == "extra":
+        tools.installer_files["foreign.dll"] = b"foreign"
+    elif problem == "missing":
+        del tools.installer_files[name]
+    elif problem == "hash":
+        tools.installer_files[name] = b"changed"
+    elif problem == "provenance":
+        metadata = json.loads(tools.installer_files[sign_release.INSTALLER_METADATA])
+        metadata["source_run_id"] = "999"
+        tools.installer_files[sign_release.INSTALLER_METADATA] = json.dumps(metadata).encode()
+    else:
+        tools.installer_files[name + ".sha256"] = (
+            b"\xff" if problem == "encoding" else b"wrong hash"
+        )
+    with pytest.raises(sign_release.SigningError):
+        sign_release.sign_installer(**arguments)  # type: ignore[arg-type]
+    assert len([call for call in tools.calls if call[1] == "sign"]) == 1
+    assert not Path(signing["output"]).exists()  # type: ignore[arg-type]
+
+
+def test_changed_stage_and_rebound_hashes_still_fail_against_the_original_ci_archive(
+    signing: dict[str, object],
+) -> None:
+    """Eine nachträglich passend geschriebene lokale Prüfsumme ersetzt die CI-Herkunft nicht."""
+    arguments = _application_phase(signing)
+    stage = signing["stage"]
+    assert isinstance(stage, Path)
+    target = stage / f"dist/{APP}/_internal/python313.dll"
+    target.write_bytes(b"changed after application signing")
+    handoff_path = stage / sign_release.HANDOFF_NAME
+    handoff = json.loads(handoff_path.read_text())
+    handoff["input_sha256"][target.relative_to(stage).as_posix()] = _sha256(target)
+    handoff_path.write_text(json.dumps(handoff))
+    with pytest.raises(sign_release.SigningError, match=r"Arbeitsstand.*CI-Herkunft"):
+        sign_release.sign_installer(**arguments)  # type: ignore[arg-type]
+
+
+def test_installer_run_must_have_the_same_commit(
+    signing: dict[str, object], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein erfolgreicher Installerlauf aus einem anderen Commit bleibt ein fremder Rückweg."""
+    arguments = _application_phase(signing)
+    monkeypatch.setattr(
+        sign_release,
+        "verify_ci_run",
+        lambda run_id, workflow: {**_ci_record(run_id, workflow), "head_sha": "34" * 20},
+    )
+    with pytest.raises(sign_release.SigningError, match="CI-Commits"):
+        sign_release.sign_installer(**arguments)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("status,identity", [("NotSigned", THUMBPRINT), ("Valid", "CD" * 20)])
+def test_authenticode_identity_rejects_an_invalid_or_foreign_signature(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, status: str, identity: str
+) -> None:
+    """Eine gültige fremde Signatur erfüllt die ausdrückliche Zertifikatswahl nicht."""
+    monkeypatch.setattr(
+        sign_release,
+        "_read_powershell_json",
+        lambda *args: {"Status": status, "Thumbprint": identity},
+    )
+    with pytest.raises(sign_release.SigningError, match="gewählten Zertifikat"):
+        sign_release.verify_signature_identity(tmp_path / "package.exe", THUMBPRINT)
+
+
+def test_authenticode_path_is_data_and_never_powershell_source(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Shellzeichen im Dateinamen reisen ausschließlich als Umgebungswert."""
+    target = tmp_path / "app '; $(Write-Output foreign).exe"
+
+    def read(script: str, environment: dict[str, str]) -> dict[str, str]:
+        assert str(target) not in script
+        assert environment["SOLIDON_SIGNATURE_PATH"] == str(target.resolve())
+        return {"Status": "Valid", "Thumbprint": THUMBPRINT.lower()}
+
+    monkeypatch.setattr(sign_release, "_read_powershell_json", read)
+    sign_release.verify_signature_identity(target, THUMBPRINT)
+
+
+def test_old_local_build_entry_and_missing_phase_stop_before_any_work(
+    signing: dict[str, object], capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Weder die alte API noch ein unvollständiger CLI-Aufruf baut still lokal."""
+    with pytest.raises(sign_release.SigningError, match="CI baut"):
+        sign_release.run(subject="Beispiel")
+    assert sign_release.main(["--run", "123", "--thumbprint", THUMBPRINT]) == 1
+    assert "--phase application" in capsys.readouterr().out
+    tools = signing["tools"]
+    assert isinstance(tools, FakeTools)
+    assert tools.calls == [] and tools.downloads == []
+
+
 def test_signtool_is_found_in_the_newest_sdk(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -390,13 +988,18 @@ def test_signtool_is_found_in_the_newest_sdk(
 
 
 def test_the_command_line_reports_a_missing_archive_with_the_way_out(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], signing: dict[str, object]
 ) -> None:
     """Der Einstieg endet nie mit einem Traceback — die Meldung nennt den nächsten Schritt."""
+    archive = signing["archive"]
+    assert isinstance(archive, Path)
+    archive.unlink()
     code = sign_release.main(
         [
-            "--archive",
-            str(tmp_path / "fehlt.zip"),
+            "--phase",
+            "application",
+            "--run",
+            "123",
             "--stage",
             str(tmp_path / "stage"),
             "--subject",
@@ -404,7 +1007,7 @@ def test_the_command_line_reports_a_missing_archive_with_the_way_out(
         ]
     )
     assert code == 1
-    assert "--run" in capsys.readouterr().out
+    assert "Laufnummer prüfen" in capsys.readouterr().out
 
 
 @pytest.mark.parametrize("failure", ["copy", "corrupt", "checksum"])

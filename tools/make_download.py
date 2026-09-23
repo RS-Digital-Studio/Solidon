@@ -40,6 +40,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.branding import APP_NAME, APP_VERSION
 from app.core import changes
+from tools import sign_release
 from tools.make_changelog import write_pages as write_changelog_pages
 
 for _stream in (sys.stdout, sys.stderr):
@@ -371,11 +372,11 @@ def refuse_wrong_delivery(paths: list[Path]) -> None:
 
 
 def read_packages(paths: list[Path]) -> list[Package]:
-    """Kopieren, messen, Prüfsumme rechnen — in der Reihenfolge der Plattformen."""
+    """Alle Eingänge prüfen, dann kopieren, messen und nach Plattform ordnen."""
     refuse_wrong_delivery(paths)
-    STORE.mkdir(parents=True, exist_ok=True)
-    found: list[Package] = []
+    prepared: list[tuple[Path, str]] = []
     seen: set[str] = set()
+    signtool: Path | None = None
     for path in paths:
         if not path.is_file():
             raise SystemExit(f"{path} gibt es nicht.")
@@ -383,7 +384,23 @@ def read_packages(paths: list[Path]) -> list[Package]:
         if path.name in seen:
             raise SystemExit(f"{path.name} ist zweimal angegeben.")
         seen.add(path.name)
+        if kind == "windows":
+            try:
+                if signtool is None:
+                    signtool = sign_release.find_signtool()
+                sign_release.verify_file(signtool, path)
+            except (sign_release.SigningError, OSError) as exc:
+                raise SystemExit(
+                    f"Die Windows-Auslieferung wurde angehalten: {exc}\n"
+                    "SignTool aus dem Windows SDK prüfen und das Paket mit "
+                    "tools/sign_release.py samt Zeitstempel signieren; "
+                    "danach den Download-Lauf erneut starten."
+                ) from exc
+        prepared.append((path, kind))
 
+    STORE.mkdir(parents=True, exist_ok=True)
+    found: list[Package] = []
+    for path, kind in prepared:
         target = STORE / path.name
         # Verglichen wird der Inhalt, nicht die Größe: Ein neu gebautes Paket
         # derselben Länge blieb liegen, und die Prüfsumme darunter belegte das

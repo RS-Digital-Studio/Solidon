@@ -194,21 +194,158 @@ def test_the_download_store_takes_the_new_bytes_even_at_the_same_size(
     Prüfsumme darunter belegte das alte."""
     import hashlib
 
-    from tools import make_download
+    from tools import make_download, sign_release
 
     store = tmp_path / "dl"
     store.mkdir()
-    source = tmp_path / "Solidon3D-Setup.exe"
+    source = tmp_path / "Solidon3D-x86_64.AppImage"
     source.write_bytes(b"NEW_CONTENT")
     (store / source.name).write_bytes(b"OLD_CONTENT")
     monkeypatch.setattr(make_download, "STORE", store)
     monkeypatch.setattr(make_download, "refuse_wrong_delivery", lambda _paths: None)
+    monkeypatch.setattr(sign_release, "find_signtool", lambda: pytest.fail("kein Windows-Paket"))
 
     packages = make_download.read_packages([source])
 
     assert (store / source.name).read_bytes() == b"NEW_CONTENT"
     assert packages[0].hash_ == hashlib.sha256(b"NEW_CONTENT").hexdigest()
     assert not list(store.glob("*.part")), "keine halbe Kopie bleibt liegen"
+
+
+def _download_inputs(root: Path) -> list[Path]:
+    """Fünf Auslieferungsplätze, absichtlich mit Windows als letzter Datei."""
+    names = (
+        "Solidon3D-x86_64.AppImage",
+        "Solidon3D-x86_64.flatpak",
+        "Solidon3D-macos-arm64.pkg",
+        "Solidon3D-macos-x86_64.pkg",
+        "Solidon3D-Setup.exe",
+    )
+    paths = [root / name for name in names]
+    for path in paths:
+        path.write_bytes(b"NEW_CONTENT")
+    return paths
+
+
+@pytest.mark.parametrize("existing_store", [False, True])
+@pytest.mark.parametrize("problem", ["missing", "unsigned", "invalid", "timestamp", "unreadable"])
+def test_the_download_build_keeps_every_file_when_windows_verification_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    existing_store: bool,
+    problem: str,
+) -> None:
+    """Auch ein spätes Windows-Paket sperrt den gesamten Lauf vor der ersten Kopie."""
+    from tools import make_download, sign_release
+
+    sources = _download_inputs(tmp_path)
+    website = tmp_path / "website"
+    store = website / "dl"
+    if existing_store:
+        store.mkdir(parents=True)
+        for source in sources:
+            (store / source.name).write_bytes(b"OLD_CONTENT")
+    for name in (*make_download.PAGES, "version.json"):
+        path = website / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(f"published {name}", encoding="utf-8")
+    before = {
+        path.relative_to(website): path.read_bytes()
+        for path in website.rglob("*")
+        if path.is_file()
+    }
+    tool = tmp_path / "signtool.exe"
+    checked: list[Path] = []
+
+    def find_tool() -> Path:
+        if problem == "missing":
+            raise sign_release.SigningError("SignTool fehlt; Windows SDK installieren.")
+        return tool
+
+    def run_verify(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        assert command == [str(tool), "verify", "/pa", "/all", "/tw", "/v", str(sources[-1])]
+        assert kwargs == {"check": False}
+        checked.append(Path(command[-1]))
+        if problem == "unreadable":
+            raise OSError("SignTool lässt sich nicht starten.")
+        return subprocess.CompletedProcess(command, 2 if problem == "timestamp" else 1)
+
+    monkeypatch.setattr(make_download, "WEBSITE", website)
+    monkeypatch.setattr(make_download, "STORE", store)
+    monkeypatch.setattr(make_download, "VERSION_FILE", website / "version.json")
+    monkeypatch.setattr(sign_release, "find_signtool", find_tool)
+    monkeypatch.setattr(sign_release, "_run", run_verify)
+    monkeypatch.setattr(sys, "argv", ["make_download.py", *(str(path) for path in sources)])
+
+    with pytest.raises(SystemExit) as stopped:
+        make_download.main()
+
+    after = {
+        path.relative_to(website): path.read_bytes()
+        for path in website.rglob("*")
+        if path.is_file()
+    }
+    assert after == before, "Downloadbestand, Seiten und Manifest bleiben bytegleich"
+    assert store.exists() is existing_store, (
+        "auch der Downloadordner entsteht erst nach der Prüfung"
+    )
+    assert checked == ([] if problem == "missing" else [sources[-1]])
+    assert "signieren" in str(stopped.value) and "SignTool" in str(stopped.value)
+
+
+def test_the_download_store_accepts_verified_windows_packages(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der gemeinsame Prüfer gibt gültige Windows-Bytes vor jeder Mutation frei."""
+    from tools import make_download, sign_release
+
+    sources = _download_inputs(tmp_path)
+    store = tmp_path / "dl"
+    tool = tmp_path / "signtool.exe"
+    checked: list[Path] = []
+
+    def run_verify(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        assert command == [str(tool), "verify", "/pa", "/all", "/tw", "/v", str(sources[-1])]
+        assert kwargs == {"check": False}
+        assert not store.exists(), "die Prüfung steht vor STORE.mkdir"
+        checked.append(Path(command[-1]))
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(make_download, "STORE", store)
+    monkeypatch.setattr(sign_release, "find_signtool", lambda: tool)
+    monkeypatch.setattr(sign_release, "_run", run_verify)
+
+    packages = make_download.read_packages(sources)
+
+    assert checked == [sources[-1]]
+    assert {package.name for package in packages} == {source.name for source in sources}
+    assert all((store / source.name).read_bytes() == source.read_bytes() for source in sources)
+
+
+def test_withdrawing_downloads_needs_no_windows_signing_tool(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Der vorhandene leere Aufruf zieht das Angebot auch ohne Windows-Werkzeuge zurück."""
+    from tools import make_download, sign_release
+
+    written: list[str] = []
+
+    def pages(packages: list[make_download.Package]) -> None:
+        assert packages == []
+        written.append("pages")
+
+    def version(packages: list[make_download.Package]) -> None:
+        assert packages == []
+        written.append("version")
+
+    monkeypatch.setattr(sys, "argv", ["make_download.py"])
+    monkeypatch.setattr(make_download, "write_pages", pages)
+    monkeypatch.setattr(make_download, "write_version", version)
+    monkeypatch.setattr(make_download, "write_changelog_pages", list)
+    monkeypatch.setattr(sign_release, "find_signtool", lambda: pytest.fail("kein Windows-Paket"))
+
+    assert make_download.main() == 0
+    assert written == ["pages", "version"]
 
 
 # --- check_new_texts -------------------------------------------------------------
@@ -468,8 +605,8 @@ def test_signing_cli_explains_file_errors_without_a_traceback(
     def fail(**_kwargs: object) -> None:
         raise problem_type("broken input")
 
-    monkeypatch.setattr(sign_release, "run", fail)
-    assert sign_release.main(["--subject", "test"]) == 1
+    monkeypatch.setattr(sign_release, "sign_application", fail)
+    assert sign_release.main(["--phase", "application", "--run", "123", "--subject", "test"]) == 1
     message = capsys.readouterr().out
     assert "prüfen" in message and "Traceback" not in message
 

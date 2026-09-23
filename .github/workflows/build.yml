@@ -16,8 +16,10 @@
 # Geheimnisse erreichen nur den jeweiligen Signierschritt. Windows wird hier
 # gebaut und **nicht** signiert: Der Paketjob übergibt den gebundenen App-Baum
 # als Artefakt, und `tools/sign_release.py` signiert ihn lokal mit dem
-# Certum-Cloud-Zertifikat (Signierung/README.md). Der Installer aus der CI
-# bleibt unsigniert und trägt eine sichtbare Warnung.
+# Certum-Cloud-Zertifikat (Signierung/README.md). Danach baut der manuelle
+# Workflow windows-signed-installer.yml aus derselben Übergabe und der lokal
+# signierten Anwendung den Installer; seine Setup-Datei wird zuletzt lokal
+# signiert. Der unsignierte Prüfbau dieses Hauptlaufs wird nicht ausgeliefert.
 #
 # Der tägliche Push läuft nur auf Ubuntu; die volle Matrix mit beiden Macs und
 # die Paketierung laufen bei Tags und beim Handstart (workflow_dispatch).
@@ -709,7 +711,7 @@ jobs:
 
   windows-installer:
     name: Windows-Installer ohne Signierrechte bauen
-    # Baut den unsignierten Installer für Demo und Releaseprüfung aus genau
+    # Baut den unsignierten Installer ausschließlich zur Releaseprüfung aus genau
     # der Übergabe, die tools/sign_release.py lokal signiert. Der Job hat
     # keine Geheimnisse und braucht keine.
     needs: package
@@ -819,7 +821,7 @@ jobs:
 
       - name: Unsignierten Bau ausweisen
         shell: pwsh
-        run: Write-Host "::warning::Unsignierter Bau - SmartScreen warnt beim ersten Start. Die signierte Fassung entsteht lokal mit tools/sign_release.py aus dem Artefakt solidon3d-windows-signing-input."
+        run: Write-Host "::warning::Unsignierter Prüfbau - nicht ausliefern. Nach der lokalen Anwendungssignatur baut windows-signed-installer.yml den Installer; seine Setup-Datei wird abschließend lokal signiert."
 
       - name: Unsignierten finalen Installer intern übergeben
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

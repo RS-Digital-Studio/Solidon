@@ -4,8 +4,9 @@ Was ein Kunde beim Herunterladen und Starten sieht, hängt an
 drei verschiedenen Mechanismen: SmartScreen unter Windows, Gatekeeper unter
 macOS, und unter Linux an nichts. Die CI (`.github/workflows/build.yml`)
 signiert macOS selbst, sobald Konto und Geheimnisse da sind; Windows baut sie
-und übergibt es zur lokalen Signatur mit `tools/sign_release.py`. Bis dahin
-liefert sie unsignierte Pakete mit sichtbarer Warnung. Diese Datei
+und übergibt es zur lokalen Signatur mit `tools/sign_release.py`. **Ab 0.5.0
+wird Windows nur signiert veröffentlicht.** Anwendung und Installer werden
+in der CI gebaut; lokal erfolgen die Certum-Signaturen. Diese Datei
 sagt, welcher Weg je Plattform der günstigste sichere ist, was er kostet, was
 dafür zu tun ist und wer dann wo baut.
 
@@ -23,6 +24,38 @@ Zertifizierungsstellen seit 2023 nicht mehr heraus.
 ---
 
 ## Windows — Certum Standard Code Signing für eine Einzelperson
+
+### Zertifikat und lokale Anmeldung
+
+Das ausgestellte Zertifikat gehört **Robert Schneider**. Sein SHA-1-
+Fingerabdruck zur eindeutigen Auswahl lautet:
+
+```
+235C54FC71D79BD03449DBC62FFB14D0AC58AEB3
+```
+
+Gültigkeit: 23.09.2026 bis 26.12.2027. Die öffentliche DER-Kopie liegt auf
+Roberts Rechner unter
+`%USERPROFILE%\OneDrive\477e7c0243c8df3da3a667dd8968351d.cer`.
+Sie enthält keinen privaten Schlüssel. Dieser bleibt bei Certum; eine
+manuelle Installation der `.cer` ersetzt die SimplySign-Anmeldung nicht.
+
+Auf dem Handy SimplySign über Certums Aktivierungsmails einrichten. Auf dem
+Windows-PC SimplySign Desktop mit `abrechnung@solidon3d.de` und einem
+Einmalcode aus der Handy-App verbinden. Einmalcodes, Aktivierungsgeheimnis
+und QR-Code werden weder im Repository noch in GitHub hinterlegt.
+
+Der Vorabcheck liest nur Werkzeuge und Zertifikatsmetadaten; er lädt kein
+Artefakt herunter und signiert nichts:
+
+```powershell
+.venv\Scripts\python.exe tools/sign_release.py --check --thumbprint 235C54FC71D79BD03449DBC62FFB14D0AC58AEB3
+```
+
+Er prüft die eindeutige Auswahl, Gültigkeit, Code-Signing-Verwendung und
+Zuordnung zum privaten Schlüssel im Windows-Benutzerspeicher. Ein grüner
+Vorabcheck belegt noch keine erfolgreiche Cloud-Signatur. Dafür müssen die
+echten Dateien signiert und einschließlich Zeitstempel geprüft werden.
 
 ### Was es ist
 
@@ -69,43 +102,86 @@ Jahren kommt die Neuausstellung kostenlos, je Jahr etwas günstiger.
    QR-Code koppeln, Zertifikat im Konto aktivieren. Certum hat dazu eine
    Anleitung als PDF („Standard Code Signing in the cloud certificate activation").
 
-### Signieren — der lokale Weg über die Signierübergabe
+### Signieren — zwei CI-Bauschritte mit lokaler Signatur
 
 Die CI baut die Windows-Anwendung und legt einen prüfsummengebundenen
 Signiereingang ab: das Artefakt `solidon3d-windows-signing-input` mit
 `windows-signing-input.zip` und der zugehörigen `.sha256`. Darin liegen der
 gebaute Anwendungsordner, das Inno-Setup-Skript, Lizenz, Symbol, Lizenzmanifest
 und `packaging/build/windows-signing.json` mit den Prüfsummen jeder Eingabe.
-Genau dieser Eingang ist für den geschützten Signierjob gedacht, und er lässt
-sich ebenso gut lokal verarbeiten. Das Artefakt lebt sieben Tage
+Dieser Eingang wird lokal geprüft und signiert. Das Artefakt lebt sieben Tage
 (`retention-days: 7`) — genug, um nach dem Lauf in Ruhe zu signieren.
 
-Ein Aufruf fährt die ganze Kette:
+Der Ablauf ist verbindlich:
 
-```
-.venv\Scripts\python.exe tools/sign_release.py --run <lauf> --subject "Robert Schneider"
+1. `build.yml` baut die Anwendung in der CI und liefert den Signiereingang.
+2. Lokal wird ausschließlich `Solidon3D.exe` signiert und geprüft.
+3. `windows-signed-installer.yml` baut den Installer in der CI aus genau dieser
+   signierten Anwendung und den ursprünglichen, geprüften Eingängen.
+4. Lokal wird ausschließlich dieser Installer signiert und geprüft. Danach
+   werden Prüfsumme und Releaseakte für das endgültige Kundenpaket geschrieben.
+
+**Erster lokaler Schritt**, mit der Nummer des erfolgreichen Anwendungslaufs:
+
+```powershell
+.venv\Scripts\python.exe tools/sign_release.py --phase application --run <bau-lauf> --stage build/signing-<bau-lauf> --output dist/signing-<bau-lauf> --thumbprint 235C54FC71D79BD03449DBC62FFB14D0AC58AEB3
 ```
 
-`--run` holt das Artefakt mit `gh` nach `dist/`; ohne `--run` nimmt das
-Werkzeug ein schon dort liegendes `windows-signing-input.zip`. Dann, in
-dieser Reihenfolge und bei jeder Abweichung mit Halt: Archiv gegen seine
-`.sha256` prüfen, nach `build/signing` entpacken (ein vorhandener Ordner
-wird nie überschrieben), die Übergabe gegen Produktangaben und jede
-Prüfsumme prüfen, `Solidon3D.exe` mit `signtool sign /fd SHA256 /tr
-http://time.certum.pl /td SHA256 /n <Name>` signieren und mit `signtool
-verify /pa /v` prüfen, die Übergabe mit der neuen Prüfsumme neu binden,
-die Setup-Datei mit Inno Setup bauen, sie genauso signieren und prüfen, die
-`.sha256` daneben schreiben. Ergebnis und Prüfsumme liegen danach unter
-`dist/`. Am Ende schreibt es die Release-Evidenz neu
-(`make_licence_notices.py --write-evidence`) und fährt `--release-check`
-gegen den signierten Installer, wie die CI es gegen den unsignierten tut —
-der äußere Hash ist nach der Signatur ein anderer, und die Akte muss den
-nennen, den der Kunde bekommt. Scheitert einer der beiden Schritte, warnt
-das Werkzeug und legt den signierten Installer trotzdem ab, wie die CI seit
-dem 02.09.2026: Kein Release hängt an einer Prüfung, die zum ersten Mal
-läuft; der Befund gehört ins Register. Bei zwei Zertifikaten auf denselben Namen
-entscheidet `--thumbprint <SHA-1>` statt `--subject`; `--release-evidence`
-verlegt die Akte (Vorgabe `build/release-evidence.json`).
+Das Werkzeug prüft den Lauf, das Archiv gegen seine `.sha256`, Produktangaben
+und jede Eingangsdatei. Ein vorhandener Arbeitsordner wird nie überschrieben.
+Es signiert die Anwendung mit SHA-256 und RFC-3161-Zeitstempel, prüft mit
+`signtool verify /pa /all /tw /v` und bindet die neue Prüfsumme in der Übergabe.
+Es liefert `Solidon3D.exe` und `windows-application-signature.json`. Der
+JSON-Nachweis nennt Version, ursprünglichen CI-Lauf und Commit, Archivhash,
+Anwendungshash vor und nach der Signatur sowie den Zertifikatsfingerabdruck.
+
+Diese beiden Dateien werden für den beauftragten Release als Assets eines
+**unveröffentlichten GitHub-Release-Entwurfs** hinterlegt. Der separate
+Installer-Workflow lädt sie anhand dieses Entwurfs, vergleicht die Herkunft
+mit dem erfolgreichen Anwendungslauf und prüft Hash, Signatur und das genaue
+Herausgeberzertifikat. Der Anwendungslauf muss über `workflow_dispatch` auf
+`main` gestartet und erfolgreich abgeschlossen sein. `target_commitish` des
+Entwurfs nennt denselben vollständigen Commit-Hash; eine bewegliche Angabe
+wie `main` genügt dort nicht. Auch der Installer-Workflow läuft auf diesem
+Stand von `main`:
+
+```powershell
+$signing = Get-Content 'dist/signing-<bau-lauf>/windows-application-signature.json' -Raw | ConvertFrom-Json
+$tag = "v$($signing.app_version)"
+gh release create $tag 'dist/signing-<bau-lauf>/Solidon3D.exe' 'dist/signing-<bau-lauf>/windows-application-signature.json' --repo RS-Digital-Studio/Solidon --draft --target $signing.source_commit --title "Solidon3D $($signing.app_version)" --notes 'Unveröffentlichter Signiertransport für den CI-Installerbau.'
+$draftId = gh api "repos/RS-Digital-Studio/Solidon/releases/tags/$tag" --jq '.id'
+gh workflow run windows-signed-installer.yml --repo RS-Digital-Studio/Solidon --ref main -f "build_run_id=$($signing.source_run_id)" -f "source_commit=$($signing.source_commit)" -f "app_version=$($signing.app_version)" -f "draft_release_id=$draftId" -f "signed_app_sha256=$($signing.signed_application_sha256)"
+```
+
+Diese Befehle gehören zum ausdrücklich beauftragten Release. Existiert dafür
+bereits ein unveröffentlichter Entwurf mit genau diesem `target_commitish`,
+werden die beiden Dateien mit `gh release upload` diesem Entwurf hinzugefügt;
+ein veröffentlichter Release wird dafür nicht verändert. Nach jedem Befehl
+muss der Exitcode null sein, bevor der nächste Schritt folgt.
+
+Die Entwurfs-ID ist die numerische GitHub-Release-ID, nicht der Tagname.
+Erst der vollständig erfolgreiche Installerlauf ist ein Signiereingang.
+Er baut mit Inno Setup in der CI. Das Ergebnis ist das
+Artefakt `solidon3d-windows-installer-signing-input`: Setup-Datei, `.sha256`
+und `windows-installer-build.json`, das die Herkunft und den Installerhash bindet.
+Die Transportdateien sind keine Kundendownloads.
+
+**Zweiter lokaler Schritt**, mit der Nummer des erfolgreichen Installerlaufs
+und demselben Arbeitsordner wie im ersten Schritt:
+
+```powershell
+.venv\Scripts\python.exe tools/sign_release.py --phase installer --installer-run <installer-lauf> --stage build/signing-<bau-lauf> --output dist --thumbprint 235C54FC71D79BD03449DBC62FFB14D0AC58AEB3
+```
+
+Vor der Setup-Signatur müssen Installerherkunft und der unveränderte signierte
+App-Baum zusammenpassen. Danach prüft das Werkzeug auch die Setup-Signatur
+mit Zeitstempel, schreibt die neue `.sha256` und erneuert die Release-Evidenz
+(`make_licence_notices.py --write-evidence`, anschließend `--release-check`).
+**Jeder Fehler hält die Weitergabe an.** Eine rote Releaseakte wird nicht
+durch eine Warnung ersetzt. Nur das erfolgreiche Ergebnis unter `dist/` wird
+veröffentlicht; der unsignierte Installer aus dem normalen Baujob gehört
+nicht dazu. `--release-evidence` verlegt die Akte (Vorgabe
+`build/release-evidence.json`).
 
 Danach wie bisher: `tools/make_download.py`, `tools/sign_version.py`,
 `tools/stamp_assets.py`, `tools/upload_website.py`.
@@ -119,22 +195,23 @@ Drei Dinge dabei:
   Anwendung ein; wer nur die Setup-Datei signiert, liefert eine signierte Hülle
   um eine unsignierte `Solidon3D.exe`. SmartScreen prüft die heruntergeladene
   Datei, Virenscanner und Firmenrichtlinien sehen die installierte.
-- **Inno Setup muss lokal installiert sein, 7 oder 6.** `make_installer.py`
-  sucht ISCC auf dem PATH und an den üblichen Orten, die neuere zuerst.
+- **Inno Setup läuft in der CI.** Der lokale Rechner braucht SimplySign
+  Desktop, SignTool aus dem Windows SDK, `gh` und die Projektumgebung für die
+  Prüfung. Er kompiliert weder Anwendung noch Installer.
 
-In der CI gibt es keinen Windows-Signiermodus mehr: Sie baut aus derselben
-Übergabe den unsignierten Installer für Demo und Releaseprüfung und übergibt
-das Archiv. `tests/test_sign_release.py` stellt signtool, ISCC und das Archiv
-nach und prüft, dass jede Abweichung die Kette anhält, bevor ein Zertifikat
-ins Spiel kommt.
+Die CI erhält keine Windows-Signiergeheimnisse. Ihr normaler Baujob darf ein
+unsigniertes Prüfpaket erzeugen; der separate Installerlauf verwendet die
+lokal signierte Anwendung. Die Veröffentlichung verlangt die abschließende
+Signatur. `tests/test_sign_release.py` prüft den Vorabcheck, die beiden
+lokalen Schritte, Herkunftsabweichungen und das Anhalten bei fehlerhaften
+Signaturen, Zeitstempeln oder Releasebelegen.
 
 ### Was SmartScreen dann tut
 
-Auch mit gültiger Signatur warnt SmartScreen anfangs bei einem neuen
-Herausgeber, „Unbekannter Herausgeber" wird aber zu „Herausgeber: Robert
-Schneider", und die Warnung verschwindet mit der Zahl der Downloads. Ein
-Zertifikatswechsel setzt die Reputation nicht auf null, solange der Herausgeber
-derselbe bleibt.
+Die gültige Signatur weist **Robert Schneider** als Herausgeber aus und macht
+nachträgliche Änderungen erkennbar. SmartScreen kann bei neuen Dateien
+trotzdem einen Hinweis zeigen. Die Signatur ist deshalb keine Zusage, dass
+jeder Windows-Rechner das Paket ohne Warnung öffnet.
 
 ---
 
@@ -236,16 +313,15 @@ Nur die Windows-**Signierung** wandert nach draußen:
 
 | Plattform | Bauen | Signieren | Paket entsteht |
 |---|---|---|---|
-| Windows | CI | lokal, aus der Signierübergabe | lokal (`make_installer.py`, Inno Setup) |
+| Windows | CI, einschließlich Installer | lokal, vor und nach dem Installerbau | CI (`windows-signed-installer.yml`, Inno Setup) |
 | macOS | CI | CI (Developer ID, Notarisierung) | CI |
 | Linux | CI | keine | CI |
 
-Windows wird also nicht „abseits" gebaut; gebaut wird es in der CI wie heute,
-nur die Setup-Datei entsteht am Ende auf Roberts Rechner, weil sie die signierte
-Anwendung einpacken muss. macOS bleibt vollständig in der CI, das ist der
-Grund, warum die Apple-Geheimnisse dort liegen dürfen.
+Anwendung und Setup-Datei entstehen in der CI. Zwischen den beiden Bauschritten
+wird lokal die Anwendung signiert, anschließend der fertige Installer. macOS
+bleibt vollständig in der CI, einschließlich Signierung und Notarisierung.
 
-**Warum Windows nicht auch in der CI:** Certums Cloud-Schlüssel lässt sich nicht
+**Warum die Windows-Signierung lokal bleibt:** Certums Cloud-Schlüssel lässt sich nicht
 als PFX exportieren, und SimplySign verlangt einen Einmalcode vom Handy. Es
 gibt einen bekannten Trick, das zu automatisieren (der QR-Code beim Koppeln ist
 eine `otpauth://`-URI, aus der ein Skript den Code selbst erzeugen kann). Damit
@@ -265,12 +341,16 @@ den Trick mit einem eigenen Certum-Konto nur für die CI neu zu bewerten.
 | macOS, Apple Developer Program | 99 Dollar | keine | Stunden bis wenige Tage |
 | Linux | 0 | 0 | 0 |
 
-Für die Demo 0.3.0 kommt beides zu spät; sie geht wie im Demo-Konzept geplant
-unsigniert hinaus, mit dem Satz zur SmartScreen-Warnung auf der Seite. Die
-erste signierte Fassung ist die, die nach der Prüfung gebaut wird.
+Die früheren Windows-Demos wurden unsigniert ausgeliefert. Die erste
+verbindlich signierte Windows-Fassung ist **0.5.0**. Fehlende Anmeldung,
+ungültige Signatur oder unvollständige Releasebelege halten die Veröffentlichung an.
 
 ## Quellen (abgerufen am 02.09.2026)
 
+- Certum, aktuelle SimplySign-Desktop-Installation und Code-Signing-Anleitung
+  (für die Einrichtung am 23.09.2026 geprüft):
+  https://support.certum.eu/en/software/procertum-smartsign/ und
+  https://support.certum.eu/en/installation-of-the-simplysign-applications/
 - Certum, Produktfamilie Code Signing: https://www.certum.eu/en/code-signing-certificates/
 - Certum, Standard Code Signing in the Cloud: https://shop.certum.eu/standard-code-signing-in-the-cloud.html
 - Certum, benötigte Unterlagen: https://support.certum.eu/en/code-signing-required-documents/
