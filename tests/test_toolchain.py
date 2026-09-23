@@ -2559,8 +2559,9 @@ def test_activation_deployment_rejects_ambiguous_or_public_private_roots(root: s
 
 
 @pytest.mark.parametrize("failure", ["none", "write", "verify", "rename"])
+@pytest.mark.parametrize("hide_dotfiles", [False, True])
 def test_activation_upload_publishes_only_complete_verified_bytes(
-    monkeypatch: pytest.MonkeyPatch, failure: str
+    monkeypatch: pytest.MonkeyPatch, failure: str, hide_dotfiles: bool
 ) -> None:
     """Ein abgerissener oder beschädigter Upload lässt den alten Endpunkt stehen."""
     from tools import deploy_activation_server as deployment
@@ -2577,7 +2578,7 @@ def test_activation_upload_publishes_only_complete_verified_bytes(
                 raise OSError("connection lost")
 
         def nlst(self) -> list[str]:
-            return list(self.files)
+            return [name for name in self.files if not hide_dotfiles or not name.startswith(".")]
 
         def retrbinary(self, command: str, consume: object) -> None:
             consume(b"corrupt" if failure == "verify" else self.files[command[5:]])
@@ -2602,6 +2603,32 @@ def test_activation_upload_publishes_only_complete_verified_bytes(
         with pytest.raises((OSError, SystemExit)):
             deployment._store_bytes(server, "domain/httpdocs/endpoint.php", b"complete")
         assert server.files == {"endpoint.php": b"previous"}
+
+
+@pytest.mark.parametrize("reply", ["550 File not found", "530 Not logged in", "450 Busy"])
+def test_activation_remote_read_preserves_the_ftp_error_contract(
+    monkeypatch: pytest.MonkeyPatch, reply: str
+) -> None:
+    """Nur eine fehlende Datei ergibt None; andere FTP-Fehler halten den Ablauf an."""
+    import ftplib
+
+    from tools import deploy_activation_server as deployment
+
+    class Server:
+        def nlst(self) -> list[str]:
+            return ["absent.php"]
+
+        def retrbinary(self, command: str, consume: object) -> None:
+            assert command == "RETR absent.php"
+            error_type = ftplib.error_temp if reply.startswith("4") else ftplib.error_perm
+            raise error_type(reply)
+
+    monkeypatch.setattr(deployment.upload_website, "ensure_dir", lambda *_args: None)
+    if reply.startswith("550"):
+        assert deployment._remote_bytes(Server(), "domain/httpdocs/absent.php") is None
+    else:
+        with pytest.raises(ftplib.Error, match=reply):
+            deployment._remote_bytes(Server(), "domain/httpdocs/absent.php")
 
 
 def test_activation_deployment_failure_names_backup_and_recovery(
@@ -2720,7 +2747,10 @@ def test_activation_deployment_closes_private_files_and_checks_both_services(
             self.writes += 1
 
         def retrbinary(self, command: str, consume: object) -> None:
-            consume(self.files[self.at(command[5:])])
+            path = self.at(command[5:])
+            if path not in self.files:
+                raise ftplib.error_perm("550 File not found")
+            consume(self.files[path])
 
         def rename(self, old: str, new: str) -> None:
             source, target = self.at(old), self.at(new)

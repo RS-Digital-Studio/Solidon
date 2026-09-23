@@ -56,13 +56,10 @@ def _remote_parts(path: str) -> tuple[list[str], str]:
 
 
 def _remote_bytes(session: ftplib.FTP_TLS, path: str) -> bytes | None:
-    """Liest eine vorhandene kleine Serverdatei; fehlend ist kein Fehler."""
+    """Liest direkt, da Verzeichnislisten Punktdateien ausblenden können."""
     directories, name = _remote_parts(path)
     try:
         upload_website.ensure_dir(session, directories)
-        names = set(session.nlst())
-        if name not in names:
-            return None
         target = io.BytesIO()
         session.retrbinary(f"RETR {name}", target.write)
         return target.getvalue()
