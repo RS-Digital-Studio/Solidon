@@ -3,6 +3,13 @@
 PySide6. Darf `app.core` benutzen, die Gegenrichtung ist verboten (§8). Die
 Oberfläche rechnet keine Geometrie und ändert keine — **sie ruft Ops auf.**
 
+Nachlaufende Befunde erhalten die gewählte Zeile des Prüfberichts über die
+gemeinsame Befundidentität, auch wenn neue Fehler die Reihenfolge ändern.
+Nur wenn die bisherige Zeile entfällt oder ausgefiltert wird, gilt die
+bestehende Vorauswahl einer angebotenen Handlung. Prüfungen lesen die
+aktuellen Handlungsknöpfe aus dem Layout; ausgebaute Qt-Kinder können bis
+zur Verarbeitung von `deleteLater` noch am Elternobjekt hängen.
+
 Maßbeschriftungen lesen `Feature.measure_sources` über die gemeinsame
 Kernauskunft. `labels.feature_measure` gruppiert gleiche Zusätze; verschiedene
 Quellen bleiben je Zahl benannt. Baum, Viewport und Merkmalpanel benutzen
@@ -603,6 +610,8 @@ Kennungen unterscheiden gleiche Etiketten; Details und zugängliche
 Beschreibungen bewahren die Kennung unabhängig von dieser Verkürzung.
 
 `filament_usage.py` hält Angebote erfolgreicher Ausgaben ohne Zeitlimit bereit.
+`slot_title` benennt das Druckfilament auch ohne eigenen Namen; Buchungsdialog
+und Bestandsbedarf im Druckdialog verwenden dieselbe Beschriftung.
 Beim Anlegen einer Spule im Buchungsdialog bleiben gewählte Spulen, manuelle
 Mengen und Aufteilungen erhalten. Die neue Spule füllt höchstens eine noch
 freie Hauptposition und bleibt in allen passenden Auswahllisten erreichbar.
@@ -1149,7 +1158,10 @@ Zahlen ohne neuen Verlaufsschritt — **und geht je Stufe genau eine zurück**
 (`PlacementFlow.step_back`, RM-205): Tiefe → Maße → Zielen → Dialog. Aus dem
 Dialog führt ein Klick auf das Modell zurück und setzt dort die Stelle
 (`_resume` über `Viewport.set_placement_resume`, sendet `surfaceRequested`);
-der Dialog zeigt dazu seinen Platzierungssatz weiter. Am gewählten Merkmal
+der Dialog zeigt dazu seinen Platzierungssatz und den Tastaturknopf
+`aim_again` weiter. `show_placement_hint(on, paused=...)` hält beide Aussagen
+getrennt: Der Fluss meldet bei `back()` die Pause, beim aktiven Zielen und
+beim endgültigen Ende verschwindet der Rückkehrknopf. Am gewählten Merkmal
 (`QuietHost`) und beim Ändern eines Schritts gibt es nur eine Stufe, dort
 geht Escape ganz zurück. Die Mausbewegung fragt im 16-ms-Takt nach der
 Fläche, nicht erst im Stillstand: eine Frage zur Zeit, ihr Ende nimmt die
@@ -1354,6 +1366,15 @@ behalten ihre Seite. Vorbelegte Richtungswerte ändern ihre Schemaseite nicht.
 
 `sketch_editor.py` (§30.1, Stufe zwei)
 
+`SketchCanvas.planes_are_parallel` liefert dieselbe Richtungsprüfung für den
+Erhalt einer Flächenebene beim Einrasten und das Ziehgriffangebot.
+`SketchPanel.offer_faces` erhält beim Neubefüllen den Kamerablick im Feld;
+fällt die Ansichtsfläche weg, wechseln Feld und Kamera zur Zeichenebene.
+`viewport.place_sketch_cards` verteilt Maß- und Griffkarten gemeinsam im
+Bildraum; alle Karten bleiben erhalten.
+Die Vorschau von Verrunden und Fase übernimmt die neue nicht konstruierende
+Kante aus dem Kernergebnis; der virtuelle Eckpunkt dient nur der Maßbindung.
+
 **Agent**
 
 `chat.py` (§26.3, §2.5) · `snapshots.py` (Ansichten für den Agenten) ·
@@ -1512,7 +1533,7 @@ gefallen — die Regel dazu steht in `oberflaeche.md`.
 gewollt ist — `insertRequested`, `moveRequested`, `suppressRequested`,
 `reactivateRequested`, `stopInsertRequested` — aus Kontextmenü
 (`_add_revision_entries`), Tastatur (`_list_action`: Einfg, Alt+Pfeil,
-Leertaste, Esc) und Ziehen (`_HistoryList`: legt nie selbst ab, fragt beim
+Leertaste) und Ziehen (`_HistoryList`: legt nie selbst ab, fragt beim
 Ziehen `places` nach gültigen Stellen und meldet den Grund über `refused`).
 Neu gefasste Zeilen blendet es aus (`replanned_steps`), Einfügen und
 Verschieben stehen als Protokollzeile mit ihrer Folge darunter
@@ -1522,7 +1543,10 @@ Verschieben stehen als Protokollzeile mit ihrer Folge darunter
 Sitzung: `Session.revise_history` plant sofort (eine unmögliche Stelle sagt
 es ohne Wartezeit) und rechnet im `_RevisionWorker`; `revisionDone`,
 `revisionCancelled` und `insertionChanged` gehen an die Statuszeile. Die
-Regeln dazu stehen in `oberflaeche.md`.
+Regeln dazu stehen in `oberflaeche.md`. Escape gehört einmal dem
+Hauptfenster: `_escape` beendet nach offenen Werkzeugen und Maßen das
+Einfügen über `Session.stop_inserting`, bevor es die Auswahl verlässt.
+Die Verlaufsaktion erhält dafür keine zweite Kürzelbindung.
 
 **Ein Paar ist kein Baustein, sondern zwei** (RM-147 E1): *Gegenstücke setzen …*
 steht deshalb im Menü *Bausteine* neben dem Katalog und nicht darin.
@@ -1873,6 +1897,10 @@ ausdrücklich, solange seine Canvas lebt, und stellen erst danach Qts
 aufgeschobene Fensterlöschung im Hauptthread zu. Ein Test-Pin schützt ein neu
 gebautes Hauptfenster oder einen einzelnen Viewport nur bis zu genau diesem
 geordneten Teardown; Fenster werden nicht über mehrere Tests angesammelt.
+Der modale Bausteinkatalog hält seine Vorschau-Zeitgeberkette mit `release()`
+an, bevor `_exec_catalog` im `finally` seine Löschung vormerkt. Das gilt auch
+beim Abbrechen: Ein eingereihter gebundener Rückruf hält sonst die Pythonhülle
+des bereits nativ gelöschten Dialogs fest.
 Eine `WorkerLeash` hält ihren Fensterbesitzer nicht zurück: Der Besitzer hält
 die Leine bereits, alle Zeitgeber gehören dem langlebigen Keeper und die
 Fertigrückrufe verwenden schwache Verweise. Damit entsteht um Qt-Fenster kein
@@ -1961,9 +1989,10 @@ trennt der Dialog die Signalverbindung und schließt den Portal-Request.
   (`_MEMBERS_ROLE`, nie mit dem des ersten), alles andere läuft einmal. Sie
   trägt keinen Ort und keine Merkmale, wo die Mitglieder verschiedene haben;
   ohne Körper (die Gegenprobe aus dem G-Code für Material und Zeit) heißen
-  ihre Mitglieder im Tooltip *Einträge*, nicht *Objekte*. Der Kerntext bleibt
-  kanalneutral — Agent, CLI und Datei lesen jeden Befund einzeln; nur das
-  Panel zählt.
+  ihre Mitglieder im Tooltip *Einträge*, nicht *Objekte*. Bei verlorenen
+  Formdetails zählt der Kern bereits je Körper und Schritt: Zeile, Tooltip
+  und Bildschirmleser zeigen dieselbe Summe dieser Mengen. Die Kopfzeile
+  zählt weiterhin die Befunde. Der Kerntext bleibt kanalneutral.
 - **Und der Objektbaum bündelt nach derselben Regel wie der Prüfbericht.**
   Erkannte Merkmale mit gleichem Namen **und gleichem Maß** stehen ab
   `BUNDLE_FROM` unter einem zugeklappten Dach („Hohlkehle (17) · R13,98 mm").

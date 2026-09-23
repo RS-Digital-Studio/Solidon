@@ -226,14 +226,24 @@ def test_an_unknown_key_survives_instead_of_vanishing() -> None:
     assert value_label("etwas_ganz_neues") == "etwas_ganz_neues"
 
 
-def test_a_line_reads_like_a_line() -> None:
+@pytest.mark.parametrize(("locale", "number"), [("de_DE", "12,40"), ("en_US", "12.40")])
+def test_a_line_reads_like_a_line(locale: str, number: str) -> None:
     """Beschriftung, Doppelpunkt, Wert — und die Zahl in der Anzeigesprache.
 
     Die Einzelheiten eines Fehlers sind kein Sonderfall von §13: Wo die
-    Sprache ein Komma will, steht ein Komma.
+    Sprache ein Komma will, steht ein Komma. Die Zahlensprache wird auch ohne
+    QApplication ausdrücklich gesetzt und danach wiederhergestellt; sonst
+    entschiede die Sprache des Rechners über den Test.
     """
-    assert value_line("open_edges", 6) == "Offene Kanten: 6"
-    assert value_line("oversize_mm", 12.4) == "Übermaß: 12,40 mm"
+    from PySide6.QtCore import QLocale
+
+    before = QLocale()
+    try:
+        QLocale.setDefault(QLocale(locale))
+        assert value_line("open_edges", 6) == "Offene Kanten: 6"
+        assert value_line("oversize_mm", 12.4) == f"Übermaß: {number} mm"
+    finally:
+        QLocale.setDefault(before)
 
 
 def test_the_report_offers_what_helps(qt_app: object) -> None:
@@ -1584,5 +1594,5 @@ def test_the_last_demo_day_is_said_in_the_singular(qt_app: object) -> None:
     from app.ui.labels import demo_line
 
     last = demo_line(Activation(days_left=1, deadline=date(2026, 10, 30)))
-    assert "1 Tag," in last and "Tage" not in last, last
+    assert "heute letzter Tag" in last and "Tage" not in last, last
     assert "2 Tage" in demo_line(Activation(days_left=2, deadline=date(2026, 10, 30)))

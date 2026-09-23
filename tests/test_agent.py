@@ -1452,6 +1452,75 @@ def test_the_agent_reads_orphaned_form_details_once_per_body_and_step() -> None:
     )
 
 
+def test_the_agent_reads_the_count_of_a_summarised_orphan_finding() -> None:
+    """Die Auswertung meldet verlorene Formdetails einmal je Körper und Schritt.
+
+    Seit dem 23.09.2026 steht die Zahl in ``values["count"]`` statt in der
+    Menge wortgleicher Befunde (Handschmeichler: 28 an der Daumenmulde). Das
+    Modell liest dieselbe Zahl wie vorher.
+    """
+    finding = Finding(
+        code="perceive.orphaned",
+        severity="info",
+        message="Formdetails sind nach diesem Schritt nicht mehr automatisch wiederzuerkennen.",
+        object_id="obj_1",
+        op_id=4,
+        values={"feature": ", ".join(f"face_{index}" for index in range(28)), "count": 28},
+    )
+
+    (line,) = checks.as_lines([finding]).splitlines()
+
+    assert "28 \N{MULTIPLICATION SIGN}" in line and "Körper obj_1 · Schritt 4" in line, line
+
+
+@pytest.mark.parametrize("code", ["perceive.orphaned", "perceive.mended"])
+@pytest.mark.parametrize("severity", [None, "info", "warning"])
+def test_read_report_keeps_summarised_detail_counts_and_severity(
+    project: Project, profile: Profile, code: str, severity: str | None
+) -> None:
+    """Das lesende Werkzeug bewahrt die Mengen und filtert erst ab der gewünschten Schwere."""
+    from app.core.types import Report
+
+    findings = (
+        *(
+            Finding(
+                code=code,
+                severity="info",
+                message="Formdetails wurden zusammengefasst.",
+                object_id=body,
+                op_id=4,
+                values={"count": amount, "feature": "face_1, face_2"},
+            )
+            for body, amount in (("obj_1", 28), ("obj_2", 21))
+        ),
+        Finding(code="mesh.thin_wall", severity="warning", message="Eine Wand ist zu dünn."),
+        Finding(code="mesh.open", severity="error", message="Der Körper ist offen."),
+    )
+    scene = Scene(report=Report(findings=findings))
+    proposal = Proposal(request="Lies den Prüfbericht")
+    agent = session(project, profile, [])
+
+    handled = agent._extra_tool(
+        "read_report", {"severity": severity}, proposal, project.document, scene
+    )
+
+    assert handled is not None
+    text, unchanged = handled
+    assert unchanged is scene and proposal.readings == ["read_report"]
+    lines = text.splitlines()
+    assert lines[-2:] == [
+        "warning: mesh.thin_wall: Eine Wand ist zu dünn.",
+        "error: mesh.open: Der Körper ist offen.",
+    ]
+    if severity == "warning":
+        assert len(lines) == 2
+    else:
+        assert lines[:2] == [
+            f"info: {code}: 28 × Formdetails wurden zusammengefasst. — Körper obj_1 · Schritt 4",
+            f"info: {code}: 21 × Formdetails wurden zusammengefasst. — Körper obj_2 · Schritt 4",
+        ]
+
+
 def test_agent_orphan_groups_keep_every_meaningful_dimension_and_order() -> None:
     """Körper, Schritt, Schwere, Text und Herkunft trennen Agentenzeilen."""
     message = "Ein Formdetail ist nicht mehr automatisch wiederzuerkennen."
@@ -1671,11 +1740,6 @@ def test_the_compact_schema_keeps_every_tool() -> None:
     kurz = tool_schemas(compact=True)
 
     assert {entry["name"] for entry in kurz} == {entry["name"] for entry in voll}
-    from app.core.backends import llm
-
-    assert len(kurz) == llm.PROMPT_TOOL_COUNT, (
-        "der gemessene Ollama-Prompt gehört nach jeder neuen Operation neu gemessen"
-    )
     # **Ein Feld darf kompakt nur fehlen, wenn der Prompt es für dieses
     # Werkzeug sagt** (RM-185): die zehn Ortsangaben der Bausteine. Jedes
     # andere Feld bleibt, und die Pflichtfelder bleiben alle.
@@ -1697,6 +1761,20 @@ def test_the_compact_schema_keeps_every_tool() -> None:
     grosse = len(json.dumps(voll, ensure_ascii=False, default=str))
     kleine = len(json.dumps(kurz, ensure_ascii=False, default=str))
     assert kleine < grosse * 0.85, "unter fünfzehn Prozent Ersparnis lohnt der Sonderweg nicht"
+
+
+@pytest.mark.xfail(
+    reason="RM-185: Tokenmessung auf Roberts Wunsch vor 0.5.1 nachholen und Marke entfernen",
+    strict=False,
+)
+def test_the_measured_prompt_matches_the_current_tool_count() -> None:
+    """Nur der Messstand wartet auf 0.5.1; die Vollständigkeit bleibt scharf geprüft."""
+    from app.core.agent.tools import tool_schemas
+    from app.core.backends import llm
+
+    assert len(tool_schemas(compact=True)) == llm.PROMPT_TOOL_COUNT, (
+        "der gemessene Ollama-Prompt gehört nach jeder neuen Operation neu gemessen"
+    )
 
 
 def test_the_compact_schema_keeps_unit_condition_and_caveat() -> None:

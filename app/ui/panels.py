@@ -309,6 +309,23 @@ def _bundled(
     return result
 
 
+#: Befunde über verlorene Formdetails und geschlossene Fehlstellen. Der Kern
+#: meldet sie einmal je Körper und Schritt; wie viele es sind, steht dann in
+#: ``values["count"]`` und fehlt bei genau einem (``evaluate``, 23.09.2026).
+_LOST_CODES: Final[frozenset[str]] = frozenset({"perceive.orphaned", "perceive.mended"})
+
+
+def _lost_count(finding: Finding) -> int:
+    """Wie viele verlorene Formdetails oder geschlossene Stellen ein Befund nennt.
+
+    Jeder andere Befund zählt als einer, auch wenn er ein eigenes ``count``
+    trägt („12 kleine Objekte übergangen" ist ein Satz, keine zwölf).
+    """
+    if finding.code not in _LOST_CODES:
+        return 1
+    return int(cast(float, finding.values.get("count", 1)))
+
+
 def _by_severity(findings: Iterable[Finding]) -> list[Finding]:
     """Schweres zuerst, sonst in der Reihenfolge, in der es entstanden ist.
 
@@ -3359,8 +3376,9 @@ class HistoryPanel(QWidget):
         self.remove_action.triggered.connect(self._request_selected_removal)
         self.list.addAction(self.remove_action)
         # **Die Tastatur kann alles, was die Maus kann** (P7): davor einfügen,
-        # schrittweise verschieben, aus- und einschalten, das Einfügen beenden.
-        # Am Verlauf und nur dort — dieselbe Begrenzung wie bei Entf.
+        # schrittweise verschieben, aus- und einschalten. Am Verlauf und
+        # nur dort — dieselbe Begrenzung wie bei Entf. Escape verteilt das
+        # Hauptfenster: eine zweite Belegung hier blockierte beide Wege.
         self.insert_action = self._list_action(tr("Davor einfügen"), "Ins", self._request_insert)
         self.up_action = self._list_action(
             tr("Nach oben", context="Verlauf"), "Alt+Up", self._request_up
@@ -3370,7 +3388,7 @@ class HistoryPanel(QWidget):
         )
         self.toggle_action = self._list_action(tr("Aus- oder einschalten"), "Space", self._toggle)
         self.stop_insert_action = self._list_action(
-            tr("Einfügen beenden"), "Esc", self.stopInsertRequested.emit
+            tr("Einfügen beenden"), "", self.stopInsertRequested.emit
         )
         self.list.dragged = self.selected_operations
         self.list.dropped.connect(self.moveRequested.emit)
@@ -4640,6 +4658,10 @@ class ReportPanel(QWidget):
         30.08.2026): Eine veraltete Aussage über eine ersetzte Datei ist keine
         Historie, sondern Irreführung.
         """
+        selected = self.list.selectedItems()
+        selected_key = (
+            _identity(selected[0].data(Qt.ItemDataRole.UserRole)) if len(selected) == 1 else None
+        )
         if replacing_source is not None:
             self._findings = [entry for entry in self._findings if entry.source != replacing_source]
         # Je Identität der Befund, nicht nur die Menge: Derselbe Sachverhalt
@@ -4670,6 +4692,18 @@ class ReportPanel(QWidget):
         self._rebuild()
         self._count_up()
         self._refilter()
+        # Nachlaufende Analyse ordnet die Liste neu, nimmt dem Kunden aber
+        # nicht den gewählten Befund und seine Reparaturhandlung weg.
+        if selected_key is not None:
+            for row in range(self.list.count()):
+                item = self.list.item(row)
+                if (
+                    not item.isHidden()
+                    and _identity(item.data(Qt.ItemDataRole.UserRole)) == selected_key
+                ):
+                    self.list.setCurrentRow(row)
+                    break
+        self._preselect()
         # Auch hier: ein Befund, der nachkommt, bringt die Filterzeile mit —
         # sonst hängt sie an dem Stand, den die Auswertung hinterließ.
         self._show_controls()
@@ -4804,7 +4838,10 @@ class ReportPanel(QWidget):
                 if finding.code == "perceive.orphaned"
                 else str(finding.message)
             )
-            message = f"({len(members)}) {sentence}"
+            # Verlorene Formdetails zählen, was verloren ist, nicht die
+            # Körper: Jedes Mitglied fasst die seines Körpers schon zusammen.
+            amount = sum(_lost_count(one) for one in members)
+            message = f"({amount}) {sentence}"
             # Gleicher Satz genügt nicht: Zwei Schritte wären in der Liste
             # optisch dieselbe Handlung, obwohl ihre Klicks an verschiedene
             # Ziele führen. „Schritt" ist die Sprache des sichtbaren Verlaufs
@@ -4874,7 +4911,7 @@ class ReportPanel(QWidget):
                 else ("objects" if bodies else "entries")
             )
             values: Mapping[str, float | str | TranslatableText] = {
-                "count": len(members),
+                "count": amount,
                 listed: names,
             }
             finding = dataclasses.replace(
@@ -4888,17 +4925,31 @@ class ReportPanel(QWidget):
                 suggestions=members[0].suggestions,
             )
         else:
+            lost = _lost_count(finding)
             if finding.code == "perceive.orphaned":
                 # Der Kernbefund bleibt für Agent, CLI und Datei kanalneutral.
                 # Erst die sichtbare Zeile darf den konkreten UI-Klick nennen.
+                # Mehrere Formdetails eines Schritts kommen als ein Befund und
+                # stehen wie eine Sammelzeile da: die Zahl davor, in Klammern.
+                several = tr(
+                    "Formdetails sind nach diesem Schritt nicht mehr automatisch "
+                    "wiederzuerkennen. Anklicken zeigt den Körper und den Schritt; die "
+                    "Bearbeitung bleibt erhalten."
+                )
                 finding = dataclasses.replace(
                     finding,
-                    message=tr(
-                        "Ein Formdetail ist nach diesem Schritt nicht mehr automatisch "
-                        "wiederzuerkennen. Anklicken zeigt den Körper und den Schritt; "
-                        "die Bearbeitung bleibt erhalten."
+                    message=(
+                        f"({lost}) {several}"
+                        if lost > 1
+                        else tr(
+                            "Ein Formdetail ist nach diesem Schritt nicht mehr automatisch "
+                            "wiederzuerkennen. Anklicken zeigt den Körper und den Schritt; "
+                            "die Bearbeitung bleibt erhalten."
+                        )
                     ),
                 )
+            elif lost > 1:
+                finding = dataclasses.replace(finding, message=f"({lost}) {finding.message}")
             item = QListWidgetItem(_line_for(finding, self._names))
         # Die Farbe folgt der Fläche, auf der sie landet. Die Rollenfarben sind
         # für den dunklen Untergrund gewählt; auf der weißen Liste des hellen

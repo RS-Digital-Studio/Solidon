@@ -1028,7 +1028,7 @@ def report_text(scene: Scene, severity: str | None) -> str:
     findings = [entry for entry in scene.report.findings if entry.severity in wanted]
     if not findings:
         return tr("Keine Befunde.")
-    return "\n".join(f"{entry.severity}: {entry.code}: {entry.message}" for entry in findings)
+    return checks.as_lines(findings, include_severity=True)
 
 
 def parse_number(value: Any) -> float:

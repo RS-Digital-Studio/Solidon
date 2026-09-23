@@ -1748,7 +1748,6 @@ class OperationDialog(QDialog):
         # Mit der Maus geht es auch ohne ihn — ein Klick ins Modell holt die
         # Platzierung zurück und setzt dort die Stelle
         # (``PlacementFlow._resume``); der Knopf ist der Weg für die Tastatur.
-        self._aimed = False
         self.aim_again = QPushButton(tr("Stelle im Bild wählen"), self)
         aim_note = tr("Zurück ins Bild und die Stelle am Modell neu wählen. Die Werte bleiben.")
         self.aim_again.setToolTip(aim_note)
@@ -2086,7 +2085,7 @@ class OperationDialog(QDialog):
         entered = self.values()
         return entered.get("coverage") == "whole_face" and not entered.get("face")
 
-    def show_placement_hint(self, on: bool) -> None:
+    def show_placement_hint(self, on: bool, *, paused: bool = False) -> None:
         """Den Satz „Die Stelle wählen Sie im Bild" zeigen oder wegnehmen.
 
         Gerufen vom :class:`~app.ui.placement_flow.PlacementFlow`, wenn er
@@ -2094,14 +2093,13 @@ class OperationDialog(QDialog):
         Das Register sagt, ob eine Operation platziert *werden kann*, nicht ob
         sie es gerade *tut*.
 
-        Und wer nicht mehr zielt, nachdem er es schon tat, bekommt den Knopf
-        zurück ins Bild (RM-205) — nicht beim ersten Öffnen, wo der Dialog
-        vielleicht gar nicht platzieren kann.
+        Der Fluss meldet eine Pause ausdrücklich: Dann bleibt der Tastaturweg
+        zurück ins Bild sichtbar (RM-205), zusammen mit dem Hinweis, wenn
+        auch ein Modellklick zurückführt. Beim aktiven Zielen und nach dem
+        endgültigen Ende gibt es keinen Rückkehrknopf.
         """
         self._placement_hint.setVisible(bool(on))
-        if on:
-            self._aimed = True
-        self.aim_again.setVisible(self._aimed and not on)
+        self.aim_again.setVisible(paused)
 
     def block_apply(self, reason: str | None) -> None:
         """Den Übernehmen-Knopf von außen sperren — mit Grund — oder freigeben.

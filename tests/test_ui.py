@@ -1700,6 +1700,35 @@ def test_no_two_shortcuts_in_the_window_collide(window: MainWindow) -> None:
     assert not twice, f"doppelt belegte Tasten führen keine der beiden Aktionen aus: {twice}"
 
 
+def test_escape_ends_insertion_from_the_history_without_changing_the_stack(
+    window: MainWindow,
+) -> None:
+    """Ein echtes Escape erreicht den Rückweg trotz Fokus im Verlauf (§19.2)."""
+    from PySide6.QtTest import QTest
+
+    from app.ui.panels import open_section
+
+    window.show()
+    window.open_path(MESHES / "cube_clean.stl")
+    assert window.session.wait_for_idle(30_000)
+    operations = tuple(window.session.project.document.ops)
+    assert window.session.start_inserting(operations[0].id)
+    assert window.session.wait_for_idle(30_000)
+    open_section(window.history_panel)
+    window.activateWindow()
+    window.history_panel.list.setFocus()
+    QApplication.processEvents()
+    assert window.history_panel.list.hasFocus(), "der Verlauf empfängt die Taste"
+    assert window.history_panel.stop_insert_action.isEnabled()
+
+    QTest.keyClick(window.history_panel.list, Qt.Key.Key_Escape)
+    assert window.session.wait_for_idle(30_000)
+
+    assert window.session.inserting is None, "Escape beendet das Einfügen"
+    assert tuple(window.session.project.document.ops) == operations, "kein Schritt wurde geändert"
+    assert not window.history_panel.stop_insert_action.isEnabled()
+
+
 def test_the_window_starts_on_the_start_screen(window: MainWindow) -> None:
     assert window.stack.currentWidget() is window.start_screen
     assert not window.toolbar.isVisibleTo(window)
@@ -2224,37 +2253,72 @@ def test_a_slicer_start_counts_on_the_way_of_the_application(
 def test_the_support_line_stays_clear_of_banner_and_cards(
     window: MainWindow, own_feedback: Path
 ) -> None:
-    """Oben mittig zwischen den Karten, unter dem Vorschauband und der Rückfragekarte."""
+    """Die Einladung weicht den echten Karten aus und kehrt an ihren freien Platz zurück.
+
+    Ist die Lücke oben zu schmal, darf sie unter die kürzere Karte. Geprüft
+    werden ihre Überschneidungen, keine offscreen erfundene Schriftbreite.
+    """
+    from PySide6.QtCore import QRect
+
+    from app.ui.survey import NOTICE_TOP
+
     window.resize(1400, 900)
     window.show()
     window.open_path(MESHES / "cube_clean.stl")
     assert window.session.wait_for_idle(30_000)
-    for _round in range(3):
+    for _ in range(3):
         QApplication.processEvents()
     viewport = window.viewport
     notice = window._support_notice
+    banner = viewport.banner
+    survey = window._survey_notice
+    obstacles = (
+        window.overlay.left,
+        window.overlay.right,
+        window.overlay.bottom,
+        viewport.view_bar,
+        viewport.drag_bar,
+        banner,
+        survey,
+    )
+
+    def assert_clear() -> None:
+        """Die sichtbaren Bedienflächen unabhängig von der Platzsuche vergleichen."""
+        assert viewport.rect().contains(notice.geometry())
+        for obstacle in obstacles:
+            if obstacle is None or not obstacle.isVisible():
+                continue
+            corner = viewport.mapFromGlobal(obstacle.mapToGlobal(QPoint(0, 0)))
+            area = QRect(corner, obstacle.size())
+            assert not area.intersects(notice.geometry()), (
+                f"{obstacle.objectName()} bei {area} verdeckt {notice.geometry()}"
+            )
+
     notice.offer()
     QApplication.processEvents()
-    margins = viewport._zone_margins
-    assert margins[0] > 0 and margins[1] > 0, "beide Karten stehen"
-    left, right = margins[0], viewport.width() - margins[1]
-    assert notice.x() >= left and notice.x() + notice.width() <= right, (
-        "die Zeile liegt zwischen linker und rechter Karte"
-    )
-    banner = viewport.banner
+    assert_clear()
+
     banner.show()
     banner.adjustSize()
     banner.move((viewport.width() - banner.width()) // 2, 12)
     QApplication.processEvents()
-    assert notice.y() >= banner.geometry().bottom(), "sie weicht dem Vorschauband aus"
-    window._survey_notice.ask()
+    assert_clear()
+    survey.ask()
     QApplication.processEvents()
-    survey = window._survey_notice.geometry()
-    assert not survey.intersects(notice.geometry()), "zwei Einladungen liegen nie übereinander"
+    assert_clear()
+
     banner.hide()
-    window._survey_notice.hide()
+    survey.hide()
     QApplication.processEvents()
-    assert notice.y() == 12, "und rückt nach, wenn oben wieder Platz ist"
+    assert_clear()
+    # Erst ohne die Karten ist die Oberkante sicher frei. Deren Inhalt kann
+    # während der Anzeige noch durch die Druckprüfung kürzer werden.
+    for obstacle in obstacles:
+        if obstacle is not None:
+            obstacle.hide()
+    QApplication.processEvents()
+    assert_clear()
+    assert notice.y() == NOTICE_TOP, "an der freien Oberkante rückt die Einladung nach"
 
 
 @pytest.mark.parametrize("theme", ["light", "dark"])
@@ -2695,13 +2759,24 @@ def test_a_dialog_without_a_position_takes_no_point(qt_app: QApplication) -> Non
         dialog.deleteLater()
 
 
-def test_the_dialog_keeps_out_of_the_middle_of_the_view(qt_app: QApplication) -> None:
-    """§18.7: der Dialog trägt eine Live-Vorschau und darf sie nicht verdecken.
+@pytest.mark.parametrize(
+    ("shown", "requested", "expected"),
+    [(False, 240, 380), (False, 520, 520), (True, 380, 380), (True, 520, 520)],
+)
+def test_the_dialog_keeps_out_of_the_middle_of_the_view(
+    qt_app: QApplication,
+    monkeypatch: pytest.MonkeyPatch,
+    shown: bool,
+    requested: int,
+    expected: int,
+) -> None:
+    """Bei vorhandenem Platz steht der Dialog rechts und vollständig im Anker.
 
-    Qt setzt Dialoge mittig zum Elternfenster, und die Mitte ist genau die
-    Stelle, an der die Kamera das Modell zeigt — die Vorschau entstand hinter
-    dem Dialog, der sie ausgelöst hat.
+    Die Breiten sind Vorgaben dieser Geometrieprobe. Vor dem Anzeigen zählt
+    die Mindestbreite, danach die gewählte Fensterbreite; die Schriftmetrik
+    des Offscreen-Treibers sagt nichts über einen Kundendialog aus.
     """
+    from PySide6.QtCore import QSize
     from PySide6.QtWidgets import QWidget
 
     anchor = QWidget()
@@ -2709,25 +2784,19 @@ def test_the_dialog_keeps_out_of_the_middle_of_the_view(qt_app: QApplication) ->
     anchor.show()
     dialog = OperationDialog(REGISTRY.get("load"), ["obj_1"])
     try:
+        if shown:
+            dialog.setFixedWidth(requested)
+            dialog.show()
+            QApplication.processEvents()
+        else:
+            monkeypatch.setattr(dialog, "sizeHint", lambda: QSize(requested, 400))
         dialog.place_beside(anchor)
         middle = anchor.mapToGlobal(anchor.rect().center()).x()
 
-        assert dialog.x() > middle, "der Dialog steht rechts, nicht über der Mitte"
+        assert dialog.x() > middle, "der Dialog lässt bei genügend Platz die Mitte frei"
         assert dialog.y() >= anchor.mapToGlobal(anchor.rect().topLeft()).y()
-
-        # **Und er bleibt innerhalb der Kante.** Gerechnet wurde mit
-        # ``sizeHint``, gezeigt wird die Mindestbreite von 380: um die Differenz
-        # — je Operation 62 bis 131 Bildpunkte — schob die Rechnung ihn über
-        # genau den Rand hinaus, den sie einhalten sollte.
-        breadth = (
-            dialog.width()
-            if dialog.isVisible()
-            else max(dialog.sizeHint().width(), dialog.minimumWidth())
-        )
         right_edge = anchor.mapToGlobal(anchor.rect().topRight()).x()
-        assert dialog.x() + breadth <= right_edge, (
-            f"der Dialog ragt {dialog.x() + breadth - right_edge} Punkte über die Kante"
-        )
+        assert dialog.x() + expected <= right_edge, "auch die Mindestbreite bleibt im Anker"
     finally:
         dialog.deleteLater()
         anchor.deleteLater()
@@ -5049,6 +5118,43 @@ def test_the_report_puts_the_heavy_findings_first(qt_app: QApplication) -> None:
     assert order == ["error", "warning", "info", "info"]
 
 
+@pytest.mark.parametrize("additional", [False, True])
+def test_later_report_findings_keep_the_selected_action(
+    window: MainWindow, additional: bool
+) -> None:
+    """Nachlaufende Analyse lässt die gewählte Befundzeile und ihre Handlung stehen."""
+    from PySide6.QtWidgets import QPushButton
+
+    from app.core.types import Finding
+
+    panel = window.report
+    chosen = Finding(code="agent.undo_sweeps", severity="warning", message="ältere Schritte")
+    panel.add_findings([chosen])
+    panel.list.setCurrentRow(0)
+    before = [
+        item.widget().text()
+        for index in range(panel._offer_row.count())
+        if (item := panel._offer_row.itemAt(index)) is not None
+        and isinstance(item.widget(), QPushButton)
+    ]
+    assert before
+
+    incoming = [Finding(code="analysis.new", severity="error", message="neuer Befund")]
+    panel.add_findings(incoming if additional else [])
+
+    selected = panel.list.currentItem()
+    assert selected is not None
+    assert selected.data(Qt.ItemDataRole.UserRole) == chosen
+    current = [
+        item.widget()
+        for index in range(panel._offer_row.count())
+        if (item := panel._offer_row.itemAt(index)) is not None
+        and isinstance(item.widget(), QPushButton)
+    ]
+    assert [button.text() for button in current] == before
+    assert all(not button.isHidden() for button in current)
+
+
 def test_a_finding_with_a_way_out_is_chosen_before_anyone_clicks(window: MainWindow) -> None:
     """Die Knopfzeile des Prüfberichts steht ohne einen Klick da (§2.7).
 
@@ -5195,10 +5301,15 @@ def test_a_halted_chain_takes_no_new_step_and_names_the_way_on(
 
     **Roberts Fall** (11.09.2026: „da geht nichts mehr wenn ich die operation
     ausführe"): Schriftzug, in Einzelteile zerlegt, dann die Schrift gewechselt
-    — Comfortaa hat elf lose Teile, DejaVu Sans zehn, und die Zerlegung hält
-    an. Jede Operation danach ging durch ihren Dialog und stand dann als
+    — Comfortaa hatte mit der damaligen Füllregel elf lose Teile, DejaVu
+    Sans zehn, und die Zerlegung hielt an. Jede Operation danach ging durch
+    ihren Dialog und stand dann als
     Schritt 4, 5, 6 hinter dem angehaltenen zweiten: nie gerechnet, im Bild
     nichts, im Verlauf eine Zeile mehr (§15.3: gerechnet wird bis zum Halt).
+
+    Die korrigierte Füllregel liefert heute in beiden Schriften zehn Teile.
+    Ein zusätzlicher Punkt liefert deshalb die unabhängige elfte Komponente;
+    beim Ändern von Schrift und Text fällt sie weg und löst denselben Halt aus.
 
     Drei Zusagen, in der Reihenfolge, in der der Kunde sie trifft: Vor dem
     Klick ist jede Operation gesperrt und sagt warum — Aktion, Palette und
@@ -5217,20 +5328,22 @@ def test_a_halted_chain_takes_no_new_step_and_names_the_way_on(
             OperationDraft(
                 op="create_label",
                 inputs=(),
-                params={"text": "Solidon3D", "size": 200.0, "font": "Comfortaa"},
+                params={"text": "Solidon3D.", "size": 200.0, "font": "Comfortaa"},
             )
         ],
     )
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(30000)
     window.session.apply(
         "Zerlegen",
         [OperationDraft(op="split_bodies", inputs=("obj_1",), params={"count": 11})],
     )
-    window.session.wait_for_idle()
-    assert window.session.evaluate_now().stopped_at is None, "elf Teile, elf verlangt — kein Halt"
+    assert window.session.wait_for_idle(30000)
+    initial = window.session.evaluate_now()
+    assert initial.stopped_at is None, "elf Teile, elf verlangt — kein Halt"
+    assert len(initial.scene.objects) == 11
 
     window.session.change_params(1, {"text": "Solidon3D", "size": 200.0, "font": "DejaVu Sans"})
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(30000)
     halted = window.session.evaluate_now()
     window._on_scene(halted)
     split_step = document.ops[1].id
@@ -5283,7 +5396,7 @@ def test_a_halted_chain_takes_no_new_step_and_names_the_way_on(
 
     # 3. Der erste Knopf führt hinaus, und danach ist alles wieder frei.
     window.error_handlers()[RECOUNT_AND_RETRY.id](refusal)
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(30000)
     result = window.session.evaluate_now()
     window._on_scene(result)
     assert result.stopped_at is None and len(result.scene.objects) == 10
@@ -7046,10 +7159,10 @@ def test_a_chosen_hole_puts_its_own_actions_in_front(window: MainWindow) -> None
     # `slot_hole` steht seit dem 10.09.2026 **nicht** dabei: Es ist eine Zeile
     # mit Feldern im Merkmalsfenster darüber (`ACTION_ORDER`) und bekommt hier
     # deshalb keinen zweiten Knopf — dieselbe Regel wie bei *Bohrung ändern*.
-    an_der_bohrung = {"countersink_hole", "plug_hole"}
+    an_der_bohrung = {"countersink_hole", "plug_hole", "pattern_feature"}
     assert vorn() == an_der_bohrung, "die Bohrung bringt ihre eigenen mit"
     assert all(panel._buttons[name].isEnabled() for name in an_der_bohrung), (
-        "und sie sind ausführbar, nicht zwei graue Knöpfe"
+        "und sie sind ausführbar, nicht nur graue Knöpfe"
     )
 
     window.object_tree.select_object(object_id)
@@ -7460,16 +7573,13 @@ def test_an_unreachable_address_opens_that_address_not_the_product_page(
     """
     from PySide6.QtGui import QDesktopServices
 
-    from app.ui import main_window as modul
-
     geoeffnet: list[str] = []
-    monkeypatch.setattr(
-        modul.QDesktopServices,
-        "openUrl",
-        staticmethod(lambda url: geoeffnet.append(url.toString())),
-        raising=True,
-    )
-    assert QDesktopServices is not None  # der Import oben ist die geprüfte Stelle
+
+    def open_url(url) -> bool:
+        geoeffnet.append(url.toString())
+        return True
+
+    monkeypatch.setattr(QDesktopServices, "openUrl", staticmethod(open_url))
 
     adresse = "https://beispiel.test/teil.stl"
     fehler = errors.ValidationError(
@@ -8317,7 +8427,10 @@ def test_partial_repair_runs_from_the_report_and_undoes(
         raise AssertionError(f"kein Befund {code!r} im sichtbaren Bericht")
 
     def button(label: object) -> QPushButton | None:
-        buttons = window.report._offers.findChildren(QPushButton)
+        # Ausgebaute Qt-Kinder warten noch auf deleteLater; maßgeblich ist
+        # ausschließlich die aktuelle Knopfzeile.
+        row = window.report._offer_row
+        buttons = [row.itemAt(index).widget() for index in range(row.count())]
         return next((entry for entry in buttons if entry.text() == str(label)), None)
 
     choose("ingest.not_watertight")
@@ -8393,11 +8506,13 @@ def test_failed_operation_is_repaired_before_retry_without_a_loop(
         raise AssertionError(f"kein Befund {code!r} im sichtbaren Bericht")
 
     def button(label: object) -> QPushButton | None:
+        row = window.report._offer_row
         return next(
             (
                 entry
-                for entry in window.report._offers.findChildren(QPushButton)
-                if entry.text() == str(label)
+                for index in range(row.count())
+                if isinstance(entry := row.itemAt(index).widget(), QPushButton)
+                and entry.text() == str(label)
             ),
             None,
         )
@@ -9051,6 +9166,10 @@ def test_cancelling_the_question_keeps_the_window_open(window: MainWindow, monke
     Der Quader ist die Arbeit, um die es geht: Ein bloßes Einlesen fragt seit
     RM-130 nicht mehr, und ein Test ohne Frage prüfte hier gar nichts.
     """
+    from time import monotonic
+
+    from PySide6.QtTest import QTest
+
     import app.ui.main_window as module
 
     answers = ["cancel"]
@@ -9066,9 +9185,18 @@ def test_cancelling_the_question_keeps_the_window_open(window: MainWindow, monke
     assert not window.close(), "der Schließversuch wird abgelehnt"
     assert window.isVisible(), "das Fenster steht noch"
     assert window.session.modified, "und die Arbeit ist unberührt"
+    assert not window._close_requested, "Abbrechen merkt kein späteres Schließen vor"
+    assert window.isEnabled(), "nach Abbrechen bleibt die Arbeit bedienbar"
 
     answers[0] = "discard"
-    assert window.close(), "mit Verwerfen geht es dann"
+    window.close()
+    assert window._close_requested, "mit Verwerfen ist das Schließen entschieden"
+    # Laufende Arbeiter dürfen noch enden; der echte Wiederholungszeitgeber
+    # schließt danach ohne einen weiteren Nutzerklick.
+    deadline = monotonic() + 30.0
+    while window.isVisible() and monotonic() < deadline:
+        QTest.qWait(10)
+    assert not window.isVisible(), "nach Verwerfen und Arbeiterende schließt das Fenster"
 
 
 def test_dropping_a_model_on_the_start_screen_asks_before_replacing(
@@ -10858,6 +10986,7 @@ def test_a_failed_slicer_precheck_reaches_the_main_report(
 
         sliced = Signal(object)
         reported = Signal(object)
+        handedOver = Signal()  # noqa: N815 — bildet das echte Qt-Signal nach
         usage_changed = Signal()
         setupRequested = Signal()  # noqa: N815 - bildet das echte Qt-Signal nach
         filamentsRequested = Signal()  # noqa: N815 - dasselbe für den Weg zu den Spulen
@@ -12138,6 +12267,10 @@ def test_the_split_end_reports_when_the_thread_is_truly_gone(session: Session) -
         def isRunning(self) -> bool:  # noqa: N802 — der Name gehört Qt
             return False
 
+        def wait(self, _timeout_ms: int) -> bool:
+            """Die fertige Thread-Attrappe hat auch ihren Abbau abgeschlossen."""
+            return True
+
     worker = Done()
     session._split = worker
     busy: list[bool] = []
@@ -12159,6 +12292,10 @@ def test_cancelling_an_already_finished_split_is_confirmed_once(session: Session
 
         def isRunning(self) -> bool:  # noqa: N802 — bildet die Qt-API nach
             return False
+
+        def wait(self, _timeout_ms: int) -> bool:
+            """Die fertige Thread-Attrappe hat auch ihren Abbau abgeschlossen."""
+            return True
 
     worker = Done()
     session._split = worker
@@ -12826,11 +12963,11 @@ def test_the_export_offers_its_folder(
     Meldung, solange sie steht, und öffnet den Ordner über Qt — dieselbe
     Stelle auf allen drei Plattformen.
     """
-    import app.ui.main_window as module
+    from app.ui import dialogs
 
     opened: list[str] = []
     monkeypatch.setattr(
-        module.QDesktopServices, "openUrl", lambda url: opened.append(url.toLocalFile()) or True
+        dialogs.QDesktopServices, "openUrl", lambda url: opened.append(url.toLocalFile()) or True
     )
     worker = object()
     window._export_worker = worker
@@ -20054,8 +20191,8 @@ def test_naming_the_dimensions_makes_them_project_parameters(window: MainWindow)
     assert document.parameters == {}, "der Quader nimmt seine Maße mit"
 
 
-def test_finish_lists_the_seven_kinds_in_the_window(window: MainWindow) -> None:
-    """Die sieben Arten aus dem Register hängen unter *Mehr* — der Dialog
+def test_finish_lists_the_sketch_operations_in_the_window(window: MainWindow) -> None:
+    """Die zehn Skizzenoperationen hängen unter *Mehr* — der Dialog
     „Was soll daraus werden?" ist am 16.09.2026 gefallen (Robert: „weniger
     ist manchmal mehr"), und an *Fertig* hängen sie seit dem 23.09.2026 nicht
     mehr (Bedienabnahme Zeichnen, E2). Hochziehen steht vorn."""
@@ -20070,6 +20207,9 @@ def test_finish_lists_the_seven_kinds_in_the_window(window: MainWindow) -> None:
             "sketch_revolve",
             "sketch_loft",
             "sketch_sweep",
+            "sketch_revolve_cut",
+            "sketch_loft_cut",
+            "sketch_sweep_cut",
             "field_cut",
         }
         assert window.sketch_more_button.menu() is window._finish_menu
@@ -20606,14 +20746,11 @@ def test_a_countersunk_bore_builds_the_selection_window_once(
 def test_a_click_in_the_tree_settles_the_menu_entries_once_per_signal_pair(
     window: MainWindow, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Ein Klick auf eine Fläche stellt die Einträge zweimal, nicht viermal.
+    """Ein Merkmalsklick stellt die Einträge genau einmal vollständig ein.
 
-    Der Baum leert beim Wählen erst und setzt dann, und jede der zwei
-    Meldungen kommt als ``selectionChanged`` **und** ``featureSelected`` an.
-    Bis zum 22.09.2026 stellten beide Empfänger alle Einträge neu — vier Läufe
-    je Klick, 4 × 20 ms am Besenhalter aus dem Kundenbestand. Der Lauf gehört
-    dem zweiten Empfänger, der die Auswahl vollständig kennt; was er stellt,
-    muss danach stimmen.
+    Der Baum unterdrückt beim Leeren die Zwischenmeldung und meldet nur die
+    fertige Auswahl. Deren Signalpaar selectionChanged/featureSelected darf
+    die Hauptaktionen ebenfalls nur einmal aktualisieren.
     """
     window.open_path(MESHES / "cube_clean.stl")
     assert window.session.wait_for_idle()
@@ -20632,7 +20769,7 @@ def test_a_click_in_the_tree_settles_the_menu_entries_once_per_signal_pair(
     monkeypatch.setattr(window, "_update_actions", counted)
     window.object_tree.select_feature("obj_1", face)
 
-    assert len(runs) == 2, f"{len(runs)} Läufe für einen Klick"
+    assert len(runs) == 1, f"{len(runs)} Läufe für einen Klick"
     assert window.selected_feature_kind() == "face"
     settled = {name: action.isEnabled() for name, action in window._op_actions.items()}
     original()

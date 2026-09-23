@@ -695,9 +695,9 @@ TOURS: Final[tuple[Tour, ...]] = (
         ),
         closing=_(
             # **Drei Wege, und der erste hat eine Bedingung.** Hier stand
-            # allein *Automatisch teilen*, dazu im falschen Menü — der Eintrag
-            # trägt die Kategorie ``prepare`` und ist mit ihr nach
-            # *Vorbereiten* umgezogen, der Satz blieb bei *Bearbeiten* zurück.
+            # allein *Automatisch teilen*. Die vorbereitenden Operationen
+            # stehen rechts bei der Auswahl; dieser eigene Ablauf bleibt
+            # im Menü *Bearbeiten*.
             #
             # Schwerer wog der Inhalt: *Automatisch teilen* zerschneidet ein
             # Teil, **das nicht auf das Bett passt** (so steht es an seinem
@@ -705,7 +705,7 @@ TOURS: Final[tuple[Tour, ...]] = (
             # sparen — wer ihrem Schlusssatz folgte, griff zu einer Funktion,
             # die seinen Fall gar nicht meint, und die beiden Wege, auf denen
             # er die Naht selbst legt, standen nirgends.
-            "Passt ein Teil nicht auf das Bett, sucht Vorbereiten → Automatisch "
+            "Passt ein Teil nicht auf das Bett, sucht Bearbeiten → Automatisch "
             "teilen die Trennebene selbst. Soll die Naht woanders liegen, legen "
             "Sie sie mit *Teilen* aus den Handlungen rechts an eine Ebene — oder "
             "ziehen sie mit *An gezeichneter Linie trennen* dorthin, wo Sie sie "
@@ -754,7 +754,7 @@ TOURS: Final[tuple[Tour, ...]] = (
             ),
         ),
         closing=_(
-            "Mit Ihrem eigenen Modell: Vorbereiten → Automatisch teilen. Ist ein "
+            "Mit Ihrem eigenen Modell: Bearbeiten → Automatisch teilen. Ist ein "
             "Teil spiegelgleich, liegt die Naht in der Mitte, und beide Seiten "
             "drucken sich mit denselben Einstellungen."
         ),

@@ -996,3 +996,54 @@ def test_an_operation_reference_stays_with_its_own_body(scene: Scene) -> None:
     assert not [choice for choice in asked[0] if ":" in choice], (
         f"eine Operation bekam einen fremden Körper zur Wahl: {asked[0]}"
     )
+
+
+def test_a_shaping_step_names_its_unreferenced_losses_once(profile: Profile) -> None:
+    """Der Handschmeichler der Website meldete 55 Hinweise, 51 davon verlorene Formdetails.
+
+    Gemessen am 23.09.2026 am Schaustück ``website/teile/weg4-stein-formen.p3d``
+    (Weg 4, Quelle des Loops ``weg4-formen``), in 0.4.4 genauso: Die Kugel
+    des Rohlings hat 320 Dreiecke, *Gleichmäßig vernetzen* behält deren
+    Facetten, und die Erkennung findet 320 ebene Flächen. Jeder Pinselzug
+    nimmt denen, die er trifft, die Ebene — 28 an der Daumenmulde, 21 an den
+    Fingerrillen, und je Fläche stand ein eigener Befund. Auf keine davon
+    zeigt eine Passung oder ein Schritt; §21.3 knüpft das Melden an den
+    Verweis. Der Hinweis steht deshalb einmal je Körper und Schritt, Zahl und
+    Kennungen in den Werten. Ein Verlust mit Verweis bleibt ein eigener
+    Befund (``perceive.referenced_lost``) und ist hier nicht betroffen.
+    """
+    from collections import Counter
+
+    from app.core.scene import evaluate
+    from app.core.scene.project import ProjectSources, load
+
+    load_operations()
+    root = Path(__file__).resolve().parent.parent
+    project = load(root / "website" / "teile" / "weg4-stein-formen.p3d")
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert result.complete
+
+    findings = result.scene.report.findings
+    lost = [entry for entry in findings if entry.code == "perceive.orphaned"]
+    per_step = Counter((entry.object_id, entry.op_id) for entry in lost)
+    assert per_step and max(per_step.values()) == 1, (
+        f"derselbe Satz je Merkmal statt einmal je Schritt: {dict(per_step)}"
+    )
+    assert not [entry for entry in findings if entry.severity != "info"], (
+        "kein Verweis, also keine Warnung"
+    )
+
+    counted = 0
+    for entry in lost:
+        named = str(entry.values["feature"]).split(", ")
+        assert len(named) == len(set(named)), named
+        assert int(entry.values.get("count", 1)) == len(named), dict(entry.values)
+        counted += len(named)
+    # Die Merkmale gehen nicht verloren, nur ihre Wiederholung: Jede der
+    # 51 Kennungen steht weiterhin in genau einem Befund.
+    assert counted == 51, counted
+    assert max(int(entry.values.get("count", 1)) for entry in lost) == 28
+
+    # Vier Schritte mit Verlust, zweimal *Pinselzüge angewendet*, dazu
+    # Angleichen und Abweichung des Vernetzens: acht Hinweise statt 55.
+    assert len(findings) <= 8, Counter(entry.code for entry in findings)

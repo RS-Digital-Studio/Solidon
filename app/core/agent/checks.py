@@ -13,6 +13,7 @@ es weitermacht.
 from __future__ import annotations
 
 from collections import Counter
+from typing import cast
 
 from app.core.scene.evaluate import EvaluationResult
 from app.core.types import Finding, Mesh, ObjectId, Scene, SceneObject
@@ -150,14 +151,16 @@ def _compare(object_id: ObjectId, earlier: SceneObject, mesh: Mesh) -> list[Find
     return findings
 
 
-def as_lines(findings: list[Finding]) -> str:
+def as_lines(findings: list[Finding], *, include_severity: bool = False) -> str:
     """Die Befunde als das Werkzeugergebnis, das das Modell liest.
 
-    Verlorene Formdetails bleiben als Rohbefunde im Vorschlag und damit für
-    Bericht, Diagnose und Barrierefreiheit vollständig erhalten. Im
-    Werkzeugergebnis werden sie je Körper und Schritt gezählt: Hunderte
-    wortgleiche Sätze verdrängen sonst gerade den nächsten andersartigen
-    Befund, auf den das Modell reagieren soll.
+    Verlorene Formdetails ohne Verweis meldet die Auswertung einmal je Körper
+    und Schritt, ihre Zahl in ``values["count"]`` (fehlt bei genau einem) und
+    ihre Kennungen in ``values["feature"]``. Im Werkzeugergebnis werden sie
+    je Körper und Schritt gezählt — auch wortgleiche Einzelbefunde, wie sie
+    ein Vorschlag von Hand tragen kann: Hunderte gleiche Sätze verdrängen
+    sonst gerade den nächsten andersartigen Befund, auf den das Modell
+    reagieren soll.
     """
     if not findings:
         return str(_("Prüfung ohne Befund."))
@@ -172,12 +175,16 @@ def as_lines(findings: list[Finding]) -> str:
             finding.op_id,
         )
 
-    counts = Counter(key(finding) for finding in findings if finding.code == "perceive.orphaned")
+    counts: Counter[tuple[object, ...]] = Counter()
+    for finding in findings:
+        if finding.code in ("perceive.orphaned", "perceive.mended"):
+            counts[key(finding)] += int(cast(float, finding.values.get("count", 1)))
     emitted: set[tuple[object, ...]] = set()
     lines: list[str] = []
     for finding in findings:
-        if finding.code != "perceive.orphaned":
-            lines.append(f"{finding.code}: {finding.message}")
+        prefix = f"{finding.severity}: " if include_severity else ""
+        if finding.code not in ("perceive.orphaned", "perceive.mended"):
+            lines.append(f"{prefix}{finding.code}: {finding.message}")
             continue
 
         identity = key(finding)
@@ -192,5 +199,5 @@ def as_lines(findings: list[Finding]) -> str:
             context.append(f"{tr('Schritt')} {finding.op_id}")
         suffix = f" — {' · '.join(context)}" if context else ""
         count = f"{amount} \N{MULTIPLICATION SIGN} " if amount > 1 else ""
-        lines.append(f"{finding.code}: {count}{finding.message}{suffix}")
+        lines.append(f"{prefix}{finding.code}: {count}{finding.message}{suffix}")
     return "\n".join(lines)

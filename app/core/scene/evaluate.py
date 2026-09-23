@@ -2904,6 +2904,10 @@ def _with_features(
     # einer elliptisch verzerrten Bohrung darf hier niemals zur Zusage werden.
     rigid_orphans: dict[str, Feature] = {}
     arranged_rigidly = operation.op == "arrange_bed" and feature_movement is not None
+    # Verluste ohne Verweis, je Art gesammelt: ``False`` die Formdetails,
+    # ``True`` die geschlossenen Fehlstellen. Gemeldet werden sie nach der
+    # Schleife einmal je Körper und Schritt (siehe dort).
+    quiet: dict[bool, list[str]] = {False: [], True: []}
     for old_id in matched.orphaned:
         old_feature = previous.get(old_id)
         if (
@@ -2985,21 +2989,50 @@ def _with_features(
             )
             continue
 
+        quiet[defect].append(old_id)
+
+    # **Einmal je Körper und Schritt, nicht je Merkmal** (23.09.2026). Der
+    # Handschmeichler der Website meldete 55 Hinweise, 51 davon dieser Satz:
+    # Seine Kugel hat 320 Facetten, das Vernetzen behält sie, und jeder
+    # Pinselzug nahm denen, die er traf, die Ebene — 28 an der Daumenmulde,
+    # 21 an den Fingerrillen, je Fläche ein Befund. Auf keine zeigte etwas.
+    # Was ein Verlust ohne Verweis sagt, ist eine Aussage über den Schritt;
+    # welche Kennungen es waren, bleibt in den Werten für die Diagnose. Ein
+    # Verlust **mit** Verweis ist oben schon als eigener Befund gemeldet und
+    # wird hier nie mitgezählt.
+    for defect, gone in quiet.items():
+        if not gone:
+            continue
+        several = len(gone) > 1
+        said: dict[str, Any] = {"feature": ", ".join(gone)}
+        if several:
+            said["count"] = len(gone)
         findings.append(
             Finding(
                 code="perceive.mended" if defect else "perceive.orphaned",
                 severity="info",
                 message=(
-                    _("Eine offene Stelle ist geschlossen und damit fort.")
+                    (
+                        _("Offene Stellen sind geschlossen und damit fort.")
+                        if several
+                        else _("Eine offene Stelle ist geschlossen und damit fort.")
+                    )
                     if defect
-                    else _(
-                        "Ein Formdetail ist nach diesem Schritt nicht mehr automatisch "
-                        "wiederzuerkennen."
+                    else (
+                        _(
+                            "Formdetails sind nach diesem Schritt nicht mehr automatisch "
+                            "wiederzuerkennen."
+                        )
+                        if several
+                        else _(
+                            "Ein Formdetail ist nach diesem Schritt nicht mehr automatisch "
+                            "wiederzuerkennen."
+                        )
                     )
                 ),
                 object_id=entry.id,
                 op_id=operation.id,
-                values={"feature": old_id},
+                values=said,
             )
         )
 

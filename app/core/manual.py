@@ -1579,7 +1579,7 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "braucht er Platz — die Naht muss mindestens 5,4 mm hergeben, "
             "sonst wäre der Arm zu kurz zum Federn. Ist sie schmaler, werden "
             "es runde Stifte, und der Prüfbericht sagt warum.\n\n"
-            "**Vorbereiten → Automatisch teilen …** nimmt auch die Suche ab. "
+            "**Bearbeiten → Automatisch teilen …** nimmt auch die Suche ab. "
             "Die Trennebene wird gesucht, nicht geraten: über dieselbe "
             "Schichtanalyse wie die Orientierungssuche. Eine Naht, die aus "
             "**einer** Kontur besteht, ist besser als eine, die in fünf dünne "

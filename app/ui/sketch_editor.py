@@ -1231,7 +1231,15 @@ class SketchCanvas(QWidget):
         """
         if self.tool in CORNER_TOOLS:
             broken = self._broken_corner()
-            return () if broken is None else (broken.elements[-1],)
+            if broken is None:
+                return ()
+            # Hinter der neuen Kante steht der virtuelle Eckpunkt, der die
+            # bisherigen Maße hält. Vorschau ist die Kante, nicht die Hilfe.
+            return tuple(
+                element
+                for element in broken.elements[len(self.sketch.elements) :]
+                if not element.construction
+            )
         if not self._pending_world:
             return ()
         target = self._placement_target()[1]
@@ -1546,6 +1554,29 @@ class SketchCanvas(QWidget):
         if is_derived_plane(plane):
             return frame_for_plane(plane, (), self._params)
         return None
+
+    def planes_are_parallel(self, first: str, second: str) -> bool:
+        """Ob zwei Ebenen dieselbe Blickrichtung beschreiben, auch gegenläufig.
+
+        Griffangebot und Erhalt einer gewählten Fläche benutzen dieselbe
+        Richtungsprüfung. Der Ebenenname allein unterscheidet auch parallele
+        Flächen; eine freie Ansicht hat dagegen keine feste Normale.
+        """
+        if first == FREE_VIEW or second == FREE_VIEW:
+            return False
+        if first == second:
+            return True
+        normals = []
+        for plane in (first, second):
+            normal = _PLANE_NORMALS.get(plane)
+            if normal is None:
+                frame = self.plane_frame(plane)
+                if frame is None:
+                    return False
+                normal = frame.normal
+            normals.append(normal)
+        along = sum(float(a) * float(b) for a, b in zip(*normals, strict=True))
+        return abs(along) >= _PARALLEL_COS
 
     def project_bodies(self) -> None:
         """Holt die Schnittkurven aller Körper als Hilfsgeometrie herein.
@@ -7277,12 +7308,7 @@ class SketchPanel(QWidget):
             is_feature_plane(current) or is_derived_plane(current)
         ):
             return False
-        frame = self.canvas.plane_frame(current)
-        axis = _PLANE_NORMALS.get(view_plane)
-        if frame is None or axis is None:
-            return False
-        along = sum(float(a) * float(b) for a, b in zip(frame.normal, axis, strict=True))
-        return abs(along) >= _PARALLEL_COS
+        return self.canvas.planes_are_parallel(current, view_plane)
 
     def _plane_restored(self) -> None:
         """Feld und Ansicht folgen einer Ebene, die ein Rückgängig zurückgeholt hat."""
@@ -7997,12 +8023,17 @@ class SketchPanel(QWidget):
                 self.plane_choice.addItem(label, userData=f"feature:{feature_id}")
             self._add_plane_tail()
         self.canvas.offer_faces({feature_id: normal for feature_id, _label, normal in faces})
-        # Die Wahl kann durch das Entfernen weggefallen sein — dann steht sie
-        # jetzt auf XY, und der Hinweis darunter muss das mitbekommen.
-        chosen = self.plane_choice.findData(self.canvas.sketch.plane)
+        # Das Feld zeigt bei vorhandenen Strichen den Blick. Nur wenn dessen
+        # Fläche weggefallen ist, wechseln Kamera und Feld zur Zeichenebene.
+        chosen = self.plane_choice.findData(self.canvas.view_plane)
+        view_missing = chosen < 0
+        if view_missing:
+            chosen = self.plane_choice.findData(self.canvas.sketch.plane)
         if chosen >= 0:
             with QSignalBlocker(self.plane_choice):
                 self.plane_choice.setCurrentIndex(chosen)
+            if view_missing:
+                self._plane_picked()
         else:
             with QSignalBlocker(self.plane_choice):
                 self.plane_choice.setCurrentIndex(0)

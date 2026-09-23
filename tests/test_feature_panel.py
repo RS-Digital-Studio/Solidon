@@ -1460,6 +1460,8 @@ def test_a_face_gets_the_catalogue_instead_of_a_dead_end(qt_app: QApplication) -
     Sackgasse bleibt es trotzdem. Der Katalog lag hinter Rechtsklick und
     Untermenü.
     """
+    from app.i18n import tr
+
     identifier, feature = a_face()
     assert all(action.op is None for action in actions_for(feature)), "sonst prüft das nichts"
 
@@ -1468,7 +1470,14 @@ def test_a_face_gets_the_catalogue_instead_of_a_dead_end(qt_app: QApplication) -
     gerufen: list[bool] = []
     panel.catalogRequested.connect(lambda: gerufen.append(True))
 
-    knopf = next(widget for widget in panel._built if isinstance(widget, QPushButton))
+    buttons = [
+        widget
+        for widget in panel._built
+        if isinstance(widget, QPushButton) and widget.text() == tr("Baustein einsetzen …")
+    ]
+    assert len(buttons) == 1, "der Katalog hat genau einen eigenen Weg"
+    knopf = buttons[0]
+    assert knopf.isEnabled() and not knopf.isHidden()
     knopf.click()
 
     assert gerufen == [True], "der Knopf öffnet den Katalog"

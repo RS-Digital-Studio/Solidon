@@ -6842,13 +6842,78 @@ def test_the_remote_orientation_analysis_is_prepared_not_computed(window: MainWi
     Suche im Hauptthread Sekunden kostet. Jetzt gibt das Fenster eine
     Momentaufnahme zurück, die der Serverthread rechnet — und die Antwort
     ist dieselbe Analyse wie im Chat, mit Herkunft."""
+    from unittest.mock import patch
+
+    from app.core.agent.analysis import analysis_text
     from app.core.agent.tools import READ_ANALYSIS
     from app.core.scene.cancel import CancelSignal
-    from app.ui.remote_server import DeferredAnswer
 
-    prepared = window.run_remote(READ_ANALYSIS, {"kind": "orientation"})
+    with patch("app.ui.main_window.analysis_text", wraps=analysis_text) as compute:
+        prepared = window.run_remote(READ_ANALYSIS, {"kind": "orientation"})
 
-    assert isinstance(prepared, DeferredAnswer)
-    answer = prepared.work(CancelSignal())
+        assert callable(prepared)
+        compute.assert_not_called()
+        cancelled = CancelSignal()
+        answer = prepared(cancelled)
+        compute.assert_called_once()
+        assert compute.call_args.args[0] == "orientation"
+        assert compute.call_args.kwargs["cancelled"] is cancelled
+
     assert "Schichtanalyse" in answer
     assert "obj_1" in answer
+
+
+def test_a_summarised_loss_counts_its_details_and_nothing_else_does() -> None:
+    """Die Zahl vor einer Zeile über verlorene Formdetails zählt die Details.
+
+    Die Auswertung meldet sie seit dem 23.09.2026 einmal je Körper und
+    Schritt (Handschmeichler: 55 Hinweise, 51 davon dieser Satz). Die Zahl
+    steht in ``values["count"]`` und fehlt bei genau einem; ein anderer
+    Befund mit eigenem ``count`` bleibt ein Satz.
+    """
+    from app.ui.panels import _lost_count
+
+    def lost(code: str, **values: float | str) -> Finding:
+        return Finding(code=code, severity="info", message="x", values=values)
+
+    assert _lost_count(lost("perceive.orphaned", feature="face_1")) == 1
+    assert _lost_count(lost("perceive.orphaned", feature="face_1, face_2", count=2)) == 2
+    assert _lost_count(lost("perceive.mended", feature="edge_loop_1, edge_loop_2", count=2)) == 2
+    assert _lost_count(lost("ingest.small_parts_skipped", count=12)) == 1
+
+
+@pytest.mark.parametrize("code", ["perceive.orphaned", "perceive.mended"])
+def test_a_bundle_of_summarised_losses_announces_the_same_count_everywhere(
+    qt_app: QApplication, code: str
+) -> None:
+    """Zwei Kernbefunde über 49 Details müssen dieselbe Menge zeigen und vorlesen."""
+    from app.core.scene import EvaluationResult
+    from app.core.types import Report, Scene
+    from app.ui.labels import value_line
+    from app.ui.panels import ReportPanel
+
+    findings = tuple(
+        Finding(
+            code=code,
+            severity="info",
+            message="Formdetails wurden zusammengefasst.",
+            object_id=body,
+            op_id=4,
+            values={"count": amount, "feature": "face_1, face_2"},
+        )
+        for body, amount in (("obj_1", 28), ("obj_2", 21))
+    )
+    panel = ReportPanel()
+    try:
+        panel.show_result(EvaluationResult(scene=Scene(report=Report(findings=findings))))
+
+        assert panel.list.count() == 1
+        item = panel.list.item(0)
+        assert item.text().startswith("(49) ")
+        assert value_line("count", 49) in item.toolTip()
+        assert value_line("count", 49) in item.data(Qt.ItemDataRole.AccessibleDescriptionRole)
+        stored: Finding = item.data(Qt.ItemDataRole.UserRole)
+        assert stored.values["count"] == 49
+        assert f"2 × {tr('Hinweis')}" in panel.summary.text()
+    finally:
+        panel.deleteLater()

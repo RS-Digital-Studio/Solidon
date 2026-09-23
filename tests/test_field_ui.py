@@ -61,9 +61,11 @@ def test_an_invalid_required_sketch_keeps_the_correction_visible(field_dialog):
 
 @pytest.mark.parametrize("on_body", [False, True])
 def test_free_sketch_explains_why_cutting_needs_a_body(qt_app, on_body):
-    """Die Einträge unter *Fertig*, die einen Körper schneiden, sind ohne
-    Körper gesperrt — und sagen, was fehlt (Regel 18). Der Dialog, der das
-    vorher tat, ist am 16.09.2026 gefallen."""
+    """Schnitte unter *Mehr* sagen ohne Zielkörper, was fehlt (Regel 18).
+
+    Mit Ziel steht die Tasche als direkter Knopf *Abtragen* daneben;
+    ihr doppelter Menüeintrag bleibt dann ausgeblendet.
+    """
     from app.core.scene import OperationDraft
     from app.ui.main_window import MainWindow
     from app.ui.session import Session
@@ -79,11 +81,21 @@ def test_free_sketch_explains_why_cutting_needs_a_body(qt_app, on_body):
             # Bedienabnahme Zeichnen); ohne Auswahl wäre es ein neuer.
             window.object_tree.select_object(next(iter(window.session.last_result.scene.objects)))
         window.start_sketch("", sketch_to_text(shapes.rectangle(20, 20)))
-        for name in ("field_cut", "sketch_pocket"):
-            action = window._finish_actions[name]
-            assert action.isEnabled() == on_body, name
-            if not on_body:
-                assert "Körper" in action.toolTip(), name
+        field = window._finish_actions["field_cut"]
+        pocket = window._finish_actions["sketch_pocket"]
+        assert field.isVisible()
+        assert field.isEnabled() == on_body
+        if on_body:
+            assert window.sketch_body() == next(iter(window.session.last_result.scene.objects))
+            assert not window.sketch_cut_button.isHidden()
+            assert window.sketch_cut_button.isEnabled()
+            assert not pocket.isVisible(), "Abtragen steht bereits als direkter Knopf daneben"
+        else:
+            assert window.sketch_body() is None
+            assert window.sketch_cut_button.isHidden()
+            assert pocket.isVisible() and not pocket.isEnabled()
+            assert "Körper" in field.toolTip()
+            assert "Körper" in pocket.toolTip()
     finally:
         if window._sketch_panel is not None:
             window.finish_sketch(keep=False)

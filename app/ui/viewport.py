@@ -883,6 +883,12 @@ MEASURE_GAP = 14
 #: Geräteverhältnis multiplizierte, verdoppelte sie bei 200 Prozent.
 SKETCH_POINT_PIXELS = 10
 
+#: Schriftgröße der Maß- und Griffkarten im Skizzenmodus, in Logikpunkten.
+#: Eine Zahl für den Renderer und für die Platzierung
+#: (:meth:`Viewport._sketch_card_sizes`), sonst rechnete die eine mit einer
+#: anderen Karte, als die andere zeichnet.
+SKETCH_CARD_FONT_PIXELS = 10
+
 #: Abstand der Achsenbuchstaben vom Ursprung, in Bildpunkten.
 #:
 #: Die Rasterausdehnung reicht weit über den sichtbaren Ausschnitt; ein
@@ -3685,6 +3691,129 @@ def layout_feature_labels(
             )
             break
     return placed
+
+
+def _sketch_card_offsets(
+    width: float, height: float, gap: float, rings: int
+) -> list[tuple[float, float]]:
+    """Die Ausweichplätze einer Skizzenkarte, der nächste zuerst.
+
+    Ein Gitter in halben Kartenmaßen um den Anker. Bei gleichem Abstand
+    gewinnt die senkrechte Richtung vor der waagerechten — zwei Karten
+    untereinander lesen sich wie eine Liste —, dann unten vor oben und
+    rechts vor links.
+    """
+    step_x = (width + gap) / 2.0
+    step_y = (height + gap) / 2.0
+    offsets = [
+        (column * step_x, row * step_y)
+        for column in range(-rings, rings + 1)
+        for row in range(-rings, rings + 1)
+    ]
+    return sorted(
+        offsets,
+        key=lambda offset: (
+            math.hypot(offset[0], offset[1]),
+            abs(offset[0]),
+            offset[1] < 0.0,
+            offset[0] < 0.0,
+        ),
+    )
+
+
+def spread_sketch_cards(
+    anchors: Sequence[tuple[float, float]],
+    sizes: Sequence[tuple[float, float]],
+    *,
+    gap: float,
+    rings: int = 12,
+) -> list[tuple[float, float]]:
+    """Die Mitten der Skizzenkarten so, dass keine eine andere verdeckt.
+
+    Maßkarten und die Karten des Ziehgriffs stehen mittig auf ihrem Anker.
+    Fallen zwei an denselben Ort — die Anker des Ziehgriffs in der Draufsicht,
+    zwei Maße an einem Punkt —, lagen sie deckungsgleich und ergaben ein
+    unlesbares Wortgemisch. Hier behält die erste ihren Platz, jede weitere
+    rückt zum nächsten freien Platz um ihren Anker. Wer frei steht, bleibt
+    genau auf dem Anker.
+
+    **Keine Karte fällt weg**, anders als bei :func:`layout_feature_labels`:
+    Ein Merkmalsname ist ein Angebot, das in einem vollen Bild fehlen darf;
+    eine Maßkarte ist die Aussage der Zeichnung und der Griff das Ziel einer
+    Geste. Findet sich im Suchgitter kein freier Platz, bleibt die Karte auf
+    ihrem Anker. Ein Anker außerhalb des Bildes (NaN) wird nicht verschoben
+    und belegt nichts. Alle Maße sind Bildpunkte, Mitte und Größe je Karte.
+    """
+    reserved: list[tuple[float, float, float, float]] = []
+    centres: list[tuple[float, float]] = []
+    for (x, y), (width, height) in zip(anchors, sizes, strict=True):
+        if not all(math.isfinite(value) for value in (x, y, width, height)):
+            centres.append((x, y))
+            continue
+        chosen = (x, y)
+        for dx, dy in _sketch_card_offsets(width, height, gap, rings):
+            left = x + dx - width / 2.0
+            top = y + dy - height / 2.0
+            right = left + width
+            bottom = top + height
+            if not any(
+                left < other[2] and right > other[0] and top < other[3] and bottom > other[1]
+                for other in reserved
+            ):
+                chosen = (x + dx, y + dy)
+                break
+        centres.append(chosen)
+        # Belegt wird mit Leseabstand, damit zwei Karten nicht Kante an
+        # Kante kleben.
+        reserved.append(
+            (
+                chosen[0] - width / 2.0 - gap,
+                chosen[1] - height / 2.0 - gap,
+                chosen[0] + width / 2.0 + gap,
+                chosen[1] + height / 2.0 + gap,
+            )
+        )
+    return centres
+
+
+def place_sketch_cards(
+    renderer: Renderer,
+    points: Sequence[Vec3],
+    sizes: Sequence[tuple[float, float]],
+    *,
+    gap: float,
+) -> list[Vec3]:
+    """Die Weltpunkte der Skizzenkarten nach der Platzierung im Bild.
+
+    Projiziert, verteilt mit :func:`spread_sketch_cards` und in derselben
+    Tiefe zurückgerechnet — verschoben wird also nur parallel zum Bild.
+    Eine Karte, die nicht ausweichen musste, behält ihren Weltpunkt
+    unverändert. ``sizes`` und ``gap`` stehen in Gerätepixeln wie
+    :meth:`Renderer.world_to_display`.
+    """
+    projected = [renderer.world_to_display(point) for point in points]
+    anchors = [(x, y) if 0.0 <= depth <= 1.0 else (math.nan, math.nan) for x, y, depth in projected]
+    centres = spread_sketch_cards(anchors, sizes, gap=gap)
+    shown: list[Vec3] = []
+    for point, (x, y, depth), anchor, centre in zip(
+        points, projected, anchors, centres, strict=True
+    ):
+        if not math.isfinite(anchor[0]) or centre == anchor:
+            shown.append(point)
+            continue
+        before = renderer.display_to_world(x, y, depth)
+        after = renderer.display_to_world(centre[0], centre[1], depth)
+        if before is None or after is None:
+            shown.append(point)
+            continue
+        shown.append(
+            (
+                point[0] + after[0] - before[0],
+                point[1] + after[1] - before[1],
+                point[2] + after[2] - before[2],
+            )
+        )
+    return shown
 
 
 class _Same:
@@ -14891,6 +15020,28 @@ class Viewport(QWidget):
         angle = float(self.renderer.view_angle() or 30.0)
         self.renderer.set_parallel_scale(distance * math.tan(math.radians(angle) / 2.0))
 
+    def _sketch_card_sizes(self, cards: Sequence[tuple[str, int]]) -> list[tuple[float, float]]:
+        """Breite und Höhe je Skizzenkarte in Gerätepixeln, mit Rand.
+
+        Gemessen mit Qt, gezeichnet von pygfx — beide formen Text mit eigener
+        Schrift. Die Breite bekommt deshalb ein Fünftel Zuschlag: Eine zu
+        große Reserve kostet ein paar Bildpunkte Abstand, eine zu kleine ließe
+        die Karten wieder übereinanderragen.
+        """
+        font = QFont(self.font())
+        font.setPixelSize(SKETCH_CARD_FONT_PIXELS)
+        font.setBold(True)
+        metrics = QFontMetricsF(font)
+        ratio = self._device_ratio()
+        line = max(metrics.height(), float(SKETCH_CARD_FONT_PIXELS))
+        return [
+            (
+                (max(metrics.horizontalAdvance(text), 1.0) * 1.2 + 2.0 * margin + 4.0) * ratio,
+                (line + 2.0 * margin) * ratio,
+            )
+            for text, margin in cards
+        ]
+
     def show_sketch(
         self,
         curves: Sequence[SketchCurve],
@@ -14971,7 +15122,7 @@ class Viewport(QWidget):
                     name=name,
                     style=LabelStyle(
                         text_colour=self._sketch_label_colour,
-                        font_size=10,
+                        font_size=SKETCH_CARD_FONT_PIXELS,
                         bold=True,
                         always_visible=True,
                         background=self._sketch_label_background,
@@ -15089,13 +15240,13 @@ class Viewport(QWidget):
                     size=14.0,
                 )
             )
-        if measure_labels:
-            add_cards(
-                [point for point, _text in measure_labels],
-                [text for _point, text in measure_labels],
-                5,
-                "sketch_measures",
-            )
+        # Maßkarten und Griffkarten werden erst gesammelt und dann gemeinsam
+        # im Bild verteilt (:func:`place_sketch_cards`): Jede Karte kennt nur
+        # ihren eigenen Anker, und zwei an demselben Bildpunkt lagen
+        # deckungsgleich übereinander.
+        cards: list[tuple[Vec3, str, int, str]] = [
+            (point, text, 5, "sketch_measures") for point, text in measure_labels
+        ]
         full_handle = self._pull_handle_segments()
         handle = self._visible_pull_handle_segments(full_handle)
         if handle and self._pull_is_offered():
@@ -15127,7 +15278,30 @@ class Viewport(QWidget):
                     )
                 )
                 labels.append(str(tr("Abtragen")))
-            add_cards(label_points, labels, 4, "sketch_pull_labels")
+            cards.extend(
+                (point, text, 4, "sketch_pull_labels")
+                for point, text in zip(label_points, labels, strict=True)
+            )
+        if cards:
+            shown = place_sketch_cards(
+                renderer,
+                [point for point, _text, _margin, _name in cards],
+                self._sketch_card_sizes([(text, margin) for _point, text, margin, _name in cards]),
+                gap=self._device_pixels(TIGHT),
+            )
+            for name in ("sketch_measures", "sketch_pull_labels"):
+                group = [
+                    (point, text, margin)
+                    for point, (_anchor, text, margin, owner) in zip(shown, cards, strict=True)
+                    if owner == name
+                ]
+                if group:
+                    add_cards(
+                        [point for point, _text, _margin in group],
+                        [text for _point, text, _margin in group],
+                        group[0][2],
+                        name,
+                    )
         self._set_sketch_preview(preview)
         self._draw()
 
@@ -16388,7 +16562,7 @@ class Viewport(QWidget):
                     name="sketch_pull_measure",
                     style=LabelStyle(
                         text_colour=self._sketch_label_colour,
-                        font_size=10,
+                        font_size=SKETCH_CARD_FONT_PIXELS,
                         bold=True,
                         always_visible=True,
                         background=self._sketch_label_background,

@@ -354,6 +354,7 @@ eines der folgenden Stücke anfasst, liest sie zusätzlich:
 | `set_sketch_pull`, `pull_cage`, `pulled_height`, `polyline_distance` | der Ziehgriff der Querschau |
 | `MEASURE_GAP`, `DragValueBar.anchor` | die Zahl am Zeiger |
 | `apply_wheel_zoom`, `view_on_plane`, `cameraMoved` | Zoom und Schwenk auf einer Ebene |
+| `place_sketch_cards`, `spread_sketch_cards`, `SKETCH_CARD_FONT_PIXELS` | keine Karte über einer anderen |
 
 ## Die Ansicht
 

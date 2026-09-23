@@ -77,6 +77,11 @@ Was nur diese Datei weiß:
   umgebenden Klasse zu und prüft deren eigenen `eventFilter` auf den
   Abmeldegriff. Ein anderer Filter in derselben Datei erfüllt diesen Vertrag
   nicht.
+  Bei modalen Hauptfensterdialogen prüft die Datei zuerst die native
+  Kindlöschung bei weiterhin gehaltenem Elternfenster. Erst danach beendet
+  der gemeinsame Qt-Abbau den Fensterbaum; schwache Verweise auf Fenster
+  und Dialoge müssen anschließend sämtlich leer sein. `release()` allein
+  ersetzt die native Fensterlöschung nicht.
 - `test_suite_script.py` prüft die Halbierung des geteilten Laufs mit echten
   Shell-Prozessausgängen und simulierten pytest-Aufrufen, einschließlich 256
   gezählter Fehler: Erfolgreiche kleinere Teilstücke löschen den

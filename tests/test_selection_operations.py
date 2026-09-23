@@ -109,28 +109,21 @@ def test_the_front_row_follows_the_kind_and_the_count_of_the_selection(
         (2, ""): QUICK_BODIES,
         (5, ""): QUICK_BODIES,
         (1, "face"): QUICK_FEATURES["face"],
-        (1, "hole"): ("countersink_hole", "plug_hole"),
-        (1, "cone"): ("countersink_hole",),
+        (1, "hole"): ("countersink_hole", "plug_hole", "pattern_feature"),
+        (1, "cone"): ("countersink_hole", "pattern_feature"),
+        (1, "slot"): ("pattern_feature",),
         (1, "edge_loop"): QUICK_FEATURES["edge_loop"],
-        # Eine Art ohne eigene Zeile bekommt die generischen
-        # Merkmalshandlungen — **solange das Register sie dort anbietet und
-        # das Merkmalsfenster sie nicht schon als Feld zeigt.** Alle drei aus
-        # :data:`QUICK_FEATURE` stehen in ``ACTION_ORDER`` und damit oben mit
-        # ihrem gemessenen Wert; die Zeile bleibt an Stift und Kugel deshalb
-        # leer. Gemessen am 09.09.2026: `pin` trägt sieben Operationen, davon
-        # fünf als Feld, und die zwei übrigen stehen in der Liste darunter.
-        (1, "pin"): (),
-        (1, "sphere"): (),
-        # **Und eine Art, die das Register gar nicht kennt, bekommt nichts.**
-        # `applies_to` nennt sechs Arten, die Erkennung liefert mehr: Torus,
-        # Verrundung und Gewinde haben null Operationen. Vorher standen dort
-        # drei Knöpfe, hinter denen keine einzige lag — und weil
-        # `feature_requirement` fragt, ob **der Körper** ein solches Merkmal
-        # hat, waren sie auf einem Körper mit Bohrung sogar bedienbar und
-        # hätten auf ein anderes Merkmal gewirkt.
-        (1, "torus"): (),
+        # Gemessene Merkmalshandlungen stehen bereits als Felder darüber.
+        # Das Muster hat keine solche Zeile und bleibt an jeder vom Register
+        # unterstützten Art als eigene Hauptaktion sichtbar.
+        (1, "pin"): ("pattern_feature",),
+        (1, "sphere"): ("pattern_feature",),
+        (1, "torus"): ("pattern_feature",),
+        # Verrundung und Gewinde bieten kein Muster; ihre übrigen
+        # Merkmalshandlungen erscheinen bereits als Felder.
         (1, "fillet"): (),
         (1, "thread"): (),
+        (1, "unknown-feature"): (),
     }
     for (bodies, kind), wanted in lagen.items():
         assert quick_names(bodies, kind) == wanted
@@ -233,6 +226,10 @@ def test_actions_of_the_wrong_level_leave_instead_of_greying_out(qt_app: QApplic
         panel._quick_buttons
     )
     assert am_koerper and am_merkmal, "ohne beide Mengen prüft der Test nichts"
+    shared = am_koerper & am_merkmal
+    assert shared == {"draft_faces"}, "Formschräge gilt ganzen Körpern und gewählten Flächen"
+    draft = REGISTRY.get("draft_faces")
+    assert draft.also_on_body and tuple(draft.applies_to) == ("face",)
 
     def sichtbar() -> set[str]:
         """Die Knöpfe der **Liste**, ohne die Hauptaktionen oben.
@@ -252,8 +249,8 @@ def test_actions_of_the_wrong_level_leave_instead_of_greying_out(qt_app: QApplic
 
     panel.set_context(1, _availability(1))
     am_koerper_sichtbar = sichtbar()
-    assert not am_koerper_sichtbar & am_merkmal, (
-        "an einem Körper hat eine Merkmalshandlung nichts zu suchen"
+    assert am_koerper_sichtbar & am_merkmal == shared, (
+        "am Körper steht nur die ausdrücklich auch dort geltende Merkmalshandlung"
     )
 
     panel.set_context(1, _availability(1), feature_kind="face")
@@ -261,7 +258,9 @@ def test_actions_of_the_wrong_level_leave_instead_of_greying_out(qt_app: QApplic
     assert "arrange_bed" not in an_der_flaeche, (
         "eine Fläche wird nie auf dem Bett angeordnet — der Knopf verschwindet"
     )
-    assert not an_der_flaeche & am_koerper, "an einer Fläche steht keine Körperhandlung"
+    assert an_der_flaeche & am_koerper == shared, (
+        "an einer Fläche steht nur die ausdrücklich auch dort geltende Körperhandlung"
+    )
 
     # Und der Weg zurück: die Stufe wechselt, die Knöpfe kommen wieder. Sie
     # verschwinden beim Wechsel der Stufe, nicht beim zufälligen Klick.

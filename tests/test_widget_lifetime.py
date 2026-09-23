@@ -795,15 +795,21 @@ def test_a_window_that_opened_a_dialog_still_lets_go(
     """
     from PySide6.QtCore import QEvent
     from PySide6.QtWidgets import QApplication, QDialog
+    from shiboken6 import isValid
 
+    import conftest as suite_setup
     from app.ui import leash
     from app.ui.main_window import MainWindow
     from app.ui.session import Session
     from app.ui.settings import UiSettings
 
-    monkeypatch.setattr(
-        dialog_path + ".exec", lambda self: QDialog.DialogCode.Rejected, raising=True
-    )
+    dialogs: list[weakref.ReferenceType[QDialog]] = []
+
+    def cancelled(dialog: QDialog) -> int:
+        dialogs.append(weakref.ref(dialog))
+        return QDialog.DialogCode.Rejected
+
+    monkeypatch.setattr(dialog_path + ".exec", cancelled, raising=True)
 
     watchers = []
     windows = []
@@ -818,9 +824,8 @@ def test_a_window_that_opened_a_dialog_still_lets_go(
         # Halterung: ``DeferredDelete`` löst sie mitten im Kinddestruktor und
         # zerstört darin zugleich das Elternfenster. Das ist ein ungültiger
         # Prüfaufbau und riss mit 0xc0000409 schon bei einem einzelnen Fall.
-        # Der Ringwächter bleibt scharf: Erst nach der Kindlöschung fällt die
-        # äußere Liste; eine verbliebene Signalverbindung hält die schwache
-        # Fensterreferenz darunter weiterhin sichtbar.
+        # Zuerst wird die Kindlöschung unabhängig geprüft; erst danach endet
+        # der Elternbaum über denselben Qt-Abbau wie im gemeinsamen Teardown.
         windows.append(window)
         del window
 
@@ -834,14 +839,21 @@ def test_a_window_that_opened_a_dialog_still_lets_go(
         # endet, die sie eingereiht hat — im Betrieb ist das die des Fensters,
         # hier gibt es keine. Ohne diese Zeile misst der Test den Fix nicht.
         application.sendPostedEvents(None, QEvent.Type.DeferredDelete)
-    windows.clear()
-    gc.collect()
+    assert len(dialogs) == HOW_MANY, "jeder Fensterweg hat seinen Dialog wirklich geöffnet"
+    assert not any(watch() is not None and isValid(watch()) for watch in dialogs), (
+        "ein geschlossener Dialog lebt noch nativ am weiterhin gehaltenen Hauptfenster"
+    )
+    # Die Kindfreigabe ist bereits unabhängig belegt. Das Hauptfenster endet
+    # danach wie beim gemeinsamen Schließwächter über seinen nativen Qt-Abbau;
+    # release() allein löst die Elternhierarchie und ihre Rückrufe nicht.
+    suite_setup._release_pinned_ui(windows)
 
     alive = [watch for watch in watchers if watch() is not None]
     assert not alive, (
         f"{len(alive)} von {HOW_MANY} Fenstern überlebten, nachdem sie den "
-        f"{name} geöffnet hatten — der Dialog wird nicht freigegeben"
+        f"{name} geöffnet hatten — der Fensterbaum wird nicht freigegeben"
     )
+    assert all(watch() is None for watch in dialogs), "keine Dialoghülle bleibt nach dem Fenster"
 
 
 @pytest.mark.parametrize("withdrawn", [False, True])

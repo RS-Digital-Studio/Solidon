@@ -304,13 +304,18 @@ dann in die Seitenansicht oder vorderansicht gehe sie nach oben ziehen kann."
 Vorher tippte man eine Höhe und sah das Ergebnis; der Unterschied ist die
 Geste.
 
-**Angeboten wird sie genau dort, wo nicht gezeichnet wird** — in der Querschau,
-also wenn `view_plane` und `sketch.plane` auseinandergehen. Das ist ein
-**Zustand** und keine Schwelle, und das ist Absicht: Ein Winkelmaß „wie sehr
-von der Kante" läge neben der Prüfung, mit der `ray_hit` seine Stelle findet,
-und zwischen zwei Schwellen für dieselbe Frage liegt immer ein Bereich, in dem
-beide Antworten falsch sind. In der Draufsicht bliebe die Geste dem Zeichnen im
-Weg: Ein Druck auf eine Umrisskante wäre dort mal ein Punkt, mal ein Zug.
+**Angeboten wird sie genau dort, wo nicht gezeichnet wird** — in der Querschau.
+`SketchCanvas.planes_are_parallel` vergleicht die Richtungen von Blick und
+Zeichenebene, unabhängig von Namen und Versatz. Dieselbe Prüfung erhält eine
+gewählte Fläche beim Einrasten der Kamera; gegenläufige Normalen gelten ebenso
+als parallel. In einer solchen Draufsicht bleibt der Griff aus und der Hinweis
+führt zur Vorder- oder Seitenansicht. Die freie Ansicht bleibt eine Querschau;
+ob dort wirklich gezogen werden kann, prüft weiterhin `axis_hit` selbst.
+
+**Das Ebenenfeld zeigt den Blick.** `offer_faces` erhält beim Neuaufbau zuerst
+`canvas.view_plane`. Fällt dessen Fläche weg, wechseln Feld und Kamera auf die
+noch vorhandene Zeichenebene, ersatzweise auf XY. Eine vorhandene Zeichnung
+wird dabei nicht verschoben.
 
 Sechs Dinge hängen daran:
 
@@ -484,6 +489,18 @@ nur da, wenn gezeichnet wird, um an einem Zielkörper zu arbeiten, und
 Wurde der Skizzenmodus bereits für eine andere Operation geöffnet, bleiben die
 beiden kurzen Wege verborgen und *Fertig* hält die ursprüngliche Absicht.
 
+**Keine Karte über einer anderen.** Maßkarten und die Karten des Ziehgriffs
+stehen mittig auf ihrem Anker. Mehrere Maße können auf denselben Bildpunkt
+fallen; `show_sketch` sammelt deshalb erst alle Karten und verteilt sie
+gemeinsam im Bild (`place_sketch_cards`, die Rechnung in
+`spread_sketch_cards`): Die erste behält ihren Platz, jede weitere rückt zum
+nächsten freien um ihren Anker, senkrecht vor waagerecht. Wer frei steht,
+bleibt genau auf dem Anker. **Weggelassen wird keine** — anders als ein
+Merkmalsname (`layout_feature_labels`) ist eine Maßkarte die Aussage der
+Zeichnung. Die Größe misst Qt mit derselben Schrift, die pygfx zeichnet
+(`SKETCH_CARD_FONT_PIXELS`), mit einem Fünftel Zuschlag für die zweite
+Textformung. Geprüft ohne Fenster in `tests/test_sketch_card_layout.py`.
+
 **Und der Umriss beantwortet auch, was seine Kennzahl bedeutet**
 (`outline_advice`). „Geschlossen · 12 Freiheitsgrade sind noch frei" sagt einem
 Anfänger nichts — weder ob das gut oder schlecht ist, noch was zu tun wäre. Die
@@ -590,7 +607,9 @@ eine Ecke, Klick.** Eine Ecke sind zwei Linienenden am selben Ort — gesucht
 * **Die Vorschau hängt an der Ecke unter dem Zeiger, nicht an einem ersten
   Klick** (`_corner_hover`, gesetzt in `note_pointer` **vor** `pointerChanged`,
   weil `pointer_target` sie kennen muss). `pending_elements` gibt den Bogen
-  oder die Schräge zurück, die der Klick setzen würde; `pending_measure` das
+  oder die Schräge zurück, die der Klick setzen würde — aus den neu
+  hinzugefügten Elementen ohne Konstruktionshilfen. Der virtuelle Eckpunkt
+  steht hinter der Kante und ist deshalb nicht die Vorschau. `pending_measure` liefert das
   gemerkte Maß (`corner_values`, Vorgabe `DEFAULT_FILLET_MM` und
   `DEFAULT_CHAMFER_MM`). Damit erscheint das Maßfeld an der Ecke, die erste
   Ziffer beginnt die Eingabe, und die Eingabetaste bricht die Ecke mit der

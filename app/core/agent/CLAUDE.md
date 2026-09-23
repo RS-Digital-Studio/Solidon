@@ -121,10 +121,11 @@ der betroffenen Passung sichtbar; eine neue fachliche Diagnose braucht
 keine zweite Freigabeliste im Agenten.
 
 `checks.check()` behält jeden Rohbefund für Vorschlag und Prüfbericht.
-`checks.as_lines()` zählt nur `perceive.orphaned` je Körper und Schritt, bevor
-der Text zum Modell geht. So bleiben Diagnose und Klickziele vollständig,
-ohne dass hunderte wortgleiche Sätze den nächsten andersartigen Befund aus
-dem Agentenkontext verdrängen.
+`checks.as_lines()` zählt `perceive.orphaned` und `perceive.mended` je Körper
+und Schritt anhand der vom Kern gemeldeten Menge. `read_report` nutzt dieselbe
+Formatierung mit Schwerepräfix nach seinem Schwerefilter. So bleiben Diagnose
+und Klickziele vollständig, ohne dass hunderte wortgleiche Sätze den nächsten
+andersartigen Befund aus dem Agentenkontext verdrängen.
 
 ## Änderungen werden gemessen, nicht behauptet
 

@@ -1096,7 +1096,7 @@ def test_the_cuts_with_a_tool_wait_for_a_body_and_take_the_outline(
 ) -> None:
     """Freies Zeichnen → Operationswahl: Die drei Schnitte brauchen einen Körper.
 
-    Ohne Körper sind sie unter *Fertig* gesperrt und sagen, was fehlt (Regel
+    Ohne Zielkörper sind sie unter *Mehr* gesperrt und sagen, was fehlt (Regel
     18, derselbe Satz wie bei der Tasche); über einem Körper führen sie mit
     der Zeichnung als Querschnitt in ihren Dialog.
     """
@@ -1116,6 +1116,8 @@ def test_the_cuts_with_a_tool_wait_for_a_body_and_take_the_outline(
         if on_body:
             window.session.apply("Welle", [OperationDraft(op="create_brep_cylinder")])
             assert window.session.wait_for_idle(30000)
+            body = next(iter(window.session.last_result.scene.objects))
+            window.object_tree.select_object(body)
         text = sketch_to_text(shapes.rectangle(2.0, 3.0))
         window.start_sketch("", text)
         cuts = ("sketch_revolve_cut", "sketch_sweep_cut", "sketch_loft_cut")
@@ -4351,6 +4353,76 @@ def test_the_constraint_list_explains_each_entry(qt_app: QApplication) -> None:
 # --- Der Ziehgriff der Querschau (§30.1) -------------------------------------
 
 
+@pytest.mark.parametrize("normal", [(0.0, 0.0, 1.0), (0.0, 0.0, -1.0)])
+def test_parallel_face_view_offers_drawing_instead_of_a_pull_grip(
+    qt_app: QApplication, normal: tuple[float, float, float]
+) -> None:
+    """Eine parallele Deck- oder Bodenfläche macht aus der Draufsicht keinen Ziehweg."""
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window.start_sketch("")
+        panel = window._sketch_panel
+        assert panel is not None
+        panel.canvas.insert_shape(shapes.rectangle(40.0, 20.0))
+        frame = PlaneFrame((0.0, 0.0, 12.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0), normal)
+        panel.canvas.offer_frames(lambda plane: frame if plane == "feature:top" else None)
+        panel.offer_faces((("top", "Deckfläche", normal),))
+        assert panel.choose_plane("feature:top")
+        assert panel.canvas.sketch.plane == "plane:xy"
+        assert window._sketch_pull_offer() == ""
+        assert "Vorder- oder Seitenansicht" in window.viewport.sketch_action.text()
+        panel.choose_plane("plane:xz")
+        assert window._sketch_pull_offer() == "ready"
+    finally:
+        window.finish_sketch(keep=False)
+        window.close()
+        window.deleteLater()
+
+
+@pytest.mark.parametrize("view", ["plane:xz", "feature:top", "view:free"])
+def test_reoffering_faces_keeps_the_camera_view_in_the_field(
+    qt_app: QApplication, view: str
+) -> None:
+    """Nachbarn zeigen baut das Feld neu auf, ohne den gewählten Blick zu verlieren."""
+    panel = SketchPanel(sketch_to_text(shapes.rectangle(40.0, 20.0)))
+    faces = (("top", "Deckfläche", (0.0, 0.0, 1.0)),)
+    try:
+        panel.offer_faces(faces)
+        if view == "view:free":
+            panel.reflect_camera_view(None)
+        else:
+            assert panel.choose_plane(view)
+        before = panel.canvas.sketch
+        panel.offer_faces(faces)
+        assert panel.plane_choice.currentData() == view
+        assert panel.canvas.view_plane == view
+        assert panel.canvas.sketch == before
+    finally:
+        panel.close()
+
+
+def test_a_removed_view_face_returns_field_and_camera_to_the_drawing_plane(
+    qt_app: QApplication,
+) -> None:
+    """Eine verlorene Ansichtsfläche lässt weder ein falsches Feld noch einen alten Blick zurück."""
+    panel = SketchPanel(sketch_to_text(shapes.rectangle(40.0, 20.0)))
+    try:
+        panel.offer_faces((("top", "Deckfläche", (0.0, 0.0, 1.0)),))
+        assert panel.choose_plane("feature:top")
+        changes: list[str] = []
+        panel.planeChanged.connect(lambda: changes.append(panel.canvas.view_plane))
+        panel.offer_faces(())
+        assert panel.plane_choice.currentData() == "plane:xy"
+        assert panel.canvas.view_plane == "plane:xy"
+        assert changes == ["plane:xy"]
+    finally:
+        panel.close()
+
+
 def test_the_grip_is_offered_only_when_the_plane_is_seen_edge_on(qt_app: QApplication) -> None:
     """Robert am 27.08.2026: in der Draufsicht zeichnen, in der Seitenansicht
     nach oben ziehen.
@@ -4380,7 +4452,6 @@ def test_the_grip_is_offered_only_when_the_plane_is_seen_edge_on(qt_app: QApplic
         assert window._sketch_pull_offer() == "ready"
         assert "Pfeil:" in window.viewport.sketch_action.text()
         assert "Kreuz:" not in window.viewport.sketch_action.text()
-        assert "bearbeitbaren Körper" in window.viewport.sketch_action.text()
         assert len(window.viewport._visible_pull_handle_segments()) == 3, (
             "ohne Zielkörper steht nur der Pfeil nach außen im Modell"
         )
@@ -4632,8 +4703,8 @@ def test_a_free_sketch_offers_building_and_cutting_without_a_cad_term(
     """Die beiden häufigsten Folgen stehen sichtbar an der Zeichnung.
 
     Ein Neuling soll weder „Extrusion" kennen noch erst über *Fertig* eine
-    Liste durchsuchen. Solange der Umriss offen ist, sagen die gesperrten
-    Knöpfe, was noch fehlt; danach ist Hochziehen sofort bereit.
+    Liste durchsuchen. Solange der Umriss offen ist, sagt Hochziehen, was
+    fehlt; danach ist es sofort bereit. Abtragen erscheint erst mit Ziel.
     """
     from app.ui.main_window import MainWindow
     from app.ui.session import Session
@@ -4645,15 +4716,14 @@ def test_a_free_sketch_offers_building_and_cutting_without_a_cad_term(
         panel = window._sketch_panel
         assert panel is not None
         assert not window.sketch_pull_button.isHidden()
-        assert not window.sketch_cut_button.isHidden()
+        assert window.sketch_cut_button.isHidden(), "ohne Ziel gibt es nichts abzutragen"
         assert not window.sketch_pull_button.isEnabled()
         assert "geschlossenen Umriss" in window.sketch_pull_button.toolTip()
 
         panel.canvas.insert_shape(shapes.rectangle(40.0, 20.0))
 
         assert window.sketch_pull_button.isEnabled()
-        assert not window.sketch_cut_button.isEnabled(), "Abtragen braucht einen Körper"
-        assert "Körper" in window.sketch_cut_button.toolTip()
+        assert window.sketch_cut_button.isHidden(), "Abtragen braucht einen Zielkörper"
     finally:
         window.finish_sketch(keep=False)
         window.close()
@@ -4696,13 +4766,8 @@ def test_the_visible_cut_button_goes_directly_to_the_selected_body(
     qt_app: QApplication,
 ) -> None:
     """Abtragen ist die klare kurze Hand zur Tasche auf einem exakten Körper."""
-    from types import SimpleNamespace
-
-    import trimesh
-
-    from app.core.geom.mesh import MeshData
     from app.core.registry import OperationSpec
-    from app.core.types import Scene, SceneObject
+    from app.core.scene import OperationDraft
     from app.ui.main_window import MainWindow
     from app.ui.session import Session
     from app.ui.settings import UiSettings
@@ -4714,24 +4779,22 @@ def test_the_visible_cut_button_goes_directly_to_the_selected_body(
         asked.append((spec.name, dict(given or {})))
 
     try:
+        window.session.apply(
+            "Körper",
+            [
+                OperationDraft(
+                    op="create_brep_box", params={"width": 30.0, "depth": 20.0, "height": 10.0}
+                )
+            ],
+        )
+        assert window.session.wait_for_idle(30000)
+        body = next(iter(window.session.last_result.scene.objects))
+        window.object_tree.select_object(body)
         window.run_operation = note
         window.start_sketch("")
         panel = window._sketch_panel
         assert panel is not None
-        window.object_tree.selected_objects = lambda: ("body",)
-        window.session.last_result = SimpleNamespace(
-            stopped_at=None,
-            scene=Scene(
-                objects={
-                    "body": SceneObject(
-                        id="body",
-                        name="Körper",
-                        mesh=MeshData.of(trimesh.creation.box(extents=(30.0, 20.0, 10.0))),
-                        kind="brep",
-                    )
-                }
-            ),
-        )
+        assert window.sketch_body() == body
         panel.canvas.insert_shape(shapes.rectangle(40.0, 20.0))
 
         assert window.sketch_cut_button.isEnabled()
@@ -4740,55 +4803,118 @@ def test_the_visible_cut_button_goes_directly_to_the_selected_body(
         assert [name for name, _given in asked] == ["sketch_pocket"]
         assert asked[0][1]["sketch"]
     finally:
-        window.session.last_result = None
-        window.close()
+        if window._sketch_panel is not None:
+            window.finish_sketch(keep=False)
+        window.wait_for_workers()
         window.deleteLater()
 
 
 def test_selecting_a_body_updates_the_visible_cut_button_immediately(
     qt_app: QApplication,
 ) -> None:
-    """Wer dem Hinweis folgt, braucht keine zweite zufällige Geste."""
-    from types import SimpleNamespace
+    """Die Wahl im Feld Ziel aktiviert Abtragen unmittelbar und bindet nur diesen Körper."""
+    from PySide6.QtTest import QTest
 
-    import trimesh
-
-    from app.core.geom.mesh import MeshData
-    from app.core.types import Scene, SceneObject
+    from app.core.scene import OperationDraft
     from app.ui.main_window import MainWindow
     from app.ui.session import Session
     from app.ui.settings import UiSettings
 
     window = MainWindow(Session(), UiSettings())
     try:
+        window.session.apply(
+            "Körper",
+            [
+                OperationDraft(
+                    op="create_brep_box", params={"width": 30.0, "depth": 20.0, "height": 10.0}
+                )
+            ],
+        )
+        assert window.session.wait_for_idle(30000)
+        body = next(iter(window.session.last_result.scene.objects))
+        window.object_tree.select_object(None)
         window.start_sketch("")
         panel = window._sketch_panel
         assert panel is not None
         panel.canvas.insert_shape(shapes.rectangle(40.0, 20.0))
         assert not window.sketch_cut_button.isEnabled()
 
-        body = SceneObject(
-            id="body",
-            name="Körper",
-            mesh=MeshData.of(trimesh.creation.box(extents=(30.0, 20.0, 10.0))),
-            kind="brep",
-        )
-        window.session.last_result = SimpleNamespace(
-            stopped_at=None, scene=Scene(objects={"body": body})
-        )
-        window.object_tree.selected_objects = lambda: ("body",)
+        QTest.keyClick(window.sketch_body_choice, Qt.Key.Key_Down)
 
-        window._on_selection("body")
-
+        assert window.sketch_body() == body
+        assert not window.sketch_cut_button.isHidden()
         assert window.sketch_cut_button.isEnabled()
         assert "Schneidet den Umriss" in window.sketch_cut_button.toolTip()
         panel.choose_plane("plane:xz")
         assert "Kreuz:" in window.viewport.sketch_action.text()
         assert len(window.viewport._visible_pull_handle_segments()) == 5
     finally:
-        window.session.last_result = None
         window.finish_sketch(keep=False)
-        window.close()
+        window.wait_for_workers()
+        window.deleteLater()
+
+
+def test_cutting_from_the_sketch_card_changes_only_its_target_and_is_undoable(
+    qt_app: QApplication,
+) -> None:
+    """Fläche, Rechteck, Abtragen, Tiefe: 10 × 6 × 4 mm fehlen nur im gewählten Körper."""
+    from PySide6.QtTest import QTest
+
+    from app.core.scene import OperationDraft
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window.session.apply(
+            "Zwei Körper",
+            [
+                OperationDraft(
+                    op="create_brep_box",
+                    params={"width": 30.0, "depth": 20.0, "height": 10.0},
+                ),
+                OperationDraft(
+                    op="create_brep_box",
+                    params={"width": 10.0, "depth": 10.0, "height": 10.0, "x": 80.0},
+                ),
+            ],
+        )
+        assert window.session.wait_for_idle(30000)
+        body, neighbour = window.session.last_result.scene.objects
+        window.object_tree.select_object(body)
+        window.action_sketch_free()
+        window.viewport.plane_picker._buttons["face"].click()
+        panel = window._sketch_panel
+        assert panel is not None
+        assert panel.canvas.sketch.plane.startswith(f"feature:{body}:")
+        panel.canvas.insert_shape(shapes.rectangle(10.0, 6.0))
+        window.sketch_cut_button.click()
+        dialog = window._op_dialog
+        assert dialog is not None
+        dialog._editors["depth"].set_value(4.0)
+        QTest.qWait(350)
+        assert window.session.wait_for_idle(30000)
+        dialog.accept()
+        assert window.session.wait_for_idle(30000)
+        assert window.session.history.operations[-1].op == "sketch_pocket"
+        result = window.session.last_result
+        assert result.stopped_at is None
+        assert result.scene.objects[body].mesh.volume == pytest.approx(5760.0)
+        assert result.scene.objects[neighbour].mesh.volume == pytest.approx(1000.0)
+        window.session.undo()
+        assert window.session.wait_for_idle(30000)
+        assert window.session.last_result.scene.objects[body].mesh.volume == pytest.approx(6000.0)
+        window.session.redo()
+        assert window.session.wait_for_idle(30000)
+        assert window.session.last_result.scene.objects[body].mesh.volume == pytest.approx(5760.0)
+    finally:
+        if window._op_dialog is not None:
+            window._op_dialog.reject()
+        if window._sketch_panel is not None:
+            window.finish_sketch(keep=False)
+        window.wait_for_workers()
+        window.object_tree.select_object(None)
         window.deleteLater()
 
 
@@ -4867,13 +4993,9 @@ def test_the_viewport_toolbar_drops_its_empty_canvas_row(qt_app: QApplication) -
         # der Umriss liegen könnte. Der Satz nennt seit dem Fusion-Abgleich
         # nicht mehr die Auswahl, sondern das, was fehlt.
         ("keine szene", "Körper in der Szene"),
-        # **Der zweite Fall hieß bis zum 30.08.2026 „festen Dreiecken"** und
-        # stellte einen Körper mit ``kind="mesh"``: Ein Netz war kein Ziel. Das
-        # gilt nicht mehr — ``sketch_pocket`` schneidet auch in ein Netz. Der
-        # Ablehnungsgrund, der geblieben ist, ist der örtliche: Die Zeichnung
-        # liegt neben dem Teil. Damit prüft dieser Test weiter **beide** Wege,
-        # auf denen ein Zug abgelehnt werden kann, und nicht nur noch einen.
-        ("körper daneben", "kein bearbeitbarer Körper"),
+        # Ein vorhandener Körper ist noch kein gebundenes Ziel. Der Griff
+        # verweist auf das Zielfeld und sucht kein Teil unter der Zeichnung.
+        ("körper ohne ziel", "unter „Ziel“ einen Körper wählen"),
     ],
 )
 def test_a_rejected_inward_pull_clears_its_preview(
@@ -4881,7 +5003,7 @@ def test_a_rejected_inward_pull_clears_its_preview(
     aufbau: str,
     message: str,
 ) -> None:
-    """Fehlende oder unerreichbare Körper lassen keinen alten Drahtkäfig stehen."""
+    """Fehlende Szene oder fehlendes Ziel lassen keinen alten Drahtkäfig stehen."""
     from types import SimpleNamespace
 
     from app.core.types import BoundingBox, Scene
@@ -4895,9 +5017,8 @@ def test_a_rejected_inward_pull_clears_its_preview(
     try:
         window.start_sketch("")
         window.object_tree.selected_objects = lambda: ()
-        if aufbau == "körper daneben":
-            # Ein echtes Teil, aber fünfhundert Millimeter weiter — die Suche
-            # unter der Zeichnung findet es nicht, und genau das soll sie.
+        if aufbau == "körper ohne ziel":
+            # Das Teil ist vorhanden, aber beim Zeichnen nicht als Ziel gewählt.
             window.session.last_result = SimpleNamespace(
                 stopped_at=None,
                 scene=Scene(
@@ -5047,7 +5168,7 @@ def test_the_bar_says_how_the_grip_works_once_it_is_available(qt_app: QApplicati
         # Review-Sitzung, 27.08.2026).
         badge = window.viewport.sketch_action.text()
         assert "Pfeil:" in badge and "Kreuz:" not in badge, badge
-        assert "bearbeitbaren Körper" in badge, badge
+        assert "bearbeitbaren Körper" not in badge, "ohne Ziel gibt es keinen Schneidgriff"
         assert "Pfeil:" not in after, "die Zeile wiederholt die Geste nicht — sie steht im Bild"
         assert "Zeichenebene" in after, "die Ebene bleibt in der Zeile stehen"
     finally:
@@ -5096,13 +5217,8 @@ def test_a_pulled_height_reaches_the_operation(qt_app: QApplication) -> None:
 
 def test_an_inward_pull_becomes_a_visible_pocket_operation(qt_app: QApplication) -> None:
     """Das Kreuz trägt zur Tasche; die Tiefe kommt positiv im Operationsschema an."""
-    from types import SimpleNamespace
-
-    import trimesh
-
-    from app.core.geom.mesh import MeshData
     from app.core.registry import OperationSpec
-    from app.core.types import Scene, SceneObject
+    from app.core.scene import OperationDraft
     from app.ui.main_window import MainWindow
     from app.ui.session import Session
     from app.ui.settings import UiSettings
@@ -5114,26 +5230,24 @@ def test_an_inward_pull_becomes_a_visible_pocket_operation(qt_app: QApplication)
         asked.append((spec.name, dict(given or {})))
 
     try:
+        window.session.apply(
+            "Körper",
+            [
+                OperationDraft(
+                    op="create_brep_box", params={"width": 30.0, "depth": 20.0, "height": 10.0}
+                )
+            ],
+        )
+        assert window.session.wait_for_idle(30000)
+        body = next(iter(window.session.last_result.scene.objects))
+        window.object_tree.select_object(body)
         window.run_operation = note
         window.start_sketch("")
         panel = window._sketch_panel
         assert panel is not None
         panel.canvas.insert_shape(shapes.rectangle(40.0, 20.0))
         panel.choose_plane("plane:xz")
-        window.object_tree.selected_objects = lambda: ("body",)
-        window.session.last_result = SimpleNamespace(
-            stopped_at=None,
-            scene=Scene(
-                objects={
-                    "body": SceneObject(
-                        id="body",
-                        name="Körper",
-                        mesh=MeshData.of(trimesh.creation.box(extents=(30.0, 20.0, 10.0))),
-                        kind="brep",
-                    )
-                }
-            ),
-        )
+        assert window.sketch_body() == body
 
         window._apply_sketch_pull(-8.5)
 
@@ -5143,8 +5257,9 @@ def test_an_inward_pull_becomes_a_visible_pocket_operation(qt_app: QApplication)
         assert given["depth"] == pytest.approx(8.5)
         assert given["sketch"], "die ausgeschnittene Zeichnung reist mit"
     finally:
-        window.session.last_result = None
-        window.close()
+        if window._sketch_panel is not None:
+            window.finish_sketch(keep=False)
+        window.wait_for_workers()
         window.deleteLater()
 
 
@@ -7114,7 +7229,9 @@ def test_the_fillet_tool_rounds_a_corner_on_click(qt_app: QApplication) -> None:
 
     canvas.place_on_plane((40.0, 20.0))
 
-    assert canvas.sketch.elements[-1].kind == "arc"
+    added = tuple(element for element in canvas.sketch.elements[4:] if not element.construction)
+    assert len(added) == 1 and added[0].kind == "arc"
+    assert added[0].points == preview[0].points, "Vorschau und Klick zeigen denselben Bogen"
     kinds = [entry.kind for entry in canvas.sketch.constraints]
     assert kinds.count("radius") == 1
     assert canvas.solved is not None and canvas.solved.free_dof == 4
@@ -7133,8 +7250,11 @@ def test_a_typed_radius_rounds_the_corner_under_the_pointer(qt_app: QApplication
 
     canvas.place_measured(5.0)
 
-    arc = canvas.sketch.elements[-1]
-    assert arc.kind == "arc"
+    arc = next(element for element in canvas.sketch.elements if element.kind == "arc")
+    assert not arc.construction
+    import math
+
+    assert math.dist(arc.points[0], arc.points[1]) == pytest.approx(5.0)
     assert canvas.corner_values["fillet"] == 5.0
     radius = next(entry for entry in canvas.sketch.constraints if entry.kind == "radius")
     assert float(radius.value) == pytest.approx(5.0)
@@ -7150,12 +7270,16 @@ def test_the_chamfer_tool_cuts_a_corner_and_a_slanted_edge_appears(
     _clicked_box(canvas)
     canvas.set_tool("chamfer")
     canvas.hover_on_plane((40.0, 20.0))
+    preview = canvas.pending_elements()
+    assert len(preview) == 1 and preview[0].kind == "line"
+    assert not preview[0].construction
     canvas.place_measured(4.0)
 
-    edge = canvas.sketch.elements[-1]
+    edge = next(element for element in canvas.sketch.elements[4:] if not element.construction)
     assert edge.kind == "line"
     (ax, ay), (bx, by) = edge.points
-    assert abs(bx - ax) > 0.0 and abs(by - ay) > 0.0, "schräg, nicht achsparallel"
+    assert abs(bx - ax) == pytest.approx(4.0)
+    assert abs(by - ay) == pytest.approx(4.0)
     assert canvas.outline, "und der Umriss ist weiter geschlossen"
 
 
@@ -7726,7 +7850,10 @@ def test_finish_lists_the_kinds_and_says_why_cutting_is_locked(qt_app: QApplicat
         assert "Umriss" in window._finish_actions["sketch_extrude"].toolTip()
 
         panel.canvas.insert_shape(shapes.rectangle(40.0, 20.0))
-        assert window._finish_actions["sketch_extrude"].isEnabled()
+        assert not window._finish_actions["sketch_extrude"].isVisible(), (
+            "Hochziehen steht bereits als Knopf neben Mehr"
+        )
+        assert window.sketch_pull_button.isEnabled()
         pocket = window._finish_actions["sketch_pocket"]
         assert not pocket.isEnabled() and "Körper" in pocket.toolTip(), "Abtragen sagt, was fehlt"
         assert window._finish_actions["sketch_revolve"].isEnabled()

@@ -1180,13 +1180,21 @@ def test_escape_leads_back_to_the_dialog_and_the_dialog_back_into_the_view(
     controller.back()
     assert not controller.active
     assert dialog.aim_again.isVisibleTo(dialog), "aus dem Dialog führt kein Weg zurück ins Bild"
+    assert dialog._placement_hint.isVisibleTo(dialog), "auch der Modellklick bleibt angekündigt"
     assert dialog.aim_again.toolTip()
 
     dialog.aim_again.click()
     assert controller.active, "der Knopf beginnt die Platzierung wieder in Stufe 1"
     assert not controller._deepening
     assert not dialog.aim_again.isVisibleTo(dialog)
+    assert dialog._placement_hint.isVisibleTo(dialog), "beim erneuten Zielen bleibt der Hinweis"
     assert dialog.values() == values
+
+    controller.dispose()
+    assert not controller.active
+    assert dialog.aim_again.isHidden(), "nach dem Ende gibt es keinen verwaisten Rückweg"
+    assert dialog._placement_hint.isHidden()
+    assert _viewport.resume is None
 
 
 def test_invalid_surface_cannot_reuse_the_previous_position(flow: Any) -> None:

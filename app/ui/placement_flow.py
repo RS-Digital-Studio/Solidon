@@ -159,7 +159,7 @@ class PlacementHost(Protocol):
 
     def isVisible(self) -> bool: ...  # noqa: N802 — Qt-Name
 
-    def show_placement_hint(self, on: bool) -> None: ...
+    def show_placement_hint(self, on: bool, *, paused: bool = False) -> None: ...
 
 
 class QuietHost(QObject):
@@ -313,7 +313,7 @@ class QuietHost(QObject):
     def isVisible(self) -> bool:  # noqa: N802 — Qt-Name
         return False
 
-    def show_placement_hint(self, on: bool) -> None:
+    def show_placement_hint(self, on: bool, *, paused: bool = False) -> None:
         """Kein Fenster, kein Satz — die Werte stehen rechts im Merkmalfenster."""
         return None
 
@@ -1732,8 +1732,8 @@ class PlacementFlow(QObject):
             self.session.placement_before(self._change_op, ready, lambda _detail: ready(None))
         self.redraw()
 
-    def _tell_the_host_we_aim(self, on: bool) -> None:
-        """Dem Träger sagen, ob gerade im Bild gezielt wird.
+    def _tell_the_host_we_aim(self, on: bool, *, paused: bool = False) -> None:
+        """Dem Träger Zielen oder die mögliche Rückkehr aus der Pause melden.
 
         Nur der Operationsdialog trägt den Satz; der stille Träger am
         gewählten Merkmal (`QuietHost`) hat kein Fenster und beantwortet die
@@ -1741,7 +1741,7 @@ class PlacementFlow(QObject):
         `getattr` stand hier und sah aus wie Vorsicht: Es ging an mypy vorbei,
         und ein Tippfehler im Namen wäre nie aufgefallen.
         """
-        self.dialog.show_placement_hint(on)
+        self.dialog.show_placement_hint(on, paused=paused)
 
     def show_preview_base(self) -> bool:
         """Die vollständige Ergebnisszene zeigen, den historischen Eingang behalten.
@@ -1870,9 +1870,10 @@ class PlacementFlow(QObject):
         # **Und der Weg zurück steht offen** (RM-205): Ein Klick auf das Modell
         # holt die Platzierung wieder, und der Satz im Dialog sagt es — er ist
         # derselbe wie beim Zielen, weil der Klick dasselbe tut.
-        if starts_by_itself(self.spec_of()) and self._change_op is None:
+        resumes_on_click = starts_by_itself(self.spec_of()) and self._change_op is None
+        if resumes_on_click:
             self.viewport.set_placement_resume(self._resume)
-            self._tell_the_host_we_aim(True)
+        self._tell_the_host_we_aim(resumes_on_click, paused=True)
         self.dialog.show()
         self.dialog.raise_()
         self.dialog.activateWindow()

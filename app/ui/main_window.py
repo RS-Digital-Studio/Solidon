@@ -7932,6 +7932,7 @@ class MainWindow(QMainWindow):
             # das ganze Fenster samt Kachelliste bis zum Programmende fest.
             # Im ``finally``, weil der abgebrochene Katalog der häufigere Fall
             # ist — genau der, der vorher hängenblieb.
+            catalog.release()
             catalog.deleteLater()
 
     def _insert_readiness(self) -> tuple[bool, str]:
@@ -9458,6 +9459,9 @@ class MainWindow(QMainWindow):
             return
         if self._leave_the_measures():
             return
+        if self.session.inserting is not None:
+            self.session.stop_inserting()
+            return
         # Zuletzt der Weg aus der Auswahl heraus. Nur wenn kein Werkzeug offen
         # war: Wer eines geöffnet hat, meint mit Escape das Werkzeug.
         self._step_selection_out()
@@ -10347,7 +10351,7 @@ class MainWindow(QMainWindow):
         in der draufsicht zeichne und dann in die Seitenansicht oder
         vorderansicht gehe sie nach oben ziehen kann." Genau dieser Zustand ist
         die Bedingung — **die Querschau**, also Blick und Zeichenebene
-        auseinander (``view_plane`` gegen ``sketch.plane``). In der Draufsicht
+        nicht parallel (``SketchCanvas.planes_are_parallel``). In der Draufsicht
         bliebe die Geste dem Zeichnen im Weg: Ein Druck auf eine Umrisskante
         wäre dort mal ein Punkt, mal ein Zug.
 
@@ -10376,7 +10380,7 @@ class MainWindow(QMainWindow):
         panel = self._sketch_panel
         if panel is None:
             return ""
-        if panel.canvas.view_plane == panel.canvas.sketch.plane:
+        if panel.canvas.planes_are_parallel(panel.canvas.view_plane, panel.canvas.sketch.plane):
             return ""
         if self._sketch_target and self._sketch_target not in (PULL_OP, JOIN_OP, POCKET_OP):
             # Wer den Modus für *Grundform drehen* betreten hat, meint keine
@@ -10680,7 +10684,7 @@ class MainWindow(QMainWindow):
             action = offer
         elif (
             panel.canvas.outline
-            and panel.canvas.view_plane == panel.canvas.sketch.plane
+            and panel.canvas.planes_are_parallel(panel.canvas.view_plane, drawing_plane)
             and self._sketch_target in ("", PULL_OP, JOIN_OP, POCKET_OP)
         ):
             action = str(tr("Zum Ziehen mit der Maus: Vorder- oder Seitenansicht wählen."))

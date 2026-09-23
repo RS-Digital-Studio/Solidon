@@ -493,6 +493,13 @@ Eine ID muss eine Neuberechnung überleben — sonst zeigt der Op-Stack nach der
 nächsten Änderung ins Leere. Mehrdeutige Zuordnung hält an und fragt, statt
 die nächstbeste zu nehmen.
 
+Ein Verlust ohne Verweis wird **einmal je Körper und Schritt** gemeldet, nie je
+Merkmal (`perceive.orphaned`/`perceive.mended`, Zahl und Kennungen in den
+Werten). Ein Formschritt kann viele erkannte Flächen verlieren; ihre Kennungen
+bleiben vollständig im Befund erhalten. Ein Verlust mit Verweis bleibt je
+Merkmal eine Warnung — diese
+Zusammenfassung darf ihn nie aufnehmen (§21.3).
+
 Analysekarten sind teuer: sie laufen im Hintergrund, sind abbrechbar und
 halten das Budget aus §31 ein (Wandstärke unter 3 s, Schichtanalyse bei
 200 000 Dreiecken und 0,2 mm unter 300 ms). Farbskala wahrnehmungsgleich, nie
@@ -792,7 +799,20 @@ ein Stadion mit Weg 0,00005 mm, angenommen, weil der Weg nur größer als
   Ecken über der Facette, und die Stufe machte aus dem Mantel hundert
   Flächen. Ein Werkzeug, das nur die Ecken biegt, hat seinen Boden in der
   Mitte um die Sehnenabweichung tiefer als am Rand — erst teilen, dann
-  biegen.
+  biegen. **Geteilt wird konform** (`patterns._cut_at`), nicht mit
+  `split_by_plane` und einer Vereinigung danach: Eine Facettengrenze geht
+  bei jeder Zelle, die mittig auf einer Kante des Vielecks sitzt, genau durch
+  eine Ecke des verfeinerten Stopfens, und dort ließ die Vereinigung Finnen
+  stehen, aus denen `manifold3d` einen Keil verwarf (vier Hohlräume nach dem
+  Entfernen von 48 Taschen, 23.09.2026). Zugedeckt hatte das die Rundung der
+  Facettenwinkel auf sechs Stellen — wer eine Auskunft genauer macht, sucht
+  die Verbraucher, die an ihrem Rauschen hingen. Ein vertiefter Stopfen endet
+  an den Stirnflächen des Stifts (`Frame.span`), und die Aufweitung zum Boden
+  einer Tasche mit parallelen Wänden gilt nur dem Umfang. Stopfen und neu
+  gezeichnetes Muster teilen den Mündungssaum (`_mouth_with_margin`): Ein
+  bereits gefüllter Streifen gehört zum neuen Feld. Am Stirnrand reicht nur
+  das Schneidwerkzeug über die gemessene Stirnfläche hinaus; seine Verlängerung
+  bezieht sich auf diese Ebene, nicht auf den angenäherten Umrisspunkt.
 * **Die Langlochsuche rechnet je Bogen, nicht je Paar.** Flutung, Flanken
   und Stadionfit hängen an Bogen und Achse (`slots._Reach`), und die Maske
   einer Achse ist ihr Schlüssel, nicht die gerundete Achse allein. Ein
