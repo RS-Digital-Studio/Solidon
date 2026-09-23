@@ -5,9 +5,11 @@ wie es auf den Schirm kommt. Er steht hinter einem Vertrag (`api.py`), und
 hinter dem Vertrag steht seit dem 06.09.2026 **einer**: pygfx über wgpu
 (Entscheidung Robert, nach der Modellabnahme mit zwei Renderern;
 Gedächtnis `viewport-zwei-renderer-messen`). Der zweite, VTK direkt, war die
-Messlatte und ist ausgebaut; das Paket `vtk` bleibt als kopflose
-Geometriebibliothek der Bereichsprüfung (`core/knowledge/parts/range_check.py`)
-und hat mit diesem Verzeichnis nichts mehr zu tun.
+Messlatte und ist ausgebaut; seit RM-050 (23.09.2026) ist auch das Paket
+`vtk` selbst aus der Anwendung — die Bereichsprüfung der Bausteine
+(`core/knowledge/parts/range_check.py`) misst ihre Wandstärke seither über
+`core/geom/mesh.ray_hits_batch`, dieselbe Möller-Trumbore-Rechnung wie jeder
+andere Strahl im Kern.
 
 ## Die Karte
 

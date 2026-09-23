@@ -352,6 +352,22 @@ def test_local_wall_measurement_finds_a_thin_appendage_on_a_large_body() -> None
     assert local_wall_thickness(mesh) == pytest.approx(0.4, abs=0.01)
 
 
+def test_local_wall_measurement_ignores_a_tip_without_an_opposing_face() -> None:
+    """Ein Kegel läuft spitz zu, aber keine seiner Flächen liegt der anderen gegenüber.
+
+    RM-050: Der Ersatz für VTKs ``vtkStaticCellLocator`` prüft weiterhin die
+    Normale des getroffenen Dreiecks und nicht nur seinen Abstand — sonst
+    meldete die Spitze eine erfundene Wandstärke von null statt „kein
+    gegenüberliegendes Material".
+    """
+    import trimesh
+
+    cone = trimesh.creation.cone(radius=5.0, height=10.0)
+    mesh = MeshData.of(cone)
+
+    assert local_wall_thickness(mesh) is None
+
+
 def test_self_intersection_is_measured_in_the_mesh_not_in_its_flags() -> None:
     """Zwei geschlossene Hüllen können einander trotzdem durchdringen."""
     import trimesh
@@ -1551,7 +1567,13 @@ def test_range_check_cancels_inside_local_geometry_and_keeps_progress_monotonic(
     def sphere(values: BaseParams) -> PartResult:
         return PartResult(
             mesh=MeshData.of(
-                trimesh.creation.icosphere(subdivisions=3, radius=float(values.size))  # type: ignore[attr-defined]
+                # RM-050: Die Wandstärke fragt seither ``ray_hits_batch``, blockweise
+                # über die Dreiecksachse statt einmal je Dreieck (VTKs Locator vorher).
+                # Bei 1280 Dreiecken (``subdivisions=3``) reichte ein einziger Block,
+                # und der Abbruch griff erst in der zweiten Ecke statt in der ersten.
+                # Vier Unterteilungen (5120 Dreiecke) geben genug Blöcke, damit der
+                # Abbruch wieder mitten in der ersten Ecke greift.
+                trimesh.creation.icosphere(subdivisions=4, radius=float(values.size))  # type: ignore[attr-defined]
             ),
             features={
                 "face_1": Feature(

@@ -1136,18 +1136,44 @@ def ray_hits(
     triangles = np.asarray(triangles, dtype=float)
     origin = np.asarray(origin, dtype=float).reshape(3)
     direction = np.asarray(direction, dtype=float).reshape(3)
-    edge_one = triangles[:, 1] - triangles[:, 0]
-    edge_two = triangles[:, 2] - triangles[:, 0]
+    t, inside = _ray_triangle_parameters(
+        triangles[:, 0],
+        triangles[:, 1] - triangles[:, 0],
+        triangles[:, 2] - triangles[:, 0],
+        origin,
+        direction,
+        edge_margin,
+        minimum_travel,
+    )
+    return np.asarray(t[inside], dtype=float), np.flatnonzero(inside)
+
+
+def _ray_triangle_parameters(
+    vertex: np.ndarray,
+    edge_one: np.ndarray,
+    edge_two: np.ndarray,
+    origin: np.ndarray,
+    direction: np.ndarray,
+    edge_margin: float,
+    minimum_travel: float,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Möller-Trumbore für :func:`ray_hits` und :func:`ray_hits_batch` — eine Stelle.
+
+    Die Felder werden nur gesendet (NumPy-Broadcasting): ein Strahl gegen
+    ``n`` Dreiecke oder ``m`` Strahlen gegen einen Block Dreiecke, dieselbe
+    Rechnung in derselben Reihenfolge. Zurück kommen der Strahlparameter
+    ``t`` und die Maske der gültigen Treffer.
+    """
     across = np.cross(direction, edge_two)
     determinant = _rowwise_dot(edge_one, across)
     parallel = np.abs(determinant) < RAY_PARALLEL_EPS
     # Division erst nach dem Ausblenden der parallelen — sonst rechnet numpy
     # mit inf weiter und meldet Warnungen über Fälle, die keiner nimmt.
     safe = np.where(parallel, 1.0, determinant)
-    to_origin = origin - triangles[:, 0]
+    to_origin = origin - vertex
     u = _rowwise_dot(to_origin, across) / safe
     q = np.cross(to_origin, edge_one)
-    v = (q[:, 0] * direction[0] + q[:, 1] * direction[1] + q[:, 2] * direction[2]) / safe
+    v = _rowwise_dot(q, direction) / safe
     t = _rowwise_dot(edge_two, q) / safe
     inside = (
         ~parallel
@@ -1156,14 +1182,90 @@ def ray_hits(
         & (u + v <= 1.0 + edge_margin)
         & (t > minimum_travel)
     )
-    return np.asarray(t[inside], dtype=float), np.flatnonzero(inside)
+    return t, inside
 
 
 def _rowwise_dot(first: np.ndarray, second: np.ndarray) -> np.ndarray:
-    """Zeilenweises Skalarprodukt zweier ``(n, 3)``-Felder, elementweise (RM-187)."""
+    """Skalarprodukt über die letzte Achse zweier Felder, elementweise (RM-187).
+
+    ``...`` statt eines festen ``:`` trägt auch ein drittes Achsenpaar mit,
+    wie es :func:`ray_hits_batch` braucht — für die bisherigen zweiachsigen
+    Aufrufer ist das dieselbe Rechnung.
+    """
     return np.asarray(
-        first[:, 0] * second[:, 0] + first[:, 1] * second[:, 1] + first[:, 2] * second[:, 2]
+        first[..., 0] * second[..., 0]
+        + first[..., 1] * second[..., 1]
+        + first[..., 2] * second[..., 2]
     )
+
+
+#: Wie viele Strahl-Dreieck-Paare :func:`ray_hits_batch` höchstens auf einmal
+#: als Feld hält — dieselbe Kostenüberlegung wie ``PAIR_BLOCK`` in
+#: ``geom.intersections``, nur mit einer zweiten Strahlachse statt eines
+#: zweiten Dreiecks.
+RAY_BATCH_PAIRS: Final = 200_000
+
+
+def ray_hits_batch(
+    triangles: np.ndarray,
+    origins: np.ndarray,
+    directions: np.ndarray,
+    *,
+    edge_margin: float = 1e-9,
+    minimum_travel: float = 0.0,
+    cancelled: CancelToken | None = None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Für viele eigene Strahlen zugleich der **nächste** Treffer und dessen Dreieck.
+
+    Dieselbe Möller-Trumbore-Rechnung wie :func:`ray_hits`
+    (:func:`_ray_triangle_parameters`), aber über zwei Achsen zugleich:
+    ``m`` Strahlen (je eigener Ursprung und Richtung) gegen dieselben ``n``
+    Dreiecke, blockweise über die Dreiecksachse, damit der
+    Speicher begrenzt bleibt. Das ist der Ersatz für VTKs
+    ``vtkStaticCellLocator`` in der Bausteinbereichsprüfung (RM-050):
+    ``knowledge/parts/range_check.local_wall_thickness`` schießt hier von
+    jedem Dreiecksschwerpunkt einwärts und braucht außer dem Abstand auch,
+    **welches** Dreieck getroffen wurde, um dessen Normale zu prüfen.
+
+    **Elementweise und nicht über ``np.dot`` oder ``np.einsum``** (RM-187):
+    dasselbe Ergebnis auf jeder Maschine.
+
+    Zurück kommen je Strahl der kleinste positive Treffer (``np.inf`` ohne
+    Treffer) und die zugehörige Dreiecksnummer (``-1`` ohne Treffer). Ein
+    Abbruch mitten im Lauf liefert den bis dahin gefundenen Teilstand zurück;
+    der Aufrufer erkennt ihn an ``cancelled.is_cancelled``.
+    """
+    triangles = np.asarray(triangles, dtype=float)
+    origins = np.asarray(origins, dtype=float)
+    directions = np.asarray(directions, dtype=float)
+    count = len(origins)
+    best_travel = np.full(count, np.inf)
+    best_face = np.full(count, -1, dtype=np.int64)
+    total = len(triangles)
+    if not total or not count:
+        return best_travel, best_face
+
+    block = max(1, min(total, RAY_BATCH_PAIRS // max(1, count)))
+    for start in range(0, total, block):
+        if cancelled is not None and cancelled.is_cancelled:
+            break
+        chunk = triangles[start : start + block]
+        t, inside = _ray_triangle_parameters(
+            chunk[None, :, 0, :],
+            (chunk[:, 1] - chunk[:, 0])[None, :, :],
+            (chunk[:, 2] - chunk[:, 0])[None, :, :],
+            origins[:, None, :],
+            directions[:, None, :],
+            edge_margin,
+            minimum_travel,
+        )
+        masked = np.where(inside, t, np.inf)
+        local_best = np.argmin(masked, axis=1)
+        local_travel = masked[np.arange(count), local_best]
+        better = local_travel < best_travel
+        best_travel = np.where(better, local_travel, best_travel)
+        best_face = np.where(better, start + local_best, best_face)
+    return best_travel, best_face
 
 
 def distance_to_triangles(triangles: np.ndarray, point: np.ndarray) -> float:

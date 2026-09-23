@@ -17,9 +17,9 @@ den heutigen Stand jedes Bausteins, ohne selbst zu rechnen.
     python tools/check_part_ranges.py --jobs 8        # Prozesse (Vorgabe: bis zu vier)
 
 Jeder Baustein läuft in einem eigenen Prozess, wie ein Kunde ihn nie sähe: Der
-Bereichstest sammelt native Netze und VTK-Objekte, und ein Prozess je Baustein
-gibt sie mit seinem Ende zurück. Der Lauf schreibt die Nutzerverzeichnisse in
-einen Temp-Ordner um (§38) — eigene Bausteine des Entwicklers laden so nicht mit.
+Bereichstest sammelt native Netze, und ein Prozess je Baustein gibt sie mit
+seinem Ende zurück. Der Lauf schreibt die Nutzerverzeichnisse in einen
+Temp-Ordner um (§38) — eigene Bausteine des Entwicklers laden so nicht mit.
 
 Exit-Code 0, wenn jeder gefahrene Baustein bestanden hat (bei ``--check``:
 wenn der Nachweis zu jedem Baustein passt); 1 sonst. Die Datei wird auch bei

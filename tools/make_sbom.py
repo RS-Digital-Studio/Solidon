@@ -245,13 +245,6 @@ NATIVE_COMPONENTS: Final = (
         "https://libgeos.org/",
     ),
     NativeComponent(
-        "vtk",
-        "VTK native libraries",
-        "vtk-native",
-        "BSD-3-Clause",
-        "https://docs.vtk.org/en/latest/about.html",
-    ),
-    NativeComponent(
         "wgpu", "wgpu-native", "wgpu-native", "MIT", "https://github.com/gfx-rs/wgpu-native"
     ),
     NativeComponent(

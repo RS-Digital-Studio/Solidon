@@ -99,7 +99,7 @@ def test_every_runtime_component_has_version_licence_purl_and_dependency_entry()
 
 
 def test_native_libraries_are_owned_by_their_distributions() -> None:
-    """Qt, OCCT, GEOS und VTK verschwinden nicht hinter dem Wort „Python"."""
+    """Qt, OCCT und GEOS verschwinden nicht hinter dem Wort „Python"."""
     bom = make_sbom.build_bom()
     components = _components(bom)
     properties = {
@@ -111,22 +111,21 @@ def test_native_libraries_are_owned_by_their_distributions() -> None:
         "pyside6-essentials",
         "cadquery-ocp-novtk",
         "shapely",
-        "vtk",
     } <= set(components)
+    assert "vtk" not in components, "VTK ist seit RM-050 keine Abhängigkeit mehr"
     for package in ("pyside6", "pyside6-essentials", "pyside6-addons", "shiboken6"):
         assert components[package]["licenses"] == [{"expression": "LGPL-3.0-only"}]
     assert {
         "qt",
         "open cascade technology",
         "geos",
-        "vtk native libraries",
     } <= set(components)
+    assert "vtk native libraries" not in components
     assert components["qt"]["licenses"] == [{"expression": "LGPL-3.0-only"}]
     assert components["open cascade technology"]["licenses"] == [
         {"expression": "LGPL-2.1-only WITH OCCT-exception-1.0"}
     ]
     assert components["geos"]["licenses"] == [{"expression": "LGPL-2.1-or-later"}]
-    assert components["vtk native libraries"]["licenses"] == [{"expression": "BSD-3-Clause"}]
     assert components["wgpu-native"]["version"] == "29.0.1.1"
     assert components["wgpu-native"]["licenses"] == [{"expression": "MIT"}]
     assert components["freetype (freetype-py)"]["licenses"] == [{"expression": "FTL"}]
@@ -307,7 +306,6 @@ def test_the_finished_artifact_exposes_every_native_file_and_runtime_family(
         "_internal/PySide6/Qt6Core.dll",
         "_internal/PySide6/VCRUNTIME140.dll",
         "_internal/cadquery_ocp_novtk.libs/TKernel-test.dll",
-        "_internal/vtk.libs/vtkCommonCore-test.dll",
         "_internal/vendor/without-owner.dll",
     )
     for name in names:

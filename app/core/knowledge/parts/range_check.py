@@ -20,7 +20,7 @@ import math
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Final, SupportsInt, cast
+from typing import Any, Final
 
 from app.core.errors import OperationCancelled, ValidationError
 from app.core.knowledge.parts.ops import PLAY_FIELD
@@ -165,97 +165,61 @@ class _Silent:
 OPPOSING_NORMAL: Final = -0.95
 
 
-def _vtk_poly_data(vertices: Any, faces: Any) -> Any:
-    """Das Netz für den räumlichen VTK-Index, ohne Qt oder Renderfenster."""
-    import numpy as np
-    from vtkmodules.util.numpy_support import numpy_to_vtk, numpy_to_vtkIdTypeArray
-    from vtkmodules.vtkCommonCore import vtkPoints
-    from vtkmodules.vtkCommonDataModel import vtkCellArray, vtkPolyData
-
-    vertices = np.asarray(vertices, dtype=np.float64)
-    faces = np.asarray(faces, dtype=np.int64)
-
-    points = vtkPoints()
-    points.SetData(numpy_to_vtk(vertices, deep=True))  # type: ignore[no-untyped-call]
-    offsets = np.arange(0, len(faces) * 3 + 1, 3, dtype=np.int64)
-    cells = vtkCellArray()
-    cells.SetData(
-        numpy_to_vtkIdTypeArray(offsets, deep=True),  # type: ignore[no-untyped-call]
-        numpy_to_vtkIdTypeArray(faces.reshape(-1), deep=True),  # type: ignore[no-untyped-call]
-    )
-    data = vtkPolyData()
-    data.SetPoints(points)
-    data.SetPolys(cells)
-    return data
-
-
 def local_wall_thickness(mesh: Any, cancelled: CancelToken | None = None) -> float | None:
     """Die kleinste lokale Wand zwischen wirklich gegenläufigen Flächen.
 
     Von **jedem** Dreiecksmittelpunkt läuft ein Strahl nach innen bis zum
     ersten Austritt. Dessen Fläche muss gegenläufig sein: Nur dann ist der
     Abstand eine Wandstärke. So werden eine Fase, ein scharfer Keil und das
-    Ende eines Zylinders nicht mit einer dünnen Wand verwechselt.
+    Ende eines Zylinders nicht mit einer dünnen Wand verwechselt. Ist der
+    nächste Austritt nicht gegenläufig, zählt dieser Strahl nicht — es wird
+    nicht am selben Punkt nach einem zweiten, weiter entfernten Austritt
+    gesucht.
 
-    Der räumliche Index rechnet in VTKs plattformgleichem C++-Kern. Das ist
-    kein Rendering und zieht insbesondere weder Qt noch PySide in ``core``.
-    Es gibt keine Stichprobe: auch ein kleines Detail mit einem einzigen
-    Dreieck wird vermessen. ``None`` bedeutet, dass der Körper keine zwei
-    gegenläufigen Flächen trägt, oder dass der Lauf abgebrochen wurde; der
-    Aufrufer unterscheidet beides am Token.
+    Gerechnet wird in ``geom.mesh.ray_hits_batch``: Möller-Trumbore über alle
+    Dreiecke zugleich, blockweise, ohne räumlichen Index (RM-050 — Ersatz für
+    VTKs ``vtkStaticCellLocator``, plattformgleich wie jeder andere Strahl im
+    Kern). Es gibt keine Stichprobe: auch ein kleines Detail mit einem
+    einzigen Dreieck wird vermessen. ``None`` bedeutet, dass der Körper keine
+    zwei gegenläufigen Flächen trägt, oder dass der Lauf abgebrochen wurde;
+    der Aufrufer unterscheidet beides am Token.
     """
     import numpy as np
-    from vtkmodules.vtkCommonCore import reference
-    from vtkmodules.vtkCommonDataModel import vtkStaticCellLocator
+
+    from app.core.geom.mesh import ray_hits_batch
 
     body = mesh.raw
     if not len(body.faces):
         return None
-    data = _vtk_poly_data(body.vertices, body.faces)
-    locator = vtkStaticCellLocator()
-    locator.SetDataSet(data)
-    locator.BuildLocator()
-
-    diagonal = float(mesh.bounds.diagonal)
-    least = float("inf")
+    vertices = np.asarray(body.vertices, dtype=np.float64)
+    faces = np.asarray(body.faces, dtype=np.int64)
     centres = np.asarray(body.triangles_center, dtype=float)
     normals = np.asarray(body.face_normals, dtype=float)
-    try:
-        for origin, normal in zip(centres, normals, strict=True):
-            if cancelled is not None and cancelled.is_cancelled:
-                return None
-            # Der Start liegt knapp **im** Körper. Sonst ist das eigene Dreieck
-            # der erste Treffer bei t=0, und die Messung sagt an jeder Wand null.
-            start = origin - normal * EPS_GEOM
-            end = origin - normal * (diagonal + EPS_GEOM)
-            travel = reference(0.0)
-            point = [0.0, 0.0, 0.0]
-            coordinates = [0.0, 0.0, 0.0]
-            sub_id = reference(0)
-            cell_id = reference(0)
-            found = locator.IntersectWithLine(  # type: ignore[call-overload]
-                start,
-                end,
-                EPS_GEOM,
-                travel,
-                point,
-                coordinates,
-                sub_id,
-                cell_id,
-            )
-            if not found:
-                continue
-            # VTK schreibt hier eine ganzzahlige Zellkennung. Der reference-Stub
-            # führt deren zur Laufzeit vorhandenes __int__ nicht auf.
-            opposite = normals[int(cast(SupportsInt, cell_id))]
-            if float(np.dot(normal, opposite)) > OPPOSING_NORMAL:
-                continue
-            least = min(least, float(np.linalg.norm(np.asarray(point) - origin)))
-        return least if least < float("inf") else None
-    finally:
-        locator.FreeSearchStructure()
-        locator.SetDataSet(None)  # type: ignore[arg-type]
-        data.Initialize()
+
+    travel, hit_face = ray_hits_batch(
+        vertices[faces],
+        centres,
+        -normals,
+        edge_margin=EPS_GEOM,
+        # Das Dreieck unter dem Startpunkt liegt exakt auf der Strahlachse
+        # (der Strahl steht senkrecht auf ihm) und wäre sonst sein eigener
+        # erster Treffer bei t≈0 — dieselbe Schwelle wie in
+        # ``geom.measure.ray_distances``.
+        minimum_travel=EPS_GEOM * 100.0,
+        cancelled=cancelled,
+    )
+    if cancelled is not None and cancelled.is_cancelled:
+        return None
+    hit = hit_face >= 0
+    if not np.any(hit):
+        return None
+    opposite = normals[hit_face[hit]]
+    dotted = np.sum(normals[hit] * opposite, axis=1)
+    opposing = np.zeros(len(hit), dtype=bool)
+    opposing[hit] = dotted <= OPPOSING_NORMAL
+    if not np.any(opposing):
+        return None
+    return float(travel[opposing].min())
 
 
 def has_self_intersections(mesh: Any, cancelled: CancelToken | None = None) -> bool:

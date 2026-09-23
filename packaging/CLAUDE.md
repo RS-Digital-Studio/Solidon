@@ -99,9 +99,11 @@ nicht mehr heraus. Der Weg je Plattform steht in `Signierung/README.md`.
   Die Ansicht zeichnet mit pygfx über wgpu; ohne Adapter für Direct3D 12,
   Vulkan oder Metal fällt sie aus. Auf Windows kann der Systemadapter WARP
   einspringen; Linux benötigt einen installierten Vulkan-Softwareadapter wie
-  lavapipe aus Mesa. wgpu liefert diese Systemtreiber nicht mit. VTK reist nur noch als kopflose
-  Geometriebibliothek der Bereichsprüfung mit; PyVista, PyVistaQt und QtPy
-  gehören nicht zum Laufzeitbaum. Die Entwicklungsvorschau
+  lavapipe aus Mesa. wgpu liefert diese Systemtreiber nicht mit. Seit RM-050
+  (23.09.2026) reist auch VTK nicht mehr mit — die Wandstärke der
+  Bereichsprüfung rechnet über `core/geom/mesh.ray_hits_batch`; PyVista,
+  PyVistaQt und QtPy gehörten schon vorher nicht zum Laufzeitbaum. Die
+  Entwicklungsvorschau
   der Lizenzbeilage wird nach einer Änderung mit dem Interpreter des neuen
   Versionssatzes erzeugt; sie ersetzt keinen nativen Paketnachweis.
   Der Schichtkern wird über `build_slice_core.current_extensions()` ausgewählt:
@@ -126,8 +128,8 @@ nicht mehr heraus. Der Weg je Plattform steht in `Signierung/README.md`.
   eingecheckte plattformspezifische Kopie gibt es absichtlich nicht. Ihr
   Dateiname kommt aus `make_sbom.ARTIFACT_SBOM_NAME`, ebenso in den
   Lizenzbelegen und im lokalen Signierwerkzeug.
-  PySide6-Essentials weist Qt, cadquery-ocp-novtk OCCT, Shapely GEOS und VTK
-  seine nativen Bibliotheken als eigene Komponenten mit gewählter
+  PySide6-Essentials weist Qt, cadquery-ocp-novtk OCCT und Shapely GEOS
+  ihre nativen Bibliotheken als eigene Komponenten mit gewählter
   Lizenzgrundlage aus. Windows bindet die exakte libffi-Version an den
   festgeschriebenen CPython-Patchstand; Linux liest sie über `pkg-config` aus
   der tatsächlich gebündelten Systembibliothek. Die Microsoft-Laufzeit trägt

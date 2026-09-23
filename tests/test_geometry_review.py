@@ -34,7 +34,7 @@ from app.core.geom import texture_ops as texture_module
 from app.core.geom.hollow import erosion_steps, hollow
 from app.core.geom.lattice import _cavity_mesh
 from app.core.geom.measure import ray_distances
-from app.core.geom.mesh import MeshData
+from app.core.geom.mesh import MeshData, ray_hits, ray_hits_batch
 from app.core.geom.orient import orient_for_print, print_transform
 from app.core.geom.prepare import countersink, drill, open_sides, plug
 from app.core.geom.primitive_ops import top_face_of
@@ -48,6 +48,7 @@ from app.core.scene.cancel import NeverCancelled
 from app.core.scene.placement import values_for
 from app.core.slice.analysis import cross_section
 from app.core.types import Feature, OpContext, Profile, Scene, SceneObject
+from app.core.units import EPS_GEOM
 
 load_operations()
 
@@ -923,6 +924,49 @@ def test_a_sliver_triangle_is_still_hit_by_a_ray() -> None:
     )
 
     assert len(hits) == 1, "der Strahl geht mitten hindurch"
+
+
+# --- RM-050: der Bereichstest verzichtet auf VTK -------------------------------
+
+
+def test_ray_hits_batch_answers_like_one_ray_hits_call_per_ray() -> None:
+    """Viele Strahlen zugleich, dieselbe Antwort wie ``ray_hits`` einzeln je Strahl.
+
+    :func:`ray_hits_batch` ersetzt VTKs ``vtkStaticCellLocator`` in der
+    Wandstärkenmessung der Bereichsprüfung (``knowledge.parts.range_check.
+    local_wall_thickness``, RM-050) — dieselbe Möller-Trumbore-Rechnung wie
+    :func:`ray_hits`, nur über zwei Achsen zugleich und blockweise über die
+    Dreiecke, damit der Speicher begrenzt bleibt.
+    """
+    rng = np.random.default_rng(23092026)
+    sphere = trimesh.creation.icosphere(subdivisions=1)
+    triangles = np.asarray(sphere.triangles, dtype=float)
+    centres = np.asarray(sphere.triangles_center, dtype=float)
+    normals = np.asarray(sphere.face_normals, dtype=float)
+    origins = centres + rng.normal(scale=0.01, size=centres.shape)
+    directions = -normals
+
+    travel, hit_face = ray_hits_batch(
+        triangles, origins, directions, edge_margin=EPS_GEOM, minimum_travel=EPS_GEOM * 100.0
+    )
+
+    assert travel.shape == (len(origins),)
+    assert hit_face.shape == (len(origins),)
+    for index in range(len(origins)):
+        single_travel, single_faces = ray_hits(
+            triangles,
+            origins[index],
+            directions[index],
+            edge_margin=EPS_GEOM,
+            minimum_travel=EPS_GEOM * 100.0,
+        )
+        if len(single_travel):
+            best = int(np.argmin(single_travel))
+            assert travel[index] == pytest.approx(float(single_travel[best]), abs=1e-9)
+            assert int(hit_face[index]) == int(single_faces[best])
+        else:
+            assert travel[index] == float("inf")
+            assert int(hit_face[index]) == -1
 
 
 # --- C-22: der tote Zweig verwarf die Befunde des Stiftplans -------------------

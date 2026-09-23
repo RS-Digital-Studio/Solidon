@@ -11,8 +11,10 @@
 # Paket installiert wird, nicht *dass* es installiert wird. Der
 # Windows-Eintrag (pywin32-ctypes) greift auf Linux deshalb einfach nicht.
 #
-# Entwicklung und CI verwenden CPython 3.14.7. Der Paketbaum enthält VTK
-# direkt sowie pygfx; PyVista, PyVistaQt und deren Adapterabhängigkeiten entfallen.
+# Entwicklung und CI verwenden CPython 3.14.7. Der Paketbaum enthält pygfx;
+# VTK, PyVista, PyVistaQt und deren Adapterabhängigkeiten entfallen (RM-050,
+# 23.09.2026 — VTK war zuletzt nur noch die Geometriebibliothek der
+# Bausteinbereichsprüfung, jetzt ``app.core.geom.mesh.ray_hits_batch``).
 #
 # Erneuern: Umgebung neu aufbauen, Suite grün fahren, dann
 #   .venv\Scripts\python.exe tools/check_env.py --freeze
@@ -93,6 +95,5 @@ trimesh==5.1.0
 typing_extensions==4.16.0
 uharfbuzz==0.56.1
 vhacdx==0.0.10
-vtk==9.7.0
 wgpu==0.32.0
 xxhash==4.0.1

@@ -1,8 +1,8 @@
 # PyInstaller-Spezifikation (Bauplan §37.2, §38).
 #
 # Ein Ordner, keine Ein-Datei-Anwendung: eine einzelne ausführbare Datei packt
-# sich bei jedem Start selbst aus, und mit VTK und Qt darin sind das Sekunden,
-# in denen der Nutzer auf nichts wartet.
+# sich bei jedem Start selbst aus, und mit Qt und OCCT darin sind das
+# Sekunden, in denen der Nutzer auf nichts wartet.
 #
 # Was absichtlich **nicht** mitreist (§36, §38): Slicer werden nur extern
 # aufgerufen; Ollama und ComfyUI werden angegeben. OpenSCAD wird nicht mehr
@@ -194,17 +194,6 @@ hiddenimports = [
         for name in collect_submodules("app.core")
         if name != "app.core.activation" and not name.startswith("app.core.activation.")
     ],
-    # VTK zeichnet seit dem 06.09.2026 nicht mehr; geblieben ist die
-    # kopflose Geometrie der Bereichsprüfung (``range_check.py``), und die
-    # importiert ihre Module in Funktionen. Kein ``vtkmodules.all`` mehr —
-    # das lud beim Start jedes Modul samt Rendering.
-    "vtkmodules.util.numpy_support",
-    "vtkmodules.util.data_model",
-    "vtkmodules.util.execution_model",
-    "vtkmodules.vtkCommonCore",
-    "vtkmodules.vtkCommonDataModel",
-    "vtkmodules.vtkCommonMath",
-    "vtkmodules.vtkFiltersModeling",
     # Die optionalen Kerne werden innerhalb von Funktionen importiert, damit
     # die Anwendung ohne sie startet (§30, §22.3). Normale Funktionsimporte
     # findet PyInstallers Modulgraph; ausdrücklich stehen sie hier trotzdem

@@ -106,7 +106,7 @@ exakter Körper keine Dreiecke). Drei Grenzen dabei:
 | `shapes.py` | Kleine Formen, aus denen die Bausteine gebaut werden, darunter `rounded_box` (Sehnen nach `MAX_FACET_SAG` am Netz, vier Viertelkreise exakt, Eckmitten aus `rounded_corners` für beide); `building`/`building_exact` wählen den Kern, `mesh_only` benennt die Netzstellen |
 | `section.py` | Querschnitte mit zwei Auswertern (P2.7): `manifold3d.CrossSection` fürs Netz und die Prüfungen, eine ebene Fläche des exakten Kerns für die Geometrie — Versatz, Differenz, Ohren, Hälfte, Prisma; die Profilklemmen bauen daraus |
 | `exact.py` | Die exakten Zwillinge der Formen und Operationen aus `shapes`/`build` (P2.7) — `Solid` mit demselben Rahmen, Vereinigung mit Körperzahl-Prüfung und Stufenleiter auf Kopien |
-| `range_check.py` | Der Bereichstest in der Anwendung; die Selbstdurchdringung fragt er `geom.intersections`, dieselbe Rechnung wie die Netzfehlerkarte |
+| `range_check.py` | Der Bereichstest in der Anwendung; die Selbstdurchdringung fragt er `geom.intersections` (dieselbe Rechnung wie die Netzfehlerkarte), die Wandstärke `geom.mesh.ray_hits_batch` — beides ohne VTK (RM-050) |
 | `range_proof.py` | Der Bereichsnachweis: Abdruck je Baustein, Laden und Vergleichen von `data/part_ranges.toml`; `tools/check_part_ranges.py` schreibt die Datei, der Katalog und `test_parts.py` lesen sie |
 | `preview.py` | Vorschaubilder — **gerendert, nicht von Hand gepflegt** |
 | `scad.py` | Export als OpenSCAD-Quelltext |

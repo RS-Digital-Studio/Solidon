@@ -206,13 +206,6 @@ source = "https://github.com/libgeos/geos/tree/3.13.1"
 source_delivery = true
 versions = ["3.13.1"]
 
-[[runtime]]
-id = "vtk-native"
-name = "VTK native libraries"
-notice_package = "vtk"
-source = "https://gitlab.kitware.com/vtk/vtk/-/tree/v9.7.0"
-versions = ["9.7.0"]
-
 # Systembibliotheken, die das Linux-Paket bewusst mitnimmt (Familien aus
 # ``make_sbom.LINUX_LIBRARY_FAMILIES``, Ausschlussliste in
 # ``make_linux_packages.HOST_PROVIDED_LIBRARIES``). Die Version je Familie liest

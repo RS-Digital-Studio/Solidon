@@ -390,7 +390,6 @@ def test_every_sbom_runtime_family_has_an_explicit_notice_policy() -> None:
         "systemd",
         "uharfbuzz-native",
         "util-linux",
-        "vtk-native",
         "wgpu-native",
         "xcb-util",
         "xcb-util-cursor",

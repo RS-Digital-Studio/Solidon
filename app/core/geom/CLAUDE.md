@@ -1307,6 +1307,19 @@ für Bit umkehrbar. Die Wandstärke (`measure.ray_distances`) schießt über
 denselben Strahltest wie der Rest (`mesh.ray_hits` mit `edge_margin` und
 `minimum_travel`).
 
+**Die Wandstärke der Bereichsprüfung rechnet seither ebenfalls ohne
+Index** (RM-050, 23.09.2026): `knowledge/parts/range_check.local_wall_thickness`
+ersetzte VTKs `vtkStaticCellLocator` durch `mesh.ray_hits_batch` — dieselbe
+Möller-Trumbore-Rechnung wie `ray_hits`, aber über zwei Achsen zugleich (viele
+Strahlen, dieselben Dreiecke) und blockweise über die Dreiecksachse, damit der
+Speicher begrenzt bleibt. Anders als bei der Selbstdurchdringung gibt es hier
+keinen räumlichen Index über den Dreiecken: Ein Strahl je Dreiecksmittelpunkt
+gegen alle Dreiecke ist quadratisch, aber für die Größenordnung der
+mitgelieferten Bausteine (höchstens einige tausend Dreiecke) auf jeder
+Maschine unter einer Sekunde — gemessen über alle 35 mitgelieferten
+Bausteine, siehe `ROADMAP.md` RM-050. Das Paket `vtk` ist damit keine
+Abhängigkeit mehr.
+
 **Netz, Farbe, Text**
 
 `mesh_ops.py` (Arbeit am Netz selbst) · `colour_ops.py` · `paint.py` (Flächen
