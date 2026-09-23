@@ -1890,14 +1890,20 @@ def test_the_step_refusal_offers_the_way_out_it_names(profile: Profile) -> None:
     häufigere der beiden Wege mit „geht nicht, brich ab", während die Handlung
     dazu im Fenster fertig lag: ``_export_as_mesh_after_error`` trägt den Fall
     im Namen und wurde nie gerufen.
+
+    **Seit P4.0 sind es zwei Auswege, und der zum Körper steht vorn:** *In
+    Flächen und Kanten umwandeln* macht aus dem Netz, was STEP tragen kann;
+    *Als 3MF speichern* bleibt für den, der kein STEP braucht. Beide stehen vor
+    dem Abbruch.
     """
-    from app.core.errors import EXPORT_AS_MESH
+    from app.core.errors import CANCEL, CONVERT_TO_EXACT, EXPORT_AS_MESH
     from app.core.export.writer import _needs_solid
 
     ausgaenge = [action.id for action in _needs_solid().suggestions]
 
     assert EXPORT_AS_MESH.id in ausgaenge, ausgaenge
-    assert ausgaenge[0] == EXPORT_AS_MESH.id, "der Ausweg steht vor dem Abbruch"
+    assert ausgaenge[:2] == [CONVERT_TO_EXACT.id, EXPORT_AS_MESH.id], ausgaenge
+    assert ausgaenge.index(CANCEL.id) > 1, "die Auswege stehen vor dem Abbruch"
 
 
 def test_a_name_the_customer_typed_reaches_the_disc_unchanged(

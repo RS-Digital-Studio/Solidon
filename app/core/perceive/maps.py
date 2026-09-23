@@ -20,7 +20,7 @@ import math
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Final, Literal
+from typing import TYPE_CHECKING, Any, Final, Literal
 
 import numpy as np
 import shapely
@@ -53,6 +53,9 @@ from app.core.types import (
 )
 from app.core.units import DEGREE_UNIT, EPS_DISPLAY, EPS_GEOM
 from app.i18n import TranslatableText, _, format_decimal
+
+if TYPE_CHECKING:
+    from app.core.geom.deviation import SampledDeviation
 
 _log = get_logger(__name__)
 
@@ -379,8 +382,19 @@ def deviation_map(
     cancelled: CancelToken | None = None,
     progress: ProgressFn | None = None,
 ) -> AnalysisMap:
-    """Ganze Originalfacetten gegen belegte Teilträger eingrenzen, ohne neue Einpassung."""
-    from app.core.geom.deviation import DeviationTable, deviation_bounds_grouped
+    """Ganze Originalfacetten gegen belegte Teilträger eingrenzen, ohne neue Einpassung.
+
+    **Ein aus dem Netz umgewandelter Körper wird gegen dieses Netz gemessen**
+    (P4.0). Seine Flächen sind die eingepassten Träger selbst; sie gegen sich
+    zu prüfen zeigte nur die Feinheit seiner Darstellung. Die Frage des Kunden
+    ist, wie weit das Ergebnis von dem abliegt, was er hineingegeben hat — und
+    wo.
+    """
+    from app.core.geom.deviation import (
+        DeviationTable,
+        HasSourceDeviation,
+        deviation_bounds_grouped,
+    )
     from app.core.perceive.surfaces import PATCH_BLOCK, valid_patch
 
     def check() -> None:
@@ -394,6 +408,10 @@ def deviation_map(
         check()
 
     report(0.0)
+    if isinstance(entry.mesh, HasSourceDeviation):
+        measured = entry.mesh.source_deviation(cancelled=cancelled, progress=report)
+        if measured is not None and len(measured.values_mm) == mesh.triangle_count:
+            return _source_map(measured)
     owners = np.full(mesh.triangle_count, -1, dtype=np.int32)
     origin_masks = np.zeros(mesh.triangle_count, dtype=np.uint8)
     source_flags: dict[SurfaceSource, int] = {"native": 1, "facets": 2, "fit": 4}
@@ -540,6 +558,27 @@ def deviation_map(
         witness_point=witness_point,
         witness_face=witness_face,
         witness_distance=witness_distance,
+    )
+
+
+def _source_map(measured: SampledDeviation) -> AnalysisMap:
+    """Die Karte eines umgewandelten Körpers: gemessene Abstände zu seinem Netz, je Dreieck."""
+    values = measured.values_mm
+    highest = float(values.max()) if len(values) else 0.0
+    return AnalysisMap(
+        kind="deviation",
+        title=TITLES["deviation"],
+        values=tuple(float(value) for value in values),
+        unit="mm",
+        low=0.0,
+        high=highest if highest > 0.0 else EPS_DISPLAY,
+        highlighted=(measured.witness_face,) if measured.witness_face is not None else (),
+        note=_(
+            "Abstand zum Netz vor der Umwandlung, in beiden Richtungen an Stichproben gemessen."
+        ),
+        witness_point=measured.witness,
+        witness_face=measured.witness_face,
+        witness_distance=highest if measured.witness is not None else None,
     )
 
 
@@ -1389,7 +1428,7 @@ def map_for(finding: Finding) -> MapKind | None:
     zur Stelle (§18.4).
     """
     code = finding.code
-    if code == "perceive.deviation":
+    if code in {"perceive.deviation", "brep.from_mesh.deviation"}:
         return "deviation"
     if code.startswith("fit."):
         return "fits"

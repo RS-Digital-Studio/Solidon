@@ -393,6 +393,14 @@ def _oriented_faces(shape: Any, *, cancelled: CancelToken | None = None) -> list
     return faces
 
 
+def _has_edges(face: Any) -> bool:
+    """Ob eine Fläche überhaupt Kanten trägt — eine natürlich begrenzte muss es nicht."""
+    from OCP.TopAbs import TopAbs_EDGE
+    from OCP.TopExp import TopExp_Explorer
+
+    return bool(TopExp_Explorer(face, TopAbs_EDGE).More())
+
+
 def _cone_volume(face: Any, *, cancelled: CancelToken | None = None) -> tuple[Any, float]:
     """Das native Kegelvolumen einer Fläche zum lokalen Ursprung samt seinem Fehler.
 
@@ -409,8 +417,15 @@ def _cone_volume(face: Any, *, cancelled: CancelToken | None = None) -> tuple[An
     if cancelled is not None:
         cancelled.raise_if_cancelled()
     surface = BRepGProp_Face(face)
-    if surface.NaturalRestriction():
-        inert = BRepGProp_Vinert(surface, gp_Pnt(0.0, 0.0, 0.0), _PATCH_RELATIVE_ERROR)
+    # **Die natürliche Begrenzung geht über ihre Kanten, nicht über den
+    # Trägerbereich.** ``BRepGProp_Vinert(Fläche, Punkt, Genauigkeit)`` gab an
+    # einer natürlich begrenzten Fläche 0 zurück, mit Fehler 0 — gemessen an
+    # einer vollen Kugel und einem vollen Ring (P4.0: ein aus einem Netz
+    # gebauter Ring hatte das Volumen 0). Über ``BRepGProp_Domain`` stimmt
+    # derselbe Aufruf auf die letzte Stelle. Nur eine Fläche ganz ohne Kanten
+    # hat kein Gebiet, und für sie trägt der Aufruf ohne Genauigkeitsvorgabe.
+    if surface.NaturalRestriction() and not _has_edges(face):
+        inert = BRepGProp_Vinert(surface, gp_Pnt(0.0, 0.0, 0.0))
     else:
         inert = BRepGProp_Vinert(
             surface, BRepGProp_Domain(face), gp_Pnt(0.0, 0.0, 0.0), _PATCH_RELATIVE_ERROR

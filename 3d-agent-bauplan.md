@@ -1895,8 +1895,8 @@ Drucken und werden abgewiesen, nicht gerechnet.
 **Fasen und Verrundungen greifen an beiden Kernen** (Entscheidung Robert,
 10.09.2026: „alles soll immer bearbeitbar sein, egal ob importiert Format egal
 und beim selbst zeichnen"). Ein importiertes Mesh erhält durch den zweiten Kern
-weiterhin keine exakte Flächentopologie; die Flächenrückgewinnung aus Netzen
-bleibt eine gesonderte Entscheidung und keine Eigenschaft des STEP-Exports.
+dadurch allein keine exakte Flächentopologie; die Flächenrückgewinnung aus
+Netzen ist eine eigene Operation (§30) und keine Eigenschaft des STEP-Exports.
 
 Was der exakte Kern beisteuert, ist deshalb nicht mehr die **Möglichkeit**,
 sondern die **Genauigkeit**: Dort ist eine Verrundung eine Kurve, am Netz ein
@@ -2267,8 +2267,14 @@ Die Darstellung wird daraus vernetzt; diese Tessellierung ist nicht die
 Konstruktionsgeometrie.
 
 Als zweiter Kern **neben** dem Mesh-Kern, nicht als Ersatz. Objekte tragen die
-Kennzeichnung `kind` (§9). Der Übergang B-Rep → Mesh ist jederzeit möglich, der
-Rückweg nicht — im Objektbaum sichtbar machen.
+Kennzeichnung `kind` (§9). Der Übergang B-Rep → Mesh ist jederzeit möglich. Der
+Rückweg ist eine eigene Operation (*In Flächen und Kanten umwandeln*,
+Entscheidung Robert 23.09.2026): Sie baut aus den erkannten Flächen (§21.1)
+einen exakten Körper ohne Konstruktionsverlauf. Was keine erkannte Fläche
+trägt, bleibt ebene Dreiecksflächen und wird mit Anteil ausgewiesen; zu viel
+freie Form wird mit Grund abgelehnt. Die Abweichung zum Netz wird in beiden
+Richtungen gemessen und in der Formabweichungskarte gezeigt; das Netz bleibt
+im Verlauf davor. Der Objektbaum zeigt, welche Art ein Objekt hat.
 
 Bei B-Rep-Objekten werden geometrische Merkmale aus der exakten Topologie
 abgelesen, statt aus Dreiecken eingepasst. Das löst die Identität nach einer
@@ -3226,15 +3232,18 @@ mitreisen; daraus entsteht kein Weg zur Ausführung fremden Quelltexts.
 - Ein importiertes Mesh hat keine Konstruktionshistorie. Merkmalserkennung
   rekonstruiert erkennbare Geometrie, nicht die ursprünglichen
   Konstruktionsschritte. STEP liefert bearbeitbare Flächen und Kanten,
-  ebenfalls keine ursprüngliche parametrische Historie (§30).
+  ebenfalls keine ursprüngliche parametrische Historie (§30). Auch die
+  Umwandlung in Flächen und Kanten (§30) liefert keinen Verlauf, und freie
+  Formen wie Figuren oder Scans bleiben Dreiecke.
 - Rückfallstufe „voxel" rettet die Operation, kostet aber Genauigkeit
 - Reproduzierbarkeit gilt nur bei gleichen Bibliotheksversionen
 - Farbquantisierung aus Texturen bleibt gröber als das Rendering
 - Verrundungen und Fasen an **exakten** Kanten benötigen einen B-Rep-Körper.
   Am Netz entstehen sie seit dem 10.09.2026 ebenfalls, aber als Sehnenzug
   innerhalb von `units.MAX_FACET_SAG`; erkannte Merkmale eines Meshes machen es
-  dadurch nicht zu einer bearbeitbaren B-Rep-Konstruktion, und eine
-  Flächenrückgewinnung bleibt ein eigener möglicher Ausbau (§30).
+  dadurch nicht zu einer bearbeitbaren B-Rep-Konstruktion; die
+  Flächenrückgewinnung ist eine eigene Operation (§30) und liefert Flächen
+  ohne Verlauf.
 - Baugruppen mit echten Funktionstoleranzen bleiben Handarbeit; der Agent
   liefert den Entwurf, nicht das Endergebnis
 - Die Zielwerte in §31 gelten mit dem übersetzten Schichtkern; ohne ihn ist die

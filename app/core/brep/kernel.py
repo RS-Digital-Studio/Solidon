@@ -19,10 +19,10 @@ und der Rest der Anwendung bleibt unberührt (§36).
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field, replace
 from operator import index as integer_index
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from app.core.errors import CANCEL, INSTALL_MISSING, AppError, InternalError, ValidationError
 from app.core.geom.edges import EDGE_SELECTION_REJECTED, checked_indices
@@ -31,6 +31,10 @@ from app.core.log import get_logger
 from app.core.types import MAX_SLOTS, BoundingBox, CancelToken
 from app.core.units import MAX_FACET_ANGLE, MAX_FACET_SAG, is_close
 from app.i18n import TranslatableText, _
+
+if TYPE_CHECKING:
+    from app.core.brep.from_mesh import ConversionReference
+    from app.core.geom.deviation import SampledDeviation
 
 _log = get_logger(__name__)
 
@@ -369,6 +373,15 @@ class Solid:
     deflection: float = DEFLECTION
     face_slots: tuple[int, ...] = ()
     """Filament je nativer Fläche; leer bedeutet überall den neutralen Slot null."""
+    converted_from: ConversionReference | None = field(default=None, compare=False, repr=False)
+    """Das Netz, aus dem dieser Körper umgewandelt wurde (P4.0) — sonst ``None``.
+
+    Nur im Speicher und nur am unveränderten Ergebnis: Jede Operation, die
+    Geometrie ändert, baut einen neuen Körper, und der kennt es nicht mehr —
+    gegen ein Netz zu messen, das nicht mitbewegt wurde, wäre falsch. Wer nur
+    Filamente zuweist, behält es (``with_triangle_slots`` ersetzt nur die
+    Slots). Gelesen von der Karte „Formabweichung“ über
+    :meth:`source_deviation`."""
     _cache: dict[str, Any] = field(default_factory=dict, init=False, compare=False, repr=False)
     _copied_faces: tuple[int, ...] = field(init=False, compare=False, repr=False)
     _copied_edges: tuple[int, ...] = field(init=False, compare=False, repr=False)
@@ -568,8 +581,34 @@ class Solid:
             self._cache["mesh"] = cached
         return cast(MeshData, cached)
 
+    def source_deviation(
+        self,
+        *,
+        cancelled: CancelToken | None = None,
+        progress: Callable[[float], None] | None = None,
+    ) -> SampledDeviation | None:
+        """Wie weit der Körper von dem Netz abliegt, aus dem er umgewandelt wurde.
+
+        ``None`` an jedem anderen Körper. Einmal gerechnet und am Körper
+        gemerkt: Die Karte fragt bei jedem Öffnen und jedem Wechsel der
+        Anzeigeeinheit, und die Messung dauert an großen Netzen Sekunden.
+        """
+        if self.converted_from is None:
+            return None
+        known = self._cache.get("source_deviation")
+        if known is None:
+            from app.core.brep.from_mesh import source_deviation
+
+            known = source_deviation(
+                self, self.converted_from, cancelled=cancelled, progress=progress
+            )
+            self._cache["source_deviation"] = known
+        return cast("SampledDeviation", known)
+
     def to_mesh(self, *, deflection: float | None = None) -> MeshData:
-        """Die Einbahntür aus §30. Ausdrücklich, denn der Rückweg ist zu."""
+        """Die Einbahntür aus §30. Ausdrücklich, denn der Rückweg ist zu — die
+        Umwandlung ``mesh_to_exact`` (P4.0) erkennt Flächen neu, sie rechnet
+        nicht zurück."""
         return self.mesh if deflection is None else self._tessellated(deflection)
 
     def _tessellated(self, deflection: float) -> MeshData:

@@ -183,12 +183,22 @@ class MapLegend(QWidget):
                         upper=length_bound(upper, upper=True),
                     )
                 )
+            elif analysis.known and analysis.witness_distance is not None:
+                # Ein umgewandelter Körper (P4.0) misst gegen sein Netz an
+                # Stichproben — eine gefundene Zahl, keine Klammer.
+                parts.append(
+                    tr("Größter gefundener Abstand: {value}").format(
+                        value=length(analysis.witness_distance)
+                    )
+                )
             parts.append(
                 tr("{known} von {total} Flächen ausgewertet").format(
                     known=len(analysis.known), total=len(analysis.values)
                 )
             )
-            if analysis.known:
+            if analysis.known and analysis.maximum_interval is None:
+                fine.append(tr("Gemessene Abstände an Stichproben, keine Obergrenzen."))
+            elif analysis.known:
                 fine.append(tr("Die Zahlen sind Obergrenzen je Dreiecksfläche."))
                 if analysis.numerical_error is not None:
                     fine.append(

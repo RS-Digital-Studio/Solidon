@@ -40,7 +40,7 @@ mehrdeutige Anfragen und zählt, ob gefragt statt geraten wurde.
 
 **„Fragen vor Raten" trägt nur als Vorbedingung, nicht als Gewohnheit.** Als
 vierter Punkt einer Liste war sie anleitend, und das hielt gegen die damals
-84 Werkzeuge nicht — heute sind es 136 Operationen und elf Zusatzwerkzeuge:
+84 Werkzeuge nicht — heute sind es 137 Operationen und elf Zusatzwerkzeuge:
 sobald der Systemprompt vollständig ankam, fiel die Quote von 3/3 auf
 1/3 — wer genug Angebote hat, findet immer eines, das plausibel aussieht.
 Prompt-Version 2 stellt deshalb drei Prüfungen *vor* den ersten
@@ -122,7 +122,7 @@ vollständigen Auftrag und weist Modell, Kontext, Werkzeugzahl und Anfragehash
 aus. Dieser funktionale Zählweg misst keine Geschwindigkeit; Kalt-/Warmläufe
 und Leistungsprüfungen bleiben dem Release vorbehalten.
 
-**Stand 22.09.2026: 136 Operationen, 147 Werkzeuge** — die Zahlen hält
+**Stand 23.09.2026: 137 Operationen, 148 Werkzeuge** — die Zahlen hält
 `tests/test_registry_consistency.py` gegen Register und `tool_schemas()`.
 Der kompakte Auftrag wurde mit `qwen3:14b`, `num_ctx=32768` und
 `num_predict=1` vollständig mit **27 293 Token** gezählt (83,3 Prozent des

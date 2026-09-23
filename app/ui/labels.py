@@ -1344,6 +1344,9 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     # den Flächen des exakten Körpers abweichen dürfen (RM-071).
     "deflection": _("Größte Abweichung"),
     "deviation": _("Abweichung"),
+    # Die beiden Richtungen der Formabweichung einer Umwandlung (P4.0).
+    "mesh_to_body": _("Netz zum Körper"),
+    "body_to_mesh": _("Körper zum Netz"),
     # ``perceive.freeform``: wie viele Rundformen die Erkennung auf einer
     # Freiform wegließ — der Kunde liest die Zahl im Prüfbericht.
     "dropped": _("Weggelassen"),
@@ -1370,6 +1373,12 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "expected_prefix": _("Erwarteter Anfang"),
     "extruder": _("Extruder"),
     "faces": _("Flächen"),
+    # Die Flächen eines umgewandelten Körpers je Art (P4.0).
+    "planes": _("Ebenen"),
+    "cylinders": _("Zylinder"),
+    "cones": _("Kegel"),
+    "spheres": _("Kugeln"),
+    "tori": _("Ringe"),
     "factor": _("Maßstab"),
     # Die Spule, die in der Druckdatei fehlt (``gcode.spool_left_out``) — mit
     # ihrem Namen, denn eine Werkzeugnummer sucht niemand im Regal.
@@ -1387,6 +1396,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "features": _("Merkmale"),
     "field": _("Feld"),
     "file": _("Datei"),
+    "files": _("Dateien im Archiv"),
     "file_version": _("Dateiversion"),
     "findings": _("Befunde"),
     "first_kind": _("Erste Art"),
@@ -1812,6 +1822,15 @@ def kind_requirement(spec: Any, kinds: Sequence[str], spoiled_by: str = "") -> s
     # nannte jede Absage den exakten Körper — auch an einem Werkzeug, das das
     # Dreiecksmodell braucht; seit neue Grundkörper exakt entstehen (P2.8),
     # war das der Normalfall an *Merkmale an dieser Stelle erkennen*.
+    # **Die zwei Umwandlungen an dem Körper, der schon ist, was sie machen.**
+    # Die allgemeinen Sätze darunter schickten ihn im Kreis: „In Flächen und
+    # Kanten umwandeln“ an einem exakten Körper über „Flächenbearbeitung
+    # beenden“ zum Netz, und „Flächenbearbeitung beenden“ an einem Netz über
+    # die Umwandlung zurück.
+    if spec.requires_kind == "mesh" and spec.result_kind == "brep":
+        return str(tr("Der Körper hat bereits echte Flächen und Kanten."))
+    if spec.requires_kind == "brep" and spec.result_kind == "mesh":
+        return str(tr("Der Körper besteht bereits aus festen Dreiecken."))
     if spec.requires_kind == "mesh":
         return str(
             tr(
@@ -1821,12 +1840,13 @@ def kind_requirement(spec: Any, kinds: Sequence[str], spoiled_by: str = "") -> s
         )
     # Der Satz sagte, woher exakte Körper *kommen*, und ließ offen, was man
     # jetzt tun soll. Seit P2.8 bringt eine Grundform die Flächen und Kanten
-    # von sich aus mit; ein älterer Schritt wird im Verlauf umgestellt.
+    # von sich aus mit; ein älterer Schritt wird im Verlauf umgestellt. Und
+    # seit P4.0 bekommt auch ein eingelesenes Netz sie — der häufigste Fall.
     return str(
         tr(
-            "Dieses Werkzeug braucht einen Körper mit echten Kurven. Grundformen und "
-            "STEP-Dateien bringen sie mit; einen älteren Schritt stellen Sie im Verlauf "
-            "auf „Mit echten Flächen und Kanten rechnen“."
+            "Dieses Werkzeug braucht echte Flächen und Kanten. Ein Netz bekommt sie über „In "
+            "Flächen und Kanten umwandeln“, eine ältere Grundform im Verlauf über „Mit echten "
+            "Flächen und Kanten rechnen“."
         )
     )
 

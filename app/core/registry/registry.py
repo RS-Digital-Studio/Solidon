@@ -78,7 +78,9 @@ CATEGORIES: Final[dict[str, TranslatableText]] = {
     "label": _("Beschriftung"),
     "surface": _("Oberfläche"),
     # „Netz" allein ist für den Kunden ohne CAD-Kenntnisse kein Wort; der
-    # Name sagt, was die neun Einträge darunter tun (Review 02.09.2026).
+    # Name sagt, was die meisten Einträge darunter tun (Review 02.09.2026).
+    # Dazu stehen hier die zwei Umwandlungen zwischen Netz und echten Flächen:
+    # *Flächenbearbeitung beenden* und *In Flächen und Kanten umwandeln* (P4.0).
     "mesh": _("Netz glätten und vereinfachen"),
     "variants": _("Varianten"),
 }

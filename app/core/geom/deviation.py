@@ -21,7 +21,7 @@ from contextlib import suppress
 from dataclasses import dataclass
 from fractions import Fraction
 from itertools import pairwise
-from typing import Any, Final, cast
+from typing import Any, Final, Protocol, cast, runtime_checkable
 
 import numpy as np
 
@@ -53,6 +53,43 @@ _TORUS_HALVINGS: Final = 2
 #: brauchte.
 _MAX_REFINEMENTS: Final = 32
 _TRIG_TERMS: Final = 32
+
+
+@dataclass(frozen=True, slots=True)
+class SampledDeviation:
+    """Wie weit ein umgewandelter Körper von seinem Netz abliegt — je Dreieck seiner Darstellung.
+
+    **Gemessen, nicht eingeschlossen.** Die Klammern darunter gelten ganzen
+    Originaldreiecken gegen einen Träger; ein umgewandelter Körper hat zwei
+    Seiten, und beide werden an Stichproben gemessen: Punkte des Körpers
+    gegen das Netz, Punkte des Netzes gegen die Fläche des Körpers, an der sie
+    liegen. ``values_mm`` hält je Dreieck der Darstellung den größten Abstand,
+    der auf es fällt; ``witness`` ist die Stelle des größten überhaupt.
+    """
+
+    values_mm: np.ndarray
+    to_body_mm: float
+    """Größter Abstand eines Netzpunkts zum Körper (Netz → Körper)."""
+    from_body_mm: float
+    """Größter Abstand eines Körperpunkts zum Netz (Körper → Netz)."""
+    witness: Vec3 | None
+    witness_face: int | None
+
+
+@runtime_checkable
+class HasSourceDeviation(Protocol):
+    """Ein Körper, der weiß, aus welchem Netz er umgewandelt wurde (P4.0).
+
+    Die Karte „Formabweichung“ fragt so, ohne den exakten Kern zu importieren:
+    Die Erkennung liegt unter dem Kern und darf ihn nicht kennen.
+    """
+
+    def source_deviation(
+        self,
+        *,
+        cancelled: CancelToken | None = None,
+        progress: Callable[[float], None] | None = None,
+    ) -> SampledDeviation | None: ...
 
 
 @dataclass(frozen=True, slots=True)

@@ -7068,8 +7068,21 @@ class MainWindow(QMainWindow):
         # Mesh-Projekten, und das sind die meisten, konnte der Eintrag nie zu
         # etwas führen. Angeboten wird er jetzt, wenn wenigstens ein Körper
         # ihn tragen kann.
+        #
+        # **Und sonst mit dem Weg dorthin, statt stumm zu fehlen** (P4.0):
+        # Ein Netz bekommt seine Flächen über *In Flächen und Kanten
+        # umwandeln*, und genau das steht in der Zeile. Wählt man sie
+        # trotzdem, sagt die Absage dasselbe und bietet die Umwandlung als
+        # Knopf an (``_convert_after_error``). Hinten angehängt und nie als
+        # Vorschlag: Ein Projekt, das zuletzt STEP schrieb, soll an einem Netz
+        # nicht in eine Absage laufen.
+        hint = ""
         if any(entry.kind == "brep" for entry in objects):
             offered.append("STEP (*.step)")
+        else:
+            hint = tr("STEP – erst „{step}“ (*.step)").format(
+                step=REGISTRY.get("mesh_to_exact").title
+            )
         # **Format, Ordner und Namensschema kommen aus dem Projekt** (§29,
         # RM-141). Der Dialog begann bisher jedes Mal bei 3MF im zuletzt
         # benutzten Ordner *irgendeines* Vorgangs — wer ein Modell für einen
@@ -7087,6 +7100,8 @@ class MainWindow(QMainWindow):
             wanted = "3mf"
             label = offered[0]
         offered = [label, *(entry for entry in offered if entry != label)]
+        if hint:
+            offered.append(hint)
         filters = ";;".join(offered)
         # **Bei mehreren Dateien steht das Schema im Namensfeld**, und das ist
         # der Kundenweg aus §29 („Namensschema … konfigurierbar"): Der Kunde
@@ -7399,6 +7414,34 @@ class MainWindow(QMainWindow):
     def _export_crashed(self, worker: _ExportWorker, detail: str) -> None:
         """Unerwartete Fehler folgen demselben Besitzer- und Abbruchvertrag."""
         self._export_failed(worker, InternalError(detail=detail))
+
+    def _convert_after_error(self, error: Any) -> None:
+        """*In Flächen und Kanten umwandeln* an den Körpern, an denen es gescheitert ist (P4.0).
+
+        Der Fehler oder Befund nennt seinen Körper, wenn er einen hat — die
+        Absage eines Werkzeugs tut das. Der Export nennt keinen: Dann gelten
+        die Netze unter den gewählten Körpern, ohne Auswahl alle, wie beim
+        Export selbst. Einer bekommt den gewöhnlichen Dialog, mehrere denselben
+        Dialog einmal und einen Schritt je Körper in **einer** Transaktion.
+        """
+        result = self.session.last_result
+        if result is None:
+            return
+        objects = result.scene.objects
+        named = getattr(error, "object_id", None)
+        if named and named in objects:
+            bodies = [str(named)]
+        else:
+            chosen = self.object_tree.selected_objects() or tuple(objects)
+            bodies = [str(entry) for entry in chosen if objects[entry].kind == "mesh"]
+        if not bodies:
+            return
+        spec = REGISTRY.get("mesh_to_exact")
+        if len(bodies) == 1:
+            self.object_tree.select_object(bodies[0])
+            self.run_operation(spec)
+            return
+        self.run_operation(spec, on_bodies=bodies)
 
     def _export_as_mesh_after_error(self, _error: Any) -> None:
         """Dasselbe Teil als 3MF, wenn STEP an einem Netz gescheitert ist (§29).
@@ -18279,6 +18322,10 @@ class MainWindow(QMainWindow):
             "split_along_line": lambda _error: self.tools.activate("split"),
             "scale_to_fit": self._scale_after_error,
             "export_as_mesh": self._export_as_mesh_after_error,
+            # **Der Rückweg zum Körper** (P4.0): STEP, das Werkzeug des exakten
+            # Kerns — beide scheitern am Netz, und beide nennen jetzt die
+            # Umwandlung als ersten Ausweg.
+            "mesh_to_exact": self._convert_after_error,
             "place_on_bed": self._place_on_bed_after_error,
             "arrange_on_bed": self._arrange_after_error,
             "correct_input": self._correct_after_error,

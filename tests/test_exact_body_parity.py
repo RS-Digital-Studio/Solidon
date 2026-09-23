@@ -32,6 +32,7 @@ EXACT = (("brep", ("brep",)),)
 MESH_ONLY = (("mesh", ("mesh",)),)
 CREATE_MESH = (("none", ("mesh",)),)
 CREATE_EXACT = (("none", ("brep",)),)
+CONVERT_EXACT = (("mesh", ("brep",)),)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -396,6 +397,10 @@ CASES = [
         900.0,
     ),
     Case("load_step", "load_step", {"source": "step"}, CREATE_EXACT, "volume", 3200.0),
+    # P4.0: die einzige Operation, die aus einem Netz einen exakten Körper macht.
+    # Am exakten Eingang steht sie grau (``requires_kind="mesh"``); dort gibt es
+    # nichts umzuwandeln.
+    Case("mesh_to_exact", "box", {"tolerance": 0.01}, CONVERT_EXACT, "volume", 3200.0),
     Case(
         "mirror_object",
         "shifted",

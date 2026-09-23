@@ -679,7 +679,7 @@ def split_oversized() -> Project:
     plan = plan_split(
         as_mesh_data(entry.mesh), "obj_1", profile, features=entry.features, margin=margin
     )
-    applied = apply_planned(project.document, plan, "obj_1", profile)
+    applied = apply_planned(project.document, plan, "obj_1")
     History(project.document).apply(
         _("Anordnen"),
         [

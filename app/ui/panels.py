@@ -84,6 +84,7 @@ from app.core.errors import (
     CANCEL,
     CHANGE_SELECTION,
     CHOOSE_PRINTER,
+    CONVERT_TO_EXACT,
     CORRECT_INPUT,
     DECIMATE_MESH,
     EXPORT_AS_MESH,
@@ -347,7 +348,11 @@ FINDING_ACTIONS: dict[str, tuple[Action, ...]] = {
     # einer eine Handlung, müssen es alle. ``needs_solid`` steht allein in
     # seiner Familie und fiel deshalb durch: Wer `teil.step` tippte und ein
     # Netz hatte, bekam eine gute Erklärung und keinen Knopf.
-    "export.needs_solid": (EXPORT_AS_MESH, SHOW_DETAILS),
+    #
+    # **Seit P4.0 steht der Weg zu STEP vorn**: Aus dem Netz einen Körper mit
+    # echten Flächen und Kanten machen, danach trägt das Format. 3MF bleibt
+    # der zweite Ausweg für den, der kein STEP braucht.
+    "export.needs_solid": (CONVERT_TO_EXACT, EXPORT_AS_MESH, SHOW_DETAILS),
     # **Zu groß und nur verrutscht sind zwei Fälle.** Beide meldete der Kern
     # unter derselben Kennung, also bekam auch das Teil, das bloß zur Hälfte
     # unter der Platte steckt, *Modell teilen* und *Auf den Bauraum

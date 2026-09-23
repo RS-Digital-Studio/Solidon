@@ -726,16 +726,44 @@ Was ein Netz nicht geben kann: echte Kanten — und damit Fasen und
 Verrundungen, die rund sind statt facettiert, präzise Boolesche Operationen
 ohne Tessellations-Artefakte, und STEP hinein wie hinaus.
 
-## Die Einbahnstraße
+## Die Einbahnstraße — und die Umwandlung daneben
 
 ```
-B-Rep  ──────>  Mesh      jederzeit
-B-Rep  <──╳───  Mesh      nie
+B-Rep  ──────>  Mesh      jederzeit (brep_to_mesh, jede Netzoperation)
+B-Rep  <──╳───  Mesh      kein Rückweg: die alten Kanten sind verloren
+B-Rep  <·······  Mesh      Umwandlung (mesh_to_exact, P4.0): erkannt, nicht zurückgerechnet
 ```
 
-**Der Rückweg existiert nicht, und der Objektbaum sagt das auch.** Ein Netz
-hat die Kanten verloren, aus denen es gebaut wurde; das Gegenteil zu behaupten
-ergäbe einen Körper, dessen „exakte" Verrundung ein Vieleck ist.
+**Ein Rückweg existiert nicht.** Ein Netz hat die Kanten verloren, aus denen
+es gebaut wurde; das Gegenteil zu behaupten ergäbe einen Körper, dessen
+„exakte" Verrundung ein Vieleck ist. **Die Umwandlung ist etwas anderes**: Sie
+nimmt die Flächen, die die Erkennung im Netz findet, und baut daraus einen
+neuen Körper — ohne Konstruktionsverlauf, mit gemessener Abweichung, und was
+auf keiner erkannten Fläche liegt, bleibt Dreieck. Siehe den nächsten
+Abschnitt.
+
+## Vom Netz zum exakten Körper (P4.0)
+
+`from_mesh.convert` in sieben Stufen; `ops.mesh_to_exact` macht daraus die
+Operation mit Absagen und Befunden.
+
+| Stufe | Funktion | Was sie hält |
+|---|---|---|
+| Bereiche | `surface_regions`, `regularized` | Träger aus den `SurfacePatch` der Erkennung, keine eigene Einpassung; ein Dreieck nur, wenn alle Ecken in der Toleranz liegen **und** seine Normale höchstens `FACET_TILT` kippt; Ebenen mit der Genauigkeit einer `float32`-Ebene (`PLANAR_SPAN`); danach Achsen, Radien und Berührungen abgeglichen, jede Änderung gegen die Toleranz geprüft |
+| Ränder | `boundaries` | Halbkanten zu Ketten zwischen Ecken; geschlossene Ketten mit fester Anfangsecke |
+| Ecken | `_vertex_positions`, `snapped` | Gauß-Newton mit rangaufdeckender Pseudoinversen (`SNAP_RCOND`); nie weiter als `CORNER_REACH` mal die Toleranz, sonst die Ebenen allein, sonst bleibt die Ecke |
+| Kanten | `_plan`, `structural_curve`, `intersection_curve` | zuerst aus der Gestalt der Träger (Kreis, Gerade), dann `GeomAPI_IntSS` (Kegelschnitte exakt), zuletzt B-Spline durch Punkte; zwei Durchgänge, dazwischen die Ecken auf ihre Kurven (`_on_curves`, Gauß-Newton) |
+| Flächen | `_occ_face` | je Bereich eine Fläche mit **eigenen** Kanten (`Inside=False`, `ShapeFix_Face`, `SameParameter`), geprüft gegen Fläche und Probe des Bereichs |
+| Körper | `_shells`, `_assembled`, `_broken_after_sewing` | genäht je Netzkomponente; ist der Körper ungültig, werden die Flächen einzeln geprüft und ihre Bereiche als Dreiecke neu gebaut (`_demoted`) |
+| Messung | `_mesh_to_body`, `body_to_mesh`, `source_deviation` | beidseitig an Stichproben auf den **exakten** Flächen; innere Wände (nicht verschmolzene Nähte) zählen eigens |
+
+Der Körper trägt das Netz, aus dem er stammt (`Solid.converted_from`, nur im
+Speicher, nur am unveränderten Ergebnis); die Karte „Formabweichung" misst
+damit gegen das Netz statt gegen seine eigene Darstellung
+(`geom.deviation.HasSourceDeviation`). Die Regeln dazu stehen in den
+Docstrings der Konstanten `CORNER_REACH`, `SNAP_RCOND`, `PLANAR_SPAN`,
+`FACET_TILT`, `MAX_FREEFORM_FACES` — jede mit dem Modell, an dem sie gemessen
+wurde.
 
 ## Optional heißt: er meldet sich ab
 
@@ -776,13 +804,14 @@ Anwendung gegen die installierte Bindung.
 |---|---|
 | `kernel.py` | Der `Solid` und sein Weg ins Netz. `available()`, `BRepUnavailable` |
 | `profiles.py` | Vom Skizzenumriss zum exakten Körper (§30.1) — das größte Modul hier; `helical_thread` näht Kern und Gang eines Gewindes ohne Boolesche Operation; `face_of`, `offset_face`, `face_boolean`, `face_rotated` und `prism` sind die exakte Seite der Querschnitte, aus denen Profilklemmen und Dichtnuten bauen (`knowledge/parts/section.py`); `round_cord` zieht die runde Dichtschnur als Rohrsweep mit runden Ecken am exakten Weg entlang |
-| `ops.py` | Die B-Rep-Operationen im Register (§25, §10) — **ohne** Verrunden und Fase, die stehen in `geom/edge_ops.py`. Seit P2.8 die fünf exakten Grundkörper (`create_brep_box` mit `anchor`, `_cylinder`, `_cone`, `_sphere`, `_torus` — sichtbar, wo der Kern da ist; `edit.sphere` und `edit.cone` daneben zu `box`, `cylinder`, `torus`); `drill_brep_hole` und `shell_exact` bleiben registriert und versteckt, weil `prepare_ops.drill_hole` und `hollow_object` sie am exakten Körper selbst rufen |
+| `ops.py` | Die B-Rep-Operationen im Register (§25, §10) — **ohne** Verrunden und Fase, die stehen in `geom/edge_ops.py`. `mesh_to_exact` (P4.0, Kategorie `mesh`) ist die Umwandlung vom Netz; `brep_to_mesh` die Gegenrichtung. Seit P2.8 die fünf exakten Grundkörper (`create_brep_box` mit `anchor`, `_cylinder`, `_cone`, `_sphere`, `_torus` — sichtbar, wo der Kern da ist; `edit.sphere` und `edit.cone` daneben zu `box`, `cylinder`, `torus`); `drill_brep_hole` und `shell_exact` bleiben registriert und versteckt, weil `prepare_ops.drill_hole` und `hollow_object` sie am exakten Körper selbst rufen |
 | `edit.py` | Einen Körper formen |
 | `features.py` | Merkmale aus der Topologie (§30, §21) |
 | `thread.py` | Gewinde an importierter Geometrie: Kantenzüge nach Bogenlänge, Achse eingepasst, Vorschub und Händigkeit aus der Wendelregression, Gangzahl aus der Periodizität (§21.1, P2.5) |
 | `canonical.py` | Geprüfte Ebenen-, Zylinder-, Kugel- und Ringträger mit wirklichen Flächengrenzen (§30, §21); `horizontal_area` summiert die ebenen Flächen einer Höhe in einer Richtung — die exakte Seite der gezählten Organizer-Flächen (P2.7) |
 | `properties.py` | Volumen und Fläche nativ auf dem knotenzerlegten Verbund mit Leiter, Python-Randintegral als Rückfall (§30, §11) |
 | `step.py` | STEP hinein und hinaus |
+| `from_mesh.py` | Vom Dreiecksnetz zum exakten Körper ohne Verlauf (P4.0): Bereiche, Ränder, Ecken, Kanten, Flächen, Nähen, beidseitige Messung — siehe „Vom Netz zum exakten Körper" |
 
 ## Grenzen
 

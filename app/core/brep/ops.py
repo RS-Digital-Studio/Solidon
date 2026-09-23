@@ -7,8 +7,8 @@ Importspur (§36).
 
 Die Kategorie heißt „Formgebung", nicht nach dem Kern: wer eine Verrundung
 sucht, sucht sie neben Fase, Schale und Formschräge — nicht unter einem
-Kernel-Namen, den er nie gewählt hat. Nur die Umwandlung wohnt unter „Netz",
-weil sie dort endet.
+Kernel-Namen, den er nie gewählt hat. Nur die beiden Umwandlungen wohnen unter
+„Netz": die eine endet dort, die andere beginnt dort (P4.0).
 """
 
 from __future__ import annotations
@@ -16,19 +16,23 @@ from __future__ import annotations
 import dataclasses
 import math
 from pathlib import Path
-from typing import Literal, cast
+from typing import Final, Literal, cast
 
 import numpy as np
 
-from app.core.brep import edit, profiles, step
+from app.core.brep import edit, from_mesh, profiles, step
 from app.core.brep.features import features_of
 from app.core.brep.kernel import Solid, require
 from app.core.errors import (
     CANCEL,
     CORRECT_INPUT,
+    DECIMATE_MESH,
+    REPAIR_AND_RETRY,
     GeometryError,
     InternalError,
     NeedsSolidError,
+    NotManifoldError,
+    UserError,
     ValidationError,
 )
 from app.core.geom.boolean import NOTHING_LEFT_DETAIL, NOTHING_LEFT_TITLE, without_effect
@@ -67,8 +71,8 @@ from app.core.types import (
     SceneObject,
     Vec3,
 )
-from app.core.units import EPS_GEOM, is_close
-from app.i18n import _
+from app.core.units import EPS_GEOM, MAX_FACET_SAG, is_close
+from app.i18n import TranslatableText, _
 
 
 @op_params
@@ -910,6 +914,256 @@ def converted_finding(source: SceneObject, mesh: MeshData) -> Finding:
     )
 
 
+@op_params
+class MeshToExactParams(BaseParams):
+    # **Vorn, und das einzige Feld** — aus demselben Grund wie die Feinheit
+    # der Gegenrichtung: Wer an einem gescannten oder neu vernetzten Modell
+    # zu viel als Dreiecke zurückbekommt, muss wissen, dass er die Grenze
+    # weiter stellen kann.
+    tolerance: float = param(
+        title=_("Erlaubte Abweichung"),
+        default=from_mesh.DEFAULT_TOLERANCE,
+        unit="mm",
+        minimum=0.001,
+        maximum=0.2,
+        placement="front",
+        doc=_(
+            "Wie weit eine Ecke des Netzes neben ihrer Fläche liegen darf. Größer nimmt grobe "
+            "Netze auf."
+        ),
+    )
+
+
+#: Was die Leiste während der Umwandlung sagt — je Stufe von ``convert``.
+_STAGES: dict[str, TranslatableText] = {
+    "regions": _("Flächen zuordnen …"),
+    "edges": _("Kanten bestimmen …"),
+    "faces": _("Flächen bauen …"),
+    "body": _("Körper schließen …"),
+    "measure": _("Abweichung messen …"),
+}
+
+
+@register_op(
+    name="mesh_to_exact",
+    result_kind="brep",
+    cache_version="1",
+    requires_kind="mesh",
+    title=_("In Flächen und Kanten umwandeln"),
+    category="mesh",
+    params=MeshToExactParams,
+    consumes=1,
+    produces=1,
+    doc=_(
+        "Macht aus einem Dreiecksnetz einen Körper mit echten Flächen und Kanten — Ebenen, "
+        "Zylinder, Kegel, Kugeln und Ringe. Danach geht STEP, und Bohrungen, Kanten und "
+        "Flächen lassen sich bearbeiten; einen Konstruktionsverlauf hat er nicht. Was auf "
+        "keiner erkannten Fläche liegt, bleibt ebene Dreiecke; der Prüfbericht nennt Anteil "
+        "und Abweichung."
+    ),
+    # Wann sie die falsche Wahl ist (Vertrag von ``caveat``), nicht ihre Grenze —
+    # die steht im doc-Satz davor.
+    caveat=_(
+        "Nicht für organische Formen wie Figuren oder Scans: Ihre freie Form bleibt "
+        "Dreiecke. Zum Drucken und für STL oder 3MF ist die Umwandlung nicht nötig."
+    ),
+)
+def mesh_to_exact(ctx: OpContext) -> OpResult:
+    """P4.0: das Netz als Körper mit analytischen Flächen, ohne Verlauf.
+
+    Die Gegenrichtung zu :func:`brep_to_mesh` und wie sie ein Schritt im
+    Stapel: Das Netz bleibt im Schritt davor, ein Undo holt es zurück (§30).
+    Die Arbeit tut :func:`app.core.brep.from_mesh.convert`; hier werden ihre
+    Absagen zu Sätzen mit Handlung (Regel 17) und ihre Messungen zu Befunden.
+
+    ``ctx.quality`` ändert hier **bewusst nichts**. Das Ergebnis ist ein
+    exakter Körper; eine Entwurfsfassung wäre ein anderer Körper mit anderen
+    Flächen, und alles, was danach an ihm rechnet, hinge an der Stufe. Auch
+    die Messung bleibt gleich — eine Abweichung, die beim Umschalten auf
+    „Fein“ anders hieße, wäre keine Auskunft.
+    """
+    from app.core.perceive.features import detect
+
+    params = cast(MeshToExactParams, ctx.params)
+    require()
+    source = ctx.inputs[0]
+    if isinstance(source.mesh, Solid):
+        raise UserError(
+            _("Der Körper hat bereits echte Flächen und Kanten."),
+            _("Seine Flächen und Kanten lassen sich direkt bearbeiten."),
+            suggestions=(CANCEL,),
+            values={"name": source.name},
+            object_id=source.id,
+        )
+    mesh = as_mesh_data(source.mesh)
+    ctx.progress(0.0, str(_STAGES["regions"]))
+    # Dieselbe Erkennung wie die Auswertung — ihr Merker liefert sie, wenn der
+    # Körper schon untersucht ist. ``source.features`` genügt nicht: In der
+    # Vorschau eines Dialogs erkennt die Auswertung nur, was ein späterer
+    # Schritt braucht, und die Umwandlung braucht alles.
+    features = detect(mesh, check_cancelled=ctx.cancelled.raise_if_cancelled)
+
+    def progress(fraction: float, stage: str) -> None:
+        ctx.progress(0.05 + 0.95 * fraction, str(_STAGES.get(stage, _STAGES["faces"])))
+
+    try:
+        conversion = from_mesh.convert(
+            mesh,
+            features,
+            tolerance=params.tolerance,
+            cancelled=ctx.cancelled,
+            progress=progress,
+        )
+    except from_mesh.OpenSurfaceError as problem:
+        raise NotManifoldError(
+            _("Das Netz ist nicht dicht. Reparieren Sie es, dann lässt es sich umwandeln."),
+            suggestions=(REPAIR_AND_RETRY, CANCEL),
+            object_id=source.id,
+        ) from problem
+    except from_mesh.ConversionRefusedError as refusal:
+        raise _refusal(refusal, source) from refusal
+    output = _replaced(source, conversion.solid, cancelled=ctx.cancelled)
+    return OpResult(outputs=[output], findings=conversion_findings(source, conversion, params))
+
+
+def _refusal(refusal: from_mesh.ConversionRefusedError, source: SceneObject) -> GeometryError:
+    """Die Absage der Umwandlung als Satz mit Handlung (Regel 17)."""
+    if refusal.reason == "freeform":
+        return GeometryError(
+            _("Dieses Modell ist zum größten Teil freie Form."),
+            _(
+                "Kaum ein Dreieck liegt auf einer erkennbaren Fläche, und jedes würde eine "
+                "eigene. Freie Formen bleiben besser ein Netz; mit weniger Dreiecken geht die "
+                "Umwandlung trotzdem."
+            ),
+            suggestions=(DECIMATE_MESH, CANCEL),
+            values={
+                "triangles": refusal.values.get("triangles", 0),
+                "limit": from_mesh.MAX_FREEFORM_FACES,
+            },
+            object_id=source.id,
+        )
+    return GeometryError(
+        _("Aus den erkannten Flächen ließ sich kein geschlossener Körper bauen."),
+        _(
+            "Die Flächen schließen an ihren Rändern nicht dicht. Eine größere erlaubte "
+            "Abweichung oder eine Reparatur des Netzes kann helfen."
+        ),
+        suggestions=(CORRECT_INPUT, REPAIR_AND_RETRY, CANCEL),
+        values={"reason": refusal.reason},
+        object_id=source.id,
+    )
+
+
+#: Ab welcher Abweichung die Umwandlung mehr als eine Auskunft ist: die
+#: Sehnenhöhe, mit der der exakte Kern selbst tesselliert. Weicht der Körper
+#: weiter vom Netz ab, sind entweder die Dreiecke des Netzes gröber als das,
+#: was Solidon selbst ausgibt (ein Ring aus 48 mal 24 Vierecken: 0,1 mm), oder
+#: eine Fläche liegt daneben — beides will der Kunde sehen, bevor er das Teil
+#: als STEP weitergibt.
+DEVIATION_NOTICE: Final = MAX_FACET_SAG
+
+
+def conversion_findings(
+    source: SceneObject, conversion: from_mesh.Conversion, params: MeshToExactParams
+) -> list[Finding]:
+    """Was die Umwandlung gebaut und gemessen hat — drei Befunde, jeder mit Zahl."""
+    kinds = dict(conversion.faces)
+    # Je Flächenart eine Zahl, und nur die, die vorkommen: „Kugeln: 0“ an
+    # einer Platte ist keine Auskunft.
+    values = {
+        "faces": sum(kinds.values()),
+        "planes": kinds.get("plane", 0),
+        "cylinders": kinds.get("cylinder", 0),
+        "cones": kinds.get("cone", 0),
+        "spheres": kinds.get("sphere", 0),
+        "tori": kinds.get("torus", 0),
+        "triangles": kinds.get("facet", 0),
+    }
+    findings = [
+        Finding(
+            code="brep.from_mesh",
+            severity="info",
+            message=_(
+                "Das Netz ist jetzt ein Körper mit echten Flächen und Kanten, ohne "
+                "Konstruktionsverlauf. Das Netz bleibt im Schritt davor."
+            ),
+            object_id=source.id,
+            values={key: value for key, value in values.items() if value},
+        )
+    ]
+    if conversion.freeform_triangles:
+        findings.append(
+            Finding(
+                code="brep.from_mesh.freeform",
+                severity="warning",
+                message=_(
+                    "Ein Teil der Oberfläche passt auf keine erkannte Fläche und bleibt ebene "
+                    "Dreiecke, wie im Netz."
+                ),
+                object_id=source.id,
+                values={
+                    "share_percent": round(100.0 * conversion.freeform_share, 2),
+                    "triangles": conversion.freeform_triangles,
+                },
+            )
+        )
+    worst = max(conversion.mesh_to_body, conversion.body_to_mesh)
+    findings.append(
+        Finding(
+            code="brep.from_mesh.deviation",
+            severity="warning" if worst > DEVIATION_NOTICE else "info",
+            message=(
+                _(
+                    "Der Körper weicht stellenweise deutlich vom Netz ab — meist schneiden grobe "
+                    "Dreiecke eine Rundung ab. Die Karte „Formabweichung“ zeigt, wo."
+                )
+                if worst > DEVIATION_NOTICE
+                else _(
+                    "Körper und Netz liegen dicht beieinander. Die Karte „Formabweichung“ zeigt "
+                    "die Abweichung Stelle für Stelle."
+                )
+            ),
+            object_id=source.id,
+            location=conversion.worst,
+            values={
+                "deviation_mm": round(worst, 4),
+                "mesh_to_body_mm": round(conversion.mesh_to_body, 4),
+                "body_to_mesh_mm": round(conversion.body_to_mesh, 4),
+                "tolerance_mm": params.tolerance,
+            },
+        )
+    )
+    if conversion.inner_walls:
+        findings.append(
+            Finding(
+                code="brep.from_mesh.inner_walls",
+                severity="info",
+                message=_(
+                    "Das Netz hatte Wände im Inneren, etwa eine nicht verschmolzene Naht. Der "
+                    "Körper übernimmt sie nicht; außen ändert sich nichts."
+                ),
+                object_id=source.id,
+                values={"triangles": conversion.inner_walls},
+            )
+        )
+    if conversion.rejected:
+        findings.append(
+            Finding(
+                code="brep.from_mesh.rejected",
+                severity="info",
+                message=_(
+                    "Einige erkannte Merkmale lagen nicht genau genug auf ihrer Fläche; ihre "
+                    "Dreiecke gehören jetzt zu Nachbarflächen oder bleiben Dreiecke."
+                ),
+                object_id=source.id,
+                feature_ids=tuple(name for name, _distance in conversion.rejected),
+                values={"count": len(conversion.rejected)},
+            )
+        )
+    return findings
+
+
 def brep_input(ctx: OpContext) -> tuple[SceneObject, Solid]:
     """Die Eingabe und ihr exakter Körper — oder ein klarer Satz, wenn es ein
     Netz ist (§33.1).
@@ -934,10 +1188,10 @@ def brep_input(ctx: OpContext) -> tuple[SceneObject, Solid]:
             # formatiert nicht — ein „{name}" stünde dem Nutzer wörtlich da.
             # Der Name reist wie überall in ``values``.
             detail=_(
-                "Der gewählte Körper besteht bereits aus festen Dreiecken. Dieses "
-                "Werkzeug braucht einzeln bearbeitbare Flächen und Kanten. Stellen Sie "
-                "den Schritt der Grundform im Verlauf auf „Mit echten Flächen und Kanten "
-                "rechnen“ um, oder öffnen Sie eine STEP-Datei."
+                "Der Körper besteht aus festen Dreiecken. Dieses Werkzeug braucht echte "
+                "Flächen und Kanten: „In Flächen und Kanten umwandeln“ macht sie aus dem "
+                "Netz, eine ältere Grundform bekommt sie im Verlauf über „Mit echten "
+                "Flächen und Kanten rechnen“."
             ),
             values={"name": source.name, "field": "in", "constraint": "needs_brep"},
             object_id=source.id,
@@ -966,6 +1220,7 @@ __all__ = [
     "create_brep_torus",
     "drill_brep_hole",
     "load_step",
+    "mesh_to_exact",
     "shell_exact",
     "thread_exact",
 ]

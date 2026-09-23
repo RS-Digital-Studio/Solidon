@@ -774,9 +774,24 @@ def max_distance_to_surface(
     ``cancelled`` wird je Portion gefragt: Am Voronoi-Spiderman (885 570
     Dreiecke) misst die Abweichung nach dem Glätten 5,4 s (23.09.2026).
     """
+    return farthest_from_surface(body, points, cancelled=cancelled)[0]
+
+
+def farthest_from_surface(
+    body: trimesh.Trimesh, points: np.ndarray, *, cancelled: CancelToken | None = None
+) -> tuple[float, int | None]:
+    """Dasselbe Maximum wie :func:`max_distance_to_surface` — und welcher Punkt es hat.
+
+    Gebraucht, wo der Ort zählt: Die Umwandlung ins Exakte meldet die größte
+    Abweichung mit der Stelle, an die die Ansicht fliegt. Den Ort danach über
+    :func:`on_surface` zu suchen hieß, jeden Punkt exakt zu messen — genau das,
+    was die Schranken hier sparen (an ``post_with_fillet.stl``: 4,0 s statt
+    der Zehntelsekunde davor). ``None``, wo kein Punkt über dem Rundungsrauschen
+    liegt.
+    """
     queries = np.asarray(points, dtype=float).reshape(-1, 3)
     if not len(queries) or not len(body.faces):
-        return 0.0
+        return 0.0, None
     index = _SurfaceIndex.of(body)
     bound = index.bound(queries)
     # Der Boden ist das Rundungsrauschen der Koordinaten: Ein Punkt, der
@@ -789,6 +804,7 @@ def max_distance_to_surface(
         * max(float(np.max(np.abs(index.triangles))), float(np.max(np.abs(queries))), 1.0)
     )
     highest = 0.0
+    where: int | None = None
     portion = 256
     rounds = 0
     # Wer die Schranke des bisher Gemessenen nicht überbietet, kann das
@@ -810,12 +826,53 @@ def max_distance_to_surface(
                 break
         chosen = alive[np.argsort(-bound[alive], kind="stable")[:portion]]
         _spot, distance, _triangle = _nearest_on(index, queries[chosen])
-        highest = max(highest, float(distance.max()))
+        best = int(np.argmax(distance))
+        if float(distance[best]) > highest:
+            highest = float(distance[best])
+            where = int(chosen[best])
         bound[chosen] = distance
         portion *= 2
         rounds += 1
         alive = np.flatnonzero(bound > max(highest, roundoff))
-    return highest
+    return highest, where
+
+
+def beyond_surface(
+    body: trimesh.Trimesh, points: np.ndarray, floor: float | np.ndarray
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Die Punkte, die weiter als ``floor`` von der Oberfläche liegen — exakt gemessen.
+
+    ``floor`` gilt für alle Punkte oder je Punkt.
+
+    Dieselben Schranken wie :func:`max_distance_to_surface`: Wessen Schranke
+    unter ``floor`` bleibt, liegt sicher darunter und wird nie gemessen. Die
+    Umwandlung ins Exakte fragt so nach den Stellen, an denen das Netz weiter
+    vom Körper abliegt als von seiner eigenen Fläche — eine Naht, die eine
+    Vereinigung nicht verschmolzen hat, liegt im Inneren des Körpers, und in
+    einem gewöhnlichen Netz gibt es keine; gemessen wird dann nichts.
+
+    Zurück kommen die Nummern der Punkte, ihre Abstände, die nächsten Punkte
+    auf der Oberfläche und deren Dreiecke — nur für die, die ``floor``
+    überschreiten.
+    """
+    queries = np.asarray(points, dtype=float).reshape(-1, 3)
+    floors = np.broadcast_to(np.asarray(floor, dtype=float), (len(queries),))
+    empty = np.zeros(0, dtype=np.int64)
+    if not len(queries) or not len(body.faces):
+        return empty, np.zeros(0), np.zeros((0, 3)), empty
+    index = _SurfaceIndex.of(body)
+    alive = np.flatnonzero(index.bound(queries) > floors)
+    if not len(alive):
+        return empty, np.zeros(0), np.zeros((0, 3)), empty
+    tighter = np.minimum(
+        index.bound(queries[alive], neighbours=8), index.bound_at_corners(queries[alive])
+    )
+    alive = alive[tighter > floors[alive]]
+    if not len(alive):
+        return empty, np.zeros(0), np.zeros((0, 3)), empty
+    spots, distances, triangles = _nearest_on(index, queries[alive])
+    keep = distances > floors[alive]
+    return alive[keep], distances[keep], spots[keep], triangles[keep]
 
 
 def _nearest_on(

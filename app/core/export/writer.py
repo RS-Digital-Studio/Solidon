@@ -26,6 +26,7 @@ from app.core.deferred import trimesh
 from app.core.errors import (
     CANCEL,
     CHANGE_SELECTION,
+    CONVERT_TO_EXACT,
     EXPORT_AS_MESH,
     SHOW_HISTORY,
     FileWriteError,
@@ -716,11 +717,9 @@ def check_before_export(
                         code="export.needs_solid",
                         severity="error",
                         message=_(
-                            "STEP speichert einzeln bearbeitbare Flächen und Kanten; der "
-                            "gewählte Körper besteht nur noch aus festen Dreiecken. Als STL "
-                            "oder 3MF lässt er sich exportieren. Für STEP eine STEP-Datei "
-                            "öffnen oder den Schritt der Grundform im Verlauf auf „Mit "
-                            "echten Flächen und Kanten rechnen“ stellen."
+                            "STEP speichert einzeln bearbeitbare Flächen und Kanten, der Körper "
+                            "besteht aus festen Dreiecken. „In Flächen und Kanten umwandeln“ "
+                            "macht sie daraus; STL und 3MF nehmen ihn, wie er ist."
                         ),
                         object_id=entry.id,
                         values={"format": export_format},
@@ -1533,16 +1532,16 @@ def _needs_solid() -> NeedsSolidError:
     „geht nicht, brich ab", während die Handlung dazu im Fenster fertig lag
     (``_export_as_mesh_after_error`` trägt den Fall im Namen).
 
-    Der schmale Vorschlag von :class:`NeedsSolidError` bleibt für die
-    B-Rep-Werkzeuge richtig — vom Netz zum exakten Körper führt kein Weg
-    zurück. Hier führt einer: nicht zum Körper, aber zu einer Datei, die
+    Seit P4.0 führen zwei Wege weiter: der zum Körper — *In Flächen und
+    Kanten umwandeln*, danach trägt STEP — und der zu einer Datei, die
     Dreiecke kennt.
     """
     return NeedsSolidError(
         detail=_(
-            "STEP bewahrt einzeln bearbeitbare Flächen und Kanten. Dieses Modell "
-            "besteht aus festen Dreiecken; dafür bleiben STL und 3MF."
+            "STEP speichert echte Flächen und Kanten, dieses Modell besteht aus festen "
+            "Dreiecken. „In Flächen und Kanten umwandeln“ macht sie daraus; STL und 3MF "
+            "nehmen es, wie es ist."
         ),
         values={"field": "format", "constraint": "needs_brep"},
-        suggestions=(EXPORT_AS_MESH, CANCEL),
+        suggestions=(CONVERT_TO_EXACT, EXPORT_AS_MESH, CANCEL),
     )

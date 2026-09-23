@@ -1263,9 +1263,18 @@ def test_the_greyed_out_entry_says_why(window: MainWindow) -> None:
     window._update_actions()
 
     hint = window._op_actions["brep_to_mesh"].toolTip()
-    assert "Flächen und Kanten" in hint
-    # Seit P2.8 zeigt der Satz auf den Verlauf, nicht auf einen Haken.
-    assert "im Verlauf" in hint
+    # **Die Umwandlung sagt, was ist, und schickt nicht im Kreis** (P4.0):
+    # Vorher stand hier der allgemeine Satz, und der hätte seit der Umwandlung
+    # ins Exakte empfohlen, das Netz erst exakt zu machen, um es dann wieder
+    # zu vernetzen.
+    assert hint.startswith("Der Körper besteht bereits aus festen Dreiecken.")
+    from app.ui.labels import kind_requirement
+
+    generic = kind_requirement(REGISTRY.get("shell_exact"), ["mesh"])
+    assert generic is not None and "Flächen und Kanten" in generic
+    # Seit P2.8 zeigt der Satz auf den Verlauf, nicht auf einen Haken — und
+    # seit P4.0 zuerst auf die Umwandlung.
+    assert "im Verlauf" in generic and "In Flächen und Kanten umwandeln" in generic
 
 
 def test_rounding_and_chamfering_stay_available_on_a_mesh(window: MainWindow) -> None:

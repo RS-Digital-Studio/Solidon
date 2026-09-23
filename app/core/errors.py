@@ -101,6 +101,10 @@ SCALE_TO_FIT = Action("scale_to_fit", _("Auf den Bauraum verkleinern"))
 #: weil es Materialslots und Baugruppenstruktur mitnimmt — also genau
 #: das, wofür der Kunde eine Datei mit mehr als Geometrie wollte.
 EXPORT_AS_MESH = Action("export_as_mesh", _("Als 3MF speichern"), primary=True)
+#: Der andere Ausweg, seit es ihn gibt (P4.0): aus dem Netz einen Körper mit
+#: echten Flächen und Kanten machen. Die Kennung ist der Name der Operation,
+#: und der Knopf öffnet ihren Dialog an den betroffenen Körpern.
+CONVERT_TO_EXACT = Action("mesh_to_exact", _("In Flächen und Kanten umwandeln"), primary=True)
 SPLIT_MODEL = Action("split_model", _("Modell teilen"), primary=True)
 #: Für einen Körper aus losen Teilen, der als Ganzes nirgends hinpasst: die
 #: Zerlegung vor den angehaltenen Schritt, dann derselbe Schritt noch einmal
@@ -458,15 +462,16 @@ class NeedsSolidError(UserError):
     einwandfrei war. Der richtige Satz stand im ``detail`` und kam nie an;
     gesucht hätte man danach am falschen Ende, nämlich bei den Zahlen.
 
-    Der Vorschlag ist bewusst schmal: einen Rückweg vom Netz zum exakten Körper
-    gibt es nicht (er stünde sonst hier), und einen Knopf anzubieten, der nichts
-    tut, wäre schlimmer als keiner. Was hilft, sagt der Satz.
+    Der Vorschlag hieß lange nur *Abbrechen*: einen Rückweg vom Netz zum
+    exakten Körper gab es nicht. Seit P4.0 gibt es ihn, und er steht vorn —
+    *In Flächen und Kanten umwandeln* macht aus dem Netz, was das Werkzeug
+    braucht.
     """
 
     default_title: ClassVar[TranslatableText] = _(
         "Dieses Werkzeug braucht einzeln bearbeitbare Flächen und Kanten."
     )
-    default_suggestions: ClassVar[tuple[Action, ...]] = (CANCEL,)
+    default_suggestions: ClassVar[tuple[Action, ...]] = (CONVERT_TO_EXACT, CANCEL)
 
 
 class SketchConflictError(UserError):
