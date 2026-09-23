@@ -16,6 +16,7 @@ läuft; was hier ankommt, ist immer ein nackter Wert.
 
 from __future__ import annotations
 
+import json
 import math
 from collections.abc import Mapping
 from dataclasses import MISSING, dataclass, field, fields, replace
@@ -268,8 +269,49 @@ TEXT_KINDS: Final[frozenset[str]] = frozenset(
         "edges",
         "contours",
         "organizer",
+        # Die übernommenen Körper einer STEP-Baugruppe (P7.4): ihre Kennungen
+        # als JSON-Liste, nach derselben Bauart wie die Konturauswahl.
+        "step_bodies",
     }
 )
+
+
+#: Die Kennung, unter der eine STEP-Datei als **ein** Körper über den Leser
+#: vor P7.4 kommt, weil die Baugruppenlesung sie nicht auflösen konnte — der
+#: ausdrücklich gemeldete Rückfall (``load_step``, Befund
+#: ``step.metadata_lost``).
+WHOLE_FILE: Final = "*"
+
+
+def body_keys(value: object, field: str = "bodies") -> tuple[str, ...]:
+    """Die Körperkennungen einer ``step_bodies``-Auswahl (P7.4).
+
+    Leer heißt: der Stand vor P7.4, die ganze Datei als ein Körper — so
+    rechnen Schritte weiter, die vorher gespeichert wurden. Sonst eine
+    JSON-Liste verschiedener, nicht leerer Kennungen; eine leere Liste ist
+    keine Auswahl und hält an, statt einen Schritt ohne Körper zu ergeben.
+    Die Auswertung zählt die Ausgänge daran (``produces_from``), bevor
+    irgendetwas gelesen wird.
+    """
+    text = str(value or "").strip()
+    if not text:
+        return ()
+    try:
+        parsed = json.loads(text)
+    except ValueError:
+        parsed = None
+    if (
+        not isinstance(parsed, list)
+        or not parsed
+        or not all(isinstance(entry, str) and entry.strip() for entry in parsed)
+        or len(set(parsed)) != len(parsed)
+    ):
+        raise ValidationError(
+            field=field,
+            detail=_("Wählen Sie mindestens einen Körper der Datei."),
+            constraint="empty_selection",
+        )
+    return tuple(parsed)
 
 
 def _coerce(spec: ParamSpec, value: Any) -> Any:
@@ -493,6 +535,7 @@ _JSON_TYPE: dict[ParamKind, str] = {
     "edges": "string",
     "contours": "string",
     "organizer": "string",
+    "step_bodies": "string",
 }
 
 #: Parameterarten, die eine unbegrenzte Zahl von Nutzergesten sammeln (Regel 2,

@@ -18,6 +18,8 @@ if TYPE_CHECKING:
 _OPERATION_MODULES: Final[tuple[str, ...]] = (
     "app.core.scene.ops",
     "app.core.ingest.ops",
+    # P7.4: STEP als Baugruppe — die Ladeoperation des exakten Kerns.
+    "app.core.ingest.step_ops",
     "app.core.geom.ops",
     "app.core.geom.prepare_ops",
     "app.core.geom.primitive_ops",

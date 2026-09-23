@@ -712,8 +712,14 @@ def test_a_further_model_keeps_its_place() -> None:
 
 
 def test_only_a_mesh_is_placed_and_centred() -> None:
-    """STEP und eine flache Zeichnung gehen andere Operationen; ihnen einen
-    Parameter mitzugeben, den sie nicht kennen, wäre ein Planungsfehler."""
+    """Eine flache Zeichnung geht eine andere Operation; ihr einen Parameter
+    mitzugeben, den sie nicht kennt, wäre ein Planungsfehler.
+
+    STEP stand hier bis P7.4 mit dabei. Seit dem Baugruppenimport trägt
+    ``load_step`` dieselben zwei Haken wie ``load`` — §17.1 Schritt 6 gilt für
+    jedes erste Modell —, und der Plan liest die Datei, um ihre Körper zu
+    zählen; das prüft ``tests/test_step_assembly.py``.
+    """
     from app.core.ingest import plan
 
     # Ein Kopf statt einer leeren Datei: Seit ``loader.check_readable``
@@ -721,7 +727,6 @@ def test_only_a_mesh_is_placed_and_centred() -> None:
     # Absage. Die Weiche entscheidet an der Endung und liest den Inhalt
     # nicht, die Aussage des Tests bleibt also dieselbe.
     for name, payload in (
-        ("teil.step", b"ISO-10303-21;"),
         ("zeichnung.dxf", b"0 SECTION"),
         ("platte.svg", b"<svg/>"),
     ):
@@ -1483,8 +1488,16 @@ def test_a_format_without_a_signature_is_not_judged() -> None:
     den STEP-Weg ab, der drei Zeilen weiter unten in ``import_plan`` beginnt.
     Gemeldet von 3d-druck-c7 beim Durchfahren echter Kundendateien.
     """
-    plan = import_plan("src_1", "teil.step", b"ISO-10303-21;\nHEADER;\n")
+    # Seit P7.4 liest der Plan eine STEP-Datei, um ihre Körper zu zählen; die
+    # Kennungsprüfung davor bleibt stumm, und was der Leser nicht versteht,
+    # ist seine Absage mit Vorschlag, nicht die der Prüfung.
+    step = (Path(__file__).parent / "data" / "step" / "inch.step").read_bytes()
+    plan = import_plan("src_1", "teil.step", step)
     assert plan.draft.op == "load_step"
+    with pytest.raises(ValidationError) as caught:
+        import_plan("src_1", "teil.step", b"ISO-10303-21;\nHEADER;\n")
+    assert caught.value.constraint == "unreadable", "der Leser sagt ab, nicht die Kennung"
+    assert caught.value.suggestions
 
 
 def test_an_empty_file_is_refused_whatever_its_format() -> None:

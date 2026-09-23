@@ -170,6 +170,7 @@ from app.core.registry import (
     palette_entries,
     variant_members,
 )
+from app.core.registry.params import body_keys
 from app.core.scene import (
     EdgeTarget,
     EvaluationResult,
@@ -5641,6 +5642,8 @@ class MainWindow(QMainWindow):
         self.session.importFinished.connect(self._on_import_finished)
         self.session.choose_outline = True
         self.session.outlineImportRequested.connect(self._choose_outline_import)
+        self.session.choose_step_bodies = True
+        self.session.stepImportRequested.connect(self._choose_step_import)
         self.session.failed.connect(self._on_error)
         # Gebundene Methode, kein Lambda: Der Sender ist ein Kind dieses
         # Fensters, und ein Lambda schlösse den Ring aus `.claude/rules`.
@@ -5901,6 +5904,67 @@ class MainWindow(QMainWindow):
             {**plan.draft.params, "source": source_id},
             partial(self.session.finish_outline_import, source_id, generation),
         )
+
+    def _choose_step_import(self, plan: Any, source_id: str, generation: int) -> None:
+        """Eine STEP-Baugruppe vor ihrem ersten Schritt mit sichtbarer Körperauswahl öffnen."""
+
+        def answered(result: dict[str, Any] | None) -> None:
+            keys = list(body_keys(result["bodies"])) if result is not None else None
+            self.session.finish_step_import(source_id, generation, keys)
+
+        self._open_step_dialog(
+            {**plan.draft.params, "source": source_id}, answered, choices=plan.choices
+        )
+
+    def _open_step_dialog(
+        self,
+        values: Mapping[str, Any],
+        answered: Callable[[dict[str, Any] | None], None],
+        parent: QWidget | None = None,
+        *,
+        choices: Sequence[Any] = (),
+    ) -> None:
+        """Eine Körperauswahl gilt nur ihrer Quelle und dem noch offenen Projekt."""
+        from app.ui.step_dialog import StepBodiesDialog
+
+        project = self.session.project
+        source_id = str(values.get("source", ""))
+        source = project.document.sources.get(source_id)
+        if source is None:
+            self.announce(tr("Wählen Sie zuerst eine STEP-Datei als Quelle."))
+            answered(None)
+            return
+        dialog = StepBodiesDialog(
+            project.sources[source_id],
+            Path(source.path).stem,
+            parent or self,
+            dict(values),
+            choices=choices,
+        )
+
+        def project_changed() -> None:
+            if self.session.project is not project:
+                dialog.reject()
+
+        completed = False
+
+        def finished(code: int) -> None:
+            nonlocal completed
+            if completed:
+                return
+            completed = True
+            self.session.projectChanged.disconnect(project_changed)
+            result = (
+                dialog.values()
+                if code == QDialog.DialogCode.Accepted and self.session.project is project
+                else None
+            )
+            answered(result)
+            dialog.deleteLater()
+
+        self.session.projectChanged.connect(project_changed)
+        dialog.finished.connect(finished)
+        dialog.open()
 
     def _open_outline_dialog(
         self,
@@ -16816,6 +16880,7 @@ class MainWindow(QMainWindow):
             previous.reject()
 
         self._wire_outline_choice(dialog)
+        self._wire_step_choice(dialog)
         self._wire_organizer_choice(dialog)
 
         project = self.session.project
@@ -16882,6 +16947,23 @@ class MainWindow(QMainWindow):
                     field.set_value(result["contours"])
 
             self._open_outline_dialog(values, answered, dialog, selection_only=True)
+
+        field.choiceRequested.connect(choose)
+
+    def _wire_step_choice(self, dialog: OperationDialog) -> None:
+        """Das Körperfeld benutzt dieselbe Auswahl wie der erste STEP-Import."""
+        from app.ui.step_dialog import StepBodiesField
+
+        field = dialog._editors.get("bodies")
+        if not isinstance(field, StepBodiesField):
+            return
+
+        def choose() -> None:
+            def answered(result: dict[str, Any] | None) -> None:
+                if result is not None and isValid(field):
+                    field.set_value(result["bodies"])
+
+            self._open_step_dialog(dialog.values(), answered, dialog)
 
         field.choiceRequested.connect(choose)
 

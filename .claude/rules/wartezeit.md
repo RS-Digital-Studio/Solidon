@@ -7,6 +7,7 @@ paths:
   - "app/ui/splash.py"
   - "app/ui/main_window.py"
   - "app/ui/outline_dialog.py"
+  - "app/ui/step_dialog.py"
   - "app/ui/organizer_dialog.py"
   - "app/ui/local_recognition.py"
   - "app/ui/local_recognition_flow.py"
@@ -88,6 +89,12 @@ Unterhalb der Grenze (`PLAN_IN_WORKER_ABOVE`, gemessene 0,18 s je MB, also etwa
 1,4 s bei acht MB) bleibt es beim geraden Weg unter `waiting()` — ein Arbeiter
 für einen Plan, der in Mikrosekunden steht, verschöbe das Ergebnis hinter die
 Ereignisschleife, ohne dass jemand darauf gewartet hätte.
+
+**Eine STEP-Datei hat ihre eigene Grenze** (`STEP_PLAN_IN_WORKER_ABOVE`, zwei
+MB, P7.4): Ihr Plan liest die ganze Baugruppe über XCAF, gemessen rund 0,6 s
+je MB (0,28 s an 0,45 MB, 1,1 s an 1000 Instanzen in 2 MB). Welche Grenze
+gilt, sagt `_plans_in_worker` an der Endung; ein Test, der
+`PLAN_IN_WORKER_ABOVE` auf null setzt, schickt auch STEP in den Arbeiter.
 
 Zwei Fallen dabei, beide gemessen und beide teuer:
 

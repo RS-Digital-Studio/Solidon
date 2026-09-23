@@ -499,11 +499,33 @@ def _group_on_bed(
     moved = [
         dataclasses.replace(entry, mesh=apply(as_mesh_data(entry.mesh), lift)) for entry in outputs
     ]
-    # **Der Satz sagt, was geschehen ist, und nicht mehr.** Beide Haken sind
-    # einzeln setzbar (sie stehen als Parameter an der Operation), und ein
-    # Befund „auf das Bett gesetzt" über eine Gruppe, die nur zur Seite gerückt
-    # wurde, wäre schlicht unwahr.
-    if place_on_bed and centre:
+    findings.append(
+        group_on_bed_finding(offset, place_on_bed=place_on_bed, centre=centre, several=True)
+    )
+    return moved
+
+
+def group_on_bed_finding(
+    offset: Vec3, *, place_on_bed: bool, centre: bool, several: bool
+) -> Finding:
+    """Der Befund zu einem gemeinsamen Versatz aufs Bett — für Netz und STEP.
+
+    **Der Satz sagt, was geschehen ist, und nicht mehr.** Beide Haken sind
+    einzeln setzbar (sie stehen als Parameter an der Operation), und ein
+    Befund „auf das Bett gesetzt" über eine Gruppe, die nur zur Seite gerückt
+    wurde, wäre schlicht unwahr. ``several`` unterscheidet die Baugruppe vom
+    einzelnen Körper: Ein STEP mit einem Körper hat keine Teile, die ihre Lage
+    zueinander behalten.
+    """
+    if not several:
+        message = (
+            _("Das Modell wurde mittig auf das Bett gesetzt.")
+            if place_on_bed and centre
+            else _("Das Modell wurde auf das Bett gesetzt.")
+            if place_on_bed
+            else _("Das Modell wurde in die Mitte des Betts gerückt.")
+        )
+    elif place_on_bed and centre:
         message = _(
             "Die Baugruppe wurde als Ganzes mittig auf das Bett gesetzt — die Teile "
             "behalten ihre Lage zueinander."
@@ -518,15 +540,12 @@ def _group_on_bed(
             "Die Baugruppe wurde als Ganzes in die Mitte des Betts gerückt — die Teile "
             "behalten ihre Lage zueinander."
         )
-    findings.append(
-        Finding(
-            code="load.assembly_on_bed",
-            severity="info",
-            message=message,
-            values={"amount": format_length(math.hypot(*offset))},
-        )
+    return Finding(
+        code="load.assembly_on_bed",
+        severity="info",
+        message=message,
+        values={"amount": format_length(math.hypot(*offset))},
     )
-    return moved
 
 
 def _stated_unit(

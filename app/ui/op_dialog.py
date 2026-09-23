@@ -2574,6 +2574,10 @@ class OperationDialog(QDialog):
         ist.
         """
         start = entry.default if given is None else given
+        if entry.kind == "step_bodies":
+            from app.ui.step_dialog import StepBodiesField
+
+            return StepBodiesField(start, self)
         if entry.kind == "contours":
             return ContourField(start, self)
         if entry.kind == "organizer":

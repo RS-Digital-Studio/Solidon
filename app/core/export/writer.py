@@ -66,6 +66,7 @@ if TYPE_CHECKING:
     # Nur für die Signatur: zur Laufzeit zieht ``handover`` die
     # G-Code-Auswertung mit, und ein Export soll nicht davon abhängen, dass
     # ein Slicer im Spiel ist.
+    from app.core.brep.kernel import Solid
     from app.core.export.handover import SlicerSetup
     from app.core.knowledge.parts.registry import PartSpec
     from app.core.types import BaseParams
@@ -1377,7 +1378,7 @@ def export_bytes(
     gibt (§30).
     """
     if export_format == "step":
-        return _step_bytes(body, name)
+        return _step_bytes(body, name, slots)
     if export_format == "stl":
         return mesh.to_stl()
     if export_format == "3mf":
@@ -1496,18 +1497,35 @@ def _parts_by_slot(
     return parts
 
 
-def _step_bytes(body: Mesh | None, name: str = "") -> bytes:
+def _step_bytes(
+    body: Mesh | None, name: str = "", slots: Sequence[MaterialSlot] | None = None
+) -> bytes:
     """STEP eines exakten Körpers — und ein klares Nein, wenn es keinen
     gibt (§30).
 
     Der Name reist mit: ohne ihn hieß das Teil in Fusion „Körper1", während
-    er im Dokument die ganze Zeit dastand.
+    er im Dokument die ganze Zeit dastand. **Und die Filamentfarben reisen
+    mit** (P7.4): Jede Fläche trägt die Farbe ihres Slots, so wie sie beim
+    Einlesen einer STEP-Baugruppe aus der Datei kam — die Rundreise gibt
+    dieselben Farben zurück. Ein Slot ohne Farbe schreibt keine.
     """
     from app.core.brep import step as brep_step
+    from app.core.brep.kernel import Solid as ExactSolid
 
-    if body is None or not isinstance(body, BRepBody):
+    if body is None or not isinstance(body, BRepBody) or not isinstance(body, ExactSolid):
         raise _needs_solid()
-    return brep_step.write(body, name)  # type: ignore[arg-type]
+    return brep_step.write(body, name, _face_colours(body, slots or ()))
+
+
+def _face_colours(body: Solid, slots: Sequence[MaterialSlot]) -> tuple[str | None, ...]:
+    """``#rrggbb`` je Fläche eines exakten Körpers aus seinen Filamentslots."""
+    from app.core.brep.step import hex_colour
+
+    colours = {slot.index: slot.colour for slot in slots if slot.colour is not None}
+    if not colours:
+        return ()
+    face_slots = body.face_slots or (0,) * body.face_count
+    return tuple(hex_colour(*colours[slot]) if slot in colours else None for slot in face_slots)
 
 
 def _needs_solid() -> NeedsSolidError:

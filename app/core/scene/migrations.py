@@ -26,7 +26,7 @@ from app.i18n import _
 _log = get_logger(__name__)
 
 #: Aktuelle Version von ``project.json``.
-FORMAT_VERSION: Final = 32
+FORMAT_VERSION: Final = 33
 
 
 @dataclass(frozen=True, slots=True)
@@ -828,6 +828,24 @@ def _allow_suppressed_steps(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def _read_step_assemblies(data: dict[str, Any]) -> dict[str, Any]:
+    """32 → 33: Eine STEP-Datei kommt als Baugruppe an (P7.4).
+
+    Ein neuer Ladeschritt trägt in ``bodies`` die gewählten Körper der Datei
+    und dazu die Haken fürs Bett und die Kopienummer wie ``load``. Ein
+    älterer Schritt trägt nichts davon, und ohne ``bodies`` liest er die
+    Datei wie bisher als einen Körper — derselbe Schritt ergibt dasselbe Teil
+    (§15.1). Umzuschreiben ist also nichts.
+
+    Die Stufe steht für die andere Richtung, wie 25 → 26: Ein älteres
+    Programm, das einen Schritt mit ``bodies`` öffnete, hielte mitten in der
+    Auswertung an einem unbekannten Parameter an — als wäre die Datei kaputt.
+    Mit der Versionsgrenze sagt es, was gilt: Die Datei ist neuer, ein Update
+    öffnet sie.
+    """
+    return data
+
+
 #: Alle bekannten Schritte, älteste zuerst.
 MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=1, to_version=2, apply=_add_chat),
@@ -861,6 +879,7 @@ MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=29, to_version=30, apply=_let_seam_and_lid_fits_follow_their_bodies),
     Step(from_version=30, to_version=31, apply=_allow_curve_sketches),
     Step(from_version=31, to_version=32, apply=_allow_suppressed_steps),
+    Step(from_version=32, to_version=33, apply=_read_step_assemblies),
 )
 
 

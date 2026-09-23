@@ -60,7 +60,13 @@ from app.core.geom.mesh import as_mesh_data
 from app.core.geom.section import SectionPlane
 from app.core.ingest.archive import is_archive, model_from_archive
 from app.core.ingest.loader import read_bounded_payload, read_local_payload
-from app.core.ingest.plan import ImportPlan, import_plan, is_only_imported, names_in_use
+from app.core.ingest.plan import (
+    ImportPlan,
+    import_plan,
+    is_only_imported,
+    names_in_use,
+    with_selection,
+)
 from app.core.knowledge import print_settings, profiles
 from app.core.knowledge.parts import check as part_check
 from app.core.knowledge.parts.recipe import Recipe
@@ -1074,6 +1080,23 @@ def _with_findings(result: EvaluationResult, extra: list[Finding]) -> Evaluation
 #: darauf gewartet hat.
 PLAN_IN_WORKER_ABOVE: Final = 8 * 1024 * 1024
 
+#: Dieselbe Grenze für eine STEP-Datei, und sie liegt tiefer. Der Plan liest
+#: dort die ganze Baugruppe (P7.4, ``brep.step.read_assembly``), um die Körper
+#: zu zählen: gemessen 0,28 s an ``build_tray_v3.step`` (0,45 MB) und 1,1 s an
+#: einer Baugruppe mit 1000 Instanzen (2 MB) — rund 0,6 s je MB, also bei zwei
+#: MB etwa so lange wie eine 3MF an der Grenze darüber.
+STEP_PLAN_IN_WORKER_ABOVE: Final = 2 * 1024 * 1024
+
+
+def _plans_in_worker(name: str, size: int) -> bool:
+    """Ob der Einleseplan dieser Datei in einen Arbeiter gehört."""
+    from app.core.brep import step as brep_step
+
+    limit = PLAN_IN_WORKER_ABOVE
+    if brep_step.is_step(Path(name).suffix):
+        limit = min(limit, STEP_PLAN_IN_WORKER_ABOVE)
+    return size > limit
+
 
 class Session(QObject):
     """Hält das offene Projekt und die Oberfläche im Gleichschritt mit ihm."""
@@ -1114,6 +1137,8 @@ class Session(QObject):
     Stapel fertig sind und das Fenster seinen Wartezustand auflösen darf."""
     outlineImportRequested = Signal(object, str, int)
     """Eine Zeichnung wartet auf Konturen und Höhe: Plan, Quelle, Projektgeneration."""
+    stepImportRequested = Signal(object, str, int)
+    """Eine STEP-Baugruppe wartet auf die Körperauswahl: Plan, Quelle, Projektgeneration."""
     evaluationCancelled = Signal()
     """Ein Mensch hat die Auswertung angehalten (§2.8).
 
@@ -1152,6 +1177,9 @@ class Session(QObject):
         self.choose_outline = False
         """Das Hauptfenster beantwortet Zeichnungsimporte vor dem ersten Schritt."""
         self._outline_imports: dict[tuple[int, str], ImportPlan] = {}
+        self.choose_step_bodies = False
+        """Das Hauptfenster lässt vor dem ersten Schritt die Körper einer STEP-Baugruppe wählen."""
+        self._step_imports: dict[tuple[int, str], ImportPlan] = {}
         self.project: Project = new_project(profiles.DEFAULT_PRINTER, profiles.DEFAULT_MATERIAL)
         self.history = History(self.project.document)
         self.cache = disk_backed_cache()
@@ -2454,7 +2482,7 @@ class Session(QObject):
         # die Ereignisschleife, ohne dass jemand darauf gewartet hätte — und
         # jeder Aufrufer müsste danach auf ein Signal warten, auch wenn es
         # nichts zu warten gab.
-        if len(payload) <= PLAN_IN_WORKER_ABOVE:
+        if not _plans_in_worker(path.name, len(payload)):
             try:
                 plan = import_plan(
                     source_id, path.name, payload, unit, first_model=first_model, taken=taken
@@ -2578,6 +2606,14 @@ class Session(QObject):
             self._outline_imports[stamp, source_id] = plan
             self.outlineImportRequested.emit(plan, source_id, stamp)
             return
+        # **Eine Baugruppe wird gewählt, bevor sie ankommt** (P7.4): Der Kunde
+        # sieht jeden Körper und übernimmt, was er braucht. Mit einem Körper
+        # gibt es nichts zu wählen.
+        if self.choose_step_bodies and plan.draft.op == "load_step" and len(plan.choices) > 1:
+            stamp = self._project_generation
+            self._step_imports[stamp, source_id] = plan
+            self.stepImportRequested.emit(plan, source_id, stamp)
+            return
         self._apply_import_plan(plan, source_id)
 
     def finish_outline_import(
@@ -2593,6 +2629,24 @@ class Session(QObject):
             return
         draft = dataclasses.replace(plan.draft, params={**plan.draft.params, **values})
         self._apply_import_plan(dataclasses.replace(plan, draft=draft), source_id)
+
+    def finish_step_import(
+        self, source_id: str, generation: int, keys: Sequence[str] | None
+    ) -> None:
+        """Die Körperauswahl genau einmal übernehmen oder ihre eingebettete Quelle verwerfen.
+
+        ``None`` heißt abgebrochen: Die Quelle geht wieder aus dem Dokument,
+        wie bei jedem abgewiesenen Import — sonst reiste sie beim nächsten
+        Speichern unsichtbar mit.
+        """
+        plan = self._step_imports.pop((generation, source_id), None)
+        if plan is None or self._stale_import(source_id, generation):
+            return
+        if not keys:
+            self._drop_source(source_id)
+            self.importFinished.emit(False)
+            return
+        self._apply_import_plan(with_selection(plan, keys), source_id)
 
     def _apply_import_plan(self, plan: ImportPlan, source_id: str) -> None:
         """Den fertig gewählten Import anwenden; abgewiesene Quellen reisen nicht mit."""

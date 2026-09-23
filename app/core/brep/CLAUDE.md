@@ -784,7 +784,7 @@ für jede gezeichnete Bahn und jedes Übergangswerkzeug eines Schnitts (P6.5).
 
 **Und `IsDone` heißt nicht gültig.** `is_sound` fragt `BRepCheck_Analyzer`
 am Ergebnis. Gemessen an `carpet-corner-clip.step` (zwei Teile, aus
-F:D Dateien): Eine Ringnut in der Bohrung Ø9 meldete Erfolg, das Volumen
+F:\3D Dateien): Eine Ringnut in der Bohrung Ø9 meldete Erfolg, das Volumen
 sank um genau das Werkzeug, und der Körper war ungültig — die Luft der
 Bohrung galt danach als innen. Die Schnitte mit Werkzeug liefern ein solches
 Ergebnis nicht aus, sondern rechnen am Netz weiter und sagen es
@@ -796,6 +796,75 @@ denselben ungültigen Körper still zurück — offen, nicht Teil von P6.5.
 hat, nimmt das — der Übergangsschnitt, wenn zwei Zuordnungen gleich nah waren
 und gefragt wurde; bei Gleichstand wählte der Kern sonst nach der letzten
 Stelle einer Summe. Die Vorgabe bleibt `True`, der Erzeuger rechnet wie bisher.
+## Eine STEP-Datei ist eine Baugruppe (P7.4)
+
+`step.read_assembly` liest über XCAF (`STEPCAFControl_Reader`, `ReadStream`)
+und löst **jede Komponenteninstanz in einen eigenen Körper** auf: Form in
+Weltlage, Name, Farbe je Fläche, eine Kennung (`StepBody.key`, der Pfad der
+Vorkommen, „1.3.2“, bei einem Teil mit mehreren Körpern „1.3#2“) und die
+Kennung des eingesetzten Teils (`geometry`). Lebende Instanzbeziehungen
+entstehen nicht — zwei Bolzen desselben Teils sind danach zwei unabhängige
+Körper. `step.read` bleibt der Leser vor P7.4 (`OneShape`, ein Körper) für
+gespeicherte Schritte ohne Auswahl und für den gemeldeten Rückfall.
+
+**Welcher Name gilt:** Instanz → Referenz (Teil) → Form (Körpername). Ein Teil
+mit mehreren Körpern nennt jeden beim eigenen Namen, weil Instanz und Referenz
+dort die Gruppe nennen; ohne ihn „Teil n“. Gleichnamige bekommen den nächsten
+unterscheidenden Vorkommensnamen in Klammern, danach Nummern; namenlos heißt
+ein einzelner Körper wie seine Datei, sonst „Körper n“. Was kein Mensch
+vergeben hat, zählt nicht (`usable_name`): OCCTs Übersetzername, die
+NAUO-Nummer einer unbenannten Instanz, XCAF-Typwörter.
+
+**Welche Farbe gilt, je Fläche:** Instanz (von der äußersten Baugruppe nach
+innen, je Ebene SHUO vor der Farbe des Vorkommens) → Referenz (im Teil:
+Fläche → Schale → Körper → Teil) → Form (`XCAFDoc_ColorTool.GetColor` an der
+Form). Oberflächenfarbe vor allgemeiner, Kantenfarben zählen nicht. OCCTs
+eigene Darstellung (`XCAFPrs`) ließe eine Flächenfarbe des Teils über der
+Instanzfarbe stehen; hier meint eine Farbe am Vorkommen das ganze Vorkommen.
+**Der Farbraum ist sRGB**: OCCT hält Farben linear (`COLOUR_RGB 0,627` kam als
+`0,3515` an), zurück über `Quantity_TOC_sRGB`, gerundet auf `#rrggbb`. Die
+Farbnamen der Datei werden nicht übernommen — Fusion nennt ein eingefärbtes
+Creme „ABS (Black)“.
+
+**Eine starre Instanzlage bleibt eine Lage** (`TopLoc_Location`, die Form
+teilt ihre `TShape` mit dem Teil). **Eine Spiegelung wird eingerechnet**
+(`BRepBuilderAPI_Transform`), weil eine Lage mit negativer Determinante
+Normalen umkehrt; die Flächenzuordnung geht über `ModifiedShape`. Geschlossene
+Schalen ohne Körper werden Körper, offene Schalen und lose Flächen eines Teils
+ein offener Körper; Teile nur aus Kanten oder Punkten zählt `skipped`.
+
+Drei Fallen der Bindung, alle gemessen:
+
+- **`label.FindAttribute(guid, TDataStd_Name())` stürzt nativ ab** — der
+  Handle-Ausgabeparameter gibt das Python-Objekt frei. Namen liest
+  `_name_of` über `TDF_AttributeIterator`. Dasselbe Muster lässt
+  `SetSHUO(labels, XCAFDoc_GraphNode())` ein leeres Label zurückgeben.
+- **Körpernamen eines Teils brauchen `read.stepcaf.subshapes.name`**, und
+  der Schlüssel existiert erst nach `STEPCAFControl_Controller.Init` —
+  vorher gibt `SetIVal` still `False` zurück (`_prepare_translator`).
+- **`TCollection_ExtendedString(text)` liest UTF-8 Byte für Byte**; ein Name
+  braucht `TCollection_ExtendedString(text, True)`.
+
+Gelesen und geschrieben wird **ein XCAF-Dokument zur Zeit** (`_XCAF`): Die
+Dokumente hängen an der einen `XCAFApp_Application` des Prozesses, und der
+Einleseplan im Arbeiter darf der Auswertung eines zweiten Imports nicht
+begegnen. Die Maße für Auswahl und Bett kommen aus den Grenzen des Teils,
+einmal je Teil gemessen und in die Lage gebracht (`StepBody.box`, genau bei
+einer reinen Verschiebung) — `AddOptimal` je Instanz kostete an tausend
+gerundeten Teilen 8 s.
+
+**Hinaus geht es denselben Weg** (`write_bodies`): XCAF, der Name wörtlich im
+PRODUCT (der alte Weg über `write.step.product.name` hängte „ 1“ an), Farben
+je Fläche, die Wurzellage eingerechnet (mit Lage fand `AddSubShape` keine
+Fläche), Nicht-ASCII nach ISO 10303-21 kodiert (`escaped`). Die Rundreise gibt
+dieselben Körper, Namen und Farben zurück.
+
+`load_step` (`ingest/step_ops.py`) überträgt die Merkmale weiterer Instanzen
+desselben Teils statt neu zu suchen, unter Beleg an der Form — dieselbe `TShape`, starre Lage,
+gleiche Flächenzahl, nur Merkmale aus ganzen nativen Flächen mit Formmaßen —,
+und ordnet die Dreiecke je nativer Fläche neu zu: `BRepMesh` trianguliert
+dieselbe Fläche an anderer Lage mit anderen Diagonalen. Die Regeln dazu
+stehen in `.claude/rules/dateiformat.md`.
 
 ## Was er einbringt
 
@@ -889,7 +958,7 @@ Anwendung gegen die installierte Bindung.
 | `properties.py` | Volumen und Fläche nativ auf dem knotenzerlegten Verbund mit Leiter, Python-Randintegral als Rückfall (§30, §11). Extrusionen und Drehflächen teilt `_trimmed_grid` über getrimmte Sichten — `ShapeUpgrade_SplitSurface` schneidet sie in der Richtung ihrer Kurve nicht. `estimated_volume` ist ein grobes Volumen für Plausibilitätsfragen und wird nie veröffentlicht |
 | `section.py` | Der exakte Ebenenschnitt für die Skizzenprojektion (P3.5): Kreise und Bögen als solche, alles andere als Kurve durch Punkte der echten Schnittlinie. `horizontal_regions` gibt den waagerechten Querschnitt als Flächen — Materialstück, gefüllter Umriss, Löcher —, aus denen `geom.lid` den exakten Deckel baut |
 | `lettering.py` | Schrift als exakte Flächen (P2.8): die Glyphenpfade als Strecken und Bézier-Kurven, gefüllt nach der Füllregel der Schrift (nonzero), zu Prismen aufgezogen — `label_text` nimmt sie für einen exakten Körper |
-| `step.py` | STEP hinein und hinaus; eine dichte Schale ohne Körper (Flächenmodell) wird beim Einlesen zum Körper, eine offene meldet `load_step` |
+| `step.py` | STEP hinein und hinaus: `read_assembly` löst eine Baugruppe über XCAF in Körper mit Weltlage, Namen und Flächenfarben auf, `write_bodies` schreibt Körper mit Namen und Farben; `read`/`write` für einen Körper; eine dichte Schale ohne Körper (Flächenmodell) wird beim Einlesen zum Körper, eine offene meldet `load_step` |
 | `from_mesh.py` | Vom Dreiecksnetz zum exakten Körper ohne Verlauf (P4.0): Bereiche, Ränder, Ecken, Kanten, Flächen, Nähen, beidseitige Messung — siehe „Vom Netz zum exakten Körper" |
 
 ## Grenzen

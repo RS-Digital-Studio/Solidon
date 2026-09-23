@@ -217,8 +217,37 @@ ausgewertet.
 
 3MF ist eine **Baugruppe**, keine einzelne Datei: mehrere Objekte, Stückzahlen,
 Materialgruppen je Dreieck, Transformationen. Wer es als ein Mesh liest,
-verliert genau das. STL kennt keine Einheiten und keine Farbe. STEP bringt
-echte Flächen, aber keine Farbe.
+verliert genau das. STL kennt keine Einheiten und keine Farbe.
+
+**STEP ist seit Version 33 ebenfalls eine Baugruppe** (P7.4): jede
+Komponenteninstanz ein exakter Körper mit Weltlage, Namen und Flächenfarben,
+gelesen über XCAF (`brep.step.read_assembly`, Vorrang von Name und Farbe
+dort). Fünf Sätze dazu:
+
+* **Die Quelle bleibt die STEP-Datei.** Im Dokument stehen der Ladeschritt
+  und die Kennungen der übernommenen Körper (`load_step.bodies`, eine
+  JSON-Liste von Instanzpfaden) — keine Formen, keine Farben, kein Pfad.
+  Beim Öffnen liest derselbe Schritt dieselbe eingebettete Datei (Regel 12,
+  13). Eine Kennung, die die Datei nicht mehr trägt, hält an und sagt, wo man
+  neu wählt.
+* **Leer heißt: der Stand vor P7.4.** Ein Schritt ohne `bodies` liest die
+  Datei wie bisher als einen Körper (`step.read`), damit ein altes Projekt
+  dasselbe Teil ergibt; die Migration 32 → 33 schreibt nichts um
+  (`step_assembly_v32.p3d`). `*` ist der gemeldete Rückfall, wenn XCAF die
+  Datei nicht auflöst — ein Körper, und der Prüfbericht sagt, dass Namen und
+  Farben fehlen.
+* **Farben werden Filamentslots nur, wenn die Datei zwei oder mehr kennt**
+  — dieselbe Regel wie bei der 3MF. Die eine Farbe, in der ein CAD-Programm
+  alles zeigt, hat niemand als Filament gewählt. Flächen ohne Farbe bleiben
+  am neutralen Slot null; mehr als acht Farben je Körper sind ein Befund.
+* **Die Auswahl ändert sich nur, solange niemand auf ihr baut.** Die Liste
+  nennt die Zahl der Ausgänge (`produces_from`); `History.change_params`
+  weist eine andere Zahl **und** einen Austausch gleicher Zahl ab, sobald ein
+  späterer Schritt die Körper benutzt (`members_in_use`) — sonst träfe er
+  still einen anderen Körper.
+* **Hinaus schreibt `step.write_bodies`**: Name wörtlich, Filamentfarben je
+  Fläche, Umlaute nach ISO 10303-21 kodiert. Eine Rundreise ergibt dieselben
+  Körper, Namen und Farben.
 
 Dreieckszahl und Dateigröße sind beim Import gedeckelt — mit klarer Meldung
 statt Speicherüberlauf.

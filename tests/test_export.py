@@ -1730,7 +1730,7 @@ def test_a_mixed_step_export_writes_the_solids_and_leaves_the_meshes(
     """
     from app.core.export import writer
 
-    monkeypatch.setattr(writer, "_step_bytes", lambda body, name="": b"ISO-10303-21;\n")
+    monkeypatch.setattr(writer, "_step_bytes", lambda body, name="", slots=None: b"ISO-10303-21;\n")
     plan = plan_export(
         [scene_object(), _solid(), scene_object("obj_3", "Winkel")],
         project_name="Projekt",

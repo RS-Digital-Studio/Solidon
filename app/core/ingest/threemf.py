@@ -46,6 +46,7 @@ from app.core.geom import transform
 from app.core.geom.mesh import MeshData
 from app.core.log import get_logger
 from app.core.types import MAX_FILAMENT_COLOURS, Finding, MaterialSlot, ProgressFn, SolverInfo
+from app.core.units import ASSEMBLY_BODIES, ASSEMBLY_DEPTH
 from app.i18n import TranslatableText, _
 
 _log = get_logger(__name__)
@@ -425,12 +426,12 @@ def _leaf_tool(leaf: _PaintLeaf) -> int | None:
 #: Fünfhundert Byte Datei. Was es wirklich stoppt, ist die Weigerung, ein
 #: Objekt zu betreten, das schon auf dem Weg dorthin liegt (§32: eine Grenze
 #: sagt etwas, sie hängt nicht).
-MAX_DEPTH = 32
+MAX_DEPTH = ASSEMBLY_DEPTH
 
 #: Mehr Körper trägt kein Projekt (``project.MAX_PROJECT_OBJECTS``): Jedes
 #: Blatt des Builds wird ein Objekt im Stapel, und eine Datei, die mehr davon
 #: erzeugt, ließe sich nie speichern.
-MAX_BODIES: Final = 10_000
+MAX_BODIES: Final = ASSEMBLY_BODIES
 
 
 @dataclass(slots=True)

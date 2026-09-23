@@ -134,7 +134,7 @@ Die Regeln dieses Gebiets stehen in `.claude/rules/` und laden sich selbst —
 |---|---|
 | `oberflaeche.md` | jeder Datei hier — Texte, Zahlen, Grenzen, Barrierefreiheit |
 | `ansicht.md` | `viewport.py`, `overlay.py`, `cursors.py` und den Leisten |
-| `wartezeit.md` | `session.py`, `loading.py`, `leash.py`, `splash.py`, `main_window.py`, `outline_dialog.py`, `organizer_dialog.py`, `local_recognition.py`, `local_recognition_flow.py`, `print_findings_flow.py` |
+| `wartezeit.md` | `session.py`, `loading.py`, `leash.py`, `splash.py`, `main_window.py`, `outline_dialog.py`, `step_dialog.py`, `organizer_dialog.py`, `local_recognition.py`, `local_recognition_flow.py`, `print_findings_flow.py` |
 | `zeichenflaeche.md` | `sketch_editor.py` |
 
 Hier steht die Karte, dort das Gesetz.
@@ -396,6 +396,19 @@ Nur die Konturauswahl fließt zurück, bestehende Maßausdrücke bleiben erhalte
 In der Konturliste stehen Haken und ausdrücklicher Status neben dem Bild;
 der Zeilenfokus übermalt den Haken nicht. Nebenknöpfe erhalten keinen
 automatischen Default, der feste Hauptknopf bleibt `make_primary`.
+
+`step_dialog.py` ist die Importauswahl einer STEP-Baugruppe (P7.4): jeder
+Körper als Zeile mit Haken, Namen, Maßen, Farbfeld und der Farbe als Wort im
+Tooltip (Regel 18), daneben die Lage des betrachteten Körpers in der
+Baugruppe. Die Vorschau zeichnet **Hüllquader** aus den Maßen der Auswahl im
+Arbeiter — die echte Vernetzung kostete an 200 Teilen 5,9 s und das Bild 3,6 s.
+`Session.choose_step_bodies` hält eine Baugruppe mit mehr als einem Körper vor
+ihrem ersten Schritt an (`stepImportRequested`), `finish_step_import` übernimmt
+die Wahl genau einmal oder verwirft die eingebettete Quelle. Ohne Plan (aus
+„Diesen Schritt ändern“) liest der Dialog die Datei selbst im Arbeiter.
+`StepBodiesField` erbt vom `ContourField`, damit der Operationsdialog Wert,
+Gültigkeit und Signale an derselben Art abfragt; der leere Wert ist der Stand
+vor P7.4, die ganze Datei als ein Körper.
 
 Das Hauptfenster schaltet `Session.choose_outline` für seine asynchronen
 Importwege ein. `outlineImportRequested` hält vor dem ersten Schritt an;

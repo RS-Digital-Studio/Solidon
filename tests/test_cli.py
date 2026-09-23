@@ -487,8 +487,10 @@ def test_import_reads_every_format_the_window_reads(
     # steht vor der Weiche eine Eingangsprüfung, und für sie ist eine Datei
     # ohne ein einziges Byte in jedem Format eine Absage — der abgebrochene
     # Download. Ein Kopf genügt: Die Weiche entscheidet an der Endung und
-    # liest den Inhalt nicht.
-    knapp_step = b"ISO-10303-21;"
+    # liest den Inhalt nicht. **Außer bei STEP, seit P7.4**: Der Plan zählt
+    # die Körper der Baugruppe wie bei einer 3MF, also braucht er eine echte
+    # Datei — die kleinste des STEP-Korpus.
+    knapp_step = (Path(__file__).parent / "data" / "step" / "inch.step").read_bytes()
     knapp_dxf = b"0 SECTION"
     knapp_stl = bytes(80) + struct.pack("<I", 1) + bytes(50)
 

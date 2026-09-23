@@ -883,6 +883,14 @@ class Solid:
         from OCP.Bnd import Bnd_Box
         from OCP.BRepBndLib import BRepBndLib
 
+        # **Einmal je Körper**, wie Volumen und Fläche: Die Form ist privat
+        # und ändert sich nicht, und ``AddOptimal`` kostet an einem gerundeten
+        # Teil rund 8 ms. Die Prüfungen nach jeder Auswertung fragten sie je
+        # Körper mehrmals — an 200 Instanzen einer STEP-Baugruppe 470 Aufrufe,
+        # 3,4 s (P7.4).
+        cached = self._cache.get("bounds")
+        if cached is not None:
+            return cast(BoundingBox, cached)
         box = Bnd_Box()
         # Ohne diese Zeile legt OpenCASCADE eine Sicherheitstoleranz um den
         # Quader; ein Würfel von 40 mm hätte dann 40,00002.
@@ -1026,6 +1034,19 @@ class Solid:
         entities = [as_typed(found.FindKey(index)) for index in range(1, found.Extent() + 1)]
         self._cache[f"list:{kind}"] = entities
         return list(entities)
+
+
+def face_sources(mesh: MeshData) -> Any:
+    """Zu welcher nativen Fläche jedes Dreieck einer Tessellation gehört.
+
+    Die Zuordnung, die ``tessellate`` am Netz hinterlässt, als Zahlenfeld —
+    für Vergleiche zweier Vernetzungen derselben Form (``load_step``
+    überträgt Merkmale zwischen Instanzen eines Teils nur, wenn auch diese
+    Zuordnung gleich ist). Leer, wenn das Netz keine trägt.
+    """
+    import numpy as np
+
+    return np.asarray(mesh.raw.face_attributes.get(_FACE_ATTRIBUTE, ()), dtype=np.int64)
 
 
 def tessellate(shape: Any, deflection: float = DEFLECTION) -> MeshData:

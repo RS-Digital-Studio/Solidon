@@ -51,6 +51,18 @@ EPS_MATCH_MINIMUM: Final[float] = EPS_DISPLAY
 #: und genau davor steht die Zusage, dass beide dieselbe Kante gleich nennen.
 MAX_FACET_SAG: Final[float] = 0.05
 
+#: Wie viele Körper eine eingelesene Baugruppe höchstens trägt — dieselbe Zahl
+#: wie ``scene.project.MAX_PROJECT_OBJECTS``: Jeder Körper wird ein Objekt im
+#: Stapel, und mehr ließe sich nie speichern. 3MF (``ingest.threemf``) und STEP
+#: (``brep.step``) lesen sie von hier; zwei Zahlen wären zwei Stellen, an denen
+#: die Formate auseinanderlaufen.
+ASSEMBLY_BODIES: Final[int] = 10_000
+
+#: Wie tief Baugruppen ineinander stecken dürfen, bevor das Einlesen anhält —
+#: für 3MF und STEP dieselbe Grenze. Was eine vervielfachende Datei wirklich
+#: stoppt, ist die Körpergrenze darüber; diese hält die Tiefe davor.
+ASSEMBLY_DEPTH: Final[int] = 32
+
 #: Und die zweite Grenze daneben, im Bogenmaß: Wie weit eine Facette drehen
 #: darf, auch wenn sie die Abweichung darüber einhält.
 #:

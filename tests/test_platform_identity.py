@@ -448,6 +448,27 @@ def _mended_import() -> str:
     return _mesh_print(normalise(MeshData.of(raw), "mm").mesh)
 
 
+def _step_assembly() -> str:
+    """Eine STEP-Baugruppe in Weltlage (P7.4): verschachtelt, eine Instanz gespiegelt.
+
+    Die Lagen rechnet OpenCASCADE (``gp_Trsf``), die Gruppengrenzen fürs Bett
+    ``load_step`` in Python — beides darf am Rauschen nicht hängen.
+    """
+    from pathlib import Path
+
+    from app.core.brep import step
+    from app.core.brep.kernel import Solid, available
+
+    if not available():
+        pytest.skip("ohne OpenCASCADE gibt es kein STEP")
+    payload = (Path(__file__).parent / "data" / "step" / "nested.step").read_bytes()
+    bodies = step.read_assembly(payload, "nested").bodies
+    return "|".join(
+        f"{body.key}:{body.name}:{body.face_colours}:{_mesh_print(Solid(body.shape).mesh)}"
+        for body in bodies
+    )
+
+
 _WAYS: dict[str, Callable[[], str]] = {
     "align_to_feature": _aligned_plate,
     "import_repair": _mended_import,
@@ -457,6 +478,7 @@ _WAYS: dict[str, Callable[[], str]] = {
     "resize_hole": _changed_bore,
     "rotate_object": _turned_plate,
     "section_cut": _slanted_cut,
+    "step_assembly": _step_assembly,
     "thicken": _thickened_skin,
 }
 

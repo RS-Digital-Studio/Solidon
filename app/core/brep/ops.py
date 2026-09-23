@@ -15,12 +15,11 @@ from __future__ import annotations
 
 import dataclasses
 import math
-from pathlib import Path
 from typing import Final, Literal, cast
 
 import numpy as np
 
-from app.core.brep import edit, from_mesh, profiles, step
+from app.core.brep import edit, from_mesh, profiles
 from app.core.brep.features import features_of
 from app.core.brep.kernel import Solid, require
 from app.core.errors import (
@@ -29,7 +28,6 @@ from app.core.errors import (
     DECIMATE_MESH,
     REPAIR_AND_RETRY,
     GeometryError,
-    InternalError,
     NeedsSolidError,
     NotManifoldError,
     UserError,
@@ -377,77 +375,6 @@ def create_brep_torus(ctx: OpContext) -> OpResult:
     return OpResult(
         outputs=[_object(params.name or str(_("Ring")), solid, cancelled=ctx.cancelled)]
     )
-
-
-@op_params
-class LoadStepParams(BaseParams):
-    source: str = param(
-        title=_("Quelle"),
-        kind="source",
-        doc=_("Die eingebettete STEP-Datei im Projekt."),
-    )
-    name: str = param(title=_("Name"), default="", doc=_("Leer übernimmt den Dateinamen."))
-
-
-@register_op(
-    name="load_step",
-    title=_("STEP laden"),
-    category="import",
-    params=LoadStepParams,
-    consumes=0,
-    produces=1,
-    doc=_(
-        "Liest eine STEP-Datei mit einzeln bearbeitbaren Flächen und Kanten. "
-        "STEP trägt seine Einheit selbst — die Einheitenfrage entfällt."
-    ),
-)
-def load_step(ctx: OpContext) -> OpResult:
-    params = cast(LoadStepParams, ctx.params)
-    require()
-    if ctx.sources is None:
-        raise InternalError(
-            detail="load_step was called without access to the project sources",
-            values={"source": params.source},
-        )
-
-    source = ctx.sources.describe(params.source)
-    if not step.is_step(Path(source.path).suffix):
-        raise ValidationError(
-            field="source",
-            detail=_("Diese Datei ist keine STEP-Datei."),
-            value=source.path,
-            constraint="not_step",
-        )
-
-    solid = step.read(ctx.sources.read(params.source))
-    name = params.name or Path(source.path).stem
-    entry = _object(name, solid, cancelled=ctx.cancelled)
-    findings = [
-        Finding(
-            code="brep.loaded",
-            severity="info",
-            message=_("Flächen und Kanten lassen sich einzeln weiterbearbeiten."),
-            values={"faces": solid.face_count, "edges": solid.edge_count},
-        )
-    ]
-    if not solid.is_closed:
-        # **Dieselbe Auskunft wie beim Netz** (``ingest.not_watertight``):
-        # Eine offene Fläche aus STEP hat kein Volumen, das ein Slicer füllen
-        # könnte, und „Reparieren" schließt sie am Netz. Bis zum 22.09.2026
-        # kam eine offene Schale hier ohne Wort an — mit einem „Volumen"
-        # aus der offenen Hülle (833 mm³ für fünf Seiten eines 10er-Würfels)
-        # und einem ``is_closed``, das immer Ja sagte.
-        findings.append(
-            Finding(
-                code="ingest.not_watertight",
-                severity="warning",
-                message=_(
-                    "Das Modell ist nicht geschlossen. „Reparieren“ schließt die offenen Stellen."
-                ),
-                values={"open_edges": step.open_edge_count(solid)},
-            )
-        )
-    return OpResult(outputs=[entry], findings=findings)
 
 
 @op_params
@@ -1256,7 +1183,6 @@ __all__ = [
     "create_brep_sphere",
     "create_brep_torus",
     "drill_brep_hole",
-    "load_step",
     "mesh_to_exact",
     "shell_exact",
     "thread_exact",

@@ -18,12 +18,14 @@ laden" gegen „Modell laden" ist Teil derselben Entscheidung.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
 from app.core.brep import step as brep_step
+from app.core.errors import AppError
 from app.core.ingest import threemf
 from app.core.ingest.loader import (
     READABLE_SUFFIXES,
@@ -32,11 +34,15 @@ from app.core.ingest.loader import (
     check_unpacked,
 )
 from app.core.ingest.outline import OUTLINE_SUFFIXES, is_outline
+from app.core.log import get_logger
 from app.core.registry import REGISTRY
+from app.core.registry.params import WHOLE_FILE
 from app.core.scene.history import OperationDraft
 from app.core.types import Document, ObjectId, ProgressFn, SceneObject
 from app.core.units import EPS_DISPLAY
 from app.i18n import TranslatableText, _
+
+_log = get_logger(__name__)
 
 #: Der Titel der Transaktion je Weg. Im Verlauf steht er, nicht der Op-Name.
 _TITLES: Final[dict[str, TranslatableText]] = {
@@ -54,6 +60,30 @@ MODEL_SUFFIXES: Final = tuple(
 
 
 @dataclass(frozen=True, slots=True)
+class BodyChoice:
+    """Ein Körper einer STEP-Baugruppe, wie ihn die Importauswahl zeigt (P7.4).
+
+    Nur Auskunft, keine Geometrie: Name, Farben, Maße, welches Teil er
+    einsetzt — damit Fenster und Kommandozeile ohne OpenCASCADE zeigen
+    können, was gewählt wird. Die Kennung ist die aus
+    ``brep.step.StepBody.key``, dieselbe, die in ``bodies`` gespeichert wird.
+    """
+
+    key: str
+    name: str
+    colours: tuple[str, ...]
+    """``#rrggbb`` je Farbe des Körpers, in der Reihenfolge ihres Auftretens."""
+    size: tuple[float, float, float]
+    """Ausdehnung in X, Y und Z, in Millimetern."""
+    low: tuple[float, float, float]
+    """Die untere Ecke der Weltgrenzen — mit ``size`` die Lage in der Baugruppe."""
+    part: str
+    """Gleiche Angabe heißt: dasselbe Teil, nur anders gelegt oder gefärbt."""
+    mirrored: bool = False
+    solid: bool = True
+
+
+@dataclass(frozen=True, slots=True)
 class ImportPlan:
     """Was aus einer Datei wird: eine Transaktion mit genau einem Entwurf."""
 
@@ -67,6 +97,13 @@ class ImportPlan:
     sagt, wie dick sie sein soll (§25, §30, §11.1) — dort wäre die Frage eine
     Zumutung ohne Zweck. Eine 3MF sagt ihre Einheit ebenfalls selbst, sofern
     sie das ``unit``-Attribut führt.
+    """
+    choices: tuple[BodyChoice, ...] = ()
+    """Die Körper einer STEP-Baugruppe, aus denen der Kunde wählt (P7.4).
+
+    Leer bei jedem anderen Format und bei einer STEP-Datei mit einem Körper —
+    dort gibt es nichts zu wählen. Die Auswahl selbst steht im Entwurf
+    (``load_step.bodies``); die Liste ist, was die Importauswahl zeigt.
     """
 
 
@@ -227,10 +264,8 @@ def import_plan(
     check_readable(payload, suffix)
     own_name = _own_name(name, taken, loads=False)
     if brep_step.is_step(suffix):
-        return ImportPlan(
-            title=_TITLES["load_step"],
-            draft=OperationDraft(op="load_step", params={"source": source_id, **own_name}),
-            asks_unit=False,
+        return _step_plan(
+            source_id, name, payload, first_model=first_model, taken=taken, progress=progress
         )
     if is_outline(suffix):
         return ImportPlan(
@@ -283,6 +318,110 @@ def import_plan(
             produces=max(parts, 1),
         ),
         asks_unit=asks,
+    )
+
+
+def _step_plan(
+    source_id: str,
+    name: str,
+    payload: bytes,
+    *,
+    first_model: bool,
+    taken: Sequence[str],
+    progress: ProgressFn,
+) -> ImportPlan:
+    """Der Einleseweg einer STEP-Datei: jede Komponenteninstanz ein Körper (P7.4).
+
+    Wie viele Körper die Datei trägt, steht vor der Operation fest — wie bei
+    der 3MF-Baugruppe, weil der Stapel die Objekt-IDs vergibt, bevor gerechnet
+    wird (§11). Gewählt sind zunächst alle; die Importauswahl im Fenster darf
+    die Liste kürzen (``choices``).
+
+    **Lässt sich die Baugruppe nicht auflösen**, liest der Schritt die Datei
+    über den bisherigen Leser als einen Körper (``*``) und sagt im
+    Prüfbericht, dass Namen und Farben dabei fehlen (Konzept §13.9: der
+    Rückfall mit Metadatenverlust wird angezeigt, nicht verschwiegen). Was
+    der Kunde korrigieren kann — eine unlesbare Datei, zu viele Körper —,
+    bleibt eine Absage mit Vorschlag.
+    """
+    stem = Path(name).stem
+    choices: tuple[BodyChoice, ...] = ()
+    try:
+        assembly = brep_step.read_assembly(payload, stem, progress=progress)
+    except AppError:
+        raise
+    except Exception as problem:
+        # Ein nativer Fehler der Baugruppenlesung ist kein Grund, die Datei
+        # abzuweisen, solange der bisherige Leser sie kennt: ``load_step``
+        # liest ``*`` über ihn und meldet den Verlust.
+        _log.warning("the STEP assembly could not be resolved, one body instead: %s", problem)
+        keys: list[str] = [WHOLE_FILE]
+    else:
+        keys = [body.key for body in assembly.bodies]
+        if len(assembly.bodies) > 1:
+            choices = tuple(choice_of(body) for body in assembly.bodies)
+    return ImportPlan(
+        title=_TITLES["load_step"],
+        draft=OperationDraft(
+            op="load_step",
+            params={
+                "source": source_id,
+                "bodies": selection(keys),
+                # Eine Nummer statt eines Namens, wie beim Netz: Sie gilt
+                # jedem Körper, den die Datei bringt (``_own_name``).
+                **_own_name(name, taken, loads=True),
+                **({"place_on_bed": True, "centre": True} if first_model else {}),
+            },
+            produces=len(keys),
+        ),
+        asks_unit=False,
+        choices=choices,
+    )
+
+
+def choice_of(body: brep_step.StepBody) -> BodyChoice:
+    """Was die Importauswahl über einen Körper zeigt — ohne seine Form.
+
+    Die Maße sind die des Teils selbst, gleich wie es liegt; die Lage kommt
+    aus dem Quader um die Instanz (``StepBody.box``). Gemessen wird dafür
+    nichts je Instanz: ``AddOptimal`` an tausend gerundeten Teilen kostete im
+    Plan 8,3 s.
+    """
+    low = body.box[:3] if body.box is not None else body.bounds()[:3]
+    return BodyChoice(
+        key=body.key,
+        name=body.name,
+        colours=body.colours,
+        size=body.size,
+        low=(low[0], low[1], low[2]),
+        part=body.geometry,
+        mirrored=body.mirrored,
+        solid=body.solid,
+    )
+
+
+def selection(keys: Sequence[str]) -> str:
+    """Die gespeicherte Form einer Körperauswahl (``load_step.bodies``)."""
+    return json.dumps(list(keys), ensure_ascii=False, separators=(",", ":"))
+
+
+def with_selection(plan: ImportPlan, keys: Sequence[str]) -> ImportPlan:
+    """Derselbe Plan mit einer gekürzten Körperauswahl.
+
+    Die Zahl der Ausgänge folgt der Auswahl — der Stapel liest sie aus
+    ``bodies`` (``produces_from``), der Entwurf trägt sie mit.
+    """
+    import dataclasses
+
+    known = {choice.key for choice in plan.choices}
+    wanted = [key for key in keys if key in known]
+    return dataclasses.replace(
+        plan,
+        draft=dataclasses.replace(
+            plan.draft,
+            params={**plan.draft.params, "bodies": selection(wanted)},
+            produces=len(wanted),
+        ),
     )
 
 

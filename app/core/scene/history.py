@@ -41,6 +41,7 @@ from app.core.errors import (
 from app.core.log import get_logger
 from app.core.perceive.match_records import EDGE_DOMAIN, domain_of
 from app.core.registry import REGISTRY, VARIABLE, Registry, needed_inputs
+from app.core.registry.params import body_keys
 from app.core.scene import bundling
 from app.core.types import (
     Document,
@@ -1242,9 +1243,24 @@ class History:
         merged = {**entry.params, **params}
         draft = OperationDraft(op=entry.op, inputs=entry.inputs, params=merged)
         outputs = self._outputs_for(spec, draft) if spec.produces_from else entry.outputs
-        if len(outputs) != len(entry.outputs):
+        # **Dieselbe Zahl heißt nicht dieselben Körper.** Eine Auswahl aus
+        # einer Baugruppe (``step_bodies``) kann bei gleicher Zahl andere
+        # Körper nennen; die Kennungen blieben dann, und ein späterer Schritt
+        # an ``obj_3`` träfe still einen anderen Körper. Ändert sich der Wert,
+        # der die Ausgänge nennt, gilt deshalb dieselbe Hürde wie bei einer
+        # anderen Zahl.
+        members_changed = False
+        if spec.produces_from:
+            declared = next(
+                (item for item in spec.params.spec() if item.name == spec.produces_from), None
+            )
+            default = declared.default if declared is not None else None
+            members_changed = draft.params.get(spec.produces_from, default) != entry.params.get(
+                spec.produces_from, default
+            )
+        if len(outputs) != len(entry.outputs) or members_changed:
             used = self._later_users(op_id, entry.outputs)
-            if used:
+            if used and len(outputs) != len(entry.outputs):
                 raise ValidationError(
                     field=spec.produces_from or "params",
                     detail=_(
@@ -1255,7 +1271,17 @@ class History:
                     constraint="count_in_use",
                     values={"op": entry.op, "used_by": sorted(used)},
                 )
-        else:
+            if used:
+                raise ValidationError(
+                    field=spec.produces_from or "params",
+                    detail=_(
+                        "Diese Änderung tauscht Körper aus, mit denen spätere Operationen "
+                        "arbeiten. Dafür die Operation zurücknehmen und neu anwenden."
+                    ),
+                    constraint="members_in_use",
+                    values={"op": entry.op, "used_by": sorted(used)},
+                )
+        if len(outputs) == len(entry.outputs):
             outputs = entry.outputs
 
         changed = dataclasses.replace(entry, params=dict(merged), outputs=tuple(outputs))
@@ -2347,6 +2373,11 @@ class History:
         """
         declared = next((entry for entry in spec.params.spec() if entry.name == field_name), None)
         value = draft.params.get(field_name, declared.default if declared else 1)
+        if declared is not None and declared.kind == "step_bodies":
+            # Die Auswahl einer Baugruppe nennt ihre Körper, und ihre Zahl
+            # ist die der Ausgänge. Der leere Text ist ein Körper — die
+            # ganze Datei, wie vor P7.4 gelesen.
+            return len(body_keys(value, field_name)) or 1
         if expressions.is_expression(value):
             raise ValidationError(
                 field=field_name,

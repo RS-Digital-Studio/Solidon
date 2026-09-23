@@ -430,6 +430,11 @@ _NOT_A_RANGE = frozenset(
         # Auswahlen — kein Feld, in dem eine Zahl zu klein wäre.
         "not_a_curve", "own_point", "same_curve", "spline_point", "spline_end",
         "not_a_spline", "point_there", "least_points", "too_few_crossings",
+        # Die Körperauswahl einer STEP-Baugruppe (P7.4): eine leere Auswahl,
+        # ein Körper, den die Datei nicht mehr trägt, und ein Austausch von
+        # Körpern, auf denen spätere Schritte bauen — Auswahl und Verlauf,
+        # keine Zahl in einem Feld.
+        "empty_selection", "unknown_body", "members_in_use",
         # Eine erklärte Bedingung zwischen Parametern (``PartSpec.feasible``):
         # jeder Wert für sich ist erlaubt, nur nicht zusammen.
         "feasible",

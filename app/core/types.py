@@ -1590,6 +1590,7 @@ ParamKind = Literal[
     "edges",
     "contours",
     "organizer",
+    "step_bodies",
 ]
 """``image`` ist eine Quelle, die ein Bild sein muss: Der Dialog listet nur
 Bildquellen und bietet daneben an, eine von der Platte zu holen — ein
@@ -1599,6 +1600,12 @@ Bildquellen und bietet daneben an, eine von der Platte zu holen — ein
 ``contours`` speichert eine JSON-Liste geometrischer Profilkennungen. Die
 Oberfläche zeigt Anzahl und Konturauswahl; Agent und Projekt behalten reine
 Daten, keine Zeichengesten oder ausführbaren Inhalte.
+
+``step_bodies`` speichert eine JSON-Liste von Körperkennungen einer
+STEP-Baugruppe (P7.4, ``brep.step.StepBody.key``) — welche Körper der Datei
+übernommen werden. Die Liste nennt zugleich die Zahl der Ausgänge
+(``produces_from``); der leere Text ist der Stand vor P7.4, die ganze Datei als
+ein Körper. Die Oberfläche zeigt die Anzahl und die Körperauswahl.
 
 ``organizer`` trägt einen begrenzten Baum von Fachteilungen und Wiederholungen.
 Seine Maße benutzen denselben Ausdrucksauswerter wie gewöhnliche Parameter;

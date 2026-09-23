@@ -13,7 +13,8 @@ Die Regeln stehen in `.claude/rules/dateiformat.md`.
 | `loader.py` | Die Eingangsstufe selbst — die sechs Schritte; lokale GLTF-Begleitdateien werden sicher eingebettet. `read_model` liest eine Datei aus dem Speicher als einen Körper (3MF als Baugruppe verschweißt), `READABLE_SUFFIXES` ist **die** Liste dessen, was sich öffnen lässt |
 | `threemf.py` | 3MF **lesen** — Objekte, Farbgruppen, erklärte Einheit, Baugruppe mit Production-Erweiterung (§17.1, §20). Bis zum 02.09.2026 lag der Leser beim Schreiber in `export/`; die Konstanten des Containers stehen hier, `export/threemf.py` holt sie sich |
 | `ops.py` | Die `load`-Operation. **Auch Laden ist eine Operation** und steht im Stapel |
-| `plan.py` | Welche Operation eine Datei einliest — für Fenster und Kommandozeile; `names_in_use` nennt die im Stapel vergebenen Objektnamen, damit der Plan einen freien wählt; `is_only_imported` sagt umgekehrt, ob ein ganzes Dokument nichts als eingelesene Dateien trägt (RM-130) |
+| `step_ops.py` | Die `load_step`-Operation: eine STEP-Baugruppe als unabhängige exakte Körper mit Weltlage, Namen und Filamentslots aus den Flächenfarben (P7.4). Sie liest mit `brep.step` und wohnt hier, weil nur `ingest → brep` erlaubt ist, nicht umgekehrt |
+| `plan.py` | Welche Operation eine Datei einliest — für Fenster und Kommandozeile; `names_in_use` nennt die im Stapel vergebenen Objektnamen, damit der Plan einen freien wählt; `is_only_imported` sagt umgekehrt, ob ein ganzes Dokument nichts als eingelesene Dateien trägt (RM-130). Eine STEP-Datei liest der Plan als Baugruppe (`BodyChoice`, `with_selection`, P7.4) |
 | `fetch.py` | Eine Modelldatei aus dem Netz holen (§16.3, §32); eine Adresse von Printables, Thingiverse, MakerWorld, Cults3D, MyMiniFactory oder Thangs ohne Dateiendung ist eine Seite und wird ohne Netzzugriff mit dem Weg über den Herunterladen-Knopf beantwortet (`model_page_host`) |
 | `archive.py` | Ein ZIP mit Modellen **vor** dem Einbetten auflösen: nur das Modell kommt ins Projekt, bei mehreren wird gefragt; dieselben Grenzen wie beim 3MF, Pfadtricks übergangen, GLTF-Begleitdateien aus demselben Archiv. `IMPORT_SUFFIXES` ist die Liste für Dateidialog, Ablage, Netz und Kommandozeile; `plan.MODEL_SUFFIXES` bleibt die der Operationen |
 | `outline.py` | SVG/DXF-Profile mit Innenringen lesen, prüfen, auswählen und extrudieren; SVG-Standardwerte für fehlende Rechteckpositionen werden nur in der Parserkopie ergänzt |
@@ -58,6 +59,16 @@ Nullwirkung ersetzt sie nicht.
   Verschweißen es aufgerissen hat; das zurückgelegte Netz behält seine
   Antwort. `tests/test_ingest_figures.py` zählt die Fragen.
 - **3MF ist eine Baugruppe**, kein Körper. Sie kommt als mehrere Objekte an.
+- **STEP ist es auch** (P7.4). Der Plan liest die Datei über
+  `brep.step.read_assembly`, schreibt die Kennungen aller Körper in
+  `load_step.bodies` und legt die Liste als `ImportPlan.choices` daneben;
+  das Fenster lässt daraus wählen (`with_selection`), bevor der Schritt
+  entsteht. Die Zahl der Ausgänge steht damit vor der Operation fest (§11),
+  wie bei der 3MF. Beim ersten Modell kommen `place_on_bed` und `centre`
+  dazu — die Baugruppe geht als Ganzes aufs Bett, als Lage an der Form, der
+  Körper bleibt exakt. Lässt sich die Baugruppe nicht auflösen, wählt der
+  Plan `*`: ein Körper über den alten Leser, und der Schritt meldet, dass
+  Namen und Farben fehlen.
 - **Gleich benannte ZIP-Einträge** prüft `loader.check_unpacked` erst nach
   sämtlichen Archivgrenzen blockweise auf bytegleichen Inhalt. Alle Kopien
   zählen zu Anzahl und Entpackgröße; nur identische Inhalte sind eindeutig.
