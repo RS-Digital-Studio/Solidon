@@ -29,10 +29,11 @@ from app.core.errors import (
     InternalError,
     ValidationError,
 )
-from app.core.geom.boolean import without_effect
+from app.core.geom.boolean import fell_apart, without_effect
 from app.core.registry import NAME_DOC, op_params, param, register_op
 from app.core.sketch import planes, shapes
 from app.core.sketch.planes import (
+    feature_plane_parts,
     frame_for,
     frame_for_sketch,
     frame_of,
@@ -130,7 +131,7 @@ class _Pattern:
     hole_diameter: float
 
 
-def _pattern_of(params: SketchExtrudeParams | SketchPocketParams) -> _Pattern:
+def _pattern_of(params: RaisedOutlineParams | SketchPocketParams) -> _Pattern:
     """Die vier Lochbildzahlen aus dem Schema, das sie trägt."""
     return _Pattern(params.count, params.columns, params.rows, params.hole_diameter)
 
@@ -302,6 +303,22 @@ def _span_along(body: Any, normal: tuple[float, float, float]) -> tuple[float, f
     return min(marks), max(marks)
 
 
+def _is_the_drawing_face(plane: str, up_to: str) -> bool:
+    """Ob „Bis zur Fläche" die Fläche nennt, auf der die Zeichnung liegt.
+
+    Verglichen werden Körper und Merkmal der beiden Angaben; eine alte Angabe
+    ohne Körper (``face_7``) trifft jede gleichnamige Fläche, so wie
+    :func:`~app.core.sketch.planes.frame_for` sie liest.
+    """
+    if not is_feature_plane(plane):
+        return False
+    drawn_on, drawn_face = feature_plane_parts(plane)
+    target_on, target_face = feature_plane_parts(f"feature:{up_to}")
+    if drawn_face != target_face:
+        return False
+    return not drawn_on or not target_on or drawn_on == target_on
+
+
 def _height_of(
     ctx: OpContext,
     height: float,
@@ -319,6 +336,28 @@ def _height_of(
     """
     if not up_to:
         return height
+    if _is_the_drawing_face(plane, up_to):
+        # **Die Zeichenfläche ist kein Ziel** (Bedienabnahme Zeichnen, F1).
+        # Von der eigenen Fläche aus gibt es kein Vorwärts; der Satz über eine
+        # Fläche „hinter der Skizze" nannte eine Lage, die der Kunde nie
+        # gewählt hatte — er hatte auf ihr gezeichnet.
+        raise ValidationError(
+            "up_to",
+            _(
+                "Das Ziel ist die Fläche, auf der gezeichnet wird. "
+                "Tragen Sie eine Höhe ein oder wählen Sie eine andere Fläche."
+            ),
+            value=up_to,
+            constraint="drawing_face",
+            suggestions=[
+                Action(
+                    id="sketch.clear_up_to",
+                    label=_("Die Höhe wieder als Zahl eintragen"),
+                    primary=True,
+                ),
+                Action(id="sketch.pick_face", label=_("Eine andere Zielfläche wählen")),
+            ],
+        )
     if frame is None:
         # Die Normalen der drei Hauptebenen stehen in ``profiles.PLANES`` — sie
         # hier noch einmal aufzuschreiben hieße, zwei Wahrheiten zu führen.
@@ -381,7 +420,14 @@ def _created(name: str, fallback: str, solid: Solid, *, cancelled: CancelToken) 
 
 
 @op_params
-class SketchExtrudeParams(BaseParams):
+class RaisedOutlineParams(BaseParams):
+    """Was beim Hochziehen eines Umrisses gilt — gleich, ob daraus ein neuer
+    Körper wird (``sketch_extrude``) oder ob er an einen vorhandenen wächst
+    (``sketch_join``). Öffentlich aus demselben Grund wie
+    ``PositionedPrimitiveParams``: Der Umschalter zwischen beiden Arten im
+    Dialog darf keine Zahl verlieren, und das hält nur ein gemeinsames Schema.
+    """
+
     shape: str = param(
         title=_("Grundform"),
         default="rectangle",
@@ -476,10 +522,14 @@ class SketchExtrudeParams(BaseParams):
             "Höhe darüber gilt. Eine angeklickte Fläche trägt sich selbst ein."
         ),
     )
-    name: str = param(title=_("Name"), default="", placement="advanced", doc=NAME_DOC)
     sketch: str = param(
         title=_("Skizze"), default="", kind="sketch", placement="advanced", doc=_SKETCH_DOC
     )
+
+
+@op_params
+class SketchExtrudeParams(RaisedOutlineParams):
+    name: str = param(title=_("Name"), default="", placement="advanced", doc=NAME_DOC)
 
 
 @register_op(
@@ -520,6 +570,154 @@ def sketch_extrude(ctx: OpContext) -> OpResult:
         outputs=[_created(params.name, str(_("Grundform")), solid, cancelled=ctx.cancelled)],
         findings=findings,
     )
+
+
+@op_params
+class SketchJoinParams(RaisedOutlineParams):
+    """Dieselben Felder wie beim Hochziehen, ohne Namen: Der Körper, an den
+    angefügt wird, behält seinen."""
+
+
+@register_op(
+    name="sketch_join",
+    title=_("An Körper anfügen"),
+    category="sketch",
+    params=SketchJoinParams,
+    consumes=1,
+    produces=1,
+    applies_to=("face",),
+    doc=_(
+        "Zieht den Umriss hoch und verbindet ihn mit dem gewählten Körper — "
+        "ein Körper, ein Schritt. Ein exakter Körper bleibt exakt, ein "
+        "eingelesenes Netz bleibt ein Netz."
+    ),
+    caveat=_(
+        "Nicht für ein eigenes Teil: Soll das Hochgezogene ein zweiter Körper werden, "
+        "nehmen Sie „Grundform hochziehen“."
+    ),
+)
+def sketch_join(ctx: OpContext) -> OpResult:
+    """Der Zapfen auf der Platte als **ein** Körper (Bedienabnahme Zeichnen, E4).
+
+    ``sketch_extrude`` erzeugt immer einen neuen Körper; ein Zapfen auf einer
+    Platte war danach ein zweiter, überlappender, und wer einen wollte, musste
+    *Vereinigen* finden. Fusion bietet „Verbinden" im selben Dialog — hier ist
+    es die zweite Art derselben Gruppe, mit derselben Rechnung für den
+    Umriss und dem Eingang, den ``sketch_pocket`` auch hat.
+    """
+    params = cast(SketchJoinParams, ctx.params)
+    findings: list[Finding] = []
+    plane = _plane_of(params.sketch)
+    frame = _frame_of(ctx, plane)
+    height = _height_of(ctx, params.height, plane, frame, params.up_to)
+    chosen = _regions_for(
+        ctx,
+        params.sketch,
+        params.shape,
+        params.length,
+        params.width,
+        params.corners,
+        params.region,
+        findings,
+        _pattern_of(params),
+    )
+    source = ctx.inputs[0]
+    body = source.mesh
+    solver: Any = None
+    if isinstance(body, Solid):
+        tools = []
+        for one in chosen:
+            ctx.cancelled.raise_if_cancelled()
+            tools.append(profiles.extrude(one, height, plane, frame))
+        joined: Any = edit.boolean("union", [body, *tools])
+        output = dataclasses.replace(
+            source,
+            mesh=joined,
+            kind="brep",
+            features=features_of(joined, cancelled=ctx.cancelled),
+        )
+    else:
+        on = frame if frame is not None else planes.frame_for_plane(plane)
+        assert on is not None, f"{plane} steht in PLANES, aber nicht in frame_for_plane"
+        output, solver, chain = _join_in_mesh(ctx, source, chosen, on, height)
+        findings.extend(chain)
+        joined = output.mesh
+    apart = fell_apart(
+        body,
+        joined,
+        applies=True,
+        code="sketch.join_apart",
+        message=lambda _loose: _(
+            "Der Umriss berührt den Körper nicht und steht als loses Stück daneben. "
+            "Zeichnen Sie auf einer Fläche des Körpers oder nehmen Sie "
+            "„Grundform hochziehen“."
+        ),
+    )
+    nothing = without_effect(body, joined, "union", ctx.profile)
+    return OpResult(
+        outputs=[output],
+        findings=[*findings, *(entry for entry in (apart, nothing) if entry is not None)],
+        solver=solver,
+    )
+
+
+def _join_in_mesh(
+    ctx: OpContext,
+    source: SceneObject,
+    regions: list[Profile],
+    frame: PlaneFrame,
+    height: float,
+) -> tuple[SceneObject, Any, list[Finding]]:
+    """Dasselbe Anfügen an einem Netz — über die Boolesche Rückfallkette.
+
+    **Das Werkzeug beginnt ein Stück im Körper.** Ein Zapfen, der genau auf
+    der Fläche aufsitzt, berührt sie nur; die Vereinigung zweier Netze, die
+    sich in einer Ebene treffen, ist dort nicht entschieden und ließ je nach
+    Stufe eine Naht oder zwei Teile stehen. ``BOOLEAN_OVERLAP`` in den Körper
+    hinein ändert am Ergebnis nichts, was man sieht oder druckt — dasselbe
+    Maß, mit dem die Tasche durchgehend durchtrennt.
+    """
+    from app.core.geom import boolean as mesh_boolean
+    from app.core.geom.boolean import BOOLEAN_OVERLAP
+    from app.core.geom.mesh import MeshData
+    from app.core.geom.sketch_solid import extrude_profile
+
+    sunk = dataclasses.replace(
+        frame,
+        origin=(
+            frame.origin[0] - frame.normal[0] * BOOLEAN_OVERLAP,
+            frame.origin[1] - frame.normal[1] * BOOLEAN_OVERLAP,
+            frame.origin[2] - frame.normal[2] * BOOLEAN_OVERLAP,
+        ),
+    )
+    tools = []
+    for one in regions:
+        ctx.cancelled.raise_if_cancelled()
+        try:
+            tools.append(MeshData.of(extrude_profile(one, height + BOOLEAN_OVERLAP, sunk)))
+        except ValueError as problem:
+            raise GeometryError(
+                detail=_("Aus diesem Umriss entsteht kein Körper."),
+                suggestions=(CORRECT_INPUT,),
+                values={"reason": str(problem)},
+            ) from problem
+    if not tools:
+        raise GeometryError(
+            detail=_("Die Zeichnung enthält keinen geschlossenen Umriss."),
+            suggestions=(CORRECT_INPUT,),
+        )
+    outcome = mesh_boolean.boolean(
+        "union",
+        # Der Aufrufer hat an der Weiche geprüft, dass hier kein exakter Körper liegt.
+        [cast(MeshData, source.mesh), *tools],
+        quality=ctx.quality,
+        seed=ctx.seed,
+        cancelled=ctx.cancelled,
+    )
+    # Leeres Wörterbuch, nicht die alten Merkmale: Der Aufsatz hat Flächen
+    # verändert, auf die sie zeigten.
+    output = dataclasses.replace(source, mesh=outcome.mesh, features={})
+    return output, outcome.solver, list(outcome.findings)
 
 
 @op_params
@@ -609,8 +807,8 @@ class SketchPocketParams(BaseParams):
         maximum=1000.0,
         placement="advanced",
         doc=_(
-            "Mitte der Tasche in der Zeichenebene, in deren x-Richtung. Eine "
-            "angeklickte Fläche trägt den Ort selbst ein."
+            "Mitte der Grundform in der Zeichenebene, in deren x-Richtung. "
+            "Eine gezeichnete Skizze liegt schon an ihrem Ort."
         ),
     )
     y: float = param(
@@ -621,8 +819,8 @@ class SketchPocketParams(BaseParams):
         maximum=1000.0,
         placement="advanced",
         doc=_(
-            "Mitte der Tasche in der Zeichenebene, in deren y-Richtung. Eine "
-            "angeklickte Fläche trägt den Ort selbst ein."
+            "Mitte der Grundform in der Zeichenebene, in deren y-Richtung. "
+            "Eine gezeichnete Skizze liegt schon an ihrem Ort."
         ),
     )
     z: float = param(
@@ -775,7 +973,9 @@ def _pocket_in_mesh(
     # Kurve statt entlang ihrer Stützpunkte, und ein Kreis trägt die Ecken der
     # plattformgleichen Tafel (``sketch_solid.outline_points``) — ältere
     # Ergebnisse dürfen nicht aus dem Cache kommen.
-    cache_version=f"spline-curve-circle-table-1+{PROFILE_REVISION}",
+    # Seit dem 23.09.2026 verschiebt X/Y eine gezeichnete Kontur nicht mehr
+    # (F2) — ein Ergebnis mit gesetztem X/Y und Zeichnung stammt vom alten Weg.
+    cache_version=f"spline-curve-circle-table-1+drawing-keeps-its-place-1+{PROFILE_REVISION}",
     params=SketchPocketParams,
     consumes=1,
     produces=1,
@@ -800,8 +1000,15 @@ def sketch_pocket(ctx: OpContext) -> OpResult:
     # Alle Umrisse, wie beim Extrudieren: Zwei Taschen in einer Zeichnung sind
     # eine Handlung. Vorher lehnte die Tasche dieselbe Skizze ab, die das
     # Extrudieren rechnete (Gesamtreview D-15).
+    # **Eine Zeichnung hat ihren Ort** (Bedienabnahme Zeichnen, F2). X und Y
+    # setzen die Grundform aus dem Dialog; eine gezeichnete Kontur liegt schon
+    # in ihrer Ebene — auf einer Fläche in deren Rahmen, mit der Flächenmitte
+    # als Ursprung. Sie noch einmal um X/Y zu verschieben hieß, den Ort
+    # zweimal zu nehmen: Auf jeder Fläche, deren Mitte nicht im Weltursprung
+    # lag, schnitt die Tasche daneben.
+    shift = (0.0, 0.0) if params.sketch else (params.x, params.y)
     chosen = [
-        shifted(one, params.x, params.y)
+        shifted(one, *shift)
         for one in _regions_for(
             ctx,
             params.sketch,

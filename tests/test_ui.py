@@ -20054,23 +20054,26 @@ def test_naming_the_dimensions_makes_them_project_parameters(window: MainWindow)
     assert document.parameters == {}, "der Quader nimmt seine Maße mit"
 
 
-def test_finish_lists_the_six_kinds_in_the_window(window: MainWindow) -> None:
-    """Die sechs Arten aus dem Register hängen unter *Fertig* — der Dialog
+def test_finish_lists_the_seven_kinds_in_the_window(window: MainWindow) -> None:
+    """Die sieben Arten aus dem Register hängen unter *Mehr* — der Dialog
     „Was soll daraus werden?" ist am 16.09.2026 gefallen (Robert: „weniger
-    ist manchmal mehr"). Hochziehen steht vorn, gelesen wird von oben."""
+    ist manchmal mehr"), und an *Fertig* hängen sie seit dem 23.09.2026 nicht
+    mehr (Bedienabnahme Zeichnen, E2). Hochziehen steht vorn."""
     window.action_sketch_free()
     try:
         names = list(window._finish_actions)
         assert names[0] == "sketch_extrude", "der Normalfall steht an erster Stelle"
         assert set(names) == {
             "sketch_extrude",
+            "sketch_join",
             "sketch_pocket",
             "sketch_revolve",
             "sketch_loft",
             "sketch_sweep",
             "field_cut",
         }
-        assert window.sketch_finish_button.menu() is window._finish_menu
+        assert window.sketch_more_button.menu() is window._finish_menu
+        assert window.sketch_finish_button.menu() is None
         for action in window._finish_actions.values():
             assert action.toolTip(), "jeder Eintrag sagt, was er tut oder warum nicht"
     finally:

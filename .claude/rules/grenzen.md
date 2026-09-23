@@ -355,7 +355,7 @@ das Feld tippen, zwei Dinge, von denen ein Neuling keines kennt. Nachweis:
 `test_only_a_primitive_offers_to_name_its_dimensions`.
 
 **Eine Grenze steht dort, wo gewählt wird.** `caveat` im Registereintrag sagt,
-wann eine Operation die falsche Wahl ist. Vierzig von hunderteinundvierzig
+wann eine Operation die falsche Wahl ist. Einundvierzig von hundertzweiundvierzig
 Operationen tragen einen (die Zahl prüft `tests/test_registry_consistency.py`;
 ungeprüft altert sie still). Er gehört überall dorthin, wo gewählt wird, nicht
 allein in die Handbuchreferenz: `caveat_line()` (`app/core/registry/surfaces.py`)

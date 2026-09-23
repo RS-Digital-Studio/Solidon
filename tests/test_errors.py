@@ -369,6 +369,9 @@ _NOT_A_RANGE = frozenset(
     {
         "absolute_path", "already_solid", "ambiguous_reference", "broken_scheme",
         "checksum", "choices",
+        # Die Zeichenfläche als Ziel von „Bis zur Fläche" (sketch/ops.py): eine
+        # Fläche, keine Zahl.
+        "drawing_face",
         # Ein ZIP ohne lesbares Modell oder mit Kennwort (archive.py): der
         # Inhalt, keine Zahl.
         "encrypted", "no_model",

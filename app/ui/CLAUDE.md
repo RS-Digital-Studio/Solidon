@@ -324,6 +324,13 @@ Eine leer abgeschlossene zielgebundene Zeichnung meldet über `announce`, dass
 nichts übernommen wurde. Verwerfen und der freie Abschluss behalten ihre
 eigenen Rückwege.
 
+**Gezeichnet wird für genau einen Körper** (Robert, 23.09.2026): den
+gewählten, ohne Auswahl einen neuen. `MainWindow._resolve_sketch_body` findet
+ihn, `_apply_sketch_body` zieht Ansicht (`Viewport.set_sketch_focus`), Leiste
+(Feld *Ziel*, *Nachbarn zeigen*, Frage bei mehreren) und Zeichenfläche
+(`_sketch_surroundings(only=…)`) nach. Die Regeln dazu stehen in
+`.claude/rules/zeichenflaeche.md`, Abschnitt „Ein Körper, ein Ziel".
+
 Ausdrücklich erforderliche Materialrollen beginnen ohne Auswahl und sperren
 Übernehmen mit dem jeweiligen Feldtitel. Optionale Materialfelder behalten
 „Wie das Projekt“. Eine nur bedingt benötigte Zeichnung startet nicht den

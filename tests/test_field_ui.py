@@ -75,7 +75,9 @@ def test_free_sketch_explains_why_cutting_needs_a_body(qt_app, on_body):
         if on_body:
             window.session.apply("Platte", [OperationDraft(op="create_box")])
             assert window.session.wait_for_idle(30000)
-            window.object_tree.tree.clearSelection()
+            # Gezeichnet wird für den gewählten Körper (Abschnitt 7 der
+            # Bedienabnahme Zeichnen); ohne Auswahl wäre es ein neuer.
+            window.object_tree.select_object(next(iter(window.session.last_result.scene.objects)))
         window.start_sketch("", sketch_to_text(shapes.rectangle(20, 20)))
         for name in ("field_cut", "sketch_pocket"):
             action = window._finish_actions[name]
@@ -90,7 +92,7 @@ def test_free_sketch_explains_why_cutting_needs_a_body(qt_app, on_body):
         window.deleteLater()
 
 
-def test_free_sketch_field_uses_the_body_beneath_the_drawing(qt_app, monkeypatch):
+def test_free_sketch_field_uses_the_target_body(qt_app, monkeypatch):
     from app.core.scene import OperationDraft
     from app.ui.main_window import MainWindow
     from app.ui.session import Session
@@ -99,11 +101,11 @@ def test_free_sketch_field_uses_the_body_beneath_the_drawing(qt_app, monkeypatch
     window = MainWindow(Session(), UiSettings())
     window.session.apply("Platte", [OperationDraft(op="create_box")])
     assert window.session.wait_for_idle(30000)
-    window.object_tree.tree.clearSelection()
     identifier = next(iter(window.session.last_result.scene.objects))
+    window.object_tree.select_object(identifier)
     text = sketch_to_text(shapes.rectangle(20, 20))
     window.start_sketch("", text)
-    assert window._body_under_the_outline() == identifier
+    assert window.sketch_body() == identifier
     # Der Eintrag unter *Fertig* statt des gestrichenen Dialogs (16.09.2026).
     window._finish_actions["field_cut"].trigger()
     dialog = window._op_dialog

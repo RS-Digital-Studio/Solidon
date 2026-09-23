@@ -2245,6 +2245,53 @@ class OperationDialog(QDialog):
         self._couplings.append(follow)
         follow()
         self._couple_sketch_measures()
+        self._release_the_drawing_face()
+
+    def _release_the_drawing_face(self) -> None:
+        """Die Fläche, auf der gezeichnet wird, ist nie „Bis zur Fläche"
+        (Bedienabnahme Zeichnen, F1).
+
+        Die Auswahl trägt eine angeklickte Fläche als Ziel ein, und wer danach
+        im Dialog auf genau dieser Fläche zeichnet, hat ein Ziel, von dem aus
+        es kein Vorwärts gibt — die Auswertung hielt an. Sobald die Zeichnung
+        auf der Zielfläche liegt, wird das Ziel geleert; die Höhe gilt wieder.
+        """
+        target = next(
+            (entry.name for entry in self.spec.params.spec() if entry.targets_feature), ""
+        )
+        drawing = next(
+            (entry.name for entry in self.spec.params.spec() if entry.kind == "sketch"), ""
+        )
+        if not target or not drawing:
+            return
+        from app.core.sketch.planes import feature_plane_parts, is_feature_plane
+        from app.core.sketch.serialize import sketch_from_text
+
+        def release() -> None:
+            editor = self._editors.get(target)
+            if not isinstance(editor, QComboBox):
+                return
+            chosen = str(editor.currentData() or "")
+            text = str(self.values().get(drawing, "") or "")
+            if not chosen or not text.strip():
+                return
+            try:
+                plane = sketch_from_text(text).plane
+            except AppError:
+                return
+            if not is_feature_plane(plane):
+                return
+            drawn_on, drawn_face = feature_plane_parts(plane)
+            aimed_at, aimed_face = feature_plane_parts(f"feature:{chosen}")
+            same_body = not drawn_on or not aimed_at or drawn_on == aimed_at
+            if drawn_face == aimed_face and same_body:
+                empty = editor.findData("")
+                if empty >= 0:
+                    editor.setCurrentIndex(empty)
+
+        self.valuesChanged.connect(release)
+        self._couplings.append(release)
+        release()
 
     def _link_sketch_planes(self) -> None:
         """Eine zweite Zeichnung beginnt auf der Ebene der ersten (RM-183).

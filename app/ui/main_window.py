@@ -31,7 +31,7 @@ from threading import Lock
 from typing import Any, Final, cast
 from uuid import uuid4
 
-from PySide6.QtCore import QEvent, QObject, QPoint, Qt, QTimer, QUrl, Signal
+from PySide6.QtCore import QEvent, QObject, QPoint, QSignalBlocker, Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import (
     QAction,
     QActionGroup,
@@ -183,7 +183,14 @@ from app.core.scene import fits as fit_checks
 from app.core.scene.cancel import CancelSignal
 from app.core.scene.history import change_for, repair_is_available
 from app.core.scene.project import clear_autosave, discard_recovery, find_recovery
-from app.core.sketch.planes import feature_plane, frame_for_plane, is_derived_plane, to_world
+from app.core.sketch.planes import (
+    feature_plane,
+    feature_plane_parts,
+    frame_for_plane,
+    is_derived_plane,
+    standing_on_feature,
+    to_world,
+)
 from app.core.sketch.profile import SketchCurve, curves_of
 from app.core.sketch.serialize import sketch_from_text
 from app.core.slice import gcode
@@ -252,7 +259,7 @@ from app.ui.facts import PrintFacts
 from app.ui.filament_picker import CatalogueWrites, FilamentPanel, colours_of, spool_slot
 from app.ui.filament_usage import UsageNotice
 from app.ui.generate_dialog import IMAGE_SUFFIXES, GenerateDialog, image_filter
-from app.ui.header import HeaderBar, header_stylesheet
+from app.ui.header import ALL_PLATES, HeaderBar, header_stylesheet
 from app.ui.icons import icon, icon_name_for
 from app.ui.install_dialog import InstallDialog
 from app.ui.labels import (
@@ -1658,6 +1665,14 @@ def _has_stroke_param(spec: OperationSpec) -> bool:
     return any(entry.kind == "strokes" for entry in spec.params.spec())
 
 
+def _carries_a_drawing(spec: OperationSpec, given: Mapping[str, Any] | None) -> bool:
+    """Ob eine gezeichnete Skizze mitkommt — sie hat ihre Ebene und ihren Ort."""
+    return any(
+        entry.kind == "sketch" and str((given or {}).get(entry.name, "") or "").strip()
+        for entry in spec.params.spec()
+    )
+
+
 def _sketch_planes(op_name: str, field_name: str = "") -> tuple[str, ...]:
     """Auf welchen Ebenen die Zeichnung dieses Felds liegen darf — leer heißt überall.
 
@@ -1710,6 +1725,19 @@ PULL_FIELD = "height"
 #: Nach innen ziehen schneidet eine Tasche in den gewählten exakten Körper.
 POCKET_OP = "sketch_pocket"
 POCKET_FIELD = "depth"
+
+#: Nach außen an einem Zielkörper: der Umriss wächst an ihn an, statt ein
+#: zweiter Körper daneben zu werden (Bedienabnahme Zeichnen, E4). Dasselbe
+#: Höhenfeld wie :data:`PULL_OP` — beide teilen ihr Schema.
+JOIN_OP = "sketch_join"
+
+#: Wie viele Flächen des Zielkörpers das Ebenenfeld höchstens anbietet.
+#:
+#: Die größten zuerst: auf einer Deckplatte zeichnet man, auf einer Fase von
+#: zwei Quadratmillimetern nicht. Mit den drei Grundebenen und *Neue Ebene …*
+#: sind es zwölf Einträge — gezählt standen dort 41 am Besenhalter und 234 an
+#: der Druckschale, weil jede ebene Fläche jedes Körpers kam (Befund B4).
+MOST_PLANE_FACES = 8
 
 
 def operation_limits(op_name: str, field: str) -> tuple[float, float]:
@@ -1846,6 +1874,8 @@ class _DiscardedSketch:
     text: str
     plane: str
     steps: int
+    body: str = ""
+    """Für welchen Körper gezeichnet wurde — leer bei einer neuen Zeichnung."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -2291,6 +2321,7 @@ class MainWindow(QMainWindow):
         self.history_panel.removalRequested.connect(self.remove_history_operations)
         self.history_panel.bakeRequested.connect(self.bake_sculpt)
         self.history_panel.kernelSwitchRequested.connect(self.switch_kernel)
+        self.history_panel.drawingReuseRequested.connect(self.reuse_drawing)
         self.filaments = FilamentPanel(self)
         self.filaments.overrideRequested.connect(self._edit_filament_settings)
         self.filaments.printSettingsRequested.connect(self.action_print_settings)
@@ -2388,6 +2419,7 @@ class MainWindow(QMainWindow):
         # Derselbe Katalog wie aus dem Objektbaum — ein zweiter Weg dorthin,
         # kein zweiter Katalog.
         self.feature_panel.catalogRequested.connect(self.action_catalog)
+        self.feature_panel.sketchRequested.connect(self._sketch_on_the_shown_face)
         # **Ein Baustein ändert seinen Schritt.** Nicht `launch_operation`:
         # Das legte bei jeder Maßkorrektur ein zweites Schlüsselloch über das
         # alte. Beide Wege gehen durch die Sitzung und damit durch eine
@@ -2677,8 +2709,57 @@ class MainWindow(QMainWindow):
         self._sketch_hint.setWordWrap(True)
         sketch_heading.addWidget(self._sketch_hint, stretch=1)
         sketch_layout.addLayout(sketch_heading)
+        # **Die Frage nach dem Ziel, wenn die Auswahl zwei Antworten hat**
+        # (Abschnitt 7.3): Mehrere gewählte Körper sind keine stille Wahl
+        # (Regel 21). Die Knöpfe entstehen beim Betreten mit den Namen der
+        # gewählten Körper (:meth:`_ask_for_the_sketch_body`).
+        self._sketch_question = QWidget(self.sketch_bar)
+        question_row = QHBoxLayout(self._sketch_question)
+        question_row.setContentsMargins(0, 0, 0, 0)
+        question_row.addWidget(QLabel(tr("An welchem Körper zeichnen?"), self._sketch_question))
+        question_row.addStretch(1)
+        self._sketch_question_row = question_row
+        self._sketch_question.setVisible(False)
+        sketch_layout.addWidget(self._sketch_question)
         sketch_actions = QHBoxLayout()
         sketch_actions.setContentsMargins(0, 0, 0, 0)
+        # **Wofür gezeichnet wird, steht in der Leiste** (Robert, 23.09.2026:
+        # „nur einen Körper … am besten den ausgewählten; wenn keiner
+        # ausgewählt ist, ist man beim neu Zeichnen"). Ein Auswahlfeld und
+        # nicht nur ein Wort: Wer ohne Auswahl begonnen hat und doch an ein
+        # Teil will, wählt es hier — die anderen Körper sind ausgeblendet und
+        # im Bild nicht anklickbar.
+        target_label = QLabel(tr("Ziel"), self.sketch_bar)
+        self.sketch_body_choice = QComboBox(self.sketch_bar)
+        self.sketch_body_choice.setAccessibleName(tr("Ziel"))
+        self.sketch_body_choice.setToolTip(
+            tr("Für welchen Körper gezeichnet wird. Nur er ist beim Zeichnen zu sehen.")
+        )
+        self.sketch_body_choice.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
+        target_label.setBuddy(self.sketch_body_choice)
+        self.sketch_body_choice.activated.connect(
+            weak_slot(self, MainWindow._on_sketch_body_chosen, forward=True)
+        )
+        self._sketch_target_label = target_label
+        # **Nachbarn zeigen**: die übrigen Körper durchscheinend, zum
+        # Ausrichten — nicht anklickbar (Entscheidung Robert, 23.09.2026:
+        # standardmäßig ausgeblendet, ein Klick oder N holt sie).
+        self.sketch_neighbours_button = QPushButton(tr("Nachbarn zeigen"), self.sketch_bar)
+        self.sketch_neighbours_button.setCheckable(True)
+        self.sketch_neighbours_button.setShortcut(QKeySequence("N"))
+        self.sketch_neighbours_button.setToolTip(
+            tr(
+                "Blendet die übrigen Körper durchscheinend ein, zum Ausrichten. "
+                "Anklicken lassen sie sich nicht."
+            )
+            + " (N)"
+        )
+        self.sketch_neighbours_button.toggled.connect(
+            weak_slot(self, MainWindow._on_sketch_neighbours_toggled, forward=True)
+        )
+        sketch_actions.addWidget(target_label)
+        sketch_actions.addWidget(self.sketch_body_choice)
+        sketch_actions.addWidget(self.sketch_neighbours_button)
         sketch_actions.addStretch(1)
         # Der Abschluss sieht aus wie einer. Fusion setzt dafür einen großen
         # Haken oben rechts; hier stand ein Textknopf unter den anderen und
@@ -2776,6 +2857,13 @@ class MainWindow(QMainWindow):
         Sitzung als *eine* Transaktion, wenn sie fertig ist (Regel 16)."""
         self._discarded_sketch: _DiscardedSketch | None = None
         """Die zuletzt verworfene Zeichnung, solange Strg+Z sie noch meint."""
+        self._sketch_body: ObjectId | None = None
+        """Der Körper, für den gezeichnet wird — ``None`` heißt „neu zeichnen"
+        (Bedienabnahme Zeichnen, Abschnitt 7)."""
+        self._sketch_neighbours = False
+        """Ob *Nachbarn zeigen* die übrigen Körper gerade einblendet."""
+        self._view_before_sketch: tuple[int, str | None, int] | None = None
+        """Plattenindex, offenes Werkzeug und Explosion vor dem Zeichnen."""
 
         # Die zwei häufigsten Folgen stehen **an der fertigen Kontur**. Wer
         # Solidon ohne CAD-Vokabular benutzt, soll weder „Extrusion“ kennen
@@ -2783,8 +2871,12 @@ class MainWindow(QMainWindow):
         # bleibt: Dort wird die genaue Höhe oder Tiefe eingetragen.
         self.sketch_pull_button = QPushButton(tr("Hochziehen"), self.sketch_bar)
         self.sketch_pull_button.setIcon(icon("sketch_pull", self.sketch_pull_button))
+        # *Hochziehen* heißt am Zielkörper anfügen, sonst ein neuer Körper
+        # (Befund E4) — entschieden beim Klick, dieselbe Frage wie Tooltip und
+        # Liste (:meth:`_pull_op`). Wer ausdrücklich das andere will, findet es
+        # unter *Mehr*.
         self.sketch_pull_button.clicked.connect(
-            weak_slot(self, lambda view: view._finish_sketch_as(PULL_OP))
+            weak_slot(self, lambda view: view._finish_sketch_as(view._pull_op()))
         )
         self.sketch_cut_button = QPushButton(tr("Abtragen"), self.sketch_bar)
         self.sketch_cut_button.setIcon(icon("sketch_cut", self.sketch_cut_button))
@@ -2794,25 +2886,33 @@ class MainWindow(QMainWindow):
         sketch_actions.addWidget(self.sketch_pull_button)
         sketch_actions.addWidget(self.sketch_cut_button)
 
-        done = QPushButton(tr("Fertig"), self.sketch_bar)
-        make_primary(done)
-        done.clicked.connect(weak_slot(self, lambda view: view.finish_sketch(keep=True)))
-        # **Fertig klappt die Arten direkt auf** (Robert, 16.09.2026: „weniger
-        # ist manchmal mehr"). Bis dahin fragte ein eigener Dialog „Was soll
-        # daraus werden?" mit einer Liste und *Weiter* — zwei Fenster
-        # hintereinander für eine Wahl. Jetzt hängt die Liste am Knopf: ein
-        # Klick, jede Art mit ihrem Satz als Tooltip, was nicht geht, sagt
-        # warum. Beim freien Zeichnen; mit festgelegter Operation schließt
-        # *Fertig* ohne Frage (:meth:`_update_sketch_actions` hängt das Menü
-        # an und ab).
-        self.sketch_finish_button = done
-        self._finish_menu = QMenu(done)
+        # **Die übrigen Arten stehen hinter einem eigenen Knopf, nicht unter
+        # Fertig** (Bedienabnahme Zeichnen, E2). Die Liste hing seit dem
+        # 16.09.2026 als Menü an *Fertig*, und derselbe Knopf trug zugleich
+        # ``clicked`` → Abschluss mit der Vorgabe. Welche der beiden
+        # Bedeutungen eine Geste traf, hing daran, wer das Loslassen bekam:
+        # Mit der echten Maus (gemessen über ``SendInput``) öffnete der Druck
+        # das Menü und das Loslassen ging an das Menü; mit der Eingabetaste,
+        # mit ``QTest`` oder über die Barrierefreiheit (``click()``) lief
+        # dagegen ``clicked`` — der Dialog der Vorgabe ging auf, das Menü nie.
+        # Die Abnahme hat genau das gesehen. Ein Knopf, eine Bedeutung.
+        more = QPushButton(tr("Mehr"), self.sketch_bar)
+        more.setToolTip(tr("Weitere Arten, aus der Zeichnung einen Körper zu machen."))
+        more.setAccessibleName(tr("Mehr"))
+        self.sketch_more_button = more
+        self._finish_menu = QMenu(more)
         self._finish_menu.setToolTipsVisible(True)
         self._finish_actions: dict[str, QAction] = {}
         self._fill_finish_menu()
+        more.setMenu(self._finish_menu)
+        done = QPushButton(tr("Fertig"), self.sketch_bar)
+        make_primary(done)
+        done.clicked.connect(weak_slot(self, lambda view: view.finish_sketch(keep=True)))
+        self.sketch_finish_button = done
         discard = QPushButton(tr("Verwerfen"), self.sketch_bar)
         discard.clicked.connect(weak_slot(self, lambda view: view.finish_sketch(keep=False)))
         self.sketch_discard_button = discard
+        sketch_actions.addWidget(more)
         sketch_actions.addWidget(done)
         sketch_actions.addWidget(discard)
         sketch_layout.addLayout(sketch_actions)
@@ -9051,8 +9151,20 @@ class MainWindow(QMainWindow):
             return ""
         return feature_plane(object_id, feature_id)
 
-    def _drawable_faces(self) -> list[tuple[str, str, tuple[float, float, float]]]:
+    def _drawable_faces(
+        self,
+        only: Sequence[ObjectId] | None = None,
+        *,
+        keep: str = "",
+    ) -> list[tuple[str, str, tuple[float, float, float]]]:
         """Die planaren Flächen der Szene, auf denen gezeichnet werden kann.
+
+        ``only`` beschränkt sie auf diese Körper und auf die
+        :data:`MOST_PLANE_FACES` größten (Befund B4: 41 bis 234 Einträge,
+        weil jede Fläche jedes Körpers kam). ``keep`` ist die gewählte
+        Zeichenfläche: Sie steht auch dann im Feld, wenn sie klein ist —
+        sonst fände ``choose_plane`` sie nicht, und eine angeklickte Fläche
+        landete stumm auf der Grundebene.
 
         Nach Fläche absteigend: auf einer Deckplatte zeichnet man, auf einer
         Fase von zwei Quadratmillimetern nicht, und eine Liste in
@@ -9069,6 +9181,8 @@ class MainWindow(QMainWindow):
             return []
         found: list[tuple[float, str, str, tuple[float, float, float]]] = []
         for object_id, entry in result.scene.objects.items():
+            if only is not None and object_id not in only:
+                continue
             for feature_id, feature in entry.features.items():
                 if feature.kind != "face":
                     continue
@@ -9091,6 +9205,12 @@ class MainWindow(QMainWindow):
                     )
                 )
         found.sort(key=lambda row: -row[0])
+        if only is not None and len(found) > MOST_PLANE_FACES:
+            kept = keep.removeprefix("feature:")
+            chosen = next((row for row in found if row[1] == kept), None)
+            found = found[:MOST_PLANE_FACES]
+            if chosen is not None and chosen not in found:
+                found = [*found[: MOST_PLANE_FACES - 1], chosen]
         return [(feature_id, label, normal) for _area, feature_id, label, normal in found]
 
     # --- Skizzenmodus (§30.1 Stufe zwei) ----------------------------------------
@@ -9112,13 +9232,25 @@ class MainWindow(QMainWindow):
             self.session.cancel_split()
             return
         if self._sketch_panel is not None:
-            # Zwei Stufen: erst das Zeichenwerkzeug ablegen, dann die Skizze
-            # verlassen. Vorher lag auf dieser Taste auch ein Kürzel des
-            # Editors, und Qt führte deshalb **keines** von beiden aus — es
-            # meldete ``activatedAmbiguously`` und tat nichts.
+            # Erst das Zeichenwerkzeug ablegen, dann die Auswahl. Vorher lag
+            # auf dieser Taste auch ein Kürzel des Editors, und Qt führte
+            # deshalb **keines** von beiden aus — es meldete
+            # ``activatedAmbiguously`` und tat nichts.
+            #
+            # **Und Escape verwirft nicht mehr** (Bedienabnahme Zeichnen, R5;
+            # Entscheidung Robert, 23.09.2026). Dreimal Escape warf eine
+            # Zeichnung weg; der Rückweg über Strg+Z hielt nur, solange nichts
+            # anderes geschah. Verlassen wird über *Fertig* oder *Verwerfen* —
+            # Fusion verwirft mit Escape nie eine Skizze.
             if self._sketch_panel.drop_tool():
                 return
-            self.finish_sketch(keep=False)
+            canvas = self._sketch_panel.canvas
+            if canvas.selection:
+                canvas.selection.clear()
+                canvas.selectionChanged.emit()
+                canvas.update()
+                return
+            self.announce(tr("Zum Verlassen: Fertig oder Verwerfen."))
             return
         if self._armature_target is not None:
             # Wie beim Formen: Escape beendet und verwirft nicht.
@@ -9210,8 +9342,16 @@ class MainWindow(QMainWindow):
         """Ob gerade gezeichnet wird statt betrachtet."""
         return self._sketch_panel is not None
 
-    def _sketch_surroundings(self) -> Surroundings:
+    def _sketch_surroundings(
+        self, only: Sequence[ObjectId] | None = None, *, keep: str = ""
+    ) -> Surroundings:
         """Was eine Zeichenfläche von der Szene wissen soll (§30.1, E1, E18).
+
+        ``only`` nennt die Körper, die dazugehören — im Zeichenmodus der
+        Zielkörper, bei einer neuen Zeichnung keiner oder die eingeblendeten
+        Nachbarn (:meth:`_sketch_scope`). Ebenenfeld, *Projizieren* und
+        *Flächenkontur* sehen dann nur sie. Ohne Angabe gilt die ganze Szene,
+        wie für das Skizzenfeld im Operationsdialog.
 
         Eine Stelle für beide Wege: den Skizzenmodus und das Skizzenfeld im
         Operationsdialog. Getrennt gepflegt war das Feld ärmer als der Modus —
@@ -9226,12 +9366,20 @@ class MainWindow(QMainWindow):
         """
         volume = self.session.profile.printer.build_volume
         result = self.session.last_result
+        entries = [
+            entry
+            for object_id, entry in (result.scene.objects.items() if result else ())
+            if only is None or object_id in only
+        ]
         return Surroundings(
             bed=(float(volume[0]), float(volume[1])),
-            faces=tuple(self._drawable_faces()),
-            bodies=tuple(entry.mesh for entry in result.scene.objects.values()) if result else (),
+            faces=tuple(self._drawable_faces(only, keep=keep)),
+            bodies=tuple(entry.mesh for entry in entries),
+            # Der Rahmen einer Ebene wird gegen die **ganze** Szene gelöst:
+            # Eine Zeichnung aus dem Verlauf kann auf einer Fläche eines
+            # Körpers liegen, der gerade nicht Ziel ist.
             frame_of=self._plane_frame,
-            objects=tuple(result.scene.objects.values()) if result else (),
+            objects=tuple(entries),
         )
 
     def _chain_sketch_card(self, panel: SketchPanel) -> None:
@@ -9258,8 +9406,11 @@ class MainWindow(QMainWindow):
         """
         chain = [
             panel.status,
+            self.sketch_body_choice,
+            self.sketch_neighbours_button,
             self.sketch_pull_button,
             self.sketch_cut_button,
+            self.sketch_more_button,
             self.sketch_finish_button,
             self.sketch_discard_button,
             panel.constraint_list,
@@ -9290,6 +9441,7 @@ class MainWindow(QMainWindow):
         *,
         step: int | None = None,
         field_name: str = "",
+        body: ObjectId | None = None,
     ) -> None:
         """In den Skizzenmodus wechseln, für die Operation, die sie verbraucht.
 
@@ -9320,6 +9472,15 @@ class MainWindow(QMainWindow):
         Vorgabe. Das gilt für jeden Weg ohne eigene Ebene — den Knopf der
         Werkzeugzeile genauso wie eine Skizzen-Operation aus Menü oder
         Palette.
+
+        **Gezeichnet wird für genau einen Körper** (Robert, 23.09.2026; Bericht
+        „Bedienabnahme Zeichnen", Abschnitt 7). ``body`` nennt ihn
+        ausdrücklich — das Auswahlfenster einer Fläche, „Zeichnung
+        weiterverwenden", eine zurückgeholte Zeichnung. Sonst gilt der Schritt,
+        der geändert wird, dann die Fläche, auf der gezeichnet wird, dann der
+        eine gewählte Körper; ist keiner gewählt, beginnt eine neue Zeichnung
+        für einen neuen Körper, und bei mehreren fragt die Leiste
+        (:meth:`_resolve_sketch_body`).
         """
         if self._sketch_panel is not None or not self._begin_from_the_start_screen():
             return
@@ -9335,8 +9496,18 @@ class MainWindow(QMainWindow):
         else:
             plane = plane or (self._selected_face_plane() if not text.strip() else "")
         show_plane_picker = not text.strip() and not plane
+        target, candidates, lost = self._resolve_sketch_body(
+            text=text, plane=plane, step=step, body=body
+        )
+        self._sketch_body = target
+        self._sketch_neighbours = False
+        offered = self._top_face_plane() if show_plane_picker and not planes else ""
         panel = SketchPanel(
-            text, self._parameter_values(), self, self._sketch_surroundings(), planes=planes
+            text,
+            self._parameter_values(),
+            self,
+            self._sketch_surroundings(self._sketch_scope(), keep=plane or offered),
+            planes=planes,
         )
         if plane and not panel.choose_plane(plane):
             self.announce(tr("Diese Fläche steht nicht mehr zur Verfügung."))
@@ -9425,10 +9596,24 @@ class MainWindow(QMainWindow):
         panel.sketchChanged.connect(self._update_sketch_selection)
         panel.canvas.selectionChanged.connect(self._redraw_sketch)
         panel.canvas.measureViewChanged.connect(self._redraw_sketch)
-        # **Das Modell bleibt stehen und tritt zurück.** Es ist der Grund,
+        # **Der Zielkörper bleibt stehen und tritt zurück.** Er ist der Grund,
         # aus dem man auf einer Fläche zeichnet — verstecken hieße, die Frage
         # wegzuräumen, die man gerade beantwortet. Durchscheinend, damit die
-        # Zeichnung darauf und nicht dahinter liegt.
+        # Zeichnung darauf und nicht dahinter liegt. **Die übrigen Körper
+        # treten ab** (Abschnitt 7, Entscheidung Robert 23.09.2026): Sie sind
+        # ausgeblendet, bis *Nachbarn zeigen* sie durchscheinend holt.
+        #
+        # Und was die Sicht vorher trug — Platte, offenes Werkzeug samt
+        # Explosion —, wird gemerkt und beim Verlassen wiederhergestellt: Eine
+        # auseinandergezogene Ansicht verschöbe die Körper gegen ihre Flächen,
+        # und die Zeichnung landete woanders als gesehen.
+        self._view_before_sketch = (
+            self.header.plates.currentIndex(),
+            self.tools.active(),
+            self.explode_bar.slider.value(),
+        )
+        self._show_the_plate_of(target)
+        self._clear_the_status_line()
         self._mode_before_sketch = self.viewport.display_mode
         self.viewport.set_display_mode("transparent")
         # **Und die Ansicht wird orthografisch.** Der Grund steht schon am
@@ -9462,6 +9647,7 @@ class MainWindow(QMainWindow):
         self.viewport.set_sketching(frame)
         panel.planeChanged.connect(self._sketch_plane_changed)
         self._redraw_sketch()
+        self._offer_the_top_face()
         self.viewport.show_sketch_planes(show_plane_picker)
         self._update_sketch_selection()
         # Der Startbildschirm liegt vor dem Arbeitsbereich, solange nichts
@@ -9483,15 +9669,357 @@ class MainWindow(QMainWindow):
         # wird, entscheidet der Dialog bei „Fertig". Ein Hinweis, der auf eine
         # Operation zeigt, die niemand gewählt hat, lässt den Nutzer suchen,
         # wo nichts ist.
-        self._update_sketch_hint()
+        self._apply_sketch_body(candidates)
+        if lost:
+            self.announce(
+                tr(
+                    "Der Körper dieser Zeichnung ist nicht mehr da. "
+                    "Gezeichnet wird für einen neuen."
+                )
+            )
         if op_name:
             self.statusBar().showMessage(
-                tr("Skizze für {op} — Escape verlässt den Modus.").format(
+                tr("Skizze für {op}. Fertig übernimmt die Zeichnung.").format(
                     op=str(REGISTRY.get(op_name).title)
                 )
             )
             return
-        self.statusBar().showMessage(tr("Freies Zeichnen — Escape verlässt den Modus."))
+        self.statusBar().showMessage(tr("Freies Zeichnen. Fertig übernimmt die Zeichnung."))
+
+    # --- Ein Körper, ein Ziel (Bedienabnahme Zeichnen, Abschnitt 7) -------------
+
+    def _resolve_sketch_body(
+        self, *, text: str, plane: str, step: int | None, body: ObjectId | None
+    ) -> tuple[ObjectId | None, tuple[ObjectId, ...], bool]:
+        """Für welchen Körper gezeichnet wird: Ziel, offene Kandidaten, verloren?
+
+        Die Reihenfolge ist die der Ausdrücklichkeit. Ein genannter Körper
+        schlägt alles; dann der Körper des Schritts, der geändert wird (bei
+        *Tasche* und *Anfügen* ihr Eingang, sonst der Körper der Fläche, sonst
+        der erzeugte Körper selbst); dann der Körper der Fläche, auf der
+        gezeichnet wird; dann die Auswahl. **Mehrere gewählte Körper sind keine
+        stille Wahl** (Regel 21) — sie kommen als Kandidaten zurück, und die
+        Leiste fragt. ``lost`` sagt, dass ein genanntes oder aus dem Schritt
+        folgendes Ziel nicht mehr in der Szene steht (ein Rückgängig, ein
+        Löschen): Dann beginnt eine neue Zeichnung, und die Leiste sagt es.
+        """
+        result = self.session.last_result
+        objects = result.scene.objects if result is not None else {}
+        if body is not None:
+            return (body, (), False) if body in objects else (None, (), bool(body))
+        if step is not None:
+            found = self._sketch_body_of_step(step)
+            return (found, (), False) if found else (None, (), True)
+        drawn_on = plane
+        if not drawn_on and text.strip():
+            try:
+                drawn_on = sketch_from_text(text).plane
+            except AppError:
+                drawn_on = ""
+        owner = self._owner_of_plane(drawn_on)
+        if owner:
+            return owner, (), False
+        selected = tuple(entry for entry in self.object_tree.selected_objects() if entry in objects)
+        if len(selected) == 1:
+            return selected[0], (), False
+        return None, selected if len(selected) > 1 else (), False
+
+    def _owner_of_plane(self, plane: str) -> ObjectId | None:
+        """Der Körper, auf dessen Fläche eine Ebene steht — auch über Versatzebenen."""
+        standing = standing_on_feature(plane) if plane else None
+        if not standing:
+            return None
+        owner, _feature = feature_plane_parts(standing)
+        result = self.session.last_result
+        if owner and result is not None and owner in result.scene.objects:
+            return owner
+        return None
+
+    def _sketch_body_of_step(self, op_id: int) -> ObjectId | None:
+        """Der Zielkörper eines Verlaufsschritts mit Zeichnung (Abschnitt 7.3).
+
+        Bei *Tasche* und *Anfügen* ihr Eingang, bei *Hochziehen* auf einer
+        Fläche der Körper der Fläche, bei *Hochziehen* frei der erzeugte Körper
+        selbst — der dann nicht als Nachbar zurücktritt.
+        """
+        try:
+            entry = self.session.history.operation(op_id)
+        except AppError:
+            return None
+        result = self.session.last_result
+        objects = result.scene.objects if result is not None else {}
+        if entry.inputs and entry.inputs[0] in objects:
+            return entry.inputs[0]
+        text = str(entry.params.get("sketch", "") or "")
+        if text.strip():
+            try:
+                owner = self._owner_of_plane(sketch_from_text(text).plane)
+            except AppError:
+                owner = None
+            if owner:
+                return owner
+        if entry.outputs and entry.outputs[0] in objects:
+            return entry.outputs[0]
+        return None
+
+    def _sketch_scope(self) -> tuple[ObjectId, ...] | None:
+        """Die Körper, auf die sich Ebenenfeld, Projizieren und Kontur beziehen.
+
+        Nur der Zielkörper, auch wenn Nachbarn eingeblendet sind — an ihnen
+        richtet man aus, auf ihnen zeichnet man nicht. Bei einer neuen
+        Zeichnung nur die Grundebenen, und die Nachbarn erst, wenn sie
+        ausdrücklich eingeblendet sind (Auftrag Robert, 23.09.2026).
+        """
+        if self._sketch_body is not None:
+            return (self._sketch_body,)
+        if self._sketch_neighbours:
+            result = self.session.last_result
+            return tuple(result.scene.objects) if result is not None else ()
+        return ()
+
+    def sketch_body(self) -> ObjectId | None:
+        """Der Körper, für den gerade gezeichnet wird — ``None`` heißt neu."""
+        return self._sketch_body
+
+    def _apply_sketch_body(self, candidates: Sequence[ObjectId] = ()) -> None:
+        """Ansicht, Leiste und Zeichenfläche folgen dem Zielkörper.
+
+        Die eine Stelle, die nach jeder Änderung des Ziels läuft — beim
+        Betreten, bei einer Wahl im Feld, bei *Nachbarn zeigen* und wenn der
+        Körper verschwindet. Die Frage nach mehreren Kandidaten blendet die
+        übrigen Körper leise ein: Wer wählen soll, muss sehen, zwischen was.
+        """
+        panel = self._sketch_panel
+        if panel is None:
+            return
+        asking = bool(candidates)
+        self._ask_for_the_sketch_body(candidates)
+        self.viewport.set_sketch_focus(
+            self._sketch_body, neighbours=self._sketch_neighbours or asking
+        )
+        keep = panel.canvas.sketch.plane
+        if not panel.canvas.sketch.elements and self._sketch_body:
+            keep = keep if keep.startswith("feature:") else self._top_face_plane()
+        panel.set_surroundings(self._sketch_surroundings(self._sketch_scope(), keep=keep))
+        self._show_sketch_body_choice()
+        self._offer_the_top_face()
+        self._update_sketch_hint()
+
+    def _show_sketch_body_choice(self) -> None:
+        """Feld *Ziel* und Knopf *Nachbarn zeigen* nach der Szene aufbauen."""
+        result = self.session.last_result
+        objects = result.scene.objects if result is not None else {}
+        choice = self.sketch_body_choice
+        with QSignalBlocker(choice):
+            choice.clear()
+            choice.addItem(tr("Neuer Körper"), "")
+            for object_id, entry in objects.items():
+                choice.addItem(str(entry.name), object_id)
+            index = choice.findData(self._sketch_body or "")
+            choice.setCurrentIndex(max(index, 0))
+        any_body = bool(objects)
+        choice.setVisible(any_body)
+        self._sketch_target_label.setVisible(any_body)
+        others = [entry for entry in objects if entry != self._sketch_body]
+        with QSignalBlocker(self.sketch_neighbours_button):
+            self.sketch_neighbours_button.setChecked(self._sketch_neighbours)
+        # Der Zustand steht im Wort, nicht nur in der Knopffarbe (Regel 18):
+        # Eingerastet sah der Knopf im dunklen Thema aus wie vorher.
+        self.sketch_neighbours_button.setText(
+            str(tr("Nachbarn ausblenden") if self._sketch_neighbours else tr("Nachbarn zeigen"))
+        )
+        self.sketch_neighbours_button.setVisible(bool(others))
+
+    def _ask_for_the_sketch_body(self, candidates: Sequence[ObjectId]) -> None:
+        """Die Frage „An welchem Körper zeichnen?" mit einem Knopf je Kandidat."""
+        row = self._sketch_question_row
+        while row.count() > 2:
+            item = row.takeAt(1)
+            widget = item.widget() if item is not None else None
+            if widget is not None:
+                widget.deleteLater()
+        names = self._object_names()
+        for position, object_id in enumerate(candidates, start=1):
+            button = QPushButton(names.get(object_id, object_id), self._sketch_question)
+            button.clicked.connect(
+                weak_slot(self, lambda view, chosen=object_id: view._choose_sketch_body(chosen))
+            )
+            row.insertWidget(position, button)
+        if candidates:
+            fresh = QPushButton(tr("Neuer Körper"), self._sketch_question)
+            fresh.clicked.connect(weak_slot(self, lambda view: view._choose_sketch_body(None)))
+            row.insertWidget(len(candidates) + 1, fresh)
+        self._sketch_question.setVisible(bool(candidates))
+
+    def _choose_sketch_body(self, object_id: ObjectId | None) -> None:
+        """Ein Ziel wurde gewählt — in der Frage oder im Feld *Ziel*."""
+        if self._sketch_panel is None:
+            return
+        self._sketch_body = object_id or None
+        self._show_the_plate_of(self._sketch_body)
+        self._apply_sketch_body()
+
+    def _on_sketch_body_chosen(self, index: int) -> None:
+        """Das Feld *Ziel* wurde bedient."""
+        self._choose_sketch_body(str(self.sketch_body_choice.itemData(index) or "") or None)
+
+    def _on_sketch_neighbours_toggled(self, shown: bool) -> None:
+        """*Nachbarn zeigen* — durchscheinend und nicht anklickbar, oder weg."""
+        if self._sketch_panel is None:
+            return
+        self._sketch_neighbours = bool(shown)
+        self._apply_sketch_body()
+
+    def toggle_sketch_neighbours(self) -> None:
+        """Dasselbe wie der Knopf — für Taste, Befehlspalette und Tests."""
+        if self.sketch_neighbours_button.isVisible() or self._sketch_panel is not None:
+            self.sketch_neighbours_button.toggle()
+
+    def _show_the_plate_of(self, object_id: ObjectId | None) -> None:
+        """Steht der Zielkörper auf einer anderen Platte, wechselt die Ansicht
+        dorthin — dieselbe Wahl wie im Plattenfeld der Kopfzeile."""
+        result = self.session.last_result
+        entry = result.scene.objects.get(object_id) if result and object_id else None
+        if entry is None:
+            return
+        shown = self.header.plate
+        if shown != ALL_PLATES and shown != entry.plate:
+            self.header.plates.setCurrentIndex(self.header.plates.findData(entry.plate))
+
+    def _restore_the_view_before_sketch(self) -> None:
+        """Platte, Werkzeug und Explosion wie vor dem Zeichnen (Abschnitt 7.2, 4)."""
+        before = self._view_before_sketch
+        self._view_before_sketch = None
+        if before is None:
+            return
+        plate_index, tool, explosion = before
+        if 0 <= plate_index < self.header.plates.count():
+            self.header.plates.setCurrentIndex(plate_index)
+        if tool is not None:
+            self.tools.activate(tool)
+            if tool == "explode":
+                self.explode_bar.slider.setValue(explosion)
+
+    def _clear_the_status_line(self) -> None:
+        """Die Statuszeile leeren — ein Griffsatz von vorhin gilt hier nicht (B3).
+
+        Im Zeichenmodus stand „Der Griff versetzt die gewählte Fläche entlang
+        ihrer Normalen." weiter da; einen solchen Griff gibt es beim Zeichnen
+        nicht.
+        """
+        self._announcement = ""
+        if hasattr(self, "reveal_export"):
+            self.reveal_export.setVisible(False)
+        if self._active_progress_owner() is None:
+            self.status_message.setText("")
+
+    def _sketch_body_missing(self, result: EvaluationResult) -> None:
+        """Der Zielkörper ist während des Zeichnens verschwunden (Abschnitt 7.3).
+
+        Nur ein Agent oder die Fernsteuerung kann das — die Menüs sind im
+        Modus gesperrt. Die Zeichnung bleibt, die Leiste sagt es, und *Fertig*
+        legt einen neuen Körper an.
+        """
+        body = self._sketch_body
+        if self._sketch_panel is None or body is None or body in result.scene.objects:
+            return
+        name = self._sketch_body_label or body
+        self._sketch_body = None
+        self._apply_sketch_body()
+        self.announce(
+            tr(
+                "„{name}“ ist nicht mehr da. Die Zeichnung bleibt, "
+                "Fertig legt einen neuen Körper an."
+            ).replace("{name}", name)
+        )
+
+    @property
+    def _sketch_body_label(self) -> str:
+        """Der Name des Zielkörpers, wie das Feld *Ziel* ihn zeigt."""
+        index = self.sketch_body_choice.findData(self._sketch_body or "")
+        return self.sketch_body_choice.itemText(index) if index > 0 else ""
+
+    def _outline_meets_the_body(self) -> bool:
+        """Liegt der Umriss auf oder über dem Zielkörper?
+
+        Gefragt wird grob über Hüllquader, wie vorher bei der Suche nach dem
+        Körper unter der Zeichnung: quer zur Ebene müssen sich Umriss und
+        Körper überdecken, entlang der Normalen muss die Ebene den Körper
+        schneiden oder berühren. Ob tatsächlich Material getroffen wird,
+        rechnet die Operation und sagt es. Hier fällt nur die Vorwahl —
+        Tasche statt Aufbau bei *Fertig*, Anfügen statt neuem Körper beim
+        *Hochziehen* —, und im Dialog lässt sie sich umschalten.
+        """
+        panel = self._sketch_panel
+        frame = self._sketch_frame()
+        result = self.session.last_result
+        body = self._sketch_body
+        if panel is None or frame is None or result is None or body is None:
+            return False
+        entry = result.scene.objects.get(body)
+        points = [
+            point
+            for element in panel.canvas.sketch.elements
+            if not element.construction
+            for point in element.points
+        ]
+        if entry is None or not points:
+            return False
+        corners = [to_world(frame, point) for point in points]
+        low = [min(corner[axis] for corner in corners) for axis in range(3)]
+        high = [max(corner[axis] for corner in corners) for axis in range(3)]
+        bounds = entry.mesh.bounds
+        slack = 1e-6 * max(1.0, *(abs(value) for value in (*bounds.minimum, *bounds.maximum)))
+        across = [axis for axis in range(3) if abs(frame.normal[axis]) < 0.5]
+        if not all(
+            low[axis] <= bounds.maximum[axis] + slack and high[axis] >= bounds.minimum[axis] - slack
+            for axis in across
+        ):
+            return False
+        along = [
+            sum(c * n for c, n in zip(corner, frame.normal, strict=True))
+            for corner in (
+                (x, y, z)
+                for x in (bounds.minimum[0], bounds.maximum[0])
+                for y in (bounds.minimum[1], bounds.maximum[1])
+                for z in (bounds.minimum[2], bounds.maximum[2])
+            )
+        ]
+        plane = sum(o * n for o, n in zip(frame.origin, frame.normal, strict=True))
+        return min(along) - slack <= plane <= max(along) + slack
+
+    def _pull_op(self) -> str:
+        """Was *Hochziehen* hier bedeutet: anfügen am Zielkörper oder neu."""
+        return JOIN_OP if self._outline_meets_the_body() else PULL_OP
+
+    def _top_face_plane(self) -> str:
+        """Die oberste Fläche des Zielkörpers als Ebenenangabe — oder leer.
+
+        Dieselbe Antwort, die die Vorbelegung einer Bohrung gibt, wenn nur der
+        Körper gewählt ist (:func:`app.core.scene.placement.top_face`).
+        """
+        result = self.session.last_result
+        body = self._sketch_body
+        entry = result.scene.objects.get(body) if result is not None and body else None
+        if entry is None:
+            return ""
+        from app.core.scene.placement import top_face
+
+        face = top_face(entry.features)
+        return feature_plane(str(body), face.id) if face is not None else ""
+
+    def _offer_the_top_face(self) -> None:
+        """Die fünfte Ebenenkarte folgt dem Zielkörper — solange nichts gezeichnet ist."""
+        panel = self._sketch_panel
+        plane = ""
+        if panel is not None and not panel.canvas.sketch.elements and self._sketch_body:
+            plane = self._top_face_plane()
+        label = (
+            str(tr("Oberseite von {name}")).replace("{name}", self._sketch_body_label)
+            if plane
+            else ""
+        )
+        self.viewport.plane_picker.offer_face(plane, label)
 
     def _sketch_plane_changed(self) -> None:
         """Die Zeichenebene wurde gewechselt — Kamera, Ziel und Bild nachziehen.
@@ -9660,7 +10188,7 @@ class MainWindow(QMainWindow):
             return ""
         if panel.canvas.view_plane == panel.canvas.sketch.plane:
             return ""
-        if self._sketch_target and self._sketch_target not in (PULL_OP, POCKET_OP):
+        if self._sketch_target and self._sketch_target not in (PULL_OP, JOIN_OP, POCKET_OP):
             # Wer den Modus für *Grundform drehen* betreten hat, meint keine
             # Höhe. Der Griff gehört zu ``sketch_extrude``; ihn dort anzubieten
             # hieße, die gewählte Operation stillschweigend zu tauschen.
@@ -9680,72 +10208,20 @@ class MainWindow(QMainWindow):
                 return problem
         return "ready"
 
-    def _body_under_the_outline(self) -> str:
-        """Der bearbeitbare Körper, über dem die Zeichnung liegt — oder nichts.
-
-        **In Fusion wählt man vor dem Abtragen keinen Körper aus**: Man zieht
-        den Umriss nach unten, und geschnitten wird, was darunter liegt. Wer
-        von dort kommt, zieht — und Solidon antwortete „Zum Abtragen muss genau
-        ein Körper ausgewählt sein", obwohl das Teil unter der Zeichnung lag
-        und nur nicht angeklickt war (Robert, 30.08.2026).
-
-        Gesucht wird deshalb über die Lage: Der Umriss wird auf die Ebene
-        gelegt und sein Hüllrechteck gegen die Hüllquader der Körper gehalten.
-        Trifft es genau einen bearbeitbaren, ist das der gemeinte.
-
-        **Der Hüllquader ist die grobe Antwort, und sie genügt hier.** Eine
-        genaue wäre der Schnitt des ausgetragenen Umrisses mit dem Körper —
-        die rechnet aber die Operation ohnehin, und wenn sie nichts findet,
-        sagt sie es. Was hier gebraucht wird, ist die Frage „welcher ist
-        gemeint", nicht „trifft es wirklich".
-        """
-        panel = self._sketch_panel
-        frame = self._sketch_frame()
-        result = self.session.last_result
-        if panel is None or frame is None or result is None:
-            return ""
-        points = [point for element in panel.canvas.sketch.elements for point in element.points]
-        if not points:
-            return ""
-
-        from app.core.sketch.planes import to_world
-
-        corners = [to_world(frame, point) for point in points]
-        low = tuple(min(corner[axis] for corner in corners) for axis in range(3))
-        high = tuple(max(corner[axis] for corner in corners) for axis in range(3))
-
-        hits = []
-        for object_id, entry in result.scene.objects.items():
-            # **Jede Art zählt.** Bis zum 30.08.2026 sprang die Schleife über
-            # jedes Netz hinweg, weil nur ein exakter Körper abtragbar war —
-            # jetzt ist er es nicht mehr allein, und wer ein heruntergeladenes
-            # STL geöffnet hat, ist der Normalfall, nicht die Ausnahme.
-            bounds = entry.mesh.bounds
-            # In der Zugrichtung wird nicht verglichen: Dort *soll* der Umriss
-            # außerhalb des Körpers liegen, sonst gäbe es nichts zu ziehen.
-            across = [axis for axis in range(3) if abs(frame.normal[axis]) < 0.5]
-            if all(
-                low[axis] <= bounds.maximum[axis] and high[axis] >= bounds.minimum[axis]
-                for axis in across
-            ):
-                hits.append(object_id)
-        return hits[0] if len(hits) == 1 else ""
-
     def _pocket_top_shift(self) -> float:
         """Wie weit die Oberkante des Zielkörpers über der Zeichenebene liegt.
 
         Dort beginnt ``sketch_pocket`` zu schneiden, wenn die Zeichnung tiefer
         liegt, also zeigt die Drahtform der Ansicht dort ihre Tiefe. Der
-        Zielkörper ist der gewählte, sonst der unter dem Umriss — dieselbe
-        Reihenfolge wie in :meth:`_pocket_target_problem`. Gerechnet wird
-        über die acht Ecken des Hüllquaders entlang der Ebenennormale: grob,
-        aber in dieselbe Richtung wie die Operation, und ohne zweiten Schnitt.
+        Körper ist der Zielkörper des Zeichenmodus. Gerechnet wird über die
+        acht Ecken des Hüllquaders entlang der Ebenennormale: grob, aber in
+        dieselbe Richtung wie die Operation, und ohne zweiten Schnitt.
         """
         frame = self._sketch_frame()
         result = self.session.last_result
         if frame is None or result is None:
             return 0.0
-        chosen = self.object_tree.selected() or self._body_under_the_outline()
+        chosen = self._sketch_body
         entry = result.scene.objects.get(chosen) if chosen else None
         if entry is None:
             return 0.0
@@ -9764,20 +10240,20 @@ class MainWindow(QMainWindow):
     def _pocket_target_problem(self) -> str:
         """Warum die gezeichnete Kontur gerade nichts abtragen kann.
 
-        Gefragt wird in zwei Stufen: erst der gewählte Körper — wer einen
-        anklickt, meint ihn —, dann der, über dem die Zeichnung liegt. Die
-        zweite Stufe ist die, die ein Fusion-Kunde erwartet
-        (:meth:`_body_under_the_outline`).
+        **Geschnitten wird der Zielkörper, und nur er** (Abschnitt 7). Bis zum
+        23.09.2026 suchte diese Stelle ohne Auswahl den Körper unter der
+        Zeichnung über Hüllquader (Robert, 30.08.2026: „In Fusion wählt man
+        vor dem Abtragen keinen Körper aus"). Roberts Vorgabe vom 23.09.2026
+        löst das anders: Gezeichnet wird für den gewählten Körper, ohne Auswahl
+        für einen neuen — die übrigen sind dabei ausgeblendet. Wer ohne Auswahl
+        begonnen hat, wählt das Ziel im Feld der Leiste.
         """
-        selected = self.object_tree.selected_objects()
         result = self.session.last_result
-        if result is None:
+        if result is None or not result.scene.objects:
             return str(tr("Zum Abtragen muss ein Körper in der Szene liegen."))
-        chosen = selected[0] if len(selected) == 1 and selected[0] in result.scene.objects else ""
-        if not chosen:
-            chosen = self._body_under_the_outline()
-        if not chosen:
-            return str(tr("Unter der Zeichnung liegt kein bearbeitbarer Körper — einen auswählen."))
+        chosen = self._sketch_body
+        if not chosen or chosen not in result.scene.objects:
+            return str(tr("Zum Abtragen unter „Ziel“ einen Körper wählen."))
         # **Kein dritter Grund mehr.** Hier stand bis zum 30.08.2026 „Der
         # gewählte Körper besteht bereits aus festen Dreiecken" — und damit war
         # Abtragen für jedes eingelesene Modell ausgeschlossen. Seit
@@ -9791,16 +10267,17 @@ class MainWindow(QMainWindow):
         return not self._pocket_target_problem()
 
     def _fill_finish_menu(self) -> None:
-        """Die Skizzen-Operationen des Registers als Einträge unter *Fertig*.
+        """Die Skizzen-Operationen des Registers als Einträge unter *Mehr*.
 
-        Hochziehen und Tasche vorn — die zwei häufigsten Folgen —, dann der
-        Rest nach Titel; eine neue Skizzen-Op taucht von selbst auf. Jeder
+        Hochziehen, Anfügen und Tasche vorn — die häufigsten Folgen —, dann
+        der Rest nach Titel; eine neue Skizzen-Op taucht von selbst auf. Jeder
         Eintrag trägt den ``doc``-Satz als Tooltip, denselben wie Menü und
-        Dialog; was gerade nicht geht, sagt :meth:`_update_sketch_actions`.
+        Dialog; was gerade nicht geht, sagt :meth:`_update_sketch_actions`, und
+        was schon als Knopf daneben steht, blendet es aus.
         """
         section = next((entry for entry in menu_tree(REGISTRY) if entry.category == "sketch"), None)
         specs = list(section.entries) if section else []
-        first = (PULL_OP, POCKET_OP)
+        first = (PULL_OP, JOIN_OP, POCKET_OP)
         specs.sort(
             key=lambda spec: (
                 spec.name not in first,
@@ -9816,46 +10293,60 @@ class MainWindow(QMainWindow):
             self._finish_actions[spec.name] = action
 
     def _update_sketch_actions(self) -> None:
-        """Hochziehen, Abtragen und die Liste unter *Fertig* folgen dem
-        Zustand der freien Kontur."""
+        """Hochziehen, Abtragen und die Liste unter *Mehr* folgen dem Zustand
+        der freien Kontur — und dem Zielkörper.
+
+        **Abtragen steht nur mit Ziel da** (Abschnitt 7.2): Ohne Zielkörper
+        gibt es nichts zu schneiden, und ein grauer Knopf mit dem Satz „einen
+        auswählen" verwiese auf Körper, die gerade ausgeblendet sind. Der Weg
+        dorthin ist das Feld *Ziel*.
+        """
         panel = self._sketch_panel
         free = panel is not None and not self._sketch_target
+        target = self._sketch_body
         self.sketch_pull_button.setVisible(free)
-        self.sketch_cut_button.setVisible(free)
-        # Mit festgelegter Operation ist *Fertig* ein Knopf: Die Wahl ist
-        # gefallen, die Zeichnung geht dorthin zurück, woher sie kam.
-        # Qt nimmt ``None`` und hängt das Menü ab; die Stubs kennen nur ``QMenu``.
-        self.sketch_finish_button.setMenu(self._finish_menu if free else None)  # type: ignore[arg-type]
+        self.sketch_cut_button.setVisible(free and target is not None)
+        self.sketch_more_button.setVisible(free)
         if not free or panel is None:
             return
 
         closed = bool(panel.canvas.outline)
         outline_problem = str(tr("Erst einen geschlossenen Umriss zeichnen."))
+        pull = self._pull_op() if closed else PULL_OP
+        name = self._sketch_body_label
         self.sketch_pull_button.setEnabled(closed)
-        self.sketch_pull_button.setToolTip(
-            str(tr("Macht aus dem Umriss einen Körper. Danach die Höhe einstellen."))
-            if closed
-            else outline_problem
-        )
+        if not closed:
+            self.sketch_pull_button.setToolTip(outline_problem)
+        elif pull == JOIN_OP:
+            self.sketch_pull_button.setToolTip(
+                str(tr("Zieht den Umriss hoch und fügt ihn an {name} an.")).replace("{name}", name)
+            )
+        else:
+            self.sketch_pull_button.setToolTip(
+                str(tr("Macht aus dem Umriss einen neuen Körper. Danach die Höhe einstellen."))
+            )
         pocket_problem = self._pocket_target_problem() if closed else outline_problem
         self.sketch_cut_button.setEnabled(closed and not pocket_problem)
         self.sketch_cut_button.setToolTip(
             pocket_problem
-            or str(
-                tr("Schneidet den Umriss aus dem ausgewählten Körper. Danach die Tiefe einstellen.")
+            or str(tr("Schneidet den Umriss aus {name}. Danach die Tiefe einstellen.")).replace(
+                "{name}", name
             )
         )
         # Dieselbe Auskunft an jedem Eintrag der Liste: Ohne Umriss geht
         # keine, ohne Körper keine, die einen braucht — und der Tooltip sagt
-        # es, statt nur grau zu werden (Regel 18).
-        for name, action in self._finish_actions.items():
-            spec = REGISTRY.get(name)
+        # es, statt nur grau zu werden (Regel 18). Was als Knopf daneben
+        # steht, steht nicht noch einmal in der Liste.
+        beside = {pull, POCKET_OP} if target is not None else {pull}
+        for op_name, action in self._finish_actions.items():
+            spec = REGISTRY.get(op_name)
             if not closed:
                 problem = outline_problem
             elif needed_inputs(spec):
                 problem = pocket_problem
             else:
                 problem = ""
+            action.setVisible(op_name not in beside)
             action.setEnabled(not problem)
             action.setToolTip(problem or str(spec.doc))
 
@@ -9873,12 +10364,6 @@ class MainWindow(QMainWindow):
             if problem:
                 self.announce(problem)
                 return
-            # Der Körper unter der Zeichnung ist gemeint, wenn keiner gewählt
-            # ist — die Operation nimmt die Auswahl (so tat es der Dialog).
-            if not self.object_tree.selected_objects():
-                beneath = self._body_under_the_outline()
-                if beneath:
-                    self.object_tree.select_object(beneath)
         self._sketch_target = op_name
         self.finish_sketch(keep=True)
 
@@ -9912,20 +10397,12 @@ class MainWindow(QMainWindow):
                 self.viewport.cancel_sketch_pull()
                 self.announce(problem)
                 return
-            # **Gefunden heißt noch nicht gewählt.** ``run_operation`` nimmt
-            # seine Eingänge aus dem Objektbaum; ein Körper, den nur
-            # :meth:`_body_under_the_outline` kennt, käme dort nie an, und die
-            # Operation liefe ohne Eingang. Das ist dasselbe letzte Glied, an
-            # dem heute schon zwei Befunde hingen — die Entscheidung fällt,
-            # und niemand setzt sie um.
-            if not self.object_tree.selected_objects():
-                found = self._body_under_the_outline()
-                if found:
-                    self.object_tree.select_object(found)
             self._sketch_target = POCKET_OP
             self.finish_sketch(keep=True, given={POCKET_FIELD: abs(float(height))})
             return
-        self._sketch_target = PULL_OP
+        # Nach außen am Zielkörper heißt anfügen (E4); sonst ein neuer Körper.
+        # Beide Schemata tragen dasselbe Höhenfeld.
+        self._sketch_target = self._pull_op()
         self.finish_sketch(keep=True, given={PULL_FIELD: float(height)})
 
     def _on_sketch_hover(self, point: object) -> None:
@@ -9998,15 +10475,14 @@ class MainWindow(QMainWindow):
             # 16.09.2026 wörtlich noch einmal — zwei Sätze für eine Geste, und
             # die Karte unten wuchs auf vier Zeilen (Robert: „das zeichen
             # panel ein bisschen übersichtlicher gestalten").
+            # **Abtragen nur mit Zielkörper** (E9, Abschnitt 7): Ohne Ziel
+            # steht der Satz über das Kreuz nicht da — auch keiner, der
+            # erklärt, warum es fehlt; im leeren Projekt gibt es nichts zu
+            # schneiden, und bei einer neuen Zeichnung ist das Ziel die Wahl.
             action = (
                 str(tr("Pfeil: Körper hochziehen · Kreuz: Tasche schneiden."))
                 if self._sketch_cut_available()
-                else str(
-                    tr(
-                        "Pfeil: Körper hochziehen · Abtragen braucht einen ausgewählten, "
-                        "bearbeitbaren Körper."
-                    )
-                )
+                else str(tr("Pfeil: Körper hochziehen."))
             )
         elif offer:
             # Der Grund, aus dem der Griff gerade nicht geht, steht dort, wo
@@ -10015,18 +10491,9 @@ class MainWindow(QMainWindow):
         elif (
             panel.canvas.outline
             and panel.canvas.view_plane == panel.canvas.sketch.plane
-            and self._sketch_target in ("", PULL_OP, POCKET_OP)
+            and self._sketch_target in ("", PULL_OP, JOIN_OP, POCKET_OP)
         ):
-            action = (
-                str(tr("Zum Ziehen mit der Maus: Vorder- oder Seitenansicht wählen."))
-                if self._sketch_cut_available()
-                else str(
-                    tr(
-                        "Zum Ziehen mit der Maus: Vorder- oder Seitenansicht wählen. "
-                        "Abtragen braucht zusätzlich einen bearbeitbaren Körper."
-                    )
-                )
-            )
+            action = str(tr("Zum Ziehen mit der Maus: Vorder- oder Seitenansicht wählen."))
         self._sketch_hint.setText(line)
         self._sketch_hint.setVisible(bool(line))
         self.viewport.show_sketch_action(action)
@@ -10162,14 +10629,29 @@ class MainWindow(QMainWindow):
         if panel is None:
             return
         text = panel.sketch_text()
+        body = self._sketch_body
+        if keep and text and target and step is None and needed_inputs(REGISTRY.get(target)):
+            # **Ohne Ziel geht die Zeichnung nicht verloren.** Eine Tasche aus
+            # dem Menü, begonnen ohne Auswahl, lief bis zum Dialog und endete
+            # dort mit „braucht einen Körper" — der Modus war schon abgebaut,
+            # die Zeichnung weg. Jetzt bleibt der Modus, und der Satz nennt den
+            # Weg (Regel 17).
+            problem = self._pocket_target_problem()
+            if problem:
+                self.announce(problem)
+                return
         # Nach dem Abbau kennt die Ansicht weder Kontur noch Zeichenrahmen.
-        # Der darunter eindeutig gefundene Körper reist deshalb mit dem Text.
-        on_body = self._body_under_the_outline() if keep and text and not target else ""
+        # Die Vorwahl fällt deshalb hier: Ohne gewählte Art gilt der
+        # wahrscheinlichere Fall (Robert, 03.09.2026) — über dem Zielkörper eine
+        # Tasche, sonst ein neuer Körper.
+        on_body = bool(keep and text and not target and self._outline_meets_the_body())
         if not keep:
             # **Verworfen heißt nicht vernichtet.** Escape war die teuerste
             # Taste des Programms: eine halbe Stunde Zeichnung, ein Tastendruck,
             # kein Rückweg — und kein Dialog davor, weil Regel 19 keinen
             # zulässt, solange die Handlung rücknehmbar ist. Sie ist es jetzt.
+            # Escape verwirft seit dem 23.09.2026 gar nicht mehr; dieser Weg
+            # gehört allein dem Knopf *Verwerfen*.
             self._remember_discarded(target, text, panel)
             text = ""
         # Die Ansicht stand die ganze Zeit — zurückzuschalten gibt es nichts
@@ -10188,6 +10670,9 @@ class MainWindow(QMainWindow):
         self._sketch_target = None
         self._sketch_step = None
         self._sketch_parameter = ""
+        self._sketch_body = None
+        self._sketch_neighbours = False
+        self._sketch_question.setVisible(False)
         self.viewport.set_sketching(None)
         # Die Maßeingabe abklemmen und das Feld heimholen, **bevor** das Panel
         # stirbt: Die Ansicht hielte sonst Rückrufe auf einen toten Canvas,
@@ -10229,16 +10714,28 @@ class MainWindow(QMainWindow):
         panel.hide()
         panel.deleteLater()
         self.viewport.clear_sketch()
+        # **Die vorige Sicht kommt zurück**, samt den Nachbarn (Abschnitt 7.2).
+        self.viewport.set_sketch_focus(None, active=False)
         self.viewport.set_display_mode(self._mode_before_sketch)
         self.viewport.set_projection(self._projection_before_sketch)
         self.tools.setVisible(True)
         self.toolbar.setVisible(self.stack.currentWidget() is not self.start_screen)
         self.sketch_bar.setVisible(False)
+        self._restore_the_view_before_sketch()
         self.statusBar().clearMessage()
         self._update_actions()
         if keep and target and not text:
             self.announce(tr("Die Zeichnung ist leer. Es wurde nichts übernommen."))
         if keep and text:
+            # Die Operation nimmt ihre Eingänge aus dem Objektbaum; das Ziel des
+            # Zeichenmodus muss dort ankommen, sonst liefe sie ohne Eingang.
+            if (
+                body is not None
+                and target
+                and needed_inputs(REGISTRY.get(target))
+                and self.object_tree.selected_objects() != (body,)
+            ):
+                self.object_tree.select_object(body)
             if target:
                 values: dict[str, Any] = {parameter or _sketch_param(target): text}
                 values.update(given or {})
@@ -10255,10 +10752,10 @@ class MainWindow(QMainWindow):
                     self.run_operation(REGISTRY.get(target), given=values)
             else:
                 # Ohne Wahl gilt der wahrscheinlichere Fall (Robert, 03.09.2026):
-                # auf leerer Fläche ein Körper, über einem Körper eine Tasche.
+                # auf leerer Fläche ein Körper, über dem Zielkörper eine Tasche.
                 name = POCKET_OP if on_body else PULL_OP
-                if on_body and not self.object_tree.selected_objects():
-                    self.object_tree.select_object(on_body)
+                if on_body and body is not None and self.object_tree.selected_objects() != (body,):
+                    self.object_tree.select_object(body)
                 self.run_operation(REGISTRY.get(name), given={_sketch_param(name): text})
 
     # --- Formsitzung (§25, Konzept P16.6) ---------------------------------------
@@ -10603,6 +11100,7 @@ class MainWindow(QMainWindow):
             text=text,
             plane=plane,
             steps=len(self.session.history.operations),
+            body=self._sketch_body or "",
         )
         self.announce(tr("Zeichnung verworfen — Strg+Z holt sie zurück."))
         self._update_actions()
@@ -10623,7 +11121,9 @@ class MainWindow(QMainWindow):
             # Der Verlauf ist weitergegangen — das Angebot ist verfallen, und
             # dieser Griff gehört dem Verlauf.
             return False
-        self.start_sketch(discarded.op_name, text=discarded.text, plane=discarded.plane)
+        self.start_sketch(
+            discarded.op_name, text=discarded.text, plane=discarded.plane, body=discarded.body
+        )
         self.announce(tr("Zeichnung zurückgeholt."))
         return True
 
@@ -13610,6 +14110,45 @@ class MainWindow(QMainWindow):
             self.object_tree.select_object(str(object_id))
         self.launch_operation(spec)
 
+    def _sketch_on_the_shown_face(self, feature_id: str, cut: bool) -> None:
+        """*Hier zeichnen* und *Loch oder Aussparung zeichnen …* im
+        Auswahlfenster einer Fläche (Befund B2, S2).
+
+        §2.6 verspricht dort den kürzesten Weg vom Sehen zum Tun; angeboten war
+        nur „Baustein einsetzen …". Beide Zeilen beginnen den Zeichenmodus auf
+        dieser Fläche mit ihrem Körper als Ziel; die zweite legt die Art fest —
+        *Fertig* schneidet dann eine Tasche.
+        """
+        object_id = self.object_tree.selected()
+        if object_id is None:
+            return
+        self.start_sketch(
+            POCKET_OP if cut else "",
+            plane=feature_plane(object_id, feature_id),
+            body=object_id,
+        )
+
+    def reuse_drawing(self, op_id: int) -> None:
+        """„Zeichnung weiterverwenden" am Verlaufsschritt (Befund E6).
+
+        Entscheidung Robert, 23.09.2026: Der Text der Zeichnung wird kopiert
+        und öffnet sich als neue, freie Zeichnung — *Fertig* legt daraus einen
+        **neuen** Schritt an, der alte bleibt, wie er ist. So werden Außen- und
+        Innenkontur aus einer Zeichnung zwei Schritte, ohne neu zu zeichnen;
+        die Skizze bleibt dabei ein Parameterwert (§30.1). Ziel ist der Körper
+        des Schritts, dieselbe Regel wie beim Ändern.
+        """
+        try:
+            entry = self.session.history.operation(op_id)
+        except AppError as error:
+            self.session.failed.emit(error)
+            return
+        text = str(entry.params.get("sketch", "") or "")
+        if not text.strip():
+            self.announce(tr("Dieser Schritt hat keine Zeichnung."))
+            return
+        self.start_sketch("", text=text, body=self._sketch_body_of_step(op_id) or "")
+
     def _on_sketch_on_face(self, feature_id: str) -> None:
         """Ein Klick auf eine Fläche beginnt dort eine Skizze (§30.1).
 
@@ -15374,7 +15913,17 @@ class MainWindow(QMainWindow):
             self.announce(f"{spec.title}: {tr('Die Szene ist leer.')}")
             return
 
-        values = dict(self._from_selection(spec, chosen[0] if chosen else None))
+        # **Eine Zeichnung trägt ihren Ort schon** (Bedienabnahme Zeichnen, F1
+        # und F2). Aus der gewählten Fläche kamen sonst „Bis zur Fläche" — die
+        # Fläche, auf der gezeichnet wurde, also nie erreichbar — und bei der
+        # Tasche X/Y/Oberkante in Weltkoordinaten zu einer Kontur, die schon im
+        # Rahmen der Fläche liegt: Hochziehen hielt immer an, die Tasche schnitt
+        # daneben. Ohne Zeichnung bleibt die Vorbelegung, wie sie war.
+        values = (
+            {}
+            if _carries_a_drawing(spec, given)
+            else dict(self._from_selection(spec, chosen[0] if chosen else None))
+        )
         values.update(self._spacing_for(spec))
         values.update(self._plane_through(spec, chosen[0] if chosen else None))
         values.update(self._measured_from_body(spec, chosen[0] if chosen else None))
@@ -17717,6 +18266,7 @@ class MainWindow(QMainWindow):
         # *vorigen* — beim ersten Projekt also mit gar keinen, und dann passte
         # es auf den Bauraum ein statt auf das Teil.
         self._seen_objects = bool(result.scene.objects)
+        self._sketch_body_missing(result)
         self.object_tree.show_scene(result, self.session.project.document)
         effective_settings = self.effective_print_settings()
         self.filaments.show_scene(list(result.scene.objects.values()), effective_settings)

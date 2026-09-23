@@ -1106,21 +1106,36 @@ def test_every_sketch_use_the_dialog_offers_really_takes_a_sketch() -> None:
     )
 
 
-def test_a_drawn_sketch_cuts_a_pocket_where_x_and_y_say() -> None:
-    """Die Skizze ersetzt nur die Grundform — alles andere gilt weiter:
-    x und y verschieben auch den gezeichneten Umriss."""
-    result = run(
-        "sketch_pocket",
-        brep_box(),
-        parameters=scene_parameters(width=10.0, height=8.0),
-        shape="circle",
-        length=999.0,
-        depth=5.0,
-        x=-5.0,
-        y=-4.0,
-        sketch=drawn_text(),
-    )
-    assert solid_of(result).volume == pytest.approx(24000.0 - 10.0 * 8.0 * 5.0, rel=1e-9)
+def test_a_drawn_sketch_keeps_its_place_whatever_x_and_y_say() -> None:
+    """Die Skizze ersetzt die Grundform **samt ihrem Ort**: X und Y setzen nur
+    die Grundform. Hier stand bis zum 23.09.2026 das Gegenteil („x und y
+    verschieben auch den gezeichneten Umriss"), und das war der Fehler F2 der
+    Bedienabnahme: Der Dialog trug die Weltlage der gewählten Fläche in X/Y
+    ein, die Zeichnung lag schon dort, und die Tasche schnitt daneben."""
+
+    def pocket(x: float, y: float) -> Solid:
+        return solid_of(
+            run(
+                "sketch_pocket",
+                brep_box(),
+                parameters=scene_parameters(width=10.0, height=8.0),
+                shape="circle",
+                length=999.0,
+                depth=5.0,
+                x=x,
+                y=y,
+                sketch=drawn_text(),
+            )
+        )
+
+    shifted_one, plain = pocket(-5.0, -4.0), pocket(0.0, 0.0)
+    assert shifted_one.volume == pytest.approx(plain.volume, rel=1e-12)
+    assert plain.volume < 24000.0, "die Tasche trägt überhaupt etwas ab"
+    from app.core.brep import edit as brep_edit
+
+    assert brep_edit.boolean("difference", [shifted_one, plain]).volume == pytest.approx(
+        0.0, abs=1e-6
+    ), "und an derselben Stelle"
 
 
 def test_a_damaged_sketch_text_is_a_correctable_error() -> None:
@@ -1633,6 +1648,97 @@ def test_a_vanished_target_face_blames_the_up_to_field() -> None:
     advice = [str(action.label) for action in caught.value.suggestions]
     assert advice, "der Fehler muss Vorschläge tragen"
     assert not any("Grundebenen" in line for line in advice)
+
+
+def test_a_drawn_pocket_on_an_off_centre_face_cuts_where_it_is_drawn() -> None:
+    """Bedienabnahme Zeichnen, F2, am exakten Körper: dieselbe doppelte
+    Verschiebung wie am Netz. X und Y aus der Auswahl kamen zur Zeichnung auf
+    der Fläche noch hinzu, und die Tasche schnitt ins Leere. Soll: 600 mm³
+    ab, am Ort der Zeichnung (Sollwert aus dem Bericht, ± 0,5 %)."""
+    from app.core.brep import edit as brep_edit
+
+    box = brep_box(60.0, 40.0, 10.0)
+    box = dataclasses.replace(box, mesh=brep_edit.moved(box.mesh, (50.0, 30.0, 0.0)))
+    from app.core.brep.features import features_of
+
+    box = dataclasses.replace(box, features=features_of(box.mesh))
+    top = next(
+        name
+        for name, feature in box.features.items()
+        if feature.kind == "face" and feature.params["normal"][2] > 0.99
+    )
+    drawn = dataclasses.replace(shapes.rectangle(20.0, 10.0), plane=f"feature:obj_1:{top}")
+    before = box.mesh.volume
+    result = run("sketch_pocket", box, sketch=sketch_to_text(drawn), depth=3.0, x=50.0, y=30.0)
+    body = solid_of(result)
+    assert before - body.volume == pytest.approx(600.0, rel=0.005)
+    low, high = body.bounds.minimum, body.bounds.maximum
+    assert (low[0], high[0]) == pytest.approx((20.0, 80.0)), "der Körper selbst bleibt, wo er war"
+    assert not [finding for finding in result.findings if finding.severity != "info"]
+
+
+def test_the_drawing_face_itself_is_no_target_for_up_to() -> None:
+    """Bedienabnahme Zeichnen, F1: Hochziehen auf einer gewählten Fläche hielt
+    immer an — der Dialog trug genau die Fläche, auf der gezeichnet wurde,
+    als „Bis zur Fläche" ein, und von dort geht es nicht vorwärts.
+
+    Die Oberfläche trägt sie nicht mehr ein; kommt sie trotzdem an (eine
+    ältere Datei, ein Agent), nennt der Satz die Ursache und den Weg — nicht
+    „liegt hinter der Skizze" über eine Fläche, auf der gezeichnet wurde."""
+    box = brep_box()
+    with pytest.raises(ValidationError) as caught:
+        run(
+            "sketch_extrude",
+            box,
+            sketch=sketch_on("feature:obj_1:face_6"),
+            up_to="obj_1:face_6",
+        )
+    assert caught.value.field == "up_to"
+    assert caught.value.constraint == "drawing_face"
+    assert caught.value.suggestions and caught.value.suggestions[0].id == "sketch.clear_up_to"
+
+
+def _circle_on(plane: str, diameter: float) -> str:
+    """Ein Kreis um die Mitte der Ebene — auf einer Fläche deren Mitte."""
+    return sketch_to_text(dataclasses.replace(shapes.circle(diameter), plane=plane))
+
+
+def test_a_joined_cylinder_grows_the_body_and_stays_one_body() -> None:
+    """Bedienabnahme Zeichnen, F1 und E4: Kreis Ø 8 auf der Deckfläche, 10
+    hoch — ein Zapfen, **an** der Platte und nicht als zweiter Körper
+    daneben. Soll: der Körper wächst um π·16·10 (Sollwert aus dem Bericht,
+    hier exakt, weil der Kreis als Kurve in den Kern geht), bleibt ein Stück
+    und behält seinen Namen."""
+    box = brep_box()
+    before = box.mesh.volume
+    result = run("sketch_join", box, sketch=_circle_on("feature:obj_1:face_6", 8.0), height=10.0)
+    body = solid_of(result)
+    assert body.volume - before == pytest.approx(math.pi * 16.0 * 10.0, rel=1e-6)
+    assert body.solid_count == 1
+    assert body.bounds.maximum[2] == pytest.approx(30.0)
+    assert result.outputs[0].name == box.name and result.outputs[0].id == box.id
+    assert result.outputs[0].kind == "brep"
+    assert not [finding for finding in result.findings if finding.severity != "info"]
+
+
+def test_a_join_beside_the_body_says_it_stands_apart() -> None:
+    """Ein Umriss neben dem Körper wird kein Anfügen, sondern ein loses
+    Stück im selben Körper — und das steht im Bericht, mit dem Weg zum
+    Hochziehen als neuer Körper (Regel 17)."""
+    box = brep_box()
+    drawn = edit_moved_circle(60.0)
+    result = run("sketch_join", box, sketch=drawn, height=5.0)
+    codes = [finding.code for finding in result.findings]
+    assert "sketch.join_apart" in codes
+    apart = next(finding for finding in result.findings if finding.code == "sketch.join_apart")
+    assert "Grundform hochziehen" in str(apart.message)
+
+
+def edit_moved_circle(dx: float) -> str:
+    from app.core.sketch import edit as sketch_edit
+
+    circle = shapes.circle(6.0)
+    return sketch_to_text(sketch_edit.move(circle, (0,), dx, 0.0))
 
 
 def test_two_regions_become_one_body() -> None:

@@ -3129,6 +3129,10 @@ class HistoryPanel(QWidget):
     kernelSwitchRequested = Signal(int)
     """Dieser Grundkörperschritt soll im anderen Rechenkern rechnen (P2.8,
     ``History.change_kernel``) — rücknehmbar, also ohne Nachfrage."""
+    drawingReuseRequested = Signal(int)
+    """Die Zeichnung dieses Schritts soll als Kopie für einen **neuen** Schritt
+    geöffnet werden (Bedienabnahme Zeichnen E6, Entscheidung Robert
+    23.09.2026). Der alte Schritt bleibt, wie er ist."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -3183,6 +3187,8 @@ class HistoryPanel(QWidget):
         noch aus ihren Zügen gerechnet werden."""
         self._switchable: dict[int, str] = {}
         """Grundkörperschritte, die in den anderen Rechenkern können, mit dem Satz dafür."""
+        self._drawn: frozenset[int] = frozenset()
+        """Schritte mit einer gezeichneten Skizze — dort steht „Zeichnung weiterverwenden"."""
         # Wie beim Objektbaum: ein Satz statt eines stummen Kastens.
         self._empty = QLabel(_empty_history_text(), self)
         self._empty.setWordWrap(True)
@@ -3273,6 +3279,9 @@ class HistoryPanel(QWidget):
             if kernel_twin_of(entry.op) is not None
             and (label := kernel_switch_label(entry.op)) is not None
         }
+        self._drawn = frozenset(
+            entry.id for entry in document.ops if str(entry.params.get("sketch", "") or "").strip()
+        )
         for transaction in document.transactions:
             # Nur was abweicht, wird ausgeschrieben (§26.4). „(Nutzer)" stand
             # vorher an jeder Zeile — in einem Projekt ohne Agenten also
@@ -3575,6 +3584,16 @@ class HistoryPanel(QWidget):
             switch = menu.addAction(self._switchable[single_op])
             switch.triggered.connect(
                 lambda _checked=False, chosen=single_op: self.kernelSwitchRequested.emit(chosen)
+            )
+        if single_op is not None and single_op in self._drawn:
+            # **Eine Zeichnung für mehrere Schritte** (Befund E6): Außenkontur
+            # hochziehen, Innenkontur als Tasche — ohne neu zu zeichnen. Der
+            # Eintrag steht nur an Schritten, die eine Zeichnung tragen.
+            reuse = menu.addAction(tr("Zeichnung weiterverwenden"))
+            reuse.setToolTip(tr("Öffnet eine Kopie dieser Zeichnung für einen neuen Schritt."))
+            menu.setToolTipsVisible(True)
+            reuse.triggered.connect(
+                lambda _checked=False, chosen=single_op: self.drawingReuseRequested.emit(chosen)
             )
         remove = menu.addAction(tr("Schritt löschen …"))
         remove.triggered.connect(
@@ -5380,6 +5399,9 @@ class FeaturePanel(QWidget):
     fitRequested = Signal(str, object)
     stepEditRequested = Signal(int)
     stepSelectionChanged = Signal()
+    sketchRequested = Signal(str, bool)
+    """Auf dieser Fläche zeichnen — ``True`` heißt: um auszuschneiden (Befund
+    B2). Das Fenster kennt Körper und Ebene; das Panel nennt nur die Fläche."""
     protectionToggled = Signal(str, bool)
     """Dieses Merkmal als Sichtfläche sperren oder freigeben (§22.3, RM-080).
 
@@ -5869,6 +5891,9 @@ class FeaturePanel(QWidget):
             self._built.append(row)
             self._blocks[next(reversed(self._runs))] = (line, row)
 
+        if feature.kind == "face":
+            self._build_sketch_entries(feature_id)
+
         # **Wo nichts gilt, steht der Weg, der gilt.** An einer Fläche ist
         # jede der vier Handlungen abgelehnt — dort setzen dafür
         # fünfundzwanzig Bausteine an, und der Katalog lag hinter Rechtsklick
@@ -5884,6 +5909,37 @@ class FeaturePanel(QWidget):
             self._rows.insertWidget(self._rows.count() - 1, catalog)
             self._built.append(catalog)
         self._build_protection(feature_id, feature, protected)
+
+    def _build_sketch_entries(self, feature_id: str) -> None:
+        """Zwei Zeilen an jeder ebenen Fläche: *Hier zeichnen* und *Loch oder
+        Aussparung zeichnen …* (Bedienabnahme Zeichnen, B2 und S2).
+
+        §2.6 verspricht im Auswahlfenster den kürzesten Weg vom Sehen zum Tun,
+        und an einer Fläche stand dort nur „Baustein einsetzen …". Wer hier ein
+        Loch in einer eigenen Form wollte, musste wissen, dass *Zeichnen* oben
+        in der Werkzeugzeile auf der gewählten Fläche beginnt.
+        """
+        for text, tip, cut in (
+            (
+                tr("Hier zeichnen"),
+                tr("Beginnt eine Zeichnung auf dieser Fläche, für diesen Körper."),
+                False,
+            ),
+            (
+                tr("Loch oder Aussparung zeichnen …"),
+                tr("Zeichnen Sie den Umriss; Fertig schneidet ihn aus diesem Körper."),
+                True,
+            ),
+        ):
+            button = QPushButton(text, self)
+            button.setStatusTip(tip)
+            button.setToolTip(tip)
+            button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+            button.clicked.connect(
+                lambda _checked=False, chosen=cut: self.sketchRequested.emit(feature_id, chosen)
+            )
+            self._rows.insertWidget(self._rows.count() - 1, button)
+            self._built.append(button)
 
     def _build_protection(self, feature_id: str, feature: Feature, protected: bool) -> None:
         """Der Umschalter *Vor Trennnähten schützen* — die eine Kundengeste der

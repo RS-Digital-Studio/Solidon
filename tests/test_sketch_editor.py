@@ -1019,8 +1019,12 @@ def test_a_sketch_operation_opens_the_mode_not_a_dialog(qt_app: QApplication) ->
         # ist die Aussage, die hier trägt.
         assert not window.sketch_bar.isHidden(), "Fertig und Verwerfen stehen bereit"
 
-        # Escape verlässt den Modus wie jedes andere Werkzeug (§2.1).
+        # Verlassen wird über *Verwerfen* oder *Fertig* — Escape verwirft seit
+        # dem 23.09.2026 nicht mehr (Entscheidung Robert zu R5 der
+        # Bedienabnahme Zeichnen).
         window._escape()
+        assert window.sketching(), "Escape allein verlässt die Zeichnung nicht"
+        window.sketch_discard_button.click()
         assert not window.sketching()
         assert window.middle_stack.currentWidget() is window.viewport
     finally:
@@ -1035,6 +1039,8 @@ def test_leaving_the_sketch_mode_empty_starts_no_operation(
 
     Ohne das öffnete jedes versehentliche Escape einen Operationsdialog auf
     einer leeren Skizze — eine Sackgasse, die §2.1 ausdrücklich ausschließt.
+    Seit dem 23.09.2026 verlässt Escape den Modus gar nicht mehr (Entscheidung
+    Robert zu R5); der Weg ohne Übernahme ist *Verwerfen*.
     """
     from app.ui.main_window import MainWindow
     from app.ui.session import Session
@@ -1048,6 +1054,8 @@ def test_leaving_the_sketch_mode_empty_starts_no_operation(
             window.sketch_finish_button.click()
         else:
             window._escape()
+            assert window.sketching(), "Escape verlässt die Skizze nicht mehr"
+            window.sketch_discard_button.click()
         assert not window.sketching()
         assert not window.session.history.transactions, "nichts gezeichnet, nichts angewandt"
         message = "Die Zeichnung ist leer. Es wurde nichts übernommen."
@@ -2226,9 +2234,11 @@ def test_escape_has_exactly_one_owner_in_the_sketch_mode(qt_app: QApplication) -
     **ein** Besitzer der Taste —, denn sie ist unabhängig davon, welches Fenster
     ein Testlauf gerade für das aktive hält.
 
-    Dazu die drei Stufen, alle über den Fensterweg: Wer eine Linie angefangen
-    hat, meint mit Escape die halbfertige Kette; wer das Werkzeug hält, das
-    Werkzeug; wer nur schaut, die Skizze. Die erste Stufe prüfte bisher nur
+    Dazu die Stufen, alle über den Fensterweg: Wer eine Linie angefangen hat,
+    meint mit Escape die halbfertige Kette; wer das Werkzeug hält, das
+    Werkzeug. Die dritte Stufe verließ bis zum 23.09.2026 die Skizze und
+    verwarf sie — seither sagt sie nur den Weg (Entscheidung Robert zu R5).
+    Die erste Stufe prüfte bisher nur
     ``test_escape_gives_back_one_thing_at_a_time`` direkt an ``drop_tool`` —
     und das Fenster ist der einzige Weg, auf dem die Taste sie je erreicht.
     """
@@ -2269,7 +2279,8 @@ def test_escape_has_exactly_one_owner_in_the_sketch_mode(qt_app: QApplication) -
         assert window.sketching(), "und wirft die Zeichnung nicht gleich mit weg"
 
         window._escape()
-        assert not window.sketching(), "beim dritten Mal verlässt es die Skizze"
+        assert window.sketching(), "beim dritten Mal bleibt die Zeichnung stehen"
+        assert "Verwerfen" in window.status_message.text(), "und der Weg hinaus steht da"
     finally:
         window.deleteLater()
 
@@ -5676,23 +5687,20 @@ def test_the_hint_does_not_spell_out_the_button_beside_it(qt_app: QApplication) 
         window.deleteLater()
 
 
-def test_a_body_under_the_drawing_needs_no_selecting(qt_app: QApplication) -> None:
-    """In Fusion wählt man vor dem Abtragen keinen Körper aus.
+def test_the_target_body_decides_where_the_drawing_lies(qt_app: QApplication) -> None:
+    """Liegt der Umriss auf oder über dem Zielkörper, wird *Fertig* eine
+    Tasche und *Hochziehen* ein Anfügen; daneben nicht.
 
-    Man zieht den Umriss nach unten, und geschnitten wird, was darunter liegt.
-    Solidon antwortete stattdessen „Zum Abtragen muss genau ein Körper
-    ausgewählt sein" — obwohl das Teil unter der Zeichnung lag und nur nicht
-    angeklickt war (Robert, 30.08.2026).
+    Hier stand bis zum 23.09.2026 „Ein Körper unter der Zeichnung braucht
+    keine Auswahl" (Robert, 30.08.2026: in Fusion wählt man vor dem Abtragen
+    keinen Körper aus). Roberts Vorgabe vom 23.09.2026 hat das abgelöst:
+    Gezeichnet wird für den gewählten Körper, ohne Auswahl für einen neuen,
+    und die übrigen sind dabei ausgeblendet. Die Lage entscheidet nur noch
+    **welche Art** am Zielkörper gemeint ist, nicht mehr **welcher Körper**.
 
-    **Die Szene ist gestellt**, weil dieser Test nur die Suche prüft — welcher
-    Körper unter der Zeichnung liegt —, und dafür genügt, was sie liest: Art
-    und Hüllquader. Der Test darunter geht den echten Weg mit einer
-    eingelesenen Datei.
-
-    Der ursprüngliche Grund für das Stellen ist übrigens weggefallen: Hier
-    stand, Abtragen setze ``kind == "brep"`` voraus, und ein eingelesenes Netz
-    sei keiner. Das galt bis zum 30.08.2026 und gilt nicht mehr — seither
-    schneidet ``sketch_pocket`` auch in ein Netz.
+    **Die Szene ist gestellt**, weil dieser Test nur die Lagefrage prüft, und
+    dafür genügt, was sie liest: Art und Hüllquader. Der Test darunter geht
+    den echten Weg mit einer eingelesenen Datei.
     """
     from types import SimpleNamespace
 
@@ -5724,11 +5732,13 @@ def test_a_body_under_the_drawing_needs_no_selecting(qt_app: QApplication) -> No
         # Ein Umriss mitten über dem Körper — dort, wo ein Kunde ihn zöge.
         panel.canvas.add_element("line", ((2.0, 2.0), (8.0, 2.0)))
         panel.canvas.add_element("line", ((8.0, 2.0), (8.0, 8.0)))
-        window.object_tree.selected_objects = lambda: ()
+        window._sketch_body = None
 
-        assert window._body_under_the_outline() == "body", (
-            "the drawing lies over the body, so it is the one meant"
-        )
+        assert not window._outline_meets_the_body(), "ohne Ziel gibt es keine Lagefrage"
+        assert window._pocket_target_problem(), "und ohne Ziel kein Abtragen"
+        window._sketch_body = "body"
+        assert window._outline_meets_the_body(), "the drawing lies over the target"
+        assert window._pull_op() == "sketch_join", "so pulling up joins it"
         assert not window._pocket_target_problem(), (
             "and nothing stands in the way of cutting into it"
         )
@@ -5738,7 +5748,8 @@ def test_a_body_under_the_drawing_needs_no_selecting(qt_app: QApplication) -> No
 
         panel.canvas.set_sketch(_replace(panel.canvas.sketch, elements=()))
         panel.canvas.add_element("line", ((60.0, 60.0), (70.0, 60.0)))
-        assert not window._body_under_the_outline(), "beside the body nothing is found"
+        assert not window._outline_meets_the_body(), "beside the body it is a new one"
+        assert window._pull_op() == "sketch_extrude"
     finally:
         window.deleteLater()
 
@@ -5749,9 +5760,10 @@ def test_an_imported_mesh_is_a_target_for_cutting(qt_app: QApplication) -> None:
     Kein gestellter Namespace, sondern eine echte Datei durch den echten Weg —
     denn genau hier lag der Fehler, und er lag an der **Art** des Körpers. Wer
     ein STL öffnet, bekommt ``kind == "mesh"``, und beide Stellen der
-    Oberfläche sprangen darüber hinweg: ``_body_under_the_outline`` zählte nur
-    exakte Körper, und ``_pocket_target_problem`` antwortete „besteht bereits
-    aus festen Dreiecken".
+    Oberfläche sprangen darüber hinweg: Die Suche nach dem Körper unter der
+    Zeichnung zählte nur exakte Körper, und ``_pocket_target_problem``
+    antwortete „besteht bereits aus festen Dreiecken". Seit dem 23.09.2026 ist
+    das Netz der gewählte Zielkörper (Abschnitt 7 der Bedienabnahme).
 
     Ein gestellter Körper hätte das nicht gefangen — er trägt die Art, die der
     Test hineinschreibt. Die Datei trägt die, die die Anwendung erzeugt.
@@ -5768,6 +5780,7 @@ def test_an_imported_mesh_is_a_target_for_cutting(qt_app: QApplication) -> None:
         entry = next(iter(result.scene.objects.values()))
         assert entry.kind == "mesh", "eine eingelesene Datei ist ein Netz — darum ging es"
 
+        window.object_tree.select_object(entry.id)
         window.start_sketch("")
         panel = window._sketch_panel
         assert panel is not None
@@ -5781,11 +5794,9 @@ def test_an_imported_mesh_is_a_target_for_cutting(qt_app: QApplication) -> None:
         panel.canvas.add_element(
             "line", ((mid[0] + 3.0, mid[1] - 3.0), (mid[0] + 3.0, mid[1] + 3.0))
         )
-        window.object_tree.selected_objects = lambda: ()
 
-        assert window._body_under_the_outline() == entry.id, (
-            "das eingelesene Netz liegt unter der Zeichnung und ist gemeint"
-        )
+        assert window.sketch_body() == entry.id, "das gewählte Netz ist das Ziel"
+        assert window._outline_meets_the_body(), "und die Zeichnung liegt darüber"
         assert not window._pocket_target_problem(), (
             "und es abzulehnen war der Fehler — hier stand „besteht bereits aus "
             "festen Dreiecken“, und damit war der häufigste Fall ausgeschlossen"
@@ -5820,6 +5831,7 @@ def test_pulling_down_on_an_imported_mesh_starts_the_pocket(qt_app: QApplication
         result = window.session.evaluate_now()
         entry = next(iter(result.scene.objects.values()))
 
+        window.object_tree.select_object(entry.id)
         window.start_sketch("")
         panel = window._sketch_panel
         assert panel is not None
@@ -5831,7 +5843,6 @@ def test_pulling_down_on_an_imported_mesh_starts_the_pocket(qt_app: QApplication
         panel.canvas.add_element(
             "line", ((mid[0] + 3.0, mid[1] - 3.0), (mid[0] + 3.0, mid[1] + 3.0))
         )
-        window.object_tree.selected_objects = lambda: ()
 
         gesagt: list[str] = []
         uebergeben: list[tuple[bool, dict[str, float]]] = []
@@ -5850,15 +5861,10 @@ def test_pulling_down_on_an_imported_mesh_starts_the_pocket(qt_app: QApplication
         assert keep, "die Zeichnung reist mit — sie ist der Umriss der Tasche"
         assert given.get(POCKET_FIELD) == pytest.approx(4.0), "vier Millimeter nach unten"
         assert window._sketch_target == POCKET_OP, "nach unten gezogen heißt abtragen"
-        # **Gefunden ist nicht gewählt** — und diese Zeile steht hier, weil die
-        # Gegenprobe sie verlangt hat: Ohne sie blieb der Test grün, als der
-        # Griff den Körper zwar fand, ihn aber nicht mehr in den Objektbaum
-        # setzte. ``run_operation`` nimmt seine Eingänge von dort; ein Körper,
-        # den nur die Suche kennt, käme nie an, und die Operation liefe ohne
-        # Eingang. Genau davor warnt der Kommentar an der Stelle selbst.
-        assert gewaehlt == [entry.id], (
-            f"der gefundene Körper muss im Objektbaum ankommen, gewählt wurde {gewaehlt}"
-        )
+        # Der Zielkörper kommt in ``finish_sketch`` im Objektbaum an — hier ist
+        # ``finish_sketch`` ersetzt, und gewählt war er schon beim Betreten.
+        assert window.sketch_body() == entry.id
+        assert gewaehlt == [], "gewählt war das Ziel schon beim Betreten"
     finally:
         window.wait_for_workers()
         window.deleteLater()
@@ -7679,13 +7685,14 @@ def test_the_constraint_hint_retires_once_the_buttons_were_seen(qt_app: QApplica
 
 
 def test_finish_lists_the_kinds_and_says_why_cutting_is_locked(qt_app: QApplication) -> None:
-    """*Fertig* klappt die Arten direkt auf — der Dialog „Was soll daraus
-    werden?" mit *Weiter* ist gefallen (Robert, 16.09.2026: „weniger ist
-    manchmal mehr").
+    """Die Arten stehen unter *Mehr* — der Dialog „Was soll daraus werden?"
+    mit *Weiter* ist gefallen (Robert, 16.09.2026: „weniger ist manchmal
+    mehr"), und seit dem 23.09.2026 hängt die Liste nicht mehr an *Fertig*
+    (Bedienabnahme Zeichnen, E2: ein Knopf, eine Bedeutung).
 
-    Hochziehen und Tasche stehen vorn, der Rest nach Titel; was nicht geht,
-    sagt warum; ein Eintrag führt ohne Zwischenschritt in die Operation. Mit
-    festgelegter Operation ist *Fertig* ein Knopf ohne Liste.
+    Hochziehen, Anfügen und Tasche stehen vorn, der Rest nach Titel; was nicht
+    geht, sagt warum; ein Eintrag führt ohne Zwischenschritt in die Operation.
+    Mit festgelegter Operation gibt es kein *Mehr*.
     """
     from app.core.registry import OperationSpec
     from app.ui.main_window import MainWindow
@@ -7703,14 +7710,16 @@ def test_finish_lists_the_kinds_and_says_why_cutting_is_locked(qt_app: QApplicat
         window.start_sketch("")
         panel = window._sketch_panel
         assert panel is not None
-        assert window.sketch_finish_button.menu() is window._finish_menu, (
-            "beim freien Zeichnen hängt die Liste am Knopf"
+        assert window.sketch_finish_button.menu() is None, "Fertig trägt keine Liste"
+        assert window.sketch_more_button.menu() is window._finish_menu, (
+            "beim freien Zeichnen hängt die Liste an Mehr"
         )
         names = list(window._finish_actions)
-        assert names[:2] == ["sketch_extrude", "sketch_pocket"], names
-        # Sechs bis P6.5; die drei Schnitte mit Werkzeug stehen seither mit
-        # in der Liste, jeder hinter der Tasche nach Titel eingereiht.
-        assert len(names) == 9, names
+        assert names[:3] == ["sketch_extrude", "sketch_join", "sketch_pocket"], names
+        # Sechs bis P6.5; die drei Schnitte mit Werkzeug stehen seither mit in
+        # der Liste, jeder hinter der Tasche nach Titel eingereiht, und
+        # *An Körper anfügen* direkt hinter dem Hochziehen.
+        assert len(names) == 10, names
         assert not any(action.isEnabled() for action in window._finish_actions.values()), (
             "ohne Umriss geht keine — und jede sagt es"
         )
@@ -7728,7 +7737,7 @@ def test_finish_lists_the_kinds_and_says_why_cutting_is_locked(qt_app: QApplicat
         assert window._sketch_panel is None, "der Modus ist zu"
 
         window.start_sketch("sketch_extrude")
-        assert window.sketch_finish_button.menu() is None, "mit Ziel ist Fertig ein Knopf"
+        assert window.sketch_more_button.isHidden(), "mit festgelegter Art gibt es kein Mehr"
     finally:
         if window._sketch_panel is not None:
             window.finish_sketch(keep=False)

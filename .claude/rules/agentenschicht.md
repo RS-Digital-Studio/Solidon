@@ -40,7 +40,7 @@ mehrdeutige Anfragen und zählt, ob gefragt statt geraten wurde.
 
 **„Fragen vor Raten" trägt nur als Vorbedingung, nicht als Gewohnheit.** Als
 vierter Punkt einer Liste war sie anleitend, und das hielt gegen die damals
-84 Werkzeuge nicht — heute sind es 141 Operationen und elf Zusatzwerkzeuge:
+84 Werkzeuge nicht — heute sind es 142 Operationen und elf Zusatzwerkzeuge:
 sobald der Systemprompt vollständig ankam, fiel die Quote von 3/3 auf
 1/3 — wer genug Angebote hat, findet immer eines, das plausibel aussieht.
 Prompt-Version 2 stellt deshalb drei Prüfungen *vor* den ersten
@@ -122,14 +122,16 @@ vollständigen Auftrag und weist Modell, Kontext, Werkzeugzahl und Anfragehash
 aus. Dieser funktionale Zählweg misst keine Geschwindigkeit; Kalt-/Warmläufe
 und Leistungsprüfungen bleiben dem Release vorbehalten.
 
-**Stand 23.09.2026: 141 Operationen, 152 Werkzeuge** — die Zahlen hält
+**Stand 23.09.2026: 142 Operationen, 153 Werkzeuge** — die Zahlen hält
 `tests/test_registry_consistency.py` gegen Register und `tool_schemas()`.
 Der kompakte Auftrag wurde bei 147 Werkzeugen mit `qwen3:14b`,
 `num_ctx=32768` und `num_predict=1` vollständig mit **27 293 Token** gezählt
 (83,3 Prozent des Fensters, 5 475 Token Rest). Die Werkzeuge danach (P4.0,
-die drei Schnitte mit Werkzeug aus P6.5, *Merkmal vervielfachen* aus P6.7)
-und die drei Parameter mehr an *Aushöhlen* sind in dieser Zählung nicht
-enthalten; am langen Satz vor RM-185 kosteten die drei Schnitte 2 326 Token.
+die drei Schnitte mit Werkzeug aus P6.5, *Merkmal vervielfachen* aus P6.7,
+*An Körper anfügen*) und die drei Parameter mehr an *Aushöhlen* sind in
+dieser Zählung nicht enthalten. Einzeln gezählt, je gegen den eigenen
+Stand: die drei Schnitte am langen Satz vor RM-185 2 326 Token,
+*An Körper anfügen* am kurzen Satz 747 Token (28 040 bei 148 Werkzeugen).
 Werkzeugzahl und Tokenzahl in `backends/llm.py` gehören zu derselben Zählung.
 Systemprompt und Werkzeugsatz zusammen waren am 26.08.2026 (90 Operationen,
 nach dem OpenSCAD-Ausbau eines weniger) 149 061 Zeichen im vollen und 110 027

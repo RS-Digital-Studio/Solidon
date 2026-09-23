@@ -2046,16 +2046,103 @@ def _shortened(
     return tuple(elements)
 
 
-def _without_corner_joint(
-    sketch: Sketch, first_flat: int, second_flat: int
-) -> tuple[SketchConstraint, ...]:
-    """Die Bedingungen ohne die Deckung, die beide Eckenden verband."""
+def _collapsed(kind: str, targets: tuple[int, ...]) -> bool:
+    """Ob eine Bedingung nach dem Umhängen einen Punkt mit sich selbst verbindet.
+
+    Zwei Eckenden werden derselbe Hilfspunkt; eine Deckung, eine Waagerechte
+    oder ein Abstand zwischen ihnen wäre danach eine Gleichung ohne Inhalt —
+    eine Nullzeile, die der Löser als „legt fest, was schon festliegt" meldet.
+    Paarweise gelesen bei den Arten mit zwei Strecken, am Ende beim
+    Mittelpunkt.
+    """
+    if len(targets) == 2:
+        return targets[0] == targets[1]
+    if len(targets) == 4:
+        return targets[0] == targets[1] or targets[2] == targets[3]
+    if kind == "midpoint":
+        return targets[1] == targets[2]
+    return False
+
+
+def _held_by_the_virtual_corner(
+    sketch: Sketch, corner: Corner, virtual: int
+) -> tuple[SketchElement, tuple[SketchConstraint, ...]]:
+    """Die alte Ecke als Hilfspunkt — und die Bedingungen, die sie meinten.
+
+    **Eine Ecke, die es nicht mehr gibt, bleibt Bezug** (Bedienabnahme
+    Zeichnen, F3). Beide Werkzeuge kürzen die Schenkel bis zum Berührpunkt.
+    Ließe man die Bedingungen dabei stehen, zeigte „Seite = 50" danach auf das
+    Reststück: Der Löser zog die Seite auf 55, und ein getipptes Rechteck
+    80 mal 50 kam nach einer Rundung R 5 als 80 mal 55 aus dem Dialog. Fusion
+    hält dafür die *virtuelle Ecke* fest — den Schnittpunkt der verlängerten
+    Schenkel —, und genau das tut dieser Punkt.
+
+    Er liegt auf beiden Geraden (:func:`_on_the_leg`): Die Strecke vom fernen
+    Ende zum Hilfspunkt ist parallel zum gekürzten Schenkel, und weil beide am
+    fernen Ende beginnen, heißt das „auf derselben Geraden". Eine eigene Art
+    „Punkt auf Linie" braucht es dafür nicht; der Hilfspunkt kostet zwei
+    Koordinaten und bringt zwei Gleichungen mit, die Zahl der freien Maße
+    bleibt, wie sie war.
+
+    Was bisher an einem Eckende hing, hängt danach am Hilfspunkt — das Maß
+    der Seite, eine Deckung mit einem dritten Element, ein Festpunkt, ein
+    Abstand zu einem Loch. Nur was die **Richtung** eines Schenkels meint
+    (:data:`_ALONG_THE_LINE`, beide Enden der Linie unter den Zielen), bleibt
+    an der Linie: Eine Waagerechte gilt für das Reststück genauso. Die
+    Deckung zwischen den beiden Eckenden fällt weg — sie wäre die des
+    Hilfspunkts mit sich selbst.
+    """
+    offsets = offsets_of(sketch)
+    first_flat = offsets[corner.first[0]] + corner.first[1]
+    second_flat = offsets[corner.second[0]] + corner.second[1]
+    first_far = offsets[corner.first[0]] + (1 - corner.first[1])
+    second_far = offsets[corner.second[0]] + (1 - corner.second[1])
+    far_of = {first_flat: first_far, second_flat: second_far}
     joint = {first_flat, second_flat}
-    return tuple(
-        entry
-        for entry in sketch.constraints
-        if not (entry.kind == "coincident" and set(entry.targets) == joint)
+
+    moved: list[SketchConstraint] = []
+    for entry in sketch.constraints:
+        if entry.kind == "coincident" and set(entry.targets) == joint:
+            continue
+        if not joint.intersection(entry.targets):
+            moved.append(entry)
+            continue
+        targets = tuple(
+            target
+            if target not in joint
+            or (entry.kind in _ALONG_THE_LINE and far_of[target] in entry.targets)
+            else virtual
+            for target in entry.targets
+        )
+        if _collapsed(entry.kind, targets):
+            continue
+        moved.append(SketchConstraint(entry.kind, targets, entry.value))
+    point = SketchElement(kind="point", points=(corner.spot,), construction=True)
+    held = (
+        *moved,
+        _on_the_leg(sketch, first_far, first_flat, virtual),
+        _on_the_leg(sketch, second_far, second_flat, virtual),
     )
+    return point, held
+
+
+def _on_the_leg(sketch: Sketch, far: int, near: int, virtual: int) -> SketchConstraint:
+    """Hält den Hilfspunkt auf der Geraden eines Schenkels.
+
+    **Liegt der Schenkel waagerecht oder senkrecht, dann dieselbe Achse.**
+    ``horizontal`` und ``vertical`` sind linear; ``parallel`` rechnet mit
+    Einheitsvektoren, und deren Krümmung schob beim Ziehen einer unbemaßten
+    Seite die freie Gegenseite mit: gemessen 1,9 µm auf zehn Millimeter Zug in
+    fünfzig Schritten, wo ohne den Hilfspunkt unter 10⁻⁸ blieb. Rechteck und
+    L-Profil — der Normalfall, denn der Fang legt gezeichnete Linien auf die
+    Achse (``_axis_constraint``) — bekommen so die lineare Gleichung; nur ein
+    schräger Schenkel die parallele.
+    """
+    ends = {far, near}
+    for entry in sketch.constraints:
+        if entry.kind in ("horizontal", "vertical") and set(entry.targets) == ends:
+            return SketchConstraint(entry.kind, (far, virtual))
+    return SketchConstraint("parallel", (far, near, far, virtual))
 
 
 def fillet(sketch: Sketch, points: Sequence[Point2], flat: int, radius: float) -> Sketch:
@@ -2139,15 +2226,19 @@ def fillet(sketch: Sketch, points: Sequence[Point2], flat: int, radius: float) -
 
     elements = _shortened(sketch, corner, touch_u, touch_v)
     arc = SketchElement("arc", stored)
+    # Der Hilfspunkt der alten Ecke steht **hinter** dem Bogen: So behalten
+    # Bogenmitte und Bogenenden ihre Nummern, und wer die Rundung danach
+    # zieht, greift dieselben Punkte wie vorher.
+    virtual_corner, held = _held_by_the_virtual_corner(sketch, corner, arc_begin + 3)
     constraints = (
-        *_without_corner_joint(sketch, first_flat, second_flat),
+        *held,
         SketchConstraint("coincident", (first_flat, end_of_u)),
         SketchConstraint("coincident", (second_flat, end_of_v)),
         SketchConstraint("perpendicular", (*first_line, arc_centre, end_of_u)),
         SketchConstraint("perpendicular", (*second_line, arc_centre, end_of_v)),
         SketchConstraint("radius", (arc_centre, arc_start), written_measure(radius)),
     )
-    return replace(sketch, elements=(*elements, arc), constraints=constraints)
+    return replace(sketch, elements=(*elements, arc, virtual_corner), constraints=constraints)
 
 
 def chamfer(sketch: Sketch, points: Sequence[Point2], flat: int, distance: float) -> Sketch:
@@ -2192,15 +2283,22 @@ def chamfer(sketch: Sketch, points: Sequence[Point2], flat: int, distance: float
     edge_begin = len(points)
     elements = _shortened(sketch, corner, cut_u, cut_v)
     edge = SketchElement("line", (cut_u, cut_v))
+    virtual = edge_begin + 2
+    virtual_corner, held = _held_by_the_virtual_corner(sketch, corner, virtual)
+    # **Gemessen wird von der alten Ecke aus**, wie getippt: „5" heißt fünf
+    # Millimeter auf jedem Schenkel. Mit dem Hilfspunkt lässt sich das sagen —
+    # ein Maß an einem Schenkel, ein Gleich-lang für den anderen —, und damit
+    # ist auch der Winkel der Schräge bestimmt. Vorher stand die Länge der
+    # Schräge als Maß, ihr Winkel blieb frei, und die Zeile sagte „Noch ein
+    # Maß fehlt" über eine Fase, die vollständig eingegeben war.
     constraints = (
-        *_without_corner_joint(sketch, first_flat, second_flat),
+        *held,
         SketchConstraint("coincident", (first_flat, edge_begin)),
         SketchConstraint("coincident", (second_flat, edge_begin + 1)),
-        SketchConstraint(
-            "distance", (edge_begin, edge_begin + 1), written_measure(math.dist(cut_u, cut_v))
-        ),
+        SketchConstraint("distance", (virtual, first_flat), written_measure(distance)),
+        SketchConstraint("equal", (virtual, first_flat, virtual, second_flat)),
     )
-    return replace(sketch, elements=(*elements, edge), constraints=constraints)
+    return replace(sketch, elements=(*elements, edge, virtual_corner), constraints=constraints)
 
 
 #: Die Bedingungsarten, die ein Maß tragen und deshalb mitskaliert werden

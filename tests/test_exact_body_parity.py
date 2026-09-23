@@ -571,6 +571,15 @@ CASES = [
         "volume",
         1200.0,
     ),
+    # Angefügt wird nur, was über den Körper hinausragt: 8 mal 6 von z = 10 bis 16.
+    Case(
+        "sketch_join",
+        "box",
+        {"shape": "rectangle", "length": 8.0, "width": 6.0, "height": 16.0},
+        KEEP,
+        "volume",
+        3200.0 + 8.0 * 6.0 * 6.0,
+    ),
     Case(
         "sketch_loft",
         "none",

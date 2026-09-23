@@ -491,8 +491,14 @@ VARIANT_GROUPS: Final[tuple[VariantGroup, ...]] = (
         # direkt hinter ihrem Erzeuger (Konzept §10: „Revolve-Cut wird kein
         # zweiter Eintrag, sondern ein Feld im Dialog"). Sie haben einen
         # Eingang wie die Tasche und werden ohne Körper gleich gesperrt.
+        #
+        # **``sketch_join`` steht neben dem Hochziehen** (23.09.2026,
+        # Bedienabnahme Zeichnen E4): dieselbe Handlung mit dem gewählten
+        # Körper als Ziel. Wie die Tasche hat es einen Eingang und fragt ihn im
+        # Umschalter vorher.
         members=(
             "sketch_extrude",
+            "sketch_join",
             "sketch_pocket",
             "sketch_revolve",
             "sketch_revolve_cut",

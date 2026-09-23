@@ -804,7 +804,8 @@ def test_a_fillet_replaces_the_corner_with_a_tangent_arc() -> None:
     sketch = box()
     rounded = edit.fillet(sketch, edit.flat_points(sketch), 3, 5.0)
 
-    assert len(rounded.elements) == 5
+    assert len(rounded.elements) == 6, "vier Linien, der Bogen, der Hilfspunkt der alten Ecke"
+    assert rounded.elements[5] == SketchElement("point", ((40.0, 20.0),), construction=True)
     assert rounded.elements[1].points == ((40.0, 0.0), (40.0, 15.0))
     assert rounded.elements[2].points[0] == pytest.approx((35.0, 20.0))
     arc = rounded.elements[4]
@@ -815,6 +816,9 @@ def test_a_fillet_replaces_the_corner_with_a_tangent_arc() -> None:
     assert kinds.count("coincident") == 5, "die Ecke ist weg, zwei Bogenenden sind dazu"
     assert kinds.count("perpendicular") == 2, "die Tangente als Senkrechte zum Radiusstrahl"
     assert kinds.count("radius") == 1
+    assert kinds.count("horizontal") == 3 and kinds.count("vertical") == 3, (
+        "der Hilfspunkt liegt auf beiden verlängerten Schenkeln — hier achsparallel"
+    )
     assert any(
         entry.kind == "coincident" and set(entry.targets) == {3, 4} for entry in box().constraints
     ), "vorher gab es die Eckdeckung — sonst prüft die nächste Zeile nichts"
@@ -866,7 +870,7 @@ def test_a_fillet_names_the_largest_radius_that_fits() -> None:
     assert "20" in str(caught.value.detail)
     with pytest.raises(ValidationError):
         edit.fillet(sketch, edit.flat_points(sketch), 3, 20.0)
-    assert len(edit.fillet(sketch, edit.flat_points(sketch), 3, 19.99).elements) == 5
+    assert len(edit.fillet(sketch, edit.flat_points(sketch), 3, 19.99).elements) == 6
     # ``maximum`` ist eine Bereichsgrenze, und nur die trägt den Titel „außerhalb
     # des zulässigen Bereichs"; ein unbekannter Wert bekäme den vagen Satz.
     assert caught.value.constraint == "maximum"
@@ -877,21 +881,26 @@ def test_a_fillet_names_the_largest_radius_that_fits() -> None:
 
 
 def test_a_chamfer_cuts_the_corner_with_a_straight_edge() -> None:
-    """Fase 5: beide Linien um fünf gekürzt, dazwischen die Schräge mit ihrer
-    Länge als Maß — 5·√2 an der rechten Ecke."""
+    """Fase 5: beide Linien um fünf gekürzt, dazwischen die Schräge. Das Maß
+    steht, wie getippt, von der alten Ecke aus — fünf auf dem einen Schenkel,
+    gleich lang auf dem anderen —, und nicht als Länge der Schräge (5·√2),
+    deren Winkel dann frei blieb (Bedienabnahme Zeichnen, F3)."""
     from app.core.sketch.profile import regions_of
     from app.core.sketch.solver import solve_sketch
 
     sketch = box()
     cut = edit.chamfer(sketch, edit.flat_points(sketch), 3, 5.0)
 
-    assert len(cut.elements) == 5
+    assert len(cut.elements) == 6
     edge = cut.elements[4]
     assert edge.kind == "line"
     assert flat(edge.points) == pytest.approx(flat(((40.0, 15.0), (35.0, 20.0))))
+    assert cut.elements[5] == SketchElement("point", ((40.0, 20.0),), construction=True)
     measure = [entry for entry in cut.constraints if entry.kind == "distance"]
     assert len(measure) == 1
-    assert float(measure[0].value) == pytest.approx(5.0 * math.sqrt(2.0), abs=1e-5)
+    assert float(measure[0].value) == pytest.approx(5.0)
+    assert 10 in measure[0].targets, "gemessen vom Hilfspunkt der alten Ecke"
+    assert solve_sketch(cut).free_dof == solve_sketch(sketch).free_dof, "kein Grad mehr frei"
 
     solved = solve_sketch(cut)
     assert len(regions_of(solved)) == 1, "der Umriss bleibt geschlossen"
@@ -903,7 +912,120 @@ def test_a_chamfer_cuts_the_corner_with_a_straight_edge() -> None:
     assert caught.value.title is ValidationError.default_title
     with pytest.raises(ValidationError):
         edit.chamfer(sketch, edit.flat_points(sketch), 3, 20.0)
-    assert len(edit.chamfer(sketch, edit.flat_points(sketch), 3, 19.99).elements) == 5
+    assert len(edit.chamfer(sketch, edit.flat_points(sketch), 3, 19.99).elements) == 6
+
+
+def _typed_rectangle(anchored: bool = False) -> Sketch:
+    """Ein Rechteck 80 × 50 mit der unteren linken Ecke im Ursprung, beide
+    Maße getippt — wie ``SketchCanvas._finish_rectangle`` es nach „80 Tab 50
+    Enter" baut: waagerecht, senkrecht, Deckung, zwei Maße, kein Festpunkt."""
+    from app.core.sketch import shapes
+
+    rectangle = edit.move(shapes.rectangle(80.0, 50.0), (0, 1, 2, 3), 40.0, 25.0)
+    return replace(
+        rectangle,
+        constraints=tuple(
+            entry for entry in rectangle.constraints if anchored or entry.kind != "fixed"
+        ),
+    )
+
+
+def _drawn_extent(solved) -> tuple[tuple[float, float], tuple[float, float]]:
+    """Hülle der gezeichneten Linienenden — Hilfsgeometrie zählt nicht."""
+    points = [
+        point
+        for element in solved.elements
+        if element.kind == "line" and not element.construction
+        for point in element.points
+    ]
+    xs, ys = [point[0] for point in points], [point[1] for point in points]
+    return (min(xs), min(ys)), (max(xs), max(ys))
+
+
+@pytest.mark.parametrize("flat_index", [1, 3, 5, 7])
+@pytest.mark.parametrize("tool", ["fillet", "chamfer"])
+def test_breaking_a_corner_keeps_a_typed_rectangle_at_its_size(tool: str, flat_index: int) -> None:
+    """Bedienabnahme Zeichnen, F3: 80 × 50 getippt, R 5 an einer Ecke — und
+    die Platte kam 80 × 55 aus dem Dialog, um 3,2 mm nach unten gewandert.
+
+    Das Maß der gekürzten Seite zeigte danach auf das Reststück. Soll: die
+    Hülle bleibt (0 | 0)–(80 | 50) auf 10⁻⁶, an jeder der vier Ecken und mit
+    beiden Werkzeugen (Sollwert aus dem Bericht, Abschnitt F3).
+    """
+    from app.core.sketch.solver import solve_sketch
+
+    sketch = _typed_rectangle()
+    points = edit.flat_points(sketch)
+    broken = getattr(edit, tool)(sketch, points, flat_index, 5.0)
+    solved = solve_sketch(broken)
+
+    low, high = _drawn_extent(solved)
+    assert low == pytest.approx((0.0, 0.0), abs=1e-6)
+    assert high == pytest.approx((80.0, 50.0), abs=1e-6)
+    assert solved.free_dof == solve_sketch(sketch).free_dof, "nur die Lage bleibt frei"
+
+
+def test_a_fully_dimensioned_rectangle_stays_determined_after_a_chamfer() -> None:
+    """Mit Festpunkt und beiden Maßen ist das Rechteck bestimmt — und die Fase
+    daran auch. Vorher blieb ihr Winkel ein freier Grad; die Zeile sagte
+    „Noch ein Maß fehlt" über etwas, das vollständig eingegeben war. Der
+    Festpunkt sitzt an der unteren linken Ecke, und genau die wird gebrochen:
+    Er wandert auf den Hilfspunkt und hält weiter."""
+    from app.core.sketch.solver import solve_sketch
+
+    sketch = _typed_rectangle(anchored=True)
+    assert solve_sketch(sketch).free_dof == 0
+    for tool in ("fillet", "chamfer"):
+        broken = getattr(edit, tool)(sketch, edit.flat_points(sketch), 0, 4.0)
+        solved = solve_sketch(broken)
+        assert solved.free_dof == 0, tool
+        low, high = _drawn_extent(solved)
+        assert low == pytest.approx((0.0, 0.0), abs=1e-6), tool
+        assert high == pytest.approx((80.0, 50.0), abs=1e-6), tool
+
+
+def test_what_hung_at_the_corner_moves_to_the_virtual_corner() -> None:
+    """Eine Hilfslinie von der Ecke zur Mitte bleibt an der Ecke — auch wenn
+    die Ecke nur noch ein Hilfspunkt ist. Ohne Umhängen zeigte ihre Deckung
+    auf das gekürzte Linienende und zog die Hilfslinie mit dem Bogen weg."""
+    from app.core.sketch.solver import solve_sketch
+
+    sketch = box()
+    diagonal = SketchElement("line", ((40.0, 20.0), (20.0, 10.0)), construction=True)
+    sketch = replace(
+        sketch,
+        elements=(*sketch.elements, diagonal),
+        constraints=(*sketch.constraints, SketchConstraint("coincident", (3, 8))),
+    )
+    rounded = edit.fillet(sketch, edit.flat_points(sketch), 3, 5.0)
+    virtual = len(edit.flat_points(rounded)) - 1
+    assert SketchConstraint("coincident", (virtual, 8)) in rounded.constraints
+    solved = solve_sketch(rounded)
+    assert solved.elements[4].points[0] == pytest.approx((40.0, 20.0), abs=1e-9)
+
+
+def test_an_oblique_corner_keeps_its_virtual_corner_on_both_legs() -> None:
+    """Ohne Achse liegt der Hilfspunkt über ``parallel`` auf den Schenkeln —
+    und ein Maß von einem fernen Ende bis zur alten Ecke hält auch dort."""
+    from app.core.sketch.solver import solve_sketch
+
+    sketch = Sketch(
+        plane="plane:xy",
+        elements=(
+            SketchElement("line", ((0.0, 0.0), (30.0, 10.0))),
+            SketchElement("line", ((30.0, 10.0), (10.0, 30.0))),
+        ),
+        constraints=(
+            SketchConstraint("coincident", (1, 2)),
+            SketchConstraint("distance", (0, 1), str(math.hypot(30.0, 10.0))),
+            SketchConstraint("fixed", (0,)),
+        ),
+    )
+    rounded = edit.fillet(sketch, edit.flat_points(sketch), 1, 3.0)
+    assert [entry.kind for entry in rounded.constraints].count("parallel") == 2
+    solved = solve_sketch(rounded)
+    virtual = solved.elements[-1].points[0]
+    assert virtual == pytest.approx((30.0, 10.0), abs=1e-6), "die alte Ecke steht"
 
 
 def test_breaking_needs_a_corner() -> None:

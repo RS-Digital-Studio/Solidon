@@ -478,11 +478,11 @@ drücken und unter fünf Fachbegriffen suchen. Sobald der Umriss geschlossen
 ist, führen deshalb *Hochziehen* und *Abtragen* direkt in den jeweiligen
 Operationsdialog. Dort wird die genaue Höhe oder Tiefe angegeben — die
 Zeichenleiste erzeugt selbst keine Geometrie (Regel 2). Solange der Umriss
-offen ist, nennen beide Knöpfe im Hinweis ihre Bedingung. *Abtragen* verlangt
-zusätzlich genau einen ausgewählten exakten Körper; fehlt er, steht der Grund
-am gesperrten Knopf. Wurde der Skizzenmodus bereits für eine andere Operation
-geöffnet, bleiben die beiden kurzen Wege verborgen und *Fertig* hält die
-ursprüngliche Absicht.
+offen ist, nennen beide Knöpfe im Hinweis ihre Bedingung. *Abtragen* steht
+nur da, wenn gezeichnet wird, um an einem Zielkörper zu arbeiten, und
+*Hochziehen* heißt dort „anfügen" (Abschnitt „Ein Körper, ein Ziel" unten).
+Wurde der Skizzenmodus bereits für eine andere Operation geöffnet, bleiben die
+beiden kurzen Wege verborgen und *Fertig* hält die ursprüngliche Absicht.
 
 **Und der Umriss beantwortet auch, was seine Kennzahl bedeutet**
 (`outline_advice`). „Geschlossen · 12 Freiheitsgrade sind noch frei" sagt einem
@@ -607,15 +607,19 @@ eine Ecke, Klick.** Eine Ecke sind zwei Linienenden am selben Ort — gesucht
   (`edit.fillet`): Am Bogenende, das per Deckung auf der Linie liegt, ist die
   Tangentenbedingung ein doppelter Nullpunkt, und der Löser meldete
   „legt fest, was schon festliegt" über eine Skizze, die bestimmt war.
-* **Die Fase bleibt einen Grad frei.** Ihre Länge steht als Maß, ihr Winkel
-  nicht — ein Maß für „gleich weit von einer Ecke, die es nicht mehr gibt"
-  kennt die Bedingungsliste nicht. Eine neue Art wäre dabei nicht das
-  Hindernis: Sie ändert den **Aufbau** der Projektdatei nicht, nur den
-  Wertebereich einer Aufzählung, und ältere Dateien lesen sich unverändert
-  (die Versionsstufe steht trotzdem, seit RM-188 P6.6 — die Begründung steht
-  in `app/core/sketch/CLAUDE.md`). Was bleibt, ist der Bedienentwurf: Für
-  diesen Winkel gäbe es keine Auswahl, an der ein Knopf hängen könnte. Die
-  Zeile sagt es ehrlich („Noch ein Maß fehlt").
+* **Die alte Ecke bleibt als Hilfspunkt stehen** (`edit._held_by_the_virtual_corner`,
+  Bedienabnahme Zeichnen F3, 23.09.2026). Beide Werkzeuge kürzen die
+  Schenkel; das Maß der gekürzten Seite zeigte danach auf das Reststück, und
+  ein getipptes Rechteck 80 mal 50 kam nach R 5 als 80 mal 55 aus dem Dialog.
+  Der Hilfspunkt liegt auf beiden verlängerten Schenkeln — über dieselbe Achse,
+  wo ein Schenkel waagerecht oder senkrecht gehalten wird, sonst über
+  `parallel` vom fernen Ende —, und was am Eckende hing (Seitenmaß, Deckung mit
+  einem Dritten, Festpunkt), hängt jetzt an ihm. Wie in Fusion steht er im
+  Bild und lässt sich ziehen.
+* **Die Fase misst von der alten Ecke aus**, wie getippt: ein Maß auf dem
+  einen Schenkel, *gleich lang* auf dem anderen. Damit ist auch ihr Winkel
+  bestimmt; vorher stand die Länge der Schräge als Maß, und die Zeile sagte
+  „Noch ein Maß fehlt" über eine vollständig eingegebene Fase.
 
 ## Vieleck, Langloch und vier Bedingungen (14.09.2026)
 
@@ -815,14 +819,17 @@ Dinge, alle drei aus der Durchsicht `konzepte/durchsicht-zeichenmodus-2026-09.md
 beste für kunden daraus, denk auch dran weniger ist manchmal mehr"), und so
 sind sie gefallen:
 
-* **Fertig klappt die Arten direkt auf** (`_fill_finish_menu`): ein Menü am
-  Knopf mit den neun Skizzen-Operationen des Registers, Hochziehen und Tasche
-  vorn, jede mit ihrem `doc`-Satz als Tooltip; was nicht geht, ist gesperrt
-  und sagt warum (`_update_sketch_actions`). Der Dialog „Was soll daraus
-  werden?" mit *Weiter* und *Zurück zum Zeichnen* ist gefallen — zwei Fenster
-  für eine Wahl. Mit festgelegter Operation ist *Fertig* ein Knopf ohne Menü.
-  Ohne Wahl gilt der wahrscheinlichere Fall: auf leerer Fläche ein Körper,
-  über einem Körper eine Tasche (Robert, 03.09.2026).
+* **Die Arten stehen in einer Liste, und die hängt an *Mehr*, nicht an
+  *Fertig*** (`_fill_finish_menu`; bis zum 23.09.2026 am Knopf *Fertig*):
+  die Skizzen-Operationen des Registers, Hochziehen, Anfügen und Tasche vorn,
+  jede mit ihrem `doc`-Satz als Tooltip; was nicht geht, ist gesperrt und
+  sagt warum, und was als Knopf daneben steht, blendet die Liste aus
+  (`_update_sketch_actions`). Der Dialog „Was soll daraus werden?" mit
+  *Weiter* und *Zurück zum Zeichnen* ist gefallen — zwei Fenster für eine
+  Wahl. Mit festgelegter Operation gibt es kein *Mehr*. *Fertig* nimmt ohne
+  Wahl den wahrscheinlicheren Fall: über dem Zielkörper eine Tasche, sonst ein
+  neuer Körper (Robert, 03.09.2026; „über einem Körper" heißt seit dem
+  23.09.2026 über dem Zielkörper).
 * **Die Zeile der Skizzenkarte sagt nur, was sonst nirgends steht.** Ebene
   führt das Auswahlfeld, Zustand die Zeile des Panels, Geste die Karte im
   Bild — dann ist sie leer. Sie spricht bei abweichendem Blick („Blick aus der
@@ -956,3 +963,73 @@ der Art): „Auf Kurve — Punkt 1, Ellipse 1", nicht „Ellipse 1 Mitte".
 auf die Kurve fügt dort einen Punkt ein — auf der Kurve, nicht am Klick —,
 Rechtsklick auf einen ihrer Punkte nimmt ihn heraus, unter drei Punkten
 gesperrt und begründet. Entf löscht weiterhin das ganze Element.
+## Ein Körper, ein Ziel (23.09.2026)
+
+Robert: „Beim Zeichnen wäre es auch gut, wenn man nur einen Körper hat und
+nicht alle, also am besten den ausgewählten; oder wenn keiner ausgewählt ist,
+ist man beim neu Zeichnen." Umgesetzt als Paket Z1 der Bedienabnahme
+(`reports/zeichnen-bedienung.md`, Abschnitt 7). Die Stellen liegen im
+Hauptfenster (`start_sketch`, `_resolve_sketch_body`, `_apply_sketch_body`),
+in der Ansicht (`Viewport.set_sketch_focus`) und im Register
+(`sketch_join`).
+
+* **Das Ziel folgt der Ausdrücklichkeit** (`_resolve_sketch_body`): ein
+  genannter Körper (Auswahlfenster, „Zeichnung weiterverwenden", zurückgeholte
+  Zeichnung), dann der Körper des geänderten Schritts (Eingang von Tasche und
+  Anfügen, sonst der Körper der Fläche, sonst der erzeugte Körper selbst),
+  dann der Körper der Fläche, auf der gezeichnet wird — auch über
+  Versatzebenen —, dann der **eine** gewählte Körper. Ohne Auswahl ist es eine
+  neue Zeichnung. **Mehrere gewählte Körper sind eine Frage** (Regel 21): Die
+  Leiste nennt sie mit Namen und *Neuer Körper*; bis zur Antwort stehen alle
+  Körper leise im Bild. Eine Baugruppe ist dabei nichts anderes als mehrere
+  gewählte Körper.
+* **Die übrigen Körper sind ausgeblendet** (Entscheidung Robert, 23.09.2026,
+  gegen die Empfehlung „durchscheinend"): `_in_view` lässt im Zeichenmodus
+  nur den Zielkörper durch — Bild, Klick, Fang, Kanten. *Nachbarn zeigen*
+  (Knopf, Taste N) holt sie mit `SKETCH_NEIGHBOUR_OPACITY` ohne Kanten und
+  nicht anklickbar zurück (`_draw_sketch_neighbours`, eigene Aktoren). Eine
+  eigene Regel neben `_hidden`, weil die Ausblendung des Nutzers im Objektbaum
+  steht und den Modus überlebt; diese endet mit ihm.
+* **Ebenenfeld, Projizieren und Flächenkontur sehen nur den Zielkörper**
+  (`_sketch_scope` → `_sketch_surroundings(only=…)`), auch wenn Nachbarn
+  eingeblendet sind — an ihnen richtet man aus, auf ihnen zeichnet man nicht.
+  Bei einer neuen Zeichnung sind es die Grundebenen, und die Nachbarn erst,
+  wenn sie ausdrücklich eingeblendet sind. Das Ebenenfeld nennt höchstens
+  `MOST_PLANE_FACES` Flächen, die größten zuerst; die gewählte steht immer
+  dabei. Die fünfte Ebenenkarte bietet die Oberseite des Zielkörpers an
+  (`SketchPlanePicker.offer_face`, `placement.top_face`). Aufgelöst werden
+  Ebenen weiter gegen die ganze Szene — eine Zeichnung aus dem Verlauf kann
+  auf einer Fläche eines anderen Körpers liegen.
+* **Das Ziel bestimmt das Ergebnis.** *Hochziehen* heißt am Zielkörper
+  *An Körper anfügen* (`sketch_join`, Befund E4), wenn der Umriss auf oder
+  über ihm liegt (`_outline_meets_the_body`, grob über Hüllquader wie vorher
+  die Suche nach dem Körper darunter), sonst neuer Körper. *Abtragen* steht
+  nur mit Ziel da und schneidet nur das Ziel — die Hüllquadersuche nach dem
+  Körper unter der Zeichnung (Robert, 30.08.2026) ist damit abgelöst. Ein Ziel
+  wählt man auch nachträglich im Feld *Ziel* der Leiste.
+* **Beim Verlassen kommt die vorige Sicht zurück**: Nachbarregel aus,
+  Darstellung, Projektion, Platte, das offene Werkzeug samt Explosion
+  (`_view_before_sketch`, `_restore_the_view_before_sketch`). Beim Betreten
+  wechselt die Ansicht auf die Platte des Ziels, und eine offene Explosion
+  wird aufgehoben — auf verschobenen Körpern landete die Zeichnung woanders
+  als gesehen.
+* **Verschwindet das Ziel im Modus** (Agent, Fernsteuerung), bleibt die
+  Zeichnung, die Leiste sagt es, und *Fertig* legt einen neuen Körper an
+  (`_sketch_body_missing`).
+* **Eine Zeichnung trägt ihren Ort** (F1, F2): Kommt eine Zeichnung in den
+  Dialog, übernimmt er aus der Auswahl weder „Bis zur Fläche" noch X/Y/
+  Oberkante (`_carries_a_drawing` in `run_operation`), und der Dialog leert
+  ein Ziel, das auf der Zeichenfläche selbst liegt
+  (`OperationDialog._release_the_drawing_face`).
+* **Ein Knopf, eine Bedeutung** (E2): *Fertig* hat kein Menü mehr. Mit
+  Menü **und** `clicked` am selben Knopf entschied die Zustellung des
+  Loslassens, welche Bedeutung galt — die echte Maus (über `SendInput`
+  gemessen) öffnete das Menü, Eingabetaste, `QTest` und `click()` den Dialog.
+* **Escape verwirft nicht** (Entscheidung Robert zu R5): Kette, Werkzeug,
+  Auswahl — danach sagt die Zeile „Zum Verlassen: Fertig oder Verwerfen."
+  *Verwerfen* bleibt der eine Weg samt Rückweg über Strg+Z.
+* **Das Auswahlfenster einer ebenen Fläche** bietet *Hier zeichnen* und
+  *Loch oder Aussparung zeichnen …* (B2, `FeaturePanel.sketchRequested`), der
+  Verlauf an Schritten mit Zeichnung *Zeichnung weiterverwenden* (E6,
+  Entscheidung Robert: kopiert den Text in eine neue, freie Zeichnung — §30.1
+  bleibt unverändert).

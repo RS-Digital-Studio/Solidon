@@ -902,6 +902,16 @@ AXIS_LABEL_PIXELS = 64.0
 #: Darstellung mit 45 % war im Handbuchbild lauter als die Skizze selbst.
 SKETCH_CONTEXT_OPACITY = 0.16
 
+#: Deckkraft der übrigen Körper, wenn sie beim Zeichnen eingeblendet sind.
+#:
+#: Gezeichnet wird für **einen** Körper (Robert, 23.09.2026: „nur einen Körper
+#: … am besten den ausgewählten"). Die anderen sind ausgeblendet, bis
+#: *Nachbarn zeigen* sie holt — dann halb so deutlich wie der Zielkörper, ohne
+#: Kanten und nicht anklickbar: Man richtet an ihnen aus, man zeichnet nicht
+#: auf ihnen. Zwei Stufen Deckkraft **und** die fehlenden Kanten unterscheiden
+#: sie vom Zielkörper (Regel 18), nicht die Farbe.
+SKETCH_NEIGHBOUR_OPACITY = 0.08
+
 
 SketchGridSegment = tuple[tuple[float, float, float], tuple[float, float, float]]
 
@@ -3393,6 +3403,9 @@ class SketchPlanePicker(QFrame):
 
         row = QHBoxLayout()
         row.setSpacing(TIGHT)
+        self._row = row
+        self._face_plane = ""
+        """Die Fläche des Zielkörpers, die die fünfte Karte anbietet — oder keine."""
         self._buttons: dict[str, QToolButton] = {}
         # **Und eine vierte Karte für eine eigene Ebene** (RM-188 P3.3): parallel
         # versetzt, gekippt oder durch drei Punkte. Sie öffnet denselben Dialog
@@ -3435,6 +3448,37 @@ class SketchPlanePicker(QFrame):
         chosen = getattr(parent, "sketchPlaneChosen", None)
         if chosen is not None:
             chosen.emit(plane)
+
+    def offer_face(self, plane: str, label: str = "") -> None:
+        """Eine Karte für die oberste Fläche des Zielkörpers — oder keine.
+
+        Gezeichnet wird für einen Körper (Bedienabnahme Zeichnen, 7.2): Seine
+        Oberseite ist dann die wahrscheinlichste Ebene und steht vor den drei
+        Grundebenen, dort, wo man hinsieht. Ohne Zielkörper fällt die Karte weg.
+        """
+        button = self._buttons.get("face")
+        self._face_plane = plane
+        if not plane:
+            if button is not None:
+                button.hide()
+            return
+        if button is None:
+            button = QToolButton(self)
+            button.setIcon(icon("view_top", button))
+            button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
+            button.setMinimumSize(142, 76)
+            button.clicked.connect(
+                weak_slot(self, lambda picker: picker._choose(picker._face_plane))
+            )
+            self._row.insertWidget(0, button)
+            self._buttons["face"] = button
+        tip = str(tr("Auf der obersten Fläche des Zielkörpers zeichnen."))
+        button.setText(label)
+        button.setToolTip(tip)
+        button.setAccessibleName(label)
+        button.setAccessibleDescription(tip)
+        button.show()
+        self.adjustSize()
 
     def set_theme(self, theme: str) -> None:
         """Kartenfarben aus dem Thema; Fokus und Hover bleiben sichtbar."""
@@ -4906,6 +4950,18 @@ class Viewport(QWidget):
         self._hidden: frozenset[ObjectId] = frozenset()
         """§18.8: was der Nutzer ausgeblendet hat. Ansicht, nicht Szene — die
         Körper werden weiter gerechnet, geprüft und exportiert."""
+        self._sketch_focus: tuple[ObjectId | None, bool] | None = None
+        """Für welchen Körper gerade gezeichnet wird, und ob die übrigen
+        eingeblendet sind — ``None``, solange die Regel nicht gilt.
+
+        Ein Filter wie :attr:`_hidden`, aber ein eigener: Die Ausblendung des
+        Nutzers steht im Objektbaum und überlebt den Zeichenmodus, diese
+        endet mit ihm. In dieselbe Menge geschrieben, stünde nach dem Verlassen
+        ein Auge im Baum durchgestrichen, das niemand angeklickt hat."""
+        self._neighbour_actors: dict[ObjectId, Any] = {}
+        """Die durchscheinenden Nachbarn beim Zeichnen — eigene Aktoren, denn
+        sie sind weder Klickziel noch Teil der Deckkraftregel für den
+        Zielkörper (:meth:`set_sketching`)."""
         self._display_cache: dict[DisplayKey, Any] = {}
         """§18.9: die dezimierte Version des zuletzt gezeigten Körpers. Sie
         fließt nie in den Kern zurück."""
@@ -6389,6 +6445,9 @@ class Viewport(QWidget):
         for actor in self._actors.values():
             self.renderer.remove(actor)
         self._actors.clear()
+        for actor in self._neighbour_actors.values():
+            self.renderer.remove(actor)
+        self._neighbour_actors.clear()
         self._actor_offsets.clear()
         self._actor_scene = result
         # **Und mit ihnen die gemerkten Farben.** Ein neuer Aktor kommt grau
@@ -6541,6 +6600,7 @@ class Viewport(QWidget):
             # Versatz der Ansicht kommt erst beim Merken dazu.
             self._remember_shadow(local, mesh, object_id, mesh, offset)
 
+        self._draw_sketch_neighbours(result)
         # Erst jetzt: ein Schatten fällt auf die Fläche, auf der sein Körper
         # steht, und welche das ist, weiß nur die vollständige Szene.
         if self._sketch_frame is None:
@@ -7146,6 +7206,74 @@ class Viewport(QWidget):
         # Szene belegt. ``show_scene`` zieht die Kulisse nach, sobald sich die
         # Zahl ändert — und ``_plate`` ist gesetzt, bevor sie gezählt wird.
         self.show_scene(self._scene_for_rebuild())
+
+    def set_sketch_focus(
+        self, target: ObjectId | None, *, neighbours: bool = False, active: bool = True
+    ) -> None:
+        """Zeichnen gilt genau einem Körper — die übrigen treten ab (Abschnitt 7).
+
+        ``target`` ist der Körper, an dem gezeichnet wird, ``None`` heißt „neu
+        zeichnen". Ohne ``neighbours`` sind alle anderen ausgeblendet (die
+        Entscheidung Roberts vom 23.09.2026); mit ihnen stehen sie
+        durchscheinend und ohne Kanten da (:data:`SKETCH_NEIGHBOUR_OPACITY`),
+        zum Ausrichten und für Passungen. ``active=False`` hebt die Regel auf —
+        beim Verlassen des Zeichenmodus.
+        """
+        wanted = (target, neighbours) if active else None
+        if wanted == self._sketch_focus:
+            return
+        self._sketch_focus = wanted
+        self.show_scene(self._scene_for_rebuild())
+
+    @property
+    def sketch_focus(self) -> tuple[ObjectId | None, bool] | None:
+        """Zielkörper und Nachbarsicht des Zeichenmodus, oder ``None``."""
+        return self._sketch_focus
+
+    def sketch_neighbours_drawn(self) -> tuple[ObjectId, ...]:
+        """Welche Nachbarn gerade durchscheinend im Bild stehen — für Tests."""
+        return tuple(self._neighbour_actors)
+
+    def _sketch_neighbours(self, result: EvaluationResult) -> list[tuple[ObjectId, Any]]:
+        """Die Körper, die *Nachbarn zeigen* einblendet — sichtbar, auf der
+        betrachteten Platte, nicht ausgeblendet und nicht der Zielkörper."""
+        focus = self._sketch_focus
+        if focus is None or not focus[1]:
+            return []
+        return [
+            (object_id, entry)
+            for object_id, entry in result.scene.objects.items()
+            if object_id != focus[0]
+            and entry.visible
+            and object_id not in self._hidden
+            and (self._plate < 0 or entry.plate == self._plate)
+        ]
+
+    def _draw_sketch_neighbours(self, result: EvaluationResult) -> None:
+        """Die eingeblendeten Nachbarn als leise Flächen — nicht anklickbar."""
+        if self.renderer is None:
+            return
+        import numpy as np
+
+        for object_id, entry in self._sketch_neighbours(result):
+            mesh = self._for_display(object_id, entry.mesh, result.object_hashes.get(object_id, ""))
+            raw = getattr(mesh, "raw", None)
+            if raw is None or not len(raw.faces):
+                continue
+            offset = np.asarray(self._view_offset(entry, result), dtype=float)
+            self._neighbour_actors[object_id] = self.renderer.add_surface(
+                np.asarray(raw.vertices, dtype=float) + offset,
+                np.asarray(raw.faces, dtype=np.int64),
+                name=f"neighbour:{object_id}",
+                style=SurfaceStyle(
+                    colour=self._object_colour,
+                    opacity=SKETCH_NEIGHBOUR_OPACITY,
+                    show_edges=False,
+                    smooth=self._shading == "smooth",
+                    backface_colour=BACKFACE_COLOUR,
+                    pickable=False,
+                ),
+            )
 
     def set_explosion(self, factor: float) -> None:
         """Zeichnet die Teile auseinander, um eine Teilung anzusehen (§18.8).
@@ -8720,6 +8848,13 @@ class Viewport(QWidget):
         das niemand sieht.
         """
         if not entry.visible or object_id in self._hidden:
+            return False
+        # **Beim Zeichnen gilt ein Körper** (Bedienabnahme Zeichnen, Abschnitt
+        # 7): Die übrigen sind kein Klickziel, kein Fang und keine Kante —
+        # auch nicht, wenn *Nachbarn zeigen* sie durchscheinend einblendet.
+        # Dann zeichnet sie :meth:`_draw_sketch_neighbours` für sich.
+        focus = self._sketch_focus
+        if focus is not None and object_id != focus[0]:
             return False
         return self._plate < 0 or entry.plate == self._plate
 

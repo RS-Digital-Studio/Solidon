@@ -44,7 +44,7 @@ bleibt dadurch abbrechbar, bevor ein Ergebnis in Szene oder Cache erscheint.
 | `shapes.py` | Die Grundformen und die zwei Lochbilder; `grid_centres` hält die gemeinsame mittige Rasterlage für Skizze und Feldschnitt |
 | `planes.py` | Wo eine Skizze liegt; `frame_in_scene` löst eine Ebenenangabe gegen eine Szene mit ihren Projektparametern auf — der Weg für jeden Verbraucher außerhalb der Skizzen-Ops |
 | `edit.py` | Trimmen (auch Ellipsen — so entsteht der Ellipsenbogen), Verlängern, Versetzen, Spiegeln — an einer Ecke Verrunden und Fase (`corner_at`, `fillet`, `chamfer`), die vier Formen aus zwei Klicks (`polygon_at`, `slot_between`, `hole_grid_between`, `bolt_circle_at` — die Lochbilder halten über Bedingungen zwischen den Mitten, nicht über Festpunkte), Projizieren (`project`, ein Ebenenschnitt — am exakten Körper exakt über `brep.section`: Kreise, Bögen und Strecken statt eines Sehnenzugs, fest wie am Netz über `_held_copy`) und die Flächenkontur (`face_outline`, der Rand der Fläche unter der Zeichnung); die Ellipse aus drei Klicks (`ellipse_from_clicks`), Splinepunkte einfügen und entfernen (`spline_point_added`, `spline_point_removed`), Löschen mit Umnummerieren (`removed`) und die Pläne der Kurvenbedingungen (`tangent_plan`, `curvature_plan`, `on_curve_plan`, `equal_axes_plan`, `taken_back`) |
-| `ops.py` | Die Operationen der Kategorie „Skizze“; `cut_regions` teilt den bestehenden Taschenschnitt mit aufgelösten Feldern, einschließlich Ebene, Durchgang und Z-Bezug (`_cut_span`, auch für den Übergangsschnitt). Die drei Schnitte mit Werkzeug (`sketch_revolve_cut`, `sketch_sweep_cut`, `sketch_loft_cut`) bauen ihr Werkzeug über dieselben Helfer wie die Erzeuger (`_revolve_section`, `_swept`, `_loft_outlines`) und ziehen es über `_cut_with_tool` in beiden Kernen ab |
+| `ops.py` | Die Operationen der Kategorie „Skizze“; `cut_regions` teilt den bestehenden Taschenschnitt mit aufgelösten Feldern, einschließlich Ebene, Durchgang und Z-Bezug (`_cut_span`, auch für den Übergangsschnitt). Die drei Schnitte mit Werkzeug (`sketch_revolve_cut`, `sketch_sweep_cut`, `sketch_loft_cut`) bauen ihr Werkzeug über dieselben Helfer wie die Erzeuger (`_revolve_section`, `_swept`, `_loft_outlines`) und ziehen es über `_cut_with_tool` in beiden Kernen ab; `sketch_join` fügt den hochgezogenen Umriss an den Eingang an (exakt oder am Netz über die Rückfallkette) und teilt mit `sketch_extrude` das Schema `RaisedOutlineParams` |
 | `serialize.py` | **Die ganze Skizze als ein Parameterwert** einer Operation |
 
 ## Warum `serialize.py` der Schlüssel ist
@@ -149,9 +149,23 @@ erhalten.
   Jacobimatrix singulär, und die Rangprüfung meldete „legt fest, was schon
   festliegt" über eine bestimmte Skizze. `perpendicular` zwischen Linie und
   Radiusstrahl zum Berührpunkt sagt dasselbe mit einer Ableitung, die trägt.
-  Die Fase hält nur ihre Länge als Maß; ihr Winkel bleibt ein Freiheitsgrad,
-  weil „gleich weit von einer Ecke, die es nicht mehr gibt" keine Bedingung
-  der Liste ist und eine neue Art ein Dateiformat wäre.
+- **Die gebrochene Ecke bleibt als Hilfspunkt** (`_held_by_the_virtual_corner`).
+  Verrunden und Fase kürzen die Schenkel; was am Eckende hing — das Seitenmaß
+  zuerst —, hängt danach am Hilfspunkt, der über zwei Gleichungen auf beiden
+  verlängerten Schenkeln liegt: `horizontal`/`vertical` vom fernen Ende, wo
+  der Schenkel so gehalten wird, sonst `parallel(fern, gekürzt, fern,
+  Hilfspunkt)`. „Punkt auf Linie" braucht es dafür nicht. Die lineare Achse
+  hat Vorrang, weil `parallel` über Einheitsvektoren rechnet und beim Ziehen
+  einer unbemaßten Seite die freie Gegenseite um 1,9 µm je 10 mm schob
+  (gemessen 23.09.2026; mit Achse unter 10⁻⁸). Die Fase misst vom Hilfspunkt
+  aus (Maß plus `equal`) und ist damit bestimmt.
+- **Eine gezeichnete Tasche verschiebt nicht** (`sketch_pocket`): X und Y
+  setzen die Grundform; eine Zeichnung liegt schon in ihrer Ebene, auf einer
+  Fläche mit der Flächenmitte als Ursprung. Zweimal verschoben schnitt sie auf
+  jeder außermittigen Fläche ins Leere (Bedienabnahme Zeichnen, F2).
+- **Die Zeichenfläche ist nie „Bis zur Fläche"** (`_is_the_drawing_face`): Von
+  ihr aus gibt es kein Vorwärts; die Absage nennt das und bietet die Höhe als
+  Zahl an.
 - **Flächenrahmen übernehmen die orientierte Merkmalsnormale.** Die Mitte
   des Hüllquaders entscheidet keine Innen-/Außenrichtung, insbesondere an
   Innenböden und konkaven Körpern. Eine blinde Tasche endet in beiden Kernen

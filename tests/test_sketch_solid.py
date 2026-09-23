@@ -464,3 +464,82 @@ def test_a_drawn_spline_is_cut_along_its_curve_not_its_clicks() -> None:
         if 0.0 < x < 10.0
     )
     assert beside > 0.2, "ein Zug durch die Klicks läge auf der Sehne"
+
+
+def _off_centre_mesh_box():
+    """Ein Quader 60 × 40 × 10, dessen Mitte bei (50 | 30) steht — und seine
+    Deckfläche als Merkmal, so wie die Erkennung sie meldet."""
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.types import Feature, SceneObject
+
+    box = trimesh.creation.box(extents=(60.0, 40.0, 10.0))
+    box.apply_translation((50.0, 30.0, 5.0))
+    top = Feature(
+        id="face_top",
+        kind="face",
+        provenance="detected",
+        params={"centre": (50.0, 30.0, 10.0), "normal": (0.0, 0.0, 1.0), "area": 2400.0},
+    )
+    return SceneObject(id="obj_1", name="Teil", mesh=MeshData.of(box), features={"face_top": top})
+
+
+def test_a_drawn_pocket_on_an_off_centre_face_of_a_mesh_cuts_where_it_is_drawn() -> None:
+    """Bedienabnahme Zeichnen, F2: Tasche 20 × 10 × 3 um die Flächenmitte —
+    das Volumen blieb unverändert, „das Werkzeug liegt neben dem Körper".
+
+    Die Zeichnung liegt schon im Rahmen der Fläche (Ursprung = Flächenmitte);
+    der Dialog trug zusätzlich deren Weltkoordinaten in X/Y ein, und die
+    Tasche verschob die gezeichnete Kontur noch einmal. Eine Zeichnung hat
+    ihren Ort: X und Y gelten nur der Grundform ohne Zeichnung. Soll: genau
+    20 · 10 · 3 = 600 mm³ ab (± 0,5 %, Sollwert aus dem Bericht)."""
+    import dataclasses
+
+    from app.core.sketch import shapes
+    from app.core.sketch.serialize import sketch_to_text
+
+    body = _off_centre_mesh_box()
+    drawn = dataclasses.replace(shapes.rectangle(20.0, 10.0), plane="feature:obj_1:face_top")
+    result = _pocket(body, sketch=sketch_to_text(drawn), depth=3.0, x=50.0, y=30.0, z=10.0)
+
+    cut = result.outputs[0].mesh
+    assert body.mesh.volume - cut.volume == pytest.approx(600.0, rel=0.005)
+    assert not [finding for finding in result.findings if finding.severity != "info"]
+
+
+def test_a_joined_cylinder_grows_a_mesh_body_on_an_off_centre_face() -> None:
+    """Bedienabnahme Zeichnen, F1 und E4, am eingelesenen Netz: Kreis Ø 8 auf
+    der Deckfläche eines Quaders, dessen Mitte nicht im Ursprung liegt, 10
+    hoch angefügt. Soll: π·16·10 mehr Volumen (± 0,5 %, Sollwert aus dem
+    Bericht), ein Stück, weiter ein Netz."""
+    import dataclasses
+
+    from app.core.registry import REGISTRY
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.sketch import shapes
+    from app.core.sketch.serialize import sketch_to_text
+    from app.core.types import OpContext, Scene
+
+    body = _off_centre_mesh_box()
+    drawn = dataclasses.replace(shapes.circle(8.0), plane="feature:obj_1:face_top")
+    spec = REGISTRY.get("sketch_join")
+    result = spec.fn(
+        OpContext(
+            scene=Scene(objects={body.id: body}, parameters={}),
+            inputs=[body],
+            params=spec.params(sketch=sketch_to_text(drawn), height=10.0),
+            profile=None,
+            quality="fine",
+            seed=None,
+            progress=lambda fraction, text: None,
+            ask=lambda question, choices: choices[0],
+            cancelled=NeverCancelled(),
+        )
+    )
+    grown = result.outputs[0].mesh
+    assert grown.volume - body.mesh.volume == pytest.approx(math.pi * 16.0 * 10.0, rel=0.005)
+    assert grown.component_count == 1
+    assert grown.is_watertight
+    assert result.outputs[0].kind != "brep"
+    assert grown.bounds.maximum[2] == pytest.approx(20.0, abs=1e-6)
