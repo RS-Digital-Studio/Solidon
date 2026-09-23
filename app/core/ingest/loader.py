@@ -1159,6 +1159,9 @@ def normalise(
     # 5 — Komponenten. Kleine werden gemeldet, nie still verworfen.
     progress(0.8, str(_("Komponenten zählen")))
     components = _count_components(body, findings)
+    # trimesh berechnet Dichtheit und Umlaufsinn gemeinsam. Die reine
+    # Verschiebung verwirft beide Cachewerte; zurückgelegt werden sie als Paar.
+    winding = bool(body.is_winding_consistent) if len(body.faces) else False
 
     # 6 — Lage. Aufsetzen und Zentrieren werden angeboten, nicht erzwungen.
     if (place_on_bed or centre) and len(body.faces):
@@ -1182,6 +1185,7 @@ def normalise(
         if cache is not None:
             cache.verify()
             cache["is_watertight"] = bool(closed)
+            cache["is_winding_consistent"] = winding
             cache["solidon_component_count"] = components
         # Das Volumen über ``MeshData`` — dasselbe Integral wie trimesh, ohne
         # dessen Trägheitsmomente, und unter dem Schlüssel, den ``volume``

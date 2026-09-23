@@ -58,6 +58,10 @@ Nullwirkung ersetzt sie nicht.
   der gilt: erst am verschweißten Netz, am unverschweißten nur, wenn das
   Verschweißen es aufgerissen hat; das zurückgelegte Netz behält seine
   Antwort. `tests/test_ingest_figures.py` zählt die Fragen.
+- **Dichtheit und Umlaufsinn reisen als Paar.** trimesh berechnet beide über
+  dieselbe Topologieprüfung. `normalise` bewahrt vor Aufsetzen oder Zentrieren
+  beide Antworten und legt sie danach gemeinsam zurück; ein halber Cache
+  verhindert die fehlende Auskunft beim nachfolgenden booleschen Schnitt.
 - **3MF ist eine Baugruppe**, kein Körper. Sie kommt als mehrere Objekte an.
 - **STEP ist es auch** (P7.4). Der Plan liest die Datei über
   `brep.step.read_assembly`, schreibt die Kennungen aller Körper in

@@ -99,7 +99,9 @@ DEFAULT_DISK_BUDGET_BYTES: Final = 2 * 1024 * 1024 * 1024
 #:   Düsenzahl, und der Operationsschlüssel das Profil jedes Eingangs mit
 #:   eigenem Material — eine geänderte Düsenzahl ordnet neu an, ein
 #:   kalibriertes Körpermaterial bohrt neu.
-CACHE_FORMAT_VERSION: Final = 25
+#: - 26: vollständige Topologieauskunft nach Aufsetzen und Zentrieren beim
+#:   Import; zuvor abgewiesene Folgeoperationen werden neu gerechnet.
+CACHE_FORMAT_VERSION: Final = 26
 
 
 @dataclass(frozen=True, slots=True)

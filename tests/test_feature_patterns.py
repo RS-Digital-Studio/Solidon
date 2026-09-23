@@ -427,6 +427,35 @@ def test_an_imported_countersunk_plate_gets_its_pattern(profile: Profile) -> Non
     assert len([f for f in found.values() if f.kind == "cone"]) == 2
 
 
+def test_an_imported_plate_on_the_bed_gets_a_fifth_hole(profile: Profile) -> None:
+    """Korpusplatte 80 × 50 × 8 mit vier 48-eckigen Bohrungen Ø 5,2: eine weitere längs Y."""
+    load_operations()
+    path = MESHES / "plate_holes.stl"
+    mesh = normalise(read_mesh(path.read_bytes(), path.suffix), "mm", place_on_bed=True).mesh
+    source = SceneObject(id="obj_1", name="Lochplatte", mesh=mesh, features=detect(mesh))
+    hole = _holes(source)[0]
+
+    result = run(
+        "pattern_feature",
+        source,
+        profile,
+        at_features=(hole.id,),
+        kind="linear",
+        count=2,
+        spacing=15.0,
+        dy=1.0,
+    )
+
+    body = result.outputs[0].mesh
+    # Jeder der 48 Mantelabschnitte begrenzt ein Dreieck vom Kreismittelpunkt.
+    bore_volume = 48 / 2 * 2.6**2 * math.sin(2 * math.pi / 48) * 8.0
+    assert float(body.volume) == pytest.approx(80 * 50 * 8 - 5 * bore_volume, abs=1e-3)
+    assert body.is_watertight and body.component_count == 1
+    assert len(_holes(result.outputs[0])) == 5
+    assert _codes(result)["pattern_feature.done"].values["placed"] == 1
+    assert "pattern_feature.no_target" not in _codes(result)
+
+
 def test_overlapping_instances_are_explained_and_left_out(profile: Profile) -> None:
     """Abstand 4 bei Ø 6: die zweite Instanz schnitte in die Quelle — sie entsteht nicht."""
     load_operations()

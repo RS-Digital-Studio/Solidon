@@ -144,6 +144,36 @@ def test_the_figures_the_window_reads_are_already_known_after_normalise() -> Non
     assert result.mesh.volume > 0.0
 
 
+@pytest.mark.parametrize(
+    ("place_on_bed", "centre"), [(False, False), (True, False), (False, True), (True, True)]
+)
+def test_placing_an_import_keeps_its_winding_answer(place_on_bed: bool, centre: bool) -> None:
+    """Dichtheit und Umlaufsinn bleiben nach dem Aufsetzen gemeinsam gültig.
+
+    Die Verschiebung verwirft beide trimesh-Antworten. Nur Dichtheit wieder
+    einzusetzen verhinderte deren gemeinsame Neuberechnung: eine gültige
+    Lochplatte galt danach beim Merkmalsmuster als falsch orientiert.
+    """
+    mesh = read_mesh((MESHES / "plate_holes.stl").read_bytes(), ".stl")
+    mesh.raw.apply_translation((10.0, -5.0, 0.0))
+    result = normalise(mesh, "mm", place_on_bed=place_on_bed, centre=centre)
+
+    assert result.mesh.raw.is_watertight
+    assert result.mesh.raw.is_winding_consistent
+
+
+def test_placing_without_normal_repair_does_not_invent_consistent_winding() -> None:
+    """Die gemerkte Antwort ist eine Messung, keine Annahme über geschlossene Netze."""
+    from app.core.geom.mesh import MeshData
+
+    body = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+    body.faces[0] = body.faces[0][::-1]
+    result = normalise(MeshData.of(body), "mm", unify_normals=False, mend=False, place_on_bed=True)
+
+    assert result.mesh.raw.is_watertight
+    assert result.mesh.raw.is_winding_consistent is False
+
+
 def test_an_inverted_mesh_still_says_its_faces_were_turned() -> None:
     """Der Befund kommt aus dem Vergleich der Dreiecke vorher und nachher, nicht mehr
     aus zwei Volumenrechnungen — und er kommt weiterhin."""
