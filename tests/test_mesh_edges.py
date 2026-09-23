@@ -2366,3 +2366,278 @@ def test_the_reference_face_is_the_one_facing_up_then_back_then_right() -> None:
     assert not reference_first((0.0, -1.0, 0.0), (0.0, 0.0, 1.0))
     assert reference_first((0.0, 1.0, 0.0), (1.0, 0.0, 0.0))
     assert reference_first((1.0, 0.0, 0.0), (0.0, -1.0, 0.0))
+
+
+# --- P6.2: schräge und gekrümmte Nachbarflächen, und welche Fläche welches Maß trägt ---------
+
+
+def _prism(kernel: str, corners: int, diameter: float = 40.0, height: float = 10.0) -> Any:
+    """Ein regelmäßiges Prisma auf Z = 0 in beiden Kernen — eine Kante unten waagerecht.
+
+    Die senkrechten Kanten liegen zwischen zwei **schrägen** Seitenflächen:
+    am Sechseck unter 120°, am Dreieck unter 60° (Innenwinkel des Körpers).
+    """
+    if kernel == "brep":
+        pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+        from app.core.brep import profiles as exact_profiles
+        from app.core.sketch import shapes
+        from app.core.sketch.profile import profile_of
+        from app.core.sketch.solver import solve_sketch
+
+        return exact_profiles.extrude(
+            profile_of(solve_sketch(shapes.polygon(diameter, corners))), height
+        )
+    from shapely.geometry import Polygon
+
+    start = -math.pi / 2.0 - math.pi / corners
+    corner_points = [
+        (
+            diameter / 2.0 * math.cos(start + 2.0 * math.pi * k / corners),
+            diameter / 2.0 * math.sin(start + 2.0 * math.pi * k / corners),
+        )
+        for k in range(corners)
+    ]
+    return MeshData.of(trimesh.creation.extrude_polygon(Polygon(corner_points), height))
+
+
+def _upright_edge_key(kernel: str, body: Any, corner: tuple[float, float]) -> str:
+    """Der Schlüssel der senkrechten Kante an dieser Ecke, im Kern des Körpers."""
+    if kernel == "brep":
+        from app.core.brep import edit
+
+        exact = min(edit.edges_of(body), key=lambda entry: math.dist(entry.middle[:2], corner))
+        return edit.edge_key(exact)
+    found = min(edges_of(body), key=lambda entry: math.dist(entry.middle[:2], corner))
+    return edge_key(found)
+
+
+def _cut_at_the_corner(
+    body: MeshData,
+    corner: tuple[float, float],
+    reference: tuple[float, float, float],
+    other: tuple[float, float, float],
+) -> tuple[float, float, float]:
+    """Was die Fase an dieser senkrechten Ecke weggenommen hat — gemessen am Ergebnis.
+
+    Die zwei Rücknahmen sind die Abstände der verbliebenen Ecken jeder
+    Seitenfläche von der alten Kante; der Winkel ist der zwischen der neuen
+    Fläche und der Bezugsfläche. Gemessen wird am Netz des Ergebnisses, also
+    an beiden Kernen gleich — und ohne eine Zeile aus dem Kern der Fase.
+    """
+    points = np.asarray(body.raw.vertices, dtype=float)
+    apart = np.linalg.norm(points[:, :2] - np.asarray(corner), axis=1)
+    reaches = []
+    for normal in (reference, other):
+        in_plane = np.abs((points[:, :2] - np.asarray(corner)) @ np.asarray(normal[:2])) <= 1e-6
+        near = in_plane & (apart > 1e-6) & (apart < 8.0)
+        assert near.any(), "keine Ecke der Seitenfläche neben der gefasten Kante"
+        reaches.append(float(apart[near].max()))
+    normals = np.asarray(body.raw.face_normals, dtype=float)
+    centres = np.asarray(body.raw.triangles_center, dtype=float)
+    known = [np.asarray(v, dtype=float) for v in (reference, other, (0, 0, 1), (0, 0, -1))]
+    new = [
+        normals[index]
+        for index in range(len(normals))
+        if np.linalg.norm(centres[index, :2] - np.asarray(corner)) < 8.0
+        and all(np.linalg.norm(normals[index] - normal) > 1e-6 for normal in known)
+    ]
+    assert new, "keine neue Fläche an der Ecke — die Fase fehlt"
+    angles = {
+        round(math.degrees(math.acos(float(np.clip(normal @ known[0], -1.0, 1.0)))), 6)
+        for normal in new
+    }
+    assert len(angles) == 1, f"die Fase ist keine Ebene: {angles}"
+    return reaches[0], reaches[1], angles.pop()
+
+
+def _triangle_angle_at_the_reference(first: float, second: float, between: float) -> float:
+    """Der Winkel der Fase zur Bezugsfläche, aus dem Dreieck Kante–Berührpunkte.
+
+    Kosinussatz für die Fasenbreite, Sinussatz für den Winkel an der
+    Berührlinie der Bezugsfläche — die Konstruktion, nicht die Rechnung des Kerns.
+    """
+    across = math.sqrt(
+        first * first + second * second - 2.0 * first * second * math.cos(math.radians(between))
+    )
+    return math.degrees(math.asin(second * math.sin(math.radians(between)) / across))
+
+
+_SIXTH = (math.cos(math.pi / 6.0), math.sin(math.pi / 6.0))
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+@pytest.mark.parametrize(
+    ("corners", "corner", "reference", "other", "between"),
+    [
+        # Sechseck, Ecke rechts: Beide Seiten zeigen gleich hoch, die hintere
+        # (+y) ist die Bezugsfläche. Innenwinkel 120°.
+        (6, (20.0, 0.0), (_SIXTH[0], _SIXTH[1], 0.0), (_SIXTH[0], -_SIXTH[1], 0.0), 120.0),
+        # Dreieck, Spitze hinten: beide gleich hoch und gleich weit hinten, die
+        # rechte ist die Bezugsfläche. Innenwinkel 60°.
+        (3, (0.0, 20.0), (_SIXTH[0], _SIXTH[1], 0.0), (-_SIXTH[0], _SIXTH[1], 0.0), 60.0),
+    ],
+    ids=["sechseck-120", "dreieck-60"],
+)
+@pytest.mark.parametrize("mode", ["two_distances", "distance_angle"])
+def test_an_asymmetric_chamfer_between_sloped_faces_cuts_where_the_construction_says(
+    kernel: str,
+    corners: int,
+    corner: tuple[float, float],
+    reference: tuple[float, float, float],
+    other: tuple[float, float, float],
+    between: float,
+    mode: str,
+) -> None:
+    """Zwischen zwei schrägen Flächen: Schnittmaße und Winkel aus der Konstruktion.
+
+    Zwei Abstände 2 und 1 mm: Die Bezugsfläche verliert 2 mm, die andere 1 mm;
+    der Winkel der Fase zur Bezugsfläche folgt aus dem Dreieck (am Sechseck
+    19,1066°, am Dreieck 30°). Abstand 2 mm und Winkel 30°: Die Fase steht
+    unter 30° zur Bezugsfläche, und die zweite Rücknahme ist
+    ``2 · sin 30° / sin(t + 30°)`` — am Sechseck (t = 120°) wieder 2 mm, am
+    Dreieck (t = 60°) 1 mm. Beide Kerne treffen das auf Rundungsgenauigkeit.
+    """
+    from app.core.geom.mesh import as_mesh_data
+
+    body = _prism(kernel, corners)
+    key = _upright_edge_key(kernel, body, corner)
+    entry = SceneObject(id="obj_1", name="Prisma", mesh=body, kind=kernel)
+    values = {"mode": mode, "distance": 2.0, "second_distance": 1.0, "angle": 30.0}
+
+    result = run("chamfer_edges", entry, edges="named", edge_keys=key, **values).outputs[0]
+
+    if mode == "two_distances":
+        expected_second = 1.0
+        expected_angle = _triangle_angle_at_the_reference(2.0, 1.0, between)
+    else:
+        expected_second = (
+            2.0 * math.sin(math.radians(30.0)) / math.sin(math.radians(between + 30.0))
+        )
+        expected_angle = 30.0
+    first, second, angle = _cut_at_the_corner(as_mesh_data(result.mesh), corner, reference, other)
+    assert first == pytest.approx(2.0, abs=1e-6), "die Bezugsfläche trägt die Breite"
+    assert second == pytest.approx(expected_second, abs=1e-6)
+    assert angle == pytest.approx(expected_angle, abs=1e-5)
+
+
+def _frustum_chamfer_removed(bottom: float, top: float, height: float, a: float, b: float) -> float:
+    """Was eine Fase an der oberen Kreiskante eines Kegelstumpfs wegnimmt.
+
+    ``a`` auf der Deckfläche nach innen, ``b`` die Mantellinie hinunter. Das
+    weggenommene Stück ist das Dreieck aus Kante und den beiden Berührpunkten,
+    um die Achse gedreht: Fläche mal Weg seines Schwerpunkts (Pappus).
+    """
+    slant = math.hypot(bottom - top, height)
+    down = ((bottom - top) / slant, -height / slant)
+    edge = (top, height)
+    on_top = (top - a, height)
+    on_side = (top + b * down[0], height + b * down[1])
+    area = (
+        abs(
+            (on_top[0] - edge[0]) * (on_side[1] - edge[1])
+            - (on_top[1] - edge[1]) * (on_side[0] - edge[0])
+        )
+        / 2.0
+    )
+    return 2.0 * math.pi * (edge[0] + on_top[0] + on_side[0]) / 3.0 * area
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+@pytest.mark.parametrize("mode", ["two_distances", "distance_angle"])
+def test_an_asymmetric_chamfer_on_a_curved_sloped_edge_meets_the_construction(
+    kernel: str, mode: str
+) -> None:
+    """Die obere Kreiskante eines Kegelstumpfs: Deckfläche eben, Mantel gekrümmt und schräg.
+
+    Bezugsfläche ist die Deckfläche (sie zeigt nach oben). Zwischen ihr und dem
+    Mantel liegen quer zur Kante ``t = 90° + atan((R − r) / h)``; mit Abstand
+    2 mm und 30° reicht die Fase ``2 · sin 30° / sin(t + 30°)`` den Mantel
+    hinunter. Der exakte Kern trifft das weggenommene Volumen auf 10⁻⁶
+    (Pappus); am Netz liegt die Berührlinie auf der Deckfläche innerhalb der
+    Sehnenabweichung, mit der der Kegel vernetzt ist.
+
+    **Bis zum 23.09.2026 wies der exakte Kern jede solche Fase ab** („lassen
+    sich nicht bestimmen"): Er fragte die Flächen am Linienschwerpunkt der
+    Kante, und der liegt bei einem Kreis auf der Achse.
+    """
+    pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+    from app.core.brep import edit
+    from app.core.geom.mesh import as_mesh_data
+
+    bottom, top, height = 15.0, 10.0, 12.0
+    exact = edit.cone(2.0 * bottom, 2.0 * top, height)
+    body: Any = exact if kernel == "brep" else MeshData.of(as_mesh_data(exact).raw.copy())
+    between = 90.0 + math.degrees(math.atan((bottom - top) / height))
+    second = (
+        1.0
+        if mode == "two_distances"
+        else 2.0 * math.sin(math.radians(30.0)) / math.sin(math.radians(between + 30.0))
+    )
+    values = {"mode": mode, "distance": 2.0, "second_distance": 1.0, "angle": 30.0}
+    entry = SceneObject(id="obj_1", name="Kegelstumpf", mesh=body, kind=kernel)
+
+    result = run("chamfer_edges", entry, edges="top", **values).outputs[0]
+
+    points = np.asarray(as_mesh_data(result.mesh).raw.vertices, dtype=float)
+    crown = points[np.abs(points[:, 2] - points[:, 2].max()) <= 1e-6]
+    radius = float(np.linalg.norm(crown[:, :2], axis=1).max())
+    if kernel == "brep":
+        full = math.pi * height / 3.0 * (bottom**2 + bottom * top + top**2)
+        removed = _frustum_chamfer_removed(bottom, top, height, 2.0, second)
+        assert float(result.mesh.volume) == pytest.approx(full - removed, abs=1e-6)
+        assert radius == pytest.approx(top - 2.0, abs=1e-6)
+    else:
+        assert radius == pytest.approx(top - 2.0, abs=MAX_FACET_SAG)
+        assert radius <= top - 2.0 + 1e-9, "die Berührlinie liegt nie außerhalb des Kreises"
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_the_chamfer_marks_name_the_face_the_operation_takes(kernel: str) -> None:
+    """Welche Fläche die Breite trägt — dieselbe Antwort wie die Operation, an beiden Kernen.
+
+    An der oberen Kante rechts ist die Oberseite die Bezugsfläche: Die Marke
+    der Breite endet 2 mm weiter innen auf ihr, die des zweiten Abstands 1 mm
+    tiefer auf der Seitenwand. *Seiten tauschen* tauscht, der Winkel ergibt
+    die zweite Rücknahme aus der Konstruktion (Quader: ``2 · tan 30°``), und
+    eine Breite als Ausdruck wird mit den Projektparametern aufgelöst. Gleiche
+    Breite hat keine Bezugsfläche und keine Marke.
+    """
+    from app.core.geom.edge_ops import chamfer_marks, edge_sides
+
+    body = _chamfer_box(kernel).mesh
+    if kernel == "brep":
+        from app.core.brep import edit
+
+        found: list[Any] = list(edit.edges_of(body))
+    else:
+        found = list(edges_of(body))
+    right_top = max(found, key=lambda edge: (edge.middle[2], edge.middle[0]))
+    top = float(right_top.middle[2])
+    sides = edge_sides(body, right_top)
+    assert sides is not None
+
+    values: dict[str, Any] = {"mode": "two_distances", "distance": 2.0, "second_distance": 1.0}
+    marks = chamfer_marks(sides, values)
+    assert marks is not None
+    reference, other = marks
+    assert reference.reference and not other.reference
+    assert reference.reach == pytest.approx(2.0) and other.reach == pytest.approx(1.0)
+    assert reference.end[2] == pytest.approx(top), "die Breite liegt auf der Oberseite"
+    assert reference.end[0] == pytest.approx(18.0), "und 2 mm weiter innen"
+    assert other.end[2] == pytest.approx(top - 1.0), "der zweite Abstand die Wand hinunter"
+    assert other.end[0] == pytest.approx(20.0)
+
+    flipped = chamfer_marks(sides, {**values, "flip_sides": True})
+    assert flipped is not None
+    assert flipped[0].end[2] == pytest.approx(top - 2.0), "getauscht: die Wand trägt die Breite"
+    assert flipped[1].end[0] == pytest.approx(19.0)
+
+    angled = chamfer_marks(sides, {"mode": "distance_angle", "distance": 2.0, "angle": 30.0})
+    assert angled is not None
+    assert angled[1].reach == pytest.approx(2.0 * math.tan(math.radians(30.0)))
+
+    bound = chamfer_marks(sides, {**values, "distance": "=@b * 2"}, {"b": 1.5})
+    assert bound is not None and bound[0].reach == pytest.approx(3.0)
+
+    assert chamfer_marks(sides, {"mode": "equal_distances", "distance": 2.0}) is None
+    assert chamfer_marks(sides, {**values, "distance": "=@fehlt"}) is None

@@ -436,6 +436,14 @@ class ActionField:
     """Faktor vom sichtbaren Maß zum Operationsparameter, etwa Radius zu Durchmesser."""
     measurement: MeasureStatus | None = None
     """Quelle des Ausgangswerts; der editierte Zielwert ist keine neue Messung."""
+    depends_on: tuple[str, tuple[str | bool, ...]] | None = None
+    """Welches Feld derselben Handlung dieses wirksam macht, und bei welchen Werten.
+
+    Dieselbe Angabe wie ``ParamSpec.depends_on`` des Parameters, unverändert
+    durchgereicht: Das Merkmalfenster blendet das Feld aus, solange die
+    Bedingung nicht erfüllt ist — wie der Operationsdialog (P6.2: der zweite
+    Abstand nur bei „Zwei Abstände", der Winkel nur bei „Abstand und
+    Winkel")."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -1314,7 +1322,7 @@ def part_actions(operation: Any, spec: Any) -> list[FeatureAction]:
 #: Beide leben im exakten Kern und tragen dieselbe Auswahl: Fünf Gruppen und
 #: ``named`` für einzeln gewählte Kanten (``brep.edit.EDGE_CHOICES``). Wer
 #: eine Kante anklickt, hat ``named`` bereits beantwortet — einzugeben bleibt
-#: das eine Maß, das die Zeile führt.
+#: das Maß, das die Zeile führt, und was :data:`EDGE_SHAPE_FIELDS` dazu nennt.
 #:
 #: Eine Liste und keine Ableitung aus ``applies_to``: Eine Kante ist **kein
 #: Merkmal**. Sie trägt keine Kennung, die die Erkennung vergibt, und steht
@@ -1331,6 +1339,20 @@ EDGE_OPERATIONS: Final[tuple[tuple[str, str], ...]] = (
     ("bead_edges", "radius"),
 )
 
+#: Was eine Kantenzeile **neben** ihrem Maß führt — je Operation, in dieser Folge.
+#:
+#: Das eine Maß aus :data:`EDGE_OPERATIONS` bleibt vorn; hier stehen die
+#: Felder, die seine Bedeutung bestimmen. Bei der Fase (P6.2) sind es die Art
+#: der Bemaßung, der zweite Abstand, der Winkel und der Seitentausch — die
+#: letzten drei mit ihrem ``depends_on`` aus dem Schema, sodass die Zeile nur
+#: zeigt, was zur gewählten Art gehört. Eine eigene Tabelle und keine zweite
+#: Spalte in :data:`EDGE_OPERATIONS`: Die zählt die Test- und Menüwege als
+#: Paar aus Operation und Maß, und eine Operation ohne weitere Felder braucht
+#: hier keinen Eintrag.
+EDGE_SHAPE_FIELDS: Final[dict[str, tuple[str, ...]]] = {
+    "chamfer_edges": ("mode", "second_distance", "angle", "flip_sides"),
+}
+
 
 def edge_actions(key: str) -> list[FeatureAction]:
     """Was sich an dieser einen Kante tun lässt — verrunden und fasen.
@@ -1340,12 +1362,14 @@ def edge_actions(key: str) -> list[FeatureAction]:
     **diese eine Ecke** brechen wollte, musste sie in einer Aufzählung
     wiedererkennen.
 
-    Jede Zeile trägt genau ein Feld — den Radius beziehungsweise die Breite
-    —, und die übrigen Werte bringt sie als :attr:`FeatureAction.fixed` mit:
-    ``edges="named"`` und den Schlüssel. Die Vorgabe ist die des Registers und
-    nicht ein Maß der Kante: Anders als bei einer Bohrung gibt es hier keinen
-    **gemessenen** Wert, den man übernehmen könnte — eine scharfe Kante hat
-    keinen Radius, und der gewünschte ist der einzige, der zählt.
+    Jede Zeile trägt vorn ihr Maß — den Radius beziehungsweise die Breite —
+    und dahinter, was :data:`EDGE_SHAPE_FIELDS` für sie nennt (bei der Fase
+    Art, zweiter Abstand, Winkel, Seitentausch). Die übrigen Werte bringt sie
+    als :attr:`FeatureAction.fixed` mit: ``edges="named"`` und den Schlüssel.
+    Die Vorgabe ist die des Registers und nicht ein Maß der Kante: Anders als
+    bei einer Bohrung gibt es hier keinen **gemessenen** Wert, den man
+    übernehmen könnte — eine scharfe Kante hat keinen Radius, und der
+    gewünschte ist der einzige, der zählt.
 
     Ohne den exakten Kern steht keine der beiden im Register, und dann ist die
     leere Liste die richtige Antwort: Die Anwendung läuft weiter, es sind die
@@ -1356,29 +1380,35 @@ def edge_actions(key: str) -> list[FeatureAction]:
         if not REGISTRY.has(name):
             continue
         spec = REGISTRY.get(name)
-        entry = next((item for item in spec.params.spec() if item.name == measure), None)
-        if entry is None:
+        schema = {item.name: item for item in spec.params.spec()}
+        if measure not in schema:
             continue
+        names = (measure, *EDGE_SHAPE_FIELDS.get(name, ()))
         actions.append(
             FeatureAction(
                 title=spec.title,
                 op=name,
                 note=spec.doc,
-                fields=(
-                    ActionField(
-                        name=entry.name,
-                        label=entry.title,
-                        unit=entry.unit or "",
-                        value=entry.default,
-                        kind=_kind_of(entry),
-                        minimum=entry.minimum,
-                        maximum=entry.maximum,
-                    ),
-                ),
+                fields=tuple(_edge_field(schema[item]) for item in names if item in schema),
                 fixed=(("edges", "named"), ("edge_keys", key)),
             )
         )
     return actions
+
+
+def _edge_field(entry: Any) -> ActionField:
+    """Ein Feld einer Kantenzeile — Vorgabe, Grenzen und Bedingung aus dem Register."""
+    return ActionField(
+        name=entry.name,
+        label=entry.title,
+        unit=entry.unit or "",
+        value=entry.default,
+        kind=_kind_of(entry),
+        minimum=entry.minimum,
+        maximum=entry.maximum,
+        choices=tuple((choice, choice) for choice in (entry.choices or ())),
+        depends_on=entry.depends_on,
+    )
 
 
 # --- Sichtflächen (§22.3, RM-080) ----------------------------------------------

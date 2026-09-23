@@ -495,6 +495,30 @@ Zwei Dinge hängen mit daran, und beide waren falsch:
   und Merkmalssuche darunter fragt die Szene; für die Kante ist der Bildpunkt
   der richtige, genau wie beim Linksklick.
 
+### An der gewählten Kante stehen die Seiten der Fase (P6.2, 23.09.2026)
+
+Welche Fläche die Breite trägt und welche den zweiten Abstand oder den
+Winkel, war nur als Regel im Tooltip zu lesen („am weitesten nach oben, dann
+hinten, dann rechts"). Das Bild zeigt es jetzt, und drei Festlegungen gelten
+für jede Marke dieser Art:
+
+* **Die Ansicht rechnet nicht und schaltet nicht.** Wo die Marken liegen,
+  sagt der Kern (`edge_ops.chamfer_marks`) mit denselben Normalen, mit denen
+  die Operation fast — eine Marke, die eine andere Fläche nennt als die Fase
+  nimmt, ist damit ausgeschlossen. Ein Klick auf eine Marke ändert keinen
+  Wert in der Ansicht, er meldet (`chamferSidesSwapRequested`), und das
+  Fenster schaltet den Haken im Merkmalfenster; Vorschau und Übernehmen
+  lesen denselben Stand wie nach einem Klick auf den Haken.
+* **Die zweite Kodierung ist eine Ziffer, keine Farbe** (Regel 18): „1 · …"
+  an der Bezugsfläche, „2 · …" an der anderen; die breitere Linie sagt es ein
+  drittes Mal. Die Statuszeile nennt beide Flächen in Worten, denn die
+  Beschriftung im Bild erreicht keinen Bildschirmleser.
+* **Die Marke nimmt den Klick vor Kante und Fläche — aber nur ihre äußere
+  Hälfte.** Beide Marken beginnen an der Kante; zählte die ganze Linie, wäre
+  die Kante selbst nicht mehr anzuklicken. Der Zeiger zeigt über der Marke
+  dieselbe Rolle wie über einer Kante (`_set_hover_edge`), weil derselbe
+  Handgriff dasselbe Bild hat.
+
 ### Ein Merkmal hat eine Reichweite
 
 `_feature_at` hatte keine, und das war der gemeldete Fehler: Es nahm das

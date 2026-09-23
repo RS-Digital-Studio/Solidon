@@ -2587,6 +2587,146 @@ def test_the_edge_panel_carries_the_key_the_customer_never_sees(qt_app: QApplica
     assert werte["radius"] == pytest.approx(float(vorgabe.default))
 
 
+def test_the_chamfer_edge_row_carries_the_kind_and_its_fields_from_the_register() -> None:
+    """Die Fase an einer Kante führt Art, zweiten Abstand, Winkel und Seitentausch (P6.2).
+
+    Aus dem Register und nicht aus einer Liste hier: Vorgaben, Grenzen,
+    Einheiten und die Bedingung ``depends_on`` reisen unverändert mit. Die
+    Breite bleibt vorn, damit eine Fase mit gleicher Breite so aussieht wie
+    bisher; *Verrunden* und *Wulst* behalten ihr eines Maß.
+    """
+    load_operations()
+    if not REGISTRY.has("chamfer_edges"):
+        pytest.skip("OpenCASCADE is an optional dependency")
+    key = "e:-20.00,0.00,20.00:0.000,1.000,0.000"
+    rows = {str(action.op): action for action in actions.edge_actions(key)}
+
+    chamfer = rows["chamfer_edges"]
+    names = [field.name for field in chamfer.fields]
+    assert names == ["distance", "mode", "second_distance", "angle", "flip_sides"]
+    schema = {entry.name: entry for entry in REGISTRY.get("chamfer_edges").params.spec()}
+    for field in chamfer.fields:
+        entry = schema[field.name]
+        assert field.value == entry.default, field.name
+        assert field.depends_on == entry.depends_on, field.name
+        assert field.minimum == entry.minimum and field.maximum == entry.maximum, field.name
+    by_name = {field.name: field for field in chamfer.fields}
+    assert by_name["mode"].kind == "choice"
+    assert [value for value, _text in by_name["mode"].choices] == list(schema["mode"].choices)
+    assert by_name["angle"].kind == "angle"
+    assert by_name["flip_sides"].kind == "bool"
+    assert by_name["mode"].value == "equal_distances", "eine neue Fase ist gleich breit wie bisher"
+    assert dict(chamfer.fixed) == {"edges": "named", "edge_keys": key}
+
+    for name, measure in EDGE_OPERATIONS:
+        if name != "chamfer_edges" and name in rows:
+            assert [field.name for field in rows[name].fields] == [measure], name
+
+
+def _chamfer_editor(panel: FeaturePanel, label: str) -> QWidget:
+    """Das Feld der Fasenzeile mit dieser Beschriftung — über seinen zugänglichen Namen."""
+    title = str(REGISTRY.get("chamfer_edges").title)
+    wanted = f"{title} — {label}"
+    found = [widget for widget in panel.findChildren(QWidget) if widget.accessibleName() == wanted]
+    assert len(found) == 1, f"{wanted!r}: {len(found)} Felder"
+    return found[0]
+
+
+def test_the_chamfer_row_at_an_edge_shows_only_the_fields_of_its_kind(
+    qt_app: QApplication,
+) -> None:
+    """Art wählen, und die Zeile zeigt, was dazugehört — wie der Operationsdialog (P6.2).
+
+    Gleiche Breite: nur Breite und Art. Zwei Abstände: dazu der zweite Abstand
+    und *Seiten tauschen*. Abstand und Winkel: der Winkel statt des zweiten
+    Abstands. Die Zahlenfelder sind die des Dialogs (``ValueField``) und
+    nehmen einen Ausdruck an; jedes trägt einen Namen mit der Handlung.
+    Übernommen wird ein Schritt mit allen Werten und der angeklickten Kante;
+    *Seiten tauschen* von außen (die Marke im Bild) geht über denselben Haken.
+    """
+    from app.ui.op_dialog import ValueField
+
+    load_operations()
+    if not REGISTRY.has("chamfer_edges"):
+        pytest.skip("OpenCASCADE is an optional dependency")
+    schema = {entry.name: entry for entry in REGISTRY.get("chamfer_edges").params.spec()}
+    key = "e:-20.00,0.00,20.00:0.000,1.000,0.000"
+    panel = FeaturePanel()
+    gemeldet: list[tuple[str, dict[str, Any]]] = []
+    gerufen: list[tuple[str, dict[str, Any]]] = []
+    panel.valuesChanged.connect(lambda op, werte: gemeldet.append((op, dict(werte))))
+    panel.operationRequested.connect(lambda op, werte: gerufen.append((op, dict(werte))))
+
+    panel.show_edge(key, "Waagerecht · 30,00 mm", parameter_values={"b": 1.5})
+
+    breite = _chamfer_editor(panel, str(schema["distance"].title))
+    art = _chamfer_editor(panel, str(schema["mode"].title))
+    zweiter = _chamfer_editor(panel, str(schema["second_distance"].title))
+    winkel = _chamfer_editor(panel, str(schema["angle"].title))
+    tauschen = _chamfer_editor(panel, str(schema["flip_sides"].title))
+    assert isinstance(breite, ValueField) and isinstance(zweiter, ValueField)
+    assert isinstance(winkel, ValueField), "Winkel mit derselben Einheit wie im Dialog"
+    assert isinstance(art, QComboBox) and isinstance(tauschen, QCheckBox)
+
+    def gezeigt() -> set[str]:
+        return {
+            name
+            for name, editor in (("second", zweiter), ("angle", winkel), ("flip", tauschen))
+            if not editor.isHidden()
+        }
+
+    assert gezeigt() == set(), "gleiche Breite: nur Breite und Art"
+    assert not panel.toggle_field("chamfer_edges", "flip_sides"), (
+        "bei gleicher Breite gibt es nichts zu tauschen"
+    )
+
+    art.setCurrentIndex(art.findData("two_distances"))
+    assert gezeigt() == {"second", "flip"}
+    assert gemeldet[-1][0] == "chamfer_edges" and gemeldet[-1][1]["mode"] == "two_distances"
+    beschriftung = {label.buddy(): label for label in panel.findChildren(QLabel) if label.buddy()}
+    assert not beschriftung[zweiter].isHidden(), "die Beschriftung kommt mit dem Feld"
+    assert beschriftung[winkel].isHidden(), "und geht mit ihm"
+
+    art.setCurrentIndex(art.findData("distance_angle"))
+    assert gezeigt() == {"angle", "flip"}
+    art.setCurrentIndex(art.findData("two_distances"))
+
+    # Die Namen: keiner leer, keiner doppelt, jeder mit der Handlung.
+    namen = [editor.accessibleName() for editor in (breite, art, zweiter, winkel, tauschen)]
+    assert len(set(namen)) == len(namen)
+    assert all(name.startswith(str(REGISTRY.get("chamfer_edges").title)) for name in namen)
+
+    # Die Fokuskette geht die Zeile hinunter wie das Auge: Breite, Art,
+    # zweiter Abstand, Seitentausch.
+    reihenfolge: list[QWidget] = []
+    halt = breite.focusProxy() or breite
+    for _ in range(40):
+        halt = halt.nextInFocusChain()
+        for editor in (art, zweiter, tauschen):
+            if (halt is editor or editor.isAncestorOf(halt)) and editor not in reihenfolge:
+                reihenfolge.append(editor)
+    assert reihenfolge == [art, zweiter, tauschen]
+
+    zweiter.set_value(0.5)
+    breite.set_value("=@b * 2")
+    assert panel.toggle_field("chamfer_edges", "flip_sides")
+    assert tauschen.isChecked()
+    assert gemeldet[-1][1]["flip_sides"] is True, "der Tausch meldet sich wie ein Klick"
+
+    press(panel, str(REGISTRY.get("chamfer_edges").title))
+
+    assert len(gerufen) == 1
+    op, werte = gerufen[0]
+    assert op == "chamfer_edges"
+    assert werte["edges"] == "named" and werte["edge_keys"] == key
+    assert werte["mode"] == "two_distances"
+    assert werte["second_distance"] == pytest.approx(0.5)
+    assert werte["distance"] == "=@b * 2", "der Ausdruck geht als Ausdruck in den Schritt"
+    assert werte["flip_sides"] is True
+    # Jeder Wert ist ein Parameter der Operation — keiner, den sie nicht kennt.
+    validate(REGISTRY.get("chamfer_edges").params, {**werte, "distance": 3.0})
+
+
 def test_no_feature_kind_falls_back_to_the_sentence_that_says_nothing() -> None:
     """Jede erkennbare Art begründet ihre Absagen selbst (Regel 17).
 

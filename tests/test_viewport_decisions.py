@@ -8772,3 +8772,30 @@ def test_the_finding_ring_stands_in_front_of_the_material_at_its_place(
     finally:
         viewport._finding_timer.stop()
         viewport.deleteLater()
+
+
+def test_the_chamfer_marks_say_one_and_two_and_the_angle_stands_at_the_reference() -> None:
+    """Die Beschriftung der Fasenmarken: Ziffer, Maß, und der Winkel an der Bezugsfläche (P6.2).
+
+    Die Ziffer ist die zweite Kodierung neben Farbe und Strichstärke
+    (Regel 18); die Länge steht in der Anzeigeeinheit. Der Winkel steht zur
+    Bezugsfläche und deshalb an ihrer Marke, die Gegenfläche zeigt, wie weit
+    die Fase sie daraus zurücknimmt.
+    """
+    from app.core.geom.edge_ops import ChamferMark
+    from app.ui.labels import length
+    from app.ui.viewport import chamfer_mark_texts
+
+    at = (0.0, 0.0, 0.0)
+    marks = (
+        ChamferMark(at, (-2.0, 0.0, 0.0), 2.0, True, (0.0, 0.0, 1.0)),
+        ChamferMark(at, (0.0, 0.0, -1.5), 1.5, False, (1.0, 0.0, 0.0)),
+    )
+
+    assert chamfer_mark_texts(marks, {"mode": "two_distances"}) == [
+        f"1 · {length(2.0)}",
+        f"2 · {length(1.5)}",
+    ]
+    angled = chamfer_mark_texts(marks, {"mode": "distance_angle", "angle": 30.0})
+    assert angled[0] == f"1 · {length(2.0)} · 30°"
+    assert angled[1] == f"2 · {length(1.5)}", "der Winkel steht nur an der Bezugsfläche"

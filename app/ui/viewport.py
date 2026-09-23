@@ -83,6 +83,7 @@ from app.core.types import (
     Vec3,
 )
 from app.core.units import (
+    DEGREE_UNIT,
     EPS_DISPLAY,
     EPS_GEOM,
     EPS_MATCH_MINIMUM,
@@ -103,6 +104,7 @@ from app.ui.labels import (
     feature_name,
     length,
     localised,
+    plain_number,
     read_number,
 )
 from app.ui.leash import Worker, WorkerLeash, stop_watching_the_dying, weak_slot
@@ -4091,6 +4093,13 @@ class Viewport(QWidget):
     überlebt damit eine zweite Auswertung; er ist genau das, was die
     Operationen *Verrunden* und *Fase anbringen* als ``edge_keys`` erwarten.
     """
+    chamferSidesSwapRequested = Signal()
+    """Ein Klick auf eine Marke der Fase — die Seiten sollen tauschen (P6.2).
+
+    Die Ansicht ändert dabei nichts selbst: Der Seitentausch ist ein Feld der
+    Handlung im Merkmalfenster (``flip_sides``), und dort wird er geschaltet —
+    derselbe Weg wie ein Klick auf den Haken, mit derselben Vorschau.
+    """
     objectPicked = Signal(str, bool)
     """Ein Klick hat einen Körper getroffen — leer heißt: daneben.
 
@@ -4732,6 +4741,22 @@ class Viewport(QWidget):
         self._edge_patch: Item | None = None
         """Die Linie der gewählten Kante, vor dem Material gezeichnet
         (:meth:`_redraw_edge_patch`)."""
+        self._chamfer_values: dict[str, Any] | None = None
+        """Die Werte der Fase im Merkmalfenster, solange sie die gewählte Kante
+        meint — sonst ``None`` (:meth:`show_chamfer_sides`)."""
+        self._chamfer_parameters: dict[str, float] = {}
+        """Die Projektparameter, mit denen ein Ausdruck in diesen Werten aufgeht."""
+        self._chamfer_shown: tuple[Any, Any] | None = None
+        """Die zwei Marken, die gerade stehen — Bezugsfläche zuerst
+        (``edge_ops.ChamferMark``)."""
+        self._chamfer_items: list[Item] = []
+        """Linien und Beschriftungen dieser Marken im Renderer."""
+        self._edge_sides: dict[tuple[ObjectId, str], Any] = {}
+        """Die zwei Flächen je Kante (``edges.EdgeSides``), einmal je Auswertung.
+
+        Am exakten Körper fragt die Auskunft die Topologie nach den Nachbarn
+        der Kante; je Tastendruck in einem Feld wäre das eine Suche über den
+        ganzen Körper für eine Antwort, die sich nicht geändert hat."""
         self._feature_patch: Any | None = None
         """Die Dreiecke des gewählten Merkmals, in der Auswahlfarbe über dem
         Körper. Ohne sie hieß „Bohrung gewählt", dass der ganze Körper
@@ -6308,6 +6333,7 @@ class Viewport(QWidget):
         # Hervorhebung auf einen Schlüssel, den es nicht mehr gibt.
         self._edge_geometry.clear()
         self._edge_info.clear()
+        self._edge_sides.clear()
         # **Nachgesehen wird nur bei einer neuen Auswertung.** ``show_scene``
         # läuft auch bei jedem Themenwechsel, jeder Auswahl und jedem Schritt
         # der Schieber für Explosion, Schnitt und Schicht — dort ändert sich
@@ -8268,7 +8294,12 @@ class Viewport(QWidget):
         # (erst ``_edge_click``, dann ``_on_picked``), und ein Zeiger, der eine
         # andere Reihenfolge behauptet als die Behandlung, verspricht etwas,
         # das nicht eintritt (`.claude/rules/ansicht.md`).
-        self._set_hover_edge(point is not None and self._edge_under(x, y, point))
+        # Eine Marke der Fase nimmt einen Klick an wie eine Kante, und der
+        # Zeiger sagt es genauso (:meth:`_chamfer_mark_at`).
+        self._set_hover_edge(
+            (point is not None and self._edge_under(x, y, point))
+            or (self._means_a_feature() and self._chamfer_mark_at(x, y) is not None)
+        )
         self._set_hover_target(object_id, feature_id)
 
     def _edge_under(self, x: int, y: int, point: Vec3) -> bool:
@@ -8976,6 +9007,10 @@ class Viewport(QWidget):
         if chosen is not None and self.highlighted_feature_refs():
             self.select_feature(None)
         self._selected_edge = chosen
+        # Die Werte der Fase gehörten der vorigen Kante; die neue bekommt
+        # ihre eigenen, sobald das Merkmalfenster sie meldet.
+        self._chamfer_values = None
+        self._chamfer_shown = None
         self._redraw_edge_patch()
         # Der Körper gibt die Auswahlfarbe an die Kante ab und holt sie
         # zurück, sobald keine mehr gewählt ist — dieselbe Zeile wie bei
@@ -8996,6 +9031,8 @@ class Viewport(QWidget):
         if self._selected_edge is None:
             return
         self._selected_edge = None
+        self._chamfer_values = None
+        self._chamfer_shown = None
         self._redraw_edge_patch()
         self._apply_selection_colour()
 
@@ -9038,6 +9075,157 @@ class Viewport(QWidget):
         über die gezeichnete Linie prüfte dort nichts.
         """
         return self._selected_edge
+
+    def show_chamfer_sides(
+        self,
+        values: Mapping[str, Any] | None,
+        parameter_values: Mapping[str, float] | None = None,
+    ) -> None:
+        """Zeigt an der gewählten Kante, welche Fläche welches Maß der Fase trägt (P6.2).
+
+        ``values`` sind die Werte der Handlung *Fase anbringen* im
+        Merkmalfenster, ``None`` nimmt die Marken weg. Die Ansicht rechnet
+        dabei nichts: Wo die Fase jede Fläche zurücknimmt und welche davon die
+        Bezugsfläche ist, sagt der Kern (``edge_ops.chamfer_marks``) mit
+        denselben Zeilen, mit denen die Operation fast.
+
+        **Zwei Marken mit Ziffer statt einer Farbe** (Regel 18): je Fläche eine
+        Maßlinie von der Kante bis zur Berührlinie, beschriftet „1 · 2,00 mm"
+        auf der Bezugsfläche und „2 · 1,00 mm" auf der anderen. Die Linie der
+        Bezugsfläche ist breiter; die Ziffer sagt dasselbe ohne Farbe und ohne
+        Strichstärke. Bei gleicher Breite gibt es keine Bezugsfläche und keine
+        Marke.
+        """
+        # Jede andere Handlung meldet ``None`` bei jedem Tastendruck; stehen
+        # keine Marken, ist nichts wegzunehmen und nichts neu zu zeichnen.
+        if values is None and self._chamfer_values is None:
+            return
+        self._chamfer_values = dict(values) if values is not None else None
+        self._chamfer_parameters = dict(parameter_values or {})
+        self._redraw_chamfer_marks()
+        if self.renderer is not None:
+            self._draw()
+
+    def chamfer_marks(self) -> tuple[Any, Any] | None:
+        """Die zwei Marken der Fase, die gerade stehen — Bezugsfläche zuerst, sonst ``None``."""
+        return self._chamfer_shown
+
+    def _current_chamfer_marks(self) -> tuple[Any, Any] | None:
+        """Die Marken für die gewählte Kante und die gemeldeten Werte — aus dem Kern."""
+        if self._chamfer_values is None or self._selected_edge is None or self._result is None:
+            return None
+        object_id, key = self._selected_edge
+        entry = self._result.scene.objects.get(object_id)
+        if entry is None:
+            return None
+        if (object_id, key) not in self._edge_info:
+            self._prepared_edges(object_id)
+        info = self._edge_info.get((object_id, key))
+        if info is None:
+            return None
+        from app.core.geom.edge_ops import chamfer_marks, edge_sides
+
+        if (object_id, key) not in self._edge_sides:
+            self._edge_sides[(object_id, key)] = edge_sides(entry.mesh, info)
+        sides = self._edge_sides[(object_id, key)]
+        if sides is None:
+            return None
+        return chamfer_marks(sides, self._chamfer_values, self._chamfer_parameters)
+
+    def _redraw_chamfer_marks(self) -> None:
+        """Die Marken der Fase neu legen — oder wegnehmen.
+
+        Gefragt wird bei jedem Aufbau der Kantenlinie (:meth:`_redraw_edge_patch`)
+        und bei jedem gemeldeten Wert; sichtbar sind sie nur, wo die Kantenlinie
+        es auch ist — am sichtbaren Körper, auf der gezeigten Platte, nicht
+        während die Auswahl verborgen ist.
+        """
+        self._chamfer_shown = self._current_chamfer_marks()
+        renderer = self.renderer
+        if renderer is None:
+            return
+        for item in self._chamfer_items:
+            renderer.remove(item)
+        self._chamfer_items.clear()
+        marks = self._chamfer_shown
+        if marks is None or self._selected_edge is None or self._result is None:
+            return
+        if self._selection_marking_hidden():
+            return
+        object_id = self._selected_edge[0]
+        entry = self._result.scene.objects.get(object_id)
+        if entry is None or not self._in_pick_view(object_id, entry):
+            return
+
+        import numpy as np
+
+        offset = np.asarray(self._shown_offset(entry, self._result), dtype=float)
+        for number, mark in enumerate(marks, start=1):
+            self._chamfer_items.append(
+                renderer.add_lines(
+                    np.asarray([mark.start, mark.end], dtype=float) + offset,
+                    name=f"chamfer-side:{number}",
+                    colour=MEASURE_COLOUR,
+                    width=SELECTED_EDGE_WIDTH if mark.reference else 2.0 * FEATURE_EDGE_WIDTH,
+                    keep_in_front=True,
+                )
+            )
+        self._chamfer_items.append(
+            renderer.add_labels(
+                np.asarray([mark.end for mark in marks], dtype=float) + offset,
+                chamfer_mark_texts(marks, self._chamfer_values or {}),
+                name="chamfer-sides",
+                style=LabelStyle(
+                    text_colour=MEASURE_COLOUR,
+                    font_size=12,
+                    bold=True,
+                    always_visible=True,
+                    background=self._sketch_label_background,
+                    background_opacity=1.0,
+                    margin=4,
+                    show_points=True,
+                    point_colour=MEASURE_COLOUR,
+                    point_size=8,
+                ),
+            )
+        )
+
+    def _chamfer_mark_at(self, x: int, y: int) -> int | None:
+        """Welche Marke der Fase unter diesem Bildpunkt liegt — ihr Platz, oder ``None``.
+
+        Gezählt wird nur die **äußere Hälfte** jeder Marke bis zu ihrer
+        Beschriftung: Beide Marken beginnen an der Kante, und ein Klick dort
+        meint die Kante und nicht eine der Seiten. Gemessen wird im Bild, mit
+        derselben Reichweite wie bei einer Kante (:data:`EDGE_REACH_PIXELS`).
+        """
+        marks = self._chamfer_shown
+        if not marks or self.renderer is None or self._result is None:
+            return None
+        if not self._chamfer_items or self._selected_edge is None:
+            return None
+        entry = self._result.scene.objects.get(self._selected_edge[0])
+        if entry is None:
+            return None
+
+        import numpy as np
+
+        from app.ui.render.edges import nearest_polyline
+
+        offset = np.asarray(self._shown_offset(entry, self._result), dtype=float)
+        projected = []
+        for mark in marks:
+            start = np.asarray(mark.start, dtype=float) + offset
+            end = np.asarray(mark.end, dtype=float) + offset
+            outer = ((start + end) / 2.0, end)
+            projected.append(
+                np.asarray(
+                    [self.renderer.world_to_display((p[0], p[1], p[2])) for p in outer],
+                    dtype=float,
+                )
+            )
+        return nearest_polyline(
+            projected, float(x), float(y), EDGE_REACH_PIXELS * self._device_ratio()
+        )
 
     def select_feature(self, feature_id: FeatureId | None) -> None:
         self._selected_feature_refs = ()
@@ -9593,6 +9781,7 @@ class Viewport(QWidget):
         # wohin sie zeigt.
         if self._edge_patch is not None and self._selected_edge is not None:
             patches.append((self._edge_patch, self._selected_edge[0]))
+            patches.extend((item, self._selected_edge[0]) for item in self._chamfer_items)
         for patch, patch_owner in patches:
             if patch is not None and patch_owner is not None:
                 matrix, position = transforms.get(patch_owner, (np.eye(4), (0.0, 0.0, 0.0)))
@@ -10130,6 +10319,9 @@ class Viewport(QWidget):
         """
         if self.renderer is None:
             return
+        # Die Marken der Fase gehören zur Kante und folgen ihr — auch dorthin,
+        # wo die Linie gleich nicht gezeichnet wird.
+        self._redraw_chamfer_marks()
         if self._edge_patch is not None:
             self.renderer.remove(self._edge_patch)
             self._edge_patch = None
@@ -16381,6 +16573,12 @@ class Viewport(QWidget):
         if self._means_a_feature() and not self.user_selection_allowed():
             self._refuse_selection()
             return
+        # **Eine Marke der Fase tauscht die Seiten** (P6.2) — vor allem anderen,
+        # denn sie liegt über dem Körper, und derselbe Klick wählte sonst die
+        # Fläche darunter und nähme der Kante mitsamt ihrer Marke die Auswahl.
+        if self._means_a_feature() and not add and self._chamfer_mark_at(x, y) is not None:
+            self.chamferSidesSwapRequested.emit()
+            return
         point = self._aim_at(x, y) if self._means_a_feature() else self._world_at(x, y)
         if point is None:
             # **Mit Taste hebt ein Klick ins Leere nichts auf.** Wer
@@ -16411,6 +16609,30 @@ class Viewport(QWidget):
     @property
     def navigation(self) -> NavigationScheme:
         return self._scheme
+
+
+def chamfer_mark_texts(marks: Sequence[Any], values: Mapping[str, Any]) -> list[str]:
+    """Die Beschriftungen der zwei Fasenmarken — „1 · 2,00 mm" und „2 · 1,00 mm".
+
+    Die Ziffer ist die zweite Kodierung neben Farbe und Strichstärke
+    (Regel 18); sie braucht keine Übersetzung. Bei Abstand und Winkel trägt
+    die Bezugsfläche den Winkel mit, denn er steht zu ihr — „1 · 2,00 mm ·
+    30°" —, und die Gegenfläche zeigt, wie weit die Fase sie daraus
+    zurücknimmt. Längen in der Anzeigeeinheit (``length``).
+    """
+    texts: list[str] = []
+    for number, mark in enumerate(marks, start=1):
+        text = f"{number} · {length(float(mark.reach))}"
+        angle = values.get("angle")
+        if (
+            mark.reference
+            and values.get("mode") == "distance_angle"
+            and isinstance(angle, int | float)
+            and not isinstance(angle, bool)
+        ):
+            text += f" · {plain_number(float(angle))}{DEGREE_UNIT}"
+        texts.append(text)
+    return texts
 
 
 def _ring_points(centre: Any, normal: Any, radius: float, count: int = 48) -> Any:

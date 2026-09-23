@@ -1699,6 +1699,37 @@ Auswahl geblockt, und `MainWindow._on_features_selected` baut an Bohrung und
 Senkung nicht ein zweites Mal, was `featureSelected` derselben Runde schon
 gebaut hat (`_fields_this_round`, `FeaturePanel.serial`).
 
+### Die Fase an einer Kante: Art, Felder, Seiten im Bild (P6.2)
+
+Die Kantenzeile kommt aus `perceive.actions.edge_actions`: vorn das Maß aus
+`EDGE_OPERATIONS`, dahinter `EDGE_SHAPE_FIELDS` (bei *Fase anbringen* Art,
+zweiter Abstand, Winkel, *Seiten tauschen*). `ActionField.depends_on` reicht
+die Bedingung des Schemas durch; `FeaturePanel._follow_conditions` blendet
+Feld **und** Beschriftung aus, solange `registry.params.inactive_dependency`
+nein sagt — beim Füllen der Zeile und bei jeder Meldung vor `valuesChanged`.
+Gesperrt wird dort nicht (das gehört `_settle_lock`), und der Wert bleibt
+stehen. `show_edge(parameter_values=…)` gibt jeder Kantenzeile die
+`ValueField`s des Dialogs (Ausdrücke, Einheit), je Zeile über
+`_texture_fields`, weil Verrunden und Wulst beide einen `radius` führen;
+Kantenzeilen werden deshalb nicht wiederverwendet (RM-204 oben).
+
+Im Bild zeigt `Viewport.show_chamfer_sides(values, parameter_values)` an der
+gewählten Kante zwei Marken aus `edge_ops.chamfer_marks`: je Fläche eine
+Maßlinie bis zur Berührlinie, `chamfer_mark_texts` „1 · …" (Bezugsfläche,
+breiter, bei Winkel mit „· 30°") und „2 · …". Die Seitenauskunft merkt
+`_edge_sides` je Auswertung; die Marken folgen `_redraw_edge_patch`, dem Zug
+am Körper und fallen mit der Kante (`select_edge`, `_drop_edge`). Ein Klick
+auf die äußere Hälfte einer Marke (`_chamfer_mark_at`, vor Kante und Fläche)
+sendet `chamferSidesSwapRequested`; `MainWindow._swap_chamfer_sides` schaltet
+`FeaturePanel.toggle_field("chamfer_edges", "flip_sides")` — derselbe Haken,
+dieselbe Vorschau. `MainWindow._follow_chamfer_sides` (aus
+`_on_handling_armed` und `_on_feature_values_changed`) versorgt die Marken und
+nennt beide Flächen als Hinweis in der Statuszeile („Fase: Fläche 1 oben,
+Fläche 2 rechts", `_face_side`); `_update_actions` nimmt den Hinweis weg,
+sobald keine Marke mehr steht. Tests: `test_feature_panel.py` (Zeile,
+Bedingungen, Fokuskette, Namen), `test_ui.py` (Ende zu Ende mit Klick,
+Übernehmen, Undo), `test_viewport_decisions.py` (Beschriftung).
+
 ### Das Merkmalsfenster hat einen Knopf, nicht fünf (10.09.2026)
 
 Vier bis fünf Handlungen stehen an einer Bohrung untereinander, und jede trug

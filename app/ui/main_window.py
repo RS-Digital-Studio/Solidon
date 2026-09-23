@@ -2308,6 +2308,9 @@ class MainWindow(QMainWindow):
         self._feature_preview.setInterval(300)
         self._feature_preview.timeout.connect(self._preview_feature_change)
         self._feature_pending: tuple[str, dict[str, Any]] | None = None
+        self._chamfer_hint = False
+        """Ob die Statuszeile gerade die zwei Flächen einer Fase nennt
+        (:meth:`_follow_chamfer_sides`) — nur dann gibt es sie wegzunehmen."""
         self._preview_approval: _PreviewApproval | None = None
         self._preview_revision = 0
         self._preview_block_reason: str | None = None
@@ -2468,6 +2471,7 @@ class MainWindow(QMainWindow):
         self.viewport.gizmoStatus.connect(self._on_gizmo_status)
         self.viewport.featurePicked.connect(self._on_feature_picked)
         self.viewport.edgePicked.connect(self._on_edge_picked)
+        self.viewport.chamferSidesSwapRequested.connect(self._swap_chamfer_sides)
         self.viewport.objectPicked.connect(self._on_object_picked)
         self.viewport.contextMenuAt.connect(self._on_viewport_context_menu)
         self.viewport.pointPicked.connect(self._on_point_picked)
@@ -4444,6 +4448,11 @@ class MainWindow(QMainWindow):
         er vorher etwas hätte auswählen sollen. Eine Sackgasse als Antwort auf
         eine Frage, die das Menü selbst beantworten kann.
         """
+        if self._chamfer_hint and self.viewport.chamfer_marks() is None:
+            # Die Kante der Fase ist nicht mehr gewählt — und dann nennt die
+            # Statuszeile auch ihre zwei Flächen nicht mehr.
+            self._chamfer_hint = False
+            self.announce("", receipt=False)
         result = self.session.last_result
         objects = len(result.scene.objects) if result else 0
         chosen = len(self.object_tree.selected_objects())
@@ -13279,7 +13288,7 @@ class MainWindow(QMainWindow):
         # Ohne sie leuchtete die Kante, und die beiden Handlungen dazu waren
         # über keinen Weg mehr erreichbar.
         self.feature_dock.forget_dismissal()
-        self.feature_panel.show_edge(key, title)
+        self.feature_panel.show_edge(key, title, parameter_values=self._parameter_values())
         self.feature_dock.reveal()
         self._start_feature_preview()
         # **Und die Karte rechts erfährt davon** — dieselbe Zeile wie bei der
@@ -14270,6 +14279,43 @@ class MainWindow(QMainWindow):
         if order is not None:
             self._set_preview_order(self._quiet_host or self.feature_panel, order)
         self._offer_feature_cancel()
+        self._follow_chamfer_sides(op, params)
+
+    def _follow_chamfer_sides(self, op: str, params: Mapping[str, Any]) -> None:
+        """Die Marken der Fase an der gewählten Kante folgen den Feldern (P6.2).
+
+        Sofort und nicht entprellt, wie der Umriss beim Langloch: Die Marken
+        sind zwei Linien und keine Boolesche. Gezeigt wird nur, solange die
+        Handlung *Fase anbringen* an einer Kante steht; jede andere nimmt sie
+        weg. Die Statuszeile nennt beide Flächen in Worten — die Ziffern im
+        Bild sieht ein Bildschirmleser nicht (Regel 18).
+        """
+        chamfer = op == "chamfer_edges" and self.viewport.has_a_chosen_edge()
+        self.viewport.show_chamfer_sides(
+            params if chamfer else None, self._parameter_values() if chamfer else None
+        )
+        marks = self.viewport.chamfer_marks()
+        if marks is not None:
+            self.announce(
+                tr("Fase: Fläche 1 {first}, Fläche 2 {second}").format(
+                    first=_face_side(marks[0].normal), second=_face_side(marks[1].normal)
+                ),
+                receipt=False,
+            )
+            self._chamfer_hint = True
+        elif self._chamfer_hint:
+            self._chamfer_hint = False
+            self.announce("", receipt=False)
+
+    def _swap_chamfer_sides(self) -> None:
+        """Ein Klick auf eine Marke im Bild tauscht die Seiten der Fase.
+
+        Geschaltet wird der Haken *Seiten tauschen* im Merkmalfenster und nicht
+        eine Kopie davon: Er meldet seinen neuen Wert wie nach einem Klick auf
+        ihn, und Vorschau, Marken und Übernehmen lesen denselben Stand. Ein
+        Undo braucht es nicht — übernommen ist noch nichts.
+        """
+        self.feature_panel.toggle_field("chamfer_edges", "flip_sides")
 
     def _on_feature_values_changed(self, op: str, params: dict[str, Any]) -> None:
         """Eine geänderte Zahl im Merkmalspanel — erst zeigen, nicht tun.
@@ -14299,6 +14345,7 @@ class MainWindow(QMainWindow):
             self.viewport.reshape_slot(
                 float(params.get("slot_length") or 0.0), float(params.get("slot_angle") or 0.0)
             )
+        self._follow_chamfer_sides(op, params)
         flow, host = self._quiet_placement, self._quiet_host
         if flow is not None and flow.active:
             flow.cancel_pending_accept()

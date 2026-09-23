@@ -2937,6 +2937,7 @@
   "Fase": "Chanfrein",
   "Fase am Rand, damit die Buchse beim Einpressen gerade läuft.": "Un chanfrein sur le bord, pour que la douille entre droit.",
   "Fase anbringen": "Ajouter un chanfrein",
+  "Fase: Fläche 1 {first}, Fläche 2 {second}": "Chanfrein : face 1 {first}, face 2 {second}",
   "Fase: Klick bricht die Ecke um {value} — tippen ändert das Maß.": "Chanfrein : un clic casse le coin de {value} — saisir modifie la cote.",
   "Fase: auf eine Ecke klicken, an der zwei Linien zusammentreffen.": "Chanfrein : cliquer sur un coin où deux lignes se rejoignent.",
   "Fasen, Verrundungen und STEP brauchen das Zusatzpaket OpenCASCADE. Alles andere in Solidon funktioniert ohne.": "Les chanfreins, les congés et STEP nécessitent le module complémentaire OpenCASCADE. Tout le reste de Solidon fonctionne sans lui.",

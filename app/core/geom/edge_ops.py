@@ -28,7 +28,8 @@ Gruppen („alle senkrechten") rechnet ``geom.edges.wanted`` für beide.
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from typing import Literal, cast
 
 from app.core.errors import GeometryError
@@ -37,8 +38,13 @@ from app.core.geom.edges import (
     EDGE_CHOICES,
     ChamferShape,
     EdgeChoice,
+    EdgeSides,
+    MeshEdge,
     bead_edges,
     bevel_edges,
+    chamfer_reaches,
+    mesh_edge_sides,
+    reference_first,
     round_edges,
 )
 from app.core.geom.mesh import MeshData, as_mesh_data
@@ -51,6 +57,7 @@ from app.core.types import (
     OpResult,
     Profile,
     SceneObject,
+    Vec3,
 )
 from app.core.units import DEGREE_UNIT, EPS_GEOM
 from app.i18n import _
@@ -227,7 +234,9 @@ class ChamferParams(BaseParams):
     name="chamfer_edges",
     # 8: wie beim Verrunden (22.09.2026).
     # 9: zwei Abstände oder Abstand und Winkel (P6.2, 23.09.2026).
-    cache_version="9",
+    # 10: der exakte Kern fragt die Flächen an einem Punkt auf der Kante statt
+    # am Linienschwerpunkt — an Bögen und Kreisen (P6.2, 23.09.2026).
+    cache_version="10",
     title=_("Fase anbringen"),
     category="shaping",
     params=ChamferParams,
@@ -265,6 +274,108 @@ def chamfer_shape(params: ChamferParams) -> ChamferShape | None:
     if params.mode == "distance_angle":
         return ChamferShape(angle=float(params.angle), flipped=bool(params.flip_sides))
     return None
+
+
+@dataclass(frozen=True, slots=True)
+class ChamferMark:
+    """Wo eine Fase eine ihrer zwei Flächen zurücknimmt — für die Marke im Bild (P6.2).
+
+    ``start`` liegt auf der Kante, ``end`` auf der Berührlinie der Fase in
+    dieser Fläche; dazwischen liegen ``reach`` Millimeter in der Fläche.
+    ``reference`` sagt, ob diese Fläche die Bezugsfläche ist — die, auf der
+    die Breite gilt und zu der der Winkel steht. ``normal`` ist die Normale
+    der Fläche an dieser Stelle, damit die Oberfläche sie auch in Worten
+    nennen kann („oben", „rechts").
+    """
+
+    start: Vec3
+    end: Vec3
+    reach: float
+    reference: bool
+    normal: Vec3
+
+
+def edge_sides(body: object, entry: object) -> EdgeSides | None:
+    """Die zwei Flächen einer Kante an einem Punkt auf ihr — an beiden Kernen.
+
+    ``entry`` ist die Kante, wie der Kern des Körpers sie beschreibt:
+    ``brep.edit.EdgeInfo`` an einem exakten Körper, ``MeshEdge`` an einem
+    Netz. ``None``, wo die Frage keine Antwort hat — eine entartete Kante,
+    oder ein exakter Körper ohne OpenCASCADE.
+    """
+    if isinstance(entry, MeshEdge):
+        return mesh_edge_sides(entry)
+    try:
+        from app.core.brep import edit
+        from app.core.brep.kernel import Solid, available
+    except ImportError:
+        return None
+    if not available() or not isinstance(body, Solid) or not isinstance(entry, edit.EdgeInfo):
+        return None
+    try:
+        return edit.edge_sides(body, entry)
+    except GeometryError:
+        return None
+
+
+def chamfer_marks(
+    sides: EdgeSides,
+    values: Mapping[str, object],
+    parameter_values: Mapping[str, float] | None = None,
+) -> tuple[ChamferMark, ChamferMark] | None:
+    """Welche Fläche welche Rücknahme bekommt — die Bezugsfläche zuerst.
+
+    ``values`` sind die Werte, die gerade im Merkmalfenster stehen, auch mit
+    Ausdrücken (``=@breite``); sie werden mit ``parameter_values`` aufgelöst
+    wie bei der Auswertung. Gerechnet wird mit denselben Zeilen wie beim Fasen
+    (:func:`chamfer_shape`, :func:`~app.core.geom.edges.chamfer_reaches`) und
+    denselben Normalen in derselben Folge — die Marke kann also nicht eine
+    andere Fläche nennen als die Fase nimmt.
+
+    ``None`` bei gleicher Breite (dort gibt es keine Bezugsfläche, die man
+    sehen müsste) und bei Werten, aus denen keine Fase wird: ein ungültiger
+    Ausdruck, ein Winkel, der die Gegenfläche verfehlt. Das sagt die Vorschau
+    mit ihrem eigenen Satz; eine Marke dazu wäre eine zweite Meldung.
+    """
+    from app.core import expressions
+    from app.core.errors import AppError
+
+    try:
+        resolved = expressions.resolve_params(dict(values), dict(parameter_values or {}))
+        params = ChamferParams(
+            **{
+                name: resolved[name]
+                for name in ("distance", "mode", "second_distance", "angle", "flip_sides")
+                if name in resolved
+            }
+        )
+        shape = chamfer_shape(params)
+        if shape is None:
+            return None
+        one, two = chamfer_reaches(
+            float(params.distance), shape, sides.one.normal, sides.two.normal
+        )
+    except AppError, TypeError, ValueError:
+        return None
+    reference_is_one = reference_first(sides.one.normal, sides.two.normal) != shape.flipped
+    marks = [
+        ChamferMark(
+            start=sides.at,
+            end=cast(
+                Vec3,
+                tuple(sides.at[axis] + reach * side.towards[axis] for axis in range(3)),
+            ),
+            reach=reach,
+            reference=reference,
+            normal=side.normal,
+        )
+        for side, reach, reference in (
+            (sides.one, one, reference_is_one),
+            (sides.two, two, not reference_is_one),
+        )
+    ]
+    marks.sort(key=lambda mark: not mark.reference)
+    return marks[0], marks[1]
 
 
 @op_params

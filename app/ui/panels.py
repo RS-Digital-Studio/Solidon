@@ -6078,7 +6078,13 @@ class FeaturePanel(QWidget):
         if (entered := self.preview_values()) is not None:
             self.valuesChanged.emit(*entered)
 
-    def show_edge(self, key: str, title: str) -> None:
+    def show_edge(
+        self,
+        key: str,
+        title: str,
+        *,
+        parameter_values: Mapping[str, float] | None = None,
+    ) -> None:
         """Was sich an dieser **Kante** tun lässt — verrunden und fasen.
 
         Eine Kante ist kein Merkmal: Sie trägt keine Kennung, die die
@@ -6092,6 +6098,15 @@ class FeaturePanel(QWidget):
         Dialogs kennt („Senkrecht · 20 mm · x -20,0, y -15,0"). Der Schlüssel
         dahinter steht nirgends im Fenster: Er ist eine Kennung aus sechs
         Zahlen und keine Beschriftung (§2.4).
+
+        **Die Zahlenfelder sind die des Dialogs** (P6.2): ``ValueField`` mit
+        derselben Einheit, denselben Grenzen und dem Umschalter für einen
+        Ausdruck (``=@breite``), gerechnet mit ``parameter_values``. Eine Fase
+        mit zwei Abständen ist ein Maß, das man an einen Projektparameter
+        hängen will — im Dialog ging das, an der angeklickten Kante bis dahin
+        nicht. Die Felder, die von einer Auswahl abhängen (zweiter Abstand,
+        Winkel, Seitentausch), stehen nur da, solange sie gelten
+        (:meth:`_follow_conditions`).
         """
         from app.core.perceive.actions import edge_actions
 
@@ -6099,6 +6114,7 @@ class FeaturePanel(QWidget):
         try:
             self.clear(rebuilding=True)
             self._feature_id = None
+            self._parameter_values = dict(parameter_values or {})
             _set_shown(self._empty, False)
 
             heading = QLabel(title, self)
@@ -6110,10 +6126,20 @@ class FeaturePanel(QWidget):
 
             for action in edge_actions(key):
                 self._separate()
+                # Die Ausdrucksfelder gelten je Zeile: *Verrunden* und *Wulst
+                # anlegen* führen beide einen ``radius`` mit eigener Vorgabe,
+                # eigenen Grenzen und eigenem Satz — ein gemeinsames
+                # Verzeichnis gäbe dem einen die Beschreibung des anderen.
+                self._texture_fields = {
+                    entry.name: entry
+                    for entry in REGISTRY.get(str(action.op)).params.spec()
+                    if entry.kind == "float"
+                }
                 row = self._build_action(action)
                 self._rows.insertWidget(self._rows.count() - 1, row)
                 self._built.append(row)
         finally:
+            self._texture_fields = {}
             self._drop_spare_rows()
         self._settle_apply()
 
@@ -6438,6 +6464,7 @@ class FeaturePanel(QWidget):
         row.fixed = tuple(getattr(action, "fixed", ()))
         row.step = step
         self._fill_row(row, action)
+        self._follow_conditions(row)
         self._shown_rows[row.box] = row
         box = row.box
 
@@ -6704,6 +6731,61 @@ class FeaturePanel(QWidget):
             # Bedienelement gehört — und damit auch, dass es mit ihnen gesperrt
             # wird, solange die Kette anhält (:meth:`_settle_lock`).
             self._mark(row.button, row.key)
+
+    def _follow_conditions(self, row: _ActionRow) -> None:
+        """Zeigt nur die Felder dieser Zeile, deren Bedingung gerade gilt (P6.2).
+
+        Dieselbe Regel wie im Operationsdialog (``_couple_dependent_fields``)
+        und aus derselben Quelle: ``depends_on`` des Parameters, durchgereicht
+        über :attr:`~app.core.perceive.actions.ActionField.depends_on`, geprüft
+        mit :func:`~app.core.registry.params.inactive_dependency` — auch über
+        eine Kette von Bedingungen. Ein Feld, das nicht gilt, verschwindet
+        samt Beschriftung; die Fokuskette übergeht es von selbst. Gesperrt
+        wird es hier nicht: Sperren gehört :meth:`_settle_lock`, und zwei
+        Stellen, die dieselbe Sperre setzen, gewinnen abwechselnd.
+
+        Der Wert bleibt dabei stehen. Wer von „Zwei Abstände" auf „Gleiche
+        Breite" und zurück wechselt, findet seinen zweiten Abstand wieder —
+        die Operation liest ihn nur, solange er gilt.
+        """
+        from app.core.registry.params import inactive_dependency
+
+        conditional = [field for field in row.entries if getattr(field, "depends_on", None)]
+        if not conditional:
+            return
+        values = self._row_values(row)
+        for field in conditional:
+            name = str(field.name)
+            editor = row.widgets.get(name)
+            label = row.labels.get(name)
+            if editor is None:
+                continue
+            active = inactive_dependency(cast(Any, field), cast(Any, row.entries), values) is None
+            _set_shown(editor, active)
+            if label is not None:
+                _set_shown(label, active)
+
+    def toggle_field(self, op: str, name: str) -> bool:
+        """Schaltet einen Haken der Handlung ``op`` um — wie ein Klick auf ihn.
+
+        Der Weg für eine Geste außerhalb des Fensters: Ein Klick auf eine
+        Marke der Fase im Bild tauscht die Seiten, und das ist hier der Haken
+        *Seiten tauschen*. Über den Haken und nicht an ihm vorbei, damit Knopf,
+        Vorschau und Übernehmen denselben Stand lesen wie nach einem Klick
+        hier. ``False``, wenn es den Haken gerade nicht gibt oder er nicht
+        gilt — dann ist im Bild auch nichts, das ihn tauschen könnte.
+        """
+        row = next(
+            (row for row in self._shown_rows.values() if row.op == op and name in row.widgets),
+            None,
+        )
+        if row is None:
+            return False
+        editor = row.widgets[name]
+        if not isinstance(editor, QCheckBox) or editor.isHidden() or not editor.isEnabled():
+            return False
+        editor.toggle()
+        return True
 
     def _row_values(self, row: _ActionRow) -> dict[str, Any]:
         """Was in den Feldern dieser Zeile steht — mit dem gezeigten Merkmal."""
@@ -7265,6 +7347,9 @@ class FeaturePanel(QWidget):
             # folgt der Berührung; ohne das zeigte er auf die erste, während
             # jemand in der vierten tippt.
             self._arm(row.key)
+            # Eine andere Art der Fase zeigt andere Felder — vor der Meldung,
+            # damit die Vorschau schon zur sichtbaren Zeile gehört.
+            self._follow_conditions(row)
             self.valuesChanged.emit(row.op, self._row_values(row))
 
         for target in (editor, *editor.findChildren(QLineEdit)):

@@ -731,6 +731,82 @@ def chamfer_reaches(
     return (distance, other) if reference_is_one else (other, distance)
 
 
+@dataclass(frozen=True, slots=True)
+class EdgeSide:
+    """Eine der zwei Flächen an einer Kante, gefragt an einer Stelle der Kante.
+
+    ``normal`` zeigt aus dem Körper heraus; ``towards`` liegt in der Fläche,
+    quer zur Kante, und zeigt von ihr weg in die Fläche hinein — dorthin, wo
+    eine Fase die Fläche zurücknimmt.
+    """
+
+    normal: Vec3
+    towards: Vec3
+
+
+@dataclass(frozen=True, slots=True)
+class EdgeSides:
+    """Die beiden Flächen einer Kante an einem Punkt **auf** ihr (P6.2).
+
+    Die Reihenfolge ``one``/``two`` ist die, in der der Kern der Kante die
+    Flächen fragt; :func:`chamfer_reaches` bekommt die Normalen in derselben
+    Folge. Deshalb sagt diese Auskunft, welche Fläche welche Rücknahme
+    bekommt, ohne die Wahl der Bezugsfläche ein zweites Mal zu treffen.
+    """
+
+    at: Vec3
+    one: EdgeSide
+    two: EdgeSide
+
+
+def mesh_edge_sides(entry: MeshEdge) -> EdgeSides | None:
+    """Die zwei Flächen eines Netzzugs an seiner halben Länge — oder ``None``.
+
+    Gefragt wird das Stück, auf dem die halbe Länge liegt, mit seinen eigenen
+    Normalen: Das Netz fast jedes Stück mit dessen Normalen
+    (:func:`_wedge`), und an einem Bogen drehen sie sich mit. Die Richtungen
+    in die Flächen sind dieselben wie beim Werkzeug (:func:`_along_face`).
+    """
+    if len(entry.points) < 2 or len(entry.normals) != len(entry.points) - 1:
+        return None
+    points = np.asarray(entry.points, dtype=float)
+    steps = np.linalg.norm(np.diff(points, axis=0), axis=1)
+    total = float(steps.sum())
+    if total <= EPS_GEOM:
+        return None
+    walked = 0.0
+    index = len(steps) - 1
+    for position, step in enumerate(steps):
+        if walked + float(step) >= total / 2.0:
+            index = position
+            break
+        walked += float(step)
+    step = float(steps[index])
+    if step <= EPS_GEOM:
+        return None
+    along = (points[index + 1] - points[index]) / step
+    at = points[index] + along * min(max(total / 2.0 - walked, 0.0), step)
+    one = np.asarray(entry.normals[index][0], dtype=float)
+    two = np.asarray(entry.normals[index][1], dtype=float)
+    into = -(one + two) if entry.convex else one + two
+    if float(np.linalg.norm(into)) <= EPS_GEOM:
+        return None
+    towards_one = _along_face(one, along, into)
+    towards_two = _along_face(two, along, into)
+    if towards_one is None or towards_two is None:
+        return None
+    return EdgeSides(
+        at=_vec(at),
+        one=EdgeSide(normal=_vec(one), towards=_vec(towards_one)),
+        two=EdgeSide(normal=_vec(two), towards=_vec(towards_two)),
+    )
+
+
+def _vec(values: np.ndarray) -> Vec3:
+    """Ein NumPy-Vektor als Raumpunkt des Kerns."""
+    return (float(values[0]), float(values[1]), float(values[2]))
+
+
 def rounding_tool(
     entry: MeshEdge,
     radius: float,

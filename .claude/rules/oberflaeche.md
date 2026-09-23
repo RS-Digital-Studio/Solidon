@@ -412,6 +412,15 @@ exakten Körper seinen eigenen Satz — *Flächenbearbeitung beenden* —, nicht
 den Satz über die fehlenden Kurven; seit Grundkörper exakt entstehen, ist
 das dort der Normalfall.
 
+**Ein bedingtes Feld im Merkmalfenster folgt demselben `depends_on` wie im
+Dialog** (P6.2): Es verschwindet samt Beschriftung, solange seine Bedingung
+nicht gilt (`FeaturePanel._follow_conditions`), und kommt mit ihr zurück — mit
+dem Wert, den es vorher trug. Gesperrt wird es dafür nicht: Die Sperre gehört
+dem Kettenhalt (`_settle_lock`), und zwei Stellen, die dieselbe Sperre setzen,
+gewinnen abwechselnd. Die Bedingung reist als `ActionField.depends_on` aus dem
+Schema; eine zweite Liste in der Oberfläche wüsste beim nächsten Parameter
+nichts davon.
+
 ## Ein Feld ohne Namen ist für einen Bildschirmleser ein leeres Kästchen
 
 Die Regel „jedes Feld sagt, was es tut" nannte zwei Orte — die

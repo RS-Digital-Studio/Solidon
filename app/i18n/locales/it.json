@@ -2937,6 +2937,7 @@
   "Fase": "Smusso",
   "Fase am Rand, damit die Buchse beim Einpressen gerade läuft.": "Smusso al bordo, perché la boccola entri dritta durante l'inserimento.",
   "Fase anbringen": "Applica uno smusso",
+  "Fase: Fläche 1 {first}, Fläche 2 {second}": "Smusso: faccia 1 {first}, faccia 2 {second}",
   "Fase: Klick bricht die Ecke um {value} — tippen ändert das Maß.": "Smusso: un clic spezza l'angolo di {value}; digitare cambia la quota.",
   "Fase: auf eine Ecke klicken, an der zwei Linien zusammentreffen.": "Smusso: fai clic su un angolo in cui si incontrano due linee.",
   "Fasen, Verrundungen und STEP brauchen das Zusatzpaket OpenCASCADE. Alles andere in Solidon funktioniert ohne.": "Smussi, raccordi e STEP richiedono il componente aggiuntivo OpenCASCADE. Tutto il resto di Solidon funziona senza.",

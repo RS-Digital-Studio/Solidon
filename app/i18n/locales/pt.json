@@ -2937,6 +2937,7 @@
   "Fase": "Chanfro",
   "Fase am Rand, damit die Buchse beim Einpressen gerade läuft.": "Um chanfro na borda, para que a bucha entre a direito.",
   "Fase anbringen": "Aplicar um chanfro",
+  "Fase: Fläche 1 {first}, Fläche 2 {second}": "Chanfro: face 1 {first}, face 2 {second}",
   "Fase: Klick bricht die Ecke um {value} — tippen ändert das Maß.": "Chanfro: um clique quebra o canto em {value} — escrever altera a cota.",
   "Fase: auf eine Ecke klicken, an der zwei Linien zusammentreffen.": "Chanfro: clicar num canto onde duas linhas se encontram.",
   "Fasen, Verrundungen und STEP brauchen das Zusatzpaket OpenCASCADE. Alles andere in Solidon funktioniert ohne.": "Chanfros, arredondamentos e STEP precisam do complemento OpenCASCADE. Tudo o resto no Solidon funciona sem ele.",

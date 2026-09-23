@@ -2937,6 +2937,7 @@
   "Fase": "Chaflán",
   "Fase am Rand, damit die Buchse beim Einpressen gerade läuft.": "Un chaflán en el borde para que el casquillo entre recto.",
   "Fase anbringen": "Aplicar un chaflán",
+  "Fase: Fläche 1 {first}, Fläche 2 {second}": "Chaflán: cara 1 {first}, cara 2 {second}",
   "Fase: Klick bricht die Ecke um {value} — tippen ändert das Maß.": "Chaflán: un clic rompe la esquina en {value}; escribir cambia la medida.",
   "Fase: auf eine Ecke klicken, an der zwei Linien zusammentreffen.": "Chaflán: hacer clic en una esquina donde se unen dos líneas.",
   "Fasen, Verrundungen und STEP brauchen das Zusatzpaket OpenCASCADE. Alles andere in Solidon funktioniert ohne.": "Los chaflanes, redondeos y STEP requieren el complemento OpenCASCADE. Todo lo demás en Solidon funciona sin él.",

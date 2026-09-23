@@ -2937,6 +2937,7 @@
   "Fase": "Chamfer",
   "Fase am Rand, damit die Buchse beim Einpressen gerade läuft.": "A chamfer at the rim so the insert goes in straight.",
   "Fase anbringen": "Add a chamfer",
+  "Fase: Fläche 1 {first}, Fläche 2 {second}": "Chamfer: face 1 {first}, face 2 {second}",
   "Fase: Klick bricht die Ecke um {value} — tippen ändert das Maß.": "Chamfer: a click breaks the corner by {value} — typing changes the size.",
   "Fase: auf eine Ecke klicken, an der zwei Linien zusammentreffen.": "Chamfer: click a corner where two lines meet.",
   "Fasen, Verrundungen und STEP brauchen das Zusatzpaket OpenCASCADE. Alles andere in Solidon funktioniert ohne.": "Chamfers, fillets and STEP need the OpenCASCADE add-on. Everything else in Solidon works without it.",

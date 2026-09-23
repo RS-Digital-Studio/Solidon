@@ -40,7 +40,7 @@ from app.core.errors import (
     OperationCancelled,
 )
 from app.core.geom.edges import EDGE_CHOICES as SHARED_EDGE_CHOICES
-from app.core.geom.edges import ChamferShape, chamfer_reaches
+from app.core.geom.edges import ChamferShape, EdgeSide, EdgeSides, chamfer_reaches
 from app.core.geom.edges import EdgeChoice as SharedEdgeChoice
 from app.core.geom.edges import choose as choose_by_place
 from app.core.geom.edges import named_edges as edges_named
@@ -626,6 +626,12 @@ def _faces_at_edge(solid: Solid, entry: EdgeInfo) -> list[tuple[Any, tuple[float
     Fußpunkt der Kantenmitte, mit der Orientierung der Fläche im Körper — an
     einer ebenen Fläche die Ebenennormale, an einer gekrümmten die an dieser
     Stelle.
+
+    **Die Kantenmitte liegt auf der Kante** (:func:`_point_on_edge`), nicht im
+    Linienschwerpunkt ``entry.middle``. Der liegt bei einem Kreis in dessen
+    Mitte, und von dort auf einen Kegel oder Zylinder projiziert fand sich
+    keine Normale: Jede obere Kante eines Zylinders wies eine Fase mit zwei
+    Abständen mit „lassen sich nicht bestimmen" ab (P6.2, gemessen 23.09.2026).
     """
     from OCP.BRep import BRep_Tool
     from OCP.BRepAdaptor import BRepAdaptor_Surface
@@ -643,12 +649,13 @@ def _faces_at_edge(solid: Solid, entry: EdgeInfo) -> list[tuple[Any, tuple[float
     TopExp.MapShapesAndAncestors_s(solid.shape, TopAbs_EDGE, TopAbs_FACE, neighbours)
     if not neighbours.Contains(entry.edge):
         raise _chamfer_sides_unknown()
+    on_edge, _tangent = _point_on_edge(entry)
     found: list[tuple[Any, tuple[float, float, float]]] = []
     for shape in neighbours.FindFromKey(entry.edge):
         face = TopoDS.Face(shape)
         if any(face.IsSame(known) for known, _normal in found):
             continue
-        projector = GeomAPI_ProjectPointOnSurf(gp_Pnt(*entry.middle), BRep_Tool.Surface_s(face))
+        projector = GeomAPI_ProjectPointOnSurf(gp_Pnt(*on_edge), BRep_Tool.Surface_s(face))
         if projector.NbPoints() < 1:
             raise _chamfer_sides_unknown()
         u, v = projector.LowerDistanceParameters()
@@ -661,6 +668,67 @@ def _faces_at_edge(solid: Solid, entry: EdgeInfo) -> list[tuple[Any, tuple[float
     if len(found) != 2:
         raise _chamfer_sides_unknown()
     return found
+
+
+def _point_on_edge(entry: EdgeInfo) -> tuple[Vec3, Vec3]:
+    """Der Punkt in der Mitte des Kurvenparameters und die Richtung der Kante dort.
+
+    An einer Strecke ist das ihre Mitte und ``entry.direction``; an einem
+    Kreis ein Punkt auf ihm und seine Tangente — beides, was der
+    Linienschwerpunkt nicht ist.
+    """
+    from OCP.BRepAdaptor import BRepAdaptor_Curve
+    from OCP.gp import gp_Pnt, gp_Vec
+
+    curve = BRepAdaptor_Curve(entry.edge)
+    point = gp_Pnt()
+    tangent = gp_Vec()
+    curve.D1((curve.FirstParameter() + curve.LastParameter()) / 2.0, point, tangent)
+    size = tangent.Magnitude()
+    if size <= EPS_GEOM:
+        raise _chamfer_sides_unknown()
+    return (
+        (point.X(), point.Y(), point.Z()),
+        (tangent.X() / size, tangent.Y() / size, tangent.Z() / size),
+    )
+
+
+def edge_sides(solid: Solid, entry: EdgeInfo) -> EdgeSides:
+    """Die zwei Flächen einer Kante, in der Folge, in der :func:`chamfer` sie fragt (P6.2).
+
+    Die Normalen sind die aus :func:`_faces_at_edge` — dieselben, aus denen
+    :func:`chamfer` Bezugsfläche und Rücknahmen bestimmt. Die Richtung in
+    jede Fläche steht quer zur Kante in der Tangentialebene; welches der
+    beiden Vorzeichen in die Fläche führt, entscheidet ein Punkt knapp daneben,
+    den die Fläche selbst einordnet (``BRepClass_FaceClassifier``). Eine
+    Regel über Außen- und Innenkante wäre eine zweite Rechnung derselben
+    Frage und stimmte an einer gekrümmten Fläche nur ungefähr.
+    """
+    require()
+    from OCP.BRepClass import BRepClass_FaceClassifier
+    from OCP.gp import gp_Pnt
+    from OCP.TopAbs import TopAbs_OUT
+
+    at, tangent = _point_on_edge(entry)
+    # Knapp daneben heißt: weit unter jeder Fase, weit über der Toleranz der
+    # Einordnung — ein Hundertstel der Kantenlänge, höchstens 0,05 mm.
+    probe = min(0.05, max(entry.length / 100.0, 10.0 * EPS_GEOM))
+    sides: list[EdgeSide] = []
+    for face, normal in _faces_at_edge(solid, entry):
+        across = (
+            tangent[1] * normal[2] - tangent[2] * normal[1],
+            tangent[2] * normal[0] - tangent[0] * normal[2],
+            tangent[0] * normal[1] - tangent[1] * normal[0],
+        )
+        size = math.hypot(*across)
+        if size <= EPS_GEOM:
+            raise _chamfer_sides_unknown()
+        towards = tuple(value / size for value in across)
+        beside = gp_Pnt(*(at[axis] + probe * towards[axis] for axis in range(3)))
+        if BRepClass_FaceClassifier(face, beside, probe / 10.0).State() == TopAbs_OUT:
+            towards = tuple(-value for value in towards)
+        sides.append(EdgeSide(normal=normal, towards=cast(Vec3, towards)))
+    return EdgeSides(at=at, one=sides[0], two=sides[1])
 
 
 def _chamfer_sides_unknown() -> GeometryError:

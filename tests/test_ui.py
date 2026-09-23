@@ -30,6 +30,7 @@ from PySide6.QtWidgets import (
     QDialogButtonBox,
     QMessageBox,
     QToolBar,
+    QWidget,
 )
 
 from app.core import errors
@@ -6821,6 +6822,127 @@ def test_a_chosen_edge_reaches_the_panel_as_its_own_level(window: MainWindow) ->
     # lässt, steht oben bei den Maßen" und bot eine Zuweisung an, die dem
     # ganzen Körper gilt (Fund der zweiten Durchsicht, 18.09.2026).
     assert window.quick_filament.isHidden(), "an einer Kante gibt es nichts zu färben"
+
+
+def test_the_chamfer_marks_follow_the_panel_and_a_click_on_one_swaps_the_sides(
+    window: MainWindow,
+) -> None:
+    """Welche Fläche welches Maß der Fase trägt, steht im Bild — und tauscht per Klick (P6.2).
+
+    Der Weg der Kundin, Ende zu Ende am Fenster: Kante anklicken, bei *Fase
+    anbringen* „Zwei Abstände" wählen. Im Bild steht je Fläche eine Maßlinie
+    bis zur Berührlinie, beschriftet „1 · …" auf der Bezugsfläche (hier die
+    Oberseite) und „2 · …" auf der Wand — die Ziffer ist die zweite Kodierung
+    neben Farbe und Strichstärke, und die Statuszeile nennt beide Flächen in
+    Worten. Ein Klick auf eine Marke schaltet *Seiten tauschen* im
+    Merkmalfenster, und die Marken folgen. Übernommen wird **ein** Schritt mit
+    den Werten aus dem Fenster; ein Strg+Z nimmt ihn zurück. Gleiche Breite
+    nimmt die Marken weg, samt dem Satz in der Statuszeile.
+    """
+    from render_fakes import RecordingRenderer
+
+    from app.core.geom import edges as mesh_edges
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.registry import REGISTRY
+    from app.ui.viewport import FEATURE_EDGE_WIDTH, SELECTED_EDGE_WIDTH, chamfer_mark_texts
+
+    renderer = RecordingRenderer(size=(900, 600))
+    window.viewport.renderer = renderer
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    if not REGISTRY.has("chamfer_edges"):
+        pytest.skip("ohne Fase im Register gibt es keine Marken")
+    object_id, body = next(iter(result.scene.objects.items()))
+    before = len(window.session.project.document.ops)
+    kanten = mesh_edges.edges_of(as_mesh_data(body.mesh))
+    oben_rechts = max(kanten, key=lambda kante: (kante.middle[2], kante.middle[0]))
+    key = mesh_edges.edge_key(oben_rechts)
+    top, right = float(oben_rechts.middle[2]), float(oben_rechts.middle[0])
+
+    window.object_tree.select_object(object_id)
+    QApplication.processEvents()
+    window.viewport.select_edge(object_id, key)
+    window.viewport.edgePicked.emit(object_id, key)
+    QApplication.processEvents()
+    assert window.viewport.chamfer_marks() is None, "an der Kante ist zuerst Verrunden scharf"
+
+    title = str(REGISTRY.get("chamfer_edges").title)
+    schema = {entry.name: entry for entry in REGISTRY.get("chamfer_edges").params.spec()}
+
+    def feld(name: str) -> Any:
+        wanted = f"{title} — {schema[name].title}"
+        return next(
+            widget
+            for widget in window.feature_panel.findChildren(QWidget)
+            if widget.accessibleName() == wanted
+        )
+
+    art, breite, tauschen = feld("mode"), feld("distance"), feld("flip_sides")
+    breite.set_value(2.0)
+    art.setCurrentIndex(art.findData("two_distances"))
+    QApplication.processEvents()
+
+    marks = window.viewport.chamfer_marks()
+    assert marks is not None, "zwei Abstände: die Marken stehen"
+    assert marks[0].reference and marks[0].reach == pytest.approx(2.0)
+    assert marks[0].end[2] == pytest.approx(top), "die Breite liegt auf der Oberseite"
+    assert marks[0].end[0] == pytest.approx(right - 2.0)
+    assert marks[1].end[2] == pytest.approx(top - 1.0), "der zweite Abstand die Wand hinunter"
+    assert renderer.item_of("chamfer-side:1").line_width == pytest.approx(SELECTED_EDGE_WIDTH)
+    assert renderer.item_of("chamfer-side:2").line_width == pytest.approx(2.0 * FEATURE_EDGE_WIDTH)
+    texts = chamfer_mark_texts(marks, {"mode": "two_distances"})
+    assert renderer.labelled[-1] == texts
+    assert texts[0].startswith("1 · ") and texts[1].startswith("2 · ")
+    assert window.status_message.text() == "Fase: Fläche 1 oben, Fläche 2 rechts"
+
+    # Ein Klick auf die äußere Hälfte der ersten Marke tauscht die Seiten.
+    entry = window.session.last_result.scene.objects[object_id]
+    offset = window.viewport._shown_offset(entry, window.session.last_result)
+    end = tuple(float(marks[0].end[axis]) + float(offset[axis]) for axis in range(3))
+    x, y, _depth = renderer.world_to_display(end)
+    window.viewport._on_left_click(round(x), round(y))
+    QApplication.processEvents()
+
+    assert tauschen.isChecked(), "der Klick schaltet den Haken im Merkmalfenster"
+    swapped = window.viewport.chamfer_marks()
+    assert swapped is not None
+    assert swapped[0].end[2] == pytest.approx(top - 2.0), "jetzt trägt die Wand die Breite"
+    assert swapped[1].end[0] == pytest.approx(right - 1.0)
+    assert window.status_message.text() == "Fase: Fläche 1 rechts, Fläche 2 oben"
+    assert window.viewport.highlighted_edge() == (object_id, key), "die Kante bleibt gewählt"
+
+    # Übernehmen wartet auf die dargestellte Vorschau, dann ein Schritt.
+    window._feature_preview.stop()
+    window._preview_feature_change()
+    assert window.session.wait_for_idle(30_000)
+    for _ in range(40):
+        QApplication.processEvents()
+    window.feature_panel._apply.click()
+    assert window.session.wait_for_idle(30_000)
+    assert len(window.session.project.document.ops) == before + 1
+    step = window.session.project.document.ops[-1]
+    assert step.op == "chamfer_edges"
+    assert step.params["edges"] == "named" and step.params["edge_keys"] == key
+    assert step.params["mode"] == "two_distances" and step.params["flip_sides"] is True
+    assert float(step.params["distance"]) == pytest.approx(2.0)
+    window.session.undo()
+    assert window.session.wait_for_idle(30_000)
+    assert len(window.session.project.document.ops) == before
+
+    # Gleiche Breite: keine Bezugsfläche, keine Marken, kein Satz.
+    window.viewport.select_edge(object_id, key)
+    window.viewport.edgePicked.emit(object_id, key)
+    QApplication.processEvents()
+    art = feld("mode")
+    art.setCurrentIndex(art.findData("two_distances"))
+    assert window.viewport.chamfer_marks() is not None
+    shown = list(window.viewport._chamfer_items)
+    art.setCurrentIndex(art.findData("equal_distances"))
+    QApplication.processEvents()
+    assert window.viewport.chamfer_marks() is None
+    assert all(item in renderer.removed for item in shown), "die Marken sind aus dem Bild"
+    assert not window.status_message.text().startswith("Fase:")
 
 
 def test_the_window_hands_the_panel_its_level_and_its_name(window: MainWindow) -> None:

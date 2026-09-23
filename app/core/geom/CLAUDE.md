@@ -1205,6 +1205,22 @@ tauscht), `chamfer_reaches` rechnet beide Rücknahmen — dieselben Zeilen für
 (`_faces_at_edge`, `Add(d1, d2, Kante, Fläche)`). An einer gemischten Ecke
 (außen und innen) sagen sie ab. Wo drei ungleiche Fasen sich treffen, schließt
 das Netz die Ecke eben, OpenCASCADE gewölbt — der Vorbehalt steht im Register.
+Der exakte Kern fragt die Flächen an einem Punkt **auf** der Kante
+(`brep.edit._point_on_edge`, Mitte des Kurvenparameters), nicht am
+Linienschwerpunkt — der liegt bei einem Kreis auf der Achse.
+
+**Welche Fläche welches Maß trägt, sagt der Kern auch der Anzeige**:
+`edges.EdgeSides` (Punkt auf der Kante, je Fläche Normale und Richtung in die
+Fläche) kommt aus `edges.mesh_edge_sides` (Stück auf halber Länge, seine
+Normalen, `_along_face`) oder `brep.edit.edge_sides` (Normalen aus
+`_faces_at_edge`, Richtung per `BRepClass_FaceClassifier`);
+`edge_ops.edge_sides` wählt den Kern, `edge_ops.chamfer_marks` rechnet mit
+`chamfer_shape`/`chamfer_reaches` und denselben Normalen in derselben Folge
+die zwei `ChamferMark` (Bezugsfläche zuerst, `None` bei gleicher Breite oder
+ungültigen Werten, Ausdrücke über `expressions.resolve_params`). Schnittmaße
+und Winkel an schrägen (Sechseck 120°, Dreieck 60°) und gekrümmten
+Nachbarflächen (Kegelstumpf, Pappus) prüft `tests/test_mesh_edges.py` gegen
+die Konstruktion.
 
 Fasen verbinden die tatsächlichen Schnittpunkte ihrer Flanken auf den
 Nachbarflächen. Bei mehr als drei Flächen schließt deren ebene oder
