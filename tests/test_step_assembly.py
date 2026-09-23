@@ -94,6 +94,29 @@ def test_the_corpus_matches_its_generator(name: str) -> None:
     assert same, text
 
 
+@pytest.mark.parametrize("fresh", [False, True])
+def test_the_corpus_summary_compares_zero_without_a_sign(fresh: bool) -> None:
+    """Spiegelung und Versatz zählen, das plattformabhängige Vorzeichen der Null nicht."""
+    data = corpus.build("nested") if fresh else payload("nested")
+    reflected = next(line for line in corpus.summary(data) if "instance Halter gespiegelt " in line)
+
+    cells = reflected.split("[", 1)[1].split("]", 1)[0].split()
+    assert cells == [
+        "-1.000000",
+        "0.000000",
+        "0.000000",
+        f"{corpus.MIRRORED_SHIFT:.6f}",
+        "0.000000",
+        "1.000000",
+        "0.000000",
+        "0.000000",
+        "0.000000",
+        "0.000000",
+        "1.000000",
+        "0.000000",
+    ]
+
+
 # --- Lesen: Körper, Lagen, Namen, Farben ------------------------------------------
 
 

@@ -479,7 +479,7 @@ def summary(data: bytes) -> list[str]:
         if shapes.IsComponent_s(label):
             transform = shapes.GetLocation_s(label).Transformation()
             cells = " ".join(
-                f"{transform.Value(row, column):.6f}"
+                f"{transform.Value(row, column):z.6f}"
                 for row in (1, 2, 3)
                 for column in (1, 2, 3, 4)
             )

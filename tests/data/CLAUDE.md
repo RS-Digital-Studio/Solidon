@@ -9,6 +9,10 @@ Die Modelle und Projekte, gegen die gemessen wird.
 | `step/` | Sechs STEP-Baugruppen aus Konstruktionsmaßen (`make_step_assembly_corpus.py`, P7.4): Instanzen mit Lage und Instanzfarbe, verschachtelt mit SHUO und Spiegelung, ein Teil mit mehreren Körpern, ohne Namen, in Zoll, Flächenmodell — die Sollwerte stehen im Erzeuger, `--check` vergleicht den XCAF-Baum |
 | `threads/` | Fünf STEP-Gewindekörper aus Konstruktionsmaßen (`make_thread_corpus.py`): M6, M10, M8 innen, zweigängig, eine Naht ohne Rille — die Basis der Fallmatrix in `test_thread_import.py`; alles Abgeleitete baut der Test selbst |
 
+Der STEP-Baumvergleich normalisiert das Vorzeichen gerundeter Nullwerte in
+Transformationsmatrizen (`z.6f`). Negative Maßwerte und Spiegelungen bleiben
+erhalten; `-0.000000` und `0.000000` bezeichnen dieselbe Lage.
+
 ## Ein Fehlerbild wird eine Datei hier
 
 Das ist die Regel, die diesen Ordner erklärt: **Neue Fehlerbilder werden
