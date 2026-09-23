@@ -33,7 +33,15 @@ from app.core.geom.mesh import (
 from app.core.geom.repair import merge_vertices
 from app.core.log import get_logger
 from app.core.registry import op_params, param, register_op
-from app.core.types import BaseParams, CancelToken, Finding, OpContext, OpResult, Severity
+from app.core.types import (
+    BaseParams,
+    CancelToken,
+    Finding,
+    OpContext,
+    OpResult,
+    SceneObject,
+    Severity,
+)
 from app.core.units import DEGREE_UNIT, VOLUME_SUM_NOISE
 from app.i18n import _
 
@@ -917,6 +925,16 @@ def subdivided(mesh: MeshData, edge: float, angle: float) -> MeshData:
 # --- operations -------------------------------------------------------------------
 
 
+#: Die zwei Wege von *Dreiecke verringern*. ``"measured"`` ist der der
+#: Operation (:func:`_decimate_with_solver`, Abweichung gemessen und gemeldet)
+#: und die Vorgabe — jedes vorhandene Projekt rechnet damit wie zuvor.
+#: ``"fast"`` ist der Anzeigeweg (:func:`decimate_for_display`): Kern nach
+#: Sehnenfehler, dann Raster, ohne Messung. Ihn nimmt die grobe Vorschau
+#: (``app.ui.session``, Entscheidung Robert vom 23.09.2026); im Dialog steht
+#: er hinten für jeden, dessen großes Netz nur noch zu sehen sein muss.
+DECIMATE_METHODS: Final = ("measured", "fast")
+
+
 @op_params
 class DecimateParams(BaseParams):
     triangles: int = param(
@@ -925,6 +943,19 @@ class DecimateParams(BaseParams):
         minimum=DECIMATE_FLOOR,
         maximum=5_000_000,
         doc=_("Zielzahl. Weniger heißt schneller und ungenauer — wie viel, sagt der Bericht."),
+    )
+    method: str = param(
+        # „Methode" und nicht „Verfahren": Das Wort trägt im Katalog schon die
+        # Drucktechnik (FDM, Harz), und ein Quelltext hat eine Übersetzung.
+        title=_("Methode"),
+        default="measured",
+        choices=DECIMATE_METHODS,
+        placement="advanced",
+        doc=_(
+            "Gemessen: die Abweichung wird geprüft und gemeldet. Schnell: vereinfacht "
+            "wie die Anzeige, ohne Messung — für große Netze, die nur noch zu sehen "
+            "sein müssen."
+        ),
     )
 
 
@@ -949,11 +980,16 @@ class DecimateParams(BaseParams):
         "und eine Bohrung, die danach gesetzt wird, sitzt auf einer anderen Oberfläche "
         "als geplant. Zuerst konstruieren, zuletzt dezimieren."
     ),
+    # „2" mit dem Parameter ``method``: Der gemessene Weg rechnet wie zuvor,
+    # der Schlüssel alter Einträge passt aber nicht mehr zum neuen Schema.
+    cache_version="2",
 )
 def decimate_mesh(ctx: OpContext) -> OpResult:
     params = cast(DecimateParams, ctx.params)
     source = ctx.inputs[0]
     before = as_mesh_data(source.mesh)
+    if params.method == "fast":
+        return _decimated_fast(source, before, params.triangles)
     after, solver, measured = _decimate_with_solver(before, params.triangles, ctx.cancelled)
     findings = _deviation_findings(
         before,
@@ -992,6 +1028,34 @@ def decimate_mesh(ctx: OpContext) -> OpResult:
         outputs=[dataclasses.replace(source, mesh=after)],
         findings=findings,
     )
+
+
+def _decimated_fast(source: SceneObject, before: MeshData, target: int) -> OpResult:
+    """*Dreiecke verringern* auf dem Anzeigeweg — :func:`decimate_for_display`, sonst nichts.
+
+    Keine zweite Herleitung: Toleranz, Rückfall aufs Raster und Farbübertrag
+    stehen dort. Was fehlt, fehlt mit Absicht — Messung der Abweichung,
+    Dichtheit, Teilzahl. Am Weg der Operation kosteten genau die an der
+    Lochplatte mit 815 104 Dreiecken 27 bis 30 s je grober Vorschau (Bericht
+    Ansicht, 23.09.2026). Der Befund sagt, dass nicht gemessen wurde, statt
+    „kaum verschoben" vorzutäuschen.
+    """
+    after = decimate_for_display(before, target)
+    findings = (
+        [
+            Finding(
+                code="mesh.simplified_unmeasured",
+                severity="info",
+                message=_("Schnell verringert — die Abweichung wurde nicht gemessen."),
+                object_id=source.id,
+                values={"before": before.triangle_count, "after": after.triangle_count},
+            )
+        ]
+        if after is not before
+        else []
+    )
+    findings.extend(_simplification_findings(before, after, target, source.id))
+    return OpResult(outputs=[dataclasses.replace(source, mesh=after)], findings=findings)
 
 
 @op_params

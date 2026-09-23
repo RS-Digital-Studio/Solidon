@@ -4811,6 +4811,94 @@ def test_changing_a_step_previews_on_the_coarse_twin(
     assert [entry.op for entry in window.session.project.document.ops] == ["load", "drill_hole"]
 
 
+def test_a_long_preview_offers_cancel_and_cancelling_leaves_the_model(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """§2.8, RM-208: Über zwei Sekunden bekommt die Vorschau Balken und *Abbrechen*.
+
+    Eine genaue Vorschau an großen Teilen rechnete acht bis fünfzehn Sekunden
+    (Senkplatte, 311 296 Dreiecke), und alles, was das Fenster dazu sagte,
+    war das Band „Vorschau wird gerechnet …" — kein Balken, kein Weg, sie
+    anzuhalten. Hier rechnet sie, bis jemand abbricht: Unter zwei Sekunden
+    bleibt der Balken weg, danach stehen Balken und *Abbrechen* mit dem
+    laufenden Schritt, der Dialog bleibt bedienbar. Der Klick hält die
+    Rechnung an, das Modell bleibt, wie es war, und das Band sagt es. Ein
+    neuer Wert rechnet danach wieder.
+    """
+    import time
+
+    from PySide6.QtTest import QTest
+
+    from app.core.errors import OperationCancelled
+
+    select(window)
+    before = window.session.last_result.scene
+    started = threading.Event()
+    stopped = threading.Event()
+
+    def endless(_drafts: object, *, cancelled: Any = None, progress: Any = None, **_: Any) -> Any:
+        started.set()
+        if progress is not None:
+            progress(0.5, "Dreiecke verringern")
+        while not cancelled.is_cancelled:
+            time.sleep(0.01)
+        stopped.set()
+        raise OperationCancelled()
+
+    monkeypatch.setattr(window.session, "_preview_outcome", endless)
+    shown: list[str] = []
+    real = type(window.viewport).mark_preview
+
+    def noted(self: object, note: str, hint: str = "") -> object:
+        shown.append(note)
+        return real(self, note, hint)
+
+    monkeypatch.setattr(type(window.viewport), "mark_preview", noted)
+    window.run_operation(REGISTRY.get("decimate_mesh"))
+    dialog = window._op_dialog
+    assert dialog is not None
+    assert started.wait(5.0), "die Vorschau muss angefordert werden"
+
+    QTest.qWait(1000)
+    assert shown[-1] == tr("Vorschau wird gerechnet …"), "nach 0,2 s sagt es das Band"
+    assert not window.cancel_button.isVisibleTo(window), "unter zwei Sekunden kein Balken"
+    QTest.qWait(1500)
+    assert window.progress.isVisibleTo(window), "über zwei Sekunden der Balken"
+    assert window.cancel_button.isVisibleTo(window) and window.cancel_button.isEnabled()
+    assert window.cancel_button.accessibleDescription() == tr(
+        "Bricht die Vorschau ab. Das Modell bleibt, wie es war."
+    )
+    assert window.status_message.text() == tr("Vorschau: {step} …").format(
+        step="Dreiecke verringern"
+    )
+    assert dialog.isEnabled(), "der Dialog bleibt bedienbar"
+
+    window.cancel_button.click()
+    assert stopped.wait(5.0), "Abbrechen hält die Rechnung an"
+    QTest.qWait(50)
+    assert not window.cancel_button.isVisibleTo(window)
+    assert not window.progress.isVisibleTo(window)
+    assert shown[-1] == tr(
+        "Vorschau abgebrochen — das Modell bleibt, wie es war. Ein geänderter Wert rechnet sie neu."
+    )
+    assert window.viewport.difference is None, "kein Vorschaukörper im Bild"
+    assert window.session.last_result.scene is before, "das Modell bleibt, wie es war"
+    assert window._op_dialog is dialog, "der Dialog bleibt offen"
+
+    started.clear()
+    stopped.clear()
+    dialog._editors["triangles"].set_value(40_000)
+    for _round in range(100):
+        # Die Anfrage kommt entprellt über einen Zeitgeber — die Schleife muss laufen.
+        QTest.qWait(50)
+        if started.is_set():
+            break
+    assert started.is_set(), "ein neuer Wert rechnet neu"
+    window._clear_preview()
+    assert stopped.wait(5.0), "das Schließen hält auch diese Rechnung an"
+    dialog.reject()
+
+
 def test_a_preview_from_the_dialog_is_dropped_at_a_document_change(window: MainWindow) -> None:
     """Der Abbau am Dokumentwechsel räumt auch die Vorschau des Dialogs.
 

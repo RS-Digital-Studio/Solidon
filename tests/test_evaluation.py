@@ -1602,6 +1602,7 @@ def test_coarse_steps_before_a_changed_step_rebuild_the_stack_without_gaps(monke
 
     assert [entry.op for entry in inserted] == ["decimate_mesh"]
     assert inserted[0].inputs == (body,) and inserted[0].outputs == (body,)
+    assert inserted[0].params["method"] == "fast", "die grobe Stufe nimmt den Anzeigeweg (RM-208)"
     ids = [int(entry.id) for entry in working.ops]
     assert ids == list(range(ids[0], ids[0] + len(ids))), "keine Lücke, keine Doppelung"
     assert working.ops[index].op == "decimate_mesh"
@@ -1639,6 +1640,122 @@ def test_no_coarse_step_for_a_small_body_or_a_whole_face_texture(monkeypatch) ->
         working.ops[1], op="apply_texture", params={"coverage": "whole_face"}
     )
     assert session_module._coarse_steps_before(working, 1, scene) == []
+
+
+def test_the_coarse_reduction_of_the_unchanged_input_outlives_a_superseded_preview(
+    monkeypatch,
+) -> None:
+    """Nur die erste Vorschau trägt die Verkleinerung, auch wenn sie abgelöst wird (RM-208).
+
+    Die Auswertung legt ihre Ergebnisse erst nach einem vollständigen
+    Durchlauf in den Cache. Stand die Verkleinerung in der Auswertung der
+    Vorschau, ging sie mit jeder abgelösten Anfrage verloren — an der
+    Lochplatte mit 815 104 Dreiecken 27 bis 30 s Verkleinerung **je**
+    Loslassen des Platzierungsgriffs (Bericht Ansicht, 23.09.2026). Seither
+    rechnet sie vorab unter dem Signal der Vorbereitung und wird gemerkt;
+    die Vorschau selbst findet sie im Cache.
+
+    Hier wird die erste Vorschau abgelöst, sobald die Verkleinerung steht —
+    genau der Augenblick, in dem der Kunde die nächste Zahl tippt.
+    """
+    from app.core.geom import mesh_ops
+    from app.core.geom.mesh_ops import DECIMATE_FLOOR
+    from app.ui import session as session_module
+    from app.ui.session import Session
+
+    session = Session()
+    meshes = Path(__file__).parent / "data" / "meshes"
+    assert session.import_model(meshes / "near_sphere_ellipsoid.stl", unit="mm")
+    session.evaluate_now()
+    body = next(iter(session.last_result.scene.objects))
+    # Die Schwelle am kleinen Korpus erzwingen, wie die Nachbartests.
+    monkeypatch.setattr(session_module, "COARSE_PREVIEW_ABOVE", DECIMATE_FLOOR)
+    monkeypatch.setattr(session_module, "COARSE_PREVIEW_TARGET", DECIMATE_FLOOR)
+    superseded = CancelSignal()
+    reductions: list[int] = []
+    original = mesh_ops.decimate_for_display
+
+    def counted(mesh: Any, target: int, **kwargs: Any) -> Any:
+        reductions.append(mesh.triangle_count)
+        reduced = original(mesh, target, **kwargs)
+        superseded.cancel()
+        return reduced
+
+    monkeypatch.setattr(mesh_ops, "decimate_for_display", counted)
+
+    def drill(diameter: float) -> OperationDraft:
+        return OperationDraft(
+            op="drill_hole",
+            params={"diameter": diameter, "x": 0.0, "y": 0.0, "z": 20.0, "depth": 0.0},
+            inputs=(body,),
+        )
+
+    with pytest.raises(OperationCancelled):
+        session._preview_outcome(
+            [drill(5.0)], coarsened=[].append, cancelled=superseded, detect_features=False
+        )
+    assert len(reductions) == 1, "die erste Vorschau trägt die Verkleinerung"
+
+    for diameter in (6.0, 7.0):
+        seen: list[int] = []
+        _scene, difference, reason = session._preview_outcome(
+            [drill(diameter)], coarsened=seen.append, detect_features=False
+        )
+        assert reason == "" and difference is not None, reason
+        assert seen, "grob gerechnet"
+        assert difference.removed_volume > 0.0
+    assert len(reductions) == 1, "jede weitere Zahl verkleinert nicht noch einmal"
+
+
+def test_a_coarse_preview_the_kernel_refuses_is_computed_exactly(monkeypatch) -> None:
+    """Scheitert der Kern am groben Netz, rechnet die Vorschau genau (RM-208).
+
+    Gemessen am 23.09.2026 an drei von fünf Kundenmodellen (Eiffelturm,
+    Voronoi-Spiderman, Piratenschiff): Die grobe Vorschau sagte „Auch die
+    letzte Rückfallstufe hat kein brauchbares Ergebnis geliefert", die
+    genaue hat ein Ergebnis. Der Halt lag am vorgeschauten Schritt und nicht
+    an der Verkleinerung, und der Rückweg auf „genau" fragte nur nach der
+    Verkleinerung. Hier weigert sich der Schritt an jedem verkleinerten Netz.
+    """
+    from app.core.errors import BooleanFailedError
+    from app.core.geom.mesh_ops import DECIMATE_FLOOR
+    from app.core.registry import REGISTRY
+    from app.ui import session as session_module
+    from app.ui.session import Session
+
+    session = Session()
+    meshes = Path(__file__).parent / "data" / "meshes"
+    assert session.import_model(meshes / "near_sphere_ellipsoid.stl", unit="mm")
+    result = session.evaluate_now()
+    body, entry = next(iter(result.scene.objects.items()))
+    full = entry.mesh.triangle_count
+    monkeypatch.setattr(session_module, "COARSE_PREVIEW_ABOVE", DECIMATE_FLOOR)
+    monkeypatch.setattr(session_module, "COARSE_PREVIEW_TARGET", DECIMATE_FLOOR)
+    spec = REGISTRY.get("drill_hole")
+    real = spec.fn
+
+    def refuses_the_coarse_body(ctx: OpContext) -> Any:
+        if ctx.inputs[0].mesh.triangle_count < full:
+            raise BooleanFailedError(attempted=("direct", "welded"))
+        return real(ctx)
+
+    draft = OperationDraft(
+        op="drill_hole",
+        params={"diameter": 5.0, "x": 0.0, "y": 0.0, "z": 20.0, "depth": 0.0},
+        inputs=(body,),
+    )
+    seen: list[int] = []
+    object.__setattr__(spec, "fn", refuses_the_coarse_body)
+    try:
+        _scene, difference, reason = session._preview_outcome(
+            [draft], coarsened=seen.append, detect_features=False
+        )
+    finally:
+        object.__setattr__(spec, "fn", real)
+
+    assert reason == "", "keine Absage, die nur am groben Netz gilt"
+    assert difference is not None and difference.removed_volume > 0.0
+    assert seen == [], 'genau gerechnet — das Band sagt nicht „grob"'
 
 
 def test_a_recorded_answer_does_not_cost_the_import_a_second_time() -> None:

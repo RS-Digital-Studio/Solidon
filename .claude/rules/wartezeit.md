@@ -244,7 +244,19 @@ Darüber legt `_preview_outcome` vor die vorgeschauten Schritte eine
 in der **Dokumentkopie**, die die Vorschau ohnehin rechnet, und nur dort. Was
 übernommen wird, rechnet weiterhin genau.
 
-Drei Bedingungen, und jede einzelne trägt:
+**Sie nimmt den Anzeigeweg** (Entscheidung Robert, 23.09.2026, RM-208):
+`method="fast"` an `decimate_mesh` ruft `mesh_ops.decimate_for_display` —
+Kern nach Sehnenfehler, dann Raster, ohne Messung. Die Werte stehen einmal in
+`session._coarse_params`, für beide Wege (`_coarse_drafts`,
+`_coarse_steps_before`). Vorgabe der Operation bleibt `"measured"`; ein
+Projekt ohne den Parameter rechnet wie zuvor (`cache_version="2"`). Der
+gemessene Weg war für die Vorschau doppelt falsch: An der Lochplatte mit
+815 104 Dreiecken stand er 24 s im Quadrik-Solver, und sein Netz war offen —
+jede Bohrung darauf lief die Boolesche Kette hinunter, die grobe Vorschau war
+langsamer als die genaue (22–24 gegen 13 s je Zahl), und an drei von fünf
+Kundenmodellen sagte sie eine Absage, wo die genaue ein Ergebnis hat.
+
+Vier Bedingungen, und jede einzelne trägt:
 
 * **Beide Seiten auf demselben groben Netz.** `davor` und `danach` gehen
   durch dieselbe Verkleinerung (`_coarse_before` wertet die Kopie ohne die
@@ -260,31 +272,67 @@ Drei Bedingungen, und jede einzelne trägt:
   eine leere Differenz keine Zusage. Er steht **hinter** „Vorschau
   unvollständig": Eine halb gerechnete Differenz ist der schwerere Vorbehalt,
   und sie darf nie als bloß neu vernetzt erscheinen.
-* **Die Merkmale bleiben erkennbar.** Gemessen an derselben Kugel, Ø-5-Bohrung
-  nach der Verkleinerung:
+* **Die Merkmale bleiben erkennbar.** Gemessen am 23.09.2026 am Anzeigeweg,
+  Kugel r = 20 mm aus 327 680 Dreiecken, Ø-5-Bohrung nach der Verkleinerung
+  (`sonden/vorschau/probe_sphere_table.py`); genau: Geschlecht 1, erkannte
+  Bohrung 5,20 mm, 843,5 mm³ Abtrag:
 
-  | Ziel | Abweichung | Geschlecht | Loch | abgetragen |
-  |---:|---:|---:|---:|---:|
-  | 100 000 | 0,0040 mm | 1 | 4,98 mm | 1 168,5 mm³ |
-  | 50 000 | 0,0078 mm | 1 | 4,98 mm | 1 168,5 mm³ |
-  | 20 000 | 0,0125 mm | 1 | 4,98 mm | 1 168,4 mm³ |
-  | 5 000 | 0,0266 mm | 1 | 4,98 mm | 1 168,2 mm³ |
-  | 2 000 | **0,0804 mm** | 1 | 4,98 mm | 1 167,3 mm³ |
+  | Ziel | Dreiecke | Abweichung | Geschlecht | Loch | abgetragen |
+  |---:|---:|---:|---:|---:|---:|
+  | 100 000 | 7 556 | 0,0489 mm | 1 | 5,20 mm | 842,7 mm³ |
+  | 50 000 | 7 556 | 0,0489 mm | 1 | 5,20 mm | 842,7 mm³ |
+  | 20 000 | 7 556 | 0,0489 mm | 1 | 5,20 mm | 842,7 mm³ |
+  | 5 000 | 1 916 | **0,1909 mm** | **3** | 5,20 mm | 838,4 mm³ |
+  | 2 000 | 1 916 | **0,1909 mm** | **3** | 5,20 mm | 838,4 mm³ |
 
   Die Grenze ist `units.MAX_FACET_SAG` = 0,05 mm — dieselbe, mit der beide
-  Kerne tessellieren. Bei 50 000 liegt die Abweichung bei einem Sechstel
-  davon; erst 2 000 reißt sie. Das Loch selbst überlebt jede Stufe, denn es
-  entsteht **nach** der Verkleinerung.
+  Kerne tessellieren, und die, mit der der Anzeigeweg beginnt. Abweichung
+  heißt hier: jede alte Ecke gegen die neue Fläche (`deviation(grob, genau)`);
+  die Gegenrichtung ist null, der Kern lässt Ecken weg und bewegt keine.
+  Solange der Sehnenfehler allein unter das Ziel führt, bleibt er die
+  Abweichung, egal wie hoch das Ziel ist. Erst ein Ziel darunter vervierfacht
+  die Toleranz, und dann reißt beides — Abweichung und Geschlecht. Ein
+  Körper, dessen Form bei 0,05 mm mehr als 50 000 Dreiecke braucht (eine
+  Figur, ein Scan), wird gröber als die Grenze; das Band sagt „grob" auch
+  dann.
+* **Die Verkleinerung des unveränderten Eingangs wird gemerkt.**
+  `_coarse_before` rechnet sie **vor** der Vorschau, in einem eigenen
+  Durchlauf unter dem Signal der Vorbereitung (`Session._coarse_cancel`),
+  und merkt die grobe Szene je Szene und Schritt (`_coarse_scene`); eine
+  Sperre (`_coarse_lock`) lässt zwei Arbeiter nicht dieselbe rechnen. Der
+  Grund: `evaluate` legt seine Ergebnisse **erst nach einem vollständigen
+  Durchlauf** in den Cache. Stand die Verkleinerung in der Auswertung der
+  Vorschau, ging sie mit jeder abgelösten Anfrage und jedem ungültigen
+  Zwischenwert verloren — 27–30 s Verkleinerung **je** Loslassen des
+  Platzierungsgriffs an 815 104 Dreiecken (Bericht Ansicht, 23.09.2026).
+  Deshalb trennt die Sitzung zwei Wege: `supersede_preview` (eine neue
+  Zahl — die Vorbereitung läuft weiter, die nächste braucht sie) und
+  `cancel_preview` (Dialog zu, *Abbrechen* — sie hält mit an). Nachweis:
+  `test_evaluation.py::test_the_coarse_reduction_of_the_unchanged_input_outlives_a_superseded_preview`.
 
-Was das bringt, an denselben Netzen vorher und nachher gemessen (zweite und
-jede weitere Zahl im Dialog, also mit gefülltem Cache):
+Was das bringt, am 23.09.2026 an den hochgerechneten Lochplatten und an
+Kundenmodellen aus `F:\3D Dateien` vorher und nachher gemessen
+(`sonden/vorschau/probe_preview.py`, *Bohrung* Ø 5 → 6 → 7 wie der Dialog,
+belastete Maschine; „danach" ist jede weitere Zahl):
 
-| Dreiecke | genau | grob, erstmals | grob, danach |
-|---:|---:|---:|---:|
-| 20 480 | 0,16 s | — | — |
-| 81 920 | 0,64 s | — | — |
-| 327 680 | 3,25 s | 1,43 s | **0,52 s** |
-| 813 600 | 6,19 s | 3,54 s | **0,41 s** |
+| Modell | Dreiecke | grob erstmals | grob danach | genau |
+|---|---:|---:|---:|---:|
+| Lochplatte, viermal unterteilt | 203 776 | 14,2 → **0,23 s** | 3,4–3,9 → **0,04–0,05 s** | 1,7–1,8 s |
+| Lochplatte, fünfmal unterteilt | 815 104 | 62,1 → **0,96 s** | 22,5–24,4 → **0,17–0,21 s** | 7,1–13,6 s |
+| Waschschüssel (offen) | 215 072 | 3,9 → 1,2 s | 0,7–0,9 → 0,55–0,59 s | 3,8–4,9 s |
+| Gartenschlauchhalter | 392 532 | Absage → 11,6 s | Absage → 1,1 s | Absage (Entwurfskette) |
+| Eiffelturm | 312 938 | **falsche Absage** → genau, 13,8 s | Absage → genau, 9,6–11,1 s | 8,8–11,1 s |
+| Voronoi-Spiderman | 885 570 | **falsche Absage** → genau, 20,6 s | Absage → genau, 13,7–20,9 s | 11,7–17,7 s |
+| Piratenschiff-Baugruppe | 1 223 838 | **falsche Absage** → genau, 26,4 s | Absage → genau, 17,7–28,1 s | 19,6–37,5 s |
+
+Das abgetragene Volumen der groben Vorschau gleicht an beiden Platten dem
+genauen (166,2 / 237,0 / 320,3 mm³), an der offenen Schüssel liegt es 1,8 %
+darüber (Raster). An den letzten drei Zeilen legt der Anzeigeweg im Raster
+zusammen, die Bohrung scheitert am groben Netz, und die Vorschau rechnet genau
+(`_kernel_gave_up`, unten) — so lange wie genau, aber mit einem Ergebnis statt
+der Absage von vorher. Die Maschine war bei beiden Läufen unterschiedlich
+belastet (Öffnen desselben Eiffelturms 55 bis 102 s); die Spannen sind
+Streuung, die Größenordnungen nicht.
 
 **Ein Weg bleibt genau, mit Absicht.** Der Agentenvorschlag geht über
 `preview_scene` ohne den Rückruf — er antwortet ohnehin nicht in
@@ -298,12 +346,19 @@ Kopie, die niemand speichert, und `evaluate` liest nur den Stapel), und
 `_coarse_before` rechnet die Vorher-Seite mit demselben eingefügten Schritt
 am ungeänderten Wert, gemerkt je Szene und Schritt. Gemessen am Ändern eines
 Bohrdurchmessers an 204 000 Dreiecken: 1,1 s je getippter Zahl davor, 40 ms
-ab der zweiten — die erste trägt die Verkleinerung selbst. **Und die ist an
-einem CAD-Export mit Fächern teuer:** `decimate_mesh` steht dort im
-Quadrik-Solver vier Sekunden still und misst danach im Kern-Rückfall die
-Abweichung (rund acht Sekunden für die erste Zahl). Ob die Operation in
-Entwurfsqualität den Weg der Anzeige nehmen darf — Kern nach Toleranz, ohne
-Messung —, ist eine Entscheidung von Robert (RM-208).
+ab der zweiten — die erste trägt die Verkleinerung selbst. Seit dem
+Anzeigeweg (RM-208) kostet die erste an der Platte mit 815 104 Dreiecken
+0,34 s statt 33 s, jede weitere 0,14 s.
+
+**Der Kern hält beim ersten Mal den GIL.** `manifold3d.simplify` gibt ihn
+nicht her (siehe „Ein Arbeiter ist nur nebenläufig …"); die erste grobe
+Vorschau steht damit für die Dauer des Kerns auch im Hauptthread. Gemessen
+mit einem 5-ms-Takt neben dem Arbeiter, längste Lücke: Lochplatte 815 104
+Dreiecke 568 ms, Waschschüssel 149 ms, Eiffelturm 1,3 s, Spiderman 2,0 s —
+der gemessene Weg davor 378 ms, 7,9 s und 2,2 s, und zwar **bei jeder**
+Vorschau, die nicht vollständig durchlief. Jetzt einmal je Körper und
+Dialog. Ganz weg ist es erst mit einem Kern, der den GIL hergibt, oder dem
+Raster allein — das ist eine Frage der Ansicht (offener Punkt dort).
 
 **Und die Vorschau des Dialogs erkennt keine Merkmale** (22.09.2026).
 `preview_async` reicht `detect_features=False` bis in `evaluate`: Die
@@ -318,8 +373,36 @@ Beschnitt auf die Änderungsbox, `geom.difference`). Der Agentenweg über
 
 Scheitert das Verkleinern — zu wenige Dreiecke, ein Körper, der keiner ist —,
 hält die Kette an seinem eigenen Schritt an, und `_preview_outcome` rechnet
-denselben Entwurf noch einmal genau. Der Kunde sieht davon nichts außer der
-längeren Wartezeit.
+denselben Entwurf noch einmal genau. **Dasselbe, wenn der Kern am groben
+Netz aufgibt** (`_kernel_gave_up`: der Halt ist eine `GeometryError`, etwa
+die erschöpfte Boolesche Kette). Wo der Kern das Netz nicht nimmt, legt der
+Anzeigeweg im Raster zusammen, und das Ergebnis ist oft kein Körper mehr —
+am Eiffelturm, am Voronoi-Spiderman und am Piratenschiff stand sonst
+„Auch die letzte Rückfallstufe hat kein brauchbares Ergebnis geliefert",
+wo die genaue Vorschau ein Ergebnis hat. Ein ungültiger Wert
+(`ValidationError`, `UserError`) bleibt am groben Netz derselbe und rechnet
+nicht zweimal. Der Kunde sieht davon nichts außer der längeren Wartezeit —
+und die hat seit RM-208 über zwei Sekunden Balken und *Abbrechen*.
+Nachweis: `test_evaluation.py::test_a_coarse_preview_the_kernel_refuses_is_computed_exactly`.
+
+**Über zwei Sekunden bekommt die Vorschau Balken und *Abbrechen*.** Ein
+eigener Besitzer im gemeinsamen Fortschrittsbereich (`"preview"` in
+`_PROGRESS_PRIORITY`), gestuft wie jeder Lauf: das Band nach 0,2 s
+(`_preview_busy`), Zeiger und Zeile ebenso, Balken und *Abbrechen* nach 2 s
+(`_bar_delay`). Die Zeile nennt den laufenden Schritt aus dem Fortschritt der
+Auswertung (`preview_async(progressed=…)`), ohne Prozentzahl — `evaluate`
+zählt Schritte, und bei einem Stapel im Cache stünde der Balken sofort bei
+neun Zehnteln. *Abbrechen* (`MainWindow._cancel_preview_run`) hält die
+Rechnung an (`Session.cancel_preview`, samt Vorbereitung), nimmt ein Bild
+einer früheren Zahl aus der Ansicht, und das Band sagt „Vorschau abgebrochen
+— das Modell bleibt, wie es war. Ein geänderter Wert rechnet sie neu." Der
+Dialog bleibt offen; *Übernehmen* rechnet genau oder fordert die Vorschau neu
+an, wo sie Pflicht ist, ein wartender Klick verfällt. Vor `compare_scenes`
+fragt `_preview_outcome` das Abbruchsignal, weil der Vergleich keines kennt.
+Den Besitzer beenden die Antwort des Arbeiters (`shown`, `explained`,
+`failed`), jede Ablösung (`_set_preview_order`) und jeder Abbau
+(`_forget_preview_approval`). Nachweis (Fenstertest, beim Release):
+`test_operation_ui.py::test_a_long_preview_offers_cancel_and_cancelling_leaves_the_model`.
 
 **Was die Operation gar nicht ändert, sagt das Band mit ihren Worten.** Über
 einer leeren Differenz ist jeder Befund des vorgeschauten Schritts die bessere

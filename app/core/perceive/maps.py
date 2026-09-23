@@ -888,6 +888,11 @@ def defect_map(mesh: MeshData, cancelled: CancelToken | None = None) -> Analysis
             for edge in np.atleast_1d(np.asarray(group)):
                 face = int(edge) // 3
                 values[face] = max(values[face], level)
+        # Zwischen den Phasen gefragt: Die räumliche Suche fragt erst je
+        # Kandidatenblock, und an einem kleinen Körper gibt es womöglich keinen
+        # — wer die nächste Karte wählt, wartet trotzdem nicht auf diese.
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
         for face in self_intersecting_faces(mesh, cancelled):
             values[face] = 3.0
 

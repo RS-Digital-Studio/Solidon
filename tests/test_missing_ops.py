@@ -237,6 +237,87 @@ def test_a_small_body_is_not_decimated_for_display() -> None:
     assert mesh_ops.decimate_for_display(body, 600) is body
 
 
+def test_the_fast_decimation_is_the_display_path_and_keeps_a_hole_readable(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """*Dreiecke verringern* mit ``method="fast"`` nimmt den Anzeigeweg (RM-208).
+
+    Die grobe Vorschau verkleinert große Körper damit (Entscheidung Robert,
+    23.09.2026): Kern nach Sehnenfehler, dann Raster, ohne Messung. Geprüft
+    wird, was die Tabelle der groben Stufe in ``wartezeit.md`` zusagt — die
+    Oberfläche bleibt innerhalb des Sehnenfehlers, mit dem beide Kerne
+    tessellieren, und eine Bohrung danach bleibt eine Bohrung: Geschlecht
+    eins, erkannter Durchmesser, derselbe Abtrag wie am genauen Körper. Und
+    es wird nicht gemessen — genau das kostete am Weg der Operation die
+    Sekunden.
+    """
+    from app.core.perceive.features import detect
+    from app.core.units import MAX_FACET_SAG
+
+    assert mesh_ops.DecimateParams().method == "measured", "alte Projekte rechnen wie zuvor"
+    sphere = MeshData.of(trimesh.creation.icosphere(subdivisions=6, radius=20.0))
+    assert sphere.triangle_count == 81_920
+    entry = SceneObject(id="obj_1", name="Kugel", mesh=sphere)
+
+    def refused(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("der Anzeigeweg misst nicht und fragt den Solver nicht")
+
+    with monkeypatch.context() as patched:
+        patched.setattr(mesh_ops, "deviation", refused)
+        patched.setattr(mesh_ops, "_decimate_with_solver", refused)
+        result = run("decimate_mesh", entry, profile, triangles=20_000, method="fast")
+
+    coarse = result.outputs[0].mesh
+    assert coarse.triangle_count <= 20_000
+    assert coarse.is_watertight, "der Kern gibt einen geschlossenen Körper zurück"
+    # Beide Richtungen: Der Kern lässt Ecken weg (neue Ecke auf alter
+    # Fläche, Abstand null), und die Sehne dazwischen liegt höchstens um den
+    # Sehnenfehler innen — gemessen 0,0497 mm.
+    assert mesh_ops.deviation(sphere, coarse) <= MAX_FACET_SAG
+    assert mesh_ops.deviation(coarse, sphere) <= MAX_FACET_SAG
+    assert [finding.code for finding in result.findings] == ["mesh.simplified_unmeasured"]
+
+    drilled = {
+        name: run(
+            "drill_hole",
+            SceneObject(id="obj_1", name="Kugel", mesh=body),
+            profile,
+            diameter=5.0,
+            x=0.0,
+            y=0.0,
+            z=20.0,
+            depth=0.0,
+        )
+        .outputs[0]
+        .mesh
+        for name, body in (("exact", sphere), ("coarse", coarse))
+    }
+    rough = drilled["coarse"]
+    assert rough.raw.euler_number == 0, "Geschlecht eins: ein Durchgangsloch"
+    assert coarse.volume - rough.volume == pytest.approx(
+        sphere.volume - drilled["exact"].volume, rel=0.01
+    ), "derselbe Abtrag wie am genauen Körper"
+    holes = {
+        name: [feature for feature in detect(body).values() if feature.kind == "hole"]
+        for name, body in drilled.items()
+    }
+    assert len(holes["coarse"]) == 1, "die Bohrung wird am groben Körper erkannt"
+    assert holes["coarse"][0].params["diameter"] == pytest.approx(
+        holes["exact"][0].params["diameter"], abs=0.02
+    ), "mit demselben Durchmesser wie am genauen"
+
+
+def test_the_fast_decimation_leaves_a_small_body_alone(profile: Profile) -> None:
+    """Unter dem Ziel gibt es nichts zu verringern — derselbe Befund wie am gemessenen Weg."""
+    body = MeshData.of(trimesh.creation.icosphere(subdivisions=2, radius=20.0))
+    entry = SceneObject(id="obj_1", name="Kugel", mesh=body)
+
+    result = run("decimate_mesh", entry, profile, triangles=600, method="fast")
+
+    assert result.outputs[0].mesh is body
+    assert [finding.code for finding in result.findings] == ["mesh.already_below_target"]
+
+
 def test_the_raster_keeps_two_triangles_apart_beyond_two_million_corners() -> None:
     """Die Kennung eines Dreiecks im Raster darf nicht überlaufen.
 

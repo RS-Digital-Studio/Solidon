@@ -710,11 +710,24 @@ bevor es jemand wusste:
 
 **Und oberhalb von 150 000 Dreiecken rechnet sie grob.** `Session._preview_outcome`
 legt dann eine `decimate_mesh`-Operation auf 50 000 Dreiecke vor die
-Entwurfsschritte — in der Dokumentkopie, die die Vorschau ohnehin anlegt, und
-für beide Seiten der Differenz dieselbe (`_coarse_before`). Der Weg meldet
-sich über `_PreviewWorker.coarse` ans Fenster (`MainWindow._preview_coarse`),
-und das Band sagt „Grobe Vorschau". Schranke, Ziel, Messreihen und die zwei
-Wege, die absichtlich genau bleiben, stehen in `.claude/rules/wartezeit.md`.
+Entwurfsschritte — auf dem Anzeigeweg (`method="fast"`, `_coarse_params`), in
+der Dokumentkopie, die die Vorschau ohnehin anlegt, und für beide Seiten der
+Differenz dieselbe (`_coarse_before`). `_coarse_before` rechnet **zuerst** und
+unter eigenem Signal (`_coarse_cancel`, Sperre `_coarse_lock`) und merkt die
+grobe Szene je Szene und Schritt: Eine abgelöste Vorschau verliert die
+Verkleinerung nicht mehr. `supersede_preview` löst eine Vorschau ab und lässt
+die Vorbereitung laufen, `cancel_preview` hält beides an. Gibt der Kern am
+groben Netz auf (`_kernel_gave_up`), rechnet sie genau. Der Weg meldet sich
+über `_PreviewWorker.coarse` ans Fenster (`MainWindow._preview_coarse`), und
+das Band sagt „Grobe Vorschau". Schranke, Ziel, Messreihen und die zwei Wege,
+die absichtlich genau bleiben, stehen in `.claude/rules/wartezeit.md`.
+
+**Und über zwei Sekunden mit Balken und *Abbrechen*.** `preview_async(progressed=…)`
+meldet über `_PreviewWorker.progressed` Anteil und Schritt der Auswertung; das
+Fenster führt dafür den Fortschrittsbesitzer `"preview"`
+(`_start_preview_progress`, `_preview_progressed`, `_finish_preview_progress`),
+und *Abbrechen* geht an `MainWindow._cancel_preview_run`: Rechnung angehalten,
+Vorschaukörper weg, Band „Vorschau abgebrochen — …", Dialog offen.
 
   Einleseplan und Auswertung teilen sich `busy` und `busyChanged`. Erst die
   zugestellten Endsignale beider Arbeiter beenden den Fortschritt; weder die

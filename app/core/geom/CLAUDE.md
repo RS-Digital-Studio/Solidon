@@ -1372,6 +1372,13 @@ erst der exakte Kern nach Sehnenfehler (`units.MAX_FACET_SAG` als Start, je
 Schritt vervierfacht), dann das Zusammenlegen im Raster für Netze, die der
 Kern nicht nimmt (`_clustered_for_display`). Keine Zielzahl, keine Messung,
 eine Antwort in rund hundert Millisekunden an 200 000 Dreiecken.
+**Die Operation hat eine Tür zum Anzeigeweg:** `decimate_mesh(method="fast")`
+ruft `decimate_for_display` und sonst nichts (`_decimated_fast`) — keine
+Messung, ein Befund `mesh.simplified_unmeasured`, der das sagt. Die grobe
+Vorschau der Sitzung nimmt diesen Weg (Entscheidung Robert, 23.09.2026,
+RM-208); die Vorgabe bleibt `"measured"`, jedes vorhandene Projekt rechnet
+wie zuvor. Zahlen und Grenze in `.claude/rules/wartezeit.md`, „Die grobe
+Vorschaustufe".
 `mesh_ops.raster_for_display` ist nur das Raster, für das Vorschaubild im
 Objektbaum: Der exakte Kern hält während `simplify` den GIL und hielt damit
 aus dem Arbeiter heraus das Fenster an (gemessen bis 800 ms, siehe

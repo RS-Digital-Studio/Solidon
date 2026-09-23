@@ -19253,7 +19253,8 @@ def test_only_a_big_body_is_reduced_for_the_preview(session: Session) -> None:
     drafts = _coarse_drafts(scene)
     assert [draft.inputs for draft in drafts] == [("obj_1",)], "genau einer liegt darüber"
     assert drafts[0].op == "decimate_mesh"
-    assert drafts[0].params == {"triangles": COARSE_PREVIEW_TARGET}
+    # Der Anzeigeweg (RM-208): Kern nach Sehnenfehler, dann Raster, ohne Messung.
+    assert drafts[0].params == {"triangles": COARSE_PREVIEW_TARGET, "method": "fast"}
 
 
 def test_a_coarse_preview_measures_the_same_change_as_the_exact_one(

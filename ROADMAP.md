@@ -75,7 +75,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-181 — Handlungsliste und Baugruppenladen an dichten Netzen weiter vermessen](#rm-181) | Geometrie, Erkennung und Druckvorbereitung | Die Langlochsuche ist gebaut (126 s → 9 s); offen sind `actions_for` mit Netz (0,14 s je Merkmal) und die Ladezeit einer Baugruppe mit vielen Körpern |
 | [RM-193 — Die Erkennung an einer glatten Generator-Freiform kostet Minuten für null Merkmale](#rm-193) | Geometrie, Erkennung und Druckvorbereitung | Entschieden und gebaut am 22.09.2026: Die Haut — der Fleck über der halben Oberfläche, der keine Grundform ist und in Splitter zerfällt — wird nicht mehr Splitter für Splitter eingepasst, ihre Stücke von Gewicht schon (Zapfen, Verrundung bleiben); das Freiformurteil kommt aus der Haut. Drache 482 → 37,7 → 4,2 s, Schüssel 7,3 → 3,0 s (unter Fremdlast, gleiche Merkmale). Vierte Fassung nach einem Korpusfund: Das Urteil zählt nur Flecken **ohne** Grundform — drei Bowlingkugeln verloren sonst ihre Kugel (Rückstand 0,0 über 65 024 Dreiecke), und schon im alten Stand hing es an der Fleckreihenfolge. Zwei Runden statt einer, Drache 4,02 → 3,83 s. Offen: §31 verlangt 1 s je 200 000, gemessen sind 3,83 — es bleibt `_large_facet_faces` (1,2 s am Drachen) und der Löser selbst (RM-209). Zwei Abkürzungen sind gemessen und verworfen: nur den Zylinder fragen (kostet die Bowlingkugel) und die Stichprobe an Riesenflecken (ändert die Erkennung) |
 | [RM-201 — Ein hohler Körper hält die 300 ms der Schichtanalyse nicht](#rm-201) | Geometrie, Erkennung und Druckvorbereitung | Die neue Leistungsmarke `slice_medium_hollow` (200 000 Dreiecke, Wand 1,5 mm) misst 1,5 s für §31 „300 ms": 3 658 Puffer, 796 Differenzen und 718 STRtree-Anfragen je Lauf — die Stufen je Schicht stapeln oder das Ziel für Schalen neu fassen |
-| [RM-208 — Die Kundenwege Verschieben, Bearbeiten, Erkennen und Vorschau auf Zeit](#rm-208) | Geometrie, Erkennung und Druckvorbereitung | Am 22.09.2026 an einer Platte mit 204 000 Dreiecken gemessen und umgebaut: Verschieben 8,6 → 0,5 s, Bohrung 8,3 → 1,8 s, Klick auf eine Bohrung 1,9 → 0,2 s, Vorschau je Zahl 2,2 → 0,04 s ab der zweiten, Erkennung 1,1 → 0,99 s (Kundenmodell 21 → 7,3 s). Dritte Runde: das exakte Vorspiel der Dezimierung (Nadelplatte 11,6 → 0,3 s, erste Vorschau am Fächerexport unter einer Sekunde), `max_distance_to_surface` misst nur, was das Maximum heben kann (Besenhalter 2,9 → 0,25 s), die Freiformhaut (RM-193, Kundenmodell 3,0 s), und der Korpus `F:\3D Dateien` alt gegen neu — Ergebnis im Block |
+| [RM-208 — Die Kundenwege Verschieben, Bearbeiten, Erkennen und Vorschau auf Zeit](#rm-208) | Geometrie, Erkennung und Druckvorbereitung | Am 22.09.2026 an einer Platte mit 204 000 Dreiecken gemessen und umgebaut: Verschieben 8,6 → 0,5 s, Bohrung 8,3 → 1,8 s, Klick auf eine Bohrung 1,9 → 0,2 s, Vorschau je Zahl 2,2 → 0,04 s ab der zweiten, Erkennung 1,1 → 0,99 s (Kundenmodell 21 → 7,3 s). Dritte Runde: das exakte Vorspiel der Dezimierung (Nadelplatte 11,6 → 0,3 s, erste Vorschau am Fächerexport unter einer Sekunde), `max_distance_to_surface` misst nur, was das Maximum heben kann (Besenhalter 2,9 → 0,25 s), die Freiformhaut (RM-193, Kundenmodell 3,0 s), und der Korpus `F:\3D Dateien` alt gegen neu — Ergebnis im Block. Vierte Runde (23.09.2026): grobe Vorschau auf dem Anzeigeweg, Verkleinerung gemerkt, genauer Rückweg bei Kernabsage (815 104 Dreiecke: erste Zahl 62 → 1 s, jede weitere 23 → 0,2 s; drei falsche Absagen an Kundenmodellen weg), Vorschau über 2 s mit Balken und *Abbrechen* |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Der Mac ist gefahren; die Zoom-Dämpfung ist seit dem 16.09. eine Rampe statt einer Klippe und am Gerät zu bestätigen; offen bleiben Linux, die 3DxWare-Mausemulation und die Bildrate an 1 Mio. Dreiecken |
 | [RM-203 — Die Ansicht rechnet je Bild und je Klick, was sie je Auswertung rechnen könnte](#rm-203) | Bedienung und Darstellung | Kanten und Schattenhüllen entstehen je Auswertung im Hauptthread (200 000 Dreiecke: 57 + 71 ms) statt im `_SceneMeshWorker`; `_redraw_feature_patch` kostet an einer Fläche der 360k-Platte 0,41 s; `show_scene` läuft am historischen Bohrschritt je Tastendruck; der Zeiger ruht 16 ms nicht, bevor er fragt — jeden Posten am echten Renderer messen, dann verlegen |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | `show_feature` leert und baut je Auswahl achtzehn Widgets neu (`_build_action`, 80 ms je Klick); `_settle_lock` ist seit dem Review ohne `findChildren`. Weg: `_Handling` mutabel mit `entries/widgets/fixed`, Wiederverwendung je (Operation, Felder, Schritt, Gruppengröße), Werte über `refresh_feature_fields` |
@@ -2147,6 +2147,43 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
     lief dreimal sauber. Und die Übertragung der Erkennung auf ein bewegtes Netz
     (`carry_detection`) gibt an 370 von 458 Körpern dieselbe Antwort wie eine frische
     Erkennung; die 88 übrigen sind Zahlen in der letzten Stelle und keine anderen Merkmale.
+
+  **Vierte Runde (23.09.2026): die grobe Vorschau und ihre Wartezeit.** Robert hat
+  entschieden, dass die grobe Vorschau den Anzeigeweg nehmen darf — Kern nach Sehnenfehler,
+  dann Raster, ohne Messung; sie ist ein Bild, übernommen wird genau.
+
+  * *Die Operation.* `decimate_mesh` hat hinten den Parameter *Methode*
+    (`measured` als Vorgabe, `fast` ruft `decimate_for_display` und misst nichts,
+    Befund `mesh.simplified_unmeasured`; `cache_version="2"`). Die Sitzung legt ihn über
+    `_coarse_params` an beiden Stellen an.
+  * *Der Merker.* `evaluate` cacht erst nach einem vollständigen Durchlauf; die
+    Verkleinerung stand in der Auswertung der Vorschau und ging mit jeder abgelösten Anfrage
+    verloren (die 27–30 s je Loslassen aus dem Ansicht-Bericht). `_coarse_before` rechnet
+    jetzt zuerst, unter eigenem Signal und mit Sperre; `supersede_preview` löst ab,
+    `cancel_preview` hält an.
+  * *Der Rückweg.* Das Netz des gemessenen Wegs war an den Platten offen, die grobe
+    Vorschau langsamer als die genaue, und an Eiffelturm, Voronoi-Spiderman und
+    Piratenschiff sagte sie „Auch die letzte Rückfallstufe …", wo die genaue ein Ergebnis
+    hat. Gibt der Kern am groben Netz auf (`_kernel_gave_up`), rechnet die Vorschau genau.
+  * *Die Wartezeit.* Über zwei Sekunden Balken und *Abbrechen* (Fortschrittsbesitzer
+    `"preview"`); Abbrechen lässt das Modell stehen und sagt es im Band.
+
+  Gemessen (`sonden/vorschau/probe_preview.py`, Tabelle in `wartezeit.md`, „Die grobe
+  Vorschaustufe"): Lochplatte 815 104 Dreiecke erste Zahl 62,1 → 0,96 s, jede weitere
+  22,5–24,4 → 0,17–0,21 s, Ändern eines Schritts 32,7 → 0,34 s; 203 776 Dreiecke 14,2 →
+  0,23 s und 3,4 → 0,05 s. Nachweise: `test_missing_ops.py` (Anzeigeweg ohne Messung,
+  Abweichung ≤ `MAX_FACET_SAG`, Bohrung erkennbar), `test_evaluation.py` (Merker über eine
+  abgelöste Vorschau, genauer Rückweg), `test_operation_ui.py` (Balken und *Abbrechen*,
+  Fenstertest beim Release).
+
+  Offen und außerhalb dieser Runde: `manifold3d.simplify` hält den GIL — die erste grobe
+  Vorschau steht einmal je Körper im Hauptthread (Platte 0,57 s, Spiderman 2,0 s; der alte
+  Weg ebenso, aber bei jeder abgelösten Vorschau). Die Suche des Anzeigewegs läuft an
+  Netzen, die der Kern nicht unter das Ziel bringt, sechs Schritte lang, bevor das Raster
+  drankommt (Spiderman 4,1 s, Piratenschiff 4,8 s). Beides gehört zur Ansicht und zum
+  Netzkern. Und die genaue Vorschau großer Teile bleibt, was sie ist (Senkplatte 8–15 s);
+  sie hat jetzt Balken und *Abbrechen*, schneller wird sie erst mit dem lokalen Tausch des
+  Hohlraums (Bericht Ansicht).
 
 ## Bedienung und Darstellung
 

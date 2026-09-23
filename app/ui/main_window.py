@@ -1020,6 +1020,7 @@ _PROGRESS_PRIORITY: Final = (
     "map",
     "part_file",
     "agent",
+    "preview",
     "evaluation",
 )
 
@@ -3061,6 +3062,23 @@ class MainWindow(QMainWindow):
         generic_description = tr("Zeigt den Fortschritt der laufenden Aufgabe.")
         generic_cancel = tr("Bricht die laufende Aufgabe ab.")
         self._progress_states = {
+            # Die Live-Vorschau eines Editors (§2.8, RM-208): unter zwei
+            # Sekunden sagen Band, Zeiger und Zeile genug; darüber kommen Balken
+            # und *Abbrechen* — an großen Netzen rechnet eine genaue Vorschau
+            # acht bis fünfzehn Sekunden (Senkplatte, 311 296 Dreiecke).
+            "preview": _ProgressState(
+                False,
+                tr("Vorschau wird gerechnet …"),
+                0,
+                0,
+                0,
+                tr("Vorschau"),
+                tr("Vorschau wird gerechnet …"),
+                tr("Bricht die Vorschau ab. Das Modell bleibt, wie es war."),
+                True,
+                True,
+                False,
+            ),
             "map": _ProgressState(
                 False,
                 "",
@@ -3354,6 +3372,7 @@ class MainWindow(QMainWindow):
             return
         handlers = {
             "evaluation": self.session.cancel_evaluation,
+            "preview": self._cancel_preview_run,
             "agent": self.session.cancel_agent,
             "download": self._cancel_download,
             "source": self._cancel_source_read,
@@ -16260,7 +16279,10 @@ class MainWindow(QMainWindow):
                 previous.owner.setStatusTip("")
                 previous.owner.setAccessibleDescription("")
             previous.owner.preview_required = False
-        self.session.cancel_preview()
+        # Abgelöst, nicht abgebrochen: Die Vorbereitung der groben Stufe
+        # braucht die nächste Anfrage genauso (``Session.supersede_preview``).
+        self.session.supersede_preview()
+        self._finish_preview_progress()
         self._preview_revision += 1
         document = self.session.project.document
         approval = _PreviewApproval(
@@ -16356,7 +16378,12 @@ class MainWindow(QMainWindow):
     def _apply_when_previewed(self, approval: _PreviewApproval, then: Callable[[], object]) -> None:
         """Den Klick an die erwartete Freigabe hängen — genau einen, den letzten."""
         approval.pending_click = then
-        self.announce(tr("Wird übernommen, sobald die Vorschau steht."), receipt=False)
+        waiting = tr("Wird übernommen, sobald die Vorschau steht.")
+        self.announce(waiting, receipt=False)
+        # Rechnet die Vorschau noch, trägt ihr Fortschritt denselben Satz —
+        # sonst ersetzte „Vorschau wird gerechnet …" nach 0,2 s die Zusage.
+        if self._progress_states["preview"].active:
+            self._set_progress_state("preview", text=waiting)
 
     def _request_order_preview(self, approval: _PreviewApproval) -> None:
         """Ein gemeinsamer Antwortpfad für Dialog, Merkmalkarte und stille Platzierung."""
@@ -16402,6 +16429,7 @@ class MainWindow(QMainWindow):
             self.session.placement_before(key[2], before_ready, lambda _detail: before_ready(False))
             return
         self._preview_busy.start()
+        self._start_preview_progress()
         if order.change_op is not None:
             name = order.change_name or self.session.history.operation(order.change_op).op
         else:
@@ -16460,6 +16488,9 @@ class MainWindow(QMainWindow):
 
         def shown(difference: Any) -> None:
             """Erst das Ergebnis darstellen, danach denselben Auftrag freigeben."""
+            # Gerechnet ist; was jetzt noch fehlt, ist das Bild, und das hält
+            # niemand mehr mit *Abbrechen* an.
+            self._finish_preview_progress()
             if difference is None:
                 if approval.required is not False:
                     failed(None)
@@ -16515,6 +16546,7 @@ class MainWindow(QMainWindow):
             "coarse": still(self._preview_coarse),
             "advised": still(self._preview_advised),
             "failed": still(failed),
+            "progressed": still(self._preview_progressed),
         }
         if order.changes is not None:
             kwargs["changes"] = order.changes
@@ -16621,6 +16653,7 @@ class MainWindow(QMainWindow):
         approval, self._preview_approval = self._preview_approval, None
         self._preview_revision += 1
         self._preview_block_reason = None
+        self._finish_preview_progress()
         self._offer_feature_cancel()
         if approval is not None:
             block = getattr(approval.owner, "block_apply", None)
@@ -16763,6 +16796,7 @@ class MainWindow(QMainWindow):
         # wenn ``difference`` leer ist: Das Band unten setzt es trotzdem.
         self._preview_shown = True
         self._preview_busy.stop()
+        self._finish_preview_progress()
         self._preview_action = ""
         has_result = any(
             getattr(entry, "result", None) is not None
@@ -16913,6 +16947,7 @@ class MainWindow(QMainWindow):
         """
         self._preview_shown = True
         self._preview_busy.stop()
+        self._finish_preview_progress()
         advice = self._preview_action
         self._preview_action = ""
         self._preview_reason = reason
@@ -16925,6 +16960,81 @@ class MainWindow(QMainWindow):
     def _say_preview_busy(self) -> None:
         """Nach 0,2 s ohne Ergebnis sagt das Band, dass gerechnet wird (§2.8)."""
         self.viewport.mark_preview(tr("Vorschau wird gerechnet …"), "")
+
+    def _start_preview_progress(self) -> None:
+        """Eine Vorschau rechnet — Zeiger und Zeile nach 0,2 s, Balken und *Abbrechen* nach 2 s.
+
+        Dieselbe Stufung wie jeder andere Lauf (§2.8, ``_update_waiting_state``);
+        das Band sagt es nach 0,2 s zusätzlich dort, wo man hinsieht. Bis
+        RM-208 gab es nur das Band: Eine genaue Vorschau an der Senkplatte mit
+        311 296 Dreiecken rechnete acht bis fünfzehn Sekunden ohne Balken und
+        ohne einen Weg, sie anzuhalten.
+        """
+        self._set_progress_state(
+            "preview",
+            active=True,
+            text=tr("Vorschau wird gerechnet …"),
+            accessible_description=tr("Vorschau wird gerechnet …"),
+            cancel_enabled=True,
+        )
+        self._update_waiting_state()
+
+    def _preview_progressed(self, step: tuple[float, str]) -> None:
+        """Der laufende Schritt steht in Zeile und Beschreibung des Balkens.
+
+        Ohne Prozentzahl, mit Absicht: ``evaluate`` zählt Schritte, und an
+        einem Stapel, dessen Schritte fast alle im Cache liegen, stünde der
+        Balken sofort bei neun Zehnteln und bliebe dort die ganze Wartezeit.
+        """
+        _fraction, text = step
+        if not text or not self._progress_states["preview"].active:
+            return
+        approval = self._preview_approval
+        if approval is not None and approval.pending_click is not None:
+            # Die Zusage „Wird übernommen, sobald …" bleibt stehen.
+            return
+        display = tr("Vorschau: {step} …").format(step=text)
+        self._set_progress_state("preview", text=display, accessible_description=display)
+
+    def _finish_preview_progress(self) -> None:
+        """Die Vorschau rechnet nicht mehr — ihr Anteil am Fortschrittsbereich geht."""
+        if not self._progress_states["preview"].active:
+            return
+        self._progress_states["preview"] = replace(self._progress_states["preview"], active=False)
+        if isValid(self) and not self._close_requested:
+            self._progress_idle()
+
+    def _cancel_preview_run(self) -> None:
+        """*Abbrechen* am Balken: Die Vorschau hört auf, das Modell bleibt, wie es war.
+
+        Die Rechnung hält an (``Session.cancel_preview``), ein Bild aus einer
+        früheren Zahl geht aus der Ansicht — es zeigte einen Wert, der nicht
+        mehr im Dialog steht —, und das Band sagt beides. Der Dialog bleibt
+        offen und bedienbar: Ein geänderter Wert rechnet neu, und *Übernehmen*
+        rechnet genau oder fordert die Vorschau erneut an, wo sie Pflicht ist
+        (:meth:`_preview_can_apply`). Ein Klick, der auf die Vorschau wartete,
+        verfällt — er galt einem Bild, das jetzt nicht kommt.
+        """
+        approval = self._preview_approval
+        self.session.cancel_preview()
+        self._preview_busy.stop()
+        self._finish_preview_progress()
+        self._preview_shown = True
+        self._preview_reason = ""
+        self._preview_coarse_at = 0
+        self._preview_effect = ""
+        self._preview_action = ""
+        if approval is not None:
+            approval.requested = False
+            approval.pending_click = None
+        self._show_difference(None)
+        note = tr(
+            "Vorschau abgebrochen — das Modell bleibt, wie es war. "
+            "Ein geänderter Wert rechnet sie neu."
+        )
+        self.viewport.mark_preview(note, "")
+        self.announce(note, receipt=False)
+        self._refresh_preview_block()
 
     def _show_difference(self, difference: Any | None) -> None:
         """Eine Differenz ins Bild — oder die stehende heraus; keine Arbeit ohne Differenz."""
@@ -17961,6 +18071,11 @@ class MainWindow(QMainWindow):
 
     def _on_busy(self, busy: bool) -> None:
         if busy:
+            # Eine Vorschau, die jetzt noch antwortet, gilt einem Stand, der
+            # gerade abgelöst wird (``_preview_is_current`` verlangt Ruhe);
+            # ihr Balken ginge sonst mit niemandem mehr. Nach der Auswertung
+            # fragt ``_resume_preview_after_idle`` neu an.
+            self._finish_preview_progress()
             self._cancel_map_worker()
             self.viewport.set_analysis_map(None, None)
             self.viewport.clear_finding_mark()

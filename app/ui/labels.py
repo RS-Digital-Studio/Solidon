@@ -1041,6 +1041,9 @@ _CHOICE_NAMES: dict[str, TranslatableText] = {
     "skirt": _("Skirt"),
     "brim": _("Brim"),
     "raft": _("Raft"),
+    # Die zwei Wege von *Dreiecke verringern* (``mesh_ops.DECIMATE_METHODS``).
+    "measured": _("Gemessen"),
+    "fast": _("Schnell"),
 }
 
 
@@ -1207,6 +1210,8 @@ _CHOICE_NOTES: dict[str, TranslatableText] = {
     "raft": _(
         "Ein gedrucktes Floß unter dem Teil — beste Haftung, kostet Zeit und die Unterseite."
     ),
+    "measured": _("Misst die Abweichung und meldet sie — genau, an großen Netzen langsam."),
+    "fast": _("Vereinfacht wie die Anzeige, ohne Messung — auch große Netze in Sekunden."),
 }
 
 

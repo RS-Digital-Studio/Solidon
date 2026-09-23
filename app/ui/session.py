@@ -45,6 +45,7 @@ from app.core.errors import (
     RETRY,
     SHOW_HISTORY,
     AppError,
+    GeometryError,
     InternalError,
     OperationCancelled,
     QuestionDeclined,
@@ -487,6 +488,9 @@ class _PreviewWorker(Worker):
     #: Dass auf einem vergröberten Netz gerechnet wurde, samt der Dreieckszahl
     #: davor — das Band sagt es, statt ein genaues Bild vorzutäuschen.
     coarse = Signal(int, int)
+    #: Wie weit die Rechnung ist, samt dem laufenden Schritt — ab zwei Sekunden
+    #: zeigt das Fenster daraus Balken und *Abbrechen* (§2.8).
+    progressed = Signal(int, float, str)
     #: Die Handlung, die der Kern dem Grund mitgab (``Action.id``) — kommt
     #: **vor** :attr:`explained`, damit das Fenster beim Satz schon weiß, ob
     #: *Übernehmen* danach noch eine sinnvolle Handlung ist. Was die Kennung
@@ -668,6 +672,23 @@ COARSE_PREVIEW_ABOVE: Final = 150_000
 COARSE_PREVIEW_TARGET: Final = 50_000
 
 
+def _quiet_progress(_fraction: float, _text: str) -> None:
+    """Keine Fortschrittsmeldung — Agentenweg und Aufrufe ohne Fenster fragen nicht."""
+
+
+def _coarse_params() -> dict[str, Any]:
+    """Womit die grobe Stufe verkleinert — eine Stelle für beide Wege.
+
+    **Der Anzeigeweg** (``method="fast"``, Entscheidung Robert vom 23.09.2026):
+    Kern nach Sehnenfehler, dann Raster, ohne Messung. Die Vorschau ist ein
+    Bild und kein Dokumentstand; übernommen wird genau. Der Weg der Operation
+    stand an der Lochplatte mit 815 104 Dreiecken 24 s im Quadrik-Solver und
+    in der Messung danach — und sein Netz war offen, sodass jede Bohrung
+    darauf die Boolesche Kette hinunterlief (grob 22 s je Zahl, genau 13 s).
+    """
+    return {"triangles": COARSE_PREVIEW_TARGET, "method": "fast"}
+
+
 #: Werte, mit denen ein Schritt ein Merkmal, eine Fläche oder Kanten **des
 #: Eingangsnetzes** benennt. Eine vorgeschaltete Verkleinerung erkennt das
 #: Netz neu, und die Kennung gibt es danach nicht mehr — oder sie meint ein
@@ -739,7 +760,7 @@ def _coarse_steps_before(working: Any, index: int, scene: Any) -> list[Operation
             op="decimate_mesh",
             inputs=(object_id,),
             outputs=(object_id,),
-            params={"triangles": COARSE_PREVIEW_TARGET},
+            params=_coarse_params(),
         )
         for offset, object_id in enumerate(targets)
     ]
@@ -757,13 +778,38 @@ def _coarse_drafts(scene: Any) -> list[OperationDraft]:
     if scene is None:
         return []
     return [
-        OperationDraft(
-            op="decimate_mesh", params={"triangles": COARSE_PREVIEW_TARGET}, inputs=(object_id,)
-        )
+        OperationDraft(op="decimate_mesh", params=_coarse_params(), inputs=(object_id,))
         for object_id, entry in scene.objects.items()
         if kind_of(entry.mesh) == "mesh"
         and int(getattr(entry.mesh, "triangle_count", 0)) > COARSE_PREVIEW_ABOVE
     ]
+
+
+def _kernel_gave_up(result: EvaluationResult) -> bool:
+    """Ob die Kette an einer Grenze des Rechenkerns hielt — und nicht an einem Wert.
+
+    ``evaluate`` schreibt den Halt als ``op.<Operation>.<Ausnahme>``
+    (``_finding_from``). Eine ``GeometryError`` — die Boolesche Kette ist
+    erschöpft, ein Körper ist keiner — hängt am Netz, und in der groben Stufe
+    ist das Netz nicht das des Kunden. Gemessen am 23.09.2026: Am Eiffelturm
+    (312 938 Dreiecke), am Voronoi-Spiderman und am Piratenschiff sagte die
+    grobe Vorschau „Auch die letzte Rückfallstufe hat kein brauchbares
+    Ergebnis geliefert", wo die genaue Vorschau ein Ergebnis hat. Ein
+    ungültiger Wert dagegen bleibt am groben Netz derselbe und braucht keine
+    zweite Rechnung.
+    """
+    if result.stopped_at is None:
+        return False
+    kinds: set[str] = set()
+    pending: list[type] = [GeometryError]
+    while pending:
+        kind = pending.pop()
+        kinds.add(kind.__name__)
+        pending.extend(kind.__subclasses__())
+    return any(
+        finding.op_id == result.stopped_at and finding.code.rsplit(".", 1)[-1] in kinds
+        for finding in result.scene.report.findings
+    )
 
 
 def _stop_reason(result: EvaluationResult) -> str:
@@ -1096,6 +1142,20 @@ class Session(QObject):
         Szene davor dieselbe, und ihre grobe Kopie ändert sich nicht. Die
         nächste Auswertung liefert ein neues ``Scene``-Objekt — der Vergleich
         auf Identität merkt das, ohne dass jemand ein Feld zurücksetzen muss."""
+        self._coarse_lock = threading.Lock()
+        """Eine Vorbereitung der groben Stufe zur Zeit (:meth:`_coarse_before`).
+
+        Wer tippt, startet je Zahl einen Arbeiter. Ohne die Sperre rechneten
+        zwei davon dieselbe Verkleinerung nebeneinander, und keiner fände den
+        Merker, den der andere gleich anlegt."""
+        self._coarse_cancel = CancelSignal()
+        """Das Abbruchsignal der Vorbereitung — nicht das der einzelnen Vorschau.
+
+        Eine neue Zahl ersetzt die laufende Vorschau (:meth:`supersede_preview`),
+        die Verkleinerung des unveränderten Eingangs aber braucht die nächste
+        genauso. Sie rechnet deshalb zu Ende und wird gemerkt; angehalten wird
+        sie erst, wenn niemand mehr auf eine Vorschau wartet
+        (:meth:`cancel_preview`) oder ein anderes Dokument offen ist."""
         self._placements: list[_PreviewWorker] = []
         """Jeder laufende Vorschau-Arbeiter, festgehalten bis ``finished``.
 
@@ -1437,6 +1497,7 @@ class Session(QObject):
         self._dirty = False
         self.last_result = None
         self._coarse_scene = None
+        self._stop_coarse_preparation()
         self.projectChanged.emit()
         self.evaluate_async()
 
@@ -2747,6 +2808,7 @@ class Session(QObject):
         coarse: Any = None,
         advised: Any = None,
         failed: Any = None,
+        progressed: Any = None,
     ) -> None:
         """Die Live-Vorschau des Operationsdialogs (§18.7).
 
@@ -2762,6 +2824,9 @@ class Session(QObject):
         nennen einen Schritt, der vor das Übernehmen gehört.
         ``failed`` meldet einen unerwarteten Arbeiterfehler an den aktuellen
         Editor, damit dessen Übernahme gesperrt bleibt und ein Hinweis erscheint.
+        ``progressed`` bekommt ``(Anteil, laufender Schritt)`` der Auswertung —
+        das Fenster zeigt daraus ab zwei Sekunden Balken und *Abbrechen*
+        (§2.8), und :meth:`cancel_preview` hält die Rechnung an.
         """
         self._preview_generation += 1
         generation = self._preview_generation
@@ -2798,6 +2863,11 @@ class Session(QObject):
                     if advised is None
                     else (lambda action: worker.advised.emit(generation, action))
                 ),
+                progress=(
+                    None
+                    if progressed is None
+                    else (lambda fraction, text: worker.progressed.emit(generation, fraction, text))
+                ),
                 # Der Dialog zeigt Geometrie und Differenz, keine Merkmale:
                 # Eine Erkennung je getippter Zahl wäre eine Sekunde für nichts.
                 detect_features=False,
@@ -2819,6 +2889,12 @@ class Session(QObject):
             )
         if advised is not None:
             worker.advised.connect(lambda stamp, action: self._preview_done(stamp, action, advised))
+        if progressed is not None:
+            worker.progressed.connect(
+                lambda stamp, fraction, text: self._preview_done(
+                    stamp, (fraction, text), progressed
+                )
+            )
         # Technische Einzelheiten gehören ins Protokoll. Ein abhängiger Editor
         # kann seine Freigabe zurücknehmen und den Hinweis direkt am Feld zeigen.
         worker.crashed.connect(lambda detail: _log.warning("preview crashed: %s", detail))
@@ -2897,15 +2973,39 @@ class Session(QObject):
         then(difference)
 
     def cancel_preview(self) -> None:
-        """Der Dialog ist zu — was noch rechnet, hört auf.
+        """Der Dialog ist zu oder die Vorschau abgebrochen — was noch rechnet, hört auf.
 
         Die Generation allein genügte nicht: Sie **verwarf** das Ergebnis,
         angehalten hat sie nichts. Wer einen Dialog über einem großen Körper
         schloss, ließ eine Rechnung hinter sich, die niemand mehr sehen wollte
         und die trotzdem bis zum Ende lief.
+
+        Mit angehalten wird die Vorbereitung der groben Stufe: Auf ihr Ergebnis
+        wartet jetzt niemand mehr. Wer dagegen nur eine neue Zahl tippt, ruft
+        :meth:`supersede_preview`.
+        """
+        self.supersede_preview()
+        self._stop_coarse_preparation()
+
+    def supersede_preview(self) -> None:
+        """Eine neue Anfrage ersetzt die laufende Vorschau — die Vorbereitung bleibt.
+
+        Die alte Antwort wird verworfen und ihr Arbeiter angehalten. Die
+        Verkleinerung des unveränderten Eingangs läuft weiter: Die nächste
+        Vorschau braucht dieselbe, und angehalten müsste sie beim nächsten
+        Tastendruck von vorn beginnen. Genau so kam es an der Lochplatte mit
+        815 104 Dreiecken zu 27 bis 30 s Verkleinerung **je** Loslassen des
+        Platzierungsgriffs — die Auswertung legt ihre Ergebnisse erst nach
+        einem vollständigen Durchlauf in den Cache, und ein abgelöster Lauf ist
+        keiner (Bericht Ansicht, 23.09.2026).
         """
         self._preview_generation += 1
         self.cancel_previews()
+
+    def _stop_coarse_preparation(self) -> None:
+        """Die laufende Vorbereitung anhalten; die nächste bekommt ein frisches Signal."""
+        self._coarse_cancel.cancel()
+        self._coarse_cancel = CancelSignal()
 
     def split_async(self, object_id: str, then: Any) -> None:
         """Auto Split, ohne das Fenster anzuhalten (§2.8).
@@ -3170,8 +3270,10 @@ class Session(QObject):
         self.last_result = result
         # Die grobe Kopie gehört der Szene, aus der sie entstand. Ohne dieses
         # Wegräumen hielte sie die **vorige** Szene am Leben — bei einem Netz
-        # dieser Größe genau das, was die Stufe einsparen soll.
+        # dieser Größe genau das, was die Stufe einsparen soll. Eine
+        # Vorbereitung, die noch für die vorige rechnet, rechnet für niemanden.
         self._coarse_scene = None
+        self._stop_coarse_preparation()
         self._bind_filament_profiles()
         self.result_generation += 1
         self.result_current = True
@@ -3401,6 +3503,7 @@ class Session(QObject):
         counselled: Any = None,
         detect_features: bool = True,
         snapshot: _Snapshot | None = None,
+        progress: Any = None,
     ) -> tuple[Any, SceneDifference | None, str]:
         """:meth:`preview_scene`, dazu der Grund, wenn es keine Vorschau gibt.
 
@@ -3422,6 +3525,9 @@ class Session(QObject):
         Weg wie bei ``coarsened`` und aus demselben Grund: Das Ergebnis ist ein
         Dreiertupel, an dem drei Aufrufer und drei Tests hängen, und eine
         Auskunft **neben** dem Satz gehört nicht in dessen Zeichenkette.
+
+        ``progress`` bekommt Anteil und Schritt der Auswertung, wie
+        ``evaluate`` sie meldet — für Balken und *Abbrechen* im Fenster.
         """
         import copy
 
@@ -3487,6 +3593,43 @@ class Session(QObject):
                 _("Vorschau"), drafts, origin=origin or Origin(by="user"), changes=changes
             )
             previewed = tuple(transaction.ops)
+        coarse_before: Any = None
+        if coarse:
+            # **Erst der Eingang, dann die Vorschau** (RM-208). Die Verkleinerung
+            # des unveränderten Eingangs rechnet in einem eigenen Durchlauf, der
+            # weder am Abbruch dieser Vorschau hängt noch an einem Halt ihres
+            # Schritts — erst ein vollständiger Durchlauf legt seine Ergebnisse
+            # in den Cache. Stand sie in der Auswertung der Vorschau, ging sie
+            # mit jeder abgelösten Anfrage und jedem ungültigen Zwischenwert
+            # verloren, und die nächste Zahl begann von vorn. Die Auswertung
+            # darunter findet sie danach im Cache.
+            #
+            # **Und beide Seiten auf demselben groben Netz.** Getrennt
+            # verkleinert liefen ``davor`` und ``danach`` überall um Bruchteile
+            # eines Millimeters auseinander, und die Differenz beider war nicht
+            # die Änderung, sondern dieser Unterschied: gemessen an einer Kugel
+            # aus 81 920 Dreiecken 16,7 mm³ Material, das niemand angefasst hat
+            # — und die Rechnung darüber dauerte zehn bis fünfzig Sekunden
+            # statt einer halben, weil zwei fast deckungsgleiche Häute der
+            # schlimmste Fall für jeden Booleschen Kern sind.
+            coarse_before = self._coarse_before(
+                before, coarse, ask, cancelled, change_op=change_op, snapshot=snapshot
+            )
+            if coarse_before is None:
+                return self._preview_outcome(
+                    drafts,
+                    origin=origin,
+                    ask=ask,
+                    change_op=change_op,
+                    change_values=change_values,
+                    change_name=change_name,
+                    changes=changes,
+                    cancelled=cancelled,
+                    counselled=counselled,
+                    detect_features=detect_features,
+                    snapshot=snapshot,
+                    progress=progress,
+                )
         preview_profile = snapshot.profile
         if changes is not None:
             preview_profile = profiles.for_process(
@@ -3512,11 +3655,13 @@ class Session(QObject):
             cache=self.cache,
             cancelled=cancelled or NeverCancelled(),
             detect_features=detect_features,
+            progress=progress or _quiet_progress,
         )
-        if reduced and result.stopped_at in reduced:
-            # **Das Verkleinern selbst hat angehalten.** Dann ist die grobe
-            # Stufe die Ursache und nicht die Antwort; gerechnet wird genau,
-            # und der Kunde sieht davon nichts als die längere Wartezeit.
+        if reduced and (result.stopped_at in reduced or _kernel_gave_up(result)):
+            # **Das Verkleinern selbst hat angehalten — oder der Kern am groben
+            # Netz.** Dann ist die grobe Stufe die Ursache und nicht die Antwort;
+            # gerechnet wird genau, und der Kunde sieht davon nichts als die
+            # längere Wartezeit, über zwei Sekunden mit Balken und *Abbrechen*.
             return self._preview_outcome(
                 drafts,
                 origin=origin,
@@ -3529,6 +3674,7 @@ class Session(QObject):
                 counselled=counselled,
                 detect_features=detect_features,
                 snapshot=snapshot,
+                progress=progress,
             )
         if result.stopped_at is not None:
             # Eine angehaltene Kette ist keine Vorschau: die leere Differenz
@@ -3545,33 +3691,12 @@ class Session(QObject):
                     counselled(advice)
             return result.scene, None, _stop_reason(result)
         if coarse:
-            # **Beide Seiten auf demselben groben Netz.** Getrennt verkleinert
-            # liefen ``davor`` und ``danach`` überall um Bruchteile eines
-            # Millimeters auseinander, und die Differenz beider war nicht die
-            # Änderung, sondern dieser Unterschied: gemessen an einer Kugel
-            # aus 81 920 Dreiecken 16,7 mm³ Material, das niemand angefasst
-            # hat — und die Rechnung darüber dauerte zehn bis fünfzig
-            # Sekunden statt einer halben, weil zwei fast deckungsgleiche
-            # Häute der schlimmste Fall für jeden Booleschen Kern sind.
-            coarse_before = self._coarse_before(
-                before, coarse, ask, cancelled, change_op=change_op, snapshot=snapshot
-            )
-            if coarse_before is None:
-                return self._preview_outcome(
-                    drafts,
-                    origin=origin,
-                    ask=ask,
-                    change_op=change_op,
-                    change_values=change_values,
-                    change_name=change_name,
-                    changes=changes,
-                    cancelled=cancelled,
-                    counselled=counselled,
-                    detect_features=detect_features,
-                    snapshot=snapshot,
-                )
             coarsened(_triangles_of(before))
             before = coarse_before
+        # Der Vergleich kennt kein Abbruchsignal und kostet an großen Netzen
+        # Sekunden; wer vorher abgebrochen hat, bekommt ihn nicht mehr.
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
         difference = compare_scenes(before, result.scene) if before is not None else None
         if difference is not None:
             difference.findings = tuple(
@@ -3639,6 +3764,14 @@ class Session(QObject):
         kostet einmal je Auswertung; danach liegt jeder Schritt im Cache, und
         eine Zahl im Dialog zu ändern kostet nur noch die Operation selbst.
 
+        **Das ist der Merker der Verkleinerung** (RM-208), geschlüsselt nach
+        Szene und Schritt (``_coarse_scene``). Er rechnet unter dem Signal der
+        Vorbereitung (``_coarse_cancel``) und nicht unter dem der Vorschau:
+        Wird die Vorschau abgelöst, rechnet er zu Ende und legt die
+        Verkleinerung in den Cache, und die nächste Zahl findet beides.
+        ``cancelled`` gilt nur dem Warten auf einen anderen Arbeiter, der
+        denselben Merker gerade anlegt.
+
         ``change_op`` nennt den geänderten Schritt: Dann stehen die
         Verkleinerungen wie in der Vorschau **vor** ihm
         (:func:`_coarse_steps_before`) statt am Ende des Stapels, und der
@@ -3652,31 +3785,47 @@ class Session(QObject):
             return held[2]
         import copy
 
-        snapshot = snapshot if snapshot is not None else _Snapshot.of(self)
-        base = copy.deepcopy(snapshot.document)
-        if change_op is None:
-            History(base).apply(_("Vorschau"), coarse)
-        else:
-            index = next(number for number, entry in enumerate(base.ops) if entry.id == change_op)
-            _coarse_steps_before(base, index, before)
-        result = evaluate(
-            base,
-            snapshot.profile,
-            quality="draft",
-            sources=ProjectSources(self.project, base_dir=self.base_dir),
-            ask=ask or _no_questions,
-            cache=self.cache,
-            cancelled=cancelled or NeverCancelled(),
-        )
-        if result.stopped_at is not None:
-            return None
-        # Gemerkt nur für die Szene, die noch dasteht: Kam inzwischen eine
-        # neue Auswertung (``_on_finished`` räumt den Platz), hielte der
-        # Eintrag die alte Szene samt grober Kopie am Leben.
-        current = self.last_result
-        if current is not None and current.scene is before:
-            self._coarse_scene = (before, change_op, result.scene)
-        return result.scene
+        preparation = self._coarse_cancel
+        waiting = cancelled or NeverCancelled()
+        while not self._coarse_lock.acquire(timeout=0.05):
+            waiting.raise_if_cancelled()
+        try:
+            # Wer gewartet hat, findet womöglich, was der andere eben gemerkt hat.
+            held = self._coarse_scene
+            if held is not None and held[0] is before and held[1] == change_op:
+                return held[2]
+            snapshot = snapshot if snapshot is not None else _Snapshot.of(self)
+            base = copy.deepcopy(snapshot.document)
+            if change_op is None:
+                History(base).apply(_("Vorschau"), coarse)
+            else:
+                index = next(
+                    number for number, entry in enumerate(base.ops) if entry.id == change_op
+                )
+                _coarse_steps_before(base, index, before)
+            result = evaluate(
+                base,
+                snapshot.profile,
+                quality="draft",
+                sources=ProjectSources(self.project, base_dir=self.base_dir),
+                ask=ask or _no_questions,
+                cache=self.cache,
+                cancelled=preparation,
+                # Wie die Vorschau selbst: Die Kopie davor zeigt Geometrie,
+                # keine Merkmale.
+                detect_features=False,
+            )
+            if result.stopped_at is not None:
+                return None
+            # Gemerkt nur für die Szene, die noch dasteht: Kam inzwischen eine
+            # neue Auswertung (``_on_finished`` räumt den Platz), hielte der
+            # Eintrag die alte Szene samt grober Kopie am Leben.
+            current = self.last_result
+            if current is not None and current.scene is before:
+                self._coarse_scene = (before, change_op, result.scene)
+            return result.scene
+        finally:
+            self._coarse_lock.release()
 
     def accept_proposal(self, preview: ProposalPreview) -> Transaction | None:
         """Legt den Vorschlag als eine Transaktion ins Dokument (§26.5).
@@ -3813,8 +3962,10 @@ class Session(QObject):
         self.last_result = result
         # Die grobe Kopie gehört der Szene, aus der sie entstand. Ohne dieses
         # Wegräumen hielte sie die **vorige** Szene am Leben — bei einem Netz
-        # dieser Größe genau das, was die Stufe einsparen soll.
+        # dieser Größe genau das, was die Stufe einsparen soll. Eine
+        # Vorbereitung, die noch für die vorige rechnet, rechnet für niemanden.
         self._coarse_scene = None
+        self._stop_coarse_preparation()
         self._bind_filament_profiles()
         self.result_generation += 1
         self.result_current = not self._rerun_pending
