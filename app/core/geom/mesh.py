@@ -1401,8 +1401,8 @@ def _check_embedded_gltf(payload: bytes) -> None:
             raise ValidationError(
                 field="file",
                 detail=_(
-                    "Diese GLTF braucht Begleitdateien. Öffne sie lokal zusammen mit "
-                    "diesen Dateien oder exportiere das Modell als GLB."
+                    "Diese GLTF braucht Begleitdateien. Öffnen Sie sie lokal zusammen "
+                    "mit diesen Dateien, oder exportieren Sie das Modell als GLB."
                 ),
                 constraint="missing_file",
                 values={"dependencies": external},

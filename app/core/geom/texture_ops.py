@@ -417,10 +417,10 @@ def _cell_share(pattern: str, pitch: float, cell: float | None, wall: float = 0.
             # Zellbreite statt von der Teilung.
             raise ValidationError(
                 "pitch",
-                _(
-                    "Bei dieser Teilung haben Zelle und Wand nebeneinander keinen Platz. "
-                    "Die Teilung muss mindestens so groß sein wie in „needed_mm“ angegeben."
-                ),
+                # Die nötige Teilung steht in den Einzelheiten als „Nötig"; ein
+                # Verweis auf „needed_mm" nannte einen Schlüssel, den der Kunde
+                # nie sieht (Durchsicht 0.5.0).
+                _("Bei dieser Teilung haben Zelle und Wand nebeneinander keinen Platz."),
                 value=pitch,
                 constraint="minimum",
                 values={"needed_mm": math.ceil(needed * 100.0) / 100.0, "wall_mm": wall},
@@ -532,16 +532,17 @@ def check_printable(
         needed = pitch * detail / max(narrowest, EPS_GEOM)
         raise ValidationError(
             "pitch",
+            # Wie groß die Teilung mindestens sein muss, steht in den
+            # Einzelheiten als „Nötig" — nicht als Schlüssel im Satz
+            # (Durchsicht 0.5.0).
             _(
                 "Bei dieser Teilung sind die Stege schmaler als ein Bildpunkt — sie "
-                "werden nicht belichtet. Die Teilung muss mindestens so groß sein wie "
-                "in „needed_mm“ angegeben."
+                "werden nicht belichtet."
             )
             if printer.is_resin
             else _(
                 "Bei dieser Teilung sind die Stege schmaler als die Düse — sie werden "
-                "nicht gedruckt. Die Teilung muss mindestens so groß sein wie in "
-                "„needed_mm“ angegeben."
+                "nicht gedruckt."
             ),
             value=pitch,
             constraint="nozzle_width",
@@ -551,10 +552,7 @@ def check_printable(
     if depth < printer.layer_height:
         raise ValidationError(
             "depth",
-            _(
-                "Diese Prägung ist flacher als eine Schicht und verschwindet beim "
-                "Drucken. Die Schichthöhe steht in „layer_mm“."
-            ),
+            _("Diese Prägung ist flacher als eine Schicht und verschwindet beim Drucken."),
             value=depth,
             constraint="layer_height",
             values={"layer_mm": printer.layer_height},

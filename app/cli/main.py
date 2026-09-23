@@ -151,11 +151,15 @@ def terminal_ask(question: str, choices: list[str]) -> str:
 
 
 def open_project(path: Path) -> Project:
-    return load(path)
+    project = load(path)
+    # Eigene Drucker und Materialien, die das Projekt mitbringt, gelten hier
+    # wie im Fenster (``profiles.carry``).
+    profiles.carry(project.document.carried_profiles)
+    return project
 
 
 def profile_of(project: Project) -> Any:
-    return profiles.make_profile(
+    return profiles.scene_profile(
         project.document.printer or profiles.DEFAULT_PRINTER,
         project.document.material or profiles.DEFAULT_MATERIAL,
     )

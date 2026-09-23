@@ -29,7 +29,7 @@ import math
 from collections.abc import Callable, Collection, Mapping, Sequence
 from contextlib import suppress
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, Any, Final
+from typing import TYPE_CHECKING, Any, Final, Literal
 
 import numpy as np
 
@@ -249,6 +249,121 @@ def screw_for_bore(diameter: float) -> str | None:
     return None
 
 
+#: Welches Loch einer Schraube eine Bohrung sein kann: das Durchgangsloch
+#: in einer der drei Reihen nach ISO 273 oder das Kernloch für ihr Gewinde.
+BoreHole = Literal["fine", "medium", "coarse", "tap"]
+
+
+@dataclass(frozen=True, slots=True)
+class BoreMatch:
+    """Eine Schraubengröße, zu deren Loch eine Bohrung passt — und welches Loch."""
+
+    size: str
+    hole: BoreHole
+
+
+def bore_matches(low: float, high: float) -> tuple[BoreMatch, ...]:
+    """Die Normlöcher, in deren Band das Maßintervall ``[low, high]`` fällt.
+
+    **Für ein Maß mit Unsicherheit**, nicht für ein exaktes — das beantwortet
+    :func:`screw_for_bore` mit einer einzigen Größe. Eine gemessene Bohrung
+    trägt ein Intervall: Die Kreispassung hat einen Fehler, und zwischen den
+    Ecken eines Vielecks liegen seine Seiten weiter innen
+    (:func:`measured_interval`). Das Band einer Schraube reicht dabei
+
+    * beim **Durchgangsloch** vom Nennmaß — darunter geht sie nicht hindurch —
+      bis zur groben Reihe nach ISO 273. Welche Reihe gemeint ist, sagt der
+      nächstgelegene der drei Werte;
+    * beim **Kernloch** genau über das Tabellenmaß: Es muss im Intervall liegen.
+
+    Mehrere Treffer sind eine Antwort und kein Fehler. 4,2 mm ist das feine
+    Durchgangsloch einer M4 **und** das Kernloch einer M5; wer nur eines
+    nennt, hat geraten (Regel 21). Die Reihenfolge ist die der Tabelle.
+    """
+    from app.core.knowledge import standards
+
+    found: list[BoreMatch] = []
+    centre = (low + high) / 2.0
+    for size in standards.screw_sizes():
+        entry = standards.screw(size)
+        coarse = entry.clearance_coarse if entry.clearance_coarse is not None else entry.clearance
+        if high >= entry.nominal - EPS_GEOM and low <= coarse + EPS_GEOM:
+            series: list[tuple[float, BoreHole]] = [(entry.clearance, "medium")]
+            if entry.clearance_fine is not None:
+                series.append((entry.clearance_fine, "fine"))
+            if entry.clearance_coarse is not None:
+                series.append((entry.clearance_coarse, "coarse"))
+            nearest = min(series, key=lambda item: abs(item[0] - centre))
+            found.append(BoreMatch(size, nearest[1]))
+        if low - EPS_GEOM <= entry.tap <= high + EPS_GEOM:
+            found.append(BoreMatch(size, "tap"))
+    return tuple(found)
+
+
+def measured_interval(
+    diameter: float, feature: Feature | None, status: MeasureStatus
+) -> tuple[float, float]:
+    """Das Intervall, in dem der Durchmesser einer Bohrung liegen kann.
+
+    Die Quellen, die das Merkmal selbst belegt, und keine erfundene Toleranz:
+
+    * ``fit_error`` ist der größte radiale Fehler der Kreispassung — auf
+      beiden Seiten des Durchmessers doppelt;
+    * ``radial_min`` und ``radial_max`` sind das Netzband der Wand, der
+      kleinste und der größte Abstand ihrer Dreiecke zur Achse. Ein Vieleck
+      mit Ecken auf dem Kreis hat seine Seiten weiter innen; welches der
+      beiden Maße der Konstrukteur meinte, weiß niemand.
+
+    Ein Vorgabemaß (``parameter``) und ein Wert ohne belegte Quelle bleiben
+    ein Punkt: Für sie ist keine Messunsicherheit bekannt, und eine
+    ausgedachte wäre eine Toleranz aus dem Nichts (Regel 7).
+    """
+    if feature is None or status.source not in ("fit", "facets"):
+        return (diameter, diameter)
+    low, high = diameter, diameter
+    band = [feature.params.get("radial_min"), feature.params.get("radial_max")]
+    for radius in band:
+        if (
+            isinstance(radius, (int, float))
+            and not isinstance(radius, bool)
+            and np.isfinite(radius)
+            and radius > 0.0
+        ):
+            low, high = min(low, 2.0 * radius), max(high, 2.0 * radius)
+    error = feature.params.get("fit_error")
+    if isinstance(error, (int, float)) and not isinstance(error, bool) and np.isfinite(error):
+        low, high = low - 2.0 * abs(error), high + 2.0 * abs(error)
+    return (max(low, 0.0), high)
+
+
+def _hole_title(hole: BoreHole) -> str:
+    """Wie ein Normloch im Satz heißt."""
+    titles = {
+        "fine": tr("Durchgangsloch fein"),
+        "medium": tr("Durchgangsloch mittel"),
+        "coarse": tr("Durchgangsloch grob"),
+        "tap": tr("Kernloch für Gewinde"),
+    }
+    return titles[hole]
+
+
+def _matches_said(matches: Sequence[BoreMatch]) -> str:
+    """Die Treffer als Aufzählung: „M4 (Durchgangsloch fein) oder M5 (Kernloch …)"."""
+    named = [
+        tr("{screw} ({hole})")
+        .replace("{screw}", entry.size)
+        .replace("{hole}", _hole_title(entry.hole))
+        for entry in matches
+    ]
+    if len(named) == 1:
+        return named[0]
+    return (
+        tr("{list} oder {last}")
+        .replace("{list}", ", ".join(named[:-1]))
+        .replace("{last}", named[-1])
+    )
+
+
 def bore_advice(
     diameter: float,
     *,
@@ -306,14 +421,29 @@ def bore_advice(
                 "nach der engeren Bohrung."
             ).replace("{measure}", named_measure), []
     if status.source != "native":
-        said = tr(
-            "Bohrungsmaß: {measure}. Eine passende Schraubengröße ist damit nicht sicher bestimmt."
-        ).format(measure=named_measure)
+        # **Eine Messung nennt eine Größe als Einschätzung** (Durchsicht
+        # 0.5.0). Bis dahin sagte sie gar keine: An einer Netzbohrung von
+        # 5,19 mm stand „nicht sicher bestimmt", obwohl das Maß samt seiner
+        # Unsicherheit nur ins Band der M5 fällt — und die Website verspricht
+        # genau diesen Satz für eine fremde STL. „Vermutlich" und die Herkunft
+        # in Klammern halten die Grenze zur Konstruktionsangabe.
+        low, high = measured_interval(diameter, feature, status)
+        matches = bore_matches(low, high)
+        if matches:
+            said = tr("Bohrungsmaß: {measure}. Passt vermutlich zu {matches}.")
+            said = said.replace("{measure}", named_measure).replace(
+                "{matches}", _matches_said(matches)
+            )
+        else:
+            said = tr(
+                "Bohrungsmaß: {measure}. Eine passende Schraubengröße ist damit nicht sicher "
+                "bestimmt."
+            ).format(measure=named_measure)
         if not ask:
             return said, []
         return (
             f"{said} {tr('Zu welcher Schraube gehört sie?')}",
-            [*_sizes_around(diameter), tr("Selbst eintragen")],
+            [*_sizes_around(diameter, matches), tr("Selbst eintragen")],
         )
     size = screw_for_bore(diameter)
     if size is not None:
@@ -345,7 +475,7 @@ def bore_advice(
     )
     return (
         asked.replace("{measure}", measured),
-        [*_sizes_around(diameter), tr("Selbst eintragen")],
+        [*_sizes_around(diameter, ()), tr("Selbst eintragen")],
     )
 
 
@@ -374,11 +504,23 @@ def _head_diameter(feature: Feature) -> float | None:
     *Senken* und macht Platz für einen Kopf, der bündig sitzt. Wo keine Größe
     passt, kommt nichts zurück — die Schemavorgabe ist dann ehrlicher als ein
     Kopf, den sich niemand ausgesucht hat.
+
+    **Auch aus der groben Reihe**, wenn sie genau eine Größe nennt: Über
+    einem Loch von 5,7 mm sagt der Hinweis „Passt vermutlich zu M5
+    (Durchgangsloch grob)"; ein leeres Feld darunter widerspräche ihm.
+    Ein Kernloch trägt keine Senkung — seine Schraube geht nicht hindurch.
     """
     diameter = feature.params.get("diameter")
     if diameter is None:
         return None
     size = screw_for_bore(float(diameter))
+    if size is None:
+        through = {
+            entry.size
+            for entry in bore_matches(float(diameter), float(diameter))
+            if entry.hole != "tap"
+        }
+        size = next(iter(through)) if len(through) == 1 else None
     if size is None:
         return None
     from app.core.knowledge import standards
@@ -386,19 +528,27 @@ def _head_diameter(feature: Feature) -> float | None:
     return round(standards.screw(size).countersink, 4)
 
 
-def _sizes_around(diameter: float) -> list[str]:
-    """Die Größen unter und über einer Bohrung, die zu keiner passt.
+def _sizes_around(diameter: float, matches: Sequence[BoreMatch]) -> list[str]:
+    """Die Größen, die für eine Bohrung infrage kommen — in der Reihenfolge der Tabelle.
 
-    Beide oder eine — an den Enden der Tabelle gibt es keine zweite Seite, und
-    eine erfundene wäre schlechter als eine kurze Liste.
+    Die, zu deren Loch sie passt (``matches``), dazu je eine Nachbargröße
+    darunter und darüber. Beide Nachbarn oder einer — an den Enden der Tabelle
+    gibt es keine zweite Seite, und eine erfundene wäre schlechter als eine
+    kurze Liste.
+
+    **Die passende Größe gehört dazu.** Bis zur Durchsicht 0.5.0 nannte diese
+    Stelle nur die Nachbarn, auch dort, wo sie für eine gemessene Bohrung
+    fragte: An 5,19 mm standen M4 und M6 zur Wahl, die M5 nicht.
     """
     from app.core.knowledge import standards
 
     # Die Reihenfolge der Tabelle ist aufsteigend; die Bausteine rechnen seit je
     # damit (``size_for_insert`` nimmt die erste passende als die kleinste).
-    below = [size for size in standards.screw_sizes() if standards.screw(size).clearance < diameter]
-    above = [size for size in standards.screw_sizes() if standards.screw(size).nominal > diameter]
-    return [*below[-1:], *above[:1]]
+    sizes = standards.screw_sizes()
+    below = [size for size in sizes if standards.screw(size).clearance < diameter]
+    above = [size for size in sizes if standards.screw(size).nominal > diameter]
+    wanted = {*below[-1:], *above[:1], *(entry.size for entry in matches)}
+    return [size for size in sizes if size in wanted]
 
 
 def _target_field(spec: OperationSpec) -> str:

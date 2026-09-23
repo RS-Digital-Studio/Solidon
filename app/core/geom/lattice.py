@@ -85,9 +85,11 @@ def _gyroid_samples(size: np.ndarray, cell: float) -> np.ndarray:
     reachable = math.ceil(float(size.max()) * SAMPLES_PER_CELL / MAX_SAMPLES * 10.0) / 10.0
     raise ValidationError(
         "cell",
+        # Die kleinste mögliche Zelle steht in den Einzelheiten als „Erreichbar"
+        # und nicht als Schlüssel im Satz (Durchsicht 0.5.0).
         _(
             "Für diesen Hohlraum ist die Zelle zu fein — der Gyroid ließe sich nicht mehr "
-            "sauber abtasten. Die kleinste Zelle, die hier geht, steht in „reachable_mm“."
+            "sauber abtasten."
         ),
         value=cell,
         constraint="gyroid_samples",
@@ -311,10 +313,10 @@ def check_printable(wall: float, cell: float, profile: Profile) -> None:
     if wall < minimum:
         raise ValidationError(
             "wall",
-            _(
-                "Diese Stege sind dünner als zwei Extrusionsbahnen und werden nicht "
-                "gedruckt. Was hier mindestens nötig ist, steht in „minimum_mm“."
-            ),
+            # Der Mindestwert steht in den Einzelheiten; „steht in
+            # „minimum_mm"" verwies auf einen Schlüssel, den dort niemand liest
+            # (Durchsicht 0.5.0, ``test_customer_texts_quote_no_internal_keys``).
+            _("Diese Stege sind dünner als zwei Extrusionsbahnen und werden nicht gedruckt."),
             value=wall,
             constraint="minimum_wall",
             values={"minimum_mm": round(minimum, 2)},

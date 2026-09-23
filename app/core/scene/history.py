@@ -182,6 +182,20 @@ def _copy_operation_matches(
     return dataclasses.replace(entry, matches=deepcopy(matches))
 
 
+#: Der Namensraum eingesetzter Bausteine im Stapel (``knowledge.parts.ops``).
+#: Nur er: Einen Stand zum Wählen haben allein Rezepte, und ein Rezept wird
+#: immer eingesetzt — ``create_`` teilt es sich mit den Grundkörpern.
+_PART_PREFIX: Final = "insert_"
+
+
+def _part_state_target(op_name: str, states: Mapping[str, str]) -> str | None:
+    """Der Operationsname desselben Schritts mit dem Baustein aus ``states``."""
+    if not op_name.startswith(_PART_PREFIX):
+        return None
+    wanted = states.get(op_name[len(_PART_PREFIX) :])
+    return f"{_PART_PREFIX}{wanted}" if wanted else None
+
+
 def restore(document: Document, state: DocumentState) -> None:
     """Legt eine Seite einer Dokumentänderung ins Dokument zurück (§15.5).
 
@@ -1163,10 +1177,16 @@ class History:
         # der Zahl der Schritte, die anhalten würden (Regel 17).
         exact = exact_names()
         if entry.op in exact and op_name not in exact:
+            # Ein Schritt, den diese Fassung nicht kennt, braucht nichts — er
+            # rechnet ohnehin nicht (``evaluate.unknown_operation``). Ihn im
+            # Register nachzuschlagen war ein ``InternalError`` statt des
+            # Wechsels (Durchsicht 0.5.0).
             later = [
                 other
                 for other in self.operations
-                if other.id > op_id and self._registry.get(other.op).requires_kind == "brep"
+                if other.id > op_id
+                and self._registry.has(other.op)
+                and self._registry.get(other.op).requires_kind == "brep"
             ]
             if later:
                 raise ValidationError(
@@ -1299,14 +1319,31 @@ class History:
         steht der Titel des Schritts — die Transaktion **ist** seine neue
         Fassung, kein eigener Text ohne Katalognachzug.
         """
-        changed = _copy_operation_matches(
-            changed, previous_outputs=entry.outputs, previous_inputs=entry.inputs
+        _transaction, (swapped,) = self._swap_operations(title, ((entry, changed),))
+        return swapped
+
+    def _swap_operations(
+        self,
+        title: TranslatableText | str,
+        pairs: Sequence[tuple[Operation, Operation]],
+    ) -> tuple[Transaction, tuple[Operation, ...]]:
+        """Wie :meth:`_swap_operation`, für mehrere Schritte in **einer**
+        Transaktion — ein Strg+Z legt alle zurück (Regel 16, §15.5)."""
+        swapped = tuple(
+            _copy_operation_matches(
+                changed, previous_outputs=entry.outputs, previous_inputs=entry.inputs
+            )
+            for entry, changed in pairs
         )
         self._reseed()
         self._forget_undone()
         changes = DocumentChange(
-            before=DocumentState(edited_ops={entry.id: _copy_operation_matches(entry)}),
-            after=DocumentState(edited_ops={entry.id: _copy_operation_matches(changed)}),
+            before=DocumentState(
+                edited_ops={entry.id: _copy_operation_matches(entry) for entry, _changed in pairs}
+            ),
+            after=DocumentState(
+                edited_ops={changed.id: _copy_operation_matches(changed) for changed in swapped}
+            ),
         )
         transaction = Transaction(
             id=f"t{next(self._next_transaction)}",
@@ -1316,7 +1353,47 @@ class History:
         )
         self.document.transactions.append(transaction)
         self._settle(changes.after)
-        return changed
+        return transaction, swapped
+
+    def use_part_states(self, states: Mapping[str, str]) -> Transaction | None:
+        """Rechnet benutzte Bausteine mit einem anderen Stand desselben
+        Bausteins (§24.4, RM-138).
+
+        ``states`` nennt je Baustein im Stapel den Katalogeintrag, der ab
+        jetzt rechnen soll — beim Öffnen der gespeicherte Stand eines eigenen
+        Rezepts, den die Projektdatei mitgebracht hat
+        (``knowledge.parts.check.saved_states``). Jeder Schritt behält
+        Kennung, Platz, Eingänge und Werte; nur der Baustein dahinter wechselt.
+
+        **Eine Transaktion für alle Schritte.** Ein Projekt setzt denselben
+        Baustein oft mehrfach ein, und ein halb umgestelltes Projekt rechnete
+        mit zwei Ständen nebeneinander. Ein Strg+Z führt vollständig zum
+        aktuellen Stand zurück.
+
+        ``None``, wenn kein Schritt einen der genannten Bausteine benutzt.
+        """
+        activation.require(activation.CHANGE)  # schreibt ins Dokument (kern.md)
+        pairs: list[tuple[Operation, Operation]] = []
+        for entry in self.operations:
+            target = _part_state_target(entry.op, states)
+            if target is None:
+                continue
+            if not self._registry.has(target):
+                raise ValidationError(
+                    field="op",
+                    detail=_("Dieser Stand des Bausteins ist hier nicht verfügbar."),
+                    constraint="part_state_missing",
+                    values={"op": entry.op, "wanted": target},
+                    suggestions=(CANCEL,),
+                )
+            spec = self._registry.get(target)
+            self._check_params(spec.name, spec.params.spec(), entry.params)
+            pairs.append((entry, dataclasses.replace(entry, op=target)))
+        if not pairs:
+            return None
+        transaction, _swapped = self._swap_operations(_("Gespeicherten Stand verwenden"), pairs)
+        _log.info("switched %d part steps to another state", len(pairs))
+        return transaction
 
     def _later_users(self, op_id: OpId, objects: tuple[ObjectId, ...]) -> set[OpId]:
         """Operationen nach dieser, die eine ihrer Ausgaben nehmen."""

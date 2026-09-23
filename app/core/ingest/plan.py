@@ -104,30 +104,64 @@ def names_in_use(document: Document) -> tuple[str, ...]:
             continue
         source = document.sources.get(str(operation.params.get("source", "")))
         if source is not None:
-            used.append(Path(source.path).stem)
+            stem = Path(source.path).stem
+            copy = operation.params.get("copy")
+            # Eine nummerierte Kopie belegt ihre Nummer, sonst bekäme die
+            # dritte dieselbe wie die zweite.
+            if isinstance(copy, int) and not isinstance(copy, bool) and copy >= 2:
+                used.append(copy_name(stem, copy))
+            else:
+                used.append(stem)
     return tuple(used)
 
 
-def _own_name(file_name: str, taken: Sequence[str]) -> dict[str, str]:
-    """Der Name für diesen Import — nummeriert, wenn der Dateiname schon steht.
+def copy_name(name: str, number: int) -> str:
+    """„plate_holes (2)" — wie eine zweite Kopie derselben Datei heißt."""
+    return f"{name} ({number})"
+
+
+def _copy_number(file_name: str, taken: Sequence[str]) -> int:
+    """Null, wenn der Dateiname frei ist — sonst die erste freie Nummer ab zwei.
+
+    Auch die ältere Schreibweise „plate_holes 2" belegt ihre Nummer: Projekte
+    vor 0.5.0 tragen sie als Namen im Schritt.
+    """
+    stem = Path(file_name).stem
+    if stem not in taken:
+        return 0
+    number = 2
+    while copy_name(stem, number) in taken or f"{stem} {number}" in taken:
+        number += 1
+    return number
+
+
+def _own_name(file_name: str, taken: Sequence[str], *, loads: bool) -> dict[str, object]:
+    """Die Nummer für diesen Import, wenn der Dateiname schon steht.
 
     Dieselbe Datei zweimal einzulesen ist der gewöhnliche Weg zu zwei gleichen
     Teilen, und der Objektbaum trug danach zweimal „plate_holes": im Baum nicht
-    auseinanderzuhalten, im Prüfbericht zweimal derselbe Satz. Der zweite heißt
-    deshalb „plate_holes 2" — dieselbe Nummerierung, die ``split_model`` seinen
-    Teilen gibt.
+    auseinanderzuhalten, im Prüfbericht zweimal derselbe Satz.
+
+    **Die Ladeoperation bekommt eine Nummer, keinen Namen** (Durchsicht
+    0.5.0): ``copy`` hängt „(2)" an jeden Körper, den sie einliest. Ein Name
+    passte nur auf einen Körper — eine Baugruppe bringt ihre Namen aus der
+    Datei mit, und die zweite Kopie trug sie alle ein zweites Mal; eine
+    3MF mit einem benannten Körper hieß beim ersten Mal nach dem Körper und
+    beim zweiten nach der Datei. Die Klammer, weil Teilnamen selbst oft auf
+    eine Zahl enden („Sieb 1 (2)" statt „Sieb 1 2"). Die anderen
+    Einleseoperationen machen genau einen Körper und bekommen den Namen
+    selbst, in derselben Schreibweise.
 
     Ist der Name frei, steht **kein** Parameter im Entwurf: Ein leerer Name
     heißt „nimm den Dateinamen", und ihn hineinzuschreiben hieße, dieselbe
     Auskunft zweimal zu führen.
     """
-    stem = Path(file_name).stem
-    if stem not in taken:
+    number = _copy_number(file_name, taken)
+    if not number:
         return {}
-    number = 2
-    while f"{stem} {number}" in taken:
-        number += 1
-    return {"name": f"{stem} {number}"}
+    if loads:
+        return {"copy": number}
+    return {"name": copy_name(Path(file_name).stem, number)}
 
 
 def _silent_plan(fraction: float, text: str) -> None:
@@ -191,7 +225,7 @@ def import_plan(
     # Dokument und wandert beim Speichern in die Projektdatei — auch wenn
     # der Leser danach nichts damit anfangen kann.
     check_readable(payload, suffix)
-    own_name = _own_name(name, taken)
+    own_name = _own_name(name, taken, loads=False)
     if brep_step.is_step(suffix):
         return ImportPlan(
             title=_TITLES["load_step"],
@@ -241,10 +275,9 @@ def import_plan(
                 "source": source_id,
                 "unit": unit,
                 **({"coordinates": "gltf"} if gltf else {}),
-                # **Nur am einzelnen Körper.** Eine Baugruppe trägt die Namen
-                # ihrer Teile in der Datei, und ``load`` nimmt den Parameter
-                # dort gar nicht an — er wäre ein Name für dreißig Körper.
-                **(own_name if parts == 1 else {}),
+                # Eine Nummer statt eines Namens (``_own_name``): Sie gilt
+                # jedem Körper, den die Datei bringt, auch einer Baugruppe.
+                **_own_name(name, taken, loads=True),
                 **({"place_on_bed": True, "centre": True} if first_model else {}),
             },
             produces=max(parts, 1),

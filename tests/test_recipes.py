@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 
 from app.core.bootstrap import load_operations
-from app.core.errors import ValidationError
+from app.core.errors import KEEP_SAVED_PARTS, ValidationError
 from app.core.geom.mesh import as_mesh_data
 from app.core.knowledge import profiles
 from app.core.knowledge.parts import ops as part_ops
@@ -1602,9 +1602,9 @@ def _run_the_second_project(
     reopened = load(target)
     findings = part_check.check(reopened.document, parts2)
     assert any(
-        finding.code == "parts.own_changed" and "mein_klotz" in str(finding.values.get("parts"))
+        finding.code == "parts.own_changed" and str(made.title) in str(finding.values.get("parts"))
         for finding in findings
-    ), "ein geändertes Rezept muss sich beim Öffnen melden (§24.4)"
+    ), "ein geändertes Rezept muss sich beim Öffnen melden (§24.4), mit seinem Titel"
 
     # Und die Gegenrichtung: unverändert heißt still.
     parts3 = PartRegistry()
@@ -1877,14 +1877,145 @@ def test_a_local_part_beats_the_travelled_one(profile: Profile, tmp_path: Path) 
         assert arrived.source == "travelled", "der mitgereiste bekommt einen eigenen Namen"
 
         findings = part_check.check(loaded.document)
-        assert any(entry.code == "parts.travelled_shadowed" for entry in findings), (
-            "der Kunde erfährt, dass sein Stand gilt und der mitgereiste daneben steht"
-        )
-        assert any(entry.code == "parts.own_changed" for entry in findings), (
-            "und §24.4 meldet, dass anders gerechnet wird als beim Absender"
-        )
+        changed = [entry for entry in findings if entry.code == "parts.own_changed"]
+        assert len(changed) == 1, "§24.4 meldet, dass anders gerechnet wird als beim Absender"
+        # Der mitgereiste ist der gespeicherte Stand: Derselbe Befund bietet
+        # ihn an (RM-138), statt in einer zweiten Zeile zu sagen, dass er im
+        # Katalog daneben steht.
+        assert changed[0].suggestions == (KEEP_SAVED_PARTS,)
+        assert changed[0].values["parts"] == "Probehalter", "der Titel, nicht die Kennung"
+        assert not any(entry.code == "parts.travelled_shadowed" for entry in findings)
     finally:
         _clean_globals("probe_halter", "probe_halter_travelled")
+
+
+def _plate_with_halter(width_default: float, profile: Profile) -> recipe.Recipe:
+    """Das Probe-Rezept mit einer eigenen Vorgabebreite — ein anderer Stand."""
+    return recipe.capture(
+        _document(),
+        {},
+        name="probe_halter",
+        title="Probehalter",
+        group="structure",
+        op_ids=(1,),
+        exposed=(
+            recipe.ExposedParam(
+                name="w", title="Breite", default=width_default, minimum=10.0, maximum=90.0
+            ),
+        ),
+        features={"top": "face_top"},
+        profile=profile,
+    )
+
+
+def test_the_saved_state_of_an_own_part_can_be_chosen_again(
+    profile: Profile, tmp_path: Path
+) -> None:
+    """§24.4, RM-138: Beim Öffnen lässt sich der gespeicherte Stand wählen.
+
+    Ein eigenes Rezept wurde nach dem Speichern geändert (Vorgabebreite 30 →
+    50). Das Projekt rechnet zuerst mit dem lokalen Stand („lokal schlägt
+    mitgereist"); die Datei bringt den gespeicherten mit, und ein Schritt im
+    Verlauf rechnet wieder mit ihm — reproduzierbar über Speichern und
+    Öffnen, rücknehmbar mit einem Strg+Z.
+    """
+    from app.core.knowledge.parts import check as part_check
+    from app.core.knowledge.parts.registry import PARTS
+    from app.core.scene import History, evaluate
+    from app.core.scene.project import Project, ProjectSources, load, save
+
+    def volume(project: Project) -> float:
+        result = evaluate(project.document, profile, sources=ProjectSources(project))
+        assert result.complete, result.stopped_at
+        return float(result.scene.objects["obj_1"].mesh.volume)
+
+    try:
+        recipe.register(_plate_with_halter(30.0, profile))
+        document = _document()
+        document.ops[0] = dataclasses.replace(
+            document.ops[0],
+            params={"width": 100.0, "depth": 100.0, "height": 3.0, "anchor": "corner"},
+        )
+        halter = Operation(
+            id=2,
+            op=part_ops.op_name("probe_halter"),
+            inputs=("obj_1",),
+            outputs=("obj_1",),
+            params={"z": 3.0},
+        )
+        document.ops.extend(
+            [halter, dataclasses.replace(halter, id=3, params={"z": 3.0, "x": 60.0})]
+        )
+        saved = tmp_path / "halter.p3d"
+        save(Project(document=document), saved)
+        as_saved = volume(load(saved))
+
+        # Später: das Rezept geändert, das Projekt wieder geöffnet.
+        _clean_globals("probe_halter")
+        recipe.register(_plate_with_halter(50.0, profile))
+        opened = load(saved)
+        assert volume(opened) > as_saved, "zuerst gilt der lokale, breitere Stand"
+        assert part_check.saved_states(opened.document) == {
+            "probe_halter": "probe_halter_travelled"
+        }
+
+        history = History(opened.document)
+        before = len(opened.document.transactions)
+        transaction = part_check.keep_saved(history)
+        assert transaction is not None
+        assert len(opened.document.transactions) == before + 1, "eine Transaktion für beide"
+        assert [entry.op for entry in opened.document.ops[1:]] == [
+            "insert_probe_halter_travelled"
+        ] * 2
+        assert volume(opened) == pytest.approx(as_saved)
+        assert not any(
+            entry.code == "parts.own_changed" for entry in part_check.check(opened.document)
+        )
+
+        # Reproduzierbar: gespeichert und auf einem frischen Katalog geöffnet.
+        again = tmp_path / "wieder.p3d"
+        save(opened, again)
+        _clean_globals("probe_halter_travelled")
+        reopened = load(again)
+        assert PARTS.get("probe_halter").version != PARTS.get("probe_halter_travelled").version
+        assert volume(reopened) == pytest.approx(as_saved)
+
+        # Und ein Strg+Z führt vollständig zum neuen Stand zurück.
+        history.undo()
+        assert [entry.op for entry in opened.document.ops[1:]] == ["insert_probe_halter"] * 2
+        assert volume(opened) > as_saved
+    finally:
+        _clean_globals("probe_halter", "probe_halter_travelled")
+
+
+def test_a_changed_own_part_without_its_saved_state_is_explained_not_offered(
+    profile: Profile, tmp_path: Path
+) -> None:
+    """Fehlt der gespeicherte Stand, ist der neue eine Migration (§24.4, RM-138).
+
+    Hier: ein Projekt, das keinen Rezepttext mitbringt — der Abdruck sagt,
+    dass sich etwas geändert hat, aber es gibt nichts, womit man zurück
+    könnte. Der Befund sagt das und bietet keinen Knopf ohne Wirkung an.
+    """
+    from app.core.knowledge.parts import check as part_check
+    from app.core.knowledge.parts.user import FINGERPRINT_KEY
+
+    try:
+        recipe.register(_plate_with_halter(50.0, profile))
+        document = _document()
+        document.ops.append(
+            Operation(id=2, op=part_ops.op_name("probe_halter"), outputs=("obj_2",), params={})
+        )
+        document.libs[f"{FINGERPRINT_KEY}probe_halter"] = "0" * 12
+        findings = [
+            entry for entry in part_check.check(document) if entry.code == "parts.own_changed"
+        ]
+        assert len(findings) == 1
+        assert findings[0].suggestions == ()
+        assert "nicht mehr vor" in str(findings[0].message)
+        assert part_check.saved_states(document) == {}
+    finally:
+        _clean_globals("probe_halter")
 
 
 def test_the_same_recipe_arrives_silently(profile: Profile, tmp_path: Path) -> None:

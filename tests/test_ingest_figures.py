@@ -49,6 +49,91 @@ def test_a_triangle_soup_is_welded_before_anyone_asks_whether_it_is_closed(monke
     )
 
 
+def test_a_mesh_with_shared_corners_asks_once_whether_it_is_closed(monkeypatch) -> None:
+    """Eine OBJ, PLY oder GLB bringt ihre Punkte geteilt mit: eine Frage nach der Dichtheit.
+
+    Die Gegenprobe zu den zwei Fällen darunter (Durchsicht 0.5.0, Zusatz aus dem
+    Paket „netzkern"): Legt das Verschweißen nichts zusammen, bleibt es bei
+    einer Frage — auch nachdem das Einlesen nicht mehr vor dem Verschweißen
+    fragt. Am 1,2-M-Netz kostet jede Frage eine halbe Sekunde.
+    """
+    from app.core.geom.mesh import MeshData
+
+    calls = _counting_watertight(monkeypatch)
+    ball = trimesh.creation.icosphere(subdivisions=3, radius=20.0)
+    assert len(ball.vertices) < len(ball.faces), "geteilte Ecken, keine Suppe"
+
+    result = normalise(MeshData.of(ball), "mm")
+
+    assert result.mesh.is_watertight
+    assert result.mesh.volume == ball.volume
+    assert len(calls) == 1, f"{len(calls)} Fragen nach der Dichtheit"
+
+
+def _counting_watertight(monkeypatch) -> list[int]:
+    calls: list[int] = []
+    original = trimesh.graph.is_watertight
+
+    def counted(*args, **kwargs):
+        calls.append(1)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(trimesh.graph, "is_watertight", counted)
+    return calls
+
+
+def test_a_weld_that_closes_the_mesh_is_asked_about_once(monkeypatch) -> None:
+    """Doppelte Punkte, die das Verschweißen schließt: eine Frage, nicht zwei.
+
+    Gefragt wurde vorher am unverschweißten Netz, ob es dicht war — die
+    Antwort zählt aber nur, wenn das Verschweißen das Netz aufreißt. Jetzt
+    fragt das Einlesen erst am verschweißten Netz und nur bei „offen" noch
+    einmal zurück (Durchsicht 0.5.0, Zusatz aus dem Paket „netzkern").
+    """
+    import numpy as np
+
+    from app.core.geom.mesh import MeshData
+
+    ball = trimesh.creation.icosphere(subdivisions=3, radius=20.0)
+    # Die Hälfte der Dreiecke bekommt eigene Kopien ihrer Ecken: offen vor
+    # dem Verschweißen, geschlossen danach.
+    faces = np.asarray(ball.faces).copy()
+    half = len(faces) // 2
+    extra = np.asarray(ball.vertices)[faces[:half].ravel()]
+    faces[:half] = np.arange(len(extra)).reshape(-1, 3) + len(ball.vertices)
+    split = trimesh.Trimesh(vertices=np.vstack([ball.vertices, extra]), faces=faces, process=False)
+    assert not split.is_watertight
+    calls = _counting_watertight(monkeypatch)
+
+    result = normalise(MeshData.of(split), "mm")
+
+    assert result.mesh.is_watertight
+    assert len(calls) == 1, f"{len(calls)} Fragen nach der Dichtheit"
+
+
+def test_a_weld_that_is_taken_back_keeps_its_answer(monkeypatch) -> None:
+    """Zurückgenommenes Verschweißen: Die Antwort des alten Netzes geht mit zurück.
+
+    Das zurückgelegte Netz ist eine Kopie ohne Cache; die Frage „dicht?", deren
+    Antwort gerade feststand, stellte ``fix_inversion`` am 1,2-M-Bett ein
+    drittes Mal (Durchsicht 0.5.0).
+    """
+    from app.core.geom.mesh import MeshData
+
+    left = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+    right = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+    right.apply_translation((10.0, 0.0, 0.0))
+    touching = trimesh.util.concatenate([left, right])
+    assert touching.is_watertight
+    calls = _counting_watertight(monkeypatch)
+
+    result = normalise(MeshData.of(touching), "mm")
+
+    assert "ingest.weld_skipped" in [finding.code for finding in result.findings]
+    assert result.mesh.is_watertight
+    assert len(calls) == 2, f"{len(calls)} Fragen nach der Dichtheit"
+
+
 def test_the_figures_the_window_reads_are_already_known_after_normalise() -> None:
     mesh = read_mesh((MESHES / "plate_holes.stl").read_bytes(), ".stl")
     result = normalise(mesh, "mm", weld_is_reading=True)

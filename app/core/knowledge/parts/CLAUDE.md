@@ -263,6 +263,18 @@ Qt-Objekte finalisieren; deren Lebenszeitbereinigung bleibt bei der Oberfläche.
 Baustein hat sich geändert". `AGENTS.md` sagt verkürzt „`parts_version`
 erhöhen"; gemeint ist die Konstante der Bibliothek.
 
+**Die Wahl beim Öffnen (§24.4, RM-138)** gibt es, wo ein alter Stand
+vorliegt: Den gespeicherten Stand eines eigenen Rezepts bringt die
+Projektdatei mit (`recipe.for_container`), `adopt` registriert ihn neben
+einem geänderten lokalen als `<name>_travelled`. `check.saved_states`
+findet ihn über den gespeicherten Abdruck — verglichen unter dem Namen im
+Stapel, denn der Name steckt im Hash —, und der Befund `parts.own_changed`
+bietet `KEEP_SAVED_PARTS` an. `check.keep_saved` stellt alle Schritte in
+einer Transaktion um (`History.use_part_states`). Die Bibliothek führt keine
+alten Stände, eine eigene `.py` reist nie mit: Dort erklärt der Befund den
+neuen Stand als Migration und bietet nichts an. Befunde nennen Bausteine mit
+Katalogtitel (`_titles`), nie mit Kennung.
+
 ## Material, Messkörper und Reise
 
 Beim Einsetzen bestimmt `profiles.for_object` das Material des Zielkörpers,

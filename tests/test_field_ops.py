@@ -361,3 +361,71 @@ def test_field_on_a_tilted_mesh_face_obeys_its_real_frame():
     )
     area = 36 * math.sin(math.tau / 72)
     assert 8000 - result.outputs[0].mesh.volume == pytest.approx(9 * area * 4, rel=1e-7)
+
+
+def test_a_field_drawn_on_a_derived_plane_follows_its_parameters(profile):
+    """Ein Feldschnitt auf einer Versatzebene über einer Fläche (RM-188 P3.2).
+
+    Durchsicht 0.5.0: Die Zeichnung auf ``offset:<Deckfläche>:@d`` schnitt,
+    und danach warf die Benennung der Bohrungen einen ``AssertionError`` —
+    sie fragte den Rahmen der Ebene ohne die Projektparameter, und ohne die
+    ist ``@d`` keine Zahl. Der Kunde sah „Im Programm ist ein unerwarteter
+    Fehler aufgetreten". Gerechnet wird mit demselben Rahmen wie der Schnitt,
+    und nach jeder Änderung von Abstand oder Körperhöhe steht warm dasselbe da
+    wie kalt.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.scene import ResultCache, evaluate
+    from app.core.scene.migrations import FORMAT_VERSION
+    from app.core.sketch.planes import feature_plane, offset_plane
+    from app.core.types import Document, Operation
+
+    load_operations()
+    plane = offset_plane(feature_plane("body", "face_top"), "@d")
+    document = Document(
+        format_version=FORMAT_VERSION,
+        app_version="0.0.0",
+        parameters={"h": Parameter("h", 20.0), "d": Parameter("d", 0.0)},
+        ops=[
+            Operation(
+                id=1,
+                op="create_box",
+                outputs=("body",),
+                params={"width": 40.0, "depth": 40.0, "height": "@h", "anchor": "corner"},
+            ),
+            Operation(
+                id=2,
+                op="field_cut",
+                inputs=("body",),
+                outputs=("body",),
+                params={
+                    "region_sketch": sketch_to_text(replace(shapes.rectangle(30, 30), plane=plane)),
+                    "diameter": 3.0,
+                    "spacing": 8.0,
+                    "depth": 4.0,
+                    "margin": 1.0,
+                    "web": 1.0,
+                },
+            ),
+        ],
+    )
+
+    def figures(result):
+        body = result.scene.objects["body"]
+        return (
+            round(float(body.mesh.volume), 6),
+            tuple(round(value, 6) for value in body.mesh.bounds.minimum),
+            tuple(round(value, 6) for value in body.mesh.bounds.maximum),
+            sorted(name for name in body.features if name.startswith("field_")),
+        )
+
+    cache = ResultCache()
+    first = evaluate(document, profile=profile, cache=cache)
+    assert first.complete, [entry.code for entry in first.scene.report.findings]
+    assert figures(first)[3], "die Bohrungen tragen ihre Namen"
+    for name, value in (("d", 1.0), ("h", 26.0), ("d", 2.0)):
+        document.parameters[name] = Parameter(name, value)
+        warm = evaluate(document, profile=profile, cache=cache)
+        cold = evaluate(document, profile=profile)
+        assert warm.complete and cold.complete
+        assert figures(warm) == figures(cold), (name, value)

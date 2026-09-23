@@ -18,9 +18,13 @@ from pathlib import Path
 import pytest
 
 from app.core.bootstrap import load_operations
-from app.core.scene import bundling, project
+from app.core.knowledge import profiles
+from app.core.scene import bundling, evaluate, project
 from app.core.scene.history import History, OperationDraft
 from app.core.scene.project import new_project
+from app.core.types import Source
+
+MESHES = Path(__file__).parent / "data" / "meshes"
 
 
 @pytest.fixture
@@ -125,16 +129,25 @@ def test_two_turns_about_different_axes_stay_two_steps(history: History) -> None
 
 
 def test_two_turns_about_the_same_axis_become_one(history: History) -> None:
-    """Um dieselbe Achse dagegen ist es eine Winkelsumme."""
+    """Um dieselbe Achse und denselben festen Punkt ist es eine Winkelsumme.
+
+    Der Punkt ist genannt, wie ihn der Griff für mehrere gewählte Körper
+    schickt. Bis zur Durchsicht 0.5.0 drehte dieser Test um die eigene Mitte
+    und bestand an einem Würfel — dem einen Körper, dessen Mitte beim Drehen
+    stehen bleibt (siehe den Test darunter).
+    """
     target = _box(history)
     vorher = len(history.document.transactions)
+    point = {"about": "point", "pivot_x": 12.0, "pivot_y": -3.0, "pivot_z": 5.0}
 
     for angle in (30.0, 15.0):
         history.apply(
             "Direkt bewegt",
             [
                 OperationDraft(
-                    op="rotate_object", inputs=(target,), params={"axis": "z", "angle": angle}
+                    op="rotate_object",
+                    inputs=(target,),
+                    params={"axis": "z", "angle": angle, **point},
                 )
             ],
             bundle=True,
@@ -142,6 +155,157 @@ def test_two_turns_about_the_same_axis_become_one(history: History) -> None:
 
     assert len(history.document.transactions) == vorher + 1
     assert history.document.ops[-1].params["angle"] == pytest.approx(45.0)
+
+
+def _turned_bracket(about: str, *, bundle: bool) -> tuple[int, tuple[float, float, float]]:
+    """Ein unsymmetrisches Teil, zweimal um Z gedreht — Zahl der Schritte und Mitte danach."""
+    load_operations()
+    body = new_project("centauri-carbon-2", "petg")
+    body.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/bracket_inch.stl", sha256=""
+    )
+    body.sources["src_1"] = (MESHES / "bracket_inch.stl").read_bytes()
+    history = History(body.document)
+    history.apply("Laden", [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})])
+    before = len(history.document.transactions)
+    for angle in (30.0, 15.0):
+        history.apply(
+            "Direkt bewegt",
+            [
+                OperationDraft(
+                    op="rotate_object",
+                    inputs=("obj_1",),
+                    params={"axis": "z", "angle": angle, "about": about},
+                )
+            ],
+            bundle=bundle,
+        )
+    result = evaluate(
+        body.document,
+        profiles.make_profile("centauri-carbon-2", "petg"),
+        sources=project.ProjectSources(body),
+    )
+    assert result.complete, result.scene.report.findings
+    centre = result.scene.objects["obj_1"].mesh.bounds.centre
+    return len(history.document.transactions) - before, (
+        float(centre[0]),
+        float(centre[1]),
+        float(centre[2]),
+    )
+
+
+@pytest.mark.parametrize("about", ["centre", "bed"])
+def test_turning_twice_about_the_body_ends_where_the_steps_end(about: str) -> None:
+    """Gebündelt oder nicht — das Teil steht danach an derselben Stelle.
+
+    **Die Mitte eines Körpers ist kein fester Punkt.** ``centre`` ist die
+    Mitte des Hüllquaders, und nach 30° um Z liegt sie bei einem
+    unsymmetrischen Teil woanders: Der zweite Zug dreht um den neuen Punkt, die
+    Summe von 45° drehte um den alten. Am Keil ``Wedge-Lock (Base)`` lagen die
+    Mitten danach 1,3 mm auseinander — das Teil sprang beim Loslassen des
+    zweiten Zugs weg von der Stelle, die die Vorschau zeigte. Rot bis zur
+    Durchsicht 0.5.0; seitdem wird daraus ein zweiter Schritt.
+    """
+    steps, separate = _turned_bracket(about, bundle=False)
+    bundled_steps, bundled = _turned_bracket(about, bundle=True)
+
+    assert steps == 2
+    assert bundled == pytest.approx(separate, abs=1e-6), (
+        f"gebündelt steht das Teil bei {bundled}, Schritt für Schritt bei {separate}"
+    )
+    assert bundled_steps == 2, "eine Drehung um die eigene Mitte wurde zur Winkelsumme"
+
+
+def _dragged_box(
+    drags: tuple[tuple[float, bool], ...], *, bundle: bool
+) -> tuple[int, float, list[bool]]:
+    """Ein Quader, so gezogen, wie die Sitzung Züge annimmt.
+
+    Vor jedem Zug fragt die Sitzung :func:`bundling.stays_exact` an der
+    aktuellen Szene und schließt das Bündel, wenn der vorige Zug nachgeführt
+    wurde (``Session._bundle_stays_exact``). Genau diesen Weg geht die Hilfe,
+    ohne Fenster. Zurück kommen die Zahl der Schritte, die Mitte in X und die
+    Antworten der Prüfung.
+    """
+    load_operations()
+    body = new_project("centauri-carbon-2", "petg")
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    history = History(body.document)
+    history.apply(
+        "Kasten",
+        [OperationDraft(op="create_box", params={"width": 20.0, "depth": 20.0, "height": 8.0})],
+    )
+    before = len(history.document.transactions)
+    answers: list[bool] = []
+    for index, (dx, keep) in enumerate(drags):
+        # Vor dem ersten Zug gibt es kein Bündel, das weitergehen könnte.
+        if bundle and index > 0:
+            scene = evaluate(body.document, profile, sources=project.ProjectSources(body)).scene
+            ids = history.document.transactions[-1].ops
+            last = [entry for entry in history.document.ops if entry.id in ids]
+            answers.append(bundling.stays_exact(last, scene))
+            if not answers[-1]:
+                history.end_bundle()
+        history.apply(
+            "Direkt bewegt",
+            [
+                OperationDraft(
+                    op="translate_object",
+                    inputs=("obj_1",),
+                    params={"dx": dx, "dy": 0.0, "dz": 0.0, "keep_on_bed": keep},
+                )
+            ],
+            bundle=bundle,
+        )
+    result = evaluate(body.document, profile, sources=project.ProjectSources(body))
+    assert result.complete, result.scene.report.findings
+    centre = float(result.scene.objects["obj_1"].mesh.bounds.centre[0])
+    return len(history.document.transactions) - before, centre, answers
+
+
+def test_a_drag_brought_back_onto_the_bed_ends_the_bundle() -> None:
+    """Wer über den Rand zieht und zurück, steht, wo die Schritte ihn hinstellen.
+
+    Gemessen vor der Durchsicht 0.5.0: 300 mm nach rechts, *Auf dem Bett
+    halten* schiebt zurück; dann 50 mm nach links. Einzeln stand der Quader bei
+    68 mm, gebündelt bei 118 mm — die Summe von 250 mm wurde als ein Zug noch
+    einmal zurückgeschoben, und der Rückweg des ersten ging verloren.
+    """
+    drags = ((300.0, True), (-50.0, True))
+    _steps, separate, _answers = _dragged_box(drags, bundle=False)
+    steps, bundled, answers = _dragged_box(drags, bundle=True)
+
+    assert bundled == pytest.approx(separate, abs=1e-6)
+    assert answers == [False], "der zurückgeschobene Zug hätte das Bündel schließen müssen"
+    assert steps == 2
+
+
+def test_a_drag_that_stays_on_the_bed_still_bundles() -> None:
+    """Die Gegenprobe: Bleibt der Körper auf der Fläche, bleibt es ein Schritt."""
+    drags = ((30.0, True), (-10.0, True))
+    _steps, separate, _answers = _dragged_box(drags, bundle=False)
+    steps, bundled, answers = _dragged_box(drags, bundle=True)
+
+    assert bundled == pytest.approx(separate, abs=1e-6)
+    assert answers == [True]
+    assert steps == 1
+
+
+def test_a_parked_body_pulled_onto_the_bed_ends_the_bundle() -> None:
+    """Ein geparkter Körper, auf das Bett gezogen: Der nächste Zug beginnt neu.
+
+    *Auf dem Bett halten* hält nur, wer vor dem Zug auf der Fläche stand. Der
+    Quader wird erst ohne den Haken neben das Bett gestellt, dann mit dem
+    Griff auf die Fläche gezogen und ein zweites Mal über den Rand. Einzeln
+    holt der zweite Zug ihn zurück — seine Eingabe stand auf dem Bett.
+    Gebündelt fragte die Summe am geparkten Eingang und ließ ihn draußen.
+    """
+    drags = ((400.0, False), (-400.0, True), (300.0, True))
+    _steps, separate, _answers = _dragged_box(drags, bundle=False)
+    _bundled_steps, bundled, answers = _dragged_box(drags, bundle=True)
+
+    assert bundled == pytest.approx(separate, abs=1e-6)
+    assert answers[-1] is False
 
 
 def test_scaling_does_not_bundle_yet(history: History) -> None:
@@ -290,3 +454,48 @@ def test_a_step_without_the_offer_is_never_changed_afterwards(history: History) 
     assert history.document.ops[-2].params["dx"] == pytest.approx(3.0), (
         f"der Dialogschritt wurde nachträglich verändert: {history.document.ops[-2].params}"
     )
+
+
+def test_only_the_summed_values_may_differ(history: History) -> None:
+    """Was nicht summiert wird, muss gleich sein — sonst ein eigener Schritt.
+
+    Bis zur Durchsicht 0.5.0 verglich die Bündelung nur den Anker und nahm
+    alle übrigen Werte vom älteren Zug: Ein Schritt ohne *Auf dem Bett halten*
+    schluckte einen Zug mit dem Haken, und der Haken war weg. Ein fehlender
+    Wert gilt dabei als seine Vorgabe — weggelassen ist dasselbe wie ``False``.
+    """
+    target = _box(history)
+    vorher = len(history.document.transactions)
+
+    _shift(history, target, 3.0)
+    history.apply(
+        "Direkt bewegt",
+        [
+            OperationDraft(
+                op="translate_object",
+                inputs=(target,),
+                params={"dx": 4.0, "keep_on_bed": True},
+            )
+        ],
+        bundle=True,
+    )
+
+    assert len(history.document.transactions) == vorher + 2, (
+        "ein Zug mit dem Haken ging im Schritt ohne ihn auf"
+    )
+    assert history.document.ops[-1].params.get("keep_on_bed") is True
+
+    history.apply(
+        "Direkt bewegt",
+        [
+            OperationDraft(
+                op="translate_object",
+                inputs=(target,),
+                params={"dx": 1.0, "keep_on_bed": True},
+            )
+        ],
+        bundle=True,
+    )
+    assert len(history.document.transactions) == vorher + 2
+    assert history.document.ops[-1].params["dx"] == pytest.approx(5.0)
+    assert bundling.merge_params("translate_object", {"dx": 1.0}, {"dx": 2.0, "keep_on_bed": False})

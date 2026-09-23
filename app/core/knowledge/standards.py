@@ -46,6 +46,16 @@ class Screw:
     countersink: float
     hex: float
     pitch: float
+    clearance_fine: float | None = None
+    """Durchgangsloch, feine Reihe (ISO 273) — ``None``, wo die Tabelle es nicht führt."""
+    clearance_coarse: float | None = None
+    """Durchgangsloch, grobe Reihe (ISO 273).
+
+    Die beiden Reihen braucht die **Einschätzung** einer gemessenen Bohrung
+    (``scene.placement.bore_matches``): Eine Bohrung von 5,7 mm ist das grobe
+    Durchgangsloch einer M5 und keine Bohrung „zwischen zwei Größen". Die
+    Zuordnung eines exakten Maßes bleibt bei ``clearance`` (mittlere Reihe).
+    """
 
 
 @dataclass(frozen=True, slots=True)
@@ -293,6 +303,23 @@ def _validate(tables: Tables, source: Path) -> None:
             "tap_nominal_clearance",
             source,
         )
+        # Die feine und die grobe Reihe liegen um die mittlere herum, und die
+        # feine noch über dem Nennmaß — sonst ginge die Schraube nicht hindurch.
+        series = [measures["nominal"]]
+        if screw.clearance_fine is not None:
+            series.append(
+                _finite_positive(
+                    screw.clearance_fine, "screws", screw.size, "clearance_fine", source
+                )
+            )
+        series.append(measures["clearance"])
+        if screw.clearance_coarse is not None:
+            series.append(
+                _finite_positive(
+                    screw.clearance_coarse, "screws", screw.size, "clearance_coarse", source
+                )
+            )
+        _ordered(tuple(series), "screws", screw.size, "clearance_series", source)
         if measures["head"] < measures["nominal"] or measures["countersink"] < measures["head"]:
             raise _invalid("screws", screw.size, "head_diameters", source)
 

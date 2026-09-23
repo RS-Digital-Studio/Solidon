@@ -540,6 +540,10 @@ def _evaluate(
                 else profile
                 for name in spec.material_params
             }
+            # Und das Material jedes Eingangs, wo es nicht das des Projekts
+            # ist: Bohren, Deckel, Bausteine und das Lochfeld rechnen Spiel und
+            # Lochzugabe mit dem Profil des Körpers (``profiles.for_object``).
+            material_profiles.update(_body_profiles(profile, inputs))
             # Ausdrücklich gewählte Kanten werden **vor** dem Cache am
             # aktuellen Eingang gebunden — eine Kollision fragt hier, und die
             # gebundene Auswahl geht in den Schlüssel: Eine andere Antwort ist
@@ -860,6 +864,32 @@ def _evaluate(
                     # Verweisfilter muss diese Bezüge kennen, damit er sie
                     # nicht an der alten Szene für aufgelöst hält.
                     blocked.extend(error.references)
+                stopped_at = operation.id
+                break
+            except OperationCancelled:
+                raise
+            except Exception as problem:
+                # **Derselbe Fang wie um die Operation darüber** (Durchsicht
+                # 0.5.0). Gefangen war hier nur ``AppError``; ein
+                # ``MemoryError`` der Erkennung am Puppenhausbett (1,2
+                # Millionen Dreiecke aus Weg 3) flog aus ``evaluate`` heraus,
+                # und im Fenster blieb ein abgestürzter Arbeiter statt eines
+                # Prüfberichts mit dem Schritt, an dem es lag.
+                _log.error(
+                    "features of op %s (%s) raised %s: %s",
+                    operation.id,
+                    operation.op,
+                    type(problem).__name__,
+                    problem,
+                    exc_info=problem,
+                )
+                del findings[output_findings_start:]
+                wrapped = InternalError(
+                    detail=f"{type(problem).__name__}: {problem}",
+                    values={"operation": str(operation.op)},
+                    op_id=operation.id,
+                )
+                findings.append(_finding_from(wrapped, operation))
                 stopped_at = operation.id
                 break
             else:
@@ -1909,7 +1939,7 @@ def _answer_matches(
                     ).format(names=", ".join(claims))
                 question += "\n\n" + tr(
                     "Bei „Nicht weiterführen“ bleiben Verweise auf dieses Merkmal ungeklärt. "
-                    "Ordne sie in den betroffenen Folgeschritten neu zu."
+                    "Ordnen Sie sie in den betroffenen Folgeschritten neu zu."
                 )
                 try:
                     if question_context is not None:
@@ -2837,6 +2867,39 @@ class _WatchedAsk:
     def __call__(self, question: str, choices: list[str]) -> str:
         self.used = True
         return self._ask(question, choices)
+
+
+def _body_profiles(profile: Profile, inputs: Sequence[SceneObject]) -> dict[str, Profile]:
+    """Das Druckprofil jedes Eingangs, der nicht im Projektmaterial gedruckt wird.
+
+    **Für den Schlüssel, weil die Operationen es lesen.** Ein Körper trägt sein
+    eigenes Material (*Material wählen*, oder die Spule seines Slots), und wer
+    daran eine Länge aus dem Material rechnet — die Lochzugabe beim Bohren, das
+    Spiel eines Deckels, die Bohrung eines Bausteins, das Lochfeld —, fragt
+    ``profiles.for_object`` statt das Projektprofil. Der Schlüssel kannte davon
+    nur die Materialkennung, die im Parameter des früheren Schritts steht,
+    nicht die Werte dahinter: Nach dem Kalibrieren des Körpermaterials kam die
+    Bohrung mit der alten Zugabe aus dem Cache — gemessen Ø 5,2 statt 5,6 an
+    PETG in einem PLA-Projekt, über das Schließen hinaus (Durchsicht 0.5.0,
+    22.09.2026).
+
+    Aufgenommen wird je Eingang an seiner Stelle, nicht an seiner Kennung:
+    Derselbe Schritt an einem anderen Körper desselben Materials ist derselbe
+    Schlüssel. Ein Material, das dieser Rechner nicht kennt, bleibt draußen —
+    liest die Operation es, hält sie selbst mit dem Satz dazu an, und liest sie
+    es nicht, darf ihr Ergebnis nicht daran scheitern.
+    """
+    from app.core.knowledge.profiles import for_object
+
+    found: dict[str, Profile] = {}
+    for index, entry in enumerate(inputs):
+        try:
+            own = for_object(profile, entry)
+        except AppError:
+            continue
+        if own is not profile:
+            found[f"#input{index}"] = own
+    return found
 
 
 def _key_after_answers(

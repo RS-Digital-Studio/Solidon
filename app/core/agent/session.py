@@ -60,6 +60,7 @@ from app.core.registry import GATHERED_KINDS, REGISTRY, Registry, validate
 from app.core.scene.evaluate import EvaluationResult, evaluate
 from app.core.scene.history import History, OperationDraft
 from app.core.types import (
+    AUTO_TOLERANCE_PREFIX,
     FIT_KINDS,
     CancelToken,
     Document,
@@ -819,7 +820,7 @@ class AgentSession:
 
     def _fit(self, arguments: dict[str, Any], proposal: Proposal, working: Document) -> str:
         try:
-            fit = build_fit(arguments, self.profile.material.id, len(working.fits))
+            fit = build_fit(arguments, len(working.fits))
         except ValueError as error:
             proposal.invalid_calls += 1
             return str(error)
@@ -944,7 +945,7 @@ class AgentSession:
     def _label_for(self, name: str) -> str:
         """Was in der Statuszeile steht, während dieses Werkzeug läuft."""
         extras = {
-            ASK_USER: tr("Rückfrage an dich"),
+            ASK_USER: tr("Rückfrage an Sie"),
             UNDO_TRANSACTION: tr("Merkt eine Rücknahme vor"),
             ADD_PARAMETER: tr("Legt einen Parameter an"),
             SET_PARAMETER: tr("Ändert einen Parameter"),
@@ -1036,13 +1037,19 @@ def parse_number(value: Any) -> float:
     return number
 
 
-def build_fit(arguments: dict[str, Any], material_id: str, taken: int) -> Fit:
+def build_fit(arguments: dict[str, Any], taken: int) -> Fit:
     """Ein Passungspaar aus Werkzeugargumenten — geprüft, mit Verweis-Toleranz.
 
     Der Enum steht im Werkzeugschema, aber ein Schema ist eine Bitte, keine
     Zusage: eine unbekannte Art landete sonst in der Projektdatei und erst
     bei der nächsten Auswertung als KeyError. Sitzung und Fernsteuerung
     bauten diesen Fit je einmal — jetzt einmal hier (Konzept 2.4).
+
+    **Die Toleranz nennt kein Material** (``auto:``). Das Werkzeug fragt
+    keines ab; bis zur Durchsicht 0.5.0 schrieb es das Projektmaterial des
+    Augenblicks fest, und nach einem Materialwechsel prüfte die Passung gegen
+    ein Material, das niemand mehr druckt. Ohne Kennung folgt sie den Körpern,
+    die sie verbindet (``scene.fits._wanted``).
     """
     try:
         first = FeatureRef.parse(str(arguments.get("a", "")))
@@ -1058,7 +1065,7 @@ def build_fit(arguments: dict[str, Any], material_id: str, taken: int) -> Fit:
         a=first,
         b=second,
         kind=cast(FitKind, kind),
-        tolerance=f"auto:{material_id}",
+        tolerance=AUTO_TOLERANCE_PREFIX,
     )
 
 

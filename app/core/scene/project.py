@@ -31,6 +31,7 @@ import secrets
 import tempfile
 import unicodedata
 import zipfile
+import zlib
 from collections.abc import Mapping
 from contextlib import suppress
 from dataclasses import dataclass, field
@@ -106,6 +107,10 @@ MAX_PROJECT_SOURCES: Final = 10_000
 MAX_PROJECT_FITS: Final = 100_000
 MAX_PROJECT_TRANSACTIONS: Final = 100_000
 MAX_PROJECT_CHAT_ENTRIES: Final = 100_000
+#: Mitgenommene eigene Profile je Art (``Document.carried_profiles``). Ein
+#: Projekt nennt einen Drucker und wenige Materialien; mehr ist keine
+#: Projektdatei, sondern ein Profilarchiv.
+MAX_CARRIED_PROFILES: Final = 100
 MAX_REPORT_FINDINGS: Final = 100_000
 #: Die Summe über **alle** verknüpften Quellen — dieselbe Regel wie für die
 #: eingebetteten und aus demselben Grund. Sie stand bis zum 02.09.2026 auf der
@@ -573,7 +578,11 @@ def _read_archive_entry(
     try:
         with container.open(info, "r") as stream:
             payload = stream.read(limit + 1)
-    except (EOFError, NotImplementedError, RuntimeError) as problem:
+    # ``zlib.error`` ist der Fall einer verstümmelten Datei: Ein gekipptes Bit
+    # im gepackten Strom endet beim Entpacken darin, bevor die Prüfsumme des
+    # Eintrags gelesen ist — und lief bis zur Durchsicht vor 0.5.0 roh durch
+    # ``load`` hindurch, ohne Satz und ohne Ausweg (Regel 17).
+    except (EOFError, NotImplementedError, RuntimeError, zlib.error) as problem:
         raise ValidationError(
             field="container",
             detail=_("Der Projektinhalt ist beschädigt."),
@@ -1068,6 +1077,18 @@ def _validate_current_project_schema(data: dict[str, Any]) -> None:
     for name in ("transaction", "op", "object"):
         _schema_integer(numbering.get(name, 0), f"numbering.{name}")
 
+    carried = _nested_mapping(data.get("carried_profiles"), "carried_profiles", optional=True)
+    if carried is not None:
+        for kind, entries in carried.items():
+            if kind not in ("printers", "materials"):
+                raise ValueError(f"schema:carried_profiles.{kind}")
+            stored_entries = _nested_mapping(entries, f"carried_profiles.{kind}")
+            assert stored_entries is not None
+            if len(stored_entries) > MAX_CARRIED_PROFILES:
+                raise ValueError(f"schema:carried_profiles.{kind}")
+            for identifier, table in stored_entries.items():
+                _nested_mapping(table, f"carried_profiles.{kind}.{identifier}")
+
     settings = data.get("print_settings")
     if settings is not None:
         stored = _nested_mapping(settings, "print_settings")
@@ -1240,11 +1261,58 @@ def _next_gathered(data: dict[str, Any]) -> int:
 CONTAINER_TIMESTAMP: Final = (1980, 1, 1, 0, 0, 0)
 
 
+#: Das System, das jeder Eintrag als seinen Schreiber nennt: MS-DOS.
+#:
+#: **Nicht das des schreibenden Rechners** (RM-106). ``zipfile.ZipInfo`` setzt
+#: ``create_system`` nach ``sys.platform`` — 0 unter Windows, 3 überall sonst —,
+#: und der Wert steht in jedem Zentralverzeichniseintrag. Dieselbe Speicherung
+#: war damit auf Linux und macOS an diesen Bytes eine andere Datei als auf
+#: Windows, bei gleichem Inhalt. Null, weil die eingecheckten Beispiele auf
+#: Windows entstehen und ihre Bytes so bleiben, wie sie sind; ohne
+#: Dateirechte in ``external_attr`` ist es für jeden Entpacker ein gewöhnlicher
+#: Eintrag.
+CONTAINER_SYSTEM: Final = 0
+
+
 def _write(container: zipfile.ZipFile, name: str, payload: str | bytes) -> None:
-    """Ein Eintrag mit festem Zeitstempel statt der Uhr."""
+    """Ein Eintrag mit festem Zeitstempel statt der Uhr und festem Schreibsystem.
+
+    Was dann noch je Plattform abweichen kann, ist der gepackte Strom selbst:
+    CPython 3.14 packt unter Windows mit zlib-ng, unter Linux und macOS mit dem
+    zlib des Systems, und die beiden legen denselben Inhalt verschieden ab
+    (gemessen an ``weg3-generiert-aufbereiten.p3d``: 788 gegen 790 Byte für
+    ``project.json``, 47 623 gegen 47 374 für das eingebettete Netz). Der
+    Vertrag steht deshalb über dem Inhalt — :func:`content_digest` —, und
+    bytegleich ist eine Speicherung auf derselben Plattform.
+    """
     info = zipfile.ZipInfo(name, date_time=CONTAINER_TIMESTAMP)
     info.compress_type = zipfile.ZIP_DEFLATED
+    info.create_system = CONTAINER_SYSTEM
     container.writestr(info, payload)
+
+
+def content_digest(path: Path) -> str:
+    """Der plattformgleiche Fingerabdruck eines Containers: Namen und entpackte Bytes.
+
+    **Die Antwort auf „ist das dieselbe Projektdatei?" über Rechner hinweg**
+    (RM-106). Das Archiv selbst ist es nicht: Sein gepackter Strom hängt am
+    Kompressor der Plattform (siehe :func:`_write`). Der Inhalt hängt an
+    nichts davon — wer zwei Erzeugerläufe vergleicht, vergleicht diesen Wert
+    und liest aus einem abweichenden Archivhash bei gleichem Inhalt nur den
+    Kompressor ab, keinen Fehler.
+
+    Gelesen wird mit denselben Grenzen wie beim Öffnen.
+    """
+    _check_outer_size(path)
+    checksum = hashlib.sha256()
+    with zipfile.ZipFile(path) as container:
+        infos = _preflight_archive(container)
+        for name in sorted(infos):
+            payload = _read_archive_entry(container, infos[name])
+            checksum.update(name.encode("utf-8"))
+            checksum.update(len(payload).to_bytes(8, "big"))
+            checksum.update(payload)
+    return checksum.hexdigest()
 
 
 def save(project: Project, path: Path) -> Path:
@@ -1264,6 +1332,23 @@ def save(project: Project, path: Path) -> Path:
     # nicht mehr die Zeile von Hand, sondern der Weg, der zusätzlich je
     # benutztem eigenen Baustein einen Abdruck seiner Datei mitschreibt.
     part_check.stamp(document)
+    # Eigene Drucker und Materialien reisen mit (``Document.carried_profiles``).
+    # Gefragt wird der Bestand dieses Rechners; was er nicht kennt, behält die
+    # Beschreibung, die das Projekt schon trug.
+    from app.core.knowledge import profiles
+
+    document.carried_profiles = profiles.carried_definitions(
+        (document.printer,),
+        (
+            document.material,
+            *(
+                str(entry.params["material"])
+                for entry in document.ops
+                if entry.op == "set_material" and isinstance(entry.params.get("material"), str)
+            ),
+        ),
+        document.carried_profiles,
+    )
 
     # Zusicherung gegen den Altbestand: In Dateien von vor dem 26.08.2026
     # können zwei Quellen denselben Containerpfad tragen — beim Schreiben
@@ -1390,12 +1475,15 @@ def save(project: Project, path: Path) -> Path:
         entries.append((THUMBNAIL_ENTRY, project.thumbnail))
     _check_output_entries(entries)
 
-    ensure_dir(path.parent)
-    descriptor, temporary_name = tempfile.mkstemp(
-        prefix=f".{path.name}.",
-        suffix=".part",
-        dir=path.parent,
-    )
+    try:
+        ensure_dir(path.parent)
+        descriptor, temporary_name = tempfile.mkstemp(
+            prefix=f".{path.name}.",
+            suffix=".part",
+            dir=path.parent,
+        )
+    except OSError as problem:
+        raise _not_written(path, problem) from problem
     temporary = Path(temporary_name)
     try:
         with os.fdopen(descriptor, "w+b") as stream:
@@ -1431,11 +1519,29 @@ def save(project: Project, path: Path) -> Path:
         # Wechsel bleibt damit atomar, ohne ein vorhersagbares ``.part``-Ziel
         # zu öffnen oder einer dort vorbereiteten Verknüpfung zu folgen.
         temporary.replace(path)
+    except OSError as problem:
+        raise _not_written(path, problem) from problem
     finally:
-        with suppress(FileNotFoundError):
+        # ``OSError`` und nicht nur ``FileNotFoundError``: Hält ein
+        # Virenscanner die halbe Datei, darf das Aufräumen den eigentlichen
+        # Grund nicht durch einen zweiten Fehler ersetzen.
+        with suppress(OSError):
             temporary.unlink()
     _log.info("saved project %s", path.name)
     return path
+
+
+def _not_written(path: Path, problem: OSError) -> FileWriteError:
+    """Ein Schreibfehler des Betriebssystems als Absage mit zwei Auswegen.
+
+    **Bis zur Durchsicht vor 0.5.0 lief er roh aus ``save`` hinaus.** Das
+    Fenster fängt beim Speichern ``AppError`` und bietet dann *Erneut
+    versuchen* und *Anderen Ort wählen* an — genau die zwei Wege für eine
+    Datei, die ein anderes Programm hält, einen schreibgeschützten Ordner oder
+    ein volles Laufwerk. Ein ``PermissionError`` kam an dieser Tür vorbei, und
+    aus „Datei gesperrt" wurde ein Absturzbericht.
+    """
+    return FileWriteError(target=path.name, detail=problem.strerror or str(problem))
 
 
 # --- Lesen ---------------------------------------------------------------------
@@ -1450,8 +1556,8 @@ def load(path: Path) -> Project:
             constraint="missing_file",
             values={"path": path.name},
         )
-    _check_outer_size(path)
     try:
+        _check_outer_size(path)
         with zipfile.ZipFile(path) as container:
             infos = _preflight_archive(container)
             names = set(infos)
@@ -1605,6 +1711,23 @@ def load(path: Path) -> Project:
             detail=_("Der Projektinhalt ist beschädigt."),
             constraint="damaged",
             values={"path": path.name},
+        ) from problem
+    except OSError as problem:
+        # **Ein ``OSError`` ist nicht „beschädigt"**, dieselbe Unterscheidung
+        # wie bei den verknüpften Quellen (RM-097): Das Betriebssystem spricht
+        # über den **Zugriff** — eine Datei, die ein anderes Programm gerade
+        # hält, ein getrenntes Netzlaufwerk, fehlende Rechte. Bis zur Durchsicht
+        # vor 0.5.0 lief er roh aus ``load`` hinaus, und das Fenster fängt beim
+        # Öffnen nur ``AppError``: aus einer gesperrten Datei wurde ein
+        # Absturzbericht.
+        raise ValidationError(
+            field="path",
+            detail=_(
+                "Die Projektdatei lässt sich nicht lesen. Prüfen Sie, ob sie noch an ihrem "
+                "Platz liegt und ob dieser erreichbar ist."
+            ),
+            constraint="unreadable",
+            values={"path": path.name, "reason": problem.strerror or str(problem)},
         ) from problem
     except PROGRAMMING_ERRORS:
         # **Ein falscher Aufruf ist keine kaputte Datei.** ``TypeError`` und

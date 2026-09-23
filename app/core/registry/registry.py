@@ -529,6 +529,10 @@ FEATURE_TITLES: Final[dict[str, TranslatableText]] = {
     # Kuppel oder Pfanne, je nach Richtung — in der Faktenzeile steht die
     # Art, und die heißt in den Absagen des Auswahlfensters genauso.
     "sphere": _("Kugelfläche"),
+    # Wulst oder Kehle, je nach Richtung, wie bei der Kugel. Fehlte bis zur
+    # Durchsicht 0.5.0, und die Ortsangabe für den Agenten schrieb
+    # „…, torus, …" in einen deutschen Satz.
+    "torus": _("Ringfläche"),
 }
 
 _NAME_PATTERN: Final = re.compile(r"^[a-z][a-z0-9_]*$")

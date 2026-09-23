@@ -71,8 +71,13 @@ def write_catalog(language: str, entries: dict[str, str]) -> Path:
     path = catalog_path(language)
     path.parent.mkdir(parents=True, exist_ok=True)
     ordered = {key: entries[key] for key in sorted(entries)}
+    # ``newline`` ausdrücklich: Unter Windows schrieb der Textmodus sonst CRLF,
+    # und ein Lauf von ``app.i18n.extract`` stellte alle Kataloge auf andere
+    # Zeilenenden als das Repository um (Durchsicht 0.5.0).
     path.write_text(
-        json.dumps(ordered, indent=2, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8"
+        json.dumps(ordered, indent=2, ensure_ascii=False, sort_keys=True) + "\n",
+        encoding="utf-8",
+        newline="\n",
     )
     return path
 

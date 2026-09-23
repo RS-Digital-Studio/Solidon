@@ -380,6 +380,175 @@ def test_the_profile_enters_the_hash(profile: Profile) -> None:
     assert profile_key(profile) != profile_key(other)
 
 
+#: Profilfelder, die keine Operation liest — und warum. Alles andere muss den
+#: Profilschlüssel ändern. Bis zur Durchsicht vor 0.5.0 stand dort keine
+#: Düsenzahl, und die Anordnung nach Filamenten kam nach einem Wechsel von
+#: einer auf zwei Düsen unverändert aus dem Cache.
+_PRINTER_FIELDS_NO_OPERATION_READS: dict[str, str] = {
+    "title": "nur Anzeige; die Kennung steht im Schlüssel",
+    "vendor": "nur Anzeige und Slicerauswahl",
+    "enclosed": "Druckeinstellungen und Materialrat, keine Geometrie",
+    "bed_temperature_max": "Druckeinstellungen und Slicerübergabe, keine Geometrie",
+    "nozzle_temperature_max": "Druckeinstellungen und Slicerübergabe, keine Geometrie",
+}
+_MATERIAL_FIELDS_NO_OPERATION_READS: dict[str, str] = {
+    "title": "nur Anzeige; die Kennung steht im Schlüssel",
+    "calibrated": "Hinweis im Steckbrief und im Rat, keine Geometrie",
+    "technology": "Materialwahl am Drucker, keine Geometrie",
+}
+
+
+def _changed(value: object) -> object:
+    """Ein anderer, gültiger Wert derselben Art."""
+    if isinstance(value, bool):
+        return not value
+    if isinstance(value, int):
+        return value + 1
+    if isinstance(value, float):
+        return value + 0.123
+    if isinstance(value, str):
+        return value + "x"
+    if isinstance(value, tuple) and len(value) == 3 and all(isinstance(v, float) for v in value):
+        return tuple(entry + 1.0 for entry in value)
+    if isinstance(value, tuple):
+        return ((-50.0, -50.0), (50.0, -50.0), (0.0, 50.0)) if not value else ()
+    if value is None:
+        return 0.123
+    raise AssertionError(f"no changed value for {value!r}")
+
+
+def test_every_profile_field_is_in_the_key_or_named_as_unread(profile: Profile) -> None:
+    """Jedes Drucker- und Materialfeld ändert den Schlüssel — oder steht mit Grund oben."""
+    printer_fields = {field.name for field in dataclasses.fields(profile.printer)}
+    material_fields = {field.name for field in dataclasses.fields(profile.material)}
+    assert set(_PRINTER_FIELDS_NO_OPERATION_READS) <= printer_fields
+    assert set(_MATERIAL_FIELDS_NO_OPERATION_READS) <= material_fields
+    # Die Prozessmessung wirkt nur mit passender Probe; dann muss sie im Schlüssel stehen.
+    calibrated = dataclasses.replace(
+        profile,
+        material=dataclasses.replace(
+            profile.material,
+            calibration_printer=profile.printer.id,
+            calibration_nozzle_diameter=profile.printer.nozzle_diameter,
+            calibration_layer_height=profile.printer.layer_height,
+            calibration_extrusion_width=profile.printer.extrusion_width,
+            minimum_wall=0.9,
+            overhang_angle=50.0,
+        ),
+    )
+    for name in sorted(printer_fields - set(_PRINTER_FIELDS_NO_OPERATION_READS)):
+        value = getattr(calibrated.printer, name)
+        if name == "technology":
+            other = dataclasses.replace(calibrated.printer, technology="resin")
+        else:
+            other = dataclasses.replace(calibrated.printer, **{name: _changed(value)})
+        assert profile_key(calibrated) != profile_key(
+            dataclasses.replace(calibrated, printer=other)
+        ), f"printer.{name} does not enter the profile key"
+    for name in sorted(material_fields - set(_MATERIAL_FIELDS_NO_OPERATION_READS)):
+        value = getattr(calibrated.material, name)
+        other_material = dataclasses.replace(calibrated.material, **{name: _changed(value)})
+        assert profile_key(calibrated) != profile_key(
+            dataclasses.replace(calibrated, material=other_material)
+        ), f"material.{name} does not enter the profile key"
+
+
+def test_the_nozzle_count_reaches_the_cached_arrangement() -> None:
+    """Zwei Düsen legen zwei Filamente auf eine Platte — auch mit warmem Cache."""
+    from app.core.bootstrap import load_operations
+    from app.core.knowledge import profiles as profile_table
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.project import ProjectSources, new_project
+
+    load_operations()
+    project = new_project("centauri-carbon-2", "pla")
+    history = History(project.document)
+    for name in ("A", "B"):
+        history.apply(
+            name,
+            [OperationDraft(op="create_box", params={"width": 30.0, "depth": 20.0, "height": 8.0})],
+        )
+    for object_id, colour in (("obj_1", "#ff0000"), ("obj_2", "#0000ff")):
+        history.apply(
+            "Filament",
+            [
+                OperationDraft(
+                    op="assign_slot",
+                    inputs=(object_id,),
+                    params={"slot": 0, "name": colour, "colour": colour, "material_type": "PLA"},
+                )
+            ],
+        )
+    history.apply(
+        "Anordnen",
+        [OperationDraft(op="arrange_bed", inputs=("obj_1", "obj_2"), params={"by_material": True})],
+    )
+    one = profile_table.make_profile("centauri-carbon-2", "pla")
+    two = dataclasses.replace(one, printer=dataclasses.replace(one.printer, nozzles=2))
+    sources = ProjectSources(project)
+
+    def plates(result) -> list[int]:
+        assert result.complete, result.scene.report.findings
+        return sorted(entry.plate for entry in result.scene.objects.values())
+
+    cache = ResultCache()
+    assert plates(evaluate(project.document, one, cache=cache, sources=sources)) == [0, 1]
+    assert plates(evaluate(project.document, two, cache=None, sources=sources)) == [0, 0]
+    assert plates(evaluate(project.document, two, cache=cache, sources=sources)) == [0, 0]
+
+
+def test_a_calibrated_body_material_reaches_the_cached_step(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein Körper in PETG bohrt nach dem Kalibrieren von PETG neu, im PLA-Projekt."""
+    from app.core.bootstrap import load_operations
+    from app.core.knowledge import profiles as profile_table
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.project import ProjectSources, new_project
+
+    load_operations()
+    project = new_project("centauri-carbon-2", "pla")
+    history = History(project.document)
+    history.apply(
+        "Quader",
+        [OperationDraft(op="create_box", params={"width": 30.0, "depth": 20.0, "height": 8.0})],
+    )
+    history.apply(
+        "Material",
+        [OperationDraft(op="set_material", inputs=("obj_1",), params={"material": "petg"})],
+    )
+    history.apply(
+        "Bohren",
+        [
+            OperationDraft(
+                op="drill_hole",
+                inputs=("obj_1",),
+                params={"diameter": 5.0, "x": 0.0, "y": 0.0, "z": 4.0, "compensate": True},
+            )
+        ],
+    )
+    profile = profile_table.make_profile("centauri-carbon-2", "pla")
+    sources = ProjectSources(project)
+
+    def bore(result) -> float:
+        assert result.complete, result.scene.report.findings
+        body = result.scene.objects["obj_1"]
+        return next(f for f in body.features.values() if f.kind == "hole").params["diameter"]
+
+    cache = ResultCache()
+    petg = profile_table.material("petg")
+    before = bore(evaluate(project.document, profile, cache=cache, sources=sources))
+    assert before == pytest.approx(5.0 + petg.hole_compensation, abs=1e-6)
+    calibrated = dict(profile_table.material_profiles())
+    calibrated["petg"] = dataclasses.replace(petg, hole_compensation=petg.hole_compensation + 0.4)
+    monkeypatch.setattr(profile_table, "_materials", calibrated)
+    cold = bore(evaluate(project.document, profile, cache=None, sources=sources))
+    assert cold == pytest.approx(before + 0.4, abs=1e-6)
+    assert bore(evaluate(project.document, profile, cache=cache, sources=sources)) == (
+        pytest.approx(cold, abs=1e-9)
+    )
+
+
 def test_hashes_are_stable_and_short() -> None:
     assert digest("a", 1) == digest("a", 1)
     assert len(digest("a")) == 32
@@ -610,6 +779,56 @@ def test_a_damaged_entry_is_dropped_instead_of_raising(tmp_path: Path) -> None:
 
     assert disk.get("key") is None
     assert disk.get("key") is None, "the damaged entry was removed, not read again"
+
+
+@pytest.mark.parametrize("damage", ["halved", "empty", "garbage", "json_shape"])
+def test_a_damaged_mesh_beside_the_index_is_recomputed(
+    tmp_path: Path, profile: Profile, damage: str
+) -> None:
+    """Ein verstümmeltes Netz im Plattencache kostet einen Neulauf, nie das Projekt.
+
+    Gemessen vor 0.5.0: eine halbierte ``.npz`` warf ``BadZipFile`` durch
+    ``evaluate`` hindurch, und das Projekt öffnete erst wieder, nachdem der
+    Cacheordner von Hand gelöscht war.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.geom.mesh import MeshCodec
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.project import ProjectSources, new_project
+
+    load_operations()
+    project = new_project("centauri-carbon-2", "petg")
+    History(project.document).apply(
+        "Quader",
+        [OperationDraft(op="create_box", params={"width": 30.0, "depth": 20.0, "height": 8.0})],
+    )
+    directory = tmp_path / "cache"
+    first = ResultCache(disk=DiskCache(codec=MeshCodec(), directory=directory))
+    volume = (
+        evaluate(project.document, profile, cache=first, sources=ProjectSources(project))
+        .scene.objects["obj_1"]
+        .mesh.volume
+    )
+    meshes = sorted(directory.rglob("*.npz"))
+    assert meshes, "the box went to disk"
+    for mesh in meshes:
+        data = mesh.read_bytes()
+        if damage == "halved":
+            mesh.write_bytes(data[: len(data) // 2])
+        elif damage == "empty":
+            mesh.write_bytes(b"")
+        elif damage == "garbage":
+            mesh.write_bytes(b"PK\x03\x04" + bytes(range(256)) * 4)
+        else:
+            index = mesh.with_name("objects.json")
+            payload = json.loads(index.read_text(encoding="utf-8"))
+            payload["objects"] = {"not": "a list"}
+            index.write_text(json.dumps(payload), encoding="utf-8")
+    fresh = ResultCache(disk=DiskCache(codec=MeshCodec(), directory=directory))
+    again = evaluate(project.document, profile, cache=fresh, sources=ProjectSources(project))
+    assert again.complete
+    assert again.scene.objects["obj_1"].mesh.volume == pytest.approx(volume)
+    assert fresh.statistics.disk_hits == 0, "the damaged entry was not handed out"
 
 
 def test_the_disk_budget_is_kept(tmp_path: Path) -> None:

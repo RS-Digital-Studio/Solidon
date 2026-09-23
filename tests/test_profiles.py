@@ -253,3 +253,161 @@ def test_a_spool_without_a_known_type_keeps_the_project_material() -> None:
 
     for body in (unknown, empty, none_at_all):
         assert profiles.for_object(project, body).material.id == "petg"
+
+
+# --- Eigene Drucker reisen mit dem Projekt (Durchsicht 0.5.0) ------------------
+
+
+@pytest.fixture
+def two_computers(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """Zwei Rechner: je ein eigener Profilordner, dazwischen eine Projektdatei.
+
+    Ein Rechnerwechsel ist hier ein anderer Profilordner und ein frisch
+    geladener Bestand — genau das, was ein zweiter Rechner beim Öffnen hat.
+    """
+    folders = {"erster": tmp_path / "erster", "zweiter": tmp_path / "zweiter"}
+
+    def switch(name: str) -> Path:
+        monkeypatch.setattr(profiles, "user_profiles_dir", lambda: folders[name])
+        profiles.carry(None)
+        profiles.reload()
+        return folders[name]
+
+    yield switch
+    profiles.carry(None)
+    profiles.reload()
+
+
+def _own_printer() -> object:
+    template = profiles.printer(profiles.DEFAULT_PRINTER)
+    return replace(
+        template,
+        id="werkstatt-xl",
+        title="Werkstatt XL",
+        build_volume=(420.0, 380.0, 500.0),
+        nozzle_diameter=0.6,
+        layer_height=0.3,
+    )
+
+
+def _project_on(printer_id: str, path: Path) -> Path:
+    from app.core.bootstrap import load_operations
+    from app.core.scene import History, OperationDraft
+    from app.core.scene.project import new_project, save
+
+    load_operations()
+    project = new_project(printer_id, "petg")
+    History(project.document).apply(
+        "Quader",
+        [OperationDraft(op="create_box", params={"width": 30.0, "depth": 20.0, "height": 8.0})],
+    )
+    return save(project, path)
+
+
+def test_an_own_printer_travels_with_the_project_to_another_computer(
+    tmp_path: Path, two_computers
+) -> None:
+    """Auf dem zweiten Rechner hieß es nur „Dieses Druckerprofil ist nicht bekannt."
+
+    Keine Szene, keine Druckeinstellungen (Fund aus dem Paket „dialoge",
+    Durchsicht 0.5.0). Jetzt trägt die Projektdatei die Beschreibung des
+    eigenen Druckers — Name, Bauraum, Düse, Verfahren, Schichthöhe, kein Pfad
+    und kein Code —, der zweite Rechner rechnet damit, der Prüfbericht bietet
+    an, ihn zu übernehmen, und ein Speichern dort verliert ihn nicht.
+    """
+    from app.core.errors import ADOPT_PRINTER, CHOOSE_PRINTER
+    from app.core.knowledge import print_settings
+    from app.core.scene import evaluate
+    from app.core.scene.project import ProjectSources, load, project_data, save
+
+    two_computers("erster")
+    own = _own_printer()
+    profiles.save_printer(own)
+    path = _project_on(own.id, tmp_path / "werkstatt.p3d")
+    carried = project_data(path)["carried_profiles"]["printers"]
+    assert set(carried) == {own.id}
+    assert "id" not in carried[own.id], "die Kennung steht einmal, als Schlüssel"
+
+    two_computers("zweiter")
+    with pytest.raises(ValidationError):
+        profiles.printer(own.id)
+    project = load(path)
+    assert profiles.carry(project.document.carried_profiles) == (own.id,)
+
+    profile = profiles.scene_profile(project.document.printer, project.document.material)
+    assert profile.printer == own, "gerechnet wird mit der mitgebrachten Beschreibung"
+    assert print_settings.resolve(profile).layers.layer_height == pytest.approx(0.3)
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert result.complete
+    (said,) = profiles.carried_findings(project.document.printer, project.document.material)
+    assert said.code == "profile.carried_printer"
+    assert said.suggestions == (ADOPT_PRINTER, CHOOSE_PRINTER)
+
+    again = save(project, tmp_path / "weitergegeben.p3d")
+    assert set(project_data(again)["carried_profiles"]["printers"]) == {own.id}, (
+        "ein Speichern auf dem zweiten Rechner verlor die Beschreibung"
+    )
+
+    assert profiles.adopt_carried() == (own.id,)
+    profiles.reload()
+    assert profiles.user_printer_profiles()[own.id] == own
+    assert profiles.only_carried() == ()
+    assert profiles.carried_findings(own.id, "petg") == ()
+
+
+def test_a_project_whose_printer_is_nowhere_still_opens(two_computers) -> None:
+    """Ohne Beschreibung rechnet das Projekt mit dem Standarddrucker — und sagt es."""
+    from app.core.errors import CHOOSE_PRINTER
+
+    two_computers("zweiter")
+
+    profile = profiles.scene_profile("gibt-es-nicht", "petg")
+
+    assert profile.printer.id == profiles.DEFAULT_PRINTER
+    assert profile.material.id == "petg"
+    (said,) = profiles.carried_findings("gibt-es-nicht", "petg")
+    assert said.code == "profile.printer_missing" and said.severity == "warning"
+    assert said.suggestions == (CHOOSE_PRINTER,)
+    assert "{" not in str(said.message), "ein Befundsatz trägt keinen Platzhalter"
+
+
+def test_a_carried_printer_is_read_like_an_own_file(two_computers) -> None:
+    """Eine fremde Beschreibung geht durch denselben Prüfer — Unlesbares bleibt weg."""
+    two_computers("zweiter")
+
+    adoptable = profiles.carry(
+        {
+            "printers": {
+                "kaputt": {"title": "Kaputt", "build_volume": ["breit", 1, 2]},
+                "ohne-mass": {"title": "Ohne Maß"},
+                "gut": {"title": "Gut", "build_volume": [200, 200, 200]},
+            }
+        }
+    )
+
+    assert adoptable == ("gut",)
+    assert profiles.scene_profile("kaputt", "pla").printer.id == profiles.DEFAULT_PRINTER
+
+
+def test_a_carried_printer_never_replaces_one_this_computer_has(two_computers) -> None:
+    """Kennt der Rechner die Kennung selbst, gilt seine Beschreibung."""
+    two_computers("zweiter")
+    local = _own_printer()
+    profiles.save_printer(local)
+
+    adoptable = profiles.carry(
+        {"printers": {local.id: {"title": "Fremd", "build_volume": [100, 100, 100]}}}
+    )
+
+    assert adoptable == ()
+    assert profiles.printer(local.id) == local
+
+
+def test_a_shipped_printer_is_never_carried(tmp_path: Path, two_computers) -> None:
+    """Mitgelieferte Profile gibt es überall — die Datei bleibt, wie sie war."""
+    from app.core.scene.project import project_data
+
+    two_computers("erster")
+    path = _project_on("centauri-carbon-2", tmp_path / "centauri.p3d")
+
+    assert "carried_profiles" not in project_data(path)

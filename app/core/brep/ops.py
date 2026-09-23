@@ -935,9 +935,9 @@ def brep_input(ctx: OpContext) -> tuple[SceneObject, Solid]:
             # Der Name reist wie überall in ``values``.
             detail=_(
                 "Der gewählte Körper besteht bereits aus festen Dreiecken. Dieses "
-                "Werkzeug braucht einzeln bearbeitbare Flächen und Kanten. Stelle den "
-                "Schritt der Grundform im Verlauf auf „Mit echten Flächen und Kanten "
-                "rechnen“ oder öffne eine STEP-Datei."
+                "Werkzeug braucht einzeln bearbeitbare Flächen und Kanten. Stellen Sie "
+                "den Schritt der Grundform im Verlauf auf „Mit echten Flächen und Kanten "
+                "rechnen“ um, oder öffnen Sie eine STEP-Datei."
             ),
             values={"name": source.name, "field": "in", "constraint": "needs_brep"},
             object_id=source.id,

@@ -132,8 +132,30 @@ Creality Print bekommt im CLI eine temporäre 3MF-Kopie ohne den einzelnen
 7.2.2.5483 bei mehreren Filamenten einen Absturz aus. Nur eine nachweislich
 einzelne Platte darf so übergeben werden; mehrere oder unlesbare Plattenblöcke
 bleiben vollständig. Objektwerkzeuge, Namen, Farben, Geometrie und alle übrigen
-Beilagen bleiben erhalten. Die Originaldatei, der allgemeine Mehrplattenexport,
-das Öffnen im Slicerfenster und andere Slicer benutzen die vollständige Datei.
+Beilagen bleiben erhalten. **Das Fenster bekommt dieselbe Datei**
+(`_for_the_creality_window`): Fenster und Konsole teilen den Absturz, und ein
+Kunde, dem die Konsole eine gerettete Datei gab, soll im Fenster nicht an der
+ungeretteten scheitern. Die Originaldatei, der allgemeine Mehrplattenexport
+und andere Slicer benutzen die vollständige Datei.
+
+**Cura übernimmt Einstellungen nur als Profil.** Seine Kommandozeile liest
+Werte, das Fenster nicht; `cura_profile_beside` legt deshalb neben das Modell
+eine `.curaprofile` (Qualitätsänderungen im Containerformat, das Curas
+`CuraProfileReader` liest: `setting_version` aus der installierten
+`fdmprinter.def.json`, Wahrheitswerte als `True`/`False`, `quality_type` nur,
+wenn die Maschine ihn führt), und der Befund `handover.cura_profile` sagt, wo
+man sie importiert. Eingelegte Materialien liest `configured_filaments` aus
+Curas Konfigurationsordner (`cura.cfg` → aktiver Drucker → Extruderstapel,
+Platz 4 ist das Material).
+
+**Jede Rolle bekommt Solidons Wert** (RM-191): PrusaSlicer schreibt Solidon
+volle Füllung und Lücken (`solid_infill_speed`, `gap_fill_speed`) und setzt
+`machine_limits_usage = ignore`, damit die Zeitschätzung nicht mit
+erfundenen 1 500 mm/s² rechnet; die Orca-Familie bekommt dieselben zwei
+Geschwindigkeiten und die Bahnbreite für alle fünf Rollen. Bambu Studio sagt
+seine Absage nicht auf der Konsole, sondern in `result.json` neben der
+Druckdatei (`return_code`, `error_string`); `_result_reason` hängt sie an die
+Ausgabe, nur aus dem Lauf, der gerade war.
 
 Im selben CLI-Weg werden fehlende Reinigungsturmkoordinaten nach Crealitys
 Herstellermodus, Bettkontur und Turmbreite initialisiert. Das ersetzt die sonst

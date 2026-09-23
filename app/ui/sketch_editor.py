@@ -4703,7 +4703,7 @@ class ExpressionDialog(QDialog):
             self.problem.setVisible(True)
             return
         try:
-            expressions.evaluate(text, self._values)
+            expressions.evaluate(expressions.canonical(text, self._values), self._values)
         except AppError as error:
             self.problem.setText(str(error.detail or error.title))
             self.problem.setVisible(True)
@@ -4711,7 +4711,19 @@ class ExpressionDialog(QDialog):
         self.accept()
 
     def expression(self) -> str:
-        return self.field.text().strip()
+        """Das Maß, wie es gespeichert wird — ein Name bekommt sein ``@``.
+
+        Eine bloße Zahl bleibt eine Zahl: Ergänzt wird nur, wo ein Name ohne
+        ``@`` steht (``expressions.canonical``).
+        """
+        from app.core import expressions
+
+        text = self.field.text().strip()
+        try:
+            written = expressions.canonical(text, self._values)
+        except AppError:
+            return text
+        return written if written.lstrip("=") != text.lstrip("=") else text
 
 
 class PointDialog(QDialog):

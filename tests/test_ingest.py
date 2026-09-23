@@ -808,8 +808,9 @@ def test_the_same_file_twice_gives_two_names_that_can_be_told_apart(
     einzulesen. Im Objektbaum standen danach zwei Zeilen „plate_holes", und im
     Prüfbericht zweimal derselbe Satz mit demselben Namen dahinter: kein Weg,
     beim Lesen zu erkennen, welcher Körper gemeint ist. Der zweite heißt
-    deshalb „plate_holes 2" — dieselbe Nummerierung, die *In Einzelteile
-    zerlegen* seinen Teilen gibt.
+    deshalb „plate_holes (2)" — seit der Durchsicht 0.5.0 mit Klammer und für
+    jede Datei gleich: Eine Baugruppe nummeriert jeden Teil so, und Teilnamen
+    enden selbst oft auf eine Zahl („Sieb 1 (2)" statt „Sieb 1 2").
 
     Der Bericht bündelt gleiche Meldungen seit 0.4.1, hier aber **nicht**, und
     das ist richtig: In seinen Gruppenschlüssel geht der Schritt ein, und zwei
@@ -840,7 +841,7 @@ def test_the_same_file_twice_gives_two_names_that_can_be_told_apart(
 
     assert result.complete, f"gestoppt bei op {result.stopped_at}"
     namen = [entry.name for entry in result.scene.objects.values()]
-    assert namen == ["plate_holes", "plate_holes 2"], namen
+    assert namen == ["plate_holes", "plate_holes (2)"], namen
 
     # **Und der Bericht nennt beide unterscheidbar.** Die Zeile des Fensters
     # setzt den Namen des Körpers hinter den Satz (``panels._line_for``); was
@@ -851,7 +852,69 @@ def test_the_same_file_twice_gives_two_names_that_can_be_told_apart(
         for finding in result.scene.report.findings
         if finding.object_id is not None
     }
-    assert {"plate_holes", "plate_holes 2"} <= beteiligt, beteiligt
+    assert {"plate_holes", "plate_holes (2)"} <= beteiligt, beteiligt
+
+
+def _imported_twice(file_name: str, payload: bytes, times: int, profile: Profile) -> list[str]:
+    """Dieselbe Datei so oft eingelesen, wie das Fenster es täte — die Namen danach."""
+    from app.core.ingest.plan import names_in_use
+
+    project = new_project("centauri-carbon-2", "petg")
+    for number in range(1, times + 1):
+        source_id = f"src_{number}"
+        project.document.sources[source_id] = Source(
+            id=source_id, kind="import", path=f"sources/{file_name}", sha256=""
+        )
+        project.sources[source_id] = payload
+        plan = import_plan(
+            source_id, file_name, payload, "mm", taken=names_in_use(project.document)
+        )
+        History(project.document).apply(plan.title, [plan.draft])
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert result.complete, f"gestoppt bei op {result.stopped_at}"
+    return [str(entry.name) for entry in result.scene.objects.values()]
+
+
+def test_the_same_assembly_twice_keeps_every_name_apart(profile: Profile) -> None:
+    """Eine Baugruppe zweimal eingelesen: jeder Teil mit seiner Kopiennummer.
+
+    Der Einleseplan nummerierte nur einen einzelnen Körper; eine Baugruppe
+    bringt ihre Namen aus der Datei mit, und die zweite Kopie trug sie alle
+    ein zweites Mal. Gemessen am ``Siebhalter+X1C.3mf`` eines Kunden: sieben
+    gleiche Zeilen im Baum und im Prüfbericht (Durchsicht 0.5.0). Die dritte
+    Kopie bekommt die nächste Nummer, nicht noch einmal die zweite.
+    """
+    from tests.test_threemf_assembly import cube, production_container
+
+    payload = production_container(
+        {"1": cube(10.0), "2": cube(12.0, at=(30.0, 0.0, 0.0))},
+        names={"1": "Halter", "2": "Deckel"},
+    )
+
+    names = _imported_twice("baugruppe.3mf", payload, 3, profile)
+
+    assert names == [
+        "Halter",
+        "Deckel",
+        "Halter (2)",
+        "Deckel (2)",
+        "Halter (3)",
+        "Deckel (3)",
+    ], names
+
+
+def test_an_unnamed_body_in_a_3mf_is_named_after_its_file(profile: Profile) -> None:
+    """Ein unbenannter Körper heißt wie seine Datei — wie bei einer STL.
+
+    Hier stand der Ersatz „Körper 1", und beim zweiten Einlesen hieß derselbe
+    Körper nach der Datei: „Körper 1" und „drill-holder 2" im selben Baum,
+    gemessen an ``drill-holder.3mf`` (Durchsicht 0.5.0).
+    """
+    from tests.test_threemf_assembly import cube, production_container
+
+    payload = production_container({"1": cube(10.0)})
+
+    assert _imported_twice("halter.3mf", payload, 2, profile) == ["halter", "halter (2)"]
 
 
 def test_load_asks_when_the_unit_is_ambiguous(profile: Profile) -> None:
@@ -1714,6 +1777,79 @@ def test_a_file_with_broken_coordinates_is_refused_instead_of_asked_about(
     assert not result.complete, "eine Datei ohne gültige Maße darf nicht durchgehen"
     codes = {entry.code for entry in result.scene.report.findings}
     assert any("ValidationError" in code for code in codes), codes
+
+
+@pytest.mark.parametrize("suffix", [".obj", ".ply", ".3mf"])
+@pytest.mark.parametrize("inverted", [False, True], ids=["same", "inverted"])
+def test_a_shell_written_twice_with_its_own_corners_arrives_once(
+    profile: Profile, suffix: str, inverted: bool
+) -> None:
+    """Eine Datei, die ihre Schale zweimal mit eigenen Ecken trägt, liefert sie einmal.
+
+    Gefunden vom Paket „netzkern" der Durchsicht 0.5.0, nachgemessen hier: Eine
+    Kugel (1280 Dreiecke, 33 221,9 mm³) zweimal in einer OBJ, PLY oder 3MF kam
+    als zwei deckungsgleiche Teile mit **doppeltem** Volumen an, und der
+    Bericht sagte nur „Doppelte Punkte blieben stehen" und „besteht aus
+    mehreren Teilen". Das Verschweißen hätte die Kopie zu doppelten Dreiecken
+    gemacht und wurde zurückgenommen, weil das Netz dann offen war. Eine STL
+    kam richtig an — sie ist eine Dreieckssuppe, dort räumt ``unique_faces``
+    die Doppelung ab.
+
+    Jetzt bleibt von deckungsgleichen Dreiecken das erste, wenn das Netz
+    danach geschlossen ist, und der Bericht sagt es. Gleich wie die Kopie
+    umläuft: Die Außenseiten richtet der nächste Schritt aus.
+    """
+    ball = trimesh.creation.icosphere(subdivisions=3, radius=20.0)
+    copy = ball.copy()
+    if inverted:
+        copy.invert()
+    twice = trimesh.util.concatenate([ball, copy])
+    assert len(twice.vertices) == 2 * len(ball.vertices), "jede Schale mit eigenen Ecken"
+    exported = twice.export(file_type=suffix.lstrip("."))
+    payload = exported if isinstance(exported, bytes) else exported.encode("utf-8")
+
+    project = _project_of(payload, f"kugel{suffix}")
+    History(project.document).apply(
+        _("Laden"), [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})]
+    )
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+
+    assert result.complete
+    (body,) = result.scene.objects.values()
+    assert body.mesh.triangle_count == len(ball.faces)
+    assert body.mesh.component_count == 1
+    assert body.mesh.is_watertight
+    # PLY speichert Ecken in einfacher Genauigkeit: daher die Toleranz.
+    assert float(body.mesh.volume) == pytest.approx(float(ball.volume), rel=1e-6)
+    codes = {entry.code for entry in result.scene.report.findings}
+    assert "ingest.doubled_shell_removed" in codes, codes
+    assert not codes & {"ingest.weld_skipped", "ingest.multiple_components"}, codes
+
+
+def test_two_closed_bodies_that_only_touch_keep_both(profile: Profile) -> None:
+    """Die Gegenprobe: Zwei Würfel, die sich an einer Fläche berühren, sind keine Kopie.
+
+    Ihr Verschweißen macht die gemeinsame Fläche zu einem deckungsgleichen
+    Paar; das erste zu behalten ließe eine Kante mit drei Flächen zurück. Dann
+    bleibt es beim Zurücknehmen des Verschweißens — zwei Teile, beide ganz.
+    """
+    left = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+    right = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+    right.apply_translation((10.0, 0.0, 0.0))
+    exported = trimesh.util.concatenate([left, right]).export(file_type="obj")
+    payload = exported if isinstance(exported, bytes) else exported.encode("utf-8")
+
+    project = _project_of(payload, "wuerfel.obj")
+    History(project.document).apply(
+        _("Laden"), [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})]
+    )
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+
+    (body,) = result.scene.objects.values()
+    assert body.mesh.component_count == 2
+    assert float(body.mesh.volume) == pytest.approx(2000.0, rel=1e-9)
+    codes = {entry.code for entry in result.scene.report.findings}
+    assert "ingest.doubled_shell_removed" not in codes
 
 
 def test_the_scan_counts_what_the_reader_would_return() -> None:

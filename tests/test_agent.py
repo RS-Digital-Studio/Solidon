@@ -1030,7 +1030,9 @@ def test_a_fit_takes_its_tolerance_from_the_material(project: Project, profile: 
 
     proposal = agent.propose("Leg eine Passung an")
 
-    assert proposal.fits[0].tolerance == "auto:petg"
+    # Ohne Kennung: Das Werkzeug fragt kein Material ab, also folgt die
+    # Passung den Körpern (Durchsicht 0.5.0).
+    assert proposal.fits[0].tolerance == "auto:"
 
 
 # --- annehmen und zurücknehmen (§26.3, §26.5) ------------------------------------

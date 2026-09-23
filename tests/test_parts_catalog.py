@@ -226,8 +226,31 @@ def test_a_project_from_an_older_library_is_told_what_moved() -> None:
 
     findings = part_check.check(document)
 
-    assert [finding.code for finding in findings] == ["parts.changed"]
-    assert "screw_hole" in str(findings[0].values["parts"])
+    assert findings[0].code == "parts.changed"
+    # Der Titel aus dem Katalog, nicht die Kennung (Durchsicht 0.5.0) — und
+    # der Satz sagt, dass der alte Stand fehlt: eine Migration (RM-138).
+    assert findings[0].values["parts"] == "Schraubenloch mit Senkung"
+    assert "nicht mehr enthalten" in str(findings[0].message)
+    assert findings[0].suggestions == (), "keine Wahl ohne einen alten Stand"
+    assert findings[0].values["library_saved"] == "0"
+    # **Und was sich geändert hat** (Entscheidung Robert, 23.09.2026: die
+    # Migrationsmeldung reicht, wenn sie das sagt): je Maßwirkung seit dem
+    # Speichern eine Zeile, in der Reihenfolge der Stände, ohne die
+    # Erstbestückung, die kein altes Projekt ändert.
+    from app.core.knowledge.parts.registry import PARTS
+
+    expected = [
+        change.effect
+        for change in sorted(PARTS.get("screw_hole").changes, key=lambda item: int(item.version))
+        if change.effect and int(change.version) > 0
+    ]
+    lines = [finding for finding in findings[1:] if finding.code == "parts.change"]
+    assert len(lines) == len(findings) - 1 == len(expected) > 0
+    for line, effect in zip(lines, expected, strict=True):
+        assert line.message.values is not None
+        assert line.message.values["parts"] == "Schraubenloch mit Senkung"
+        assert line.message.values["change"] == effect
+        assert str(effect) in str(line.message)
 
 
 def test_a_library_12_project_is_told_about_all_three_geometry_fixes() -> None:
@@ -243,8 +266,49 @@ def test_a_library_12_project_is_told_about_all_three_geometry_fixes() -> None:
 
     findings = part_check.check(document)
 
-    assert [finding.code for finding in findings] == ["parts.changed"]
-    assert findings[0].values["parts"] == "barrel_hinge, dowel, foot"
+    assert findings[0].code == "parts.changed"
+    assert findings[0].values["parts"] == "Bolzenscharnier, Passstift und Passbohrung, Standfuß"
+    # Ein Baustein kann seit Stand 12 mehr als eine Änderung tragen — der
+    # Passstift hat seit Stand 20 eine zweite —, also je Name eine Liste.
+    said: dict[str, list[str]] = {}
+    for finding in findings[1:]:
+        if finding.code == "parts.change" and finding.message.values:
+            names = str(finding.message.values["parts"])
+            said.setdefault(names, []).append(str(finding.message.values["change"]))
+    # Je Baustein seine eigene Korrektur aus Stand 13 …
+    assert said["Bolzenscharnier"][0].startswith("Der Außendurchmesser wächst")
+    assert said["Passstift und Passbohrung"][0].startswith("Der Schwalbenschwanz folgt")
+    assert said["Standfuß"][0].startswith("Fuß und Tasche entstehen")
+    # … und die gemeinsame aus Stand 15 einmal, mit allen drei Namen.
+    shared = "Bolzenscharnier, Passstift und Passbohrung, Standfuß"
+    assert said[shared] == [
+        text for text in said[shared] if text.startswith("An ausdrücklich anders zugeordneten")
+    ]
+    effects = {
+        str(change.effect)
+        for name in ("barrel_hinge", "dowel", "foot")
+        for change in PARTS.get(name).changes
+        if change.effect and int(change.version) > 12
+    }
+    assert len(findings) - 1 == sum(len(texts) for texts in said.values()) == len(effects)
+
+
+def test_every_change_effect_reaches_the_customer_translated() -> None:
+    """Jede Maßwirkung im Änderungsverlauf ist ein übersetzbarer Text.
+
+    Die Migrationsmeldung zeigt sie dem Kunden (RM-138, Entscheidung Robert
+    23.09.2026: die Meldung reicht). Sechs Einträge vom 22.09.2026 standen als
+    bloße Zeichenkette da und wären in jeder Sprache deutsch erschienen.
+    """
+    from app.i18n import TranslatableText
+
+    plain = sorted(
+        f"{spec.name} v{change.version}"
+        for spec in PARTS.all()
+        for change in spec.changes
+        if change.effect and not isinstance(change.effect, TranslatableText)
+    )
+    assert not plain, f"Maßwirkungen ohne _(): {plain}"
 
 
 def test_a_project_of_the_current_library_says_nothing() -> None:
@@ -357,8 +421,12 @@ def test_a_changed_own_part_is_reported_when_the_project_opens(
     ]
 
     assert findings, "eine geänderte eigene Datei wird beim Öffnen gemeldet"
-    assert findings[0].values["parts"] == "eigenbau"
-    assert findings[0].severity == "info", "ein Hinweis mit einer Wahl, kein Abbruch (§24.4)"
+    assert findings[0].values["parts"] == "Eigenbau"
+    assert findings[0].severity == "info", "ein Hinweis, kein Abbruch (§24.4)"
+    # Eine eigene ``.py`` reist nie mit (Regel 13): Ihr gespeicherter Stand
+    # liegt nicht vor, also sagt der Befund das, statt ihn anzubieten.
+    assert findings[0].suggestions == ()
+    assert "nicht mehr vor" in str(findings[0].message)
 
 
 def test_a_project_without_a_fingerprint_says_nothing(

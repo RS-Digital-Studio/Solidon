@@ -2483,3 +2483,238 @@ def test_a_mesh_op_result_on_an_stl_survives_the_weld(
         )
     else:
         assert made.raw.volume < plate.raw.volume, "die drei anderen tragen ab"
+
+
+# --- Cura im Fenster: die Einstellungen als Profil (Durchsicht 0.5.0) --------------
+
+
+def _cura_install(tmp_path: Path) -> Path:
+    """Eine Cura-Installation mit dem, was ihr Profilleser prüft.
+
+    ``fdmprinter.def.json`` trägt die Einstellungsversion und die Typen der
+    Einstellungen, zwei allgemeine Qualitätsstufen daneben — gebaut nach Cura
+    5.13 (``share/cura/resources``), nicht nach Solidons Vorstellung davon.
+    """
+    install = tmp_path / "UltiMaker Cura 5.13.0"
+    resources = install / "share" / "cura" / "resources"
+    (resources / "definitions").mkdir(parents=True)
+    (resources / "definitions" / "fdmprinter.def.json").write_text(
+        json.dumps({"version": 2, "name": "FDM Printer", "metadata": {"setting_version": 27}}),
+        encoding="utf-8",
+    )
+    (resources / "quality").mkdir()
+    for kind, height in (("draft", 0.2), ("normal", 0.1)):
+        (resources / "quality" / f"{kind}.inst.cfg").write_text(
+            f"[general]\ndefinition = fdmprinter\nname = {kind}\nversion = 4\n\n"
+            f"[metadata]\nglobal_quality = True\nquality_type = {kind}\n"
+            "setting_version = 27\ntype = quality\n\n"
+            f"[values]\nlayer_height = {height}\n",
+            encoding="utf-8",
+        )
+    engine = install / "CuraEngine.exe"
+    engine.write_bytes(b"")
+    return engine
+
+
+def _cura_containers(target: Path) -> dict[str, dict[str, dict[str, str]]]:
+    """Die Einträge so gelesen wie Curas ``CuraProfileReader``: INI ohne Interpolation."""
+    import configparser
+
+    found: dict[str, dict[str, dict[str, str]]] = {}
+    with zipfile.ZipFile(target) as archive:
+        for name in archive.namelist():
+            parser = configparser.ConfigParser(interpolation=None)
+            parser.read_string(archive.read(name).decode("utf-8"))
+            found[name] = {section: dict(parser[section]) for section in parser.sections()}
+    return found
+
+
+def test_cura_opens_with_its_settings_as_an_importable_profile(
+    tmp_path: Path, profile: Profile
+) -> None:
+    """„Im Slicer öffnen" gab Cura ein bloßes STL — die Einstellungen blieben zurück.
+
+    Cura liest aus einer geöffneten Datei nur Geometrie; Einstellungen nimmt
+    sein Fenster als Profil an. Seit der Durchsicht 0.5.0 liegt deshalb eine
+    ``.curaprofile`` neben dem Modell, und der Befund sagt, wo sie in Cura
+    hineingeht. Geprüft wie Curas eigener Leser: Container Version 4, die
+    Einstellungsversion der Installation, eine Qualitätsstufe, die es gibt,
+    und Wahrheitswerte als ``True`` — ``ast.literal_eval`` liest kein
+    ``true``. Maschinenwerte und Abgeleitetes gehören nicht hinein: Das
+    Fenster rechnet seine Formeln selbst.
+    """
+    engine = _cura_install(tmp_path)
+    setup = handover.SlicerSetup(engine, "cura")
+    settings = print_settings.resolve(profile)
+    settings = replace(settings, support=replace(settings.support, style="tree"))
+    model = tmp_path / "halter.stl"
+    model.write_bytes(b"solid halter\nendsolid halter\n")
+
+    said = handover.cura_profile_beside(model, settings, profile, setup)
+
+    assert said is not None and said.code == "handover.cura_profile"
+    assert said.values["file"] == "halter.curaprofile"
+    containers = _cura_containers(model.with_suffix(".curaprofile"))
+    assert list(containers) == ["solidon"], "eine einzelne Spule legt Cura selbst aufs erste Fach"
+    entry = containers["solidon"]
+    assert entry["general"]["version"] == "4"
+    assert entry["metadata"]["setting_version"] == "27"
+    assert entry["metadata"]["type"] == "quality_changes"
+    assert entry["metadata"]["quality_type"] == "draft", "die Stufe mit der nächsten Schichthöhe"
+    values = entry["values"]
+    assert values["layer_height"] == "0.2"
+    assert values["support_enable"] == "True"
+    assert not [key for key in values if key.startswith("machine_")], "die Maschine bleibt Curas"
+    assert "infill_line_distance" not in values, "Abgeleitetes rechnet das Fenster selbst"
+    assert not [value for value in values.values() if value in {"true", "false"}]
+
+
+def test_cura_gets_one_extruder_profile_per_spool(tmp_path: Path, profile: Profile) -> None:
+    """Zwei Spulen, zwei Fächer: je Spule ein Extruderprofil mit ``position``."""
+    engine = _cura_install(tmp_path)
+    model = tmp_path / "zweifarbig.stl"
+    model.write_bytes(b"solid z\nendsolid z\n")
+    slots = (
+        MaterialSlot(index=0, name="Rot", colour="#ff0000", material_type="PETG"),
+        MaterialSlot(index=1, name="Weiß", colour="#ffffff", material_type="PLA"),
+    )
+
+    handover.cura_profile_beside(
+        model,
+        print_settings.resolve(profile),
+        profile,
+        handover.SlicerSetup(engine, "cura"),
+        slots,
+    )
+
+    containers = _cura_containers(model.with_suffix(".curaprofile"))
+    assert [entry["metadata"].get("position") for entry in containers.values()] == [None, "0", "1"]
+    assert (
+        containers["solidon_extruder_0"]["values"]["material_print_temperature"]
+        != containers["solidon_extruder_1"]["values"]["material_print_temperature"]
+    ), "PETG und PLA fahren verschiedene Temperaturen"
+
+
+def test_only_cura_gets_a_profile_beside_the_model(tmp_path: Path, profile: Profile) -> None:
+    """Die anderen Familien tragen ihre Einstellungen in der Datei selbst."""
+    model = tmp_path / "teil.3mf"
+    model.write_bytes(b"")
+    setup = handover.SlicerSetup(tmp_path / "orca-slicer.exe", "orca")
+
+    assert (
+        handover.cura_profile_beside(model, print_settings.resolve(profile), profile, setup) is None
+    )
+    assert not model.with_suffix(".curaprofile").exists()
+
+
+@pytest.mark.parametrize(
+    ("program", "stripped"),
+    [("CrealityPrint.exe", True), ("orca-slicer.exe", False)],
+)
+def test_the_creality_window_gets_the_file_its_console_gets(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, profile: Profile, program: str, stripped: bool
+) -> None:
+    """Das Fenster bekam die volle Datei, die Konsole eine Kopie ohne Plattenblock.
+
+    Creality Print 7.2 stürzt an diesem Block einer Mehrfilament-3MF ab, und
+    Fenster und Konsole sind dasselbe Programm mit demselben 3MF-Leser. Seit
+    der Durchsicht 0.5.0 öffnet auch das Fenster die Datei ohne den Block —
+    an Ort und Stelle, mit dem Namen, den der Kunde im Austauschordner sieht.
+    Namen und Werkzeuge der Körper bleiben; die anderen Slicer bekommen die
+    Datei unverändert.
+    """
+    from app.core.export import slicer_keys
+
+    executable = tmp_path / program
+    executable.write_bytes(b"")
+    flavour = slicer_keys.flavour_of(program)
+    assert flavour == "orca"
+    setup = handover.SlicerSetup(executable=executable, flavour=flavour)
+    settings = print_settings.resolve(profile)
+    parts = [
+        threemf.AssemblyPart(
+            MeshData.of(trimesh.creation.box((12.0, 12.0, 3.0))),
+            name=name,
+            slots=(MaterialSlot(index=0, name=name, colour=colour, material_type=kind),),
+        )
+        for name, colour, kind in (
+            ("PLA Orange", (177 / 255, 99 / 255, 10 / 255), "PLA"),
+            ("PETG Weiß", (1.0, 1.0, 1.0), "PETG"),
+        )
+    ]
+    slots = threemf.merge_slots(parts)
+    model = tmp_path / "Halter.3mf"
+    model.write_bytes(
+        threemf.write_assembly(
+            parts,
+            project_settings=handover.project_settings(settings, profile, setup, slots=slots),
+        )
+    )
+    with zipfile.ZipFile(model) as container:
+        before = ET.fromstring(container.read(threemf.SETTINGS_PATH))
+    assert len(before.findall("plate")) == 1
+    opened: list[list[str]] = []
+    monkeypatch.setattr(
+        handover.subprocess, "Popen", lambda command, **_options: opened.append(command)
+    )
+
+    handover.open_in_slicer(model, setup)
+
+    assert len(opened) == 1 and opened[0][-1] == str(model.resolve())
+    with zipfile.ZipFile(model) as container:
+        after = ET.fromstring(container.read(threemf.SETTINGS_PATH))
+    assert len(after.findall("plate")) == (0 if stripped else 1)
+    assert [
+        entry.find("metadata[@key='name']").get("value") for entry in after.findall("object")
+    ] == ["PLA Orange", "PETG Weiß"]
+    assert [
+        entry.find("metadata[@key='extruder']").get("value") for entry in after.findall("object")
+    ] == ["1", "2"]
+    assert not list(tmp_path.glob("*.staging.3mf")), "die Zwischenkopie bleibt nicht liegen"
+
+
+# --- RM-191: jede Rolle bekommt Solidons Werte (Durchsicht 0.5.0) ---------------
+
+
+def test_prusa_gets_the_infill_speed_for_solid_infill_and_no_guessed_machine_limits(
+    tmp_path: Path, profile: Profile
+) -> None:
+    """PrusaSlicer fuhr die volle Füllung mit seinen eingebauten 20 mm/s.
+
+    Gemessen am Gewürzregal (RM-191): 48 532 s gegen 23 655 s bei Orca für
+    dieselbe Platte; danach 31 387 s gegen 26 471 s, Material innerhalb von
+    drei Prozent. Dazu schätzte Prusa mit seinen 1500 mm/s² statt mit den
+    angeforderten 8000 (``machine_limits_usage``).
+    """
+    settings = print_settings.resolve(profile)
+    setup = handover.SlicerSetup(tmp_path / "prusa-slicer-console.exe", "prusa")
+
+    written = handover.write_config(settings, profile, setup, tmp_path).written
+
+    assert written["solid_infill_speed"] == f"{settings.speed.infill:g}"
+    assert written["gap_fill_speed"] == f"{settings.speed.inner_wall:g}"
+    assert written["machine_limits_usage"] == "ignore"
+
+
+def test_the_orca_family_gets_solidons_speed_and_width_for_every_role(profile: Profile) -> None:
+    """Die Orca-Familie fuhr volle Füllung und Lücken mit dem Herstellerprofil.
+
+    Beim Centauri Carbon 2 mit 250 mm/s, während Wände und dünne Füllung
+    Solidons Werte bekamen — und Innenwand und Füllung mit 0,45 mm statt
+    Solidons Bahnbreite (RM-191).
+    """
+    settings = print_settings.resolve(profile)
+
+    process = handover.by_section(settings, "orca")["process"]
+
+    assert process["internal_solid_infill_speed"] == f"{settings.speed.infill:g}"
+    assert process["gap_infill_speed"] == f"{settings.speed.inner_wall:g}"
+    width = f"{settings.layers.line_width:g}"
+    for key in (
+        "outer_wall_line_width",
+        "inner_wall_line_width",
+        "sparse_infill_line_width",
+        "internal_solid_infill_line_width",
+        "top_surface_line_width",
+    ):
+        assert process[key] == width, key

@@ -1092,6 +1092,27 @@ def test_a_wrong_expression_says_so_before_it_is_confirmed(qt_app: QApplication)
     )
 
 
+def test_the_fx_field_takes_a_formula_without_equals_and_at(qt_app: QApplication) -> None:
+    """``schraube_m4 + spiel`` — so zeigt es die Website, so tippt es ein Slicer-Nutzer.
+
+    Bis zur Durchsicht 0.5.0 wies das fx-Feld das ab: ohne ``=`` kein Ausdruck,
+    ohne ``@`` ein unbekannter Name. Jetzt ergänzt es beides, zeigt das
+    Ergebnis und gibt die gespeicherte Form mit ``@`` zurück.
+    """
+    from app.ui.op_dialog import ValueField
+
+    spec = REGISTRY.get("create_box")
+    dialog = OperationDialog(spec, [], None, parameter_values={"schraube_m4": 40.0, "spiel": 0.3})
+    field = dialog._editors["width"]
+    assert isinstance(field, ValueField)
+
+    field.toggle.setChecked(True)
+    field.text.setText("schraube_m4 + spiel")
+
+    assert field.hint.text().startswith("= 40.3"), field.hint.text()
+    assert field.value() == "=@schraube_m4 + @spiel"
+
+
 def test_every_operation_of_the_weg2_example_can_be_opened(qt_app: QApplication) -> None:
     """Der Fund aus der Durchsicht, am Original: im Weg-2-Beispiel ließ sich
     keine der vier Operationen im Verlauf öffnen.

@@ -46,8 +46,10 @@ WALL_LADDER_SEPARATE_STEPS = PartChange(
     version="15",
     date="2026-09-06",
     reason="Breitere Messwände überlappten ihre Nachbarn.",
-    effect="Jede Stufe bleibt einzeln messbar; die Sockelbreite wächst um alle Wandstärken und "
-    "Zwischenräume.",
+    effect=_(
+        "Jede Stufe bleibt einzeln messbar; die Sockelbreite wächst um alle Wandstärken und "
+        "Zwischenräume."
+    ),
 )
 
 OVERHANG_FROM_VERTICAL = PartChange(
@@ -55,8 +57,10 @@ OVERHANG_FROM_VERTICAL = PartChange(
     date="2026-09-06",
     reason="Die angegebene Senkrechte war durch vertauschte Sinus- und Kosinusanteile zur "
     "Waagerechten geworden.",
-    effect="Jede Rampe hat ihren eingetragenen Winkel zur Senkrechten. Kombinationen mit einem "
-    "letzten Winkel ab 90 Grad werden vor dem Bauen erklärt.",
+    effect=_(
+        "Jede Rampe hat ihren eingetragenen Winkel zur Senkrechten. Kombinationen mit einem "
+        "letzten Winkel ab 90 Grad werden vor dem Bauen erklärt."
+    ),
 )
 
 OVERHANG_FAN_BOUNDED = PartChange(
@@ -64,8 +68,10 @@ OVERHANG_FAN_BOUNDED = PartChange(
     date="2026-09-22",
     reason="Breite und Auskraglänge hatten keine Obergrenze; der Bereichstest prüfte sie "
     "deshalb nur an ihrer Untergrenze.",
-    effect="Breite je Stufe höchstens 50 mm, Auskraglänge höchstens 100 mm. Ein Fächer "
-    "darüber wird mit Hinweis auf die Grenze abgewiesen; darunter ändert sich nichts.",
+    effect=_(
+        "Breite je Stufe höchstens 50 mm, Auskraglänge höchstens 100 mm. Ein Fächer "
+        "darüber wird mit Hinweis auf die Grenze abgewiesen; darunter ändert sich nichts."
+    ),
 )
 
 FIRST_RELEASE = PartChange(
@@ -79,7 +85,7 @@ FIT_LADDER_KEEPS_EACH_PAIR_SEPARATE = PartChange(
         "Großes Spiel konnte bei kleinem Nenndurchmesser benachbarte Bohrungen "
         "verbinden und die Grundplatte zerlegen."
     ),
-    effect=(
+    effect=_(
         "Abstand und Plattentiefe richten sich jetzt auch nach der größten "
         "Bohrung; Nennmaße, Spielstufen und Höhe bleiben unverändert."
     ),
@@ -93,7 +99,7 @@ FIT_LADDER_NUMBERS_ITS_STEPS = PartChange(
         "bei der Vorgabe trugen Stufe 1 und 3 dieselben Striche, bei Schritt "
         "0,10 alle vier."
     ),
-    effect=(
+    effect=_(
         "Jede Stufe trägt so viele eingravierte Striche wie ihre Nummer; Maße, "
         "Spiele und Höhe bleiben unverändert."
     ),
@@ -103,16 +109,20 @@ FIT_LADDER_CAN_BE_ASSEMBLED = PartChange(
     version="16",
     date="2026-09-08",
     reason="Zapfen und Bohrungen waren auf derselben starren Platte und nicht ineinander steckbar.",
-    effect="Zwei getrennte, nummerierte Leisten lassen sich zum Messen zusammenstecken. "
-    "Zapfendurchmesser und Spielstufen bleiben erhalten; die Grundplatte wird geteilt.",
+    effect=_(
+        "Zwei getrennte, nummerierte Leisten lassen sich zum Messen zusammenstecken. "
+        "Zapfendurchmesser und Spielstufen bleiben erhalten; die Grundplatte wird geteilt."
+    ),
 )
 
 FIT_LADDER_FACE_AT_RAIL_CENTRE = PartChange(
     version="18",
     date="2026-09-12",
     reason="Der Flächenbezug lag um die Gravurtiefe vom Leistenrand versetzt statt in der Mitte.",
-    effect="Die benannte Fläche liegt mittig auf der Zapfenleiste. Daran ausgerichtete "
-    "Folgeschritte verschieben sich; Leisten, Zapfen, Bohrungen und Spielmaße bleiben gleich.",
+    effect=_(
+        "Die benannte Fläche liegt mittig auf der Zapfenleiste. Daran ausgerichtete "
+        "Folgeschritte verschieben sich; Leisten, Zapfen, Bohrungen und Spielmaße bleiben gleich."
+    ),
 )
 
 #: Höhe der eingravierten Beschriftungen. Zwei Schichten zu 0,2 mm — lesbar,

@@ -26,7 +26,7 @@ from app.i18n import _
 _log = get_logger(__name__)
 
 #: Aktuelle Version von ``project.json``.
-FORMAT_VERSION: Final = 29
+FORMAT_VERSION: Final = 30
 
 
 @dataclass(frozen=True, slots=True)
@@ -471,7 +471,7 @@ def _bind_old_lid_fits(data: dict[str, Any]) -> dict[str, Any]:
         for operation in document.ops:
             if operation.op != "create_lid" or len(operation.outputs) != 2:
                 continue
-            proposed = fit_for_lid(operation, document.material, ())
+            proposed = fit_for_lid(operation, ())
             key = frozenset((str(proposed.a), str(proposed.b)))
             if key in found:
                 ambiguous.add(key)
@@ -485,7 +485,7 @@ def _bind_old_lid_fits(data: dict[str, Any]) -> dict[str, Any]:
             for state in (transaction.changes.before, transaction.changes.after):
                 existing.extend(state.fits or ())
     represented = {frozenset((str(fit.a), str(fit.b))) for fit in existing}
-    missing: dict[frozenset[str], tuple[Operation, str]] = {}
+    missing: dict[frozenset[str], Operation] = {}
     history = History(original)
     while True:
         for key, operation in lids(original).items():
@@ -504,13 +504,13 @@ def _bind_old_lid_fits(data: dict[str, Any]) -> dict[str, Any]:
                 and math.isfinite(value)
                 and value <= 0.0
             ):
-                missing[key] = (operation, original.material)
+                missing[key] = operation
         if history.undo() is None:
             break
 
     additions: dict[frozenset[str], Fit] = {}
-    for key, (operation, material) in sorted(missing.items(), key=lambda item: item[1][0].id):
-        fit = fit_for_lid(operation, material, existing)
+    for key, operation in sorted(missing.items(), key=lambda item: item[1].id):
+        fit = fit_for_lid(operation, existing)
         additions[key] = fit
         existing.append(fit)
 
@@ -685,6 +685,115 @@ def _allow_edge_answers(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+#: Welche Abläufe eine Passung aus dem Material gerechnet haben — Operation,
+#: und die Merkmalsnamen der beiden Seiten.
+_MATERIAL_FLOWS: Final[dict[str, tuple[frozenset[str], frozenset[str]]]] = {
+    "create_lid": (frozenset({"lid_cavity"}), frozenset({"lid_collar"})),
+    "screw_lid": (frozenset({"lid_neck_thread"}), frozenset({"lid_cap_thread"})),
+}
+
+#: Die Nahtpassungen des Teilens: Stift auf der einen Hälfte, Bohrung auf der anderen.
+_SEAM_OPERATIONS: Final = frozenset({"split_pinned", "split_line"})
+
+
+def _let_seam_and_lid_fits_follow_their_bodies(data: dict[str, Any]) -> dict[str, Any]:
+    """29 → 30: Passungen aus *Teilen* und *Deckel* nennen kein Material mehr.
+
+    Stifte, Kragen und Gewinde rechnen ihr Spiel aus dem Material, in dem ihre
+    Körper gedruckt werden. Die Passung dazu schrieb bis Version 29 das
+    Projektmaterial des Augenblicks fest (``auto:petg``), und nach einem
+    Wechsel prüfte sie gegen ein Material, das niemand mehr druckt: geteilt in
+    PETG, gerechnet in TPU, und der Prüfbericht meldete jeden Stift als
+    verletzt (Durchsicht 0.5.0). Seitdem schreiben die Abläufe ``auto:``,
+    und das folgt den Körpern (§14).
+
+    **Umgeschrieben wird nur, was ein solcher Ablauf angelegt hat**, erkannt
+    an der Operation, deren Ausgaben die Passung verbindet, und an den
+    Merkmalsnamen, die er vergibt. Eine benannte Kennung an jeder anderen
+    Passung bleibt stehen: Dort kann jemand ein Material mit Absicht gemeint
+    haben (§12), und das zu überschreiben wäre geraten. In jedem gespeicherten
+    Undo-Zustand gilt dasselbe, sonst holte ein Strg+Z die alte Kennung
+    zurück.
+
+    **Dieselbe Stufe führt ``carried_profiles`` ein** (``Document``): die
+    eigenen Drucker und Materialien, die ein Projekt mitnimmt, damit es auf
+    einem zweiten Rechner rechnet. Umzuschreiben ist dafür nichts — eine
+    ältere Datei trägt keine, und das Speichern füllt das Feld. Die
+    Versionsgrenze steht für die andere Richtung: Ein älteres Programm
+    öffnete die Datei, fände den Drucker nicht und hielte an; so sagt es,
+    dass die Datei neuer ist.
+    """
+    versions: list[dict[str, Any]] = [
+        entry for entry in data.get("ops", []) if isinstance(entry, dict)
+    ]
+    for transaction in data.get("transactions", []):
+        if not isinstance(transaction, dict):
+            continue
+        for state in (transaction.get("changes") or {}).values():
+            if not isinstance(state, dict):
+                continue
+            versions.extend(
+                version
+                for version in (state.get("edited_ops") or {}).values()
+                if isinstance(version, dict)
+            )
+
+    def side(reference: Any) -> tuple[str, str] | None:
+        if not isinstance(reference, str) or ":" not in reference:
+            return None
+        object_id, feature_id = reference.split(":", 1)
+        return object_id, feature_id
+
+    def made_by_a_flow(fit: dict[str, Any]) -> bool:
+        first, second = side(fit.get("a")), side(fit.get("b"))
+        if first is None or second is None:
+            return False
+        for operation in versions:
+            outputs = [str(entry) for entry in operation.get("out") or ()]
+            name = operation.get("op")
+            flow = _MATERIAL_FLOWS.get(str(name))
+            if (
+                flow is not None
+                and outputs[:2] == [first[0], second[0]]
+                and first[1] in flow[0]
+                and second[1] in flow[1]
+            ):
+                return True
+            if (
+                name in _SEAM_OPERATIONS
+                and {first[0], second[0]} <= set(outputs)
+                and first[0] != second[0]
+                and first[1].startswith("pin_")
+                and second[1].startswith("bore_")
+            ):
+                return True
+        return False
+
+    def follow(fits: Any) -> None:
+        if not isinstance(fits, list):
+            return
+        for fit in fits:
+            if not isinstance(fit, dict):
+                continue
+            tolerance = fit.get("tolerance")
+            if (
+                isinstance(tolerance, str)
+                and tolerance.startswith("auto:")
+                and tolerance != "auto:"
+                and made_by_a_flow(fit)
+            ):
+                fit["tolerance"] = "auto:"
+
+    follow(data.get("fits"))
+    for transaction in data.get("transactions", []):
+        if not isinstance(transaction, dict):
+            continue
+        for state in (transaction.get("changes") or {}).values():
+            if isinstance(state, dict):
+                follow(state.get("fits"))
+    return data
+
+
 #: Alle bekannten Schritte, älteste zuerst.
 MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=1, to_version=2, apply=_add_chat),
@@ -715,6 +824,7 @@ MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=26, to_version=27, apply=_qualify_match_answers),
     Step(from_version=27, to_version=28, apply=_allow_native_alias_groups),
     Step(from_version=28, to_version=29, apply=_allow_edge_answers),
+    Step(from_version=29, to_version=30, apply=_let_seam_and_lid_fits_follow_their_bodies),
 )
 
 

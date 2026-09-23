@@ -289,6 +289,25 @@ def test_the_shared_placement_names_match_the_parts_library() -> None:
     assert tuple(name for name, _kind, _spec in _PLACEMENT) == PART_PLACEMENT_PARAMS
 
 
+def test_every_feature_kind_has_a_title_for_the_reader() -> None:
+    """Jede Merkmalsart aus ``types.FeatureKind`` hat einen Titel.
+
+    ``FEATURE_TITLES`` führt die Namen, mit denen Referenzteil, Ortsangabe des
+    Agenten und Absagen des Auswahlfensters eine Art nennen. ``torus`` fehlte
+    darin bis zur Durchsicht 0.5.0, und die Ortsangabe schrieb das Wort
+    „torus" in einen deutschen Satz — der Rückfall ``get(kind, kind)`` ist
+    die Kennung, und die ist kein Oberflächentext.
+    """
+    from typing import get_args
+
+    from app.core.registry.registry import FEATURE_TITLES
+    from app.core.types import FeatureKind
+
+    missing = sorted(set(get_args(FeatureKind)) - set(FEATURE_TITLES))
+    assert not missing, f"feature kinds without a title: {missing}"
+    assert set(FEATURE_KINDS) <= set(FEATURE_TITLES)
+
+
 def test_every_detected_feature_kind_offers_an_operation() -> None:
     """Ein angeklicktes Merkmal führt zu einer Handlung — oder es steht im
     Ausnahmeverzeichnis unten (§2.6, §18.5).

@@ -2196,6 +2196,61 @@ def test_an_unexpected_error_leaves_its_traceback_and_cause_in_the_log(
     )
 
 
+def test_an_unexpected_error_in_the_recognition_stops_at_its_step(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Ein Programmfehler der Merkmalserkennung hält am Schritt an wie einer der Operation.
+
+    Gemessen in der Durchsicht 0.5.0 am Puppenhausbett (1,2 Millionen
+    Dreiecke, Weg 3): ``detect`` warf einen ``MemoryError``, und der flog aus
+    ``evaluate`` heraus — gefangen war um ``_with_features`` nur ``AppError``.
+    Im Fenster endete die Auswertung damit als abgestürzter Arbeiter, ohne
+    Prüfbericht und ohne den Schritt, an dem es lag; die Operation selbst hat
+    diesen Fang seit dem Gesamtreview.
+    """
+    from importlib import import_module
+
+    from app.core.bootstrap import load_operations
+    from app.core.knowledge.profiles import make_profile
+    from app.core.scene.project import ProjectSources, new_project
+    from app.core.types import Source
+
+    # Das Modul, nicht die gleichnamige Funktion aus ``app.core.scene``.
+    evaluate_module = import_module("app.core.scene.evaluate")
+
+    def exhausted(*_args: object, **_kwargs: object) -> object:
+        raise MemoryError("kein Speicher für die Erkennung")
+
+    load_operations()
+    monkeypatch.setattr(evaluate_module, "detect", exhausted)
+    project = new_project("centauri-carbon-2", "petg")
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/plate_holes.stl", sha256=""
+    )
+    project.sources["src_1"] = (
+        Path(__file__).parent / "data" / "meshes" / "plate_holes.stl"
+    ).read_bytes()
+    History(project.document).apply(
+        "Import", [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})]
+    )
+
+    with caplog.at_level(logging.WARNING, logger="app.core.scene.evaluate"):
+        result = evaluate(
+            project.document,
+            make_profile("centauri-carbon-2", "petg"),
+            sources=ProjectSources(project),
+        )
+
+    assert result.stopped_at == 1
+    finding = next(
+        entry for entry in result.scene.report.findings if entry.code == "op.load.InternalError"
+    )
+    assert finding.values["detail"] == "MemoryError: kein Speicher für die Erkennung"
+    assert any(r.levelno == logging.ERROR and r.exc_info for r in caplog.records), (
+        "kein Traceback im Protokoll"
+    )
+
+
 def test_the_log_reason_carries_the_numbers_not_the_placeholders() -> None:
     """Der Abbruchgrund nennt die Zahlen — sonst hilft er dem Support wieder nicht.
 

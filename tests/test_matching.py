@@ -1425,20 +1425,25 @@ def test_an_insert_replaces_the_bore_and_so_takes_its_measurement() -> None:
 def test_a_bore_between_two_sizes_is_named_and_asked_about() -> None:
     """Wo keine Größe passt, wird der Durchmesser genannt und gefragt.
 
-    4,75 mm ist weiter als das Durchgangsloch der M4 (4,50) und enger als das
-    Nennmaß der M5 (5,00). Eine der beiden zu wählen wäre geraten; keine zu
-    nennen wäre ein stiller Vorschlag über ein leeres Feld.
+    4,90 mm ist weiter als das grobe Durchgangsloch der M4 (4,80) und enger
+    als das Nennmaß der M5 (5,00). Eine der beiden zu wählen wäre geraten;
+    keine zu nennen wäre ein stiller Vorschlag über ein leeres Feld.
+
+    Bis zur Durchsicht 0.5.0 stand hier 4,75 mm — gemessen an der mittleren
+    Reihe allein. Seit die Tabelle auch die grobe Reihe nach ISO 273 kennt,
+    ist 4,75 mm das grobe Durchgangsloch der M4 und kein Fall mehr für diesen
+    Test.
     """
-    between = 4.75
-    assert standards.screw("M4").clearance < between < standards.screw("M5").nominal, (
-        "der Fall dieses Tests: zwischen zwei Größen"
-    )
+    between = 4.9
+    assert (
+        (standards.screw("M4").clearance_coarse or 0.0) < between < standards.screw("M5").nominal
+    ), "der Fall dieses Tests: zwischen zwei Größen"
 
     assert screw_for_bore(between) is None, "keine Größe wird herbeigerundet"
 
     text, choices = bore_advice(between)
 
-    assert "4.75" in text, "der Kunde liest, was gemessen wurde"
+    assert "4.90" in text, "der Kunde liest, was gemessen wurde"
     assert choices[:2] == ["M4", "M5"], "die beiden Nachbarn, in dieser Reihenfolge"
     assert len(choices) == 3, "und ein Ausweg, der keine Größe behauptet"
 
@@ -1499,7 +1504,18 @@ def test_no_bore_falls_between_the_two_answers() -> None:
 
 @pytest.mark.parametrize("source", ["fit", "parameter", None])
 def test_bore_advice_distinguishes_a_measurement_from_a_known_screw(source: str | None) -> None:
-    """Auch ein Wert mitten im Normbereich beweist kein ursprüngliches Schraubenmaß."""
+    """Ein gemessener Wert nennt die Größe als Einschätzung, nie als Tatsache.
+
+    **Umgestellt in der Durchsicht 0.5.0.** Bis dahin schrieb dieser Test
+    ``"M5" not in text`` fest: Eine Messung durfte gar keine Größe nennen, auch
+    nicht an 5,19 mm, die nur ins Band der M5 fallen. Die Funktionsseite
+    verspricht aber genau diesen Satz für eine fremde STL, und der Kunde
+    bekam „nicht sicher bestimmt" und Nachbargrößen ohne die M5.
+
+    Die Grenze zur Konstruktionsangabe bleibt: Die Messung sagt „vermutlich"
+    und nennt ihre Herkunft in Klammern; die exakte Fläche sagt „das
+    Durchgangsloch für" (``test_the_measured_diameter_is_said_out_loud``).
+    """
     feature = replace(
         clicked_bore(),
         measure_sources={"diameter": source} if source else {},  # type: ignore[arg-type]
@@ -1507,8 +1523,112 @@ def test_bore_advice_distinguishes_a_measurement_from_a_known_screw(source: str 
     text, choices = bore_advice(MEASURED_BORE, feature=feature)
     qualifier = {"fit": "geschätzt", "parameter": "Vorgabemaß", None: "Maßherkunft nicht bestimmt"}
     assert qualifier[source] in text
-    assert "5.19" in text and "nicht sicher bestimmt" in text
-    assert "M5" not in text
+    assert "5.19" in text and "Passt vermutlich zu M5 (Durchgangsloch fein)" in text
+    assert "Durchgangsloch für" not in text, "eine Messung ist keine Konstruktionsangabe"
+    assert "M5" in choices, f"die passende Größe fehlt unter den Antworten: {choices}"
     assert choices and choices[-1] == "Selbst eintragen"
     passive, choices = bore_advice(MEASURED_BORE, feature=feature, ask=False)
-    assert qualifier[source] in passive and not choices
+    assert qualifier[source] in passive and "vermutlich zu M5" in passive and not choices
+
+
+def test_a_measured_bore_offers_its_own_size_among_the_answers() -> None:
+    """An 5,19 mm fragte die Rückfrage nach M4 und M6 — die M5 fehlte.
+
+    ``_sizes_around`` nannte nur die Nachbargrößen einer Bohrung, „die zu
+    keiner passt", und wurde auch dort gefragt, wo sie passt. Rot bis zur
+    Durchsicht 0.5.0.
+    """
+    feature = replace(clicked_bore(), measure_sources={"diameter": "fit"})
+
+    _text, choices = bore_advice(MEASURED_BORE, feature=feature)
+
+    assert choices == ["M4", "M5", "M6", "Selbst eintragen"]
+
+
+def test_a_measured_bore_names_every_hole_it_may_be() -> None:
+    """4,2 mm ist das feine Durchgangsloch der M4 und das Kernloch der M5.
+
+    Eines davon zu nennen wäre geraten (Regel 21); beide stehen im Satz, in
+    der Reihenfolge der Tabelle, und beide Größen unter den Antworten.
+    """
+    feature = replace(
+        clicked_bore(4.2),
+        measure_sources={"diameter": "fit"},
+    )
+    text, choices = bore_advice(4.2, feature=feature)
+
+    assert "M4 (Durchgangsloch fein) oder M5 (Kernloch für Gewinde)" in text
+    assert {"M4", "M5"} <= set(choices)
+
+
+def test_a_measured_bore_outside_every_band_is_still_asked_about() -> None:
+    """Zwischen den Bändern bleibt es bei der ehrlichen Frage.
+
+    7,5 mm ist weiter als das grobe Durchgangsloch der M6 (7,0) und enger als
+    das Nennmaß der M8 — keine Größe, kein Kernloch, also keine Einschätzung.
+    """
+    feature = replace(clicked_bore(7.5), measure_sources={"diameter": "fit"})
+
+    text, choices = bore_advice(7.5, feature=feature)
+
+    assert "nicht sicher bestimmt" in text and "vermutlich" not in text
+    assert choices == ["M6", "M8", "Selbst eintragen"]
+
+
+def test_the_measuring_uncertainty_comes_from_the_feature_and_nowhere_else() -> None:
+    """Das Intervall nimmt Kreispassung und Netzband, und sonst nichts.
+
+    4,95 mm liegt unter dem Nennmaß der M5 und über dem groben Loch der M4.
+    Erst ein belegter Passungsfehler von 0,03 mm hebt das Intervall bis 5,01
+    — dann kommt die M5 infrage, vorher nicht, und mit ihr das Kernloch der
+    M6. Ein Vorgabemaß bleibt ein Punkt: Für ihn ist keine Messunsicherheit
+    bekannt.
+    """
+    from app.core.scene.placement import BoreMatch, bore_matches, measured_interval
+    from app.core.types import MeasureStatus
+
+    fitted = MeasureStatus("estimated", "fit", available=True)
+    plain = replace(clicked_bore(4.95), measure_sources={"diameter": "fit"})
+    assert measured_interval(4.95, plain, fitted) == (4.95, 4.95)
+    assert not bore_matches(4.95, 4.95)
+
+    uncertain = replace(plain, params={**plain.params, "fit_error": 0.03, "radial_min": 2.46})
+    low, high = measured_interval(4.95, uncertain, fitted)
+    assert low == pytest.approx(4.92 - 0.06)
+    assert high == pytest.approx(4.95 + 0.06)
+    # Und mit ihr auch das Kernloch der M6: Es misst genau 5,00 mm.
+    assert bore_matches(low, high) == (BoreMatch("M5", "fine"), BoreMatch("M6", "tap"))
+
+    given = MeasureStatus("exact", "parameter", available=True)
+    assert measured_interval(4.95, uncertain, given) == (4.95, 4.95)
+
+
+def test_the_clearance_series_are_those_of_iso_273() -> None:
+    """Feine, mittlere und grobe Reihe — gegen die Norm, nicht gegen die Tabelle.
+
+    Abgeschrieben aus ISO 273 und nicht aus ``standards.toml``, sonst prüfte
+    sich die Tabelle selbst (``.claude/memory/sollwert-aus-dem-pruefling.md``).
+    """
+    iso_273 = {
+        "M2": (2.2, 2.4, 2.6),
+        "M2.5": (2.7, 2.9, 3.1),
+        "M3": (3.2, 3.4, 3.6),
+        "M4": (4.3, 4.5, 4.8),
+        "M5": (5.3, 5.5, 5.8),
+        "M6": (6.4, 6.6, 7.0),
+        "M8": (8.4, 9.0, 10.0),
+    }
+    for size in standards.screw_sizes():
+        entry = standards.screw(size)
+        assert (entry.clearance_fine, entry.clearance, entry.clearance_coarse) == iso_273[size]
+
+
+def test_a_coarse_clearance_hole_gets_the_head_of_its_screw() -> None:
+    """5,7 mm ist das grobe Durchgangsloch der M5 — die Senkung nimmt ihren Kopf.
+
+    Der Hinweis darüber sagt „Passt vermutlich zu M5 (Durchgangsloch grob)";
+    ein leeres Feld darunter widerspräche ihm.
+    """
+    values = values_for(REGISTRY.get("countersink_hole"), clicked_bore(5.7))
+
+    assert values["diameter"] == standards.screw("M5").countersink

@@ -1380,6 +1380,9 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     # Ohne das ``_mm`` des Werteschlüssels: ``value_label`` streift die
     # Einheiten-Endung, bevor es hier nachschlägt — wie bei ``eroded``.
     "fair_wall": _("Verlässlich ab"),
+    # ``profile.printer_missing``: der Drucker, mit dem gerechnet wird, bis
+    # der Kunde einen wählt.
+    "fallback_printer": _("Gerechnet mit"),
     "feature": _("Merkmal"),
     "features": _("Merkmale"),
     "field": _("Feld"),
@@ -1432,6 +1435,10 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "largest": _("Größte Größe"),
     "least": _("Mindestens"),
     "limit": _("Grenze"),
+    # ``parts.changed``: der Bausteinstand, mit dem gespeichert wurde, und der
+    # dieser Version (§24.4). „Gespart" hieße Material, nicht Version.
+    "library_saved": _("Bausteinstand beim Speichern"),
+    "library_now": _("Bausteinstand jetzt"),
     "loose": _("Lose Stücke"),
     "materials": _("Materialien"),
     "lost": _("Verloren"),
@@ -1460,7 +1467,6 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "nearest": _("Nächste Größe"),
     "node": _("Knoten"),
     "nominal": _("Nennmaß"),
-    "now": _("Jetzt"),
     "nozzle": _("Düse"),
     "object": _("Objekt"),
     "objects": _("Objekte"),
@@ -1545,6 +1551,8 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "strokes": _("Striche"),
     "suffix": _("Endung"),
     "suggested_name": _("Freier Name"),
+    # ``expressions.canonical``: wie der Parameter geschrieben werden muss.
+    "suggestion": _("Vorschlag"),
     "support": _("Stützen"),
     "supported": _("Unterstützt"),
     "target": _("Ziel"),

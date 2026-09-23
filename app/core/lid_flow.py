@@ -32,6 +32,7 @@ from app.core.log import get_logger
 from app.core.scene.fits import active_fits
 from app.core.scene.history import History, OperationDraft, change_for
 from app.core.types import (
+    AUTO_TOLERANCE_PREFIX,
     Document,
     FeatureRef,
     Finding,
@@ -79,15 +80,22 @@ def _unused_name(fits: Sequence[Fit], wanted: str) -> str:
     return f"{wanted}_{number}"
 
 
-def fit_for_lid(operation: Operation, material: str, existing: Sequence[Fit]) -> Fit:
-    """Die gemeinsame Beziehung für den Ablauf und belegte alte Deckelschritte."""
+def fit_for_lid(operation: Operation, existing: Sequence[Fit]) -> Fit:
+    """Die gemeinsame Beziehung für den Ablauf und belegte alte Deckelschritte.
+
+    Die Toleranz nennt kein Material (``auto:``): Kragen und Gewinde rechnen
+    ihr Spiel aus dem Material, in dem Dose und Deckel gedruckt werden, und
+    die Passung prüft gegen dasselbe. Bis zur Durchsicht 0.5.0 stand hier das
+    Projektmaterial des Augenblicks, und ein späterer Materialwechsel machte
+    aus einem passenden Deckel einen verletzten.
+    """
     threaded = operation.op == "screw_lid"
     return Fit(
         name=_unused_name(existing, FIT_NAME),
         a=FeatureRef(operation.outputs[0], NECK_THREAD_FEATURE if threaded else CAVITY_FEATURE),
         b=FeatureRef(operation.outputs[1], CAP_THREAD_FEATURE if threaded else COLLAR_FEATURE),
         kind="clearance",
-        tolerance=f"auto:{material}",
+        tolerance=AUTO_TOLERANCE_PREFIX,
         when_positive=None if threaded else (operation.id, "collar"),
     )
 
@@ -124,7 +132,7 @@ def apply_lid(
         return LidApplied(object_ids=list(made), transaction=applied.id)
 
     box_id, lid_id = made[0], made[1]
-    fit = fit_for_lid(document.ops[-1], profile.material.id, document.fits)
+    fit = fit_for_lid(document.ops[-1], document.fits)
     # Die Passung gehört in dieselbe Transaktion wie die Geometrie: sie ist
     # keine Operation, also reist sie als DocumentChange mit (§15.5). Ohne das
     # ließe ein Undo den Deckel verschwinden und die Passung stehen — sie

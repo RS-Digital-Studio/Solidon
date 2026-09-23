@@ -339,14 +339,23 @@ def _coerce(spec: ParamSpec, value: Any) -> Any:
         # er für **jede** Zahlenart einmal steht. Vor der Ganzzahlfrage, weil
         # `float("nan").is_integer()` falsch ist und die Meldung dann „hier
         # wird eine ganze Zahl erwartet" hieße — wahr und irreführend.
-        if not math.isfinite(float(value)):
+        # **Und eine Ganzzahl über den Bereich eines ``float`` hinaus ist auch
+        # keine.** JSON kennt keine Obergrenze für Ganzzahlen: Eine Projektdatei
+        # mit ``"width": 1000…0`` (400 Stellen) ließ ``float()`` mit einem rohen
+        # ``OverflowError`` scheitern, und der lief aus der Auswertung hinaus
+        # statt als Befund am Schritt zu stehen (Durchsicht 0.5.0).
+        try:
+            as_float = float(value)
+        except OverflowError:
+            as_float = math.inf
+        if not math.isfinite(as_float):
             raise ValidationError(
                 field=spec.name,
                 detail=_("Der Wert ist keine endliche Zahl. Tragen Sie eine Zahl ein."),
                 value=value,
                 constraint="not_finite",
             )
-        if spec.kind != "float" and not float(value).is_integer():
+        if spec.kind != "float" and not as_float.is_integer():
             raise ValidationError(
                 field=spec.name,
                 detail=_("Hier wird eine ganze Zahl erwartet."),

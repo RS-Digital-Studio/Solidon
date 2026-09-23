@@ -1780,15 +1780,21 @@ Projekte still anders, und Leitprinzip 4 ist verletzt.
 - **Änderungsverlauf je Baustein**: was, wann, warum, mit Auswirkung auf die
   Maße
 - **Beim Öffnen**: Hinweis, welche *benutzten* Bausteine sich seither geändert
-  haben, mit der Wahl zwischen „neu rechnen" und „alten Stand beibehalten".
+  haben, mit Katalogtitel und je Maßwirkung seit dem Speichern einer Zeile
+  aus dem Änderungsverlauf. Gerechnet wird mit dem aktuellen Stand; die
+  Bibliothek führt keine alten Stände (Entscheidung Robert, 23.09.2026: die
+  Migrationsmeldung reicht). Ein eigenes Rezept, dessen gespeicherter Stand
+  in der Projektdatei mitreist, bietet zusätzlich „Gespeicherten Stand
+  verwenden" an — als eine rücknehmbare Transaktion über alle Einsätze.
   Eigene Bausteine werden zusätzlich über einen beim Speichern abgelegten
   Inhaltsfingerabdruck je benutztem Baustein erkannt: bei `.py` über den
   Dateiinhalt, bei Rezepten über die Rezeptdaten. Änderungszeit und Dateigröße
   allein belegen keine Inhaltsänderung. Fehlt ein früherer oder aktueller
   Fingerabdruck, ist keine Aussage über eine Änderung möglich. Die grobe
   Invalidierung des Plattencaches (§38) bleibt davon getrennt.
-- Der alte Stand bleibt aufrufbar, solange die Bibliothek ihn führt; wird er
-  entfernt, verhält sich das wie eine Migration (§16.2)
+- Ein nicht mehr geführter Stand verhält sich wie eine Migration (§16.2):
+  Die Meldung sagt, was sich geändert hat, und der Prüfbericht nennt die
+  Maße, die zu prüfen sind
 
 ### 24.5 Eigene Bausteine
 Dieselbe Registrierung aus einem Nutzerverzeichnis

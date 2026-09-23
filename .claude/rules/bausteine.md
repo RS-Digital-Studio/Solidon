@@ -227,7 +227,15 @@ Parameter, als Daten in `<Nutzerdaten>/parts/recipes/*.json`. Was dabei gilt:
   dessen Migrationen; die Hülle trägt ihre eigene `FORMAT_VERSION`.
 - **Die Version ist der Hash** über die kanonischen Daten (§24.4). Der
   Bereichstest-Bericht hängt am Rezept, aber **außerhalb** des Hashes —
-  Prüfen macht aus dem Rezept kein anderes.
+  Prüfen macht aus dem Rezept kein anderes. **Der Name steckt im Hash:** Wer
+  einen mitgereisten Stand (`<name>_travelled`) mit dem gespeicherten Abdruck
+  vergleicht, vergleicht ihn unter dem Namen im Stapel
+  (`check.saved_states`), sonst findet er nie den Stand, den die Datei
+  mitgebracht hat.
+- **Eine Wahl nur, wo es einen alten Stand gibt** (§24.4, RM-138). Der
+  gespeicherte Stand eines Rezepts reist mit und lässt sich wählen; für die
+  Bibliothek und eigene `.py` ist der neue Stand eine Migration, und der
+  Befund sagt das, statt einen Knopf ohne Wirkung anzubieten.
 - **Ausgewertet wird mit dem Auswerter der Szene** (`recipe.build`): dieselbe
   Rückfallkette, dieselben `auto:`-Toleranzen, dieselbe §32-Quelltextprüfung.
   Beim Einsetzen läuft `build_with_profile` mit dem Profil des Dokuments

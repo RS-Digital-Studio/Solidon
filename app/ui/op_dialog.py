@@ -450,8 +450,13 @@ class ValueField(QWidget):
         if self.toggle.isChecked() and (entered := self.text.text().strip()):
             # Ein Ausdruck bleibt wörtlich. Ihn umzurechnen hieße, „=@breite/2"
             # in eine Zahl zu verwandeln — die Bindung wäre weg, und §13 rechnet
-            # ohnehin in Millimetern.
-            return entered
+            # ohnehin in Millimetern. Ergänzt werden nur ``=`` und ``@``, wo
+            # der Kunde sie weggelassen hat (``expressions.canonical``); ist
+            # ein Name mehrdeutig, bleibt der Text, und ``_describe`` sagt es.
+            try:
+                return expressions.canonical(entered, self._parameter_values)
+            except AppError:
+                return entered
         if self._optional and self.spin.value() <= self.spin.minimum():
             return None
         number = self._number()
@@ -686,8 +691,9 @@ class ValueField(QWidget):
             self.hint.setText(waiting)
             return
         try:
-            expressions.check(entered)
-            value = expressions.evaluate(entered, self._parameter_values)
+            written = expressions.canonical(entered, self._parameter_values)
+            expressions.check(written)
+            value = expressions.evaluate(written, self._parameter_values)
         except AppError as problem:
             self.hint.setText(str(problem.detail or problem.title))
             return

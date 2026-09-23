@@ -173,10 +173,14 @@ Speichern unwiederbringlich, und Strg+Z traf einen anderen Schritt. Seit
 Format v12 trägt die Transaktion beide **Fassungen** des Schritts
 (`DocumentState.edited_ops`, `History._swap_operation`): Kennung und Platz
 bleiben, der Verlauf wächst um keinen Schritt (§15.4), und `restore` legt
-die Fassung in beide Richtungen zurück. Wer einen vierten Änderungsweg baut,
+die Fassung in beide Richtungen zurück. Wer einen weiteren Änderungsweg baut,
 geht durch `_swap_operation` — und misst „kein zweiter Schritt" an der
 Schrittliste, nie an der Transaktionszahl: Genau diese Verwechslung hatte
-einen Test die Nicht-Rücknehmbarkeit festschreiben lassen.
+einen Test die Nicht-Rücknehmbarkeit festschreiben lassen. Wechseln mehrere
+Schritte zusammen, dann in **einer** Transaktion (`_swap_operations`): der
+gespeicherte Bausteinstand (`History.use_part_states`, RM-138) stellt jeden
+Einsatz desselben Bausteins um, und ein halb umgestelltes Projekt rechnete
+mit zwei Ständen nebeneinander.
 
 Wer stattdessen `document.parameters[...] = ...` schreibt, baut den Fehler
 nach, der hier zweimal steckte: die Änderung ist nicht rücknehmbar, sie gilt

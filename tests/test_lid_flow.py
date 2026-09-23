@@ -104,6 +104,11 @@ def test_the_tolerance_stays_a_reference(profile: Profile) -> None:
 
     Sonst erreicht eine Kalibrierung nach §28.3 einen Deckel nicht, der vor
     ihr entstanden ist — und genau dafür gibt es die Kalibrierung.
+
+    **Und sie nennt kein Material** (``auto:``, Durchsicht 0.5.0): Der Kragen
+    rechnet sein Spiel aus dem Material, in dem Dose und Deckel gedruckt
+    werden. Mit ``auto:petg`` prüfte die Passung nach einem Wechsel auf TPU
+    gegen PETG und meldete einen passenden Deckel als verletzt.
     """
     project = new_project("centauri-carbon-2", "petg")
     document = project.document
@@ -111,7 +116,7 @@ def test_the_tolerance_stays_a_reference(profile: Profile) -> None:
 
     apply_lid(document, box, {"thickness": 3.0, "collar": 4.0}, profile)
 
-    assert str(document.fits[0].tolerance) == "auto:petg"
+    assert str(document.fits[0].tolerance) == "auto:"
 
 
 def test_both_features_exist_after_evaluation(profile: Profile) -> None:
@@ -432,7 +437,7 @@ def test_v19_flat_lid_gains_a_dynamic_fit_with_parameter_undo_and_roundtrip(prof
     from app.core.scene.migrations import FORMAT_VERSION
 
     assert document.format_version == FORMAT_VERSION
-    assert len(document.fits) == 1 and document.fits[0].tolerance == "auto:petg"
+    assert len(document.fits) == 1 and document.fits[0].tolerance == "auto:"
     assert document.fits[0].when_positive == (3, "collar")
     assert active_fits(document) == []
     history = History(document)

@@ -107,8 +107,13 @@ class PartChange:
     version: str
     date: str
     reason: str
-    effect: str = ""
-    """Was sie an den Maßen ändert — das, worauf es für alte Projekte ankommt."""
+    effect: TranslatableText | str = ""
+    """Was sie an den Maßen ändert — das, worauf es für alte Projekte ankommt.
+
+    **Übersetzbar**, denn der Kunde liest ihn: Beim Öffnen eines älteren
+    Projekts nennt der Prüfbericht je Baustein genau diesen Satz (§24.4,
+    ``parts.change``). Der Grund darüber bleibt Entwicklernotiz.
+    """
 
 
 MATERIAL_OF_TARGET = PartChange(
@@ -116,8 +121,10 @@ MATERIAL_OF_TARGET = PartChange(
     date="2026-09-06",
     reason="Automatische Passungswerte wurden aus dem Projektmaterial statt aus dem Material "
     "des Zielkörpers gelesen.",
-    effect="An ausdrücklich anders zugeordneten Körpern folgen Spiel und Übermaß jetzt deren "
-    "Material. Bestehende Passungen an solchen Körpern prüfen.",
+    effect=_(
+        "An ausdrücklich anders zugeordneten Körpern folgen Spiel und Übermaß jetzt deren "
+        "Material. Bestehende Passungen an solchen Körpern prüfen."
+    ),
 )
 
 
@@ -716,9 +723,11 @@ MOUTH_AT_ORIGIN: Final = PartChange(
     version="2",
     date="2026-08-05",
     reason="Der Ursprung ist die Mündung, das Werkzeug geht nach unten ins Material (§24.1).",
-    effect="Der Baustein liegt um seine eigene Tiefe tiefer. Alte Projekte "
-    "bekommen ihn an der Stelle, an der er vorher wirkungslos in der Luft "
-    "stand — die Position ist zu prüfen.",
+    effect=_(
+        "Der Baustein liegt um seine eigene Tiefe tiefer. Alte Projekte "
+        "bekommen ihn an der Stelle, an der er vorher wirkungslos in der Luft "
+        "stand — die Position ist zu prüfen."
+    ),
 )
 
 
@@ -732,9 +741,11 @@ FACE_ON_THE_BODY: Final = PartChange(
     date="2026-09-22",
     reason="Die Mitte der benannten Fläche lag im Material oder in der Luft neben dem "
     "Körper, nicht auf der Fläche, die sie benennt.",
-    effect="Die Mitte liegt jetzt auf der Fläche. Wer einen weiteren Baustein daran "
-    "ausgerichtet hat, findet ihn um diesen Versatz verschoben; der Körper selbst "
-    "bleibt gleich.",
+    effect=_(
+        "Die Mitte liegt jetzt auf der Fläche. Wer einen weiteren Baustein daran "
+        "ausgerichtet hat, findet ihn um diesen Versatz verschoben; der Körper selbst "
+        "bleibt gleich."
+    ),
 )
 
 
@@ -746,10 +757,12 @@ FACE_GIVES_DIRECTION: Final = PartChange(
     date="2026-08-23",
     reason="Eine Fläche schaut entlang ihrer Normalen, und darauf steht der "
     "Baustein — vorher stand er entlang der Vorgabe Z (§25, §18.5).",
-    effect="An einer Deckfläche ändert sich nichts. An einer Seitenwand oder "
-    "einer geneigten Fläche steht der Baustein jetzt senkrecht auf ihr statt "
-    "senkrecht nach oben; wer das alte Verhalten nachbaut, hat unter *Achse* "
-    "eine Richtung gewählt, die nun aus der Fläche kommt.",
+    effect=_(
+        "An einer Deckfläche ändert sich nichts. An einer Seitenwand oder einer "
+        "geneigten Fläche steht der Baustein jetzt senkrecht auf ihr statt senkrecht "
+        "nach oben; wer das alte Verhalten nachbaut, hat unter „Achse“ eine Richtung "
+        "gewählt, die nun aus der Fläche kommt."
+    ),
 )
 
 

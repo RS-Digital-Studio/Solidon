@@ -1903,6 +1903,64 @@ def test_a_plate_outside_the_volume_offers_arranging(
     assert raised.value.values["output"], "die Ausgabe des Slicers bleibt lesbar"
 
 
+def test_bambus_refusal_in_its_result_file_reaches_the_slicer_output(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Bambu Studio sagt seine Absage nicht auf der Konsole, sondern in ``result.json``.
+
+    Gemessen an Bambu Studio 2.3 (RM-163, Durchsicht 0.5.0): Ein Projekt für
+    einen Drucker, den Bambu nicht kennt, endet mit Rückgabewert −17 und
+    leerer Ausgabe; der Grund steht nur in der Datei neben der Druckdatei.
+    Der Kunde las „Der Slicer hat keine Druckdatei geschrieben", und
+    *Ausgabe des Slicers anzeigen* zeigte ein leeres Feld. Eine Datei aus
+    einem früheren Lauf zählt nicht.
+    """
+    import os
+
+    profile = profiles.make_profile()
+    model = tmp_path / "model.stl"
+    model.write_bytes(b"solid x\nendsolid x\n")
+    executable = tmp_path / "bambu-studio.exe"
+    executable.write_bytes(b"")
+    reason = "The selected printer is not compatible with the process preset in the 3mf."
+    output_dir = tmp_path / "ausgabe"
+    output_dir.mkdir()
+    stale = output_dir / "result.json"
+    stale.write_text(json.dumps({"error_string": "alt", "return_code": -5}), encoding="utf-8")
+    os.utime(stale, (1_000_000_000, 1_000_000_000))
+    writes = {"reason": True}
+
+    def run(command: list[str], *args: object, **kwargs: object) -> _Finished:
+        target = Path(command[command.index("--outputdir") + 1])
+        if writes["reason"]:
+            (target / "result.json").write_text(
+                json.dumps({"error_string": reason, "return_code": -17}), encoding="utf-8"
+            )
+        finished = _Finished(b"")
+        finished.returncode = 0xFFFFFFEF
+        return finished
+
+    monkeypatch.setattr(handover, "_run_slicer", run)
+    setup = handover.SlicerSetup(executable=executable, flavour="orca")
+
+    with pytest.raises(ExternalToolError) as raised:
+        handover.slice_model(
+            model, print_settings.resolve(profile), profile, setup, output_dir=output_dir
+        )
+    assert reason in raised.value.values["output"]
+
+    # Die Gegenprobe: Schreibt der Lauf nichts, bleibt die alte Datei stumm.
+    os.utime(stale, (1_000_000_000, 1_000_000_000))
+    stale.write_text(json.dumps({"error_string": "alt", "return_code": -5}), encoding="utf-8")
+    os.utime(stale, (1_000_000_000, 1_000_000_000))
+    writes["reason"] = False
+    with pytest.raises(ExternalToolError) as raised:
+        handover.slice_model(
+            model, print_settings.resolve(profile), profile, setup, output_dir=output_dir
+        )
+    assert "alt" not in raised.value.values["output"]
+
+
 def test_any_other_silence_keeps_the_old_answer(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

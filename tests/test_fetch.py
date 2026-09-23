@@ -51,6 +51,15 @@ class _Handler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(payload)
             return
+        if self.path.startswith("/ausbruch"):
+            self.send_response(200)
+            self.send_header("Content-Type", "application/octet-stream")
+            self.send_header(
+                "Content-Disposition", r'attachment; filename="..\..\Windows\halter.stl"'
+            )
+            self.end_headers()
+            self.wfile.write(payload)
+            return
         if self.path.startswith("/fehlt"):
             self.send_error(404)
             return
@@ -104,6 +113,19 @@ def test_the_server_may_name_the_file(server: str) -> None:
     """Content-Disposition schlägt den Pfad — dort steht der Name, den der
     Anbieter meint."""
     assert fetch_model(f"{server}/benannt?id=17").name == "halterung.stl"
+
+
+def test_a_server_name_keeps_only_its_last_part_whatever_the_separator(server: str) -> None:
+    """Ein Dateiname mit Rückstrichen ist ein Pfad, keiner mit Schrägstrichen allein.
+
+    Durchsicht 0.5.0: ``PurePosixPath`` kannte nur „/" als Trenner — ein Server,
+    der ``..\\..\\Windows\\halter.stl`` schickt, gab diesen Namen ganz weiter.
+    Unter Windows fing ihn der Containerpfad ab, unter Linux und macOS lehnte
+    das Speichern das Projekt danach als nicht relativ ab.
+    """
+    assert fetch_model(f"{server}/ausbruch").name == "halter.stl"
+    # Und derselbe Name, verschlüsselt im Pfad der Adresse.
+    assert fetch_model(f"{server}/modelle/..%5C..%5Cwuerfel.stl").name == "wuerfel.stl"
 
 
 def test_a_real_redirect_is_checked_and_remains_inside_the_total_deadline(server: str) -> None:

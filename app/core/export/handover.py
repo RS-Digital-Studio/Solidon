@@ -27,6 +27,7 @@ import tempfile
 import time
 import zipfile
 from collections.abc import Callable, Iterable, Mapping, Sequence
+from contextlib import suppress
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
@@ -914,6 +915,14 @@ def _machine_keys(profile: Profile, flavour: SlicerFlavour) -> dict[str, str]:
         "nozzle_diameter": f"{printer.nozzle_diameter:g}",
         "bed_shape": corners,
         "max_print_height": f"{height:g}",
+        # **Die Grenzen der Maschine kennt Solidon nicht** (RM-191). Mit der
+        # Vorgabe ``time_estimate_only`` schätzte PrusaSlicer mit seinen
+        # eingebauten 1500 mm/s² — ein Fünftel der Beschleunigung, die die
+        # Datei selbst anfordert —, und die Druckzeit stand doppelt so hoch
+        # wie bei Orca für dieselbe Platte. ``ignore`` schreibt keine Grenzen
+        # in den G-Code (die Firmware behält ihre) und schätzt mit den
+        # Werten, die Solidon verlangt.
+        "machine_limits_usage": "ignore",
     }
 
 
@@ -2813,6 +2822,35 @@ def _creality_cli_input(model: Path, target: Path, cancelled: CancelToken | None
     return target
 
 
+def _is_creality_print(setup: SlicerSetup) -> bool:
+    """Ob dieser Slicer Creality Print ist — ein Mitglied der Orca-Familie."""
+    return (
+        setup.flavour == "orca" and discover.program_mark(setup.executable.name) == "crealityprint"
+    )
+
+
+def _for_the_creality_window(model: Path) -> Path:
+    """Dieselbe Datei ohne Plattenblock wie für die Konsole — an Ort und Stelle.
+
+    Die Kopie entsteht wie für die Konsole (:func:`_creality_cli_input`) und
+    ersetzt danach die geschriebene Datei, damit das Fenster denselben
+    Dateinamen zeigt, den der Kunde im Austauschordner sieht. Ohne genau einen
+    Plattenblock bleibt die Datei, wie sie ist.
+    """
+    staging = model.with_name(f"{model.stem}.staging{model.suffix}")
+    if _creality_cli_input(model, staging) == model:
+        return model
+    try:
+        staging.replace(model)
+    except OSError as problem:
+        with suppress(OSError):
+            staging.unlink()
+        raise FileWriteError(
+            target=model.name, detail=problem.strerror or str(problem)
+        ) from problem
+    return model
+
+
 def _creality_cli_tower_position(
     config: SlicerConfig, setup: SlicerSetup, models: Sequence[Path]
 ) -> SlicerConfig:
@@ -2979,8 +3017,7 @@ def slice_model(
                 _creality_cli_input(entry, workspace / f"model_{index}.3mf", cancelled)
                 for index, entry in enumerate(models)
             ]
-            if setup.flavour == "orca"
-            and discover.program_mark(setup.executable.name) == "crealityprint"
+            if _is_creality_print(setup)
             else models
         )
         config = write_config(settings, profile, setup, workspace, slots)
@@ -3007,6 +3044,8 @@ def slice_model(
         # den Grund. Gemerkt je Programm und Sitzung, damit die zweite Platte
         # nicht wieder zweimal läuft.
         wanted_arrangement = keep_arrangement and setup.executable not in _REFUSES_THE_ARRANGE_FLAG
+        # Ab wann eine Ergebnisdatei zu diesem Lauf gehört (``_result_reason``).
+        started = time.time()
         completed = _run_slicer(
             _command(setup, cli_models, config, target, wanted_arrangement),
             workspace,
@@ -3054,6 +3093,10 @@ def slice_model(
             # lässt stderr leer. Nur stderr zu zeigen hieße, einen Fehler
             # ohne Text zu melden — und das ist schlimmer als keiner.
             output = _tail(completed.stdout, completed.stderr)
+            reason = _result_reason(target, started)
+            if reason:
+                _log.info("%s refused the job: %s", setup.name, reason)
+                output = "\n".join(part for part in (output, reason) if part)
             # **Vor den Ausgabeprüfungen**, denn ein abgestürztes Programm
             # schreibt keinen Satz, an dem sie greifen könnten: Es fällt mitten
             # im Lauf um, und was dasteht, ist die letzte Zeile davor. Der
@@ -3270,6 +3313,15 @@ def open_in_slicer(model: Path, setup: SlicerSetup) -> None:
     braucht, und ein Solidon, das sich beendet, nimmt es nicht mit. Nach
     §32 bleibt es eine feste Argumentliste ohne Shell — hier läuft kein
     fremder Quelltext, ein Programm zeigt auf eine Datei.
+
+    **Creality Print bekommt dieselbe Datei wie seine Konsole**
+    (:func:`_for_the_creality_window`, Durchsicht 0.5.0): ohne den einzelnen
+    Plattenblock, an dem Creality Print 7.2 bei einer Mehrfilament-3MF
+    abstürzt. Fenster und Konsole sind dasselbe Programm mit demselben
+    3MF-Leser; ein Absturz des Fensters wäre der schlechtere Ausgang, und bei
+    einer einzelnen Platte verliert die Datei ohne den Block nichts — Namen,
+    Werkzeuge, Farben und Lagen bleiben, und das Fenster legt alles auf seine
+    eine Platte.
     """
     activation.require(activation.SLICER)
     if not model.is_file():
@@ -3292,6 +3344,8 @@ def open_in_slicer(model: Path, setup: SlicerSetup) -> None:
             detail=_("Der eingestellte Slicer liegt nicht mehr an seinem Pfad."),
             suggestions=(INSTALL_MISSING, EXPORT_ONLY),
         )
+    if _is_creality_print(setup):
+        model = _for_the_creality_window(model)
     # Losgelöst und leise, dasselbe Muster wie der Dienststart in
     # ``tools.start``: kein Konsolenfenster, kein Kindprozess, der am Ende
     # von Solidon hängt. Und wie jeder Startpfad geht auch dieser auf den
@@ -3307,6 +3361,121 @@ def open_in_slicer(model: Path, setup: SlicerSetup) -> None:
             suggestions=(CHOOSE_SLICER, INSTALL_MISSING, EXPORT_ONLY),
         ) from problem
     _log.info("opened %s in %s", model.name, program.name)
+
+
+#: Endung eines Profils, das Cura über *Profile verwalten → Importieren* liest.
+CURA_PROFILE_SUFFIX: Final = ".curaprofile"
+
+#: Die Formatversion eines Cura-Containers (``UM.Settings.InstanceContainer``
+#: ``Version``). Sie steht seit Cura 4 unverändert auf vier.
+_CURA_CONTAINER_VERSION: Final = 4
+
+#: Zeitstempel der Einträge im Profil — fest, damit dieselben Werte dieselbe
+#: Datei ergeben.
+_CURA_PROFILE_TIMESTAMP: Final = (1980, 1, 1, 0, 0, 0)
+
+
+def cura_profile_beside(
+    model: Path,
+    settings: PrintSettings,
+    profile: Profile,
+    setup: SlicerSetup,
+    slots: Sequence[MaterialSlot] = (),
+) -> Finding | None:
+    """Die Einstellungen als importierbares Cura-Profil neben dem Modell (§29).
+
+    **Cura nimmt beim Öffnen einer Datei keine Einstellungen an.** Die
+    Konsole bekommt sie als ``-s`` (:func:`_command`); das Fenster liest aus
+    einem Modell nur Geometrie. Bis zur Durchsicht 0.5.0 bekam es deshalb
+    ein bloßes STL, und alles, was Solidon eingestellt hatte, war auf diesem
+    Weg verloren. Was Cura aus einer Datei übernimmt, ist ein Profil: eine
+    ``.curaprofile`` mit einem ``quality_changes``-Container, geprüft gegen
+    Curas eigenen Leser (``plugins/CuraProfileReader`` und
+    ``CuraContainerRegistry.importProfile`` in Cura 5.13).
+
+    Was hineingeht, ist die **Einstellungsseite** (:func:`as_mapping`) —
+    nicht die Maschine und nicht das Abgeleitete: Das Fenster rechnet seine
+    Formeln selbst, und ein festgeschriebener Linienabstand bliebe stehen,
+    wenn der Kunde danach in Cura die Füllung ändert. Wahrheitswerte schreibt
+    Cura als ``True``/``False`` (es liest sie mit ``ast.literal_eval``), die
+    Konsole als ``true``. Mehrere Spulen bekommen je ein Extruderprofil mit
+    ``position``; eine einzelne legt Cura beim Import selbst auf das erste
+    Fach.
+
+    Die Qualitätsstufe muss es für die Maschine geben, sonst lehnt Cura ab;
+    gewählt wird die mit der nächstliegenden Schichthöhe. ``None`` heißt:
+    kein Cura, oder eine Installation ohne lesbare Definitionen — dann wird
+    nichts geschrieben, und ein Profil mit geratener Version wäre schlimmer
+    als keines. Der zurückgegebene Befund ist der eine Satz, den der Dialog
+    dazu zeigt.
+    """
+    if setup.flavour != "cura":
+        return None
+    version = slicer_profiles.cura_setting_version(setup.executable)
+    if version is None:
+        return None
+    machine_name = machine_for(setup, profile)
+    machine = profile_file(machine_name, setup, "machine") if machine_name else None
+    qualities = slicer_profiles.cura_quality_types(setup.executable, machine)
+    if not qualities:
+        return None
+    wanted = float(settings.layers.layer_height)
+    quality = min(sorted(qualities), key=lambda kind: abs(qualities[kind] - wanted))
+    definition = (
+        slicer_profiles.cura_definition_id(machine) if machine is not None else "fdmprinter"
+    )
+    name = _one_line(model.stem) or "solidon"
+
+    def container(values: Mapping[str, str], position: int | None) -> str:
+        lines = [
+            "[general]",
+            f"version = {_CURA_CONTAINER_VERSION}",
+            f"name = {name}",
+            f"definition = {definition}",
+            "",
+            "[metadata]",
+            "type = quality_changes",
+            f"quality_type = {quality}",
+            f"setting_version = {version}",
+        ]
+        if position is not None:
+            lines.append(f"position = {position}")
+        lines += ["", "[values]"]
+        for key, value in sorted(values.items()):
+            written = {"true": "True", "false": "False"}.get(value, value)
+            lines.append(f"{key} = {written}")
+        return "\n".join(lines) + "\n"
+
+    shared = as_mapping(settings_for_handover(settings, profile, "cura", slots, setup), "cura")
+    _without_line_break(shared, setup.name)
+    entries = [("solidon", container(shared, None))]
+    if len(slots) > 1:
+        for position, slot in enumerate(slots):
+            own = as_mapping(settings_for_slot(settings, profile, slot, setup), "cura")
+            _without_line_break(own, setup.name)
+            entries.append((f"solidon_extruder_{position}", container(own, position)))
+    target = model.with_suffix(CURA_PROFILE_SUFFIX)
+    try:
+        with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as archive:
+            for entry_name, body in entries:
+                info = zipfile.ZipInfo(entry_name, date_time=_CURA_PROFILE_TIMESTAMP)
+                info.compress_type = zipfile.ZIP_DEFLATED
+                info.create_system = 0
+                archive.writestr(info, body.encode("utf-8"))
+    except OSError as problem:
+        raise FileWriteError(
+            target=target.name, detail=problem.strerror or str(problem)
+        ) from problem
+    _log.info("wrote a Cura profile beside %s (%s, quality %s)", model.name, definition, quality)
+    return Finding(
+        code="handover.cura_profile",
+        severity="info",
+        message=_(
+            "Cura übernimmt Einstellungen nur als Profil. Es liegt neben dem Modell: "
+            "in Cura unter Profile verwalten → Importieren wählen."
+        ),
+        values={"file": target.name},
+    )
 
 
 #: Schlüssel, deren Wert der Slicer bewusst umrechnet oder ergänzt — eine
@@ -3491,6 +3660,54 @@ def crashed(exit_code: int) -> bool:
     # MS-ERREF §2.3: Schwere 11, N-Bit 0; das Customer-Bit bleibt frei,
     # damit auch nicht abgefangene C++-Ausnahmen (0xE06D7363) erkannt werden.
     return exit_code <= 0xFFFFFFFF and exit_code & 0xD0000000 == 0xC0000000
+
+
+#: Die Datei, in die Bambu Studio neben die Druckdatei schreibt, wie der Lauf
+#: ausging — auch dann, wenn er keine schrieb.
+RESULT_FILE: Final = "result.json"
+
+#: Größer ist sie nie: Sie trägt je Platte ein paar Kennzahlen und je Objekt
+#: einen Hüllquader.
+_RESULT_LIMIT: Final = 1 << 20
+
+#: Wie grob ein Dateisystem die Änderungszeit führt: FAT zählt in zwei
+#: Sekunden. Eine Datei, die knapp vor dem Start geschrieben scheint, gehört
+#: noch zu diesem Lauf.
+_MTIME_SLACK_S: Final = 2.0
+
+
+def _result_reason(directory: Path, since: float) -> str:
+    """Was der Slicer in ``result.json`` über einen gescheiterten Lauf sagt.
+
+    **Bambu Studio sagt seine Absage nicht auf der Konsole.** Gemessen an
+    Version 2.3 (RM-163, Durchsicht 0.5.0): Ein Projekt für einen Drucker, den
+    Bambu nicht kennt, endet mit Rückgabewert -17 und leerer Ausgabe; der
+    Grund steht nur hier — „The selected printer is not compatible with the
+    process preset in the 3mf." Der Kunde las „Der Slicer hat keine
+    Druckdatei geschrieben", und *Ausgabe des Slicers anzeigen* zeigte ein
+    leeres Feld. Orca und Elegoo schrieben die Datei bei denselben Fehlern
+    nicht; für sie ändert sich nichts.
+
+    Nur eine Datei dieses Laufs zählt (Änderungszeit ab ``since``) — der
+    Zielordner kann der des Kunden sein, mit dem Ergebnis eines älteren
+    Laufs —, und nur eine Absage (``return_code`` ungleich null). Was sich
+    nicht lesen lässt, sagt nichts.
+    """
+    path = directory / RESULT_FILE
+    try:
+        info = path.stat()
+        if info.st_mtime < since - _MTIME_SLACK_S or info.st_size > _RESULT_LIMIT:
+            return ""
+        data = json.loads(path.read_bytes())
+    except OSError, ValueError:
+        return ""
+    if not isinstance(data, dict):
+        return ""
+    code = data.get("return_code")
+    text = data.get("error_string")
+    if not isinstance(code, int) or code == 0 or not isinstance(text, str) or not text.strip():
+        return ""
+    return f"{text.strip()} (return_code {code})"
 
 
 def _tail(*streams: bytes, limit: int = 800) -> str:

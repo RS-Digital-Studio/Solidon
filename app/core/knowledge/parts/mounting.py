@@ -45,9 +45,11 @@ KEYHOLE_RETAINS_HEAD = PartChange(
     version="15",
     date="2026-09-06",
     reason="Der Kopfkanal war zur Mündung offen und konnte den Schraubenkopf nicht zurückhalten.",
-    effect="Nur der Einstieg ist kopfbreit offen, über dem Haltekanal bleibt eine Lippe. Tiefe "
-    "und Einhängeweg werden auf eine mögliche Rückhaltung geprüft; das Spiel folgt dem "
-    "Zielmaterial.",
+    effect=_(
+        "Nur der Einstieg ist kopfbreit offen, über dem Haltekanal bleibt eine Lippe. Tiefe "
+        "und Einhängeweg werden auf eine mögliche Rückhaltung geprüft; das Spiel folgt dem "
+        "Zielmaterial."
+    ),
 )
 
 FIRST_RELEASE = PartChange(
@@ -61,7 +63,7 @@ WALL_MOUNT_KEEPS_HOLE_WALLS = PartChange(
         "Kleine Rückplatten konnten große oder dicht gesetzte Schraubenlöcher "
         "nicht als zusammenhängenden druckbaren Körper halten."
     ),
-    effect=(
+    effect=_(
         "Die eingetragene Breite und Höhe bleiben Mindestmaße; die Rückplatte "
         "wächst nur dann, wenn Schraubengröße oder Lochzahl mehr Rand und Steg brauchen. "
         "Die Schraubenlöcher schneiden jetzt durch die Platte; zuvor lagen ihre "
@@ -81,13 +83,13 @@ SLOT_RUNS_DOWNWARD = PartChange(
         "Der Schlitz lag quer zur Fallrichtung. ``shapes.slot`` baut seine Länge "
         "immer in X; der Code verschob danach in Y und meinte, er habe gedreht."
     ),
-    effect=(
-        "Der Schlitz läuft jetzt in -Y statt in X — also dorthin, wohin der "
-        "Docstring seit jeher zeigt. Wer die Aufhängung bisher an einer Wand "
+    effect=_(
+        "Der Schlitz läuft jetzt in -Y statt in X — also dorthin, wohin die "
+        "Beschreibung seit jeher zeigt. Wer die Aufhängung bisher an einer Wand "
         "benutzt hat, bekam einen waagerechten Schlitz: Die Schraube wanderte "
         "seitlich, statt sich beim Absinken zu verklemmen. Die Maße ändern sich "
-        "nicht, nur ihre Richtung. Alte Projekte rechnen den Schlitz neu, und das "
-        "ist beabsichtigt."
+        "nicht, nur ihre Richtung. Alte Projekte rechnen den Schlitz neu, und das ist "
+        "beabsichtigt."
     ),
 )
 
@@ -99,12 +101,12 @@ LIP_GRIPS_THE_MAGNET = PartChange(
         "Die Haltelippe wurde der Tasche hinzugefügt statt von ihr abgezogen — "
         "ein Volumen, das man vereinigt, kann nur weiten, nicht verengen."
     ),
-    effect=(
-        "Die Mündung ist jetzt ein Zehntel enger als der Magnet, statt genauso "
-        "weit wie die Tasche. An einem 6-mm-Magneten gemessen: 5,91 mm statt "
-        "6,00 bei kalibriertem Material sogar 6,35. Wer die Lippe bisher "
-        "eingeschaltet hatte, bekam keine — der Magnet fiel bei jedem Material "
-        "heraus, sobald das Teil kopfüber lag."
+    effect=_(
+        "Die Mündung ist jetzt ein Zehntel enger als der Magnet, statt genauso weit "
+        "wie die Tasche. An einem 6-mm-Magneten gemessen: 5,91 mm statt bisher 6,00, "
+        "bei kalibriertem Material sogar 6,35. Wer die Lippe bisher eingeschaltet "
+        "hatte, bekam keine — der Magnet fiel bei jedem Material heraus, sobald das "
+        "Teil kopfüber lag."
     ),
 )
 
@@ -118,12 +120,11 @@ LIP_GRIP_FROM_PROFILE = PartChange(
         "Kalibrierung (Regel 7). Die Tasche las ihr Spiel längst aus dem Profil "
         "und ihr Übermaß nicht."
     ),
-    effect=(
-        "Neues Feld *Übermaß* unter Weitere Einstellungen. Null heißt wie beim "
-        "Spiel: der Wert aus dem Materialprofil, sobald es den Baustein erreicht "
-        "— ohne Profil bleibt es bei den bisherigen 0,1 mm. Wer eine Zahl "
-        "einträgt, bekommt genau sie; die Mündung wird um diesen Betrag enger "
-        "als der Magnet."
+    effect=_(
+        "Neues Feld „Übermaß“ unter „Weitere Einstellungen“. Null heißt wie beim "
+        "Spiel: der Wert aus dem Materialprofil — ohne Profil bleibt es bei den "
+        "bisherigen 0,1 mm. Wer eine Zahl einträgt, bekommt genau sie; die Mündung "
+        "wird um diesen Betrag enger als der Magnet."
     ),
 )
 
@@ -134,10 +135,9 @@ HEAD_PLAY_FROM_PROFILE = PartChange(
         "Das Kopfspiel stand als feste 0,6 im Baustein und kam damit nie aus dem "
         "Materialprofil (Regel 7, §28.3)."
     ),
-    effect=(
-        "Mit einem kalibrierten Profil wird das runde Ende enger oder weiter, "
-        "statt bei 0,6 mm zu bleiben. Ohne Kalibrierung ändert sich nichts: Der "
-        "Vorgabewert ist derselbe."
+    effect=_(
+        "Mit einem kalibrierten Profil wird das runde Ende enger oder weiter, statt "
+        "bei 0,6 mm zu bleiben."
     ),
 )
 
@@ -149,13 +149,11 @@ HEAD_PLAY_ADDS_INSTEAD_OF_REPLACING = PartChange(
         "dazuzurechnen — und ``ops.insert`` füllt das Spiel bei **jedem** Profil "
         "ein, nicht erst bei einem kalibrierten."
     ),
-    effect=(
-        "Das runde Ende wird wieder weit genug, dass der Kopf hindurchfällt. "
-        "Gemessen an M4 mit PETG: 7,25 mm Öffnung bei 7,00 mm Kopf — gedruckt "
-        "geht der Kopf da nicht mehr durch. Jetzt sind es 7,25 mm über dem "
-        "Durchgangsmaß, also 7,85. Der Satz „Ohne Kalibrierung ändert sich "
-        "nichts“ aus Version 6 war falsch: Er änderte sich für jedes Profil, "
-        "denn der Vorgabewert wurde gar nicht mehr benutzt."
+    effect=_(
+        "Das runde Ende wird wieder weit genug, dass der Kopf hindurchfällt. Gemessen "
+        "an M4 mit PETG: 7,25 mm Öffnung bei 7,00 mm Kopf — gedruckt geht der Kopf da "
+        "nicht mehr durch. Jetzt sind es 7,25 mm über dem Durchgangsmaß, also 7,85. "
+        "Das gilt mit und ohne Kalibrierung."
     ),
 )
 
@@ -166,10 +164,10 @@ POCKET_REACHES_PAST_THE_FACE = PartChange(
         "Die Fußtasche endete als einziger abziehender Baustein exakt auf der "
         "angeklickten Fläche statt einen Überlappungswert darüber hinaus (§39)."
     ),
-    effect=(
+    effect=_(
         "Kein Maß am fertigen Teil ändert sich — die Tasche ist gleich tief und "
-        "gleich weit. Der Schnitt trifft nur nicht mehr Fläche auf Fläche, und "
-        "das ist der Fall, an dem eine Boolesche Operation bricht."
+        "gleich weit. Der Schnitt trifft nur nicht mehr Fläche auf Fläche; genau "
+        "daran scheiterte vorher das Abziehen."
     ),
 )
 
@@ -688,7 +686,7 @@ HOOK_HOLDS_WHEN_LIFTED = PartChange(
         "es in der Hand. Er bekommt eine federnde Rastzunge (Entscheidung "
         "Robert, 25.08.2026)."
     ),
-    effect=(
+    effect=_(
         "Der Zapfen trägt jetzt oben eine federnde Zunge, die beim Einführen "
         "einfedert und hinter der Platte ausrastet. Zwei Maße ändern sich damit: "
         "Der Einhänger misst über alles eine Zungenstärke, einen Federweg und "
@@ -708,7 +706,7 @@ HOOK_FEATURE_ON_A_REAL_FACE = PartChange(
         "Das Merkmal ``hook_N`` lag mitten im Material: auf der Höhe der Nase, "
         "die den Querschnitt dort ausfüllt (gemessen zu 99 % innen)."
     ),
-    effect=(
+    effect=_(
         "Es liegt jetzt auf der Rückseite der Nase — einer Fläche, die es "
         "wirklich gibt — und meldet deren Langlochfläche statt eines Rechtecks. "
         "Wer über dieses Merkmal eine Passung oder eine Operation angesetzt hat, "
@@ -724,7 +722,7 @@ HOOK_BODIES_JOIN_WITH_VOLUME = PartChange(
         "Zapfen und Nase überlappten nur um die Boolesche Rechenschwelle; "
         "Grenzkombinationen hinterließen dadurch sich schneidende Dreiecke."
     ),
-    effect=(
+    effect=_(
         "Außenmaße, Rastweg und Plattensitz bleiben gleich; Zapfen und Nase "
         "greifen innerhalb des Körpers jetzt über eine tragende Fläche ineinander."
     ),
@@ -1265,7 +1263,7 @@ FOOT_PROFILE_FIXED = PartChange(
         "Überlappende Körper hinterließen am Fasenansatz des Fußes eine "
         "Ringschulter und durchschnitten sich bei tiefen Taschen."
     ),
-    effect=(
+    effect=_(
         "Fuß und Tasche entstehen jetzt jeweils aus einem einzigen Drehprofil. "
         "Höhe, Sitzmaß, Standfläche und Fase bleiben gleich; innere Flächen entfallen."
     ),

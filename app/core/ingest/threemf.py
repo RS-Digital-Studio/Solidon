@@ -607,6 +607,10 @@ class Part:
     solver: SolverInfo | None = None
     """Wie eine Aussparung abgezogen wurde (§17.2) — ``None``, wenn keine da
     war. Die ``load``-Operation meldet die tiefste Stufe aller Körper."""
+    named: bool = True
+    """Ob die Datei den Körper benennt. ``False`` heißt: Der Name ist der
+    Ersatz „Körper <Nummer>" — die ``load``-Operation nimmt bei einem
+    einzelnen Körper dann den Dateinamen, wie bei einer STL."""
 
 
 def read_objects(payload: bytes, findings: list[Finding] | None = None) -> list[Part]:
@@ -750,6 +754,7 @@ def read_objects(payload: bytes, findings: list[Finding] | None = None) -> list[
                 mesh=mesh,
                 slots=tuple(groups.materials) if groups else (),
                 solver=solver,
+                named=leaf.named,
             )
         )
 
@@ -1242,6 +1247,8 @@ class _Leaf:
     """Was der Slicer aus dem Teil macht: ein druckbares Teil, eine
     Aussparung (:data:`NEGATIVE_KIND`) oder ein Hilfsteil
     (:data:`HELPER_KINDS`)."""
+    named: bool = True
+    """Ob der Name aus der Datei stammt und nicht der Ersatz ist."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -1543,6 +1550,7 @@ def _leaves(payload: bytes, noted: list[Finding]) -> list[_Leaf]:
                 0,
                 budget,
                 native=native,
+                inherited_named=bool(item.get("name") or settings.titles.get(identifier, "")),
             )
         )
     return found
@@ -1637,12 +1645,16 @@ def _parts_of(
     native: _NativeMaterials | None = None,
     owner: str = "",
     tool: int | None = None,
+    inherited_named: bool = False,
 ) -> list[_Leaf]:
     """Die Meshes, die ein Objekt beiträgt, mit den Transformationen darüber
     angewandt.
 
     ``budget`` zählt jedes Blatt mit und hält an, sobald der Build mehr
     Körper oder Dreiecke instanziert, als die Anwendung trägt (:class:`_Budget`).
+
+    ``inherited_named`` sagt, ob ``inherited`` ein Name aus der Datei ist
+    oder schon der Ersatz „Körper <Nummer>" des Objekts darüber.
     """
     budget.visit()
     if depth > MAX_DEPTH:
@@ -1660,12 +1672,9 @@ def _parts_of(
         _log.info("3MF references object %s in %s, which is not there", identifier, path)
         return []
 
-    name = (
-        entry.get("name")
-        or settings.titles.get(identifier)
-        or inherited
-        or str(_("Körper {number}", number=identifier))
-    )
+    own = entry.get("name") or settings.titles.get(identifier) or ""
+    name = own or inherited or str(_("Körper {number}", number=identifier))
+    named = bool(own) or (bool(inherited) and inherited_named)
     # Der Eigentümer ist das Objekt, das der Build nennt — die Klammer, in
     # der Part-IDs, Werkzeuge und Aussparungen gelten.
     if not owner:
@@ -1691,6 +1700,7 @@ def _parts_of(
                 owner=owner,
                 identifier=identifier,
                 kind=settings.kinds.get((owner, identifier), "normal_part"),
+                named=named,
             )
         ]
 
@@ -1719,6 +1729,7 @@ def _parts_of(
                 native,
                 owner,
                 tool,
+                named,
             )
         )
     return found

@@ -16,17 +16,23 @@ import json
 import math
 import os
 import tempfile
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from dataclasses import asdict, replace
 from pathlib import Path
 from typing import Any, Final, cast, get_args
 
-from app.core.errors import FileWriteError, ValidationError
+from app.core.errors import (
+    ADOPT_PRINTER,
+    CHOOSE_PRINTER,
+    FileWriteError,
+    ValidationError,
+)
 from app.core.knowledge.tables import read_table
 from app.core.log import get_logger
 from app.core.paths import user_profiles_dir
 from app.core.types import (
     AUTO_TOLERANCE_PREFIX,
+    Finding,
     FitKind,
     MaterialProfile,
     PrinterProfile,
@@ -65,6 +71,16 @@ _DATA_DIR: Final = Path(__file__).parent / "data"
 
 _printers: dict[str, PrinterProfile] | None = None
 _materials: dict[str, MaterialProfile] | None = None
+
+#: Was das geöffnete Projekt an eigenen Profilen mitbringt (:func:`carry`).
+#: Eine dritte Schicht unter den mitgelieferten und den eigenen: Sie füllt nur
+#: Kennungen, die dieser Rechner nicht kennt.
+_carried_printers: dict[str, PrinterProfile] = {}
+_carried_materials: dict[str, MaterialProfile] = {}
+
+#: Unter diesen Schlüsseln stehen die mitgebrachten Profile im Projekt.
+CARRIED_PRINTERS: Final = "printers"
+CARRIED_MATERIALS: Final = "materials"
 
 
 def _read_table(path: Path) -> dict[str, dict[str, Any]]:
@@ -187,6 +203,8 @@ def _load_printers() -> dict[str, PrinterProfile]:
             continue
         for identifier, table in _read_table(path).items():
             profiles[identifier] = _printer_from_table(identifier, table, path)
+    for identifier, entry in _carried_printers.items():
+        profiles.setdefault(identifier, entry)
     return _by_title(profiles)
 
 
@@ -197,7 +215,203 @@ def _load_materials() -> dict[str, MaterialProfile]:
             continue
         for identifier, table in _read_table(path).items():
             profiles[identifier] = _material_from_table(identifier, table, path)
+    for identifier, entry in _carried_materials.items():
+        profiles.setdefault(identifier, entry)
     return _by_title(profiles)
+
+
+# --- Eigene Profile reisen mit dem Projekt -------------------------------------
+
+
+def _shipped(table: str) -> frozenset[str]:
+    """Die Kennungen des mitgelieferten Bestands — die reisen nie mit."""
+    path = _DATA_DIR / table
+    return frozenset(_read_table(path)) if path.is_file() else frozenset()
+
+
+def printer_definition(profile: PrinterProfile) -> dict[str, Any]:
+    """Ein Drucker als Tabelle, wie ``printers.toml`` und die Projektdatei ihn führen.
+
+    Nur Maße, Zahlen und Namen: Bauraum, Düse, Verfahren, Schichthöhe,
+    Kontur. Kein Pfad und kein Code — ein Druckerprofil kennt beides nicht,
+    und :func:`carry` liest es mit demselben Prüfer wie eine eigene Datei.
+    """
+    return _as_table(profile)
+
+
+def material_definition(profile: MaterialProfile) -> dict[str, Any]:
+    """Ein Material als Tabelle — dieselbe Form wie ``materials.toml``."""
+    return _as_table(profile)
+
+
+def _as_table(profile: PrinterProfile | MaterialProfile) -> dict[str, Any]:
+    """Die Felder eines Profils ohne Kennung, als reine JSON-Daten.
+
+    Über ``json`` hin und zurück, damit Tupel zu Listen werden und nichts
+    mitreist, was eine Projektdatei nicht tragen kann (``allow_nan=False``).
+    """
+    table: dict[str, Any] = json.loads(
+        json.dumps(
+            {
+                key: value
+                for key, value in asdict(profile).items()
+                if key != "id" and value is not None
+            },
+            allow_nan=False,
+        )
+    )
+    return table
+
+
+def carried_definitions(
+    printer_ids: Collection[str],
+    material_ids: Collection[str],
+    previous: Mapping[str, Mapping[str, Any]] | None = None,
+) -> dict[str, dict[str, dict[str, Any]]]:
+    """Was ein Projekt an eigenen Profilen mitnehmen muss, damit es woanders rechnet.
+
+    **Der Anlass** (Durchsicht 0.5.0, Fund aus dem Paket „dialoge"): Ein
+    Projekt mit einem eigenen Drucker, auf einem zweiten Rechner geöffnet,
+    meldete nur „Dieses Druckerprofil ist nicht bekannt." — und rechnete
+    nicht, und die Druckeinstellungen gingen nicht mehr auf. Der Drucker
+    stand in einer Datei des ersten Rechners, und das Projekt nannte nur
+    seine Kennung.
+
+    Mitgenommen wird, was nicht zum Lieferumfang gehört: ein eigener Drucker
+    oder ein eigenes Material, so wie dieser Rechner es kennt. Kennt er eine
+    Kennung nicht, bleibt die Beschreibung, die das Projekt schon trug
+    (``previous``) — sonst verlöre ein Projekt sie beim ersten Speichern auf
+    einem Rechner, der sie nicht übernommen hat.
+    """
+    previous = previous or {}
+    found: dict[str, dict[str, dict[str, Any]]] = {}
+    shipped_printers = _shipped("printers.toml")
+    known_printers = printer_profiles()
+    earlier_printers = previous.get(CARRIED_PRINTERS) or {}
+    for identifier in sorted({entry for entry in printer_ids if entry}):
+        if identifier in shipped_printers:
+            continue
+        if identifier in known_printers:
+            found.setdefault(CARRIED_PRINTERS, {})[identifier] = printer_definition(
+                known_printers[identifier]
+            )
+        elif isinstance(earlier_printers.get(identifier), Mapping):
+            found.setdefault(CARRIED_PRINTERS, {})[identifier] = dict(earlier_printers[identifier])
+    shipped_materials = _shipped("materials.toml")
+    known_materials = material_profiles()
+    earlier_materials = previous.get(CARRIED_MATERIALS) or {}
+    for identifier in sorted({entry for entry in material_ids if entry}):
+        if identifier in shipped_materials:
+            continue
+        if identifier in known_materials:
+            found.setdefault(CARRIED_MATERIALS, {})[identifier] = material_definition(
+                known_materials[identifier]
+            )
+        elif isinstance(earlier_materials.get(identifier), Mapping):
+            found.setdefault(CARRIED_MATERIALS, {})[identifier] = dict(
+                earlier_materials[identifier]
+            )
+    return found
+
+
+def carry(carried: Mapping[str, Mapping[str, Any]] | None) -> tuple[str, ...]:
+    """Macht die Profile bekannt, die das geöffnete Projekt mitbringt.
+
+    Eine dritte Schicht: Sie füllt nur Kennungen, die dieser Rechner weder
+    mitliefert noch selbst angelegt hat — ein eigener Drucker hier gewinnt
+    gegen die Beschreibung aus dem Projekt. Jeder Aufruf ersetzt die vorige
+    Schicht; ``None`` räumt sie. Was sich nicht lesen lässt, bleibt weg und
+    steht im Protokoll: Die Tabelle kommt aus einer fremden Datei und geht
+    durch denselben Prüfer wie eine eigene (:func:`_printer_from_table`).
+
+    Zurück kommen die Drucker, die nur das Projekt kennt — die, die
+    :func:`carried_findings` zum Übernehmen anbietet.
+    """
+    global _printers, _materials
+    source = Path("project.json")
+    printers: dict[str, PrinterProfile] = {}
+    materials: dict[str, MaterialProfile] = {}
+    carried = carried or {}
+    for identifier, table in (carried.get(CARRIED_PRINTERS) or {}).items():
+        try:
+            printers[str(identifier)] = _printer_from_table(str(identifier), table, source)
+        except (ValidationError, TypeError, ValueError, AttributeError) as problem:
+            _log.warning("the project carries an unreadable printer %r: %s", identifier, problem)
+    for identifier, table in (carried.get(CARRIED_MATERIALS) or {}).items():
+        try:
+            materials[str(identifier)] = _material_from_table(str(identifier), table, source)
+        except (ValidationError, TypeError, ValueError, AttributeError) as problem:
+            _log.warning("the project carries an unreadable material %r: %s", identifier, problem)
+    _carried_printers.clear()
+    _carried_printers.update(printers)
+    _carried_materials.clear()
+    _carried_materials.update(materials)
+    _printers = None
+    _materials = None
+    return only_carried()
+
+
+def only_carried() -> tuple[str, ...]:
+    """Die Drucker, die nur das geöffnete Projekt kennt, nach Kennung."""
+    known = printer_profiles()
+    return tuple(
+        sorted(
+            identifier
+            for identifier, entry in _carried_printers.items()
+            if known.get(identifier) is entry
+        )
+    )
+
+
+def adopt_carried() -> tuple[str, ...]:
+    """Übernimmt die mitgebrachten Drucker in die eigenen — zurück kommen ihre Kennungen."""
+    adopted = only_carried()
+    for identifier in adopted:
+        save_printer(_carried_printers[identifier])
+    return adopted
+
+
+def carried_findings(printer_id: str, material_id: str = "") -> tuple[Finding, ...]:
+    """Was der Prüfbericht nach dem Öffnen über den Drucker des Projekts sagt.
+
+    Bringt das Projekt den Drucker mit, rechnet es mit dessen Beschreibung —
+    und bietet an, ihn zu übernehmen oder einen eigenen zu wählen. Kennt der
+    Rechner ihn gar nicht, rechnet es mit dem Standarddrucker, sagt das und
+    bietet die Wahl an (:func:`scene_profile`); geraten wird dabei nichts
+    still (Regel 21).
+    """
+    if printer_id and printer_id in only_carried():
+        return (
+            Finding(
+                code="profile.carried_printer",
+                severity="info",
+                message=_(
+                    "Dieses Projekt bringt seinen Drucker mit, der hier nicht eingerichtet "
+                    "ist. Gerechnet wird mit der Beschreibung aus dem Projekt."
+                ),
+                values={"printer": printer_profiles()[printer_id].title},
+                suggestions=(ADOPT_PRINTER, CHOOSE_PRINTER),
+            ),
+        )
+    if printer_id and printer_id not in printer_profiles():
+        # **Der Satz nennt den Drucker, mit dem gerechnet wird** — der
+        # allgemeine desselben Verfahrens (:func:`_standard_printer_for`).
+        # „Standarddrucker" ließ offen, welcher Bauraum gerade gilt.
+        general = printer(_standard_printer_for(material_id)).title
+        return (
+            Finding(
+                code="profile.printer_missing",
+                severity="warning",
+                message=_(
+                    "Den Drucker dieses Projekts gibt es hier nicht. Gerechnet wird mit "
+                    "„{printer}“, bis Sie einen wählen.",
+                    printer=general,
+                ),
+                values={"printer": printer_id, "fallback_printer": general},
+                suggestions=(CHOOSE_PRINTER,),
+            ),
+        )
+    return ()
 
 
 # Drucker und Material teilen sich nur den Titel, und der genügt zum Sortieren.
@@ -356,6 +570,40 @@ def _material_technology(
 def make_profile(printer_id: str = DEFAULT_PRINTER, material_id: str = DEFAULT_MATERIAL) -> Profile:
     """Das Paar, für das eine Szene gerechnet wird."""
     return Profile(printer=printer(printer_id), material=material(material_id))
+
+
+def _standard_printer_for(material_id: str) -> str:
+    """Der Drucker, mit dem gerechnet wird, wenn der des Projekts fehlt.
+
+    Ein Resin-Projekt bleibt am Resin-Gerät: Ein Harz an einer Düse wäre ein
+    zweiter Fehler, der den ersten verdeckt.
+    """
+    known = material_profiles().get(material_id)
+    return (
+        DEFAULT_RESIN_PRINTER
+        if known is not None and known.technology == "resin"
+        else DEFAULT_PRINTER
+    )
+
+
+def scene_profile(printer_id: str, material_id: str) -> Profile:
+    """Das Paar eines geöffneten Projekts — auch wenn dieser Rechner es nicht kennt.
+
+    Ein unbekannter Drucker oder ein unbekanntes Material hielt vorher alles
+    an: keine Szene, keine Druckeinstellungen, nur „Dieses Druckerprofil ist
+    nicht bekannt." Gerechnet wird dann mit der Vorgabe — und der Prüfbericht
+    sagt es mit dem Weg zur Wahl (:func:`carried_findings`). Das Projekt
+    selbst behält seine Kennung, bis jemand einen anderen Drucker wählt.
+    """
+    known_printers = printer_profiles()
+    chosen_printer = (
+        printer_id if printer_id in known_printers else _standard_printer_for(material_id)
+    )
+    known_materials = material_profiles()
+    chosen_material = (
+        material_id if material_id in known_materials else default_material_for(chosen_printer)
+    )
+    return make_profile(chosen_printer, chosen_material)
 
 
 def default_material_for(printer_id: str) -> str:

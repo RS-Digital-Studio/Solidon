@@ -197,9 +197,19 @@ def into_project(project: Project, result: GeneratedMesh, name: str = "") -> Gen
                 params={
                     "source": source_id,
                     "unit": "mm",
-                    # Die Generatorquelle trägt Rohachsen. Die folgende
-                    # Arbeitsgröße ist eine eigene Operation, keine glTF-Einheit.
-                    "coordinates": "legacy_raw",
+                    # **Eine erzeugte GLB steht auf glTF-Achsen** (RM-086).
+                    # Hier stand „Rohachsen", und gemessen war das nie:
+                    # TripoSG schreibt Y-oben wie jede glTF-Datei — der
+                    # Drache aus ``image_00001_.glb`` und die vier
+                    # Puppenhausmöbel tragen ihre Höhe auf Y. Roh gelesen lag
+                    # jeder erzeugte Körper auf dem Rücken. Gedreht wird wie
+                    # beim Import; die Meter der Spezifikation gelten dagegen
+                    # nicht: Die Einheit bleibt ``mm``, die Größe setzt der
+                    # eigene Schritt ``fit_to_size`` darunter. Ältere Projekte
+                    # behalten ``legacy_raw`` über die Migration (24 → 25).
+                    "coordinates": (
+                        "gltf" if result.suffix.lower() in (".glb", ".gltf") else "legacy_raw"
+                    ),
                     "name": short,
                     # Beim Laden nichts bereinigen, solange das Modell winzig
                     # ist. Die Reparaturkette unten holt jeden dieser Schritte

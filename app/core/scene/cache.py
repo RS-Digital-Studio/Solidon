@@ -19,7 +19,10 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import struct
 import threading
+import zipfile
+import zlib
 from collections import OrderedDict
 from contextlib import suppress
 from dataclasses import dataclass, field
@@ -92,7 +95,11 @@ DEFAULT_DISK_BUDGET_BYTES: Final = 2 * 1024 * 1024 * 1024
 #: - 24 (22.09.2026, RM-071): der Profilschlüssel trägt das Druckverfahren,
 #:   Pixelgröße und Mindestwand des Druckers — ein auf Resin umgestelltes
 #:   Projekt rechnet seine Befunde neu statt sie aus dem FDM-Cache zu holen.
-CACHE_FORMAT_VERSION: Final = 24
+#: - 25 (22.09.2026, Durchsicht 0.5.0): der Profilschlüssel trägt die
+#:   Düsenzahl, und der Operationsschlüssel das Profil jedes Eingangs mit
+#:   eigenem Material — eine geänderte Düsenzahl ordnet neu an, ein
+#:   kalibriertes Körpermaterial bohrt neu.
+CACHE_FORMAT_VERSION: Final = 25
 
 
 @dataclass(frozen=True, slots=True)
@@ -403,6 +410,34 @@ def _continuations_from_data(
     return tuple(result)
 
 
+#: Was ein beschädigter Eintrag beim Lesen wirft — und damit verworfen wird.
+#:
+#: **Nicht nur das JSON kann kaputt sein, sondern auch das Netz daneben.** Bis
+#: zur Durchsicht vor 0.5.0 standen hier ``OSError``, ``KeyError`` und
+#: ``ValueError`` — die Fehler einer kaputten ``objects.json``. Ein halb
+#: geschriebenes oder verstümmeltes ``.npz`` wirft aber aus ``np.load``
+#: ``zipfile.BadZipFile``, ``EOFError`` oder ``zlib.error``, und das lief durch
+#: ``evaluate`` bis in die Oberfläche: Das Projekt ließ sich nicht mehr öffnen,
+#: bis jemand den Cacheordner von Hand löschte (gemessen: eine halbierte Datei
+#: genügt). ``TypeError`` und ``AttributeError`` gehören dazu, weil ein
+#: verstümmeltes JSON auch die falsche **Gestalt** tragen kann — eine Liste,
+#: wo ein Wörterbuch stehen muss —, und ``IndexError`` und ``struct.error``,
+#: weil ein abgeschnittenes Feld beim Lesen einer Zahl endet. Der Grund steht
+#: mit seiner Art im Protokoll; ein Fehler in unserem Code fällt dort weiter auf.
+_DAMAGED_ENTRY: Final = (
+    OSError,
+    KeyError,
+    ValueError,
+    TypeError,
+    AttributeError,
+    IndexError,
+    EOFError,
+    zipfile.BadZipFile,
+    zlib.error,
+    struct.error,
+)
+
+
 def _warm_figures(mesh: Mesh) -> None:
     """Volumen, Fläche, Dichtheit und Teilezahl einmal hier anfassen — im Arbeiter.
 
@@ -680,10 +715,12 @@ class DiskCache:
                 else None
             )
             continuations = _continuations_from_data(data.get("continuations", []), len(objects))
-        except (OSError, KeyError, ValueError) as problem:
+        except _DAMAGED_ENTRY as problem:
             # Ein beschädigter Cache-Eintrag ist nie fatal: verwerfen und
             # neu rechnen.
-            _log.warning("dropping unreadable cache entry %s: %s", key, problem)
+            _log.warning(
+                "dropping unreadable cache entry %s: %s: %s", key, type(problem).__name__, problem
+            )
             shutil.rmtree(folder, ignore_errors=True)
             return None
         # Ein paralleler Aufräumer darf den gerade gelesenen Ordner nach dem

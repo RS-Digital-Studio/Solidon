@@ -25,6 +25,23 @@ Keine absoluten Pfade. Kein ausführbarer Code. Keine eigenen Bausteine — ein
 Projekt verweist auf sie namentlich, und fehlt einer, hält die Auswertung an
 und sagt welcher (§24.5, §32).
 
+**Eigene Drucker und Materialien reisen als Daten mit** (Version 30,
+`Document.carried_profiles`): die Beschreibung, mit der gerechnet wurde —
+Name, Bauraum, Düse, Verfahren, Schichtwerte —, nie ein Pfad, nie Code, und
+nur für Kennungen, die nicht mitgeliefert sind. Der zweite Rechner rechnet
+damit und bietet an, sie zu übernehmen; kennt er einen Drucker gar nicht,
+rechnet er mit dem allgemeinen Drucker desselben Verfahrens und sagt es.
+Dieselbe Version stellt Passungen aus *Teilen* und *Deckel* auf `auto:` um:
+Sie folgen dem Material ihrer Körper statt dem Projektmaterial des
+Augenblicks (Migration 29 → 30, `material_fits_v29.p3d`).
+
+**Gleich heißt inhaltsgleich, nicht bytegleich** (RM-106). Zwei Plattformen
+schreiben dieselbe Projektdatei mit anderen Deflate-Bytes (zlib gegen
+zlib-ng); der ZIP-Kopf nennt kein schreibendes System (`CONTAINER_SYSTEM`).
+Wer zwei Dateien vergleicht, vergleicht `project.content_digest`, nicht den
+Dateihash. Eingecheckte Beispiel- und Belegdateien werden nicht neu
+geschrieben, um sie „gleich" zu machen — ihr Hash ist ihr Beleg.
+
 **Der Exportordner ist der Fall, an dem sich das entscheidet** (RM-141,
 Version 23). §29 sagt „Ordner, Format und Übergabeart werden je Projekt
 gemerkt" — je Projekt, nicht in der Projektdatei. Format und Namensschema
@@ -113,6 +130,14 @@ Modell besteht aus mehreren Teilen." trägt seither die Handlung, die es
 nahelegt (`SPLIT_BODIES`, `panels.FINDING_ACTIONS`) — ein Angebot, keine
 Ausführung.
 
+**Eine Kopie derselben Schale ist ein Duplikat, keine Baugruppe.** Trägt eine
+OBJ, PLY oder 3MF ihre Schale zweimal mit eigenen Ecken, kam sie vorher als
+zwei deckungsgleiche Teile mit doppeltem Volumen an (gegenläufig geschrieben
+mit dem Volumen null). Seit der Durchsicht 0.5.0 räumt das Einlesen sie ab wie
+jedes andere doppelte Dreieck — unter `remove_degenerate`, mit Befund, und nur,
+wenn das Netz danach geschlossen ist; berühren sich zwei Körper an einer
+Fläche, bleibt es beim Zurücknehmen des Verschweißens.
+
 **Und sie schließt, was offen ist** (Entscheidung Robert, 22.09.2026: „am
 besten beim Import", „alles bei der Reparatur beheben"). Bis dahin meldete der
 Import „Das Modell ist nicht geschlossen. Reparieren schließt die offenen
@@ -145,10 +170,15 @@ und änderbar bleiben.
 
 **GLB-/GLTF-Koordinaten werden am Ladeschritt versioniert.** Neue Importe
 speichern `coordinates="gltf"` und lesen Meter/Y-oben. Bestehende Projekte,
-deren gespeicherte Undo-Fassungen und rohe Generatorquellen behalten
-`legacy_raw`; die gemeinsame Migration gilt auch für Rezeptdokumente.
-Eine explizite Einheit hat Vorrang. Der Rohleser und die separate
-Zielgrößenskalierung ändern ihren Vertrag dadurch nicht.
+deren gespeicherte Undo-Fassungen und die darin eingebetteten
+Generatorquellen behalten `legacy_raw`; die gemeinsame Migration gilt auch
+für Rezeptdokumente. **Eine neu erzeugte GLB (Weg 3) speichert ebenfalls
+`gltf`** mit der Einheit `mm`: TripoSG schreibt Y-oben wie jede glTF-Datei,
+roh gelesen lag jeder erzeugte Körper auf dem Rücken (RM-086, gemessen an
+fünf erzeugten Netzen). Die Achsen folgen dem Format, die Meter nicht — die
+Größe setzt der eigene Schritt `fit_to_size`. Eine explizite Einheit hat
+Vorrang. Der Rohleser und die separate Zielgrößenskalierung ändern ihren
+Vertrag dadurch nicht.
 **Die Meter-Lesart wird nicht geglaubt, wenn sie unplausibel ist.** glTF
 schreibt Meter vor, aber die Datei sagt es nicht selbst; ein Generator
 liefert den Einheitswürfel. Fällt das Modell in Metern unter zehn Millimeter

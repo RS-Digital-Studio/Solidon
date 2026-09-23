@@ -57,6 +57,75 @@ def session(qt_app: QApplication) -> Session:
     return Session()
 
 
+@pytest.mark.parametrize(
+    ("material", "general"),
+    [
+        ("petg", profiles.DEFAULT_PRINTER),
+        (profiles.DEFAULT_RESIN_MATERIAL, profiles.DEFAULT_RESIN_PRINTER),
+    ],
+    ids=["fdm", "resin"],
+)
+def test_a_project_with_a_printer_from_another_computer_opens_with_the_general_printer(
+    qt_app: QApplication,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    material: str,
+    general: str,
+) -> None:
+    """Ein Projekt mit einem Drucker, den dieser Rechner nicht kennt, öffnet.
+
+    Übernommen aus dem Paket „dialoge" der Durchsicht 0.5.0: ``Session.profile``
+    warf ``ValidationError``, ``_update_header`` warf im Slot, die Auswertung
+    meldete modal „Dieses Druckerprofil ist nicht bekannt.", und der
+    Druckdialog öffnete nicht. Gerechnet wird mit dem allgemeinen Drucker
+    desselben Verfahrens; der Bericht nennt ihn und bietet die Wahl an, und der
+    Druckdialog zeigt den Drucker, mit dem tatsächlich gerechnet wird — nicht
+    den ersten der Liste.
+    """
+    import sys
+
+    from app.core.errors import CHOOSE_PRINTER
+    from app.core.scene.project import save
+    from app.ui.main_window import MainWindow
+
+    raised: list[BaseException] = []
+    monkeypatch.setattr(sys, "excepthook", lambda _kind, error, _trace: raised.append(error))
+    sender = Session()
+    sender.project.document.printer = "vom-anderen-rechner"
+    sender.project.document.material = material
+    path = tmp_path / "fremd.p3d"
+    save(sender.project, path)
+
+    window = MainWindow(Session(), UiSettings())
+    failures: list[object] = []
+    window.session.failed.connect(failures.append)
+    try:
+        window.open_path(path)
+        assert window.session.wait_for_idle()
+        QApplication.processEvents()
+        assert not raised, raised
+        assert not failures, failures
+        assert window.session.project.document.printer == "vom-anderen-rechner"
+        assert window.session.profile.printer.id == general
+        said = [
+            entry
+            for entry in window.session.last_result.scene.report.findings
+            if entry.code == "profile.printer_missing"
+        ]
+        assert len(said) == 1
+        assert CHOOSE_PRINTER in said[0].suggestions
+        assert str(profiles.printer(general).title) in str(said[0].message)
+
+        dialog = PrintSettingsDialog(window.session, UiSettings(), window)
+        try:
+            assert dialog.printer_choice.currentData() == general
+        finally:
+            dialog.close()
+    finally:
+        window.wait_for_workers()
+        window.close()
+
+
 def test_the_filament_panel_keeps_material_identity_and_marks_the_right_override(
     qt_app: QApplication,
 ) -> None:

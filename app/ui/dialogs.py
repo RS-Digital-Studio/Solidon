@@ -630,7 +630,10 @@ class ParameterDialog(QDialog):
             return tr("Ein Ausdruck beginnt mit = und rechnet in Millimetern.")
         if expression:
             try:
-                self._value = expressions.evaluate(expression, self._values)
+                # ``=`` und ``@`` darf der Kunde weglassen (``expressions.canonical``).
+                self._value = expressions.evaluate(
+                    expressions.canonical(expression, self._values), self._values
+                )
             except AppError as error:
                 return str(error.detail or error.title)
         bounds = self._bounds()
@@ -743,6 +746,10 @@ class ParameterDialog(QDialog):
         expression = (
             self.expression_field.text().strip() or None if self.fx_button.isChecked() else None
         )
+        if expression:
+            # Gespeichert wird die Form mit ``=`` und ``@`` — wie getippt, nur ergänzt.
+            with suppress(AppError):
+                expression = expressions.canonical(expression, self._values)
         low, high = self._bounds() or (None, None)
         unit = self.unit_field.currentData()
         return Parameter(

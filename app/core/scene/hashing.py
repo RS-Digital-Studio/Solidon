@@ -54,7 +54,19 @@ def digest(*parts: Any) -> str:
 def profile_key(profile: Profile) -> str:
     """Was an einem Profil ein Ergebnis ändern kann: Toleranzen,
     Düsengeometrie — und das Verfahren, denn ein auf Resin umgestelltes
-    Projekt darf seine Befunde nicht aus dem FDM-Cache holen."""
+    Projekt darf seine Befunde nicht aus dem FDM-Cache holen.
+
+    **Und die Zahl der Düsen.** *Auf dem Bett anordnen* und *Druckoptimal
+    ausrichten* legen die Filamente nur dann auf eigene Platten, wenn der
+    Drucker weniger Düsen als Filamente hat (``prepare_ops._filament_groups``).
+    Der Druckdialog speichert eine geänderte Düsenzahl unter derselben
+    Druckerkennung und rechnet die Szene neu — ohne die Zahl hier kam die
+    Anordnung der alten Düsenzahl aus dem Cache zurück, über das Schließen
+    hinaus (Durchsicht 0.5.0, 22.09.2026).
+
+    Welches Feld hier fehlen darf, weil keine Operation es liest, hält
+    ``tests/test_cache.py`` je Feld fest: Ein neues Profilfeld ist damit eine
+    Entscheidung und keine stille Lücke im Schlüssel."""
     printer = profile.printer
     material = profile.material
     return digest(
@@ -69,6 +81,7 @@ def profile_key(profile: Profile) -> str:
         printer.printable_area,
         printer.bed_exclusions,
         printer.printable_height,
+        printer.nozzles,
         material.id,
         material.clearance,
         material.press,

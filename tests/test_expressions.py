@@ -115,6 +115,27 @@ def test_deep_nesting_stops_before_the_recursion_limit() -> None:
         expressions.check("=" + "(" * 200 + "1" + ")" * 200)
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        "=round(1, " + "9" * 400 + ")",
+        "=round(1, " + "9" * 400 + " - " + "9" * 400 + ")",
+        "=round(@width, " + "9" * 400 + ")",
+    ],
+)
+def test_a_function_that_cannot_answer_is_a_grammar_error(text: str) -> None:
+    """``round`` auf ``inf`` oder ``nan`` Stellen warf einen rohen ``OverflowError``.
+
+    Schon beim Eintippen, in der Syntaxprüfung — vor 0.5.0 ohne Satz und ohne
+    Ausweg (Regel 17).
+    """
+    with pytest.raises(ValidationError) as caught:
+        expressions.check(text)
+    assert caught.value.suggestions
+    with pytest.raises(ValidationError):
+        expressions.evaluate(text, {"width": 84.0})
+
+
 def test_references_are_reported_without_values() -> None:
     assert expressions.references("=@width/2 - @wall") == frozenset({"width", "wall"})
     assert expressions.references("=1 + 2") == frozenset()
@@ -202,3 +223,105 @@ def test_shifting_a_bound_value_keeps_the_binding() -> None:
     assert expressions.evaluate(
         expressions.shifted("=@staerke * 2", -1.0), values
     ) == pytest.approx(11.0)
+
+
+# --- Getippt ohne = und @ (Durchsicht 0.5.0) -------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("typed", "stored"),
+    [
+        ("schraube_m4 + spiel", "=@schraube_m4 + @spiel"),
+        ("=schraube_m4 + spiel", "=@schraube_m4 + @spiel"),
+        ("=@schraube_m4 + @spiel", "=@schraube_m4 + @spiel"),
+        ("schraube_m4 * 2", "=@schraube_m4 * 2"),
+        ("@spiel", "@spiel"),
+        ("max(schraube_m4, 3)", "=max(@schraube_m4, 3)"),
+        ("12", "=12"),
+    ],
+)
+def test_a_known_name_is_taken_without_at_and_stored_with_it(typed: str, stored: str) -> None:
+    """Die Website zeigt ``schraube_m4 + spiel``; der Auswerter wies es ab.
+
+    Wer aus dem Slicer kommt, kennt kein ``@``. Das Formelfeld ergänzt es vor
+    einem bekannten Namen, und das führende ``=`` dazu — gespeichert wird die
+    Form mit beidem, und die rechnet wie getippt.
+    """
+    names = {"schraube_m4": 4.0, "spiel": 0.3}
+
+    written = expressions.canonical(typed, names)
+
+    assert written == stored
+    expressions.check(written)
+    assert expressions.is_expression(written)
+    assert expressions.canonical(written, names) == written, "die Form ist ein Fixpunkt"
+
+
+def test_a_name_that_is_also_a_function_asks_for_the_at() -> None:
+    """Heißt ein Parameter ``max``, ist ``max + 1`` mehrdeutig — und wird nicht geraten.
+
+    Die Klammer entscheidet: ``max(…)`` ist der Aufruf und bleibt einer. Ohne
+    Klammer kommt eine Absage mit dem Vorschlag ``@max``.
+    """
+    names = {"max": 10.0}
+
+    with pytest.raises(ValidationError) as caught:
+        expressions.canonical("max + 1", names)
+    assert caught.value.values["suggestion"] == "@max"
+    assert caught.value.suggestions
+    assert "{" not in str(caught.value.detail), "ein Fehlertext trägt keinen Platzhalter"
+
+    assert expressions.canonical("max(@max, 1)", names) == "=max(@max, 1)"
+    assert expressions.evaluate(expressions.canonical("@max + 1", names), names) == 11.0
+
+
+@pytest.mark.parametrize("typed", ["import os", "__import__('os')", "breite + 1", "2 ** 3"])
+def test_an_unknown_name_is_still_refused_after_the_completion(typed: str) -> None:
+    """Ergänzt wird nur, was das Projekt kennt — alles andere bleibt abgelehnt (Regel 10)."""
+    written = expressions.canonical(typed, {"hoehe": 5.0})
+
+    with pytest.raises(ValidationError):
+        expressions.check(written)
+
+
+def test_completed_expressions_still_find_their_cycle() -> None:
+    """Zwei Parameter, die einander ohne ``@`` nennen, bleiben ein Zyklus."""
+    names = {"a", "b"}
+    params = parameters(
+        a=(0.0, expressions.canonical("b + 1", names)),
+        b=(0.0, expressions.canonical("a + 1", names)),
+    )
+
+    with pytest.raises(ValidationError) as caught:
+        expressions.resolve(params)
+    assert caught.value.constraint == "cycle"
+
+
+def test_a_completed_expression_travels_through_the_project_file(tmp_path) -> None:
+    """Gespeichert, geöffnet, gerechnet: Die ergänzte Form ist die Form der Datei."""
+    from app.core.bootstrap import load_operations
+    from app.core.knowledge import profiles
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.project import ProjectSources, load, new_project, save
+
+    load_operations()
+    project = new_project("centauri-carbon-2", "pla")
+    project.document.parameters["schraube_m4"] = Parameter(name="schraube_m4", value=4.0)
+    project.document.parameters["spiel"] = Parameter(name="spiel", value=0.3)
+    width = expressions.canonical("schraube_m4 * 10 + spiel", project.document.parameters)
+    History(project.document).apply(
+        "Quader",
+        [OperationDraft(op="create_box", params={"width": width, "depth": 10.0, "height": 5.0})],
+    )
+
+    reopened = load(save(project, tmp_path / "formel.p3d"))
+
+    assert reopened.document.ops[-1].params["width"] == "=@schraube_m4 * 10 + @spiel"
+    result = evaluate(
+        reopened.document,
+        profiles.make_profile("centauri-carbon-2", "pla"),
+        sources=ProjectSources(reopened),
+    )
+    assert result.complete, result.scene.report.findings
+    size = result.scene.objects["obj_1"].mesh.bounds.size
+    assert float(size[0]) == pytest.approx(40.3)

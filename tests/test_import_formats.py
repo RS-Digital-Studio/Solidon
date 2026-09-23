@@ -362,14 +362,48 @@ def test_own_glb_export_round_trips_dimensions_and_upright(
     assert np.array_equal(restored.raw.faces, imported.raw.faces)
 
 
-def test_generated_glb_keeps_raw_axes_and_one_working_size(profile: Profile) -> None:
+def test_a_generated_glb_stands_upright_and_gets_one_working_size(profile: Profile) -> None:
+    """TripoSG schreibt Y-oben, wie glTF es vorschreibt — Weg 3 las roh.
+
+    Gemessen an fünf erzeugten Netzen (Durchsicht 0.5.0, RM-086): Der Drache
+    aus ``image_00001_.glb`` und die vier Puppenhausmöbel tragen ihre Höhe
+    auf Y. Mit Rohachsen lag jeder erzeugte Körper auf dem Rücken: der
+    Schrank 29 mm hoch und 100 mm tief, die Tischplatte senkrecht. Gedreht
+    wird wie beim Import; die Einheit bleibt die eigene Arbeitsgröße.
+    """
+    from app.core.backends.mesh import ScriptedMeshBackend
+    from app.core.generate import WORKING_SIZE_MM, from_text
+
+    # Ein Kegel mit der Spitze nach glTF-oben: Standfläche unten, Spitze oben.
+    cone = trimesh.creation.cone(radius=0.5, height=2.0)
+    cone.apply_transform(trimesh.transformations.rotation_matrix(-np.pi / 2.0, (1.0, 0.0, 0.0)))
+    assert np.ptp(cone.vertices, axis=0) == pytest.approx((1.0, 2.0, 1.0), abs=1e-6)
+    payload = _bytes(trimesh.Scene(cone).export(file_type="glb"))
+    project = new_project("centauri-carbon-2", "petg")
+    from_text(project, ScriptedMeshBackend(fallback=payload, suffix=".glb"), "Kegel")
+    assert project.document.ops[0].params["coordinates"] == "gltf"
+    assert project.document.ops[0].params["unit"] == "mm"
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert result.complete
+    mesh = next(iter(result.scene.objects.values())).mesh
+    size = np.asarray(mesh.bounds.size)
+    assert size == pytest.approx(np.array((1.0, 1.0, 2.0)) * WORKING_SIZE_MM / 2.0, rel=1e-3)
+    heights = np.asarray(mesh.raw.vertices)[:, 2]
+    # Oben steht genau ein Punkt, die Spitze; unten der ganze Rand der
+    # Standfläche. Kopfüber wäre es umgekehrt.
+    assert np.isclose(heights, heights.max(), atol=1e-6).sum() == 1
+    assert np.isclose(heights, heights.min(), atol=1e-6).sum() > 8
+
+
+def test_a_generated_mesh_without_an_axis_convention_keeps_its_axes(profile: Profile) -> None:
+    """Nur glTF schreibt eine Achse vor; ein STL aus dem Generator bleibt roh."""
     from app.core.backends.mesh import ScriptedMeshBackend
     from app.core.generate import WORKING_SIZE_MM, from_text
 
     body = trimesh.creation.box(extents=(1.0, 2.0, 3.0))
-    payload = _bytes(trimesh.Scene(body).export(file_type="glb"))
+    payload = _bytes(body.export(file_type="stl"))
     project = new_project("centauri-carbon-2", "petg")
-    from_text(project, ScriptedMeshBackend(fallback=payload, suffix=".glb"), "Quader")
+    from_text(project, ScriptedMeshBackend(fallback=payload, suffix=".stl"), "Quader")
     assert project.document.ops[0].params["coordinates"] == "legacy_raw"
     result = evaluate(project.document, profile, sources=ProjectSources(project))
     assert result.complete

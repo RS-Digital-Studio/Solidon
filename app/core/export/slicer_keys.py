@@ -223,6 +223,14 @@ PRUSA: Final[tuple[Row, ...]] = (
     ("speed.outer_wall", "external_perimeter_speed", _number),
     ("speed.inner_wall", "perimeter_speed", _number),
     ("speed.infill", "infill_speed", _number),
+    # **Die innere volle Füllung und die Lückenfüllung** (RM-191). Ohne die
+    # beiden Zeilen fuhr PrusaSlicer seine eingebauten 20 mm/s — für die
+    # größte Rolle einer Regalplatte, die volle Füllung zwischen den Böden.
+    # Gemessen am Gewürzregal (Durchsicht 0.5.0): 48 532 s gegen 23 655 s bei
+    # Orca für dieselbe Platte. Die Füllung ist eine Geschwindigkeit, ob
+    # dünn oder voll; die Lücke zwischen den Wänden fährt wie die Wand.
+    ("speed.infill", "solid_infill_speed", _number),
+    ("speed.inner_wall", "gap_fill_speed", _number),
     ("speed.top_surface", "top_solid_infill_speed", _number),
     ("speed.first_layer", "first_layer_speed", _number),
     ("speed.travel", "travel_speed", _number),
@@ -282,6 +290,16 @@ ORCA: Final[tuple[Row, ...]] = (
     ("layers.layer_height", "layer_height", _number),
     ("layers.first_layer_height", "initial_layer_print_height", _number),
     ("layers.line_width", "line_width", _number),
+    # **Die Bahnbreite gilt jeder Rolle** (RM-191). ``line_width`` allein
+    # erreichte nur, was das Herstellerprofil nicht selbst setzt — beim
+    # Centauri Carbon 2 fuhren Innenwand und Füllung weiter mit 0,45 mm, alle
+    # anderen mit Solidons 0,42. PrusaSlicer leitet seine Breiten aus der einen
+    # ab, Cura spiegelt sie (``CURA_MIRRORED``); hier stehen sie ausdrücklich.
+    ("layers.line_width", "outer_wall_line_width", _number),
+    ("layers.line_width", "inner_wall_line_width", _number),
+    ("layers.line_width", "sparse_infill_line_width", _number),
+    ("layers.line_width", "internal_solid_infill_line_width", _number),
+    ("layers.line_width", "top_surface_line_width", _number),
     ("layers.first_layer_line_width", "initial_layer_line_width", _number),
     ("shell.wall_count", "wall_loops", _integer),
     ("shell.top_layers", "top_shell_layers", _integer),
@@ -318,6 +336,12 @@ ORCA: Final[tuple[Row, ...]] = (
     ("speed.outer_wall", "outer_wall_speed", _number),
     ("speed.inner_wall", "inner_wall_speed", _number),
     ("speed.infill", "sparse_infill_speed", _number),
+    # Dieselben zwei wie bei PrusaSlicer (RM-191): Ohne sie fuhr die
+    # Orca-Familie die volle Füllung und die Lücken mit den 250 mm/s des
+    # Herstellerprofils, während Wände und dünne Füllung Solidons Werte
+    # bekamen — ein Auftrag aus zwei Geschwindigkeitswelten.
+    ("speed.infill", "internal_solid_infill_speed", _number),
+    ("speed.inner_wall", "gap_infill_speed", _number),
     ("speed.top_surface", "top_surface_speed", _number),
     ("speed.first_layer", "initial_layer_speed", _number),
     ("speed.travel", "travel_speed", _number),

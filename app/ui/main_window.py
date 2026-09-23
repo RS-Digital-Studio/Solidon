@@ -15633,7 +15633,7 @@ class MainWindow(QMainWindow):
         """
         document = self.session.project.document
         try:
-            fit = build_fit(dict(values), self.session.profile.material.id, len(document.fits))
+            fit = build_fit(dict(values), len(document.fits))
         except ValueError as error:
             return str(error)
         if not self.session.add_fit(fit, origin=Origin(by="agent", model=REMOTE_ORIGIN)):
@@ -18174,6 +18174,16 @@ class MainWindow(QMainWindow):
             )
         show_error(error, self)
 
+    def _adopt_carried_printers(self) -> None:
+        """Übernimmt den mitgebrachten Drucker und sagt, was geschehen ist."""
+        try:
+            adopted = self.session.adopt_carried_printers()
+        except AppError as error:
+            show_error(error, self)
+            return
+        if adopted:
+            self.announce(tr("Der Drucker steht jetzt in Ihren Druckern."))
+
     def error_handlers(self) -> dict[str, Any]:
         """Was hinter den Knöpfen eines Fehlerdialogs steckt (§2.7, Regel 17).
 
@@ -18238,6 +18248,14 @@ class MainWindow(QMainWindow):
             # einen größeren Drucker hat, ist damit einen Klick entfernt statt
             # gezwungen, sein Teil zu verkleinern.
             "choose_printer": lambda _error: self.action_print_settings(),
+            # Ein Projekt bringt seinen eigenen Drucker mit, und dieser Rechner
+            # kennt ihn nicht (``profiles.carried_findings``): übernehmen, und
+            # er steht hier auch in jedem anderen Projekt zur Wahl.
+            "adopt_printer": lambda _error: self._adopt_carried_printers(),
+            # Ein eigener Baustein hat sich seit dem Speichern geändert, und
+            # die Datei hat den gespeicherten Stand mitgebracht (§24.4,
+            # RM-138): wieder mit ihm rechnen, als ein Schritt im Verlauf.
+            "keep_saved_parts": lambda _error: self.session.keep_saved_parts(),
             # **Derselbe Weg, dieselbe Lücke, eine Zeile weiter.** Scheitert
             # der Slicer-Lauf, schlägt die Absage vor, einen anderen zu
             # wählen — und auch dieser Rat hatte keinen Draht. Auf einem

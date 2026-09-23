@@ -2104,6 +2104,17 @@ class Document:
     Der Umschalter am Merkmal ist sein eigener Rückweg. Seit Format v24 in der
     Datei.
     """
+    carried_profiles: dict[str, dict[str, dict[str, Any]]] = field(default_factory=dict)
+    """Die eigenen Drucker und Materialien, die das Projekt mitnimmt (seit Format v30).
+
+    ``{"printers": {Kennung: Tabelle}, "materials": {…}}`` — dieselbe Form wie
+    ``printers.toml`` und ``materials.toml`` des Nutzers: Maße, Zahlen, Namen,
+    kein Pfad und kein Code. Ein Projekt mit einem eigenen Drucker rechnet so
+    auch auf einem Rechner, der ihn nicht kennt (``profiles.carry``); vorher
+    endete es dort bei „Dieses Druckerprofil ist nicht bekannt." Das Speichern
+    füllt das Feld aus dem Bestand des Rechners
+    (``profiles.carried_definitions``), mitgelieferte Profile stehen nie darin.
+    """
     highest_transaction: int = 0
     """Die höchste je vergebene Transaktionsnummer — mit ``highest_op`` und
     ``highest_object`` die Wasserlinie der Nummernvergabe (§15.4).

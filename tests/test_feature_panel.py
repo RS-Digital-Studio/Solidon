@@ -2161,8 +2161,8 @@ def test_a_nearly_nominal_bore_explains_why_it_is_not_assigned(qt_app: QApplicat
     identifier, feature = a_hole()
     panel = FeaturePanel()
     # Die Nennmaß-Auskunft gilt einem **belegten** Maß: Eine eingepasste Bohrung
-    # (``fit``) sagt seit den Maßquellen ehrlich „nicht sicher bestimmt" — hier
-    # steht die Frage nach der Rundung, also ein nativ gelesenes Maß.
+    # (``fit``) nennt eine Größe nur als Einschätzung („passt vermutlich") —
+    # hier steht die Frage nach der Rundung, also ein nativ gelesenes Maß.
     nearly = replace(
         feature,
         params={**feature.params, "diameter": 1.9999},

@@ -18,13 +18,19 @@ passieren.
 
 Geschrieben als ``"=@width/2 - @wall"`` oder, für den nackten Verweis,
 ``"@width"``.
+
+**Getippt werden darf es auch ohne beides** (:func:`canonical`). Wer aus dem
+Slicer kommt, schreibt ``schraube_m4 + spiel``; das Formelfeld ergänzt ``=``
+und ``@``, bevor irgendetwas gespeichert oder gerechnet wird. Die Grammatik
+selbst bleibt, wie sie ist — in der Projektdatei steht immer die Form mit
+``@``, und ein Name ohne ``@`` wird dort weiter abgelehnt.
 """
 
 from __future__ import annotations
 
 import math
 import re
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Collection, Iterable, Mapping
 from dataclasses import dataclass
 from typing import Final, TypeGuard
 
@@ -265,7 +271,17 @@ class _Parser:
                 self.source,
                 token.position,
             )
-        return float(function(*arguments))
+        try:
+            return float(function(*arguments))
+        except (OverflowError, ValueError) as problem:
+            # ``round(1, 99…9)`` rundet auf eine Stellenzahl, die keine Zahl
+            # mehr ist: Die Ziffernfolge wird ``inf``, und ``int(inf)`` warf
+            # einen rohen ``OverflowError`` — schon beim Eintippen, aus der
+            # Syntaxprüfung heraus, ohne Satz und ohne Ausweg (Durchsicht
+            # 0.5.0).
+            raise _fail(
+                str(_("Das Ergebnis ist keine gültige Zahl.")), self.source, token.position
+            ) from problem
 
     def _lookup(self, token: _Token) -> float:
         if self.values is None:
@@ -331,6 +347,78 @@ def references(text: str) -> frozenset[str]:
 def check(text: str) -> None:
     """Lehnt alles außerhalb der Grammatik ab. Wirft — oder kehrt still zurück."""
     references(text)
+
+
+def canonical(text: str, names: Collection[str]) -> str:
+    """Die gespeicherte Form eines eingetippten Ausdrucks: mit ``=`` und ``@``.
+
+    Für Felder, die ohnehin eine Formel erwarten — das fx-Feld eines Dialogs,
+    der Ausdruck eines Projektparameters. Die Website zeigt als Beispiel
+    ``schraube_m4 + spiel``, und wer aus dem Slicer kommt, kennt kein ``@``:
+    Der Auswerter wies das ab (Durchsicht 0.5.0). Hier wird ergänzt:
+
+    * ein führendes ``=``, wenn der Text weder mit ``=`` noch mit ``@``
+      beginnt — beginnt er so, bleibt er, wie er ist;
+    * ein ``@`` vor jedem Namen aus ``names``, der ohne dasteht.
+
+    **Nur ein eindeutiger Name.** Heißt ein Parameter wie eine Funktion —
+    ``max``, ``round`` —, entscheidet die Klammer: ``max(…)`` ist der Aufruf,
+    ein ``max`` ohne Klammer bleibt mehrdeutig und wird abgelehnt, mit dem
+    Vorschlag ``@max``. Geraten wird nicht (Regel 21). Ein unbekannter Name
+    bleibt stehen, und :func:`check` sagt danach, woran es liegt.
+
+    Ausgeführt wird dabei nichts (Regel 10): Die Stelle zerlegt den Text mit
+    denselben Mustern wie :func:`_tokenise` und setzt ihn Zeichen für Zeichen
+    wieder zusammen.
+    """
+    source = text.strip()
+    if not source:
+        return source
+    prefixed = source.startswith((EXPRESSION_PREFIX, REFERENCE_PREFIX))
+    body = source[1:] if source.startswith(EXPRESSION_PREFIX) else source
+    known = set(names)
+    pieces: list[str] = []
+    index = 0
+    while index < len(body):
+        if body[index] == REFERENCE_PREFIX:
+            reference = _NAME_PATTERN.match(body, index + 1)
+            end = reference.end() if reference is not None else index + 1
+            pieces.append(body[index:end])
+            index = end
+            continue
+        number = _NUMBER_PATTERN.match(body, index)
+        if number is not None:
+            pieces.append(number.group())
+            index = number.end()
+            continue
+        name = _NAME_PATTERN.match(body, index)
+        if name is None:
+            pieces.append(body[index])
+            index += 1
+            continue
+        word = name.group()
+        called = body[name.end() :].lstrip().startswith("(")
+        if word in known and not (word in _FUNCTIONS and called):
+            if word in _FUNCTIONS:
+                raise ValidationError(
+                    title=_("Dieser Ausdruck lässt sich nicht lesen."),
+                    field="expression",
+                    detail=_(
+                        "Dieser Name ist auch eine Funktion. Schreiben Sie den Parameter "
+                        "mit @ davor."
+                    ),
+                    value=source,
+                    constraint="grammar",
+                    values={"parameter": word, "suggestion": f"{REFERENCE_PREFIX}{word}"},
+                )
+            pieces.append(f"{REFERENCE_PREFIX}{word}")
+        else:
+            pieces.append(word)
+        index = name.end()
+    written = "".join(pieces)
+    if source.startswith(EXPRESSION_PREFIX) or not prefixed:
+        return f"{EXPRESSION_PREFIX}{written}"
+    return written
 
 
 def function_names() -> tuple[str, ...]:

@@ -1594,6 +1594,38 @@ def test_two_drags_in_a_row_are_one_step_in_the_history(window: MainWindow) -> N
     )
 
 
+def test_a_drag_over_the_edge_and_back_ends_where_the_steps_end(window: MainWindow) -> None:
+    """Über den Rand gezogen und zurück: Das Teil steht, wo die Vorschau es zeigte.
+
+    Der erste Zug führt über das Bett hinaus, *Auf dem Bett halten* schiebt
+    zurück. Der zweite Zug geht von dort 50 mm nach links. Bis zur Durchsicht
+    0.5.0 wurden beide zu einer Summe gebündelt, und die wurde als ein Zug noch
+    einmal zurückgeschoben: Am Quader standen einzeln 68 mm, gebündelt 118 mm.
+    Seitdem schließt die Sitzung das Bündel, sobald die Auswertung einen Zug
+    nachgeführt hat (``Session._bundle_stays_exact``).
+    """
+    from app.ui.viewport import TransformSteps
+
+    result = window.session.last_result
+    assert result is not None
+    body = next(iter(result.scene.objects))
+    window.object_tree.select_object(body)
+    vorher = len(window.session.project.document.transactions)
+
+    window._on_transform_dragged(TransformSteps(offset=(400.0, 0.0, 0.0)))
+    window.session.wait_for_idle()
+    zurueckgeschoben = centre_of(window, body)
+    window._on_transform_dragged(TransformSteps(offset=(-50.0, 0.0, 0.0)))
+    window.session.wait_for_idle()
+
+    ende = centre_of(window, body)
+    assert ende[0] == pytest.approx(zurueckgeschoben[0] - 50.0, abs=1e-6), (
+        f"nach dem zweiten Zug steht das Teil bei {ende[0]:.3f} mm statt "
+        f"{zurueckgeschoben[0] - 50.0:.3f} mm"
+    )
+    assert len(window.session.project.document.transactions) == vorher + 2
+
+
 def test_turning_several_bodies_turns_them_as_a_group(window: MainWindow) -> None:
     """Zwei Teile gewählt, einmal gedreht — die Gruppe dreht, nicht jeder für sich.
 

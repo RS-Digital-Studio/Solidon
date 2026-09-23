@@ -955,6 +955,157 @@ def test_a_broken_cura_file_is_skipped_not_fatal(cura: Path, cura_bestand: Path)
     assert len(sp.find_profiles(cura, "cura", kinds=("process",))) == 1
 
 
+def _cura_konfiguration(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Curas Konfigurationsordner, wie Cura 5.13 ihn nach dem Einrichten schreibt.
+
+    ``cura.cfg`` nennt die aktive Maschine, je Fach ein Extruderstapel mit
+    dem Material an Stelle vier (``_ContainerIndexes.Material``). Die
+    Kennung des ersten ist eine Ableitung mit Maschine und Düse, wie Cura sie
+    für Drucker mit Düsenvarianten bildet; das zweite Fach trägt ein eigenes
+    Material aus dem Konfigurationsordner. Eine zweite Maschine mit anderem
+    Material zeigt, dass nur die aktive zählt.
+    """
+    config = tmp_path / "config"
+    root = config / "cura" / "5.13"
+    (root / "extruders").mkdir(parents=True)
+    (root / "materials").mkdir(parents=True)
+    (root / "cura.cfg").write_text(
+        "[general]\nversion = 7\n\n[cura]\nactive_machine = Meine Werkstatt\n",
+        encoding="utf-8",
+    )
+
+    def fach(dateiname: str, maschine: str, position: int, material: str) -> None:
+        (root / "extruders" / dateiname).write_text(
+            f"[general]\nversion = 4\nname = Extruder {position + 1}\nid = {dateiname}\n\n"
+            f"[metadata]\ntype = extruder_train\nmachine = {maschine}\n"
+            f"position = {position}\nsetting_version = 27\n\n"
+            "[containers]\n0 = empty_user_changes\n1 = empty_quality_changes\n"
+            f"2 = empty_intent\n3 = normal\n4 = {material}\n5 = empty_variant\n"
+            "6 = empty_definition_changes\n7 = fdmextruder\n",
+            encoding="utf-8",
+        )
+
+    fach("meine+werkstatt_1.extruder.cfg", "Meine Werkstatt", 1, "eigenes_petg")
+    fach("meine+werkstatt_0.extruder.cfg", "Meine Werkstatt", 0, "generic_pla_abax_pri3_0.4mm")
+    fach("andere_0.extruder.cfg", "Andere Maschine", 0, "bestfilament_petg_orange")
+    (root / "materials" / "eigenes_petg.xml.fdm_material").write_text(
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<fdmmaterial xmlns="http://www.ultimaker.com/material" version="1.3">\n'
+        "  <metadata>\n"
+        "    <name><brand>Werkstatt</brand><material>PETG</material>"
+        "<color>Blau</color></name>\n"
+        "    <color_code>#1e4bd2</color_code>\n"
+        "  </metadata>\n"
+        "</fdmmaterial>\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(sp, "config_home", lambda _platform: str(config))
+    monkeypatch.delenv("XDG_DATA_HOME", raising=False)
+    monkeypatch.setattr(sp.Path, "home", classmethod(lambda cls: tmp_path / "kein_home"))
+    return root
+
+
+def test_cura_names_the_spools_of_its_active_machine(
+    cura: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Filamentübernahme las Orca und Prusa, Cura blieb leer (Durchsicht 0.5.0).
+
+    Gelesen wird die aktive Maschine, in Fachreihenfolge: das mitgelieferte
+    PLA über seine abgeleitete Kennung, das eigene PETG aus dem
+    Konfigurationsordner. Die andere Maschine bleibt draußen.
+    """
+    _cura_konfiguration(tmp_path, monkeypatch)
+
+    found = sp.configured_filaments("cura", cura)
+
+    assert found == (
+        sp.SlicerFilament(profile="Generic PLA", colour="#FFC924", material_type="PLA"),
+        sp.SlicerFilament(profile="Werkstatt PETG Blau", colour="#1E4BD2", material_type="PETG"),
+    )
+
+
+def test_cura_without_an_active_machine_names_no_spools(
+    cura: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ohne aktive Maschine gibt es keine Belegung — und keinen Fehler."""
+    root = _cura_konfiguration(tmp_path, monkeypatch)
+    (root / "cura.cfg").write_text("[general]\nversion = 7\n", encoding="utf-8")
+
+    assert sp.configured_filaments("cura", cura) == ()
+
+
+def test_a_cura_file_that_is_not_utf8_is_skipped_not_fatal(
+    cura: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Eine Konfigurationsdatei in fremder Kodierung ist kein Absturz der Filamentsuche.
+
+    ``_read_ini`` fing ``OSError`` und ``configparser.Error``, aber nicht
+    ``UnicodeDecodeError`` — eine ``cura.cfg`` in Latin-1 mit einem Umlaut im
+    Maschinennamen riss die Suche im Druckdialog ab (Durchsicht 0.5.0).
+    """
+    root = _cura_konfiguration(tmp_path, monkeypatch)
+    (root / "cura.cfg").write_bytes("[cura]\nactive_machine = Gerät\n".encode("latin-1"))
+
+    assert sp.configured_filaments("cura", cura) == ()
+
+
+def test_cura_knows_which_quality_types_a_machine_offers(cura: Path, cura_bestand: Path) -> None:
+    """Ein importiertes Profil muss eine Qualitätsstufe nennen, die es gibt.
+
+    Maschinen ohne eigene Qualitäten nehmen die allgemeinen von
+    ``fdmprinter``; eine mit ``has_machine_quality`` die ihrer
+    ``quality_definition`` — auch geerbt. Und die Einstellungsversion steht
+    in ``fdmprinter.def.json``.
+    """
+    _write(
+        cura_bestand / "definitions" / "fdmprinter.def.json",
+        {
+            "version": 2,
+            "name": "FDM Drucker",
+            "metadata": {"visible": False, "setting_version": 27},
+        },
+    )
+    _write(
+        cura_bestand / "definitions" / "werkstatt_basis.def.json",
+        {
+            "version": 2,
+            "name": "Werkstatt Basis",
+            "inherits": "fdmprinter",
+            "metadata": {"visible": False, "has_machine_quality": True},
+        },
+    )
+    _write(
+        cura_bestand / "definitions" / "werkstatt_eins.def.json",
+        {
+            "version": 2,
+            "name": "Werkstatt Eins",
+            "inherits": "werkstatt_basis",
+            "metadata": {"quality_definition": "werkstatt_basis"},
+        },
+    )
+    for folder, definition, kind, height in (
+        ("", "fdmprinter", "draft", 0.2),
+        ("", "fdmprinter", "normal", 0.1),
+        ("werkstatt", "werkstatt_basis", "standard", 0.2),
+    ):
+        target = cura_bestand / "quality" / folder / f"{definition}_{kind}.inst.cfg"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(
+            f"[general]\ndefinition = {definition}\nname = {kind}\nversion = 4\n\n"
+            f"[metadata]\nglobal_quality = True\nquality_type = {kind}\n"
+            "setting_version = 27\ntype = quality\n\n"
+            f"[values]\nlayer_height = {height}\n",
+            encoding="utf-8",
+        )
+
+    assert sp.cura_setting_version(cura) == 27
+    assert sp.cura_quality_types(cura, None) == {"draft": 0.2, "normal": 0.1}
+    eins = cura_bestand / "definitions" / "werkstatt_eins.def.json"
+    assert sp.cura_quality_types(cura, eins) == {"standard": 0.2}
+    abax = cura_bestand / "definitions" / "abax_pri3.def.json"
+    assert sp.cura_quality_types(cura, abax) == {"draft": 0.2, "normal": 0.1}
+
+
 # --- PrusaSlicer: eine Datei, ein kopfloser Anfang ---------------------------------
 
 

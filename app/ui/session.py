@@ -69,6 +69,7 @@ from app.core.scene import (
     History,
     NeverCancelled,
     OperationDraft,
+    bundling,
     disk_backed_cache,
     foreign,
     orphans,
@@ -1097,14 +1098,46 @@ class Session(QObject):
 
     @property
     def profile(self) -> Profile:
+        # ``scene_profile`` und nicht ``make_profile``: Ein Drucker, den dieser
+        # Rechner nicht kennt, hielt sonst alles an — keine Szene, keine
+        # Druckeinstellungen. Der Prüfbericht sagt, womit gerechnet wird
+        # (``profiles.carried_findings`` in ``run_evaluation``).
         document = self.project.document
         return profiles.for_process(
-            profiles.make_profile(
+            profiles.scene_profile(
                 document.printer or profiles.DEFAULT_PRINTER,
                 document.material or profiles.DEFAULT_MATERIAL,
             ),
             document.print_settings,
         )
+
+    def adopt_carried_printers(self) -> tuple[str, ...]:
+        """Übernimmt die Drucker, die das Projekt mitbringt, in die eigenen.
+
+        Danach stehen sie auf diesem Rechner in jedem Projekt zur Wahl; die
+        Kennung bleibt dieselbe, also rechnet dieses Projekt unverändert.
+        """
+        adopted = profiles.adopt_carried()
+        if adopted:
+            self.evaluate_async()
+        return adopted
+
+    def keep_saved_parts(self) -> bool:
+        """Rechnet eigene Bausteine wieder mit dem gespeicherten Stand (§24.4).
+
+        Den Stand hat die Projektdatei mitgebracht
+        (``part_check.saved_states``). Alle Schritte wechseln in einer
+        Transaktion; ein Strg+Z führt zum neuen Stand zurück (RM-138).
+        """
+        try:
+            transaction = part_check.keep_saved(self.history)
+        except AppError as error:
+            self.failed.emit(error)
+            return False
+        if transaction is None:
+            return False
+        self._changed()
+        return True
 
     @property
     def project_generation(self) -> int:
@@ -1342,6 +1375,9 @@ class Session(QObject):
             self._recovery_finalizer = None
 
     def _reset_for(self, path: Path | None) -> None:
+        # Was dieses Projekt an eigenen Druckern und Materialien mitbringt,
+        # ist ab jetzt bekannt — und das des vorigen nicht mehr.
+        profiles.carry(self.project.document.carried_profiles)
         self.release_recovery()
         # Ein anderes Dokument kommt aus keinem Baustein, bis jemand es sagt —
         # ``open_draft`` setzt die Herkunft danach wieder (E6).
@@ -1409,6 +1445,10 @@ class Session(QObject):
             refusal = self.halt_in_the_way() if drafts else None
             if refusal is not None:
                 raise refusal
+            if bundle and not self._bundle_stays_exact():
+                # Die Summe zweier Züge stimmt nur, wenn die Auswertung den
+                # vorigen genau so gerechnet hat, wie er gezogen wurde.
+                self.history.end_bundle()
             self.history.apply(
                 title, drafts, origin or Origin(by="user"), bundle=bundle, changes=changes
             )
@@ -1419,6 +1459,23 @@ class Session(QObject):
             return False
         self._changed()
         return True
+
+    def _bundle_stays_exact(self) -> bool:
+        """Ob der nächste Zug in den vorigen aufgehen darf (§15.5).
+
+        Gefragt wird am **aktuellen** Ergebnis: Ist die Auswertung des vorigen
+        Zugs noch nicht zurück, weiß niemand, ob sie ihn zurückgeschoben hat —
+        dann wird es ein eigener Schritt. Ein Bündel zu wenig kostet einen
+        Eintrag im Verlauf, eines zu viel verschiebt das Teil
+        (:func:`app.core.scene.bundling.stays_exact`).
+        """
+        result = self.last_result
+        document = self.project.document
+        if result is None or not self.result_current or not document.transactions:
+            return False
+        by_id = {entry.id: entry for entry in document.ops}
+        ops = [by_id[op_id] for op_id in document.transactions[-1].ops if op_id in by_id]
+        return bundling.stays_exact(ops, result.scene)
 
     def halted_step(self) -> tuple[int, TranslatableText | str] | None:
         """Der Schritt, an dem die letzte Auswertung hält — Kennung und Titel.
@@ -2433,12 +2490,10 @@ class Session(QObject):
             raise refusal
         result = self.last_result
         entry = result.scene.objects.get(object_id) if result is not None else None
-        object_profile = profiles.for_object(self.profile, entry)
         applied = apply_line_split(
             self.project.document,
             object_id,
             plane,
-            object_profile,
             mesh=as_mesh_data(entry.mesh) if entry is not None else None,
             features=entry.features if entry is not None else None,
             pins=pins,
@@ -2468,12 +2523,9 @@ class Session(QObject):
                     object_id,
                     mesh=as_mesh_data(entry.mesh) if entry is not None else None,
                     features=entry.features if entry is not None else None,
-                    profile=profiles.for_object(self.profile, entry),
                 )
             )
-        applied = apply_pinned_split(
-            self.project.document, targets, params, self.profile, title=title
-        )
+        applied = apply_pinned_split(self.project.document, targets, params, title=title)
         self._changed()
         return applied
 
@@ -2814,9 +2866,7 @@ class Session(QObject):
         )
         # Jeder Empfänger bekommt den Absender mit: Was ein überlebender
         # Arbeiter eines früheren Starts noch meldet, zählt nicht mehr.
-        worker.done.connect(
-            lambda plan: self._split_planned(worker, plan, object_id, object_profile, then)
-        )
+        worker.done.connect(lambda plan: self._split_planned(worker, plan, object_id, then))
         worker.failedWith.connect(lambda error: self._split_failed(worker, error))
         worker.crashed.connect(
             lambda detail: self._split_failed(worker, InternalError(detail=detail))
@@ -2890,7 +2940,6 @@ class Session(QObject):
         worker: object,
         plan: Any,
         object_id: str,
-        profile: Profile,
         then: Any,
     ) -> None:
         if worker is not self._split:
@@ -2898,7 +2947,7 @@ class Session(QObject):
         self.splitBusyChanged.emit(False)
         if self._split_discarded:
             return
-        applied = apply_planned(self.project.document, plan, object_id, profile)
+        applied = apply_planned(self.project.document, plan, object_id)
         if applied.transaction is not None:
             self._changed()
         then(applied)
@@ -2975,8 +3024,9 @@ class Session(QObject):
         # Wer die volle Kette braucht, braucht sie an einer Stelle, und alles
         # danach soll wieder so schnell sein wie vorher (§31).
         once, self._quality_once = self._quality_once, None
-        return evaluate(
-            self.project.document,
+        document = self.project.document
+        result = evaluate(
+            document,
             self.profile,
             quality=quality or once or self.quality,
             progress=self.report_progress,
@@ -2985,6 +3035,13 @@ class Session(QObject):
             cancelled=self.cancel_signal,
             cache=self.cache,
             sources=ProjectSources(self.project, base_dir=self.base_dir),
+        )
+        # Bei jedem Lauf und nicht nur beim Öffnen: Solange mit einem
+        # mitgebrachten oder einem Ersatzdrucker gerechnet wird, sagt es der
+        # Bericht — sonst verschwände der Satz mit der ersten Änderung, und
+        # der Ersatz liefe still weiter.
+        return _with_findings(
+            result, list(profiles.carried_findings(document.printer, document.material))
         )
 
     def recompute_fully(self) -> None:
@@ -3336,7 +3393,7 @@ class Session(QObject):
         preview_profile = snapshot.profile
         if changes is not None:
             preview_profile = profiles.for_process(
-                profiles.make_profile(
+                profiles.scene_profile(
                     working.printer or profiles.DEFAULT_PRINTER,
                     working.material or profiles.DEFAULT_MATERIAL,
                 ),

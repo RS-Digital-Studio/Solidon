@@ -467,6 +467,9 @@ _NOT_A_RANGE = frozenset(
         "beyond_table", "known_axis",
         # Ein fremdes Muster ohne gewählten Stil: eine Auswahl, keine Zahl.
         "pattern_style",
+        # Der gespeicherte Bausteinstand fehlt im Katalog (RM-138): ein Stand,
+        # keine Zahl.
+        "part_state_missing",
         # Eine Öffnungsfläche, die zu einem anderen Körper gehört, schräg liegt
         # oder innen sitzt (RM-087): eine andere Fläche ist der Weg, keine Zahl.
         "foreign_feature", "not_axis_aligned", "not_outside",

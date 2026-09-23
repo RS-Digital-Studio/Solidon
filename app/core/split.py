@@ -27,6 +27,7 @@ from app.core.geom.section import SectionPlane
 from app.core.log import get_logger
 from app.core.scene.history import History, OperationDraft, change_for
 from app.core.types import (
+    AUTO_TOLERANCE_PREFIX,
     CancelToken,
     Document,
     Feature,
@@ -276,14 +277,13 @@ def apply_split(
         cancelled=cancelled,
         progress=progress,
     )
-    return apply_planned(document, plan, object_id, profile, pins=pins)
+    return apply_planned(document, plan, object_id, pins=pins)
 
 
 def apply_planned(
     document: Document,
     plan: SplitPlan,
     object_id: ObjectId,
-    profile: Profile,
     *,
     pins: int = PIN_COUNT,
 ) -> SplitApplied:
@@ -371,7 +371,6 @@ def apply_planned(
                     pinned,
                     drilled,
                     seated,
-                    profile,
                     len(existing) + len(created),
                     feature_start=feature_start,
                     taken=[entry.name for entry in (*existing, *created)],
@@ -403,21 +402,18 @@ class SplitTarget:
     (:func:`fitting_pins`); ohne ihn gilt die gewünschte Zahl. ``features``
     sind die Merkmale, an denen bestehende Passungen auf die richtige Hälfte
     wandern (:func:`_retarget_fits`); ohne sie entfallen diese Passungen mit
-    Hinweis. ``profile`` ist das Profil **dieses** Körpers, falls er ein
-    eigenes Material trägt — sonst gilt das des Aufrufs.
+    Hinweis.
     """
 
     object_id: ObjectId
     mesh: MeshData | None = None
     features: Mapping[FeatureId, Feature] | None = None
-    profile: Profile | None = None
 
 
 def apply_line_split(
     document: Document,
     object_id: ObjectId,
     plane: SectionPlane,
-    profile: Profile,
     *,
     mesh: MeshData | None = None,
     features: Mapping[FeatureId, Feature] | None = None,
@@ -448,7 +444,6 @@ def apply_line_split(
             "shape": shape,
         },
         plane,
-        profile,
         [SplitTarget(object_id, mesh, features)],
         title=_("An gezeichneter Linie trennen"),
     )
@@ -460,7 +455,6 @@ def apply_pinned_split(
     document: Document,
     targets: Sequence[SplitTarget],
     params: Mapping[str, Any],
-    profile: Profile,
     *,
     title: TranslatableText | str,
 ) -> SplitApplied:
@@ -487,9 +481,7 @@ def apply_pinned_split(
         normal=AXIS_NORMALS[axis],
         position=float(params.get("position", 0.0)),
     )
-    applied = _apply_plane_splits(
-        document, "split_pinned", params, plane, profile, targets, title=title
-    )
+    applied = _apply_plane_splits(document, "split_pinned", params, plane, targets, title=title)
     _log.info(
         "split %d body(ies) at %s into %d part(s)", len(targets), axis, len(applied.object_ids)
     )
@@ -501,7 +493,6 @@ def _apply_plane_splits(
     op: str,
     params: Mapping[str, Any],
     plane: SectionPlane,
-    profile: Profile,
     targets: Sequence[SplitTarget],
     *,
     title: TranslatableText | str,
@@ -562,7 +553,6 @@ def _apply_plane_splits(
                     first,
                     second,
                     count,
-                    target.profile or profile,
                     len(surviving) + len(fits),
                     feature_start=next_connector_index(target.features or {}),
                     taken=[entry.name for entry in (*surviving, *fits)],
@@ -659,7 +649,6 @@ def _pairs(
     first: ObjectId,
     second: ObjectId,
     pins: int,
-    profile: Profile,
     made_so_far: int,
     *,
     feature_start: int = 1,
@@ -671,6 +660,14 @@ def _pairs(
     Die Toleranz ist ein Verweis ins Materialprofil, nie die Zahl selbst
     (AGENTS.md Regel 7) — eine Kalibrierung danach muss ein Teil erreichen,
     das vor ihr geteilt wurde.
+
+    **Und ohne Kennung** (``auto:``): Die Stifte rechnen ihr Spiel aus dem
+    Material, in dem ihre Hälften gedruckt werden, also muss die Passung es
+    auch. Bis zur Durchsicht 0.5.0 stand hier das Material des Augenblicks
+    (``auto:petg``); nach einem Wechsel auf TPU meldete der Prüfbericht jeden
+    Stift als verletzt, obwohl die Naht genau richtig war. Ein benannter
+    Verweis bleibt, wo jemand ein Material ausdrücklich meint — der Ablauf
+    meint keines.
 
     **Der Name wird gegen die belegten vergeben, nicht gezählt.** Gezählt
     wurde die Zahl der vorhandenen Passungen, und eine von Hand benannte
@@ -694,7 +691,7 @@ def _pairs(
             a=FeatureRef(first, f"pin_{index}"),
             b=FeatureRef(second, f"bore_{index}"),
             kind="clearance",
-            tolerance=f"auto:{profile.material.id}",
+            tolerance=AUTO_TOLERANCE_PREFIX,
         )
         for offset, index in enumerate(range(feature_start, feature_start + pins))
     ]

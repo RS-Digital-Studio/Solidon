@@ -438,6 +438,76 @@ def test_four_variants_come_out_of_one_call(profile: Profile) -> None:
     assert len(scene.objects) == 4
 
 
+def test_the_steps_before_the_parameter_are_computed_once(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Vier Varianten, ein Vorlauf: was den Parameter nicht liest, rechnet einmal.
+
+    Jeder Lauf rechnete den ganzen Stapel neu, auch den Quader und das
+    Aushöhlen vor der einen Bohrung, die ``@loch`` liest (Durchsicht 0.5.0).
+    Gemessen an sechs Schritten: vier Varianten 4,8 s gegen 2,1 s, im selben
+    Prozess abwechselnd. Und gerechnet wird wie beim Export (``fine``): Die
+    Varianten sind ein Druckauftrag.
+    """
+    from app.core.scene.cache import ResultCache
+
+    project = new_project("centauri-carbon-2", "petg")
+    project.document.parameters["loch"] = Parameter(name="loch", value=5.0)
+    history = History(project.document)
+    history.apply(
+        "Quader",
+        [OperationDraft(op="create_box", params={"width": 40.0, "depth": 30.0, "height": 10.0})],
+    )
+    history.apply(
+        "Aushöhlen", [OperationDraft(op="hollow_object", inputs=("obj_1",), params={"wall": 2.0})]
+    )
+    history.apply(
+        "Messbohrung",
+        [
+            OperationDraft(
+                op="drill_hole",
+                inputs=("obj_1",),
+                params={"diameter": "=@loch", "x": 0.0, "y": 0.0, "z": 5.0},
+            )
+        ],
+    )
+    hits: list[str] = []
+    qualities: list[str] = []
+
+    class Counting(ResultCache):
+        def get(self, key: str):  # type: ignore[no-untyped-def]
+            found = super().get(key)
+            if found is not None:
+                hits.append(key)
+            return found
+
+    real_evaluate = variants.evaluate
+
+    def remembering(*args, **kwargs):  # type: ignore[no-untyped-def]
+        qualities.append(kwargs["quality"])
+        return real_evaluate(*args, **kwargs)
+
+    # Der gemeinsame Cache der Varianten kommt aus ``disk_backed_cache``; hier
+    # ohne Platte, damit jeder Treffer aus diesem einen Aufruf stammt.
+    monkeypatch.setattr(variants, "disk_backed_cache", Counting)
+    monkeypatch.setattr(variants, "evaluate", remembering)
+
+    made = variants.build(
+        project.document,
+        profile,
+        parameter="loch",
+        first=4.8,
+        step=0.1,
+        count=4,
+        mark=False,
+        sources=ProjectSources(project),
+    )
+
+    assert made.complete
+    assert len(hits) >= 3 * 2, f"Quader und Aushöhlen hätten dreimal gelesen werden müssen: {hits}"
+    assert set(qualities) == {"fine"}
+
+
 def test_the_variants_stand_next_to_each_other(profile: Profile) -> None:
     """Ein Druck — sie dürfen also nicht ineinander sitzen."""
     project = project_with_parameter()

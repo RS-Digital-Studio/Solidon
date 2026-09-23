@@ -40,7 +40,11 @@ SNAP_ARM_ANCHOR_ON_SURFACE = PartChange(
     version="15",
     date="2026-09-06",
     reason="Der Anker der Federarmfläche lag in der Mitte des Arms.",
-    effect="Der Anker liegt auf der bezeichneten Außenfläche bei minus halber Armdicke.",
+    effect=_(
+        "Der Bezugspunkt der Federarmfläche liegt jetzt auf ihrer Außenseite statt in "
+        "der Armmitte. Daran ausgerichtete Schritte verschieben sich um eine halbe "
+        "Armdicke."
+    ),
 )
 
 FIRST_RELEASE = PartChange(
@@ -54,7 +58,7 @@ BEARING_SEAT_ADDED = PartChange(
         "Die Kugellagermaße standen in der Normteiltabelle, ließen sich aber in "
         "keinem Baustein verwenden."
     ),
-    effect=(
+    effect=_(
         "Der Katalog kann jetzt eine passgenaue Lageraufnahme schneiden. Alte "
         "Projekte ändern sich nicht, weil sie den neuen Baustein nicht enthalten."
     ),
@@ -67,7 +71,7 @@ DOWEL_CHAMFER_WITHIN_LENGTH = PartChange(
         "Eine Fase länger als der Stift schrumpfte dessen Fuß, und an der Bohrung "
         "reichte die Einführung tiefer als die Bohrung selbst."
     ),
-    effect=(
+    effect=_(
         "Die Fase ist höchstens so lang wie Stift oder Bohrung. Nur Stifte und "
         "Bohrungen, die kürzer sind als ihre Fase, ändern sich: Der Fuß behält seinen "
         "Durchmesser, die Bohrung ihre Tiefe."
@@ -81,7 +85,7 @@ DOWEL_DOVETAIL_PROFILE_FIXED = PartChange(
         "Der trapezförmige Schwalbenschwanz verlor bei der Umrechnung auf den "
         "Nenn-Umkreis fast ein Drittel seiner druckbaren Querschnittstiefe."
     ),
-    effect=(
+    effect=_(
         "Der Schwalbenschwanz folgt jetzt dem Nenn-Umkreis mit einer gerundeten "
         "Außenseite und einer formschlüssigen Sehne. Sein Umkreis bleibt gleich, "
         "der kleinste Stift hält aber wieder zwei Extrusionsbahnen."
@@ -111,7 +115,7 @@ SNAP_FIT_HOOK_FIXED = PartChange(
     version="13",
     date="2026-08-31",
     reason="Der Schnapphaken ragte zur falschen Seite in den Federarm hinein.",
-    effect=(
+    effect=_(
         "Der Haken steht jetzt um den angegebenen Überstand aus dem Arm heraus. "
         "Damit stimmen Geometrie und benannte Hakenfläche überein, und die kleinste "
         "Parameterkombination schneidet sich nicht mehr selbst."
@@ -126,7 +130,7 @@ SNAP_FIT_RAMP_AT_THE_TIP = PartChange(
         "die gerade Fläche zur Spitze. Beim Einschieben traf das Gegenstück zuerst "
         "die gerade Fläche, und der Arm federte nicht aus."
     ),
-    effect=(
+    effect=_(
         "Die Schräge beginnt jetzt an der Spitze und läuft zum Fuß hinaus, die gerade "
         "Haltefläche liegt darunter und zeigt zum Fuß — so, wie die benannte "
         "Hakenfläche es immer sagte. Länge, Armstärke und Hakenüberstand bleiben gleich; "
@@ -381,7 +385,7 @@ LATCH_STANDS_ON_ITS_BASE = PartChange(
         "Kante (6 mm mal 0,005 mm), wuchs um ihre Höhe statt um ihren Überstand hinaus, "
         "und als Aussparung wurde sie aufgesetzt statt abgezogen."
     ),
-    effect=(
+    effect=_(
         "Die Nase liegt jetzt mit ihrer ganzen Grundfläche auf: entlang der Fläche so "
         "hoch wie angegeben, so weit hinaus wie der Überstand, oben die Anlaufschräge, "
         "unten die gerade Haltefläche. An einer Wand richtet sie sich selbst auf. Die "
@@ -565,8 +569,10 @@ def _hinge_feasible(raw: BaseParams) -> TranslatableText | None:
             version="16",
             date="2026-09-08",
             reason="Scharnierfolie mindestens so dick wie der Flügel ergab eine massive Platte.",
-            effect="Diese unbrauchbaren Kombinationen werden mit Änderungsvorschlag abgewiesen; "
-            "alle tatsächlich dünneren Scharnierfolien behalten ihre Maße.",
+            effect=_(
+                "Diese unbrauchbaren Kombinationen werden mit Änderungsvorschlag abgewiesen; "
+                "alle tatsächlich dünneren Scharnierfolien behalten ihre Maße."
+            ),
         ),
         FACE_ON_THE_BODY,
     ],
@@ -666,7 +672,7 @@ class DowelParams(BaseParams):
             version="2",
             date="2026-08-21",
             reason="Die Passbohrung trug nichts ab, sondern setzte auf (§24.1).",
-            effect=(
+            effect=_(
                 "Auf „Bohrung“ wird das Werkzeug jetzt abgezogen statt vereinigt, und "
                 "es liegt unter seiner Mündung statt über ihr. Wer die Bohrung bisher "
                 "benutzt hat, bekam einen Zapfen von "
@@ -778,9 +784,9 @@ SNAP_CONNECTOR_FEATURES_FIXED = PartChange(
     version="13",
     date="2026-08-31",
     reason="Der Haken war im Ergebnis benannt, aber nicht im Register deklariert.",
-    effect=(
-        "Arm und Haken sind jetzt ausschließlich für den Stift, die Rastkante "
-        "ausschließlich für die Tasche als Merkmale deklariert. Die Geometrie bleibt gleich."
+    effect=_(
+        "Arm und Haken gehören als Merkmale jetzt nur noch zum Stift, die Rastkante "
+        "nur noch zur Tasche. Die Geometrie bleibt gleich."
     ),
 )
 
@@ -858,23 +864,22 @@ class SnapConnectorParams(BaseParams):
             version="3",
             date="2026-08-21",
             reason="Die Rasttasche trug nichts ab, sondern setzte auf (§24.1).",
-            effect=(
-                "Auf „Tasche“ wird der Schlitz jetzt abgezogen statt vereinigt, und er "
-                "liegt unter seiner Mündung statt über ihr. Der Docstring sagte es seit "
-                "je — „was hier fehlt, bleibt im Bauteil stehen“ —, die Operation tat es "
-                "nicht."
+            effect=_(
+                "Auf „Tasche“ wird der Schlitz jetzt abgezogen statt vereinigt, und er liegt "
+                "unter seiner Mündung statt über ihr. Beschrieben war es immer so, gebaut "
+                "wurde es anders."
             ),
         ),
         PartChange(
             version="4",
             date="2026-08-21",
             reason="Die Rastkante lag am tiefen Ende der Tasche statt an der Mündung.",
-            effect=(
-                "Version 3 schob die ganze Tasche um ihre Tiefe nach unten — und nahm "
-                "die Kerbe für die Rastkante mit ans andere Ende. Der Haken fand dort "
-                "nichts, was ihn hält: Der Verbinder ging zusammen und wieder "
-                "auseinander. Gebaut wird jetzt von der Mündung nach unten, Schlitz und "
-                "Kante einzeln gesetzt."
+            effect=_(
+                "Eine frühere Korrektur schob die ganze Tasche um ihre Tiefe nach unten — und "
+                "nahm die Kerbe für die Rastkante mit ans andere Ende. Der Haken fand dort "
+                "nichts, was ihn hält: Der Verbinder ging zusammen und wieder auseinander. "
+                "Gebaut wird jetzt von der Mündung nach unten, Schlitz und Kante einzeln "
+                "gesetzt."
             ),
         ),
         # **Ein eigener Eintrag, weil der Stand schon bei 4 lag.**
@@ -1023,7 +1028,7 @@ HINGE_EYE_FACET_WALL_FIXED = PartChange(
     version="13",
     date="2026-08-31",
     reason="Die polygonale Kreisannäherung unterschritt die zugesagte Augenwand.",
-    effect=(
+    effect=_(
         "Der Außendurchmesser wächst um die analytische Facettenkorrektur. "
         "Bohrung und Spiel bleiben unverändert; die kleinste Wand hält jetzt ihr Nennmaß."
     ),
@@ -1167,7 +1172,7 @@ BARREL_HINGE_CLEARANCE_FIXED = PartChange(
     version="13",
     date="2026-08-31",
     reason="Die Augenwand wurde fälschlich vor dem Druckspalt bemessen.",
-    effect=(
+    effect=_(
         "Der Außendurchmesser wächst jetzt zusätzlich um zweimal das gewählte Spiel. "
         "Damit bleibt die angegebene Wandstärke auch um die bewegliche Bohrung erhalten."
     ),

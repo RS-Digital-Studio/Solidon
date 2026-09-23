@@ -739,10 +739,10 @@ def exact_mean(values: Sequence[float]) -> float:
 
     Für Punkte im Raum wird je Achse gerufen; ``exact_centre`` tut das.
     """
-    reihe = list(values)
-    if not reihe:
+    series = list(values)
+    if not series:
         raise ValueError("Der Mittelwert einer leeren Reihe ist nicht bestimmt")
-    return math.fsum(reihe) / len(reihe)
+    return math.fsum(series) / len(series)
 
 
 def exact_centre(points: Sequence[Sequence[float]]) -> tuple[float, float, float]:

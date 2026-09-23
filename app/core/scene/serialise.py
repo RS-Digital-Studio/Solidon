@@ -949,7 +949,44 @@ def document_to_data(document: Document) -> dict[str, Any]:
             for object_id, feature_ids in sorted(document.protected.items())
             if feature_ids
         },
+        # Eigene Drucker und Materialien, die das Projekt mitnimmt (seit v30).
+        # Nur, wo es welche gibt: Ein Projekt mit mitgelieferten Profilen
+        # schreibt dieselbe Datei wie vorher.
+        **(
+            {
+                "carried_profiles": {
+                    kind: {identifier: dict(table) for identifier, table in sorted(entries.items())}
+                    for kind, entries in sorted(document.carried_profiles.items())
+                    if entries
+                }
+            }
+            if any(document.carried_profiles.values())
+            else {}
+        ),
     }
+
+
+def _carried_from_data(stored: Any) -> dict[str, dict[str, dict[str, Any]]]:
+    """Die mitgenommenen Profile aus der Datei — nur, was wie eine Tabelle aussieht.
+
+    Gelesen wird erst von ``profiles.carry``, und zwar mit demselben Prüfer wie
+    eine eigene Profildatei. Hier fällt nur weg, was gar keine Tabelle ist.
+    """
+    if not isinstance(stored, dict):
+        return {}
+    result: dict[str, dict[str, dict[str, Any]]] = {}
+    for kind in ("printers", "materials"):
+        entries = stored.get(kind)
+        if not isinstance(entries, dict):
+            continue
+        kept = {
+            identifier: dict(table)
+            for identifier, table in entries.items()
+            if isinstance(identifier, str) and identifier and isinstance(table, dict)
+        }
+        if kept:
+            result[kind] = kept
+    return result
 
 
 def _protected_from_data(stored: Any) -> dict[ObjectId, tuple[FeatureId, ...]]:
@@ -1009,4 +1046,5 @@ def document_from_data(data: dict[str, Any]) -> Document:
         else "",
         export_scheme=str(exported.get("scheme", "")) if isinstance(exported, dict) else "",
         protected=_protected_from_data(data.get("protected")),
+        carried_profiles=_carried_from_data(data.get("carried_profiles")),
     )

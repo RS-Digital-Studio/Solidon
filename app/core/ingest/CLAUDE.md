@@ -41,10 +41,21 @@ Nullwirkung ersetzt sie nicht.
   `geom.repair.repair` (ohne die Schritte, die es selbst schon gefahren hat),
   sobald ein verschweißtes Netz nicht dicht ist: verzweigte Kanten auflösen,
   Sanduhr-Ecken auftrennen, Ränder vernähen, Ringe schließen. Am Korpus
-  `F:D Dateien` gehen damit 118 von 484 Körpern geschlossen heraus, die
+  `F:\3D Dateien` gehen damit 118 von 484 Körpern geschlossen heraus, die
   offen hereinkamen, und keiner bleibt offen. Die Befunde der Reparatur reisen
   in denselben Bericht; die Regel und ihre drei Sätze stehen in
   `.claude/rules/dateiformat.md`.
+- **Dieselbe Schale zweimal** (`loader._without_doubled_shell`): Reißt das
+  Verschweißen ein geschlossenes Netz auf, weil eine Kopie derselben Schale
+  mit eigenen Ecken daneben liegt, bleibt von deckungsgleichen Dreiecken das
+  erste, wenn das Netz danach dicht ist (`ingest.doubled_shell_removed`,
+  unter `remove_degenerate`). Sonst wird das Verschweißen zurückgenommen wie
+  bisher (`ingest.weld_skipped`) — zwei Körper, die sich nur berühren, bleiben
+  zwei.
+- **Dichtheit wird gefragt, wenn die Antwort gebraucht wird**, und am Stand,
+  der gilt: erst am verschweißten Netz, am unverschweißten nur, wenn das
+  Verschweißen es aufgerissen hat; das zurückgelegte Netz behält seine
+  Antwort. `tests/test_ingest_figures.py` zählt die Fragen.
 - **3MF ist eine Baugruppe**, kein Körper. Sie kommt als mehrere Objekte an.
 - **Gleich benannte ZIP-Einträge** prüft `loader.check_unpacked` erst nach
   sämtlichen Archivgrenzen blockweise auf bytegleichen Inhalt. Alle Kopien
@@ -102,18 +113,24 @@ Nullwirkung ersetzt sie nicht.
   war Roberts Drache 1,9 m hoch (20.09.2026). Die 3MF-Einheit bleibt davon
   unberührt; sie steht als Attribut in der Datei.
   `legacy_raw` erhält alte importierte und erzeugte Quellen; der Rohleser
-  ändert sie nicht. Die Zielgröße eines Generatormodells bleibt der eigene
+  ändert sie nicht. Eine **neu erzeugte** GLB (`generate.into_project`)
+  speichert `gltf` mit der Einheit `mm`: Sie steht auf glTF-Achsen, aber in
+  keinen Metern. Die Zielgröße eines Generatormodells bleibt der eigene
   Schritt `fit_to_size` und wird nicht in die Einheitenumrechnung eingerechnet.
 - **Herkunft** wird vermerkt (`scene/foreign.py`, §32): Der Nutzer soll
   wissen, woher der Inhalt stammt.
 - **Wie der Körper heißt**, entscheidet der Plan und nicht die Auswertung:
-  Trägt der Stapel den Dateinamen schon, bekommt der neue eine Nummer dahinter
-  („plate_holes 2"), und das steht im `name`-Parameter der Operation. Gefragt
-  wird der **Stapel**, nicht die gerechnete Szene — dieselbe Entscheidung wie
-  bei `first_model`, und aus demselben Grund (§15.1): Sonst hinge der Name
-  daran, was gerade sonst in der Szene steht, und dieselbe Datei käme beim
-  nächsten Öffnen anders herein. Eine 3MF-Baugruppe bleibt außen vor; sie
-  bringt die Namen ihrer Teile in der Datei mit.
+  Trägt der Stapel die Datei schon, bekommt der neue Ladeschritt eine Nummer
+  (`copy`, „plate_holes (2)", `plan.copy_name`). Die Nummer steht im Schritt,
+  nicht im Namen, und gilt **jedem** Körper, den die Datei bringt — auch den
+  Teilen einer Baugruppe, die ihre Namen aus der Datei mitbringen: Sonst stand
+  der Siebhalter zweimal mit sieben gleichen Zeilen im Baum. Ein Einzelteil
+  ohne eigenen Namen heißt nach der Datei. Gefragt wird der **Stapel**, nicht
+  die gerechnete Szene — dieselbe Entscheidung wie bei `first_model`, und aus
+  demselben Grund (§15.1): Sonst hinge der Name daran, was gerade sonst in der
+  Szene steht, und dieselbe Datei käme beim nächsten Öffnen anders herein.
+  Ältere Schritte mit „Name 2" im `name`-Parameter zählen beim Nummerieren
+  mit.
 
 ## Grenzen
 

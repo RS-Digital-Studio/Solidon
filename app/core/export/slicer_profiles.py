@@ -420,10 +420,17 @@ def configured_filaments(
     08.09.2026 blieb es hier bei ``()``, und damit war die Zusage aus §20 —
     die eingelegten Filamente werden als Vorwahl übernommen — nur für eine der
     drei Familien eingelöst.
+
+    **Und Cura in seinen Stapeln** (Durchsicht 0.5.0): Die aktive Maschine
+    steht in ``cura.cfg``, jedes Extruderfach ist ein ``*.extruder.cfg`` mit
+    dem Material an seiner festen Stelle (:func:`_cura_configured`). Bis
+    dahin blieb es für Cura bei ``()``.
     """
     _check_cancelled(cancelled)
     if flavour == "prusa":
         return _prusa_configured(executable, cancelled)
+    if flavour == "cura":
+        return _cura_configured(executable, cancelled)
     if not has_user_profile_tree(flavour):
         return ()
     roots = profile_roots(flavour, executable)
@@ -471,6 +478,196 @@ def configured_filaments(
             )
     _check_cancelled(cancelled)
     return tuple(result)
+
+
+#: An welcher Stelle eines Cura-Stapels das Material steht
+#: (``cura/Settings/CuraContainerStack.py``, ``_ContainerIndexes.Material``).
+_CURA_MATERIAL_INDEX: Final = "4"
+
+#: So heißt die leere Materialstelle — ein Fach ohne Spule.
+_CURA_EMPTY_MATERIAL: Final = "empty_material"
+
+
+def _cura_configured(
+    executable: Path, cancelled: CancelToken | None = None
+) -> tuple[SlicerFilament, ...]:
+    """Die Materialien der zuletzt aktiven Cura-Maschine, in Fachreihenfolge.
+
+    Cura hält die Belegung nicht in einer Liste, sondern in seinen Stapeln:
+    ``cura.cfg`` nennt unter ``[cura] active_machine`` die Maschine, jedes
+    Extruderfach ist ein ``extruders/*.extruder.cfg`` mit ``machine`` und
+    ``position`` in ``[metadata]``, und das eingelegte Material steht in
+    ``[containers]`` an Stelle vier. Seine Farbe und Art stehen in der
+    Materialdatei selbst (``*.xml.fdm_material``) — im eigenen Ordner oder im
+    mitgelieferten Bestand. Ein Fach ohne Material oder ohne Farbe bleibt weg;
+    ein Vorschlag ohne Farbe wäre keiner.
+    """
+    base = config_home(sys.platform)
+    if not base:
+        return ()
+    for root in _cura_user_roots(executable, Path(base)):
+        _check_cancelled(cancelled)
+        found = _cura_loaded_materials(root, executable, cancelled)
+        if found:
+            return found
+    return ()
+
+
+def _cura_loaded_materials(
+    root: Path, executable: Path, cancelled: CancelToken | None
+) -> tuple[SlicerFilament, ...]:
+    """Die Materialien der aktiven Maschine in einem Cura-Konfigurationsordner."""
+    preferences = _read_ini(root / "cura.cfg") if (root / "cura.cfg").is_file() else None
+    if preferences is None or not preferences.has_section("cura"):
+        return ()
+    machine = preferences["cura"].get("active_machine", "").strip()
+    if not machine:
+        return ()
+    trays: list[tuple[int, str]] = []
+    for stack in sorted((root / "extruders").glob("*.extruder.cfg")):
+        _check_cancelled(cancelled)
+        parsed = _read_ini(stack)
+        if parsed is None or not parsed.has_section("metadata"):
+            continue
+        metadata = parsed["metadata"]
+        if metadata.get("machine", "").strip() != machine:
+            continue
+        containers = parsed["containers"] if parsed.has_section("containers") else {}
+        material = str(containers.get(_CURA_MATERIAL_INDEX, "")).strip()
+        try:
+            position = int(metadata.get("position", "0"))
+        except ValueError:
+            continue
+        if material and material != _CURA_EMPTY_MATERIAL:
+            trays.append((position, material))
+    if not trays:
+        return ()
+    files: dict[str, Path] = {}
+    installed = install_root(executable)
+    for folder in (
+        *((_cura_resources(installed) / "materials",) if installed is not None else ()),
+        root / "materials",
+    ):
+        for candidate in sorted(folder.rglob("*.xml.fdm_material")) if folder.is_dir() else ():
+            files[candidate.name.removesuffix(".xml.fdm_material")] = candidate
+    result: list[SlicerFilament] = []
+    for _position, material in sorted(trays):
+        _check_cancelled(cancelled)
+        source = _cura_material_file(material, files)
+        if source is None:
+            continue
+        entry = _read_cura_material(source)
+        colour = str(_cura_material_values(source).get("filament_colour", "")).strip()
+        if entry is None or not _is_colour(colour):
+            continue
+        result.append(
+            SlicerFilament(
+                profile=entry.name, colour=colour.upper(), material_type=entry.filament_type
+            )
+        )
+    return tuple(result)
+
+
+def _cura_material_file(material: str, files: Mapping[str, Path]) -> Path | None:
+    """Die Materialdatei zu einer Stapelkennung.
+
+    Cura leitet für Maschinen mit eigenen Düsenvarianten Kennungen aus dem
+    Dateinamen ab — ``generic_pla_175`` wird dort zu
+    ``generic_pla_175_<maschine>_<düse>``. Gesucht wird deshalb erst genau,
+    dann der längste Dateiname, der die Kennung bis zu einem ``_`` beginnt.
+    """
+    if material in files:
+        return files[material]
+    prefixes = [name for name in files if material.startswith(f"{name}_")]
+    return files[max(prefixes, key=len)] if prefixes else None
+
+
+def cura_setting_version(executable: Path) -> int | None:
+    """Welche Einstellungsversion die installierte Cura-Fassung liest.
+
+    Sie steht in ``fdmprinter.def.json`` unter ``metadata.setting_version``
+    und in jedem mitgelieferten Qualitätsprofil; ein Profil mit einer anderen
+    Zahl schickt Cura beim Import durch seine Versionsumstellung, und eine
+    höhere kennt es nicht. ``None`` heißt: Die Installation trägt keine
+    Definitionen, die sich lesen lassen.
+    """
+    installed = install_root(executable)
+    if installed is None:
+        return None
+    definition = _cura_resources(installed) / "definitions" / "fdmprinter.def.json"
+    try:
+        loaded = json.loads(definition.read_text(encoding="utf-8"))
+        version = loaded["metadata"]["setting_version"]
+    except (OSError, ValueError, KeyError, TypeError) as problem:
+        _log.debug("no Cura setting version below %s: %s", installed, problem)
+        return None
+    return int(version) if isinstance(version, (int, str)) and str(version).isdigit() else None
+
+
+def cura_quality_types(executable: Path, machine: Path | None) -> dict[str, float]:
+    """Die Qualitätsstufen, die Cura für diese Maschine kennt — Art auf Schichthöhe.
+
+    Ein importiertes Profil muss eine davon nennen, sonst lehnt Cura es ab
+    („Quality type … is not compatible", ``CuraContainerRegistry``). Welche
+    gelten, steht in der Definition: ``has_machine_quality`` und
+    ``quality_definition`` entlang der Erbkette, und ohne sie die allgemeinen
+    Stufen von ``fdmprinter``.
+    """
+    installed = install_root(executable)
+    if installed is None:
+        return {}
+    resources = _cura_resources(installed)
+    definition = "fdmprinter"
+    if machine is not None:
+        own = _cura_quality_definition(machine, resources / "definitions")
+        definition = own or definition
+    found: dict[str, float] = {}
+    for path in sorted((resources / "quality").rglob("*.inst.cfg")):
+        parsed = _read_ini(path)
+        if parsed is None or not parsed.has_section("metadata"):
+            continue
+        general = parsed["general"] if parsed.has_section("general") else {}
+        metadata = parsed["metadata"]
+        if (
+            str(general.get("definition", "")).strip() != definition
+            or str(metadata.get("type", "")).strip() != "quality"
+            or str(metadata.get("global_quality", "")).strip().casefold() != "true"
+        ):
+            continue
+        kind = str(metadata.get("quality_type", "")).strip()
+        values = parsed["values"] if parsed.has_section("values") else {}
+        try:
+            height = float(str(values.get("layer_height", "nan")))
+        except ValueError:
+            height = math.nan
+        if kind and math.isfinite(height):
+            found.setdefault(kind, height)
+    return found
+
+
+def _cura_quality_definition(machine: Path, definitions: Path) -> str:
+    """``quality_definition`` einer Maschine, wenn sie eigene Qualitäten hat — sonst leer."""
+    current: Path | None = machine
+    quality = ""
+    own: bool | None = None
+    for _step in range(MAX_INHERITANCE):
+        if current is None:
+            break
+        try:
+            loaded = json.loads(current.read_text(encoding="utf-8"))
+        except OSError, ValueError:
+            return ""
+        metadata = loaded.get("metadata") if isinstance(loaded, dict) else None
+        if isinstance(metadata, Mapping):
+            if not quality and isinstance(metadata.get("quality_definition"), str):
+                quality = str(metadata["quality_definition"])
+            if own is None and isinstance(metadata.get("has_machine_quality"), bool):
+                own = bool(metadata["has_machine_quality"])
+        parent = loaded.get("inherits") if isinstance(loaded, dict) else None
+        current = definitions / f"{parent}.def.json" if isinstance(parent, str) else None
+    if not own:
+        return ""
+    return quality or cura_definition_id(machine)
 
 
 def _configuration(path: Path) -> dict[str, Any] | None:
@@ -934,7 +1131,7 @@ def _read_cura_machine(path: Path) -> SlicerProfile | None:
         # Curas Kennung des Druckers, nicht sein Anzeigename: Genau darauf
         # zeigt ``definition`` in jedem Qualitätsprofil, und darüber hängen
         # die beiden zusammen.
-        printer_model=_cura_definition_id(path),
+        printer_model=cura_definition_id(path),
         nozzle=nozzle,
         inherits=str(loaded.get("inherits", "")),
     )
@@ -972,7 +1169,9 @@ def _read_ini(path: Path) -> configparser.ConfigParser | None:
     parsed = configparser.ConfigParser(interpolation=None)
     try:
         parsed.read(path, encoding="utf-8")
-    except (OSError, configparser.Error) as problem:
+    except (OSError, configparser.Error, UnicodeDecodeError) as problem:
+        # ``UnicodeDecodeError`` dazu: Eine Datei in fremder Kodierung riss
+        # die Filamentsuche des Druckdialogs ab (Durchsicht 0.5.0).
         _log.debug("skipping Cura profile %s: %s", path.name, problem)
         return None
     return parsed
@@ -1010,7 +1209,7 @@ def _read_cura_material(path: Path) -> SlicerProfile | None:
     )
 
 
-def _cura_definition_id(path: Path) -> str:
+def cura_definition_id(path: Path) -> str:
     """Aus ``abax_pri3.def.json`` wird ``abax_pri3``.
 
     ``Path.stem`` allein reicht nicht: Es bleibt ``abax_pri3.def`` stehen, und
@@ -1022,12 +1221,12 @@ def _cura_definition_id(path: Path) -> str:
 def _cura_definition_values(path: Path, roots: Sequence[Path]) -> dict[str, Any]:
     """Definitionsvererbung als Daten; berechnete Eigenschaften bleiben unbekannt."""
     index = {
-        _cura_definition_id(entry): entry
+        cura_definition_id(entry): entry
         for root in roots
         for entry in sorted((_cura_resources(root) / "definitions").glob("*.def.json"))
     }
     index.update(
-        {_cura_definition_id(entry): entry for entry in sorted(path.parent.glob("*.def.json"))}
+        {cura_definition_id(entry): entry for entry in sorted(path.parent.glob("*.def.json"))}
     )
 
     def read(current: Path, active: frozenset[Path]) -> dict[str, dict[str, Any]]:

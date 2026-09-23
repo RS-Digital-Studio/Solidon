@@ -6,6 +6,7 @@ import io
 import json
 import os
 import stat
+import sys
 import zipfile
 from copy import deepcopy
 from pathlib import Path
@@ -637,6 +638,106 @@ def test_the_container_carries_no_clock(filled: Project, tmp_path: Path) -> None
         stamps = {info.date_time for info in container.infolist()}
 
     assert stamps == {CONTAINER_TIMESTAMP}, f"aus der Uhr statt fest: {sorted(stamps)}"
+
+
+@pytest.mark.parametrize("platform", ["linux", "darwin"])
+def test_the_container_names_no_writing_platform(
+    filled: Project, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, platform: str
+) -> None:
+    """Dieselbe Speicherung ist auf jedem System dieselbe Datei — bis auf den Kompressor.
+
+    RM-106: ``zipfile.ZipInfo`` schrieb das System des Rechners in jeden
+    Zentralverzeichniseintrag (0 unter Windows, 3 sonst). Hier läuft derselbe
+    Kompressor für beide Speicherungen; was übrig bleibt, wäre allein das
+    Schreibsystem — und das darf es nicht geben.
+    """
+    here = save(filled, tmp_path / "here.p3d")
+    monkeypatch.setattr(sys, "platform", platform)
+    there = save(load(here), tmp_path / "there.p3d")
+    assert here.read_bytes() == there.read_bytes()
+    with zipfile.ZipFile(there) as container:
+        assert {info.create_system for info in container.infolist()} == {0}
+
+
+def test_the_content_digest_ignores_how_the_container_was_packed(
+    filled: Project, tmp_path: Path
+) -> None:
+    """RM-106: Ein anderer Kompressor ändert das Archiv, nicht den Inhalt.
+
+    Gemessen an ``weg3-generiert-aufbereiten.p3d``: zlib-ng (CPython 3.14 unter
+    Windows) packt ``project.json`` in 788 Byte, das zlib 1.3.1 von Linux und
+    macOS in 790. Nachgestellt mit einer anderen Kompressionsstufe — dieselbe
+    Lage, ein anders gepackter Strom bei gleichem Inhalt.
+    """
+    from app.core.scene.project import content_digest
+
+    saved = save(filled, tmp_path / "a.p3d")
+    repacked = tmp_path / "b.p3d"
+    with zipfile.ZipFile(saved) as source, zipfile.ZipFile(repacked, "w") as target:
+        for info in source.infolist():
+            target.writestr(info, source.read(info), compresslevel=1)
+    assert saved.read_bytes() != repacked.read_bytes()
+    assert content_digest(saved) == content_digest(repacked)
+    changed = build_example_project()
+    changed.document.parameters.pop("half")
+    assert content_digest(save(changed, tmp_path / "c.p3d")) != content_digest(saved)
+
+
+def test_a_damaged_packed_stream_is_a_damaged_file(filled: Project, tmp_path: Path) -> None:
+    """Ein gekipptes Bit im gepackten Strom endet in ``zlib.error`` — vor 0.5.0 roh."""
+    path = save(filled, tmp_path / "a.p3d")
+    raw = bytearray(path.read_bytes())
+    with zipfile.ZipFile(path) as container:
+        info = container.getinfo(PROJECT_ENTRY)
+    start = info.header_offset + 30 + len(info.filename) + len(info.extra)
+    for offset in range(start + 5, start + min(info.compress_size, 60)):
+        raw[offset] ^= 0x5A
+    path.write_bytes(bytes(raw))
+    with pytest.raises(ValidationError) as caught:
+        load(path)
+    assert caught.value.constraint == "damaged"
+    assert caught.value.suggestions
+
+
+def test_an_unreadable_project_file_is_a_file_error_not_a_crash(
+    filled: Project, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Eine Datei, die ein anderes Programm hält, ist eine Absage mit Satz (Regel 17)."""
+    path = save(filled, tmp_path / "a.p3d")
+
+    def refuse(*_args: object, **_kwargs: object) -> None:
+        raise PermissionError(13, "Der Prozess kann nicht auf die Datei zugreifen")
+
+    monkeypatch.setattr(zipfile.ZipFile, "__init__", refuse)
+    with pytest.raises(ValidationError) as caught:
+        load(path)
+    assert caught.value.constraint == "unreadable"
+    assert "zugreifen" in str(caught.value.values["reason"])
+
+
+@pytest.mark.parametrize("stage", ["folder", "replace"])
+def test_a_refused_save_offers_retry_and_another_place(
+    filled: Project, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, stage: str
+) -> None:
+    """Ein Schreibfehler des Systems ist ``FileWriteError`` mit zwei Auswegen, kein Absturz."""
+    from app.core.errors import RETRY, SAVE_ELSEWHERE, FileWriteError
+
+    target = tmp_path / "a.p3d"
+    if stage == "folder":
+        blocker = tmp_path / "blocked"
+        blocker.write_bytes(b"no folder")
+        target = blocker / "a.p3d"
+    else:
+
+        def refuse(self: Path, other: object) -> None:
+            raise PermissionError(13, "Die Datei wird von einem anderen Prozess verwendet")
+
+        monkeypatch.setattr(Path, "replace", refuse)
+    with pytest.raises(FileWriteError) as caught:
+        save(filled, target)
+    assert RETRY in caught.value.suggestions
+    assert SAVE_ELSEWHERE in caught.value.suggestions
+    assert not list(tmp_path.glob("*.part")), "no half-written file stays behind"
 
 
 def test_expressions_and_tolerance_references_survive(filled: Project, tmp_path: Path) -> None:
@@ -3094,3 +3195,51 @@ def test_foreign_protection_entries_are_ignored_not_trusted() -> None:
     assert _protected_from_data({"obj_1": [1, None, "face_2", {"a": 1}, "face_2"]}) == {
         "obj_1": ("face_2",)
     }
+
+
+def test_seam_and_lid_fits_of_a_v29_file_follow_their_bodies() -> None:
+    """29 → 30: Was *Teilen* und *Deckel* angelegt haben, nennt kein Material mehr.
+
+    Die Datei ist mit dem Stand von Format 29 geschrieben (Durchsicht 0.5.0):
+    ein Deckel und eine Naht in PETG, beide Passungen mit ``auto:petg``, und
+    eine vierte, die kein Ablauf angelegt hat, mit ``auto:pla``. Nach dem
+    Öffnen folgen die drei Ablaufpassungen den Körpern — auch in jedem
+    Undo-Zustand —, und die vierte behält ihr Material: Dort kann es jemand
+    gemeint haben (§12). Gerechnet in TPU meldet keine der drei eine
+    Verletzung; unter Format 29 waren es drei.
+    """
+    from app.core.knowledge import profiles
+    from app.core.scene import evaluate
+
+    path = Path(__file__).parent / "data" / "projects" / "material_fits_v29.p3d"
+    assert project_data(path)["format_version"] == 29, "die Datei trägt den alten Stand"
+
+    project = load(path)
+
+    tolerances = {fit.name: fit.tolerance for fit in project.document.fits}
+    assert tolerances == {
+        "deckel": "auto:",
+        "stift_2": "auto:",
+        "stift_3": "auto:",
+        "von_hand": "auto:pla",
+    }
+    for transaction in project.document.transactions:
+        if transaction.changes is None:
+            continue
+        for state in (transaction.changes.before, transaction.changes.after):
+            for fit in state.fits or ():
+                assert fit.tolerance == ("auto:pla" if fit.name == "von_hand" else "auto:"), (
+                    f"ein Undo holte {fit.name} mit {fit.tolerance} zurück"
+                )
+
+    result = evaluate(
+        project.document,
+        profiles.make_profile("centauri-carbon-2", "tpu-95a"),
+        sources=ProjectSources(project),
+    )
+    violated = {
+        str(finding.values.get("fit"))
+        for finding in result.scene.report.findings
+        if finding.code == "fit.violated"
+    }
+    assert not violated & {"deckel", "stift_2", "stift_3"}, violated

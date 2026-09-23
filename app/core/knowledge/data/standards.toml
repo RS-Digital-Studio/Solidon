@@ -12,6 +12,12 @@
 #
 # Alle Maße in Millimetern.
 
+# Version 9 seit dem 22.09.2026: Die Schrauben tragen neben dem mittleren
+# Durchgangsloch auch die feine und die grobe Reihe nach ISO 273. Kein
+# bestehender Wert hat sich geändert. Gebraucht werden die Reihen für die
+# Einschätzung einer gemessenen Bohrung: 5,7 mm ist das grobe Durchgangsloch
+# einer M5 und keine Bohrung zwischen zwei Größen.
+
 # Version 8: Ruthex RX-M2,5x5,7 verwendet das empfohlene Einbauloch d3=4,0 mm
 # statt 3,6 mm. Außenmaß d1=4,6 mm und Länge L=5,7 mm sind bestätigt.
 # Quelle: Herstellerdatenblatt, Maßtabelle auf Seite 1:
@@ -36,7 +42,7 @@
 # tragen zwei Felder mehr (`lip`, `depth`). In beiden Schritten hat sich kein
 # bestehender Wert geändert, alte Projekte rechnen also unverändert — die Zahl
 # sagt, dass die Tabelle mehr weiß, nicht dass sie etwas anderes weiß.
-version = "8"
+version = "9"
 
 # --- Metrische Schrauben --------------------------------------------------------
 # nominal: Nenndurchmesser · clearance: Durchgangsloch (mittel)
@@ -47,6 +53,8 @@ version = "8"
 #   sind die Senkung d2 der Durchgangsbohrung, nicht der Kopf); M2 und M2.5 stehen
 #   nicht in der Norm und folgen derselben Regel.
 # hex: Schlüsselweite Innensechskant · pitch: Regelsteigung
+# clearance_fine / clearance_coarse: Durchgangsloch feine und grobe Reihe
+#   (ISO 273; die mittlere Reihe ist clearance). Seit Version 9.
 
 [[screws]]
 size = "M2"
@@ -58,6 +66,8 @@ head_height = 2.0
 countersink = 4.0
 hex = 1.5
 pitch = 0.4
+clearance_fine = 2.2
+clearance_coarse = 2.6
 
 [[screws]]
 size = "M2.5"
@@ -69,6 +79,8 @@ head_height = 2.5
 countersink = 5.0
 hex = 2.0
 pitch = 0.45
+clearance_fine = 2.7
+clearance_coarse = 3.1
 
 [[screws]]
 size = "M3"
@@ -80,6 +92,8 @@ head_height = 3.0
 countersink = 6.0
 hex = 2.5
 pitch = 0.5
+clearance_fine = 3.2
+clearance_coarse = 3.6
 
 [[screws]]
 size = "M4"
@@ -91,6 +105,8 @@ head_height = 4.0
 countersink = 8.0
 hex = 3.0
 pitch = 0.7
+clearance_fine = 4.3
+clearance_coarse = 4.8
 
 [[screws]]
 size = "M5"
@@ -102,6 +118,8 @@ head_height = 5.0
 countersink = 10.0
 hex = 4.0
 pitch = 0.8
+clearance_fine = 5.3
+clearance_coarse = 5.8
 
 [[screws]]
 size = "M6"
@@ -113,6 +131,8 @@ head_height = 6.0
 countersink = 12.0
 hex = 5.0
 pitch = 1.0
+clearance_fine = 6.4
+clearance_coarse = 7.0
 
 [[screws]]
 size = "M8"
@@ -124,6 +144,8 @@ head_height = 8.0
 countersink = 16.0
 hex = 6.0
 pitch = 1.25
+clearance_fine = 8.4
+clearance_coarse = 10.0
 
 # --- Sechskantmuttern -----------------------------------------------------------
 # width: Schlüsselweite · height: Höhe (Regelmutter, m max nach ISO 4032)

@@ -13,22 +13,28 @@ zweite hält die Auswertung an (§15.2).
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, replace
+from typing import TYPE_CHECKING
 
+from app.core.errors import KEEP_SAVED_PARTS, PROGRAMMING_ERRORS
 from app.core.knowledge.parts.registry import (
     LIBRARY_VERSION,
     PARTS,
     PartChange,
     PartRegistry,
+    _as_number,
     changed_since_library,
     used_parts,
 )
 from app.core.knowledge.parts.user import FINGERPRINT_KEY, fingerprint, travelling_parts
 from app.core.log import get_logger
 from app.core.registry import Registry
-from app.core.types import Document, DocumentState, Finding, Operation
-from app.i18n import _
+from app.core.types import Document, DocumentState, Finding, Operation, Transaction
+from app.i18n import TranslatableText, _, sort_key, source_text
+
+if TYPE_CHECKING:
+    from app.core.scene.history import History
 
 _log = get_logger(__name__)
 
@@ -181,7 +187,7 @@ def check(document: Document, registry: PartRegistry | None = None) -> list[Find
                     "Katalog. Sie bleiben bei der Datei und werden nicht auf "
                     "diesem Rechner abgelegt."
                 ),
-                values={"parts": ", ".join(travelled)},
+                values={"parts": _titles(travelled, source)},
             )
         )
 
@@ -189,10 +195,16 @@ def check(document: Document, registry: PartRegistry | None = None) -> list[Find
     # Projekt mit dem lokalen Stand, steht der mitgereiste als eigener
     # Eintrag daneben — sonst sucht der Kunde, warum sein Ergebnis anders
     # aussieht als beim Absender.
+    # Hat die Datei den **gespeicherten** Stand mitgebracht, sagt es der
+    # §24.4-Befund weiter unten samt der Wahl, ihn zu verwenden — eine zweite
+    # Zeile über dieselben Bausteine wäre nur länger.
+    kept = saved_states(document, source)
     shadowed = tuple(
         name
         for name in sorted(set(used))
-        if source.has(f"{name}_travelled") and source.get(f"{name}_travelled").source == "travelled"
+        if name not in kept
+        and source.has(f"{name}_travelled")
+        and source.get(f"{name}_travelled").source == "travelled"
     )
     if shadowed:
         findings.append(
@@ -203,7 +215,7 @@ def check(document: Document, registry: PartRegistry | None = None) -> list[Find
                     "Für Bausteine dieser Datei gilt Ihr eigener Stand — der "
                     "mitgereiste steht als eigener Eintrag im Katalog."
                 ),
-                values={"parts": ", ".join(shadowed)},
+                values={"parts": _titles(shadowed, source)},
             )
         )
 
@@ -231,18 +243,43 @@ def check(document: Document, registry: PartRegistry | None = None) -> list[Find
                     "Berechnen ein externes Programm ausführt. Der Quelltext "
                     "wird vor jedem Lauf geprüft."
                 ),
-                values={"parts": ", ".join(scripted)},
+                values={"parts": _titles(scripted, source)},
             )
         )
 
+    # **Die Wahl aus §24.4, wo es eine gibt** (RM-138). Den gespeicherten
+    # Stand eines eigenen Rezepts bringt die Projektdatei mit; er steht als
+    # mitgereister Eintrag im Katalog, und ein Klick rechnet wieder mit ihm.
+    # Wo er fehlt — eine eigene ``.py`` reist nie mit (Regel 13), und die
+    # Bibliothek führt keine alten Stände —, ist der neue Stand eine
+    # Migration: Das sagt der Satz, statt eine Wahl anzubieten, die es nicht
+    # gibt.
     own_changed = changed_own_parts(document, used, source)
-    if own_changed:
+    available = tuple(name for name in own_changed if name in kept)
+    lost = tuple(name for name in own_changed if name not in kept)
+    if available:
         findings.append(
             Finding(
                 code="parts.own_changed",
                 severity="info",
-                message=_("Seit dem Speichern haben sich eigene Bausteine geändert."),
-                values={"parts": ", ".join(own_changed)},
+                message=_(
+                    "Eigene Bausteine wurden seit dem Speichern geändert. "
+                    "Gerechnet wird mit dem neuen Stand."
+                ),
+                values={"parts": _titles(available, source)},
+                suggestions=(KEEP_SAVED_PARTS,),
+            )
+        )
+    if lost:
+        findings.append(
+            Finding(
+                code="parts.own_changed",
+                severity="info",
+                message=_(
+                    "Eigene Bausteine wurden seit dem Speichern geändert; ihr "
+                    "alter Stand liegt nicht mehr vor. Prüfen Sie die Maße."
+                ),
+                values={"parts": _titles(lost, source)},
             )
         )
 
@@ -260,15 +297,133 @@ def check(document: Document, registry: PartRegistry | None = None) -> list[Find
                     "dem aktuellen. Prüfen Sie Lage und Maße dieser Bausteine."
                 ),
                 values={
-                    "parts": ", ".join(changed),
-                    "saved": document.parts_version,
-                    "now": LIBRARY_VERSION,
+                    "parts": _titles(changed, source),
+                    "library_saved": document.parts_version,
+                    "library_now": LIBRARY_VERSION,
                 },
             )
         )
+        findings.extend(_changes_since(document.parts_version, changed, source))
     if findings:
         _log.info("part check: %d findings", len(findings))
     return findings
+
+
+def _changes_since(saved: str, changed: Iterable[str], source: PartRegistry) -> list[Finding]:
+    """Je Änderung seit dem Speichern eine Zeile: an welchen Bausteinen, und was sie
+    an den Maßen ändert (§24.4, RM-138).
+
+    Robert am 23.09.2026: Alte Bausteinstände reisen nicht mit, die
+    Migrationsmeldung reicht — dann muss sie aber sagen, **was** sich geändert
+    hat. „Benutzte Bausteine wurden geändert" allein schickte den Kunden auf
+    die Suche an jedem Einsatz. Gezeigt wird die Maßwirkung aus dem
+    Änderungsverlauf (``PartChange.effect``), nicht der Grund: Der Grund ist
+    Entwicklernotiz, die Wirkung ist das, was am gedruckten Teil anders wird.
+
+    **Eine Zeile je Wirkung, nicht je Baustein.** Dieselbe Änderung trifft oft
+    mehrere Bausteine (``MATERIAL_OF_TARGET`` sechs auf einmal); sie steht
+    einmal da und nennt alle. Einträge ohne Wirkung — die Erstbestückung —
+    ändern kein altes Projekt und stehen nicht da.
+    """
+    since = _as_number(saved)
+    affected: dict[str, list[str]] = {}
+    effects: dict[str, TranslatableText | str] = {}
+    first_version: dict[str, int] = {}
+    for name in changed:
+        if not source.has(name):
+            continue
+        for change in source.get(name).changes:
+            version = _as_number(change.version)
+            if version <= since or not change.effect:
+                continue
+            key = source_text(change.effect)
+            effects.setdefault(key, change.effect)
+            first_version[key] = min(first_version.get(key, version), version)
+            if name not in affected.setdefault(key, []):
+                affected[key].append(name)
+    return [
+        Finding(
+            code="parts.change",
+            severity="info",
+            message=_(
+                "Geändert an {parts}: {change}",
+                parts=_titles(sorted(affected[key], key=_title_order(source)), source),
+                change=effects[key],
+            ),
+        )
+        for key in sorted(effects, key=lambda entry: (first_version[entry], entry))
+    ]
+
+
+def _title_order(source: PartRegistry) -> Callable[[str], str]:
+    """Sortiert Bausteinkennungen nach ihrem angezeigten Titel."""
+    return lambda name: sort_key(source.get(name).title) if source.has(name) else name
+
+
+def _titles(names: Iterable[str], source: PartRegistry) -> str:
+    """Die Bausteine, wie der Katalog sie nennt — nicht ihre Kennung.
+
+    Im Bericht stand ``barrel_hinge, dowel, foot``: Kennungen, die in keinem
+    Menü stehen (Durchsicht 0.5.0). Die Sprache des Titels ist die beim
+    Öffnen, denn der Befund entsteht einmal.
+    """
+    return ", ".join(str(source.get(name).title) if source.has(name) else name for name in names)
+
+
+def saved_states(document: Document, registry: PartRegistry | None = None) -> dict[str, str]:
+    """Benutzte eigene Rezepte, deren **gespeicherter** Stand mitgekommen ist
+    (§24.4, RM-138).
+
+    Zurück kommt je Baustein im Stapel der Katalogeintrag, der genau den
+    Stand trägt, mit dem das Projekt gespeichert wurde. Das Speichern legt
+    je benutztem Baustein einen Abdruck ab (:func:`stamp`) und bettet das
+    Rezept ein (``recipe.for_container``); beim Öffnen nimmt
+    ``recipe.adopt`` es auf — unter eigenem Namen, wenn lokal ein anderer
+    Stand liegt („lokal schlägt mitgereist"). Weil der Name im Abdruck steckt,
+    wird der mitgereiste Eintrag unter dem Namen im Stapel verglichen.
+
+    Leer, wo sich nichts geändert hat, der Abdruck fehlt (ältere Projekte:
+    keine Aussage möglich) oder der gespeicherte Stand nicht vorliegt.
+    """
+    from app.core.knowledge.parts import recipe as part_recipes
+
+    source = registry or PARTS
+    travelled = [
+        spec
+        for spec in source.all()
+        if spec.source == part_recipes.TRAVELLED_SOURCE and spec.recipe_data is not None
+    ]
+    found: dict[str, str] = {}
+    for name in sorted(set(used_parts(document.ops))):
+        saved = document.libs.get(f"{FINGERPRINT_KEY}{name}")
+        now = fingerprint(name, source)
+        if not saved or not now or saved == now:
+            continue
+        for spec in travelled:
+            if spec.name == name or spec.recipe_data is None:
+                continue
+            try:
+                arrived = part_recipes.from_data(dict(spec.recipe_data))
+            except PROGRAMMING_ERRORS:
+                raise
+            except Exception as problem:  # Regel 17: keine Wahl statt eines Abbruchs
+                _log.warning("travelled recipe %s is unreadable: %s", spec.name, problem)
+                continue
+            as_saved = part_recipes.fingerprint(replace(arrived, name=name))
+            if as_saved[: len(saved)] == saved:
+                found[name] = spec.name
+                break
+    return found
+
+
+def keep_saved(history: History, registry: PartRegistry | None = None) -> Transaction | None:
+    """Rechnet die eigenen Rezepte wieder mit dem gespeicherten Stand (RM-138).
+
+    Eine Transaktion für alle Schritte (:meth:`History.use_part_states`);
+    ``None``, wenn kein gespeicherter Stand vorliegt.
+    """
+    states = saved_states(history.document, registry)
+    return history.use_part_states(states) if states else None
 
 
 def check_outgoing(document: Document, registry: PartRegistry | None = None) -> list[Finding]:

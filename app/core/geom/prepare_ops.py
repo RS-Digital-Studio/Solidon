@@ -9931,14 +9931,16 @@ def _resize_pattern(
     if drawn_width is not None and drawn_width < detail:
         raise ValidationError(
             "cell_width",
+            # Das Maß steht in den Einzelheiten als „Düse" — nicht als Schlüssel
+            # im Satz (Durchsicht 0.5.0).
             _(
                 "Bei dieser Zellbreite sind die Zellen schmaler als ein Bildpunkt — sie "
-                "werden nicht belichtet. Der Bildpunkt misst „nozzle_mm“."
+                "werden nicht belichtet."
             )
             if printer.is_resin
             else _(
                 "Bei dieser Zellbreite sind die Zellen schmaler als die Düse — sie werden "
-                "nicht gedruckt. Die Düse misst „nozzle_mm“."
+                "nicht gedruckt."
             ),
             value=drawn_width,
             constraint="nozzle_width",

@@ -16,12 +16,14 @@ import numpy as np
 import pytest
 import trimesh
 
+from app.core.bootstrap import load_operations
 from app.core.errors import BooleanFailedError, OperationCancelled, ValidationError
 from app.core.geom import autosplit, pins
 from app.core.geom.mesh import MeshData, read_mesh
 from app.core.geom.prepare import split_at_plane
 from app.core.geom.section import Axis, SectionPlane
 from app.core.ingest.loader import normalise
+from app.core.knowledge import profiles
 from app.core.registry import REGISTRY
 from app.core.scene import History, OperationDraft, evaluate
 from app.core.scene.cancel import CancelSignal, NeverCancelled
@@ -1796,7 +1798,7 @@ def test_splitting_a_piece_again_keeps_its_existing_fits(profile: Profile) -> No
     block = MeshData.of(trimesh.creation.box(extents=(80.0, 60.0, 40.0)))
 
     first = apply_line_split(
-        project.document, "obj_1", SectionPlane((1.0, 0.0, 0.0), 0.0), profile, mesh=block
+        project.document, "obj_1", SectionPlane((1.0, 0.0, 0.0), 0.0), mesh=block
     )
     assert len(first.fits) == 2, "die erste Naht bekommt ihre Paare"
     assert project.document.fits == first.fits
@@ -1807,7 +1809,6 @@ def test_splitting_a_piece_again_keeps_its_existing_fits(profile: Profile) -> No
         project.document,
         target,
         SectionPlane((0.0, 1.0, 0.0), 0.0),
-        profile,
         mesh=halved.scene.objects[target].mesh,
         features=halved.scene.objects[target].features,
     )
@@ -1840,7 +1841,7 @@ def test_a_cut_through_an_existing_connector_drops_only_that_fit(profile: Profil
     )
     block = MeshData.of(trimesh.creation.box(extents=(80.0, 60.0, 40.0)))
     first = apply_line_split(
-        project.document, "obj_1", SectionPlane((1.0, 0.0, 0.0), 0.0), profile, mesh=block
+        project.document, "obj_1", SectionPlane((1.0, 0.0, 0.0), 0.0), mesh=block
     )
     halved = evaluate(project.document, profile, sources=ProjectSources(project))
     target = first.object_ids[0]
@@ -1854,7 +1855,6 @@ def test_a_cut_through_an_existing_connector_drops_only_that_fit(profile: Profil
         project.document,
         target,
         plane,
-        profile,
         mesh=entry.mesh,
         features=entry.features,
     )
@@ -1883,7 +1883,7 @@ def test_undo_brings_the_dropped_fits_back(profile: Profile) -> None:
     block = MeshData.of(trimesh.creation.box(extents=(80.0, 60.0, 40.0)))
 
     applied = apply_line_split(
-        project.document, "obj_1", SectionPlane((1.0, 0.0, 0.0), 0.0), profile, mesh=block
+        project.document, "obj_1", SectionPlane((1.0, 0.0, 0.0), 0.0), mesh=block
     )
     assert project.document.fits == applied.fits
 
@@ -1970,7 +1970,9 @@ def test_the_seams_become_fit_pairs(loaded, profile: Profile) -> None:
 
     applied = apply_split(project.document, mesh, "obj_1", profile)
 
-    assert [fit.tolerance for fit in applied.fits] == ["auto:petg", "auto:petg"]
+    # Ohne Kennung: Die Passung folgt dem Material, in dem die Hälften
+    # gedruckt werden (Durchsicht 0.5.0; siehe ``test_a_seam_follows_…``).
+    assert [fit.tolerance for fit in applied.fits] == ["auto:", "auto:"]
     assert project.document.fits == applied.fits
     assert applied.fits[0].a.feature_id == "pin_1"
     assert applied.fits[0].b.feature_id == "bore_1"
@@ -2000,7 +2002,7 @@ def test_a_seam_without_pins_gets_no_fit_pair(profile: Profile) -> None:
     assert plan.cuts, "der Balken passt nicht auf das Bett und wird geteilt"
     assert all(count == 0 for count in plan.seated), "auf 3 × 3 mm sitzt kein Stift"
 
-    applied = apply_planned(project.document, plan, "obj_1", profile)
+    applied = apply_planned(project.document, plan, "obj_1")
 
     assert applied.fits == [], "keine Passung ohne Stift, auf den sie zeigt"
     assert project.document.fits == []
@@ -2263,7 +2265,6 @@ def test_splitting_from_the_dialog_pairs_its_pins_in_one_step(profile: Profile) 
         document,
         [SplitTarget("obj_1", block, {})],
         {"axis": "x", "position": 0.0, "pins": 2, "shape": "round"},
-        profile,
         title="Teilen",
     )
 
@@ -2372,7 +2373,6 @@ def test_a_seam_with_pins_on_b_keeps_its_pairs_the_right_way_round(profile: Prof
         document,
         [SplitTarget("obj_1", block, {})],
         {"axis": "x", "position": 0.0, "pins": 2, "shape": "round", "pins_on_b": True},
-        profile,
         title="Teilen",
     )
     first, second = applied.object_ids
@@ -2386,6 +2386,37 @@ def test_a_seam_with_pins_on_b_keeps_its_pairs_the_right_way_round(profile: Prof
     assert b.mesh.bounds.minimum[0] < -1.0, "die Stifte von B ragen über die Naht nach A"
     assert a.mesh.bounds.maximum[0] == pytest.approx(0.0, abs=1e-6), "A trägt keine"
     assert "fit.missing_feature" not in [f.code for f in result.scene.report.findings]
+
+
+@pytest.mark.parametrize("material", ["tpu-95a", "pla"])
+def test_a_seam_follows_the_material_it_is_printed_in(material: str) -> None:
+    """Geteilt in PETG, gerechnet in einem anderen Material: die Passung zieht mit.
+
+    Die Stifte rechnen ihr Spiel aus dem Material, in dem gerechnet wird. Die
+    Passung schrieb bis zur Durchsicht 0.5.0 das Material des Augenblicks
+    fest (``auto:petg``), und nach dem Wechsel auf TPU meldete der Prüfbericht
+    beide Stifte als verletzt — für eine Naht, die genau richtig war. Die
+    Presse verspricht „wechselt man auf PLA, ändert sich das Spiel mit".
+    """
+    load_operations()
+    project = new_project("centauri-carbon-2", "petg")
+    History(project.document).apply(
+        "Anlegen",
+        [OperationDraft(op="create_box", params={"width": 80.0, "depth": 60.0, "height": 40.0})],
+    )
+    block = MeshData.of(trimesh.creation.box(extents=(80.0, 60.0, 40.0)))
+    applied = apply_line_split(
+        project.document, "obj_1", SectionPlane((1.0, 0.0, 0.0), 0.0), mesh=block
+    )
+    assert applied.fits
+
+    other = profiles.make_profile("centauri-carbon-2", material)
+    result = evaluate(project.document, other, sources=ProjectSources(project))
+
+    assert result.complete, result.scene.report.findings
+    codes = [finding.code for finding in result.scene.report.findings]
+    assert "fit.violated" not in codes, codes
+    assert all(fit.tolerance == "auto:" for fit in project.document.fits)
 
 
 def z_shape() -> MeshData:
@@ -2464,7 +2495,7 @@ def test_a_tilted_plane_is_tried_when_every_upright_one_cuts_three_bars(profile:
     History(project.document).apply(
         "Laden", [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})]
     )
-    applied = apply_planned(project.document, plan, "obj_1", profile)
+    applied = apply_planned(project.document, plan, "obj_1")
     result = evaluate(project.document, profile, sources=ProjectSources(project))
     assert result.complete
     assert len(applied.fits) == plan.pins_at(0, 2)

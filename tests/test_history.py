@@ -1379,6 +1379,41 @@ def test_only_twins_may_be_switched() -> None:
     assert project.document.ops[0].op == "create_box", "abgelehnt heißt unverändert"
 
 
+def test_a_step_unknown_to_this_version_does_not_break_the_switch() -> None:
+    """Ein späterer Schritt, den diese Fassung nicht kennt, ist kein Programmfehler.
+
+    Alte Projekte behalten Schritte, deren Operation es nicht mehr gibt — ein
+    OpenSCAD-Schritt aus 0.1 etwa (Migration 12→13); die Auswertung hält dort
+    mit ``evaluate.unknown_operation`` an. Der Kernwechsel eines Quaders davor
+    fragte jeden späteren Schritt im Register nach seiner Körperart und bekam
+    für den unbekannten einen ``InternalError`` — einen Absturzbericht statt
+    des Wechsels (Durchsicht 0.5.0). Ein unbekannter Schritt braucht keinen
+    exakten Körper: Er rechnet ohnehin nicht.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.scene.project import new_project
+    from app.core.types import Operation
+
+    load_operations()
+    project = new_project()
+    history = History(project.document)
+    history.apply("Quader", [OperationDraft(op="create_brep_box", params={"width": 30.0})])
+    box = project.document.ops[0]
+    project.document.ops.append(
+        Operation(
+            id=box.id + 1,
+            op="create_from_scad",
+            inputs=(),
+            outputs=("obj_9",),
+            params={"source": "cube(5);"},
+        )
+    )
+
+    changed = history.change_kernel(box.id, "create_box", {"width": 30.0, "anchor": "centre"})
+
+    assert changed.op == "create_box"
+
+
 def test_a_transaction_number_is_never_reused_after_undo(history: History) -> None:
     """Vergeben ist vergeben — wie bei den Op-Kennungen.
 

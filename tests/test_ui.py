@@ -7029,6 +7029,61 @@ def test_every_offered_error_action_does_something(window: MainWindow) -> None:
         )
 
 
+def test_the_saved_part_state_button_switches_every_step_at_once(
+    window: MainWindow, tmp_path: Path
+) -> None:
+    """RM-138, Anschluss: Der Knopf am Befund rechnet wieder mit dem gespeicherten Stand.
+
+    Der Kern kann es (``tests/test_recipes.py``); geprüft wird hier, dass die
+    Anwendung es tut — der Befund beim Öffnen, sein Knopf, ein Schritt im
+    Verlauf für beide Einsätze und ein Strg+Z zurück.
+    """
+    from app.core.errors import AppError
+    from app.core.knowledge import profiles
+    from app.core.knowledge.parts import check as part_check
+    from app.core.knowledge.parts import recipe
+    from app.core.scene.project import Project, save
+    from app.core.types import Operation
+    from tests.test_recipes import _clean_globals, _document, _plate_with_halter
+
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    try:
+        recipe.register(_plate_with_halter(30.0, profile))
+        document = _document()
+        halter = Operation(
+            id=2,
+            op="insert_probe_halter",
+            inputs=("obj_1",),
+            outputs=("obj_1",),
+            params={"z": 8.0},
+        )
+        document.ops.extend(
+            [halter, dataclasses.replace(halter, id=3, params={"z": 8.0, "x": 5.0})]
+        )
+        saved = tmp_path / "halter.p3d"
+        save(Project(document=document), saved)
+        _clean_globals("probe_halter")
+        recipe.register(_plate_with_halter(50.0, profile))
+
+        window.session.open_project(saved)
+        finding = next(
+            entry
+            for entry in part_check.check(window.session.project.document)
+            if entry.code == "parts.own_changed"
+        )
+        (action,) = finding.suggestions
+        window.error_handlers()[action.id](AppError(title=finding.message))
+
+        steps = [entry.op for entry in window.session.project.document.ops[1:]]
+        assert steps == ["insert_probe_halter_travelled"] * 2
+        assert window.session.modified
+        window.session.undo()
+        steps = [entry.op for entry in window.session.project.document.ops[1:]]
+        assert steps == ["insert_probe_halter"] * 2
+    finally:
+        _clean_globals("probe_halter", "probe_halter_travelled")
+
+
 #: Kennungen, die absichtlich neben ``errors.py`` entstehen — sie gehören einem
 #: Fenster, das seine Knöpfe selbst baut (der Support-Dialog), oder einem Rat,
 #: den ``unhandled_advice`` als Satz zeigt. Wer hier etwas einträgt, sagt damit:
@@ -10513,6 +10568,12 @@ def test_the_parameter_dialog_validates_inline(qt_app: QApplication) -> None:
     dialog.expression_field.setText("import os")
     assert dialog.validation_problem() is not None, "alles außerhalb der Grammatik fällt durch"
 
+    # Ohne ``=`` und ``@`` getippt, wie auf der Website (Durchsicht 0.5.0):
+    # angenommen, und gespeichert in der Form mit beidem.
+    dialog.expression_field.setText("width / 4")
+    assert dialog.validation_problem() is None
+    assert dialog.parameter().expression == "=@width / 4"
+
 
 def test_the_parameter_dialog_offers_fx_and_parameter_choices(qt_app: QApplication) -> None:
     """Formeln beginnen über sichtbare Werkzeuge, nicht über auswendig gelernte Syntax."""
@@ -11352,18 +11413,27 @@ def test_auto_split_uses_the_objects_material_for_search_and_fits(
 
     assert len(chosen) == 1, "das Objektprofil wird genau einmal bestimmt"
     assert searched == chosen and searched[0].material.id == "pla"
-    assert {fit.tolerance for fit in applied.fits} == {"auto:pla"}
+    # Die Passungen nennen kein Material: Sie folgen dem der Körper, wenn sie
+    # geprüft werden (``scene.fits._wanted``), statt es beim Teilen
+    # festzuschreiben (Durchsicht 0.5.0).
+    assert {fit.tolerance for fit in applied.fits} == {"auto:"}
 
 
 def test_drawn_split_uses_the_spool_material_for_its_fits(
     session: Session, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Auch der gezeichnete Schnitt liest das Material von Spule null (§12)."""
+    """Auch der gezeichnete Schnitt prüft seine Passungen im Material von Spule null (§12).
+
+    Bis zur Durchsicht 0.5.0 bestimmte die Sitzung dafür das Spulenprofil und
+    schrieb es in die Passung (``auto:pla``). Seitdem nennt die Passung kein
+    Material und folgt den Körpern, wenn sie geprüft wird — gemessen hier an
+    einem Projekt in TPU, dessen Körper auf einer PLA-Spule liegt: Die Stifte
+    rechnen ihr Spiel in PLA, und die Passung prüft in PLA, nicht in TPU.
+    """
     from app.core.geom.section import SectionPlane
-    from app.ui import session as session_module
 
     session.project.document.printer = "centauri-carbon-2"
-    session.project.document.material = "petg"
+    session.project.document.material = "tpu-95a"
     session.history.apply(
         "Anlegen",
         [
@@ -11373,41 +11443,40 @@ def test_drawn_split_uses_the_spool_material_for_its_fits(
             )
         ],
     )
+    session.history.apply(
+        "Spule",
+        [
+            OperationDraft(
+                op="assign_slot",
+                inputs=("obj_1",),
+                params={"slot": 0, "name": "PLA", "colour": "#ffffff", "material_type": "PLA"},
+            )
+        ],
+    )
     session.evaluate_async()
     session.wait_for_idle()
     assert session.last_result is not None
-    entry = session.last_result.scene.objects["obj_1"]
-    entry.material_slots = [MaterialSlot(index=0, name="PLA", material_type="PLA")]
-
-    chosen: list[Profile] = []
-    applied_with: list[Profile] = []
-    real_for_object = session_module.profiles.for_object
-    real_apply_line_split = session_module.apply_line_split
-
-    def choose(base: Profile, body: SceneObject | None) -> Profile:
-        profile = real_for_object(base, body)
-        chosen.append(profile)
-        return profile
-
-    def apply(*args: Any, **values: Any) -> Any:
-        applied_with.append(args[3])
-        return real_apply_line_split(*args, **values)
-
-    monkeypatch.setattr(session_module.profiles, "for_object", choose)
-    monkeypatch.setattr(session_module, "apply_line_split", apply)
-    monkeypatch.setattr(session, "evaluate_async", lambda: None)
 
     applied = session.split_along("obj_1", SectionPlane((1.0, 0.0, 0.0), 0.0), pins=2)
+    session.evaluate_async()
+    session.wait_for_idle()
 
-    assert len(chosen) == 1, "das Spulenprofil wird genau einmal bestimmt"
-    assert applied_with == chosen and applied_with[0].material.id == "pla"
-    assert {fit.tolerance for fit in applied.fits} == {"auto:pla"}
+    assert applied.fits and {fit.tolerance for fit in applied.fits} == {"auto:"}
+    result = session.last_result
+    assert result is not None and result.complete, result
+    codes = [finding.code for finding in result.scene.report.findings]
+    assert "fit.violated" not in codes, codes
 
 
 def test_async_split_keeps_one_object_profile_from_search_through_apply(
     session: Session, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Eine Profiländerung während der Suche darf deren Plan nicht umdeuten."""
+    """Eine Profiländerung während der Suche darf deren Plan nicht umdeuten.
+
+    Seit der Durchsicht 0.5.0 bekommt das Anwenden gar kein Profil mehr: Die
+    Nahtpassungen nennen kein Material (``auto:``), und was der Plan
+    festlegt, entschied die Suche. Geprüft bleibt, dass genau ihr Plan ankommt.
+    """
     from app.core.split import SplitApplied
     from app.ui import session as session_module
 
@@ -11423,7 +11492,7 @@ def test_async_split_keeps_one_object_profile_from_search_through_apply(
     release = threading.Event()
     chosen: list[Profile] = []
     searched: list[Profile] = []
-    applied_with: list[Profile] = []
+    applied_with: list[object] = []
     real_for_object = session_module.profiles.for_object
     plan = object()
 
@@ -11438,11 +11507,8 @@ def test_async_split_keeps_one_object_profile_from_search_through_apply(
         assert release.wait(2.0), "die blockierte Suche wurde nicht freigegeben"
         return plan
 
-    def apply(
-        _document: object, received: object, object_id: str, profile: Profile
-    ) -> SplitApplied:
-        assert received is plan
-        applied_with.append(profile)
+    def apply(_document: object, received: object, object_id: str) -> SplitApplied:
+        applied_with.append(received)
         return SplitApplied(object_ids=[object_id])
 
     monkeypatch.setattr(session_module.profiles, "for_object", choose)
@@ -11458,7 +11524,7 @@ def test_async_split_keeps_one_object_profile_from_search_through_apply(
 
     assert len(chosen) == 1, "das Objektprofil wird genau einmal bestimmt"
     assert searched == chosen and searched[0].material.id == "pla"
-    assert applied_with == searched and applied_with[0] is searched[0]
+    assert applied_with == [plan], "angewandt wird der Plan der Suche, kein neuer"
     assert len(results) == 1
 
 
@@ -11611,7 +11677,7 @@ def test_a_stale_split_worker_cannot_deliver(session: Session) -> None:
     reported: list[object] = []
     session.failed.connect(reported.append)
 
-    session._split_planned(stale, object(), "obj_1", session.profile, called.append)
+    session._split_planned(stale, object(), "obj_1", called.append)
     assert not called and not busy, "ein fremder Plan wird nicht angewandt"
 
     session._split_failed(stale, errors.InternalError(detail="stale"))

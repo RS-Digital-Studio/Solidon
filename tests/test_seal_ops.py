@@ -635,3 +635,70 @@ def test_counterface_change_invalidates_the_operation_cache(document, profile):
     assert finding.severity == "warning"
     assert finding.values["gap_mm"] == pytest.approx(2)
     assert finding.values["overlap_mm"] == pytest.approx(-1.6)
+
+
+def test_a_seal_drawn_on_a_derived_plane_follows_its_parameters(profile):
+    """Ein Dichtweg auf einer Versatzebene mit Parameterabstand (RM-188 P3.2).
+
+    Durchsicht 0.5.0: ``offset:<Deckfläche>:@d`` hielt mit „Wählen Sie eine
+    vorhandene Zeichenebene für den Dichtweg." an — die Ebene gab es, aber
+    ihr Rahmen wurde ohne die Projektparameter gefragt, und ohne sie ist
+    ``@d`` keine Zahl. Mit einer Zahl als Abstand lief derselbe Weg. Nach
+    jeder Änderung der Körperhöhe steht warm dasselbe da wie kalt.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.scene import ResultCache, evaluate
+    from app.core.scene.migrations import FORMAT_VERSION
+    from app.core.sketch.planes import feature_plane, offset_plane
+    from app.core.types import Document, Operation, Parameter
+
+    load_operations()
+    plane = offset_plane(feature_plane("body", "face_top"), "@d")
+    document = Document(
+        format_version=FORMAT_VERSION,
+        app_version="0.0.0",
+        parameters={"h": Parameter("h", 20.0), "d": Parameter("d", 0.0)},
+        ops=[
+            Operation(
+                id=1,
+                op="create_box",
+                outputs=("body",),
+                params={"width": 40.0, "depth": 40.0, "height": "@h", "anchor": "corner"},
+            ),
+            Operation(
+                id=2,
+                op="create_seal",
+                inputs=("body",),
+                outputs=("body", "seal"),
+                params={
+                    "path_sketch": sketch_to_text(replace(shapes.rectangle(30, 30), plane=plane)),
+                    "groove_width": 3.0,
+                    "groove_depth": 2.0,
+                    "body_material": "petg",
+                    "gasket_material": "tpu-95a",
+                },
+            ),
+        ],
+    )
+
+    def figures(result):
+        return {
+            key: (
+                round(float(entry.mesh.volume), 6),
+                tuple(round(value, 6) for value in entry.mesh.bounds.minimum),
+                tuple(round(value, 6) for value in entry.mesh.bounds.maximum),
+            )
+            for key, entry in result.scene.objects.items()
+        }
+
+    cache = ResultCache()
+    first = evaluate(document, profile=profile, cache=cache)
+    assert first.complete, [str(entry.message) for entry in first.scene.report.findings]
+    # Der Abstand bleibt null — eine Nut über der Fläche ist keine; was sich
+    # bewegt, ist die Fläche selbst, und mit ihr muss die Ebene wandern.
+    for name, value in (("h", 24.0), ("h", 18.0)):
+        document.parameters[name] = Parameter(name, value)
+        warm = evaluate(document, profile=profile, cache=cache)
+        cold = evaluate(document, profile=profile)
+        assert warm.complete and cold.complete, (name, value)
+        assert figures(warm) == figures(cold), (name, value)

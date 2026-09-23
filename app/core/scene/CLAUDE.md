@@ -297,6 +297,42 @@ Prüfsumme. Abweichender Inhalt, Größenverletzungen oder ein Pfad außerhalb
 des Projektordners werden auch beim Speichern und Öffnen abgewiesen.
 Erneute Erreichbarkeit entfernt den alten Verknüpfungshinweis.
 
+**Eigene Drucker und Materialien reisen als Beschreibung mit**
+(`Document.carried_profiles`, ab Format 30): Name, Bauraum, Düse, Verfahren,
+Schichtwerte — keine Pfade, kein Code (Regel 12, 13). `save` erneuert sie aus
+Drucker, Material und den `set_material`-Schritten (höchstens
+`MAX_CARRIED_PROFILES`); beim Öffnen legt `profiles.carry` sie in eine eigene
+Schicht, `profiles.scene_profile` rechnet mit ihnen, und
+`carried_findings` bietet an, sie zu übernehmen. Ein Drucker, den weder der
+Rechner noch die Datei kennt, fällt auf den allgemeinen Drucker desselben
+Verfahrens zurück, mit Befund und Wahl — `Session.profile`, Kopfzeile,
+Druckdialog und Kommandozeile fragen dieselbe Funktion.
+
+**Die Projektdatei ist inhaltsgleich, nicht bytegleich** (RM-106): Jeder
+ZIP-Kopf trägt `CONTAINER_SYSTEM` (0) statt des schreibenden Systems; die
+Deflate-Bytes hängen weiter von der zlib der Plattform ab (Windows-CPython
+packt mit zlib-ng). Gleichheit prüft `project.content_digest` über Namen,
+Längen und entpackte Inhalte. Eingecheckte Beispiel- und Belegdateien bleiben
+an ihre Originalbytes gebunden; neu geschrieben wird nur, was ein Test
+ausdrücklich erzeugt.
+
+**Was eine Operation liest, steht im Schlüssel** — auch das Profil jedes
+Eingangs mit eigenem Material (`evaluate._body_profiles`, mit Kalibrierung)
+und jedes Drucker- und Materialfeld in `profile_key`, das eine Operation
+liest (die Düsenzahl eingeschlossen); ein Feld, das keine liest, steht
+ausdrücklich benannt daneben. Ein beschädigter Plattencache-Eintrag wird
+verworfen und neu gerechnet (`cache._DAMAGED_ENTRY`), nie zum Absturz.
+
+**Ein Bündel hält nur, solange es genau bleibt** (`bundling.stays_exact`):
+Die Sitzung beendet ein Bündel, wenn die Summe der Züge nicht mehr dasselbe
+ergäbe wie die einzelnen Schritte — etwa weil eine Bettkorrektur
+(`transform.nudged_onto_bed`) dazwischen lag oder um die Körpermitte gedreht
+wird. Mehrere Schritte, die zusammen wechseln müssen, gehen in **einer**
+Transaktion (`History._swap_operations`, `use_part_states` für den
+gespeicherten Bausteinstand). Varianten rechnen in der feinen Stufe und
+teilen einen Cache (`variants.build`). Ein Programmfehler der
+Merkmalserkennung hält am Schritt an wie einer der Operation.
+
 ## Die Karte
 
 **Das Dokument**

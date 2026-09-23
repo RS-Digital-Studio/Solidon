@@ -209,7 +209,15 @@ eigenen Eingängen vorbei liest.** `operation_hash` deckt die Hashes der
 Eingänge — drei Lesarten greifen aber auf fremde Körper der Szene zu: das
 Ziel von `align_to_feature` (`kind="feature"`), die `up_to`-Fläche
 (`TARGET_FIELD`) und die `feature:<id>`-Ebene jeder Skizze
-(`face_of_sketch`, dieselbe Funktion wie im Verweisfilter).
+(`face_of_sketch`, dieselbe Funktion wie im Verweisfilter) — auch durch eine
+abgeleitete Ebene hindurch (`standing_on_feature`), am Feldschnitt und am
+Dichtweg genauso wie an der Extrusion. **Den Rahmen einer Ebene fragt eine
+Operation mit den Projektparametern** (`sketch.planes.frame_in_scene(plane,
+ctx.scene)`, derselbe Weg wie im Skizzenmodus): Eine Versatzebene darf ihren
+Abstand als `@name` schreiben, und `frame_for_plane` ohne Werte gibt dann
+`None` — gebaut für Ansichten, die nichts zeichnen müssen. Feldschnitt und
+Dichtweg fragten so und endeten in einem `AssertionError` bzw. „Wählen Sie
+eine vorhandene Zeichenebene" (RM-188 P3.2, Durchsicht 0.5.0).
 `_with_nested_context` mischt die Hashes **aller** Träger des benannten
 Merkmals in den Schlüssel — alle, weil zwei Körper denselben Merkmalsnamen
 tragen können. Ohne das behielt ein ausgerichteter Körper mit Cache die alte

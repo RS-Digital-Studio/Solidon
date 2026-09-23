@@ -123,13 +123,26 @@ class LoadParams(BaseParams):
         title=_("Entartete Dreiecke entfernen"),
         default=True,
         placement="advanced",
-        doc=_("Dreiecke ohne Fläche. Sie stören jede spätere Rechnung und tragen nichts."),
+        doc=_(
+            "Dreiecke ohne Fläche und doppelt geschriebene. Sie stören jede spätere "
+            "Rechnung und tragen nichts."
+        ),
     )
     unify_normals: bool = param(
         title=_("Außenseiten angleichen"),
         default=True,
         placement="advanced",
         doc=_("Richtet aus, wo außen ist. Ohne das erscheinen Flächen dunkel oder fehlen."),
+    )
+    copy: int = param(
+        title=_("Kopie"),
+        default=0,
+        minimum=0,
+        placement="advanced",
+        doc=_(
+            "Dieselbe Datei steht schon im Projekt. Ab 2 tragen alle Körper die Nummer "
+            "in Klammern hinter ihrem Namen."
+        ),
     )
 
 
@@ -183,6 +196,23 @@ def load(ctx: OpContext) -> OpResult:
         parts = [threemf.Part(name=params.name or stem, mesh=mesh, slots=tuple(slots))]
     elif params.name and len(parts) == 1:
         parts = [dataclasses.replace(parts[0], name=params.name)]
+    elif len(parts) == 1 and not parts[0].named:
+        # **Ein unbenannter Körper heißt wie seine Datei** — wie bei einer STL.
+        # Hier stand der Ersatz „Körper 1", und beim zweiten Einlesen hieß
+        # derselbe Körper „drill-holder 2": eine Nummer ohne erstes Stück dazu
+        # (Durchsicht 0.5.0, gemessen an ``drill-holder.3mf``).
+        parts = [dataclasses.replace(parts[0], name=stem)]
+    if params.copy >= 2 and not (params.name and len(parts) == 1):
+        # **Dieselbe Datei zweimal** (Durchsicht 0.5.0): Eine Baugruppe bringt
+        # ihre Namen aus der Datei mit, und die zweite Kopie trug sie alle ein
+        # zweites Mal — am Siebhalter sieben gleiche Zeilen im Baum und im
+        # Prüfbericht. Die Nummer gilt deshalb jedem Körper
+        # (``ingest.plan._own_name``).
+        from app.core.ingest.plan import copy_name
+
+        parts = [
+            dataclasses.replace(part, name=copy_name(part.name, params.copy)) for part in parts
+        ]
 
     check_limits(len(payload), sum(part.mesh.triangle_count for part in parts))
 
@@ -215,7 +245,7 @@ def load(ctx: OpContext) -> OpResult:
                 detail=_(
                     "Die Datei enthält ungültige Koordinaten und ergibt keine "
                     "Ausdehnung. Meistens ist beim Erzeugen oder Übertragen etwas "
-                    "schiefgegangen — erzeuge sie im Ursprungsprogramm neu."
+                    "schiefgegangen — erzeugen Sie sie im Ursprungsprogramm neu."
                 ),
                 constraint="not_a_number",
                 values={"object": part.name},

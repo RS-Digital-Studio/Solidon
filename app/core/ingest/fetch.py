@@ -28,7 +28,7 @@ import re
 import urllib.error
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from pathlib import PurePosixPath
+from pathlib import PurePosixPath, PureWindowsPath
 from time import monotonic
 from typing import Any, Final
 from urllib.parse import unquote, urljoin, urlsplit
@@ -320,10 +320,15 @@ def _name_from(answer: object, url: str) -> str:
     """
     disposition = _DISPOSITION.search(_header(answer, "Content-Disposition"))
     if disposition:
-        candidate = unquote(disposition.group(1)).strip()
+        # **Der letzte Teil, gleich mit welchem Trenner.** ``PurePosixPath``
+        # kannte nur „/": ``..\..\Windows\halter.stl`` ging ganz weiter,
+        # und unter Linux und macOS lehnte das Speichern das Projekt danach als
+        # nicht relativ ab (Durchsicht 0.5.0). ``PureWindowsPath`` trennt an
+        # beiden Zeichen.
+        candidate = PureWindowsPath(unquote(disposition.group(1)).strip()).name
         if suffix_of(candidate) in ALLOWED_SUFFIXES:
-            return PurePosixPath(candidate).name
-    from_path = unquote(PurePosixPath(urlsplit(url).path).name)
+            return candidate
+    from_path = PureWindowsPath(unquote(PurePosixPath(urlsplit(url).path).name)).name
     if suffix_of(from_path) in ALLOWED_SUFFIXES:
         return from_path
     raise ValidationError(

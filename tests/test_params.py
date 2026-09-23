@@ -214,3 +214,41 @@ def test_an_infinite_count_does_not_become_an_overflow() -> None:
         validate(SampleParams, {"count": float("inf")})
 
     assert raised.value.constraint == "not_finite"
+
+
+@pytest.mark.parametrize("field", ["diameter", "count"])
+def test_an_integer_beyond_every_float_is_not_a_number(field: str) -> None:
+    """JSON kennt keine Obergrenze für Ganzzahlen; ``float(10**400)`` wirft.
+
+    Vor 0.5.0 lief dieser ``OverflowError`` aus der Auswertung hinaus: Eine
+    Projektdatei mit einer solchen Zahl in einem Schritt ließ sich öffnen,
+    aber nicht rechnen, und der Kunde bekam einen Absturzbericht statt eines
+    Befunds am Schritt.
+    """
+    with pytest.raises(ValidationError) as raised:
+        validate(SampleParams, {field: 10**400})
+
+    assert raised.value.constraint == "not_finite"
+
+
+def test_a_project_with_an_overflowing_integer_stops_at_its_step(tmp_path) -> None:
+    """Derselbe Fall am Kundenweg: öffnen, rechnen, am Schritt anhalten."""
+    from app.core.bootstrap import load_operations
+    from app.core.knowledge import profiles
+    from app.core.scene import evaluate
+    from app.core.scene.project import ProjectSources, load, new_project, save
+    from app.core.types import Operation
+
+    load_operations()
+    project = new_project("centauri-carbon-2", "pla")
+    project.document.ops.append(
+        Operation(id=1, op="create_box", outputs=("obj_1",), params={"width": 10**400})
+    )
+    reopened = load(save(project, tmp_path / "gross.p3d"))
+    result = evaluate(
+        reopened.document,
+        profiles.make_profile("centauri-carbon-2", "pla"),
+        sources=ProjectSources(reopened),
+    )
+    assert result.stopped_at == 1
+    assert any(entry.op_id == 1 for entry in result.scene.report.findings)

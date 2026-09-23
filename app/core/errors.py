@@ -128,6 +128,14 @@ RELEASE_PROTECTION = Action(
 PLACE_ON_BED = Action("place_on_bed", _("Auf das Bett setzen"), primary=True)
 ARRANGE_ON_BED = Action("arrange_on_bed", _("Auf dem Bett anordnen"), primary=True)
 CHOOSE_PRINTER = Action("choose_printer", _("Anderes Druckerprofil wählen"))
+#: Einen Drucker, den ein Projekt mitbringt, in die eigenen übernehmen
+#: (``profiles.carry``). Danach steht er auf diesem Rechner auch in jedem
+#: anderen Projekt zur Wahl.
+ADOPT_PRINTER = Action("adopt_printer", _("In meine Drucker übernehmen"), primary=True)
+#: Eigene Bausteine wieder so rechnen, wie das Projekt gespeichert wurde
+#: (§24.4, RM-138). Den Stand bringt die Projektdatei als mitgereistes Rezept
+#: mit (``knowledge.parts.check.saved_states``); ein Strg+Z führt zurück.
+KEEP_SAVED_PARTS = Action("keep_saved_parts", _("Gespeicherten Stand verwenden"))
 OPEN_SETTINGS = Action("open_settings", _("Einstellungen öffnen"), primary=True)
 #: Der Weg zu den zusätzlichen Programmen — wo sie liegen, und ein Knopf, der
 #: sie holt. Nicht ``OPEN_SETTINGS``: Ein fehlender Slicer und ein stilles

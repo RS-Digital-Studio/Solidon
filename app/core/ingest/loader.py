@@ -40,7 +40,7 @@ from app.core.geom.mesh import (
     face_components,
     read_mesh,
 )
-from app.core.geom.repair import SMALL_COMPONENT_SHARE
+from app.core.geom.repair import SMALL_COMPONENT_SHARE, open_edge_count
 from app.core.log import get_logger
 from app.core.perceive.maps import MAP_LIMIT_TRIANGLES
 from app.core.scene.evaluate import FEATURE_LIMIT_TRIANGLES
@@ -905,12 +905,22 @@ def normalise(
     if weld and len(body.faces):
         progress(0.2, str(_("Punkte verschweißen")))
         before = len(body.vertices)
-        was_closed = bool(body.is_watertight) if closed is None else closed
         tolerance = weld_tolerance(diagonal)
-        unwelded = body.copy() if was_closed else None
+        # **Gefragt wird am verschweißten Netz, nicht vorher** (Durchsicht
+        # 0.5.0, Zusatz aus dem Paket „netzkern"). Ob das Netz vorher dicht
+        # war, zählt nur, wenn das Verschweißen es aufreißt; die Frage stand
+        # aber immer davor — am 1,2-M-Netz eine halbe Sekunde, auch wenn das
+        # Verschweißen nichts zusammenlegte oder das Netz schloss. Die Kopie
+        # für den Rückweg kostet ein Zehntel davon. Eine Suppe braucht keine:
+        # Sie war nie dicht.
+        unwelded = body.copy() if closed is not False else None
         body.merge_vertices(digits_vertex=weld_digits(tolerance))
         welded = len(body.vertices) < before
-        closed = was_closed if not welded else None
+        if welded:
+            closed = bool(body.is_watertight) if unwelded is not None else None
+        opened = (
+            welded and closed is False and unwelded is not None and bool(unwelded.is_watertight)
+        )
         # **Ein Verschweißen, das das Netz aufreißt, wird zurückgenommen.**
         #
         # Zwei Punkte, die dichter beieinanderliegen als die Toleranz, gehören
@@ -921,7 +931,32 @@ def normalise(
         # 17184, und der Prüfbericht sagte „Das Modell ist nicht geschlossen"
         # über eine Datei, die es war. Verschweißen ist eine Reparatur, und
         # eine Reparatur, die etwas kaputt macht, wird nicht angewendet.
-        if welded and unwelded is not None and not body.is_watertight:
+        single = _without_doubled_shell(body) if opened and remove_degenerate else None
+        if single is not None:
+            # **Dieselbe Schale zweimal, jede mit eigenen Ecken** (Durchsicht
+            # 0.5.0, gefunden vom Paket „netzkern"): Das Verschweißen macht aus
+            # der Kopie lauter deckungsgleiche Dreiecke, und das Netz ist
+            # offen, weil jede Kante vier Flächen trägt. Zurückgenommen kam die
+            # Kugel als zwei Teile mit doppeltem Volumen an — gegenläufig
+            # geschrieben mit dem Volumen null. Bleibt von jeder Gruppe das
+            # erste Dreieck und ist das Netz danach geschlossen, war es eine
+            # Kopie und keine Berührung zweier Körper.
+            body, kept_faces = single
+            if slots is not None:
+                slots = slots[kept_faces]
+            closed = True
+            findings.append(
+                Finding(
+                    code="ingest.doubled_shell_removed",
+                    severity="info",
+                    message=_(
+                        "Die Datei trug den Körper zweimal deckungsgleich. Die Kopie wurde "
+                        "entfernt."
+                    ),
+                    values={"removed": int((~kept_faces).sum())},
+                )
+            )
+        elif opened and unwelded is not None:
             body = unwelded
             welded = False
             closed = True
@@ -1133,7 +1168,7 @@ def normalise(
                 message=_(
                     "Das Modell ist nicht geschlossen. „Reparieren“ schließt die offenen Stellen."
                 ),
-                values={"open_edges": _open_edge_count(body)},
+                values={"open_edges": open_edge_count(MeshData.of(body))},
             )
         )
 
@@ -1200,12 +1235,33 @@ def _too_fine(triangles: int) -> Finding | None:
     )
 
 
-def _open_edge_count(body: trimesh.Trimesh) -> int:
-    """Kanten, die zu genau einem Dreieck gehören. Direkt gezählt, ohne
-    Graphenbibliothek.
+def _without_doubled_shell(
+    body: trimesh.Trimesh,
+) -> tuple[trimesh.Trimesh, np.ndarray] | None:
+    """Das verschweißte Netz ohne deckungsgleiche Kopien — wenn es danach geschlossen ist.
+
+    Von jeder Gruppe deckungsgleicher Dreiecke (dieselben Ecken, gleich in
+    welchem Umlauf) bleibt das erste. Ist das Netz danach dicht, war die
+    Doppelung eine Kopie derselben Schale. Berühren sich dagegen zwei Körper
+    an einer Fläche, bleibt dort eine Kante mit drei Flächen zurück, und die
+    Antwort ist ``None``: Dann nimmt der Aufrufer das Verschweißen zurück wie
+    bisher. Zurück kommt das Netz und die Maske der behaltenen Dreiecke — die
+    Filamentzuweisung je Dreieck folgt ihr.
     """
-    single = trimesh.grouping.group_rows(body.edges_sorted, require_count=1)
-    return len(single)
+    faces = np.asarray(body.faces)
+    if not len(faces):
+        return None
+    _groups, first = np.unique(np.sort(faces, axis=1), axis=0, return_index=True)
+    if len(first) == len(faces):
+        return None
+    keep = np.zeros(len(faces), dtype=bool)
+    keep[first] = True
+    single = body.copy()
+    single.update_faces(keep)
+    single.remove_unreferenced_vertices()
+    if not single.is_watertight:
+        return None
+    return single, keep
 
 
 def _count_components(body: trimesh.Trimesh, findings: list[Finding]) -> int:

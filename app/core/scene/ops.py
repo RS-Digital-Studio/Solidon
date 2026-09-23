@@ -353,13 +353,13 @@ def _check_ring_volume(ctx: OpContext, source: SceneObject, steps: list[Any]) ->
         if needed > volume[axis] + EPS_GEOM:
             raise ValidationError(
                 "count",
-                _(
-                    "So viele Kopien reichen über den Bauraum hinaus. Wie weit, steht "
-                    "in „needed_mm“; was die Maschine kann, in „volume_mm“."
-                ),
+                # Die Zahlen stehen in den Einzelheiten als „Nötig" und „Grenze".
+                # Hier stand „Wie weit, steht in „needed_mm"" — ein Schlüssel,
+                # den der Kunde nie zu sehen bekommt (Durchsicht 0.5.0).
+                _("So viele Kopien reichen über den Bauraum hinaus."),
                 value=needed,
                 constraint="build_volume",
-                values={"needed_mm": round(needed, 1), "volume_mm": round(volume[axis], 1)},
+                values={"needed_mm": round(needed, 1), "limit_mm": round(volume[axis], 1)},
                 suggestions=[
                     replace(CORRECT_INPUT, label=_("Anzahl oder Abstand verringern")),
                     SPLIT_MODEL,
@@ -383,13 +383,13 @@ def _check_volume(
         if needed > volume[axis] + EPS_GEOM:
             raise ValidationError(
                 "count",
-                _(
-                    "So viele Kopien reichen über den Bauraum hinaus. Wie weit, steht "
-                    "in „needed_mm“; was die Maschine kann, in „volume_mm“."
-                ),
+                # Die Zahlen stehen in den Einzelheiten als „Nötig" und „Grenze".
+                # Hier stand „Wie weit, steht in „needed_mm"" — ein Schlüssel,
+                # den der Kunde nie zu sehen bekommt (Durchsicht 0.5.0).
+                _("So viele Kopien reichen über den Bauraum hinaus."),
                 value=needed,
                 constraint="build_volume",
-                values={"needed_mm": round(needed, 1), "volume_mm": round(volume[axis], 1)},
+                values={"needed_mm": round(needed, 1), "limit_mm": round(volume[axis], 1)},
                 suggestions=[
                     replace(CORRECT_INPUT, label=_("Anzahl oder Abstand verringern")),
                     SPLIT_MODEL,

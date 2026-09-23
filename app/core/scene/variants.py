@@ -24,6 +24,7 @@ from app.core.errors import ValidationError
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.geom.transform import apply, translation
 from app.core.log import get_logger
+from app.core.scene.cache import ResultCache, disk_backed_cache
 from app.core.scene.evaluate import evaluate
 from app.core.types import (
     CancelToken,
@@ -100,10 +101,11 @@ def build(
     count: int = 4,
     gap: float = DEFAULT_GAP,
     mark: bool = True,
-    quality: Quality = "draft",
+    quality: Quality = "fine",
     sources: SourceAccess | None = None,
     progress: ProgressFn = _silent,
     cancelled: CancelToken | None = None,
+    cache: ResultCache | None = None,
 ) -> VariantSet:
     """Wertet denselben Stapel ``count``-mal mit gestuftem Parameter aus.
 
@@ -127,6 +129,19 @@ def build(
     zu, wenn die Teile vom Bett kommen. Aus heißt, das Teil bleibt Punkt für
     Punkt das, was der Stapel gerechnet hat — für den Fall, dass die Oberseite
     zur Sache gehört.
+
+    **Ein Cache über alle Läufe** (Durchsicht 0.5.0). Jeder Lauf rechnete den
+    ganzen Stapel neu, auch die Schritte vor dem ersten, der den Parameter
+    liest — bei vier Varianten viermal dasselbe. Ihr Schlüssel hängt nicht am
+    Parameter, also rechnet jetzt der erste Lauf sie und die übrigen lesen
+    sie (``cache``, ohne Angabe ein frischer). Gemessen an sechs Schritten mit
+    dem Parameter im letzten: vier Varianten 8,9 s vorher, siehe Bericht.
+
+    **Und in der Qualität des Exports** (``fine``): Die Varianten sind ein
+    Druckauftrag, und was gedruckt wird, rechnet die Anwendung sonst mit der
+    vollen Rückfallkette (§31). Mit ``draft`` hielt eine Boolesche Operation,
+    die erst die späteren Stufen tragen, eine Variante an, die der Export
+    gerechnet hätte.
     """
     if parameter not in document.parameters:
         raise ValidationError(
@@ -144,6 +159,10 @@ def build(
 
     made = VariantSet(parameter=parameter)
     offset = 0.0
+    # Derselbe Cache für alle Varianten, mit der Plattenebene der Anwendung
+    # (``disk_backed_cache``): Ein zweiter Kalibrierdruck mit denselben Werten
+    # trifft dann auch nach einem Neustart.
+    shared = cache if cache is not None else disk_backed_cache()
 
     for index in range(count):
         if cancelled is not None and cancelled.is_cancelled:
@@ -166,6 +185,7 @@ def build(
             sources=sources,
             progress=onward,
             cancelled=cancelled,
+            cache=shared,
         )
         variant = Variant(value=value, complete=result.complete)
         variant.findings.extend(result.scene.report.findings)

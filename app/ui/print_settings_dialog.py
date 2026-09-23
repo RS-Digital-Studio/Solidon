@@ -2178,11 +2178,23 @@ class _OpenInSlicerWorker(Worker):
                 )
                 if self._was_cancelled():
                     return
+                # Cura übernimmt Einstellungen nur als Profil neben dem Modell
+                # (``handover.cura_profile_beside``); jeder andere Slicer gibt
+                # hier ``None`` zurück.
+                beside = (
+                    handover.cura_profile_beside(
+                        run.model, self._job.settings, self._job.profile, self._job.setup, run.slots
+                    )
+                    if self._job.with_settings
+                    else None
+                )
                 handover.open_in_slicer(run.model, self._job.setup)
             except AppError as problem:
                 self.failed.emit(problem)
                 return
             findings.extend(run.findings)
+            if beside is not None:
+                findings.append(beside)
             opened += 1
             for request in usage:
                 self.usageReady.emit(request)
@@ -2586,12 +2598,16 @@ class PrintSettingsDialog(QDialog):
         # Drucker und Material standen hier als Beschriftung — und es gab
         # nirgends einen Weg, sie zu ändern. Wer eine fremde Datei öffnete,
         # arbeitete für immer gegen deren Bauraum (§12).
-        document = self.session.project.document
         self.printer_choice = QComboBox(self)
         # Nach Verfahren gruppiert wie im Erststart (RM-071): Ein Resin-Drucker
         # stand hier flach zwischen den FDM-Geräten.
         add_printer_choices(self.printer_choice, profiles.printer_profiles())
-        _select_data(self.printer_choice, document.printer or profiles.DEFAULT_PRINTER)
+        # Der Drucker, **mit dem gerechnet wird** — nicht die Kennung im
+        # Dokument. Kennt dieser Rechner sie nicht (ein eigener Drucker eines
+        # anderen Rechners), rechnet die Szene mit dem allgemeinen Drucker
+        # desselben Verfahrens (``profiles.scene_profile``), und die Liste
+        # stand auf ihrem ersten Eintrag: ein Gerät, das nirgends galt.
+        _select_data(self.printer_choice, self.session.profile.printer.id)
         self.printer_choice.currentIndexChanged.connect(self._scene_profile_changed)
 
         # **Die Düse steht neben dem Drucker, weil sie zu ihm gehört.** Die
