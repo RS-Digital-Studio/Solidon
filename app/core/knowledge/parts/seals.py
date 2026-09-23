@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, cast
 
 import numpy as np
 
+from app.core.geom.boolean import BOOLEAN_OVERLAP
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.geom.seal import seal_geometry
 from app.core.knowledge.parts import shapes
@@ -202,15 +203,18 @@ def seal_features(body: Form, *, gasket: bool, rounded: bool = False) -> dict[st
 )
 def seal_groove(raw: BaseParams) -> PartResult:
     p = cast(GrooveParams, raw)
+    # Die Nut reicht ein Hundertstel über ihre Mündung hinaus, wie jedes
+    # abtragende Werkzeug (§39); ihr Boden bleibt in der eingestellten Tiefe.
     geometry = seal_geometry(
         _profile(p.path_sketch),
         groove_width=p.width,
-        groove_depth=p.depth,
+        groove_depth=p.depth + BOOLEAN_OVERLAP,
         protrusion=0,
         gasket_width=p.width,
         offset=p.offset,
     )
-    return PartResult(mesh=geometry.groove, features=seal_features(geometry.groove, gasket=False))
+    groove = shapes.moved(geometry.groove, (0.0, 0.0, BOOLEAN_OVERLAP))
+    return PartResult(mesh=groove, features=seal_features(groove, gasket=False))
 
 
 @register_part(

@@ -376,10 +376,22 @@ sagt an einer Kette weiter ab.
 
 Die Regeln stehen in `.claude/rules/operationen.md`.
 
-`repair.self_intersecting_faces` rechnet nach dem Sweep jedes Dreieckspaar als
-Feld (`_share_a_corner`, `_edges_pierce` über `(m, 3, 3)`, Möller-Trumbore
-vektorisiert) — Lochplatte 507 → 10 ms, ihre zweifache Unterteilung 5,3 s →
-185 ms, dieselben acht Dreiecke der zwei durcheinanderlaufenden Quader. Und
+**Die Selbstdurchdringung rechnet `intersections.py`, und zwar für beide
+Fragesteller** (RM-206): `repair.self_intersecting_faces` (welche Dreiecke,
+für die Netzfehlerkarte, mit Paarbudget) und
+`knowledge/parts/range_check.has_self_intersections` (ob überhaupt, für den
+Bereichstest, vollständig). Kandidaten über Sweep-and-Prune, bei großen
+Netzen in Scheiben entlang einer zweiten Achse — Achsen und Breite wählt
+`_plan` an einer festen Stichprobe (Baum 166 000 Dreiecke: 146 Mio. statt
+8 Mio. Sweep-Paare, 16 s → 5 s; jedes Paar zählt nur in der Scheibe der
+unteren Ecke seiner gemeinsamen Hülle) —, dann je Paar als Feld: Ecken
+innerhalb `EPS_GEOM` sind ein topologischer Punkt, nicht koplanare Paare
+entscheiden ihre Schnittstrecken auf der Schnittgeraden, koplanare der
+Trennachsensatz. Die Karte rechnete bis zum 22.09.2026 Möller-Trumbore und sah
+zwei deckungsgleiche Dreiecke derselben Ebene nicht, ebenso wenig ein Paar,
+das sich eine Ecke teilt und trotzdem durch das andere läuft; der Bereichstest
+lief als Python-Schleife über VTK-Kontakte (Schraubenloch 1,5 s je Ecke,
+jetzt Millisekunden). Und
 `ops.repair_object` gibt einen Eingang, an dem nichts zu reparieren war,
 unverändert zurück: Ein exakter Körper bleibt exakt, statt als Netz mit
 „nichts zu reparieren" zurückzukommen.
@@ -563,7 +575,7 @@ Körper zuerst auf den Quader, in dem sich ihre Häute unterscheiden
 Nummer in kanonischer Drehung verglichen); die Differenz liegt in dessen
 Hülle, und zwei Schnitte an einer Platte mit 204 000 Dreiecken kosten so
 25 statt 366 ms — bleibt die Box über der Hälfte der gemeinsamen Hülle,
-rechnet sie am ganzen Körper) · `repair.py` (Netze reparieren: verzweigte Kanten
+rechnet sie am ganzen Körper) · `intersections.py` (Selbstdurchdringung als Feld, eine Rechnung für Karte und Bereichstest) · `repair.py` (Netze reparieren: verzweigte Kanten
 auflösen (`resolve_branching_edges` — dort liegen Flächen übereinander, die
 kleinste geht), Sanduhr-Ecken auftrennen (`split_pinched_vertices` — zwei
 Löcher, die sich eine Ecke teilen, sind zwei Ringe), Ränder vernähen und

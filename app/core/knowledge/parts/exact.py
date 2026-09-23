@@ -39,12 +39,10 @@ if TYPE_CHECKING:
 #: Die Stufenleiter der Vereinigung, in Millimetern: Ohne Toleranz lässt
 #: OpenCASCADE zwei Teile, die sich nur um Rundungsstellen durchdringen, als
 #: zwei Körper stehen; zu fein lässt die Naht offen, zu grob bringt die
-#: Boolesche Operation zum Aufgeben, deshalb mehrere Werte. Dieselben drei
-#: Zehnerpotenzen wie ``profiles.ROD_FUZZ_RATIOS`` — dort als Anteil der
-#: Steigung, weil ein Gewinde ein Maß hat, an dem sich die Naht orientiert;
-#: ein Baustein hat keines, also stehen die Werte hier absolut. Bei Steigungen
-#: um einen Millimeter fallen beide zusammen; ``tests/test_exact_parts.py``
-#: hält die Zahlen gleich, damit sie nicht still auseinanderlaufen.
+#: Boolesche Operation zum Aufgeben, deshalb mehrere Werte. Der Gewindebolzen
+#: hatte dieselbe Leiter als Anteil der Steigung (``ROD_FUZZ_RATIOS``); seit
+#: RM-195 entsteht er genäht und braucht keine mehr, und die Zahlen stehen nur
+#: noch hier.
 UNION_FUZZ_MM: Final = (1e-4, 1e-3, 1e-2)
 
 

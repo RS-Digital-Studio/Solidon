@@ -43,7 +43,7 @@ from app.core.geom.boolean import (
     without_effect,
 )
 from app.core.geom.mesh import MeshData, as_mesh_data, concatenated
-from app.core.geom.transform import rotation, translation
+from app.core.geom.transform import rotation, rotation_about, translation
 from app.core.knowledge.parts.registry import PARTS, PartRegistry, PartSpec
 from app.core.knowledge.parts.shapes import Kernel, building
 from app.core.knowledge.profiles import for_object
@@ -337,11 +337,12 @@ def depth_field(
     seitenansicht sehen und dann die tiefe runterziehen").
 
     **Der Name allein trägt die Auskunft nicht.** Zwölf Operationen führen ein
-    Längenfeld ``depth``, und bei dreien geht es nach *außen*: die Nase von
-    ``insert_latch`` steht vor, Beschriftung und Textur sind erhaben oder
-    eingelassen, je nach ``mode``. Ein Zug nach unten hätte dort einen Wert
-    vergrößert, der nichts abträgt — genau die Verwechslung, vor der
-    ``placement_fields`` warnt, nur eine Ebene tiefer. Gefragt wird deshalb
+    Längenfeld ``depth``, und bei dreien kann es nach *außen* gehen: die Nase
+    von ``insert_latch`` steht vor und trägt nur als Aussparung ab,
+    Beschriftung und Textur sind erhaben oder eingelassen, je nach ``mode``.
+    Ein Zug nach unten hätte dort einen Wert vergrößert, der nichts abträgt —
+    genau die Verwechslung, vor der ``placement_fields`` warnt, nur eine Ebene
+    tiefer. Gefragt wird deshalb
     zusätzlich nach der **Richtung**, und zwar aus derselben Quelle, aus der
     auch die Boolesche Operation und die Vorschaufarbe sie lesen
     (:func:`cuts`, :func:`cuts_by_parameter`).
@@ -1346,6 +1347,58 @@ def _built_part(
     return part_params, produced
 
 
+def placed_tool(
+    source: SceneObject,
+    spec: PartSpec,
+    params: BaseParams,
+    profile: Profile | None,
+    *,
+    parameters: Mapping[str, float] | None = None,
+) -> MeshData:
+    """Der Werkzeugkörper eines gesetzten Bausteins, dort, wo sein Schritt ihn hinsetzt.
+
+    Im Rahmen des Objekts und mit genau der Lage der Operation — Anker am
+    Merkmal oder an der eingetragenen Stelle, Richtung, Rolle, Einsenken,
+    Spiegelung (:func:`_insert_at`). Für den Geist beim Zug an einem Baustein
+    (RM-174): Die Ansicht zeigte bis dahin nur die Marke des einen Merkmals,
+    das man angefasst hatte; der Rest des Bausteins folgte erst beim Loslassen.
+    Mit diesem Körper wandert der ganze Umriss. Er wird einmal zu Beginn des
+    Zugs gebaut (im Arbeiter, ``wartezeit.md``) und dann nur verschoben — ein
+    Versatz in ``x``/``y``/``z`` ist eine reine Verschiebung.
+
+    ``source`` ist der Körper, an dem der Schritt ansetzt; ein benanntes
+    Merkmal muss dort stehen. Ein Trägeraufbau (``host_add``) ist nicht Teil
+    des Werkzeugs, er wächst mit.
+    """
+    profile = for_object(profile, source) if profile is not None else None
+    _part_params, produced = _built_part(spec, params, profile, "fine", parameters=parameters)
+    built = as_mesh_data(produced.mesh)
+    anchor, direction = _anchor(source, params, spec, built)
+    subtractive = cuts(spec, params)
+    sink = 0.0 if subtractive or spec.separate_from_host else BOOLEAN_OVERLAP
+    flip = subtractive and _builds_upward_on_a_face(source, params, built)
+    return _place(built, params, anchor, sink, direction, spec.keeps_up, flip)
+
+
+def lands_on(host: Mesh, tool: MeshData) -> bool:
+    """Ob ein Werkzeugkörper den Träger überhaupt erreicht.
+
+    Die zweite Hälfte von RM-174: Ein Zug neben die Fläche soll schon vor dem
+    Loslassen zeigen, dass der Baustein dort nicht landet. Gefragt wird das
+    Volumen der Überdeckung, nicht die Hüllquader: Ein Werkzeug neben einem
+    L-förmigen Teil liegt in dessen Hülle und trifft trotzdem nichts. Ein
+    aufgesetzter Baustein sinkt ein Hundertstel ein und überdeckt damit
+    einen dünnen Streifen — auch das zählt.
+    """
+    body = as_mesh_data(host)
+    low = [max(a, b) for a, b in zip(body.bounds.minimum, tool.bounds.minimum, strict=True)]
+    high = [min(a, b) for a, b in zip(body.bounds.maximum, tool.bounds.maximum, strict=True)]
+    if any(top < bottom - EPS_GEOM for bottom, top in zip(low, high, strict=True)):
+        return False
+    overlap = boolean("intersection", [body, tool], quality="fine", allow_empty=True)
+    return float(overlap.mesh.volume) > EPS_GEOM
+
+
 def placement_tool(
     spec: PartSpec,
     values: Mapping[str, Any],
@@ -1832,27 +1885,10 @@ def _roll_upright(direction: Vec3) -> Any:
     )
     if abs(degrees) < 1e-9:
         return np.eye(4)
-    return _rotation_about(unit, degrees)
-
-
-def _rotation_about(axis: Vec3, degrees: float) -> Any:
-    """Eine Drehung um eine beliebige Achse durch den Ursprung (Rodrigues)."""
-    import numpy as np
-
-    unit = np.asarray(axis, dtype=float)
-    unit = unit / float(np.linalg.norm(unit))
-    angle = math.radians(degrees)
-    cross = np.array(
-        [
-            [0.0, -unit[2], unit[1]],
-            [unit[2], 0.0, -unit[0]],
-            [-unit[1], unit[0], 0.0],
-        ]
-    )
-    turn = np.eye(3) + math.sin(angle) * cross + (1.0 - math.cos(angle)) * (cross @ cross)
-    matrix = np.eye(4)
-    matrix[:3, :3] = turn
-    return matrix
+    # Dieselbe Drehung wie überall (``transform.rotation_about``, RM-187): Mit
+    # ``math.sin(math.radians(180))`` blieb an einer -Y-Wand 1,2·10⁻¹⁶ statt null
+    # in der Matrix, und ein Keil lag um dieses Haar neben seiner Fläche.
+    return rotation_about(unit, (0.0, 0.0, 0.0), degrees)
 
 
 def _matrix(

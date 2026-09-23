@@ -1366,9 +1366,13 @@ def test_a_depth_that_goes_outwards_gets_no_depth_stage():
         spec = REGISTRY.get(name)
         assert depth_field(name, spec.params) == "depth", f"{name} bohrt ins Material"
 
-    # Die Nase steht vor: kein Zug nach unten.
+    # Die Nase steht vor: kein Zug nach unten. Ihre Aussparung trägt ab — seit
+    # dem 22.09.2026 sagt der Umschalter das (``subtractive_on``); vorher wurde
+    # auch die Aussparung aufgesetzt.
     latch = REGISTRY.get("insert_latch")
-    assert depth_field("insert_latch", latch.params) is None
+    nose, pocket = latch.params(negative=False), latch.params(negative=True)
+    assert depth_field("insert_latch", latch.params, nose) is None
+    assert depth_field("insert_latch", latch.params, pocket) == "depth"
 
     # Und wo ein Umschalter die Richtung führt, entscheidet sein Wert.
     for name, values in (

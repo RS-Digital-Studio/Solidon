@@ -131,7 +131,7 @@ Was nur diese Datei weiß:
 | Findet `tools/twin_scan.py` die Zwillinge, für die es gebaut wurde? | `test_twin_scan.py` — gepflanzte Fälle, und ein leerer Baum ist ein Fehler statt eines Ergebnisses |
 | Überleben zwei Sitzungen, die gleichzeitig in `MEMORY.md` schreiben? | `test_memory_index.py` — zwei echte Prozesse; ohne Sperre gingen gemessen 17 bis 20 von 40 Einträgen verloren |
 | Lässt ein Versetzen am Netz keine Narben zurück, verliert eine vergrabene Senkung kein Volumen, sagt ein Ring ohne Achse ab, und reist keine alte Dreiecksnummer mit? | `test_feature_moves_keep_shape.py` — vier Züge an der Lochplatte bleiben bei 796 Dreiecken, das Volumen der Senkung auf 10⁻⁹ |
-| Findet die vektorisierte Selbstdurchdringung dieselben Paare wie der skalare Weg? | `test_self_intersections.py` — acht Treffer zweier Quader, je Paar gegen die skalare Rechnung |
+| Findet die vektorisierte Selbstdurchdringung dieselben Paare wie der skalare Weg? | `test_self_intersections.py` — `geom.intersections` je Paar gegen die skalare Rechnung, deckungsgleiche Dreiecke derselben Ebene, zwölf Treffer zweier Quader |
 | Prüft das Einlesen Dichtheit und Kennzahlen einmal und reicht sie warm weiter? | `test_ingest_figures.py` — `is_watertight` und `volume` zählen ihre Aufrufe |
 
 ## Der Korpus

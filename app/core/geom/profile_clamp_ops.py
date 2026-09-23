@@ -185,7 +185,7 @@ class ProfileClampSetParams(CounterProfileParams):
     screw_size: str = param(
         title=_("Schraubengröße"),
         default="M4",
-        choices=("M4",),
+        choices=clamps.SCREW_SIZES,
         placement="advanced",
         doc=_("Zwei Schrauben und Muttern mit Aufnahmen aus der Normteiltabelle."),
     )

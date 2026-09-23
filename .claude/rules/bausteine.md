@@ -133,29 +133,71 @@ dem der Arm sitzt, nicht vom Stift daneben. Und wer eine Rückfallregel baut,
 misst einmal nach, wann sie greift: Eine, die immer greift, ist keine
 Rückfallregel, sondern die Regel.
 
-## Test über den ganzen Bereich — von Hand, nicht bei jedem Lauf
+## Test über den ganzen Bereich — mit Nachweis, nicht bei jedem Lauf
 
 Jeder Baustein wird über seinen Parameterbereich durchgerechnet: wasserdicht,
 Mindestwandstärke eingehalten, keine Selbstdurchdringung an den Grenzen,
 Features korrekt benannt.
 
-**Der Lauf über alle 27 Bausteine ist am 03.09.2026 gefallen** (Entscheidung
-Robert). Er kostete rund eine Minute je Baustein und machte aus einem Torlauf
-von Minuten einen von einer halben Stunde; in dieser Zeit schreibt pytest kein
-Zeichen, und auf einer Maschine mit bis zu vier Sitzungen blockierte er alle
-mit. Was bleibt:
+**Der Lauf über alle Bausteine ist am 03.09.2026 aus der Suite gefallen**
+(Entscheidung Robert). Er kostete damals rund eine Minute je Baustein, fast
+alles in der Selbstdurchdringung, und machte aus einem Torlauf von Minuten
+einen von einer halben Stunde. **Seit dem 22.09.2026 steht dahinter ein
+Nachweis:** `tools/check_part_ranges.py` fährt den Bereichstest je Baustein in
+einem eigenen Prozess und schreibt das Ergebnis nach
+`data/part_ranges.toml` — mit dem Abdruck des Stands, gegen den gefahren
+wurde (`parts/range_proof.py`). Dazwischen lagen drei Wochen, in denen der
+Katalog für mitgelieferte Bausteine „in der Suite geprüft" annahm, und acht
+Bausteine nie gefahren waren. Was gilt:
 
-* **Die Prüflogik selbst** steht weiter unter Test — Eckenberechnung, die 2114
-  kartesischen Grenzen, Wandmessung, Selbstdurchdringung (`test_parts.py`).
-* **Die versprochenen Merkmale** werden weiter über jeden Baustein geprüft;
-  das ist schnell.
-* **Der Bereichstest läuft in der Anwendung**: `range_check.check` hängt am
-  Rezeptdialog, ein Kunde bekommt ihn also zu sehen.
-* **Von Hand fällig**, wenn ein Baustein oder seine Grenzen sich ändern —
-  `check_part(spec, profile)` für den einen, den es betrifft.
+* **Ein Baustein ändern heißt, seinen Nachweis erneuern.**
+  `test_every_shipped_part_carries_a_current_range_proof` rechnet nichts; er
+  vergleicht die Datei mit dem Abdruck jedes Bausteins und wird rot, sobald
+  Bausteindatei, gemeinsame Formen, Formmodule aus `geom`, Normteiltabelle,
+  Prüfung, Parameterschema oder Bezugsprofil sich ändern.
+  `python tools/check_part_ranges.py` fährt dann genau die, die nicht mehr
+  passen (`--all` alle, `--check` nur vergleichen).
+* **Der Katalog sagt „über den ganzen Maßbereich geprüft" nur, wo der
+  Nachweis passt**, sonst die Warnung — für mitgelieferte Bausteine wie für
+  eigene (§24.5).
+* **Der Netzkern steht nicht im Abdruck** (Boolesche Kette, Netzhülle): Eine
+  Änderung dort veraltete sonst alle Nachweise zugleich. Deshalb fährt der
+  Release-Schritt „Bausteinnachweis" (`auslieferung.md`) den Lauf frisch.
+* **Die Prüflogik selbst** steht weiter unter Test — Eckenberechnung, die
+  kartesischen Grenzen, Wandmessung, Selbstdurchdringung (`test_parts.py`,
+  `test_self_intersections.py`).
+* **Der Bereichstest läuft auch in der Anwendung**: `range_check.check` hängt
+  am Rezeptdialog, ein Kunde bekommt ihn für eigene Rezepte zu sehen.
 
-Damit gilt ein Baustein ohne diese Prüfung weiterhin als nicht vorhanden
-(§24.3); nur wird sie nicht mehr bei jedem Schritt wiederholt.
+**Ein Maß ohne Obergrenze ist ein Bereich ohne Rand.** Der Bereichstest fährt
+von einem Feld ohne `maximum` nur die Untergrenze; der Überhangfächer lief so
+bis zum 22.09.2026 nie mit breiten oder langen Stufen. Jedes Längenmaß eines
+Bausteins trägt beide Grenzen. Ausgenommen sind Winkel und Versatz der
+Trennebene an den Profilklemmen: Sie sind durch die Zeichnung begrenzt, nicht
+durch eine Zahl, und das Klemmenpaar grenzt sie ein.
+
+## Ein Gewindepaar wird als Paar geprüft
+
+Dass Schraube und Mutter je für sich wasserdicht und einteilig sind, sagt
+nichts darüber, ob sie zusammengehen. Geprüft wird die Überdeckung der beiden
+Körper in Phase — beide Gänge beginnen an ihrem unteren Ende bei Winkel null
+— über den ganzen Weg, vom Eintritt an der Spitze bis unter den Kopf
+(`test_a_printed_screw_turns_through_its_printed_nut`). Bis zum 22.09.2026
+begann der Netzgang genau am unteren Ende, und an der Unterseite jeder Mutter
+stand ein Umlauf Material im Gang: bei M8 und 0,2 mm Spiel 2,3 mm³
+Überdeckung, während beide Teile jeden Einzeltest bestanden. Der exakte
+Zwilling hatte den Vorlauf von einem Umlauf schon; `build.threaded` baut ihn
+seitdem auch am Netz.
+
+## Was eine Richtung hat, wird an ihr gemessen
+
+Rastnase und Schnapphaken standen bis zum 22.09.2026 verkehrt herum — die
+Nase auf ihrer Spitze, der Haken mit der Schräge zum Fuß —, und keine
+Kennzahl sah es: Volumen, Wasserdichtheit und Hülle stimmten. Ein Baustein
+mit Anlaufschräge und Haltefläche wird deshalb an einem Querschnitt geprüft,
+der sagt, **wo** die Schräge liegt; eine Nase zusätzlich an der Fläche, auf
+der sie aufliegt. Und was abtragend gemeint ist, sagt es seinem Schalter
+(`subtractive_on`), sonst wird die Aussparung vereinigt.
 
 ## Version
 

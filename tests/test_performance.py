@@ -358,11 +358,12 @@ def test_the_input_stage_on_a_million_triangles() -> None:
 
 
 def test_self_intersection_on_two_hundred_thousand_faces() -> None:
-    """Der vollständige BVH-Vertrag bleibt auch am P5-Maximalfall interaktiv.
+    """Die vollständige Prüfung bleibt auch am P5-Maximalfall interaktiv.
 
     Der Körper entsteht **vor** der Uhr. Seine voneinander getrennten kleinen
-    Dreiecke zwingen den Checker trotzdem durch exakt 199.516 Faces und alle
-    same-node-Blätter; ein Treffer wäre ein False-Positive. ``measure`` trägt
+    Dreiecke zwingen den Checker trotzdem durch exakt 199.516 Faces und die
+    ganze Kandidatensuche (``geom.intersections``); ein Treffer wäre ein
+    False-Positive. ``measure`` trägt
     denselben 25-%-Regressionsvertrag wie die übrigen §31-Messungen in die
     lokale ``.performance.json`` ein.
     """

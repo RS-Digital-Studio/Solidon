@@ -33,9 +33,12 @@ def test_seal_part_has_one_closed_body_and_geometrically_bound_feature_faces(nam
 
 
 def test_groove_part_starts_at_the_clicked_mouth_and_extends_down():
+    from app.core.geom.boolean import BOOLEAN_OVERLAP
+
     built = seals.seal_groove(seals.GrooveParams(depth=4))
     assert built.mesh.bounds.minimum[2] == pytest.approx(-4)
-    assert built.mesh.bounds.maximum[2] == pytest.approx(0)
+    # Wie jedes abtragende Werkzeug ein Hundertstel über die Mündung hinaus (§39).
+    assert built.mesh.bounds.maximum[2] == pytest.approx(BOOLEAN_OVERLAP)
     floor = built.features["groove_floor"]
     assert built.mesh.raw.triangles[list(floor.face_indices)][:, :, 2] == pytest.approx(-4)
 

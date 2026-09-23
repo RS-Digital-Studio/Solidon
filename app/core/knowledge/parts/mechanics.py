@@ -23,6 +23,7 @@ from app.core.knowledge.parts import shapes
 from app.core.knowledge.parts.build import bore, compound, face, pin, result, subtract, union
 from app.core.knowledge.parts.registry import (
     FACE_GIVES_DIRECTION,
+    FACE_ON_THE_BODY,
     MATERIAL_OF_TARGET,
     FeatureRequirement,
     PartChange,
@@ -56,6 +57,20 @@ BEARING_SEAT_ADDED = PartChange(
     effect=(
         "Der Katalog kann jetzt eine passgenaue Lageraufnahme schneiden. Alte "
         "Projekte ändern sich nicht, weil sie den neuen Baustein nicht enthalten."
+    ),
+)
+
+DOWEL_CHAMFER_WITHIN_LENGTH = PartChange(
+    version="20",
+    date="2026-09-22",
+    reason=(
+        "Eine Fase länger als der Stift schrumpfte dessen Fuß, und an der Bohrung "
+        "reichte die Einführung tiefer als die Bohrung selbst."
+    ),
+    effect=(
+        "Die Fase ist höchstens so lang wie Stift oder Bohrung. Nur Stifte und "
+        "Bohrungen, die kürzer sind als ihre Fase, ändern sich: Der Fuß behält seinen "
+        "Durchmesser, die Bohrung ihre Tiefe."
     ),
 )
 
@@ -100,6 +115,22 @@ SNAP_FIT_HOOK_FIXED = PartChange(
         "Der Haken steht jetzt um den angegebenen Überstand aus dem Arm heraus. "
         "Damit stimmen Geometrie und benannte Hakenfläche überein, und die kleinste "
         "Parameterkombination schneidet sich nicht mehr selbst."
+    ),
+)
+
+SNAP_FIT_RAMP_AT_THE_TIP = PartChange(
+    version="20",
+    date="2026-09-22",
+    reason=(
+        "Der Haken stand verkehrt herum: Die Anlaufschräge zeigte zum Fuß des Arms, "
+        "die gerade Fläche zur Spitze. Beim Einschieben traf das Gegenstück zuerst "
+        "die gerade Fläche, und der Arm federte nicht aus."
+    ),
+    effect=(
+        "Die Schräge beginnt jetzt an der Spitze und läuft zum Fuß hinaus, die gerade "
+        "Haltefläche liegt darunter und zeigt zum Fuß — so, wie die benannte "
+        "Hakenfläche es immer sagte. Länge, Armstärke und Hakenüberstand bleiben gleich; "
+        "die Hakenfläche sitzt um die halbe Keilhöhe tiefer."
     ),
 )
 
@@ -227,7 +258,13 @@ class SnapFitParams(BaseParams):
         "Federnder Arm mit Haken zum Einrasten zweier Teile. Der Arm ist "
         "mindestens zehnmal so lang wie dick, sonst bricht er, statt zu federn."
     ),
-    changes=[FIRST_RELEASE, FACE_GIVES_DIRECTION, SNAP_FIT_HOOK_FIXED, SNAP_ARM_ANCHOR_ON_SURFACE],
+    changes=[
+        FIRST_RELEASE,
+        FACE_GIVES_DIRECTION,
+        SNAP_FIT_HOOK_FIXED,
+        SNAP_ARM_ANCHOR_ON_SURFACE,
+        SNAP_FIT_RAMP_AT_THE_TIP,
+    ],
 )
 def snap_fit(raw: BaseParams) -> PartResult:
     params = cast(SnapFitParams, raw)
@@ -245,10 +282,11 @@ def snap_fit(raw: BaseParams) -> PartResult:
             (0.0, -params.thickness / 2.0, length / 2.0),
             (0.0, -1.0, 0.0),
         ),
+        # Die Haltefläche unter der Schräge, zum Fuß des Arms gerichtet.
         face(
             "hook_1",
             params.width * params.hook,
-            (0.0, params.thickness / 2.0 + params.hook / 2.0, length - hook_height / 2.0),
+            (0.0, params.thickness / 2.0 + params.hook / 2.0, length - hook_height),
             (0.0, 0.0, -1.0),
         ),
     )
@@ -267,21 +305,30 @@ def _snap_fit_body(
     hook: float,
     hook_height: float,
 ) -> Form:
-    """Federarm und Anlaufkeil als ein einziger extrudierter Umriss.
+    """Federarm und Haken als ein einziger extrudierter Umriss.
 
     Zwei überlappende Prismen ließen bei extrem langen, dünnen Armen trotz
     Boolescher Vereinigung innere Dreiecke zurück. Der gemeinsame Seitenriss
-    enthält dieselbe Form ohne innere Grenzfläche: Der Arm endet oben in der
-    Haltefläche, der Keil läuft darunter bis zur Armseite zurück.
+    enthält dieselbe Form ohne innere Grenzfläche.
+
+    **Die Schräge zeigt zur Spitze.** Das Gegenstück kommt beim Einschieben von
+    der Spitze her, gleitet über die Schräge und drückt den Arm zurück; hinter
+    ihr rastet es an der geraden Haltefläche ein, die zum Fuß zeigt. Bis zum
+    22.09.2026 stand der Haken umgekehrt — gerade Fläche an der Spitze, Schräge
+    zum Fuß —, und die benannte Hakenfläche, nach unten gerichtet, beschrieb
+    eine Form, die es nicht gab. Der Schnappverbinder nebenan baut seinen
+    Haken seit je so.
     """
     half = thickness / 2.0
-    points = [(-half, 0.0), (half, 0.0)]
-    # Bei gleicher Keil- und Armlänge fällt die Schulter mit der unteren Ecke
-    # zusammen. Ein doppelter Polygonpunkt erzeugt dort entartete Dreiecke;
-    # geometrisch ist diese Stellung einfach ein vierseitiger Umriss.
-    if hook_height < length:
-        points.append((half, length - hook_height))
-    points.extend(((half + hook, length), (-half, length)))
+    catch = length - hook_height
+    # Reicht die Schräge bis zum Fuß, gibt es keine Haltefläche über der
+    # Ansatzfläche: Dann ist der Umriss ein Viereck, und ein doppelter
+    # Polygonpunkt machte dort entartete Dreiecke.
+    if catch > EPS_GEOM:
+        points = [(-half, 0.0), (half, 0.0), (half, catch), (half + hook, catch)]
+    else:
+        points = [(-half, 0.0), (half + hook, 0.0)]
+    points.extend(((half, length), (-half, length)))
     return shapes.prism_across(points, width)
 
 
@@ -316,9 +363,55 @@ class LatchParams(BaseParams):
     negative: bool = param(
         title=_("Als Aussparung"),
         default=False,
+        # Die Gegenseite trägt ab. Ohne diese Angabe galt der feste Wert des
+        # Registereintrags, und die Aussparung wurde **vereinigt**: an einer
+        # Wand gemessen +12,3 mm³ statt einer Tasche (22.09.2026) — derselbe
+        # Fehler, den das Innengewinde am 25.08.2026 hatte.
+        subtractive_on=(True,),
         doc=_("Die Gegenseite: dieselbe Form, aber mit Spiel und zum Abziehen."),
     )
     play: float = play_param()
+
+
+LATCH_STANDS_ON_ITS_BASE = PartChange(
+    version="20",
+    date="2026-09-22",
+    reason=(
+        "Die Rastnase stand auf ihrer Spitze: Sie berührte ihre Fläche nur an einer "
+        "Kante (6 mm mal 0,005 mm), wuchs um ihre Höhe statt um ihren Überstand hinaus, "
+        "und als Aussparung wurde sie aufgesetzt statt abgezogen."
+    ),
+    effect=(
+        "Die Nase liegt jetzt mit ihrer ganzen Grundfläche auf: entlang der Fläche so "
+        "hoch wie angegeben, so weit hinaus wie der Überstand, oben die Anlaufschräge, "
+        "unten die gerade Haltefläche. An einer Wand richtet sie sich selbst auf. Die "
+        "Aussparung trägt ab und lässt ringsum das Spiel. Lage und Maße prüfen."
+    ),
+)
+
+
+def _latch_outline(height: float, depth: float, play: float) -> list[tuple[float, float]]:
+    """Der Seitenriss der Nase, in YZ, oder ihrer Aussparung vor dem Spiegeln.
+
+    Die Nase: Grundfläche auf z = 0 von y = -height bis 0 — oben ist **-Y**
+    (``keeps_up``) —, die Haltefläche bei y = 0 senkrecht hinaus bis zum
+    Überstand, die Anlaufschräge von dort zurück zum oberen Ende der Grundfläche.
+
+    Die Aussparung hält um ``play`` Abstand von Haltefläche, Schräge und Spitze.
+    Die Schräge wird dafür um ``play`` entlang ihrer Normalen versetzt; die
+    spitze obere Ecke eines Versatzes liefe bei einem steilen Keil weit hinaus
+    (bei Höhe 1 und Überstand 6 um drei Millimeter), und so tief muss die
+    Tasche nicht sein — sie endet eben ``play`` über der Spitze der Nase.
+    """
+    if play <= EPS_GEOM:
+        return [(0.0, 0.0), (0.0, depth), (-height, 0.0)]
+    slope = math.hypot(height, depth)
+    return [
+        (play, 0.0),
+        (play, depth + play),
+        (play * (height - slope) / depth, depth + play),
+        (-height - play * slope / depth, 0.0),
+    ]
 
 
 @register_part(
@@ -331,29 +424,57 @@ class LatchParams(BaseParams):
         "Die Rastnase läuft funktionsbedingt spitz aus; als Aussparung ist sie zudem "
         "ein abtragender Werkzeugkörper."
     ),
+    # Oben ist die Anlaufschräge, unten die Haltefläche: An einer Wand muss die
+    # Nase wissen, wo oben ist (``PartSpec.keeps_up``).
+    keeps_up=True,
     doc=_(
         "Nase zum Einrasten, mit Anlaufschräge nach oben und gerader "
         "Haltefläche nach unten — "
         "druckt ohne Stütze und hält gegen Zug."
     ),
-    changes=[FIRST_RELEASE, FACE_GIVES_DIRECTION, MATERIAL_OF_TARGET],
+    changes=[FIRST_RELEASE, FACE_GIVES_DIRECTION, MATERIAL_OF_TARGET, LATCH_STANDS_ON_ITS_BASE],
 )
 def latch(raw: BaseParams) -> PartResult:
+    """Die Nase auf ihrer Grundfläche — oder die Tasche, in die sie einrastet.
+
+    **Sie stand bis zum 22.09.2026 auf ihrer Spitze.** Der Keil wurde um X
+    umgedreht und hochgeschoben; heraus kam ein Körper, der seine Fläche nur an
+    einer Kante berührte und um seine *Höhe* hinausragte statt um seinen
+    Überstand. Nach dem Einsinken um ``BOOLEAN_OVERLAP`` hing die Nase an einem
+    Streifen von fünf Tausendstel Millimetern.
+
+    Die Aussparung liegt unter ihrer Mündung (§24.1): der Seitenriss der Nase,
+    um das Spiel geweitet und in Z gespiegelt, und ein Hundertstel über die
+    Mündung hinaus, damit der Schnitt nicht Fläche auf Fläche trifft (§39).
+    Gespiegelt passt sie auf die Nase eines Gegenstücks, dessen Fläche ihr
+    gegenübersteht — Haltefläche unten, Schräge oben, wie dort.
+    """
     params = cast(LatchParams, raw)
-    grow = params.play if params.negative else 0.0
-
-    body = shapes.wedge(params.width + 2.0 * grow, params.depth + grow, params.height + grow, 0.0)
-    body = shapes.turned(body, 180.0, (1.0, 0.0, 0.0))
-    body = shapes.moved(body, (0.0, 0.0, params.height + grow))
-
+    play = params.play if params.negative else 0.0
+    width = params.width + 2.0 * play
+    outline = _latch_outline(params.height, params.depth, play)
+    slope = math.hypot(params.height, params.depth)
+    ramp = (outline[-1], outline[-2])
+    centre = ((ramp[0][0] + ramp[1][0]) / 2.0, (ramp[0][1] + ramp[1][1]) / 2.0)
+    # Die Schräge der Nase zeigt nach oben (-Y) und hinaus (+Z), vom Körper weg.
+    normal = (0.0, -params.depth / slope, params.height / slope)
+    if params.negative:
+        mouth = outline[0][0], outline[-1][0]
+        outline = [
+            (mouth[0], BOOLEAN_OVERLAP),
+            *((y, -z) for y, z in outline[1:-1]),
+            (mouth[1], 0.0),
+            (mouth[1], BOOLEAN_OVERLAP),
+        ]
+        centre = (centre[0], -centre[1])
+        # In der Tasche ist die Schräge eine Fläche des Trägers und zeigt in die
+        # Tasche hinein, wie bei jedem abtragenden Baustein.
+        normal = (0.0, params.depth / slope, params.height / slope)
+    body = shapes.prism_across(outline, width)
     return result(
         body,
-        face(
-            "ramp_1",
-            params.width * params.height,
-            (0.0, params.depth / 2.0, params.height / 2.0),
-            (0.0, 1.0, 0.0),
-        ),
+        # Die Anlaufschräge — die Fläche, über die das Gegenstück gleitet.
+        face("ramp_1", width * math.dist(ramp[0], ramp[1]), (0.0, *centre), normal),
     )
 
 
@@ -447,6 +568,7 @@ def _hinge_feasible(raw: BaseParams) -> TranslatableText | None:
             effect="Diese unbrauchbaren Kombinationen werden mit Änderungsvorschlag abgewiesen; "
             "alle tatsächlich dünneren Scharnierfolien behalten ihre Maße.",
         ),
+        FACE_ON_THE_BODY,
     ],
 )
 def living_hinge(raw: BaseParams) -> PartResult:
@@ -462,7 +584,8 @@ def living_hinge(raw: BaseParams) -> PartResult:
     body = subtract(plate, groove)
     return result(
         body,
-        face("hinge_1", params.width * params.gap, (0.0, 0.0, params.film / 2.0)),
+        # Die Oberseite der Folie, der Boden der Scharnierrille.
+        face("hinge_1", params.width * params.gap, (0.0, 0.0, params.film)),
     )
 
 
@@ -553,16 +676,19 @@ class DowelParams(BaseParams):
         FACE_GIVES_DIRECTION,
         DOWEL_DOVETAIL_PROFILE_FIXED,
         MATERIAL_OF_TARGET,
+        DOWEL_CHAMFER_WITHIN_LENGTH,
     ],
 )
 def dowel(raw: BaseParams) -> PartResult:
     params = cast(DowelParams, raw)
     is_pin = params.kind == "pin"
     diameter = params.diameter if is_pin else params.diameter + params.play
-    # Eine Fase breiter als der Radius schnitte den Stift entzwei. Der
-    # deklarierte Bereich erlaubt beides unabhängig, also hält der Baustein die
-    # Grenze selbst ein.
-    chamfer = min(params.chamfer, diameter / 2.0 - 0.2)
+    # Eine Fase breiter als der Radius schnitte den Stift entzwei, eine längere
+    # als der Stift verschöbe seine Maße: Am Stift schrumpfte der Fuß (Ø 30,
+    # Länge 1, Fase 3: Fuß Ø 26), an der Bohrung wurde sie tiefer als verlangt
+    # (drei statt einem Millimeter). Der deklarierte Bereich erlaubt alle drei
+    # Maße unabhängig, also hält der Baustein beide Grenzen selbst ein.
+    chamfer = min(params.chamfer, diameter / 2.0 - 0.2, params.length)
 
     if is_pin:
         # Der Stift sitzt **auf** der Fläche: Ursprung ist der Fuß, er wächst
@@ -584,14 +710,29 @@ def dowel(raw: BaseParams) -> PartResult:
     # also nach draußen; abgetragen wurde damit nichts als die Fase, die
     # zufällig unter dem Ursprung lag. Gemessen an einem Klotz von 30 auf 30
     # auf 20: minus 28,6 mm³, wo ein Loch von 9 mm Tiefe hätte stehen sollen.
-    body = shapes.moved(_profile(params.shape, diameter, params.length), (0.0, 0.0, -params.length))
+    # Ein Hundertstel über die Mündung hinaus, wie jedes abtragende Werkzeug
+    # (§39): Sonst schnitte die Deckfläche genau in der angeklickten Fläche.
+    body = shapes.moved(
+        _profile(params.shape, diameter, params.length + BOOLEAN_OVERLAP),
+        (0.0, 0.0, -params.length),
+    )
     if chamfer > 0.0:
         # Eine Senkung an der Mündung, nach oben weiter werdend — das ist, was
         # eine Fase an einem Loch tut. Vorher verengte sie sich zur Mündung
         # hin, was aus einer Einführung eine Sperre gemacht hätte, wenn sie je
-        # im Material gelegen hätte.
-        lead = shapes.cone(diameter, diameter + 2.0 * chamfer, chamfer)
-        body = union(body, shapes.moved(lead, (0.0, 0.0, -chamfer)))
+        # im Material gelegen hätte. Ein Drehprofil samt Überstand, damit
+        # zwischen Kegel und Überstand keine innere Fläche liegt.
+        mouth = diameter / 2.0 + chamfer
+        lead = shapes.revolved(
+            [
+                (0.0, -chamfer),
+                (diameter / 2.0, -chamfer),
+                (mouth, 0.0),
+                (mouth, BOOLEAN_OVERLAP),
+                (0.0, BOOLEAN_OVERLAP),
+            ]
+        )
+        body = union(body, lead)
     return result(
         body,
         bore("bore_1", diameter, (0.0, 0.0, -params.length / 2.0), depth=params.length),
@@ -750,6 +891,7 @@ class SnapConnectorParams(BaseParams):
         ),
         SNAP_CONNECTOR_FEATURES_FIXED,
         MATERIAL_OF_TARGET,
+        FACE_ON_THE_BODY,
     ],
 )
 def snap_connector(raw: BaseParams) -> PartResult:
@@ -820,7 +962,8 @@ def snap_connector(raw: BaseParams) -> PartResult:
             face(
                 "arm_1",
                 width * params.length,
-                (0.0, arm_centre, params.length / 2.0),
+                # Die Rückseite des Arms, wie beim Schnapphaken nebenan.
+                (0.0, arm_centre - thickness / 2.0, params.length / 2.0),
                 (0.0, -1.0, 0.0),
             ),
             face(
@@ -846,7 +989,9 @@ def snap_connector(raw: BaseParams) -> PartResult:
     # hinkommt, statt zwischen Mündung und Haken zu stehen. Der Schnapper hielt
     # damit nichts, und `tests/test_split_line.py` hat es gemessen. Gebaut wird
     # deshalb von der Mündung nach unten, Stück für Stück.
-    slot = shapes.moved(shapes.box(width + params.play, across, depth), (0.0, 0.0, -depth))
+    slot = shapes.moved(
+        shapes.box(width + params.play, across, depth + BOOLEAN_OVERLAP), (0.0, 0.0, -depth)
+    )
     lip = shapes.box(width + params.play + 2.0 * BOOLEAN_OVERLAP, hook, catch)
     lip = shapes.moved(lip, (0.0, across / 2.0 - hook / 2.0, -catch))
     body = subtract(slot, lip)

@@ -31,6 +31,7 @@ from app.core.knowledge.parts import shapes
 from app.core.knowledge.parts.build import bore, compound, face, pin, result, subtract, union
 from app.core.knowledge.parts.registry import (
     FACE_GIVES_DIRECTION,
+    FACE_ON_THE_BODY,
     PartChange,
     WallRequirement,
     register_part,
@@ -56,6 +57,15 @@ OVERHANG_FROM_VERTICAL = PartChange(
     "Waagerechten geworden.",
     effect="Jede Rampe hat ihren eingetragenen Winkel zur Senkrechten. Kombinationen mit einem "
     "letzten Winkel ab 90 Grad werden vor dem Bauen erklärt.",
+)
+
+OVERHANG_FAN_BOUNDED = PartChange(
+    version="20",
+    date="2026-09-22",
+    reason="Breite und Auskraglänge hatten keine Obergrenze; der Bereichstest prüfte sie "
+    "deshalb nur an ihrer Untergrenze.",
+    effect="Breite je Stufe höchstens 50 mm, Auskraglänge höchstens 100 mm. Ein Fächer "
+    "darüber wird mit Hinweis auf die Grenze abgewiesen; darunter ändert sich nichts.",
 )
 
 FIRST_RELEASE = PartChange(
@@ -317,7 +327,7 @@ class WallLadderParams(BaseParams):
         "Wände von einer bis mehreren Extrusionsbreiten. Zeigt, ab wann der Drucker "
         "wirklich noch Material legt — die Grundlage für die Mindestwandstärke."
     ),
-    changes=[FIRST_RELEASE, FACE_GIVES_DIRECTION, WALL_LADDER_SEPARATE_STEPS],
+    changes=[FIRST_RELEASE, FACE_GIVES_DIRECTION, WALL_LADDER_SEPARATE_STEPS, FACE_ON_THE_BODY],
 )
 def wall_ladder(raw: BaseParams) -> PartResult:
     params = cast(WallLadderParams, raw)
@@ -338,7 +348,13 @@ def wall_ladder(raw: BaseParams) -> PartResult:
     body = union(*bodies)
     return result(
         body,
-        face("face_1", width * params.length, (0.0, 0.0, base_height)),
+        # Die freie Oberseite des Sockels, mitten in der ersten Lücke — unter
+        # den Wänden liegt keine Fläche.
+        face(
+            "face_1",
+            (width - sum(thicknesses)) * params.length,
+            (-width / 2.0 + gap / 2.0, 0.0, base_height),
+        ),
     )
 
 
@@ -367,11 +383,16 @@ class OverhangFanParams(BaseParams):
         maximum=10,
         doc=_("Wie viele Winkel geprüft werden."),
     )
+    # Beide Maße hatten bis zum 22.09.2026 keine Obergrenze: Der Bereichstest
+    # fuhr sie deshalb nur an ihrer Untergrenze, und ein Tippfehler baute einen
+    # Fächer von Metern. Die Grenzen sind großzügig — ein Prüfkörper, der mehr
+    # braucht, prüft etwas anderes als den Überhang.
     width: float = param(
         title=_("Breite je Stufe"),
         default=8.0,
         unit="mm",
         minimum=2.0,
+        maximum=50.0,
         doc=_("Breite einer einzelnen Fläche. Schmaler spart Zeit, breiter zeigt mehr."),
     )
     length: float = param(
@@ -379,6 +400,7 @@ class OverhangFanParams(BaseParams):
         default=15.0,
         unit="mm",
         minimum=3.0,
+        maximum=100.0,
         doc=_("Wie weit jede Fläche frei hinaussteht. Zu kurz verzeiht der Drucker alles."),
     )
 
@@ -415,7 +437,7 @@ def _fan_over_the_top(params: OverhangFanParams) -> TranslatableText | None:
         "Flächen von steil bis flach. Zeigt, ab welchem Winkel dieser Drucker mit "
         "diesem Material wirklich Stützen braucht — statt der Faustregel 45 Grad."
     ),
-    changes=[FIRST_RELEASE, FACE_GIVES_DIRECTION, OVERHANG_FROM_VERTICAL],
+    changes=[FIRST_RELEASE, FACE_GIVES_DIRECTION, OVERHANG_FROM_VERTICAL, OVERHANG_FAN_BOUNDED],
     feasible=lambda raw: _fan_over_the_top(cast(OverhangFanParams, raw)),
 )
 def overhang_fan(raw: BaseParams) -> PartResult:

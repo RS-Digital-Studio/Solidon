@@ -26,6 +26,7 @@ from app.core.knowledge.parts import shapes
 from app.core.knowledge.parts.build import bore, face, result, subtract, union
 from app.core.knowledge.parts.registry import (
     FACE_GIVES_DIRECTION,
+    FACE_ON_THE_BODY,
     MATERIAL_OF_TARGET,
     MOUTH_AT_ORIGIN,
     FeatureRequirement,
@@ -244,6 +245,7 @@ class RibParams(BaseParams):
         FACE_GIVES_DIRECTION,
         THIN_WALL_KEEPS_THE_RIB_PRINTABLE,
         RIB_MEETS_THE_MINIMUM_WALL,
+        FACE_ON_THE_BODY,
     ],
 )
 def rib(raw: BaseParams) -> PartResult:
@@ -261,8 +263,12 @@ def rib(raw: BaseParams) -> PartResult:
 
     return result(
         body,
+        # Die Seitenfläche bei +X, nicht die Mittelebene der Rippe.
         face(
-            "rib_1", params.length * params.height, (0.0, 0.0, params.height / 2.0), (1.0, 0.0, 0.0)
+            "rib_1",
+            params.length * params.height,
+            (thickness / 2.0, 0.0, params.height / 2.0),
+            (1.0, 0.0, 0.0),
         ),
     )
 
@@ -465,7 +471,7 @@ class ProfileTongueParams(BaseParams):
         "Nutrichtung flach — steht sie senkrecht, ist die Schulter unter dem "
         "Kopf ein Überhang."
     ),
-    changes=[PROFILE_TONGUE_ADDED, FACE_GIVES_DIRECTION, MATERIAL_OF_TARGET],
+    changes=[PROFILE_TONGUE_ADDED, FACE_GIVES_DIRECTION, MATERIAL_OF_TARGET, FACE_ON_THE_BODY],
 )
 def profile_tongue(raw: BaseParams) -> PartResult:
     params = cast(ProfileTongueParams, raw)
@@ -501,17 +507,17 @@ def profile_tongue(raw: BaseParams) -> PartResult:
     head = shapes.tapered_bar(head_width, neck_width, params.length, head_height, lead_in)
     body = union(neck, shapes.moved(head, (0.0, 0.0, neck_height)))
 
+    # Die tragende Fläche: die Unterseite des Kopfes rechts und links des
+    # Halses, die sich gegen den Steg legt — zwei Streifen, also zwei Merkmale.
+    # Ihre gemeinsame Mitte läge im Hals, in keiner der beiden Flächen. Die
+    # Schräge an den Enden nimmt je ein Dreieck weg.
+    side = (head_width - neck_width) / 2.0 * (params.length - lead_in)
+    reach = (head_width + neck_width) / 4.0
     return result(
         body,
-        # Die tragende Fläche: die Unterseite des Kopfes links und rechts des
-        # Halses, die sich gegen den Steg legt. Nach unten gerichtet, denn dort
-        # liegt das Material, das sie hält — die Fläche des eigenen Teils zeigt
-        # nach oben.
-        face(
-            "tongue_1",
-            (head_width - neck_width) * params.length,
-            (0.0, 0.0, neck_height),
-            (0.0, 0.0, -1.0),
+        *(
+            face(f"tongue_{index}", side, (sign * reach, 0.0, neck_height), (0.0, 0.0, -1.0))
+            for index, sign in ((1, 1.0), (2, -1.0))
         ),
     )
 

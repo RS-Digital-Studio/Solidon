@@ -910,3 +910,34 @@ def test_scaled_liners_do_not_claim_an_unmodified_rigid_frame(clamp_set, profile
                 changed,
             )
         )
+
+
+def test_the_clamp_offers_every_table_screw_and_sizes_its_ears_by_it(profile):
+    """Die Website verspricht Schrauben „zur gewählten Normgröße" — zu wählen war nur M4.
+
+    Jede angebotene Größe baut ihre Aufnahmen aus der Normteiltabelle: Die Ohren
+    wachsen mit Kopf und Mutter, die Montagehinweise nennen die Größe.
+    """
+    from app.core.geom.profile_clamp_ops import ProfileClampSetParams, create_profile_clamp_set
+    from app.core.knowledge.parts.profile_clamps import SCREW_SIZES, ProfileClampShellParams
+
+    assert SCREW_SIZES == ("M3", "M4", "M5", "M6")
+    for schema in (ProfileClampSetParams, ProfileClampShellParams):
+        choices = next(entry.choices for entry in schema.spec() if entry.name == "screw_size")
+        assert tuple(choices) == SCREW_SIZES
+    widths = []
+    for size in SCREW_SIZES:
+        built = create_profile_clamp_set(
+            _context(
+                ProfileClampSetParams(
+                    clamp_material="petg", liner_material="tpu-95a", screw_size=size
+                ),
+                profile,
+            )
+        )
+        shell = built.outputs[0].mesh
+        assert shell.is_watertight and shell.component_count == 1, size
+        hardware = next(f for f in built.findings if f.code == "profile_clamp.hardware")
+        assert hardware.values["size"] == size
+        widths.append(float(shell.bounds.size[0]))
+    assert widths == sorted(widths) and len(set(widths)) == len(widths), widths

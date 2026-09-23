@@ -567,3 +567,33 @@ def test_a_test_body_without_a_bore_keeps_its_default() -> None:
 
     assert "diameter" not in values_for(REGISTRY.get("create_fit_ladder"), face)
     assert REGISTRY.get("create_fit_ladder").params().diameter == 6.0
+
+
+def test_a_changed_part_says_what_moved_and_that_the_old_state_is_gone() -> None:
+    """§24.4: „Der alte Stand bleibt aufrufbar, solange die Bibliothek ihn führt."
+
+    Die Bibliothek führt je Baustein eine Umsetzung, die heutige. Beim Öffnen
+    eines Projekts aus Stand 19 nennt der Kern deshalb je benutztem Baustein
+    die neuen Einträge des Änderungsverlaufs und erklärt die Änderung als
+    Migration — statt eine Wahl zu versprechen, die nichts auswählen könnte
+    (RM-138, Kernanteil).
+    """
+    from app.core.types import Operation
+
+    document = Document(format_version=2, app_version="0.0.1", parts_version="19")
+    document.ops = [
+        Operation(id=2, op="insert_latch", inputs=("obj_1",), outputs=("obj_1",)),
+        Operation(id=3, op="insert_printed_nut", inputs=("obj_1",), outputs=("obj_1",)),
+        Operation(id=4, op="insert_bearing_seat", inputs=("obj_1",), outputs=("obj_1",)),
+    ]
+
+    changed = part_check.changed_parts(document)
+
+    assert [part.name for part in changed] == ["latch", "printed_nut"]
+    for part in changed:
+        assert part.saved == "19" and part.now == "20"
+        assert part.changes and all(change.version == "20" for change in part.changes)
+        assert all(change.effect for change in part.changes), "was es an den Maßen ändert"
+        assert not part.earlier_available
+    finding = next(f for f in part_check.check(document) if f.code == "parts.changed")
+    assert "früherer Stand ist nicht mehr enthalten" in str(finding.message)

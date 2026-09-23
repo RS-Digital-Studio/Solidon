@@ -695,6 +695,22 @@ PRINTED_THREAD_ROOT_OVERLAPS_CORE = PartChange(
     ),
 )
 
+THREAD_OPENS_AT_BOTH_ENDS = PartChange(
+    version="20",
+    date="2026-09-22",
+    reason=(
+        "Der Gang eines Netzgewindes begann erst am unteren Ende. Ein Innengewinde "
+        "hatte dort einen Umlauf Material im Gang, und eine gedruckte Schraube kam "
+        "nicht durch die gedruckte Mutter — bei M8 und 0,2 mm Spiel überdeckten sich "
+        "beide um 2,3 mm³."
+    ),
+    effect=(
+        "Der Gang läuft an beiden Stirnflächen voll aus, wie am exakten Kern. Mutter "
+        "und Gewindeloch sind unten offen; ein Gewindebolzen trägt den Gang bis an sein "
+        "unteres Ende. Durchmesser, Steigung, Spiel und Länge bleiben gleich."
+    ),
+)
+
 
 @op_params
 class ThreadParams(BaseParams):
@@ -767,6 +783,7 @@ class ThreadParams(BaseParams):
         THREAD_CUTS_INWARD,
         PRINTED_THREAD_ROOT_OVERLAPS_CORE,
         THREAD_PROFILES_MATCH,
+        THREAD_OPENS_AT_BOTH_ENDS,
     ],
 )
 def printed_thread(raw: BaseParams) -> PartResult:
@@ -820,12 +837,16 @@ def _printed_thread(
                 ),
                 values={"maximum": screw.nominal - 2.0 * depth, "play": play},
             )
+    built = length
     if bottom is None:
         bottom = -length if internal else 0.0
+        # Das Werkzeug reicht ein Hundertstel über die Mündung hinaus (§39); der
+        # Gang beginnt trotzdem unten, die Phase hängt an ``bottom``.
+        built = length + BOOLEAN_OVERLAP if internal else length
 
     # Kern plus Gang, auf Länge geschnitten — wie das entsteht, weiß ``build``
     # je Kern; die Maße stehen hier.
-    body = threaded(diameter, screw.pitch, length, internal=internal, bottom=bottom)
+    body = threaded(diameter, screw.pitch, built, internal=internal, bottom=bottom)
     return result(
         body,
         thread(
@@ -896,6 +917,7 @@ class PrintedScrewParams(BaseParams):
         PRINTED_SCREW_PREPARES_COUNTERSINK,
         PRINTED_SCREW_GEOMETRY_FIXED,
         THREAD_PROFILES_MATCH,
+        THREAD_OPENS_AT_BOTH_ENDS,
     ],
 )
 def printed_screw(raw: BaseParams) -> PartResult:
@@ -990,7 +1012,12 @@ class PrintedNutParams(BaseParams):
         "kommt aus dem Materialprofil. Für hohe Lasten oder häufiges Lösen sind "
         "Metallschrauben mit Mutternfalle oder Heat-Set-Buchse zuverlässiger."
     ),
-    changes=[PRINTED_FASTENERS, PRINTED_THREAD_ROOT_OVERLAPS_CORE, THREAD_PROFILES_MATCH],
+    changes=[
+        PRINTED_FASTENERS,
+        PRINTED_THREAD_ROOT_OVERLAPS_CORE,
+        THREAD_PROFILES_MATCH,
+        THREAD_OPENS_AT_BOTH_ENDS,
+    ],
 )
 def printed_nut(raw: BaseParams) -> PartResult:
     """Eine Sechskantmutter, deren Innengewinde zum gedruckten Bolzen passt."""

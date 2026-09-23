@@ -234,7 +234,7 @@
 <line x1="107.3" y1="109.8" x2="107.8" y2="110.1" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="113.0,109.6 112.5,109.9 112.5,117.3" fill="#747c84" stroke="#747c84" stroke-width="0.6" />
 <line x1="112.5" y1="109.9" x2="113.0" y2="109.6" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="107.3,109.8 106.8,109.5 106.8,116.8" fill="#7d858e" stroke="#7d858e" stroke-width="0.6" />
+<polygon points="106.8,109.5 106.8,116.8 107.3,109.8" fill="#7d858e" stroke="#7d858e" stroke-width="0.6" />
 <line x1="106.8" y1="109.5" x2="107.3" y2="109.8" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="113.5,109.2 113.0,109.6 113.0,116.9" fill="#788089" stroke="#788089" stroke-width="0.6" />
 <line x1="113.0" y1="109.6" x2="113.5" y2="109.2" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />

@@ -27,6 +27,7 @@ from app.core.knowledge.parts.build import bore, compound, face, result, subtrac
 from app.core.knowledge.parts.mechanics import SNAP_LEAD_ANGLE, SNAP_MIN_ARM, SNAP_RATIO
 from app.core.knowledge.parts.registry import (
     FACE_GIVES_DIRECTION,
+    FACE_ON_THE_BODY,
     MATERIAL_OF_TARGET,
     MOUTH_AT_ORIGIN,
     FeatureRequirement,
@@ -399,7 +400,7 @@ class WallMountParams(BaseParams):
         "Rückplatte mit Schraubenlöchern und nach vorn stehender Auflage. "
         "Die Löcher sind Durchgangslöcher aus der Normteiltabelle."
     ),
-    changes=[FIRST_RELEASE, FACE_GIVES_DIRECTION, WALL_MOUNT_KEEPS_HOLE_WALLS],
+    changes=[FIRST_RELEASE, FACE_GIVES_DIRECTION, WALL_MOUNT_KEEPS_HOLE_WALLS, FACE_ON_THE_BODY],
 )
 def wall_mount(raw: BaseParams) -> PartResult:
     params = cast(WallMountParams, raw)
@@ -426,7 +427,16 @@ def wall_mount(raw: BaseParams) -> PartResult:
             ),
         )
 
-    features = [face("plate_1", width * height, (0.0, 0.0, height / 2.0))]
+    # Die Rückseite der Platte, die an die Wand kommt — die Auflage steht nach
+    # +Y, also liegt sie bei -Y und schaut dorthin.
+    features = [
+        face(
+            "plate_1",
+            width * height,
+            (0.0, -params.thickness / 2.0, height / 2.0),
+            (0.0, -1.0, 0.0),
+        )
+    ]
     spacing = width / (params.holes + 1)
     for index in range(1, params.holes + 1):
         x = -width / 2.0 + spacing * index
@@ -616,8 +626,18 @@ def keyhole(raw: BaseParams) -> PartResult:
         )
     # Nur der Einstieg reicht kopfbreit bis zur Mündung. Der Kopfkanal
     # liegt darunter; über seinem Halteende bleibt die Rückhaltekante.
-    entrance = shapes.cylinder(screw.head + clearance, params.depth + BOOLEAN_OVERLAP)
-    entrance = shapes.moved(entrance, (0.0, 0.0, -params.depth))
+    #
+    # **Der Einstieg beginnt über dem Kopfkanal, nicht an dessen Boden.** Das
+    # runde Ende des Kanals *ist* der Einstieg — dieselbe Achse, derselbe
+    # Durchmesser. Reichten beide bis zum Boden, lagen in der Kopfzone zwei
+    # Zylinderwände aufeinander, dazu die Längsseiten des Kanals tangential am
+    # Einstieg; bei 60 mm Einhängeweg rundete die Mitte des Kanals um ein
+    # Haar neben die Achse, und die Vereinigung hinterließ Dreiecke, die
+    # einander an Punkten außerhalb ihrer Kanten berührten. Der Bereichstest
+    # meldete an 21 Ecken Selbstdurchdringung — vor und nach RM-206.
+    pocket_top = -params.depth + params.head_room
+    entrance = shapes.cylinder(screw.head + clearance, -pocket_top + BOOLEAN_OVERLAP)
+    entrance = shapes.moved(entrance, (0.0, 0.0, pocket_top))
     pocket = falling(screw.head + clearance, screw.head + clearance + params.drop, params.head_room)
     pocket = shapes.moved(pocket, (0.0, drop, -params.depth))
 
@@ -1409,10 +1429,17 @@ def _foot_profile(wide: float, narrow: float, height: float, chamfer: float) -> 
 
 
 def _pocket_profile(wide: float, height: float, chamfer: float) -> Form:
-    """Sitz und Einführfase als ein geschlossenes abtragendes Drehprofil."""
+    """Sitz und Einführfase als ein geschlossenes abtragendes Drehprofil.
+
+    Es reicht ein Hundertstel über die Mündung hinaus (§39). Das hatte die
+    Tasche seit Version 2 (``POCKET_REACHES_PAST_THE_FACE``), und das
+    gemeinsame Drehprofil von Version 13 verlor es wieder: Seine Deckfläche lag
+    genau in der angeklickten Fläche, bis zum 22.09.2026.
+    """
 
     outline = [
-        (0.0, 0.0),
+        (0.0, BOOLEAN_OVERLAP),
+        (wide / 2.0 + chamfer, BOOLEAN_OVERLAP),
         (wide / 2.0 + chamfer, 0.0),
         (wide / 2.0, -chamfer),
         (wide / 2.0, -height),

@@ -30,6 +30,20 @@ _invalid = invalid
 __all__ = ["CONTOUR_SAG"]
 
 _ADDED = PartChange("1", "2026-09-15", "Geteilte Profilklemme mit separat wechselbaren Einlagen.")
+
+#: Die Schraubengrößen der Klemme — aus der Normteiltabelle, soweit dort
+#: Schraube **und** Mutter stehen. Die Website verspricht Schrauben „zur
+#: gewählten Normgröße"; zu wählen war bis zum 22.09.2026 nur M4. M3 bis M6
+#: tragen Ohren und Aufnahmen über den ganzen Bereich; wo die Klemmtiefe für
+#: eine große Größe nicht reicht, sagt ``_shell_reason`` es mit Vorschlag.
+#: Das Klemmenpaar (``geom/profile_clamp_ops.py``) bietet dieselbe Auswahl an.
+#: Kein Eintrag im Änderungsverlauf: Eine neue Wahl ändert keine bestehende
+#: Schale, und ein Hinweis beim Öffnen wäre einer ohne Anlass.
+SCREW_SIZES: tuple[str, ...] = tuple(
+    size
+    for size in ("M3", "M4", "M5", "M6")
+    if size in standards.screw_sizes() and size in standards.nut_sizes()
+)
 _SHELL_SEATED = PartChange(
     version="19",
     date="2026-09-16",
@@ -243,7 +257,7 @@ class ProfileClampShellParams(BaseParams):
     screw_size: str = param(
         title=_("Schraubengröße"),
         default="M4",
-        choices=("M4",),
+        choices=SCREW_SIZES,
         placement="advanced",
         doc=_("Schraube und Mutter aus der Normteiltabelle."),
     )

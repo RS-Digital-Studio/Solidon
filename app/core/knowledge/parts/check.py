@@ -14,11 +14,12 @@ zweite hält die Auswertung an (§15.2).
 from __future__ import annotations
 
 from collections.abc import Iterable
-from dataclasses import replace
+from dataclasses import dataclass, replace
 
 from app.core.knowledge.parts.registry import (
     LIBRARY_VERSION,
     PARTS,
+    PartChange,
     PartRegistry,
     changed_since_library,
     used_parts,
@@ -30,6 +31,50 @@ from app.core.types import Document, DocumentState, Finding, Operation
 from app.i18n import _
 
 _log = get_logger(__name__)
+
+
+@dataclass(frozen=True, slots=True)
+class ChangedPart:
+    """Ein benutzter Baustein, der sich seit dem Speichern geändert hat (§24.4).
+
+    Die Antwort auf „was ist anders?" für den Öffnen-Dialog: welche Einträge
+    des Änderungsverlaufs seit dem gespeicherten Bibliotheksstand dazukamen,
+    und ob der frühere Stand noch zu haben ist.
+
+    **Er ist es heute für keinen mitgelieferten Baustein.** §24.4 sagt: „Der
+    alte Stand bleibt aufrufbar, solange die Bibliothek ihn führt; wird er
+    entfernt, verhält sich das wie eine Migration" — und die Bibliothek führt
+    je Baustein genau eine Umsetzung, die heutige. ``earlier_available`` ist
+    deshalb ``False``, und der Dialog erklärt die Änderung als Migration,
+    statt eine Wahl anzubieten, die nichts auswählen könnte. Wer einen alten
+    Stand aufrufbar machen will, hält seine Umsetzung im Register und setzt
+    das Feld hier.
+    """
+
+    name: str
+    saved: str
+    now: str
+    changes: tuple[PartChange, ...]
+    earlier_available: bool = False
+
+
+def changed_parts(
+    document: Document, registry: PartRegistry | None = None
+) -> tuple[ChangedPart, ...]:
+    """Die benutzten Bausteine mit Änderungen seit dem gespeicherten Stand, samt Verlauf."""
+    source = registry or PARTS
+    saved = document.parts_version
+    since = int(saved) if saved.isdecimal() else 0
+    found: list[ChangedPart] = []
+    for name in changed_since_library(saved, used_parts(document.ops), source):
+        spec = source.get(name)
+        changes = tuple(
+            change
+            for change in spec.changes
+            if change.version.isdecimal() and int(change.version) > since
+        )
+        found.append(ChangedPart(name=name, saved=saved, now=spec.version, changes=changes))
+    return tuple(found)
 
 
 def normalise_legacy_placement(
@@ -203,11 +248,17 @@ def check(document: Document, registry: PartRegistry | None = None) -> list[Find
 
     changed = changed_since_library(document.parts_version, used, source)
     if changed:
+        # Der frühere Stand ist nicht mehr zu haben (``ChangedPart``): Die
+        # Meldung sagt das, statt eine Wahl zu versprechen, die es nicht gibt.
         findings.append(
             Finding(
                 code="parts.changed",
                 severity="info",
-                message=_("Seit dem Speichern haben sich benutzte Bausteine geändert."),
+                message=_(
+                    "Seit dem Speichern haben sich benutzte Bausteine geändert. Ihr "
+                    "früherer Stand ist nicht mehr enthalten; das Projekt rechnet mit "
+                    "dem aktuellen. Prüfen Sie Lage und Maße dieser Bausteine."
+                ),
                 values={
                     "parts": ", ".join(changed),
                     "saved": document.parts_version,

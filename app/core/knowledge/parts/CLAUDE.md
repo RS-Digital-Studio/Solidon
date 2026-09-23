@@ -106,7 +106,8 @@ exakter Körper keine Dreiecke). Drei Grenzen dabei:
 | `shapes.py` | Kleine Formen, aus denen die Bausteine gebaut werden, darunter `rounded_box` (Sehnen nach `MAX_FACET_SAG` am Netz, vier Viertelkreise exakt, Eckmitten aus `rounded_corners` für beide); `building`/`building_exact` wählen den Kern, `mesh_only` benennt die Netzstellen |
 | `section.py` | Querschnitte mit zwei Auswertern (P2.7): `manifold3d.CrossSection` fürs Netz und die Prüfungen, eine ebene Fläche des exakten Kerns für die Geometrie — Versatz, Differenz, Ohren, Hälfte, Prisma; die Profilklemmen bauen daraus |
 | `exact.py` | Die exakten Zwillinge der Formen und Operationen aus `shapes`/`build` (P2.7) — `Solid` mit demselben Rahmen, Vereinigung mit Körperzahl-Prüfung und Stufenleiter auf Kopien |
-| `range_check.py` | Der Bereichstest in der Anwendung |
+| `range_check.py` | Der Bereichstest in der Anwendung; die Selbstdurchdringung fragt er `geom.intersections`, dieselbe Rechnung wie die Netzfehlerkarte |
+| `range_proof.py` | Der Bereichsnachweis: Abdruck je Baustein, Laden und Vergleichen von `data/part_ranges.toml`; `tools/check_part_ranges.py` schreibt die Datei, der Katalog und `test_parts.py` lesen sie |
 | `preview.py` | Vorschaubilder — **gerendert, nicht von Hand gepflegt** |
 | `scad.py` | Export als OpenSCAD-Quelltext |
 | `recipe.py` | Ein eigener Baustein als **Rezept**: Daten statt Programm (§24.5) |
@@ -242,7 +243,9 @@ Qt-Objekte finalisieren; deren Lebenszeitbereinigung bleibt bei der Oberfläche.
    später Ops und Passungen ansetzen
 4. `to_scad()` für den Quelltext-Export
 5. Test über den **gesamten** Parameterbereich: wasserdicht,
-   Mindestwandstärke, keine Selbstdurchdringung an den Grenzen
+   Mindestwandstärke, keine Selbstdurchdringung an den Grenzen —
+   `python tools/check_part_ranges.py <name>` fährt ihn und schreibt den
+   Nachweis, den Katalog und Suite lesen
 6. Normteilmaße aus `standards.py`, **nie im Baustein hart eintragen**
 7. Vorschaubild rendern lassen
 8. Maß an einem bestehenden Baustein geändert? `LIBRARY_VERSION` erhöhen und
@@ -319,9 +322,9 @@ unter diesen Rand würde einen Ringsims erzeugen und die Hohlraumkette trennen.
 `depth_field(operation, schema, values)` daneben beantwortet, **welches Feld
 die Eindringtiefe ist** — die Flächenplatzierung geht danach nach dem Klick in
 ihre Tiefenstufe (§18.5). Der Name allein trägt das nicht: Zwölf Operationen
-führen ein Längenfeld `depth`, und bei dreien geht es nach außen — die Nase
-von `insert_latch` steht vor, Beschriftung und Textur sind erhaben oder
-eingelassen. Gefragt wird deshalb nach der **Richtung**, aus derselben Quelle
+führen ein Längenfeld `depth`, und bei dreien kann es nach außen gehen — die
+Nase von `insert_latch` steht vor und trägt nur als Aussparung ab,
+Beschriftung und Textur sind erhaben oder eingelassen. Gefragt wird deshalb nach der **Richtung**, aus derselben Quelle
 wie die Boolesche Operation und die Vorschaufarbe (`cuts`,
 `cuts_by_parameter`, also `ParamSpec.subtractive_on`). Wer eine Operation mit
 einem `depth` baut, das aufträgt, deklariert das dort — sonst zieht die Maus

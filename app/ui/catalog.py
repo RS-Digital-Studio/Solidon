@@ -922,27 +922,37 @@ class PartCatalog(QDialog):
 def _range_warning(spec: PartSpec) -> str:
     """Der §24.5-Satz zum Bereichstest — oder nichts.
 
-    Für alles außer den mitgelieferten Bausteinen: Ein mitgelieferter wird in
-    der Suite über seinen ganzen Bereich gefahren, sein ``None`` heißt „nicht
-    hier protokolliert" und nicht „ungeprüft". Überall sonst heißt ``None``,
-    dass der Test nie lief — eine von Hand kopierte Datei etwa —, und ``False``,
-    dass an den Grenzen kein brauchbarer Körper herauskam.
+    **Ein mitgelieferter Baustein bekommt ihn, wenn sein Nachweis fehlt.** Bis
+    zum 22.09.2026 stand hier, er werde „in der Suite über seinen ganzen
+    Bereich gefahren", und die Warnung blieb für ihn aus. Der Lauf war am
+    03.09.2026 aus der Suite gefallen, acht Bausteine waren nie gefahren
+    worden, und der Katalog sagte trotzdem nichts. Heute fragt er den
+    eingecheckten Nachweis (``parts.range_proof``): Passt er zum Stand des
+    Bausteins, schweigt die Warnung; ist der Baustein seither geändert, sagt
+    sie es; hielt eine Ecke nicht, auch das.
+
+    Für alle anderen Quellen heißt ``range_passed`` ``None``, dass der Test nie
+    lief — eine von Hand kopierte Datei etwa —, und ``False``, dass an den
+    Grenzen kein brauchbarer Körper herauskam.
 
     **``user`` fehlte hier, und das war die Quelle, um die §24.5 geht.** Der
     Abschnitt heißt „Eigene Bausteine" und meint die ``.py``-Dateien aus dem
     Nutzerverzeichnis; sein letzter Satz lautet „Dieselben Tests gelten; ohne
     bestandenen Parameterbereichstest erscheint ein Warnhinweis im Katalog".
-    Die Bedingung zählte ``recipe``, ``travelled`` und ``imported`` auf — die
-    drei Quellen, die es *später* dazu bekam — und ließ genau die aus, für die
-    der Satz geschrieben wurde. Gemessen am 03.09.2026: Ein Baustein mit
-    ``source="user"`` bekam unter **keinem** Wert von ``range_passed`` einen
-    Hinweis, auch nicht bei ``False``.
-
     Aufgezählt wird deshalb, wovon ausgenommen wird, statt wofür es gilt: Die
     Liste der Quellen wächst, und eine neue soll den Hinweis erben und nicht
     stillschweigend verlieren.
     """
-    if spec.source == "shipped" or spec.range_passed is True:
+    if spec.source == "shipped":
+        from app.core.knowledge.parts import range_proof
+
+        state = range_proof.status(spec)
+        if state == "proven":
+            return ""
+        if state == "failed":
+            return tr("an den Grenzen kam kein brauchbarer Körper heraus")
+        return tr("der Bereichstest passt nicht mehr zum Stand dieses Bausteins")
+    if spec.range_passed is True:
         return ""
     if spec.range_passed is False:
         return tr("an den Grenzen kam kein brauchbarer Körper heraus")
@@ -1002,8 +1012,10 @@ def detail(spec: PartSpec | None) -> str:
     warning = _range_warning(spec)
     if warning:
         lines.append(f"<b>{RANGE_MARKER}</b> {warning}")
-    if spec.subtractive or spec.own or spec.source in ("travelled", "imported") or warning:
-        lines.append("")
+    else:
+        # Die Zusage steht da, wo sie eingelöst ist — und nur dort.
+        lines.append(tr("über den ganzen Maßbereich geprüft"))
+    lines.append("")
 
     lines.append(f"<b>{tr('Parameter')}</b>")
     for entry in spec.params.spec():

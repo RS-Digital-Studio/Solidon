@@ -845,15 +845,6 @@ def _finely_meshed(rod: Solid, fineness: float) -> Solid:
     return replace(rod, deflection=fineness)
 
 
-#: Die Stufen der Fuzzy-Leiter, als Anteil der Steigung, von fein nach grob —
-#: die Zahlen, die die Bausteine absolut in Millimetern kennen
-#: (``knowledge.parts.exact.UNION_FUZZ_MM``; ein Test hält beide gleich). Der
-#: Gewindebolzen selbst braucht die Leiter seit RM-195 nicht mehr: Kern und
-#: Gang entstehen genäht, ohne Vereinigung. Bei M6 wären das 0,1 bis 10
-#: Mikrometer — alles feiner als jeder Drucker und jede Passung.
-ROD_FUZZ_RATIOS: Final = (1e-4, 1e-3, 1e-2)
-
-
 def _checked_rod(solid: Solid, major: float, pitch: float, *, at_least: float = 0.0) -> Solid:
     """Nachsehen, was die Vereinigung von Kern und Gang wirklich ergeben hat.
 
@@ -963,25 +954,25 @@ def _sewn(solid: Solid, tolerance: float = 0.0) -> Solid:
 
 
 def _fuzzy_boolean(kind: str, first: Solid, second: Solid, tolerance: float = EPS_GEOM) -> Solid:
-    """Boolesch mit kleiner Fuzzy-Toleranz — der helikale Gang braucht sie.
+    """Boolesch mit kleiner Fuzzy-Toleranz — für Flächen, die sich nur berühren.
 
-    ``tolerance`` ist die zweite Stufe aus :func:`_joined_rod`: gröber, wenn
-    die feine Rechnung eine Naht offen gelassen hat.
+    Seit RM-195 fügt sie keinen Gewindebolzen mehr zusammen: Kern und Gang
+    entstehen genäht (:func:`helical_thread`). Geblieben sind die Löcher eines
+    gezogenen und eines übergeblendeten Umrisses (:func:`sweep_path`,
+    :func:`loft`), die derselben Bahn folgen wie der Außenkörper und deshalb
+    an ihren Enden dessen Flächen berühren.
     """
     operation = boolean_builder(kind, first.shape, second.shape, tolerance=tolerance)
-    # **Nicht „fehlgeschlagen"** (Regel 17). Der Satz stand hier wörtlich so,
-    # und er sagt weder, was nicht ging, noch was jetzt möglich ist — dabei ist
-    # der Fall eng: Diese Verknüpfung fügt den Kern eines Gewindes mit seinem
-    # Gang zusammen, und was dort scheitert, scheitert an Flächen, die sich
-    # berühren statt zu überlappen. Der Ausweg ist ein anderes Maß, keine
-    # Reparatur; die gröbere Stufe versucht ``_joined_rod`` schon selbst.
+    # **Nicht „fehlgeschlagen"** (Regel 17), und nicht mehr der Satz über Kern
+    # und Gang eines Gewindes: Bis zum 22.09.2026 las ein Kunde, dessen
+    # gezogener Umriss sein Loch nicht schneiden ließ, von Durchmesser und
+    # Steigung — Maße, die sein Umriss gar nicht hat.
     return _finished(
         operation,
         _(
-            "Kern und Gang des Gewindes ließen sich nicht zu einem Körper verbinden. "
-            "Das passiert, wenn zwei Flächen sich nur berühren statt zu überlappen — "
-            "ein leicht anderer Durchmesser oder eine andere Steigung verschiebt die "
-            "Berührung."
+            "Ein Loch der Zeichnung ließ sich nicht aus dem Körper schneiden. Das "
+            "passiert, wenn zwei Flächen sich nur berühren statt zu überlappen. "
+            "Verschieben Sie das Loch ein wenig oder ändern Sie seine Größe."
         ),
         first,
         others=() if kind == "difference" else (second,),

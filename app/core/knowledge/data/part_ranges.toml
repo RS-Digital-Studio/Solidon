@@ -1,0 +1,394 @@
+# Bereichsnachweis der mitgelieferten Bausteine (Bauplan §24.3).
+#
+# Erzeugt von tools/check_part_ranges.py — nicht von Hand bearbeiten. Der
+# Abdruck (fingerprint) sagt, gegen welchen Stand gefahren wurde; passt er
+# nicht mehr, zeigt der Katalog die Warnung, und
+# tests/test_parts.py::test_every_shipped_part_carries_a_current_range_proof
+# wird rot, bis das Werkzeug erneut lief.
+#
+# Materialprofil: Spiel 0.2 mm, Übermaß -0.05 mm, Mindestwand 0.84 mm.
+
+[[parts]]
+name = "barrel_hinge"
+version = "15"
+fingerprint = "9f2d42a4ebf98df723399ad1bc52692a9f3669a379d14b1cbfb3b91e79575ce5"
+corners = 32
+checked = 32
+excluded = 0
+failures = 0
+passed = true
+date = "2026-09-23"
+
+[[parts]]
+name = "bearing_seat"
+version = "15"
+fingerprint = "6ad9159f0a167ca32105e9d6cbe72476f8aaf49ed07f4270a6ec19d0e5043c06"
+corners = 128
+checked = 128
+excluded = 0
+failures = 0
+passed = true
+date = "2026-09-23"
+
+[[parts]]
+name = "cable_clip"
+version = "15"
+fingerprint = "aaa33831825fa0451e8cbf1c07c7e6a0801481a3708c268bec18859573e58f20"
+corners = 128
+checked = 128
+excluded = 32
+failures = 0
+passed = true
+date = "2026-09-23"
+
+[[parts]]
+name = "cable_gland"
+version = "16"
+fingerprint = "b527880ae49841b7b138541f8e50e9462290741b697b947935684c62c14ceb4b"
+corners = 128
+checked = 128
+excluded = 16
+failures = 0
+passed = true
+date = "2026-09-23"
+
+[[parts]]
+name = "dowel"
+version = "20"
+fingerprint = "ec62d6515d1869fc11297a90d4cd5158491d33f0e3ac2bceec97175f1ac7feac"
+corners = 96
+checked = 96
+excluded = 0
+failures = 0
+passed = true
+date = "2026-09-23"
+
+[[parts]]
+name = "fit_ladder"
+version = "18"
+fingerprint = "d90965aa380c944ce42c60ac937b3f2953e0d82ccefaa538aa2741187daaef8c"
+corners = 32
+checked = 32
+excluded = 0
+failures = 0
+passed = true
+date = "2026-09-23"
+
+[[parts]]
+name = "foot"
+version = "15"
+fingerprint = "a15180a031d448b10a97c9da65a85b867a61747daf1c9f85e07a30a96b893a09"
+corners = 32
+checked = 32
+excluded = 0
+failures = 0
+passed = true
+date = "2026-09-23"
+
+[[parts]]
+name = "gusset"
+version = "10"
+fingerprint = "b90c4af8b337655f9ea11c0a2b092ecb37003dcf4ed1f2b777b485bf8d74a771"
+corners = 8
+checked = 8
+excluded = 0
+failures = 0
+passed = true
+date = "2026-09-23"
+
+[[parts]]
+name = "heatset_m4"
+version = "17"
+fingerprint = "7f54a09e863bfd16e79eaa53588cb9f4d9b44d16f8fbf65cb3ace3d35f85ed8c"
+corners = 36
+checked = 36
+excluded = 0
+failures = 0
+passed = true
+date = "2026-09-23"
+
+[[parts]]
+name = "hinge_eye"
+version = "15"
+fingerprint = "61d7c4de527dcac2a751ca1ceb98bd954562e9643af679a8dbadd5023168f7e7"
+corners = 32
+checked = 32
+excluded = 0
+failures = 0
+passed = true
+date = "2026-09-23"
+
+[[parts]]
+name = "keyhole"
+version = "15"
+fingerprint = "3077beae133e95f77368f3212988cb3d3f7a56f0fce8550b2fec3dc63c67b686"
+corners = 112
+checked = 112
+excluded = 55
+failures = 0
+passed = true
+date = "2026-09-23"
+
+[[parts]]
+name = "latch"
+version = "20"
+fingerprint = "fcb20d003d9cd74b295ee50893031a812ba2bf77307a6355f8eca6c5bc91b077"
+corners = 32
+checked = 32
+excluded = 0
+failures = 0
+passed = true
+date = "2026-09-23"
+
+[[parts]]
+name = "living_hinge"
+version = "20"
+fingerprint = "44df6b5410e1e91e76cb4c900be15d4b1aa295c3ad37c0467f4cb89b628ae6bc"
+corners = 32
+checked = 32
+excluded = 8
+failures = 0
+passed = true
+date = "2026-09-23"
+
+[[parts]]
+name = "magnet_pocket"
+version = "15"
+fingerprint = "545df01934baace4e693ca2e6646973d5cc9f0ea1b48f866017f222cccefdc42"
+corners = 320
+checked = 320
+excluded = 0
+failures = 0
+passed = true
+date = "2026-09-23"
+
+[[parts]]
+name = "nut_trap"
+version = "15"
+fingerprint = "596b9af245d0aa4b335d99e29ae8bf9eb4a12b66b1a39e91b7e0b880e93607f3"
+corners = 112
+checked = 112
+excluded = 0
+failures = 0
+passed = true
+date = "2026-09-23"
+
+[[parts]]
+name = "organizer_divider"
+version = "1"
+fingerprint = "f22d28d4434edeb28d887b0fd0944ec0dec6ceb8b975610c33c78c94bbf0933c"
+corners = 8
+checked = 8
+excluded = 0
+failures = 0
+passed = true
+date = "2026-09-23"
+
+[[parts]]
+name = "organizer_foot"
+version = "1"
+fingerprint = "39df55697b25c48a9a317d2bfdb554de86f9ba855e6a59f5d82fbe92b46893f8"
+corners = 16
+checked = 16
+excluded = 4
+failures = 0
+passed = true
+date = "2026-09-23"
+
+[[parts]]
+name = "organizer_rim"
+version = "1"
+fingerprint = "0669f614686d7b74d33f8b219fecce99ca13da82b9be82a44048683ad84b6322"
+corners = 32
+checked = 32
+excluded = 18
+failures = 0
+passed = true
+date = "2026-09-23"
+
+[[parts]]
+name = "organizer_tray"
+version = "1"
+fingerprint = "1557f46d7cb00a40c0868eb78d93ff8ea6a7a104623ab109bff4990679b903fc"
+corners = 64
+checked = 64
+excluded = 43
+failures = 0
+passed = true
+date = "2026-09-23"
+
+[[parts]]
+name = "overhang_fan"
+version = "20"
+fingerprint = "6f5242a4b421f62bdf624836af2b227a97402ca90e655708d71c81aeab60b5ac"
+corners = 32
+checked = 32
+excluded = 16
+failures = 0
+passed = true
+date = "2026-09-23"
+
+[[parts]]
+name = "pegboard_hook"
+version = "15"
+fingerprint = "712f70c61bf253728d8121c029170fbed60ac245eead74cfceab922fbc27c763"
+corners = 128
+checked = 128
+excluded = 0
+failures = 0
+passed = true
+date = "2026-09-23"
+
+[[parts]]
+name = "printed_nut"
+version = "20"
+fingerprint = "ea88a9cda2d8045a3035e742e1f06002c499448271e2d66d16db119d803de312"
+corners = 14
+checked = 14
+excluded = 0
+failures = 0
+passed = true
+date = "2026-09-23"
+
+[[parts]]
+name = "printed_screw"
+version = "20"
+fingerprint = "d71ae1084e26c9c921f10a42780c7a3aa941488f1e6ef4111f9242c0ad217fc1"
+corners = 56
+checked = 56
+excluded = 0
+failures = 0
+passed = true
+date = "2026-09-23"
+
+[[parts]]
+name = "printed_thread"
+version = "20"
+fingerprint = "89b825dd76905e03b5227091ec860617deaeab147379d1d02c284419909a152f"
+corners = 56
+checked = 56
+excluded = 0
+failures = 0
+passed = true
+date = "2026-09-23"
+
+[[parts]]
+name = "profile_clamp_liner"
+version = "1"
+fingerprint = "064b9022b11511ae41063e06d795a75ae8e53433361bc6f94f27a8fb0140582c"
+corners = 256
+checked = 256
+excluded = 0
+failures = 0
+passed = true
+date = "2026-09-23"
+
+[[parts]]
+name = "profile_clamp_shell"
+version = "19"
+fingerprint = "e23260c0f9bb5baa3d2d2068959d5dc1ab8a3f623ee26e58cbe34064dbe085dd"
+corners = 128
+checked = 128
+excluded = 36
+failures = 0
+passed = true
+date = "2026-09-23"
+
+[[parts]]
+name = "profile_tongue"
+version = "20"
+fingerprint = "148304e008c51fbba08f015c34e83cad2fc28593eb98865a97178428f5208be9"
+corners = 48
+checked = 48
+excluded = 0
+failures = 0
+passed = true
+date = "2026-09-23"
+
+[[parts]]
+name = "rib"
+version = "20"
+fingerprint = "f6ecad5c6fdabd4bcb375db2a9a7a8a922c1fe6450a46a49e4a67c1f4dd5593f"
+corners = 32
+checked = 32
+excluded = 0
+failures = 0
+passed = true
+date = "2026-09-23"
+
+[[parts]]
+name = "screw_hole"
+version = "15"
+fingerprint = "4d2e9741fcba2687e3bace128fb9351c9169f17abfb375ad4e97a936312cab50"
+corners = 224
+checked = 224
+excluded = 0
+failures = 0
+passed = true
+date = "2026-09-23"
+
+[[parts]]
+name = "seal_gasket"
+version = "1"
+fingerprint = "6994bfd608e22d35ab2c23161cb094a4e7f914fb4313d64a47efb62b07934261"
+corners = 16
+checked = 16
+excluded = 0
+failures = 0
+passed = true
+date = "2026-09-23"
+
+[[parts]]
+name = "seal_groove"
+version = "1"
+fingerprint = "9a36759bf0a4baf7afa99404ead60dbcde4126262a6e44e4f3fd78a762a405ae"
+corners = 8
+checked = 8
+excluded = 0
+failures = 0
+passed = true
+date = "2026-09-23"
+
+[[parts]]
+name = "snap_connector"
+version = "20"
+fingerprint = "2399f7992adbce04cf9c79730b251b0ae48e787e6f78901e6170f75b7a7f8f37"
+corners = 16
+checked = 16
+excluded = 0
+failures = 0
+passed = true
+date = "2026-09-23"
+
+[[parts]]
+name = "snap_fit"
+version = "20"
+fingerprint = "e86e982c33db4242f82f55869f987f91a0fd7685d447394929e0770e5b4c8ca4"
+corners = 32
+checked = 32
+excluded = 0
+failures = 0
+passed = true
+date = "2026-09-23"
+
+[[parts]]
+name = "wall_ladder"
+version = "20"
+fingerprint = "a01b84b095cc83c06bc72475fe9b13abe1c5151e261c07b412569fdcdc2809db"
+corners = 16
+checked = 16
+excluded = 0
+failures = 0
+passed = true
+date = "2026-09-23"
+
+[[parts]]
+name = "wall_mount"
+version = "20"
+fingerprint = "cc9c0d54c3bdec074babea8c9eb1218240a0c0a5b220cba0308d055d3f038f45"
+corners = 224
+checked = 224
+excluded = 0
+failures = 0
+passed = true
+date = "2026-09-23"

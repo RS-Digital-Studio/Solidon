@@ -322,7 +322,9 @@ def test_a_saved_part_joins_the_grid_and_gets_its_picture(qt_app: QApplication) 
         PARTS.remove("nachzuegler_probe")
 
 
-def test_a_failed_or_missing_range_check_is_written_on_the_entry(qt_app: QApplication) -> None:
+def test_a_failed_or_missing_range_check_is_written_on_the_entry(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """§24.5 verlangt den Warnhinweis am Katalogeintrag, kein Verbot.
 
     ``range_passed`` wurde geschrieben, deklariert und geprüft — und von
@@ -349,9 +351,15 @@ def test_a_failed_or_missing_range_check_is_written_on_the_entry(qt_app: QApplic
     assert tr("an den Grenzen kam kein brauchbarer Körper heraus") in detail(broken)
     assert tr("der Bereichstest ist für diesen Baustein nie gelaufen") in detail(unchecked)
 
-    # Ein mitgelieferter Baustein trägt ``None``, weil sein Bereich in der
-    # Suite gefahren wird — der Katalog darf ihn nicht als ungeprüft anschreiben.
+    # Ein mitgelieferter Baustein trägt ``None``; ob er geprüft ist, sagt sein
+    # eingecheckter Nachweis. Passt er, bleibt der Eintrag still; hielt eine
+    # Ecke nicht, steht dasselbe da wie bei einem Rezept.
+    from app.core.knowledge.parts import range_proof
+
+    monkeypatch.setattr(range_proof, "status", lambda *_args, **_kwargs: "proven")
     assert "Bereichstest" not in describe(donor) and "Grenzen" not in describe(donor)
+    monkeypatch.setattr(range_proof, "status", lambda *_args, **_kwargs: "failed")
+    assert tr("an den Grenzen kam kein brauchbarer Körper heraus") in describe(donor)
 
 
 def test_the_locked_save_button_shows_its_reason_beside_it(qt_app: QApplication) -> None:
@@ -1496,7 +1504,9 @@ def test_opening_a_part_for_editing_puts_its_steps_into_the_window(
         window.close()
 
 
-def test_an_own_python_part_is_told_apart_from_a_shipped_one(qt_app: QApplication) -> None:
+def test_an_own_python_part_is_told_apart_from_a_shipped_one(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """§24.5 heißt „Eigene Bausteine" und meint die ``.py`` aus dem Nutzerordner.
 
     Genau die fielen durch. ``_range_warning`` zählte ``recipe``, ``travelled``
@@ -1523,10 +1533,20 @@ def test_an_own_python_part_is_told_apart_from_a_shipped_one(qt_app: QApplicatio
     assert RANGE_MARKER in detail(gebrochen), "Regel 18: Zeichen und Satz"
     assert "Bereichstest" not in describe(bestanden) and "Grenzen" not in describe(bestanden)
 
-    # Und die Gegenprobe bleibt: Der mitgelieferte trägt dasselbe ``None`` und
-    # wird nicht angeschrieben, denn seinen Bereich fährt die Suite.
+    # Und der mitgelieferte: Er trägt dasselbe ``None``, und ob er angeschrieben
+    # wird, sagt sein Bereichsnachweis — nicht mehr die Behauptung, die Suite
+    # fahre ihn (sie tat es seit dem 03.09.2026 nicht mehr).
+    from app.core.knowledge.parts import range_proof
+
     ausgeliefert = dataclasses.replace(donor, source="shipped", range_passed=None)
+    monkeypatch.setattr(range_proof, "status", lambda *_args, **_kwargs: "proven")
     assert "Bereichstest" not in describe(ausgeliefert)
+    assert tr("über den ganzen Maßbereich geprüft") in detail(ausgeliefert)
+    monkeypatch.setattr(range_proof, "status", lambda *_args, **_kwargs: "stale")
+    assert tr("der Bereichstest passt nicht mehr zum Stand dieses Bausteins") in describe(
+        ausgeliefert
+    )
+    assert tr("über den ganzen Maßbereich geprüft") not in detail(ausgeliefert)
 
 
 def test_a_new_source_inherits_the_warning_instead_of_losing_it(qt_app: QApplication) -> None:

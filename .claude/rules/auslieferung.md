@@ -34,6 +34,19 @@ fragt man `git tag --contains <ursache>`: Ein Fehler, den keine
 veröffentlichte Version hatte, gehört nicht in den Changelog — der Kunde
 suchte ihn sonst bei sich.
 
+## Kein Release ohne frischen Bausteinnachweis
+
+Die Website verspricht, jeder Baustein sei über seinen ganzen Maßbereich
+geprüft, und der Katalog sagt es je Baustein. Vor dem Bau läuft deshalb der
+Schritt **Bausteinnachweis**: `python tools/check_part_ranges.py --all` —
+alle Bausteine, gleich ob ihr Abdruck passt, denn der Abdruck enthält den
+Netzkern nicht (`parts/range_proof.py`), und eine Änderung dort sieht nur ein
+frischer Lauf. Exit 0 und eine unveränderte oder eingecheckte
+`data/part_ranges.toml` sind die Bedingung; ein gebrochener Baustein hält den
+Release an, statt mit Warnung im Katalog hinauszugehen. Seit dem 22.09.2026
+dauert der Lauf mit vier Prozessen Minuten statt der halben Stunde, die ihn
+am 03.09.2026 aus der Suite nahm.
+
 ## Keine Abhängigkeit ohne Lizenz, keine Lizenz ohne Nachweis am Artefakt
 
 Regel 15 und 22 aus `AGENTS.md` gelten hier wörtlich; dazu kommt, was sie im

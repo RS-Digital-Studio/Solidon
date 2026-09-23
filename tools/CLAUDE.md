@@ -54,6 +54,7 @@ Fenster- und Arbeiterabbau.
 | `link_memory.py` | Die Erinnerungen ins Repository hängen — einmal je Maschine |
 | `memory_index.py` | Eine Zeile in `MEMORY.md` einfügen — unter Sperre, atomar, mit Nachzählen |
 | `check_message.py` | Der `commit-msg`-Hook: Ersatzschreibung statt Umlaut in einer Commit-Meldung |
+| `check_part_ranges.py` | Der Bereichsnachweis der Bausteine (§24.3): fährt je Baustein den Bereichstest in einem eigenen Prozess und schreibt `data/part_ranges.toml`; `--check` vergleicht nur |
 
 **Die beiden Erinnerungswerkzeuge tun Verschiedenes**, und die Namen sagen es
 nicht von selbst: `link_memory.py` hängt das Verzeichnis einmal je Maschine

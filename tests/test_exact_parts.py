@@ -172,12 +172,18 @@ def test_the_slot_keeps_its_ends_as_true_arcs() -> None:
     assert FACET < mesh.volume / exact.volume < 1.0
 
 
-def test_the_fuzzy_ladders_of_parts_and_rod_carry_the_same_steps() -> None:
-    """Absolut in Millimetern hier, als Anteil der Steigung dort — dieselben Zahlen."""
+def test_the_rod_no_longer_carries_a_fuzzy_ladder() -> None:
+    """RM-195: Der Gewindebolzen entsteht genäht; seine Fuzzy-Leiter ist gefallen.
+
+    Die Zahlen standen noch in ``profiles.ROD_FUZZ_RATIOS``, gelesen nur von
+    einem Test, der sie gegen die Leiter der Bausteine hielt. Eine Konstante,
+    die niemand mehr benutzt, sieht aus wie eine, auf die sich jemand verlässt.
+    """
     from app.core.brep import profiles
     from app.core.knowledge.parts import exact
 
-    assert exact.UNION_FUZZ_MM == profiles.ROD_FUZZ_RATIOS
+    assert not hasattr(profiles, "ROD_FUZZ_RATIOS")
+    assert exact.UNION_FUZZ_MM == (1e-4, 1e-3, 1e-2)
 
 
 def test_a_union_that_leaves_two_bodies_is_refused_with_advice() -> None:
@@ -310,9 +316,11 @@ def test_printed_thread_exact_is_core_and_ridge_without_a_seam(internal: bool) -
     body = _sound(produced.mesh)
     depth = screw.pitch * shapes.RIDGE_SHARE
     diameter = screw.nominal - 2.0 * depth if internal else screw.nominal
-    expected = _thread_volume(diameter, screw.pitch, length, internal=internal)
+    # Das Innengewinde reicht als Werkzeug ein Hundertstel über seine Mündung.
+    built = length + BOOLEAN_OVERLAP if internal else length
+    expected = _thread_volume(diameter, screw.pitch, built, internal=internal)
     assert body.volume == pytest.approx(expected, rel=1e-6)
-    top, bottom = (0.0, -length) if internal else (length, 0.0)
+    top, bottom = (BOOLEAN_OVERLAP, -length) if internal else (length, 0.0)
     assert body.bounds.maximum[2] == pytest.approx(top, abs=1e-6)
     assert body.bounds.minimum[2] == pytest.approx(bottom, abs=1e-6)
     assert body.bounds.maximum[0] == pytest.approx(screw.nominal / 2.0, abs=1e-6)
@@ -554,9 +562,11 @@ def test_a_dowel_bore_exact_lies_under_the_mouth_and_widens_there() -> None:
         math.pi * radius**2 * length
         + _frustum(diameter, diameter + 2.0 * chamfer, chamfer)
         - math.pi * radius**2 * chamfer
+        # Ein Hundertstel über die Mündung, in der Weite der Einführung.
+        + math.pi * (radius + chamfer) ** 2 * BOOLEAN_OVERLAP
     )
     assert tool.volume == pytest.approx(expected, rel=1e-9)
-    assert tool.bounds.maximum[2] == pytest.approx(0.0, abs=1e-9)
+    assert tool.bounds.maximum[2] == pytest.approx(BOOLEAN_OVERLAP, abs=1e-9)
     assert tool.bounds.minimum[2] == pytest.approx(-length, abs=1e-9)
     assert tool.bounds.maximum[0] == pytest.approx(radius + chamfer, abs=1e-9)
     assert "bore_1" in produced.features
@@ -595,8 +605,11 @@ def test_latch_exact_is_the_same_wedge_as_the_mesh() -> None:
     assert mesh.volume == pytest.approx(body.volume, rel=1e-9)
     assert body.bounds.minimum == pytest.approx(mesh.bounds.minimum, abs=1e-9)
     assert body.bounds.maximum == pytest.approx(mesh.bounds.maximum, abs=1e-9)
+    # Die Nase liegt auf ihrer Grundfläche: Höhe entlang -Y, Überstand in Z.
     assert body.bounds.minimum[2] == pytest.approx(0.0, abs=1e-9)
-    assert body.bounds.maximum[2] == pytest.approx(3.0, abs=1e-9)
+    assert body.bounds.maximum[2] == pytest.approx(1.0, abs=1e-9)
+    assert body.bounds.minimum[1] == pytest.approx(-3.0, abs=1e-9)
+    assert body.bounds.maximum[1] == pytest.approx(0.0, abs=1e-9)
     negative = _sound(_built("latch", True, **values, negative=True, play=0.2).mesh)
     assert negative.volume > body.volume
 
@@ -610,7 +623,7 @@ def test_living_hinge_exact_matches_its_analytic_volume() -> None:
     assert _built("living_hinge", False, **values).mesh.volume == pytest.approx(
         body.volume, rel=1e-9
     )
-    assert produced.features["hinge_1"].params["centre"][2] == pytest.approx(0.2)
+    assert produced.features["hinge_1"].params["centre"][2] == pytest.approx(0.4)
     _roundtrip(body)
 
 
@@ -633,14 +646,16 @@ def test_snap_connector_exact_pin_and_bore_match_the_mesh_and_the_analytic_pocke
     run = thickness / math.tan(math.radians(35.0))
     catch = 9.0 - run
     depth = 9.0 + shapes.SEAT_RELIEF
-    expected = (width + play) * across * depth - (width + play) * thickness * catch
+    expected = (width + play) * across * (depth + BOOLEAN_OVERLAP) - (
+        width + play
+    ) * thickness * catch
     assert tool.volume == pytest.approx(expected, rel=1e-9)
-    assert tool.bounds.maximum[2] == pytest.approx(0.0, abs=1e-9)
+    assert tool.bounds.maximum[2] == pytest.approx(BOOLEAN_OVERLAP, abs=1e-9)
     assert "catch_1" in produced.features
     _roundtrip(tool)
 
 
-def test_snap_fit_exact_is_one_side_profile_with_the_hook_on_top() -> None:
+def test_snap_fit_exact_is_one_side_profile_with_the_ramp_at_the_tip() -> None:
     _kernel()
     values = {"width": 8.0, "length": 16.0, "thickness": 1.6, "hook": 1.2, "lead_angle": 35.0}
     produced = _built("snap_fit", True, **values)
@@ -648,13 +663,22 @@ def test_snap_fit_exact_is_one_side_profile_with_the_hook_on_top() -> None:
     hook_height = 1.2 / math.tan(math.radians(35.0))
     arm = max(16.0, 1.6 * 10.0, hook_height)
     half = 0.8
-    points = [(-half, 0.0), (half, 0.0), (half, arm - hook_height), (half + 1.2, arm), (-half, arm)]
+    catch = arm - hook_height
+    points = [
+        (-half, 0.0),
+        (half, 0.0),
+        (half, catch),
+        (half + 1.2, catch),
+        (half, arm),
+        (-half, arm),
+    ]
     assert body.volume == pytest.approx(8.0 * _polygon_area(points), rel=1e-9)
     assert body.bounds.maximum[2] == pytest.approx(arm, abs=1e-9)
     assert body.bounds.maximum[1] == pytest.approx(half + 1.2, abs=1e-9)
     assert body.bounds.minimum[0] == pytest.approx(-4.0, abs=1e-9)
     assert _built("snap_fit", False, **values).mesh.volume == pytest.approx(body.volume, rel=1e-9)
     assert produced.features["hook_1"].params["normal"] == (0.0, 0.0, -1.0)
+    assert produced.features["hook_1"].params["centre"][2] == pytest.approx(catch, abs=1e-9)
     _roundtrip(body)
 
 
@@ -729,11 +753,13 @@ def test_foot_exact_is_one_revolved_outline_with_the_chamfer_at_the_standing_end
     tool = _sound(produced.mesh)
     wide = diameter + 0.2
     lead = min(POCKET_LEAD, height / 2.0)
-    expected = math.pi * (wide / 2.0) ** 2 * (height - lead) + _frustum(
-        wide, wide + 2.0 * lead, lead
+    expected = (
+        math.pi * (wide / 2.0) ** 2 * (height - lead)
+        + _frustum(wide, wide + 2.0 * lead, lead)
+        + math.pi * (wide / 2.0 + lead) ** 2 * BOOLEAN_OVERLAP
     )
     assert tool.volume == pytest.approx(expected, rel=1e-9)
-    assert tool.bounds.maximum[2] == pytest.approx(0.0, abs=1e-9)
+    assert tool.bounds.maximum[2] == pytest.approx(BOOLEAN_OVERLAP, abs=1e-9)
     assert tool.bounds.minimum[2] == pytest.approx(-height, abs=1e-9)
     assert tool.bounds.maximum[0] == pytest.approx(wide / 2.0 + lead, abs=1e-9)
     assert "foot_1" in produced.features
@@ -1374,15 +1400,18 @@ def test_seal_groove_exact_is_a_band_with_round_outer_corners_under_the_mouth() 
     tool = _sound(produced.mesh)
     mesh = _built("seal_groove", False, **values)
     ring = _band_area(20.0, 12.0, 3.0)
-    assert tool.volume == pytest.approx(ring * 2.0, rel=1e-9)
+    assert tool.volume == pytest.approx(ring * (2.0 + BOOLEAN_OVERLAP), rel=1e-9)
     # Außen vier Ebenen und vier Zylinder, innen vier scharfe Ebenen, Mündung und Boden.
     assert tool.face_count == 14
     assert tool.bounds.minimum[2] == pytest.approx(-2.0, abs=1e-9)
-    assert tool.bounds.maximum[2] == pytest.approx(0.0, abs=1e-9)
+    assert tool.bounds.maximum[2] == pytest.approx(BOOLEAN_OVERLAP, abs=1e-9)
     assert tool.bounds.maximum[0] == pytest.approx(11.5, abs=1e-9)
     assert abs(mesh.mesh.volume / tool.volume - 1.0) < 2e-3
     features = produced.features
-    for name, height, sign in (("groove_mouth", 0.0, 1.0), ("groove_floor", -2.0, -1.0)):
+    for name, height, sign in (
+        ("groove_mouth", BOOLEAN_OVERLAP, 1.0),
+        ("groove_floor", -2.0, -1.0),
+    ):
         feature = features[name]
         assert feature.params["area"] == pytest.approx(ring, rel=1e-9)
         assert feature.measure_sources["area"] == "native"
@@ -1559,7 +1588,10 @@ def test_wall_ladder_exact_is_the_box_row_of_the_mesh() -> None:
     assert ladder.volume == pytest.approx(expected, rel=1e-9)
     assert mesh.volume == pytest.approx(expected, rel=1e-9)
     assert ladder.bounds.maximum[2] == pytest.approx(17.0, abs=1e-9)
-    assert produced.features["face_1"].params["centre"] == (0.0, 0.0, 2.0)
+    # Die freie Oberseite des Sockels in der ersten Lücke, nicht unter einer Wand.
+    assert produced.features["face_1"].params["centre"] == pytest.approx(
+        (-width / 2.0 + 0.42 * 3.0, 0.0, 2.0)
+    )
     _roundtrip(ladder)
 
 

@@ -965,132 +965,29 @@ def self_intersecting_faces(
     sagt dazu nichts. `broken_selfint.stl` ist der Fall: zwei Quader, die
     durcheinanderlaufen, jede Kante in Ordnung.
 
-    Gerechnet wird in zwei Stufen, weil die zweite teuer ist:
+    Gerechnet wird in ``geom.intersections``, derselben Rechnung, mit der der
+    Bereichstest eines Bausteins fragt (RM-206): Sweep-and-Prune entlang der
+    günstigsten Achse, dann je Paar als Feld. **Zwei Fälle kamen damit dazu,
+    die der Möller-Trumbore-Test hier nicht sah:** zwei Dreiecke, die in
+    derselben Ebene übereinanderliegen — keine Kante durchstößt dort eine
+    Fläche —, und ein Paar, das sich eine Ecke teilt und trotzdem durch das
+    andere läuft. Nachbarn zählen weiter nicht: Was zwei Dreiecke an Kante
+    oder Ecke teilen, ist Berührung. Verglichen wird über die **Eckpunkte**
+    innerhalb ``EPS_GEOM``, nicht über die Indizes — ein eingelesenes STL
+    trägt dieselbe Ecke oft mehrfach.
 
-    * **Sweep-and-Prune über x.** Die Dreiecke werden nach ihrem kleinsten x
-      sortiert; für jedes kommen nur die in Frage, deren x-Intervall es noch
-      überlappt. Ohne diesen Filter wären es bei 10 000 Dreiecken fünfzig
-      Millionen Paare.
-    * **Segment gegen Dreieck**, für jede der drei Kanten beider Partner
-      (Möller-Trumbore, vektorisiert). Zwei Dreiecke schneiden sich genau
-      dann, wenn eine Kante des einen die Fläche des anderen durchstößt — das
-      ist der Test, der keine Ausnahme kennt.
-
-    **Nachbarn zählen nicht.** Zwei Dreiecke, die sich eine Kante oder eine
-    Ecke teilen, berühren einander per Definition; sie als Durchdringung zu
-    melden hieße, jedes Netz zu markieren. Verglichen wird über die
-    **Eckpunkte**, nicht über die Indizes: Ein eingelesenes STL trägt dieselbe
-    Ecke oft mehrfach, und zwei Dreiecke mit verschiedenen Indizes können
-    dieselbe Kante meinen.
+    Die Suche deckelt sich an :data:`MAX_INTERSECTION_PAIRS` Kandidaten des
+    Sweeps; was sie bis dahin fand, schneidet wirklich.
     """
+    from app.core.geom.intersections import crossing_faces
+
     body = mesh.raw
-    faces = np.asarray(body.faces)
-    if len(faces) < 2:
-        return ()
-    corners = np.asarray(body.vertices, dtype=float)[faces]
-    low, high = corners.min(axis=1), corners.max(axis=1)
-
-    # **Sweep-and-Prune, aber ohne Python-Schleife über die Paare.** Die erste
-    # Fassung lief je Dreieck durch seine Nachbarn und brauchte an einer Kugel
-    # mit 20 480 Dreiecken 5,3 Sekunden — die Karte hat drei (§18.4, §31).
-    # Sortiert man nach dem kleinsten x, ist die Menge der Partner je Dreieck
-    # ein **zusammenhängender Bereich** im sortierten Feld, und den findet
-    # ``searchsorted`` für alle auf einmal.
-    order = np.argsort(low[:, 0], kind="stable")
-    starts = low[order, 0]
-    reach = np.searchsorted(starts, high[order, 0], side="right")
-
-    hit: set[int] = set()
-    counted = 0
-    # Blockweise, damit die Paarliste den Speicher nicht sprengt: 14 Millionen
-    # Paare wären als zwei Indexfelder schon ein Viertel Gigabyte.
-    for begin in range(0, len(order), _SWEEP_BLOCK):
-        # **Zwischen den Blöcken, nicht in der inneren Schleife.** Ein Block
-        # ist ein numpy-Aufruf und kooperativ ohnehin nicht zu unterbrechen —
-        # dieselbe Grenze wie in ``boolean.boolean``.
-        if cancelled is not None:
-            cancelled.raise_if_cancelled()
-        block = np.arange(begin, min(begin + _SWEEP_BLOCK, len(order)))
-        counts = np.maximum(reach[block] - block - 1, 0)
-        if not counts.any():
-            continue
-        left = np.repeat(block, counts)
-        offsets = np.arange(counts.sum()) - np.repeat(np.cumsum(counts) - counts, counts)
-        right = left + 1 + offsets
-        counted += len(left)
-        if counted > MAX_INTERSECTION_PAIRS:
-            _log.info("self-intersection search stopped after %d pairs", counted)
-            break
-        first, second = order[left], order[right]
-        # Die zwei übrigen Achsen, vektorisiert — das schlägt den Großteil weg.
-        apart = np.any(low[second, 1:] > high[first, 1:], axis=1) | np.any(
-            low[first, 1:] > high[second, 1:], axis=1
-        )
-        first, second = first[~apart], second[~apart]
-        # **Und die Paare selbst als Feld, nicht eine je Schleifenrunde.** Die
-        # Schleife über die verbliebenen Paare kostete an der Netzfehlerkarte
-        # 605 ms für 992 und 1,5 s für 9974 Dreiecke (Review, 21.09.2026);
-        # Möller-Trumbore über ``(m, 3, 3)`` rechnet dieselben Ecken zugleich.
-        for start in range(0, len(first), _PAIR_BLOCK):
-            ones = first[start : start + _PAIR_BLOCK]
-            others = second[start : start + _PAIR_BLOCK]
-            one, other = corners[ones], corners[others]
-            candidates = ~_share_a_corner(one, other)
-            if not candidates.any():
-                continue
-            one, other = one[candidates], other[candidates]
-            crossed = _edges_pierce(one, other) | _edges_pierce(other, one)
-            hit.update(int(index) for index in ones[candidates][crossed])
-            hit.update(int(index) for index in others[candidates][crossed])
-    return tuple(sorted(hit))
-
-
-#: Wie viele Dreiecke ein Sweep-Block umfasst. Groß genug, dass numpy die
-#: Paarbildung trägt, klein genug, dass die Indexfelder in den Cache passen.
-_SWEEP_BLOCK: Final = 4096
-
-#: Wie viele Dreieckspaare Möller-Trumbore auf einmal rechnet — die
-#: Zwischenfelder je Paar sind drei Kanten mal drei Koordinaten.
-_PAIR_BLOCK: Final = 65536
-
-
-def _share_a_corner(one: np.ndarray, other: np.ndarray) -> np.ndarray:
-    """Teilen sich die zwei Dreiecke eines Paars eine Ecke? Dann berühren sie
-    einander — je Paar über ``(m, 3, 3)``."""
-    close = np.all(np.isclose(one[:, :, None, :], other[:, None, :, :]), axis=3)
-    return np.any(close, axis=(1, 2))
-
-
-def _edges_pierce(edges_of: np.ndarray, face: np.ndarray) -> np.ndarray:
-    """Möller-Trumbore für die drei Kanten eines Dreiecks gegen ein zweites, je Paar.
-
-    Ein Treffer zählt nur **innerhalb** der Strecke und **innerhalb** des
-    Dreiecks; die Ränder bleiben draußen (``EPS_GEOM``), denn eine Kante, die
-    genau auf einer Fläche endet, berührt sie und läuft nicht hindurch.
-    ``edges_of`` und ``face`` sind ``(m, 3, 3)``; zurück kommt je Paar, ob
-    eine der drei Kanten die Fläche durchstößt.
-    """
-    starts = edges_of
-    directions = np.roll(edges_of, -1, axis=1) - edges_of
-    first, second = face[:, 1] - face[:, 0], face[:, 2] - face[:, 0]
-    normals = np.cross(directions, second[:, None, :])
-    determinants = np.einsum("mij,mj->mi", normals, first)
-    parallel = np.abs(determinants) <= EPS_GEOM
-    safe = np.where(parallel, 1.0, determinants)
-    offsets = starts - face[:, None, 0]
-    u = np.einsum("mij,mij->mi", offsets, normals) / safe
-    crossed = np.cross(offsets, first[:, None, :])
-    v = np.einsum("mij,mij->mi", directions, crossed) / safe
-    t = np.einsum("mij,mj->mi", crossed, second) / safe
-    inside = (
-        ~parallel
-        & (u > EPS_GEOM)
-        & (v > EPS_GEOM)
-        & (u + v < 1.0 - EPS_GEOM)
-        & (t > EPS_GEOM)
-        & (t < 1.0 - EPS_GEOM)
+    found, complete = crossing_faces(
+        body.vertices, body.faces, cancelled, max_pairs=MAX_INTERSECTION_PAIRS
     )
-    return np.any(inside, axis=1)
+    if not complete:
+        _log.info("self-intersection search stopped after %d pairs", MAX_INTERSECTION_PAIRS)
+    return found
 
 
 def resolve_self_intersections(mesh: MeshData) -> tuple[MeshData, bool]:

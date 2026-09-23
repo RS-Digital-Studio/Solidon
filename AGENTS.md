@@ -235,16 +235,15 @@ Dialoge.
 4. `to_scad()` für den Quelltext-Export — **das bleibt.** Es schreibt eine
    Datei und führt nichts aus; mit dem Ausbau von OpenSCAD (26.08.2026) ist
    der *Lauf* verschwunden, nicht das Format
-5. Bereichstest **von Hand**, wenn der Baustein oder seine Grenzen sich
+5. Bereichstest **mit Nachweis**, wenn der Baustein oder seine Grenzen sich
    ändern — wasserdicht, Mindestwandstärke, keine Selbstdurchdringung an den
-   Ecken des Parameterbereichs. Die Prüfung liegt in
-   `knowledge/parts/range_check.py` und läuft über den Rezeptdialog; der Test,
-   der sie bei jedem Lauf über alle 27 Bausteine fuhr, ist am 03.09.2026
-   gefallen (Entscheidung Robert). Er kostete rund eine Minute je Baustein und
-   machte aus einem Torlauf von Minuten einen von einer halben Stunde, und in
-   dieser Zeit schreibt pytest kein Zeichen. **Was bleibt, ist die
-   Prüflogik selbst**: Eckenberechnung, die 2114 kartesischen Grenzen,
-   Wandmessung und Selbstdurchdringung stehen weiter in `test_parts.py`
+   Ecken des Parameterbereichs. `python tools/check_part_ranges.py <name>`
+   fährt ihn (`knowledge/parts/range_check.py`) und schreibt den Nachweis nach
+   `knowledge/data/part_ranges.toml`; die Suite fährt den Bereich nicht, sie
+   vergleicht nur, ob der Nachweis zum Stand jedes Bausteins passt
+   (Entscheidung Robert vom 03.09.2026: kein Bereichslauf im Torlauf). Die
+   Prüflogik selbst — Eckenberechnung, kartesische Grenzen, Wandmessung,
+   Selbstdurchdringung — steht weiter in `test_parts.py`
 6. Normteilmaße aus der Tabelle, nie im Baustein hart eintragen
 7. Vorschaubild wird gerendert, nicht von Hand gepflegt
 8. Bei Maßänderung an einem bestehenden Baustein: `parts_version` erhöhen und

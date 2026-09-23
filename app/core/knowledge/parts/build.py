@@ -91,6 +91,17 @@ def threaded(
     Durchmesser die Bohrung und der Gang wächst nach außen. ``bottom`` ist die
     Höhe des unteren Endes — der exakte Kern baut gleich dort, statt einen
     fertigen Körper zu bewegen.
+
+    **Der Gang beginnt einen Umlauf unter dem unteren Ende**, wie beim exakten
+    Zwilling, und wird erst vom Schnittzylinder auf die Länge gebracht. Bis zum
+    22.09.2026 begann er am Netz genau bei ``bottom``: Oben lief er über die
+    Länge hinaus und wurde abgeschnitten, unten setzte er erst mit seinem
+    Anfang ein. An einem Innengewinde — Mutter, Gewindeloch — stand damit an der
+    unteren Stirnfläche ein Umlauf Material im Gang, und eine gedruckte
+    Schraube kam nicht hindurch: bei M8 und 0,2 mm Spiel überdeckten sich
+    Schraube und Mutter um 2,3 mm³, gleich wie man sie gegeneinander drehte.
+    Mit dem Vorlauf ist der Gang an beiden Stirnflächen offen, und die Phase
+    bleibt dieselbe: Sie hängt an ``bottom`` modulo Steigung.
     """
     from app.core.geom.boolean import BOOLEAN_OVERLAP
     from app.core.knowledge.parts import shapes
@@ -102,7 +113,9 @@ def threaded(
     depth = pitch * shapes.RIDGE_SHARE
     core_diameter = diameter if internal else diameter - 2.0 * depth
     core = shapes.cylinder(core_diameter + 2.0 * BOOLEAN_OVERLAP, length)
-    ridge = shapes.thread_body(diameter, pitch, length, internal=internal)
+    ridge = shapes.moved(
+        shapes.thread_body(diameter, pitch, length + pitch, internal=internal), (0.0, 0.0, -pitch)
+    )
     body = union(core, ridge)
     limit = shapes.cylinder(diameter * 2.0 + 4.0, length)
     body = intersect(body, limit)

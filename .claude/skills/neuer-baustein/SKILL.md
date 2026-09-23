@@ -34,15 +34,17 @@ stimmt es oder es existiert nicht.
 3. Benannte Features zurückgeben: die Provenienz-IDs, an denen Ops und
    Passungen ansetzen
 4. `to_scad()` ergänzen
-5. **Bereichstest von Hand** für den neuen Baustein — `check_part(spec,
-   profile)`: wasserdicht, Mindestwandstärke, keine Selbstdurchdringung an
-   den Grenzen, Features korrekt benannt. An den Rändern bricht Geometrie,
-   nicht in der Mitte. Der Lauf über *alle* Bausteine ist am 03.09.2026
-   gefallen (`.claude/rules/bausteine.md`). Laufzeit und Abdeckung für den
-   konkreten Baustein messen; gültige, ausgeschlossene, abgebrochene und
-   fehlerhafte Fälle im `RangeReport` auseinanderhalten. Eine endliche
-   Grenzprüfung beweist nicht jeden Wert eines kontinuierlichen Bereichs.
-   **Der Testlauf unten führt diesen Bereichslauf nicht aus.**
+5. **Bereichstest mit Nachweis** für den neuen oder geänderten Baustein —
+   `python tools/check_part_ranges.py <name>`: fährt `check_part(spec,
+   profile)` mit dem Bezugsprofil (wasserdicht, Mindestwandstärke, keine
+   Selbstdurchdringung an den Grenzen, Features korrekt benannt) und schreibt
+   `data/part_ranges.toml`. An den Rändern bricht Geometrie, nicht in der
+   Mitte. Jedes Längenmaß braucht beide Grenzen, sonst fährt der Test nur die
+   untere. Gültige, ausgeschlossene, abgebrochene und fehlerhafte Fälle im
+   `RangeReport` auseinanderhalten; eine endliche Grenzprüfung beweist nicht
+   jeden Wert eines kontinuierlichen Bereichs. **Der Testlauf unten fährt
+   den Bereich nicht**, er vergleicht nur den Nachweis mit dem Stand
+   (`test_every_shipped_part_carries_a_current_range_proof`).
 6. Normteilmaße aus der Tabelle, nie hart im Baustein
 7. Vorschaubild über den vorhandenen Weg in
    `app/core/knowledge/parts/preview.py` rendern lassen; `preview` ist kein
@@ -56,7 +58,9 @@ Spiel wird als Parameter aus dem Materialprofil abgeleitet, nicht als feste
 Zugabe versteckt. Ein Paar in Einbaulage prüfen: Schnittvolumen und
 Mindestabstand für Spielpassungen, beabsichtigte Überdeckung für Press- oder
 Schnappverbindungen sowie den Montageweg. Zwei einzeln gültige Körper und
-eine Boolesche Differenz allein belegen keine passende Verbindung.
+eine Boolesche Differenz allein belegen keine passende Verbindung — die
+gedruckte Mutter bestand jeden Einzeltest und ließ bis zum 22.09.2026 keine
+gedruckte Schraube durch.
 
 ## Abschluss
 

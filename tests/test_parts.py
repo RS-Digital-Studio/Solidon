@@ -293,15 +293,17 @@ def test_range_corners_are_the_complete_cartesian_boundary() -> None:
     assert len({tuple(entry.items()) for entry in plan}) == len(plan)
 
 
-def test_the_library_really_has_2546_cartesian_boundaries() -> None:
+def test_the_library_really_has_2666_cartesian_boundaries() -> None:
     """Vollständige Grenzen einschließlich der 120 Organizer-Kombinationen.
 
     Die 312 seit dem 16.09.2026 sind die Klemmschale (32), ihre Einlage (256),
     die Dichtnut (8) und die Dichtung (16) — gezählt je Baustein, nicht aus
-    dem Prüfling abgelesen.
+    dem Prüfling abgelesen. Seit dem 22.09.2026 kommen 120 dazu: Die
+    Klemmschale bietet vier Schraubengrößen statt einer (32 → 128), und der
+    Überhangfächer hat für Breite und Auskraglänge eine Obergrenze (8 → 32).
     """
 
-    assert sum(len(corners(spec)) for spec in PARTS.all()) == 2546
+    assert sum(len(corners(spec)) for spec in PARTS.all()) == 2666
 
 
 def test_a_range_limit_is_checked_before_materialising_combinations(
@@ -397,7 +399,7 @@ def test_self_intersection_is_independent_of_face_order_and_ignores_topological_
 def test_shared_edge_roundoff_in_a_manifold_block_is_not_an_intersection(
     capfd: pytest.CaptureFixture[str],
 ) -> None:
-    """VTKs versetzte Schnittlinie macht eine gemeinsame Kante nicht ungültig."""
+    """Ein Rundungsversatz an einer gemeinsamen Kante macht sie nicht ungültig."""
     spec = PARTS.get("heatset_m4")
     result = spec.fn(spec.params(size="M2", lead_in=True, extra_depth=0.0))
 
@@ -408,7 +410,7 @@ def test_shared_edge_roundoff_in_a_manifold_block_is_not_an_intersection(
 
 
 def test_shared_vertex_roundoff_in_a_manifold_block_is_not_an_intersection() -> None:
-    """Ein versetzter einzelner VTK-Punkt bleibt der gemeinsame Eckkontakt."""
+    """Ein um Rundung versetzter Eckpunkt bleibt der gemeinsame Eckkontakt."""
     spec = PARTS.get("cable_gland")
     result = spec.fn(
         spec.params(
@@ -473,50 +475,11 @@ def test_float32_contact_deduplication_keeps_a_short_real_intersection() -> None
     assert has_self_intersections(SimpleNamespace(raw=mesh))
 
 
-@pytest.mark.parametrize("pointer_style", ["native", "opaque", "null", "error"])
-def test_vectorized_large_mesh_path_matches_analytic_contact_cases(
-    monkeypatch: pytest.MonkeyPatch,
-    pointer_style: str,
-) -> None:
-    """Der skalierbare Pfad trennt Kontakt, Schnitt und Flächenüberdeckung exakt."""
-    from types import SimpleNamespace
-
-    import trimesh
-    from vtkmodules import vtkCommonCore
-
-    from app.core.knowledge.parts import range_check
-
-    instances: list[Any] = []
-    if pointer_style != "native":
-
-        class DifferentPointer(vtkCommonCore.vtkIdList):
-            def __init__(self) -> None:
-                super().__init__()
-                self.pointer_calls = 0
-                self.item_calls = 0
-                instances.append(self)
-
-            def GetPointer(self, index: int) -> Any:  # noqa: N802 - VTK-API
-                self.pointer_calls += 1
-                if pointer_style == "error":
-                    raise RuntimeError("Zeigerzugriff nicht verfügbar")
-                return "_0000000000000000_p_void" if pointer_style == "null" else object()
-
-            def GetId(self, index: int) -> int:  # noqa: N802 - VTK-API
-                self.item_calls += 1
-                return super().GetId(index)
-
-        monkeypatch.setattr(vtkCommonCore, "vtkIdList", DifferentPointer)
-
-    cases = (
+@pytest.mark.parametrize(
+    ("vertices", "faces", "expected"),
+    (
         (
-            (
-                (0.0, 0.0, 0.0),
-                (2.0, 0.0, 0.0),
-                (0.0, 2.0, 0.0),
-                (1.0, 1.0, -1.0),
-                (1.0, 1.0, 1.0),
-            ),
+            ((0.0, 0.0, 0.0), (2.0, 0.0, 0.0), (0.0, 2.0, 0.0), (1.0, 1.0, -1.0), (1.0, 1.0, 1.0)),
             ((0, 1, 2), (0, 3, 4)),
             True,
         ),
@@ -555,20 +518,24 @@ def test_vectorized_large_mesh_path_matches_analytic_contact_cases(
             ((0, 1, 2), (3, 4, 5)),
             False,
         ),
-    )
-    monkeypatch.setattr(range_check, "INTERSECTION_BATCH_FACES", 0)
+    ),
+    ids=("shared-corner-crossing", "shared-corner-apart", "coplanar-overlap", "coplanar-apart"),
+)
+def test_self_intersection_separates_contact_crossing_and_overlap(
+    vertices: tuple[tuple[float, float, float], ...],
+    faces: tuple[tuple[int, int, int], ...],
+    expected: bool,
+) -> None:
+    """Berührung, Schnitt und Flächenüberdeckung, je ein Fall mit und ohne Treffer."""
+    from types import SimpleNamespace
 
-    for vertices, faces, expected in cases:
-        mesh = trimesh.Trimesh(
-            vertices=np.asarray(vertices), faces=np.asarray(faces), process=False
-        )
-        assert has_self_intersections(SimpleNamespace(raw=mesh)) is expected
-    for instance in instances:
-        assert instance.pointer_calls == 1
-        assert instance.item_calls > 0
+    import trimesh
+
+    mesh = trimesh.Trimesh(vertices=np.asarray(vertices), faces=np.asarray(faces), process=False)
+    assert has_self_intersections(SimpleNamespace(raw=mesh)) is expected
 
 
-def test_manifold_thread_union_is_not_a_vtk_self_intersection() -> None:
+def test_manifold_thread_union_is_not_a_self_intersection() -> None:
     """Kern und aufliegender Gewindegang bilden nach der Vereinigung eine Hülle."""
     spec = PARTS.get("printed_thread")
     built = spec.fn(spec.params(size="M2", length=2.0, internal=False, play=0.25)).mesh
@@ -610,7 +577,7 @@ def test_supported_thread_crests_stay_connected_to_their_core_or_shell(size: str
 
 
 def test_self_intersection_result_does_not_depend_on_hook_count_or_position() -> None:
-    """Dieselbe saubere Hakenform bleibt auch in größeren BVH-Blöcken sauber."""
+    """Dieselbe saubere Hakenform bleibt sauber, gleich wie viele Haken und wo."""
     spec = PARTS.get("pegboard_hook")
     variants = (
         {"latch": False, "plate": 0.0, "play": 1.5, "lip": 0.0},
@@ -635,7 +602,7 @@ def test_self_intersection_result_does_not_depend_on_hook_count_or_position() ->
 
 
 def test_coplanar_triangle_overlap_is_a_self_intersection() -> None:
-    """VTKs Linienfilter übersieht Flächenüberdeckung; der Vertrag darf es nicht."""
+    """Ein Schnittlinientest übersieht Flächenüberdeckung; der Vertrag darf es nicht."""
     from types import SimpleNamespace
 
     import trimesh
@@ -688,8 +655,8 @@ def test_self_intersection_ignores_empty_and_degenerate_faces_and_can_cancel() -
     )
 
 
-def test_self_intersection_cancels_before_bvh_partition_work() -> None:
-    """Ein Abbruch vor dem BVH-Aufbau startet weder Teilung noch VTK-Blatt."""
+def test_self_intersection_cancels_before_the_sweep() -> None:
+    """Ein Abbruch vor dem Start sortiert nicht einmal die Hüllquader."""
     from types import SimpleNamespace
 
     import trimesh
@@ -700,13 +667,12 @@ def test_self_intersection_cancels_before_bvh_partition_work() -> None:
             return True
 
     many_faces = SimpleNamespace(raw=trimesh.creation.icosphere(subdivisions=3))
-    with mock.patch("numpy.ptp", side_effect=AssertionError("BVH trotz Abbruch geteilt")):
+    with mock.patch("numpy.argsort", side_effect=AssertionError("Sweep trotz Abbruch")):
         assert not has_self_intersections(many_faces, CancelNow())
 
 
 def test_self_intersection_cancels_on_one_connected_199516_face_body() -> None:
-    """Der Maximalfall baut weder Komponentenmatrix noch ein unteilbares VTK-Blatt."""
-    import sys
+    """Der Maximalfall — ein zusammenhängendes, ebenes Netz — hält beim ersten Abbruch an."""
     from types import SimpleNamespace
 
     import trimesh
@@ -727,224 +693,45 @@ def test_self_intersection_cancels_on_one_connected_199516_face_body() -> None:
     )
     body = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
 
-    class CancelDuringBvh:
+    class CancelAfterOneBlock:
         calls = 0
 
         @property
         def is_cancelled(self) -> bool:
-            if sys._getframe(1).f_code.co_name == "large_mesh_intersects":
-                self.calls += 1
-            return self.calls >= 2
+            self.calls += 1
+            return self.calls >= 3
 
-    token = CancelDuringBvh()
+    token = CancelAfterOneBlock()
     assert len(body.faces) == 199_516
     assert not has_self_intersections(SimpleNamespace(raw=body), token)
-    assert token.calls == 2
+    assert token.calls == 3, "nach dem Abbruch fragt niemand weiter"
 
 
-@pytest.mark.parametrize(
-    ("phase", "caller", "occurrence"),
-    (
-        ("native", "native_groups_intersect", 1),
-        ("sat", "coplanar_groups_overlap", 1),
-        ("hits", "native_groups_intersect", 2),
-        ("traversal", "distinct_nodes", 1),
-    ),
-)
-def test_self_intersection_cancels_in_each_long_bvh_phase(
-    phase: str,
-    caller: str,
-    occurrence: int,
-) -> None:
-    """Nach Indexaufbau bleiben natives Blatt, SAT, Trefferliste und Traversierung abbrechbar."""
+@pytest.mark.parametrize("phase", ["_candidates", "_pairs_that_cross"])
+def test_self_intersection_cancels_in_each_phase(phase: str) -> None:
+    """Kandidatensuche und genaue Prüfung fragen beide nach dem Abbruch und hören darauf."""
     import sys
     from types import SimpleNamespace
 
     import trimesh
 
     class CancelAtPhase:
-        calls = 0
         triggered = False
 
         @property
         def is_cancelled(self) -> bool:
-            if sys._getframe(1).f_code.co_name == caller:
-                self.calls += 1
-                self.triggered = self.calls >= occurrence
+            if sys._getframe(2).f_code.co_name == phase:
+                self.triggered = True
             return self.triggered
 
-    if phase == "sat":
-        raw = trimesh.Trimesh(
-            vertices=np.asarray(
-                (
-                    (0.0, 0.0, 0.0),
-                    (2.0, 0.0, 0.0),
-                    (0.0, 2.0, 0.0),
-                    (1.5, 1.5, 0.0),
-                    (3.5, 1.5, 0.0),
-                    (1.5, 3.5, 0.0),
-                )
-            ),
-            faces=np.asarray(((0, 1, 2), (3, 4, 5))),
-            process=False,
-        )
-    elif phase == "hits":
-        raw = trimesh.Trimesh(
-            vertices=np.asarray(
-                (
-                    (0.0, 0.0, 0.0),
-                    (2.0, 0.0, 0.0),
-                    (0.0, 2.0, 0.0),
-                    (1.0, 1.0, -1.0),
-                    (1.0, 1.0, 1.0),
-                )
-            ),
-            faces=np.asarray(((0, 1, 2), (0, 3, 4))),
-            process=False,
-        )
-    elif phase == "traversal":
-        raw = trimesh.creation.icosphere(subdivisions=3)
-    else:
-        raw = trimesh.creation.box()
-
     token = CancelAtPhase()
-    if phase in {"native", "traversal"}:
-        with mock.patch(
-            "app.core.knowledge.parts.range_check._vtk_poly_data",
-            side_effect=AssertionError("nach Abbruch darf kein natives Blatt starten"),
-        ):
-            assert not has_self_intersections(SimpleNamespace(raw=raw), token)
-    else:
-        assert not has_self_intersections(SimpleNamespace(raw=raw), token)
-    assert token.triggered and token.calls >= occurrence
+    raw = trimesh.creation.icosphere(subdivisions=3)
+    assert not has_self_intersections(SimpleNamespace(raw=raw), token)
+    assert token.triggered
 
 
-@pytest.mark.parametrize(
-    "stage", ["update", "event", "output", "ids", "invalid_id", "contact_cell"]
-)
-def test_self_intersection_releases_native_data_after_vtk_errors(
-    stage: str,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Auch native Fehler halten weder Eingänge noch Schnittausgabe fest."""
-    from types import SimpleNamespace
-
-    import trimesh
-    from vtkmodules import vtkFiltersModeling
-
-    from app.core.errors import CANCEL, REPAIR_AND_RETRY, GeometryError
-    from app.core.knowledge.parts import range_check
-
-    class FakeData:
-        initialized = False
-
-        def Initialize(self) -> None:  # noqa: N802 - bildet die VTK-API nach
-            self.initialized = True
-
-    class FakeLines(FakeData):
-        def GetNumberOfCells(self) -> int:  # noqa: N802 - bildet die VTK-API nach
-            return 1
-
-        def GetCell(self, _index: int) -> Any:  # noqa: N802 - bildet die VTK-API nach
-            class PointContact:
-                def GetNumberOfPoints(self) -> int:  # noqa: N802 - bildet die VTK-API nach
-                    return 1
-
-            return PointContact()
-
-    class BrokenCollision:
-        removed = False
-        error_callback: Any = None
-        cell_tolerance: float | None = None
-
-        def SetInputData(  # noqa: N802 - bildet die VTK-API nach
-            self, _index: int, _data: FakeData
-        ) -> None:
-            return None
-
-        def SetMatrix(self, _index: int, _matrix: Any) -> None:  # noqa: N802
-            return None
-
-        def SetCollisionModeToAllContacts(self) -> None:  # noqa: N802
-            return None
-
-        def SetBoxTolerance(self, _value: float) -> None:  # noqa: N802
-            return None
-
-        def SetCellTolerance(self, value: float) -> None:  # noqa: N802
-            self.cell_tolerance = value
-
-        def AddObserver(self, _event: str, callback: Any) -> None:  # noqa: N802
-            self.error_callback = callback
-
-        def Update(self) -> None:  # noqa: N802 - bildet die VTK-API nach
-            if stage == "update":
-                raise RuntimeError("VTK-Update abgebrochen")
-            if stage == "event":
-                self.error_callback(self, "ErrorEvent", "VTK-Fehlerereignis")
-
-        def GetErrorCode(self) -> int:  # noqa: N802 - bildet die VTK-API nach
-            return 1 if stage == "output" else 0
-
-        def GetContactsOutput(self) -> FakeLines:  # noqa: N802 - bildet die VTK-API nach
-            return lines
-
-        def GetNumberOfContacts(self) -> int:  # noqa: N802 - bildet die VTK-API nach
-            return 1
-
-        def GetContactCells(self, _index: int) -> None:  # noqa: N802
-            if stage == "ids":
-                raise RuntimeError("Treffer-IDs fehlen")
-            return None
-
-        def RemoveAllInputs(self) -> None:  # noqa: N802 - bildet die VTK-API nach
-            self.removed = True
-
-    made: list[FakeData] = []
-    lines = FakeLines()
-    collision = BrokenCollision()
-
-    def fake_data(_vertices: Any, _faces: Any) -> FakeData:
-        data = FakeData()
-        made.append(data)
-        return data
-
-    monkeypatch.setattr(range_check, "_vtk_poly_data", fake_data)
-    monkeypatch.setattr(vtkFiltersModeling, "vtkCollisionDetectionFilter", lambda: collision)
-    if stage in {"invalid_id", "contact_cell"}:
-        monkeypatch.setattr(
-            "vtkmodules.util.numpy_support.vtk_to_numpy",
-            lambda _values: np.asarray([-1 if stage == "invalid_id" else 0]),
-        )
-    mesh = trimesh.Trimesh(
-        vertices=np.asarray(((0.0, 0.0, 0.0), (2.0, 0.0, 0.0), (0.0, 2.0, 0.0))),
-        faces=np.asarray(((0, 1, 2), (0, 2, 1))),
-        process=False,
-    )
-
-    causes = {
-        "update": "VTK-Update abgebrochen",
-        "event": "VTK-Fehlerereignis",
-        "output": "unvollständige Ausgabe",
-        "ids": "Treffer-IDs fehlen",
-        "invalid_id": "ungültige Face-ID",
-        "contact_cell": "keine eindeutige Kontaktstrecke",
-    }
-    with pytest.raises(GeometryError) as caught:
-        has_self_intersections(SimpleNamespace(raw=mesh))
-
-    assert caught.value.suggestions == (REPAIR_AND_RETRY, CANCEL)
-    assert isinstance(caught.value.__cause__, RuntimeError)
-    assert causes[stage] in str(caught.value.__cause__)
-    assert str(caught.value.title) and str(caught.value.detail)
-    assert collision.removed
-    assert collision.cell_tolerance == 0.0
-    assert len(made) == 2 and all(data.initialized for data in made)
-    assert lines.initialized == (stage in {"ids", "invalid_id", "contact_cell"})
-
-
-def test_self_intersection_crosses_a_bvh_split_above_512_faces() -> None:
-    """Das erste Paar über der Blattgrenze darf nicht zwischen den Hälften verschwinden."""
+def test_self_intersection_finds_a_pair_whose_boxes_only_touch_on_one_axis() -> None:
+    """Zwei Dreiecke derselben Ebene zwischen 512 fernen: Ihre Hüllen haben die Dicke null."""
     from types import SimpleNamespace
 
     import trimesh
@@ -961,10 +748,10 @@ def test_self_intersection_crosses_a_bvh_split_above_512_faces() -> None:
         x = -1000.0 - index
         add_triangle(((x, 100.0, 0.0), (x + 0.1, 100.0, 0.0), (x, 100.1, 0.0)))
     add_triangle(((-2.0, -2.0, 0.0), (2.0, -2.0, 0.0), (-0.3, 4.0, 0.0)))
-    # Beide Zielkörper liegen koplanar auf z=0. Ihre AABBs **berühren** sich
-    # auf dieser Achse und überdecken sich trotzdem positiv. Wird der exakte
-    # Disjunktheitstest von ``<`` zu ``<=`` mutiert, verschwindet genau dieses
-    # Paar an der Root-Grenze.
+    # Beide Zielkörper liegen koplanar auf z=0. Ihre Hüllquader **berühren**
+    # sich auf dieser Achse und überdecken sich trotzdem positiv. Wird der
+    # Filter der Kandidaten von ``>`` zu ``>=`` mutiert, verschwindet genau
+    # dieses Paar.
     add_triangle(((-0.5, -0.5, 0.0), (2.5, -0.5, 0.0), (-1.7, 3.0, 0.0)))
     for index in range(256):
         x = 1000.0 + index
@@ -976,15 +763,15 @@ def test_self_intersection_crosses_a_bvh_split_above_512_faces() -> None:
     assert has_self_intersections(SimpleNamespace(raw=mesh))
 
 
-def test_self_intersection_skips_native_work_without_any_aabb_pair(
+def test_self_intersection_skips_the_pair_check_without_any_aabb_pair(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Ein leeres exaktes Kandidatenfeld endet vor dem nativen Filter."""
+    """Ohne überdeckende Hüllquader rechnet die genaue Prüfung kein einziges Paar."""
     from types import SimpleNamespace
 
     import trimesh
 
-    from app.core.knowledge.parts import range_check
+    from app.core.geom import intersections
 
     face_count = 512
     x = np.arange(face_count, dtype=float) * 2.0
@@ -998,25 +785,28 @@ def test_self_intersection_skips_native_work_without_any_aabb_pair(
         process=False,
     )
 
-    def unexpected_native_work(_vertices: Any, _faces: Any) -> Any:
-        raise AssertionError("disjunkte AABBs dürfen VTK nicht erreichen")
+    def unexpected_pair_work(*_args: Any) -> Any:
+        raise AssertionError("getrennte Hüllquader dürfen die Paarprüfung nicht erreichen")
 
-    monkeypatch.setattr(range_check, "_vtk_poly_data", unexpected_native_work)
+    monkeypatch.setattr(intersections, "crossing_pairs", unexpected_pair_work)
 
     assert not has_self_intersections(SimpleNamespace(raw=mesh))
 
 
-def test_self_intersection_bvh_follows_a_helix_on_every_axis(
-    monkeypatch: pytest.MonkeyPatch,
-    capfd: pytest.CaptureFixture[str],
-) -> None:
-    """Die BVH teilt die längste Raumachse, nicht eine feste Koordinate."""
+def test_self_intersection_sweeps_along_a_helix_on_every_axis() -> None:
+    """Der Sweep läuft entlang der Achse der Wendel, gleich wie sie liegt.
+
+    Entlang einer Querachse gezählt träfe jeder Umlauf jeden anderen — eine
+    Wendel ist quer zu ihrer Achse rund. Dieselbe Form bekommt deshalb in allen
+    drei Lagen dieselbe Zahl Kandidaten, und der Hindernisquader, der durch
+    sie läuft, wird gefunden.
+    """
     import math
     from types import SimpleNamespace
 
     import trimesh
 
-    from app.core.knowledge.parts import range_check
+    from app.core.geom import intersections
 
     def helix(axis: int) -> trimesh.Trimesh:
         turns = np.linspace(0.0, 8.0 * np.pi, 256)
@@ -1058,22 +848,18 @@ def test_self_intersection_bvh_follows_a_helix_on_every_axis(
             mesh.faces = mesh.faces[::-1]
         return mesh
 
-    native_calls = 0
-    original = range_check._vtk_poly_data
-
-    def counted(*args: Any) -> Any:
-        nonlocal native_calls
-        native_calls += 1
-        return original(*args)
-
-    monkeypatch.setattr(range_check, "_vtk_poly_data", counted)
+    counts = []
     for axis in range(3):
         mesh = helix(axis)
-        before = native_calls
+        surface = intersections._surface(mesh.vertices, mesh.faces)
+        assert surface is not None
+        search = intersections._Search()
+        counts.append(
+            sum(len(first) for first, _second in intersections._candidates(surface, None, search))
+        )
         assert not has_self_intersections(SimpleNamespace(raw=mesh))
-        calls = (native_calls - before) // 2
-        blocks = math.ceil(len(mesh.faces) / range_check.INTERSECTION_BATCH_FACES)
-        assert calls < blocks * (blocks + 1) // 2 * 0.75
+    assert counts[0] == counts[1] == counts[2]
+    assert counts[0] < math.comb(len(helix(2).faces), 2) * 0.01
 
     crossing = helix(2)
     obstacle = trimesh.creation.box(extents=(2.0, 2.0, 2.0))
@@ -1081,8 +867,6 @@ def test_self_intersection_bvh_follows_a_helix_on_every_axis(
     assert has_self_intersections(
         SimpleNamespace(raw=trimesh.util.concatenate([crossing, obstacle]))
     )
-    captured = capfd.readouterr()
-    assert "WARN|" not in captured.err
 
 
 def test_features_are_checked_at_the_boundary_where_they_disappear(profile: Profile) -> None:
@@ -1273,6 +1057,56 @@ def test_the_smallest_snap_fit_hook_protrudes_without_intersecting_its_arm() -> 
         values.thickness / 2.0 + values.hook / 2.0,
         abs=EPS_DISPLAY,
     )
+
+
+def test_a_snap_fit_hook_ramps_at_the_tip_and_catches_towards_the_root() -> None:
+    """Das Gegenstück kommt von der Spitze: Dort beginnt die Schräge, darunter hält es.
+
+    Gemessen am Querschnitt knapp unter der Spitze und knapp über der
+    Haltefläche: Oben steht der Haken kaum über den Arm hinaus, unten um den
+    vollen Überstand — und die benannte Hakenfläche liegt dort, wo er endet.
+    Bis zum 22.09.2026 war es umgekehrt.
+    """
+    import math
+
+    spec = PARTS.get("snap_fit")
+    values = spec.params(width=8.0, length=16.0, thickness=1.6, hook=1.2, lead_angle=35.0)
+    built = spec.fn(values)
+    hook_height = values.hook / math.tan(math.radians(values.lead_angle))
+    catch = 16.0 - hook_height
+
+    def reach(z: float) -> float:
+        section = built.mesh.raw.section(plane_origin=(0.0, 0.0, z), plane_normal=(0, 0, 1))
+        assert section is not None
+        return float(section.vertices[:, 1].max())
+
+    assert reach(16.0 - 0.01) < values.thickness / 2.0 + 0.05, "Spitze: kaum Überstand"
+    assert reach(catch + 0.01) == pytest.approx(values.thickness / 2.0 + values.hook, abs=0.02)
+    assert reach(catch - 0.01) == pytest.approx(values.thickness / 2.0, abs=1e-6)
+    assert built.features["hook_1"].params["centre"][2] == pytest.approx(catch)
+
+
+@pytest.mark.parametrize("kind", ["pin", "bore"])
+def test_a_dowel_chamfer_never_changes_its_length_or_foot(kind: str) -> None:
+    """Eine Fase länger als der Stift verkürzt ihn nicht und bohrt nicht tiefer.
+
+    Gemessen an der Ecke Ø 30, Länge 1, Fase 3: Bis zum 22.09.2026 maß der Fuß
+    des Stifts Ø 26 statt 30, und die Bohrung reichte drei Millimeter tief.
+    """
+    spec = PARTS.get("dowel")
+    values = spec.params(diameter=30.0, length=1.0, chamfer=3.0, kind=kind, play=0.2)
+    mesh = spec.fn(values).mesh
+    diameter = 30.0 if kind == "pin" else 30.2
+
+    if kind == "pin":
+        assert mesh.bounds.minimum[2] == pytest.approx(0.0, abs=1e-6)
+        foot = mesh.raw.section(plane_origin=(0.0, 0.0, 0.001), plane_normal=(0, 0, 1))
+    else:
+        assert mesh.bounds.minimum[2] == pytest.approx(-1.0, abs=1e-6), "so tief wie verlangt"
+        foot = mesh.raw.section(plane_origin=(0.0, 0.0, -0.999), plane_normal=(0, 0, 1))
+    assert foot is not None
+    reach = float(np.hypot(foot.vertices[:, 0], foot.vertices[:, 1]).max())
+    assert 2.0 * reach == pytest.approx(diameter, abs=0.05)
 
 
 def test_a_flat_large_snap_fit_hook_extends_the_arm_instead_of_crossing_its_base() -> None:
@@ -1848,6 +1682,70 @@ def test_a_subtractive_part_reaches_into_the_material(
     assert cut.mesh.volume < plate.volume - 1.0, (
         f"{direction_ids(pair)} trägt an der angeklickten Fläche nichts ab"
     )
+
+
+@pytest.mark.parametrize("pair", SUBTRACTIVE, ids=direction_ids)
+def test_a_subtractive_part_reaches_past_its_mouth(pair: tuple[PartSpec, BaseParams]) -> None:
+    """Ein Werkzeug endet nicht in der Fläche, die es schneidet (§39).
+
+    ``ops._insert_at`` senkt abtragende Bausteine nicht ein, weil ihr
+    Werkzeug „ohnehin über die Fläche hinausreicht" — bis zum 22.09.2026
+    stimmte das für fünf nicht: Passbohrung, Fußtasche (ihr Änderungsverlauf
+    versprach es seit Version 2), Innengewinde, Rasttasche und Dichtnut
+    endeten genau bei z = 0.
+    """
+    from app.core.geom.boolean import BOOLEAN_OVERLAP
+
+    spec, values = pair
+    mesh = spec.fn(values).mesh
+    assert float(mesh.bounds.maximum[2]) >= BOOLEAN_OVERLAP - 1e-9, direction_ids(pair)
+
+
+@pytest.mark.parametrize("spec", PARTS.all(), ids=ids)
+def test_a_named_face_lies_on_the_face_it_names(spec: PartSpec, profile: Profile) -> None:
+    """Die Mitte einer benannten Fläche liegt auf ihr, und die Normale stimmt.
+
+    Ein Merkmal ist eine Zusage an den nächsten Schritt (§24.1). Bis zum
+    22.09.2026 lagen sechs daneben: Rippe und Nutfeder nannten einen Punkt
+    im Material, Wandhalter und Scharnier einen in der Mitte der Platte, die
+    Wandleiter einen unter einer Wand, der Schnappverbinder einen in der
+    Mitte seines Arms. Geprüft werden die Flächen, die ein Baustein aus seinen
+    Maßen erklärt; wer Dreiecke mitbringt (``face_indices``), benennt eine
+    gemessene Fläche, deren Schwerpunkt bei einem Ring in der Öffnung liegt.
+    An einem Werkzeug ist die Fläche die des Trägers und schaut in das
+    Werkzeug hinein.
+    """
+    import math
+
+    import trimesh
+
+    values = {"play": profile.material.clearance} if "play" in _names(spec) else {}
+    built = spec.fn(spec.params(**values))
+    mesh = built.mesh.raw
+    tool = part_ops.cuts(spec, spec.params(**values))
+    for name, feature in built.features.items():
+        if feature.kind != "face" or feature.face_indices:
+            continue
+        centre = np.asarray(feature.params["centre"], dtype=float)
+        nearest = trimesh.triangles.closest_point(
+            mesh.triangles, np.repeat(centre[None, :], len(mesh.triangles), axis=0)
+        )
+        distance = np.linalg.norm(nearest - centre, axis=1)
+        assert float(distance.min()) <= 1e-6, f"{spec.name}.{name}: {distance.min():.4f} mm daneben"
+        touching = distance <= 1e-6
+        normal = np.asarray(feature.params["normal"], dtype=float)
+        agreement = mesh.face_normals[touching] @ normal
+        expected = -1.0 if tool else 1.0
+        # Eine Rundung ist am Netz ein Vieleck: Die Facette neben dem Punkt darf
+        # um eine halbe Segmentbreite geneigt sein.
+        facet = 1.0 - math.cos(math.pi / shapes.SEGMENTS) + 1e-6
+        assert np.any(np.isclose(agreement, expected, atol=facet)), (
+            f"{spec.name}.{name}: keine anliegende Fläche schaut nach {tuple(normal)}"
+        )
+
+
+def _names(spec: PartSpec) -> set[str]:
+    return {entry.name for entry in spec.params.spec()}
 
 
 # --- was die drei Neuen versprechen -------------------------------------------------
@@ -3298,8 +3196,9 @@ def test_an_added_part_has_the_component_count_it_declares(
 def test_the_part_keeps_the_size_it_promises(profile: Profile) -> None:
     """Eingesenkt wird um den Überlappungswert, nicht um einen Millimeter.
 
-    Die Nase steht 3 mm hoch über der Fläche; was im Körper verschwindet, ist
-    ein Hundertstel und liegt unter dem, was die Anzeige unterscheidet.
+    Die Nase steht mit ihrem Überstand von 3 mm über der Fläche; was im Körper
+    verschwindet, ist ein Hundertstel und liegt unter dem, was die Anzeige
+    unterscheidet.
     """
     project = new_project("centauri-carbon-2", "petg")
     History(project.document).apply("Quader", [OperationDraft(op="create_box", params={})])
@@ -3309,7 +3208,7 @@ def test_the_part_keeps_the_size_it_promises(profile: Profile) -> None:
             OperationDraft(
                 op="insert_latch",
                 inputs=("obj_1",),
-                params={"at_feature": "face_top", "height": 3.0},
+                params={"at_feature": "face_top", "depth": 3.0},
             )
         ],
     )
@@ -3329,14 +3228,14 @@ def test_a_part_on_a_side_wall_grows_into_that_wall(profile: Profile) -> None:
     Kunden war das der häufigste Handgriff überhaupt: Man zeigt auf eine Wand,
     und was man bekommt, steckt in der Decke.
 
-    **Gemessen wird über zwei Höhen, und das ist keine Umständlichkeit.** Bei
-    3 mm Höhe stimmt die Zahl auch im falschen Zustand: Die Nase ist 6 mm
+    **Gemessen wird über zwei Überstände, und das ist keine Umständlichkeit.**
+    Bei 3 mm stimmt die Zahl auch im falschen Zustand: Die Nase ist 6 mm
     breit, eine senkrecht stehende reicht also 3 mm nach -X — dieselbe Zahl,
-    aus der Breite statt aus der Höhe. Ein Test, der nur diesen einen Wert
-    prüft, ist grün und beweist nichts. Erst wenn der Ausschlag mit der Höhe
-    **mitwächst**, misst er die Richtung.
+    aus der Breite statt aus dem Überstand. Ein Test, der nur diesen einen Wert
+    prüft, ist grün und beweist nichts. Erst wenn der Ausschlag mit dem
+    Überstand **mitwächst**, misst er die Richtung.
     """
-    for height, expected in ((3.0, -23.0), (8.0, -28.0)):
+    for depth, expected in ((3.0, -23.0), (5.0, -25.0)):
         project = new_project("centauri-carbon-2", "petg")
         History(project.document).apply("Quader", [OperationDraft(op="create_box", params={})])
         History(project.document).apply(
@@ -3346,7 +3245,7 @@ def test_a_part_on_a_side_wall_grows_into_that_wall(profile: Profile) -> None:
                     op="insert_latch",
                     inputs=("obj_1",),
                     # face_5 schaut nach -X; der Quader steht dort bei x = -20.
-                    params={"at_feature": "face_5", "height": height},
+                    params={"at_feature": "face_5", "depth": depth},
                 )
             ],
         )
@@ -3355,8 +3254,58 @@ def test_a_part_on_a_side_wall_grows_into_that_wall(profile: Profile) -> None:
 
         assert result.complete, [f.message for f in result.scene.report.findings]
         bounds = result.scene.objects["obj_1"].mesh.bounds
-        assert bounds.minimum[0] == pytest.approx(expected, abs=0.02), f"height {height}"
+        assert bounds.minimum[0] == pytest.approx(expected, abs=0.02), f"depth {depth}"
         assert bounds.maximum[2] == pytest.approx(10.0, abs=0.02), "und nichts nach oben"
+
+
+def test_a_latch_rests_on_its_base_with_the_ramp_on_top(profile: Profile) -> None:
+    """Die Rastnase liegt mit ihrer ganzen Grundfläche an der Wand, die Schräge oben.
+
+    Bis zum 22.09.2026 stand sie auf ihrer Spitze: Einen halben Hundertstel
+    vor der Wand maß ihr Querschnitt 0,03 mm² statt Breite mal Höhe, und als
+    Aussparung wuchs sie aus der Wand heraus (+12,3 mm³), statt eine Tasche zu
+    schneiden. Geprüft wird an einer senkrechten Wand, denn nur dort hat die
+    Nase ein Oben.
+    """
+    width, height, depth = 6.0, 3.0, 1.0
+    volumes = {}
+    for negative in (False, True):
+        project = new_project("centauri-carbon-2", "petg")
+        History(project.document).apply("Quader", [OperationDraft(op="create_box", params={})])
+        before = evaluate(project.document, profile, sources=ProjectSources(project))
+        History(project.document).apply(
+            "Nase",
+            [
+                OperationDraft(
+                    op="insert_latch",
+                    inputs=("obj_1",),
+                    params={"at_feature": "face_5", "negative": negative},
+                )
+            ],
+        )
+        result = evaluate(project.document, profile, sources=ProjectSources(project))
+        assert result.complete, [f.message for f in result.scene.report.findings]
+        mesh = result.scene.objects["obj_1"].mesh
+        volumes[negative] = mesh.volume - before.scene.objects["obj_1"].mesh.volume
+        if negative:
+            continue
+        # face_5 schaut nach -X und steht bei x = -20.
+        touching = mesh.raw.section(plane_origin=(-20.005, 0.0, 0.0), plane_normal=(1, 0, 0))
+        assert touching is not None
+        contact = touching.to_2D()[0]
+        assert contact.area == pytest.approx(width * height, rel=0.02), "die Nase liegt voll auf"
+        assert mesh.bounds.minimum[0] == pytest.approx(-20.0 - depth, abs=0.02)
+        # Ganz draußen ist nur die Haltefläche: Sie liegt unten, die Schräge
+        # läuft darüber zur Wand zurück.
+        tip = mesh.raw.section(plane_origin=(-20.9, 0.0, 0.0), plane_normal=(1, 0, 0))
+        assert tip is not None
+        z_tip = tip.vertices[:, 2]
+        z_base = touching.vertices[:, 2]
+        assert z_tip.min() == pytest.approx(z_base.min(), abs=0.02), "Haltefläche unten"
+        assert z_tip.max() < z_base.max() - 2.0, "die Schräge läuft oben zur Wand zurück"
+
+    assert volumes[False] == pytest.approx(width * height * depth / 2.0, rel=0.02)
+    assert volumes[True] < -width * height * depth / 2.0, "die Aussparung trägt mehr ab"
 
 
 def test_a_bore_in_a_side_wall_runs_through_that_wall(profile: Profile) -> None:
@@ -3667,6 +3616,69 @@ def test_printed_nut_has_the_matching_internal_thread() -> None:
     assert external.params["diameter"] == internal.params["diameter"] == 5.0
     assert external.params["pitch"] == internal.params["pitch"]
     assert not external.params["internal"] and internal.params["internal"]
+
+
+@pytest.mark.parametrize("size", ["M3", "M5", "M8"])
+def test_a_printed_screw_turns_through_its_printed_nut(size: str, profile: Profile) -> None:
+    """Schraube und Mutter überdecken sich an keiner Stelle ihres Wegs.
+
+    Ein Gewindepaar wird an der Differenz geprüft, nicht daran, dass beide
+    Hälften für sich sauber sind. Die Mutter wird dafür in Phase mit dem Gang
+    der Schraube gesetzt — beide Gänge beginnen an ihrem unteren Ende bei
+    Winkel null — und über die ganze Gewindelänge geschoben, vom Eintritt an der
+    Spitze bis unter den Kopf. Bis zum 22.09.2026 fehlte dem Netzgewinde der
+    Gang unter seinem ersten Umlauf: An der Unterseite der Mutter stand
+    Material im Gang, bei M8 und 0,2 mm Spiel 2,3 mm³ Überdeckung.
+    """
+    from app.core.geom.boolean import BOOLEAN_OVERLAP
+    from app.core.units import EPS_GEOM
+
+    play = profile.material.clearance
+    pitch = standards.screw(size).pitch
+    screw_spec, nut_spec = PARTS.get("printed_screw"), PARTS.get("printed_nut")
+    length = 12.0
+    screw = screw_spec.fn(
+        screw_spec.params(size=size, length=length, countersunk=False, play=play)
+    ).mesh
+    nut = nut_spec.fn(nut_spec.params(size=size, play=play)).mesh
+    # Der Gang der Schraube beginnt bei -length + OVERLAP, der der Mutter bei
+    # -OVERLAP: Um die Differenz verschoben laufen beide in Phase.
+    start = -length + 2.0 * BOOLEAN_OVERLAP
+    height = standards.nut(size).height
+    turns = int((length - height) // pitch)
+    for turn in (0, turns // 2, turns):
+        placed = nut.raw.copy()
+        placed.apply_translation((0.0, 0.0, start + turn * pitch))
+        overlap = boolean("intersection", [screw, MeshData.of(placed)], allow_empty=True)
+        tolerance = EPS_GEOM * (screw.raw.area + placed.area)
+        assert overlap.mesh.volume <= tolerance, f"{size}, Umlauf {turn}: {overlap.mesh.volume}"
+
+
+def test_an_external_thread_turns_into_the_internal_thread_of_the_same_size(
+    profile: Profile,
+) -> None:
+    """Gewindebolzen und Gewindeloch derselben Größe: Luft über die ganze Länge.
+
+    Der Bolzen ist doppelt so lang wie das Loch und läuft unten hinaus — genau
+    dort stand bis zum 22.09.2026 der letzte Umlauf Material im Gang.
+    """
+    from app.core.knowledge.parts.build import subtract
+    from app.core.units import EPS_GEOM
+
+    spec = PARTS.get("printed_thread")
+    play = profile.material.clearance
+    length = 10.0
+    bolt = spec.fn(spec.params(size="M6", length=2.0 * length, internal=False, play=play)).mesh
+    tool = spec.fn(spec.params(size="M6", length=length, internal=True, play=play)).mesh
+    plate = shapes.moved(shapes.box(20.0, 20.0, length), (0.0, 0.0, -length))
+    hole = subtract(plate, tool)
+    # Das Loch reicht von -length bis null, sein Gang beginnt unten; der Bolzen
+    # beginnt eine ganze Zahl von Steigungen darunter und läuft damit in Phase.
+    placed = bolt.raw.copy()
+    placed.apply_translation((0.0, 0.0, -2.0 * length))
+    overlap = boolean("intersection", [hole, MeshData.of(placed)], allow_empty=True)
+
+    assert overlap.mesh.volume <= EPS_GEOM * (hole.raw.area + placed.area)
 
 
 @pytest.mark.parametrize("size", ["M2", "M3", "M6", "M8"])
@@ -5847,3 +5859,90 @@ def test_only_a_part_step_answers_for_its_features() -> None:
     assert REGISTRY.get("insert_keyhole").category == "parts"
     assert REGISTRY.get("drill_hole").category != "parts"
     assert REGISTRY.get("create_box").category != "parts"
+
+
+def test_every_shipped_part_carries_a_current_range_proof() -> None:
+    """Jeder mitgelieferte Baustein hat einen Bereichsnachweis, der zu seinem Stand passt.
+
+    §24.3 nennt einen Baustein ohne diesen Nachweis „nicht abgenommen", und die
+    Website verspricht ihn. Der Lauf selbst ist zu lang für die Suite; dieser
+    Test rechnet nichts, er vergleicht den eingecheckten Nachweis
+    (``data/part_ranges.toml``) mit dem Abdruck jedes Bausteins. Wird er rot,
+    hat sich ein Baustein, seine Form oder seine Prüfung geändert — dann den
+    Lauf wiederholen: ``python tools/check_part_ranges.py``.
+    """
+    from app.core.knowledge.parts import range_proof
+
+    profile = range_proof.reference_profile()
+    proofs = range_proof.load()
+    states = {
+        spec.name: range_proof.status(spec, profile, proofs)
+        for spec in PARTS.all()
+        if spec.source == "shipped"
+    }
+    wrong = {name: state for name, state in states.items() if state != "proven"}
+    assert not wrong, (
+        f"Bereichsnachweis passt nicht: {wrong} — python tools/check_part_ranges.py "
+        + " ".join(sorted(wrong))
+    )
+    assert set(proofs) == set(states), "Einträge ohne Baustein im Nachweis"
+
+
+@pytest.mark.parametrize("size", ["M2", "M8"])
+def test_a_keyhole_with_the_longest_drop_does_not_cross_itself(size: str) -> None:
+    """Der Kopfkanal und sein Einstieg lagen in der Kopfzone aufeinander.
+
+    Das runde Ende des Kanals hat dieselbe Achse und denselben Durchmesser wie
+    der Einstieg. Reichten beide bis zum Boden, rundete bei 60 mm Einhängeweg
+    die Kanalmitte um ein Haar neben die Achse, und die Vereinigung ließ
+    Dreiecke zurück, die einander außerhalb ihrer Kanten berührten: 21 Ecken
+    des Bereichstests brachen, mit der alten Prüfung wie mit der neuen.
+    """
+    spec = PARTS.get("keyhole")
+    for play in (0.2, 2.0):
+        for depth, head_room in ((1.0, 0.5), (40.0, 20.0)):
+            values = spec.params(size=size, drop=60.0, depth=depth, head_room=head_room, play=play)
+            mesh = spec.fn(values).mesh
+            assert mesh.is_watertight and mesh.component_count == 1
+            assert not has_self_intersections(mesh), f"{size}, Tiefe {depth}, Spiel {play}"
+
+
+def test_a_placed_part_tool_is_where_its_step_cuts_and_knows_when_it_misses(
+    profile: Profile,
+) -> None:
+    """Der Geist beim Zug an einem Baustein ist der ganze Baustein (RM-174, Kernanteil).
+
+    ``placed_tool`` baut das Werkzeug mit der Lage der Operation: Vom Quader
+    abgezogen ergibt es genau das Ergebnis des Schritts. Verschoben landet es
+    daneben, und ``lands_on`` sagt es, bevor jemand loslässt.
+    """
+    from dataclasses import replace
+
+    from app.core.registry import validate
+
+    project = new_project("centauri-carbon-2", "petg")
+    History(project.document).apply("Quader", [OperationDraft(op="create_box", params={})])
+    before = evaluate(project.document, profile, sources=ProjectSources(project))
+    box = before.scene.objects["obj_1"]
+    History(project.document).apply(
+        "Loch",
+        [
+            OperationDraft(
+                op="insert_screw_hole", inputs=("obj_1",), params={"at_feature": "face_top"}
+            )
+        ],
+    )
+    after = evaluate(project.document, profile, sources=ProjectSources(project))
+    spec = PARTS.get("screw_hole")
+    params = validate(REGISTRY.get("insert_screw_hole").params, project.document.ops[-1].params)
+
+    tool = part_ops.placed_tool(box, spec, params, profile)
+    cut = boolean("difference", [box.mesh, tool])
+    assert cut.mesh.volume == pytest.approx(after.scene.objects["obj_1"].mesh.volume, rel=1e-9)
+    assert part_ops.lands_on(box.mesh, tool)
+
+    beside = part_ops.placed_tool(box, spec, replace(params, x=100.0), profile)
+    assert float(beside.bounds.minimum[0]) == pytest.approx(
+        float(tool.bounds.minimum[0]) + 100.0, abs=1e-9
+    )
+    assert not part_ops.lands_on(box.mesh, beside), "daneben landet der Baustein nicht"

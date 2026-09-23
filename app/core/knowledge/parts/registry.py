@@ -705,7 +705,9 @@ def register_part(
 #: Zapfenleiste statt um die Gravurtiefe vom Rand versetzt.
 #: Version 19: Die Profilklemmschale beginnt allein bei null statt bei der
 #: Bundhöhe der Einlage; den Bundfreiraum setzt das Klemmenpaar.
-LIBRARY_VERSION: Final = "19"
+#: Version 20: Netzgewinde laufen an beiden Stirnflächen aus, sodass gedruckte
+#: Schraube und Mutter zusammengehen (``fasteners.py``, 22.09.2026).
+LIBRARY_VERSION: Final = "20"
 
 #: Version 2 hat eine einzige Ursache, und die betrifft drei Bausteine: sie
 #: bauten über ihrem Ursprung statt darunter. Der Eintrag steht hier statt
@@ -717,6 +719,22 @@ MOUTH_AT_ORIGIN: Final = PartChange(
     effect="Der Baustein liegt um seine eigene Tiefe tiefer. Alte Projekte "
     "bekommen ihn an der Stelle, an der er vorher wirkungslos in der Luft "
     "stand — die Position ist zu prüfen.",
+)
+
+
+#: Version 20 hat für sechs Bausteine eine gemeinsame Ursache: Die Mitte ihrer
+#: benannten Fläche lag nicht auf dieser Fläche, sondern im Material oder
+#: daneben. Ein Merkmal ist eine Zusage an den nächsten Schritt (§24.1), und
+#: ``HOOK_FEATURE_ON_A_REAL_FACE`` hat es am Einhänger schon einmal gezeigt:
+#: Ein Punkt im Material ist für die Zuordnung kein Anhaltspunkt.
+FACE_ON_THE_BODY: Final = PartChange(
+    version="20",
+    date="2026-09-22",
+    reason="Die Mitte der benannten Fläche lag im Material oder in der Luft neben dem "
+    "Körper, nicht auf der Fläche, die sie benennt.",
+    effect="Die Mitte liegt jetzt auf der Fläche. Wer einen weiteren Baustein daran "
+    "ausgerichtet hat, findet ihn um diesen Versatz verschoben; der Körper selbst "
+    "bleibt gleich.",
 )
 
 
