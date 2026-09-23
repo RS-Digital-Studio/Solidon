@@ -15632,7 +15632,7 @@ def _drag(urls: list[str]) -> Any:
     return _Drag(urls)
 
 
-def test_a_dropped_link_is_taken_like_a_dropped_file() -> None:
+def test_a_dropped_link_is_taken_like_a_dropped_file(tmp_path: Path) -> None:
     """§2.3: Ziehen und Ablegen gilt auch für einen Verweis aus dem Browser.
 
     **Auch der Verweis auf eine Modellseite** (22.09.2026): Er bekam beim
@@ -15647,7 +15647,7 @@ def test_a_dropped_link_is_taken_like_a_dropped_file() -> None:
     assert accepted_url(_drag(["https://example.invalid/modelle/17"])) is not None
     assert accepted_url(_drag(["file:///C:/teil.stl"])) is None, "das ist der Weg für Dateien"
     assert accepted_url(_drag(["ftp://example.invalid/teil.stl"])) is None
-    assert accepted_path(_drag([Path("C:/Downloads/teile.zip").as_uri()])) is not None, (
+    assert accepted_path(_drag([(tmp_path / "teile.zip").as_uri()])) is not None, (
         "ein ZIP von der Modellseite geht wie eine Datei"
     )
 
