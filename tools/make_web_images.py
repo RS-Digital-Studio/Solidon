@@ -492,7 +492,7 @@ def work_rect(window: Any, ratio: float | None = None) -> QRect:
     Mit ``ratio`` wird die Fläche unten gekürzt, bis sie das Verhältnis hat —
     die Schrittkarten stehen in 16:10 nebeneinander, und ein Bild, das die
     Karte erst per CSS beschneidet, schnitt die schwebende Werkzeugleiste
-    unten durch. Liegt die neue Unterkante in dieser Leiste, endet der
+    unten durch. Liegt die neue Unterkante in einer Werkzeug- oder Ansichtsleiste, endet der
     Zuschnitt über ihr, und die Breite gibt links nach — dort ist nur Ansicht,
     rechts steht die Karte des Prüfberichts.
     """
@@ -508,9 +508,11 @@ def work_rect(window: Any, ratio: float | None = None) -> QRect:
     if ratio is None:
         return area
     height = min(area.height(), round(area.width() / ratio))
-    bar = window_rect(window, window.overlay.bottom)
-    if bar.top() < top + height and bar.bottom() >= top + height - 1:
-        height = bar.top() - gap - top
+    for widget in (window.overlay.bottom, window.viewport.view_bar):
+        if widget.isVisible():
+            bar = window_rect(window, widget)
+            if bar.top() < top + height and bar.bottom() >= top + height - 1:
+                height = bar.top() - gap - top
     width = round(height * ratio)
     return QRect(area.right() + 1 - width, top, width, height)
 
@@ -853,7 +855,8 @@ def _screens_child(language: str) -> int:
     settle(20)
 
     # 9 Das Filamentlager, nach Lagerort gruppiert — über die Auswahl, die der
-    # Kunde trifft. Zugeschnitten auf Kopf und Regal, im Verhältnis der Karte.
+    # Kunde trifft. Nur das Regal mit seinen Gruppenüberschriften: Die volle
+    # Such- und Filterzeile darüber gehört nicht in den schmalen Zuschnitt.
     window.action_inventory()
     settle(20)
     view = window._inventory_view
@@ -862,7 +865,7 @@ def _screens_child(language: str) -> int:
     expected = 6
     if len(view.cards) != expected:
         raise SystemExit(f"Das Regal zeigt {len(view.cards)} Spulen statt {expected}")
-    shelf = window_rect(window, view)
+    shelf = window_rect(window, view.page_scroll.viewport())
     focus = QRect(shelf.topLeft(), QPoint(shelf.left() + 1, shelf.top() + 1))
     for card in view.cards:
         focus = focus.united(window_rect(window, card))

@@ -27,7 +27,7 @@
 <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="/icon.svg?v=a72d0c52" type="image/svg+xml">
-<link rel="stylesheet" href="../style.css?v=8c4d6ed7">
+<link rel="stylesheet" href="../style.css?v=a6447f34">
 </head>
 <body>
 <a class="skip" href="#content">Ir para o conteúdo</a>
@@ -80,7 +80,7 @@
         <div class="shot">
           <div class="stage">
             <div class="chrome" aria-hidden="true"><i></i><i></i><i></i></div>
-            <a href="../bilder/beleg-fenster-pt.webp?v=85668cb9"><img src="../bilder/beleg-fenster-pt.webp?v=85668cb9" width="2560" height="1369" fetchpriority="high"
+            <a href="../bilder/beleg-fenster-pt.webp?v=17bdf996"><img src="../bilder/beleg-fenster-pt.webp?v=17bdf996" width="2560" height="1369" fetchpriority="high"
                  alt="A janela principal do Solidon3D com uma placa de duas cores: à esquerda objetos, parâmetros e histórico, ao centro a placa em grande com o ano selecionado, à direita o relatório de verificação com um aviso e o painel Seleção com as ações para as letras selecionadas."></a>
           </div>
         </div>
@@ -104,7 +104,7 @@
 
   <section id="features">
     <div class="wrap">
-      <div class="showcase" id="recognised-features" data-operations="countersink_hole duplicate_feature move_feature plug_hole remove_feature resize_feature resize_hole rotate_feature slot_hole">
+      <div class="showcase" id="recognised-features" data-operations="countersink_hole duplicate_feature move_feature pattern_feature plug_hole remove_feature resize_feature resize_hole rotate_feature slot_hole">
         <div>
           <span class="kicker">Características</span>
           <h3>Num STL alheio, um furo volta a ser um furo</h3>
@@ -135,10 +135,15 @@
           arredondamento nos arredondamentos e golas que substituem visivelmente uma aresta; uma transição que se funde suavemente com as faces vizinhas, não. <b>O
           Solidon3D explica quais as ações disponíveis no ponto escolhido e
           porquê.</b></p>
+          <p>Podes repetir furos reconhecidos e outros elementos compatíveis
+          em fila, à volta de um círculo ou com cópias espelhadas. Assim, um
+          único furo dá origem a um conjunto de furos com espaçamento regular.
+          Se alterares a medida do original num passo anterior do histórico,
+          as cópias acompanham a alteração.</p>
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../bilder/beleg-merkmal-pt.webp?v=9151016d"><img src="../bilder/beleg-merkmal-pt.webp?v=9151016d" width="2560" height="1369" loading="lazy" decoding="async"
+            <a href="../bilder/beleg-merkmal-pt.webp?v=588f3ff6"><img src="../bilder/beleg-merkmal-pt.webp?v=588f3ff6" width="2560" height="1369" loading="lazy" decoding="async"
                  alt="Um suporte importado com cinco furos reconhecidos; o furo 4 está selecionado. Na vista, as suas distâncias às arestas e o grupo «Alterar furo» com diâmetro, posição e profundidade; à direita, no painel Seleção, a linha «Provavelmente corresponde a M5» e por baixo Mover elemento, Esticar para furo oblongo, Rodar elemento, Duplicar elemento, Remover elemento, Escarear e Fechar furo."></a>
           </div>
           <figcaption>Um furo clicado: as suas cotas na vista, as suas ações à direita no painel Seleção.</figcaption>
@@ -202,7 +207,7 @@
         </figure>
       </div>
 
-      <div class="showcase flip" id="sketches-with-constraints" data-operations="sketch_extrude sketch_loft sketch_pocket sketch_revolve sketch_sweep">
+      <div class="showcase flip" id="sketches-with-constraints" data-operations="sketch_extrude sketch_join sketch_loft sketch_loft_cut sketch_pocket sketch_revolve sketch_revolve_cut sketch_sweep sketch_sweep_cut">
         <div>
           <span class="kicker">Esboços com restrições</span>
           <h3>Desenhar, cotar — e cada cota pode ser um parâmetro</h3>
@@ -221,10 +226,16 @@
           baixo diz a face em que se está a desenhar. Uma linha auxiliar
           continua auxiliar — mesmo depois de aparar, prolongar, deslocar e
           espelhar.</p>
+          <p>Podes extrudir um contorno e uni-lo diretamente ao sólido
+          selecionado. Para retirar material, roda uma secção em torno de um
+          eixo, por exemplo para criar uma ranhura anular. Uma transição entre
+          dois contornos recorta um funil ou um canal de secção quadrada para
+          circular. Ao longo de um arco ou de um percurso desenhado, podes
+          cortar um canal guiado que também pode sair pela lateral.</p>
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../bilder/beleg-skizze-pt.webp?v=a456a519"><img src="../bilder/beleg-skizze-pt.webp?v=a456a519" width="2560" height="1369" loading="lazy" decoding="async"
+            <a href="../bilder/beleg-skizze-pt.webp?v=08d4e8b5"><img src="../bilder/beleg-skizze-pt.webp?v=08d4e8b5" width="2560" height="1369" loading="lazy" decoding="async"
                  alt="O modo de esboço na janela principal: desenha-se na vista, numa face do suporte do caminho 2 — um retângulo cotado de 50 × 30 mm com um círculo lá dentro, por trás, esbatido, o suporte com os seus dois furos de parafuso; em baixo a barra com as ferramentas de desenho, o plano de esboço e os botões Concluído e Descartar, à direita o separador Restrições."></a>
           </div>
           <figcaption>Desenha-se na vista — na face em que clicou.</figcaption>
@@ -305,7 +316,7 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../bilder/beleg-bausteine-pt.webp?v=a06ad43d"><img src="../bilder/beleg-bausteine-pt.webp?v=a06ad43d" width="1560" height="1144" loading="lazy" decoding="async"
+            <a href="../bilder/beleg-bausteine-pt.webp?v=8253a157"><img src="../bilder/beleg-bausteine-pt.webp?v=8253a157" width="1560" height="1144" loading="lazy" decoding="async"
                  alt="O catálogo de blocos, aberto por cima da janela: os grupos Parafusos e roscas, Mecânica e Fixação com bucha de inserção a quente, alojamento de porca, porca impressa, parafuso, rosca imprimível, furo de parafuso com escareamento, dobradiça de pino, rolamento de esferas, pino de posicionamento e furo de ajuste, olhal de dobradiça, lingueta de encaixe, dobradiça de filme, ligações de encaixe, pé, suspensão em buraco de fechadura, alojamento de íman, gancho para painel perfurado, abraçadeira e suporte de parede, cada um com pré-visualização e as suas medidas. Em baixo os botões Inserir e Guardar a seleção como bloco."></a>
           </div>
           <figcaption>O catálogo — cada imagem de pré-visualização é renderizada, não desenhada.</figcaption>
@@ -333,7 +344,7 @@
         </div>
         <figure class="shot upright">
           <div class="stage">
-            <a href="../bilder/beleg-eigener-baustein-pt.webp?v=ff0b069d"><img src="../bilder/beleg-eigener-baustein-pt.webp?v=ff0b069d" width="479" height="1347" loading="lazy" decoding="async"
+            <a href="../bilder/beleg-eigener-baustein-pt.webp?v=d1bf6418"><img src="../bilder/beleg-eigener-baustein-pt.webp?v=d1bf6418" width="479" height="1347" loading="lazy" decoding="async"
                  alt="O diálogo «Guardar a seleção como bloco», aberto a partir do catálogo: em cima nome, grupo, descrição, licença e autor, depois para cada cota — aqui largura e profundidade — rótulo, unidade, valor mínimo e máximo, valor predefinido e lugar no diálogo, depois os pontos em que se poderá clicar, com o seu nome na receita; em baixo «Teste do intervalo: 8 combinações» e o botão Criar bloco."></a>
           </div>
           <figcaption>A caixa de diálogo pergunta cinco coisas — e calcula todo o intervalo antes de guardar.</figcaption>
@@ -444,7 +455,7 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../bilder/schritt-druck-pt.webp?v=f956c3b2"><img src="../bilder/schritt-druck-pt.webp?v=f956c3b2" width="1565" height="978" loading="lazy" decoding="async"
+            <a href="../bilder/schritt-druck-pt.webp?v=8b79198d"><img src="../bilder/schritt-druck-pt.webp?v=8b79198d" width="1565" height="978" loading="lazy" decoding="async"
                  alt="As definições de impressão por cima de uma figura importada: qualidade, impressora, bico e filamento, depois altura de camada, paredes, enchimento, temperaturas e suportes. Em «O que esta peça exige» o Solidon3D propõe um brim e mais tempo mínimo por camada; em baixo os botões Fatiar e Abrir no slicer."></a>
           </div>
           <figcaption>O que esta peça exige está no diálogo com o seu motivo — aplica-se o que estiver marcado.</figcaption>
@@ -545,7 +556,7 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../bilder/beleg-filamentlager-pt.webp?v=6df11ba5"><img src="../bilder/beleg-filamentlager-pt.webp?v=6df11ba5" width="1172" height="781" loading="lazy" decoding="async"
+            <a href="../bilder/beleg-filamentlager-pt.webp?v=755e73c2"><img src="../bilder/beleg-filamentlager-pt.webp?v=755e73c2" width="1054" height="703" loading="lazy" decoding="async"
                  alt="O inventário de filamentos, agrupado por local de armazenamento: seis bobinas nas prateleiras «Armário da oficina» e «Caixa seca», cada uma com a bobina desenhada, tipo de material, gramas restantes e local — uma bobina de três cores, uma assinalada com «Pouco filamento»; por cima o botão Sair do inventário e o campo de pesquisa."></a>
           </div>
           <figcaption>A prateleira, agrupada por local: a quantidade restante
@@ -563,13 +574,13 @@
           buscar o seu valor ao perfil de material, em vez de desaparecerem
           no modelo como constantes. À frente estão os dois ou três valores
           que se muda de facto — o resto vive em «Mais definições».</p>
-          <p class="note">136 operações, todas com o mesmo padrão:
+          <p class="note">142 operações, todas com o mesmo padrão:
           <b>menu, linha de comandos e chat veem a mesma
           declaração.</b></p>
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../bilder/beleg-dialog-pt.webp?v=c33d3cd5"><img src="../bilder/beleg-dialog-pt.webp?v=c33d3cd5" width="2560" height="1369" loading="lazy" decoding="async"
+            <a href="../bilder/beleg-dialog-pt.webp?v=db40d31d"><img src="../bilder/beleg-dialog-pt.webp?v=db40d31d" width="2560" height="1369" loading="lazy" decoding="async"
                  alt="A janela principal com a placa selecionada e, em cima à direita, o diálogo «Abrir furo»: diâmetro e posição X, Y e Z, cada um com um botão fx, a caixa Furo oblongo e «Mais definições» recolhido; em baixo na vista a barra que diz que um clique no modelo define o ponto."></a>
           </div>
           <figcaption>O diálogo de uma operação — à frente os dois ou três
@@ -685,7 +696,7 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../bilder/schritt-start-pt.webp?v=bc2323d4"><img src="../bilder/schritt-start-pt.webp?v=bc2323d4" width="1472" height="920" loading="lazy" decoding="async"
+            <a href="../bilder/schritt-start-pt.webp?v=0a47d147"><img src="../bilder/schritt-start-pt.webp?v=0a47d147" width="1472" height="920" loading="lazy" decoding="async"
                  alt="O ecrã inicial: a área para largar modelos e projetos, os botões Novo projeto, Abrir modelo, Abrir projeto e Manual, o inventário de filamentos com seis bobinas, depois quatro visitas guiadas — uma por caminho — com imagem de pré-visualização, e ainda Dar a minha opinião e Apoiar voluntariamente o Solidon, e a secção recolhida «O que mais consegue fazer?»."></a>
           </div>
           <figcaption>Quatro dos doze exemplos apresentam os caminhos principais; outros projetos mostram
@@ -714,12 +725,19 @@
         maior dimensão a uma medida pretendida. Criar cópias individuais, em linha ou
         em círculo; alinhar faces e furos entre si.</p></div>
         </details>
-        <details class="tool-card" id="kanten-flaechen" data-operations="bead_edges brep_to_mesh chamfer_edges draft_faces fillet_edges push_face">
+        <details class="tool-card" id="kanten-flaechen" data-operations="bead_edges brep_to_mesh chamfer_edges draft_faces fillet_edges mesh_to_exact push_face">
           <summary>Editar arestas e paredes</summary>
           <div class="tool-content"><p>Arredondamentos, chanfros, rebordos, deslocações de
         faces planas e ângulos de saída funcionam em malhas STL e sólidos exatos
         compatíveis. Um ângulo de saída inclina uma parede, por exemplo para
-        facilitar a desmoldagem. STEP continua disponível para sólidos exatos.</p></div>
+        facilitar a desmoldagem. STEP continua disponível para sólidos exatos.</p>
+          <p>Uma malha de triângulos pode ser convertida num sólido com faces
+          e arestas editáveis. Os planos e as superfícies curvas reconhecidos
+          tornam-se faces reais; passa também a ser possível exportar em STEP.
+          As zonas não reconhecidas continuam como triângulos planos. O
+          relatório indica a sua proporção e o desvio em relação ao original.
+          A conversão não recupera um histórico de construção anterior. Para
+          figuras orgânicas e digitalizações, é preferível manter a malha.</p></div>
         </details>
         <details class="tool-card" id="gehaeuse" data-operations="create_lid hollow_object screw_lid shell_exact thicken thread_exact">
           <summary>Caixas e tampas à medida</summary>

@@ -433,6 +433,9 @@ nav.lang a.cta:hover {
 }
 
 @media (max-width: 30rem) {
+  /* Die zweizeilige Kopfzeile darf die Überschrift eines Sprungziels nicht verdecken. */
+  html { scroll-padding-top: 9.5rem; }
+
   nav.lang .hide-tiny { display: none; }
   /* **Die Sprachliste öffnet nach rechts, weil der Griff links steht.**
      Bis 30rem sitzt die Navigation am linken Rand (gemessen bei 320 bis

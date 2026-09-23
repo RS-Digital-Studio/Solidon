@@ -40,6 +40,8 @@ ein sauberes Ergebnis.
 
 Aufnahmewerkzeuge reichen ihre feste Merkmalskennung als Argument bis zur
 Auswahl und Beschriftung durch; sie ergänzen keine Attribute an `Session`.
+Kreisflug-Loops warten zusätzlich auf den eigenen Arbeiter der Druckanalyse
+im Fenster, damit Standbild und Film denselben vollständigen Prüfbericht zeigen.
 Nach Abschluss einer bewusst verworfenen Aufnahme räumt `Session.forget_changes()`
 deren Änderungsmarkierung und eigene Wiederherstellung. Die Quelldatei bleibt
 dabei ungeschrieben; das anschließende Schließen läuft durch den normalen
@@ -183,6 +185,11 @@ ihre sichtbaren Texte aus dem Sprachkatalog. `make_manual.py` tut das auch für
 den ganzen Seiten- und PDF-Rahmen. Eine neue Sprache darf dort keine neue
 Tabellenzeile verlangen; ihr Katalog und das Pfadschema müssen genügen.
 
+Die PDF-Kapitelköpfe lesen die tatsächlichen Seiten aus den benannten Zielen
+der HTML-Kapitelanker. Beim Stempeln bleibt der ganze PDF-Dokumentkatalog
+erhalten, damit auch das Inhaltsverzeichnis diese Ziele weiter erreicht.
+PDF-Leser arbeiten dabei aus dem Speicher und halten die Zieldatei nicht offen.
+
 **Bauen und Ausliefern**
 
 Nach einem Python-Wechsel wird `build_slice_core.py` mit dem aktuellen
@@ -200,15 +207,30 @@ Anführungszeichen und gesonderter Apostrophmaskierung. Sein Desktop-Entry
 maskiert zuerst das Exec-Argument, danach dessen Backslashes auf der
 Desktop-Stringebene; wörtliche Prozentzeichen werden verdoppelt.
 
+`windows_signed_installer.py` ist der schlüssellose CI-Anschluss zwischen
+den beiden lokalen Windows-Signaturen. Er verlangt den erfolgreichen
+manuellen `build.yml`-Lauf auf `main` am exakt selben Commit wie sein eigener
+Workflow, das ursprüngliche Signierarchiv und einen unveröffentlichten,
+ebenfalls commitgebundenen Release-Entwurf mit signierter EXE und Herkunftsakte.
+Archiv, Manifest, Zeitstempel und Herausgeber prüfen die gemeinsamen Helfer
+aus `sign_release.py`. Nur die EXE wird ersetzt und die Übergabe neu gebunden.
+Der feste Inno-7-Compiler baut daraus Setup, SHA-256 und `windows-installer-build.json`
+für die lokale abschließende Setupsignatur; der Workflow veröffentlicht nichts.
+
 `bump_version.py` (die zwei Stellen, die die Version tragen, plus drei
 abgeleitete) · `make_installer.py` (baut lokal oder schreibt mit
 `--signing-handoff` den vollständigen Windows-App-Baum und alle festen
 Installer-Eingänge als sortierte relative Pfadliste samt SHA-256) ·
-`sign_release.py` (signiert das Windows-Paket **lokal** aus genau dieser
-Übergabe: Archiv und jede Prüfsumme prüfen, Anwendung mit dem
-Certum-Cloud-Zertifikat über SimplySign signieren, Installer bauen,
-Setup-Datei signieren, `.sha256` daneben — hält bei jeder Abweichung an,
-bevor ein Zertifikat ins Spiel kommt; die CI signiert Windows nicht) ·
+`sign_release.py` (signiert **lokal**, gebaut wird in der CI: `--check` liest
+Werkzeuge und Zertifikatsmetadaten ohne Signatur; `--phase application` prüft
+die CI-Übergabe und signiert die Anwendung, `--phase installer` prüft den
+zugehörigen CI-Installer und signiert ihn samt Zeitstempel. Beide wählen das
+Zertifikat eindeutig per Fingerabdruck; `verify_file` und
+`verify_signature_identity` sind die gemeinsamen Prüfer für Signierweg,
+Installer-CI und Downloadfreigabe. Eine rote Releaseakte sperrt die Ausgabe.
+`build_installer` bleibt ein Hilfsaufruf für den CI-Bau, die lokale CLI ruft
+ihn nicht. Herkunft und Prüfsummen verbinden beide Schritte; die Anleitung
+steht in `Signierung/README.md`) ·
 `make_linux_packages.py` (verlangt für AppImage den
 bereits geprüften Laufzeitkern in `APPIMAGETOOL_RUNTIME_FILE`) ·
 `make_macos_package.py` · `make_download.py` · `sign_version.py` ·
@@ -257,6 +279,13 @@ den Hash des signierten Installers. Paket und Prüfsummendatei werden in einem
 eigenen temporären Ordner vorbereitet; erst vollständige Kopien ersetzen die
 sichtbaren Dateien. Ein später Fehler beim Ersetzen der Prüfsummendatei
 entfernt die veraltete Prüfsumme und meldet keinen Erfolg.
+
+`make_download.read_packages` prüft alle Eingänge vor dem Anlegen des
+Downloadordners und vor jeder Kopie. Windows-Pakete müssen über die gemeinsame
+Funktion `sign_release.verify_file` einschließlich aller Signaturen und des
+Zeitstempels bestehen. Fehlendes SignTool oder eine abgewiesene Prüfung hält
+Downloads, Seiten und Manifest unverändert; eine Umgehungsoption gibt es nicht.
+Der leere Aufruf zum Zurückziehen der Downloads benötigt kein SignTool.
 
 **Website** `upload_website.py` (schließt `website/teile/` als lokalen
 Projektquellordner vollständig aus; Bausteindateien werden ausschließlich
@@ -310,6 +339,10 @@ entfernte allgemeine Pakete werden nicht durch einen Freeze wieder aufgenommen.
   XDG-Variablen auf einem Temp-Ordner, gesetzt in der Umgebung des Kindes
   **vor** seinem ersten Import; eine Umbiegung im laufenden Prozess kommt zu
   spät.
+- **Zuschnitte lassen Bedienelemente vollständig im Bild oder vollständig
+  draußen.** `make_web_images.work_rect` berücksichtigt die Werkzeugleiste
+  und die Ansichtsleiste. Das Lagerbild begrenzt sich auf das scrollbare
+  Regal samt Gruppenüberschriften, unterhalb der Such- und Filterzeile.
 
 ## Der Sitzungszustand ist ausgenommen
 

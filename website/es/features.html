@@ -25,7 +25,7 @@
 <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="/icon.svg?v=a72d0c52" type="image/svg+xml">
-<link rel="stylesheet" href="../style.css?v=8c4d6ed7">
+<link rel="stylesheet" href="../style.css?v=a6447f34">
 </head>
 <body>
 <a class="skip" href="#content">Saltar al contenido</a>
@@ -78,7 +78,7 @@
         <div class="shot">
           <div class="stage">
             <div class="chrome" aria-hidden="true"><i></i><i></i><i></i></div>
-            <a href="../bilder/beleg-fenster-es.webp?v=bf3a9197"><img src="../bilder/beleg-fenster-es.webp?v=bf3a9197" width="2560" height="1369" fetchpriority="high"
+            <a href="../bilder/beleg-fenster-es.webp?v=f1487a12"><img src="../bilder/beleg-fenster-es.webp?v=f1487a12" width="2560" height="1369" fetchpriority="high"
                  alt="La ventana principal de Solidon3D con un letrero de dos colores: a la izquierda objetos, parámetros e historial, en el centro el letrero en grande con el año seleccionado, a la derecha el informe de comprobación con una advertencia y el panel Selección con las acciones para las letras seleccionadas."></a>
           </div>
         </div>
@@ -102,7 +102,7 @@
 
   <section id="features">
     <div class="wrap">
-      <div class="showcase" id="recognised-features" data-operations="countersink_hole duplicate_feature move_feature plug_hole remove_feature resize_feature resize_hole rotate_feature slot_hole">
+      <div class="showcase" id="recognised-features" data-operations="countersink_hole duplicate_feature move_feature pattern_feature plug_hole remove_feature resize_feature resize_hole rotate_feature slot_hole">
         <div>
           <span class="kicker">Características</span>
           <h3>En un STL ajeno, un taladro vuelve a ser un taladro</h3>
@@ -133,10 +133,15 @@
           cambiar el radio o quitarlos; una transición que se funde suavemente con
           sus caras vecinas, no. <b>Solidon3D explica
           qué acciones están disponibles en el punto elegido y por qué.</b></p>
+          <p>Puedes repetir agujeros reconocidos y otros rasgos compatibles en
+          una fila, alrededor de un círculo o como copias reflejadas. Así, un
+          agujero se convierte en un patrón de agujeros espaciados
+          regularmente. Si cambias la medida del original en un paso anterior
+          del historial, sus copias se actualizan.</p>
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../bilder/beleg-merkmal-es.webp?v=55791f0b"><img src="../bilder/beleg-merkmal-es.webp?v=55791f0b" width="2560" height="1369" loading="lazy" decoding="async"
+            <a href="../bilder/beleg-merkmal-es.webp?v=9d121c03"><img src="../bilder/beleg-merkmal-es.webp?v=9d121c03" width="2560" height="1369" loading="lazy" decoding="async"
                  alt="Un soporte importado con cinco taladros reconocidos; el taladro 4 está seleccionado. En la vista, sus distancias a los bordes y el grupo «Cambiar orificio» con diámetro, posición y profundidad; a la derecha, en el panel Selección, la línea «Probablemente corresponde a M5» y debajo Mover elemento, Estirar a ranura, Girar elemento, Duplicar elemento, Quitar elemento, Avellanar y Cerrar un taladro."></a>
           </div>
           <figcaption>Un taladro seleccionado: sus cotas en la vista, sus acciones a la derecha en el panel Selección.</figcaption>
@@ -201,7 +206,7 @@
         </figure>
       </div>
 
-      <div class="showcase flip" id="sketches-with-constraints" data-operations="sketch_extrude sketch_loft sketch_pocket sketch_revolve sketch_sweep">
+      <div class="showcase flip" id="sketches-with-constraints" data-operations="sketch_extrude sketch_join sketch_loft sketch_loft_cut sketch_pocket sketch_revolve sketch_revolve_cut sketch_sweep sketch_sweep_cut">
         <div>
           <span class="kicker">Bocetos con restricciones</span>
           <h3>Dibujar, acotar — y cada cota puede ser un parámetro</h3>
@@ -219,10 +224,16 @@
           abajo nombra la cara sobre la que se dibuja. Una línea auxiliar
           sigue siendo auxiliar — también tras recortar, alargar,
           desplazar y reflejar.</p>
+          <p>Puedes extruir un contorno y unirlo directamente al sólido
+          seleccionado. Para quitar material, gira una sección alrededor de un
+          eje, por ejemplo para hacer una ranura anular. Una transición entre
+          dos contornos corta un embudo o un canal de sección cuadrada a
+          circular. Siguiendo un arco o una trayectoria dibujada se corta un
+          canal guiado que también puede salir por un lateral.</p>
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../bilder/beleg-skizze-es.webp?v=06d3e3c0"><img src="../bilder/beleg-skizze-es.webp?v=06d3e3c0" width="2560" height="1369" loading="lazy" decoding="async"
+            <a href="../bilder/beleg-skizze-es.webp?v=0c2eccfe"><img src="../bilder/beleg-skizze-es.webp?v=0c2eccfe" width="2560" height="1369" loading="lazy" decoding="async"
                  alt="El modo boceto en la ventana principal: se dibuja en la vista, sobre una cara del soporte del camino 2 — un rectángulo acotado de 50 × 30 mm con un círculo dentro, detrás y difuminado el soporte con sus dos agujeros para tornillo; abajo la barra con las herramientas de dibujo, el plano de dibujo y los botones Terminado y Descartar, a la derecha la pestaña Restricciones."></a>
           </div>
           <figcaption>Se dibuja en la vista — sobre la cara en la que has hecho clic.</figcaption>
@@ -303,7 +314,7 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../bilder/beleg-bausteine-es.webp?v=89324045"><img src="../bilder/beleg-bausteine-es.webp?v=89324045" width="1560" height="1144" loading="lazy" decoding="async"
+            <a href="../bilder/beleg-bausteine-es.webp?v=35aab3c7"><img src="../bilder/beleg-bausteine-es.webp?v=35aab3c7" width="1560" height="1144" loading="lazy" decoding="async"
                  alt="El catálogo de bloques, abierto sobre la ventana: los grupos Elementos de unión, Mecánica y Fijación con inserto termofijado, alojamiento de tuerca, tuerca impresa, tornillo, rosca imprimible, agujero para tornillo con avellanado, bisagra de pasador, rodamiento de bolas, pasador y agujero de ajuste, ojo de bisagra, pestaña de retención, bisagra de película, uniones de encaje, pie, colgador de ojo de cerradura, bolsillo para imán, gancho para panel perforado, abrazaderas y soporte de pared, cada uno con vista previa y sus medidas. Abajo los botones Insertar y Guardar la selección como bloque."></a>
           </div>
           <figcaption>El catálogo — cada vista previa está renderizada, no dibujada.</figcaption>
@@ -331,7 +342,7 @@
         </div>
         <figure class="shot upright">
           <div class="stage">
-            <a href="../bilder/beleg-eigener-baustein-es.webp?v=b41088b0"><img src="../bilder/beleg-eigener-baustein-es.webp?v=b41088b0" width="504" height="1347" loading="lazy" decoding="async"
+            <a href="../bilder/beleg-eigener-baustein-es.webp?v=2dc24cd5"><img src="../bilder/beleg-eigener-baustein-es.webp?v=2dc24cd5" width="504" height="1347" loading="lazy" decoding="async"
                  alt="El diálogo «Guardar la selección como bloque», abierto desde el catálogo: arriba nombre, grupo, descripción, licencia y autor, debajo para cada cota — aquí ancho y fondo — rótulo, unidad, valor mínimo y máximo, valor por defecto y lugar en el diálogo, después los puntos en los que se podrá hacer clic con su nombre en la receta; abajo «Prueba del rango: 8 combinaciones» y el botón Crear bloque."></a>
           </div>
           <figcaption>El diálogo pregunta cinco cosas — y calcula todo el rango antes de guardar.</figcaption>
@@ -381,7 +392,7 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../bilder/beleg-bericht-es.webp?v=2d9a44d0"><img src="../bilder/beleg-bericht-es.webp?v=2d9a44d0" width="1978" height="1236" loading="lazy" decoding="async"
+            <a href="../bilder/beleg-bericht-es.webp?v=47508663"><img src="../bilder/beleg-bericht-es.webp?v=47508663" width="1907" height="1192" loading="lazy" decoding="async"
                  alt="Una caja con tapa, grande en la vista, y a la derecha su informe de comprobación: 0 errores, 2 advertencias, 6 avisos. Las advertencias dicen que el ajuste queda más apretado de lo previsto y que una cara de la tapa queda en voladizo y necesita soportes; debajo, avisos sobre el vaciado, la tapa y el material."></a>
           </div>
           <figcaption>El informe de comprobación de una lata con tapa.</figcaption>
@@ -445,7 +456,7 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../bilder/schritt-druck-es.webp?v=d60bbbc2"><img src="../bilder/schritt-druck-es.webp?v=d60bbbc2" width="1554" height="971" loading="lazy" decoding="async"
+            <a href="../bilder/schritt-druck-es.webp?v=e1ef5946"><img src="../bilder/schritt-druck-es.webp?v=e1ef5946" width="1554" height="971" loading="lazy" decoding="async"
                  alt="Los ajustes de impresión sobre una figura importada: calidad, impresora, boquilla y filamento, debajo altura de capa, paredes, relleno, temperaturas y soportes. En «Qué pide esta pieza» Solidon3D propone un brim y más tiempo mínimo por capa; abajo los botones Laminar y Abrir en el slicer."></a>
           </div>
           <figcaption>Lo que pide esta pieza está en el diálogo con su motivo; se aplica lo que está marcado.</figcaption>
@@ -546,7 +557,7 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../bilder/beleg-filamentlager-es.webp?v=e7915b78"><img src="../bilder/beleg-filamentlager-es.webp?v=e7915b78" width="1172" height="781" loading="lazy" decoding="async"
+            <a href="../bilder/beleg-filamentlager-es.webp?v=0f75a772"><img src="../bilder/beleg-filamentlager-es.webp?v=0f75a772" width="1049" height="699" loading="lazy" decoding="async"
                  alt="El inventario de filamentos, agrupado por ubicación: seis bobinas en los estantes «Armario del taller» y «Caja seca», cada una con su bobina dibujada, tipo de material, gramos restantes y ubicación — una bobina de tres colores, una marcada con «Poco filamento»; encima el botón Salir del inventario y el campo de búsqueda."></a>
           </div>
           <figcaption>El estante, agrupado por ubicación: la cantidad restante
@@ -565,13 +576,13 @@
           desaparecer en el modelo como constantes. Delante están los dos o
           tres valores que de verdad se cambian — el resto vive bajo «Más
           ajustes».</p>
-          <p class="note">136 operaciones, todas con el mismo patrón:
+          <p class="note">142 operaciones, todas con el mismo patrón:
           <b>menú, línea de comandos y chat leen la misma
           declaración.</b></p>
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../bilder/beleg-dialog-es.webp?v=fabfd829"><img src="../bilder/beleg-dialog-es.webp?v=fabfd829" width="2560" height="1369" loading="lazy" decoding="async"
+            <a href="../bilder/beleg-dialog-es.webp?v=14000298"><img src="../bilder/beleg-dialog-es.webp?v=14000298" width="2560" height="1369" loading="lazy" decoding="async"
                  alt="La ventana principal con el letrero seleccionado y, arriba a la derecha, el diálogo «Hacer un taladro»: diámetro y posición X, Y y Z, cada uno con un botón fx, la casilla de ranura y «Más ajustes» plegado; abajo en la vista la barra que indica que un clic en el modelo fija el punto."></a>
           </div>
           <figcaption>El diálogo de una operación — delante los dos o tres
@@ -688,7 +699,7 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../bilder/schritt-start-es.webp?v=9b3bc745"><img src="../bilder/schritt-start-es.webp?v=9b3bc745" width="1472" height="920" loading="lazy" decoding="async"
+            <a href="../bilder/schritt-start-es.webp?v=96a6abc7"><img src="../bilder/schritt-start-es.webp?v=96a6abc7" width="1472" height="920" loading="lazy" decoding="async"
                  alt="La pantalla de inicio: la zona para soltar modelos y proyectos, los botones Nuevo proyecto, Abrir modelo, Abrir proyecto y Manual, el inventario de filamentos con seis bobinas, debajo cuatro recorridos guiados — uno por camino — con imagen de vista previa, además de Dar su opinión y Apoyar Solidon voluntariamente, y la sección plegada «¿Qué más puede hacer?»."></a>
           </div>
           <figcaption>Cuatro de los doce ejemplos presentan los caminos principales; otros proyectos
@@ -716,13 +727,20 @@
         dimensión mayor a una medida objetivo. Crea copias individuales, en fila o en
         círculo; alinea caras y taladros entre sí.</p></div>
         </details>
-        <details class="tool-card" id="kanten-flaechen" data-operations="bead_edges brep_to_mesh chamfer_edges draft_faces fillet_edges push_face">
+        <details class="tool-card" id="kanten-flaechen" data-operations="bead_edges brep_to_mesh chamfer_edges draft_faces fillet_edges mesh_to_exact push_face">
           <summary>Editar aristas y paredes</summary>
           <div class="tool-content"><p>Redondeos, chaflanes, rebordes, desplazamientos de
         caras planas y ángulos de desmoldeo funcionan en mallas STL y sólidos exactos
         compatibles. El ángulo de desmoldeo inclina una pared, por ejemplo para sacar
         una pieza del molde más fácilmente. STEP sigue disponible para sólidos
-        exactos.</p></div>
+        exactos.</p>
+          <p>Una malla de triángulos puede convertirse en un sólido con caras
+          y aristas editables. Los planos y las superficies curvas reconocidos
+          pasan a ser caras reales; después también es posible exportar a
+          STEP. Las zonas sin correspondencia permanecen como triángulos
+          planos. El informe indica su proporción y la desviación respecto al
+          original. No se recupera un historial de construcción anterior. Para
+          figuras orgánicas y escaneos, es preferible conservar la malla.</p></div>
         </details>
         <details class="tool-card" id="gehaeuse" data-operations="create_lid hollow_object screw_lid shell_exact thicken thread_exact">
           <summary>Carcasas y tapas a juego</summary>

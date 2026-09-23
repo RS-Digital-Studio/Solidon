@@ -36,7 +36,7 @@ from PySide6.QtWidgets import QApplication
 
 from app.i18n.catalog import available_languages
 from app.ui.manual_window import ManualWindow
-from tools.make_figures import SAMPLE_OBJECT, SAMPLE_PRINTER
+from tools.make_figures import SAMPLE_OBJECT, SAMPLE_PRINTER, figure_sketch
 
 #: Die erzeugten Handbuchseiten der Website. Sie sind eingecheckt, weil sie
 #: hochgeladen werden — und veralten, sobald jemand am Handbuchtext dreht,
@@ -1768,3 +1768,121 @@ def _painted_pixels(document: object, colour: int) -> int:
         for x in range(canvas.width())
         if canvas.pixel(x, y) == colour
     )
+
+
+def test_the_sketch_figure_draws_on_the_face_it_names() -> None:
+    """Die Zeichnung des Skizzenbildes liegt auf der Fläche, nicht nur ihr Blick.
+
+    ``frame_sketch`` übergab ein Rechteck auf der Draufsicht und die Fläche
+    nur als ``plane``. Mit Strichen dreht die Ebenenwahl aber nur noch den
+    Blick (``SketchCanvas.set_plane``): Das Handbuchbild zeigte „Zeichenebene:
+    Draufsicht (XY)" unter dem Körper. Seit der Zeichenmodus beim Betreten
+    das Ebenenfeld aus der Zeichnung neu aufbaut, sprang das Feld auf XY
+    zurück, und das Werkzeug brach mit „die Skizze liegt nicht auf der
+    angeforderten Fläche" ab — kein Handbuch- und kein Websitebild vom
+    Skizzenmodus mehr.
+    """
+    from app.core.sketch.serialize import sketch_from_text
+
+    plane = "feature:obj_1:face_9"
+    sketch = sketch_from_text(figure_sketch(plane))
+    assert sketch.plane == plane
+    assert [element.kind for element in sketch.elements] == ["line"] * 4
+
+
+def _pdf_with_chapter_targets(path: Path, targets: dict[str, int], *, dictionary: bool) -> None:
+    """Eine kleine PDF mit echten Kapitelzielen und einem Inhaltslink."""
+    from pypdf import PdfWriter
+    from pypdf.generic import ArrayObject, DictionaryObject, NameObject, NumberObject
+
+    writer = PdfWriter()
+    for _ in range(6):
+        writer.add_blank_page(width=595, height=842)
+    if dictionary:
+        writer.root_object[NameObject("/Dests")] = DictionaryObject(
+            {
+                NameObject("/" + name): ArrayObject(
+                    [writer.pages[number].indirect_reference, NameObject("/Fit")]
+                )
+                for name, number in targets.items()
+            }
+        )
+    else:
+        for name, number in targets.items():
+            writer.add_named_destination(name, number)
+    writer.pages[0][NameObject("/Annots")] = ArrayObject(
+        [
+            DictionaryObject(
+                {
+                    NameObject("/Type"): NameObject("/Annot"),
+                    NameObject("/Subtype"): NameObject("/Link"),
+                    NameObject("/Rect"): ArrayObject(
+                        [NumberObject(value) for value in (0, 0, 20, 20)]
+                    ),
+                    NameObject("/Dest"): NameObject("/what"),
+                }
+            )
+        ]
+    )
+    with path.open("wb") as stream:
+        writer.write(stream)
+
+
+@pytest.mark.parametrize("dictionary", (False, True))
+def test_pdf_chapters_follow_printed_anchor_targets(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, dictionary: bool
+) -> None:
+    """Zeilenumbrüche und doppelte Titel ändern keine Kapitelposition."""
+    from tools.make_manual import _chapter_of_each_page
+
+    pages = (
+        manual.Page("what", "Die vier Wege", ""),
+        manual.Page("parts", "Ein langer Titel mit Zeilenumbruch", ""),
+        manual.Page("parts", "Die vier Wege", "", generated=True),
+        manual.Page("mesh", "Netz", "", generated=True),
+    )
+    monkeypatch.setattr(manual, "pages", lambda: pages)
+    pdf = tmp_path / "manual.pdf"
+    _pdf_with_chapter_targets(
+        pdf, {"what": 2, "parts": 3, "ref-parts": 3, "ref-mesh": 4}, dictionary=dictionary
+    )
+    assert _chapter_of_each_page(pdf) == ["", "", "Die vier Wege", "Die vier Wege", "Netz", "Netz"]
+
+
+def test_a_missing_pdf_chapter_target_stops_stamping(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein fehlendes Ziel liefert keinen scheinbar gültigen Kapitelkopf."""
+    from tools.make_manual import _chapter_of_each_page
+
+    monkeypatch.setattr(manual, "pages", lambda: (manual.Page("missing", "Fehlendes Kapitel", ""),))
+    pdf = tmp_path / "manual.pdf"
+    _pdf_with_chapter_targets(pdf, {"what": 2}, dictionary=True)
+    with pytest.raises(RuntimeError, match=r"Fehlendes Kapitel.*Erzeugen Sie"):
+        _chapter_of_each_page(pdf)
+
+
+def test_stamping_preserves_pdf_link_targets(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Das Inhaltsverzeichnis erreicht nach Kopf- und Fußzeile noch sein Ziel."""
+    from pypdf import PdfReader
+
+    from tools import make_manual
+
+    monkeypatch.setattr(manual, "pages", lambda: (manual.Page("what", "Die vier Wege", ""),))
+    pdf = tmp_path / "manual.pdf"
+    _pdf_with_chapter_targets(pdf, {"what": 2}, dictionary=True)
+
+    def overlay(path: Path, chapters: list[str], total: int, language: str) -> Path:
+        """Die Seitendarstellung bleibt hier unabhängig vom Qt-Zeichner."""
+        _pdf_with_chapter_targets(path, {}, dictionary=True)
+        return path
+
+    monkeypatch.setattr(make_manual, "_overlay", overlay)
+    make_manual._stamp(pdf, "de")
+    reader = PdfReader(pdf)
+    link = reader.pages[0]["/Annots"][0].get_object()
+    target = reader.named_destinations[link["/Dest"]]
+    assert reader.get_destination_page_number(target) == 2
+    assert make_manual._chapter_of_each_page(pdf) == ["", "", *("Die vier Wege",) * 4]

@@ -222,10 +222,8 @@ STYLE = """
          Tonerfläche um jedes Bildschirmfoto. */
       figure.screenshot .stage { background: none; border: none; padding: 0;
                                  box-shadow: none; border-radius: 0; }
-      /* Die Kapitelnummer bleibt ebenfalls am Bildschirm: der Kolumnentitel
-         des PDF erkennt ein Kapitel an seiner Titelzeile, und eine Nummer
-         davor macht aus „Die vier Wege" eine Zeile, die niemand erwartet
-         (siehe ``_chapter_of_each_page``). */
+      /* Die Kapitelnummer bleibt ebenfalls am Bildschirm; im PDF übernehmen
+         Kolumnentitel und Seitenzahlen die Orientierung. */
       main > h2[id]::before, main > h3[id]::before { content: none; }
 
       .cover { display: flex; flex-direction: column; justify-content: center;
@@ -898,42 +896,35 @@ STAMP_INSET = PDF_MARGIN_SIDE * 72.0 / 25.4
 def _chapter_of_each_page(pdf: Path) -> list[str]:
     """Welches Kapitel auf welcher Seite läuft.
 
-    Aus dem gesetzten PDF gelesen und nicht aus dem Quelltext gerechnet: erst
-    der Satz weiß, wo ein Kapitel anfängt. Weil jedes auf einer neuen Seite
-    beginnt (``break-before: page``), genügt der erste Titel, der auf einer
-    Seite auftaucht; die Seiten danach führen ihn weiter.
+    Die HTML-Anker werden beim Drucken zu benannten PDF-Zielen. Sie halten
+    die tatsächliche Seite auch bei umbrochenen Überschriften und fehlenden
+    Leerzeichen der Textextraktion fest. Kopfzeile und Inhaltsverzeichnis
+    lesen dadurch dieselbe Seitenauskunft. Beginnen mehrere Kapitel auf
+    einem Blatt, führt dessen Kopf das letzte davon.
     """
-    from PySide6.QtPdf import QPdfDocument
+    from io import BytesIO
 
-    document = QPdfDocument()
-    document.load(str(pdf))
-    titles = [str(entry.title) for entry in manual.pages()]
+    from pypdf import PdfReader
 
+    reader = PdfReader(BytesIO(pdf.read_bytes()))
+    destinations = {
+        str(key).removeprefix("/"): value for key, value in reader.named_destinations.items()
+    }
+    starts: dict[int, str] = {}
+    for chapter in manual.pages():
+        target = destinations.get(_anchor(chapter))
+        number = reader.get_destination_page_number(target) if target is not None else None
+        if number is None or number < 0:
+            raise RuntimeError(
+                f"Das PDF-Ziel für „{chapter.title}“ fehlt. "
+                "Erzeugen Sie das Handbuch erneut aus der vollständigen HTML-Seite."
+            )
+        starts[number] = str(chapter.title)
     running = ""
-    ahead = 0
     found: list[str] = []
-    for number in range(document.pageCount()):
-        lines = {line.strip() for line in document.getAllText(number).text().splitlines()}
-        # Gesucht wird der **nächste erwartete** Titel, und er muss eine
-        # eigene Zeile sein. Beides zusammen trifft: irgendwo im Fließtext zu
-        # suchen setzte „Netz" über die Anleitung zum ersten Loch, weil ein
-        # Satz darunter von einem offenen Netz sprach. Nur die erste Zeile zu
-        # nehmen ging am anderen Ende daneben — ein Kapitel, das nicht oben
-        # auf dem Blatt beginnt, wurde nie erkannt, und der Kolumnentitel
-        # blieb Seiten später beim vorigen stehen.
-        while ahead < len(titles) and titles[ahead] in lines:
-            running = titles[ahead]
-            ahead += 1
+    for number in range(len(reader.pages)):
+        running = starts.get(number, running)
         found.append(running)
-    # **Ausdrücklich schließen, nicht dem Einsammler überlassen.** Qt hält die
-    # Datei offen, solange das Dokument lebt, und ``_stamp`` schreibt gleich
-    # darauf in dieselbe Datei. Ohne diese Zeile hing es davon ab, wann
-    # CPython das lokale Objekt einsammelt: Am 03.09.2026 riss der Lauf
-    # zweimal mit ``OSError 22`` beim Öffnen zum Schreiben — einmal bei
-    # Englisch, einmal bei Französisch, und dazwischen gingen dieselben
-    # Sprachen durch. Ein Fehler, der die Reihenfolge wechselt, ist kein
-    # Fehler der Datei.
-    document.close()
     return found
 
 
@@ -953,24 +944,20 @@ def _stamp(pdf: Path, language: str) -> None:
     from pypdf import PdfReader, PdfWriter
 
     chapters = _chapter_of_each_page(pdf)
-    # **Aus dem Speicher und nicht über den Pfad.** ``PdfReader`` liest
-    # verzögert und hält die Datei offen, solange er lebt — und unten wird
-    # dieselbe Datei zum Schreiben geöffnet. Das war der zweite Halter neben
-    # dem ``QPdfDocument`` darüber: Am 03.09.2026 riss der Lauf mit
-    # ``OSError 22`` beim englischen Handbuch, nachdem das deutsche
-    # durchgegangen war. Wer nur einen von beiden schließt, verschiebt den
-    # Fehler auf eine andere Sprache, statt ihn abzustellen.
+    # Aus dem Speicher: Der verzögert lesende Reader darf die Datei beim
+    # anschließenden Ersetzen nicht mehr offen halten.
     reader = PdfReader(BytesIO(pdf.read_bytes()))
     total = len(reader.pages)
     overlay = _overlay(pdf.with_suffix(".stamp.pdf"), chapters, total, language)
 
-    writer = PdfWriter()
+    # Einzelne Seiten zu kopieren verliert den Dokumentkatalog und damit
+    # die Ziele, auf die die Links im Inhaltsverzeichnis zeigen.
+    writer = PdfWriter(clone_from=reader)
     # Dieselbe Vorsicht: ``overlay`` wird am Ende gelöscht.
     marks = PdfReader(BytesIO(overlay.read_bytes()))
-    for number, page in enumerate(reader.pages):
+    for number, page in enumerate(writer.pages):
         if number >= SKIP_STAMP:
             page.merge_page(marks.pages[number])
-        writer.add_page(page)
     writer.add_metadata(
         {
             "/Title": f"{site_text('Handbuch', language)} — {APP_NAME}",

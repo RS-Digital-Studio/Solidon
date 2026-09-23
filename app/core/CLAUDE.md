@@ -160,6 +160,10 @@ mit gerätebezogener USB-Regel nur bei bekannter Hersteller-/Produktkennung) ·
 Netzprojektion) · `markup.py` (Markdown → HTML, nur die selbst erzeugte
 Teilmenge) · `examples.py` · `tour.py`
 
+Lange Beschriftungen gezeichneter Schemata werden mit `Canvas.wrapped` innerhalb
+ihres Feldes umbrochen. Der vollständige übersetzte Text bleibt im SVG erhalten;
+die Bildkante ist kein Ersatz für den Textumbruch.
+
 **Kundenkontakt — der Weg hinaus:**
 
 `updates.py` (fragen, holen, prüfen, einspielen — angestoßen wird nur auf

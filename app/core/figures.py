@@ -685,7 +685,15 @@ def _sketch_editor(theme: Theme) -> str:
     canvas.box(388, 16, 96, 20, stroke=colours.muted, radius=2.0)
     canvas.label(396, 31, str(_("Grundform")), size=10)
     canvas.box(492, 16, 108, 20, stroke=colours.muted, radius=2.0)
-    canvas.label(500, 31, str(_("Trimmen · Versetzen")), size=10)
+    canvas.wrapped(
+        546,
+        25,
+        str(_("Trimmen · Versetzen")),
+        width=20,
+        size=9,
+        line_height=10,
+        anchor="middle",
+    )
 
     # Die Ebene gehört vor das Zeichnen: sie entscheidet, wohin extrudiert
     # wird — und wie die Schichten zur Zeichnung liegen.
@@ -763,7 +771,13 @@ def _sketch_editor(theme: Theme) -> str:
         canvas.line(454, top + 4, 600, top + 4, stroke=colours.muted, weight=0.5)
         canvas.label(454, top, str(kind), size=10)
         canvas.label(600, top, targets, anchor="end", size=10, colour=colours.muted)
-    canvas.caption(454, 276, str(_("Entf entfernt die gewählte.")))
+    canvas.wrapped(
+        454,
+        260,
+        str(_("Entf entfernt die gewählte.")),
+        width=24,
+        colour=colours.muted,
+    )
 
     # Die Statuszeile — die eigentliche Auskunft des Editors.
     canvas.box(10, 300, 600, 30, fill=colours.fill)

@@ -25,7 +25,7 @@
 <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="/icon.svg?v=a72d0c52" type="image/svg+xml">
-<link rel="stylesheet" href="style.css?v=8c4d6ed7">
+<link rel="stylesheet" href="style.css?v=a6447f34">
 </head>
 <body>
 <a class="skip" href="#content">Zum Inhalt springen</a>
@@ -78,7 +78,7 @@
         <div class="shot">
           <div class="stage">
             <div class="chrome" aria-hidden="true"><i></i><i></i><i></i></div>
-            <a href="bilder/beleg-fenster.webp?v=141dce04"><img src="bilder/beleg-fenster.webp?v=141dce04" width="2560" height="1369" fetchpriority="high"
+            <a href="bilder/beleg-fenster.webp?v=88946e0a"><img src="bilder/beleg-fenster.webp?v=88946e0a" width="2560" height="1369" fetchpriority="high"
                  alt="Das Hauptfenster von Solidon3D mit einem zweifarbigen Schild: links Objekte, Parameter und Verlauf, in der Mitte groß das Schild, dessen Jahreszahl gewählt ist, rechts der Prüfbericht mit einer Warnung und das Fenster „Auswahl“ mit den Handlungen für die gewählten Lettern."></a>
           </div>
         </div>
@@ -102,7 +102,7 @@
 
   <section id="funktionen">
     <div class="wrap">
-      <div class="showcase" id="merkmale" data-operations="countersink_hole duplicate_feature move_feature plug_hole remove_feature resize_feature resize_hole rotate_feature slot_hole">
+      <div class="showcase" id="merkmale" data-operations="countersink_hole duplicate_feature move_feature pattern_feature plug_hole remove_feature resize_feature resize_hole rotate_feature slot_hole">
         <div>
           <span class="kicker">Merkmale</span>
           <h3>In einer fremden STL ist die Bohrung wieder eine Bohrung</h3>
@@ -135,10 +135,15 @@
           fließend in seine Nachbarflächen übergeht, nicht. <b>Welche Handlung
           an der gewählten Stelle möglich ist, zeigt Solidon3D mit ihrer
           Begründung.</b></p>
+          <p>Erkannte Bohrungen und andere geeignete Merkmale kannst du in
+          einer Reihe, auf einem Kreis oder gespiegelt wiederholen. So
+          entsteht aus einer Bohrung ein gleichmäßig verteiltes Lochbild.
+          Änderst du später das Maß der Quelle in einem früheren Schritt des
+          Verlaufs, folgen ihre Kopien.</p>
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="bilder/beleg-merkmal.webp?v=eb593459"><img src="bilder/beleg-merkmal.webp?v=eb593459" width="2560" height="1369" loading="lazy" decoding="async"
+            <a href="bilder/beleg-merkmal.webp?v=b6029f9f"><img src="bilder/beleg-merkmal.webp?v=b6029f9f" width="2560" height="1369" loading="lazy" decoding="async"
                  alt="Eine eingelesene Halterung mit fünf erkannten Bohrungen; Bohrung 4 ist gewählt. Im Bild stehen ihre Abstände zu den Kanten und die Gruppe „Bohrung ändern“ mit Durchmesser, Ort und Tiefe; rechts im Fenster „Auswahl“ der Satz „Passt vermutlich zu M5“ und darunter Merkmal verschieben, Zum Langloch ziehen, Merkmal drehen, Merkmal verdoppeln, Merkmal entfernen, Senken und Bohrung verschließen."></a>
           </div>
           <figcaption>Eine angeklickte Bohrung: ihre Maße im Bild, ihre Handlungen rechts in der Auswahl.</figcaption>
@@ -202,7 +207,7 @@
         </figure>
       </div>
 
-      <div class="showcase flip" id="skizzen-mit-zwaengen" data-operations="sketch_extrude sketch_loft sketch_pocket sketch_revolve sketch_sweep">
+      <div class="showcase flip" id="skizzen-mit-zwaengen" data-operations="sketch_extrude sketch_join sketch_loft sketch_loft_cut sketch_pocket sketch_revolve sketch_revolve_cut sketch_sweep sketch_sweep_cut">
         <div>
           <span class="kicker">Zeichnen mit Bedingungen</span>
           <h3>Zeichnen, bemaßen — und jedes Maß darf ein Parameter sein</h3>
@@ -224,10 +229,16 @@
           die Fläche, auf der gerade gezeichnet wird. Eine Hilfslinie bleibt
           eine Hilfslinie — auch nach Trimmen, Verlängern, Versetzen und
           Spiegeln.</p>
+          <p>Einen hochgezogenen Umriss kannst du direkt an den gewählten
+          Körper anfügen. Zum Ausschneiden lässt sich ein Querschnitt um eine
+          Achse drehen, etwa für eine Ringnut. Ein Übergang zwischen zwei
+          Umrissen schneidet einen Trichter oder einen Kanal von eckig auf
+          rund. Entlang eines Bogens oder einer gezeichneten Bahn entsteht ein
+          geführter Kanal, der auch seitlich austreten kann.</p>
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="bilder/beleg-skizze.webp?v=d3a8ff14"><img src="bilder/beleg-skizze.webp?v=d3a8ff14" width="2560" height="1369" loading="lazy" decoding="async"
+            <a href="bilder/beleg-skizze.webp?v=e2bae8da"><img src="bilder/beleg-skizze.webp?v=e2bae8da" width="2560" height="1369" loading="lazy" decoding="async"
                  alt="Der Skizzenmodus im Hauptfenster: Gezeichnet wird in der Ansicht auf einer Fläche des Halters aus Weg 2, ein bemaßtes Rechteck von 50 × 30 mm mit einem Kreis darin, dahinter blass der Halter mit seinen zwei Schraubenlöchern; unten die Leiste mit den Zeichenwerkzeugen, der Zeichenebene und den Knöpfen Fertig und Verwerfen, rechts der Reiter „Bedingungen“."></a>
           </div>
           <figcaption>Gezeichnet wird in der Ansicht — auf der Fläche, die man angeklickt hat.</figcaption>
@@ -338,7 +349,7 @@
         </div>
         <figure class="shot upright">
           <div class="stage">
-            <a href="bilder/beleg-eigener-baustein.webp?v=285c7387"><img src="bilder/beleg-eigener-baustein.webp?v=285c7387" width="460" height="1347" loading="lazy" decoding="async"
+            <a href="bilder/beleg-eigener-baustein.webp?v=6fac421d"><img src="bilder/beleg-eigener-baustein.webp?v=6fac421d" width="460" height="1347" loading="lazy" decoding="async"
                  alt="Der Dialog „Auswahl als Baustein speichern“, geöffnet aus dem Katalog: oben Name, Gruppe, Beschreibung, Lizenz und Autor, darunter für jedes Maß — hier Breite und Tiefe — Beschriftung, Einheit, kleinster und größter Wert, Vorgabe und Platz im Dialog, dann die Stellen, die man später anklicken kann, mit ihrem Namen im Rezept; unten „Bereichstest: 8 Kombinationen“ und der Knopf „Baustein anlegen“."></a>
           </div>
           <figcaption>Der Dialog fragt fünf Dinge — und rechnet den Maßbereich durch, bevor er speichert.</figcaption>
@@ -388,7 +399,7 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="bilder/beleg-bericht.webp?v=38bebc67"><img src="bilder/beleg-bericht.webp?v=38bebc67" width="1986" height="1241" loading="lazy" decoding="async"
+            <a href="bilder/beleg-bericht.webp?v=f85cb349"><img src="bilder/beleg-bericht.webp?v=f85cb349" width="1907" height="1192" loading="lazy" decoding="async"
                  alt="Eine Dose mit Deckel groß in der Ansicht, rechts ihr Prüfbericht: 0 Fehler, 2 Warnungen, 6 Hinweise. Die Warnungen sagen, dass die Passung enger sitzt als vorgesehen und dass eine Fläche des Deckels frei überhängt und Stützen braucht; darunter Hinweise zu Aushöhlen, Deckel und Material."></a>
           </div>
           <figcaption>Der Prüfbericht einer Dose mit Deckel.</figcaption>
@@ -452,7 +463,7 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="bilder/schritt-druck.webp?v=dbe52f39"><img src="bilder/schritt-druck.webp?v=dbe52f39" width="1562" height="976" loading="lazy" decoding="async"
+            <a href="bilder/schritt-druck.webp?v=8d9db92b"><img src="bilder/schritt-druck.webp?v=8d9db92b" width="1562" height="976" loading="lazy" decoding="async"
                  alt="Die Druckeinstellungen über einer eingelesenen Figur: Qualität, Drucker, Düse und Filament, darunter Schichthöhe, Wände, Fülldichte, Temperaturen und Stützen. Unter „Was dieses Teil verlangt“ schlägt Solidon3D einen Brim und eine längere Mindestzeit je Schicht vor; unten die Knöpfe Slicen und Im Slicer öffnen."></a>
           </div>
           <figcaption>Was dieses Teil verlangt, steht mit Grund im Dialog — übernommen wird, was angehakt ist.</figcaption>
@@ -554,7 +565,7 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="bilder/beleg-filamentlager.webp?v=88e5de3e"><img src="bilder/beleg-filamentlager.webp?v=88e5de3e" width="1172" height="781" loading="lazy" decoding="async"
+            <a href="bilder/beleg-filamentlager.webp?v=c57ec927"><img src="bilder/beleg-filamentlager.webp?v=c57ec927" width="1052" height="701" loading="lazy" decoding="async"
                  alt="Das Filamentlager, nach Lagerort gruppiert: sechs Spulen auf den Brettern „Regal Werkstatt“ und „Trockenbox“, jede mit gezeichneter Spule, Materialart, Restmenge in Gramm und Lagerort — eine Spule mit drei Farben, eine mit dem Vermerk „Wenig Filament“; darüber der Knopf „Lager verlassen“ und das Suchfeld."></a>
           </div>
           <figcaption>Das Regal, nach Lagerort gruppiert: Die Restmenge steht
@@ -572,13 +583,13 @@
           ihren Wert aus dem Materialprofil, statt als Konstante im Modell zu
           verschwinden. Vorne stehen die Werte, die man wirklich ändert —
           der Rest liegt unter „Weitere Einstellungen“.</p>
-          <p class="note">136 Operationen, alle nach demselben Muster:
+          <p class="note">142 Operationen, alle nach demselben Muster:
           <b>Menü, Kommandozeile und Chat sehen dieselbe
           Deklaration.</b></p>
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="bilder/beleg-dialog.webp?v=1ab43c13"><img src="bilder/beleg-dialog.webp?v=1ab43c13" width="2560" height="1369" loading="lazy" decoding="async"
+            <a href="bilder/beleg-dialog.webp?v=b10de91b"><img src="bilder/beleg-dialog.webp?v=b10de91b" width="2560" height="1369" loading="lazy" decoding="async"
                  alt="Das Hauptfenster mit dem gewählten Schild und rechts oben dem Dialog „Bohrung setzen“: Durchmesser und Position X, Y und Z mit je einem fx-Knopf, das Kästchen Langloch und der zugeklappte Bereich „Weitere Einstellungen“; unten im Bild die Leiste mit dem Hinweis, dass ein Klick ins Modell die Stelle setzt."></a>
           </div>
           <figcaption>Der Dialog einer Operation — vorne die zwei bis drei
@@ -696,7 +707,7 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="bilder/schritt-start.webp?v=3d3ea6b0"><img src="bilder/schritt-start.webp?v=3d3ea6b0" width="1472" height="920" loading="lazy" decoding="async"
+            <a href="bilder/schritt-start.webp?v=e12c45b1"><img src="bilder/schritt-start.webp?v=e12c45b1" width="1472" height="920" loading="lazy" decoding="async"
                  alt="Der Startbildschirm: das Ablagefeld für Modelle und Projekte, die Knöpfe Neues Projekt, Modell öffnen, Projekt öffnen und Handbuch, das Filamentlager mit sechs Spulen, darunter vier geführte Touren — je eine pro Weg — mit Vorschaubild, dazu Feedback geben und Solidon freiwillig unterstützen und der zugeklappte Abschnitt „Was kann das noch?“."></a>
           </div>
           <figcaption>Vier der zwölf Beispiele führen die Hauptwege vor; weitere
@@ -726,12 +737,19 @@
         Zielmaß bringen. Kopien entstehen einzeln, in einer Reihe oder im
         Kreis; Flächen und Bohrungen lassen sich aufeinander ausrichten.</p></div>
         </details>
-        <details class="tool-card" id="kanten-flaechen" data-operations="bead_edges brep_to_mesh chamfer_edges draft_faces fillet_edges push_face">
+        <details class="tool-card" id="kanten-flaechen" data-operations="bead_edges brep_to_mesh chamfer_edges draft_faces fillet_edges mesh_to_exact push_face">
           <summary>Kanten und Wände bearbeiten</summary>
           <div class="tool-content"><p>Verrunden, Fasen, Wülste, ebene Flächen versetzen und Formschrägen
         anstellen funktionieren an geeigneten STL-Netzen und exakten Körpern.
         Eine Formschräge neigt die Wand beispielsweise für eine leichter
-        entformbare Form. STEP bleibt für exakte Körper verfügbar.</p></div>
+        entformbare Form. STEP bleibt für exakte Körper verfügbar.</p>
+          <p>Ein Dreiecksnetz lässt sich in einen Körper mit bearbeitbaren
+          Flächen und Kanten umwandeln. Erkannte Ebenen und Rundungen werden
+          zu echten Flächen; danach ist auch der STEP-Export möglich. Nicht
+          zugeordnete Bereiche bleiben ebene Dreiecke. Der Prüfbericht nennt
+          ihren Anteil und die Abweichung zur Vorlage. Ein früherer
+          Konstruktionsverlauf entsteht dadurch nicht. Für organische Figuren
+          und Scans bleibt das Netz die passende Wahl.</p></div>
         </details>
         <details class="tool-card" id="gehaeuse" data-operations="create_lid hollow_object screw_lid shell_exact thicken thread_exact">
           <summary>Gehäuse und passende Deckel</summary>

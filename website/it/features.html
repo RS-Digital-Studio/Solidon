@@ -27,7 +27,7 @@
 <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="/icon.svg?v=a72d0c52" type="image/svg+xml">
-<link rel="stylesheet" href="../style.css?v=8c4d6ed7">
+<link rel="stylesheet" href="../style.css?v=a6447f34">
 </head>
 <body>
 <a class="skip" href="#content">Vai al contenuto</a>
@@ -80,7 +80,7 @@
         <div class="shot">
           <div class="stage">
             <div class="chrome" aria-hidden="true"><i></i><i></i><i></i></div>
-            <a href="../bilder/beleg-fenster-it.webp?v=fa7803e6"><img src="../bilder/beleg-fenster-it.webp?v=fa7803e6" width="2560" height="1369" fetchpriority="high"
+            <a href="../bilder/beleg-fenster-it.webp?v=5a6a29f4"><img src="../bilder/beleg-fenster-it.webp?v=5a6a29f4" width="2560" height="1369" fetchpriority="high"
                  alt="La finestra principale di Solidon3D con una targa a due colori: a sinistra oggetti, parametri e cronologia, al centro la targa in grande con l’anno selezionato, a destra il rapporto di verifica con un avviso e il pannello Selezione con le azioni per le lettere selezionate."></a>
           </div>
         </div>
@@ -104,7 +104,7 @@
 
   <section id="features">
     <div class="wrap">
-      <div class="showcase" id="recognised-features" data-operations="countersink_hole duplicate_feature move_feature plug_hole remove_feature resize_feature resize_hole rotate_feature slot_hole">
+      <div class="showcase" id="recognised-features" data-operations="countersink_hole duplicate_feature move_feature pattern_feature plug_hole remove_feature resize_feature resize_hole rotate_feature slot_hole">
         <div>
           <span class="kicker">Caratteristiche</span>
           <h3>In un STL altrui, un foro torna a essere un foro</h3>
@@ -135,10 +135,15 @@
           il raggio o rimuoverli; una transizione che sfuma dolcemente nelle
           facce vicine, no. <b>Solidon3D spiega quali azioni sono
           disponibili nel punto selezionato e perché.</b></p>
+          <p>Puoi ripetere fori riconosciuti e altri elementi compatibili in
+          fila, lungo un cerchio o con copie speculari. Da un solo foro nasce
+          così una serie di fori a distanza regolare. Se cambi la misura
+          dell'originale in un passo precedente della cronologia, le copie si
+          aggiornano.</p>
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../bilder/beleg-merkmal-it.webp?v=48405fe5"><img src="../bilder/beleg-merkmal-it.webp?v=48405fe5" width="2560" height="1369" loading="lazy" decoding="async"
+            <a href="../bilder/beleg-merkmal-it.webp?v=b27d964e"><img src="../bilder/beleg-merkmal-it.webp?v=b27d964e" width="2560" height="1369" loading="lazy" decoding="async"
                  alt="Un supporto importato con cinque fori riconosciuti; il foro 4 è selezionato. Nella vista le sue distanze dai bordi e il gruppo «Modifica foro» con diametro, posizione e profondità; a destra, nel pannello Selezione, la riga «Probabilmente adatto a M5» e sotto Sposta elemento, Allunga in asola, Ruota elemento, Duplica elemento, Rimuovi elemento, Svasa e Chiudi un foro."></a>
           </div>
           <figcaption>Un foro cliccato: le sue quote nella vista, le sue azioni a destra nel pannello Selezione.</figcaption>
@@ -202,7 +207,7 @@
         </figure>
       </div>
 
-      <div class="showcase flip" id="sketches-with-constraints" data-operations="sketch_extrude sketch_loft sketch_pocket sketch_revolve sketch_sweep">
+      <div class="showcase flip" id="sketches-with-constraints" data-operations="sketch_extrude sketch_join sketch_loft sketch_loft_cut sketch_pocket sketch_revolve sketch_revolve_cut sketch_sweep sketch_sweep_cut">
         <div>
           <span class="kicker">Schizzi con vincoli</span>
           <h3>Disegna, quota — e ogni quota può essere un parametro</h3>
@@ -220,10 +225,16 @@
           sotto indica la faccia su cui si sta disegnando. Una linea ausiliaria
           resta ausiliaria — anche dopo tagliare, prolungare, spostare e
           specchiare.</p>
+          <p>Puoi estrudere un contorno e unirlo direttamente al solido
+          selezionato. Per togliere materiale, fai ruotare una sezione attorno
+          a un asse, per esempio per creare una scanalatura anulare. Un
+          passaggio tra due contorni ritaglia un imbuto o un canale da
+          quadrato a rotondo. Seguendo un arco o un percorso disegnato si
+          ritaglia un canale guidato che può anche sboccare lateralmente.</p>
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../bilder/beleg-skizze-it.webp?v=eefa6c35"><img src="../bilder/beleg-skizze-it.webp?v=eefa6c35" width="2560" height="1369" loading="lazy" decoding="async"
+            <a href="../bilder/beleg-skizze-it.webp?v=e0374833"><img src="../bilder/beleg-skizze-it.webp?v=e0374833" width="2560" height="1369" loading="lazy" decoding="async"
                  alt="La modalità schizzo nella finestra principale: si disegna nella vista, su una faccia del supporto del percorso 2 — un rettangolo quotato di 50 × 30 mm con un cerchio dentro, dietro il supporto sfumato con i suoi due fori per viti; in basso la barra con gli strumenti di disegno, il piano di schizzo e i pulsanti Fatto e Scarta, a destra la scheda Vincoli."></a>
           </div>
           <figcaption>Si disegna nella vista — sulla faccia su cui hai fatto clic.</figcaption>
@@ -332,7 +343,7 @@
         </div>
         <figure class="shot upright">
           <div class="stage">
-            <a href="../bilder/beleg-eigener-baustein-it.webp?v=d7db0054"><img src="../bilder/beleg-eigener-baustein-it.webp?v=d7db0054" width="456" height="1347" loading="lazy" decoding="async"
+            <a href="../bilder/beleg-eigener-baustein-it.webp?v=4df3ae24"><img src="../bilder/beleg-eigener-baustein-it.webp?v=4df3ae24" width="456" height="1347" loading="lazy" decoding="async"
                  alt="La finestra «Salva la selezione come blocco», aperta dal catalogo: in alto nome, gruppo, descrizione, licenza e autore, poi per ogni quota — qui larghezza e profondità — etichetta, unità, valore minimo e massimo, valore predefinito e posto nella finestra, poi i punti su cui si potrà fare clic con il loro nome nella ricetta; in basso «Test dell’intervallo: 8 combinazioni» e il pulsante Crea blocco."></a>
           </div>
           <figcaption>La finestra chiede cinque cose — e calcola l'intero intervallo prima di salvare.</figcaption>
@@ -382,7 +393,7 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../bilder/beleg-bericht-it.webp?v=e1538448"><img src="../bilder/beleg-bericht-it.webp?v=e1538448" width="1979" height="1237" loading="lazy" decoding="async"
+            <a href="../bilder/beleg-bericht-it.webp?v=d4381ddd"><img src="../bilder/beleg-bericht-it.webp?v=d4381ddd" width="1907" height="1192" loading="lazy" decoding="async"
                  alt="Una scatola con coperchio, grande nella vista, e a destra il suo rapporto di verifica: 0 errori, 2 avvisi, 6 note. Gli avvisi dicono che l’accoppiamento è più stretto del previsto e che una faccia del coperchio è a sbalzo e richiede supporti; sotto, note su svuotamento, coperchio e materiale."></a>
           </div>
           <figcaption>Il rapporto di verifica di una scatola con coperchio.</figcaption>
@@ -445,7 +456,7 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../bilder/schritt-druck-it.webp?v=7680c270"><img src="../bilder/schritt-druck-it.webp?v=7680c270" width="1555" height="972" loading="lazy" decoding="async"
+            <a href="../bilder/schritt-druck-it.webp?v=64ed5220"><img src="../bilder/schritt-druck-it.webp?v=64ed5220" width="1555" height="972" loading="lazy" decoding="async"
                  alt="Le impostazioni di stampa sopra una figura importata: qualità, stampante, ugello e filamento, poi altezza strato, pareti, riempimento, temperature e supporti. In «Cosa richiede questo pezzo» Solidon3D propone un brim e un tempo minimo per strato più lungo; in basso i pulsanti Affetta e Apri nello slicer."></a>
           </div>
           <figcaption>Cosa richiede questo pezzo è nella finestra con il suo motivo — si applica ciò che è spuntato.</figcaption>
@@ -546,7 +557,7 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../bilder/beleg-filamentlager-it.webp?v=c5bf6098"><img src="../bilder/beleg-filamentlager-it.webp?v=c5bf6098" width="1172" height="781" loading="lazy" decoding="async"
+            <a href="../bilder/beleg-filamentlager-it.webp?v=0c5ab9ac"><img src="../bilder/beleg-filamentlager-it.webp?v=0c5ab9ac" width="1049" height="699" loading="lazy" decoding="async"
                  alt="Il magazzino filamenti, raggruppato per posizione: sei bobine sui ripiani «Armadio officina» e «Dry box», ciascuna con la bobina disegnata, tipo di materiale, grammi residui e posizione — una bobina a tre colori, una segnata «Poco filamento»; sopra il pulsante Esci dal magazzino e il campo di ricerca."></a>
           </div>
           <figcaption>Il ripiano, raggruppato per posizione: la quantità rimanente
@@ -564,13 +575,13 @@
           loro valore dal profilo del materiale, invece di sparire nel
           modello come costante. Davanti stanno i due o tre valori che si
           cambiano davvero — il resto vive sotto «Altre impostazioni».</p>
-          <p class="note">136 operazioni, tutte sullo stesso schema:
+          <p class="note">142 operazioni, tutte sullo stesso schema:
           <b>menu, riga di comando e chat leggono la
           stessa dichiarazione.</b></p>
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../bilder/beleg-dialog-it.webp?v=62fed955"><img src="../bilder/beleg-dialog-it.webp?v=62fed955" width="2560" height="1369" loading="lazy" decoding="async"
+            <a href="../bilder/beleg-dialog-it.webp?v=e6830826"><img src="../bilder/beleg-dialog-it.webp?v=e6830826" width="2560" height="1369" loading="lazy" decoding="async"
                  alt="La finestra principale con la targa selezionata e, in alto a destra, la finestra «Pratica un foro»: diametro e posizione X, Y e Z, ciascuno con un pulsante fx, la casella Asola e «Altre impostazioni» chiuso; in basso nella vista la barra che dice che un clic sul modello fissa il punto."></a>
           </div>
           <figcaption>Il dialogo di un'operazione — davanti i due o tre
@@ -688,7 +699,7 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../bilder/schritt-start-it.webp?v=10628bf4"><img src="../bilder/schritt-start-it.webp?v=10628bf4" width="1472" height="920" loading="lazy" decoding="async"
+            <a href="../bilder/schritt-start-it.webp?v=92e26c56"><img src="../bilder/schritt-start-it.webp?v=92e26c56" width="1472" height="920" loading="lazy" decoding="async"
                  alt="La schermata iniziale: l’area dove rilasciare modelli e progetti, i pulsanti Nuovo progetto, Apri modello, Apri progetto e Manuale, il magazzino filamenti con sei bobine, sotto quattro tour guidati — uno per percorso — con immagine di anteprima, e inoltre Dare un riscontro e Sostieni Solidon volontariamente, e la sezione chiusa «Che altro sa fare?»."></a>
           </div>
           <figcaption>Quattro dei dodici esempi presentano le vie principali; altri progetti mostrano
@@ -717,13 +728,21 @@
         dimensione maggiore a una misura obiettivo. Crea copie singole, in fila o in
         cerchio; allinea facce e fori tra loro.</p></div>
         </details>
-        <details class="tool-card" id="kanten-flaechen" data-operations="bead_edges brep_to_mesh chamfer_edges draft_faces fillet_edges push_face">
+        <details class="tool-card" id="kanten-flaechen" data-operations="bead_edges brep_to_mesh chamfer_edges draft_faces fillet_edges mesh_to_exact push_face">
           <summary>Modificare spigoli e pareti</summary>
           <div class="tool-content"><p>Raccordi, smussi, cordoni, spostamenti di facce
         piane e angoli di sformo funzionano su maglie STL e solidi esatti
         compatibili. Un angolo di sformo inclina una parete, ad esempio per
         facilitare l’estrazione da uno stampo. STEP resta disponibile per i solidi
-        esatti.</p></div>
+        esatti.</p>
+          <p>Una maglia di triangoli può diventare un solido con facce e
+          spigoli modificabili. I piani e le superfici curve riconosciuti
+          diventano facce reali; diventa quindi possibile anche esportare in
+          STEP. Le zone non riconosciute restano triangoli piani. Il rapporto
+          ne indica la percentuale e lo scostamento dall'originale. La
+          conversione non ricostruisce una precedente cronologia di
+          costruzione. Per figure organiche e scansioni è preferibile
+          mantenere la maglia.</p></div>
         </details>
         <details class="tool-card" id="gehaeuse" data-operations="create_lid hollow_object screw_lid shell_exact thicken thread_exact">
           <summary>Custodie e coperchi su misura</summary>

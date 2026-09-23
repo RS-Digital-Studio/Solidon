@@ -25,7 +25,7 @@
 <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="/icon.svg?v=a72d0c52" type="image/svg+xml">
-<link rel="stylesheet" href="../style.css?v=8c4d6ed7">
+<link rel="stylesheet" href="../style.css?v=a6447f34">
 </head>
 <body>
 <a class="skip" href="#content">Aller au contenu</a>
@@ -78,7 +78,7 @@
         <div class="shot">
           <div class="stage">
             <div class="chrome" aria-hidden="true"><i></i><i></i><i></i></div>
-            <a href="../bilder/beleg-fenster-fr.webp?v=fe3d324d"><img src="../bilder/beleg-fenster-fr.webp?v=fe3d324d" width="2560" height="1369" fetchpriority="high"
+            <a href="../bilder/beleg-fenster-fr.webp?v=ba32cf3a"><img src="../bilder/beleg-fenster-fr.webp?v=ba32cf3a" width="2560" height="1369" fetchpriority="high"
                  alt="La fenêtre principale de Solidon3D avec une plaque bicolore : à gauche objets, paramètres et historique, au centre la plaque en grand avec son année sélectionnée, à droite le rapport de contrôle avec un avertissement et le panneau Sélection avec les actions pour les lettres sélectionnées."></a>
           </div>
         </div>
@@ -102,7 +102,7 @@
 
   <section id="features">
     <div class="wrap">
-      <div class="showcase" id="recognised-features" data-operations="countersink_hole duplicate_feature move_feature plug_hole remove_feature resize_feature resize_hole rotate_feature slot_hole">
+      <div class="showcase" id="recognised-features" data-operations="countersink_hole duplicate_feature move_feature pattern_feature plug_hole remove_feature resize_feature resize_hole rotate_feature slot_hole">
         <div>
           <span class="kicker">Caractéristiques</span>
           <h3>Dans un STL étranger, un perçage redevient un perçage</h3>
@@ -135,10 +135,15 @@
           supprimer ; une transition qui se fond progressivement dans les
           faces voisines, non. <b>Solidon3D explique quelles actions sont possibles à
           l’endroit sélectionné et pourquoi.</b></p>
+          <p>Répétez les perçages reconnus et les autres éléments compatibles
+          en ligne, autour d'un cercle ou par symétrie. Un seul perçage
+          devient ainsi un ensemble de trous régulièrement espacés. Si vous
+          modifiez la cote de l'élément d'origine dans une étape antérieure de
+          l'historique, ses copies suivent.</p>
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../bilder/beleg-merkmal-fr.webp?v=6bcb72f9"><img src="../bilder/beleg-merkmal-fr.webp?v=6bcb72f9" width="2560" height="1369" loading="lazy" decoding="async"
+            <a href="../bilder/beleg-merkmal-fr.webp?v=6bf68345"><img src="../bilder/beleg-merkmal-fr.webp?v=6bf68345" width="2560" height="1369" loading="lazy" decoding="async"
                  alt="Un support importé avec cinq perçages reconnus ; le perçage 4 est sélectionné. Dans la vue, ses distances aux bords et le groupe « Modifier le trou » avec diamètre, position et profondeur ; à droite, dans le panneau Sélection, la ligne « Correspond probablement à M5 », puis Déplacer l’élément, Étirer en trou oblong, Faire pivoter l’élément, Dupliquer l’élément, Supprimer l’élément, Fraiser et Reboucher un perçage."></a>
           </div>
           <figcaption>Un perçage cliqué&nbsp;: ses cotes dans la vue, ses actions à droite dans le panneau Sélection.</figcaption>
@@ -202,7 +207,7 @@
         </figure>
       </div>
 
-      <div class="showcase flip" id="sketches-with-constraints" data-operations="sketch_extrude sketch_loft sketch_pocket sketch_revolve sketch_sweep">
+      <div class="showcase flip" id="sketches-with-constraints" data-operations="sketch_extrude sketch_join sketch_loft sketch_loft_cut sketch_pocket sketch_revolve sketch_revolve_cut sketch_sweep sketch_sweep_cut">
         <div>
           <span class="kicker">Esquisses sous contraintes</span>
           <h3>Dessiner, coter — et chaque cote peut être un paramètre</h3>
@@ -220,10 +225,16 @@
           du dessous nomme la face sur laquelle on dessine. Une ligne de
           construction reste une ligne de construction — même après
           ajustage, prolongement, décalage et symétrie.</p>
+          <p>Vous pouvez extruder un contour et le joindre directement au
+          solide sélectionné. Pour retirer de la matière, faites tourner une
+          section autour d'un axe, par exemple pour créer une gorge annulaire.
+          Une transition entre deux contours découpe un entonnoir ou un canal
+          passant du carré au rond. Le long d'un arc ou d'un chemin dessiné,
+          vous découpez un canal guidé qui peut aussi déboucher sur le côté.</p>
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../bilder/beleg-skizze-fr.webp?v=a26712dc"><img src="../bilder/beleg-skizze-fr.webp?v=a26712dc" width="2560" height="1369" loading="lazy" decoding="async"
+            <a href="../bilder/beleg-skizze-fr.webp?v=dafba0a4"><img src="../bilder/beleg-skizze-fr.webp?v=dafba0a4" width="2560" height="1369" loading="lazy" decoding="async"
                  alt="Le mode esquisse dans la fenêtre principale : on dessine dans la vue, sur une face du support du chemin 2 — un rectangle coté de 50 × 30 mm avec un cercle à l’intérieur, derrière lui le support estompé avec ses deux trous de vis ; en bas la barre avec les outils de dessin, le plan d’esquisse et les boutons Terminé et Abandonner, à droite l’onglet Contraintes."></a>
           </div>
           <figcaption>On dessine dans la vue — sur la face que l'on a cliquée.</figcaption>
@@ -304,7 +315,7 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../bilder/beleg-bausteine-fr.webp?v=7614cf68"><img src="../bilder/beleg-bausteine-fr.webp?v=7614cf68" width="1560" height="1144" loading="lazy" decoding="async"
+            <a href="../bilder/beleg-bausteine-fr.webp?v=e98420bc"><img src="../bilder/beleg-bausteine-fr.webp?v=e98420bc" width="1560" height="1144" loading="lazy" decoding="async"
                  alt="Le catalogue des blocs, ouvert par-dessus la fenêtre : les groupes Visserie, Mécanique et Fixation avec insert à chaud, piège à écrou, écrou imprimé, vis, filetage imprimable, trou de vis avec fraisure, charnière à axe, roulement à billes, goupille et alésage, œil de charnière, ergot d’encliquetage, charnière-film, clips, pied, suspension en trou de serrure, poche à aimant, crochet pour panneau perforé, collier et support mural, chacun avec son aperçu et ses dimensions. En bas les boutons Insérer et Enregistrer la sélection comme bloc."></a>
           </div>
           <figcaption>Le catalogue — chaque aperçu est rendu, pas dessiné.</figcaption>
@@ -333,7 +344,7 @@
         </div>
         <figure class="shot upright">
           <div class="stage">
-            <a href="../bilder/beleg-eigener-baustein-fr.webp?v=1ed93cc5"><img src="../bilder/beleg-eigener-baustein-fr.webp?v=1ed93cc5" width="429" height="1347" loading="lazy" decoding="async"
+            <a href="../bilder/beleg-eigener-baustein-fr.webp?v=f76fd785"><img src="../bilder/beleg-eigener-baustein-fr.webp?v=f76fd785" width="429" height="1347" loading="lazy" decoding="async"
                  alt="La boîte de dialogue « Enregistrer la sélection comme bloc », ouverte depuis le catalogue : en haut nom, groupe, description, licence et auteur, puis pour chaque cote — ici largeur et profondeur — libellé, unité, valeur minimale et maximale, valeur par défaut et place dans la boîte de dialogue, ensuite les emplacements sur lesquels on pourra cliquer, avec leur nom dans la recette ; en bas « Test de plage : 8 combinaisons » et le bouton Créer le bloc."></a>
           </div>
           <figcaption>Le dialogue pose cinq questions — et calcule toute la plage avant d'enregistrer.</figcaption>
@@ -383,7 +394,7 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../bilder/beleg-bericht-fr.webp?v=27b3b88b"><img src="../bilder/beleg-bericht-fr.webp?v=27b3b88b" width="1970" height="1231" loading="lazy" decoding="async"
+            <a href="../bilder/beleg-bericht-fr.webp?v=0e3780fe"><img src="../bilder/beleg-bericht-fr.webp?v=0e3780fe" width="1907" height="1192" loading="lazy" decoding="async"
                  alt="Une boîte avec couvercle, en grand dans la vue, et à droite son rapport de contrôle : 0 erreur, 2 avertissements, 6 remarques. Les avertissements signalent que l’ajustement est plus serré que prévu et qu’une face du couvercle est en porte-à-faux et demande des supports ; en dessous, des remarques sur l’évidement, le couvercle et le matériau."></a>
           </div>
           <figcaption>Le rapport de contrôle d'une boîte avec couvercle.</figcaption>
@@ -446,7 +457,7 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../bilder/schritt-druck-fr.webp?v=7037ae71"><img src="../bilder/schritt-druck-fr.webp?v=7037ae71" width="1577" height="986" loading="lazy" decoding="async"
+            <a href="../bilder/schritt-druck-fr.webp?v=0a3425df"><img src="../bilder/schritt-druck-fr.webp?v=0a3425df" width="1577" height="986" loading="lazy" decoding="async"
                  alt="Les réglages d’impression par-dessus une figurine importée : qualité, imprimante, buse et filament, puis hauteur de couche, parois, remplissage, températures et supports. Sous « Ce que cette pièce exige », Solidon3D propose une bordure (brim) et un temps minimal par couche plus long ; en bas les boutons Trancher et Ouvrir dans le slicer."></a>
           </div>
           <figcaption>Ce que la pièce exige figure dans la boîte de dialogue avec sa raison — ce qui est coché est appliqué.</figcaption>
@@ -546,7 +557,7 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../bilder/beleg-filamentlager-fr.webp?v=f3cf1bd5"><img src="../bilder/beleg-filamentlager-fr.webp?v=f3cf1bd5" width="1172" height="781" loading="lazy" decoding="async"
+            <a href="../bilder/beleg-filamentlager-fr.webp?v=a09dcd4b"><img src="../bilder/beleg-filamentlager-fr.webp?v=a09dcd4b" width="1060" height="707" loading="lazy" decoding="async"
                  alt="Le stock de filament, regroupé par emplacement : six bobines sur les étagères « Armoire de l’atelier » et « Boîte sèche », chacune avec sa bobine dessinée, le type de matériau, les grammes restants et l’emplacement — une bobine en trois couleurs, une marquée « Peu de filament » ; au-dessus le bouton Quitter le stock et le champ de recherche."></a>
           </div>
           <figcaption>L’étagère, regroupée par emplacement&nbsp;: la quantité
@@ -565,13 +576,13 @@
           de disparaître dans le modèle comme constantes. Devant, les deux ou
           trois valeurs qu'on change vraiment — le reste vit sous
           «&nbsp;Autres réglages&nbsp;».</p>
-          <p class="note">136 opérations, toutes sur le même modèle&nbsp;:
+          <p class="note">142 opérations, toutes sur le même modèle&nbsp;:
           <b>menu, ligne de commande et chat lisent la même
           déclaration.</b></p>
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../bilder/beleg-dialog-fr.webp?v=b73b576b"><img src="../bilder/beleg-dialog-fr.webp?v=b73b576b" width="2560" height="1369" loading="lazy" decoding="async"
+            <a href="../bilder/beleg-dialog-fr.webp?v=9a9f9221"><img src="../bilder/beleg-dialog-fr.webp?v=9a9f9221" width="2560" height="1369" loading="lazy" decoding="async"
                  alt="La fenêtre principale avec la plaque sélectionnée et, en haut à droite, la boîte de dialogue « Percer un trou » : diamètre et position X, Y et Z, chacun avec un bouton fx, la case Trou oblong et « Autres réglages » replié ; en bas de la vue la barre qui indique qu’un clic sur le modèle place le perçage."></a>
           </div>
           <figcaption>Le dialogue d'une opération — devant, les deux ou trois
@@ -690,7 +701,7 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../bilder/schritt-start-fr.webp?v=95d311b4"><img src="../bilder/schritt-start-fr.webp?v=95d311b4" width="1472" height="920" loading="lazy" decoding="async"
+            <a href="../bilder/schritt-start-fr.webp?v=9af75be6"><img src="../bilder/schritt-start-fr.webp?v=9af75be6" width="1472" height="920" loading="lazy" decoding="async"
                  alt="L’écran d’accueil : la zone où déposer modèles et projets, les boutons Nouveau projet, Ouvrir un modèle, Ouvrir un projet et Manuel, le stock de filament avec six bobines, puis quatre visites guidées — une par chemin — avec image d’aperçu, ainsi que Donner mon avis et Soutenir volontairement Solidon, et la section repliée « Que sait-il faire encore ? »."></a>
           </div>
           <figcaption>Quatre des douze exemples présentent les voies principales ; les autres projets
@@ -720,12 +731,20 @@
         copies individuelles, en ligne ou en cercle ; aligner des faces et des
         perçages entre eux.</p></div>
         </details>
-        <details class="tool-card" id="kanten-flaechen" data-operations="bead_edges brep_to_mesh chamfer_edges draft_faces fillet_edges push_face">
+        <details class="tool-card" id="kanten-flaechen" data-operations="bead_edges brep_to_mesh chamfer_edges draft_faces fillet_edges mesh_to_exact push_face">
           <summary>Modifier les arêtes et les parois</summary>
           <div class="tool-content"><p>Congés, chanfreins, bourrelets, déplacement
         de faces planes et dépouilles fonctionnent sur les maillages STL et les
         solides exacts compatibles. Une dépouille incline une paroi, par exemple pour
-        faciliter le démoulage. STEP reste disponible pour les solides exacts.</p></div>
+        faciliter le démoulage. STEP reste disponible pour les solides exacts.</p>
+          <p>Un maillage de triangles peut être converti en solide avec des
+          faces et des arêtes modifiables. Les plans et les surfaces courbes
+          reconnus deviennent de vraies faces ; l'export STEP devient alors
+          possible. Les zones non reconnues restent des triangles plans. Le
+          rapport indique leur proportion et l'écart par rapport à l'original.
+          Cette conversion ne reconstitue pas un ancien historique de
+          construction. Pour les figurines aux formes organiques et les scans,
+          mieux vaut conserver le maillage.</p></div>
         </details>
         <details class="tool-card" id="gehaeuse" data-operations="create_lid hollow_object screw_lid shell_exact thicken thread_exact">
           <summary>Des boîtiers et des couvercles adaptés</summary>

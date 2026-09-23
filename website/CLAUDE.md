@@ -124,6 +124,9 @@ Damit nutzt der Text auf großen Bildschirmen die Mitte statt links neben
 einer leeren, wie ein Ladefehler wirkenden Spalte zu stehen; auf kleinen
 Fenstern bleibt die normale Leserichtung erhalten.
 
+Das Scrollpolster für Sprungziele berücksichtigt unter 30rem die zweizeilige
+Kopfzeile; die Zielüberschrift bleibt beim direkten Anspringen darunter sichtbar.
+
 ## Eine Falle beim Suchen
 
 **Ein Tag kann einen Namen zerteilen.** Steht die Marke als

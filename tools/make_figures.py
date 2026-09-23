@@ -255,6 +255,27 @@ def await_result(app: QApplication, session: object, seconds: float = 30.0) -> b
     return False
 
 
+def figure_sketch(plane: str) -> str:
+    """Die Zeichnung des Skizzenbildes als Parameterwert — **auf** ``plane``.
+
+    **Maße auf dem Raster.** Das Raster steht auf fünf Millimetern, und ein
+    Rechteck von 46 mal 24 legt seine Kanten zwischen die Linien — im Bild
+    sieht das aus, als läge die Zeichnung schief im Netz. 50 mal 30 liegt auf
+    ±25 und ±15, der Kreis mit 20 auf ±10.
+
+    **Die Ebene steht in der Zeichnung, nicht nur im Aufruf.** Eine Zeichnung
+    mit Strichen behält ihre Ebene; die Ebenenwahl dreht dann nur noch den
+    Blick (``SketchCanvas.set_plane``). Mit einem Rechteck auf der Draufsicht
+    und der Fläche als ``plane`` lag die Zeichnung unter dem Körper auf z = 0,
+    und seit der Zeichenmodus beim Betreten das Ebenenfeld aus der Zeichnung
+    aufbaut, brach die Aufnahme ab.
+    """
+    from app.core.sketch import shapes
+    from app.core.sketch.serialize import sketch_to_text
+
+    return sketch_to_text(replace(shapes.rectangle(50.0, 30.0), plane=plane))
+
+
 def frame_sketch(window: Any, app: QApplication) -> None:
     """Den Skizzenmodus so aufsetzen, dass ein Bild davon etwas zeigt.
 
@@ -274,7 +295,6 @@ def frame_sketch(window: Any, app: QApplication) -> None:
       Punkten passt, verdeckt bei 1400 die halbe Zeichnung.
     """
     from app.core.sketch import shapes
-    from app.core.sketch.serialize import sketch_to_text
 
     result = window.session.last_result
     if result is None:
@@ -318,11 +338,7 @@ def frame_sketch(window: Any, app: QApplication) -> None:
         # gewählte Wirtskörper macht im Skizzenbild zugleich sichtbar, dass
         # derselbe Umriss auch als Tasche abgetragen werden kann.
         "sketch_extrude",
-        # **Maße auf dem Raster.** Das Raster steht auf fünf Millimetern, und
-        # ein Rechteck von 46 mal 24 legt seine Kanten zwischen die Linien —
-        # im Bild sieht das aus, als läge die Zeichnung schief im Netz. 50 mal
-        # 30 liegt auf ±25 und ±15, der Kreis mit 20 auf ±10.
-        sketch_to_text(shapes.rectangle(50.0, 30.0)),
+        figure_sketch(plane_key),
         plane=plane_key,
     )
     panel = window._sketch_panel

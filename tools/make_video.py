@@ -3587,7 +3587,13 @@ def shoot_loop(
     # Neustart der Schleife wieder zurück. Und die Statuszeile trägt die
     # Restlaufzeit der Demo („noch 38 Tage") — im Film eine Zahl, die in einer
     # Woche falsch ist.
-    session.wait_for_idle(120_000)
+    if not session.wait_for_idle(120_000):
+        raise SystemExit("Die Auswertung wurde nicht rechtzeitig fertig — kein Loop")
+    # Der Prüfbericht gehört dem Fenster und hat einen eigenen Arbeiter;
+    # Sitzungsleerlauf allein wartet dessen Druckanalyse nicht ab.
+    analysis = window._print_findings.worker
+    if analysis is not None and not analysis.wait(120_000):
+        raise SystemExit("Die Druckanalyse wurde nicht rechtzeitig fertig — kein Loop")
     settle(app, 60)
     window.statusBar().hide()
     settle(app, 20)
