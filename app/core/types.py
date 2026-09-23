@@ -1078,9 +1078,29 @@ class TemperatureSettings:
 
 @dataclass(frozen=True, slots=True)
 class CoolingSettings:
-    """Kühlung. ``fan_speed`` ist ein Anteil, 1.0 heißt volle Drehzahl."""
+    """Kühlung. Lüfterwerte sind Anteile, 1.0 heißt volle Drehzahl.
+
+    Der Bauteillüfter läuft in allen drei Slicer-Familien auf einer Kurve über
+    der Schichtzeit: bis zur :attr:`minimum_layer_time` mit :attr:`fan_speed`,
+    ab :attr:`fan_below_layer_time` mit :attr:`minimum_fan_speed`, dazwischen
+    linear. Bis zum 23.09.2026 kannte Solidon nur einen Wert und schrieb ihn an
+    beide Enden — der Lüfter lief bei PLA in jeder Schicht voll (Befund
+    Robert, am ElegooSlicer gemessen).
+    """
 
     fan_speed: float = 1.0
+    """Das obere Ende: so stark kühlt der Lüfter eine Schicht, die kaum Zeit
+    zum Abkühlen hat."""
+    minimum_fan_speed: float = 1.0
+    """Das untere Ende: so stark läuft er auch bei Schichten, die lange genug
+    dauern — über null läuft er nie ganz aus. Höher als :attr:`fan_speed` wird
+    er nicht übergeben (``handover.as_mapping`` deckelt). Die Vorgabe gleicht
+    :attr:`fan_speed`; eine ältere Projektdatei ohne das Feld ergänzt es aus
+    ihrem Material (``serialise.print_settings_from_data``)."""
+    fan_below_layer_time: float = 60.0
+    """Sekunden. Kürzere Schichten kühlt der Lüfter stärker als mit
+    :attr:`minimum_fan_speed`. Die Vorgabe ist der Slicerstandard von Orca und
+    PrusaSlicer; die Materialien bringen ihre eigene mit."""
     bridge_fan_speed: float = 1.0
     disable_first_layers: int = 1
     """So viele erste Schichten laufen ohne Lüfter — sonst löst sich das Teil."""

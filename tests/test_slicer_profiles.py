@@ -525,6 +525,54 @@ def test_a_filament_profile_tells_its_own_values(tmp_path: Path) -> None:
     assert werte["cooling.fan_speed"] == 0.4, "Prozent im Profil, Bruch in Solidon"
 
 
+def test_both_ends_of_the_fan_curve_are_read_back_in_every_format(tmp_path: Path) -> None:
+    """Befund Robert, 23.09.2026: Elegoo PLA @ECC2 nennt 50 bis 100 % mit der
+    Schwelle bei 80 s. Gelesen wurde nur das obere Ende, und beim Schreiben
+    stand der eine Wert an beiden — der Lüfter lief in jeder Schicht voll.
+    Dieselbe Frage an alle drei Formate, die Solidon zurückliest."""
+    orca = tmp_path / "Elegoo PLA @ECC2.json"
+    orca.write_text(
+        json.dumps(
+            {
+                "name": "Elegoo PLA @ECC2",
+                "fan_min_speed": ["50"],
+                "fan_max_speed": ["100"],
+                "fan_cooling_layer_time": ["80"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    prusa = tmp_path / "filament" / "Prusament PETG.ini"
+    prusa.parent.mkdir()
+    prusa.write_text(
+        "min_fan_speed = 30\nmax_fan_speed = 50\nfan_below_layer_time = 20\n",
+        encoding="utf-8",
+    )
+    cura = tmp_path / "petg.inst.cfg"
+    cura.write_text(
+        "[general]\nversion = 4\nname = PETG\ndefinition = fdmprinter\n\n"
+        "[metadata]\ntype = material\n\n"
+        "[values]\ncool_fan_speed = 60\ncool_fan_speed_min = 25\n"
+        "cool_min_layer_time_fan_speed_max = 15\n",
+        encoding="utf-8",
+    )
+
+    werte = sp.filament_values(orca)
+    assert werte["cooling.fan_speed"] == pytest.approx(1.0)
+    assert werte["cooling.minimum_fan_speed"] == pytest.approx(0.5)
+    assert werte["cooling.fan_below_layer_time"] == pytest.approx(80.0)
+
+    werte = sp.filament_values(prusa)
+    assert werte["cooling.fan_speed"] == pytest.approx(0.5)
+    assert werte["cooling.minimum_fan_speed"] == pytest.approx(0.3)
+    assert werte["cooling.fan_below_layer_time"] == pytest.approx(20.0)
+
+    werte = sp.filament_values(cura)
+    assert werte["cooling.fan_speed"] == pytest.approx(0.6)
+    assert werte["cooling.minimum_fan_speed"] == pytest.approx(0.25)
+    assert werte["cooling.fan_below_layer_time"] == pytest.approx(15.0)
+
+
 def test_what_a_filament_does_not_say_is_not_invented(tmp_path: Path) -> None:
     """Ein Wert, den niemand gesetzt hat, ist keine Angabe des Herstellers.
 

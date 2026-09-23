@@ -17,6 +17,7 @@ from dataclasses import fields
 from typing import Any, Final
 
 from app.core.errors import ValidationError
+from app.core.knowledge import print_settings, profiles
 from app.core.types import (
     FIT_KINDS,
     Action,
@@ -719,6 +720,28 @@ _SETTING_GROUPS: Final[dict[str, type]] = {
 }
 
 
+def _group_from_data(group: str, klass: type, stored: dict[str, Any], material: str) -> Any:
+    """Eine Einstellungsgruppe aus der Datei — unbekannte Schlüssel fallen weg.
+
+    **Die Lüfterkurve einer älteren Datei kommt aus dem Material.** Bis zum
+    23.09.2026 kannte Solidon einen Lüfterwert; das Feld hieß „Lüfter", und
+    gemeint war die Drehzahl, mit der gekühlt wird — das obere Ende. Dass die
+    Übergabe ihn auch als unteres schrieb, war der Fehler, keine Wahl des
+    Kunden (Befund Robert, Entscheidung der Durchsicht vom 23.09.2026). Fehlen
+    unteres Ende oder Schwelle, kommen sie deshalb aus derselben Materialzeile
+    wie bei einem neuen Projekt (:func:`print_settings.fan_curve`), das untere
+    höchstens so hoch wie das gespeicherte obere. Ohne bekanntes Material
+    bleibt es beim einen Wert: Eine Kurve wird nicht erfunden.
+    """
+    known = {entry.name for entry in fields(klass)}
+    values = {key: value for key, value in stored.items() if key in known}
+    if group == "cooling" and not {"minimum_fan_speed", "fan_below_layer_time"} <= set(values):
+        upper = float(values.get("fan_speed", CoolingSettings().fan_speed))
+        for key, value in print_settings.fan_curve(material, upper).items():
+            values.setdefault(key, value)
+    return klass(**values)
+
+
 #: Die Gruppen, die ein Slot übersteuern darf — was an der Spule hängt.
 #: Geometrie steht nicht dabei: Wandstärke und Schichthöhe sind Eigenschaften
 #: des Teils, nicht des Materials (§20).
@@ -755,22 +778,26 @@ def _override_to_data(override: SlotOverride | None) -> dict[str, Any] | None:
     return data
 
 
-def _override_from_data(data: Any) -> SlotOverride | None:
+def _override_from_data(data: Any, material: str = "") -> SlotOverride | None:
     """Zurück aus der Projektdatei — unbekannte Schlüssel fallen weg.
 
     Dieselbe Nachsicht wie bei den Einstellungen selbst: Eine Datei aus einer
     späteren Fassung kann ein Feld tragen, das es hier noch nicht gibt, und
-    das Projekt öffnet trotzdem.
+    das Projekt öffnet trotzdem. ``material`` ist das des Projekts; eine
+    Spule mit eindeutiger eigener Materialart ergänzt ihre Lüfterkurve aus
+    dieser (:func:`_group_from_data`) — dieselbe Auflösung wie
+    ``handover.settings_for_slot``.
     """
     if not isinstance(data, dict):
         return None
+    material_type = data.get("material_type")
+    own = profiles.material_id_for_type(material_type) if isinstance(material_type, str) else ""
     groups: dict[str, Any] = {}
     for group, klass in _OVERRIDE_GROUPS.items():
         stored = data.get(group)
         if not isinstance(stored, dict):
             continue
-        known = {entry.name for entry in fields(klass)}
-        groups[group] = klass(**{key: value for key, value in stored.items() if key in known})
+        groups[group] = _group_from_data(group, klass, stored, own or material)
     if not groups:
         return None
     from app.core.scene.cache import _name_from_data
@@ -872,18 +899,18 @@ def print_settings_to_data(settings: PrintSettings) -> dict[str, Any]:
     return data
 
 
-def print_settings_from_data(data: dict[str, Any]) -> PrintSettings:
+def print_settings_from_data(data: dict[str, Any], material: str = "") -> PrintSettings:
     """Zurück aus der Projektdatei.
 
     Was in der Datei fehlt, bleibt auf der Vorgabe der Dataclass — eine ältere
     Datei kennt eine später hinzugekommene Einstellung nicht, und das ist kein
-    Fehler, sondern der Normalfall beim Öffnen.
+    Fehler, sondern der Normalfall beim Öffnen. Ausnahme ist die Lüfterkurve:
+    Sie kommt aus ``material``, dem Material des Projekts
+    (:func:`_group_from_data`).
     """
     groups: dict[str, Any] = {}
     for group, klass in _SETTING_GROUPS.items():
-        stored = data.get(group, {})
-        known = {entry.name for entry in fields(klass)}
-        groups[group] = klass(**{key: value for key, value in stored.items() if key in known})
+        groups[group] = _group_from_data(group, klass, data.get(group, {}), material)
     return PrintSettings(
         id=str(data.get("id", "standard")),
         title=str(data.get("title", "")),
@@ -896,7 +923,9 @@ def print_settings_from_data(data: dict[str, Any]) -> PrintSettings:
         slot_profile_bindings=None
         if data.get("slot_profile_bindings") is None
         else tuple(_slot_profile_binding_from_data(one) for one in data["slot_profile_bindings"]),
-        slot_overrides=tuple(_override_from_data(one) for one in data.get("slot_overrides", ())),
+        slot_overrides=tuple(
+            _override_from_data(one, material) for one in data.get("slot_overrides", ())
+        ),
         spool_bindings=tuple(
             _spool_binding_from_data(item) for item in data.get("spool_bindings", ())
         ),
@@ -1037,7 +1066,13 @@ def document_from_data(data: dict[str, Any]) -> Document:
         highest_op=int(numbering.get("op", 0)),
         highest_object=int(numbering.get("object", 0)),
         print_settings=(
-            print_settings_from_data(stored)
+            # Mit dem Material, das an diesem Drucker gilt — wie die Sitzung
+            # es für ein Projekt ohne eigene Angabe auflöst: Eine ältere Datei
+            # ergänzt daraus ihre Lüfterkurve.
+            print_settings_from_data(
+                stored,
+                profiles.material_for(scene.get("printer", ""), scene.get("material", "")),
+            )
             if isinstance(stored := data.get("print_settings"), dict)
             else None
         ),

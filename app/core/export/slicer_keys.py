@@ -115,6 +115,20 @@ def _flag(value: object) -> str:
     return "1" if value else "0"
 
 
+def _positive_switch(value: object) -> str:
+    """Der Schalter zu einem Anteil, der nur mit ihm gilt — ``0``/``1`` wie
+    :func:`_flag`, für Prusa und die Orca-Familie.
+
+    Der untere Lüfterwert ist so einer: Ohne ``reduce_fan_stop_start_freq``
+    (Orca) oder ``fan_always_on`` (PrusaSlicer) nehmen beide ihn nur innerhalb
+    der Schwelle und schalten den Lüfter bei längeren Schichten **ganz aus**.
+    Gemessen am ElegooSlicer ohne Herstellerprofil, dessen Vorgabe hier 0 ist:
+    PLA mit ``M106 S0`` in jeder Schicht über 60 s. Ein unterer Wert von null
+    meint beides gleich, der Schalter steht dann auf 0.
+    """
+    return "1" if float(value) > 0.0 else "0"  # type: ignore[arg-type]
+
+
 def _boolean(value: object) -> str:
     """Nur für CuraEngine. Prusa und Orca schreiben ``0``/``1`` — siehe
     :func:`_flag`, und die Verwechslung ist geräuschlos: ein ``true`` im
@@ -215,8 +229,13 @@ PRUSA: Final[tuple[Row, ...]] = (
     ("temperature.bed", "bed_temperature", _integer),
     ("temperature.bed_first_layer", "first_layer_bed_temperature", _integer),
     ("temperature.chamber", "chamber_temperature", _integer),
+    # Zwei Enden einer Kurve über der Schichtzeit, nicht ein Wert zweimal:
+    # Bis zum 23.09.2026 stand hier ``cooling.fan_speed`` auch unter
+    # ``min_fan_speed``, und der Lüfter lief fest (Befund Robert).
     ("cooling.fan_speed", "max_fan_speed", _percent),
-    ("cooling.fan_speed", "min_fan_speed", _percent),
+    ("cooling.minimum_fan_speed", "min_fan_speed", _percent),
+    ("cooling.minimum_fan_speed", "fan_always_on", _positive_switch),
+    ("cooling.fan_below_layer_time", "fan_below_layer_time", _integer),
     ("cooling.bridge_fan_speed", "bridge_fan_speed", _percent),
     ("cooling.disable_first_layers", "disable_fan_first_layers", _integer),
     ("cooling.minimum_layer_time", "slowdown_below_layer_time", _integer),
@@ -328,8 +347,13 @@ ORCA: Final[tuple[Row, ...]] = (
     ("temperature.bed", "hot_plate_temp", _integer, "filament"),
     ("temperature.bed_first_layer", "hot_plate_temp_initial_layer", _integer, "filament"),
     ("temperature.chamber", "chamber_temperature", _integer, "filament"),
+    # Die Lüfterkurve wie bei PrusaSlicer, darüber. Gemessen am ElegooSlicer
+    # mit Elegoo PLA @ECC2 (50 bis 100 %, 80 s): ``M106 S255`` in jeder
+    # Schicht, solange ``fan_min_speed`` den oberen Wert bekam.
     ("cooling.fan_speed", "fan_max_speed", _percent, "filament"),
-    ("cooling.fan_speed", "fan_min_speed", _percent, "filament"),
+    ("cooling.minimum_fan_speed", "fan_min_speed", _percent, "filament"),
+    ("cooling.minimum_fan_speed", "reduce_fan_stop_start_freq", _positive_switch, "filament"),
+    ("cooling.fan_below_layer_time", "fan_cooling_layer_time", _integer, "filament"),
     ("cooling.bridge_fan_speed", "overhang_fan_speed", _percent, "filament"),
     ("cooling.disable_first_layers", "close_fan_the_first_x_layers", _integer, "filament"),
     ("cooling.minimum_layer_time", "slow_down_layer_time", _integer, "filament"),
@@ -441,7 +465,13 @@ CURA: Final[tuple[Row, ...]] = (
     ("temperature.bed", "material_bed_temperature", _integer),
     ("temperature.bed_first_layer", "material_bed_temperature_layer_0", _integer),
     ("temperature.chamber", "build_volume_temperature", _integer),
+    # Curas „Regular Fan Speed" ist das untere Ende, die Schwelle heißt
+    # „Regular/Maximum Fan Speed Threshold" — dieselbe Kurve wie bei den
+    # anderen beiden. Das obere Ende spiegelt ``CURA_MIRRORED`` aus
+    # ``cool_fan_speed``, das untere stand dort bis zum 23.09.2026 mit.
     ("cooling.fan_speed", "cool_fan_speed", _percent),
+    ("cooling.minimum_fan_speed", "cool_fan_speed_min", _percent),
+    ("cooling.fan_below_layer_time", "cool_min_layer_time_fan_speed_max", _integer),
     ("cooling.bridge_fan_speed", "bridge_fan_speed", _percent),
     ("cooling.minimum_layer_time", "cool_min_layer_time", _integer),
     ("speed.outer_wall", "speed_wall_0", _number),
@@ -547,7 +577,7 @@ CURA_MIRRORED: Final[dict[str, tuple[str, ...]]] = {
     "bottom_layers": ("initial_bottom_layers",),
     "bridge_fan_speed": ("skin_support_fan_speed",),
     "bridge_skin_speed": ("bridge_skin_speed_2", "bridge_skin_speed_3", "skin_support_speed"),
-    "cool_fan_speed": ("cool_fan_speed_max", "cool_fan_speed_min"),
+    "cool_fan_speed": ("cool_fan_speed_max",),
     "cool_min_layer_time": ("cool_min_layer_time_overhang",),
     "inset_direction": ("initial_layer_inset_direction",),
     "layer_height": (

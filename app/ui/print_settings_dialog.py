@@ -536,9 +536,12 @@ FIELDS: tuple[Field, ...] = (
         ),
     ),
     # --- Kühlung ---
+    # Zwei Enden einer Kurve über der Schichtzeit, dazu ihre Schwelle — so
+    # regeln alle drei Slicer-Familien den Lüfter. Ein Feld für beide Enden
+    # hielt ihn fest: PLA lief in jeder Schicht voll (Befund Robert, 23.09.2026).
     Field(
         "cooling.fan_speed",
-        _("Lüfter"),
+        _("Lüfter höchstens"),
         "cooling",
         unit="%",
         minimum=0.0,
@@ -547,8 +550,37 @@ FIELDS: tuple[Field, ...] = (
         decimals=0,
         factor=100.0,
         note=_(
-            "Wie stark der Lüfter läuft. Viel Kühlung gibt scharfe Kanten und schwächere "
-            "Schichten; bei ABS deshalb wenig."
+            "So stark kühlt der Lüfter kurze Schichten. Viel Kühlung gibt scharfe Kanten und "
+            "schwächere Schichten; bei ABS deshalb wenig."
+        ),
+    ),
+    Field(
+        "cooling.minimum_fan_speed",
+        _("Lüfter mindestens"),
+        "cooling",
+        unit="%",
+        minimum=0.0,
+        maximum=100.0,
+        step=5.0,
+        decimals=0,
+        factor=100.0,
+        note=_(
+            "So stark läuft der Lüfter bei langen Schichten, nie mehr als der Höchstwert. "
+            "Gleich hoch hält ihn fest, null schaltet ihn dort aus."
+        ),
+    ),
+    Field(
+        "cooling.fan_below_layer_time",
+        _("Mehr Lüfter unter"),
+        "cooling",
+        unit="s",
+        minimum=0.0,
+        maximum=300.0,
+        step=5.0,
+        decimals=0,
+        note=_(
+            "Kürzere Schichten kühlt der Lüfter stärker als mit dem Mindestwert, bis zum "
+            "Höchstwert bei der Mindestzeit je Schicht."
         ),
     ),
     Field(

@@ -22,7 +22,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import replace
 from pathlib import Path
-from typing import Any, Final, get_args
+from typing import Any, Final, TypedDict, get_args
 
 from app.core.errors import ValidationError
 from app.core.knowledge.tables import read_table
@@ -213,6 +213,7 @@ def resolve(profile: Profile, quality: QualityPreset = DEFAULT_QUALITY) -> Print
         temperature=_temperatures(stuff, profile),
         cooling=CoolingSettings(
             fan_speed=float(stuff.get("fan_speed", 1.0)),
+            **fan_curve(profile.material.id, float(stuff.get("fan_speed", 1.0))),
             bridge_fan_speed=float(stuff.get("bridge_fan_speed", 1.0)),
             disable_first_layers=int(stuff.get("disable_fan_layers", 1)),
             minimum_layer_time=float(stage["minimum_layer_time"]),
@@ -241,6 +242,32 @@ def resolve(profile: Profile, quality: QualityPreset = DEFAULT_QUALITY) -> Print
             max_flow=float(stuff.get("max_flow", 12.0)),
         ),
     )
+
+
+class FanCurve(TypedDict):
+    """Was :func:`fan_curve` über die Lüfterkurve sagt — mit den Feldnamen von
+    :class:`~app.core.types.CoolingSettings`."""
+
+    minimum_fan_speed: float
+    fan_below_layer_time: float
+
+
+def fan_curve(material_id: str, upper: float) -> FanCurve:
+    """Unteres Ende und Schwelle der Lüfterkurve dieses Materials (§29).
+
+    ``upper`` ist das obere Ende, und das untere steht höchstens so hoch. Ein
+    Material ohne eigenen unteren Wert läuft fest auf dem oberen: Eine Kurve,
+    die niemand angegeben hat, wird nicht erfunden.
+
+    Zwei Aufrufer, eine Herleitung: :func:`resolve` für ein neues Projekt, und
+    das Lesen einer Projektdatei von vor dem 23.09.2026, deren gespeicherter
+    einziger Lüfterwert das obere Ende war
+    (:func:`app.core.scene.serialise.print_settings_from_data`).
+    """
+    stuff = _material_table(material_id)
+    lower = float(stuff.get("minimum_fan_speed", stuff.get("fan_speed", upper)))
+    below = float(stuff.get("fan_below_layer_time", CoolingSettings().fan_below_layer_time))
+    return {"minimum_fan_speed": min(lower, upper), "fan_below_layer_time": below}
 
 
 def _temperatures(stuff: Mapping[str, Any], profile: Profile) -> TemperatureSettings:

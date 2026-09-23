@@ -2188,6 +2188,11 @@ FILAMENT_READBACK: Final[tuple[tuple[str, str, type], ...]] = (
     ("temperature.bed_first_layer", "hot_plate_temp_initial_layer", int),
     ("temperature.chamber", "chamber_temperature", int),
     ("cooling.fan_speed", "fan_max_speed", float),
+    # Das untere Ende der Lüfterkurve und ihre Schwelle. Ohne sie las Solidon
+    # von Elegoo PLA @ECC2 nur die 100 % und schrieb sie an beide Enden — aus
+    # 50 bis 100 % wurde fest 100 (Befund Robert, 23.09.2026).
+    ("cooling.minimum_fan_speed", "fan_min_speed", float),
+    ("cooling.fan_below_layer_time", "fan_cooling_layer_time", float),
     ("cooling.bridge_fan_speed", "overhang_fan_speed", float),
     ("cooling.disable_first_layers", "close_fan_the_first_x_layers", int),
     ("cooling.minimum_layer_time", "slow_down_layer_time", float),
@@ -2201,7 +2206,9 @@ FILAMENT_READBACK: Final[tuple[tuple[str, str, type], ...]] = (
 )
 
 #: Anteile stehen im Profil als ganze Prozent, in Solidon als Bruch.
-_AS_FRACTION: Final = frozenset({"cooling.fan_speed", "cooling.bridge_fan_speed"})
+_AS_FRACTION: Final = frozenset(
+    {"cooling.fan_speed", "cooling.minimum_fan_speed", "cooling.bridge_fan_speed"}
+)
 
 
 #: Was ein Orca-Maschinenprofil über die Maschine sagt und Solidon nicht
@@ -2368,6 +2375,8 @@ _PRUSA_FILAMENT_READBACK: Final[tuple[tuple[str, str, type], ...]] = (
     ("temperature.bed_first_layer", "first_layer_bed_temperature", int),
     ("temperature.chamber", "chamber_temperature", int),
     ("cooling.fan_speed", "max_fan_speed", float),
+    ("cooling.minimum_fan_speed", "min_fan_speed", float),
+    ("cooling.fan_below_layer_time", "fan_below_layer_time", float),
     ("cooling.bridge_fan_speed", "bridge_fan_speed", float),
     ("cooling.disable_first_layers", "disable_fan_first_layers", int),
     ("cooling.minimum_layer_time", "slowdown_below_layer_time", float),
@@ -2387,6 +2396,8 @@ _CURA_FILAMENT_READBACK: Final[tuple[tuple[str, str, type], ...]] = (
     ("temperature.bed_first_layer", "material_bed_temperature_layer_0", int),
     ("temperature.chamber", "build_volume_temperature", int),
     ("cooling.fan_speed", "cool_fan_speed", float),
+    ("cooling.minimum_fan_speed", "cool_fan_speed_min", float),
+    ("cooling.fan_below_layer_time", "cool_min_layer_time_fan_speed_max", float),
     ("filament.density", "material_density", float),
     ("filament.diameter", "material_diameter", float),
     ("retraction.length", "retraction_amount", float),

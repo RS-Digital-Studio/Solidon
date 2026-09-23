@@ -670,6 +670,220 @@ def test_shares_are_written_as_percentages() -> None:
     assert written["max_fan_speed"] == "100"
 
 
+# --- die Lüfterkurve (Befund Robert, 23.09.2026) ---------------------------------
+
+#: Wie jede Familie das obere Ende, das untere Ende und die Schwelle der
+#: Lüfterkurve nennt. Alle drei regeln den Bauteillüfter nach der Schichtzeit:
+#: bis zur Mindestzeit je Schicht voll, ab der Schwelle nur noch mit dem
+#: unteren Wert, dazwischen linear.
+_FAN_CURVE_KEYS: Final[dict[str, tuple[str, str, str]]] = {
+    "orca": ("fan_max_speed", "fan_min_speed", "fan_cooling_layer_time"),
+    "prusa": ("max_fan_speed", "min_fan_speed", "fan_below_layer_time"),
+    "cura": ("cool_fan_speed_max", "cool_fan_speed_min", "cool_min_layer_time_fan_speed_max"),
+}
+
+
+@pytest.mark.parametrize("material", ["pla", "petg", "petg-cf", "asa", "abs", "tpu-95a"])
+@pytest.mark.parametrize("flavour", ["orca", "prusa", "cura"])
+def test_the_fan_curve_reaches_every_slicer_with_both_ends(flavour: str, material: str) -> None:
+    """Befund Robert, 23.09.2026: „Beim Drucken ist unser Modelllüfter auch
+    immer auf 100 % eingestellt.“
+
+    Solidon kannte einen Lüfterwert und schrieb ihn an **beide** Enden der
+    Kurve — ``fan_max_speed`` und ``fan_min_speed`` bei der Orca-Familie,
+    ``max_fan_speed`` und ``min_fan_speed`` bei PrusaSlicer, über die Spiegelung
+    ``cool_fan_speed_max`` und ``cool_fan_speed_min`` bei Cura. Gemessen am
+    ElegooSlicer mit Centauri Carbon 2 und PLA: ``M106 S255`` in jeder der 135
+    Schichten nach der ersten, obwohl Elegoos eigenes Profil 50 bis 100 %
+    vorsieht.
+    """
+    profile = profiles.make_profile("centauri-carbon-2", material)
+    settings = print_settings.resolve(profile)
+    cooling = settings.cooling
+    values = handover.values_for(settings, profile, flavour)  # type: ignore[arg-type]
+
+    high, low, threshold = _FAN_CURVE_KEYS[flavour]
+    assert values[high] == f"{cooling.fan_speed * 100.0:g}"
+    assert values[low] == f"{cooling.minimum_fan_speed * 100.0:g}"
+    assert values[threshold] == f"{cooling.fan_below_layer_time:g}"
+    assert cooling.minimum_fan_speed <= cooling.fan_speed
+    assert cooling.fan_below_layer_time > cooling.minimum_layer_time
+
+
+def test_pla_does_not_run_the_part_fan_at_full_speed_on_every_layer() -> None:
+    """Das Material des Befunds, ausdrücklich: Eine PLA-Schicht, die lange
+    genug zum Abkühlen dauert, braucht nicht die volle Drehzahl — und der
+    Lüfter geht dabei auch nicht ganz aus. Die zweite Hälfte ist der zweite
+    Fund derselben Messung: Ohne Herstellerprofil stand
+    ``reduce_fan_stop_start_freq`` auf dem Slicerstandard 0, und jede Schicht
+    über 60 s lief ganz ohne Lüfter (``M106 S0``)."""
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.resolve(profile)
+    orca = handover.values_for(settings, profile, "orca")
+    prusa = handover.values_for(settings, profile, "prusa")
+    cura = handover.values_for(settings, profile, "cura")
+
+    assert float(orca["fan_min_speed"]) < float(orca["fan_max_speed"])
+    assert float(prusa["min_fan_speed"]) < float(prusa["max_fan_speed"])
+    assert float(cura["cool_fan_speed_min"]) < float(cura["cool_fan_speed_max"])
+    assert float(orca["fan_min_speed"]) > 0
+    assert orca["reduce_fan_stop_start_freq"] == "1"
+    assert prusa["fan_always_on"] == "1"
+    assert "fan_min_speed" in handover.by_section(settings, "orca")["filament"]
+    assert "reduce_fan_stop_start_freq" in handover.by_section(settings, "orca")["filament"]
+
+
+def test_the_lower_fan_end_never_rises_above_the_upper() -> None:
+    """Ein unterer Wert über dem oberen hieße: Je länger die Schicht, desto
+    stärker der Lüfter. Keiner der drei Slicer fängt das ab — Orca und
+    PrusaSlicer rechnen die Gerade trotzdem, Curas ``cool_fan_speed_max``
+    hat kein ``max()``. Die Übergabe deckelt deshalb auf den oberen Wert."""
+    profile = profiles.make_profile("centauri-carbon-2", "asa")
+    settings = print_settings.resolve(profile)
+    settings = print_settings.with_path(settings, "cooling.minimum_fan_speed", 0.9)
+    upper = f"{settings.cooling.fan_speed * 100.0:g}"
+
+    for flavour, (high, low, _threshold) in _FAN_CURVE_KEYS.items():
+        values = handover.values_for(settings, profile, flavour)  # type: ignore[arg-type]
+        assert values[low] == upper == values[high], flavour
+
+
+def test_the_manufacturers_fan_curve_survives_the_handover(tmp_path: Path) -> None:
+    """Die Messung, die den Befund belegt hat, als Test: Elegoo PLA @ECC2
+    nennt 50 bis 100 % mit der Schwelle bei 80 s. Eine Spule mit diesem Profil
+    übernimmt die Werte des Herstellers (``settings_for_slot``) — gelesen
+    wurde bisher nur das obere Ende, und geschrieben wurde es an beide."""
+    vendor = _filament_profile(
+        tmp_path,
+        "Elegoo PLA @ECC2",
+        filament_type=["PLA"],
+        fan_min_speed=["50"],
+        fan_max_speed=["100"],
+        fan_cooling_layer_time=["80"],
+        slow_down_layer_time=["4"],
+    )
+    slot = MaterialSlot(0, "PLA", material=str(vendor), material_type="PLA")
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.resolve(profile)
+    setup = handover.SlicerSetup(Path("elegoo-slicer.exe"), "orca")
+
+    config = handover.write_config(settings, profile, setup, tmp_path, (slot,))
+    emitted = json.loads(config.filaments[0].read_text(encoding="utf-8"))
+    embedded = handover.project_settings(settings, profile, setup, slots=(slot,))
+
+    for written in (emitted, embedded):
+        assert written["fan_min_speed"] == ["50"]
+        assert written["fan_max_speed"] == ["100"]
+        assert written["fan_cooling_layer_time"] == ["80"]
+        assert written["reduce_fan_stop_start_freq"] == ["1"]
+    assert config.written["fan_min_speed"] == "50"
+
+
+def _without_fan_curve(cooling: dict[str, object], fan_speed: float) -> None:
+    """Ein Kühlblock, wie ihn Solidon vor dem 23.09.2026 speicherte: ein Wert."""
+    cooling["fan_speed"] = fan_speed
+    del cooling["minimum_fan_speed"]
+    del cooling["fan_below_layer_time"]
+
+
+@pytest.mark.parametrize(
+    ("material", "stored", "upper", "lower", "below"),
+    [
+        # Der Befund: PLA stand auf 1.0 und lief damit fest voll.
+        ("pla", 1.0, 1.0, 0.5, 80.0),
+        # PETG bekommt seine Materialwerte, auch unter einem hohen alten Wert.
+        ("petg", 1.0, 1.0, 0.2, 30.0),
+        # Ein eigener alter Wert bleibt das obere Ende …
+        ("pla", 0.6, 0.6, 0.5, 80.0),
+        # … und das untere steht nie darüber.
+        ("pla", 0.3, 0.3, 0.3, 80.0),
+    ],
+)
+def test_an_older_settings_record_gets_the_fan_curve_of_its_material(
+    material: str, stored: float, upper: float, lower: float, below: float
+) -> None:
+    """Entscheidung der Durchsicht vom 23.09.2026, im Sinne Roberts: Der eine
+    gespeicherte Lüfterwert war immer das **obere** Ende — das Feld hieß
+    „Lüfter", und dass die Übergabe ihn auch als unteres schrieb, war der
+    Fehler, keine Wahl des Kunden. Unteres Ende und Schwelle kommen beim
+    Öffnen aus derselben Materialzeile wie bei einem neuen Projekt, das untere
+    höchstens so hoch wie das gespeicherte obere."""
+    from app.core.scene import serialise
+
+    settings = print_settings.resolve(profiles.make_profile("centauri-carbon-2", material))
+    old = json.loads(json.dumps(serialise.print_settings_to_data(settings)))
+    _without_fan_curve(old["cooling"], stored)
+
+    cooling = serialise.print_settings_from_data(old, material).cooling
+
+    assert cooling.fan_speed == pytest.approx(upper)
+    assert cooling.minimum_fan_speed == pytest.approx(lower)
+    assert cooling.fan_below_layer_time == pytest.approx(below)
+
+
+def test_an_older_project_file_prints_pla_with_the_curve(tmp_path: Path) -> None:
+    """Dasselbe durch eine echte Projektdatei: gespeichert, der Kühlblock auf
+    den alten Stand zurückgeschrieben, wieder geöffnet — und übergeben. Eine
+    Spule mit eigener Materialart ergänzt ihre Kurve aus ihrem Material, wie
+    ``settings_for_slot`` es für sie auflöst. Ohne Materialangabe im Projekt
+    gilt das Material, das die Sitzung annimmt (PLA am Centauri)."""
+    from app.core.types import SlotOverride
+
+    for material in ("pla", ""):
+        profile = profiles.make_profile("centauri-carbon-2", "pla")
+        settings = print_settings.resolve(profile)
+        petg = print_settings.resolve(profiles.make_profile("centauri-carbon-2", "petg"))
+        settings = replace(
+            settings,
+            slot_overrides=(
+                SlotOverride(
+                    name="Grün",
+                    colour=(0.0, 1.0, 0.0),
+                    material_type="PETG",
+                    cooling=petg.cooling,
+                ),
+            ),
+        )
+        project = new_project("centauri-carbon-2", material)
+        project.document.print_settings = settings
+        path = save(project, tmp_path / f"alt-{material or 'leer'}.p3d")
+        with zipfile.ZipFile(path) as container:
+            entries = {name: container.read(name) for name in container.namelist()}
+        data = json.loads(entries[PROJECT_ENTRY])
+        _without_fan_curve(data["print_settings"]["cooling"], 1.0)
+        _without_fan_curve(data["print_settings"]["slot_overrides"][0]["cooling"], 0.5)
+        entries[PROJECT_ENTRY] = json.dumps(data).encode("utf-8")
+        with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as container:
+            for name, payload in entries.items():
+                container.writestr(name, payload)
+
+        opened = load(path).document.print_settings
+        assert opened is not None
+        values = handover.values_for(opened, profile, "orca")
+        assert (values["fan_max_speed"], values["fan_min_speed"]) == ("100", "50"), material
+        assert values["fan_cooling_layer_time"] == "80"
+        assert values["reduce_fan_stop_start_freq"] == "1"
+        override = opened.slot_overrides[0]
+        assert override is not None and override.cooling is not None
+        assert override.cooling.minimum_fan_speed == pytest.approx(0.2)
+        assert override.cooling.fan_below_layer_time == pytest.approx(30.0)
+
+
+def test_a_current_settings_record_keeps_its_own_fan_curve() -> None:
+    """Die Ergänzung gilt nur dem, was fehlt: Wer die Kurve selbst eingestellt
+    hat, bekommt beim Öffnen nicht die des Materials zurück."""
+    from app.core.scene import serialise
+
+    settings = print_settings.resolve(profiles.make_profile("centauri-carbon-2", "pla"))
+    own = replace(
+        settings,
+        cooling=replace(settings.cooling, minimum_fan_speed=0.35, fan_below_layer_time=45.0),
+    )
+    stored = json.loads(json.dumps(serialise.print_settings_to_data(own)))
+
+    assert serialise.print_settings_from_data(stored, "pla").cooling == own.cooling
+
+
 def test_the_colour_reaches_the_slicer() -> None:
     profile = profiles.make_profile("prusa-mk4s", "petg")
     settings = print_settings.resolve(profile)

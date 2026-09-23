@@ -107,6 +107,15 @@ outer_wall_acceleration = 4000.0
 # vierzig Prozent Infill und kosten weniger Zeit.
 
 # --- Materialien ---------------------------------------------------------------
+#
+# Der Bauteillüfter läuft in jedem Slicer auf einer Kurve über der Schichtzeit:
+# `fan_speed` bis zur Mindestzeit je Schicht der Stufe, `minimum_fan_speed` ab
+# `fan_below_layer_time` Sekunden, dazwischen linear. Die Werte liegen in der
+# Spanne der Herstellerprofile für dieselben Materialien — Elegoo @ECC2,
+# Orca Generic @System, PrusaResearch — und bei PLA auf dem Profil des
+# Centauri Carbon 2 (50 bis 100 %, 80 s). Ein unterer Wert gleich dem oberen
+# hält den Lüfter fest; so stand es bis zum 23.09.2026 für jedes Material,
+# und PLA lief in jeder Schicht voll.
 
 [material.pla]
 nozzle = 210
@@ -115,6 +124,8 @@ bed = 60
 bed_first_layer = 60
 chamber = 0
 fan_speed = 1.0
+minimum_fan_speed = 0.5
+fan_below_layer_time = 80
 bridge_fan_speed = 1.0
 disable_fan_layers = 1
 retraction_length = 0.8
@@ -133,6 +144,8 @@ bed = 80
 bed_first_layer = 80
 chamber = 0
 fan_speed = 0.5
+minimum_fan_speed = 0.2
+fan_below_layer_time = 30
 bridge_fan_speed = 1.0
 disable_fan_layers = 2
 retraction_length = 1.2
@@ -153,6 +166,8 @@ bed = 80
 bed_first_layer = 80
 chamber = 0
 fan_speed = 0.4
+minimum_fan_speed = 0.05
+fan_below_layer_time = 30
 bridge_fan_speed = 0.8
 disable_fan_layers = 2
 retraction_length = 1.0
@@ -173,6 +188,8 @@ bed = 100
 bed_first_layer = 100
 chamber = 50
 fan_speed = 0.2
+minimum_fan_speed = 0.1
+fan_below_layer_time = 35
 bridge_fan_speed = 0.5
 disable_fan_layers = 3
 retraction_length = 1.0
@@ -191,6 +208,8 @@ bed = 100
 bed_first_layer = 100
 chamber = 50
 fan_speed = 0.15
+minimum_fan_speed = 0.1
+fan_below_layer_time = 35
 bridge_fan_speed = 0.4
 disable_fan_layers = 3
 retraction_length = 1.0
@@ -211,6 +230,8 @@ bed = 45
 bed_first_layer = 45
 chamber = 0
 fan_speed = 0.6
+minimum_fan_speed = 0.6
+fan_below_layer_time = 100
 bridge_fan_speed = 0.8
 disable_fan_layers = 1
 retraction_length = 0.4

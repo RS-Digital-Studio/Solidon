@@ -351,6 +351,36 @@ an dem sie greifen könnten.
 Gemessen an Creality Print 7.2, das auf dieser Maschine nie eingerichtet war:
 dreimal `0xC0000005` mitten im eigenen Start, lange bevor es das Modell ansieht.
 
+## Ein Wert gehört an einen Schlüssel, der dasselbe meint
+
+Eine Zeile in `slicer_keys` darf einen Solidon-Wert nur unter einen Namen
+schreiben, der **dieselbe Sache** meint. Zwei Enden einer Kurve sind zwei
+Einstellungen, auch wenn ein Wert an beiden „passt". Bis zum 23.09.2026 stand
+`cooling.fan_speed` unter `fan_max_speed` **und** `fan_min_speed` (Prusa und
+Cura ebenso): Der Lüfter lief bei PLA in jeder Schicht voll, gemessen am
+ElegooSlicer mit `M106 S255` in 134 von 136 Schichten, obwohl Elegoos Profil
+50 bis 100 % vorsieht (Befund Robert). Und weil die Rücklesetabelle nur das
+obere Ende kannte, überschrieb Solidon selbst ein Herstellerprofil, das es
+richtig gelesen hatte.
+
+Wer eine Zeile ergänzt, fragt deshalb: Hat der Slicer daneben einen
+Gegenwert — Minimum zum Maximum, Schwelle zur Kurve, Schalter zum Anteil?
+Dann braucht Solidon ein eigenes Feld dafür, eine Zeile in jeder Familie, eine
+Zeile in den Rücklesetabellen und einen Wert im Materialprofil. Ein Anteil,
+der nur mit einem Schalter wirkt, schreibt den Schalter mit
+(`_positive_switch`): Ohne `reduce_fan_stop_start_freq` schaltete der
+ElegooSlicer den Lüfter bei jeder PLA-Schicht über 60 s ganz ab.
+
+Ein solches Feld, das eine ältere Datei nicht kennt, ist keine Vorgabe der
+Dataclass, sondern eine Frage an dieselbe Stelle, die ein neues Projekt
+fragt: Unteres Ende und Schwelle der Lüfterkurve kommen beim Öffnen aus dem
+Material (`print_settings.fan_curve`), und der alte eine Wert bleibt, was er
+im Dialog hieß — das obere Ende (Entscheidung der Durchsicht, 23.09.2026:
+Der Mindestwert war nie eine Wahl des Kunden, sondern der Fehler). Einen
+Formatsprung braucht das nicht, solange ein älteres Programm die neuen
+Schlüssel still übergeht (`_group_from_data` filtert nach bekannten Feldern)
+und die Datei dort so druckt, wie es vorher jede druckte.
+
 ## Wie eine Zuordnung geprüft wird
 
 Ein falscher Schlüsselname fällt nicht von selbst auf — kein Slicer meldet

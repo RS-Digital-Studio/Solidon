@@ -482,6 +482,7 @@ def as_mapping(settings: PrintSettings, flavour: SlicerFlavour) -> dict[str, str
     :func:`_machine_keys` dazu, das Abgeleitete in :func:`_cura_dependants` —
     beides führt :func:`values_for` zusammen, und nur diese eine Stelle.
     """
+    settings = _fan_curve_in_order(settings)
     written: dict[str, str] = {}
     for entry in slicer_keys.TABLES[flavour]:
         value = entry.write(read_path(settings, entry.path))
@@ -495,6 +496,23 @@ def as_mapping(settings: PrintSettings, flavour: SlicerFlavour) -> dict[str, str
     if flavour == "cura":
         return _first_layer_width(chosen)
     return _support_spacing(chosen, settings, flavour)
+
+
+def _fan_curve_in_order(settings: PrintSettings) -> PrintSettings:
+    """Der untere Lüfterwert höchstens so hoch wie der obere (§29).
+
+    Beide Enden der Kurve sind einzeln einstellbar, und ein Vorschlag senkt
+    nur das obere (``advise``: Zugluft auf ABS). Ein unterer Wert darüber
+    hieße, je länger die Schicht, desto stärker der Lüfter — Orca und
+    PrusaSlicer rechnen die Gerade trotzdem, Curas ``cool_fan_speed_max`` hat
+    kein ``max()``. Das obere Ende ist als Höchstwert gemeint, also gilt es.
+    Hier und nicht in der Tabelle, weil eine Zeile nur ihren eigenen Wert
+    sieht; alle drei Familien und die Gegenprobe lesen über diese Stelle.
+    """
+    cooling = settings.cooling
+    if cooling.minimum_fan_speed <= cooling.fan_speed:
+        return settings
+    return replace(settings, cooling=replace(cooling, minimum_fan_speed=cooling.fan_speed))
 
 
 def values_for(settings: PrintSettings, profile: Profile, flavour: SlicerFlavour) -> dict[str, str]:
@@ -1489,7 +1507,7 @@ def _with_equal_keys(documents: list[dict[str, object]]) -> list[dict[str, objec
     Das trifft nur, was Solidon **nicht** selbst setzt — Temperaturen, Kühlung,
     Rückzug und Materialwerte stehen in jedem Dokument, denn die schreibt
     :func:`_orca_filament` für jede Spule aus ihren eigenen Werten. Übrig
-    bleiben Startsequenzen, Lüfterschwellen, Druckvorschub und der Hersteller:
+    bleiben Startsequenzen, Überhangschwellen des Lüfters, Druckvorschub und der Hersteller:
     Werte, die der Slicer sonst aus seiner Vorgabe nähme — und eine Vorgabe
     aus demselben Lauf ist näher an ihr als ein Abbruch ohne Meldung.
     """

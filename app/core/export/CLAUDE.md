@@ -103,9 +103,9 @@ Filamentprofile eines Laufs **dieselben Schlüssel** (`_with_equal_keys`):
 Eine Spule anderen Typs erbt das Herstellerprofil nicht und käme mit einem
 Drittel der Schlüssel; die Orca-Familie indiziert dann ins Leere und reißt
 ohne Meldung (`0xC0000409`). Was einem Profil fehlt, kommt aus dem ersten
-Profil des Laufs, das den Schlüssel führt — nur Startsequenzen, Lüfter- und
-Vorschubwerte, denn Temperaturen, Kühlung und Materialwerte schreibt
-`_orca_filament` ohnehin je Spule.
+Profil des Laufs, das den Schlüssel führt — nur Startsequenzen,
+Überhangschwellen des Lüfters und Vorschubwerte, denn Temperaturen, Kühlung
+und Materialwerte schreibt `_orca_filament` ohnehin je Spule.
 
 Ein mehrfarbiges Filament (`MaterialSlot.extra_colours`) geht an die
 Orca-Familie als `filament_multi_colour` — alle Farben in einer Zeichenkette
@@ -168,6 +168,36 @@ Einstellungsgegenprobe ein: Creality nullt den inaktiven Einfilament-Turm. Dabei
 zählt die rückgelesene Werkzeugnutzung, nicht die Zahl deklarierter Spulen oder
 eine möglicherweise unbekannte Eingangsbelegung. Ausdrückliche Sollwerte werden
 immer verglichen; die Bauraumprüfung bleibt unverändert.
+
+## Die Lüfterkurve
+
+Alle drei Familien regeln den Bauteillüfter über der Schichtzeit: bis zur
+Mindestzeit je Schicht mit dem oberen Wert, ab einer Schwelle mit dem unteren,
+dazwischen linear. `CoolingSettings` führt dafür `fan_speed`,
+`minimum_fan_speed`, `fan_below_layer_time` und `minimum_layer_time`;
+`slicer_keys` schreibt sie je Familie unter ihren Namen:
+
+| Solidon | Orca-Familie (Filamentprofil) | PrusaSlicer | Cura |
+|---|---|---|---|
+| `fan_speed` | `fan_max_speed` | `max_fan_speed` | `cool_fan_speed` → `cool_fan_speed_max` |
+| `minimum_fan_speed` | `fan_min_speed` | `min_fan_speed` | `cool_fan_speed_min` |
+| `minimum_fan_speed` > 0 | `reduce_fan_stop_start_freq` | `fan_always_on` | — (Cura hält den unteren Wert immer) |
+| `fan_below_layer_time` | `fan_cooling_layer_time` | `fan_below_layer_time` | `cool_min_layer_time_fan_speed_max` |
+| `minimum_layer_time` | `slow_down_layer_time` | `slowdown_below_layer_time` | `cool_min_layer_time` |
+
+`handover._fan_curve_in_order` deckelt den unteren Wert am Anfang von
+`as_mapping` auf den oberen — die eine Stelle für Profildateien, 3MF-Beilage
+und Gegenprobe. Die Rücklesetabellen in `slicer_profiles` lesen beide Enden
+und die Schwelle aus Herstellerprofilen zurück; eine Spule mit eigenem Profil
+fährt so Elegoos 50…100 % statt eines festen Werts. Eine Projektdatei ohne
+`minimum_fan_speed` und `fan_below_layer_time` behält ihren einen alten
+Lüfterwert als oberes Ende und ergänzt unteres Ende und Schwelle beim Öffnen
+aus dem Material des Projekts bzw. der Spule — über `print_settings.fan_curve`,
+dieselbe Herleitung wie bei einem neuen Projekt, gedeckelt auf das obere Ende
+(`serialise._group_from_data`); ohne Formatsprung, weil ein älteres Programm
+die zwei Schlüssel still übergeht. Gemessen am 23.09.2026 mit ElegooSlicer,
+OrcaSlicer, PrusaSlicer und CuraEngine; die Regel dazu steht in
+`.claude/rules/dateiformat.md`.
 
 ## Die vier Gegenproben nach dem Lauf
 
