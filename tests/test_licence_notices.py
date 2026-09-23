@@ -403,6 +403,55 @@ def test_every_sbom_runtime_family_has_an_explicit_notice_policy() -> None:
     }
 
 
+@pytest.mark.parametrize(
+    ("version", "reviewed"), [("6.22.2", True), ("6.22.3", True), ("6.22.4", False)]
+)
+def test_pyinstaller_uses_the_reviewed_versions_own_wheel_notice(
+    version: str, reviewed: bool, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Latest darf seinen geprüften neuen Text liefern; unbekannte Fassungen halten an."""
+    dist_info = tmp_path / f"pyinstaller-{version}.dist-info"
+    notice = dist_info / "licenses" / "COPYING.txt"
+    notice.parent.mkdir(parents=True)
+    content = f"Lizenztext aus dem Test-Wheel {version}.\n"
+    notice.write_text(content, encoding="utf-8")
+    (dist_info / "METADATA").write_text(
+        f"Metadata-Version: 2.1\nName: pyinstaller\nVersion: {version}\n", encoding="utf-8"
+    )
+    (dist_info / "RECORD").write_text(
+        f"{dist_info.name}/licenses/COPYING.txt,,\n", encoding="utf-8"
+    )
+    package = make_licence_notices.metadata.Distribution.at(dist_info)
+    monkeypatch.setattr(make_licence_notices.metadata, "distribution", lambda _name: package)
+    monkeypatch.setattr(make_licence_notices, "collect_components", lambda: ())
+    sbom = {
+        "components": [
+            {
+                "type": "library",
+                "name": "PyInstaller bootloader",
+                "version": version,
+                "purl": f"pkg:generic/pyinstaller-bootloader@{version}",
+                "licenses": [
+                    {"expression": "GPL-2.0-or-later WITH PyInstaller Bootloader Exception"}
+                ],
+            }
+        ]
+    }
+    if not reviewed:
+        with pytest.raises(RuntimeError, match="passt nicht zur geprüften Quellenfassung"):
+            make_licence_notices.collect_artifact_components(sbom)
+        return
+
+    components = make_licence_notices.collect_artifact_components(sbom)
+
+    assert len(components) == 1
+    assert components[0].version == version
+    assert components[0].source_url == "https://github.com/pyinstaller/pyinstaller"
+    assert len(components[0].texts) == 1
+    assert components[0].texts[0].content == content
+    assert components[0].texts[0].sha256 == hashlib.sha256(content.encode("utf-8")).hexdigest()
+
+
 def test_linux_release_refuses_an_uninventoried_appimage_runtime(tmp_path: Path) -> None:
     package, package_hash = _write_hashed(tmp_path, "Solidon3D.AppImage", b"appimage")
     flatpak, flatpak_hash = _write_hashed(tmp_path, "Solidon3D.flatpak", b"flatpak")

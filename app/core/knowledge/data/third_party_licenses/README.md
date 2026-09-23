@@ -109,5 +109,33 @@ Build-Provenienz in die SBOM übernommen werden.
 Primärgrundlagen: [LGPL 3.0 §4](https://www.gnu.org/licenses/lgpl-3.0.html),
 [LGPL 2.1 §§4–6](https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html),
 [OCCT-Lizenz und Ausnahme](https://occt3d.com/dev/doc/overview/html/occt_public_license.html),
-[PyInstaller-Lizenz 6.22.2](https://github.com/pyinstaller/pyinstaller/blob/v6.22.2/COPYING.txt)
+[PyInstaller-Lizenz 6.22.2](https://github.com/pyinstaller/pyinstaller/blob/v6.22.2/COPYING.txt),
+[PyInstaller-Lizenz 6.22.3](https://github.com/pyinstaller/pyinstaller/blob/v6.22.3/COPYING.txt)
 und [AppImage-Type-2-Runtime `dd6cebe`](https://github.com/AppImage/type2-runtime/tree/dd6cebe).
+
+## Die beiden geprüften PyInstaller-Fassungen
+
+Der festgeschriebene Paketbau verwendet weiterhin 6.22.2; der Lauf mit den
+neuesten Abhängigkeiten darf zusätzlich die geprüfte Fassung 6.22.3 verwenden.
+`notice_package = "pyinstaller"` liest den vollständigen Lizenztext aus dem
+tatsächlich verwendeten Wheel. Der gemeinsame Repositorylink der Laufzeitfamilie
+ersetzt nicht die folgenden genauen Quellenbelege:
+
+| Fassung | Quellstand | Veröffentlichtes Quellarchiv | SHA-256 des Archivs |
+|---|---|---|---|
+| 6.22.2 | [Tag v6.22.2](https://github.com/pyinstaller/pyinstaller/tree/v6.22.2) | [PyPI-Quellarchiv](https://files.pythonhosted.org/packages/cc/2b/836d9def811c02522e0921d8b8cdf0c16b0545a216e97e71041758057859/pyinstaller-6.22.2.tar.gz) | `89b65a3ad07d9dd5832253e37bc45f31872d10d7f9d5c9fd0fdd6088a83829dd` |
+| 6.22.3 | [Tag v6.22.3](https://github.com/pyinstaller/pyinstaller/tree/v6.22.3) | [PyPI-Quellarchiv](https://files.pythonhosted.org/packages/63/41/f90302845945abd4ed647933ff5ee7c6ac93983187be67f897b6cb613331/pyinstaller-6.22.3.tar.gz) | `05eb2f5615503e72939a7224d68b4aff572c6b0438ee4a17d0a4b481f399362d` |
+
+`COPYING.txt` ist je Fassung bytegleich im Quellarchiv und Git-Tag. Die
+SHA-256-Werte der unveränderten Quelldateibytes sind für 6.22.2
+`dcf75fdb959db1e3b41c0f8505069d2ece781b5ec6b3d0a4d30975cfc6580245`
+und für 6.22.3
+`0598064c7d2718e38d7914a7d08343b2fa008e3bea9ebba2aa7a6ffa5900dd64`.
+Der Beilagengenerator hasht dagegen seine dokumentierte Zeilennormalisierung.
+
+Der Lizenztext von 6.22.3 ergänzt ausschließlich den Abschnitt zu zusätzlichen Laufzeitmodulen:
+`pyi_splash` und `_pyi_rth_utils` unter `PyInstaller/fake-modules` sind dort
+ausdrücklich Apache-2.0 zugeordnet. Bootloader-Ausnahme, GPL-Text und die
+weiteren Lizenzabschnitte bleiben unverändert; auch die Lizenzdateien von
+Waf und zlib im Quellarchiv sind unverändert. Eine andere PyInstaller-Fassung
+bleibt bis zur eigenen Quellen- und Lizenzprüfung gesperrt.

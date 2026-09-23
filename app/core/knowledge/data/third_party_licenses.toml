@@ -137,8 +137,13 @@ versions = ["20251108"]
 id = "pyinstaller-bootloader"
 name = "PyInstaller bootloader"
 notice_package = "pyinstaller"
-source = "https://github.com/pyinstaller/pyinstaller/tree/v6.22.2"
-versions = ["6.22.2"]
+# Der vollständige Text kommt aus genau dem verwendeten Wheel. 6.22.3 ergänzt
+# die Apache-2.0-Zuordnung von PyInstaller/fake-modules; die Bootloader-Ausnahme
+# bleibt gleich. Beide Fassungen mit Tag- und Archivbeleg: third_party_licenses/README.md.
+# https://github.com/pyinstaller/pyinstaller/tree/v6.22.2
+# https://github.com/pyinstaller/pyinstaller/tree/v6.22.3
+source = "https://github.com/pyinstaller/pyinstaller"
+versions = ["6.22.2", "6.22.3"]
 
 [[runtime]]
 id = "openssl"
