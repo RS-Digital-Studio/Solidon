@@ -1065,6 +1065,30 @@ def test_the_summary_names_what_would_change(qt_app: QApplication) -> None:
         QLocale.setDefault(before)
 
 
+def test_the_summary_names_operations_the_way_the_menu_does(qt_app: QApplication) -> None:
+    """Die Zusammenfassung nennt Schritte mit ihrem Titel, nicht mit ihrem Registernamen.
+
+    „Operation: drill_hole, move_feature" stand bis zum 22.09.2026 über den
+    zwei Knöpfen, die über den Vorschlag entscheiden — die Schlüssel des
+    Registers, die der Kunde nirgends sonst liest. Menü, Verlauf und Dialog
+    sagen „Bohrung setzen" und „Merkmal verschieben"; dieselben Wörter gehören
+    vor die Entscheidung (RM-084).
+    """
+    from app.core.agent.proposal import Proposal
+    from app.core.bootstrap import load_operations
+    from app.core.scene import OperationDraft
+
+    load_operations()
+    proposal = Proposal(request="x")
+    proposal.drafts.append(OperationDraft(op="drill_hole", inputs=("obj_1",), params={}))
+    proposal.drafts.append(OperationDraft(op="move_feature", inputs=("obj_1",), params={}))
+
+    text = describe(ProposalPreview(proposal=proposal))
+
+    assert "Bohrung setzen" in text and "Merkmal verschieben" in text, text
+    assert "drill_hole" not in text and "move_feature" not in text, text
+
+
 def test_the_proposal_shows_its_costs_and_questions(qt_app: QApplication) -> None:
     """Konzept Agent-Vertiefung 4.2: Schritte, Token und Rückfragen werden
     längst gezählt — die Entscheidung zeigt sie jetzt auch. Eine erreichte

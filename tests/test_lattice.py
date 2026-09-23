@@ -325,6 +325,105 @@ def test_the_menu_does_not_lock_what_the_operation_can_do() -> None:
     assert mit.cavity is None and body_requirement(spec, mit) is None
 
 
+def _imported(mesh: MeshData) -> SceneObject:
+    """Ein Körper auf dem Weg eines Imports: als STL hinaus, gelesen, erkannt."""
+    from app.core.geom.mesh import read_mesh
+    from app.core.ingest import loader
+    from app.core.perceive.features import detect
+
+    exported = mesh.raw.export(file_type="stl")
+    data = exported if isinstance(exported, bytes) else exported.encode()
+    imported = loader.normalise(read_mesh(data, ".stl"), "mm").mesh
+    return SceneObject(id="obj_1", name="Import", mesh=imported, features=detect(imported))
+
+
+def test_a_plate_with_through_holes_is_not_offered_a_lattice() -> None:
+    """Eine Platte mit Durchgangslöchern hat keinen Innenraum, und das Menü weiß es.
+
+    Bis zum 22.09.2026 ließ jede durchgehende Bohrung die Hohlraumfrage offen
+    (``vented``), damit ein entlüfteter Import füllbar bleibt — auch an
+    ``plate_holes.stl``: *Gitter füllen* stand anklickbar da, und der Dialog
+    konnte nur „Keine Vorschau: Der Innenraum lässt sich nicht eindeutig
+    bestimmen" sagen. Eine Entlüftung führt aus dem Freien in den Innenraum,
+    eine Bohrung durch die Platte an beiden Enden ins Freie; das entscheidet
+    ein Strahl aus jeder Mündung, auch bei geschlossenen übrigen Bohrungen.
+    """
+    from app.core.geom.mesh import read_mesh
+    from app.core.ingest import loader
+    from app.core.perceive.features import detect
+    from app.ui.labels import body_facts, body_requirement
+
+    plate = loader.normalise(
+        read_mesh(
+            (Path(__file__).parent / "data" / "meshes" / "plate_holes.stl").read_bytes(), ".stl"
+        ),
+        "mm",
+    ).mesh
+    features = detect(plate)
+    through = [f for f in features.values() if f.kind == "hole" and f.params.get("through")]
+    assert len(through) == 4, "die vier Durchgangslöcher sind die Voraussetzung des Falls"
+    entry = SceneObject(id="obj_1", name="Platte", mesh=plate, features=features)
+
+    facts = body_facts(entry)
+
+    assert facts.cavity is False
+    assert body_requirement(REGISTRY.get("lattice_fill"), facts) == str(lattice.NO_CAVITY)
+    with pytest.raises(ValidationError):
+        run(entry, structure="cubic", cell=5.0, wall=1.0)
+
+
+def test_a_detected_vent_keeps_the_lattice_offered() -> None:
+    """Die Gegenprobe mit erkannter Entlüftung statt einer gesetzten: offen.
+
+    Die Entlüftung endet innen im Hohlraum; ein Strahl von dort trifft die
+    gegenüberliegende Wand. Sie ist also keine Durchgangsbohrung ins Freie,
+    und die Operation kann den Innenraum über sie bestimmen.
+    """
+    from app.core.geom.hollow import hollow
+    from app.ui.labels import body_facts, body_requirement
+
+    entry = _imported(hollow(MeshData.of(trimesh.creation.box((40, 40, 40))), 3.0, vents=1).mesh)
+    assert any(f.kind == "hole" and f.params.get("through") for f in entry.features.values())
+
+    facts = body_facts(entry)
+
+    assert facts.cavity is None
+    assert body_requirement(REGISTRY.get("lattice_fill"), facts) is None
+
+
+def test_two_vents_on_one_axis_do_not_look_like_a_through_hole() -> None:
+    """Zwei Entlüftungen auf einer Achse: Der Strahl aus der einen Mündung
+    läuft durch den Innenraum und die gegenüberliegende Entlüftung ins Freie.
+
+    Ein Strahl, der nur die Dreiecke fragt, hielte beide Bohrungen deshalb für
+    Durchgänge und sperrte das Menü — die Operation schließt beim Rechnen aber
+    **alle** durchgehenden Bohrungen und findet den Innenraum. Die Prüfung
+    schließt sie deshalb auch: Ein Strahl durch eine andere Bohrung zählt nicht
+    als Weg ins Freie.
+    """
+    from app.core.geom.boolean import boolean
+    from app.ui.labels import body_facts, body_requirement
+
+    shell = boolean(
+        "difference",
+        [
+            MeshData.of(trimesh.creation.box((40, 40, 40))),
+            MeshData.of(trimesh.creation.box((34, 34, 34))),
+        ],
+    ).mesh
+    bore = MeshData.of(trimesh.creation.cylinder(radius=2.0, height=60, sections=48))
+    entry = _imported(boolean("difference", [shell, bore]).mesh)
+    vents = [f for f in entry.features.values() if f.kind == "hole" and f.params.get("through")]
+    assert len(vents) == 2, "zwei erkannte Entlüftungen auf derselben Achse sind der Fall"
+
+    facts = body_facts(entry)
+
+    assert facts.cavity is None
+    assert body_requirement(REGISTRY.get("lattice_fill"), facts) is None
+    result = run(entry, structure="cubic", cell=8.0, wall=1.0)
+    assert result.outputs[0].mesh.volume > entry.mesh.volume, "die Operation füllt ihn wirklich"
+
+
 def test_cavity_metadata_is_not_recursively_serialized() -> None:
     import dataclasses
 

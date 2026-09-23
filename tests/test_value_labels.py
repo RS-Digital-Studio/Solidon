@@ -1526,3 +1526,19 @@ def test_one_wheel_notch_moves_a_page_not_a_step(qt_app: object) -> None:
     )
     regler.wheelEvent(rad)
     assert regler.value() == 550, f"Eine Radraste gab {regler.value()} statt 550"
+
+
+def test_the_last_demo_day_is_said_in_the_singular(qt_app: object) -> None:
+    """„Demo — noch 1 Tage" stand am letzten Tag in der Statusleiste.
+
+    Die Zeile steht dauerhaft da, und am letzten Tag liest sie jeder am
+    genauesten. Zwei Tage bleiben zwei Tage.
+    """
+    from datetime import date
+
+    from app.core.activation import Activation
+    from app.ui.labels import demo_line
+
+    last = demo_line(Activation(days_left=1, deadline=date(2026, 10, 30)))
+    assert "1 Tag," in last and "Tage" not in last, last
+    assert "2 Tage" in demo_line(Activation(days_left=2, deadline=date(2026, 10, 30)))

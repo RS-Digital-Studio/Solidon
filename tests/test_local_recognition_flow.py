@@ -252,3 +252,31 @@ def test_old_worker_crash_cannot_override_new_preview_status(qt_app, monkeypatch
         release.set()
         session.cancel_preview()
         session.wait_for_idle(30000)
+
+
+def test_a_recalculation_in_between_does_not_swallow_the_accepted_edit(local_window, qt_app):
+    """Übernehmen nach einer bloßen Neuberechnung übernimmt — still verworfen wurde nichts.
+
+    Die lokale Erkennung ist ein nicht modales Fenster. Wer währenddessen
+    exportiert oder neu rechnen lässt, bekommt ein neues Ergebnis desselben
+    Dokuments (``evaluate_now``, kein ``projectChanged``). Bis zum 22.09.2026
+    verglich das Übernehmen das Ergebnis auf Identität und verwarf die
+    Schritte dann ohne ein Wort: Der Kunde klickte *Übernehmen*, und im
+    Verlauf stand nichts. Ein geändertes **Dokument** schließt das Fenster
+    ohnehin (``invalidate``); was zählt, ist, dass es dasselbe blieb.
+    """
+    window, session = local_window, local_window.session
+    document = copy.deepcopy(session.project.document)
+    flow, dialog = start(window, qt_app)
+    choose_action(dialog, "resize_hole")
+    dialog.editor._editors["diameter"].set_value(8)
+    _until(qt_app, lambda: dialog._preview_valid)
+
+    session.evaluate_now()
+    assert flow.dialog is dialog, "eine Neuberechnung schließt das Fenster nicht"
+    dialog.editor.accept()
+
+    assert flow.dialog is None
+    assert session.wait_for_idle(30000)
+    assert [op.op for op in session.project.document.ops[-2:]] == ["detect_region", "resize_hole"]
+    assert len(session.project.document.transactions) == len(document.transactions) + 1

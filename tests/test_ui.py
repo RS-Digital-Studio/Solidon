@@ -3791,6 +3791,53 @@ def test_the_measures_in_the_view_take_their_twins_out_of_the_panel(window: Main
     )
 
 
+def test_the_next_hole_hides_its_twins_too_and_escape_brings_them_back(
+    window: MainWindow,
+) -> None:
+    """RM-199 mit der nächsten Bohrung und dem Ausgang über Escape.
+
+    Die Abnahme aus dem Register: Bohrung wählen, rechts kein Durchmesser und
+    keine Koordinaten; Escape, und sie stehen wieder. Seit das Merkmalfenster
+    seine Zeilen von Bohrung zu Bohrung weiterverwendet (RM-204), wandert
+    dabei eine Zeile, die gerade als Zwilling versteckt war — sie muss an der
+    nächsten Bohrung wieder weichen und nach Escape wieder dastehen.
+    """
+    from render_fakes import RecordingRenderer
+
+    from app.ui.labels import LengthSpin
+
+    window.viewport.renderer = RecordingRenderer(size=(900, 600))
+    window.open_path(MESHES / "plate_holes.stl")
+    assert window.session.wait_for_idle(30_000)
+    result = window.session.evaluate_now()
+    object_id, entry = next(iter(result.scene.objects.items()))
+    holes = [name for name, feature in entry.features.items() if feature.kind == "hole"]
+    panel = window.feature_panel
+
+    def shown() -> set[str]:
+        return {
+            field.accessibleName()
+            for field in panel.findChildren(LengthSpin)
+            if field.isVisibleTo(panel)
+        }
+
+    for hole in holes[:2]:
+        window.object_tree.select_feature(object_id, hole)
+        for _ in range(40):
+            QApplication.processEvents()
+        assert panel.feature_id == hole
+        assert window._quiet_placement is not None and panel._measuring
+        assert not any("Bohrung ändern" in name for name in shown()), sorted(shown())
+        assert any("Merkmal verschieben" in name for name in shown())
+
+    window._escape()
+    for _ in range(10):
+        QApplication.processEvents()
+
+    assert window._quiet_placement is None and not panel._measuring
+    assert {"Bohrung ändern — Durchmesser", "Bohrung ändern — X"} <= shown(), sorted(shown())
+
+
 def test_a_refused_measure_shows_the_reason_of_the_core_not_a_generic_sentence(
     window: MainWindow,
 ) -> None:
@@ -6079,6 +6126,26 @@ def test_the_history_shows_titles_not_registry_names(qt_app: QApplication) -> No
     # Eine Projektdatei aus einer neueren Version ist kein Grund für eine
     # leere Zeile.
     assert _op_title("gibt_es_nicht") == "gibt_es_nicht"
+
+
+def test_a_history_row_names_its_steps_and_why_it_is_marked(session: Session) -> None:
+    """Die Kurzhilfe einer Verlaufszeile sagt „Schritt 1", nicht „Ops 1".
+
+    Und die Zeile mit dem Ausrufezeichen sagt, was es heißt: Hier hält die
+    Kette an. Bis zum 22.09.2026 stand dort „t1 · Ops 1" — ein Wort aus dem
+    Code, und das Zeichen davor blieb unerklärt (RM-084, Regel 18).
+    """
+    from app.ui.panels import HistoryPanel
+
+    session.history.apply("Quader", [OperationDraft(op="create_box", params={"width": 20.0})])
+    panel = HistoryPanel()
+    document = session.project.document
+    panel.show_document(document, stopped_at=document.ops[0].id)
+
+    tip = panel.list.item(0).toolTip()
+    assert "Ops" not in tip and "Schritt 1" in tip, tip
+    assert panel.list.item(0).text().startswith("!")
+    assert "hält die Kette an" in tip, tip
 
 
 def test_delete_only_bites_where_a_selection_is_visible(window: MainWindow) -> None:
@@ -11562,6 +11629,54 @@ def test_a_preview_delivers_a_difference(session: Session) -> None:
     difference = collected[0]
     assert difference is not None and difference.changed, "eine Bohrung ändert Volumen"
     assert list(session.project.document.ops) == stack_before, "der Stapel bleibt unberührt"
+
+
+def test_a_preview_computes_the_stand_it_was_asked_about(
+    session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Vorschau rechnet auf dem Stand beim Fragen, nicht auf dem beim Rechnen.
+
+    Bis zum 22.09.2026 kopierte der **Arbeiter** das lebende Dokument — erst
+    wenn er dran war. Kam dazwischen eine Änderung im Hauptfaden an (ein
+    Übernehmen, ein Import), rechnete die Vorschau einen Stand, den der
+    Dialog nie gezeigt hatte, und ein Wörterbuch, das sich beim Kopieren
+    änderte, riss den Arbeiter ab. Nachgestellt: Der Arbeiter wartet vor dem
+    Rechnen, im Hauptfaden kommt ein zweiter Körper hinzu — die Vorschau
+    kennt ihn nicht, denn sie wurde vorher gefragt.
+    """
+    import threading
+
+    session.import_model(MESHES / "cube_clean.stl")
+    session.wait_for_idle()
+    gate = threading.Event()
+    original = Session._preview_outcome
+
+    def held(self: Session, *args: object, **kwargs: object) -> object:
+        assert gate.wait(30.0), "der Test hat die Vorschau nie freigegeben"
+        return original(self, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(Session, "_preview_outcome", held)
+    collected: list[object] = []
+    session.preview_async(
+        collected.append,
+        [
+            OperationDraft(
+                op="drill_hole",
+                inputs=("obj_1",),
+                params={"diameter": 4.0, "x": 0.0, "y": 0.0, "z": 0.0, "axis": "z"},
+            )
+        ],
+    )
+    session.history.apply(
+        "Dazwischen", [OperationDraft(op="create_box", params={"width": 5.0, "x": 80.0})]
+    )
+    gate.set()
+    assert session.wait_for_idle(30_000)
+
+    assert collected and collected[-1] is not None
+    difference = collected[-1]
+    assert difference.changed, "die Bohrung ist in der Vorschau"
+    assert not difference.created, "der Körper von danach gehört nicht in die Vorschau von davor"
 
 
 def test_a_cancelled_preview_stays_silent(session: Session) -> None:

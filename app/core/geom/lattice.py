@@ -473,7 +473,7 @@ def _cavity_mesh(
             if feature.kind == "hole" and feature.params.get("through")
         )
     )
-    if not bores:
+    if not bores or bores_lead_outside(body, features or {}):
         return None, ()
     from app.core.geom.boolean import boolean
 
@@ -481,6 +481,251 @@ def _cavity_mesh(
     closed = boolean("union", [body, *plugs], quality=quality, allow_empty=True)
     inner = _inner_shells(closed.mesh)
     return (inner, bores) if inner is not None else (None, ())
+
+
+#: Wie weit ein Prüfstrahl hinter der Mündung einer Bohrung beginnt: jenseits
+#: des Stopfens aus :func:`_bore_solid`, der ``2 · FEATURE_OVERLAP`` über das
+#: Bohrungsende hinausreicht.
+_MOUTH_STEP: Final = 3.0
+
+#: Die Neigung der Nebenstrahlen gegen die Bohrungsachse. Der Achsstrahl allein
+#: sperrte eine Bohrung, vor deren Mündung ein anderer Teil des Körpers steht;
+#: schräg daneben ist der Blick ins Freie dann meist frei.
+_SIDE_TILT: Final = math.radians(50.0)
+
+
+def bores_lead_outside(body: MeshData, features: Mapping[FeatureId, Feature]) -> bool:
+    """Ob jede durchgehende Bohrung an **beiden** Enden ins Freie führt.
+
+    Die Frage hinter der Entlüftung (:func:`_cavity_mesh`): Eine Entlüftung
+    führt aus dem Freien in den Innenraum, eine Bohrung durch eine Platte an
+    beiden Enden ins Freie. Nur die erste kann einen Innenraum abschließen,
+    wenn sie probeweise gestopft wird. Führen alle ins Freie, entsteht durch
+    das Stopfen kein eingeschlossener Raum — die Boolesche Rechnung dafür
+    kann entfallen, und das Menü kann *Gitter füllen* ehrlich sperren
+    (``labels.body_facts``).
+
+    Entschieden wird mit Strahlen aus jeder Mündung, nach außen gerichtet:
+    Trifft einer weder den Körper noch den Stopfen einer **anderen** Bohrung,
+    sieht die Mündung ins Unendliche und liegt damit im Freien. Die Stopfen
+    zählen mit, weil die Operation beim Rechnen alle zugleich schließt — zwei
+    Entlüftungen auf einer Achse sähen sonst durcheinander hindurch ins Freie.
+
+    Jeder Zweifel sagt ``False``: ein offenes Netz (ein Strahl fände seine
+    Lücke), eine Mündung, vor der überall Körper steht, eine Messung, die in
+    Material beginnt. Dann rechnet die Operation wie bisher.
+    """
+    from app.core.geom.prepare import FEATURE_OVERLAP
+
+    bores = [
+        feature
+        for feature in features.values()
+        if feature.kind == "hole" and feature.params.get("through")
+    ]
+    if not bores or not body.raw.is_watertight:
+        return False
+    plugs = [_plug_axis(feature) for feature in bores]
+    if any(plug is None for plug in plugs):
+        return False
+    sight = _Sight(
+        np.asarray(body.raw.triangles, dtype=float),
+        [plug for plug in plugs if plug is not None],
+    )
+    step = _MOUTH_STEP * FEATURE_OVERLAP
+    for index, plug in enumerate(plugs):
+        assert plug is not None
+        centre, axis, half, _radius = plug
+        for side in (1.0, -1.0):
+            outward = axis * side
+            start = centre + outward * (half + step)
+            if not any(sight.open(start, ray, index) for ray in _mouth_rays(outward)):
+                return False
+    return True
+
+
+#: Welcher Anteil der Dreiecke über den Streifen gesucht wird; die übrigen,
+#: breitesten prüft jeder Strahl ganz.
+_NARROW_SHARE: Final = 0.99
+
+#: Auf wie viele Stellen eine Strahlrichtung für die geteilte Projektion
+#: gerundet wird.
+_KEY_DIGITS: Final = 9
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class _Frame:
+    """Die Dreiecke eines Körpers quer zu einer Strahlrichtung."""
+
+    direction: np.ndarray
+    first: np.ndarray
+    second: np.ndarray
+    low_u: np.ndarray
+    high_u: np.ndarray
+    low_v: np.ndarray
+    high_v: np.ndarray
+    far: np.ndarray
+    order: np.ndarray
+    middles: np.ndarray
+    reach: float
+    wide: np.ndarray
+
+
+class _Sight:
+    """Strahlen gegen einen Körper und die Stopfen seiner Bohrungen.
+
+    Je Richtung werden die Dreiecke einmal in die Ebene quer zum Strahl
+    projiziert und nach der Lage sortiert; ein Strahl prüft danach nur die
+    Dreiecke eines schmalen Streifens um sich, und nur die, in deren Rechteck
+    er liegt, rechnet er genau. Alle Achsstrahlen einer Platte teilen sich
+    zwei Richtungen. Gemessen an einer Platte mit 64 Durchgangsbohrungen
+    (22.09.2026): bei 16 652 Dreiecken 18 ms, bei 131 340 Dreiecken 100 bis
+    140 ms — die erste Fassung mit einer Umkugel je Dreieck und Strahl
+    brauchte 580 ms und 2,3 s.
+    """
+
+    def __init__(
+        self,
+        triangles: np.ndarray,
+        plugs: list[tuple[np.ndarray, np.ndarray, float, float]],
+    ) -> None:
+        self._triangles = triangles
+        self._frames: dict[tuple[float, ...], _Frame] = {}
+        # Spielraum der Rechtecke: die Geometrietoleranz und was die gerundete
+        # Richtung über die Ausdehnung des Körpers verschiebt.
+        extent = float(np.abs(triangles).max()) if len(triangles) else 0.0
+        self._pad = EPS_GEOM + 10.0 ** (1 - _KEY_DIGITS) * 4.0 * extent
+        self._centres = np.array([plug[0] for plug in plugs], dtype=float).reshape(-1, 3)
+        self._axes = np.array([plug[1] for plug in plugs], dtype=float).reshape(-1, 3)
+        self._halves = np.array([plug[2] for plug in plugs], dtype=float)
+        self._radii = np.array([plug[3] for plug in plugs], dtype=float)
+
+    def open(self, start: np.ndarray, direction: np.ndarray, own: int) -> bool:
+        """Ob der Strahl ins Freie geht — ohne Dreieck und ohne fremden Stopfen."""
+        from app.core.geom.mesh import ray_hits
+
+        frame = self._frame(direction)
+        u = float(start @ frame.first)
+        v = float(start @ frame.second)
+        ahead = float(start @ frame.direction)
+        pad = self._pad
+        # Nur der Streifen, in dem ein schmales Dreieck den Strahl überhaupt
+        # umfassen kann, dazu die breiten — dann die Rechtecke genau.
+        lower, upper = np.searchsorted(
+            frame.middles, (u - frame.reach - pad, u + frame.reach + pad)
+        )
+        candidates = np.concatenate((frame.order[lower:upper], frame.wide))
+        near = candidates[
+            (frame.low_u[candidates] <= u + pad)
+            & (frame.high_u[candidates] >= u - pad)
+            & (frame.low_v[candidates] <= v + pad)
+            & (frame.high_v[candidates] >= v - pad)
+            & (frame.far[candidates] >= ahead - pad)
+        ]
+        if len(near) and len(ray_hits(self._triangles[near], start, direction)[0]):
+            return False
+        touched = self._plugs_touched(start, direction)
+        touched[own] = False
+        return not bool(touched.any())
+
+    def _frame(self, direction: np.ndarray) -> _Frame:
+        """Die Rechtecke aller Dreiecke quer zu einer Richtung, einmal je Richtung."""
+        # Gleiche Achsen tragen aus der Erkennung Rauschen in der letzten
+        # Stelle; ohne Rundung bekäme jede Bohrung ihre eigene Projektion.
+        # Was die Rundung verschiebt, deckt ``_pad``.
+        key = tuple(round(float(value), _KEY_DIGITS) for value in direction)
+        known = self._frames.get(key)
+        if known is not None:
+            return known
+        rounded = np.asarray(key, dtype=float)
+        rounded /= float(np.linalg.norm(rounded))
+        axes = units.plane_axes(key)
+        assert axes is not None, "Strahlrichtungen sind normiert"
+        first, second = (np.asarray(axis, dtype=float) for axis in axes)
+        u = self._triangles @ first
+        v = self._triangles @ second
+        low_u, high_u = u.min(axis=1), u.max(axis=1)
+        middles = (low_u + high_u) / 2.0
+        widths = (high_u - low_u) / 2.0
+        # Die breitesten Dreiecke — die Deckfläche einer Platte ist eines —
+        # prüft jeder Strahl; für die übrigen reicht ein Streifen um ihn.
+        reach = float(np.quantile(widths, _NARROW_SHARE)) + EPS_GEOM if len(widths) else 0.0
+        wide = np.flatnonzero(widths > reach)
+        narrow = np.flatnonzero(widths <= reach)
+        order = narrow[np.argsort(middles[narrow], kind="stable")]
+        known = _Frame(
+            direction=rounded,
+            first=first,
+            second=second,
+            low_u=low_u,
+            high_u=high_u,
+            low_v=v.min(axis=1),
+            high_v=v.max(axis=1),
+            far=(self._triangles @ rounded).max(axis=1),
+            order=order,
+            middles=middles[order],
+            reach=reach,
+            wide=wide,
+        )
+        self._frames[key] = known
+        return known
+
+    def _plugs_touched(self, start: np.ndarray, direction: np.ndarray) -> np.ndarray:
+        """Welche Stopfen der Strahl berührt — jeder als Kapsel gerechnet.
+
+        Die Kapsel (Zylinder mit Halbkugeln an den Enden) ist etwas größer als
+        der Stopfen; sie meldet im Zweifel eine Berührung, und die heißt hier
+        „nicht im Freien" — die vorsichtige Seite. Gerechnet wird der nächste
+        Abstand zwischen Strahl (``t ≥ 0``) und Achsstrecke (``|s| ≤ half``):
+        erst über die beiden Geraden, dann abwechselnd geklemmt.
+        """
+        gap = start - self._centres
+        cross = self._axes @ direction
+        along_ray = gap @ direction
+        along_axis = np.einsum("ij,ij->i", self._axes, gap)
+        denominator = 1.0 - cross * cross
+        skew = denominator > EPS_GEOM
+        t = np.where(
+            skew,
+            (cross * along_axis - along_ray) / np.where(skew, denominator, 1.0),
+            -along_ray,
+        )
+        t = np.maximum(t, 0.0)
+        s = np.clip(along_axis + t * cross, -self._halves, self._halves)
+        points = self._centres + s[:, None] * self._axes
+        t = np.maximum(np.einsum("ij,j->i", points - start, direction), 0.0)
+        s = np.clip(along_axis + t * cross, -self._halves, self._halves)
+        points = self._centres + s[:, None] * self._axes
+        closest = np.linalg.norm(start + t[:, None] * direction - points, axis=1)
+        return np.asarray(closest <= self._radii)
+
+
+def _plug_axis(feature: Feature) -> tuple[np.ndarray, np.ndarray, float, float] | None:
+    """Mitte, Achse, halbe Länge und Halbmesser des Stopfens aus :func:`_bore_solid`."""
+    from app.core.geom.prepare import FEATURE_OVERLAP
+
+    axis = np.asarray(feature.params.get("axis", (0.0, 0.0, 1.0)), dtype=float)
+    length = float(np.linalg.norm(axis))
+    depth = float(feature.params.get("depth", 0.0))
+    diameter = float(feature.params.get("diameter", 0.0))
+    if length <= EPS_GEOM or depth <= EPS_GEOM or diameter <= EPS_GEOM:
+        return None
+    centre = np.asarray(feature.params.get("centre", (0.0, 0.0, 0.0)), dtype=float)
+    half = depth / 2.0 + 2.0 * FEATURE_OVERLAP
+    return centre, axis / length, half, (diameter + FEATURE_OVERLAP) / 2.0
+
+
+def _mouth_rays(outward: np.ndarray) -> list[np.ndarray]:
+    """Der Achsstrahl aus einer Mündung und sechs schräge daneben, alle nach außen."""
+    frame = units.plane_axes((float(outward[0]), float(outward[1]), float(outward[2])))
+    rays = [outward]
+    if frame is None:
+        return rays
+    first, second = (np.asarray(axis, dtype=float) for axis in frame)
+    for turn in range(6):
+        angle = turn * math.pi / 3.0
+        side = math.cos(angle) * first + math.sin(angle) * second
+        rays.append(math.cos(_SIDE_TILT) * outward + math.sin(_SIDE_TILT) * side)
+    return rays
 
 
 def _inner_shells(body: MeshData) -> MeshData | None:

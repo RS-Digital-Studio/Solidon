@@ -8,6 +8,8 @@ gelesen.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 pytest.importorskip("PySide6")
@@ -116,19 +118,59 @@ def test_another_project_starts_a_new_comparison(qt_app: QApplication) -> None:
     assert delta == "", "ein anderes Projekt ist kein Vorher"
 
 
-def test_the_key_survives_the_first_unsaved_change() -> None:
-    """``session.title`` trägt einen Stern, sobald etwas ungesichert ist.
+def test_the_window_compares_within_a_project_and_never_across(
+    qt_app: QApplication, tmp_path: Path
+) -> None:
+    """Im gebauten Fenster: Eine Änderung nennt die Differenz, ein anderes Projekt nicht.
 
-    Als Schlüssel genommen, hätte die Zeile ihren Vergleich genau dann
-    verloren, wenn er zum ersten Mal etwas zu sagen hätte — nach der ersten
-    Änderung. Deshalb der Pfad.
+    Hier stand eine Prüfung auf den **Quelltext** von ``_facts_key`` — ob der
+    Pfad darin vorkommt und ``session.title`` nicht. Die Methode rief niemand
+    auf: ``_update_facts`` gab gar keinen Schlüssel weiter, und der Vergleich
+    fiel beim Öffnen nur weg, weil ``_reset_for`` zufällig vorher ein leeres
+    Ergebnis meldete (22.09.2026). Jetzt geht der Weg durchs Fenster: öffnen,
+    ändern — die Zeile nennt die Differenz, trotz Stern im Titel —, ein
+    zweites Projekt öffnen, und die Zeile schweigt.
     """
-    from pathlib import Path
+    from app.core.scene import OperationDraft
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
 
-    source = (Path(__file__).parent.parent / "app" / "ui" / "main_window.py").read_text("utf-8")
-    body = source.split("def _facts_key(", 1)[1].split("\n    def ", 1)[0]
-    # Nur der Rumpf, nicht die Erklärung darüber: der Docstring dort nennt
-    # ``session.title`` gerade deshalb, weil es im Code nicht stehen darf.
-    code = body.split('"""', 2)[-1]
-    assert "session.path" in code
-    assert "session.title" not in code
+    for name, width in (("klein.p3d", 20.0), ("gross.p3d", 60.0)):
+        session = Session()
+        session.history.apply("Quader", [OperationDraft(op="create_box", params={"width": width})])
+        session.evaluate_now()
+        session.save_project(tmp_path / name)
+        session.release()
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window.open_path(tmp_path / "klein.p3d")
+        assert window.session.wait_for_idle(30_000)
+        QApplication.processEvents()
+        ops = window.session.project.document.ops
+        box = next(entry for entry in ops if entry.op == "create_box")
+        assert window.session.change_params(int(box.id), {**box.params, "width": 40.0})
+        assert window.session.wait_for_idle(30_000)
+        QApplication.processEvents()
+        assert window.session.title.endswith("*"), "ungesichert — der Titel trägt den Stern"
+        _summary, delta = window.facts.state()
+        assert delta.startswith("+"), f"die Änderung nennt ihren Preis: {delta!r}"
+        # Gesichert, sonst fragt das Öffnen nach — und der Dialog wartete
+        # offscreen auf niemanden.
+        window.session.save_project(tmp_path / "klein.p3d")
+
+        window.open_path(tmp_path / "gross.p3d")
+        assert window.session.wait_for_idle(30_000)
+        QApplication.processEvents()
+        summary, delta = window.facts.state()
+        assert summary, "das neue Projekt hat eine Zahl"
+        assert delta == "", "ein anderes Projekt ist kein Vorher"
+
+        # Und direkt, ohne das leere Ergebnis dazwischen, auf das sich der
+        # alte Weg verließ: Die Zeile erkennt den Wechsel am Schlüssel.
+        window.facts.show_estimate(Estimate(material_mm3=1.0, grams=99.0, seconds=60.0), "vorher")
+        window._update_facts()
+        assert window.facts.state()[1] == "", "der Schlüssel trennt die Projekte"
+    finally:
+        window.release()

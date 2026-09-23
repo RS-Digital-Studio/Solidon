@@ -204,6 +204,20 @@ class _RecognitionWorker(Worker):
         super().release_finished_references()
 
 
+def _found_text(count: int) -> str:
+    """Was die Suche gefunden hat — in der Zahl, die dasteht, und mit dem Weg weiter.
+
+    „1 vollständige Merkmale gefunden." und „0 vollständige Merkmale
+    gefunden." standen bis zum 22.09.2026 im Fenster; beim zweiten fehlte
+    dazu, was jetzt hilft — und *Nur Merkmale übernehmen* stand grau daneben.
+    """
+    if count == 0:
+        return tr("Kein vollständiges Merkmal gefunden. Vergrößern Sie den Radius.")
+    if count == 1:
+        return tr("1 vollständiges Merkmal gefunden.")
+    return tr("{count} vollständige Merkmale gefunden.").format(count=count)
+
+
 class LocalRecognitionDialog(QDialog):
     """Suche und Bearbeitung sammeln; ausschließlich der Besitzer schreibt die Transaktion."""
 
@@ -410,9 +424,7 @@ class LocalRecognitionDialog(QDialog):
         else:
             self.features.setCurrentRow(-1)
         self.save_button.setEnabled(bool(result.features))
-        self.state.setText(
-            tr("{count} vollständige Merkmale gefunden.").format(count=len(result.features))
-        )
+        self.state.setText(_found_text(len(result.features)))
 
     def _selected(self, item: QListWidgetItem | None, _old: QListWidgetItem | None) -> None:
         self._close_edit()

@@ -1756,9 +1756,8 @@ def kind_requirement(spec: Any, kinds: Sequence[str], spoiled_by: str = "") -> s
         # niemand ausführen kann, ist schlechter als keiner.
         return str(
             tr(
-                "„{step}“ hat den Körper in ein Dreiecksmodell umgewandelt. Dieses Werkzeug "
-                "braucht echte Kurven und muss im Verlauf davor stehen. "
-                "Nehmen Sie die Schritte ab dort zurück, wenden Sie das Werkzeug an und "
+                "Seit „{step}“ ist der Körper ein Dreiecksmodell. Dieses Werkzeug braucht "
+                "echte Kurven: Nehmen Sie die Schritte ab dort zurück, wenden Sie es an und "
                 "setzen Sie den Rest danach neu."
             )
         ).format(step=spoiled_by)
@@ -1778,10 +1777,9 @@ def kind_requirement(spec: Any, kinds: Sequence[str], spoiled_by: str = "") -> s
     # von sich aus mit; ein älterer Schritt wird im Verlauf umgestellt.
     return str(
         tr(
-            "Dieses Werkzeug braucht einen Körper mit echten Kurven. Eine Grundform "
-            "bringt sie mit; einen älteren Schritt stellen Sie im Verlauf auf „Mit echten "
-            "Flächen und Kanten rechnen“. Eine STEP-Datei bringt diese Flächen und "
-            "Kanten ebenfalls mit."
+            "Dieses Werkzeug braucht einen Körper mit echten Kurven. Grundformen und "
+            "STEP-Dateien bringen sie mit; einen älteren Schritt stellen Sie im Verlauf "
+            "auf „Mit echten Flächen und Kanten rechnen“."
         )
     )
 
@@ -1873,12 +1871,23 @@ def body_facts(entry: SceneObject) -> BodyFacts:
     # ist eine zweite Komponente; wo es zwei gibt und die Wahrnehmung keinen
     # Einschluss gemeldet hat, kann sie ihn auch übersehen haben (offene
     # Außenhülle, verkehrter Umlaufsinn) — dann entscheidet die Operation.
+    #
+    # **Eine Bohrung durch eine Platte ist keine Entlüftung.** Bis zum
+    # 22.09.2026 ließ jede durchgehende Bohrung die Frage offen, und an
+    # ``plate_holes.stl`` stand *Gitter füllen* anklickbar da, dessen Dialog
+    # nur „Keine Vorschau" sagen konnte. Führen alle Bohrungen an beiden
+    # Enden ins Freie, findet auch die Operation nichts — dieselbe Prüfung
+    # (``lattice.bores_lead_outside``) entscheidet dort und hier.
     if hollow:
         known: bool | None = True
-    elif vented:
+    elif pieces > 1:
         known = None
+    elif vented:
+        from app.core.geom.lattice import bores_lead_outside
+
+        known = False if bores_lead_outside(mesh, entry.features) else None
     else:
-        known = False if pieces <= 1 else None
+        known = False
     return BodyFacts(closed=bool(mesh.raw.is_watertight), pieces=pieces, cavity=known)
 
 
@@ -2553,6 +2562,10 @@ def demo_line(state: Activation) -> str:
     Demo mit hartem Ende ist es die Zusage, dass niemand überrascht wird —
     wer am 28.10. ein Projekt anfängt, soll es vorher gewusst haben.
     """
+    if state.days_left == 1:
+        # Am letzten Tag stand „noch 1 Tage" in der Statusleiste — dauerhaft,
+        # an genau dem Tag, an dem jemand am genauesten hinsieht.
+        return tr("Demo — noch 1 Tag, bis zum {date}").format(date=deadline_date(state))
     return tr("Demo — noch {days} Tage, bis zum {date}").format(
         days=state.days_left, date=deadline_date(state)
     )

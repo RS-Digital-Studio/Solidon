@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import replace
+from itertools import pairwise
 from pathlib import Path
 from typing import Any
 
@@ -287,6 +288,50 @@ def test_regrouping_keeps_the_selected_feature_current_and_visible(qt_app: QAppl
     assert tree.tree.currentItem() is not selected, (
         "die Tastatur setzt an der wiederhergestellten Zeile an"
     )
+    tree.close()
+
+
+def test_choosing_another_feature_reports_it_once_without_an_empty_step(
+    qt_app: QApplication,
+) -> None:
+    """Ein Klick auf ein anderes Merkmal meldet genau dieses — kein „nichts" davor.
+
+    ``select_feature`` leerte die Baumauswahl ungeblockt und setzte danach die
+    neue. Jeder Empfänger bekam damit zwei Runden: „nichts gewählt"
+    (Merkmalfenster geleert, Handlungskarte, Menüs, Maßgruppe beendet) und
+    gleich danach das neue Merkmal — am Halter mit Wabenmuster ein Drittel
+    eines Bohrungsklicks (22.09.2026). Gemeldet wird jetzt der neue Stand,
+    einmal; dasselbe gilt für Körper und Mehrfachauswahl.
+    """
+    from app.core.scene.evaluate import EvaluationResult
+    from app.core.types import Scene, SceneObject
+    from app.ui.panels import ObjectTree
+
+    mesh = plate()
+    found = features.detect(mesh)
+    holes = [key for key, value in found.items() if value.kind == "hole"]
+    entry = SceneObject(id="obj_1", name="Platte", mesh=mesh, features=found)
+    other = SceneObject(id="obj_2", name="Zweite", mesh=mesh, features={})
+    tree = ObjectTree()
+    tree.show_scene(EvaluationResult(Scene(objects={entry.id: entry, other.id: other})))
+    tree.select_feature(entry.id, holes[0])
+    heard: list[object] = []
+    bodies: list[object] = []
+    tree.featureSelected.connect(heard.append)
+    tree.selectionChanged.connect(bodies.append)
+
+    tree.select_feature(entry.id, holes[1])
+    assert heard == [holes[1]], heard
+    assert bodies == [entry.id], bodies
+
+    heard.clear()
+    bodies.clear()
+    tree.select_object(other.id)
+    assert heard == [None] and bodies == [other.id], (heard, bodies)
+
+    bodies.clear()
+    tree.select_objects([entry.id, other.id])
+    assert bodies == [entry.id], bodies
     tree.close()
 
 
@@ -1701,6 +1746,199 @@ def two_holes() -> tuple[tuple[str, Feature], tuple[str, Feature]]:
     holes = [(key, value) for key, value in found.items() if value.kind == "hole"]
     assert len(holes) >= 2, "die Platte hat mehrere Bohrungen"
     return holes[0], holes[1]
+
+
+def _panel_state(panel: FeaturePanel) -> list[Any]:
+    """Alles, was ein Kunde oder ein Vorleser am Fenster ablesen kann — je Zeile.
+
+    Werte, Grenzen, Einheit, Texte, Kurzhilfen, zugängliche Namen und
+    Beschreibungen, Sichtbarkeit und Sperre; dazu die Handlungen hinter dem
+    Knopf unten. Zwei Fenster mit gleichem Stand sind für den Kunden dasselbe
+    Fenster, gleich wie sie entstanden sind.
+    """
+    from PySide6.QtWidgets import QDoubleSpinBox, QSpinBox, QToolButton
+
+    rows: list[Any] = []
+    for row in panel._built:
+        widgets: list[Any] = []
+        for widget in (row, *row.findChildren(QWidget)):
+            entry: list[Any] = [
+                type(widget).__name__,
+                widget.toolTip(),
+                widget.statusTip(),
+                widget.accessibleName(),
+                widget.accessibleDescription(),
+                widget.isVisibleTo(panel),
+                widget.isEnabled(),
+            ]
+            if isinstance(widget, (QLabel, QPushButton, QToolButton, QCheckBox)):
+                entry.append(widget.text())
+            if isinstance(widget, QCheckBox):
+                entry.append(widget.isChecked())
+            if isinstance(widget, LengthSpin):
+                entry.append(round(widget.value_mm(), 9))
+            if isinstance(widget, (QDoubleSpinBox, QSpinBox)):
+                entry.extend((widget.value(), widget.minimum(), widget.maximum(), widget.suffix()))
+            if isinstance(widget, QComboBox):
+                entry.extend((widget.currentData(), widget.count()))
+            widgets.append(entry)
+        rows.append(widgets)
+    runs = [(entry.title, entry.reason, entry.op, entry.members) for entry in panel._runs.values()]
+    return [rows, runs, sorted(panel._explanations.values()), panel._armed_title.text()]
+
+
+def test_the_next_hole_keeps_the_rows_and_reads_exactly_like_a_fresh_panel(
+    qt_app: QApplication,
+) -> None:
+    """RM-204: Ein Merkmalklick baut nicht mehr alle Handlungen neu.
+
+    Gemessen am 21.09.2026: ``show_feature`` leerte das Fenster und baute je
+    Auswahl alle Zeilen neu — an einer Bohrung sechs Handlungen mit achtzehn
+    Feldern. Am Halter mit Wabenmuster kostete das Aufbauen 14 ms je Klick,
+    von 53 ms für das ganze Fenster (22.09.2026). Jetzt behält die nächste
+    Bohrung die Zeilen der vorigen und schreibt nur ihre Werte hinein.
+
+    **Und sieht dabei genau so aus wie frisch gebaut**: Werte, Grenzen,
+    Kurzhilfe mit dem Ausgangswert (nicht doppelt), Namen, Erklärung —
+    verglichen mit einem zweiten Fenster, das nur die zweite Bohrung kennt.
+    """
+    load_operations()
+    mesh = plate()
+    found = features.detect(mesh)
+    (first_id, first), (second_id, second) = two_holes()
+    panel = FeaturePanel()
+    panel.show_feature(first_id, first, features=found, mesh=mesh)
+    before = {id(row) for row in panel._built}
+    boxes_before = [row for row in panel._built if row in panel._shown_rows]
+    gemeldet: list[tuple[str, dict[str, object]]] = []
+    panel.valuesChanged.connect(lambda op, params: gemeldet.append((op, params)))
+
+    panel.show_feature(second_id, second, features=found, mesh=mesh)
+    qt_app.processEvents()
+
+    reused = [row for row in panel._built if id(row) in before]
+    assert len(reused) == len(boxes_before) >= 5, "jede Handlungszeile bleibt dieselbe"
+    assert not gemeldet, "das Füllen ist keine Eingabe — nichts wird gemeldet"
+
+    fresh = FeaturePanel()
+    fresh.show_feature(second_id, second, features=found, mesh=mesh)
+    assert _panel_state(panel) == _panel_state(fresh)
+    tips = [
+        widget.toolTip()
+        for row in panel._built
+        for widget in row.findChildren(LengthSpin)
+        if "Ausgangswert" in widget.toolTip()
+    ]
+    assert tips and all(tip.count("Ausgangswert") == 1 for tip in tips), tips
+
+    # Die Wege der Zeile meinen das neue Merkmal: melden, ausführen.
+    getan: list[tuple[str, dict[str, object]]] = []
+    panel.operationRequested.connect(lambda op, params: getan.append((op, params)))
+    move = row_of(panel, "Merkmal verschieben")
+    spin = next(widget for widget in fields(move) if isinstance(widget, LengthSpin))
+    spin.set_value_mm(spin.value_mm() + 1.5)
+    assert gemeldet and gemeldet[-1][0] == "move_feature"
+    assert gemeldet[-1][1]["at_feature"] == second_id
+    press(panel, "Merkmal verschieben")
+    assert getan and getan[-1][0] == "move_feature" and getan[-1][1]["at_feature"] == second_id
+
+
+def test_the_core_answers_a_feature_once_per_evaluation(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Hin- und herklicken fragt den Kern nicht jedes Mal neu (RM-181, Anteil Oberfläche).
+
+    Hohlraumkette, Handlungen und Geschwister sind reine Funktionen von Körper
+    und Merkmalsliste; am Halter mit Wabenmuster kostete ``actions_for`` je
+    Bohrungsklick 22 ms (22.09.2026), und wer drei Bohrungen vergleicht,
+    zahlte sie bei jedem Zurückklicken wieder. Eine neue Auswertung bringt
+    eine neue Merkmalsliste — dann wird wieder gefragt.
+    """
+    from app.core.perceive import actions as actions_module
+
+    load_operations()
+    mesh = plate()
+    found = features.detect(mesh)
+    (first_id, first), (second_id, second) = two_holes()
+    asked: list[str] = []
+    original = actions_module.actions_for
+
+    def counted(feature: Feature, *args: Any, **kwargs: Any) -> Any:
+        asked.append(feature.id)
+        return original(feature, *args, **kwargs)
+
+    monkeypatch.setattr(actions_module, "actions_for", counted)
+    panel = FeaturePanel()
+    for identifier, feature in ((first_id, first), (second_id, second)) * 3:
+        panel.show_feature(identifier, feature, features=found, mesh=mesh)
+    assert asked == [first_id, second_id], asked
+    assert [entry.op for entry in panel._runs.values()][:2] == ["move_feature", "resize_hole"]
+
+    again = dict(found)
+    panel.show_feature(first_id, again[first_id], features=again, mesh=mesh)
+    assert asked[-1] == first_id and len(asked) == 3, "eine neue Merkmalsliste fragt neu"
+
+
+def test_a_partly_reused_panel_matches_a_fresh_one_and_tabs_like_the_eye(
+    qt_app: QApplication,
+) -> None:
+    """Vom Stift zum Ring: vier Handlungen bleiben, *Maße ändern* hat andere Felder.
+
+    Die neue Zeile entsteht nach den wiederverwendeten, steht im Fenster aber
+    an zweiter Stelle. Qt führte die Fokuskette in der Reihenfolge der
+    Entstehung; ohne neu gezogene Kette sprang die Tabulatortaste von der
+    letzten alten Zeile zurück nach oben (RM-204). Und eine Zeile, die beim
+    Messen im Bild weggenommen war (RM-199), kommt sichtbar zurück.
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QLineEdit
+
+    load_operations()
+    mesh = read_mesh((MESHES / "post_with_fillet.stl").read_bytes(), ".stl")
+    found = features.detect(mesh)
+    pin_id = next(key for key, value in found.items() if value.kind == "pin")
+    torus_id = next(key for key, value in found.items() if value.kind == "torus")
+    panel = FeaturePanel()
+    panel.show_feature(pin_id, found[pin_id], features=found, mesh=mesh)
+    panel.set_measuring(True, op="move_feature")
+    panel.set_measuring(False)
+    panel.set_measuring(True, op="move_feature")
+    kept = {id(row) for row in panel._built}
+
+    panel.show_feature(torus_id, found[torus_id], features=found, mesh=mesh)
+    panel.set_measuring(False)
+    qt_app.processEvents()
+
+    assert sum(id(row) in kept for row in panel._built) == 4, "vier von fünf Zeilen bleiben"
+    fresh = FeaturePanel()
+    fresh.show_feature(torus_id, found[torus_id], features=found, mesh=mesh)
+    assert _panel_state(panel) == _panel_state(fresh)
+
+    def a_stop(widget: QWidget) -> bool:
+        # Das Textfeld im Drehfeld und die Liste im Aufklappfenster einer
+        # Auswahl sind Innenleben, keine Halte.
+        return (
+            widget.focusPolicy() != Qt.FocusPolicy.NoFocus
+            and not isinstance(widget, QLineEdit)
+            and widget.window() is panel.window()
+        )
+
+    stops = [
+        child
+        for row in panel._built
+        for child in (row, *row.findChildren(QWidget))
+        if a_stop(child)
+    ]
+    assert len(stops) > 6
+    for first, second in pairwise(stops):
+        node = first.nextInFocusChain()
+        while not a_stop(node):
+            node = node.nextInFocusChain()
+        assert node is second, (
+            f"nach {first.accessibleName() or type(first).__name__} kommt "
+            f"{node.accessibleName() or type(node).__name__} statt "
+            f"{second.accessibleName() or type(second).__name__}"
+        )
 
 
 def test_two_features_show_how_far_apart_they_stand(qt_app: QApplication) -> None:

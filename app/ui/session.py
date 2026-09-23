@@ -403,16 +403,19 @@ class _AgentWorker(Worker):
     finishedWith = Signal(object)
     failedWith = Signal(object)
 
-    def __init__(self, session: Session, request: str, backend: LLMBackend) -> None:
+    def __init__(
+        self, session: Session, request: str, backend: LLMBackend, snapshot: _Snapshot
+    ) -> None:
         super().__init__()
         self._session = session
         self._request = request
         self._backend = backend
+        self._snapshot = snapshot
 
     def work(self) -> None:
         session = self._session
         try:
-            preview = session.run_proposal(self._request, self._backend)
+            preview = session.run_proposal(self._request, self._backend, snapshot=self._snapshot)
         except OperationCancelled:
             self.failedWith.emit(AppError(tr("Der Vorschlag wurde abgebrochen.")))
         except AppError as error:
@@ -422,7 +425,7 @@ class _AgentWorker(Worker):
 
     def release_finished_references(self) -> None:
         """Sitzung und Anfrage nach dem zugestellten Agentenzug lösen."""
-        del self._session, self._request, self._backend
+        del self._session, self._request, self._backend, self._snapshot
         super().release_finished_references()
 
 
@@ -495,6 +498,40 @@ class _PreviewWorker(Worker):
         """Vorschaukontext nach Ergebnis und Fertigsignal lösen."""
         del self._session, self._compute
         super().release_finished_references()
+
+
+@dataclass(frozen=True, slots=True)
+class _Snapshot:
+    """Der Stand, auf dem eine Vorschau oder ein Agentenzug rechnet — im Hauptfaden gezogen.
+
+    Vorschau und Agent rechnen im Arbeiter; das Dokument gehört dem
+    Hauptfaden, der es währenddessen ändern darf (ein Übernehmen, ein
+    Import, eine Antwort). Bis zum 22.09.2026 kopierte der **Arbeiter** das
+    lebende Dokument (``copy.deepcopy`` in ``_preview_outcome``, in
+    ``_coarse_before`` und im Agentenzug) und las Profil und Szene davor
+    ebenfalls erst dort: Traf die Kopie auf eine Änderung, rechnete die
+    Vorschau einen Stand, den es nie gab — mit dem Schritt von gleich, aber
+    der Szene von vorhin —, und ein Wörterbuch, das sich beim Kopieren
+    änderte, riss den Arbeiter mit „dictionary changed size during
+    iteration" ab. Die Kopie kostet an den Beispielprojekten unter einer
+    halben Millisekunde; gezogen wird sie dort, wo das Dokument lebt.
+    """
+
+    document: Any
+    before: Any
+    profile: Profile
+
+    @classmethod
+    def of(cls, session: Session) -> _Snapshot:
+        """Zieht den Stand jetzt — nur im Hauptfaden aufrufen."""
+        import copy
+
+        result = session.last_result
+        return cls(
+            document=copy.deepcopy(session.project.document),
+            before=result.scene if result is not None else None,
+            profile=session.profile,
+        )
 
 
 def _reason_of(error: AppError) -> str:
@@ -829,7 +866,7 @@ class Session(QObject):
     """Hält das offene Projekt und die Oberfläche im Gleichschritt mit ihm."""
 
     sceneChanged = Signal(object)
-    """An evaluation finished — carries an ``EvaluationResult``."""
+    """Eine Auswertung ist fertig — trägt ein ``EvaluationResult``."""
     progressChanged = Signal(float, str)
     busyChanged = Signal(bool)
     askRequested = Signal(object)
@@ -837,7 +874,7 @@ class Session(QObject):
     questionInvalidated = Signal()
     """Abbruch oder Nachlauf hat den bisherigen Auswertungsauftrag entwertet."""
     proposalReady = Signal(object)
-    """An agent turn finished — carries a ``ProposalPreview`` (§26.5)."""
+    """Ein Agentenzug ist fertig — trägt eine ``ProposalPreview`` (§26.5)."""
     agentProgress = Signal(int, str)
     """Was der laufende Zug gerade tut — Schritt und Beschriftung (§2.8).
 
@@ -874,7 +911,7 @@ class Session(QObject):
     projectChanged = Signal()
     """Stapel, Pfad oder Titel haben sich geändert; die Leisten laden neu."""
     failed = Signal(object)
-    """An ``AppError`` the surface shows as a suggestion (§2.7)."""
+    """Eine ``AppError``, die die Oberfläche als Vorschlag zeigt (§2.7)."""
     counterpartFinished = Signal(object)
     """Die Passung eines Gegenstücks ist nachgetragen — trägt die neuen Befunde.
 
@@ -916,27 +953,27 @@ class Session(QObject):
         Sicherungen nicht teilen (:func:`app.core.scene.project.recovery_token`)."""
         self.quality: Quality = "draft"
         """Entwurf, solange gearbeitet wird; Export und Abschlussbericht schalten
-    auf fein (§31)."""
+        auf fein (§31)."""
         self._quality_once: Quality | None = None
         """Die Qualität für **einen** Lauf — siehe :meth:`recompute_fully`."""
         self.last_result: EvaluationResult | None = None
         self.result_current = False
         """Ob die Szene bereits zum aktuellen Auswertungsauftrag gehört."""
         self.pending_orphan_check = False
+        """Gesetzt, wenn eine Datei geöffnet wurde: §21.3 prüft ihre Verweise
+        einmal, nicht immer."""
         self._pending = threading.local()
-        """Was die nächste Frage **dieses Fadens** zur Wahl stellt (§21.3).
+        """Was die nächste Frage **dieses Fadens** zur Wahl stellt (§21.3) —
+        von :meth:`announce_candidates` gesetzt.
 
         Je Faden und nicht je Sitzung: siehe :meth:`announce_candidates`.
         ``getattr`` mit Vorgabe beim Lesen, weil ein frisch gestarteter Faden
         das Feld noch nicht hat — eine Frage ohne vorherige Ansage ist der
         Regelfall (die Einheitenfrage etwa) und kein Sonderfall.
         """
-        """Was die nächste Frage zur Wahl stellt — von ``announce_candidates`` gesetzt."""
-        """Gesetzt, wenn eine Datei geöffnet wurde: §21.3 prüft ihre Verweise
-    einmal, nicht immer."""
         self.pending_part_check = False
         """Dasselbe für die Bausteinbibliothek (§24.4): beim Öffnen, nicht bei
-    jedem Lauf."""
+        jedem Lauf."""
         self.pending_foreign_check = False
         """Und dasselbe für das, was §32 den Warnhinweis nennt: Quelltext und
         Verweise nach außen werden beim Öffnen einmal gemeldet. Bei jeder
@@ -1001,7 +1038,12 @@ class Session(QObject):
         der zerstört das C++-Objekt unter dem Thread: ein Absturz ohne
         Zeile, irgendwann später."""
         self._preview_generation = 0
+        """Stempel der jüngsten Vorschau-Anfrage (§18.7) — eine verspätete
+        Antwort auf eine ältere wird verworfen statt gezeigt."""
         self._project_generation = 0
+        """Welches Dokument gerade offen ist, als Zähler: ``_reset_for`` zählt
+        hoch, und ein Arbeiter, der für ein früheres gestartet wurde, erkennt
+        seine Meldung als veraltet (UI-01)."""
         self._analysis_memory: tuple[tuple[Any, ...], tuple[object, ...], dict[str, Any]] | None = (
             None
         )
@@ -1012,11 +1054,6 @@ class Session(QObject):
         ``id(last_result)``: CPython vergibt die Adresse eines freigegebenen
         Ergebnisses wieder, und zwei Auswertungen später sah der Druckdialog
         „dasselbe" Ergebnis (UI-21)."""
-        """Welches Dokument gerade offen ist, als Zähler: ``_reset_for`` zählt
-        hoch, und ein Arbeiter, der für ein früheres gestartet wurde, erkennt
-        seine Meldung als veraltet (UI-01)."""
-        """Stempel der jüngsten Vorschau-Anfrage (§18.7) — eine verspätete
-        Antwort auf eine ältere wird verworfen statt gezeigt."""
         self._backend: LLMBackend | None = None
         self._backend_probed = False
         """Ob ``first_available`` schon einmal gefragt wurde — auch ein „keins"
@@ -1045,6 +1082,15 @@ class Session(QObject):
             ),
             document.print_settings,
         )
+
+    @property
+    def project_generation(self) -> int:
+        """Welches Dokument offen ist, als Zähler — jeder Dokumentwechsel zählt hoch.
+
+        Für die Oberfläche, die sich merken will, zu welchem Dokument eine
+        Anzeige gehört (die Zahlenzeile vergleicht nur innerhalb eines).
+        """
+        return self._project_generation
 
     @property
     def base_dir(self) -> Path | None:
@@ -1482,8 +1528,6 @@ class Session(QObject):
         und weil das Schließen nur sichert, was als geändert gilt, ging sie
         dabei verloren. ``origin`` und Rückgabewert: siehe :meth:`add_fit`.
         """
-        import dataclasses
-
         parameters = self.project.document.parameters
         existing = parameters.get(name)
         if existing is None:
@@ -2528,6 +2572,7 @@ class Session(QObject):
         # stapeln sich Boolesche Operationen für Ergebnisse, die schon
         # niemand mehr sehen will.
         cancel = CancelSignal()
+        snapshot = _Snapshot.of(self)
 
         def compute() -> tuple[Any, SceneDifference | None, str]:
             # ``worker`` steht unten und ist beim **Aufruf** gebunden — die
@@ -2556,6 +2601,7 @@ class Session(QObject):
                 # Der Dialog zeigt Geometrie und Differenz, keine Merkmale:
                 # Eine Erkennung je getippter Zahl wäre eine Sekunde für nichts.
                 detect_features=False,
+                snapshot=snapshot,
             )
 
         # Was jetzt noch rechnet, rechnet für eine Frage von gestern: die
@@ -3035,7 +3081,7 @@ class Session(QObject):
                 _log.warning("scene views failed, proposing without images", exc_info=True)
         self.agent_cancel.reset()
         self.agentBusyChanged.emit(True)
-        worker = _AgentWorker(self, request, backend)
+        worker = _AgentWorker(self, request, backend, _Snapshot.of(self))
         worker.finishedWith.connect(partial(self._on_agent_proposal, finished=worker))
         worker.failedWith.connect(partial(self._on_agent_failed, finished=worker))
         worker.crashed.connect(
@@ -3047,16 +3093,28 @@ class Session(QObject):
         self._agent = worker
         self._leash.start(worker)
 
-    def run_proposal(self, request: str, backend: LLMBackend | None = None) -> ProposalPreview:
-        """Ein Agentenzug plus seine Vorschau. Läuft im Arbeiter (§26.5)."""
+    def run_proposal(
+        self,
+        request: str,
+        backend: LLMBackend | None = None,
+        *,
+        snapshot: _Snapshot | None = None,
+    ) -> ProposalPreview:
+        """Ein Agentenzug plus seine Vorschau. Läuft im Arbeiter (§26.5).
+
+        ``snapshot`` ist der Stand beim Senden (:class:`_Snapshot`); ohne ihn
+        — Kommandozeile, Tests, ein Aufruf im Hauptfaden — wird er hier
+        gezogen.
+        """
         backend = backend if backend is not None else self.agent_backend
         if backend is None:  # pragma: no cover - vor dem Start des Arbeiters abgesichert
             raise AppError(tr("Für den Chat fehlt der Zugang zu einem Sprachmodell."))
+        snapshot = snapshot if snapshot is not None else _Snapshot.of(self)
 
         agent = AgentSession(
             backend=backend,
-            document=self.project.document,
-            profile=self.profile,
+            document=snapshot.document,
+            profile=snapshot.profile,
             sources=ProjectSources(self.project, base_dir=self.base_dir),
             ask=self.ask_from_worker,
             selection=self._selection,
@@ -3067,18 +3125,22 @@ class Session(QObject):
         proposal = agent.propose(request)
         preview = ProposalPreview(proposal=proposal)
         if proposal.creates_something:
-            preview.scene, preview.difference = self._preview_of(proposal)
+            preview.scene, preview.difference = self._preview_of(proposal, snapshot)
         return preview
 
-    def _preview_of(self, proposal: Proposal) -> tuple[Any, SceneDifference | None]:
+    def _preview_of(
+        self, proposal: Proposal, snapshot: _Snapshot | None = None
+    ) -> tuple[Any, SceneDifference | None]:
         """Wonach die Szene aussähe — auf einer Kopie gerechnet, in
-        Entwurfsqualität.
+        Entwurfsqualität, auf dem Stand, auf dem der Zug gerechnet hat.
         """
+        snapshot = snapshot if snapshot is not None else _Snapshot.of(self)
         return self.preview_scene(
             list(proposal.drafts),
             origin=proposal.origin,
             ask=self.ask_from_worker,
-            changes=agent_apply.changes_for(proposal, self.project.document),
+            changes=agent_apply.changes_for(proposal, snapshot.document),
+            snapshot=snapshot,
         )
 
     def preview_scene(
@@ -3092,6 +3154,7 @@ class Session(QObject):
         change_name: str | None = None,
         changes: DocumentChange | None = None,
         cancelled: Any = None,
+        snapshot: _Snapshot | None = None,
     ) -> tuple[Any, SceneDifference | None]:
         """Wonach die Szene aussähe — die eine Vorschau für Agent und Dialog.
 
@@ -3113,6 +3176,7 @@ class Session(QObject):
             change_name=change_name,
             changes=changes,
             cancelled=cancelled,
+            snapshot=snapshot,
         )
         return scene, difference
 
@@ -3130,8 +3194,13 @@ class Session(QObject):
         coarsened: Any = None,
         counselled: Any = None,
         detect_features: bool = True,
+        snapshot: _Snapshot | None = None,
     ) -> tuple[Any, SceneDifference | None, str]:
         """:meth:`preview_scene`, dazu der Grund, wenn es keine Vorschau gibt.
+
+        ``snapshot`` ist der im Hauptfaden gezogene Stand (:class:`_Snapshot`);
+        im Arbeiter wird nur er gelesen und kopiert, nie das lebende Dokument.
+        Ohne ihn — ein Aufruf im Hauptfaden — wird er hier gezogen.
 
         ``detect_features=False`` lässt die Merkmalserkennung aus, wo kein
         späterer Schritt sie braucht — der Weg des Dialogs, dessen Bild
@@ -3150,7 +3219,8 @@ class Session(QObject):
         """
         import copy
 
-        before = self.last_result.scene if self.last_result else None
+        snapshot = snapshot if snapshot is not None else _Snapshot.of(self)
+        before = snapshot.before
         coarse = _coarse_drafts(before) if coarsened is not None and change_op is None else []
         # Der Flächenbezug meint die Originalkontur einschließlich Bohrungen.
         # Eine vorgeschaltete Reduktion änderte ihre Dreiecke und Kennung.
@@ -3162,7 +3232,9 @@ class Session(QObject):
         }
         if exact_faces:
             coarse = [draft for draft in coarse if not exact_faces.intersection(draft.inputs)]
-        working = copy.deepcopy(self.project.document)
+        # Eine eigene Kopie auch des Stands: Der Rückweg unten rechnet ihn ein
+        # zweites Mal, und diese Kopie trägt dann schon die Vorschauschritte.
+        working = copy.deepcopy(snapshot.document)
         reduced: tuple[OpId, ...] = ()
         if coarse:
             # Derselbe Titel wie die Vorschau daneben: Diese Transaktion steht
@@ -3202,7 +3274,7 @@ class Session(QObject):
                 _("Vorschau"), drafts, origin=origin or Origin(by="user"), changes=changes
             )
             previewed = tuple(transaction.ops)
-        preview_profile = self.profile
+        preview_profile = snapshot.profile
         if changes is not None:
             preview_profile = profiles.for_process(
                 profiles.make_profile(
@@ -3243,6 +3315,7 @@ class Session(QObject):
                 cancelled=cancelled,
                 counselled=counselled,
                 detect_features=detect_features,
+                snapshot=snapshot,
             )
         if result.stopped_at is not None:
             # Eine angehaltene Kette ist keine Vorschau: die leere Differenz
@@ -3267,7 +3340,9 @@ class Session(QObject):
             # hat — und die Rechnung darüber dauerte zehn bis fünfzig
             # Sekunden statt einer halben, weil zwei fast deckungsgleiche
             # Häute der schlimmste Fall für jeden Booleschen Kern sind.
-            coarse_before = self._coarse_before(before, coarse, ask, cancelled, change_op=change_op)
+            coarse_before = self._coarse_before(
+                before, coarse, ask, cancelled, change_op=change_op, snapshot=snapshot
+            )
             if coarse_before is None:
                 return self._preview_outcome(
                     drafts,
@@ -3280,6 +3355,7 @@ class Session(QObject):
                     cancelled=cancelled,
                     counselled=counselled,
                     detect_features=detect_features,
+                    snapshot=snapshot,
                 )
             coarsened(_triangles_of(before))
             before = coarse_before
@@ -3341,6 +3417,7 @@ class Session(QObject):
         cancelled: Any,
         *,
         change_op: OpId | None = None,
+        snapshot: _Snapshot | None = None,
     ) -> Any:
         """Die Szene davor, auf genau denselben verkleinerten Netzen.
 
@@ -3362,7 +3439,8 @@ class Session(QObject):
             return held[2]
         import copy
 
-        base = copy.deepcopy(self.project.document)
+        snapshot = snapshot if snapshot is not None else _Snapshot.of(self)
+        base = copy.deepcopy(snapshot.document)
         if change_op is None:
             History(base).apply(_("Vorschau"), coarse)
         else:
@@ -3370,7 +3448,7 @@ class Session(QObject):
             _coarse_steps_before(base, index, before)
         result = evaluate(
             base,
-            self.profile,
+            snapshot.profile,
             quality="draft",
             sources=ProjectSources(self.project, base_dir=self.base_dir),
             ask=ask or _no_questions,
@@ -3379,7 +3457,12 @@ class Session(QObject):
         )
         if result.stopped_at is not None:
             return None
-        self._coarse_scene = (before, change_op, result.scene)
+        # Gemerkt nur für die Szene, die noch dasteht: Kam inzwischen eine
+        # neue Auswertung (``_on_finished`` räumt den Platz), hielte der
+        # Eintrag die alte Szene samt grober Kopie am Leben.
+        current = self.last_result
+        if current is not None and current.scene is before:
+            self._coarse_scene = (before, change_op, result.scene)
         return result.scene
 
     def accept_proposal(self, preview: ProposalPreview) -> Transaction | None:
@@ -3545,7 +3628,14 @@ class Session(QObject):
             self._dirty = True
             self.projectChanged.emit()
         self.sceneChanged.emit(result)
-        self._run_finishers(result)
+        # **Nur ein aktuelles Ergebnis schließt ab.** Ist schon ein Nachlauf
+        # eingereiht, gehört dieses Ergebnis zum Stand davor — dem, auf dem
+        # die Hälften eines Gegenstücks noch fehlen. Es verbrauchte bis zum
+        # 22.09.2026 den wartenden Abschluss (``attach_fit`` fand nichts und
+        # meldete „nicht nachgetragen"), und der Nachlauf mit den echten
+        # Hälften hatte keinen mehr.
+        if self.result_current:
+            self._run_finishers(result)
 
     def _on_failed(self, error: Any, finished: _EvaluationWorker | None = None) -> None:
         if self._stale(finished):

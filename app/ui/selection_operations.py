@@ -333,6 +333,9 @@ class SelectionOperationsPanel(QWidget):
         self._query = ""
         """Der zuletzt eingegebene Suchtext — ein Stufenwechsel darf ihn nicht
         vergessen."""
+        self._wrapped_for: tuple[int, int, tuple[str, ...]] | None = None
+        """Für welche Breiten und Hauptaktionen die Beschriftungen zuletzt
+        umbrochen wurden (:meth:`_wrap_labels`)."""
         self._folded_by_hand: set[str] = set()
         """Die Gruppen, deren Klappe jemand selbst bewegt hat.
 
@@ -624,11 +627,23 @@ class SelectionOperationsPanel(QWidget):
         share = (
             (inner - self._quick.horizontalSpacing()) // 2 if self._quick_columns == 2 else inner
         )
+        room = self.scroller.viewport().width()
+        # **Nur, wenn sich eine Breite oder die Hauptaktionen geändert haben.**
+        # Jeder Merkmalklick änderte die Höhe der Karte darüber, und jede
+        # Höhenänderung lief hierher: gut hundert Knöpfe, jeder zweimal neu
+        # beschriftet (erst ganz, dann umbrochen) — im gebauten Fenster am
+        # Halter mit Wabenmuster 37 ms je Klick (22.09.2026). Eine Höhe bricht
+        # keine Zeile um; der Rollbalken, der mit ihr kommt, ändert ``room``
+        # und steht damit im Schlüssel.
+        key = (share, room, tuple(self._quick_shown))
+        if key == self._wrapped_for:
+            return
+        self._wrapped_for = key
         for name in self._quick_shown:
             self._wrap_label(self._quick_buttons[name], share)
         for _section, _toggle, buttons in self._groups.values():
             for button in buttons:
-                self._wrap_label(button, self.scroller.viewport().width())
+                self._wrap_label(button, room)
 
     @override
     def resizeEvent(self, event: QResizeEvent) -> None:

@@ -1806,9 +1806,8 @@ def _around(
     Rundung *liegt*, und die stehen senkrecht auf ihrer Achse.
     """
     from app.core.perceive.features import (
-        detect_faces,
-        face_mask,
         nearly_flat_mask,
+        planar_mask,
         planes_beside,
     )
 
@@ -1823,7 +1822,7 @@ def _around(
         mesh.raw,
         triangles,
         axis,
-        face_mask(mesh, detect_faces(mesh)) | nearly_flat_mask(mesh.raw, features or {}),
+        planar_mask(mesh) | nearly_flat_mask(mesh.raw, features or {}),
         centre=None
         if not isinstance(centre, list | tuple) or len(centre) != 3
         else np.asarray(centre, dtype=float),

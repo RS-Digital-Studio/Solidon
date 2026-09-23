@@ -25,7 +25,7 @@ import weakref
 from collections import Counter, OrderedDict
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
-from typing import Any, Final, NamedTuple
+from typing import Any, Final, NamedTuple, cast
 
 import numpy as np
 
@@ -3310,6 +3310,35 @@ def face_mask(mesh: MeshData, faces: Sequence[Feature]) -> np.ndarray:
         if feature.face_indices:
             mask[list(feature.face_indices)] = True
     return mask
+
+
+#: Der Fleck, unter dem :func:`planar_mask` seine Antwort merkt — sie gilt dem
+#: ganzen Körper und keinem Ausschnitt.
+_WHOLE_BODY: Final[tuple[int, ...]] = ()
+
+
+def planar_mask(mesh: MeshData) -> np.ndarray:
+    """Je Dreieck, ob es zu einer ebenen Fläche gehört — einmal je Körper.
+
+    Dieselbe Menge wie ``face_mask(mesh, detect_faces(mesh))``: Die Flächen
+    tragen als ``face_indices`` genau die Facetten, die
+    :func:`_planar_face_entries` findet; Träger und Innenlage, die
+    :func:`detect_faces` danach je Fläche rechnet, liest die Maske nicht. Am
+    Halter mit Wabenmuster waren das 320 ms je Rundungsklick im Hauptfaden
+    (``actions.fillet_blocked``), für eine Antwort, die sich mit dem Körper
+    nicht ändert (Regel 3). Gemerkt wird sie deshalb am Körper
+    (:func:`remembered`) und geht mit ihm; das Feld ist schreibgeschützt,
+    weil jeder Leser dieselbe Antwort bekommt.
+    """
+
+    def compute() -> np.ndarray:
+        mask = np.zeros(len(mesh.raw.faces), dtype=bool)
+        for facet, _area, _centre in _planar_face_entries(mesh):
+            mask[np.asarray(facet, dtype=np.int64)] = True
+        mask.flags.writeable = False
+        return mask
+
+    return cast(np.ndarray, remembered("planar_mask", mesh.raw, _WHOLE_BODY, compute))
 
 
 #: Bis zu diesem Winkel (in Grad) zwischen der Mittelnormale und jeder Facette

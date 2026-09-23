@@ -10,9 +10,11 @@ from __future__ import annotations
 
 import dataclasses
 import math
+import weakref
 from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
+from functools import partial
 from itertools import pairwise
-from typing import Any, Final, cast
+from typing import Any, Final, NamedTuple, cast
 
 from PySide6.QtCore import (
     QByteArray,
@@ -1281,10 +1283,10 @@ class ObjectTree(QWidget):
 
     selectionChanged = Signal(object)
     featureSelected = Signal(object)
-    #: Alle gewählten Merkmale als Paare aus Körper und Kennung — für die
-    #: Frage, wie weit zwei voneinander stehen.
-    featuresSelected = Signal(list)
     """Ein im Baum gewähltes Merkmal — trägt seine ID, oder None."""
+    featuresSelected = Signal(list)
+    """Alle gewählten Merkmale als Paare aus Körper und Kennung — für die
+    Frage, wie weit zwei voneinander stehen."""
     operationRequested = Signal(object)
     """Eine aus dem Kontextmenü gewählte Operation — trägt ihre ``OperationSpec``."""
     visibilityRequested = Signal(object, bool)
@@ -2172,15 +2174,21 @@ class ObjectTree(QWidget):
                 chosen.remove(object_id)
             else:
                 chosen.append(object_id)
-            self.tree.clearSelection()
+            # Geleert ohne Zwischenmeldung — gemeldet wird der neue Stand
+            # (siehe :meth:`select_feature`).
+            with QSignalBlocker(self.tree):
+                self.tree.clearSelection()
             if chosen:
                 self._restore(tuple(chosen), None)
             else:
                 self._on_selection()
             return
-        self.tree.clearSelection()
-        if object_id is not None:
-            self._restore((object_id,), None)
+        if object_id is None:
+            self.tree.clearSelection()
+            return
+        with QSignalBlocker(self.tree):
+            self.tree.clearSelection()
+        self._restore((object_id,), None)
 
     def select_objects(self, object_ids: Sequence[ObjectId]) -> None:
         """Mehrere Körper auf einmal wählen — die Sammelzeile des Prüfberichts.
@@ -2189,7 +2197,8 @@ class ObjectTree(QWidget):
         neun Körper; ihr Klick zeigt alle neun, nie den ersten zufälligen.
         Derselbe Weg wie ``add`` in :meth:`select_object`, nur in einem Zug.
         """
-        self.tree.clearSelection()
+        with QSignalBlocker(self.tree):
+            self.tree.clearSelection()
         wanted = tuple(dict.fromkeys(object_ids))
         if wanted:
             self._restore(wanted, None)
@@ -2206,7 +2215,14 @@ class ObjectTree(QWidget):
         ihrem Rand. In ``show_scene`` kommt ``_fit`` ohnehin danach — auf
         diesem Weg kam es nie.
         """
-        self.tree.clearSelection()
+        # **Ohne Zwischenmeldung „nichts gewählt".** ``_restore`` meldet den
+        # neuen Stand ohnehin; das Leeren davor lief ungeblockt durch alle
+        # Empfänger — Merkmalfenster geleert, Handlungskarte, Menüs und
+        # Maßgruppe neu —, und gleich danach alles noch einmal für das neue
+        # Merkmal. Am Halter mit Wabenmuster war das ein Drittel eines
+        # Bohrungsklicks (22.09.2026).
+        with QSignalBlocker(self.tree):
+            self.tree.clearSelection()
         self._restore((object_id,), feature_id)
         self._fit()
 
@@ -2467,8 +2483,10 @@ class ObjectTree(QWidget):
             # Der Rechtsklick meint die Zeile darunter. Ohne diese Auswahl
             # öffnete sich zwar das passende Kontextmenü, der Dialog erbte
             # aber ein vorher gewähltes Merkmal oder keines — ein Gewinde
-            # stand dann nicht in der gerade angeklickten Bohrung.
-            self.tree.clearSelection()
+            # stand dann nicht in der gerade angeklickten Bohrung. Geleert wird
+            # ohne Zwischenmeldung, gemeldet der neue Stand.
+            with QSignalBlocker(self.tree):
+                self.tree.clearSelection()
             item.setSelected(True)
             self.tree.setCurrentItem(item)
         menu = self.context_menu()
@@ -3257,13 +3275,25 @@ class HistoryPanel(QWidget):
             single = transaction.ops[0] if len(transaction.ops) == 1 else None
             number = f"{single}  " if single is not None else ""
             item = QListWidgetItem(f"{number}{transaction.title}{by}")
-            if stopped_at is not None and stopped_at in transaction.ops:
+            halted = stopped_at is not None and stopped_at in transaction.ops
+            if halted:
                 # §15.3: die betroffenen Operationen werden im Verlauf markiert.
                 item.setText(f"! {item.text()}")
-            item.setToolTip(
-                f"{transaction.id} · {tr('Ops')} "
-                + ", ".join(str(entry) for entry in transaction.ops)
+            # **Schritte, nicht „Ops".** Die Kurzhilfe sagte „t3 · Ops 4, 5" —
+            # ein Wort aus dem Code, und das Ausrufezeichen davor erklärte sie
+            # nicht (22.09.2026). Die Kennung bleibt vorn: Mit ihr nennt die
+            # Übernommen-Leiste des Chats denselben Schritt.
+            steps = (
+                tr("Schritt {number}").format(number=transaction.ops[0])
+                if len(transaction.ops) == 1
+                else tr("Schritte {numbers}").format(
+                    numbers=", ".join(str(entry) for entry in transaction.ops)
+                )
             )
+            tip = f"{transaction.id} · {steps}"
+            if halted:
+                tip += "\n" + tr("Hier hält die Kette an — der Grund steht im Prüfbericht.")
+            item.setToolTip(tip)
             # **Ein Symbol je Zeile, aus derselben Quelle wie im Menü.** Der
             # Verlauf war eine reine Textspalte, während siebzehn
             # Kategoriesymbole in ``icons.py`` bereitlagen — wer seine Arbeit
@@ -4861,51 +4891,17 @@ def feature_field(
     wo wirklich ein Ausdruck steht — sonst sähe die häufige Lage anders
     aus als bisher, ohne dass jemand einen Parameter im Spiel hätte.
     """
-    from app.core.expressions import is_expression
-
-    def explained(editor: QWidget) -> QWidget:
-        """Die Herkunft gehört zum unveränderten Ausgangswert, nicht zur neuen Eingabe."""
-        status = getattr(field, "measurement", None)
-        if status is None:
-            return editor
-        source = str(measure_explanation(status))
-        qualifier = measure_qualifier(status)
-        if isinstance(field.value, (int, float)) and not isinstance(field.value, bool):
-            value = (
-                length(float(field.value))
-                if field.kind == "length"
-                else f"{localised(f'{float(field.value):g}')} {field.unit}".strip()
-            )
-            if qualifier is not None:
-                value = f"{value} · {qualifier}"
-            source = tr("Ausgangswert: {value}. {source}").format(value=value, source=source)
-        elif qualifier is not None:
-            source = f"{qualifier}. {source}"
-        current = editor.toolTip()
-        hint = f"{current}\n{source}" if current else source
-        editor.setToolTip(hint)
-        editor.setStatusTip(hint)
-        editor.setAccessibleDescription(hint)
-        inner = getattr(editor, "spin", None)
-        if isinstance(inner, QWidget):
-            inner.setToolTip(hint)
-            inner.setStatusTip(hint)
-            inner.setAccessibleDescription(hint)
-        return editor
-
-    entry = expression_fields.get(field.name)
-    if entry is None and is_expression(field.value):
-        entry = part_fields.get(field.name)
+    entry = _expression_entry(field, expression_fields, part_fields)
     if entry is not None:
         from app.ui.op_dialog import ValueField
 
-        return explained(ValueField(entry, field.value, parameter_values, parent))
+        editor: QWidget = ValueField(entry, field.value, parameter_values, parent)
+        _explain_source(editor, field)
+        return editor
     kind = str(field.kind)
     if kind == "bool":
-        check = RowCheckBox(parent)
-        check.setChecked(bool(field.value))
-        return explained(check)
-    if kind == "choice":
+        editor = RowCheckBox(parent)
+    elif kind == "choice":
         combo = QComboBox(parent)
         for value, text in field.choices or ():
             combo.addItem(choice_label(str(text)), value)
@@ -4914,37 +4910,105 @@ def feature_field(
             from app.ui.op_dialog import _show_patterns
 
             _show_patterns(combo, tuple(value for value, _text in field.choices or ()))
-        index = combo.findData(field.value)
-        if index >= 0:
-            combo.setCurrentIndex(index)
-        return explained(combo)
-    if kind == "length":
-        spin = LengthSpin(parent)
-        spin.set_range_mm(
-            float(field.minimum) if field.minimum is not None else -100000.0,
-            float(field.maximum) if field.maximum is not None else 100000.0,
-        )
-        spin.set_value_mm(float(field.value))
-        return explained(spin)
-    if kind == "count":
+        editor = combo
+    elif kind == "length":
+        editor = LengthSpin(parent)
+    elif kind == "count":
         # Eine ganze Zahl ohne Einheit — die Haken eines Einhängers, die
         # Löcher einer Halterung. Kein Längenfeld: Das trüge „mm" und
         # rechnete in Zoll um (`_kind_of` in ``perceive.actions``).
-        count = QSpinBox(parent)
-        count.setRange(
-            int(field.minimum) if field.minimum is not None else 0,
-            int(field.maximum) if field.maximum is not None else 100000,
+        editor = QSpinBox(parent)
+    else:
+        editor = NumberSpin(parent)
+    configure_feature_field(editor, field)
+    return editor
+
+
+def _expression_entry(
+    field: Any, expression_fields: Mapping[str, Any], part_fields: Mapping[str, Any]
+) -> Any:
+    """Der Schemaeintrag, aus dem ein gebundener Wert sein Ausdrucksfeld bekommt — oder nichts."""
+    from app.core.expressions import is_expression
+
+    entry = expression_fields.get(field.name)
+    if entry is None and is_expression(field.value):
+        entry = part_fields.get(field.name)
+    return entry
+
+
+def configure_feature_field(editor: QWidget, field: Any) -> None:
+    """Wert, Grenzen und Herkunft in ein gebautes Feld — beim Bau und beim Wiederverwenden.
+
+    Die Art und die Auswahlwerte eines Felds stehen mit seinem Bau fest; was
+    je Merkmal wechselt, steht hier: Spanne, Wert, Einheit und die Auskunft,
+    woher der Ausgangswert kommt. Das Merkmalfenster baut eine Zeile, die zur
+    selben Handlung mit denselben Feldern gehört, nicht neu (RM-204), sondern
+    schreibt ihre Werte hier hinein — ohne Rückmeldung nach außen, denn
+    niemand hat etwas eingegeben.
+    """
+    kind = str(field.kind)
+    with QSignalBlocker(editor):
+        for target in (editor, getattr(editor, "spin", None)):
+            if isinstance(target, QWidget):
+                target.setToolTip("")
+                target.setStatusTip("")
+                target.setAccessibleDescription("")
+        if kind == "bool" and isinstance(editor, QCheckBox):
+            editor.setChecked(bool(field.value))
+        elif kind == "choice" and isinstance(editor, QComboBox):
+            index = editor.findData(field.value)
+            if index >= 0:
+                editor.setCurrentIndex(index)
+        elif kind == "length" and isinstance(editor, LengthSpin):
+            editor.set_range_mm(
+                float(field.minimum) if field.minimum is not None else -100000.0,
+                float(field.maximum) if field.maximum is not None else 100000.0,
+            )
+            editor.set_value_mm(float(field.value))
+        elif kind == "count" and isinstance(editor, QSpinBox):
+            editor.setRange(
+                int(field.minimum) if field.minimum is not None else 0,
+                int(field.maximum) if field.maximum is not None else 100000,
+            )
+            editor.setValue(int(field.value))
+        elif isinstance(editor, QDoubleSpinBox):
+            editor.setRange(
+                float(field.minimum) if field.minimum is not None else -360.0,
+                float(field.maximum) if field.maximum is not None else 360.0,
+            )
+            editor.setSuffix(f" {field.unit}" if field.unit else "")
+            editor.setValue(float(field.value))
+    _explain_source(editor, field)
+
+
+def _explain_source(editor: QWidget, field: Any) -> None:
+    """Die Herkunft gehört zum unveränderten Ausgangswert, nicht zur neuen Eingabe."""
+    status = getattr(field, "measurement", None)
+    if status is None:
+        return
+    source = str(measure_explanation(status))
+    qualifier = measure_qualifier(status)
+    if isinstance(field.value, (int, float)) and not isinstance(field.value, bool):
+        value = (
+            length(float(field.value))
+            if field.kind == "length"
+            else f"{localised(f'{float(field.value):g}')} {field.unit}".strip()
         )
-        count.setValue(int(field.value))
-        return explained(count)
-    angle = NumberSpin(parent)
-    angle.setRange(
-        float(field.minimum) if field.minimum is not None else -360.0,
-        float(field.maximum) if field.maximum is not None else 360.0,
-    )
-    angle.setSuffix(f" {field.unit}" if field.unit else "")
-    angle.setValue(float(field.value))
-    return explained(angle)
+        if qualifier is not None:
+            value = f"{value} · {qualifier}"
+        source = tr("Ausgangswert: {value}. {source}").format(value=value, source=source)
+    elif qualifier is not None:
+        source = f"{qualifier}. {source}"
+    current = editor.toolTip()
+    hint = f"{current}\n{source}" if current else source
+    editor.setToolTip(hint)
+    editor.setStatusTip(hint)
+    editor.setAccessibleDescription(hint)
+    inner = getattr(editor, "spin", None)
+    if isinstance(inner, QWidget):
+        inner.setToolTip(hint)
+        inner.setStatusTip(hint)
+        inner.setAccessibleDescription(hint)
 
 
 def feature_field_values(
@@ -5059,6 +5123,91 @@ class _Handling:
     Bis dahin *war* das Übernehmen der Weg ins Bild, und wer eine Bohrung
     ändern wollte, landete in der Platzierung statt bei seinem Ergebnis
     (Robert: „auch 2 mal übernehmen einmal unten und einmal rechts")."""
+
+
+class _FeatureAnswers(NamedTuple):
+    """Was der Kern über ein Merkmal sagt, soweit das Merkmalfenster es liest."""
+
+    cavity: tuple[Feature, ...]
+    actions: tuple[Any, ...]
+    groups: Mapping[str, FeatureActionGroup]
+
+
+def _nothing() -> None:
+    """Ein toter schwacher Verweis — der Anfangsstand des Merkers."""
+    return None
+
+
+#: Der Merker des Merkmalfensters: der Körper (schwach), die Merkmalsliste,
+#: für die er gilt, und je Merkmal die Auskunft (:meth:`FeaturePanel._answers_for`).
+_RememberedAnswers = tuple[
+    Callable[[], Any],
+    Mapping[str, Feature] | None,
+    dict[str, tuple[Feature, _FeatureAnswers]],
+]
+
+
+@dataclasses.dataclass(eq=False, slots=True)
+class _ActionRow:
+    """Eine gebaute Handlungszeile und die Handlung, die sie gerade trägt (RM-204).
+
+    Die Widgets entstehen einmal (:meth:`FeaturePanel._new_row`); was je
+    Merkmal wechselt — Schlüssel, Operation, Felder, feste Werte, Schritt —,
+    steht hier und wird bei jedem Füllen neu gesetzt. Die Wege der Zeile
+    (Ausführen, Werte lesen, ins Bild) lesen es beim Aufruf und nicht beim
+    Bau; deshalb darf eine Zeile von einem Merkmal zum nächsten wandern.
+    """
+
+    box: QWidget
+    signature: tuple[Any, ...] | None
+    title: QLabel | None = None
+    dot: QToolButton | None = None
+    button: QPushButton | None = None
+    widgets: dict[str, QWidget] = dataclasses.field(default_factory=dict)
+    labels: dict[str, QLabel] = dataclasses.field(default_factory=dict)
+    inner: dict[str, tuple[QWidget, ...]] = dataclasses.field(default_factory=dict)
+    key: str = ""
+    op: str = ""
+    action: Any = None
+    entries: tuple[Any, ...] = ()
+    fixed: tuple[tuple[str, Any], ...] = ()
+    step: int | None = None
+
+
+def _set_shown(widget: QWidget, visible: bool) -> None:
+    """Zeigt oder verbirgt ein Widget — aber nur, wenn sich dabei etwas ändert.
+
+    ``setVisible`` kehrt in Qt nur bei einem **ausdrücklich** gesetzten
+    gleichen Zustand sofort zurück; eine Zeile, die das Layout eingeblendet
+    hat, durchläuft bei jedem ``setVisible(True)`` die ganze Anzeige mit
+    Ereignissen an jeden Anwendungsfilter. Im Merkmalfenster geschah das je
+    Klick gut hundertmal — Zwillingszeilen, Info-Zeichen, die Knopfzeile —,
+    im gebauten Fenster eine halbe Millisekunde je Aufruf (22.09.2026).
+    """
+    if widget.isHidden() == visible:
+        widget.setVisible(visible)
+
+
+def _focus_stops(row: QWidget) -> list[QWidget]:
+    """Die Halte der Tabulatortaste in einer Zeile, von oben nach unten.
+
+    Die Zeile selbst zählt mit: Der Umschalter *Vor Trennnähten schützen* und
+    der Katalogknopf stehen ohne Kasten in der Liste, und ``findChildren``
+    sieht ein Widget nie als sein eigenes Kind. Nicht mit zählt, was zum
+    Innenleben eines Felds gehört: das Textfeld **in** einem Drehfeld und die
+    Liste im Aufklappfenster einer Auswahl. Die Liste ist ein Kind der
+    Auswahl, wohnt aber in einem eigenen Fenster; als letzter Halt einer Zeile
+    hängte ``_settle_tab_order`` den Knopf unten hinter sie statt hinter das
+    Feld, und die Tabulatortaste lief an ihm vorbei (22.09.2026).
+    """
+    home = row.window()
+    return [
+        child
+        for child in (row, *row.findChildren(QWidget))
+        if child.focusPolicy() != Qt.FocusPolicy.NoFocus
+        and not isinstance(child, QLineEdit)
+        and child.window() is home
+    ]
 
 
 def _leads_into_the_view(op: str) -> bool:
@@ -5330,6 +5479,7 @@ class FeaturePanel(QWidget):
         neben dem Übernehmen und verwirft sie (:meth:`offer_cancel`)."""
         self._rows.addStretch(1)
         self._built: list[QWidget] = []
+        self._serial = 0
         self._feature_id: str | None = None
         self._part_operation: int | None = None
         self._groups: dict[str, FeatureActionGroup] = {}
@@ -5353,6 +5503,15 @@ class FeaturePanel(QWidget):
         self._fit_choice: QComboBox | None = None
         self._fit_reason = ""
         self._runs: dict[str, _Handling] = {}
+        self._answers: _RememberedAnswers = (_nothing, None, {})
+        """Die gemerkte Kernauskunft des gezeigten Körpers (:meth:`_answers_for`)."""
+        self._shown_rows: dict[QWidget, _ActionRow] = {}
+        """Je gezeigter Handlungszeile ihr Inhalt — die Quelle der Wiederverwendung."""
+        self._spare_rows: dict[tuple[Any, ...], list[_ActionRow]] = {}
+        """Zeilen des vorigen Merkmals, die auf eine gleichartige Handlung warten (RM-204)."""
+        self._rows_reused = False
+        """Ob der laufende Aufbau eine Zeile wiederverwendet hat — dann zieht
+        :meth:`_settle_tab_order` die Fokuskette neu."""
         self._keyed: list[QWidget] = []
         """Jedes Bedienelement mit ``handlingKey`` — die Liste, die
         :meth:`_settle_lock` durchgeht, statt je Aufbau alle Kinder jeder Zeile
@@ -5396,14 +5555,30 @@ class FeaturePanel(QWidget):
         das noch gibt."""
         return self._feature_id
 
-    def clear(self) -> None:
+    @property
+    def serial(self) -> int:
+        """Wie oft das Fenster geleert wurde — ein Aufbaustand für Vergleiche.
+
+        Wer wissen will, ob seit seinem letzten Aufbau jemand anderes das
+        Fenster neu gefüllt hat, vergleicht diese Zahl, statt Inhalte zu lesen.
+        """
+        return self._serial
+
+    def clear(self, *, rebuilding: bool = False) -> None:
         """Zurück auf den leeren Zustand.
 
         Versteckt und gelöscht, nicht elternlos gemacht: ``setParent(None)``
         macht aus einem Kind-Widget ein eigenes Fenster, bis der Löschauftrag
         die Ereignisschleife erreicht (RM-101, dieselbe Stelle wie in
         :meth:`ReportPanel._show_offers`).
+
+        ``rebuilding`` sagt, dass gleich wieder Handlungen kommen und der
+        Aufbau mit :meth:`_settle_apply` endet: Dann bleibt die Knopfzeile
+        stehen, bis dort feststeht, was sie zeigt. Ausgeblendet und gleich
+        wieder eingeblendet kostete sie je Merkmalklick sechs Wechsel im
+        sichtbaren Fenster, für denselben Stand wie vorher.
         """
+        self._serial += 1
         for widget in self._built:
             widget.hide()
             widget.deleteLater()
@@ -5415,6 +5590,8 @@ class FeaturePanel(QWidget):
         self._fit_button = None
         self._fit_choice = None
         self._runs.clear()
+        self._shown_rows.clear()
+        self._rows_reused = False
         self._keyed.clear()
         self._blocks.clear()
         self._texture_fields.clear()
@@ -5423,20 +5600,20 @@ class FeaturePanel(QWidget):
         self._armed = None
         self._explanations.clear()
         self._dots.clear()
-        self._apply.setVisible(False)
-        self._in_view.setVisible(False)
-        self._cancel.setVisible(False)
         self._into_view = None
         self._in_view_key = None
-        self._armed_title.hide()
+        self._every.setChecked(False)
+        if rebuilding:
+            return
+        for widget in (self._apply, self._in_view, self._cancel, self._armed_title):
+            _set_shown(widget, False)
         # Der Sperrgrund selbst **bleibt** (``_locked``) — die Kette hält ja
         # weiter an —, nur seine Zeile geht: Über „Kein Merkmal gewählt …"
         # stünde eine Absage auf eine Frage, die niemand gestellt hat. Der
         # nächste Aufbau bringt sie zurück (:meth:`_settle_lock`).
-        self._lock_note.setVisible(False)
-        self._every.setVisible(False)
-        self._every.setChecked(False)
-        self._empty.setVisible(self._say_nothing_is_chosen)
+        _set_shown(self._lock_note, False)
+        _set_shown(self._every, False)
+        _set_shown(self._empty, self._say_nothing_is_chosen)
 
     def say_nothing_is_chosen(self, on: bool) -> None:
         """Ob der leere Zustand seinen Satz trägt — oder die Karte ihn trägt.
@@ -5478,9 +5655,53 @@ class FeaturePanel(QWidget):
         belegt die topologische Kette einer mehrteiligen Senkung; optional bleibt
         es für Aufrufer, die nur die einzelne Merkmalsauskunft brauchen.
         """
+        answers = self._answers_for(feature_id, feature, features, mesh)
+        self._keep_rows_for_reuse()
+        try:
+            self._show_feature_rows(
+                feature_id,
+                feature,
+                features=features,
+                mesh=mesh,
+                alone=alone,
+                protected=protected,
+                answers=answers,
+            )
+        finally:
+            self._drop_spare_rows()
+        self._settle_apply()
+
+    def _answers_for(
+        self,
+        feature_id: str,
+        feature: Feature,
+        features: Mapping[str, Feature] | None,
+        mesh: MeshData | None,
+    ) -> _FeatureAnswers:
+        """Was der Kern über dieses Merkmal sagt — einmal je Merkmal und Auswertung.
+
+        Hohlraumkette, Handlungen und gleichartige Geschwister sind reine
+        Funktionen von Körper und Merkmalen (Regel 3: eine Auswertung ändert
+        niemand). Bis zum 22.09.2026 fragte jeder Klick sie neu — am Halter
+        mit Wabenmuster 22 ms je Bohrung allein für ``actions_for``, weil die
+        Einlaufprüfung das Netz je Aufruf verschweißt und einen Suchbaum baut.
+        Wer zwischen Bohrungen hin- und herklickt, bekommt jetzt die Antwort
+        vom ersten Mal. Gemerkt wird für **einen** Körper und **eine**
+        Merkmalsliste; ein anderer Körper oder eine neue Auswertung beginnt
+        von vorn, und der Körper wird nur schwach gehalten.
+        """
         from app.core.perceive import relations
         from app.core.perceive.actions import actions_for
 
+        known: dict[str, tuple[Feature, _FeatureAnswers]] | None = None
+        if features is not None and mesh is not None:
+            body, listed, known = self._answers
+            if body() is not mesh.raw or listed is not features:
+                known = {}
+                self._answers = (weakref.ref(mesh.raw), features, known)
+            cached = known.get(feature_id)
+            if cached is not None and cached[0] is feature:
+                return cached[1]
         cavity: tuple[Feature, ...] = ()
         touches_other = False
         reason: relations.FeatureGroupReason | None = None
@@ -5491,9 +5712,48 @@ class FeaturePanel(QWidget):
                 cavity = state.chain or ()
             else:
                 cavity = relations.bore_and_widening_at(feature, features) or ()
-        self.clear()
+        actions = actions_for(
+            feature,
+            features,
+            mesh=mesh,
+            cavity=cavity,
+            touches_other=touches_other,
+            reason=reason,
+        )
+        groups: dict[str, FeatureActionGroup] = {}
+        if features is not None and mesh is not None:
+            groups = {
+                group.action: group
+                for group in relations.alike_for_actions(
+                    (str(action.op) for action in actions if action.op),
+                    feature_id,
+                    features,
+                    mesh,
+                )
+            }
+        answers = _FeatureAnswers(cavity, tuple(actions), groups)
+        if known is not None:
+            known[feature_id] = (feature, answers)
+        return answers
+
+    def _show_feature_rows(
+        self,
+        feature_id: str,
+        feature: Feature,
+        *,
+        features: Mapping[str, Feature] | None,
+        mesh: MeshData | None,
+        alone: bool,
+        protected: bool,
+        answers: _FeatureAnswers,
+    ) -> None:
+        """Der Aufbau hinter :meth:`show_feature` — mit zurückgehaltenen Zeilen."""
+        from app.core.perceive import relations
+
+        cavity = answers.cavity
+        self.clear(rebuilding=True)
         self._feature_id = feature_id
-        self._empty.setVisible(False)
+        _set_shown(self._empty, False)
 
         heading = QLabel(
             f"{cavity_name(feature_id, feature, cavity)}  ·  {feature_measure(feature)}"
@@ -5567,24 +5827,8 @@ class FeaturePanel(QWidget):
             self._rows.insertWidget(self._rows.count() - 1, note)
             self._built.append(note)
 
-        actions = actions_for(
-            feature,
-            features,
-            mesh=mesh,
-            cavity=cavity,
-            touches_other=touches_other,
-            reason=reason,
-        )
-        if features is not None and mesh is not None:
-            self._groups = {
-                group.action: group
-                for group in relations.alike_for_actions(
-                    (str(action.op) for action in actions if action.op),
-                    feature_id,
-                    features,
-                    mesh,
-                )
-            }
+        actions = answers.actions
+        self._groups = dict(answers.groups)
         # Unpassende Aktionen belegen keine Zeile. Der Kern behält ihre
         # Gründe für andere Aufrufer; das Panel zeigt die verfügbaren Wege.
         for action in _folded(actions):
@@ -5611,7 +5855,6 @@ class FeaturePanel(QWidget):
             self._rows.insertWidget(self._rows.count() - 1, catalog)
             self._built.append(catalog)
         self._build_protection(feature_id, feature, protected)
-        self._settle_apply()
 
     def _build_protection(self, feature_id: str, feature: Feature, protected: bool) -> None:
         """Der Umschalter *Vor Trennnähten schützen* — die eine Kundengeste der
@@ -5671,7 +5914,7 @@ class FeaturePanel(QWidget):
         """
         from app.core.perceive.actions import part_actions
 
-        self.clear()
+        self.clear(rebuilding=True)
         self._feature_id = None
         # **Woran die Live-Vorschau erkennt, dass sie einen Schritt meint.**
         # Ohne ihn baute sie aus denselben Werten einen *neuen* Baustein und
@@ -5683,7 +5926,7 @@ class FeaturePanel(QWidget):
         # Ausdrucksfeld bekommt (:meth:`_build_field`).
         self._part_fields = {entry.name: entry for entry in spec.params.spec()}
         self._parameter_values = dict(parameter_values or {})
-        self._empty.setVisible(False)
+        _set_shown(self._empty, False)
 
         heading = QLabel(title or str(spec.title), self)
         heading.setWordWrap(True)
@@ -5823,22 +6066,26 @@ class FeaturePanel(QWidget):
         """
         from app.core.perceive.actions import edge_actions
 
-        self.clear()
-        self._feature_id = None
-        self._empty.setVisible(False)
+        self._keep_rows_for_reuse()
+        try:
+            self.clear(rebuilding=True)
+            self._feature_id = None
+            _set_shown(self._empty, False)
 
-        heading = QLabel(title, self)
-        heading.setWordWrap(True)
-        fit_wrapped(heading)
-        set_level(heading, "section")
-        self._rows.insertWidget(self._rows.count() - 1, heading)
-        self._built.append(heading)
+            heading = QLabel(title, self)
+            heading.setWordWrap(True)
+            fit_wrapped(heading)
+            set_level(heading, "section")
+            self._rows.insertWidget(self._rows.count() - 1, heading)
+            self._built.append(heading)
 
-        for action in edge_actions(key):
-            self._separate()
-            row = self._build_action(action)
-            self._rows.insertWidget(self._rows.count() - 1, row)
-            self._built.append(row)
+            for action in edge_actions(key):
+                self._separate()
+                row = self._build_action(action)
+                self._rows.insertWidget(self._rows.count() - 1, row)
+                self._built.append(row)
+        finally:
+            self._drop_spare_rows()
         self._settle_apply()
 
     def shown_part_step(self) -> int | None:
@@ -5871,7 +6118,7 @@ class FeaturePanel(QWidget):
         schieben".
         """
         self.clear()
-        self._empty.setVisible(False)
+        _set_shown(self._empty, False)
 
         heading = QLabel(
             f"{feature_name(first_id, first)}  →  {feature_name(second_id, second)}", self
@@ -6039,7 +6286,7 @@ class FeaturePanel(QWidget):
         reason = self._locked or self._apply_blocked_reason
         self._apply.setEnabled(self._apply_allowed())
         self._lock_note.setText(reason or "")
-        self._lock_note.setVisible(bool(reason) and bool(self._built))
+        _set_shown(self._lock_note, bool(reason) and bool(self._built))
         if reason is not None:
             self._apply.setToolTip(reason)
             self._apply.setStatusTip(reason)
@@ -6077,7 +6324,7 @@ class FeaturePanel(QWidget):
         # Ohne Zeilen gibt es nichts, was der Satz erklären könnte: Über dem
         # leeren Zustand („Kein Merkmal gewählt …") stünde eine Absage auf
         # eine Frage, die niemand gestellt hat.
-        self._lock_note.setVisible(bool(reason) and bool(self._built))
+        _set_shown(self._lock_note, bool(reason) and bool(self._built))
         if reason:
             for button in (self._in_view, self._apply, self._cancel):
                 button.setToolTip(reason)
@@ -6097,10 +6344,8 @@ class FeaturePanel(QWidget):
         else:
             self._settle_apply_block()
         if self._measuring:
-            self._in_view.hide()
-            self._apply.hide()
-            self._cancel.hide()
-            self._every.hide()
+            for widget in (self._in_view, self._apply, self._cancel, self._every):
+                _set_shown(widget, False)
 
     def _build_action(self, action: Any) -> QWidget:
         """Eine Handlung: Titel, ihre Felder untereinander, dann ihr Knopf.
@@ -6113,14 +6358,23 @@ class FeaturePanel(QWidget):
         versch". Ein Formularlayout stellt die Beschriftung neben ihr Feld und
         bricht die Spalte um, statt sie zu beschneiden, und der Knopf steht
         darunter über die ganze Breite.
-        """
-        box = QWidget(self)
-        layout = QVBoxLayout(box)
-        layout.setContentsMargins(0, 0, 0, TIGHT)
-        layout.setSpacing(TIGHT)
 
+        **Eine Zeile, die schon steht, wird wiederverwendet** (RM-204). Bis zum
+        22.09.2026 leerte jeder Merkmalklick das Fenster und baute jede Zeile
+        neu — an einer Bohrung fünf Handlungen mit achtzehn Feldern, rund
+        vierzehn Millisekunden je Klick allein für Widgets, deren Aufbau sich
+        nicht geändert hatte. Dieselbe Handlung mit denselben Feldern
+        (:meth:`_row_signature`) behält jetzt ihre Zeile; neu geschrieben
+        werden Werte, Grenzen, Beschriftungen und Erklärung
+        (:func:`configure_feature_field`), und die Signale gehen dabei nicht
+        nach außen.
+        """
         step = getattr(action, "step", None)
         if action.op is None and step is None:
+            box = QWidget(self)
+            layout = QVBoxLayout(box)
+            layout.setContentsMargins(0, 0, 0, TIGHT)
+            layout.setSpacing(TIGHT)
             # Titel und Grund in **einer** umbrechenden Zeile: Der Grund ist
             # ein Satz, und ein Satz gehört nicht in eine Formularspalte.
             name = QLabel(f"{action.title} — {action.reason}", box)
@@ -6131,7 +6385,16 @@ class FeaturePanel(QWidget):
             layout.addWidget(name)
             return box
 
-        widgets: dict[str, QWidget] = {}
+        signature = self._row_signature(action)
+        spare = self._spare_rows.get(signature) if signature is not None else None
+        if spare:
+            row = spare.pop(0)
+            self._rows_reused = True
+            _set_shown(row.box, True)
+            for field in action.fields:
+                configure_feature_field(row.widgets[str(field.name)], field)
+        else:
+            row = self._new_row(action, signature)
         # **Der Schlüssel ist die Zeile, nicht die Operation.** Ein Baustein
         # bietet *Maße ändern*, *verschieben* und *entfernen* an, und zwei
         # davon tragen gar keine Operation (der Schritt ist die Handlung);
@@ -6139,92 +6402,15 @@ class FeaturePanel(QWidget):
         # überschrieb die vorige — im Panel stand danach eine Handlung von
         # dreien.
         key = f"{len(self._runs)}|{action.op}"
-        if action.fields:
-            # **Die Gruppe sagt selbst, wozu sie gehört.** Bis hierher benannte
-            # sie nur der Knopf **darunter**, und das trägt genau einmal: Beim
-            # ersten Feldpaar liest man die Bedeutung noch von unten nach, beim
-            # zweiten nicht mehr. An einer Bohrung stehen vier Gruppen
-            # untereinander — X/Y/Z für *Verschieben*, ein Durchmesser für
-            # *Ändern*, Achse und Winkel für *Drehen*, wieder X/Y/Z für
-            # *Verdoppeln* —, und der Kunde sieht zweimal dieselben drei Felder
-            # ohne erkennbaren Unterschied (Alexanders Bildschirmfoto, gemessen
-            # von 3d-druck-4d am 04.09.2026).
-            #
-            # Die Überschrift wiederholt den Knopftext, und das ist Absicht: Sie
-            # beantwortet „wozu sind diese Felder", er „und jetzt ausführen".
-            # Zwei verschiedene Wörter dafür wären zwei Namen für eine Handlung.
-            group_title = QLabel(str(action.title), box)
-            group_title.setWordWrap(True)
-            set_level(group_title, "caption")
-            fit_wrapped(group_title)
-            # **Die Erklärung steht an der Überschrift, nicht unter ihr.** Drei
-            # Zeilen Fließtext je Handlung füllten das Fenster, und an einer
-            # Bohrung stehen vier davon (Robert, 10.09.2026: „die beschreibungen
-            # die über den buttons zum übernehmen dastehen auch in einen
-            # tooltipp passen bei der überschrift von den werten mit einem i für
-            # infos"). Weg ist sie damit nicht: Der Tooltip trägt sie, die
-            # Statuszeile ebenso, und ``setAccessibleDescription`` reicht sie an
-            # den Bildschirmleser weiter — Qt liest einen Tooltip nicht von
-            # selbst vor.
-            head = QHBoxLayout()
-            head.setContentsMargins(0, 0, 0, 0)
-            head.setSpacing(TIGHT)
-            head.addWidget(group_title, 1)
-            # **Jede Handlung hat eine Erklärung.** Drei Quellen in dieser
-            # Reihenfolge: der Satz zur Lage (``note``, „Bohrung und Senkung
-            # gehen gemeinsam"), der Grund der Handlung, und zuletzt der
-            # ``doc``-Satz aus dem Register — die Beschreibung, die dieselbe
-            # Operation auch im Menü und im Dialog trägt. Ein Zeichen, das nur
-            # an einer von fünf Zeilen auftaucht, sieht aus wie ein Fehler und
-            # nicht wie ein Angebot (Robert, 11.09.2026: „ist nur hinter
-            # material verschieben").
-            self._explain(box, head, _explained(action), group_title)
-            layout.addLayout(head)
-
-            form = QFormLayout()
-            form.setContentsMargins(0, 0, 0, 0)
-            form.setSpacing(TIGHT)
-            # Bricht um, statt abzuschneiden: Bei schmaler Spalte rutscht das
-            # Feld unter seine Beschriftung, und beide bleiben ganz.
-            form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
-            form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
-            for field in action.fields:
-                editor = self._build_field(field, box)
-                widgets[str(field.name)] = editor
-                self._watch(
-                    editor,
-                    str(action.op),
-                    key,
-                    tuple(action.fields),
-                    widgets,
-                    tuple(getattr(action, "fixed", ())),
-                )
-                label = QLabel(str(field.label), box)
-                label.setWordWrap(True)
-                # **Die Beschriftung gehört an das Feld, nicht nur daneben.**
-                # Ein Bildschirmleser liest den Namen des Bedienelements, und
-                # der war leer: elf Felder mit „Drehfeld, 0,00" und
-                # „Kontrollkästchen, nicht angehakt", darunter zweimal X, Y, Z
-                # — einmal für *Merkmal verschieben*, einmal für *verdoppeln*.
-                # Wer sie nicht sieht, konnte sie nicht auseinanderhalten
-                # (gemessen 09.09.2026 an einer gewählten Bohrung; §19.1).
-                #
-                # ``setBuddy`` allein genügt nicht: Es hängt den Text an die
-                # Beschriftung, damit ihr Kürzel den Fokus setzt, und wird von
-                # den Vorlesern unterschiedlich ausgewertet. Der Name am Feld
-                # ist die Zusage, die überall trägt; die Überschrift der
-                # Handlung kommt davor, weil „Durchmesser" allein nicht sagt,
-                # welcher — an einer Bohrung stehen vier Handlungen mit je
-                # eigenen Feldern.
-                label.setBuddy(editor)
-                label.setToolTip(editor.toolTip())
-                label.setStatusTip(editor.statusTip())
-                label.setAccessibleDescription(editor.accessibleDescription())
-                editor.setAccessibleName(f"{action.title} — {field.label}")
-                form.addRow(label, editor)
-                if isinstance(editor, RowCheckBox):
-                    caption_toggles(label, editor)
-            layout.addLayout(form)
+        row.key = key
+        row.op = str(action.op)
+        row.action = action
+        row.entries = tuple(action.fields)
+        row.fixed = tuple(getattr(action, "fixed", ()))
+        row.step = step
+        self._fill_row(row, action)
+        self._shown_rows[row.box] = row
+        box = row.box
 
         # **Der Haken steht nur da, wo es Geschwister gibt.** „Auf alle 1
         # anwenden" wäre eine Frage ohne Unterschied; ab dem zweiten
@@ -6274,70 +6460,31 @@ class FeaturePanel(QWidget):
                 self._extend_explanation(box, said)
 
         op_name = str(action.op)
-        entries = tuple(action.fields)
-        fixed = tuple(getattr(action, "fixed", ()))
-
-        def run(_checked: bool = False) -> None:
-            # **Ein Baustein ändert seinen Schritt, er legt keinen zweiten an.**
-            # Ohne diese Weiche stünde nach jeder Maßkorrektur ein weiteres
-            # Schlüsselloch im Verlauf, an derselben Stelle über dem alten.
-            if step is not None:
-                if action.op is None:
-                    self.stepRemoveRequested.emit(step)
-                else:
-                    self.stepChangeRequested.emit(step, self._values(entries, widgets, fixed))
-                return
-            self._emit(op_name, entries, widgets, self._every_for(op_name), fixed)
-
-        def take(proposed: Mapping[str, Any]) -> None:
-            """Vorgeschlagene Zahlen in die Felder dieser Handlung.
-
-            Ohne Meldung nach außen: Die Zahlen kommen aus dem Bild, und die
-            Vorschau dort zeigt sie bereits. Ein ``valuesChanged`` von hier
-            liefe zurück zu dem, der gerade gezogen hat.
-            """
-            refresh_feature_fields(entries, widgets, proposed)
-
-        def in_view() -> None:
-            """Dieselbe Handlung, aber im Bild eingestellt.
-
-            **Ein eigener Knopf, seit dem 11.09.2026.** Bis dahin führte das
-            *Übernehmen* selbst ins Bild, wo die Handlung eine Stelle hat —
-            und damit konnte man an einer Bohrung nichts mehr übernehmen,
-            ohne vorher durch die Platzierung zu gehen. Zwei Absichten
-            brauchen zwei Knöpfe (Robert, 11.09.2026: „das über den viewport
-            wieder über einen button aktivieren").
-            """
-            self.inViewRequested.emit(op_name, self._values(entries, widgets, fixed))
-
         # **Ein Knopf unten statt einer je Handlung** (Robert, 10.09.2026: „die
         # ganzen buttons um werte zu übernehmen durch einen unten ersetzen,
         # damit wir bisschen platz sparen"). Fünf Knöpfe untereinander
         # kosteten fünf Zeilen und sagten fünfmal dasselbe: „tu das hier".
         # Was der eine unten tut, entscheidet die Handlung, an der zuletzt
         # jemand etwas angefasst hat — und sein Text nennt sie beim Namen,
-        # damit niemand raten muss (:meth:`_arm`).
+        # damit niemand raten muss (:meth:`_arm`). Die Wege lesen ihre Felder
+        # aus der Zeile, damit eine wiederverwendete Zeile nicht die Felder
+        # des vorigen Merkmals meint.
         members = len(group.members) if group is not None else 0
         self._runs[key] = _Handling(
             title=str(action.title),
             reason=str(action.reason) or str(action.title),
-            run=run,
-            take=take,
-            in_view=in_view if step is None and _leads_into_the_view(op_name) else None,
+            run=partial(self._run_row, row),
+            take=partial(self._take_row, row),
+            in_view=(
+                partial(self._row_in_view, row)
+                if step is None and _leads_into_the_view(op_name)
+                else None
+            ),
             op=op_name,
             members=members,
-            values=lambda: self._values(entries, widgets, fixed),
+            values=partial(self._row_values, row),
             action=action,
         )
-        if not entries:
-            button = QPushButton(str(action.title), box)
-            button.setToolTip(_explained(action))
-            button.clicked.connect(run)
-            # Derselbe Merker wie an den Feldern: Er sagt, wem dieses
-            # Bedienelement gehört — und damit auch, dass es mit ihnen gesperrt
-            # wird, solange die Kette anhält (:meth:`_settle_lock`).
-            self._mark(button, key)
-            layout.addWidget(button)
         if self._armed is None:
             self._arm(key)
 
@@ -6356,7 +6503,8 @@ class FeaturePanel(QWidget):
         # Editor; sie steht in ``action.elsewhere`` und nicht als Zahlenfeld.
         # Ohne diesen Knopf trug eine Organizer-Trennwand drei Außenmaße, und
         # die Fächer — die Sache, um die es geht — waren von dort nicht zu
-        # erreichen.
+        # erreichen. Eine solche Zeile wird nie wiederverwendet
+        # (:meth:`_row_signature`), der Knopf entsteht also mit ihr.
         elsewhere = tuple(getattr(action, "elsewhere", ()))
         if elsewhere and step is not None:
             named = ", ".join(str(entry) for entry in elsewhere)
@@ -6366,9 +6514,253 @@ class FeaturePanel(QWidget):
             deeper.setStatusTip(deeper.toolTip())
             deeper.setAccessibleDescription(deeper.toolTip())
             deeper.clicked.connect(weak_slot(self, FeaturePanel._ask_for_the_step, int(step)))
-            layout.addWidget(deeper)
+            holder = box.layout()
+            assert holder is not None, "jede Handlungszeile trägt ihr Layout"
+            holder.addWidget(deeper)
             self._built.append(deeper)
         return box
+
+    def _row_signature(self, action: Any) -> tuple[Any, ...] | None:
+        """Woran eine Zeile erkennt, dass sie eine andere Handlung tragen kann — oder ``None``.
+
+        Dieselbe Operation mit denselben Feldern in derselben Reihenfolge, von
+        derselben Art und mit denselben Auswahlwerten: Dann unterscheiden
+        sich zwei Handlungen nur in ihren Werten, und die schreibt
+        :func:`configure_feature_field` neu. Nicht wiederverwendet wird, was
+        mehr trägt als Werte — ein Schritt (Baustein, historische Bohrung),
+        ein Weg in den vollständigen Dialog, ein Ausdrucksfeld mit gebundenem
+        Wert; die entstehen je Anzeige neu wie bisher.
+        """
+        if getattr(action, "step", None) is not None or tuple(getattr(action, "elsewhere", ())):
+            return None
+        fields: list[tuple[Any, ...]] = []
+        for field in action.fields:
+            if _expression_entry(field, self._texture_fields, self._part_fields) is not None:
+                return None
+            choices = tuple((value, str(text)) for value, text in field.choices or ())
+            fields.append((str(field.name), str(field.kind), choices))
+        return (str(action.op), tuple(fields))
+
+    def _new_row(self, action: Any, signature: tuple[Any, ...] | None) -> _ActionRow:
+        """Baut die Widgets einer Handlungszeile — Werte schreibt :meth:`_fill_row`."""
+        box = QWidget(self)
+        layout = QVBoxLayout(box)
+        layout.setContentsMargins(0, 0, 0, TIGHT)
+        layout.setSpacing(TIGHT)
+        row = _ActionRow(box=box, signature=signature)
+        if action.fields:
+            # **Die Gruppe sagt selbst, wozu sie gehört.** Bis hierher benannte
+            # sie nur der Knopf **darunter**, und das trägt genau einmal: Beim
+            # ersten Feldpaar liest man die Bedeutung noch von unten nach, beim
+            # zweiten nicht mehr. An einer Bohrung stehen vier Gruppen
+            # untereinander — X/Y/Z für *Verschieben*, ein Durchmesser für
+            # *Ändern*, Achse und Winkel für *Drehen*, wieder X/Y/Z für
+            # *Verdoppeln* —, und der Kunde sieht zweimal dieselben drei Felder
+            # ohne erkennbaren Unterschied (Alexanders Bildschirmfoto, gemessen
+            # von 3d-druck-4d am 04.09.2026).
+            #
+            # Die Überschrift wiederholt den Knopftext, und das ist Absicht: Sie
+            # beantwortet „wozu sind diese Felder", er „und jetzt ausführen".
+            # Zwei verschiedene Wörter dafür wären zwei Namen für eine Handlung.
+            group_title = QLabel(str(action.title), box)
+            group_title.setWordWrap(True)
+            set_level(group_title, "caption")
+            fit_wrapped(group_title)
+            # **Die Erklärung steht an der Überschrift, nicht unter ihr.** Drei
+            # Zeilen Fließtext je Handlung füllten das Fenster, und an einer
+            # Bohrung stehen vier davon (Robert, 10.09.2026: „die beschreibungen
+            # die über den buttons zum übernehmen dastehen auch in einen
+            # tooltipp passen bei der überschrift von den werten mit einem i für
+            # infos"). Weg ist sie damit nicht: Der Tooltip trägt sie, die
+            # Statuszeile ebenso, und ``setAccessibleDescription`` reicht sie an
+            # den Bildschirmleser weiter — Qt liest einen Tooltip nicht von
+            # selbst vor.
+            head = QHBoxLayout()
+            head.setContentsMargins(0, 0, 0, 0)
+            head.setSpacing(TIGHT)
+            head.addWidget(group_title, 1)
+            row.title = group_title
+            row.dot = self._explain(box, head)
+            layout.addLayout(head)
+
+            form = QFormLayout()
+            form.setContentsMargins(0, 0, 0, 0)
+            form.setSpacing(TIGHT)
+            # Bricht um, statt abzuschneiden: Bei schmaler Spalte rutscht das
+            # Feld unter seine Beschriftung, und beide bleiben ganz.
+            form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
+            form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
+            for field in action.fields:
+                name = str(field.name)
+                editor = self._build_field(field, box)
+                row.widgets[name] = editor
+                row.inner[name] = tuple(editor.findChildren(QLineEdit))
+                self._watch(editor, row)
+                label = QLabel(str(field.label), box)
+                label.setWordWrap(True)
+                # **Die Beschriftung gehört an das Feld, nicht nur daneben.**
+                # Ein Bildschirmleser liest den Namen des Bedienelements, und
+                # der war leer: elf Felder mit „Drehfeld, 0,00" und
+                # „Kontrollkästchen, nicht angehakt", darunter zweimal X, Y, Z
+                # — einmal für *Merkmal verschieben*, einmal für *verdoppeln*.
+                # Wer sie nicht sieht, konnte sie nicht auseinanderhalten
+                # (gemessen 09.09.2026 an einer gewählten Bohrung; §19.1).
+                #
+                # ``setBuddy`` allein genügt nicht: Es hängt den Text an die
+                # Beschriftung, damit ihr Kürzel den Fokus setzt, und wird von
+                # den Vorlesern unterschiedlich ausgewertet. Der Name am Feld
+                # ist die Zusage, die überall trägt (:meth:`_fill_row`).
+                label.setBuddy(editor)
+                row.labels[name] = label
+                form.addRow(label, editor)
+                if isinstance(editor, RowCheckBox):
+                    caption_toggles(label, editor)
+            layout.addLayout(form)
+        else:
+            button = QPushButton(str(action.title), box)
+            button.clicked.connect(partial(self._run_row, row))
+            layout.addWidget(button)
+            row.button = button
+        return row
+
+    def _fill_row(self, row: _ActionRow, action: Any) -> None:
+        """Was eine Zeile über ihre Handlung sagt — beim Bau und beim Wiederverwenden.
+
+        Beschriftungen, zugängliche Namen, die Erklärung hinter dem
+        Info-Zeichen und die Merker, über die Sperre, Fokus und Eingabetaste
+        die Handlung finden (:meth:`_mark`). Die Werte der Felder stehen dann
+        schon (:func:`configure_feature_field`).
+        """
+        box = row.box
+        if row.title is not None and row.dot is not None:
+            row.title.setText(str(action.title))
+            # Die Erklärung beginnt leer: Eine wiederverwendete Zeile trug
+            # sonst die Absätze des vorigen Merkmals weiter.
+            self._dots[id(box)] = (row.dot, row.title)
+            self._explanations.pop(id(box), None)
+            for widget in (row.dot, row.title):
+                widget.setToolTip("")
+                widget.setStatusTip("")
+            row.title.setAccessibleDescription("")
+            # Sichtbar bleibt es, wenn gleich ein Text kommt: aus- und wieder
+            # einblenden wäre zwei Wechsel im sichtbaren Fenster für nichts.
+            _set_shown(row.dot, bool(_explained(action)))
+            # **Jede Handlung hat eine Erklärung.** Drei Quellen in dieser
+            # Reihenfolge: der Satz zur Lage (``note``, „Bohrung und Senkung
+            # gehen gemeinsam"), der Grund der Handlung, und zuletzt der
+            # ``doc``-Satz aus dem Register — die Beschreibung, die dieselbe
+            # Operation auch im Menü und im Dialog trägt. Ein Zeichen, das nur
+            # an einer von fünf Zeilen auftaucht, sieht aus wie ein Fehler und
+            # nicht wie ein Angebot (Robert, 11.09.2026: „ist nur hinter
+            # material verschieben").
+            self._extend_explanation(box, _explained(action))
+            for field in action.fields:
+                name = str(field.name)
+                editor = row.widgets[name]
+                label = row.labels[name]
+                label.setText(str(field.label))
+                label.setToolTip(editor.toolTip())
+                label.setStatusTip(editor.statusTip())
+                label.setAccessibleDescription(editor.accessibleDescription())
+                # Die Überschrift der Handlung kommt vor den Feldnamen, weil
+                # „Durchmesser" allein nicht sagt, welcher — an einer Bohrung
+                # stehen vier Handlungen mit je eigenen Feldern.
+                editor.setAccessibleName(f"{action.title} — {field.label}")
+                for target in (editor, *row.inner[name]):
+                    self._mark(target, row.key)
+        if row.button is not None:
+            row.button.setText(str(action.title))
+            row.button.setToolTip(_explained(action))
+            # Derselbe Merker wie an den Feldern: Er sagt, wem dieses
+            # Bedienelement gehört — und damit auch, dass es mit ihnen gesperrt
+            # wird, solange die Kette anhält (:meth:`_settle_lock`).
+            self._mark(row.button, row.key)
+
+    def _row_values(self, row: _ActionRow) -> dict[str, Any]:
+        """Was in den Feldern dieser Zeile steht — mit dem gezeigten Merkmal."""
+        return self._values(row.entries, row.widgets, row.fixed)
+
+    def _run_row(self, row: _ActionRow, _checked: bool = False) -> None:
+        """Führt die Handlung dieser Zeile aus — mit ihren heutigen Feldern.
+
+        **Ein Baustein ändert seinen Schritt, er legt keinen zweiten an.**
+        Ohne diese Weiche stünde nach jeder Maßkorrektur ein weiteres
+        Schlüsselloch im Verlauf, an derselben Stelle über dem alten.
+        """
+        if row.step is not None:
+            if row.action is not None and row.action.op is None:
+                self.stepRemoveRequested.emit(row.step)
+            else:
+                self.stepChangeRequested.emit(row.step, self._row_values(row))
+            return
+        self._emit(row.op, row.entries, row.widgets, self._every_for(row.op), row.fixed)
+
+    def _take_row(self, row: _ActionRow, proposed: Mapping[str, Any]) -> None:
+        """Vorgeschlagene Zahlen in die Felder dieser Zeile.
+
+        Ohne Meldung nach außen: Die Zahlen kommen aus dem Bild, und die
+        Vorschau dort zeigt sie bereits. Ein ``valuesChanged`` von hier
+        liefe zurück zu dem, der gerade gezogen hat.
+        """
+        refresh_feature_fields(row.entries, row.widgets, proposed)
+
+    def _row_in_view(self, row: _ActionRow) -> None:
+        """Dieselbe Handlung, aber im Bild eingestellt.
+
+        **Ein eigener Knopf, seit dem 11.09.2026.** Bis dahin führte das
+        *Übernehmen* selbst ins Bild, wo die Handlung eine Stelle hat — und
+        damit konnte man an einer Bohrung nichts mehr übernehmen, ohne vorher
+        durch die Platzierung zu gehen. Zwei Absichten brauchen zwei Knöpfe
+        (Robert, 11.09.2026: „das über den viewport wieder über einen button
+        aktivieren").
+        """
+        self.inViewRequested.emit(row.op, self._row_values(row))
+
+    def _keep_rows_for_reuse(self) -> None:
+        """Hält die Zeilen der gezeigten Handlungen für den nächsten Aufbau zurück (RM-204).
+
+        Vor :meth:`clear` gerufen: Was wiederverwendbar ist, verlässt die
+        Liste der gebauten Widgets und wird nicht gelöscht, sondern wartet
+        unter seiner Signatur. Der Aufbau danach nimmt es wieder
+        (:meth:`_build_action`); was keiner nimmt, räumt
+        :meth:`_drop_spare_rows` ab.
+        """
+        self._drop_spare_rows()
+        kept = {box for box, row in self._shown_rows.items() if row.signature is not None}
+        for box in kept:
+            row = self._shown_rows[box]
+            assert row.signature is not None
+            self._spare_rows.setdefault(row.signature, []).append(row)
+            # Aus dem Layout, nicht aus dem Fenster: Die Zeile behält Eltern
+            # und Sichtbarkeit und kommt an ihrer neuen Stelle wieder hinein.
+            self._rows.removeWidget(box)
+        # In der Reihenfolge des Fensters, damit eine Signatur mit zwei Zeilen
+        # sie wieder in derselben Folge vergibt.
+        for rows in self._spare_rows.values():
+            rows.sort(key=lambda row: self._built.index(row.box))
+        self._built = [widget for widget in self._built if widget not in kept]
+
+    def _drop_spare_rows(self) -> None:
+        """Zurückgehaltene Zeilen, die kein Aufbau genommen hat, gehen wie jede andere."""
+        for rows in self._spare_rows.values():
+            for row in rows:
+                row.box.hide()
+                row.box.deleteLater()
+        self._spare_rows.clear()
+
+    def _settle_row_order(self) -> None:
+        """Die Tabulatortaste geht auch über wiederverwendete Zeilen den Weg des Auges.
+
+        Qt führt die Fokuskette in der Reihenfolge, in der Widgets entstanden
+        sind. Eine wiederverwendete Zeile ist älter als die neuen daneben, und
+        ohne diese Kette spränge der Fokus von ihr zu Zeilen, die im Fenster
+        über ihr stehen. Gezogen wird deshalb einmal von oben nach unten durch
+        alle Halte der gezeigten Zeilen; die Knopfzeile hängt
+        :meth:`_settle_tab_order` danach an.
+        """
+        stops = [stop for row in self._built for stop in _focus_stops(row)]
+        for first, second in pairwise(stops):
+            QWidget.setTabOrder(first, second)
 
     def _ask_for_the_step(self, step: int) -> None:
         """Den vollständigen Dialog dieses Schritts öffnen.
@@ -6379,11 +6771,13 @@ class FeaturePanel(QWidget):
         """
         self.stepEditRequested.emit(int(step))
 
-    def _explain(self, box: QWidget, row: QHBoxLayout, text: str, title: QLabel) -> None:
-        """Hängt das Info-Zeichen an eine Überschrift — oder lässt es weg.
+    def _explain(self, box: QWidget, row: QHBoxLayout) -> QToolButton:
+        """Hängt das Info-Zeichen an eine Überschrift — sichtbar erst mit einem Text.
 
         Ohne Text kein Zeichen: Ein Kreis, hinter dem nichts steht, ist eine
-        Ankündigung, die niemand einlöst.
+        Ankündigung, die niemand einlöst. Den Text bringt :meth:`_fill_row`
+        (über :meth:`_extend_explanation`), damit eine wiederverwendete Zeile
+        ihre Erklärung neu bekommt.
         """
         # **Ein Knopf und kein Label.** Ein QLabel zeigt seinen Tooltip nur,
         # solange die Maus wirklich darauf steht, und bei achtzehn Bildpunkten
@@ -6404,9 +6798,7 @@ class FeaturePanel(QWidget):
         dot.setCursor(Qt.CursorShape.WhatsThisCursor)
         dot.setVisible(False)
         row.addWidget(dot, 0, Qt.AlignmentFlag.AlignTop)
-        self._dots[id(box)] = (dot, title)
-        if text:
-            self._extend_explanation(box, text)
+        return dot
 
     def _extend_explanation(self, box: QWidget, text: str) -> None:
         """Nimmt einen weiteren Absatz hinter dasselbe Info-Zeichen.
@@ -6431,7 +6823,7 @@ class FeaturePanel(QWidget):
         # bekommt (§19.1).
         title.setAccessibleDescription(gathered)
         dot.setAccessibleName(str(tr("Erklärung zu {title}")).format(title=title.text()))
-        dot.setVisible(True)
+        _set_shown(dot, True)
 
     def _apply_stands(self) -> bool:
         """Ob der Knopf unten gerade etwas anzubieten hat.
@@ -6475,9 +6867,15 @@ class FeaturePanel(QWidget):
             self._rows.removeWidget(self._footer)
             self._rows.insertWidget(self._rows.count() - 1, self._footer)
         self._settle_tab_order()
+        if self._armed not in self._runs:
+            # Ohne Handlung trägt der Knopf nichts — nach einem Neuaufbau, der
+            # die Knopfzeile stehen ließ (``clear(rebuilding=True)``), geht sie
+            # hier, und nur hier, wenn nichts mehr kommt.
+            for widget in (self._apply, self._armed_title, self._every):
+                _set_shown(widget, False)
         self._settle_in_view()
-        self._cancel.setVisible(
-            self._cancel_offered and not self._measuring and self._apply_stands()
+        _set_shown(
+            self._cancel, self._cancel_offered and not self._measuring and self._apply_stands()
         )
         self._settle_lock()
 
@@ -6501,6 +6899,8 @@ class FeaturePanel(QWidget):
         Übernehmen → Abbrechen. Unsichtbare und gesperrte Halte übergeht Qt von
         selbst, der Haken braucht also keinen Sonderfall.
         """
+        if self._rows_reused:
+            self._settle_row_order()
         anchor = self._last_field()
         chain = (self._in_view, self._every, self._apply, self._cancel)
         if anchor is not None:
@@ -6517,15 +6917,7 @@ class FeaturePanel(QWidget):
         dessen Innenleben und kein eigener Halt.
         """
         for row in reversed(self._built):
-            # Die Zeile selbst zählt mit: Der Umschalter *Vor Trennnähten
-            # schützen* und der Katalogknopf stehen ohne Kasten in der Liste,
-            # und ``findChildren`` sieht ein Widget nie als sein eigenes Kind.
-            stops = [
-                child
-                for child in (row, *row.findChildren(QWidget))
-                if child.focusPolicy() != Qt.FocusPolicy.NoFocus
-                and not isinstance(child, QLineEdit)
-            ]
+            stops = _focus_stops(row)
             if stops:
                 return stops[-1]
         return None
@@ -6561,12 +6953,12 @@ class FeaturePanel(QWidget):
         changed = self._armed is not None and self._armed != key
         self._armed = key
         self._armed_title.setText(entry.title)
-        self._armed_title.show()
+        _set_shown(self._armed_title, True)
         # **Der Titel steht am Knopf, nur nicht auf ihm.** Ein Bildschirmleser
         # liest den zugänglichen Namen, und „Übernehmen" allein sagte dort
         # nicht, was übernommen wird (§19.1).
         self._apply.setAccessibleName(entry.title)
-        self._apply.setVisible(not self._measuring)
+        _set_shown(self._apply, not self._measuring)
         applies_to_all = entry.members > 1
         if applies_to_all:
             promise = str(tr("Eine Handlung für alle — und ein Strg+Z nimmt sie zusammen zurück."))
@@ -6581,7 +6973,7 @@ class FeaturePanel(QWidget):
             # eine Handlung mit Gruppe anfasst.
             with QSignalBlocker(self._every):
                 self._every.setChecked(False)
-        self._every.setVisible(applies_to_all)
+        _set_shown(self._every, applies_to_all)
         self._settle_apply_block()
         if changed and entry.op != NO_OPERATION:
             self.handlingArmed.emit(entry.op, entry.values())
@@ -6660,7 +7052,7 @@ class FeaturePanel(QWidget):
         )
         self._in_view_key = found[0] if found is not None else None
         self._into_view = found[1].in_view if found is not None else None
-        self._in_view.setVisible(self._into_view is not None)
+        _set_shown(self._in_view, self._into_view is not None)
         if self._into_view is None:
             return
         promise = str(tr("Maßlinien zu Kanten und Mitten in der Szene — dort einstellen."))
@@ -6751,8 +7143,8 @@ class FeaturePanel(QWidget):
         self._measure_op = op if active else None
         self._measure_begun = bool(active and begun)
         self._settle_lock()
-        self._cancel.setVisible(
-            self._cancel_offered and not self._measuring and self._apply_stands()
+        _set_shown(
+            self._cancel, self._cancel_offered and not self._measuring and self._apply_stands()
         )
         # **Was im Bild steht, steht rechts nicht noch einmal** (Robert,
         # 21.09.2026: „durchmesser ist ja im viewport, kann im merkmalpanel
@@ -6764,9 +7156,9 @@ class FeaturePanel(QWidget):
         for key, (line, row) in self._blocks.items():
             entry = self._runs.get(key)
             twin = self._measuring and entry is not None and entry.op == self._measure_op
-            row.setVisible(not twin)
+            _set_shown(row, not twin)
             if line is not None:
-                line.setVisible(not twin)
+                _set_shown(line, not twin)
 
     def offer_cancel(self, offered: bool) -> None:
         """Ob *Abbrechen* steht: solange eine Vorschau aus diesem Panel wartet.
@@ -6780,8 +7172,8 @@ class FeaturePanel(QWidget):
         nicht will, hatte bis dahin nur Escape aus der Auswahl heraus.
         """
         self._cancel_offered = bool(offered)
-        self._cancel.setVisible(
-            self._cancel_offered and not self._measuring and self._apply_stands()
+        _set_shown(
+            self._cancel, self._cancel_offered and not self._measuring and self._apply_stands()
         )
 
     def request_in_view(self) -> None:
@@ -6834,31 +7226,27 @@ class FeaturePanel(QWidget):
             return None
         return self._every
 
-    def _watch(
-        self,
-        editor: QWidget,
-        op: str,
-        key: str,
-        fields: Sequence[Any],
-        widgets: Mapping[str, QWidget],
-        fixed: Sequence[tuple[str, Any]] = (),
-    ) -> None:
+    def _watch(self, editor: QWidget, row: _ActionRow) -> None:
         """Meldet jede Änderung an einem Feld — für die Vorschau, nicht zum Tun.
 
         **Bei der Länge über ``valueChangedMm``**: Qts ``valueChanged`` trägt
         die Zahl aus dem Feld, also einen Anzeigewert. Wer sie weiterreicht,
         hat die Umrechnung übersprungen, und aus 5 mm werden bei Zoll 0,1969.
+
+        Gelesen wird beim Melden aus der **Zeile** (Schlüssel, Operation,
+        Felder), nicht aus dem Stand beim Bau: Eine wiederverwendete Zeile
+        meldet für das Merkmal, das gerade dasteht (RM-204). Die Merker für
+        Sperre und Fokus setzt :meth:`_fill_row` bei jedem Füllen neu.
         """
 
         def report(*_ignored: object) -> None:
             # **Wer einen Wert ändert, meint diese Handlung.** Der Knopf unten
             # folgt der Berührung; ohne das zeigte er auf die erste, während
             # jemand in der vierten tippt.
-            self._arm(key)
-            self.valuesChanged.emit(op, self._values(fields, widgets, fixed))
+            self._arm(row.key)
+            self.valuesChanged.emit(row.op, self._row_values(row))
 
         for target in (editor, *editor.findChildren(QLineEdit)):
-            self._mark(target, key)
             target.installEventFilter(self)
         from app.ui.op_dialog import ValueField
 

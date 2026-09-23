@@ -10614,6 +10614,15 @@ class MainWindow(QMainWindow):
         self._bodies_shown: tuple[str, ...] = ()
         """Und dasselbe für die Körperauswahl — sie öffnet das Fenster ebenso,
         seit es die Handlungen trägt."""
+        self._fields_this_round: tuple[str, int] | None = None
+        """Welches Merkmal ``featureSelected`` in dieser Auswahlrunde schon ins
+        Fenster gebracht hat — mit dem Aufbaustand des Fensters.
+
+        Der Baum meldet je Auswahl erst ``featureSelected`` und gleich danach
+        ``featuresSelected``; an einer Bohrung mit ihrer Senkung meint die
+        zweite Meldung dasselbe Merkmal (``_one_cavity``) und baute Fenster,
+        Maßgruppe und Vorschau ein zweites Mal — am Halter mit Wabenmuster
+        die Hälfte eines Bohrungsklicks (22.09.2026)."""
         self._quiet_placement: Any = None
         """Die laufende Platzierung ohne Dialog — oder nichts.
 
@@ -13095,6 +13104,7 @@ class MainWindow(QMainWindow):
     def _on_feature_selected(self, feature_id: str | None) -> None:
         """Das gewählte Merkmal — in der Ansicht, in der Statusleiste und im
         Panel, das seine Maße änderbar zeigt."""
+        self._fields_this_round = None
         if feature_id is not None:
             # **Eine neue Auswahl hebt ein früheres Zumachen auf** (Konzept
             # „Ein Ort für die Auswahl", D). Zugemacht heißt „bei diesem
@@ -13140,6 +13150,7 @@ class MainWindow(QMainWindow):
             # sonst an zwei Stellen mit je eigener Rechnung, und die driften.
             self.measurements.setText(self.selection_label())
             self._show_feature_fields(feature_id, entry, result)
+            self._fields_this_round = (feature_id, self.feature_panel.serial)
         else:
             self.feature_panel.clear()
 
@@ -13389,6 +13400,7 @@ class MainWindow(QMainWindow):
 
     def _on_features_selected(self, chosen: list[Any]) -> None:
         """Abstand im selben Körper, manuelle Prüfbeziehung zwischen zwei Körpern."""
+        shown_this_round, self._fields_this_round = self._fields_this_round, None
         if chosen:
             # **Was das Bild schon zeigt, wird nicht ein zweites Mal gezeichnet.**
             # Der Baum meldet je Klick erst das eine Merkmal (``featureSelected``
@@ -13458,9 +13470,11 @@ class MainWindow(QMainWindow):
         # Baum schachtelt (``cavity_chain_at``), und nicht eine zweite
         # Rechnung über Achsen und Abstände.
         if first_object == second_object and self._one_cavity(entry, first, second):
-            self._show_feature_fields(
-                self.object_tree.selected_feature() or first_id, entry, result
-            )
+            chosen_id = self.object_tree.selected_feature() or first_id
+            # Steht es schon — aus ``featureSelected`` derselben Runde, und
+            # seither unverändert —, bleibt es stehen, samt Maßgruppe.
+            if shown_this_round != (chosen_id, self.feature_panel.serial):
+                self._show_feature_fields(chosen_id, entry, result)
             return
         self.feature_panel.show_pair(first_id, first, second_id, second)
         self.feature_dock.reveal()
@@ -17213,21 +17227,29 @@ class MainWindow(QMainWindow):
         """
         result = self.session.last_result
         if result is None or not result.scene.objects:
-            self.facts.show_estimate(None)
+            self.facts.show_estimate(None, self._facts_key())
             return
         bodies = [(entry.mesh.volume, entry.mesh.area) for entry in result.scene.objects.values()]
-        self.facts.show_estimate(estimate_total(bodies, self.effective_print_settings()))
+        self.facts.show_estimate(
+            estimate_total(bodies, self.effective_print_settings()), self._facts_key()
+        )
 
     def _facts_key(self) -> str:
         """Woran die Zahlenzeile ein Projekt wiedererkennt.
 
-        Der Pfad und nicht ``session.title``: der trägt einen Stern, sobald
-        etwas ungesichert ist, und wechselt damit bei der ersten Änderung. Die
-        Zeile hätte ihren Vergleich genau dann verloren, wenn er zum ersten Mal
-        etwas zu sagen hätte.
+        Der Dokumentzähler der Sitzung und nicht ``session.title``: der trägt
+        einen Stern, sobald etwas ungesichert ist, und wechselt damit bei der
+        ersten Änderung — die Zeile hätte ihren Vergleich genau dann verloren,
+        wenn er zum ersten Mal etwas zu sagen hätte. Auch nicht der Pfad: Zwei
+        namenlose Projekte hintereinander (neu, Entwurf aus einem Baustein,
+        Wiederherstellung) teilen sich den leeren, und das zweite meldete eine
+        Ersparnis gegenüber dem ersten.
+
+        Bis zum 22.09.2026 stand hier der Pfad, und niemand rief die Methode
+        auf; der Vergleich fiel nur deshalb beim Öffnen weg, weil
+        ``_reset_for`` zufällig vorher ein leeres Ergebnis meldete.
         """
-        path = self.session.path
-        return str(path) if path else ""
+        return str(self.session.project_generation)
 
     def _on_gizmo_status(self, text: str) -> None:
         """Der Satz am Griff — solange er gilt, und ohne die Quittung zu wischen."""

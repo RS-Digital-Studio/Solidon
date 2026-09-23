@@ -657,7 +657,14 @@ bevor es jemand wusste:
   `create_counterpart` und `create_thread_counterpart`: Die Schritte stehen
   sofort, die Passung kommt mit der Auswertung (`_finish_after`,
   `_run_finishers`) und meldet sich über `counterpartFinished`; ein
-  Projektwechsel dazwischen lässt den Abschluss verfallen.
+  Projektwechsel dazwischen lässt den Abschluss verfallen. Abgeschlossen wird
+  nur mit einem **aktuellen** Ergebnis (`result_current`) — eines mit
+  eingereihtem Nachlauf gehört zum Stand vor dem Einsetzen.
+- **Vorschau und Agentenzug rechnen auf einem `_Snapshot`**, gezogen im
+  Hauptfaden (`preview_async`, `propose_async`): Dokumentkopie, Szene davor,
+  Profil. Der Arbeiter kopiert nur diesen Stand, nie das lebende Dokument.
+  `project_generation` nennt das offene Dokument als Zähler — Zahlenzeile und
+  lokale Erkennung erkennen daran einen Dokumentwechsel.
 - **Der Auswertungsarbeiter fasst die Kennzahlen an** (`_warm_metrics`):
   Volumen, Oberfläche, Wasserdichtheit und Teilezahl jedes Körpers sind
   danach gemerkt, und `describe_selection`, `_measure_up` und `_update_facts`
@@ -1642,6 +1649,31 @@ Fenster: oben mit dem gemessenen Wert und einem Knopf, darunter als Knopf, der
 denselben Weg noch einmal anbietet. Der Kegel hat deshalb eine eigene Zeile in
 `QUICK_FEATURES` — seine einzige verbleibende Handlung ist *Senken*, und ohne
 den Eintrag stünde sie an keiner der beiden Stellen.
+
+### Ein Merkmalklick baut nicht neu, was schon steht (RM-204)
+
+`FeaturePanel.show_feature` und `show_edge` halten die Zeilen des vorigen
+Merkmals zurück (`_keep_rows_for_reuse`) und vergeben sie an Handlungen
+derselben Signatur (`_row_signature`: Operation, Feldnamen, -arten und
+Auswahlwerte; nie bei Schritt, `elsewhere` oder Ausdrucksfeld). Eine Zeile ist
+ein `_ActionRow`; ihre Wege (`_run_row`, `_take_row`, `_row_in_view`,
+`_row_values`) lesen Schlüssel, Operation und Felder beim Aufruf aus der Zeile,
+nicht beim Bau. Werte, Grenzen und Herkunft schreibt
+`configure_feature_field` (Signale geblockt, Kurzhilfe vorher geleert),
+Beschriftung, Namen, Erklärung und Merker `_fill_row`; was keiner nimmt, geht
+mit `_drop_spare_rows`. Die Fokuskette wird nach einer Wiederverwendung neu
+gezogen (`_settle_row_order`, Halte über `_focus_stops` ohne Innenleben).
+Die Kernauskunft (Hohlraumkette, Handlungen, Geschwister) merkt
+`_answers_for` je Merkmal für einen Körper und eine Merkmalsliste.
+Sichtbarkeit wechselt nur über `_set_shown`; `clear(rebuilding=True)` lässt
+die Knopfzeile bis `_settle_apply` stehen. Ein Test vergleicht ein
+wiederverwendetes Fenster mit einem frisch gebauten Zustand für Zustand
+(`test_feature_panel.py`, `_panel_state`).
+
+Die Klickkette davor meldet einmal: `ObjectTree.select_feature` leert die
+Auswahl geblockt, und `MainWindow._on_features_selected` baut an Bohrung und
+Senkung nicht ein zweites Mal, was `featureSelected` derselben Runde schon
+gebaut hat (`_fields_this_round`, `FeaturePanel.serial`).
 
 ### Das Merkmalsfenster hat einen Knopf, nicht fünf (10.09.2026)
 

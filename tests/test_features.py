@@ -4315,6 +4315,45 @@ def test_an_edge_fillet_between_two_planes_keeps_its_rows() -> None:
     assert offered[str(REGISTRY.get("resize_feature").title)] == "resize_feature"
 
 
+def test_a_fillet_click_reads_the_planes_of_a_body_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Die Ebenen eines Körpers entstehen je Körper einmal, nicht je Klick.
+
+    ``fillet_blocked`` fragte bei **jeder** Auswahl einer Rundung die volle
+    Flächenerkennung (``detect_faces``) im Hauptfaden — mit Trägern und
+    Innenlage, die die Maske gar nicht liest. Am Halter mit Wabenmuster
+    (``large-screwdriver-holder-with-honeycomb-pattern.stl``, 7 956 Dreiecke)
+    kostete ein Rundungsklick so 560 bis 610 ms, jedes Mal (22.09.2026).
+    Die Maske braucht nur die Facetten; sie bleibt am Körper gemerkt, und der
+    Zwilling in ``edges._around`` liest dieselbe.
+    """
+    from app.core.geom.edges import round_edges
+    from app.core.perceive.actions import fillet_blocked
+    from app.core.perceive.features import detect_faces, face_mask, planar_mask
+
+    body = round_edges(
+        MeshData.of(trimesh.creation.box(extents=(30.0, 20.0, 10.0))), 3.0, "vertical"
+    ).mesh
+    found = detect(body)
+    edges = [feature for feature in found.values() if feature.kind == "fillet"]
+    assert len(edges) >= 2
+    expected = face_mask(body, detect_faces(body))
+    assert np.array_equal(planar_mask(body), expected), "dieselbe Menge wie die volle Erkennung"
+
+    forget_cache()
+    reads: list[int] = []
+    original = features_module._planar_face_entries
+
+    def counted(*args: Any, **kwargs: Any) -> Any:
+        reads.append(1)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(features_module, "_planar_face_entries", counted)
+    for edge in (*edges, *edges):
+        assert fillet_blocked(edge, found, body) is None
+
+    assert len(reads) == 1, "je Körper einmal gelesen, nicht je Klick"
+
+
 def _tab_with_a_round_end() -> MeshData:
     """Eine Lasche: ein Rechteck, dessen Ende ein Halbkreis ist — die runde Wand geht
     tangential in die beiden Flanken über."""

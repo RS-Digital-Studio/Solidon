@@ -28,6 +28,8 @@ class LocalRecognitionFlow(QObject):
         self.dialog: LocalRecognitionDialog | None = None
         self.armed = False
         self._baseline: EvaluationResult | None = None
+        self._generation: int | None = None
+        """Zu welchem Dokument die Auswahl gehört (``Session.project_generation``)."""
         self._drafts: tuple[OperationDraft, ...] = ()
         window.session.projectChanged.connect(self.invalidate)
 
@@ -85,6 +87,7 @@ class LocalRecognitionFlow(QObject):
             self.view._op_dialog.reject()
         self._baseline = result
         session = self.view.session
+        self._generation = session.project_generation
         project = Project(
             document=copy.deepcopy(session.project.document),
             sources=dict(session.project.sources),
@@ -190,17 +193,27 @@ class LocalRecognitionFlow(QObject):
     def _finished(self, code: int) -> None:
         if self.sender() is not self.dialog:
             return
-        baseline, drafts = self._baseline, self._drafts
+        generation, drafts = self._generation, self._drafts
         self.dialog = None
         self._baseline = None
+        self._generation = None
         self._drafts = ()
         self.armed = False
         self.view.viewport.set_placement_pointer(None)
         self.view.viewport.set_feature_gizmo_blocked(False)
         self.view._clear_preview()
-        result = self.view.session.last_result
         self._show_committed()
-        if code == QDialog.DialogCode.Accepted and drafts and result is baseline:
+        # **Dasselbe Dokument, nicht dasselbe Ergebnis.** Ein Export oder ein
+        # Neuberechnen liefert ein neues Ergebnis desselben Stands; der
+        # Vergleich auf Identität verwarf danach das Übernehmen ohne ein Wort
+        # (22.09.2026). Ein geändertes Dokument schließt das Fenster schon
+        # vorher (``invalidate`` an ``projectChanged``); ein anderes Dokument
+        # erkennt der Zähler.
+        if (
+            code == QDialog.DialogCode.Accepted
+            and drafts
+            and generation == self.view.session.project_generation
+        ):
             title = (
                 _("Merkmale erkennen und bearbeiten") if len(drafts) > 1 else _("Merkmale erkennen")
             )

@@ -426,3 +426,78 @@ def test_the_thread_counterpart_does_not_hold_the_window_while_it_is_evaluated(
     finally:
         window.release()
         window.deleteLater()
+
+
+def test_a_result_from_before_the_counterpart_does_not_use_up_its_fit(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein Ergebnis, das schon beim Eintreffen überholt ist, trägt keine Passung nach.
+
+    Die Passung eines Gegenstücks wartet auf die nächste Auswertung
+    (``Session._finish_after``). Läuft beim Einsetzen schon eine, bricht
+    ``evaluate_async`` sie ab und reiht einen Nachlauf ein — kommt ihr
+    Ergebnis trotzdem an (``result_current`` ist dann falsch), fehlten darin
+    die neuen Hälften. Bis zum 22.09.2026 verbrauchte genau dieses Ergebnis
+    den Abschluss: ``attach_fit`` fand die Merkmale nicht, meldete „nicht
+    nachgetragen", und der Nachlauf mit den echten Hälften hatte nichts mehr
+    nachzutragen. Nachgestellt, indem der gehaltene Lauf sein altes Ergebnis
+    zustellt, während der Nachlauf schon eingereiht ist.
+    """
+    import threading
+
+    from app.ui import counterpart_dialog as module
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        first, second = _two_plates(window)
+        session = window.session
+        session.history.apply(
+            "Bolzen auf der ersten Platte",
+            [
+                OperationDraft(
+                    op="insert_printed_thread",
+                    inputs=(first,),
+                    params={"size": "M6", "length": 8.0, "internal": False, "z": 10.0},
+                )
+            ],
+        )
+        session.evaluate_now()
+        stale = session.last_result
+        assert stale is not None
+        thread = next(
+            name
+            for name, feature in stale.scene.objects[first].features.items()
+            if feature.kind == "thread" and feature.provenance == "generated"
+        )
+        window.object_tree.select_features(((first, thread), (second, _top_face(window, second))))
+        QApplication.processEvents()
+        monkeypatch.setattr(
+            module.CounterpartDialog,
+            "exec",
+            lambda self: (_ for _ in ()).throw(AssertionError("kein Dialog am Gewinde")),
+        )
+        gate = threading.Event()
+        original = type(session).run_evaluation
+
+        def held(self: Session, quality: object = None) -> object:
+            assert gate.wait(30.0), "der Test hat die Auswertung nie freigegeben"
+            return original(self, quality)  # type: ignore[arg-type]
+
+        monkeypatch.setattr(type(session), "run_evaluation", held)
+        document = session.project.document
+
+        window.action_counterpart()
+        session.evaluate_async()
+        assert session._rerun_pending, "der Nachlauf ist eingereiht"
+
+        # Der laufende Arbeiter meldet sich mit dem Stand von vorher.
+        session._on_finished(stale, finished=session._worker)
+        assert not document.fits
+        assert session._after_evaluation, "der Abschluss wartet weiter auf ein gültiges Ergebnis"
+
+        gate.set()
+        assert session.wait_for_idle(30_000)
+        assert len(document.fits) == 1 and document.fits[0].kind == "thread"
+    finally:
+        window.release()
+        window.deleteLater()

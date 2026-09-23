@@ -914,9 +914,8 @@ def fillet_blocked(
         return None
     from app.core.geom.edges import NOT_BETWEEN_TWO_PLANES
     from app.core.perceive.features import (
-        detect_faces,
-        face_mask,
         nearly_flat_mask,
+        planar_mask,
         replaces_an_edge,
     )
 
@@ -924,8 +923,9 @@ def fillet_blocked(
     # Ebenen frisch am Netz, nicht die ``face``-Einträge des Baums. Die
     # verschluckt ein Langloch (``SWALLOWED_BY_A_SLOT``), und an einer
     # Freiform stehen gar keine — das Panel hätte dort grau gestellt, was die
-    # Operation rechnet.
-    planar = face_mask(mesh, detect_faces(mesh)) | nearly_flat_mask(mesh.raw, features)
+    # Operation rechnet. Einmal je Körper gelesen (:func:`planar_mask`), nicht
+    # je Klick: Das Panel fragt hier im Hauptfaden.
+    planar = planar_mask(mesh) | nearly_flat_mask(mesh.raw, features)
     centre = feature.params.get("centre")
     if replaces_an_edge(
         mesh.raw,

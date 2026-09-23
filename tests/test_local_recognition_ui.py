@@ -525,3 +525,17 @@ def test_unexpected_worker_error_leaves_a_visible_recovery_state(qt_app, profile
         assert not dialog.progress.isVisible()
     finally:
         dispose(dialog, qt_app)
+
+
+def test_the_count_line_speaks_in_the_number_it_shows() -> None:
+    """Keine „1 vollständige Merkmale", und bei keinem der Weg weiter.
+
+    Die Zeile unter dem Radius sagte „1 vollständige Merkmale gefunden." und
+    „0 vollständige Merkmale gefunden." — beim zweiten stand *Nur Merkmale
+    übernehmen* grau daneben, und was jetzt hilft, stand nirgends.
+    """
+    from app.ui.local_recognition import _found_text
+
+    assert _found_text(1) == "1 vollständiges Merkmal gefunden."
+    assert "Radius" in _found_text(0) and "0" not in _found_text(0)
+    assert _found_text(3) == "3 vollständige Merkmale gefunden."

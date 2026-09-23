@@ -627,6 +627,43 @@ def test_a_button_wraps_its_label_instead_of_cutting_it(qt_app: QApplication) ->
         )
 
 
+def test_a_taller_panel_does_not_rewrap_a_hundred_labels(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Eine Höhe bricht keine Zeile um — umbrochen wird nur bei anderer Breite.
+
+    Jeder Merkmalklick ändert die Höhe der Karte darüber, und jede
+    Höhenänderung beschriftete bis zum 22.09.2026 alle gut hundert Knöpfe
+    zweimal neu (erst ganz, dann umbrochen): im gebauten Fenster am Halter mit
+    Wabenmuster 37 ms je Klick. Eine andere Breite oder andere Hauptaktionen
+    brechen weiter neu um.
+    """
+    load_operations()
+    panel = SelectionOperationsPanel(REGISTRY.all())
+    panel.resize(320, 600)
+    panel.show()
+    panel.set_context(1, _availability(1), feature_kind="hole")
+    qt_app.processEvents()
+    wrapped: list[object] = []
+    original = SelectionOperationsPanel._wrap_label
+
+    def counted(self: SelectionOperationsPanel, button: object, room: int) -> None:
+        wrapped.append(button)
+        original(self, button, room)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(SelectionOperationsPanel, "_wrap_label", counted)
+
+    panel.resize(320, 700)
+    qt_app.processEvents()
+    panel.set_context(1, _availability(1), feature_kind="hole")
+    qt_app.processEvents()
+    assert not wrapped, f"{len(wrapped)} Knöpfe neu beschriftet, nur weil die Höhe wuchs"
+
+    panel.resize(260, 700)
+    qt_app.processEvents()
+    assert wrapped, "eine andere Breite bricht neu um"
+
+
 def test_a_chosen_edge_leaves_the_body_operations_out(qt_app: QApplication) -> None:
     """An einer Kante steht nicht die Liste des Körpers.
 

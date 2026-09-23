@@ -714,11 +714,25 @@ NAMED_AT_MOST = 3
 
 
 def _named(entries: list[Any], word: str) -> str:
-    """Die Namen der Einträge, oder ihre Anzahl, wenn es zu viele werden."""
+    """Die Namen der Einträge, oder ihre Anzahl, wenn es zu viele werden.
+
+    Ein Schritt heißt, wie Menü, Verlauf und Dialog ihn nennen — sein Titel
+    aus dem Register und nicht sein Registername: „Operation: drill_hole"
+    stand bis zum 22.09.2026 vor der Entscheidung über den Vorschlag.
+    """
     if len(entries) > NAMED_AT_MOST:
         return f"{len(entries)} × {word}"
-    names = [getattr(entry, "op", None) or str(entry) for entry in entries]
-    return f"{word}: " + ", ".join(names)
+    return f"{word}: " + ", ".join(_title_of(entry) for entry in entries)
+
+
+def _title_of(entry: Any) -> str:
+    """Der Titel eines Schritts, wie der Kunde ihn liest — sonst der Eintrag selbst."""
+    from app.core.registry import REGISTRY
+
+    op = getattr(entry, "op", None)
+    if op and REGISTRY.has(str(op)):
+        return str(REGISTRY.get(str(op)).title)
+    return str(op) if op else str(entry)
 
 
 def _warnings(proposal: Any) -> list[str]:
