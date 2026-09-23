@@ -34,20 +34,20 @@ aber nur ein späterer neuer Bau mit gesetztem `TRIAL_FROM` kann ihn anbieten.
 Das Konzept dahinter steht in `konzepte/konzept-demo-2026-10.md`.
 
 Die veröffentlichte Fassung steht auf der [Downloadseite](https://solidon3d.de/).
-Dieses Repository enthält zusätzlich den folgenden Entwicklungsstand nach
-der Veröffentlichung von **0.4.2 am 15. September 2026**. Diese Ergänzungen
-sind noch nicht Teil dieses Downloads:
+Dieses Repository enthält zusätzlich den Entwicklungsstand für die kommende
+Version **0.5.0**, nach der Veröffentlichung von **0.4.4**. Der vollständige
+Umfang steht in `changelog/de.md`, Abschnitt „0.5.0"; noch nicht Teil des
+Downloads sind unter anderem:
 
-* **Bohrung samt Einlauf ändern:** Bei einer eindeutig erkannten Verbindung
-  können Senkung, Aufweitung oder gerundeter Einlauf dem neuen Durchmesser
-  folgen. Mehrdeutige Übergänge werden benannt, bevor Material geändert wird.
-* **Organizer konstruieren:** Fächer maßlich koppeln und Trennwände einzeln
-  auswählen und ändern; das gespeicherte Layout bleibt nachträglich bearbeitbar.
-* **SVG- und DXF-Konturen auswählen:** Vor dem Erzeugen in der Vorschau wählen,
-  welche geschlossenen Umrisse zum Teil gehören sollen.
-* **Oberflächenmuster weiterbearbeiten:** Eine gewählte Fläche bis zum Rand
-  mit Rändel, Waben oder Rippen versehen, Bohrungen aussparen und die Textur
-  anschließend über ihre Merkmalskarte ändern.
+* **Resin-Drucker:** eigene Geräteprofile mit Pixelgröße und Mindestwand,
+  ohne die Ratschläge, die nur für FDM-Drucker gelten.
+* **Maße im Bild:** eine angeklickte Bohrung zeigt Abstände, Mitte und
+  Durchmesser sofort am Modell, mit Zahlenfeldern zum Tippen.
+* **Echte Muster statt Hunderter Flächen:** Wabenmuster, Rändel, Rippen,
+  Wellen und Noppen stehen im Baum als ein Muster mit Teilung, Zellbreite
+  und Tiefe.
+* **Schnellere Erkennung und Bearbeitung:** deutlich kürzere Wartezeit beim
+  Einlesen, Klicken und Bearbeiten großer Modelle.
 * **Öffnungsfelder zeichnen:** Runde Löcher, Langlöcher oder Waben innerhalb
   eines gezeichneten Bereichs verteilen, mit festem Rand und ausgesparten Zonen.
 * **Merkmale örtlich suchen:** An großen Netzen die Erkennung auf den
@@ -102,7 +102,7 @@ frei formen.
 | `gehaeuse-mit-bausteinen.p3d` | Mutternfalle, Heat-Set-Buchse, Kabeldurchführung, Prüfstück |
 | `schild-zweifarbig.p3d` | Schrift mit eigenem Filament und Lettern als eigener Körper |
 | `skizze-mit-massen.p3d` | Umriss aus Bedingungen: der Durchmesser folgt dem Parameter |
-| `drucker-kalibrieren.p3d` | Toleranzleiter, Wandstärkenleiter, Überhangfächer |
+| `drucker-kalibrieren.p3d` | Toleranz-Testkörper, Wandstärkenleiter, Überhangfächer |
 | `aushoehlen-und-teilen.p3d` | teilen, verstiften, aushöhlen, anordnen |
 | `dose-mit-deckel.p3d` | alles zusammen: benannte Maße, Bausteine, Deckel aus der Öffnung |
 | `passung-nach-materialwechsel.p3d` | der Deckel soll aus TPU kommen — und passt nicht mehr |
@@ -317,9 +317,11 @@ Dialog — es schickt niemanden Gewichte suchen, dem die Knoten fehlen.
 
 ### Welches Modell, und warum dieses
 
-Der mitgelieferte Ablauf benutzt **TripoSG**, das unter der MIT-Lizenz steht —
-Quelltext wie Gewichte. Das ist der Grund für die Wahl: Das verbreitetere
-Hunyuan3D nimmt in seiner Lizenz die Europäische Union ausdrücklich aus.
+Der mitgelieferte Ablauf benutzt **TripoSG**: Quelltext und Modellkarte weisen
+die MIT-Lizenz aus, die vollständige Lizenz- und Herkunftskette der Gewichte
+und der eingebundenen Modelle wird derzeit geprüft. Das ist der Grund für die
+Wahl: Das verbreitetere Hunyuan3D nimmt in seiner Lizenz die Europäische
+Union ausdrücklich aus.
 
 Gemessen auf einer RTX 4080 braucht ein Körper rund 13 Sekunden und kommt mit
 300 000 bis 600 000 Dreiecken geschlossen und aus einem Stück heraus. Die
@@ -346,7 +348,7 @@ Programme bleiben für das, wo sie wirklich besser sind.
 | Linkes und rechtes Teil | **Teil wählen → rechts Spiegeln** | zweite Konstruktion |
 | Erste Schicht maßhaltig | **Elefantenfuß ausgleichen** aus dem Materialprofil | Slicer-Einstellung, projektfern |
 | Toleranz messen statt raten | **Varianten erzeugen** (§28.3) | mehrere Exporte von Hand |
-| Eine Passung prüfen, ohne das Teil zu drucken | **Teil wählen → rechts Prüfstück erzeugen** | von Hand nachmodellieren |
+| Eine Passung prüfen, ohne das Teil zu drucken | **Bohrung, Zapfen oder Fläche wählen → rechts Prüfstück erzeugen** | von Hand nachmodellieren |
 | Zweifarbige Beschriftung | **Text aufbringen** mit eigenem Filament, oder **Schriftzug als Körper** | zwei Konstruktionen |
 | Deckel zu einer vorhandenen Schachtel | **Erzeugen → Bausteine → Deckel erzeugen** | Hohlraum abmessen und neu zeichnen |
 | Schraubdeckel für ein Glas oder eine Dose | **Erzeugen → Bausteine → Drehdeckel erzeugen** | Gewindepaar von Hand konstruieren |

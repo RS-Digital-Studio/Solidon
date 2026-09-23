@@ -133,8 +133,9 @@
           <p class="note" data-kinds="hole,pin,cone,sphere">No todos los tipos admiten todas las acciones. Mover, duplicar y quitar valen para
           taladros, espigas, avellanados, cúpulas y cuencas; girar, para todos salvo
           la superficie esférica — no tiene una orientación que se pueda girar. En
-          los redondeos compatibles puedes cambiar el radio o quitar el redondeo. Las
-          gargantas y las transiciones suaves quedan excluidas. <b>Solidon3D explica
+          los redondeos y gargantas que sustituyen visiblemente una arista puedes
+          cambiar el radio o quitarlos; una transición que se funde suavemente con
+          sus caras vecinas, no. <b>Solidon3D explica
           qué acciones están disponibles en el punto elegido y por qué.</b></p>
         </div>
         <figure class="shot">
@@ -254,7 +255,7 @@
           <p>Línea, círculo, arco, curva y contornos acabados como la ranura, el círculo de
           agujeros o la rejilla de agujeros. Las restricciones mantienen unido el
           dibujo — horizontal, perpendicular, tangente, simétrica, distancia, ángulo,
-          igual longitud y punto medio —, y abajo se lee en todo momento qué sigue
+          mismo tamaño (longitudes y radios) y punto medio —, y abajo se lee en todo momento qué sigue
           libre. Qué sale del contorno lo decides después: extruirlo, cortarlo como
           bolsillo, revolucionarlo, barrerlo a lo largo de un arco o tenderlo entre
           dos contornos.</p>
@@ -429,9 +430,9 @@
         <figure class="shot">
           <div class="stage">
             <a href="../handbuch/es/report.png?v=fed3eb77"><img src="../handbuch/es/report.png?v=fed3eb77" width="620" height="430" loading="lazy" decoding="async"
-                 alt="El informe de comprobación: cero errores, dos advertencias y dos avisos, entre ellos «El modelo está abierto en tres sitios» y «Una pared es más fina que dos cordones de extrusión»"></a>
+                 alt="El informe de comprobación de una lata con tapa: cero errores, un aviso y cuatro notas, entre ellas «El ajuste queda más apretado de lo previsto» y «Vaciado. El grosor de pared cumple dentro de la retícula»"></a>
           </div>
-          <figcaption>El informe de comprobación de un archivo ajeno importado.</figcaption>
+          <figcaption>El informe de comprobación de una lata con tapa.</figcaption>
         </figure>
       </div>
 
@@ -563,7 +564,8 @@
           ya tienes tus filamentos configurados en el slicer, los importas desde
           allí — de forma deliberada, no automática.</p>
           <p>En el proyecto asignas una bobina a cuerpos enteros o a caras
-          concretas; la cabecera indica qué lleva la escena en ese momento.
+          concretas; el panel de filamentos a la izquierda cuenta qué cuerpo
+          lleva qué bobina.
           Tras la entrega al slicer, Solidon3D propone descontar el consumo —
           como estimación o según lo planificado en el G-code, cada cantidad
           con su origen. Si pregunta, si no descuenta nunca o si lo hace sin
@@ -622,8 +624,8 @@
           <p class="note">Y eso está medido, no prometido: una batería de
           <b>39 peticiones de referencia</b> se ejecuta antes y después de
           cada cambio en el conjunto de reglas del agente. A fecha de
-          08/08/2026, con un modelo local de
-          14 000 millones de parámetros y sin nube alguna: 28 de 39 bien
+          22/09/2026, con un modelo local de
+          14 000 millones de parámetros y sin nube alguna: 24 de 39 bien
           respondidas, el 98 % de las llamadas a herramientas válidas al
           primer intento — y cada petición ambigua terminó en una pregunta
           de vuelta, no en una suposición.</p>
@@ -809,7 +811,7 @@
           <summary>Distribuir la placa y comprobar la impresión</summary>
           <div class="tool-content"><p>Coloca piezas sobre la cama —un conjunto importado también entero,
         con la posición de sus piezas entre sí—, busca una orientación
-        favorable, distribúyelas en la placa y comprueba solapamientos. El envío directo al laminador incluye los ajustes adecuados;
+        favorable, distribúyelas en la placa y comprueba solapamientos. El envío directo al slicer incluye los ajustes adecuados;
         después, el G-code importado permite contrastar el resultado con su origen
         claramente identificado.</p></div>
         </details>

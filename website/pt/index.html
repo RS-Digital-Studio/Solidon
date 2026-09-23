@@ -93,7 +93,7 @@
       "name": "Posso mover um furo num STL já terminado?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Sim. Ao abrir, furos, pinos, escareados, cúpulas e sedes são reconhecidos como características com nome; a janela de características mostra os seus valores medidos, e alterar um número é a operação. Mover, duplicar e remover valem para cada um destes tipos; rodar, para todos menos a superfície esférica. Nos arredondamentos compatíveis é possível alterar o raio ou remover o arredondamento. O Solidon3D mostra quais as ações disponíveis no ponto escolhido; as golas e as transições suaves continuam excluídas."
+        "text": "Sim. Ao abrir, furos, pinos, escareados, cúpulas e sedes são reconhecidos como características com nome; a janela de características mostra os seus valores medidos, e alterar um número é a operação. Mover, duplicar e remover valem para cada um destes tipos; rodar, para todos menos a superfície esférica. Nos arredondamentos e golas que substituem visivelmente uma aresta é possível alterar o raio ou removê-los; uma transição que se funde suavemente com as faces vizinhas, não. O Solidon3D mostra quais as ações disponíveis no ponto escolhido."
       }
     },
     {
@@ -481,10 +481,11 @@
           <h3>Preparar um GLB ou STL</h3>
           <p>Arraste um ficheiro do gerador que escolher: o Solidon3D repara
           a malha, ajusta o tamanho, verifica a impressão e, se necessário,
-          divide-a ou acrescenta pinos. A instalação automática de um modelo
-          3D específico só regressará quando estiver documentada toda a sua
-          cadeia de licenças e proveniência. Os caminhos 1, 2 e 4 continuam
-          totalmente utilizáveis.</p>
+          divide-a ou acrescenta pinos. A pedido, o Solidon3D também
+          configura um modelo próprio — o TripoSG para a forma, o SDXL
+          para a imagem por trás —, enquanto a sua cadeia completa de
+          licenças e proveniência ainda está a ser revista. Os caminhos
+          1, 2 e 4 continuam totalmente utilizáveis.</p>
         </div>
         <div class="way">
           <video class="weg-film" width="1280" height="720"
@@ -518,7 +519,7 @@
         <figure>
           <img src="../bilder/galerie-gehaeuse.webp?v=0af90a22" width="900" height="578" loading="lazy"
                alt="Uma caixa para eletrónica com arestas arredondadas, casquilhos roscados nos cantos, um bucim na parede lateral e a tampa pousada ao lado">
-          <figcaption><b>Caixa para eletrónica</b> Casquilhos roscados nos cantos, bucim, nervuras de reforço — e uma tampa que encaixa. Doze passos, 79 134 triângulos.</figcaption>
+          <figcaption><b>Caixa para eletrónica</b> Casquilhos roscados nos cantos, bucim, nervuras de reforço — e uma tampa que encaixa. 13 passos, 79 134 triângulos.</figcaption>
         </figure>
         <figure>
           <img src="../bilder/galerie-schraubdose.webp?v=b4b58f39" width="900" height="578" loading="lazy"
@@ -547,7 +548,7 @@
         <figure>
           <img src="../bilder/verwandlung-vorher.svg?v=593124c2" width="420" height="420" loading="lazy"
                alt="Um modelo gerado em malha de arame: em vários sítios abrem-se buracos na superfície e há arestas que acabam no nada">
-          <figcaption><b>Como chegou</b> Arestas abertas, buracos na malha. Um fatiador enche-os a seu gosto ou desiste — de qualquer maneira só dá por isso na impressora.</figcaption>
+          <figcaption><b>Como chegou</b> Arestas abertas, buracos na malha. Um slicer enche-os a seu gosto ou desiste — de qualquer maneira só dá por isso na impressora.</figcaption>
         </figure>
         <figure>
           <img src="../bilder/verwandlung-nachher.svg?v=557c1bce" width="420" height="420" loading="lazy"
@@ -585,7 +586,7 @@
         <figure>
           <img src="../handbuch/pt/report.png?v=517fe811" width="620" height="430" loading="lazy"
                alt="O relatório com quatro constatações: o modelo está aberto em três pontos, 14 triângulos apontam para dentro, uma parede é mais fina do que duas larguras de extrusão e o ficheiro não indicava a unidade">
-          <figcaption><b>O relatório.</b> O que corre mal na impressão está ali antes de o laminador gastar o tempo — contado por erro, aviso e nota.</figcaption>
+          <figcaption><b>O relatório.</b> O que corre mal na impressão está ali antes de o slicer gastar o tempo — contado por erro, aviso e nota.</figcaption>
         </figure>
         <figure>
           <img src="../bilder/beleg-bausteine-pt.png?v=f361dd25" width="1220" height="955" loading="lazy"
@@ -625,8 +626,8 @@
         <li><b>Análise de camadas sem slicer.</b> Saliências, ilhas, vãos de
         ponte e volume de suporte; a procura de orientação propõe a posição
         que menos disso gera.</li>
-        <li><b>Esboços com restrições.</b> Distâncias, ângulos, comprimentos iguais e pontos
-        médios seguram o desenho. O contorno mantém-se uma curva exata — um círculo
+        <li><b>Esboços com restrições.</b> Distâncias, ângulos, mesmo tamanho (comprimentos e raios) e pontos
+        médios seguram o desenho. Num corpo exato ou modelo, o contorno mantém-se uma curva exata — um círculo
         torna-se um cilindro, não um polígono.</li>
         <li><b>Fazer mais com o seu modelo.</b> Também inclui relevos a partir de imagens,
         treliças espaciais, ângulos de saída, tampas à medida e inscrições
@@ -687,9 +688,10 @@
       <p class="sub">Arraste um GLB ou STL, repare-o, ajuste o tamanho,
       verifique-o face à impressora e ao material, divida-o e acrescente
       pinos: esta preparação funciona com ficheiros do gerador que escolher
-      e sem experiência em CAD. O Solidon3D não descarrega deliberadamente
-      nenhum modelo 3D específico enquanto não estiver documentada toda a sua
-      cadeia de licenças e proveniência.</p>
+      e sem experiência em CAD. A pedido, o Solidon3D também configura um
+      modelo próprio — o TripoSG para a forma, o SDXL para a imagem por
+      trás —, sem descarregar nada sem ser pedido; a sua cadeia completa de
+      licenças e proveniência ainda está a ser revista.</p>
       <a class="btn ghost" href="/pt/ai-models.html">Do gerador à peça imprimível</a>
     </div>
   </section>
@@ -776,7 +778,7 @@
             <li>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
               <span><b>Os seus projetos continuam legíveis.</b> Um ficheiro
-              ZIP com JSON lá dentro, exportação para STL, 3MF, OBJ, PLY e
+              ZIP com JSON lá dentro, exportação para STL, 3MF, OBJ, PLY, GLB e
               STEP.</span>
             </li>
             <li>
@@ -815,8 +817,8 @@
         uns 14 mil milhões de parâmetros — o que exige uma placa gráfica com
         16 GB de memória</td></tr>
         <tr><td>Modelo gerado (opcional)</td><td>um ficheiro GLB ou
-        STL externo; o Solidon3D não instala atualmente nenhum modelo 3D
-        específico</td></tr>
+        STL externo, ou o Solidon3D configura o TripoSG e o modelo de
+        imagem SDXL a pedido</td></tr>
         <tr><td>Outros (opcional)</td><td>um slicer — é encontrado ou
         indicado, e não é obrigatório</td></tr>
       </table>
@@ -884,7 +886,7 @@
           reconhecidos como características com nome; a janela de características
           mostra os seus valores medidos, e alterar um número é a operação.
           Mover, duplicar e remover valem para cada um destes tipos; rodar, para
-          todos menos a superfície esférica. Nos arredondamentos compatíveis é possível alterar o raio ou remover o arredondamento. O Solidon3D mostra quais as ações disponíveis no ponto escolhido; as golas e as transições suaves continuam excluídas.</p>
+          todos menos a superfície esférica. Nos arredondamentos e golas que substituem visivelmente uma aresta é possível alterar o raio ou removê-los; uma transição que se funde suavemente com as faces vizinhas, não. O Solidon3D mostra quais as ações disponíveis no ponto escolhido.</p>
         </details>
         <details>
           <summary>Tenho de usar uma IA?</summary>

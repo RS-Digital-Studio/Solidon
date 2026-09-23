@@ -96,7 +96,7 @@
       "name": "Can I move a hole in a finished STL?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Yes. Holes, pegs, countersinks, domes and sockets are recognised as named features when the file opens; the feature window shows their measured values, and changing a number is the operation. Moving, duplicating and removing apply to each of these kinds, turning to all but the spherical face. Supported fillets can have their radius changed or be removed. Solidon3D shows which actions are available at the selected location; coves and smooth transitions remain excluded."
+        "text": "Yes. Holes, pegs, countersinks, domes and sockets are recognised as named features when the file opens; the feature window shows their measured values, and changing a number is the operation. Moving, duplicating and removing apply to each of these kinds, turning to all but the spherical face. Fillets and coves that recognisably replace an edge can have their radius changed or be removed; a transition that flows smoothly into its neighbouring faces cannot. Solidon3D shows which actions are available at the selected location."
       }
     },
     {
@@ -480,8 +480,9 @@
           <h3>Prepare a GLB or STL</h3>
           <p>Drop in a file from any generator you choose: Solidon3D repairs
           the mesh, sizes it, checks printability, and splits or pins it when
-          needed. Automatic setup of a particular 3D model will return only
-          when its complete licence and provenance chain is documented.
+          needed. On request, Solidon3D can also set up a model of its own —
+          TripoSG for the shape, SDXL for the image behind it — while their
+          complete licence and provenance chain is still under review.
           Ways 1, 2 and 4 remain fully usable independently.</p>
         </div>
         <div class="way">
@@ -515,7 +516,7 @@
         <figure>
           <img src="../bilder/galerie-gehaeuse.webp?v=0af90a22" width="900" height="578" loading="lazy"
                alt="An electronics enclosure with rounded edges, threaded inserts in the corners, a cable gland in the side wall and the lid placed beside it">
-          <figcaption><b>Electronics enclosure</b> Threaded inserts in the corners, a cable gland, stiffening ribs — and a lid that snaps on. Twelve steps, 79,134 triangles.</figcaption>
+          <figcaption><b>Electronics enclosure</b> Threaded inserts in the corners, a cable gland, stiffening ribs — and a lid that snaps on. 13 steps, 79,134 triangles.</figcaption>
         </figure>
         <figure>
           <img src="../bilder/galerie-schraubdose.webp?v=b4b58f39" width="900" height="578" loading="lazy"
@@ -621,8 +622,8 @@
         <li><b>Layer analysis without a slicer.</b> Overhangs, islands, bridge
         spans and support volume; the orientation search suggests the pose that
         produces the least of it.</li>
-        <li><b>Constrained sketches.</b> Distances, angles, equal lengths and midpoints hold the
-        drawing together. The outline stays an exact curve — a circle becomes a
+        <li><b>Constrained sketches.</b> Distances, angles, equal size (lengths and radii) and midpoints hold the
+        drawing together. On an exact body or model the outline stays an exact curve — a circle becomes a
         cylinder, not a polygon.</li>
         <li><b>Do more with your model.</b> Reliefs from images, spatial lattices, draft angles,
         matching lids and multicolour labels are included too. <a
@@ -679,8 +680,10 @@
       <p class="sub">Drop in a GLB or STL, repair it, size it, check it
       against the printer and material, split it and add pins: this preparation
       works with files from any generator you choose and requires no CAD
-      experience. Solidon3D deliberately downloads no particular 3D model
-      while its complete licence and provenance chain is not documented.</p>
+      experience. On request, Solidon3D also sets up a model of its own —
+      TripoSG for the shape, SDXL for the image behind it — without
+      downloading anything unasked; their complete licence and provenance
+      chain is still under review.</p>
       <a class="btn ghost" href="/en/ai-models.html">From generator to printable part</a>
     </div>
   </section>
@@ -764,7 +767,7 @@
             <li>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
               <span><b>Your projects stay readable.</b> A ZIP file with JSON
-              inside, export to STL, 3MF, OBJ, PLY and STEP.</span>
+              inside, export to STL, 3MF, OBJ, PLY, GLB and STEP.</span>
             </li>
             <li>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -801,7 +804,8 @@
         parameters and up — which needs a graphics card with
         16 GB of memory</td></tr>
         <tr><td>Generated model (optional)</td><td>an external GLB
-        or STL file; Solidon3D currently sets up no particular 3D model</td></tr>
+        or STL file, or Solidon3D sets up TripoSG and the SDXL image
+        model on request</td></tr>
         <tr><td>Other (optional)</td><td>a slicer — it is found or
         configured, and it is not required</td></tr>
       </table>
@@ -868,7 +872,7 @@
           as named features when the file opens; the feature window shows their
           measured values, and changing a number is the operation. Moving,
           duplicating and removing apply to each of these kinds, turning to all
-          but the spherical face. Supported fillets can have their radius changed or be removed. Solidon3D shows which actions are available at the selected location; coves and smooth transitions remain excluded.</p>
+          but the spherical face. Fillets and coves that recognisably replace an edge can have their radius changed or be removed; a transition that flows smoothly into its neighbouring faces cannot. Solidon3D shows which actions are available at the selected location.</p>
         </details>
         <details>
           <summary>Do I have to use AI?</summary>

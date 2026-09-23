@@ -136,7 +136,7 @@
           furos, pinos, escareados, cúpulas e sedes; rodar, para todos menos a
           superfície esférica — não tem uma orientação que se possa rodar. Nos
           arredondamentos compatíveis é possível alterar o raio ou remover o
-          arredondamento. As golas e as transições suaves continuam excluídas. <b>O
+          arredondamento nos arredondamentos e golas que substituem visivelmente uma aresta; uma transição que se funde suavemente com as faces vizinhas, não. <b>O
           Solidon3D explica quais as ações disponíveis no ponto escolhido e
           porquê.</b></p>
         </div>
@@ -255,7 +255,7 @@
           <h3>Desenhar, cotar — e cada cota pode ser um parâmetro</h3>
           <p>Linha, círculo, arco, curva e contornos prontos como furo oblongo, círculo de furos
           ou matriz de furos. As restrições seguram o desenho — horizontal,
-          perpendicular, tangente, simétrico, distância, ângulo, comprimento igual e
+          perpendicular, tangente, simétrico, distância, ângulo, mesmo tamanho (comprimentos e raios) e
           ponto médio — e em baixo está sempre escrito o que ainda está livre. O que
           o contorno vai ser, decide-se só depois: extrudir, cortar como bolsa, gerar
           por revolução, conduzir ao longo de um arco ou estender entre dois
@@ -430,9 +430,9 @@
         <figure class="shot">
           <div class="stage">
             <a href="../handbuch/pt/report.png?v=517fe811"><img src="../handbuch/pt/report.png?v=517fe811" width="620" height="430" loading="lazy" decoding="async"
-                 alt="O relatório de verificação: zero erros, dois avisos e duas notas, entre eles «O modelo está aberto em três sítios» e «Uma parede é mais fina do que duas larguras de extrusão»"></a>
+                 alt="O relatório de verificação de uma lata com tampa: zero erros, um aviso e quatro notas, entre elas «O ajuste fica mais apertado do que previsto» e «Esvaziado. A espessura da parede cumpre a grelha»"></a>
           </div>
-          <figcaption>O relatório de verificação de um ficheiro alheio importado.</figcaption>
+          <figcaption>O relatório de verificação de uma lata com tampa.</figcaption>
         </figure>
       </div>
 
@@ -563,7 +563,8 @@
           filamentos configurados no slicer, importa-os de lá — de forma
           deliberada, não automática.</p>
           <p>No projeto atribui uma bobina a corpos inteiros ou a faces
-          concretas; o cabeçalho indica o que a cena transporta nesse momento.
+          concretas; o painel de filamentos à esquerda conta que corpo leva
+          que bobina.
           Após a entrega ao slicer, o Solidon3D propõe descontar o consumo —
           como estimativa ou como planeado no G-code, cada quantidade com a
           sua origem. Se pergunta, se nunca desconta ou se o faz sem perguntar,
@@ -620,9 +621,9 @@
           «gerado por alto».</b></p>
           <p class="note">E isso é medido, não prometido: uma suite de
           <b>39 pedidos de referência</b> corre antes e depois de cada
-          alteração ao conjunto de regras do agente. À data de 08/08/2026,
+          alteração ao conjunto de regras do agente. À data de 22/09/2026,
           com um modelo local de 14 mil milhões
-          de parâmetros e sem nuvem nenhuma: 28 de 39 bem respondidos, 98 %
+          de parâmetros e sem nuvem nenhuma: 24 de 39 bem respondidos, 98 %
           das chamadas de ferramentas válidas à primeira tentativa — e cada
           pedido ambíguo terminou numa pergunta de volta, não numa
           suposição.</p>
@@ -807,7 +808,7 @@
           <div class="tool-content"><p>Assentar peças na cama — um conjunto importado também por inteiro,
         com a posição das suas peças entre si —, encontrar uma orientação
         favorável, distribuí-las na placa e verificar sobreposições. A
-        passagem direta para o fatiador inclui as definições adequadas; o G-code
+        passagem direta para o slicer inclui as definições adequadas; o G-code
         importado permite depois uma contraprova com a sua origem claramente
         identificada.</p></div>
         </details>

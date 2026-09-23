@@ -307,18 +307,28 @@ den folgenden, sichtbaren Wegen:
 
 * der **Update-Hinweis**, der beim Start eine Versionsdatei auf unserer
   Website abfragt. Abschaltbar unter „Bearbeiten → Einstellungen“. Geladen und
-  installiert wird nur, was Sie ausdrücklich bestätigen;
+  installiert wird nur, was Sie ausdrücklich bestätigen — auch der eigentliche
+  Programm-Download läuft erst nach diesem Klick;
+* das **Herunterladen eines Modells** über einen Direktlink oder ein
+  ZIP-Archiv, das Sie selbst in Solidon einfügen. Der Server des Anbieters
+  erfährt dabei Ihre IP-Adresse, wie bei jedem Aufruf im Browser;
+* die **Einrichtung von Zusatzprogrammen und lokalen KI-Modellen** über
+  „Hilfe → Zusätzliche Programme …“. Was Sie dort auswählen, lädt Solidon3D
+  unmittelbar vom jeweiligen Anbieter — Ollama von ollama.com, ComfyUI von
+  comfy.org, Python-Pakete von pypi.org und github.com, Linux-Pakete von
+  dl.flathub.org, Modellgewichte von huggingface.co. Jede Einrichtung beginnt
+  erst nach Ihrer ausdrücklichen Bestätigung;
 * der **KI-Chat**, sofern Sie einen eigenen API-Schlüssel hinterlegen. Dann
   gehen Ihre Chat-Eingaben an den von Ihnen gewählten Anbieter, nach dessen
   Bedingungen. Mit einem Ollama-Ziel auf diesem Rechner bleiben diese Daten
   lokal; bei einer selbst eingetragenen entfernten Ollama-Adresse gehen sie an
   diesen anderen Rechner;
 * die **Rückmeldung an den Support**, die Sie selbst absenden — über „Hilfe →
-  Rückmeldung senden“ oder über den Bogen, den Solidon während der Demo bis zu dreimal
-  von sich aus anbietet. Beide Wege führen in denselben Dialog. Übertragen
-  wird, was er vor dem Senden anzeigt — Ihr Text und die Programmversion, dazu
-  nur die dort angehakten Anhänge (Bildschirmfoto, Protokoll, laufende
-  Sitzung). Von allein sendet die Anwendung nichts.
+  Rückmeldung senden“ oder über den Bogen, den Solidon während der Demo einmal
+  je Version von sich aus anbietet. Beide Wege führen in denselben Dialog.
+  Übertragen wird, was er vor dem Senden anzeigt — Ihr Text und die
+  Programmversion, dazu nur die dort angehakten Anhänge (Bildschirmfoto,
+  Protokoll, laufende Sitzung). Von allein sendet die Anwendung nichts.
 * die **Geräteaktivierung oder -deaktivierung**, die Sie selbst auslösen. Der
   Offline-Dateiweg sendet dieselben Aktivierungsdaten erst auf der von Ihnen
   geöffneten Aktivierungsseite; eine regelmäßige Lizenzabfrage gibt es nicht;

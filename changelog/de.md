@@ -68,7 +68,7 @@ Nutzen da und sonst nichts.
 ### Bearbeiten am exakten Modell
 
 - Grundkörper entstehen immer mit echten Flächen und Kanten. Der Haken „Flächen und Kanten später bearbeiten“ ist gefallen; alte Projekte rechnen unverändert.
-- Bohrung, Langloch, Senkung, Zapfen, Kuppe und Kegelstumpf bleiben am exakten Körper exakt, wenn Sie sie versetzen, verdoppeln, drehen oder entfernen.
+- Bohrung, Langloch, Senkung, Zapfen, Kuppel und Kegelstumpf bleiben am exakten Körper exakt, wenn Sie sie versetzen, verdoppeln, drehen oder entfernen.
 - Wulst und Kehle lassen sich versetzen, verdoppeln, drehen, ändern und entfernen. Ein Gewinde lässt sich ändern und verschließen.
 - Ein Gewinde bekommt sein Gegenstück am anderen Teil auf Knopfdruck, im Tabellenmaß und als eine Passung.
 - Alle Bausteine der Bibliothek bauen am exakten Körper exakt, von der Verschraubung bis zur Dichtnut.

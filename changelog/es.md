@@ -173,7 +173,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 
 - Seleccione visualmente los contornos SVG y DXF antes de crear el cuerpo. Los archivos GLB y GLTF conservan sus medidas y orientación correctas.
 - Las medidas del proyecto siguen actuando en los bocetos de piezas y sus vistas previas de colocación. El encuadre incluye todas las placas de impresión visibles.
-- Puede quitar filamentos de la estantería. Los primeros pasos empiezan por el laminador; los comentarios se abren rápido y preparan sus adjuntos en segundo plano.
+- Puede quitar filamentos de la estantería. Los primeros pasos empiezan por el slicer; los comentarios se abren rápido y preparan sus adjuntos en segundo plano.
 - Supr sobre una cara elimina el cuerpo y lo indica; Ctrl+Z lo recupera. Con una vista rasante, un cuerpo arrastrado sigue al puntero, y la cara elegida se mantiene en el primer clic del boceto.
 - El chat local recibe una ventana mayor y ya no recorta su solicitud.
 - El diámetro de la boquilla se ajusta en la impresora. La entrega elige entonces la máquina adecuada en el slicer, aunque allí esté seleccionada otra boquilla.
@@ -438,7 +438,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 
 - Solidon encuentra lo que tiene Cura: impresoras, perfiles de proceso y filamentos que antes quedaban invisibles.
 - De PrusaSlicer, Solidon adopta los filamentos cargados y la impresora configurada por última vez.
-- Si su laminador no conoce siquiera la impresora, Solidon lo dice, en lugar de enviarle a una lista en la que no hay nada.
+- Si su slicer no conoce siquiera la impresora, Solidon lo dice, en lugar de enviarle a una lista en la que no hay nada.
 - Cambiar el nivel de calidad tarda segundos y no casi un minuto, y la ventana sigue utilizable mientras tanto.
 - El asesoramiento sobre los ajustes de impresión mira todos los cuerpos de la placa y no solo la selección. Lo que un cuerpo necesita se conserva aunque el vecino no lo necesite.
 - Calcula en segundo plano, nombra el cuerpo, muestra su avance y se puede cancelar.
@@ -446,9 +446,9 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - La velocidad excesiva se limita en el tipo de trayectoria afectado, en lugar de calentar cada vez más la boquilla y la cama.
 - Las propuestas descartadas siguen descartadas, y un cambio de filamento, escena, placa o calidad invalida de inmediato un resultado obsoleto.
 - La separación al distribuir cuenta el borde de adherencia y la estructura de soporte: entre dos vecinos ambos cuentan dos veces.
-- Las piezas se distribuyen en el centro de la cama, como hacen los laminadores de al lado, y no en la esquina posterior izquierda.
+- Las piezas se distribuyen en el centro de la cama, como hacen los slicers de al lado, y no en la esquina posterior izquierda.
 - Orientar para imprimir vuelve a distribuir después las piezas giradas. Un cuerpo que se tumba ocupa más superficie y antes acababa dentro del vecino.
-- La segunda selección de filamento bajo los perfiles del laminador ha desaparecido. Repetía el selector de filamento; obtener los valores del perfil es ahora un botón propio.
+- La segunda selección de filamento bajo los perfiles del slicer ha desaparecido. Repetía el selector de filamento; obtener los valores del perfil es ahora un botón propio.
 - Orientar para imprimir toma todos los cuerpos de la escena, no solo los marcados. Así toda la cama se desplaza después al centro en vez de que una pieza girada esquive a otra parada.
 
 ### Vista y manejo

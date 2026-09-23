@@ -134,9 +134,10 @@
           <p class="note" data-kinds="hole,pin,cone,sphere">Tous les types ne portent pas toutes les actions. Déplacer, dupliquer et supprimer
           valent pour les perçages, tenons, fraisures, dômes et cuvettes ; pivoter,
           pour tous sauf la face sphérique — elle n’a pas d’orientation que l’on
-          pourrait faire pivoter. Les congés compatibles permettent de modifier leur
-          rayon ou de les supprimer. Les gorges et les transitions progressives
-          restent exclues. <b>Solidon3D explique quelles actions sont possibles à
+          pourrait faire pivoter. Sur les congés et gorges qui remplacent
+          nettement une arête, il est possible de modifier le rayon ou de les
+          supprimer ; une transition qui se fond progressivement dans les
+          faces voisines, non. <b>Solidon3D explique quelles actions sont possibles à
           l’endroit sélectionné et pourquoi.</b></p>
         </div>
         <figure class="shot">
@@ -255,8 +256,8 @@
           <h3>Dessiner, coter — et chaque cote peut être un paramètre</h3>
           <p>Ligne, cercle, arc, courbe et contours tout faits comme le trou oblong, le cercle de
           perçage ou la grille de trous. Les contraintes tiennent le dessin —
-          horizontal, perpendiculaire, tangent, symétrique, distance, angle, longueur
-          égale et milieu — et, en bas, s’affiche à tout moment ce qui reste libre.
+          horizontal, perpendiculaire, tangent, symétrique, distance, angle, même
+          taille (longueurs et rayons) et milieu — et, en bas, s’affiche à tout moment ce qui reste libre.
           Ce que devient le contour, vous le décidez après : l’extruder, l’entailler
           en poche, le mettre en révolution, le mener le long d’un arc ou le tendre
           entre deux contours.</p>
@@ -432,9 +433,9 @@
         <figure class="shot">
           <div class="stage">
             <a href="../handbuch/fr/report.png?v=b3f8832b"><img src="../handbuch/fr/report.png?v=b3f8832b" width="620" height="430" loading="lazy" decoding="async"
-                 alt="Le rapport de contrôle&nbsp;: zéro erreur, deux avertissements et deux remarques, dont «&nbsp;Le modèle est ouvert à trois endroits&nbsp;» et «&nbsp;Une paroi est plus mince que deux cordons d'extrusion&nbsp;»"></a>
+                 alt="Le rapport de contrôle d'une boîte avec couvercle&nbsp;: zéro erreur, un avertissement et quatre remarques, dont «&nbsp;L'ajustement est plus serré que prévu&nbsp;» et «&nbsp;Évidé. L'épaisseur de paroi tient dans le cadre de la trame&nbsp;»"></a>
           </div>
-          <figcaption>Le rapport de contrôle d'un fichier tiers importé.</figcaption>
+          <figcaption>Le rapport de contrôle d'une boîte avec couvercle.</figcaption>
         </figure>
       </div>
 
@@ -565,8 +566,8 @@
           vos filaments sont déjà configurés dans le slicer, vous les importez
           de là — délibérément, pas automatiquement.</p>
           <p>Dans le projet, vous affectez une bobine à des corps entiers ou à
-          des faces précises&nbsp;; l’en-tête indique ce que porte la scène à cet
-          instant. Après la remise au slicer, Solidon3D propose de déduire la
+          des faces précises&nbsp;; le panneau des filaments à gauche indique
+          quel corps porte quelle bobine. Après la remise au slicer, Solidon3D propose de déduire la
           consommation — en estimation ou telle que planifiée dans le G-code,
           chaque quantité avec son origine. Demander, ne jamais déduire ou
           déduire sans demander&nbsp;: cela se règle dans le stock.</p>
@@ -624,9 +625,9 @@
           rien n'est «&nbsp;généré à peu près&nbsp;».</b></p>
           <p class="note">Et c'est mesuré, pas promis&nbsp;: une suite de
           <b>39 requêtes de référence</b> tourne avant et après chaque
-          modification du corpus de règles de l'agent. Au 8&nbsp;août 2026,
+          modification du corpus de règles de l'agent. Au 22&nbsp;septembre 2026,
           avec un modèle local de
-          14 milliards de paramètres, sans aucun cloud&nbsp;: 28 réponses
+          14 milliards de paramètres, sans aucun cloud&nbsp;: 24 réponses
           correctes sur 39, 98&nbsp;% d'appels d'outils valides du premier
           coup — et chaque demande ambiguë s'est terminée par une question en
           retour, pas par une supposition.</p>
@@ -814,7 +815,7 @@
           <summary>Disposer le plateau et vérifier l’impression</summary>
           <div class="tool-content"><p>Poser les pièces sur le lit — un assemblage importé aussi d’un bloc,
         avec la position de ses pièces entre elles —, trouver une orientation
-        favorable, les répartir sur le plateau et vérifier les chevauchements. L’envoi direct au trancheur emporte les réglages adaptés
+        favorable, les répartir sur le plateau et vérifier les chevauchements. L’envoi direct au slicer emporte les réglages adaptés
         ; le G-code importé fournit ensuite une contre-vérification dont l’origine
         reste clairement indiquée.</p></div>
         </details>

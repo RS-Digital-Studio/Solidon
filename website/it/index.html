@@ -93,7 +93,7 @@
       "name": "Posso spostare un foro in un STL già finito?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Sì. All'apertura, fori, perni, svasature, cupole e sedi vengono riconosciuti come caratteristiche con un nome; la finestra delle caratteristiche mostra i loro valori misurati, e cambiare un numero è l'operazione. Spostare, duplicare e rimuovere valgono per ognuno di questi tipi; ruotare, per tutti tranne la superficie sferica. Nei raccordi supportati puoi cambiare il raggio o rimuovere il raccordo. Solidon3D mostra quali azioni sono disponibili nel punto selezionato; gole e transizioni fluide restano escluse."
+        "text": "Sì. All'apertura, fori, perni, svasature, cupole e sedi vengono riconosciuti come caratteristiche con un nome; la finestra delle caratteristiche mostra i loro valori misurati, e cambiare un numero è l'operazione. Spostare, duplicare e rimuovere valgono per ognuno di questi tipi; ruotare, per tutti tranne la superficie sferica. Nei raccordi e nelle gole che sostituiscono visibilmente uno spigolo puoi cambiare il raggio o rimuoverli; una transizione che sfuma dolcemente nelle facce vicine, no. Solidon3D mostra quali azioni sono disponibili nel punto selezionato."
       }
     },
     {
@@ -483,9 +483,10 @@
           <h3>Preparare un GLB o STL</h3>
           <p>Trascina un file dal generatore che scegli: Solidon3D ripara la
           mesh, la mette in scala, ne verifica la stampabilità e, se serve, la
-          divide o aggiunge spine. L’installazione automatica di uno specifico
-          modello 3D tornerà solo quando sarà documentata l’intera catena di
-          licenze e provenienza. Le vie 1, 2 e 4 restano pienamente
+          divide o aggiunge spine. Su richiesta, Solidon3D configura anche
+          un proprio modello — TripoSG per la forma, SDXL per l’immagine
+          dietro —, mentre la loro intera catena di licenze e provenienza è
+          ancora in verifica. Le vie 1, 2 e 4 restano pienamente
           utilizzabili.</p>
         </div>
         <div class="way">
@@ -520,7 +521,7 @@
         <figure>
           <img src="../bilder/galerie-gehaeuse.webp?v=0af90a22" width="900" height="578" loading="lazy"
                alt="Una custodia per elettronica con spigoli raccordati, boccole filettate negli angoli, un passacavo nella parete laterale e il coperchio posato accanto">
-          <figcaption><b>Custodia per elettronica</b> Boccole filettate negli angoli, passacavo, nervature di rinforzo — e un coperchio che scatta in sede. Dodici passi, 79 134 triangoli.</figcaption>
+          <figcaption><b>Custodia per elettronica</b> Boccole filettate negli angoli, passacavo, nervature di rinforzo — e un coperchio che scatta in sede. 13 passi, 79 134 triangoli.</figcaption>
         </figure>
         <figure>
           <img src="../bilder/galerie-schraubdose.webp?v=b4b58f39" width="900" height="578" loading="lazy"
@@ -628,8 +629,8 @@
         <li><b>Analisi degli strati senza slicer.</b> Sbalzi, isole, campate
         dei ponti e volume dei supporti; la ricerca dell'orientamento propone
         la posizione che ne genera di meno.</li>
-        <li><b>Schizzi con vincoli.</b> Distanze, angoli, lunghezze uguali e punti medi tengono
-        insieme il disegno. Il contorno resta una curva esatta — un cerchio diventa
+        <li><b>Schizzi con vincoli.</b> Distanze, angoli, stessa misura (lunghezze e raggi) e punti medi tengono
+        insieme il disegno. Su un corpo esatto o un modello, il contorno resta una curva esatta — un cerchio diventa
         un cilindro, non un poligono.</li>
         <li><b>Ottenere di più dal tuo modello.</b> Sono inclusi anche rilievi da immagini,
         reticoli spaziali, angoli di sformo, coperchi su misura e scritte
@@ -690,9 +691,10 @@
       <p class="sub">Trascina un GLB o STL, riparalo, mettilo in scala,
       verificalo rispetto a stampante e materiale, dividilo e aggiungi spine:
       questa preparazione funziona con i file del generatore che scegli e
-      senza esperienza CAD. Solidon3D non scarica deliberatamente alcuno
-      specifico modello 3D finché non è documentata la sua intera catena di
-      licenze e provenienza.</p>
+      senza esperienza CAD. Su richiesta, Solidon3D configura anche un
+      proprio modello — TripoSG per la forma, SDXL per l’immagine dietro —,
+      senza scaricare nulla senza che lo chieda; la loro intera catena di
+      licenze e provenienza è ancora in verifica.</p>
       <a class="btn ghost" href="/it/ai-models.html">Dal generatore al pezzo stampabile</a>
     </div>
   </section>
@@ -777,7 +779,7 @@
             <li>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
               <span><b>I tuoi progetti restano leggibili.</b> Un file ZIP con
-              dentro JSON, esportazione in STL, 3MF, OBJ, PLY e STEP.</span>
+              dentro JSON, esportazione in STL, 3MF, OBJ, PLY, GLB e STEP.</span>
             </li>
             <li>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -815,8 +817,8 @@
         14 miliardi di parametri in su — che richiede una scheda grafica con
         16 GB di memoria</td></tr>
         <tr><td>Modello generato (opzionale)</td><td>un file GLB o
-        STL esterno; Solidon3D attualmente non installa alcuno specifico
-        modello 3D</td></tr>
+        STL esterno, oppure Solidon3D configura TripoSG e il modello
+        immagine SDXL su richiesta</td></tr>
         <tr><td>Altro (opzionale)</td><td>uno slicer — viene trovato o
         indicato a mano, e non è obbligatorio</td></tr>
       </table>
@@ -885,7 +887,7 @@
           riconosciuti come caratteristiche con un nome; la finestra delle
           caratteristiche mostra i loro valori misurati, e cambiare un numero è
           l'operazione. Spostare, duplicare e rimuovere valgono per ognuno di
-          questi tipi; ruotare, per tutti tranne la superficie sferica. Nei raccordi supportati puoi cambiare il raggio o rimuovere il raccordo. Solidon3D mostra quali azioni sono disponibili nel punto selezionato; gole e transizioni fluide restano escluse.</p>
+          questi tipi; ruotare, per tutti tranne la superficie sferica. Nei raccordi e nelle gole che sostituiscono visibilmente uno spigolo puoi cambiare il raggio o rimuoverli; una transizione che sfuma dolcemente nelle facce vicine, no. Solidon3D mostra quali azioni sono disponibili nel punto selezionato.</p>
         </details>
         <details>
           <summary>Devo usare un'IA?</summary>

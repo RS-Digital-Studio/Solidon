@@ -3402,7 +3402,7 @@ class MainWindow(QMainWindow):
             "Ctrl+E",
             self.action_export,
             tr(
-                "Die Körper als STL, 3MF, OBJ, PLY oder STEP schreiben — "
+                "Die Körper als STL, 3MF, OBJ, PLY, GLB oder STEP schreiben — "
                 "mit der Prüfung aus dem Bericht davor."
             ),
             symbol="export",

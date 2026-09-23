@@ -2499,6 +2499,13 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Stellen überarbeiten. Abnahme: vollständige Liste der geprüften Bereiche, konkrete Textänderungen
   ohne Bedeutungsverlust und vollständige Sprachkataloge.
 
+  **Stand 23.09.2026 (Paket „texte", `reports/texte.md`):** Preise, Generatoraussage, README-Version,
+  Sicherheitstexte, Agentenquote, Slicer-Begriff es/fr/pt, Du/Lei-Bestand it, portugiesische
+  Anführungszeichen und die in `sollliste*.md` benannten Einzelstellen (B13/B12, B11c, B32, B23, B26,
+  B27, B34, B16, B3, C2/C9/C10/C12, A16 und Nachbarn) geprüft und korrigiert, alle fünf Kataloge
+  nachgezogen. Keine erschöpfende Zeile-für-Zeile-Prüfung jedes Anwendungstexts — offen bleibt der
+  Rest der Oberflächentexte außerhalb der benannten Fundstellen.
+
   [Bisheriger Befund](ROADMAP-ARCHIV.md#rückmeldung-und-freiwillige-unterstützung-gehören-in-die-app-startfläche-31082026).
 
 <a id="rm-088"></a>
@@ -2507,6 +2514,11 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Verständlichkeitsregel für Kundentexte entscheiden und ihren Geltungsbereich festlegen. Abnahme:
   freigegebene Formulierung, begründete Ausnahmen für Slicer-Begriffe und gegebenenfalls eine
   kuratierte, sprachübergreifende Prüfung.
+
+  **Stand 23.09.2026:** Die Slicer-Begriffsausnahme ist in der Praxis bereits gesetzt — „slicer" ist
+  jetzt in allen sechs Sprachen einheitlich der Fachbegriff (Paket „texte", RM-084). Was fehlt, ist
+  Roberts Freigabe der Verständlichkeitsregel selbst und ihres Geltungsbereichs darüber hinaus — das
+  ist eine Regelentscheidung und wird hier nicht unterstellt.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#review-vor-der-demo-030-02092026).
 

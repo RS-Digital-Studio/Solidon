@@ -135,8 +135,9 @@
           <p class="note" data-kinds="hole,pin,cone,sphere">Non ogni tipo consente ogni azione. Spostare, duplicare e rimuovere valgono per fori,
           perni, svasature, cupole e sedi; ruotare, per tutti tranne la superficie
           sferica — non ha un orientamento che si possa ruotare. Nei raccordi
-          supportati puoi cambiare il raggio o rimuovere il raccordo. Gole e
-          transizioni fluide restano escluse. <b>Solidon3D spiega quali azioni sono
+          e nelle gole che sostituiscono visibilmente uno spigolo puoi cambiare
+          il raggio o rimuoverli; una transizione che sfuma dolcemente nelle
+          facce vicine, no. <b>Solidon3D spiega quali azioni sono
           disponibili nel punto selezionato e perché.</b></p>
         </div>
         <figure class="shot">
@@ -254,7 +255,7 @@
           <h3>Disegna, quota — e ogni quota può essere un parametro</h3>
           <p>Linea, cerchio, arco, curva e contorni pronti come asola, cerchio di fori o griglia
           di fori. I vincoli tengono insieme il disegno — orizzontale,
-          perpendicolare, tangente, simmetrico, distanza, angolo, lunghezza uguale e
+          perpendicolare, tangente, simmetrico, distanza, angolo, stessa misura (lunghezze e raggi) e
           punto medio — e in basso c’è scritto in ogni momento cosa è ancora libero.
           Cosa diventa il contorno lo decidi solo dopo: estruderlo, inciderlo come
           tasca, farlo ruotare attorno a un asse, guidarlo lungo un arco o tenderlo
@@ -429,9 +430,9 @@
         <figure class="shot">
           <div class="stage">
             <a href="../handbuch/it/report.png?v=a3cfe450"><img src="../handbuch/it/report.png?v=a3cfe450" width="620" height="430" loading="lazy" decoding="async"
-                 alt="Il rapporto di verifica: zero errori, due avvisi e due note, tra cui «Il modello è aperto in tre punti» e «Una parete è più sottile di due cordoni di estrusione»"></a>
+                 alt="Il rapporto di verifica di una scatola con coperchio: zero errori, un avviso e quattro note, tra cui «L'accoppiamento è più stretto del previsto» e «Svuotato. Lo spessore della parete rispetta il reticolo»"></a>
           </div>
-          <figcaption>Il rapporto di verifica di un file esterno importato.</figcaption>
+          <figcaption>Il rapporto di verifica di una scatola con coperchio.</figcaption>
         </figure>
       </div>
 
@@ -562,7 +563,8 @@
           sono già configurati nello slicer, li importi da lì — di proposito,
           non in automatico.</p>
           <p>Nel progetto assegni una bobina a interi corpi o a singole facce;
-          l’intestazione dice che cosa porta la scena in quel momento. Dopo la
+          il pannello filamenti a sinistra conta quale corpo porta quale
+          bobina. Dopo la
           consegna allo slicer, Solidon3D propone di scalare il consumo — come
           stima o come pianificato nel G-code, ogni quantità con la sua
           origine. Se chiedere, non scalare mai o scalare senza chiedere lo
@@ -619,9 +621,9 @@
           «generato all'incirca».</b></p>
           <p class="note">Ed è misurato, non promesso: una suite di
           <b>39 richieste di riferimento</b> gira prima e dopo ogni modifica
-          alla regolamentazione dell'agente. All'8 agosto 2026, con un
+          alla regolamentazione dell'agente. Al 22 settembre 2026, con un
           modello locale da 14 miliardi
-          di parametri e senza alcun cloud: 28 su 39 risposte bene, il 98%
+          di parametri e senza alcun cloud: 24 su 39 risposte bene, il 98%
           delle chiamate agli strumenti valide al primo tentativo — e ogni
           richiesta ambigua è finita in una domanda di ritorno, non in una
           supposizione.</p>

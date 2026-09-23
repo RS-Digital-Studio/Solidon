@@ -172,7 +172,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 
 - Escolha visualmente os contornos SVG e DXF antes de criar o corpo. Os ficheiros GLB e GLTF mantêm as dimensões e a orientação corretas.
 - As medidas do projeto continuam ativas nos esboços das peças e nas pré-visualizações de colocação. O enquadramento inclui todas as placas de impressão visíveis.
-- Pode remover filamentos da estante. Os primeiros passos começam pelo laminador; os comentários abrem rapidamente e preparam os anexos em segundo plano.
+- Pode remover filamentos da estante. Os primeiros passos começam pelo slicer; os comentários abrem rapidamente e preparam os anexos em segundo plano.
 - Delete numa face remove o corpo e diz-o; Ctrl+Z traz o corpo de volta. Numa vista rasante, um corpo arrastado segue o ponteiro, e a face escolhida mantém-se no primeiro clique do esboço.
 - O chat local recebe uma janela maior e já não encurta o seu pedido.
 - O diâmetro do bico define-se na impressora. A transferência escolhe então a máquina correta no slicer, mesmo que aí esteja selecionado outro bico.
@@ -437,7 +437,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 
 - O Solidon encontra o que o Cura tem: impressoras, perfis de processo e filamentos que antes ficavam invisíveis.
 - Do PrusaSlicer, o Solidon retoma os filamentos carregados e a impressora definida por último.
-- Se o seu fatiador não conhece sequer a impressora, o Solidon di-lo, em vez de o mandar para uma lista onde não está nada.
+- Se o seu slicer não conhece sequer a impressora, o Solidon di-lo, em vez de o mandar para uma lista onde não está nada.
 - Mudar o nível de qualidade demora segundos e não quase um minuto, e a janela mantém-se utilizável entretanto.
 - O aconselhamento sobre as definições de impressão olha para todos os corpos da placa e não só para a seleção. O que um corpo precisa mantém-se, mesmo que o vizinho dispense.
 - Calcula em segundo plano, nomeia o corpo, mostra o seu avanço e pode ser cancelado.
@@ -445,9 +445,9 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - A velocidade excessiva é limitada no tipo de percurso afetado, em vez de aquecer cada vez mais o bico e a base.
 - As propostas desmarcadas continuam desmarcadas, e uma mudança de filamento, cena, placa ou qualidade invalida de imediato um resultado ultrapassado.
 - O afastamento ao dispor conta a borda de aderência e a estrutura de suporte: entre dois vizinhos ambas contam a dobrar.
-- As peças são dispostas no meio da base, como fazem os fatiadores ao lado, e não no canto traseiro esquerdo.
+- As peças são dispostas no meio da base, como fazem os slicers ao lado, e não no canto traseiro esquerdo.
 - Orientar para impressão volta a dispor depois as peças rodadas. Um corpo que se deita ocupa mais superfície e antes acabava dentro do vizinho.
-- Nas definições de impressão desapareceu a segunda escolha de filamento sob os perfis do fatiador. Repetia o que o seletor de filamento já diz; obter os valores do perfil é agora um botão próprio.
+- Nas definições de impressão desapareceu a segunda escolha de filamento sob os perfis do slicer. Repetia o que o seletor de filamento já diz; obter os valores do perfil é agora um botão próprio.
 - Orientar para impressão considera todos os corpos da cena, não só os marcados. Assim a mesa inteira desloca-se depois para o centro, em vez de uma peça rodada desviar de outra parada.
 
 ### Vista e utilização
@@ -524,7 +524,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 
 - A busca de orientação julga em duas etapas: duzentas posições a partir das normais, nove delas na análise por camadas.
 - A sua barra de progresso vai até ao fim, mesmo quando não havia nada a cortar.
-- O laminador recebe o mundo da impressora e não o do Solidon, e um perfil próprio conserva a sua base do fabricante.
+- O slicer recebe o mundo da impressora e não o do Solidon, e um perfil próprio conserva a sua base do fabricante.
 - Os perfis de laminação próprios ficam à frente do perfil do fabricante com o mesmo nome, e um AppImage encontra o seu inventário.
 - A limpeza depois da importação conserva as atribuições de filamento.
 - A impressora pertence ao projeto e muda-se tanto no cabeçalho como na janela de impressão; filamentos atribuídos, cores e os seus próprios valores de impressão mantêm-se.
@@ -731,7 +731,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 ### Mensagens, botões e informação
 
 - Os botões bloqueados indicam agora no próprio botão o que lhes falta: com o rato, pelo teclado e para um leitor de ecrã.
-- Entre eles *Fatiar* e *Abrir no fatiador* sem fatiador configurado, *Inserir* no catálogo de blocos e *Criar* no diálogo de modelo.
+- Entre eles *Fatiar* e *Abrir no slicer* sem slicer configurado, *Inserir* no catálogo de blocos e *Criar* no diálogo de modelo.
 - As recusas não terminam apenas com a frase, mas com a saída.
 - Um erro inesperado é explicado no idioma definido, em vez de recitar um texto interno em inglês.
 - O diálogo Acerca indica quem está por trás do Solidon e quem responde ao feedback.
@@ -764,7 +764,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Os diálogos extensos usam colunas e larguras de campo uniformes.
 - A antiga página conjunta para aderência, retração e filamento foi dividida em áreas de definições menores e com nomes claros.
 - Todas as 56 definições de impressão podem ser pesquisadas pelas respetivas designações alemãs visíveis.
-- A pesquisa também reconhece 146 termos comuns de fatiadores, entre os quais *perimeters* e *wall loops*.
+- A pesquisa também reconhece 146 termos comuns de slicers, entre os quais *perimeters* e *wall loops*.
 - Os campos numéricos respondem corretamente a setas, incrementos e arredondamentos, sem alterar valores inesperadamente.
 - Os controlos deslizantes têm um aspeto uniforme com um manípulo fácil de agarrar.
 - A cor de destaque fica reservada ao botão principal; a ferramenta ativa distingue-se pelo seu rebordo e os controlos inativos ficam visualmente em segundo plano.

@@ -131,10 +131,11 @@
           trägt jede Handlung. Versetzen, verdoppeln und entfernen gelten für
           Bohrung, Zapfen, Senkung sowie Kuppel und Pfanne; drehen für alle
           außer der Kugelfläche — die hat keine Lage, die sich drehen ließe. Für
-          unterstützte Verrundungen lässt sich der Radius ändern oder die
-          Rundung entfernen. Kehlen und fließende Übergänge bleiben davon
-          ausgenommen. <b>Welche Handlung an der gewählten Stelle möglich ist,
-          zeigt Solidon3D mit ihrer Begründung.</b></p>
+          Verrundungen und Kehlen, die erkennbar eine Kante ersetzen, lässt
+          sich der Radius ändern oder die Rundung entfernen; ein Übergang, der
+          fließend in seine Nachbarflächen übergeht, nicht. <b>Welche Handlung
+          an der gewählten Stelle möglich ist, zeigt Solidon3D mit ihrer
+          Begründung.</b></p>
         </div>
         <figure class="shot">
           <svg class="figure" viewBox="0 0 560 300" role="img"
@@ -252,14 +253,16 @@
           <p>Linie, Kreis, Bogen, Kurve und fertige Umrisse wie Langloch,
           Lochkreis oder Lochraster. Bedingungen halten die Zeichnung
           zusammen — waagerecht, rechtwinklig, tangential, symmetrisch,
-          Abstand, Winkel, gleiche Länge und Mittelpunkt —, und unten steht
+          Abstand, Winkel, gleich groß (Längen und Radien) und Mittelpunkt —, und unten steht
           jederzeit, was noch frei ist. Was aus dem
           Umriss wird, entscheidest du erst danach: extrudieren, als Tasche
           einschneiden, drehen, entlang eines Bogens führen oder zwischen zwei
           Umrissen aufspannen.</p>
-          <p class="note">Der Umriss bleibt eine exakte Kurve.
+          <p class="note">Beim Zeichnen am exakten Körper oder Modell bleibt
+          der Umriss eine exakte Kurve.
           <b>Ein gezeichneter Kreis wird ein runder Zylinder, kein Vieleck mit
-          vielen Ecken.</b></p>
+          vielen Ecken.</b> Aus einer eingelesenen STL oder 3MF entsteht wie
+          gewohnt ein facettiertes Netz.</p>
           <p>Das Raster zeigt, wonach gefangen wird, und seine Weite lässt
           sich eintippen. Das Maß steht am Zeiger, die Leiste darunter nennt
           die Fläche, auf der gerade gezeichnet wird. Eine Hilfslinie bleibt
@@ -327,8 +330,8 @@
           <h3>Mutternfalle in vier Klicks statt vier halben Stunden</h3>
           <p>Die angeklickte Fläche zählt: Ein Baustein setzt sich dort, wo du
           im Modell hingezeigt hast — vorher kostete jede Operation an einer
-          Fläche zwei Klicks. Im Kontextmenü einer Fläche stehen inzwischen
-          auch Wandhalter, Rippe, Nutfeder, Rastnase, Schnappverbindung und
+          Fläche zwei Klicks. Der Katalog rechts kennt inzwischen auch
+          Wandhalter, Rippe, Nutfeder, Rastnase, Schnappverbindung und
           Filmscharnier.</p>
           <p>Geprüfte Bausteine in sechs Gruppen — Schraubenloch mit Senkung,
           Mutternfalle, Heat-Set-Einpressbuchse, Gewinde, Passstift,
@@ -339,8 +342,9 @@
           <p class="note">Jeder Baustein ist über seinen ganzen
           Parameterbereich getestet: <b>wasserdicht, Mindestwandstärke,
           keine Selbstdurchdringung.</b></p>
-          <p>Wählst du vor dem Einsetzen keine Stelle, fragt Solidon3D nach,
-          statt an den Nullpunkt zu setzen. Der Katalog selbst lässt sich auch
+          <p>Wählst du vor dem Einsetzen keine Stelle, setzt Solidon3D den
+          Baustein zur Vorschau auf die größte nach oben zeigende Fläche,
+          statt an den Nullpunkt. Der Katalog selbst lässt sich auch
           ohne geöffnetes Modell ansehen — das Einsetzen ist dann gesperrt,
           mit dem Grund dabei.</p>
           <p>Der Objektbaum zeigt, was ein Baustein mitbringt: seine
@@ -429,9 +433,9 @@
         <figure class="shot">
           <div class="stage">
             <a href="handbuch/de/report.png?v=5ff8f97e"><img src="handbuch/de/report.png?v=5ff8f97e" width="620" height="430" loading="lazy" decoding="async"
-                 alt="Der Prüfbericht: null Fehler, zwei Warnungen und zwei Hinweise, darunter „Das Modell ist an drei Stellen offen“ und „Eine Wand ist dünner als zwei Extrusionsbahnen“"></a>
+                 alt="Der Prüfbericht einer Dose mit Deckel: null Fehler, eine Warnung und vier Hinweise, darunter „Die Passung sitzt enger als vorgesehen“ und „Ausgehöhlt. Die Wandstärke stimmt im Rahmen des Rasters“"></a>
           </div>
-          <figcaption>Der Prüfbericht einer eingelesenen Fremddatei.</figcaption>
+          <figcaption>Der Prüfbericht einer Dose mit Deckel.</figcaption>
         </figure>
       </div>
 
@@ -564,7 +568,8 @@
           Slicer eingerichtet hat, übernimmt sie von dort — bewusst, nicht
           automatisch.</p>
           <p>Im Projekt weist du eine Spule ganzen Körpern oder einzelnen
-          Flächen zu; die Kopfzeile nennt, was die Szene gerade trägt. Nach
+          Flächen zu; der Filamentbereich links zählt, welcher Körper welche
+          Spule trägt. Nach
           der Slicer-Übergabe bietet Solidon3D an, den Verbrauch abzubuchen —
           als Schätzung oder aus dem G-Code geplant, jede Menge mit ihrer
           Herkunft. Ob gefragt, nie oder ohne Rückfrage gebucht wird, stellst
@@ -590,12 +595,12 @@
           <span class="kicker">Jede Zahl eine Formel</span>
           <h3>Dialoge, die mitrechnen</h3>
           <p>Hinter jedem Zahlenfeld steht ein <b>fx</b>: statt 4,20 darf dort
-          <code>schraube_m4 + spiel</code> stehen. Toleranzen holen sich ihren
-          Wert aus dem Materialprofil, statt als Konstante im Modell zu
-          verschwinden. Vorne stehen die zwei bis drei Werte, die man
-          wirklich ändert — der Rest liegt unter „Weitere Einstellungen“.</p>
+          <code>=@schraube_m4 + @spiel</code> stehen. Toleranzen holen sich
+          ihren Wert aus dem Materialprofil, statt als Konstante im Modell zu
+          verschwinden. Vorne stehen die Werte, die man wirklich ändert —
+          der Rest liegt unter „Weitere Einstellungen“.</p>
           <p class="note">136 Operationen, alle nach demselben Muster:
-          <b>Menü, Kontextmenü, Kommandozeile und Chat sehen dieselbe
+          <b>Menü, Kommandozeile und Chat sehen dieselbe
           Deklaration.</b></p>
         </div>
         <figure class="shot">
@@ -623,8 +628,8 @@
           <p class="note">Und das ist gemessen, nicht versprochen: eine Suite
           aus <b>39 Referenzanfragen</b> läuft vor und nach jeder Änderung an
           der Regelsammlung des Agenten.
-          Stand 08.08.2026, mit einem lokalen 14-Milliarden-Modell ganz ohne
-          Cloud: 28 von 39 gut beantwortet, 98 % der Werkzeugaufrufe im
+          Stand 22.09.2026, mit einem lokalen 14-Milliarden-Modell ganz ohne
+          Cloud: 24 von 39 gut beantwortet, 98 % der Werkzeugaufrufe im
           ersten Versuch gültig — und jede mehrdeutige Anfrage endete in
           einer Rückfrage statt in einer Vermutung.</p>
         </div>
@@ -758,8 +763,8 @@
         <details class="tool-card" id="gehaeuse" data-operations="create_lid hollow_object screw_lid shell_exact thicken thread_exact">
           <summary>Gehäuse und passende Deckel</summary>
           <div class="tool-content"><p>Körper auf die
-        gewünschte Wandstärke aushöhlen, bei Bedarf mit Entlüftung, oder eine
-        offene Fläche verdicken. Aus einer geeigneten Öffnung entsteht ein
+        gewünschte Wandstärke aushöhlen, bei Bedarf mit Entlüftung, oder mit
+        „Offene Fläche schließen“ eine Fläche zum Körper machen. Aus einer geeigneten Öffnung entsteht ein
         passender Deckel. <b>Drehdeckel erzeugen</b> ergänzt einen Gewindehals
         und den passenden Schraubdeckel – mit Spiel aus dem Materialprofil.</p></div>
         </details>
@@ -814,7 +819,7 @@
         </details>
         <details class="tool-card" id="kalibrieren" data-operations="check_join_path compensate_first_layer create_fit_ladder create_overhang_fan create_wall_ladder test_piece">
           <summary>Passungen mit deinem Drucker abstimmen</summary>
-          <div class="tool-content"><p>Toleranzleiter, Wandstärkenleiter und Überhangfächer drucken und die
+          <div class="tool-content"><p>Toleranz-Testkörper, Wandstärkenleiter und Überhangfächer drucken und die
         Messwerte ins Materialprofil übernehmen. Ein kleines Prüfstück spart
         Material; der Elefantenfuß-Ausgleich nimmt eine zu breite erste Lage
         am Modell zurück. Der Fügeweg zeigt, ob sich Teile zusammenstecken lassen.</p></div>

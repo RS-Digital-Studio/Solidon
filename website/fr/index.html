@@ -53,7 +53,7 @@
       "name": "Qui est derrière ?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Une seule personne : Robert Schneider, RS Digital, Bamberg. La conception, le programme, le manuel, le site et l'assistance viennent d'une même main — la réponse à vos retours est écrite par celui qui a écrit le code. La vraie question, c'est ce qui arrive si cette personne s'arrête. C'est pourquoi Solidon3D est fait pour ne pas vous retenir : il fonctionne sans compte et sans réseau, vos projets sont des fichiers sur votre machine, et un fichier de projet est une archive ZIP contenant du JSON — lisible sans le programme. L'export utilise des formats que connaissent tous les trancheurs et tous les CAO : STL, 3MF, STEP, OBJ."
+        "text": "Une seule personne : Robert Schneider, RS Digital, Bamberg. La conception, le programme, le manuel, le site et l'assistance viennent d'une même main — la réponse à vos retours est écrite par celui qui a écrit le code. La vraie question, c'est ce qui arrive si cette personne s'arrête. C'est pourquoi Solidon3D est fait pour ne pas vous retenir : il fonctionne sans compte et sans réseau, vos projets sont des fichiers sur votre machine, et un fichier de projet est une archive ZIP contenant du JSON — lisible sans le programme. L'export utilise des formats que connaissent tous les slicers et tous les CAO : STL, 3MF, STEP, OBJ."
       }
     },
     {
@@ -93,7 +93,7 @@
       "name": "Puis-je déplacer un perçage dans un STL déjà terminé ?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Oui. À l'ouverture, perçages, tenons, fraisures, dômes et cuvettes sont reconnus comme caractéristiques nommées ; la fenêtre des caractéristiques affiche leurs valeurs mesurées, et changer un nombre, c'est l'opération. Déplacer, dupliquer et supprimer valent pour chacun de ces types ; pivoter, pour tous sauf la face sphérique. Les congés compatibles permettent de modifier leur rayon ou de les supprimer. Solidon3D indique les actions possibles à l’endroit sélectionné ; les gorges et les transitions progressives restent exclues."
+        "text": "Oui. À l'ouverture, perçages, tenons, fraisures, dômes et cuvettes sont reconnus comme caractéristiques nommées ; la fenêtre des caractéristiques affiche leurs valeurs mesurées, et changer un nombre, c'est l'opération. Déplacer, dupliquer et supprimer valent pour chacun de ces types ; pivoter, pour tous sauf la face sphérique. Sur les congés et gorges qui remplacent nettement une arête, il est possible de modifier le rayon ou de les supprimer ; une transition qui se fond progressivement dans les faces voisines, non. Solidon3D indique les actions possibles à l’endroit sélectionné."
       }
     },
     {
@@ -487,10 +487,11 @@
           <h3>Préparer un GLB ou STL</h3>
           <p>Déposez un fichier issu du générateur de votre choix :
           Solidon3D répare le maillage, le met à l’échelle, vérifie son
-          imprimabilité, puis le découpe ou le goupille au besoin.
-          L’installation automatique d’un modèle 3D précis ne reviendra que
-          lorsque toute sa chaîne de licences et de provenance sera
-          documentée. Les voies 1, 2 et 4 restent entièrement utilisables.</p>
+          imprimabilité, puis le découpe ou le goupille au besoin. Sur
+          demande, Solidon3D installe aussi son propre modèle — TripoSG
+          pour la forme, SDXL pour l’image derrière —, pendant que leur
+          chaîne complète de licences et de provenance est encore vérifiée.
+          Les voies 1, 2 et 4 restent entièrement utilisables.</p>
         </div>
         <div class="way">
           <video class="weg-film" width="1280" height="720"
@@ -524,7 +525,7 @@
         <figure>
           <img src="../bilder/galerie-gehaeuse.webp?v=0af90a22" width="900" height="578" loading="lazy"
                alt="Un boîtier électronique aux arêtes arrondies, avec des inserts filetés dans les coins, un passe-câble dans la paroi latérale et le couvercle posé à côté">
-          <figcaption><b>Boîtier électronique</b> Inserts filetés dans les coins, passe-câble, nervures de renfort — et un couvercle qui s’encliquette. Douze étapes, 79 134 triangles.</figcaption>
+          <figcaption><b>Boîtier électronique</b> Inserts filetés dans les coins, passe-câble, nervures de renfort — et un couvercle qui s’encliquette. Treize étapes, 79 134 triangles.</figcaption>
         </figure>
         <figure>
           <img src="../bilder/galerie-schraubdose.webp?v=b4b58f39" width="900" height="578" loading="lazy"
@@ -553,7 +554,7 @@
         <figure>
           <img src="../bilder/verwandlung-vorher.svg?v=593124c2" width="420" height="420" loading="lazy"
                alt="Un modèle généré en fil de fer&nbsp;: à plusieurs endroits, des trous s’ouvrent dans la surface et des arêtes finissent dans le vide">
-          <figcaption><b>Tel qu’il est arrivé</b> Arêtes ouvertes, trous dans le maillage. Un trancheur les comble à sa guise ou renonce — dans les deux cas, vous l’apprenez à l’imprimante.</figcaption>
+          <figcaption><b>Tel qu’il est arrivé</b> Arêtes ouvertes, trous dans le maillage. Un slicer les comble à sa guise ou renonce — dans les deux cas, vous l’apprenez à l’imprimante.</figcaption>
         </figure>
         <figure>
           <img src="../bilder/verwandlung-nachher.svg?v=557c1bce" width="420" height="420" loading="lazy"
@@ -591,7 +592,7 @@
         <figure>
           <img src="../handbuch/fr/report.png?v=b3f8832b" width="620" height="430" loading="lazy"
                alt="Le rapport avec quatre constats : le modèle est ouvert à trois endroits, 14 triangles pointent vers l'intérieur, une paroi est plus fine que deux largeurs d'extrusion, et le fichier n'indiquait pas son unité">
-          <figcaption><b>Le rapport.</b> Ce qui cloche à l'impression y figure avant que le trancheur n'y passe le temps — compté par erreur, avertissement et remarque.</figcaption>
+          <figcaption><b>Le rapport.</b> Ce qui cloche à l'impression y figure avant que le slicer n'y passe le temps — compté par erreur, avertissement et remarque.</figcaption>
         </figure>
         <figure>
           <img src="../bilder/beleg-bausteine-fr.png?v=8d51b411" width="1220" height="955" loading="lazy"
@@ -635,8 +636,8 @@
         <li><b>L'analyse des couches sans slicer.</b> Surplombs, îlots,
         portées de pont et volume de support&nbsp;; la recherche
         d'orientation propose la position qui en produit le moins.</li>
-        <li><b>Des esquisses sous contraintes.</b> Distances, angles, longueurs égales et milieux
-        tiennent le dessin. Le contour reste une courbe exacte — un cercle devient un
+        <li><b>Des esquisses sous contraintes.</b> Distances, angles, même taille (longueurs et rayons) et milieux
+        tiennent le dessin. Sur un corps exact ou un modèle, le contour reste une courbe exacte — un cercle devient un
         cylindre, pas un polygone.</li>
         <li><b>Aller plus loin avec votre modèle.</b> Reliefs à partir d’images, treillis
         spatiaux, dépouilles, couvercles adaptés et inscriptions multicolores sont
@@ -699,9 +700,11 @@
       <p class="sub">Déposez un GLB ou STL, réparez-le, mettez-le à l’échelle,
       vérifiez-le par rapport à l’imprimante et au matériau, découpez-le et
       ajoutez des goupilles : cette préparation fonctionne avec les fichiers
-      du générateur de votre choix et sans expérience en CAO. Solidon3D ne
-      télécharge volontairement aucun modèle 3D précis tant que toute sa
-      chaîne de licences et de provenance n’est pas documentée.</p>
+      du générateur de votre choix et sans expérience en CAO. Sur demande,
+      Solidon3D installe aussi son propre modèle — TripoSG pour la forme,
+      SDXL pour l’image derrière —, sans rien télécharger sans le demander ;
+      leur chaîne complète de licences et de provenance est encore
+      vérifiée.</p>
       <a class="btn ghost" href="/fr/ai-models.html">Du générateur à la pièce imprimable</a>
     </div>
   </section>
@@ -787,7 +790,7 @@
             <li>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
               <span><b>Vos projets restent lisibles.</b> Un fichier ZIP avec
-              du JSON dedans, export en STL, 3MF, OBJ, PLY et STEP.</span>
+              du JSON dedans, export en STL, 3MF, OBJ, PLY, GLB et STEP.</span>
             </li>
             <li>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -824,8 +827,8 @@
         14 milliards de paramètres et plus — ce qui demande une carte
         graphique avec 16&nbsp;Go de mémoire</td></tr>
         <tr><td>Modèle généré (optionnel)</td><td>un fichier GLB ou
-        STL externe ; Solidon3D n’installe actuellement aucun modèle 3D
-        précis</td></tr>
+        STL externe, ou Solidon3D installe TripoSG et le modèle
+        d’image SDXL sur demande</td></tr>
         <tr><td>Divers (optionnel)</td><td>un slicer — il est détecté ou
         renseigné, et n'est pas obligatoire</td></tr>
       </table>
@@ -847,7 +850,7 @@
           retenir : il fonctionne sans compte et sans réseau, vos projets sont des
           fichiers sur votre machine, et un fichier de projet est une archive ZIP
           contenant du JSON — lisible sans le programme. L'export utilise des
-          formats que connaissent tous les trancheurs et tous les CAO : STL, 3MF,
+          formats que connaissent tous les slicers et tous les CAO : STL, 3MF,
           STEP, OBJ.</p>
         </details>
         <details>
@@ -898,7 +901,7 @@
           sont reconnus comme caractéristiques nommées&nbsp;; la fenêtre des
           caractéristiques affiche leurs valeurs mesurées, et changer un nombre,
           c'est l'opération. Déplacer, dupliquer et supprimer valent pour chacun
-          de ces types&nbsp;; pivoter, pour tous sauf la face sphérique. Les congés compatibles permettent de modifier leur rayon ou de les supprimer. Solidon3D indique les actions possibles à l’endroit sélectionné ; les gorges et les transitions progressives restent exclues.</p>
+          de ces types&nbsp;; pivoter, pour tous sauf la face sphérique. Sur les congés et gorges qui remplacent nettement une arête, il est possible de modifier le rayon ou de les supprimer ; une transition qui se fond progressivement dans les faces voisines, non. Solidon3D indique les actions possibles à l’endroit sélectionné.</p>
         </details>
         <details>
           <summary>Suis-je obligé d'utiliser une IA&nbsp;?</summary>

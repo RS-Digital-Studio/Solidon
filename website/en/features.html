@@ -131,9 +131,10 @@
           axis, with no measuring tool.</p>
           <p class="note" data-kinds="hole,pin,cone,sphere">Not every kind carries every action. Moving, duplicating and removing apply to holes,
           pegs, countersinks, domes and sockets; turning to all but the spherical
-          face — it has no orientation that could be turned. Supported fillets can
-          have their radius changed or be removed. Coves and smooth transitions
-          remain excluded. <b>Solidon3D explains which actions are available at the
+          face — it has no orientation that could be turned. Fillets and coves that
+          recognisably replace an edge can have their radius changed or be
+          removed; a transition that flows smoothly into its neighbouring faces
+          cannot. <b>Solidon3D explains which actions are available at the
           selected location and why.</b></p>
         </div>
         <figure class="shot">
@@ -251,7 +252,7 @@
           <h3>Draw it, dimension it — and every measure may be a parameter</h3>
           <p>Line, circle, arc, curve, plus finished outlines like slot, bolt circle or hole grid.
           Constraints hold the drawing together — horizontal, perpendicular, tangent,
-          symmetric, distance, angle, equal length and midpoint — and the bottom line
+          symmetric, distance, angle, equal size (lengths and radii) and midpoint — and the bottom line
           always says what is still free. What becomes of the outline is up to you
           afterwards: extrude it, cut it in as a pocket, revolve it, sweep it along a
           bend or span it between two outlines.</p>
@@ -421,9 +422,9 @@
         <figure class="shot">
           <div class="stage">
             <a href="../handbuch/en/report.png?v=1d0ce508"><img src="../handbuch/en/report.png?v=1d0ce508" width="620" height="430" loading="lazy" decoding="async"
-                 alt="The inspection report: zero errors, two warnings and two hints, among them “The model is open in three places” and “A wall is thinner than two extrusion widths”"></a>
+                 alt="The inspection report for a can with a lid: zero errors, one warning and four notes, among them “The fit is tighter than intended” and “Hollowed out. The wall thickness holds within the raster”"></a>
           </div>
-          <figcaption>The report for an imported third-party file.</figcaption>
+          <figcaption>The inspection report for a can with a lid.</figcaption>
         </figure>
       </div>
 
@@ -553,7 +554,8 @@
           up in the slicer, you import them from there — deliberately, not
           automatically.</p>
           <p>In the project you assign a spool to whole bodies or individual
-          faces; the header names what the scene currently carries. After the
+          faces; the filament panel on the left counts which body carries
+          which spool. After the
           slicer handover, Solidon3D offers to book the consumption — as an
           estimate or as planned in the G-code, every amount with its origin.
           Whether it asks, never books or books without asking is set in the
@@ -610,8 +612,8 @@
           “roughly generated”.</b></p>
           <p class="note">And that is measured, not promised: a suite of
           <b>39 reference requests</b> runs before and after every change to
-          the agent's rule set. As of 2026-08-08, with a local 14-billion-parameter model
-          and no cloud at all: 28 of 39 answered well, 98 % of tool calls
+          the agent's rule set. As of 2026-09-22, with a local 14-billion-parameter model
+          and no cloud at all: 24 of 39 answered well, 98 % of tool calls
           valid on the first attempt — and every ambiguous request ended in
           a question back, not in a guess.</p>
         </div>
@@ -794,7 +796,7 @@
         </details>
         <details class="tool-card" id="kalibrieren" data-operations="check_join_path compensate_first_layer create_fit_ladder create_overhang_fan create_wall_ladder test_piece">
           <summary>Tune fits to your printer</summary>
-          <div class="tool-content"><p>Print a tolerance ladder, wall thickness ladder and
+          <div class="tool-content"><p>Print a fit test body, wall thickness ladder and
         overhang fan, then add the measurements to the material profile. A small test
         piece saves material; elephant-foot compensation reduces an overly wide first
         layer on the model. The joining path checks whether parts can be assembled.</p></div>

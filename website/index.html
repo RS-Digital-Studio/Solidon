@@ -96,7 +96,7 @@
       "name": "Kann ich eine Bohrung in einer fertigen STL verschieben?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Ja. Bohrungen, Zapfen, Senkungen, Kuppeln und Pfannen werden beim Öffnen als benannte Merkmale erkannt; im Merkmalsfenster stehen ihre gemessenen Werte, und eine geänderte Zahl ist die Operation. Versetzen, verdoppeln und entfernen gelten für jede dieser Arten, drehen für alle außer der Kugelfläche. An unterstützten Verrundungen lässt sich der Radius ändern oder die Rundung entfernen. Welche Handlung möglich ist, zeigt Solidon3D an der gewählten Stelle; Kehlen und fließende Übergänge bleiben davon ausgenommen."
+        "text": "Ja. Bohrungen, Zapfen, Senkungen, Kuppeln und Pfannen werden beim Öffnen als benannte Merkmale erkannt; im Merkmalsfenster stehen ihre gemessenen Werte, und eine geänderte Zahl ist die Operation. Versetzen, verdoppeln und entfernen gelten für jede dieser Arten, drehen für alle außer der Kugelfläche. An Verrundungen und Kehlen, die erkennbar eine Kante ersetzen, lässt sich der Radius ändern oder die Rundung entfernen; ein Übergang, der fließend in seine Nachbarflächen übergeht, nicht. Welche Handlung möglich ist, zeigt Solidon3D an der gewählten Stelle."
       }
     },
     {
@@ -488,11 +488,11 @@
           <h3>GLB oder STL aufbereiten</h3>
           <p>Eine Datei aus einem Generator deiner Wahl hereinziehen:
           Solidon3D repariert das Netz, bringt es auf Maß, prüft die
-          Druckbarkeit und teilt oder verstiftet es bei Bedarf. Die
-          automatische Einrichtung eines bestimmten 3D-Modells ist erst
-          wieder verfügbar, wenn dessen vollständige Lizenz- und
-          Herkunftskette belegt ist. Wege 1, 2 und 4 bleiben unabhängig davon
-          vollständig nutzbar.</p>
+          Druckbarkeit und teilt oder verstiftet es bei Bedarf. Auf Wunsch
+          richtet Solidon3D dafür auch ein eigenes Modell ein — TripoSG für
+          die Form, SDXL fürs Bild dahinter —, während deren vollständige
+          Lizenz- und Herkunftskette noch geprüft wird. Wege 1, 2 und 4
+          bleiben unabhängig davon vollständig nutzbar.</p>
         </div>
         <div class="way">
           <video class="weg-film" width="1280" height="720"
@@ -530,7 +530,7 @@
                alt="Ein Elektronikgehäuse mit verrundeten Kanten, Gewindebuchsen in den Ecken, einer Kabeldurchführung in der Seitenwand und dem Deckel danebengelegt">
           <figcaption><b>Elektronikgehäuse</b> Gewindebuchsen in den Ecken,
           Kabeldurchführung, Versteifungsrippen — und ein Deckel, der
-          einrastet. Zwölf Schritte, 79 134 Dreiecke.</figcaption>
+          einrastet. 13 Schritte, 79 134 Dreiecke.</figcaption>
         </figure>
         <figure>
           <img src="bilder/galerie-schraubdose.webp?v=b4b58f39" width="900" height="578" loading="lazy"
@@ -653,10 +653,10 @@
         <li><b>Schichtanalyse ohne Slicer.</b> Überhänge, Inseln, Brückenweiten
         und Stützvolumen; die Orientierungssuche schlägt die Lage vor, die am
         wenigsten davon erzeugt.</li>
-        <li><b>Zeichnen mit Bedingungen.</b> Abstände, Winkel, gleiche Längen
-        und Mittelpunkte halten die Zeichnung zusammen. Der Umriss bleibt
-        eine exakte Kurve — ein
-        Kreis wird ein Zylinder, kein Vieleck.</li>
+        <li><b>Zeichnen mit Bedingungen.</b> Abstände, Winkel, gleich groß
+        (Längen und Radien) und Mittelpunkte halten die Zeichnung zusammen.
+        Am exakten Körper oder Modell bleibt der Umriss eine exakte Kurve —
+        ein Kreis wird ein Zylinder, kein Vieleck.</li>
         <li><b>Mehr aus deinem Modell machen.</b> Reliefs aus Bildern,
         räumliche Gitter, Formschrägen, passende Deckel und mehrfarbige
         Beschriftung gehören ebenfalls dazu.
@@ -716,9 +716,10 @@
       <p class="sub">GLB oder STL hereinziehen, reparieren, auf Maß bringen,
       gegen Drucker und Material prüfen, teilen und verstiften: Diese
       Aufbereitung funktioniert mit Dateien aus dem Generator deiner Wahl und
-      ohne CAD-Vorkenntnisse. Solidon3D lädt derzeit bewusst kein bestimmtes
-      3D-Modell herunter, solange dessen vollständige Lizenz- und
-      Herkunftskette nicht belegt ist.</p>
+      ohne CAD-Vorkenntnisse. Auf Wunsch richtet Solidon3D auch ein eigenes
+      Modell ein — TripoSG für die Form, SDXL fürs Bild dahinter —, ohne
+      etwas ungefragt herunterzuladen; die vollständige Lizenz- und
+      Herkunftskette der Gewichte wird derzeit geprüft.</p>
       <a class="btn ghost" href="/ki-modelle.html">Vom Generator zum druckbaren Teil</a>
     </div>
   </section>
@@ -802,7 +803,7 @@
             <li>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
               <span><b>Deine Projekte bleiben lesbar.</b> Eine ZIP-Datei mit
-              JSON darin, Export nach STL, 3MF, OBJ, PLY und STEP.</span>
+              JSON darin, Export nach STL, 3MF, OBJ, PLY, GLB und STEP.</span>
             </li>
             <li>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -839,8 +840,8 @@
         14 Milliarden Parametern — das braucht eine Grafikkarte mit
         16 GB Speicher</td></tr>
         <tr><td>Generiertes Modell (optional)</td><td>eine externe
-        GLB- oder STL-Datei; Solidon3D richtet derzeit bewusst kein
-        bestimmtes 3D-Modell ein</td></tr>
+        GLB- oder STL-Datei, oder Solidon3D richtet TripoSG und das
+        Bildmodell SDXL auf Wunsch selbst ein</td></tr>
         <tr><td>Weiteres (optional)</td><td>ein Slicer — er wird
         gefunden oder angegeben, Pflicht ist er nicht</td></tr>
       </table>
@@ -910,10 +911,11 @@
           Öffnen als benannte Merkmale erkannt; im Merkmalsfenster stehen ihre
           gemessenen Werte, und eine geänderte Zahl ist die Operation.
           Versetzen, verdoppeln und entfernen gelten für jede dieser Arten,
-          drehen für alle außer der Kugelfläche. An unterstützten Verrundungen
-          lässt sich der Radius ändern oder die Rundung entfernen. Welche
-          Handlung möglich ist, zeigt Solidon3D an der gewählten Stelle;
-          Kehlen und fließende Übergänge bleiben davon ausgenommen.</p>
+          drehen für alle außer der Kugelfläche. An Verrundungen und Kehlen,
+          die erkennbar eine Kante ersetzen, lässt sich der Radius ändern oder
+          die Rundung entfernen; ein Übergang, der fließend in seine
+          Nachbarflächen übergeht, nicht. Welche Handlung möglich ist, zeigt
+          Solidon3D an der gewählten Stelle.</p>
         </details>
         <details>
           <summary>Muss ich eine KI benutzen?</summary>

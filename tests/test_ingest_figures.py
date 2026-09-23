@@ -22,11 +22,19 @@ MESHES = Path(__file__).parent / "data" / "meshes"
 def test_a_triangle_soup_is_welded_before_anyone_asks_whether_it_is_closed(monkeypatch) -> None:
     """Eine STL speichert jedes Dreieck mit eigenen Ecken und ist vor dem Verschweißen
     nie dicht — das braucht keine Zählung über alle Kanten. Danach genügt eine."""
+    import threading
+
     calls: list[int] = []
     original = trimesh.graph.is_watertight
+    # Gezählt wird nur, was ``normalise`` in diesem Thread fragt. Im geteilten
+    # Torlauf rechnet im selben Prozess mitunter noch ein Hintergrundthread
+    # eines früheren Tests an einem anderen Netz, und dessen Aufruf landete
+    # in dieser Zählung (``assert 2 == 1`` am 23.09.2026, einzeln grün).
+    here = threading.get_ident()
 
     def counted(*args, **kwargs):
-        calls.append(1)
+        if threading.get_ident() == here:
+            calls.append(1)
         return original(*args, **kwargs)
 
     monkeypatch.setattr(trimesh.graph, "is_watertight", counted)

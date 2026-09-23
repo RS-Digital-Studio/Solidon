@@ -173,7 +173,7 @@ dans `website/version.json`.
 
 - Choisissez visuellement les contours SVG et DXF avant de créer le corps. Les fichiers GLB et GLTF conservent leurs dimensions et leur orientation correctes.
 - Les cotes du projet restent actives dans les esquisses de pièces et les aperçus de placement. Le cadrage inclut tous les plateaux d’impression visibles.
-- Les filaments peuvent être retirés de l’étagère. Les premiers pas commencent par le trancheur ; les retours s’ouvrent vite et préparent les pièces jointes en arrière-plan.
+- Les filaments peuvent être retirés de l’étagère. Les premiers pas commencent par le slicer ; les retours s’ouvrent vite et préparent les pièces jointes en arrière-plan.
 - Suppr sur une face retire le corps et le dit ; Ctrl+Z le ramène. En vue rasante, un corps déplacé suit le pointeur, et la face choisie reste au premier clic de l’esquisse.
 - Le chat local reçoit une fenêtre plus grande et ne tronque plus votre demande.
 - Le diamètre de la buse se règle sur l'imprimante. Le transfert choisit alors la machine correspondante dans le slicer, même si une autre buse y est sélectionnée.
@@ -438,7 +438,7 @@ dans `website/version.json`.
 
 - Solidon trouve ce que possède Cura : imprimantes, profils de processus et filaments qui restaient invisibles.
 - De PrusaSlicer, Solidon reprend les filaments chargés et la dernière imprimante réglée.
-- Si votre trancheur ne connaît pas du tout l'imprimante, Solidon le dit, au lieu de vous envoyer vers une liste où il n'y a rien.
+- Si votre slicer ne connaît pas du tout l'imprimante, Solidon le dit, au lieu de vous envoyer vers une liste où il n'y a rien.
 - Changer de niveau de qualité prend des secondes et non près d'une minute, et la fenêtre reste utilisable pendant ce temps.
 - Le conseil sur les réglages d'impression regarde tous les corps du plateau et non la seule sélection. Ce dont un corps a besoin est conservé, même si le voisin s'en passe.
 - Il calcule en arrière-plan, nomme le corps, montre sa progression et peut être interrompu.
@@ -446,9 +446,9 @@ dans `website/version.json`.
 - Une vitesse trop élevée est limitée sur le type de trajet concerné, au lieu de chauffer toujours plus la buse et le plateau.
 - Les propositions décochées restent décochées, et un changement de filament, de scène, de plateau ou de qualité invalide aussitôt un résultat périmé.
 - L'écart lors de la disposition compte la bordure d'adhérence et la structure de support : entre deux voisins, les deux comptent double.
-- Les pièces sont disposées au milieu du plateau, comme le font les trancheurs d'à côté, et non dans le coin arrière gauche.
+- Les pièces sont disposées au milieu du plateau, comme le font les slicers d'à côté, et non dans le coin arrière gauche.
 - Orienter pour l'impression redispose ensuite les pièces tournées. Un corps qui se couche prend plus de surface et finissait avant dans son voisin.
-- Le second choix de filament sous les profils du trancheur a disparu. Il répétait le sélecteur de filament ; récupérer les valeurs du profil est maintenant un bouton à part.
+- Le second choix de filament sous les profils du slicer a disparu. Il répétait le sélecteur de filament ; récupérer les valeurs du profil est maintenant un bouton à part.
 - Orienter pour l'impression prend tous les corps de la scène, pas seulement les sélectionnés. Le plateau entier se place ensuite au centre, au lieu qu'une pièce tournée en contourne une autre.
 
 ### Vue et utilisation
@@ -525,14 +525,14 @@ dans `website/version.json`.
 
 - La recherche d'orientation juge en deux étapes : deux cents poses issues des normales, dont neuf dans l'analyse par couches.
 - Sa barre de progression va jusqu'au bout, même quand il n'y avait rien à couper.
-- Le trancheur reçoit le monde de l'imprimante et non celui de Solidon, et un profil propre conserve sa base constructeur.
+- Le slicer reçoit le monde de l'imprimante et non celui de Solidon, et un profil propre conserve sa base constructeur.
 - Les profils de tranchage propres passent avant le profil constructeur du même nom, et un AppImage retrouve son stock.
 - Le nettoyage après l'import conserve les affectations de filament.
 - L'imprimante appartient au projet et se change aussi bien dans l'en-tête que dans la boîte d'impression ; les filaments attribués, les couleurs et vos propres valeurs d'impression sont conservés.
 - Chaque corps porte son filament dans l'arborescence : une pastille de couleur devant le nom, un clic pour en attribuer un autre.
 - Plusieurs bobines du même type de matériau restent distinguables par leur nom et leur couleur.
 - Les opérations correspondantes portent le nom de ce qu'elles font : *Attribuer un filament* et *Filament sur une face* au lieu de *Colorer la pièce* et *Colorer la face*.
-- La remise au trancheur résout chaque bobine selon son propre type de matériau ; vos propres valeurs d'impression gardent la priorité.
+- La remise au slicer résout chaque bobine selon son propre type de matériau ; vos propres valeurs d'impression gardent la priorité.
 - Si la carte des supports prend trop de temps, le calcul se termine avec une explication et propose de réduire les triangles.
 - La boîte d'impression reste entièrement utilisable même dans des fenêtres étroites.
 - Orienter pour l'impression aligne tous les corps sélectionnés, et pas seulement le premier.
@@ -765,7 +765,7 @@ dans `website/version.json`.
 - Les grands dialogues emploient des colonnes et des largeurs de champ cohérentes.
 - L’ancienne page réunissant adhérence, rétraction et filament est divisée en sections de réglages plus petites et clairement nommées.
 - Les 56 réglages d’impression peuvent être recherchés sous leurs libellés allemands visibles.
-- La recherche reconnaît aussi 146 termes courants des trancheurs, dont *perimeters* et *wall loops*.
+- La recherche reconnaît aussi 146 termes courants des slicers, dont *perimeters* et *wall loops*.
 - Les champs numériques réagissent fidèlement aux flèches, au pas et à l’arrondi, sans plus modifier les valeurs de façon inattendue.
 - Les curseurs ont un aspect uniforme avec une poignée facile à saisir.
 - La couleur d’accentuation est réservée au bouton principal ; l’outil actif se reconnaît à son bord et les commandes inactives se font visuellement discrètes.
@@ -919,10 +919,10 @@ dans `website/version.json`.
 ### Impression et filament
 
 - Chaque bobine peut porter ses propres températures, refroidissement, rétraction et valeurs de matière. Elles restent en place lors d'un changement de qualité.
-- Les valeurs de chaque bobine arrivent dans le fichier 3MF et le trancheur au bon emplacement de matière. Une couleur ne reprend plus par erreur les valeurs d'une autre.
-- Au premier démarrage, Solidon reprend les filaments chargés dans le trancheur avec leur nom, type, couleur et profil du fabricant. Les bobines ne sont pas à recréer.
+- Les valeurs de chaque bobine arrivent dans le fichier 3MF et le slicer au bon emplacement de matière. Une couleur ne reprend plus par erreur les valeurs d'une autre.
+- Au premier démarrage, Solidon reprend les filaments chargés dans le slicer avec leur nom, type, couleur et profil du fabricant. Les bobines ne sont pas à recréer.
 - Les exemples fournis ne remplacent plus l'imprimante et le matériau choisis par les réglages qui ont servi à créer leurs aperçus.
-- Dans le Flatpak Linux, Solidon trouve et lance les trancheurs de l'ordinateur, y compris les AppImages. Les deux programmes accèdent au dossier de travail partagé.
+- Dans le Flatpak Linux, Solidon trouve et lance les slicers de l'ordinateur, y compris les AppImages. Les deux programmes accèdent au dossier de travail partagé.
 - La séparation pose des goupilles sur une moitié et les trous correspondants sur l’autre. Le message en donne le nombre ou signale que la face de coupe est trop petite.
 - Après la séparation, les moitiés s’écartent. Goupilles et trous ne disparaissent plus entre deux faces de coupe confondues.
 - Lors de l’union de deux corps, les deux gardent leur description de filament avec son nom. La description de la seconde couleur pouvait auparavant se perdre.
@@ -1013,10 +1013,10 @@ dans `website/version.json`.
 - Un bloc peut réunir plusieurs pièces. Vous pouvez ainsi enregistrer un modèle mobile ou assemblé comme une seule entrée réutilisable du catalogue.
 - Poser l'axe dans le trou ne marchait pas, bien que les deux éléments soient là. Maintenant si.
 
-### Impression et trancheur
+### Impression et slicer
 
 - Au tranchage, vous choisissez quels plateaux partent. Qui voulait trancher le plateau 2 recevait trois fichiers et les bobines du plateau 1.
-- Solidon écrit maintenant le profil de machine et de processus pour le trancheur, au lieu de renvoyer à son fonds. Sept réglages figuraient dans le fichier, cent trente-six sont partis au trancheur.
+- Solidon écrit maintenant le profil de machine et de processus pour le slicer, au lieu de renvoyer à son fonds. Sept réglages figuraient dans le fichier, cent trente-six sont partis au slicer.
 - Le code de démarrage vient du profil d'imprimante du fabricant au lieu d'être écrit à la main.
 - Ce qui ne dépose plus de cordon, la buse le dit : les parois trop minces figurent au rapport comme constat, pas comme proposition.
 - La limite basse d'épaisseur de paroi vient du profil de matériau. Deux nombres fixes s'y trouvaient, et tous deux étaient faux — sur la Centauri, c'est 0,84 mm.
@@ -1119,7 +1119,7 @@ dans `website/version.json`.
 - Un assemblage répond désormais aussi à « Poser sur le plateau » : il descend en bloc, les pièces gardant leur position les unes par rapport aux autres. Jusqu'ici rien ne se passait.
 - La quantité de filament lue dans un fichier G-code est de nouveau correcte. Une commande en fin de fichier faisait calculer différemment tout ce qui précédait et doublait le total.
 - Un changement d'imprimante ou de matériau conserve ce que vous avez réglé. Jusqu'ici tout le jeu était réinitialisé sans un mot.
-- Le choix de filament par emplacement de matériau parvient au trancheur. C'était le texte affiché qui était enregistré, pas le profil.
+- Le choix de filament par emplacement de matériau parvient au slicer. C'était le texte affiché qui était enregistré, pas le profil.
 
 ### Vue et utilisation
 - Une face sélectionnée compte : perçage, bloc et esquisse vont là où vous avez pointé. Chaque opération sur une face coûtait auparavant deux clics.
@@ -1143,7 +1143,7 @@ dans `website/version.json`.
 ### Vitesse et stabilité
 - L'application ne disparaît plus sans un mot quand une cote change, un dessin est lu ou une coupe est calculée. Les mêmes calculs vont maintenant jusqu'à soixante fois plus vite.
 - Évider et goupiller peuvent vraiment être annulés. Sur une pièce scannée, le bouton restait immobile pendant des minutes.
-- Les gros fichiers d'un trancheur s'ouvrent sans que la fenêtre se fige. Auparavant, le simple comptage des corps chargeait tout le fichier en mémoire.
+- Les gros fichiers d'un slicer s'ouvrent sans que la fenêtre se fige. Auparavant, le simple comptage des corps chargeait tout le fichier en mémoire.
 - Si un calcul en arrière-plan se bloque, l'application le signale désormais. Sinon, la légende, l'analyse des couches et la recherche d'une nouvelle version restaient bloquées pour toujours.
 - Annuler abandonne désormais aussi la prochaine exécution déjà mise en file, et la barre de progression ne disparaît plus sur un fichier encore en cours d'écriture.
 
@@ -1225,7 +1225,7 @@ dans `website/version.json`.
 - Les nombres décimaux saisis sont lus correctement partout. « 12,5 » reste douze et demi ; auparavant, cela pouvait devenir 125, sans question ni avertissement.
 - Chacun des cinquante-six champs des réglages d'impression indique désormais ce qu'il fait quand on le modifie.
 - Le temps d'impression et la quantité de matière sont estimés plus finement, surtout pour les pièces évidées.
-- Le transfert vers le trancheur atteint le plateau. Avec CuraEngine, les pièces se retrouvaient à côté.
+- Le transfert vers le slicer atteint le plateau. Avec CuraEngine, les pièces se retrouvaient à côté.
 - Lors d'une découpe avec goupilles, les trous correspondants se placent dans la bonne moitié.
 - Millimètres et pouces valent maintenant partout où figure un nombre — y compris dans les barres d'outils et lors de la peinture.
 - La progression reste affichée jusqu'à la fin réelle du calcul, et la fenêtre demeure utilisable pendant ce temps.

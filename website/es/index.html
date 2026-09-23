@@ -93,7 +93,7 @@
       "name": "¿Puedo mover un taladro en un STL ya terminado?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Sí. Al abrir el archivo, taladros, espigas, avellanados, cúpulas y cuencas se reconocen como características con nombre; la ventana de características muestra sus valores medidos, y cambiar un número es la operación. Mover, duplicar y quitar valen para cada uno de estos tipos; girar, para todos salvo la superficie esférica. En los redondeos compatibles puedes cambiar el radio o quitar el redondeo. Solidon3D muestra qué acciones están disponibles en el punto elegido; las gargantas y las transiciones suaves quedan excluidas."
+        "text": "Sí. Al abrir el archivo, taladros, espigas, avellanados, cúpulas y cuencas se reconocen como características con nombre; la ventana de características muestra sus valores medidos, y cambiar un número es la operación. Mover, duplicar y quitar valen para cada uno de estos tipos; girar, para todos salvo la superficie esférica. En los redondeos y gargantas que sustituyen visiblemente una arista puedes cambiar el radio o quitarlos; una transición que se funde suavemente con sus caras vecinas, no. Solidon3D muestra qué acciones están disponibles en el punto elegido."
       }
     },
     {
@@ -482,9 +482,10 @@
           <h3>Preparar un GLB o STL</h3>
           <p>Arrastra un archivo de cualquier generador que elijas:
           Solidon3D repara la malla, la ajusta de tamaño, comprueba su
-          imprimibilidad y la divide o añade pasadores cuando hace falta. La
-          instalación automática de un modelo 3D concreto solo volverá cuando
-          esté documentada toda su cadena de licencias y procedencia. Los
+          imprimibilidad y la divide o añade pasadores cuando hace falta. Si
+          lo pides, Solidon3D también configura un modelo propio —TripoSG
+          para la forma, SDXL para la imagen detrás— mientras se revisa su
+          cadena completa de licencias y procedencia. Los
           caminos 1, 2 y 4 siguen siendo plenamente utilizables.</p>
         </div>
         <div class="way">
@@ -519,7 +520,7 @@
         <figure>
           <img src="../bilder/galerie-gehaeuse.webp?v=0af90a22" width="900" height="578" loading="lazy"
                alt="Una caja para electrónica con cantos redondeados, casquillos roscados en las esquinas, un pasacables en la pared lateral y la tapa puesta al lado">
-          <figcaption><b>Caja para electrónica</b> Casquillos roscados en las esquinas, pasacables, nervios de refuerzo — y una tapa que encaja a presión. Doce pasos, 79 134 triángulos.</figcaption>
+          <figcaption><b>Caja para electrónica</b> Casquillos roscados en las esquinas, pasacables, nervios de refuerzo — y una tapa que encaja a presión. 13 pasos, 79 134 triángulos.</figcaption>
         </figure>
         <figure>
           <img src="../bilder/galerie-schraubdose.webp?v=b4b58f39" width="900" height="578" loading="lazy"
@@ -548,7 +549,7 @@
         <figure>
           <img src="../bilder/verwandlung-vorher.svg?v=593124c2" width="420" height="420" loading="lazy"
                alt="Un modelo generado en malla de alambre: en varios sitios se abren agujeros en la superficie y hay aristas que acaban en nada">
-          <figcaption><b>Como llegó</b> Aristas abiertas, agujeros en la malla. Un laminador los rellena a su aire o se planta — de cualquier modo te enteras en la impresora.</figcaption>
+          <figcaption><b>Como llegó</b> Aristas abiertas, agujeros en la malla. Un slicer los rellena a su aire o se planta — de cualquier modo te enteras en la impresora.</figcaption>
         </figure>
         <figure>
           <img src="../bilder/verwandlung-nachher.svg?v=557c1bce" width="420" height="420" loading="lazy"
@@ -587,7 +588,7 @@
         <figure>
           <img src="../handbuch/es/report.png?v=fed3eb77" width="620" height="430" loading="lazy"
                alt="El informe con cuatro hallazgos: el modelo está abierto en tres puntos, 14 triángulos apuntan hacia dentro, una pared es más fina que dos anchos de extrusión y el archivo no indicaba su unidad">
-          <figcaption><b>El informe.</b> Lo que sale mal al imprimir figura ahí antes de que el laminador gaste el tiempo — contado por error, aviso y nota.</figcaption>
+          <figcaption><b>El informe.</b> Lo que sale mal al imprimir figura ahí antes de que el slicer gaste el tiempo — contado por error, aviso y nota.</figcaption>
         </figure>
         <figure>
           <img src="../bilder/beleg-bausteine-es.png?v=13c7e1e2" width="1220" height="955" loading="lazy"
@@ -630,8 +631,8 @@
         <li><b>Análisis de capas sin slicer.</b> Voladizos, islas, luces de
         puente y volumen de soportes; la búsqueda de orientación propone la
         posición que menos genera de todo ello.</li>
-        <li><b>Bocetos con restricciones.</b> Distancias, ángulos, longitudes iguales y puntos
-        medios mantienen unido el dibujo. El contorno sigue siendo una curva exacta —
+        <li><b>Bocetos con restricciones.</b> Distancias, ángulos, mismo tamaño (longitudes y radios) y puntos
+        medios mantienen unido el dibujo. En un cuerpo exacto o un modelo el contorno sigue siendo una curva exacta —
         un círculo se convierte en un cilindro, no en un polígono.</li>
         <li><b>Sacar más partido a tu modelo.</b> También incluye relieves a partir de imágenes,
         retículas espaciales, ángulos de desmoldeo, tapas a juego y rotulación
@@ -692,9 +693,10 @@
       <p class="sub">Arrastra un GLB o STL, repáralo, ajústalo de tamaño,
       compruébalo contra la impresora y el material, divídelo y añade
       pasadores: esta preparación funciona con archivos de cualquier
-      generador que elijas y sin experiencia con CAD. Solidon3D no descarga
-      deliberadamente ningún modelo 3D concreto mientras no esté documentada
-      toda su cadena de licencias y procedencia.</p>
+      generador que elijas y sin experiencia con CAD. Si lo pides, Solidon3D
+      también configura un modelo propio —TripoSG para la forma, SDXL para
+      la imagen detrás— sin descargar nada sin que lo pidas; su cadena
+      completa de licencias y procedencia se está revisando.</p>
       <a class="btn ghost" href="/es/ai-models.html">Del generador a la pieza imprimible</a>
     </div>
   </section>
@@ -781,7 +783,7 @@
             <li>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
               <span><b>Tus proyectos siguen siendo legibles.</b> Un archivo
-              ZIP con JSON dentro; exportación a STL, 3MF, OBJ, PLY y
+              ZIP con JSON dentro; exportación a STL, 3MF, OBJ, PLY, GLB y
               STEP.</span>
             </li>
             <li>
@@ -819,8 +821,8 @@
         14 000 millones de parámetros — eso requiere una tarjeta gráfica
         con 16 GB de memoria</td></tr>
         <tr><td>Modelo generado (opcional)</td><td>un archivo GLB o
-        STL externo; Solidon3D no instala actualmente ningún modelo 3D
-        concreto</td></tr>
+        STL externo, o Solidon3D configura TripoSG y el modelo de
+        imagen SDXL si lo pides</td></tr>
         <tr><td>Otros (opcional)</td><td>un slicer — se encuentra solo o
         se indica, y no es obligatorio</td></tr>
       </table>
@@ -888,7 +890,7 @@
           cuencas se reconocen como características con nombre; la ventana de
           características muestra sus valores medidos, y cambiar un número es la
           operación. Mover, duplicar y quitar valen para cada uno de estos tipos;
-          girar, para todos salvo la superficie esférica. En los redondeos compatibles puedes cambiar el radio o quitar el redondeo. Solidon3D muestra qué acciones están disponibles en el punto elegido; las gargantas y las transiciones suaves quedan excluidas.</p>
+          girar, para todos salvo la superficie esférica. En los redondeos y gargantas que sustituyen visiblemente una arista puedes cambiar el radio o quitarlos; una transición que se funde suavemente con sus caras vecinas, no. Solidon3D muestra qué acciones están disponibles en el punto elegido.</p>
         </details>
         <details>
           <summary>¿Tengo que usar una IA?</summary>
