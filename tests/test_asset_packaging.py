@@ -124,8 +124,15 @@ def _built_artifact(
     return root, manifest, spec, checker, artifact
 
 
+@pytest.mark.rendered
 def test_the_real_manifest_passes_the_production_gate_for_every_target() -> None:
-    """Der echte Kundenbau bleibt auf allen drei Zielsystemen freigegeben."""
+    """Der echte Kundenbau bleibt auf allen drei Zielsystemen freigegeben.
+
+    ``rendered``: Der Nachweis bindet die Website-Bilder an die Bytes der
+    Beispielprojekte, aus denen sie entstanden. Ändert sich ein Beispiel,
+    stimmt der Nachweis erst wieder, wenn ``/erzeugen`` die Bilder neu rechnet —
+    das geschieht beim Paketbau, und dort läuft dieser Test mit.
+    """
     for platform in ("win32", "darwin", "linux"):
         asset_rights.require_application_assets_cleared(platform)
     asset_rights.require_website_assets_cleared()

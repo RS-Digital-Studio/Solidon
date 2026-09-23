@@ -96,8 +96,12 @@ Datei, die einen Fenstertest trägt (`tools/list_windowed_tests.py`), nur deren
 Fenstertests. Vorher nahm ein einziger Fenstertest seine ganze Datei aus dem
 Tor — 1709 Tests ohne Fenster, darunter fast ganz `test_translations`,
 `test_print_settings` und `test_toolchain`. Ein Test, der ein Widget baut,
-fordert `qt_app` an; ohne sie stürzt er im Tor ab. Eine gesonderte Dateiliste
-wird nicht gepflegt. Das Skript liegt unter `.claude/.state/` und ist
+fordert `qt_app` an; ohne sie stürzt er im Tor ab. **Erzeugnisvergleiche
+(`rendered`) laufen wie in der CI nur beim Release** (23.09.2026): Sie prüfen
+Handbuch, Website-Bilder und deren Rechtenachweis gegen die Dateien, die erst
+`/erzeugen` beim Paketbau neu schreibt — dazwischen sind sie erwartbar rot, und
+als Teil ihrer Fensterdateien lagen sie bis zur Trennung je Test ohnehin draußen.
+Eine gesonderte Dateiliste wird nicht gepflegt. Das Skript liegt unter `.claude/.state/` und ist
 seit dem 22.08.2026 eingecheckt — vorher schloss `.gitignore` den ganzen Ordner
 aus, und ein frischer Klon hatte damit den einzigen Weg nicht, auf dem das Tor
 durchläuft.

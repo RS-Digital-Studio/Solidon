@@ -23,8 +23,9 @@ Umgebung und kein Anlass, sie mit einem direkten Pytest-Aufruf nachzuholen.
 Keine vollständige Suite allein wegen eines kleinen Doku-Edits.
 
 Ohne Argument oder vor einem beauftragten Commit läuft das Entwicklungstor:
-alle Tests ohne Fenster (`not windowed`) und ohne `performance`, dazu Ruff,
-Format und mypy.
+alle Tests ohne Fenster (`not windowed`), ohne `performance` und ohne die
+Erzeugnisvergleiche (`not rendered` — sie brauchen einen Lauf von `.agents/skills/erzeugen/SKILL.md`
+und gehören wie in der CI zum Release), dazu Ruff, Format und mypy.
 **Fenstertests und Leistungsprüfungen laufen ausschließlich beim Release.**
 Nur dort wählt `--release` das zusätzliche Release-Tor. Die Option autorisiert
 weder einen Paketbau noch eine Veröffentlichung.

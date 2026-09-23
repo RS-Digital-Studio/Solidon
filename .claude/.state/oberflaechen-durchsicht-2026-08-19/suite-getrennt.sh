@@ -293,13 +293,20 @@ trap 'rm -f "$protokoll"' EXIT
 
 # Direkt in die Datei schreiben und den Prozessstatus vor jeder Ausgabe sichern.
 # -u hält die Fortschrittszeichen im laufenden Protokoll aktuell.
+# **Erzeugnisse nur beim Release** (23.09.2026): Tests mit ``rendered``
+# vergleichen gegen Handbuch, Website-Bilder und ihre Rechtenachweise, die erst
+# ``/erzeugen`` beim Paketbau neu schreibt. Zwischen zwei Paketbauten sind sie
+# erwartbar rot; die CI wählt sie im Entwicklungslauf ebenso ab. Bis zur
+# Trennung je Test lagen sie als Teil ihrer Fensterdateien ohnehin draußen.
 if [ "$RELEASE" -eq 0 ]; then
-  echo "Reguläres Tor: Fenstertests und Leistungsprüfungen bleiben bis zum Release zurückgestellt."
+  echo "Reguläres Tor: Fenstertests, Erzeugnisvergleiche und Leistungsprüfungen bleiben bis zum Release zurückgestellt."
+  auswahl="not performance and not windowed and not rendered"
 else
-  echo "Release-Tor: die Fenstertests laufen je Datei mit; Leistungsprüfungen folgen getrennt."
+  echo "Release-Tor: die Fenstertests laufen je Datei mit, die Erzeugnisvergleiche im Zug; Leistungsprüfungen folgen getrennt."
+  auswahl="not performance and not windowed"
 fi
 echo "=== alle Tests ohne Fenster in einem Zug (-n $KERNE) ==="
-PYTHONIOENCODING=utf-8 "$PY" -u -m pytest -q -m "not performance and not windowed" -n "$KERNE" \
+PYTHONIOENCODING=utf-8 "$PY" -u -m pytest -q -m "$auswahl" -n "$KERNE" \
   > "$protokoll" 2>&1
 status=$?
 cat "$protokoll"

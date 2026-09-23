@@ -18,6 +18,7 @@ import trimesh
 
 from app.core.errors import ValidationError
 from app.core.geom import pins
+from app.core.geom.boolean import BOOLEAN_OVERLAP
 from app.core.geom.mesh import MeshData
 from app.core.geom.prepare import split_at_plane
 from app.core.geom.section import SectionPlane, plane_patch, plane_through
@@ -568,7 +569,12 @@ def test_the_snap_connector_catches_and_still_goes_in(profile: Profile) -> None:
     )
     notch = _difference(full, pocket)
 
-    assert float(notch.raw.bounds[1][2]) == pytest.approx(float(high[2]), abs=1e-6), (
+    # Die Mündung liegt bei null. Die Tasche reicht seit dem 22.09.2026 um
+    # ``BOOLEAN_OVERLAP`` darüber hinaus (§39: ein abtragendes Werkzeug endet
+    # nicht bündig in der Fläche, die es schneidet), ihre Oberkante ist also
+    # nicht mehr die Mündung.
+    assert float(high[2]) == pytest.approx(BOOLEAN_OVERLAP, abs=1e-9), high
+    assert float(notch.raw.bounds[1][2]) == pytest.approx(0.0, abs=1e-6), (
         "die Rastkante gehört an die Mündung — am tiefen Ende hält sie nichts"
     )
 

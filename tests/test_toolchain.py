@@ -2275,6 +2275,10 @@ RENDERED_TESTS: Final[frozenset[str]] = frozenset(
         "test_every_reference_carries_the_stamp_of_the_file_it_points_at",
         "test_srcset_candidates_carry_individual_asset_stamps",
         "test_every_manual_paragraph_reaches_the_generated_page",
+        # Der Rechtenachweis bindet die Website-Bilder an die Bytes der
+        # Beispielprojekte; ein neu erzeugtes Beispiel stimmt erst nach dem
+        # Bilderlauf wieder (23.09.2026).
+        "test_the_real_manifest_passes_the_production_gate_for_every_target",
     }
 )
 
