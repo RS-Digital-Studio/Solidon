@@ -25,6 +25,37 @@ _MAX_CANONICAL_PATCHES = 4096
 _MAX_COEFFICIENT_PRODUCTS = 1_000_000
 
 
+def outward_normal(face: Any, point: Vec3) -> Vec3 | None:
+    """Die nach außen zeigende Normale einer Fläche am Fußpunkt von ``point``.
+
+    Die Normale kommt aus der Fläche selbst (``BRepLProp_SLProps``), mit der
+    Orientierung der Fläche im Körper — an einer ebenen Fläche die
+    Ebenennormale, an einer gekrümmten die an dieser Stelle. ``None``, wo sich
+    der Punkt nicht auf die Fläche legen lässt oder die Normale dort nicht
+    bestimmt ist. Fase mit zwei Abständen (``edit._faces_at_edge``) und
+    Tangentenkette der Formschräge (``profiles._tangent_chain``) fragen hier.
+    """
+    from OCP.BRep import BRep_Tool
+    from OCP.BRepAdaptor import BRepAdaptor_Surface
+    from OCP.BRepLProp import BRepLProp_SLProps
+    from OCP.GeomAPI import GeomAPI_ProjectPointOnSurf
+    from OCP.gp import gp_Pnt
+    from OCP.TopAbs import TopAbs_REVERSED
+    from OCP.TopoDS import TopoDS
+
+    typed = TopoDS.Face(face)
+    projector = GeomAPI_ProjectPointOnSurf(gp_Pnt(*point), BRep_Tool.Surface_s(typed))
+    if projector.NbPoints() < 1:
+        return None
+    u, v = projector.LowerDistanceParameters()
+    props = BRepLProp_SLProps(BRepAdaptor_Surface(typed), u, v, 1, 1e-6)
+    if not props.IsNormalDefined():
+        return None
+    normal = props.Normal()
+    sign = -1.0 if typed.Orientation() == TopAbs_REVERSED else 1.0
+    return (sign * normal.X(), sign * normal.Y(), sign * normal.Z())
+
+
 @dataclass(frozen=True, slots=True)
 class PlaneSurface:
     """Ebene mit der wirklichen, nach außen gerichteten Flächennormale."""

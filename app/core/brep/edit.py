@@ -42,7 +42,20 @@ from app.core.errors import (
     OperationCancelled,
 )
 from app.core.geom.edges import EDGE_CHOICES as SHARED_EDGE_CHOICES
-from app.core.geom.edges import ChamferShape, EdgeSide, EdgeSides, chamfer_reaches
+from app.core.geom.edges import (
+    LOOP_START,
+    ChamferShape,
+    EdgeSide,
+    EdgeSides,
+    LawOnChain,
+    RadiusLaw,
+    chamfer_reaches,
+    check_varying_radius,
+    law_at_ends,
+    points_forward,
+    samples_along,
+    starts_at_first,
+)
 from app.core.geom.edges import EdgeChoice as SharedEdgeChoice
 from app.core.geom.edges import choose as choose_by_place
 from app.core.geom.edges import named_edges as edges_named
@@ -549,6 +562,7 @@ def fillet(
     *,
     selected_edges: Sequence[int] | None = None,
     cancelled: CancelToken | None = None,
+    law: RadiusLaw | None = None,
 ) -> Solid:
     """Rundet die gewählten Kanten. Exakt, weil die Kante eine Kurve
     ist (§30).
@@ -561,21 +575,188 @@ def fillet(
     Radiuswechsel für die belegte scharfe Kante nimmt. ``cancelled`` wird
     vor und nach jedem teuren Schritt gefragt: Wandkarte, je Trägerfläche,
     je Kante, um den nativen Bau und um die Prüfung danach.
+
+    ``law`` gibt jeder Kante einen veränderlichen Radius (P6.1): Jede Kontur
+    — eine Kante mit allen tangential anschließenden, so wie OpenCASCADE sie
+    zusammenfasst — bekommt den Verlauf von ihrem Anfang
+    (:func:`~app.core.geom.edges.starts_at_first`) zu ihrem Ende, als dichte
+    Liste aus Stelle und Radius (:meth:`RadiusLaw.samples`). Ein eigenes
+    ``Law_Function`` nimmt der Kern nicht an; gemessen steht das an
+    :data:`~app.core.geom.edges.LAW_SAMPLES`.
     """
     require()
     from OCP.BRepFilletAPI import BRepFilletAPI_MakeFillet
 
     _check(cancelled)
+    varying = law is not None and not law.constant
+    if law is not None:
+        radius = law.largest
     checked = None if selected_edges is None else solid.checked_edge_indices(selected_edges)
     working = replace(solid)
     chosen = _edges_for(working, choice, keys, checked)
 
-    _fits_the_wall(working, radius, chosen, "fillet", cancelled=cancelled)
     builder = BRepFilletAPI_MakeFillet(working.shape)
-    for entry in chosen:
-        _check(cancelled)
-        builder.Add(radius, entry.edge)
+    if varying:
+        assert law is not None
+        _laid_along(builder, chosen, law)
+    _fits_the_wall(working, radius, chosen, "fillet", cancelled=cancelled)
+    if not varying:
+        for entry in chosen:
+            _check(cancelled)
+            builder.Add(radius, entry.edge)
     return _built(working, builder, "fillet", radius, len(chosen), cancelled=cancelled)
+
+
+def _laid_along(builder: Any, chosen: Sequence[EdgeInfo], law: RadiusLaw) -> None:
+    """Legt den Verlauf auf jede Kontur der gewählten Kanten — oder sagt, warum nicht.
+
+    Vorher gefragt wird dasselbe wie am Netz (:func:`check_varying_radius`):
+    Auf einem Ring müssen Anfang und Ende denselben Radius tragen, und zwei
+    Konturen mit verschiedenen Radien an einer gemeinsamen Ecke haben keine
+    Form. Die Ecke erkennt der Kern an ihrem Knoten; als Kennung dient seine
+    Lage, auf ein Millionstel gerundet. Wo ein Ring anfängt, sucht
+    :func:`_loop_start_on` an den Kurven selbst — derselbe Punkt, den das Netz
+    an seinem Sehnenzug findet (``geom.edges.loop_start``).
+    """
+    from OCP.BRep import BRep_Tool
+    from OCP.collections import Array1_gp_Pnt2d
+    from OCP.gp import gp_Pnt2d
+
+    for entry in chosen:
+        if builder.Contour(entry.edge) == 0:
+            builder.Add(entry.edge)
+    ends: list[tuple[Any, Any, tuple[float, float]]] = []
+    plans: list[tuple[int, list[_ContourPiece], LawOnChain]] = []
+    for contour in range(1, builder.NbContours() + 1):
+        start = BRep_Tool.Pnt_s(builder.FirstVertex(contour))
+        stop = BRep_Tool.Pnt_s(builder.LastVertex(contour))
+        first = (start.X(), start.Y(), start.Z())
+        last = (stop.X(), stop.Y(), stop.Z())
+        pieces = _contour_pieces(builder, contour)
+        total = pieces[-1].high if pieces else 0.0
+        first_key = tuple(round(value, 6) for value in first)
+        if builder.Closed(contour):
+            loop_start, forward = _loop_start_on(pieces)
+            on_chain = LawOnChain(law.as_loop(), total, loop_start, forward, True)
+            ends.append((first_key, first_key, (law.at(0.0), law.at(1.0))))
+        else:
+            on_chain = LawOnChain(law, total, 0.0, starts_at_first(first, last), False)
+            last_key = tuple(round(value, 6) for value in last)
+            ends.append((first_key, last_key, law_at_ends((first, last), law)))
+        plans.append((contour, pieces, on_chain))
+    check_varying_radius(ends, mixed_corner=False)
+    for contour, pieces, on_chain in plans:
+        # **Je Kante der Kontur ihr Stück** — ``SetRadius(UandR, IC, IinC)``
+        # gilt nur der Kante ``IinC``. Mit einer Tabelle für die ganze Kette
+        # an Kante 1 lief der Verlauf an einer Kette Gerade-Bogen-Gerade über
+        # die erste Gerade allein, und der Rest blieb beim Endradius
+        # (gemessen 23.09.2026: 2,17 statt 1,59 mm in der Mitte der Geraden).
+        for number, piece in enumerate(pieces, start=1):
+            pairs = samples_along(on_chain, piece.low, piece.high)
+            table = Array1_gp_Pnt2d(1, len(pairs))
+            for index, (share, radius) in enumerate(pairs, start=1):
+                table.SetValue(index, gp_Pnt2d(share, radius))
+            builder.SetRadius(table, contour, number)
+
+
+@dataclass(frozen=True, slots=True)
+class _ContourPiece:
+    """Eine Kante einer Fillet-Kontur: ihre Kurve, und wo sie in der Kontur liegt.
+
+    ``low``/``high`` sind Bogenlängen ab dem ersten Knoten der Kontur;
+    ``along`` sagt, ob der Kurvenparameter in Konturrichtung wächst.
+    """
+
+    curve: Any
+    first: float
+    last: float
+    along: bool
+    low: float
+    high: float
+
+
+def _contour_pieces(builder: Any, contour: int) -> list[_ContourPiece]:
+    """Die Kanten einer Kontur der Reihe nach, mit Bogenlänge und Richtung.
+
+    Gelaufen wird vom ersten Knoten der Kontur von Kante zu Kante über den
+    gemeinsamen Knoten; die Längen misst ``GCPnts_AbscissaPoint``. Auf einem
+    Ring endet die letzte Kante wieder am ersten Knoten — ``Abscissa`` gäbe dort
+    null statt der ganzen Länge.
+    """
+    from OCP.BRepAdaptor import BRepAdaptor_Curve
+    from OCP.GCPnts import GCPnts_AbscissaPoint
+    from OCP.TopExp import TopExp
+
+    current = builder.FirstVertex(contour)
+    reached = 0.0
+    pieces: list[_ContourPiece] = []
+    for number in range(1, builder.NbEdges(contour) + 1):
+        edge = builder.Edge(contour, number)
+        head, tail = TopExp.FirstVertex_s(edge), TopExp.LastVertex_s(edge)
+        along = head.IsSame(current)
+        curve = BRepAdaptor_Curve(edge)
+        first, last = curve.FirstParameter(), curve.LastParameter()
+        length = float(GCPnts_AbscissaPoint.Length_s(curve, first, last))
+        pieces.append(_ContourPiece(curve, first, last, along, reached, reached + length))
+        reached += length
+        current = tail if along else head
+    return pieces
+
+
+def _loop_start_on(pieces: Sequence[_ContourPiece]) -> tuple[float, bool]:
+    """Wo ein Ring anfängt (Bogenlänge ab dem ersten Knoten) und ob die Kontur vorwärts läuft.
+
+    Der Punkt kleinster Lage in :data:`~app.core.geom.edges.LOOP_START`, an den
+    Kurven gesucht: je Kante abgetastet, am kleinsten Wert mit dem goldenen
+    Schnitt verfeinert. Vorwärts heißt, dass die Tangente in Konturrichtung
+    nach :func:`~app.core.geom.edges.points_forward` zeigt.
+    """
+    from OCP.GCPnts import GCPnts_AbscissaPoint
+    from OCP.gp import gp_Pnt, gp_Vec
+
+    weight = LOOP_START
+    norm = math.sqrt(sum(value * value for value in weight))
+
+    def lying(piece: _ContourPiece, parameter: float) -> float:
+        point = piece.curve.Value(parameter)
+        return float(point.X() * weight[0] + point.Y() * weight[1] + point.Z() * weight[2]) / norm
+
+    best: tuple[float, int, float] | None = None
+    for number, piece in enumerate(pieces):
+        count = 64
+        parameters = [
+            piece.first + (piece.last - piece.first) * index / count for index in range(count + 1)
+        ]
+        values = [lying(piece, parameter) for parameter in parameters]
+        at = min(range(len(values)), key=values.__getitem__)
+        low = parameters[max(at - 1, 0)]
+        high = parameters[min(at + 1, count)]
+        golden = (math.sqrt(5.0) - 1.0) / 2.0
+        for _step in range(60):
+            one = high - golden * (high - low)
+            two = low + golden * (high - low)
+            if lying(piece, one) <= lying(piece, two):
+                high = two
+            else:
+                low = one
+        parameter = (low + high) / 2.0
+        value = lying(piece, parameter)
+        if best is None or value < best[0] - EPS_GEOM * EPS_GEOM:
+            best = (value, number, parameter)
+    assert best is not None
+    _value, number, parameter = best
+    piece = pieces[number]
+    if piece.along:
+        into = float(GCPnts_AbscissaPoint.Length_s(piece.curve, piece.first, parameter))
+    else:
+        into = float(GCPnts_AbscissaPoint.Length_s(piece.curve, parameter, piece.last))
+    point, tangent = gp_Pnt(), gp_Vec()
+    piece.curve.D1(parameter, point, tangent)
+    direction = (tangent.X(), tangent.Y(), tangent.Z())
+    if not piece.along:
+        direction = (-direction[0], -direction[1], -direction[2])
+    total = pieces[-1].high
+    return (piece.low + into) % total, points_forward(direction)
 
 
 def chamfer(
@@ -651,17 +832,14 @@ def _faces_at_edge(solid: Solid, entry: EdgeInfo) -> list[tuple[Any, tuple[float
     keine Normale: Jede obere Kante eines Zylinders wies eine Fase mit zwei
     Abständen mit „lassen sich nicht bestimmen" ab (P6.2, gemessen 23.09.2026).
     """
-    from OCP.BRep import BRep_Tool
-    from OCP.BRepAdaptor import BRepAdaptor_Surface
-    from OCP.BRepLProp import BRepLProp_SLProps
     from OCP.collections import (
         IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher as NeighbourMap,
     )
-    from OCP.GeomAPI import GeomAPI_ProjectPointOnSurf
-    from OCP.gp import gp_Pnt
-    from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE, TopAbs_REVERSED
+    from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE
     from OCP.TopExp import TopExp
     from OCP.TopoDS import TopoDS
+
+    from app.core.brep.canonical import outward_normal
 
     neighbours = NeighbourMap()
     TopExp.MapShapesAndAncestors_s(solid.shape, TopAbs_EDGE, TopAbs_FACE, neighbours)
@@ -673,16 +851,10 @@ def _faces_at_edge(solid: Solid, entry: EdgeInfo) -> list[tuple[Any, tuple[float
         face = TopoDS.Face(shape)
         if any(face.IsSame(known) for known, _normal in found):
             continue
-        projector = GeomAPI_ProjectPointOnSurf(gp_Pnt(*on_edge), BRep_Tool.Surface_s(face))
-        if projector.NbPoints() < 1:
+        normal = outward_normal(face, on_edge)
+        if normal is None:
             raise _chamfer_sides_unknown()
-        u, v = projector.LowerDistanceParameters()
-        props = BRepLProp_SLProps(BRepAdaptor_Surface(face), u, v, 1, 1e-6)
-        if not props.IsNormalDefined():
-            raise _chamfer_sides_unknown()
-        normal = props.Normal()
-        sign = -1.0 if face.Orientation() == TopAbs_REVERSED else 1.0
-        found.append((face, (sign * normal.X(), sign * normal.Y(), sign * normal.Z())))
+        found.append((face, normal))
     if len(found) != 2:
         raise _chamfer_sides_unknown()
     return found

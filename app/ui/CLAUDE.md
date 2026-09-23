@@ -1591,7 +1591,9 @@ Seite. Das Auswahlfeld führt zu beiden und baut keines von beiden nach. Seine
 Operationen stammen aus dem Operationsregister — Körperoperationen über
 `body_operations`, die Merkmalshandlungen über `feature_operations` aus
 demselben `applies_to`, aus dem der Doppelklick im Baum seine erste passende
-Handlung nimmt. **Das Auswahlfeld ist für diese Handlungen der einzige Ort**
+Handlung nimmt; eine Handlung mit `also_on_body` steht an beiden Stufen und
+bekommt einen Knopf. An einer angeklickten Kante stehen neben den
+`EDGE_OPERATIONS` die `EDGE_VARIANTS` des Kerns (*Verrunden mit Verlauf*). **Das Auswahlfeld ist für diese Handlungen der einzige Ort**
 (`PANEL_CATEGORIES`, `.claude/rules/oberflaeche.md`): Die Menüleiste trägt
 nur noch, was keine Auswahl braucht, und das Kontextmenü an Körper und Merkmal
 keine Operationen. Sie verwenden dieselbe Freigabe wie Menü und Palette und

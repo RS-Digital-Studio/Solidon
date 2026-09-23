@@ -21,6 +21,7 @@ from app.core.brep.canonical import PlaneSurface
 from app.core.brep.kernel import DEFLECTION, Solid, boolean_builder, box_limits, require
 from app.core.errors import (
     CANCEL,
+    CHANGE_SELECTION,
     CORRECT_INPUT,
     PROGRAMMING_ERRORS,
     Action,
@@ -586,13 +587,53 @@ def shell_open_top(
 def draft_vertical(
     solid: Solid, angle_deg: float, *, cancelled: CancelToken | None = None
 ) -> Solid:
-    """Stellt alle senkrechten Flächen um den Winkel an — die Formschräge.
+    """Stellt alle senkrechten Flächen um den Winkel an — der Weg aller alten Schritte.
 
     Neutral bleibt die Unterkante des Körpers: dort behält der Körper sein Maß,
-    nach oben wird er schmaler."""
+    nach oben wird er schmaler. Gerechnet wie an gewählten Flächen
+    (:func:`draft_faces`)."""
+    return draft_faces(solid, angle_deg, cancelled=cancelled)[0]
+
+
+def draft_faces(
+    solid: Solid,
+    angle_deg: float,
+    *,
+    direction: tuple[float, float, float] = (0.0, 0.0, 1.0),
+    neutral: float | None = None,
+    selected_faces: Sequence[int] | None = None,
+    cancelled: CancelToken | None = None,
+) -> tuple[Solid, int]:
+    """Stellt Flächen um den Winkel an — gewählte oder alle in Entformungsrichtung (P6.4).
+
+    Zurück kommen der Körper und die Zahl der Flächen, die als **notwendiger
+    Übergang** dazukamen (:func:`_tangent_chain`): Eine gerundete Ecke, die
+    tangential an eine angestellte Wand anschließt, muss mit, sonst gibt es
+    zwischen beiden keine Kante — OpenCASCADE sagte dann ab (``build_tray_v3.step``,
+    119 senkrechte Flächen, gerundete Ecken).
+
+    ``direction`` ist die Entformungsrichtung, in die hinein der Körper
+    schmaler wird; ``neutral`` die Lage der neutralen Ebene entlang dieser
+    Richtung, ohne Angabe der Anfang des Körpers. ``selected_faces`` sind
+    Indizes in :meth:`Solid.faces`; ohne sie gilt jede ebene Fläche, die in
+    Entformungsrichtung steht. ``BRepOffsetAPI_DraftAngle`` verlängert und
+    beschneidet die Nachbarflächen selbst — derselbe Vertrag wie am Netz
+    (``geom.faces.draft_walls``).
+
+    **Gebaut heißt nicht heil.** Laufen zwei angestellte Flächen durch
+    dieselbe Wand, liefert der Kern einen Körper, den ``BRepCheck_Analyzer``
+    ablehnt — am Gehäuse mit 3 mm Wand bei 5° über 20 mm Höhe eine Deckfläche,
+    deren Innenrand in der Tessellierung fehlte (Netzvolumen 12 569 statt
+    5 694 mm³). ``ShapeFix_Shape`` macht ihn formal gültig, zählt die fehlende
+    Wand aber negativ; repariert wird deshalb nicht, sondern abgesagt, mit dem
+    Satz, den auch das Netz sagt.
+    """
     require()
+    from OCP.BRepCheck import BRepCheck_Analyzer
     from OCP.BRepOffsetAPI import BRepOffsetAPI_DraftAngle
     from OCP.gp import gp_Ax3, gp_Dir, gp_Pln, gp_Pnt
+
+    from app.core.geom.faces import DRAFT_CUTS_THROUGH, UPRIGHT_ENOUGH, _across_the_pull
 
     if not 0.0 < angle_deg <= 30.0:
         raise ValidationError(
@@ -600,17 +641,59 @@ def draft_vertical(
         )
     if cancelled is not None:
         cancelled.raise_if_cancelled()
+    pull = (float(direction[0]), float(direction[1]), float(direction[2]))
     working = replace(solid)
-    uprights = _upright_faces(working, cancelled=cancelled)
-    if not uprights:
-        raise GeometryError(
-            detail=_("Dieser Körper hat keine senkrechten Flächen."),
-            suggestions=(CORRECT_INPUT, CANCEL),
-        )
-    neutral = gp_Pln(gp_Ax3(gp_Pnt(0.0, 0.0, solid.bounds.minimum[2]), gp_Dir(0.0, 0.0, 1.0)))
+    # Die ebenen Flächen mit ihrer nach außen zeigenden Normale, unter ihrem
+    # Index in ``faces()`` — gewölbte fehlen, eine Auswahl davon ist eine Absage.
+    planes: dict[int, tuple[float, float, float]] = {}
+    for index in range(len(working.faces())):
+        surface = working.surface(index, cancelled=cancelled)
+        if isinstance(surface, PlaneSurface):
+            planes[index] = surface.normal
+    if selected_faces is None:
+        chosen = [
+            index
+            for index, normal in planes.items()
+            if abs(sum(a * b for a, b in zip(normal, pull, strict=True))) < UPRIGHT_ENOUGH
+        ]
+        if not chosen:
+            raise GeometryError(
+                detail=_(
+                    "Dieser Körper hat keine Flächen, die in Entformungsrichtung stehen. "
+                    "Wählen Sie eine andere Richtung oder einzelne Flächen."
+                ),
+                suggestions=(CORRECT_INPUT, CHANGE_SELECTION, CANCEL),
+            )
+    else:
+        chosen = list(selected_faces)
+        for index in chosen:
+            normal = planes.get(index)
+            if normal is None:
+                raise GeometryError(
+                    detail=_(
+                        "Angestellt werden ebene Flächen. Wählen Sie eine ebene Seitenwand, "
+                        "oder lassen Sie die Auswahl leer für alle Wände."
+                    ),
+                    suggestions=(CHANGE_SELECTION, CANCEL),
+                )
+            if abs(sum(a * b for a, b in zip(normal, pull, strict=True))) > UPRIGHT_ENOUGH:
+                raise _across_the_pull()
+    grown = _tangent_chain(working, chosen, pull, cancelled)
+    added = len(grown) - len(set(chosen))
+    chosen = grown
+    axis = next(number for number, value in enumerate(pull) if abs(value) > 0.5)
+    sign = 1.0 if pull[axis] > 0.0 else -1.0
+    start = solid.bounds.minimum[axis] if sign > 0.0 else -solid.bounds.maximum[axis]
+    level = start if neutral is None else neutral
+    origin = tuple(level * value for value in pull)
+    plane = gp_Pln(gp_Ax3(gp_Pnt(*origin), gp_Dir(*pull)))
     builder = BRepOffsetAPI_DraftAngle(working.shape)
-    refusal = _("Die Formschräge lässt sich an diesen Flächen nicht anlegen.")
-    for face in uprights:
+    refusal = _(
+        "Die Formschräge lässt sich an diesen Flächen nicht anlegen. Stellen Sie "
+        "einen kleineren Winkel ein, oder wählen Sie weniger Flächen."
+    )
+    faces = working.faces()
+    for index in chosen:
         if cancelled is not None:
             cancelled.raise_if_cancelled()
         # **``Add`` rechnet schon**, nicht erst ``Build``: An einer
@@ -618,15 +701,115 @@ def draft_vertical(
         # der Übersetzung kam das als „unerwarteter Fehler" mit der Bitte um
         # einen Fehlerbericht an (22.09.2026, NURBS-Platte aus STEP).
         try:
-            builder.Add(face, gp_Dir(0.0, 0.0, 1.0), math.radians(angle_deg), neutral)
-            added = builder.AddDone()
+            builder.Add(faces[index], gp_Dir(*pull), math.radians(angle_deg), plane)
+            done = builder.AddDone()
         except PROGRAMMING_ERRORS:
             raise
         except Exception as problem:  # OpenCASCADE wirft eigene Ausnahmearten
-            raise GeometryError(detail=refusal, suggestions=(CORRECT_INPUT, CANCEL)) from problem
-        if not added:
-            raise GeometryError(detail=refusal, suggestions=(CORRECT_INPUT, CANCEL))
-    return _finished(builder, refusal, working, cancelled=cancelled)
+            raise GeometryError(
+                detail=refusal, suggestions=(CORRECT_INPUT, CHANGE_SELECTION, CANCEL)
+            ) from problem
+        if not done:
+            raise GeometryError(
+                detail=refusal, suggestions=(CORRECT_INPUT, CHANGE_SELECTION, CANCEL)
+            )
+    result = _finished(builder, refusal, working, cancelled=cancelled)
+    if (
+        not BRepCheck_Analyzer(result.shape).IsValid()
+        or not result.is_closed
+        or result.solid_count != solid.solid_count
+        or result.volume <= EPS_GEOM
+    ):
+        raise GeometryError(
+            detail=DRAFT_CUTS_THROUGH,
+            suggestions=(CORRECT_INPUT, CHANGE_SELECTION, CANCEL),
+            values={"angle_deg": round(angle_deg, 2)},
+        )
+    return result, added
+
+
+def _tangent_chain(
+    solid: Solid,
+    chosen: Sequence[int],
+    pull: tuple[float, float, float],
+    cancelled: CancelToken | None,
+) -> list[int]:
+    """Die gewählten Flächen und alles, was tangential an sie anschließt und mitkann.
+
+    Mit kann eine ebene Fläche, die in Entformungsrichtung steht, und ein
+    Zylinder, dessen Achse in ihr liegt — die gerundete senkrechte Ecke.
+    Tangential heißt: An der Mitte der gemeinsamen Kante zeigen beide
+    Flächen um höchstens :data:`~app.core.units.SAME_PLANE_AT_A_CORNER` in
+    verschiedene Richtungen (dieselbe Grenze, mit der das Netz die Ebenen an
+    einer Ecke zählt). Eine Bohrung, die an keine angestellte Wand anschließt,
+    bleibt stehen — wie seit je.
+
+    ``BRepOffsetAPI_DraftAngle.Add`` nimmt tangentiale Flächen mit seiner
+    Vorgabe (``Flag=True``) ohnehin mit; gezählt wird hier, damit der Befund
+    dieselbe Menge nennt wie am Netz und eine Absage vorher fällt, wo eine
+    tangentiale Fläche nicht mitkann.
+    """
+    from OCP.BRepAdaptor import BRepAdaptor_Curve
+    from OCP.collections import (
+        IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher as NeighbourMap,
+    )
+    from OCP.collections import IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher as ShapeMap
+    from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE
+    from OCP.TopExp import TopExp, TopExp_Explorer
+    from OCP.TopoDS import TopoDS
+
+    from app.core.brep.canonical import CylinderSurface, outward_normal
+    from app.core.geom.faces import UPRIGHT_ENOUGH
+    from app.core.units import SAME_PLANE_AT_A_CORNER, is_close
+
+    faces = solid.faces()
+    known = ShapeMap()
+    TopExp.MapShapes_s(solid.shape, TopAbs_FACE, known)
+    neighbours = NeighbourMap()
+    TopExp.MapShapesAndAncestors_s(solid.shape, TopAbs_EDGE, TopAbs_FACE, neighbours)
+
+    def draftable(index: int) -> bool:
+        surface = solid.surface(index, cancelled=cancelled)
+        if isinstance(surface, PlaneSurface):
+            return (
+                abs(sum(a * b for a, b in zip(surface.normal, pull, strict=True))) < UPRIGHT_ENOUGH
+            )
+        if isinstance(surface, CylinderSurface):
+            axis = surface.cylinder.Axis().Direction()
+            along = abs(axis.X() * pull[0] + axis.Y() * pull[1] + axis.Z() * pull[2])
+            return is_close(along, 1.0)
+        return False
+
+    grown = list(dict.fromkeys(chosen))
+    seen = set(grown)
+    queue = list(grown)
+    while queue:
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        current = queue.pop()
+        explorer = TopExp_Explorer(faces[current], TopAbs_EDGE)
+        while explorer.More():
+            edge = explorer.Current()
+            explorer.Next()
+            if not neighbours.Contains(edge):
+                continue
+            curve = BRepAdaptor_Curve(TopoDS.Edge(edge))
+            middle = curve.Value((curve.FirstParameter() + curve.LastParameter()) / 2.0)
+            point = (middle.X(), middle.Y(), middle.Z())
+            for shape in neighbours.FindFromKey(edge):
+                other = int(known.FindIndex(shape)) - 1
+                if other < 0 or other in seen or not draftable(other):
+                    continue
+                one = outward_normal(faces[current], point)
+                two = outward_normal(faces[other], point)
+                if one is None or two is None:
+                    continue
+                if 1.0 - sum(a * b for a, b in zip(one, two, strict=True)) > SAME_PLANE_AT_A_CORNER:
+                    continue
+                seen.add(other)
+                grown.append(other)
+                queue.append(other)
+    return grown
 
 
 #: Gewindetiefe je Steigung: 5H/8 des scharfen Dreiecksprofils (metrisches ISO).
@@ -1514,14 +1697,6 @@ def _top_faces(solid: Solid, *, cancelled: CancelToken | None = None) -> list[An
         if normal[2] > 0.9 and abs(centre[2] - top) <= 1e-4:
             found.append(face)
     return found
-
-
-def _upright_faces(solid: Solid, *, cancelled: CancelToken | None = None) -> list[Any]:
-    return [
-        face
-        for face, normal, _ in _planar_faces(solid, cancelled=cancelled)
-        if abs(normal[2]) < 0.1
-    ]
 
 
 def _planar_faces(

@@ -25,6 +25,7 @@ Zwei Dinge kann ein Netz dabei, die der exakte Kern nicht braucht:
 
 from __future__ import annotations
 
+import bisect
 import itertools
 import math
 from collections.abc import Callable, Mapping, Sequence
@@ -55,6 +56,7 @@ from app.core.units import (
     MAX_FACET_ANGLE,
     MAX_FACET_SAG,
     is_close,
+    is_zero,
     weld_tolerance,
 )
 from app.i18n import TranslatableText, _
@@ -672,6 +674,402 @@ class ChamferShape:
     flipped: bool = False
 
 
+#: Wie viele gleichmäßig verteilte Stellen der exakte Kern vom Verlauf bekommt.
+#:
+#: OpenCASCADE nimmt kein eigenes Radiusgesetz an: ``Add(Law_Function, E)``
+#: und ``SetRadius(Law_Function, …)`` werfen in ``Build`` (OCCT 8.0.1,
+#: ``NCollection_Sequence::First``), ``SetLaw`` setzt den Builder still auf
+#: den unveränderten Körper zurück. Was geht, ist eine Liste aus Stelle und
+#: Radius, die der Kern mit seiner eigenen Spline verbindet — dicht genug
+#: abgetastet, trifft sie diesen Verlauf: gemessen unter 4·10⁻⁶ mm mit 33
+#: Stellen und den Nachbarstellen aus :data:`LAW_NEAR` (Sonde ``p6a``,
+#: 23.09.2026). Ohne die Nachbarstellen lag der Fehler an den Enden bei
+#: 5·10⁻³ mm: Der Kern verlängert den Verlauf für seine Spline über beide
+#: Enden hinaus.
+LAW_SAMPLES: Final = 33
+
+#: Wie nah an jeder Stelle (auch Anfang und Ende) zusätzlich abgetastet wird,
+#: als Anteil der Kantenlänge — dort knickt die zweite Ableitung des Verlaufs.
+LAW_NEAR: Final = (1e-4, 1e-3, 1e-2)
+
+
+@dataclass(frozen=True, slots=True)
+class RadiusLaw:
+    """Wie sich der Radius einer Verrundung entlang ihrer Kante ändert (P6.1).
+
+    ``positions`` sind Stellen als Anteil der Kantenlänge vom **Anfang** aus,
+    aufsteigend von 0 bis 1; ``radii`` die Radien dort. Dazwischen verläuft
+    der Radius als monotone kubische Hermite-Kurve (Fritsch-Carlson, wie
+    ``scipy``s ``PchipInterpolator``): zwischen zwei Stellen nie über oder
+    unter deren Werte, ohne Knick an einer Stelle, und bei nur zwei Stellen
+    eine Gerade. Gerechnet wird nur mit Grundrechenarten — dieselbe Zahl auf
+    jeder Maschine.
+
+    **Wo der Anfang ist, sagt die Kante und nicht ihre Nummer**
+    (:func:`starts_at_first`): das linke Ende, bei gleicher Lage das vordere,
+    dann das untere. ``reversed`` tauscht Anfang und Ende. Auf einem Ring
+    (:func:`loop_start`) sind Anfang und Ende dieselbe Stelle; ``periodic``
+    rechnet die Steigung dort aus beiden Nachbarabschnitten, damit der Verlauf
+    auch über diese Stelle ohne Knick läuft.
+    """
+
+    positions: tuple[float, ...]
+    radii: tuple[float, ...]
+    reversed: bool = False
+    periodic: bool = False
+
+    def __post_init__(self) -> None:
+        if len(self.positions) != len(self.radii) or len(self.positions) < 2:
+            raise ValueError("a radius law needs matching positions and radii, at least two")
+        if not is_zero(self.positions[0]) or not is_close(self.positions[-1], 1.0):
+            raise ValueError("a radius law runs from 0 to 1")
+        if any(b - a <= EPS_GEOM for a, b in itertools.pairwise(self.positions)):
+            raise ValueError("radius law positions must rise")
+
+    @property
+    def constant(self) -> bool:
+        """Ob überall derselbe Radius gilt — dann ist es die alte Verrundung."""
+        return all(is_close(radius, self.radii[0]) for radius in self.radii)
+
+    @property
+    def largest(self) -> float:
+        """Der größte Radius; er steht an einer Stelle und nie dazwischen."""
+        return max(self.radii)
+
+    @property
+    def smallest(self) -> float:
+        return min(self.radii)
+
+    def as_loop(self) -> RadiusLaw:
+        """Derselbe Verlauf auf einem Ring — mit glatter Steigung an Anfang und Ende."""
+        return RadiusLaw(self.positions, self.radii, self.reversed, periodic=True)
+
+    def at(self, t: float) -> float:
+        """Der Radius an der Stelle ``t`` (Anteil der Länge vom Anfang)."""
+        if self.reversed:
+            t = 1.0 - t
+        return self._value(min(max(float(t), 0.0), 1.0))
+
+    def along(self, values: np.ndarray) -> np.ndarray:
+        """:meth:`at` für ein Feld von Stellen."""
+        return np.asarray([self.at(float(value)) for value in np.asarray(values).ravel()])
+
+    def curvature_bound(self) -> float:
+        """Die größte zweite Ableitung ``|r''(t)|`` über den ganzen Verlauf.
+
+        Innerhalb eines Abschnitts ist ``r''`` linear; das Größte steht also an
+        einem Abschnittsende.
+        """
+        slopes = self._slopes()
+        worst = 0.0
+        for index in range(len(self.positions) - 1):
+            width = self.positions[index + 1] - self.positions[index]
+            rise = (self.radii[index + 1] - self.radii[index]) / width
+            first, second = slopes[index], slopes[index + 1]
+            worst = max(
+                worst,
+                abs(6.0 * rise - 4.0 * first - 2.0 * second) / width,
+                abs(-6.0 * rise + 2.0 * first + 4.0 * second) / width,
+            )
+        return worst
+
+    def stations(self) -> tuple[float, ...]:
+        """Die Stellen in der Richtung, in der :meth:`at` sie liest."""
+        if self.reversed:
+            return tuple(sorted(1.0 - value for value in self.positions))
+        return self.positions
+
+    def _slopes(self) -> list[float]:
+        """Die Steigungen an den Stellen — Fritsch-Carlson mit scipys Randformel."""
+        x, y = self.positions, self.radii
+        count = len(x)
+        widths = [x[index + 1] - x[index] for index in range(count - 1)]
+        rises = [(y[index + 1] - y[index]) / widths[index] for index in range(count - 1)]
+        if count == 2:
+            return [rises[0], rises[0]]
+        slopes = [0.0] * count
+        for index in range(1, count - 1):
+            before, after = rises[index - 1], rises[index]
+            if before * after <= 0.0:
+                continue
+            left = 2.0 * widths[index] + widths[index - 1]
+            right = widths[index] + 2.0 * widths[index - 1]
+            slopes[index] = (left + right) / (left / before + right / after)
+        if self.periodic:
+            # Anfang und Ende sind dieselbe Stelle: dieselbe Regel wie innen,
+            # mit dem letzten Abschnitt davor und dem ersten danach.
+            before, after = rises[-1], rises[0]
+            seam = 0.0
+            if before * after > 0.0:
+                left = 2.0 * widths[0] + widths[-1]
+                right = widths[0] + 2.0 * widths[-1]
+                seam = (left + right) / (left / before + right / after)
+            slopes[0] = slopes[-1] = seam
+            return slopes
+        slopes[0] = _edge_slope(widths[0], widths[1], rises[0], rises[1])
+        slopes[-1] = _edge_slope(widths[-1], widths[-2], rises[-1], rises[-2])
+        return slopes
+
+    def _value(self, t: float) -> float:
+        x, y = self.positions, self.radii
+        index = max(0, min(len(x) - 2, bisect.bisect_right(x, t) - 1))
+        width = x[index + 1] - x[index]
+        slopes = self._slopes()
+        u = (t - x[index]) / width
+        u2, u3 = u * u, u * u * u
+        return (
+            (2.0 * u3 - 3.0 * u2 + 1.0) * y[index]
+            + (u3 - 2.0 * u2 + u) * width * slopes[index]
+            + (-2.0 * u3 + 3.0 * u2) * y[index + 1]
+            + (u3 - u2) * width * slopes[index + 1]
+        )
+
+
+def _edge_slope(width: float, beside: float, rise: float, next_rise: float) -> float:
+    """Die Steigung am Rand: Dreipunktformel, auf Monotonie zurückgenommen (wie scipy)."""
+    slope = ((2.0 * width + beside) * rise - width * next_rise) / (width + beside)
+    if math.copysign(1.0, slope) != math.copysign(1.0, rise) or rise == 0.0:
+        return 0.0
+    if math.copysign(1.0, rise) != math.copysign(1.0, next_rise) and abs(slope) > abs(3.0 * rise):
+        return 3.0 * rise
+    return slope
+
+
+def starts_at_first(first: Sequence[float], last: Sequence[float]) -> bool:
+    """Ob ``first`` der **Anfang** einer offenen Kante ist, die bei ``last`` endet.
+
+    Dieselbe Regel wie die Richtung im Kantenschlüssel (:func:`edge_key`): Die
+    Richtung vom Anfang zum Ende zeigt in ihrer ersten Komponente, die auf drei
+    Stellen nicht null ist, ins Positive. Am Teil heißt das: der Anfang liegt
+    links, bei gleicher Lage vorn, dann unten. Beide Kerne fragen hier, damit
+    „Radius am Anfang" am Netz und am exakten Körper dieselbe Stelle meint.
+    """
+    span = np.asarray(last, dtype=float) - np.asarray(first, dtype=float)
+    reach = float(np.linalg.norm(span))
+    if reach <= EPS_GEOM:
+        return True
+    for value in span / reach:
+        rounded = _unsigned_zero(float(value), 3)
+        if rounded:
+            return rounded > 0.0
+    return True
+
+
+#: In welcher Richtung ein **Ring** anfängt: an seinem Punkt, der in dieser
+#: Richtung am weitesten zurückliegt — links, bei gleicher Lage vorn, dann
+#: unten; die kleinen Anteile entscheiden nur einen Gleichstand, etwa an der
+#: geraden linken Seite eines gerundeten Rechtecks (dort das vordere Ende).
+LOOP_START: Final = (1.0, 1e-3, 1e-6)
+
+#: Und wohin er von dort läuft: in die Richtung, die in dieser Achse ins
+#: Positive zeigt — nach hinten, bei einem stehenden Ring nach oben. Am
+#: Anfangspunkt steht die Tangente quer zu :data:`LOOP_START`; ihr Anteil
+#: dort ist kein verlässliches Vorzeichen, dieser schon.
+LOOP_WAY: Final = (0.0, 1.0, 1e-3)
+
+
+def points_forward(direction: Sequence[float]) -> bool:
+    """Ob ein Ring in dieser Tangentenrichtung von seinem Anfang weg läuft (:data:`LOOP_WAY`)."""
+    return float(np.dot(np.asarray(direction, dtype=float), LOOP_WAY)) > 0.0
+
+
+def loop_start(points: np.ndarray) -> tuple[float, bool]:
+    """Wo ein geschlossener Punktzug anfängt (Bogenlänge ab ``points[0]``) und ob er vorwärts läuft.
+
+    Der Punkt kleinster Lage in :data:`LOOP_START`: am Zug die Ecke mit dem
+    kleinsten Wert, dann mit einer Parabel durch sie und ihre Nachbarn
+    verfeinert — zwischen zwei Ecken eines Sehnenzugs liegt der Punkt, den
+    der exakte Kern an seiner Kurve findet (``brep.edit``). Vorwärts heißt
+    :func:`points_forward` für die Richtung wachsender Bogenlänge.
+    """
+    ring = np.asarray(points, dtype=float)
+    if float(np.linalg.norm(ring[0] - ring[-1])) <= EPS_GEOM:
+        ring = ring[:-1]
+    count = len(ring)
+    steps = np.linalg.norm(np.roll(ring, -1, axis=0) - ring, axis=1)
+    cumulative = np.concatenate(([0.0], np.cumsum(steps)))
+    total = float(cumulative[-1])
+    weight = np.asarray(LOOP_START, dtype=float)
+    values = ring @ (weight / float(np.linalg.norm(weight)))
+    corner = int(np.argmin(values))
+    before, after = float(steps[corner - 1]), float(steps[corner])
+    low, here, high = values[corner - 1], values[corner], values[(corner + 1) % count]
+    offset = 0.0
+    # **Verfeinert wird nur zwischen ähnlich langen Sehnen** — dem Sehnenzug
+    # eines Bogens. Am Übergang von einer Geraden in einen Bogen (die linke
+    # Seite eines gerundeten Rechtecks) liegt der Anfang auf der Ecke; eine
+    # Parabel über die lange Seite hinweg schob ihn gemessen 10 mm hinein.
+    even = max(before, after) <= 2.0 * min(before, after)
+    if even and before > EPS_GEOM and after > EPS_GEOM:
+        bend = ((low - here) / before + (high - here) / after) / (before + after)
+        if bend > 0.0:
+            slope = (high - here) / after - bend * after
+            offset = min(max(-slope / (2.0 * bend), -before), after)
+    start = (float(cumulative[corner]) + offset) % total
+    segment = int(np.searchsorted(cumulative, start, side="right") - 1) % count
+    onward = ring[(segment + 1) % count] - ring[segment]
+    return start, points_forward(onward)
+
+
+@dataclass(frozen=True, slots=True)
+class LawOnChain:
+    """Ein Radiusverlauf auf einem bestimmten Zug: Bogenlänge ``s`` zu Stelle und Radius.
+
+    Offene Züge beginnen an ihrem Anfang (:func:`starts_at_first`), Ringe an
+    :func:`loop_start`; ``start`` ist die Bogenlänge dieses Anfangs ab dem
+    ersten Punkt des Zugs, ``forward``, ob die Stelle mit wachsender
+    Bogenlänge wächst. Netz und exakter Kern stellen dieselbe Frage — der eine
+    am Punktzug, der andere an der Kontur aus Kurven.
+    """
+
+    law: RadiusLaw
+    total: float
+    start: float
+    forward: bool
+    closed: bool
+
+    def share(self, distance: float) -> float:
+        """Die Stelle im Verlauf (0 … 1) zur Bogenlänge ``distance``."""
+        if self.total <= EPS_GEOM:
+            return 0.0
+        if self.closed:
+            offset = distance - self.start if self.forward else self.start - distance
+            return (offset / self.total) % 1.0
+        share = min(max(distance / self.total, 0.0), 1.0)
+        return share if self.forward else 1.0 - share
+
+    def radius(self, distance: float) -> float:
+        return self.law.at(self.share(distance))
+
+    def places(self) -> list[float]:
+        """Die Bogenlängen der Stellen des Verlaufs — auf einem Ring auch sein Anfang."""
+        found: list[float] = []
+        for station in self.law.stations():
+            along = station * self.total
+            if self.closed:
+                spot = self.start + along if self.forward else self.start - along
+                found.append(spot % self.total)
+            else:
+                found.append(along if self.forward else self.total - along)
+        return sorted(set(found))
+
+
+def samples_along(on_chain: LawOnChain, low: float, high: float) -> list[tuple[float, float]]:
+    """Stelle und Radius für das Stück ``low`` … ``high`` (Bogenlänge) eines Zugs, von 0 bis 1.
+
+    Für den exakten Kern: OpenCASCADE nimmt kein eigenes Radiusgesetz an, und
+    ``SetRadius(UandR, IC, IinC)`` gilt einer Kante der Kontur. Abgetastet wird
+    gleichmäßig (:data:`LAW_SAMPLES`) und verdichtet an den Enden des Stücks und
+    um jede Stelle des Verlaufs, die hineinfällt (:data:`LAW_NEAR`, als Anteil
+    der ganzen Länge): Der Kern verlängert jede Tabelle für seine Spline über
+    ihre Enden hinaus und traf ohne die Verdichtung dort um 5·10⁻³ mm daneben.
+    Gemessen an einer Kette Gerade-Bogen-Gerade weicht sein Gesetz mit ihr
+    höchstens 5·10⁻⁸ mm von diesem ab.
+    """
+    width = high - low
+    if width <= EPS_GEOM:
+        return [(0.0, on_chain.radius(low)), (1.0, on_chain.radius(high))]
+    wanted = {index / (LAW_SAMPLES - 1) for index in range(LAW_SAMPLES)}
+    wanted.update(value for near in LAW_NEAR for value in (near, 1.0 - near))
+    for place in on_chain.places():
+        if low - EPS_GEOM <= place <= high + EPS_GEOM:
+            local = (place - low) / width
+            wanted.add(local)
+            for near in LAW_NEAR:
+                step = near * on_chain.total / width
+                wanted.update((local - step, local + step))
+    ordered = sorted(value for value in wanted if 0.0 <= value <= 1.0)
+    kept = [0.0]
+    for value in ordered:
+        if value - kept[-1] > EPS_GEOM:
+            kept.append(value)
+    kept[-1] = 1.0
+    return [(value, on_chain.radius(low + value * width)) for value in kept]
+
+
+def law_on_points(points: Sequence[Sequence[float]] | np.ndarray, law: RadiusLaw) -> LawOnChain:
+    """Der Verlauf auf einem Punktzug — offen oder geschlossen, wie am Netz."""
+    ring = np.asarray(points, dtype=float)
+    steps = np.linalg.norm(np.diff(ring, axis=0), axis=1)
+    total = float(steps.sum())
+    closed = len(ring) > 2 and float(np.linalg.norm(ring[0] - ring[-1])) <= EPS_GEOM
+    if closed:
+        start, forward = loop_start(ring)
+        return LawOnChain(law.as_loop(), total, start, forward, True)
+    return LawOnChain(law, total, 0.0, starts_at_first(ring[0], ring[-1]), False)
+
+
+def law_at_ends(points: Sequence[Sequence[float]], law: RadiusLaw) -> tuple[float, float]:
+    """Der Radius am ersten und am letzten Punkt eines Zugs — nach der Regel für den Anfang.
+
+    Auf einem Ring sind beide derselbe Punkt; geliefert werden dann Anfangs-
+    und Endradius des Verlaufs, und :func:`check_varying_radius` verlangt,
+    dass sie gleich sind.
+    """
+    if len(points) > 2 and math.dist(points[0], points[-1]) <= EPS_GEOM:
+        return law.at(0.0), law.at(1.0)
+    forward = starts_at_first(points[0], points[-1])
+    return (law.at(0.0), law.at(1.0)) if forward else (law.at(1.0), law.at(0.0))
+
+
+def check_varying_radius(
+    ends: Sequence[tuple[Any, Any, tuple[float, float]]], *, mixed_corner: bool
+) -> None:
+    """Hält an, wo ein veränderlicher Radius keine eindeutige Form hat — an beiden Kernen gleich.
+
+    ``ends`` nennt je gewählter Kante ihre zwei Endknoten (eine Kennung, die
+    an einer gemeinsamen Ecke gleich ist) und die Radien dort. Drei Fälle
+    haben keine Antwort, und jeder bekommt seinen Satz mit Weg (Regel 17):
+
+    * **Auf einem Ring sind Anfang und Ende dieselbe Stelle** — beide Enden
+      sind derselbe Knoten. Der Anfang selbst ist über die Lage bestimmt
+      (:func:`loop_start`); verschiedene Radien an Anfang und Ende hätten dort
+      einen Sprung.
+    * **Zwei gewählte Kanten mit verschiedenen Radien an einer Ecke**: Die
+      Eckkugel hätte zwei Radien zugleich.
+    * **Eine Ecke aus Außen- und Innenkante**: Ihr örtlicher Ersatz ist für
+      ein Maß gebaut (:func:`_mixed_corner_region`).
+    """
+    radii_at: dict[Any, list[float]] = {}
+    for first, last, (radius_first, radius_last) in ends:
+        if first == last:
+            if abs(radius_first - radius_last) > EPS_GEOM:
+                raise GeometryError(
+                    detail=_(
+                        "Diese Kante läuft ringsum: Anfang und Ende sind dieselbe Stelle, links "
+                        "vorn am Ring. Geben Sie beiden denselben Radius, und legen Sie den "
+                        "Verlauf über Zwischenstellen."
+                    ),
+                    suggestions=(CORRECT_INPUT, CHANGE_SELECTION, CANCEL),
+                    values={
+                        "radius_mm": round(radius_first, 3),
+                        "largest_mm": round(radius_last, 3),
+                    },
+                )
+            continue
+        radii_at.setdefault(first, []).append(radius_first)
+        radii_at.setdefault(last, []).append(radius_last)
+    if mixed_corner:
+        raise GeometryError(
+            detail=_(
+                "Ein veränderlicher Radius geht nicht an einer Ecke, an der eine Außen- und "
+                "eine Innenkante zusammentreffen. Wählen Sie einen gleichbleibenden Radius, "
+                "oder lassen Sie eine dieser Kanten aus."
+            ),
+            suggestions=(CORRECT_INPUT, CHANGE_SELECTION, CANCEL),
+        )
+    for radii in radii_at.values():
+        if len(radii) > 1 and max(radii) - min(radii) > EPS_GEOM:
+            raise GeometryError(
+                detail=_(
+                    "An einer Ecke treffen gewählte Kanten mit verschiedenen Radien zusammen. "
+                    "Geben Sie ihnen dort denselben Radius, oder verrunden Sie sie einzeln."
+                ),
+                suggestions=(CORRECT_INPUT, CHANGE_SELECTION, CANCEL),
+                values={"radius_mm": round(min(radii), 3), "largest_mm": round(max(radii), 3)},
+            )
+
+
 def reference_first(one: Sequence[float], two: Sequence[float]) -> bool:
     """Ob die Fläche mit der Normale ``one`` die Bezugsfläche ist — gegen ``two``.
 
@@ -986,7 +1384,66 @@ def _wedge(
     if reach <= EPS_GEOM:
         return None
     along = along / reach
+    section = _wedge_section(
+        start,
+        along,
+        first,
+        second,
+        radius,
+        convex,
+        rounded,
+        min_steps=min_steps,
+        flank_overlap=flank_overlap,
+        shape=shape,
+    )
+    if section is None:
+        return None
+    profile, towards_one = section
 
+    # **Zwei senkrechte Achsen in der Querschnittsebene.** Die beiden
+    # Flächenrichtungen sind es nicht — bei jedem Winkel außer neunzig Grad
+    # stünde das Polygon schief, und der erste Anlauf tat genau das.
+    across = np.cross(along, towards_one)
+    flat = [
+        (float(np.dot(point - start, towards_one)), float(np.dot(point - start, across)))
+        for point in profile
+    ]
+    # **Den Überstand bekommt nur, was abgezogen wird.** Bei einer Differenz
+    # hält er die Schnittflächen von den Körperflächen fern; bei einer
+    # Vereinigung klebt er, was über das Kantenende hinausragt, außen an den
+    # Körper. Gemessen an einer durchgehenden Nut: 0,02 mm³ zu viel, als
+    # 0,01 mm dünner Grat auf beiden Stirnflächen der Platte.
+    #
+    # **Und die Frage ist die Boolesche Richtung, nicht die Kante.** Beim
+    # Verrunden fällt beides zusammen — außen wird abgezogen, innen vereinigt —,
+    # und deshalb stand hier zuerst ``convex``. Beim *Wegnehmen* einer Rundung
+    # kehrt sich das um: außen wird vereinigt. Mit der alten Bedingung stand
+    # der Quader danach 20,02 mm hoch und trug 24000,36 mm³ statt 24000,0.
+    overshoot = EDGE_OVERSHOOT if subtracted else 0.0
+    return _prism(flat, start, towards_one, across, along, reach, overshoot)
+
+
+def _wedge_section(
+    start: np.ndarray,
+    along: np.ndarray,
+    first: Vec3,
+    second: Vec3,
+    radius: float,
+    convex: bool,
+    rounded: bool,
+    *,
+    min_steps: int = 0,
+    flank_overlap: float = 0.0,
+    shape: ChamferShape | None = None,
+    steps: int | None = None,
+) -> tuple[list[np.ndarray], np.ndarray] | None:
+    """Der Querschnitt des Werkzeugs an ``start``: seine Punkte und die erste Flächenrichtung.
+
+    Dieselben Zeilen für das Prisma eines festen Radius (:func:`_wedge`) und
+    für jeden Querschnitt eines veränderlichen (:func:`_varying_tool`);
+    ``steps`` setzt die Zahl der Sehnen fest, damit alle Querschnitte eines
+    Stücks gleich viele Punkte tragen.
+    """
     one = np.asarray(first, dtype=float)
     two = np.asarray(second, dtype=float)
     # **Die Winkelhalbierende zeigt in den Zwickel — und der liegt je nach
@@ -1025,7 +1482,7 @@ def _wedge(
     bow: list[np.ndarray] = []
     if rounded:
         centre = start + radius / units.exact_sin(half) * into
-        bow = _arc(centre, first_touch, second_touch, radius, min_steps=min_steps)
+        bow = _arc(centre, first_touch, second_touch, radius, min_steps=min_steps, steps=steps)
     profile = [start, first_touch, *bow, second_touch]
     if flank_overlap > 0.0:
         # Die Schnittkurve bleibt unverändert. Nur die beiden ursprünglichen
@@ -1041,28 +1498,7 @@ def _wedge(
             second_touch,
             second_touch + shifted * two,
         ]
-
-    # **Zwei senkrechte Achsen in der Querschnittsebene.** Die beiden
-    # Flächenrichtungen sind es nicht — bei jedem Winkel außer neunzig Grad
-    # stünde das Polygon schief, und der erste Anlauf tat genau das.
-    across = np.cross(along, towards_one)
-    flat = [
-        (float(np.dot(point - start, towards_one)), float(np.dot(point - start, across)))
-        for point in profile
-    ]
-    # **Den Überstand bekommt nur, was abgezogen wird.** Bei einer Differenz
-    # hält er die Schnittflächen von den Körperflächen fern; bei einer
-    # Vereinigung klebt er, was über das Kantenende hinausragt, außen an den
-    # Körper. Gemessen an einer durchgehenden Nut: 0,02 mm³ zu viel, als
-    # 0,01 mm dünner Grat auf beiden Stirnflächen der Platte.
-    #
-    # **Und die Frage ist die Boolesche Richtung, nicht die Kante.** Beim
-    # Verrunden fällt beides zusammen — außen wird abgezogen, innen vereinigt —,
-    # und deshalb stand hier zuerst ``convex``. Beim *Wegnehmen* einer Rundung
-    # kehrt sich das um: außen wird vereinigt. Mit der alten Bedingung stand
-    # der Quader danach 20,02 mm hoch und trug 24000,36 mm³ statt 24000,0.
-    overshoot = EDGE_OVERSHOOT if subtracted else 0.0
-    return _prism(flat, start, towards_one, across, along, reach, overshoot)
+    return profile, towards_one
 
 
 def _prism(
@@ -1107,7 +1543,7 @@ def _along_face(normal: np.ndarray, along: np.ndarray, inward: np.ndarray) -> np
     return direction if float(np.dot(direction, inward)) > 0.0 else -direction
 
 
-def _arc_steps(radius: float, span: float) -> int:
+def _arc_steps(radius: float, span: float, sag: float = MAX_FACET_SAG) -> int:
     """Aus wie vielen Sehnen ein Bogen dieses Radius besteht.
 
     Zwei Grenzen, dieselben, mit denen der exakte Kern tesselliert: Keine
@@ -1121,13 +1557,152 @@ def _arc_steps(radius: float, span: float) -> int:
     an welche Zahl sie gehört, entscheidet nicht dieses Modul — sonst liefen
     die beiden Kerne bei derselben Rundung auseinander.
     """
-    if radius <= MAX_FACET_SAG:
+    if radius <= sag:
         # Kleiner als die erlaubte Abweichung: Dann sagt sie nichts mehr, und
         # es bleibt bei der Winkelgrenze.
         turn = MAX_FACET_ANGLE
     else:
-        turn = min(2.0 * math.acos(1.0 - MAX_FACET_SAG / radius), MAX_FACET_ANGLE)
+        turn = min(2.0 * math.acos(1.0 - sag / radius), MAX_FACET_ANGLE)
     return max(MIN_ARC_STEPS, math.ceil(span / turn))
+
+
+#: Welcher Anteil der Sehnengrenze bei einem gekrümmten Radiusverlauf der
+#: Länge nach verbraucht werden darf. Zwischen zwei Querschnitten verbindet
+#: das Werkzeug gerade; wo der Radius sich gekrümmt ändert, weicht diese
+#: Gerade von der Rundung ab. Der Rest der Grenze bleibt dem Sehnenzug im
+#: Querschnitt — zusammen hält es :data:`MAX_FACET_SAG` (P6.1).
+LENGTHWISE_SAG_SHARE: Final = 0.1
+
+
+def _chain_positions(entry: MeshEdge) -> tuple[np.ndarray, float]:
+    """Bogenlänge an jedem Punkt des Zugs und seine Länge."""
+    points = np.asarray(entry.points, dtype=float)
+    steps = np.linalg.norm(np.diff(points, axis=0), axis=1)
+    cumulative = np.concatenate(([0.0], np.cumsum(steps)))
+    return cumulative, float(cumulative[-1])
+
+
+def _varying_tool(
+    entry: MeshEdge,
+    law: RadiusLaw,
+    *,
+    quality: Quality = "fine",
+    cancelled: CancelToken | None = None,
+) -> MeshData:
+    """Das Werkzeug einer Rundung mit veränderlichem Radius — Querschnitte, gerade verbunden.
+
+    Je Stück des Zugs entsteht ein Loft: Querschnitte wie bei :func:`_wedge`,
+    jeder mit dem Radius seiner Stelle, an beiden Enden, an jeder Stelle des
+    Verlaufs, die in das Stück fällt, und so dicht dazwischen, dass die gerade
+    Verbindung höchstens :data:`LENGTHWISE_SAG_SHARE` der Sehnengrenze von der
+    Rundung abweicht. Alle Querschnitte eines Stücks tragen gleich viele
+    Sehnen — so viele, wie der größte Radius des Stücks braucht. Bei einem
+    geraden Verlauf an einer geraden Kante liegt die Verbindung genau auf der
+    Rundungsfläche (einem Kegel), und der Sehnenzug hat die ganze Grenze.
+    """
+    points = np.asarray(entry.points, dtype=float)
+    cumulative, total = _chain_positions(entry)
+    on_chain = law_on_points(points, law)
+    radius_at = on_chain.radius
+    stations = on_chain.places()
+    bend = on_chain.law.curvature_bound() / max(total * total, EPS_GEOM)
+    curved = bend > EPS_GEOM
+    chord_sag = MAX_FACET_SAG * (1.0 - LENGTHWISE_SAG_SHARE) if curved else MAX_FACET_SAG
+    subtracted = entry.convex
+    flank_overlap = BOOLEAN_OVERLAP if subtracted else 0.0
+    pieces: list[MeshData] = []
+    for index, (first, second) in enumerate(entry.normals):
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        start, end = points[index], points[index + 1]
+        reach = float(np.linalg.norm(end - start))
+        if reach <= EPS_GEOM:
+            continue
+        along = (end - start) / reach
+        low, high = float(cumulative[index]), float(cumulative[index + 1])
+        places = {low, high}
+        places.update(value for value in stations if low < value < high)
+        one, two = np.asarray(first, dtype=float), np.asarray(second, dtype=float)
+        half = (math.pi - math.acos(float(np.clip(np.dot(one, two), -1.0, 1.0)))) / 2.0
+        if curved and EPS_GEOM < half < math.pi / 2.0 - EPS_GEOM:
+            # Wie weit ein Querschnittspunkt je Millimeter Radius wandert:
+            # höchstens um den Mittelpunktsabstand und einen Radius dazu.
+            leverage = 1.0 / units.exact_sin(half) + 1.0
+            spacing = math.sqrt(8.0 * MAX_FACET_SAG * LENGTHWISE_SAG_SHARE / (leverage * bend))
+            count = max(1, math.ceil((high - low) / spacing))
+            places.update(low + (high - low) * step / count for step in range(1, count))
+        ordered = sorted(places)
+        radii = [radius_at(value) for value in ordered]
+        steps = _arc_steps(max(radii), math.pi - 2.0 * half, chord_sag) if half > 0 else 1
+        sections: list[list[np.ndarray]] = []
+        for place, radius in zip(ordered, radii, strict=True):
+            section = _wedge_section(
+                start + (place - low) * along,
+                along,
+                first,
+                second,
+                radius,
+                entry.convex,
+                True,
+                flank_overlap=flank_overlap,
+                steps=steps,
+            )
+            if section is None:
+                sections = []
+                break
+            sections.append(section[0])
+        if len(sections) < 2:
+            continue
+        piece = _loft(sections, along, EDGE_OVERSHOOT if subtracted else 0.0)
+        if piece is not None:
+            pieces.append(piece)
+    if not pieces:
+        raise _without_an_angle(law.largest)
+    if len(pieces) == 1:
+        return pieces[0]
+    return boolean("union", pieces, quality=quality, cancelled=cancelled).mesh
+
+
+def _loft(sections: list[list[np.ndarray]], along: np.ndarray, overshoot: float) -> MeshData | None:
+    """Ein geschlossener Körper durch gleich lange Querschnitte, der Reihe nach gerade verbunden.
+
+    Die Enden sind Fächer vom ersten Punkt jedes Querschnitts aus — das ist
+    die Kante (oder ihr Versatz nach außen), und von dort sieht man jeden
+    Punkt des Zwickels. ``overshoot`` setzt vor und hinter die Endquerschnitte
+    je eine Kopie entlang der Kante, wie beim Prisma (:data:`EDGE_OVERSHOOT`).
+
+    **Eine Kopie und kein verschobener Endquerschnitt.** Wer den ersten
+    Querschnitt um den Überstand nach außen schob, streckte den Verlauf um
+    zwei Hundertstel über die ganze Kante: 116,2356 statt 116,2423 mm³ an
+    einer Rundung von 2 auf 5 mm über 40 mm — der Radius stand an keiner Stelle
+    mehr dort, wo er hingehört.
+    """
+    import trimesh
+
+    rings = [np.asarray(section, dtype=float) for section in sections]
+    if overshoot > 0.0:
+        rings = [rings[0] - overshoot * along, *rings, rings[-1] + overshoot * along]
+    count = len(rings[0])
+    vertices = np.vstack(rings)
+    faces: list[tuple[int, int, int]] = []
+    for ring in range(len(rings) - 1):
+        here, there = ring * count, (ring + 1) * count
+        for corner in range(count):
+            following = (corner + 1) % count
+            faces.append((here + corner, here + following, there + following))
+            faces.append((here + corner, there + following, there + corner))
+    last = (len(rings) - 1) * count
+    for corner in range(1, count - 1):
+        faces.append((0, corner + 1, corner))
+        faces.append((last, last + corner, last + corner + 1))
+    body = trimesh.Trimesh(
+        vertices=vertices, faces=np.asarray(faces, dtype=np.int64), process=False
+    )
+    if body.volume < 0.0:
+        body.invert()
+    if body.volume <= EPS_GEOM:
+        return None
+    return MeshData(body)
 
 
 def _arc(
@@ -1137,8 +1712,14 @@ def _arc(
     radius: float,
     *,
     min_steps: int = 0,
+    steps: int | None = None,
 ) -> list[np.ndarray]:
-    """Die Zwischenpunkte des Rundungsbogens von einem Berührpunkt zum anderen."""
+    """Die Zwischenpunkte des Rundungsbogens von einem Berührpunkt zum anderen.
+
+    ``steps`` setzt die Zahl der Sehnen fest, statt sie aus dem Radius zu
+    rechnen — die Querschnitte eines veränderlichen Radius tragen so alle
+    gleich viele Punkte.
+    """
     one = (first - centre) / radius
     two = (second - centre) / radius
     span = math.acos(float(np.clip(np.dot(one, two), -1.0, 1.0)))
@@ -1147,7 +1728,8 @@ def _arc(
     if length <= EPS_GEOM:
         return []
     axis = axis / length
-    steps = max(_arc_steps(radius, span), min_steps)
+    if steps is None:
+        steps = max(_arc_steps(radius, span), min_steps)
     points = []
     for step in range(1, steps):
         angle = span * step / steps
@@ -1170,6 +1752,7 @@ def round_edges(
     quality: Quality = "fine",
     cancelled: CancelToken | None = None,
     narrowest: float = MAX_FACET_SAG,
+    law: RadiusLaw | None = None,
 ) -> BooleanOutcome:
     """Verrundet die gewählten Kanten eines Netzes — dieselbe Handlung wie
     ``brep.edit.fillet``, an einem Körper, der keine Topologie hat.
@@ -1179,10 +1762,15 @@ def round_edges(
     :func:`_arc_steps` — die Zusage lautet, dass keine Sehne weiter als
     :data:`~app.core.units.MAX_FACET_SAG` von der Rundung abweicht, also
     genauso weit wie die Flächen, die der exakte Kern ausgibt.
+
+    ``law`` gibt jedem gewählten Zug einen veränderlichen Radius (P6.1,
+    :class:`RadiusLaw`); ``radius`` ist dann sein größter Wert. Ein Verlauf,
+    der überall gleich ist, ist die gewöhnliche Verrundung.
     """
+    varying = law if law is not None and not law.constant else None
     return _worked_edges(
         mesh,
-        radius,
+        law.largest if law is not None else radius,
         choice,
         keys,
         selected_edges=selected_edges,
@@ -1190,6 +1778,7 @@ def round_edges(
         quality=quality,
         cancelled=cancelled,
         narrowest=narrowest,
+        law=varying,
     )
 
 
@@ -1716,6 +2305,7 @@ def _worked_edges(
     cancelled: CancelToken | None = None,
     narrowest: float = MAX_FACET_SAG,
     shape: ChamferShape | None = None,
+    law: RadiusLaw | None = None,
 ) -> BooleanOutcome:
     """Löst die Auswahl im Weltsystem und rechnet gemischte Ecken in ihrem Rahmen.
 
@@ -1737,6 +2327,17 @@ def _worked_edges(
         if not kept:
             raise _without_an_angle(size)
         chosen = kept
+    if law is not None:
+        check_varying_radius(
+            [
+                (entry.node_indices[0], entry.node_indices[-1], law_at_ends(entry.points, law))
+                for entry in chosen
+                if entry.node_indices
+            ],
+            mixed_corner=any(
+                _mixed_corner_frame(star) is not None for star in _corner_stars(entries, chosen)
+            ),
+        )
     largest = contact_band_limit(
         entries,
         chosen,
@@ -1745,19 +2346,25 @@ def _worked_edges(
         tolerance=weld_tolerance(mesh.bounds.diagonal),
         narrowest=narrowest,
         shape=shape,
+        law=law,
     )
     if largest is not None:
-        raise too_large_for_the_faces(size, largest, rounded=rounded)
-    outcome = _grouped_edge_work(
-        mesh,
-        entries,
-        chosen,
-        size,
-        rounded=rounded,
-        quality=quality,
-        cancelled=cancelled,
-        shape=shape,
-    )
+        raise too_large_for_the_faces(size, largest, rounded=rounded, varying=law is not None)
+    if law is not None:
+        outcome = _edge_work(
+            mesh, entries, chosen, size, rounded=True, quality=quality, cancelled=cancelled, law=law
+        )
+    else:
+        outcome = _grouped_edge_work(
+            mesh,
+            entries,
+            chosen,
+            size,
+            rounded=rounded,
+            quality=quality,
+            cancelled=cancelled,
+            shape=shape,
+        )
     if skipped:
         outcome.findings.append(_skipped_finding(skipped, len(chosen)))
     return outcome
@@ -1778,9 +2385,16 @@ def contact_band_limit(
     tolerance: float,
     narrowest: float = MAX_FACET_SAG,
     shape: ChamferShape | None = None,
+    law: RadiusLaw | None = None,
 ) -> float | None:
     """Das Maß, unter dem die Berührlinien aller gewählten Kanten auf ihren Flächen
     bleiben — ``None``, wenn das eingetragene passt.
+
+    Mit einem Radiusverlauf (``law``, P6.1) ist ``size`` sein größter Radius,
+    und jeder Strahl greift so weit, wie der Radius **an seiner Stelle** es
+    verlangt; zusätzliche Strahlen stehen an jeder Stelle des Verlaufs, denn
+    dort liegen seine größten Werte. Die Antwort ist dann der größte Radius,
+    bei dem der ganze Verlauf im selben Verhältnis verkleinert passt.
 
     Mit zwei Fasenbreiten (``shape``) reicht jede Seite so weit, wie
     :func:`chamfer_reaches` sagt, und die Antwort ist die größte Breite der
@@ -1837,6 +2451,38 @@ def contact_band_limit(
     normals = np.concatenate([np.asarray(entry.normals, dtype=float) for entry in chains])
     owners = np.repeat(np.arange(len(chains)), counts)
     convex = np.repeat(np.asarray([entry.convex for entry in chains], dtype=bool), counts)
+    # Wo jedes Stück in seinem Zug beginnt, wie lang der Zug ist und ob er an
+    # seinem ersten Punkt anfängt — für den Radius an einer Stelle (P6.1).
+    # Nur mit einem Verlauf gerechnet: „alle Kanten" an einem großen Netz
+    # sind zehntausende Züge, und ohne Verlauf braucht niemand diese Zahlen.
+    piece_length = np.linalg.norm(last - first, axis=1)
+    piece_start: np.ndarray | None = None
+    laws: list[LawOnChain | None] = []
+    if law is not None:
+        before = np.cumsum(piece_length) - piece_length
+        first_piece = np.concatenate(([0], np.cumsum(counts)[:-1]))
+        piece_start = before - before[first_piece][owners]
+        laws = [
+            law_on_points(entry.points, law) if id(entry) in chosen_ids else None
+            for entry in chains
+        ]
+
+    def ratio(piece: np.ndarray, share: np.ndarray) -> np.ndarray:
+        """Radius an der Stelle ``share`` des Stücks ``piece``, als Anteil von ``size``.
+
+        Nur gewählte Züge tragen einen Verlauf; an allen anderen ist der Anteil
+        eins und zählt ohnehin nicht (``counted``).
+        """
+        if law is None or piece_start is None:
+            return np.ones(len(piece))
+        found = np.ones(len(piece))
+        for number, (chunk, where) in enumerate(zip(piece.tolist(), share.tolist(), strict=True)):
+            on_chain = laws[int(owners[chunk])]
+            if on_chain is not None:
+                distance = float(piece_start[chunk]) + where * float(piece_length[chunk])
+                found[number] = on_chain.radius(distance) / size
+        return found
+
     chosen_chain = np.asarray([id(entry) in chosen_ids for entry in chains], dtype=bool)
     if not chosen_chain.any():
         return None
@@ -1901,14 +2547,19 @@ def contact_band_limit(
         direction[flip] *= -1.0
         index = np.repeat(np.arange(len(picked)), samples)
         position = np.concatenate([(np.arange(count) + 0.5) / count for count in samples])
+        if law is not None and piece_start is not None:
+            index, position = _with_station_rays(
+                index, position, picked, owners, piece_start, piece_length, laws
+            )
         index, position = index[valid[index]], position[valid[index]]
+        scale = ratio(picked[index], position)
         owner_rows.append(picked[index])
         origin_rows.append(first[picked[index]] + span[index] * position[:, None])
         head_rows.append(direction[index])
         face_rows.append(side[index])
         walk_rows.append(along[index])
-        wanted_rows.append(sided[picked[index], number])
-        growing_rows.append(grows[picked[index], number])
+        wanted_rows.append(sided[picked[index], number] * scale)
+        growing_rows.append(grows[picked[index], number] * scale)
     mine = np.concatenate(owner_rows)
     if not len(mine):
         return None
@@ -1956,13 +2607,15 @@ def contact_band_limit(
     distance = start_u + share * (stop_u - start_u)
     crossing &= distance > tolerance
     rows, columns, distance = rows[crossing], columns[crossing], distance[crossing]
+    share = share[crossing]
     if not len(rows):
         return None
     # Je Strahl der nächste Treffer: der Rand der Fläche an dieser Stelle.
     order = np.lexsort((distance, rows))
-    rows, columns, distance = rows[order], columns[order], distance[order]
+    rows, columns, distance, share = rows[order], columns[order], distance[order], share[order]
     nearest = np.concatenate(([True], rows[1:] != rows[:-1]))
     rows, columns, width = rows[nearest], columns[nearest], distance[nearest]
+    share = np.clip(share[nearest], 0.0, 1.0)
 
     mine_chain = owners[mine[rows]]
     other_chain = owners[columns]
@@ -1971,8 +2624,11 @@ def contact_band_limit(
     facing_two = np.einsum("ij,ij->i", normals[columns, 1], face[rows]) > 1.0 - 1e-6
     facing = facing_one | facing_two
     # Die Nachbarkante greift auf **dieser** Fläche so weit, wie ihre Seite auf ihr reicht.
-    beside = np.where(facing_one, sided[columns, 0], sided[columns, 1])
-    beside_grows = np.where(facing_one, grows[columns, 0], grows[columns, 1])
+    # Mit einem Verlauf greift die Nachbarkante so weit, wie ihr Radius dort
+    # ist, wo der Strahl sie trifft.
+    other_scale = ratio(columns, share)
+    beside = np.where(facing_one, sided[columns, 0], sided[columns, 1]) * other_scale
+    beside_grows = np.where(facing_one, grows[columns, 0], grows[columns, 1]) * other_scale
     counted = other_chosen & facing
     other_reach = np.where(counted, np.nan_to_num(beside, posinf=0.0), 0.0)
     needed = wanted[rows] + other_reach
@@ -2024,6 +2680,41 @@ def contact_band_limit(
     return float(((width[usable] - steady[usable]) / scaling[usable]).min())
 
 
+def _with_station_rays(
+    index: np.ndarray,
+    position: np.ndarray,
+    picked: np.ndarray,
+    owners: np.ndarray,
+    piece_start: np.ndarray,
+    piece_length: np.ndarray,
+    laws: Sequence[LawOnChain | None],
+) -> tuple[np.ndarray, np.ndarray]:
+    """Zusätzliche Strahlen an jeder Stelle eines Verlaufs, die in ein gewähltes Stück fällt.
+
+    Die gleichmäßigen Strahlen stehen zwischen den Stellen; der größte Radius
+    eines monotonen Verlaufs steht aber an einer Stelle. Ohne diese Strahlen
+    könnte die Prüfung genau dort vorbeisehen.
+    """
+    extra_index: list[int] = []
+    extra_position: list[float] = []
+    for number, piece in enumerate(picked.tolist()):
+        on_chain = laws[int(owners[piece])]
+        width = float(piece_length[piece])
+        if on_chain is None or width <= EPS_GEOM:
+            continue
+        low = float(piece_start[piece])
+        for place in on_chain.places():
+            if low <= place <= low + width:
+                extra_index.append(number)
+                extra_position.append(min(max((place - low) / width, 0.0), 1.0))
+    if not extra_index:
+        return index, position
+    return (
+        np.concatenate([index, np.asarray(extra_index, dtype=index.dtype)]),
+        np.concatenate([position, np.asarray(extra_position, dtype=float)]),
+    )
+
+
 def _reaches(normals: np.ndarray, size: float, *, rounded: bool) -> np.ndarray:
     """:func:`_reach` für ein ganzes Feld von Normalenpaaren."""
     if not rounded:
@@ -2046,15 +2737,29 @@ def _reach(pair: np.ndarray, size: float, *, rounded: bool) -> float:
 
 
 def too_large_for_the_faces(
-    size: float, largest: float, *, rounded: bool, second: bool = False
+    size: float, largest: float, *, rounded: bool, second: bool = False, varying: bool = False
 ) -> GeometryError:
     """Der eine Satz beider Kerne, wenn die Berührlinien nicht auf die Flächen passen.
 
-    ``second`` sagt, dass die feste zweite Breite einer Fase zu groß ist (P6.2).
+    ``second`` sagt, dass die feste zweite Breite einer Fase zu groß ist (P6.2);
+    ``varying``, dass die Radien eines Verlaufs zu groß sind (P6.1) — dann ist
+    ``largest`` der größte Radius des Verlaufs, bei dem alle Stellen im selben
+    Verhältnis verkleinert passen.
     """
     from app.core.units import format_length
 
     shown = format_length(max(largest, 0.0))
+    if varying:
+        return GeometryError(
+            detail=_(
+                "Die Radien sind für diese Kanten zu groß: Auf einer angrenzenden Fläche "
+                "bleibt kein Platz für die Rundung. Verkleinern Sie die Radien so, dass "
+                "der größte unter {largest} bleibt, oder bearbeiten Sie weniger Kanten.",
+                largest=shown,
+            ),
+            suggestions=(CORRECT_INPUT, CHANGE_SELECTION, CANCEL),
+            values={"size_mm": round(size, 3), "largest_mm": largest},
+        )
     if second:
         return GeometryError(
             detail=_(
@@ -2244,8 +2949,14 @@ def _edge_work(
     quality: Quality = "fine",
     cancelled: CancelToken | None = None,
     shape: ChamferShape | None = None,
+    law: RadiusLaw | None = None,
 ) -> BooleanOutcome:
     """Der gemeinsame Weg von Verrundung und Fase.
+
+    Mit ``law`` bekommt jeder Zug sein Werkzeug aus Querschnitten
+    (:func:`_varying_tool`) und jede Ecke die Kugel mit dem Radius, den ihre
+    Züge dort gemeinsam haben — dass es einer ist, hat
+    :func:`check_varying_radius` vorher verlangt.
 
     **Zwei Richtungen, zwei Rechnungen.** An einer Außenkante wird der Zwickel
     abgezogen, an einer Innenkante dazugelegt; wer beides in einem Zug
@@ -2273,27 +2984,36 @@ def _edge_work(
         # eine Rechnung abbrechbar sein muss.
         if cancelled is not None:
             cancelled.raise_if_cancelled()
-        tool = rounding_tool(
-            entry,
-            size,
-            rounded,
-            min_steps=steps if id(entry) in refined_ids else 0,
-            extend_ends=id(entry) not in refined_ids,
-            quality=quality,
-            cancelled=cancelled,
-            shape=shape,
-        )
+        if law is not None:
+            tool = _varying_tool(entry, law, quality=quality, cancelled=cancelled)
+        else:
+            tool = rounding_tool(
+                entry,
+                size,
+                rounded,
+                min_steps=steps if id(entry) in refined_ids else 0,
+                extend_ends=id(entry) not in refined_ids,
+                quality=quality,
+                cancelled=cancelled,
+                shape=shape,
+            )
         (outer if entry.convex else inner).append(tool)
     runs: list[BooleanOutcome] = []
-    ball_vertices = _corner_ball(size) if stars and rounded else np.empty((0, 3))
+    ball_vertices = _corner_ball(size) if stars and rounded and law is None else np.empty((0, 3))
+    balls: dict[float, np.ndarray] = {}
     for star in stars:
         if cancelled is not None:
             cancelled.raise_if_cancelled()
+        corner_size, corner_ball = size, ball_vertices
+        if law is not None:
+            member, end = star[0]
+            corner_size = law_at_ends(member.points, law)[0 if end == 0 else 1]
+            corner_ball = balls.setdefault(corner_size, _corner_ball(corner_size))
         prepared = _corner_tools(
             star,
-            size,
+            corner_size,
             rounded=rounded,
-            ball_vertices=ball_vertices,
+            ball_vertices=corner_ball,
             quality=quality,
             cancelled=cancelled,
             shape=shape,

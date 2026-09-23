@@ -1082,12 +1082,27 @@ nie gebildet; das trifft auch einen Umriss mit Loch. `_prism_from` nimmt einen
 **Versatz je Knoten**: fest ergibt das gerade Prisma des Versetzens, mit der
 Höhe wachsend den Keil der Formschräge.
 
-Die neutrale Ebene der Formschräge liegt in beiden Kernen auf der unteren
-Z-Grenze des Körpers. Ein reiner Höhenversatz ändert weder Abtrag noch Maße;
-auch vollständig unter Z = 0 entstehen vollwertige Keile statt Nullvolumen.
+**Die Formschräge an gewählten Flächen** (P6.4, `draft_walls`): Richtung und
+neutrale Ebene sind wählbar, ohne Angabe gilt das alte Anstellen aller
+Wände in Entformungsrichtung mit neutraler Ebene am Anfang des Körpers. Jede
+Ecke einer angestellten Fläche wandert in den Schnitt ihrer Ebenen
+(`_moved_corners`: neue der angestellten, alte der übrigen, Ebenen an der Ecke
+über `units.SAME_PLANE_AT_A_CORNER`; Widerspruch über `MAX_FACET_SAG` oder
+Rutschen über `units.GRAZING_SLIDE` ist eine Absage), zwischen alter und neuer
+Fläche entsteht je Wand ein Werkzeug (`_prism_between`, gemeinsame
+Diagonale für Nachbarwerkzeuge), jenseits der neutralen Ebene abgezogen,
+davor vereinigt; eine Wand, die sie kreuzt, wird dort geteilt.
+`_tangent_walls` nimmt tangential anschließende Streifen mit (gerundete
+senkrechte Ecken), `_checked_tools` prüft je Bauteil, dass kein Werkzeug in
+fremdes Material läuft (`DRAFT_CUTS_THROUGH`; ein ganz aufgezehrtes loses
+Teil bleibt erlaubt). So bleibt an Innenecken keine Säule und am Sechskant
+keine Rippe — der frühere Keil über jeder Wand ließ beides stehen.
 
 `face_ops.py` — *Fläche versetzen* und *Formschräge anstellen* im Register,
-kernübergreifend wie `edge_ops.py`. **Und `push_face` hat dabei seinen
+kernübergreifend wie `edge_ops.py`. Die Formschräge trägt `faces`
+(Merkmalsliste, leer = alle Wände), `direction` (sechs Achsen), `neutral`
+und `neutral_height`; `applies_to=("face",)` mit `also_on_body`, damit sie an
+Fläche und Körper angeboten wird. **Und `push_face` hat dabei seinen
 Parameter gewechselt**: Es nahm eine Richtung und bewegte jede Fläche, die
 dorthin zeigte — an einer Treppe alle Stufen zugleich (24000,0 statt 21000,0).
 Gemeint ist die gewählte Fläche, und die benennt jetzt ein Merkmalsverweis; die
@@ -1209,6 +1224,23 @@ das größte Maß; der exakte Kern fragt dasselbe, wenn OpenCASCADE abgelehnt ha
 (kleinstes Druckerdetail) zählt nicht. Eine **Gruppe** („alle", „oben" …)
 überspringt Züge, an denen keine zwei Flächen unter einem Winkel stoßen
 (`workable`, Befund `edges.skipped`); eine benannte Kante hält an.
+
+**Verrunden mit Verlauf** (P6.1): `RadiusLaw` trägt Stellen (Anteil der Länge
+vom Anfang) und Radien, dazwischen monoton kubisch (Fritsch-Carlson wie
+scipys PCHIP, nur Grundrechenarten); `starts_at_first` legt den Anfang einer
+offenen Kante (links, vorn, unten — die Richtungsregel des Kantenschlüssels),
+`loop_start` den eines Rings (Punkt kleinster Lage in `LOOP_START`, Richtung
+nach `LOOP_WAY`; Verfeinerung nur zwischen ähnlich langen Sehnen), und
+`LawOnChain`/`law_on_points` übersetzen Bogenlänge in Stelle und Radius — für
+das Werkzeug wie für die Bandprüfung. Am Netz baut `_varying_tool` je
+Kettenstück einen Loft aus Querschnitten (`_wedge_section`, derselbe
+Querschnitt wie `_wedge`), gleich viele Sehnen je Stück, dichter wo der
+Verlauf gekrümmt ist (`LENGTHWISE_SAG_SHARE`), Überstand als Kopie der
+Endquerschnitte. `check_varying_radius` sagt ab, wo es keine Form gibt (Ring
+mit verschiedenem Anfangs- und Endradius, verschiedene Radien an einer
+gemeinsamen Ecke, gemischte Ecke); `contact_band_limit(law=)` misst jeden
+Strahl am Radius seiner Stelle. `samples_along` liefert dem exakten Kern je
+Konturkante seine Tabelle.
 
 **Fasen mit zwei Abständen oder Abstand und Winkel** (P6.2): `ChamferShape`
 trägt die zweite Rücknahme oder den Winkel, `reference_first` bestimmt die

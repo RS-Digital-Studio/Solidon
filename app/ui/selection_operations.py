@@ -245,7 +245,7 @@ def body_operations(specs: Iterable[OperationSpec]) -> tuple[OperationSpec, ...]
         for spec in specs
         if (spec.consumes != 0 or spec.takes_whole_scene)
         and spec.name not in catalogue
-        and not spec.applies_to
+        and (not spec.applies_to or spec.also_on_body)
     )
 
 
@@ -296,8 +296,12 @@ class SelectionOperationsPanel(QWidget):
         # **Einmal aufgezählt, nicht zweimal durchlaufen.** Die Signatur nimmt
         # ein ``Iterable``, und ein Generator wäre beim zweiten Filter leer.
         specs = tuple(specs)
-        operations = body_operations(specs) + feature_operations(specs)
-        by_name = {spec.name: spec for spec in operations}
+        # Eine Handlung an beiden Stufen (``also_on_body``) steht in beiden
+        # Filtern und bekommt trotzdem nur einen Knopf.
+        by_name = {
+            spec.name: spec for spec in (*body_operations(specs), *feature_operations(specs))
+        }
+        operations = tuple(by_name.values())
         self._at_a_feature = frozenset(spec.name for spec in feature_operations(specs))
         """Welche Handlungen einem **Merkmal** gelten.
 
@@ -309,6 +313,8 @@ class SelectionOperationsPanel(QWidget):
         self._at_which_kind = {
             spec.name: frozenset(spec.applies_to) for spec in feature_operations(specs)
         }
+        self._on_body = frozenset(spec.name for spec in specs if spec.also_on_body)
+        """Merkmalshandlungen, die auch am ganzen Körper gelten (``also_on_body``)."""
         """Und an **welcher Art** von Merkmal jede von ihnen etwas tut.
 
         Dieselbe Quelle, einen Schritt genauer: ``applies_to`` nennt nicht nur
@@ -877,7 +883,9 @@ class SelectionOperationsPanel(QWidget):
             if name in _shown_as_fields():
                 return False
             return self._feature_kind in self._at_which_kind.get(name, frozenset())
-        return name not in self._at_a_feature
+        # Eine Handlung, die auch ohne Merkmal gilt (``also_on_body``), steht
+        # an beiden Stufen — die Formschräge am ganzen Körper und an Flächen.
+        return name not in self._at_a_feature or name in self._on_body
 
     def chosen_level(self) -> str:
         """Die Stufe, auf die das Panel gerade eingestellt ist.

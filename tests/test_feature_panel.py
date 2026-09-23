@@ -30,7 +30,7 @@ from PySide6.QtWidgets import (
 from app.core.bootstrap import load_operations
 from app.core.geom.mesh import MeshData, read_mesh
 from app.core.perceive import actions, features
-from app.core.perceive.actions import EDGE_OPERATIONS, actions_for
+from app.core.perceive.actions import EDGE_OPERATIONS, EDGE_VARIANTS, actions_for
 from app.core.registry import REGISTRY, validate
 from app.core.types import Feature
 from app.core.units import LengthUnit
@@ -2568,8 +2568,10 @@ def test_the_edge_panel_carries_the_key_the_customer_never_sees(qt_app: QApplica
     # mit zwei aufgezählten Titeln wäre daran rot geworden, ohne dass etwas
     # kaputt war — er hätte die Gewohnheit geprüft und nicht die Zusage
     # (`.claude/rules/tests.md`, „Prüft dieser Test eine Zusage?").
-    assert set(knoepfe) == {str(REGISTRY.get(name).title) for name, _feld in EDGE_OPERATIONS}, (
-        "an einer Kante steht genau, was EDGE_OPERATIONS nennt"
+    erwartet = {str(REGISTRY.get(name).title) for name, _feld in EDGE_OPERATIONS}
+    erwartet |= {str(titel) for _name, titel, _felder, _fest in EDGE_VARIANTS}
+    assert set(knoepfe) == erwartet, (
+        "an einer Kante steht genau, was EDGE_OPERATIONS und EDGE_VARIANTS nennen"
     )
 
     for beschriftung in panel.findChildren(QLabel):
@@ -2599,7 +2601,10 @@ def test_the_chamfer_edge_row_carries_the_kind_and_its_fields_from_the_register(
     if not REGISTRY.has("chamfer_edges"):
         pytest.skip("OpenCASCADE is an optional dependency")
     key = "e:-20.00,0.00,20.00:0.000,1.000,0.000"
-    rows = {str(action.op): action for action in actions.edge_actions(key)}
+    rows: dict[str, Any] = {}
+    for action in actions.edge_actions(key):
+        # Die Grundzeile je Operation; Varianten (EDGE_VARIANTS) folgen danach.
+        rows.setdefault(str(action.op), action)
 
     chamfer = rows["chamfer_edges"]
     names = [field.name for field in chamfer.fields]
@@ -2725,6 +2730,36 @@ def test_the_chamfer_row_at_an_edge_shows_only_the_fields_of_its_kind(
     assert werte["flip_sides"] is True
     # Jeder Wert ist ein Parameter der Operation — keiner, den sie nicht kennt.
     validate(REGISTRY.get("chamfer_edges").params, {**werte, "distance": 3.0})
+
+
+def test_the_edge_panel_offers_a_variable_fillet_with_start_and_end(
+    qt_app: QApplication,
+) -> None:
+    """P6.1: „Verrunden mit Verlauf" an der angeklickten Kante — zwei Felder, ein Schritt.
+
+    Die Zeile führt dieselbe Operation wie *Verrunden*, mit Radius am Anfang
+    und am Ende und dem Verlauf fest eingestellt. Gedrückt wird der echte
+    Knopf; was hinausgeht, ist der Auftrag, den die Auswertung rechnet.
+    """
+    from app.core.bootstrap import load_operations
+
+    load_operations()
+    schluessel = "e:-20.00,0.00,20.00:0.000,1.000,0.000"
+    panel = FeaturePanel()
+    gerufen: list[tuple[str, dict[str, Any]]] = []
+    panel.operationRequested.connect(lambda op, werte: gerufen.append((op, dict(werte))))
+
+    panel.show_edge(schluessel, "Waagerecht · 30,00 mm · x -20,00, y 0,00")
+    press(panel, str(EDGE_VARIANTS[0][1]))
+
+    assert len(gerufen) == 1
+    op, werte = gerufen[0]
+    assert op == "fillet_edges"
+    assert werte["mode"] == "variable_radius"
+    assert werte["edges"] == "named" and werte["edge_keys"] == schluessel
+    schema = {e.name: e for e in REGISTRY.get("fillet_edges").params.spec()}
+    assert werte["radius"] == pytest.approx(float(schema["radius"].default))
+    assert werte["end_radius"] == pytest.approx(float(schema["end_radius"].default))
 
 
 def test_no_feature_kind_falls_back_to_the_sentence_that_says_nothing() -> None:

@@ -23,6 +23,25 @@ auf 10⁻⁸ — auch an denen, die früher den Gang verloren.
 Flächen, die es benennt, werden dort weder gelesen noch beschrieben — was
 auf ihnen entstünde, verdrängte das Gewinde ohnehin als Phantom.
 
+**Verrunden mit Verlauf** (P6.1, `edit.fillet(law=)`): OpenCASCADE nimmt kein
+eigenes Radiusgesetz an — `Add(Law_Function, E)` und `SetRadius(Law_Function,
+…)` werfen in `Build` (OCCT 8.0.1), `SetLaw` setzt den Builder auf den
+unveränderten Körper zurück, und `Add(R1, R2, E)` ist trotz der Doku nicht
+linear. Getragen wird der Verlauf deshalb als dicht abgetastete Tabelle, **je
+Kante der Kontur** (`SetRadius(UandR, IC, IinC)` gilt nur der Kante `IinC`):
+`_contour_pieces` läuft die Kontur über gemeinsame Knoten ab, `_loop_start_on`
+sucht den Anfang eines Rings an den Kurven, `geom.edges.samples_along` tastet
+ab. Das Gesetz des Kerns nach dem Bau weicht höchstens 10⁻⁴ mm ab.
+
+**Formschräge** (P6.4, `profiles.draft_faces`): gewählte Flächen oder alle
+ebenen in Entformungsrichtung, dazu `_tangent_chain` (ebene und zylindrische
+Flächen in Richtung, tangential angeschlossen); ein Ergebnis, das
+`BRepCheck_Analyzer` ablehnt, ist eine Absage mit dem Satz des Netzes
+(`faces.DRAFT_CUTS_THROUGH`). `ShapeFix_Shape` wird bewusst nicht benutzt: Es
+macht den Körper zweier sich durchschneidender Wände formal gültig und zählt
+die fehlende Wand negativ. `canonical.outward_normal` ist die eine
+Flächennormale für Fase (`edit._faces_at_edge`) und Tangentenkette.
+
 ## Eigentum an der nativen Form
 
 `Solid` übernimmt beim Eintritt eine eigene Kopie von Topologie und Geometrie

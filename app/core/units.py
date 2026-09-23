@@ -79,6 +79,21 @@ UPRIGHT_TO_AXIS: Final[float] = 0.1
 #: gegen den Radius.
 TANGENT_TO_THE_ARC: Final[float] = 0.9
 
+#: Wann zwei Dreiecke an einer Ecke **dieselbe** Ebene tragen: ihre Normalen
+#: weichen um höchstens ``1 - Skalarprodukt`` so viel voneinander ab, rund
+#: 0,8°. Die Formschräge am Netz (P6.4) setzt jede Ecke einer gewählten Fläche
+#: neu in den Schnitt ihrer Ebenen; dafür muss sie die Ebenen an der Ecke
+#: zählen. Eng genug für die Facetten eines Zylinders mit 48 Teilen (7,5°
+#: auseinander), weit genug für das Rauschen einer STL mit vier Byte je Zahl.
+SAME_PLANE_AT_A_CORNER: Final[float] = 1e-4
+
+#: Wie weit eine Ecke beim Anstellen höchstens entlang ihrer Nachbarflächen
+#: wandern darf, als Vielfaches des Wegs ihrer eigenen Fläche. Mehr heißt: Die
+#: Nachbarfläche läuft fast parallel zur gewählten (unter 5,7°, etwa der
+#: Anfang einer Rundung), und der neue Schnittpunkt ist keine Kante mehr,
+#: sondern eine Frage der Rundung (P6.4).
+GRAZING_SLIDE: Final[float] = 10.0
+
 # --- Einheiten -------------------------------------------------------------------
 
 LengthUnit = Literal["mm", "cm", "m", "in"]

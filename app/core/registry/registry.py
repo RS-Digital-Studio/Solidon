@@ -678,6 +678,14 @@ class OperationSpec:
     wie bei den drei benannten Lesarten daneben, nur ohne Parameter, an dem
     sie hinge — hier wird nicht ein bestimmter Träger gelesen, sondern die
     Szene als Ganzes."""
+    also_on_body: bool = False
+    """Gilt auch ohne gewähltes Merkmal, am ganzen Körper.
+
+    Eine Operation mit :attr:`applies_to` steht in der Auswahlkarte nur an
+    einem Merkmal ihrer Art. Die *Formschräge* gilt beidem: an gewählten
+    Flächen (P6.4) und, ohne Auswahl, an allen Wänden in Entformungsrichtung
+    wie seit je. Ohne das Feld verschwände das Anstellen des ganzen Körpers
+    aus der Karte, sobald die Flächenwahl dazukommt."""
     edges_on_mesh: bool = False
     """Die Operation liest ihre Kanten (``kind="edges"``) immer am **Netz**,
     auch an einem exakten Körper.
@@ -953,6 +961,7 @@ def register_op(
     requires_body: str = "",
     whole_scene: bool = False,
     reads_other_bodies: bool = False,
+    also_on_body: bool = False,
     edges_on_mesh: bool = False,
     produces_from: str | None = None,
     keeps_inputs: int = 0,
@@ -988,6 +997,7 @@ def register_op(
                 requires_body=requires_body,
                 whole_scene=whole_scene,
                 reads_other_bodies=reads_other_bodies,
+                also_on_body=also_on_body,
                 edges_on_mesh=edges_on_mesh,
                 produces_from=produces_from,
                 keeps_inputs=keeps_inputs,

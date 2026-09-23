@@ -26,7 +26,7 @@ from __future__ import annotations
 import dataclasses
 from typing import cast
 
-from app.core.geom.faces import draft_vertical, push_face, pushed_features
+from app.core.geom.faces import draft_walls, push_face, pushed_features, tangent_faces_finding
 from app.core.geom.mesh import as_mesh_data
 from app.core.registry import op_params, param, register_op
 from app.core.types import (
@@ -140,6 +140,22 @@ def push_face_op(ctx: OpContext) -> OpResult:
     )
 
 
+#: Die Entformungsrichtungen — die sechs Achsen am Druckbett. In die gewählte
+#: hinein wird das Teil schmaler (P6.4).
+PULL_DIRECTIONS: dict[str, tuple[float, float, float]] = {
+    "pull_up": (0.0, 0.0, 1.0),
+    "pull_down": (0.0, 0.0, -1.0),
+    "pull_right": (1.0, 0.0, 0.0),
+    "pull_left": (-1.0, 0.0, 0.0),
+    "pull_back": (0.0, 1.0, 0.0),
+    "pull_front": (0.0, -1.0, 0.0),
+}
+
+#: Wo die neutrale Ebene liegt: am Anfang des Teils in Entformungsrichtung, an
+#: ihrem Ende oder auf einer Höhe dazwischen.
+NEUTRAL_PLANES: tuple[str, ...] = ("neutral_start", "neutral_end", "neutral_height")
+
+
 @op_params
 class DraftParams(BaseParams):
     angle: float = param(
@@ -149,28 +165,79 @@ class DraftParams(BaseParams):
         minimum=0.1,
         maximum=30.0,
         doc=_(
-            "Um wie viel Grad die senkrechten Flächen angestellt werden. Die "
-            "Standfläche behält ihr Maß, nach oben wird der Körper schmaler."
+            "Um wie viel Grad die Flächen angestellt werden. An der neutralen Ebene "
+            "behält das Teil sein Maß, in Entformungsrichtung wird es schmaler."
         ),
+    )
+    # **P6.4 — Formschräge an gewählten Flächen.** Ohne Auswahl, nach oben und
+    # neutral unten ist es das Anstellen aller senkrechten Wände — die
+    # Bedeutung jedes gespeicherten Schritts.
+    faces: tuple[str, ...] = param(
+        title=_("Flächen"),
+        default=(),
+        kind="features",
+        doc=_(
+            "Welche Flächen angestellt werden. Ohne Auswahl alle Wände, die in "
+            "Entformungsrichtung stehen — bei „nach oben“ alle senkrechten."
+        ),
+    )
+    direction: str = param(
+        title=_("Entformungsrichtung"),
+        default="pull_up",
+        choices=tuple(PULL_DIRECTIONS),
+        doc=_(
+            "In welche Richtung das Teil schmaler wird — die Richtung, in die die Form "
+            "abgezogen wird."
+        ),
+    )
+    neutral: str = param(
+        title=_("Neutrale Ebene"),
+        default="neutral_start",
+        choices=NEUTRAL_PLANES,
+        placement="advanced",
+        doc=_(
+            "Wo das Teil sein Maß behält: am Anfang der Entformungsrichtung — bei „nach "
+            "oben“ unten —, an ihrem Ende oder auf einer gewählten Höhe."
+        ),
+    )
+    neutral_height: float = param(
+        title=_("Höhe der neutralen Ebene"),
+        default=0.0,
+        unit="mm",
+        placement="advanced",
+        doc=_(
+            "Wie weit die neutrale Ebene vom Anfang des Teils entfernt liegt, gemessen in "
+            "Entformungsrichtung. Darunter wird das Teil breiter, darüber schmaler."
+        ),
+        depends_on=("neutral", ("neutral_height",)),
     )
 
 
 @register_op(
     name="draft_faces",
-    cache_version="4",
+    # 5: gewählte Flächen, Richtung und neutrale Ebene (P6.4); am Netz treffen
+    # die angestellten Wände sich an Innenecken wie am exakten Körper, und ein
+    # exakter Körper, den die Prüfung ablehnt, wird abgesagt (23.09.2026).
+    cache_version="5",
     title=_("Formschräge anstellen"),
     category="shaping",
     params=DraftParams,
     consumes=1,
     produces=1,
+    applies_to=("face",),
+    also_on_body=True,
     doc=_(
-        "Stellt alle senkrechten Flächen um einen Winkel an — zum Entformen, "
-        "oder damit ein Stapelbehälter sich stapeln lässt."
+        "Stellt gewählte Flächen um einen Winkel an, oder alle Wände in "
+        "Entformungsrichtung — zum Entformen, oder damit ein Stapelbehälter sich "
+        "stapeln lässt."
     ),
 )
 def draft_faces(ctx: OpContext) -> OpResult:
     params = cast(DraftParams, ctx.params)
     source = ctx.inputs[0]
+    pull = PULL_DIRECTIONS[params.direction]
+    chosen = [_drafted_face(source, name) for name in params.faces]
+    level = _neutral_level(source, pull, params)
 
     if source.kind == "brep":
         from app.core.brep import profiles
@@ -178,7 +245,26 @@ def draft_faces(ctx: OpContext) -> OpResult:
         from app.core.brep.ops import brep_input
 
         exact, body = brep_input(ctx)
-        solid = profiles.draft_vertical(body, params.angle, cancelled=ctx.cancelled)
+        selected: tuple[int, ...] | None = None
+        if chosen:
+            ctx.cancelled.raise_if_cancelled()
+            selected = tuple(
+                sorted(
+                    {
+                        index
+                        for feature in chosen
+                        for index in body.complete_faces_of_triangles(feature.face_indices)
+                    }
+                )
+            )
+        solid, added = profiles.draft_faces(
+            body,
+            params.angle,
+            direction=pull,
+            neutral=level,
+            selected_faces=selected,
+            cancelled=ctx.cancelled,
+        )
         return OpResult(
             outputs=[
                 dataclasses.replace(
@@ -187,17 +273,56 @@ def draft_faces(ctx: OpContext) -> OpResult:
                     kind="brep",
                     features=features_of(solid, cancelled=ctx.cancelled),
                 )
-            ]
+            ],
+            findings=(
+                [dataclasses.replace(tangent_faces_finding(added), object_id=source.id)]
+                if chosen and added
+                else []
+            ),
         )
 
-    outcome = draft_vertical(
-        as_mesh_data(source.mesh), params.angle, quality=ctx.quality, cancelled=ctx.cancelled
+    outcome = draft_walls(
+        as_mesh_data(source.mesh),
+        params.angle,
+        walls=chosen or None,
+        direction=pull,
+        neutral=level,
+        quality=ctx.quality,
+        cancelled=ctx.cancelled,
     )
     return OpResult(
         outputs=[dataclasses.replace(source, mesh=outcome.mesh, features={})],
         solver=outcome.solver,
         findings=[dataclasses.replace(entry, object_id=source.id) for entry in outcome.findings],
     )
+
+
+def _drafted_face(source: SceneObject, name: str) -> Feature:
+    """Ein gewähltes Flächenmerkmal — oder der Satz, warum es keines ist."""
+    feature = source.features.get(name)
+    if feature is None:
+        raise _no_face()
+    return feature
+
+
+def _neutral_level(
+    source: SceneObject, pull: tuple[float, float, float], params: DraftParams
+) -> float:
+    """Die Lage der neutralen Ebene entlang der Entformungsrichtung.
+
+    Der Anfang ist die kleinste Lage des Körpers entlang der Richtung, das
+    Ende die größte; eine Höhe zählt vom Anfang aus. Gemessen am Hüllquader,
+    denn die Richtung ist eine Achse.
+    """
+    bounds = source.mesh.bounds
+    corners = [bounds.minimum, bounds.maximum]
+    along = [sum(a * b for a, b in zip(corner, pull, strict=True)) for corner in corners]
+    start, end = min(along), max(along)
+    if params.neutral == "neutral_end":
+        return float(end)
+    if params.neutral == "neutral_height":
+        return float(start + params.neutral_height)
+    return float(start)
 
 
 def _chosen_face(source: SceneObject, name: str) -> Feature | None:
@@ -272,4 +397,11 @@ def _on_a_solid(ctx: OpContext, params: PushFaceParams, chosen: Feature | None) 
     )
 
 
-__all__ = ["DraftParams", "PushFaceParams", "draft_faces", "push_face_op"]
+__all__ = [
+    "NEUTRAL_PLANES",
+    "PULL_DIRECTIONS",
+    "DraftParams",
+    "PushFaceParams",
+    "draft_faces",
+    "push_face_op",
+]

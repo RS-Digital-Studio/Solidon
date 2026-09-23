@@ -1009,6 +1009,21 @@ _CHOICE_NAMES: dict[str, TranslatableText] = {
     "equal_distances": _("Gleiche Breite"),
     "two_distances": _("Zwei Abstände"),
     "distance_angle": _("Abstand und Winkel"),
+    # Der Verlauf einer Verrundung (P6.1): ein Radius oder einer, der sich
+    # entlang der Kante ändert.
+    "constant_radius": _("Gleichbleibend"),
+    "variable_radius": _("Mit Verlauf"),
+    # Die Entformungsrichtung der Formschräge (P6.4): in welche Richtung das
+    # Teil schmaler wird, benannt wie die Seiten am Druckbett.
+    "pull_up": _("Nach oben"),
+    "pull_down": _("Nach unten"),
+    "pull_right": _("Nach rechts"),
+    "pull_left": _("Nach links"),
+    "pull_back": _("Nach hinten"),
+    "pull_front": _("Nach vorn"),
+    "neutral_start": _("Am Anfang"),
+    "neutral_end": _("Am Ende"),
+    "neutral_height": _("Auf einer Höhe"),
     "right_side": SIDE_NAMES[0][0],
     "left_side": SIDE_NAMES[0][1],
     "back_side": SIDE_NAMES[1][0],
@@ -1201,6 +1216,23 @@ _CHOICE_NOTES: dict[str, TranslatableText] = {
         "Die Fase nimmt die Bezugsfläche und die zweite Fläche verschieden weit zurück."
     ),
     "distance_angle": _("Ein Abstand auf der Bezugsfläche und der Winkel der Fase zu ihr."),
+    "constant_radius": _("Ein Radius über die ganze Kante — die gewohnte Verrundung."),
+    "pull_up": _("Das Teil wird nach oben schmaler — die Form wird nach oben abgezogen."),
+    "pull_down": _("Das Teil wird nach unten schmaler — die Form wird nach unten abgezogen."),
+    "pull_right": _("Das Teil wird nach rechts schmaler."),
+    "pull_left": _("Das Teil wird nach links schmaler."),
+    "pull_back": _("Das Teil wird nach hinten schmaler."),
+    "pull_front": _("Das Teil wird nach vorn schmaler."),
+    "neutral_start": _(
+        "Das Maß bleibt dort, wo das Teil in Entformungsrichtung beginnt — bei „nach oben“ unten."
+    ),
+    "neutral_end": _(
+        "Das Maß bleibt dort, wo das Teil in Entformungsrichtung endet — bei „nach oben“ oben."
+    ),
+    "neutral_height": _("Das Maß bleibt auf der eingegebenen Höhe; darunter wird es breiter."),
+    "variable_radius": _(
+        "Der Radius ändert sich vom Anfang zum Ende der Kante, auf Wunsch über Zwischenstellen."
+    ),
     "right_side": _("Die Bohrung bleibt zur rechten Seite hin offen."),
     "left_side": _("Die Bohrung bleibt zur linken Seite hin offen."),
     "back_side": _("Die Bohrung bleibt zur Rückseite hin offen."),
@@ -1276,6 +1308,8 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "cells": _("Zellen"),
     "centre": _("Mittelpunkt"),
     "constraints": _("Bedingungen"),
+    # Die Ecke, an der die Formschräge am Netz keine eindeutige Antwort hat (P6.4).
+    "corner": _("Ecke"),
     "drop": _("Einhängeweg"),
     "dropped_call": _("Verworfener Aufruf"),
     "eroded": _("Wirklich abgetragen"),

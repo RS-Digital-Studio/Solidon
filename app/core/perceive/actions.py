@@ -1352,6 +1352,25 @@ EDGE_OPERATIONS: Final[tuple[tuple[str, str], ...]] = (
 EDGE_SHAPE_FIELDS: Final[dict[str, tuple[str, ...]]] = {
     "chamfer_edges": ("mode", "second_distance", "angle", "flip_sides"),
 }
+#: Weitere Zeilen an einer angeklickten Kante: eine Operation aus
+#: :data:`EDGE_OPERATIONS` in einer zweiten Bedeutung, mit eigenem Titel,
+#: ihren Feldern und den Werten, die die Zeile mitbringt.
+#:
+#: **Verrunden mit Verlauf** (P6.1) ist dieselbe Operation wie *Verrunden* —
+#: ein Radius am Anfang, einer am Ende, ``mode="variable_radius"`` fest. Als
+#: eigene Zeile steht sie da, weil der Kunde am Griff „dicker werdend
+#: verrunden" sucht und nicht „Verrunden, dann Verlauf umschalten"; die
+#: Zwischenstellen und die Richtung stehen im vollständigen Dialog.
+EDGE_VARIANTS: Final[
+    tuple[tuple[str, TranslatableText, tuple[str, ...], tuple[tuple[str, Any], ...]], ...]
+] = (
+    (
+        "fillet_edges",
+        _("Verrunden mit Verlauf"),
+        ("radius", "end_radius"),
+        (("mode", "variable_radius"),),
+    ),
+)
 
 
 def edge_actions(key: str) -> list[FeatureAction]:
@@ -1366,6 +1385,8 @@ def edge_actions(key: str) -> list[FeatureAction]:
     und dahinter, was :data:`EDGE_SHAPE_FIELDS` für sie nennt (bei der Fase
     Art, zweiter Abstand, Winkel, Seitentausch). Die übrigen Werte bringt sie
     als :attr:`FeatureAction.fixed` mit: ``edges="named"`` und den Schlüssel.
+    Danach folgen die Varianten aus :data:`EDGE_VARIANTS` (*Verrunden mit
+    Verlauf*) mit ihren eigenen Feldern und festen Werten.
     Die Vorgabe ist die des Registers und nicht ein Maß der Kante: Anders als
     bei einer Bohrung gibt es hier keinen **gemessenen** Wert, den man
     übernehmen könnte — eine scharfe Kante hat keinen Radius, und der
@@ -1375,22 +1396,28 @@ def edge_actions(key: str) -> list[FeatureAction]:
     leere Liste die richtige Antwort: Die Anwendung läuft weiter, es sind die
     Operationen, die verschwinden (§36).
     """
+    rows: list[tuple[str, TranslatableText | None, tuple[str, ...], tuple[tuple[str, Any], ...]]]
+    rows = [(name, None, (measure,), ()) for name, measure in EDGE_OPERATIONS]
+    rows.extend(EDGE_VARIANTS)
     actions: list[FeatureAction] = []
-    for name, measure in EDGE_OPERATIONS:
+    for name, title, measures, extra in rows:
         if not REGISTRY.has(name):
             continue
         spec = REGISTRY.get(name)
         schema = {item.name: item for item in spec.params.spec()}
-        if measure not in schema:
+        if any(measure not in schema for measure in measures):
             continue
-        names = (measure, *EDGE_SHAPE_FIELDS.get(name, ()))
+        # Die Grundzeile führt hinter ihrem Maß, was EDGE_SHAPE_FIELDS nennt;
+        # eine Variante bringt ihre Felder selbst mit.
+        shape_fields = EDGE_SHAPE_FIELDS.get(name, ()) if title is None else ()
+        names = (*measures, *shape_fields)
         actions.append(
             FeatureAction(
-                title=spec.title,
+                title=title if title is not None else spec.title,
                 op=name,
                 note=spec.doc,
                 fields=tuple(_edge_field(schema[item]) for item in names if item in schema),
-                fixed=(("edges", "named"), ("edge_keys", key)),
+                fixed=(*extra, ("edges", "named"), ("edge_keys", key)),
             )
         )
     return actions

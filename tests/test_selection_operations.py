@@ -711,3 +711,27 @@ def test_the_search_field_goes_with_the_list_it_searches(qt_app: QApplication) -
     QApplication.processEvents()
     assert panel.search.isVisible(), "wer sucht, behält sein Feld"
     assert "anderes Wort" in panel._nothing.text()
+
+
+def test_the_draft_stands_on_the_body_and_at_a_face_but_not_at_a_hole(qt_app: QApplication) -> None:
+    """P6.4: Die Formschräge gilt dem ganzen Körper (alle Wände) und einer gewählten Fläche.
+
+    Mit ``applies_to=("face",)`` allein verschwände sie aus der Körperstufe —
+    dort stand sie seit je (``also_on_body``). An einer Bohrung hat sie nichts
+    zu tun, und einen zweiten Knopf bekommt sie nicht.
+    """
+    load_operations()
+    panel = SelectionOperationsPanel(REGISTRY.all())
+    assert "draft_faces" in panel._buttons
+    in_the_list = [
+        str(button.property("operationName"))
+        for _section, _toggle, buttons in panel._groups.values()
+        for button in buttons
+    ]
+    assert in_the_list.count("draft_faces") <= 1, "ein Knopf, nicht zwei"
+    panel.set_context(1, _availability(1))
+    assert panel._fits_the_level("draft_faces")
+    panel.set_context(1, _availability(1), feature_kind="face")
+    assert panel._fits_the_level("draft_faces")
+    panel.set_context(1, _availability(1), feature_kind="hole")
+    assert not panel._fits_the_level("draft_faces")

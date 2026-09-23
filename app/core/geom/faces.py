@@ -21,26 +21,38 @@ gehören.
 
 from __future__ import annotations
 
-import math
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import replace
-from typing import Final
+from typing import Any, Final
 
 import numpy as np
 
+from app.core import units
 from app.core.errors import (
     CANCEL,
     CHANGE_SELECTION,
     CORRECT_INPUT,
     REPAIR_AND_RETRY,
+    BooleanFailedError,
     GeometryError,
     ValidationError,
 )
-from app.core.geom.boolean import BOOLEAN_OVERLAP, BooleanKind, BooleanOutcome, boolean
+from app.core.geom.boolean import (
+    BOOLEAN_OVERLAP,
+    BooleanKind,
+    BooleanOutcome,
+    boolean,
+    deepest,
+)
 from app.core.geom.mesh import MeshData
-from app.core.geom.repair import merge_vertices, remove_degenerate_faces
+from app.core.geom.repair import (
+    merge_vertices,
+    remove_degenerate_faces,
+    remove_doubled_faces,
+    remove_hollow_shells,
+)
 from app.core.types import CancelToken, Feature, FeatureId, Finding, Quality, Vec3
-from app.core.units import EPS_GEOM
+from app.core.units import EPS_GEOM, MAX_FACET_SAG
 from app.i18n import _
 
 #: Wie weit die Flächen eines Merkmals von **einer** Ebene abweichen dürfen,
@@ -78,6 +90,15 @@ UPRIGHT_ENOUGH = 0.1
 
 #: Die Obergrenze der Formschräge, wie im exakten Kern.
 MAX_DRAFT_DEGREES = 30.0
+
+#: Der Satz beider Kerne, wenn eine angestellte Fläche durch anderes Material
+#: läuft — am Netz aus der Volumenbilanz der Werkzeuge, am exakten Körper aus
+#: seiner Gültigkeitsprüfung (P6.4).
+DRAFT_CUTS_THROUGH = _(
+    "Mit diesem Winkel läuft eine angestellte Fläche durch anderes Material — eine Wand "
+    "würde dünner als null. Stellen Sie einen kleineren Winkel ein, oder wählen Sie "
+    "weniger Flächen."
+)
 
 #: Wie viele senkrechte Wände die Formschräge über die Merkmalserkennung
 #: hinaus ergänzt — gezählt werden die **ergänzten**, nicht die Summe.
@@ -293,32 +314,48 @@ def _prism_from(
 
     ``offset`` bekommt die Knoten der Fläche als Feld und gibt zurück, wohin
     jeder von ihnen wandert. Ein fester Vektor macht daraus das gerade Prisma
-    des Versetzens; ein Versatz, der mit der Höhe wächst, macht daraus den Keil
-    der Formschräge. Beide Handlungen unterscheidet sonst nichts, und zwei
-    Fassungen wären zwei Stellen für dieselbe Umlaufrichtung.
+    des Versetzens. Gebaut wird es von :func:`_prism_between`.
+    """
+    corners = np.asarray(mesh.raw.faces, dtype=np.int64)[triangles]
+    used = np.unique(corners)
+    below = np.asarray(mesh.raw.vertices, dtype=float)[used]
+    local = np.searchsorted(used, corners)
+    return _prism_between(below, local, below + offset(below))
+
+
+def _prism_between(below: np.ndarray, corners: np.ndarray, above: np.ndarray) -> MeshData:
+    """Der Körper zwischen einer Dreiecksmenge und ihrer verschobenen Kopie.
+
+    ``below`` sind die Knoten der Fläche, ``corners`` ihre Dreiecke (Indizes in
+    ``below``), ``above`` dieselben Knoten an ihrem neuen Ort. Boden und Deckel
+    sind die Dreiecke selbst, der Mantel steht auf den Kanten, die nur zu einem
+    von ihnen gehören — so trifft es jeden Umriss, auch einen mit Loch, ohne ihn
+    je als Polygon zu sehen.
+
+    **Jedes Mantelviereck wird an derselben Diagonale geteilt, gleich welcher
+    Körper es baut**: vom alten Ort des lexikographisch kleineren Knotens zum
+    neuen des anderen. Zwei angestellte Nachbarwände teilen sich ein solches
+    Viereck (die Kante zwischen ihnen und ihr neuer Ort); mit verschiedenen
+    Diagonalen bliebe zwischen den zwei Werkzeugen ein Spalt, und durch einen
+    Spalt bleibt beim Abziehen eine Haut stehen.
     """
     import trimesh
 
-    corners = np.asarray(mesh.raw.faces, dtype=np.int64)[triangles]
-    used = np.unique(corners)
-    # Die Knoten neu nummerieren, damit das Prisma für sich steht.
-    fresh = {int(old): index for index, old in enumerate(used.tolist())}
-    below = np.asarray(mesh.raw.vertices, dtype=float)[used]
-    above = below + offset(below)
     count = len(below)
-
     faces: list[tuple[int, int, int]] = []
     for a, b, c in corners.tolist():
-        low = (fresh[a], fresh[b], fresh[c])
         # Der Boden zeigt nach innen, der Deckel nach außen — sonst wäre der
         # Körper von innen nach außen gestülpt und hätte negatives Volumen.
-        faces.append((low[0], low[2], low[1]))
-        faces.append((low[0] + count, low[1] + count, low[2] + count))
+        faces.append((a, c, b))
+        faces.append((a + count, b + count, c + count))
 
     for first, second in _border_edges(corners):
-        low_a, low_b = fresh[first], fresh[second]
-        faces.append((low_a, low_b, low_b + count))
-        faces.append((low_a, low_b + count, low_a + count))
+        if tuple(below[first]) <= tuple(below[second]):
+            faces.append((first, second, second + count))
+            faces.append((first, second + count, first + count))
+        else:
+            faces.append((first, second, first + count))
+            faces.append((second, second + count, first + count))
 
     body = trimesh.Trimesh(
         vertices=np.vstack([below, above]), faces=np.asarray(faces, dtype=np.int64)
@@ -406,18 +443,51 @@ def draft_vertical(
     quality: Quality = "fine",
     cancelled: CancelToken | None = None,
 ) -> BooleanOutcome:
-    """Stellt alle senkrechten Flächen um den Winkel an — die Formschräge.
+    """Stellt alle senkrechten Flächen um den Winkel an — der Weg aller alten Schritte.
 
     Neutral bleibt die Unterkante des Körpers: Dort behält der Körper sein
     Maß, nach oben wird er schmaler. Wörtlich dieselbe Zusage wie im exakten
     Kern (``brep.profiles.draft_vertical``), damit dieselbe Menüzeile an
-    beiden Körperarten dasselbe bedeutet.
+    beiden Körperarten dasselbe bedeutet. Gerechnet wird wie an gewählten
+    Flächen (:func:`draft_walls`).
+    """
+    return draft_walls(mesh, angle_deg, quality=quality, cancelled=cancelled)
 
-    Gebaut wird je Wand ein **Keil**: das Prisma über ihren Dreiecken, dessen
-    Deckel mit der Höhe über der Unterkante nach innen wandert. Alle Keile zusammen
-    werden in einem Zug abgezogen; an den Ecken überlappen sie sich, und genau
-    das ist der Grund für den einen Zug — die Überlappung löst die Boolesche
-    Rechnung, und niemand muss die Ecke eigens ausrechnen.
+
+def draft_walls(
+    mesh: MeshData,
+    angle_deg: float,
+    *,
+    walls: Sequence[Feature] | None = None,
+    direction: Sequence[float] = (0.0, 0.0, 1.0),
+    neutral: float | None = None,
+    quality: Quality = "fine",
+    cancelled: CancelToken | None = None,
+) -> BooleanOutcome:
+    """Stellt Flächen um den Winkel an — gewählte oder alle in Entformungsrichtung (P6.4).
+
+    ``direction`` ist die Entformungsrichtung: In sie hinein wird das Teil
+    schmaler. ``neutral`` ist die Lage der neutralen Ebene entlang dieser
+    Richtung (``Skalarprodukt mit direction``); ohne Angabe der Anfang des
+    Körpers, bei „nach oben" also seine Unterkante. Dort behält jede
+    angestellte Fläche ihr Maß, jenseits davon wird das Teil schmaler, davor
+    breiter. ``walls`` sind die gewählten Flächenmerkmale; ohne sie gilt jede
+    Wand, die in Entformungsrichtung steht — das Anstellen aller senkrechten
+    Wände, wie jeder alte Schritt es meint.
+
+    **Wie am exakten Kern:** Die neue Fläche geht durch die Schnittlinie der
+    alten mit der neutralen Ebene und steht im Winkel zur Entformungsrichtung.
+    Jede Ecke einer angestellten Fläche wandert in den Schnitt ihrer Ebenen —
+    die neuen der angestellten Flächen, die alten aller übrigen, die an ihr
+    liegen (:func:`_moved_corners`). Die Nachbarflächen bleiben so in ihrer
+    Ebene und werden verlängert oder beschnitten, wie OpenCASCADE es tut; an
+    einer Innenecke bleibt keine Säule stehen und an einem Sechskant keine
+    Rippe.
+
+    **Gerechnet wird trotzdem boolesch**: Zwischen alter und neuer Fläche
+    entsteht ein Körper (:func:`_prism_between`), jenseits der neutralen Ebene
+    abgezogen, davor vereinigt. Eine Fläche, die in eine Bohrung dahinter
+    hineinwandert, schneidet sie damit an, statt das Netz zu durchdringen.
     """
     if not 0.0 < angle_deg <= MAX_DRAFT_DEGREES:
         raise ValidationError(
@@ -426,34 +496,61 @@ def draft_vertical(
             value=angle_deg,
         )
     _must_be_closed(mesh)
-    upright = _upright_faces(mesh)
-    if not upright:
+    pull = np.asarray(direction, dtype=float)
+    pull = pull / float(np.linalg.norm(pull))
+    chosen = (
+        _walls_along(mesh, pull)
+        if walls is None
+        else [_chosen_wall(mesh, feature, pull) for feature in walls]
+    )
+    if not chosen:
         raise GeometryError(
-            detail=_("Dieser Körper hat keine senkrechten Flächen."),
-            suggestions=(CHANGE_SELECTION, CANCEL),
+            detail=_(
+                "Dieser Körper hat keine Flächen, die in Entformungsrichtung stehen. Wählen "
+                "Sie eine andere Richtung oder einzelne Flächen."
+            ),
+            suggestions=(CORRECT_INPUT, CHANGE_SELECTION, CANCEL),
         )
+    from app.core.perceive.features import _one_body
 
-    slope = math.tan(math.radians(angle_deg))
-    bottom = mesh.bounds.minimum[2]
-    tools: list[MeshData] = []
-    for triangles, normal in upright:
-        # Zwischen den Wänden gefragt: Ein Keil entsteht in numpy und ist
-        # dort nicht zu unterbrechen (§15.6, wie in ``edges._edge_work``).
-        if cancelled is not None:
-            cancelled.raise_if_cancelled()
+    body = _one_body(mesh).raw
+    chosen, added = _tangent_walls(body, _without_repeats(body, chosen), pull)
+    heights = np.asarray(body.vertices, dtype=float) @ pull
+    level = float(heights.min()) if neutral is None else float(neutral)
+    sine = units.exact_sin_degrees(angle_deg)
+    cosine = units.exact_cos_degrees(angle_deg)
+    shift = _moved_corners(body, chosen, pull, level, sine, cosine, cancelled)
+    tools = _draft_tools(body, chosen, shift, pull, level, cancelled)
+    runs = _checked_tools(body, chosen, tools, angle_deg, quality=quality, cancelled=cancelled)
 
-        def _wedge(points: np.ndarray, normal: np.ndarray = normal) -> np.ndarray:
-            return -np.outer(np.maximum(points[:, 2] - bottom, 0.0) * slope, normal)
-
-        tools.append(_prism_from(mesh, triangles, _wedge))
-
-    outcome = boolean("difference", [mesh, *tools], quality=quality, cancelled=cancelled)
-    if outcome.mesh.volume <= EPS_GEOM:
+    result = mesh
+    steps: tuple[tuple[BooleanKind, str], ...] = (("difference", "cut"), ("union", "fill"))
+    for kind, wanted in steps:
+        chosen_tools = [tool for side, _wall, tool in tools if side == wanted]
+        if not chosen_tools:
+            continue
+        outcome = boolean(kind, [result, *chosen_tools], quality=quality, cancelled=cancelled)
+        runs.append(outcome)
+        result = outcome.mesh
+    # **Was kein Volumen hat, ist kein Körper** — wie nach den Kantenwerkzeugen
+    # (``edges._edge_work``). Wo ein Werkzeug genau an einer Deckfläche endet,
+    # blieb am Behälter ``1x1-bin.stl`` eine Haut von acht Dreiecken ohne Dicke
+    # stehen, und der Prüfbericht zählte zwei Teile.
+    cleaned, shells = remove_hollow_shells(result)
+    if shells:
+        result = cleaned
+    if result.volume <= EPS_GEOM:
         raise GeometryError(
             detail=_("Mit diesem Winkel bleibt vom Körper nichts übrig — kleiner anstellen."),
             values={"angle_deg": round(angle_deg, 2)},
             suggestions=(CORRECT_INPUT, CANCEL),
         )
+    solver = deepest(run.solver for run in runs)
+    outcome = BooleanOutcome(
+        mesh=result,
+        solver=solver if solver is not None else runs[0].solver,
+        findings=[finding for run in runs for finding in run.findings],
+    )
     # **Ein Teil, das der Keil ganz aufgezehrt hat, wird genannt.** Die
     # neutrale Ebene gilt dem ganzen Körper: Ein loses Stück, das über ihr
     # schwebt, verliert dort ``Höhe mal tan(Winkel)`` — an ``two_components.stl``
@@ -461,6 +558,8 @@ def draft_vertical(
     # bei drei Grad also 0,52 mm Abtrag auf 0,2 mm Material. Das ist richtig
     # gerechnet und trotzdem nichts, was jemand stillschweigend hinnehmen
     # will.
+    if walls is not None and added:
+        outcome.findings.append(tangent_faces_finding(added))
     before, after = mesh.component_count, outcome.mesh.component_count
     if after < before:
         outcome.findings.append(
@@ -477,8 +576,470 @@ def draft_vertical(
     return outcome
 
 
+def tangent_faces_finding(count: int) -> Finding:
+    """Der Befund beider Kerne, wenn tangential anschließende Flächen mit angestellt wurden."""
+    return Finding(
+        code="draft.tangent_faces",
+        severity="info",
+        message=_(
+            "Tangential anschließende Flächen, etwa gerundete Ecken, sind mit angestellt — "
+            "ohne sie gäbe es zwischen ihnen und den gewählten Flächen keine Kante."
+        ),
+        values={"faces": count},
+    )
+
+
+def _tangent_walls(
+    body: Any, walls: list[tuple[list[int], np.ndarray]], pull: np.ndarray
+) -> tuple[list[tuple[list[int], np.ndarray]], int]:
+    """Die Wände und alles, was ohne sichtbare Kante an sie anschließt und mitkann.
+
+    Das Gegenstück zu ``brep.profiles._tangent_chain``: Eine gerundete
+    senkrechte Ecke ist am Netz eine Reihe schmaler Streifen, und jeder liegt
+    in Entformungsrichtung. Ohne sie wanderte die Wand, und der erste Streifen
+    daneben bliebe stehen — die Ecke rutschte über ihn hinweg
+    (:data:`~app.core.units.GRAZING_SLIDE`, gemessen an ``1x1-bin.stl``).
+    Übernommen wird jedes Dreieck, das über eine Kante unterhalb der
+    Knickschwelle des Bildes (``SHARP_EDGE_ANGLE``) erreichbar ist und in
+    Entformungsrichtung steht; je Ebene eine Wand. Zurück kommt auch, wie
+    viele Wände dazukamen.
+    """
+    from app.core.geom.measure import SHARP_EDGE_ANGLE
+
+    faces_count = len(body.faces)
+    normals = np.asarray(body.face_normals, dtype=float)
+    owned = np.zeros(faces_count, dtype=bool)
+    for triangles, _normal in walls:
+        owned[triangles] = True
+    pairs = np.asarray(body.face_adjacency, dtype=np.int64)
+    angles = np.asarray(body.face_adjacency_angles, dtype=float)
+    if not len(pairs):
+        return walls, 0
+    upright = (np.abs(normals @ pull) <= UPRIGHT_ENOUGH) & (np.linalg.norm(normals, axis=1) > 0.5)
+    # Nur Paare zweier stehender Dreiecke: Die Suche betritt ohnehin keine
+    # anderen, und an einem großen Netz wäre die Nachbartafel sonst so groß
+    # wie das Netz selbst.
+    keep = (angles < SHARP_EDGE_ANGLE) & upright[pairs[:, 0]] & upright[pairs[:, 1]]
+    smooth = pairs[keep]
+    around: dict[int, list[int]] = {}
+    for first, second in smooth.tolist():
+        around.setdefault(first, []).append(second)
+        around.setdefault(second, []).append(first)
+    queue = [int(index) for index in np.flatnonzero(owned)]
+    grown: list[int] = []
+    while queue:
+        current = queue.pop()
+        for other in around.get(current, ()):
+            if owned[other] or not upright[other]:
+                continue
+            owned[other] = True
+            grown.append(other)
+            queue.append(other)
+    # Je **Ebene** eine Wand, nicht je Richtung: Die Streifen zweier gleich
+    # gerundeter Ecken zeigen paarweise in dieselbe Richtung und liegen doch in
+    # verschiedenen Ebenen (an ``1x1-bin.stl`` 20 mm auseinander).
+    corners = np.asarray(body.vertices, dtype=float)[np.asarray(body.faces, dtype=np.int64)]
+    tolerance = units.weld_tolerance(float(np.linalg.norm(np.ptp(body.vertices, axis=0))))
+    groups: list[tuple[list[int], np.ndarray, float]] = []
+    for triangle in sorted(grown):
+        normal = normals[triangle] / float(np.linalg.norm(normals[triangle]))
+        offset = float(normal @ corners[triangle].mean(axis=0))
+        for members, known, where in groups:
+            same_way = 1.0 - float(normal @ known) <= units.SAME_PLANE_AT_A_CORNER
+            if same_way and abs(offset - where) <= tolerance:
+                members.append(triangle)
+                break
+        else:
+            groups.append(([triangle], normal, offset))
+    return [*walls, *((members, normal) for members, normal, _where in groups)], len(groups)
+
+
+def _without_repeats(
+    body: Any, walls: Sequence[tuple[list[int], np.ndarray]]
+) -> list[tuple[list[int], np.ndarray]]:
+    """Die Wände ohne doppelte und ohne flächenlose Dreiecke.
+
+    Ein doppelt gespeichertes Dreieck (``degenerate.stl`` trägt eines) gäbe
+    zwei gleiche Werkzeuge; sie überdeckten sich und sähen aus wie zwei
+    Flächen, die sich durch eine Wand schneiden. Ein Dreieck ohne Fläche
+    trägt nichts bei. Eine Wand, von der nichts bleibt, fällt weg.
+    """
+    faces = np.asarray(body.faces, dtype=np.int64)
+    areas = np.asarray(body.area_faces, dtype=float)
+    seen: set[tuple[int, ...]] = set()
+    kept: list[tuple[list[int], np.ndarray]] = []
+    for triangles, normal in walls:
+        own: list[int] = []
+        for triangle in triangles:
+            key = tuple(sorted(int(corner) for corner in faces[triangle]))
+            if key in seen or areas[triangle] <= EPS_GEOM * EPS_GEOM:
+                continue
+            seen.add(key)
+            own.append(int(triangle))
+        if own:
+            kept.append((own, normal))
+    return kept
+
+
+def _checked_tools(
+    body: Any,
+    walls: Sequence[tuple[list[int], np.ndarray]],
+    tools: Sequence[tuple[str, int, MeshData]],
+    angle_deg: float,
+    *,
+    quality: Quality,
+    cancelled: CancelToken | None,
+) -> list[BooleanOutcome]:
+    """Hält an, wo eine angestellte Fläche durch anderes Material liefe.
+
+    **Ein Werkzeug zum Abziehen liegt ganz im Material, eines zum Vereinigen
+    ganz davor** — solange keine Fläche in fremdes Material wandert. Je Bauteil
+    wird das nachgerechnet: Was von der Vereinigung seiner Abzugswerkzeuge im
+    Bauteil liegt, ist genau ihre Summe (gemessen auf 10⁻¹⁷ des Volumens), und
+    die Zugabewerkzeuge berühren das Bauteil nur an ihrer Fläche. Weicht es ab,
+    überschneiden sich zwei Flächen in einer Wand — am Gehäuse mit 3 mm Wand
+    bei 5° über 20 mm Höhe weichen außen und innen oben zusammen 3,5 mm zurück
+    —, oder eine Fläche läuft in eine Bohrung dahinter. Der Körper wäre dort
+    dünner als nichts; der Satz dazu ist derselbe wie am exakten Kern.
+
+    **Ein Teil, das ganz verschwindet, ist keine solche Stelle.** Ein loses
+    Stäubchen über der neutralen Ebene zehrt der Keil vollständig auf; das
+    bleibt erlaubt und wird als Befund genannt (``draft.parts_consumed``).
+    """
+    import trimesh
+
+    faces = np.asarray(body.faces, dtype=np.int64)
+    # **Bauteile über gemeinsame Ecken, nicht über Nachbarschaften.** Ein
+    # doppelt gespeichertes Dreieck macht seine Kanten mehrdeutig, und
+    # ``face_adjacency`` lässt solche Kanten aus: In ``degenerate.stl`` stand
+    # ein Dreieck der linken Wand dann als eigenes Bauteil da.
+    corners = trimesh.graph.connected_component_labels(  # type: ignore[no-untyped-call]
+        body.edges_unique, node_count=len(body.vertices)
+    )
+    labels = np.asarray(corners, dtype=np.int64)[faces[:, 0]]
+    runs: list[BooleanOutcome] = []
+    # **Nur eine exakt gerechnete Bilanz darf absagen.** Fällt ein Schritt der
+    # Prüfung bis zur Voxelstufe durch, ist sein Volumen genähert: Am Behälter
+    # ``1x1-bin.stl`` fehlten so bei 0,3° scheinbar 8,7 mm³, bei 0,5° nichts —
+    # eine Absage, die am kleineren Winkel kam und am größeren nicht. Die
+    # Stufe steht ohnehin im Bericht (§17.2).
+    exact = [True]
+
+    def solved(outcome: BooleanOutcome) -> BooleanOutcome:
+        runs.append(outcome)
+        if outcome.solver.strategy == "voxel":
+            exact[0] = False
+        return outcome
+
+    def united(parts: list[MeshData]) -> MeshData | None:
+        if len(parts) == 1:
+            return parts[0]
+        try:
+            return solved(boolean("union", parts, quality=quality, cancelled=cancelled)).mesh
+        except BooleanFailedError:
+            # Im Entwurf endet die Kette nach Stufe 2; die Prüfung lässt dann
+            # nach, statt die Operation scheitern zu lassen.
+            exact[0] = False
+            return None
+
+    def shared(first: MeshData, second: MeshData | None, kind: BooleanKind) -> float:
+        if second is None:
+            return 0.0
+        try:
+            outcome = boolean(
+                kind, [first, second], quality=quality, allow_empty=True, cancelled=cancelled
+            )
+        except BooleanFailedError:
+            exact[0] = False
+            return 0.0
+        return float(solved(outcome).mesh.volume)
+
+    def refused() -> GeometryError:
+        return GeometryError(
+            detail=DRAFT_CUTS_THROUGH,
+            suggestions=(CORRECT_INPUT, CHANGE_SELECTION, CANCEL),
+            values={"angle_deg": round(angle_deg, 2)},
+        )
+
+    owner = {wall: int(labels[walls[wall][0][0]]) for _side, wall, _tool in tools}
+    for label in sorted(set(owner.values())):
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        # Doppelte und flächenlose Dreiecke heraus: So ein Bauteil ist für
+        # ``manifold3d`` kein geschlossener Körper, und die Kette glättete ihn
+        # bis zur Voxelstufe — dann stimmte keine Bilanz mehr.
+        part, _gone = remove_degenerate_faces(
+            MeshData(body.submesh([np.flatnonzero(labels == label)], append=True))
+        )
+        part, _doubled = remove_doubled_faces(part)
+        noise = max(units.VOLUME_SUM_NOISE * part.volume, EPS_GEOM)
+        cuts = [tool for side, wall, tool in tools if side == "cut" and owner[wall] == label]
+        fills = [tool for side, wall, tool in tools if side == "fill" and owner[wall] == label]
+        # **Nur Differenzen, kein Schnitt.** Werkzeug und Bauteil teilen die
+        # Fläche, auf der das Werkzeug steht; ``manifold3d`` rechnet den Schnitt
+        # solcher deckungsgleicher Flächen in der ersten Stufe nicht verlässlich:
+        # am Behälter bei 0,3° Vereinigung 5000,472 = Summe, Schnitt mit dem
+        # Bauteil 4991,780, Bauteil minus Vereinigung aber genau 16 906,228 =
+        # Bauteil minus Summe — die Differenz stimmte, der Schnitt nicht.
+        if cuts:
+            union = united(cuts)
+            wanted = sum(tool.volume for tool in cuts)
+            left = shared(part, union, "difference")
+            # Geht weniger weg als ihre Summe, überschneiden sie sich oder ragen
+            # hinaus — erlaubt nur, wo vom Bauteil nichts bleibt.
+            mismatch = abs(part.volume - left - wanted) > max(noise, EPS_GEOM * wanted)
+            if mismatch and left > noise and exact[0]:
+                raise refused()
+        if fills:
+            union = united(fills)
+            added = sum(tool.volume for tool in fills)
+            outside = shared(union, part, "difference") if union is not None else added
+            if union is not None and union.volume - outside > noise and exact[0]:
+                raise refused()
+    return runs
+
+
+def _chosen_wall(
+    mesh: MeshData, feature: Feature, pull: np.ndarray
+) -> tuple[list[int], np.ndarray]:
+    """Eine gewählte Fläche mit ihrer Normale — oder der Satz, warum sie nicht angestellt wird."""
+    if feature.kind != "face":
+        raise GeometryError(
+            detail=_(
+                "Angestellt werden ebene Flächen. Wählen Sie eine ebene Seitenwand, "
+                "oder lassen Sie die Auswahl leer für alle Wände."
+            ),
+            suggestions=(CHANGE_SELECTION, CANCEL),
+        )
+    triangles = _triangles_of(mesh, feature)
+    normal = np.asarray(face_normal(feature), dtype=float)
+    if abs(float(normal @ pull)) > UPRIGHT_ENOUGH:
+        raise _across_the_pull()
+    return triangles, normal
+
+
+def _across_the_pull() -> GeometryError:
+    """Der Satz beider Kerne für eine Fläche, die quer zur Entformungsrichtung steht."""
+    return GeometryError(
+        detail=_(
+            "Diese Fläche steht quer zur Entformungsrichtung — angestellt werden Flächen, "
+            "die in diese Richtung verlaufen. Wählen Sie eine Seitenwand oder eine andere "
+            "Entformungsrichtung."
+        ),
+        suggestions=(CORRECT_INPUT, CHANGE_SELECTION, CANCEL),
+    )
+
+
+def _moved_corners(
+    body: Any,
+    walls: Sequence[tuple[list[int], np.ndarray]],
+    pull: np.ndarray,
+    level: float,
+    sine: float,
+    cosine: float,
+    cancelled: CancelToken | None,
+) -> np.ndarray:
+    """Wohin jede Ecke einer angestellten Fläche wandert — in den Schnitt ihrer Ebenen.
+
+    Die neue Ebene einer Fläche mit der Normale ``n`` geht durch ihre
+    Schnittlinie mit der neutralen Ebene; ihre Normale ist ``cos(w)·n_h +
+    sin(w)·d`` mit dem Winkel ``w`` und ``n_h``, dem Teil von ``n`` quer zur
+    Entformungsrichtung ``d`` — derselbe absolute Winkel, den
+    ``BRepOffsetAPI_DraftAngle`` setzt. Eine
+    Ecke gehört zu den neuen Ebenen der angestellten Flächen an ihr und zu den
+    alten aller übrigen (Dreiecke an ihr, deren Normalen sich um mehr als
+    :data:`~app.core.units.SAME_PLANE_AT_A_CORNER` unterscheiden); ihr neuer
+    Ort ist der nächste Punkt, der alle zugleich erfüllt. Eine Ecke im Inneren
+    einer Fläche kennt nur deren Ebene und rückt senkrecht auf sie.
+
+    Zwei Fälle haben keine Antwort, und beide sagen es statt still zu glätten:
+    Die Ebenen treffen sich nicht mehr in einem Punkt (eine Fläche entstünde
+    oder verschwände), oder die Ecke wanderte mehr als
+    :data:`~app.core.units.GRAZING_SLIDE`-mal so weit wie ihre Fläche — die
+    Nachbarfläche läuft dann fast parallel, etwa eine Rundung.
+    """
+    vertices = np.asarray(body.vertices, dtype=float)
+    faces = np.asarray(body.faces, dtype=np.int64)
+    normals = np.asarray(body.face_normals, dtype=float)
+    owner = np.full(len(faces), -1, dtype=np.int64)
+    new_normals = np.zeros((len(walls), 3))
+    new_offsets = np.zeros(len(walls))
+    for number, (triangles, normal) in enumerate(walls):
+        owner[triangles] = number
+        across = normal - float(normal @ pull) * pull
+        across /= float(np.linalg.norm(across))
+        offset = float(normal @ vertices[faces[triangles]].reshape(-1, 3).mean(axis=0))
+        # Ein Punkt der Schnittlinie mit der neutralen Ebene: n·x = offset, d·x = level.
+        mix = float(normal @ pull)
+        weights = np.linalg.solve(np.array([[1.0, mix], [mix, 1.0]]), [offset, level])
+        on_line = weights[0] * normal + weights[1] * pull
+        new_normals[number] = cosine * across + sine * pull
+        new_offsets[number] = float(new_normals[number] @ on_line)
+
+    moving = np.unique(faces[owner >= 0])
+    around = np.asarray(body.vertex_faces, dtype=np.int64)[moving]
+    owners = np.where(around >= 0, owner[np.maximum(around, 0)], -2)
+    shift = np.zeros_like(vertices)
+    # Eine Ecke im Inneren genau einer Fläche: senkrecht auf deren neue Ebene.
+    lone = owners.max(axis=1)
+    inside = np.all((owners == lone[:, None]) | (owners == -2), axis=1) & (lone >= 0)
+    inner = moving[inside]
+    if len(inner):
+        plane = new_normals[lone[inside]]
+        gap = new_offsets[lone[inside]] - np.einsum("ij,ij->i", plane, vertices[inner])
+        shift[inner] = plane * gap[:, None]
+
+    # **Die Facettengrenze, nicht die Schweißtoleranz.** Eine STL speichert
+    # die Streifen einer Rundung oft als leicht verdrehte Vierecke: Ihre zwei
+    # Dreiecke liegen um Tausendstel neben einer gemeinsamen Ebene, und an der
+    # Ecke treffen sich dann vier statt drei Ebenen. Gemessen an ``1x1-bin.stl``:
+    # an 52 von 546 Ecken mehr als die Schweißtoleranz, höchstens 0,013 mm.
+    # Innerhalb von ``MAX_FACET_SAG`` weicht die Ecke nicht weiter von ihren
+    # Ebenen ab als das Netz selbst von der Fläche, die es darstellt.
+    tolerance = MAX_FACET_SAG
+    slack = units.weld_tolerance(float(np.linalg.norm(np.ptp(vertices, axis=0))))
+    for number, position in enumerate(np.flatnonzero(~inside).tolist()):
+        if cancelled is not None and number % 256 == 0:
+            cancelled.raise_if_cancelled()
+        vertex = int(moving[position])
+        point = vertices[vertex]
+        incident = around[position]
+        incident = incident[incident >= 0]
+        rows: list[np.ndarray] = []
+        targets: list[float] = []
+        free = 0.0
+        drafted: list[int] = []
+        for wall in sorted({int(owner[face]) for face in incident if owner[face] >= 0}):
+            # Zwei angestellte Wände fast gleicher Richtung an einer Ecke — die
+            # zwei Dreiecke eines leicht verdrehten Streifens — sind eine Ebene:
+            # Ihr Schnitt wäre schlecht bestimmt, und die Ecke rutschte an ihm.
+            if any(
+                1.0 - float(walls[wall][1] @ walls[known][1]) <= units.SAME_PLANE_AT_A_CORNER
+                for known in drafted
+            ):
+                continue
+            drafted.append(wall)
+        for wall in drafted:
+            rows.append(new_normals[wall])
+            targets.append(float(new_offsets[wall]))
+            free = max(free, abs(float(new_offsets[wall] - new_normals[wall] @ point)))
+        # Ein Dreieck in der alten Ebene einer angestellten Wand gehört zu ihr —
+        # ein doppelt gespeichertes zum Beispiel —, nicht als zweite, alte Ebene
+        # an die Ecke; sonst widerspräche es der neuen.
+        kept: list[np.ndarray] = [np.asarray(walls[wall][1], dtype=float) for wall in drafted]
+        for face in incident:
+            if owner[face] >= 0:
+                continue
+            candidate = normals[face]
+            if float(np.linalg.norm(candidate)) < 0.5:
+                continue
+            if any(
+                1.0 - float(candidate @ known) <= units.SAME_PLANE_AT_A_CORNER for known in kept
+            ):
+                continue
+            kept.append(candidate)
+            rows.append(candidate)
+            targets.append(float(candidate @ point))
+        matrix = np.asarray(rows, dtype=float)
+        residual = np.asarray(targets) - matrix @ point
+        step = np.linalg.lstsq(matrix, residual, rcond=None)[0]
+        if float(np.abs(matrix @ step - residual).max()) > tolerance:
+            raise GeometryError(
+                detail=_(
+                    "Beim Anstellen entstünde an einer Ecke eine neue Fläche oder eine "
+                    "verschwände — so weit reicht dieser Weg am Netz nicht. Stellen Sie einen "
+                    "kleineren Winkel ein, oder wählen Sie weniger Flächen."
+                ),
+                suggestions=(CORRECT_INPUT, CHANGE_SELECTION, CANCEL),
+                values={"corner": [round(float(value), 3) for value in point]},
+            )
+        if float(np.linalg.norm(step)) > units.GRAZING_SLIDE * free + slack:
+            raise GeometryError(
+                detail=_(
+                    "An einer gewählten Fläche schließt eine fast gleich gerichtete Fläche an, "
+                    "etwa eine Rundung — dort gibt es keine eindeutige neue Kante. Lassen Sie "
+                    "diese Fläche aus, oder wählen Sie die angrenzende mit, wenn sie eben ist."
+                ),
+                suggestions=(CHANGE_SELECTION, CORRECT_INPUT, CANCEL),
+                values={"corner": [round(float(value), 3) for value in point]},
+            )
+        shift[vertex] = step
+    return shift
+
+
+def _draft_tools(
+    body: Any,
+    walls: Sequence[tuple[list[int], np.ndarray]],
+    shift: np.ndarray,
+    pull: np.ndarray,
+    level: float,
+    cancelled: CancelToken | None,
+) -> list[tuple[str, int, MeshData]]:
+    """Die Körper zwischen alter und neuer Fläche — jenseits der neutralen Ebene zum
+    Abziehen (``"cut"``), davor zum Vereinigen (``"fill"``), je mit ihrer Wand.
+
+    Eine Fläche, die die neutrale Ebene kreuzt, wird dort geteilt: Ihre Ecken
+    wandern oberhalb ins Material und unterhalb hinaus, und ein Körper über
+    beidem wäre an der Schnittlinie verdreht. Die Knoten der Teilung liegen
+    auf der neutralen Linie und bleiben, wo sie sind.
+    """
+    import trimesh
+
+    vertices = np.asarray(body.vertices, dtype=float)
+    faces = np.asarray(body.faces, dtype=np.int64)
+    tolerance = units.weld_tolerance(float(np.linalg.norm(np.ptp(vertices, axis=0))))
+    found: list[tuple[str, int, MeshData]] = []
+    for number, (triangles, _normal) in enumerate(walls):
+        # Zwischen den Flächen gefragt: Ein Werkzeug entsteht in numpy und ist
+        # dort nicht zu unterbrechen (§15.6, wie in ``edges._edge_work``).
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        corners = faces[triangles]
+        used = np.unique(corners)
+        heights = vertices[used] @ pull - level
+        local = np.searchsorted(used, corners)
+        below = vertices[used]
+        if float(heights.min()) >= -tolerance:
+            parts = [("cut", below, local, shift[used])]
+        elif float(heights.max()) <= tolerance:
+            parts = [("fill", below, local, shift[used])]
+        else:
+            moved = {
+                tuple(point): step for point, step in zip(below.tolist(), shift[used], strict=True)
+            }
+            parts = []
+            for kind, side in (("cut", pull), ("fill", -pull)):
+                points, pieces, _uv = trimesh.intersections.slice_faces_plane(  # type: ignore[no-untyped-call]
+                    below, local, plane_normal=side, plane_origin=level * pull
+                )
+                if not len(pieces):
+                    continue
+                # **Verschweißt, bevor der Rand gesucht wird.** Die Teilung
+                # legt jeden Schnittpunkt je Dreieck neu an; zwei Dreiecke an
+                # derselben Kante trügen sonst zwei Knoten, und ihre gemeinsame
+                # Kante zählte als Rand — der Mantel stünde mitten in der Fläche.
+                piece = trimesh.Trimesh(vertices=points, faces=pieces, process=True)
+                welded = np.asarray(piece.vertices, dtype=float)
+                steps = np.asarray(
+                    [moved.get(tuple(point), np.zeros(3)) for point in welded.tolist()]
+                )
+                parts.append((kind, welded, np.asarray(piece.faces, dtype=np.int64), steps))
+        for kind, points, pieces, steps in parts:
+            if float(np.abs(steps).max(initial=0.0)) <= EPS_GEOM:
+                continue
+            tool = _prism_between(points, pieces, points + steps)
+            if tool.triangle_count and tool.volume > EPS_GEOM:
+                found.append((kind, number, tool))
+    return found
+
+
 def _upright_faces(mesh: MeshData) -> list[tuple[list[int], np.ndarray]]:
-    """Die senkrechten Flächen des Netzes, jede mit ihrer Normalen.
+    """Die senkrechten Flächen des Netzes — :func:`_walls_along` nach oben."""
+    return _walls_along(mesh, np.array([0.0, 0.0, 1.0]))
+
+
+def _walls_along(mesh: MeshData, pull: np.ndarray) -> list[tuple[list[int], np.ndarray]]:
+    """Die Flächen des Netzes, die in Entformungsrichtung stehen, jede mit ihrer Normalen.
 
     Gefragt wird die Merkmalserkennung und nicht ``face_normals`` direkt: Eine
     Wand aus zwei Dreiecken ist **eine** Fläche, und ihr Keil entsteht in einem
@@ -497,10 +1058,10 @@ def _upright_faces(mesh: MeshData) -> list[tuple[list[int], np.ndarray]]:
         if feature.kind != "face" or not feature.face_indices:
             continue
         normal = np.asarray(face_normal(feature), dtype=float)
-        if abs(float(normal[2])) > UPRIGHT_ENOUGH:
+        if abs(float(normal @ pull)) > UPRIGHT_ENOUGH:
             continue
         found.append(([int(index) for index in feature.face_indices], normal))
-    return found + _walls_no_feature_claims(mesh, features)
+    return found + _walls_no_feature_claims(mesh, features, pull)
 
 
 def _must_be_closed(mesh: MeshData) -> None:
@@ -547,6 +1108,7 @@ def _must_be_closed(mesh: MeshData) -> None:
 def _walls_no_feature_claims(
     mesh: MeshData,
     features: dict[str, Feature],
+    pull: np.ndarray | None = None,
 ) -> list[tuple[list[int], np.ndarray]]:
     """Die ebenen senkrechten Flächen, die kein erkanntes Merkmal beansprucht.
 
@@ -591,6 +1153,8 @@ def _walls_no_feature_claims(
     """
     from app.core.perceive.features import _one_body
 
+    if pull is None:
+        pull = np.array([0.0, 0.0, 1.0])
     body = _one_body(mesh).raw
     count = len(body.faces)
     # Belegt und gruppiert als Masken und nicht als Mengen: An ``dense_1m.stl``
@@ -615,7 +1179,7 @@ def _walls_no_feature_claims(
         if length <= EPS_GEOM:
             continue
         normal = normal / length
-        if abs(float(normal[2])) > UPRIGHT_ENOUGH:
+        if abs(float(normal @ pull)) > UPRIGHT_ENOUGH:
             continue
         # Die Gruppe selbst muss eben sein, nicht nur ihr erstes Dreieck.
         if float(np.abs(body.face_normals[group] @ normal - 1.0).max()) > SAME_PLANE_ENOUGH:

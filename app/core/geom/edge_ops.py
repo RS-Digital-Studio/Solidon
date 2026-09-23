@@ -28,11 +28,12 @@ Gruppen („alle senkrechten") rechnet ``geom.edges.wanted`` für beide.
 from __future__ import annotations
 
 import dataclasses
+import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Literal, cast
 
-from app.core.errors import GeometryError
+from app.core.errors import CANCEL, CORRECT_INPUT, GeometryError, ValidationError
 from app.core.geom.boolean import BooleanOutcome, HasVolume
 from app.core.geom.edges import (
     EDGE_CHOICES,
@@ -40,6 +41,7 @@ from app.core.geom.edges import (
     EdgeChoice,
     EdgeSides,
     MeshEdge,
+    RadiusLaw,
     bead_edges,
     bevel_edges,
     chamfer_reaches,
@@ -59,11 +61,22 @@ from app.core.types import (
     SceneObject,
     Vec3,
 )
-from app.core.units import DEGREE_UNIT, EPS_GEOM
+from app.core.units import DEGREE_UNIT, EPS_GEOM, format_length
 from app.i18n import _
 
 #: Wie eine Fase bemaßt ist (P6.2): gleich breit, zwei Abstände, Abstand und Winkel.
 CHAMFER_MODES: tuple[str, ...] = ("equal_distances", "two_distances", "distance_angle")
+
+#: Wie der Radius einer Verrundung verläuft (P6.1): gleichbleibend oder mit Verlauf.
+FILLET_MODES: tuple[str, ...] = ("constant_radius", "variable_radius")
+
+#: Wie Zwischenstellen geschrieben werden — der Satz steht einmal, für den
+#: ``doc``-Satz des Feldes und für jede Absage beim Lesen.
+_STATIONS_HOW = _(
+    "Weitere Radien entlang der Kante, je als „Stelle:Radius“ mit der Stelle in Prozent "
+    "der Länge vom Anfang — etwa „50:4“ für 4 mm in der Mitte, mehrere durch "
+    "Leerzeichen getrennt."
+)
 
 #: Dieselbe Auswahl bei Verrundung und Fase — deshalb steht der Satz einmal hier.
 _CHOICE_DOC = _(
@@ -105,9 +118,54 @@ class FilletParams(BaseParams):
         minimum=0.01,
         maximum=100.0,
         doc=_(
-            "Radius der Verrundung. Größer als das dünnste angrenzende Material "
-            "geht nicht — dann hat der Kern keinen Platz mehr."
+            "Radius der Verrundung, bei einem Verlauf der Radius am Anfang der Kante. "
+            "Größer als das dünnste angrenzende Material geht nicht — dann hat der Kern "
+            "keinen Platz mehr."
         ),
+    )
+    # **P6.1 — Verrunden mit Verlauf.** Die Vorgabe bleibt der eine Radius;
+    # jeder gespeicherte Schritt behält damit seine Bedeutung, und die drei
+    # Felder darunter schweigen, solange der Verlauf gleichbleibend ist.
+    mode: str = param(
+        # **Nicht „Verlauf“**: Unter diesem Schlüssel steht in den Katalogen
+        # der Verlauf der Schritte („History“) — derselbe deutsche Text wäre
+        # englisch die falsche Sache.
+        title=_("Radiusverlauf"),
+        default="constant_radius",
+        choices=FILLET_MODES,
+        doc=_(
+            "Ein Radius über die ganze Kante, oder ein Radius, der sich vom Anfang zum "
+            "Ende und über Zwischenstellen ändert — etwa für einen Griff."
+        ),
+    )
+    end_radius: float = param(
+        title=_("Radius am Ende"),
+        default=4.0,
+        unit="mm",
+        minimum=0.01,
+        maximum=100.0,
+        doc=_(
+            "Radius am Ende der Kante. Dazwischen ändert sich die Rundung gleichmäßig, "
+            "mit Zwischenstellen als weicher Bogen durch alle Werte."
+        ),
+        depends_on=("mode", ("variable_radius",)),
+    )
+    stations: str = param(
+        title=_("Zwischenstellen"),
+        default="",
+        placement="advanced",
+        doc=_STATIONS_HOW,
+        depends_on=("mode", ("variable_radius",)),
+    )
+    reverse: bool = param(
+        title=_("Anfang und Ende tauschen"),
+        default=False,
+        placement="advanced",
+        doc=_(
+            "Ohne Haken beginnt der Verlauf am linken Ende der Kante, bei gleicher Lage "
+            "am vorderen, dann am unteren. Mit Haken beginnt er am anderen Ende."
+        ),
+        depends_on=("mode", ("variable_radius",)),
     )
     edges: str = param(
         title=_("Kanten"),
@@ -129,13 +187,17 @@ class FilletParams(BaseParams):
     name="fillet_edges",
     # 8: die Berührlinien werden an beiden Kernen geprüft, und eine Gruppe
     # lässt gefaltete Züge aus (22.09.2026).
-    cache_version="8",
+    # 9: Radius mit Verlauf (P6.1, 23.09.2026).
+    cache_version="9",
     title=_("Verrunden"),
     category="shaping",
     params=FilletParams,
     consumes=1,
     produces=1,
-    doc=_("Rundet die gewählten Kanten ab — an einem exakten Körper wie an einem Netz."),
+    doc=_(
+        "Rundet die gewählten Kanten ab — mit einem Radius oder mit einem Verlauf vom "
+        "Anfang zum Ende, an einem exakten Körper wie an einem Netz."
+    ),
     # **Der zweite Teil des Vorbehalts ist gefallen** (22.09.2026). Er sagte,
     # das Netz nehme am 3-mm-Kasten noch 2 mm an, wo der exakte Körper
     # ablehnt — und das Netz nahm sie an, indem es die Wand still niedriger
@@ -149,13 +211,67 @@ class FilletParams(BaseParams):
 )
 def fillet_edges(ctx: OpContext) -> OpResult:
     params = cast(FilletParams, ctx.params)
+    law = radius_law(params)
     return _worked(
         ctx,
-        params.radius,
+        law.largest if law is not None else params.radius,
         cast(EdgeChoice, params.edges),
         _chosen_edges(params.edges, params.edge_keys),
         rounded=True,
+        law=law,
     )
+
+
+def radius_law(params: FilletParams) -> RadiusLaw | None:
+    """Der Radiusverlauf aus den Parametern — ``None`` für den einen Radius (P6.1).
+
+    Anfang und Ende kommen aus ``radius`` und ``end_radius``, dazwischen die
+    Zwischenstellen aus ``stations``: ``Stelle:Radius``, die Stelle in Prozent
+    der Kantenlänge, getrennt durch Leerzeichen oder Semikolon; Komma und
+    Punkt gelten beide als Dezimalzeichen. Was sich so nicht lesen lässt, ist
+    eine Absage mit dem Satz, wie es richtig heißt — nie eine stille Auswahl
+    (Regel 21).
+    """
+    if params.mode != "variable_radius":
+        return None
+    spec = next(item for item in FilletParams.spec() if item.name == "radius")
+    minimum = float(spec.minimum if spec.minimum is not None else 0.0)
+    maximum = float(spec.maximum if spec.maximum is not None else math.inf)
+    found: dict[float, float] = {}
+    for entry in params.stations.replace(";", " ").split():
+        place_text, colon, radius_text = entry.partition(":")
+        try:
+            place = float(place_text.replace(",", "."))
+            radius = float(radius_text.replace(",", "."))
+        except ValueError:
+            place, radius = math.nan, math.nan
+        if (
+            not colon
+            or not math.isfinite(place)
+            or not math.isfinite(radius)
+            or not 0.0 < place < 100.0
+            or not minimum <= radius <= maximum
+            or any(abs(place - known) <= EPS_GEOM * 100.0 for known in found)
+        ):
+            raise ValidationError(
+                "stations",
+                _(
+                    "Die Zwischenstelle „{entry}“ lässt sich nicht lesen. Die Stelle liegt "
+                    "zwischen 0 und 100 Prozent und kommt nur einmal vor, der Radius liegt "
+                    "zwischen {low} und {high}. {how}",
+                    entry=entry,
+                    low=format_length(minimum),
+                    high=format_length(maximum),
+                    how=_STATIONS_HOW,
+                ),
+                value=params.stations,
+                suggestions=(CORRECT_INPUT, CANCEL),
+            )
+        found[place] = radius
+    ordered = sorted(found)
+    positions = (0.0, *(place / 100.0 for place in ordered), 1.0)
+    radii = (float(params.radius), *(found[place] for place in ordered), float(params.end_radius))
+    return RadiusLaw(positions, radii, reversed=bool(params.reverse))
 
 
 @op_params
@@ -470,6 +586,7 @@ def _worked(
     *,
     rounded: bool,
     shape: ChamferShape | None = None,
+    law: RadiusLaw | None = None,
 ) -> OpResult:
     """Der gemeinsame Rumpf beider Operationen — der Körper wählt den Kern.
 
@@ -494,6 +611,7 @@ def _worked(
             rounded=rounded,
             cancelled=ctx.cancelled,
             shape=shape,
+            law=law,
         )
 
     body = as_mesh_data(source.mesh)
@@ -524,6 +642,7 @@ def _worked(
         quality=ctx.quality,
         cancelled=ctx.cancelled,
         narrowest=narrowest_face(ctx.profile),
+        law=law,
     )
     return _edge_result(ctx, source, body, outcome, rounded=rounded)
 
@@ -564,6 +683,7 @@ def _on_a_solid(
     rounded: bool,
     cancelled: CancelToken,
     shape: ChamferShape | None = None,
+    law: RadiusLaw | None = None,
 ) -> OpResult:
     """Der exakte Weg — träge geholt, weil OpenCASCADE optional ist (§36).
 
@@ -584,6 +704,7 @@ def _on_a_solid(
                 keys,
                 selected_edges=selected_edges,
                 cancelled=cancelled,
+                law=law,
             )
         else:
             solid = edit.chamfer(
@@ -597,7 +718,15 @@ def _on_a_solid(
             )
     except GeometryError as refused:
         explained = _why_it_does_not_fit(
-            source, size, choice, keys, selected_edges, rounded, narrowest_face(profile), shape
+            source,
+            size,
+            choice,
+            keys,
+            selected_edges,
+            rounded,
+            narrowest_face(profile),
+            shape,
+            law,
         )
         if explained is None:
             raise
@@ -622,6 +751,7 @@ def _why_it_does_not_fit(
     rounded: bool,
     narrowest: float,
     shape: ChamferShape | None = None,
+    law: RadiusLaw | None = None,
 ) -> GeometryError | None:
     """Warum der exakte Kern abgelehnt hat — mit demselben Satz wie am Netz, wo er passt.
 
@@ -637,6 +767,7 @@ def _why_it_does_not_fit(
 
     if selected_edges is not None:
         return None
+    varying = law if law is not None and not law.constant else None
     mesh = as_mesh_data(source.mesh)
     entries = edges_of(mesh)
     try:
@@ -652,11 +783,14 @@ def _why_it_does_not_fit(
             tolerance=weld_tolerance(mesh.bounds.diagonal),
             narrowest=narrowest,
             shape=shape,
+            law=varying,
         )
     except GeometryError as second:
         # Die zweite Breite passt schon allein nicht — derselbe Satz wie am Netz.
         return second
-    return None if largest is None else too_large_for_the_faces(size, largest, rounded=rounded)
+    if largest is None:
+        return None
+    return too_large_for_the_faces(size, largest, rounded=rounded, varying=varying is not None)
 
 
 def narrowest_face(profile: Profile | None) -> float:
@@ -676,6 +810,7 @@ __all__ = [
     "bead_edges_op",
     "chamfer_edges",
     "fillet_edges",
+    "radius_law",
 ]
 
 

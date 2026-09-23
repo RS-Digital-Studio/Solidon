@@ -270,6 +270,33 @@ benannte Grundformen und Maße, nie über rohe Punktlisten (§26, Leitprinzip 5)
 ein trotzdem mitgeschicktes Argument ab. Zwei Ebenen, weil eine Lücke im
 Schema noch kein Verbot ist.
 
+### Ein Maß mit Verlauf braucht einen Anfang, den die Kante kennt (P6.1)
+
+Ein veränderlicher Radius hängt an **Stellen**, und eine Stelle braucht einen
+Anfang, der eine Neuauswertung überlebt: bei einer offenen Kante das linke
+Ende (dann vorn, dann unten — `edges.starts_at_first`, dieselbe Regel wie die
+Richtung im Kantenschlüssel), bei einem Ring der Punkt kleinster Lage in
+`LOOP_START` mit Laufrichtung nach `LOOP_WAY`. Nie eine Knotennummer, nie der
+erste Punkt des Zugs. Beide Kerne fragen dieselben Funktionen; ein neuer
+Verbraucher auch. Wo es keine Form gibt — Ring mit verschiedenem Anfangs- und
+Endradius, verschiedene Radien an einer gemeinsamen Ecke —, ist das eine
+Absage mit Weg, nicht eine stille Wahl (Regel 21).
+
+**Eine Tabelle für den exakten Kern gilt einer Kante, nicht der Kontur.**
+`SetRadius(UandR, IC, IinC)` legt die Tabelle auf Kante `IinC`; wer die ganze
+Kontur an Kante 1 hängt, verrundet eine Kette zur Hälfte mit dem Endradius.
+Und ein eigenes `Law_Function` nimmt OCCT 8.0.1 gar nicht an.
+
+### Eine angestellte Fläche darf nicht durch fremdes Material laufen (P6.4)
+
+Die Formschräge rechnet am Netz Werkzeuge zwischen alter und neuer Fläche;
+liegt eines nicht ganz im Material (oder ganz davor), schneiden sich zwei
+Flächen in einer Wand. Das ist eine Absage an **beiden** Kernen mit demselben
+Satz — nicht ein Ergebnis mit stillschweigend niedrigerer Wand, und nicht ein
+exakter Körper, den `ShapeFix` formal heilt. Tangential anschließende Flächen
+sind notwendige Übergänge und gehen mit (Befund `draft.tangent_faces`, wo der
+Kunde Flächen gewählt hat).
+
 ## Boolesche Operationen
 
 Die Rückfallkette (§17.2) hat fünf Stufen, und die erreichte Stufe gehört in

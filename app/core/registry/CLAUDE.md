@@ -142,6 +142,10 @@ deklarierte Operationen bekommen hingegen die vollständige Szene. Negative
 Mindestzahlen und eine Mindestzahl neben fester Stelligkeit werden bereits
 beim Registrieren abgewiesen.
 
+`also_on_body` sagt der Auswahlkarte, dass eine Merkmalshandlung auch ohne
+gewähltes Merkmal am ganzen Körper gilt (die Formschräge, P6.4); sie steht
+dann an beiden Stufen, mit einem Knopf.
+
 `edges_on_mesh` sagt der Auswertung, dass eine Operation ihre Kanten
 (`kind="edges"`) immer am **Netz** liest, auch an einem exakten Körper —
 *Wulst anlegen* vereinigt am tessellierten Körper. Die Kantenbindung vor dem

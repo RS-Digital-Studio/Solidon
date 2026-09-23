@@ -470,7 +470,9 @@ def test_a_cylinder_is_not_mistaken_for_a_stack_of_walls() -> None:
     with pytest.raises(GeometryError) as problem:
         draft_vertical(MeshData(body), DRAFT)
 
-    assert "senkrechten" in str(problem.value.detail)
+    # Seit P6.4 nennt der Satz die Entformungsrichtung — bei „nach oben“ sind
+    # das die senkrechten Flächen (23.09.2026).
+    assert "Entformungsrichtung" in str(problem.value.detail)
 
 
 def test_an_open_mesh_is_turned_away_before_the_chain_wrecks_it() -> None:
