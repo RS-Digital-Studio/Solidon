@@ -412,3 +412,55 @@ assert abs(cut - 144.0) < 2.0, cut
         check=False,
     )
     assert finished.returncode == 0, finished.stderr
+
+
+def test_a_drawn_spline_is_cut_along_its_curve_not_its_clicks() -> None:
+    """Am Netz folgte eine gezeichnete Kurve ihren Stützpunkten, nicht sich selbst.
+
+    Die Vorschau zeigt die Catmull-Rom-Kurve, der exakte Kern schneidet sie —
+    und eine Tasche in einem eingelesenen STL bekam an ihrer Stelle ein
+    Vieleck mit einer Ecke an jedem Klick (Durchsicht 22.09.2026). Jetzt liegt
+    jeder Punkt auf der gezeichneten Kurve, auf ``MAX_FACET_SAG`` genau, und
+    zwischen den Klicks wölbt sie sich, wie im Bild.
+    """
+    from app.core.sketch.profile import spline_controls
+    from app.core.units import MAX_FACET_SAG
+
+    through = ((0.0, 0.0), (10.0, 8.0), (20.0, -4.0), (30.0, 0.0))
+    profile = Profile(
+        segments=(
+            ProfileSegment("spline", through[0], through[-1], through=through),
+            ProfileSegment("line", through[-1], (30.0, -20.0)),
+            ProfileSegment("line", (30.0, -20.0), (0.0, -20.0)),
+            ProfileSegment("line", (0.0, -20.0), through[0]),
+        )
+    )
+
+    ring = outline_points(profile)
+
+    # Die Kurve selbst, dicht ausgewertet: jedes kubische Stück an 400 Stellen.
+    dense = []
+    for a, b, c, d in spline_controls(through):
+        for step in range(401):
+            t = step / 400.0
+            s = 1.0 - t
+            dense.append(
+                (
+                    s**3 * a[0] + 3 * s * s * t * b[0] + 3 * s * t * t * c[0] + t**3 * d[0],
+                    s**3 * a[1] + 3 * s * s * t * b[1] + 3 * s * t * t * c[1] + t**3 * d[1],
+                )
+            )
+    on_curve = [point for point in ring if point[1] > -19.0 and point[0] < 29.999]
+    assert len(on_curve) > len(through), "die Kurve ist abgetastet, nicht nur ihre Klicks"
+    for point in on_curve:
+        nearest = min(math.dist(point, other) for other in dense)
+        assert nearest <= MAX_FACET_SAG + 0.02, (point, nearest)
+    # Zwischen dem ersten und zweiten Klick wölbt sich die Kurve über ihre Sehne.
+    chord = ((0.0, 0.0), (10.0, 8.0))
+    (x0, y0), (x1, y1) = chord
+    beside = max(
+        abs((x1 - x0) * (y - y0) - (y1 - y0) * (x - x0)) / math.dist(*chord)
+        for x, y in on_curve
+        if 0.0 < x < 10.0
+    )
+    assert beside > 0.2, "ein Zug durch die Klicks läge auf der Sehne"

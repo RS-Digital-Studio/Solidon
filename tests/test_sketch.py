@@ -1592,6 +1592,77 @@ def test_a_chain_crossing_a_two_point_spline_is_refused() -> None:
         regions_of(solve_sketch(crossing))
 
 
+def _spike() -> Sketch:
+    """Ein Umriss mit einer Spitze ohne Breite: Die untere Linie läuft bis 10
+    und kehrt auf sich selbst bis 5 zurück, dann geht es hinauf und zurück."""
+    return Sketch(
+        plane="plane:xy",
+        elements=(
+            SketchElement("line", ((0.0, 0.0), (10.0, 0.0))),
+            SketchElement("line", ((10.0, 0.0), (5.0, 0.0))),
+            SketchElement("line", ((5.0, 0.0), (5.0, 5.0))),
+            SketchElement("line", ((5.0, 5.0), (0.0, 0.0))),
+        ),
+    )
+
+
+def test_a_chain_that_runs_back_on_itself_is_refused() -> None:
+    """Zwei Stücke, die aufeinander liegen, sind eine Spitze ohne Breite.
+
+    OpenCASCADE meldet so etwas nicht als Schnittpunkt, sondern als
+    gemeinsames Stück — und die Prüfung zählte nur Punkte. Der Umriss ging
+    durch, der Kern baute daraus einen Körper mit richtigem Volumen, den
+    seine eigene Prüfung (``BRepCheck_Analyzer``) für ungültig hielt
+    (Durchsicht 22.09.2026).
+    """
+    from app.core.errors import GeometryError
+    from app.core.sketch.profile import regions_of
+
+    with pytest.raises(GeometryError, match="kreuzt"):
+        regions_of(solve_sketch(_spike()))
+
+
+def test_the_fallback_without_the_exact_kernel_sees_the_spike_too(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ohne B-Rep-Kern prüft die Punktfolge — und auch dort ist ein Stück, das
+    auf einem anderen liegt, kein Berühren (``strictly_crossing`` sah es
+    nicht, weil kollinear für das Kreuzprodukt „berührt" heißt)."""
+    from app.core.brep import kernel
+    from app.core.errors import GeometryError
+    from app.core.sketch.profile import _overlapping, regions_of
+
+    monkeypatch.setattr(kernel, "available", lambda: False)
+    with pytest.raises(GeometryError, match="kreuzt"):
+        regions_of(solve_sketch(_spike()))
+
+    assert not _overlapping((0.0, 0.0), (5.0, 0.0), (5.0, 0.0), (9.0, 0.0)), (
+        "ein gemeinsamer Endpunkt allein ist kein gemeinsames Stück"
+    )
+    assert not _overlapping((0.0, 0.0), (5.0, 0.0), (0.0, 1.0), (5.0, 1.0)), "parallel daneben"
+
+
+def test_a_branching_outline_says_more_than_two_edges_meet() -> None:
+    """Eine Acht aus sechs Linien trifft sich an einem Punkt mit vier Kanten —
+    die Meldung sprach von drei."""
+    from app.core.errors import GeometryError
+    from app.core.sketch.profile import regions_of
+
+    eight = Sketch(
+        plane="plane:xy",
+        elements=(
+            SketchElement("line", ((0.0, 0.0), (10.0, 0.0))),
+            SketchElement("line", ((10.0, 0.0), (5.0, 5.0))),
+            SketchElement("line", ((5.0, 5.0), (10.0, 10.0))),
+            SketchElement("line", ((10.0, 10.0), (0.0, 10.0))),
+            SketchElement("line", ((0.0, 10.0), (5.0, 5.0))),
+            SketchElement("line", ((5.0, 5.0), (0.0, 0.0))),
+        ),
+    )
+    with pytest.raises(GeometryError, match="mehr als zwei Kanten"):
+        regions_of(solve_sketch(eight))
+
+
 def test_a_self_crossing_exact_spline_is_refused() -> None:
     """Geprüft wird dieselbe B-Spline-Kurve, die der B-Rep-Kern extrudiert."""
     from app.core.errors import GeometryError
@@ -1870,7 +1941,7 @@ def test_the_sparse_jacobian_matches_the_dense_one() -> None:
     _solution, _residuals, jacobian = solver._solve(equations, x.reshape(-1, 2))
 
     assert jacobian.shape == (total_rows, anchors.size)
-    assert np.allclose(jacobian, dense.reshape(total_rows, anchors.size))
+    assert np.allclose(jacobian.toarray(), dense.reshape(total_rows, anchors.size))
 
 
 # --- Der Zugmodus des Lösers ----------------------------------------------------------
@@ -2029,3 +2100,382 @@ def test_a_drag_keeps_a_contradiction_a_contradiction() -> None:
     )
     with pytest.raises(SketchConflictError):
         solve_sketch(sketch, dragged={1: (40.0, 0.0)}, start=[(0.0, 0.0), (30.0, 0.0)])
+
+
+# --- Der Zug bleibt auch dort bedienbar, wo er nicht hinkommt (Durchsicht 22.09.2026) ---
+
+
+def _chain(count: int) -> Sketch:
+    """Eine Kette bemaßter Linien, die erste am Anfang festgenagelt — gelöst
+    liegt sie gestreckt, also bis zum Anschlag."""
+    elements = tuple(
+        SketchElement("line", ((i * 10.0, 0.3), (i * 10.0 + 9.5, -0.2))) for i in range(count)
+    )
+    constraints = (
+        *(SketchConstraint("coincident", (2 * i + 1, 2 * i + 2)) for i in range(count - 1)),
+        *(SketchConstraint("distance", (2 * i, 2 * i + 1), "10") for i in range(count)),
+        SketchConstraint("fixed", (0,)),
+    )
+    return Sketch(plane="plane:xy", elements=elements, constraints=constraints)
+
+
+def _counting_evaluations(monkeypatch: pytest.MonkeyPatch) -> list[int]:
+    """Zählt die Auswertungen jedes Lösers — die Zahl ist gleich auf jeder Maschine."""
+    from app.core.sketch import solver
+
+    evaluations: list[int] = []
+    real = solver.least_squares
+
+    def counted(*args: object, **kwargs: object) -> object:
+        result = real(*args, **kwargs)
+        evaluations.append(int(result.nfev))
+        return result
+
+    monkeypatch.setattr(solver, "least_squares", counted)
+    return evaluations
+
+
+def test_a_drag_beyond_reach_stays_bounded_and_leaves_the_sketch_standing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Eine gestreckte Kette über ihre Länge hinaus zu ziehen, hielt das Fenster an.
+
+    Gemessen am 22.09.2026: Die erste Zugstufe suchte ohne Grenze nach einem
+    Ort, den es nicht gibt — an zwanzig Linien 646 Auswertungen, an hundert 103
+    Sekunden je Mausereignis. Gezählt wird hier nicht die Zeit, sondern die
+    Arbeit: Sie ist auf jeder Maschine dieselbe. Und die Zeichnung bleibt
+    stehen, statt sich in einen Widerspruch zu verwandeln — die Zeile des
+    Editors sagt dann, was hält.
+    """
+    from app.core.sketch import solver
+
+    sketch = _chain(20)
+    start = _flat(solve_sketch(sketch))
+    end = len(start) - 1
+    evaluations = _counting_evaluations(monkeypatch)
+
+    solved = solve_sketch(
+        sketch, dragged={end: (start[end][0] + 3.0, start[end][1] + 4.0)}, start=start
+    )
+
+    assert sum(evaluations) <= solver.DRAG_REACH_TRIES + solver.DRAG_SLIDE_TRIES, evaluations
+    for before, after in zip(start, _flat(solved), strict=True):
+        assert after == pytest.approx(before, abs=1e-6), "die Kette bleibt, wo sie war"
+    assert solved.max_residual <= 1e-6
+
+
+def test_a_reachable_drag_is_untouched_by_the_bound(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Die Grenze gilt dem Unerreichbaren: Nach innen gezogen folgt das Ende
+    der Kette weiter exakt dem Zeiger, mit wenigen Auswertungen."""
+    from app.core.sketch import solver
+
+    sketch = _chain(20)
+    start = _flat(solve_sketch(sketch))
+    end = len(start) - 1
+    target = (start[end][0] - 3.0, start[end][1] + 4.0)
+    evaluations = _counting_evaluations(monkeypatch)
+
+    solved = solve_sketch(sketch, dragged={end: target}, start=start)
+
+    assert _flat(solved)[end] == pytest.approx(target, abs=1e-9)
+    assert len(evaluations) == 1 and evaluations[0] < solver.DRAG_REACH_TRIES
+
+
+def test_a_short_chain_still_slides_as_far_as_it_may() -> None:
+    """Die zweite Stufe beginnt, wo die erste aufgehört hat, und rutscht: Das
+    Ende einer Kette aus fünf Linien folgt über ihre Länge gezogen dem Zeiger,
+    so weit die Kette reicht — gemessen fünf statt 116 Auswertungen."""
+    sketch = _chain(5)
+    start = _flat(solve_sketch(sketch))
+    end = len(start) - 1
+    target = (start[end][0] + 3.0, start[end][1] + 4.0)
+
+    solved = solve_sketch(sketch, dragged={end: target}, start=start)
+    landed = _flat(solved)[end]
+
+    assert math.dist(start[0], landed) <= 50.0 + 1e-6, "weiter als die Kette reicht nie"
+    assert landed[1] > start[end][1] + 1.0, "in Richtung des Zeigers gedreht"
+    assert math.dist(landed, target) < math.dist(start[end], target), "näher am Zeiger"
+    assert solved.max_residual <= 1e-6
+
+
+def test_the_redundancy_search_decomposes_the_matrix_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """„Legt fest, was schon festliegt" kostete eine Zerlegung je Bedingung.
+
+    An der Kette aus §31 mit einem doppelten Maß waren das 201 Zerlegungen und
+    3,5 Sekunden im Qt-Hauptthread (Durchsicht 22.09.2026). Der linke Nullraum
+    beantwortet dieselbe Frage für alle Bedingungen aus einer.
+    """
+    sketch = _chain(100)
+    doubled = replace(
+        sketch, constraints=(*sketch.constraints, SketchConstraint("distance", (0, 1), "10"))
+    )
+    real = np.linalg.matrix_rank
+    calls: list[int] = []
+
+    def counted(matrix: object, *args: object, **kwargs: object) -> object:
+        calls.append(1)
+        return real(matrix, *args, **kwargs)
+
+    monkeypatch.setattr(np.linalg, "matrix_rank", counted)
+    with pytest.raises(SketchConflictError) as caught:
+        solve_sketch(doubled)
+    assert {caught.value.first, caught.value.second} == {99, 200}
+    assert len(calls) <= 2, f"{len(calls)} Rangberechnungen"
+
+
+@pytest.mark.parametrize("seed", range(6))
+def test_the_single_decomposition_answers_like_the_rank_of_each_rest(seed: int) -> None:
+    """Die schnelle Antwort ist dieselbe wie die langsame: je Block der
+    Rangverlust, wenn man seine Zeilen herausnimmt — an zufälligen,
+    absichtlich abhängigen Matrizen gegen ``matrix_rank`` gerechnet."""
+    from app.core.sketch.solver import _losses
+
+    generator = np.random.default_rng(seed)
+    base = generator.normal(size=(6, 7))
+    # Zwei Zeilen, die nichts Neues sagen: Rang 6 bei acht Zeilen.
+    matrix = np.vstack([base, base[1] + base[4], base[2] - 2.0 * base[5]])
+    blocks = [range(2), range(2, 3), range(3, 5), range(5, 6), range(6, 7), range(7, 8)]
+    rank = int(np.linalg.matrix_rank(matrix))
+    assert rank == 6
+
+    expected = [
+        rank - int(np.linalg.matrix_rank(np.delete(matrix, list(block), axis=0)))
+        for block in blocks
+    ]
+    assert _losses(matrix, rank, blocks) == expected
+
+
+def _fixed_ring(count: int) -> Sketch:
+    """Ein Ring aus Hilfslinien, jeder Punkt mit ``fixed`` — so kommt eine
+    übernommene Flächenkontur in die Zeichnung (RM-188 P3.4)."""
+    elements = []
+    constraints = []
+    for index in range(count):
+        first = 2.0 * math.pi * index / count
+        second = 2.0 * math.pi * (index + 1) / count
+        elements.append(
+            SketchElement(
+                "line",
+                (
+                    (20.0 * math.cos(first), 20.0 * math.sin(first)),
+                    (20.0 * math.cos(second), 20.0 * math.sin(second)),
+                ),
+                construction=True,
+            )
+        )
+        constraints += [
+            SketchConstraint("fixed", (2 * index,)),
+            SketchConstraint("fixed", (2 * index + 1,)),
+        ]
+    return Sketch("plane:xy", tuple(elements), tuple(constraints))
+
+
+def test_fixed_points_leave_the_decomposition_only_what_the_drawing_decides(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Jede Zeile von ``fixed`` hält genau eine Koordinate und wird vor der
+    Zerlegung abgeschält; zerlegt wird nur, was die Zeichnung selbst festlegt.
+
+    Die dichte Zerlegung über alle Zeilen kostete bei 512 festen Linien
+    1,8 Sekunden je Lösung, bei jedem Klick (gemessen 23.09.2026). Hier hängt
+    ein Kreis mit seiner Mitte an einem Punkt der Kontur: Die Deckung wird im
+    zweiten Schälgang zur Einerzeile, übrig bleibt der Randpunkt des Kreises.
+    """
+    ring = _fixed_ring(64)
+    rim = len(ring.elements) * 2 + 1
+    sketch = replace(
+        ring,
+        # Der Randpunkt schräg zur Mitte: Maß und Eichzeile tragen dann beide
+        # Koordinaten, und es bleibt eine echte Zerlegung übrig.
+        elements=(
+            *ring.elements,
+            SketchElement("circle", ((20.0, 0.0), (20.0 + 3.0 * 0.6, 3.0 * 0.8))),
+        ),
+        constraints=(
+            *ring.constraints,
+            SketchConstraint("coincident", (0, rim - 1)),
+            SketchConstraint("diameter", (rim - 1, rim), "6"),
+        ),
+    )
+    real = np.linalg.matrix_rank
+    shapes: list[tuple[int, ...]] = []
+
+    def recorded(matrix: np.ndarray, *args: object, **kwargs: object) -> object:
+        shapes.append(np.shape(matrix))
+        return real(matrix, *args, **kwargs)
+
+    monkeypatch.setattr(np.linalg, "matrix_rank", recorded)
+    solved = solve_sketch(sketch)
+
+    assert solved.free_dof == 0, "Kontur fest, Kreis an ihr, Durchmesser bemaßt"
+    assert shapes, "der Kreis bleibt zu zerlegen"
+    assert max(rows for rows, _columns in shapes) <= 2, shapes
+
+
+@pytest.mark.parametrize("seed", range(8))
+def test_the_peeled_rank_is_the_rank(seed: int) -> None:
+    """Abschälen ist exakt: an zufälligen Matrizen mit Einerzeilen, doppelten
+    Einerzeilen auf einer Spalte, Nullzeilen und Zeilen, die erst nach einem
+    Schälgang zu Einerzeilen werden — gegen ``matrix_rank`` über alles."""
+    from app.core.sketch.solver import _matrix_rank
+
+    generator = np.random.default_rng(seed)
+    columns = 12
+    rows: list[np.ndarray] = []
+    for _ in range(18):
+        row = np.zeros(columns)
+        width = int(generator.integers(0, 4))
+        chosen = generator.choice(columns, size=width, replace=False) if width else []
+        row[chosen] = generator.normal(size=width)
+        rows.append(row)
+    # Eine abhängige Zeile obendrauf, damit der Rest nicht immer voll ist.
+    rows.append(rows[3] + 2.0 * rows[7])
+    matrix = np.vstack(rows)
+
+    assert _matrix_rank(matrix) == int(np.linalg.matrix_rank(matrix))
+    from scipy.sparse import csr_matrix
+
+    assert _matrix_rank(csr_matrix(matrix)) == int(np.linalg.matrix_rank(matrix)), "auch dünn"
+
+
+def test_an_arc_with_all_three_points_fixed_is_determined_not_redundant() -> None:
+    """Ein Bogen mit drei festen Punkten ist bestimmt — keine Doppelung.
+
+    Seine eigene Gleichung war die siebte Zeile über sechs Koordinaten, und
+    der Löser meldete „Eine Bedingung legt fest, was schon festliegt": an
+    jedem Bogen einer übernommenen Kontur und an jedem, dessen letzten Punkt
+    jemand festnagelt.
+    """
+    arc = SketchElement("arc", ((0.0, 0.0), (10.0, 0.0), (0.0, 10.0)), construction=True)
+    sketch = Sketch(
+        "plane:xy", (arc,), tuple(SketchConstraint("fixed", (index,)) for index in range(3))
+    )
+
+    solved = solve_sketch(sketch)
+
+    assert solved.free_dof == 0
+    assert solved.elements[0].points == arc.points
+
+
+def test_a_fixed_arc_whose_ends_disagree_stays_a_contradiction() -> None:
+    """Liegen die festen Enden nicht auf einem Kreis, bleibt die Gleichung —
+    und der Widerspruch wird gemeldet wie vorher."""
+    arc = SketchElement("arc", ((0.0, 0.0), (10.0, 0.0), (0.0, 12.0)))
+    sketch = Sketch(
+        "plane:xy", (arc,), tuple(SketchConstraint("fixed", (index,)) for index in range(3))
+    )
+
+    with pytest.raises(SketchConflictError):
+        solve_sketch(sketch)
+
+
+def test_one_answer_for_how_far_an_arc_runs() -> None:
+    """Wie weit ein Bogen läuft, beantwortet profile.arc_sweep für alle —
+    und zusammenfallende Enden sind ein Vollkreis, kein Nullbogen."""
+    from app.core.sketch.profile import arc_sweep
+
+    assert arc_sweep((0.0, 0.0), (10.0, 0.0), (0.0, 10.0)) == pytest.approx(math.pi / 2.0)
+    assert arc_sweep((0.0, 0.0), (0.0, 10.0), (10.0, 0.0)) == pytest.approx(1.5 * math.pi)
+    assert arc_sweep((0.0, 0.0), (10.0, 0.0), (10.0, 1e-12)) == pytest.approx(2.0 * math.pi)
+
+
+def test_an_outline_of_thousands_of_fixed_edges_stays_solvable() -> None:
+    """Eine übernommene Kontur mit 2624 festen Strecken ist lösbar.
+
+    So viele hat eine Seitenfläche des Besenhalters aus ``F:\3D Dateien``
+    (``broomholdervcd_d35mm.stl``, gemessen 23.09.2026). Der Löser zählte die
+    Zeilen von ``fixed`` ins Budget der dichten Matrix — 881 MB — und sagte
+    „mehr Punkte und Bedingungen, als der Löser verarbeitet" über Geometrie,
+    die sich nicht bewegen kann. Sie fällt beim Schälen heraus, bevor etwas
+    dicht wird, und zählt deshalb nicht mehr.
+    """
+    solved = solve_sketch(_fixed_ring(2624))
+
+    assert solved.free_dof == 0
+    assert len(solved.elements) == 2624
+
+
+def _slot_with_a_seam() -> SolvedSketch:
+    """Die innere Kette der Flächenkontur einer exakten Platte mit Langloch 12 × 6.
+
+    **Die Zahlen sind gemessen, nicht ausgedacht** (23.09.2026, Platte
+    40 × 30 × 8 minus Langloch, ``edit.face_outline`` auf der Deckfläche,
+    gelöst): Die Naht des rechten Zylinders teilt den Halbkreis in zwei
+    Viertel, deren Enden bei y = -8,4·10⁻¹⁶ und -1,6·10⁻¹⁵ liegen. Mit runden
+    Zahlen trifft die Kette den Fall nicht — OpenCASCADE meldet das
+    gemeinsame Stück nur an diesen Bits.
+    """
+    return SolvedSketch(
+        elements=(
+            SketchElement("line", ((6.0, 2.999999999999999), (-6.0, 2.999999999999999))),
+            SketchElement(
+                "arc",
+                (
+                    (6.0, -8.446327622338112e-16),
+                    (9.0, -8.446327622338112e-16),
+                    (6.0, 2.999999999999999),
+                ),
+            ),
+            SketchElement(
+                "arc",
+                (
+                    (6.0, -8.446327622338112e-16),
+                    (5.999999999999999, -3.000000000000001),
+                    (9.0, -1.5794208417222232e-15),
+                ),
+            ),
+            SketchElement("line", ((6.0, -3.000000000000001), (-6.0, -3.000000000000001))),
+            SketchElement(
+                "arc",
+                (
+                    (-6.0, -8.446327622338112e-16),
+                    (-6.0, 2.999999999999999),
+                    (-6.000000000000001, -3.000000000000001),
+                ),
+            ),
+        ),
+        free_dof=0,
+        max_residual=0.0,
+    )
+
+
+def test_two_arcs_of_one_circle_that_meet_at_a_seam_do_not_cross() -> None:
+    """Zwei Bögen desselben Kreises, die nur aneinanderstoßen, sind kein Kreuzen.
+
+    OpenCASCADE meldet sie als gemeinsames Stück, sobald ihre Enden im letzten
+    Bit auseinanderliegen — so teilt die Naht eines exakten Zylinders den Rand
+    einer Bohrung. Die Flächenkontur einer Platte mit Langloch galt damit als
+    „kreuzt sich selbst" (23.09.2026). Gezählt wird ein gemeinsames Stück erst
+    mit Länge; das Gegenstück steht darunter.
+    """
+    if not brep_available():
+        pytest.skip("die Kreuzungsprüfung mit Kurven braucht den exakten Kern")
+    from app.core.sketch.profile import regions_of, signed_area
+
+    (region,) = regions_of(_slot_with_a_seam())
+
+    assert abs(signed_area(region)) == pytest.approx(12.0 * 6.0 + math.pi * 9.0, rel=1e-6)
+
+
+def test_an_arc_that_runs_back_along_its_own_circle_still_crosses() -> None:
+    """Das Gegenstück: Läuft ein Bogen auf seinem Kreis zurück, teilen sich die
+    zwei Bögen ein Stück mit Länge — eine Spitze ohne Breite, die abgewiesen
+    wird wie die Linie, die auf sich selbst zurückläuft."""
+    from app.core.sketch.profile import regions_of
+
+    sketch = Sketch(
+        plane="plane:xy",
+        elements=(
+            # Oben herum von 0° nach 180° …
+            SketchElement("arc", ((0.0, 0.0), (10.0, 0.0), (-10.0, 0.0))),
+            # … und auf demselben Kreis zurück bis 90°.
+            SketchElement("arc", ((0.0, 0.0), (0.0, 10.0), (-10.0, 0.0))),
+            SketchElement("line", ((0.0, 10.0), (10.0, 0.0))),
+        ),
+    )
+
+    with pytest.raises(AppError):
+        regions_of(solve_sketch(sketch))

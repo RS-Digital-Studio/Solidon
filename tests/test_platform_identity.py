@@ -541,3 +541,67 @@ def test_a_way_through_the_kernel_does_not_follow_the_blas_kernel() -> None:
     assert finished.returncode == 0, finished.stderr[-2000:]
 
     assert json.loads(finished.stdout.strip().splitlines()[-1]) == here
+
+
+def test_a_pocket_circle_takes_the_same_corners_as_the_lathe() -> None:
+    """Der Kreis, den eine Tasche oder ein Feld ins Netz schneidet (RM-187).
+
+    ``sketch_solid.outline_points`` rechnete seine 72 Ecken über
+    ``math.cos(2π·i/72)`` — gemessen am 22.09.2026 trugen 62 davon eine andere
+    letzte Stelle als die exakte Teilung, und ``math.cos`` hängt an der
+    Mathematikbibliothek der Maschine. Jetzt ist es dieselbe Tafel wie beim
+    Drehkörper, Bit für Bit.
+    """
+    from app.core.geom.sketch_solid import ARC_STEPS, outline_points
+    from app.core.sketch.profile import Profile
+
+    ring = outline_points(Profile(circle=((1.25, -2.5), 7.5)))
+    table = lathe.circle_points(sections=ARC_STEPS, radius=7.5, centre=(1.25, -2.5))
+
+    assert fingerprint(ring) == fingerprint(table)
+
+
+def test_a_rigid_inverse_moves_without_blas() -> None:
+    """Die Verschiebung der Umkehrbewegung wird elementweise gerechnet.
+
+    ``turn.T @ t`` ging durch BLAS, und das zieht Multiplikation und Addition
+    je nach CPU zu einer FMA zusammen — die letzte Stelle hing an der
+    Maschine, und die Verschiebung wirkt auf jeden Punkt des Körpers. Der
+    Sollwert ist hier die Rechnung selbst, Schritt für Schritt in Python: Jede
+    Operation rundet einzeln, genau wie ``transform.moved_points``.
+    """
+    cos, sin = units.circle_point(7, 2)
+    matrix = np.array(
+        [
+            [cos, -sin, 0.0, 12.345678901],
+            [sin, cos, 0.0, -98.7654321],
+            [0.0, 0.0, 1.0, 3.14159],
+            [0.0, 0.0, 0.0, 1.0],
+        ]
+    )
+
+    back = lathe.rigid_inverse(matrix)
+
+    for row in range(3):
+        expected = -(
+            float(matrix[0, row]) * float(matrix[0, 3])
+            + float(matrix[1, row]) * float(matrix[1, 3])
+            + float(matrix[2, row]) * float(matrix[2, 3])
+        )
+        assert float(back[row, 3]) == expected
+
+
+def test_a_mirrored_revolve_still_points_outward() -> None:
+    """Eine Spiegelung dreht auch den Umlaufsinn, nicht nur die Ecken.
+
+    ``revolve(transform=…)`` setzte allein die Ecken; ``apply_transform``, das
+    hier ersetzt worden war, drehte bei einer Spiegelung auch die Dreiecke um.
+    Ohne das zeigte der Körper nach innen, und sein Volumen war negativ.
+    """
+    outline = np.array([[0.0, 0.0], [4.0, 0.0], [4.0, 6.0], [0.0, 6.0]], dtype=np.float64)
+    mirror = np.diag([-1.0, 1.0, 1.0, 1.0])
+
+    body = lathe.revolve(outline, sections=48, transform=mirror)
+
+    assert body.volume > 0.0
+    assert body.is_winding_consistent

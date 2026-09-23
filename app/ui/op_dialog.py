@@ -1856,9 +1856,14 @@ class OperationDialog(QDialog):
         self._refit.setSingleShot(True)
         self._refit.timeout.connect(self._resize_to_content)
         self._couple_dependent_fields()
+        self._link_sketch_planes()
         self._hide_legacy_feature_field()
+        # Auch eine Zeichnung, die erst eine Wahl verlangt (``depends_on``,
+        # siehe :meth:`_missing_sketch`): Der Knopf folgt ihr, sobald die Wahl
+        # sie zur Eingabe macht.
         if self.spec.name == "apply_texture" or any(
-            entry.kind in {"sketch", "material"} and entry.required
+            (entry.kind == "material" and entry.required)
+            or (entry.kind == "sketch" and (entry.required or entry.depends_on is not None))
             for entry in self.spec.params.spec()
         ):
             self.valuesChanged.connect(self._follow_source_pending)
@@ -2008,19 +2013,33 @@ class OperationDialog(QDialog):
         super().accept()
 
     def _missing_sketch(self) -> str:
-        """Den Pflichtbereich nennen, bevor eine leere Zeichnung übernommen wird."""
+        """Den Pflichtbereich nennen, bevor eine leere Zeichnung übernommen wird.
+
+        **Auch eine Zeichnung, die eine Wahl erst verlangt** (RM-183): Die Bahn
+        eines Sweeps ist nicht immer Pflicht, aber sobald „gezeichnete Bahn"
+        gewählt ist, ist sie die Eingabe (``depends_on``). Leer ließ sich der
+        Dialog trotzdem übernehmen, und die Absage kam als Befund im
+        Prüfbericht, nachdem alles fertig war. Jetzt nennt der gesperrte Knopf,
+        was fehlt.
+        """
         from app.ui.sketch_editor import SketchField
 
         schema = self.spec.params.spec()
-        required = [entry for entry in schema if entry.kind == "sketch" and entry.required]
-        if not required:
+        wanted = [
+            entry
+            for entry in schema
+            if entry.kind == "sketch" and (entry.required or entry.depends_on is not None)
+        ]
+        if not wanted:
             return ""
         values = self.values()
-        for entry in required:
+        for entry in wanted:
             if inactive_dependency(entry, schema, values) is not None:
                 continue
             editor = self._editors.get(entry.name)
-            if isinstance(editor, SketchField) and not editor.ready:
+            if not isinstance(editor, SketchField):
+                continue
+            if not (editor.ready if entry.required else editor.has_drawing):
                 return f"{entry.title}: {editor.summary.text()}"
         return ""
 
@@ -2205,6 +2224,24 @@ class OperationDialog(QDialog):
         follow()
         self._couple_sketch_measures()
 
+    def _link_sketch_planes(self) -> None:
+        """Eine zweite Zeichnung beginnt auf der Ebene der ersten (RM-183).
+
+        Der obere Umriss eines Übergangs und die Bahn eines Sweeps hatten
+        keinen Bezug zur Hauptzeichnung: Ihr Editor öffnete immer auf der
+        Draufsicht. Beim Übergang muss die obere auf derselben Ebene liegen wie
+        die untere, sonst lehnt die Operation ab; die Bahn nimmt ohnehin nur
+        ihre eigenen Ebenen (``sketch_planes``) und fällt dann auf die erste.
+        """
+        from app.ui.sketch_editor import SketchField
+
+        main = self._editors.get("sketch")
+        if not isinstance(main, SketchField):
+            return
+        for name, editor in self._editors.items():
+            if name != "sketch" and isinstance(editor, SketchField):
+                editor.follow_plane_of(main)
+
     def _couple_sketch_measures(self) -> None:
         """Wo eine Zeichnung liegt, tragen die Maßfelder ihre Maße — und nur lesend.
 
@@ -2321,7 +2358,17 @@ class OperationDialog(QDialog):
             # wird nur die **Rechnung**, nicht der ganze Durchlauf: Die
             # Sperren darunter müssen weiterlaufen, sonst bliebe ein Feld
             # frei, das der Nachbarzweig gerade freigegeben hat.
-            if seen_text.get("value") == text:
+            # **Eine neue Zeichnung ist die Ansage, nicht die Zahl im Feld.**
+            # Ob der Nutzer ein Maß getippt hat, lässt sich nur fragen, solange
+            # die Zeichnung dieselbe ist wie beim letzten Durchlauf. Hier stand
+            # allein ``primed``, und das war nach dem ersten Durchlauf für
+            # immer gesetzt: Wer den Dialog **ohne** Zeichnung öffnete und dann
+            # über „Zeichnen …" einen Kreis Ø 30 zog, bekam ihn auf die Vorgabe
+            # des Schemas gestreckt — Ø 40, und der Körper stand neben seiner
+            # Zeichnung (gemessen am 22.09.2026 am Fenster, *Zwischen zwei
+            # Umrissen aufspannen*, RM-183).
+            drawing_changed = seen_text.get("value") != text
+            if not drawing_changed:
                 extent = seen_extent.get("value")
             else:
                 extent = sketch_extent(text, self._parameter_values)
@@ -2390,6 +2437,7 @@ class OperationDialog(QDialog):
                         and abs(typed - drawn) > _SKETCH_EPS
                         and not stretching["now"]
                         and primed["done"]
+                        and not drawing_changed
                         and darstellbar
                     ):
                         stretch(text, typed / drawn)
@@ -2534,6 +2582,9 @@ class OperationDialog(QDialog):
                     if entry.doc and (entry.required or entry.name != "sketch")
                     else None
                 ),
+                # Die Ebenen, auf denen die Zeichnung liegen darf, sagt der
+                # Parameter (``ParamSpec.sketch_planes``, RM-183).
+                planes=entry.sketch_planes,
             )
         if entry.kind == "feature" or entry.targets_feature:
             # Aus demselben Grund wie unten eine Liste, nur mit dem schärferen
@@ -2843,6 +2894,7 @@ class OperationDialog(QDialog):
             for field in self._source_fields:
                 field.pendingChanged.connect(self._follow_source_pending)
             self._couple_dependent_fields()
+            self._link_sketch_planes()
         # Alte Komplettierer und ihre Felder leben bis nach dem Neuaufbau.
         # removeRow zerstörte sie synchron mitten im Variantenwechsel.
         for widget in retired:

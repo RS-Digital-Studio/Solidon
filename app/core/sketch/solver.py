@@ -142,6 +142,30 @@ class _Equation:
 #: die Nachbarn mitzunehmen.
 DRAG_STIFFNESS: Final[float] = 1.0 / 20.0
 
+#: Wie viele Auswertungen die **erste** Zugstufe höchstens bekommt.
+#:
+#: Ist der Zeigerort erreichbar, findet der Löser ihn schnell: gemessen fünf
+#: bis zwölf Auswertungen, vom Rechteck über Vieleck, Lochkreis und Lochraster
+#: bis zur Kette aus hundert Linien. Ist er es nicht, suchte der Löser ohne
+#: Grenze weiter, bis sich der Rest nicht mehr änderte — und das kostete an
+#: einer gestreckten Kette aus zwanzig Linien 646 Auswertungen und 2,7
+#: Sekunden, aus hundert Linien 103 Sekunden, **je Mausereignis** (Durchsicht
+#: 22.09.2026). Nach fünfundzwanzig ist die Antwort „nicht erreichbar", und
+#: die zweite Stufe übernimmt — das Doppelte des größten gemessenen Bedarfs.
+DRAG_REACH_TRIES: Final = 25
+
+#: Wie viele Auswertungen die **zweite** Zugstufe höchstens bekommt.
+#:
+#: Sie rutscht so weit, wie die Bedingungen es erlauben, und braucht dafür an
+#: gewöhnlichen Zeichnungen gemessen vier bis acht Auswertungen — ein
+#: festes Vieleck, ein bemaßtes Langloch, ein Lochkreis, ein verrundetes
+#: Rechteck. Nur eine bis zum Anschlag gestreckte Kette braucht an die
+#: hundert, weil sie dort singulär steht. Findet die Stufe in dieser Zahl
+#: keine Lage, bleibt die Zeichnung, wo sie war: Ein Zug, der nicht folgt,
+#: ist eine Auskunft (die Zeile sagt, was hält); ein Zug, der das Fenster für
+#: Sekunden anhält, ist keine.
+DRAG_SLIDE_TRIES: Final = 50
+
 #: So groß darf die **dichte** Jacobimatrix werden, die die Rangprüfung nach
 #: dem Lösen braucht (Zeilen mal 2 Punkte mal 8 Byte). 256 MiB sind rund 4000
 #: Bedingungen über 4000 Punkten — das Zwanzigfache des §31-Korpus. Eine
@@ -629,6 +653,10 @@ def _build_equations(
         rows, fn, grad = _constraint_equation(constraint, measure, anchors)
         equations.append(_Equation(index, rows, fn, grad))
 
+    # Punkte mit ``fixed`` — für den ganz festen Bogen darunter.
+    held = {
+        constraint.targets[0] for constraint in sketch.constraints if constraint.kind == "fixed"
+    }
     for position, element in enumerate(sketch.elements):
         if element.kind not in ("circle", "arc"):
             continue
@@ -646,9 +674,28 @@ def _build_equations(
             )
         if element.kind == "arc":
             fn, grad = _arc_equation(centre, centre + 1, centre + 2)
+            if {centre, centre + 1, centre + 2} <= held and abs(fn(anchors)[0]) <= _TOL:
+                # **Ein Bogen, dessen drei Punkte fest sind, braucht seine
+                # eigene Gleichung nicht** — sie gilt dort schon, und
+                # mitgezählt wäre sie die siebte Zeile über sechs Koordinaten:
+                # „Eine Bedingung legt fest, was schon festliegt", an jedem
+                # Bogen einer übernommenen Flächenkontur und an jedem, dessen
+                # letzten Punkt jemand festnagelt. Gilt sie an den gespeicherten
+                # Punkten nicht, bleibt sie stehen, und der Widerspruch wird
+                # gemeldet wie bisher.
+                continue
             equations.append(_Equation(None, 1, fn, grad))
 
     return equations, anchors
+
+
+def _residuals_at(equations: Sequence[_Equation], points: np.ndarray) -> np.ndarray:
+    """Die Residuen aller Gleichungen an diesen Punkten — ohne zu lösen."""
+    pts = np.asarray(points, dtype=float).reshape(-1, 2)
+    rows: list[float] = []
+    for equation in equations:
+        rows.extend(equation.fn(pts))
+    return np.asarray(rows, dtype=float)
 
 
 def _solve(
@@ -657,8 +704,13 @@ def _solve(
     *,
     pinned: Sequence[int] = (),
     stiff: bool = False,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    tries: int | None = None,
+) -> tuple[np.ndarray, np.ndarray, Any]:
     """Ein Lauf des Lösers: Koordinaten, Residuen, Jacobimatrix an der Lösung.
+
+    Die Jacobimatrix kommt **dünn besetzt** zurück (``csr_matrix``). Dicht wird
+    nur, was die Rangprüfung nach dem Abschälen noch braucht
+    (:func:`_matrix_rank`), und im Fehlerfall die Suche nach dem Paar.
 
     ``pinned`` nennt Punkte, die ein Zug gerade hält (:func:`solve_sketch`).
     Ohne ``stiff`` sind sie **Konstanten**: Ihre Koordinaten stehen in
@@ -666,6 +718,11 @@ def _solve(
     übrigen, und der gezogene Punkt landet exakt dort, wo der Zeiger ist. Mit
     ``stiff`` bleiben sie Variablen, nur zähe (:data:`DRAG_STIFFNESS`): Das
     ist der Rückfall, wenn die Bedingungen den Zeigerort nicht zulassen.
+
+    ``tries`` begrenzt die Zahl der Auswertungen — nur der Zug setzt sie
+    (:data:`DRAG_REACH_TRIES`, :data:`DRAG_SLIDE_TRIES`). Das gewöhnliche
+    Lösen bleibt unbegrenzt: Dort ist die Lösung, was gefragt ist, und nicht
+    die Antwort auf die nächste Mausbewegung.
     """
     flat = start.reshape(-1)
     total_rows = sum(equation.rows for equation in equations)
@@ -677,11 +734,7 @@ def _solve(
     free = ~held
 
     def fun(x: np.ndarray) -> np.ndarray:
-        pts = x.reshape(-1, 2)
-        rows: list[float] = []
-        for equation in equations:
-            rows.extend(equation.fn(pts))
-        return np.asarray(rows, dtype=float)
+        return _residuals_at(equations, x)
 
     def sparse_jac(x: np.ndarray) -> csr_matrix:
         # Dünn besetzt von Anfang an: Jede Ableitung berührt eine Handvoll
@@ -703,17 +756,13 @@ def _solve(
             begin += equation.rows
         return csr_matrix((data, (rows, cols)), shape=(total_rows, points * 2))
 
-    def jac(x: np.ndarray) -> np.ndarray:
-        """Die dichte Matrix für die Rangprüfung danach — innerhalb
-        von ``MAX_JACOBIAN_BYTES``, das prüft :func:`solve_sketch` vorher."""
-        return np.asarray(sparse_jac(x).toarray(), dtype=float)
-
     if not equations:
-        return flat, np.zeros(0), np.zeros((0, flat.size))
-    if not free.any():
-        # Alles hängt am Zeiger: Es gibt nichts zu rechnen, nur zu prüfen, ob
-        # die Bedingungen an dieser Stelle noch gelten.
-        return flat, fun(flat), jac(flat)
+        return flat, np.zeros(0), csr_matrix((0, flat.size))
+    if not free.any() or tries == 0:
+        # Alles hängt am Zeiger — oder gefragt ist nur, wie es an dieser
+        # Stelle steht: Es gibt nichts zu rechnen, nur zu prüfen, ob die
+        # Bedingungen hier gelten.
+        return flat, fun(flat), sparse_jac(flat)
 
     # Die gehaltenen Koordinaten werden vor dem Lösen aus dem System genommen:
     # ``fun`` und ``sparse_jac`` sehen weiter alle Punkte, der Löser nur die
@@ -756,12 +805,13 @@ def _solve(
         xtol=1e-10,
         ftol=1e-10,
         gtol=1e-10,
+        max_nfev=tries,
     )
     solution = widened(np.asarray(result.x, dtype=float)).copy()
     return (
         solution,
         np.asarray(result.fun, dtype=float),
-        jac(solution),
+        sparse_jac(solution),
     )
 
 
@@ -802,6 +852,43 @@ def _conflict_pair(
     return first, second
 
 
+#: Ab wann ein Anteil des linken Nullraums an einer Bedingung als null gilt.
+#:
+#: Keine Toleranz im Sinne von Regel 7: Die Spalten des Nullraums sind
+#: orthonormal, ein beteiligter Block trägt Anteile in der Größenordnung eins
+#: durch die Wurzel der Beteiligten — bei tausend Bedingungen um drei
+#: Hundertstel. Was darunter bleibt, ist Rundung der Zerlegung.
+_NULL_SHARE: Final[float] = 1e-9
+
+
+def _losses(jacobian: np.ndarray, rank: int, blocks: Sequence[range]) -> list[int]:
+    """Um wie viel der Rang fiele, nähme man die Zeilen eines Blocks heraus.
+
+    **Eine Zerlegung statt einer je Bedingung.** Hier stand für jede
+    Bedingung ein eigenes ``matrix_rank`` über die übrigen Zeilen — an einer
+    Skizze mit 200 Bedingungen 200 Zerlegungen, gemessen 3,5 Sekunden im
+    Qt-Hauptthread für die Meldung „legt fest, was schon festliegt"
+    (Durchsicht 22.09.2026).
+
+    Dieselbe Frage lässt sich am **linken Nullraum** beantworten: Die Zeilen
+    eines Blocks liegen genau dann im Raum der übrigen, wenn die
+    Nullraumvektoren auf diesem Block den vollen Rang haben — sie schreiben
+    jede seiner Zeilen als Summe der anderen. Der Rangverlust ist deshalb die
+    Zeilenzahl des Blocks weniger dem Rang des Nullraums auf ihm.
+    """
+    rows = jacobian.shape[0]
+    if rank >= rows:
+        return [0 for _ in blocks]
+    left, _values, _right = np.linalg.svd(jacobian, full_matrices=True)
+    null = left[:, rank:]
+    losses: list[int] = []
+    for block in blocks:
+        share = null[list(block), :]
+        values = np.linalg.svd(share, compute_uv=False) if share.size else np.zeros(0)
+        losses.append(len(block) - int(np.count_nonzero(values > _NULL_SHARE)))
+    return losses
+
+
 def _redundant_pair(
     constraints: Sequence[SketchConstraint],
     equations: Sequence[_Equation],
@@ -821,14 +908,18 @@ def _redundant_pair(
     auch Eigenes bei (die Abhängigkeit verteilt sich über einen Verbund),
     wird die mit dem kleinsten eigenen Beitrag benannt — vorher stand hier
     ein ``(0, 0)``, das blind der ersten Bedingung der Skizze die Schuld
-    gab, gleich ob sie beteiligt war."""
+    gab, gleich ob sie beteiligt war.
+
+    Den Rangverlust je Bedingung rechnet :func:`_losses` aus **einer**
+    Zerlegung."""
     measured: list[tuple[int, int]] = []  # (Rangverlust ohne sie, Index)
+    carried: list[tuple[int, range]] = []
     for equation, block in zip(equations, blocks, strict=True):
-        if equation.constraint is None:
-            continue
-        kept = [row for row in range(jacobian.shape[0]) if row not in block]
-        loss = rank - int(np.linalg.matrix_rank(jacobian[kept]))
-        measured.append((loss, equation.constraint))
+        if equation.constraint is not None:
+            carried.append((equation.constraint, block))
+    losses = _losses(jacobian, rank, [block for _index, block in carried])
+    for (index, _block), loss in zip(carried, losses, strict=True):
+        measured.append((loss, index))
     candidates = [index for loss, index in measured if loss == 0]
     if len(candidates) >= 2:
         return candidates[0], candidates[1]
@@ -919,27 +1010,32 @@ def solve_sketch(
         begin = anchors
 
     # Vor der ersten Allokation: Der Löser rechnet dünn besetzt, die
-    # Rangprüfung danach braucht die Matrix dicht — und die wächst mit
-    # Bedingungen mal Punkten. Eine Skizze jenseits der Grenze wird benannt
-    # statt gerechnet (G-09).
-    # Die spätere Rangprüfung ergänzt je Kreis eine dichte Eichzeile, auch
-    # wenn überhaupt keine explizite Bedingung vorliegt.
+    # Rangprüfung danach braucht dicht, was nach dem Abschälen übrig bleibt —
+    # und das wächst mit Bedingungen mal Punkten. Eine Skizze jenseits der
+    # Grenze wird benannt statt gerechnet (G-09). Die spätere Rangprüfung
+    # ergänzt je Kreis eine Eichzeile, auch wenn überhaupt keine explizite
+    # Bedingung vorliegt.
+    #
+    # **Was ``fixed`` festhält, zählt nicht mit** (RM-188 P3.4): Jede seiner
+    # Zeilen hält genau eine Koordinate und fällt im ersten Schälgang samt
+    # Spalte heraus (:func:`_matrix_rank`). Gezählt wurde sie trotzdem, und
+    # eine übernommene Flächenkontur mit 2624 Strecken (Besenhalter aus
+    # ``F:\3D Dateien``, 23.09.2026) machte die Zeichnung unlösbar —
+    # „mehr Punkte und Bedingungen, als der Löser verarbeitet" über
+    # Geometrie, die sich nicht bewegen kann.
     total_rows = sum(equation.rows for equation in equations) + sum(
         element.kind == "circle" for element in sketch.elements
     )
-    dense_bytes = total_rows * anchors.size * 8
-    if dense_bytes > MAX_JACOBIAN_BYTES:
-        raise ValidationError(
-            field="sketch",
-            detail=_("Die Skizze hat mehr Punkte und Bedingungen, als der Löser verarbeitet."),
-            constraint="too_large",
-            values={
-                "points": int(anchors.size // 2),
-                "constraints": len(sketch.constraints),
-                "limit": MAX_JACOBIAN_BYTES,
-            },
-        )
-    solution, residuals, jacobian = _solve(equations, begin, pinned=pinned)
+    fixed = [
+        constraint.targets[0] for constraint in sketch.constraints if constraint.kind == "fixed"
+    ]
+    dense_rows = total_rows - 2 * len(fixed)
+    dense_columns = anchors.size - 2 * len(set(fixed))
+    if max(dense_rows, 0) * max(dense_columns, 0) * 8 > MAX_JACOBIAN_BYTES:
+        raise _too_large(sketch, anchors)
+    solution, residuals, jacobian = _solve(
+        equations, begin, pinned=pinned, tries=DRAG_REACH_TRIES if pinned else None
+    )
     max_residual = float(np.max(np.abs(residuals))) if residuals.size else 0.0
     if pinned and max_residual > _TOL:
         # Der Zeigerort ist mit den Bedingungen nicht zu haben — zweite Stufe:
@@ -947,9 +1043,35 @@ def solve_sketch(
         # (siehe den Docstring). Ihr Rest wird danach wie jeder andere
         # geprüft: Was hier noch übrig bleibt, war schon vor dem Zug ein
         # Widerspruch der Skizze selbst.
-        solution, residuals, jacobian = _solve(equations, begin, pinned=pinned, stiff=True)
+        #
+        # **Sie beginnt, wo die erste aufgehört hat**, mit den gezogenen
+        # Punkten am Zeiger. Dort hat die erste Stufe die übrigen Punkte
+        # schon so weit nachgezogen, wie es ohne die gezogenen ging; von der
+        # alten Lage aus brauchte die zweite gemessen 116 Auswertungen, von
+        # hier aus fünf (Kette aus fünf Linien, über ihre Länge gezogen).
+        reached = solution.reshape(-1, 2).copy()
+        for point in pinned:
+            reached[point] = begin[point]
+        solution, residuals, jacobian = _solve(
+            equations, reached, pinned=pinned, stiff=True, tries=DRAG_SLIDE_TRIES
+        )
         max_residual = float(np.max(np.abs(residuals))) if residuals.size else 0.0
-    rank = int(np.linalg.matrix_rank(jacobian)) if residuals.size else 0
+        if max_residual > _TOL:
+            # **Findet auch die zweite Stufe keine Lage, bleibt die Zeichnung
+            # stehen** — sofern sie vor dem Zug in Ordnung war. Ein
+            # Widerspruch der Skizze selbst bleibt einer und wird unten
+            # gemeldet; ein Zug, den die Bedingungen nicht zulassen, ist
+            # keiner: Der Punkt folgt dann nicht, und die Zeile sagt, was ihn
+            # hält.
+            held = np.asarray(
+                list(start) if start is not None and len(start) == anchors.shape[0] else anchors,
+                dtype=float,
+            ).reshape(-1, 2)
+            held_residuals = _residuals_at(equations, held)
+            if not held_residuals.size or float(np.max(np.abs(held_residuals))) <= _TOL:
+                solution, residuals, jacobian = _solve(equations, held, pinned=(), tries=0)
+                max_residual = float(np.max(np.abs(residuals))) if residuals.size else 0.0
+    rank = _matrix_rank(jacobian) if residuals.size else 0
     counted_rank = _rank_with_circle_gauges(sketch, solution, jacobian, rank, variables)
     blocks = _row_blocks(equations)
 
@@ -977,7 +1099,12 @@ def solve_sketch(
         )
 
     if residuals.size and rank < residuals.size:
-        first, second = _redundant_pair(sketch.constraints, equations, blocks, jacobian, rank)
+        # Die Suche nach dem Paar braucht die ganze Matrix dicht — nur hier,
+        # im Fehlerfall, und mit derselben Grenze.
+        if int(np.prod(jacobian.shape)) * 8 > MAX_JACOBIAN_BYTES:
+            raise _too_large(sketch, anchors)
+        dense = np.asarray(jacobian.toarray(), dtype=float)
+        first, second = _redundant_pair(sketch.constraints, equations, blocks, dense, rank)
         assert max(first, second) < len(sketch.constraints), (
             "redundancy without a bearing constraint"
         )
@@ -1015,6 +1142,20 @@ def solve_sketch(
     )
 
 
+def _too_large(sketch: Sketch, anchors: np.ndarray) -> ValidationError:
+    """Die Absage für eine Skizze, deren dichter Teil das Budget sprengt (G-09)."""
+    return ValidationError(
+        field="sketch",
+        detail=_("Die Skizze hat mehr Punkte und Bedingungen, als der Löser verarbeitet."),
+        constraint="too_large",
+        values={
+            "points": int(anchors.size // 2),
+            "constraints": len(sketch.constraints),
+            "limit": MAX_JACOBIAN_BYTES,
+        },
+    )
+
+
 def _rank_with_circle_gauges(
     sketch: Sketch, solution: Any, jacobian: Any, rank: int, variables: int
 ) -> int:
@@ -1036,7 +1177,12 @@ def _rank_with_circle_gauges(
     Randpunkt schon festhält (waagerecht zur Mitte, auf einem Festpunkt), ist
     die Zeile abhängig und zählt nichts doppelt.
     """
-    rows: list[Any] = []
+    from scipy import sparse
+
+    gauge_rows: list[int] = []
+    gauge_columns: list[int] = []
+    gauge_values: list[float] = []
+    gauge_count = 0
     offset = 0
     points = np.asarray(solution, dtype=float).reshape(-1, 2)
     for element in sketch.elements:
@@ -1045,13 +1191,77 @@ def _rank_with_circle_gauges(
             away = points[rim] - points[centre]
             reach = float(np.hypot(away[0], away[1]))
             if reach > EPS_GEOM:
-                tangent = np.array([-away[1], away[0]]) / reach
-                row = np.zeros(variables)
-                row[2 * rim : 2 * rim + 2] = tangent
-                row[2 * centre : 2 * centre + 2] = -tangent
-                rows.append(row)
+                tangent = (float(-away[1] / reach), float(away[0] / reach))
+                for point, sign in ((rim, 1.0), (centre, -1.0)):
+                    for coordinate in (0, 1):
+                        gauge_rows.append(gauge_count)
+                        gauge_columns.append(2 * point + coordinate)
+                        gauge_values.append(sign * tangent[coordinate])
+                gauge_count += 1
         offset += len(element.points)
-    if not rows:
+    if not gauge_rows:
         return rank
-    stacked = np.vstack([jacobian, *rows]) if jacobian.size else np.vstack(rows)
-    return int(np.linalg.matrix_rank(stacked))
+    gauges = sparse.csr_matrix(
+        (gauge_values, (gauge_rows, gauge_columns)), shape=(gauge_count, variables)
+    )
+    stacked = sparse.vstack([sparse.csr_matrix(jacobian), gauges]) if jacobian.shape[0] else gauges
+    return _matrix_rank(stacked)
+
+
+def _matrix_rank(matrix: Any) -> int:
+    """Der Rang einer Matrix — Einerzeilen vorweg abgeschält, der Rest zerlegt.
+
+    **Eine Zeile mit genau einem Eintrag trägt genau eins zum Rang bei.** Zieht
+    man ihr Vielfaches von den übrigen Zeilen ab, verschwindet ihre Spalte aus
+    ihnen, und der Rest der Matrix bleibt, wie er war: Rang gleich eins plus
+    Rang ohne diese Zeile und Spalte. Das ist exakt und keine Näherung. Mehrere
+    Einerzeilen auf derselben Spalte zählen einmal — die übrigen werden dabei
+    zu Nullzeilen.
+
+    Gebraucht wird das für ``fixed``: Jede seiner zwei Zeilen hält genau eine
+    Koordinate. Eine übernommene Flächenkontur trägt ein ``fixed`` an jedem
+    Punkt, und die dichte Zerlegung über alle Zeilen kostete bei 512 festen
+    Linien 1,8 Sekunden je Lösung (gemessen 23.09.2026) — bei jedem Klick in
+    der Zeichnung. Abgeschält bleibt nur, was die Zeichnung selbst festlegt.
+    Was nach einem Schälgang zur Einerzeile wird (eine Deckung mit einem
+    festen Punkt), geht im nächsten mit.
+
+    **Dünn besetzt, und dicht wird nur der Rest.** Geschält wird über die
+    Zeilen- und Spaltenlisten der ``csr``-Matrix, in der Zahl ihrer Einträge;
+    eine dichte Matrix über alle Punkte hätte bei 2624 festen Strecken
+    881 MB gebraucht, bevor die erste Zeile fiel.
+    """
+    from scipy import sparse
+
+    table = sparse.csr_matrix(matrix)
+    table.eliminate_zeros()
+    height, width = table.shape
+    if not height or not width:
+        return 0
+    by_column = table.tocsc()
+    counts = np.diff(table.indptr).astype(np.int64)
+    row_alive = counts > 0
+    column_alive = np.ones(width, dtype=bool)
+    waiting = [int(row) for row in np.flatnonzero(counts == 1)]
+    peeled = 0
+    while waiting:
+        row = waiting.pop()
+        if not row_alive[row] or counts[row] != 1:
+            continue
+        entries = table.indices[table.indptr[row] : table.indptr[row + 1]]
+        column = next(int(entry) for entry in entries if column_alive[entry])
+        row_alive[row] = False
+        column_alive[column] = False
+        peeled += 1
+        for other in by_column.indices[by_column.indptr[column] : by_column.indptr[column + 1]]:
+            if not row_alive[other]:
+                continue
+            counts[other] -= 1
+            if counts[other] == 1:
+                waiting.append(int(other))
+            elif counts[other] == 0:
+                row_alive[other] = False
+    rest = table[np.flatnonzero(row_alive)][:, np.flatnonzero(column_alive)]
+    if not rest.shape[0] or not rest.shape[1]:
+        return peeled
+    return peeled + int(np.linalg.matrix_rank(rest.toarray()))

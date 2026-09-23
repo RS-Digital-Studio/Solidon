@@ -334,6 +334,10 @@ class FieldCutParams(BaseParams):
     name="field_cut",
     title=_("Lochfeld schneiden"),
     category="sketch",
+    # Runde Löcher tragen seit dem 22.09.2026 die Ecken der plattformgleichen
+    # Tafel (``sketch_solid.outline_points``, RM-187); ältere Ergebnisse
+    # dürfen nicht aus dem Cache kommen.
+    cache_version="circle-table-1",
     params=FieldCutParams,
     consumes=1,
     produces=1,
@@ -435,12 +439,15 @@ def _named_bores(
     from app.core.geom.prepare_ops import _with_nominal_bore
     from app.core.perceive.features import detect
     from app.core.perceive.local import FEATURE_LIMIT_TRIANGLES
-    from app.core.sketch.planes import frame_for_plane, to_plane, to_world
+    from app.core.sketch.planes import frame_in_scene, to_plane, to_world
     from app.core.units import match_tolerance
 
     if cut.solver is not None and cut.solver.strategy in ("voxel", "jittered"):
         return output
-    frame = frame_for_plane(plane, ctx.scene.objects.values())
+    # Mit den Projektparametern: Eine Versatzebene ``offset:…:@wand`` löst
+    # sich ohne sie nicht auf, und das ``assert`` darunter fing genau diesen
+    # Fall als „unerwarteter Fehler“ (RM-188 P3.2).
+    frame = frame_in_scene(plane, ctx.scene)
     assert frame is not None
     mesh = as_mesh_data(output.mesh)
     if output.kind != "brep" and mesh.triangle_count > FEATURE_LIMIT_TRIANGLES:

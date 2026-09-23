@@ -2079,26 +2079,6 @@ def _placing_tool(
     )
 
 
-def _ring_in_order(ring: Iterable[tuple[int, int]]) -> list[int]:
-    """Die Ecken eines geschlossenen Randrings in Laufrichtung."""
-    neighbours: dict[int, list[int]] = {}
-    for a, b in ring:
-        neighbours.setdefault(a, []).append(b)
-        neighbours.setdefault(b, []).append(a)
-    if not neighbours:
-        return []
-    first = min(neighbours)
-    ordered = [first]
-    previous, current = -1, first
-    while len(ordered) <= len(neighbours):
-        following = next((value for value in neighbours[current] if value != previous), None)
-        if following is None or following == first:
-            break
-        ordered.append(following)
-        previous, current = current, following
-    return ordered
-
-
 def _rooted(
     mesh: MeshData,
     feature: Feature,
@@ -2125,7 +2105,7 @@ def _rooted(
     der ganze Körper verschoben, denn das machte einen aufgeweiteten Kegel
     breiter. Findet sich kein solcher Ring, bleibt der Körper, wie er war.
     """
-    from app.core.perceive.relations import boundary_rings
+    from app.core.perceive.relations import boundary_rings, ring_in_order
 
     try:
         frame = _feature_mount(mesh, feature, (feature,), built)
@@ -2135,7 +2115,7 @@ def _rooted(
     origin = np.asarray(frame.origin, dtype=float)
     vertices = np.asarray(mesh.raw.vertices, dtype=float)
     for ring in boundary_rings(mesh.raw, feature) or []:
-        ordered = _ring_in_order(ring)
+        ordered = ring_in_order(ring)
         if len(ordered) < 3:
             continue
         points = vertices[ordered]
@@ -8869,6 +8849,8 @@ def _torus_rims(
     seine Randkanten, je Ring die Randkanten und je Ring der Umlauf seiner
     Eckpunkte in Kantenfolge.
     """
+    from app.core.perceive.relations import ring_in_order
+
     raw = mesh.raw
     chosen = np.unique(np.asarray(feature.face_indices, dtype=np.int64))
     if chosen.size == 0 or int(chosen.max()) >= len(raw.faces):
@@ -8908,7 +8890,7 @@ def _torus_rims(
             or float(radial.max() - radial.min()) > FLAT_RIM
         ):
             raise _torus_refusal(feature, whole=False)
-        loop = _ring_in_order([(int(a), int(b)) for a, b in own])
+        loop = ring_in_order([(int(a), int(b)) for a, b in own])
         if len(loop) != len(members):
             raise _torus_refusal(feature, whole=False)
         ring_edges.append(own)

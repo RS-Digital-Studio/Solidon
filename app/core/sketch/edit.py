@@ -23,13 +23,23 @@ from __future__ import annotations
 
 import itertools
 import math
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, replace
-from typing import Final
+from typing import Any, Final
 
-from app.core.errors import ValidationError, require_positive
-from app.core.sketch.profile import _JOIN_TOL, _flat_curve
-from app.core.types import Point2, Sketch, SketchConstraint, SketchElement
+from app.core.errors import CANCEL, Action, ValidationError, require_positive
+from app.core.sketch.planes import feature_plane_parts, standing_on_feature, to_plane
+from app.core.sketch.profile import _JOIN_TOL, _flat_curve, arc_sweep
+from app.core.types import (
+    PlaneFrame,
+    Point2,
+    SceneObject,
+    Sketch,
+    SketchConstraint,
+    SketchElement,
+    Vec3,
+)
+from app.core.units import EPS_GEOM, MAX_FACET_SAG, PLANE_PARALLEL
 from app.i18n import _
 
 #: Wie nah zwei Punkte sein müssen, um als derselbe zu gelten. Keine Toleranz
@@ -217,42 +227,18 @@ def trim(sketch: Sketch, index: int, at: Point2) -> Sketch:
     before = [point for point in crossings if _parameter_on(line, point) < click]
     after = [point for point in crossings if _parameter_on(line, point) > click]
 
-    if before and after:
-        # Zwischen zwei Kreuzungen geklickt: das Stück dazwischen fällt weg,
-        # und aus einer Linie werden zwei.
-        return _replace_element(
-            sketch,
-            index,
-            (
-                SketchElement(
-                    kind="line", points=(line[0], before[-1]), construction=element.construction
-                ),
-                SketchElement(
-                    kind="line", points=(after[0], line[1]), construction=element.construction
-                ),
-            ),
-        )
-    if after:
-        return _replace_element(
-            sketch,
-            index,
-            (
-                SketchElement(
-                    kind="line", points=(after[0], line[1]), construction=element.construction
-                ),
-            ),
-        )
-    if before:
-        return _replace_element(
-            sketch,
-            index,
-            (
-                SketchElement(
-                    kind="line", points=(line[0], before[-1]), construction=element.construction
-                ),
-            ),
-        )
-    return _replace_element(sketch, index, ())
+    # Zwischen zwei Kreuzungen geklickt, fällt das Stück dazwischen weg, und
+    # aus einer Linie werden zwei. **Ein Stück ohne Länge ist keines:** Die
+    # Enden einer Rechteckseite sind selbst Kreuzungen — der Nachbar setzt
+    # dort an —, und ein Klick auf die Seite ließ zwei Linien der Länge null
+    # stehen, deckungsgleich mit den Ecken, statt die Seite zu entfernen
+    # (Durchsicht 22.09.2026). Jedes CAD nimmt dort die ganze Seite.
+    pieces: list[tuple[Point2, Point2]] = []
+    if before and math.dist(line[0], before[-1]) > _JOIN_TOL:
+        pieces.append((line[0], before[-1]))
+    if after and math.dist(after[0], line[1]) > _JOIN_TOL:
+        pieces.append((after[0], line[1]))
+    return _rebuilt_line(sketch, index, tuple(pieces))
 
 
 def extend(sketch: Sketch, index: int, at: Point2) -> Sketch:
@@ -291,11 +277,7 @@ def extend(sketch: Sketch, index: int, at: Point2) -> Sketch:
         candidates, key=lambda point: abs(_parameter_on(line, point) - (1.0, 0.0)[not towards_end])
     )
     points = (line[0], target) if towards_end else (target, line[1])
-    return _replace_element(
-        sketch,
-        index,
-        (SketchElement(kind="line", points=points, construction=element.construction),),
-    )
+    return _rebuilt_line(sketch, index, (points,))
 
 
 def offset(sketch: Sketch, indices: tuple[int, ...], distance: float) -> Sketch:
@@ -431,35 +413,85 @@ def mirror(sketch: Sketch, indices: tuple[int, ...], axis: str) -> Sketch:
 
 # --- Bedingungen umnummerieren ---------------------------------------------------
 
+#: Bedingungen über **beide** Enden einer Linie, die ihre Richtung meinen und
+#: nicht ihre Länge — sie gelten für jedes Stück, das von der Linie bleibt.
+#: ``tangent`` und ``symmetric`` lesen die Linie als Gerade; ein Maß, ein
+#: Gleich-lang oder ein Mittelpunkt meinen die Strecke und fallen mit ihr.
+_ALONG_THE_LINE: Final = frozenset(
+    {"horizontal", "vertical", "parallel", "perpendicular", "angle", "tangent", "symmetric"}
+)
 
-def _replace_element(sketch: Sketch, index: int, fresh: tuple[SketchElement, ...]) -> Sketch:
-    """Tauscht ein Element gegen keines, eines oder zwei — mit umnummerierten
-    Bedingungen.
 
-    Die Bedingungen des ersetzten Elements fallen weg: seine Punkte sind
-    andere geworden, und eine Bemaßung auf einer gekürzten Linie behauptet
-    eine Länge, die nicht mehr stimmt. Alle übrigen rücken auf.
+def _rebuilt_line(sketch: Sketch, index: int, pieces: tuple[tuple[Point2, Point2], ...]) -> Sketch:
+    """Tauscht eine Linie gegen die Stücke, die von ihr bleiben — mit den
+    Bedingungen, die dabei weiter gelten.
+
+    **Was an einem stehen gebliebenen Ende hing, bleibt dran.** Hier fiel
+    jede Bedingung der Linie weg, auch die Deckung an ihrem unberührten Ende:
+    Wer ein Stück aus der Mitte trimmte oder eine Linie verlängerte, hatte
+    danach eine Ecke, die beim nächsten Zug aufriss, und eine Waagerechte,
+    die keine mehr war (Durchsicht 22.09.2026). Drei Regeln:
+
+    * Ein Ende, das seinen Ort behält, behält seine Bedingungen — am Stück,
+      das es trägt.
+    * Ein Ende, das wegfällt oder wandert (die geklickte Hälfte beim Trimmen,
+      das verlängerte Ende), verliert sie: Eine Deckung dort hielte es an
+      einem Ort fest, an dem es nicht mehr ist.
+    * Was die ganze Linie meint, gilt weiter, wenn es ihre **Richtung** meint
+      (:data:`_ALONG_THE_LINE`) — am ersten Stück. Ein Maß, ein Gleich-lang
+      oder ein Mittelpunkt meinen ihre **Länge**, und die ist eine andere
+      geworden.
+
+    Alle übrigen Bedingungen rücken mit ihren Punkten auf.
     """
-    starts = offsets_of(sketch)
-    begin = starts[index]
-    count = len(sketch.elements[index].points)
-    added = sum(len(element.points) for element in fresh)
+    element = sketch.elements[index]
+    begin = offsets_of(sketch)[index]
+    count = len(element.points)
+    fresh = tuple(
+        SketchElement(kind="line", points=piece, construction=element.construction)
+        for piece in pieces
+    )
+    added = 2 * len(fresh)
 
     mapping: dict[int, int] = {}
     for old in range(len(flat_points(sketch))):
         if begin <= old < begin + count:
             continue
         mapping[old] = old if old < begin else old - count + added
+    # Die Enden, die ihren Ort behalten: der Anfang am ersten Stück, das mit
+    # ihm beginnt, das Ende am letzten, das mit ihm endet.
+    #
+    # Verglichen wird die **Herkunft** und nicht die Zahl (Regel 6): Ein Stück,
+    # das ein Ende behält, trägt genau dieses Tupel aus der alten Linie.
+    start, end = element.points[0], element.points[1]
+    for number, piece in enumerate(pieces):
+        if piece[0] is start and begin not in mapping:
+            mapping[begin] = begin + 2 * number
+        if piece[1] is end:
+            mapping[begin + 1] = begin + 2 * number + 1
+
+    constraints: list[SketchConstraint] = []
+    for entry in sketch.constraints:
+        whole = begin in entry.targets and begin + 1 in entry.targets
+        if whole:
+            if entry.kind not in _ALONG_THE_LINE or not fresh:
+                continue
+            # Die Richtung am ersten Stück: dessen Anfang für den Anfang der
+            # Linie, dessen Ende für ihr Ende — beide liegen auf derselben
+            # Geraden und zeigen in dieselbe Richtung.
+            along = {begin: begin, begin + 1: begin + 1}
+            targets = tuple(
+                along[target] if target in along else mapping.get(target, -1)
+                for target in entry.targets
+            )
+        else:
+            targets = tuple(mapping.get(target, -1) for target in entry.targets)
+        if min(targets, default=0) < 0:
+            continue
+        constraints.append(SketchConstraint(entry.kind, targets, entry.value))
 
     elements = (*sketch.elements[:index], *fresh, *sketch.elements[index + 1 :])
-    constraints = tuple(
-        SketchConstraint(
-            entry.kind, tuple(mapping[target] for target in entry.targets), entry.value
-        )
-        for entry in sketch.constraints
-        if all(target in mapping for target in entry.targets)
-    )
-    return replace(sketch, elements=elements, constraints=constraints)
+    return replace(sketch, elements=elements, constraints=tuple(constraints))
 
 
 # --- Projizieren -----------------------------------------------------------------
@@ -485,6 +517,13 @@ def project(sketch: Sketch, mesh: object, frame: object = None) -> Sketch:
     stünde beim nächsten Extrudieren ein zweiter Umriss in der Skizze, den
     niemand gezeichnet hat.
 
+    **Und fest, wie die Flächenkontur** (RM-188 P3.4): Jeder Punkt trägt
+    ``fixed``. Frei stand hier nach dem Projizieren der Lochplatte „noch 1568
+    Maße fehlen", und was man an eine Kante hängte, zog die Kante mit. Punkte,
+    die auf einer Geraden liegen, fallen dabei weg — der Schnitt durch die
+    Platte kam als 392 Strecken, obwohl die Außenkante vier hat —, und was
+    schon in der Zeichnung steht, kommt nicht doppelt.
+
     ``frame`` ist der Rahmen einer Flächenebene oder ``None`` für eine der
     drei Grundebenen. ``mesh`` ist ein ``MeshData`` — nicht typisiert, weil
     dieses Modul sonst die Geometrie-Schicht importieren müsste, nur um einen
@@ -509,26 +548,42 @@ def project(sketch: Sketch, mesh: object, frame: object = None) -> Sketch:
             _("Diese Ebene schneidet den Körper nicht — dort gibt es keine Kante."),
         )
 
-    added: list[SketchElement] = []
+    vertices = np.asarray(section.vertices, dtype=np.float64)
+    straight = _straight_enough(vertices)
+    chains: list[tuple[SketchElement, ...]] = []
     for entity in section.entities:
-        points = section.vertices[entity.points]
+        indices = list(entity.points)
         flat = [
             (
                 float(np.dot(point - np.asarray(origin), np.asarray(x_axis))),
                 float(np.dot(point - np.asarray(origin), np.asarray(y_axis))),
             )
-            for point in points
+            for point in vertices[indices]
         ]
-        for first, second in itertools.pairwise(flat):
-            if math.dist(first, second) > EPS_SKETCH:
-                added.append(SketchElement(kind="line", points=(first, second), construction=True))
+        closed = len(indices) > 3 and indices[0] == indices[-1]
+        kept = _corners(flat[:-1], straight) if closed else _chain_corners(flat, straight)
+        steps = zip(kept, [*kept[1:], kept[0]], strict=True) if closed else itertools.pairwise(kept)
+        chains.append(
+            tuple(
+                SketchElement(kind="line", points=(first, second), construction=True)
+                for first, second in steps
+                if math.dist(first, second) > EPS_SKETCH
+            )
+        )
 
-    if not added:
+    if not any(chains):
         raise ValidationError(
             "plane",
             _("Der Schnitt ergibt keine Kante, an der sich zeichnen ließe."),
         )
-    return replace(sketch, elements=(*sketch.elements, *added))
+    grown, fresh = _held_copy(sketch, chains)
+    if not fresh:
+        raise ValidationError(
+            "plane",
+            _("Diese Kanten stehen schon in der Zeichnung."),
+            constraint="already_there",
+        )
+    return grown
 
 
 def _axes_for(plane: str) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
@@ -543,6 +598,411 @@ def _axes_for(plane: str) -> tuple[tuple[float, float, float], tuple[float, floa
     if plane == "plane:yz":
         return ((0.0, 1.0, 0.0), (0.0, 0.0, 1.0))
     return ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0))
+
+
+# --- Flächenkontur ------------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class FaceOutline:
+    """Was :func:`face_outline` übernommen hat — die Zeichnung und was die Zeile sagt."""
+
+    sketch: Sketch
+    loops: int
+    """Wie viele Ränder neu in der Zeichnung stehen, der äußere mitgezählt."""
+    exact: bool
+    """Aus den Kurven des exakten Körpers — sonst aus den Kanten des Netzes."""
+    circles: int = 0
+    """Wie viele Ränder am Netz als Kreis aus einem erkannten Merkmal kamen."""
+    deviation: float = 0.0
+    """Wie weit diese Kreise höchstens neben dem Netzrand liegen, in Millimetern."""
+
+
+#: Der Weg zu einer Fläche, wenn die Zeichnung auf keiner steht.
+PICK_A_FACE = Action(id="sketch.pick_face", label=_("Eine Fläche wählen"), primary=True)
+
+
+def face_outline(sketch: Sketch, objects: Iterable[SceneObject], frame: PlaneFrame) -> FaceOutline:
+    """Die Ränder der Fläche, auf der die Zeichnung steht — als feste Hilfsgeometrie.
+
+    **Eine eigene Handlung neben** :func:`project` (RM-188 P3.4;
+    Konzept vollwertiges CAD §6 und §13.3). *Projizieren* schneidet die Körper mit der
+    Zeichenebene, und auf der Fläche selbst, auf der man zeichnet, schneidet
+    sie nichts: sechs von sechs Flächen von ``plate_holes.stl`` endeten mit
+    „Diese Ebene schneidet den Körper nicht". Die Kontur einer Fläche ist ihr
+    Rand, und den gibt es auch dort — außen einer, innen je Loch einer.
+
+    **Woher der Rand kommt:** Am exakten Körper aus seinen Kurven
+    (``brep.edit.face_loops``) — eine Bohrung kommt als Kreis und ein Bogen
+    als Bogen. Am Netz aus den Randringen (``perceive.relations``); ein Ring,
+    den ein erkanntes Merkmal als Kreis belegt (Bohrung oder Zapfen, Achse
+    durch die Ebene), wird ein Kreis — aber nur, wenn er an keiner Stelle
+    weiter als ``MAX_FACET_SAG`` neben dem Ring liegt, an den Ecken und in
+    der Mitte jeder Sehne. Ein Merkmal, das schlecht passt, erzeugt so keine
+    falsche Kontur; der Ring bleibt dann, was das Netz sagt.
+
+    **Fest, als Hilfsgeometrie, und eine Kopie.** Jeder Punkt trägt ein
+    ``fixed``: Was sich an ihr ausrichtet, zieht sie nicht mit, und sie zählt
+    nicht zu den Maßen, die der Zeichnung fehlen. Ändert sich der Körper
+    später, folgt sie nicht — das sagt die Oberfläche beim Übernehmen. Was
+    schon in der Zeichnung steht (derselbe Rand zum zweiten Mal übernommen),
+    kommt nicht doppelt.
+
+    ``frame`` ist der Rahmen der Zeichenebene. Sie darf über der Fläche
+    liegen, parallel verschoben; gegen die Fläche gekippt käme der Rand
+    verzerrt an — dann gibt es eine Absage statt einer Ellipse, die niemand
+    bestellt hat.
+    """
+    root = standing_on_feature(sketch.plane)
+    if root is None:
+        raise ValidationError(
+            "plane",
+            _(
+                "Diese Zeichnung liegt auf keiner Fläche eines Körpers. "
+                "Eine Fläche anklicken und dort zeichnen — Kanten in einer "
+                "freien Ebene holt „Projizieren“."
+            ),
+            constraint="not_on_a_face",
+            suggestions=[PICK_A_FACE, CANCEL],
+        )
+    object_id, feature_id = feature_plane_parts(root)
+    found = _face_of(objects, object_id, feature_id)
+    if found is None:
+        raise ValidationError(
+            "plane",
+            _("Diese Fläche gibt es in der Szene nicht mehr."),
+            value=feature_id,
+            constraint="unknown_feature",
+            suggestions=[PICK_A_FACE, CANCEL],
+        )
+    entry, feature = found
+    normal = tuple(float(value) for value in feature.params.get("normal", (0.0, 0.0, 1.0)))
+    if _length(_cross(normal, frame.normal)) > PLANE_PARALLEL:
+        raise ValidationError(
+            "plane",
+            _(
+                "Die Zeichenebene ist gegen ihre Fläche geneigt — die Kontur käme "
+                "verzerrt an. Auf der Fläche selbst oder parallel dazu zeichnen."
+            ),
+            constraint="tilted_to_face",
+            suggestions=[PICK_A_FACE, CANCEL],
+        )
+
+    from app.core.brep.kernel import Solid
+
+    if isinstance(entry.mesh, Solid):
+        loops = _exact_outline(entry.mesh, feature.face_indices, frame)
+        return _with_outline(sketch, loops, exact=True)
+    loops, circles, deviation = _mesh_outline(entry, feature, frame)
+    return _with_outline(sketch, loops, exact=False, circles=circles, deviation=deviation)
+
+
+def _face_of(
+    objects: Iterable[SceneObject], object_id: str, feature_id: str
+) -> tuple[SceneObject, Any] | None:
+    """Körper und ebene Fläche zu einer Flächenebene — gesucht wie in ``planes.frame_for``."""
+    for entry in objects:
+        if object_id and entry.id != object_id:
+            continue
+        feature = entry.features.get(feature_id)
+        if feature is not None and feature.kind == "face":
+            return entry, feature
+    return None
+
+
+def _exact_outline(
+    solid: Any, face_indices: Sequence[int], frame: PlaneFrame
+) -> list[tuple[SketchElement, ...]]:
+    """Die Ränder einer exakten Fläche, je Rand die Elemente in der Zeichenebene."""
+    from app.core.brep.edit import face_loops
+
+    # Die Drehrichtung der Zeichnung: gegen den Uhrzeigersinn heißt um das
+    # Kreuzprodukt ihrer beiden Achsen — auf ``plane:xz`` ist das nicht die
+    # Normale (siehe ``planes.BASE_FRAMES``), und ein Bogen, der um die
+    # falsche Achse gelesen wird, ist sein Gegenstück.
+    turning = _cross(frame.x_axis, frame.y_axis)
+    loops: list[tuple[SketchElement, ...]] = []
+    for index in solid.faces_of_triangles(tuple(face_indices)):
+        for loop in face_loops(solid, index):
+            elements: list[SketchElement] = []
+            for piece in loop.pieces:
+                flat = [to_plane(frame, point) for point in piece.points]
+                if piece.kind == "line":
+                    elements.append(SketchElement("line", (flat[0], flat[1]), construction=True))
+                elif piece.kind == "circle" and piece.centre is not None:
+                    centre = to_plane(frame, piece.centre)
+                    elements.append(SketchElement("circle", (centre, flat[0]), construction=True))
+                elif piece.kind == "arc" and piece.centre is not None:
+                    centre = to_plane(frame, piece.centre)
+                    ends = (flat[0], flat[1])
+                    if _dot(piece.axis or turning, turning) < 0.0:
+                        ends = (flat[1], flat[0])
+                    elements.append(SketchElement("arc", (centre, *ends), construction=True))
+                else:
+                    elements.extend(
+                        SketchElement("line", (first, second), construction=True)
+                        for first, second in itertools.pairwise(flat)
+                        if math.dist(first, second) > EPS_GEOM
+                    )
+            if not elements:
+                continue
+            # Der Außenrand zuerst — in der Zeichnung und in der Zählung.
+            if loop.outer:
+                loops.insert(0, tuple(elements))
+            else:
+                loops.append(tuple(elements))
+    return loops
+
+
+def _mesh_outline(
+    entry: SceneObject, feature: Any, frame: PlaneFrame
+) -> tuple[list[tuple[SketchElement, ...]], int, float]:
+    """Die Randringe einer Netzfläche — Kreise, wo ein Merkmal sie belegt.
+
+    Zurück kommen die Ränder (der äußere zuerst), wie viele davon Kreise
+    wurden und wie weit diese höchstens neben dem Netz liegen.
+    """
+    import numpy as np
+
+    from app.core.perceive.features import ROUND_WALL_KINDS
+    from app.core.perceive.relations import boundary_rings, ring_in_order
+
+    body = entry.mesh.raw  # type: ignore[attr-defined]
+    rings = boundary_rings(body, feature)
+    if not rings:
+        raise ValidationError(
+            "plane",
+            _(
+                "Der Rand dieser Fläche ist am Netz nicht eindeutig. "
+                "„Projizieren“ holt die Kanten über einen Schnitt."
+            ),
+            constraint="unreadable_rim",
+        )
+    vertices = np.asarray(body.vertices, dtype=np.float64)
+    round_walls = [
+        candidate
+        for candidate in entry.features.values()
+        if candidate.kind in ROUND_WALL_KINDS
+        and {"diameter", "axis", "centre"} <= set(candidate.params)
+    ]
+    flat_rings: list[list[Point2]] = []
+    used: list[int] = []
+    for ring in rings:
+        order = ring_in_order(ring)
+        used.extend(order)
+        flat_rings.append(
+            [to_plane(frame, (float(x), float(y), float(z))) for x, y, z in vertices[order]]
+        )
+    straight = _straight_enough(vertices[used])
+    outer = max(range(len(flat_rings)), key=lambda index: abs(_ring_area(flat_rings[index])))
+    loops: list[tuple[SketchElement, ...]] = []
+    circles = 0
+    deviation = 0.0
+    for index in [outer, *(other for other in range(len(flat_rings)) if other != outer)]:
+        ring_points = flat_rings[index]
+        circle = _circle_on(ring_points, round_walls, frame)
+        if circle is not None:
+            centre, radius, off = circle
+            circles += 1
+            deviation = max(deviation, off)
+            rim = (centre[0] + radius, centre[1])
+            loops.append((SketchElement("circle", (centre, rim), construction=True),))
+            continue
+        kept = _corners(ring_points, straight)
+        loops.append(
+            tuple(
+                SketchElement("line", (first, second), construction=True)
+                for first, second in zip(kept, [*kept[1:], kept[0]], strict=True)
+                if math.dist(first, second) > EPS_GEOM
+            )
+        )
+    return loops, circles, deviation
+
+
+def _circle_on(
+    ring: Sequence[Point2], round_walls: Sequence[Any], frame: PlaneFrame
+) -> tuple[Point2, float, float] | None:
+    """Der Kreis eines Merkmals, auf dem dieser Ring liegt — oder nichts.
+
+    Gemessen wird an den Ecken **und** in der Mitte jeder Sehne: Ein Sechseck
+    hat alle Ecken auf einem Kreis, aber seine Seiten nicht. Unter mehreren
+    passenden Merkmalen gilt das, das am wenigsten abweicht.
+    """
+    best: tuple[Point2, float, float] | None = None
+    for candidate in round_walls:
+        axis = tuple(float(value) for value in candidate.params["axis"])
+        origin = tuple(float(value) for value in candidate.params["centre"])
+        radius = float(candidate.params["diameter"]) / 2.0
+        facing = _dot(axis, frame.normal)
+        if radius <= EPS_GEOM or abs(facing) <= PLANE_PARALLEL:
+            continue
+        # Wo die Achse die Zeichenebene durchstößt — in beide Richtungen.
+        gap = [frame.origin[place] - origin[place] for place in range(3)]
+        along = _dot(gap, frame.normal) / facing
+        centre = to_plane(
+            frame,
+            (
+                origin[0] + along * axis[0],
+                origin[1] + along * axis[1],
+                origin[2] + along * axis[2],
+            ),
+        )
+        samples = [
+            *ring,
+            *(
+                ((first[0] + second[0]) / 2.0, (first[1] + second[1]) / 2.0)
+                for first, second in zip(ring, [*ring[1:], ring[0]], strict=True)
+            ),
+        ]
+        off = max(abs(math.dist(point, centre) - radius) for point in samples)
+        if off <= MAX_FACET_SAG and (best is None or off < best[2]):
+            best = (centre, radius, off)
+    return best
+
+
+def _corners(ring: Sequence[Point2], straight: float) -> list[Point2]:
+    """Die Ecken eines geschlossenen Rings — Punkte auf einer Geraden fallen weg.
+
+    Begonnen wird am Punkt, der am weitesten vom Schwerpunkt liegt: Er ist
+    sicher eine Ecke, und von ihm aus reicht ein Umlauf.
+    """
+    count = len(ring)
+    if count < 4:
+        return list(ring)
+    middle = (
+        math.fsum(point[0] for point in ring) / count,
+        math.fsum(point[1] for point in ring) / count,
+    )
+    start = max(range(count), key=lambda index: math.dist(ring[index], middle))
+    walk = [ring[(start + step) % count] for step in range(count)]
+    kept = [walk[0]]
+    for index in range(1, count):
+        following = walk[(index + 1) % count]
+        if _off_line(kept[-1], walk[index], following) > straight:
+            kept.append(walk[index])
+    return kept if len(kept) >= 3 else list(ring)
+
+
+def _chain_corners(chain: Sequence[Point2], straight: float) -> list[Point2]:
+    """Die Ecken eines offenen Zugs — die Enden bleiben, Punkte auf Geraden fallen."""
+    if len(chain) < 3:
+        return list(chain)
+    kept = [chain[0]]
+    for index in range(1, len(chain) - 1):
+        if _off_line(kept[-1], chain[index], chain[index + 1]) > straight:
+            kept.append(chain[index])
+    kept.append(chain[-1])
+    return kept
+
+
+def _straight_enough(points: Any) -> float:
+    """Ab wann ein Punkt neben einer Geraden liegt — die Auflösung der Datei.
+
+    Ein Netz aus STL steht in einfacher Genauigkeit, und dort liegen drei
+    Punkte einer schrägen Kante um einige Millionstel neben ihrer Geraden:
+    viermal der Abstand benachbarter Zahlen bei dieser Größe, mindestens
+    ``EPS_GEOM``.
+    """
+    import numpy as np
+
+    reach = float(np.abs(np.asarray(points, dtype=np.float64)).max()) if len(points) else 0.0
+    return max(EPS_GEOM, 4.0 * float(np.spacing(np.float32(reach))))
+
+
+def _off_line(start: Point2, point: Point2, end: Point2) -> float:
+    """Wie weit ``point`` neben der Geraden durch ``start`` und ``end`` liegt."""
+    span = math.dist(start, end)
+    if span <= EPS_GEOM:
+        return math.dist(start, point)
+    return (
+        abs(
+            (end[0] - start[0]) * (point[1] - start[1])
+            - (end[1] - start[1]) * (point[0] - start[0])
+        )
+        / span
+    )
+
+
+def _ring_area(ring: Sequence[Point2]) -> float:
+    """Die vorzeichenbehaftete Fläche eines geschlossenen Zugs."""
+    return 0.5 * math.fsum(
+        first[0] * second[1] - second[0] * first[1]
+        for first, second in zip(ring, [*ring[1:], ring[0]], strict=True)
+    )
+
+
+def _with_outline(
+    sketch: Sketch,
+    loops: Sequence[tuple[SketchElement, ...]],
+    *,
+    exact: bool,
+    circles: int = 0,
+    deviation: float = 0.0,
+) -> FaceOutline:
+    """Die Ränder an die Zeichnung hängen, jeden Punkt fest — ohne Doppeltes."""
+    grown, fresh = _held_copy(sketch, loops)
+    return FaceOutline(sketch=grown, loops=fresh, exact=exact, circles=circles, deviation=deviation)
+
+
+def _held_copy(sketch: Sketch, loops: Sequence[tuple[SketchElement, ...]]) -> tuple[Sketch, int]:
+    """Was aus dem Körper kommt, an die Zeichnung hängen — fest und ohne Doppeltes.
+
+    Der gemeinsame Weg von :func:`face_outline` und :func:`project`: Jeder
+    neue Punkt trägt ``fixed``, und ein Element, das schon in der Zeichnung
+    steht (:func:`_element_key`), kommt nicht noch einmal. Zurück kommt die
+    Zeichnung — **dieselbe**, wenn nichts neu war — und wie viele der Züge
+    etwas beigetragen haben.
+    """
+    present = {_element_key(element) for element in sketch.elements}
+    added: list[SketchElement] = []
+    fresh = 0
+    for loop in loops:
+        new = [element for element in loop if _element_key(element) not in present]
+        if new:
+            fresh += 1
+        added.extend(new)
+        present.update(_element_key(element) for element in new)
+    if not added:
+        return sketch, 0
+    start = len(flat_points(sketch))
+    count = sum(len(element.points) for element in added)
+    held = tuple(SketchConstraint("fixed", (start + offset,)) for offset in range(count))
+    grown = replace(
+        sketch,
+        elements=(*sketch.elements, *added),
+        constraints=(*sketch.constraints, *held),
+    )
+    return grown, fresh
+
+
+def _element_key(element: SketchElement) -> tuple[str, tuple[tuple[float, float], ...]]:
+    """Woran ein schon übernommener Rand wiedererkannt wird — Art und Punkte.
+
+    Auf ``_JOIN_TOL`` gerundet, dieselbe Nähe, in der die Profilbildung zwei
+    Enden für einen Punkt hält. Die Reihenfolge der Punkte zählt dabei nicht:
+    Eine Strecke ist in beide Richtungen dieselbe.
+    """
+    digits = round(-math.log10(_JOIN_TOL))
+    points = tuple(
+        sorted((round(x, digits) + 0.0, round(y, digits) + 0.0) for x, y in element.points)
+    )
+    return element.kind, points
+
+
+def _cross(first: Sequence[float], second: Sequence[float]) -> Vec3:
+    return (
+        first[1] * second[2] - first[2] * second[1],
+        first[2] * second[0] - first[0] * second[2],
+        first[0] * second[1] - first[1] * second[0],
+    )
+
+
+def _dot(first: Sequence[float], second: Sequence[float]) -> float:
+    return first[0] * second[0] + first[1] * second[1] + first[2] * second[2]
+
+
+def _length(vector: Sequence[float]) -> float:
+    return math.sqrt(_dot(vector, vector))
 
 
 def arc_through(start: Point2, end: Point2, via: Point2) -> tuple[Point2, Point2, Point2] | None:
@@ -754,11 +1214,11 @@ def fillet(sketch: Sketch, points: Sequence[Point2], flat: int, radius: float) -
             "radius",
             _(
                 "Der Radius ist zu groß für diese Ecke — er muss kleiner sein als {most}.",
-                most=_written(room * math.tan(theta / 2.0)),
+                most=written_measure(room * math.tan(theta / 2.0)),
             ),
             value=radius,
             constraint="maximum",
-            values={"most": _written(room * math.tan(theta / 2.0))},
+            values={"most": written_measure(room * math.tan(theta / 2.0))},
         )
     cx, cy = corner.spot
     touch_u: Point2 = (cx + u[0] * reach, cy + u[1] * reach)
@@ -802,7 +1262,7 @@ def fillet(sketch: Sketch, points: Sequence[Point2], flat: int, radius: float) -
         SketchConstraint("coincident", (second_flat, end_of_v)),
         SketchConstraint("perpendicular", (*first_line, arc_centre, end_of_u)),
         SketchConstraint("perpendicular", (*second_line, arc_centre, end_of_v)),
-        SketchConstraint("radius", (arc_centre, arc_start), _written(radius)),
+        SketchConstraint("radius", (arc_centre, arc_start), written_measure(radius)),
     )
     return replace(sketch, elements=(*elements, arc), constraints=constraints)
 
@@ -833,11 +1293,11 @@ def chamfer(sketch: Sketch, points: Sequence[Point2], flat: int, distance: float
             "distance",
             _(
                 "Die Fase ist zu groß für diese Ecke — sie muss kleiner sein als {most}.",
-                most=_written(room),
+                most=written_measure(room),
             ),
             value=distance,
             constraint="maximum",
-            values={"most": _written(room)},
+            values={"most": written_measure(room)},
         )
     cx, cy = corner.spot
     cut_u: Point2 = (cx + u[0] * distance, cy + u[1] * distance)
@@ -854,7 +1314,7 @@ def chamfer(sketch: Sketch, points: Sequence[Point2], flat: int, distance: float
         SketchConstraint("coincident", (first_flat, edge_begin)),
         SketchConstraint("coincident", (second_flat, edge_begin + 1)),
         SketchConstraint(
-            "distance", (edge_begin, edge_begin + 1), _written(math.dist(cut_u, cut_v))
+            "distance", (edge_begin, edge_begin + 1), written_measure(math.dist(cut_u, cut_v))
         ),
     )
     return replace(sketch, elements=(*elements, edge), constraints=constraints)
@@ -866,6 +1326,48 @@ def chamfer(sketch: Sketch, points: Sequence[Point2], flat: int, distance: float
 MEASURED_KINDS: frozenset[str] = frozenset({"distance", "radius", "diameter"})
 
 
+def _drawing_box(sketch: Sketch) -> tuple[Point2, Point2] | None:
+    """Das Hüllrechteck dessen, was gezeichnet ist — Kreise und Bögen ganz.
+
+    Die Punkte allein sagen es nicht: Ein Kreis führt Mitte und einen
+    Randpunkt, ein Bogen Mitte, Anfang und Ende. Gemessen wird deshalb am
+    Rand selbst — Kreis bis zu seinem Radius in jeder Achsenrichtung, Bogen
+    über seine Enden und die Achsenpunkte, die in seiner Spanne liegen.
+    Hilfsgeometrie zählt mit, wenn sonst nichts da ist: Auch eine Zeichnung
+    aus lauter Hilfslinien hat eine Mitte. ``None`` für eine leere Skizze.
+    """
+    shaping = [element for element in sketch.elements if not element.construction]
+    found: list[Point2] = []
+    for element in shaping or list(sketch.elements):
+        if element.kind == "circle":
+            (cx, cy), rim = element.points
+            radius = math.dist((cx, cy), rim)
+            found.extend(((cx - radius, cy - radius), (cx + radius, cy + radius)))
+        elif element.kind == "arc":
+            centre, start, end = element.points
+            radius = math.dist(centre, start)
+            found.extend((start, end))
+            begin = math.atan2(start[1] - centre[1], start[0] - centre[0])
+            sweep = arc_sweep(centre, start, end)
+            for quarter in range(4):
+                angle = quarter * math.pi / 2.0
+                if (angle - begin) % (2.0 * math.pi) <= sweep:
+                    found.append(
+                        (
+                            centre[0] + radius * (1.0, 0.0, -1.0, 0.0)[quarter],
+                            centre[1] + radius * (0.0, 1.0, 0.0, -1.0)[quarter],
+                        )
+                    )
+        else:
+            found.extend(element.points)
+    if not found:
+        return None
+    return (
+        (min(x for x, _y in found), min(y for _x, y in found)),
+        (max(x for x, _y in found), max(y for _x, y in found)),
+    )
+
+
 def scaled(sketch: Sketch, factor: float) -> tuple[Sketch, tuple[str, ...]]:
     """Die Skizze um *factor* vergrößern — Punkte **und** Maße.
 
@@ -873,8 +1375,16 @@ def scaled(sketch: Sketch, factor: float) -> tuple[Sketch, tuple[str, ...]]:
     allein zu strecken genügt nicht. Ein ``distance``-Maß von 50 zieht der
     Löser beim nächsten Lauf wieder auf 50 zusammen, und die Zeichnung springt
     in ihre alte Größe zurück — sichtbar erst nach dem Schließen des Dialogs.
-    Skaliert wird deshalb um den **Schwerpunkt der Punkte**, damit die
-    Zeichnung an Ort und Stelle bleibt, und jedes Maß wandert mit.
+    Skaliert wird deshalb um die **Mitte der Zeichnung**, damit sie an Ort und
+    Stelle bleibt, und jedes Maß wandert mit.
+
+    **Die Mitte der Geometrie, nicht der Schwerpunkt ihrer Punkte**
+    (:func:`_drawing_box`). Hier stand der Schwerpunkt, und ein Kreis trägt
+    Mitte **und** einen Randpunkt: Sein Punktschwerpunkt liegt auf halbem
+    Radius neben der Mitte, und ein Kreis um den Ursprung wanderte beim
+    Strecken um ein Viertel des Zuwachses zur Seite — gemessen am 22.09.2026
+    im Dialog *Zwischen zwei Umrissen aufspannen*, Kreis Ø 30 um (0 | 0) auf
+    Ø 40 um (-2,5 | 0).
 
     **Ein Maß an einem Projektparameter bleibt stehen.** Ein Wert wie
     ``=@breite`` ist die ausgesprochene Absicht des Nutzers (Regel 8); ihn
@@ -896,11 +1406,12 @@ def scaled(sketch: Sketch, factor: float) -> tuple[Sketch, tuple[str, ...]]:
             values={"factor": str(factor)},
         )
 
-    points = [point for element in sketch.elements for point in element.points]
-    if not points:
+    box = _drawing_box(sketch)
+    if box is None:
         return sketch, ()
-    centre_x = sum(x for x, _y in points) / len(points)
-    centre_y = sum(y for _x, y in points) / len(points)
+    (low_x, low_y), (high_x, high_y) = box
+    centre_x = (low_x + high_x) / 2.0
+    centre_y = (low_y + high_y) / 2.0
 
     def pulled(point: Point2) -> Point2:
         return (
@@ -927,7 +1438,7 @@ def scaled(sketch: Sketch, factor: float) -> tuple[Sketch, tuple[str, ...]]:
             kept.append(constraint.value)
             constraints.append(constraint)
             continue
-        constraints.append(replace(constraint, value=_written(measure * factor)))
+        constraints.append(replace(constraint, value=written_measure(measure * factor)))
 
     return replace(sketch, elements=elements, constraints=tuple(constraints)), tuple(kept)
 
@@ -1112,10 +1623,27 @@ def hole_grid_between(
     require_positive("hole_diameter", hole_diameter)
     step_x = (opposite[0] - first[0]) / (columns - 1) if columns > 1 else 0.0
     step_y = (opposite[1] - first[1]) / (rows - 1) if rows > 1 else 0.0
-    if columns > 1:
-        require_positive("spacing", abs(step_x))
-    if rows > 1:
-        require_positive("spacing", abs(step_y))
+    # **Zwei Klicks am selben Fleck und zwei Klicks in einer Flucht sind zwei
+    # Lagen**, und nur die erste heißt „die Klicks liegen aufeinander". Wer
+    # für ein Raster aus vier Spalten und drei Zeilen senkrecht unter den
+    # ersten Klick klickte, las genau diesen Satz — die Klicks lagen zwanzig
+    # Millimeter auseinander, nur eben ohne Abstand quer (Durchsicht
+    # 22.09.2026).
+    lacks_x = columns > 1 and abs(step_x) <= EPS_SKETCH
+    lacks_y = rows > 1 and abs(step_y) <= EPS_SKETCH
+    if lacks_x and lacks_y:
+        require_positive("spacing", 0.0)
+    if lacks_x or lacks_y:
+        raise ValidationError(
+            "spacing",
+            _(
+                "Das Raster braucht Abstand in beiden Richtungen — der zweite Klick liegt "
+                "in einer Flucht mit dem ersten. Schräg gegenüber klicken oder Spalten "
+                "beziehungsweise Zeilen in der Leiste auf eins stellen."
+            ),
+            value=0.0,
+            constraint="grid_in_line",
+        )
     tightest = min(step for step in (abs(step_x), abs(step_y)) if step > 0.0)
     if hole_diameter >= tightest:
         raise ValidationError(
@@ -1239,14 +1767,24 @@ def bolt_circle_at(centre: Point2, first_hole: Point2, count: int, hole_diameter
     return Sketch(plane="plane:xy", elements=tuple(elements), constraints=tuple(constraints))
 
 
-def _written(value: float) -> str:
+def written_measure(value: float) -> str:
     """Ein Maß so schreiben, wie es in der Projektdatei steht.
 
     Punkt als Trennzeichen (der Kern rechnet und schreibt so, Regel 6), und
     ohne die Nachkommastellen, die aus der Fließkommarechnung übrig bleiben:
     ``50 * 1.2`` ergibt ``60.00000000000001``, und das stünde danach im Feld.
-    Sechs Stellen sind feiner, als jeder Drucker auflöst, und lassen ``0.05``
-    unversehrt.
+    Sechs **Nachkommastellen** sind feiner, als jeder Drucker auflöst, und
+    lassen ``0.05`` unversehrt.
+
+    **Fest geschrieben und nicht mit ``:g``.** Hier stand ``f"{wert:g}"``, und
+    das sind sechs *gültige Ziffern*, nicht sechs Nachkommastellen: Aus einem
+    auf 1234,5678 mm gestreckten Maß wurde ``1234.57``, aus 123,4567 wurde
+    ``123.457``. Und unter 10⁻⁴ oder ab einer Million schrieb ``:g`` eine
+    Exponentenzahl (``5e-05``, ``2e+06``), die die Grammatik aus §13 nicht
+    liest — die Zeichnung ließ sich danach nicht mehr lösen (Durchsicht
+    22.09.2026). Dieselbe Regel wie ``shapes._number``, nur ohne die Nullen am
+    Ende.
     """
-    rounded = round(value, 6)
-    return f"{rounded:g}"
+    text = f"{round(value, 6):.6f}".rstrip("0").rstrip(".")
+    # ``-0.000000`` wird oben zu ``-0``, und das ist dieselbe Null.
+    return "0" if text in ("", "-0") else text

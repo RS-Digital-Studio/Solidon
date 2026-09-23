@@ -29,7 +29,7 @@ from typing import TYPE_CHECKING, Any
 from app.core.errors import ValidationError
 from app.core.geom import transform
 from app.core.types import PlaneFrame
-from app.core.units import EPS_GEOM, MAX_FACET_SAG
+from app.core.units import EPS_GEOM, MAX_FACET_SAG, circle_cos_sin
 from app.i18n import _
 
 if TYPE_CHECKING:  # pragma: no cover - nur für die Typprüfung
@@ -46,13 +46,6 @@ if TYPE_CHECKING:  # pragma: no cover - nur für die Typprüfung
 #: linear mit ihr, und die Boolesche Differenz rechnet über alle.
 ARC_STEPS = 72
 
-#: Wie viele Punkte je Spline-Abschnitt eingeschoben werden.
-#:
-#: Ein Spline ist hier ein Polygonzug durch seine Stützpunkte, kein
-#: interpolierter B-Spline wie im B-Rep-Kern (``_spline_curve`` dort). Der
-#: Unterschied ist sichtbar und gewollt benannt: Was dieses Modul liefert, ist
-#: ein Netz, und ein Netz nähert ohnehin.
-SPLINE_STEPS = 8
 
 #: Arbeitsbudget für die maßgebundene Abtastung eines geschlossenen Umrisses.
 #: Es begrenzt Speicher und Folge-Offsets, nicht die zugelassene Maßabweichung.
@@ -262,13 +255,14 @@ def outline_points(
         return _adaptive_outline(profile, max_sag, check_cancelled)
     if profile.circle is not None:
         (cx, cy), radius = profile.circle
-        return [
-            (
-                cx + radius * math.cos(2.0 * math.pi * index / ARC_STEPS),
-                cy + radius * math.sin(2.0 * math.pi * index / ARC_STEPS),
-            )
-            for index in range(ARC_STEPS)
-        ]
+        # **Die Ecken aus der Tafel, nicht aus ``math.cos``** (RM-187). Der
+        # Kreis ist der häufigste Umriss, den eine Tasche oder ein Feld in ein
+        # Netz schneidet, und ``math.cos(2π·i/72)`` hängt an der
+        # Mathematikbibliothek der Maschine — gemessen trugen 62 der 72 Ecken
+        # eine andere letzte Stelle als die exakte Teilung. Eine Boolesche
+        # Operation macht daraus auf verschiedenen Rechnern verschiedene Netze;
+        # dieselbe Tafel, die die Drehkörper benutzen, gibt überall dieselben.
+        return [(cx + radius * cos, cy + radius * sin) for cos, sin in circle_cos_sin(ARC_STEPS)]
 
     points: list[tuple[float, float]] = []
     for segment in profile.segments:
@@ -277,15 +271,22 @@ def outline_points(
         if segment.kind == "line":
             points.append(tuple(segment.end))  # type: ignore[arg-type]
         elif segment.kind == "spline" and segment.through:
-            # Der Polygonzug durch die Stützpunkte, jeder Abschnitt unterteilt —
-            # das hält die Kanten dicht genug beieinander, dass die Boolesche
-            # Operation keine Splitter erzeugt.
-            through = [tuple(one) for one in segment.through]
-            for at in range(len(through) - 1):
-                (x0, y0), (x1, y1) = through[at], through[at + 1]
-                for step in range(1, SPLINE_STEPS + 1):
-                    share = step / SPLINE_STEPS
-                    points.append((x0 + (x1 - x0) * share, y0 + (y1 - y0) * share))
+            # **Die gezeichnete Kurve, nicht der Zug durch ihre Stützpunkte.**
+            # Hier stand ein Polygonzug durch die geklickten Punkte, jeder
+            # Abschnitt achtmal gerade unterteilt: Die Vorschau zeigte eine
+            # glatte Catmull-Rom-Kurve, der exakte Kern schnitt sie, und eine
+            # Tasche im eingelesenen Netz bekam an ihrer Stelle ein Vieleck mit
+            # Ecken an jedem Klick (Durchsicht 22.09.2026). Abgetastet wird
+            # jetzt dieselbe Kurve wie überall, auf ``MAX_FACET_SAG`` genau —
+            # die Grenze, mit der auch der exakte Kern vernetzt.
+            from app.core.sketch.profile import Profile as _Profile
+
+            curve = _adaptive_outline(_Profile(segments=(segment,)), MAX_FACET_SAG, None)
+            points.extend(curve[1:])
+            if math.dist(segment.start, segment.end) < EPS_GEOM:
+                # Ein geschlossener Spline endet auf seinem Anfang; die
+                # Abtastung hat diesen Punkt als Doppel entfernt.
+                points.append(tuple(segment.end))  # type: ignore[arg-type]
         elif segment.via is not None:
             points.extend(
                 _arc_points(

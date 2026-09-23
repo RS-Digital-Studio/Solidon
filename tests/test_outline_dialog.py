@@ -357,3 +357,29 @@ def test_focused_secondary_button_keeps_the_primary_and_selection_clear(
         assert "Nicht ausgewählt" in dialog.profiles.currentItem().text()
     finally:
         _dispose(dialog, qt_app)
+
+
+def test_a_drawing_without_any_extrudable_contour_says_so_instead_of_asking(
+    qt_app: QApplication,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Keine Kontur lässt sich extrudieren — die Zeile verlangt nichts Unmögliches.
+
+    Dort stand „Wählen Sie mindestens eine gültige Kontur.", auch wenn es keine
+    gab: nichts zum Anhaken, der Knopf aus, und der Satz forderte eine Wahl,
+    die es nicht gibt. Jetzt sagt die Zeile, dass keine geht, wo der Grund
+    steht und wie es weitergeht.
+    """
+    reason = "Diese Kontur ist zu dünn oder flächenlos. Wählen Sie eine andere Kontur."
+    monkeypatch.setattr(outline, "profile_reason", lambda _entry: reason)
+    dialog = OutlineDialog(SOURCE, ".svg")
+    try:
+        _until(qt_app, lambda: dialog.profiles.count() == 2)
+        qt_app.processEvents()
+
+        assert not dialog.accept_button.isEnabled()
+        text = dialog.state.text()
+        assert "Wählen Sie mindestens" not in text, text
+        assert "Keine Kontur" in text and "neu laden" in text, text
+    finally:
+        _dispose(dialog, qt_app)

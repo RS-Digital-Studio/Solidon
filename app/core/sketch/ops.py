@@ -739,6 +739,11 @@ def _pocket_in_mesh(
     name="sketch_pocket",
     title=_("Tasche schneiden"),
     category="sketch",
+    # Am Netz schneidet eine gezeichnete Kurve seit dem 22.09.2026 entlang der
+    # Kurve statt entlang ihrer Stützpunkte, und ein Kreis trägt die Ecken der
+    # plattformgleichen Tafel (``sketch_solid.outline_points``) — ältere
+    # Ergebnisse dürfen nicht aus dem Cache kommen.
+    cache_version="spline-curve-circle-table-1",
     params=SketchPocketParams,
     consumes=1,
     produces=1,
@@ -872,6 +877,11 @@ def cut_regions(
     )
 
 
+#: Wo ein gezeichneter Querschnitt so liegt, wie der Rotationskörper ihn liest:
+#: stehend, mit der Waagerechten als Abstand zur senkrechten Achse.
+_UPRIGHT_PLANES: frozenset[str] = frozenset({"plane:xz", "plane:yz"})
+
+
 @op_params
 class SketchRevolveParams(BaseParams):
     shape: str = param(
@@ -979,6 +989,27 @@ def sketch_revolve(ctx: OpContext) -> OpResult:
     if params.sketch:
         # Wie gezeichnet: die Skizze kennt ihren Abstand zur Achse selbst.
         placed = _drawn_profile(ctx, params.sketch, findings)
+        drawn_on = _plane_of(params.sketch)
+        if drawn_on not in _UPRIGHT_PLANES:
+            # **Gedreht wird aufrecht, gleich wo gezeichnet wurde** — und das
+            # wird gesagt, statt still umgedeutet (Regel 21). Auf der
+            # Vorder- oder Seitenansicht steht der Körper genau dort, wo die
+            # Zeichnung liegt; auf der Draufsicht, einer Fläche oder einer
+            # abgeleiteten Ebene läge die Zeichnung flach und der Körper
+            # stünde trotzdem — ohne diesen Satz sähe das aus wie ein Fehler
+            # der Operation.
+            findings.append(
+                Finding(
+                    code="sketch.revolve_upright",
+                    severity="info",
+                    message=_(
+                        "Der Querschnitt liegt nicht auf der Vorder- oder Seitenansicht. "
+                        "Gedreht wird er trotzdem aufrecht um die senkrechte Achse: "
+                        "waagerecht ist der Abstand zur Achse, senkrecht die Höhe."
+                    ),
+                    values={"plane": drawn_on},
+                )
+            )
     else:
         profile = _sketch_profile(params.shape, params.length, params.width, params.corners)
         # **Der gemessene Bereich statt einer Formel je Grundform.** Hier stand
@@ -1056,11 +1087,16 @@ class SketchSweepParams(BaseParams):
         doc=_("Wie weit der Bogen führt — 90 Grad ist ein rechtwinkliger Rohrbogen."),
         depends_on=("along", ("arc",)),
     )
+    # **Vorn, sobald die Bahn gezeichnet wird** (RM-183): Sie ist dann die
+    # Eingabe, auf die es ankommt, und ``depends_on`` nimmt sie beim Bogen aus
+    # dem Dialog. Hinter „Weitere Einstellungen" suchte sie niemand — gefahren
+    # am 22.09.2026: „Bahn: gezeichnet" gewählt, und kein Knopf zum Zeichnen
+    # zu sehen. Die Ebenen sagen dem Editor, wo die Bahn liegen darf.
     path_sketch: str = param(
         title=_("Gezeichnete Bahn"),
         default="",
         kind="sketch",
-        placement="advanced",
+        sketch_planes=tuple(sorted(profiles.PATH_PLANES)),
         doc=_(
             "Der Verlauf, dem der Querschnitt folgt — offen gezeichnet, auf der "
             "Vorder- oder Seitenansicht und am Anfang senkrecht nach oben oder unten. "
@@ -1199,11 +1235,11 @@ class SketchLoftParams(BaseParams):
         ),
         depends_on=("top", ("scaled",)),
     )
+    # Vorn aus demselben Grund wie die Bahn des Sweeps (RM-183).
     top_sketch: str = param(
         title=_("Obere Zeichnung"),
         default="",
         kind="sketch",
-        placement="advanced",
         doc=_(
             "Der zweite Umriss, frei gezeichnet — auf derselben Ebene wie der "
             "untere, und um die Höhe darüber aufgespannt."

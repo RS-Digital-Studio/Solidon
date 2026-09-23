@@ -130,12 +130,22 @@ def test_only_required_contour_choices_can_sit_on_the_front_of_the_dialog(
     Feldbereich und Gegenkontur sind erforderliche Ausgangsformen. Der Dichtweg
     bietet alternativ Zeichnung oder Öffnung. Ihre eigenen Editoren dürfen
     vorn erreichbar sein; ergänzende Gesten bleiben hinten.
+
+    **Und eine Zeichnung, die eine Wahl verlangt** (``depends_on``): die Bahn
+    des Sweeps bei „gezeichnet", der obere Umriss des Übergangs bei
+    „gezeichnet". Sie steht nur da, wenn sie die Eingabe ist, und ist dann so
+    nötig wie eine Pflicht — hinter der Klappe suchte sie niemand (RM-183,
+    gefahren am 22.09.2026).
     """
     spec, name = case
     declared = next(entry for entry in spec.params.spec() if entry.name == name)
     if declared.placement != "advanced":
         assert declared.kind == "sketch"
-        assert declared.required or (spec.name, name) == ("create_seal", "path_sketch")
+        assert (
+            declared.required
+            or declared.depends_on is not None
+            or (spec.name, name) == ("create_seal", "path_sketch")
+        )
 
 
 @pytest.mark.parametrize("case", CASES, ids=ids)

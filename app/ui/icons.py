@@ -357,6 +357,18 @@ PATHS: Final[dict[str, str]] = {
     ),
     # Hilfslinie: durchweg gestrichelt, denn genau das ist ihr Wesen.
     "sketch_construction": ('<path d="M4 18.5 20 5.5" stroke-dasharray="3 2.5" />'),
+    # Eine neue Zeichenebene: die Basis unten, darüber gestrichelt die Ebene,
+    # die aus ihr entsteht — versetzt, gekippt oder durch drei Punkte gelegt.
+    "sketch_new_plane": (
+        '<path d="M3 19 7 13.5h14L17 19z" />'
+        '<path d="M3 11.5 7 6h14l-4 5.5z" stroke-dasharray="3 2.2" />'
+    ),
+    # Flächenkontur: der Rand einer Fläche, außen und um ihr Loch, als
+    # Hilfslinie übernommen — gestrichelt, wie alles, was nicht Profil ist.
+    "sketch_face_outline": (
+        '<path d="M4 5.5h16v13H4z" stroke-dasharray="2.6 2" />'
+        '<circle cx="12" cy="12" r="3.2" stroke-dasharray="2 1.6" />'
+    ),
     # Projizieren: aus dem Körper fällt seine Kante auf die Zeichenebene.
     "sketch_project": (
         '<path d="M5 4.5h9v9H5z" /><path d="M10 19.5h9" />'

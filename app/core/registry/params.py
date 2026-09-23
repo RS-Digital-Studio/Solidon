@@ -109,6 +109,7 @@ def param(
     subtractive_on: tuple[str | bool, ...] | None = None,
     targets_feature: bool = False,
     optional: bool = False,
+    sketch_planes: tuple[str, ...] = (),
 ) -> Any:
     """Deklariert einen Parameter. Alles, was die Oberflächen brauchen, sitzt
     an einer Stelle.
@@ -124,6 +125,9 @@ def param(
 
     ``optional`` lässt für eine Zahl das „nicht gesagt" zu — siehe
     :attr:`app.core.types.ParamSpec.optional`.
+
+    ``sketch_planes`` nennt die Ebenen, auf denen die Zeichnung eines
+    Skizzenfelds liegen darf — siehe :attr:`app.core.types.ParamSpec.sketch_planes`.
     """
     metadata = {
         _METADATA_KEY: {
@@ -140,6 +144,7 @@ def param(
             "subtractive_on": subtractive_on,
             "targets_feature": targets_feature,
             "optional": optional,
+            "sketch_planes": tuple(sketch_planes),
         }
     }
     if default is MISSING:
@@ -215,6 +220,7 @@ def op_params[P: BaseParams](cls: type[P]) -> type[P]:
                 subtractive_on=metadata["subtractive_on"],
                 targets_feature=metadata["targets_feature"],
                 optional=metadata["optional"],
+                sketch_planes=metadata["sketch_planes"],
             )
         )
     data_class.__param_spec__ = tuple(specs)  # type: ignore[attr-defined]

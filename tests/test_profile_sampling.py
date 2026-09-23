@@ -53,7 +53,11 @@ def test_spline_sampling_follows_the_curve_instead_of_the_control_polygon(spline
                 )
             )
     assert max(sampled.distance(Point(point)) for point in reference) <= sag + EPS_GEOM
-    assert max(legacy.distance(Point(point)) for point in reference) > MAX_FACET_SAG
+    # **Auch die Vorgabe folgt der Kurve** (Durchsicht 0.5.0, Paket skizze B10):
+    # Hier stand ``> MAX_FACET_SAG`` — der Test hielt fest, dass die Abtastung
+    # ohne ``max_sag`` dem Zug durch die Klicks folgte statt der Kurve, die der
+    # exakte Kern baut. Seither gilt auch dort die Auflösung der Anwendung.
+    assert max(legacy.distance(Point(point)) for point in reference) <= MAX_FACET_SAG + EPS_GEOM
 
 
 @pytest.mark.parametrize("radius", [0.1, 8.0, 1000.0])

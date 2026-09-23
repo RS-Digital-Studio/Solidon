@@ -21,8 +21,8 @@ from dataclasses import dataclass
 from typing import Final
 
 from app.core.errors import PICK_PLANE, Action, ValidationError
-from app.core.types import PlaneFrame, Point2, SceneObject, Vec3
-from app.core.units import plane_axes
+from app.core.types import PlaneFrame, Point2, Scene, SceneObject, Vec3
+from app.core.units import EPS_GEOM, plane_axes
 from app.i18n import _
 
 #: Zwei Richtungen gelten als parallel, wenn ihr Kreuzprodukt darunter liegt.
@@ -441,6 +441,26 @@ def frame_for_plane(
     return BASE_FRAMES.get(plane)
 
 
+def frame_in_scene(plane: str, scene: Scene | None) -> PlaneFrame | None:
+    """Der Rahmen einer Ebenenangabe gegen eine Szene — mit ihren Parametern.
+
+    **Jeder Verbraucher braucht beides, Körper und Projektparameter** (§30.1,
+    RM-188 P3.2). Eine Versatzebene ``offset:<basis>:@wand`` lässt sich ohne
+    den Wert von ``wand`` nicht ausrechnen, und bis zum 22.09.2026 reichten
+    Skizzenmodus, Feldschnitt und Dichtweg nur die Körper weiter: Die
+    Zeichnung stand nicht im Bild, der Feldschnitt endete an einem
+    ``assert`` — für den Kunden „ein unerwarteter Fehler". Eine Stelle, die
+    beides aus der Szene nimmt, statt drei, die es jeweils vergessen können.
+
+    Schweigt wie :func:`frame_for_plane`, wenn sich die Ebene nicht auflösen
+    lässt; ohne Szene gibt es nur die drei Grundebenen und die Dreipunktebene.
+    """
+    if scene is None:
+        return frame_for_plane(plane)
+    values = {name: entry.value for name, entry in scene.parameters.items()}
+    return frame_for_plane(plane, scene.objects.values(), values)
+
+
 def frame_for_sketch(
     plane: str,
     objects: Iterable[SceneObject] = (),
@@ -519,14 +539,33 @@ def _derived_frame(
         along = (second[0] - first[0], second[1] - first[1], second[2] - first[2])
         across = (third[0] - first[0], third[1] - first[1], third[2] - first[2])
         normal = _cross(along, across)
-        if _length(normal) < _PARALLEL or _length(along) < _PARALLEL:
-            # Drei Punkte auf einer Geraden spannen keine Ebene auf, und zwei
-            # gleiche Punkte erst recht nicht. Beides ist im Zeichenfenster
-            # leicht passiert und muss gesagt werden, statt eine beliebige
-            # Ebene zu liefern.
+        # Drei Punkte auf einer Geraden spannen keine Ebene auf, und zwei
+        # gleiche Punkte erst recht nicht. Beides ist im Zeichenfenster
+        # leicht passiert und muss gesagt werden, statt eine beliebige Ebene
+        # zu liefern.
+        #
+        # **Gefragt wird der Winkel und nicht die Fläche.** Hier stand das
+        # Kreuzprodukt gegen eine feste Zahl, und das hing an der Größe der
+        # Punkte: Drei Punkte 100 und 200 mm weit, der dritte ein Millionstel
+        # neben der Geraden, gingen durch — eine Ebene, deren Neigung am
+        # letzten Bit hängt —, während drei Punkte im Hundertstelmillimeter
+        # rechtwinklig zueinander abgewiesen wurden (Durchsicht 22.09.2026).
+        # Der Sinus zwischen beiden Richtungen hat keine Einheit; die Schwelle
+        # ist dieselbe wie beim streifenden Blick in :func:`ray_hit`.
+        reach = _length(along) * _length(across)
+        if (
+            _length(along) < EPS_GEOM
+            or _length(across) < EPS_GEOM
+            or _length(normal) < _PARALLEL_ENOUGH * reach
+        ):
             raise _unreadable(field, plane, "points_are_on_one_line")
-        unit = _normalised(normal)
-        x_axis = _normalised(along)
+        # Geteilt durch die eigene Länge und nicht über ``_normalised``: Deren
+        # feste Untergrenze wäre dieselbe Größenschwelle, die die Prüfung oben
+        # gerade abgelegt hat. Null kann keine der beiden Längen mehr sein.
+        spread = _length(normal)
+        unit = (normal[0] / spread, normal[1] / spread, normal[2] / spread)
+        span = _length(along)
+        x_axis = (along[0] / span, along[1] / span, along[2] / span)
         # Die erste Achse zeigt vom ersten zum zweiten Punkt — das ist die
         # Richtung, die der Zeichnende selbst gewählt hat. Die zweite folgt
         # rechtshändig daraus, statt aus der Normalen gerechnet zu werden.

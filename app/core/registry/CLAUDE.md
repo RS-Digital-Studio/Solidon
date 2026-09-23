@@ -44,6 +44,12 @@ bleiben gespeichert und typgeprüft; allein ihre Pflicht entfällt.
 `json_schema()` beschreibt dieselbe Bedingung über `if`/`then`, damit ein
 Werkzeugaufruf keine gerade unwirksame Eingabe erfinden muss.
 
+`ParamSpec.sketch_planes` nennt für ein Skizzenfeld die Ebenen, auf denen
+seine Zeichnung liegen darf; leer heißt jede, die erste ist die Vorgabe einer
+leeren Zeichnung. Editor, Zeichenmodus und Ebenenfeld bieten dann nur diese
+an. Die Angabe steht am Parameter, weil die Operation weiß, was sie annimmt —
+`sketch_sweep.path_sketch` trägt `brep.profiles.PATH_PLANES`.
+
 ## Die Karte
 
 | Datei | Rolle |

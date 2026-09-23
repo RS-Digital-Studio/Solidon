@@ -956,6 +956,31 @@ def test_a_drawn_sketch_revolves_as_drawn() -> None:
     assert body.volume == pytest.approx(math.pi * (15.0**2 - 10.0**2) * 8.0, rel=1e-9)
 
 
+def test_a_section_drawn_flat_says_that_it_is_turned_upright() -> None:
+    """Gedreht wird aufrecht, gleich auf welcher Ebene gezeichnet wurde.
+
+    Auf der Draufsicht gezeichnet lag der Querschnitt flach im Bild, und der
+    Körper stand trotzdem — still umgedeutet (Regel 21). Das Ergebnis bleibt
+    dasselbe, denn die Lesart „waagerecht ist der Abstand, senkrecht die Höhe"
+    ist die der Operation; neu ist der Satz, der es sagt. Auf der
+    Vorderansicht, wo Zeichnung und Körper übereinanderliegen, bleibt er weg.
+    """
+    elements = (
+        SketchElement("line", ((10.0, 0.0), (15.0, 0.0))),
+        SketchElement("line", ((15.0, 0.0), (15.0, 8.0))),
+        SketchElement("line", ((15.0, 8.0), (10.0, 8.0))),
+        SketchElement("line", ((10.0, 8.0), (10.0, 0.0))),
+    )
+    flat = run("sketch_revolve", sketch=sketch_to_text(Sketch(plane="plane:xy", elements=elements)))
+    upright = run(
+        "sketch_revolve", sketch=sketch_to_text(Sketch(plane="plane:xz", elements=elements))
+    )
+
+    assert [f.code for f in flat.findings if f.code == "sketch.revolve_upright"], flat.findings
+    assert not [f for f in upright.findings if f.code == "sketch.revolve_upright"]
+    assert solid_of(flat).volume == pytest.approx(solid_of(upright).volume, rel=1e-12)
+
+
 def test_a_drawn_sketch_lofts_to_its_own_scaled_copy() -> None:
     """§30.1: Auch das Aufspannen nimmt die gezeichnete Skizze.
 

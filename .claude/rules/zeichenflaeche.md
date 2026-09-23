@@ -1,5 +1,5 @@
 ---
-description: "Der Skizzeneditor — gezogene Punkte, Zwangsbedingungen, die Maßkarte, Lochkreis und Lochraster, die Karte unten"
+description: "Der Skizzeneditor — gezogene Punkte, Zwangsbedingungen, die Maßkarte, Lochkreis und Lochraster, die Karte unten, neue Ebenen und die Flächenkontur"
 paths:
   - "app/ui/sketch_editor.py"
 ---
@@ -840,3 +840,65 @@ sind sie gefallen:
   Überblenden bekommen so denselben Weg wie die Hauptskizze.
 * **Keine Kürzel für Lochkreis und Lochraster.** Fusion belegt nichts, freie
   Buchstaben ohne Eselsbrücke vergisst man.
+
+## Ebenen, Zustand und Flächenkontur (Durchsicht 0.5.0)
+
+**„Neue Ebene …" steht im Ebenenfeld und als vierte Karte, nicht im Menü**
+(RM-188 P3.3). `NewPlaneDialog` fragt Art, Basis und Maß; die Ansicht zeigt
+die Ebene schon beim Einstellen (`SketchCanvas.preview_plane`, kein Schritt),
+*Abbrechen* stellt her, *Übernehmen* ist **ein** Schritt. Der Dialog ist nicht
+modal (`open`). Steht schon eine Zeichnung, zieht sie ausdrücklich mit
+(`change_drawing_plane`) — die Maße bleiben, der Ort wandert, und der Satz im
+Dialog sagt das.
+
+**Welche Ebenen ein Skizzenfeld annimmt, sagt der Parameter**
+(`ParamSpec.sketch_planes`). Eine leere Zeichnung beginnt auf der ersten, das
+Feld bietet nur diese an (und die eigene, falls eine ältere Datei woanders
+liegt), keine Flächen, keine neue Ebene, und im Zeichenmodus bleiben die
+Karten mit allen Ebenen weg. Die Bahn eines Sweeps, auf der Draufsicht
+gezeichnet, endete sonst mit einer Absage, nachdem alles fertig war.
+
+**Der obere Umriss beginnt auf der Ebene des unteren** (`follow_plane_of`,
+schwach gehaltener Verweis zwischen den Feldern desselben Dialogs).
+
+**Eine frische Zeichnung wird nicht auf die Vorgabe gestreckt**
+(`op_dialog.follow_sketch`, `drawing_changed`). Gestreckt wird nur, wenn sich
+die Zeichnung seit dem letzten Durchlauf nicht geändert hat — sonst galt die
+Schemavorgabe des Längenfelds als getippte Zahl.
+
+**Der Zustand steht neben dem Werkzeughinweis** (`state_brief`,
+`status_shows_state`): „Noch offen · noch 3 Maße fehlen" rechts, solange die
+Zeile sagt, was der nächste Klick tut. Jedes Zeichenwerkzeug hat in jedem
+Schritt einen Hinweis — auch Vieleck und Langloch.
+
+**Rückgängig bringt Ebenenfeld und Klickebene mit** (`planeRestored`). Sonst
+lag die Zeichnung auf der alten Ebene, das Feld und die Klicks auf der neuen.
+
+**Flächenkontur ist ein eigener Knopf neben Projizieren** (RM-188 P3.4,
+`take_face_outline`). Projizieren schneidet, die Kontur nimmt den Rand der
+Fläche, auf der gezeichnet wird. Die Zeile nennt nach dem Übernehmen, dass es
+eine feste **Kopie** ist, und am Netz, wie viele Kreise aus der Erkennung
+kamen und wie weit sie höchstens neben dem Netz liegen (`outline_phrase`).
+Die Objekte kommen mit ihren Merkmalen über `Surroundings.objects`.
+
+**Die festen Punkte der Hilfsgeometrie sind eine Zeile der Liste**
+(`held_guides`). Wer eine Zeile der Bedingungsliste in Bedingungen übersetzt,
+fragt `constraint_indices(row)` — Zeile und Index sind nicht mehr dasselbe.
+Entf und Kontextmenü lösen die Gruppe in einem Schritt (`remove_constraints`).
+
+**Wie weit ein Bogen läuft, sagt `profile.arc_sweep`.** Zeichnen, Treffertest
+und Hülle rechnen nicht selbst in Grad: Ein Bogen, dessen Enden der Löser
+zusammengeführt hat, ist ein Vollkreis — im Profil wie auf dem Blatt.
+
+**Jeder Knopf ohne Text trägt einen Namen** (`setAccessibleName`). Qt liest den
+Tooltip als Beschreibung, nicht als Namen; ohne Namen sagt ein Bildschirmleser
+„Schaltfläche". Der Test fragt `QAccessible`, nicht das Attribut.
+
+**Der Tabulator läuft durch die Karte** (`MainWindow._chain_sketch_card`):
+Werkzeuge, Ebene, Raster, Statuszeile, Hochziehen, Abtragen, Fertig,
+Verwerfen, danach die Bedingungsliste in der rechten Spalte. Qt reiht ein
+umgehängtes Panel am Ende der Fensterfolge ein; ohne die Kette lagen achtzehn
+fremde Halte zwischen den Werkzeugen und *Fertig*. **Angeknüpft wird an die
+Statuszeile, und die Fensterfolge wird nie mit `nextInFocusChain` abgegangen:**
+Der erste Bau tat das durch alle 634 Halte, und sobald das Panel gelöscht war,
+waren die Menüs der Leiste tot (`test_the_menus_outlive_the_sketch_mode`).

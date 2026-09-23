@@ -39,11 +39,11 @@ bleibt dadurch abbrechbar, bevor ein Ergebnis in Szene oder Cache erscheint.
 
 | Datei | Rolle |
 |---|---|
-| `solver.py` | Der 2D-Löser — und sein Zugmodus (`dragged`, `start`) |
-| `profile.py` | Vom gelösten Element zum geschlossenen Umriss |
+| `solver.py` | Der 2D-Löser — und sein Zugmodus (`dragged`, `start`), begrenzt durch `DRAG_REACH_TRIES`/`DRAG_SLIDE_TRIES`; Rang über `_matrix_rank` (Einerzeilen abgeschält), Redundanz über `_losses` (eine Zerlegung) |
+| `profile.py` | Vom gelösten Element zum geschlossenen Umriss; `arc_sweep` ist die eine Antwort, wie weit ein Bogen läuft |
 | `shapes.py` | Die Grundformen und die zwei Lochbilder; `grid_centres` hält die gemeinsame mittige Rasterlage für Skizze und Feldschnitt |
-| `planes.py` | Wo eine Skizze liegt |
-| `edit.py` | Trimmen, Verlängern, Versetzen, Spiegeln — an einer Ecke Verrunden und Fase (`corner_at`, `fillet`, `chamfer`), und die vier Formen aus zwei Klicks (`polygon_at`, `slot_between`, `hole_grid_between`, `bolt_circle_at` — die Lochbilder halten über Bedingungen zwischen den Mitten, nicht über Festpunkte) |
+| `planes.py` | Wo eine Skizze liegt; `frame_in_scene` löst eine Ebenenangabe gegen eine Szene mit ihren Projektparametern auf — der Weg für jeden Verbraucher außerhalb der Skizzen-Ops |
+| `edit.py` | Trimmen, Verlängern, Versetzen, Spiegeln — an einer Ecke Verrunden und Fase (`corner_at`, `fillet`, `chamfer`), die vier Formen aus zwei Klicks (`polygon_at`, `slot_between`, `hole_grid_between`, `bolt_circle_at` — die Lochbilder halten über Bedingungen zwischen den Mitten, nicht über Festpunkte), Projizieren (`project`, ein Ebenenschnitt) und die Flächenkontur (`face_outline`, der Rand der Fläche unter der Zeichnung) |
 | `ops.py` | Die Operationen der Kategorie „Skizze“; `cut_regions` teilt den bestehenden Taschenschnitt mit aufgelösten Feldern, einschließlich Ebene, Durchgang und Z-Bezug |
 | `serialize.py` | **Die ganze Skizze als ein Parameterwert** einer Operation |
 
@@ -177,4 +177,41 @@ erhalten.
   `rows` und `hole_diameter` über `depends_on`. Assoziativ ist daran nichts
   (Konzept P15, E11): Die Parametrik liegt eine Ebene höher, ein
   Projektparameter dreht den Teilkreis.
+- **Die Flächenkontur ist der Rand und nicht der Schnitt** (`face_outline`,
+  RM-188 P3.4). Genommen wird die Fläche, auf der die Zeichnung steht —
+  direkt oder über parallele Versatzebenen (`standing_on_feature`); auf einer
+  Grundebene, einer Dreipunktebene oder einer gegen die Fläche gekippten
+  Ebene gibt es eine Absage mit Grund, keine Suche nach einer anderen Fläche.
+  Am exakten Körper kommen die Ränder aus seinen Kurven
+  (`brep.edit.face_loops`: Strecke, Kreis, Bogen, sonst nach `DEFLECTION`
+  abgetastet), am Netz aus `perceive.relations.boundary_rings` und
+  `ring_in_order`. Ein Netzring wird nur dann ein Kreis, wenn ein erkanntes
+  Rundmerkmal ihn an Ecken **und** Sehnenmitten auf `MAX_FACET_SAG` belegt;
+  sonst bleibt er, was das Netz sagt. Jeder Punkt trägt `fixed`, jedes
+  Element ist Hilfsgeometrie, und es ist eine **Kopie**: Ändert sich der
+  Körper, folgt sie nicht. Derselbe Rand zweimal übernommen kommt nicht
+  doppelt (`_element_key`).
+- **Feste Punkte kosten die Zerlegung nichts** (`_matrix_rank`). Eine Zeile
+  mit genau einem Eintrag trägt eins zum Rang bei und nimmt ihre Spalte mit;
+  so wird abgeschält, was `fixed` festhält, und was danach zur Einerzeile
+  wird. Geschält wird **dünn** (`_solve` gibt die `csr_matrix` zurück), dicht
+  wird nur der Rest. Deshalb zählt `fixed` auch nicht ins Budget der dichten
+  Matrix (`MAX_JACOBIAN_BYTES`): Eine Kontur mit Tausenden fester Strecken
+  bleibt lösbar. Die Redundanzsuche (`_losses`) macht im Fehlerfall die ganze
+  Matrix dicht und prüft dafür dasselbe Budget.
+- **Was aus dem Körper kommt, kommt fest und einmal** (`_held_copy`):
+  Flächenkontur und Projizieren gehen denselben Weg — jeder Punkt `fixed`,
+  Punkte auf einer Geraden fallen weg (Schwelle: die Float32-Auflösung am Ort,
+  `_straight_enough`), und was schon in der Zeichnung steht, kommt nicht noch
+  einmal.
+- **Ein Bogen mit drei festen Punkten braucht seine Gleichung nicht.** Sie
+  entfällt, wenn sie an den gespeicherten Punkten gilt — sonst wäre sie die
+  siebte Zeile über sechs Koordinaten und der Löser meldete „legt fest, was
+  schon festliegt". Gilt sie dort nicht, bleibt sie, und der Widerspruch wird
+  gemeldet.
+- **Der Zug ist begrenzt** (`DRAG_REACH_TRIES`, `DRAG_SLIDE_TRIES`). Die
+  zweite Stufe beginnt am Stand der ersten; findet auch sie keine Lage, bleibt
+  eine vorher widerspruchsfreie Zeichnung stehen. Ohne Grenze hielt ein Zug
+  über die Reichweite einer bemaßten Kette das Fenster je Mausereignis
+  Sekunden an.
 - **Kein Qt.** Der Editor ruft hier herein, nie umgekehrt.

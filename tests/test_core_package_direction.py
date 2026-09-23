@@ -150,6 +150,10 @@ LAZY: Final[frozenset[tuple[str, str]]] = frozenset(
         ("organizer", "perceive"),
         ("registry", "knowledge"),
         ("scene", "organizer"),
+        # Die Flächenkontur einer Netzfläche (RM-188 P3.4): Die Randringe und
+        # die Rundmerkmale, die einen Ring als Kreis belegen, stehen in
+        # ``perceive``; die Skizze liest sie beim Übernehmen, nicht beim Import.
+        ("sketch", "perceive"),
     }
 )
 

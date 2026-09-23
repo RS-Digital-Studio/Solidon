@@ -26,7 +26,7 @@ from app.core.knowledge import profiles
 from app.core.knowledge.parts.section import Section
 from app.core.knowledge.parts.shapes import mesh_only
 from app.core.registry import op_params, param, register_op
-from app.core.sketch.planes import feature_plane, frame_for_plane
+from app.core.sketch.planes import feature_plane, frame_in_scene
 from app.core.sketch.profile import Profile as SketchProfile
 from app.core.sketch.profile import profile_of
 from app.core.sketch.serialize import sketch_from_text
@@ -198,7 +198,9 @@ def _path(
         )
     if p.path_sketch:
         plane = sketch_from_text(p.path_sketch).plane
-        frame = frame_for_plane(plane, ctx.scene.objects.values())
+        # Mit den Projektparametern — eine Versatzebene an ``@wand`` löst
+        # sich sonst nicht auf (RM-188 P3.2).
+        frame = frame_in_scene(plane, ctx.scene)
         if frame is None:
             raise _invalid(
                 "path_sketch", _("Wählen Sie eine vorhandene Zeichenebene für den Dichtweg.")
@@ -516,7 +518,7 @@ def create_seal(ctx: OpContext) -> OpResult:
                 "Breite oder Tiefe oder verschieben Sie den Dichtweg."
             ),
         )
-    cut_frame = frame_for_plane(plane, ctx.scene.objects.values())
+    cut_frame = frame_in_scene(plane, ctx.scene)
     if cut_frame is None:
         # Kein ``assert``: Eine Ebene, die zwischen Suche und Schnitt verloren
         # geht, ist eine Auskunft mit Weg nach vorn, kein Programmabbruch

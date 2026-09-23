@@ -7091,7 +7091,6 @@ ACTIONS_WITHOUT_A_CONSTANT = {
     "sketch.enter_height",
     "sketch.flip_plane",
     "sketch.pick_face",
-    "sketch.pick_plane",
     "sketch.use_all_regions",
     "sketch.use_global_plane",
     "smaller_bodies",
@@ -12569,8 +12568,17 @@ def test_the_sketch_field_knows_as_much_as_the_sketch_mode(window: MainWindow) -
         assert canvas._bed == surroundings.bed
         assert len(canvas._bodies) == 2
         # Die drei Grundebenen stehen immer; die Flächen der Körper kommen
-        # dazu, sobald einer da ist.
-        assert dialog.panel.plane_choice.count() > 3
+        # dazu, sobald einer da ist. Gezählt werden die Flächen selbst: Das
+        # Feld trägt seit je mehr als die drei Grundebenen (die freie Ansicht,
+        # seit dem 22.09.2026 auch „Neue Ebene …"), und „mehr als drei" wäre
+        # ohne eine einzige Fläche wahr gewesen.
+        choice = dialog.panel.plane_choice
+        faces = [
+            choice.itemData(index)
+            for index in range(choice.count())
+            if str(choice.itemData(index)).startswith("feature:")
+        ]
+        assert faces, "die Flächen der Körper stehen zur Wahl"
     finally:
         dialog.reject()
 

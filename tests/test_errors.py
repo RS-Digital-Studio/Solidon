@@ -403,6 +403,14 @@ _NOT_A_RANGE = frozenset(
         # Eine Bohrung mit verbundener Senkung ist eine andere Topologie,
         # kein Zahlenwert außerhalb einer Spanne.
         "slot_and_widening",
+        # Zwei Klicks eines Lochrasters in einer Flucht: eine Lage der Hand,
+        # keine Zahl in einem Feld (Durchsicht 22.09.2026).
+        "grid_in_line",
+        # Flächenkontur und Projizieren (RM-188 P3.4): keine Fläche unter der
+        # Zeichnung, eine gegen die Fläche gekippte Ebene, ein Netzrand ohne
+        # eindeutigen Umlauf, Kanten, die schon in der Zeichnung stehen — Lagen
+        # und Orte, keine Zahl in einem Feld.
+        "not_on_a_face", "tilted_to_face", "unreadable_rim", "already_there",
         # Eine erklärte Bedingung zwischen Parametern (``PartSpec.feasible``):
         # jeder Wert für sich ist erlaubt, nur nicht zusammen.
         "feasible",

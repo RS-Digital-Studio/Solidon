@@ -12,7 +12,7 @@ from shiboken6 import isValid
 from app.core.scene import EvaluationResult, evaluate
 from app.core.scene.cancel import CancelSignal
 from app.core.scene.project import Project, ProjectSources
-from app.core.sketch.planes import frame_for_plane
+from app.core.sketch.planes import frame_in_scene
 from app.i18n import tr
 from app.ui.labels import feature_label
 from app.ui.seal_dialog import SealPathDialog, SealPathField
@@ -132,7 +132,10 @@ class SealFlow(QObject):
                 for feature in entry.features.values()
                 if feature.kind == "face" and feature.recognised
             ),
-            frame_of=lambda plane: frame_for_plane(plane, objects),
+            # Mit den Projektparametern der ausgewerteten Szene — eine
+            # Versatzebene an ``@wand`` löst sich sonst nicht auf (RM-188 P3.2).
+            frame_of=lambda plane: frame_in_scene(plane, result.scene),
+            objects=objects,
         )
         editor = SealPathDialog(
             source,

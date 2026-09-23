@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import html
 import math
+import weakref
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import Any, Final, Literal
@@ -56,8 +57,22 @@ from PySide6.QtWidgets import (
 
 from app.core.errors import AppError, SketchConflictError, ValidationError
 from app.core.sketch import edit, shapes
-from app.core.sketch.planes import is_feature_plane
-from app.core.sketch.profile import regions_of
+from app.core.sketch.planes import (
+    MAX_PLANE_DEPTH,
+    TILT_AXES,
+    OffsetPlane,
+    ThroughPlane,
+    TiltPlane,
+    derived_plane,
+    frame_for_plane,
+    frame_for_sketch,
+    is_derived_plane,
+    is_feature_plane,
+    offset_plane,
+    through_plane,
+    tilt_plane,
+)
+from app.core.sketch.profile import arc_sweep, regions_of
 from app.core.sketch.serialize import sketch_from_text, sketch_to_text
 from app.core.sketch.solver import solve_sketch
 from app.core.types import (
@@ -391,6 +406,60 @@ def targets_phrase(sketch: Sketch, targets: tuple[int, ...]) -> str:
                 names[inside[0]].rsplit(" ", 1)[0] if len(element.points) > 1 else names[inside[0]]
             )
     return ", ".join(names[target] for target in inside)
+
+
+def held_guides(sketch: Sketch) -> tuple[int, ...]:
+    """Die ``fixed``-Bedingungen auf Punkten der Hilfsgeometrie — ab zweien.
+
+    Sie stehen in der Liste als **eine** Zeile (RM-188 P3.4): Eine
+    übernommene Flächenkontur nagelt jeden ihrer Punkte fest, und einzeln
+    aufgezählt verdrängten sie die Bedingungen, die man selbst gesetzt hat.
+    Ein einzelner fester Punkt bleibt eine eigene Zeile — dort gibt es nichts
+    zusammenzufassen.
+    """
+    guides: set[int] = set()
+    for offset, element in zip(edit.offsets_of(sketch), sketch.elements, strict=True):
+        if element.construction:
+            guides.update(range(offset, offset + len(element.points)))
+    held = tuple(
+        index
+        for index, constraint in enumerate(sketch.constraints)
+        if constraint.kind == "fixed" and constraint.targets[0] in guides
+    )
+    return held if len(held) > 1 else ()
+
+
+def outline_phrase(outline: edit.FaceOutline) -> str:
+    """Was die Zeile nach dem Übernehmen einer Flächenkontur sagt (P3.4).
+
+    **Dass es eine Kopie ist, steht darin** (Konzept vollwertiges CAD §13.3):
+    Die Kontur folgt dem Körper nicht, wenn er sich später ändert — und wer
+    das nicht weiß, richtet eine Bohrung an einer Kante aus, die es so nicht
+    mehr gibt. Am Netz kommt dazu, welche Ränder als Kreis aus der Erkennung
+    kamen und wie weit sie höchstens neben dem Netz liegen: Das ist eine
+    Näherung, und sie wird genannt.
+    """
+    if outline.loops == 1:
+        text = str(
+            tr(
+                "Kontur übernommen: ein Rand, als feste Kopie — sie folgt "
+                "späteren Änderungen am Körper nicht."
+            )
+        )
+    else:
+        text = str(
+            tr(
+                "Kontur übernommen: {count} Ränder, als feste Kopie — sie folgt "
+                "späteren Änderungen am Körper nicht."
+            ).format(count=outline.loops)
+        )
+    if outline.circles:
+        text += " " + str(
+            tr("Kreise aus der Erkennung: {count}, höchstens {deviation} neben dem Netz.").format(
+                count=outline.circles, deviation=length(outline.deviation)
+            )
+        )
+    return text
 
 
 def free_dof_phrase(free: int) -> str:
@@ -759,6 +828,14 @@ class SketchCanvas(QWidget):
     denn er fragt nach einem Ausdruck mit Projektparametern; die Fläche kennt
     nur die Karte, die getroffen wurde."""
 
+    planeRestored = Signal()
+    """Ein Rückgängig oder Wiederholen hat die Zeichenebene gewechselt.
+
+    Eine Ebenenwahl ist ein Schritt im Rückgängig — und wer ihn zurücknahm,
+    hatte danach die alte Ebene in der Skizze, die neue im Ebenenfeld, und
+    die Ansicht ließ Klicks weiter auf der neuen landen. Das Panel zieht Feld
+    und Ansicht an diesem Signal nach."""
+
     pointerChanged = Signal(float, float)
     """Wohin ein Klick gerade fiele, in Millimetern.
 
@@ -950,6 +1027,12 @@ class SketchCanvas(QWidget):
         Nur Netze, keine Szene: der Zeichenbereich braucht die Kante, nicht
         das Objekt drumherum, und was er nicht kennt, kann er nicht
         veralten lassen."""
+        self._objects: list[Any] = []
+        """Die Objekte der Szene, für die Flächenkontur (RM-188 P3.4).
+
+        Anders als bei :attr:`_bodies` gehören hier Körper und Merkmale
+        zusammen: Die Kontur ist der Rand der Fläche, auf der die Zeichnung
+        steht, und die ist ein Merkmal eines bestimmten Körpers."""
         self._bed: tuple[float, float] | None = None
         """Breite und Tiefe des Druckbetts, oder ``None``.
 
@@ -1187,6 +1270,11 @@ class SketchCanvas(QWidget):
         if isinstance(error, ValidationError) and getattr(error, "field", "") == "hole_diameter":
             reason = str(error.detail or error.title)
             return f"{reason} {tr('Weiter ziehen oder den Durchmesser in der Leiste verkleinern.')}"
+        if isinstance(error, ValidationError) and error.constraint == "grid_in_line":
+            # Ein Raster in einer Flucht: Die Klicks liegen auseinander, nur
+            # ohne Abstand quer — der Satz über aufeinanderliegende Klicks wäre
+            # dort falsch. Der Kern sagt, was fehlt, samt Ausweg.
+            return str(error.detail or error.title)
         return tr("Die beiden Klicks liegen aufeinander — der zweite bestimmt die Größe.")
 
     def measure_annotations(self) -> tuple[tuple[tuple[float, float], str], ...]:
@@ -1283,8 +1371,16 @@ class SketchCanvas(QWidget):
         Auf einer angeklickten Fläche des Körpers stehen sie ohne Namen: die
         Fläche kann beliebig geneigt sein, und „X" auf einer schrägen Wand
         wäre eine Angabe, die nicht stimmt.
+
+        **Eine versetzte Ebene behält die Achsen ihrer Basis** — 20 mm über der
+        Draufsicht sind die Richtungen weiter X und Y. Gekippt oder durch drei
+        Punkte gelegt stimmen sie nicht mehr, dann bleiben sie ohne Namen wie
+        auf einer Fläche.
         """
-        return PLANE_AXES.get(self.sketch.plane, ("", ""))
+        root, only_offsets = _root_of(self.sketch.plane)
+        if not only_offsets:
+            return ("", "")
+        return PLANE_AXES.get(root, ("", ""))
 
     def layer_note(self) -> str:
         """Wie die Schichten zu dieser Ebene liegen (E1).
@@ -1304,6 +1400,21 @@ class SketchCanvas(QWidget):
         Beschriftung und keine Zeichnung: die Richtung ist ein Satz, kein Bild.
         """
         plane = self.sketch.plane
+        if is_derived_plane(plane):
+            # Eine abgeleitete Ebene hat ihre Richtung im Rahmen, nicht im Namen:
+            # 20 mm über der Draufsicht liegt sie flach, um 30° gekippt schräg.
+            frame = self.plane_frame(plane)
+            if frame is None:
+                return tr("Die Schichtrichtung folgt der Neigung dieser Ebene.")
+            upright = abs(frame.normal[2])
+            if upright > _FLAT_ENOUGH:
+                return tr("Schichten liegen parallel zur Zeichnung — sie wächst nach oben heraus.")
+            if upright < _STEEP_ENOUGH:
+                return tr(
+                    "Schichten stehen quer zur Zeichnung — was hier waagerecht liegt, "
+                    "wird eine Fuge."
+                )
+            return tr("Diese Ebene ist geneigt — der Körper wächst schräg zur Schichtung.")
         if plane.startswith("feature:"):
             normal = self._face_normals.get(plane.partition(":")[2])
             if normal is None:
@@ -1344,6 +1455,10 @@ class SketchCanvas(QWidget):
         """Woraus projiziert werden kann — die Körper der Szene."""
         self._bodies = list(meshes)
 
+    def offer_objects(self, objects: Sequence[Any]) -> None:
+        """Woraus eine Flächenkontur kommt — die Objekte der Szene (P3.4)."""
+        self._objects = list(objects)
+
     def offer_frames(self, lookup: Callable[[str], PlaneFrame | None] | None) -> None:
         """Wer zu einer Flächenebene den Rahmen auflöst (Gesamtreview D-9).
 
@@ -1355,10 +1470,22 @@ class SketchCanvas(QWidget):
         self._frame_of = lookup
 
     def plane_frame(self, plane: str) -> PlaneFrame | None:
-        """Der Rahmen einer Flächenebene — ``None``, wenn niemand ihn auflöst."""
-        if not is_feature_plane(plane) or self._frame_of is None:
+        """Der Rahmen einer Flächen- oder abgeleiteten Ebene — ``None``, wenn
+        niemand ihn auflöst.
+
+        **Auch eine abgeleitete Ebene braucht die Szene** (RM-188 P3.2): Sie
+        kann auf einer Fläche stehen, und ihr Abstand kann ein
+        Projektparameter sein. Wer die Szene kennt, reicht die Auflösung
+        herein; ohne sie genügt für eine Ebene über einer Grundebene die
+        Rechnung mit den Werten, die die Zeichenfläche selbst kennt.
+        """
+        if not (is_feature_plane(plane) or is_derived_plane(plane)):
             return None
-        return self._frame_of(plane)
+        if self._frame_of is not None:
+            return self._frame_of(plane)
+        if is_derived_plane(plane):
+            return frame_for_plane(plane, (), self._params)
+        return None
 
     def project_bodies(self) -> None:
         """Holt die Schnittkurven aller Körper als Hilfsgeometrie herein.
@@ -1371,14 +1498,23 @@ class SketchCanvas(QWidget):
             self.statusChanged.emit(tr("Es gibt keinen Körper, aus dem sich projizieren ließe."))
             return
         frame = None
-        if is_feature_plane(self.sketch.plane):
-            frame = self._frame_of(self.sketch.plane) if self._frame_of else None
+        if is_feature_plane(self.sketch.plane) or is_derived_plane(self.sketch.plane):
+            # **Auch eine abgeleitete Ebene schneidet dort, wo sie liegt**
+            # (RM-188 P3.2). Sie fiel hier auf den Grundebenen-Weg, und
+            # ``edit.project`` nahm dann die XY-Ebene: 20 mm über dem Bett
+            # gezeichnet, projizierte der Knopf die Kanten auf Höhe null.
+            frame = self.plane_frame(self.sketch.plane)
             if frame is None:
                 # Kein stiller Rückfall auf XY: Das wäre ein Schnitt durch
                 # eine Ebene, die niemand gewählt hat.
                 self.statusChanged.emit(
                     tr(
                         "Die Fläche dieser Zeichenebene ist nicht mehr da — "
+                        "projizieren geht hier nicht."
+                    )
+                    if is_feature_plane(self.sketch.plane)
+                    else tr(
+                        "Diese Zeichenebene lässt sich gerade nicht auflösen — "
                         "projizieren geht hier nicht."
                     )
                 )
@@ -1394,6 +1530,38 @@ class SketchCanvas(QWidget):
             self.statusChanged.emit(problems[0] if problems else tr("Nichts zu projizieren."))
             return
         self._apply(current)
+
+    def take_face_outline(self) -> None:
+        """Die Ränder der Fläche, auf der gezeichnet wird — als feste Hilfsgeometrie.
+
+        **Eine eigene Handlung neben** :meth:`project_bodies` (RM-188 P3.4):
+        Auf der Fläche selbst schneidet die Zeichenebene nichts, und
+        *Projizieren* antwortete dort „Diese Ebene schneidet den Körper
+        nicht". Die Kontur ist der Rand der Fläche, außen und um jedes Loch;
+        wie sie entsteht, sagt ``edit.face_outline``, was die Zeile danach
+        sagt, :func:`outline_phrase`.
+        """
+        plane = self.sketch.plane
+        derived = is_feature_plane(plane) or is_derived_plane(plane)
+        frame = self.plane_frame(plane) if derived else frame_for_plane(plane)
+        if frame is None:
+            self.statusChanged.emit(
+                tr(
+                    "Die Fläche dieser Zeichenebene ist nicht mehr da — "
+                    "ihre Kontur lässt sich nicht übernehmen."
+                )
+            )
+            return
+        try:
+            outline = edit.face_outline(self.sketch, self._objects, frame)
+        except AppError as error:
+            self.statusChanged.emit(str(error.detail or error.title))
+            return
+        if not outline.loops:
+            self.statusChanged.emit(tr("Diese Kontur steht schon in der Zeichnung."))
+            return
+        self._apply(outline.sketch)
+        self.statusChanged.emit(outline_phrase(outline))
 
     def set_plane(self, plane: str) -> None:
         """Auf welcher Ebene die Skizze liegt — solange sie leer ist (§30.1).
@@ -1424,6 +1592,36 @@ class SketchCanvas(QWidget):
             return
         self._view_plane = plane
         self._apply(replace(self.sketch, plane=plane))
+
+    def change_drawing_plane(self, plane: str) -> None:
+        """Die Zeichnung ausdrücklich auf eine andere Ebene legen — auch mit Strichen.
+
+        Der Gegenweg zu :meth:`set_plane`, und er ist gewollt ein eigener: Das
+        Ebenenfeld wechselt nach dem ersten Strich nur noch den **Blick**, weil
+        dort dieselbe Wahl zwei Bedeutungen hätte. Wer dagegen im Dialog
+        „Neue Ebene" eine Ebene festlegt, meint die Zeichenebene — eine
+        Versatzebene um fünf Millimeter höher zu setzen ist genau das. Die
+        Zahlen der Zeichnung bleiben, ihr Ort im Raum folgt der Ebene; ein
+        Schritt im Rückgängig.
+        """
+        if plane == self.sketch.plane:
+            return
+        self._view_plane = plane
+        self._apply(replace(self.sketch, plane=plane))
+
+    def preview_plane(self, plane: str) -> None:
+        """Die Ebene zeigen, ohne sie festzulegen — die Vorschau des Dialogs.
+
+        Kein Rückgängig-Schritt: Was der Dialog vorschlägt, ist noch keine
+        Änderung (Regel 2). Er setzt beim Abbrechen den alten Stand auf
+        demselben Weg zurück.
+        """
+        if plane == self.sketch.plane:
+            return
+        self._view_plane = plane
+        self.sketch = replace(self.sketch, plane=plane)
+        self.sketchChanged.emit()
+        self.statusChanged.emit(self.status_text())
 
     def set_view_plane(self, plane: str) -> None:
         """Nur die Blickrichtung — die Zeichnung bleibt, wo sie liegt."""
@@ -1670,7 +1868,7 @@ class SketchCanvas(QWidget):
         if not self._undo:
             return
         self._redo.append(self.sketch)
-        self.set_sketch(self._undo.pop())
+        self._restore(self._undo.pop())
 
     def redo(self) -> None:
         """Und Ctrl+Y wieder nach vorn (Z3).
@@ -1683,7 +1881,15 @@ class SketchCanvas(QWidget):
         if not self._redo:
             return
         self._undo.append(self.sketch)
-        self.set_sketch(self._redo.pop())
+        self._restore(self._redo.pop())
+
+    def _restore(self, sketch: Sketch) -> None:
+        """Einen gemerkten Stand zurückholen — und sagen, wenn die Ebene wechselt."""
+        before = self.sketch.plane
+        self.set_sketch(sketch)
+        if sketch.plane != before:
+            self._view_plane = sketch.plane
+            self.planeRestored.emit()
 
     def can_redo(self) -> bool:
         """Ob es etwas zu wiederholen gibt — für den Eintrag im Fenster."""
@@ -1748,23 +1954,57 @@ class SketchCanvas(QWidget):
         return True
 
     def status_text(self) -> str:
+        return self._status()[0]
+
+    def status_shows_state(self) -> bool:
+        """Ob die Zeile gerade den Zustand der Zeichnung nennt — Umriss und Maße.
+
+        Nur dann braucht es die Kurzform daneben nicht (:meth:`state_brief`):
+        Ein Werkzeughinweis, eine Auswahl, ein Widerspruch verdrängen den
+        Zustand aus der Zeile, und genau dann soll er rechts stehen bleiben.
+        """
+        return self._status()[1]
+
+    def state_brief(self) -> str:
+        """Umriss und fehlende Maße in Kurzform — „Noch offen · 4 Maße fehlen".
+
+        **Der Werkzeughinweis verdrängte den Zustand** (Durchsicht 22.09.2026):
+        Solange ein Zeichenwerkzeug in der Hand liegt, sagt die Zeile, was der
+        nächste Klick tut, und ob der Umriss schon schließt, stand nirgends —
+        dabei verspricht die Website „unten steht jederzeit, was noch frei
+        ist". Die Kurzform steht deshalb rechts neben dem Hinweis. Leer, wenn
+        es nichts zu sagen gibt: kein gelöster Stand, oder ein Widerspruch,
+        den die Zeile selbst nennt.
+        """
+        if self.solved is None or self.conflict:
+            return ""
+        state = tr("Geschlossen") if self.outline else tr("Noch offen")
+        free = self.solved.free_dof
+        if free == 0:
+            return str(tr("{state} · bestimmt").format(state=state))
+        if free == 1:
+            return str(tr("{state} · noch ein Maß fehlt").format(state=state))
+        return str(tr("{state} · noch {count} Maße fehlen").format(state=state, count=free))
+
+    def _status(self) -> tuple[str, bool]:
+        """Die Zeile und ob sie den Zustand nennt — eine Rechnung für beides."""
         if self.conflict:
-            return self.conflict
+            return self.conflict, False
         if self.outside_bed():
             return tr(
                 "Die Skizze ragt über den Bauraum hinaus — "
                 "Punkte innerhalb des Rahmens verschieben."
-            )
+            ), False
         # Ein angefangenes Element geht vor: was der nächste Klick tut, ist
         # dringender als was vorhin ausgewählt wurde. Ohne Angefangenes gewinnt
         # die Auswahl — sonst stünde beim Punktwerkzeug weiter „jeder Klick
         # setzt einen", während der eben gegriffene Punkt dick im Bild liegt.
         drawing = self.drawing_hint()
         if drawing and self._pending_world:
-            return drawing
+            return drawing, False
         chosen = self.selection_hint()
         if chosen:
-            return chosen
+            return chosen, False
         if drawing:
             # **Und wie man das Werkzeug wieder loswird**, sobald eine Zeichnung
             # steht: Das Rechteck bleibt nach dem zweiten Klick in der Hand, wie
@@ -1773,8 +2013,10 @@ class SketchCanvas(QWidget):
             # geht nicht"). Ziehen geht nur mit dem Auswahlwerkzeug, und der
             # Weg dorthin ist eine Taste, die hier steht.
             if self.sketch.elements and self.tool != "select":
-                return tr("{hint} Esc wechselt zum Auswählen und Ziehen.").format(hint=drawing)
-            return drawing
+                return tr("{hint} Esc wechselt zum Auswählen und Ziehen.").format(
+                    hint=drawing
+                ), False
+            return drawing, False
         if self.solved is None:
             # **Der Satz nennt den Knopf, den es gibt.** Vorher stand hier
             # „eine Grundform einfügen" — und einen Knopf dieses Namens gibt es
@@ -1787,7 +2029,7 @@ class SketchCanvas(QWidget):
             return tr(
                 "Leere Skizze — mit dem Rechteck beginnen oder eine Linie ziehen; "
                 "Lochkreis und Lochraster stehen rechts in der Leiste."
-            )
+            ), False
         # Zwei Fragen, eine Zeile, und die erste ist die dringendere: ohne
         # geschlossenen Umriss scheitert die Operation, mit ihm ist ein freier
         # Freiheitsgrad höchstens ungenau. Beide stehen nebeneinander, weil
@@ -1808,16 +2050,16 @@ class SketchCanvas(QWidget):
         if self.solved.free_dof == 0:
             return tr(
                 "{state} · Bestimmt — nichts wackelt mehr (alle Freiheitsgrade vergeben). {advice}"
-            ).format(state=state, advice=advice)
+            ).format(state=state, advice=advice), True
         if self.solved.free_dof == 1:
             return tr(
                 "{state} · Noch ein Maß fehlt, dann wackelt nichts mehr "
                 "(ein Freiheitsgrad frei). {advice}"
-            ).format(state=state, advice=advice)
+            ).format(state=state, advice=advice), True
         return tr(
             "{state} · Noch {count} Maße fehlen, dann wackelt nichts mehr "
             "({count} Freiheitsgrade frei). {advice}"
-        ).format(state=state, count=self.solved.free_dof, advice=advice)
+        ).format(state=state, count=self.solved.free_dof, advice=advice), True
 
     def outline_advice(self) -> str:
         """Was der Zustand der Zeichnung für den nächsten Schritt bedeutet.
@@ -1916,6 +2158,21 @@ class SketchCanvas(QWidget):
             if started:
                 return tr("Bogen: der nächste Klick setzt das Ende.")
             return tr("Bogen: erster Klick setzt den Anfang.")
+        if self.tool == "polygon":
+            # **Vieleck und Langloch hatten keinen Zweig**, und die Zeile blieb
+            # vor und nach dem ersten Klick leer — der Satz stand nur im
+            # Tooltip am Knopf (Durchsicht 22.09.2026). Jedes Werkzeug sagt,
+            # was der nächste Klick tut; so steht es auch auf der Website.
+            if started:
+                return tr("Vieleck: der zweite Klick setzt eine Ecke. Oder den Umkreis eintippen.")
+            return tool_instruction("polygon")
+        if self.tool == "slot":
+            if started:
+                return tr(
+                    "Langloch: der zweite Klick setzt die Mitte des anderen Endes. "
+                    "Oder den Abstand der Mitten eintippen."
+                )
+            return tool_instruction("slot")
         if self.tool == "hole_grid":
             if started:
                 return tr(
@@ -2013,7 +2270,17 @@ class SketchCanvas(QWidget):
         )
 
     def remove_constraint(self, index: int) -> None:
-        remaining = tuple(entry for at, entry in enumerate(self.sketch.constraints) if at != index)
+        self.remove_constraints((index,))
+
+    def remove_constraints(self, indices: Sequence[int]) -> None:
+        """Mehrere Bedingungen in **einem** Schritt entfernen — ein Rückgängig
+        bringt sie alle zurück (die festen Punkte einer Kontur, P3.4)."""
+        dropped = set(indices)
+        remaining = tuple(
+            entry for at, entry in enumerate(self.sketch.constraints) if at not in dropped
+        )
+        if len(remaining) == len(self.sketch.constraints):
+            return
         self._apply(replace(self.sketch, constraints=remaining))
 
     def change_constraint(self, index: int, value: str) -> None:
@@ -2883,8 +3150,11 @@ class SketchCanvas(QWidget):
             # Die Wölbung wird zur Mitte gerechnet und hat keinen eigenen
             # Platz; Anfang und Ende können dabei getauscht sein. Ohne diese
             # Zuordnung setzte eine Deckung auf den falschen Punkt — sichtbar
-            # erst, wenn der Löser die Skizze verzieht.
-            swapped = stored[1] != self._pending_world[0]
+            # erst, wenn der Löser die Skizze verzieht. **Gefragt wird, welcher
+            # der beiden geklickten Punkte vorn steht** — arc_through gibt
+            # sie unverändert zurück, also über ihre Identität und nicht über
+            # einen Vergleich von Kommazahlen (Regel 6).
+            swapped = stored[1] is not self._pending_world[0]
             seats = {0: 2, 1: 1} if swapped else {0: 1, 1: 2}
         element = SketchElement(self.tool, points)  # type: ignore[arg-type]
         snapped_pairs = tuple(
@@ -4203,9 +4473,7 @@ class SketchCanvas(QWidget):
                 screen_radius * 2.0,
                 screen_radius * 2.0,
             )
-            begin_angle = math.degrees(math.atan2(start[1] - centre[1], start[0] - centre[0]))
-            end_angle = math.degrees(math.atan2(end[1] - centre[1], end[0] - centre[0]))
-            sweep = (end_angle - begin_angle) % 360.0
+            begin_angle, sweep = _arc_sweep(centre, start, end)
             painter.drawArc(box, int(begin_angle * 16), int(sweep * 16))
         elif element.kind == "spline":
             # Als Kurve gezeichnet, nicht als Polygonzug: der Kern baut daraus
@@ -4303,9 +4571,7 @@ class SketchCanvas(QWidget):
         radius = math.dist(centre, start)
         if radius <= 0.0:
             return
-        begin = math.degrees(math.atan2(start[1] - centre[1], start[0] - centre[0]))
-        finish = math.degrees(math.atan2(end[1] - centre[1], end[0] - centre[0]))
-        sweep = (finish - begin) % 360.0
+        begin, sweep = _arc_sweep(centre, start, end)
         spot = self._to_screen(*centre)
         on_screen = radius * self._scale
         painter.drawArc(
@@ -4341,11 +4607,16 @@ class SketchCanvas(QWidget):
 def _arc_sweep(
     centre: tuple[float, float], start: tuple[float, float], end: tuple[float, float]
 ) -> tuple[float, float]:
-    """Anfangswinkel und Spanne eines Bogens in Grad, gegen den Uhrzeigersinn —
-    dieselbe Rechnung wie beim Zeichnen."""
+    """Anfangswinkel und Spanne eines Bogens in Grad, gegen den Uhrzeigersinn.
+
+    Die Spanne kommt aus ``profile.arc_sweep`` — dieselbe Antwort, mit der
+    Profil und Ansicht rechnen, auch dafür, dass zusammenfallende Enden ein
+    Vollkreis sind. Hier stand eine eigene Rechnung in Grad ohne diese Regel,
+    und ein Bogen, dessen Enden der Löser zusammengeführt hatte, war auf dem
+    Blatt nicht zu sehen und nicht anzuklicken.
+    """
     begin = math.degrees(math.atan2(start[1] - centre[1], start[0] - centre[0]))
-    finish = math.degrees(math.atan2(end[1] - centre[1], end[0] - centre[0]))
-    return begin, (finish - begin) % 360.0
+    return begin, math.degrees(arc_sweep(centre, start, end))
 
 
 def _on_arc(
@@ -4535,6 +4806,305 @@ class PointDialog(QDialog):
             self._across.value_mm() if self._across in self._touched else self._start[0],
             self._up.value_mm() if self._up in self._touched else self._start[1],
         )
+
+
+class NewPlaneDialog(QDialog):
+    """„Neue Ebene …" — eine eigene Zeichenebene, versetzt, gekippt oder durch
+    drei Punkte (§30.1, RM-188 P3.3).
+
+    Die Ebene **gehört der Skizze** (Konzept-Entscheidung 6) und entsteht
+    deshalb hier, in der Ebenenzeile, und nicht als Objekt im Baum. Vier
+    Angaben, von denen je Art drei gelten: die Art, die Basis, und entweder
+    der Abstand, Achse und Winkel oder drei Punkte. Abstand und Winkel dürfen
+    Projektparameter sein (``@wand``) — dasselbe Feld wie im
+    Operationsdialog, mit Einheit und Ausdrucksumschalter.
+
+    **Drei Punkte stehen in Weltkoordinaten, und das steht dabei.** Die Ebene
+    hängt nicht am Körper: Wächst der Körper, bleibt sie, wo sie ist. Das
+    Konzept verlangt den ausdrücklichen Hinweis darauf, und er steht unter den
+    Feldern, solange die Art gewählt ist.
+
+    Geprüft wird bei jeder Eingabe, und zwar gegen denselben Rahmen, den die
+    Auswertung rechnet (``plane_frame`` der Zeichenfläche). Was sich nicht
+    auflösen lässt, sagt es unter den Feldern, und der Knopf sperrt — ein
+    Übernehmen, das danach an der Operation scheitert, wäre die schlechtere
+    Antwort. Was sich auflösen lässt, geht als :attr:`proposed` an die Ansicht:
+    die Vorschau.
+    """
+
+    proposed = Signal(str)
+    """Eine Ebene, die sich auflösen lässt — die Ansicht zeigt sie vorab."""
+
+    KINDS: Final[tuple[str, ...]] = ("offset", "tilt", "through")
+
+    def __init__(
+        self,
+        bases: Sequence[tuple[str, str]],
+        current: str,
+        resolve: Callable[[str], PlaneFrame | None],
+        parameter_values: Mapping[str, float] | None = None,
+        *,
+        drawn: bool = False,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        from app.core.types import ParamSpec
+        from app.ui.op_dialog import ValueField
+
+        self.setWindowTitle(tr("Neue Ebene"))
+        self.setMinimumWidth(420)
+        self._resolve = resolve
+        self._values = dict(parameter_values or {})
+
+        self.kind = QComboBox(self)
+        for value, label, note in (
+            (
+                "offset",
+                tr("Parallel versetzt"),
+                tr("Dieselbe Richtung, um einen Abstand verschoben."),
+            ),
+            ("tilt", tr("Gekippt"), tr("Um eine Achse der Basis geneigt, durch ihren Ursprung.")),
+            (
+                "through",
+                tr("Durch drei Punkte"),
+                tr("Liegt dort, wo drei Punkte im Raum sie hinlegen."),
+            ),
+        ):
+            self.kind.addItem(str(label), userData=value)
+            index = self.kind.count() - 1
+            self.kind.setItemData(index, str(note), Qt.ItemDataRole.ToolTipRole)
+            self.kind.setItemData(index, str(note), Qt.ItemDataRole.AccessibleDescriptionRole)
+        self.kind.setAccessibleName(tr("Art der Ebene"))
+
+        self.base = QComboBox(self)
+        for value, label in bases:
+            self.base.addItem(label, userData=value)
+        self.base.setAccessibleName(tr("Basis"))
+        self.base.setToolTip(tr("Auf welcher Ebene die neue steht."))
+        # Die Basis ist, worauf gerade gezeichnet wird — bei einer abgeleiteten
+        # Ebene deren eigene Basis, damit „noch 5 mm höher" nicht stapelt.
+        start_base = current
+        try:
+            described = derived_plane(current)
+        except ValidationError:
+            described = None
+        if isinstance(described, OffsetPlane | TiltPlane):
+            start_base = described.base
+        self.base.setCurrentIndex(max(0, self.base.findData(start_base)))
+
+        self.distance = ValueField(
+            ParamSpec(
+                name="distance",
+                kind="float",
+                title=tr("Abstand"),
+                default=10.0,
+                unit="mm",
+                minimum=-1000.0,
+                maximum=1000.0,
+                doc=tr("Wie weit die neue Ebene über der Basis liegt. Negativ liegt sie darunter."),
+            ),
+            10.0,
+            self._values,
+            self,
+        )
+        self.axis = QComboBox(self)
+        for axis, label in (
+            ("x", tr("Um die waagerechte Achse der Basis")),
+            ("y", tr("Um die senkrechte Achse der Basis")),
+        ):
+            self.axis.addItem(str(label), userData=axis)
+        assert tuple(str(self.axis.itemData(i)) for i in range(self.axis.count())) == TILT_AXES
+        self.axis.setAccessibleName(tr("Kippachse"))
+        self.angle = ValueField(
+            ParamSpec(
+                name="angle",
+                kind="float",
+                title=tr("Winkel"),
+                default=30.0,
+                unit=DEGREE_UNIT,
+                minimum=-180.0,
+                maximum=180.0,
+                doc=tr("Um wie viel Grad die Ebene gegen ihre Basis gekippt ist."),
+            ),
+            30.0,
+            self._values,
+            self,
+        )
+        self.points: list[tuple[LengthSpin, LengthSpin, LengthSpin]] = []
+        for defaults in ((0.0, 0.0, 0.0), (10.0, 0.0, 0.0), (0.0, 10.0, 0.0)):
+            row: list[LengthSpin] = []
+            for coordinate in defaults:
+                spin = LengthSpin(self)
+                spin.set_range_mm(-10_000.0, 10_000.0)
+                spin.set_value_mm(coordinate)
+                row.append(spin)
+            self.points.append((row[0], row[1], row[2]))
+        # Wie in ``PointDialog``: ein Name je Feld für den Bildschirmleser —
+        # „Punkt 2, Y" und nicht sechsmal „Drehfeld".
+        for number, row_fields in enumerate(self.points, start=1):
+            for axis_name, spin in zip(("X", "Y", "Z"), row_fields, strict=True):
+                spin.setAccessibleName(
+                    tr("Punkt {number}, {axis}").format(number=number, axis=axis_name)
+                )
+        self.anchored = QLabel(
+            tr(
+                "Die drei Punkte stehen im Raum und nicht am Körper: Wächst oder wandert "
+                "der Körper, bleibt die Ebene, wo sie ist."
+            ),
+            self,
+        )
+        self.anchored.setWordWrap(True)
+        style.set_level(self.anchored, "caption")
+
+        self._form = QFormLayout()
+        self._form.addRow(tr("Art"), self.kind)
+        self._form.addRow(tr("Basis"), self.base)
+        self._form.addRow(tr("Abstand"), self.distance)
+        self._form.addRow(tr("Achse"), self.axis)
+        self._form.addRow(tr("Winkel"), self.angle)
+        self._point_rows: list[QWidget] = []
+        for number, row_fields in enumerate(self.points, start=1):
+            holder = QWidget(self)
+            line = QHBoxLayout(holder)
+            line.setContentsMargins(0, 0, 0, 0)
+            for spin in row_fields:
+                line.addWidget(spin)
+            self._form.addRow(tr("Punkt {number}").format(number=number), holder)
+            self._point_rows.append(holder)
+        for field in (self.kind, self.base, self.axis):
+            caption = self._form.labelForField(field)
+            if isinstance(caption, QLabel):
+                caption.setBuddy(field)
+
+        self.moving = QLabel(
+            tr("Die Zeichnung zieht mit auf die neue Ebene; ihre Maße bleiben, wie sie sind."),
+            self,
+        )
+        self.moving.setWordWrap(True)
+        self.moving.setVisible(drawn)
+        self.problem = QLabel("", self)
+        self.problem.setWordWrap(True)
+        self.problem.setVisible(False)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel,
+            self,
+        )
+        self.accept_button = buttons.button(QDialogButtonBox.StandardButton.Ok)
+        if self.accept_button is not None:
+            self.accept_button.setText(tr("Ebene übernehmen"))
+            style.make_primary(self.accept_button)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+
+        layout = QVBoxLayout(self)
+        layout.addLayout(self._form)
+        layout.addWidget(self.anchored)
+        layout.addWidget(self.moving)
+        layout.addWidget(self.problem)
+        layout.addWidget(buttons)
+
+        self.kind.currentIndexChanged.connect(weak_slot(self, NewPlaneDialog._kind_changed))
+        self.base.currentIndexChanged.connect(weak_slot(self, NewPlaneDialog.propose))
+        self.axis.currentIndexChanged.connect(weak_slot(self, NewPlaneDialog.propose))
+        self.distance.changed.connect(weak_slot(self, NewPlaneDialog.propose))
+        self.angle.changed.connect(weak_slot(self, NewPlaneDialog.propose))
+        for row_fields in self.points:
+            for spin in row_fields:
+                spin.valueChanged.connect(weak_slot(self, NewPlaneDialog.propose))
+        self._kind_changed()
+
+    def chosen_kind(self) -> str:
+        """``offset``, ``tilt`` oder ``through``."""
+        return str(self.kind.currentData())
+
+    def choose_kind(self, kind: str) -> None:
+        """Die Art wählen — der Weg der Auswahlliste, für Tests und Kürzel."""
+        self.kind.setCurrentIndex(max(0, self.kind.findData(kind)))
+
+    def _kind_changed(self) -> None:
+        """Nur die Felder der gewählten Art stehen da (Regel aus ``oberflaeche.md``:
+        was gerade nichts tut, steht nicht da)."""
+        kind = self.chosen_kind()
+        rows = {
+            self.base: kind in ("offset", "tilt"),
+            self.distance: kind == "offset",
+            self.axis: kind == "tilt",
+            self.angle: kind == "tilt",
+        }
+        for holder in self._point_rows:
+            rows[holder] = kind == "through"
+        for field, visible in rows.items():
+            self._form.setRowVisible(field, visible)
+        self.anchored.setVisible(kind == "through")
+        self.adjustSize()
+        self.propose()
+
+    def plane(self) -> str:
+        """Die Ebene, wie sie in der Skizze stehen wird (§9, §30.1)."""
+        kind = self.chosen_kind()
+        if kind == "through":
+            return through_plane(
+                [(x.value_mm(), y.value_mm(), z.value_mm()) for x, y, z in self.points]
+            )
+        base = str(self.base.currentData())
+        if kind == "tilt":
+            return tilt_plane(base, str(self.axis.currentData()), _plane_measure(self.angle))
+        return offset_plane(base, _plane_measure(self.distance))
+
+    def problem_text(self) -> str:
+        """Warum sich die Ebene so nicht festlegen lässt — oder nichts."""
+        plane = self.plane()
+        try:
+            if self.chosen_kind() == "through":
+                frame_for_sketch(plane)
+            elif self._resolve(plane) is None:
+                return str(
+                    tr(
+                        "Diese Ebene lässt sich so nicht festlegen — prüfen Sie Basis, "
+                        "Abstand und Winkel."
+                    )
+                )
+        except ValidationError as error:
+            if error.values.get("reason") == "points_are_on_one_line":
+                return str(
+                    tr(
+                        "Die drei Punkte liegen auf einer Geraden oder aufeinander — "
+                        "sie spannen keine Ebene auf. Einen davon seitlich versetzen."
+                    )
+                )
+            return str(error.detail or error.title)
+        return ""
+
+    def propose(self) -> None:
+        """Prüfen, sagen, was fehlt — und eine gültige Ebene vorab zeigen."""
+        problem = self.problem_text()
+        self.problem.setText(problem)
+        self.problem.setVisible(bool(problem))
+        if self.accept_button is not None:
+            self.accept_button.setEnabled(not problem)
+        if not problem:
+            self.proposed.emit(self.plane())
+
+    def accept(self) -> None:
+        """Nur eine Ebene, die sich auflösen lässt, wird übernommen."""
+        if self.problem_text():
+            self.propose()
+            return
+        super().accept()
+
+
+def _plane_measure(field: Any) -> str:
+    """Abstand oder Winkel eines Feldes, wie er in der Ebenenangabe steht.
+
+    Ein Ausdruck bleibt wörtlich (``@wand``) — die Ebene folgt dann dem
+    Parameter. Eine Zahl wird ohne Rundungsrest geschrieben, dieselbe Regel
+    wie für die Maße der Zeichnung (``edit.written_measure``).
+    """
+    value = field.value()
+    if isinstance(value, str):
+        return value
+    return edit.written_measure(float(value if value is not None else 0.0))
 
 
 #: Welche Auswahlmuster eine Bedingung braucht — die Knöpfe folgen dem, statt
@@ -4776,10 +5346,92 @@ def plane_where(plane: str) -> str:
     """
     if plane == FREE_VIEW:
         return str(tr("freien Ansicht"))
+    if is_derived_plane(plane):
+        # Eine abgeleitete Ebene heißt nach dem, was sie ist — „der gewählten
+        # Fläche" stünde dort für eine Ebene, die neben dem Körper schwebt.
+        return derived_plane_label(plane)
     full = dict(plane_choices()).get(plane, "")
     # Ohne eigenen Artikel: Beide Sätze, die diese Funktion benutzen, setzen
     # „der" davor. Mit ihm stand dort „aus der der gewählten Fläche" (Z8).
     return str(full).split(" — ")[0] if full else str(tr("gewählten Fläche"))
+
+
+#: Interner Eintrag des Ebenenfelds, der den Dialog für eine neue Ebene öffnet.
+#: Er ist keine Ebene und reist nie in eine Skizze — wie :data:`FREE_VIEW`.
+NEW_PLANE = "plane:new"
+
+
+def _base_name(plane: str, *, accusative: bool = False) -> str:
+    """Der Name der Ebene, auf der eine abgeleitete steht — für „der …" oder „die …".
+
+    Grundebenen und abgeleitete Ebenen sind weiblich und lauten in beiden
+    Fällen gleich; nur die Fläche des Körpers ändert ihre Endung.
+    """
+    if is_derived_plane(plane):
+        return derived_plane_label(plane)
+    full = dict(plane_choices()).get(plane, "")
+    if full:
+        return str(full).split(" — ")[0]
+    return str(tr("gewählte Fläche") if accusative else tr("gewählten Fläche"))
+
+
+def derived_plane_label(plane: str) -> str:
+    """Wie eine abgeleitete Ebene heißt — im Ebenenfeld und mitten im Satz (§30.1).
+
+    Benannt nach dem, was man sieht, und immer mit „Ebene" vorn: „Ebene
+    20 mm über der Draufsicht (XY)", „Ebene um 30° gegen die Draufsicht (XY)
+    gekippt", „Ebene durch drei Punkte". So passt derselbe Name ins Feld und
+    hinter „auf der …" (:func:`plane_where`). Die Zahl steht, wie sie
+    gespeichert ist — ein Ausdruck (``@wand``) bleibt ein Ausdruck, denn er
+    ist die Aussage (dieselbe Haltung wie :func:`readable_measure`). Eine
+    unlesbare Angabe heißt so und nicht irgendwie.
+    """
+    try:
+        described = derived_plane(plane)
+    except ValidationError:
+        return str(tr("unlesbare Ebene"))
+    if isinstance(described, ThroughPlane):
+        return str(tr("Ebene durch drei Punkte"))
+    if isinstance(described, OffsetPlane):
+        amount = described.distance
+        try:
+            shown = length(abs(float(amount)))
+            above = float(amount) >= 0.0
+        except ValueError:
+            shown, above = amount, True
+        base = _base_name(described.base)
+        if above:
+            return str(tr("Ebene {distance} über der {base}").format(distance=shown, base=base))
+        return str(tr("Ebene {distance} unter der {base}").format(distance=shown, base=base))
+    assert isinstance(described, TiltPlane)
+    return str(
+        tr("Ebene um {angle} gegen die {base} gekippt").format(
+            angle=readable_angle(described.angle),
+            base=_base_name(described.base, accusative=True),
+        )
+    )
+
+
+def _root_of(plane: str) -> tuple[str, bool]:
+    """Worauf eine Ebene am Ende steht — und ob unterwegs nur versetzt wurde.
+
+    Ein Versatz behält die Achsen seiner Basis; ein Kippen oder drei Punkte
+    tun es nicht. Für Achsenbuchstaben und Schichthinweis zählt genau das.
+    """
+    only_offsets = True
+    for _step in range(MAX_PLANE_DEPTH + 1):
+        if not is_derived_plane(plane):
+            return plane, only_offsets
+        try:
+            described = derived_plane(plane)
+        except ValidationError:
+            return plane, False
+        if isinstance(described, ThroughPlane) or described is None:
+            return plane, False
+        if not isinstance(described, OffsetPlane):
+            only_offsets = False
+        plane = described.base
+    return plane, False
 
 
 #: Wie breit ein Zahlenfeld der Werkzeugzeile höchstens wird.
@@ -4850,6 +5502,10 @@ class Surroundings:
     """Die Netze der Szene — Vorlage für die Projektion, nicht Geometrie."""
     frame_of: Callable[[str], PlaneFrame | None] | None = None
     """Wer zu einer Flächenebene den Rahmen auflöst — fürs Projizieren (D-9)."""
+    objects: tuple[Any, ...] = ()
+    """Die Objekte der Szene mit ihren Merkmalen — Vorlage für die
+    Flächenkontur (RM-188 P3.4). Die Netze allein reichen dort nicht: Die
+    Kontur hängt an einer Fläche, und die ist ein Merkmal eines Körpers."""
 
 
 class SketchPanel(QWidget):
@@ -4889,9 +5545,17 @@ class SketchPanel(QWidget):
         parameter_values: Mapping[str, float] | None = None,
         parent: QWidget | None = None,
         surroundings: Surroundings | None = None,
+        *,
+        planes: Sequence[str] = (),
     ) -> None:
         super().__init__(parent)
         self._params = dict(parameter_values or {})
+        self._planes = tuple(planes)
+        """Auf welchen Ebenen diese Zeichnung liegen darf — leer heißt überall.
+
+        Aus dem Parameter, den die Zeichnung füllt (``ParamSpec.sketch_planes``):
+        Die Bahn eines Sweeps liegt auf der Vorder- oder Seitenansicht, und ein
+        Feld, das die Draufsicht anbietet, bietet einen Fehler an."""
 
         self.canvas = SketchCanvas(self, parameter_values=self._params)
         opening = ""
@@ -4903,6 +5567,15 @@ class SketchPanel(QWidget):
                 # beginnt leer, die Statuszeile sagt warum, und Verwerfen
                 # lässt den alten Wert im Feld unangetastet.
                 opening = str(error.detail or error.title)
+        if (
+            self._planes
+            and not self.canvas.sketch.elements
+            and self.canvas.sketch.plane not in self._planes
+        ):
+            # Eine leere Zeichnung beginnt auf der ersten Ebene, die sie
+            # annimmt — die Bahn auf der Vorderansicht, wo „nach oben"
+            # senkrecht zum Querschnitt steht.
+            self.canvas.set_sketch(replace(self.canvas.sketch, plane=self._planes[0]))
 
         tools = QHBoxLayout()
         # Als Feld, damit die Breite dieser Zeile prüfbar ist: Sie ist der
@@ -4963,6 +5636,11 @@ class SketchPanel(QWidget):
                 note = f"{label}{shortcut} — {tool_instruction(name)}"
                 button.setToolTip(note)
                 button.setStatusTip(note)
+                # **Ein Name für den Bildschirmleser**, nicht nur eine
+                # Beschreibung: Qt liest den Tooltip als Beschreibung, und ein
+                # Knopf ohne Text hat sonst keinen Namen — gesagt wurde
+                # „Schaltfläche" und sonst nichts (Durchsicht Zeichenmodus §6).
+                button.setAccessibleName(label)
                 button.setAccessibleDescription(note)
                 button.setCheckable(True)
                 button.setAutoRaise(True)
@@ -5080,6 +5758,11 @@ class SketchPanel(QWidget):
         # Seite? Die Ebene steht in Klammern daneben — sie ist die Angabe, die
         # in der Projektdatei landet.
         for value, label in plane_choices():
+            # Eine Zeichnung mit vorgegebenen Ebenen bekommt nur diese — und
+            # ihre eigene, falls sie aus einer älteren Datei auf einer anderen
+            # liegt: Das Feld zeigt, was ist, statt eine Ebene zu behaupten.
+            if self._planes and value not in self._planes and value != self.canvas.sketch.plane:
+                continue
             key = PLANE_KEYS.get(value, "")
             self.plane_choice.addItem(f"{label}  ({key})" if key else str(label), userData=value)
         # Nach dem ersten Strich wählt dieses Feld den **Blick**. Eine freie
@@ -5215,6 +5898,21 @@ class SketchPanel(QWidget):
         # Die drei Grundebenen stehen immer; die Flächen des Körpers kommen
         # dazu, sobald einer da ist. Deshalb hier keine feste Liste.
         self._plane_count = self.plane_choice.count()
+        self._derived_plane = (
+            self.canvas.sketch.plane if is_derived_plane(self.canvas.sketch.plane) else ""
+        )
+        """Die abgeleitete Ebene, die im Feld steht — die der Skizze oder die
+        zuletzt angelegte. Eine, nicht eine Liste: Wer eine neue anlegt,
+        ersetzt die vorige, und die Wahl bleibt kurz."""
+        self._plane_dialog: NewPlaneDialog | None = None
+        self._plane_before = ""
+        """Worauf die Skizze lag, als der Dialog aufging — der Stand, zu dem
+        *Abbrechen* zurückkehrt (die Vorschau hat ihn verschoben)."""
+        with QSignalBlocker(self.plane_choice):
+            self._add_plane_tail()
+            self.plane_choice.setCurrentIndex(
+                max(0, self.plane_choice.findData(self.canvas.sketch.plane))
+            )
 
         # Die Ändern-Gruppe (E17). Trimmen und Verlängern sind Werkzeuge und
         # stehen bei den anderen; Versetzen und Spiegeln sind Handlungen auf
@@ -5277,6 +5975,7 @@ class SketchPanel(QWidget):
 
         project_button = QToolButton(self)
         project_button.setIcon(icons.icon("sketch_project", project_button))
+        project_button.setAccessibleName(tr("Projizieren"))
         project_button.setToolTip(
             f"{tr('Projizieren')} — "
             + tr("Die Kanten der vorhandenen Körper auf dieser Ebene in die Skizze holen.")
@@ -5284,6 +5983,23 @@ class SketchPanel(QWidget):
         project_button.setAutoRaise(True)
         project_button.clicked.connect(self.canvas.project_bodies)
         tools.addWidget(project_button)
+
+        # **Flächenkontur daneben und nicht darin** (RM-188 P3.4): Ein Schnitt
+        # und ein Flächenrand sind zwei Handlungen mit zwei Ergebnissen, und
+        # auf der Fläche, auf der man zeichnet, gibt es nur das zweite.
+        outline_button = QToolButton(self)
+        self.outline_button = outline_button
+        outline_button.setIcon(icons.icon("sketch_face_outline", outline_button))
+        outline_button.setAccessibleName(tr("Flächenkontur"))
+        outline_button.setToolTip(
+            f"{tr('Flächenkontur')} — "
+            + tr(
+                "Die Ränder der Fläche, auf der Sie zeichnen, als feste Hilfsgeometrie übernehmen."
+            )
+        )
+        outline_button.setAutoRaise(True)
+        outline_button.clicked.connect(self.canvas.take_face_outline)
+        tools.addWidget(outline_button)
 
         # **Das Maß beim Zeichnen steht an der Zeichenfläche, nicht hier** (E19,
         # Schritt zwei). Es hing in dieser Zeile, und beim Zeichnen sieht
@@ -5344,6 +6060,7 @@ class SketchPanel(QWidget):
         # niemand (§19.2, Regel 18).
         fit_button = QToolButton(self)
         fit_button.setIcon(icons.icon("fit", fit_button))
+        fit_button.setAccessibleName(tr("Einpassen"))
         fit_button.setToolTip(f"{tr('Einpassen')}  ({VIEW_KEYS['fit']})")
         fit_button.setAutoRaise(True)
         fit_button.clicked.connect(self.canvas.fit_view)
@@ -5351,6 +6068,7 @@ class SketchPanel(QWidget):
 
         undo_button = QToolButton(self)
         undo_button.setIcon(icons.icon("undo", undo_button))
+        undo_button.setAccessibleName(tr("Rückgängig"))
         # **Das Kürzel gehört an den Knopf**, wie bei *Einpassen* darüber: Eine
         # Belegung, zu der kein sichtbares Ziel gehört, findet niemand (§19.2).
         # Von allen Kürzeln des Skizzenmodus war dieses das einzige, das
@@ -5380,6 +6098,7 @@ class SketchPanel(QWidget):
         # eingefordert — Strg+Y stand nirgends, und er wurde rot.
         redo_button = QToolButton(self)
         redo_button.setIcon(icons.icon("redo", redo_button))
+        redo_button.setAccessibleName(tr("Wiederholen"))
         redo_keys = QKeySequence(QKeySequence.StandardKey.Redo).toString(
             QKeySequence.SequenceFormat.NativeText
         )
@@ -5461,6 +6180,8 @@ class SketchPanel(QWidget):
         constraints_row.addWidget(self.constraint_placeholder, 0, 0, 1, CONSTRAINTS_PER_ROW + 1)
 
         self.constraint_list = QListWidget(self)
+        self._rows: list[tuple[int, ...]] = []
+        """Für welche Bedingungen jede Zeile der Liste steht (:meth:`constraint_indices`)."""
         self.constraint_list.setToolTip(
             tr("Rechtsklick oder {key} entfernt die gewählte Bedingung.").format(
                 key=QKeySequence(QKeySequence.StandardKey.Delete).toString(
@@ -5509,7 +6230,6 @@ class SketchPanel(QWidget):
             | Qt.TextInteractionFlag.TextSelectableByMouse
         )
         self.status.linkActivated.connect(weak_slot(self, SketchPanel._take_rectangle))
-        self._show_status(opening or self.canvas.status_text())
 
         # Wo der Zeiger steht, rechts in der Statuszeile — an der Stelle, an
         # der jedes CAD sie hat. Sie beantwortet die Frage, die man beim
@@ -5519,6 +6239,19 @@ class SketchPanel(QWidget):
         self.coordinates = QLabel("", self)
         self.coordinates.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         self.coordinates.setToolTip(tr("Wohin der nächste Klick fällt."))
+        # **Was noch frei ist, steht auch neben einem Werkzeughinweis** — rechts,
+        # vor der Zeigerlage (:meth:`SketchCanvas.state_brief`). Links sagt die
+        # Zeile, was der nächste Klick tut; ob der Umriss schon schließt und
+        # wie viele Maße fehlen, ging dabei verloren (Durchsicht 22.09.2026).
+        self.state = QLabel("", self)
+        self.state.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self.state.setToolTip(
+            tr("Ob der Umriss schon schließt und wie viele Maße noch fehlen, bis nichts wackelt.")
+        )
+        style.set_level(self.state, "caption")
+        self.state.setVisible(False)
+        # Erst jetzt, da beide Beschriftungen der Zeile stehen.
+        self._show_status(opening or self.canvas.status_text())
         self.canvas.pointerChanged.connect(self._show_pointer)
         self.canvas.pointerChanged.connect(self.pointerMoved)
 
@@ -5558,6 +6291,7 @@ class SketchPanel(QWidget):
         layout.addLayout(middle, stretch=1)
         status_row = QHBoxLayout()
         status_row.addWidget(self.status, stretch=1)
+        status_row.addWidget(self.state)
         status_row.addWidget(self.coordinates)
         layout.addLayout(status_row)
 
@@ -5565,6 +6299,7 @@ class SketchPanel(QWidget):
         self.canvas.viewFitted.connect(self.viewFitted)
         self.canvas.sketchChanged.connect(self._refresh_constraints)
         self.canvas.sketchChanged.connect(self._refresh_plane_role)
+        self.canvas.planeRestored.connect(weak_slot(self, SketchPanel._plane_restored))
         self.canvas.selectionChanged.connect(self._refresh_buttons)
         self.canvas.statusChanged.connect(weak_slot(self, SketchPanel._show_status, forward=True))
         # Der Doppelklick auf eine Maßkarte öffnet dasselbe Fenster wie der
@@ -5644,6 +6379,7 @@ class SketchPanel(QWidget):
         self.set_bed(surroundings.bed)
         self.offer_faces(surroundings.faces)
         self.offer_bodies(surroundings.bodies)
+        self.canvas.offer_objects(surroundings.objects)
         self.canvas.offer_frames(surroundings.frame_of)
 
     def use_viewport(self) -> None:
@@ -5847,6 +6583,10 @@ class SketchPanel(QWidget):
         den Fehler in seiner Zeichnung. Der Aufrufer bekommt jetzt die
         Auskunft und kann es sagen (Regel 17).
         """
+        if is_derived_plane(plane) and plane != self._derived_plane:
+            # Eine abgeleitete Ebene steht erst im Feld, wenn sie gilt — dann
+            # bekommt sie ihren Eintrag, statt „nicht zur Wahl" zu sein.
+            self._remember_derived(plane)
         index = self.plane_choice.findData(plane)
         if index < 0:
             return False
@@ -5961,6 +6701,15 @@ class SketchPanel(QWidget):
         eigenen Kind fest (`.claude/rules/oberflaeche.md`).
         """
         plane = str(self.plane_choice.currentData())
+        if plane == NEW_PLANE:
+            # „Neue Ebene …" ist eine Handlung, keine Ebene: Das Feld zeigt
+            # weiter, was gilt, und der Dialog legt fest, was gelten soll.
+            with QSignalBlocker(self.plane_choice):
+                self.plane_choice.setCurrentIndex(
+                    max(0, self.plane_choice.findData(self.canvas.view_plane))
+                )
+            self.open_new_plane()
+            return
         if plane == FREE_VIEW:
             # Dieser Eintrag beschreibt einen Kamerazustand und ist keine
             # vierte Zeichenebene. Er wird von ``reflect_camera_view`` gesetzt,
@@ -6024,7 +6773,13 @@ class SketchPanel(QWidget):
         den Blick, den „Auf dieser Fläche zeichnen" selbst eingestellt hat.
         """
         current = self.canvas.sketch.plane
-        if self.canvas.sketch.elements or not is_feature_plane(current):
+        # **Eine abgeleitete Ebene ebenso** (RM-188 P3.3): Sie wird gewählt,
+        # die Kamera stellt sich senkrecht auf sie, und der erste Klick ist
+        # für den Navigator ein Gestenende. Ohne diese Zeile tauschte er die
+        # Versatzebene 20 mm über dem Bett gegen die Draufsicht auf Höhe null.
+        if self.canvas.sketch.elements or not (
+            is_feature_plane(current) or is_derived_plane(current)
+        ):
             return False
         frame = self.canvas.plane_frame(current)
         axis = _PLANE_NORMALS.get(view_plane)
@@ -6032,6 +6787,117 @@ class SketchPanel(QWidget):
             return False
         along = sum(float(a) * float(b) for a, b in zip(frame.normal, axis, strict=True))
         return abs(along) >= _PARALLEL_COS
+
+    def _plane_restored(self) -> None:
+        """Feld und Ansicht folgen einer Ebene, die ein Rückgängig zurückgeholt hat."""
+        plane = self.canvas.sketch.plane
+        if is_derived_plane(plane) and plane != self._derived_plane:
+            self._remember_derived(plane)
+        with QSignalBlocker(self.plane_choice):
+            self.plane_choice.setCurrentIndex(max(0, self.plane_choice.findData(plane)))
+        self.planeChanged.emit()
+        self._refresh_plane_role()
+        self._show_layer_note()
+
+    def _remember_derived(self, plane: str) -> None:
+        """Den Eintrag der abgeleiteten Ebene im Feld gegen diesen tauschen.
+
+        Still, denn getauscht wird ein Angebot, nicht die Wahl — gewählt wird
+        danach über :meth:`choose_plane`, auf dem Weg aller anderen Ebenen.
+        """
+        self._derived_plane = plane
+        with QSignalBlocker(self.plane_choice):
+            shown = str(self.plane_choice.currentData())
+            for index in reversed(range(self._plane_count, self.plane_choice.count())):
+                value = str(self.plane_choice.itemData(index))
+                if is_derived_plane(value) or value == NEW_PLANE:
+                    self.plane_choice.removeItem(index)
+            self._add_plane_tail()
+            self.plane_choice.setCurrentIndex(max(0, self.plane_choice.findData(shown)))
+
+    def plane_bases(self) -> tuple[tuple[str, str], ...]:
+        """Worauf eine neue Ebene stehen kann: jede Ebene, die das Feld anbietet.
+
+        Grundebenen, Flächen des Körpers und die abgeleitete Ebene, die gerade
+        gilt — eine Versatzebene auf einer gekippten ist eine sinnvolle
+        Konstruktion (``planes.MAX_PLANE_DEPTH``). Die freie Ansicht und der
+        Eintrag „Neue Ebene …" selbst sind keine Ebenen.
+        """
+        found: list[tuple[str, str]] = []
+        for index in range(self.plane_choice.count()):
+            value = str(self.plane_choice.itemData(index))
+            if value in (FREE_VIEW, NEW_PLANE):
+                continue
+            label = self.plane_choice.itemText(index)
+            key = PLANE_KEYS.get(value, "")
+            if key and label.endswith(f"  ({key})"):
+                label = label[: -len(f"  ({key})")]
+            found.append((value, label))
+        return tuple(found)
+
+    def open_new_plane(self) -> NewPlaneDialog:
+        """„Neue Ebene …" — versetzt, gekippt oder durch drei Punkte (RM-188 P3.3).
+
+        **Nicht blockierend** (``open`` statt ``exec``): Ein modales ``exec``
+        hält eine Suite offscreen an, und im Betrieb hält es den Aufrufer an.
+        Während der Dialog steht, zeigt die Ansicht die vorgeschlagene Ebene
+        (:meth:`SketchCanvas.preview_plane`) — das ist die Vorschau, die das
+        Konzept verlangt: Man sieht, wo die Ebene liegt, bevor man sie nimmt.
+        *Abbrechen* stellt den Stand davor wieder her.
+        """
+        if self._plane_dialog is not None:
+            self._plane_dialog.raise_()
+            return self._plane_dialog
+        current = self.canvas.sketch.plane
+        self._plane_before = current
+        dialog = NewPlaneDialog(
+            self.plane_bases(),
+            current,
+            self.canvas.plane_frame,
+            self._params,
+            drawn=bool(self.canvas.sketch.elements),
+            parent=self,
+        )
+        dialog.proposed.connect(weak_slot(self, SketchPanel._preview_new_plane, forward=True))
+        dialog.accepted.connect(weak_slot(self, SketchPanel._take_new_plane))
+        dialog.rejected.connect(weak_slot(self, SketchPanel._drop_new_plane))
+        self._plane_dialog = dialog
+        dialog.open()
+        dialog.propose()
+        return dialog
+
+    def _preview_new_plane(self, plane: str) -> None:
+        """Die vorgeschlagene Ebene zeigen — ohne Rückgängig-Schritt."""
+        self.canvas.preview_plane(plane)
+
+    def _take_new_plane(self) -> None:
+        """Die Ebene des Dialogs gilt: leer als Zeichenebene, gezeichnet mitgenommen."""
+        dialog = self._plane_dialog
+        self._plane_dialog = None
+        if dialog is None:
+            return
+        plane = dialog.plane()
+        # Erst zurück auf den Stand davor, dann **ein** Schritt dorthin: Die
+        # Vorschau hat die Skizze ohne Rückgängig verschoben, und ein Strg+Z
+        # soll danach genau diesen Wechsel zurücknehmen.
+        self.canvas.preview_plane(self._plane_before)
+        self._remember_derived(plane)
+        if self.canvas.sketch.elements:
+            self.canvas.change_drawing_plane(plane)
+            with QSignalBlocker(self.plane_choice):
+                self.plane_choice.setCurrentIndex(max(0, self.plane_choice.findData(plane)))
+            self.planeChanged.emit()
+            self._refresh_plane_role()
+            self._show_layer_note()
+            return
+        self.choose_plane(plane)
+
+    def _drop_new_plane(self) -> None:
+        """*Abbrechen*: Die Vorschau geht, der Stand davor gilt wieder."""
+        self._plane_dialog = None
+        if self._plane_before:
+            self.canvas.preview_plane(self._plane_before)
+            self._show_layer_note()
 
     def _refresh_plane_role(self) -> None:
         """Das Auswahlfeld als Zeichenebene oder als Ansicht benennen."""
@@ -6313,7 +7179,14 @@ class SketchPanel(QWidget):
         # sie und bietet an, eine davon zu entfernen — welche das wären, war
         # bis hierher nirgends zu sehen.
         conflict = getattr(self.canvas, "conflict_pair", None) or ()
+        held = held_guides(self.canvas.sketch)
+        self._rows.clear()
         for index, entry in enumerate(self.canvas.sketch.constraints):
+            if index in held:
+                if index == held[0]:
+                    self._add_held_row(held, conflict)
+                continue
+            self._rows.append((index,))
             label = _constraint_label(entry.kind)
             shown = measure_label(entry, self.canvas.points())
             if shown:
@@ -6360,6 +7233,48 @@ class SketchPanel(QWidget):
                 )
             self.constraint_list.addItem(item)
 
+    def _add_held_row(self, held: tuple[int, ...], conflict: Sequence[int]) -> None:
+        """Eine Zeile für alle festen Punkte der Hilfsgeometrie (RM-188 P3.4).
+
+        Eine übernommene Flächenkontur trägt an jedem Punkt ein ``fixed`` —
+        an einer Lochplatte sechzehn Zeilen „Fest — Kreis 3 Rand", an einer
+        Freiformfläche Hunderte, und die eigenen Bedingungen standen darunter.
+        Hier steht eine Zeile; überfahren leuchten alle Punkte auf, Entf löst
+        sie in einem Schritt.
+        """
+        self._rows.append(held)
+        targets = tuple(self.canvas.sketch.constraints[index].targets[0] for index in held)
+        text = "{label} — {where}".format(
+            label=_constraint_label("fixed"),
+            where=tr("Hilfsgeometrie, {count} Punkte").format(count=len(held)),
+        )
+        clashing = any(index in conflict for index in held)
+        if clashing:
+            text = f"{CONFLICT_MARKER} {text}"
+        item = QListWidgetItem(text)
+        item.setData(Qt.ItemDataRole.UserRole, targets)
+        if clashing:
+            # Das Zeichen trägt die Aussage, die Farbe verstärkt sie — wie an
+            # jeder anderen Zeile der Liste (Regel 18).
+            item.setForeground(QColor(text_colour("warning", self._surface())))
+        item.setToolTip(
+            f"{text}\n{_does_phrase('fixed')}.\n"
+            + tr("{key} löst alle diese Punkte in einem Schritt.").format(
+                key=QKeySequence(QKeySequence.StandardKey.Delete).toString(
+                    QKeySequence.SequenceFormat.NativeText
+                )
+            )
+        )
+        self.constraint_list.addItem(item)
+
+    def constraint_indices(self, row: int) -> tuple[int, ...]:
+        """Für welche Bedingungen eine Zeile der Liste steht — meist genau eine.
+
+        Die festen Punkte der Hilfsgeometrie teilen sich eine Zeile
+        (:meth:`_add_held_row`); jede andere Bedingung hat ihre eigene.
+        """
+        return self._rows[row] if 0 <= row < len(self._rows) else ()
+
     def _surface(self) -> str:
         """Die Fläche, auf der die Liste schreibt — für die Farbwahl."""
         return self.constraint_list.palette().base().color().name()
@@ -6397,9 +7312,20 @@ class SketchPanel(QWidget):
         # Haus aus nicht an.
         menu.setToolTipsVisible(True)
         constraints = self.canvas.sketch.constraints
-        if not 0 <= row < len(constraints):
+        indices = self.constraint_indices(row)
+        if len(indices) > 1:
+            # Die festen Punkte der Hilfsgeometrie: Sie haben keine Zahl, und
+            # gelöst werden sie zusammen, wie sie zusammen dastehen.
+            release = menu.addAction(tr("Alle {count} lösen  (Entf)").format(count=len(indices)))
+            release.setToolTip(f"{_constraint_label('fixed')}: {_does_phrase('fixed')}.")
+            release.triggered.connect(
+                lambda _checked=False, chosen=indices: self.canvas.remove_constraints(chosen)
+            )
             return menu
-        entry = constraints[row]
+        if not indices or not 0 <= indices[0] < len(constraints):
+            return menu
+        index = indices[0]
+        entry = constraints[index]
         # **Nur wo es etwas zu ändern gibt.** Eine Bedingung ohne Wert —
         # waagerecht, deckungsgleich, fest — hat keine Zahl, und ein
         # Menüeintrag, der eine leere Eingabe öffnet, ist eine Sackgasse.
@@ -6419,7 +7345,7 @@ class SketchPanel(QWidget):
         # ``_does_phrase`` an inzwischen vier Stellen; eine eigene
         # Formulierung hier wäre die vierte Gelegenheit, auseinanderzulaufen.
         remove.setToolTip(f"{_constraint_label(entry.kind)}: {_does_phrase(entry.kind)}.")
-        remove.triggered.connect(lambda _checked=False, at=row: self.canvas.remove_constraint(at))
+        remove.triggered.connect(lambda _checked=False, at=index: self.canvas.remove_constraint(at))
         return menu
 
     def change_constraint_value(self, row: int) -> None:
@@ -6437,9 +7363,11 @@ class SketchPanel(QWidget):
         from PySide6.QtWidgets import QInputDialog
 
         constraints = self.canvas.sketch.constraints
-        if not 0 <= row < len(constraints):
+        indices = self.constraint_indices(row)
+        if len(indices) != 1 or not 0 <= indices[0] < len(constraints):
             return
-        entry = constraints[row]
+        index = indices[0]
+        entry = constraints[index]
         if not entry.value:
             return
         caption = _constraint_label(entry.kind)
@@ -6458,7 +7386,7 @@ class SketchPanel(QWidget):
             entered = value.strip()
             if as_circle and (typed := read_number(entered)) is not None:
                 entered = f"{circle_stored(typed):.9f}"
-            self.canvas.change_constraint(row, entered)
+            self.canvas.change_constraint(index, entered)
 
     def _constraint_double_click(self, item: Any) -> None:
         """Doppelklick auf eine Zeile — der Griff, den ein Fusion-Kunde sucht.
@@ -6502,9 +7430,9 @@ class SketchPanel(QWidget):
             and event.type() == QEvent.Type.KeyPress
             and event.key() == Qt.Key.Key_Delete
         ):
-            row = self.constraint_list.currentRow()
-            if row >= 0:
-                self.canvas.remove_constraint(row)
+            chosen = self.constraint_indices(self.constraint_list.currentRow())
+            if chosen:
+                self.canvas.remove_constraints(chosen)
             return True
         handled: bool = super().eventFilter(watched, event)
         return handled
@@ -6529,16 +7457,58 @@ class SketchPanel(QWidget):
         eine Ebene wie XY auch, und wer sie in einen eigenen Knopf auslagert,
         behauptet einen Unterschied, den es beim Zeichnen nicht gibt (E11).
         """
-        while self.plane_choice.count() > self._plane_count:
-            self.plane_choice.removeItem(self.plane_choice.count() - 1)
-        for feature_id, label, _normal in faces:
-            self.plane_choice.addItem(label, userData=f"feature:{feature_id}")
+        if self._planes:
+            # Flächen eines Körpers sind keine der vorgegebenen Ebenen.
+            faces = ()
+        # **Umgebaut wird still, gewählt wird danach ausdrücklich.** Beim
+        # Entfernen wandert Qts Auswahl durch die Einträge, die gerade noch
+        # dastehen, und jeder Zwischenstand löste ``_plane_picked`` aus — eine
+        # leere Skizze landete so kurz auf einer Fläche, die gleich wieder
+        # entfernt wurde.
+        with QSignalBlocker(self.plane_choice):
+            while self.plane_choice.count() > self._plane_count:
+                self.plane_choice.removeItem(self.plane_choice.count() - 1)
+            for feature_id, label, _normal in faces:
+                self.plane_choice.addItem(label, userData=f"feature:{feature_id}")
+            self._add_plane_tail()
         self.canvas.offer_faces({feature_id: normal for feature_id, _label, normal in faces})
         # Die Wahl kann durch das Entfernen weggefallen sein — dann steht sie
         # jetzt auf XY, und der Hinweis darunter muss das mitbekommen.
         chosen = self.plane_choice.findData(self.canvas.sketch.plane)
-        self.plane_choice.setCurrentIndex(max(0, chosen))
+        if chosen >= 0:
+            with QSignalBlocker(self.plane_choice):
+                self.plane_choice.setCurrentIndex(chosen)
+        else:
+            with QSignalBlocker(self.plane_choice):
+                self.plane_choice.setCurrentIndex(0)
+            self._plane_picked()
         self.layer_note.setText(self.canvas.layer_note())
+
+    def _add_plane_tail(self) -> None:
+        """Die abgeleitete Ebene, wenn eine gilt, und „Neue Ebene …" ans Ende.
+
+        **Ein Eintrag im Ebenenfeld und kein Menüpunkt** (Konzept §10, §14
+        Nr. 11): Die Ebene gehört der Skizze und entsteht dort, wo man sie
+        wählt — neun Menüs und acht Felder vorn bleiben, wie sie sind
+        (``tests/test_interface_limits.py``).
+
+        Eine Zeichnung mit vorgegebenen Ebenen (:attr:`_planes`) bekommt
+        beides nicht: Eine eigene Ebene läge außerhalb dessen, was die
+        Operation annimmt.
+        """
+        if self._planes:
+            return
+        if self._derived_plane:
+            self.plane_choice.addItem(
+                derived_plane_label(self._derived_plane), userData=self._derived_plane
+            )
+        self.plane_choice.addItem(tr("Neue Ebene …"), userData=NEW_PLANE)
+        index = self.plane_choice.count() - 1
+        note = tr(
+            "Eine eigene Zeichenebene anlegen — parallel versetzt, gekippt oder durch drei Punkte."
+        )
+        self.plane_choice.setItemData(index, note, Qt.ItemDataRole.ToolTipRole)
+        self.plane_choice.setItemData(index, note, Qt.ItemDataRole.AccessibleDescriptionRole)
 
     def sketch_text(self) -> str:
         """Der Parameterwert, wie ihn die Skizzen-Ops lesen (§30.1) — leer,
@@ -6559,6 +7529,7 @@ class SketchPanel(QWidget):
         ``status_text()`` für die leere Skizze liefert, ist die Einladung, alles
         andere ist Bericht.
         """
+        self._show_state(text)
         einladung = tr(
             "Leere Skizze — mit dem Rechteck beginnen oder eine Linie ziehen; "
             "Lochkreis und Lochraster stehen rechts in der Leiste."
@@ -6579,6 +7550,19 @@ class SketchPanel(QWidget):
             f'<a href="{self.INVITATION_TARGET}">{html.escape(hit)}</a>'
             f"{html.escape(rest)}"
         )
+
+    def _show_state(self, shown: str) -> None:
+        """Die Kurzform des Zustands rechts — nur, wenn links etwas anderes steht.
+
+        Steht der Zustand selbst in der Zeile, wäre er daneben ein zweites Mal
+        zu lesen. Gefragt wird am gezeigten Text und nicht an der Werkzeugwahl:
+        Auch eine Meldung nach einem Trimmen verdrängt ihn.
+        """
+        brief = self.canvas.state_brief()
+        saying_it = shown == self.canvas.status_text() and self.canvas.status_shows_state()
+        visible = bool(brief) and not saying_it
+        self.state.setText(brief if visible else "")
+        self.state.setVisible(visible)
 
     def _take_rectangle(self, _target: str = "") -> None:
         """Der Verweis in der Einladung wählt das Rechteck — der häufigste erste
@@ -6603,12 +7587,14 @@ class SketchEditorDialog(QDialog):
         parameter_values: Mapping[str, float] | None = None,
         parent: QWidget | None = None,
         surroundings: Surroundings | None = None,
+        *,
+        planes: Sequence[str] = (),
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle(tr("Skizze zeichnen"))
         self.resize(860, 560)
 
-        self.panel = SketchPanel(text, parameter_values, self, surroundings)
+        self.panel = SketchPanel(text, parameter_values, self, surroundings, planes=planes)
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel,
@@ -6673,6 +7659,7 @@ class SketchField(QWidget):
         *,
         required: bool = False,
         empty_hint: str | None = None,
+        planes: Sequence[str] = (),
     ) -> None:
         super().__init__(parent)
         self._text = text
@@ -6681,6 +7668,12 @@ class SketchField(QWidget):
         self._required = required
         self._empty_hint = empty_hint
         self._has_elements = False
+        self.planes = tuple(planes)
+        """Auf welchen Ebenen die Zeichnung liegen darf (``ParamSpec.sketch_planes``)."""
+        self._partner: weakref.ref[SketchField] | None = None
+        """Das Feld, dessen Ebene eine leere Zeichnung hier übernimmt — schwach
+        gehalten: Beide gehören demselben Dialog, und ein starker Verweis
+        zwischen Geschwistern ist ein Ring, den niemand braucht."""
 
         self.summary = QLabel(self)
         self.summary.setWordWrap(True)
@@ -6715,6 +7708,30 @@ class SketchField(QWidget):
         layout.addWidget(self.edit_button)
         self._describe()
 
+    def follow_plane_of(self, partner: SketchField) -> None:
+        """Eine leere Zeichnung hier beginnt auf der Ebene von ``partner``.
+
+        Der obere Umriss eines Übergangs muss auf derselben Ebene liegen wie
+        der untere (``sketch_loft``); öffnete sein Editor auf der Draufsicht,
+        während unten auf der Vorderansicht gezeichnet war, lehnte die
+        Operation danach ab. Ist die Ebene des Partners hier nicht erlaubt
+        (:attr:`planes`), gilt die erste erlaubte.
+        """
+        self._partner = weakref.ref(partner)
+
+    def start_plane(self) -> str:
+        """Worauf eine neue Zeichnung in diesem Feld beginnt."""
+        partner = self._partner() if self._partner is not None else None
+        wanted = ""
+        if partner is not None and partner.text().strip():
+            try:
+                wanted = sketch_from_text(partner.text()).plane
+            except AppError:
+                wanted = ""
+        if self.planes and wanted not in self.planes:
+            return self.planes[0]
+        return wanted or EMPTY.plane
+
     def offer_space(self, go: Callable[[str], None]) -> None:
         """Den Weg in den Zeichenmodus anbieten (Z9).
 
@@ -6743,6 +7760,11 @@ class SketchField(QWidget):
     def ready(self) -> bool:
         """Eine Pflichtzeichnung braucht tatsächlich lesbare, lösbare Elemente."""
         return not self._required or self._has_elements
+
+    @property
+    def has_drawing(self) -> bool:
+        """Ob lesbare, lösbare Elemente im Feld stehen — gleich ob Pflicht."""
+        return self._has_elements
 
     def set_text(self, text: str) -> None:
         self._text = text
@@ -6778,7 +7800,14 @@ class SketchField(QWidget):
         self.summary.setText(f"{len(sketch.elements)} {tr('Elemente')} · {state}")
 
     def _edit(self) -> None:
-        dialog = SketchEditorDialog(self._text, self._params, self, self._surroundings)
+        text = self._text
+        if not text.strip():
+            # Leer beginnt die Zeichnung dort, wo sie hingehört — auf der
+            # erlaubten Ebene oder der des Partnerfelds (:meth:`start_plane`).
+            text = sketch_to_text(replace(EMPTY, plane=self.start_plane()))
+        dialog = SketchEditorDialog(
+            text, self._params, self, self._surroundings, planes=self.planes
+        )
         if dialog.exec() != SketchEditorDialog.DialogCode.Accepted:
             return
         self.set_text(dialog.sketch_text())

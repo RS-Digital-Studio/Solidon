@@ -234,7 +234,9 @@ def _one_loop(segments: list[ProfileSegment]) -> tuple[ProfileSegment, ...]:
         if not matches:
             raise _broken(_("Der Umriss ist nicht geschlossen — ein Ende bleibt frei."))
         if len(matches) > 1:
-            raise _broken(_("Der Umriss verzweigt sich — an einem Punkt treffen sich drei Kanten."))
+            raise _broken(
+                _("Der Umriss verzweigt sich — an einem Punkt treffen sich mehr als zwei Kanten.")
+            )
         index, candidate = matches[0]
         segments.pop(index)
         chain.append(candidate if _joins(tail, candidate.start) else _flipped(candidate))
@@ -361,6 +363,8 @@ def _crosses_exactly(loop: Profile) -> bool | None:
         if segment.kind != "spline":
             continue
         found = Geom2dAPI_InterCurveCurve(curve, EPS_GEOM)
+        if found.NbSegments() > 0:
+            return True
         for index in range(1, found.NbPoints() + 1):
             if not lies_at_an_end(found.Point(index), segment):
                 return True
@@ -368,6 +372,15 @@ def _crosses_exactly(loop: Profile) -> bool | None:
     for index, (first, first_segment) in enumerate(curves):
         for second, second_segment in curves[index + 1 :]:
             found = Geom2dAPI_InterCurveCurve(first, second, EPS_GEOM)
+            # **Zwei Stücke, die aufeinander liegen, kreuzen sich auch** —
+            # nur meldet OpenCASCADE das nicht als Punkt, sondern als
+            # gemeinsames Stück. Eine Linie, die auf sich selbst zurückläuft
+            # (0→10, dann 10→5), ergab so einen Umriss mit einer Spitze ohne
+            # Breite; der Kern baute daraus einen Körper, den seine eigene
+            # Prüfung für ungültig hielt (Durchsicht 22.09.2026). **Aber nur,
+            # wenn das Stück eine Länge hat** (:func:`_share_a_stretch`).
+            if found.NbSegments() > 0 and _share_a_stretch(first_segment, second_segment):
+                return True
             for point_index in range(1, found.NbPoints() + 1):
                 intersection = found.Point(point_index)
                 if not lies_at_an_end(intersection, first_segment) and not lies_at_an_end(
@@ -399,7 +412,76 @@ def _crosses_approximately(loop: Profile) -> bool:
         for other in pieces[index + 1 :]:
             if strictly_crossing(one[0], one[1], other[0], other[1]):
                 return True
+            if _overlapping(one[0], one[1], other[0], other[1]):
+                return True
     return False
+
+
+def _share_a_stretch(first: ProfileSegment, second: ProfileSegment) -> bool:
+    """Ob zwei Stücke, die OpenCASCADE als deckungsgleich meldet, eine Länge teilen.
+
+    **Zwei Bögen desselben Kreises, die nur an einem Ende aneinanderstoßen,
+    meldet** ``Geom2dAPI_InterCurveCurve`` **als gemeinsames Stück** — sobald
+    die Enden im letzten Bit auseinanderliegen. Die Naht eines exakten
+    Zylinders teilt den Rand einer Bohrung genau so in zwei Bögen, und die
+    Flächenkontur einer Platte mit Langloch galt damit als „kreuzt sich
+    selbst" (gemessen 23.09.2026: y = -1,6·10⁻¹⁵ gegen -8,4·10⁻¹⁶ am selben Ende).
+    Geteilt ist erst, was eine Länge über ``EPS_GEOM`` hat: auf einer Geraden
+    über :func:`_overlapping`, auf einem Kreis über die gemeinsamen Winkel.
+    Alles andere — ein Spline dabei — bleibt beim Wort des Kerns.
+    """
+    if first.kind == "line" and second.kind == "line":
+        return _overlapping(first.start, first.end, second.start, second.end)
+    if first.kind != "arc" or second.kind != "arc" or first.via is None or second.via is None:
+        return True
+    one = arc_through(first.start, first.via, first.end)
+    other = arc_through(second.start, second.via, second.end)
+    if one is None or other is None:
+        return True
+    if math.dist(one[0], other[0]) > _JOIN_TOL or abs(one[1] - other[1]) > _JOIN_TOL:
+        return True
+
+    def interval(segment: ProfileSegment, turn: tuple[Point2, float, float]) -> tuple[float, float]:
+        centre, _radius, sweep = turn
+        begin = segment.start if sweep > 0.0 else segment.end
+        return math.atan2(begin[1] - centre[1], begin[0] - centre[0]), abs(sweep)
+
+    low, span = interval(first, one)
+    other_low, other_span = interval(second, other)
+    shift = (other_low - low) % (2.0 * math.pi)
+    shared = 0.0
+    for start in (low + shift, low + shift - 2.0 * math.pi):
+        shared += max(0.0, min(low + span, start + other_span) - max(low, start))
+    return shared * one[1] > EPS_GEOM
+
+
+def _overlapping(a: Point2, b: Point2, c: Point2, d: Point2) -> bool:
+    """Ob zwei Strecken auf derselben Geraden ein Stück gemeinsam haben.
+
+    :func:`strictly_crossing` sieht das nicht — kollinear ist für das
+    Kreuzprodukt „berührt", und Berührung zählt dort nicht. Zwei Stücke, die
+    aufeinander liegen, sind aber eine Spitze ohne Breite im Umriss, keine
+    Berührung. Ein gemeinsamer Endpunkt allein ist kein Stück.
+    """
+    along = (b[0] - a[0], b[1] - a[1])
+    span = along[0] * along[0] + along[1] * along[1]
+    if span <= EPS_GEOM * EPS_GEOM:
+        return False
+
+    def side(point: Point2) -> float:
+        return along[0] * (point[1] - a[1]) - along[1] * (point[0] - a[0])
+
+    # Das Kreuzprodukt durch die Länge ist der Abstand zur Geraden.
+    reach = EPS_GEOM * math.sqrt(span)
+    if abs(side(c)) > reach or abs(side(d)) > reach:
+        return False
+
+    def at(point: Point2) -> float:
+        return (along[0] * (point[0] - a[0]) + along[1] * (point[1] - a[1])) / span
+
+    low, high = sorted((at(c), at(d)))
+    shared = min(high, 1.0) - max(low, 0.0)
+    return shared * math.sqrt(span) > EPS_GEOM
 
 
 def strictly_crossing(a: Point2, b: Point2, c: Point2, d: Point2) -> bool:
@@ -689,18 +771,31 @@ def arc_through(start: Point2, via: Point2, end: Point2) -> tuple[Point2, float,
     return (ux, uy), radius, sweep
 
 
+def arc_sweep(centre: Point2, start: Point2, end: Point2) -> float:
+    """Wie weit ein Bogen vom Anfang zum Ende läuft — gegen den Uhrzeigersinn, im Bogenmaß.
+
+    **Zusammenfallende Enden sind ein Vollkreis, kein Nullbogen.** Mit
+    ``== 0.0`` fing das den Löser-Fall nie: Der Stützpunkt landete auf dem
+    Startpunkt, und der B-Rep-Kern baute einen Bogen ohne Ausdehnung statt
+    eines Kreises.
+
+    **Eine Antwort für alle Leser** — Profil, Ansicht, Zeichenfläche,
+    Zeichnungshülle. Die Zeichenfläche rechnete bis zum 23.09.2026 selbst, in
+    Grad und ohne diese Regel: Ein Bogen, dessen Enden der Löser
+    zusammengeführt hatte, war im Profil ein Kreis und auf dem Blatt
+    unsichtbar und nicht anklickbar.
+    """
+    begin = math.atan2(start[1] - centre[1], start[0] - centre[0])
+    finish = math.atan2(end[1] - centre[1], end[0] - centre[0])
+    sweep = (finish - begin) % (2.0 * math.pi)
+    return 2.0 * math.pi if sweep <= _FULL_CIRCLE_EPS else sweep
+
+
 def _arc_midpoint(centre: Point2, start: Point2, end: Point2) -> Point2:
     """Der Punkt auf halbem Weg des Bogens, gegen den Uhrzeigersinn gerechnet."""
     radius = math.dist(centre, start)
     begin = math.atan2(start[1] - centre[1], start[0] - centre[0])
-    finish = math.atan2(end[1] - centre[1], end[0] - centre[0])
-    sweep = (finish - begin) % (2.0 * math.pi)
-    if sweep <= _FULL_CIRCLE_EPS:
-        # Zusammenfallende Enden sind ein Vollkreis, kein Nullbogen. Mit
-        # `== 0.0` fing das den Löser-Fall nie: der Stützpunkt landete auf
-        # dem Startpunkt, und der B-Rep-Kern baute einen Bogen ohne
-        # Ausdehnung statt eines Kreises.
-        sweep = 2.0 * math.pi
+    sweep = arc_sweep(centre, start, end)
     middle = begin + sweep / 2.0
     return (centre[0] + radius * math.cos(middle), centre[1] + radius * math.sin(middle))
 
@@ -823,15 +918,10 @@ def _flat_curve(element: SketchElement) -> tuple[Point2, ...]:
     if element.kind == "arc":
         centre, start, end = points[0], points[1], points[2]
         radius = math.hypot(start[0] - centre[0], start[1] - centre[1])
-        begin = math.atan2(start[1] - centre[1], start[0] - centre[0])
-        finish = math.atan2(end[1] - centre[1], end[0] - centre[0])
-        sweep = (finish - begin) % (2.0 * math.pi)
-        # Dieselbe Schwelle wie in ``_arc_midpoint`` — zwei Zahlen für die
+        # Dieselbe Antwort wie in ``_arc_midpoint`` — zwei Zahlen für die
         # Frage „ist das ein Vollkreis?" hießen: Der Viewport zeichnete einen
         # Kreis, in den Kern ging ein Bogen ohne Ausdehnung.
-        if sweep <= _FULL_CIRCLE_EPS:
-            sweep = 2.0 * math.pi
-        return _along_arc(centre, start, sweep, radius)
+        return _along_arc(centre, start, arc_sweep(centre, start, end), radius)
     if element.kind == "spline":
         return _along_spline(points)
     return (points[0],)

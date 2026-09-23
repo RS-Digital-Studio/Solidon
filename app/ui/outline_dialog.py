@@ -436,11 +436,22 @@ class OutlineDialog(QDialog):
         self._pending = bool(selected)
         if self._worker is not None and isinstance(self._worker, _PreviewWorker):
             self._worker.requestInterruption()
-        self.state.setText(
-            tr("Vorschau wird berechnet …")
-            if selected
-            else tr("Wählen Sie mindestens eine gültige Kontur.")
-        )
+        if selected:
+            self.state.setText(tr("Vorschau wird berechnet …"))
+        elif self._profiles and all(entry.reason for entry in self._profiles):
+            # **Keine Aufforderung, die sich nicht erfüllen lässt.** Hier stand
+            # „Wählen Sie mindestens eine gültige Kontur." auch dann, wenn es
+            # keine gab: Die Liste bot nichts zum Anhaken, der Knopf blieb aus,
+            # und der Satz verlangte das Unmögliche. Gesagt wird, was ist und
+            # wo es weitergeht — den Grund trägt jede Kontur selbst.
+            self.state.setText(
+                tr(
+                    "Keine Kontur dieser Zeichnung lässt sich extrudieren — der Grund "
+                    "steht an jeder Kontur. Die Zeichnung korrigieren und neu laden."
+                )
+            )
+        else:
+            self.state.setText(tr("Wählen Sie mindestens eine gültige Kontur."))
         self.progress.setRange(0, 0)
         self.progress.setVisible(bool(selected))
         self._timer.start()

@@ -375,6 +375,109 @@ def edge_points(entry: EdgeInfo, deflection: float = DEFLECTION) -> tuple[Vec3, 
     return tuple((point.X(), point.Y(), point.Z()) for point in points)
 
 
+@dataclass(frozen=True, slots=True)
+class LoopPiece:
+    """Ein Stück vom Rand einer exakten Fläche — beschrieben über das, was es ist.
+
+    ``line`` trägt in ``points`` Anfang und Ende; ``circle`` einen Punkt auf
+    dem ganzen Kreis; ``arc`` Anfang und Ende, und der Bogen läuft **gegen den
+    Uhrzeigersinn um** ``axis`` vom Anfang zum Ende; ``curve`` ist alles
+    andere und trägt die abgetastete Kette. Kreis und Bogen führen dazu
+    ``centre``, ``axis`` und ``radius`` aus der Kurve selbst, nicht aus
+    Punkten gerechnet.
+    """
+
+    kind: Literal["line", "arc", "circle", "curve"]
+    points: tuple[Vec3, ...]
+    centre: Vec3 | None = None
+    axis: Vec3 | None = None
+    radius: float = 0.0
+
+
+@dataclass(frozen=True, slots=True)
+class FaceLoop:
+    """Ein geschlossener Rand einer Fläche: außen einer, innen je Loch einer."""
+
+    outer: bool
+    pieces: tuple[LoopPiece, ...]
+
+
+def face_loops(
+    solid: Solid, face_index: int, deflection: float = DEFLECTION
+) -> tuple[FaceLoop, ...]:
+    """Die Ränder der Fläche ``face_index`` — Strecken, Kreise und Bögen exakt.
+
+    Für die Flächenkontur der Skizze (RM-188 P3.4): Am exakten Körper ist der
+    Rand einer Bohrung ein Kreis und keine Kette aus Sehnen, und so soll er in
+    der Zeichnung ankommen — ihr Mittelpunkt ist dann ein Punkt, an dem man
+    eine neue Bohrung ausrichten kann. Was weder Strecke noch Kreis ist, wird
+    nach Abweichung abgetastet (``deflection``, dieselbe Zahl, mit der der
+    Kern tesselliert).
+
+    Die Drähte kommen in der Reihenfolge der Fläche, die Kanten je Draht in
+    Laufrichtung (``BRepTools_WireExplorer``). Außen ist der Draht, den
+    OpenCASCADE als äußeren nennt (``BRepTools.OuterWire``).
+    """
+    require()
+    from OCP.BRepAdaptor import BRepAdaptor_Curve
+    from OCP.BRepTools import BRepTools, BRepTools_WireExplorer
+    from OCP.GCPnts import GCPnts_QuasiUniformDeflection
+    from OCP.GeomAbs import GeomAbs_Circle, GeomAbs_Line
+    from OCP.TopAbs import TopAbs_WIRE
+    from OCP.TopExp import TopExp_Explorer
+    from OCP.TopoDS import TopoDS
+
+    def spot(point: Any) -> Vec3:
+        return (float(point.X()), float(point.Y()), float(point.Z()))
+
+    face = solid.faces()[face_index]
+    outer_wire = BRepTools.OuterWire_s(face)
+    loops: list[FaceLoop] = []
+    wires = TopExp_Explorer(face, TopAbs_WIRE)
+    while wires.More():
+        wire = TopoDS.Wire(wires.Current())
+        pieces: list[LoopPiece] = []
+        edges = BRepTools_WireExplorer(wire, face)
+        while edges.More():
+            curve = BRepAdaptor_Curve(edges.Current())
+            first, last = curve.FirstParameter(), curve.LastParameter()
+            start, end = spot(curve.Value(first)), spot(curve.Value(last))
+            kind = curve.GetType()
+            if kind == GeomAbs_Line:
+                if math.dist(start, end) > EPS_GEOM:
+                    pieces.append(LoopPiece("line", (start, end)))
+            elif kind == GeomAbs_Circle:
+                circle = curve.Circle()
+                direction = circle.Axis().Direction()
+                # Der Parameter eines Kreises läuft gegen den Uhrzeigersinn um
+                # seine Achse — vom ersten zum letzten ist also der Bogen,
+                # gleich in welcher Richtung der Draht die Kante durchläuft.
+                whole = last - first >= 2.0 * math.pi - EPS_GEOM
+                pieces.append(
+                    LoopPiece(
+                        "circle" if whole else "arc",
+                        (start,) if whole else (start, end),
+                        centre=spot(circle.Location()),
+                        axis=(float(direction.X()), float(direction.Y()), float(direction.Z())),
+                        radius=float(circle.Radius()),
+                    )
+                )
+            else:
+                sampler = GCPnts_QuasiUniformDeflection(curve, max(deflection, EPS_GEOM))
+                if sampler.IsDone() and sampler.NbPoints() >= 2:
+                    chain = tuple(
+                        spot(sampler.Value(index)) for index in range(1, sampler.NbPoints() + 1)
+                    )
+                else:
+                    chain = (start, end)
+                pieces.append(LoopPiece("curve", chain))
+            edges.Next()
+        if pieces:
+            loops.append(FaceLoop(outer=bool(wire.IsSame(outer_wire)), pieces=tuple(pieces)))
+        wires.Next()
+    return tuple(loops)
+
+
 def edge_key(entry: EdgeInfo) -> str:
     """Der stabile Verweis auf **eine** Kante (E4, RM-147, §21).
 

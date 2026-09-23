@@ -618,6 +618,36 @@ def boundary_rings(
     return _face_boundary_rings(body, indices)
 
 
+def ring_in_order(ring: Iterable[tuple[int, int]]) -> list[int]:
+    """Die Ecken eines geschlossenen Randrings in Laufrichtung.
+
+    :func:`boundary_rings` liefert jeden Ring als Kantenmenge; wer ihn als Zug
+    braucht — den Sockel unter einem Merkmal, die Ränder eines Rings, die
+    Kontur einer Fläche in der Skizze —, liest ihn hier. Beginnt an der
+    kleinsten Ecke.
+
+    **Eine Stelle für alle Leser** (RM-188 P3.4): Die Reihenfolge stand bis
+    zum 23.09.2026 privat in ``geom.prepare_ops``, und die Flächenkontur der
+    Skizze hätte sie ein zweites Mal gebraucht.
+    """
+    neighbours: dict[int, list[int]] = {}
+    for a, b in ring:
+        neighbours.setdefault(a, []).append(b)
+        neighbours.setdefault(b, []).append(a)
+    if not neighbours:
+        return []
+    first = min(neighbours)
+    ordered = [first]
+    previous, current = -1, first
+    while len(ordered) <= len(neighbours):
+        following = next((value for value in neighbours[current] if value != previous), None)
+        if following is None or following == first:
+            break
+        ordered.append(following)
+        previous, current = current, following
+    return ordered
+
+
 def _face_boundary_rings(
     body: trimesh.Trimesh, indices: NDArray[np.int64]
 ) -> list[frozenset[tuple[int, int]]] | None:

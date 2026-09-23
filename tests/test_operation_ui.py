@@ -4019,6 +4019,88 @@ def test_a_typed_measurement_stretches_the_drawing(qt_app: QApplication) -> None
     )
 
 
+def test_a_drawing_made_after_opening_keeps_the_size_it_was_drawn(
+    qt_app: QApplication,
+) -> None:
+    """Eine neue Zeichnung ist die Ansage, nicht die Vorgabe im Feld (RM-183).
+
+    Gefahren am 22.09.2026 am Fenster, *Zwischen zwei Umrissen aufspannen*:
+    Dialog ohne Zeichnung öffnen, über „Zeichnen …" einen Kreis Ø 30 ziehen —
+    zurück kam Ø 40 um (−2,5 | 0). Die Vorgabe des Schemas (Länge 40) galt dem
+    Dialog als getippte Zahl, weil die Unterscheidung „Aufbau schreibt, danach
+    liest der Dialog" nach dem ersten Durchlauf für immer galt, auch für eine
+    Zeichnung, die erst danach kam. Und das Strecken zielte auf den
+    Schwerpunkt der Punkte statt auf die Mitte des Kreises.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.sketch.serialize import sketch_from_text, sketch_to_text
+    from app.core.types import Sketch, SketchElement
+    from app.ui.op_dialog import OperationDialog
+
+    load_operations()
+    from app.core.registry import REGISTRY
+
+    dialog = OperationDialog(REGISTRY.get("sketch_loft"), {})
+    dialog.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
+    dialog.show()
+    qt_app.processEvents()
+    try:
+        assert dialog._editors["length"].value() == pytest.approx(40.0), "die Vorgabe steht"
+        kreis = Sketch(
+            plane="plane:xy",
+            elements=(SketchElement("circle", ((0.0, 0.0), (15.0, 0.0))),),
+        )
+        dialog._editors["sketch"].set_text(sketch_to_text(kreis))
+        qt_app.processEvents()
+
+        gezeichnet = sketch_from_text(str(dialog.values()["sketch"]))
+        mitte, rand = gezeichnet.elements[0].points
+        assert mitte == pytest.approx((0.0, 0.0)), "der Kreis blieb nicht, wo er gezeichnet wurde"
+        assert rand == pytest.approx((15.0, 0.0)), "der Kreis wurde auf die Vorgabe gestreckt"
+        assert dialog._editors["length"].value() == pytest.approx(30.0, abs=0.01), (
+            "das Feld zeigt jetzt, was gezeichnet ist"
+        )
+    finally:
+        dialog.reject()
+        dialog.deleteLater()
+
+
+def test_a_chosen_but_empty_drawing_holds_the_accept_button(qt_app: QApplication) -> None:
+    """„Gezeichnete Bahn" gewählt und nichts gezeichnet — dann sagt es der Knopf.
+
+    Vorher ließ sich der Dialog übernehmen, und die Absage „Für die Bahn fehlt
+    die Zeichnung" kam als Befund im Prüfbericht, nachdem alles fertig war
+    (RM-183, gefahren am 22.09.2026). Beim Bogen ist die Bahn keine Eingabe,
+    und der Knopf bleibt frei.
+    """
+    from PySide6.QtWidgets import QComboBox
+
+    from app.core.bootstrap import load_operations
+    from app.ui.op_dialog import OperationDialog
+
+    load_operations()
+    from app.core.registry import REGISTRY
+
+    dialog = OperationDialog(REGISTRY.get("sketch_sweep"), {})
+    dialog.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
+    dialog.show()
+    qt_app.processEvents()
+    try:
+        assert dialog._accept_button.isEnabled(), "am Bogen fehlt nichts"
+        along = dialog._editors["along"]
+        assert isinstance(along, QComboBox)
+        along.setCurrentIndex(along.findData("drawn"))
+        qt_app.processEvents()
+
+        assert not dialog._accept_button.isEnabled()
+        assert "Gezeichnete Bahn" in dialog._accept_button.toolTip(), (
+            dialog._accept_button.toolTip()
+        )
+    finally:
+        dialog.reject()
+        dialog.deleteLater()
+
+
 def test_the_shape_stays_locked_while_a_drawing_decides_the_outline(
     qt_app: QApplication,
 ) -> None:

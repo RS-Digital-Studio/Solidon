@@ -12,6 +12,7 @@ Vorzeichenfehler auffällt statt sich zu erklären.
 from __future__ import annotations
 
 import math
+from dataclasses import replace
 
 import pytest
 
@@ -107,7 +108,14 @@ def test_trimming_a_line_that_crosses_nothing_says_so() -> None:
 
 def test_trimming_keeps_the_constraints_of_untouched_elements() -> None:
     """Eine Bedingung auf einem Punkt, den es nicht mehr gibt, wäre ein
-    Absturz beim nächsten Lauf."""
+    Absturz beim nächsten Lauf — und eine Richtung, die das verbliebene Stück
+    weiter hat, gilt weiter.
+
+    Hier stand bis zum 22.09.2026 „die Waagerechte der getrimmten Linie geht
+    mit ihr". Das beschrieb, was der Code tat, nicht was er soll: Das Stück,
+    das bleibt, liegt auf derselben Geraden, und ohne die Bedingung kippt es
+    beim nächsten Zug an seinem Ende.
+    """
     sketch = Sketch(
         plane="plane:xy",
         elements=cross().elements,
@@ -119,12 +127,105 @@ def test_trimming_keeps_the_constraints_of_untouched_elements() -> None:
 
     trimmed = edit.trim(sketch, 0, (-5.0, 0.0))
 
-    kinds = {entry.kind for entry in trimmed.constraints}
-    assert "vertical" in kinds, "die Bedingung der anderen Linie bleibt"
-    assert "horizontal" not in kinds, "die der getrimmten geht mit ihr"
+    assert SketchConstraint("vertical", (2, 3)) in trimmed.constraints, "die andere Linie"
+    assert SketchConstraint("horizontal", (0, 1)) in trimmed.constraints, (
+        "das verbliebene Stück bleibt waagerecht"
+    )
     total = sum(len(element.points) for element in trimmed.elements)
     for entry in trimmed.constraints:
         assert all(target < total for target in entry.targets), "und kein Ziel zeigt ins Leere"
+
+
+def _outline() -> Sketch:
+    """Ein Rechteck aus vier verbundenen Linien, wie der Editor es aus Linien baut."""
+    return Sketch(
+        plane="plane:xy",
+        elements=(
+            SketchElement(kind="line", points=((0.0, 0.0), (10.0, 0.0))),
+            SketchElement(kind="line", points=((10.0, 0.0), (10.0, 10.0))),
+            SketchElement(kind="line", points=((10.0, 10.0), (0.0, 10.0))),
+            SketchElement(kind="line", points=((0.0, 10.0), (0.0, 0.0))),
+        ),
+        constraints=(
+            SketchConstraint("coincident", (1, 2)),
+            SketchConstraint("coincident", (3, 4)),
+            SketchConstraint("coincident", (5, 6)),
+            SketchConstraint("coincident", (7, 0)),
+            SketchConstraint("horizontal", (0, 1)),
+            SketchConstraint("distance", (0, 1), "10"),
+        ),
+    )
+
+
+def test_trimming_a_side_between_two_corners_removes_the_whole_side() -> None:
+    """Die Enden einer Rechteckseite sind selbst Kreuzungen — dort setzen die
+    Nachbarn an. Ein Klick auf die Seite ließ zwei Linien der Länge null
+    stehen, deckungsgleich mit den Ecken (Durchsicht 22.09.2026); gemeint ist
+    in jedem CAD die ganze Seite."""
+    trimmed = edit.trim(_outline(), 0, (5.0, 0.0))
+
+    assert len(trimmed.elements) == 3, "die Seite ist weg, und nichts ohne Länge blieb"
+    for element in trimmed.elements:
+        assert math.dist(*element.points) > 1.0
+    assert trimmed.constraints == (
+        SketchConstraint("coincident", (1, 2)),
+        SketchConstraint("coincident", (3, 4)),
+    ), "die Ecken zwischen den übrigen Seiten halten; Maß und Richtung der Seite fallen mit ihr"
+
+
+def test_trimming_keeps_the_joint_at_the_untouched_end() -> None:
+    """Ein Stück vom Ende einer Linie zu nehmen, riss die Ecke an ihrem
+    anderen Ende auf: Die Deckung dort fiel mit weg, und der nächste Zug zog
+    die Linie vom Nachbarn ab."""
+    sketch = replace(
+        _outline(),
+        elements=(
+            *_outline().elements,
+            SketchElement(kind="line", points=((6.0, -5.0), (6.0, 5.0))),
+        ),
+    )
+
+    trimmed = edit.trim(sketch, 0, (8.0, 0.0))
+
+    bottom = trimmed.elements[0]
+    assert flat(bottom.points) == pytest.approx([0.0, 0.0, 6.0, 0.0])
+    assert SketchConstraint("coincident", (7, 0)) in trimmed.constraints, (
+        "die Ecke am stehen gebliebenen Anfang hält"
+    )
+    assert SketchConstraint("horizontal", (0, 1)) in trimmed.constraints
+    assert not any(entry.kind == "distance" for entry in trimmed.constraints), (
+        "das Maß meinte die alte Länge"
+    )
+    joints = [entry for entry in trimmed.constraints if entry.kind == "coincident"]
+    assert not any(1 in entry.targets for entry in joints), "am Schnittende hängt nichts mehr"
+
+
+def test_extending_keeps_the_joint_at_the_end_that_stays() -> None:
+    """Verlängern bewegt ein Ende; das andere bleibt, und mit ihm seine Deckung.
+
+    Vorher fiel jede Bedingung der Linie weg — die Ecke am festen Ende war
+    danach eine lose Berührung, die der nächste Zug auseinanderzog."""
+    sketch = Sketch(
+        plane="plane:xy",
+        elements=(
+            SketchElement(kind="line", points=((-10.0, 0.0), (0.0, 0.0))),
+            SketchElement(kind="line", points=((0.0, 0.0), (10.0, 0.0))),
+            SketchElement(kind="line", points=((30.0, -10.0), (30.0, 10.0))),
+        ),
+        constraints=(
+            SketchConstraint("coincident", (1, 2)),
+            SketchConstraint("horizontal", (2, 3)),
+            SketchConstraint("distance", (2, 3), "10"),
+        ),
+    )
+
+    grown = edit.extend(sketch, 1, (8.0, 0.0))
+
+    assert flat(grown.elements[1].points) == pytest.approx([0.0, 0.0, 30.0, 0.0])
+    assert grown.constraints == (
+        SketchConstraint("coincident", (1, 2)),
+        SketchConstraint("horizontal", (2, 3)),
+    ), "Deckung und Richtung bleiben, das alte Maß nicht"
 
 
 # --- Verlängern ------------------------------------------------------------------
@@ -936,6 +1037,26 @@ def test_a_hole_grid_refuses_what_is_no_grid() -> None:
         edit.hole_grid_between((0.0, 0.0), (10.0, 10.0), 0, 2, 3.0)
 
 
+def test_a_hole_grid_in_one_line_says_what_is_missing() -> None:
+    """Zwei Klicks in einer Flucht sind nicht „aufeinander".
+
+    Wer für vier Spalten und drei Zeilen senkrecht unter den ersten Klick
+    klickte, las „Die beiden Klicks liegen aufeinander" — sie lagen zwanzig
+    Millimeter auseinander, nur ohne Abstand quer (Durchsicht 22.09.2026).
+    """
+    with pytest.raises(ValidationError) as in_line:
+        edit.hole_grid_between((0.0, 0.0), (0.0, 20.0), 4, 3, 2.0)
+    assert in_line.value.constraint == "grid_in_line"
+    assert "Flucht" in str(in_line.value.detail)
+
+    with pytest.raises(ValidationError) as same_spot:
+        edit.hole_grid_between((5.0, 5.0), (5.0, 5.0), 4, 3, 2.0)
+    assert same_spot.value.constraint != "grid_in_line", "am selben Fleck bleibt es der alte Satz"
+
+    one_column = edit.hole_grid_between((0.0, 0.0), (0.0, 20.0), 1, 3, 2.0)
+    assert len(one_column.elements) == 3, "eine Spalte braucht keinen Abstand quer"
+
+
 @pytest.mark.parametrize("count", [2, 3, 6])
 def test_a_drawn_bolt_circle_stays_regular_under_the_solver(count: int) -> None:
     """Alle Mitten auf dem Teilkreis, gleich weit auseinander, alle Löcher
@@ -971,3 +1092,369 @@ def test_a_bolt_circle_refuses_too_few_or_too_big_holes() -> None:
         edit.bolt_circle_at((0.0, 0.0), (10.0, 0.0), 6, 12.0)
     with pytest.raises(ValidationError):
         edit.bolt_circle_at((4.0, 4.0), (4.0, 4.0), 6, 3.0)
+
+
+@pytest.mark.parametrize(
+    ("value", "written"),
+    [
+        (1234.5678, "1234.5678"),
+        (123.4567, "123.4567"),
+        (0.00005, "0.00005"),
+        (2_000_000.0, "2000000"),
+        (50 * 1.2, "60"),
+        (0.05, "0.05"),
+        (-0.0000001, "0"),
+    ],
+)
+def test_a_written_measure_keeps_its_decimals_and_stays_readable(
+    value: float, written: str
+) -> None:
+    """Ein Maß im Datenformat: sechs Nachkommastellen, nie eine Exponentenzahl.
+
+    ``f"{wert:g}"`` stand hier und hieß sechs *gültige Ziffern*: Ein auf
+    1234,5678 mm gestrecktes Maß kam als 1234,57 an, und unter 10⁻⁴ oder ab
+    einer Million stand ``5e-05`` beziehungsweise ``2e+06`` in der Datei —
+    eine Zahl, die die Grammatik aus §13 nicht liest (Durchsicht 22.09.2026).
+    """
+    from app.core.expressions import evaluate
+
+    assert edit.written_measure(value) == written
+    assert evaluate(edit.written_measure(value), {}) == pytest.approx(round(value, 6), abs=1e-12)
+
+
+def test_a_stretched_drawing_keeps_the_measure_that_was_typed() -> None:
+    """Der Weg, auf dem es der Kunde trifft: Der Dialog streckt die Zeichnung
+    auf die getippte Länge, und das Maß muss danach genau diese Zahl tragen."""
+    drawing = Sketch(
+        plane="plane:xy",
+        elements=(SketchElement(kind="line", points=((0.0, 0.0), (50.0, 0.0))),),
+        constraints=(SketchConstraint("distance", (0, 1), "50"),),
+    )
+
+    bigger, _kept = edit.scaled(drawing, 1234.5678 / 50.0)
+
+    assert bigger.constraints[0].value == "1234.5678"
+
+
+def test_a_stretched_circle_stays_where_it_was_drawn() -> None:
+    """Gestreckt wird um die Mitte der Geometrie, nicht um den Schwerpunkt der Punkte.
+
+    Ein Kreis trägt Mitte und einen Randpunkt; ihr Schwerpunkt liegt auf
+    halbem Radius neben der Mitte. Gemessen am 22.09.2026 im Dialog
+    *Zwischen zwei Umrissen aufspannen*: Kreis Ø 30 um (0 | 0) kam als Ø 40
+    um (−2,5 | 0) zurück — der Körper stand danach neben seiner Zeichnung.
+    """
+    circle = Sketch(
+        plane="plane:xy",
+        elements=(SketchElement(kind="circle", points=((0.0, 0.0), (15.0, 0.0))),),
+    )
+
+    bigger, _kept = edit.scaled(circle, 40.0 / 30.0)
+
+    centre, rim = bigger.elements[0].points
+    assert centre == pytest.approx((0.0, 0.0), abs=1e-12)
+    assert math.dist(centre, rim) == pytest.approx(20.0)
+
+
+def test_a_stretched_arc_keeps_the_middle_of_its_bulge() -> None:
+    """Auch ein Bogen misst an seinem Scheitel und nicht an seinen drei Punkten:
+    Ein Halbkreis über der Achse reicht von y = 0 bis zum Radius, und seine
+    Mitte liegt dazwischen — nicht bei einem Drittel."""
+    arc = Sketch(
+        plane="plane:xy",
+        elements=(
+            SketchElement(kind="arc", points=((0.0, 0.0), (10.0, 0.0), (-10.0, 0.0))),
+            SketchElement(kind="line", points=((-10.0, 0.0), (10.0, 0.0))),
+        ),
+    )
+
+    bigger, _kept = edit.scaled(arc, 2.0)
+
+    centre = bigger.elements[0].points[0]
+    assert centre == pytest.approx((0.0, -5.0), abs=1e-12), (
+        "gestreckt um (0 | 5), die Mitte der Hülle"
+    )
+
+
+# --- Flächenkontur (RM-188 P3.4) ---------------------------------------------------
+
+
+def _plate() -> object:
+    """``plate_holes.stl`` als Szenenobjekt mit seinen erkannten Merkmalen.
+
+    80 × 50 × 8, vier Durchgangsbohrungen Ø 5,2 als 48-Ecke; ``face_2`` ist
+    die Deckfläche bei z = 4, ``face_3`` eine Seite.
+    """
+    from pathlib import Path
+
+    from app.core.geom.mesh import read_mesh
+    from app.core.ingest.loader import normalise
+    from app.core.perceive.features import detect
+    from app.core.types import SceneObject
+
+    data = Path(__file__).parent / "data" / "meshes" / "plate_holes.stl"
+    mesh = normalise(read_mesh(data.read_bytes(), ".stl"), "mm").mesh
+    return SceneObject(id="obj_1", name="Platte", mesh=mesh, features=detect(mesh))
+
+
+def _outline_on(plane: str, objects: list[object]) -> edit.FaceOutline:
+    from app.core.sketch.planes import frame_for_plane
+
+    frame = frame_for_plane(plane, objects)  # type: ignore[arg-type]
+    assert frame is not None, plane
+    return edit.face_outline(Sketch(plane, ()), objects, frame)  # type: ignore[arg-type]
+
+
+def _released(sketch: Sketch) -> Sketch:
+    """Dieselbe Zeichnung, die Hilfslinien als Kontur — wie nach „Hilfslinie" im Editor."""
+    return replace(
+        sketch,
+        elements=tuple(replace(element, construction=False) for element in sketch.elements),
+    )
+
+
+def test_the_outline_of_a_mesh_face_takes_its_rim_and_its_holes() -> None:
+    """Die Deckfläche einer Lochplatte: außen vier Strecken, innen vier Kreise.
+
+    *Projizieren* endete an genau dieser Fläche mit „Diese Ebene schneidet den
+    Körper nicht" — die Zeichenebene liegt auf der Fläche, und ein Schnitt dort
+    trifft nichts (Konzept vollwertiges CAD §6). Die Kreise kommen aus den
+    erkannten Bohrungen; sie liegen um die Sehnenhöhe des 48-Ecks neben dem
+    Netz, und genau das wird als Abweichung genannt.
+    """
+    from app.core.sketch import solve_sketch
+    from app.core.sketch.planes import feature_plane
+    from app.core.sketch.profile import regions_of, signed_area
+
+    plate = _plate()
+    outline = _outline_on(feature_plane("obj_1", "face_2"), [plate])
+
+    kinds = [element.kind for element in outline.sketch.elements]
+    assert sorted(kinds) == ["circle"] * 4 + ["line"] * 4
+    assert all(element.construction for element in outline.sketch.elements), "Hilfsgeometrie"
+    assert (outline.loops, outline.circles, outline.exact) == (5, 4, False)
+    radii = [
+        math.dist(*element.points)
+        for element in outline.sketch.elements
+        if element.kind == "circle"
+    ]
+    assert radii == pytest.approx([2.6] * 4, abs=1e-6)
+    assert outline.deviation == pytest.approx(2.6 * (1.0 - math.cos(math.pi / 48.0)), rel=1e-3)
+    fixed = {constraint.targets[0] for constraint in outline.sketch.constraints}
+    assert fixed == set(range(len(edit.flat_points(outline.sketch)))), "jeder Punkt fest"
+    assert solve_sketch(outline.sketch).free_dof == 0, "die Kontur fehlt keinem Maß"
+
+    (region,) = regions_of(solve_sketch(_released(outline.sketch)))
+    assert len(region.holes) == 4
+    material = abs(signed_area(region)) - sum(abs(signed_area(hole)) for hole in region.holes)
+    assert material == pytest.approx(80.0 * 50.0 - 4.0 * math.pi * 2.6**2, rel=1e-3)
+
+
+def test_the_outline_on_a_parallel_plane_above_the_face_is_the_same_rim() -> None:
+    """Eine Versatzebene über der Fläche bekommt denselben Rand — parallel
+    verschoben ändert sich an den zwei Zahlen der Zeichnung nichts."""
+    from app.core.sketch.planes import feature_plane, offset_plane
+
+    plate = _plate()
+    on_face = _outline_on(feature_plane("obj_1", "face_2"), [plate])
+    above = _outline_on(offset_plane(feature_plane("obj_1", "face_2"), 5.0), [plate])
+
+    assert [element.kind for element in above.sketch.elements] == [
+        element.kind for element in on_face.sketch.elements
+    ]
+    for first, second in zip(above.sketch.elements, on_face.sketch.elements, strict=True):
+        for mine, theirs in zip(first.points, second.points, strict=True):
+            assert mine == pytest.approx(theirs, abs=1e-9)
+
+
+def test_the_outline_of_a_side_face_is_its_rectangle() -> None:
+    from app.core.sketch.planes import feature_plane
+
+    outline = _outline_on(feature_plane("obj_1", "face_3"), [_plate()])
+
+    assert [element.kind for element in outline.sketch.elements] == ["line"] * 4
+    spans = sorted(math.dist(*element.points) for element in outline.sketch.elements)
+    assert spans == pytest.approx([8.0, 8.0, 80.0, 80.0], abs=1e-6)
+
+
+def test_taking_the_outline_twice_adds_nothing() -> None:
+    """Derselbe Rand ein zweites Mal übernommen kommt nicht doppelt — sonst
+    stünden zwei feste Konturen übereinander, und die zweite fiele erst beim
+    Löschen auf."""
+    from app.core.sketch.planes import feature_plane, frame_for_plane
+
+    plate = _plate()
+    plane = feature_plane("obj_1", "face_2")
+    first = _outline_on(plane, [plate])
+    frame = frame_for_plane(plane, [plate])  # type: ignore[list-item]
+    assert frame is not None
+
+    again = edit.face_outline(first.sketch, [plate], frame)  # type: ignore[list-item]
+
+    assert again.loops == 0
+    assert again.sketch == first.sketch
+
+
+def test_a_badly_fitting_feature_makes_no_circle() -> None:
+    """Ein Merkmal, das neben dem Ring liegt, macht keinen Kreis daraus.
+
+    Hier behauptet jede Bohrung 0,2 mm mehr Durchmesser, als das Netz hat —
+    der Kreis läge überall 0,1 mm neben dem Rand, doppelt so weit, wie eine
+    Rundung neben ihren Facetten liegen darf. Der Ring bleibt das 48-Eck.
+    """
+    from dataclasses import replace as changed
+
+    from app.core.sketch.planes import feature_plane
+
+    plate = _plate()
+    wider = {
+        name: changed(feature, params={**feature.params, "diameter": 5.4})
+        if feature.kind == "hole"
+        else feature
+        for name, feature in plate.features.items()  # type: ignore[attr-defined]
+    }
+    plate = changed(plate, features=wider)  # type: ignore[type-var]
+
+    outline = _outline_on(feature_plane("obj_1", "face_2"), [plate])
+
+    assert outline.circles == 0
+    kinds = [element.kind for element in outline.sketch.elements]
+    assert kinds.count("circle") == 0
+    assert kinds.count("line") == 4 + 4 * 48
+
+
+@pytest.mark.parametrize(
+    ("plane", "constraint"),
+    [
+        ("plane:xy", "not_on_a_face"),
+        ("through:0,0,0;1,0,0;0,1,0", "not_on_a_face"),
+        ("tilt:feature:obj_1:face_2:x:30", "tilted_to_face"),
+        ("feature:obj_1:face_99", "unknown_feature"),
+    ],
+)
+def test_the_outline_says_why_it_cannot_be_taken(plane: str, constraint: str) -> None:
+    """Keine Fläche unter der Zeichnung, eine gekippte Ebene, eine verschwundene
+    Fläche — jedes mit eigenem Grund und einem Weg weiter (Regel 17)."""
+    from app.core.sketch.planes import BASE_FRAMES, frame_for_plane
+
+    plate = _plate()
+    frame = frame_for_plane(plane, [plate]) or BASE_FRAMES["plane:xy"]  # type: ignore[list-item]
+
+    with pytest.raises(ValidationError) as caught:
+        edit.face_outline(Sketch(plane, ()), [plate], frame)  # type: ignore[list-item]
+
+    assert caught.value.constraint == constraint
+    assert caught.value.suggestions, "Regel 17"
+
+
+def test_the_outline_of_an_exact_face_keeps_its_circle_and_its_arcs() -> None:
+    """Am exakten Körper kommt der Rand aus den Kurven: eine Bohrung als Kreis,
+    die Rundung einer Ecke als Bogen — und zwar richtig herum, auf der Deck-
+    wie auf der Bodenfläche, deren Rahmen gespiegelt liegt. Geprüft an der
+    Fläche, die der gelöste Umriss einschließt."""
+    from tests.helpers import exact_kernel
+
+    brep = exact_kernel()
+    from app.core.brep.features import features_of
+    from app.core.sketch import solve_sketch
+    from app.core.sketch.planes import feature_plane
+    from app.core.sketch.profile import regions_of, signed_area
+    from app.core.types import SceneObject
+
+    rounded = brep.fillet(brep.box(40.0, 30.0, 8.0), 5.0, "vertical")
+    body = SceneObject(id="obj_1", name="Runde", mesh=rounded, features=features_of(rounded))
+    caps = [
+        name
+        for name, feature in body.features.items()
+        if feature.kind == "face" and abs(feature.params["normal"][2]) > 0.5
+    ]
+    assert len(caps) == 2
+    for name in caps:
+        outline = _outline_on(feature_plane("obj_1", name), [body])
+        kinds = sorted(element.kind for element in outline.sketch.elements)
+        assert kinds == ["arc"] * 4 + ["line"] * 4, name
+        assert outline.exact
+        assert solve_sketch(outline.sketch).free_dof == 0, "ganz feste Bögen sind bestimmt"
+        (region,) = regions_of(solve_sketch(_released(outline.sketch)))
+        assert abs(signed_area(region)) == pytest.approx(40.0 * 30.0 - (4.0 - math.pi) * 25.0)
+
+    drilled = brep.boolean(
+        "difference",
+        [brep.box(40.0, 30.0, 8.0), brep.moved(brep.cylinder(6.0, 20.0), (-10.0, 0.0, -5.0))],
+    )
+    body = SceneObject(id="obj_2", name="Klotz", mesh=drilled, features=features_of(drilled))
+    top = next(
+        name
+        for name, feature in body.features.items()
+        if feature.kind == "face" and feature.params["normal"][2] > 0.5
+    )
+    outline = _outline_on(feature_plane("obj_2", top), [body])
+    (circle,) = [element for element in outline.sketch.elements if element.kind == "circle"]
+    assert math.dist(*circle.points) == pytest.approx(3.0, abs=1e-9), "der Kreis selbst, exakt"
+
+
+def test_projected_edges_are_fixed_and_come_once() -> None:
+    """Projizieren kommt fest wie die Flächenkontur, ohne Punkte auf Geraden
+    und ohne Doppeltes.
+
+    Gemessen an der Lochplatte, Schnitt bei z = 0: vorher 392 freie Strecken
+    (die Außenkante allein 200), „noch 1568 Maße fehlen", und ein zweiter
+    Druck legte dieselben 392 noch einmal darüber. Jetzt 4 + 4 · 48 Strecken,
+    jeder Punkt fest, nichts fehlt, und der zweite Druck sagt, dass sie schon
+    dastehen.
+    """
+    from app.core.sketch import solve_sketch
+
+    plate = _plate()
+    projected = edit.project(Sketch("plane:xy", ()), plate.mesh)  # type: ignore[attr-defined]
+
+    assert len(projected.elements) == 4 + 4 * 48
+    assert all(element.construction for element in projected.elements)
+    fixed = {constraint.targets[0] for constraint in projected.constraints}
+    assert fixed == set(range(len(edit.flat_points(projected)))), "jeder Punkt fest"
+    assert solve_sketch(projected).free_dof == 0
+    with pytest.raises(ValidationError) as caught:
+        edit.project(projected, plate.mesh)  # type: ignore[attr-defined]
+    assert caught.value.constraint == "already_there"
+
+
+def test_the_outline_of_an_exact_plate_with_a_slot_keeps_its_hole() -> None:
+    """Die Deckfläche einer exakten Platte mit Langloch: ein Umriss mit einem Loch.
+
+    Die Naht des rechten Zylinders teilt den Halbkreis in zwei Bögen, deren
+    Enden im letzten Bit auseinanderliegen; die Kreuzungsprüfung hielt sie für
+    ein gemeinsames Stück, und der übernommene Rand ergab nach „Hilfslinie"
+    keinen Umriss (gefunden an der Platte, 23.09.2026). Soll ist die Analytik:
+    40·30 − (12·6 + π·3²), an Deck- und Bodenfläche.
+    """
+    from tests.helpers import exact_kernel
+
+    brep = exact_kernel()
+    from app.core.brep.features import features_of
+    from app.core.sketch import solve_sketch
+    from app.core.sketch.planes import feature_plane
+    from app.core.sketch.profile import regions_of, signed_area
+    from app.core.types import SceneObject
+
+    tool = brep.boolean(
+        "union",
+        [
+            brep.moved(brep.cylinder(6.0, 20.0), (-6.0, 0.0, -5.0)),
+            brep.moved(brep.cylinder(6.0, 20.0), (6.0, 0.0, -5.0)),
+            brep.moved(brep.box(12.0, 6.0, 20.0), (0.0, 0.0, -5.0)),
+        ],
+    )
+    plate = brep.boolean("difference", [brep.box(40.0, 30.0, 8.0), tool])
+    body = SceneObject(id="obj_1", name="Platte", mesh=plate, features=features_of(plate))
+    caps = [
+        name
+        for name, feature in body.features.items()
+        if feature.kind == "face" and abs(feature.params["normal"][2]) > 0.5
+    ]
+    assert len(caps) == 2
+    for name in caps:
+        outline = _outline_on(feature_plane("obj_1", name), [body])
+        (region,) = regions_of(solve_sketch(_released(outline.sketch)))
+        assert len(region.holes) == 1
+        material = abs(signed_area(region)) - abs(signed_area(region.holes[0]))
+        assert material == pytest.approx(40.0 * 30.0 - (12.0 * 6.0 + math.pi * 9.0))

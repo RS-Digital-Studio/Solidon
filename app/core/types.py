@@ -1682,6 +1682,17 @@ class ParamSpec:
     Der Wert reist als ``null`` in der Projektdatei, fehlt im Werkzeugschema
     des Agenten als Pflichtfeld und steht im Dialog als leeres Feld mit einem
     Sondertext am Mindestwert."""
+    sketch_planes: tuple[str, ...] = ()
+    """Auf welchen Ebenen die Zeichnung dieses Skizzenfelds liegen darf.
+
+    Leer heißt: auf jeder. Die erste ist die Vorgabe für eine leere Zeichnung.
+    **Am Parameter und nicht im Editor**, aus demselben Grund wie
+    :attr:`depends_on`: Die Operation weiß, was sie annimmt — die Bahn eines
+    Sweeps steht senkrecht zum Querschnitt, also auf der Vorder- oder
+    Seitenansicht (``brep.profiles.PATH_PLANES``). Ohne diese Angabe öffnete
+    der Editor der Bahn auf der Draufsicht, der Kunde zeichnete dort, und die
+    Operation lehnte ab, nachdem alles fertig war (RM-183, gefahren am
+    22.09.2026)."""
 
 
 @runtime_checkable

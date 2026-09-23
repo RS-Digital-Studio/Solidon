@@ -12,6 +12,7 @@ Kommandozeile, sobald sie deklariert ist (§10).
 from __future__ import annotations
 
 import inspect
+import itertools
 import math
 import os
 import re
@@ -180,8 +181,9 @@ from app.core.scene import fits as fit_checks
 from app.core.scene.cancel import CancelSignal
 from app.core.scene.history import change_for, repair_is_available
 from app.core.scene.project import clear_autosave, discard_recovery, find_recovery
-from app.core.sketch.planes import feature_plane, frame_for_plane, to_world
+from app.core.sketch.planes import feature_plane, frame_for_plane, is_derived_plane, to_world
 from app.core.sketch.profile import SketchCurve, curves_of
+from app.core.sketch.serialize import sketch_from_text
 from app.core.slice import gcode
 from app.core.slice.analysis import slice_body
 from app.core.slice.estimate import support_material
@@ -1641,6 +1643,21 @@ def _has_stroke_param(spec: OperationSpec) -> bool:
     return any(entry.kind == "strokes" for entry in spec.params.spec())
 
 
+def _sketch_planes(op_name: str, field_name: str = "") -> tuple[str, ...]:
+    """Auf welchen Ebenen die Zeichnung dieses Felds liegen darf — leer heißt überall.
+
+    Aus dem Schema (``ParamSpec.sketch_planes``); ohne Operation oder ohne
+    Skizzenfeld gibt es keine Vorgabe.
+    """
+    if not op_name:
+        return ()
+    name = field_name or ""
+    for entry in REGISTRY.get(op_name).params.spec():
+        if entry.kind == "sketch" and (entry.name == name or not name):
+            return tuple(entry.sketch_planes)
+    return ()
+
+
 def _sketch_param(op_name: str) -> str:
     """Wie der Skizzenparameter dieser Operation heißt (§30.1).
 
@@ -2722,6 +2739,7 @@ class MainWindow(QMainWindow):
         self._fill_finish_menu()
         discard = QPushButton(tr("Verwerfen"), self.sketch_bar)
         discard.clicked.connect(weak_slot(self, lambda view: view.finish_sketch(keep=False)))
+        self.sketch_discard_button = discard
         sketch_actions.addWidget(done)
         sketch_actions.addWidget(discard)
         sketch_layout.addLayout(sketch_actions)
@@ -9000,16 +9018,56 @@ class MainWindow(QMainWindow):
             faces=tuple(self._drawable_faces()),
             bodies=tuple(entry.mesh for entry in result.scene.objects.values()) if result else (),
             frame_of=self._plane_frame,
+            objects=tuple(result.scene.objects.values()) if result else (),
         )
+
+    def _chain_sketch_card(self, panel: SketchPanel) -> None:
+        """Der Tabulator läuft durch die Karte: vom Panel zu Hochziehen bis Verwerfen.
+
+        **Qt hängt ein umgehängtes Widget ans Ende der Fensterfolge.** Das Panel
+        kommt erst mit dem Skizzenmodus in die Karte, und nach seinem letzten
+        Knopf ging der Tabulator in die Bedingungsliste, den Objektbaum, die
+        Parameter, den Verlauf, die Ansicht und ihre Knöpfe — achtzehn fremde
+        Halte, bevor *Fertig* kam (Durchsicht Zeichenmodus §6). Hier wird die
+        Folge so gelegt, wie die Karte aussieht: Werkzeuge, Ebene, Raster,
+        Statuszeile, dann die Knöpfe der Leiste darunter. **Die Bedingungsliste
+        kommt danach**: Sie steht in der rechten Spalte, und mitten in der Karte
+        sprang der Tabulator dorthin und wieder zurück.
+
+        **Angeknüpft wird an die Statuszeile, ohne die Fensterfolge
+        abzugehen.** Der erste Bau suchte das letzte Widget des Panels über
+        ``nextInFocusChain`` durch alle 634 Halte des Fensters — und danach
+        waren die Menüs der Leiste tot (Datei, Bearbeiten, Erzeugen, Ansicht,
+        Hilfe: „Internal C++ object already deleted"), sobald das Panel
+        gelöscht wurde. Die Statuszeile ist das letzte Glied der Karte, das den
+        Fokus nimmt (ihr Verweis ist per Tastatur erreichbar); innerhalb des
+        Panels bleibt die Folge, die sein Aufbau legt.
+        """
+        chain = [
+            panel.status,
+            self.sketch_pull_button,
+            self.sketch_cut_button,
+            self.sketch_finish_button,
+            self.sketch_discard_button,
+            panel.constraint_list,
+        ]
+        for first, second in itertools.pairwise(chain):
+            QWidget.setTabOrder(first, second)
 
     def _plane_frame(self, plane: str) -> PlaneFrame | None:
         """Der Rahmen zu einer Ebenenangabe, gegen die aktuelle Szene.
 
         Fürs Projizieren auf einer Flächenebene (Gesamtreview D-9): Die
-        Zeichenfläche kennt die Szene nicht, hier steht sie."""
+        Zeichenfläche kennt die Szene nicht, hier steht sie.
+
+        **Mit den Projektparametern** (§30.1, RM-188 P3.2): Eine Versatzebene
+        ``offset:…:@wand`` löst sich ohne den Wert nicht auf. Ohne ihn stand
+        eine solche Skizze im Zeichenmodus nirgends — kein Rahmen, keine
+        Zeichnung, kein Klick auf der Ebene. Dieselben Werte, mit denen die
+        Zeichenfläche ihre Maße rechnet."""
         result = self.session.last_result
         objects = result.scene.objects.values() if result else ()
-        return frame_for_plane(plane, objects)
+        return frame_for_plane(plane, objects, self._parameter_values())
 
     def start_sketch(
         self,
@@ -9052,9 +9110,21 @@ class MainWindow(QMainWindow):
         """
         if self._sketch_panel is not None or not self._begin_from_the_start_screen():
             return
-        plane = plane or (self._selected_face_plane() if not text.strip() else "")
+        # **Die Ebenen, die das Feld annimmt** (``ParamSpec.sketch_planes``,
+        # RM-183): Die Bahn eines Sweeps liegt auf der Vorder- oder
+        # Seitenansicht. Mit dieser Angabe beginnt eine leere Bahn dort, das
+        # Ebenenfeld bietet nur diese an, und die Karten mit allen Ebenen
+        # bleiben weg — sie böten die Draufsicht an, die die Operation ablehnt.
+        planes = _sketch_planes(op_name, field_name)
+        if planes:
+            if not text.strip() and plane not in planes:
+                plane = planes[0]
+        else:
+            plane = plane or (self._selected_face_plane() if not text.strip() else "")
         show_plane_picker = not text.strip() and not plane
-        panel = SketchPanel(text, self._parameter_values(), self, self._sketch_surroundings())
+        panel = SketchPanel(
+            text, self._parameter_values(), self, self._sketch_surroundings(), planes=planes
+        )
         if plane and not panel.choose_plane(plane):
             self.announce(tr("Diese Fläche steht nicht mehr zur Verfügung."))
         self._sketch_panel = panel
@@ -9114,6 +9184,7 @@ class MainWindow(QMainWindow):
         self.right.setTabVisible(self.right.indexOf(self._constraints_room), True)
         self.right.setCurrentWidget(self._constraints_room)
         self._bottom_layout.insertWidget(0, panel)
+        self._chain_sketch_card(panel)
         panel.sketchChanged.connect(self._redraw_sketch)
         panel.viewFitted.connect(self._fit_sketch_view)
         # **Die dritte Kante: Kamera → Raster.** Feld → Bild läuft über
@@ -9701,7 +9772,10 @@ class MainWindow(QMainWindow):
             line = tr("Blick aus der {view} · Zeichenebene: {place}").format(
                 view=plane_where(panel.canvas.view_plane), place=place
             )
-        elif drawing_plane.startswith("feature:"):
+        elif drawing_plane.startswith("feature:") or is_derived_plane(drawing_plane):
+            # Auch eine abgeleitete Ebene nennt die Zeile: „Ebene 20 mm über
+            # der Draufsicht (XY)" steht im Feld darüber abgeschnitten, und
+            # wie weit über dem Bett gezeichnet wird, soll man nicht raten.
             line = tr("Zeichenebene: {place}").format(place=place)
         offer = self._sketch_pull_offer()
         action = ""
@@ -15591,8 +15665,21 @@ class MainWindow(QMainWindow):
         Der Knopf sagt das vorher; sein Hinweis nennt beides, was er bringt
         und was er kostet.
         """
+        # **Eine leere zweite Zeichnung beginnt auf der Ebene der ersten**
+        # (RM-183) — der obere Umriss eines Übergangs muss dort liegen, wo der
+        # untere liegt. Gelesen, bevor der Dialog zugeht.
+        plane = ""
+        main = dialog._editors.get("sketch") if isinstance(dialog, OperationDialog) else None
+        secondary = field_name and field_name != "sketch" and not text.strip()
+        if secondary and isinstance(main, SketchField):
+            partner = main.text()
+            if partner.strip():
+                try:
+                    plane = sketch_from_text(partner).plane
+                except AppError:
+                    plane = ""
         dialog.reject()
-        self.start_sketch(op_name, text=text, step=op_id, field_name=field_name)
+        self.start_sketch(op_name, text=text, plane=plane, step=op_id, field_name=field_name)
 
     def edit_operation(
         self, op_id: int, field: str = "", given: Mapping[str, Any] | None = None

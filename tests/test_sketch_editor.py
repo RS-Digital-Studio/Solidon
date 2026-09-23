@@ -4711,10 +4711,13 @@ def test_selecting_a_body_updates_the_visible_cut_button_immediately(
         window.deleteLater()
 
 
-def test_the_free_sketch_starts_with_three_plane_cards_and_a_quiet_corner(
+def test_the_free_sketch_starts_with_the_plane_cards_and_a_quiet_corner(
     qt_app: QApplication,
 ) -> None:
     """Die erste Entscheidung steht im Bild; die allgemeine Leiste tritt zurück.
+
+    **Vier Karten seit dem 22.09.2026:** die drei Grundebenen und „Neue
+    Ebene …" (RM-188 P3.3) — derselbe Dialog wie im Ebenenfeld.
 
     **Und die Auswahl-Kapsel schweigt, solange nichts da ist.** Sie stand hier
     bis zum 30.08.2026 als „Keine Auswahl" über dem leeren Blatt — eine
@@ -4735,6 +4738,7 @@ def test_the_free_sketch_starts_with_three_plane_cards_and_a_quiet_corner(
             "plane:xy",
             "plane:xz",
             "plane:yz",
+            "plane:new",
         }
         assert window.toolbar.isHidden()
         assert window.viewport.sketch_selection.text() == "", (
@@ -7655,5 +7659,1000 @@ def test_finish_lists_the_kinds_and_says_why_cutting_is_locked(qt_app: QApplicat
     finally:
         if window._sketch_panel is not None:
             window.finish_sketch(keep=False)
+        window.close()
+        window.deleteLater()
+
+
+# --- Jeder Schritt sagt, was der nächste Klick tut (Durchsicht 22.09.2026) --------
+
+
+#: Wie viele Klicks jedes Zeichenwerkzeug nimmt, bevor sein Element steht.
+_CLICKS_PER_TOOL: dict[str, int] = {
+    "point": 1,
+    "line": 2,
+    "rectangle": 2,
+    "circle": 2,
+    "arc": 3,
+    "spline": 3,
+    "polygon": 2,
+    "slot": 2,
+    "bolt_circle": 2,
+    "hole_grid": 2,
+    "trim": 1,
+    "extend": 1,
+    "fillet": 1,
+    "chamfer": 1,
+}
+
+
+def test_every_drawing_tool_says_what_every_click_does(qt_app: QApplication) -> None:
+    """Die Website verspricht: „Jedes Werkzeug sagt, was der nächste Klick bewirkt."
+
+    Vieleck und Langloch hatten keinen Zweig in ``drawing_hint``: Die Zeile
+    blieb vor und nach dem ersten Klick leer, der Satz stand nur im Tooltip am
+    Knopf. Geprüft wird jedes Werkzeug der Leiste in jedem Schritt vor dem
+    letzten Klick — ein neues Werkzeug ohne Satz wird hier rot.
+    """
+    panel = SketchPanel()
+    try:
+        drawing_tools = {name for name in panel._tool_buttons if name != "select"}
+        assert drawing_tools == set(_CLICKS_PER_TOOL), "jedes Werkzeug der Leiste ist hier gezählt"
+        canvas = panel.canvas
+        for tool, clicks in _CLICKS_PER_TOOL.items():
+            canvas.set_sketch(replace(canvas.sketch, elements=(), constraints=()))
+            panel.choose_tool(tool)
+            assert canvas.drawing_hint(), f"{tool}: vor dem ersten Klick steht nichts"
+            for step in range(1, clicks):
+                canvas.place_on_plane((13.0 * step, 7.0 * step))
+                assert canvas.drawing_hint(), f"{tool}: nach Klick {step} steht nichts"
+                assert canvas.status_text(), f"{tool}: und die Zeile ist leer"
+    finally:
+        panel.close()
+
+
+def test_the_state_stays_beside_a_tool_hint(qt_app: QApplication) -> None:
+    """Mit einem Zeichenwerkzeug in der Hand sagt die Zeile, was der nächste
+    Klick tut — und ob der Umriss schließt, stand dann nirgends.
+
+    Die Website verspricht „unten steht jederzeit, was noch frei ist". Rechts
+    neben dem Hinweis steht deshalb die Kurzform; nennt die Zeile den Zustand
+    selbst, bleibt sie weg, damit er nicht zweimal dasteht.
+    """
+    panel = SketchPanel()
+    try:
+        panel.canvas.insert_shape(shapes.rectangle(40.0, 20.0))
+        panel.choose_tool("line")
+
+        assert panel.status.text().startswith("Linie:"), panel.status.text()
+        assert panel.state.isVisibleTo(panel)
+        assert panel.state.text() == "Geschlossen · bestimmt", panel.state.text()
+
+        # Eine lose Linie daneben: Der Umriss ist nicht mehr zu, und drei
+        # Maße fehlen der Linie — genau das, was man beim Zeichnen sehen will.
+        panel.canvas.place_on_plane((100.0, 100.0))
+        panel.canvas.place_on_plane((120.0, 100.0))
+        assert "Linie" in panel.status.text()
+        assert panel.state.text() == "Noch offen · noch 3 Maße fehlen", panel.state.text()
+
+        panel.drop_tool()
+        panel.drop_tool()
+        assert panel.status.text().startswith("Noch offen · Noch 3 Maße fehlen"), (
+            "die Zeile nennt den Zustand selbst"
+        )
+        assert not panel.state.isVisibleTo(panel), "dann steht er nicht ein zweites Mal da"
+    finally:
+        panel.close()
+
+
+# --- Eine eigene Zeichenebene: „Neue Ebene …" (RM-188 P3.2, P3.3) ------------------
+
+
+def test_new_plane_is_an_entry_of_the_plane_field_and_not_a_menu(qt_app: QApplication) -> None:
+    """Die Versatzebene gehört der Skizze (Konzept-Entscheidung 6) und entsteht
+    dort, wo man die Ebene wählt — der letzte Eintrag des Ebenenfelds, auch
+    wenn Flächen dazukommen. Kein Menüeintrag, keine neue Leiste."""
+    from app.ui.sketch_editor import NEW_PLANE
+
+    panel = SketchPanel()
+    try:
+        values = [panel.plane_choice.itemData(i) for i in range(panel.plane_choice.count())]
+        assert values[-1] == NEW_PLANE
+        panel.offer_faces((("obj_1:face_1", "Fläche an Platte", (0.0, 0.0, 1.0)),))
+        values = [panel.plane_choice.itemData(i) for i in range(panel.plane_choice.count())]
+        assert values[-2:] == ["feature:obj_1:face_1", NEW_PLANE]
+        assert panel.canvas.sketch.plane == "plane:xy", "das Umbauen hat nichts gewählt"
+        note = panel.plane_choice.itemData(len(values) - 1, Qt.ItemDataRole.ToolTipRole)
+        assert "versetzt" in str(note)
+    finally:
+        panel.close()
+
+
+def test_a_new_offset_plane_becomes_the_drawing_plane_in_one_undo_step(
+    qt_app: QApplication,
+) -> None:
+    """Parallel versetzt, zehn Millimeter über der Draufsicht: die Vorgabe.
+
+    Das Feld zeigt die neue Ebene mit Namen, die Achsen bleiben X und Y, und
+    ein Strg+Z nimmt genau diesen Wechsel zurück — samt Feld, das vorher auf
+    der neuen Ebene stehen blieb, während die Skizze wieder auf XY lag.
+    """
+    panel = SketchPanel()
+    changed: list[bool] = []
+    panel.planeChanged.connect(lambda: changed.append(True))
+    try:
+        dialog = panel.open_new_plane()
+        assert dialog.chosen_kind() == "offset"
+        assert dialog.plane() == "offset:plane:xy:10"
+
+        dialog.accept()
+
+        assert panel.canvas.sketch.plane == "offset:plane:xy:10"
+        assert panel.plane_choice.currentData() == "offset:plane:xy:10"
+        assert "über der Draufsicht (XY)" in panel.plane_choice.currentText()
+        assert panel.canvas.axis_names() == ("X", "Y"), "versetzt behält die Achsen"
+        assert changed, "die Ansicht erfährt es"
+
+        changed.clear()
+        panel.canvas.undo()
+        assert panel.canvas.sketch.plane == "plane:xy"
+        assert panel.plane_choice.currentData() == "plane:xy", "das Feld folgt dem Rückgängig"
+        assert changed, "und die Ansicht auch — sonst landen Klicks auf der alten Ebene"
+    finally:
+        panel.close()
+
+
+def test_the_new_plane_is_previewed_and_cancel_puts_everything_back(
+    qt_app: QApplication,
+) -> None:
+    """Die Vorschau: Solange der Dialog steht, liegt die Skizze schon auf der
+    vorgeschlagenen Ebene — die Ansicht zeigt, wo sie liegt. *Abbrechen* stellt
+    den Stand davor her, ohne einen Schritt im Rückgängig zu hinterlassen."""
+    panel = SketchPanel()
+    try:
+        dialog = panel.open_new_plane()
+        dialog.distance.set_value(25.0)
+        assert panel.canvas.sketch.plane == "offset:plane:xy:25"
+
+        dialog.reject()
+
+        assert panel.canvas.sketch.plane == "plane:xy"
+        assert not panel.canvas._undo, "eine Vorschau ist keine Änderung"
+    finally:
+        panel.close()
+
+
+def test_a_tilted_and_a_three_point_plane_are_written_as_the_contract_says(
+    qt_app: QApplication,
+) -> None:
+    """Die drei Arten schreiben die Zeichenkette aus §9 — und drei Punkte auf
+    einer Geraden sperren den Knopf mit einem Satz, statt eine Ebene zu raten."""
+    panel = SketchPanel()
+    try:
+        dialog = panel.open_new_plane()
+        dialog.choose_kind("tilt")
+        dialog.angle.set_value(30.0)
+        assert dialog.plane() == "tilt:plane:xy:x:30"
+        assert panel.canvas.layer_note().startswith("Diese Ebene ist geneigt")
+        assert panel.canvas.axis_names() == ("", ""), "gekippt stimmen X und Y nicht mehr"
+
+        dialog.choose_kind("through")
+        assert dialog.anchored.isVisibleTo(dialog), "der Hinweis auf die fehlende Körperbindung"
+        dialog.points[2][0].set_value_mm(20.0)
+        dialog.points[2][1].set_value_mm(0.0)
+        assert not dialog.accept_button.isEnabled()
+        assert "Geraden" in dialog.problem.text()
+        dialog.accept()
+        assert panel._plane_dialog is dialog, "ein gesperrter Knopf übernimmt auch direkt nichts"
+
+        dialog.points[2][1].set_value_mm(10.0)
+        dialog.accept()
+        assert panel.canvas.sketch.plane.startswith("through:0.0,0.0,0.0;10.0,0.0,0.0;20.0,10.0")
+    finally:
+        panel.close()
+
+
+def test_a_new_plane_may_stand_at_a_project_parameter(qt_app: QApplication) -> None:
+    """Abstand und Winkel dürfen Maßausdrücke sein (§13) — und ein Name, den
+    es nicht gibt, sperrt den Knopf, statt eine Ebene auf Höhe null zu legen."""
+    panel = SketchPanel(parameter_values={"wand": 6.0})
+    try:
+        dialog = panel.open_new_plane()
+        dialog.distance.set_value("=@wand * 2")
+        assert dialog.plane() == "offset:plane:xy:=@wand * 2"
+        assert dialog.accept_button.isEnabled()
+
+        dialog.distance.set_value("=@fehlt")
+        assert not dialog.accept_button.isEnabled()
+        assert dialog.problem.text()
+    finally:
+        panel.close()
+
+
+def test_a_derived_plane_survives_the_first_click_that_snaps_the_view(
+    qt_app: QApplication,
+) -> None:
+    """Wie bei einer gewählten Fläche: Die Kamera steht senkrecht auf der
+    neuen Ebene, der erste Klick rastet die Ansicht auf die parallele
+    Hauptebene ein — und das tauschte die Versatzebene gegen die Draufsicht
+    auf Höhe null."""
+    panel = SketchPanel()
+    try:
+        panel.open_new_plane().accept()
+
+        panel.reflect_camera_view("plane:xy")
+        assert panel.canvas.sketch.plane == "offset:plane:xy:10", "parallel: die Ebene bleibt"
+
+        panel.reflect_camera_view("plane:xz")
+        assert panel.canvas.sketch.plane == "plane:xz", "ein anderer Blick wechselt weiter"
+    finally:
+        panel.close()
+
+
+def test_a_drawing_moves_with_an_explicitly_chosen_new_plane(qt_app: QApplication) -> None:
+    """Nach dem ersten Strich wechselt das Feld nur den Blick. Eine Ebene aus
+    dem Dialog ist dagegen ausdrücklich die Zeichenebene: Die Zeichnung zieht
+    mit, ihre Zahlen bleiben, und der Dialog sagt das vorher."""
+    panel = SketchPanel()
+    try:
+        panel.canvas.insert_shape(shapes.rectangle(40.0, 20.0))
+        before = panel.canvas.sketch.elements
+        steps = len(panel.canvas._undo)
+
+        dialog = panel.open_new_plane()
+        assert dialog.moving.isVisibleTo(dialog)
+        dialog.distance.set_value(5.0)
+        dialog.accept()
+
+        assert panel.canvas.sketch.plane == "offset:plane:xy:5"
+        assert panel.canvas.sketch.elements == before, "die Zahlen der Zeichnung bleiben"
+        assert len(panel.canvas._undo) == steps + 1, "ein Schritt, nicht einer je Vorschau"
+        panel.canvas.undo()
+        assert panel.canvas.sketch.plane == "plane:xy"
+    finally:
+        panel.close()
+
+
+def test_projecting_on_an_offset_plane_cuts_at_its_height(qt_app: QApplication) -> None:
+    """Eine Versatzebene schneidet dort, wo sie liegt (RM-188 P3.2).
+
+    Sie fiel auf den Weg der Grundebenen, und ``edit.project`` nahm die
+    XY-Ebene: Der Körper hier beginnt bei z = 2, auf Höhe null gab es nichts
+    zu schneiden, und die Zeile sagte „schneidet den Körper nicht" über eine
+    Ebene fünf Millimeter hoch, die ihn sehr wohl schneidet.
+    """
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+
+    body = trimesh.creation.box(extents=(20.0, 10.0, 8.0))
+    body.apply_translation((0.0, 0.0, 6.0))
+    canvas = SketchCanvas()
+    canvas.set_plane("offset:plane:xy:5")
+    canvas.offer_bodies([MeshData.of(body)])
+
+    canvas.project_bodies()
+
+    assert canvas.sketch.elements, canvas.status_text()
+    spans = [
+        abs(value)
+        for element in canvas.sketch.elements
+        for point in element.points
+        for value in point
+    ]
+    assert max(spans) == pytest.approx(10.0, abs=1e-6), "der Schnitt ist das 20 x 10-Rechteck"
+
+
+def test_a_sketch_opened_on_a_derived_plane_shows_it_in_the_field(qt_app: QApplication) -> None:
+    """Eine Skizze aus dem Verlauf auf einer Versatzebene stand im Feld als
+    „Draufsicht" — und eine leere verlor ihre Ebene an die Draufsicht, sobald
+    das Feld umgebaut wurde."""
+    text = sketch_to_text(replace(shapes.rectangle(40.0, 20.0), plane="offset:plane:xz:-7.5"))
+    panel = SketchPanel(text)
+    try:
+        assert panel.plane_choice.currentData() == "offset:plane:xz:-7.5"
+        assert "unter der Vorderansicht (XZ)" in panel.plane_choice.currentText()
+        panel.offer_faces(())
+        assert panel.canvas.sketch.plane == "offset:plane:xz:-7.5"
+        assert panel.canvas.axis_names() == ("X", "Z")
+    finally:
+        panel.close()
+
+    empty = sketch_to_text(
+        replace(
+            shapes.rectangle(40.0, 20.0), plane="offset:plane:xy:3", elements=(), constraints=()
+        )
+    )
+    panel = SketchPanel(empty)
+    try:
+        panel.offer_faces(())
+        assert panel.canvas.sketch.plane == "offset:plane:xy:3"
+    finally:
+        panel.close()
+
+
+def test_the_window_draws_on_a_new_plane_from_the_card_to_the_click(qt_app: QApplication) -> None:
+    """Der ganze Weg im Fenster (RM-188 P3.3): die vierte Karte, der Dialog, die
+    Vorschau, die Ebene — und der Klick landet auf ihr.
+
+    Gemessen wird am Rahmen, den die Ansicht zum Treffen der Klicks benutzt
+    (``Viewport._sketch_frame``), nicht am Namen der Ebene: Ein Name, der
+    stimmt, und ein Rahmen, der auf Höhe null liegen bleibt, war der Fehler,
+    den ein Rückgängig vorher erzeugte.
+    """
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window.start_sketch("")
+        panel = window._sketch_panel
+        assert panel is not None
+
+        window.viewport.plane_picker._buttons["plane:new"].click()
+        dialog = panel._plane_dialog
+        assert dialog is not None, "die vierte Karte öffnet den Dialog"
+        dialog.distance.set_value(20.0)
+        assert window._sketch_frame() is not None
+        assert window._sketch_frame().origin[2] == pytest.approx(20.0), "die Vorschau im Bild"
+
+        dialog.accept()
+
+        assert panel.canvas.sketch.plane == "offset:plane:xy:20"
+        assert window.viewport._sketch_frame is not None
+        assert window.viewport._sketch_frame.origin[2] == pytest.approx(20.0)
+        assert window.viewport.plane_picker.isHidden(), "die Frage nach der Ebene ist beantwortet"
+        assert "Ebene 20" in window._sketch_hint.text(), window._sketch_hint.text()
+
+        panel.canvas.undo()
+        assert window.viewport._sketch_frame is not None
+        assert window.viewport._sketch_frame.origin[2] == pytest.approx(0.0), (
+            "nach dem Rückgängig treffen die Klicks wieder die Draufsicht"
+        )
+    finally:
+        window.finish_sketch(keep=False)
+        window.close()
+        window.deleteLater()
+
+
+def test_the_window_resolves_a_plane_at_a_project_parameter(qt_app: QApplication) -> None:
+    """Eine Versatzebene an ``@wand`` stand im Zeichenmodus nirgends (RM-188 P3.2).
+
+    ``MainWindow._plane_frame`` reichte nur die Körper weiter, und ohne den
+    Wert von ``wand`` löst sich die Ebene nicht auf: kein Rahmen, keine
+    Zeichnung, kein Klick. Jetzt rechnet sie mit denselben Werten wie die
+    Maße der Zeichnung.
+    """
+    from app.core.types import Parameter
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window.session.project.document.parameters["wand"] = Parameter(
+            name="wand", value=6.0, unit="mm"
+        )
+        frame = window._plane_frame("offset:plane:xy:=@wand * 2")
+        assert frame is not None
+        assert frame.origin[2] == pytest.approx(12.0)
+    finally:
+        window.close()
+        window.deleteLater()
+
+
+def test_undo_of_a_plane_choice_moves_field_and_click_plane_back(qt_app: QApplication) -> None:
+    """Eine Ebenenwahl ist ein Schritt im Rückgängig — und nahm ihn jemand
+    zurück, lag die Skizze wieder auf der Draufsicht, das Feld zeigte weiter
+    die Vorderansicht, und die Ansicht ließ Klicks auf der Vorderansicht
+    landen (Durchsicht 22.09.2026). Drei Stellen, eine Wahrheit."""
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window.start_sketch("")
+        panel = window._sketch_panel
+        assert panel is not None
+        panel.choose_plane("plane:xz")
+        assert window.viewport._sketch_frame is not None
+        assert window.viewport._sketch_frame.normal == pytest.approx((0.0, 1.0, 0.0))
+
+        panel.canvas.undo()
+
+        assert panel.canvas.sketch.plane == "plane:xy"
+        assert panel.plane_choice.currentData() == "plane:xy", "das Feld folgt"
+        assert window.viewport._sketch_frame.normal == pytest.approx((0.0, 0.0, 1.0)), (
+            "und die Klicks landen wieder auf der Draufsicht"
+        )
+
+        panel.canvas.redo()
+        assert panel.plane_choice.currentData() == "plane:xz"
+        assert window.viewport._sketch_frame.normal == pytest.approx((0.0, 1.0, 0.0))
+    finally:
+        window.finish_sketch(keep=False)
+        window.close()
+        window.deleteLater()
+
+
+# --- RM-183: Führen und Überblenden mit Zeichnung, am Fenster gefahren -----------------
+
+
+def _draw_in_the_dialog(monkeypatch: pytest.MonkeyPatch, *drawings: object) -> list[str]:
+    """``SketchEditorDialog.exec`` durch das Zeichnen ersetzen, das der Kunde täte.
+
+    Der Dialog ist modal und hielte die Suite offscreen an; ersetzt wird nur
+    die Schleife, nicht der Dialog — gezeichnet wird im echten Panel, über
+    dieselben Methoden wie die Maus. Zurück kommt, auf welcher Ebene jeder
+    Editor öffnete und was sein Ebenenfeld anbot.
+    """
+    from PySide6.QtWidgets import QDialog
+
+    from app.ui import sketch_editor
+
+    queue = list(drawings)
+    seen: list[str] = []
+
+    def drawn(self: SketchEditorDialog) -> int:
+        offered = [
+            str(self.panel.plane_choice.itemData(index))
+            for index in range(self.panel.plane_choice.count())
+        ]
+        seen.append(f"{self.canvas.sketch.plane} {offered}")
+        draw = queue.pop(0)
+        draw(self.panel)  # type: ignore[operator]
+        return QDialog.DialogCode.Accepted
+
+    monkeypatch.setattr(sketch_editor.SketchEditorDialog, "exec", drawn)
+    return seen
+
+
+def _circle(radius: float) -> object:
+    def draw(panel: SketchPanel) -> None:
+        panel.choose_tool("circle")
+        panel.canvas.place_on_plane((0.0, 0.0))
+        panel.canvas.place_on_plane((radius, 0.0))
+        panel.choose_tool("select")
+
+    return draw
+
+
+def _square(side: float) -> object:
+    def draw(panel: SketchPanel) -> None:
+        panel.choose_tool("rectangle")
+        panel.canvas.place_on_plane((-side / 2.0, -side / 2.0))
+        panel.canvas.place_on_plane((side / 2.0, side / 2.0))
+        panel.choose_tool("select")
+
+    return draw
+
+
+def _up_and_over(panel: SketchPanel) -> None:
+    """Die Bahn, wie man sie zeichnet: vom Anfang senkrecht nach oben, dann zur Seite."""
+    panel.choose_tool("line")
+    for point in ((0.0, 0.0), (0.0, 30.0), (20.0, 30.0)):
+        panel.canvas.place_on_plane(point)
+    panel.drop_tool()
+    panel.drop_tool()
+
+
+def _run_with_drawings(
+    window: object, op: str, switch: tuple[str, str], field: str
+) -> tuple[object, object]:
+    """Operation öffnen, auf „gezeichnet" stellen, beide Zeichnungen anlegen, übernehmen."""
+    from PySide6.QtWidgets import QComboBox
+
+    window.run_operation(REGISTRY.get(op))  # type: ignore[attr-defined]
+    dialog = window._op_dialog  # type: ignore[attr-defined]
+    assert dialog is not None
+    combo = dialog._editors[switch[0]]
+    assert isinstance(combo, QComboBox)
+    combo.setCurrentIndex(combo.findData(switch[1]))
+    QApplication.processEvents()
+    second = dialog._editors[field]
+    assert second.isVisibleTo(dialog), (
+        f"„{switch[1]}“ gewählt, und das Feld zum Zeichnen steht hinter der Klappe"
+    )
+    dialog._editors["sketch"].edit_button.click()
+    second.edit_button.click()
+    dialog.accept()
+    assert window.session.wait_for_idle()  # type: ignore[attr-defined]
+    return dialog, window.session.last_result  # type: ignore[attr-defined]
+
+
+def test_a_pipe_bend_along_a_drawn_path_is_built_from_the_window(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-183, erster Fall: *Entlang eines Bogens führen* mit gezeichneter Bahn.
+
+    Gefahren am 22.09.2026, und die Operation endete mit „Die Bahn muss
+    senkrecht zum Querschnitt liegen": Der Editor der Bahn öffnete auf der
+    Draufsicht, dort zeichnet man „nach oben" in Y — waagerecht zum Querschnitt.
+    Dazu stand das Feld hinter „Weitere Einstellungen", nachdem man „gezeichnet"
+    gewählt hatte. Jetzt beginnt die Bahn auf der Vorderansicht, das Feld bietet
+    nur Vorder- und Seitenansicht an, und das Rohr entsteht.
+
+    Der Sollwert ist die Rechnung: Querschnitt π·4² mal Bahnlänge 30 + 20 — die
+    Gehrung an der Ecke nimmt auf der einen Seite, was sie auf der anderen gibt.
+    """
+    import math
+
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    opened = _draw_in_the_dialog(monkeypatch, _circle(4.0), _up_and_over)
+    window = MainWindow(Session(), UiSettings())
+    window._may_discard = lambda: True  # type: ignore[method-assign]
+    try:
+        window.session.start_new()
+        assert window.session.wait_for_idle()
+
+        _dialog, result = _run_with_drawings(
+            window, "sketch_sweep", ("along", "drawn"), "path_sketch"
+        )
+
+        assert opened[1] == "plane:xz ['plane:xz', 'plane:yz', 'view:free']", opened
+        assert result.complete, [str(f.message) for f in result.scene.report.findings]
+        (body,) = result.scene.objects.values()
+        assert body.mesh.volume == pytest.approx(math.pi * 16.0 * 50.0, rel=1e-6)
+    finally:
+        window.close()
+        window.deleteLater()
+
+
+def test_a_funnel_with_a_drawn_top_keeps_both_outlines_as_drawn(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-183, zweiter Fall: *Zwischen zwei Umrissen aufspannen* mit oberer Zeichnung.
+
+    Gefahren am 22.09.2026: Der Körper entstand — mit einem Kreis Ø 40 um
+    (-2,5 | 0) unten, wo einer mit Ø 30 um den Ursprung gezeichnet war. Der
+    Dialog streckte die frische Zeichnung auf die Vorgabe seines Längenfelds.
+    Geprüft wird an den Schnitten des Körpers, unabhängig von der Operation:
+    unten der gezeichnete Kreis, oben das gezeichnete Quadrat.
+    """
+    import math
+
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    opened = _draw_in_the_dialog(monkeypatch, _circle(15.0), _square(20.0))
+    window = MainWindow(Session(), UiSettings())
+    window._may_discard = lambda: True  # type: ignore[method-assign]
+    try:
+        window.session.start_new()
+        assert window.session.wait_for_idle()
+
+        _dialog, result = _run_with_drawings(window, "sketch_loft", ("top", "drawn"), "top_sketch")
+
+        assert opened[1].startswith("plane:xy "), "der obere Umriss beginnt, wo der untere liegt"
+        assert result.complete, [str(f.message) for f in result.scene.report.findings]
+        (body,) = result.scene.objects.values()
+        raw = body.mesh.mesh.raw
+        low = raw.section(plane_origin=(0.0, 0.0, 0.01), plane_normal=(0.0, 0.0, 1.0))
+        high = raw.section(plane_origin=(0.0, 0.0, 19.99), plane_normal=(0.0, 0.0, 1.0))
+        assert low is not None and high is not None
+        bottom, _ = low.to_2D()
+        top, _ = high.to_2D()
+        assert bottom.area == pytest.approx(math.pi * 15.0**2, rel=0.01), "unten der Kreis Ø 30"
+        assert top.area == pytest.approx(400.0, rel=0.01), "oben das Quadrat 20 × 20"
+        assert raw.bounds[0][:2] == pytest.approx((-15.0, -15.0), abs=0.05), "und um den Ursprung"
+    finally:
+        window.close()
+        window.deleteLater()
+
+
+def test_a_drawn_path_in_space_starts_on_the_front_view(qt_app: QApplication) -> None:
+    """Derselbe Vertrag im Zeichenmodus des Fensters: Eine leere Bahn beginnt
+    auf der Vorderansicht, das Feld bietet nur die zwei Ebenen an, die die
+    Operation annimmt, und die Karten mit allen Ebenen bleiben weg."""
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window.start_sketch("sketch_sweep", step=7, field_name="path_sketch")
+        panel = window._sketch_panel
+        assert panel is not None
+        assert panel.canvas.sketch.plane == "plane:xz"
+        offered = [
+            str(panel.plane_choice.itemData(index)) for index in range(panel.plane_choice.count())
+        ]
+        assert offered == ["plane:xz", "plane:yz", "view:free"], offered
+        assert window.viewport.plane_picker.isHidden()
+    finally:
+        window.finish_sketch(keep=False)
+        window.close()
+        window.deleteLater()
+
+
+# --- Flächenkontur (RM-188 P3.4) ---------------------------------------------------
+
+
+def _plate_object() -> object:
+    """``plate_holes.stl`` mit seinen erkannten Merkmalen — Deckfläche ``face_2``."""
+    from app.core.geom.mesh import read_mesh
+    from app.core.ingest.loader import normalise
+    from app.core.perceive.features import detect
+    from app.core.types import SceneObject
+
+    data = Path(__file__).parent / "data" / "meshes" / "plate_holes.stl"
+    mesh = normalise(read_mesh(data.read_bytes(), ".stl"), "mm").mesh
+    return SceneObject(id="obj_1", name="Platte", mesh=mesh, features=detect(mesh))
+
+
+def test_the_face_outline_is_its_own_button_beside_projecting(qt_app: QApplication) -> None:
+    """Die Kontur der Fläche, auf der man zeichnet — ein eigener Knopf.
+
+    *Projizieren* antwortete auf der Deckfläche der Lochplatte „Diese Ebene
+    schneidet den Körper nicht". Die Kontur kommt als feste Hilfsgeometrie,
+    die Zeile nennt die Ränder, sagt, dass es eine Kopie ist, und nennt die
+    Näherung der Kreise am Netz. Ein Rückgängig nimmt alles auf einmal zurück.
+    """
+    from app.core.sketch.planes import frame_for_plane
+    from app.i18n import tr
+
+    plate = _plate_object()
+    panel = SketchPanel()
+    panel.canvas.set_plane("feature:obj_1:face_2")
+    panel.canvas.offer_frames(lambda plane: frame_for_plane(plane, [plate]))  # type: ignore[list-item]
+    panel.canvas.offer_objects([plate])
+    said: list[str] = []
+    panel.canvas.statusChanged.connect(said.append)
+
+    assert tr("Flächenkontur") in panel.outline_button.toolTip()
+    assert panel.outline_button.accessibleName() == tr("Flächenkontur")
+    panel.outline_button.click()
+
+    elements = panel.canvas.sketch.elements
+    assert sorted(element.kind for element in elements) == ["circle"] * 4 + ["line"] * 4
+    assert all(element.construction for element in elements)
+    assert said, "die Zeile sagt, was übernommen wurde"
+    assert "5 Ränder" in said[-1], said[-1]
+    assert "Kopie" in said[-1], "dass sie dem Körper nicht folgt, steht da"
+    assert "Kreise aus der Erkennung: 4" in said[-1], "die Näherung am Netz wird genannt"
+    assert panel.canvas.solved is not None and panel.canvas.solved.free_dof == 0
+
+    panel.canvas.undo()
+    assert not panel.canvas.sketch.elements, "ein Schritt, ein Rückgängig"
+
+
+def test_the_face_outline_on_a_base_plane_says_where_to_draw(qt_app: QApplication) -> None:
+    """Auf der Grundebene gibt es keine Fläche, deren Rand man nehmen könnte —
+    die Zeile sagt, wo es sie gibt, statt nichts zu tun."""
+    panel = SketchPanel()
+    panel.canvas.offer_objects([_plate_object()])
+    said: list[str] = []
+    panel.canvas.statusChanged.connect(said.append)
+
+    panel.outline_button.click()
+
+    assert not panel.canvas.sketch.elements
+    assert said and "Fläche" in said[-1] and "Projizieren" in said[-1], said
+
+
+def test_the_window_hands_the_objects_to_the_face_outline(qt_app: QApplication) -> None:
+    """Der Kundenweg: Lochplatte öffnen, auf der Deckfläche zeichnen, Kontur
+    übernehmen. Das Fenster reicht die Objekte mit ihren Merkmalen weiter —
+    ohne sie hätte der Knopf im Zeichenmodus nichts, woraus er den Rand liest.
+    """
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    window._may_discard = lambda: True  # type: ignore[method-assign]
+    try:
+        window.open_path(Path(__file__).parent / "data" / "meshes" / "plate_holes.stl")
+        assert window.session.wait_for_idle()
+        result = window.session.last_result
+        assert result is not None
+        (object_id,) = result.scene.objects
+        top = next(
+            name
+            for name, feature in result.scene.objects[object_id].features.items()
+            if feature.kind == "face" and feature.params["normal"][2] > 0.5
+        )
+
+        window.start_sketch("sketch_extrude", plane=f"feature:{object_id}:{top}")
+        panel = window._sketch_panel
+        assert panel is not None
+        panel.outline_button.click()
+
+        kinds = sorted(element.kind for element in panel.canvas.sketch.elements)
+        assert kinds == ["circle"] * 4 + ["line"] * 4
+    finally:
+        window.finish_sketch(keep=False)
+        window.close()
+        window.deleteLater()
+
+
+def test_an_arc_whose_ends_met_is_drawn_and_hit_as_a_whole_circle(qt_app: QApplication) -> None:
+    """Führt der Löser die Enden eines Bogens zusammen, ist er ein Vollkreis.
+
+    Profil und Ansicht wussten das (``profile.arc_sweep``); das Blatt rechnete
+    selbst, in Grad und ohne die Regel: Der Bogen hatte dort die Spanne null,
+    wurde nicht gezeichnet und war nur an seinen Enden anzuklicken — im
+    Profil ein Kreis, auf dem Blatt nichts.
+    """
+    from app.core.types import Sketch, SketchElement
+    from app.ui.sketch_editor import _arc_sweep, _on_arc
+
+    centre, start = (0.0, 0.0), (10.0, 0.0)
+    assert _arc_sweep(centre, start, start)[1] == pytest.approx(360.0)
+    assert _on_arc(centre, start, start, (-10.0, 0.0), 0.1), "gegenüber dem Anfang liegt er auch"
+
+    canvas = SketchCanvas()
+    canvas.resize(400, 400)
+    canvas.set_sketch(Sketch("plane:xy", (SketchElement("arc", (centre, start, start)),)))
+    canvas.fit_view(keep_following=False)
+    spot = canvas._to_screen(-10.0 * 0.7071, 10.0 * 0.7071)
+    drawn = canvas.grab().toImage()
+    canvas.set_sketch(Sketch("plane:xy", ()))
+    assert canvas._to_screen(-10.0 * 0.7071, 10.0 * 0.7071) == spot, "dieselbe Ansicht"
+    empty = canvas.grab().toImage()
+
+    x, y = round(spot.x()), round(spot.y())
+    changed = [
+        (dx, dy)
+        for dx in range(-2, 3)
+        for dy in range(-2, 3)
+        if drawn.pixelColor(x + dx, y + dy) != empty.pixelColor(x + dx, y + dy)
+    ]
+    assert changed, "der Bogen ist dort gezeichnet, wo ein Vollkreis läuft"
+
+
+def test_an_arc_drawn_the_other_way_round_joins_the_ends_it_was_clicked_on(
+    qt_app: QApplication,
+) -> None:
+    """Ein Bogen, dessen Enden die Speicherung tauscht, hängt trotzdem an den
+    Punkten, auf die geklickt wurde.
+
+    Angefangen am rechten Ende einer Linie, beendet am linken, gewölbt nach
+    unten: Gegen den Uhrzeigersinn läuft dieser Bogen vom linken Ende zum
+    rechten, also speichert ``arc_through`` die Enden getauscht. Die Deckungen
+    müssen der Tauschung folgen — welcher Klick vorn steht, wird an der
+    Identität des Punkts gelesen und nicht an einem Vergleich von
+    Kommazahlen (Regel 6). Folgten sie nicht, zöge der Löser das rechte Ende
+    der Linie auf den Anfang des Bogens, und der Umriss fiele zusammen.
+    """
+    canvas = SketchCanvas()
+    canvas.resize(400, 400)
+    canvas.set_tool("line")
+    canvas.place(canvas._to_screen(0.0, 0.0))
+    canvas.place(canvas._to_screen(40.0, 0.0))
+    canvas.set_tool("arc")
+    canvas.place(canvas._to_screen(40.0, 0.0))
+    canvas.place(canvas._to_screen(0.0, 0.0))
+    canvas.place(canvas._to_screen(20.0, -15.0))
+
+    line, arc = canvas.sketch.elements[:2]
+    assert arc.kind == "arc"
+    _centre, start, end = arc.points
+    assert start == pytest.approx((0.0, 0.0), abs=1e-6), "gespeichert beginnt er links"
+    assert end == pytest.approx((40.0, 0.0), abs=1e-6)
+    joins = {
+        tuple(sorted(constraint.targets))
+        for constraint in canvas.sketch.constraints
+        if constraint.kind == "coincident"
+    }
+    assert joins == {(0, 3), (1, 4)}, "links an links, rechts an rechts"
+    assert canvas.solved is not None and not canvas.conflict
+    assert line.points[1] == pytest.approx((40.0, 0.0), abs=1e-6), "die Linie bleibt, wo sie war"
+
+
+def test_the_fixed_points_of_an_outline_stand_as_one_row(qt_app: QApplication) -> None:
+    """Die festen Punkte einer übernommenen Kontur sind **eine** Zeile der Liste.
+
+    Einzeln waren es an der Lochplatte sechzehn Zeilen „Fest — Kreis 3 Rand",
+    an einer Freiformfläche Hunderte, und die eigenen Bedingungen standen
+    darunter. Die Zeile nennt die Zahl, lässt alle Punkte aufleuchten, und
+    Entf löst sie in einem Schritt — ein Rückgängig bringt alle zurück. Eine
+    eigene Bedingung danach behält ihre eigene Zeile.
+    """
+    from PySide6.QtTest import QTest
+
+    from app.core.sketch.planes import frame_for_plane
+    from app.core.types import SketchConstraint, SketchElement
+
+    plate = _plate_object()
+    panel = SketchPanel()
+    panel.canvas.set_plane("feature:obj_1:face_2")
+    panel.canvas.offer_frames(lambda plane: frame_for_plane(plane, [plate]))  # type: ignore[list-item]
+    panel.canvas.offer_objects([plate])
+    panel.outline_button.click()
+    outline = panel.canvas.sketch
+    mine = replace(
+        outline,
+        elements=(*outline.elements, SketchElement("line", ((0.0, 0.0), (10.0, 0.0)))),
+        constraints=(*outline.constraints, SketchConstraint("horizontal", (16, 17))),
+    )
+    panel.canvas.set_sketch(mine)
+    panel._refresh_constraints()
+
+    assert panel.constraint_list.count() == 2, "die Kontur und die eigene Bedingung"
+    held = panel.constraint_list.item(0)
+    assert "16" in held.text(), held.text()
+    assert len(held.data(Qt.ItemDataRole.UserRole)) == 16, "überfahren leuchten alle Punkte"
+    assert panel.constraint_indices(1) == (16,), "die eigene Zeile zeigt auf die eigene Bedingung"
+    (release,) = panel.constraint_menu_at(0).actions()
+    assert "16" in release.text()
+
+    panel.constraint_list.setCurrentRow(0)
+    QTest.keyClick(panel.constraint_list, Qt.Key.Key_Delete)
+    kinds = [constraint.kind for constraint in panel.canvas.sketch.constraints]
+    assert kinds == ["horizontal"], "alle festen Punkte in einem Schritt gelöst"
+
+    panel.canvas.undo()
+    assert len(panel.canvas.sketch.constraints) == 17, "ein Rückgängig bringt alle zurück"
+
+
+# --- Die Karte mit Tastatur und Bildschirmleser (RM-183) ---------------------------
+
+
+def test_every_symbol_button_of_the_sketch_has_a_name_for_a_screen_reader(
+    qt_app: QApplication,
+) -> None:
+    """Neunzehn Knöpfe trugen nur ein Zeichen — ein Bildschirmleser sagte
+    „Schaltfläche" und sonst nichts (Durchsicht Zeichenmodus §6, „ein
+    Bildschirmleser an den Symbolknöpfen"). Der Tooltip ist keine Antwort: Qt
+    liest ihn als Beschreibung, nicht als Namen. Gefragt wird die Schnittstelle,
+    die ein Bildschirmleser fragt."""
+    from PySide6.QtGui import QAccessible
+    from PySide6.QtWidgets import QAbstractButton
+
+    panel = SketchPanel()
+    silent = []
+    for button in panel.findChildren(QAbstractButton):
+        interface = QAccessible.queryAccessibleInterface(button)
+        spoken = interface.text(QAccessible.Text.Name) if interface is not None else ""
+        if not spoken.strip():
+            silent.append(button.toolTip().split("  ")[0].split(" — ")[0])
+    assert not silent, f"ohne Namen: {silent}"
+
+
+def test_tab_runs_from_the_tools_through_the_card_to_finish(qt_app: QApplication) -> None:
+    """Tabulator von den Werkzeugen über Ebene und Raster bis *Fertig* — ohne
+    durch das ganze Fenster zu laufen (Durchsicht Zeichenmodus §6).
+
+    Das Panel kommt erst mit dem Skizzenmodus in die Karte, und Qt hängt einen
+    umgehängten Knopf an das Ende der Fensterfolge: Nach *Wiederholen* ging der
+    Tabulator in die Bedingungsliste, den Objektbaum, die Parameter, den
+    Verlauf, die Ansicht und die Ansichtsknöpfe — achtzehn fremde Halte —,
+    bevor er *Fertig* erreichte.
+    """
+    from PySide6.QtTest import QTest
+
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    window._may_discard = lambda: True  # type: ignore[method-assign]
+    try:
+        window.resize(1400, 900)
+        window.show()
+        QApplication.processEvents()
+        window.start_sketch("sketch_extrude")
+        panel = window._sketch_panel
+        assert panel is not None
+        panel._tool_buttons["select"].setFocus(Qt.FocusReason.TabFocusReason)
+        QApplication.processEvents()
+
+        stops = []
+        for _ in range(60):
+            focused = QApplication.focusWidget()
+            assert focused is not None
+            if focused is window.sketch_finish_button:
+                break
+            QTest.keyClick(focused, Qt.Key.Key_Tab)
+            QApplication.processEvents()
+            stops.append(QApplication.focusWidget())
+        else:
+            raise AssertionError("Fertig nie erreicht")
+
+        card = (panel, window.sketch_bar)
+        strangers = [
+            type(stop).__name__
+            for stop in stops
+            if stop is not None and not any(owner.isAncestorOf(stop) for owner in card)
+        ]
+        assert not strangers, f"der Tabulator verlässt die Karte: {strangers}"
+        assert panel.plane_choice in stops and panel.snap_step in stops, "über Ebene und Raster"
+        QTest.keyClick(
+            window.sketch_finish_button, Qt.Key.Key_Tab, Qt.KeyboardModifier.ShiftModifier
+        )
+        QApplication.processEvents()
+        back = QApplication.focusWidget()
+        assert back is not None and any(owner.isAncestorOf(back) for owner in card), (
+            "und Umschalt+Tab führt von Fertig zurück in die Karte"
+        )
+    finally:
+        window.finish_sketch(keep=False)
+        window.close()
+        window.deleteLater()
+
+
+@pytest.mark.parametrize("theme", ["dark", "light"])
+def test_the_three_dividers_of_the_tool_row_show_in_both_themes(
+    qt_app: QApplication, theme: str
+) -> None:
+    """Die drei Trennstriche der Werkzeugzeile stehen im Bild — auch dunkel
+    (Durchsicht Zeichenmodus §6). Gemessen am gerenderten Panel mit dem
+    Stylesheet der Anwendung: in der Linienfarbe des Themas, gegen den Grund
+    daneben dunkel 2,30:1 und hell 2,00:1 (23.09.2026)."""
+    from PySide6.QtCore import QPoint
+    from PySide6.QtGui import QColor
+    from PySide6.QtWidgets import QFrame
+
+    from app.ui.style import DIVIDER, apply_style
+    from app.ui.theme import THEMES, apply_theme, current_theme
+
+    previous_theme = current_theme()
+    previous_palette = qt_app.palette()
+    previous_sheet = qt_app.styleSheet()
+    try:
+        apply_theme(qt_app, theme)  # type: ignore[arg-type]
+        apply_style(qt_app, theme)  # type: ignore[arg-type]
+        panel = SketchPanel()
+        panel.resize(1200, 600)
+        panel.show()
+        QApplication.processEvents()
+        image = panel.grab().toImage()
+        lines = [
+            frame
+            for frame in panel.findChildren(QFrame)
+            if frame.objectName() == DIVIDER and frame.isVisible()
+        ]
+        assert len(lines) == 3
+        for line in lines:
+            centre = line.mapTo(panel, QPoint(line.width() // 2, line.height() // 2))
+            drawn = image.pixelColor(centre.x(), centre.y())
+            beside = image.pixelColor(centre.x() + 3, centre.y())
+            assert drawn.name() == QColor(THEMES[theme]["line"]).name(), "in der Linienfarbe"  # type: ignore[index]
+            assert drawn.name() != beside.name(), "und vom Grund verschieden"
+        panel.close()
+    finally:
+        apply_theme(qt_app, previous_theme)
+        qt_app.setPalette(previous_palette)
+        qt_app.setStyleSheet(previous_sheet)
+
+
+def test_the_menus_outlive_the_sketch_mode(qt_app: QApplication) -> None:
+    """Nach dem Skizzenmodus leben die Menüs der Leiste noch.
+
+    Der erste Bau der Tabulatorkette (``_chain_sketch_card``) suchte das letzte
+    Widget des Panels über ``nextInFocusChain`` durch alle Halte des Fensters;
+    sobald das Panel danach gelöscht war, waren Datei, Bearbeiten, Erzeugen,
+    Ansicht und Hilfe tot („Internal C++ object already deleted"), und das
+    nächste ``_update_actions`` endete mit einer Ausnahme. Gefunden hat es
+    ``test_home_has_exactly_one_owner_in_the_sketch_mode`` — hier steht es als
+    eigene Zusage.
+    """
+    from PySide6.QtCore import QEvent
+    from shiboken6 import isValid
+
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    window._may_discard = lambda: True  # type: ignore[method-assign]
+    try:
+        window.show()
+        menus = list(window._menus)
+        window.start_sketch("sketch_extrude")
+        window.finish_sketch(keep=False)
+        QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+        QApplication.processEvents()
+
+        dead = [menu for menu in menus if not isValid(menu)]
+        assert not dead, f"{len(dead)} Menüs der Leiste sind mit dem Panel gestorben"
+        window._update_actions()
+    finally:
         window.close()
         window.deleteLater()

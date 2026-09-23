@@ -47,8 +47,10 @@ from app.core.sketch.serialize import (
     sketch_to_text,
 )
 from app.core.types import (
+    Document,
     Feature,
     OpContext,
+    Operation,
     Parameter,
     Scene,
     SceneObject,
@@ -245,6 +247,32 @@ def test_three_points_on_one_line_say_so() -> None:
         frame_for_sketch(through_plane([(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (2.0, 0.0, 0.0)]))
 
     assert problem.value.suggestions
+
+
+def test_three_points_almost_on_one_line_say_so_too() -> None:
+    """Gefragt wird der Winkel, nicht die Fläche des Dreiecks.
+
+    Drei Punkte 100 und 200 mm weit, der dritte ein Millionstel neben der
+    Geraden, gingen durch — eine Ebene, deren Neigung am letzten Bit hängt
+    (Durchsicht 22.09.2026).
+    """
+    with pytest.raises(ValidationError):
+        frame_for_sketch(through_plane([(0.0, 0.0, 0.0), (100.0, 0.0, 0.0), (200.0, 1e-6, 0.0)]))
+
+
+@pytest.mark.parametrize("reach", [0.01, 1e-5])
+def test_three_close_points_at_a_right_angle_still_span_a_plane(reach: float) -> None:
+    """Und umgekehrt: Klein ist nicht krumm — die Prüfung kennt keine Größe.
+
+    Die feste Schwelle auf dem Kreuzprodukt wies drei rechtwinklige Punkte ab,
+    sobald sie näher als drei Hunderttausendstel Millimeter beieinanderlagen;
+    der Winkel zwischen den beiden Richtungen hat keine Einheit und damit
+    keine solche Grenze. Der Hundertstelmillimeter ist der Fall, den ein
+    Kunde tippen könnte; der kleinere ist der, an dem die alte Schwelle riss.
+    """
+    frame = frame_for_sketch(through_plane([(0.0, 0.0, 0.0), (reach, 0.0, 0.0), (0.0, reach, 0.0)]))
+
+    assert frame.normal == pytest.approx((0.0, 0.0, 1.0))
 
 
 def test_a_plane_may_stand_on_a_derived_one() -> None:
@@ -448,3 +476,110 @@ def test_a_body_reads_the_project_parameter_of_its_plane() -> None:
     )
 
     assert body.bounds.minimum[2] == pytest.approx(8.0, abs=1e-9)
+
+
+# --- Die Ebene folgt ihrer Fläche (RM-188 P3.2, durchgeprüft) --------------------
+
+
+def _stacked(kind: str, face: str, before: list[Operation], height: str | float) -> Document:
+    """Quader → (Bewegung) → Grundform auf der Versatzebene 5 mm über ``face``."""
+    square = Sketch(
+        plane=offset_plane(feature_plane("obj_1", face), 5.0),
+        elements=(
+            SketchElement(kind="line", points=((-5.0, -5.0), (5.0, -5.0))),
+            SketchElement(kind="line", points=((5.0, -5.0), (5.0, 5.0))),
+            SketchElement(kind="line", points=((5.0, 5.0), (-5.0, 5.0))),
+            SketchElement(kind="line", points=((-5.0, 5.0), (-5.0, -5.0))),
+        ),
+    )
+    return Document(
+        format_version=1,
+        app_version="0.0.1",
+        parameters={"h": Parameter(name="h", value=float(height), unit="mm")},
+        ops=[
+            Operation(
+                id=1,
+                op=kind,
+                outputs=("obj_1",),
+                params={"width": 40.0, "depth": 40.0, "height": "=@h"},
+            ),
+            *before,
+            Operation(
+                id=3,
+                op="sketch_extrude",
+                outputs=("obj_2",),
+                params={"sketch": sketch_to_text(square), "height": 4.0},
+            ),
+        ],
+    )
+
+
+@pytest.mark.parametrize("kind", ["create_box", "create_brep_box"])
+@pytest.mark.parametrize(
+    ("motion", "low", "high"),
+    [
+        ("none", (-5.0, -5.0, 15.0), (5.0, 5.0, 19.0)),
+        ("taller", (-5.0, -5.0, 25.0), (5.0, 5.0, 29.0)),
+        ("moved", (25.0, -5.0, 15.0), (35.0, 5.0, 19.0)),
+        ("turned", (-5.0, -14.0, 0.0), (5.0, -10.0, 10.0)),
+    ],
+)
+def test_a_body_on_an_offset_plane_follows_its_face(
+    kind: str, motion: str, low: Vec3, high: Vec3
+) -> None:
+    """Maßänderung, Verschieben und Drehen des Grundkörpers — die Versatzebene
+    geht mit ihrer Fläche mit, an beiden Kernen (Konzept vollwertiges CAD,
+    P3.2: „Verschieben, Drehen, Maßänderung … durchprüfen").
+
+    Die Maßänderung läuft über **denselben** Cache wie der Lauf davor: Hinge
+    die Grundform nur an ihren eigenen Werten, käme sie auf der alten Höhe aus
+    dem Cache zurück.
+    """
+    from app.core.knowledge import profiles
+    from app.core.scene import ResultCache, evaluate
+
+    if kind == "create_brep_box":
+        from tests.helpers import exact_kernel
+
+        exact_kernel()
+    load_operations()
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    plain = evaluate(_stacked(kind, "face_1", [], 10.0), profile)
+    top = next(
+        name
+        for name, feature in plain.scene.objects["obj_1"].features.items()
+        if feature.kind == "face" and feature.params["normal"][2] > 0.5
+    )
+    moves = {
+        "moved": [
+            Operation(
+                id=2,
+                op="translate_object",
+                inputs=("obj_1",),
+                outputs=("obj_1",),
+                params={"dx": 30.0},
+            )
+        ],
+        "turned": [
+            Operation(
+                id=2,
+                op="rotate_object",
+                inputs=("obj_1",),
+                outputs=("obj_1",),
+                params={"axis": "x", "angle": 90.0},
+            )
+        ],
+    }
+    cache = ResultCache()
+    first = evaluate(_stacked(kind, top, moves.get(motion, []), 10.0), profile, cache=cache)
+    assert first.complete
+    result = (
+        evaluate(_stacked(kind, top, [], 20.0), profile, cache=cache)
+        if motion == "taller"
+        else first
+    )
+
+    assert result.complete
+    bounds = result.scene.objects["obj_2"].mesh.bounds
+    assert bounds.minimum == pytest.approx(low, abs=1e-6)
+    assert bounds.maximum == pytest.approx(high, abs=1e-6)

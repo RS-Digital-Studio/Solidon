@@ -3392,14 +3392,30 @@ class SketchPlanePicker(QFrame):
         row = QHBoxLayout()
         row.setSpacing(TIGHT)
         self._buttons: dict[str, QToolButton] = {}
+        # **Und eine vierte Karte für eine eigene Ebene** (RM-188 P3.3): parallel
+        # versetzt, gekippt oder durch drei Punkte. Sie öffnet denselben Dialog
+        # wie „Neue Ebene …" im Ebenenfeld — der Wert ``plane:new`` ist dort
+        # der Eintrag, der ihn aufmacht, keine Ebene.
         choices = (
             ("plane:xy", tr("Draufsicht (XY) — liegend"), "view_top", "1"),
             ("plane:xz", tr("Vorderansicht (XZ) — stehend, von vorn"), "view_front", "2"),
             ("plane:yz", tr("Seitenansicht (YZ) — stehend, von der Seite"), "view_right", "3"),
+            (
+                "plane:new",
+                tr(
+                    "Eine eigene Zeichenebene anlegen — parallel versetzt, gekippt oder "
+                    "durch drei Punkte."
+                ),
+                "sketch_new_plane",
+                "",
+            ),
         )
         for plane, label, image, key in choices:
             button = QToolButton(self)
-            button.setText(f"{label}\n{key}")
+            # Die vierte Karte trägt ihren kurzen Namen; der Satz dahinter steht
+            # im Hinweis und für den Vorleser — auf 142 Bildpunkten Breite wäre
+            # er eine Wand aus Wörtern.
+            button.setText(f"{label}\n{key}" if key else str(tr("Neue Ebene …")))
             button.setIcon(icon(image, button))
             button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
             button.setMinimumSize(142, 76)
