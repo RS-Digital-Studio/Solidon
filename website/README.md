@@ -12,6 +12,18 @@ Die Sicherheitsseiten verlinken ebenso die ENISA-Meldeplattform ausschließlich
 als gewöhnlichen Anker. Die Freigabe einer Außenadresse erlaubt weder
 Ressourcen von dort noch Vorabverbindungen oder das Vorladen der Zielseite.
 
+**Eine Ausnahme, und nur auf Klick: der Stand der GoFundMe-Kampagne.** Im
+Unterstützungsabschnitt der Startseiten steht zuerst ein lokaler Platzhalter
+mit dem Satz, welche Daten beim Laden an GoFundMe gehen. Erst der Knopf
+*Aktuellen Stand bei GoFundMe laden* lässt `site.js` einen `<iframe>` mit der
+Adresse bauen, die GoFundMes eigener Einbettungscode erzeugt; `embed.js` von
+GoFundMe wird nicht geladen. `.htaccess` setzt für jede `.html` eine
+`Content-Security-Policy`, die als einzigen fremden Ursprung
+`frame-src https://www.gofundme.com` zulässt. Was der Rahmen danach selbst
+nachlädt (gemessen: Dienste von Google und Meta), gehört GoFundMe und steht so
+im Hinweis am Knopf und in `datenschutz.html#gofundme-stand`. Die Prüfungen
+dazu stehen in `tests/test_website.py` (`…gofundme…`).
+
 Der Hinweis unmittelbar am Knopf hält die rechtliche Grenze fest: keine
 Bestellung, keine Gegenleistung, keine Anrechnung auf einen späteren Kauf und
 keine steuerliche Bestätigung. `datenschutz.html` erläutert die Datenverarbeitung
@@ -21,8 +33,11 @@ Startseiten führen dieselbe lokale Auswahl und dieselben Anbieterziele.
 
 Beide Skripte kommen von hier — kein CDN, keine Bibliothek, keine Schriftart
 von außen, kein Zählpixel. `site.js` markiert in der Funktionsseite den gerade
-gelesenen Block und zählt auf der Startseite die Zeit bis zur Demo herunter;
-beides ist Zugabe. `activation.js` gehört ausschließlich zur bewusst
+gelesenen Block, zählt auf der Startseite die Zeit bis zur Demo herunter,
+spielt die Loops erst ab, wenn sie im Bild sind, lässt die Schrittmarken unter
+dem Aufmacher-Loop mitlaufen (die Zeitmarken stehen als `data-at` im Markup und
+folgen `make_video.web_loop_chapter_starts`) und baut nach dem Klick den
+GoFundMe-Rahmen; alles davon ist Zugabe — ohne Skript steht jeder Inhalt da. `activation.js` gehört ausschließlich zur bewusst
 aufgerufenen Offline-Aktivierungsseite und sendet erst nach einem Klick die
 vom Kunden gewählte Anfragedatei. `tests/test_website.py` prüft den Teil, der
 die Zusage der Seite trägt: **nichts von außen** und kein versteckter
@@ -418,14 +433,17 @@ Anriss ändert, ändert die Unterseite mit: dieselbe Aussage darf nicht zweimal
 verschieden dastehen. Die Angabe **39 Referenzanfragen** bleibt bewusst im
 Anriss der Startseite — `tests/test_website.py` sucht sie dort.
 
-**Die Startseite lebt von `handbuch/`.** Sie bindet fünf Abbildungen daraus
-ein — `main-window.png`, `report.png`, `catalog.png`, `op-dialog.png` und
-`start-screen.png`, je Sprache aus dem eigenen Ordner. Erzeugt werden sie von
-`tools/make_figures.py`; wer dort einen Namen ändert, ändert ihn hier mit.
-`tests/test_website.py` prüft jeden Verweis beider Seiten auf Existenz.
-Die übrigen Belege (`bilder/beleg-*.png`) schneidet `tools/make_web_images.py`
-je Sprache; der Lagerbeleg `beleg-filamentlager*.png` zeigt Beispielspulen aus
-einem Kindprozess mit eigenen Nutzerverzeichnissen, nie Roberts echtes Lager.
+**Start- und Funktionsseiten zeigen die Anwendung im ganzen Fenster.** Alle
+Aufnahmen entstehen im maximierten Hauptfenster auf dem 2560 × 1440-Schirm
+(Bildstandard, Robert 23.09.2026), je Sprache mit der Oberfläche dieser
+Sprache: die Loops `loop-anpassen*` und `weg4-formen*` über
+`tools/make_video.py`, die Standbilder `schritt-*`, `beleg-*` und das
+Vorschaubild `teilen*.png` über `tools/make_web_images.py` — ein Kindprozess
+je Sprache mit eigenen Nutzerverzeichnissen (Beispielspulen, nie Roberts
+Lager). Zuschnitte kommen nur aus der Vollbildaufnahme. Handbuchbilder aus
+`handbuch/` stehen auf diesen Seiten nicht mehr
+(`test_the_selling_pages_show_the_whole_application_window`); nur die
+KI-Seiten tragen `handbuch/<sprache>/report.png` als Vorschaubild.
 Die Karte zur Fernsteuerung (`#mcp` auf der Funktionsseite) trägt in allen
 sechs Fassungen dieselbe gezeichnete `bilder/fernsteuerung-mcp.svg` — ohne
 Text im Bild, damit sie sprachneutral bleibt.

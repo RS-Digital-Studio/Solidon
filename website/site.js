@@ -1,11 +1,12 @@
 /* Solidon3D — das Einzige, was diese Website ohne Skript nicht kann.
  *
- * Fünf Dinge stehen hier, und alle sind Zugabe: Das mobile Kopfmenü gibt die
- * Seite nach einer Wahl wieder frei, die Sprungliste der Funktionsseite
- * markiert den Block, der gerade gelesen wird, der Download-Kasten der
- * Startseite zählt die Zeit bis zur Demo herunter, und der Changelog zeigt
- * die gewählte Version einzeln. Ganz unten meldet eine Zeile dem eigenen
- * Server, dass diese Seite geöffnet wurde. Alles
+ * Was hier steht, ist Zugabe: Das mobile Kopfmenü gibt die Seite nach einer
+ * Wahl wieder frei, die Sprungliste der Funktionsseite markiert den Block, der
+ * gerade gelesen wird, der Download-Kasten der Startseite zählt die Zeit bis
+ * zur Demo herunter, der Changelog zeigt die gewählte Version einzeln, die
+ * Schrittmarken unter dem Bedienloop laufen mit, und der Stand der
+ * GoFundMe-Kampagne wird erst auf ausdrücklichen Klick geladen. Eine Zeile
+ * meldet dem eigenen Server, dass diese Seite geöffnet wurde. Alles
  * andere bleibt CSS: die Bewegung der Zeichnungen läuft über scroll-gesteuerte
  * Zeitachsen (`animation-timeline: view()`), und die gehören dorthin — sie
  * laufen im Compositor, ein Skript müsste bei jedem Bildlauf rechnen.
@@ -636,7 +637,9 @@
  */
 (() => {
   try {
-    const films = document.querySelectorAll("video.weg-film");
+    /* Der Bedienloop im Aufmacher (`loop-film`) läuft nach denselben Regeln
+       wie die Wege: erst im Bild, nie bei reduzierter Bewegung, Leiste bleibt. */
+    const films = document.querySelectorAll("video.weg-film, video.loop-film");
     if (!films.length) return;
     if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       return;
@@ -664,6 +667,124 @@
     for (const film of films) watcher.observe(film);
   } catch (problem) {
     console.warn("site.js: die Wege-Aufnahmen laufen nicht —", problem);
+  }
+})();
+
+/* Die Schrittmarken unter dem Bedienloop laufen mit.
+ *
+ * Jede Marke nennt im Markup die Sekunde, ab der sie gilt (`data-at`); die
+ * Zahlen kommen aus dem Aufnahmewerkzeug (`make_video.web_loop_chapter_starts`)
+ * und ein Test hält beide zusammen. Hier wird nur abgelesen, welche Marke zur
+ * gerade gezeigten Stelle gehört, und sie mit `aria-current="step"` markiert.
+ *
+ * **Ohne dieses Skript fehlt nichts:** Die vier Marken stehen dann gleichrangig
+ * da und erzählen den Weg in Worten — derselbe Zustand wie bei reduzierter
+ * Bewegung, wo der Loop nicht von selbst läuft. Wer ihn dort von Hand
+ * startet, bekommt die Markierung trotzdem; sie folgt seiner Absicht.
+ */
+(() => {
+  "use strict";
+  try {
+    for (const figure of document.querySelectorAll("[data-loop]")) {
+      const film = figure.querySelector("video");
+      const steps = [...figure.querySelectorAll("[data-loop-steps] [data-at]")];
+      if (!film || steps.length === 0) continue;
+      const marks = steps.map((step) => Number(step.dataset.at) || 0);
+
+      const follow = () => {
+        const now = film.currentTime;
+        let current = 0;
+        marks.forEach((mark, index) => {
+          if (now >= mark) current = index;
+        });
+        steps.forEach((step, index) => {
+          if (index === current) step.setAttribute("aria-current", "step");
+          else step.removeAttribute("aria-current");
+        });
+      };
+
+      film.addEventListener("timeupdate", follow);
+      film.addEventListener("seeked", follow);
+      film.addEventListener("play", follow);
+    }
+  } catch (problem) {
+    console.warn("site.js: die Schrittmarken laufen nicht mit —", problem);
+  }
+})();
+
+/* Der Stand der GoFundMe-Kampagne — erst auf ausdrücklichen Klick.
+ *
+ * **Beim Laden der Seite geht nichts an GoFundMe.** Im Markup steht nur ein
+ * Platzhalter mit einem Satz und einem Knopf; die Adresse des Widgets liegt
+ * in `data-gfm-widget`, einem Attribut, das kein Browser lädt. Erst der Klick
+ * setzt das offizielle Widget als `<iframe>` ein — mit genau der Adresse, die
+ * GoFundMes eigener Einbettungscode (`/static/js/embed.js`) daraus baut:
+ * dieselben drei `utm_`-Angaben und der Hinweis auf die DSGVO-Einstellung des
+ * Widgets hinter `#:~:`.
+ *
+ * **Warum nicht einfach `embed.js` nachladen?** Es richtet sich nur beim
+ * Ereignis `DOMContentLoaded` ein; nach einem Klick ist das längst vorbei, und
+ * das Skript täte nichts. Vor allem aber liefe dann fremder Code auf
+ * solidon3d.de — mit Zugriff auf die ganze Seite. Das `<iframe>` hält GoFundMe
+ * in seinem eigenen Ursprung, und die Kopfzeile `Content-Security-Policy`
+ * (`.htaccess`) erlaubt als Rahmen genau diesen einen Ursprung und sonst
+ * keinen.
+ *
+ * Die Höhe meldet das Widget selbst über `postMessage`
+ * (`gfm-embed-widget-resize`, wie `embed.js` sie liest). Angenommen wird die
+ * Meldung nur von `https://www.gofundme.com` und nur für den eigenen Rahmen.
+ */
+(() => {
+  "use strict";
+  try {
+    const ORIGIN = "https://www.gofundme.com";
+    const WIDGET = /^\/f\/[a-z0-9-]+\/widget\/(small|medium|large)$/;
+    const HEIGHTS = { small: 70, medium: 200, large: 500 };
+
+    for (const slot of document.querySelectorAll("[data-gfm-widget]")) {
+      const button = slot.querySelector("[data-gfm-load]");
+      if (!button) continue;
+
+      button.addEventListener(
+        "click",
+        () => {
+          let address;
+          try {
+            address = new URL(slot.dataset.gfmWidget || "");
+          } catch {
+            return;
+          }
+          const size = WIDGET.exec(address.pathname);
+          if (address.origin !== ORIGIN || !size) return;
+          address.searchParams.set("utm_content", location.hostname || "none");
+          address.searchParams.set("utm_medium", "referral");
+          address.searchParams.set("utm_source", "widget");
+
+          const frame = document.createElement("iframe");
+          frame.className = "gfm-frame";
+          frame.title = slot.dataset.gfmTitle || "GoFundMe";
+          frame.height = String(HEIGHTS[size[1]]);
+          frame.setAttribute("scrolling", "no");
+          frame.referrerPolicy = "strict-origin-when-cross-origin";
+          frame.src = `${address.href}#:~:tcm-regime=GDPR&tcm-prompt=Hidden`;
+
+          window.addEventListener("message", (event) => {
+            if (event.origin !== ORIGIN || event.source !== frame.contentWindow) return;
+            const data = event.data;
+            if (!data || data.type !== "gfm-embed-widget-resize") return;
+            const height = Number(data.offsetHeight);
+            if (height > 0 && height < 4000) frame.height = String(Math.round(height));
+          });
+
+          slot.classList.add("is-loaded");
+          slot.replaceChildren(frame);
+          frame.focus();
+        },
+        { once: true }
+      );
+    }
+  } catch (problem) {
+    console.warn("site.js: der Stand von GoFundMe lässt sich nicht laden —", problem);
   }
 })();
 

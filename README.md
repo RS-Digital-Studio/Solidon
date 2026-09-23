@@ -33,6 +33,14 @@ Der gepflegte 14-Tage-Pfad bleibt im Code,
 aber nur ein späterer neuer Bau mit gesetztem `TRIAL_FROM` kann ihn anbieten.
 Das Konzept dahinter steht in `konzepte/konzept-demo-2026-10.md`.
 
+Verkauft wird 1.0 ab dem **1. November 2026, 10:00 Uhr**, in zwei Lizenzarten
+mit demselben Funktionsumfang, beide als Einmalkauf mit allen Updates von 1.x:
+**privat 69 €** und **gewerblich 199 €**, jeweils als Einstiegspreis bis zum
+31. Januar 2027; ab dem 1. Februar 2027 kostet die private Lizenz 99 € und die
+gewerbliche 249 €. Was die beiden unterscheidet (Personen, Rechner, Support,
+Weitergabe im Betrieb), regeln `AGB.md` §2 und `EULA.md`; die Startseite zeigt
+es in ihrem Abschnitt „Preis und Lizenz".
+
 Die veröffentlichte Fassung steht auf der [Downloadseite](https://solidon3d.de/).
 Dieses Repository enthält zusätzlich den Entwicklungsstand für die kommende
 Version **0.5.0**, nach der Veröffentlichung von **0.4.4**. Der vollständige

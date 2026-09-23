@@ -27,7 +27,7 @@
 <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="/icon.svg?v=a72d0c52" type="image/svg+xml">
-<link rel="stylesheet" href="../style.css?v=aece7d33">
+<link rel="stylesheet" href="../style.css?v=8c4d6ed7">
 </head>
 <body>
 <a class="skip" href="#content">Vai al contenuto</a>
@@ -79,7 +79,7 @@
         <p class="hero-act">
           <a class="btn hero-btn" href="/it/#download">Scarica gratis ora</a>
         </p>
-        <p class="hero-kauf">Dalla 1.0 un acquisto unico — senza abbonamento.</p>
+        <p class="hero-kauf">Dal 1º novembre si compra una volta sola: <a href="/it/#pricing">licenza privata da 69&nbsp;€</a>, senza abbonamento.</p>
         </div>
 
       </div>
@@ -145,15 +145,7 @@
       restano comunque pienamente utilizzabili.</p>
 
       <h2>Chat locale: GPU e CPU misurate separatamente</h2>
-      <p class="footnote">Il 31.08.2026, <b>qwen3:14b</b> ha eseguito
-      correttamente cinque istruzioni di prova complete su cinque con 106
-      strumenti. Su una NVIDIA RTX 4080 con 16&nbsp;GB di memoria grafica
-      hanno richiesto da 11,8 a 25,2 secondi, con una mediana di 17 secondi.
-      Un prompt di 19.641 token è stato letto in 13,1 secondi a freddo e in
-      una mediana di 2,3 secondi a caldo; il modello risiedeva interamente
-      nella memoria grafica. <b>7,8 token al secondo e circa 42 minuti valgono
-      soltanto per il ripiego sulla CPU.</b> L’applicazione indica se Ollama
-      sta usando davvero la GPU.</p>
+      <p class="footnote">Misurato il 23.09.2026 con <b>qwen3:14b</b> in Ollama e tutti i 147 strumenti, su una NVIDIA RTX 4080 con 16&nbsp;GB di memoria grafica: il modello stava tutto sulla scheda, senza aiuto del processore. Un turno ha richiesto 19,8 secondi a freddo — Solidon libera la scheda dopo ogni turno e il modello viene ricaricato — e, con il modello già caricato, 2,5 secondi di mediana. <b>Se il modello non entra tutto nella memoria grafica, il processore interviene e diventa molte volte più lento.</b> L’applicazione mostra se Ollama usa davvero la GPU.</p>
     </div>
   </section>
 
@@ -187,6 +179,6 @@
   </div>
 </footer>
 
-<script src="/site.js?v=174df3cf" defer></script>
+<script src="/site.js?v=365a5a78" defer></script>
 </body>
 </html>

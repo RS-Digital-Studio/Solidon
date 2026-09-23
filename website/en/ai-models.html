@@ -25,7 +25,7 @@
 <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="/icon.svg?v=a72d0c52" type="image/svg+xml">
-<link rel="stylesheet" href="../style.css?v=aece7d33">
+<link rel="stylesheet" href="../style.css?v=8c4d6ed7">
 </head>
 <body>
 <a class="skip" href="#content">Skip to content</a>
@@ -77,7 +77,7 @@
         <p class="hero-act">
           <a class="btn hero-btn" href="/en/#download">Download for free now</a>
         </p>
-        <p class="hero-kauf">From 1.0 a one-time purchase — no subscription.</p>
+        <p class="hero-kauf">From 1 November, buy once: <a href="/en/#pricing">private licence from €69</a>, no subscription.</p>
         </div>
 
       </div>
@@ -139,14 +139,7 @@
       usable regardless.</p>
 
       <h2>Local chat: GPU and CPU measured separately</h2>
-      <p class="footnote">On 31 August 2026, <b>qwen3:14b</b> completed five
-      out of five full probe instructions correctly with 106 tools. On an
-      NVIDIA RTX 4080 with 16&nbsp;GB of graphics memory they took 11.8 to
-      25.2 seconds, with a median of 17 seconds. A 19,641-token prompt was
-      read in 13.1 seconds cold and a warm median of 2.3 seconds; the model
-      was entirely in graphics memory. <b>7.8 tokens per second and about
-      42 minutes apply only to the CPU fallback.</b> The application shows
-      whether Ollama is actually using the GPU.</p>
+      <p class="footnote">Measured on 23 September 2026 with <b>qwen3:14b</b> under Ollama and all 147 tools, on an NVIDIA RTX 4080 with 16&nbsp;GB of graphics memory: the model sat entirely on the card, with no help from the processor. A turn took 19.8 seconds cold — Solidon frees the card after every turn, so the model is loaded again — and a median of 2.5 seconds with the model already loaded. <b>If the model does not fit completely into graphics memory, the processor joins in and it becomes many times slower.</b> The application shows whether Ollama is really using the GPU.</p>
     </div>
   </section>
 
@@ -179,6 +172,6 @@
   </div>
 </footer>
 
-<script src="/site.js?v=174df3cf" defer></script>
+<script src="/site.js?v=365a5a78" defer></script>
 </body>
 </html>

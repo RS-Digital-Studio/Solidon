@@ -25,7 +25,7 @@
 <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="/icon.svg?v=a72d0c52" type="image/svg+xml">
-<link rel="stylesheet" href="style.css?v=aece7d33">
+<link rel="stylesheet" href="style.css?v=8c4d6ed7">
 </head>
 <body>
 <a class="skip" href="#content">Zum Inhalt springen</a>
@@ -78,8 +78,8 @@
         <div class="shot">
           <div class="stage">
             <div class="chrome" aria-hidden="true"><i></i><i></i><i></i></div>
-            <a href="bilder/beleg-fenster.png?v=46451ef4"><img src="bilder/beleg-fenster.png?v=46451ef4" width="2560" height="1392" fetchpriority="high"
-                 alt="Das Hauptfenster von Solidon3D: links Objektbaum, Parameter und Verlauf, in der Mitte die 3D-Ansicht mit dem Modell, rechts der Prüfbericht mit seinen Befunden"></a>
+            <a href="bilder/beleg-fenster.webp?v=141dce04"><img src="bilder/beleg-fenster.webp?v=141dce04" width="2560" height="1369" fetchpriority="high"
+                 alt="Das Hauptfenster von Solidon3D mit einem zweifarbigen Schild: links Objekte, Parameter und Verlauf, in der Mitte groß das Schild, dessen Jahreszahl gewählt ist, rechts der Prüfbericht mit einer Warnung und das Fenster „Auswahl“ mit den Handlungen für die gewählten Lettern."></a>
           </div>
         </div>
       </div>
@@ -110,8 +110,7 @@
           Konstruktion war: Bohrungen, Zapfen, Senkungen, Kuppeln und Pfannen,
           Verrundungen, Kehlen, Gewinde, ebene Flächen und offene Kanten. Jedes
           gefundene Merkmal bekommt eine Kennung, die die folgenden Schritte
-          überlebt — und im Merkmalsfenster stehen seine <b>gemessenen</b> Werte
-          als Felder: Ort, Durchmesser, Tiefe, Achse.</p>
+          überlebt — und ein Klick zeigt seine <b>gemessenen</b> Werte, als Maße im Bild und rechts im Fenster „Auswahl“: Ort, Durchmesser, Tiefe, Achse.</p>
           <p class="note">Eine geänderte Zahl ist die Operation.
           <b>Kein Modus, kein zweiter Dialog</b> — und die Vorschau im Bild
           folgt schon beim Tippen.</p>
@@ -122,7 +121,7 @@
           Hand, und die Kennung war weg. Jetzt ist es ein Schritt, und jede
           Passung, die auf diese Bohrung zeigt, behält ihren Bezug.</p>
           <p>Die Bohrung sagt dabei selbst, welche Schraube hineingehört
-          („misst 5,19 mm — das Durchgangsloch für M5“), und wo nichts passt,
+          („Passt vermutlich zu M5 (Durchgangsloch fein)“), und wo nichts passt,
           sagt sie auch das. Sechs gleichartige Bohrungen bringst du in einem
           Zug auf dasselbe Maß, als eine Handlung, die ein Undo zusammen
           zurücknimmt. Zwei markierte Merkmale nennen ihren Abstand — räumlich
@@ -138,54 +137,11 @@
           Begründung.</b></p>
         </div>
         <figure class="shot">
-          <svg class="figure" viewBox="0 0 560 300" role="img"
-               aria-label="Eine Zeichnung des Merkmalsfensters: oben steht „Bohrung — Ø 5,19 mm“ und darunter der Satz „das Durchgangsloch für M5“; es folgen Felder für Durchmesser, Tiefe und Ort, dann die Knöpfe Versetzen, Drehen, Verdoppeln und Entfernen. An einer geeigneten Verrundung lässt sich der Radius ändern.">
-            <text class="ink" x="24" y="30" font-weight="600">Merkmal</text>
-
-            <rect class="field" x="24" y="46" width="250" height="44" rx="4"/>
-            <text class="ink" x="38" y="66" font-size="12">Bohrung</text>
-            <text class="value" x="260" y="66" text-anchor="end">Ø 5,19 mm</text>
-            <text class="dim" x="38" y="82">das Durchgangsloch für M5</text>
-
-            <rect class="field" x="24" y="102" width="250" height="30" rx="4"/>
-            <text class="dim" x="38" y="122">Durchmesser</text>
-            <text class="value" x="260" y="122" text-anchor="end">5,19 mm</text>
-
-            <rect class="field" x="24" y="140" width="250" height="30" rx="4"/>
-            <text class="dim" x="38" y="160">Tiefe</text>
-            <text class="value" x="260" y="160" text-anchor="end">12,00 mm</text>
-
-            <rect class="field" x="24" y="178" width="250" height="30" rx="4"/>
-            <text class="dim" x="38" y="198">Ort X / Y</text>
-            <text class="value" x="260" y="198" text-anchor="end">18,0 / 24,0</text>
-
-            <g class="rule" fill="none">
-              <rect x="24" y="224" width="58" height="26" rx="4"/>
-              <rect x="88" y="224" width="50" height="26" rx="4"/>
-              <rect x="144" y="224" width="66" height="26" rx="4"/>
-              <rect x="216" y="224" width="58" height="26" rx="4"/>
-            </g>
-            <text class="ink" x="53" y="241" font-size="11" text-anchor="middle">Versetzen</text>
-            <text class="ink" x="113" y="241" font-size="11" text-anchor="middle">Drehen</text>
-            <text class="ink" x="177" y="241" font-size="11" text-anchor="middle">Verdoppeln</text>
-            <text class="ink" x="245" y="241" font-size="11" text-anchor="middle">Entfernen</text>
-
-            <text class="dim" x="24" y="278">Verrundung</text>
-            <text class="dim" x="24" y="294">Radius ändern, wenn die Rundung dafür geeignet ist.</text>
-
-            <text class="dim" x="320" y="42">Im Bild</text>
-            <rect class="body" x="320" y="56" width="216" height="150" rx="6"/>
-            <circle class="body-soft" cx="378" cy="112" r="17"/>
-            <circle class="hot-stroke" cx="378" cy="112" r="21"/>
-            <circle class="body-soft" cx="470" cy="112" r="17"/>
-            <circle class="body-soft" cx="378" cy="168" r="17"/>
-            <circle class="body-soft" cx="470" cy="168" r="17"/>
-            <text class="dim" x="320" y="230">gewählt: eine von vier</text>
-            <text class="ink" x="320" y="252" font-size="12">Alle vier auf einmal ändern:</text>
-            <text class="value" x="320" y="270">Ø 5,19 → 5,40 mm</text>
-          </svg>
-          <figcaption>Das Merkmalsfenster: gemessene Werte als Felder, und was
-          nicht geht, steht als Satz.</figcaption>
+          <div class="stage">
+            <a href="bilder/beleg-merkmal.webp?v=eb593459"><img src="bilder/beleg-merkmal.webp?v=eb593459" width="2560" height="1369" loading="lazy" decoding="async"
+                 alt="Eine eingelesene Halterung mit fünf erkannten Bohrungen; Bohrung 4 ist gewählt. Im Bild stehen ihre Abstände zu den Kanten und die Gruppe „Bohrung ändern“ mit Durchmesser, Ort und Tiefe; rechts im Fenster „Auswahl“ der Satz „Passt vermutlich zu M5“ und darunter Merkmal verschieben, Zum Langloch ziehen, Merkmal drehen, Merkmal verdoppeln, Merkmal entfernen, Senken und Bohrung verschließen."></a>
+          </div>
+          <figcaption>Eine angeklickte Bohrung: ihre Maße im Bild, ihre Handlungen rechts in der Auswahl.</figcaption>
         </figure>
       </div>
 
@@ -271,8 +227,8 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="bilder/beleg-skizze.png?v=6881aee1"><img src="bilder/beleg-skizze.png?v=6881aee1" width="2560" height="1392" loading="lazy" decoding="async"
-                 alt="Der Skizzenmodus im Hauptfenster: Gezeichnet wird in der Ansicht selbst, über dem Modell liegt das Raster mit einem bemaßten Rechteck und einem Kreis; unten die schwebende Leiste mit Zeichenwerkzeugen, Rasterweite, der Zeile „Zeichenebene: Fläche an Schild — 2247 mm²“ und den Bedingungsknöpfen; rechts der Reiter „Bedingungen“ mit den dreizehn Bedingungen der Zeichnung"></a>
+            <a href="bilder/beleg-skizze.webp?v=d3a8ff14"><img src="bilder/beleg-skizze.webp?v=d3a8ff14" width="2560" height="1369" loading="lazy" decoding="async"
+                 alt="Der Skizzenmodus im Hauptfenster: Gezeichnet wird in der Ansicht auf einer Fläche des Halters aus Weg 2, ein bemaßtes Rechteck von 50 × 30 mm mit einem Kreis darin, dahinter blass der Halter mit seinen zwei Schraubenlöchern; unten die Leiste mit den Zeichenwerkzeugen, der Zeichenebene und den Knöpfen Fertig und Verwerfen, rechts der Reiter „Bedingungen“."></a>
           </div>
           <figcaption>Gezeichnet wird in der Ansicht — auf der Fläche, die man angeklickt hat.</figcaption>
         </figure>
@@ -353,8 +309,8 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="bilder/beleg-bausteine.png?v=716c23e5"><img src="bilder/beleg-bausteine.png?v=716c23e5" width="1220" height="955" loading="lazy" decoding="async"
-                 alt="Der Bausteinkatalog mit den Gruppen Verbindungen und Mechanik: Heat-Set-Einpressbuchse, Mutternfalle, Gewinde, Schraubenloch mit Senkung, Passstift, Scharnierauge, Rastnase, Filmscharnier, Schnappverbinder und Schnappverbindung, dazu Standfuß, Schlüsselloch-Aufhängung, Magnettasche, Lochwand-Einhänger und Wandhalter, jeder mit Vorschau und seinen Maßen"></a>
+            <a href="bilder/beleg-bausteine.webp?v=ce447195"><img src="bilder/beleg-bausteine.webp?v=ce447195" width="1560" height="1144" loading="lazy" decoding="async"
+                 alt="Der Bausteinkatalog, über dem Fenster geöffnet: die Gruppen Verbindungen, Mechanik und Befestigung mit Heat-Set-Einpressbuchse, Mutternfalle, gedruckter Mutter, Schraube, Gewinde, Schraubenloch mit Senkung, Scharnieren, Rastnase, Schnappverbindungen, Standfuß, Schlüsselloch-Aufhängung, Magnettasche, Lochwand-Einhänger, Profilklemmen und Wandhalter, jeder mit Vorschau und seinen Maßen. Unten die Knöpfe Einfügen und Auswahl als Baustein speichern."></a>
           </div>
           <figcaption>Der Katalog — jedes Vorschaubild ist gerendert, nicht gezeichnet.</figcaption>
         </figure>
@@ -380,10 +336,10 @@
           bekommt, kann sie rechnen und ändern, ohne etwas zu
           installieren.</p>
         </div>
-        <figure class="shot">
+        <figure class="shot upright">
           <div class="stage">
-            <a href="handbuch/de/own-part.png?v=3bfcfd0d"><img src="handbuch/de/own-part.png?v=3bfcfd0d" width="520" height="920" loading="lazy" decoding="async"
-                 alt="Der Dialog „Auswahl als Baustein speichern“: oben Name, Gruppe und Beschreibung, darunter je Parameter Beschriftung, Einheit, kleinster und größter Wert, Vorgabe und der Platz im Dialog, dann die anklickbaren Stellen mit ihren Namen im Rezept — unten der Knopf „Baustein anlegen“"></a>
+            <a href="bilder/beleg-eigener-baustein.webp?v=285c7387"><img src="bilder/beleg-eigener-baustein.webp?v=285c7387" width="460" height="1347" loading="lazy" decoding="async"
+                 alt="Der Dialog „Auswahl als Baustein speichern“, geöffnet aus dem Katalog: oben Name, Gruppe, Beschreibung, Lizenz und Autor, darunter für jedes Maß — hier Breite und Tiefe — Beschriftung, Einheit, kleinster und größter Wert, Vorgabe und Platz im Dialog, dann die Stellen, die man später anklicken kann, mit ihrem Namen im Rezept; unten „Bereichstest: 8 Kombinationen“ und der Knopf „Baustein anlegen“."></a>
           </div>
           <figcaption>Der Dialog fragt fünf Dinge — und rechnet den Maßbereich durch, bevor er speichert.</figcaption>
         </figure>
@@ -432,8 +388,8 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="handbuch/de/report.png?v=5ff8f97e"><img src="handbuch/de/report.png?v=5ff8f97e" width="620" height="430" loading="lazy" decoding="async"
-                 alt="Der Prüfbericht einer Dose mit Deckel: null Fehler, eine Warnung und vier Hinweise, darunter „Die Passung sitzt enger als vorgesehen“ und „Ausgehöhlt. Die Wandstärke stimmt im Rahmen des Rasters“"></a>
+            <a href="bilder/beleg-bericht.webp?v=38bebc67"><img src="bilder/beleg-bericht.webp?v=38bebc67" width="1986" height="1241" loading="lazy" decoding="async"
+                 alt="Eine Dose mit Deckel groß in der Ansicht, rechts ihr Prüfbericht: 0 Fehler, 2 Warnungen, 6 Hinweise. Die Warnungen sagen, dass die Passung enger sitzt als vorgesehen und dass eine Fläche des Deckels frei überhängt und Stützen braucht; darunter Hinweise zu Aushöhlen, Deckel und Material."></a>
           </div>
           <figcaption>Der Prüfbericht einer Dose mit Deckel.</figcaption>
         </figure>
@@ -483,6 +439,23 @@
             </g>
           </svg>
           <figcaption>Drei Befunde, die der Slicer erst nach dem Slicen kennt.</figcaption>
+        </figure>
+      </div>
+
+      <div class="showcase" id="druckeinstellungen">
+        <div>
+          <span class="kicker">Druckeinstellungen</span>
+          <h3>An den Slicer übergeben — mit Werten, die zum Teil passen</h3>
+          <p>Solidon3D schreibt keinen G-Code, das tut dein Slicer. Die Druckeinstellungen sagen vorher, was dieses Teil verlangt: Aus der Geometrie kommen Vorschläge wie ein Brim bei kleiner Standfläche oder mehr Zeit je Schicht, wenn oben wenig Fläche liegt — jeder mit Grund und einzeln abwählbar.</p>
+          <p><b>Im Slicer öffnen</b> übergibt das Teil, auf Wunsch samt Werten, an PrusaSlicer, OrcaSlicer, Bambu Studio, ElegooSlicer, Creality Print, SuperSlicer oder Cura. <b>Slicen</b> lässt deinen Slicer im Hintergrund rechnen; was er misst, steht danach im Prüfbericht.</p>
+          <p class="note">Gemessenes und Geschätztes werden nie vermischt: <b>Was aus dem G-Code stammt, ist als gemessen gekennzeichnet</b> und steht neben Solidons Schätzung, nicht an ihrer Stelle.</p>
+        </div>
+        <figure class="shot">
+          <div class="stage">
+            <a href="bilder/schritt-druck.webp?v=dbe52f39"><img src="bilder/schritt-druck.webp?v=dbe52f39" width="1562" height="976" loading="lazy" decoding="async"
+                 alt="Die Druckeinstellungen über einer eingelesenen Figur: Qualität, Drucker, Düse und Filament, darunter Schichthöhe, Wände, Fülldichte, Temperaturen und Stützen. Unter „Was dieses Teil verlangt“ schlägt Solidon3D einen Brim und eine längere Mindestzeit je Schicht vor; unten die Knöpfe Slicen und Im Slicer öffnen."></a>
+          </div>
+          <figcaption>Was dieses Teil verlangt, steht mit Grund im Dialog — übernommen wird, was angehakt ist.</figcaption>
         </figure>
       </div>
 
@@ -581,8 +554,8 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="bilder/beleg-filamentlager.png?v=e0e99784"><img src="bilder/beleg-filamentlager.png?v=e0e99784" width="1278" height="852" loading="lazy" decoding="async"
-                 alt="Das Filamentlager: sechs Spulen auf zwei Regalbrettern „Regal Werkstatt“ und „Trockenbox“, jede mit gezeichneter Spule, Materialart, Restmenge in Gramm und Lagerort — eine Spule mit drei Farben, eine mit dem Vermerk „Wenig Filament“; darüber Suchfeld, Gruppierung und der Knopf „Spule von Hand anlegen“"></a>
+            <a href="bilder/beleg-filamentlager.webp?v=88e5de3e"><img src="bilder/beleg-filamentlager.webp?v=88e5de3e" width="1172" height="781" loading="lazy" decoding="async"
+                 alt="Das Filamentlager, nach Lagerort gruppiert: sechs Spulen auf den Brettern „Regal Werkstatt“ und „Trockenbox“, jede mit gezeichneter Spule, Materialart, Restmenge in Gramm und Lagerort — eine Spule mit drei Farben, eine mit dem Vermerk „Wenig Filament“; darüber der Knopf „Lager verlassen“ und das Suchfeld."></a>
           </div>
           <figcaption>Das Regal, nach Lagerort gruppiert: Die Restmenge steht
           als Wickel und als Zahl da, eine Spule liegt unter der Warnschwelle,
@@ -605,8 +578,8 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="handbuch/de/op-dialog.png?v=302c4ad6"><img src="handbuch/de/op-dialog.png?v=302c4ad6" width="520" height="306" loading="lazy" decoding="async"
-                 alt="Der Dialog „Bohrung setzen“ mit Durchmesser und Position X, einem fx-Knopf hinter jedem Zahlenfeld und dem zugeklappten Bereich „Weitere Einstellungen“"></a>
+            <a href="bilder/beleg-dialog.webp?v=1ab43c13"><img src="bilder/beleg-dialog.webp?v=1ab43c13" width="2560" height="1369" loading="lazy" decoding="async"
+                 alt="Das Hauptfenster mit dem gewählten Schild und rechts oben dem Dialog „Bohrung setzen“: Durchmesser und Position X, Y und Z mit je einem fx-Knopf, das Kästchen Langloch und der zugeklappte Bereich „Weitere Einstellungen“; unten im Bild die Leiste mit dem Hinweis, dass ein Klick ins Modell die Stelle setzt."></a>
           </div>
           <figcaption>Der Dialog einer Operation — vorne die zwei bis drei
           Werte, die man wirklich ändert, hinten alles andere.</figcaption>
@@ -723,8 +696,8 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="bilder/beleg-start.png?v=4334e127"><img src="bilder/beleg-start.png?v=4334e127" width="2560" height="1392" loading="lazy" decoding="async"
-                 alt="Der Startbildschirm: ein Ablagefeld für Modelle und Projekte, die Knöpfe „Neues Projekt“ und „Projekt öffnen“, darunter vier Beispielprojekte — je eins pro Weg — mit Vorschaubild und Beschreibung, darunter der zugeklappte Abschnitt „Was kann das noch?“"></a>
+            <a href="bilder/schritt-start.webp?v=3d3ea6b0"><img src="bilder/schritt-start.webp?v=3d3ea6b0" width="1472" height="920" loading="lazy" decoding="async"
+                 alt="Der Startbildschirm: das Ablagefeld für Modelle und Projekte, die Knöpfe Neues Projekt, Modell öffnen, Projekt öffnen und Handbuch, das Filamentlager mit sechs Spulen, darunter vier geführte Touren — je eine pro Weg — mit Vorschaubild, dazu Feedback geben und Solidon freiwillig unterstützen und der zugeklappte Abschnitt „Was kann das noch?“."></a>
           </div>
           <figcaption>Vier der zwölf Beispiele führen die Hauptwege vor; weitere
           Projekte zeigen einzelne Werkzeuge und ihre Anwendung.</figcaption>
@@ -929,8 +902,7 @@
         </article>
         <article class="feature-card" id="textur-bearbeiten">
           <img src="bilder/feature-textures.webp?v=f88988e1" width="1200" height="800" loading="lazy" decoding="async" alt="Drei Modellplatten mit Rändel, Wabenmuster und parallelen Rippen als echter Geometrie.">
-          <div class="feature-card-copy"><h3>Ein Muster später weiterbearbeiten</h3><p>Eine aufgebrachte Textur im Merkmalsfenster auswählen und ihre Werte
-        ändern. Mit <b>Gesamte Fläche</b> füllt das Muster die gewählte ebene
+          <div class="feature-card-copy"><h3>Ein Muster später weiterbearbeiten</h3><p>Eine aufgebrachte Textur anklicken und ihre Werte rechts im Fenster „Auswahl“ ändern. Mit <b>Gesamte Fläche</b> füllt das Muster die gewählte ebene
         Fläche bis zum Rand und lässt Bohrungen frei. Die Änderung siehst du
         am Ergebniskörper.</p></div>
         </article>
@@ -981,7 +953,7 @@
   </div>
 </footer>
 
-<script src="/site.js?v=174df3cf" defer></script>
+<script src="/site.js?v=365a5a78" defer></script>
 
 </body>
 </html>

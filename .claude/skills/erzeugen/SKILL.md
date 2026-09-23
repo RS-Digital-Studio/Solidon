@@ -33,7 +33,7 @@ Windows `.venv/Scripts/python.exe`, Linux/macOS `.venv/bin/python`. Nur
 |---|---|
 | Beispielprojekte | `tools/make_examples.py`; nach jeder Änderung an der Bausteinbibliothek (`LIBRARY_VERSION`) oder an einer Beispielkette — `tests/test_examples.py` hält die Bausteinversion fest, sonst begrüßt ein Beispiel mit „benutzte Bausteine geändert". |
 | Handbuch-Bildschirmfotos | `tools/make_figures.py <sprache>`; `--schirm N` wählt den Monitor. |
-| Verkaufsbilder | `tools/make_web_images.py <sprache>`; eigene Ansichtsgröße, nicht verkleinerte Handbuchbilder. |
+| Verkaufsbilder | `tools/make_web_images.py <sprache>`; das maximierte Hauptfenster, ein Kindprozess je Sprache, Zuschnitte nur aus der Vollbildaufnahme. Loops der Website: `tools/make_video.py <ordner> webloop anpassen <sprache>` und `… formen loop website/teile/weg4-stein-formen.p3d --name weg4-formen <sprache>`, ein Prozess je Sprache. Der Bausteinkatalog braucht vorher einen gültigen Bereichsnachweis. |
 | Handbuch und PDF | `tools/make_manual.py`; Sprach- und Ausgabeoptionen vor dem Lauf nachsehen. **Auf einem Rechner mit exaktem Kern** (OCP): Die Menüwege der Referenz lesen `registry.MENU_TWINS`, und die hängen seit P2.8 daran, ob der Kern da ist. |
 | Symbol | `tools/make_icon.py`; Rasterdateien und Website-Favicon aus der vorhandenen Quelle. |
 | SEO-Dateien | `tools/make_seo.py`; nach den Seiten- und Handbuchgeneratoren. |

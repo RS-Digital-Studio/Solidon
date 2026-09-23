@@ -124,7 +124,9 @@ ART_SUFFIXES: Final = {
     "icon": {".icns", ".ico", ".svg"},
     "image": {".gif", ".jpeg", ".jpg", ".png", ".svg", ".webp"},
     "project": {".p3d"},
-    "video": {".mp4", ".png", ".webm"},
+    # Das Standbild gehört zum Video (``poster``) und ist seit den
+    # Website-Loops von 0.5.0 WebP — ein Zehntel der Bytes von PNG.
+    "video": {".mp4", ".png", ".webm", ".webp"},
 }
 
 

@@ -16,9 +16,11 @@ Hier steht nur, was beim **Arbeiten** daran zusätzlich gilt.
 | `eula.html`, `agb.html`, `widerruf.html` | `tools/make_legal.py` |
 | `robots.txt`, `sitemap.xml`, `llms.txt` | `tools/make_seo.py` |
 | `icon.svg` | `tools/make_icon.py` |
-| `bilder/beleg-*.png` | `tools/make_web_images.py` — `beleg-filamentlager*.png` entsteht darin in einem Kindprozess mit eigenen Nutzerverzeichnissen (Beispielspulen, nie Roberts Lager) |
+| `bilder/beleg-*.webp`, `bilder/schritt-*.webp` | `tools/make_web_images.py <sprache> --nur fenster` — ein Kindprozess je Sprache mit eigenen Nutzerverzeichnissen, ein maximiertes Hauptfenster, elf Motive als Vollbild oder Zuschnitt daraus |
+| `bilder/verwandlung-*.svg` | `tools/make_web_images.py de --nur verwandlung` (ohne Fenster) |
 | `bilder/feature-*.webp` | `tools/make_feature_images.py`, ein nativer Prozess je Motiv |
-| `bilder/weg{1,2,3,4}-*.(mp4|png|webm)` | `tools/make_video.py` |
+| `bilder/loop-anpassen*.(mp4|webm|webp)` | `tools/make_video.py <ordner> webloop anpassen <sprache>` — Bedienloop mit Anfangs- und Schlussbild |
+| `bilder/weg4-formen*.(mp4|webm|webp)` | `tools/make_video.py <ordner> formen loop website/teile/weg4-stein-formen.p3d --name weg4-formen <sprache>` |
 | `dl/` | `tools/make_download.py` |
 
 Von Hand: `index.html`, `funktionen.html`, `ki-modelle.html`, `style.css`,
@@ -42,11 +44,29 @@ einem Verwender.
 Eine Änderung an einer erzeugten Datei ist beim nächsten Lauf weg. Wer sie
 ändern will, ändert das Werkzeug oder die Quelle.
 
-Der Weg-3-Loop wird reproduzierbar aus dem mitgelieferten Beispiel erzeugt:
-`.venv\Scripts\python.exe tools\make_video.py <temporärer Ordner> generieren
-loop de app\examples\weg3-generiert-aufbereiten.p3d`. Seine eingebettete
-Geometrie stammt ausschließlich aus `tests/data/meshes/generated_figure.stl`;
-Ausgabe- und Eingangsbytes stehen zusätzlich in `ASSET-RIGHTS.toml`.
+## Aufnahmen der Anwendung — der Bildstandard
+
+Jedes Bild und jeder Loop aus der Anwendung zeigt **das ganze Solidon-Fenster,
+maximiert auf dem 2560 × 1440-Schirm** (Robert, 23.09.2026: „dass der ganze
+Bildschirm verwendet wird und wir nicht nur so eine kleine Szene haben"), in
+nativen Bildpunkten, Gerätepixelverhältnis 1. Braucht eine Karte einen anderen
+Zuschnitt, schneiden ihn die Werkzeuge aus der Vollbildaufnahme — so, dass
+jede Leiste ganz im Bild steht oder ganz draußen, nie auf einen angesetzten
+Grund. Die Begründungen stehen bei `make_video.WEB_VIDEO_WIDTH` und im
+Modulkopf von `make_web_images.py`.
+
+- **Ein Prozess je Sprache und Motivgruppe.** Mehrere Hauptfenster
+  nacheinander enden in einem nativen Abbruch.
+- **Nicht parallel zu einer anderen Sitzung aufnehmen, die denselben Schirm
+  benutzt** — oder es der Wache überlassen: `make_figures.foreign_window_over`
+  lässt jedes Werkzeug warten, solange ein fremdes Fenster über der Aufnahme
+  liegt.
+- **Der Bausteinkatalog braucht einen gültigen Bereichsnachweis**
+  (`tools/check_part_ranges.py`); sonst steht unter jeder Kachel die Warnung,
+  dass der Bereichstest nicht mehr passt — und genau so im Bild.
+- **Angesehen wird jedes Bild** in voller Größe und in Handybreite, bevor es
+  auf die Seite kommt. Die Maße in den `<img>`- und `<video>`-Angaben kommen
+  aus den Dateien (`test_every_picture_states_the_size_it_actually_has`).
 
 Die sechs Handbuchseiten lesen Inhalt **und sichtbaren Seitenrahmen** aus den
 Katalogen unter `app/i18n/locales/`. Titel, Navigation, Sprunglinks,

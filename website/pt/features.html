@@ -27,7 +27,7 @@
 <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="/icon.svg?v=a72d0c52" type="image/svg+xml">
-<link rel="stylesheet" href="../style.css?v=aece7d33">
+<link rel="stylesheet" href="../style.css?v=8c4d6ed7">
 </head>
 <body>
 <a class="skip" href="#content">Ir para o conteúdo</a>
@@ -80,10 +80,8 @@
         <div class="shot">
           <div class="stage">
             <div class="chrome" aria-hidden="true"><i></i><i></i><i></i></div>
-            <a href="../bilder/beleg-fenster-pt.png?v=b79bc44e">
-              <img src="../bilder/beleg-fenster-pt.png?v=b79bc44e" width="2560" height="1392" fetchpriority="high"
-                   alt="A janela principal do Solidon3D: à esquerda a árvore de objetos com parâmetros e histórico, ao centro a vista 3D, à direita o relatório de verificação">
-            </a>
+            <a href="../bilder/beleg-fenster-pt.webp?v=85668cb9"><img src="../bilder/beleg-fenster-pt.webp?v=85668cb9" width="2560" height="1369" fetchpriority="high"
+                 alt="A janela principal do Solidon3D com uma placa de duas cores: à esquerda objetos, parâmetros e histórico, ao centro a placa em grande com o ano selecionado, à direita o relatório de verificação com um aviso e o painel Seleção com as ações para as letras selecionadas."></a>
           </div>
         </div>
       </div>
@@ -114,8 +112,7 @@
           dia foi projeto: furos, pinos, escareados, cúpulas e sedes,
           arredondamentos, golas, roscas, faces planas e arestas abertas. Cada
           característica encontrada recebe uma identidade que sobrevive aos
-          passos seguintes — e a janela de características mostra os seus
-          valores <b>medidos</b> como campos: posição, diâmetro, profundidade,
+          passos seguintes — e um clique mostra os seus valores <b>medidos</b>, como cotas na vista e, à direita, no painel Seleção: posição, diâmetro, profundidade,
           eixo.</p>
           <p class="note">Alterar um número é a operação.
           <b>Sem modo e sem um segundo diálogo</b> — e a pré-visualização na
@@ -126,8 +123,7 @@
           coordenadas novas — dois passos, seis números à mão, e a identidade
           perdia-se. Agora é um passo, e cada ajuste que aponta para esse furo
           mantém a sua referência.</p>
-          <p>O próprio furo diz que parafuso lhe pertence («mede 5,19 mm — o
-          furo de passagem para M5»), e onde nenhum serve, também o diz. Seis
+          <p>O próprio furo diz que parafuso lhe pertence («Provavelmente corresponde a M5 (Furo de passagem fino)»), e onde nenhum serve, também o diz. Seis
           furos iguais passam à mesma medida de uma só vez, como uma única ação
           que um desfazer retira em conjunto. Duas características marcadas
           indicam a sua distância — no espaço e por eixo, sem ferramenta de
@@ -141,54 +137,11 @@
           porquê.</b></p>
         </div>
         <figure class="shot">
-          <svg class="figure" viewBox="0 0 560 300" role="img"
-               aria-label="Desenho da janela de características: em cima lê-se «Furo — Ø 5,19 mm» e por baixo «o furo de passagem para M5»; seguem-se campos para diâmetro, profundidade e posição, e os botões Mover, Rodar, Duplicar e Remover. Num arredondamento compatível é possível alterar o raio.">
-            <text class="ink" x="24" y="30" font-weight="600">Característica</text>
-
-            <rect class="field" x="24" y="46" width="250" height="44" rx="4"/>
-            <text class="ink" x="38" y="66" font-size="12">Furo</text>
-            <text class="value" x="260" y="66" text-anchor="end">Ø 5,19 mm</text>
-            <text class="dim" x="38" y="82">o furo de passagem para M5</text>
-
-            <rect class="field" x="24" y="102" width="250" height="30" rx="4"/>
-            <text class="dim" x="38" y="122">Diâmetro</text>
-            <text class="value" x="260" y="122" text-anchor="end">5,19 mm</text>
-
-            <rect class="field" x="24" y="140" width="250" height="30" rx="4"/>
-            <text class="dim" x="38" y="160">Profundidade</text>
-            <text class="value" x="260" y="160" text-anchor="end">12,00 mm</text>
-
-            <rect class="field" x="24" y="178" width="250" height="30" rx="4"/>
-            <text class="dim" x="38" y="198">Posição X / Y</text>
-            <text class="value" x="260" y="198" text-anchor="end">18,0 / 24,0</text>
-
-            <g class="rule" fill="none">
-              <rect x="24" y="224" width="54" height="26" rx="4"/>
-              <rect x="84" y="224" width="52" height="26" rx="4"/>
-              <rect x="142" y="224" width="62" height="26" rx="4"/>
-              <rect x="210" y="224" width="60" height="26" rx="4"/>
-            </g>
-            <text class="ink" x="51" y="241" font-size="11" text-anchor="middle">Mover</text>
-            <text class="ink" x="110" y="241" font-size="11" text-anchor="middle">Rodar</text>
-            <text class="ink" x="173" y="241" font-size="11" text-anchor="middle">Duplicar</text>
-            <text class="ink" x="240" y="241" font-size="11" text-anchor="middle">Remover</text>
-
-            <text class="dim" x="24" y="278">Arredondamento</text>
-            <text class="dim" x="24" y="294">Alterar o raio se o arredondamento permitir.</text>
-
-            <text class="dim" x="320" y="42">Na imagem</text>
-            <rect class="body" x="320" y="56" width="216" height="150" rx="6"/>
-            <circle class="body-soft" cx="378" cy="112" r="17"/>
-            <circle class="hot-stroke" cx="378" cy="112" r="21"/>
-            <circle class="body-soft" cx="470" cy="112" r="17"/>
-            <circle class="body-soft" cx="378" cy="168" r="17"/>
-            <circle class="body-soft" cx="470" cy="168" r="17"/>
-            <text class="dim" x="320" y="230">escolhido: um de quatro</text>
-            <text class="ink" x="320" y="252" font-size="12">Alterar os quatro de uma vez:</text>
-            <text class="value" x="320" y="270">Ø 5,19 → 5,40 mm</text>
-          </svg>
-          <figcaption>A janela de características: valores medidos como campos,
-          e o que não é possível escrito por extenso.</figcaption>
+          <div class="stage">
+            <a href="../bilder/beleg-merkmal-pt.webp?v=9151016d"><img src="../bilder/beleg-merkmal-pt.webp?v=9151016d" width="2560" height="1369" loading="lazy" decoding="async"
+                 alt="Um suporte importado com cinco furos reconhecidos; o furo 4 está selecionado. Na vista, as suas distâncias às arestas e o grupo «Alterar furo» com diâmetro, posição e profundidade; à direita, no painel Seleção, a linha «Provavelmente corresponde a M5» e por baixo Mover elemento, Esticar para furo oblongo, Rodar elemento, Duplicar elemento, Remover elemento, Escarear e Fechar furo."></a>
+          </div>
+          <figcaption>Um furo clicado: as suas cotas na vista, as suas ações à direita no painel Seleção.</figcaption>
         </figure>
       </div>
 
@@ -271,8 +224,8 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../bilder/beleg-skizze-pt.png?v=194b7949"><img src="../bilder/beleg-skizze-pt.png?v=194b7949" width="2560" height="1392" loading="lazy" decoding="async"
-                 alt="O modo de esboço na janela principal: desenha-se na própria vista, a grelha fica sobre o modelo com um retângulo cotado e um círculo; em baixo, a barra flutuante com as ferramentas de desenho, o passo da grelha, a linha «Plano de desenho: face em Letreiro — 2247 mm²» e os botões de restrição; à direita, o separador com as treze restrições do desenho"></a>
+            <a href="../bilder/beleg-skizze-pt.webp?v=a456a519"><img src="../bilder/beleg-skizze-pt.webp?v=a456a519" width="2560" height="1369" loading="lazy" decoding="async"
+                 alt="O modo de esboço na janela principal: desenha-se na vista, numa face do suporte do caminho 2 — um retângulo cotado de 50 × 30 mm com um círculo lá dentro, por trás, esbatido, o suporte com os seus dois furos de parafuso; em baixo a barra com as ferramentas de desenho, o plano de esboço e os botões Concluído e Descartar, à direita o separador Restrições."></a>
           </div>
           <figcaption>Desenha-se na vista — na face em que clicou.</figcaption>
         </figure>
@@ -329,8 +282,7 @@
           <span class="kicker">Blocos</span>
           <h3>Um alojamento de porca em quatro cliques, não em quatro meias horas</h3>
           <p>A face em que clica é que conta: um bloco aparece onde apontou
-          no modelo — antes, cada operação numa face custava dois cliques. O
-          menu de contexto de uma face oferece agora também suporte de
+          no modelo — antes, cada operação numa face custava dois cliques. O catálogo à direita conhece agora também suporte de
           parede, nervura, lingueta e ranhura, lingueta de encaixe, ligação
           de encaixe e dobradiça de filme.</p>
           <p>Blocos verificados em seis grupos — furo de parafuso com
@@ -353,8 +305,8 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../bilder/beleg-bausteine-pt.png?v=f361dd25"><img src="../bilder/beleg-bausteine-pt.png?v=f361dd25" width="1220" height="955" loading="lazy" decoding="async"
-                 alt="O catálogo de blocos com os grupos ligações e mecânica: bucha de inserção a quente, alojamento de porca, rosca, furo de parafuso com escareamento, pino de posicionamento, olhal de dobradiça, lingueta de encaixe, dobradiça de filme, conector de encaixe e ligação de encaixe, além de pé, suspensão em buraco de fechadura, alojamento de íman, gancho para painel perfurado e suporte de parede, cada um com pré-visualização e medidas"></a>
+            <a href="../bilder/beleg-bausteine-pt.webp?v=a06ad43d"><img src="../bilder/beleg-bausteine-pt.webp?v=a06ad43d" width="1560" height="1144" loading="lazy" decoding="async"
+                 alt="O catálogo de blocos, aberto por cima da janela: os grupos Parafusos e roscas, Mecânica e Fixação com bucha de inserção a quente, alojamento de porca, porca impressa, parafuso, rosca imprimível, furo de parafuso com escareamento, dobradiça de pino, rolamento de esferas, pino de posicionamento e furo de ajuste, olhal de dobradiça, lingueta de encaixe, dobradiça de filme, ligações de encaixe, pé, suspensão em buraco de fechadura, alojamento de íman, gancho para painel perfurado, abraçadeira e suporte de parede, cada um com pré-visualização e as suas medidas. Em baixo os botões Inserir e Guardar a seleção como bloco."></a>
           </div>
           <figcaption>O catálogo — cada imagem de pré-visualização é renderizada, não desenhada.</figcaption>
         </figure>
@@ -379,10 +331,10 @@
           passos e valores, não um programa. Quem recebe o ficheiro pode
           calcular e alterar sem instalar nada.</p>
         </div>
-        <figure class="shot">
+        <figure class="shot upright">
           <div class="stage">
-            <a href="../handbuch/pt/own-part.png?v=81780b51"><img src="../handbuch/pt/own-part.png?v=81780b51" width="520" height="920" loading="lazy" decoding="async"
-                 alt="A caixa de diálogo «Guardar a seleção como bloco»: em cima nome, grupo e descrição, por baixo, por cada parâmetro, a etiqueta, a unidade, o valor mínimo e máximo, a predefinição e o seu lugar na caixa, depois os pontos clicáveis com os seus nomes na receita — em baixo o botão «Criar bloco»"></a>
+            <a href="../bilder/beleg-eigener-baustein-pt.webp?v=ff0b069d"><img src="../bilder/beleg-eigener-baustein-pt.webp?v=ff0b069d" width="479" height="1347" loading="lazy" decoding="async"
+                 alt="O diálogo «Guardar a seleção como bloco», aberto a partir do catálogo: em cima nome, grupo, descrição, licença e autor, depois para cada cota — aqui largura e profundidade — rótulo, unidade, valor mínimo e máximo, valor predefinido e lugar no diálogo, depois os pontos em que se poderá clicar, com o seu nome na receita; em baixo «Teste do intervalo: 8 combinações» e o botão Criar bloco."></a>
           </div>
           <figcaption>A caixa de diálogo pergunta cinco coisas — e calcula todo o intervalo antes de guardar.</figcaption>
         </figure>
@@ -429,8 +381,8 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../handbuch/pt/report.png?v=517fe811"><img src="../handbuch/pt/report.png?v=517fe811" width="620" height="430" loading="lazy" decoding="async"
-                 alt="O relatório de verificação de uma lata com tampa: zero erros, um aviso e quatro notas, entre elas «O ajuste fica mais apertado do que previsto» e «Esvaziado. A espessura da parede cumpre a grelha»"></a>
+            <a href="../bilder/beleg-bericht-pt.webp?v=54038114"><img src="../bilder/beleg-bericht-pt.webp?v=54038114" width="1989" height="1243" loading="lazy" decoding="async"
+                 alt="Uma caixa com tampa, grande na vista, e à direita o seu relatório de verificação: 0 erros, 2 avisos, 6 notas. Os avisos dizem que o ajuste fica mais apertado do que o previsto e que uma face da tampa fica em balanço e precisa de suportes; por baixo, notas sobre o esvaziamento, a tampa e o material."></a>
           </div>
           <figcaption>O relatório de verificação de uma lata com tampa.</figcaption>
         </figure>
@@ -479,6 +431,23 @@
             </g>
           </svg>
           <figcaption>Três achados que o slicer só conhece depois do slicing.</figcaption>
+        </figure>
+      </div>
+
+      <div class="showcase" id="print-settings">
+        <div>
+          <span class="kicker">Definições de impressão</span>
+          <h3>Passar ao slicer, com valores à medida da peça</h3>
+          <p>O Solidon3D não escreve G-code: isso é com o seu slicer. As definições de impressão dizem antes o que esta peça exige: da geometria saem sugestões como um brim quando a base é pequena ou mais tempo por camada quando sobra pouca área em cima — cada uma com o seu motivo, e cada uma pode ser desmarcada.</p>
+          <p><b>Abrir no slicer</b> passa a peça, se quiser com os valores, ao PrusaSlicer, OrcaSlicer, Bambu Studio, ElegooSlicer, Creality Print, SuperSlicer ou Cura. <b>Fatiar</b> deixa o seu slicer calcular em segundo plano; o que ele mede aparece depois no relatório de verificação.</p>
+          <p class="note">O medido e o estimado nunca se misturam: <b>o que vem do G-code fica marcado como medido</b> e aparece ao lado da estimativa do Solidon, não no seu lugar.</p>
+        </div>
+        <figure class="shot">
+          <div class="stage">
+            <a href="../bilder/schritt-druck-pt.webp?v=f956c3b2"><img src="../bilder/schritt-druck-pt.webp?v=f956c3b2" width="1565" height="978" loading="lazy" decoding="async"
+                 alt="As definições de impressão por cima de uma figura importada: qualidade, impressora, bico e filamento, depois altura de camada, paredes, enchimento, temperaturas e suportes. Em «O que esta peça exige» o Solidon3D propõe um brim e mais tempo mínimo por camada; em baixo os botões Fatiar e Abrir no slicer."></a>
+          </div>
+          <figcaption>O que esta peça exige está no diálogo com o seu motivo — aplica-se o que estiver marcado.</figcaption>
         </figure>
       </div>
 
@@ -576,8 +545,8 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../bilder/beleg-filamentlager-pt.png?v=860b6a7c"><img src="../bilder/beleg-filamentlager-pt.png?v=860b6a7c" width="1278" height="852" loading="lazy" decoding="async"
-                 alt="O inventário de filamentos: seis bobinas nas duas prateleiras «Armário da oficina» e «Caixa seca», cada uma com a bobina desenhada, o tipo de material, a quantidade restante em gramas e o local — uma bobina com três cores, outra com a indicação «Pouco filamento»; por cima, o campo de pesquisa, o agrupamento e o botão «Criar bobina manualmente»"></a>
+            <a href="../bilder/beleg-filamentlager-pt.webp?v=6df11ba5"><img src="../bilder/beleg-filamentlager-pt.webp?v=6df11ba5" width="1172" height="781" loading="lazy" decoding="async"
+                 alt="O inventário de filamentos, agrupado por local de armazenamento: seis bobinas nas prateleiras «Armário da oficina» e «Caixa seca», cada uma com a bobina desenhada, tipo de material, gramas restantes e local — uma bobina de três cores, uma assinalada com «Pouco filamento»; por cima o botão Sair do inventário e o campo de pesquisa."></a>
           </div>
           <figcaption>A prateleira, agrupada por local: a quantidade restante
           vê-se como enrolamento e como número, uma bobina está abaixo do
@@ -595,13 +564,13 @@
           no modelo como constantes. À frente estão os dois ou três valores
           que se muda de facto — o resto vive em «Mais definições».</p>
           <p class="note">136 operações, todas com o mesmo padrão:
-          <b>menu, menu de contexto, linha de comandos e chat veem a mesma
+          <b>menu, linha de comandos e chat veem a mesma
           declaração.</b></p>
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../handbuch/pt/op-dialog.png?v=4ba44c88"><img src="../handbuch/pt/op-dialog.png?v=4ba44c88" width="520" height="306" loading="lazy" decoding="async"
-                 alt="O diálogo «Abrir furo» com diâmetro e posição X, um botão fx atrás de cada campo numérico e a secção recolhida «Mais definições»"></a>
+            <a href="../bilder/beleg-dialog-pt.webp?v=c33d3cd5"><img src="../bilder/beleg-dialog-pt.webp?v=c33d3cd5" width="2560" height="1369" loading="lazy" decoding="async"
+                 alt="A janela principal com a placa selecionada e, em cima à direita, o diálogo «Abrir furo»: diâmetro e posição X, Y e Z, cada um com um botão fx, a caixa Furo oblongo e «Mais definições» recolhido; em baixo na vista a barra que diz que um clique no modelo define o ponto."></a>
           </div>
           <figcaption>O diálogo de uma operação — à frente os dois ou três
           valores que se muda de facto, atrás tudo o resto.</figcaption>
@@ -716,8 +685,8 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../bilder/beleg-start-pt.png?v=940f5744"><img src="../bilder/beleg-start-pt.png?v=940f5744" width="2560" height="1392" loading="lazy" decoding="async"
-                 alt="O ecrã inicial: uma área de largar para modelos e projetos, os botões «Novo projeto» e «Abrir projeto», e por baixo quatro projetos de exemplo — um por caminho — com imagem de pré-visualização e descrição, e por baixo disso a secção recolhida «Que mais há?»"></a>
+            <a href="../bilder/schritt-start-pt.webp?v=bc2323d4"><img src="../bilder/schritt-start-pt.webp?v=bc2323d4" width="1472" height="920" loading="lazy" decoding="async"
+                 alt="O ecrã inicial: a área para largar modelos e projetos, os botões Novo projeto, Abrir modelo, Abrir projeto e Manual, o inventário de filamentos com seis bobinas, depois quatro visitas guiadas — uma por caminho — com imagem de pré-visualização, e ainda Dar a minha opinião e Apoiar voluntariamente o Solidon, e a secção recolhida «O que mais consegue fazer?»."></a>
           </div>
           <figcaption>Quatro dos doze exemplos apresentam os caminhos principais; outros projetos mostram
           ferramentas específicas e a sua utilização.</figcaption>
@@ -921,8 +890,7 @@
         </article>
         <article class="feature-card" id="textur-bearbeiten">
           <img src="../bilder/feature-textures.webp?v=f88988e1" width="1200" height="800" loading="lazy" decoding="async" alt="Três placas com recartilhado, padrão de favo de mel e nervuras paralelas como geometria real.">
-          <div class="feature-card-copy"><h3>Voltar a editar um padrão mais tarde</h3><p>Selecionar uma textura aplicada na
-        janela de características e alterar os seus valores. <b>Face inteira</b>
+          <div class="feature-card-copy"><h3>Voltar a editar um padrão mais tarde</h3><p>Clicar numa textura aplicada e alterar os seus valores à direita, no painel Seleção. <b>Face inteira</b>
         preenche a face plana escolhida até ao bordo e deixa os furos livres. O
         sólido resultante mostra a alteração.</p></div>
         </article>
@@ -975,7 +943,7 @@
   </div>
 </footer>
 
-<script src="/site.js?v=174df3cf" defer></script>
+<script src="/site.js?v=365a5a78" defer></script>
 
 </body>
 </html>

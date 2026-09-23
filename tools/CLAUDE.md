@@ -304,11 +304,12 @@ entfernte allgemeine Pakete werden nicht durch einen Freeze wieder aufgenommen.
   fault nach der ersten Sprache). Ein Prozess je Sprache — dieselbe Antwort
   wie bei der Suite. Die Hintergrund-Hülle meldet darüber „exit code 0".
 - **Ein Motiv, das in Nutzerverzeichnisse schreibt, bekommt eigene.**
-  `make_web_images.py` liest sonst Roberts Profil (Einstellungen, Lager) —
-  der Lagerbeleg legt Spulen an und bucht Verbrauch, deshalb läuft er als
-  Kindprozess mit `APPDATA`, `LOCALAPPDATA`, `HOME` und den XDG-Variablen
-  auf einem Temp-Ordner, gesetzt in der Umgebung des Kindes **vor** seinem
-  ersten Import; eine Umbiegung im laufenden Prozess kommt zu spät.
+  `make_web_images.py` legt Spulen an, bucht Verbrauch und merkt sich im
+  Druckdialog den Slicer — deshalb laufen alle seine Fenstermotive in einem
+  Kindprozess je Sprache mit `APPDATA`, `LOCALAPPDATA`, `HOME` und den
+  XDG-Variablen auf einem Temp-Ordner, gesetzt in der Umgebung des Kindes
+  **vor** seinem ersten Import; eine Umbiegung im laufenden Prozess kommt zu
+  spät.
 
 ## Der Sitzungszustand ist ausgenommen
 

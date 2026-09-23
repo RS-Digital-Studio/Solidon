@@ -84,6 +84,21 @@
   # Weggehen mitgereicht wird.
   Header set X-Content-Type-Options "nosniff"
   Header set Referrer-Policy "strict-origin-when-cross-origin"
+
+  # **Was eine Seite laden darf, sagt der Server — nicht nur der Test.** Die
+  # Seiten versprechen, nichts von außen zu laden, und `test_website.py` prüft
+  # das Markup. Diese Richtlinie setzt dasselbe im Browser durch: Skripte,
+  # Bilder, Schriften, Filme und Verbindungen nur von hier. Die eine Ausnahme
+  # ist ein **Rahmen** von `https://www.gofundme.com` — der Stand der Kampagne,
+  # den `site.js` erst nach einem Klick einsetzt. Ohne Klick lädt ihn niemand;
+  # mit Klick kommt er in seinem eigenen Ursprung und sieht nichts von dieser
+  # Seite. `style-src 'unsafe-inline'` brauchen Handbuch und Changelog, deren
+  # erzeugte Seiten einen eigenen Stilblock tragen; Skripte bleiben streng.
+  # Nur für `.html`: Die Auswertungsseite unter `/api/` baut ihr HTML selbst
+  # und hat eigene Kopfzeilen.
+  <FilesMatch "\.html$">
+    Header set Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self'; font-src 'self'; connect-src 'self'; frame-src https://www.gofundme.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+  </FilesMatch>
 </IfModule>
 
 # Kompression. Der Server macht es für HTML von sich aus, für SVG und JSON

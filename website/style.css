@@ -948,25 +948,6 @@ nav.lang a.cta:hover {
   font-size: var(--t-sm);
 }
 
-/* **Das Rechtliche bleibt, es steht nur nicht mehr in der ersten Zeile.** Wer
-   gerade herunterlädt, liest „keine Bestellung, keine Gegenleistung" nicht —
-   wer unterstützen will, findet es in einem Griff. Im Dokument, im Text und für
-   jede Suche ist es unverändert da; das ist der Unterschied zwischen
-   Wegklappen und Weglassen. */
-.donate-fine {
-  margin-top: 0.35rem;
-}
-
-.donate-fine summary {
-  color: var(--muted);
-  font-size: var(--t-xs);
-  cursor: pointer;
-}
-
-.donate-fine summary:hover { color: var(--accent); }
-
-.donate-fine .donate-terms { margin-top: 0.45rem; }
-
 .donate p.donate-terms {
   margin-top: 0.55rem;
   color: var(--muted);
@@ -3757,6 +3738,8 @@ p.footnote {
   box-shadow: var(--edge);
 }
 
+.beleg figure > a { display: block; }
+
 .beleg img {
   display: block;
   width: 100%;
@@ -3939,7 +3922,6 @@ nav.lang .menu > summary,
 .btn,
 .tab,
 .download-notes summary,
-.donate-fine summary,
 .donate-button,
 .toc a,
 .feature-topics a,
@@ -3986,11 +3968,625 @@ footer.site a {
 /* Die Klappen bleiben native ``summary``-Elemente mitsamt ihrem Pfeil. Etwas
    symmetrischer Innenraum zentriert ihre Zeile im größeren Zielkasten. */
 .download-notes summary { padding-block: 0.6rem; }
-.donate-fine summary { padding-block: 0.45rem; }
 .toc a { padding-block: 0.6rem; }
 
 /* Beim Schieberegler ist die Spur nicht das Ziel. Der Eingabekasten wird
    44 Pixel hoch, während der Browser Spur und Daumen weiterhin zeichnet. */
 .dial input[type="range"] {
   min-block-size: var(--target-min);
+}
+
+/* ══ Die anschauliche Startseite (Durchsicht 0.5.0) ═══════════════════════
+   Alles ab hier trägt die Bauteile, mit denen die Startseite zeigt statt
+   erzählt: den Bedienloop im Aufmacher mit seinen Schrittmarken, das
+   Ablaufschaubild, die drei Schrittkarten, Preis und Lizenz auf einen Blick
+   und den Abschnitt zur Unterstützung. Gebaut nur aus den Grundwerten oben —
+   Karte, Kante, Akzent, Bühne —, damit hell und dunkel dieselbe Sprache
+   sprechen. Bewegung gibt es hier keine eigene: Der Loop ist ein Video mit
+   Bedienleiste, und die Schrittmarken folgen ihm nur, solange er läuft. */
+
+/* ── Der Bedienloop im Aufmacher ────────────────────────────────────────── */
+
+/* **Die Bühne reserviert ihren Platz, bevor das Video da ist.** Ohne das
+   Seitenverhältnis stünde bis zum Standbild eine Fläche ohne Höhe da, und die
+   Seite spränge, sobald es geladen ist (`width`/`height` am Video tun dasselbe
+   für Browser, die das Verhältnis daraus lesen). */
+.loop-film {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1280 / 800;
+  border-radius: var(--r-sm);
+  background: var(--stage);
+}
+
+.hero-shot figcaption { margin-top: 0.85rem; }
+
+/* **Vier Marken, die mitlaufen, und nichts, was ohne sie fehlt.** Ohne Skript
+   und bei reduzierter Bewegung stehen alle vier gleichrangig da und erzählen
+   den Weg in Worten. Läuft der Loop, trägt die gerade gezeigte Marke
+   `aria-current="step"` — sichtbar an **zwei** Dingen, der gefüllten Nummer
+   und der fetten Schrift, nicht allein an der Farbe (Hausregel 18). */
+ol.loop-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  counter-reset: loop;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem 0.9rem;
+  font-size: var(--t-sm);
+  color: var(--muted);
+}
+
+@media (min-width: 40rem) {
+  ol.loop-steps { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+ol.loop-steps li {
+  counter-increment: loop;
+  display: grid;
+  grid-template-columns: 1.6rem 1fr;
+  align-items: start;
+  gap: 0.45rem;
+  line-height: 1.35;
+  transition: color var(--step);
+}
+
+ol.loop-steps li::before {
+  content: counter(loop);
+  display: grid;
+  place-items: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 50%;
+  border: 1.5px solid color-mix(in srgb, var(--accent) 55%, var(--line));
+  color: var(--accent);
+  font-weight: 700;
+  font-size: var(--t-xs);
+  transition: background var(--step), color var(--step);
+}
+
+ol.loop-steps li[aria-current="step"] {
+  color: var(--fg);
+  font-weight: 650;
+}
+
+ol.loop-steps li[aria-current="step"]::before {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg);
+}
+
+/* ── Wo Solidon3D hingehört: das Ablaufschaubild ────────────────────────── */
+
+section.flow-band {
+  padding: 2.75rem 0 2.5rem;
+}
+
+/* **Vier Stationen, und die dritte ist nicht unsere.** Solidon steht als
+   gefüllte Karte in der Mitte des Wegs, Modell, Slicer und Drucker als
+   Umriss daneben — die Seite sagt damit ohne ein Wort, was sie ist und was
+   nicht. Am Telefon läuft der Weg senkrecht, der Pfeil zeigt dann nach unten. */
+ol.flow {
+  list-style: none;
+  margin: 1.5rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 1.9rem;
+}
+
+@media (min-width: 56rem) {
+  ol.flow {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 2.4rem;
+  }
+}
+
+.flow-step {
+  position: relative;
+  display: grid;
+  gap: 0.3rem;
+  align-content: start;
+  padding: 1.15rem 1.2rem 1.25rem;
+  border: 1px dashed color-mix(in srgb, var(--fg) 22%, var(--line));
+  border-radius: var(--r-lg);
+  background: transparent;
+}
+
+.flow-step svg {
+  width: 1.9rem;
+  height: 1.9rem;
+  color: var(--muted);
+}
+
+.flow-step b {
+  font-family: "Archivo", system-ui, "Segoe UI", Roboto, sans-serif;
+  font-size: var(--t-lg);
+  color: var(--fg);
+}
+
+.flow-step span {
+  font-size: var(--t-md);
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.flow-step.flow-main {
+  border: 0;
+  background: var(--card);
+  box-shadow: var(--edge), inset 0 3px 0 var(--accent);
+}
+
+.flow-step.flow-main svg { color: var(--accent); }
+
+/* Der Pfeil zwischen zwei Stationen — gezeichnet aus zwei Rändern, damit er
+   in hell und dunkel die Linienfarbe trägt und keine Datei braucht. */
+.flow-step:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -1.35rem;
+  width: 0.7rem;
+  height: 0.7rem;
+  border-right: 2px solid var(--accent);
+  border-bottom: 2px solid var(--accent);
+  transform: translateX(-50%) rotate(45deg);
+}
+
+@media (min-width: 56rem) {
+  .flow-step:not(:last-child)::after {
+    left: auto;
+    right: -1.55rem;
+    bottom: auto;
+    top: 50%;
+    transform: translateY(-50%) rotate(-45deg);
+  }
+}
+
+.flow-note {
+  margin: 1.6rem 0 0;
+  max-width: 62ch;
+  color: var(--muted);
+}
+
+.flow-note b { color: var(--fg); }
+
+/* ── Drei Schritte als Karten mit echtem Ausschnitt ─────────────────────── */
+
+ol.step-cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  counter-reset: stepcard;
+  display: grid;
+  gap: 1.25rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(18rem, 100%), 1fr));
+  align-items: start;
+}
+
+.step-card {
+  counter-increment: stepcard;
+  background: var(--card);
+  border-radius: var(--r-lg);
+  box-shadow: var(--edge);
+  overflow: hidden;
+}
+
+/* **Ein Dialog im Hochformat wird nicht hochgerechnet.** Der Dialog für
+   einen eigenen Baustein ist 460 Punkte breit und 1347 hoch, geschnitten am
+   eigenen Rahmen. Auf Spaltenbreite gezogen stand er anderthalbfach
+   vergrößert und unscharf da, fast zwei Bildschirme hoch. Er steht deshalb
+   in seiner Aufnahmegröße, die Bühne schmiegt sich an ihn. */
+.shot.upright .stage {
+  width: fit-content;
+  max-width: 100%;
+  margin-inline: auto;
+}
+
+.shot.upright .stage img {
+  width: auto;
+  max-width: 100%;
+}
+
+/* **Drei Zuschnitte aus dem maximierten Fenster, alle in 16:10.**
+   `tools/make_web_images.py` schneidet sie in genau diesem Verhältnis und so,
+   dass jede Leiste ganz im Bild steht oder ganz draußen — der Rahmen hier
+   beschneidet deshalb nichts mehr. `object-fit` bleibt als Sicherung für
+   eine Sprache, deren Zuschnitt um einen Punkt abweicht. Antippen öffnet
+   das Bild in voller Größe. */
+.step-media {
+  display: block;
+  aspect-ratio: 16 / 10;
+  background: var(--stage);
+  border-bottom: 1px solid var(--stage-line);
+  overflow: hidden;
+}
+
+.step-media img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+}
+
+.step-card h3 {
+  margin: 1.05rem 1.25rem 0.35rem;
+  font-size: var(--t-lg);
+  display: flex;
+  gap: 0.6rem;
+  align-items: baseline;
+}
+
+.step-card h3::before {
+  content: counter(stepcard);
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 1.8rem;
+  height: 1.8rem;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: var(--t-md);
+  font-weight: 700;
+}
+
+.step-card p {
+  margin: 0 1.25rem 1.3rem;
+  color: var(--muted);
+  font-size: var(--t-md);
+}
+
+/* ── Die Wege tragen jetzt echte Bilder statt Zeichnungen ───────────────── */
+
+.way-media,
+.way .weg-film {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin-bottom: 1rem;
+  border-radius: var(--r-md);
+  background: var(--stage);
+  border: 1px solid var(--stage-line);
+}
+
+/* Beide Wege-Aufnahmen zeigen das ganze maximierte Fenster (1920 × 1026
+   kodiert): das Standbild aus dem Bedienloop und der Formen-Loop. Der
+   allgemeine 16:9-Rahmen von `.weg-film` schnitte links und rechts je fünf
+   Prozent ab — ausgerechnet die Leisten. */
+.way-media,
+.way .weg-film { aspect-ratio: 1920 / 1026; object-fit: cover; }
+
+.way .turn-wrap,
+.way .dial { margin-bottom: 0.9rem; }
+
+.way .turn-hint { margin: -0.35rem 0 0.8rem; }
+
+/* Vorher und Nachher nebeneinander, gleich groß — auf dem Telefon auch: zwei
+   Quadrate von je 150 Punkten zeigen den Unterschied besser als zwei
+   untereinander, zwischen denen man scrollen muss. */
+.way-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+}
+
+.way-pair figure {
+  margin: 0;
+  background: var(--stage);
+  border: 1px solid var(--stage-line);
+  border-radius: var(--r-md);
+  overflow: hidden;
+}
+
+.way-pair img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+}
+
+.way-pair figcaption {
+  padding: 0.4rem 0.6rem 0.5rem;
+  font-size: var(--t-xs);
+  color: #c9ccd2;
+  text-align: center;
+}
+
+/* ── Preis und Lizenz ───────────────────────────────────────────────────── */
+
+/* **Die Termine als Weg, nicht als Absatz.** Fünf Stationen, und die heutige
+   ist markiert — mit gefülltem Punkt **und** fetter Schrift. Am Telefon
+   läuft die Linie senkrecht an der linken Kante. */
+ol.timeline {
+  list-style: none;
+  margin: 1.5rem 0 2rem;
+  padding: 0;
+  display: grid;
+  gap: 0.9rem;
+  position: relative;
+}
+
+ol.timeline li {
+  position: relative;
+  display: grid;
+  gap: 0.1rem;
+  padding-left: 1.8rem;
+  font-size: var(--t-md);
+}
+
+ol.timeline li::before {
+  content: "";
+  position: absolute;
+  left: 0.2rem;
+  top: 0.35rem;
+  width: 0.8rem;
+  height: 0.8rem;
+  border-radius: 50%;
+  border: 2px solid var(--accent);
+  background: var(--bg);
+}
+
+ol.timeline li:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  left: calc(0.6rem - 1px);
+  top: 1.25rem;
+  bottom: -0.95rem;
+  width: 2px;
+  background: var(--line);
+}
+
+ol.timeline b { color: var(--fg); }
+ol.timeline span { color: var(--muted); }
+
+ol.timeline li.is-now::before { background: var(--accent); }
+ol.timeline li.is-now span { color: var(--fg); font-weight: 600; }
+
+@media (min-width: 56rem) {
+  ol.timeline {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 1rem;
+  }
+
+  ol.timeline li {
+    padding-left: 0;
+    padding-top: 1.6rem;
+  }
+
+  ol.timeline li::before { left: 0; top: 0; }
+
+  ol.timeline li:not(:last-child)::after {
+    left: 1rem;
+    right: -1rem;
+    top: calc(0.4rem - 1px);
+    bottom: auto;
+    width: auto;
+    height: 2px;
+  }
+}
+
+.licences {
+  display: grid;
+  gap: 1.25rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(20rem, 100%), 1fr));
+  align-items: stretch;
+}
+
+.licence {
+  background: var(--card);
+  border-radius: var(--r-lg);
+  border-top: 3px solid var(--accent);
+  box-shadow: var(--edge);
+  padding: 1.5rem 1.6rem 1.4rem;
+}
+
+.licence h3 {
+  margin: 0 0 0.4rem;
+  font-size: var(--t-xl);
+}
+
+.licence-price {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.4rem 0.7rem;
+  margin: 0;
+}
+
+.licence-price b {
+  font-family: "Archivo", system-ui, "Segoe UI", Roboto, sans-serif;
+  font-stretch: 110%;
+  font-size: var(--t-3xl);
+  line-height: 1;
+  letter-spacing: -0.03em;
+}
+
+.licence-price em {
+  font-style: normal;
+  font-size: var(--t-sm);
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: var(--r-pill);
+  padding: 0.15rem 0.6rem;
+}
+
+.licence-later {
+  margin: 0.45rem 0 1.1rem;
+  color: var(--muted);
+  font-size: var(--t-md);
+}
+
+.licence-terms {
+  margin: 1.25rem 0 2.5rem;
+  max-width: 70ch;
+  color: var(--muted);
+  font-size: var(--t-md);
+}
+
+/* ── Unterstützen ───────────────────────────────────────────────────────── */
+
+.support-grid,
+/* Oben bündig, nicht gleich hoch: Die GoFundMe-Karte trägt den Platz für
+   die Anzeige und ist deshalb höher. Gestreckt stand die PayPal-Karte mit
+   zwei Zeilen Text über einer leeren Fläche von 200 Punkten. */
+.support-ways {
+  display: grid;
+  gap: 1.25rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(22rem, 100%), 1fr));
+  align-items: start;
+  margin-bottom: 1.25rem;
+}
+
+.support-card {
+  background: var(--card);
+  border-radius: var(--r-lg);
+  box-shadow: var(--edge);
+  padding: 1.35rem 1.5rem 1.4rem;
+}
+
+.support-card h3 {
+  margin: 0 0 0.6rem;
+  font-size: var(--t-lg);
+}
+
+.support-card p {
+  margin: 0 0 0.6rem;
+  color: var(--muted);
+  max-width: 62ch;
+}
+
+.support-card p:last-child { margin-bottom: 0; }
+
+ul.support-list {
+  margin: 0 0 0.9rem;
+  padding-left: 1.1rem;
+  color: var(--muted);
+  display: grid;
+  gap: 0.35rem;
+}
+
+ul.support-list b,
+.support-paid b { color: var(--fg); }
+
+.support-paid {
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line);
+  font-size: var(--t-md);
+}
+
+.milestones { margin-bottom: 1.25rem; }
+
+/* **Geschafft und kommend unterscheiden sich an zwei Dingen**: am Zeichen
+   (Haken gegen leeren Kreis) und an der Schrift der Zeitangabe — nicht nur an
+   der Farbe. */
+ol.milestone-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.55rem;
+}
+
+ol.milestone-list li {
+  display: grid;
+  grid-template-columns: 1.4rem 7.5rem 1fr;
+  gap: 0.6rem;
+  align-items: baseline;
+  color: var(--muted);
+  font-size: var(--t-md);
+}
+
+ol.milestone-list li::before {
+  content: "";
+  align-self: center;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 50%;
+  border: 2px solid var(--accent);
+}
+
+ol.milestone-list li.done::before {
+  background:
+    no-repeat center / 0.7rem url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m4 12 5 5L20 6'/%3E%3C/svg%3E"),
+    var(--accent);
+}
+
+ol.milestone-list time {
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+ol.milestone-list li.next time { font-weight: 400; font-style: italic; }
+
+ol.milestone-list li.is-now span { color: var(--fg); }
+
+/* Schmaler als 34rem rückt der Text unter das Datum. Nicht im
+   30rem-Block: Der letzte davon trägt die Regeln für den ersten
+   Handybildschirm, und die Prüfung liest genau ihn. */
+@media (max-width: 34rem) {
+  ol.milestone-list li { grid-template-columns: 1.4rem 1fr; }
+  ol.milestone-list li span { grid-column: 2; }
+}
+
+/* **Der Platz des GoFundMe-Stands ist gleich groß, ob geladen oder nicht.**
+   Der Platzhalter hält die Höhe, die das Widget ungefähr braucht; lädt es
+   nach dem Klick, meldet es seine wirkliche Höhe selbst (``site.js``). Beim
+   Laden der Seite steht hier nur Text und ein Knopf — nichts, was GoFundMe
+   erreicht. */
+.gfm-slot {
+  display: grid;
+  align-content: center;
+  justify-items: start;
+  gap: 0.2rem;
+  min-height: 12rem;
+  margin-top: 0.8rem;
+  padding: 1rem 1.1rem;
+  border: 1px dashed color-mix(in srgb, var(--fg) 25%, var(--line));
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--accent) 4%, var(--bg));
+}
+
+.gfm-slot .gfm-note {
+  margin: 0;
+  font-size: var(--t-sm);
+  color: var(--muted);
+}
+
+.gfm-slot .btn { margin-left: 0; }
+
+.gfm-slot.is-loaded {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.gfm-frame {
+  display: block;
+  width: 100%;
+  border: 0;
+  border-radius: var(--r-md);
+  background: #fff;
+}
+
+/* Die Unterstützung selbst: der rechtliche Satz und der eine Knopf, der den
+   lokalen Hinweis öffnet. Der Satz steht jetzt offen da und nicht mehr in
+   einem Aufklapper — wer unterstützen will, soll die Grenze sehen, bevor er
+   klickt. */
+.support .donate {
+  max-width: none;
+  margin: 0;
+  align-items: center;
+}
+
+.support .donate p.donate-terms {
+  margin: 0;
+  max-width: 70ch;
+  font-size: var(--t-sm);
 }

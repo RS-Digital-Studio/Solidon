@@ -1,6 +1,6 @@
 # Datenschutzerklärung
 
-Stand: 13. September 2026
+Stand: 23. September 2026
 
 
 ## Diese Website
@@ -9,7 +9,8 @@ Die öffentlich zugänglichen Informationsseiten dieser Website sind statisch un
 nehmen keine Eingaben entgegen. Insbesondere gibt es dort keinen Fragebogen
 und kein Rückmeldungsformular. Die Seiten setzen keine Cookies, binden keine
 Inhalte fremder Server ein und verwenden keine Analyse- oder Tracking-Dienste
-Dritter. Es gibt keine Nutzerkonten. Ein einziges Cookie gibt es doch, und es
+Dritter. Eine Ausnahme gibt es nur auf Ihren ausdrücklichen Klick: den Stand
+der GoFundMe-Kampagne auf der Startseite (siehe unten). Es gibt keine Nutzerkonten. Ein einziges Cookie gibt es doch, und es
 erreicht keinen Besucher: Die nicht öffentliche Auswertungsseite unter `/api/`
 merkt sich damit die Anmeldung des Betreibers. Aktivierungs- und Supportwege
 sind davon getrennt und werden unten beschrieben.
@@ -34,13 +35,21 @@ Falls Sie bei PayPal eine wiederkehrende Zahlung wählen, lässt sie sich dort i
 
 ## Freiwillige Unterstützung über GoFundMe
 
-Im lokalen Unterstützungsdialog der App können Sie außerdem *GoFundMe im Browser öffnen* wählen. Auf der Website führt *Mit GoFundMe unterstützen* im selben lokalen Hinweis zur [Solidon3D-Kampagne](https://gofund.me/08c5f0edb). Der Kurzlink leitet auf GoFundMe weiter. Vor diesem Klick wird keine Verbindung zu GoFundMe aufgebaut. Es sind keine GoFundMe-Inhalte oder Cookies eingebunden.
+Im lokalen Unterstützungsdialog der App können Sie außerdem *GoFundMe im Browser öffnen* wählen. Auf der Website führt *Mit GoFundMe unterstützen* im selben lokalen Hinweis zur [Solidon3D-Kampagne](https://gofund.me/08c5f0edb). Der Kurzlink leitet auf GoFundMe weiter. Vor diesem Klick wird keine Verbindung zu GoFundMe aufgebaut. Bis dahin sind keine GoFundMe-Inhalte oder Cookies eingebunden; den Stand der Kampagne lädt die Website ebenfalls erst auf Ihren Klick (nächster Abschnitt).
 
 GoFundMe verarbeitet auf seiner Plattform insbesondere Kontakt-, Geräte-, Zahlungs- und Transaktionsdaten in eigener Verantwortung. Für Nutzer im Europäischen Wirtschaftsraum mit einem Vertragsverhältnis zu GoFundMe Ireland ist GoFundMe Ireland Limited, 70 Sir John Rogerson Quay, Dublin 2, Irland, verantwortlich. Weitere Empfänger, Zahlungsabwicklung und mögliche Drittlandübermittlungen erläutert die [Datenschutzerklärung von GoFundMe](https://www.gofundme.com/c/privacy).
 
 Als Organisator kann RS Digital die von GoFundMe bereitgestellten Kontakt- und Zahlungsangaben erhalten, auch wenn die Unterstützung öffentlich als anonym angezeigt wird. Ich nutze diese Angaben zur Zuordnung, Abrechnung, gegebenenfalls Erstattung und für Rückfragen zur Zahlung sowie zur Erfüllung gesetzlicher Aufbewahrungspflichten. Rechtsgrundlagen sind Art. 6 Abs. 1 lit. b DSGVO für die veranlasste Zahlung und Art. 6 Abs. 1 lit. c DSGVO für die gesetzliche Aufbewahrung. Danach werden die Daten gelöscht. Namen und Kommentare können abhängig von Ihren Einstellungen auf GoFundMe öffentlich sichtbar sein.
 
 Auch diese Unterstützung ist keine Bestellung, begründet keine Gegenleistung, schaltet keine Funktionen frei und wird nicht auf einen späteren Kauf angerechnet. RS Digital stellt keine steuerliche Bestätigung aus.
+
+### Stand der Kampagne auf der Startseite {#gofundme-stand}
+
+Im Unterstützungsbereich der Startseite steht an der Stelle des Kampagnenstands zunächst nur ein lokaler Platzhalter. Erst wenn Sie dort *Aktuellen Stand bei GoFundMe laden* wählen, lädt Ihr Browser die Anzeige der Kampagne (das Widget von GoFundMe) von `www.gofundme.com` und zeigt sie in einem eingebetteten Rahmen. Vor diesem Klick wird keine Verbindung zu GoFundMe aufgebaut, und beim nächsten Aufruf der Seite steht wieder der Platzhalter da.
+
+Mit dem Laden übermittelt Ihr Browser an GoFundMe die für den Abruf technisch nötigen Daten, insbesondere Ihre IP-Adresse, Datum und Uhrzeit, Angaben zu Browser und Gerät sowie unsere Domain als Herkunft. Die Adresse des Widgets trägt zusätzlich die Angabe, dass es aus einer Einbettung auf solidon3d.de aufgerufen wird. GoFundMe kann dabei Cookies oder vergleichbare Techniken einsetzen, und die Anzeige lädt ihrerseits Inhalte und Dienste weiterer Anbieter nach, darunter Analyse- und Werbedienste (bei einer Prüfung am 23. September 2026 etwa von Google und Meta); darauf haben wir keinen Einfluss. Verantwortlich für diese Verarbeitung ist GoFundMe (siehe oben); Einzelheiten stehen in der [Datenschutzerklärung von GoFundMe](https://www.gofundme.com/c/privacy). RS Digital erhält aus der Anzeige keine Daten über Sie.
+
+Rechtsgrundlage für das Laden ist Ihre Einwilligung nach Art. 6 Abs. 1 lit. a DSGVO und, soweit dabei Informationen auf Ihrem Endgerät gespeichert oder ausgelesen werden, § 25 Abs. 1 TDDDG. Sie erteilen sie mit dem Klick auf den Knopf und können sie jederzeit für die Zukunft widerrufen: Nach einem neuen Aufruf der Seite wird nichts mehr geladen, und von GoFundMe gesetzte Cookies löschen Sie in Ihrem Browser.
 
 
 ## Der Kauf einer Lizenz

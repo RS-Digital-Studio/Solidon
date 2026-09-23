@@ -988,6 +988,14 @@ RETIRED_MEDIA = (
     "weg-1-erzeugt",
     "weg-2-schnitt",
     "weg3-generieren",
+    # Die Kreisflug-Loops der Wege 1 bis 3 mit deutscher Schlusskarte
+    # (Durchsicht 0.5.0): Weg 1 zeigt jetzt der Bedienloop, Weg 2 die
+    # Drehbühne, Weg 3 das Vorher/Nachher. Weg 4 bleibt, je Sprache neu und
+    # mit WebP-Standbild statt PNG.
+    "weg1-anpassen",
+    "weg2-konstruieren",
+    "weg3-generiert-aufbereiten.",
+    "weg4-formen.png",
 )
 
 
@@ -1010,7 +1018,15 @@ def test_each_start_page_reads_like_product_copy(page: str) -> None:
 
 @pytest.mark.parametrize(("page", "marker"), PLANNED_1_0_MARKERS.items())
 def test_each_start_page_distinguishes_the_plan_from_an_offer(page: str, marker: str) -> None:
-    """Der Termin bleibt sichtbar, ohne Preis oder Vorbestellung vorzutäuschen."""
+    """Der Termin bleibt ein Plan, und vor dem Verkaufsstart gibt es kein Angebot.
+
+    **Seit dem 23.09.2026 stehen die Preise auf der Seite** (Entscheidung
+    Robert: zwei Lizenzarten, Einstiegspreis bis Ende Januar). Angekündigt ist
+    damit, was ab dem 1. November gilt — verkauft wird vorher nichts. Die
+    Seite sagt deshalb weiter „geplant", und sie zeichnet für Suchmaschinen
+    kein ``Offer`` und keine Vorbestellung aus: Ein Rich Result mit Preis und
+    „Jetzt kaufen" wäre eine Kaufmöglichkeit, die es noch nicht gibt.
+    """
     text = (WEBSITE / page).read_text(encoding="utf-8")
     assert marker in text, f"{page}: Planung für Version 1.0 fehlt"
     assert "schema.org/PreOrder" not in text, f"{page}: Vorbestellung ausgezeichnet"
@@ -1105,15 +1121,20 @@ def test_each_start_page_keeps_picture_before_support(page: str) -> None:
     text = (WEBSITE / page).read_text(encoding="utf-8")
 
     act = text.index('<p class="hero-act">')
-    # **Die Bauart des Produktbilds hat zum zweiten Mal gewechselt** (WD1):
-    # Aus dem stehenden Bildschirmfoto (``shot hero-shot``) wurde eine
-    # Drehbühne, und die ist kein ``<img>``, sondern ein Sprite im Stylesheet.
-    # Geprüft wird deshalb, was von beiden dort **steht** — die Zusage ist der
-    # Ort im Lesefluss, nicht die Klasse, mit der er gebaut ist.
+    # **Die Bauart des Produktbilds hat zum dritten Mal gewechselt**: vom
+    # stehenden Bildschirmfoto (``shot hero-shot``) über die Drehbühne (WD1)
+    # zum Bedienloop aus der echten Anwendung (Durchsicht 0.5.0), der als
+    # ``<figure class="shot hero-shot …">`` steht; die Drehbühne ist in die
+    # Karte „Weg 2" gezogen. Geprüft wird, was im Aufmacher **steht** — die
+    # Zusage ist der Ort im Lesefluss, nicht das Element, mit dem er gebaut ist.
+    hero = text[text.index('<div class="hero">') : text.index('<section id="download">')]
     stages = [
-        text.index(mark)
-        for mark in ('<div class="turn-wrap">', '<div class="shot hero-shot">')
-        if mark in text
+        text.index(found.group(0))
+        for found in (
+            re.search(r'<div class="turn-wrap">', hero),
+            re.search(r'<(?:div|figure) class="shot hero-shot[ "]', hero),
+        )
+        if found is not None
     ]
     assert stages, f"{page}: im Aufmacher steht kein Produktbild"
     picture = min(stages)
@@ -2612,3 +2633,266 @@ def test_the_checked_address_of_a_start_page_is_the_one_the_server_answers() -> 
             "Server mit einer 301 auf das Verzeichnis, und der Abgleich liest das als "
             "Abweichung."
         )
+
+
+# --- Die anschauliche Startseite (Durchsicht 0.5.0) -------------------------------------
+
+
+def _language_of(page: str) -> str:
+    """Die Sprache einer Startseite aus ihrem Pfad — Deutsch liegt oben."""
+    return page.split("/", 1)[0] if "/" in page else "de"
+
+
+def _media_suffix(language: str) -> str:
+    """Wie ein Bild der Website seine Sprache trägt: Deutsch ohne Kürzel."""
+    return "" if language == "de" else f"-{language}"
+
+
+@pytest.mark.parametrize("page", START_PAGES)
+def test_the_loop_steps_follow_the_recording_tool(page: str) -> None:
+    """Die Schrittmarken unter dem Bedienloop leuchten zur richtigen Sekunde.
+
+    Die Sekunden stehen zweimal: im Aufnahmewerkzeug, das die Szenen filmt
+    (``make_video.WEB_LOOPS``), und als ``data-at`` an den Marken der Seite,
+    die ``site.js`` mitlaufen lässt. Wer eine Szene verlängert und die Seite
+    nicht nachzieht, bekommt eine Marke „Bohrung anklicken", die leuchtet,
+    während im Film schon getippt wird — in sechs Sprachen.
+    """
+    import tools.make_video as make_video
+
+    text = (WEBSITE / page).read_text(encoding="utf-8")
+    steps = re.search(r"<ol class=\"loop-steps\"[^>]*data-loop-steps>(.*?)</ol>", text, re.DOTALL)
+    assert steps is not None, f"{page}: die Schrittmarken des Bedienloops fehlen"
+    marks = tuple(round(float(value), 1) for value in re.findall(r'data-at="([\d.]+)"', steps[1]))
+    assert marks == make_video.web_loop_chapter_starts("anpassen"), (
+        f"{page}: die Marken stehen bei {marks}, der Loop wechselt bei "
+        f"{make_video.web_loop_chapter_starts('anpassen')}"
+    )
+
+
+@pytest.mark.parametrize("page", START_PAGES)
+def test_each_start_page_shows_the_application_in_its_own_language(page: str) -> None:
+    """Ein Loop zeigt die Oberfläche in der Sprache der Seite, nicht die deutsche.
+
+    Bis zur Durchsicht vor 0.5.0 liefen auf allen sechs Startseiten dieselben
+    vier Aufnahmen: deutsche Oberfläche, deutsche Schlusskarte. Seitdem nimmt
+    das Werkzeug je Sprache auf, und die Seite verweist auf ihre Fassung.
+    """
+    language = _language_of(page)
+    text = (WEBSITE / page).read_text(encoding="utf-8")
+    films = re.findall(
+        r'(?:src|poster)="(?:\.\./)?bilder/((?:loop-anpassen|weg4-formen)[^"?]*)', text
+    )
+    assert films, f"{page}: kein Loop aus der Anwendung auf der Startseite"
+    suffix = _media_suffix(language)
+    foreign = [
+        name
+        for name in films
+        if not re.fullmatch(
+            rf"(?:loop-anpassen(?:-ende)?|weg4-formen){re.escape(suffix)}\.\w+", name
+        )
+    ]
+    assert not foreign, f"{page} zeigt Aufnahmen einer anderen Sprache: {foreign}"
+    still = re.findall(r'src="(?:\.\./)?bilder/(loop-anpassen-ende[^"?]*)', text)
+    assert still == [f"loop-anpassen-ende{suffix}.webp"], (
+        f"{page}: das Ergebnisbild in Weg 1 fehlt oder ist das einer anderen Sprache: {still}"
+    )
+
+
+#: Die offizielle Widget-Adresse der Kampagne, wie GoFundMes eigener
+#: Einbettungscode sie in ``data-url`` setzt (``…/f/<kampagne>/widget/large``).
+GOFUNDME_WIDGET_URL = (
+    "https://www.gofundme.com/f/solidon3d-stl-anpassen-ohne-cad-bis-version-10/widget/large"
+)
+
+
+@pytest.mark.parametrize("page", START_PAGES)
+def test_the_gofundme_status_waits_for_a_click(page: str) -> None:
+    """Der Stand der Kampagne lädt nicht mit der Seite, sondern auf Klick.
+
+    Im Markup steht ein Platzhalter mit einem Satz über die Daten, die dabei an
+    GoFundMe gehen, einem Verweis auf den Datenschutz und einem Knopf. Die
+    Adresse des Widgets liegt in einem Attribut, das kein Browser lädt; ein
+    ``<iframe>`` steht nirgends im Markup.
+    """
+    text = (WEBSITE / page).read_text(encoding="utf-8")
+    assert "<iframe" not in text, f"{page}: ein Rahmen steht schon im Markup"
+    slots = re.findall(
+        r'<div class="gfm-slot" data-gfm-widget="([^"]+)"[^>]*>(.*?)</div>', text, re.DOTALL
+    )
+    assert len(slots) == 1, f"{page}: {len(slots)} Platzhalter für den GoFundMe-Stand"
+    widget, inner = slots[0]
+    assert widget == GOFUNDME_WIDGET_URL, f"{page}: fremde Widget-Adresse {widget}"
+    assert re.search(r'<button class="btn ghost gfm-load" type="button" data-gfm-load>', inner)
+    assert 'href="/datenschutz.html#gofundme-stand"' in inner, (
+        f"{page}: der Platzhalter erklärt nicht, was beim Laden geschieht"
+    )
+    assert inner.count("GoFundMe") >= 2, f"{page}: der Platzhalter nennt den Empfänger nicht"
+
+
+def test_only_the_click_handler_creates_the_gofundme_frame() -> None:
+    """``site.js`` legt genau einen Rahmen an, und zwar im Klick des Knopfs.
+
+    Geprüft wird die Bauart, denn ein Browser ist in der Suite nicht dabei: Der
+    einzige ``createElement("iframe")`` der Datei steht innerhalb des
+    Klick-Handlers am Knopf ``[data-gfm-load]``; die Adresse muss den Ursprung
+    ``https://www.gofundme.com`` und den Pfad eines Widgets tragen; die
+    Höhenmeldung wird nur von diesem Ursprung und nur vom eigenen Rahmen
+    angenommen. Und außer diesem Ursprung nennt das Skript keine fremde
+    Adresse.
+    """
+    script = (WEBSITE / "site.js").read_text(encoding="utf-8")
+    assert script.count('createElement("iframe")') == 1
+    block = script.split("Der Stand der GoFundMe-Kampagne", 1)[1].split("})();", 1)[0]
+    handler = block.split('button.addEventListener(\n        "click"', 1)
+    assert len(handler) == 2, "der Rahmen entsteht nicht im Klick-Handler des Knopfs"
+    assert 'createElement("iframe")' in handler[1]
+    assert "{ once: true }" in handler[1], "ein zweiter Klick legte einen zweiten Rahmen an"
+    assert 'const ORIGIN = "https://www.gofundme.com";' in block
+    assert "address.origin !== ORIGIN" in block
+    assert r"/^\/f\/[a-z0-9-]+\/widget\/(small|medium|large)$/" in block
+    assert "event.origin !== ORIGIN || event.source !== frame.contentWindow" in block
+    addresses = set(re.findall(r"https?://[^\s\"'`)]+", script))
+    assert addresses == {"https://www.gofundme.com"}, f"fremde Adressen in site.js: {addresses}"
+
+
+def _content_security_policy() -> str:
+    """Die Richtlinie, die ``.htaccess`` den Seiten mitgibt."""
+    htaccess = (WEBSITE / ".htaccess").read_text(encoding="utf-8")
+    block = re.search(r'<FilesMatch "\\\.html\$">(.*?)</FilesMatch>', htaccess, re.DOTALL)
+    assert block is not None, ".htaccess setzt den Seiten keine eigenen Kopfzeilen"
+    policy = re.search(r'Header set Content-Security-Policy "([^"]+)"', block[1])
+    assert policy is not None, ".htaccess setzt keine Content-Security-Policy"
+    return policy[1]
+
+
+def test_the_server_policy_allows_exactly_the_gofundme_frame() -> None:
+    """Die Richtlinie erlaubt als fremden Ursprung nur den Rahmen von GoFundMe.
+
+    Das Markup verspricht, nichts von außen zu laden; die Kopfzeile setzt es im
+    Browser durch. Skripte, Verbindungen, Bilder, Schriften und Medien kommen
+    nur von hier, und die eine Ausnahme ist ``frame-src`` — der Stand der
+    Kampagne, den erst ein Klick einsetzt.
+    """
+    directives = {
+        name: values
+        for name, *values in (part.split() for part in _content_security_policy().split(";"))
+    }
+    assert directives["default-src"] == ["'self'"]
+    assert directives["script-src"] == ["'self'"]
+    assert directives["connect-src"] == ["'self'"]
+    assert directives["frame-src"] == ["https://www.gofundme.com"]
+    assert directives["object-src"] == ["'none'"]
+    foreign = {
+        value
+        for name, values in directives.items()
+        for value in values
+        if value.startswith(("http:", "https:", "//")) or value in {"*", "https:", "http:"}
+    }
+    assert foreign == {"https://www.gofundme.com"}, f"weitere fremde Ursprünge: {foreign}"
+
+
+@pytest.mark.parametrize("path", [WEBSITE.parent / "DATENSCHUTZ.md", WEBSITE / "datenschutz.html"])
+def test_the_privacy_notice_explains_the_gofundme_status(path: Path) -> None:
+    """Quelle und Seite erklären den Stand der Kampagne, bevor jemand klickt."""
+    text = path.read_text(encoding="utf-8")
+    plain = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", text))
+    assert "gofundme-stand" in text, "die Sprungmarke vom Platzhalter fehlt"
+    assert "Aktuellen Stand bei GoFundMe laden" in plain
+    assert "Vor diesem Klick" in plain
+
+
+#: Die vier Preise und die Uhrzeit des Verkaufsstarts (Entscheidung Robert,
+#: 23.09.2026). Sie stehen als Zahlen in jeder Sprache gleich da; Schreibweise
+#: der Währung und der Uhrzeit folgen der Sprache und werden nicht geprüft.
+PRICES = ("69", "99", "199", "249")
+
+
+@pytest.mark.parametrize("page", START_PAGES)
+def test_each_start_page_shows_both_licences_with_their_prices(page: str) -> None:
+    """Preise und Lizenzarten auf einen Blick — in allen sechs Sprachen gleich."""
+    text = (WEBSITE / page).read_text(encoding="utf-8")
+    section = re.search(r'<section id="demo">(.*?)</section>', text, re.DOTALL)
+    assert section is not None, f"{page}: der Preisabschnitt fehlt"
+    body = section[1]
+    assert body.count('<article class="licence"') == 2, f"{page}: nicht genau zwei Lizenzarten"
+    for price in PRICES:
+        # „69 €" in fünf Sprachen, „€69" im Englischen — beide Stellungen.
+        written = rf"(?:€(?:&nbsp;|\s)?{price}\b|\b{price}(?:&nbsp;|\s)?€)"
+        assert re.search(written, body), f"{page}: der Preis {price} € fehlt"
+    assert re.search(r"10(?::00|\.00|h00|(?:\s|&nbsp;)h\b)", body), (
+        f"{page}: die Uhrzeit des Verkaufsstarts fehlt"
+    )
+    assert body.count('<ol class="timeline"') == 1, f"{page}: die Zeitleiste fehlt"
+    for legal in ("/agb.html", "/eula.html", "/widerruf.html"):
+        assert f'href="{legal}"' in body, f"{page}: der Preisabschnitt verlinkt {legal} nicht"
+
+
+@pytest.mark.parametrize("page", START_PAGES)
+def test_each_start_page_has_the_support_section_in_the_header(page: str) -> None:
+    """Der Unterstützungsabschnitt ist aus dem Kopf erreichbar und sagt, wofür.
+
+    Robert, 23.09.2026: gut sichtbar, einladend, ehrlich. Der Kopf führt
+    deshalb einen Anker dorthin; der Abschnitt nennt, wer dahintersteht, wofür
+    das Geld ist und was geschafft ist, und zeigt beide Wege gleichwertig.
+    """
+    text = (WEBSITE / page).read_text(encoding="utf-8")
+    section = re.search(
+        r'<section id="(unterstuetzen|support)" class="support tint">(.*?)</section>',
+        text,
+        re.DOTALL,
+    )
+    assert section is not None, f"{page}: der Abschnitt zur Unterstützung fehlt"
+    mark, body = section[1], section[2]
+    header = text[text.index("<header") : text.index("</header>")]
+    assert f'href="#{mark}"' in header, f"{page}: der Kopf führt nicht zur Unterstützung"
+    assert body.count('class="support-card support-way"') == 2, f"{page}: nicht beide Wege"
+    assert body.count('<li class="done') >= 5, f"{page}: zu wenige geschaffte Meilensteine"
+    assert body.count('<li class="next">') >= 1, f"{page}: kein nächster Meilenstein"
+    assert "Robert Schneider" in body and "RS Digital" in body
+    assert "Certum" in body and "Claude" in body and "Codex" in body
+
+
+SELLING_PAGES = (
+    *START_PAGES,
+    "funktionen.html",
+    *(f"{code}/features.html" for code in ("en", "es", "fr", "it", "pt")),
+)
+
+
+@pytest.mark.parametrize("page", SELLING_PAGES)
+def test_the_selling_pages_show_the_whole_application_window(page: str) -> None:
+    """Start- und Funktionsseiten zeigen nur Aufnahmen aus dem maximierten Fenster.
+
+    Robert, 23.09.2026: „Du nimmst die Bilder aber schon so auf, dass der ganze
+    Bildschirm verwendet wird und wir nicht nur so eine kleine Szene haben."
+    Die Belege von vorher (`beleg-*.png`: ein Fenster von 1400 Punkten, ein
+    Katalog als Montage, ein Regal auf einem Blatt) und die Handbuchdialoge in
+    520 Punkten Breite kommen deshalb nicht zurück; die Aufnahmen entstehen in
+    `tools/make_web_images.py` und `tools/make_video.py`.
+    """
+    text = (WEBSITE / page).read_text(encoding="utf-8")
+    old = re.findall(
+        r'(?:src|href|poster)="(?:\.\./)?(bilder/beleg-[a-z-]+\.png|handbuch/[a-z]{2}/[a-z-]+\.png)',
+        text,
+    )
+    assert not old, f"{page} zeigt noch Aufnahmen von vorher: {old}"
+
+
+def test_llms_txt_names_the_licences_of_the_start_page() -> None:
+    """Wer ein Sprachmodell nach dem Preis fragt, bekommt den der Startseite.
+
+    `tools/make_seo.py` liest Preis und Lizenzarten aus den `data-summary`-
+    Elementen der deutschen Startseite; eine zweite Preisliste gibt es nicht.
+    """
+    import html
+
+    summary = (WEBSITE / "llms.txt").read_text(encoding="utf-8")
+    index = (WEBSITE / "index.html").read_text(encoding="utf-8")
+    prices = re.findall(r'<p class="licence-price"><b>([^<]+)</b>', index)
+    assert len(prices) == 2, "die Startseite nennt nicht zwei Lizenzarten"
+    assert "## Preis und Lizenz" in summary
+    for price in prices:
+        # `make_seo._plain` fasst jeden Leerraum zu einem Leerzeichen zusammen,
+        # auch das geschützte zwischen Zahl und Währung.
+        assert " ".join(html.unescape(price).split()) in summary, f"llms.txt nennt {price} nicht"

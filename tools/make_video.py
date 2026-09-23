@@ -78,7 +78,7 @@ from app.i18n.catalog import read_catalog
 #: ist er hier nicht — ``make_video`` lädt das Operationsregister selbst
 #: (``load_operations`` weiter unten), zieht also nichts mit, was es nicht
 #: ohnehin braucht.
-from tools.make_figures import release_viewport
+from tools.make_figures import chosen_screen, release_viewport, wait_until_uncovered
 
 #: Was eine Szene je Bild tut: Nummer und Gesamtzahl herein, Welt eingestellt.
 StepFn = Callable[[int, int], None]
@@ -1777,7 +1777,9 @@ def record(
     for index in range(count):
         step(index, count)
         app.processEvents()
-        window.screen()
+        # Liegt das Fenster einer anderen Sitzung darüber, stünde es im Bild
+        # (``make_figures.foreign_window_over``) — gewartet wird vor jedem Bild.
+        wait_until_uncovered(window)
         shot = screen.grabWindow(window.winId())
         if caption is not None:
             _paint_feature_caption(shot, caption, index, count)
@@ -2546,6 +2548,10 @@ def shoot_storyboard(
             step = explode_step(window, app, (EXPLOSION, 0.0), zoom)
         elif key == "parameters":
             step = hold_step(window, app)
+        elif key == FULL_TURN:
+            # Eine ganze Umdrehung: Das letzte Bild schließt an das erste an,
+            # und der Loop läuft ohne Sprung weiter.
+            step = orbit_step(window, app, zoom, turns=1.0, start_degrees=start_degrees)
         else:
             # Aufmacher und Abspann drehen, aber nur ein Stück weit: eine volle
             # Umdrehung in vier Sekunden sieht aus wie ein Ausstellungsstück im
@@ -2581,25 +2587,45 @@ def reset_morph(session: Any) -> None:
     session.evaluate_now()
 
 
-#: Die Grenzen eines Website-Loops (WD1).
+#: Die Grenzen eines Website-Loops (WD1) — und die Breite, auf die er kodiert wird.
 #:
 #: **Ein Loop ist keine kleine Fassung des Videos.** Er läuft stumm, endlos und
 #: neben Text, den jemand gerade liest — er soll zeigen, dass sich etwas
 #: bewegt, und nicht erzählen. Daraus folgt jede Zahl hier:
 #:
-#: * **720p statt 1080p.** Auf der Seite steht er in einer Spalte, nie im
-#:   Vollbild. Die Hälfte der Datenmenge für einen Unterschied, den man an
-#:   dieser Größe nicht sieht.
+#: * **Das ganze Fenster, maximiert auf dem 2560er Schirm** (Bildstandard,
+#:   Robert 23.09.2026: „dass der ganze Bildschirm verwendet wird und wir nicht
+#:   nur so eine kleine Szene haben"), aufgenommen in nativen Bildpunkten und
+#:   auf **1920 Breite** kodiert. Auf der Seite steht ein Loop höchstens rund
+#:   1100 CSS-Punkte breit; 1920 bleiben darüber scharf, 2560 kosteten ein
+#:   Drittel mehr Bytes für nichts, das man sieht. Hochgerechnet wird nie.
+#: * **Gerätepixelverhältnis 1, nicht 2.** Beide Schirme hier sind 1440 Punkte
+#:   hoch. Bei Faktor 2 stünde das maximierte Fenster auf 1280 x 696 logischen
+#:   Punkten — unter der Mindestauflösung der Anwendung (1920 x 1080): Die
+#:   Leisten deckten das Modell zu, der Druckdialog passte nicht auf den
+#:   Schirm, und das Bild zeigte eine Enge, die kein Kunde hat.
 #: * **Kein Ton.** Ein Video, das ungefragt spricht, ist der schnellste Weg
 #:   zum Zurück-Knopf. Ohne Tonspur spielt es außerdem in jedem Browser von
 #:   selbst — ``autoplay`` gilt nur für stumme Videos.
-#: * **Zwei Formate.** ``webm`` (VP9) ist kleiner, ``mp4`` (H.264) versteht
-#:   jeder. Der Browser nimmt das erste, das er kann; wer nur eines liefert,
-#:   liefert manchem gar nichts.
+#: * **Zwei Formate**, ``mp4`` (H.264) zuerst und ``webm`` (VP9) als Rückfall
+#:   — warum in dieser Reihenfolge, steht bei :func:`encode_website_video`.
+#:   Wer nur eines liefert, liefert manchem gar nichts.
 #: * **Ein Standbild.** Es steht, bis das Video geladen ist — und bei
 #:   ``prefers-reduced-motion`` ist es das einzige, was der Besucher je sieht.
 #:   Ohne poster zeigt der Browser dort ein schwarzes Rechteck.
-LOOP_HEIGHT = 720
+WEB_VIDEO_WIDTH = 1920
+
+#: Die Szene eines Kreisflug-Loops: eine ganze Umdrehung, nahtlos.
+FULL_TURN = "full_turn"
+
+#: Wie nah die Kamera im Kreisflug-Loop steht, als Faktor auf den eingepassten
+#: Abstand. Beim Einpassen bleibt Platz für die schwebenden Leisten; im Loop
+#: soll das Teil die freie Mitte füllen (gemessen am Handschmeichler: bei 1,0
+#: nahm er ein Achtel des Bildes ein).
+LOOP_ZOOM = 0.66
+
+#: Szenen, die etwas anderes tun als die Kamera im Kreis zu fahren.
+MOVING_SCENES = frozenset({"morph", "explode", "join", "parameters"})
 
 #: Wie lang ein Loop läuft, in Sekunden.
 #:
@@ -2609,21 +2635,32 @@ LOOP_HEIGHT = 720
 #: wächst linear mit.
 LOOP_SECONDS = 12.0
 
-#: Wie stark der Loop gerechnet wird, je Format.
+#: Wie stark ein Website-Loop gerechnet wird, je Format.
 #:
-#: Gemessen wird am Ziel: 2 bis 5 MB je Loop. Der Upload schafft 1,8 MB/s, und
-#: fünf Loops sind damit eine halbe Minute — der Besucher lädt einen davon,
-#: aber die Seite muss auch hochgehen.
+#: H.264 steht beim Bedienloop bei 26. VP9 steht höher (38, mit
+#: Bildschirmabstimmung), weil WebM auf der Seite nur noch der Rückfall hinter
+#: MP4 ist: Gemessen am 23.09.2026 wog derselbe Bedienloop als H.264 217 kB,
+#: als VP9 bei 34 783 kB und bei 38 noch 534 kB (siehe
+#: :func:`encode_website_video`).
 LOOP_CRF_H264 = 26
-LOOP_CRF_VP9 = 34
+LOOP_CRF_VP9 = 38
+
+#: H.264 für den **Kreisflug**: zwei Stufen gröber als beim Bedienloop.
+#:
+#: Im Bedienloop steht die Oberfläche still, und ein ruhiges Bild kostet fast
+#: nichts. Im Kreisflug dreht sich das Druckbett mit seinem Raster in jedem
+#: Bild — gemessen am Handschmeichler in 1920 Breite (23.09.2026): 2596 kB bei
+#: 26, 2213 kB bei 28, 1829 kB bei 30, 1390 kB bei 32. Bei 32 zerfasern die
+#: Rasterlinien sichtbar, bei 28 nicht.
+LOOP_CRF_H264_TURN = 28
 
 
 def encode_loop(shot: Shot, stem: Path) -> tuple[Path, Path, Path]:
-    """Einen Website-Loop schreiben: ``webm``, ``mp4`` und sein Standbild.
+    """Einen Kreisflug-Loop schreiben: ``webm``, ``mp4`` und sein Standbild.
 
-    ``stem`` ist der Pfad **ohne** Endung; zurück kommen die drei Dateien in
-    der Reihenfolge, in der sie im HTML stehen sollten — erst ``webm``, dann
-    ``mp4``, dann das Standbild.
+    ``stem`` ist der Pfad **ohne** Endung. Kodiert wird wie beim Bedienloop
+    (:func:`encode_website_video`), nur mit :data:`LOOP_CRF_H264_TURN` — das
+    drehende Druckbett kostet in jedem Bild.
 
     **Das Standbild ist das erste Bild und nicht irgendeines.** Es steht, bis
     das Video geladen ist, und muss deshalb genau das zeigen, womit der Loop
@@ -2634,70 +2671,9 @@ def encode_loop(shot: Shot, stem: Path) -> tuple[Path, Path, Path]:
     Loop ein Video, das der Browser von selbst abspielen darf. Mit Tonspur —
     auch mit stiller — verlangt jeder Browser eine Nutzergeste.
     """
-    scaled = f"scale=-2:{LOOP_HEIGHT}:flags=lanczos"
-    webm = stem.with_suffix(".webm")
-    mp4 = stem.with_suffix(".mp4")
-    poster = stem.with_suffix(".png")
-
-    run_ffmpeg(
-        [
-            "-framerate",
-            str(FPS),
-            "-i",
-            str(shot.frames / "%05d.png"),
-            "-an",
-            "-vf",
-            scaled,
-            "-c:v",
-            "libvpx-vp9",
-            "-crf",
-            str(LOOP_CRF_VP9),
-            "-b:v",
-            "0",
-            "-row-mt",
-            "1",
-            str(webm),
-        ]
+    return encode_website_video(
+        shot, stem, f"scale={WEB_VIDEO_WIDTH}:-2:flags=lanczos", LOOP_CRF_H264_TURN
     )
-    run_ffmpeg(
-        [
-            "-framerate",
-            str(FPS),
-            "-i",
-            str(shot.frames / "%05d.png"),
-            "-an",
-            "-vf",
-            scaled,
-            "-c:v",
-            "libx264",
-            "-pix_fmt",
-            "yuv420p",
-            "-crf",
-            str(LOOP_CRF_H264),
-            "-preset",
-            "slow",
-            # Damit der Browser mit dem Abspielen beginnen kann, bevor die
-            # Datei ganz da ist: der Index gehört an den Anfang.
-            "-movflags",
-            "+faststart",
-            str(mp4),
-        ]
-    )
-    run_ffmpeg(
-        [
-            "-i",
-            str(shot.frames / "00000.png"),
-            "-vf",
-            scaled,
-            "-frames:v",
-            "1",
-            str(poster),
-        ]
-    )
-    for written in (webm, mp4, poster):
-        megabytes = written.stat().st_size / 1024 / 1024
-        print(f"  Loop  → {written.name}  {megabytes:.1f} MB")
-    return webm, mp4, poster
 
 
 def encode_landscape(shot: Shot, target: Path, audio: Path | None = None) -> None:
@@ -3070,15 +3046,50 @@ def main() -> int:
     if frames.exists():
         shutil.rmtree(frames)
 
+    arguments = sys.argv[2:]
+    # ``webloop <name> [sprachen]`` — die Bedienloops der Website
+    # (:data:`WEB_LOOPS`).
+    web_loop = arguments[1] if arguments[:1] == ["webloop"] and len(arguments) > 1 else ""
+    if arguments[:1] == ["webloop"] and web_loop not in WEB_LOOPS:
+        raise SystemExit(
+            f"webloop braucht einen Namen aus {', '.join(WEB_LOOPS)} — etwa: webloop anpassen de"
+        )
+    # Beide Website-Formate — Bedienloop und Kreisflug-Loop — nehmen das
+    # maximierte Fenster auf dem Zielschirm auf (``make_figures.target_screen``,
+    # ``--schirm N``); die Hochformatprüfung von ``require_screen`` gilt für sie
+    # nicht, ein maximiertes Fenster passt auf seinen Schirm.
+    as_loop = "loop" in arguments
+    website_format = bool(web_loop) or as_loop
+    arguments = chosen_screen(arguments)
+
     load_operations()
     app = QApplication.instance() or QApplication([])
     assert isinstance(app, QApplication)
-    require_screen(app)
+    if not website_format:
+        require_screen(app)
     apply_theme(app, "dark")
+
+    if web_loop:
+        from app.i18n.catalog import available_languages
+
+        chosen_languages = arguments[2:] or list(available_languages())
+        unknown = sorted(set(chosen_languages) - set(available_languages()))
+        if unknown:
+            raise SystemExit(f"Unbekannte Sprache {unknown} — vorhanden: {available_languages()}")
+        qt_translator = None
+        for language in chosen_languages:
+            print(f"\n=== {language} ===")
+            install_catalog(language, read_catalog(language))
+            set_language(language)
+            if qt_translator is not None:
+                app.removeTranslator(qt_translator)
+            qt_translator = install_qt_translations(app, language)
+            shoot_web_loop(app, language, out, frames / f"{web_loop}-{language}", web_loop)
+        print(f"\nFertig: {out}")
+        return 0
 
     # Erstes Argument nach dem Ziel ist das Drehbuch, alles Weitere sind
     # Sprachen: ``make_video.py ziel einstieg de``.
-    arguments = sys.argv[2:]
     name = arguments[0] if arguments and arguments[0] in SCRIPTS else "einstieg"
     script = SCRIPTS[name]
     # Ein Projekt oder Modell kann ausdrücklich das jeweilige Schaustück
@@ -3089,12 +3100,12 @@ def main() -> int:
         entry for entry in arguments if Path(entry).suffix.lower() in MODEL_SUFFIXES | {".p3d"}
     ]
     project = Path(chosen[0]) if chosen else None
-    # ``loop`` schaltet auf die Website-Fassung um: stumm, 720p, kurz, in
-    # zwei Formaten samt Standbild. Kein eigenes Werkzeug daneben — es ist
-    # dieselbe Aufnahme aus demselben Drehbuch, nur anders ausgegeben, und
-    # zwei Programme, die dasselbe Fenster filmen, laufen unweigerlich
-    # auseinander.
-    as_loop = "loop" in arguments
+    # ``loop`` schaltet auf die Website-Fassung um: stumm, kurz, das ganze
+    # maximierte Fenster, in zwei Formaten samt Standbild. Kein eigenes
+    # Werkzeug daneben — es ist dieselbe Aufnahme aus demselben Drehbuch, nur
+    # anders ausgegeben, und zwei Programme, die dasselbe Fenster filmen,
+    # laufen unweigerlich auseinander. (``as_loop`` steht schon oben: Es
+    # schaltet die Hochformatprüfung ab.)
     short_only = "short" in arguments
     # ``--morph <name>[:<von>:<bis>]`` — welcher Parameter im Loop läuft.
     #
@@ -3144,6 +3155,9 @@ def main() -> int:
     }
     if start_degrees:
         skip.add(f"{start_degrees:g}")
+    # Der Wert hinter ``--name`` ist ein Dateistamm und keine Sprache.
+    if option(arguments, "--name"):
+        skip.add(option(arguments, "--name"))
     wanted = [
         entry
         for entry in arguments
@@ -3194,8 +3208,15 @@ def main() -> int:
         return 0
 
     qt_translator = None
+    from app.i18n import SOURCE_LANGUAGE
+    from app.i18n.catalog import available_languages
+
+    if as_loop and not any(entry in available_languages() for entry in arguments):
+        # Ein Website-Loop spricht nicht: Es gibt ihn in jeder Sprache, die die
+        # Oberfläche kann, nicht nur in denen, für die ein Sprechertext steht.
+        wanted = list(available_languages())
     for language in wanted:
-        if language not in script:
+        if language not in script and not (as_loop and language in available_languages()):
             raise SystemExit(f"Kein Drehbuch für {language!r} — vorhanden: {', '.join(script)}")
         print(f"\n=== {language} ===")
         install_catalog(language, read_catalog(language))
@@ -3206,13 +3227,30 @@ def main() -> int:
             app.removeTranslator(qt_translator)
         qt_translator = install_qt_translations(app, language)
         if as_loop:
+            # **Ohne Schlusskarte.** Die Karte trägt Text in einer Sprache
+            # („Vollständige Demo bis …"); auf der Website stand sie deshalb
+            # in allen sechs Fassungen deutsch da, und den Aufruf zum Laden
+            # hat die Seite ohnehin. Die Szenen kommen aus der Quellsprache —
+            # gesprochen wird nichts, nur ihre Namen und ihre Zahl zählen.
+            scenes = tuple(
+                scene
+                for scene in script.get(language, script[SOURCE_LANGUAGE])
+                if scene[0] != "closing"
+            )
+            # Ein Drehbuch aus lauter Kreisfahrten wird **eine** ganze
+            # Umdrehung: Jede Kreisfahrt beginnt am selben Winkel, und zwei
+            # hintereinander sprangen nach sechs Sekunden zurück an den Anfang.
+            if not any(key in MOVING_SCENES or key in FEATURE_DEMO_SCENES for key, _ in scenes):
+                scenes = ((FULL_TURN, ""),)
+            base = option(arguments, "--name") or name
+            stem = base if language == SOURCE_LANGUAGE else f"{base}-{language}"
             shoot_loop(
                 app,
                 language,
                 out,
                 frames / f"{name}-{language}",
-                script[language],
-                f"{name}-{language}",
+                scenes,
+                stem,
                 chosen=project,
                 morph_name=morph_name,
                 morph_span=morph_span,
@@ -3514,11 +3552,10 @@ def shoot_loop(
     from app.ui.main_window import MainWindow
     from app.ui.session import Session
     from app.ui.settings import UiSettings
+    from tools.make_figures import prepared
 
     session = Session()
-    window = MainWindow(session, UiSettings())
-    window.resize(*WINDOW)
-    window.show()
+    window = prepared(MainWindow(session, UiSettings()), None, hidden=False)
     settle(app, 60)
 
     # **Ohne Projekt filmt man den Startbildschirm.** Beim ersten Lauf war
@@ -3544,6 +3581,16 @@ def shoot_loop(
             f"Kein Körper in der Szene ({project.name}) — der Loop zeigte den Startbildschirm."
         )
     print(f"  Projekt: {project.name}, {bodies} Körper")
+    # **Erst filmen, wenn alles fertig ist — auch der Prüfbericht.** Die
+    # Schichtanalyse meldet ihre Befunde nach der Auswertung; am 23.09.2026
+    # sprang der Bericht mitten im Loop von null auf zwei Warnungen, und beim
+    # Neustart der Schleife wieder zurück. Und die Statuszeile trägt die
+    # Restlaufzeit der Demo („noch 38 Tage") — im Film eine Zahl, die in einer
+    # Woche falsch ist.
+    session.wait_for_idle(120_000)
+    settle(app, 60)
+    window.statusBar().hide()
+    settle(app, 20)
 
     print(f"Aufnahme Loop {stem} ({seconds:.0f} s):")
     shot = shoot_storyboard(
@@ -3552,6 +3599,7 @@ def shoot_loop(
         session,
         frames,
         loop_timing(scenes, seconds),
+        zoom=LOOP_ZOOM,
         language=language,
         morph_name=morph_name,
         morph_span=morph_span,
@@ -3566,6 +3614,464 @@ def shoot_loop(
     # handtellergroßes Achsenkreuz quer über dem Modell.)
     release_viewport(window)
     return files
+
+
+# --- Die Bedienloops der Website ------------------------------------------------
+#
+# Der Aufmacher der Startseite zeigt, was die Überschrift verspricht: Eine
+# fremde STL passt nicht, die Bohrung wird angeklickt, ihr Durchmesser
+# eingetippt, übernommen — und der Prüfbericht steht daneben. Das ist kein
+# Kreisflug um ein fertiges Teil, sondern **der Bedienweg selbst**, mit
+# denselben Eingaben, die ein Mensch macht (``QTest`` an Feld und Knopf), und
+# mit Prüfungen, die den Lauf anhalten, wenn das Ergebnis nicht stimmt.
+#
+# Drei Unterschiede zu den übrigen Loops, und jeder hat einen Grund:
+#
+# * **Kein Text im Bild.** Was zu sagen ist, steht übersetzt im HTML neben dem
+#   Loop (die Schrittmarken). Eine eingebrannte Zeile wäre auf fünf von sechs
+#   Seiten in der falschen Sprache.
+# * **Je Sprache eine Aufnahme.** Die Oberfläche spricht die Sprache der Seite.
+# * **Das ganze Fenster, maximiert, die Kamera eng am Teil** (Bildstandard, siehe
+#   ``WEB_VIDEO_WIDTH``): Das Modell füllt die 3D-Ansicht, Maßgruppe,
+#   Auswahlfenster und Prüfbericht stehen im selben Bild.
+
+
+@dataclass(frozen=True, slots=True)
+class WebLoop:
+    """Ein stummer Bedienloop: welches Projekt, welche Bohrung, welches Maß."""
+
+    #: Beispielprojekt unter ``app/examples``.
+    project: str
+    #: Die Merkmalskennung, an der gearbeitet wird.
+    target: str
+    #: Der neue Durchmesser in Millimetern.
+    diameter: float
+    #: Szenen und ihre Dauer in Sekunden, in dieser Reihenfolge.
+    scenes: tuple[tuple[str, float], ...]
+    #: Mit welcher Szene jede Schrittmarke im HTML beginnt.
+    chapters: tuple[str, ...]
+
+
+#: Die Bedienloops, nach dem Namen, unter dem ``make_video.py`` sie aufnimmt.
+#:
+#: Die Halterung ist dasselbe eingelesene Korpusnetz wie im Merkmalsfilm
+#: (``FEATURE_EXAMPLE``): fünf Bohrungen aus der STL, keine aus Solidon. 5,2 auf
+#: 6,5 mm ist die Änderung, die jemand wirklich macht, wenn M5 nicht durchgeht.
+WEB_LOOPS: dict[str, WebLoop] = {
+    "anpassen": WebLoop(
+        project=FEATURE_EXAMPLE,
+        # Die Bohrung vorn rechts: Dort verdeckt sie weder die Maßgruppe
+        # (links im Bild) noch der Prüfbericht (rechts).
+        target="hole_4",
+        diameter=6.5,
+        scenes=(
+            ("web_view", 1.6),
+            ("web_pick", 3.0),
+            ("web_type", 3.0),
+            ("web_apply", 2.4),
+            ("web_report", 2.6),
+        ),
+        chapters=("web_view", "web_pick", "web_type", "web_report"),
+    ),
+}
+
+#: Wie nah die Kamera im Bedienloop an die Bohrung rückt — als Faktor auf den
+#: eingepassten Abstand. Bei 0,5 misst die 5,2-mm-Bohrung im maximierten
+#: Fenster rund 150 Bildpunkte (gemessen am Anfangsbild, 23.09.2026); die
+#: Platte füllt die Ansicht bis an ihre Ränder.
+WEB_LOOP_CLOSE = 0.5
+
+
+def web_loop_chapter_starts(name: str) -> tuple[float, ...]:
+    """Ab welcher Sekunde jede Schrittmarke gilt — die Zahlen stehen auch im HTML.
+
+    ``tests/test_website.py`` hält die ``data-at``-Werte der Seiten gegen diese
+    Funktion: Wer eine Szene verlängert, ohne die Seite nachzuziehen, bekommt
+    eine Marke, die neben dem falschen Bild leuchtet.
+    """
+    loop = WEB_LOOPS[name]
+    starts: dict[str, float] = {}
+    elapsed = 0.0
+    for scene, seconds in loop.scenes:
+        starts[scene] = elapsed
+        elapsed += seconds
+    return tuple(round(starts[scene], 1) for scene in loop.chapters)
+
+
+def _world_to_window(window: Any, world: tuple[float, float, float]) -> tuple[float, float]:
+    """Ein Weltpunkt in Fensterkoordinaten — dieselbe Rechnung wie ``_feature_click``."""
+    from PySide6.QtCore import QPoint
+
+    interactor = window.viewport.renderer.widget
+    display = window.viewport._display_of(world)
+    if display is None:
+        raise SystemExit(f"Der Punkt {world} ließ sich nicht ins Bild projizieren")
+    ratio = float(interactor.devicePixelRatioF()) or 1.0
+    visible = interactor.mapTo(window, QPoint(round(display[0] / ratio), round(display[1] / ratio)))
+    return float(visible.x()), float(visible.y())
+
+
+def _web_loop_diameter_field(window: Any) -> Any:
+    """Das Durchmesserfeld der Maßgruppe *Bohrung ändern* im Bild.
+
+    Gesucht über den zugänglichen Namen, den die Anwendung jedem Feld gibt
+    („Bohrung ändern — Durchmesser", übersetzt), und nicht über die
+    Reihenfolge: X, Y, Z und Tiefe sind ebenfalls Längenfelder.
+    """
+    from PySide6.QtWidgets import QAbstractSpinBox, QFrame, QWidget
+
+    box = window.findChild(QFrame, "placement_measure_fields")
+    if box is None or not box.isVisible():
+        raise SystemExit("Die Maßgruppe „Bohrung ändern“ steht nicht im Bild")
+    entry = next(
+        (run for run in window.feature_panel._runs.values() if run.op == "resize_hole"), None
+    )
+    if entry is None or entry.action is None:
+        raise SystemExit("Für die gewählte Bohrung bietet das Fenster „Bohrung ändern“ nicht an")
+    field = next((field for field in entry.action.fields if field.name == "diameter"), None)
+    if field is None:
+        raise SystemExit("„Bohrung ändern“ hat kein Durchmesserfeld mehr")
+    wanted = f"{entry.action.title} — {field.label}"
+    for widget in box.findChildren(QWidget):
+        if widget.accessibleName() == wanted and widget.isVisible():
+            spin = widget if isinstance(widget, QAbstractSpinBox) else getattr(widget, "spin", None)
+            if spin is not None:
+                return spin
+    raise SystemExit(f"Das Feld {wanted!r} fehlt in der Maßgruppe")
+
+
+def web_loop_step(
+    window: Any,
+    app: QApplication,
+    session: Any,
+    scene: str,
+    loop: WebLoop,
+    state: dict[str, Any],
+) -> tuple[StepFn, PointerFn]:
+    """Eine Szene des Bedienloops: was je Bild geschieht und wo der Zeiger steht.
+
+    ``state`` trägt die Zeigerstelle von Szene zu Szene weiter — der Zeiger
+    springt nie, er fährt.
+    """
+    from PySide6.QtCore import QLocale, Qt
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QPushButton
+
+    renderer = window.viewport.renderer
+
+    def render(_index: int, _total: int) -> None:
+        renderer.render()
+
+    def glide(end: tuple[float, float], click_at: float | None, arrive: float = 0.8) -> PointerFn:
+        begin = state["pointer"]
+
+        def pointer(index: int, total: int) -> tuple[float, float, bool]:
+            point = _ease(begin, end, index / max(1.0, total * arrive))
+            state["pointer"] = point
+            pressed = click_at is not None and abs(index - round(total * click_at)) <= 2
+            return (*point, pressed)
+
+        return pointer
+
+    if scene == "web_view":
+        # Der Zeiger kommt von rechts unten ins Bild und bleibt über dem
+        # Modell stehen — das erste Bild ist zugleich das Standbild.
+        centre = _widget_centre(window, renderer.widget)
+        return render, glide((centre[0] + 60.0, centre[1] + 40.0), None, arrive=1.0)
+
+    if scene == "web_pick":
+        # **Zwei Klicks, wie in der Anwendung:** der erste wählt den Körper,
+        # der zweite die Bohrung darin. Ein einzelner Klick auf die Bohrung
+        # eines nicht gewählten Körpers wählt nur den Körper — der Film zeigt
+        # deshalb beide, statt einen Zustand vorzugeben.
+        object_id, _feature_id, feature = _feature_demo_target(session, loop.target)
+        bore = [float(value) for value in feature.params["centre"]]
+        top = bore[2] + float(feature.params["depth"]) / 2.0
+        inward = 1.6 * float(feature.params["diameter"])
+        body_world = (
+            bore[0] - math.copysign(inward, bore[0] or 1.0),
+            bore[1] - math.copysign(inward, bore[1] or 1.0),
+            top,
+        )
+        body = _world_to_window(window, body_world)
+        _interactor, world, hole = _feature_click(window, loop.target)
+        begin = state["pointer"]
+
+        def pick(index: int, total: int) -> None:
+            if not state.get("body") and index >= round(total * 0.3):
+                window.viewport._select_at(body_world)
+                app.processEvents()
+                if window.object_tree.selected() != object_id:
+                    raise SystemExit("Der erste sichtbare Klick hat den Körper nicht gewählt")
+                state["body"] = True
+            if not state.get("picked") and index >= round(total * 0.68):
+                window.viewport._select_at(world)
+                app.processEvents()
+                if window.object_tree.selected_feature() != loop.target:
+                    raise SystemExit(f"Der zweite sichtbare Klick hat {loop.target} nicht gewählt")
+                state["picked"] = True
+                settle(app, 20)
+            renderer.render()
+
+        def pointer(index: int, total: int) -> tuple[float, float, bool]:
+            if index < total * 0.3:
+                point = _ease(begin, body, index / max(1.0, total * 0.27))
+            else:
+                point = _ease(body, hole, (index - total * 0.3) / max(1.0, total * 0.32))
+            state["pointer"] = point
+            pressed = any(abs(index - round(total * share)) <= 2 for share in (0.3, 0.68))
+            return (*point, pressed)
+
+        return pick, pointer
+
+    if scene == "web_type":
+        spin = _web_loop_diameter_field(window)
+        typed = QLocale().toString(loop.diameter, "f", 2)
+
+        def type_value(index: int, total: int) -> None:
+            if not state.get("typed") and index >= round(total * 0.34):
+                QTest.mouseClick(spin, Qt.MouseButton.LeftButton)
+                spin.setFocus()
+                spin.selectAll()
+                QTest.keyClicks(spin, typed)
+                state["typed"] = True
+            if state.get("typed") and not state.get("committed") and index >= round(total * 0.6):
+                # Tab und nicht Enter: Enter übernimmt in der Maßgruppe sofort,
+                # und der Klick auf *Übernehmen* in der nächsten Szene fände
+                # nichts mehr zu tun. Tab schließt die Eingabe ab wie ein
+                # Mensch, der zum nächsten Feld geht.
+                QTest.keyClick(spin, Qt.Key.Key_Tab)
+                _wait_for_feature_preview(window, app)
+                state["committed"] = True
+            renderer.render()
+
+        return type_value, glide(_widget_centre(window, spin), 0.34, arrive=0.3)
+
+    if scene == "web_apply":
+        button = window.findChild(QPushButton, "placement_measure_accept")
+        if button is None or not button.isVisible():
+            raise SystemExit("Der Knopf „Übernehmen“ der Maßgruppe fehlt")
+        before = len(session.project.document.transactions)
+
+        def apply(index: int, total: int) -> None:
+            if not state.get("applied") and index >= round(total * 0.42):
+                if not button.isEnabled():
+                    raise SystemExit(f"„Übernehmen“ ist gesperrt: {button.toolTip()}")
+                QTest.mouseClick(button, Qt.MouseButton.LeftButton)
+                session.wait_for_idle(120_000)
+                settle(app, 30)
+                _object_id, feature_id, feature = _feature_demo_target(session, loop.target)
+                if feature_id != loop.target:
+                    raise SystemExit(f"Die Bohrungskennung wechselte zu {feature_id}")
+                measured = float(feature.params.get("diameter", 0.0))
+                if not math.isclose(measured, loop.diameter, abs_tol=0.2):
+                    raise SystemExit(f"Die Bohrung misst {measured:.2f} statt {loop.diameter} mm")
+                if len(session.project.document.transactions) != before + 1:
+                    raise SystemExit("Die Änderung steht nicht als ein Schritt im Verlauf")
+                state["applied"] = True
+            renderer.render()
+
+        return apply, glide(_widget_centre(window, button), 0.42, arrive=0.38)
+
+    if scene == "web_report":
+        # Der Zeiger fährt an die Zählzeile des Prüfberichts („0 x Fehler ·
+        # 0 x Warnung …") und bleibt dort: Das ist das Urteil nach der Änderung.
+        report = getattr(window, "report", None)
+        summary = getattr(report, "summary", None)
+        if summary is None or not summary.isVisible():
+            raise SystemExit("Die Zählzeile des Prüfberichts steht nicht im Bild")
+        corner = summary.mapTo(window, summary.rect().topLeft())
+        aim = (float(corner.x() + min(summary.width(), 220) * 0.55), float(corner.y() + 14))
+        return render, glide(aim, None, arrive=0.55)
+
+    raise SystemExit(f"Unbekannte Szene des Bedienloops: {scene}")
+
+
+def shoot_web_loop(
+    app: QApplication,
+    language: str,
+    out: Path,
+    frames: Path,
+    name: str,
+) -> tuple[Path, Path, Path]:
+    """Einen Bedienloop aufnehmen und als ``webm``, ``mp4`` und Standbild ablegen.
+
+    Die Dateien heißen ``loop-<name>.*`` für Deutsch und ``loop-<name>-<sprache>.*``
+    für die übrigen Sprachen — dieselbe Regel wie bei den Belegbildern.
+    """
+    from app.core import examples
+    from app.i18n import SOURCE_LANGUAGE
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+    from tools.make_figures import prepared
+
+    loop = WEB_LOOPS[name]
+    session = Session()
+    window = prepared(MainWindow(session, UiSettings()), None, hidden=False)
+    project = examples.directory() / loop.project
+    if not project.is_file():
+        raise SystemExit(f"Projekt fehlt: {project}")
+    _open_video_input(session, project)
+    window._show_start_screen(False)
+    if not await_result(app, session):
+        raise SystemExit(f"Das Projekt rechnete nicht fertig: {project}")
+    # Wie beim Kreisflug: Der Prüfbericht ist erst fertig, wenn alles fertig
+    # ist, und er soll im Loop nicht nachträglich springen.
+    session.wait_for_idle(120_000)
+    settle(app, 30)
+    # **Die Statuszeile geht aus**, sonst nichts: Sie trägt die Restlaufzeit der
+    # Demo („noch 38 Tage") — im Film wäre das in einer Woche eine falsche Zahl.
+    window.statusBar().hide()
+    settle(app, 30)
+    window.raise_()
+    window.activateWindow()
+    reset_feature_demo(window, app, session, loop.target)
+    # Ohne Auswahl anfangen: Der Film zeigt, wie der Kunde wählt.
+    window.object_tree.select_object(None)
+    window.viewport.reset_camera()
+    settle(app, 30)
+    # **Näher an die Bohrung**, sonst ist 5,2 → 6,5 mm auf einer 80-mm-Platte
+    # ein Unterschied von wenigen Bildpunkten. Die Blickrichtung bleibt die des
+    # Einpassens; nur Blickpunkt und Abstand ändern sich.
+    renderer = window.viewport.renderer
+    if renderer is None:
+        raise SystemExit("Die 3D-Ansicht hat keinen Renderer — ohne Grafik kein Loop")
+    pose = renderer.camera_pose()
+    _object_id, _feature_id, feature = _feature_demo_target(session, loop.target)
+    focal = tuple(float(value) for value in feature.params["centre"])
+    position = tuple(
+        f + (p - q) * WEB_LOOP_CLOSE
+        for f, p, q in zip(focal, pose.position, pose.focal_point, strict=True)
+    )
+    _aim_camera(renderer, position, focal, pose.view_up)  # type: ignore[arg-type]
+    renderer.reset_clipping_range()
+    renderer.render()
+    settle(app, 30)
+
+    if frames.exists():
+        shutil.rmtree(frames)
+    total = 0
+    start = (float(window.width()) - 40.0, float(window.height()) - 30.0)
+    state: dict[str, Any] = {"pointer": start}
+    print(f"Aufnahme Bedienloop {name} ({language}):")
+    for scene, seconds in loop.scenes:
+        count = max(1, round(seconds * FPS))
+        step, pointer = web_loop_step(window, app, session, scene, loop, state)
+        total = record(window, app, frames, total, count, step, pointer)
+        print(f"  {scene:12s} {count:4d} Bilder")
+    shot = Shot(frames=frames, count=total, viewport=viewport_rect(window))
+    suffix = "" if language == SOURCE_LANGUAGE else f"-{language}"
+    files = encode_web_loop(shot, out / f"loop-{name}{suffix}")
+    write_last_frame(shot, out / f"loop-{name}-ende{suffix}.webp")
+    session.forget_changes()
+    window.close()
+    release_viewport(window)
+    return files
+
+
+def write_last_frame(shot: Shot, target: Path) -> Path:
+    """Das letzte Bild des Bedienloops als eigenes Standbild — das Ergebnis.
+
+    Das Standbild des Videos ist das **erste** Bild (siehe :func:`encode_loop`).
+    Wo die Seite das Ergebnis ohne Film zeigt — die Karte „Weg 1" —, braucht sie
+    das letzte: dieselbe Aufnahme, dieselbe Sprache, nach dem Übernehmen.
+    """
+    run_ffmpeg(
+        [
+            "-i",
+            str(shot.frames / f"{shot.count - 1:05d}.png"),
+            "-vf",
+            f"scale={WEB_VIDEO_WIDTH}:-2:flags=lanczos",
+            "-frames:v",
+            "1",
+            "-quality",
+            "82",
+            str(target),
+        ]
+    )
+    print(f"  Ende  → {target.name}  {target.stat().st_size / 1024:.0f} kB")
+    return target
+
+
+def encode_web_loop(shot: Shot, stem: Path) -> tuple[Path, Path, Path]:
+    """Den Bedienloop kodieren — auf :data:`WEB_VIDEO_WIDTH`, die Höhe folgt dem Fenster."""
+    return encode_website_video(shot, stem, f"scale={WEB_VIDEO_WIDTH}:-2:flags=lanczos")
+
+
+def encode_website_video(
+    shot: Shot, stem: Path, scaled: str, crf_h264: int = LOOP_CRF_H264
+) -> tuple[Path, Path, Path]:
+    """Einen stummen Website-Loop schreiben: ``webm`` (VP9), ``mp4`` (H.264), Standbild.
+
+    Das Standbild ist WebP statt PNG — ein Zehntel der Bytes (weg4-formen:
+    635 kB als PNG), und jeder Browser, der das Video abspielt, liest es.
+    Zurück kommen die Dateien in der Reihenfolge ``webm``, ``mp4``, Standbild.
+    """
+    webm = stem.with_suffix(".webm")
+    mp4 = stem.with_suffix(".mp4")
+    poster = stem.with_suffix(".webp")
+    source = ["-framerate", str(FPS), "-i", str(shot.frames / "%05d.png"), "-an", "-vf", scaled]
+    # **Hier ist H.264 das kleinere Format**, und das ist gemessen: Derselbe
+    # Bedienloop (12,6 s, damals 1280 x 800) wog am 23.09.2026 als H.264 bei CRF 26 217 kB,
+    # als VP9 bei CRF 34 783 kB und selbst mit Bildschirmabstimmung bei CRF 38
+    # noch 534 kB. Oberfläche ist große ruhige Fläche mit scharfen Kanten, das
+    # liegt dem x264-Profil besser. Die Seite nennt deshalb MP4 zuerst; WebM
+    # bleibt für Browser ohne H.264 (einige Linux-Builds von Chromium).
+    run_ffmpeg(
+        [
+            *source,
+            "-c:v",
+            "libvpx-vp9",
+            "-crf",
+            str(LOOP_CRF_VP9),
+            "-b:v",
+            "0",
+            "-row-mt",
+            "1",
+            "-deadline",
+            "good",
+            "-cpu-used",
+            "2",
+            "-tune-content",
+            "screen",
+            "-g",
+            str(round(FPS * 10)),
+            str(webm),
+        ]
+    )
+    run_ffmpeg(
+        [
+            *source,
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            "-crf",
+            str(crf_h264),
+            "-preset",
+            "slow",
+            "-movflags",
+            "+faststart",
+            str(mp4),
+        ]
+    )
+    run_ffmpeg(
+        [
+            "-i",
+            str(shot.frames / "00000.png"),
+            "-vf",
+            scaled,
+            "-frames:v",
+            "1",
+            "-quality",
+            "82",
+            str(poster),
+        ]
+    )
+    for written in (webm, mp4, poster):
+        print(f"  Loop  → {written.name}  {written.stat().st_size / 1024:.0f} kB")
+    return webm, mp4, poster
 
 
 def shoot_language(

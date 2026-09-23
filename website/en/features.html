@@ -25,7 +25,7 @@
 <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="/icon.svg?v=a72d0c52" type="image/svg+xml">
-<link rel="stylesheet" href="../style.css?v=aece7d33">
+<link rel="stylesheet" href="../style.css?v=8c4d6ed7">
 </head>
 <body>
 <a class="skip" href="#content">Skip to content</a>
@@ -78,10 +78,8 @@
         <div class="shot">
           <div class="stage">
             <div class="chrome" aria-hidden="true"><i></i><i></i><i></i></div>
-            <a href="../bilder/beleg-fenster-en.png?v=220cac42">
-              <img src="../bilder/beleg-fenster-en.png?v=220cac42" width="2560" height="1392" fetchpriority="high"
-                   alt="The Solidon3D main window: object tree with parameters and history on the left, the 3D view in the middle, the inspection report on the right">
-            </a>
+            <a href="../bilder/beleg-fenster-en.webp?v=64551c1f"><img src="../bilder/beleg-fenster-en.webp?v=64551c1f" width="2560" height="1369" fetchpriority="high"
+                 alt="The Solidon3D main window with a two-colour sign: objects, parameters and history on the left, the sign large in the middle with its year selected, and on the right the report with one warning and the Selection panel with the actions for the selected letters."></a>
           </div>
         </div>
       </div>
@@ -112,8 +110,7 @@
           what used to be design intent: holes, pegs, countersinks, domes and
           sockets, fillets, coves, threads, flat faces and open edges. Every
           feature it finds gets an identity that survives the steps that
-          follow — and the feature window shows its <b>measured</b> values as
-          fields: position, diameter, depth, axis.</p>
+          follow — and a click shows its <b>measured</b> values, as dimensions in the view and in the Selection panel on the right: position, diameter, depth, axis.</p>
           <p class="note">Changing a number is the operation.
           <b>No mode, no second dialog</b> — and the preview in the view
           follows while you are still typing.</p>
@@ -123,8 +120,7 @@
           coordinates — two steps, six numbers by hand, and the identity was
           gone. Now it is one step, and every fit that points at that hole
           keeps its reference.</p>
-          <p>The hole itself says which screw belongs in it (“measures
-          5.19 mm — the clearance hole for M5”), and where nothing fits, it
+          <p>The hole itself says which screw belongs in it (“Probably fits M5 (Clearance hole, fine)”), and where nothing fits, it
           says that too. Six holes of the same kind go to the same size in one
           go, as a single action that one undo takes back together. Two
           selected features state the distance between them — in space and per
@@ -138,54 +134,11 @@
           selected location and why.</b></p>
         </div>
         <figure class="shot">
-          <svg class="figure" viewBox="0 0 560 300" role="img"
-               aria-label="A drawing of the feature window: at the top it reads “Hole — Ø 5.19 mm” with the line “the clearance hole for M5” below it; then fields for diameter, depth and position, and the buttons Move, Turn, Duplicate and Remove. A suitable fillet can have its radius changed.">
-            <text class="ink" x="24" y="30" font-weight="600">Feature</text>
-
-            <rect class="field" x="24" y="46" width="250" height="44" rx="4"/>
-            <text class="ink" x="38" y="66" font-size="12">Hole</text>
-            <text class="value" x="260" y="66" text-anchor="end">Ø 5.19 mm</text>
-            <text class="dim" x="38" y="82">the clearance hole for M5</text>
-
-            <rect class="field" x="24" y="102" width="250" height="30" rx="4"/>
-            <text class="dim" x="38" y="122">Diameter</text>
-            <text class="value" x="260" y="122" text-anchor="end">5.19 mm</text>
-
-            <rect class="field" x="24" y="140" width="250" height="30" rx="4"/>
-            <text class="dim" x="38" y="160">Depth</text>
-            <text class="value" x="260" y="160" text-anchor="end">12.00 mm</text>
-
-            <rect class="field" x="24" y="178" width="250" height="30" rx="4"/>
-            <text class="dim" x="38" y="198">Position X / Y</text>
-            <text class="value" x="260" y="198" text-anchor="end">18.0 / 24.0</text>
-
-            <g class="rule" fill="none">
-              <rect x="24" y="224" width="50" height="26" rx="4"/>
-              <rect x="80" y="224" width="46" height="26" rx="4"/>
-              <rect x="132" y="224" width="66" height="26" rx="4"/>
-              <rect x="204" y="224" width="62" height="26" rx="4"/>
-            </g>
-            <text class="ink" x="49" y="241" font-size="11" text-anchor="middle">Move</text>
-            <text class="ink" x="103" y="241" font-size="11" text-anchor="middle">Turn</text>
-            <text class="ink" x="165" y="241" font-size="11" text-anchor="middle">Duplicate</text>
-            <text class="ink" x="235" y="241" font-size="11" text-anchor="middle">Remove</text>
-
-            <text class="dim" x="24" y="278">Fillet</text>
-            <text class="dim" x="24" y="294">Change radius where the fillet supports it.</text>
-
-            <text class="dim" x="320" y="42">In the view</text>
-            <rect class="body" x="320" y="56" width="216" height="150" rx="6"/>
-            <circle class="body-soft" cx="378" cy="112" r="17"/>
-            <circle class="hot-stroke" cx="378" cy="112" r="21"/>
-            <circle class="body-soft" cx="470" cy="112" r="17"/>
-            <circle class="body-soft" cx="378" cy="168" r="17"/>
-            <circle class="body-soft" cx="470" cy="168" r="17"/>
-            <text class="dim" x="320" y="230">selected: one of four</text>
-            <text class="ink" x="320" y="252" font-size="12">Change all four at once:</text>
-            <text class="value" x="320" y="270">Ø 5.19 → 5.40 mm</text>
-          </svg>
-          <figcaption>The feature window: measured values as fields, and what
-          is not possible written out as a sentence.</figcaption>
+          <div class="stage">
+            <a href="../bilder/beleg-merkmal-en.webp?v=9b8692f9"><img src="../bilder/beleg-merkmal-en.webp?v=9b8692f9" width="2560" height="1369" loading="lazy" decoding="async"
+                 alt="An imported bracket with five recognised holes; hole 4 is selected. In the view its distances to the edges and the “Change bore” group with diameter, position and depth; on the right in the Selection panel the line “Probably fits M5”, then Move feature, Pull into a slot, Turn feature, Duplicate feature, Remove feature, Countersink and Fill a bore."></a>
+          </div>
+          <figcaption>A clicked hole: its dimensions in the view, its actions on the right in the Selection panel.</figcaption>
         </figure>
       </div>
 
@@ -266,8 +219,8 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../bilder/beleg-skizze-en.png?v=ba5826ca"><img src="../bilder/beleg-skizze-en.png?v=ba5826ca" width="2560" height="1392" loading="lazy" decoding="async"
-                 alt="The sketch mode inside the main window: you draw in the view itself, the grid lies over the model with a dimensioned rectangle and a circle; at the bottom the floating bar with drawing tools, grid width, the line “Sketch plane: face on Sign — 2247 mm²” and the constraint buttons; on the right the Constraints tab with the thirteen constraints of the drawing"></a>
+            <a href="../bilder/beleg-skizze-en.webp?v=ef64fe67"><img src="../bilder/beleg-skizze-en.webp?v=ef64fe67" width="2560" height="1369" loading="lazy" decoding="async"
+                 alt="Sketch mode in the main window: the drawing happens in the view, on a face of the holder from Path 2 — a dimensioned 50 × 30 mm rectangle with a circle inside, the holder with its two screw holes faint behind it; at the bottom the bar with the drawing tools, the sketch plane and the buttons Done and Discard, and on the right the Constraints tab."></a>
           </div>
           <figcaption>You draw in the view — on the face you clicked.</figcaption>
         </figure>
@@ -324,7 +277,7 @@
           <h3>A nut pocket in four clicks instead of four half-hours</h3>
           <p>The face you click is the one that counts: a building block
           lands where you pointed in the model — every operation on a face
-          used to cost two clicks. A face's context menu now also offers
+          used to cost two clicks. The catalogue on the right now also knows
           wall mount, rib, tongue and groove, snap tab, snap fit and living
           hinge.</p>
           <p>Tested building blocks in six groups — counterbored screw hole,
@@ -345,8 +298,8 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../bilder/beleg-bausteine-en.png?v=fdb5b03b"><img src="../bilder/beleg-bausteine-en.png?v=fdb5b03b" width="1220" height="955" loading="lazy" decoding="async"
-                 alt="The building block catalogue with the groups fasteners and mechanics: heat-set insert, nut pocket, thread, counterbored screw hole, alignment pin, hinge eye, snap hook, living hinge, snap connector and snap fit, plus foot, keyhole hanger, magnet pocket, pegboard hook and wall mount, each with a preview and its dimensions"></a>
+            <a href="../bilder/beleg-bausteine-en.webp?v=dd9d1548"><img src="../bilder/beleg-bausteine-en.webp?v=dd9d1548" width="1560" height="1144" loading="lazy" decoding="async"
+                 alt="The Parts catalogue, opened over the window: the groups Fasteners, Mechanics and Mounting with heat-set insert, nut trap, printed nut, screw, printable thread, screw hole with countersink, barrel hinge, ball bearing, dowel pin and bore, hinge eye, latch, living hinge, snap connectors, foot, keyhole hanger, magnet pocket, pegboard hook, profile clamp liner and shell and wall mount, each with a preview and its dimensions. At the bottom the buttons Insert and Save selection as a part."></a>
           </div>
           <figcaption>The catalogue — every preview is rendered, not drawn.</figcaption>
         </figure>
@@ -371,10 +324,10 @@
           list of steps and values, not a program. Whoever receives the file
           can compute and change it without installing anything.</p>
         </div>
-        <figure class="shot">
+        <figure class="shot upright">
           <div class="stage">
-            <a href="../handbuch/en/own-part.png?v=e139ec31"><img src="../handbuch/en/own-part.png?v=e139ec31" width="520" height="920" loading="lazy" decoding="async"
-                 alt="The dialog “Save selection as a part”: name, group and description at the top, below them per parameter the label, unit, smallest and largest value, default and its place in the dialog, then the clickable features with their names in the recipe — at the bottom the button “Create part”"></a>
+            <a href="../bilder/beleg-eigener-baustein-en.webp?v=411be64f"><img src="../bilder/beleg-eigener-baustein-en.webp?v=411be64f" width="437" height="1347" loading="lazy" decoding="async"
+                 alt="The “Save selection as a part” dialog, opened from the catalogue: name, group, description, licence and author at the top, then for each dimension — here width and depth — label, unit, smallest and largest value, default and place in the dialog, then the places that can be clicked later with their names in the recipe; at the bottom “Range test: 8 combinations” and the Create part button."></a>
           </div>
           <figcaption>The dialog asks five things — and computes the whole range before it saves.</figcaption>
         </figure>
@@ -421,8 +374,8 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../handbuch/en/report.png?v=1d0ce508"><img src="../handbuch/en/report.png?v=1d0ce508" width="620" height="430" loading="lazy" decoding="async"
-                 alt="The inspection report for a can with a lid: zero errors, one warning and four notes, among them “The fit is tighter than intended” and “Hollowed out. The wall thickness holds within the raster”"></a>
+            <a href="../bilder/beleg-bericht-en.webp?v=8b387796"><img src="../bilder/beleg-bericht-en.webp?v=8b387796" width="1986" height="1241" loading="lazy" decoding="async"
+                 alt="A box with a lid, large in the view, and its report on the right: 0 errors, 2 warnings, 6 notes. The warnings say that the fit is tighter than intended and that a face of the lid overhangs freely and needs supports; below them notes on hollowing, the lid and the material."></a>
           </div>
           <figcaption>The inspection report for a can with a lid.</figcaption>
         </figure>
@@ -471,6 +424,23 @@
             </g>
           </svg>
           <figcaption>Three findings the slicer only knows after slicing.</figcaption>
+        </figure>
+      </div>
+
+      <div class="showcase" id="print-settings">
+        <div>
+          <span class="kicker">Print settings</span>
+          <h3>Hand it to your slicer — with values that suit the part</h3>
+          <p>Solidon3D does not write G-code; your slicer does. The print settings say beforehand what this part asks for: suggestions come from the geometry, such as a brim for a small footprint or more time per layer where little area is left at the top — each with its reason and each one can be unticked.</p>
+          <p><b>Open in slicer</b> hands the part over, with the values if you want, to PrusaSlicer, OrcaSlicer, Bambu Studio, ElegooSlicer, Creality Print, SuperSlicer or Cura. <b>Slice</b> lets your slicer compute in the background; what it measures then appears in the report.</p>
+          <p class="note">Measured and estimated figures are never mixed: <b>whatever comes from the G-code is marked as measured</b> and stands next to Solidon's estimate, not in its place.</p>
+        </div>
+        <figure class="shot">
+          <div class="stage">
+            <a href="../bilder/schritt-druck-en.webp?v=9ab470e2"><img src="../bilder/schritt-druck-en.webp?v=9ab470e2" width="1561" height="976" loading="lazy" decoding="async"
+                 alt="The print settings over an imported figure: quality, printer, nozzle and filament, then layer height, walls, infill, temperatures and supports. Under “What this part asks for” Solidon3D suggests a brim and a longer minimum time per layer; at the bottom the buttons Slice and Open in slicer."></a>
+          </div>
+          <figcaption>What this part asks for is in the dialog with its reason — what is ticked gets applied.</figcaption>
         </figure>
       </div>
 
@@ -567,8 +537,8 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../bilder/beleg-filamentlager-en.png?v=e5296035"><img src="../bilder/beleg-filamentlager-en.png?v=e5296035" width="1278" height="852" loading="lazy" decoding="async"
-                 alt="The filament inventory: six spools on the two shelves “Bench shelf” and “Dry box”, each with a drawn spool, material type, remaining amount in grams and storage location — one spool with three colours, one marked “Low filament”; above them the search field, the grouping and the button “Add spool manually”"></a>
+            <a href="../bilder/beleg-filamentlager-en.webp?v=fb508991"><img src="../bilder/beleg-filamentlager-en.webp?v=fb508991" width="1172" height="781" loading="lazy" decoding="async"
+                 alt="The filament inventory, grouped by storage location: six spools on the shelves “Bench shelf” and “Dry box”, each with a drawn spool, material type, remaining grams and location — one spool in three colours, one marked “Low filament”; above them the Leave inventory button and the search field."></a>
           </div>
           <figcaption>The shelf, grouped by storage location: the remaining
           amount shows as a coil and as a number, one spool is below the
@@ -586,13 +556,13 @@
           model as a constant. The two or three values you actually change
           are up front — the rest lives under “More settings”.</p>
           <p class="note">136 operations, all built the same way:
-          <b>menu, context menu, command line and chat read the same
+          <b>menu, command line and chat read the same
           declaration.</b></p>
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../handbuch/en/op-dialog.png?v=7786cd66"><img src="../handbuch/en/op-dialog.png?v=7786cd66" width="520" height="306" loading="lazy" decoding="async"
-                 alt="The “Drill hole” dialog with diameter and position X, an fx button behind every number field and the collapsed “More settings” section"></a>
+            <a href="../bilder/beleg-dialog-en.webp?v=791e86ca"><img src="../bilder/beleg-dialog-en.webp?v=791e86ca" width="2560" height="1369" loading="lazy" decoding="async"
+                 alt="The main window with the sign selected and, top right, the “Drill a bore” dialog: diameter and position X, Y and Z, each with an fx button, the Slot checkbox and the collapsed “More settings”; at the bottom of the view the bar saying that a click on the model sets the spot."></a>
           </div>
           <figcaption>An operation dialog — the two or three values you
           actually change up front, everything else behind.</figcaption>
@@ -704,8 +674,8 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../bilder/beleg-start-en.png?v=9752c769"><img src="../bilder/beleg-start-en.png?v=9752c769" width="2560" height="1392" loading="lazy" decoding="async"
-                 alt="The start screen: a drop area for models and projects, the buttons “New project” and “Open project”, and below them four example projects — one per way — with a preview image and a description, and below that the collapsed section “What else is there?”"></a>
+            <a href="../bilder/schritt-start-en.webp?v=6c7d9cca"><img src="../bilder/schritt-start-en.webp?v=6c7d9cca" width="1472" height="920" loading="lazy" decoding="async"
+                 alt="The start screen: the drop area for models and projects, the buttons New project, Open model, Open project and Manual, the filament inventory with six spools, then four guided tours — one per path — with preview pictures, plus Give feedback and Support Solidon voluntarily, and the collapsed section “What else can it do?”."></a>
           </div>
           <figcaption>Four of the twelve examples introduce the main ways; further projects demonstrate
           individual tools and how to use them.</figcaption>
@@ -901,8 +871,7 @@
         </article>
         <article class="feature-card" id="textur-bearbeiten">
           <img src="../bilder/feature-textures.webp?v=f88988e1" width="1200" height="800" loading="lazy" decoding="async" alt="Three model plates with knurling, a honeycomb pattern and parallel ribs made from real geometry.">
-          <div class="feature-card-copy"><h3>Edit a pattern later</h3><p>Select an applied texture in the feature window and
-        change its values. <b>Entire face</b> fills the selected flat face to the
+          <div class="feature-card-copy"><h3>Edit a pattern later</h3><p>Click an applied texture and change its values in the Selection panel on the right. <b>Entire face</b> fills the selected flat face to the
         edge and leaves holes open. The resulting solid shows the change.</p></div>
         </article>
       </div>
@@ -952,7 +921,7 @@
   </div>
 </footer>
 
-<script src="/site.js?v=174df3cf" defer></script>
+<script src="/site.js?v=365a5a78" defer></script>
 
 </body>
 </html>

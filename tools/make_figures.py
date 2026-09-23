@@ -41,7 +41,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
-from PySide6.QtCore import QSize, Qt
+from PySide6.QtCore import QPoint, QRect, QSize, Qt
 from PySide6.QtWidgets import QApplication, QWidget
 
 from app.core import figures
@@ -145,6 +145,76 @@ def work_area() -> tuple[int, int]:
         return WINDOW
     area = target_screen().availableGeometry()
     return int(area.width()), int(area.height())
+
+
+def foreign_window_over(widget: QWidget, rect: QRect | None = None) -> str:
+    """Welches fremde Fenster über ``rect`` des Widgets liegt — leer, wenn keines.
+
+    **Auf diesem Rechner nehmen mehrere Sitzungen gleichzeitig auf, und alle
+    auf denselben Schirm** (:data:`SCREEN_INDEX`). Am 23.09.2026 stand in einem
+    Website-Bild statt des eigenen Dialogs das Hauptfenster einer anderen
+    Sitzung — mit fremdem Projekt, fremdem Drucker und der Restlaufzeit der
+    Demo in der Statuszeile. Eine Bildschirmaufnahme greift, was obenauf liegt.
+
+    Gefragt wird Windows an 25 Punkten des Rechtecks, welchem Prozess das
+    Fenster dort gehört (``WindowFromPoint``). Eigene Dialoge und Menüs zählen
+    nicht als fremd. Auf anderen Systemen gibt es die Abfrage nicht, und die
+    Antwort ist leer — dort nimmt auch niemand parallel auf.
+    """
+    if sys.platform != "win32":
+        return ""
+    import ctypes
+    from ctypes import wintypes
+
+    user32 = ctypes.windll.user32  # type: ignore[attr-defined]
+    user32.WindowFromPoint.argtypes = [wintypes.POINT]
+    user32.WindowFromPoint.restype = wintypes.HWND
+    user32.GetAncestor.restype = wintypes.HWND
+    area = rect if rect is not None else widget.rect()
+    own = os.getpid()
+    for share_x in (0.02, 0.25, 0.5, 0.75, 0.98):
+        for share_y in (0.02, 0.25, 0.5, 0.75, 0.98):
+            spot = widget.mapToGlobal(
+                QPoint(
+                    area.left() + round((area.width() - 1) * share_x),
+                    area.top() + round((area.height() - 1) * share_y),
+                )
+            )
+            window = user32.WindowFromPoint(wintypes.POINT(spot.x(), spot.y()))
+            owner = wintypes.DWORD()
+            user32.GetWindowThreadProcessId(window, ctypes.byref(owner))
+            if owner.value != own:
+                title = ctypes.create_unicode_buffer(200)
+                user32.GetWindowTextW(user32.GetAncestor(window, 2), title, 200)
+                return title.value or f"ein Fenster des Prozesses {owner.value}"
+    return ""
+
+
+def wait_until_uncovered(
+    widget: QWidget, rect: QRect | None = None, seconds: float = 300.0
+) -> None:
+    """Erst abdrücken, wenn kein fremdes Fenster über der Aufnahme liegt.
+
+    Holt das eigene Fenster nach vorn und wartet, solange ein fremdes darüber
+    liegt — eine andere Sitzung schließt ihr Fenster meist nach Sekunden. Nach
+    ``seconds`` bricht der Lauf ab und nennt das Fenster: Ein Bild mit fremdem
+    Inhalt ist schlimmer als keines.
+    """
+    deadline = time.monotonic() + seconds
+    reported = ""
+    while other := foreign_window_over(widget, rect):
+        if time.monotonic() > deadline:
+            raise SystemExit(
+                f"Über der Aufnahme liegt seit {seconds:.0f} s „{other}“. Das Fenster "
+                "schließen oder den Lauf auf einen freien Schirm legen (--schirm N)."
+            )
+        if other != reported:
+            print(f"  … warte, über der Aufnahme liegt „{other}“", flush=True)
+            reported = other
+        top = widget.window()
+        top.raise_()
+        top.activateWindow()
+        settle(QApplication.instance(), 20)  # type: ignore[arg-type]
 
 
 def settle(app: QApplication, rounds: int = 12) -> None:
@@ -343,7 +413,6 @@ def prepared(
     *,
     hidden: bool = True,
     fit_height: bool = False,
-    maximize: bool = True,
 ) -> QWidget:
     """Ein Fenster aufbauen — normalerweise, ohne es jemandem zu zeigen.
 
@@ -357,12 +426,6 @@ def prepared(
     gezogen: Ein von Hand auf die Arbeitsfläche vergrößertes Fenster ist nicht
     dasselbe wie ein maximiertes — Windows legt bei maximierten Fenstern einen
     unsichtbaren Rahmen an, und ``grabWindow`` schneidet ihn mit ab.
-
-    ``maximize=False`` lässt ein sichtbares Fenster bei ``size``. Das braucht
-    ``tools/make_web_images.py``: Auf der Website steht dasselbe Fenster in
-    einer Spalte von 650 Bildpunkten, und ein bildschirmfüllendes Bild ist dort
-    auf ein Viertel gestaucht — man sieht, dass es eine Oberfläche ist, und
-    nicht mehr, welche.
 
     ``fit_height`` nimmt die Höhe vom Inhalt statt aus ``size``. Für einen
     Dialog ist das der Unterschied zwischen einem Bild und einem falschen Bild:
@@ -381,7 +444,7 @@ def prepared(
         widget.setScreen(screen)
         widget.move(screen.availableGeometry().topLeft())
     widget.show()
-    if not hidden and maximize:
+    if not hidden:
         widget.showMaximized()
     if fit_height:
         # Nach dem Anzeigen noch einmal: erst dort kennt Qt die endgültigen

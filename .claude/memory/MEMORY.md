@@ -53,6 +53,7 @@
 - [Ops am Stück](ops-reihendurchlauf-kundensicht.md) · [Register zählen](register-zaehlen-load-operations.md) · [Rezept ist der Fund](rezept-ist-der-fund-op-ist-die-ursache.md) · [Arbeiter verlegt die Wartezeit](arbeiter-verlegt-die-wartezeit-ans-ende.md)
 - [Knopf und Handlung](knopf-und-handlung-fragen-verschieden.md) · [Reparatur vor den Fehler](reparatur-muss-vor-den-fehler.md) · [Kette endet am letzten Glied](eine-kette-endet-am-letzten-glied.md) · [Architektur-Sonde](architektur-sonde-type-checking.md)
 - [Fenstermaske über Vulkan verliert das Gerät](fenstermaske-ueber-vulkan-verliert-das-geraet.md)
+- [Fremdes Fenster in der Aufnahme](fremdes-fenster-in-der-aufnahme.md) — mehrere Sitzungen, ein Schirm; `foreign_window_over`.
 
 ## Messen und Prüfen
 

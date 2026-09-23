@@ -53,7 +53,6 @@ def test_interactive_components_use_shared_target_height() -> None:
         ".btn",
         ".tab",
         ".download-notes summary",
-        ".donate-fine summary",
         ".donate-button",
         ".toc a",
         ".feature-topics a",

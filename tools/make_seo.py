@@ -13,6 +13,10 @@ keiner von Hand gepflegt:
 * ``FAQPage``-Auszeichnung in den Startseiten, gelesen aus dem
   ``<div class="faq">``, das dort ohnehin steht.
 
+Preis und Lizenzarten stehen in ``llms.txt`` ebenfalls, und zwar **abgelesen
+aus der deutschen Startseite** (die Elemente mit ``data-summary``) — eine
+zweite Preisliste hier liefe beim nächsten Preisschritt auseinander.
+
 Kein ``lastmod``, kein ``priority``, kein ``changefreq``: Google wertet die
 beiden letzten nicht aus, und ein ``lastmod``, das aus der Dateizeit stammt,
 ist nach einem frischen Klon für jede Seite derselbe falsche Tag.
@@ -227,6 +231,35 @@ def write_faq() -> int:
     return written
 
 
+_SUMMARY_SUB = re.compile(r'<p class="sub" data-summary>(.*?)</p>', re.DOTALL)
+_SUMMARY_LICENCE = re.compile(r'<article class="licence" data-summary>(.*?)</article>', re.DOTALL)
+
+
+def price_summary() -> list[str]:
+    """Preis und Lizenz, abgelesen aus der deutschen Startseite — leer, wenn sie keine nennt.
+
+    Ein Sprachmodell, das nach dem Preis gefragt wird, soll ihn hier finden
+    und nicht aus einer alten Seite raten. Gelesen wird, was die Seite selbst
+    als Zusammenfassung markiert: der Einleitungssatz des Abschnitts und je
+    Lizenzart Name, Preis, späterer Preis und Umfang.
+    """
+    text = (WEBSITE / "index.html").read_text(encoding="utf-8")
+    sub = _SUMMARY_SUB.search(text)
+    licences = _SUMMARY_LICENCE.findall(text)
+    if sub is None or not licences:
+        return []
+    lines = ["## Preis und Lizenz", "", _plain(sub.group(1)), ""]
+    for block in licences:
+        heading = re.search(r"<h3>(.*?)</h3>", block, re.DOTALL)
+        if heading is None:
+            continue
+        details = [_plain(part) for part in re.findall(r"<p[^>]*>(.*?)</p>", block, re.DOTALL)]
+        points = [_plain(point) for point in re.findall(r"<li>(.*?)</li>", block, re.DOTALL)]
+        lines.append(f"- {_plain(heading.group(1))}: " + " · ".join(details + points))
+    lines.append("")
+    return lines
+
+
 def llms() -> str:
     """``llms.txt`` — die Seite in Kurzform, für Modelle statt für Crawler."""
     lines = [
@@ -242,6 +275,7 @@ def llms() -> str:
         "der eingebaute Agent bedient dieselben Operationen wie die Menüs und ist",
         "abschaltbar.",
         "",
+        *price_summary(),
         "## Seiten",
         "",
     ]

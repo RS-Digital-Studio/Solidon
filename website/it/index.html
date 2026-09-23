@@ -21,13 +21,13 @@
 <meta property="og:url" content="https://solidon3d.de/it/">
 <meta property="og:title" content="Solidon3D — adattare modelli 3D e renderli stampabili">
 <meta property="og:description" content="Applicazione desktop per la stampa 3D: adatta i modelli altrui, costruisci i tuoi, verifica la stampabilità — in locale, senza account, senza abbonamento.">
-<meta property="og:image" content="https://solidon3d.de/bilder/beleg-fenster-it.png">
-<meta property="og:image:alt" content="La finestra principale di Solidon3D: albero degli oggetti, vista 3D e rapporto di verifica affiancati">
+<meta property="og:image" content="https://solidon3d.de/bilder/teilen-it.png">
+<meta property="og:image:alt" content="Solidon3D con una targa a due colori nella vista 3D e il rapporto di verifica accanto">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="/icon.svg?v=a72d0c52" type="image/svg+xml">
-<link rel="stylesheet" href="../style.css?v=aece7d33">
+<link rel="stylesheet" href="../style.css?v=8c4d6ed7">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -61,7 +61,7 @@
       "name": "Cosa succede il 30 ottobre?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Dal 31 ottobre la demo non si avvia più. Lo dice per tempo: nella barra di stato c'è ogni giorno quanto le resta. La versione 1.0 è prevista per il 1º novembre 2026. Non è ancora un’offerta; prezzo e condizioni contrattuali saranno pubblicati prima che venga proposta. I tuoi file non ne sono toccati. Restano dove li hai salvati; non si cancella nulla e nulla diventa illeggibile. Un file di progetto è un archivio ZIP con dentro JSON e si apre anche senza Solidon3D — la versione successiva lo legge senza modifiche."
+        "text": "Dal 31 ottobre la demo non si avvia più. Lo dice per tempo: nella barra di stato c'è ogni giorno quanto le resta. Il 31 ottobre è riservato agli ultimi controlli. Solidon3D 1.0 è prevista per il 1º novembre 2026 alle 10:00 (ora tedesca); da allora sono in vendita la licenza privata e quella commerciale. I tuoi file non ne sono toccati. Restano dove li hai salvati; non si cancella nulla e nulla diventa illeggibile. Un file di progetto è un archivio ZIP con dentro JSON e si apre anche senza Solidon3D — la versione successiva lo legge senza modifiche."
       }
     },
     {
@@ -93,7 +93,7 @@
       "name": "Posso spostare un foro in un STL già finito?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Sì. All'apertura, fori, perni, svasature, cupole e sedi vengono riconosciuti come caratteristiche con un nome; la finestra delle caratteristiche mostra i loro valori misurati, e cambiare un numero è l'operazione. Spostare, duplicare e rimuovere valgono per ognuno di questi tipi; ruotare, per tutti tranne la superficie sferica. Nei raccordi e nelle gole che sostituiscono visibilmente uno spigolo puoi cambiare il raggio o rimuoverli; una transizione che sfuma dolcemente nelle facce vicine, no. Solidon3D mostra quali azioni sono disponibili nel punto selezionato."
+        "text": "Sì. All'apertura, fori, perni, svasature, cupole e sedi vengono riconosciuti come caratteristiche con un nome; un clic mostra i loro valori misurati come quote nella vista e a destra nel pannello Selezione, e cambiare un numero è l'operazione. Spostare, duplicare e rimuovere valgono per ognuno di questi tipi; ruotare, per tutti tranne la superficie sferica. Nei raccordi e nelle gole che sostituiscono visibilmente uno spigolo puoi cambiare il raggio o rimuoverli; una transizione che sfuma dolcemente nelle facce vicine, no. Solidon3D mostra quali azioni sono disponibili nel punto selezionato."
       }
     },
     {
@@ -101,7 +101,7 @@
       "name": "Devo usare un'IA?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "No. La chat è una via su quattro. Senza chiave e senza Ollama resta pienamente utilizzabile tutto tranne la chat — menu, menu contestuali, riga di comando e tutte le 136 operazioni."
+        "text": "No. La chat è una via su quattro. Senza chiave e senza Ollama resta pienamente utilizzabile tutto tranne la chat — menu, il pannello Selezione, riga di comando e tutte le 136 operazioni."
       }
     },
     {
@@ -162,10 +162,10 @@
     },
     {
       "@type": "Question",
-      "name": "Cosa viene dopo la demo?",
+      "name": "Cosa viene dopo la demo, e quanto costa?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "La versione 1.0 è prevista per il 1º novembre 2026. Non è ancora un’offerta; prezzo e condizioni contrattuali saranno pubblicati prima che venga proposta. I tuoi progetti demo restano leggibili come file locali."
+        "text": "La versione 1.0, prevista per il 1º novembre 2026 alle 10:00. Arriva in due tipi di licenza con le stesse funzioni, entrambi ad acquisto unico con tutti gli aggiornamenti di 1.x: privata 69 € e commerciale 199 €, ciascuna a prezzo di lancio fino al 31 gennaio 2027. Dal 1º febbraio 2027 la privata costa 99 € e la commerciale 249 €. I tuoi progetti demo restano leggibili come file locali, e la versione 1.0 li apre."
       }
     }
   ]
@@ -190,7 +190,8 @@
         <div class="menu-panel">
           <a href="/it/features.html">Funzioni</a>
           <a href="/it/ai-models.html">Modelli IA</a>
-          <a href="#demo">Demo</a>
+          <a href="#pricing">Prezzo</a>
+          <a href="#support">Sostieni</a>
           <a href="/it/changelog.html">Novità</a>
           <a href="/it/manual.html">Manuale</a>
         </div>
@@ -217,17 +218,14 @@
       <div class="hero-text">
         <p class="hero-kicker">Modifica e crea modelli 3D — senza conoscenze CAD</p>
         <h1>Trasforma ogni STL nel pezzo che ti serve.</h1>
-        <p class="lead">Importa un modello, modificane le dimensioni, aggiungi
-        un foro o scegli un accoppiamento — Solidon3D controlla prima dello
-        slicing che il pezzo sia pronto da stampare. Senza CAD, cloud né
-        account.</p>
+        <p class="lead">Trascina un modello, clicca un foro, scrivi la nuova misura. Prima dello slicing Solidon3D controlla se il pezzo si stamperà e lo passa al tuo slicer. Senza cloud, senza account.</p>
         <p class="hero-act">
           <a class="btn hero-btn" href="#download"
              data-release-href data-release-download
              data-past-text="Provala gratis — senza account"
              data-release-text="Scarica gratis ora">Scarica gratis ora</a>
         </p>
-        <p class="hero-kauf">Fino alla versione 1.0 saranno pubblicate solo demo 0.x gratuite.</p>
+        <p class="hero-kauf">Gratis fino al 30 ottobre. Dal 1º novembre si compra una volta sola: <a href="#pricing">licenza privata da 69&nbsp;€</a>, senza abbonamento.</p>
 
       <ul class="assure hero-assure">
         <li>
@@ -258,23 +256,59 @@
       </div>
 
       <div class="hero-side">
-        <div class="turn-wrap">
-          <div class="turntable" tabindex="0" role="img" data-frames="36"
-               aria-label="Un supporto per bobine di filamento, costruito in Solidon3D: piastra di base, due fianchi, due assi di rotolamento. Trascinalo o usa le frecce per girarlo."></div>
-        </div>
-        <p class="turn-hint">Portabobine, costruito in 20 passi — trascinalo o giralo con le frecce</p>
-
-        <div class="dial">
-          <label for="rollenbreite">Larghezza bobina</label>
-          <input id="rollenbreite" type="range" min="0" max="23" value="0" step="1"
-                 data-dial="../bilder/regler-{n}.webp" data-from="55" data-to="90" data-stops="24">
-          <output for="rollenbreite" data-dial-value>55,0 mm</output>
-        </div>
+        <figure class="shot hero-shot loop" data-loop>
+          <div class="stage">
+            <video class="loop-film" width="1920" height="1026"
+                   poster="../bilder/loop-anpassen-it.webp?v=25d2cd77" muted loop playsinline controls
+                   preload="none" aria-describedby="loop-anpassen-schritte"
+                   aria-label="Registrazione da Solidon3D: in un STL importato si clicca un foro, il suo diametro passa da 5,20 a 6,50 millimetri e viene applicato. A destra il rapporto di verifica mostra poi 0 errori e 0 avvisi.">
+              <source src="../bilder/loop-anpassen-it.mp4?v=c12551d4" type="video/mp4">
+              <source src="../bilder/loop-anpassen-it.webm?v=4dc03951" type="video/webm">
+            </video>
+          </div>
+          <figcaption>
+            <ol class="loop-steps" id="loop-anpassen-schritte" data-loop-steps>
+              <li data-at="0">Un STL con fori per M5</li>
+              <li data-at="1.6">Clic sul foro</li>
+              <li data-at="4.6">Scrivere 6,5&nbsp;mm, applicare</li>
+              <li data-at="10">Rapporto: 0&nbsp;errori</li>
+            </ol>
+          </figcaption>
+        </figure>
       </div>
 
     </div>
 
   </div>
+
+    <section id="workflow" class="flow-band">
+    <div class="wrap">
+      <h2>Dove si inserisce Solidon3D</h2>
+      <ol class="flow">
+        <li class="flow-step">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3v11" stroke-linecap="round"/><path d="m7.5 9.5 4.5 4.5 4.5-4.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 16v3.5h16V16" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <b>Il tuo modello</b>
+          <span>Da Printables, MakerWorld o Thingiverse, da un generatore o da una tua idea</span>
+        </li>
+        <li class="flow-step flow-main">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M12 2.6 21 7.5v9L12 21.4 3 16.5v-9z" stroke-linejoin="round"/><path d="M3 7.5 12 12.4l9-4.9M12 12.4v9" stroke-linejoin="round"/></svg>
+          <b>Solidon3D</b>
+          <span>Adattare, riparare, verificare. Con impostazioni di stampa adatte al pezzo</span>
+        </li>
+        <li class="flow-step">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 17.5h16M5.5 13.5h13M7 9.5h10M8.5 5.5h7" stroke-linecap="round"/></svg>
+          <b>Il tuo slicer</b>
+          <span>Bambu Studio, OrcaSlicer, PrusaSlicer, Cura, ElegooSlicer, Creality Print … ne fa il file di stampa</span>
+        </li>
+        <li class="flow-step">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 4h16v16H4z" stroke-linejoin="round"/><path d="M4 8h16" stroke-linecap="round"/><path d="M9 8v3.5h6V8" stroke-linejoin="round"/><path d="M8 17h8" stroke-linecap="round"/></svg>
+          <b>La tua stampante</b>
+          <span>Stampa un pezzo già verificato</span>
+        </li>
+      </ol>
+      <p class="flow-note">Solidon3D <b>non è uno slicer</b> e <b>non è un catalogo di modelli</b>. Sta nel mezzo: tra il file che non va bene e lo slicer che lo stampa senza chiedere.</p>
+    </div>
+  </section>
 
   <section id="download">
     <div class="wrap">
@@ -308,9 +342,7 @@
             dell'esportazione, nessuna funzione bloccata. <b>Gira fino al
             30 ottobre 2026</b> e dopo non si avvia più — i tuoi file di
             progetto non ne sono toccati.</p>
-            <p>La versione 1.0 è prevista per il 1º novembre 2026. Non è ancora
-            un’offerta; prezzo e condizioni contrattuali saranno pubblicati
-            prima che venga proposta.</p>
+            <p>La versione 1.0 è prevista per il 1º novembre 2026 alle 10:00 (ora tedesca). Quanto costa è scritto più sotto, in <a href="#pricing">Prezzo</a>.</p>
               <div class="tabs" data-tabs data-tabs-label="Sistema operativo">
                 <div data-tab="Windows" data-release-show hidden>
                   <p class="pruefhinweis">Windows mostra un avviso azzurro per un’applicazione nuova e non ancora firmata: <i>Ulteriori informazioni</i> → <i>Esegui comunque</i>. Con <i>Smart App Control</i> attivo, Windows 11 non avvia affatto il programma, perché ammette allora solo applicazioni firmate o giudicate sicure da Microsoft — e chi lo disattiva in <i>Sicurezza di Windows</i> → <i>Controllo delle app e del browser</i> non può riattivarlo senza reinstallare Windows. La firma arriverà appena il certificato sarà pronto.</p>
@@ -326,29 +358,6 @@
             </details>
             <p class="pruefhinweis">Dopo l'installazione: <a href="/it/manual.html#start">I primi quindici minuti</a> — dalla finestra vuota al primo pezzo esportato.</p>
     </div>
-    </div>
-  </section>
-  <section id="support">
-    <div class="wrap">
-  <div class="donate">
-            <div>
-              <strong>Sostieni Solidon3D</strong>
-              <p>La demo resta gratuita. Un sostegno volontario aiuta a finanziare lo sviluppo, i test e la prossima versione.</p>
-              <details class="donate-fine">
-                <summary>Nota legale sul sostegno volontario</summary>
-                <p class="donate-terms">Non è un ordine, non offre alcuna controprestazione e non viene detratto da un acquisto successivo. Non rilasciamo attestazioni fiscali per il pagamento; non trattarlo come fiscalmente deducibile. PayPal o GoFundMe si apre solo dopo la scelta nell’avviso locale; <a href="/datenschutz.html">dettagli sulla privacy</a>.</p>
-              </details>
-            </div>
-            <button class="donate-button" type="button" data-choice="support">Sostieni volontariamente <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M12 20s-7-4.35-7-10.1C5 7.75 6.75 6 8.9 6c1.32 0 2.55.68 3.1 1.77C12.55 6.68 13.78 6 15.1 6 17.25 6 19 7.75 19 9.9 19 15.65 12 20 12 20Z" stroke-linejoin="round"/></svg></button>
-            <dialog class="auswahl donate-dialog" id="wahl-support" aria-label="Sostegno volontario tramite PayPal o GoFundMe">
-              <p class="auswahl-titel">Sostieni volontariamente</p>
-              <p>Il pagamento non è un ordine, non offre alcuna controprestazione, non sblocca nulla e non viene detratto da un acquisto successivo. Non rilasciamo attestazioni fiscali; non trattarlo come fiscalmente deducibile.</p>
-              <p>Scegli PayPal o GoFundMe. Solo il pulsante corrispondente apre la pagina esterna. Lascerai solidon3d.de; si applicherà l’informativa sulla privacy del fornitore scelto: <a href="https://www.paypal.com/de/legalhub/paypal/privacy-full?locale.x=de_DE">PayPal</a> o <a href="https://www.gofundme.com/c/privacy">GoFundMe</a>.</p>
-              <a class="btn" href="https://www.paypal.com/donate/?hosted_button_id=D7T4A9VYU9MX4" rel="noopener noreferrer">Continua su PayPal</a>
-              <a class="btn" href="https://gofund.me/08c5f0edb" rel="noopener noreferrer">Continua su GoFundMe</a>
-              <form method="dialog"><button class="btn ghost" value="zu">Indietro</button></form>
-            </dialog>
-          </div>
     </div>
   </section>
 
@@ -369,41 +378,34 @@
   <section id="primi-passi">
     <div class="wrap">
       <h2>In tre passi al pezzo stampato</h2>
-      <p class="sub">Fatto per tutti quelli che stampano — non solo per chi
-      conosce il CAD. La strada dal download al pezzo è corta:</p>
-      <div class="steps">
-        <ol class="steps-list">
-          <li><b>Scarica la demo e avviala.</b> Niente account, niente
-          chiave, nessuna configurazione — installare e partire. Undici
-          progetti di esempio aspettano nella schermata iniziale.</li>
-          <li><b>Trascina dentro un modello.</b> Un STL da Printables o il
-          tuo progetto: il rapporto di verifica dice subito cosa andrebbe
-          storto in stampa — e ogni rilievo porta con sé un'azione
-          proposta.</li>
-          <li><b>Adatta e stampa.</b> Clicca un foro o una faccia, cambia la
-          quota misurata, prendi il gioco dal profilo del materiale — poi esporta o passa il
-          modello direttamente al tuo slicer.</li>
-        </ol>
-        <figure class="shot">
-          <div class="stage">
-            <a href="../bilder/beleg-start-it.png?v=8472ecdd"><img src="../bilder/beleg-start-it.png?v=8472ecdd" width="2560" height="1392" loading="lazy" decoding="async"
-                 alt="La schermata iniziale di Solidon3D: un'area dove lasciare modelli e progetti, i pulsanti «Nuovo progetto» e «Apri progetto», sotto quattro progetti di esempio — uno per via — con anteprima e descrizione, e sotto la sezione chiusa «Cos'altro c'è?»"></a>
-          </div>
-          <figcaption>La schermata iniziale della demo — basta lasciare un
-          file. Quattro dei dodici progetti di esempio inclusi percorrono le
-          vie; gli altri sette stanno dietro «Cos'altro c'è?».</figcaption>
-        </figure>
-      </div>
+      <p class="sub">Fatto per chi stampa, non solo per chi sa usare il CAD. Ecco il percorso nella demo:</p>
+      <ol class="step-cards">
+        <li class="step-card">
+          <a class="step-media" href="../bilder/schritt-start-it.webp?v=10628bf4"><img src="../bilder/schritt-start-it.webp?v=10628bf4" width="1472" height="920" loading="lazy" decoding="async"
+               alt="La schermata iniziale di Solidon3D: in alto l’area dove rilasciare modelli e progetti, sotto i pulsanti Nuovo progetto, Apri modello, Apri progetto e Manuale, e il magazzino filamenti con sei bobine. Poi quattro tour guidati con immagine di anteprima, e inoltre Dare un riscontro e Sostieni Solidon volontariamente."></a>
+          <h3>Scaricare la demo e avviarla</h3>
+          <p>Nessun account, nessuna chiave, nessuna configurazione. Nella schermata iniziale ti aspettano quattro tour guidati e dodici progetti di esempio.</p>
+        </li>
+        <li class="step-card">
+          <a class="step-media" href="../bilder/schritt-bericht-it.webp?v=c24a08ce"><img src="../bilder/schritt-bericht-it.webp?v=c24a08ce" width="1979" height="1237" loading="lazy" decoding="async"
+               alt="Un STL importato, una figura di tre sfere, grande nella vista 3D. A destra il rapporto di verifica: 0 errori, 1 avviso, 5 note. L’avviso dice che ci sono parti separate molto piccole; le note elencano cosa Solidon3D ha riparato all’importazione, per esempio 18 spigoli aperti su 18 chiusi."></a>
+          <h3>Trascinare il modello</h3>
+          <p>Un STL da Printables o un tuo progetto. Il rapporto di verifica ti dice subito cosa andrebbe storto in stampa, e ogni rilievo porta una proposta su cosa fare.</p>
+        </li>
+        <li class="step-card">
+          <a class="step-media" href="../bilder/schritt-druck-it.webp?v=7680c270"><img src="../bilder/schritt-druck-it.webp?v=7680c270" width="1555" height="972" loading="lazy" decoding="async"
+               alt="Le impostazioni di stampa sopra la stessa figura: qualità, stampante, ugello e filamento, poi altezza strato, pareti, riempimento, temperature e supporti. In «Cosa richiede questo pezzo» Solidon3D propone un brim e un tempo minimo per strato più lungo; in basso i pulsanti Affetta e Apri nello slicer."></a>
+          <h3>Regolare e passare allo slicer</h3>
+          <p>Clicca un foro o una faccia, cambia la quota misurata, prendi l’accoppiamento dal profilo del materiale. Poi esporta, o passalo direttamente al tuo slicer con impostazioni adatte al pezzo.</p>
+        </li>
+      </ol>
     </div>
   </section>
 
   <section id="why">
     <div class="wrap">
       <h2>Ti suona familiare?</h2>
-      <p class="sub">Solidon3D non è uno slicer e non è un catalogo di
-      modelli. Sta in mezzo: tra l'STL scaricato che non combacia e lo slicer
-      che lo stampa senza fare domande. Le quattro frasi che si sentono più
-      spesso attorno a una stampante — e cosa ne fa Solidon3D:</p>
+      <p class="sub">Quattro frasi che si sentono spesso quando si stampa, e cosa ne fa Solidon3D:</p>
       <ul class="pains">
         <li>
           <q>Il foro è 0,2 mm troppo stretto, e non ho un CAD.</q>
@@ -444,41 +446,49 @@
       non programma per programma.</p>
       <div class="ways">
         <div class="way">
-          <video class="weg-film" width="1280" height="720"
-                 poster="../bilder/weg1-anpassen.png?v=91000706" muted loop playsinline controls
-                 preload="none" aria-label="Una registrazione dell’applicazione: un portabobine importato viene riparato, appoggiato sul piano di stampa e forato. A sinistra la cronologia con quattro passi, a destra il rapporto senza errori.">
-                   <source src="../bilder/weg1-anpassen.webm?v=b2b486da" type="video/webm">
-                   <source src="../bilder/weg1-anpassen.mp4?v=f5ff1b70" type="video/mp4">
-          </video>
+          <img class="way-media" src="../bilder/loop-anpassen-ende-it.webp?v=cb117eba" width="1920" height="1026" loading="lazy" decoding="async"
+               alt="Il risultato della registrazione qui sopra: il foro cliccato misura ora 6,50 millimetri, e il rapporto di verifica a destra mostra 0 errori e 0 avvisi.">
           <span class="tag">Via 1 — Adattare</span>
           <h3>Modificare un modello altrui</h3>
           <p>Lascia cadere il file — o trascina il link da MakerWorld,
           Printables o Thingiverse direttamente dal browser nella finestra,
           senza passare dalla cartella dei download. Leggi il rapporto di
           verifica, clicca una faccia o un foro — poi di' in chat cosa deve
-          diventare, oppure scegli dal menu contestuale. Confronta
+          diventare, oppure scegli l’azione a destra. Confronta
           prima/dopo, applica, esporta.</p>
         </div>
         <div class="way">
-          <video class="weg-film" width="1280" height="720"
-                 poster="../bilder/weg2-konstruieren.png?v=0bcd8fd8" muted loop playsinline controls
-                 preload="none" aria-label="Una registrazione dell’applicazione: la larghezza della bobina passa da 55 a 90 millimetri e il supporto viene ricalcolato a ogni passo — le fiancate si allontanano e i fori restano tondi invece di diventare ellissi.">
-                   <source src="../bilder/weg2-konstruieren.webm?v=a96cb061" type="video/webm">
-                   <source src="../bilder/weg2-konstruieren.mp4?v=90d3bd90" type="video/mp4">
-          </video>
+          <div class="turn-wrap">
+          <div class="turntable" tabindex="0" role="img" data-frames="36"
+               aria-label="Un supporto per bobine di filamento, costruito in Solidon3D: piastra di base, due fianchi, due assi di rotolamento. Trascinalo o usa le frecce per girarlo."></div>
+        </div>
+        <p class="turn-hint">Portabobine, costruito in 20 passi — trascinalo o giralo con le frecce</p>
+
+        <div class="dial">
+          <label for="rollenbreite">Larghezza bobina</label>
+          <input id="rollenbreite" type="range" min="0" max="23" value="0" step="1"
+                 data-dial="../bilder/regler-{n}.webp" data-from="55" data-to="90" data-stops="24">
+          <output for="rollenbreite" data-dial-value>55,0 mm</output>
+        </div>
           <span class="tag">Via 2 — Costruire</span>
           <h3>Costruire da zero, con le quote</h3>
           <p>Descrivi cosa ti serve. L'agente crea i parametri e piazza
           blocchi verificati — filettature, inserti a caldo, cerniere.
-          Gira i numeri, il modello segue all'istante.</p>
+          Gira i numeri, il modello segue all'istante. Prova il cursore: ognuna delle 24 immagini è stata calcolata a sé, non stirata.</p>
         </div>
         <div class="way">
-          <video class="weg-film" width="1280" height="720"
-                 poster="../bilder/weg3-generiert-aufbereiten.png?v=d55a501c" muted loop playsinline controls
-                 preload="none" aria-label="Una registrazione dell’applicazione: una mesh di riferimento creata da noi viene aperta, ridimensionata, riparata e posata sul piano di stampa. A sinistra compaiono quattro passaggi della cronologia; a destra il rapporto elenca le riparazioni e gli avvisi rimanenti.">
-                   <source src="../bilder/weg3-generiert-aufbereiten.webm?v=7fff1746" type="video/webm">
-                   <source src="../bilder/weg3-generiert-aufbereiten.mp4?v=244b3ddd" type="video/mp4">
-          </video>
+          <div class="way-pair">
+            <figure>
+              <img src="../bilder/verwandlung-vorher.svg?v=593124c2" width="420" height="420" loading="lazy"
+                   alt="Un modello generato a reticolo: in più punti si aprono buchi nella superficie e alcuni spigoli finiscono nel vuoto">
+              <figcaption>Com’è arrivato</figcaption>
+            </figure>
+            <figure>
+              <img src="../bilder/verwandlung-nachher.svg?v=557c1bce" width="420" height="420" loading="lazy"
+                   alt="Lo stesso modello dopo la riparazione: la superficie è chiusa e ogni spigolo ha un vicino">
+              <figcaption>Dopo la preparazione</figcaption>
+            </figure>
+          </div>
           <span class="tag">Via 3 — Modello generato</span>
           <h3>Preparare un GLB o STL</h3>
           <p>Trascina un file dal generatore che scegli: Solidon3D ripara la
@@ -490,11 +500,11 @@
           utilizzabili.</p>
         </div>
         <div class="way">
-          <video class="weg-film" width="1280" height="720"
-                 poster="../bilder/weg4-formen.png?v=a5df0a27" muted loop playsinline controls
-                 preload="none" aria-label="Una registrazione dell’applicazione: una pietra da mano con un incavo per il pollice ruota. È nata da corpi di base fusi dolcemente, rimagliati in modo uniforme e poi modellati con i pennelli: l’incavo è formato a mano, non da un numero. L’intero procedimento resta un solo passo della cronologia ed è annullabile.">
-                   <source src="../bilder/weg4-formen.webm?v=c978268b" type="video/webm">
-                   <source src="../bilder/weg4-formen.mp4?v=11670731" type="video/mp4">
+          <video class="weg-film" width="1920" height="1026"
+                 poster="../bilder/weg4-formen-it.webp?v=3aa4e36e" muted loop playsinline controls
+                 preload="none" aria-label="Una registrazione dall’applicazione: un sasso da tenere in mano con un incavo per il pollice fa un giro completo. È nato da forme base fuse in modo morbido, rimagliate in modo uniforme e poi modellate con i pennelli.">
+                   <source src="../bilder/weg4-formen-it.mp4?v=0727fbd7" type="video/mp4">
+                   <source src="../bilder/weg4-formen-it.webm?v=d1d1880c" type="video/webm">
           </video>
           <span class="tag">Via 4 — Modellare</span>
           <h3>Figure a mano</h3>
@@ -543,39 +553,7 @@
         </figure>
       </div>
 
-      <h3>E che cosa succede a un modello che così non si può stampare</h3>
-      <p class="sub">Una mesh generata sembra sana e raramente lo è. A sinistra com’è arrivata, a destra dopo la riparazione — lo stesso file, due clic in mezzo.</p>
-
-      <div class="weg">
-        <figure>
-          <img src="../bilder/verwandlung-vorher.svg?v=593124c2" width="420" height="420" loading="lazy"
-               alt="Un modello generato a reticolo: in più punti si aprono buchi nella superficie e alcuni spigoli finiscono nel vuoto">
-          <figcaption><b>Com’è arrivata</b> Spigoli aperti, buchi nella mesh. Uno slicer li riempie a modo suo oppure si ferma — in entrambi i casi te ne accorgi alla stampante.</figcaption>
-        </figure>
-        <figure>
-          <img src="../bilder/verwandlung-nachher.svg?v=557c1bce" width="420" height="420" loading="lazy"
-               alt="Lo stesso modello dopo la riparazione: la superficie è chiusa e ogni spigolo ha un vicino">
-          <figcaption><b>Dopo la riparazione</b> Chiusa, un pezzo solo, con pareti più spesse del tuo ugello. Solidon3D ti dice prima che cosa ha cambiato.</figcaption>
-        </figure>
-      </div>
-
-      <h3>Ed ecco dove nasce</h3>
-      <p class="sub">A sinistra oggetti, parametri, cronologia e filamenti:
-      quattro sezioni, ognuna richiudibile. Al centro la vista 3D, con la barra
-      degli strumenti sotto. A destra le schede Rapporto di verifica e Chat, e
-      tutto al bordo la finestra delle caratteristiche: si apre appena scegli
-      una caratteristica e prima non occupa spazio. Ogni passo resta nella cronologia e si
-      può cambiare, anche dieci passi dopo.</p>
-
-      <div class="shot">
-        <div class="stage">
-          <div class="chrome" aria-hidden="true"><i></i><i></i><i></i></div>
-          <a href="../bilder/beleg-fenster-it.png?v=67395b7c"><img src="../bilder/beleg-fenster-it.png?v=67395b7c" width="2560" height="1392" loading="lazy"
-               alt="La finestra principale di Solidon3D: a sinistra l'albero degli oggetti con parametri e cronologia, al centro la vista 3D, a destra il rapporto di verifica"></a>
-        </div>
-      </div>
-
-      <a class="btn ghost" href="#features">Tutte le funzioni in breve</a>
+      <a class="btn ghost" href="/it/features.html">Vedere la finestra: tutte le funzioni</a>
     </div>
   </section>
 
@@ -586,14 +564,14 @@
       <a href="/it/features.html">tutte le funzioni con immagini nella pagina delle funzioni</a>.</p>
       <div class="beleg">
         <figure>
-          <img src="../handbuch/it/report.png?v=a3cfe450" width="620" height="430" loading="lazy"
-               alt="Il rapporto con quattro rilievi: il modello è aperto in tre punti, 14 triangoli guardano all'interno, una parete è più sottile di due larghezze di estrusione e il file non indicava l'unità">
+          <a href="../bilder/beleg-bericht-it.webp?v=e1538448"><img src="../bilder/beleg-bericht-it.webp?v=e1538448" width="1979" height="1237" loading="lazy" decoding="async"
+               alt="Una scatola con coperchio, grande nella vista, e a destra il suo rapporto di verifica: 0 errori, 2 avvisi, 6 note. Gli avvisi dicono che l’accoppiamento è più stretto del previsto e che una faccia del coperchio è a sbalzo e richiede supporti; sotto, note su svuotamento, coperchio e materiale."></a>
           <figcaption><b>Il rapporto.</b> Quello che va storto in stampa sta lì prima che lo slicer ci spenda il tempo — contato per errore, avviso e nota.</figcaption>
         </figure>
         <figure>
-          <img src="../bilder/beleg-bausteine-it.png?v=638655b6" width="1220" height="955" loading="lazy"
-               alt="Il catalogo dei blocchi: inserto a caldo, sede per dado, filettatura, foro per vite con svasatura, spina, occhiello di cerniera, dente di scatto, cerniera a film, connettore a scatto e aggancio a scatto, oltre a piedino, attacco a buco di serratura, tasca per magnete, gancio per pannello forato e supporto a parete, ciascuno con anteprima e misure">
-          <figcaption><b>Blocchi verificati in sei gruppi, tre dei quali qui.</b> Sede per dado, boccola a caldo, cerniera a film, gancio per pannello forato — le misure vengono da una tabella di parti normalizzate, non a sensazione.</figcaption>
+          <a href="../bilder/beleg-bausteine-it.webp?v=e0e60a76"><img src="../bilder/beleg-bausteine-it.webp?v=e0e60a76" width="1560" height="1144" loading="lazy" decoding="async"
+               alt="Il catalogo dei blocchi, aperto sopra la finestra: i gruppi Collegamenti, Meccanica e Fissaggio con inserto a caldo, sede per dado, dado stampato, vite, filettatura stampabile, foro per vite con svasatura, cerniera a perno, cuscinetto a sfere, spina e foro di accoppiamento, occhio di cerniera, dente di scatto, cerniera a film, agganci a scatto, piedino, attacco a buco di serratura, tasca per magnete, gancio per pannello forato, morsetto e supporto a parete, ciascuno con anteprima e misure. In basso i pulsanti Inserisci e Salva la selezione come blocco."></a>
+          <figcaption><b>Blocchi verificati in sei gruppi, tre dei quali qui.</b> Sede per dado, boccola a caldo, cerniera a film, gancio per pannello forato — le misure vengono da una tabella di parti normalizzate, non a sensazione — e ognuno è calcolato su tutto il suo intervallo di misure.</figcaption>
         </figure>
       </div>
 
@@ -603,25 +581,10 @@
         geometria la calcola il codice, mai il modello linguistico — ed è
         misurato: una suite di <b>39 richieste di riferimento</b> gira prima
         e dopo ogni modifica alla regolamentazione dell'agente.</li>
-        <li><b>La faccia cliccata conta.</b> Un foro, un blocco o uno
-        schizzo si posano dove hai indicato. Crea un foro con la sua svasatura in un solo passo. Il menu contestuale di una faccia offre ora
-        anche supporto a parete, nervatura, linguetta e scanalatura, dente di
-        scatto, aggancio a scatto e cerniera a film.</li>
         <li><b>La caratteristica riconosciuta si lascia afferrare.</b> Clicca un
-        foro, tira la maniglia o cambia la quota misurata nella finestra delle
-        caratteristiche: spostare, ruotare, duplicare, rimuovere. L’identità
+        foro, tira la maniglia o cambia la quota misurata: spostare, ruotare, duplicare, rimuovere. L’identità
         resta, e ogni accoppiamento che punta a essa mantiene il suo
         riferimento.</li>
-        <li><b>Rapporto di verifica prima della stampa.</b> Punti aperti,
-        normali invertite, pareti sotto i due cordoni — ogni rilievo salta al
-        punto del modello e porta con sé un'azione proposta.</li>
-        <li><b>Cambiare un numero invece di ricostruire.</b> La cronologia è
-        non distruttiva: spessore di parete da 2,40 a 3,60, e svuotatura,
-        coperchio, fori e accoppiamenti si ricalcolano.</li>
-        <li><b>Blocchi verificati, dalla filettatura al gancio per pannello
-        forato.</b> Le quote vengono dalla tabella dei componenti
-        normalizzati, non dall'istinto — e ogni blocco è calcolato su tutto il
-        suo intervallo.</li>
         <li><b>Blocchi tuoi senza programmare.</b> Costruiscilo una volta e
         salvalo nel catalogo come blocco tuo — con quote regolabili e
         intervallo verificato. Viaggia come ricetta in ogni file di progetto
@@ -666,7 +629,7 @@
         definiscono il campo; le sue misure restano modificabili in seguito.</p></div>
         </article>
         <article class="feature-card">
-          <img src="../bilder/beleg-filamentlager-it.png?v=2b105e4f" width="1278" height="852" loading="lazy" decoding="async" alt="Il magazzino filamenti: sei bobine su due ripiani, ognuna con la bobina disegnata, il tipo di materiale, la quantità rimanente e la posizione — una con tre colori, una con la dicitura «Poco filamento».">
+          <img src="../bilder/beleg-filamentlager-it.webp?v=c5bf6098" width="1172" height="781" loading="lazy" decoding="async" alt="Il magazzino filamenti, raggruppato per posizione: sei bobine sui ripiani «Armadio officina» e «Dry box», ciascuna con la bobina disegnata, tipo di materiale, quantità residua e posizione — una a tre colori, una segnata «Poco filamento».">
           <div class="feature-card-copy"><h3><a href="/it/features.html#filamentlager">Quanto resta sulla bobina</a></h3><p>Il magazzino filamenti tiene ogni bobina con materiale, colore,
         posizione e quantità rimanente — per tutti i progetti. Dopo la consegna
         allo slicer, Solidon3D propone di scalare il consumo, stimato o
@@ -708,6 +671,7 @@
           <li><b>Non è uno slicer.</b> Solidon3D analizza e prepara; il file
           di stampa lo produce ancora il tuo slicer — Solidon3D glielo
           consegna direttamente e ne rilegge il G-code come controllo.</li>
+          <li><b>Non è un catalogo di modelli.</b> I modelli li porti tu, da Printables, MakerWorld, Thingiverse o da una tua cartella.</li>
           <li><b>Non è un CAD in cloud.</b> Nessun account, nessun archivio
           in rete, nessuna telemetria. I progetti sono file sul tuo
           computer.</li>
@@ -732,22 +696,48 @@
   <section id="demo">
     <span id="pricing" aria-hidden="true"></span>
     <div class="wrap">
-      <h2>Demo 0.x gratuite fino alla versione 1.0</h2>
-      <p class="sub">La demo attuale è gratuita e completa. La versione 1.0
-      è prevista per il 1º novembre 2026. Prezzo, acquisto e condizioni
-      contrattuali saranno pubblicati prima che venga proposta.</p>
+      <h2>Prezzo e licenza</h2>
+      <p class="sub" data-summary>Fino al 30 ottobre la demo è gratuita e completa. Solidon3D 1.0 è prevista per il 1º novembre 2026, con l’apertura delle vendite alle 10:00 (ora tedesca): si paga una volta, senza abbonamento, con tutti gli aggiornamenti della versione 1.x.</p>
       <p class="countdown" data-countdown
-             data-template="Ancora {rest}" aria-hidden="true" hidden></p>
+         data-template="Ancora {rest}" aria-hidden="true" hidden></p>
+      <ol class="timeline" aria-label="Date">
+        <li class="is-now"><b>Fino al 30 ottobre</b><span>Demo gratuita e completa</span></li>
+        <li><b>31 ottobre</b><span>Pausa per gli ultimi controlli</span></li>
+        <li><b>1º novembre, 10:00</b><span>Aprono le vendite della versione 1.0</span></li>
+        <li><b>Fino al 31 gennaio 2027</b><span>Prezzo di lancio</span></li>
+        <li><b>Dal 1º febbraio 2027</b><span>Prezzo normale</span></li>
+      </ol>
+      <div class="licences">
+        <article class="licence" data-summary>
+          <h3>Privata</h3>
+          <p class="licence-price"><b>69&nbsp;€</b> <em>Prezzo di lancio fino al 31/01/2027</em></p>
+          <p class="licence-later">Dal 1º febbraio 2027: 99&nbsp;€</p>
+          <ul class="price-list">
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Una persona su un computer attivato</span></li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Tutte le funzioni, tutti gli aggiornamenti di 1.x</span></li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Assistenza per quanto possibile, senza tempo di risposta garantito</span></li>
+          </ul>
+        </article>
+        <article class="licence" data-summary>
+          <h3>Commerciale</h3>
+          <p class="licence-price"><b>199&nbsp;€</b> <em>Prezzo di lancio fino al 31/01/2027</em></p>
+          <p class="licence-later">Dal 1º febbraio 2027: 249&nbsp;€</p>
+          <ul class="price-list">
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Fino a due persone della stessa azienda, due computer</span></li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Le stesse funzioni della privata, tutti gli aggiornamenti di 1.x</span></li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Risposta dell’assistenza entro due giorni lavorativi</span></li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Trasferimento all’interno dell’azienda, fattura intestata all’azienda</span></li>
+          </ul>
+        </article>
+      </div>
+      <p class="licence-terms">Entrambe le licenze sono un acquisto unico a prezzo finale. È commerciale ogni uso per un’attività d’impresa o autonoma; formazione, studio e insegnamento non contano. Per entrambe sono promessi aggiornamenti di sicurezza almeno fino al 31/10/2031. Valgono le <a href="/agb.html">condizioni di vendita</a>, il <a href="/eula.html">contratto di licenza</a> e le <a href="/widerruf.html">informazioni sul recesso</a> (in tedesco).</p>
       <div class="price">
         <div class="price-card">
           <div class="amount">
             <b>Gratuita</b>
             <em>demo fino al 30/10/2026</em>
           </div>
-          <p class="terms">La demo pubblica è gratuita e
-          completa, senza chiave né account. La versione 1.0 è prevista per il
-          1º novembre 2026, ma non è ancora un’offerta. Prezzo e condizioni
-          contrattuali saranno pubblicati prima che venga proposta.</p>
+          <p class="terms">La demo pubblicata è gratuita e completa, senza chiave e senza account. La versione 1.0 aprirà poi i tuoi progetti.</p>
           <a class="btn" href="#download"
              data-release-href data-release-download>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"
@@ -785,11 +775,77 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
               <span><b>Segnala le vulnerabilità in modo riservato.</b> Il
               <a href="/it/security.html">contatto di sicurezza</a> copre
-              anche la demo. Gli aggiornamenti di sicurezza per la versione a
-              pagamento sono garantiti almeno fino al 31/10/2031.</span>
+              anche la demo.</span>
             </li>
           </ul>
         </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="support" class="support tint">
+    <div class="wrap">
+      <h2>Sostieni Solidon3D</h2>
+      <p class="sub">La demo non costa nulla, e sostenerla non cambia questo. Se vuoi aiutare a portare il lavoro fino alla versione 1.0, puoi farlo qui, liberamente.</p>
+
+      <div class="support-grid">
+        <div class="support-card">
+          <h3>Chi c’è dietro</h3>
+          <p>Sono Robert Schneider, tecnico elettronico di formazione, della zona di Bamberga in Germania. Faccio Solidon3D da solo, con la mia azienda RS Digital: il programma, il manuale, questo sito e l’assistenza. Se mi scrivi, ti rispondo io.</p>
+        </div>
+        <div class="support-card">
+          <h3>A cosa servono i soldi</h3>
+          <ul class="support-list">
+            <li><b>Strumenti di sviluppo:</b> Claude e Codex, i due strumenti di IA con cui programmo, ciascuno con il piano più alto.</li>
+            <li><b>Azienda:</b> i costi correnti di RS Digital.</li>
+            <li><b>Gestione:</b> hosting e dominio per il sito, i download e l’attivazione.</li>
+          </ul>
+          <p class="support-paid"><b>Già pagato di tasca mia:</b> l’Apple Developer Program, senza il quale i pacchetti per Mac non si aprirebbero con un doppio clic, e il certificato di firma del codice per Windows di Certum.</p>
+        </div>
+      </div>
+
+      <div class="support-card milestones">
+        <h3>Cosa è fatto e cosa viene</h3>
+        <ol class="milestone-list">
+          <li class="done"><time datetime="2026-07-27">27/07/2026</time><span>La prima riga di codice</span></li>
+          <li class="done"><time datetime="2026-08-20">20/08/2026</time><span>La prima demo pubblica</span></li>
+          <li class="done"><time datetime="2026-08-26">26/08/2026</time><span>Versione 0.2: blocchi propri senza programmare</span></li>
+          <li class="done"><time datetime="2026-09-03">03/09/2026</time><span>Versione 0.3: disegnare con le quote, tutto in sei lingue</span></li>
+          <li class="done"><time datetime="2026-09-10">10/09/2026</time><span>Versione 0.4: il magazzino filamenti</span></li>
+          <li class="done"><time datetime="2026-09-13">13/09/2026</time><span>Versione 0.4.1: pacchetti per Mac notarizzati da Apple</span></li>
+          <li class="done is-now"><time>Adesso</time><span>Versione 0.5: gli elementi dei modelli scaricati riconosciuti molto più in fretta, quote direttamente nella vista, stampanti a resina</span></li>
+          <li class="next"><time>Poi</time><span>Pacchetti Windows firmati: il certificato è pagato, Certum lo sta ancora verificando</span></li>
+          <li class="next"><time datetime="2026-11-01T10:00:00+01:00">01/11/2026</time><span>Versione 1.0 (prevista)</span></li>
+        </ol>
+      </div>
+
+      <div class="support-ways">
+        <div class="support-card support-way">
+          <h3>PayPal</h3>
+          <p>L’importo che vuoi, con un account PayPal o con una carta. PayPal gestisce il pagamento sulla sua pagina.</p>
+        </div>
+        <div class="support-card support-way">
+          <h3>GoFundMe</h3>
+          <p>La campagna di Solidon3D. GoFundMe mostra da sé a che punto è:</p>
+          <div class="gfm-slot" data-gfm-widget="https://www.gofundme.com/f/solidon3d-stl-anpassen-ohne-cad-bis-version-10/widget/large"
+               data-gfm-title="GoFundMe: stato della campagna di Solidon3D">
+            <p class="gfm-note">Solo questo pulsante carica la visualizzazione di GoFundMe. A quel punto dati come il tuo indirizzo IP arrivano a GoFundMe, e la visualizzazione può impostare cookie e caricare servizi come Google e Meta. <a href="/datenschutz.html#gofundme-stand">Di più nell’informativa sulla privacy</a> (in tedesco).</p>
+            <button class="btn ghost gfm-load" type="button" data-gfm-load>Carica lo stato attuale da GoFundMe</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="donate">
+        <p class="donate-terms">Non è un ordine, non offre alcuna controprestazione e non viene detratto da un acquisto successivo. Non rilasciamo attestazioni fiscali per il pagamento; non trattarlo come fiscalmente deducibile. PayPal o GoFundMe si apre solo dopo la scelta nell’avviso locale; <a href="/datenschutz.html">dettagli sulla privacy</a>.</p>
+        <button class="donate-button" type="button" data-choice="support">Sostieni volontariamente <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M12 20s-7-4.35-7-10.1C5 7.75 6.75 6 8.9 6c1.32 0 2.55.68 3.1 1.77C12.55 6.68 13.78 6 15.1 6 17.25 6 19 7.75 19 9.9 19 15.65 12 20 12 20Z" stroke-linejoin="round"/></svg></button>
+        <dialog class="auswahl donate-dialog" id="wahl-support" aria-label="Sostegno volontario tramite PayPal o GoFundMe">
+              <p class="auswahl-titel">Sostieni volontariamente</p>
+              <p>Il pagamento non è un ordine, non offre alcuna controprestazione, non sblocca nulla e non viene detratto da un acquisto successivo. Non rilasciamo attestazioni fiscali; non trattarlo come fiscalmente deducibile.</p>
+              <p>Scegli PayPal o GoFundMe. Solo il pulsante corrispondente apre la pagina esterna. Lascerai solidon3d.de; si applicherà l’informativa sulla privacy del fornitore scelto: <a href="https://www.paypal.com/de/legalhub/paypal/privacy-full?locale.x=de_DE">PayPal</a> o <a href="https://www.gofundme.com/c/privacy">GoFundMe</a>.</p>
+              <a class="btn" href="https://www.paypal.com/donate/?hosted_button_id=D7T4A9VYU9MX4" rel="noopener noreferrer">Continua su PayPal</a>
+              <a class="btn" href="https://gofund.me/08c5f0edb" rel="noopener noreferrer">Continua su GoFundMe</a>
+              <form method="dialog"><button class="btn ghost" value="zu">Indietro</button></form>
+            </dialog>
       </div>
     </div>
   </section>
@@ -846,9 +902,7 @@
           <summary>Cosa succede il 30 ottobre?</summary>
           <p>Dal 31 ottobre la demo non si avvia più. Lo dice per tempo:
           nella barra di stato c'è ogni giorno quanto le resta.</p>
-          <p>La versione 1.0 è prevista per il 1º novembre 2026. Non è ancora
-          un’offerta; prezzo e condizioni contrattuali saranno pubblicati
-          prima che venga proposta.</p>
+          <p>Il 31 ottobre è riservato agli ultimi controlli. Solidon3D 1.0 è prevista per il 1º novembre 2026 alle 10:00 (ora tedesca); da allora sono in vendita la licenza privata e quella commerciale.</p>
           <p><b>I tuoi file non ne sono toccati.</b> Restano dove li hai
           salvati; non si cancella nulla e nulla diventa illeggibile. Un file
           di progetto è un archivio ZIP con dentro JSON e si apre anche senza
@@ -884,16 +938,14 @@
         <details>
           <summary>Posso spostare un foro in un STL già finito?</summary>
           <p>Sì. All'apertura, fori, perni, svasature, cupole e sedi vengono
-          riconosciuti come caratteristiche con un nome; la finestra delle
-          caratteristiche mostra i loro valori misurati, e cambiare un numero è
+          riconosciuti come caratteristiche con un nome; un clic mostra i loro valori misurati come quote nella vista e a destra nel pannello Selezione, e cambiare un numero è
           l'operazione. Spostare, duplicare e rimuovere valgono per ognuno di
           questi tipi; ruotare, per tutti tranne la superficie sferica. Nei raccordi e nelle gole che sostituiscono visibilmente uno spigolo puoi cambiare il raggio o rimuoverli; una transizione che sfuma dolcemente nelle facce vicine, no. Solidon3D mostra quali azioni sono disponibili nel punto selezionato.</p>
         </details>
         <details>
           <summary>Devo usare un'IA?</summary>
           <p>No. La chat è una via su quattro. Senza chiave e senza Ollama
-          resta pienamente utilizzabile tutto tranne la chat — menu, menu
-          contestuali, riga di comando e tutte le 136 operazioni.</p>
+          resta pienamente utilizzabile tutto tranne la chat — menu, il pannello Selezione, riga di comando e tutte le 136 operazioni.</p>
         </details>
         <details>
           <summary>L'IA calcola la mia geometria?</summary>
@@ -954,11 +1006,9 @@
           accoppiamenti si aggiunge una calibrazione, una volta sola.</p>
         </details>
         <details>
-          <summary>Cosa viene dopo la demo?</summary>
-          <p>La versione 1.0 è prevista per il 1º novembre 2026. Non è ancora
-          un’offerta; prezzo e condizioni contrattuali saranno pubblicati
-          prima che venga proposta. I tuoi progetti demo restano leggibili
-          come file locali.</p>
+          <summary>Cosa viene dopo la demo, e quanto costa?</summary>
+          <p>La versione 1.0, prevista per il 1º novembre 2026 alle 10:00. Arriva in due tipi di licenza con le stesse funzioni, entrambi ad acquisto unico con tutti gli aggiornamenti di 1.x: <b>privata 69&nbsp;€</b> e <b>commerciale 199&nbsp;€</b>, ciascuna a prezzo di lancio fino al 31 gennaio 2027. Dal 1º febbraio 2027 la privata costa 99&nbsp;€ e la commerciale 249&nbsp;€.</p>
+          <p>I tuoi progetti demo restano leggibili come file locali, e la versione 1.0 li apre.</p>
         </details>
       </div>
     </div>
@@ -999,7 +1049,9 @@
     <a href="/it/security.html">Sicurezza</a> ·
     <a href="/impressum.html">Note legali</a> ·
     <a href="/datenschutz.html">Privacy</a> ·
-    <a href="/eula.html">Contratto di licenza</a>
+    <a href="/eula.html">Contratto di licenza</a> ·
+    <a href="/agb.html">Condizioni di vendita</a> ·
+    <a href="/widerruf.html">Recesso</a>
     <em>(testi legali in tedesco — fa fede la versione tedesca)</em> ·
     <a href="/">Deutsch</a> ·
     <a href="/en/">English</a> ·
@@ -1009,7 +1061,7 @@
   </div>
 </footer>
 
-<script src="/site.js?v=174df3cf" defer></script>
+<script src="/site.js?v=365a5a78" defer></script>
 
 </body>
 </html>
