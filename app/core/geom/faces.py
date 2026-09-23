@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable
+from typing import Final
 
 import numpy as np
 
@@ -34,7 +35,7 @@ from app.core.errors import (
     GeometryError,
     ValidationError,
 )
-from app.core.geom.boolean import BooleanKind, BooleanOutcome, boolean
+from app.core.geom.boolean import BOOLEAN_OVERLAP, BooleanKind, BooleanOutcome, boolean
 from app.core.geom.mesh import MeshData
 from app.core.geom.repair import merge_vertices, remove_degenerate_faces
 from app.core.types import CancelToken, Feature, Finding, Quality, Vec3
@@ -50,6 +51,24 @@ from app.i18n import _
 #: der Fall, den das trifft — dort ist die Handlung nicht zu streng, sondern
 #: undefiniert.
 SAME_PLANE_ENOUGH = 0.02
+
+#: Wie weit eine Ecke einer gewählten ebenen Fläche neben ihrer Ebene liegen
+#: darf, wenn ein Werkzeug flach auf diese Ebene gelegt wird — ein Muster bis
+#: zum Rand, eine Dichtnut in der Trägerfläche.
+#:
+#: **Nicht ``EPS_GEOM``.** Eine STL speichert vier Byte je Koordinate, und
+#: eine schräge Fläche liegt nach dem Einlesen um deren Rundung neben ihrer
+#: Ebene: 5·10⁻⁵ mm an der Keilfläche von ``Wedge-Lock (Base).stl`` (gemessen
+#: am 22.09.2026), zwanzigmal ``EPS_GEOM``. *Muster bis zum Rand* lehnte die
+#: Fläche daraufhin als „nicht eben" ab, obwohl die Erkennung sie als Ebene
+#: führte. Achsparallele Flächen fielen nicht auf, weil dort alle Ecken
+#: dieselbe gerundete Zahl tragen.
+#:
+#: Die Grenze kommt aus dem, was das Werkzeug aushält: Es greift um
+#: ``BOOLEAN_OVERLAP`` in den Körper, und von diesem Überlapp bleiben bei einer
+#: Ecke ein Viertel daneben noch drei Viertel. Eine gewölbte Fläche liegt um
+#: Millimeter neben jeder Ebene und bleibt abgelehnt.
+FLAT_ENOUGH_FOR_A_TOOL: Final = BOOLEAN_OVERLAP / 4.0
 
 #: Wie weit die Normale einer Wand aus der Waagerechten kippen darf und noch
 #: als senkrecht gilt. Dieselbe Frage wie ``edges.MeshEdge.flat``, nur an der

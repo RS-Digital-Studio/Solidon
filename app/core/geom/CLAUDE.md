@@ -633,8 +633,13 @@ Wo der exakte Kern da ist, zeigt das Menü `brep/ops.create_brep_*`, und
 **Ebene** des nächsten Dreiecks, nicht zu seiner Mitte: Die Oberflächenwolke
 ist diskret, und der Weg zum nächsten Punkt fällt vor einer ebenen Wand
 wellig aus. Eine Wand zerfiel damit in 67 koplanare Gruppen, und die
-Erkennung las daraus Schichten) · `displace.py`
-(Höhenfeld) · `lattice.py` (Gitterfüllung) · `texture_ops.py`
+Erkennung las daraus Schichten; das neue Netz bekommt die Filamente beider
+Körper über `attributes.transfer`) · `displace.py`
+(Höhenfeld — nur die der Projektion zugewandten Eckpunkte wandern, in ihrer
+Richtung: von oben senkrecht, um die Achse radial, auf eine Fläche nur deren
+Dreiecke entlang ihrer Normalen) · `lattice.py` (Gitterfüllung; die Wabe teilt
+ihre Wände, der Gyroid sagt ab, wo der Hohlraum für seine Zelle zu groß ist)
+· `texture_ops.py`
 (Oberflächentexturen als echte Geometrie) · `sculpt.py` · `pose.py`
 (Skelett und Stellung) · `sketch_solid.py` (einen Skizzenumriss zu einem Netz
 aufziehen)
@@ -642,11 +647,15 @@ aufziehen)
 `texture_ops.texture_tool()` erzeugt den gemeinsamen Werkzeugkörper für
 Vorschau und Operation. `coverage="whole_face"` bindet die gewählte ebene
 Fläche über ihre Kennung, schneidet die Musterpolygone an ihren tatsächlichen
-Dreiecken zu und hält Innenringe sowie konkave Ränder frei. Die Drehung gilt
+Dreiecken zu und hält Innenringe sowie konkave Ränder frei. Eben heißt
+dabei `faces.FLAT_ENOUGH_FOR_A_TOOL` (ein Viertel des Booleschen Überlapps)
+und nicht `EPS_GEOM` — eine schräge STL-Fläche liegt um ihre float32-Rundung
+neben der Ebene; die Dichtnut fragt dieselbe Grenze. Die Drehung gilt
 innerhalb dieser festen Kontur. `rectangle` bleibt die Vorgabe für vorhandene
 Operationen mit freier Position und Breite/Höhe. Beide Wege enden in
 `tool_in_outline()`, das auch *Merkmal ändern* an einem gelesenen Muster
-ruft (`prepare_ops._resize_pattern`): mit dem gelesenen Stil, Feld und
+ruft (`prepare_ops._resize_pattern`): mit dem gelesenen Stil (oder dem
+gewählten — ein fremdes Muster `other` bekommt so einen eigenen Stil), Feld und
 Winkel, und mit `cell=` der gemessenen Zellbreite — `pattern_shapes()`
 rechnet daraus je Stil den Anteil an der Teilung, `cell_width_for()` sagt,
 was Teilung und Drucker davon zulassen: Die Wand zwischen zwei Zellen bleibt
@@ -718,7 +727,10 @@ Merkmale zurück; die Hohlraumdecke liegt innen und wird abgewiesen)
 
 `prepare.py` und `prepare_ops.py` (Bohrungen, Teilen, Abschneiden — das halbe
 Teilen mit einer bleibenden Seite, `cut_away` über `section.cut` —, Anordnen,
-Kollisionen, §18.6) · `autosplit.py` (schneiden, bis es auf die Platte passt; nach einer
+Kollisionen, §18.6) · `autosplit.py` (schneiden, bis es auf die Platte passt; überzeugt keine
+achsparallele Ebene, fragt ein Fächer aus zwölf gekippten Richtungen — nur Nähte mit weniger
+Konturen, als achsparallel möglich, eine schiefe Naht geht als `split_line` in den Verlauf; je
+Naht werden beide Stiftseiten fertig gebaut und am Stützvolumen verglichen, `pins_on_b`; nach einer
 billigen Naht-Vorauswahl entscheidet das interne Stützvolumen der fertig
 verstifteten Hälften, §22.3; `search_plane` sagt neben der Ebene, wie viele
 Ebenen an einer gesperrten Sichtfläche gescheitert sind — daran unterscheidet

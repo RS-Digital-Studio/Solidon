@@ -799,6 +799,53 @@ def test_a_letter_with_a_hole_comes_out_with_a_hole() -> None:
     assert sum(len(entry.interiors) for entry in shapes) == 1
 
 
+@pytest.mark.parametrize("font", ["Comfortaa", "Dancing Script", "DejaVu Sans"])
+@pytest.mark.parametrize("text", ["Mama", "illu", "&%8"])
+def test_overlapping_strokes_fill_by_winding_not_by_parity(font: str, text: str) -> None:
+    """Eine Schrift füllt nach Umlaufzahl — überlappende Striche bleiben voll.
+
+    Comfortaa und Dancing Script liegen als variable Schriften bei, und deren
+    Striche überlappen sich: Die Konturen werden erst beim Zeichnen vereinigt,
+    und zwar nach der Umlaufzahl (TrueType, „nonzero"). ``outlines`` füllte bis
+    zum 22.09.2026 nach Parität — ein Symmetrische-Differenz-Lauf über alle
+    Ringe —, und wo zwei Striche übereinanderlagen, stand danach ein Loch:
+    „Mama" in Comfortaa auf 10 mm verlor 2,4 mm², „Hallo Welt" in Dancing
+    Script 0,3 mm², und erhaben gedruckt hatten die Buchstaben Schlitze.
+
+    Der Sollwert kommt nicht aus ``outlines``: Die Umlaufzahl wird hier an
+    einem Punktraster direkt aus den Konturen der Schrift gerechnet.
+    """
+    from matplotlib.textpath import TextPath
+    from shapely import contains_xy
+
+    from app.core.geom.label_ops import font_properties, outlines
+
+    size = 10.0
+    path = TextPath((0.0, 0.0), text, size=size, prop=font_properties(font))
+    rings = [np.asarray(ring, dtype=float) for ring in path.to_polygons() if len(ring) >= 4]
+    low = np.min([ring.min(axis=0) for ring in rings], axis=0)
+    high = np.max([ring.max(axis=0) for ring in rings], axis=0)
+    xs, ys = np.meshgrid(
+        np.arange(low[0], high[0], 0.04) + 0.013, np.arange(low[1], high[1], 0.04) + 0.017
+    )
+    px, py = xs.ravel(), ys.ravel()
+    winding = np.zeros(len(px), dtype=int)
+    for ring in rings:
+        start, end = ring[:-1], ring[1:]
+        for (x0, y0), (x1, y1) in zip(start, end, strict=True):
+            side = (x1 - x0) * (py - y0) - (px - x0) * (y1 - y0)
+            winding += ((y0 <= py) & (y1 > py) & (side > 0)).astype(int)
+            winding -= ((y0 > py) & (y1 <= py) & (side < 0)).astype(int)
+    from shapely.ops import unary_union
+
+    shape = unary_union(outlines(text, size, font))
+    near_edge = contains_xy(shape.boundary.buffer(0.03), px, py)
+    covered = contains_xy(shape, px, py)
+    inside = winding != 0
+    assert not np.any(inside & ~covered & ~near_edge), "ein Strich hat ein Loch bekommen"
+    assert not np.any(~inside & covered & ~near_edge), "ein Zwischenraum ist gefüllt"
+
+
 def test_raised_text_adds_exactly_its_own_volume(profile: Profile) -> None:
     plate = trimesh.creation.box(extents=(40.0, 20.0, 4.0))
     plate.apply_translation((0.0, 0.0, 2.0))
@@ -1022,7 +1069,39 @@ def test_lettering_can_carry_its_own_slot(profile: Profile) -> None:
     assert counts(output.mesh)[1] > 0, "the letters are in the second slot"
     assert [(slot.index, str(slot.name)) for slot in output.material_slots] == [
         (0, "Körper"),
-        (1, "Schrift"),
+        (1, "Beschriftung"),
+    ]
+
+
+def test_engraved_lettering_carries_its_slot_in_its_walls_and_floor(profile: Profile) -> None:
+    """Vertieft trägt die Schrift ihren Slot auf Wänden und Boden der Rillen.
+
+    Das Feld *Filament* stand bei vertiefter Schrift bis zum 22.09.2026 ohne
+    Wirkung da: Die Differenz gab den frisch geschnittenen Flächen den Slot
+    des Körpers, und die Zahl im Feld ging verloren, ohne dass jemand es
+    sagte. Eingefärbte Rillen sind der übliche Weg, eine vertiefte Schrift
+    lesbar zu drucken.
+    """
+    from app.core.geom.attributes import used_slots
+
+    plate = trimesh.creation.box(extents=(40.0, 20.0, 4.0))
+    plate.apply_translation((0.0, 0.0, 2.0))
+    entry = SceneObject(id="obj_1", name="Deckel", mesh=MeshData.of(plate))
+
+    result = run("label_text", entry, profile, text="RS", size=10.0, z=4.0, slot=2, mode="engraved")
+
+    output = result.outputs[0]
+    mesh = output.mesh
+    assert used_slots(mesh) == (0, 2)
+    centres = mesh.raw.triangles_center
+    slots = np.asarray(mesh.slots)
+    floor = np.abs(centres[:, 2] - 3.4) < 1e-6
+    assert floor.any() and np.all(slots[floor] == 2), "der Boden der Rillen ist in Slot 2"
+    top = np.abs(centres[:, 2] - 4.0) < 1e-6
+    assert np.all(slots[top] == 0), "die Oberseite bleibt, wie sie war"
+    assert [(slot.index, str(slot.name)) for slot in output.material_slots] == [
+        (0, "Körper"),
+        (2, "Beschriftung"),
     ]
 
 
@@ -1644,6 +1723,55 @@ def test_a_second_screw_lid_gets_a_number(profile: Profile) -> None:
 
     namen = [str(entry.name) for entry in result.outputs]
     assert "Drehdeckel 2" in namen, f"der zweite Deckel heißt wie der erste: {namen}"
+
+
+def test_the_screw_lid_name_follows_the_language(profile: Profile) -> None:
+    """Der Name des Drehdeckels wandert mit der Sprache — auch mit Zähler.
+
+    ``unused_name`` nahm ein ``str`` und gab eins zurück, also stand
+    ``str(_("Drehdeckel"))`` im Ergebnis: das Wort in der Sprache, die beim
+    Rechnen eingestellt war, vom Ergebnis-Cache festgehalten. Der Deckel
+    daneben (*Deckel erzeugen*) hatte genau das schon abgelegt; der Kommentar
+    im Drehdeckel sagte „kein eingefrorenes Wort" über einer Zeile, die eines
+    einfror.
+    """
+    from app.core.registry import REGISTRY
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.types import OpContext, Scene
+    from app.i18n import SOURCE_LANGUAGE, get_language, set_language
+    from app.i18n.catalog import install_language
+
+    tin = SceneObject(id="obj_1", name="Dose", mesh=hollow(block(), 3.0, open_top=True).mesh)
+    spec = REGISTRY.get("screw_lid")
+
+    def lid_name(scene_objects: dict[str, SceneObject]) -> object:
+        result = spec.fn(
+            OpContext(
+                scene=Scene(objects=scene_objects),
+                inputs=[tin],
+                params=spec.params(),
+                profile=profile,
+                quality="fine",
+                seed=None,
+                progress=lambda fraction, text: None,
+                ask=lambda question, choices: choices[0],
+                cancelled=NeverCancelled(),
+            )
+        )
+        return result.outputs[1].name
+
+    install_language("fr")
+    vorher = get_language()
+    try:
+        set_language("fr")
+        first = lid_name({tin.id: tin})
+        taken = SceneObject(id="obj_9", name=str(first), mesh=block())
+        second = lid_name({tin.id: tin, taken.id: taken})
+        set_language(SOURCE_LANGUAGE)
+        assert str(first) == "Drehdeckel"
+        assert str(second) == "Drehdeckel 2"
+    finally:
+        set_language(vorher)
 
 
 # --- ein Ziel über der vorhandenen Dreieckszahl ----------------------------------

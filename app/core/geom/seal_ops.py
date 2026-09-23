@@ -14,6 +14,7 @@ from app.core.geom.contours import polygons_of
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.geom.seal import (
     _band,
+    _closed_path,
     _mesh,
     match_opening,
     opening_choices,
@@ -289,6 +290,7 @@ def _named_floor(
 ) -> SceneObject:
     from shapely import contains_xy
 
+    from app.core.geom.faces import FLAT_ENOUGH_FOR_A_TOOL
     from app.core.perceive.surfaces import planar_patch
 
     if cancelled is not None:
@@ -297,8 +299,12 @@ def _named_floor(
     inverse = np.linalg.inv(_matrix(frame))
     centres = mesh.raw.triangles_center @ inverse[:3, :3].T + inverse[:3, 3]
     normals = mesh.raw.face_normals @ np.asarray(frame.normal)
+    # Der Boden liegt dort, wo ``cut_regions`` geschnitten hat — an der Ebene
+    # der gewählten Fläche. Bei einer eingelesenen schrägen Fläche liegt die um
+    # das Rundungsrauschen der STL neben dem Rahmen dieser Operation; gesucht
+    # wird deshalb mit der Grenze, die eine ebene Fläche für ein Werkzeug hat.
     mask = (
-        (np.abs(centres[:, 2] + depth) <= EPS_GEOM)
+        (np.abs(centres[:, 2] + depth) <= FLAT_ENOUGH_FOR_A_TOOL)
         & (normals > 1 - EPS_GEOM)
         & contains_xy(footprint.buffer(EPS_GEOM), centres[:, 0], centres[:, 1])
     )
@@ -511,7 +517,13 @@ def create_seal(ctx: OpContext) -> OpResult:
             ),
         )
     cut_frame = frame_for_plane(plane, ctx.scene.objects.values())
-    assert cut_frame is not None
+    if cut_frame is None:
+        # Kein ``assert``: Eine Ebene, die zwischen Suche und Schnitt verloren
+        # geht, ist eine Auskunft mit Weg nach vorn, kein Programmabbruch
+        # ohne Vorschlag (Regel 17).
+        raise _invalid(
+            "path_sketch", _("Wählen Sie eine vorhandene Zeichenebene für den Dichtweg.")
+        )
     cut_polygon = _polygon_in_frame(footprint, frame, cut_frame)
     ctx.progress(0.45, str(_("Dichtnut schneiden")))
     cut = cut_regions(
@@ -544,7 +556,8 @@ def create_seal(ctx: OpContext) -> OpResult:
     gasket_footprint = cross_section(
         gasket_body, -p.groove_depth + (p.groove_depth + p.protrusion) / 2
     )
-    assert gasket_footprint is not None
+    if gasket_footprint is None:
+        raise _closed_path()
     findings.extend(_counterface(ctx, p, frame, gasket_footprint, gasket_mesh))
     findings.append(
         Finding(

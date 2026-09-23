@@ -6028,3 +6028,39 @@ def test_remove_feature_rejects_unproven_native_rounding_triangles(
     assert source.mesh is body
     assert source.features == before_features
     assert _native_rounding_bytes(source) == before
+
+
+def test_cutting_away_an_open_body_says_the_cut_stays_open(profile: Profile) -> None:
+    """Ein offenes Netz lässt sich nicht ehrlich deckeln — und *Abschneiden* sagt es.
+
+    *Teilen* meldet eine ungedeckelte Schnittfläche seit je
+    (``split.uncapped``, mit *Reparieren und erneut versuchen*); *Abschneiden*
+    ging bis zum 22.09.2026 denselben Schnitt ohne ein Wort und gab einen
+    Körper mit offener Schnittfläche zurück, den der Slicer nach eigenem
+    Gutdünken füllt oder verwirft.
+    """
+    from app.core.errors import REPAIR_AND_RETRY
+    from app.core.scene.cancel import NeverCancelled
+
+    raw = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
+    open_box = trimesh.Trimesh(raw.vertices, raw.faces[:-2], process=False)
+    assert not open_box.is_watertight
+    entry = SceneObject(id="obj_1", name="Offen", mesh=MeshData.of(open_box))
+    spec = REGISTRY.get("cut_away")
+    result = spec.fn(
+        OpContext(
+            scene=Scene(objects={entry.id: entry}),
+            inputs=[entry],
+            params=spec.params(axis="z", position=0.0, keep="below"),
+            profile=profile,
+            quality="fine",
+            seed=None,
+            progress=lambda fraction, text: None,
+            ask=lambda question, choices: choices[0],
+            cancelled=NeverCancelled(),
+        )
+    )
+    found = [f for f in result.findings if f.code == "cut_away.uncapped"]
+    assert found, [f.code for f in result.findings]
+    assert found[0].object_id == "obj_1"
+    assert REPAIR_AND_RETRY in found[0].suggestions

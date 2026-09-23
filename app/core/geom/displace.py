@@ -1,9 +1,9 @@
 """Displacement über ein Höhenfeld (Bauplan §25, Konzept P16 Entscheidung G).
 
-Ein Bild wird zur Geometrie: Jeder Eckpunkt wandert entlang seiner Normale um
-so viel, wie das Bild an seiner Stelle hell ist. Damit lässt sich ein Relief,
-eine Prägung oder eine Struktur auf eine Fläche legen, für die keine Skizze
-taugt — Holzmaserung, Leder, ein Wappen.
+Ein Bild wird zur Geometrie: Jeder Eckpunkt, der der Projektion zugewandt ist,
+wandert in ihrer Richtung um so viel, wie das Bild an seiner Stelle hell ist.
+Damit lässt sich ein Relief, eine Prägung oder eine Struktur auf eine Fläche
+legen, für die keine Skizze taugt — Holzmaserung, Leder, ein Wappen.
 
 **Getrennt vom Pinsel, weil es einen anderen Charakter hat.** Es ist ein
 *Wert*, kein Handgriff: Ein Displacement ändert man, indem man eine Zahl
@@ -159,16 +159,92 @@ def _coordinates(
         # Auf die Ebene einer erkannten Fläche: Das Bild liegt so darauf, wie
         # es aussähe, wenn man senkrecht daraufsieht. Die einzige Projektion,
         # die ein Merkmal braucht — und die einzige, die auf einer schrägen
-        # Fläche nicht verzerrt.
+        # Fläche nicht verzerrt. **Aufgespannt über die Fläche**, nicht über
+        # den ganzen Körper: Das Bild füllt, was gewählt ist.
         first, second, centre = _face_frame(face)
         towards = points - centre
         along = towards @ first
         across = towards @ second
-        span = max(float(np.ptp(along)), float(np.ptp(across)), 1e-9)
-        return (across - across.min()) / span, (along - along.min()) / span
+        mine = _moving(mesh, projection, face)
+        if not mine.any():
+            mine = np.ones(len(points), dtype=bool)
+        span = max(float(np.ptp(along[mine])), float(np.ptp(across[mine])), 1e-9)
+        return (across - across[mine].min()) / span, (along - along[mine].min()) / span
     # Planar: von oben auf die XY-Ebene, die häufigste und einzige, bei der
     # ein rechteckiges Bild rechteckig bleibt.
     return (points[:, 1] - low[1]) / size[1], (points[:, 0] - low[0]) / size[0]
+
+
+#: Ab welchem Anteil seiner Normalen ein Eckpunkt in die Projektionsrichtung
+#: schaut. Null wäre die Kante selbst — eine senkrechte Wand, deren Normale
+#: um ein Rundungsbit nach oben kippt, soll kein Relief tragen.
+FACING: Final = 1e-6
+
+
+def _moving(mesh: MeshData, projection: str, face: Feature | None) -> np.ndarray:
+    """Welche Eckpunkte das Bild tragen — die, die der Projektion zugewandt sind.
+
+    **Nicht jeder Eckpunkt.** Bis zum 22.09.2026 wanderte jeder Eckpunkt des
+    Körpers entlang seiner Normalen, gleich wohin er schaute: „Von oben"
+    verschob auch die Unterseite mit demselben Bild nach unten — eine Platte
+    mit Relief stand danach nicht mehr eben auf dem Bett —, „Auf eine Fläche"
+    trug das Relief auf allen Seiten statt auf der gewählten, und die Deckel
+    eines Rohrs bekamen das Bild des Mantels.
+
+    * **von oben**: was nach oben schaut,
+    * **um die Achse**: was von der Achse weg schaut, nicht die Stirnflächen,
+    * **über die Kugel**: was von der Mitte weg schaut,
+    * **auf eine Fläche**: die Eckpunkte ihrer Dreiecke — oder, wo ein Merkmal
+      keine Dreiecke nennt, die der Ebene, die in ihre Richtung schauen.
+    """
+    body = mesh.raw
+    points = np.asarray(body.vertices, dtype=float)
+    normals = np.asarray(body.vertex_normals, dtype=float)
+    if projection == "face" and face is not None:
+        total = len(body.faces)
+        chosen = [int(index) for index in face.face_indices if 0 <= int(index) < total]
+        mine = np.zeros(len(points), dtype=bool)
+        if chosen:
+            mine[np.unique(np.asarray(body.faces)[chosen])] = True
+            return mine
+        from app.core.geom.faces import FLAT_ENOUGH_FOR_A_TOOL
+
+        _first, _second, centre = _face_frame(face)
+        direction = _face_normal(face)
+        on_plane = np.abs((points - centre) @ direction) <= FLAT_ENOUGH_FOR_A_TOOL
+        return np.asarray(on_plane & (normals @ direction > FACING))
+    outward = _directions(points, projection)
+    return np.asarray(np.einsum("ij,ij->i", normals, outward) > FACING)
+
+
+def _face_normal(face: Feature) -> np.ndarray:
+    """Die Normale einer erkannten Fläche, auf Länge eins."""
+    normal = np.asarray(face.params.get("normal", (0.0, 0.0, 1.0)), dtype=float)
+    length = float(np.linalg.norm(normal))
+    return normal / length if length > 1e-12 else np.array([0.0, 0.0, 1.0])
+
+
+def _directions(points: np.ndarray, projection: str, face: Feature | None = None) -> np.ndarray:
+    """In welche Richtung jeder Eckpunkt wandert — die der Projektion.
+
+    Von oben senkrecht nach oben, um die Achse quer zu ihr, über die Kugel von
+    der Mitte weg, auf eine Fläche entlang ihrer Normalen. **Nicht entlang der
+    Eckpunktnormalen:** An einer Kante steht die schräg, und eine Plattenkante
+    wanderte mit dem Relief nach außen statt nach oben.
+    """
+    if projection == "face" and face is not None:
+        return np.broadcast_to(_face_normal(face), points.shape)
+    if projection == "planar":
+        return np.broadcast_to(np.array([0.0, 0.0, 1.0]), points.shape)
+    low, high = points.min(axis=0), points.max(axis=0)
+    centre = (low + high) / 2.0
+    away = points - centre
+    if projection == "cylindrical":
+        away[:, 2] = 0.0
+    length = np.linalg.norm(away, axis=1)
+    return np.asarray(
+        np.divide(away, length[:, None], out=np.zeros_like(away), where=length[:, None] > 1e-12)
+    )
 
 
 def displaced(
@@ -181,11 +257,15 @@ def displaced(
     smooth: int = 0,
     face: Feature | None = None,
 ) -> MeshData:
-    """Jeden Eckpunkt entlang seiner Normale um den Bildwert verschieben.
+    """Die Eckpunkte, die der Projektion zugewandt sind, um den Bildwert verschieben.
 
     ``middle`` legt fest, welcher Grauwert die Fläche in Ruhe lässt: Bei null
     hebt das Bild nur an, bei 0,5 hebt weiß und senkt schwarz. Das ist der
     Unterschied zwischen einem Stempel und einer Prägung.
+
+    Welche Eckpunkte wandern und wohin, sagen :func:`_moving` und
+    :func:`_directions`: Das Bild ist ein Höhenfeld in Richtung der
+    Projektion, nicht entlang jeder Normalen.
 
     Wie beim Pinsel ändert sich die Topologie nicht — es kommen keine Dreiecke
     dazu. Wer ein feines Relief auf ein grobes Netz legen will, braucht vorher
@@ -198,8 +278,9 @@ def displaced(
     heights = _bilinear(field, rows, columns) - middle
     if smooth > 0:
         heights = _relaxed(body, heights, smooth)
-    normals = np.asarray(body.vertex_normals, dtype=float)
-    moved = np.asarray(body.vertices, dtype=float) + normals * (heights * strength)[:, None]
+    points = np.asarray(body.vertices, dtype=float)
+    heights = np.where(_moving(mesh, projection, face), heights, 0.0)
+    moved = points + _directions(points, projection, face) * (heights * strength)[:, None]
     built = trimesh.Trimesh(vertices=moved, faces=body.faces, process=False)
     _log.info("displaced %d vertices by up to %.3f mm", len(moved), abs(strength))
     return mesh.replacing(built)
@@ -315,6 +396,9 @@ class DisplaceParams(BaseParams):
 @register_op(
     name="displace_image",
     result_kind="mesh",
+    # 2 seit dem 22.09.2026: Nur die zugewandten Eckpunkte tragen das Bild, in
+    # Richtung der Projektion (``_moving``, ``_directions``).
+    cache_version="2",
     title=_("Relief auflegen"),
     category="surface",
     params=DisplaceParams,
@@ -405,7 +489,12 @@ def _displacement_findings(
     ]
 
     wanted = max(field.shape) * POINTS_PER_PIXEL
-    if before.vertex_count < wanted * wanted:
+    # Gezählt werden die Eckpunkte, die das Bild tragen — eine fein vernetzte
+    # Rückseite hilft einer groben Deckfläche nicht.
+    carrying = int(
+        np.count_nonzero(_moving(before, params.projection, _chosen_face(ctx.inputs[0], params)))
+    )
+    if carrying < wanted * wanted:
         findings.append(
             Finding(
                 code="displace.too_coarse",
@@ -415,7 +504,7 @@ def _displacement_findings(
                     "kaum etwas übrig. Erst gleichmäßig vernetzen."
                 ),
                 object_id=object_id,
-                values={"vertices": before.vertex_count, "wanted": int(wanted * wanted)},
+                values={"vertices": carrying, "wanted": int(wanted * wanted)},
             )
         )
 

@@ -454,6 +454,11 @@ _NOT_A_RANGE = frozenset(
         "not_a_project", "private_destination",
         "left_handed", "not_a_twin", "not_movable", "not_outline", "not_step", "not_upright",
         "one_body", "multi_start", "no_standard_size", "not_a_thread", "needs_exact",
+        # Ein Gewinde über der Tabelle, und eine Achse, die keine der drei ist:
+        # ein Name und eine Größe außerhalb einer Liste, keine Spanne im Feld.
+        "beyond_table", "known_axis",
+        # Ein fremdes Muster ohne gewählten Stil: eine Auswahl, keine Zahl.
+        "pattern_style",
         # Eine Öffnungsfläche, die zu einem anderen Körper gehört, schräg liegt
         # oder innen sitzt (RM-087): eine andere Fläche ist der Weg, keine Zahl.
         "foreign_feature", "not_axis_aligned", "not_outside",

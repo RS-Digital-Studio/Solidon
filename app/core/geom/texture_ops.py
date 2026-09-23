@@ -349,6 +349,17 @@ def pattern_shapes(
     return _noise(width, height, pitch, seed)
 
 
+#: Wie viele Wände eine Teilung mindestens misst, damit neben einer Zelle von
+#: Wandbreite noch eine Wand steht — je Stil, aus derselben Rechnung wie
+#: :func:`_max_share`. Rippe, Rändel, Wabe und Noppe: Zelle plus Wand. Die
+#: Welle trägt ihre Amplitude von einer Viertelteilung zweimal in der Zelle
+#: und kommt mit vier Dritteln aus. Die Raute des Kreuzrändels hat ihre Rille
+#: zum Nachbarn der nächsten Reihe, eine halbe Diagonale weiter: 2·√2.
+_PITCH_PER_WALL: Final[dict[str, float]] = {
+    "wave": 4.0 / 3.0,
+    "knurl_diamond": 2.0 * math.sqrt(2.0),
+}
+
 #: Wie nah eine Zelle an ihren Nachbarn heranreichen darf, als Anteil des
 #: Abstands zwischen ihnen — knapp darunter, sonst stünde zwischen zwei
 #: Zellen keine Wand mehr, sondern eine Kante, und das Muster zerfiele beim
@@ -397,6 +408,24 @@ def _cell_share(pattern: str, pitch: float, cell: float | None, wall: float = 0.
     druckt (``wall``) —, wird auf :func:`_max_share` begrenzt; eine, die
     nichts ließe, wird abgewiesen.
     """
+    if wall > 0.0:
+        needed = wall * _PITCH_PER_WALL.get(pattern, 2.0)
+        if pitch < needed and not is_close(pitch, needed):
+            # Neben der Wand bleibt keine Zelle — oder umgekehrt. Bis zum
+            # 22.09.2026 kam hier eine negative Zellbreite heraus (-0,1 mm bei
+            # Teilung 0,3 und Düse 0,4), und die Absage danach sprach von der
+            # Zellbreite statt von der Teilung.
+            raise ValidationError(
+                "pitch",
+                _(
+                    "Bei dieser Teilung haben Zelle und Wand nebeneinander keinen Platz. "
+                    "Die Teilung muss mindestens so groß sein wie in „needed_mm“ angegeben."
+                ),
+                value=pitch,
+                constraint="minimum",
+                values={"needed_mm": math.ceil(needed * 100.0) / 100.0, "wall_mm": wall},
+                suggestions=[replace(CORRECT_INPUT, label=_("Teilung vergrößern"))],
+            )
     if cell is None:
         return {"hexagon": HEX_FILL, "dimple": DIMPLE_FILL}.get(pattern, LAND_SHARE)
     require_positive("cell_width", cell)
@@ -645,7 +674,14 @@ class TextureParams(BaseParams):
         minimum=-360.0,
         maximum=360.0,
         placement="advanced",
-        doc=_("Dreht das Muster in der Fläche."),
+        # Um einen Zylinder wird mit Winkel null gebogen (``texture_tool``).
+        # Ausgrauen geht nicht über ``depends_on`` — beim Muster bis zum Rand
+        # gilt die Drehung, und dort ist ``wrap`` gar nicht wirksam —, also
+        # sagt es der Satz, und die Operation meldet es (``texture.angle_on_wrap``).
+        doc=_(
+            "Dreht das Muster in der Fläche. Um einen Zylinder läuft es entlang des "
+            "Umfangs, die Drehung wirkt dort nicht."
+        ),
     )
     x: float = param(
         title=_("Position X"),
@@ -940,7 +976,7 @@ def _face_texture_tool(source: SceneObject, params: TextureParams, seed: int) ->
 
     from app.core.errors import CANCEL, CHANGE_SELECTION, GeometryError
     from app.core.geom.face_ops import _chosen_face, _no_face
-    from app.core.geom.faces import _triangles_of, face_normal
+    from app.core.geom.faces import FLAT_ENOUGH_FOR_A_TOOL, _triangles_of, face_normal
     from app.core.geom.mesh import as_mesh_data
     from app.core.sketch.planes import frame_of
 
@@ -964,7 +1000,7 @@ def _face_texture_tool(source: SceneObject, params: TextureParams, seed: int) ->
     )
     basis = basis @ turn
     local = (corners - origin) @ basis
-    if np.max(np.abs(local[:, :, 2])) > EPS_GEOM:
+    if np.max(np.abs(local[:, :, 2])) > FLAT_ENOUGH_FOR_A_TOOL:
         raise GeometryError(
             detail=_("Für ein Muster bis zum Rand wählen Sie eine ebene Fläche."),
             suggestions=(CHANGE_SELECTION, CANCEL),
@@ -1282,9 +1318,18 @@ def apply_texture(ctx: OpContext) -> OpResult:
     from app.core.geom.mesh import as_mesh_data
 
     params = cast(TextureParams, ctx.params)
+    # Um einen Zylinder wird mit der Teilung gezeichnet, die im Umfang aufgeht
+    # (``wrap_pitch``) — bis zu einer halben Periode kleiner als verlangt.
+    # Geprüft wird die gezeichnete: Bis zum 22.09.2026 fragte die Prüfung die
+    # verlangte, und Stege knapp über der Düse kamen knapp darunter heraus.
+    drawn_pitch = (
+        wrap_pitch(params.pattern, params.pitch, params.wrap_diameter, params.width)
+        if params.coverage == "rectangle" and params.wrap == "cylinder"
+        else params.pitch
+    )
     # §9: das Profil gehört zum Kontext und ist immer da — eine Prüfung darauf
     # wäre eine Frage, deren Antwort der Vertrag schon gibt.
-    check_printable(params.pattern, params.pitch, params.depth, ctx.profile.printer)
+    check_printable(params.pattern, drawn_pitch, params.depth, ctx.profile.printer)
 
     source = ctx.inputs[0]
     placed = texture_tool(source, params, ctx.seed or 0)
@@ -1309,12 +1354,35 @@ def apply_texture(ctx: OpContext) -> OpResult:
     apart = _fell_apart(body_mesh, outcome.mesh, params.mode)
     if apart is not None:
         findings.append(apart)
+    # Vor der Verzweigung gelesen: Die Drehung wirkt überall außer um einen
+    # Zylinder (``texture_tool``), und die Meldung darunter ist ihre einzige
+    # Lesestelle in dieser Funktion. Stünde sie allein im Zweig, hielte die
+    # Prüfung auf bedingte Felder (``test_a_field_without_effect_says_so``) den
+    # Winkel für wirksam **nur** um den Zylinder — das Gegenteil.
+    turned = not is_close(params.angle % 360.0, 0.0)
     if params.coverage == "rectangle" and params.wrap == "cylinder":
+        if turned:
+            findings.append(
+                Finding(
+                    code="texture.angle_on_wrap",
+                    severity="info",
+                    message=_(
+                        "Die Drehung wirkt nur auf einer Fläche. Um einen Zylinder läuft "
+                        "das Muster entlang des Umfangs."
+                    ),
+                    values={"angle": round(params.angle, 3)},
+                )
+            )
         beyond = _wrap_beyond_body(body_mesh, params.wrap_diameter)
         if beyond is not None:
             findings.append(beyond)
-        pitch = wrap_pitch(params.pattern, params.pitch, params.wrap_diameter, params.width)
+        pitch = drawn_pitch
         if not is_close(pitch, params.pitch):
+            # Gezählt wird entlang des Umfangs: Beim geraden Rändel liegt dort
+            # die Diagonale der Teilung (``_PERIOD_ALONG_X``) — quer zu den
+            # Stegen gezählt stand bis zum 22.09.2026 „99 Teilungen", wo 70
+            # Stege herumlaufen.
+            period = pitch * _PERIOD_ALONG_X.get(params.pattern, 1.0)
             findings.append(
                 Finding(
                     code="texture.pitch_wrapped",
@@ -1323,7 +1391,7 @@ def apply_texture(ctx: OpContext) -> OpResult:
                         "Die Teilung ist auf {pitch} gerückt, damit das Muster um den Umfang "
                         "aufgeht — {count} Teilungen um Ø {diameter}.",
                         pitch=format_length(pitch),
-                        count=round(math.pi * params.wrap_diameter / pitch),
+                        count=round(math.pi * params.wrap_diameter / period),
                         diameter=format_length(params.wrap_diameter),
                     ),
                     values={

@@ -336,6 +336,8 @@ _RANGE_CONSTRAINTS: Final = frozenset(
         "nozzle_width",
         "layer_height",
         "cell_size",
+        # Die Zelle eines Gyroids gegen die Stützstellen, die sein Hohlraum trägt.
+        "gyroid_samples",
         "no_core",
         "kinks_inside",
         "crosses_axis",

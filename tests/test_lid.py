@@ -461,3 +461,51 @@ def test_screw_cap_accepts_the_entire_neck_without_intersection(profile, height,
     assembled.apply_translation((0, 0, 60))
     assert shared_volume(neck.raw, assembled) < 1e-5
     assert neck.bounds.maximum[2] == pytest.approx(60 + height, abs=1e-5)
+
+
+def test_a_turned_opening_is_measured_across_its_narrow_side(profile: Profile) -> None:
+    """Die Weite einer Öffnung ist ihre schmale Seite, nicht die ihres Hüllrechtecks.
+
+    Die Passung zwischen Deckel und Schachtel prüft zwei Weiten
+    (``lid_cavity``, ``lid_collar``). Bis zum 22.09.2026 kamen sie aus dem
+    achsparallelen Hüllrechteck — an einem um 45 Grad gedrehten quadratischen
+    Fach von 30 mm stand damit 42,4 mm da, die Diagonale, und die Passung
+    maß ein Maß, das es am Teil nicht gibt.
+    """
+    outer = trimesh.creation.box(extents=(70.0, 70.0, 30.0))
+    outer.apply_translation((0.0, 0.0, 15.0))
+    inner = trimesh.creation.box(extents=(30.0, 30.0, 27.0))
+    inner.apply_transform(trimesh.transformations.rotation_matrix(np.pi / 4.0, (0, 0, 1)))
+    inner.apply_translation((0.0, 0.0, 16.5))
+    body = trimesh.boolean.difference([outer, inner])
+    entry = SceneObject(id="obj_1", name="Schachtel", mesh=MeshData.of(body))
+
+    result = make_lid(entry, profile, thickness=2.4, collar=4.0)
+
+    cavity = result.outputs[0].features["lid_cavity"].params["diameter"]
+    collar = result.outputs[1].features["lid_collar"].params["diameter"]
+    gap = profiles.material("petg").clearance
+    assert cavity == pytest.approx(30.0, abs=0.01)
+    assert collar == pytest.approx(30.0 - gap, abs=0.01)
+
+
+def test_a_neck_on_a_turned_square_stays_on_its_wall(profile: Profile) -> None:
+    """Der Hals richtet sich nach der schmalen Seite — auch an einer gedrehten Dose.
+
+    ``neck_diameters`` las Außen- und Bohrungsmaß aus dem achsparallelen
+    Hüllrechteck. An einer um 45 Grad gedrehten quadratischen Dose von 50 mm
+    ist das die Diagonale, 70,7 mm: Der Hals hätte zehn Millimeter über jede
+    Seite gestanden. Die schmale Seite ist 50 mm.
+    """
+    outer = trimesh.creation.box(extents=(50.0, 50.0, 40.0))
+    outer.apply_translation((0.0, 0.0, 20.0))
+    inner = trimesh.creation.box(extents=(44.0, 44.0, 38.0))
+    inner.apply_translation((0.0, 0.0, 22.0))
+    body = trimesh.boolean.difference([outer, inner])
+    body.apply_transform(trimesh.transformations.rotation_matrix(np.pi / 4.0, (0, 0, 1)))
+    entry = SceneObject(id="obj_1", name="Dose", mesh=MeshData.of(body))
+
+    result = make_screw_lid(entry, profile, height=8.0, pitch=3.0)
+
+    neck = result.findings[0].values["neck_mm"]
+    assert neck == pytest.approx(50.0, abs=0.01), f"der Hals misst {neck} mm auf 50 mm Wand"

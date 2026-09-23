@@ -316,6 +316,7 @@ def paint_slot(ctx: OpContext) -> OpResult:
                 or (existing.material_type if existing is not None else None),
             )
         ],
+        used={int(slot) for slot in stroke.mesh.slots},
     )
     return OpResult(
         outputs=[

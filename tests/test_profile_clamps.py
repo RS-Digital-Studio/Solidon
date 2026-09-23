@@ -941,3 +941,43 @@ def test_the_clamp_offers_every_table_screw_and_sizes_its_ears_by_it(profile):
         assert hardware.values["size"] == size
         widths.append(float(shell.bounds.size[0]))
     assert widths == sorted(widths) and len(set(widths)) == len(widths), widths
+
+
+def test_the_fit_and_mounting_notes_show_numbers_a_customer_reads():
+    """Die Zahlen im Befund sind gerundet, ohne Rechenrauschen und ohne „-0".
+
+    Bis zum 22.09.2026 standen die Werte roh im Satz: Ein Spiel aus zwei
+    Profilwerten wie 0,1 + 0,2 las sich „0.30000000000000004 mm", ein Übermaß
+    von null „-0.0 mm". Der Satz geht an jemanden, der vom Slicer kommt.
+    """
+    from dataclasses import replace
+
+    from app.core.geom.profile_clamp_ops import _findings
+    from app.core.knowledge import profiles
+    from app.core.types import Profile
+
+    base = profiles.make_profile()
+    hard = Profile(base.printer, replace(profiles.material("pla"), clearance=0.1 + 0.2))
+    soft = Profile(base.printer, replace(profiles.material("tpu-95a"), clearance=0.1, press=0.0))
+    settings = {
+        "depth": 40.0,
+        "wall": 4.0 + 0.1 + 0.2,
+        "liner_thickness": 2.0,
+        "joint_gap": 1.0,
+        "flange_width": 1.2,
+        "flange_height": 1.5,
+        "rear_relief": 2.0,
+        "split_angle": 0.0,
+        "split_offset": 0.0,
+        "screw_size": "M4",
+    }
+    texts = [str(finding.message) for finding in _findings(settings, hard, soft)]
+    for text in texts:
+        assert "0000000" not in text, text
+        assert "-0" not in text, text
+    assert "Sitzspiel 0.30 mm" in texts[0], texts[0]
+    assert "Übermaß am Gegenprofil 0.00 mm" in texts[0], texts[0]
+    for finding in _findings(settings, hard, soft):
+        for value in finding.values.values():
+            if isinstance(value, float):
+                assert not (value == 0.0 and str(value).startswith("-")), finding.values

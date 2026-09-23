@@ -91,6 +91,61 @@ def test_a_finer_cell_puts_more_material_in() -> None:
     assert fine.volume > coarse.volume
 
 
+def test_a_honeycomb_is_one_web_with_walls_of_the_given_thickness() -> None:
+    """Eine Wabe teilt ihre Wände — sie ist ein Netz, keine Schar loser Röhren.
+
+    Bis zum 22.09.2026 hatte jedes Sechseck den Umkreis einer halben Zelle,
+    stand aber im Raster einer Wabe, deren Sechsecke den Umkreis ``Zelle/√3``
+    brauchen: Zwischen zwei Nachbarn blieb ein Spalt von 0,13 Zellen. Im
+    Quader von 40 auf 40 standen bei Zelle 8 damit 38 getrennte Röhren, die
+    nur Boden und Decke des Hohlraums zusammenhielten — gemessen, nicht
+    vermutet. Eine Wabe mit Wandstärke ``t`` und Zellabstand ``s`` füllt im
+    Inneren ``1 - ((s - t)/s)²`` ihrer Fläche; der Rand beschneidet nur.
+    """
+    cell, wall = 8.0, 1.0
+    box = ((-60.0, -60.0, 0.0), (60.0, 60.0, 5.0))
+    body = lattice.build("honeycomb", box, cell=cell, wall=wall)
+    assert body is not None
+    assert body.component_count == 1, "eine Wabe hängt zusammen"
+    # Das Innere, fern vom Rand: ein Kreis mitten im Feld.
+    from shapely.geometry import Point
+
+    from app.core.slice.analysis import cross_section
+
+    section = cross_section(body, 2.5)
+    assert section is not None
+    probe = Point(0.0, 0.0).buffer(40.0)
+    share = section.intersection(probe).area / probe.area
+    expected = 1.0 - ((cell - wall) / cell) ** 2
+    assert share == pytest.approx(expected, rel=0.05)
+
+
+def test_a_gyroid_too_fine_for_its_cavity_is_refused_with_the_cell_that_works() -> None:
+    """Ein Gyroid mit zu wenigen Stützstellen je Zelle ist kein Gyroid mehr.
+
+    Die Abtastung ist auf ``MAX_SAMPLES`` je Achse begrenzt; bis zum 22.09.2026
+    wurde darüber still gröber abgetastet. Gemessen an einem Würfel von
+    200 mm mit Zelle 5: vier statt zehn Stützstellen je Zelle, 92 Sekunden,
+    15,7 Millionen Dreiecke in 105 448 losen Stücken, nicht geschlossen — und
+    kein Wort dazu. Jetzt kommt die Absage, bevor gerechnet wird, mit der
+    kleinsten Zelle, die dieser Hohlraum trägt.
+    """
+    import time
+
+    box = ((0.0, 0.0, 0.0), (200.0, 200.0, 200.0))
+    started = time.perf_counter()
+    with pytest.raises(ValidationError) as problem:
+        lattice.build("gyroid", box, cell=5.0, wall=1.0)
+    assert time.perf_counter() - started < 5.0, "die Absage kommt vor der Rechnung"
+    assert problem.value.field == "cell"
+    assert problem.value.suggestions
+    reachable = problem.value.values["reachable_mm"]
+    assert reachable == pytest.approx(
+        200.0 * lattice.SAMPLES_PER_CELL / lattice.MAX_SAMPLES, abs=0.1
+    )
+    assert lattice.build("gyroid", ((0.0, 0.0, 0.0), (40.0, 40.0, 40.0)), cell=5.0, wall=1.0)
+
+
 def test_a_wall_below_the_nozzle_is_refused() -> None:
     """E1: ein Steg schmaler als zwei Extrusionsbahnen wird nicht gedruckt."""
     profile = profiles.make_profile()

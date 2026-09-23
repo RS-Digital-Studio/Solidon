@@ -221,6 +221,47 @@ def test_a_patch_too_small_for_a_filament_change_is_dropped() -> None:
     assert len(slots) == 1, "one triangle of green is not worth an AMS slot"
 
 
+def test_dropping_a_colour_keeps_the_smoothing() -> None:
+    """Wer einen Slot wegwirft, wirft die Glättung nicht mit weg.
+
+    Bis zum 22.09.2026 ordnete :func:`texture._drop_the_negligible` danach
+    **alle** Dreiecke neu nach ihrer rohen Farbe zu — und brachte damit genau
+    die Sprenkel zurück, die :func:`texture.smooth` gerade genommen hatte.
+    Hier: die linke Hälfte rot, die rechte blau, dazu einzelne blaue und
+    grüne Dreiecke in der roten Hälfte. Die Glättung nimmt beide zurück, Grün
+    fällt als zu klein weg, und danach muss die rote Hälfte rot bleiben.
+    """
+    body = painted([(255, 0, 0), (0, 0, 255)])
+    colours = np.asarray(body.visual.face_colors).copy()
+    left = np.flatnonzero(body.triangles_center[:, 0] < -5.0)
+    # Sechs Dreiecke der linken Hälfte, keines Nachbar eines anderen: Jedes
+    # widerspricht allen seinen Nachbarn und ist damit ein Sprenkel.
+    adjacent = {tuple(sorted(map(int, pair))) for pair in body.face_adjacency}
+    strays: list[int] = []
+    for candidate in left.tolist():
+        if all(tuple(sorted((candidate, other))) not in adjacent for other in strays):
+            strays.append(candidate)
+        if len(strays) == 6:
+            break
+    colours[strays[:3], :3] = (0, 0, 255)
+    colours[strays[3:], :3] = (0, 255, 0)
+    body.visual.face_colors = colours
+
+    mesh, slots = texture.to_slots(MeshData.of(body), 3, seed=0)
+
+    assert len(slots) == 2, "grün ist zu wenig für einen Filamentwechsel"
+    labels = np.asarray(mesh.slots)
+    assert len(set(labels[left].tolist())) == 1, "die Sprenkel sind zurückgekommen"
+
+
+def test_a_colour_change_keeps_the_known_cavity() -> None:
+    """Eine Farbe ändert keine Geometrie — der belegte Innenraum bleibt."""
+    body = painted([(255, 0, 0), (0, 0, 255)])
+    cavity = MeshData.of(trimesh.creation.box(extents=(4.0, 4.0, 1.0)))
+    mesh, _slots = texture.to_slots(MeshData(raw=body, cavity=cavity), 2, seed=0)
+    assert mesh.cavity is cavity
+
+
 def test_a_body_without_colour_keeps_what_it_had() -> None:
     mesh = MeshData.of(plate())
 

@@ -365,11 +365,36 @@ THREAD_SIZE_REACH: Final = (0.2, 0.02)
 
 
 def thread_size_for(feature: Feature) -> str:
-    """Das Normmaß zu einem Gewinde — oder die Absage, die die nächste Größe nennt."""
+    """Das Normmaß zu einem Gewinde — oder die Absage, die die nächste Größe nennt.
+
+    **Und eine Absage, die sagt, wo die Tabelle endet.** Ein Bolzen M10 aus
+    einer Datei bekam bis zum 22.09.2026 „nächste Größe M8" genannt — für ihn
+    kein Gegenstück, sondern ein Loch, durch das er fällt. Liegt das Gewinde
+    über der größten Tabellengröße, nennt der Satz sie als Grenze.
+    """
     diameter = float(feature.params.get("diameter", 0.0))
     pitch = float(feature.params.get("pitch", 0.0))
+    sizes = standards.screw_sizes()
+    largest = max(sizes, key=lambda size: standards.screw(size).nominal)
+    if diameter > standards.screw(largest).nominal + THREAD_SIZE_REACH[0]:
+        raise ValidationError(
+            field="at_feature",
+            detail=_(
+                "Dieses Gewinde ist größer als die Gewinde der Bibliothek — sie reichen bis "
+                "{largest}. Ein Gegenstück dazu lässt sich hier nicht setzen.",
+                largest=largest,
+            ),
+            values={
+                "feature": feature.id,
+                "diameter": diameter,
+                "pitch": pitch,
+                "largest": largest,
+            },
+            constraint="beyond_table",
+            suggestions=(CHANGE_SELECTION, CANCEL),
+        )
     nearest: tuple[float, str] | None = None
-    for size in standards.screw_sizes():
+    for size in sizes:
         screw = standards.screw(size)
         if (
             abs(screw.nominal - diameter) <= THREAD_SIZE_REACH[0]
@@ -417,6 +442,24 @@ def thread_counterpart_draft(
             ),
             value=feature.id,
             constraint="left_handed",
+            suggestions=(CHANGE_SELECTION, CANCEL),
+        )
+    # **Die Gangzahl gehört zur Frage.** Ein zweigängiges Gewinde ist kein
+    # eingängiges mit anderem Maß: Bis zum 22.09.2026 hieß es an
+    # ``zweigaengig.step`` „kein Normmaß, nächstes M8", und träfen Durchmesser
+    # und Teilung zufällig eine Tabellengröße, entstünde still ein eingängiges
+    # Gegengewinde, das nicht greift.
+    starts = feature.params.get("starts", 1)
+    if isinstance(starts, int | float) and starts > 1:
+        raise ValidationError(
+            field="at_feature",
+            detail=_(
+                "Ein mehrgängiges Gewinde hat kein Gegenstück aus der Bibliothek — deren "
+                "Gewinde sind eingängig."
+            ),
+            value=feature.id,
+            values={"feature": feature.id, "starts": int(starts)},
+            constraint="multi_start",
             suggestions=(CHANGE_SELECTION, CANCEL),
         )
     size = thread_size_for(feature)

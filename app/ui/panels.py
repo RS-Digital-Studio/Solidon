@@ -391,6 +391,8 @@ FINDING_ACTIONS: dict[str, tuple[Action, ...]] = {
     # offen. *Stellen zeigen* steht nicht daneben — der Befund trägt keinen
     # Ort, und ein Knopf, der ins Leere führt, ist schlechter als keiner.
     "split.uncapped": (REPAIR_AND_RETRY,),
+    # Dieselbe Ursache beim halben Teilen: das Modell war schon offen.
+    "cut_away.uncapped": (REPAIR_AND_RETRY,),
     "split.too_many_parts": (SPLIT_ALONG_LINE, CHOOSE_PRINTER, SHOW_DETAILS),
     # Die Druckdatei ist niedriger als das Modell: CuraEngine schneidet unter
     # ``z = 0`` wortlos ab (gemessen 30.08.2026, 50 statt 100 Schichten). Die

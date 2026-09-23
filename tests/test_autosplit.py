@@ -7,6 +7,7 @@ geteilt, ohne dass jemand einen Parameter anfasst. Alle drei stehen hier.
 
 from __future__ import annotations
 
+import math
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -278,7 +279,10 @@ def test_only_the_fixed_shortlist_is_sliced(
 
     autosplit.find_plane(crossed_overhangs(), profile, support_planes=3)
 
-    assert len(seen) == 3
+    # Je Naht zwei Rechnungen, seit beide Stiftseiten gewertet werden (RM-005):
+    # dieselben drei Ebenen, nicht mehr.
+    assert len(set(seen)) == 3
+    assert len(seen) == 6
 
 
 def test_support_refinement_is_reproducible(profile: Profile) -> None:
@@ -783,14 +787,16 @@ def test_the_profile_curve_measures_at_its_own_stations(monkeypatch: pytest.Monk
     Querschnitt passen, der an dieser Station steht.
     """
     cone = MeshData.of(trimesh.creation.cone(radius=20.0, height=60.0, sections=64))
-    measure = autosplit.sections_along
+    # Gefragt wird über ``sections_across`` — seit dem Normalenfächer (T3)
+    # nimmt die Kurve eine Richtung, keine Achse.
+    measure = autosplit.sections_across
     asked: list[np.ndarray] = []
 
-    def recording(mesh: MeshData, axis: Axis, heights: np.ndarray) -> list[Any]:
+    def recording(mesh: MeshData, normal: Any, heights: np.ndarray) -> list[Any]:
         asked.append(np.asarray(heights, dtype=float))
-        return measure(mesh, axis, heights)
+        return measure(mesh, normal, heights)
 
-    monkeypatch.setattr(autosplit, "sections_along", recording)
+    monkeypatch.setattr(autosplit, "sections_across", recording)
     depth_at = autosplit._notch_depth(cone, "z")
 
     low = float(cone.bounds.minimum[2]) + autosplit.PRISM_STEP
@@ -805,7 +811,7 @@ def test_the_profile_curve_measures_at_its_own_stations(monkeypatch: pytest.Monk
         f"die Schnitte liegen nicht auf den Stationen: {np.sort(heights)}"
     )
 
-    areas = [float(entry.area) for entry in measure(cone, "z", stations)]
+    areas = [float(entry.area) for entry in measure(cone, (0.0, 0.0, 1.0), stations)]
     middle = autosplit.PROFILE_SAMPLES // 2
     expected = (max(areas) - areas[middle]) / max(areas)
     assert depth_at(float(stations[middle])) == pytest.approx(expected, rel=1e-9), (
@@ -2230,3 +2236,262 @@ def test_the_open_cut_names_the_body_it_belongs_to(profile: Profile) -> None:
     offen = [finding for finding in result.findings if finding.code == "split.uncapped"]
     assert offen, "der Befund fehlt"
     assert offen[0].object_id == "obj_7", f"der Befund nennt keinen Körper: {offen[0].object_id!r}"
+
+
+def test_splitting_from_the_dialog_pairs_its_pins_in_one_step(profile: Profile) -> None:
+    """*Teilen* aus dem Dialog legt seine Passungen an wie *Automatisch teilen*.
+
+    Bis zum 22.09.2026 legte der Dialog nur den Schritt ``split_pinned`` an:
+    Stifte und Bohrungen entstanden, eine Passung dazwischen nicht, und im
+    Slicer fehlten die Werte, die über das Zusammenstecken entscheiden. Das
+    Trennen-Werkzeug und *Automatisch teilen* taten es längst, und die Website
+    zählt es zu *Teilen*. Jetzt geht auch der Dialog über den Ablauf, in einer
+    Transaktion mit dem Schnitt — ein Undo nimmt beides.
+    """
+    from app.core.split import SplitTarget, apply_pinned_split
+
+    project = new_project("centauri-carbon-2", "petg")
+    document = project.document
+    History(document).apply(
+        "Anlegen",
+        [OperationDraft(op="create_box", params={"width": 80.0, "depth": 60.0, "height": 40.0})],
+    )
+    block = MeshData.of(trimesh.creation.box(extents=(80.0, 60.0, 40.0)))
+    transactions = len(document.transactions)
+
+    applied = apply_pinned_split(
+        document,
+        [SplitTarget("obj_1", block, {})],
+        {"axis": "x", "position": 0.0, "pins": 2, "shape": "round"},
+        profile,
+        title="Teilen",
+    )
+
+    assert len(document.transactions) == transactions + 1, "ein Schritt"
+    assert document.ops[-1].op == "split_pinned"
+    assert len(applied.fits) == 2
+    assert document.fits == applied.fits
+    assert [fit.a.feature_id for fit in applied.fits] == ["pin_1", "pin_2"]
+    result = evaluate(document, profile, sources=ProjectSources(project))
+    assert result.complete
+    assert "fit.missing_feature" not in [f.code for f in result.scene.report.findings]
+
+    History(document).undo()
+    assert document.fits == [], "das Undo nimmt die Passungen mit"
+
+
+def test_the_pins_go_to_the_half_that_needs_less_support(profile: Profile) -> None:
+    """RM-005: Welche Hälfte die Stifte trägt, entscheidet das fertige Stützvolumen.
+
+    Die Stifte stehen über die Naht, und die Hälfte mit ihnen kann nicht mehr
+    auf der Naht liegen. Bis zum 22.09.2026 trug immer A die Stifte. An der
+    Naht, die Auto Split am Balken mit zwei gekreuzten Überhängen wählt
+    (x = 3,25), kosten die Stifte an A 3 754 mm³ Stützen, an B 3 298 — zwölf
+    Prozent, mehr als die fünf, mit denen eine Naht die andere schlägt.
+    Beide Zuordnungen werden jetzt fertig gebaut, und die bessere steht im
+    Schritt.
+    """
+    from app.core.slice.orientation import SUPPORT_TIE
+
+    mesh = crossed_overhangs()
+    seam = autosplit.Candidate("x", 3.25, 144.0, 1, 0.0)
+    on_a = autosplit._support_after_cut(
+        mesh, seam, profile, orientation_candidates=3, cancelled=None, connector_count=2
+    )
+    on_b = autosplit._support_after_cut(
+        mesh,
+        seam,
+        profile,
+        orientation_candidates=3,
+        cancelled=None,
+        connector_count=2,
+        pins_on_b=True,
+    )
+    assert on_b < on_a * (1.0 - SUPPORT_TIE), (on_a, on_b)
+
+    chosen = autosplit._best_by_support(
+        mesh,
+        profile,
+        (seam,),
+        plane_candidates=1,
+        orientation_candidates=3,
+        cancelled=None,
+        connector_count=2,
+    )
+    assert chosen.pins_on_b, "die Hälfte ohne Stifte liegt günstiger"
+    assert (chosen.axis, chosen.position) == (seam.axis, seam.position)
+    found = autosplit.find_plane(mesh, profile)
+    assert found is not None
+    assert (found.axis, found.position, found.pins_on_b) == ("x", 3.25, True), (
+        "und Auto Split nimmt genau diese Wahl"
+    )
+
+
+def test_a_half_that_cannot_stand_has_no_cheap_support(profile: Profile) -> None:
+    """Eine Lage, die nicht steht, ist kein Preis für eine Naht.
+
+    ``best_face_candidate`` gibt eine Lage, die nicht steht, nur zurück, wenn
+    keine der vorgewählten steht — und ihr Stützvolumen ist dann eine Zahl
+    über eine Kante. Am Balken bei x = −2 stand die Hälfte B mit den Stiften
+    auf 1,4 mm² erster Schicht und „kostete" 2 988 mm³, weniger als jede
+    Naht, die die Überhänge trennt; Auto Split hätte sie gewählt (gemessen am
+    22.09.2026). Unbekannt heißt: niemals billig.
+    """
+    mesh = crossed_overhangs()
+    seam = autosplit.Candidate("x", -2.0, 144.0, 1, 0.0)
+    on_b = autosplit._support_after_cut(
+        mesh,
+        seam,
+        profile,
+        orientation_candidates=3,
+        cancelled=None,
+        connector_count=2,
+        pins_on_b=True,
+    )
+    assert on_b == float("inf")
+
+
+def test_a_seam_with_pins_on_b_keeps_its_pairs_the_right_way_round(profile: Profile) -> None:
+    """Trägt B die Stifte, zeigt jede Passung von B nach A — und die Namen sagen es.
+
+    Der Schritt ``split_pinned`` mit ``pins_on_b`` setzt die Stifte an die
+    zweite Hälfte, die Bohrungen in die erste. Die Passungen des Ablaufs
+    müssen dem folgen, sonst zeigte ``pin_1`` auf ein Teil, das nur Löcher
+    hat, und die Prüfung meldete ein fehlendes Merkmal.
+    """
+    from app.core.split import SplitTarget, apply_pinned_split
+
+    project = new_project("centauri-carbon-2", "petg")
+    document = project.document
+    History(document).apply(
+        "Anlegen",
+        [OperationDraft(op="create_box", params={"width": 80.0, "depth": 60.0, "height": 40.0})],
+    )
+    block = MeshData.of(trimesh.creation.box(extents=(80.0, 60.0, 40.0)))
+    applied = apply_pinned_split(
+        document,
+        [SplitTarget("obj_1", block, {})],
+        {"axis": "x", "position": 0.0, "pins": 2, "shape": "round", "pins_on_b": True},
+        profile,
+        title="Teilen",
+    )
+    first, second = applied.object_ids
+    assert all(fit.a.object_id == second and fit.b.object_id == first for fit in applied.fits)
+
+    result = evaluate(document, profile, sources=ProjectSources(project))
+    assert result.complete
+    a, b = result.scene.objects[first], result.scene.objects[second]
+    assert "pin_1" in b.features and "bore_1" in a.features
+    assert "Löcher" in str(a.name) and "Stifte" in str(b.name)
+    assert b.mesh.bounds.minimum[0] < -1.0, "die Stifte von B ragen über die Naht nach A"
+    assert a.mesh.bounds.maximum[0] == pytest.approx(0.0, abs=1e-6), "A trägt keine"
+    assert "fit.missing_feature" not in [f.code for f in result.scene.report.findings]
+
+
+def z_shape() -> MeshData:
+    """Zwei lange Stäbe, versetzt, verbunden durch eine schräge Strebe.
+
+    400 mm lang, also zu lang für jedes Bett bis 256. Jede achsparallele Ebene,
+    die beide Hälften aufs Bett bringt (x zwischen etwa −45 und 45), schneidet
+    mindestens zwei Stäbe, meist dazu die Strebe — zwei oder drei Konturen, so
+    viele Brücken. Eine schräge Ebene quer zur Strebe schneidet nur die Strebe.
+    """
+    import manifold3d as m
+
+    first = m.Manifold.cube((240.0, 20.0, 20.0)).translate((-200.0, -10.0, 0.0))
+    second = m.Manifold.cube((240.0, 20.0, 20.0)).translate((-40.0, 140.0, 0.0))
+    strut = (
+        m.Manifold.cube((math.hypot(160.0, 150.0), 20.0, 20.0), center=True)
+        .rotate((0.0, 0.0, math.degrees(math.atan2(150.0, 160.0))))
+        .translate((0.0, 75.0, 10.0))
+    )
+    built = (first + second + strut).to_mesh64()
+    return MeshData.of(
+        trimesh.Trimesh(
+            vertices=np.array(built.vert_properties[:, :3]),
+            faces=np.array(built.tri_verts),
+            process=False,
+        )
+    )
+
+
+def test_a_tilted_plane_is_tried_when_every_upright_one_cuts_three_bars(profile: Profile) -> None:
+    """RM-080, T3: schräge Ebenen in der automatischen Suche.
+
+    Bis zum 23.09.2026 blieb die Suche achsparallel. Am Z aus zwei Stäben und
+    einer Strebe gewann damit eine Naht durch zwei oder drei Konturen — so
+    viele dünne Brücken, so viele Stellen zum Kleben. Liegt die beste achsparallele Ebene über
+    der Schwelle, fragt die Suche jetzt einen Fächer gekippter Richtungen
+    (15, 30 und 45 Grad zur Schnittachse, aus ganzzahligen Ecken und damit auf
+    jeder Maschine dieselben) und nimmt die, die eine Kontur schneidet und
+    beide Hälften aufs Bett bringt.
+    """
+    mesh = z_shape()
+    axis_only = [
+        entry
+        for entry in autosplit._judge(
+            mesh, "x", np.linspace(*autosplit._window(mesh, profile, "x"), autosplit.SAMPLES)
+        )
+        if entry.area > 0.0
+    ]
+    assert min(entry.contours for entry in axis_only) >= 2, "der Prüfkörper trifft den Fall"
+
+    candidate = autosplit.find_plane(mesh, profile)
+
+    assert candidate is not None
+    assert candidate.normal is not None, "die Naht ist schräg"
+    assert abs(candidate.normal[2]) < 1e-9
+    assert candidate.contours == 1
+    assert autosplit.find_plane(mesh, profile) == candidate, "und jedes Mal dieselbe"
+
+    outcome = autosplit.split_to_fit(mesh, profile)
+    assert len(outcome.parts) == 2
+    for part in outcome.parts:
+        assert part.is_watertight
+        assert autosplit.fits(part, profile)
+
+    plan = plan_split(mesh, "obj_1", profile)
+    assert [draft.op for draft in plan.drafts] == ["split_line"]
+    params = plan.drafts[0].params
+    assert math.isclose(math.hypot(params["normal_x"], params["normal_y"]), 1.0, abs_tol=1e-9)
+
+    # Und der Weg in den Verlauf: ein Schritt, Passungen je Stift, die Hälften passen.
+    project = new_project("centauri-carbon-2", "petg")
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/1_z.stl", sha256=""
+    )
+    project.sources["src_1"] = mesh.raw.export(file_type="stl")
+    History(project.document).apply(
+        "Laden", [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})]
+    )
+    applied = apply_planned(project.document, plan, "obj_1", profile)
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert result.complete
+    assert len(applied.fits) == plan.pins_at(0, 2)
+    codes = [finding.code for finding in result.scene.report.findings]
+    assert "fit.missing_feature" not in codes, codes
+    for object_id in applied.object_ids:
+        assert autosplit.fits(result.scene.objects[object_id].mesh, profile), object_id
+
+
+def test_an_upright_seam_that_is_good_enough_stays_upright(profile: Profile) -> None:
+    """Die Gegenprobe: Wo achsparallel eine gute Naht liegt, wird nichts gekippt."""
+    candidate = autosplit.find_plane(bar(), profile)
+    assert candidate is not None and candidate.normal is None
+
+
+def test_the_tilted_fan_listens_to_cancel(profile: Profile) -> None:
+    """Der Fächer fragt vor jeder Richtung nach dem Abbruch (§15.6)."""
+    token = CancelSignal()
+    token.cancel()
+    with pytest.raises(OperationCancelled):
+        autosplit._tilted(z_shape(), profile, "x", 0.0, cancelled=token)
+
+
+def test_the_tilted_fan_is_the_same_on_every_machine() -> None:
+    """Zwölf Richtungen aus ganzzahligen Ecken — kein ``np.cos``, keine Plattformfrage."""
+    fan = autosplit.tilted_normals("x")
+    assert len(fan) == 12 and len(set(fan)) == 12
+    for normal in fan:
+        assert math.isclose(math.hypot(*normal), 1.0, abs_tol=1e-15)
+        assert normal[0] > 0.0

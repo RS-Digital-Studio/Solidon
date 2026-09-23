@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 from typing import Any, Final, Literal, Protocol, get_args, runtime_checkable
 
 from app.core.knowledge.rules import OVERHANG_LIMIT_DEGREES
-from app.i18n import TranslatableText
+from app.i18n import TranslatableText, _
 
 # --- Bezeichner ----------------------------------------------------------------
 
@@ -1434,7 +1434,7 @@ class Scene:
     profile: Profile | None = None
     report: Report = field(default_factory=Report)
 
-    def unused_name(self, wanted: str) -> str:
+    def unused_name(self, wanted: TranslatableText | str) -> TranslatableText | str:
         """Der Name, wenn er frei ist — sonst derselbe mit einem Zähler.
 
         **Zwei Objekte mit demselben Namen sind im Baum eines** (RM-097).
@@ -1447,13 +1447,22 @@ class Scene:
         1" neben nichts wäre eine Nummer ohne Reihe. Dieselbe Zählweise wie bei
         den Passungen (``lid_flow._unused_name``); zwei Fassungen derselben
         Frage liefen auseinander.
+
+        **Und ein übersetzbarer Name bleibt übersetzbar.** Bis zum 22.09.2026
+        nahm diese Funktion ein ``str``, und die Aufrufer reichten
+        ``str(_("Drehdeckel"))`` — das Wort in der Sprache, die beim Rechnen
+        eingestellt war, vom Ergebnis-Cache festgehalten. Verglichen wird in
+        der eingestellten Sprache, zurück kommt der Text selbst oder der Text
+        mit Zähler (``{name} {number}``).
         """
         taken = {str(entry.name) for entry in self.objects.values()}
-        if wanted not in taken:
+        if str(wanted) not in taken:
             return wanted
         number = 2
         while f"{wanted} {number}" in taken:
             number += 1
+        if isinstance(wanted, TranslatableText):
+            return _("{name} {number}", name=wanted, number=number)
         return f"{wanted} {number}"
 
 

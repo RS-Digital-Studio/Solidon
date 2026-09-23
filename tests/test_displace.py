@@ -218,10 +218,10 @@ def test_the_middle_decides_what_is_up_and_what_is_down(profile: Profile) -> Non
     lifted = run(entry, profile, blocks(), strength=2.0, middle=0.0).outputs[0].mesh
     both = run(entry, profile, blocks(), strength=2.0, middle=0.5).outputs[0].mesh
 
-    # Ohne Nulllage trägt jeder Grauwert auf, und der Körper wird überall
-    # größer. Mit 0,5 hebt weiß und senkt schwarz — er bleibt im Mittel, wo er
-    # war. Gemessen am Volumen, nicht an einer Kante: Das Relief wirkt entlang
-    # der Normalen und damit auf allen Seiten, auch der unteren.
+    # Ohne Nulllage trägt jeder Grauwert auf, und der Körper wird größer. Mit
+    # 0,5 hebt weiß und senkt schwarz — er bleibt im Mittel, wo er war.
+    # Gemessen am Volumen, nicht an einer Kante. Das Relief wirkt von oben,
+    # also auf der Oberseite; die Unterseite bleibt auf dem Bett.
     assert lifted.volume > body.volume
     assert abs(both.volume - body.volume) < abs(lifted.volume - body.volume)
 
@@ -381,6 +381,11 @@ def slanted() -> tuple[MeshData, Feature]:
     tilted = body.raw.copy()
     tilted.apply_transform(trimesh.transformations.rotation_matrix(np.pi / 6.0, [0, 1, 0]))
     normal = np.asarray([np.sin(np.pi / 6.0), 0.0, np.cos(np.pi / 6.0)])
+    # Wie die Erkennung sie liefert: mit ihren Dreiecken und der Mitte auf der
+    # Fläche. Bis zum 22.09.2026 stand hier die Mitte des Hüllquaders und kein
+    # Dreieck — die Projektion las die Fläche damals gar nicht, sie verschob
+    # jeden Eckpunkt des Körpers.
+    top = np.flatnonzero(tilted.face_normals @ normal > 0.999)
     face = Feature(
         id="face_1",
         kind="face",
@@ -388,8 +393,9 @@ def slanted() -> tuple[MeshData, Feature]:
         params={
             "area": 1600.0,
             "normal": tuple(float(value) for value in normal),
-            "centre": tuple(float(value) for value in tilted.bounds.mean(axis=0)),
+            "centre": tuple(float(value) for value in tilted.triangles_center[top].mean(axis=0)),
         },
+        face_indices=tuple(int(index) for index in top),
     )
     return MeshData.of(tilted), face
 
@@ -424,6 +430,86 @@ def test_the_face_projection_differs_from_looking_down(profile: Profile) -> None
         np.asarray(flat.outputs[0].mesh.raw.vertices),
         np.asarray(on_face.outputs[0].mesh.raw.vertices),
     )
+
+
+def test_a_relief_on_a_face_stays_on_that_face(profile: Profile) -> None:
+    """Auf eine Fläche gelegt heißt: auf diese eine, und nirgends sonst.
+
+    Bis zum 22.09.2026 rechnete die Projektion „Auf eine Fläche" nur die
+    **Bildlage** aus der Fläche und verschob dann jeden Eckpunkt des Körpers
+    entlang seiner Normalen — die Rückseite der Platte trug dasselbe Relief
+    gespiegelt, die Seiten wuchsen mit (gemessen an einer Platte 40 x 40 x 6:
+    4 256 von 4 353 Eckpunkten der Unterseite bewegt). Jetzt wandern nur die
+    Eckpunkte der gewählten Fläche, und zwar entlang ihrer Normalen.
+    """
+    body = plate(40.0, 40.0, 6.0)
+    raw = body.raw
+    top = np.flatnonzero(raw.face_normals[:, 2] > 0.99)
+    face = Feature(
+        id="face_1",
+        kind="face",
+        provenance="detected",
+        params={"area": 1600.0, "normal": (0.0, 0.0, 1.0), "centre": (0.0, 0.0, 6.0)},
+        face_indices=tuple(int(index) for index in top),
+    )
+    entry = SceneObject(id="obj_1", name="Platte", mesh=body, features={"face_1": face})
+
+    after = run(entry, profile, ramp(), strength=1.5, projection="face", at_feature="face_1")
+
+    moved = np.linalg.norm(after.outputs[0].mesh.raw.vertices - raw.vertices, axis=1)
+    on_face = np.zeros(len(raw.vertices), dtype=bool)
+    on_face[np.unique(raw.faces[top])] = True
+    assert moved[on_face].max() > 1.0, "die Fläche trägt das Relief"
+    assert moved[~on_face].max() == 0.0, "sonst bewegt sich nichts"
+    shift = after.outputs[0].mesh.raw.vertices[on_face] - raw.vertices[on_face]
+    assert np.allclose(shift[:, :2], 0.0), "entlang der Normalen der Fläche, nicht schräg"
+
+
+def test_a_relief_from_above_leaves_the_underside_on_the_bed(profile: Profile) -> None:
+    """„Von oben" heißt: was nach oben schaut, und in der Höhe.
+
+    Bis zum 22.09.2026 wanderte jeder Eckpunkt entlang seiner Normalen, auch
+    die der Unterseite — mit demselben Bild, nach unten. Eine Platte mit
+    Relief stand danach nicht mehr eben auf dem Bett (Unterseite bis 0,98 mm
+    unter null bei einem Relief von einem Millimeter), und die Oberkante
+    wanderte schräg nach außen, weil die Normale an der Kante diagonal steht.
+    """
+    body = plate(40.0, 40.0, 6.0)
+    raw = body.raw
+    entry = SceneObject(id="obj_1", name="Platte", mesh=body)
+
+    after = run(entry, profile, blocks(), strength=1.0, projection="planar").outputs[0].mesh
+
+    bottom = raw.vertices[:, 2] < 1e-9
+    assert np.array_equal(after.raw.vertices[bottom], raw.vertices[bottom]), "die Unterseite bleibt"
+    shift = after.raw.vertices - raw.vertices
+    assert np.allclose(shift[:, :2], 0.0), "von oben heißt senkrecht, nicht entlang der Normalen"
+    assert after.raw.bounds[0] == pytest.approx(raw.bounds[0])
+
+
+def test_a_relief_around_the_axis_keeps_the_ends_flat(profile: Profile) -> None:
+    """Um die Achse gewickelt trägt der Mantel das Bild — nicht die Stirnflächen.
+
+    Die Deckel eines Rohrs schauen entlang der Achse; bis zum 22.09.2026
+    wurden auch sie entlang ihrer Normalen mit dem Bild verschoben, und das
+    Rohr stand danach auf einem Relief statt auf seiner Stirnfläche.
+    """
+    from app.core.geom.mesh_ops import remesh
+
+    tube = remesh(
+        MeshData.of(trimesh.creation.cylinder(radius=10.0, height=30.0, sections=64)), 1.0
+    )
+    entry = SceneObject(id="obj_1", name="Rohr", mesh=tube)
+
+    after = run(entry, profile, blocks(), strength=1.5, projection="cylindrical").outputs[0].mesh
+
+    ends = np.abs(np.abs(tube.raw.vertices[:, 2]) - 15.0) < 1e-9
+    assert np.allclose(after.raw.vertices[ends, 2], tube.raw.vertices[ends, 2]), (
+        "die Enden bleiben eben"
+    )
+    shift = after.raw.vertices - tube.raw.vertices
+    assert np.allclose(shift[:, 2], 0.0), "gewickelt heißt quer zur Achse"
+    assert after.is_watertight
 
 
 def test_the_face_projection_without_a_face_says_so(profile: Profile) -> None:

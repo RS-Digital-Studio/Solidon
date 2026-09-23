@@ -9,6 +9,7 @@ treffen — ein Gewinde Ø 6,4 mit Steigung 1,1 wird nicht still zu M6.
 
 from __future__ import annotations
 
+import dataclasses
 import itertools
 
 import pytest
@@ -262,3 +263,142 @@ def test_a_changed_history_leaves_the_fit_out_and_says_so(profile: Profile) -> N
 
     assert applied.fit is None and not document.fits
     assert [entry.code for entry in applied.findings] == ["parts.counterpart_unpaired"]
+
+
+# --- eingelesene Gewinde: STEP und Netz --------------------------------------------
+#
+# Bis zum 22.09.2026 fuhren alle Tests hier ein Gewinde, das Solidon selbst
+# erzeugt hatte (``provenance == "generated"``). Ein Kunde bringt seinen Bolzen
+# aber als STEP oder STL mit; dann liest die Erkennung Durchmesser, Steigung,
+# Gangzahl und Händigkeit aus der Geometrie. Die Sollwerte kommen aus den
+# Konstruktionsmaßen des Gewindekorpus (``tests/data/make_thread_corpus.py``).
+
+
+def _profile() -> Profile:
+    from app.core.knowledge import profiles
+
+    return profiles.make_profile("centauri-carbon-2", "petg")
+
+
+def _imported(name: str, kind: str) -> tuple[Document, ResultCache, Feature, object]:
+    """Ein Gewinde aus dem Korpus, über den Ladeweg eingelesen, und eine Platte daneben.
+
+    ``kind="mesh"`` liest dasselbe Teil als STL — so, wie es aus einem Slicer
+    oder einer Modellseite kommt.
+    """
+    from pathlib import Path
+
+    from app.core.brep import step
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.scene.project import ProjectSources
+    from app.core.types import Source
+
+    _kernel_or_skip("brep")
+    corpus = Path(__file__).parent / "data" / "threads" / f"{name}.step"
+    if kind == "brep":
+        payload, suffix = corpus.read_bytes(), "step"
+    else:
+        payload = as_mesh_data(step.read(corpus.read_bytes())).raw.export(file_type="stl")
+        suffix = "stl"
+    project = new_project("centauri-carbon-2", "petg")
+    document = project.document
+    document.sources["src_1"] = Source(
+        id="src_1", kind="import", path=f"sources/1_{name}.{suffix}", sha256=""
+    )
+    project.sources["src_1"] = payload
+    # Der Ladeweg der Anwendung: STEP über den Importplan (exakter Körper),
+    # STL über ``load``.
+    from app.core.ingest.plan import import_plan
+
+    plan = import_plan("src_1", f"{name}.{suffix}", payload)
+    draft = plan.draft
+    if suffix == "stl":
+        # Ein Teil von zwölf Millimetern lässt die Einheit offen; der Kunde
+        # beantwortet die Frage mit Millimetern.
+        draft = dataclasses.replace(draft, params={**draft.params, "unit": "mm"})
+    History(document).apply(plan.title, [draft])
+    History(document).apply(
+        "Platte",
+        [OperationDraft(op="create_box", params={"width": 40.0, "depth": 30.0, "height": 10.0})],
+    )
+    History(document).apply(
+        "Daneben",
+        [OperationDraft(op="translate_object", inputs=("obj_2",), params={"dx": 60.0})],
+    )
+    cache = ResultCache()
+    sources = ProjectSources(project)
+    result = evaluate(document, _profile(), cache=cache, sources=sources)
+    assert result.stopped_at is None
+    threads = [f for f in result.scene.objects["obj_1"].features.values() if f.kind == "thread"]
+    assert len(threads) == 1, f"der Korpus trägt genau ein Gewinde: {[f.id for f in threads]}"
+    assert threads[0].provenance != "generated", "eingelesen, nicht erzeugt"
+    return document, cache, threads[0], sources
+
+
+@pytest.mark.parametrize("kind", ["brep", "mesh"])
+@pytest.mark.parametrize(
+    ("name", "size", "internal"), [("m6_rechts", "M6", True), ("m8_innen", "M8", False)]
+)
+def test_an_imported_thread_gets_its_counterpart_and_a_measurable_fit(
+    kind: str, name: str, size: str, internal: bool
+) -> None:
+    """Ein eingelesener Bolzen bekommt seine Mutter, ein eingelesenes Innengewinde seinen Bolzen."""
+    document, cache, thread, sources = _imported(name, kind)
+    profile = _profile()
+
+    applied = apply_thread_counterpart(document, thread, "obj_1", "obj_2", {"x": 60.0, "z": 10.0})
+    step_params = document.ops[-1].params
+    assert step_params["size"] == size and step_params["internal"] is internal
+
+    result = evaluate(document, profile, cache=cache, sources=sources)
+    assert result.stopped_at is None
+    applied = attach_thread_fit(document, applied, thread, result.scene)
+    assert applied.fit is not None, [str(f.message) for f in applied.findings]
+    checked = evaluate(document, profile, cache=cache, sources=sources)
+    codes = {finding.code for finding in checked.scene.report.findings}
+    assert "fit.not_measurable" not in codes
+    assert "fit.missing_feature" not in codes
+
+
+def test_a_multi_start_thread_is_refused_with_a_sentence() -> None:
+    """Ein zweigängiges Gewinde hat kein eingängiges Gegenstück.
+
+    ``zweigaengig.step`` trägt zwei Gänge mit 1 mm Teilung auf Ø 8. Bis zum
+    22.09.2026 fragte ``thread_counterpart_draft`` die Gangzahl nicht und sagte
+    „kein Normmaß, nächstes M8" — ein Satz über das falsche Maß, und bei einer
+    Steigung, die zufällig in der Tabelle steht, wäre still ein eingängiges
+    Gegengewinde entstanden, das nicht greift.
+    """
+    from pathlib import Path
+
+    from app.core.brep import step
+    from app.core.brep.features import features_of
+
+    _kernel_or_skip("brep")
+    solid = step.read((Path(__file__).parent / "data/threads/zweigaengig.step").read_bytes())
+    thread = next(f for f in features_of(solid).values() if f.kind == "thread")
+    assert thread.params.get("starts") == 2
+    with pytest.raises(ValidationError) as caught:
+        thread_counterpart_draft(thread, "obj_2", {})
+    assert caught.value.constraint == "multi_start"
+    assert caught.value.suggestions
+
+    # Und auch dort, wo Durchmesser und Steigung eine Tabellengröße träfen.
+    lookalike = _generated(8.0, 1.25, starts=2)
+    with pytest.raises(ValidationError) as caught:
+        thread_counterpart_draft(lookalike, "obj_2", {})
+    assert caught.value.constraint == "multi_start"
+
+
+def test_a_thread_beyond_the_table_says_where_the_table_ends() -> None:
+    """Ein M10 aus einer Datei: Die Tabelle reicht bis M8, und der Satz sagt das.
+
+    Bis zum 22.09.2026 hieß es „Setzen Sie das Gegenstück als Baustein mit der
+    nächsten Größe" und nannte M8 — für einen Bolzen M10 kein Gegenstück,
+    sondern ein Loch, durch das er fällt.
+    """
+    feature = _generated(10.0, 1.5)
+    with pytest.raises(ValidationError) as caught:
+        thread_size_for(feature)
+    assert caught.value.constraint == "beyond_table"
+    assert caught.value.values["largest"] == "M8"

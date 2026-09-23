@@ -98,7 +98,9 @@ def assign_slot(ctx: OpContext) -> OpResult:
     return OpResult(
         outputs=[
             dataclasses.replace(
-                source, mesh=painted, material_slots=merged_slots(source.material_slots, [slot])
+                source,
+                mesh=painted,
+                material_slots=merged_slots(source.material_slots, [slot], used={params.slot}),
             )
         ]
     )
@@ -306,6 +308,10 @@ class SlotsFromTextureParams(BaseParams):
 
 @register_op(
     name="slots_from_texture",
+    # 2 seit dem 22.09.2026: Ein zu kleiner Farbfleck nimmt beim Wegfallen die
+    # Glättung nicht mehr mit (``texture._drop_the_negligible``), und die
+    # Farbnamen bleiben übersetzbar.
+    cache_version="2",
     title=_("Textur in Filamente umrechnen"),
     category="colour",
     params=SlotsFromTextureParams,
@@ -366,17 +372,33 @@ def slots_from_texture(ctx: OpContext) -> OpResult:
     return OpResult(
         outputs=[
             dataclasses.replace(
-                source, mesh=mesh, material_slots=merged_slots(source.material_slots, slots)
+                source,
+                mesh=mesh,
+                material_slots=merged_slots(
+                    source.material_slots, slots, used={int(slot) for slot in mesh.slots}
+                ),
             )
         ],
         findings=findings,
     )
 
 
-def merged_slots(existing: list[MaterialSlot], added: list[MaterialSlot]) -> list[MaterialSlot]:
+def merged_slots(
+    existing: list[MaterialSlot],
+    added: list[MaterialSlot],
+    *,
+    used: set[int] | None = None,
+) -> list[MaterialSlot]:
     """Neue Zuweisungen gewinnen; Slots, die das Objekt schon kannte und
     weiter benutzt, bleiben.
+
+    ``used`` sind die Slots, die die Dreiecke nach dem Schritt wirklich tragen.
+    **Was keine Fläche mehr trägt, fällt heraus** — bis zum 22.09.2026 blieb
+    es stehen: Wer ein Teil erst rot und dann blau zuwies, trug danach Rot und
+    Blau, und die 3MF-Baugruppe schrieb beide als Filament; der Slicer fragte
+    nach einer Spule, die kein Dreieck braucht. *Filament entfernen* räumte
+    schon so auf. Ohne ``used`` bleibt die ganze Liste, wie sie war.
     """
     known = {entry.index: entry for entry in existing}
     known.update({entry.index: entry for entry in added})
-    return [known[index] for index in sorted(known)]
+    return [known[index] for index in sorted(known) if used is None or index in used]

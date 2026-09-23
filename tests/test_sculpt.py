@@ -713,3 +713,48 @@ def test_baked_array_headers_cannot_request_more_than_the_stored_data(monkeypatc
         MeshData.from_bytes(payload.getvalue(), maximum_bytes=1024)
     assert caught.value.constraint == "invalid_mesh_array_size"
     assert caught.value.suggestions, "auch ein beschädigter Stand nennt einen Weg (Regel 17)"
+
+
+def test_a_long_session_can_be_stopped_while_it_is_applied(profile: Profile) -> None:
+    """Abbrechen wirkt während der Striche, nicht erst danach (§15.6).
+
+    Eine Sitzung mit tausenden Zügen ist ein Durchgang je Zug durch den
+    Suchbaum; bis zum 22.09.2026 fragte ``apply_strokes`` dabei nie nach dem
+    Abbruch, und der Knopf wirkte erst, wenn die Sitzung fertig war.
+    """
+    from app.core.errors import OperationCancelled
+
+    class StopsAfter:
+        """Ein Abbruch, der nach der ersten Frage ausgelöst ist."""
+
+        def __init__(self) -> None:
+            self.asked = 0
+
+        @property
+        def is_cancelled(self) -> bool:
+            return self.asked > 1
+
+        def raise_if_cancelled(self) -> None:
+            self.asked += 1
+            if self.asked > 1:
+                raise OperationCancelled
+
+    entry = SceneObject(id="obj_1", name="Kugel", mesh=ball())
+    strokes = [on_ball(float(np.cos(a)), float(np.sin(a)), 0.3) for a in np.linspace(0, 6, 60)]
+    spec = REGISTRY.get("sculpt_strokes")
+    token = StopsAfter()
+    with pytest.raises(OperationCancelled):
+        spec.fn(
+            OpContext(
+                scene=Scene(objects={entry.id: entry}),
+                inputs=[entry],
+                params=spec.params(strokes=strokes_to_text(strokes)),
+                profile=profile,
+                quality="fine",
+                seed=None,
+                progress=lambda fraction, text: None,
+                ask=lambda question, choices: choices[0],
+                cancelled=token,  # type: ignore[arg-type]
+            )
+        )
+    assert token.asked == 2, "gefragt wird zwischen den Zügen, und nach dem Abbruch nicht weiter"

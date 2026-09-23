@@ -14864,6 +14864,15 @@ class MainWindow(QMainWindow):
                 applied = self.session.create_lid(inputs[0], dict(params), op=spec.name)
                 self.report.add_findings(applied.findings)
                 return
+            if spec.name == "split_pinned" and (on_bodies or inputs):
+                # Wie der Deckel: *Teilen* geht über seinen Ablauf, damit jede
+                # Naht ihre Passungspaare in derselben Transaktion bekommt (§14).
+                split = self.session.split_pinned(
+                    list(on_bodies or inputs), dict(params), title=spec.title
+                )
+                self.report.add_findings(split.findings)
+                self._queue_split_reveal(tuple(split.object_ids[-2:]))
+                return
             count_before = len(self.session.project.document.ops)
             # Ein Schritt je Körper, alle in einer Transaktion: Die Operation
             # verbraucht einen (``consumes``), die Handlung meint zwölf.
@@ -15064,6 +15073,16 @@ class MainWindow(QMainWindow):
                         order.drafts[0].inputs[0], dict(order.drafts[0].params), op=picked.name
                     )
                     self.report.add_findings(applied.findings)
+                    return
+                if picked.name == "split_pinned" and order.drafts[0].inputs:
+                    # Derselbe Ablauf wie im Dialog ohne Vorschau: Passungen je Naht (§14).
+                    split = self.session.split_pinned(
+                        [draft.inputs[0] for draft in order.drafts],
+                        dict(order.drafts[0].params),
+                        title=picked.title,
+                    )
+                    self.report.add_findings(split.findings)
+                    self._queue_split_reveal(tuple(split.object_ids[-2:]))
                     return
                 if chosen_spool is not None and picked.name in {"assign_slot", "paint_slot"}:
                     if matches_spool(order.drafts[0].params):

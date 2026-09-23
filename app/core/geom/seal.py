@@ -194,7 +194,13 @@ def support_geometry(
     """
     from shapely.ops import unary_union
 
-    from app.core.geom.faces import _must_be_flat, _triangles_of, face_normal
+    from app.core.errors import CANCEL, CHANGE_SELECTION, GeometryError
+    from app.core.geom.faces import (
+        FLAT_ENOUGH_FOR_A_TOOL,
+        _must_be_flat,
+        _triangles_of,
+        face_normal,
+    )
     from app.core.geom.mesh import as_mesh_data
 
     if check_cancelled is not None:
@@ -212,7 +218,13 @@ def support_geometry(
     normal /= np.linalg.norm(normal)
     _must_be_flat(mesh, indices, normal)
     triangles = np.asarray(mesh.raw.triangles)[indices]
-    origin = triangles[0, 0]
+    # Der Ursprung ist die erste Ecke, auf die mittlere Ebene der Fläche
+    # gelegt: Eine eingelesene STL rundet eine schräge Fläche um ihre vier
+    # Byte je Koordinate, und die erste Ecke allein läge um dieses Rauschen
+    # neben der Ebene, auf der geschnitten wird. Starre Bewegungen führt die
+    # Projektion genauso mit wie die Ecke selbst.
+    middle = triangles.reshape(-1, 3).mean(axis=0)
+    origin = triangles[0, 0] - normal * float(np.dot(triangles[0, 0] - middle, normal))
     tangent = triangles[0, 1] - origin
     tangent -= normal * float(np.dot(tangent, normal))
     length = float(np.linalg.norm(tangent))
@@ -222,8 +234,14 @@ def support_geometry(
     second = np.cross(normal, tangent)
     basis = np.column_stack((tangent, second, normal))
     local = (triangles - origin) @ basis
-    if np.max(np.abs(local[:, :, 2])) > EPS_GEOM:
-        raise _signature_error()
+    if np.max(np.abs(local[:, :, 2])) > FLAT_ENOUGH_FOR_A_TOOL:
+        # Ein Satz über die Fläche und nicht über eine gespeicherte Wahl: Bis
+        # zum 22.09.2026 hieß es hier „Die gespeicherte Öffnungswahl ist nicht
+        # lesbar", auch beim ersten Klick, als es noch keine gab.
+        raise GeometryError(
+            detail=_("Für eine Dichtnut wählen Sie eine ebene Trägerfläche."),
+            suggestions=(CHANGE_SELECTION, CANCEL),
+        )
     projected = unary_union([_polygon(triangle[:, :2]) for triangle in local]).simplify(
         EPS_GEOM,
         preserve_topology=True,

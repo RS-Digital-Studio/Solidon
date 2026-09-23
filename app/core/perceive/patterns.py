@@ -2227,6 +2227,8 @@ def plug_for(
         prism = _extruded(polygon, height)
         if prism is None:
             continue
+        if frame.kind == "cylinder" and not raised and not through:
+            _widened_towards_the_axis(prism, polygon, height, frame.radius)
         prism.apply_translation((0.0, 0.0, lift if raised else lift - height))
         parts.append(prism)
     if not parts:
@@ -2446,6 +2448,32 @@ def _solid(geometry: Any) -> Any:
         if part.geom_type == "Polygon" and part.area > EPS_GEOM
     ]
     return unary_union(parts) if parts else geometry
+
+
+def _widened_towards_the_axis(prism: Any, polygon: Any, height: float, radius: float) -> None:
+    """Den Boden eines vertieften Stopfens um einen Zylinder so weit wie die Tasche dort.
+
+    In der Abwicklung ist ein Millimeter in der Tiefe ``d`` unter dem Mantel
+    ``R / (R - d)`` Millimeter breit: Eine Tasche mit **parallelen** Wänden —
+    gefräst, aus einer fremden Datei — wird zum Boden hin breiter, eine mit
+    radialen Wänden (so biegt ``apply_texture``) bleibt gleich. Bis zum
+    22.09.2026 blieb der Stopfen ein gerades Prisma über der Mündung; an
+    48 Taschen 3 auf 5 mm um einen Griff Ø 30 standen danach 96 eingeschlossene
+    Hohlräume von je 0,07 mm³ am Taschenboden. Der Boden wird deshalb um die
+    Mitte der Mündung um diesen Faktor gestreckt. Was er dabei mehr deckt, ist
+    Material unter dem Mantel — die Vereinigung ändert dort nichts.
+
+    ``prism`` steht auf Z = 0 (der Boden) bis ``height`` (die Mündung) und wird
+    an Ort und Stelle geändert.
+    """
+    if radius <= height + EPS_GEOM:
+        return
+    factor = radius / (radius - height)
+    centre = np.asarray(polygon.centroid.coords[0], dtype=float)
+    vertices = np.array(prism.vertices, dtype=float)
+    floor = vertices[:, 2] <= EPS_GEOM
+    vertices[floor, :2] = centre + (vertices[floor, :2] - centre) * factor
+    prism.vertices = vertices
 
 
 def _extruded(polygon: Any, height: float) -> Any:

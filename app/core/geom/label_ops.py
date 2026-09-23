@@ -390,7 +390,8 @@ def outlines(
 ) -> list[Any]:
     """Die Buchstaben als Polygone, in Millimetern, auf dem Ursprung sitzend."""
     from matplotlib.textpath import TextPath
-    from shapely.geometry import Polygon as ShapelyPolygon
+    from shapely import polygonize
+    from shapely.geometry import LineString
     from shapely.ops import unary_union
 
     path = TextPath((0.0, 0.0), text, size=size, prop=font_properties(font, style))
@@ -399,16 +400,47 @@ def outlines(
     if not rings:
         return []
 
-    # Ein Buchstabe wie „o" kommt als zwei Ringe, und welcher das Loch ist,
-    # folgt aus der Enthaltung, nicht aus der Reihenfolge des Zeichnens.
-    shapes = [ShapelyPolygon(entry).buffer(0) for entry in rings]
-    solid = None
-    for shape in sorted(shapes, key=lambda entry: -entry.area):
-        solid = shape if solid is None else solid.symmetric_difference(shape)
-    merged = unary_union([solid]) if solid is not None else None
+    # **Gefüllt wird nach der Umlaufzahl, wie die Schrift es meint.** Ein
+    # Buchstabe wie „o" kommt als zwei Ringe gegensinnigen Umlaufs, und das
+    # Loch ist, wo sie sich aufheben. Eine variable Schrift (Comfortaa,
+    # Dancing Script) legt ihre Striche außerdem übereinander und überlässt
+    # das Vereinigen dem Zeichnen. Bis zum 22.09.2026 stand hier eine
+    # symmetrische Differenz über alle Ringe — Parität statt Umlaufzahl —, und
+    # wo zwei Striche sich überlappten, blieb ein Loch: „Mama" in Comfortaa auf
+    # 10 mm verlor 2,4 mm², erhaben gedruckt standen Schlitze in den Buchstaben.
+    #
+    # Die Ränder aller Ringe werden verknotet und in Zellen zerlegt; jede Zelle
+    # bleibt, wenn die Umlaufzahl an einem ihrer inneren Punkte nicht null ist.
+    noded = unary_union([LineString(ring) for ring in rings])
+    cells = polygonize(list(getattr(noded, "geoms", [noded])))
+    kept = [
+        cell
+        for cell in getattr(cells, "geoms", [cells])
+        if cell.area > 0.0 and _winding(rings, cell.representative_point()) != 0
+    ]
+    merged = unary_union(kept) if kept else None
     if merged is None or merged.is_empty:
         return []
     return [entry for entry in getattr(merged, "geoms", [merged]) if entry.area > EPS_GEOM]
+
+
+def _winding(rings: Sequence[np.ndarray], point: Any) -> int:
+    """Wie oft die Ringe diesen Punkt umlaufen, mit Vorzeichen (Umlaufzahl).
+
+    Gezählt wird jede Kante, die die Waagerechte durch den Punkt kreuzt —
+    aufwärts links vom Punkt plus eins, abwärts rechts von ihm minus eins.
+    """
+    x, y = float(point.x), float(point.y)
+    total = 0
+    for ring in rings:
+        start, end = ring[:-1], ring[1:]
+        side = (end[:, 0] - start[:, 0]) * (y - start[:, 1]) - (x - start[:, 0]) * (
+            end[:, 1] - start[:, 1]
+        )
+        upward = (start[:, 1] <= y) & (end[:, 1] > y) & (side > 0.0)
+        downward = (start[:, 1] > y) & (end[:, 1] <= y) & (side < 0.0)
+        total += int(np.count_nonzero(upward)) - int(np.count_nonzero(downward))
+    return total
 
 
 def label_solid(shapes: list[Any], depth: float) -> MeshData | None:
@@ -547,8 +579,9 @@ class LabelParams(BaseParams):
         placement="advanced",
         kind="filament",
         doc=_(
-            "Legt die Schrift in einen eigenen Slot — der 3MF-Export macht daraus "
-            "den Farbwechsel, ohne zweite Datei."
+            "Legt die Schrift in einen eigenen Slot — erhaben die Buchstaben, vertieft "
+            "Wände und Boden der Rillen. Der 3MF-Export macht daraus den Farbwechsel, "
+            "ohne zweite Datei."
         ),
     )
     font: str = param(
@@ -741,6 +774,10 @@ def _too_fine(
 @register_op(
     name="label_text",
     result_kind="mesh",
+    # 2 seit dem 22.09.2026: Die Buchstaben füllen nach der Umlaufzahl
+    # (``outlines``) — überlappende Striche einer variablen Schrift bleiben voll
+    # —, und vertieft trägt die Schrift ihren Slot in den Rillen.
+    cache_version="2",
     title=_("Text aufbringen"),
     category="label",
     params=LabelParams,
@@ -781,12 +818,15 @@ def label_text(ctx: OpContext) -> OpResult:
     )
     body_mesh = as_mesh_data(source.mesh)
     slots = list(source.material_slots)
-    if params.slot and mode == "raised":
-        # §20: die Buchstaben tragen einen eigenen Slot in die Vereinigung,
-        # und die Attributübertragung der Booleschen Op bringt ihn auf der
-        # anderen Seite wieder heraus. Das macht aus einer zweifarbigen
-        # Beschriftung eine Datei statt zwei.
-        placed = with_slot(placed, params.slot)
+    if params.slot:
+        # §20: Erhaben tragen die Buchstaben einen eigenen Slot in die
+        # Vereinigung, und die Attributübertragung der Booleschen Op bringt ihn
+        # auf der anderen Seite wieder heraus. Vertieft bekommen die frisch
+        # geschnittenen Wände und Böden der Rillen den Slot (``cut_slot``) —
+        # bis zum 22.09.2026 stand das Feld dort ohne Wirkung. Beides macht
+        # aus einer zweifarbigen Beschriftung eine Datei statt zwei.
+        if mode == "raised":
+            placed = with_slot(placed, params.slot)
         if not body_mesh.slots:
             body_mesh = with_slot(body_mesh, 0)
         slots = _with_slot_named(slots, params.slot)
@@ -796,7 +836,7 @@ def label_text(ctx: OpContext) -> OpResult:
         kind,
         [body_mesh, placed],
         quality=ctx.quality,
-        cut_slot=0,
+        cut_slot=params.slot if mode == "engraved" else 0,
         cancelled=ctx.cancelled,
     )
 
@@ -903,6 +943,8 @@ class LabelBodyParams(BaseParams):
 
 @register_op(
     name="create_label",
+    # 2 seit dem 22.09.2026, aus demselben Grund wie bei ``label_text``.
+    cache_version="2",
     title=_("Schriftzug als Körper"),
     category="label",
     params=LabelBodyParams,
@@ -949,8 +991,17 @@ def create_label(ctx: OpContext) -> OpResult:
 
 
 def _with_slot_named(slots: list[MaterialSlot], index: int) -> list[MaterialSlot]:
-    """Fügt den Slot an, in den die Schrift kommt; ein schon benannter bleibt."""
+    """Fügt den Slot an, in den die Schrift kommt; ein schon benannter bleibt.
+
+    **Die Namen bleiben übersetzbar** und werden erst beim Anzeigen aufgelöst,
+    wie bei *Filament zuweisen*: Bis zum 22.09.2026 standen sie als
+    ``str(_(…))`` da, also in der Sprache, die beim Rechnen eingestellt war,
+    und der Ergebnis-Cache hielt sie dort fest. Und die Spule heißt
+    „Beschriftung", nicht „Schrift" — das Wort ist auch der Titel des Feldes,
+    in dem die Schriftart gewählt wird, und im Englischen stand deshalb
+    „Font" als Name eines Filaments.
+    """
     known = {entry.index: entry for entry in slots}
-    known.setdefault(0, MaterialSlot(index=0, name=str(_("Körper"))))
-    known.setdefault(index, MaterialSlot(index=index, name=str(_("Schrift"))))
+    known.setdefault(0, MaterialSlot(index=0, name=_("Körper")))
+    known.setdefault(index, MaterialSlot(index=index, name=_("Beschriftung")))
     return [known[key] for key in sorted(known)]

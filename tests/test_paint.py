@@ -830,7 +830,11 @@ def test_two_painted_slots_do_not_look_the_same(profile: Profile) -> None:
 
     entry = _with_top_face(SceneObject(id="obj_1", name="Deckel", mesh=plate()), (0, 1))
     first = run("paint_slot", entry, profile, slot=1, at_feature="face_1").outputs[0]
-    painted = run("paint_slot", first, profile, slot=2, at_feature="face_1").outputs[0]
+    # Eine **zweite** Fläche in den zweiten Slot: Dieselbe Fläche noch einmal
+    # zu färben ließe Slot 1 ohne Dreieck, und der fällt seit dem 22.09.2026
+    # aus der Liste (``merged_slots(..., used=...)``).
+    second = _with_top_face(first, (2, 3))
+    painted = run("paint_slot", second, profile, slot=2, at_feature="face_1").outputs[0]
 
     assert [slot.colour for slot in painted.material_slots] == [None, None], (
         "der Pinsel setzt keine Farbe — genau darum geht es hier"
@@ -869,6 +873,62 @@ def test_a_chosen_colour_wins_over_an_existing_slot() -> None:
     )
     weiss = next(s for s in mit_zweitem if s.index == 2)
     assert weiss.colour == (1.0, 1.0, 1.0), "fremde Filamente bleiben, wie sie waren"
+
+
+def test_the_slot_names_of_lettering_and_texture_follow_the_language(profile: Profile) -> None:
+    """Dieselbe Falle wie beim Vorgabenamen, an zwei weiteren Stellen.
+
+    *Text aufbringen* mit eigenem Slot legte „Körper" und „Schrift" als
+    ``str(_(…))`` ab, *Textur in Filamente umrechnen* seine Farben als
+    ``tr('Farbe')`` — beide in der Sprache, die beim Rechnen eingestellt war,
+    und der Ergebnis-Cache hielt sie dort fest. Dazu hieß die Spule der
+    Schrift im Englischen „Font": Das Wort ist dasselbe wie der Titel des
+    Feldes *Schrift*, gemeint war die Beschriftung.
+    """
+    import numpy as np
+
+    from app.i18n import SOURCE_LANGUAGE, get_language, set_language
+    from app.i18n.catalog import install_language
+
+    install_language("fr")
+    vorher = get_language()
+    try:
+        set_language("fr")
+        lettered = run(
+            "label_text",
+            SceneObject(id="obj_1", name="Platte", mesh=plate()),
+            profile,
+            text="M4",
+            size=8.0,
+            depth=0.6,
+            z=10.0,
+            slot=2,
+        ).outputs[0]
+        coloured = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
+        colours = np.zeros((len(coloured.faces), 4), dtype=np.uint8)
+        colours[:, 3] = 255
+        colours[: len(colours) // 2, 0] = 255
+        colours[len(colours) // 2 :, 2] = 255
+        coloured.visual.face_colors = colours
+        textured = run(
+            "slots_from_texture",
+            SceneObject(id="obj_2", name="Würfel", mesh=MeshData.of(coloured)),
+            profile,
+            filaments=2,
+        ).outputs[0]
+
+        set_language(SOURCE_LANGUAGE)
+        names = {entry.index: str(entry.name) for entry in lettered.material_slots}
+        assert names == {0: "Körper", 2: "Beschriftung"}, names
+        assert sorted(str(entry.name) for entry in textured.material_slots) == [
+            "Farbe 1",
+            "Farbe 2",
+        ]
+        set_language("fr")
+        assert str(lettered.material_slots[1].name) != "Beschriftung", "und wandert mit"
+        assert str(textured.material_slots[0].name) == "Couleur 1"
+    finally:
+        set_language(vorher)
 
 
 def test_a_default_slot_name_follows_the_language(profile: Profile) -> None:
@@ -922,3 +982,35 @@ def test_a_default_slot_name_follows_the_language(profile: Profile) -> None:
         assert str(zurueck) == "Slot 2", "und nach dem Umschalten in der neuen"
     finally:
         set_language(vorher)
+
+
+def test_a_filament_no_triangle_uses_any_more_leaves_the_body(profile: Profile) -> None:
+    """Was keine Fläche mehr trägt, steht nicht mehr in der Filamentliste des Körpers.
+
+    Bis zum 22.09.2026 hängten *Filament zuweisen*, *Filament auf eine
+    Fläche* und *Textur in Filamente umrechnen* ihre Wahl an die bisherige
+    Liste an und behielten alles andere: Wer ein Teil erst rot und dann blau
+    zuwies, trug danach Rot und Blau, und die 3MF-Baugruppe schrieb beide
+    als Filament — der Slicer fragte nach einer Spule, die kein Dreieck
+    braucht. *Filament entfernen* räumte schon auf; jetzt tun es alle vier.
+    """
+    from app.core.export.threemf import AssemblyPart, merge_slots
+    from app.core.geom.mesh import as_mesh_data
+
+    plain = SceneObject(id="obj_1", name="Platte", mesh=plate())
+    red = run("assign_slot", plain, profile, slot=1, name="Rot", colour="#ff0000").outputs[0]
+    blue = run("assign_slot", red, profile, slot=2, name="Blau", colour="#0000ff").outputs[0]
+    assert [slot.index for slot in blue.material_slots] == [2]
+
+    faced = _with_top_face(blue, tuple(range(as_mesh_data(blue.mesh).triangle_count)))
+    green = run(
+        "paint_slot", faced, profile, slot=3, name="Grün", colour="#00ff00", at_feature="face_1"
+    ).outputs[0]
+    assert [slot.index for slot in green.material_slots] == [3], "alle Flächen sind grün"
+
+    part = AssemblyPart(
+        name="Platte",
+        mesh=as_mesh_data(green.mesh),
+        slots=tuple(green.material_slots),
+    )
+    assert [str(slot.name) for slot in merge_slots([part])] == ["Grün"]

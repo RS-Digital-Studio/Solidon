@@ -19,6 +19,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from typing import Any
 
+from app.core.errors import ValidationError
 from app.core.geom.autosplit import SplitOutcome, split_to_fit
 from app.core.geom.mesh import MeshData
 from app.core.geom.pins import PIN_COUNT, feature_side, next_connector_index, plan_pins
@@ -40,7 +41,7 @@ from app.core.types import (
     SceneObject,
     TransactionId,
 )
-from app.i18n import _
+from app.i18n import TranslatableText, _
 
 _log = get_logger(__name__)
 
@@ -160,10 +161,20 @@ def plan_split(
     ]
     drafts = [
         OperationDraft(
-            op="split_pinned",
+            # Eine schiefe Ebene (RM-080, T3) geht als *An gezeichneter Linie
+            # trennen* in den Verlauf — derselbe Schnitt, eine freie Richtung.
+            op="split_pinned" if step.plane.normal is None else "split_line",
             inputs=(object_id,),
             params={
-                "axis": step.plane.axis,
+                **(
+                    {"axis": step.plane.axis}
+                    if step.plane.normal is None
+                    else {
+                        "normal_x": step.plane.normal[0],
+                        "normal_y": step.plane.normal[1],
+                        "normal_z": step.plane.normal[2],
+                    }
+                ),
                 "position": step.plane.position,
                 "pins": pins,
                 # Auto Split trifft diese Wahl aus den Messdaten der jeweiligen
@@ -174,6 +185,9 @@ def plan_split(
                 # getrennte Wert bewahrt nur den Handlungshinweis des
                 # automatischen Rückfalls über Speichern und Neuauswertung.
                 "glue_hint": step.connector_glue,
+                # Welche Hälfte die Stifte trägt, entschied das fertige
+                # Stützvolumen (RM-005) — gespeichert, nicht neu gesucht.
+                "pins_on_b": step.pins_on_b,
             },
         )
         for step in outcome.cuts
@@ -201,6 +215,7 @@ def fitting_pins(
     wanted: int,
     *,
     shape: str = "round",
+    diameter: float = 0.0,
     cancelled: CancelToken | None = None,
 ) -> int:
     """Wie viele Stifte an dieser Naht wirklich sitzen werden.
@@ -221,6 +236,10 @@ def fitting_pins(
     nichts widerlegt — und stumm auf null zu gehen wäre kein Vorsichtsmaß,
     sondern der Verlust der Passungen, die es vor dieser Änderung gab. Der
     Fall tritt auf, wenn noch keine Auswertung vorliegt.
+
+    ``diameter`` ist der Wunschdurchmesser der Operation (null: aus der
+    Fläche). Er geht in dieselbe Planung wie dort — ein dickerer Stift passt
+    an weniger Stellen, und die Zahl hier muss die der Operation sein.
     """
     if cancelled is not None:
         cancelled.raise_if_cancelled()
@@ -228,7 +247,7 @@ def fitting_pins(
         return 0
     if mesh is None:
         return wanted
-    plan = plan_pins(mesh, plane, count=wanted, shape=shape)
+    plan = plan_pins(mesh, plane, count=wanted, shape=shape, diameter=diameter or None)
     if cancelled is not None:
         cancelled.raise_if_cancelled()
     return plan.count
@@ -344,10 +363,13 @@ def apply_planned(
             # So viele Paare, wie Stifte sitzen — nicht so viele, wie
             # gewünscht waren. Eine zu schmale Schnittfläche bekommt keinen
             # Stift und deshalb auch keine Passung, die auf ihn zeigt.
+            pinned, drilled = (
+                (made[1], made[0]) if operation.params.get("pins_on_b") else (made[0], made[1])
+            )
             created.extend(
                 _pairs(
-                    made[0],
-                    made[1],
+                    pinned,
+                    drilled,
                     seated,
                     profile,
                     len(existing) + len(created),
@@ -373,6 +395,24 @@ def apply_planned(
     )
 
 
+@dataclass(frozen=True, slots=True)
+class SplitTarget:
+    """Ein Körper, der an einer Ebene geteilt wird — so, wie ihn die Auswertung zuletzt sah.
+
+    ``mesh`` entscheidet, wie viele Stifte wirklich sitzen
+    (:func:`fitting_pins`); ohne ihn gilt die gewünschte Zahl. ``features``
+    sind die Merkmale, an denen bestehende Passungen auf die richtige Hälfte
+    wandern (:func:`_retarget_fits`); ohne sie entfallen diese Passungen mit
+    Hinweis. ``profile`` ist das Profil **dieses** Körpers, falls er ein
+    eigenes Material trägt — sonst gilt das des Aufrufs.
+    """
+
+    object_id: ObjectId
+    mesh: MeshData | None = None
+    features: Mapping[FeatureId, Feature] | None = None
+    profile: Profile | None = None
+
+
 def apply_line_split(
     document: Document,
     object_id: ObjectId,
@@ -396,74 +436,155 @@ def apply_line_split(
     ohne ihn gilt die gewünschte Zahl, und das ist die alte, ungenauere
     Antwort.
     """
-    seated = fitting_pins(mesh, plane, pins, shape=shape)
-    kept, moving = _partition_fits(list(document.fits), object_id)
+    applied = _apply_plane_splits(
+        document,
+        "split_line",
+        {
+            "normal_x": plane.normal[0],
+            "normal_y": plane.normal[1],
+            "normal_z": plane.normal[2],
+            "position": plane.position,
+            "pins": pins,
+            "shape": shape,
+        },
+        plane,
+        profile,
+        [SplitTarget(object_id, mesh, features)],
+        title=_("An gezeichneter Linie trennen"),
+    )
+    _log.info("split along a drawn line into %d part(s)", len(applied.object_ids))
+    return applied
+
+
+def apply_pinned_split(
+    document: Document,
+    targets: Sequence[SplitTarget],
+    params: Mapping[str, Any],
+    profile: Profile,
+    *,
+    title: TranslatableText | str,
+) -> SplitApplied:
+    """*Teilen* aus dem Dialog — ein Schritt je Körper, mit Passungspaaren, eine Transaktion.
+
+    Bis zum 22.09.2026 legte der Dialog nur ``split_pinned`` an: Stifte und
+    Bohrungen entstanden, die Passung dazwischen nicht, und im Slicer fehlten
+    die Werte, die über das Zusammenstecken entscheiden. *Automatisch teilen*
+    und das Trennen-Werkzeug taten es längst. Jetzt gehen alle drei über
+    denselben Ablauf; ``params`` sind die Werte des Dialogs, unverändert im
+    Schritt.
+    """
+    from app.core.geom.section import AXIS_NORMALS
+
+    axis = str(params.get("axis", "z"))
+    if axis not in AXIS_NORMALS:
+        raise ValidationError(
+            field="axis",
+            detail=_("Geteilt wird quer zu einer der drei Achsen X, Y oder Z."),
+            value=axis,
+            constraint="known_axis",
+        )
+    plane = SectionPlane(
+        normal=AXIS_NORMALS[axis],
+        position=float(params.get("position", 0.0)),
+    )
+    applied = _apply_plane_splits(
+        document, "split_pinned", params, plane, profile, targets, title=title
+    )
+    _log.info(
+        "split %d body(ies) at %s into %d part(s)", len(targets), axis, len(applied.object_ids)
+    )
+    return applied
+
+
+def _apply_plane_splits(
+    document: Document,
+    op: str,
+    params: Mapping[str, Any],
+    plane: SectionPlane,
+    profile: Profile,
+    targets: Sequence[SplitTarget],
+    *,
+    title: TranslatableText | str,
+) -> SplitApplied:
+    """Der gemeinsame Ablauf von gezeichneter Linie und *Teilen*: Schnitt und Passungen in einem.
+
+    Je Körper ein Schritt ``op`` mit ``params``; die Passungen jeder Naht
+    bilden sich erst in ``change``, weil sie die Körper benennen, die der
+    Verlauf beim Anwenden vergibt. Bestehende Passungen eines geteilten
+    Körpers wandern mit ihrem Merkmal auf die richtige Hälfte oder entfallen
+    mit Hinweis.
+    """
+    pins = int(params.get("pins", PIN_COUNT))
+    shape = str(params.get("shape", "round"))
+    diameter = float(params.get("diameter", 0.0) or 0.0)
+    seated = [
+        fitting_pins(target.mesh, plane, pins, shape=shape, diameter=diameter) for target in targets
+    ]
+    kept = list(document.fits)
+    moving_of: list[list[Fit]] = []
     dropped: list[Fit] = []
-    if features is None:
-        dropped.extend(moving)
-        moving = []
-    feature_start = next_connector_index(features or {})
+    for target in targets:
+        kept, moving = _partition_fits(kept, target.object_id)
+        if target.features is None:
+            dropped.extend(moving)
+            moving = []
+        moving_of.append(moving)
     made: list[ObjectId] = []
     fits: list[Fit] = []
+    lost_here: list[Fit] = []
 
     def change(planned: Sequence[Any]) -> Any:
-        """Die Passungen dieser Naht — und die, die dabei entfallen.
+        """Die Passungen jeder Naht — und die, die dabei entfallen.
 
         In der Transaktion und nicht daneben: Ein Undo, das die Teilung
         zurücknimmt, muss auch die Passungen zurücknehmen, und ein Redo muss
         sie wiederbringen. Gebildet wird das erst hier, weil die Paare die
         Körper benennen, die es beim Aufruf noch nicht gab.
         """
-        made.extend(planned[0].outputs)
-        remapped, lost = _retarget_fits(
-            moving,
-            object_id,
-            made[0],
-            made[1],
-            features or {},
-            plane,
-        )
-        dropped.extend(lost)
-        surviving = [*kept, *remapped]
-        fits.extend(
-            _pairs(
-                made[0],
-                made[1],
-                seated,
-                profile,
-                len(surviving),
-                feature_start=feature_start,
-                taken=[entry.name for entry in (*surviving, *fits)],
+        made.clear()
+        fits.clear()
+        lost_here.clear()
+        surviving = list(kept)
+        for operation, target, moving, count in zip(
+            planned, targets, moving_of, seated, strict=True
+        ):
+            first, second = operation.outputs[0], operation.outputs[1]
+            made.extend((first, second))
+            remapped, lost = _retarget_fits(
+                moving, target.object_id, first, second, target.features or {}, plane
             )
-        )
+            lost_here.extend(lost)
+            surviving.extend(remapped)
+            if params.get("pins_on_b"):
+                first, second = second, first
+            fits.extend(
+                _pairs(
+                    first,
+                    second,
+                    count,
+                    target.profile or profile,
+                    len(surviving) + len(fits),
+                    feature_start=next_connector_index(target.features or {}),
+                    taken=[entry.name for entry in (*surviving, *fits)],
+                )
+            )
         return change_for(document, fits=[*surviving, *fits])
 
     history = History(document)
     applied = history.apply(
-        _("An gezeichneter Linie trennen"),
+        title,
         [
-            OperationDraft(
-                op="split_line",
-                inputs=(object_id,),
-                params={
-                    "normal_x": plane.normal[0],
-                    "normal_y": plane.normal[1],
-                    "normal_z": plane.normal[2],
-                    "position": plane.position,
-                    "pins": pins,
-                    "shape": shape,
-                },
-            )
+            OperationDraft(op=op, inputs=(target.object_id,), params=dict(params))
+            for target in targets
         ],
         Origin(by="user"),
         changes=change,
     )
-    _log.info("split along a drawn line into %d part(s)", len(made))
     return SplitApplied(
         object_ids=list(made),
-        fits=fits,
+        fits=list(fits),
         transaction=applied.id,
-        findings=[_fit_dropped(fit) for fit in dropped],
+        findings=[_fit_dropped(fit) for fit in (*dropped, *lost_here)],
     )
 
 

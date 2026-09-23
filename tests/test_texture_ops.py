@@ -102,6 +102,41 @@ def test_whole_face_texture_follows_a_rotated_corpus_plate() -> None:
     assert tool.bounds.size[0] > 20.0
 
 
+def test_whole_face_texture_takes_a_tilted_face_from_an_stl() -> None:
+    """Eine schräge Fläche aus einer STL ist eben, auch wenn float32 sie rundet.
+
+    Gemessen am 22.09.2026 an ``Wedge-Lock (Base).stl`` aus Roberts Modellen:
+    Die schräge Keilfläche (1 122 mm²) liegt nach dem Einlesen um 5·10⁻⁵ mm
+    neben ihrer Ebene — das Rundungsrauschen der vier Byte je Koordinate —,
+    und *Muster bis zum Rand* lehnte sie als „nicht eben" ab. Nachgestellt
+    wird derselbe Weg an der Lochplatte des Korpus: gekippt, als STL
+    geschrieben und über den Ladeweg der Anwendung wieder gelesen.
+    """
+    from pathlib import Path
+
+    import numpy as np
+    import trimesh
+
+    from app.core.ingest.loader import normalise, read_model
+
+    raw = trimesh.load_mesh(Path(__file__).parent / "data/meshes/plate_holes.stl")
+    rotation = trimesh.transformations.rotation_matrix(0.73, (1.0, 2.0, 0.0))
+    raw.apply_transform(rotation)
+    payload = raw.export(file_type="stl")
+    loaded = normalise(read_model(payload, ".stl"), "mm", weld_is_reading=True).mesh.raw
+    normal = rotation[:3, 2]
+    indices = np.flatnonzero(loaded.face_normals @ normal > 0.999999)
+    corners = loaded.triangles[indices].reshape(-1, 3)
+    noise = np.abs((corners - corners.mean(axis=0)) @ normal).max()
+    assert noise > 1e-6, "ohne Rundungsrauschen prüfte der Test nicht den Fall aus der STL"
+
+    source = _face_source(loaded, normal)
+    params = texture_ops.TextureParams(coverage="whole_face", face="top", pattern="rib", pitch=4.0)
+    tool = texture_ops.texture_tool(source, params, seed=8)
+    assert tool.raw.is_watertight
+    assert tool.bounds.size[0] > 20.0
+
+
 def test_whole_face_texture_requires_a_selected_face() -> None:
     import trimesh
 
@@ -953,3 +988,103 @@ def test_an_excessively_dense_wave_is_refused_before_allocating():
         pattern_shapes("wave", 10000, 10000, 0.1)
     assert caught.value.field == "pitch"
     assert caught.value.suggestions
+
+
+@pytest.mark.parametrize(
+    "pattern", ["rib", "wave", "knurl_straight", "hexagon", "knurl_diamond", "dimple"]
+)
+def test_a_pitch_narrower_than_two_walls_names_the_pitch_that_works(pattern: str) -> None:
+    """Eine Teilung, in der neben der Wand keine Zelle Platz hat, ist eine Absage an die Teilung.
+
+    ``cell_width_for`` begrenzt die Zellbreite so, dass zwischen zwei Zellen die
+    Wand des Druckers stehen bleibt. War die Teilung selbst kleiner als diese
+    Wand, kam bis zum 22.09.2026 eine **negative** Zellbreite heraus (-0,1 mm
+    bei Teilung 0,3 und Düse 0,4), und *Merkmal ändern* meldete darauf „die
+    Zellen sind schmaler als die Düse" mit dieser Zahl — ein Satz über das
+    falsche Feld mit einem Maß, das es nicht gibt.
+    """
+    with pytest.raises(ValidationError) as refused:
+        texture_ops.cell_width_for(pattern, 0.3, 0.2, wall=0.4)
+    assert refused.value.field == "pitch"
+    needed = refused.value.values["needed_mm"]
+    assert needed > 0.3
+    width = texture_ops.cell_width_for(pattern, needed, None, wall=0.4)
+    assert width is not None and width >= 0.4 - 1e-9, "die genannte Teilung trägt Zelle und Wand"
+
+
+def test_the_pitch_that_goes_around_is_the_one_checked_and_counted() -> None:
+    """Geprüft und genannt wird die Teilung, mit der wirklich gezeichnet wird.
+
+    Um einen Zylinder rückt ``wrap_pitch`` die Teilung auf einen Teiler des
+    Umfangs — bis zu einer halben Periode kleiner. Bis zum 22.09.2026 fragte
+    ``check_printable`` trotzdem die verlangte: Eine Teilung knapp über der
+    doppelten Düse geht um einen Umfang von 37,6 Teilungen mit 38 herum, die
+    Stege werden schmaler als die Düse — gezeichnet wurde ohne ein Wort. Und
+    der Befund zählte beim geraden Rändel Teilungen quer zu den Stegen, wo
+    entlang des Umfangs die Diagonale liegt: 99 statt 70 um Ø 30.
+    """
+    pitch = 2.0 * NOZZLE.smallest_detail * 1.006
+    diameter = pitch * 37.6 / math.pi
+    texture_ops.check_printable("rib", pitch, 0.6, NOZZLE)  # verlangt: druckbar
+    with pytest.raises(ValidationError) as refused:
+        _on_cylinder(
+            diameter,
+            pattern="rib",
+            pitch=pitch,
+            depth=0.6,
+            wrap="cylinder",
+            wrap_diameter=diameter,
+            width=40.0,
+            height=10.0,
+            nx=0.0,
+            ny=0.0,
+            nz=1.0,
+        )
+    assert refused.value.field == "pitch"
+
+    result = _on_cylinder(
+        30.0,
+        pattern="knurl_straight",
+        pitch=0.95,
+        depth=0.6,
+        wrap="cylinder",
+        wrap_diameter=30.0,
+        width=100.0,
+        height=10.0,
+        nx=0.0,
+        ny=0.0,
+        nz=1.0,
+    )
+    wrapped = next(f for f in result.findings if f.code == "texture.pitch_wrapped")
+    pitch = wrapped.values["pitch_mm"]
+    count = round(math.pi * 30.0 / (pitch * math.sqrt(2.0)))
+    assert f"{count} " in str(wrapped.message), str(wrapped.message)
+
+
+def test_a_turn_that_a_wrap_does_not_apply_is_not_offered_and_is_said() -> None:
+    """Die Drehung wirkt auf der Fläche, nicht um den Zylinder — und das steht da.
+
+    ``texture_tool`` legt ein umlaufendes Muster mit Winkel null auf; bis zum
+    23.09.2026 ging ein Wert im Feld *Drehung* dort ohne ein Wort verloren.
+    Ausgrauen lässt es sich nicht (beim Muster bis zum Rand gilt die Drehung,
+    und dort wirkt ``wrap`` nicht) — also sagt es der Satz am Feld, und die
+    Operation meldet es.
+    """
+    spec = {entry.name: entry for entry in texture_ops.TextureParams.spec()}
+    assert "Zylinder" in str(spec["angle"].doc)
+
+    result = _on_cylinder(
+        30.0,
+        pattern="rib",
+        pitch=3.0,
+        depth=0.6,
+        wrap="cylinder",
+        wrap_diameter=30.0,
+        width=20.0,
+        height=10.0,
+        angle=30.0,
+        nx=0.0,
+        ny=0.0,
+        nz=1.0,
+    )
+    assert "texture.angle_on_wrap" in [finding.code for finding in result.findings]

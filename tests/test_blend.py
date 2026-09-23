@@ -302,3 +302,63 @@ def test_draft_quality_is_coarser_than_fine(profile: Profile) -> None:
 
     assert draft.outputs[0].mesh.triangle_count < fine.outputs[0].mesh.triangle_count
     assert draft.outputs[0].mesh.is_watertight
+
+
+def test_both_filaments_come_through_the_blend(profile: Profile) -> None:
+    """Weich verschmelzen vernetzt neu — und trägt die Filamente hinüber (§20).
+
+    Das Rasterverfahren baut eine ganz neue Oberfläche, und
+    ``MeshData.replacing`` lässt eine Slotliste fallen, die nicht zur neuen
+    Dreieckszahl passt. Bis zum 22.09.2026 kam deshalb jedes verschmolzene
+    Teil einfarbig in Slot 0 heraus: ein roter Sockel mit blauem Turm wurde
+    grau, und die Filamentbeschreibung des Turms verschwand mit. Dieselbe
+    Pflicht wie nach der Voxelstufe (``operationen.md``): Wer neu vernetzt,
+    überträgt die Slots neu.
+    """
+    import dataclasses
+
+    from app.core.geom.attributes import used_slots, with_slot
+    from app.core.types import MaterialSlot
+
+    base = trimesh.creation.box(extents=(20.0, 20.0, 10.0))
+    tower = trimesh.creation.box(extents=(8.0, 8.0, 20.0))
+    tower.apply_translation((0.0, 0.0, 12.0))
+    spec = REGISTRY.get("blend_union")
+    entries = [
+        SceneObject(
+            id="obj_1",
+            name="Sockel",
+            mesh=with_slot(MeshData.of(base), 2),
+            material_slots=[MaterialSlot(index=2, name="Rot", colour=(1.0, 0.0, 0.0))],
+        ),
+        SceneObject(
+            id="obj_2",
+            name="Turm",
+            mesh=with_slot(MeshData.of(tower), 3),
+            material_slots=[MaterialSlot(index=3, name="Blau", colour=(0.0, 0.0, 1.0))],
+        ),
+    ]
+    result = spec.fn(
+        OpContext(
+            scene=Scene(objects={entry.id: entry for entry in entries}),
+            inputs=entries,
+            params=spec.params(radius=2.0, grid=1.0),
+            profile=profile,
+            quality="fine",
+            seed=None,
+            progress=lambda fraction, text: None,
+            ask=lambda question, choices: choices[0],
+            cancelled=NeverCancelled(),
+        )
+    )
+    body = result.outputs[0]
+    mesh = body.mesh
+    assert used_slots(mesh) == (2, 3)
+    centres = mesh.raw.triangles_center
+    slots = np.asarray(mesh.slots)
+    assert np.all(slots[centres[:, 2] < 2.0] == 2), "der Sockel bleibt rot"
+    assert np.all(slots[centres[:, 2] > 15.0] == 3), "der Turm bleibt blau"
+    assert [dataclasses.astuple(slot)[:2] for slot in body.material_slots] == [
+        (2, "Rot"),
+        (3, "Blau"),
+    ]

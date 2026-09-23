@@ -894,6 +894,9 @@ _CHOICE_NAMES: dict[str, TranslatableText] = {
     # Geist nach. Die Namen kommen aus dem Abbildungskatalog, der dieselben
     # Kacheln beschriftet — zwei Listen wären eine Frage der Zeit.
     **figures.TEXTURE_NAMES,
+    # Ein gelesenes Muster, das Solidon nicht selbst zeichnet — so steht es
+    # in *Merkmal ändern* vorbelegt, bis der Kunde einen der acht Stile wählt.
+    "other": _("Fremdes Muster"),
     # Und dieselbe Sorte Fund im selben Dialog eine Zeile tiefer: „Art:
     # raised", „Auflegen: flat". Über das ganze Register waren es
     # sechsundzwanzig Werte; ``tests/test_translations.py`` hält sie jetzt
@@ -1079,6 +1082,10 @@ _CHOICE_NOTES: dict[str, TranslatableText] = {
     "dimple": _("Kleine runde Vertiefungen — dezenter Halt ohne scharfe Kanten."),
     "voronoi": _("Unregelmäßige Zellen wie gesprungenes Glas — organisch, jedes Teil einzigartig."),
     "noise": _("Feines zufälliges Relief — kaschiert Schichtlinien und Fingerabdrücke."),
+    "other": _(
+        "Ein gelesenes Muster, das Solidon nicht selbst zeichnet. Wählen Sie einen der acht "
+        "Stile, dann wird es damit neu gesetzt."
+    ),
     "none": _("Nichts davon — es kommt nichts hinzu."),
     "xy": _("Jeder Zug wirkt gespiegelt auch jenseits der X- und der Y-Ebene."),
     "xz": _("Jeder Zug wirkt gespiegelt auch jenseits der X- und der Z-Ebene."),
@@ -1280,7 +1287,6 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "chain": _("Kette"),
     "changes": _("Änderungen"),
     "character": _("Zeichen"),
-    "check": _("Prüfung"),
     "choice": _("Wahl"),
     "choices": _("Auswahl"),
     "checked": _("Geprüft"),
@@ -1391,6 +1397,8 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "layer": _("Schicht"),
     "layer_height": _("Schichthöhe"),
     "layers": _("Schichten"),
+    # ``counterpart``: die größte Gewindegröße der Tabelle.
+    "largest": _("Größte Größe"),
     "least": _("Mindestens"),
     "limit": _("Grenze"),
     "loose": _("Lose Stücke"),

@@ -37,6 +37,7 @@ from app.core.registry import op_params, param, register_op
 from app.core.types import (
     ORDERED_TOOLS,
     BaseParams,
+    CancelToken,
     Finding,
     OpContext,
     OpResult,
@@ -136,13 +137,20 @@ def _neighbours(mesh: trimesh.Trimesh, count: int) -> tuple[np.ndarray, np.ndarr
 
 
 def _offsets(
-    mesh: MeshData, strokes: Iterable[Stroke], missed: list[Stroke] | None = None
+    mesh: MeshData,
+    strokes: Iterable[Stroke],
+    missed: list[Stroke] | None = None,
+    cancelled: CancelToken | None = None,
 ) -> np.ndarray:
     """Das Offsetfeld einer Etappe: alle Striche summiert, ein Durchgang.
 
     ``missed`` sammelt die Striche, die keinen einzigen Eckpunkt greifen —
     hier und nicht anderswo, weil die Kugelabfrage es ohnehin feststellt.
     Was daraus wird, steht in ``_sculpting_findings``.
+
+    ``cancelled`` wird vor jedem Zug gefragt (§15.6): Eine Sitzung mit
+    tausenden Zügen ist ein Suchlauf je Zug, und bis zum 22.09.2026 wirkte der
+    Abbrechen-Knopf erst, wenn alle gerechnet waren.
     """
     body = mesh.raw
     points = np.asarray(body.vertices, dtype=float)
@@ -162,6 +170,8 @@ def _offsets(
         curvature = np.einsum("ij,ij->i", middle - points, normals)
 
     for stroke in strokes:
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
         touched = False
         for centre, direction in _mirrored(stroke):
             near, weight = _weights(tree, points, centre, stroke.radius)
@@ -243,7 +253,11 @@ def stroke_at(
 
 
 def apply_strokes(
-    mesh: MeshData, strokes: Sequence[Stroke], missed: list[Stroke] | None = None
+    mesh: MeshData,
+    strokes: Sequence[Stroke],
+    missed: list[Stroke] | None = None,
+    *,
+    cancelled: CancelToken | None = None,
 ) -> MeshData:
     """Die ganze Strichliste auswerten — Etappe für Etappe, jede in einem Zug.
 
@@ -257,7 +271,7 @@ def apply_strokes(
     body = mesh.raw
     for part in stages(strokes):
         moved = np.asarray(body.vertices, dtype=float) + _offsets(
-            mesh.replacing(body), part, missed
+            mesh.replacing(body), part, missed, cancelled
         )
         body = trimesh.Trimesh(vertices=moved, faces=body.faces, process=False)
     return mesh.replacing(body)
@@ -410,7 +424,7 @@ def sculpt_strokes(ctx: OpContext) -> OpResult:
         strokes = [replace(stroke, symmetry=stroke.symmetry | extra) for stroke in strokes]
 
     missed: list[Stroke] = []
-    after = apply_strokes(before, strokes, missed)
+    after = apply_strokes(before, strokes, missed, cancelled=ctx.cancelled)
     findings = _sculpting_findings(before, after, strokes, source.id, missed, ctx.profile)
     return OpResult(outputs=[dataclasses.replace(source, mesh=after)], findings=findings)
 

@@ -24,11 +24,12 @@ Näherung wieder zusammenzukleben ergibt ein genähertes Teil (§11.1).
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Final
 
 import numpy as np
 
+from app.core import units
 from app.core.build_area import placement_offset, printable_area, printable_height
 from app.core.deferred import trimesh
 from app.core.errors import PROGRAMMING_ERRORS
@@ -38,7 +39,7 @@ from app.core.geom.orient import NoFittingOrientationError
 from app.core.geom.section import AXIS_NORMALS, Axis, SectionPlane
 from app.core.log import get_logger
 from app.core.slice.analysis import cross_sections
-from app.core.slice.orientation import SUPPORT_TIE, best_face_candidate
+from app.core.slice.orientation import SUPPORT_TIE, best_face_candidate, stands
 from app.core.types import CancelToken, Finding, Profile, ProgressFn, Vec3
 from app.core.units import EPS_GEOM, is_close
 from app.i18n import _
@@ -108,6 +109,18 @@ PROFILE_PLATEAU = 0.08
 #: die konvexe Zerlegung wird um eine zweite Meinung gebeten.
 HINT_THRESHOLD = 0.3
 
+#: Um welche Winkel der Normalenfächer der schiefen Ebenen gegen die
+#: Schnittachse kippt (RM-080, T3) — als Ecken eines 24-Ecks, also 15, 30 und
+#: 45 Grad aus ganzen Zahlen (:func:`units.circle_point`) und damit auf jeder
+#: Maschine dieselben Richtungen. Gekippt wird zu beiden Nachbarachsen, in
+#: beide Richtungen: zwölf Normalen.
+TILT_STEPS: Final = (1, 2, 3)
+
+#: Wie viele Lagen je gekippter Richtung abgetastet werden. Weniger als bei den
+#: Achsen, weil es zwölf Richtungen sind und der Fächer nur fragt, wo die
+#: achsparallelen Ebenen alle mittelmäßig sind.
+TILT_SAMPLES: Final = 17
+
 #: Wie viel der nutzbaren Länge der erste Schnitt von einem Körper nimmt, der
 #: mehr als doppelt zu lang ist. Nicht die volle Länge: die Suche braucht
 #: Raum für eine Naht, und ein exakt auf die Grenze geschnittenes Stück lässt
@@ -133,10 +146,22 @@ class Candidate:
     area: float
     contours: int
     score: float
+    pins_on_b: bool = False
+    """Ob die Hälfte auf der größeren Seite die Stifte trägt (RM-005).
+
+    Gesetzt von :func:`_best_by_support`, wenn diese Zuordnung am fertigen
+    Stützvolumen gewinnt; die Nahtbewertung davor kennt sie nicht."""
+    normal: Vec3 | None = None
+    """Die Richtung einer schiefen Ebene (RM-080, T3) — ``None`` heißt quer zu
+    ``axis``. ``axis`` bleibt die Achse, die das Stück zu lang machte und die
+    der Schnitt verkürzt."""
 
     @property
     def plane(self) -> SectionPlane:
-        return SectionPlane(normal=AXIS_NORMALS[self.axis], position=self.position)
+        return SectionPlane(
+            normal=self.normal if self.normal is not None else AXIS_NORMALS[self.axis],
+            position=self.position,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -170,6 +195,8 @@ class Step:
     """
     connector_glue: bool = False
     """Ob die automatische Wahl auf Rundstifte mit Kleber zurückfiel."""
+    pins_on_b: bool = False
+    """Ob Hälfte B die Stifte trägt — die Wahl am fertigen Stützvolumen (RM-005)."""
 
 
 @dataclass(slots=True)
@@ -448,7 +475,7 @@ def split_to_fit(
         # neuen Schnitts auf der Schnittachse dazu. Auf **beide**, weil erst der
         # nächste Schnitt entscheidet, welche die knappe wird — der sichere
         # Fehler ist, einer zu viel Reserve zu geben, nicht einer zu wenig.
-        child = _add_on_axis(reserve, axis, allowance)
+        child = _add_along(reserve, candidate, allowance)
         reserves[index : index + 1] = [child, child]
         outcome.cuts.append(
             Step(
@@ -457,6 +484,7 @@ def split_to_fit(
                 source=part,
                 connector_shape=connector_shape,
                 connector_glue=connector_glue,
+                pins_on_b=candidate.pins_on_b and pins > 0,
             )
         )
         _log.info("split along %s at %.2f mm", candidate.axis, candidate.position)
@@ -501,6 +529,22 @@ def _add_on_axis(reserve: Vec3, axis: Axis, extra: float) -> Vec3:
     values = list(reserve)
     values["xyz".index(axis)] += extra
     return (values[0], values[1], values[2])
+
+
+def _add_along(reserve: Vec3, candidate: Candidate, extra: float) -> Vec3:
+    """Die Zugabe je Achse nach diesem Schnitt — bei einer schiefen Ebene anteilig.
+
+    Ein Stift steht entlang der Normalen über die Naht; auf jede Achse fällt
+    davon der Betrag ihrer Komponente. Quer zu einer Achse ist das die alte
+    Rechnung.
+    """
+    if candidate.normal is None:
+        return _add_on_axis(reserve, candidate.axis, extra)
+    return (
+        reserve[0] + abs(candidate.normal[0]) * extra,
+        reserve[1] + abs(candidate.normal[1]) * extra,
+        reserve[2] + abs(candidate.normal[2]) * extra,
+    )
 
 
 def _pin_allowance(
@@ -689,6 +733,30 @@ def search_plane(
             blocked,
         )
 
+    # **Schiefe Ebenen** (RM-080, T3): Wo keine achsparallele Ebene
+    # überzeugt, fragt die Suche einen Fächer gekippter Richtungen — dieselbe
+    # Bewertung, dieselbe Sperre, und nur Lagen, die beide Hälften entlang der
+    # Achse aufs Bett bringen. Am Z aus zwei Stäben und einer Strebe schnitt
+    # jede achsparallele Ebene zwei oder drei Konturen; quer zur Strebe eine.
+    #
+    # **Eine schiefe Naht muss etwas besser machen, das zählt**: weniger
+    # Konturen als jede achsparallele. Bei gleicher Konturzahl bleibt es
+    # achsparallel — eine gerade Schnittfläche legt sich ohne Umweg aufs Bett,
+    # und eine um Hundertstel bessere Punktzahl ist keine andere Naht. Gemessen
+    # am Schraubendreherhalter auf einem 120er Bett: ohne diese Bedingung
+    # gewann eine um 15 Grad gekippte Naht mit 0,398 gegen die achsparallele,
+    # beide mit einer Kontur.
+    upright_best = min((entry.contours for entry in candidates), default=None)
+    for entry in _tilted(mesh, profile, axis, allowance, cancelled=cancelled):
+        if upright_best is not None and entry.contours >= upright_best:
+            continue
+        if cuts_through(entry.plane, protect):
+            blocked += 1
+            continue
+        candidates.append(entry)
+    if progress is not None:
+        progress(0.25, str(_("Die Trennebenen werden gesucht …")))
+
     # Nichts Überzeugendes unter den abgetasteten Ebenen: die Zerlegung
     # fragen, wo der Körper von selbst auseinanderfällt, und diese Position
     # nach denselben Regeln beurteilen. Sie ist der zweite teure Schritt, also
@@ -722,9 +790,108 @@ def search_plane(
     )
 
 
-def _candidate_order(candidate: Candidate) -> tuple[float, str, float]:
-    """Stabile Reihenfolge der billigen Nahtbewertung."""
-    return (candidate.score, candidate.axis, candidate.position)
+def _candidate_order(
+    candidate: Candidate,
+) -> tuple[float, str, tuple[float, ...], float]:
+    """Stabile Reihenfolge der billigen Nahtbewertung — achsparallel vor schief bei Gleichstand."""
+    return (
+        candidate.score,
+        candidate.axis,
+        tuple(candidate.normal) if candidate.normal is not None else (),
+        candidate.position,
+    )
+
+
+def tilted_normals(axis: Axis) -> tuple[Vec3, ...]:
+    """Der Fächer schiefer Richtungen um eine Achse (T3) — zwölf, auf jeder Maschine dieselben.
+
+    Gekippt um 15, 30 und 45 Grad (:data:`TILT_STEPS`) zu jeder der beiden
+    Nachbarachsen, in beide Richtungen. Die Komponente entlang ``axis`` ist
+    immer positiv: Eine Ebene und ihre Gegenrichtung sind dieselbe Ebene.
+    """
+    index = "xyz".index(axis)
+    others = [other for other in range(3) if other != index]
+    found: list[Vec3] = []
+    for step in TILT_STEPS:
+        along, across = units.circle_point(24, step)
+        for other in others:
+            for sign in (1.0, -1.0):
+                values = [0.0, 0.0, 0.0]
+                values[index] = along
+                values[other] = sign * across
+                found.append((values[0], values[1], values[2]))
+    return tuple(found)
+
+
+def _tilted(
+    mesh: MeshData,
+    profile: Profile,
+    axis: Axis,
+    allowance: float,
+    *,
+    cancelled: CancelToken | None = None,
+) -> list[Candidate]:
+    """Die bewerteten Lagen des Normalenfächers, die beide Hälften aufs Bett bringen.
+
+    Je Richtung :data:`TILT_SAMPLES` Lagen über die Ausdehnung des Körpers in
+    dieser Richtung (fünf Prozent Rand wie bei den Achsen). Behalten wird nur,
+    was entlang ``axis`` beide Hälften samt Stiftzugabe unter die Grenze des
+    Betts bringt — dieselbe Frage, die :func:`_window` für eine Achse stellt.
+    Die Ausdehnung einer Hälfte kommt aus ihren Ecken und den Punkten, an denen
+    Kanten die Ebene kreuzen: genau, ohne zu schneiden.
+    """
+    index = "xyz".index(axis)
+    limit = _limits(profile)[index]
+    vertices = np.asarray(mesh.raw.vertices, dtype=float)
+    edges = np.asarray(mesh.raw.edges_unique, dtype=np.int64)
+    found: list[Candidate] = []
+    for normal in tilted_normals(axis):
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        direction = np.asarray(normal, dtype=float)
+        heights = vertices @ direction
+        low, high = float(heights.min()), float(heights.max())
+        inset = (high - low) * 0.05
+        positions = np.linspace(low + inset, high - inset, TILT_SAMPLES)
+        room = limit - allowance * abs(normal[index])
+        usable = [
+            float(position)
+            for position in positions
+            if all(
+                extent <= room + EPS_GEOM
+                for extent in _half_extents(vertices, edges, heights, float(position), index)
+            )
+        ]
+        if not usable:
+            continue
+        found.extend(
+            entry
+            for entry in _judge(mesh, axis, np.asarray(usable), cancelled=cancelled, normal=normal)
+            if entry.area > EPS_GEOM
+        )
+    return found
+
+
+def _half_extents(
+    vertices: np.ndarray, edges: np.ndarray, heights: np.ndarray, position: float, index: int
+) -> tuple[float, float]:
+    """Die Ausdehnung beider Hälften entlang einer Achse, ohne zu schneiden.
+
+    Eine Hälfte reicht so weit wie ihre Ecken und die Punkte, an denen Kanten
+    die Ebene kreuzen — dort beginnt die Schnittfläche.
+    """
+    first = heights <= position
+    crossing = first[edges[:, 0]] != first[edges[:, 1]]
+    ends = edges[crossing]
+    share = (position - heights[ends[:, 0]]) / (heights[ends[:, 1]] - heights[ends[:, 0]])
+    seam = vertices[ends[:, 0], index] + share * (
+        vertices[ends[:, 1], index] - vertices[ends[:, 0], index]
+    )
+    extents = []
+    for side in (first, ~first):
+        values = np.concatenate([vertices[side, index], seam])
+        extents.append(float(values.max() - values.min()) if len(values) else 0.0)
+    return extents[0], extents[1]
 
 
 def _best_by_support(
@@ -749,21 +916,29 @@ def _best_by_support(
     ``plan_pins`` entscheidet die konkrete Verbinderform aus den Nahtdaten,
     ``add_pins`` setzt sie in beide Hälften. So darf ein großer
     Schwalbenschwanz die Rangfolge nicht erst nach der Suche umkehren.
+
+    **Und welche Hälfte die Stifte trägt, gehört zur selben Frage** (RM-005):
+    Die Stifte stehen über die Naht, und die Hälfte mit ihnen kann nicht mehr
+    auf der Naht liegen. Gemessen am Balken mit zwei gekreuzten Überhängen:
+    Bei x = -2 kosten die Stifte an A 242 402 mm³ Stützen, an B 23 883; an der
+    gewählten Naht x = 3,25 sind es 3 754 gegen 3 298. Beide Zuordnungen
+    werden deshalb fertig gebaut und gestellt; B gewinnt nur mit derselben
+    Fünf-Prozent-Grenze, mit der eine Naht die andere schlägt — sonst bleibt
+    es bei A, wie bisher.
     """
-    shortlist = sorted(candidates, key=_candidate_order)[: max(1, plane_candidates)]
-    best = shortlist[0]
-    best_support = _support_after_cut(
-        mesh,
-        best,
-        profile,
-        orientation_candidates=orientation_candidates,
-        cancelled=cancelled,
-        connector_count=connector_count,
-    )
-    if progress is not None:
-        progress(0.25 + 0.75 / len(shortlist), str(_("Ausrichtung suchen")))
-    for index, candidate in enumerate(shortlist[1:], start=2):
-        support = _support_after_cut(
+    # **Gut heißt zuerst: so wenige Konturen wie möglich.** Eine Naht durch
+    # zwei Brücken ist keine gute Naht, auch wenn ihre Hälften weniger Stützen
+    # brauchen — das Stützvolumen entscheidet zwischen gleichwertigen Nähten,
+    # es kauft keine zweite Klebestelle. Seit dem Normalenfächer (T3) stehen
+    # Nähte verschiedener Konturzahl in derselben Liste: Am Z aus zwei Stäben
+    # schlug eine schiefe Naht durch zwei Stäbe die durch die Strebe allein.
+    fewest = min(candidate.contours for candidate in candidates)
+    good = [candidate for candidate in candidates if candidate.contours == fewest]
+    shortlist = sorted(good, key=_candidate_order)[: max(1, plane_candidates)]
+
+    def judged(candidate: Candidate) -> tuple[Candidate, float]:
+        """Die bessere Zuordnung der Stifte an dieser Naht, und ihr Stützvolumen."""
+        on_a = _support_after_cut(
             mesh,
             candidate,
             profile,
@@ -771,6 +946,28 @@ def _best_by_support(
             cancelled=cancelled,
             connector_count=connector_count,
         )
+        if connector_count <= 0:
+            return candidate, on_a
+        on_b = _support_after_cut(
+            mesh,
+            candidate,
+            profile,
+            orientation_candidates=orientation_candidates,
+            cancelled=cancelled,
+            connector_count=connector_count,
+            pins_on_b=True,
+        )
+        if np.isfinite(on_b) and (
+            not np.isfinite(on_a) or on_b < on_a - max(on_a, on_b, EPS_GEOM) * SUPPORT_TIE
+        ):
+            return replace(candidate, pins_on_b=True), on_b
+        return candidate, on_a
+
+    best, best_support = judged(shortlist[0])
+    if progress is not None:
+        progress(0.25 + 0.75 / len(shortlist), str(_("Ausrichtung suchen")))
+    for index, raw in enumerate(shortlist[1:], start=2):
+        candidate, support = judged(raw)
         if not np.isfinite(best_support) and np.isfinite(support):
             best, best_support = candidate, support
         elif np.isfinite(support):
@@ -790,13 +987,15 @@ def _support_after_cut(
     orientation_candidates: int,
     cancelled: CancelToken | None,
     connector_count: int = 0,
+    pins_on_b: bool = False,
 ) -> float:
     """Internes Stützvolumen der zwei fertigen, unabhängig gestellten Stücke.
 
     ``connector_count=0`` misst bewusst die nackten Hälften für Diagnose und
     Vergleichstests. Ein positiver Wert plant dagegen mit T4 dieselbe
     automatische Form wie der spätere Auto-Split-Schritt und beurteilt deren
-    wirklich hinzugefügte bzw. abgetragene Geometrie.
+    wirklich hinzugefügte bzw. abgetragene Geometrie. ``pins_on_b`` setzt
+    die Stifte an die zweite Hälfte, wie ``split_pinned`` es dann tut.
     """
     if cancelled is not None:
         cancelled.raise_if_cancelled()
@@ -823,6 +1022,9 @@ def _support_after_cut(
         plan = plan_pins(mesh, candidate.plane, count=connector_count, shape=AUTO)
         if cancelled is not None:
             cancelled.raise_if_cancelled()
+        if pins_on_b:
+            first, second = second, first
+            plan = replace(plan, normal=(-plan.normal[0], -plan.normal[1], -plan.normal[2]))
         pair = add_pins(
             first,
             second,
@@ -850,6 +1052,15 @@ def _support_after_cut(
         except NoFittingOrientationError:
             # Ein zu großes Zwischenstück kann weitere Schnitte brauchen;
             # sein unbekannter Stützbedarf ist niemals null.
+            return float("inf")
+        if not stands(orientation, profile.smallest_first_layer):
+            # **Eine Lage, die nicht steht, ist kein Preis.** ``best_of`` nimmt
+            # eine solche nur, wenn keine der vorgewählten Lagen steht, und
+            # ihr Stützvolumen ist dann eine Zahl über eine Kante: Am Balken
+            # mit gekreuzten Überhängen stand die Hälfte B bei x = -6,5 auf
+            # 1,4 mm² und „kostete" 2 988 mm³ — billiger als jede Naht, die
+            # die Überhänge trennt (gemessen am 22.09.2026, RM-005). Unbekannt
+            # heißt hier wie oben: niemals billig.
             return float("inf")
         total += orientation.support_volume
     return total
@@ -906,6 +1117,7 @@ def _sections_in_blocks(
     axis: Axis,
     positions: np.ndarray,
     cancelled: CancelToken | None,
+    normal: Vec3 | None = None,
 ) -> list[Any]:
     """Die Querschnitte zu allen Positionen — in Blöcken, damit dazwischen
     jemand aufhören darf.
@@ -916,9 +1128,10 @@ def _sections_in_blocks(
     wieder zusammengelegt — nicht blockweise hintereinander, sonst stünde die
     Bewertung gleich daneben vor der falschen Nachbarschaft.
     """
+    direction = normal if normal is not None else AXIS_NORMALS[axis]
     if cancelled is None:
         heights = np.concatenate([positions - PRISM_STEP, positions, positions + PRISM_STEP])
-        return sections_along(mesh, axis, heights)
+        return sections_across(mesh, direction, heights)
 
     below: list[Any] = []
     middle: list[Any] = []
@@ -926,8 +1139,8 @@ def _sections_in_blocks(
     for start in range(0, len(positions), JUDGE_BLOCK):
         cancelled.raise_if_cancelled()
         chunk = positions[start : start + JUDGE_BLOCK]
-        cut = sections_along(
-            mesh, axis, np.concatenate([chunk - PRISM_STEP, chunk, chunk + PRISM_STEP])
+        cut = sections_across(
+            mesh, direction, np.concatenate([chunk - PRISM_STEP, chunk, chunk + PRISM_STEP])
         )
         size = len(chunk)
         below.extend(cut[:size])
@@ -941,6 +1154,7 @@ def _notch_depth(
     axis: Axis,
     *,
     cancelled: CancelToken | None = None,
+    normal: Vec3 | None = None,
 ) -> Callable[[float], float]:
     """Baut die Auskunft „wie tief ist die Einschnürung hier".
 
@@ -968,9 +1182,10 @@ def _notch_depth(
     ``PRISM_WEIGHT``-Term, der über ``PRISM_STEP`` misst; genau deshalb bekam
     eine Hantel mit 201 mm² Hals die bestmögliche Punktzahl.
     """
-    index = "xyz".index(axis)
-    low = float(mesh.bounds.minimum[index]) + PRISM_STEP
-    high = float(mesh.bounds.maximum[index]) - PRISM_STEP
+    direction = normal if normal is not None else AXIS_NORMALS[axis]
+    heights = np.asarray(mesh.raw.vertices, dtype=float) @ np.asarray(direction, dtype=float)
+    low = float(heights.min()) + PRISM_STEP
+    high = float(heights.max()) - PRISM_STEP
     if high <= low:
         return lambda _position: 0.0
 
@@ -981,7 +1196,7 @@ def _notch_depth(
     # kosten drei Millisekunden, also fragt sie sie in einem Zug.
     if cancelled is not None:
         cancelled.raise_if_cancelled()
-    sections = sections_along(mesh, axis, stations)
+    sections = sections_across(mesh, direction, stations)
     areas = [
         float(entry.area) if entry is not None and not entry.is_empty else 0.0 for entry in sections
     ]
@@ -1017,6 +1232,7 @@ def _judge(
     positions: np.ndarray,
     *,
     cancelled: CancelToken | None = None,
+    normal: Vec3 | None = None,
 ) -> list[Candidate]:
     """Schneidet den Körper an jeder Kandidatenposition und bewertet, was
     herauskommt.
@@ -1026,18 +1242,23 @@ def _judge(
     einem großen Netz die Minute, die der Nutzer wartet. Zwischen den Blöcken
     liegt die Abfrage; die Bewertung danach ist billig.
     """
-    sections = _sections_in_blocks(mesh, axis, positions, cancelled)
+    sections = _sections_in_blocks(mesh, axis, positions, cancelled, normal)
     count = len(positions)
     below, middle, above = sections[:count], sections[count : 2 * count], sections[2 * count :]
 
-    index = "xyz".index(axis)
-    centre = float(mesh.bounds.centre[index])
-    span = float(mesh.bounds.size[index]) or 1.0
+    if normal is None:
+        index = "xyz".index(axis)
+        centre = float(mesh.bounds.centre[index])
+        span = float(mesh.bounds.size[index]) or 1.0
+    else:
+        heights = np.asarray(mesh.raw.vertices, dtype=float) @ np.asarray(normal, dtype=float)
+        centre = float(heights.min() + heights.max()) / 2.0
+        span = float(heights.max() - heights.min()) or 1.0
 
     # Die Einschnürung wird über die **ganze** Achse gemessen, nicht im
     # Suchfenster: Darin sehen eine prismatische Taille und eine Mulde gleich
     # aus. Dreizehn zusätzliche Schnitte, gemessen drei Millisekunden.
-    depth_at = _notch_depth(mesh, axis, cancelled=cancelled)
+    depth_at = _notch_depth(mesh, axis, cancelled=cancelled, normal=normal)
 
     judged: list[Candidate] = []
     for position, under, here, over in zip(positions, below, middle, above, strict=True):
@@ -1060,6 +1281,7 @@ def _judge(
                     + BALANCE_WEIGHT * balance
                     + NOTCH_WEIGHT * depth_at(float(position))
                 ),
+                normal=normal,
             )
         )
     return judged

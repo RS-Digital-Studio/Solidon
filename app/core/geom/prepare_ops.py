@@ -221,7 +221,7 @@ def _own_notes() -> frozenset[str]:
 
 
 def half_names(
-    base: TranslatableText | str, *, pinned: bool
+    base: TranslatableText | str, *, pinned: bool, pins_on_b: bool = False
 ) -> tuple[TranslatableText | str, TranslatableText | str]:
     """Wie die beiden Stücke heißen.
 
@@ -239,6 +239,9 @@ def half_names(
     bleibt eine Zeichenkette; mit Stiften trägt er den Zusatz der Anwendung und
     ist übersetzbar. Wer ihn anzeigt, nimmt ``str(...)``; wer ihn in einen
     Dateinamen schreibt, ``source_text``.
+
+    ``pins_on_b`` sagt, dass B die Stifte trägt (RM-005) — dann tauschen die
+    Zusätze, die Buchstaben bleiben, wo die Hälften liegen.
     """
     # Ab hier wörtlich: Wie die Hälften heißen, entsteht beim Trennen, und was
     # dabei entsteht, gehört dem Nutzer — dieselbe Regel wie beim Namen einer
@@ -255,6 +258,11 @@ def half_names(
             stem = head
     if not pinned:
         return f"{stem} A", f"{stem} B"
+    if pins_on_b:
+        return (
+            _("{name} · Löcher", name=f"{stem} A"),
+            _("{name} · Stifte", name=f"{stem} B"),
+        )
     return (
         _("{name} · Stifte", name=f"{stem} A"),
         _("{name} · Löcher", name=f"{stem} B"),
@@ -3359,7 +3367,9 @@ class RemoveFeatureParams(BaseParams):
 
 @register_op(
     name="remove_feature",
-    cache_version="4",
+    # 5 seit dem 23.09.2026: Ein Musterstopfen um einen Zylinder füllt auch
+    # Taschen mit parallelen Wänden bis zum Boden (``patterns.plug_for``).
+    cache_version="5",
     title=_("Merkmal entfernen"),
     category="holes",
     params=RemoveFeatureParams,
@@ -4172,12 +4182,38 @@ class ResizeFeatureParams(BaseParams):
             "Null lässt sie unverändert."
         ),
     )
+    style: str = param(
+        title=_("Musterstil"),
+        default="other",
+        # „other" steht für ein Muster, das Solidon nicht selbst zeichnet — so
+        # heißt es in der Erkennung (``perceive.patterns.STYLES``), und so
+        # steht es vorbelegt da, bis jemand einen der acht Stile wählt.
+        choices=(
+            "other",
+            "rib",
+            "wave",
+            "knurl_straight",
+            "knurl_diamond",
+            "hexagon",
+            "dimple",
+            "voronoi",
+            "noise",
+        ),
+        placement="advanced",
+        doc=_(
+            "Nur an einem Muster: der Stil, mit dem es neu gezeichnet wird. Ein fremdes "
+            "Muster bekommt so einen der acht Stile von Solidon, auf derselben Fläche und "
+            "mit der gemessenen Teilung."
+        ),
+    )
 
 
 @register_op(
     name="resize_feature",
     result_kind="mesh",
-    cache_version="5",
+    # 6 seit dem 23.09.2026: Ein Muster kann den Stil wechseln (``style``), und
+    # sein Stopfen um einen Zylinder füllt die Tasche bis zum Boden.
+    cache_version="6",
     title=_("Merkmal ändern"),
     category="holes",
     params=ResizeFeatureParams,
@@ -4226,7 +4262,13 @@ def resize_feature(ctx: OpContext) -> OpResult:
         return _resize_thread(ctx, source, feature, params.diameter, params.pitch)
     if feature.kind == "pattern":
         return _resize_pattern(
-            ctx, source, feature, params.pitch, params.cell_width, params.cell_depth
+            ctx,
+            source,
+            feature,
+            params.pitch,
+            params.cell_width,
+            params.cell_depth,
+            style=params.style,
         )
 
     if is_close(params.diameter, previous):
@@ -8816,11 +8858,15 @@ def _remove_thread(ctx: OpContext, source: SceneObject, feature: Feature) -> OpR
     return _thread_result(ctx, source, body, feature, None, findings)
 
 
-#: Warum ein Muster, das Solidon nicht selbst zeichnet, nicht geändert wird.
+#: Was ein Muster, das Solidon nicht selbst zeichnet, zum Ändern braucht.
+#:
+#: Bis zum 22.09.2026 war das eine Absage („lassen sich nicht neu setzen"),
+#: und die Zeile stand grau. Seither ersetzt *Merkmal ändern* ein fremdes
+#: Muster durch einen der eigenen Stile — der Satz nennt das Feld dafür.
 PATTERN_NOT_DRAWABLE: Final = _(
-    "Dieses Muster ist keines, das Solidon zeichnet — Wabe, Rändel, Rippe, Welle, "
-    "Noppe, Voronoi oder Rauschen. Seine Zellen lassen sich nicht neu setzen; "
-    "„Merkmal entfernen“ füllt sie."
+    "Dieses Muster ist keines, das Solidon zeichnet. Wählen Sie unter „Musterstil“ "
+    "Wabe, Rändel, Rippe, Welle, Noppe, Voronoi oder Rauschen — dann wird es damit "
+    "auf derselben Fläche neu gesetzt; „Merkmal entfernen“ füllt es."
 )
 
 #: Warum die Zellen eines Musters am Netz nicht nachgezeichnet werden konnten.
@@ -8929,6 +8975,8 @@ def _resize_pattern(
     pitch: float,
     cell_width: float,
     cell_depth: float,
+    *,
+    style: str = "other",
 ) -> OpResult:
     """Ein Muster mit neuer Teilung, Zellbreite oder Tiefe: schließen, dann neu zeichnen.
 
@@ -8940,6 +8988,14 @@ def _resize_pattern(
     Feld legt es ab, wo es lag — auf der Ebene oder um den Zylinder
     (``patterns.Field.placed``). Null in einem Feld heißt: so lassen, wie
     gemessen.
+
+    **Und ``style`` wechselt den Stil** — auch den eines fremden Musters, das
+    Solidon selbst nicht zeichnet (``other``): Seine Zellen gehen zu, und auf
+    derselben Fläche entsteht der gewählte Stil mit der gemessenen Teilung. Ein
+    Schritt, ein Undo — bis zum 22.09.2026 war ein fremdes Muster nur
+    entfernbar. Ohne gewählten Stil sagt die Operation, was fehlt, statt einen
+    zu raten (Regel 21). Die Zellbreite gehört zum alten Stil; wer wechselt,
+    bekommt die des neuen, solange er keine nennt.
     """
     from app.core.geom.texture_ops import (
         STRIP_PATTERNS,
@@ -8950,25 +9006,30 @@ def _resize_pattern(
     )
     from app.core.perceive.patterns import GENERATOR_OF, field_outline
 
-    style = str(feature.params.get("style", "other"))
-    generator = GENERATOR_OF.get(style)
+    read_style = str(feature.params.get("style", "other"))
+    wanted_style = style if style and style != "other" else read_style
+    generator = GENERATOR_OF.get(wanted_style)
     if generator is None:
         raise ValidationError(
-            field="at_feature",
+            field="style",
             detail=PATTERN_NOT_DRAWABLE,
-            values={"feature": feature.id, "style": style},
-            constraint="not_movable",
-            suggestions=(CANCEL,),
+            values={"feature": feature.id, "style": read_style},
+            constraint="pattern_style",
+            suggestions=(CORRECT_INPUT, CANCEL),
         )
+    restyled = wanted_style != read_style
     measured_pitch = float(feature.params.get("pitch", 0.0))
     measured_width = float(feature.params.get("cell_width", 0.0))
     measured_depth = float(feature.params.get("cell_depth", 0.0))
     new_pitch = pitch if pitch > 0.0 else measured_pitch
-    new_width = cell_width if cell_width > 0.0 else measured_width
+    new_width: float | None = (
+        cell_width if cell_width > 0.0 else (None if restyled else measured_width)
+    )
     new_depth = cell_depth if cell_depth > 0.0 else measured_depth
     if (
-        is_close(new_pitch, measured_pitch)
-        and is_close(new_width, measured_width)
+        not restyled
+        and is_close(new_pitch, measured_pitch)
+        and is_close(new_width or 0.0, measured_width)
         and is_close(new_depth, measured_depth)
     ):
         return OpResult(
@@ -8993,7 +9054,9 @@ def _resize_pattern(
     printer = ctx.profile.printer
     detail = printer.smallest_detail
     drawn_width = cell_width_for(generator, new_pitch, new_width, wall=detail)
-    limited = drawn_width is not None and not is_close(drawn_width, new_width)
+    limited = (
+        drawn_width is not None and new_width is not None and not is_close(drawn_width, new_width)
+    )
     if drawn_width is not None and drawn_width < detail:
         raise ValidationError(
             "cell_width",
@@ -9069,11 +9132,17 @@ def _resize_pattern(
     )
     params_after = {
         **feature.params,
+        "style": wanted_style,
         "pitch": new_pitch,
         "cell_depth": new_depth,
         "through": still_through,
     }
-    sources_after = {**feature.measure_sources, "pitch": "parameter", "cell_depth": "parameter"}
+    sources_after = {
+        **feature.measure_sources,
+        "pitch": "parameter",
+        "cell_depth": "parameter",
+        "style": "parameter",
+    }
     if drawn_width is not None:
         params_after["cell_width"] = drawn_width
         sources_after["cell_width"] = "parameter"
@@ -10283,6 +10352,9 @@ class TestPieceParams(BaseParams):
 @register_op(
     name="test_piece",
     result_kind="mesh",
+    # 2 seit dem 22.09.2026: Der Name bleibt übersetzbar (``Scene.unused_name``)
+    # statt in der Sprache der Rechnung im Ergebnis-Cache zu stehen.
+    cache_version="2",
     title=_("Prüfstück erzeugen"),
     category="prepare",
     params=TestPieceParams,
@@ -10334,7 +10406,7 @@ def test_piece(ctx: OpContext) -> OpResult:
                 source,
                 mesh=piece,
                 # Wie beim Deckel: kein Quellbezug, kein eingefrorenes Wort.
-                name=ctx.scene.unused_name(str(_("Prüfstück"))),
+                name=ctx.scene.unused_name(_("Prüfstück")),
                 features={},
             )
         ],
@@ -10402,6 +10474,16 @@ class SplitPinnedParams(BaseParams):
         doc=_("Null heißt: aus der Schnittfläche ableiten."),
     )
     play: float = play_param()
+    pins_on_b: bool = param(
+        title=_("Stifte an Hälfte B"),
+        default=False,
+        placement="advanced",
+        doc=_(
+            "Welche Hälfte die Stifte trägt: A liegt auf der kleineren Seite der Ebene, "
+            "B auf der größeren. Automatisch teilen wählt die Seite, deren Hälften "
+            "zusammen weniger Stützen brauchen."
+        ),
+    )
 
 
 @op_params
@@ -10726,6 +10808,7 @@ def split_pinned(ctx: OpContext) -> OpResult:
         glue_hint=params.glue_hint,
         diameter=params.diameter,
         play=params.play,
+        pins_on_b=params.pins_on_b,
     )
 
 
@@ -10738,6 +10821,7 @@ def _cut_and_pin(
     glue_hint: bool,
     diameter: float,
     play: float,
+    pins_on_b: bool = False,
 ) -> OpResult:
     """Der gemeinsame Teil von *Teilen* und *An Linie trennen*.
 
@@ -10779,43 +10863,69 @@ def _cut_and_pin(
     #
     # Beide Hälften kommen aus diesem einen Körper, das Spiel ist also das
     # seines Materials.
+    #
+    # **Welche Hälfte die Stifte trägt, ist ein Wert** (RM-005): Die Stifte
+    # stehen über die Naht hinaus, und die Hälfte mit ihnen kann nicht mehr
+    # auf der Naht liegen. *Automatisch teilen* vergleicht beide Zuordnungen am
+    # fertigen Stützvolumen und schreibt die bessere hierher. B trägt die
+    # Stifte über denselben Plan mit umgedrehter Normale — die Stellen sind
+    # dieselben, sie liegen auf der Ebene.
+    carrier, drilled = (second, first) if pins_on_b else (first, second)
+    placed_plan = (
+        dataclasses.replace(plan, normal=_reversed(plan.normal))
+        if plan is not None and pins_on_b
+        else plan
+    )
     pair = (
         add_pins(
-            first,
-            second,
-            plan,
+            carrier,
+            drilled,
+            placed_plan,
             for_object(ctx.profile, source),
             start=connector_start,
             play=play or None,
             quality=ctx.quality,
             cancelled=ctx.cancelled,
         )
-        if plan is not None
-        else PinnedPair(first=first, second=second)
+        if placed_plan is not None
+        else PinnedPair(first=carrier, second=drilled)
     )
     if glue_hint and plan is not None and plan.count and plan.shape == "round":
         pair.findings.append(connector_glue_finding())
 
     first_features, second_features = _features_after_split(source.features, plane)
-    first_name, second_name = half_names(source.name, pinned=bool(pair.pin_features))
+    first_name, second_name = half_names(
+        source.name, pinned=bool(pair.pin_features), pins_on_b=pins_on_b
+    )
+    first_mesh, second_mesh = (pair.second, pair.first) if pins_on_b else (pair.first, pair.second)
+    first_added, second_added = (
+        (pair.bore_features, pair.pin_features)
+        if pins_on_b
+        else (pair.pin_features, pair.bore_features)
+    )
     return OpResult(
         solver=pair.solver,
         outputs=[
             dataclasses.replace(
                 source,
-                mesh=pair.first,
+                mesh=first_mesh,
                 name=first_name,
-                features={**first_features, **pair.pin_features},
+                features={**first_features, **first_added},
             ),
             dataclasses.replace(
                 source,
-                mesh=pair.second,
+                mesh=second_mesh,
                 name=second_name,
-                features={**second_features, **pair.bore_features},
+                features={**second_features, **second_added},
             ),
         ],
         findings=[*findings, *pair.findings, _halves_still_together(source)],
     )
+
+
+def _reversed(normal: Vec3) -> Vec3:
+    """Dieselbe Richtung, umgedreht."""
+    return (-normal[0], -normal[1], -normal[2])
 
 
 def _features_after_split(
@@ -10871,6 +10981,9 @@ class CutAwayParams(BaseParams):
 @register_op(
     name="cut_away",
     result_kind="mesh",
+    # 2 seit dem 22.09.2026: Eine offene Schnittfläche wird gemeldet
+    # (``cut_away.uncapped``) — ein Ergebnis aus dem Cache trüge den Befund nicht.
+    cache_version="2",
     title=_("Abschneiden"),
     category="prepare",
     params=CutAwayParams,
@@ -10913,10 +11026,33 @@ def cut_away(ctx: OpContext) -> OpResult:
             constraint="no_split",
         )
     features, _dropped = _features_after_split(source.features, plane)
+    # **Eine offene Schnittfläche wird gesagt, nicht verschwiegen.** *Teilen*
+    # meldet sie seit je (``split.uncapped``); *Abschneiden* ging denselben
+    # Schnitt bis zum 22.09.2026 ohne ein Wort, und der Körper kam mit offener
+    # Schnittfläche zurück. ``capped`` ist die Wasserdichtheit der Eingabe —
+    # das Modell war schon vorher offen, und der Weg nach vorn ist dasselbe
+    # Reparieren wie dort.
+    findings = (
+        []
+        if kept.capped
+        else [
+            Finding(
+                code="cut_away.uncapped",
+                severity="warning",
+                message=_(
+                    "Die Schnittfläche bleibt offen: Das Modell ist schon vor dem Schnitt "
+                    "nicht geschlossen. Reparieren Sie es und schneiden Sie danach erneut."
+                ),
+                object_id=source.id,
+                suggestions=(REPAIR_AND_RETRY,),
+            )
+        ]
+    )
     return OpResult(
         outputs=[
             dataclasses.replace(source, mesh=kept.mesh, features=_without_old_triangles(features))
-        ]
+        ],
+        findings=findings,
     )
 
 
@@ -11019,6 +11155,25 @@ class SplitLineParams(BaseParams):
         doc=_("Null heißt: aus der Schnittfläche ableiten."),
     )
     play: float = play_param()
+    pins_on_b: bool = param(
+        title=_("Stifte an Hälfte B"),
+        default=False,
+        placement="advanced",
+        doc=_(
+            "Welche Hälfte die Stifte trägt: A liegt auf der kleineren Seite der Ebene, "
+            "B auf der größeren. Automatisch teilen wählt die Seite, deren Hälften "
+            "zusammen weniger Stützen brauchen."
+        ),
+    )
+    glue_hint: bool = param(
+        title=_("Kleben empfohlen"),
+        default=False,
+        placement="advanced",
+        doc=_(
+            "Automatisch teilen schaltet dies ein, wenn weder Schwalbenschwanz noch "
+            "Schnapper zur Naht passen."
+        ),
+    )
 
 
 @register_op(
@@ -11063,9 +11218,10 @@ def split_line(ctx: OpContext) -> OpResult:
         SectionPlane(normal=normal, position=params.position),
         pins=params.pins,
         shape=params.shape,
-        glue_hint=False,
+        glue_hint=params.glue_hint,
         diameter=params.diameter,
         play=params.play,
+        pins_on_b=params.pins_on_b,
     )
 
 

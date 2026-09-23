@@ -60,10 +60,45 @@ SAMPLES_PER_CELL: Final = 10
 
 #: Wie viele Abtastpunkte eine Achse höchstens bekommt. Ein großer Körper mit
 #: feinen Zellen sprengt sonst den Speicher, bevor irgendetwas entsteht.
+#:
+#: **Eine Grenze, an der abgesagt wird, nicht abgeschnitten.** Bis zum
+#: 22.09.2026 wurde die Zahl je Achse still auf diese Grenze gekappt, und der
+#: Gyroid bekam damit weniger Stützstellen je Zelle, als er braucht: Ein Würfel
+#: von 200 mm mit Zelle 5 wurde mit vier statt zehn abgetastet — 92 Sekunden,
+#: 15,7 Millionen Dreiecke in 105 448 losen Stücken, nicht geschlossen.
+#: :func:`_gyroid_samples` nennt jetzt die kleinste Zelle, die der Bereich trägt.
 MAX_SAMPLES: Final = 160
 
 
-def _gyroid(box: tuple[Vec3, Vec3], cell: float, wall: float) -> MeshData | None:
+def _gyroid_samples(size: np.ndarray, cell: float) -> np.ndarray:
+    """Die Stützstellen je Achse — oder die Absage mit der Zelle, die noch geht.
+
+    Zehn je Zelle (:data:`SAMPLES_PER_CELL`), mindestens vier je Achse. Wer mehr
+    bräuchte, als :data:`MAX_SAMPLES` erlaubt, bekäme keinen Gyroid, sondern
+    Bruchstücke; die Absage rechnet deshalb aus, ab welcher Zelle dieser
+    Bereich abgetastet werden kann, und rundet auf den nächsten Zehntelmillimeter
+    auf, damit der Vorschlag nicht die Zahl nennt, die er gerade ablehnt.
+    """
+    counts = np.asarray(np.maximum(np.ceil(size / cell * SAMPLES_PER_CELL).astype(int), 4))
+    if int(counts.max()) <= MAX_SAMPLES:
+        return counts
+    reachable = math.ceil(float(size.max()) * SAMPLES_PER_CELL / MAX_SAMPLES * 10.0) / 10.0
+    raise ValidationError(
+        "cell",
+        _(
+            "Für diesen Hohlraum ist die Zelle zu fein — der Gyroid ließe sich nicht mehr "
+            "sauber abtasten. Die kleinste Zelle, die hier geht, steht in „reachable_mm“."
+        ),
+        value=cell,
+        constraint="gyroid_samples",
+        values={"reachable_mm": reachable, "samples": int(counts.max()), "limit": MAX_SAMPLES},
+        suggestions=[replace(CORRECT_INPUT, label=_("Zelle vergrößern"))],
+    )
+
+
+def _gyroid(
+    box: tuple[Vec3, Vec3], cell: float, wall: float, cancelled: CancelToken | None = None
+) -> MeshData | None:
     """Die Gyroid-Fläche, zu einer Wand aufgedickt.
 
     ``sin x·cos y + sin y·cos z + sin z·cos x = 0`` ist die Minimalfläche; was
@@ -77,7 +112,9 @@ def _gyroid(box: tuple[Vec3, Vec3], cell: float, wall: float) -> MeshData | None
     low = np.asarray(box[0], dtype=float)
     high = np.asarray(box[1], dtype=float)
     size = high - low
-    counts = np.clip(np.ceil(size / cell * SAMPLES_PER_CELL).astype(int), 4, MAX_SAMPLES)
+    counts = _gyroid_samples(size, cell)
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
     axes = [np.linspace(low[axis], high[axis], counts[axis]) for axis in range(3)]
     grid = np.meshgrid(*axes, indexing="ij")
     scale = 2.0 * math.pi / cell
@@ -105,12 +142,16 @@ def _gyroid(box: tuple[Vec3, Vec3], cell: float, wall: float) -> MeshData | None
     # Eine Lage „außen“ ringsherum schließt es: dort ist der Wert positiv, das
     # Vorzeichen wechselt, und die Fläche macht den Deckel selbst.
     walled = np.pad(np.abs(field) - level, 1, constant_values=abs(level) + 1.0)
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
     try:
         points, faces, _normals, _values = measure.marching_cubes(walled, 0.0, spacing=step)
     except ValueError, RuntimeError:
         return None
     # Die Polsterung verschiebt den Ursprung um einen Schritt je Achse zurück.
     origin = low - np.asarray(step, dtype=float)
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
     built = trimesh.Trimesh(vertices=points + origin, faces=faces, process=True)
     built.fix_normals()
     return MeshData.of(built)
@@ -123,6 +164,14 @@ def _honeycomb(
 
     Sie trägt in der Ebene ihrer Zellen am besten und ist quer dazu weich; wer
     eine Platte aussteift, nimmt sie, wer einen Klotz füllt, den Gyroid.
+
+    **Die Zellen teilen ihre Wände.** Das Raster setzt die Mitten eine Zelle
+    auseinander, und genau dort schließen spitz stehende Sechsecke mit dem
+    Umkreis ``Zelle/√3`` lückenlos aneinander. Jede Zelle bekommt die halbe
+    Wand nach außen und die halbe nach innen; zwei Nachbarn ergeben zusammen
+    eine Wand von ``wall``. Bis zum 22.09.2026 war der Umkreis die halbe Zelle,
+    und zwischen den Nachbarn blieb ein Spalt von 0,13 Zellen — lauter lose
+    Röhren statt einer Wabe (38 im Quader von 40 auf 40 bei Zelle 8).
     """
     from shapely.geometry import Polygon
     from shapely.geometry import box as shapely_box
@@ -130,7 +179,7 @@ def _honeycomb(
 
     low = np.asarray(box[0], dtype=float)
     high = np.asarray(box[1], dtype=float)
-    radius = cell / 2.0
+    radius = cell / math.sqrt(3.0)
     step_y = cell * math.sqrt(3.0) / 2.0
     rings = []
     row = 0
@@ -151,7 +200,11 @@ def _honeycomb(
                 )
                 for index in range(6)
             ]
-            cellwall = Polygon(corners).buffer(0).difference(Polygon(corners).buffer(-wall))
+            hexagon = Polygon(corners)
+            # Spitz statt rund an den Ecken: Die Wabe hat Knoten, keine Bögen.
+            cellwall = hexagon.buffer(wall / 2.0, join_style="mitre").difference(
+                hexagon.buffer(-wall / 2.0, join_style="mitre")
+            )
             if not cellwall.is_empty and cellwall.area > 0.0:
                 rings.append(cellwall)
             x += cell
@@ -240,7 +293,7 @@ def build(
     require_positive("cell", cell)
     require_positive("wall", wall)
     if structure == "gyroid":
-        return _gyroid(box, cell, wall)
+        return _gyroid(box, cell, wall, cancelled)
     if structure == "honeycomb":
         return _honeycomb(box, cell, wall, cancelled)
     return _cubic(box, cell, wall, cancelled)
@@ -326,6 +379,9 @@ NO_CAVITY: Final = _(
 @register_op(
     name="lattice_fill",
     result_kind="mesh",
+    # 2 seit dem 22.09.2026: Die Wabe teilt ihre Wände (``_honeycomb``) —
+    # dieselben Werte zeichnen ein anderes Gitter als die losen Röhren davor.
+    cache_version="2",
     title=_("Gitter füllen"),
     category="surface",
     params=LatticeParams,

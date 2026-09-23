@@ -31,7 +31,7 @@ from app.core.types import (
     SolverInfo,
     Transform,
 )
-from app.core.units import DEGREE_UNIT, EPS_GEOM
+from app.core.units import DEGREE_UNIT, EPS_GEOM, format_length
 from app.i18n import TranslatableText, _
 
 ROLES = ("shell_lower", "shell_upper", "liner_lower", "liner_upper")
@@ -377,10 +377,20 @@ def _bound_part(part: PartResult, binding: dict[str, Any], role: str) -> PartRes
 
 
 def _findings(settings: Mapping[str, Any], hard: Profile, soft: Profile) -> list[Finding]:
+    """Passung und Montage als zwei Sätze — mit Zahlen, wie ein Kunde sie liest.
+
+    **Gerundet über** :func:`format_length`. Bis zum 22.09.2026 standen die
+    Werte roh im Satz: Ein Spiel aus zwei Profilwerten wie 0,1 + 0,2 las sich
+    „0.30000000000000004 mm", ein Übermaß von null „-0.0 mm". Das Übermaß
+    ist nach :func:`_materials` nie positiv; sein Betrag ist die Zahl, und er
+    kennt keine negative Null.
+    """
     screw = standards.screw(settings["screw_size"])
     nut = standards.nut(settings["screw_size"])
     ear = max(screw.head_height, nut.height) + settings["wall"] + settings["joint_gap"] / 2
     length = 2 * ear - screw.head_height
+    clearance = max(hard.material.clearance, soft.material.clearance)
+    press = abs(soft.material.press)
     return [
         Finding(
             code="profile_clamp.material_fit",
@@ -388,13 +398,10 @@ def _findings(settings: Mapping[str, Any], hard: Profile, soft: Profile) -> list
             message=_(
                 "Sitzspiel {clearance} mm gesamt, Übermaß am Gegenprofil {press} mm gesamt. "
                 "Prüfen Sie den Sitz mit den gewählten Materialien.",
-                clearance=max(hard.material.clearance, soft.material.clearance),
-                press=-soft.material.press,
+                clearance=format_length(clearance, with_unit=False),
+                press=format_length(press, with_unit=False),
             ),
-            values={
-                "clearance": max(hard.material.clearance, soft.material.clearance),
-                "press": -soft.material.press,
-            },
+            values={"clearance": clearance, "press": press},
         ),
         Finding(
             code="profile_clamp.hardware",
@@ -404,7 +411,7 @@ def _findings(settings: Mapping[str, Any], hard: Profile, soft: Profile) -> list
                 "und passende Muttern. Einlagen von der Bundseite einschieben; "
                 "waagrechte Schraubenlöcher beim Druck auf Stützen prüfen.",
                 size=settings["screw_size"],
-                length=length,
+                length=format_length(length, with_unit=False),
             ),
             values={"size": settings["screw_size"], "length": length},
         ),

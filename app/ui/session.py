@@ -92,7 +92,9 @@ from app.core.scene.project import (
 )
 from app.core.split import (
     SplitApplied,
+    SplitTarget,
     apply_line_split,
+    apply_pinned_split,
     apply_planned,
     apply_split,
     plan_split,
@@ -2421,6 +2423,36 @@ class Session(QObject):
             features=entry.features if entry is not None else None,
             pins=pins,
             shape=shape,
+        )
+        self._changed()
+        return applied
+
+    def split_pinned(
+        self, object_ids: Sequence[str], params: Mapping[str, Any], *, title: Any
+    ) -> SplitApplied:
+        """*Teilen* aus dem Dialog — mit den Passungspaaren jeder Naht (§14).
+
+        Derselbe Ablauf wie :meth:`split_along`, nur mit der Ebene aus Achse
+        und Position: Bis zum 22.09.2026 legte der Dialog allein den Schritt
+        an, und die Stifte standen ohne Passung da.
+        """
+        refusal = self.halt_in_the_way()
+        if refusal is not None:
+            raise refusal
+        result = self.last_result
+        targets = []
+        for object_id in object_ids:
+            entry = result.scene.objects.get(object_id) if result is not None else None
+            targets.append(
+                SplitTarget(
+                    object_id,
+                    mesh=as_mesh_data(entry.mesh) if entry is not None else None,
+                    features=entry.features if entry is not None else None,
+                    profile=profiles.for_object(self.profile, entry),
+                )
+            )
+        applied = apply_pinned_split(
+            self.project.document, targets, params, self.profile, title=title
         )
         self._changed()
         return applied

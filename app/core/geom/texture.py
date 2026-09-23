@@ -18,7 +18,7 @@ statt so zu tun als nicht.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 import numpy as np
@@ -27,7 +27,7 @@ from app.core.deferred import trimesh
 from app.core.geom.mesh import MeshData
 from app.core.log import get_logger
 from app.core.types import MaterialSlot
-from app.i18n import tr
+from app.i18n import _
 
 _log = get_logger(__name__)
 
@@ -237,13 +237,18 @@ def to_slots(mesh: MeshData, count: int, seed: int) -> tuple[MeshData, list[Mate
     slots = [
         MaterialSlot(
             index=index,
-            name=f"{tr('Farbe')} {index + 1}",
+            # Übersetzbar abgelegt und erst beim Anzeigen aufgelöst — ein
+            # ``tr('Farbe')`` stand bis zum 22.09.2026 in der Sprache fest, in
+            # der gerechnet wurde, und der Ergebnis-Cache hielt es dort.
+            name=_("Farbe {number}", number=index + 1),
             colour=(float(centre[0]), float(centre[1]), float(centre[2])),
         )
         for index, centre in enumerate(centres)
     ]
     _log.info("quantised %d faces onto %d slot(s)", len(labels), len(slots))
-    return MeshData(raw=mesh.raw, slots=tuple(int(entry) for entry in labels)), slots
+    # ``replace`` und kein neues ``MeshData``: Ein belegter Innenraum
+    # (``cavity``) gehört zur Geometrie, und die ändert eine Farbe nicht.
+    return replace(mesh, slots=tuple(int(entry) for entry in labels)), slots
 
 
 def _drop_the_negligible(
@@ -254,6 +259,13 @@ def _drop_the_negligible(
     Gemessen an der Fläche, nicht an der Dreieckszahl: ein feines Netz legt
     tausend Dreiecke in einen Fleck von Fingernagelgröße, ein grobes ein
     Dreieck über das halbe Teil.
+
+    **Neu zugeordnet werden nur die Dreiecke der weggeworfenen Slots.** Bis
+    zum 22.09.2026 kamen danach alle Dreiecke neu an die nächste Farbe —
+    samt der Sprenkel, die :func:`smooth` gerade genommen hatte. Wer die
+    geglättete Zuordnung behält, behält auch die Glättung; die wenigen
+    verwaisten Dreiecke gehen an die nächste verbliebene Farbe und werden
+    danach noch einmal geglättet.
     """
     areas = np.asarray(mesh.area_faces, dtype=float)
     total = float(areas.sum()) or 1.0
@@ -261,4 +273,11 @@ def _drop_the_negligible(
     keep = np.flatnonzero(share >= MIN_SHARE)
     if len(keep) == len(centres) or not len(keep):
         return labels, centres
-    return _assign(colours, centres[keep]), centres[keep]
+    renumbered = np.full(len(centres), -1, dtype=np.int32)
+    renumbered[keep] = np.arange(len(keep), dtype=np.int32)
+    result = renumbered[labels]
+    orphaned = result < 0
+    if orphaned.any():
+        result[orphaned] = _assign(colours[orphaned], centres[keep])
+        result = smooth(mesh, result)
+    return result, centres[keep]

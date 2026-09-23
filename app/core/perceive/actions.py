@@ -344,6 +344,9 @@ _FROM_FEATURE: Final[dict[str, FeatureValueSource]] = {
     "depth": ("depth", None),
     "cell_width": ("cell_width", None),
     "cell_depth": ("cell_depth", None),
+    # Der gelesene Stil eines Musters — ``other`` bei einem, das Solidon nicht
+    # selbst zeichnet; dort wählt der Kunde einen der acht.
+    "style": ("style", None),
     # Die Länge eines Langlochs hat kein gemessenes Gegenstück — die Bohrung
     # hat noch keines. Genommen wird ihr Durchmesser, und
     # :data:`_SHIFTED_BY` legt denselben noch einmal darauf: Vorbelegt steht
@@ -521,6 +524,10 @@ def _value_of(spec: Any, feature: Feature, op: str = "") -> float | bool | str:
     measured = feature.params.get(key)
     if measured is None:
         return spec.default  # type: ignore[no-any-return]
+    if isinstance(measured, str):
+        # Eine Auswahl, keine Zahl — der gelesene Stil eines Musters. Was nicht
+        # unter den Wahlen steht, bleibt bei der Vorgabe.
+        return measured if not spec.choices or measured in spec.choices else spec.default
     shift = _SHIFTED_BY.get((op, spec.name))
     beside = float(feature.params.get(shift, 0.0)) if shift else 0.0
     if index is None:
@@ -568,7 +575,14 @@ def _action_field(entry: Any, feature: Feature, op: str) -> ActionField:
 #: Felder, die an einer Art keinen Gegenstand haben, obwohl ihre Vorgabe
 #: nicht null ist: Der Durchmesser von *Merkmal ändern* steht auf 8 mm, und
 #: ein Muster hat keinen — seine Maße sind Teilung, Zellbreite und Tiefe.
-_NOT_A_FIELD: Final[frozenset[tuple[str, str]]] = frozenset({("pattern", "diameter")})
+_NOT_A_FIELD: Final[frozenset[tuple[str, str]]] = frozenset(
+    {
+        ("pattern", "diameter"),
+        # Der Musterstil hat eine Vorgabe (``other``), aber nur ein Muster hat
+        # einen Stil.
+        *((kind, "style") for kind in ("pin", "cone", "sphere", "fillet", "torus", "thread")),
+    }
+)
 
 
 def _carried_by(entry: Any, feature: Feature) -> bool:
@@ -700,15 +714,6 @@ def actions_for(
                     ),
                 )
             )
-        elif (
-            fitting is not None
-            and fitting.name == "resize_feature"
-            and feature.kind == "pattern"
-            and (not_drawable := _pattern_not_drawable(feature)) is not None
-        ):
-            # Ein Gitter aus Zellen, das Solidon so nicht zeichnet, lässt sich
-            # nicht neu setzen — derselbe Satz wie beim Übernehmen, nur vorher.
-            actions.append(FeatureAction(title=fitting.title, op=None, reason=not_drawable))
         elif fitting is not None and (
             shared := _shares_its_cavity(
                 fitting.name,
@@ -782,22 +787,6 @@ _NEED_AN_OWN_BODY: Final = (
     "remove_feature",
     "resize_feature",
 )
-
-
-def _pattern_not_drawable(feature: Feature) -> TranslatableText | None:
-    """Warum *Merkmal ändern* an diesem Muster grau steht — oder ``None``.
-
-    Nur ein **genannter** Stil außerhalb der acht sperrt; ein Merkmal ohne
-    Stil ist keines aus der Erkennung, und die Zeile bleibt, was die
-    Registertabelle sagt (``test_the_operation_refuses_exactly_what_the_panel_greys_out``).
-    """
-    from app.core.geom.prepare_ops import PATTERN_NOT_DRAWABLE
-    from app.core.perceive.patterns import GENERATOR_OF
-
-    style = feature.params.get("style")
-    if style is None or str(style) in GENERATOR_OF:
-        return None
-    return PATTERN_NOT_DRAWABLE
 
 
 def no_own_body(

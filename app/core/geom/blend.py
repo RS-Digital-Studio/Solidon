@@ -345,8 +345,9 @@ class BlendParams(BaseParams):
     result_kind="mesh",
     # Das Abstandsfeld misst seit dem 18.09.2026 zur Ebene des nächsten
     # Dreiecks statt zu seiner Mitte (siehe :func:`distance_field`). Ein
-    # Ergebnis aus dem Cache trüge sonst weiter die gewellten Wände.
-    cache_version="2",
+    # Ergebnis aus dem Cache trüge sonst weiter die gewellten Wände. 3 seit dem
+    # 22.09.2026: Die Filamente beider Körper kommen mit (:func:`_with_filaments`).
+    cache_version="3",
     title=_("Weich verschmelzen"),
     category="boolean",
     params=BlendParams,
@@ -377,6 +378,7 @@ def blend_union(ctx: OpContext) -> OpResult:
         progress=ctx.progress,
         cancelled=ctx.cancelled,
     )
+    merged = _with_filaments(merged, first, second, params.radius + grid)
 
     findings = [
         Finding(
@@ -403,7 +405,41 @@ def blend_union(ctx: OpContext) -> OpResult:
                 values={"components": merged.component_count},
             )
         )
+    from app.core.geom.ops import _material_slots_after_boolean
+
     return OpResult(
-        outputs=[dataclasses.replace(ctx.inputs[0], mesh=merged, features={})],
+        outputs=[
+            dataclasses.replace(
+                ctx.inputs[0],
+                mesh=merged,
+                features={},
+                material_slots=_material_slots_after_boolean(ctx, "union", merged),
+            )
+        ],
         findings=findings,
     )
+
+
+def _with_filaments(merged: MeshData, first: MeshData, second: MeshData, reach: float) -> MeshData:
+    """Die Filamente beider Körper auf die neue Oberfläche übertragen (§20).
+
+    Das Rasterverfahren baut eine ganz neue Oberfläche, und
+    :meth:`MeshData.replacing` lässt eine Slotliste fallen, die nicht mehr zur
+    Dreieckszahl passt — bis zum 22.09.2026 kam jedes verschmolzene Teil
+    einfarbig in Slot 0 heraus. Dieselbe Pflicht wie nach der Voxelstufe der
+    Rückfallkette: Wer neu vernetzt, überträgt die Slots neu
+    (``attributes.transfer``).
+
+    ``reach`` ist, wie weit ein Dreieck von einer alten Oberfläche liegen darf
+    und ihr Filament noch bekommt: Die Kehle wächst um bis zu ``radius`` aus
+    der Naht, das Raster verschiebt jede Wand um bis zu eine Weite. Was
+    weiter liegt, bekommt das häufigste Filament des ersten Körpers — er ist
+    der, dessen Name und Material bleiben.
+    """
+    from app.core.geom.attributes import counts, transfer
+
+    if not first.slots and not second.slots:
+        return merged
+    usual = counts(first)
+    fallback = max(usual, key=lambda slot: (usual[slot], -slot))
+    return transfer(merged, [first, second], cut_slot=fallback, tolerance=reach)

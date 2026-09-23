@@ -256,6 +256,59 @@ def test_selected_opening_is_saved_and_rotated_without_new_guess(profile, axis):
     assert as_mesh_data(second.outputs[1].mesh).raw.bounds == pytest.approx(before.bounds, abs=1e-6)
 
 
+def test_a_tilted_support_read_from_an_stl_takes_its_seal(profile):
+    """Eine gekippte Trägerfläche aus einer STL ist eben, auch nach der float32-Rundung.
+
+    Dieselbe Falle wie beim Muster bis zum Rand: Eine schräge Fläche liegt nach
+    dem Einlesen einer STL um die Rundung ihrer vier Byte je Koordinate neben
+    ihrer Ebene (5·10⁻⁵ mm an ``Wedge-Lock (Base).stl``). Die Trägerfläche
+    wurde daraufhin mit „Die gespeicherte Öffnungswahl ist nicht lesbar"
+    abgelehnt — ein Satz über eine Wahl, die es noch gar nicht gab. Die
+    Prüfplatte wird gekippt, als STL geschrieben und über den Ladeweg der
+    Anwendung gelesen.
+    """
+    from test_seal_openings import plate
+
+    from app.core.ingest.loader import normalise, read_model
+
+    entry = plate()
+    matrix = trimesh.transformations.rotation_matrix(0.57, (1, 2, 3))
+    # Weit vom Ursprung, wie ein Teil auf dem Bett eines Slicers liegt: Die
+    # Rundung wächst mit der Koordinate.
+    matrix[:3, 3] = (110, 95, 40)
+    raw = entry.mesh.raw.copy()
+    raw.apply_transform(matrix)
+    loaded = normalise(read_model(raw.export(file_type="stl"), ".stl"), "mm", weld_is_reading=True)
+    mesh = loaded.mesh
+    normal = matrix[:3, 2]
+    indices = np.flatnonzero(mesh.raw.face_normals @ normal > 0.999999)
+    corners = mesh.raw.triangles[indices].reshape(-1, 3)
+    noise = np.abs((corners - corners.mean(axis=0)) @ normal).max()
+    assert noise > 1e-6, "ohne Rundungsrauschen prüfte der Test nicht den Fall aus der STL"
+    feature = Feature(
+        "top",
+        "face",
+        "generated",
+        {"normal": tuple(normal), "centre": tuple(corners.mean(axis=0))},
+        face_indices=tuple(int(index) for index in indices),
+    )
+    tilted = SceneObject("plate", "Prüfplatte", mesh, features={"top": feature})
+
+    result = run(
+        tilted,
+        path_sketch="",
+        support_feature="plate:top",
+        offset=3,
+        profile=profile,
+        ask=lambda question, labels: labels[1],
+    )
+    body, gasket = result.outputs
+    assert as_mesh_data(body.mesh).is_watertight
+    assert body.mesh.volume < mesh.volume
+    assert "groove_floor" in body.features
+    assert as_mesh_data(gasket.mesh).is_watertight
+
+
 def test_history_parameter_save_load_and_disk_cache_preserve_the_two_outputs(profile, tmp_path):
     from app.core.bootstrap import load_operations
     from app.core.geom.mesh import MeshCodec

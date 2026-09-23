@@ -17,6 +17,7 @@ einen Deckel, der vor ihr gebaut wurde.
 from __future__ import annotations
 
 import dataclasses
+from itertools import pairwise
 from typing import Any, cast
 
 from app.core.deferred import trimesh
@@ -121,12 +122,30 @@ def _narrowest(cavities: list[Any]) -> float:
 
     Ein Deckel klemmt nicht an der Fläche, sondern an der schmalsten Stelle:
     dort sitzt der Kragen am nächsten an der Wand. Genommen wird die kürzere
-    Seite des Hüllrechtecks, bei mehreren Fächern die kleinste davon.
+    Seite des **kleinsten umschließenden Rechtecks in jeder Drehung**, bei
+    mehreren Fächern die kleinste davon.
+
+    Bis zum 22.09.2026 war es das achsparallele Hüllrechteck: An einem um
+    45 Grad gedrehten quadratischen Fach von 30 mm stand damit 42,4 mm in der
+    Passung, die Diagonale — ein Maß, das es am Teil nicht gibt.
     """
+    from shapely.geometry import Polygon as ShapelyPolygon
+
     widths: list[float] = []
     for cavity in cavities:
-        left, bottom, right, top = cavity.bounds
-        widths.append(min(right - left, top - bottom))
+        box = cavity.minimum_rotated_rectangle
+        if not isinstance(box, ShapelyPolygon):
+            # Ein entarteter Umriss hat keine Breite; das Hüllrechteck sagt dann
+            # wenigstens die eine, die er hat.
+            left, bottom, right, top = cavity.bounds
+            widths.append(min(right - left, top - bottom))
+            continue
+        corners = list(box.exterior.coords)[:3]
+        sides = [
+            float(((x1 - x0) ** 2 + (y1 - y0) ** 2) ** 0.5)
+            for (x0, y0), (x1, y1) in pairwise(corners)
+        ]
+        widths.append(min(sides))
     return float(min(widths)) if widths else 0.0
 
 
@@ -514,6 +533,9 @@ class LidParams(BaseParams):
 
 @register_op(
     name="create_lid",
+    # 2 seit dem 22.09.2026: Die Weiten der Passung sind die schmale Seite in
+    # jeder Drehung (``_narrowest``), nicht die des Hüllrechtecks.
+    cache_version="2",
     title=_("Deckel erzeugen"),
     category="parts",
     params=LidParams,
@@ -668,14 +690,14 @@ def neck_diameters(outline: Any, cavities: list[Any]) -> tuple[float, float]:
     bei einer runden Öffnung *ist* das der Durchmesser, bei einer eckigen der
     größte runde Hals, den die Wand noch tragen kann. Ein Kreis durch die
     Ecken eines Quadrats stünde über dessen Seiten hinaus.
+
+    **Die schmale Seite in jeder Drehung** (:func:`_narrowest`): Bis zum
+    22.09.2026 kam sie aus dem achsparallelen Hüllrechteck, und an einer um
+    45 Grad gedrehten quadratischen Dose von 50 mm war das die Diagonale —
+    ein Hals von 70,7 mm, zehn Millimeter über jeder Seite.
     """
-    left, bottom, right, top = outline.bounds
     widest = max(cavities, key=lambda ring: ring.area)
-    inner_left, inner_bottom, inner_right, inner_top = widest.bounds
-    return (
-        float(min(right - left, top - bottom)),
-        float(min(inner_right - inner_left, inner_top - inner_bottom)),
-    )
+    return _narrowest([outline]), _narrowest([widest])
 
 
 def _pipe(
@@ -795,6 +817,9 @@ class ScrewLidParams(BaseParams):
 @register_op(
     name="screw_lid",
     result_kind="mesh",
+    # 2 seit dem 22.09.2026: Hals und Bohrung messen die schmale Seite in jeder
+    # Drehung (``neck_diameters``), und der Deckel heißt in jeder Sprache.
+    cache_version="2",
     title=_("Drehdeckel erzeugen"),
     category="parts",
     params=ScrewLidParams,
@@ -941,7 +966,7 @@ def screw_lid(ctx: OpContext) -> OpResult:
                 id="",
                 # Wie beim Deckel darüber: kein Quellbezug, kein
                 # eingefrorenes Wort.
-                name=ctx.scene.unused_name(str(_("Drehdeckel"))),
+                name=ctx.scene.unused_name(_("Drehdeckel")),
                 mesh=lid,
                 material=source.material,
                 features={CAP_THREAD_FEATURE: cap_thread},

@@ -593,14 +593,24 @@ def test_redrawing_keeps_every_rib_where_it_was() -> None:
     assert np.allclose(after.params["centre"], read.params["centre"], atol=0.1)
 
 
-def test_change_stands_grey_at_a_pattern_solidon_does_not_draw() -> None:
-    """Der Satz steht im Panel, bevor jemand übernimmt — nicht erst danach."""
+def test_change_at_a_foreign_pattern_offers_a_style_with_the_measured_pitch() -> None:
+    """Ein fremdes Muster lässt sich ändern: mit einem eigenen Stil und der gemessenen Teilung.
+
+    Bis zum 22.09.2026 stand *Merkmal ändern* an einem Muster, das Solidon
+    nicht selbst zeichnet, grau — ein fremdes Gitter war nur entfernbar. Die
+    Presse verspricht das Gegenteil („beliebiges Modell mit Rändel
+    herunterladen, Teilung ändern"). Jetzt bietet die Zeile den Stil an,
+    vorbelegt mit „fremdes Muster", und die Teilung mit dem gemessenen Wert.
+    """
     mesh = oblong_pockets()
     entry = SceneObject(id="obj_1", name="Platte", mesh=mesh, features=detect(mesh))
     read = only_pattern(entry.features)
     actions = actions_for(read, entry.features, mesh=as_mesh_data(entry.mesh))
     change = next(action for action in actions if str(action.title) == "Merkmal ändern")
-    assert change.op is None and "zeichnet" in str(change.reason)
+    assert change.op == "resize_feature", change.reason
+    fields = {field.name: field for field in change.fields}
+    assert fields["style"].value == "other"
+    assert math.isclose(float(fields["pitch"].value), float(read.params["pitch"]), abs_tol=1e-6)
     remove = next(action for action in actions if action.op == "remove_feature")
     assert remove.op == "remove_feature"
 
@@ -731,7 +741,14 @@ def oblong_pockets() -> MeshData:
     ).mesh
 
 
-def test_a_grid_of_oblongs_is_a_pattern_of_its_own_kind_removable_but_not_redrawable() -> None:
+def test_a_grid_of_oblongs_is_a_pattern_of_its_own_kind_removable_and_restyled() -> None:
+    """Ein fremdes Gitter wird entfernt — oder mit einem eigenen Stil ersetzt, in einem Schritt.
+
+    Ohne gewählten Stil sagt die Operation, was fehlt (Regel 21: kein Stil
+    wird geraten). Mit Stil schließt sie die fremden Zellen und zeichnet das
+    Muster auf derselben Fläche neu — dieselbe Operation, also ein Schritt und
+    ein Undo.
+    """
     mesh = oblong_pockets()
     entry = SceneObject(id="obj_1", name="Platte", mesh=mesh, features=detect(mesh))
     read = only_pattern(entry.features)
@@ -739,9 +756,29 @@ def test_a_grid_of_oblongs_is_a_pattern_of_its_own_kind_removable_but_not_redraw
     assert read.params["count"] == 9
     with pytest.raises(ValidationError) as refused:
         run_op("resize_feature", entry, at_feature=read.id, pitch=8.0)
+    assert refused.value.field == "style"
     assert refused.value.suggestions, "ein Fehler endet nie mit „fehlgeschlagen“"
     out, _findings = run_op("remove_feature", entry, at_feature=read.id)
     assert math.isclose(out.mesh.volume, 60.0 * 40.0 * 6.0, abs_tol=0.05)
+
+    # Auf dem Feld der neun Taschen (25 auf 28 mm) haben Waben mit 5 mm
+    # Teilung Platz genug, um wieder ein Muster zu sein.
+    restyled, findings = run_op(
+        "resize_feature", entry, at_feature=read.id, style="hexagon", pitch=5.0
+    )
+    assert as_mesh_data(restyled.mesh).is_watertight
+    after = only_pattern(restyled.features)
+    assert after.params["style"] == "hexagon", after.params
+    assert after.params["count"] >= 9
+    assert math.isclose(float(after.params["pitch"]), 5.0, abs_tol=0.05)
+    assert after.params["mode"] == "engraved"
+    assert "resize_feature.pattern" in [finding.code for finding in findings]
+    # Die fremden Taschen sind zu: Unter den neuen Waben steht kein Rechteck mehr.
+    assert not [
+        f
+        for f in restyled.features.values()
+        if f.kind == "pattern" and f.params.get("style") == "other"
+    ]
 
 
 # --- Was der Kunde und der Agent lesen --------------------------------------------
@@ -753,9 +790,12 @@ def test_the_panel_offers_change_and_remove_with_the_patterns_own_fields() -> No
     actions = actions_for(read, entry.features, mesh=as_mesh_data(entry.mesh))
     offered = {action.title: action for action in actions}
     change = next(action for action in offered.values() if action.op == "resize_feature")
-    assert [field.name for field in change.fields] == ["pitch", "cell_width", "cell_depth"], [
-        field.name for field in change.fields
-    ]
+    assert [field.name for field in change.fields] == [
+        "pitch",
+        "cell_width",
+        "cell_depth",
+        "style",
+    ], [field.name for field in change.fields]
     assert math.isclose(float(change.fields[0].value), 4.0, abs_tol=0.01)
     remove = next(action for action in offered.values() if action.op == "remove_feature")
     assert remove.fields == ()
@@ -1012,3 +1052,68 @@ def test_the_digest_names_the_cylinder_a_wrapped_pattern_runs_around() -> None:
     assert "Rippenmuster" in line
     assert "Ø 30.00 mm" in line, line
     assert "Achse" in line
+
+
+def pocketed_grip() -> MeshData:
+    """Der Griff mit 48 Taschen, die kein Solidon-Stil sind: 3 auf 5 mm, parallele Wände.
+
+    Gefräst wie in einer heruntergeladenen Datei — der Boden eben, die Wände
+    parallel statt radial. In der Abwicklung ist eine solche Tasche am Boden
+    breiter als an der Mündung (``R / (R - Tiefe)``), und das ist der Fall,
+    den ein gerades Prisma nicht füllt.
+    """
+    tools = []
+    for i in range(16):
+        angle = 2.0 * math.pi * i / 16
+        for z in (-8.0, 0.0, 8.0):
+            box = trimesh.creation.box(extents=(2.0, 3.0, 5.0))
+            box.apply_translation((CYLINDER_DIAMETER / 2.0, 0.0, z))
+            box.apply_transform(trimesh.transformations.rotation_matrix(angle, (0, 0, 1)))
+            tools.append(box)
+    return boolean(
+        "difference",
+        [cylinder(), MeshData.of(trimesh.util.concatenate(tools))],
+        quality="fine",
+        cancelled=NeverCancelled(),
+    ).mesh
+
+
+def test_removing_foreign_pockets_around_a_grip_leaves_no_voids() -> None:
+    """Entfernen füllt jede Tasche ganz — auch die, deren Wände nicht radial stehen.
+
+    Das Prisma über der Mündung wurde gerade um den Zylinder gebogen und blieb
+    in der Abwicklung so breit wie die Mündung. Eine Tasche mit parallelen
+    Wänden ist am Boden aber breiter: Bis zum 22.09.2026 blieben an jedem
+    Taschenboden zwei eingeschlossene Hohlräume von 0,07 mm³ stehen — 96
+    Schalen im Körper, der Slicer druckt sie als Luftblasen.
+    """
+    mesh = pocketed_grip()
+    entry = SceneObject(id="obj_1", name="Griff", mesh=mesh, features=detect(mesh))
+    read = only_pattern(entry.features)
+    assert read.params["style"] == "other" and read.params["carrier"] == "cylinder"
+    plain, _findings = run_op("remove_feature", entry, at_feature=read.id)
+    body = as_mesh_data(plain.mesh)
+    assert body.component_count == 1, f"{body.component_count} Schalen, eingeschlossene Hohlräume"
+    assert math.isclose(body.volume, cylinder().volume, abs_tol=0.05), body.volume
+
+
+@pytest.mark.parametrize("style", ["hexagon", "rib", "knurl_diamond"])
+def test_a_foreign_pattern_around_a_grip_is_replaced_by_an_own_style(style: str) -> None:
+    """Ein fremdes Muster um einen Griff bekommt einen eigenen Stil — in einem Schritt."""
+    mesh = pocketed_grip()
+    entry = SceneObject(id="obj_1", name="Griff", mesh=mesh, features=detect(mesh))
+    read = only_pattern(entry.features)
+    restyled, findings = run_op("resize_feature", entry, at_feature=read.id, style=style)
+    body = as_mesh_data(restyled.mesh)
+    assert body.is_watertight
+    assert body.component_count == 1, body.component_count
+    assert "resize_feature.pattern" in [finding.code for finding in findings]
+    assert body.volume < cylinder().volume - 50.0, "die neuen Zellen sind eingeschnitten"
+    after = [f for f in restyled.features.values() if f.kind == "pattern"]
+    if style == "hexagon":
+        # Rippen und Kreuzrändel mit 5,9 mm Teilung um Ø 30 liest die Erkennung
+        # heute nicht als Muster zurück (gemessen 23.09.2026: 34 Flächen bzw.
+        # der blanke Stift) — das ist eine Frage an die Erkennung, nicht an das
+        # Zeichnen; die Geometrie darüber ist geprüft.
+        assert after and after[0].params["carrier"] == "cylinder"
+        assert after[0].params["style"] == "hexagon"
