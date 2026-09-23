@@ -17311,8 +17311,11 @@ class MainWindow(QMainWindow):
         Liste das Suchen: der Motorhalter aus dem Kundenbestand hat 27
         Merkmale und darunter 6 Bohrungen.
 
-        Ohne ``applies_to`` wird nicht gefiltert — dieselbe Haltung wie in
-        :func:`labels.feature_requirement`: Raten wäre schlechter als Anbieten.
+        Ohne ``applies_to`` gilt, was die Merkmalsfelder selbst annehmen
+        (``ParamSpec.feature_kinds``): *Aushöhlen* gilt dem Körper, seine
+        Öffnungen sind aber Flächen (P6.3). Sagt auch das nichts, wird nicht
+        gefiltert — dieselbe Haltung wie in :func:`labels.feature_requirement`:
+        Raten wäre schlechter als Anbieten.
         Die übrigen Aufrufer (Legende der Analyseleiste, das Nachtragen eines
         angeklickten Merkmals) fragen ohne ``spec`` und bekommen alles.
         """
@@ -17324,6 +17327,13 @@ class MainWindow(QMainWindow):
         if entry is None:
             return {}
         wanted = frozenset(spec.applies_to or ()) if spec is not None else frozenset()
+        if spec is not None and not wanted:
+            wanted = frozenset(
+                kind
+                for entry in spec.params.spec()
+                if entry.kind in {"feature", "features"}
+                for kind in entry.feature_kinds
+            )
         return {
             feature_id: feature_label(feature_id, feature)
             for feature_id, feature in entry.features.items()

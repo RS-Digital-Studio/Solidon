@@ -208,6 +208,7 @@ NOT_APPLICABLE_HERE: Final[dict[tuple[str, str], TranslatableText]] = {
     ("thread", "move_feature"): THREAD_STAYS_WHERE_IT_IS,
     ("thread", "duplicate_feature"): THREAD_STAYS_WHERE_IT_IS,
     ("thread", "rotate_feature"): THREAD_STAYS_WHERE_IT_IS,
+    ("thread", "pattern_feature"): THREAD_STAYS_WHERE_IT_IS,
 }
 
 #: Warum an einem Ring, der der ganze Körper ist, jede Handlung absagt: Seine

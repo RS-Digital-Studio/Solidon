@@ -844,6 +844,12 @@ class Registry:
                 values={"op": spec.name, "fields": spec.material_params},
             )
         unknown = [kind for kind in spec.applies_to if kind not in FEATURE_KINDS]
+        unknown += [
+            kind
+            for entry in spec.params.spec()
+            for kind in entry.feature_kinds
+            if kind not in FEATURE_KINDS
+        ]
         if unknown:
             raise InternalError(
                 detail=f"{spec.name!r} applies to unknown feature kinds {unknown}",

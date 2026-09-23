@@ -1291,21 +1291,37 @@ class EdgeSetField(QWidget):
 
 
 class FeatureSetField(QWidget):
-    """Benannte Flächen wählen; eine leere Zwischenwahl erweitert niemals den Auftrag."""
+    """Benannte Flächen wählen; eine leere Zwischenwahl erweitert niemals den Auftrag.
+
+    ``empty`` sagt, was eine leere Wahl bedeutet, und beschriftet den Haken
+    dafür: am Filament der ganze Körper (die Vorgabe), an den Öffnungen des
+    Aushöhlens keine Öffnung. ``None`` heißt, leer gibt es nicht — eine
+    Pflichtliste wie die Quellen eines Merkmalsmusters (P6.7) hat keinen
+    Haken, und gültig ist sie erst mit einem markierten Merkmal. Ein Haken
+    „Ganzer Körper" an einer Liste, deren Leere etwas anderes heißt, wäre ein
+    Versprechen, das die Operation nicht hält.
+    """
 
     changed = Signal()
     validityChanged = Signal()
 
     def __init__(
-        self, choices: Mapping[str, str], selected: Sequence[str], parent: QWidget | None = None
+        self,
+        choices: Mapping[str, str],
+        selected: Sequence[str],
+        parent: QWidget | None = None,
+        *,
+        empty: str | None = "",
+        hint: str = "",
     ) -> None:
         super().__init__(parent)
         self._last_value = tuple(dict.fromkeys(selected))
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(TIGHT)
-        self.whole = QCheckBox(tr("Ganzer Körper"), self)
-        self.whole.setChecked(not selected)
+        self.whole = QCheckBox(empty or tr("Ganzer Körper"), self)
+        self.whole.setChecked(not selected and empty is not None)
+        self.whole.setVisible(empty is not None)
         layout.addWidget(self.whole)
         self.list = QListWidget(self)
         self.list.setAccessibleName(tr("Flächen auswählen"))
@@ -1319,7 +1335,7 @@ class FeatureSetField(QWidget):
                 Qt.CheckState.Checked if identifier in selected else Qt.CheckState.Unchecked
             )
         layout.addWidget(self.list)
-        self.hint = QLabel(tr("Flächen markieren oder den ganzen Körper wählen."), self)
+        self.hint = QLabel(hint or tr("Flächen markieren oder den ganzen Körper wählen."), self)
         self.hint.setWordWrap(True)
         set_level(self.hint, "caption")
         layout.addWidget(self.hint)
@@ -2516,6 +2532,25 @@ class OperationDialog(QDialog):
         if entry.kind == "organizer":
             return OrganizerLayoutField(start, self)
         if entry.kind == "features":
+            if entry.required:
+                return FeatureSetField(
+                    self._features,
+                    tuple(start or ()),
+                    self,
+                    empty=None,
+                    hint=tr("Mindestens ein Merkmal markieren."),
+                )
+            if entry.feature_kinds:
+                # Eine Liste bestimmter Arten, die leer bleiben darf — die
+                # Öffnungen des Aushöhlens (P6.3): leer heißt „keine gewählte
+                # Fläche", nicht „der ganze Körper".
+                return FeatureSetField(
+                    self._features,
+                    tuple(start or ()),
+                    self,
+                    empty=tr("Keine"),
+                    hint=tr("Flächen markieren oder „Keine“ wählen."),
+                )
             return FeatureSetField(self._features, tuple(start or ()), self)
         if entry.kind == "edges":
             return EdgeSetField(self._edges, str(start or ""), self)

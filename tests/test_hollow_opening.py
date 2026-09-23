@@ -164,15 +164,21 @@ def test_the_dollhouse_opens_at_its_front(profile: Profile) -> None:
 def test_a_clicked_face_fills_the_opening_field_and_a_bore_does_not(profile: Profile) -> None:
     """Der Puppenhaus-Weg ist ein Klick: Fläche wählen, Strg+H, Übernehmen.
 
-    ``values_for`` trägt eine Fläche als Ziel ein — und eine Bohrung nicht,
+    ``values_for`` trägt eine Fläche als Öffnung ein — und eine Bohrung nicht,
     denn an einer Bohrung lässt sich nichts öffnen.
+
+    **Seit P6.3 (23.09.2026) unter „Öffnungen" statt „Öffnen an Fläche".**
+    ``open_at`` öffnet in die Achsrichtung der Fläche über den ganzen
+    Querschnitt des Hohlraums und bleibt für gespeicherte Schritte, was es
+    war; ein Klick meint aber genau diese Fläche, und die öffnet
+    ``openings``. Die Bohrung hält ``ParamSpec.feature_kinds`` draußen.
     """
     load_operations()
     spec = REGISTRY.get("hollow_object")
     entry = house()
     front = face_towards(entry, (0.0, -1.0, 0.0))
 
-    assert values_for(spec, entry.features[front], "obj_1").get("open_at") == f"obj_1:{front}"
+    assert values_for(spec, entry.features[front], "obj_1") == {"openings": (front,)}
 
     bore = Feature(
         id="hole_1",
@@ -180,7 +186,7 @@ def test_a_clicked_face_fills_the_opening_field_and_a_bore_does_not(profile: Pro
         provenance="detected",
         params={"diameter": 5.0, "centre": (0.0, 0.0, 90.0), "axis": (0.0, 0.0, 1.0)},
     )
-    assert "open_at" not in values_for(spec, bore, "obj_1")
+    assert values_for(spec, bore, "obj_1") == {}
 
 
 @pytest.mark.parametrize(

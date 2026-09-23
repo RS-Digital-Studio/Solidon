@@ -636,6 +636,13 @@ def values_for(
         (entry for entry in spec.params.spec() if entry.kind in {"feature", "features"}),
         None,
     )
+    # Ein Merkmalsfeld, das nur bestimmte Arten annimmt, nimmt einen Klick auf
+    # eine andere nicht an (``ParamSpec.feature_kinds``): An einer Bohrung
+    # lässt sich nichts öffnen, und die Öffnungen des Aushöhlens sind Flächen.
+    if feature_field is not None and (
+        feature_field.feature_kinds and feature.kind not in feature_field.feature_kinds
+    ):
+        feature_field = None
     if feature_field is not None and spec.name != "apply_texture":
         feature_values = {
             feature_field.name: (feature.id,) if feature_field.kind == "features" else feature.id,

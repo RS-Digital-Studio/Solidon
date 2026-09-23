@@ -584,6 +584,89 @@ def shell_open_top(
     )
 
 
+def top_faces_of(solid: Solid, *, cancelled: CancelToken | None = None) -> tuple[int, ...]:
+    """Die Indizes der Flächen, die *Oben öffnen* meint — dieselbe Frage wie
+    :func:`shell_open_top`, als Zahlen für :func:`shell_open_at`."""
+    require()
+    return tuple(solid.face_index(face) for face in _top_faces(solid, cancelled=cancelled))
+
+
+def shell_open_at(
+    solid: Solid,
+    thickness: float,
+    faces: Sequence[int],
+    *,
+    outward: bool = False,
+    cancelled: CancelToken | None = None,
+) -> Solid | None:
+    """Höhlt exakt aus und lässt genau die gewählten Flächen offen (P6.3).
+
+    ``faces`` zählt die nativen Flächen aus :meth:`Solid.faces`. Nach innen
+    bleibt die Außenhaut, wo sie war; nach außen (``outward``) wird der Körper
+    selbst zum Hohlraum, und die Wand legt sich um ihn — die offenen Flächen
+    bleiben dabei bündig, der Rand der Öffnung liegt in ihrer Ebene. Die
+    Stöße nach außen sind rund (``GeomAbs_Arc``, die Vorgabe von OpenCASCADE):
+    Dieselbe Form entsteht am Netz, wo die Wand mit einer Kugel wächst.
+
+    **``None`` statt einer Ausnahme, und aus gemessenem Grund.** OpenCASCADE
+    scheitert hier auf drei Arten, und keine davon wirft (Sonde vom
+    23.09.2026, Bericht P6.3): Bei zu großer Wand kommt der Eingang
+    unverändert zurück, an einem konkaven Körper ebenso, an einer dünnen
+    Platte ist das Ergebnis leer, und ein geschlossener Winkel wird eine
+    Schale statt eines Körpers. Welcher Satz dem Kunden gilt — zu dicke Wand
+    oder sich schneidende Innenwände —, entscheidet der Aufrufer, der dafür das
+    Raster fragen kann; hier steht nur, dass kein brauchbarer Körper entstand.
+    Ein Ergebnis, das kein gültiger, geschlossener und veränderter Körper ist,
+    geht nie hinaus.
+    """
+    require()
+    from OCP.BRepCheck import BRepCheck_Analyzer
+    from OCP.BRepOffsetAPI import BRepOffsetAPI_MakeThickSolid
+    from OCP.collections import List_TopoDS_Shape
+    from OCP.TopAbs import TopAbs_SOLID
+
+    require_positive("wall", thickness)
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+    working = replace(solid)
+    chosen = working.checked_face_indices(faces, cancelled=cancelled)
+    native = working.faces()
+    removed = List_TopoDS_Shape()
+    for index in chosen:
+        removed.Append(native[index])
+    builder = BRepOffsetAPI_MakeThickSolid()
+    offset = thickness if outward else -thickness
+    try:
+        builder.MakeThickSolidByJoin(working.shape, removed, offset, EPS_GEOM)
+        builder.Build()
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        if not builder.IsDone():
+            return None
+        shape = builder.Shape()
+    except OperationCancelled:
+        raise
+    except PROGRAMMING_ERRORS:
+        raise
+    except Exception as problem:  # OpenCASCADE wirft eigene Ausnahmearten
+        _log.info("thick solid failed: %s", problem)
+        return None
+    if shape.IsNull() or shape.ShapeType() != TopAbs_SOLID:
+        return None
+    if not BRepCheck_Analyzer(shape).IsValid():
+        return None
+    result = working.replacing(shape, history=builder, cancelled=cancelled)
+    try:
+        unchanged = is_close(result.volume, working.volume)
+    except GeometryError:
+        # Ein Ergebnis, dessen Volumen sich nicht bestimmen lässt, ist keines —
+        # gemessen an ``Cat_1.stp`` von unten geöffnet (Sonde 23.09.2026).
+        return None
+    if not result.is_closed or unchanged:
+        return None
+    return result
+
+
 def draft_vertical(
     solid: Solid, angle_deg: float, *, cancelled: CancelToken | None = None
 ) -> Solid:

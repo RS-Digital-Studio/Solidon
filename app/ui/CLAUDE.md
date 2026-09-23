@@ -1604,7 +1604,11 @@ und Undo erhalten bleiben. Seine Gruppen sind einklappbare Abschnitte
 Welche Handlungen **vorn** stehen, beantwortet `quick_names(bodies,
 feature_kind)`: bei mehreren Körpern die Booleschen, bei einem einzelnen
 Bohren, Aushöhlen und Teilen, an einem gewählten Merkmal die seiner Art —
-das Merkmal hat Vorrang vor der Menge. Die Knöpfe dieser Lagen entstehen
+das Merkmal hat Vorrang vor der Menge. *Merkmal vervielfachen*
+(`pattern_feature`, P6.7) steht an jeder Art, die es annimmt, vorn: Es hat
+keine gemessenen Werte, die das Merkmalfenster als Felder zeigen könnte, und
+steht deshalb nicht in `ACTION_ORDER`, sondern öffnet den Dialog mit dem
+gewählten Merkmal in `at_features`. Die Knöpfe dieser Lagen entstehen
 einmal (`all_quick_names`) und werden nur ein- und ausgehängt; was oben
 stehen kann, steht nicht auch in der Suchliste darunter.
 

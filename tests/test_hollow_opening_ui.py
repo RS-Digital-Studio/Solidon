@@ -8,8 +8,9 @@ import pytest
 from PySide6.QtWidgets import QApplication
 
 from app.core.registry import REGISTRY
+from app.i18n import tr
 from app.ui.main_window import MainWindow
-from app.ui.op_dialog import OperationDialog
+from app.ui.op_dialog import FeatureSetField, OperationDialog
 from app.ui.session import Session
 from app.ui.settings import UiSettings
 
@@ -24,11 +25,16 @@ def window(qt_app: QApplication) -> MainWindow:
 
 
 def test_a_clicked_side_face_is_the_opening_of_the_hollowing_dialog(window: MainWindow) -> None:
-    """Fläche wählen, Strg+H — und das Feld *Öffnen an Fläche* nennt sie schon.
+    """Fläche wählen, Strg+H — und das Feld *Öffnungen* nennt sie schon.
 
     Das ist der ganze Kundenweg: kein Haken, keine Kennung zum Abtippen. Eine
     gewählte Bohrung trägt sich dagegen nicht ein — an ihr lässt sich nichts
     öffnen, und das Feld bleibt leer.
+
+    **Seit P6.3 (23.09.2026) unter „Öffnungen" statt „Öffnen an Fläche".**
+    Der Klick meint genau diese Fläche; ``open_at`` öffnet in ihre
+    Achsrichtung und bleibt für gespeicherte Schritte, was es war. Der Haken
+    der leeren Liste heißt dort „Keine", nicht „Ganzer Körper".
     """
     window.open_path(MESHES / "cube_clean.stl")
     window.session.wait_for_idle()
@@ -46,8 +52,11 @@ def test_a_clicked_side_face_is_the_opening_of_the_hollowing_dialog(window: Main
     window.run_operation(spec)
     dialog = next(child for child in window.findChildren(OperationDialog) if child.isVisible())
     try:
-        assert dialog.values()["open_at"] == f"{object_id}:{side}"
+        assert dialog.values()["openings"] == [side]
+        assert dialog.values()["open_at"] == "", "der ältere Achsweg bleibt leer"
         assert dialog.values()["open_top"] is False, "die Fläche gilt, nicht der Haken"
+        field = dialog.findChild(FeatureSetField)
+        assert field is not None and field.whole.text() == tr("Keine")
     finally:
         dialog.reject()
 
@@ -55,7 +64,7 @@ def test_a_clicked_side_face_is_the_opening_of_the_hollowing_dialog(window: Main
     window.run_operation(spec)
     dialog = next(child for child in window.findChildren(OperationDialog) if child.isVisible())
     try:
-        assert dialog.values()["open_at"] == "", "ohne gewählte Fläche bleibt das Feld leer"
+        assert dialog.values()["openings"] == [], "ohne gewählte Fläche bleibt das Feld leer"
     finally:
         dialog.reject()
 

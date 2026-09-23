@@ -441,6 +441,15 @@ CASES = [
         3,
     ),
     Case(
+        "pattern_feature",
+        "hole",
+        # P6.7: das Merkmalsmuster bleibt am exakten Körper exakt.
+        {"at_features": ["hole"], "kind": "linear", "count": 2, "spacing": 14.0, "dx": 1.0},
+        KEEP,
+        "hole_count",
+        2,
+    ),
+    Case(
         "pattern",
         "box",
         {"kind": "linear", "count": 3, "spacing": 30.0, "dx": 1.0, "dy": 0.0, "dz": 0.0},

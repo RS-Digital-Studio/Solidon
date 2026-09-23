@@ -944,6 +944,14 @@ _CHOICE_NAMES: dict[str, TranslatableText] = {
     "vertical": _("Senkrecht"),
     "linear": _("Geradlinig"),
     "circular": _("Kreisförmig"),
+    # Die dritte Art des Merkmalsmusters (P6.7).
+    "mirror": _("Gespiegelt"),
+    # Wohin die Wand beim Aushöhlen wächst (P6.3).
+    "inside": _("Innen"),
+    "outside": _("Außen"),
+    # Was geschieht, wenn der exakte Kern keine Innenwand findet (P6.3).
+    "raster": _("Am Dreiecksmodell"),
+    "unchanged": _("Teil unverändert lassen"),
     "origin": _("Ursprung"),
     "bed": _("Druckbett"),
     "corner": _("Ecke"),
@@ -1164,6 +1172,11 @@ _CHOICE_NOTES: dict[str, TranslatableText] = {
     "vertical": _("Senkrecht, quer zum Druckbett."),
     "linear": _("In gerader Reihe mit gleichem Abstand."),
     "circular": _("Im Kreis um einen Mittelpunkt verteilt."),
+    "mirror": _("Eine Kopie jenseits einer Ebene, spiegelbildlich."),
+    "inside": _("Die Außenmaße bleiben; die Wand wächst nach innen."),
+    "outside": _("Das Teil wird zum Hohlraum; die Wand legt sich außen darum."),
+    "raster": _("Die Wand entsteht über das Raster — das Teil wird ein Dreiecksmodell."),
+    "unchanged": _("Nichts geschieht; der Befund sagt, woran es lag."),
     "origin": _(
         "Der Nullpunkt der Szene steht fest — ein Körper abseits davon ändert auch seinen Ort."
     ),
@@ -1647,6 +1660,13 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "valid": _("Gültige Kandidaten"),
     "value": _("Wert"),
     "vents": _("Entlüftungen"),
+    # Aushöhlen mit gewählten Flächen (P6.3): wie viele davon offen sind, und
+    # was vom Innenraum trotzdem geschlossen blieb (``hollow.closed_cavities``).
+    "openings": _("Öffnungen"),
+    "closed": _("Geschlossene Hohlräume"),
+    # Das Merkmalsmuster (P6.7) nennt die Plätze, die nicht entstanden sind.
+    # „Plätze" allein heißt im Katalog schon die Materialslots.
+    "instances": _("Plätze im Muster"),
     "vertices": _("Ecken"),
     "volume": _("Volumen"),
     # Die Einheit steht im Namen, weil ``_minutes`` keines der Suffixe aus

@@ -1678,6 +1678,15 @@ class ParamSpec:
     "up_to"``: Eine zweite Operation mit Zielfläche hätte ihren Parameter exakt
     so nennen müssen, sonst hätte der Cache still ein veraltetes Ergebnis
     geliefert."""
+    feature_kinds: tuple[str, ...] = ()
+    """Welche Merkmalsarten dieser Merkmalsparameter annimmt — leer heißt jede.
+
+    Gebraucht, wo die Operation selbst keinem Merkmal gilt (kein
+    ``applies_to``) und trotzdem Merkmale nennt: Die Öffnungen des Aushöhlens
+    sind Flächen des Körpers, der ausgehöhlt wird (P6.3). Ein Klick auf eine
+    Bohrung trägt sich dort nicht ein (``scene.placement.values_for``), und
+    die Operation prüft dieselbe Menge, bevor sie rechnet — eine Auskunft,
+    zwei Leser, am Parameter statt in einer Tabelle der Oberfläche."""
     optional: bool = False
     """Dieser Zahlenparameter kennt „nicht gesagt" — sein Wert darf ``None`` sein.
 

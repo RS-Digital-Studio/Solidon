@@ -770,7 +770,18 @@ Richtung durch, und die Operation leitet sie aus der Normalen der Fläche in
 `_vent_spots` nimmt die Stellen aus dem Raster, an denen der ganze
 Bohrerquerschnitt unter Hohlraum liegt, bohrt bis über den höchsten Boden
 darunter und zählt eine Entlüftung erst, wenn sie Material abgetragen hat —
-weniger Platz als verlangt sagt `hollow.fewer_vents`) ·
+weniger Platz als verlangt sagt `hollow.fewer_vents`. **Seit P6.3 dazu gewählte
+Öffnungsflächen und die Wand außen** (`openings`, `outward`): am Netz das
+Raster wie bisher — innen erodiert, außen mit derselben Kugel gewachsen
+(`_outer_field`) —, danach je ebener Fläche ein Öffnungswerkzeug im
+aufgerichteten Rahmen der Fläche (`_opening_tool`): innen der Umriss der
+Fläche geschnitten mit dem Hohlraum eine Wand und eine Zelle unter ihr,
+außen der Umriss plus ein Band über den nach außen gehenden Randkanten, damit
+der Rand bündig bleibt wie am exakten Kern. Eine Fläche ohne Hohlraum darunter
+bleibt zu (`hollow.opening_misses`); bleiben trotz Öffnung oder Entlüftung
+Teile des Innenraums geschlossen, sagt es `hollow.closed_cavities`. Der
+bisherige Innenweg ohne gewählte Flächen rechnet unverändert — goldene
+Volumina in `tests/test_hollow_faces.py`) ·
 `lid.py` (ein Deckel für eine Öffnung — auch vor einer Seitenöffnung:
 `opening_frame` nimmt jede achsparallele **Außen**fläche, `create_lid` dreht den
 Körper mit `upright_normal` nach oben, baut wie immer und dreht Deckel und
@@ -905,6 +916,27 @@ Damit bleibt am exakten Körper keine Merkmalshandlung mehr, die vernetzt;
 `evaluate.exact_became_mesh` ist der Befund für die Operationen, die es
 noch tun (Netzwerkzeuge wie Glätten und Dezimieren, siehe die
 Paritätstabelle).
+
+**Das Merkmalsmuster** (`pattern_feature`, P6.7) wiederholt Merkmale linear,
+kreisförmig oder gespiegelt in **einem** Schritt und bleibt ein Körper —
+anders als `scene.ops.pattern`, das ganze Körper kopiert. Jede Instanz ist
+die Quelle, bewegt: Das Werkzeug entsteht einmal an der Stelle der Quelle
+(`_pattern_probe` — dieselben Körper wie beim Verdoppeln: `_placing_tool`,
+die Kette über `_chain_copy_tool`, der Ring aus Kennzahlen) und wird je Platz
+mit der Matrix des Musters versetzt, gedreht oder gespiegelt; die Merkmale der
+Kopie führt `perceive.matching.transformed_features` nach, derselbe Weg wie
+bei einer Spiegelung des ganzen Körpers (P0.0). Vor dem Schneiden prüft
+`_checked_places` jeden Platz: Überschneidet sein Werkzeug die Quelle oder
+einen angenommenen Platz, oder teilt es kein Volumen mit dem Körper, entsteht
+er nicht (`pattern_feature.overlap`, `pattern_feature.no_target`, je Platz
+benannt). Am Netz schneiden alle Werkzeuge in einer Booleschen je Richtung;
+am exakten Körper je Art das exakte Werkzeug der Verdoppelung
+(`_exact_cavity_tool`, `_exact_chain_tool_placed` mit `_plane_placed`,
+`edit.transformed` des Flächenkörpers, `_exact_torus_tool`) und das Ende von
+`_exact_copy_result`. Die Quelle bleibt maßgebend, weil der Schritt sie beim
+Namen nennt und bei jeder Auswertung neu liest. Matrizen und Punkte rechnen
+elementweise (`transform.moved_points`, `math.fsum`), nicht über BLAS
+(RM-187).
 
 **`slot_hole` nimmt seit dem 22.09.2026 auch eine Breite entgegen**
 (`diameter`, leer heißt „so breit wie gemessen"; `compensate` wie bei

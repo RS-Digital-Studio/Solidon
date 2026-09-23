@@ -816,7 +816,12 @@ def test_a_slot_offers_the_one_operation_that_fits_it() -> None:
         "die Stelle steht auf der gemessenen Mitte, nicht auf dem Ursprung von irgendwo"
     )
     assert werte["diameter"] == pytest.approx(float(slot.params["diameter"]))
-    assert quick_names(1, "slot") == (), "was als Feld dasteht, wird kein zweiter Knopf"
+    # Seit P6.7 (23.09.2026) steht dort *Merkmal vervielfachen* — es hat keine
+    # gemessenen Werte und damit keine Zeile im Merkmalfenster. Was als Feld
+    # dasteht, bleibt ohne zweiten Knopf.
+    assert quick_names(1, "slot") == ("pattern_feature",), (
+        "was als Feld dasteht, wird kein zweiter Knopf"
+    )
 
 
 def test_a_slot_takes_the_four_generic_actions(profile: Profile) -> None:

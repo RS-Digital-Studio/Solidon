@@ -443,7 +443,15 @@ def test_every_operation_with_a_feature_field_gets_it_filled_in() -> None:
 
     empty = []
     for spec in with_field:
-        selected = face() if spec.applies_to == ("face",) else clicked
+        # Ein Feld, das nur Flächen annimmt (``feature_kinds``, die Öffnungen
+        # des Aushöhlens, P6.3), bekommt eine Fläche angeklickt — eine Bohrung
+        # trägt sich dort mit Absicht nicht ein.
+        faces_only = any(
+            entry.feature_kinds and clicked.kind not in entry.feature_kinds
+            for entry in spec.params.spec()
+            if entry.kind in {"feature", "features"}
+        )
+        selected = face() if spec.applies_to == ("face",) or faces_only else clicked
         values = values_for(spec, selected)
         fields = [entry for entry in spec.params.spec() if entry.kind in {"feature", "features"}]
         if not any(

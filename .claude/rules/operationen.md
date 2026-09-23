@@ -86,7 +86,9 @@ ohne Antwortmöglichkeit. **Seit P2.8 gilt dieselbe Weiche auch für die
 Zwillinge** (Konzept §10.1, Entscheidung 4): *Bohrung setzen* und *Aushöhlen*
 fragen die Körperart ihres Eingangs und rufen den exakten Zwilling selbst
 (`drill_brep_hole`, `shell_exact` — Aushöhlen nur, wenn die Oberseite offen
-bleibt und keine Entlüftung gewünscht ist, sonst der Netzweg mit Befund);
+bleibt und keine Entlüftung gewünscht ist, sonst der Netzweg mit Befund;
+gewählte Öffnungsflächen rechnet seit P6.3 der exakte Kern selbst,
+`brep.profiles.shell_open_at`);
 die fünf Grundkörper entstehen exakt, wo der Kern da ist, ihr Netz-Zwilling
 ist versteckt und über die Befehlspalette erreichbar. Der Haken ist aus beiden
 Dialogen verschwunden; der Kernwechsel eines gespeicherten Schritts steht im
@@ -903,6 +905,45 @@ von außen geklickt ist das Langloch der Kandidat. Wo daraus keine positive
 Wand mehr wird, ist es kein Rohr, sondern eine offene Flanke; bei der runden
 Bohrung fängt das der Durchmesservergleich ab, beim Langloch erst die fertige
 Zahl.
+
+## Ein Muster ist die Quelle, bewegt — und es bleibt ein Körper (P6.7)
+
+`pattern_feature` wiederholt Merkmale; `pattern` kopiert Körper. Die zwei
+bleiben getrennt, denn der Kundenweg verlangt ausdrücklich „keine
+versehentliche Kopie des gesamten Körpers" (Konzept §13.9). Drei Regeln:
+
+- **Jede Instanz entsteht aus dem Werkzeug der Quelle, bewegt** — nie aus
+  einer zweiten Beschreibung. Wer eine Art dazunimmt, gibt ihr ein Werkzeug
+  an der Stelle der Quelle (`_pattern_probe`) und ein exaktes Gegenstück
+  (`_exact_place_tool`); die Merkmale der Kopie führt
+  `transformed_features` nach, damit Achsen, Richtungen und Öffnungen
+  drehen und spiegeln wie beim ganzen Körper.
+- **Ein Platz, der nicht passt, entsteht nicht und wird genannt.**
+  Überschneidung mit der Quelle oder einem anderen Platz, kein Material
+  unter dem Werkzeug — beides ein Befund mit den Platznummern und einem
+  Ausweg, nie ein halb geschnittenes Langloch (Regel 17).
+- **Die Quelle bleibt maßgebend**, weil der Schritt sie beim Namen nennt und
+  bei jeder Auswertung neu liest. Ein erkanntes Merkmal ohne belegte
+  Flächen ist keine Quelle (`not_evidenced`): Sein Werkzeug wäre an jedem
+  Platz eine Vermutung.
+
+## Aushöhlen: eine Öffnung ist eine fehlende Fläche, eine Entlüftung ein Loch (P6.3)
+
+`openings` nennt Flächen, die fehlen; `vents` bohrt Löcher in einen sonst
+geschlossenen Hohlraum. Ein offener Hohlraum bekommt keine Entlüftung. Der
+ältere `open_at` öffnet in eine Achsrichtung über den ganzen Querschnitt und
+behält diese Bedeutung für gespeicherte Schritte; zusammen mit `openings`
+ist er eine Absage, keine stille Mischung. **Die Resin-Stufe 2 (P9.3)
+erweitert `vents`, nicht einen zweiten Aushöhlen-Weg.**
+
+Am exakten Körper rechnet `MakeThickSolidByJoin`; ein Ergebnis zählt nur,
+wenn es ein gültiger, geschlossener **und veränderter** Körper ist — die
+Bibliothek gibt bei zu dicker Wand und an konkaven Formen den Eingang
+unverändert zurück, ohne zu werfen. Findet sie keine Innenwand, fragt das
+Raster, ob Platz wäre: Ohne Platz ist die Wand zu dick (`hollow.too_thin`),
+mit Platz entscheidet `exact_fallback` — nachfragen (`ctx.ask`, die Antwort
+reist über `OpResult.answered` in den Schritt), am Dreiecksmodell mit Befund
+und Umwandlungshinweis, oder das Teil lassen. Nie still der Netzweg.
 
 ## Ein Loch versetzt man an beiden Kernen gleich (11.09.2026)
 

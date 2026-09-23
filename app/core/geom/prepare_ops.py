@@ -41,9 +41,10 @@ from app.core.geom.boolean import (
     BooleanOutcome,
     boolean,
     deepest,
+    shared_volume,
     without_effect,
 )
-from app.core.geom.hollow import VENT_DIAMETER, below_printable_wall, hollow
+from app.core.geom.hollow import VENT_DIAMETER, HollowResult, below_printable_wall, hollow
 from app.core.geom.mesh import MeshData, as_mesh_data, face_components
 from app.core.geom.ops import as_transform
 from app.core.geom.orient import NoFittingOrientationError, orient_for_print, ranked_orientations
@@ -3467,22 +3468,7 @@ def _duplicate_cavity_chain(
     body = as_mesh_data(source.mesh)
     measured = np.asarray(feature.params["centre"], dtype=float)
     travel = np.asarray(target, dtype=float) - measured
-    exact = _paired_cavity_body(body, *chain)
-    tool = (
-        _past_the_mouths(body, exact)
-        if exact is not None
-        else _chain_tool(body, chain, pivot=measured, tilt=0.0)
-        or _cavity_tool(
-            body, chain, chain, quality=ctx.quality, seed=ctx.seed, cancelled=ctx.cancelled
-        )
-    )
-    if tool is None:
-        raise ValidationError(
-            field="at_feature",
-            detail=NO_OWN_BODY,
-            values={"feature": feature.id, "bore": chain[0].id, "widening": chain[-1].id},
-            constraint="not_movable",
-        )
+    tool = _chain_copy_tool(ctx, body, feature, chain)
     shifted = tool.raw.copy()
     shifted.apply_translation(travel)
     cutting = MeshData.of(shifted)
@@ -3542,6 +3528,712 @@ def _duplicate_cavity_chain(
         findings=findings,
         solver=placed.solver,
     )
+
+
+# --- Merkmalsmuster (P6.7) --------------------------------------------------------
+
+#: Wie viele Plätze ein Merkmalsmuster höchstens hat, die Quelle mitgezählt.
+#: Dieselbe Grenze und derselbe Grund wie bei den Körperkopien
+#: (``scene.ops.MAX_PATTERN``): darüber ist es ein Tippfehler.
+MOST_FEATURE_PLACES: Final = 100
+
+#: Die drei Arten eines Merkmalsmusters — eine Operation, drei Arten.
+FEATURE_PATTERN_KINDS: Final = ("linear", "circular", "mirror")
+
+
+@op_params
+class PatternFeatureParams(BaseParams):
+    at_features: tuple[str, ...] = param(
+        title=_("Merkmale"),
+        default=(),
+        kind="features",
+        required=True,
+        feature_kinds=DUPLICABLE_KINDS,
+        placement="front",
+        doc=_(
+            "Die Merkmale, die sich wiederholen — ein Klick trägt eines ein. Sie bleiben "
+            "die Quelle: Ändert sich ihr Maß im Verlauf, folgen alle Kopien."
+        ),
+    )
+    kind: str = param(
+        title=_("Art"),
+        default="linear",
+        choices=FEATURE_PATTERN_KINDS,
+        doc=_(
+            "Linear reiht die Kopien in eine Richtung, kreisförmig legt sie um eine "
+            "Achse, gespiegelt setzt eine Kopie jenseits einer Ebene."
+        ),
+    )
+    count: int = param(
+        title=_("Anzahl"),
+        default=3,
+        minimum=2,
+        maximum=MOST_FEATURE_PLACES,
+        depends_on=("kind", ("linear", "circular")),
+        doc=_("Wie viele Plätze das Muster hat, die Quelle mitgezählt."),
+    )
+    spacing: float = param(
+        title=_("Abstand"),
+        default=10.0,
+        unit="mm",
+        minimum=0.1,
+        maximum=1000.0,
+        depends_on=("kind", ("linear",)),
+        doc=_("Von Mitte zu Mitte zweier benachbarter Plätze."),
+    )
+    angle: float = param(
+        title=_("Winkel"),
+        default=360.0,
+        unit=DEGREE_UNIT,
+        minimum=-360.0,
+        maximum=360.0,
+        depends_on=("kind", ("circular",)),
+        doc=_(
+            "Über welchen Bogen die Plätze verteilt werden. Volle 360 Grad "
+            "schließen den Kranz, ohne dass zwei Plätze aufeinanderfallen."
+        ),
+    )
+    skip: str = param(
+        title=_("Auslassen"),
+        default="",
+        depends_on=("kind", ("linear", "circular")),
+        doc=_(
+            "Plätze, die frei bleiben, als Nummern mit Komma. Die Quelle ist Platz 1 "
+            "und bleibt immer."
+        ),
+    )
+    dx: float = param(
+        title=_("Richtung X"),
+        default=0.0,
+        placement="advanced",
+        doc=_(
+            "Bei einer Reihe ihre Richtung, beim Kreis seine Achse, beim Spiegeln die "
+            "Senkrechte der Ebene. Null in allen drei Feldern heißt: Reihe längs X, "
+            "Kreis um Z, gespiegelt an der YZ-Ebene."
+        ),
+    )
+    dy: float = param(
+        title=_("Richtung Y"),
+        default=0.0,
+        placement="advanced",
+        doc=_("Zweite Achse der Richtung — siehe Richtung X."),
+    )
+    dz: float = param(
+        title=_("Richtung Z"),
+        default=0.0,
+        placement="advanced",
+        doc=_("Dritte Achse der Richtung — siehe Richtung X."),
+    )
+    cx: float = param(
+        title=_("Punkt X"),
+        default=0.0,
+        unit="mm",
+        minimum=-1000.0,
+        maximum=1000.0,
+        placement="advanced",
+        depends_on=("kind", ("circular", "mirror")),
+        doc=_("Ein Punkt auf der Achse des Kreises oder in der Spiegelebene."),
+    )
+    cy: float = param(
+        title=_("Punkt Y"),
+        default=0.0,
+        unit="mm",
+        minimum=-1000.0,
+        maximum=1000.0,
+        placement="advanced",
+        depends_on=("kind", ("circular", "mirror")),
+        doc=_("Zweite Koordinate des Punkts — siehe Punkt X."),
+    )
+    cz: float = param(
+        title=_("Punkt Z"),
+        default=0.0,
+        unit="mm",
+        minimum=-1000.0,
+        maximum=1000.0,
+        placement="advanced",
+        depends_on=("kind", ("circular", "mirror")),
+        doc=_("Dritte Koordinate des Punkts — siehe Punkt X."),
+    )
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class _PatternUnit:
+    """Eine Quelle des Musters: das gewählte Merkmal und alles, was mit ihm geht.
+
+    Eine Bohrung mit Senkung ist **ein** Hohlraum (RM-172) und wiederholt sich
+    als Ganzes — ``members`` ist dann die Kette, sonst das Merkmal allein.
+    """
+
+    feature: Feature
+    members: tuple[Feature, ...]
+    chain: tuple[Feature, ...] | None
+
+
+@dataclasses.dataclass(slots=True)
+class _PatternPlace:
+    """Ein Platz des Musters: welche Quelle, welche Nummer, welche Bewegung."""
+
+    unit: _PatternUnit
+    number: int
+    matrix: NDArray[np.float64]
+    probe: MeshData
+    copies: list[Feature] = dataclasses.field(default_factory=list)
+
+
+@register_op(
+    name="pattern_feature",
+    title=_("Merkmal vervielfachen"),
+    category="holes",
+    params=PatternFeatureParams,
+    consumes=1,
+    produces=1,
+    applies_to=list(DUPLICABLE_KINDS),
+    deterministic=False,
+    doc=_(
+        "Wiederholt erkannte Merkmale in einer Reihe, auf einem Kreis oder gespiegelt: "
+        "Bohrung, Senkung, Langloch, Zapfen, Verjüngung, Kuppel, Wulst oder Kehle. Die "
+        "Quelle bleibt maßgebend — ändert sich ihr Maß im Verlauf, folgen die Kopien."
+    ),
+)
+def pattern_feature(ctx: OpContext) -> OpResult:
+    """Merkmale linear, kreisförmig oder gespiegelt wiederholen — ein Schritt (P6.7).
+
+    **Nicht** :func:`app.core.scene.ops.pattern`: Das kopiert ganze Körper.
+    Hier bleibt es ein Körper, und nur das Merkmal wiederholt sich — der
+    Kundenweg aus Konzept §13.9 verlangt ausdrücklich „keine versehentliche
+    Kopie des gesamten Körpers".
+
+    **Die Quelle bleibt maßgebend**, und zwar durch die Bauart: Der Schritt
+    nennt die Quelle beim Namen und liest sie bei jeder Auswertung neu. Ändert
+    jemand ihr Maß in dem Schritt, der sie gesetzt hat, rechnet das Muster mit
+    dem neuen Maß; ein Undo nimmt das ganze Muster, denn es ist ein Schritt.
+
+    **Jede Instanz ist die Quelle, bewegt.** Das Werkzeug entsteht einmal an
+    der Stelle der Quelle — derselbe Körper wie beim Verdoppeln — und wird je
+    Platz mit der Bewegung des Musters versetzt, gedreht oder gespiegelt; so
+    drehen auch Achsen radialer Bohrungen und Richtungen von Langlöchern mit.
+    Vor dem Schneiden wird jeder Platz geprüft: Überschneidet er die Quelle
+    oder einen schon gesetzten Platz, oder trifft er kein Material, entsteht
+    er nicht, und ein Befund nennt ihn beim Platz (Regel 17).
+    """
+    params = cast(PatternFeatureParams, ctx.params)
+    source = ctx.inputs[0]
+    body = as_mesh_data(source.mesh)
+    units = _pattern_units(source, params.at_features, body)
+    places, left_out = _pattern_places(params, _pattern_default_axis(params))
+    ctx.progress(0.1, str(_("Die Plätze des Musters werden geprüft …")))
+    probes = {unit.feature.id: _pattern_probe(ctx, body, source, unit) for unit in units}
+    candidates: list[_PatternPlace] = []
+    for unit in units:
+        for number, matrix in places:
+            ctx.cancelled.raise_if_cancelled()
+            moved = probes[unit.feature.id].raw.copy()
+            transform.moved(moved, matrix)
+            candidates.append(_PatternPlace(unit, number, matrix, MeshData.of(moved)))
+    kept, overlapping, missing = _checked_places(ctx, body, candidates, list(probes.values()))
+    _name_copies(source, kept)
+    findings: list[Finding] = []
+    if overlapping:
+        findings.append(_places_overlap(overlapping, len(units)))
+    if missing:
+        findings.append(_places_miss(missing, len(units)))
+    findings.append(
+        Finding(
+            code="pattern_feature.done",
+            severity="info",
+            message=_("Das Muster steht."),
+            values={
+                "placed": len(kept),
+                "skipped": left_out * len(units),
+                "sources": len(units),
+            },
+        )
+    )
+    if not kept:
+        return OpResult(
+            outputs=[source],
+            findings=[dataclasses.replace(entry, object_id=source.id) for entry in findings],
+        )
+    ctx.progress(0.4, str(_("Die Merkmale werden an ihren Plätzen angelegt …")))
+    if source.kind == "brep":
+        return _exact_pattern_result(ctx, source, kept, findings)
+    return _mesh_pattern_result(ctx, source, body, kept, findings, seed=ctx.seed)
+
+
+def _pattern_units(source: SceneObject, names: Sequence[str], body: MeshData) -> list[_PatternUnit]:
+    """Die Quellen des Musters, jede mit ihrer Kette — oder ein Satz, warum nicht.
+
+    Dieselben Fragen wie beim Verdoppeln (``_movable_feature``, die Kette aus
+    ``cavity_chain_state_at``), dazu eine, die ein Muster schärfer stellt:
+    **Ein erkanntes Merkmal braucht belegte Flächen.** Das Werkzeug jeder
+    Instanz entsteht aus ihnen; ein Merkmal ohne Flächen, das nicht ein
+    Baustein mit seinen Kennzahlen gesetzt hat, wäre an jedem Platz eine
+    Vermutung (Konzept §13.2, „Importmerkmale brauchen belegte Träger").
+    Zwei gewählte Abschnitte derselben Kette sind eine Quelle, nicht zwei.
+    """
+    from app.core.perceive.actions import cone_piece_blocked, reason_against
+    from app.core.perceive.relations import cavity_chain_state_at
+
+    chosen = tuple(dict.fromkeys(names))
+    if not chosen:
+        raise ValidationError(
+            field="at_features",
+            detail=_("Wählen Sie mindestens ein Merkmal, das sich wiederholen soll."),
+            constraint="required",
+            suggestions=(CHANGE_SELECTION, CANCEL),
+        )
+    units: list[_PatternUnit] = []
+    covered: set[str] = set()
+    for name in chosen:
+        feature = source.features.get(name)
+        if feature is None:
+            raise ValidationError(
+                field="at_features",
+                detail=_("Dieses Merkmal gibt es an diesem Objekt nicht."),
+                values={"feature": name, "object": source.id},
+                constraint="unknown_feature",
+                suggestions=(CHANGE_SELECTION, CANCEL),
+            )
+        against = cone_piece_blocked(feature) or reason_against("pattern_feature", feature.kind)
+        if against is not None:
+            raise ValidationError(
+                field="at_features",
+                detail=against,
+                values={"feature": name, "kind": feature.kind},
+                constraint="not_movable",
+                suggestions=(CHANGE_SELECTION, CANCEL),
+            )
+        if feature.id in covered:
+            continue
+        if feature.provenance != "generated" and not feature.face_indices:
+            raise ValidationError(
+                field="at_features",
+                detail=_(
+                    "Dieses Merkmal ist an keinen Flächen des Körpers belegt, und ohne sie "
+                    "entsteht kein Werkzeug für seine Kopien. Erkennen Sie die Merkmale neu "
+                    "oder wählen Sie ein anderes."
+                ),
+                values={"feature": name},
+                constraint="not_evidenced",
+                suggestions=(CHANGE_SELECTION, CANCEL),
+            )
+        state = cavity_chain_state_at(feature, source.features, body)
+        if (refused := cavity_refusal(state)) is not None:
+            raise ValidationError(
+                field="at_features",
+                detail=refused,
+                values={"feature": name},
+                constraint="not_movable",
+                suggestions=(CHANGE_SELECTION, CANCEL),
+            )
+        chain = tuple(state.chain) if state.chain is not None else None
+        members = chain if chain is not None else (feature,)
+        covered.update(member.id for member in members)
+        units.append(_PatternUnit(feature, members, chain))
+    return units
+
+
+def _pattern_default_axis(params: PatternFeatureParams) -> NDArray[np.float64]:
+    """Die Richtung des Musters als Einheitsvektor — ohne Angabe die dokumentierte.
+
+    Null in allen drei Feldern ist keine Richtung, und geraten wird sie nicht:
+    Das Schema nennt, was dann gilt (Reihe längs X, Kreis um Z, Spiegeln an
+    der YZ-Ebene) — dieselbe Vorgabe wie bei *Kopien in Reihe oder Kreis*.
+    """
+    direction = np.asarray((params.dx, params.dy, params.dz), dtype=np.float64)
+    length = math.sqrt(math.fsum(float(value) * float(value) for value in direction))
+    if length <= EPS_GEOM:
+        return np.asarray(
+            (0.0, 0.0, 1.0) if params.kind == "circular" else (1.0, 0.0, 0.0), dtype=np.float64
+        )
+    return direction / length
+
+
+def _pattern_places(
+    params: PatternFeatureParams, direction: NDArray[np.float64]
+) -> tuple[list[tuple[int, NDArray[np.float64]]], int]:
+    """Die Plätze außer der Quelle, je mit Nummer und Bewegung — und wie viele ausgelassen.
+
+    Linear: Platz *k* liegt um k - 1 Abstände in der Richtung. Kreisförmig:
+    Ein voller Kranz teilt durch die Anzahl, ein Teilbogen durch die
+    Zwischenräume — sonst fielen bei 360 Grad der erste und der letzte Platz
+    aufeinander (dieselbe Regel wie beim Körpermuster). Gespiegelt: ein Platz,
+    die Spiegelung an der Ebene durch den Punkt mit der Richtung als
+    Senkrechte; eine Spiegelung ist eine Bewegung mit Determinante -1, und
+    Werkzeug wie Merkmal drehen dabei ihren Umlaufsinn mit.
+    """
+    point = np.asarray((params.cx, params.cy, params.cz), dtype=np.float64)
+    if params.kind == "mirror":
+        # Elementweise, nicht über BLAS (RM-187): An einer Achsnormalen stehen
+        # dann exakt null und eins in der Matrix, und die Kopie liegt auf jeder
+        # Maschine auf denselben Bits.
+        reflection = np.eye(4)
+        reflection[:3, :3] -= 2.0 * np.outer(direction, direction)
+        distance = math.fsum(float(a) * float(b) for a, b in zip(point, direction, strict=True))
+        reflection[:3, 3] = 2.0 * distance * direction
+        return [(2, reflection)], 0
+    if params.count < 2:
+        raise ValidationError(
+            "count",
+            _("Ein Muster braucht mindestens zwei Plätze."),
+            value=params.count,
+            constraint="pattern_count",
+            suggestions=(CORRECT_INPUT, CANCEL),
+        )
+    left_out = _left_out_places(params.skip, params.count)
+    places: list[tuple[int, NDArray[np.float64]]] = []
+    if params.kind == "linear":
+        for number in range(2, params.count + 1):
+            if number in left_out:
+                continue
+            travel = direction * params.spacing * (number - 1)
+            places.append((number, np.asarray(translation(cast(Vec3, tuple(travel))))))
+        return places, len(left_out)
+    full = is_close(abs(params.angle), 360.0)
+    divisor = params.count if full else params.count - 1
+    axis = cast(Vec3, tuple(float(value) for value in direction))
+    about = cast(Vec3, tuple(float(value) for value in point))
+    for number in range(2, params.count + 1):
+        if number in left_out:
+            continue
+        degrees = params.angle * (number - 1) / divisor
+        places.append((number, np.asarray(transform.rotation_about(axis, about, degrees))))
+    return places, len(left_out)
+
+
+def _left_out_places(text: str, count: int) -> set[int]:
+    """Die ausgelassenen Plätze aus „3, 5" — oder ein Satz, warum das keine sind."""
+    numbers: set[int] = set()
+    for word in text.replace(";", ",").replace(" ", ",").split(","):
+        word = word.strip()
+        if not word:
+            continue
+        if not word.isdigit() or not 2 <= int(word) <= count:
+            raise ValidationError(
+                "skip",
+                _(
+                    "Ausgelassen werden Plätze des Musters, als Nummern mit Komma von 2 bis "
+                    "zur Anzahl. Die Quelle ist Platz 1 und bleibt."
+                ),
+                value=text,
+                constraint="pattern_skip",
+                values={"count": count},
+                suggestions=(CORRECT_INPUT, CANCEL),
+            )
+        numbers.add(int(word))
+    return numbers
+
+
+def _pattern_probe(
+    ctx: OpContext, body: MeshData, source: SceneObject, unit: _PatternUnit
+) -> MeshData:
+    """Das Werkzeug einer Instanz an der Stelle der Quelle, als Netz.
+
+    Derselbe Körper, den *Merkmal verdoppeln* setzt: die Kette aus
+    :func:`_chain_copy_tool`, ein einzelnes Merkmal aus :func:`_placing_tool`
+    (ein Zapfen mit Sockel in der Grundfläche), der Ring aus seinen Kennzahlen.
+    Am Netz ist es das Werkzeug selbst, am exakten Körper die Probe, an der
+    Überschneidung und Ziel geprüft werden, bevor exakt geschnitten wird.
+    """
+    feature = unit.feature
+    centre = cast(Vec3, tuple(float(value) for value in feature.params["centre"]))
+    if unit.chain is not None:
+        return _chain_copy_tool(ctx, body, feature, unit.chain)
+    if feature.kind == "torus":
+        ring, tube = _torus_measures(feature, None, None)
+        axis = _torus_axis(feature)
+        return _torus_ring_mesh(centre, cast(Vec3, tuple(float(v) for v in axis)), ring, tube)
+    return _placing_tool(ctx, body, source, feature, centre, is_a_cavity(feature))
+
+
+def _checked_places(
+    ctx: OpContext,
+    body: MeshData,
+    candidates: Sequence[_PatternPlace],
+    sources: Sequence[MeshData],
+) -> tuple[list[_PatternPlace], list[_PatternPlace], list[_PatternPlace]]:
+    """Welche Plätze entstehen — und welche nicht, weil sie überschneiden oder nichts treffen.
+
+    **Überschneidung:** Das Werkzeug des Platzes teilt Volumen mit einer Quelle
+    oder einem schon angenommenen Platz. Zwei Bohrungen, die ineinander
+    laufen, sind keine zwei Bohrungen mehr, und ein Muster, das sie trotzdem
+    schneidet, hinterließe ein Langloch, das niemand bestellt hat.
+
+    **Kein Ziel:** Das Werkzeug teilt kein Volumen mit dem Körper — eine
+    Bohrung neben dem Teil schnitte nichts, ein Zapfen stünde in der Luft.
+    Der Zapfen trägt seinen Sockel (:func:`_rooted`) und berührt eine Fläche,
+    auf der er sitzt, also mit Volumen.
+
+    Kontakt zählt nicht, gemessen an der Druckgrenze wie bei
+    :func:`without_effect`. Die Hüllquader sortieren vor.
+    """
+    least = ctx.profile.smallest_printable_volume if ctx.profile is not None else EPS_GEOM
+    occupied = [entry.raw for entry in sources]
+    kept: list[_PatternPlace] = []
+    overlapping: list[_PatternPlace] = []
+    missing: list[_PatternPlace] = []
+    for place in candidates:
+        ctx.cancelled.raise_if_cancelled()
+        tool = place.probe.raw
+        if any(
+            _boxes_meet(tool, other) and shared_volume(tool, other) > least for other in occupied
+        ):
+            overlapping.append(place)
+            continue
+        if not _boxes_meet(tool, body.raw) or shared_volume(tool, body.raw) <= least:
+            missing.append(place)
+            continue
+        occupied.append(tool)
+        kept.append(place)
+    return kept, overlapping, missing
+
+
+def _boxes_meet(first: Any, second: Any) -> bool:
+    """Überlappen die Hüllquader zweier Netze — die billige Vorfrage."""
+    low = np.maximum(first.bounds[0], second.bounds[0])
+    high = np.minimum(first.bounds[1], second.bounds[1])
+    return bool(np.all(low < high))
+
+
+def _name_copies(source: SceneObject, kept: Sequence[_PatternPlace]) -> None:
+    """Jede Kopie bekommt ihre Lage aus der Bewegung und einen eigenen Namen.
+
+    Die Lage führt :func:`~app.core.perceive.matching.transformed_features`
+    nach — derselbe Weg, auf dem eine Spiegelung oder Drehung des ganzen
+    Körpers seine Merkmale mitnimmt (P0.0): Mitte, Achse, Richtung und
+    Öffnung drehen und spiegeln mit. Die Namen zählt dieselbe Regel wie beim
+    Verdoppeln weiter (:func:`_free_id_among`), über die höchste vergebene
+    Zahl und an den reservierten vorbei.
+    """
+    from app.core.perceive.matching import transformed_features
+
+    taken: set[str] = {*source.reserved_feature_ids, *source.features}
+    for place in kept:
+        moved = transformed_features(
+            {member.id: member for member in place.unit.members}, as_transform(place.matrix)
+        ).candidates
+        for member in place.unit.members:
+            name = _free_id_among(taken, member.kind)
+            taken.add(name)
+            place.copies.append(
+                dataclasses.replace(
+                    moved[member.id],
+                    id=name,
+                    provenance="generated",
+                    face_indices=(),
+                    surface_patches=(),
+                    created_by=None,
+                )
+            )
+
+
+def _place_list(places: Sequence[_PatternPlace], sources: int) -> str:
+    """„2, 3" — oder bei mehreren Quellen „hole_1: 2, 3; pin_2: 4"."""
+    if sources <= 1:
+        return ", ".join(str(place.number) for place in places)
+    grouped: dict[str, list[int]] = {}
+    for place in places:
+        grouped.setdefault(place.unit.feature.id, []).append(place.number)
+    return "; ".join(
+        f"{name}: {', '.join(str(number) for number in numbers)}"
+        for name, numbers in grouped.items()
+    )
+
+
+def _places_overlap(places: Sequence[_PatternPlace], sources: int) -> Finding:
+    """Plätze, die in die Quelle oder einen anderen Platz schneiden würden — sie fehlen."""
+    return Finding(
+        code="pattern_feature.overlap",
+        severity="warning",
+        message=_(
+            "Einige Plätze des Musters überschneiden die Quelle oder einen anderen Platz "
+            "und sind ausgelassen. Welche, steht in „instances“."
+        ),
+        feature_ids=tuple(dict.fromkeys(place.unit.feature.id for place in places)),
+        values={"instances": _place_list(places, sources)},
+        suggestions=(
+            dataclasses.replace(CORRECT_INPUT, label=_("Abstand vergrößern oder Platz auslassen")),
+            CANCEL,
+        ),
+    )
+
+
+def _places_miss(places: Sequence[_PatternPlace], sources: int) -> Finding:
+    """Plätze ohne Material: neben dem Teil, oder ein Zapfen in der Luft — sie fehlen."""
+    return Finding(
+        code="pattern_feature.no_target",
+        severity="warning",
+        message=_(
+            "Einige Plätze des Musters treffen kein Material — sie lägen neben dem Teil "
+            "oder in der Luft und sind ausgelassen. Welche, steht in „instances“."
+        ),
+        feature_ids=tuple(dict.fromkeys(place.unit.feature.id for place in places)),
+        values={"instances": _place_list(places, sources)},
+        suggestions=(
+            dataclasses.replace(CORRECT_INPUT, label=_("Anzahl, Abstand oder Richtung ändern")),
+            CANCEL,
+        ),
+    )
+
+
+def _mesh_pattern_result(
+    ctx: OpContext,
+    source: SceneObject,
+    body: MeshData,
+    kept: Sequence[_PatternPlace],
+    findings: list[Finding],
+    *,
+    seed: int | None,
+) -> OpResult:
+    """Das Muster am Netz: alle Werkzeuge in einer Booleschen je Richtung.
+
+    Materie zuerst, dann die Hohlräume — dieselbe Reihenfolge, in der eine
+    Bohrung durch einen neuen Zapfen hindurch ihren Weg behält. Die Plätze
+    überschneiden einander nicht (:func:`_checked_places`), also ist eine
+    Boolesche mit allen Werkzeugen dasselbe wie eine je Platz.
+    """
+    material = [place.probe for place in kept if not is_a_cavity(place.unit.feature)]
+    hollow_tools = [place.probe for place in kept if is_a_cavity(place.unit.feature)]
+    stages: list[SolverInfo | None] = []
+    placed = body
+    for change, tools in (("union", material), ("difference", hollow_tools)):
+        if not tools:
+            continue
+        outcome = boolean(
+            cast(BooleanKind, change),
+            [placed, *tools],
+            quality=ctx.quality,
+            seed=seed,
+            cancelled=ctx.cancelled,
+        )
+        placed = outcome.mesh
+        findings.extend(outcome.findings)
+        stages.append(outcome.solver)
+    copies: dict[FeatureId, Feature] = {}
+    for place in kept:
+        ctx.cancelled.raise_if_cancelled()
+        findings.extend(_edge_findings(body, place.copies))
+        for copy in place.copies:
+            if copy.params.get("through"):
+                lost = _throughness_lost(
+                    placed,
+                    copy,
+                    cast(Vec3, tuple(float(value) for value in copy.params["centre"])),
+                    "pattern_feature",
+                    quality=ctx.quality,
+                    seed=seed,
+                    cancelled=ctx.cancelled,
+                )
+                findings.extend(lost)
+                if lost:
+                    copy = dataclasses.replace(copy, params={**copy.params, "through": False})
+            copies[copy.id] = copy
+    return OpResult(
+        outputs=[
+            dataclasses.replace(
+                source,
+                mesh=placed,
+                features={**_without_old_triangles(source.features), **copies},
+                reserved_feature_ids=tuple(
+                    sorted({*source.reserved_feature_ids, *source.features, *copies})
+                ),
+            )
+        ],
+        findings=[dataclasses.replace(entry, object_id=source.id) for entry in findings],
+        solver=deepest(stages),
+    )
+
+
+def _exact_pattern_result(
+    ctx: OpContext,
+    source: SceneObject,
+    kept: Sequence[_PatternPlace],
+    findings: list[Finding],
+) -> OpResult:
+    """Das Muster am exakten Körper: exakte Werkzeuge, dieselben Plätze.
+
+    Je Art das Werkzeug, das die exakte Verdoppelung benutzt, an den Platz
+    gebracht: Bohrung und Langloch aus ihren Maßen an der bewegten Mitte und
+    Achse (:func:`_exact_cavity_tool`), die Kette als Drehkörper ihrer Profile
+    an den bewegten Randebenen, Zapfen, Kuppel und Kegel aus ihren nativen
+    Flächen bewegt (``edit.transformed``), der Ring aus seinen Kennzahlen.
+    Das Ende ist das der Verdoppelung (:func:`_exact_copy_result`): erkennen,
+    benennen, Durchgang und verlorene Merkmale melden.
+    """
+    from app.core.brep import edit
+
+    solid = _exact_body(source)
+    faces_bodies: dict[str, Any] = {}
+    material: list[Any] = []
+    hollow_tools: list[Any] = []
+    for place in kept:
+        ctx.cancelled.raise_if_cancelled()
+        tool = _exact_place_tool(source, solid, place, faces_bodies)
+        (hollow_tools if is_a_cavity(place.unit.feature) else material).append(tool)
+    placed = solid
+    if material:
+        placed = edit.unified(edit.boolean("union", [placed, *material]))
+    if hollow_tools:
+        placed = edit.unified(edit.boolean("difference", [placed, *hollow_tools]))
+    copies = [copy for place in kept for copy in place.copies]
+    findings.extend(_edge_findings(as_mesh_data(solid), copies))
+    result = _exact_copy_result(ctx, source, placed, copies, findings, op="pattern_feature")
+    result.findings = [dataclasses.replace(entry, object_id=source.id) for entry in result.findings]
+    return result
+
+
+def _exact_place_tool(
+    source: SceneObject, solid: Any, place: _PatternPlace, faces_bodies: dict[str, Any]
+) -> Any:
+    """Das exakte Werkzeug eines Platzes — je Art dasselbe wie bei der Verdoppelung."""
+    from app.core.brep import edit
+
+    feature = place.unit.feature
+    if place.unit.chain is not None:
+        entrance = _exact_chain_entrance(source, place.unit.chain)
+        return _exact_chain_tool_placed(solid, entrance, place.matrix)
+    copy = place.copies[0]
+    centre = cast(Vec3, tuple(float(value) for value in copy.params["centre"]))
+    if feature.kind == "torus":
+        axis = cast(Vec3, tuple(float(value) for value in copy.params["axis"]))
+        return _exact_torus_tool(feature, centre, axis)
+    if feature.kind in EXACT_CAVITY_KINDS:
+        axis = cast(Vec3, tuple(float(value) for value in copy.params["axis"]))
+        return _exact_cavity_tool(solid, copy, centre, axis)
+    if feature.id not in faces_bodies:
+        faces_bodies[feature.id] = _exact_body_from_faces(source, feature)
+    return edit.transformed(faces_bodies[feature.id], as_transform(place.matrix))
+
+
+def _chain_copy_tool(
+    ctx: OpContext, body: MeshData, feature: Feature, chain: Sequence[Feature]
+) -> MeshData:
+    """Das Werkzeug einer Kopie der ganzen Kette, an der Stelle der Quelle.
+
+    Der exakte Hohlraum aus den Flächen, an den Mündungen um die Zugabe aus
+    §39 verlängert (:func:`_past_the_mouths`); wo die Flächen keinen Körper
+    hergeben, die Kennzahlen (:func:`_chain_tool`) und zuletzt
+    :func:`_cavity_tool`. Eine Stelle für *Merkmal verdoppeln* und das
+    Merkmalsmuster: Beide bewegen dasselbe Werkzeug nur verschieden.
+    """
+    measured = np.asarray(feature.params["centre"], dtype=float)
+    exact = _paired_cavity_body(body, *chain)
+    tool = (
+        _past_the_mouths(body, exact)
+        if exact is not None
+        else _chain_tool(body, chain, pivot=measured, tilt=0.0)
+        or _cavity_tool(
+            body, chain, chain, quality=ctx.quality, seed=ctx.seed, cancelled=ctx.cancelled
+        )
+    )
+    if tool is None:
+        raise ValidationError(
+            field="at_feature",
+            detail=NO_OWN_BODY,
+            values={"feature": feature.id, "bore": chain[0].id, "widening": chain[-1].id},
+            constraint="not_movable",
+        )
+    return tool
 
 
 def _cavity_chain_of(
@@ -7858,6 +8550,20 @@ def _exact_cavity_cut(solid: Any, feature: Feature, centre: Vec3, axis: Vec3) ->
     """
     from app.core.brep import edit
 
+    tool = _exact_cavity_tool(solid, feature, centre, axis)
+    cut = edit.boolean("difference", [solid, tool])
+    # Beim Langloch liegen die Flanken des Werkzeugs in der Ebene alter
+    # Flanken; ihre Teilungsnähte gehören nicht zum Mantel (``slot_bore``).
+    return edit.unified(cut) if feature.kind == "slot" else cut
+
+
+def _exact_cavity_tool(solid: Any, feature: Feature, centre: Vec3, axis: Vec3) -> Any:
+    """Das Werkzeug von :func:`_exact_cavity_cut` — für das Muster, das viele
+    davon zugleich schneidet. Dieselben Maße: durchgehend über die ganze
+    Zielhülle, blind in der gemessenen Tiefe, das Langloch in seiner Richtung.
+    """
+    from app.core.brep import edit
+
     diameter = _bore_number(feature, "diameter")
     depth = (
         _through_bore_depth(solid, centre, axis)
@@ -7865,17 +8571,16 @@ def _exact_cavity_cut(solid: Any, feature: Feature, centre: Vec3, axis: Vec3) ->
         else _bore_number(feature, "depth")
     )
     if feature.kind == "slot":
-        return edit.slot_bore(
-            solid,
-            position=centre,
-            direction=axis,
-            diameter=diameter,
-            depth=depth,
-            length=_bore_number(feature, "length"),
-            angle_deg=_slot_angle_in_frame(feature, axis),
-            overlap=0.0,
+        return edit._slot_tool(
+            centre,
+            axis,
+            diameter,
+            depth,
+            _bore_number(feature, "length"),
+            _slot_angle_in_frame(feature, axis),
+            0.0,
         )
-    return edit.cut_bore(solid, position=centre, direction=axis, diameter=diameter, depth=depth)
+    return edit._centred_bore(centre, axis, diameter, depth, 0.0)
 
 
 def _exact_body_checked(solid: Any) -> Any:
@@ -8148,6 +8853,8 @@ def _exact_copy_result(
     placed: Any,
     copies: Sequence[Feature],
     findings: list[Finding],
+    *,
+    op: str = "duplicate_feature",
 ) -> OpResult:
     """Das gemeinsame Ende der vier exakten Verdoppelungen — Hohlraum, Kette,
     Flächenkörper und Ring: prüfen, erkennen, der Kopie ihren Namen geben,
@@ -8157,7 +8864,8 @@ def _exact_copy_result(
     Namen, den die Zählung freigibt — nicht den, den die Erkennung zufällig
     vergab, und keinen, der reserviert ist. Bis zum 21.09.2026 stand dieser
     Block viermal wörtlich da, und nur einer der vier fragte nach dem
-    verlorenen Durchgang.
+    verlorenen Durchgang. Das Merkmalsmuster endet hier ebenfalls, mit allen
+    Instanzen auf einmal; ``op`` gibt den Befunden seinen Namen.
     """
     checked = _exact_body_checked(placed)
     features, continued, _lost = _exact_features_after(
@@ -8177,15 +8885,13 @@ def _exact_copy_result(
         if len(fresh) == 1 and fresh[0] != copy.id:
             features[copy.id] = dataclasses.replace(features.pop(fresh[0]), id=copy.id)
         elif not fresh and copy.id not in features:
-            findings.append(_cavity_lost_finding("duplicate_feature", copy))
+            findings.append(_cavity_lost_finding(op, copy))
         if (
             copy.id in features
             and copy.params.get("through")
             and not features[copy.id].params.get("through")
         ):
-            findings.append(
-                _through_lost_finding("duplicate_feature", copy, _bore_vector(copy, "centre"))
-            )
+            findings.append(_through_lost_finding(op, copy, _bore_vector(copy, "centre")))
     return OpResult(
         outputs=[
             dataclasses.replace(
@@ -8281,12 +8987,6 @@ def _exact_chain_entrance(source: SceneObject, chain: Sequence[Feature]) -> _Bor
     return entrance
 
 
-def _plane_moved(plane: SectionPlane, travel: NDArray[np.float64]) -> SectionPlane:
-    """Dieselbe Ebene, um ``travel`` verschoben."""
-    normal = np.asarray(plane.normal, dtype=float)
-    return dataclasses.replace(plane, position=plane.position + float(normal @ travel))
-
-
 def _plane_turned(
     plane: SectionPlane, matrix: NDArray[np.float64], pivot: NDArray[np.float64], shift: float
 ) -> SectionPlane:
@@ -8349,20 +9049,71 @@ def _exact_chain_filled(source: SceneObject, entrance: _BoreEntrance) -> Any:
 def _exact_chain_cut_moved(solid: Any, entrance: _BoreEntrance, travel: NDArray[np.float64]) -> Any:
     """Die Kette an der um ``travel`` verschobenen Stelle exakt ausschneiden."""
     from app.core.brep import edit
+
+    matrix = np.asarray(translation(cast(Vec3, tuple(float(v) for v in travel))), dtype=float)
+    tool = _exact_chain_tool_placed(solid, entrance, matrix)
+    return edit.unified(edit.boolean("difference", [solid, tool]))
+
+
+def _exact_chain_tool_placed(
+    solid: Any, entrance: _BoreEntrance, matrix: NDArray[np.float64]
+) -> Any:
+    """Das Werkzeug der Kette, mit einer starren Bewegung an einen neuen Platz gebracht.
+
+    Der Drehkörper ihrer Profile steht auf der bewegten Achse, die Randebenen
+    wandern mit (:func:`_plane_placed`). Eine Spiegelung ist erlaubt: Der
+    Drehkörper ist um seine Achse symmetrisch, und die Ebenen spiegeln mit.
+    Verschieben (*Merkmal verdoppeln*) ist der Sonderfall ohne Drehung, das
+    Merkmalsmuster der allgemeine.
+    """
     from app.core.sketch.planes import frame_of
 
-    origin = np.asarray(entrance.origin, dtype=float) + travel
-    tool = _exact_chain_solid(
+    origin = _moved_point(np.asarray(entrance.origin, dtype=float), matrix)
+    axis = _vector_placed(np.asarray(entrance.axis, dtype=float), matrix)
+    return _exact_chain_solid(
         entrance,
         solid.bounds.diagonal,
         filling=False,
-        frame=frame_of(entrance.axis, (float(origin[0]), float(origin[1]), float(origin[2]))),
+        frame=frame_of(
+            (float(axis[0]), float(axis[1]), float(axis[2])),
+            (float(origin[0]), float(origin[1]), float(origin[2])),
+        ),
         planes_of=lambda _index, lower, upper: (
-            _plane_moved(lower, travel),
-            _plane_moved(upper, travel),
+            _plane_placed(lower, matrix),
+            _plane_placed(upper, matrix),
         ),
     )
-    return edit.unified(edit.boolean("difference", [solid, tool]))
+
+
+def _plane_placed(plane: SectionPlane, matrix: NDArray[np.float64]) -> SectionPlane:
+    """Dieselbe Ebene nach einer starren Bewegung — auch einer Spiegelung.
+
+    Für eine orthogonale Drehung ist die Normale ein Vektor wie jeder andere;
+    der Abstand vom Ursprung kommt aus einem bewegten Punkt der Ebene.
+    """
+    normal = np.asarray(plane.normal, dtype=float)
+    turned = _vector_placed(normal, matrix)
+    point = _moved_point(normal * plane.position, matrix)
+    return SectionPlane(
+        normal=(float(turned[0]), float(turned[1]), float(turned[2])),
+        position=math.fsum(float(a) * float(b) for a, b in zip(turned, point, strict=True)),
+    )
+
+
+def _moved_point(point: NDArray[np.float64], matrix: NDArray[np.float64]) -> NDArray[np.float64]:
+    """Ein Punkt nach einer 4x4-Bewegung — elementweise über
+    :func:`~app.core.geom.transform.moved_points`, nicht über BLAS (RM-187)."""
+    return cast(
+        NDArray[np.float64],
+        transform.moved_points(np.asarray([point], dtype=np.float64), matrix)[0],
+    )
+
+
+def _vector_placed(vector: NDArray[np.float64], matrix: NDArray[np.float64]) -> NDArray[np.float64]:
+    """Eine Richtung nach einer 4x4-Bewegung: nur deren Drehung, ohne Verschiebung."""
+    turn = np.eye(4)
+    turn[:3, :3] = np.asarray(matrix, dtype=np.float64)[:3, :3]
+    return _moved_point(vector, turn)
 
 
 def _exact_chain_cut_turned(
@@ -11114,19 +11865,43 @@ class HollowParams(BaseParams):
             "eine Dose, und *Deckel erzeugen* findet die Öffnung, die es braucht."
         ),
     )
+    openings: tuple[str, ...] = param(
+        title=_("Öffnungen"),
+        default=(),
+        kind="features",
+        # Flächen des Körpers, der ausgehöhlt wird — eine Bohrung trägt sich
+        # beim Anklicken nicht ein (``values_for``), und die Operation prüft
+        # dieselbe Menge (P6.3).
+        feature_kinds=("face", "curved_face"),
+        doc=_(
+            "Die Flächen, die offen bleiben — jede angeklickte Fläche kommt dazu. "
+            "Die übrigen Flächen bleiben geschlossen. Leer heißt: geschlossen "
+            "oder oben offen."
+        ),
+    )
+    wall_side: str = param(
+        title=_("Richtung"),
+        default="inside",
+        choices=("inside", "outside"),
+        doc=_(
+            "Innen behält das Teil seine Außenmaße, und die Wand wächst nach innen. "
+            "Außen wird das Teil selbst zum Hohlraum, und die Wand legt sich darum."
+        ),
+    )
     open_at: str = param(
         title=_("Öffnen an Fläche"),
         default="",
         # **Ein Ziel, kein Ort** — dieselbe Bauart wie ``up_to`` an der
-        # Skizze: Eine angeklickte Fläche trägt sich ein (``values_for`` tut
-        # das nur für Flächen), und der Dialog bietet die Flächen der Szene
-        # mit Namen an. Ein ``kind="feature"`` hätte auch eine Bohrung
-        # eingetragen, und an einer Bohrung lässt sich nichts öffnen.
+        # Skizze. Seit P6.3 (23.09.2026) die ältere der zwei Öffnungen: Sie
+        # öffnet in die **Achsrichtung** der Fläche über den ganzen Querschnitt
+        # des Hohlraums (RM-087), und gespeicherte Schritte hängen an genau
+        # dieser Bedeutung. Ein Klick trägt sich seither unter ``openings``
+        # ein; hier nur noch, wer das Feld ausdrücklich wählt.
         targets_feature=True,
+        placement="advanced",
         doc=_(
-            "Statt oben: die Seite, an der der Hohlraum offen bleibt — die "
-            "Vorderseite eines Puppenhauses etwa. Eine angeklickte Fläche trägt "
-            "sich selbst ein und gilt vor „Oben öffnen“."
+            "Öffnet den Hohlraum zu der Seite, in die diese Fläche zeigt, über seinen "
+            "ganzen Querschnitt. Genau die gewählten Flächen öffnet „Öffnungen“."
         ),
     )
     vents: int = param(
@@ -11148,19 +11923,35 @@ class HollowParams(BaseParams):
         placement="advanced",
         doc=_("Weite der Öffnungen. Groß genug, dass nicht verbrauchtes Material herauskommt."),
     )
+    exact_fallback: str = param(
+        title=_("Wenn es exakt nicht geht"),
+        default="ask",
+        choices=("ask", "raster", "unchanged"),
+        placement="advanced",
+        doc=_(
+            "Findet der exakte Kern für diese Form keine gleichmäßige Innenwand, entsteht "
+            "die Wand am Dreiecksmodell über das Raster — oder das Teil bleibt, wie es "
+            "ist. „Nachfragen“ entscheidet, sobald der Fall eintritt."
+        ),
+    )
 
 
 @register_op(
     name="hollow_object",
+    # 2: gewählte Öffnungsflächen, Wand außen, erfragter Rückfall; an den
+    # bisherigen Wegen neu der Befund ``hollow.closed_cavities`` (P6.3,
+    # 23.09.2026). Die Geometrie gespeicherter Schritte ist unverändert.
+    cache_version="2",
     title=_("Aushöhlen"),
     category="prepare",
     params=HollowParams,
     consumes=1,
     produces=1,
     doc=_(
-        "Höhlt ein Objekt aus und setzt Entlüftungen. Spart Material und Zeit; "
-        "die Wandstärke stimmt im Rahmen des Rasters. Ein Körper mit bearbeitbaren "
-        "Flächen bleibt exakt, wenn nur die Oberseite offen bleibt."
+        "Höhlt ein Objekt aus, mit Entlüftungen oder mit gewählten offenen Flächen. "
+        "Spart Material und Zeit; am Dreiecksmodell stimmt die Wand im Rahmen des "
+        "Rasters. Ein Körper mit bearbeitbaren Flächen bleibt exakt, wenn gewählte "
+        "Flächen oder die Oberseite offen bleiben."
     ),
     caveat=_(
         "Nicht ohne Entlüftung, wenn im Slicer Stützen entstehen: Der Hohlraum füllt "
@@ -11173,7 +11964,30 @@ class HollowParams(BaseParams):
 def hollow_object(ctx: OpContext) -> OpResult:
     params = cast(HollowParams, ctx.params)
     source = ctx.inputs[0]
+    outward = params.wall_side == "outside"
+    openings = tuple(dict.fromkeys(params.openings))
+    if openings:
+        # **Gewählte Öffnungsflächen** (P6.3, Konzept §13.2): exakt über
+        # ``BRepOffsetAPI_MakeThickSolidByJoin``, am Netz über das Raster mit
+        # einem Öffnungswerkzeug je Fläche. Der ältere Achsweg ``open_at``
+        # bedeutet etwas anderes und wird nicht still mit ihm vermischt.
+        if str(params.open_at).strip():
+            raise ValidationError(
+                field="open_at",
+                detail=_(
+                    "„Öffnen an Fläche“ gilt nur ohne gewählte Öffnungen. Tragen Sie die "
+                    "Fläche unter „Öffnungen“ ein und leeren Sie dieses Feld."
+                ),
+                value=params.open_at,
+                constraint="opening_twice",
+                suggestions=(CORRECT_INPUT, CANCEL),
+            )
+        if source.kind == "brep":
+            return _exact_hollow_open(ctx, source, openings, outward=outward)
+        return _mesh_hollow_open(ctx, source, openings, outward=outward)
     if source.kind == "brep" and exactly_hollowable(params):
+        if outward:
+            return _exact_hollow_open(ctx, source, (), outward=True)
         # **Die Entscheidungstabelle** (P2.8, Konzept §10.1): Der exakte Weg
         # öffnet immer die Oberseite und kennt weder eine andere Öffnung noch
         # Entlüftungen. Genau dieser Auftrag bleibt exakt; jeder andere geht
@@ -11189,10 +12003,17 @@ def hollow_object(ctx: OpContext) -> OpResult:
         vent_diameter=params.vent_diameter,
         open_top=params.open_top,
         open_towards=_opening_direction(source, params.open_at),
+        outward=outward,
         quality=ctx.quality,
         progress=ctx.progress,
         cancelled=ctx.cancelled,
     )
+    return _mesh_hollow_result(ctx, source, result)
+
+
+def _mesh_hollow_result(ctx: OpContext, source: SceneObject, result: HollowResult) -> OpResult:
+    """Das gemeinsame Ende der Netzwege des Aushöhlens: Körper, Stufe, Befunde."""
+    params = cast(HollowParams, ctx.params)
     return OpResult(
         outputs=[dataclasses.replace(source, mesh=result.mesh, features={})],
         # Aushöhlen fährt bis zu sechs Boolesche Schnitte und meldete keine
@@ -11212,6 +12033,256 @@ def hollow_object(ctx: OpContext) -> OpResult:
             for entry in [*result.findings, below_printable_wall(params.wall, ctx.profile)]
             if entry is not None
         ],
+    )
+
+
+def _opening_faces(source: SceneObject, openings: Sequence[str]) -> list[Feature]:
+    """Die gewählten Öffnungsflächen — oder ein Satz, warum eine nicht geht (Regel 17).
+
+    Dieselben Fragen wie am älteren ``open_at``: Gibt es die Fläche an
+    **diesem** Körper, und ist sie eine Fläche. Welche Arten zählen, sagt der
+    Parameter selbst (``feature_kinds``) — derselbe, nach dem ein Klick im
+    Fenster sich einträgt. Ob sie eben sein muss, entscheidet der Kern, der
+    rechnet: am Netz ja, am exakten Körper nicht.
+    """
+    from app.core.sketch.planes import feature_plane_parts
+
+    allowed = next(entry.feature_kinds for entry in HollowParams.spec() if entry.name == "openings")
+    faces: list[Feature] = []
+    for name in openings:
+        object_id, feature_id = feature_plane_parts(f"feature:{name}")
+        if object_id and object_id != source.id:
+            raise ValidationError(
+                field="openings",
+                detail=_(
+                    "Diese Fläche gehört zu einem anderen Körper — geöffnet wird "
+                    "an einer Fläche des Körpers, der ausgehöhlt wird."
+                ),
+                value=name,
+                constraint="foreign_feature",
+                suggestions=(CORRECT_INPUT, CANCEL),
+            )
+        feature = source.features.get(feature_id)
+        if feature is None:
+            raise ValidationError(
+                field="openings",
+                detail=_("Diese Fläche gibt es an diesem Objekt nicht mehr."),
+                value=name,
+                constraint="unknown_feature",
+                values={"known": ", ".join(sorted(source.features))},
+                suggestions=(CORRECT_INPUT, CANCEL),
+            )
+        if feature.kind not in allowed:
+            raise ValidationError(
+                field="openings",
+                detail=_("Geöffnet wird an einer Fläche — dieses Merkmal ist keine."),
+                value=name,
+                constraint="not_a_face",
+                values={"kind": feature.kind},
+                suggestions=(CORRECT_INPUT, CANCEL),
+            )
+        faces.append(feature)
+    return faces
+
+
+def _mesh_hollow_open(
+    ctx: OpContext, source: SceneObject, openings: Sequence[str], *, outward: bool
+) -> OpResult:
+    """Aushöhlen mit gewählten Flächen am Netz — Raster und Öffnungswerkzeug (P6.3).
+
+    Am Netz bleibt nur eine **ebene** Fläche offen: Ihr Umriss in ihrer Ebene
+    ist das Werkzeug. Eine gewölbte Fläche sagt ab und nennt den Weg dorthin.
+    """
+    from app.core.geom.hollow import Opening, opening_plane
+
+    params = cast(HollowParams, ctx.params)
+    mesh = as_mesh_data(source.mesh)
+    chosen: list[Opening] = []
+    for feature in _opening_faces(source, openings):
+        triangles = tuple(int(index) for index in feature.face_indices)
+        if feature.kind != "face" or opening_plane(mesh, triangles) is None:
+            raise ValidationError(
+                field="openings",
+                detail=_(
+                    "Am Dreiecksmodell bleibt nur eine ebene Fläche offen. Wählen Sie "
+                    "eine ebene Fläche, oder arbeiten Sie an einem Körper mit "
+                    "bearbeitbaren Flächen."
+                ),
+                value=feature.id,
+                constraint="not_planar",
+                suggestions=(CHANGE_SELECTION, CANCEL),
+            )
+        chosen.append(Opening(triangles=triangles, name=feature.id))
+    if params.open_top:
+        top = _top_triangles(mesh)
+        if top and not any(set(top) == set(entry.triangles) for entry in chosen):
+            chosen.append(Opening(triangles=top))
+    result = hollow(
+        mesh,
+        params.wall,
+        openings=tuple(chosen),
+        outward=outward,
+        quality=ctx.quality,
+        progress=ctx.progress,
+        cancelled=ctx.cancelled,
+    )
+    return _mesh_hollow_result(ctx, source, result)
+
+
+def _top_triangles(mesh: MeshData) -> tuple[int, ...]:
+    """Die Dreiecke der Oberseite — dieselbe Frage wie ``profiles.top_faces_of``
+    am exakten Körper: nach oben gerichtet und auf der höchsten Ebene."""
+    raw = mesh.raw
+    normals = np.asarray(raw.face_normals, dtype=np.float64)
+    centres = np.asarray(raw.triangles_center, dtype=np.float64)
+    top = float(mesh.bounds.maximum[2])
+    chosen = np.flatnonzero((normals[:, 2] > 0.9) & (np.abs(centres[:, 2] - top) <= 1e-4))
+    return tuple(int(index) for index in chosen)
+
+
+def _exact_hollow_open(
+    ctx: OpContext, source: SceneObject, openings: Sequence[str], *, outward: bool
+) -> OpResult:
+    """Aushöhlen mit gewählten Flächen am exakten Körper (P6.3).
+
+    ``BRepOffsetAPI_MakeThickSolidByJoin`` mit genau diesen Flächen, nach innen
+    oder nach außen; *Oben öffnen* legt die Oberseite dazu. Gibt OpenCASCADE
+    keinen brauchbaren Körper, bleibt das Teil, wie es war, und der Befund sagt
+    warum: Findet das Raster innen keinen Platz, ist die Wand zu dick; findet
+    es welchen, schneiden sich die Innenwände an dieser Form
+    (``hollow.walls_collide``). Das Raster wird nur in diesem Fall gefragt.
+    """
+    from app.core.brep.profiles import shell_open_at, top_faces_of
+    from app.core.geom.hollow import erosion_steps, has_room_inside, hollowed, too_thin
+
+    params = cast(HollowParams, ctx.params)
+    solid = _exact_body(source)
+    faces = _opening_faces(source, openings)
+    indices: set[int] = set()
+    for feature in faces:
+        indices.update(solid.complete_faces_of_triangles(tuple(feature.face_indices)))
+    if params.open_top:
+        indices.update(top_faces_of(solid, cancelled=ctx.cancelled))
+    ctx.progress(0.2, str(_("Hohlraum ausschneiden")))
+    shelled = shell_open_at(
+        solid, params.wall, sorted(indices), outward=outward, cancelled=ctx.cancelled
+    )
+    findings: list[Finding] = []
+    if shelled is None:
+        tessellated = as_mesh_data(solid)
+        if not outward and not has_room_inside(tessellated, params.wall):
+            findings.append(dataclasses.replace(too_thin(params.wall), suggestions=_THINNER))
+            return OpResult(
+                outputs=[source],
+                findings=[dataclasses.replace(entry, object_id=source.id) for entry in findings],
+            )
+        choice, answered = _exact_fallback_choice(ctx, params)
+        if choice == "raster":
+            # **Derselbe Auftrag, am Dreiecksmodell** — dieselben Flächen, dieselbe
+            # Wand, im Rahmen des Rasters. Die Umwandlung meldet die Auswertung vor
+            # der Übernahme (``evaluate.exact_became_mesh``); der Satz hier sagt,
+            # warum es sie gibt. Gefragt wurde einmal, die Antwort steht im Schritt.
+            meshed = dataclasses.replace(source, mesh=tessellated, kind="mesh")
+            result = _mesh_hollow_open(ctx, meshed, openings, outward=outward)
+            result.findings.insert(
+                0, dataclasses.replace(_exact_gave_way(params.wall), object_id=source.id)
+            )
+            result.answered.update(answered)
+            return result
+        steps, pitch = erosion_steps(params.wall)
+        findings.append(_walls_collide(params.wall, steps * pitch))
+        return OpResult(
+            outputs=[source],
+            findings=[dataclasses.replace(entry, object_id=source.id) for entry in findings],
+            answered=answered,
+        )
+    findings.append(hollowed(params.wall, float(solid.volume) - float(shelled.volume)))
+    thin = below_printable_wall(params.wall, ctx.profile)
+    if thin is not None:
+        findings.append(thin)
+    features, _continued, _lost = _exact_features_after(
+        source,
+        shelled,
+        expected=None,
+        gone=tuple(feature.id for feature in faces),
+        cancelled=ctx.cancelled,
+    )
+    return OpResult(
+        outputs=[dataclasses.replace(source, mesh=shelled, kind="brep", features=features)],
+        findings=[dataclasses.replace(entry, object_id=source.id) for entry in findings],
+    )
+
+
+def _exact_fallback_choice(ctx: OpContext, params: HollowParams) -> tuple[str, dict[str, Any]]:
+    """Was geschieht, wenn der exakte Kern keine Innenwand findet — gefragt oder gespeichert.
+
+    Regel 21: Der Rückfall auf das Raster ist keine stille Entscheidung. Steht
+    ``exact_fallback`` auf „Nachfragen", fragt die Operation einmal
+    (``ctx.ask``), und die Antwort reist als Parameter in den Stapel
+    (``OpResult.answered``) — dieselbe Datei rechnet danach ohne Frage gleich.
+    """
+    if params.exact_fallback != "ask":
+        return params.exact_fallback, {}
+    choices = [str(_("Am Dreiecksmodell aushöhlen")), str(_("Teil unverändert lassen"))]
+    answer = ctx.ask(
+        str(
+            _(
+                "Der exakte Kern findet für diese Form keine gleichmäßige Innenwand. Soll "
+                "die Wand am Dreiecksmodell entstehen — dieselben Öffnungen, die Wand im "
+                "Rahmen des Rasters?"
+            )
+        ),
+        choices,
+    )
+    if answer not in choices:
+        raise InternalError(detail="the hollowing fallback question returned an unknown choice")
+    choice = "raster" if answer == choices[0] else "unchanged"
+    return choice, {"exact_fallback": choice}
+
+
+def _exact_gave_way(wall: float) -> Finding:
+    """Die Wand entstand am Dreiecksmodell, weil der exakte Kern sie nicht fand."""
+    return Finding(
+        code="hollow.exact_fallback",
+        severity="warning",
+        message=_(
+            "Der exakte Kern fand für diese Form keine gleichmäßige Innenwand. Die Wand "
+            "entstand am Dreiecksmodell über das Raster; das Teil ist danach ein "
+            "Dreiecksmodell."
+        ),
+        values={"wall_mm": round(wall, 2)},
+    )
+
+
+#: Die Auswege, wenn die Wand für diesen Körper zu dick ist: eine dünnere
+#: eintragen, oder es lassen.
+_THINNER: Final = (
+    dataclasses.replace(CORRECT_INPUT, label=_("Dünnere Wand eintragen")),
+    CANCEL,
+)
+
+
+def _walls_collide(wall: float, eroded: float) -> Finding:
+    """Der exakte Kern findet keine gleichmäßige Innenwand, und das Teil bleibt.
+
+    Der konkave Fall aus P6.3: An einer Rippe, einem Absatz oder einer engen
+    Kehle finden die versetzten Flächen keinen gemeinsamen Verlauf, obwohl das
+    Teil dick genug ist — und an verrundeten Kundenteilen aus STEP scheitert
+    ``MakeThickSolidByJoin`` in jeder gemessenen Einstellung (Sonde vom
+    23.09.2026, Bericht P6.3). Gesagt wird deshalb, was feststeht: Der exakte
+    Kern hat es nicht geschafft; nicht, dass die Form es verbietet. Gilt, wenn
+    ``exact_fallback`` das Raster ausschlägt.
+    """
+    return Finding(
+        code="hollow.walls_collide",
+        severity="warning",
+        message=_(
+            "Der exakte Kern findet für diese Form keine gleichmäßige Innenwand. Das Teil "
+            "bleibt, wie es war. Eine dünnere Wand oder andere offene Flächen wählen, "
+            "oder am Dreiecksmodell aushöhlen."
+        ),
+        values={"wall_mm": round(wall, 2), "eroded_mm": round(eroded, 3)},
+        suggestions=(*_THINNER[:1], CHANGE_SELECTION, CANCEL),
     )
 
 

@@ -488,6 +488,14 @@ _NOT_A_RANGE = frozenset(
         # Eine Öffnungsfläche, die zu einem anderen Körper gehört, schräg liegt
         # oder innen sitzt (RM-087): eine andere Fläche ist der Weg, keine Zahl.
         "foreign_feature", "not_axis_aligned", "not_outside",
+        # Gewählte Öffnungsflächen (P6.3): am Netz eine gewölbte Fläche, und die
+        # ältere Achsöffnung zugleich mit gewählten Flächen — eine andere
+        # Fläche oder ein geleertes Feld ist der Weg, keine Zahl.
+        "not_planar", "opening_twice",
+        # Das Merkmalsmuster (P6.7): ein Merkmal ohne belegte Flächen, und
+        # auszulassende Plätze, die keine Plätze sind — eine andere Wahl ist
+        # der Weg, keine Zahl in einem Feld.
+        "not_evidenced", "pattern_skip",
         # Die Tiefe einer Bohrung (23.09.2026): welche Seite offen ist, lässt sich
         # nicht bestimmen, oder die genannte Seite ist keine ihrer Mündungen —
         # eine andere Seite oder ein leeres Feld ist der Weg, keine Zahl.

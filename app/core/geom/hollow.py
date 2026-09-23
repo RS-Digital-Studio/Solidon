@@ -30,7 +30,7 @@ from app.core.deferred import trimesh
 from app.core.errors import PROGRAMMING_ERRORS, BooleanFailedError, NotManifoldError
 from app.core.geom import lathe
 from app.core.geom.boolean import BooleanOutcome, boolean, deepest
-from app.core.geom.mesh import MeshData
+from app.core.geom.mesh import MeshData, concatenated
 from app.core.geom.repair import open_edge_count
 from app.core.log import get_logger
 from app.core.types import (
@@ -93,6 +93,51 @@ class HollowResult:
     exakten Schnitt kommt oder aus einer Voxelnäherung."""
 
 
+@dataclass(frozen=True, slots=True)
+class Opening:
+    """Eine gewählte ebene Fläche, die beim Aushöhlen offen bleibt (P6.3).
+
+    ``triangles`` sind die Dreiecksnummern der Fläche im Netz, das ausgehöhlt
+    wird; ``name`` ihre Merkmalskennung, damit ein Befund sagen kann, welche
+    Öffnung gemeint ist.
+    """
+
+    triangles: tuple[int, ...]
+    name: str = ""
+
+
+def opening_plane(mesh: MeshData, triangles: tuple[int, ...]) -> tuple[Vec3, Vec3] | None:
+    """Mitte und Normale einer ebenen Öffnungsfläche — ``None``, wenn sie nicht eben ist.
+
+    Die Normale ist das flächengewichtete Mittel der Dreiecksnormalen und zeigt
+    aus dem Material heraus. Eben heißt: Jede Ecke liegt höchstens
+    ``FLAT_ENOUGH_FOR_A_TOOL`` neben der Ebene durch die Mitte. Am Netz öffnet
+    nur eine ebene Fläche; eine gewölbte hat keinen Querschnitt, an dem die
+    Öffnung als Umriss entsteht (Absage mit Weg in der Operation).
+    """
+    from app.core.geom.faces import FLAT_ENOUGH_FOR_A_TOOL
+
+    raw = mesh.raw
+    chosen = np.asarray(triangles, dtype=np.int64)
+    if not chosen.size or int(chosen.max()) >= len(raw.faces) or int(chosen.min()) < 0:
+        return None
+    corners = np.asarray(raw.triangles, dtype=np.float64)[chosen]
+    crossed = np.cross(corners[:, 1] - corners[:, 0], corners[:, 2] - corners[:, 0])
+    summed = crossed.sum(axis=0)
+    length = float(np.linalg.norm(summed))
+    if length <= EPS_GEOM:
+        return None
+    normal = summed / length
+    points = corners.reshape(-1, 3)
+    centre = points.mean(axis=0)
+    if float(np.abs((points - centre) @ normal).max()) > FLAT_ENOUGH_FOR_A_TOOL:
+        return None
+    return (
+        (float(centre[0]), float(centre[1]), float(centre[2])),
+        (float(normal[0]), float(normal[1]), float(normal[2])),
+    )
+
+
 def hollow(
     mesh: MeshData,
     wall: float,
@@ -101,6 +146,8 @@ def hollow(
     vent_diameter: float = VENT_DIAMETER,
     open_top: bool = False,
     open_towards: Vec3 | None = None,
+    openings: tuple[Opening, ...] = (),
+    outward: bool = False,
     quality: Quality = "fine",
     progress: ProgressFn | None = None,
     cancelled: CancelToken | None = None,
@@ -120,13 +167,81 @@ def hollow(
     Rand. Gesetzt schlägt es ``open_top``; beides ist dieselbe Sache mit
     anderer Richtung, und eine offene Seite braucht so wenig eine
     Entlüftung wie eine offene Decke.
+
+    ``openings`` sind gewählte ebene Flächen, die offen bleiben (P6.3) — jede
+    in ihrer eigenen Ebene, auch schräg. Gesetzt gehen sie vor ``open_top``
+    und ``open_towards``; die Operation lässt die Mischung mit ``open_towards``
+    nicht zu und legt die Oberseite bei ``open_top`` als Fläche dazu.
+
+    ``outward`` lässt die Wand außen wachsen: Der Körper selbst wird der
+    Hohlraum, die Wand legt sich mit einer Kugel als Werkzeug um ihn — runde
+    Stöße wie am exakten Kern (``GeomAbs_Arc``). Ohne beides ist es der Weg,
+    den gespeicherte Schritte immer gegangen sind, und er rechnet unverändert.
     """
     if wall <= EPS_GEOM:
         raise ValueError("a wall thickness has to be positive")
     direction: Vec3 | None = open_towards if open_towards is not None else None
     if direction is None and open_top:
         direction = (0.0, 0.0, 1.0)
+    # **Ein Wächter für jede Boolesche** (RM-170): Reißt die Kette an einem
+    # nicht geschlossenen Körper, ist die offene Hülle der Grund, gleich an
+    # welchem Schnitt — Hohlraum, Öffnung, Entlüftung, Wand außen. Er steht
+    # hier einmal und nicht in jedem Helfer; die Prüfung über den Syntaxbaum
+    # (``test_the_hull_is_named_at_every_boolean_of_the_hollowing``) folgt den
+    # Aufrufen bis in die Helfer.
+    try:
+        if openings:
+            return _hollow_with_openings(
+                mesh,
+                wall,
+                openings,
+                outward=outward,
+                quality=quality,
+                progress=progress,
+                cancelled=cancelled,
+            )
+        if outward:
+            return _hollow_outward(
+                mesh,
+                wall,
+                vents=vents,
+                vent_diameter=vent_diameter,
+                direction=direction,
+                quality=quality,
+                progress=progress,
+                cancelled=cancelled,
+            )
+        return _hollow_inward(
+            mesh,
+            wall,
+            vents=vents,
+            vent_diameter=vent_diameter,
+            direction=direction,
+            quality=quality,
+            progress=progress,
+            cancelled=cancelled,
+        )
+    except BooleanFailedError as failure:
+        _the_hull_or_the_chain(mesh, failure)
 
+
+def _hollow_inward(
+    mesh: MeshData,
+    wall: float,
+    *,
+    vents: int,
+    vent_diameter: float,
+    direction: Vec3 | None,
+    quality: Quality,
+    progress: ProgressFn | None,
+    cancelled: CancelToken | None,
+) -> HollowResult:
+    """Der Weg, den gespeicherte Schritte immer gegangen sind: Wand innen,
+    geschlossen, oben oder zu einer Achsrichtung offen, mit Entlüftungen.
+
+    Unverändert aus :func:`hollow` herausgelöst (P6.3) — die goldenen Volumina
+    in ``tests/test_hollow_faces.py`` halten ihn auf dem Stand davor.
+    """
     # §15.6: Aushöhlen rastert einen ganzen Körper und fährt danach bis zu sechs
     # Boolesche Schnitte. Das dauert an einem gescannten Teil Minuten, und bis
     # hierher erfuhr niemand davon — weder wie weit es ist noch dass man
@@ -144,11 +259,8 @@ def hollow(
 
     before = mesh.volume
     _step(progress, cancelled, 0.4, _("Hohlraum ausschneiden"))
-    try:
-        outcome = boolean("difference", [mesh, cavity], quality=quality, cancelled=cancelled)
-        enclosed = _enclosed_cavity(mesh, cavity, outcome, before, quality, cancelled)
-    except BooleanFailedError as failure:
-        _the_hull_or_the_chain(mesh, failure)
+    outcome = boolean("difference", [mesh, cavity], quality=quality, cancelled=cancelled)
+    enclosed = _enclosed_cavity(mesh, cavity, outcome, before, quality, cancelled)
     body = outcome.mesh
     findings = [*outcome.findings, *enclosed.findings]
     stages: list[SolverInfo | None] = [outcome.solver, enclosed.solver]
@@ -168,10 +280,7 @@ def hollow(
                 )
             )
         else:
-            try:
-                opened = boolean("difference", [body, tool], quality=quality, cancelled=cancelled)
-            except BooleanFailedError as failure:
-                _the_hull_or_the_chain(mesh, failure)
+            opened = boolean("difference", [body, tool], quality=quality, cancelled=cancelled)
             body = opened.mesh
             findings.extend(opened.findings)
             stages.append(opened.solver)
@@ -180,47 +289,454 @@ def hollow(
     # Eine offene Dose ist ihre eigene Entlüftung. Ein Loch im Boden wäre dort
     # kein Schutz vor der durchsackenden Decke, sondern ein Loch im Boden.
     if vents > 0 and direction is None:
-        _step(progress, cancelled, 0.8, _("Entlüftungen bohren"))
-        try:
-            body, placed, drilled = _vent(
-                body, cavity, vent_diameter, vents, quality, progress, cancelled, field=field
-            )
-        except BooleanFailedError as failure:
-            _the_hull_or_the_chain(mesh, failure)
+        body, placed, drilled, said = _drill_vents(
+            mesh, body, cavity, field, vents, vent_diameter, quality, progress, cancelled
+        )
         stages.extend(drilled)
-        if not placed:
-            findings.append(
-                Finding(
-                    code="hollow.no_vent",
-                    severity="warning",
-                    message=_(
-                        "Es war keine Stelle für eine Entlüftung zu finden — "
-                        "ein geschlossener Hohlraum drückt beim Drucken die Decke hoch."
-                    ),
-                )
-            )
-        elif len(placed) < vents:
-            # Weniger, als verlangt, und das wird gesagt: Der Hohlraum ist
-            # offen, aber wer drei Entlüftungen eingetragen hat, soll nicht
-            # im Bericht nachzählen müssen, dass es eine wurde.
-            findings.append(
-                Finding(
-                    code="hollow.fewer_vents",
-                    severity="info",
-                    message=_(
-                        "Am Boden des Hohlraums war nur Platz für {placed} von {wanted} "
-                        "Entlüftungen. Der Hohlraum ist offen.",
-                        placed=len(placed),
-                        wanted=vents,
-                    ),
-                    values={"placed": len(placed), "wanted": vents},
-                )
-            )
+        findings.extend(said)
 
     removed = before - body.volume
-    steps, pitch = erosion_steps(wall)
     _log.info("hollowed out %.1f mm³ behind a %.2f mm wall", removed, wall)
-    findings.append(
+    values: dict[str, float | int | str] = {
+        "removed_cm3": round(removed / 1000.0, 1),
+        "vents": len(placed),
+        # Wohin geöffnet wurde, als Wort — „+z" für die Decke, „-y"
+        # für die Vorderseite. Ohne Öffnung steht dort nichts.
+        "opening": _direction_name(direction) if direction is not None else "",
+    }
+    findings.extend(
+        _raster_findings(wall, values, opened=body if vents > 0 or direction is not None else None)
+    )
+    return HollowResult(
+        mesh=replace(body, cavity=enclosed.mesh),
+        removed=removed,
+        vents=placed,
+        findings=findings,
+        solver=deepest(stages),
+    )
+
+
+def _outer_field(mesh: MeshData, wall: float) -> tuple[np.ndarray, np.ndarray, Vec3, float]:
+    """Das Raster des Körpers und seine um die Wand gewachsene Hülle (Wand außen).
+
+    Zurück kommen der Körper selbst — er ist außen der Hohlraum —, die Hülle,
+    der Ursprung und die Weite. Das Raster wird vorher um die Wand und zwei
+    Zellen erweitert: ``solid_field`` lässt ringsum nur eine leere Zelle, und
+    eine Kugel von ``steps`` Zellen fiele sonst vom Rand. Gewachsen wird mit
+    derselben Kugel, mit der innen erodiert wird (:func:`_ball`) — die Stöße
+    werden damit rund, wie am exakten Kern.
+    """
+    from scipy import ndimage
+
+    from app.core.perceive.maps import solid_field
+
+    steps, pitch = erosion_steps(wall)
+    field = solid_field(mesh, pitch)
+    margin = steps + 2
+    body = np.pad(field.filled, margin)
+    grown = ndimage.binary_dilation(body, structure=_ball(steps))
+    origin = np.asarray(field.origin, dtype=float) - margin * pitch
+    return body, grown, (float(origin[0]), float(origin[1]), float(origin[2])), pitch
+
+
+def _hollow_outward(
+    mesh: MeshData,
+    wall: float,
+    *,
+    vents: int,
+    vent_diameter: float,
+    direction: Vec3 | None,
+    quality: Quality,
+    progress: ProgressFn | None,
+    cancelled: CancelToken | None,
+) -> HollowResult:
+    """Die Wand wächst außen: Der Körper wird zum Hohlraum (P6.3).
+
+    Die Hülle ist das um die Wand gewachsene Raster, neu vernetzt; der Körper
+    selbst geht exakt als Innenseite hinein. Eine Öffnung nach ``direction``
+    nimmt die Wand über dem äußersten Querschnitt des Körpers weg, um die
+    Wand in der Ebene verbreitert (:func:`_outward_mouth`) — der Rand bleibt
+    bündig mit der Fläche, über die geöffnet wird.
+    """
+    _step(progress, cancelled, 0.05, _("Raster aufbauen"))
+    inner, grown, origin, pitch = _outer_field(mesh, wall)
+    outer = _meshed(grown, origin, pitch, mesh)
+    if outer is None:
+        return HollowResult(mesh=mesh, findings=[too_thin(wall)])
+    before = mesh.volume
+    _step(progress, cancelled, 0.4, _("Wand legen"))
+    outcome = boolean("difference", [outer, mesh], quality=quality, cancelled=cancelled)
+    body = outcome.mesh
+    findings = list(outcome.findings)
+    stages: list[SolverInfo | None] = [outcome.solver]
+    if direction is not None:
+        steps, _pitch = erosion_steps(wall)
+        opening = _outward_mouth(inner, direction, steps)
+        tool = _meshed(opening, origin, pitch, mesh) if opening is not None else None
+        if tool is not None:
+            opened = boolean("difference", [body, tool], quality=quality, cancelled=cancelled)
+            body = opened.mesh
+            findings.extend(opened.findings)
+            stages.append(opened.solver)
+    placed: tuple[Vec3, ...] = ()
+    if vents > 0 and direction is None:
+        body, placed, drilled, said = _drill_vents(
+            mesh,
+            body,
+            mesh,
+            (inner, origin, pitch),
+            vents,
+            vent_diameter,
+            quality,
+            progress,
+            cancelled,
+        )
+        stages.extend(drilled)
+        findings.extend(said)
+    values: dict[str, float | int | str] = {
+        "material_cm3": round(body.volume / 1000.0, 1),
+        "vents": len(placed),
+        "opening": _direction_name(direction) if direction is not None else "",
+    }
+    findings.extend(
+        _raster_findings(wall, values, opened=body if vents > 0 or direction is not None else None)
+    )
+    _log.info("hollowed %.1f mm³ outwards behind a %.2f mm wall", before, wall)
+    return HollowResult(
+        mesh=replace(body, cavity=MeshData.of(mesh.raw.copy())),
+        removed=before - body.volume,
+        vents=placed,
+        findings=findings,
+        solver=deepest(stages),
+    )
+
+
+def _outward_mouth(body: np.ndarray, direction: Vec3, steps: int) -> np.ndarray | None:
+    """Das Raster der Öffnung bei Wand außen: der äußerste Querschnitt des
+    Körpers in ``direction``, in der Ebene um die Wand verbreitert, jenseits
+    davon bis an den Rand des Rasters.
+
+    Verbreitert, weil die gewachsene Hülle an den Kanten rund über den
+    Querschnitt hinausgreift: Ohne das stünde um die Öffnung ein Wulst von
+    Wandhöhe, wo der exakte Kern den Rand bündig in der Ebene lässt. Jenseits
+    des äußersten Querschnitts liegt vom Körper nichts mehr — was dort von
+    der Hülle steht, gehört zu dieser Öffnung.
+    """
+    from scipy import ndimage
+
+    axis = int(np.argmax(np.abs(np.asarray(direction, dtype=float))))
+    forward = float(direction[axis]) > 0.0
+    seen = np.moveaxis(body, axis, -1)
+    opening = np.zeros_like(body)
+    written = np.moveaxis(opening, axis, -1)
+    if not forward:
+        seen = seen[..., ::-1]
+        written = written[..., ::-1]
+    levels = np.flatnonzero(seen.any(axis=(0, 1)))
+    if not len(levels):
+        return None
+    top = int(levels[-1])
+    reach = np.arange(-steps, steps + 1)
+    disk = (reach[:, None] ** 2 + reach[None, :] ** 2) <= steps**2
+    wider = ndimage.binary_dilation(seen[..., top], structure=disk)
+    written[..., top] = seen[..., top]
+    written[..., top + 1 :] = wider[..., None]
+    return opening if opening.any() else None
+
+
+def _hollow_with_openings(
+    mesh: MeshData,
+    wall: float,
+    openings: tuple[Opening, ...],
+    *,
+    outward: bool,
+    quality: Quality,
+    progress: ProgressFn | None,
+    cancelled: CancelToken | None,
+) -> HollowResult:
+    """Aushöhlen mit gewählten ebenen Öffnungsflächen (P6.3).
+
+    Die Wand entsteht wie ohne Öffnung (innen erodiert, außen gewachsen);
+    danach schneidet je Fläche ein Werkzeug die Wand über ihr weg
+    (:func:`_opening_tool`). Eine Fläche, unter der kein Hohlraum liegt, bleibt
+    zu, und der Befund ``hollow.opening_misses`` nennt sie. Ein offener
+    Hohlraum braucht keine Entlüftung.
+    """
+    _steps, pitch = erosion_steps(wall)
+    before = mesh.volume
+    _step(progress, cancelled, 0.05, _("Raster aufbauen"))
+    stages: list[SolverInfo | None] = []
+    findings: list[Finding] = []
+    if outward:
+        _inner, grown, origin, pitch = _outer_field(mesh, wall)
+        outer = _meshed(grown, origin, pitch, mesh)
+        if outer is None:
+            return HollowResult(mesh=mesh, findings=[too_thin(wall)])
+        cavity = MeshData.of(mesh.raw.copy())
+        _step(progress, cancelled, 0.4, _("Wand legen"))
+        outcome = boolean("difference", [outer, mesh], quality=quality, cancelled=cancelled)
+    else:
+        field = _inner_field(mesh, wall)
+        found = _meshed(field[0], field[1], field[2], mesh) if field is not None else None
+        if found is None or found.triangle_count == 0:
+            return HollowResult(mesh=mesh, findings=[too_thin(wall)])
+        cavity = found
+        _step(progress, cancelled, 0.4, _("Hohlraum ausschneiden"))
+        outcome = boolean("difference", [mesh, cavity], quality=quality, cancelled=cancelled)
+    body = outcome.mesh
+    findings.extend(outcome.findings)
+    stages.append(outcome.solver)
+    opened = 0
+    for index, opening in enumerate(openings, start=1):
+        _step(progress, cancelled, 0.5 + 0.4 * index / len(openings), _("Öffnungen schneiden"))
+        tools = _opening_tool(mesh, cavity, opening, wall, pitch, outward=outward)
+        if not tools:
+            findings.append(_opening_misses(opening))
+            continue
+        for tool in tools:
+            cut = boolean("difference", [body, tool], quality=quality, cancelled=cancelled)
+            body = cut.mesh
+            findings.extend(cut.findings)
+            stages.append(cut.solver)
+        opened += 1
+    values: dict[str, float | int | str] = {"vents": 0, "openings": opened}
+    if outward:
+        values["material_cm3"] = round(body.volume / 1000.0, 1)
+    else:
+        values["removed_cm3"] = round((before - body.volume) / 1000.0, 1)
+    findings.extend(_raster_findings(wall, values, opened=body))
+    return HollowResult(
+        mesh=replace(body, cavity=cavity),
+        removed=before - body.volume,
+        findings=findings,
+        solver=deepest(stages),
+    )
+
+
+def _opening_misses(opening: Opening) -> Finding:
+    """Unter dieser Fläche liegt kein Hohlraum — sie bleibt zu."""
+    from app.core.errors import CHANGE_SELECTION, CORRECT_INPUT
+
+    return Finding(
+        code="hollow.opening_misses",
+        severity="warning",
+        message=_(
+            "Unter dieser Fläche liegt kein Hohlraum, sie bleibt geschlossen. Dort ist "
+            "das Teil dünner als zwei Wände — eine dünnere Wand oder eine andere "
+            "Fläche wählen."
+        ),
+        feature_ids=(opening.name,) if opening.name else (),
+        suggestions=(CORRECT_INPUT, CHANGE_SELECTION),
+    )
+
+
+def _opening_tool(
+    mesh: MeshData,
+    cavity: MeshData,
+    opening: Opening,
+    wall: float,
+    pitch: float,
+    *,
+    outward: bool,
+) -> list[MeshData]:
+    """Die Werkzeuge, die die Wand über einer gewählten ebenen Fläche wegnehmen.
+
+    Gerechnet in dem Bezugssystem, in dem die Fläche nach oben schaut
+    (``autosplit.upright_normal``): Ihr Umriss ist dort die Vereinigung ihrer
+    Dreiecke in der Ebene.
+
+    **Innen** ist die Öffnung der Teil des Umrisses, unter dem der Hohlraum
+    liegt — der Schnitt des Hohlraums eine Wand und eine Rasterweite unter
+    der Fläche. Das Werkzeug reicht von dort bis eine Rasterweite über die
+    Fläche: Der Hohlraum liegt auf einen halben Rasterschritt genau, die
+    Wand darüber ist damit sicher durch. Eine Stelle, unter der das Teil
+    dünner ist als zwei Wände, hat dort keinen Hohlraum und bleibt zu.
+
+    **Außen** ist der Körper der Hohlraum, die Öffnung also der ganze Umriss.
+    Über den **nach außen** gehenden Kanten der Fläche greift die gewachsene
+    Hülle rund über den Umriss hinaus; ein zweites Werkzeug nimmt dort alles
+    oberhalb der Flächenebene weg — der Rand bleibt bündig wie am exakten
+    Kern. An einer nach innen gehenden Kante steigt die Nachbarwand über die
+    Ebene; ihre Wand bleibt stehen.
+    """
+    import shapely
+    from shapely.geometry import LineString, Polygon
+
+    from app.core.geom.autosplit import sections_across, upright_normal
+
+    plane = opening_plane(mesh, opening.triangles)
+    if plane is None:
+        return []
+    _centre, normal = plane
+    turn = upright_normal(normal)
+    back = np.linalg.inv(turn)
+    rotation = turn[:3, :3]
+    raw = mesh.raw
+    chosen = np.asarray(opening.triangles, dtype=np.int64)
+    corners = np.asarray(raw.triangles, dtype=np.float64)[chosen] @ rotation.T
+    level = float(corners[..., 2].mean())
+    outline = shapely.union_all([Polygon(triangle[:, :2]) for triangle in corners]).buffer(0)
+    if outline.is_empty:
+        return []
+    reach = wall + pitch
+    if not outward:
+        section = sections_across(cavity, normal, np.array([level - reach]))[0]
+        if section is None or section.is_empty:
+            return []
+        region = outline.intersection(section)
+        tool = _prism(region, level - reach, level + pitch, back, pitch)
+        return [tool] if tool is not None else []
+    tools = []
+    below = _prism(outline, level - pitch, level + reach, back, pitch)
+    if below is not None:
+        tools.append(below)
+    ring = [
+        LineString(segment).buffer(reach)
+        for segment in _outgoing_edges(mesh, chosen, rotation, level)
+    ]
+    if ring:
+        rim = _prism(shapely.union_all(ring), level, level + reach, back, pitch)
+        if rim is not None:
+            tools.append(rim)
+    return tools
+
+
+def _outgoing_edges(
+    mesh: MeshData, chosen: np.ndarray, rotation: np.ndarray, level: float
+) -> list[np.ndarray]:
+    """Die Randkanten der Fläche, hinter denen der Körper nach unten weggeht.
+
+    Im aufgerichteten Bezugssystem, als Strecken in der Ebene. Eine Kante ist
+    eine Randkante, wenn nur ein Dreieck der Fläche an ihr liegt; ob sie nach
+    außen geht, sagt das Nachbardreieck jenseits von ihr: liegt seine Mitte
+    unter der Flächenebene, fällt der Körper dort ab. Liegt sie darüber, steigt
+    eine Wand auf, und deren eigene Wand bleibt stehen.
+    """
+    from app.core.geom.faces import FLAT_ENOUGH_FOR_A_TOOL
+
+    raw = mesh.raw
+    inside = np.zeros(len(raw.faces), dtype=bool)
+    inside[chosen] = True
+    pairs = np.asarray(raw.face_adjacency, dtype=np.int64)
+    edges = np.asarray(raw.face_adjacency_edges, dtype=np.int64)
+    if not len(pairs):
+        return []
+    crossing = inside[pairs[:, 0]] != inside[pairs[:, 1]]
+    vertices = np.asarray(raw.vertices, dtype=np.float64) @ rotation.T
+    centres = np.asarray(raw.triangles_center, dtype=np.float64) @ rotation.T
+    found = []
+    for (first, second), edge in zip(pairs[crossing], edges[crossing], strict=True):
+        other = second if inside[first] else first
+        if centres[other, 2] > level + FLAT_ENOUGH_FOR_A_TOOL:
+            continue
+        found.append(vertices[edge][:, :2])
+    return found
+
+
+def _prism(
+    region: object, bottom: float, top: float, back: np.ndarray, pitch: float
+) -> MeshData | None:
+    """Ein Umriss als Prisma von ``bottom`` bis ``top``, zurück in die Welt gedreht.
+
+    Splitter unter einer Rasterzelle Fläche fallen weg — sie entstehen, wo der
+    Schnitt des Hohlraums den Umriss nur an seinem Rasterrand berührt, und
+    schnitten eine Kerbe statt einer Öffnung.
+    """
+    from shapely.geometry import MultiPolygon, Polygon
+
+    parts: list[Polygon] = []
+    if isinstance(region, Polygon):
+        parts = [region]
+    elif isinstance(region, MultiPolygon):
+        parts = list(region.geoms)
+    elif hasattr(region, "geoms"):
+        parts = [part for part in region.geoms if isinstance(part, Polygon)]
+    bodies = []
+    for part in parts:
+        if part.is_empty or part.area < pitch * pitch:
+            continue
+        body = trimesh.creation.extrude_polygon(part, height=top - bottom)
+        body.apply_translation((0.0, 0.0, bottom))
+        body.apply_transform(back)
+        bodies.append(body)
+    if not bodies:
+        return None
+    joined = bodies[0] if len(bodies) == 1 else concatenated(bodies)
+    return MeshData.of(joined)
+
+
+def _drill_vents(
+    mesh: MeshData,
+    body: MeshData,
+    cavity: MeshData,
+    field: tuple[np.ndarray, Vec3, float] | None,
+    vents: int,
+    vent_diameter: float,
+    quality: Quality,
+    progress: ProgressFn | None,
+    cancelled: CancelToken | None,
+) -> tuple[MeshData, tuple[Vec3, ...], list[SolverInfo | None], list[Finding]]:
+    """Die Entlüftungen eines geschlossenen Hohlraums — und was dabei zu sagen war.
+
+    Eine Stelle für die Wand innen und die Wand außen: ``field`` ist das
+    Raster des **Hohlraums** (innen der eingezogene Körper, außen der Körper
+    selbst), ``cavity`` sein Netz. Gebohrt wird von unten durch die Wand bis
+    über den höchsten Boden des Hohlraums (:func:`_vent`).
+    """
+    _step(progress, cancelled, 0.8, _("Entlüftungen bohren"))
+    drilled_body, placed, drilled = _vent(
+        body, cavity, vent_diameter, vents, quality, progress, cancelled, field=field
+    )
+    findings: list[Finding] = []
+    if not placed:
+        findings.append(
+            Finding(
+                code="hollow.no_vent",
+                severity="warning",
+                message=_(
+                    "Es war keine Stelle für eine Entlüftung zu finden — "
+                    "ein geschlossener Hohlraum drückt beim Drucken die Decke hoch."
+                ),
+            )
+        )
+    elif len(placed) < vents:
+        # Weniger, als verlangt, und das wird gesagt: Der Hohlraum ist
+        # offen, aber wer drei Entlüftungen eingetragen hat, soll nicht
+        # im Bericht nachzählen müssen, dass es eine wurde.
+        findings.append(
+            Finding(
+                code="hollow.fewer_vents",
+                severity="info",
+                message=_(
+                    "Am Boden des Hohlraums war nur Platz für {placed} von {wanted} "
+                    "Entlüftungen. Der Hohlraum ist offen.",
+                    placed=len(placed),
+                    wanted=vents,
+                ),
+                values={"placed": len(placed), "wanted": vents},
+            )
+        )
+    return drilled_body, placed, drilled, findings
+
+
+def _raster_findings(
+    wall: float, values: dict[str, float | int | str], *, opened: MeshData | None = None
+) -> list[Finding]:
+    """Ausgehöhlt — und was das Raster dabei zugesagt hat.
+
+    Eine Stelle für alle drei Netzwege (bisheriger Weg, Wand außen, gewählte
+    Öffnungen): ``hollow.done`` mit dem, was die Erosion wirklich abgetragen
+    hat, und ``hollow.coarse_grid``, wenn das Raster die Wand nicht treffen
+    kann. ``values`` sind die Werte, die nur der jeweilige Weg kennt.
+
+    ``opened`` ist der fertige Körper, wenn der Hohlraum offen sein soll — über
+    eine Öffnung oder eine Entlüftung. Dann sagt ``hollow.closed_cavities``,
+    wenn Teile des Innenraums trotzdem geschlossen geblieben sind: An einem
+    Tischorganizer aus dem Kundenkorpus blieben neben dem geöffneten Fach
+    weitere Hohlräume zu, und kein Satz nannte sie (Sonde vom 23.09.2026).
+    """
+    steps, pitch = erosion_steps(wall)
+    findings = [
         Finding(
             code="hollow.done",
             severity="info",
@@ -233,14 +749,10 @@ def hollow(
                 # nicht treffen konnte.
                 "eroded_mm": round(steps * pitch, 3),
                 "tolerance_mm": round(pitch / 2.0, 3),
-                "removed_cm3": round(removed / 1000.0, 1),
-                "vents": len(placed),
-                # Wohin geöffnet wurde, als Wort — „+z" für die Decke, „-y"
-                # für die Vorderseite. Ohne Öffnung steht dort nichts.
-                "opening": _direction_name(direction) if direction is not None else "",
+                **values,
             },
         )
-    )
+    ]
     worst = abs(steps * pitch - wall) + pitch / 2.0
     if worst > wall * PITCH_SHARE / 2.0 + EPS_GEOM:
         # Unter ``MIN_PITCH`` kommt das Raster nicht, also verfehlt eine dünne
@@ -265,13 +777,42 @@ def hollow(
                 },
             )
         )
-    return HollowResult(
-        mesh=replace(body, cavity=enclosed.mesh),
-        removed=removed,
-        vents=placed,
-        findings=findings,
-        solver=deepest(stages),
-    )
+    if opened is not None:
+        closed = _closed_cavities(opened, pitch)
+        if closed:
+            from app.core.errors import CORRECT_INPUT
+
+            findings.append(
+                Finding(
+                    code="hollow.closed_cavities",
+                    severity="warning",
+                    message=_(
+                        "Nicht jeder Hohlraum ist offen: Teile des Innenraums bleiben "
+                        "geschlossen und drücken beim Drucken die Decke hoch. Weitere "
+                        "Öffnungen oder Entlüftungen setzen."
+                    ),
+                    values={
+                        "count": len(closed),
+                        "closed_cm3": round(sum(closed) / 1000.0, 2),
+                    },
+                    suggestions=(CORRECT_INPUT,),
+                )
+            )
+    return findings
+
+
+def _closed_cavities(body: MeshData, pitch: float) -> list[float]:
+    """Die Volumina der geschlossenen Hohlräume im fertigen Körper, in mm³.
+
+    Ein geschlossener Hohlraum ist eine Schale des Netzes mit negativem
+    Volumen — nach innen gerichtet, ohne Verbindung zur Außenhaut. Kleiner
+    als zwei Rasterzellen zählt nicht: Solche Schalen entstehen, wo das
+    Raster an einer dünnen Stelle eine Zelle einschließt, und sind kein
+    Hohlraum, den jemand ausdrucken würde.
+    """
+    least = 8.0 * pitch**3
+    pieces = body.raw.split(only_watertight=False)
+    return [-float(piece.volume) for piece in pieces if float(piece.volume) < -least]
 
 
 def below_printable_wall(wall: float, profile: Profile | None) -> Finding | None:
@@ -415,6 +956,16 @@ def too_thin(wall: float) -> Finding:
         message=_("Für diese Wandstärke bleibt kein Hohlraum übrig."),
         values={"wall_mm": round(wall, 2)},
     )
+
+
+def has_room_inside(mesh: MeshData, wall: float) -> bool:
+    """Bleibt nach einer Wand von ``wall`` innen überhaupt ein Hohlraum?
+
+    Die Frage des Rasters, für den exakten Kern gestellt, wenn OpenCASCADE
+    keinen Körper liefert: Ist hier kein Platz, war die Wand zu dick; ist
+    Platz, schneiden sich an dieser Form die Innenwände (P6.3).
+    """
+    return _inner_field(mesh, wall) is not None
 
 
 def _inner_field(mesh: MeshData, wall: float) -> tuple[np.ndarray, Vec3, float] | None:

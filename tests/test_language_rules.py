@@ -698,9 +698,10 @@ DU_FORMS_CAPITAL = [
 
 
 #: „Stelle" und „Teile" sind Nomen und Befehlsform zugleich. Am Satzanfang
-#: zählen sie nur, wenn ein Wort folgt und der Text kein Knopftitel ist
+#: zählen sie nur, wenn ein Objekt folgt, wie es ein Befehl hat (Artikel oder
+#: Fürwort im Akkusativ), und der Text kein Knopftitel ist
 #: (:func:`_noun_title`) — „Stelle den Schritt um." duzt, „Stelle im Bild
-#: wählen" nicht.
+#: wählen" und „Teile des Innenraums bleiben geschlossen" nicht.
 DU_FORMS_AMBIGUOUS = ["Stelle", "Teile"]
 
 #: Sätze, die der Kunde selbst an den Agenten schreibt — Beispiele im Chat.
@@ -739,7 +740,13 @@ def _du_form(text: str) -> str | None:
     capital = re.search(start + "(" + "|".join(DU_FORMS_CAPITAL) + ")" + boundary, text)
     if capital:
         return capital.group(1)
-    ambiguous = re.search(start + "(" + "|".join(DU_FORMS_AMBIGUOUS) + r")\s+(?!Sie\b)\S", text)
+    ambiguous = re.search(
+        start
+        + "("
+        + "|".join(DU_FORMS_AMBIGUOUS)
+        + r")\s+(den|das|die|sie|es|ihn|ein|eine|einen)\b",
+        text,
+    )
     if ambiguous and not _noun_title(text):
         return ambiguous.group(1)
     return None

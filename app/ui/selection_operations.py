@@ -70,24 +70,25 @@ QUICK_FEATURES: dict[str, tuple[str, ...]] = {
     # Sie bleiben trotzdem in der Reihenfolge stehen: Nimmt der Kern eine der
     # beiden aus ``ACTION_ORDER``, steht sie an der Stelle wieder da, an die
     # sie gehört, statt hinten in der Suchliste.
-    "hole": ("resize_hole", "countersink_hole", "slot_hole", "plug_hole"),
-    # **Am Langloch ist die Karte leer, und das ist die richtige Antwort.**
-    # Alle sechs Handlungen des Langlochs stehen oben als Felder, und was dort
-    # steht, bekommt hier keinen zweiten Knopf. Die Zeile hält die Stelle für
-    # den Fall frei, dass *Zum Langloch ziehen* je aufhört, ein Feld zu sein —
-    # der Rückfall :data:`QUICK_FEATURE` träfe an dieser Art nichts, denn
-    # `quick_names` schneidet ihn gegen das Register.
-    "slot": ("slot_hole",),
-    "cone": ("countersink_hole",),
+    "hole": ("resize_hole", "countersink_hole", "slot_hole", "plug_hole", "pattern_feature"),
+    # **Am Langloch steht vorn nur das Muster.** Alle sechs übrigen Handlungen
+    # des Langlochs stehen oben als Felder, und was dort steht, bekommt hier
+    # keinen zweiten Knopf; *Merkmal vervielfachen* (P6.7) hat keine
+    # gemessenen Werte und damit keine Zeile oben. Die Zeile hält außerdem die
+    # Stelle für den Fall frei, dass *Zum Langloch ziehen* je aufhört, ein Feld
+    # zu sein.
+    "slot": ("slot_hole", "pattern_feature"),
+    "cone": ("countersink_hole", "pattern_feature"),
     "edge_loop": ("repair",),
 }
 """Je Merkmalsart die Handlungen, die dort zuerst gesucht werden.
 
-Nur wo die Art eine eigene Antwort hat. Stift und Kugel bieten die drei
+Nur wo die Art eine eigene Antwort hat. Stift und Kugel bieten die
 generischen Merkmalshandlungen **mit** an — nicht genau sie: Am Register
 gemessen (07.09.2026) trägt `pin` sieben Operationen und `sphere` vier, die
-drei aus :data:`QUICK_FEATURE` sind darunter. Der Rest steht in der Suchliste,
-im Menü und in der Befehlspalette.
+aus :data:`QUICK_FEATURE` sind darunter. Der Rest steht in der Suchliste,
+im Menü und in der Befehlspalette. *Merkmal vervielfachen* (P6.7) steht an
+jeder Art, die es annimmt, mit vorn: Es hat keine Zeile im Merkmalfenster.
 
 **Der Kegel hat seit dem 09.09.2026 eine eigene Zeile**, und der Grund ist ein
 Loch, das vorher niemandem auffiel: Er trägt sechs Operationen, fünf davon
@@ -99,7 +100,7 @@ nennt. Damit war die einzige Handlung an einer Senkung an keiner der beiden
 Stellen zu finden.
 """
 
-QUICK_FEATURE = ("resize_feature", "move_feature", "remove_feature")
+QUICK_FEATURE = ("resize_feature", "move_feature", "remove_feature", "pattern_feature")
 """Für jede Merkmalsart ohne eigene Zeile in :data:`QUICK_FEATURES`."""
 
 
