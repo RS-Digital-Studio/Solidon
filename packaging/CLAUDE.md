@@ -66,13 +66,37 @@ Nur wenn die Apple-Angaben vollständig sind und `notarytool`, `stapler` und
 `spctl` grün bleiben, nennt der Schlusstext das Paket geprüft. Der unsignierte
 Weg betritt keinen geschützten Job und behält den Gatekeeper-Hinweis.
 
-Windows wird in der CI gebaut und **lokal signiert**. Der Paketjob hat nur
-lesenden Repositoryzugriff und keine Windows-Geheimnisse. Er übergibt den
-**vollständigen** App-Baum sowie die festen Installer-Eingänge als kanonische
-relative Pfadliste mit SHA-256 (Artefakt `solidon3d-windows-signing-input`,
-sieben Tage haltbar). Ein ungeschützter Job baut daraus mit ISCC den
-unsignierten Installer für Demo und Releaseprüfung und nennt SmartScreen
-ausdrücklich. Die Signatur entsteht auf Roberts Rechner mit
+Windows wird in **zwei CI-Schritten gebaut und dazwischen sowie danach lokal
+signiert**. Die CI hat nur lesenden Repositoryzugriff und keine
+Windows-Signiergeheimnisse. Die verbindliche Reihenfolge lautet:
+
+1. `build.yml` baut die Anwendung und übergibt den **vollständigen** App-Baum
+   sowie die festen Installer-Eingänge als kanonische relative Pfadliste mit
+   SHA-256 (Artefakt `solidon3d-windows-signing-input`, sieben Tage haltbar).
+   Der daneben gebaute unsignierte Installer dient ausschließlich der
+   Releaseprüfung und wird nicht ausgeliefert.
+2. `tools/sign_release.py --phase application` prüft lokal die CI-Herkunft,
+   Archiv, Produktangaben und jede Eingangsprüfsumme. Es signiert und prüft
+   ausschließlich die Anwendung. Die signierte EXE und ihre Herkunftsakte
+   werden als Transport in einem unveröffentlichten Release-Entwurf abgelegt.
+3. `windows-signed-installer.yml` lädt die ursprünglichen Eingänge und die
+   signierte EXE. Der Workflow verlangt denselben Commit wie der erfolgreiche
+   manuelle Anwendungslauf auf `main`, prüft Herkunft, Hash, Zeitstempel und
+   Herausgeber, ersetzt nur die EXE und bindet die Übergabe neu. Inno Setup 7
+   baut den Installer in der CI. Das Artefakt
+   `solidon3d-windows-installer-signing-input` enthält Setup, `.sha256` und
+   `windows-installer-build.json`; der Workflow veröffentlicht nichts.
+4. `tools/sign_release.py --phase installer` prüft lokal diesen CI-Rückweg,
+   signiert und prüft die Setup-Datei und schreibt Prüfsumme und Releaseakte
+   für das endgültige Kundenpaket. Lokal wird kein Installer gebaut.
+
+Das Certum-Zertifikat liegt in der SimplySign-Cloud und verlangt einen
+Einmalcode vom Handy, den keine CI eingeben kann und soll. Einen Azure- oder
+PFX-Weg gibt es nicht mehr (Entscheidung Robert, 02.09.2026): Azure Artifact
+Signing verlangt eine Organisation mit drei Jahren Bestand, und exportierbare
+PFX-Schlüssel geben die Zertifizierungsstellen seit 2023 nicht mehr heraus.
+Der genaue Aufruf- und Übergabevertrag steht in `Signierung/README.md`.
+
 **Die Setup-Datei packt blockweise aus, nicht in einem Strom** (Entscheidung
 Robert, 03.09.2026): `SolidCompression=no` und `Compression=lzma2/normal`. Das
 kostet gemessene 23 MB gegenüber der kleinsten baubaren Fassung und nimmt dafür
@@ -82,18 +106,16 @@ Messreihe, der Anlass und die Falle mit `LZMADictionarySize` — die Direktive
 wirkt nicht — stehen im Kommentar über den beiden Zeilen in `solidon3d.iss`;
 `tests/test_packaging.py` hält sie fest.
 
-`tools/sign_release.py` aus demselben Archiv: Das Certum-Zertifikat liegt in
-der SimplySign-Cloud und verlangt einen Einmalcode vom Handy, den keine CI
-eingeben kann und soll. Das Werkzeug prüft Archiv, Produktangaben und jede
-Prüfsumme, signiert die Anwendung, bindet die Übergabe neu, baut den
-Installer, signiert die Setup-Datei und schreibt die `.sha256` daneben. Einen
-Azure- oder PFX-Weg gibt es nicht mehr (Entscheidung Robert, 02.09.2026):
-Azure Artifact Signing verlangt eine Organisation mit drei Jahren Bestand,
-und exportierbare PFX-Schlüssel geben die Zertifizierungsstellen seit 2023
-nicht mehr heraus. Der Weg je Plattform steht in `Signierung/README.md`.
-
 ## Was hier hineinmuss, wenn sich etwas ändert
 
+- **Nach geänderten Projektanforderungen** vor der lokalen Lizenzbeilage die
+  tatsächlich gelesenen Solidon-Metadaten prüfen. Eine alte `solidon3d.egg-info`
+  im Projektwurzelordner kann die frisch installierte `.dist-info` überdecken.
+  Die Editable-Installation allein erneuert diesen Altbestand nicht zwingend;
+  bei vorhandenem Root-Bestand synchronisiert der vorhandene Setuptools-Backend
+  ihn mit `python -c "from setuptools import setup; setup(script_args=['egg_info'])"`.
+  Danach müssen Laufzeitbaum und `tools/check_env.py` die aktuellen Anforderungen
+  bestätigen, bevor `tools/make_licence_notices.py` die Beilage erzeugt.
 - **Eine neue Abhängigkeit** kann in der `.spec` fehlen und erst im gebauten
   Paket auffallen — dort, wo kein `pip` mehr hilft.
   Die Ansicht zeichnet mit pygfx über wgpu; ohne Adapter für Direct3D 12,
