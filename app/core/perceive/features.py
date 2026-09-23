@@ -728,6 +728,23 @@ SINK_AXIS_LIMIT = 2.0
 #: sechs bis fünfzehn Grad, und mehr als das darf die Schwelle nicht fordern.
 FULL_TURN_SPAN = 300.0
 
+#: Wie viel Kreis eine Rundform mindestens zeigen muss, in Grad — sonst ist
+#: sie eine Kante und keine Rundform (RM-210, Entscheidung Robert 23.09.2026:
+#: „konservativ, etwa 5°").
+#:
+#: Gilt für die Stücke, deren Bogen klein sein kann: Verrundung (Zylinder-
+#: ausschnitt), Kegelstück und Torusstück, beim Torus der Bogen der Röhre.
+#: Ein Fleck aus acht Dreiecken mit 0,03 mm Wölbung zeigt 2,8 Grad eines
+#: Kreises, und die Einpassung extrapoliert daraus einen Radius von 99 mm —
+#: für einen Drucker ist das keine Rundung. Gemessen an echten Verrundungen:
+#: konstruierte 82,7 bis 86,3 Grad, `drill-holder.3mf` median 151,5, die
+#: wackelnden Flecken der Lageprobe 2,0 bis 18,3 Grad.
+#:
+#: **Nicht** :data:`FLAT_ANGLE`: Der sagt, ab wann ein Winkel überhaupt eine
+#: Krümmung ist und nicht Rechenrauschen (0,5 Grad). Diese Schwelle ist eine
+#: Aussage über das Erzeugnis; sie steht deshalb für sich.
+MIN_ROUND_ARC: Final = 5.0
+
 #: Eine Kante hat zwei Seiten. Eine Rundung, die genau an zwei ebene Flächen
 #: quer zu ihrer Achse grenzt, ersetzt die Kante zwischen ihnen; jede andere
 #: Nachbarschaft macht sie zur Wand.
@@ -923,6 +940,15 @@ DETECTABLE_KINDS: frozenset[str] = frozenset(
 #: Öffnen andere Namen zurück als beim ersten — schlimmer als jede Wartezeit.
 _FEATURE_CACHE: OrderedDict[bytes, dict[FeatureId, Feature]] = OrderedDict()
 
+#: Das Schloss über :data:`_FEATURE_CACHE` und seine vier Nebentabellen.
+#: **Die Erkennung läuft in mehr als einem Faden**: die Auswertung im Arbeiter,
+#: die Vorschau eines Dialogs daneben (:func:`known_detection`). Nachschlagen
+#: und Nachvornerücken waren zwei Schritte, und ein Verdrängen in einem
+#: anderen Faden dazwischen warf ``KeyError`` aus ``move_to_end``; das Ablegen
+#: schrieb fünf Tabellen nacheinander. Unter dem Schloss ist jedes davon ein
+#: Schritt. Gerechnet wird außerhalb — keine Erkennung wartet auf eine andere.
+_CACHE_LOCK = threading.RLock()
+
 #: Je Eintrag die Zahl seiner Flächenindizes — das Gewicht, das
 #: :data:`CACHE_INDEX_LIMIT` deckelt. Getrennt geführt, weil die Summe sonst
 #: bei jeder Verdrängung über alle Merkmale aller Einträge neu zu rechnen wäre.
@@ -1021,11 +1047,12 @@ def _mesh_key(mesh: MeshData) -> bytes:
 
 def forget_cache() -> None:
     """Vergisst die gemerkten Erkennungen — für Tests und Messungen."""
-    _FEATURE_CACHE.clear()
-    _CACHE_INDICES.clear()
-    _FREEFORM_DROPPED.clear()
-    _FREEFORM.clear()
-    _UNREADABLE_VOIDS.clear()
+    with _CACHE_LOCK:
+        _FEATURE_CACHE.clear()
+        _CACHE_INDICES.clear()
+        _FREEFORM_DROPPED.clear()
+        _FREEFORM.clear()
+        _UNREADABLE_VOIDS.clear()
     with _MEMORY_LOCK:
         _SUPPORT_CACHE.clear()
         _DIGESTS.clear()
@@ -1122,9 +1149,8 @@ def detect(
     key = _mesh_key(mesh)
     if check_cancelled is not None:
         check_cancelled()
-    known = _FEATURE_CACHE.get(key)
+    known = _cached_detection(key)
     if known is not None:
-        _FEATURE_CACHE.move_to_end(key)
         # Eine Kopie, weil der Aufrufer sein Ergebnis behalten darf. Die
         # ``Feature``-Objekte selbst sind unveränderlich (``frozen=True``) und
         # dürfen geteilt werden; die Zuordnung darüber hinein nicht.
@@ -1182,7 +1208,7 @@ def detect(
         # Die Flächen zuerst ohne Träger und Innenlage — was das Muster gleich
         # verschluckt, braucht beides nie (:func:`_face_candidates`).
         face_entries = _planar_face_entries(mesh, planar=planar, check_cancelled=check_cancelled)
-        face_entries.sort(key=lambda entry: (-round(entry[1], 4), _corner_key(mesh.raw, entry[0])))
+        face_entries = _largest_first(mesh.raw, face_entries)
         found: dict[FeatureId, Feature] = {}
         for phase in (
             lambda: detect_holes(mesh, fitted.cylinders, fitted.cones),
@@ -1289,11 +1315,17 @@ def known_detection(mesh: MeshData) -> dict[FeatureId, Feature] | None:
     Merkmale, und eine Erkennung von einer Sekunde je getippter Zahl wäre
     dort eine Sekunde für nichts (``scene.evaluate``, ``detect_features``).
     """
-    known = _FEATURE_CACHE.get(_mesh_key(mesh))
-    if known is None:
-        return None
-    _FEATURE_CACHE.move_to_end(_mesh_key(mesh))
-    return dict(known)
+    known = _cached_detection(_mesh_key(mesh))
+    return None if known is None else dict(known)
+
+
+def _cached_detection(key: bytes) -> dict[FeatureId, Feature] | None:
+    """Die gemerkte Erkennung unter diesem Abdruck, nach vorn gerückt — in einem Schritt."""
+    with _CACHE_LOCK:
+        known = _FEATURE_CACHE.get(key)
+        if known is not None:
+            _FEATURE_CACHE.move_to_end(key)
+        return known
 
 
 def _remember(
@@ -1306,28 +1338,31 @@ def _remember(
     gerechnet wurde (:func:`detect`) oder von einem bewegten Zwilling stammt
     (:func:`carry_detection`), ist für die Ablage dasselbe.
     """
-    _FEATURE_CACHE[key] = found
-    _CACHE_INDICES[key] = sum(
+    weight = sum(
         len(feature.face_indices)
         + sum(len(patch.face_indices) for patch in feature.surface_patches)
         for feature in found.values()
     )
-    _FREEFORM_DROPPED[key] = left_out
-    _FREEFORM[key] = freeform
-    _UNREADABLE_VOIDS[key] = unreadable
-    while len(_FEATURE_CACHE) > CACHE_LIMIT or sum(_CACHE_INDICES.values()) > CACHE_INDEX_LIMIT:
-        if len(_FEATURE_CACHE) == 1:
-            # Ein einzelner Eintrag über der Grenze bleibt: Ihn wegzuwerfen
-            # hieße, ihn beim nächsten Aufruf sofort neu zu rechnen — der Cache
-            # wäre dann nicht begrenzt, sondern aus. Bis zum 21.09.2026 warf
-            # die Schleife ihn weg und brach erst danach ab; dieser Satz stand
-            # darunter und stimmte nicht.
-            break
-        oldest, _ = _FEATURE_CACHE.popitem(last=False)
-        _CACHE_INDICES.pop(oldest, None)
-        _FREEFORM_DROPPED.pop(oldest, None)
-        _FREEFORM.pop(oldest, None)
-        _UNREADABLE_VOIDS.pop(oldest, None)
+    with _CACHE_LOCK:
+        _FEATURE_CACHE[key] = found
+        _FEATURE_CACHE.move_to_end(key)
+        _CACHE_INDICES[key] = weight
+        _FREEFORM_DROPPED[key] = left_out
+        _FREEFORM[key] = freeform
+        _UNREADABLE_VOIDS[key] = unreadable
+        while len(_FEATURE_CACHE) > CACHE_LIMIT or sum(_CACHE_INDICES.values()) > CACHE_INDEX_LIMIT:
+            if len(_FEATURE_CACHE) == 1:
+                # Ein einzelner Eintrag über der Grenze bleibt: Ihn wegzuwerfen
+                # hieße, ihn beim nächsten Aufruf sofort neu zu rechnen — der
+                # Cache wäre dann nicht begrenzt, sondern aus. Bis zum
+                # 21.09.2026 warf die Schleife ihn weg und brach erst danach
+                # ab; dieser Satz stand darunter und stimmte nicht.
+                break
+            oldest, _ = _FEATURE_CACHE.popitem(last=False)
+            _CACHE_INDICES.pop(oldest, None)
+            _FREEFORM_DROPPED.pop(oldest, None)
+            _FREEFORM.pop(oldest, None)
+            _UNREADABLE_VOIDS.pop(oldest, None)
 
 
 #: Wie weit eine Ecke des bewegten Netzes von der rechnerisch bewegten Ecke
@@ -1377,7 +1412,8 @@ def carry_detection(
     if check_cancelled is not None:
         check_cancelled()
     source_key = _mesh_key(source)
-    known = _FEATURE_CACHE.get(source_key)
+    with _CACHE_LOCK:
+        known = _FEATURE_CACHE.get(source_key)
     if known is None:
         return False
     matrix = np.asarray(transform, dtype=float)
@@ -1397,19 +1433,23 @@ def carry_detection(
     if check_cancelled is not None:
         check_cancelled()
     moved_key = _mesh_key(moved)
-    if moved_key in _FEATURE_CACHE:
-        _FEATURE_CACHE.move_to_end(moved_key)
+    if _cached_detection(moved_key) is not None:
         return True
     carried = transformed_features(known, transform, mesh=moved, check_cancelled=check_cancelled)
     if set(carried.exact) != set(known):
         return False
-    _FEATURE_CACHE.move_to_end(source_key)
+    with _CACHE_LOCK:
+        if source_key in _FEATURE_CACHE:
+            _FEATURE_CACHE.move_to_end(source_key)
+        side = (
+            _FREEFORM_DROPPED.get(source_key, 0),
+            _UNREADABLE_VOIDS.get(source_key, 0),
+            _FREEFORM.get(source_key, False),
+        )
     _remember(
         moved_key,
         dict(carried.candidates),
-        _FREEFORM_DROPPED.get(source_key, 0),
-        _UNREADABLE_VOIDS.get(source_key, 0),
-        _FREEFORM.get(source_key, False),
+        *side,
     )
     _log.info("carried %d features onto a moved twin", len(known))
     return True
@@ -1470,50 +1510,92 @@ def _threads_instead_of_phantoms(
     ohnehin in der Szene und läuft nie durch ``detect``; hier entsteht die
     Auskunft für alles, was von außen kommt.
     """
-    if helices is None:
-        helices = find_helices(mesh)
-    if not helices:
+    read_helices: Sequence[Helix] = find_helices(mesh) if helices is None else helices
+    if not read_helices:
         return found
 
     # Die Dateireihenfolge ihrer Kantenzüge darf keine Merkmalskennung bestimmen.
-    # Gleiche Mittelpunkte werden über die gemessenen Gewindemaße aufgelöst.
-    helices = sorted(
-        helices,
-        key=lambda entry: (
-            tuple(round(value, 3) for value in entry.centre),
-            round(entry.diameter, 3),
-            round(entry.pitch, 3),
-            round(entry.length, 3),
-            entry.internal,
+    # Gleiche Mittelpunkte werden über die gemessenen Gewindemaße aufgelöst —
+    # nach derselben Regel wie jede andere Nummer (:func:`numbering_order`).
+    order = numbering_order(
+        len(read_helices),
+        (
+            (lambda index: read_helices[index].centre, NUMBERING_DIGITS),
+            (
+                lambda index: (
+                    read_helices[index].diameter,
+                    read_helices[index].pitch,
+                    read_helices[index].length,
+                    float(read_helices[index].internal),
+                ),
+                NUMBERING_DIGITS,
+            ),
         ),
+        lambda index: _corner_key(mesh.raw, np.asarray(read_helices[index].face_indices)),
     )
+    helices = [read_helices[index] for index in order]
     kept = dict(found)
     for number, helix in enumerate(helices, start=1):
         kept = without_phantoms_on(kept, helix.face_indices)
         identifier = FeatureId(f"thread_{number}")
+        measured: dict[str, Any] = {}
+        sources: dict[str, Any] = {
+            "diameter": "fit",
+            "pitch": "fit",
+            "centre": "fit",
+            "axis": "fit",
+            "length": "facets",
+            "handedness": "fit",
+        }
+        if helix.measured:
+            # **An den Kanten gemessen, nicht am Spektrum geschätzt** (P2.5):
+            # Die Händigkeit ist das Vorzeichen der Steigung jeder windenden
+            # Kante, die Gangzahl die Periodizität aller Wendeln — dieselben
+            # Fragen wie am exakten Kern (``brep.thread``). Die Händigkeit
+            # heißt deshalb ``facets``: belegt, nicht geraten; ein
+            # Linksgewinde am Netz sperrt das Neuschneiden wie am exakten
+            # Körper (``types.thread_is_left_handed``). Vorschub und
+            # Gangzahl stehen daneben, die Wendelabweichung als ``uncertainty``
+            # wie beim exakten Leser — die Passung rechnet damit statt mit
+            # einer Rasterstufe (``scene.fits._pitch_uncertainty``).
+            root = helix.crest_radius + (helix.depth if helix.internal else -helix.depth)
+            measured = {
+                "lead": helix.lead,
+                "starts": helix.starts,
+                "crest_radius": helix.crest_radius,
+                "root_radius": root,
+                "depth": helix.depth,
+                "turns": helix.turns,
+                "uncertainty": float(helix.uncertainty or 0.0),
+            }
+            sources.update(
+                handedness="facets",
+                lead="fit",
+                starts="facets",
+                crest_radius="fit",
+                root_radius="fit",
+                depth="fit",
+                turns="facets",
+                uncertainty="facets",
+            )
         kept[identifier] = Feature(
             id=identifier,
             kind="thread",
             provenance="detected",
-            measure_sources={
-                "diameter": "fit",
-                "pitch": "fit",
-                "centre": "fit",
-                "axis": "fit",
-                "length": "facets",
-                "handedness": "fit",
-            },
+            measure_sources=sources,
+            # **Ungerundet, wie am exakten Kern** (Regel 6): Hier standen Ø,
+            # Steigung und Länge auf vier Stellen gerundet — im Kern, und mit
+            # einer gemessenen Wendelabweichung von 4·10⁻⁵ mm hätte die Rundung
+            # die Passungsprüfung mehr verschoben als die Messung selbst.
             params={
-                "diameter": round(helix.diameter, 4),
-                "pitch": round(helix.pitch, 4),
+                "diameter": helix.diameter,
+                "pitch": helix.pitch,
                 "centre": helix.centre,
                 "axis": helix.axis,
                 "internal": helix.internal,
-                "length": round(helix.length, 4),
-                # Die Händigkeit kennt das Netz seit B1 (P2.5); die Gangzahl
-                # kennt es nicht — ein Vielfaches der Steigung konzentriert
-                # nicht, und ohne Kanten je Wendel bleibt sie ungemessen.
+                "length": helix.length,
                 "handedness": helix.handedness,
+                **measured,
             },
             face_indices=helix.face_indices,
         )
@@ -1960,7 +2042,13 @@ def _fitted(
             # (etwa einer Bohrung mit Rastnasen) nicht als Treffer beenden.
             return False
 
-        patches = _connected_patches(body, curved)
+        # **Nach Größe gefragt, nicht nach der Lage** (RM-210): Die Folge der
+        # Flecken entscheidet, welcher von zwei deckungsgleichen zuerst seinen
+        # Kegel sucht und für den anderen mitantwortet (:func:`_rigid_key`),
+        # und in welcher Folge die Zusammenlegung die Stücke sieht.
+        # :func:`in_body_order` ist unabhängig von der Dreiecksfolge, aber nicht
+        # drehfest; die Fläche ist beides.
+        patches = _in_size_order(body, _connected_patches(body, curved))
 
         def splinters_in(pieces: list[list[int]]) -> int:
             """Wie viele Stücke unter :data:`FREEFORM_PIECE_SHARE` der Oberfläche liegen."""
@@ -2040,7 +2128,7 @@ def _fitted(
             patch = patches[patch_index]
             if check_cancelled is not None:
                 check_cancelled()
-            pieces = curvature_splits[patch_index]
+            pieces = _in_size_order(body, curvature_splits[patch_index])
             split_apart = len(pieces) > 1
             if split_apart and freeform_skin:
                 # Die Haut einer Figur wird nicht in ihre Splitter zerlegt und
@@ -2103,48 +2191,19 @@ def _fitted(
         if check_cancelled is not None:
             check_cancelled()
 
-        # Nach Position sortiert, damit die Nummerierung für denselben Körper
-        # reproduzierbar ist. **Alle drei Achsen**, nicht nur X und Y: Zwei
-        # koaxiale Bohrungen — eine Durchführung durch zwei Wände, die häufigste
-        # Doppelbohrung überhaupt — haben dieselbe Mitte in X und Y. Der Vergleich
-        # endete dort unentschieden, und welche von beiden `hole_1` wurde, hing an
-        # der Reihenfolge der Flecken. Genau das darf eine Provenienz-ID nicht
-        # (§21.2): Eine Op, die an `hole_2` hängt, sitzt nach der nächsten
-        # Auswertung an der anderen.
-        found.sort(
-            key=lambda entry: (
-                round(entry[0].centre[0], 3),
-                round(entry[0].centre[1], 3),
-                round(entry[0].centre[2], 3),
-            )
-        )
-        # Kegel nach ihrer Spitze, aus demselben Grund: Die Nummer eines Merkmals
-        # ist eine Provenienz-ID, und die darf nicht an der Reihenfolge der Flecken
-        # hängen (§21.2).
-        cones.sort(
-            key=lambda entry: (
-                round(entry[0].centre[0], 3),
-                round(entry[0].centre[1], 3),
-                round(entry[0].centre[2], 3),
-            )
-        )
-        # Kugeln und Tori nach demselben Schlüssel und aus demselben Grund (§21.2).
-        for round_shapes in (spheres, rings):
-            round_shapes.sort(
-                key=lambda entry: (
-                    round(entry[0].centre[0], 3),
-                    round(entry[0].centre[1], 3),
-                    round(entry[0].centre[2], 3),
-                )
-            )
-        for entry_list in (fillets,):
-            entry_list.sort(
-                key=lambda entry: (
-                    round(entry[0].centre[0], 3),
-                    round(entry[0].centre[1], 3),
-                    round(entry[0].centre[2], 3),
-                )
-            )
+        # **Die Nummer ist eine Provenienz-ID** (§21.2): Eine Op, die an
+        # `hole_2` hängt, muss nach der nächsten Auswertung an derselben
+        # Bohrung sitzen. Geordnet wird deshalb nach dem Körper und nie nach
+        # der Reihenfolge der Flecken — nach der Mitte auf **allen drei
+        # Achsen** (zwei koaxiale Bohrungen einer Durchführung haben dieselbe
+        # Mitte in X und Y), und wo Mitten zusammenfallen, nach Maß, Länge,
+        # Lage und zuletzt den Ecken (:func:`numbering_order`). Die Mitte
+        # allein ließ konzentrische Rundungen unentschieden (RM-211).
+        found = _in_numbering_order(body, found, lambda fit: (fit.radius,))
+        cones = _in_numbering_order(body, cones, lambda fit: (fit.radius, *fit.apex))
+        spheres = _in_numbering_order(body, spheres, lambda fit: (fit.radius,))
+        rings = _in_numbering_order(body, rings, lambda fit: (fit.ring_radius, fit.tube_radius))
+        fillets = _in_numbering_order(body, fillets, lambda fit: (fit.radius,))
         return Fitted(found, cones, spheres, rings, fillets, helices, stadiums, freeform_skin)
 
 
@@ -2400,7 +2459,7 @@ def _cylinder_beside_a_torus(
         cylinder = fit_cylinder(body, candidate, check_cancelled=check_cancelled)
         if cylinder is None or not cylinder.good or not _fits_in_the_body(mesh, cylinder):
             continue
-        joined = sorted({*ring_patch, *rest})
+        joined = in_body_order(body, [sorted({*ring_patch, *rest})])[0]
         again = fit_torus(body, joined, check_cancelled=check_cancelled)
         if check_cancelled is not None:
             check_cancelled()
@@ -2461,82 +2520,194 @@ def _merged_cylinders(
     centres = np.zeros((len(found), 3))
     radii = np.zeros(len(found))
     inward = np.zeros(len(found), dtype=bool)
-    axis_cosine = math.cos(math.radians(SINK_AXIS_LIMIT))
+    axis_cosine = units.exact_cos_degrees(SINK_AXIS_LIMIT)
+
+    def alike(fit: CylinderFit, among: np.ndarray) -> np.ndarray:
+        """Welche der Gemerkten ``among`` Seite, Radius und Achslinie mit ``fit`` teilen."""
+        axis = np.asarray(fit.axis, dtype=float)
+        centre = np.asarray(fit.centre, dtype=float)
+        scale = np.maximum(radii[among], fit.radius)
+        offset = centre - centres[among]
+        across = offset - axes[among] * (offset * axes[among]).sum(axis=1)[:, None]
+        chosen: np.ndarray = among[
+            (inward[among] == fit.inward)
+            & (np.abs(radii[among] - fit.radius) <= scale * CYLINDER_TOLERANCE)
+            & (np.abs(axes[among] @ axis) >= axis_cosine)
+            & (np.linalg.norm(across, axis=1) <= scale * SINK_FIT_LIMIT)
+        ]
+        return chosen
+
+    def remember(index: int, fit: CylinderFit) -> None:
+        # Die Spalten beschreiben, was gemerkt ist: Nach dem
+        # Zusammenfassen steht dort der gemeinsame Fit. Gemessen ist
+        # das nie entscheidend gewesen — unter den Toleranzen von
+        # `_same_cylinder` wandert ein Fit über derselben Wand kaum,
+        # und eine Probe ohne diese vier Zeilen fiel an keinem der
+        # 23 Korpusmodelle und keinem Test auf. Eine Spalte, die
+        # einen verworfenen Fit beschreibt, wäre trotzdem eine
+        # zweite Wahrheit.
+        axes[index] = np.asarray(fit.axis, dtype=float)
+        centres[index] = np.asarray(fit.centre, dtype=float)
+        radii[index] = fit.radius
+        inward[index] = fit.inward
+
     for fit, patch in found:
         if check_cancelled is not None:
             check_cancelled()
-        axis = np.asarray(fit.axis, dtype=float)
-        centre = np.asarray(fit.centre, dtype=float)
-        count = len(merged)
-        scale = np.maximum(radii[:count], fit.radius)
-        offset = centre - centres[:count]
-        across = offset - axes[:count] * (offset * axes[:count]).sum(axis=1)[:, None]
-        alike = (
-            (inward[:count] == fit.inward)
-            & (np.abs(radii[:count] - fit.radius) <= scale * CYLINDER_TOLERANCE)
-            & (np.abs(axes[:count] @ axis) >= axis_cosine)
-            & (np.linalg.norm(across, axis=1) <= scale * SINK_FIT_LIMIT)
-        )
-        for index in (int(number) for number in np.flatnonzero(alike)):
-            other, gathered = merged[index]
-            if not _same_cylinder(body, (fit, patch), (other, gathered)):
-                continue
-            together = gathered + patch
-            again = fit_cylinder(body, together, check_cancelled=check_cancelled)
-            # **Die Vereinigung muss sich selbst rechtfertigen.** Dass zwei
-            # Flecken zueinander passen, heißt nicht, dass ihre Summe eine
-            # Fläche ist: An einem hohlen Quader stehen die verrundeten
-            # Innenkanten oben und unten koaxial und gleich groß, und
-            # zusammengefasst kam ein Zylinder heraus, den es nicht gibt —
-            # samt zwei weiteren Fehlbefunden daneben. Der neue Fit darf
-            # deshalb **nicht schlechter streuen** als der schlechtere der
-            # beiden, aus denen er entsteht.
-            #
-            # **Oder der neue Fleck liegt nachweislich auf dem Zylinder, der
-            # schon da ist.** Die Regel darüber ist für die Frage gebaut, ob
-            # zwei Flecken überhaupt dieselbe Fläche sind; sie sieht nicht,
-            # dass ein Fit über mehr Punkte immer ein wenig mehr streut. An
-            # einem Uhrenteil (``REMONTOIRE ESCAPEMENT-12``, 15.09.2026) kam
-            # eine Bohrung Ø 30 nach dem Ändern einer **anderen** Bohrung in
-            # vier Bögen zurück: drei fanden zusammen (226°), der vierte lag
-            # mit 0,003 mm auf demselben Kreis, hob die Streuung aber von
-            # 0,00076 auf 0,00114 — damals noch in Facettenbreiten gemessen,
-            # heute in Sehnenhöhen — und blieb draußen. Im Baum
-            # standen zwei Hohlkehlen R 15 statt einer Bohrung, und die
-            # Kennung ``hole_5`` ging verloren. Liegt der Fleck innerhalb des
-            # Fitvertrags (:data:`CYLINDER_SPREAD`) auf der vorhandenen
-            # Wand, beschreibt er sie — dann trägt die Streuung des
-            # gemeinsamen Fits nichts mehr zur Frage bei.
-            if (
-                again is not None
-                and again.good
-                and _fits_in_the_body(mesh, again)
-                and (
-                    again.spread <= max(fit.spread, other.spread) + EPS_GEOM
-                    or _lies_on_the_cylinder(body, other, patch, check_cancelled=check_cancelled)
-                )
-            ):
-                merged[index] = (again, together)
-                # Die Spalten beschreiben, was gemerkt ist: Nach dem
-                # Zusammenfassen steht dort der gemeinsame Fit. Gemessen ist
-                # das nie entscheidend gewesen — unter den Toleranzen von
-                # `_same_cylinder` wandert ein Fit über derselben Wand kaum,
-                # und eine Probe ohne diese vier Zeilen fiel an keinem der
-                # 23 Korpusmodelle und keinem Test auf. Eine Spalte, die
-                # einen verworfenen Fit beschreibt, wäre trotzdem eine
-                # zweite Wahrheit.
-                axes[index] = np.asarray(again.axis, dtype=float)
-                centres[index] = np.asarray(again.centre, dtype=float)
-                radii[index] = again.radius
-                inward[index] = again.inward
+        for index in alike(fit, np.arange(len(merged))).tolist():
+            joined = _joined_cylinders(
+                body, mesh, (fit, patch), merged[index], check_cancelled=check_cancelled
+            )
+            if joined is not None:
+                merged[index] = joined
+                remember(index, joined[0])
                 break
         else:
-            axes[len(merged)] = axis
-            centres[len(merged)] = centre
-            radii[len(merged)] = fit.radius
-            inward[len(merged)] = fit.inward
+            remember(len(merged), fit)
             merged.append((fit, patch))
-    return merged
+
+    # **Dann die Gruppen untereinander, bis keine zwei mehr zusammengehören**
+    # (RM-210). Die erste Runde fragt jeden Fleck nur gegen die Gruppen, die
+    # vor ihm kamen; welche Flecken zusammenfanden, hing damit an ihrer
+    # Reihenfolge. Am Keilschloss (``Wedge-Lock (Top).stl``) liegen drei
+    # Stücke einer Verrundung: In der gelesenen Lage kam zuerst das Paar, das
+    # allein keinen Zylinder ergibt, und am Ende standen zwei Verrundungen;
+    # um 90 Grad gedreht fanden alle drei zu einer mit 112,9 Grad zusammen.
+    # Die zweite Runde gibt beiden Lagen dieselbe Antwort, und den Fit jeder
+    # Vereinigung kennt der Merker schon, wenn sie einmal gefragt war.
+    return _joined_until_stable(
+        merged,
+        lambda index, later: alike(merged[index][0], later),
+        lambda new, known: _joined_cylinders(
+            body, mesh, new, known, check_cancelled=check_cancelled
+        ),
+        remember,
+        check_cancelled,
+    )
+
+
+def _joined_cylinders(
+    body: trimesh.Trimesh,
+    mesh: MeshData,
+    new: tuple[CylinderFit, list[int]],
+    known: tuple[CylinderFit, list[int]],
+    *,
+    check_cancelled: Callable[[], None] | None = None,
+) -> tuple[CylinderFit, list[int]] | None:
+    """Der gemeinsame Zylinder zweier Flecken, wenn sie dieselbe Fläche sind — sonst nichts."""
+    fit, patch = new
+    other, gathered = known
+    if not _same_cylinder(body, new, known):
+        return None
+    # In der Ordnung des Körpers (:func:`in_body_order`), nicht in der
+    # zufälligen Folge, in der die zwei Flecken zusammenkamen.
+    together = in_body_order(body, [gathered + patch])[0]
+    again = fit_cylinder(body, together, check_cancelled=check_cancelled)
+    # **Die Vereinigung muss sich selbst rechtfertigen.** Dass zwei
+    # Flecken zueinander passen, heißt nicht, dass ihre Summe eine
+    # Fläche ist: An einem hohlen Quader stehen die verrundeten
+    # Innenkanten oben und unten koaxial und gleich groß, und
+    # zusammengefasst kam ein Zylinder heraus, den es nicht gibt —
+    # samt zwei weiteren Fehlbefunden daneben. Der neue Fit darf
+    # deshalb **nicht schlechter streuen** als der schlechtere der
+    # beiden, aus denen er entsteht.
+    #
+    # **Oder der neue Fleck liegt nachweislich auf dem Zylinder, der
+    # schon da ist.** Die Regel darüber ist für die Frage gebaut, ob
+    # zwei Flecken überhaupt dieselbe Fläche sind; sie sieht nicht,
+    # dass ein Fit über mehr Punkte immer ein wenig mehr streut. An
+    # einem Uhrenteil (``REMONTOIRE ESCAPEMENT-12``, 15.09.2026) kam
+    # eine Bohrung Ø 30 nach dem Ändern einer **anderen** Bohrung in
+    # vier Bögen zurück: drei fanden zusammen (226°), der vierte lag
+    # mit 0,003 mm auf demselben Kreis, hob die Streuung aber von
+    # 0,00076 auf 0,00114 — damals noch in Facettenbreiten gemessen,
+    # heute in Sehnenhöhen — und blieb draußen. Im Baum
+    # standen zwei Hohlkehlen R 15 statt einer Bohrung, und die
+    # Kennung ``hole_5`` ging verloren. Liegt der Fleck innerhalb des
+    # Fitvertrags (:data:`CYLINDER_SPREAD`) auf der vorhandenen
+    # Wand, beschreibt er sie — dann trägt die Streuung des
+    # gemeinsamen Fits nichts mehr zur Frage bei.
+    #
+    # **In beide Richtungen** (RM-210): Welcher der zwei Flecken zuerst da war,
+    # ist eine Frage der Reihenfolge und keine der Geometrie. Am Unterteil
+    # ``bottom-double.stl`` trägt ein Bogen aus 26 Dreiecken (19,6 Grad) nur
+    # r = 5,0143, der anschließende aus 79 Dreiecken r = 5,0004. Der große
+    # liegt nicht auf dem Zylinder des kleinen, der kleine aber auf dem des
+    # großen; gefragt war nur die erste Richtung, und aus einer Verrundung
+    # wurden zwei.
+    if (
+        again is not None
+        and again.good
+        and _fits_in_the_body(mesh, again)
+        and (
+            again.spread <= max(fit.spread, other.spread) + EPS_GEOM
+            or _lies_on_the_cylinder(body, other, patch, check_cancelled=check_cancelled)
+            or _lies_on_the_cylinder(body, fit, gathered, check_cancelled=check_cancelled)
+        )
+    ):
+        return again, together
+    return None
+
+
+def _joined_until_stable[Fit](
+    merged: list[tuple[Fit, list[int]]],
+    near: Callable[[int, np.ndarray], np.ndarray],
+    join: Callable[[tuple[Fit, list[int]], tuple[Fit, list[int]]], tuple[Fit, list[int]] | None],
+    remember: Callable[[int, Fit], None],
+    check_cancelled: Callable[[], None] | None,
+) -> list[tuple[Fit, list[int]]]:
+    """Die zweite Runde jeder Zusammenlegung: die Gruppen untereinander, bis
+    keine zwei mehr zusammengehören (RM-210).
+
+    Die erste Runde fragt jeden Fleck nur gegen die Gruppen, die vor ihm
+    kamen, und welche Flecken zusammenfinden, hing damit an ihrer
+    Reihenfolge — und die folgt seit :func:`in_body_order` den Koordinaten,
+    also der Lage des Körpers. Hier fragt jede Gruppe jede spätere, bis sich
+    nichts mehr ändert. Den Fit einer Vereinigung, die schon einmal gefragt
+    war, kennt der Merker.
+
+    ``near`` liefert von den Nummern ``later`` die, die für ``index``
+    überhaupt in Frage kommen (die notwendige Bedingung der Paarprüfung, für
+    alle auf einmal); ``join`` stellt die ganze Frage und gibt die
+    Vereinigung oder nichts; ``remember`` trägt einen neuen Fit in die
+    Spalten ein, aus denen ``near`` liest.
+    """
+    alive = np.ones(len(merged), dtype=bool)
+    changed = True
+    while changed:
+        changed = False
+        for index in range(len(merged)):
+            if not alive[index]:
+                continue
+            later = np.arange(index + 1, len(merged))
+            for other in near(index, later[alive[later]]).tolist():
+                if check_cancelled is not None:
+                    check_cancelled()
+                joined = join(merged[other], merged[index])
+                if joined is None:
+                    continue
+                merged[index] = joined
+                remember(index, joined[0])
+                alive[other] = False
+                changed = True
+                break
+    return [entry for entry, kept in zip(merged, alive, strict=True) if kept]
+
+
+def _anchored_near(
+    anchors: np.ndarray, scales: np.ndarray
+) -> Callable[[int, np.ndarray], np.ndarray]:
+    """Die notwendige Bedingung von :func:`_same_cone` und :func:`_same_torus`
+    für viele auf einmal: Anker höchstens :data:`SINK_FIT_LIMIT` des größeren
+    Maßes voneinander entfernt."""
+
+    def near(index: int, later: np.ndarray) -> np.ndarray:
+        """Die Nummern aus ``later``, deren Anker nah genug bei dem von ``index`` liegt."""
+        reach = np.maximum(scales[later], scales[index]) * SINK_FIT_LIMIT
+        chosen: np.ndarray = later[np.linalg.norm(anchors[later] - anchors[index], axis=1) <= reach]
+        return chosen
+
+    return near
 
 
 def _lies_on_the_cylinder(
@@ -2766,8 +2937,8 @@ def _same_cylinder(
         return False
 
     axis = np.asarray(first.axis, dtype=float)
-    if abs(float(axis @ np.asarray(second.axis, dtype=float))) < math.cos(
-        math.radians(SINK_AXIS_LIMIT)
+    if abs(float(axis @ np.asarray(second.axis, dtype=float))) < units.exact_cos_degrees(
+        SINK_AXIS_LIMIT
     ):
         return False
     # Kollinear und nicht bloß parallel: zwei Bohrungen nebeneinander haben
@@ -2810,6 +2981,35 @@ def span_about(
     chosen = np.asarray(body.faces)[np.asarray(list(patch), dtype=np.int64)]
     points = np.asarray(body.vertices, dtype=float)[np.unique(chosen)] - centre
     angles = np.sort(np.arctan2(points @ basis_v, points @ basis_u))
+    if len(angles) < 3:
+        return 0.0
+    gaps = np.diff(np.concatenate([angles, [angles[0] + 2.0 * math.pi]]))
+    return float(math.degrees(2.0 * math.pi - gaps.max()))
+
+
+def _shows_enough_arc(body: trimesh.Trimesh, fit: Any, patch: list[int]) -> bool:
+    """Ob eine Rundform mindestens :data:`MIN_ROUND_ARC` ihres Kreises zeigt (RM-210).
+
+    Verrundung und Kegelstück: der Bogen um ihre Achse (:func:`angular_span`).
+    Torusstück: der Bogen um die Mittellinie seiner Röhre — das ist das
+    Profil einer Verrundung an einer runden Kante; um die Ringachse darf es
+    kurz sein wie jede Verrundung an einem kurzen Kantenstück.
+    """
+    if isinstance(fit, TorusFit):
+        return _tube_span(body, fit, patch) >= MIN_ROUND_ARC
+    return angular_span(body, fit, patch) >= MIN_ROUND_ARC
+
+
+def _tube_span(body: trimesh.Trimesh, fit: TorusFit, patch: Sequence[int]) -> float:
+    """Wie viel Grad um die Mittellinie seiner Röhre ein Torusstück überdeckt."""
+    axis = np.asarray(fit.axis, dtype=float)
+    chosen = np.asarray(body.faces)[np.asarray(list(patch), dtype=np.int64)]
+    points = np.asarray(body.vertices, dtype=float)[np.unique(chosen)] - np.asarray(
+        fit.centre, dtype=float
+    )
+    along = points @ axis
+    radial = np.linalg.norm(points - along[:, None] * axis, axis=1)
+    angles = np.sort(np.arctan2(along, radial - float(fit.ring_radius)))
     if len(angles) < 3:
         return 0.0
     gaps = np.diff(np.concatenate([angles, [angles[0] + 2.0 * math.pi]]))
@@ -3114,6 +3314,7 @@ def _torus_candidates(mesh: MeshData, tori: Tori) -> Tori:
         for entry in tori
         if not _too_small_to_make(min(entry[0].ring_radius, entry[0].tube_radius) * 2.0)
         and not _a_sliver(mesh.raw, entry[1])
+        and _shows_enough_arc(mesh.raw, entry[0], entry[1])
     ]
 
 
@@ -3137,7 +3338,9 @@ def _fillets_worth_naming(mesh: MeshData, found: Fillets) -> Fillets:
     return [
         entry
         for entry in found
-        if not _too_small_to_make(entry[0].radius * 2.0) and not _a_sliver(mesh.raw, entry[1])
+        if not _too_small_to_make(entry[0].radius * 2.0)
+        and not _a_sliver(mesh.raw, entry[1])
+        and _shows_enough_arc(mesh.raw, entry[0], entry[1])
     ]
 
 
@@ -3603,6 +3806,7 @@ def detect_cones(
         for entry in found
         if not _too_small_to_make(entry[0].radius * 2.0)
         and not _a_sliver(mesh.raw, entry[1])
+        and _shows_enough_arc(mesh.raw, entry[0], entry[1])
         and _cone_is_recognisable(mesh.raw, entry[0], entry[1], check_cancelled=check_cancelled)
     ]
     return [
@@ -3802,10 +4006,15 @@ def _mouth_flanks_folded(
         if feature.face_indices:
             taken[list(feature.face_indices)] = True
     normals = np.asarray(body.face_normals, dtype=float)
-    neighbours: dict[int, list[int]] = {}
-    for left, right in np.asarray(body.face_adjacency, dtype=np.int64).tolist():
-        neighbours.setdefault(left, []).append(right)
-        neighbours.setdefault(right, []).append(left)
+    # Die Nachbarn aus dem Index je Dreieck und die Facetten als Tabelle —
+    # beides einmal je Körper. Hier stand ein Wörterbuch über alle Nähte des
+    # Netzes, in Python gebaut, und je Langloch eine Schleife über **alle**
+    # Facetten des Körpers mit einer Mengenfrage je Dreieck.
+    table, _rows = _neighbour_index(body)
+    facets = list(body.facets)
+    members, owner, sizes, _curved = _facet_table(facets, len(body.faces), set())
+    facet_of = np.full(len(body.faces), -1, dtype=np.int64)
+    facet_of[members] = owner
     for name, pieces in grown.items():
         if check_cancelled is not None:
             check_cancelled()
@@ -3816,26 +4025,26 @@ def _mouth_flanks_folded(
         # Nachbarn. Das sind die letzten Kegelfacetten, die der Fit an der
         # Naht zur Flanke ausließ, und die geraden Flanken dazwischen —
         # Deckel (quer) und Mantel (längs) gehören nicht dazu.
-        band = set(pieces)
-        frontier = list(pieces)
-        while frontier:
+        band = np.zeros(len(body.faces), dtype=bool)
+        start = np.fromiter(pieces, dtype=np.int64, count=len(pieces))
+        band[start] = True
+        frontier = start
+        while len(frontier):
             if check_cancelled is not None:
                 check_cancelled()
-            following = [
-                index
-                for triangle in frontier
-                for index in neighbours.get(triangle, ())
-                if index not in band and not taken[index] and tilted[index]
-            ]
-            band.update(following)
+            following = table[frontier].ravel()
+            following = np.unique(following[following >= 0])
+            following = following[~band[following] & ~taken[following] & tilted[following]]
+            band[following] = True
             frontier = following
-        added = band - pieces
-        if not added:
+        band[start] = False
+        if not band.any():
             continue
-        for facet in body.facets:
-            indices = [int(index) for index in facet]
-            if not all(index in added for index in indices):
-                continue
+        added = set(np.flatnonzero(band).tolist())
+        # Nur Facetten, die ganz im Band liegen.
+        inside = np.bincount(facet_of[band & (facet_of >= 0)], minlength=len(facets))
+        for number in np.flatnonzero((inside == sizes) & (sizes > 0)).tolist():
+            indices = [int(index) for index in facets[number]]
             centre = _facet_centre(body, np.asarray(indices, dtype=np.int64))
             normal = normals[indices[0]]
             patch = planar_patch(
@@ -4358,14 +4567,21 @@ def _cylinder_contour(
 
     if check_cancelled is not None:
         check_cancelled()
+    # **Ein Punkt der Kontur, auch wenn ihn zwei Ecken tragen.** Die zwei
+    # Enden einer Mantelkante fallen in der Projektion aufeinander — bis auf
+    # das Rauschen der Achse, und das hing an der Reihenfolge der Dreiecke im
+    # Fleck. An einer Schwammablage trug ein Bogen aus drei Konturpunkten
+    # (40°, R 3) je nach Reihenfolge eine vierte „Ecke" 10⁻¹⁵ neben der
+    # dritten und galt dann als Rundung; in 119 von 200 Reihenfolgen nicht
+    # (22.09.2026). Die Zählung unten verlangt vier unabhängige Ecken.
+    flat = _distinct_points(flat)
     hull = MultiPoint(flat).convex_hull
     if hull.geom_type != "Polygon":
         return None
     outline = np.asarray(hull.exterior.coords, dtype=float)[:-1]
-    # Douglas-Peucker hält den Anfang eines geschlossenen Rings fest. Zuerst
-    # müssen deshalb alle numerisch geraden Hüllpunkte verschwinden. Nach
-    # der Vereinfachung könnten ihre echten Nachbarn schon entfernt sein,
-    # sodass ein zuvor gerader Sehnenpunkt selbst eine Ecke vortäuscht.
+    # Zuerst verschwinden alle numerisch geraden Hüllpunkte, vor der
+    # Vereinfachung darunter: Wären dort ihre echten Nachbarn schon entfernt,
+    # täuschte ein zuvor gerader Sehnenpunkt selbst eine Ecke vor.
     while len(outline) > 3:
         if check_cancelled is not None:
             check_cancelled()
@@ -4381,7 +4597,7 @@ def _cylinder_contour(
     # ihn unabhängig tragen. Zwei ebene Streifen sind noch keine Rundung.
     if len(outline) < 4:
         return None
-    outline = np.asarray(Polygon(outline).simplify(tolerance).exterior.coords, dtype=float)[:-1]
+    outline = _simplified_ring(outline, tolerance)
     boundary = Polygon(outline).exterior
     for start in range(0, len(flat), FIT_SCAN_BLOCK):
         if check_cancelled is not None:
@@ -4390,6 +4606,112 @@ def _cylinder_contour(
         if float(np.max(away)) > tolerance:
             return None
     return outline
+
+
+def _simplified_ring(outline: np.ndarray, tolerance: float) -> np.ndarray:
+    """Die Ecken eines konvexen Rings ohne die, deren Weglassen höchstens
+    ``tolerance`` kostet — gleich, an welcher Ecke der Ring beginnt.
+
+    **Nicht Douglas-Peucker** (RM-210). Der hält den Anfang des Rings fest und
+    teilt jeweils am fernsten Punkt; welche Ecken übrig blieben, hing damit
+    daran, wo GEOS die Hülle beginnen lässt, und das folgt den Koordinaten.
+    Gemessen am 1x1-Tray (Verrundung R 10, zwei Eckenreihen, die innere
+    4,6 µm neben dem Kreis): In der gelesenen Lage blieb eine innere Ecke als
+    Teilungspunkt stehen — r = 10,058, Streuung 0,11 —, um 37 Grad gedreht
+    nicht — r = 10,000, Streuung 0,00. Die Zusammenlegung der zwei Hälften
+    der Verrundung kippte daran, und aus einer wurden zwei.
+
+    Weggelassen wird hier immer die Ecke, deren Lücke am wenigsten abweicht:
+    Je verbliebener Ecke zählt der größte Abstand aller Ecken zwischen ihren
+    zwei Nachbarn — die schon weggelassenen eingeschlossen — von deren
+    Sehne. Die Reihenfolge folgt diesen Abständen und nicht der Lage im
+    Ring; bei exakt gleichen entscheidet der lexikographisch kleinere Punkt.
+    Dieselbe Grenze wie zuvor: Keine weggelassene Ecke liegt weiter als
+    ``tolerance`` neben dem Ring, der übrig bleibt.
+    """
+    count = len(outline)
+    if count <= 3:
+        return outline
+    before = np.roll(np.arange(count), 1)
+    after = np.roll(np.arange(count), -1)
+    kept = np.ones(count, dtype=bool)
+
+    def gap_cost(corner: int) -> float:
+        """Der größte Abstand der Ecken zwischen den Nachbarn von ``corner`` von deren Sehne."""
+        start, end = int(before[corner]), int(after[corner])
+        inside = (
+            np.arange(start + 1, end)
+            if start < end
+            else np.r_[np.arange(start + 1, count), np.arange(0, end)]
+        )
+        return float(_segment_distances(outline[inside], outline[start], outline[end]).max())
+
+    costs = _segment_distances(outline, outline[before], outline[after])
+    remaining = count
+    while remaining > 3:
+        masked = np.where(kept, costs, np.inf)
+        lowest = float(masked.min())
+        if lowest > tolerance:
+            break
+        # Bitgleich und nicht „nahe“: Gefragt ist, welche von exakt gleich
+        # teuren Ecken zuerst geht — kein Vergleich zweier Maße (Regel 6).
+        tied = np.flatnonzero(masked == lowest)
+        corner = int(tied[np.lexsort(outline[tied].T[::-1])[0]])
+        kept[corner] = False
+        remaining -= 1
+        start, end = int(before[corner]), int(after[corner])
+        after[start], before[end] = end, start
+        costs[start] = gap_cost(start)
+        costs[end] = gap_cost(end)
+    return np.asarray(outline[kept], dtype=float)
+
+
+def _segment_distances(points: np.ndarray, starts: np.ndarray, ends: np.ndarray) -> np.ndarray:
+    """Abstände ebener Punkte von Strecken, je Zeile oder gegen eine gemeinsame.
+
+    Die Skalarprodukte als Produkt und Summe über zwei Spalten, nicht über
+    ``einsum`` oder ``@``: Welche Ecke wegfällt, ist eine Wahl, und die soll
+    auf jeder Maschine gleich ausgehen (RM-187).
+    """
+    along = ends - starts
+    squares = (along * along).sum(axis=-1)
+    share = np.clip(
+        ((points - starts) * along).sum(axis=-1) / np.maximum(squares, EPS_GEOM * EPS_GEOM),
+        0.0,
+        1.0,
+    )
+    return np.asarray(
+        np.linalg.norm(points - (starts + share[..., None] * along), axis=-1), dtype=float
+    )
+
+
+def _distinct_points(points: np.ndarray) -> np.ndarray:
+    """Punkte, die höchstens :data:`~app.core.units.EPS_GEOM` auseinanderliegen, als einer.
+
+    Über Ketten und unabhängig von der Reihenfolge: Jede Gruppe steht durch
+    ihren lexikographisch kleinsten Punkt. ``EPS_GEOM`` ist die Grenze, unter
+    der zwei Längen im Kern gleich sind — hier die zwei Enden einer
+    Mantelkante, die in der Projektion auf denselben Punkt fallen.
+    """
+    if len(points) < 2:
+        return points
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.csgraph import connected_components
+    from scipy.spatial import cKDTree
+
+    pairs = cKDTree(points).query_pairs(EPS_GEOM, output_type="ndarray")
+    if not len(pairs):
+        return points
+    count = len(points)
+    links = coo_matrix(
+        (np.ones(len(pairs), dtype=np.int8), (pairs[:, 0], pairs[:, 1])), shape=(count, count)
+    )
+    _groups, labels = connected_components(links, directed=False)
+    order = np.lexsort(points.T[::-1])
+    chosen: dict[int, int] = {}
+    for index in order.tolist():
+        chosen.setdefault(int(labels[index]), index)
+    return np.asarray(points[sorted(chosen.values())], dtype=float)
 
 
 def _cylinder_band(
@@ -4697,8 +5019,11 @@ def fit_stadium(
     # größer — grob über einen halben Kreis gesucht, dann exakt aus den zwei
     # Scheiteln, die dort ganz außen liegen.
     if direction_hint is None:
-        angles = np.linspace(0.0, np.pi, STADIUM_SWEEP, endpoint=False)
-        sweep = np.column_stack([np.cos(angles), np.sin(angles)])
+        # Die Richtungen aus der genauen Kreistafel (RM-187): ``np.cos``
+        # rundet auf AVX2, AVX-512 und NEON verschieden, und die breiteste
+        # Richtung ist ein ``argmax`` — ein Unterschied in der letzten Stelle
+        # wählt dort eine andere.
+        sweep = np.asarray(units.circle_cos_sin(2 * STADIUM_SWEEP)[:STADIUM_SWEEP], dtype=float)
         projected = centred @ sweep.T
         widest = int(np.argmax(projected.max(axis=0) - projected.min(axis=0)))
         apex_a = centred[int(np.argmax(projected[:, widest]))]
@@ -6092,11 +6417,27 @@ def _surface_normals_are_consistent(
     return outlier_area <= total_area * max_outlier_share
 
 
+def _cross3(first: Any, second: Any) -> np.ndarray:
+    """``np.cross`` zweier 3-Vektoren — dieselben Gleitkommaschritte, ohne dessen Umweg.
+
+    ``np.cross`` rechnet je Komponente ein Produkt, ein zweites und ihre
+    Differenz, jedes für sich gerundet; genau das tut diese Zeile, also Bit für
+    Bit dasselbe Ergebnis, samt Vorzeichen einer Null. Der Umweg dagegen —
+    Achsen verschieben, Ausgabefeld anlegen, drei Teilfelder — kostete an einer
+    Taschenplatte mit 200 Taschen 70 µs je Aufruf und 0,92 von 9,2 Sekunden
+    eines Profils der Erkennung, fast alles aus :func:`_plane_basis`
+    (gemessen am 22.09.2026).
+    """
+    a0, a1, a2 = float(first[0]), float(first[1]), float(first[2])
+    b0, b1, b2 = float(second[0]), float(second[1]), float(second[2])
+    return np.array([a1 * b2 - a2 * b1, a2 * b0 - a0 * b2, a0 * b1 - a1 * b0])
+
+
 def _plane_basis(axis: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    helper = np.array([1.0, 0.0, 0.0]) if abs(axis[0]) < 0.9 else np.array([0.0, 1.0, 0.0])
-    basis_u = np.cross(axis, helper)
+    helper = (1.0, 0.0, 0.0) if abs(axis[0]) < 0.9 else (0.0, 1.0, 0.0)
+    basis_u = _cross3(axis, helper)
     basis_u = basis_u / float(np.linalg.norm(basis_u))
-    return basis_u, np.cross(axis, basis_u)
+    return basis_u, _cross3(axis, basis_u)
 
 
 def _fit_circle(points: np.ndarray) -> tuple[np.ndarray, float]:
@@ -6326,14 +6667,12 @@ def _mouth_covered(
     flat = flat[within]
     if not len(flat):
         return False
-    angles = np.linspace(0.0, 2.0 * np.pi, THROUGH_SAMPLES, endpoint=False)
+    # Die Stichproben aus der genauen Kreistafel (RM-187), nicht aus ``np.cos``.
+    circle = np.asarray(units.circle_cos_sin(THROUGH_SAMPLES), dtype=float)
     samples = np.vstack(
         [
             np.zeros((1, 2)),
-            *(
-                np.column_stack([np.cos(angles), np.sin(angles)]) * (radius * share)
-                for share in THROUGH_RINGS
-            ),
+            *(circle * (radius * share) for share in THROUGH_RINGS),
         ]
     )
 
@@ -6640,10 +6979,11 @@ def _split_patches_by_curvature(
         # 808 ms. Gleichheit aller Labels beantwortet dieselbe Frage direkt;
         # nur eine wirkliche Teilung braucht die allgemeine Gruppierung.
         if bool(np.all(node_labels == node_labels[0])):
-            split.append([[int(index) for index in nodes]])
+            # Derselbe Fleck, in seiner Ordnung (:func:`in_body_order`).
+            split.append([patch])
             continue
         groups = trimesh.grouping.group(node_labels, min_len=1)
-        split.append([[int(index) for index in nodes[group]] for group in groups])
+        split.append(in_body_order(body, [nodes[group].tolist() for group in groups]))
     return split
 
 
@@ -6765,9 +7105,121 @@ def _connected_patches_read(body: trimesh.Trimesh, faces: list[int]) -> list[lis
         angles = np.degrees(np.asarray(body.face_adjacency_angles, dtype=float)[rows])
         adjacency = pairs[rows[angles < CURVATURE_LIMIT]]
     if not len(adjacency):
-        return [[index] for index in faces]
+        return in_body_order(body, [[index] for index in faces])
     groups = trimesh.graph.connected_components(adjacency, nodes=np.asarray(faces), engine="scipy")
-    return _without_notches(body, [group.tolist() for group in groups])
+    return in_body_order(body, _without_notches(body, [group.tolist() for group in groups]))
+
+
+def in_body_order(body: trimesh.Trimesh, groups: Sequence[Sequence[int]]) -> list[list[int]]:
+    """Flecken und ihre Dreiecke in einer Ordnung, die der Körper vorgibt und nicht die Datei.
+
+    **Die Erkennung hing an der Reihenfolge der Dreiecke** (22.09.2026): Zwölf
+    von 101 Körpern des Korpus lieferten mit rückwärts gespeicherten
+    Dreiecken andere Merkmale — dieselben Ecken, dieselbe Form. Zwei Wege
+    führten dorthin:
+
+    * Die Einpassungen summieren über die Dreiecke eines Flecks, und die
+      Reihenfolge der Summe verschiebt die letzte Stelle. An der Kippe eines
+      Fits — ein Kegel, der sein Auswertungsbudget ausschöpft — entscheidet
+      diese Stelle (Siebhalter: der Kegel sprang zwischen zwei gleichen
+      Flächen hin und her).
+    * Die Flecken werden der Reihe nach gefragt, und manche Antworten gelten
+      für die folgenden mit: ein „kein Kegel" für deckungsgleiche Flecken, die
+      Zusammenlegung benachbarter Bögen.
+
+    Geordnet wird deshalb nach den Ecken: jede Ecke bekommt ihren Rang nach
+    ihren Koordinaten (:func:`_vertex_rank`, einmal je Körper), jedes Dreieck
+    die drei Ränge seiner Ecken aufsteigend, und die Dreiecke folgen diesen
+    drei Zahlen; die Flecken folgen ihrem ersten Dreieck. Gleich sind nur
+    deckungsgleiche Dreiecke, und die tragen zur Summe dasselbe bei.
+    Gerechnet wird nicht — die Ränge kommen aus den Ecken selbst, also frei
+    von Rundung. Über Ränge statt über die neun Koordinaten, weil deren
+    Sortierung am Drachen aus TripoSG (325 244 Dreiecke) 1,5 s kostete.
+    """
+    kept = [group for group in groups if len(group)]
+    if not kept:
+        return []
+    sizes = np.fromiter((len(group) for group in kept), dtype=np.int64, count=len(kept))
+    # Einmal durch alle Flecken statt eines Felds je Fleck: Eine Freiform bringt
+    # 120 000 davon mit, und je Fleck ``np.asarray`` und ``np.split`` kosteten
+    # dort zusammen 0,4 s (23.09.2026).
+    faces = np.fromiter(itertools.chain.from_iterable(kept), dtype=np.int64, count=int(sizes.sum()))
+    corners = np.sort(_vertex_rank(body)[np.asarray(body.faces, dtype=np.int64)[faces]], axis=1)
+    count = int(corners.max()) + 1
+    if count <= _RANK_PACKING:
+        key = (corners[:, 0] * count + corners[:, 1]) * count + corners[:, 2]
+        rank = np.empty(len(faces), dtype=np.int64)
+        rank[np.argsort(key, kind="stable")] = np.arange(len(faces))
+    else:
+        rank = np.empty(len(faces), dtype=np.int64)
+        rank[np.lexsort(corners.T[::-1])] = np.arange(len(faces))
+    labels = np.repeat(np.arange(len(kept)), sizes)
+    order = np.lexsort((rank, labels))
+    ordered = faces[order].tolist()
+    bounds = np.r_[0, np.cumsum(sizes)]
+    firsts = rank[order][bounds[:-1]]
+    limits = bounds.tolist()
+    return [
+        ordered[limits[index] : limits[index + 1]]
+        for index in np.argsort(firsts, kind="stable").tolist()
+    ]
+
+
+#: Bis zu wie vielen Ecken sich drei Ränge in eine ganze Zahl packen lassen:
+#: ``n³`` muss unter ``2⁶³`` bleiben. Darüber sortiert :func:`in_body_order`
+#: die drei Spalten einzeln — dasselbe Ergebnis, nur langsamer.
+_RANK_PACKING: Final = 2_097_151
+
+
+def _in_size_order(body: trimesh.Trimesh, patches: list[list[int]]) -> list[list[int]]:
+    """Flecken, der größte zuerst; gleich große in der Ordnung des Körpers.
+
+    Gleich heißt wie bei jeder Flächenordnung: auf :data:`AREA_DIGITS`
+    Stellen zusammenfallend, über Ketten (:func:`numbering_order`). Die
+    Fläche hängt weder an der Folge der Dreiecke noch an der Lage des
+    Körpers — anders als :func:`in_body_order`, das nach Koordinaten ordnet
+    und bei einer Drehung eine andere Folge gibt (RM-210).
+
+    Gerechnet wie :func:`numbering_order` mit einer Stufe, aber als Feld:
+    In einer Dimension ist eine Kette eine Folge von Lücken unter der Grenze,
+    und eine Freiform bringt hunderttausend Flecken mit (am Drachen 120 610).
+    """
+    if len(patches) < 2:
+        return patches
+    sizes = np.add.reduceat(
+        np.asarray(body.area_faces, dtype=float)[np.concatenate(patches)],
+        np.r_[0, np.cumsum([len(patch) for patch in patches])[:-1]],
+    )
+    order = np.argsort(-sizes, kind="stable")
+    group = np.cumsum(np.r_[True, np.diff(-sizes[order]) > 10.0**-AREA_DIGITS]) - 1
+    return [patches[index] for index in order[np.lexsort((order, group))].tolist()]
+
+
+#: Unter diesem Schlüssel hält der Cache von ``trimesh`` den Rang jeder Ecke —
+#: er lebt und stirbt mit der Geometrie wie ``face_adjacency``.
+_VERTEX_RANK_KEY: Final = "solidon_vertex_rank"
+
+
+def _vertex_rank(body: trimesh.Trimesh) -> np.ndarray:
+    """Der Rang jeder Ecke nach ihren Koordinaten (x, dann y, dann z), einmal je Körper.
+
+    Deckungsgleiche Ecken teilen einen Rang. Unabhängig von der Reihenfolge
+    der Ecken und Dreiecke im Netz.
+    """
+    if _VERTEX_RANK_KEY in body._cache:
+        cached: np.ndarray = body._cache[_VERTEX_RANK_KEY]
+        return cached
+    vertices = np.asarray(body.vertices, dtype=float)
+    order = np.lexsort(vertices.T[::-1])
+    ordered = vertices[order]
+    # Bitgleichheit wie in ``np.unique``: Deckungsgleiche Ecken einer
+    # ungeschweißten STL tragen dieselben Bits. Kein Vergleich zweier Maße,
+    # also keine Toleranz (Regel 6) — der Rang ordnet nur.
+    fresh = np.r_[True, np.any(ordered[1:] != ordered[:-1], axis=1)] if len(ordered) else []
+    rank = np.empty(len(vertices), dtype=np.int64)
+    rank[order] = np.cumsum(fresh) - 1
+    body._cache[_VERTEX_RANK_KEY] = rank
+    return rank
 
 
 class _Rim(NamedTuple):
@@ -7106,7 +7558,7 @@ def detect_faces(
     # Gerundet wird auch die Fläche, aus demselben Grund: Zwei gleich große
     # Flächen unterscheiden sich im Netz gern in der zwölften Stelle, und dann
     # entschiede wieder diese Stelle.
-    entries.sort(key=lambda entry: (-round(entry[1], 4), _corner_key(body, entry[0])))
+    entries = _largest_first(body, entries)
     return _finished_faces(mesh, _face_candidates(body, entries), entries, check_cancelled)
 
 
@@ -7134,8 +7586,11 @@ def _face_candidates(body: trimesh.Trimesh, entries: FaceEntries) -> list[Featur
                 kind="face",
                 provenance="detected",
                 measure_sources={"area": "facets", "normal": "facets", "centre": "facets"},
+                # **Ungerundet** (Regel 6), wie am exakten Kern: Gerundet wird
+                # in der Anzeige. Wer zwei gleich große Flächen vergleicht,
+                # rundet im Schlüssel (:data:`AREA_DIGITS`), nicht im Wert.
                 params={
-                    "area": round(area, 4),
+                    "area": float(area),
                     "normal": (float(normal[0]), float(normal[1]), float(normal[2])),
                     "centre": (float(centre[0]), float(centre[1]), float(centre[2])),
                 },
@@ -7549,7 +8004,7 @@ def detect_curved_faces(
         entries.append((patch, area))
     # Größte zuerst, bei gleicher Fläche die Eckennummern — dieselbe
     # Stabilität wie bei den ebenen Flächen (:func:`detect_faces`).
-    entries.sort(key=lambda entry: (-round(entry[1], 4), _corner_key(body, entry[0])))
+    entries = _largest_first(body, entries)
 
     features: list[Feature] = []
     for number, (patch, area) in enumerate(entries, start=1):
@@ -7574,7 +8029,7 @@ def detect_curved_faces(
                 provenance="detected",
                 measure_sources={"area": "facets", "normal": "facets", "centre": "facets"},
                 params={
-                    "area": round(area, 4),
+                    "area": float(area),
                     "normal": (float(mean[0]), float(mean[1]), float(mean[2])),
                     "centre": (float(centre[0]), float(centre[1]), float(centre[2])),
                     "inner": inner,
@@ -7593,6 +8048,142 @@ def _corner_key(body: trimesh.Trimesh, facet: np.ndarray) -> tuple[int, ...]:
     Drehen des Körpers noch beim Umsortieren seiner Dreiecke ändern.
     """
     return tuple(int(index) for index in np.unique(body.faces[facet]))
+
+
+#: Auf wie viele Nachkommastellen der Nummernschlüssel eine Länge in
+#: Millimetern liest — drei, wie er es immer tat. **Die Auflösung eines
+#: Schlüssels, keine Toleranz** (Regel 7): Sie entscheidet nicht, ob zwei
+#: Merkmale gleich sind, sondern nur, wann :func:`numbering_order` die nächste
+#: Stufe fragt.
+NUMBERING_DIGITS: Final = 3
+
+
+def numbering_order(
+    count: int,
+    levels: Sequence[tuple[Callable[[int], Sequence[float] | np.ndarray], int]],
+    last: Callable[[int], tuple[int, ...]],
+) -> list[int]:
+    """In welcher Reihenfolge ``count`` Merkmale einer Art ihre Nummern bekommen (§21.2).
+
+    Die Nummer ist eine Provenienz-ID: Eine Operation oder Passung, die an
+    ``fillet_2`` hängt, muss nach der nächsten Auswertung an derselben Rundung
+    hängen. Sie darf deshalb an nichts hängen, was nicht der Körper selbst ist
+    — nicht an der Reihenfolge seiner Dreiecke oder Flecken, nicht am Rauschen
+    in der zwölften Stelle.
+
+    ``levels`` sind die Stufen des Schlüssels, je eine Abfrage und ihre
+    Nachkommastellen; ``last`` entscheidet zuletzt und muss für verschiedene
+    Merkmale verschieden sein — die Ecken ihrer Flecken (:func:`_corner_key`).
+    Die nächste Stufe fragt nur, wer in der vorigen mit einem anderen
+    zusammenfällt:
+
+    * **Zusammenfallen heißt: in jeder Stelle höchstens eine Einheit der
+      letzten Nachkommastelle auseinander, über Ketten hinweg** — nicht
+      „gerundet gleich". Konzentrische Rundungen haben dieselbe Mitte bis auf
+      Rauschen. Liegt sie auf einer Rundungsgrenze — RM-211: drei Rundungen
+      eines Clips um ``119,0005`` —, fallen sie gerundet auseinander, und das
+      Rauschen entscheidet, welche ``fillet_1`` heißt.
+    * **Eine Gruppe steht an der Stelle ihres kleinsten gerundeten Werts.**
+      Wer allein steht, steht damit genau dort, wo ihn der gerundete Schlüssel
+      immer hinstellte, und behält seine Nummer. Neu geordnet wird nur, was
+      bisher unentschieden war — und das hing an der Reihenfolge der Flecken:
+      Zwei konzentrische Rundungen eines Winkels tauschten ihre Namen, sobald
+      die Dreiecke rückwärts im Netz standen (22.09.2026).
+    """
+
+    def ordered(members: list[int], depth: int) -> list[int]:
+        if len(members) < 2:
+            return members
+        if depth == len(levels):
+            return sorted(members, key=last)
+        read, digits = levels[depth]
+        values = np.array([[float(value) for value in read(member)] for member in members])
+        result: list[int] = []
+        for group in _close_groups(values, digits):
+            result.extend(ordered([members[position] for position in group], depth + 1))
+        return result
+
+    return ordered(list(range(count)), 0)
+
+
+def _close_groups(values: np.ndarray, digits: int) -> list[list[int]]:
+    """Zeilen, die in jeder Stelle höchstens ``10**-digits`` auseinanderliegen — über Ketten.
+
+    Die Gruppen kommen nach ihrem kleinsten gerundeten Wert geordnet, die
+    Zeilen darin aufsteigend. Zwei Gruppen haben nie denselben kleinsten
+    gerundeten Wert: Sie liegen in mindestens einer Stelle weiter als eine
+    Einheit auseinander, und gerundet bleibt dort ein Unterschied.
+    """
+    count = len(values)
+    if count < 2 or values.ndim != 2 or values.shape[1] == 0:
+        return [list(range(count))]
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.csgraph import connected_components
+    from scipy.spatial import cKDTree
+
+    pairs = cKDTree(values).query_pairs(10.0**-digits, p=np.inf, output_type="ndarray")
+    links = coo_matrix(
+        (np.ones(len(pairs), dtype=np.int8), (pairs[:, 0], pairs[:, 1])), shape=(count, count)
+    )
+    _count, labels = connected_components(links, directed=False)
+    rounded = [tuple(round(float(value), digits) for value in row) for row in values]
+    members: dict[int, list[int]] = {}
+    for position, label in enumerate(labels.tolist()):
+        members.setdefault(label, []).append(position)
+    return sorted(members.values(), key=lambda group: min(rounded[position] for position in group))
+
+
+def _in_numbering_order(
+    body: trimesh.Trimesh,
+    entries: list[Any],
+    size: Callable[[Any], Sequence[float]],
+) -> list[Any]:
+    """Eingepasste Flecken in der Reihenfolge ihrer Nummern (:func:`numbering_order`).
+
+    Nach der Mitte das Maß (``size``: der Radius, beim Ring beide, beim Kegel
+    mit der Spitze), dann die Länge entlang der Achse, wo es eine gibt, dann
+    die flächengewichtete Mitte des Flecks — sie trennt zwei gleich große
+    Bögen desselben Zylinders —, zuletzt seine Ecken.
+    """
+
+    def length(index: int) -> tuple[float, ...]:
+        fit, patch = entries[index]
+        axis = getattr(fit, "axis", None)
+        return () if axis is None else (_patch_extent(body, patch, axis),)
+
+    order = numbering_order(
+        len(entries),
+        (
+            (lambda index: entries[index][0].centre, NUMBERING_DIGITS),
+            (lambda index: size(entries[index][0]), NUMBERING_DIGITS),
+            (length, NUMBERING_DIGITS),
+            (lambda index: _facet_centre(body, np.asarray(entries[index][1])), NUMBERING_DIGITS),
+        ),
+        lambda index: _corner_key(body, np.asarray(entries[index][1])),
+    )
+    return [entries[index] for index in order]
+
+
+#: Auf wie viele Nachkommastellen der Nummernschlüssel eine Fläche in mm² liest
+#: — vier, wie er es immer tat. Dieselbe Art Auflösung wie
+#: :data:`NUMBERING_DIGITS`, keine Toleranz.
+AREA_DIGITS: Final = 4
+
+
+def _largest_first(body: trimesh.Trimesh, entries: list[Any]) -> list[Any]:
+    """Flächen, die größte zuerst, bei gleicher Größe nach ihren Ecken (:func:`numbering_order`).
+
+    ``entries`` beginnen mit den Dreiecken und der Fläche. Gerundet wurde die
+    Fläche schon immer, weil zwei gleich große sich im Netz in der zwölften
+    Stelle unterscheiden; die Rundung allein ließ aber zwei gleiche Flächen
+    auf einer Rundungsgrenze wieder nach dem Rauschen ordnen.
+    """
+    order = numbering_order(
+        len(entries),
+        ((lambda index: (-float(entries[index][1]),), AREA_DIGITS),),
+        lambda index: _corner_key(body, np.asarray(entries[index][0])),
+    )
+    return [entries[index] for index in order]
 
 
 def _facet_centre(body: trimesh.Trimesh, facet: np.ndarray) -> np.ndarray:
@@ -8250,6 +8841,19 @@ def _detect_voids(
             float(upper[2] - lower[2]),
         )
         measured.append((centre, size, volume, tuple(sorted(int(index) for index in faces))))
+    # Nach Mitte, Ausdehnung und Volumen, zuletzt nach den Ecken — dieselbe
+    # Regel wie jede andere Nummer (:func:`numbering_order`). Hier stand der
+    # ungerundete Vergleich der Mitten, und zwei gleiche Hohlräume auf einer
+    # Linie ordnete dann die zwölfte Stelle.
+    order = numbering_order(
+        len(measured),
+        (
+            (lambda index: measured[index][0], NUMBERING_DIGITS),
+            (lambda index: measured[index][1], NUMBERING_DIGITS),
+            (lambda index: (measured[index][2],), NUMBERING_DIGITS),
+        ),
+        lambda index: _corner_key(body, np.asarray(measured[index][3])),
+    )
     found = [
         Feature(
             id=FeatureId(f"void_{number}"),
@@ -8259,7 +8863,9 @@ def _detect_voids(
             params={"volume": volume, "centre": centre, "size": size},
             face_indices=faces,
         )
-        for number, (centre, size, volume, faces) in enumerate(sorted(measured), start=1)
+        for number, (centre, size, volume, faces) in enumerate(
+            (measured[index] for index in order), start=1
+        )
     ]
     if check_cancelled is not None:
         check_cancelled()
@@ -8349,8 +8955,8 @@ def _same_torus(one: tuple[TorusFit, list[int]], two: tuple[TorusFit, list[int]]
         return False
 
     axis = np.asarray(first.axis, dtype=float)
-    if abs(float(axis @ np.asarray(second.axis, dtype=float))) < math.cos(
-        math.radians(SINK_AXIS_LIMIT)
+    if abs(float(axis @ np.asarray(second.axis, dtype=float))) < units.exact_cos_degrees(
+        SINK_AXIS_LIMIT
     ):
         return False
 
@@ -8392,8 +8998,8 @@ def _same_cone(one: tuple[ConeFit, list[int]], two: tuple[ConeFit, list[int]]) -
         return False
 
     axis = np.asarray(first.axis, dtype=float)
-    if abs(float(axis @ np.asarray(second.axis, dtype=float))) < math.cos(
-        math.radians(CONE_SAME_AXIS)
+    if abs(float(axis @ np.asarray(second.axis, dtype=float))) < units.exact_cos_degrees(
+        CONE_SAME_AXIS
     ):
         return False
 
@@ -8426,21 +9032,42 @@ def _merged_cones(
     if len(found) < 2:
         return found
 
+    def join(
+        new: tuple[ConeFit, list[int]], known: tuple[ConeFit, list[int]]
+    ) -> tuple[ConeFit, list[int]] | None:
+        """Der gemeinsame Kegel zweier Flecken, wenn er einer ist."""
+        if not _same_cone(new, known):
+            return None
+        # In der Ordnung des Körpers (:func:`in_body_order`), nicht in der
+        # zufälligen Folge, in der die zwei Flecken zusammenkamen.
+        together = in_body_order(body, [known[1] + new[1]])[0]
+        again = fit_cone(body, together, check_cancelled=check_cancelled)
+        if again is not None and again.good and again.residual <= ROUND_TOLERANCE:
+            return again, together
+        return None
+
     merged: Cones = []
     for fit, patch in found:
-        for index, (other, gathered) in enumerate(merged):
+        for index in range(len(merged)):
             if check_cancelled is not None:
                 check_cancelled()
-            if not _same_cone((fit, patch), (other, gathered)):
-                continue
-            together = gathered + patch
-            again = fit_cone(body, together, check_cancelled=check_cancelled)
-            if again is not None and again.good and again.residual <= ROUND_TOLERANCE:
-                merged[index] = (again, together)
+            joined = join((fit, patch), merged[index])
+            if joined is not None:
+                merged[index] = joined
                 break
         else:
             merged.append((fit, patch))
-    return merged
+    apexes = np.asarray([entry[0].apex for entry in merged], dtype=float).reshape(-1, 3)
+    radii = np.asarray([entry[0].radius for entry in merged], dtype=float)
+
+    def remember(index: int, fit: ConeFit) -> None:
+        """Spitze und Radius eines neuen gemeinsamen Kegels eintragen."""
+        apexes[index] = np.asarray(fit.apex, dtype=float)
+        radii[index] = fit.radius
+
+    return _joined_until_stable(
+        merged, _anchored_near(apexes, radii), join, remember, check_cancelled
+    )
 
 
 def _merged_tori(
@@ -8473,18 +9100,39 @@ def _merged_tori(
     if len(found) < 2:
         return found
 
+    def join(
+        new: tuple[TorusFit, list[int]], known: tuple[TorusFit, list[int]]
+    ) -> tuple[TorusFit, list[int]] | None:
+        """Der gemeinsame Ring zweier Flecken, wenn er einer ist."""
+        if not _same_torus(new, known):
+            return None
+        # In der Ordnung des Körpers (:func:`in_body_order`), nicht in der
+        # zufälligen Folge, in der die zwei Flecken zusammenkamen.
+        together = in_body_order(body, [known[1] + new[1]])[0]
+        again = fit_torus(body, together, check_cancelled=check_cancelled)
+        if again is not None and again.residual <= ROUND_TOLERANCE:
+            return again, together
+        return None
+
     merged: Tori = []
     for fit, patch in found:
-        for index, (other, gathered) in enumerate(merged):
+        for index in range(len(merged)):
             if check_cancelled is not None:
                 check_cancelled()
-            if not _same_torus((fit, patch), (other, gathered)):
-                continue
-            together = gathered + patch
-            again = fit_torus(body, together, check_cancelled=check_cancelled)
-            if again is not None and again.residual <= ROUND_TOLERANCE:
-                merged[index] = (again, together)
+            joined = join((fit, patch), merged[index])
+            if joined is not None:
+                merged[index] = joined
                 break
         else:
             merged.append((fit, patch))
-    return merged
+    centres = np.asarray([entry[0].centre for entry in merged], dtype=float).reshape(-1, 3)
+    rings = np.asarray([entry[0].ring_radius for entry in merged], dtype=float)
+
+    def remember(index: int, fit: TorusFit) -> None:
+        """Mitte und Ringradius eines neuen gemeinsamen Rings eintragen."""
+        centres[index] = np.asarray(fit.centre, dtype=float)
+        rings[index] = fit.ring_radius
+
+    return _joined_until_stable(
+        merged, _anchored_near(centres, rings), join, remember, check_cancelled
+    )

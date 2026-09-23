@@ -231,6 +231,7 @@ def features_of(
     found = _seam_split_cylinders_joined(
         solid, found, named, neighbours, surfaces, inside, reach, tolerance, cancelled=cancelled
     )
+    found = _short_arcs_dropped(found, named, surfaces)
     found = _slots_instead_of_half_bores(
         solid,
         found,
@@ -932,6 +933,7 @@ def _seam_split_cylinders_joined(
     :func:`_cylinder_group_extent` misst deshalb beides im Rahmen der
     ersten Fläche und vereinigt Bögen und Spannen.
     """
+    from app.core.perceive.features import MIN_ROUND_ARC
     from app.core.perceive.slots import PARALLEL_AXES, SAME_RADIUS
 
     cylinders = [
@@ -991,6 +993,12 @@ def _seam_split_cylinders_joined(
         assert isinstance(first, CylinderSurface)
         cylinder = first.cylinder
         turn, low, high = _cylinder_group_extent(solid, group, surfaces)
+        if turn < math.radians(MIN_ROUND_ARC):
+            # Auch zusammen zu wenig Bogen (RM-210): keine Rundform, und die
+            # Stücke bleiben Oberfläche wie in :func:`_short_arcs_dropped`.
+            for index in group:
+                found.pop(named.pop(index), None)
+            continue
         radius = float(cylinder.Radius())
         axis = cylinder.Axis().Direction()
         depth = high - low
@@ -1060,6 +1068,43 @@ def _seam_split_cylinders_joined(
             face_indices=tuple(sorted(indices)),
         )
     return found
+
+
+def _short_arcs_dropped(
+    found: dict[FeatureId, Feature],
+    named: dict[int, FeatureId],
+    surfaces: dict[int, Surface | None],
+) -> dict[FeatureId, Feature]:
+    """Einzelne Zylinderstücke unter dem Mindestbogen sind keine Verrundung (RM-210).
+
+    **Dieselbe Schranke wie am Netz** (:data:`app.core.perceive.features.MIN_ROUND_ARC`,
+    Entscheidung Robert vom 23.09.2026): Eine Rundform, die weniger als fünf
+    Grad ihres Kreises zeigt, ist eine Kante. Am exakten Körper ist ihr Radius
+    zwar kein Schätzwert, aber der Steckbrief darf nicht am Dateiformat hängen:
+    Dasselbe Teil als STL meldete die Rundung nicht, als STEP schon.
+
+    Gefragt wird **nach** :func:`_seam_split_cylinders_joined`: Ein schmales
+    Stück, das eine Naht oder ein Schnitt von einem Mantel abtrennt, gehört zu
+    diesem und zählt dort mit. Was hier wegfällt, stand allein — ein Merkmal
+    aus genau einer Fläche. Seine Dreiecke bleiben Oberfläche, und die
+    Restflächen am Ende von :func:`features_of` lesen sie wie am Netz.
+    """
+    from app.core.perceive.features import MIN_ROUND_ARC
+
+    least_turn = math.radians(MIN_ROUND_ARC)
+    faces_of: dict[FeatureId, list[int]] = {}
+    for index, identifier in named.items():
+        faces_of.setdefault(identifier, []).append(index)
+    kept = dict(found)
+    for identifier, indices in faces_of.items():
+        feature = kept.get(identifier)
+        if feature is None or feature.kind != "fillet" or len(indices) != 1:
+            continue
+        surface = surfaces.get(indices[0])
+        if isinstance(surface, CylinderSurface) and surface.turn < least_turn:
+            del kept[identifier]
+            del named[indices[0]]
+    return kept
 
 
 def _cylinder_group_extent(
@@ -1455,6 +1500,14 @@ def _describe(
     from OCP.gp import gp_Pnt
     from OCP.TopAbs import TopAbs_REVERSED
 
+    from app.core.perceive.features import MIN_ROUND_ARC
+
+    # **Dieselbe Schranke wie am Netz** (RM-210, :func:`_short_arcs_dropped`):
+    # Torus- und Kegelstücke unter dem Mindestbogen sind schon hier keine
+    # Rundform. Ein Zylinderstück wird erst nach der Nahtzusammenführung
+    # gefragt — ein schmaler Rest neben einem Mantel gehört zu diesem.
+    least_turn = math.radians(MIN_ROUND_ARC)
+
     adaptor = BRepAdaptor_Surface(face)
     kind = adaptor.GetType()
     if surface is None and kind not in (GeomAbs_Cone, GeomAbs_Sphere, GeomAbs_Torus):
@@ -1474,6 +1527,14 @@ def _describe(
         }
 
     if isinstance(surface, TorusSurface):
+        # Der Bogen der Röhre läuft beim echten Torusträger in V; ein als Torus
+        # erkannter Freiformträger hat keine solche Parameterlinie und bleibt,
+        # wie er ist.
+        if (
+            kind == GeomAbs_Torus
+            and abs(float(adaptor.LastVParameter() - adaptor.FirstVParameter())) < least_turn
+        ):
+            return None
         torus = surface.torus
         return "torus", {
             "diameter": float(torus.MajorRadius()) * 2.0,
@@ -1599,6 +1660,8 @@ def _describe(
         location = cone.Location()
         along = wide_v * math.cos(angle)
         turn = abs(adaptor.LastUParameter() - adaptor.FirstUParameter())
+        if turn < least_turn:
+            return None
         return "cone", {
             "diameter": 2.0 * radius,
             "angle": math.degrees(abs(angle)) * 2.0,

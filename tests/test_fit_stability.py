@@ -25,10 +25,22 @@ statistischer Effekt und braucht tausende Flecken an der Kippe, wie sie ein
 CAD-Export mitbringt; ein solcher Körper gehört nicht in das Entwicklungstor.
 Die ersten beiden Zusicherungen prüfen deshalb die **Regel**, nicht ihre
 Wirkung — sie bleiben scharf, auch wenn kein Korpuskörper den Fall trägt.
+
+Seit dem 23.09.2026 stehen drei weitere Regeln hier, gefunden an den
+Verrundungen, die in der Lageprobe über 101 echte Körper kippten:
+
+* Welche Konturecken einen Kreis tragen, hängt nicht davon ab, an welcher Ecke
+  die Hülle beginnt — und die folgt den Koordinaten.
+* Welche Flecken zu einer Fläche zusammenfinden, hängt nicht an ihrer
+  Reihenfolge, und die Rechtfertigung einer Vereinigung gilt in beide
+  Richtungen.
+* Unter :data:`MIN_ROUND_ARC` ist eine Rundform eine Kante — an beiden Kernen
+  (Entscheidung Robert zu RM-210).
 """
 
 from __future__ import annotations
 
+import itertools
 import math
 from pathlib import Path
 from typing import Any
@@ -36,19 +48,25 @@ from typing import Any
 import numpy as np
 import pytest
 import trimesh
+from shapely.geometry import LineString
 
+from app.core import units
 from app.core.geom.mesh import MeshData, read_mesh
 from app.core.ingest.loader import normalise
 from app.core.perceive import features as features_module
 from app.core.perceive.features import (
     CONE_START_ANGLE,
     MIN_PATCH_FACES,
+    MIN_ROUND_ARC,
     RIGID_KEY_POINTS,
     ROUND_FIT_EVALUATIONS,
+    ConeFit,
+    CylinderFit,
     _refined_fit,
     _rigid_key,
     detect,
     forget_cache,
+    span_about,
 )
 
 MESHES = Path(__file__).parent / "data" / "meshes"
@@ -331,4 +349,344 @@ def test_a_cone_keeps_its_angle_when_the_body_turns() -> None:
     assert here, "the probe needs at least one cone"
     assert there == pytest.approx(here, abs=1e-3), (
         f"a countersink keeps its angle and diameter when the body turns: {here} -> {there}"
+    )
+
+
+# --- Die Konturecken hängen nicht am Anfang der Hülle ----------------------------
+
+
+def _two_rows_of_corners(step: float = 5.1) -> np.ndarray:
+    """Der Schnitt einer Verrundung R 10 aus zwei Eckenreihen, nachgebaut am 1x1-Tray.
+
+    Sechs Ecken liegen auf dem Kreis, dazwischen sechs einer zweiten Reihe
+    4,6 µm weiter innen — so ungleich verteilt wie am echten Teil, in einer
+    Lücke zwei. Die Mitte liegt abseits des Ursprungs, wie in jedem Fleck.
+    """
+    radius, inner = 10.0, 10.0 - 0.0046
+    points = [
+        (
+            radius * units.exact_cos_degrees(index * step),
+            radius * units.exact_sin_degrees(index * step),
+        )
+        for index in range(6)
+    ]
+    for gap, shares in enumerate(([0.23], [0.24], [0.2, 0.62], [0.25], [0.26])):
+        for share in shares:
+            angle = (gap + share) * step
+            points.append(
+                (inner * units.exact_cos_degrees(angle), inner * units.exact_sin_degrees(angle))
+            )
+    return np.asarray(points) + np.array([3.7, -12.1])
+
+
+def test_the_contour_carries_the_same_circle_wherever_its_ring_starts() -> None:
+    """Welche Ecken den Kreis tragen, entscheidet nicht die Lage des Körpers.
+
+    Douglas-Peucker hielt den Anfang des Rings fest und teilte am jeweils
+    fernsten Punkt; GEOS lässt die Hülle an der Ecke mit den kleinsten
+    Koordinaten beginnen. Am 1x1-Tray blieb so in der gelesenen Lage eine
+    innere Ecke stehen — r = 10,058 und Streuung 0,11 —, um 37 Grad gedreht
+    nicht: r = 10,000. Die zwei Hälften der Verrundung fanden danach je nach
+    Lage zusammen oder nicht. Am Nachbau kamen über 52 Drehungen drei
+    verschiedene Radien heraus, bis 10,062.
+    """
+    points = _two_rows_of_corners()
+    radii = set()
+    for turn in range(0, 360, 7):
+        cos, sin = units.exact_cos_degrees(turn), units.exact_sin_degrees(turn)
+        turned = np.column_stack(
+            (points[:, 0] * cos - points[:, 1] * sin, points[:, 0] * sin + points[:, 1] * cos)
+        )
+        outline = features_module._cylinder_contour(turned, 0.01, None)
+        assert outline is not None, f"the arc is a contour at {turn} degrees"
+        _centre, radius = features_module._fit_circle(outline)
+        radii.add(round(float(radius), 6))
+
+    assert radii == {10.0}, f"one circle in every pose, not {sorted(radii)}"
+
+
+# --- Welche Flecken zusammenfinden, hängt nicht an ihrer Folge ----------------
+
+
+_PIECES = {"A": list(range(6)), "B": list(range(10, 16)), "C": list(range(20, 26))}
+
+
+def _pieces_in(patch: list[int]) -> frozenset[str]:
+    """Aus welchen der drei Stücke ein Fleck besteht."""
+    faces = set(patch)
+    return frozenset(name for name, piece in _PIECES.items() if set(piece) <= faces)
+
+
+def _wall(radius: float = 5.0, spread: float = 0.1) -> CylinderFit:
+    """Ein Zylinderfit ohne Körper — die Zusammenlegung liest nur seine Zahlen."""
+    return CylinderFit(
+        axis=(0.0, 0.0, 1.0),
+        centre=(0.0, 0.0, 0.0),
+        radius=radius,
+        residual=0.0,
+        inward=False,
+        spread=spread,
+    )
+
+
+def _joined_by(monkeypatch: pytest.MonkeyPatch, answers: dict[frozenset[str], Any]) -> None:
+    """Die Zusammenlegung fragt nur noch die Tafel: Welche Vereinigung ist ein Zylinder?"""
+
+    def fit(body: Any, patch: list[int], *, check_cancelled: Any = None) -> Any:
+        return answers.get(_pieces_in(patch))
+
+    monkeypatch.setattr(features_module, "fit_cylinder", fit)
+    monkeypatch.setattr(features_module, "_same_cylinder", lambda body, one, two: True)
+    monkeypatch.setattr(features_module, "_fits_in_the_body", lambda mesh, found: True)
+    monkeypatch.setattr(
+        features_module, "in_body_order", lambda body, groups: [sorted(group) for group in groups]
+    )
+
+
+def test_three_pieces_of_one_fillet_join_in_every_order(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Welche Stücke einer Verrundung zusammenfinden, hängt nicht an ihrer Folge.
+
+    Nachgestellt ist das Keilschloss (``Wedge-Lock (Top).stl``): Zwei der drei
+    Stücke ergeben zusammen keinen Zylinder, jedes mit dem dritten und alle
+    drei schon. In der gelesenen Lage kamen die zwei zuerst, und am Ende
+    standen zwei Verrundungen; um 90 Grad gedreht war es eine. Die Folge der
+    Flecken ist seit ``in_body_order`` die der Koordinaten — also der Lage.
+    """
+    joined = _wall()
+    _joined_by(
+        monkeypatch,
+        {frozenset("AB"): joined, frozenset("AC"): joined, frozenset("ABC"): joined},
+    )
+    monkeypatch.setattr(features_module, "_lies_on_the_cylinder", lambda *args, **kwargs: False)
+
+    outcomes = set()
+    for order in itertools.permutations("ABC"):
+        merged = features_module._merged_cylinders(
+            None, None, [(_wall(), _PIECES[name]) for name in order]
+        )
+        outcomes.add(frozenset(_pieces_in(patch) for _fit, patch in merged))
+
+    assert outcomes == {frozenset({frozenset("ABC")})}, (
+        f"one fillet in every order, not {sorted(map(sorted, outcomes))}"
+    )
+
+
+def test_a_piece_on_the_other_cylinder_joins_whichever_came_first(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Die Rechtfertigung einer Vereinigung gilt in beide Richtungen.
+
+    Nachgestellt ist das Unterteil ``bottom-double.stl``: ein kurzer Bogen mit
+    r = 5,0143, ein langer mit r = 5,0004, zusammen streuen sie mehr als jeder
+    für sich. Der kurze liegt auf dem Zylinder des langen, der lange nicht auf
+    dem des kurzen — gefragt war nur, ob der später gekommene auf dem früheren
+    liegt, und kam der kurze zuerst, blieben es zwei Verrundungen.
+    """
+    short, long_ = _wall(5.0143, 0.0046), _wall(5.0004, 0.0092)
+    _joined_by(monkeypatch, {frozenset("AB"): _wall(5.0022, 0.0155)})
+
+    def lies(body: Any, fit: CylinderFit, patch: list[int], **kwargs: Any) -> bool:
+        return fit is long_ and _pieces_in(patch) == frozenset("A")
+
+    monkeypatch.setattr(features_module, "_lies_on_the_cylinder", lies)
+
+    for first, second in (("A", "B"), ("B", "A")):
+        fits = {"A": short, "B": long_}
+        merged = features_module._merged_cylinders(
+            None, None, [(fits[first], _PIECES[first]), (fits[second], _PIECES[second])]
+        )
+        assert [_pieces_in(patch) for _fit, patch in merged] == [frozenset("AB")], (
+            f"one fillet when {first} comes first"
+        )
+
+
+def test_three_pieces_of_one_cone_join_in_every_order(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Dieselbe Regel für die Kegel — am Siebhalter kippte eine Senkung daran."""
+
+    def cone(radius: float = 6.0) -> ConeFit:
+        return ConeFit(
+            axis=(0.0, 0.0, 1.0),
+            apex=(0.0, 0.0, -6.0),
+            centre=(0.0, 0.0, 0.0),
+            half_angle=45.0,
+            radius=radius,
+            residual=0.0,
+            recess=True,
+        )
+
+    answers = {frozenset("AB"): cone(), frozenset("AC"): cone(), frozenset("ABC"): cone()}
+    monkeypatch.setattr(
+        features_module,
+        "fit_cone",
+        lambda body, patch, *, check_cancelled=None: answers.get(_pieces_in(patch)),
+    )
+    monkeypatch.setattr(features_module, "_same_cone", lambda one, two: True)
+    monkeypatch.setattr(
+        features_module, "in_body_order", lambda body, groups: [sorted(group) for group in groups]
+    )
+
+    outcomes = set()
+    for order in itertools.permutations("ABC"):
+        merged = features_module._merged_cones(None, [(cone(), _PIECES[name]) for name in order])
+        outcomes.add(frozenset(_pieces_in(patch) for _fit, patch in merged))
+
+    assert outcomes == {frozenset({frozenset("ABC")})}, (
+        f"one cone in every order, not {sorted(map(sorted, outcomes))}"
+    )
+
+
+# --- Unter dem Mindestbogen ist eine Rundform eine Kante (RM-210) ---------------
+
+
+def bent_strip(turn: float, segments: int, radius: float = 20.0) -> MeshData:
+    """Ein Streifen, 3 mm dick und 10 mm hoch, der mit einem Bogen R ``radius`` knickt.
+
+    Der Bogen dreht um ``turn`` Grad in ``segments`` Sehnen; an der Außen- und
+    an der Innenseite liegt je eine Rundung.
+    """
+    points = [(0.0, 0.0), (30.0, 0.0)]
+    for step in range(1, segments + 1):
+        angle = -90.0 + turn * step / segments
+        points.append(
+            (
+                30.0 + radius * units.exact_cos_degrees(angle),
+                radius + radius * units.exact_sin_degrees(angle),
+            )
+        )
+    end_x, end_y = points[-1]
+    points.append(
+        (
+            end_x + 30.0 * units.exact_cos_degrees(turn),
+            end_y + 30.0 * units.exact_sin_degrees(turn),
+        )
+    )
+    band = LineString(points).buffer(-3.0, single_sided=True, cap_style=2, join_style=2)
+    return MeshData.of(trimesh.creation.extrude_polygon(band, height=10.0))
+
+
+def fillet_arcs(mesh: MeshData) -> list[float]:
+    """Der Bogen jeder erkannten Verrundung, in Grad."""
+    forget_cache()
+    found = detect(mesh)
+    welded = features_module._one_body(mesh).raw
+    return sorted(
+        span_about(
+            welded,
+            np.asarray(feature.params["axis"], dtype=float),
+            np.asarray(feature.params["centre"], dtype=float),
+            feature.face_indices,
+        )
+        for feature in found.values()
+        if feature.kind == "fillet"
+    )
+
+
+def test_a_round_form_under_the_minimum_arc_is_an_edge() -> None:
+    """Unter :data:`MIN_ROUND_ARC` meldet die Erkennung keine Rundung.
+
+    Entscheidung Robert zu RM-210 (23.09.2026): konservativ, etwa fünf Grad.
+    Der Streifen knickt um 4,5 Grad in acht Sehnen, und bis dahin standen
+    dort zwei Verrundungen mit je 3,37 Grad Bogen — für einen Drucker ist
+    das eine Kante.
+    """
+    arcs = fillet_arcs(bent_strip(4.5, 8))
+
+    assert arcs == [], f"a bend of 4.5 degrees carries no fillet, found arcs {arcs}"
+
+
+def test_a_round_form_over_the_minimum_arc_stays_a_fillet() -> None:
+    """Die Gegenprobe: Zwölf Grad sind eine Rundung, außen wie innen."""
+    arcs = fillet_arcs(bent_strip(12.0, 8))
+
+    assert len(arcs) == 2, f"a bend of 12 degrees carries two fillets, found arcs {arcs}"
+    assert min(arcs) >= MIN_ROUND_ARC
+
+
+def test_the_exact_kernel_holds_the_same_minimum_arc() -> None:
+    """Dieselbe Schranke am exakten Körper, sonst hinge der Steckbrief am Format.
+
+    Ein Quader, dessen Oberseite ein flacher Bogen über 40 mm ist. Bei drei
+    Grad (R 764) meldete der exakte Kern eine Verrundung, sein eigener
+    Netzzwilling eine gekrümmte Fläche; bei zwölf Grad (R 191) ist es an ihm
+    eine Verrundung.
+    """
+    pytest.importorskip("OCP.BRepPrimAPI")
+    from app.core.brep import profiles
+    from app.core.brep.features import features_of
+    from app.core.sketch.profile import Profile, ProfileSegment
+
+    def arched(arc: float) -> tuple[Any, float]:
+        chord = 40.0
+        radius = (chord / 2.0) / units.exact_sin_degrees(arc / 2.0)
+        rise = radius * (1.0 - units.exact_cos_degrees(arc / 2.0))
+        outline = Profile(
+            segments=(
+                ProfileSegment("line", (0.0, 0.0), (chord, 0.0)),
+                ProfileSegment("line", (chord, 0.0), (chord, 10.0)),
+                ProfileSegment("arc", (chord, 10.0), (0.0, 10.0), via=(chord / 2.0, 10.0 + rise)),
+                ProfileSegment("line", (0.0, 10.0), (0.0, 0.0)),
+            )
+        )
+        return profiles.extrude(outline, 8.0), radius
+
+    shallow, _radius = arched(3.0)
+    fillets = [f.id for f in features_of(shallow).values() if f.kind == "fillet"]
+    assert fillets == [], f"three degrees of arc are an edge at the exact kernel: {fillets}"
+
+    kept, radius = arched(12.0)
+    radii = [f.params["radius"] for f in features_of(kept).values() if f.kind == "fillet"]
+    assert radii == [pytest.approx(radius, rel=1e-9)], f"twelve degrees stay a fillet: {radii}"
+
+
+# --- Die Erkennung fragt ihre Flecken nach Größe, nicht nach Lage ---------------
+
+
+def plate_with_three_bores() -> MeshData:
+    """Eine Platte 60 x 40 x 8 mit drei Bohrungen Ø 4, 6 und 9 an drei Stellen.
+
+    Die Stellen sind so gewählt, dass ihre Folge nach X eine andere ist als
+    nach Y: Eine Vierteldrehung um Z ordnet sie nach den Koordinaten um.
+    """
+    plate = trimesh.creation.box(extents=(60.0, 40.0, 8.0))
+    bores = []
+    for diameter, (x, y) in ((4.0, (-20.0, 10.0)), (6.0, (0.0, -10.0)), (9.0, (20.0, 5.0))):
+        bore = trimesh.creation.cylinder(radius=diameter / 2.0, height=20.0, sections=48)
+        bore.apply_translation((x, y, 0.0))
+        bores.append(bore)
+    return MeshData.of(trimesh.boolean.difference([plate, *bores], engine="manifold"))
+
+
+def test_the_patches_are_asked_in_the_same_order_in_every_pose(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Welcher Fleck zuerst gefragt wird, entscheidet die Größe, nicht die Lage.
+
+    Die Folge zählt: Von zwei deckungsgleichen Flecken antwortet der erste für
+    den zweiten (:func:`_rigid_key`), und ein Stück fragt nach dem Ring, den
+    ein früherer Fleck gefunden hat. Seit :func:`in_body_order` folgte sie den
+    Koordinaten — am Siebhalter sprang eine Senkung danach bei einer
+    Vierteldrehung um Z auf andere Dreiecke. Die Fläche hängt weder an der
+    Dreiecksfolge noch an der Lage.
+    """
+    mesh = plate_with_three_bores()
+    asked: list[frozenset[int]] = []
+    raw = features_module.fit_cylinder
+
+    def watching(body: Any, patch: Any, *, check_cancelled: Any = None) -> Any:
+        asked.append(frozenset(int(index) for index in patch))
+        return raw(body, patch, check_cancelled=check_cancelled)
+
+    monkeypatch.setattr(features_module, "fit_cylinder", watching)
+    sequences = []
+    for axis, degrees in (((0.0, 0.0, 1.0), 0.0), ((0.0, 0.0, 1.0), 90.0), ((1.0, 2.0, 3.0), 37.0)):
+        body = mesh.raw.copy()
+        body.apply_transform(trimesh.transformations.rotation_matrix(math.radians(degrees), axis))
+        asked.clear()
+        forget_cache()
+        found = detect(MeshData(raw=body, slots=mesh.slots))
+        assert kinds(found)["hole"] == 3, f"three bores at {degrees} degrees"
+        sequences.append(list(asked))
+
+    assert sequences[0] == sequences[1] == sequences[2], (
+        "the order of the questions must not follow the pose"
     )

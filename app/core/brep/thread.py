@@ -22,7 +22,7 @@ Achse winden — die Kämme und Füße der Gänge. Hier wird genau das gelesen:
 5. **Materialseite**: die orientierte Normale der Flächen am Zug zeigt von
    der Achse weg (Bolzen) oder zu ihr hin (Gewindebohrung) — dieselbe Frage
    wie ``helix._material_outside`` am Netz.
-6. **Gangtiefe**: Kamm- gegen Fußradius, geprüft gegen ``helix.GROOVE_RANGE``
+6. **Gangtiefe**: Kamm- gegen Fußradius, geprüft gegen ``helix.MEASURED_GROOVE_RANGE``
    — die Bedingung, die auch am Netz allein ablehnt (eine Naht ohne Rille ist
    kein Gewinde). Die Schranken werden aus ``helix`` gelesen, nicht
    abgeschrieben.
@@ -42,8 +42,10 @@ Der Netzweg (``perceive.helix.find_helices``) ist der gewollte Zwilling
 dieses Lesers: zwei Rechenkerne, und der Zweig endet ohne ihn — das Netz
 hat keine Kanten, der exakte Körper keine Dreiecke, an denen sich die
 Konzentration misst (``zwillinge.md``). Geteilt sind die fachlichen Anteile:
-``GROOVE_RANGE``, die Festlegung des Nenndurchmessers und die Regel, welche
-Einpassungen eine Wendel verschluckt.
+``MEASURED_GROOVE_RANGE`` — dasselbe Fenster wie der Kantenleser am Netz, der
+wie dieser Leser den Abstand zweier Wendeln misst —, die Gangzahlregel
+(``starts_from_periodicity``), die Festlegung des Nenndurchmessers und die
+Regel, welche Einpassungen eine Wendel verschluckt.
 """
 
 from __future__ import annotations
@@ -101,10 +103,6 @@ MIN_TURNS_FOR_PITCH: Final = 1.0
 
 #: Wie weit ein Punkt von der Wendel abweichen darf, als Anteil des Vorschubs.
 HELIX_DEVIATION_SHARE: Final = 0.02
-
-#: Wie weit zwei Phasen (als Anteil eines Vorschubs) auseinanderliegen dürfen,
-#: um als dieselbe zu gelten — für die Gangzahl aus der Periodizität.
-PHASE_TOLERANCE: Final = 0.03
 
 #: Wie flach eine Kurve relativ zu ihrer Ausdehnung sein darf, um als eben zu gelten.
 PLANAR_LIMIT: Final = 1e-4
@@ -848,8 +846,12 @@ def _same_helices(windings: Sequence[Winding], lead: float) -> list[list[Winding
     in zwei Gruppen, die Gangzahl halbierte sich, und der Körper galt als
     „nur 0,60 Umläufe belegt“ (Regel 6 — kein Vergleich über Rundung).
     Gruppiert wird wie in :func:`starts_from_periodicity`, mit
-    ``RADIUS_TOLERANCE`` und ``PHASE_TOLERANCE`` auf dem Kreis.
+    ``RADIUS_TOLERANCE`` und ``PHASE_TOLERANCE`` auf dem Kreis — die
+    Phasengrenze aus :mod:`app.core.perceive.helix`, wo der Kantenleser des
+    Netzes dieselbe Frage stellt; träge importiert wie das Rillenfenster.
     """
+    from app.core.perceive.helix import PHASE_TOLERANCE
+
     groups: list[list[Winding]] = []
     for winding in windings:
         phase = (winding.phase / lead) % 1.0
@@ -878,20 +880,17 @@ def starts_from_periodicity(helices: Sequence[tuple[float, float]]) -> int:
     Kammkanten mit Abständen 0,35/0,15/0,35/0,15 — Gangzahl fälschlich 1).
     Geprüft wird von der größten möglichen Gangzahl abwärts; 1 ist der
     Rückfall, wenn keine Verschiebung die Menge auf sich selbst abbildet.
+
+    **Die Regel steht einmal**, in ``perceive.helix.starts_from_periodicity``:
+    Der Netzleser fragt dieselbe Frage an Kanten statt an Kurven (P2.5), und
+    zwei Abschriften derselben Regel geben eines Tages zwei Antworten. Hier
+    kommt nur die Radiustoleranz des exakten Körpers dazu — träge importiert
+    wie das Rillenfenster, damit der exakte Kern keine eifrige Kante zur
+    Wahrnehmung bekommt.
     """
-    entries = list(helices)
-    for count in range(len(entries), 1, -1):
-        shift = 1.0 / count
-        if all(
-            any(
-                abs(radius - other_radius) <= RADIUS_TOLERANCE
-                and _phase_gap(phase + shift, other_phase) <= PHASE_TOLERANCE
-                for other_radius, other_phase in entries
-            )
-            for radius, phase in entries
-        ):
-            return count
-    return 1
+    from app.core.perceive.helix import starts_from_periodicity as periodicity
+
+    return periodicity(helices, radius_tolerance=RADIUS_TOLERANCE)
 
 
 def read_thread(solid: Solid, *, cancelled: CancelToken | None = None) -> ThreadReading:
@@ -1016,14 +1015,15 @@ def read_thread(solid: Solid, *, cancelled: CancelToken | None = None) -> Thread
     starts_count = starts_from_periodicity(phase_sets)
     pitch = lead / starts_count
     # Die Schranken der Rille kommen aus dem Netzweg — träge, damit der exakte
-    # Kern keine eifrige Kante zur Wahrnehmung bekommt.
-    from app.core.perceive.helix import GROOVE_RANGE
+    # Kern keine eifrige Kante zur Wahrnehmung bekommt. Dasselbe Fenster wie
+    # der Kantenleser am Netz: Beide messen die Tiefe zwischen zwei Wendeln.
+    from app.core.perceive.helix import MEASURED_GROOVE_RANGE
 
-    if not (GROOVE_RANGE[0] <= depth / pitch <= GROOVE_RANGE[1]):
+    if not (MEASURED_GROOVE_RANGE[0] <= depth / pitch <= MEASURED_GROOVE_RANGE[1]):
         return ThreadReading(
             False,
             f"Gangtiefe {depth:.3f} mm ist {depth / pitch:.2f} Teilungen — außerhalb "
-            f"{GROOVE_RANGE}",
+            f"{MEASURED_GROOVE_RANGE}",
             axis=reference.axis,
             centre=reference.centre,
             lead=lead,

@@ -164,6 +164,185 @@ def test_two_coaxial_bores_are_numbered_from_below() -> None:
     assert heights == sorted(heights), f"die untere ist hole_1: {heights}"
 
 
+def _bent_bracket() -> MeshData:
+    """Ein gebogener Winkel: innen R3, außen R5 um dieselbe Mitte, zwei gerade Schenkel."""
+    from shapely.geometry import Point, box
+    from shapely.ops import unary_union
+
+    bend = Point(0.0, 0.0).buffer(5.0, quad_segs=32).difference(Point(0.0, 0.0).buffer(3.0))
+    shape = unary_union(
+        [bend.intersection(box(0.0, 0.0, 6.0, 6.0)), box(3, -30, 5, 0), box(-30, 3, 0, 5)]
+    )
+    return MeshData.of(trimesh.creation.extrude_polygon(shape, height=8.0))
+
+
+def _hollow_ball() -> MeshData:
+    """Eine Kugelschale: außen R10, innen R7 um dieselbe Mitte."""
+    outer = trimesh.creation.icosphere(subdivisions=4, radius=10.0)
+    inner = trimesh.creation.icosphere(subdivisions=4, radius=7.0)
+    inner.invert()
+    return MeshData.of(trimesh.util.concatenate([outer, inner]))
+
+
+def _named_sizes(mesh: MeshData, kind: str) -> dict[str, float]:
+    features_module.forget_cache()
+    return {
+        name: round(float(feature.params.get("radius", feature.params.get("diameter", 0.0))), 3)
+        for name, feature in detect(mesh).items()
+        if feature.kind == kind
+    }
+
+
+@pytest.mark.parametrize(("body", "kind"), [(_bent_bracket, "fillet"), (_hollow_ball, "sphere")])
+def test_concentric_shapes_keep_their_names_whatever_the_triangle_order(body, kind) -> None:
+    """RM-211: Die Nummer hing bei gleicher Mitte an der Reihenfolge der Flecken.
+
+    Konzentrische Rundungen — innen und außen an einem gebogenen Winkel, eine
+    Kugelschale — haben dieselbe Mitte, und nach der Mitte allein war der
+    Vergleich unentschieden. Am Winkel hieß die äußere Rundung ``fillet_1``,
+    mit rückwärts gespeicherten Dreiecken die innere; an der Kugelschale wurde
+    aus ``sphere_1`` ``sphere_2``. Eine Passung auf ``fillet_1`` zeigte danach
+    auf die andere Rundung — ohne Befund und mit denselben Zahlen im
+    Merkmalfenster (gefunden an vier Clips aus ``CC2-Werkzeugbox``,
+    22.09.2026).
+    """
+    mesh = body()
+    raw = mesh.raw
+    count = len(raw.faces)
+    forward = _named_sizes(mesh, kind)
+    assert forward, f"no {kind} found"
+    for order in (np.arange(count)[::-1], np.random.default_rng(211).permutation(count)):
+        reordered = MeshData.of(
+            trimesh.Trimesh(np.asarray(raw.vertices), np.asarray(raw.faces)[order], process=False)
+        )
+        assert _named_sizes(reordered, kind) == forward
+
+
+def test_concentric_fillets_are_numbered_by_their_size() -> None:
+    """Bei gleicher Mitte entscheidet das Maß, und zwar das kleinere zuerst."""
+    assert _named_sizes(_bent_bracket(), "fillet") == {"fillet_1": 3.0, "fillet_2": 5.0}
+
+
+def test_the_numbering_order_groups_what_the_rounding_splits() -> None:
+    """Zwei Mitten um eine Rundungsgrenze sind eine Mitte, und das Maß entscheidet.
+
+    ``119,0005`` liegt auf der Grenze zwischen ``119,000`` und ``119,001``.
+    Zwei konzentrische Rundungen, deren Mitten um 10⁻¹² daneben liegen,
+    rundeten auseinander, und das Rauschen ordnete sie. Wer dagegen allein
+    steht, bleibt, wo ihn die gerundete Mitte hinstellt — die Nummern aller
+    anderen Merkmale ändern sich nicht.
+    """
+    from app.core.perceive.features import NUMBERING_DIGITS, numbering_order
+
+    centres = [
+        (99.6893, 119.0005 + 1e-12, 3.8),
+        (99.6893, 119.0005 - 1e-12, 3.8),
+        (99.6893, 119.0005, 3.8),
+        (10.0, 5.0, 0.0),
+        (10.0004, -3.0, 0.0),
+        (-2.0, 7.0, 1.0),
+    ]
+    radii = [5.0, 1.0, 3.0, 2.0, 2.0, 2.0]
+
+    def order(permutation: list[int]) -> list[int]:
+        found = numbering_order(
+            len(permutation),
+            (
+                (lambda index: centres[permutation[index]], NUMBERING_DIGITS),
+                (lambda index: (radii[permutation[index]],), NUMBERING_DIGITS),
+            ),
+            lambda index: (permutation[index],),
+        )
+        return [permutation[index] for index in found]
+
+    expected = [5, 4, 3, 1, 2, 0]
+    assert order([0, 1, 2, 3, 4, 5]) == expected
+    assert order([5, 4, 3, 2, 1, 0]) == expected
+    assert order([2, 0, 4, 1, 5, 3]) == expected
+    # Wer allein steht, steht wie nach der gerundeten Mitte.
+    alone = [3, 4, 5]
+    assert [index for index in expected if index in alone] == sorted(
+        alone, key=lambda index: tuple(round(value, 3) for value in centres[index])
+    )
+
+
+def test_the_body_order_ignores_the_order_of_triangles_corners_and_vertices() -> None:
+    """Flecken und Dreiecke kommen in der Ordnung des Körpers — nicht der Datei.
+
+    Mit umgekehrter Dreiecksfolge lieferten 12 von 101 Korpuskörpern andere
+    Merkmale (22.09.2026): Die Einpassungen summieren in Fleckfolge, und an
+    der Kippe eines Fits entscheidet die letzte Stelle. Dieselbe Form in
+    anderer Folge — Dreiecke gemischt, Ecken im Dreieck verdreht, Ecken
+    umnummeriert — muss dieselbe geometrische Folge ergeben.
+    """
+    from app.core.perceive.features import in_body_order
+
+    body = trimesh.creation.icosphere(subdivisions=2, radius=10.0)
+    rng = np.random.default_rng(7)
+    groups = [sorted(rng.choice(len(body.faces), 25, replace=False).tolist()) for _ in range(4)]
+    groups = [
+        sorted(set(group) - set().union(*groups[:number])) for number, group in enumerate(groups)
+    ]
+
+    def geometry(mesh: trimesh.Trimesh, ordered: list[list[int]]) -> list[list[tuple]]:
+        corners = np.asarray(mesh.vertices)[np.asarray(mesh.faces)]
+        return [
+            [tuple(sorted(map(tuple, np.round(corners[face], 12)))) for face in group]
+            for group in ordered
+        ]
+
+    faces = np.asarray(body.faces)
+    shuffle = rng.permutation(len(faces))
+    renumber = rng.permutation(len(body.vertices))
+    moved = np.roll(faces[shuffle], 1, axis=1)
+    other = trimesh.Trimesh(
+        vertices=np.asarray(body.vertices)[np.argsort(renumber)],
+        faces=renumber[moved],
+        process=False,
+    )
+    back = np.empty(len(faces), dtype=np.int64)
+    back[shuffle] = np.arange(len(faces))
+    other_groups = [[int(back[face]) for face in group][::-1] for group in groups[::-1]]
+    assert geometry(body, in_body_order(body, groups)) == geometry(
+        other, in_body_order(other, other_groups)
+    )
+
+
+def test_a_contour_point_carried_by_two_corners_counts_once() -> None:
+    """Die zwei Enden einer Mantelkante fallen in der Projektion auf einen Punkt.
+
+    Wie weit sie auseinanderliegen, hing am Rauschen der Achse und damit an der
+    Reihenfolge der Dreiecke: An einer Schwammablage aus dem Korpus trug ein
+    Bogen aus drei Konturpunkten so eine vierte „Ecke" 10⁻¹⁵ neben der dritten
+    und galt in 81 von 200 Reihenfolgen als Rundung (22.09.2026). Die
+    Kontur verlangt vier unabhängige Ecken; drei bestimmen jeden Kreis.
+    """
+    from app.core.perceive.features import _cylinder_contour
+
+    arc = np.array([[3.0 * math.cos(a), 3.0 * math.sin(a)] for a in np.radians([-20, 0, 20])])
+    doubled = np.vstack((arc, arc + np.array([[1e-15, -2e-15], [0.0, 3e-15], [-1e-15, 0.0]])))
+    assert _cylinder_contour(doubled, 0.01, None) is None
+
+    from app.core.perceive.features import _distinct_points
+
+    assert len(_distinct_points(doubled)) == 3
+
+
+def test_a_face_keeps_its_area_unrounded() -> None:
+    """Regel 6: Der Kern rundet nicht — die Fläche steht, wie sie gemessen ist.
+
+    Ebene und gekrümmte Flächen trugen ihre Fläche auf vier Stellen gerundet,
+    der exakte Kern dieselbe Fläche ungerundet: zwei Zwillinge, zwei Zahlen.
+    Wo zwei gleich große Flächen verglichen werden, rundet der Schlüssel
+    (``AREA_DIGITS``), nicht der Wert.
+    """
+    body = trimesh.creation.box(extents=(10.0, 10.0 / 3.0, 1.0))
+    features_module.forget_cache()
+    faces = [f for f in detect(MeshData.of(body)).values() if f.kind == "face"]
+    largest = max(faces, key=lambda face: face.params["area"])
+    assert largest.params["area"] == pytest.approx(100.0 / 3.0, abs=1e-9)
+
+
 def u_profile() -> MeshData:
     """Ein U-Profil mit einer Durchgangsbohrung im linken Schenkel.
 
@@ -1682,6 +1861,62 @@ def test_the_cache_keeps_only_what_it_promises() -> None:
     )
 
 
+def test_the_feature_cache_holds_when_readers_and_writers_meet(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Auswertung und Vorschau fragen den Merker aus verschiedenen Fäden.
+
+    Nachschlagen und Nachvornerücken waren zwei Schritte: Verdrängte ein
+    anderer Faden den Eintrag dazwischen, warf ``move_to_end`` ``KeyError``
+    mitten aus der Erkennung. Hier verdrängt jeder Schreibzugriff den ältesten
+    Eintrag (Grenze eins), und drei Leser fragen dieselben Netze.
+    """
+    import sys
+    import threading
+
+    monkeypatch.setattr(features_module, "CACHE_LIMIT", 1)
+    forget_cache()
+    body = trimesh.load(MESHES / "cube_clean.stl", process=False, force="mesh")
+    meshes = []
+    for step in range(3):
+        moved = body.copy()
+        moved.apply_translation([float(step) * 3.0, 0.0, 0.0])
+        meshes.append(MeshData.of(moved))
+    keys = [features_module._mesh_key(mesh) for mesh in meshes]
+    errors: list[BaseException] = []
+    stop = threading.Event()
+
+    def read() -> None:
+        while not stop.is_set():
+            for mesh in meshes:
+                try:
+                    features_module.known_detection(mesh)
+                except BaseException as problem:
+                    errors.append(problem)
+                    return
+
+    def write() -> None:
+        for _round in range(3000):
+            for key in keys:
+                features_module._remember(key, {}, 0, 0, False)
+
+    interval = sys.getswitchinterval()
+    sys.setswitchinterval(1e-6)
+    try:
+        readers = [threading.Thread(target=read) for _ in range(3)]
+        writer = threading.Thread(target=write)
+        for thread in (*readers, writer):
+            thread.start()
+        writer.join()
+        stop.set()
+        for thread in readers:
+            thread.join()
+    finally:
+        sys.setswitchinterval(interval)
+        forget_cache()
+    assert not errors, errors[:3]
+
+
 def test_the_inner_wall_of_a_hollow_box_knows_it_is_inside() -> None:
     """Innen- und Außenwand zeigen in dieselbe Richtung und hießen gleich.
 
@@ -2871,7 +3106,11 @@ def test_curvature_splitting_scans_adjacency_once_for_many_failed_patches(
 
 
 def test_batched_curvature_splitting_matches_the_previous_result() -> None:
-    """Die einmalige Indexierung ändert keinen Flecken und keine Reihenfolge."""
+    """Die einmalige Indexierung ändert keinen Flecken, und die Stücke folgen dem Körper.
+
+    Die Reihenfolge ist seit dem 23.09.2026 die des Körpers
+    (``in_body_order``), nicht die der Dreiecksnummern.
+    """
     body = _curvature_patch_family(6, noisy=True).raw
     faces = list(range(len(body.faces)))
     patches = features_module._connected_patches(body, faces)
@@ -2896,7 +3135,7 @@ def test_batched_curvature_splitting_matches_the_previous_result() -> None:
         )
         return [[int(index) for index in group] for group in groups]
 
-    expected = [previous(patch) for patch in patches]
+    expected = [features_module.in_body_order(body, previous(patch)) for patch in patches]
     actual = features_module._split_patches_by_curvature(body, patches, jumps)
 
     assert any(len(pieces) > 1 for pieces in expected), "die Probe erzeugt keinen Krümmungssprung"
@@ -3294,7 +3533,7 @@ def test_a_skin_of_splinters_is_not_fitted_piece_by_piece(monkeypatch: pytest.Mo
     **Die Schwelle steht hier auf der Hälfte statt auf zwei Dritteln**, denn
     der Scan-Körper liegt mit 63,6 Prozent zerfallender Fläche knapp darunter
     — geprüft wird die Mechanik, nicht die Zahl. Die Zahl selbst ist an
-    ``F:D Dateien`` kalibriert und steht an der Konstanten; ein Körper, der
+    ``F:\\3D Dateien`` kalibriert und steht an der Konstanten; ein Körper, der
     unter ihr bleibt, verliert nichts, sondern wird gelesen wie zuvor und von
     der Zählung beurteilt — genau das tut dieser hier ohne den Patch.
     """
@@ -4038,8 +4277,9 @@ def test_the_patch_search_gives_what_the_row_by_row_filter_gave() -> None:
     das Ergebnis als ``int()`` je Dreieck — an einer verrauschten Freiform mit
     120 610 Flecken kostete beides zusammen hundert Millisekunden. Gerechnet
     wird jetzt über zwei Felder; geprüft wird gegen genau die Formulierung,
-    die sie ersetzt, **einschließlich der Reihenfolge**: Die Nummerierung der
-    Merkmale hängt an ihr (§21.2).
+    die sie ersetzt, **einschließlich der Reihenfolge** — seit dem 23.09.2026
+    der des Körpers (``in_body_order``): Die Einpassungen summieren in
+    Fleckfolge, und die Erkennung darf nicht an der Folge der Dreiecke hängen.
     """
     mesh = plate("post_with_fillet.stl")
     body = mesh.raw
@@ -4059,7 +4299,7 @@ def test_the_patch_search_gives_what_the_row_by_row_filter_gave() -> None:
         )
         return [[int(index) for index in group] for group in groups]
 
-    expected = row_by_row(curved)
+    expected = features_module.in_body_order(body, row_by_row(curved))
 
     assert features_module._connected_patches(body, curved) == expected
     assert len(expected) > 1, "ein einziger Fleck prüft die Auswahl nicht"
@@ -4078,7 +4318,10 @@ def test_a_patch_search_without_a_single_neighbour_returns_each_triangle() -> No
     body = trimesh.creation.icosphere(subdivisions=0)
     faces = list(range(len(body.faces)))
 
-    assert features_module._connected_patches(body, faces) == [[index] for index in faces]
+    singles = [[index] for index in faces]
+    assert features_module._connected_patches(body, faces) == features_module.in_body_order(
+        body, singles
+    )
 
 
 # --- Lehren aus 34 Modellen aus dem Netz (15.09.2026) -----------------------------

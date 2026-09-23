@@ -571,18 +571,67 @@ def test_a_two_start_thread_separates_lead_and_pitch() -> None:
 
 
 def test_the_mesh_twin_agrees_where_it_can(m6: Solid) -> None:
-    """Der Netzweg misst Teilung und Seite im Raster gleich; Händigkeit und Gangzahl fehlen ihm."""
+    """Der Netzweg misst dieselbe Teilung, Seite, Händigkeit und Gangzahl wie der exakte Leser.
+
+    Bis P2.5 suchte das Netz die Steigung im Raster von 0,01 und kannte weder
+    Händigkeit noch Gangzahl sicher; seit es an den Kanten misst
+    (``helix._slope_reading``), trägt jede windende Kante ihren Vorschub genau.
+    """
     from app.core.geom.mesh import as_mesh_data
-    from app.core.perceive.helix import PITCH_STEP, find_helices
+    from app.core.perceive.helix import find_helices
 
     helices = find_helices(as_mesh_data(m6))
     assert len(helices) == 1
     exact = _reading(m6)
-    # Das Netz sucht die Steigung in einem Raster von 0,01: eine Rasterstufe daneben
-    # ist dieselbe Auskunft, zwei wären eine andere.
-    assert helices[0].pitch == pytest.approx(exact.pitch, abs=1.5 * PITCH_STEP)
-    assert helices[0].internal is exact.internal
-    assert helices[0].diameter == pytest.approx(exact.diameter, abs=0.05)
+    helix = helices[0]
+    assert helix.measured
+    assert helix.pitch == pytest.approx(exact.pitch, abs=1e-4)
+    assert helix.lead == pytest.approx(exact.lead, abs=1e-4)
+    assert helix.starts == exact.starts
+    assert helix.handedness == exact.handedness
+    assert helix.internal is exact.internal
+    assert helix.diameter == pytest.approx(exact.diameter, abs=1e-3)
+
+
+@pytest.mark.parametrize("deflection", [0.05, 0.01])
+def test_the_mesh_reads_a_two_start_thread(deflection: float) -> None:
+    """Zwei Gänge am Netz: Vorschub 2, Teilung 1 — aus der Periodizität aller Wendeln.
+
+    Das Spektrum fand das zweigängige Gewinde bei keiner Vernetzung: Beim
+    Vorschub liegen die zwei Gänge einander gegenüber und heben sich auf. Die
+    Kanten tragen den Vorschub trotzdem, und ihre Wendeln wiederholen sich nach
+    einem halben — dieselbe Regel wie am exakten Kern
+    (``helix.starts_from_periodicity``).
+    """
+    from app.core.perceive.helix import find_helices
+
+    expected = BASES["zweigaengig"]
+    helices = find_helices(_read("zweigaengig").to_mesh(deflection=deflection))
+    assert len(helices) == 1
+    helix = helices[0]
+    assert helix.starts == expected["starts"]
+    assert helix.lead == pytest.approx(expected["lead"], abs=1e-4)
+    assert helix.pitch == pytest.approx(expected["pitch"], abs=1e-4)
+    assert helix.handedness == expected["handedness"]
+    assert helix.diameter == pytest.approx(expected["diameter"], abs=1e-3)
+
+
+def test_a_coarse_internal_thread_keeps_its_root_diameter_on_the_mesh() -> None:
+    """Innen nennt das Netz den Grund-Ø auch grob vernetzt — aus den Wendeln, nicht Perzentilen.
+
+    Bei einer Sehnenabweichung von 0,05 mm kam das M8-Innengewinde mit Ø 7,80
+    statt 8,20 heraus: Kamm und Rille standen aus Perzentilen der
+    Dreiecksmitten, und die liegen um die Sehnenhöhe innerhalb. Die Kanten des
+    Kamms und des Grunds liegen auf ihren Wendeln.
+    """
+    from app.core.perceive.helix import find_helices
+
+    expected = BASES["m8_innen"]
+    helices = find_helices(_read("m8_innen").to_mesh(deflection=0.05))
+    assert len(helices) == 1
+    assert helices[0].internal is True
+    assert helices[0].diameter == pytest.approx(expected["diameter"], abs=1e-3)
+    assert helices[0].pitch == pytest.approx(expected["pitch"], abs=1e-4)
 
 
 # --- Was die Durchsicht vom 21.09.2026 gefunden hat ------------------------------------

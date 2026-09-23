@@ -56,16 +56,22 @@ def fingerprint(values: object) -> str:
     [
         (3, "8499ba0788b12dea"),
         (4, "35051fd2bf2a3d2f"),
+        (8, "0f4775e181c5061d"),
         (32, "fe8488d27a898c06"),
         (120, "169ba88212acfdba"),
         (192, "5d81998cecab205a"),
+        (360, "6796c3e32617a875"),
     ],
 )
 def test_a_circle_has_the_same_corners_everywhere(sections: int, digest: str) -> None:
     """Die Ecken eines regelmäßigen Vielecks, festgeschrieben.
 
     Der unterste Baustein: Steht er, kann jede Geometrie darauf stehen. Fällt
-    er, ist alles darüber Zufall.
+    er, ist alles darüber Zufall. Acht und 360 liest die Erkennung: die
+    Stichproben der Durchgangsfrage (``features.THROUGH_SAMPLES``) und die
+    Richtungen der Stadionsuche über einen halben Kreis
+    (``features.STADIUM_SWEEP``) — beide rechneten bis zum 23.09.2026 mit
+    ``np.cos``.
     """
     values = units.circle_cos_sin(sections)
 

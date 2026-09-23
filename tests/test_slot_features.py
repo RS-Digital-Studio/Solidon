@@ -113,7 +113,7 @@ def test_slot_shell_has_a_boundary_for_sloping_walls(angle, expected) -> None:
     )
     sloped = np.flatnonzero(np.abs(body.face_normals[:, 1]) > 0.9)
     assert len(sloped) == 4
-    assert all(mask[index] is expected for index in sloped)
+    assert all(bool(mask[index]) is expected for index in sloped)
 
 
 @pytest.mark.parametrize(("offset", "expected"), [(0.075, True), (0.125, False)])
@@ -242,6 +242,41 @@ def test_unconnected_arcs_need_no_slot_direction(monkeypatch: pytest.MonkeyPatch
 
     assert find_slots(mesh, fitted.fillets) == []
     assert calls < 8 * len(fitted.fillets), "fremde Mantelstücke brauchen keine Querrichtung"
+
+
+def test_only_arcs_on_a_shared_shell_are_paired_one_by_one(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Die Paarsuche wächst mit den Bögen je Mantel, nicht mit dem Quadrat aller Bögen.
+
+    Sechzehn Taschen mit je vier Eckrundungen sind 64 Bögen und 2 016 Paare;
+    einen Mantel teilen nur die vier Ecken einer Tasche, also sechs Paare je
+    Tasche. Bis zum 22.09.2026 ging jedes der 2 016 Paare einzeln durch
+    ``_slot_from`` — bei 200 Taschen 319 600 Paare und 7,7 von 12 Sekunden
+    der Erkennung. Die Vorauswahl (``_PairPlan``) lässt nur durch, was ein
+    Langloch ergeben kann; dass sie keines verliert, prüfen die Tests mit
+    echten Langlöchern in dieser Datei.
+    """
+    from app.core.perceive import slots as slot_module
+    from tests.test_performance import pocketed_plate
+
+    pockets = 16
+    mesh = _one_body(pocketed_plate(pockets))
+    fitted = _fitted(mesh)
+    inward = sum(bool(getattr(fit, "inward", False)) for fit, _patch in fitted.fillets)
+    assert inward == 4 * pockets, f"expected four corner arcs per pocket, got {inward}"
+    original = slot_module._slot_from
+    pairs = 0
+
+    def counted(*args, **kwargs):
+        nonlocal pairs
+        pairs += 1
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(slot_module, "_slot_from", counted)
+
+    assert find_slots(mesh, fitted.fillets) == []
+    assert pairs <= 6 * pockets, f"{pairs} pairs checked one by one for {pockets} pockets"
 
 
 def only_slot(mesh: MeshData) -> Feature:

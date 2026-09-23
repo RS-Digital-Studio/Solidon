@@ -36,10 +36,16 @@ def _branched_components() -> tuple[Any, list[list[int]], np.ndarray]:
     )
     angles = np.radians([5.0, 5.0, 45.0, 45.0, 5.0, 4.0, 4.0, 4.0, 4.0])
     jumps = np.asarray([0.0, 0.0, 0.0, 0.0, 0.0, 0.1, 0.1, 0.1, 1.0])
+    # Jedes Dreieck mit eigenen Ecken, lexikographisch nach seiner Nummer:
+    # Die Körperordnung (``in_body_order``) ist dann die Nummernfolge.
     body = SimpleNamespace(
-        faces=np.zeros((12, 3), dtype=np.int64),
+        faces=np.arange(36, dtype=np.int64).reshape(12, 3),
+        vertices=np.asarray(
+            [[float(face), float(corner), 0.0] for face in range(12) for corner in range(3)]
+        ),
         face_adjacency=pairs,
         face_adjacency_angles=angles,
+        _cache={},
     )
     return body, patches, jumps
 
@@ -71,10 +77,26 @@ def _previous_result(
     return result
 
 
+def _in_body_order(
+    body: Any, patches: list[list[int]], previous: list[list[list[int]]]
+) -> list[list[list[int]]]:
+    """Die Referenz in der Ordnung des Körpers, wie die Teilung sie seit B7 liefert.
+
+    Ein ungeteilter Fleck kommt, wie er hereinkam; die Stücke eines geteilten
+    ordnet ``in_body_order`` — Dreiecke und Stücke nach ihren Ecken statt nach
+    der Folge, in der die Komponentensuche sie fand.
+    """
+    return [
+        [patch] if len(pieces) == 1 else features_module.in_body_order(body, pieces)
+        for patch, pieces in zip(patches, previous, strict=True)
+    ]
+
+
 def test_all_active_patches_share_one_component_search(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Die Bündelung bewahrt Ergebnis und Reihenfolge ohne Graphaufbau je Fleck."""
+    """Die Bündelung bewahrt das Ergebnis ohne Graphaufbau je Fleck — in der
+    Ordnung des Körpers statt der Folge der Suche."""
     body, patches, jumps = _branched_components()
-    expected = _previous_result(body, patches, jumps)
+    expected = _in_body_order(body, patches, _previous_result(body, patches, jumps))
     original = trimesh.graph.connected_component_labels
     calls = 0
 
@@ -157,4 +179,4 @@ def test_without_the_mask_every_patch_is_still_split() -> None:
 
     actual = features_module._split_patches_by_curvature(body, patches, jumps)
 
-    assert actual == _previous_result(body, patches, jumps)
+    assert actual == _in_body_order(body, patches, _previous_result(body, patches, jumps))

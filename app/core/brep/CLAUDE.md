@@ -430,6 +430,13 @@ wie an einer Fläche. `FULL_TURN` ist seither dieselbe Zahl wie
 vollen Umdrehung trägt `partial`, und was das bedeutet, entscheidet die
 Nachbarschaft (`perceive.relations`), nicht der Winkel.
 
+**Unter dem Mindestbogen ist eine Rundform eine Kante** — dieselbe Zahl wie am
+Netz (`perceive.features.MIN_ROUND_ARC`, fünf Grad, RM-210). Torus- und
+Kegelstücke fragt `_describe` am nativen Umfang (V- bzw. U-Spanne); ein
+Zylinderstück erst nach der Nahtzusammenführung (`_short_arcs_dropped`, und
+die Nahtgruppe selbst), damit ein schmaler Rest neben einem Mantel dort
+mitzählt. Was nicht benannt wird, lesen die Restflächen wie am Netz.
+
 Offene Randbohrungen und Langlöcher ergänzt `features_of` über dieselbe
 Wandprüfung wie der Mesh-Kern (§21.1). `edit.slot_bore` vereinigt nach dem
 Schnitt koplanare Flanken, damit Nachziehen ohne neue Breitenzugabe das
@@ -508,9 +515,11 @@ längste zusammen: Zwölf Stücke einer halbierten Wendel belegen sie, zwei
 Bögen um verschiedene Achsen nicht. Die Gangzahl ist die
 Periodizität **aller** Wendeln (Kamm- wie Fußkanten) unter einer
 Verschiebung um 1/n des Vorschubs — die Kammphasen allein zählten den
-zweigängigen Körper als eingängig. Die Materialseite kommt aus den
-orientierten Normalen der Flächen am Zug, die Gangtiefe aus Kamm- und
-Fußradius gegen `helix.GROOVE_RANGE` (träge importiert, damit `brep` keine
+zweigängigen Körper als eingängig; die Regel steht einmal, in
+`helix.starts_from_periodicity`, und der Kantenleser am Netz fragt dieselbe.
+Die Materialseite kommt aus den orientierten Normalen der Flächen am Zug,
+die Gangtiefe aus Kamm- und Fußradius gegen `helix.MEASURED_GROOVE_RANGE`
+(dasselbe Fenster wie am Netz; beides träge importiert, damit `brep` keine
 eifrige Kante zur Wahrnehmung bekommt). Unter einer vollen Umdrehung, bei
 schlechter Wendel oder ohne Rille gibt es einen **Grund** fürs Protokoll
 und nie eine geratene Steigung.

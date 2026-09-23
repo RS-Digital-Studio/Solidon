@@ -262,6 +262,178 @@ def test_a_mirrored_bolt_is_measured_left_handed() -> None:
     assert left.turns == pytest.approx(right.turns, abs=0.05)
 
 
+def _printed(size: float, pitch: float, length: float, *, mirrored: bool = False) -> MeshData:
+    """Das Gewinde, das diese Anwendung selbst druckt — abgeflachter Kamm, 48 Segmente je Umlauf.
+
+    Über Ecken und Dreiecke neu aufgebaut, damit nichts vom Baustein mitreist;
+    gespiegelt an der YZ-Ebene ist es dasselbe Gewinde links herum.
+    """
+    from app.core.knowledge.parts import build
+
+    built = build.threaded(size, pitch, length)
+    assert isinstance(built, MeshData)
+    body = trimesh.Trimesh(
+        vertices=np.asarray(built.raw.vertices), faces=np.asarray(built.raw.faces)
+    )
+    if mirrored:
+        body.apply_transform(np.diag([-1.0, 1.0, 1.0, 1.0]))
+    return MeshData(raw=body)
+
+
+@pytest.mark.parametrize(("length", "turns"), [(8.0, 8.0), (2.5, 2.5)])
+def test_the_printed_profile_is_measured_at_its_edges(length: float, turns: float) -> None:
+    """Das gedruckte Gewinde misst seine Händigkeit an den Kanten, nicht am Spektrum (P2.5).
+
+    Ein abgeflachter Kamm trägt vier Wendeln je Gang, fast gleich über die
+    Periode verteilt, und im Spektrum heben sie sich nahezu auf. Am Gewinde,
+    das ``build.threaded(6, 1, 8)`` baut, stand der Gipfel deshalb bei 0,98 mm
+    und **links** statt rechts, die Spiegelung umgekehrt (gemessen 21.09.2026);
+    mit 2,5 Umläufen fand das Spektrum gar nichts. Die Kanten sagen es genau:
+    Jede trägt den Vorschub, und das Vorzeichen ihrer Steigung ist die
+    Händigkeit — die Fußkanten auch im Zickzack um ihre Wendel, denn sie sind
+    Schnitte der gedrehten Flanken mit dem Vieleck des Kerns.
+    """
+    right = _only(find_helices(_printed(6.0, 1.0, length)))
+    left = _only(find_helices(_printed(6.0, 1.0, length, mirrored=True)))
+    for helix, handedness in ((right, "right"), (left, "left")):
+        assert helix.measured
+        assert helix.handedness == handedness
+        # Die Toleranzen des exakten Nachweises (``test_thread_import.py``):
+        # Teilung und Vorschub 1e-4, Radien 1e-3.
+        assert helix.pitch == pytest.approx(1.0, abs=1e-4)
+        assert helix.lead == pytest.approx(1.0, abs=1e-4)
+        assert helix.starts == 1
+        assert not helix.internal
+        assert helix.diameter == pytest.approx(6.0, abs=1e-3)
+        assert helix.turns == pytest.approx(turns, abs=0.05)
+
+
+def test_a_measured_thread_carries_its_starts_and_an_evidenced_handedness() -> None:
+    """Das Merkmal trägt Vorschub, Gangzahl und Wendelabweichung — und eine belegte Richtung.
+
+    Belegt heißt hier ``facets``: am Netz gemessen, nicht geraten. Damit sperrt
+    ein Linksgewinde am Netz das Neuschneiden wie am exakten Körper
+    (``types.thread_is_left_handed``) — bis dahin hieß jede Netz-Händigkeit
+    ``fit`` und wurde übergangen, weil sie am gedruckten Profil falsch sein
+    konnte; ein linkes Netzgewinde wurde beim *Merkmal ändern* still rechts.
+    """
+    from app.core.types import thread_is_left_handed
+
+    for mirrored, handedness in ((False, "right"), (True, "left")):
+        found = detect(_printed(6.0, 1.0, 8.0, mirrored=mirrored))
+        threads = [feature for feature in found.values() if feature.kind == "thread"]
+        assert len(threads) == 1, sorted(found)
+        thread = threads[0]
+        assert thread.params["handedness"] == handedness
+        assert thread.measure_sources["handedness"] == "facets"
+        assert thread.params["starts"] == 1
+        assert thread.params["lead"] == pytest.approx(1.0, abs=1e-4)
+        assert thread.params["pitch"] == pytest.approx(1.0, abs=1e-4)
+        assert 0.0 <= thread.params["uncertainty"] < 1e-3
+        assert thread_is_left_handed(thread) is mirrored
+
+
+def _reshaped(
+    mesh: MeshData, *, radial: float = 1.0, twist: float = 0.0, span: float = 0.0
+) -> MeshData:
+    """Dasselbe Netz, radial gestaucht und am oberen Ende verdreht — dieselben Dreiecke.
+
+    ``radial`` staucht alle Radien um die Achse: Die Rille wird flacher, die
+    Wendeln bleiben, wo sie sind. ``twist`` dreht die Ecken der obersten
+    ``span`` Millimeter zunehmend um die Achse (quadratisch bis ``twist`` im
+    Bogenmaß): Der Kamm verlässt dort seine Wendel wie am Auslauf eines
+    gedruckten Gewindes.
+    """
+    vertices = np.asarray(mesh.raw.vertices, dtype=float).copy()
+    vertices[:, :2] *= radial
+    if twist:
+        heights = vertices[:, 2]
+        start = float(heights.max()) - span
+        angle = np.where(heights > start, twist * ((heights - start) / span) ** 2, 0.0)
+        x, y = vertices[:, 0].copy(), vertices[:, 1].copy()
+        vertices[:, 0] = np.cos(angle) * x - np.sin(angle) * y
+        vertices[:, 1] = np.sin(angle) * x + np.cos(angle) * y
+    return MeshData(raw=trimesh.Trimesh(vertices=vertices, faces=np.asarray(mesh.raw.faces)))
+
+
+def test_a_shallow_thread_is_measured_as_well() -> None:
+    """Rillentiefe 0,27 Teilungen: flach wie ein Behältergewinde, und doch ein Gewinde.
+
+    Das Fenster der Rille lag bei 0,40 bis 1,20 Teilungen — eine Grenze für die
+    Tiefe aus dem Spektrum. Die Deckel des Gewürzregals aus dem Korpus liegen bei
+    0,399 und blieben ungemessen, die Schraubfüße eines Besteckkorbs bei 0,315 und
+    0,242 wurden gar nicht gefunden (23.09.2026). Der Kantenleser misst den
+    Abstand zweier Wendeln und prüft gegen ``MEASURED_GROOVE_RANGE``.
+    """
+    helix = _only(find_helices(_reshaped(_printed(6.0, 1.0, 8.0), radial=0.5)))
+    assert helix.measured
+    assert helix.pitch == pytest.approx(1.0, abs=1e-4)
+    assert helix.handedness == "right"
+    assert helix.depth / helix.pitch == pytest.approx(0.27, abs=0.01)
+
+
+def test_a_crest_that_runs_out_keeps_the_thread_measured() -> None:
+    """Am Ende verlässt der Kamm seine Wendel — das Gewinde bleibt gemessen.
+
+    An der Düsenbox aus dem Korpus lief der Kamm in eine Fase aus und lag dort
+    0,55 mm neben seiner Wendel; die größte Abweichung über alle Kanten
+    entschied, und das ganze Gewinde blieb ungemessen (23.09.2026). Hier dreht
+    sich das oberste Millimeter um bis zu einem halben Bogenmaß — 0,08 mm
+    Abweichung am Ende, mehr als ``MAX_FACET_SAG``.
+    """
+    helix = _only(find_helices(_reshaped(_printed(6.0, 1.0, 8.0), twist=0.5, span=1.0)))
+    assert helix.measured
+    assert helix.lead == pytest.approx(1.0, abs=1e-4)
+    assert helix.turns == pytest.approx(8.0, abs=0.05)
+    assert helix.uncertainty is not None and helix.uncertainty < 0.05
+
+
+def test_two_strands_of_one_crest_count_their_turns_once() -> None:
+    """Die zwei Kanten eines flachen Kamms überdecken dieselbe Höhe — gezählt einmal.
+
+    Liegen sie enger als eine Wendel breit sein darf, bilden sie eine; ihre
+    Winkel zusammengezählt hatte die waagrechte Düse aus dem Korpus zwölf
+    Umläufe statt sechs (23.09.2026).
+    """
+    from app.core.perceive.helix import _covered
+
+    strand = np.column_stack((np.arange(0.0, 6.0, 0.1), np.arange(0.1, 6.1, 0.1)))
+    assert _covered(strand) == pytest.approx(6.0)
+    assert _covered(np.concatenate((strand, strand + 0.02))) == pytest.approx(6.02)
+    # Eine Unterbrechung zählt nicht mit.
+    assert _covered(np.concatenate((strand[:20], strand[40:]))) == pytest.approx(4.0)
+
+
+def test_two_helices_bridged_by_a_few_edges_are_two_and_a_coarse_one_stays_one() -> None:
+    """Dicht ist eine Wendel; was dünn dazwischen liegt, verbindet keine zwei.
+
+    Am flachen Grund der waagrechten Düse aus dem Korpus hielten rund neunzig
+    Kanten zwei Randwendeln mit je 1 630 Kanten als eine Gruppe zusammen
+    (23.09.2026). Eine grob vernetzte Wendel verteilt ihre Kanten dagegen
+    ungleich über benachbarte Fächer und bleibt eine.
+    """
+    from app.core.perceive.helix import _dense_parts
+
+    rng = np.random.default_rng(3)
+    phases = np.concatenate(
+        (
+            0.10 + rng.normal(0.0, 0.002, 1000),
+            0.42 + rng.normal(0.0, 0.002, 1000),
+            np.linspace(0.12, 0.40, 60),
+        )
+    )
+    group = np.argsort(phases)
+    parts = _dense_parts(group, phases, np.ones(len(phases)), 3.0)
+    assert len(parts) == 2
+    first, second = sorted(parts, key=lambda part: float(phases[part].mean()))
+    assert set(range(1000)) <= set(first.tolist())
+    assert set(range(1000, 2000)) <= set(second.tolist())
+    # Die Brücke in der Mitte gehört zu keiner: weiter als eine Wendelbreite.
+    assert len(first) + len(second) < len(phases)
+    uneven = np.concatenate((np.full(100, 0.300), np.full(5, 0.316), np.full(80, 0.331)))
+    assert len(_dense_parts(np.arange(len(uneven)), uneven, np.ones(len(uneven)), 2.0)) == 1
+
+
 @pytest.mark.parametrize(("size", "core", "pitch"), [("M5", 4.2, 0.8), ("M8", 6.8, 1.25)])
 def test_a_tapped_hole_is_found_as_an_internal_thread(size: str, core: float, pitch: float) -> None:
     """Innen ist dieselbe Wendel, gespiegelt.
@@ -291,13 +463,23 @@ def test_the_pitch_is_the_largest_peak_and_not_the_highest() -> None:
 
 
 def test_a_short_thread_says_nothing_rather_than_something_wrong() -> None:
-    """Unter etwa sieben Windungen ist die Steigung nicht mehr abzulesen.
+    """Ein kurzes Gewinde bekommt seine richtige Steigung — oder gar keine.
 
-    Bei fünf Millimetern überwiegt der Auslauf. Gemessen meldete ein solcher
-    Bolzen ohne diese Grenze 0,42 mm statt 1,25 — eine Zahl, die schlechter
-    ist als keine (Regel 21).
+    Bei fünf Millimetern (vier Windungen M8) überwiegt im Spektrum der
+    Auslauf: Gemessen meldete es 0,42 mm statt 1,25 — eine Zahl, die schlechter
+    ist als keine (Regel 21), und deshalb stand hier bis zum 22.09.2026 ein
+    leeres Ergebnis als Soll. Seit P2.5 misst der Netzleser an den Kanten:
+    Jede windende Kante trägt ihren Vorschub, und der Bolzen kommt mit 1,25
+    heraus. Die Zusage bleibt dieselbe, nur ihre Hälfte hat gewechselt — wer
+    ein Gewinde meldet, meldet das richtige.
     """
-    assert find_helices(_bolt("M8", 5.0)) == []
+    helices = find_helices(_bolt("M8", 5.0))
+    assert helices, "vier Windungen reichen der Kantenmessung"
+    helix = _only(helices)
+    assert helix.measured, "an den Kanten gemessen, nicht am Spektrum geschätzt"
+    assert helix.pitch == pytest.approx(1.25, abs=1e-3)
+    assert helix.handedness == "right"
+    assert helix.starts == 1
 
 
 @pytest.mark.parametrize("path", CORPUS, ids=lambda p: p.name)
@@ -342,6 +524,36 @@ def test_a_helix_without_a_groove_is_not_a_thread() -> None:
     tall = trimesh.Trimesh(vertices=stretched, faces=np.asarray(body.faces))
 
     assert find_helices(MeshData(raw=tall)) == []
+
+
+def test_axial_grooves_around_a_handle_are_not_a_thread() -> None:
+    """Rillen längs der Achse winden sich nicht — sie sind kein Gewinde.
+
+    Ein Griff Ø 30, von ``apply_texture`` über die ganze Länge berippt: Die
+    Ecken der Rillenkanten liegen im Takt der Vernetzung, und das Spektrum
+    fand darin ein Linksgewinde mit Teilung 0,6 und Schärfe 15,6 (23.09.2026,
+    am Stand davor genauso). Die Schätzung des Spektrums gilt nur noch, wo der
+    Kantenleser eine Schar windender Kanten findet.
+    """
+    from app.core.types import SceneObject
+    from tests.test_pattern_features import CIRCUMFERENCE, CYLINDER_DIAMETER, cylinder, run_op
+
+    entry = SceneObject(id="obj_1", name="Griff", mesh=cylinder())
+    out, _findings = run_op(
+        "apply_texture",
+        entry,
+        pattern="rib",
+        pitch=3.0,
+        depth=0.8,
+        mode="engraved",
+        width=CIRCUMFERENCE,
+        height=34.0,
+        wrap="cylinder",
+        wrap_diameter=CYLINDER_DIAMETER,
+        z=0.0,
+    )
+    assert not find_helices(out.mesh)
+    assert not [feature for feature in out.features.values() if feature.kind == "thread"]
 
 
 def test_the_tree_shows_one_thread_instead_of_a_handful_of_phantoms() -> None:

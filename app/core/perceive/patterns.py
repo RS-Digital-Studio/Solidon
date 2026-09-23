@@ -75,7 +75,7 @@ from typing import Any, Final, Literal
 import numpy as np
 
 from app.core import units
-from app.core.geom.mesh import MeshData
+from app.core.geom.mesh import MeshData, unique_edges
 from app.core.types import Feature, FeatureId, MeasureSource, Vec3
 from app.core.units import EPS_GEOM
 
@@ -471,9 +471,12 @@ def find_patterns(
     small = np.array(
         [areas[index] <= limit and _cell_material(owned[name]) for index, name in enumerate(names)]
     )
+    # Ein Stift, der mit einem zweiten die Achse teilt und in Streifen
+    # zerfällt, ist Boden oder Kopf der Zellen und kein Träger
+    # (:func:`_cell_floors`).
+    for index in _cell_floors(body, owned, names, small):
+        small[index] = True
     candidate_features = np.flatnonzero(small)
-    if len(candidate_features) < MIN_CELLS:
-        return []
     measure = _CellMeasure(body, owned, names, owner)
     # **Ein Stift als Träger nimmt beim Einpassen Wandstücke mit** — kleine
     # Dreiecke quer zum Mantel, die keine ebene Fläche wurden und über die
@@ -524,6 +527,15 @@ def find_patterns(
     # da. Eine Zelle besteht aus allem Kleinen zwischen ihren Trägern — was
     # kein Träger und keine Sammelform ist, gehört dazu.
     candidate = (owner < 0) | np.isin(owner, candidate_features)
+    # **Gezählt wird das Zellmaterial, nicht die Merkmale darunter.** Hier
+    # stand die Frage, ob es wenigstens MIN_CELLS kleine Merkmale gibt — vor
+    # den zwei Schritten darüber, die dem Stift sein Wandmaterial nehmen. Ein
+    # Kreuzrändel um einen Griff besteht aus Dreiecken ohne Namen: Nach dem
+    # Ändern auf 4 mm lagen sie im Stift, sieben Verrundungen standen daneben,
+    # und die Suche endete, bevor sie die Zellen sah (Fund aus „formops",
+    # 23.09.2026).
+    if not bool(candidate.any()):
+        return []
     carrier_feature = np.array(
         [owned[name].kind in CARRIER_KINDS and not small[index] for index, name in enumerate(names)]
     )
@@ -533,13 +545,15 @@ def find_patterns(
     cells, pieces = _cells(
         body, measure, candidate, carrier_feature, check_cancelled=check_cancelled
     )
-    if len(cells) < min(MIN_CELLS, MIN_STRIPS):
+    if len(cells) < min(MIN_CELLS, MIN_STRIPS) and len(pieces) < MIN_STRIPS:
         return []
     if check_cancelled is not None:
         check_cancelled()
 
     carriers = {
-        name: _carrier_outline(body, owned[name]) for name in {cell.carrier[0] for cell in cells}
+        name: _carrier_outline(body, owned[name])
+        for name in {cell.carrier[0] for cell in cells}
+        | {name for piece in pieces for name in piece.carriers if owned[name].kind == "pin"}
     }
     patterns: list[Pattern] = []
     taken: set[int] = set()
@@ -570,8 +584,101 @@ def find_patterns(
         if pattern is None:
             continue
         patterns.append(_absorb(pattern, cells, pieces, measure, taken, carriers))
-    patterns.sort(key=lambda pattern: tuple(round(value, 3) for value in pattern.centre))
-    return patterns
+    patterns.extend(_rim_patterns(pieces, measure, taken, carriers, owned))
+    # Nach der Mitte, und wo zwei Muster sie teilen — zwei Lochkreise um
+    # dieselbe Achse —, nach Teilung, Feld und Zellenzahl, zuletzt nach den
+    # Ecken: dieselbe Regel wie für jede andere Nummer
+    # (:func:`app.core.perceive.features.numbering_order`).
+    from app.core.perceive.features import NUMBERING_DIGITS, _corner_key, numbering_order
+
+    order = numbering_order(
+        len(patterns),
+        (
+            (lambda index: patterns[index].centre, NUMBERING_DIGITS),
+            (
+                lambda index: (
+                    patterns[index].pitch,
+                    patterns[index].width,
+                    patterns[index].height,
+                ),
+                NUMBERING_DIGITS,
+            ),
+            (
+                lambda index: (len(patterns[index].cells), len(patterns[index].partial)),
+                NUMBERING_DIGITS,
+            ),
+        ),
+        lambda index: _corner_key(body, np.asarray(patterns[index].face_indices)),
+    )
+    return [patterns[index] for index in order]
+
+
+def _cell_floors(
+    body: Any,
+    owned: Mapping[FeatureId, Feature],
+    names: Sequence[FeatureId],
+    small: np.ndarray,
+) -> list[int]:
+    """Welche großen Stifte Böden oder Köpfe von Zellen sind und keine Träger.
+
+    **Vertiefte Rillen um einen Griff haben einen Boden, und der ist wieder
+    ein Zylinder** — derselbe für alle Rillen, eine Tiefe unter dem Mantel.
+    Die Einpassung legt seine Streifen zu einem Stift zusammen, und der ist
+    so groß wie der Mantel selbst: Bei Rillen mit Teilung 5,9 um Ø 30 standen
+    ein Stift Ø 30 und einer Ø 28,4 nebeneinander, jede Rille berührte beide,
+    und die Suche fand null Zellen und sechzehn Randstücke (Fund aus
+    „formops", 23.09.2026). Dasselbe gilt für die Köpfe erhabener Rippen.
+
+    Getrennt wird am Zusammenhang: Der Träger reicht über das Feld hinaus
+    und hängt als **ein** Stück zusammen, die Böden sind so viele Streifen,
+    wie es Rillen gibt. Von zwei Stiften um dieselbe Achse ist deshalb der
+    zersplitterte Zellmaterial — mindestens :data:`MIN_STRIPS` Stücke und
+    mehr als der andere. Reicht das Muster über die ganze Länge, zerfallen
+    beide gleich; dann lässt die Geometrie beide Lesarten zu (vertiefte
+    Rillen auf dem äußeren Zylinder, erhabene Rippen auf dem inneren), und
+    Träger ist der äußere — der Durchmesser, den der Griff hat.
+    """
+    import trimesh
+
+    pins = [
+        index
+        for index, name in enumerate(names)
+        if owned[name].kind == "pin" and not small[index] and owned[name].face_indices
+    ]
+    if len(pins) < 2:
+        return []
+    adjacency = np.asarray(body.face_adjacency, dtype=np.int64)
+    pieces: dict[int, int] = {}
+    for index in pins:
+        faces = np.asarray(owned[names[index]].face_indices, dtype=np.int64)
+        inside = adjacency[np.isin(adjacency, faces).all(axis=1)]
+        pieces[index] = len(
+            trimesh.graph.connected_components(inside, nodes=faces, min_len=1, engine="scipy")
+        )
+    floors: set[int] = set()
+    for position, first in enumerate(pins):
+        for second in pins[position + 1 :]:
+            one, other = owned[names[first]].params, owned[names[second]].params
+            axis = np.asarray(one.get("axis", (0.0, 0.0, 0.0)), dtype=float)
+            if abs(float(axis @ np.asarray(other.get("axis", (0.0, 0.0, 0.0)), dtype=float))) < (
+                1.0 - SAME_MEASURE
+            ):
+                continue
+            radius = float(one.get("diameter", 0.0)) / 2.0
+            offset = np.asarray(other.get("centre", (0.0, 0.0, 0.0)), dtype=float) - np.asarray(
+                one.get("centre", (0.0, 0.0, 0.0)), dtype=float
+            )
+            beside = offset - axis * float(offset @ axis)
+            if float(np.linalg.norm(beside)) > SAME_MEASURE * radius + units.MAX_FACET_SAG:
+                continue
+            if max(pieces[first], pieces[second]) < MIN_STRIPS:
+                continue
+            if pieces[first] != pieces[second]:
+                floors.add(first if pieces[first] > pieces[second] else second)
+                continue
+            inner = float(one.get("diameter", 0.0)) < float(other.get("diameter", 0.0))
+            floors.add(first if inner else second)
+    return sorted(floors)
 
 
 def _cell_material(feature: Feature) -> bool:
@@ -595,6 +702,71 @@ def _least_cells(cell: Cell) -> int:
     if cell.style in {"rib", "wave"}:
         return MIN_STRIPS
     return MIN_CELLS
+
+
+def _rim_patterns(
+    pieces: Sequence[EdgePiece],
+    measure: _CellMeasure,
+    taken: set[int],
+    carriers: Mapping[FeatureId, np.ndarray],
+    owned: Mapping[FeatureId, Feature],
+) -> list[Pattern]:
+    """Muster aus lauter Randstücken um einen Stift — die Riffelung eines Deckels.
+
+    **Reicht jede Zelle bis an eine Stirnfläche, gibt es keine ganze.** Die
+    Mulden um den Rand eines Schraubdeckels, die Rippen eines Knopfes über
+    seine ganze Höhe: Jede grenzt an den Stift und an eine Stirnfläche, ist
+    damit ein Randstück (:class:`EdgePiece`) und wartet auf ein Muster, das
+    sie an seinem Träger nachmisst — und das es ohne ganze Zellen nie gibt.
+    Am Deckel des Gewürzregals aus dem Korpus: 24 Mulden um Ø 40, sieben
+    Zellen, 25 Randstücke und kein Muster (23.09.2026).
+
+    Gemessen wird jedes Stück an seinem Stift als ganze Zelle — der Schnitt
+    durch die Stirnfläche ist dort die Gestalt der Zelle und kein Feldrand —,
+    und danach gilt dieselbe Frage wie für jede Zellgruppe: deckungsgleich,
+    mindestens so viele wie ihr Stil verlangt, im Gitter.
+    """
+    around: dict[FeatureId, list[EdgePiece]] = {}
+    spans: dict[FeatureId, tuple[np.ndarray, float, float]] = {}
+    for piece in pieces:
+        if id(piece) in taken:
+            continue
+        for name in piece.carriers:
+            if owned[name].kind != "pin":
+                continue
+            if name not in spans:
+                axis = np.asarray(owned[name].params.get("axis", (0.0, 0.0, 1.0)), dtype=float)
+                corners = measure.points[
+                    measure.triangles[np.asarray(owned[name].face_indices, dtype=np.int64)]
+                ].reshape(-1, 3)
+                along = corners @ axis
+                spans[name] = (axis, float(along.min()), float(along.max()))
+            axis, low, high = spans[name]
+            reach = measure.points[measure.triangles[piece.indices]].reshape(-1, 3) @ axis
+            # Nur, was in der Länge des Stifts liegt: Eine Rippe, die über die
+            # Stirnfläche hinausragt, lässt sich dort weder stopfen noch
+            # abnehmen — entfernt blieben ihre Stummel stehen.
+            if reach.min() < low - units.MAX_FACET_SAG or reach.max() > high + units.MAX_FACET_SAG:
+                continue
+            around.setdefault(name, []).append(piece)
+    found: list[Pattern] = []
+    for name in sorted(around):
+        group = around[name]
+        if len(group) < MIN_STRIPS:
+            continue
+        measured = [(piece, measure(piece.indices, (name,))) for piece in group]
+        cells = [cell for _piece, cell in measured if cell is not None]
+        for candidates in _congruent_groups(cells):
+            fresh = [cell for cell in candidates if id(cell) not in taken]
+            if not fresh or len(fresh) < _least_cells(fresh[0]):
+                continue
+            pattern = _lattice_of(fresh)
+            if pattern is None or pattern == "bores":
+                continue
+            found.append(_absorb(pattern, cells, (), measure, taken, carriers))
+            chosen = {id(cell) for cell in (*pattern.cells, *pattern.partial)}
+            taken.update(id(piece) for piece, cell in measured if id(cell) in chosen)
+    return found
 
 
 def _absorb(
@@ -1028,11 +1200,16 @@ def _front_carrier(
     bei gleicher Neigung die größere Fläche. Eine Regel, keine Messung, und
     deshalb steht sie hier und nicht in einer Zahl.
     """
+    from app.core.perceive.features import AREA_DIGITS
+
+    # Die Fläche gerundet wie im Nummernschlüssel: Zwei gleich große Seiten
+    # unterscheiden sich im Netz in der zwölften Stelle, und dann entschiede
+    # diese Stelle statt des Namens.
     ranked = sorted(
         carrier,
         key=lambda name: (
             -round(float(normals[name][2]), 6),
-            -float(owned[name].params.get("area", 0.0)),
+            -round(float(owned[name].params.get("area", 0.0)), AREA_DIGITS),
             name,
         ),
     )
@@ -1083,7 +1260,7 @@ def _straight_share(
     walls = np.abs(normals_here @ normal) < 0.5
     if not walls.any():
         return 1.0, 0.0
-    parallel = np.abs(normals_here[walls] @ axis_world) <= math.sin(math.radians(CORNER_DEGREES))
+    parallel = np.abs(normals_here[walls] @ axis_world) <= units.exact_sin_degrees(CORNER_DEGREES)
     total = float(triangle_areas[indices][walls].sum())
     if total <= EPS_GEOM:
         return 1.0, 0.0
@@ -1388,10 +1565,9 @@ def _facet_sag(frame: Frame, points: np.ndarray, triangles: np.ndarray) -> float
     return max(0.0, -float(heights.min()))
 
 
-#: Auf wie viele Stellen der Winkel einer Facettennormalen gerundet wird, damit
-#: die Dreiecke einer Facette zusammenfallen — ein Mikroradiant, weit unter
-#: jedem Facettenschritt und weit über dem Rauschen einer Booleschen Rechnung.
-_FACET_ANGLE_DIGITS: Final = 6
+#: Wie genau gefundene Facetten auf einem regelmäßigen Vieleck liegen müssen,
+#: damit die fehlenden ergänzt werden — als Anteil des Facettenschritts.
+_REGULAR_FACETS: Final = 0.01
 
 
 def _facet_planes(
@@ -1412,17 +1588,61 @@ def _facet_planes(
     flat = np.abs(along) < 0.5
     if not flat.any():
         return None
+    from app.core.perceive.features import EPS_ANGLE
+
     angles = np.arctan2(normals[flat] @ frame.y_axis, normals[flat] @ frame.x_axis)
-    keys = np.round(angles, _FACET_ANGLE_DIGITS)
-    unique, first = np.unique(keys, return_index=True)
-    if len(unique) < 3:
+    order = np.argsort(angles, kind="stable")
+    ordered = angles[order]
+    # **Dieselbe Facette, solange die Normalen um weniger als ``EPS_ANGLE``
+    # auseinanderliegen** — die Grenze, unter der die Erkennung zwei Dreiecke
+    # koplanar nennt, und über Ketten statt gerundet. Hier stand eine Rundung
+    # auf sechs Stellen: Die Dreiecke einer Facette fielen auf zwei Seiten
+    # ihrer Grenzen, und eine STL mit vier Nachkommastellen trägt in einer
+    # Facette Normalen, die 6·10⁻⁵ rad auseinanderliegen. Der Rand eines
+    # Schraubdeckels hatte so 159 „Facetten" statt 72, der Median ihrer
+    # Schritte war null, und der Stopfen lag auf dem Kreis (23.09.2026).
+    starts = np.flatnonzero(np.r_[True, np.diff(ordered) > math.radians(EPS_ANGLE)])
+    if len(starts) < 3:
         return None
-    corners = points[triangles[flat][first]]
+    unique = ordered[starts]
+    corners = points[triangles[flat][order[starts]]]
     offsets = np.empty(len(unique))
     for number, (angle, triangle) in enumerate(zip(unique, corners, strict=True)):
         direction = frame.x_axis * math.cos(float(angle)) + frame.y_axis * math.sin(float(angle))
         offsets[number] = float(((triangle - frame.origin) @ direction).mean())
-    return np.asarray(unique, dtype=float), offsets
+    return _regular_polygon(np.asarray(unique, dtype=float), offsets)
+
+
+def _regular_polygon(angles: np.ndarray, offsets: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Die Facetten eines regelmäßigen Vielecks — auch die, die ein Muster weggeschnitten hat.
+
+    **Wo eine Rille durch die ganze Höhe geht, fehlt ihre Facette im Träger.**
+    Am Rand eines Schraubdeckels sind es 24 Mulden über je 1 bis 2 Facetten;
+    ohne sie legte :meth:`Frame._facet_radius` den Stopfen auf die Ebene der
+    Nachbarfacette oder den Kreis, der Rand war danach kein Vieleck mehr, und
+    nach dem Entfernen standen 103 Flächen, wo ein Zylinder war (23.09.2026).
+    Liegen alle gefundenen Facetten auf einem regelmäßigen Vieleck — jede
+    höchstens :data:`_REGULAR_FACETS` Schritte neben ihrem Platz, alle mit
+    demselben Abstand von der Achse —, kommen die fehlenden an ihren Platz;
+    sonst bleibt es bei den gefundenen.
+    """
+    steps = np.diff(np.r_[angles, angles[0] + 2.0 * math.pi])
+    step = float(np.min(steps))
+    if step <= EPS_GEOM:
+        return angles, offsets
+    count = round(2.0 * math.pi / step)
+    if count <= len(angles) or count > 4096:
+        return angles, offsets
+    spacing = 2.0 * math.pi / count
+    slots = (angles - angles[0]) / spacing
+    if float(np.max(np.abs(slots - np.round(slots)))) > _REGULAR_FACETS:
+        return angles, offsets
+    if float(offsets.max() - offsets.min()) > _REGULAR_FACETS * spacing * float(offsets.mean()):
+        return angles, offsets
+    grid = angles[0] + spacing * np.arange(count)
+    grid = (grid + math.pi) % (2.0 * math.pi) - math.pi
+    order = np.argsort(grid, kind="stable")
+    return grid[order], np.full(count, float(np.median(offsets)))
 
 
 def frame_for(
@@ -1814,8 +2034,8 @@ def _strip_position(cell: Cell, axis: np.ndarray, across: np.ndarray) -> float:
     edges = np.roll(cell.outline, -1, axis=0) - cell.outline
     lengths = np.linalg.norm(edges, axis=1)
     along = lengths > EPS_GEOM
-    along[along] = np.abs(edges[along] @ axis) / lengths[along] >= math.cos(
-        math.radians(CORNER_DEGREES)
+    along[along] = np.abs(edges[along] @ axis) / lengths[along] >= units.exact_cos_degrees(
+        CORNER_DEGREES
     )
     if not along.any():
         return float(cell.flat_centre @ across)
@@ -1936,7 +2156,7 @@ def _box(outlines: np.ndarray, angle: float) -> tuple[float, float, float, np.nd
     Zurück kommen Fläche, Breite, Höhe und Mitte — die Mitte in den Achsen der
     Ebene, nicht des Rechtecks.
     """
-    along = np.array([math.cos(math.radians(angle)), math.sin(math.radians(angle))])
+    along = np.array([units.exact_cos_degrees(angle), units.exact_sin_degrees(angle)])
     across = np.array([-along[1], along[0]])
     reach_u = outlines @ along
     reach_v = outlines @ across
@@ -1965,7 +2185,9 @@ def _belongs_to(cell: Cell, pattern: Pattern) -> bool:
     largest = max(member.mouth_area for member in pattern.cells)
     if cell.mouth_area > largest * (1.0 + SAME_MEASURE):
         return False
-    along = np.array([math.cos(math.radians(pattern.angle)), math.sin(math.radians(pattern.angle))])
+    along = np.array(
+        [units.exact_cos_degrees(pattern.angle), units.exact_sin_degrees(pattern.angle)]
+    )
     across = np.array([-along[1], along[0]])
     middle = pattern.frame.developed(np.asarray(pattern.centre, dtype=float))[0][0]
     offset = cell.flat_centre - middle
@@ -2246,6 +2468,8 @@ def carrier_of(feature: Feature, features: Mapping[FeatureId, Feature]) -> Featu
     der Stift mit derselben Achse und demselben Durchmesser, durch dessen
     Achse die des Musters läuft.
     """
+    from app.core.perceive.features import AREA_DIGITS
+
     params = feature.params
     if params.get("carrier") == "cylinder":
         return _cylinder_carrier_of(feature, features)
@@ -2263,8 +2487,12 @@ def carrier_of(feature: Feature, features: Mapping[FeatureId, Feature]) -> Featu
         centre = np.asarray(candidate.params.get("centre", (0.0, 0.0, 0.0)), dtype=float)
         if abs(float(centre @ normal) - lift) > _flat_tolerance(depth) + units.MAX_FACET_SAG:
             continue
-        if best is None or float(candidate.params.get("area", 0.0)) > float(
-            best.params.get("area", 0.0)
+        # Gerundet wie im Nummernschlüssel: Bei zwei gleich großen Flächen
+        # bleibt die mit der kleineren Nummer, nicht die mit der größeren
+        # zwölften Stelle — am exakten Kern stand die Fläche schon immer
+        # ungerundet im Merkmal.
+        if best is None or round(float(candidate.params.get("area", 0.0)), AREA_DIGITS) > round(
+            float(best.params.get("area", 0.0)), AREA_DIGITS
         ):
             best = candidate
     return best
@@ -2501,14 +2729,23 @@ def _components(body: Any, indices: np.ndarray) -> list[np.ndarray]:
         shape=(len(indices), len(indices)),
     )
     count, labels = connected_components(graph, directed=False)
-    return [np.flatnonzero(labels == label) for label in range(count)]
+    # Einmal sortiert statt je Stück über alle Etiketten gefragt: das war
+    # Stückzahl mal Dreieckszahl, an einem Kreuzrändel mit 434 Zellen die
+    # Hälfte der Mündungssuche. Stabil sortiert, also je Stück aufsteigend wie
+    # bisher.
+    order = np.argsort(labels, kind="stable")
+    bounds = np.searchsorted(labels[order], np.arange(count + 1))
+    return [order[bounds[label] : bounds[label + 1]] for label in range(count)]
 
 
 def _rim_edges(triangles: np.ndarray) -> np.ndarray:
-    """Die Kanten, die genau ein Dreieck des Ausschnitts haben."""
+    """Die Kanten, die genau ein Dreieck des Ausschnitts haben.
+
+    Über ``geom.mesh.unique_edges`` und nicht ``np.unique(…, axis=0)`` — die
+    Frage fällt je Zelle, und dort gilt die Regel aus ``kern.md``.
+    """
     edges = np.vstack((triangles[:, [0, 1]], triangles[:, [1, 2]], triangles[:, [2, 0]]))
-    ordered = np.sort(edges, axis=1)
-    unique, counts = np.unique(ordered, axis=0, return_counts=True)
+    unique, counts = unique_edges(edges, return_counts=True)
     return np.asarray(unique[counts == 1], dtype=np.int64)
 
 

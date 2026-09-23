@@ -123,9 +123,17 @@ Die Suche nach Randöffnungen erweitert einen Bogen nur über erreichbare
 Nachbarflächen. Tangenz und Kreisform werden lokal geprüft; die gemeinsame
 Flächentabelle liefert auch die Randkanten. Der Abbruch wird innerhalb der
 Flutung geprüft, ohne pro Bogen Felder über das gesamte Netz anzulegen.
-Die Paarsuche normiert jede Bogenachse einmal und verwirft getrennte
-Mantelstücke vor der Richtungsrechnung. Der Leistungstest misst zusätzlich
-den vollständigen Erkennungslauf an vielen verrundeten Taschen.
+Die Paarsuche normiert jede Bogenachse einmal und fragt einzeln nur, wer in
+Frage kommt (`slots._PairPlan`): Radius und Achse als Feld für alle zweiten
+Bögen, das gemeinsame Mantelstück je Gruppe gleichgerichteter Bögen einmal
+— mit einem Randabstandsbeweis, dass die Quermaske für jede Paarachse der
+Gruppe dieselbe ist; fehlt er, fragt jedes Paar selbst. Die Mantelstücke
+sind Zusammenhangskomponenten je Quermaske (`_Components`), der Mantel eines
+Bogens sein Fleck plus die Stücke, an die er grenzt (`_reach_of`), und ein
+Mantel, der schon an einer Auswahl seiner Ecken breiter ist als jedes
+Langloch, wird nicht geflutet (`_wider_than_a_slot`, eine Beweisgrenze in
+Radien). Der Leistungstest misst zusätzlich den vollständigen
+Erkennungslauf an vielen verrundeten Taschen.
 Die vorgeschaltete Gewindeunterdrückung liest Zylinderachsen, Mitten und
 Radien einmal und prüft je Ausgangszylinder ein lineares Feld. Axiale
 Fortsetzung und die bestehenden Winkel-/Abstandsschranken bleiben maßgeblich.
@@ -272,6 +280,14 @@ Dreht eine Operation den ganzen Körper, dreht der Feldwinkel eines ebenen
 Musters mit (`matching._turned_field_angle`): Er ist gegen die Flächenachsen
 der Normale gemessen (`units.plane_axes`), und die gedrehte Normale hat
 andere — ohne das stand ein gedrehtes Wabenmuster mit seinem alten Winkel da.
+
+Gezählt wird das **Zellmaterial**, nicht die kleinen Merkmale: Ein Kreuzrändel
+besteht aus Dreiecken ohne Namen, und die Suche fragt erst, nachdem sie dem
+Stift sein mitgenommenes Wandmaterial abgenommen hat. Und von zwei Stiften um
+dieselbe Achse ist der zersplitterte Boden oder Kopf der Zellen und kein
+Träger (`_cell_floors`): Vertiefte Rillen mit breitem Boden hätten sonst zwei
+Träger, und jede Rille wäre ein Randstück. Zerfallen beide gleich, trägt der
+äußere — die Geometrie lässt dann beide Lesarten zu.
 
 ## Lokale Erkennung großer Netze
 
@@ -590,8 +606,8 @@ unberührt; das Budget gilt nur der Karte.
 | Datei | Rolle |
 |---|---|
 | `features.py` | Merkmalserkennung (§21.1): Flächenformen einpassen und benennen; `detect_voids` belegt Hohlräume ohne Weg nach außen über vier Tore |
-| `helix.py` | Wendelflächen (§21.1): Achse, Steigung, Gangtiefe. Ein eingelesener Bolzen bringt sonst je nach Größe drei bis zwanzig Merkmale mit, die es nicht gibt — die Flanke eines Gewindegangs ist örtlich eine Kegelfläche und passt sich sauber ein. Wo eine Wendel liegt, steht danach **ein** `thread` statt vieler Erfundener. Welche Einpassungen eine Wendel verschluckt, sagt `features.without_phantoms_on` für beide Kerne — der exakte Leser `brep.thread` ruft dieselbe Regel |
-| `slots.py` | Langlöcher (§21.1): zwei Halbzylinder, zwei ebene Flanken, ein Merkmal. Dieselbe Bauart wie `helix.py` und aus demselben Grund — die Einpassung findet darin zwei Verrundungen, und der Kunde sah zwei Rundungen, wo eine Öffnung ist |
+| `helix.py` | Wendelflächen (§21.1): Achse, Steigung, Gangtiefe. Ein eingelesener Bolzen bringt sonst je nach Größe drei bis zwanzig Merkmale mit, die es nicht gibt — die Flanke eines Gewindegangs ist örtlich eine Kegelfläche und passt sich sauber ein. Wo eine Wendel liegt, steht danach **ein** `thread` statt vieler Erfundener. Das Spektrum findet sie, der **Kantenleser** misst sie (`_measured_helix`, P2.5): Händigkeit aus dem Vorzeichen der Steigung jeder windenden Kante, Vorschub aus dem Wert, den die meisten Kanten tragen, Wendeln nach Radius und Phase (`_dense_parts` trennt zwei überbrückte, schneidet den Auslauf ab), Gangzahl aus ihrer Periodizität (`starts_from_periodicity`, eine Regel für beide Kerne), die Rille gegen `MEASURED_GROOVE_RANGE`; die Händigkeit heißt dann `facets` und ist belegt. Welche Einpassungen eine Wendel verschluckt, sagt `features.without_phantoms_on` für beide Kerne — der exakte Leser `brep.thread` ruft dieselbe Regel |
+| `slots.py` | Langlöcher (§21.1): zwei Halbzylinder, zwei ebene Flanken, ein Merkmal. Dieselbe Bauart wie `helix.py` und aus demselben Grund — die Einpassung findet darin zwei Verrundungen, und der Kunde sah zwei Rundungen, wo eine Öffnung ist. Die Paarsuche fragt einzeln nur, wer in Frage kommt (`_PairPlan`, siehe oben) |
 | `relations.py` | Nachbarschaften zwischen Merkmalen (§21.1, §21.2): Was zusammengehört und was daraus folgt. Die Randringe der Hohlraumketten (`_cavity_links`) liegen im Cache des Netzes unter einem Schlüssel aus Name, Art und Flächen — **ohne Lage**, damit `geom.transform.apply` den Eintrag an die bewegte Kopie weiterreichen kann; `session._warm_metrics` fragt sie im Arbeiter, bevor der Objektbaum sie im Hauptfaden liest. Der vollständige Flächenvergleich zweier Ausschnitte (`_same_surface_patch`) fragt erst die Ecken über den Suchbaum und misst nur an Dreiecken, was weiter als die Sehnenhöhe von jeder Ecke liegt — vier gleich vernetzte Bohrungen kosteten je Klick 1,6 s im Hauptfaden, jetzt eine Baumabfrage. Heute das koaxiale Rohr — eine Bohrung und das Material um sie herum, mit der Wand dazwischen. Am Langloch ist das die **dünnste** Wand: Der Weg der Mittellinie geht zur Hälfte ab, denn dort sitzen die Enden. Eine Regel (`_sleeve_between`), drei Auskünfte: `sleeve_at` fragt für **ein** Merkmal; `sleeves_of` liefert die dünnste Wand an **jeder** Merkmalszeile des Steckbriefs; `thinnest_sleeve` liefert das Minimum für die Wandprüfung. Beide Körperabfragen lesen die Maße je Merkmal einmal und teilen dieselbe Paarprüfung (RM-127). Und wem ein Dreieck gehört, das zwei Merkmale beanspruchen, sagt `cell_owner_table` (innerstes bei Verschachtelung, `CONTESTED` bei Widerspruch) — der Viewport liest es für den Klick im Bild |
 | `maps.py` | Analysekarten (§18.4). Die Netzfehlerkarte hat **drei** Stufen, und die dritte ist die einzige räumliche: offene und verzweigte Kanten stehen in der Kantentabelle, eine **Durchdringung** nicht — zwei Wände, die einander schneiden, haben lauter saubere Kanten mit je zwei Flächen (`repair.self_intersecting_faces`, RM-143). Wand- und Krümmungskarte nehmen `cancelled` bis in die Schrittschleife mit (ein Kartenwechsel hält die alte an); die Wand rechnet je Schritt nur die noch aktiven Dreiecke, die Krümmung ist vektorisiert. Die Überhanglegende nennt den Grenzwinkel der Karte, nicht fest 45 Grad |
 | `digest.py` | Der Steckbrief der Szene für den Agenten (§23). Unter der Auswahlzeile steht seit P1.5, was das Merkmalfenster zur gewählten Stelle weiß (`_selection_lines`): die Hohlraumkette oder der Grund „nicht sicher einzeln“, und je Mitgliedschaft eine Zeile der Handlungsgruppen — gleiche Merkmale mit Umfang, unsichere mit Grund; Handlungen mit derselben Mitgliedschaft teilen eine Zeile (§26.1) |
@@ -627,6 +643,33 @@ Ein Merkmal, das nach jeder Operation einen neuen Namen bekäme, wäre wertlos
 — Passungen und Agentenverweise hingen ins Leere. `matching.py` hält die IDs;
 was es trotzdem verliert, fängt `scene/orphans.py` auf und **fragt**, statt
 zu raten.
+
+Die Nummer selbst kommt aus dem Körper (`features.numbering_order`, RM-211):
+nach der Mitte, und wo Mitten zusammenfallen — in jeder Stelle höchstens
+eine Einheit der letzten Nachkommastelle, über Ketten —, nach Maß, Länge,
+Lage und zuletzt den Ecken. Eine Regel für alle Arten, Langloch, Muster,
+Gewinde und Hohlraum eingeschlossen; wer allein steht, steht wie nach der
+gerundeten Mitte. Und die Erkennung hängt nicht an der Reihenfolge der
+Dreiecke: Flecken und ihre Dreiecke kommen in der Ordnung ihrer Ecken
+(`features.in_body_order`), und Konturpunkte, die in der Projektion
+zusammenfallen, zählen einmal (`_distinct_points`). Umgekehrte
+Dreiecksfolge gab vorher an 12 von 101 Korpuskörpern andere Merkmale.
+
+Die Ordnung der Ecken ist nicht drehfest, und drei Schritte durften deshalb
+nicht an ihr hängen (RM-210). Gefragt werden die Flecken nach Größe, der
+größte zuerst (`_in_size_order`) — die Folge entscheidet, welcher von
+deckungsgleichen Flecken für die anderen antwortet. Welche Konturecken einen
+Kreis tragen, wählt `_simplified_ring` nach den Abständen und nicht vom
+Anfang der Hülle aus (Douglas-Peucker hielt ihn fest, und GEOS beginnt je
+Lage woanders). Und jede Zusammenlegung — Zylinder, Kegel, Torus — fragt nach
+der ersten Runde ihre Gruppen untereinander, bis keine zwei mehr
+zusammengehören (`_joined_until_stable`); der Zylinder rechtfertigt eine
+Vereinigung in beide Richtungen (`_joined_cylinders`).
+
+Unter `MIN_ROUND_ARC` (fünf Grad, Entscheidung Robert zu RM-210) ist eine
+Rundform eine Kante: Verrundung, Kegel- und Torusstück, beim Torus der Bogen
+der Röhre (`_shows_enough_arc`). Der exakte Kern fragt dieselbe Zahl
+(`brep/features._short_arcs_dropped`).
 
 Eine eindeutig zugeordnete Neu-Erkennung übernimmt `created_by` vom
 vorherigen Merkmal, wenn sie selbst keinen Erzeuger trägt. Formdaten und

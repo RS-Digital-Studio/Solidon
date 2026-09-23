@@ -58,6 +58,33 @@ BLAS-Kern, und der Fingerabdruck darf sich nicht rühren. Anzeige, Messung
 für den Bericht und Vorauswahlen, deren Ergebnis danach exakt nachgeprüft
 wird, dürfen schnell rechnen — der Kommentar sagt dann, warum.
 
+## Eine Merkmalsnummer kommt aus dem Körper, nie aus der Reihenfolge
+
+Die Nummer eines erkannten Merkmals ist eine Provenienz-ID (§21.2): Passungen
+und Operationen hängen an ihr. Zwei Regeln halten sie fest:
+
+- **Jede Nummerierung geht über `perceive.features.numbering_order`.** Keine
+  eigene Sortierung nach der gerundeten Mitte: Bei konzentrischen Rundungen
+  ist sie unentschieden, und die stabile Sortierung erbt dann die Folge der
+  Flecken (RM-211: zwei Rundungen eines gebogenen Winkels tauschten ihre
+  Namen, sobald die Dreiecke rückwärts im Netz standen). Die Regel fragt
+  nach der Mitte Maß, Länge, Lage und Ecken, und wer allein steht, steht wie
+  nach der gerundeten Mitte.
+- **Was eine Einpassung summiert, kommt in der Ordnung des Körpers**
+  (`perceive.features.in_body_order`): Flecken, Stücke und
+  Zusammenlegungen. Die Summenfolge verschiebt die letzte Stelle, und an der
+  Kippe eines Fits entscheidet sie. Mit umgekehrter Dreiecksfolge lieferten
+  12 von 101 Korpuskörpern andere Merkmale (22.09.2026), danach keiner.
+- **Diese Ordnung folgt den Koordinaten und ist nicht drehfest — keine Wahl
+  darf deshalb an ihr hängen** (RM-210). Die Erkennung fragt ihre Flecken
+  nach Größe (`_in_size_order`); eine Zusammenlegung läuft bis keine zwei
+  Gruppen mehr zusammengehören (`_joined_until_stable`) und rechtfertigt
+  sich in beide Richtungen; eine Auswahl von Punkten beginnt nicht an einem
+  Ringanfang (`_simplified_ring` statt Douglas-Peucker).
+- **Unter `perceive.features.MIN_ROUND_ARC` ist eine Rundform eine Kante**,
+  an beiden Kernen (Entscheidung Robert, 23.09.2026). Wer eine neue Rundform
+  meldet, fragt dieselbe Zahl.
+
 ## `scipy.spatial.ConvexHull` gehört nicht in eine Schleife über Flecken
 
 Der Qhull-Wrapper legt **je Aufruf eine Temporärdatei** an (`tempfile.mkstemp`

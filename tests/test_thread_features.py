@@ -306,3 +306,82 @@ def test_a_cross_hole_through_the_bolt_survives() -> None:
     assert not [f for f in entry.features.values() if f.kind in ("pin", "sphere")], _invented(
         dict(entry.features)
     )
+
+
+def test_the_end_face_of_a_thread_bolt_belongs_to_its_step() -> None:
+    """RM-186: Der Bolzen trägt neben dem Gewinde seine Stirnfläche, beide vom Schritt.
+
+    Nachgestellt wie im Fenster (``test_analysis_ui.py::_insert_a_thread``):
+    ``plate_holes.stl`` über den Einleseweg des ersten Modells, das Gewinde an
+    der ersten erkannten Fläche. Die Stirnfläche ist das Dreiecksfeld am
+    äußersten Ende des Bolzens, dessen Normale von der Platte weg zeigt — aus
+    dem Netz gelesen, nicht aus der Erkennung.
+
+    **Ohne Fenster, damit jede Plattform es in ihrem Kernlauf prüft.** Das
+    Register führte die Fläche als „auf Ubuntu nicht gefunden". Gemessen war
+    das nie: Die Fensterdateien liegen im CI-Schritt „Tests" auf der
+    Ausschlussliste, und „Fensterdateien" lief nur auf Windows
+    (22.09.2026, Läufe vom 15. und 16.09.). Hier und am damaligen Stand
+    93ef16e3c steht die Fläche, auch unter nachgestellten Rechenwegen von
+    NumPy und OpenBLAS und unter Störungen der Ecken bis 10⁻¹¹.
+    """
+    from pathlib import Path
+
+    import numpy as np
+
+    from app.core.ingest.plan import import_plan
+    from app.core.scene.project import checksum
+    from app.core.types import Source
+
+    load_operations()
+    payload = (Path(__file__).parent / "data" / "meshes" / "plate_holes.stl").read_bytes()
+    project = new_project("centauri-carbon-2", "petg")
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/plate_holes.stl", sha256=checksum(payload)
+    )
+    project.sources["src_1"] = payload
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    history = History(project.document)
+    plan = import_plan("src_1", "plate_holes.stl", payload, "mm", first_model=True)
+    history.apply("Laden", [plan.draft])
+    loaded = evaluate(project.document, profile, sources=ProjectSources(project))
+    faces = [
+        name
+        for entry in loaded.scene.objects.values()
+        for name, feature in entry.features.items()
+        if feature.kind == "face"
+    ]
+    assert faces, "das eingelesene Modell trägt keine Fläche"
+    history.apply(
+        "Gewinde",
+        [
+            OperationDraft(
+                op="insert_printed_thread", inputs=("obj_1",), params={"at_feature": faces[0]}
+            )
+        ],
+    )
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    entry = next(iter(result.scene.objects.values()))
+    made = {name: f for name, f in entry.features.items() if f.created_by is not None}
+    assert sorted(f.kind for f in made.values()) == ["face", "thread"], {
+        name: f.kind for name, f in made.items()
+    }
+
+    thread = next(f for f in made.values() if f.kind == "thread")
+    axis = np.asarray(thread.params["axis"], dtype=float)
+    body = entry.mesh.raw
+    along = np.asarray(body.triangles_center, dtype=float) @ axis
+    normals = np.asarray(body.face_normals, dtype=float) @ axis
+    # Das äußerste Ende in Achsrichtung: Welche Seite, sagt der Schwerpunkt
+    # des Gewindes gegenüber dem ganzen Körper.
+    sign = 1.0 if float(np.asarray(thread.params["centre"]) @ axis) > float(along.mean()) else -1.0
+    tip = float((sign * along).max())
+    cap = np.flatnonzero((np.abs(sign * along - tip) < 1e-6) & (sign * normals > 0.999999))
+    assert len(cap), "der Bolzen hat eine ebene Stirn"
+    face = next(f for f in made.values() if f.kind == "face")
+    assert set(cap.tolist()) <= set(face.face_indices), (
+        f"die Stirnfläche ({len(cap)} Dreiecke) ist nicht das Flächenmerkmal des Schritts"
+    )
+    assert float(body.area_faces[cap].sum()) == pytest.approx(
+        float(body.area_faces[list(face.face_indices)].sum()), rel=1e-9
+    )

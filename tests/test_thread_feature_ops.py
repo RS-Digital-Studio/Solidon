@@ -423,17 +423,38 @@ def test_a_recognised_rod_recut_carries_only_the_set_thread(profile: Profile) ->
 
 
 def test_a_mesh_read_thread_is_not_refused_as_left_handed(profile: Profile) -> None:
-    """Der Netzleser rät die Händigkeit am gedruckten Profil — sie sperrt nicht.
+    """Ein am Netz gelesenes Rechtsgewinde sperrt nicht.
 
-    Gemessen an ``build.threaded(6, 1, 8)``: Netz „left“, exakt „right“. Eine
-    Auskunft aus ``fit`` zählt nicht (``types.thread_is_left_handed``).
+    Bis zum 22.09.2026 riet der Netzleser die Händigkeit am gedruckten Profil
+    (``build.threaded(6, 1, 8)``: Netz „left“, exakt „right“), und die Auskunft
+    hieß ``fit`` — sie zählte nicht. Seit er an den Kanten misst, heißt sie
+    ``facets`` und stimmt; ein Rechtsgewinde bleibt änderbar.
     """
     load_operations()
     source, thread = _recognised("mesh", _corpus("m6_rechts"))
-    assert thread.measure_sources.get("handedness") == "fit"
+    assert thread.measure_sources.get("handedness") == "facets"
+    assert thread.params["handedness"] == "right"
     result = run("resize_feature", source, profile, at_feature=thread.id, diameter=8.0, pitch=1.25)
     output = _stays(result, "mesh")
     assert output.features[thread.id].params["diameter"] == 8.0
+
+
+def test_a_mesh_read_left_hand_thread_is_refused(profile: Profile) -> None:
+    """Ein am Netz gemessenes Linksgewinde sperrt das Ändern — wie am exakten Körper.
+
+    Vorher galt am Netz jede Händigkeit als geraten, und *Merkmal ändern*
+    schnitt ein Linksgewinde still rechts neu (P2.5).
+    """
+    _kernel()
+    from tests.test_thread_import import _mirrored
+
+    load_operations()
+    source, thread = _recognised("mesh", _mirrored(_corpus("m6_rechts")))
+    assert thread.params["handedness"] == "left"
+    assert thread.measure_sources.get("handedness") == "facets"
+    with pytest.raises(ValidationError) as caught:
+        run("resize_feature", source, profile, at_feature=thread.id, diameter=8.0, pitch=1.25)
+    assert caught.value.constraint == "left_handed"
 
 
 def test_a_natively_read_left_hand_thread_is_refused(profile: Profile) -> None:

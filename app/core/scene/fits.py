@@ -165,9 +165,10 @@ def _pair_problem(
 def _pitch_uncertainty(feature: Feature) -> float:
     """Wie genau die Steigung dieses Gewindes bekannt ist — je nach Herkunft.
 
-    Ein gemessenes Gewinde des exakten Kerns trägt seine Wendelabweichung
-    (``uncertainty``); der Netzweg kennt sie nicht und sucht die Steigung im
-    Raster ``helix.PITCH_STEP`` — eine Rasterstufe ist seine Unsicherheit; ein
+    Ein gemessenes Gewinde — am exakten Kern oder am Netz an den Kanten
+    (P2.5) — trägt seine Wendelabweichung (``uncertainty``); das Spektrum des
+    Netzwegs kennt sie nicht und sucht die Steigung im Raster
+    ``helix.PITCH_STEP`` — eine Rasterstufe ist seine Unsicherheit; ein
     erzeugtes Gewinde (``parameter``) ist so genau wie seine Zahl.
     """
     stated = feature.params.get("uncertainty")

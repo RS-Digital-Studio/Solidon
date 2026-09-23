@@ -1026,6 +1026,121 @@ def test_resizing_a_wrapped_pattern_redraws_around_the_cylinder(
     assert any(finding.code == "resize_feature.pattern" for finding in findings)
 
 
+@pytest.mark.parametrize(
+    "pattern,mode",
+    [("rib", "engraved"), ("knurl_diamond", "raised"), ("knurl_diamond", "engraved")],
+)
+@pytest.mark.parametrize("new_pitch", [4.0, 5.9])
+def test_a_changed_pattern_around_a_handle_is_read_as_that_pattern_again(
+    pattern: str, mode: str, new_pitch: float
+) -> None:
+    """Was Solidon um den Griff neu zeichnet, liest die Erkennung wieder als dieses Muster.
+
+    Sonst lässt es sich kein zweites Mal ändern. Ein Kreuzrändel auf 4 oder
+    5,9 mm geändert stand danach als Stift und zwei Flächen im Baum: Seine
+    Dreiecke tragen keinen Namen, der Stift hatte sie beim Einpassen
+    mitgenommen, und die Suche endete an der Zahl der kleinen Merkmale, bevor
+    sie sie ihm wieder abnahm (Fund aus „formops", 23.09.2026).
+    """
+    out, _findings = wrapped(pattern, mode, CIRCUMFERENCE)
+    read = only_pattern(out.features)
+    redrawn, _findings = run_op("resize_feature", out, at_feature=read.id, pitch=new_pitch)
+    after = only_pattern(redrawn.features)
+    assert after.params["style"] == pattern
+    assert after.params["mode"] == mode
+    assert after.params["carrier"] == "cylinder"
+    assert math.isclose(after.params["carrier_diameter"], CYLINDER_DIAMETER, abs_tol=0.05)
+    expected = wrap_pitch(pattern, new_pitch, CYLINDER_DIAMETER, CIRCUMFERENCE)
+    assert math.isclose(after.params["pitch"], expected, abs_tol=0.02), after.params["pitch"]
+    assert kinds(redrawn.features)["pin"] == 1, kinds(redrawn.features)
+
+
+@pytest.mark.parametrize(
+    "pattern,mode",
+    [
+        ("rib", "engraved"),
+        ("rib", "raised"),
+        ("knurl_diamond", "raised"),
+        ("knurl_diamond", "engraved"),
+    ],
+)
+def test_a_coarse_pattern_around_a_handle_is_one_pattern_on_the_handle(
+    pattern: str, mode: str
+) -> None:
+    """Teilung 5,9 um Ø 30: Der Boden der Rillen ist Zelle, nicht ein zweiter Stift.
+
+    Vertiefte Rillen mit dieser Teilung haben einen Boden, der breit genug für
+    eine Zylindereinpassung ist — sechzehn Streifen Ø 28,4, zu einem Stift so
+    groß wie der Mantel zusammengelegt. Jede Rille berührte danach zwei Träger,
+    und die Suche fand null Zellen (Fund aus „formops", 23.09.2026).
+    """
+    out, _findings = wrapped(pattern, mode, CIRCUMFERENCE, pitch=5.9)
+    read = only_pattern(out.features)
+    assert read.params["style"] == pattern
+    assert read.params["mode"] == mode
+    assert math.isclose(read.params["carrier_diameter"], CYLINDER_DIAMETER, abs_tol=0.05)
+    expected = wrap_pitch(pattern, 5.9, CYLINDER_DIAMETER, CIRCUMFERENCE)
+    assert math.isclose(read.params["pitch"], expected, abs_tol=0.02), read.params["pitch"]
+    assert math.isclose(read.params["cell_depth"], 0.8, abs_tol=0.02)
+    assert kinds(out.features) == {"pin": 1, "face": 2, "pattern": 1}, kinds(out.features)
+
+
+@pytest.mark.parametrize("pattern", ["rib", "knurl_diamond"])
+def test_grooves_running_out_of_the_end_face_are_one_pattern_around_the_handle(
+    pattern: str,
+) -> None:
+    """Rillen, die oben aus dem Griff laufen, sind ein Muster — obwohl jede Zelle ein Randstück ist.
+
+    Am Deckel des Gewürzregals aus dem Korpus grenzen 24 Mulden um Ø 40 an den
+    Mantel **und** an die Deckfläche. Die Suche fand sieben Zellen, 25
+    Randstücke und kein Muster: Ein Randstück wird erst gemessen, wenn ein
+    Muster aus ganzen Zellen es nachfragt, und ganze Zellen gab es keine
+    (23.09.2026). Dasselbe hier mit einem Feld, das oben über den Griff
+    hinausreicht. Entfernt kommt der Stift wieder: Die fehlenden Facetten unter
+    den Rillen ergänzt das regelmäßige Vieleck des Trägers.
+    """
+    entry = SceneObject(id="obj_1", name="Griff", mesh=cylinder())
+    out, _findings = run_op(
+        "apply_texture",
+        entry,
+        pattern=pattern,
+        pitch=3.0,
+        depth=0.8,
+        mode="engraved",
+        width=CIRCUMFERENCE,
+        height=20.0,
+        wrap="cylinder",
+        wrap_diameter=CYLINDER_DIAMETER,
+        z=8.0,
+    )
+    read = only_pattern(out.features)
+    assert read.params["style"] == pattern
+    assert read.params["mode"] == "engraved"
+    assert read.params["carrier"] == "cylinder"
+    expected = wrap_pitch(pattern, 3.0, CYLINDER_DIAMETER, CIRCUMFERENCE)
+    assert math.isclose(read.params["pitch"], expected, abs_tol=0.02), read.params["pitch"]
+    assert kinds(out.features)["pin"] == 1, kinds(out.features)
+    plain, _findings = run_op("remove_feature", out, at_feature=read.id)
+    assert kinds(plain.features).get("pin") == 1, kinds(plain.features)
+    assert "pattern" not in kinds(plain.features)
+    # Die Stopfen schließen auch die Kerben in der Deckfläche; was sie dort
+    # an Überlappung mitbringen, sind unter 2 mm³ auf 21 190.
+    assert math.isclose(plain.mesh.volume, cylinder().volume, abs_tol=2.0), plain.mesh.volume
+
+
+def test_a_regular_polygon_gets_back_the_facets_a_pattern_cut_away() -> None:
+    """Fehlen einem regelmäßigen Vieleck Facetten, kommen sie an ihren Platz — sonst nichts."""
+    angles = np.radians(np.arange(96) * 3.75 - 180.0 + 1.875)
+    kept = np.delete(np.arange(96), np.arange(0, 96, 4))
+    completed, offsets = patterns._regular_polygon(angles[kept], np.full(len(kept), 19.99))
+    assert len(completed) == 96
+    np.testing.assert_allclose(np.sort(completed), np.sort(angles), atol=1e-9)
+    assert np.allclose(offsets, 19.99)
+    uneven = np.radians(np.array([-170.0, -100.0, -20.0, 45.0, 130.0]))
+    same, _offsets = patterns._regular_polygon(uneven, np.full(5, 10.0))
+    np.testing.assert_array_equal(same, uneven)
+
+
 def test_a_full_turn_redrawn_has_no_seam() -> None:
     """24 Rillen mit 3,93 — und an der Naht keine halbe, keine doppelte."""
     out, _findings = wrapped("rib", "engraved", CIRCUMFERENCE)

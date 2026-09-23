@@ -140,8 +140,8 @@ def _seeds(
     closest = closest_point(triangles, np.broadcast_to(point, (len(indices), 3)))
     tolerance = max(EPS_GEOM, weld_tolerance(mesh.bounds.diagonal))
     on_surface = np.linalg.norm(closest - point, axis=1) <= tolerance
-    aligned = np.asarray(mesh.raw.face_normals)[indices] @ normal >= math.cos(
-        math.radians(detection.EPS_ANGLE)
+    aligned = np.asarray(mesh.raw.face_normals)[indices] @ normal >= units.exact_cos_degrees(
+        detection.EPS_ANGLE
     )
     found = indices[on_surface & aligned]
     preferred = sorted({int(index) for index in hints}.intersection(found))
