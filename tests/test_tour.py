@@ -727,3 +727,38 @@ def test_the_undo_step_of_way_one_means_the_number_not_the_hole() -> None:
 def _first_drill_diameter(document: Document) -> float:
     entry = next(entry for entry in document.ops if entry.op == "drill_hole")
     return float(entry.params["diameter"])
+
+
+def test_a_restarted_tour_points_at_its_first_place_again(qt_app: object) -> None:
+    """Nach „Tour beenden" zeigte die nächste Tour ihren ersten Bereich nicht.
+
+    Das Panel merkte sich, worauf es zuletzt gezeigt hatte, damit ein Rahmen
+    nicht bei jeder Neuberechnung aufblinkt — und vergaß es beim Beenden nicht.
+    Fast jede Tour beginnt beim Verlauf; wer eine abbrach und eine neue
+    begann, bekam deren ersten Hinweis nie zu sehen (Review Fenster 0.5.0,
+    22.09.2026).
+    """
+    from app.ui.session import Session
+    from app.ui.tour import TourPanel
+
+    project, history = _opened("weg1-halterung-anpassen")
+    session = Session()
+    session.project = project
+    session.history = history
+    tour = tour_for("weg1-halterung-anpassen")
+    assert tour is not None
+    first = tour.steps[0].shows
+    assert first is not None, "premise: the first step names a place"
+    panel = TourPanel(session)
+    pointed: list[str] = []
+    panel.pointsAt.connect(pointed.append)
+
+    panel.start(examples.EXAMPLES[0], tour)
+    assert pointed == [first]
+
+    panel.stop()
+    panel.start(examples.EXAMPLES[0], tour)
+    assert pointed == [first, first], "the new tour must show its first place again"
+
+    panel.deleteLater()
+    session.release()

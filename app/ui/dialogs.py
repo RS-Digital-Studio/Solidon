@@ -2492,6 +2492,24 @@ class ActivationDialog(QDialog):
         self._leash.wait_all()
 
 
+def open_or_copy(url: QUrl, shown: str) -> bool:
+    """Öffnet ``url`` im zuständigen Programm — sonst liegt ``shown`` in der Zwischenablage.
+
+    ``QDesktopServices.openUrl`` meldet mit ``False``, dass kein Programm die
+    Adresse angenommen hat: kein Standardbrowser, ein Dateiverwalter ohne
+    Zuordnung, ein Portal, das ablehnt. Dann geschah auf den Klick nichts.
+    Hier steht der Rückweg einmal; **wie** er dem Kunden gesagt wird, bleibt
+    beim Aufrufer — ein Dialog sagt es mit einem Kasten (:func:`open_link`),
+    das Hauptfenster in seiner Statuszeile.
+    """
+    if QDesktopServices.openUrl(url):
+        return True
+    clipboard = QApplication.clipboard()
+    if clipboard is not None:
+        clipboard.setText(shown)
+    return False
+
+
 def open_link(address: str, parent: QWidget | None = None) -> bool:
     """Öffnet eine Adresse im Browser — und sagt, wie es ohne ihn weitergeht.
 
@@ -2501,9 +2519,8 @@ def open_link(address: str, parent: QWidget | None = None) -> bool:
     der Aktivierung): Die Adresse liegt in der Zwischenablage und steht im
     Satz, damit man sie auch abschreiben kann.
     """
-    if QDesktopServices.openUrl(QUrl(address)):
+    if open_or_copy(QUrl(address), address):
         return True
-    QApplication.clipboard().setText(address)
     QMessageBox.information(
         parent,
         tr("Der Browser ließ sich nicht öffnen"),
@@ -2643,7 +2660,12 @@ def show_expired_demo(state: activation.Activation) -> None:
 #:
 #: *Stückzahl anpassen* ebenso: Es ersetzt **diesen** Schritt durch einen mit
 #: der gemessenen Zahl (``MainWindow._recount_after_error``).
-NEEDS_OP: Final = frozenset({"correct_input", "show_step_values", "recount_and_retry"})
+#:
+#: *Eine andere Ebene wählen* öffnet den Schritt mit dem Cursor im Ebenenfeld —
+#: derselbe Weg wie *Eingabe korrigieren*, also dieselbe Bedingung.
+NEEDS_OP: Final = frozenset(
+    {"correct_input", "show_step_values", "recount_and_retry", "sketch.pick_plane"}
+)
 
 
 class StepValuesDialog(QDialog):

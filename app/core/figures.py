@@ -96,6 +96,11 @@ def _window(theme: Theme) -> str:
 
     canvas.box(10, 10, 580, 26, fill=colours.fill)
     canvas.label(20, 28, str(_("Werkzeugleiste")), size=11)
+    # Die Projektkopfzeile steht **in** der Werkzeugleiste, rechts nach ihren
+    # Knöpfen (``MainWindow``: ``toolbar.addWidget(self.header)``) — sie fehlte
+    # im Bild, obwohl dort Projekt, Drucker und Filamente stehen (RM-136).
+    canvas.line(300, 14, 300, 32, stroke=colours.muted, weight=1.0)
+    canvas.label(310, 28, str(_("Projekt · Drucker · Filamente")), size=10, colour=colours.muted)
 
     # Vier Abschnitte, nicht drei: *Filamente* ist der vierte und steht
     # zugeklappt da. Die Höhen sind an die Zahl gebunden — wer einen fünften
@@ -127,14 +132,17 @@ def _window(theme: Theme) -> str:
         colour=colours.muted,
     )
 
-    # Das Merkmalsfenster ist ein eigenes Dock: ganz außen und über die volle
-    # Höhe, nicht unter dem Prüfbericht. Es steht hier, weil es dort steht.
+    # Das Fenster „Auswahl" ist ein eigenes Dock: ganz außen und über die
+    # volle Höhe, nicht unter dem Prüfbericht. Es steht hier, weil es dort
+    # steht — und es heißt, wie es im Fenster heißt. Hier stand „Merkmal",
+    # und die Handlungen an der Auswahl, die seit dem 13.09.2026 darunter
+    # stehen, fehlten (RM-136).
     canvas.box(492, 46, 98, 202, fill=colours.fill)
-    canvas.label(541, 76, str(_("Merkmal")), anchor="middle", size=10, bold=True)
+    canvas.label(541, 76, str(_("Auswahl")), anchor="middle", size=10, bold=True)
     canvas.wrapped(
         541,
         98,
-        str(_("Maße der gewählten Stelle, abziehbar")),
+        str(_("Maße und Handlungen der gewählten Stelle")),
         width=13,
         anchor="middle",
         colour=colours.muted,
@@ -1118,10 +1126,11 @@ FIGURES: Final[tuple[Figure, ...]] = (
     Figure(
         key="window",
         alt=_(
-            "Das Fenster: oben die Werkzeugleiste, links Objekte, Parameter, Verlauf "
-            "und Filamente untereinander, in der Mitte der Viewport mit dem Modell und "
-            "darunter die Werkzeugzeile, daneben wahlweise Prüfbericht oder Chat und "
-            "ganz rechts über die volle Höhe das Fenster „Auswahl“, unten die "
+            "Das Fenster: oben die Werkzeugleiste mit Projekt, Drucker und Filamenten, "
+            "links Objekte, Parameter, Verlauf und Filamente untereinander, in der Mitte "
+            "der Viewport mit dem Modell und darunter die Werkzeugzeile, daneben wahlweise "
+            "Prüfbericht oder Chat und ganz rechts über die volle Höhe das Fenster "
+            "„Auswahl“ mit Maßen und Handlungen der gewählten Stelle, unten die "
             "Statusleiste."
         ),
         caption=_("Vier Bereiche, keine Betriebsarten. Rechts lässt sich ganz ausblenden."),

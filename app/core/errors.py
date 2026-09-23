@@ -63,6 +63,12 @@ CHOOSE = Action("choose", _("Auswählen"), primary=True)
 #: ist keine Zeile im Formular. Ein Knopf, der den Dialog öffnete, zeigte auf
 #: ein Feld, das es nicht gibt.
 CHANGE_SELECTION = Action("change_selection", _("Andere Objekte wählen"), primary=True)
+#: Eine Zeichenebene, die sich nicht lesen lässt (``sketch.planes._unreadable``):
+#: den Schritt mit dem Cursor in seinem Ebenenfeld öffnen — derselbe Weg wie
+#: *Eingabe korrigieren*, mit dem Satz, der sagt, was dort zu tun ist. Bis zum
+#: 22.09.2026 stand die Kennung nur an ihrer Aufrufstelle, und der Kunde las
+#: den Rat als Satz ohne Knopf.
+PICK_PLANE = Action("sketch.pick_plane", _("Eine andere Ebene wählen"), primary=True)
 REPAIR_AND_RETRY = Action("repair_and_retry", _("Reparieren und erneut versuchen"), primary=True)
 SHOW_LOCATIONS = Action("show_locations", _("Stellen zeigen"))
 #: Die Senkung über einer geänderten Bohrung im selben Verhältnis mitziehen.

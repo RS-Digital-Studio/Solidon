@@ -1312,13 +1312,64 @@ def test_a_dead_end_is_greyed_out_with_the_sentence_the_operation_would_say(
         assert str(sentence) in action.toolTip(), name
 
 
+def test_a_through_hole_is_a_vent_only_where_it_joins_two_skins() -> None:
+    """*Gitter füllen* bleibt an einer entlüfteten Schale offen — an einer
+    gebohrten Platte nicht.
+
+    Seit RM-041 (22.09.2026) findet die Operation den Innenraum einer
+    eingelesenen Schale über ihre Entlüftung, und das Menü ließ deshalb die
+    Hohlraumfrage an **jeder** durchgehenden Bohrung offen — auch an
+    ``plate_holes.stl``, wo die Vorschau nur „kein Hohlraum" sagen kann. Die
+    Unterscheidung: Ohne die Bohrungswände zerfällt die Schale in Außen- und
+    Innenhaut, die Platte bleibt ein Stück.
+    """
+    import trimesh
+
+    from app.core.geom.hollow import hollow
+    from app.core.geom.mesh import MeshData, read_mesh
+    from app.core.ingest import loader
+    from app.core.perceive.features import detect
+    from app.core.types import SceneObject
+    from app.ui.labels import body_facts, body_requirement
+
+    def imported(payload: bytes) -> SceneObject:
+        mesh = loader.normalise(read_mesh(payload, ".stl"), "mm").mesh
+        return SceneObject(id="obj_1", name="Import", mesh=mesh, features=detect(mesh))
+
+    shell = hollow(MeshData.of(trimesh.creation.box((40, 40, 40))), 3.0, vents=1).mesh
+    exported = shell.raw.export(file_type="stl")
+    vented = imported(exported if isinstance(exported, bytes) else exported.encode())
+    plate = imported((MESHES / "plate_holes.stl").read_bytes())
+    for entry, bores in ((vented, 1), (plate, 4)):
+        found = [f for f in entry.features.values() if f.kind == "hole" and f.params.get("through")]
+        assert len(found) == bores and all(f.face_indices for f in found), (
+            "ohne erkannte Bohrungswände prüft der Fall die Rückfallregel, nicht die Trennung"
+        )
+
+    spec = REGISTRY.get("lattice_fill")
+    assert body_facts(vented).cavity is None
+    assert body_requirement(spec, body_facts(vented)) is None, "die Schale bleibt füllbar"
+    assert body_facts(plate).cavity is False
+    assert body_requirement(spec, body_facts(plate)) is not None, "die Platte hat keinen Innenraum"
+
+
 def test_the_body_state_lock_lifts_where_the_body_brings_what_is_asked(
-    qt_app: QApplication,
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Die Gegenprobe zu jeder der drei Sperren — sonst bewiese der Test nur,
-    dass drei Einträge grau sind."""
+    dass drei Einträge grau sind.
+
+    Der offene Körper kommt seit dem 22.09.2026 nicht mehr von selbst: Der
+    Import schließt ``broken_open.stl`` (``ed233f2c``), und die Sperre hielt
+    damit zu Recht — ein geschlossener Körper hat keine offene Fläche. Offen
+    bleibt ein Körper dort, wo die Reparatur eine Öffnung nicht füllen kann;
+    ``keep_imports_open`` stellt genau diesen Fall her."""
+    from tests.helpers import keep_imports_open
+
     # Offen: die Fläche schließen geht, zerlegen und füllen nicht.
-    window = MainWindow(Session(), UiSettings())
+    session = Session()
+    keep_imports_open(monkeypatch, session)
+    window = MainWindow(session, UiSettings())
     window.open_path(MESHES / "broken_open.stl")
     window.session.wait_for_idle()
     select(window)
@@ -1354,21 +1405,29 @@ def test_body_facts_are_measured_once_per_body_and_evaluation(
     calls: list[int] = []
     original = labels.face_components
 
-    def counted(mesh: Any) -> Any:
+    def counted(mesh: Any, **kwargs: Any) -> Any:
         calls.append(1)
-        return original(mesh)
+        return original(mesh, **kwargs)
 
     monkeypatch.setattr(labels, "face_components", counted)
     # Das Öffnen hat den Körper schon gewählt und gemessen — mit der echten
     # Funktion. Gezählt wird ab hier, also ohne diese Antwort.
+    #
+    # Seit dem 22.09.2026 (Review Fenster 0.5.0) fragt ``body_facts`` bei einem
+    # Körper mit Durchgangsbohrung ein zweites Mal — ohne die Bohrungswände —,
+    # ob die Bohrung zwei Häute verbindet. Gezählt wird deshalb die erste
+    # Messung als Einheit: Sie darf sich innerhalb einer Auswertung nicht
+    # wiederholen.
     window._body_facts = (-1, {})
     select(window)
     window._update_actions()
+    once = len(calls)
+    assert once >= 1, "premise: the body is measured"
     window._update_actions()
     window.object_tree.select_object(None)
     select(window)
     window._update_actions()
-    assert len(calls) == 1, "dieselbe Auswertung, derselbe Körper — eine Rechnung"
+    assert len(calls) == once, "dieselbe Auswertung, derselbe Körper — eine Rechnung"
 
     window.session.history.apply(
         "Verschieben",
@@ -1377,7 +1436,7 @@ def test_body_facts_are_measured_once_per_body_and_evaluation(
     window.session.evaluate_now()
     select(window)
     window._update_actions()
-    assert len(calls) == 2, "eine neue Auswertung ist ein neuer Körper"
+    assert len(calls) == 2 * once, "eine neue Auswertung ist ein neuer Körper"
 
 
 def test_the_body_state_lock_asks_the_body_the_operation_would_get(
@@ -5033,7 +5092,9 @@ def test_only_a_primitive_offers_to_name_its_dimensions(qt_app: QApplication) ->
         offered.deleteLater()
 
 
-def test_hollowing_an_open_body_does_not_offer_apply(qt_app: QApplication) -> None:
+def test_hollowing_an_open_body_does_not_offer_apply(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """*Aushöhlen* an einer offenen Figur: Das Band riet, der Knopf ließ zu.
 
     Gemessen am 14.09.2026: Im Band stand „Der Körper ist nicht geschlossen —
@@ -5046,8 +5107,17 @@ def test_hollowing_an_open_body_does_not_offer_apply(qt_app: QApplication) -> No
     (``repair_and_retry``); sie reist über ``preview_async(advised=…)`` mit,
     und das Fenster sperrt den Knopf mit dem Satz in Kurzhilfe, Statuszeile
     und zugänglicher Beschreibung (Regel 18).
+
+    Seit dem 22.09.2026 schließt der Import ``partially_open.stl`` selbst
+    (``ed233f2c``); der offene Körper, um den es hier geht, entsteht nur noch
+    dort, wo die Reparatur eine Öffnung nicht füllen kann —
+    ``keep_imports_open`` stellt diesen Fall her.
     """
-    window = MainWindow(Session(), UiSettings())
+    from tests.helpers import keep_imports_open
+
+    session = Session()
+    keep_imports_open(monkeypatch, session)
+    window = MainWindow(session, UiSettings())
     window.open_path(MESHES / "partially_open.stl")
     assert window.session.wait_for_idle()
     result = window.session.last_result

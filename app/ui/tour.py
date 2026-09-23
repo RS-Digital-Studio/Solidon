@@ -214,6 +214,7 @@ class TourPanel(QWidget):
         """Baut die Schritte auf und beginnt vorn."""
         self._clear_rows()
         self._tour = tour
+        self._pointed_at = None
         self._document = self._session.project.document
         self._example = example
         self._current = 0
@@ -281,6 +282,10 @@ class TourPanel(QWidget):
         """Vergisst die Tour, ohne ein Signal — für den Projektwechsel."""
         self._tour = None
         self._document = None
+        # Vergessen, worauf gezeigt wurde: Die nächste Tour beginnt fast immer
+        # beim Verlauf, und ein gemerktes „history" aus der abgebrochenen
+        # hätte ihren ersten Hinweis verschluckt.
+        self._pointed_at = None
         self._completed.clear()
         self._skipped.clear()
         self._clear_rows()

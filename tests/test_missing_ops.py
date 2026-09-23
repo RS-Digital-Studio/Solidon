@@ -202,6 +202,36 @@ def test_the_display_decimation_carries_the_slots() -> None:
     assert np.array_equal(np.asarray(small.slots)[clear], expected)
 
 
+def test_a_thumbnail_never_holds_the_window_on_the_exact_kernel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein Vorschaubild dezimiert über das Raster, nie über ``manifold3d``.
+
+    Der Kern gibt den Interpreter während ``simplify`` nicht frei, und die
+    Bilder des Objektbaums entstehen in einem Arbeiter neben dem Fenster: Am
+    Besenhalter aus dem Kundenbestand stand das Fenster nach jeder Operation
+    bis zu 0,46 s still (22.09.2026). Das Raster braucht denselben Weg in
+    32 ms und gibt den Interpreter frei.
+    """
+    from app.core import drawing
+
+    def refused(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("ein Vorschaubild darf den exakten Kern nicht fragen")
+
+    monkeypatch.setattr(mesh_ops, "_display_manifold_decimation", refused)
+    plate = needle_plate()
+
+    svg = drawing.thumbnail(plate.raw, 20)
+
+    assert svg.startswith("<svg") and "<polygon" in svg, "ein Bild mit Flächen"
+    small = mesh_ops.raster_for_display(
+        plate, drawing.PREVIEW_FACES, sag=plate.bounds.diagonal / 80
+    )
+    assert small.triangle_count < plate.triangle_count // 50, "das Bild zeichnet ein paar hundert"
+    assert np.allclose(small.bounds.minimum, plate.bounds.minimum, atol=plate.bounds.diagonal / 40)
+    assert np.allclose(small.bounds.maximum, plate.bounds.maximum, atol=plate.bounds.diagonal / 40)
+
+
 def test_a_small_body_is_not_decimated_for_display() -> None:
     body = MeshData.of(trimesh.creation.icosphere(subdivisions=2, radius=20.0))
     assert mesh_ops.decimate_for_display(body, 600) is body

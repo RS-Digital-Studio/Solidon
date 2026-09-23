@@ -7710,12 +7710,25 @@ def test_an_objectless_direct_error_has_no_repair_button(
     assert "repair_and_retry" not in {action.id for action in shown[0].suggestions}
 
 
-def test_partial_repair_runs_from_the_report_and_undoes(window: MainWindow) -> None:
-    """Datei → Berichtsknopf → Restkarte → Oberflächen-Undo, ohne Kernabkürzung."""
+def test_partial_repair_runs_from_the_report_and_undoes(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Datei → Berichtsknopf → Restkarte → Oberflächen-Undo, ohne Kernabkürzung.
+
+    Seit dem 22.09.2026 schließt der Import das offene Netz selbst, und die
+    Reparatur füllt jede Öffnung, die eine Fläche tragen kann (``ed233f2c``).
+    Der Teilerfolg, um den es hier geht, bleibt dort, wo Ränder sich nicht
+    füllen lassen; die Testnetze haben keine solchen, also stellen die zwei
+    Schalter aus ``tests/helpers.py`` den Fall nach — der Weg durch die
+    Oberfläche ist derselbe.
+    """
     from PySide6.QtWidgets import QPushButton
 
     from app.core.geom.repair import open_edge_count
+    from tests.helpers import fill_only_small_holes, keep_imports_open
 
+    keep_imports_open(monkeypatch, window.session)
+    fill_only_small_holes(monkeypatch)
     window.open_path(MESHES / "partially_open.stl")
     window.session.wait_for_idle()
     object_id = next(iter(window.session.last_result.scene.objects))
@@ -7762,10 +7775,22 @@ def test_partial_repair_runs_from_the_report_and_undoes(window: MainWindow) -> N
     assert open_edge_count(restored) == 19
 
 
-def test_failed_operation_is_repaired_before_retry_without_a_loop(window: MainWindow) -> None:
-    """Echter Fehler → Reparatur davor → Retry → Stellen zeigen → ein Undo."""
+def test_failed_operation_is_repaired_before_retry_without_a_loop(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Echter Fehler → Reparatur davor → Retry → Stellen zeigen → ein Undo.
+
+    Dieselben zwei Schalter wie im Test darüber, aus demselben Grund
+    (22.09.2026, ``ed233f2c``): Ohne sie ist der Körper nach dem Import dicht,
+    das Vernetzen gelingt, und es gibt keinen Fehler, dessen Reparatur zu
+    prüfen wäre.
+    """
     from PySide6.QtWidgets import QPushButton, QVBoxLayout
 
+    from tests.helpers import fill_only_small_holes, keep_imports_open
+
+    keep_imports_open(monkeypatch, window.session)
+    fill_only_small_holes(monkeypatch)
     window.resize(1500, 950)
     window.show()
     QApplication.processEvents()
@@ -19754,3 +19779,253 @@ def test_the_ask_dialog_shows_a_label_per_token_and_returns_the_token(
         assert dialog.chosen() == "a#2"
     finally:
         dialog.deleteLater()
+
+
+def test_a_countersunk_bore_builds_the_selection_window_once(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein Klick auf eine gesenkte Bohrung baut das Merkmalfenster **einmal**.
+
+    Der Baum meldet dieselbe Wahl zweimal — erst als Merkmal, dann als
+    Bohrung mit Senkung —, und bis zum 22.09.2026 bauten beide Meldungen
+    Panel, Handlungen und Maßgruppe vollständig auf. Gemessen am Besenhalter
+    aus dem Kundenbestand (60 000 Dreiecke): 0,55 s Stillstand je Klick, die
+    Hälfte davon doppelt.
+    """
+    window.open_path(MESHES / "plate_countersunk.stl")
+    assert window.session.wait_for_idle()
+    entry = window.session.last_result.scene.objects["obj_1"]
+    hole = next(identifier for identifier, f in entry.features.items() if f.kind == "hole")
+    window.object_tree.select_object("obj_1")
+    QApplication.processEvents()
+
+    built: list[str] = []
+    original = window.feature_panel.show_feature
+
+    def counted(feature_id: str, *args: Any, **kwargs: Any) -> None:
+        built.append(feature_id)
+        original(feature_id, *args, **kwargs)
+
+    monkeypatch.setattr(window.feature_panel, "show_feature", counted)
+    window.object_tree.select_feature("obj_1", hole)
+    QApplication.processEvents()
+
+    assert len(window.object_tree.selected_features()) == 2, (
+        "die Bohrung kommt mit ihrer Senkung — sonst gibt es die zweite Meldung nicht"
+    )
+    assert built == [hole], "dieselbe Wahl, ein Aufbau"
+    assert window.feature_panel.feature_id == hole
+
+
+def test_a_click_in_the_tree_settles_the_menu_entries_once_per_signal_pair(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein Klick auf eine Fläche stellt die Einträge zweimal, nicht viermal.
+
+    Der Baum leert beim Wählen erst und setzt dann, und jede der zwei
+    Meldungen kommt als ``selectionChanged`` **und** ``featureSelected`` an.
+    Bis zum 22.09.2026 stellten beide Empfänger alle Einträge neu — vier Läufe
+    je Klick, 4 × 20 ms am Besenhalter aus dem Kundenbestand. Der Lauf gehört
+    dem zweiten Empfänger, der die Auswahl vollständig kennt; was er stellt,
+    muss danach stimmen.
+    """
+    window.open_path(MESHES / "cube_clean.stl")
+    assert window.session.wait_for_idle()
+    entry = window.session.last_result.scene.objects["obj_1"]
+    face = next(identifier for identifier, f in entry.features.items() if f.kind == "face")
+    window.object_tree.select_object("obj_1")
+    QApplication.processEvents()
+
+    runs: list[int] = []
+    original = window._update_actions
+
+    def counted() -> None:
+        runs.append(1)
+        original()
+
+    monkeypatch.setattr(window, "_update_actions", counted)
+    window.object_tree.select_feature("obj_1", face)
+
+    assert len(runs) == 2, f"{len(runs)} Läufe für einen Klick"
+    assert window.selected_feature_kind() == "face"
+    settled = {name: action.isEnabled() for name, action in window._op_actions.items()}
+    original()
+    again = {name: action.isEnabled() for name, action in window._op_actions.items()}
+    assert settled == again, "was der Klick stellt, ist der Stand der vollständigen Auswahl"
+
+
+def test_a_sleeping_network_drive_does_not_hold_the_recent_list(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Ein Projekt auf dem ausgeschalteten NAS hielt den Start 21 s an.
+
+    „Zuletzt geöffnet" fragte beim Fensteraufbau im Hauptthread jede Datei
+    nach ihrer Existenz, und Windows antwortet für eine nicht erreichbare
+    Netzadresse erst nach seinem Zeitlimit — gemessen am 22.09.2026 21 s
+    (Review Fenster 0.5.0). Jetzt fragt ein eigener Thread; die Liste steht
+    sofort und dünnt sich aus, wenn die Antwort da ist.
+    """
+    import time
+
+    from app.ui import settings as settings_module
+
+    here = tmp_path / "hier.p3d"
+    here.write_text("{}", encoding="utf-8")
+    gone = tmp_path / "nas" / "weg.p3d"
+    answer = threading.Event()
+
+    def asleep(entries: list[str]) -> list[Path]:
+        answer.wait(10)
+        return [Path(entry) for entry in entries if Path(entry).is_file()]
+
+    monkeypatch.setattr(settings_module, "existing_paths", asleep)
+    window.settings.recent = [str(here), str(gone)]
+
+    started = time.perf_counter()
+    window._show_recent()
+    assert time.perf_counter() - started < 1.0, "the window waited for the file system"
+    assert window.start_screen.recent_list.count() == 2, "the remembered list stands at once"
+
+    answer.set()
+    deadline = time.monotonic() + 5.0
+    while window.start_screen.recent_list.count() != 1 and time.monotonic() < deadline:
+        QApplication.processEvents()
+        time.sleep(0.01)
+    assert window.start_screen.recent_list.count() == 1, "the missing entry must go"
+
+
+def test_a_local_recent_list_is_checked_before_it_is_shown(
+    window: MainWindow, tmp_path: Path
+) -> None:
+    """Auf einer lokalen Platte gibt es kein Zwischenbild mit toten Einträgen."""
+    here = tmp_path / "hier.p3d"
+    here.write_text("{}", encoding="utf-8")
+    window.settings.recent = [str(here), str(tmp_path / "geloescht.p3d")]
+
+    window._show_recent()
+
+    assert window.start_screen.recent_list.count() == 1
+    assert not window._recent_poll.isActive()
+
+
+def test_an_unreadable_plane_opens_its_step_at_the_plane(window: MainWindow) -> None:
+    """„Eine andere Ebene wählen" führt in den Schritt, und zwar ans Ebenenfeld.
+
+    Die Handlung stand bis zum 22.09.2026 als Kennung nur an ihrer
+    Aufrufstelle (``planes._unreadable``) — ohne Konstante und ohne Handler
+    im Fenster, also als Satz ohne Knopf beim häufigsten Rat eines
+    Skizzenfehlers (Review Fenster 0.5.0). Geprüft am Klickweg über
+    ``error_handlers()``, mit dem Fehler, den der Kern wirklich wirft.
+    """
+    from app.core.errors import PICK_PLANE
+    from app.core.sketch import planes
+
+    error = planes._unreadable("plane", "quer", "unknown_plane")
+    assert PICK_PLANE in error.suggestions, "premise: the core offers the action"
+    error.op_id = 7
+
+    opened: list[tuple[int, str]] = []
+    window.edit_operation = lambda op_id, field="": opened.append((op_id, field))  # type: ignore[method-assign]
+    window.error_handlers()[PICK_PLANE.id](error)
+
+    assert opened == [(7, "plane")]
+
+
+def test_a_missing_selection_is_said_not_put_in_a_box(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """„Diese Operation braucht zwei Objekte" kam als modaler Kasten.
+
+    Eine Auskunft ohne Entscheidung hielt das Fenster an, bis jemand *OK*
+    klickte — auch auf Wegen, die aus einer Fehlerhandlung oder einer Karte
+    kommen. Jetzt steht der Satz in der Ansage, wie beim Formen (Review
+    Fenster 0.5.0, 22.09.2026).
+    """
+
+    def no_box(*_args: Any, **_kwargs: Any) -> None:
+        raise AssertionError("no modal box for a missing selection")
+
+    monkeypatch.setattr(QMessageBox, "information", no_box)
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    window.object_tree.tree.clearSelection()
+
+    window.run_operation(REGISTRY.get("blend_union"))
+    assert "zwei Objekte" in window.status_message.text()
+
+    window.action_auto_split()
+    assert window.status_message.text() == str(main_window_module._NEEDS_SELECTION)
+
+
+def test_several_dropped_files_do_not_vanish_silently(window: MainWindow) -> None:
+    """Von mehreren gezogenen Dateien kam eine — und kein Wort zu den übrigen.
+
+    Mehrfachimport ist zurückgestellt (RM-131); die Abnahme dort verlangt aber
+    „ohne still verworfene Dateien", und bis dahin fielen sie genau so weg
+    (Review Fenster 0.5.0, 22.09.2026). Geprüft an beiden Ablageorten: am
+    Fenster und an der Fläche des Startbildschirms.
+    """
+    from PySide6.QtCore import QMimeData, QUrl
+
+    class _Drop:
+        def __init__(self, data: QMimeData) -> None:
+            self._data = data
+
+        def mimeData(self) -> QMimeData:  # noqa: N802 - Qt gibt den Namen
+            return self._data
+
+        def acceptProposedAction(self) -> None:  # noqa: N802 - Qt gibt den Namen
+            pass
+
+    data = QMimeData()
+    data.setUrls(
+        [
+            QUrl.fromLocalFile(str(MESHES / "cube_clean.stl")),
+            QUrl.fromLocalFile(str(MESHES / "plate_holes.stl")),
+            QUrl.fromLocalFile(str(MESHES / "plate_countersunk.stl")),
+        ]
+    )
+    opened: list[Path] = []
+    window.open_path = opened.append  # type: ignore[method-assign,assignment]
+
+    window.dropEvent(_Drop(data))  # type: ignore[arg-type]
+
+    assert opened == [MESHES / "cube_clean.stl"]
+    assert window.status_message.text().startswith("2 weitere Dateien nicht geöffnet")
+
+    window.status_message.setText("")
+    from app.ui.start_screen import DropArea
+
+    area = window.start_screen.findChild(DropArea)
+    assert area is not None
+    area.dropEvent(_Drop(data))  # type: ignore[arg-type]
+    assert window.status_message.text().startswith("2 weitere Dateien nicht geöffnet")
+
+
+def test_a_link_without_a_browser_lands_on_the_clipboard(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ohne Browser geschah auf den Klick nichts.
+
+    ``QDesktopServices.openUrl`` sagt mit ``False``, dass kein Programm die
+    Adresse annimmt; der Rückgabewert wurde nicht angesehen (Befund aus dem
+    Paket „dialoge", Review 0.5.0). Beide Wege des Fensters — die Adresse aus
+    einem Importfehler und *Ordner zeigen* nach dem Export — legen jetzt das
+    Ziel in die Zwischenablage und sagen es.
+    """
+    import app.ui.dialogs as dialogs
+    from app.core.errors import AppError
+
+    monkeypatch.setattr(dialogs.QDesktopServices, "openUrl", lambda _url: False)
+    clipboard = QApplication.clipboard()
+    assert clipboard is not None
+
+    error = AppError(detail="x", values={"url": "https://example.org/teil.stl"})
+    window.error_handlers()["open_in_browser"](error)
+    assert clipboard.text() == "https://example.org/teil.stl"
+    assert "Zwischenablage" in window.status_message.text()
+
+    window._export_folder = tmp_path
+    window._reveal_export_folder()
+    assert clipboard.text() == str(tmp_path)
+    assert "Zwischenablage" in window.status_message.text()

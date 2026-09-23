@@ -175,3 +175,61 @@ def placed(body: trimesh.Trimesh, scale: float, angle: float) -> trimesh.Trimesh
     )
     result.apply_translation((37.0, -19.0, 83.0))
     return result
+
+
+# --- Offene Netze nach dem 22.09.2026 -----------------------------------------------
+
+
+def keep_imports_open(monkeypatch: pytest.MonkeyPatch, session: Any) -> None:
+    """Der Import lässt offene Netze offen — wie vor ``ed233f2c`` (22.09.2026).
+
+    Seit diesem Tag schließt ``loader.normalise`` jedes offene Netz, das es
+    verschweißen kann (Robert: „Der Import schließt, was offen ist, statt
+    darüber zu berichten"). Die Oberfläche kennt den offenen Körper trotzdem
+    weiter: Er entsteht, wo die Reparatur eine Öffnung nicht füllen kann, und
+    dort müssen *Offene Fläche schließen*, der Satz im Vorschauband und der
+    Reparaturweg im Prüfbericht genauso wirken wie vorher. Die Testnetze
+    schließt die Reparatur dagegen restlos — ohne diesen Schalter gäbe es in
+    der Suite keinen offenen Körper mehr, an dem sich das prüfen ließe.
+
+    Abgeschaltet wird nur das Schließen der Leseoperation (``mend=False``),
+    nicht die Reparatur als Operation. **Und die Sitzung bekommt einen eigenen
+    Cache nur im Speicher:** Der Plattencache der Suite ist prozessweit, und
+    ein früherer Test hat dieselbe Datei vielleicht schon geschlossen
+    eingelesen — sein Ergebnis käme sonst aus dem Cache statt aus der
+    Leseoperation.
+    """
+    from functools import partial
+
+    from app.core.ingest import loader, ops
+    from app.core.scene.cache import ResultCache
+
+    monkeypatch.setattr(ops, "normalise", partial(loader.normalise, mend=False))
+    session.cache = ResultCache()
+
+
+def fill_only_small_holes(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Das Löcherschließen der Reparatur erreicht nur Ringe aus drei und vier Kanten.
+
+    Bis zum 22.09.2026 war das die ganze Reparatur (``trimesh.repair.fill_holes``);
+    seither füllt ``repair.fill_boundary_loops`` jede Öffnung, die eine Fläche
+    tragen kann. Eine Reparatur, die nicht alles schließt, gibt es trotzdem —
+    an Rändern, die sich selbst berühren oder auf verzweigten Kanten liegen.
+    Die Testnetze haben solche Ränder nicht; dieser Schalter stellt den
+    Teilerfolg nach, damit sein Weg durch die Oberfläche (Restbefund, *Stellen
+    zeigen*, kein Reparaturring) geprüft bleibt.
+    """
+    import trimesh
+
+    from app.core.geom import repair
+
+    def filled(mesh: Any) -> tuple[Any, bool, int]:
+        before = repair.open_edge_count(mesh)
+        if not before:
+            return mesh, False, 0
+        raw = mesh.raw.copy()
+        trimesh.repair.fill_holes(raw)
+        result = mesh.replacing(raw)
+        return result, repair.open_edge_count(result) < before, 0
+
+    monkeypatch.setattr(repair, "_filled_with_count", filled)

@@ -107,7 +107,11 @@ class PoseBar(QWidget):
         if not bones:
             self.state.setText(tr("Noch kein Knochen."))
             return
-        self.state.setText(
-            tr("{count} Knochen").replace("{count}", str(bones))
-            + ("" if chain else f" · {tr('neue Kette')}")
+        # Die Einzahl steht daneben (P0.1): „{count} Knochen" ist im Deutschen
+        # auch für einen richtig, im Englischen hieß es „1 bones".
+        counted = (
+            tr("Ein Knochen")
+            if bones == 1
+            else tr("{count} Knochen").replace("{count}", str(bones))
         )
+        self.state.setText(counted + ("" if chain else f" · {tr('neue Kette')}"))

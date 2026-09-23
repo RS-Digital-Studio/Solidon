@@ -731,16 +731,20 @@ def thumbnail(
     für Genauigkeit, die kein Bildschirm zeigt.
     """
     from app.core.geom.mesh import MeshData
-    from app.core.geom.mesh_ops import decimate_for_display
+    from app.core.geom.mesh_ops import raster_for_display
 
     # Der Anzeigeweg, nicht die Operation: ``decimate`` stand an der
     # Lochplatte mit 203 776 Dreiecken vier Sekunden still und lieferte danach
     # 197 458 — das Bild kostete 6,3 s (22.09.2026). Begonnen wird mit einem
-    # Viertel Pixel als Sehnenfehler; was darunter liegt, zeichnet kein Bild.
+    # Viertel Pixel als Zelle; was darunter liegt, zeichnet kein Bild.
+    #
+    # **Und nur das Raster, nicht der exakte Kern davor.** ``manifold3d``
+    # hält den Interpreter während des Vereinfachens fest, und das Bild
+    # entsteht in einem Arbeiter neben dem Fenster: 0,3 s Stillstand nach
+    # jeder Operation am Besenhalter des Kundenbestands, bis 0,86 s an einem
+    # Netz mit 166 400 Dreiecken (22.09.2026, ``raster_for_display``).
     body = MeshData.of(mesh)
-    small = decimate_for_display(
-        body, PREVIEW_FACES, sag=body.bounds.diagonal / (4.0 * max(size, 1))
-    )
+    small = raster_for_display(body, PREVIEW_FACES, sag=body.bounds.diagonal / (4.0 * max(size, 1)))
     colours = palette(theme)
     tone = colours.subtractive if subtractive else colours.solid
     return project(small.raw, size, tone, theme=theme)

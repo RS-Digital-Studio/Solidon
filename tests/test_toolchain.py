@@ -2279,6 +2279,10 @@ RENDERED_TESTS: Final[frozenset[str]] = frozenset(
         # Beispielprojekte; ein neu erzeugtes Beispiel stimmt erst nach dem
         # Bilderlauf wieder (23.09.2026).
         "test_the_real_manifest_passes_the_production_gate_for_every_target",
+        # Die gezeichneten Handbuchabbildungen gegen die eingecheckten SVGs:
+        # Eine geänderte Zeichnung (Fensterschema, 22.09.2026) stimmt erst nach
+        # dem Handbuchlauf beim Release wieder.
+        "test_the_drawn_figures_are_the_ones_the_code_draws",
     }
 )
 

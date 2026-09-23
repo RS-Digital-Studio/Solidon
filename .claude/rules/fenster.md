@@ -97,6 +97,17 @@ im Menü. **Wer eine Karte für einen Zustand öffnet, den es vorher nicht gab,
 sieht nach, welche leeren Zustände darin dadurch zum ersten Mal sichtbar
 werden.**
 
+**Ein Klick baut das Fenster einmal, auch wenn er mehrere Signale sendet**
+(22.09.2026). Der Objektbaum meldet einen Klick als `selectionChanged` **und**
+`featureSelected`/`featuresSelected`, und `select_feature` leert die Auswahl
+vorher noch einmal. Jeder Empfänger rechnete alles: `_update_actions` lief
+zweimal je Paar, und an einer Senkbohrung (zwei Merkmale) entstand das
+Merkmalfenster zweimal. Der Baum geht deshalb über `_on_tree_selection`, das
+die Menüeinträge dem Merkmalsignal überlässt, und `_fields_this_round` merkt
+sich das Merkmal, das `featureSelected` in derselben Runde schon gebaut hat,
+samt Aufbaustand des Fensters (`FeaturePanel.serial`). Wer ein weiteres Signal an
+dieselbe Geste hängt, prüft mit einem Zähler, wie oft der teure Teil läuft.
+
 **Eine gewählte Kante ist eine Stufe für sich** (Befund Robert, 18.09.2026:
 „bei einer kante zu viele optionen die sinnlos bei kanten sind"). Sie ist
 kein Merkmal und steht in keiner Baumzeile — der Kantenklick setzt die

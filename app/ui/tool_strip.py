@@ -33,6 +33,7 @@ from dataclasses import dataclass, replace
 
 from PySide6.QtCore import QEvent, QPoint, QRect, QSize, Qt, Signal
 from PySide6.QtWidgets import (
+    QAbstractButton,
     QApplication,
     QButtonGroup,
     QComboBox,
@@ -161,6 +162,15 @@ class ToolStrip(QWidget):
         # genau das schließt das Werkzeug wieder.
         self._group = QButtonGroup(self)
         self._group.setExclusive(False)
+        # **Ein Empfänger für alle Knöpfe, als gebundene Methode** (``wartezeit.md``,
+        # „Ein Rückruf an ein eigenes Kind hält schwach"). Hier hing an jedem
+        # Knopf ein Lambda, das ``self`` fing: Zeile → Knopf → Rückruf → Zeile.
+        # ``weak_slot`` je Knopf löste den Ring, riss aber
+        # ``test_widget_lifetime`` beim Einsammeln reproduzierbar mit einer
+        # Zugriffsverletzung ab (gemessen am 22.09.2026, drei von drei Läufen);
+        # die gebundene Methode an der Gruppe hält Qt von sich aus schwach, und
+        # derselbe Lauf ist grün.
+        self._group.buttonClicked.connect(self._on_button)
 
         # Der Hinweis steht über der Leiste, nicht in der Statuszeile: dort
         # unten liest ihn niemand, der gerade in die Mitte des Bildes schaut,
@@ -260,7 +270,6 @@ class ToolStrip(QWidget):
         button.setCheckable(True)
         button.setAutoRaise(True)
         button.setToolTip(str(title))
-        button.clicked.connect(lambda _checked, name=key: self.toggle(name))
         self._group.addButton(button)
         self._buttons[key] = button
         self._row.insertWidget(self._row.count() - 1, button)
@@ -281,6 +290,13 @@ class ToolStrip(QWidget):
             return
         self._tools[key] = replace(tool, shortcut=sequence)
         self._buttons[key].setToolTip(f"{tool.title}  ({sequence})")
+
+    def _on_button(self, button: QAbstractButton) -> None:
+        """Ein Klick auf einen Umschalter — welcher, sagt die Gruppe."""
+        for key, known in self._buttons.items():
+            if known is button:
+                self.toggle(key)
+                return
 
     def toggle(self, key: str) -> None:
         """Ein Werkzeug öffnen — oder schließen, wenn es schon offen war."""

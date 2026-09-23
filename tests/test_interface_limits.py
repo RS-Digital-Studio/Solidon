@@ -2009,3 +2009,19 @@ def test_the_dialog_and_the_test_agree_on_the_front() -> None:
     from app.ui.op_dialog import MAX_FRONT_FIELDS
 
     assert MAX_FRONT_FIELDS == MAX_FRONT_PARAMS, "zwei Grenzen für dieselbe Frage"
+
+
+def test_the_palette_names_the_key_the_menu_really_uses(window: MainWindow) -> None:
+    """Die Palette nannte für *Wiederholen* „Strg+Y", gleich was das Menü band.
+
+    Das Menü setzt ``StandardKey.Redo`` — auf macOS ⌘⇧Z, unter GNOME und KDE
+    Strg+Umschalt+Z. Die Tabelle der Fensterbefehle trug ihre eigene Zeichenkette
+    daneben, und die Palette zeigte dort eine Taste, die nichts tat (Review
+    Fenster 0.5.0, 22.09.2026). Nachgestellt wird die fremde Plattform, indem
+    die Action eine andere Belegung bekommt.
+    """
+    window.redo_action.setShortcut(QKeySequence("Ctrl+Shift+Z"))
+
+    _title, key, _slot = window.window_commands()["edit.redo"]
+
+    assert key == "Ctrl+Shift+Z"

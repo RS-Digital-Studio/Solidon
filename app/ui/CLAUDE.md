@@ -740,8 +740,8 @@ wiederhergestellt; ein verzögerter Scroll-Aufruf hält keine alten Baumzeiger.
 3D-Ansicht braucht — entschieden vor der `QGuiApplication`, ohne Qt-Import;
 Qt 6 nähme in einer Wayland-Sitzung sonst Wayland, und der wgpu-Fensterweg ist
 nur unter X11 und Xwayland geprüft — nativer Wayland-Betrieb von rendercanvas
-ist ein offener Punkt) · `main_window.py` (**rund 8 900 Zeilen** — das
-Hauptfenster, §2.5) · `splash.py` · `first_run.py` (der erste Start) ·
+ist ein offener Punkt) · `main_window.py` (das Hauptfenster, §2.5 — die
+größte Datei des Gebiets; eine Zeilenzahl stand hier und alterte) · `splash.py` · `first_run.py` (der erste Start) ·
 `start_screen.py` (die ersten fünf Minuten, §2.3) · `header.py` (Projektname,
 Druckerwechsel und die tatsächlich in der Szene verwendeten Filamente)
 
@@ -764,7 +764,7 @@ die ihr überwachtes Objekt überleben: `stop_watching_the_dying`)
 
 **Ansicht**
 
-`viewport.py` (**rund 8 200 Zeilen** — §18, §2.9) · `render/` (der Renderer
+`viewport.py` (§18, §2.9) · `render/` (der Renderer
 hinter der Ansicht, eigene `CLAUDE.md`: der Vertrag `api.py`, pygfx über wgpu
 in `gfx_renderer.py`, gebaut über `factory.py`, Kameraführung, Formen,
 Bewegungsgriff) · `overlay.py` (Zonen über der
@@ -1304,7 +1304,7 @@ behalten ihre Seite. Vorbelegte Richtungswerte ändern ihre Schemaseite nicht.
 
 **Editor**
 
-`sketch_editor.py` (**rund 4 800 Zeilen** — §30.1, Stufe zwei)
+`sketch_editor.py` (§30.1, Stufe zwei)
 
 **Agent**
 

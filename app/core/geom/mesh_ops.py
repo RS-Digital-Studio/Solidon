@@ -301,6 +301,30 @@ def decimate_for_display(mesh: MeshData, target: int, *, sag: float | None = Non
     return reduced
 
 
+def raster_for_display(mesh: MeshData, target: int, *, sag: float | None = None) -> MeshData:
+    """Weniger Dreiecke für ein kleines Bild — nur über das Raster, nie über den Kern.
+
+    Der Weg für die Vorschaubilder des Objektbaums (``drawing.thumbnail``),
+    die neben dem Fenster in einem Arbeiter entstehen. :func:`decimate_for_display`
+    fragt zuerst den exakten Kern, und ``manifold3d`` gibt den Interpreter
+    während ``simplify`` nicht frei: Jeder Aufruf im Arbeiter hält das Fenster
+    an. Gemessen am 22.09.2026 am Besenhalter aus dem Kundenbestand (59 740
+    Dreiecke, belastete Maschine): 1,25 s für ein Bild von zwanzig Pixeln, das
+    Fenster stand dabei bis zu 456 ms still, nach **jeder** Operation und
+    jedem Undo — die Zeile rechnet ihr Bild zu jeder Auswertung neu. Das Raster
+    (:func:`_clustered_for_display`) rechnet in numpy, gibt den Interpreter
+    in seinen Sortierungen frei und braucht an demselben Netz 32 ms bei
+    höchstens 4 ms Stillstand.
+
+    Genauer ist es nicht, und das braucht es nicht: Eine Ecke wandert um
+    höchstens eine Zelle, und die Zelle ist ein Viertel Pixel des Bildes
+    (``sag``). Für die große Anzeige gilt weiter der Kern.
+    """
+    if mesh.triangle_count <= max(target, DECIMATE_FLOOR):
+        return mesh
+    return _clustered_for_display(mesh, target, sag)
+
+
 def _display_manifold_decimation(mesh: MeshData, target: int, sag: float | None) -> MeshData | None:
     """Der erste Weg von :func:`decimate_for_display` — oder ``None``.
 

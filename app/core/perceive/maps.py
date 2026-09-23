@@ -346,7 +346,10 @@ def build(
 
     if kind == "wall":
         return wall_thickness_map(
-            mesh, wall, default_pitch(mesh, profile.printer.smallest_detail if profile else None)
+            mesh,
+            wall,
+            default_pitch(mesh, profile.printer.smallest_detail if profile else None),
+            cancelled=cancelled,
         )
     if kind == "overhang":
         return overhang_map(mesh, angle)
@@ -659,7 +662,11 @@ def _indices(field: SolidField, points: Any) -> Any:
 
 
 def wall_thickness_map(
-    mesh: MeshData, minimum: float | None = None, pitch: float | None = None
+    mesh: MeshData,
+    minimum: float | None = None,
+    pitch: float | None = None,
+    *,
+    cancelled: CancelToken | None = None,
 ) -> AnalysisMap:
     """Die Dicke unter jedem Dreieck: einwärts entlang der Normalen bis zur
     gegenüberliegenden Wand.
@@ -669,6 +676,13 @@ def wall_thickness_map(
     dieselbe Zahl, bis auf das Raster, auf dem die Karte abgetastet ist. Wo der
     Lauf gar kein Material findet, ist der Wert ``nan``: eine offene Fläche hat
     keine Dicke, und null wäre eine Lüge.
+
+    ``cancelled`` bricht zwischen den Schichten des Rasters und zwischen den
+    Schritten des Einwärtslaufs ab. Die Karte kostet an echten Modellen
+    Sekunden (gemessen am 22.09.2026: 2,7 bis 5,5 s), und die Wandprüfung der
+    Formsitzung stößt nach jedem Zug eine neue an — die alte muss dann gehen
+    können, statt den Rechner für eine Antwort zu belegen, die niemand mehr
+    will.
     """
     body = mesh.raw
     if not len(body.faces):
@@ -676,8 +690,8 @@ def wall_thickness_map(
             kind="wall", title=TITLES["wall"], values=(), unit="mm", low=0.0, high=0.0
         )
 
-    field = solid_field(mesh, pitch)
-    thickness = _inward_thickness(body, field)
+    field = solid_field(mesh, pitch, cancelled=cancelled)
+    thickness = _inward_thickness(body, field, cancelled)
 
     highlighted: tuple[int, ...] = ()
     if minimum is not None:
@@ -717,7 +731,9 @@ def wall_thickness_map(
     )
 
 
-def _inward_thickness(body: trimesh.Trimesh, field: SolidField) -> list[float]:
+def _inward_thickness(
+    body: trimesh.Trimesh, field: SolidField, cancelled: CancelToken | None = None
+) -> list[float]:
     """Läuft von jedem Dreieck einwärts, bis das Material ausgeht."""
     centres = np.asarray(body.triangles_center, dtype=float)
     normals = np.asarray(body.face_normals, dtype=float)
@@ -731,6 +747,8 @@ def _inward_thickness(body: trimesh.Trimesh, field: SolidField) -> list[float]:
     upper = np.asarray(field.filled.shape, dtype=int) - 1
 
     for step in range(steps):
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
         # Drei große Fließkommafelder und ein Ganzzahlfeld je Schritt waren
         # hier mehr Arbeit als das Nachschlagen selbst: auf dem §31-Körper 1,5
         # von 2,4 Sekunden. Die Rechenreihenfolge bleibt dieselbe wie in

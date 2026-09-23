@@ -1279,13 +1279,16 @@ Ergebnis auf Dichtheit, Teilzahl, Volumen und Abweichung, gibt also nur Heiles
 her — die Eule rettet er bei 150 000 und 60 000 vollständig. Wo er ablehnt,
 bleibt das zerrissene Ergebnis stehen und `_deviation_findings` sagt es
 (`mesh.not_watertight`, `mesh.components_split`).
-`mesh_ops.decimate_for_display` ist die des Bildschirms — Vorschaubild im
-Objektbaum, Anzeige ab der Schwelle aus §31, Beispielbilder, Stellvertreter
-der Orientierungssuche: erst der exakte Kern nach Sehnenfehler
-(`units.MAX_FACET_SAG` als Start, je Schritt vervierfacht), dann das
-Zusammenlegen im Raster für Netze, die der Kern nicht nimmt
-(`_clustered_for_display`). Keine Zielzahl, keine Messung, eine Antwort in
-rund hundert Millisekunden an 200 000 Dreiecken.
+`mesh_ops.decimate_for_display` ist die des Bildschirms — Anzeige ab der
+Schwelle aus §31, Beispielbilder, Stellvertreter der Orientierungssuche:
+erst der exakte Kern nach Sehnenfehler (`units.MAX_FACET_SAG` als Start, je
+Schritt vervierfacht), dann das Zusammenlegen im Raster für Netze, die der
+Kern nicht nimmt (`_clustered_for_display`). Keine Zielzahl, keine Messung,
+eine Antwort in rund hundert Millisekunden an 200 000 Dreiecken.
+`mesh_ops.raster_for_display` ist nur das Raster, für das Vorschaubild im
+Objektbaum: Der exakte Kern hält während `simplify` den GIL und hielt damit
+aus dem Arbeiter heraus das Fenster an (gemessen bis 800 ms, siehe
+`wartezeit.md`, „Ein Arbeiter ist nur nebenläufig …").
 
 **Eine Beschriftung sieht überall gleich aus, oder sie ist keine.** Ein Projekt
 wandert zwischen Rechnern, und eine Systemschrift, die es hier gibt und dort

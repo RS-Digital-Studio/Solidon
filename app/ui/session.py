@@ -1794,11 +1794,10 @@ class Session(QObject):
         zwanzig Etappen kostet jede Auswertung zwanzig Durchgänge, und genau
         das ist der Grund für diese Handlung.
 
-        **Einer von zwei Fällen, in denen eine Nachfrage richtig ist.** Neben
-        dem ausdrücklich gewünschten Löschen aus der Mitte des Verlaufs ist
-        diese Handlung nicht folgenlos rücknehmbar, denn danach lässt sich an
-        den Zügen nichts mehr ändern. Die Nachfrage stellt der Aufrufer, nicht
-        diese Methode — der Kern fragt nie selbst (Regel 21).
+        **Rücknehmbar wie jede Parameteränderung:** Das Festschreiben läuft
+        über :meth:`change_params`, also als Transaktion, und ein Strg+Z gibt
+        der Sitzung ihre Züge zurück. Eine Nachfrage davor gibt es deshalb
+        nicht (Regel 19, nachgemessen am 22.09.2026).
         """
         document = self.project.document
         operation = next((entry for entry in document.ops if entry.id == op_id), None)

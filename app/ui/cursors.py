@@ -266,7 +266,8 @@ def install(application: QApplication) -> CursorWatcher:
     ``app.py`` setzt das Erscheinungsbild an zwei Stellen: einmal früh für
     Ladebildschirm und Abschiedsdialog, einmal in ``build_application``. Ein
     zweiter Wächter läge dann im Strom jedes Ereignisses und täte dasselbe;
-    gefunden wird der vorhandene über seinen Namen.
+    gefunden wird der vorhandene über seine Klasse unter den Kindern der
+    Anwendung.
     """
     for existing in application.findChildren(CursorWatcher):
         return existing

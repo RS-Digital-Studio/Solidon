@@ -1,8 +1,10 @@
 """Explosionsansicht (Bauplan §18.8, §25).
 
-Der Schieber erscheint ab zwei Körpern, denn darunter gibt es nichts
-auseinanderzuziehen. Ein Element, das immer sichtbar ist und meistens nichts
-tut, bringt Leuten bei, es zu ignorieren.
+Der Schieber gilt ab zwei Körpern, denn darunter gibt es nichts
+auseinanderzuziehen. Sein Umschalter in der Werkzeugzeile verschwindet dabei
+nicht, er wird grau und nennt den Grund (seit dem 14.09.2026, ``grenzen.md``,
+„Und keiner der sieben verschwindet"): Eine Zeile, die sich beim Laden einer
+Datei umbaut, wirkt unzuverlässig.
 
 **Der Plattenwähler stand hier und steht jetzt in der Kopfzeile.** Er gehörte
 nie hierher: Wer eine einzelne Platte ansehen wollte, suchte ihn unter einem
@@ -74,8 +76,9 @@ class ExplodeBar(QWidget):
 
         Die Leiste macht sich dabei **nicht** selbst sichtbar. Das tut die
         Werkzeugzeile, der sie gehört — sonst steuern zwei Stellen dieselbe
-        Sichtbarkeit, und die eine öffnet, was die andere zugeklappt hält. Der
-        Aufrufer gibt die Antwort an ``ToolStrip.set_available`` weiter.
+        Sichtbarkeit, und die eine öffnet, was die andere zugeklappt hält. Ob
+        ihr Umschalter geht, entscheidet ``MainWindow._update_actions`` über
+        ``ToolStrip.set_tool_usable`` — grau mit Grund, nicht verschwunden.
         """
         wanted = objects > 1
         if not wanted and self.slider.value():

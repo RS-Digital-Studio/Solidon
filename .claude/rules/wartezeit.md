@@ -439,6 +439,16 @@ def _rebuild_layer(self) -> None:
 button.toggled.connect(weak_slot(self, Editor._tool_chosen, name))
 ```
 
+**Wo die Knöpfe einer Schleife eine Gruppe haben, ist die Gruppe besser als
+die dritte Wahl:** ein Empfänger an `QButtonGroup.buttonClicked`, als gebundene
+Methode, der den Knopf in seinem Wörterbuch nachschlägt
+(`ToolStrip._on_button`). Gemessen am 22.09.2026: `weak_slot` je Knopf an der
+Werkzeugzeile löste den Ring, riss aber `test_widget_lifetime` beim
+Einsammeln drei von drei Läufen mit einer Zugriffsverletzung ab; die Gruppe
+löst denselben Ring, und die Datei ist grün (zwei von zwei). Warum die eine
+Form reißt und die andere nicht, ist nicht aufgeklärt — gemessen ist nur,
+dass es so ist.
+
 `weak_slot` (`app/ui/leash.py`) bleibt für zwei Fälle, die die ersten beiden
 nicht abdecken. Der eine ist ein Wert aus einer **Schleife**, der an den
 Rückruf gebunden werden muss; es hält den Besitzer schwach und reicht den
@@ -854,11 +864,12 @@ Drei Sätze, die über diesen Fall hinausgehen:
   `fast_simplification` lehnt dort jeden Kollaps ab, nach vier Sekunden
   waren an der Lochplatte mit 203 776 Dreiecken noch 197 458 da, das SVG
   daraus kostete 1,5 s und sein Rendern 0,8 s im Hauptthread (22.09.2026,
-  Robert: Verschieben dauerte acht Sekunden). Ein Bild, die Anzeige ab der
-  Schwelle aus §31, die Beispielbilder und der Stellvertreter der
-  Orientierungssuche nehmen `mesh_ops.decimate_for_display`: den exakten Kern
-  nach Sehnenfehler, dann das Raster — rund hundert Millisekunden, an jedem
-  Netz.
+  Robert: Verschieben dauerte acht Sekunden). Die Anzeige ab der Schwelle
+  aus §31, die Beispielbilder und der Stellvertreter der Orientierungssuche
+  nehmen `mesh_ops.decimate_for_display`: den exakten Kern nach
+  Sehnenfehler, dann das Raster. **Das Vorschaubild des Baums nimmt nur das
+  Raster** (`mesh_ops.raster_for_display`) — der Grund steht im nächsten
+  Abschnitt.
 * **Freigegeben heißt: nichts mehr anfangen.** `show_scene` stellt den Start
   des Zeichners mit `singleShot(0)` zurück. `ObjectTree.release` leert den
   Vorrat, bevor es wartet, und `MainWindow.release` ruft es — sonst startete
@@ -866,6 +877,51 @@ Drei Sätze, die über diesen Fall hinausgehen:
   und der Thread überlebte den Prozess (`QThread: Destroyed while thread is
   still running`, Exit 127; gemessen am 21.09.2026 an fünf Fällen in
   `test_operation_ui`, deren Test keine Ereignisrunde durchlief).
+
+### Ein Arbeiter ist nur nebenläufig, wenn er den GIL hergibt (22.09.2026)
+
+Das Vorschaubild lief im Arbeiter, und trotzdem stand das Fenster nach jeder
+Operation und jedem Rückgängig: `manifold3d` hält den GIL während
+`simplify`. Ein Thread im Hintergrund, der den GIL nicht hergibt, ist für die
+Ereignisschleife dasselbe wie Arbeit im Hauptthread. Gemessen mit einem
+10-ms-Takt im Hauptthread, größte Lücke während eines Bildes:
+Besenhalter (59 740 Dreiecke) 456 ms mit dem exakten Kern gegen 3,8 ms mit
+dem Raster, Baum (166 400) 800 gegen 3,4 ms, Kumiko-Schale (94 990) 271
+gegen 13,7 ms. Am Fenster: Übernehmen 380 → 52 ms, Rückgängig 390 → 60 ms.
+
+Zwei Sätze daraus:
+
+* **Wer einen Arbeiter baut, misst den Hauptthread, nicht den Arbeiter.**
+  „Läuft im Hintergrund" sagt nichts darüber, ob die Oberfläche weiterläuft.
+  Die Probe ist ein Zeitgeber im Hauptthread und die größte Lücke zwischen
+  zwei Takten, solange der Arbeiter rechnet.
+* **Für zwanzig Pixel genügt das Raster.** Der exakte Kern bleibt, wo die
+  Form zählt — in der Anzeige ab §31 und der Orientierungssuche —, und er
+  hält dort denselben GIL. Das ist ein offener Punkt der Ansicht, kein
+  Freibrief.
+
+Die Wandprüfung der Formsitzung ist der zweite Fall derselben Woche: Sie lief
+im Hauptthread mit Wartezeiger, der Kommentar rechnete mit 273 ms, gemessen
+waren es an echten Modellen 2,7 bis 5,5 s nach jedem Zug. Im Arbeiter
+(`_SculptWallWorker`) ist die größte Lücke im Hauptthread 143 ms am
+Besenhalter — `shapely` und `numpy` geben den GIL überwiegend her. Eine
+Prüfung, die nach jeder Geste neu anläuft, bekommt einen Abbruchschalter:
+Die Wandkarte nimmt seither `cancelled` (`maps.wall_thickness_map`).
+
+### Ein Blick auf eine Datei ist eine Netzfrage (22.09.2026)
+
+„Zuletzt geöffnet" fragte beim Fensteraufbau jede gemerkte Datei nach ihrer
+Existenz, im Hauptthread. Auf der eigenen Platte kostet das Mikrosekunden;
+liegt ein Projekt auf einem ausgeschalteten NAS, antwortet Windows erst nach
+seinem Zeitlimit — gemessen 21 s an einer nicht erreichbaren Adresse, 2,7 s
+an einem unbekannten Rechnernamen. So lange startete das Fenster nicht.
+
+`MainWindow._show_recent` fragt deshalb in einem **Daemon-Thread** und nicht
+an der Leine: Ein `stat` lässt sich nicht abbrechen, und ein `QThread`, der
+beim Beenden noch darin hängt, reißt den Prozess mit (0xC0000409). Er wartet
+50 ms — lokal der Normalfall, ohne Zwischenbild — und zeigt sonst die
+ungeprüfte Liste, die sich ausdünnt, sobald die Antwort da ist. Wer eine
+gemerkte Pfadliste prüft, prüft sie so.
 
 ### Ein Dialog, der beim Öffnen nachsieht, öffnet erst danach
 

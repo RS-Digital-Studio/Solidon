@@ -16,6 +16,7 @@ import math
 import os
 import re
 import sys
+import threading
 import time
 import traceback
 import weakref
@@ -35,7 +36,6 @@ from PySide6.QtGui import (
     QActionGroup,
     QCloseEvent,
     QCursor,
-    QDesktopServices,
     QDragEnterEvent,
     QDropEvent,
     QKeySequence,
@@ -213,6 +213,7 @@ from app.core.types import (
 from app.core.units import EPS_DISPLAY, EPS_GEOM, is_close, match_tolerance
 from app.i18n import _, format_decimal, tr
 from app.ui import first_run
+from app.ui import settings as settings_module
 from app.ui.ai_disclosure import (
     DisclosureResult,
     ensure_ai_disclosure,
@@ -236,6 +237,7 @@ from app.ui.dialogs import (
     confirm_unsaved,
     damaged_line,
     licence_lock_line,
+    open_or_copy,
     open_website,
     show_details,
     show_error,
@@ -322,7 +324,7 @@ from app.ui.sketch_editor import (
 )
 from app.ui.spacemouse import SpaceMouseController
 from app.ui.split_bar import POINTS_NEEDED, SplitBar
-from app.ui.start_screen import StartScreen, accepted_path, accepted_url
+from app.ui.start_screen import StartScreen, accepted_path, accepted_paths, accepted_url
 from app.ui.style import NORMAL, ROOMY, TIGHT, divider, make_primary, menu_heading, set_level
 from app.ui.support_dialog import SupportDialog, window_shot
 from app.ui.survey import SurveyNotice, UsageClock
@@ -338,6 +340,15 @@ from app.ui.viewport import DisplayMode, Projection, SketchSelectionBadge, Viewp
 _log = get_logger(__name__)
 
 AUTOSAVE_INTERVAL_MS = 120_000
+
+#: Wie lange der Aufbau von „Zuletzt geöffnet" auf die Dateiprüfung wartet,
+#: bevor er die ungeprüfte Liste zeigt. Lokale Platten antworten in
+#: Millisekunden; ein schlafendes Netzlaufwerk in bis zu 21 s
+#: (:meth:`MainWindow._show_recent`). Unter der 0,2-s-Schwelle aus §2.8.
+RECENT_WAIT_S = 0.05
+
+#: Wie oft danach nachgesehen wird, ob die Prüfung zurück ist.
+RECENT_POLL_MS = 100
 
 #: Zwei Sätze, die diese Datei je viermal sagte.
 #:
@@ -798,6 +809,66 @@ class _MapRequest:
     document_state: Any
     result: EvaluationResult
     key: tuple[Any, ...]
+
+
+class _SculptWallWorker(Worker):
+    """Die Wandprüfung der Formsitzung, abseits des Oberflächen-Threads
+    (Entscheidung L, §2.8).
+
+    Sie lief im Hauptthread, nur mit Wartezeiger, und der Kommentar dort
+    rechnete mit 273 ms bei 82 000 Dreiecken. Gemessen am 22.09.2026 an
+    echten Modellen mit zwanzig Zügen: 2,7 bis 5,5 s je Prüfung
+    (Besenhalter mit 59 740 Dreiecken 5,5 s, Kumiko-Schale mit 94 990
+    Dreiecken 5,2 s, Baum mit 166 400 Dreiecken 4,3 s). So lange stand das
+    Fenster 400 ms nach jedem abgesetzten Zug still — ohne Fortschritt, ohne
+    Abbrechen, und wer weiterformen wollte, konnte es nicht.
+
+    ``done`` trägt die Nummer der Prüfung und die Zahl der zu dünnen Stellen
+    — ``None``, wenn das Netz für die Karte zu groß ist. Das Fenster nimmt
+    nur die Antwort der jüngsten Prüfung an.
+    """
+
+    done = Signal(int, object)
+
+    def __init__(self, number: int, mesh: MeshData, strokes: list[Stroke], minimum: float) -> None:
+        super().__init__()
+        self._number = number
+        self._mesh: MeshData | None = mesh
+        self._strokes = strokes
+        self._minimum = minimum
+        self.cancelled = CancelSignal()
+        """Der nächste Zug macht diese Prüfung wertlos — und das Schließen
+        des Fensters ebenso, das sonst Sekunden auf sie wartete."""
+
+    def cancel(self) -> None:
+        self.cancelled.cancel()
+
+    def work(self) -> None:
+        mesh = self._mesh
+        if mesh is None:
+            return
+        sculpted = apply_strokes(mesh, self._strokes)
+        try:
+            card = wall_thickness_map(
+                sculpted,
+                minimum=self._minimum,
+                pitch=self._minimum * WALL_GRID_SHARE,
+                cancelled=self.cancelled,
+            )
+        except OperationCancelled:
+            return
+        except AppError:
+            # Ein zu großes Netz ist kein Grund, die Sitzung zu stören. Der
+            # Prüfbericht sagt dasselbe später und gründlicher.
+            self.done.emit(self._number, None)
+            return
+        self.done.emit(self._number, len(card.highlighted))
+
+    def release_finished_references(self) -> None:
+        """Netz und Züge loslassen, sobald die Antwort zugestellt ist."""
+        self._mesh = None
+        self._strokes = []
+        super().release_finished_references()
 
 
 class _UpdateWorker(Worker):
@@ -1821,9 +1892,11 @@ class MainWindow(QMainWindow):
         """
         self._map_worker: Any = None
         self._map_request: _MapRequest | None = None
-        """Die Karte, die gerade gerechnet wird (§18.9). Eine neuere Anfrage ersetzt sie."""
-        """Nur die letzte Karte wird gehalten: neu zu rechnen ist billig, sie zu
-    halten teuer."""
+        """Die Karte, die gerade gerechnet wird (§18.9). Eine neuere Anfrage ersetzt sie.
+
+        Gehalten werden die fertigen Karten in ``_map_cache`` — bis zu
+        :data:`MAP_CACHE_KEPT`, geleert mit jeder neuen Auswertung. (Hier stand
+        „Nur die letzte Karte wird gehalten", aus der Zeit vor dem Cache.)"""
         self._map_cancelled_for: tuple[str | None, Any] | None = None
         """Körper und Kartenart, deren Rechnung der Kunde abgebrochen hat —
         gehalten bis zur nächsten anderen Wahl (``_on_map_changed``)."""
@@ -1837,23 +1910,23 @@ class MainWindow(QMainWindow):
         """Wer auf das laufende Ergebnis wartet. Ein Rückruf, der schon in der
         Reihe steht, wird nicht doppelt eingereiht."""
         self._update_worker: Any = None
+        """Die laufende Update-Anfrage (§37.2) — festgehalten wie jeder
+        andere Arbeiter, damit sie das Fenster nicht überlebt."""
         self._finished_update_worker: Any = None
         """Die ausgelaufene Abfrage, festgehalten bis zur nächsten — dieselbe
         Halteleine wie bei den Arbeitern der Sitzung."""
-        """Die laufende Update-Anfrage (§37.2) — festgehalten wie jeder
-        andere Arbeiter, damit sie das Fenster nicht überlebt."""
         self._ollama_size_worker: Any = None
+        """Die Modellgrößen-Frage an Ollama (§27), aus demselben Grund."""
         self._backend_probe: Any = None
         """Der laufende Arbeiter der Modellfrage (:class:`_BackendProbe`)."""
-        """Die Modellgrößen-Frage an Ollama (§27), aus demselben Grund."""
         self._download_worker: Any = None
+        """Ein Modell, das gerade aus dem Netz kommt (§16.3) — dieselbe
+        Halteleine, derselbe Grund."""
         self._downloading = False
         """Ob gerade eine Datei geholt wird — als eigene Flagge, nicht über
         das Worker-Feld: ``done``/``failed`` kommen vor ``finished``, und das
         Feld hält den Arbeiter absichtlich länger (GC-Falle). Der Balken
         richtet sich nach dem Zustand, nicht nach der Lebensdauer."""
-        """Ein Modell, das gerade aus dem Netz kommt (§16.3) — dieselbe
-        Halteleine, derselbe Grund."""
         self._gcode_worker: Any = None
         self._gcode_path: Path | None = None
         """Die laufende G-Code-Gegenprobe und ihre ausgewählte Datei (§2.8)."""
@@ -1864,6 +1937,9 @@ class MainWindow(QMainWindow):
         self._source_callback: Callable[[tuple[str, str] | None], None] | None = None
         """Die nachgereichte Quelle eines offenen Operationsdialogs."""
         self._export_worker: Any = None
+        """Der laufende Export (§2.8, §29). Solange er steht, ist der
+        Menüeintrag gesperrt — zwei Läufe auf denselben Ordner wären ein
+        Wettlauf um dieselben Dateinamen."""
         self._exporting = False
         """Wie ``_downloading`` — der Export meldet sein Ende vor dem
         Auslaufen seines Threads."""
@@ -1888,22 +1964,19 @@ class MainWindow(QMainWindow):
         Felder je Schreibweg: Export und Speichern scheitern am selben
         Betriebssystem, und der Kunde bekommt in beiden Fällen dieselben zwei
         Antworten."""
-        """Der laufende Export (§2.8, §29). Solange er steht, ist der
-        Menüeintrag gesperrt — zwei Läufe auf denselben Ordner wären ein
-        Wettlauf um dieselben Dateinamen."""
         self._leash = WorkerLeash(self)
         """Hält fertige und ersetzte Arbeiter, bis Qt mit ihnen durch ist —
         das Warum steht in :mod:`app.ui.leash`."""
         self._close_requested = False
         self._close_retry = QTimer(self)
+        """Hält das Fenster offen, bis jeder angehaltene Arbeiter ausgelaufen ist."""
         self._close_retry.setInterval(50)
         self._close_retry.timeout.connect(self._retry_close)
-        """Hält das Fenster offen, bis jeder angehaltene Arbeiter ausgelaufen ist."""
         self._proposal: Any = None
+        """Der Agentenzug, der auf eine Entscheidung wartet (§26.5)."""
         self._applied_transaction: str | None = None
         """Die Transaktion hinter der Übernommen-Leiste (§26.5) — nur solange
         sie die oberste ist, hält der Rückgängig-Knopf sein Versprechen."""
-        """Der Agentenzug, der auf eine Entscheidung wartet (§26.5)."""
         self._manual: ManualWindow | None = None
         """Das Handbuchfenster, einmal gebaut und danach wiederverwendet."""
         self._crash_dialog: SupportDialog | None = None
@@ -1921,6 +1994,8 @@ class MainWindow(QMainWindow):
         """§18.8: was der Nutzer ausgeblendet hat. Ansichtszustand des
         Fensters, nicht des Dokuments — er reist nicht mit der Datei."""
         self._announcement = ""
+        """Was zuletzt zu melden war — siehe :meth:`announce`. Ein laufender
+        Fortschritt legt sich darüber und gibt es danach wieder frei."""
         self._halted = False
         """Ob die stehende Meldung von einer angehaltenen Kette stammt.
 
@@ -1944,8 +2019,6 @@ class MainWindow(QMainWindow):
 
         Er wird sofort gesammelt, aber erst nach der 0,2-s-Schwelle gezeigt.
         Die bestimmte Stützbewertung darf dabei nie rückwärts laufen."""
-        """Was zuletzt zu melden war — siehe :meth:`announce`. Ein laufender
-        Fortschritt legt sich darüber und gibt es danach wieder frei."""
         self._patience = QTimer(self)
         """Wann der Wartezeiger kommt — die zweite Stufe von §2.8.
 
@@ -1990,8 +2063,6 @@ class MainWindow(QMainWindow):
         Qt stapelt Zeiger: Zweimal setzen und einmal zurücknehmen lässt einen
         stehen, und ein Zeiger, der nach dem Rechnen bleibt, sieht aus wie ein
         hängendes Programm. Die Flagge macht das Paar abzählbar."""
-        """Was zuletzt zu melden war — siehe :meth:`announce`. Ein laufender
-        Fortschritt legt sich darüber und gibt es danach wieder frei."""
         self._menus: list[QMenu] = []
         """Jedes Menü der Leiste, festgehalten.
 
@@ -2004,14 +2075,14 @@ class MainWindow(QMainWindow):
         """Ob die Szene schon einmal einen Körper hatte — der erste bekommt
         die Kamera."""
         self._op_actions: dict[str, QAction] = {}
+        """Die Menüeinträge der Operationen, damit sie sich ausgrauen lassen.
+        Ein Menü, in dem alles anklickbar ist und die Hälfte mit „Bitte zuerst
+        etwas auswählen" antwortet, lässt den Nutzer die Regeln erraten."""
         self._variant_actions: dict[str, QAction] = {}
         """Die Sammeleinträge der Variantengruppen, unter dem Namen ihrer
         ersten Operation. Getrennt von ``_op_actions``, weil sie keiner
         Operation gehören: Wer dort nachschlägt, sucht einen Eintrag, der
         genau eine Operation auslöst, und das tun sie nicht."""
-        """Die Menüeinträge der Operationen, damit sie sich ausgrauen lassen.
-        Ein Menü, in dem alles anklickbar ist und die Hälfte mit „Bitte zuerst
-        etwas auswählen" antwortet, lässt den Nutzer die Regeln erraten."""
         self._palette_actions: dict[str, QAction] = {}
         """Zu welcher Action ein Fensterbefehl der Palette gehört.
 
@@ -2117,12 +2188,18 @@ class MainWindow(QMainWindow):
                 weak_slot(self, lambda view, name: view.tools.toggle(name), key),
             )
 
+        self._recent_box: list[list[Path]] = []
+        """Die Antwort der laufenden Prüfung von „Zuletzt geöffnet" — leer,
+        bis sie da ist (:meth:`_show_recent`)."""
+        self._recent_poll = QTimer(self)
+        self._recent_poll.setInterval(RECENT_POLL_MS)
+        self._recent_poll.timeout.connect(self._collect_recent)
         self._autosave = QTimer(self)
         self._autosave.setInterval(AUTOSAVE_INTERVAL_MS)
         self._autosave.timeout.connect(self.session.autosave)
         self._autosave.start()
 
-        self.start_screen.show_recent(settings.existing_recent())
+        self._show_recent()
         self._show_start_screen(True)
 
     # --- construction -----------------------------------------------------------
@@ -2197,13 +2274,13 @@ class MainWindow(QMainWindow):
         """Wie viele Merkmale beim letzten Start von *Automatisch teilen*
         gesperrt waren — für die Ansage danach; der Körper ist dann verbraucht."""
         self._body_facts: tuple[int, dict[ObjectId, BodyFacts]] = (-1, {})
+        """Geschlossen, Stücke, Hohlraum — je Körper, für die Auswertung, die
+        gerade gilt. ``_update_actions`` fragt bei jeder Auswahl für drei
+        Operationen danach; gerechnet wird je Körper und Auswertung einmal."""
         self._lid_reasons: tuple[int, dict[tuple[ObjectId, str], str | None]] = (-1, {})
         """Warum an einer gewählten Fläche kein Deckel entsteht — je Merkmal und
         Auswertung einmal gerechnet, denn die Antwort kostet einen Schnitt
         (:meth:`_lid_reason`)."""
-        """Geschlossen, Stücke, Hohlraum — je Körper, für die Auswertung, die
-        gerade gilt. ``_update_actions`` fragt bei jeder Auswahl für drei
-        Operationen danach; gerechnet wird je Körper und Auswertung einmal."""
         self._difference_standing = False
         """Ob im Bild eine Differenz liegt — dann lohnt ``show_difference(None)``.
 
@@ -2486,17 +2563,18 @@ class MainWindow(QMainWindow):
         """Die MCP-Schnittstelle, solange sie läuft (Konzept P15 §7 Etappe 9)."""
         self._sketch_panel: SketchPanel | None = None
         self._sketch_target: str | None = None
+        """Der Operationsname, für den gerade gezeichnet wird."""
         self._mode_before_sketch: DisplayMode = "solid"
-        self._projection_before_sketch: Projection = "perspective"
-        #: Die Projektion, zu der das Messen zurückkehrt — ``None``, solange
-        #: nicht gemessen wird (RM-142).
-        self._projection_before_measure: Projection | None = None
         """Die Darstellung vor dem Skizzenmodus (§30.1, P4).
 
         Er blendet das Modell durchscheinend, damit die Zeichnung darauf
         liegt und nicht dahinter. Wer vorher im Drahtgitter gearbeitet hat,
         soll danach wieder darin sein — gemerkt statt geraten."""
-        """Der Operationsname, für den gerade gezeichnet wird."""
+        self._projection_before_sketch: Projection = "perspective"
+        """Und die Projektion davor — aus demselben Grund."""
+        self._projection_before_measure: Projection | None = None
+        """Die Projektion, zu der das Messen zurückkehrt — ``None``, solange
+        nicht gemessen wird (RM-142)."""
 
         # Die Leiste des Skizzenmodus. Sie steht neben der Werkzeugzeile statt
         # in ihr: die sieben dort sind Ansichtswerkzeuge, die sich gegenseitig
@@ -2592,16 +2670,22 @@ class MainWindow(QMainWindow):
         self._sculpt_check.setSingleShot(True)
         self._sculpt_check.setInterval(SCULPT_CHECK_MS)
         self._sculpt_check.timeout.connect(self._check_sculpted_walls)
+        self._sculpt_wall_worker: Any = None
+        """Die laufende Wandprüfung der Formsitzung (:class:`_SculptWallWorker`)."""
+        self._sculpt_wall_number = 0
+        """Die Nummer der jüngsten Wandprüfung. Eine Antwort mit einer
+        anderen gehört zu einem Stand, den es nicht mehr gibt — ein Zug
+        danach, ein Rückgängig oder das Ende der Sitzung."""
         """Die Wandstärkenprüfung läuft **nach** der Geste, nicht in ihr
         (Entscheidung L). Bei jedem Zug zu rechnen hieße, den Pinsel um eine
         Viertelsekunde zu verzögern, damit eine Zahl aktuell ist, die sich beim
         nächsten Zug wieder ändert."""
         self._sculpt_strokes: list[Stroke] = []
-        self._discarded_sketch: _DiscardedSketch | None = None
-        """Die zuletzt verworfene Zeichnung, solange Strg+Z sie noch meint."""
         """Die Züge dieser Sitzung. Das Rückgängig des Editors läuft auf
         dieser Liste und nicht über den Verlauf: Der Verlauf bekommt die
         Sitzung als *eine* Transaktion, wenn sie fertig ist (Regel 16)."""
+        self._discarded_sketch: _DiscardedSketch | None = None
+        """Die zuletzt verworfene Zeichnung, solange Strg+Z sie noch meint."""
 
         # Die zwei häufigsten Folgen stehen **an der fertigen Kontur**. Wer
         # Solidon ohne CAD-Vokabular benutzt, soll weder „Extrusion“ kennen
@@ -2832,6 +2916,7 @@ class MainWindow(QMainWindow):
         self.start_screen.importRequested.connect(self.action_import)
         self.start_screen.openRequested.connect(self.open_path)
         self.start_screen.fileDropped.connect(self.open_path)
+        self.start_screen.leftOut.connect(self._say_files_left_out)
         self.start_screen.urlDropped.connect(self.download_model)
         self.start_screen.forgetRequested.connect(self._forget_recent)
         # Mit Kapitel: Der Knopf nennt es, also schlägt er es auf.
@@ -2849,7 +2934,7 @@ class MainWindow(QMainWindow):
         self._inventory_return: QWidget = self.start_screen
         self.setCentralWidget(self.stack)
 
-        self.object_tree.selectionChanged.connect(self._on_selection)
+        self.object_tree.selectionChanged.connect(self._on_tree_selection)
         self.object_tree.featureSelected.connect(self._on_feature_selected)
         # Zwei markierte Merkmale beantworten eine andere Frage als eines —
         # deshalb ein eigenes Signal und ein eigener Empfänger.
@@ -3656,7 +3741,11 @@ class MainWindow(QMainWindow):
             tr("Rechten Bereich zeigen"),
             "F9",
             self.action_toggle_right,
-            tr("Verlauf, Parameter und Chat ein- oder ausblenden."),
+            # Links stehen Objekte, Parameter und Verlauf — die rechte Spalte
+            # trägt Prüfbericht und Chat (§2.5). Hier stand bis zum 22.09.2026
+            # „Verlauf, Parameter und Chat", und wer F9 drückte, suchte die
+            # zwei, die gar nicht verschwanden.
+            tr("Prüfbericht und Chat ein- oder ausblenden."),
         )
         # Robert, 02.09.2026: „eine Option, wo man schnell hinkommt, um die
         # Druckplatte auszublenden". Ein Haken mit Kürzel, in der Palette
@@ -5026,7 +5115,24 @@ class MainWindow(QMainWindow):
         """
         adresse = str(error.values.get("url", "")) if error.values else ""
         if adresse:
-            QDesktopServices.openUrl(QUrl(adresse))
+            self._open_or_copy(
+                QUrl(adresse),
+                adresse,
+                tr("Kein Browser geöffnet — die Adresse liegt in der Zwischenablage."),
+            )
+
+    def _open_or_copy(self, url: QUrl, shown: str, fallback: str) -> bool:
+        """Öffnet ``url`` — und sagt es in der Statuszeile, wenn das System es nicht tut.
+
+        Den Rückweg selbst (``shown`` in die Zwischenablage) kennt
+        :func:`dialogs.open_or_copy`, dieselbe Stelle, die :func:`dialogs.open_link`
+        nimmt. Das Fenster sagt es nur anders: in der Statuszeile statt in
+        einem Kasten, wie jede andere Ansage hier.
+        """
+        if open_or_copy(url, shown):
+            return True
+        self.announce(fallback)
+        return False
 
     def _say_why(self, action: QAction, reason: str) -> None:
         """Schreibt den Grund einer Sperre an den Eintrag — und nimmt ihn zurück.
@@ -5273,11 +5379,58 @@ class MainWindow(QMainWindow):
         if name:
             self.open_path(Path(name))
 
+    def _show_recent(self) -> None:
+        """„Zuletzt geöffnet" zeigen, ohne das Fenster an einem Netzpfad anzuhalten.
+
+        Ob ein Eintrag noch da ist, fragt das Dateisystem, und für einen Pfad
+        auf einem ausgeschalteten Netzlaufwerk antwortet Windows erst nach
+        seinem Zeitlimit — gemessen am 22.09.2026 21 s an einer nicht
+        erreichbaren Adresse. Das lief beim Fensteraufbau im Hauptthread: Wer
+        sein letztes Projekt auf dem NAS hatte, bekam nach dem Start ein
+        Fenster, das nicht reagierte (§2.8).
+
+        Die Prüfung läuft deshalb in einem **Daemon-Thread** und nicht an der
+        Leine. Ein ``stat`` lässt sich nicht abbrechen, und ein ``QThread``,
+        der beim Beenden noch darin hängt, reißt den Prozess mit
+        (0xC0000409). Ein Daemon-Thread hält das Beenden nicht auf, und seine
+        späte Antwort landet in einem Kasten, den niemand mehr abholt.
+
+        Ist sie nach :data:`RECENT_WAIT_S` da — auf lokalen Platten der
+        Normalfall —, steht die geprüfte Liste sofort, ohne ein Zwischenbild.
+        Sonst zeigt die Liste, was gemerkt ist, und dünnt sich aus, sobald die
+        Antwort kommt: Ein toter Eintrag für ein paar Sekunden schadet
+        weniger als ein Fenster, das so lange nicht reagiert.
+        """
+        entries = list(self.settings.recent)
+        box: list[list[Path]] = []
+        self._recent_box = box
+        checker = threading.Thread(
+            target=lambda: box.append(settings_module.existing_paths(entries)),
+            name="recent-check",
+            daemon=True,
+        )
+        checker.start()
+        checker.join(RECENT_WAIT_S)
+        if box:
+            self._recent_poll.stop()
+            self.start_screen.show_recent(box[0])
+            return
+        self.start_screen.show_recent([Path(entry) for entry in entries])
+        self._recent_poll.start()
+
+    def _collect_recent(self) -> None:
+        """Holt die Antwort aus :meth:`_show_recent` ab, sobald sie da ist."""
+        box = self._recent_box
+        if not box:
+            return
+        self._recent_poll.stop()
+        self.start_screen.show_recent(box[0])
+
     def _forget_recent(self, path: Path) -> None:
         """Einen Eintrag aus „Zuletzt geöffnet" nehmen — die Datei bleibt."""
         self.settings.recent = [entry for entry in self.settings.recent if entry != str(path)]
         self._store_settings()
-        self.start_screen.show_recent(self.settings.existing_recent())
+        self._show_recent()
 
     def _may_discard(self) -> bool:
         """Fragt, bevor ein geändertes Projekt weggeworfen wird.
@@ -5782,7 +5935,10 @@ class MainWindow(QMainWindow):
             return
         object_id = object_id or self.object_tree.selected()
         if not object_id:
-            QMessageBox.information(self, tr("Automatisch teilen"), str(_NEEDS_SELECTION))
+            # Angesagt und nicht in einem Kasten, den man wegklicken muss:
+            # dieselbe Antwort wie beim Formen (``start_sculpt``) — und kein
+            # modaler Halt für eine Auskunft ohne Entscheidung.
+            self.announce(str(_NEEDS_SELECTION))
             return
 
         # Kein Wartezeiger mehr: die Suche prüft Kandidatenebene für
@@ -5798,13 +5954,22 @@ class MainWindow(QMainWindow):
             self.announce(tr("Dieses Objekt passt bereits auf das Bett."))
             return
         self._queue_split_reveal(applied.object_ids)
-        said = f"{tr('Geteilt')}: {len(applied.object_ids)} · {len(applied.fits)} {tr('Passungen')}"
+        # **Die Einzahl steht daneben, sie wird nicht gebildet** (P0.1): „1
+        # Passungen" und „1 geschützte Stellen" lasen sich wie ein Fehler der
+        # Anwendung — dieselbe Regel wie bei ``_when``.
+        fits = len(applied.fits)
+        said = (
+            f"{tr('Geteilt')}: {len(applied.object_ids)} · {fits} "
+            f"{tr('Passung') if fits == 1 else tr('Passungen')}"
+        )
         if self._split_protected:
             # Die zweite Kodierung der Sperre (Regel 18): Die Schraffur sagt
             # es im Bild, die Statuszeile sagt es in Worten — und zwar an der
             # Stelle, an der die Sperre gewirkt hat.
-            said += " · " + tr("{count} geschützte Stellen gemieden").format(
-                count=self._split_protected
+            said += " · " + (
+                tr("eine geschützte Stelle gemieden")
+                if self._split_protected == 1
+                else tr("{count} geschützte Stellen gemieden").format(count=self._split_protected)
             )
         self.announce(said)
 
@@ -5846,42 +6011,34 @@ class MainWindow(QMainWindow):
         if not released:
             self.announce(tr("An diesem Körper ist nichts gesperrt."))
             return
-        self.announce(tr("{count} Sperren aufgehoben.").format(count=released))
+        self.announce(
+            tr("Eine Sperre aufgehoben.")
+            if released == 1
+            else tr("{count} Sperren aufgehoben.").format(count=released)
+        )
         self.action_auto_split(object_id)
 
     def bake_sculpt(self, op_id: int) -> None:
-        """Den Stand einer Formsitzung festschreiben — mit Nachfrage.
+        """Den Stand einer Formsitzung festschreiben — ohne Nachfrage, mit Rückweg.
 
-        **Eine von zwei Bestätigungen vor einer Handlung.** (Daneben gibt es
-        die ausdrücklich gewünschte Ausnahme beim Löschen im Verlauf sowie
-        zwei Fragen anderer Art: Wiederherstellung nach einem Absturz und
-        Speichern/Verwerfen beim Schließen.) Regel 19 verbietet sonst
-        Bestätigungsdialoge vor rücknehmbaren Handlungen; diese Handlung ist
-        es nicht folgenlos, denn danach lässt sich an den Zügen nichts mehr
-        ändern. Deshalb steht im Dialog auch nicht „Sind Sie sicher", sondern
-        was danach nicht mehr geht (Entscheidung D, §2.7).
+        **Hier stand eine Nachfrage**, begründet damit, dass die Handlung
+        „nicht folgenlos rücknehmbar" sei (Entscheidung D, 13.08.2026).
+        Nachgemessen am 22.09.2026 trägt diese Voraussetzung nicht: Das
+        Festschreiben ist ein ``change_params`` und damit eine gewöhnliche
+        Transaktion, und ein Strg+Z gibt der Sitzung ihre Züge zurück
+        (``test_baking_asks_nothing_because_undo_takes_it_back``). Regel 19
+        kennt seither genau eine gewünschte Ausnahme, das Löschen im Verlauf.
+
+        Was der Dialog erklärte, steht jetzt in der Ansage danach — was sich
+        geändert hat und wie es zurückgeht — und vorher im Tooltip des
+        Eintrags im Verlauf.
         """
-        box = QMessageBox(
-            QMessageBox.Icon.Question,
-            tr("Stand festschreiben"),
-            tr(
-                "Der jetzige Stand wird als Körper im Projekt abgelegt. Die Züge bleiben "
-                "als Beleg stehen, wirken aber nicht mehr — an dieser Sitzung lässt sich "
-                "danach nichts mehr ändern. Dafür wird sie nicht mehr gerechnet."
-            ),
-            QMessageBox.StandardButton.NoButton,
-            self,
-        )
-        # Die Knöpfe heißen nach ihrer Handlung, nicht „OK": „Ja" verlangt,
-        # die Frage im Kopf zu behalten — „Festschreiben" nicht. Derselbe
-        # Grund wie bei `confirm_discard` nebenan.
-        bake = box.addButton(tr("Festschreiben"), QMessageBox.ButtonRole.AcceptRole)
-        box.addButton(tr("Abbrechen"), QMessageBox.ButtonRole.RejectRole)
-        box.exec()
-        if box.clickedButton() is not bake:
-            return
         if not self.session.bake_strokes(op_id):
             self.announce(tr("Dieser Schritt lässt sich nicht festschreiben."))
+            return
+        self.announce(
+            tr("Stand festgeschrieben — die Züge wirken nicht mehr. Strg+Z nimmt es zurück.")
+        )
 
     def remove_history_operations(self, op_ids: Sequence[int]) -> None:
         """Gewählte Verlaufsschritte nach ausdrücklicher Bestätigung löschen.
@@ -7121,7 +7278,11 @@ class MainWindow(QMainWindow):
         Plattform gilt, ist keine Zusage").
         """
         if self._export_folder is not None:
-            QDesktopServices.openUrl(QUrl.fromLocalFile(str(self._export_folder)))
+            self._open_or_copy(
+                QUrl.fromLocalFile(str(self._export_folder)),
+                str(self._export_folder),
+                tr("Der Ordner ließ sich nicht öffnen — sein Pfad liegt in der Zwischenablage."),
+            )
 
     def _export_failed(self, worker: _ExportWorker, error: AppError) -> None:
         """Der Fehlerdialog gehört in den Hauptthread, nicht in den Arbeiter.
@@ -8520,19 +8681,31 @@ class MainWindow(QMainWindow):
         by_title = {title: key for key, (title, _shortcut, _slot) in known.items()}
         ops = set(self._op_actions.values())
         found: dict[str, Any] = {}
+        overridden = 0
         self._palette_actions.clear()
         for path, action in _menu_lines(self.menuBar()):
             if action in ops:
                 continue
             if action.text() in known_titles:
-                self._palette_actions[by_title[action.text()]] = action
+                known_key = by_title[action.text()]
+                self._palette_actions[known_key] = action
+                # **Und das Kürzel kommt von der Action**, nicht aus der
+                # Tabelle. Dort stand „Ctrl+Y" für Wiederholen; das Menü setzt
+                # aber ``StandardKey.Redo``, und das ist auf macOS ⌘⇧Z, unter
+                # GNOME und KDE Strg+Umschalt+Z. Die Palette nannte dort eine
+                # Taste, die nichts tat.
+                title, shortcut, slot = known[known_key]
+                actual = action.shortcut().toString()
+                if actual and actual != shortcut:
+                    found[known_key] = (title, actual, slot)
+                    overridden += 1
                 continue
             if action in (self._quit_action, self._palette_action):
                 continue
             # Der Weg steht im Titel: „Vorne" allein sagt in einer Liste aus
             # hundert Zeilen nichts, „Kamera: Vorne" schon.
             title = f"{path}: {action.text()}" if path else action.text()
-            key = f"menu.{len(found)}"
+            key = f"menu.{len(found) - overridden}"
             found[key] = (
                 title,
                 action.shortcut().toString(),
@@ -10033,6 +10206,10 @@ class MainWindow(QMainWindow):
         Mindestwandstärke, sonst findet die Karte gar nichts — bei 2 mm Raster
         und 1,2 mm Mindestwand meldete sie null zu dünne Stellen an einer
         Schale mit 0,8 mm Wand. Und als Zahl, nicht nur als Farbe (Regel 18).
+
+        Gerechnet wird im Arbeiter (:class:`_SculptWallWorker`): Sekunden an
+        einem echten Modell, und währenddessen formt man weiter. Ein neuer
+        Zug stößt eine neue Prüfung an; die Antwort einer älteren verfällt.
         """
         if self._sculpt_target is None or not self._sculpt_strokes:
             return
@@ -10040,32 +10217,81 @@ class MainWindow(QMainWindow):
         if mesh is None:
             return
         plane = SYMMETRY_BITS.get(self.sculpt_bar.plane(), 0)
-        strokes = self._sculpt_strokes
+        strokes = list(self._sculpt_strokes)
         shown = [replace(s, symmetry=s.symmetry | plane) for s in strokes] if plane else strokes
-        sculpted = apply_strokes(mesh, shown)
-        minimum = self.session.profile.minimum_wall_thickness
-        # Mit Wartezeiger: gemessen 273 ms bei 82 000 Dreiecken — über der
-        # 200-ms-Grenze aus §2.8, und die Prüfung läuft nach jedem Zug. Auf
-        # feinen Netzen (und `refine_for_sculpt` erzeugt gezielt feine) wäre
-        # das ein Stocken ohne Erklärung.
-        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
-        try:
-            card = wall_thickness_map(sculpted, minimum=minimum, pitch=minimum * WALL_GRID_SHARE)
-        except AppError:
-            # Ein zu großes Netz ist kein Grund, die Sitzung zu stören. Der
-            # Prüfbericht sagt dasselbe später und gründlicher.
+        self._sculpt_wall_number += 1
+        worker = _SculptWallWorker(
+            self._sculpt_wall_number, mesh, shown, self.session.profile.minimum_wall_thickness
+        )
+        worker.done.connect(self._sculpt_walls_checked)
+        worker.crashed.connect(self._sculpt_walls_crashed)
+        self._cancel_sculpt_check()
+        self._retire(self._sculpt_wall_worker)
+        self._sculpt_wall_worker = worker
+        worker.finished.connect(weak_slot(self, MainWindow._sculpt_wall_worker_done, worker))
+        if not self.sculpt_bar.warning.text():
+            self.sculpt_bar.show_warning(tr("Wandstärke wird geprüft …"))
+        self._leash.start(worker)
+
+    def _sculpt_walls_checked(self, number: int, thin: Any) -> None:
+        """Die Antwort der Wandprüfung — nur die der jüngsten zählt."""
+        if not isValid(self) or number != self._sculpt_wall_number:
             return
-        finally:
-            QApplication.restoreOverrideCursor()
-        thin = len(card.highlighted)
+        target = self._sculpt_target
+        if target is None:
+            return
+        if thin is None:
+            self._drop_wall_check_note()
+            return
+        minimum = self.session.profile.minimum_wall_thickness
         if not thin:
-            self.sculpt_bar.show_warning(self._sculpt_resolution_hint(mesh), refinable=True)
+            mesh = self._sculpt_mesh(target)
+            hint = self._sculpt_resolution_hint(mesh) if mesh is not None else ""
+            self.sculpt_bar.show_warning(hint, refinable=True)
             return
         self.sculpt_bar.show_warning(
-            tr("{count} Stellen dünner als {minimum}")
+            tr("Eine Stelle dünner als {minimum}").replace("{minimum}", length(minimum))
+            if thin == 1
+            else tr("{count} Stellen dünner als {minimum}")
             .replace("{count}", str(thin))
             .replace("{minimum}", length(minimum))
         )
+
+    def _drop_wall_check_note(self) -> None:
+        """„Wird geprüft" nimmt sich zurück, wenn keine Antwort mehr kommt."""
+        if self.sculpt_bar.warning.text() == tr("Wandstärke wird geprüft …"):
+            self.sculpt_bar.show_warning("")
+
+    def _sculpt_walls_crashed(self, detail: str) -> None:
+        """Die Prüfung ist ein Hinweis — ihr Ausfall kostet den Hinweis, nicht
+        die Sitzung. Der Satz „wird geprüft" darf dabei nicht stehen bleiben."""
+        _log.warning("sculpt wall check crashed: %s", detail)
+        if isValid(self):
+            self._drop_wall_check_note()
+
+    def _cancel_sculpt_check(self) -> None:
+        """Die laufende Wandprüfung aufgeben — ihre Antwort will niemand mehr."""
+        worker = self._sculpt_wall_worker
+        if worker is not None:
+            worker.cancel()
+
+    def _sculpt_wall_worker_done(self, worker: Any) -> None:
+        if self._sculpt_wall_worker is worker:
+            self._sculpt_wall_worker = None
+        self._hold_until_done(worker)
+
+    def wait_for_sculpt_check(self, timeout_ms: int = 30_000) -> bool:
+        """Auf die laufende Wandprüfung warten und ihre Antwort zustellen.
+
+        Für Tests und Prüfstände — die Oberfläche selbst wartet nie darauf.
+        Gibt zurück, ob die Prüfung fertig ist.
+        """
+        worker = self._sculpt_wall_worker
+        if worker is not None and worker.isRunning() and not worker.wait(timeout_ms):
+            return False
+        QApplication.sendPostedEvents()
+        QApplication.processEvents()
+        return True
 
     def _remember_discarded(self, target: str | None, text: str, panel: Any) -> None:
         """Die verworfene Zeichnung aufheben und den Rückweg ansagen.
@@ -10127,6 +10353,16 @@ class MainWindow(QMainWindow):
         mesh = self._sculpt_mesh(self._sculpt_target)
         if mesh is not None:
             self._show_sculpt_preview(mesh)
+        # Die Vorschau hat die Wandwarnung überschrieben. Ohne neue Prüfung
+        # verschwand nach einem Rückgängig auch die Warnung der Züge, die noch
+        # stehen — und die Antwort einer laufenden Prüfung zählte den
+        # zurückgenommenen Zug mit.
+        self._sculpt_wall_number += 1
+        self._cancel_sculpt_check()
+        if self._sculpt_strokes:
+            self._sculpt_check.start()
+        else:
+            self._sculpt_check.stop()
         return True
 
     def finish_sculpt(self) -> None:
@@ -10156,6 +10392,9 @@ class MainWindow(QMainWindow):
         self._sculpt_target = None
         self._sculpt_strokes = []
         self._sculpt_check.stop()
+        # Eine Antwort, die nach dem Verlassen ankommt, gehört niemandem mehr.
+        self._sculpt_wall_number += 1
+        self._cancel_sculpt_check()
         self.viewport.set_sculpting(False)
         self.viewport.clear_preview_mesh()
         self.sculpt_bar.setVisible(False)
@@ -10654,6 +10893,7 @@ class MainWindow(QMainWindow):
         """Ihr Träger. Getrennt geführt, damit ein Test ihn fragen kann, ohne
         durch den Fluss zu greifen."""
         self._quiet_target: tuple[str, str | None] | None = None
+        """Körper und Merkmal, deren Stelle die laufende Platzierung bearbeitet."""
         self._quiet_order: Callable[[str, Mapping[str, Any]], _PreviewOrder | None] | None = None
         window_ref = weakref.ref(self)
 
@@ -10668,12 +10908,12 @@ class MainWindow(QMainWindow):
                 window._say_the_change_comes_first()
 
         self.viewport.selection_allowed = selection_allowed
-        # Die Ansicht kennt den Satz noch nicht als Feld (Paket E schließt ihn
-        # an ``_select_at``, Rechtsklick und ``mousePressEvent`` an).
+        # Bild und Baum sagen denselben Satz wie der Menüweg, wenn sie einen
+        # Klick halten (``Viewport.selection_refused``,
+        # ``_ObjectTreeView.selection_refused``).
         self.viewport.selection_refused = selection_refused
         self.object_tree.tree.selection_allowed = selection_allowed
         self.object_tree.tree.selection_refused = selection_refused
-        """Körper und Merkmal, deren Stelle die laufende Platzierung bearbeitet."""
         self._measures_to_resume: str = ""
         """Das Merkmal, an dem die Maße nach dem Übernehmen wieder ins Bild kommen.
 
@@ -13038,9 +13278,15 @@ class MainWindow(QMainWindow):
         if panel is None or not isinstance(point, tuple) or len(point) != 2:
             return
         menu = panel.canvas.context_menu_on_plane((float(point[0]), float(point[1])))
-        if menu.isEmpty():
-            return
-        menu.exec(self.viewport.mapToGlobal(self._from_view_point(x, y)))
+        # **Das Menü gehört seinem Klick** (``app/ui/CLAUDE.md``): Der Canvas
+        # baut es je Rechtsklick neu als sein Kind, und ohne das Wegräumen blieb
+        # jedes samt seinen Rückrufen liegen, bis die Skizze endete — auch das
+        # leere, das gar nicht aufging.
+        try:
+            if not menu.isEmpty():
+                menu.exec(self.viewport.mapToGlobal(self._from_view_point(x, y)))
+        finally:
+            menu.deleteLater()
 
     def _from_view_point(self, x: int, y: int) -> QPoint:
         """Eine Stelle der Ansicht als Qt-Logikpunkt des Viewports.
@@ -14786,12 +15032,16 @@ class MainWindow(QMainWindow):
         # diesen Weg nie gemeint war.
         chosen = tuple(on_bodies) if on_bodies else self.object_tree.selected_objects()
         braucht = needed_inputs(spec)
+        # Beide Auskünfte werden angesagt statt in einem modalen Kasten
+        # gezeigt: Sie verlangen keine Entscheidung, und dieser Weg kommt
+        # auch aus Fehlerhandlungen und Karten, wo ein Kasten den nächsten
+        # Schritt nur aufhält (Review Fenster 0.5.0, 22.09.2026).
         if braucht and len(chosen) < braucht:
-            QMessageBox.information(self, str(spec.title), _needs_objects(braucht))
+            self.announce(f"{spec.title}: {_needs_objects(braucht)}")
             return
 
         if spec.takes_whole_scene and not objects:
-            QMessageBox.information(self, str(spec.title), tr("Die Szene ist leer."))
+            self.announce(f"{spec.title}: {tr('Die Szene ist leer.')}")
             return
 
         values = dict(self._from_selection(spec, chosen[0] if chosen else None))
@@ -17109,7 +17359,7 @@ class MainWindow(QMainWindow):
             if eingelesen is not None:
                 self.settings.remember(eingelesen)
                 self._store_settings()
-                self.start_screen.show_recent(self.settings.existing_recent())
+                self._show_recent()
             if geladen:
                 self.announce(f"{tr('Geladen')}: {geladen}")
         else:
@@ -17844,6 +18094,11 @@ class MainWindow(QMainWindow):
             "place_on_bed": self._place_on_bed_after_error,
             "arrange_on_bed": self._arrange_after_error,
             "correct_input": self._correct_after_error,
+            # **Eine unlesbare Zeichenebene** (``sketch.planes._unreadable``):
+            # Der Schritt geht mit dem Cursor im Ebenenfeld auf, das der Kern
+            # nennt — dort wird die andere Ebene gewählt. Bis zum 22.09.2026
+            # stand der Rat als Satz ohne Knopf.
+            "sketch.pick_plane": self._correct_after_error,
             "resize_the_widening": self._resize_the_widening,
             "show_step_values": self._show_step_values,
             # **Die Absage beim Einlesen hatte nur „Abbrechen".** Eine
@@ -18445,7 +18700,26 @@ class MainWindow(QMainWindow):
             ],
         )
 
-    def _on_selection(self, object_id: str | None, *, refresh_analysis: bool = True) -> None:
+    def _on_tree_selection(self, object_id: str | None) -> None:
+        """Die Körperauswahl aus dem Baum — die Einträge stellt die Meldung danach.
+
+        Der Baum sendet je Auswahl ``selectionChanged`` und unmittelbar danach
+        ``featureSelected`` (``ObjectTree._on_selection``), und beide Empfänger
+        stellten alle Einträge neu: vier Läufe von ``_update_actions`` je Klick
+        auf eine Fläche, weil der Baum beim Wählen erst leert und dann setzt
+        (gemessen am 22.09.2026 am Besenhalter, viermal 20 ms). Der Lauf gehört
+        dem Merkmalsempfänger, der als zweiter kommt und die Auswahl dann
+        vollständig kennt.
+        """
+        self._on_selection(object_id, settle_actions=False)
+
+    def _on_selection(
+        self,
+        object_id: str | None,
+        *,
+        refresh_analysis: bool = True,
+        settle_actions: bool = True,
+    ) -> None:
         if self._quiet_target is not None:
             if object_id is None:
                 # Der Baum leert beim Wiederwählen kurz seine Auswahl. Erst
@@ -18490,7 +18764,7 @@ class MainWindow(QMainWindow):
         if refresh_analysis:
             self._on_map_changed(self.analysis_bar.chosen())
         self._on_layer_changed(self.layer_bar.index())
-        if not self._showing_scene:
+        if settle_actions and not self._showing_scene:
             self._update_actions()
         self._update_transform_roles()
         # „Abtragen“ hängt nicht nur am Umriss, sondern am gewählten exakten
@@ -19104,7 +19378,13 @@ class MainWindow(QMainWindow):
         # Das Zeichen steht neben der Zahl, nicht statt ihrer: dieselbe zweite
         # Kodierung wie am Reiter (Regel 18).
         self.alert_button.setText(f"{SEVERITY_MARKER['warning']} {count}")
-        hint = tr("{count} offene Befunde — anklicken öffnet den Prüfbericht.").format(count=count)
+        hint = (
+            tr("Ein offener Befund — anklicken öffnet den Prüfbericht.")
+            if count == 1
+            else tr("{count} offene Befunde — anklicken öffnet den Prüfbericht.").format(
+                count=count
+            )
+        )
         self.alert_button.setToolTip(hint)
         self.alert_button.setStatusTip(hint)
 
@@ -19322,9 +19602,10 @@ class MainWindow(QMainWindow):
             self._drop_image(image)
             event.acceptProposedAction()
             return
-        path = accepted_path(event)
-        if path is not None:
-            self.open_path(path)
+        paths = accepted_paths(event)
+        if paths:
+            self.open_path(paths[0])
+            self._say_files_left_out(len(paths) - 1)
             event.acceptProposedAction()
             return
         # Ein Verweis aus dem Browser ist dieselbe Handlung wie eine Datei,
@@ -19333,6 +19614,24 @@ class MainWindow(QMainWindow):
         if url is not None:
             self.download_model(url)
             event.acceptProposedAction()
+
+    def _say_files_left_out(self, count: int) -> None:
+        """Sagen, dass von mehreren gezogenen Dateien nur die erste kam.
+
+        Mehrere auf einmal zu übernehmen ist zurückgestellt (RM-131). Bis
+        dahin fielen die übrigen **still** weg: Wer die Teile eines Modells
+        zusammen zog, bekam eines und keinen Satz dazu — und suchte die
+        anderen im Objektbaum (Review Fenster 0.5.0, 22.09.2026).
+        """
+        if count <= 0:
+            return
+        self.announce(
+            tr("Eine weitere Datei nicht geöffnet — bitte einzeln einfügen.")
+            if count == 1
+            else tr("{count} weitere Dateien nicht geöffnet — bitte einzeln einfügen.").format(
+                count=count
+            )
+        )
 
     def _drop_image(self, path: Path) -> None:
         """Ein Bild auf dem Fenster ist ein Relief-Wunsch (§25).
@@ -19410,6 +19709,7 @@ class MainWindow(QMainWindow):
         self._cancel_source_read()
         self._cancel_gcode()
         self._cancel_export()
+        self._cancel_sculpt_check()
         workers = (
             self._map_worker,
             self._slice_worker,
@@ -19427,6 +19727,7 @@ class MainWindow(QMainWindow):
             self._gcode_worker,
             self._export_worker,
             self._part_file_worker,
+            self._sculpt_wall_worker,
             *self._leash.pending(),
         )
         deadline = time.monotonic() + max(0, timeout_ms) / 1000.0

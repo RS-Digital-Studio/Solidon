@@ -3565,7 +3565,16 @@ class HistoryPanel(QWidget):
             # Nur an einer Formsitzung, und nur an einer, die noch gerechnet
             # wird: Ein Eintrag, der an jedem Schritt steht und an fast keinem
             # etwas tut, ist einer, den man nicht mehr liest.
-            frozen = menu.addAction(tr("Stand festschreiben …"))
+            # Ohne Auslassungspunkte: Es folgt keine Frage mehr, und Strg+Z
+            # nimmt es zurück (``MainWindow.bake_sculpt``).
+            frozen = menu.addAction(tr("Stand festschreiben"))
+            frozen.setToolTip(
+                tr(
+                    "Legt den jetzigen Stand als Körper ab. Die Züge bleiben als Beleg, "
+                    "wirken aber nicht mehr — die Sitzung wird nicht mehr gerechnet."
+                )
+            )
+            menu.setToolTipsVisible(True)
             frozen.triggered.connect(
                 lambda _checked=False, chosen=single_op: self.bakeRequested.emit(chosen)
             )

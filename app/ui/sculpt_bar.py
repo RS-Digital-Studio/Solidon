@@ -95,12 +95,17 @@ class SculptBar(QWidget):
         self.radius.set_range_mm(0.1, 100.0)
         self.radius.set_value_mm(6.0)
         self.radius.setToolTip(tr("Wie weit der Pinsel greift."))
+        # Die Beschriftung links steht im Layout, nicht im Barrierefreiheitsbaum
+        # — ohne eigenen Namen wäre das Feld für einen Bildschirmleser ein
+        # leeres Kästchen (``oberflaeche.md``).
+        self.radius.setAccessibleName(tr("Radius"))
 
         self.strength = LengthSpin(self)
         self.strength.set_range_mm(0.05, 10.0)
         self.strength.set_step_mm(0.1)
         self.strength.set_value_mm(1.0)
         self.strength.setToolTip(tr("Wie weit ein einzelner Zug die Fläche verschiebt."))
+        self.strength.setAccessibleName(tr("Stärke"))
 
         self.symmetry = QComboBox(self)
         self.symmetry.setAccessibleName(tr("Symmetrie"))
@@ -188,6 +193,14 @@ class SculptBar(QWidget):
         und gehört sichtbar."""
         if not strokes:
             self.state.setText(tr("Noch kein Zug."))
+            return
+        # Die Einzahl steht daneben, sie wird nicht gebildet (P0.1): Nach dem
+        # ersten Zug stand hier „1 Züge, 1 Etappen".
+        if strokes == 1:
+            self.state.setText(tr("Ein Zug, eine Etappe"))
+            return
+        if stages == 1:
+            self.state.setText(tr("{strokes} Züge, eine Etappe").replace("{strokes}", str(strokes)))
             return
         self.state.setText(
             tr("{strokes} Züge, {stages} Etappen")

@@ -75,7 +75,11 @@ class TransformBar(QWidget):
     #: Eine Operation mit ihren Werten — das Fenster macht daraus einen Schritt.
     applyRequested = Signal(str, dict)
     snappingChanged = Signal(float, float)
-    #: Welche Rolle gerade gewählt ist; die Ansicht hebt die passenden Griffe hervor.
+    #: Welche Rolle gerade gewählt ist. **Niemand hört zu, und das ist gewollt:**
+    #: Der Griff im Bild bleibt vollständig (Modulkopf); die Rolle wählt nur die
+    #: Felder daneben. Hier stand „die Ansicht hebt die passenden Griffe hervor"
+    #: — eine Zusage, die kein Empfänger je einlöste. Das Signal bleibt für
+    #: Tests und Bilder, die wissen wollen, wann umgeschaltet wurde.
     roleChanged = Signal(str)
 
     def __init__(self, parent: QWidget | None = None) -> None:
@@ -193,7 +197,11 @@ class TransformBar(QWidget):
         self.angle.setSuffix(tr(" °"))
         self.angle.valueChanged.connect(self._emit_snapping)
         # **Hier ist Platz für den vollen Namen**, anders als in der Zeile: Im
-        # Popup steht, was das Feld tut, und nicht bloß, wie es heißt.
+        # Popup steht, was das Feld tut, und nicht bloß, wie es heißt. Und das
+        # Feld trägt ihn selbst — ``addRow`` verbindet Beschriftung und Feld
+        # nicht für den Bildschirmleser.
+        self.grid.setAccessibleName(tr("Rasterfang"))
+        self.angle.setAccessibleName(tr("Winkelfang"))
         rows.addRow(tr("Rasterfang"), self.grid)
         rows.addRow(tr("Winkelfang"), self.angle)
         holder.setStatusTip(tr("Null heißt: kein Einrasten."))
@@ -288,6 +296,13 @@ class TransformBar(QWidget):
         for name, spin in (("X", self.dx), ("Y", self.dy), ("Z", self.dz)):
             spin.set_range_mm(-500.0, 500.0)
             spin.set_value_mm(0.0)
+            # **Ein Feld trägt seinen Namen selbst** (``oberflaeche.md``, „Ein
+            # Feld ohne Namen ist für einen Bildschirmleser ein leeres
+            # Kästchen"): Das „X" daneben steht im Layout und nicht im
+            # Barrierefreiheitsbaum. Die Handlung gehört in den Namen, denn
+            # X, Y und Z gibt es in dieser Leiste nur hier — und das Wort ist
+            # dasselbe wie am Rollenknopf darüber.
+            spin.setAccessibleName(f"{_role_name('move')} {name}")
             row.addWidget(QLabel(name, holder))
             row.addWidget(spin)
         return holder
@@ -316,6 +331,7 @@ class TransformBar(QWidget):
         # sie geht durch tr(): Im Französischen gehört vor das Prozentzeichen
         # ein Leerzeichen, im Englischen nicht.
         self.angle_value.setSuffix(tr(" °"))
+        self.angle_value.setAccessibleName(tr("Winkel"))
         # **Vorgewählt, weil das Teil sonst in der Luft steht.** Eine Drehung um
         # X oder Y kippt den Körper, und seine Unterseite liegt danach irgendwo
         # — mal über der Platte, mal darunter. Wer dreht, will fast immer
@@ -360,7 +376,9 @@ class TransformBar(QWidget):
         self.factor.setRange(1.0, 1000.0)
         self.factor.setValue(100.0)
         self.factor.setSuffix(tr(" %"))
+        self.factor.setAccessibleName(tr("Faktor"))
         self.largest = LengthSpin(holder)
+        self.largest.setAccessibleName(tr("Größte Kante"))
         self.largest.set_range_mm(0.1, 1000.0)
         self.largest.set_value_mm(50.0)
         self.largest.setVisible(False)

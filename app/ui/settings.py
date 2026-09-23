@@ -8,6 +8,7 @@ Zugangsdaten leben nie hier — die gehören in den System-Schlüsselbund.
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -262,11 +263,19 @@ class UiSettings:
         folder = Path(stored)
         return folder if folder.is_dir() else None
 
-    def existing_recent(self) -> list[Path]:
-        """Zuletzt geöffnete Projekte, die es noch gibt — ein toter Eintrag hilft
-        niemandem.
-        """
-        return [Path(entry) for entry in self.recent if Path(entry).is_file()]
+
+def existing_paths(entries: Sequence[str]) -> list[Path]:
+    """Welche der gemerkten Pfade noch auf eine Datei zeigen — ein toter
+    Eintrag in „Zuletzt geöffnet" hilft niemandem.
+
+    Eine freie Funktion über eine **Kopie** der Liste und keine Methode an
+    :class:`UiSettings`, weil sie in einem eigenen Thread läuft
+    (``MainWindow._show_recent``): Ein Pfad auf einem ausgeschalteten Netzlaufwerk
+    beantwortet ``is_file`` erst nach dem Zeitlimit von Windows — gemessen
+    am 22.09.2026 21 s an einer nicht erreichbaren Adresse, 2,7 s an einem
+    unbekannten Rechnernamen.
+    """
+    return [Path(entry) for entry in entries if Path(entry).is_file()]
 
 
 def utc_timestamp() -> str:
@@ -363,7 +372,10 @@ def load_settings() -> UiSettings:
         return settings
     except (OSError, ValueError, TypeError) as problem:
         _log.warning("could not read settings, starting from defaults: %s", problem)
-        return UiSettings()
+        # Dieselbe Sprache wie beim allerersten Start: Eine unlesbare Datei
+        # ist keine Wahl des Nutzers, und ein spanisches System bekam hier
+        # bisher ein deutsches Fenster.
+        return UiSettings(language=initial_language())
 
 
 def save_settings(settings: UiSettings) -> Path | None:

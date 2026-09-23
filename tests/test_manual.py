@@ -327,6 +327,7 @@ FIGURE_FOLDERS = {
 }
 
 
+@pytest.mark.rendered
 @pytest.mark.parametrize("language", sorted(FIGURE_FOLDERS))
 def test_the_drawn_figures_are_the_ones_the_code_draws(language: str) -> None:
     """Jede eingecheckte Zeichnung ist die, die der Code heute zeichnet.

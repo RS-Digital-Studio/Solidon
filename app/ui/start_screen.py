@@ -135,6 +135,8 @@ class DropArea(QPushButton):
     fileDropped = Signal(Path)
     urlDropped = Signal(str)
     """Ein Verweis aus dem Browser, gezogen statt heruntergeladen (§16.3)."""
+    leftOut = Signal(int)
+    """Wie viele weitere Dateien mitgezogen und nicht geöffnet wurden."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -288,9 +290,11 @@ class DropArea(QPushButton):
 
     def dropEvent(self, event: QDropEvent) -> None:  # noqa: N802 - Qt name
         self._set_hover(False)
-        path = accepted_path(event)
-        if path is not None:
-            self.fileDropped.emit(path)
+        paths = accepted_paths(event)
+        if paths:
+            self.fileDropped.emit(paths[0])
+            if len(paths) > 1:
+                self.leftOut.emit(len(paths) - 1)
             event.acceptProposedAction()
             return
         url = accepted_url(event)
@@ -495,16 +499,30 @@ def accepted_path(event: QDragEnterEvent | QDropEvent) -> Path | None:
     """Die erste fallengelassene Datei, mit der diese Anwendung etwas
     anfangen kann.
     """
+    paths = accepted_paths(event)
+    return paths[0] if paths else None
+
+
+def accepted_paths(event: QDragEnterEvent | QDropEvent) -> list[Path]:
+    """Alle fallengelassenen Dateien, mit denen diese Anwendung etwas anfangen
+    kann — in der Reihenfolge des Ziehens.
+
+    Geöffnet wird weiter nur die erste; mehrere Dateien auf einmal sind
+    zurückgestellt (RM-131). Die Liste ist dafür da, dass die übrigen nicht
+    still wegfallen: Wer siebzehn Teile eines Schiffs zieht und eines
+    bekommt, soll es gesagt bekommen (:data:`DropArea.leftOut`).
+    """
     data = event.mimeData()
     if not data.hasUrls():
-        return None
+        return []
+    found: list[Path] = []
     for url in data.urls():
         if not url.isLocalFile():
             continue
         path = Path(url.toLocalFile())
         if path.suffix.lower() in (*MODEL_SUFFIXES, PROJECT_SUFFIX, PART_FILE_SUFFIX):
-            return path
-    return None
+            found.append(path)
+    return found
 
 
 class StartActionCard(QPushButton):
@@ -766,6 +784,8 @@ class StartScreen(QWidget):
     urlDropped = Signal(str)
     """Eine Adresse aus dem Browser ist hier gelandet — dieselbe Handlung wie
     eine Datei, nur liegt sie noch nicht auf der Platte (§16.3)."""
+    leftOut = Signal(int)
+    """Wie viele weitere Dateien mitgezogen und nicht geöffnet wurden."""
     forgetRequested = Signal(Path)
     """Ein Eintrag soll aus der Liste verschwinden — die Datei bleibt."""
     manualRequested = Signal()
@@ -848,6 +868,7 @@ class StartScreen(QWidget):
         drop = DropArea(self)
         drop.fileDropped.connect(self.fileDropped)
         drop.urlDropped.connect(self.urlDropped)
+        drop.leftOut.connect(self.leftOut)
         drop.clicked.connect(self.importRequested)
 
         # Die ersten fünfzehn Minuten stehen im Handbuch — aber der Weg
@@ -1233,9 +1254,11 @@ class StartScreen(QWidget):
             event.acceptProposedAction()
 
     def dropEvent(self, event: QDropEvent) -> None:  # noqa: N802 - Qt name
-        path = accepted_path(event)
-        if path is not None:
-            self.fileDropped.emit(path)
+        paths = accepted_paths(event)
+        if paths:
+            self.fileDropped.emit(paths[0])
+            if len(paths) > 1:
+                self.leftOut.emit(len(paths) - 1)
             event.acceptProposedAction()
             return
         url = accepted_url(event)

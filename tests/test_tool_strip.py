@@ -161,3 +161,31 @@ def test_no_tool_opens_without_saying_anything(window: MainWindow, key: str) -> 
         f"the {key!r} bar opens with nothing to use and nothing to read — "
         "a tool that says neither what to do nor what is missing looks broken"
     )
+
+
+def test_the_strip_does_not_hold_itself_through_its_buttons(qt_app: QApplication) -> None:
+    """Ein losgelassener Streifen geht — seine Knöpfe halten ihn nicht fest.
+
+    Bis zum 22.09.2026 hing an jedem Umschalter ein Lambda, das ``self`` fing
+    (``wartezeit.md``, „Ein Rückruf an ein eigenes Kind hält schwach"): Streifen →
+    Knopf → Rückruf → Streifen, über die C++-Grenze hinweg, und den Ring bricht
+    der Speicherbereiniger nicht auf. Der Klick muss dabei weiter wirken.
+    """
+    import gc
+    import weakref
+
+    from PySide6.QtWidgets import QWidget
+
+    from app.ui.tool_strip import ToolStrip
+
+    strip = ToolStrip()
+    strip.add("section", "Schnitt", QWidget(strip))
+    strip._buttons["section"].click()
+    assert strip.active() == "section", "der Klick öffnet das Werkzeug weiterhin"
+    strip._buttons["section"].click()
+    assert strip.active() is None, "und schließt es wieder"
+
+    gone = weakref.ref(strip)
+    del strip
+    gc.collect()
+    assert gone() is None, "der Streifen überlebt sein Loslassen"

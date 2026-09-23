@@ -20,7 +20,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Final
 
-from app.core.errors import Action, ValidationError
+from app.core.errors import PICK_PLANE, Action, ValidationError
 from app.core.types import PlaneFrame, Point2, SceneObject, Vec3
 from app.core.units import plane_axes
 from app.i18n import _
@@ -211,7 +211,7 @@ def _unreadable(field: str, value: str, reason: str) -> ValidationError:
         constraint="unreadable_plane",
         values={"reason": reason},
         suggestions=[
-            Action(id="sketch.pick_plane", label=_("Eine andere Ebene wählen"), primary=True),
+            PICK_PLANE,
             Action(
                 id="sketch.use_global_plane", label=_("Auf einer der drei Grundebenen zeichnen")
             ),

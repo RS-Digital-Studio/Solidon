@@ -12,6 +12,7 @@ Geprüft wird offscreen, wie bei ``test_sketch_editor.py``: Die Züge entstehen
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -462,6 +463,9 @@ def test_sculpting_reports_walls_that_are_too_thin(window: MainWindow, tmp_path:
     window._on_sculpt((0.0, 0.0, 20.0))
 
     window._check_sculpted_walls()
+    # Seit dem 22.09.2026 rechnet ein Arbeiter (Review Fenster 0.5.0): Die
+    # Prüfung kostete an echten Modellen Sekunden im Hauptthread.
+    assert window.wait_for_sculpt_check()
 
     text = window.sculpt_bar.warning.text()
     assert any(char.isdigit() for char in text), f"eine Zahl muss dastehen: {text!r}"
@@ -474,6 +478,7 @@ def test_a_solid_body_leaves_the_warning_empty(window: MainWindow) -> None:
     window._on_sculpt((0.0, 0.0, 82.0))
 
     window._check_sculpted_walls()
+    assert window.wait_for_sculpt_check()
 
     assert not window.sculpt_bar.warning.text()
 
@@ -504,6 +509,57 @@ def test_leaving_the_session_stops_the_check(window: MainWindow) -> None:
     window.finish_sculpt()
 
     assert not window._sculpt_check.isActive()
+
+
+def test_the_wall_check_does_not_hold_the_window(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Wandprüfung stand Sekunden im Hauptthread, nach jedem Zug.
+
+    Gemessen am 22.09.2026 an echten Modellen: 2,7 bis 5,5 s je Prüfung,
+    400 ms nach jedem abgesetzten Zug — mit Wartezeiger, ohne Abbrechen, und
+    weiterformen ließ sich in der Zeit nicht (Review Fenster 0.5.0). Jetzt
+    rechnet ein Arbeiter; die Leiste sagt, dass geprüft wird, und nur die
+    Antwort der jüngsten Prüfung zählt.
+    """
+    import threading
+    import time
+
+    import app.ui.main_window as module
+
+    object_id = with_a_thin_shell(window, tmp_path)
+    window.start_sculpt(object_id)
+    window._on_sculpt((0.0, 0.0, 20.0))
+    release = threading.Event()
+    real = module.wall_thickness_map
+
+    def slow(*args: Any, **kwargs: Any) -> Any:
+        release.wait(10)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(module, "wall_thickness_map", slow)
+
+    # Der Hinweis auf ein zu grobes Netz hat Vorrang vor „wird geprüft"; hier
+    # geht es um die Zeile, die sonst leer stünde.
+    window.sculpt_bar.show_warning("")
+    started = time.perf_counter()
+    window._check_sculpted_walls()
+    assert time.perf_counter() - started < 1.0, "the check ran in the main thread"
+    assert window.sculpt_bar.warning.text() == "Wandstärke wird geprüft …"
+
+    # Ein weiterer Zug macht die laufende Prüfung wertlos.
+    stale = window._sculpt_wall_number
+    window._on_sculpt((0.0, 0.0, 20.0))
+    window._check_sculpted_walls()
+    assert window._sculpt_wall_number == stale + 1
+
+    release.set()
+    assert window.wait_for_sculpt_check()
+    text = window.sculpt_bar.warning.text()
+    assert any(char.isdigit() for char in text), f"the latest answer must stand: {text!r}"
+
+    window._sculpt_walls_checked(stale, 0)
+    assert window.sculpt_bar.warning.text() == text, "an old answer must not overwrite it"
 
 
 # --- Einbacken (Entscheidung D) -------------------------------------------------
@@ -627,6 +683,49 @@ def test_a_baked_session_is_not_offered_again(window: MainWindow) -> None:
     window.history_panel.show_document(window.session.project.document)
 
     assert sculpt.id not in window.history_panel._bakeable
+
+
+def test_baking_asks_nothing_because_undo_takes_it_back(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Regel 19: Festschreiben ist rücknehmbar — also keine Nachfrage davor.
+
+    Entscheidung D (13.08.2026) stellte eine Nachfrage vor das Einbacken, weil
+    es „nicht folgenlos rücknehmbar" sei. Nachgemessen am 22.09.2026 (Review
+    Fenster 0.5.0): Das Festschreiben ist ein ``change_params`` und damit
+    eine gewöhnliche Transaktion; ein Strg+Z gibt der Sitzung ihre Züge
+    zurück, und sie rechnet wieder. Die Voraussetzung der Ausnahme trägt
+    nicht, und AGENTS.md Regel 19 kennt seither genau eine: das Löschen im
+    Verlauf. Die Folgen stehen jetzt in der Ansage samt Rückweg.
+    """
+    from PySide6.QtWidgets import QMessageBox
+
+    object_id = with_a_body(window)
+    window.start_sculpt(object_id)
+    window._on_sculpt((0.0, 0.0, 82.0))
+    window.finish_sculpt()
+    window.session.wait_for_idle()
+    sculpt = next(
+        entry for entry in window.session.project.document.ops if entry.op == "sculpt_strokes"
+    )
+
+    def no_box(*_args: Any, **_kwargs: Any) -> int:
+        raise AssertionError("baking must not ask first")
+
+    monkeypatch.setattr(QMessageBox, "exec", no_box)
+
+    window.bake_sculpt(sculpt.id)
+    window.session.wait_for_idle()
+
+    baked = next(entry for entry in window.session.project.document.ops if entry.id == sculpt.id)
+    assert baked.params["baked"]
+    assert "Strg+Z" in window.status_message.text()
+
+    window.session.undo()
+    window.session.wait_for_idle()
+
+    live = next(entry for entry in window.session.project.document.ops if entry.id == sculpt.id)
+    assert not live.params.get("baked"), "undo gives the session its strokes back"
 
 
 def test_baking_something_that_is_not_a_session_does_nothing(window: MainWindow) -> None:
