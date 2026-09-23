@@ -98,8 +98,10 @@ def page() -> str:
             "geschichte",
         ),
         section(
-            "Update 1 (Deutsch, darunter Englisch)",
-            "In GoFundMe: links „Update“ → Neues Update. Bild dazu: bilder/update-1-de.jpg.",
+            "Historisches Update 1 (Deutsch, darunter Englisch)",
+            "Nur die falsche Signaturzusage im bestehenden Bericht korrigieren. "
+            "Keinen neuen Updatepost anlegen und keine Benachrichtigungen auslösen. "
+            "Die vier damaligen Versionen und der Ausblick bleiben historisch erhalten.",
             update,
             "update",
         ),
@@ -142,6 +144,10 @@ def page() -> str:
   <h1>GoFundMe-Kopiervorlage</h1>
   <p class="lead">Erzeugt aus den Markdown-Dateien in diesem Ordner. Änderungen hier
   werden nicht gespeichert. Anleitung: anleitung-einstellen.md, Schritt 4.</p>
+  <p class="lead"><b>Lokale Freigabeschranke für 0.5.0:</b> Noch nicht veröffentlicht.
+  Die neue Geschichte erst einsetzen, wenn das endgültige Windows-Paket mit geprüfter
+  Anwendungs- und Installer-Signatur öffentlich verfügbar ist und die Website die
+  genannten Preise zeigt. Bis dahin bleibt die öffentliche Kampagne beim Stand 0.4.4.</p>
   {"".join(sections)}
 </main>
 <script>

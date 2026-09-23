@@ -1,12 +1,23 @@
 # Bericht: GoFundMe-Kampagne Solidon3D überarbeiten
 
+**Aktualisierung zur Veröffentlichung 0.5.0:** Robert hat die signierte Windows-Auslieferung verbindlich beauftragt. Die frühere Annahme in Abschnitt 6, 0.5.0 erscheine unsigniert, und die Zusage eines Starts ohne Warnhinweis sind überholt. Die vorbereiteten Kampagnentexte nennen die digitale Signatur und mögliche verbleibende SmartScreen-Hinweise; Veröffentlichung erst nach geprüftem signiertem Endpaket. Die datierten früheren Befunde unten bleiben als Verlauf erhalten.
+
 Auftrag Robert, 23.09.2026: Kampagnenseite und Spenden optimieren, bis jetzt
 kaum Spenden. Dieser Bericht wird nach jedem Arbeitsschritt fortgeschrieben.
 Er hält Quellen, Zahlen mit Beleg, Entscheidungen mit Begründung und die
 offenen Fragen an Robert fest.
 
-Eingestellt wird alles von Robert selbst. In diesem Ordner wurde nichts
-veröffentlicht, nichts gesendet und kein Konto benutzt.
+Die ursprüngliche Vorbereitung in diesem Ordner erfolgte ohne Veröffentlichung,
+Versand oder Kontozugriff. Inzwischen hat Root über die GoFundMe-Oberfläche
+ausschließlich die beiden Signaturabsätze im bestehenden Update 1 ersetzt und
+gespeichert. Anschließend waren beide neuen Absätze im vollständig sichtbaren
+Bericht geprüft. Der Speicherdialog sagte ausdrücklich, dass die Änderungen
+nur auf der Spendenaufrufseite erscheinen. Kein neuer Post, keine Teilen-Aktion;
+die Anzeige „5 Std.“ und das vorhandene Bild blieben unverändert.
+
+Die eigentliche Kampagnengeschichte bleibt unverändert beim öffentlichen Stand
+0.4.4. Ihre lokal vorbereitete Fassung 0.5.0 mit den Preisen bleibt gesperrt,
+bis die geprüften signierten Endpakete und die Preise öffentlich verfügbar sind.
 
 ---
 

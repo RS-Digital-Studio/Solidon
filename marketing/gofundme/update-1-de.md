@@ -1,6 +1,8 @@
 # Update 1: Was seit dem Start passiert ist
 
-**Wann:** gleich nach dem Umbau der Seite (neuer Titel, neuer Text, Ziel auf
+**Historischer Bericht, Signaturkorrektur veröffentlicht:** Root hat die beiden deutschen und englischen Signaturabsätze im bestehenden Update 1 über die GoFundMe-Oberfläche ersetzt, gespeichert und im vollständig sichtbaren Bericht geprüft. Der Speicherdialog bestätigte, dass Änderungen nur auf der Spendenaufrufseite erscheinen. Kein neuer Post, keine Teilen-Aktion; die Anzeige „5 Std.“ und das bestehende Bild blieben unverändert. Die vier damaligen Versionen, 185 Neuerungen und der Ausblick auf 0.5.0 bleiben erhalten. Die Kampagnengeschichte steht weiterhin auf 0.4.4; ihre neue Fassung bleibt bis zu den geprüften signierten Downloads und den veröffentlichten Preisen gesperrt.
+
+**Ursprünglicher Veröffentlichungsplan:** gleich nach dem Umbau der Seite (neuer Titel, neuer Text, Ziel auf
 die erste Etappe gesetzt). GoFundMe rät, innerhalb der ersten Woche ein
 Update zu posten; die Kampagne läuft seit dem 13.09., es ist also überfällig.
 
@@ -14,8 +16,8 @@ WhatsApp teilen (siehe `teilen.md`).
 Alle Angaben sind belegt: Versionen und Tage aus dem Git-Log von
 `website/version.json`, Inhalte aus `changelog/de.md`, Anzahl der Neuerungen
 aus `website/changelog.html`, Videos am 23.09.2026 öffentlich abrufbar.
-Zur Windows-Signierung steht bewusst kein Zeitpunkt da: Die Prüfung bei Certum
-ist offen, und 0.5.0 erscheint noch unsigniert.
+Die Signaturkorrektur unten behauptet keinen neuen Veröffentlichungsstand.
+Der aktuelle Kampagnenstand steht in `kampagne-de.md`.
 
 ---
 
@@ -33,7 +35,7 @@ Seit dem 13. September sind vier Versionen erschienen, mit zusammen 185 Neuerung
 • 0.4.3 (18.09.): Organizer mit einzeln änderbaren Fächern, Lochfelder in einem gezeichneten Bereich und eine Dichtnut samt passender Dichtung.
 • 0.4.4 (19.09.): Eine Spule im Filamentlager kann bis zu vier Farben haben, und die Druckvorschläge für eine große Figur kommen in Sekunden statt Minuten.
 
-Das Zertifikat für Windows ist gekauft. Mit ihm startet künftig auch die Windows-Version ohne Warnhinweis.
+Das Zertifikat für Windows habe ich selbst bezahlt. Eine digitale Signatur weist mich als Herausgeber aus und macht nachträgliche Änderungen erkennbar. Windows kann bei neuen Dateien trotzdem noch einen SmartScreen-Hinweis anzeigen.
 
 Auf YouTube gibt es jetzt die Reihe „STL passend machen“ mit fünf Anleitungen, auf Deutsch und Englisch. Die erste zeigt, wie man Löcher in einer fertigen STL vergrößert und verschiebt, ohne das Teil neu zu zeichnen: https://youtu.be/OnUbdoI1YC0
 

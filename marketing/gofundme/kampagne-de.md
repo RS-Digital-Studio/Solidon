@@ -1,5 +1,7 @@
 # Kampagne, deutsche Fassung
 
+**Freigabeschranke für die Veröffentlichung 0.5.0:** Lokal vorbereitet, noch nicht auf GoFundMe veröffentlicht. Erst einsetzen, wenn die Signaturen am endgültigen Windows-Installer und an der enthaltenen Anwendung geprüft sind, genau dieses Paket öffentlich verfügbar ist und die Website die unten genannten Preise zeigt. Bis dahin bleibt die öffentliche Kampagne beim Stand 0.4.4.
+
 Alles in diesem Dokument ist zum Einsetzen gedacht; die früheren
 Prüfstellen sind mit Roberts Angaben vom 23.09.2026 aufgelöst. Wie der Text formatiert in GoFundMe
 landet, steht dort in Schritt 4; die fertig formatierte Fassung zum Kopieren
@@ -77,7 +79,7 @@ Solidon3D sitzt zwischen dem Modell aus dem Netz und deinem Slicer. Du klickst d
 
 Vor dem Druck sagt ein Prüfbericht, was schiefgehen würde, etwa eine zu dünne Wand oder ein Teil, das nicht aufs Bett passt. Danach geht das Modell an deinen Slicer. Solidon3D läuft auf Windows, macOS und Linux, ohne Konto und ohne Cloud.
 
-Die Demo wurde seit Ende August über 1.700-mal heruntergeladen. Seit dieser Spendenaufruf läuft, sind vier neue Versionen erschienen, zuletzt 0.4.4 am 19. September. Ansehen und laden: solidon3d.de
+Die Demo wurde seit Ende August über 1.700-mal heruntergeladen. Seit dieser Spendenaufruf läuft, sind fünf neue Versionen erschienen, zuletzt 0.5.0. Ansehen und laden: solidon3d.de
 
 **Wer ich bin**
 
@@ -85,7 +87,7 @@ Robert Schneider aus dem Raum Bamberg, gelernter Elektroniker. Solidon3D mache i
 
 **Was es kostet**
 
-Einiges habe ich schon selbst bezahlt: das Apple-Entwicklerkonto, damit die Mac-Version ohne Warnung startet, und ein Zertifikat für Windows, mit dem auch die Windows-Version künftig ohne Warnhinweis startet.
+Einiges habe ich schon selbst bezahlt: das Apple-Entwicklerkonto und das Signaturzertifikat für Windows. Seit Version 0.5.0 sind die Windows-Anwendung und die Setup-Datei digital signiert. Die Signatur weist mich als Herausgeber aus und macht nachträgliche Änderungen erkennbar. Bei neuen Dateien kann Windows trotzdem noch einen SmartScreen-Hinweis zeigen.
 
 Jeden Monat laufen:
 • rund 400 € für zwei KI-Programmierwerkzeuge (Claude Max und ChatGPT Pro mit Codex)
@@ -105,7 +107,7 @@ Was es gibt: Updates hier auf der Seite, auch dazu, wofür das Geld gegangen ist
 
 **Ab 1. November**
 
-Dann erscheint Version 1.0 als Einmalkauf, ohne Abo und ohne Konto. Bis zum 30. Oktober bleibt die Demo kostenlos und vollständig. Der Kauf läuft getrennt von diesem Spendenaufruf.
+Dann erscheint Version 1.0 als Einmalkauf, ohne Abo und ohne Konto. Bis zum 31. Januar 2027 kostet die private Lizenz 69 €, die gewerbliche 199 €; ab dem 1. Februar 2027 sind es 99 € beziehungsweise 249 €. Beide haben denselben Funktionsumfang und enthalten alle Updates von 1.x. Bis zum 30. Oktober bleibt die Demo kostenlos und vollständig. Der Kauf läuft getrennt von diesem Spendenaufruf.
 
 **Auch ohne Geld hilfst du**
 
@@ -118,16 +120,12 @@ Robert
 
 ---
 
-### Der Satz mit den Preisen (erst einsetzen, wenn die Website sie zeigt)
+### Preise und Veröffentlichung
 
-Die Website sagt heute noch „Preis und Vertragsbedingungen werden vor ihrem
-Angebot veröffentlicht“. Solange das dort steht, nennt die Kampagne keine
-Preise, sonst widersprechen sich beide Seiten. Sobald die Preise auf
-solidon3d.de stehen, kommt dieser Satz im Abschnitt „Ab 1. November“ hinter
-den ersten Satz:
-
-> Privat kostet sie bis Ende Januar 69 €, danach 99 €; gewerblich 199 €,
-> ab Februar 249 €.
+Die Preise stehen bereits im einzusetzenden Abschnitt „Ab 1. November“ und
+entsprechen dem lokalen Website-Index. Die Geschichte wird erst gemeinsam
+mit den veröffentlichten Preisen und den fertigen Paketen 0.5.0 freigegeben.
+Es gibt keinen zweiten Preissatz zum nachträglichen Einfügen.
 
 ### Englischer Teil
 

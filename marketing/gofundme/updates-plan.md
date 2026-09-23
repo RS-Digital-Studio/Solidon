@@ -28,7 +28,7 @@ Was in eckigen Klammern steht, setzt Robert am Tag des Updates ein.
 |---|---|---|---|
 | Mi 23.09. / Do 24.09. | **Update 1: Was seit dem Start passiert ist** | `bilder/update-1-de.jpg` | fertig in `update-1-de.md` |
 | sofort bei Erreichen | **Etappe erreicht** (500 €, 1.500 €, 3.000 €, 5.000 €) | Screenshot des Fortschrittsrings | Vorlage A |
-| sofort, sobald Certum durch ist | **Windows signiert** | Screenshot: Installation ohne blauen SmartScreen-Hinweis | Vorlage B |
+| mit dem geprüften und veröffentlichten Windows-Paket 0.5.0 | **Windows signiert** | Screenshot der gültigen digitalen Signatur mit Herausgeber | Vorlage B |
 | Mi 30.09. | **Aus einer Rückmeldung wird eine Korrektur** | Vorher/Nachher aus der App | Vorlage C |
 | am Tag der Veröffentlichung | **0.5.0 ist da** | Maße im Bild an einer angeklickten Bohrung | Vorlage D |
 | Mi 07.10. | **Kostenbericht September** | Tabelle als Bild oder Text | Vorlage E |
@@ -61,9 +61,11 @@ Robert
 
 ### B: Windows signiert
 
+**Änderungsvorschlag für die Veröffentlichung 0.5.0:** Erst einsetzen, wenn die Signaturen am endgültigen Windows-Installer und an der enthaltenen Anwendung geprüft sind und genau dieses Paket öffentlich verfügbar ist. Noch nicht auf GoFundMe veröffentlicht.
+
 **Die Windows-Version ist jetzt signiert**
 
-Ab Version [0.x.y] startet Solidon3D unter Windows ohne den blauen Hinweis „Der Computer wurde durch Windows geschützt“. Auch mit eingeschaltetem Smart App Control lässt Windows das Programm jetzt zu. [prüfen: vorher auf einem Rechner mit Smart App Control testen]
+Ab Version 0.5.0 sind die Windows-Anwendung und die Setup-Datei von Solidon3D digital signiert. Die Signatur weist mich als Herausgeber aus und macht nachträgliche Änderungen erkennbar. Bei neuen Dateien kann Windows trotzdem einen SmartScreen-Hinweis anzeigen.
 
 Das Zertifikat habe ich selbst bezahlt. Zusammen mit der Notarisierung bei Apple, die seit 0.4.1 steht, sind damit Windows und Mac beide signiert.
 

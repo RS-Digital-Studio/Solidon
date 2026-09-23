@@ -1,5 +1,19 @@
 # Anleitung: die Kampagne in GoFundMe umstellen
 
+**Für die Veröffentlichung 0.5.0:** Die lokale Kopiervorlage enthält bereits
+die fünf Versionen und die Februarpreise. Erst nach Prüfung der Signaturen,
+Veröffentlichung der fertigen Pakete und der Preise auf der Website einsetzen.
+Der folgende Ablauf dokumentiert den ursprünglichen Kampagnenumbau. Bei der
+jetzigen Textkorrektur kein neues Update anlegen und keine Benachrichtigungen
+auslösen; Update 1 bleibt ein historischer Bericht.
+
+**Signaturkorrektur in Update 1 erledigt:** Root hat ausschließlich die beiden
+Signaturabsätze im bestehenden Bericht gespeichert und anschließend beide im
+vollständig sichtbaren Bericht geprüft. Der Dialog begrenzte die Änderungen
+ausdrücklich auf die Spendenaufrufseite. Kein neuer Post und keine Teilen-Aktion;
+Bild und Anzeige „5 Std.“ blieben unverändert. Die Kampagnengeschichte 0.5.0
+wurde dabei nicht veröffentlicht.
+
 Alles hier macht Robert selbst, angemeldet in seinem GoFundMe-Konto. Dauer:
 rund 45 Minuten, das eigene Foto nicht mitgerechnet.
 
@@ -15,13 +29,14 @@ Begriff zum Wiederfinden.
 ## Vor dem Start
 
 1. **Die früheren Prüfstellen sind aufgelöst** (Roberts Angaben vom
-   23.09.2026): Downloadzahl „über 1.700“ bleibt stehen, zur
-   Windows-Signierung steht kein Zeitpunkt, bei den Kosten steht nur die
+   23.09.2026): Downloadzahl „über 1.700“ bleibt stehen, für die
+   Windows-Version 0.5.0 ist die signierte Auslieferung beauftragt. Die
+   vorbereitete Aussage dazu erst nach Prüfung und Veröffentlichung des
+   signierten Endpakets einsetzen. Bei den Kosten steht nur die
    Zahl für die Werkzeuge (rund 400 €) und „dazu Gewerbe, Webspace und
    Domain“.
-2. **Preise:** Stehen die Preise der Version 1.0 schon auf solidon3d.de? Nur
-   dann den vorbereiteten Preissatz einsetzen (`kampagne-de.md`, unter der
-   Geschichte).
+2. **Preise:** Die Preise stehen bereits in beiden Kampagnentexten. Die ganze
+   Geschichte erst einsetzen, wenn genau diese Preise auf solidon3d.de stehen.
 3. **Kopiervorlage neu erzeugen**, falls an den Texten etwas geändert wird:
    `.venv\Scripts\python.exe marketing/gofundme/make_kopiervorlage.py`.
    Alternativ direkt in `kopiervorlage.html` im Browser ändern (wird nicht
@@ -220,7 +235,7 @@ Hilfe: [Thanking and managing donors](https://support.gofundme.com/hc/en-us/arti
 
 ## Checkliste
 
-- [ ] Preissatz nur, wenn die Website die Preise zeigt
+- [ ] Neue Geschichte erst, wenn die Website dieselben Preise zeigt
 - [ ] Titel geändert, Link unverändert
 - [ ] Titelbild ersetzt, Zuschnitt mittig
 - [ ] Fünf Zusatzbilder in der Reihenfolge, alte Zusatzbilder gelöscht

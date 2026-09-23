@@ -1,5 +1,7 @@
 # Kampagne, englische Fassung
 
+**Freigabeschranke für die Veröffentlichung 0.5.0:** Lokal vorbereitet, noch nicht auf GoFundMe veröffentlicht. Erst einsetzen, wenn die Signaturen am endgültigen Windows-Installer und an der enthaltenen Anwendung geprüft sind, genau dieses Paket öffentlich verfügbar ist und die Website die unten genannten Preise zeigt. Bis dahin bleibt die öffentliche Kampagne beim Stand 0.4.4.
+
 Inhaltlich dieselbe Kampagne wie `kampagne-de.md`, für Leser, die kein
 Deutsch lesen. Die Zahlen sind dieselben.
 
@@ -64,7 +66,7 @@ Solidon3D sits between the model you downloaded and your slicer. You click the h
 
 Before you print, a check report tells you what would go wrong, such as a wall that's too thin or a part that doesn't fit the bed. Then the model goes to your slicer. Solidon3D runs on Windows, macOS and Linux, with no account and no cloud.
 
-The demo has been downloaded more than 1,700 times since late August, and four new versions have come out since this fundraiser started, most recently 0.4.4 on 19 September. Have a look: solidon3d.de/en/
+The demo has been downloaded more than 1,700 times since late August, and five new versions have come out since this fundraiser started, most recently 0.5.0. Have a look: solidon3d.de/en/
 
 **Who I am**
 
@@ -72,7 +74,7 @@ Robert Schneider, a trained electronics technician from near Bamberg, Germany. I
 
 **What it costs**
 
-Some of it I've already paid for myself: the Apple developer account, so the Mac version opens without a warning, and a code-signing certificate for Windows, so the Windows version will also start without a warning in future.
+I've already paid for the Apple developer account and the Windows code-signing certificate myself. Since version 0.5.0, the Windows application and installer have been digitally signed. The signature identifies me as the publisher and makes later changes detectable. Windows may still show a SmartScreen warning for new files.
 
 Every month:
 • about €400 for two AI coding tools (Claude Max and ChatGPT Pro with Codex)
@@ -92,7 +94,7 @@ What you do get: updates on this page, including where the money went.
 
 **From 1 November**
 
-Version 1.0 comes out as a one-time purchase, with no subscription and no account. Until 30 October the demo stays free and complete. Buying it is separate from this fundraiser.
+Version 1.0 comes out as a one-time purchase, with no subscription and no account. Until 31 January 2027 the private licence costs €69 and the commercial licence €199; from 1 February 2027 they cost €99 and €249 respectively. Both have the same features and include all updates of 1.x. Until 30 October the demo stays free and complete. Buying it is separate from this fundraiser.
 
 **You can help without money, too**
 
@@ -105,9 +107,9 @@ Robert
 
 ---
 
-### Price sentence (only once the website shows the prices)
+### Preise und Veröffentlichung
 
-Goes after the first sentence of “From 1 November”:
-
-> For personal use it costs €69 until the end of January, €99 after that;
-> for business use €199, from February €249.
+Die Preise stehen bereits im einzusetzenden Abschnitt „From 1 November“ und
+entsprechen dem lokalen englischen Website-Index. Die Freigabeschranke am
+Dateianfang gilt für beide Sprachfassungen gemeinsam; kein zusätzlicher
+Preissatz wird gepflegt.
