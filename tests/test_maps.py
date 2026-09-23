@@ -738,18 +738,25 @@ def test_every_expensive_map_stops_when_the_next_one_is_chosen(
     from app.core.errors import OperationCancelled
 
     class _AfterTheFirstLook:
-        """Sagt beim zweiten Fragen ab — das erste ist der Eingang von ``build``."""
+        """Sagt beim zweiten Fragen ab — das erste ist der Eingang von ``build``.
+
+        **Jedes Fragen zählt, auch das Lesen von** ``is_cancelled``. Beide Wege
+        gehören zum ``CancelToken``; die Durchdringungssuche der Netzfehlerkarte
+        (``geom.intersections``) liest seit dem 23.09.2026 die Eigenschaft statt
+        die Methode zu rufen. Zählte nur die Methode, hielt die Karte an einem
+        echten Abbruch an und diese Attrappe sagte trotzdem nie ab.
+        """
 
         def __init__(self) -> None:
             self.asked = 0
 
         @property
         def is_cancelled(self) -> bool:
+            self.asked += 1
             return self.asked > 1
 
         def raise_if_cancelled(self) -> None:
-            self.asked += 1
-            if self.asked > 1:
+            if self.is_cancelled:
                 raise OperationCancelled
 
     token = _AfterTheFirstLook()

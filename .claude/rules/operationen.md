@@ -1221,10 +1221,13 @@ eine Karte sagt, was wo liegt, eine Regel, was zu halten ist.
   eindeutige Zuordnung auf ein **bis auf Rechenrauschen unverändertes**
   Merkmal (`_unchanged_continuations`: jede Lage und Richtung auf `EPS_GEOM`,
   jede Größe relativ auf `EPS_GEOM` — gemessen bitgleich an unberührten
-  Flächen, 23.09.2026) oder durch einen von der Operation selbst
-  ausgestellten Übergang (`OpResult.feature_continuations`). Ohne den dritten
-  Weg fragte Solidon nach jedem *Fläche versetzen* nach jeder unberührten
-  Fläche einer Passung, weil die Erkennung neu nummeriert. Diesen stellt nur aus, wer die
+  Flächen, 23.09.2026; ohne ihn fragte Solidon nach einer Sackbohrung in eine
+  Seite nach der Deckfläche einer Passung, weil die Erkennung neu nummeriert)
+  oder durch einen von der Operation selbst ausgestellten Übergang
+  (`OpResult.feature_continuations`). **Unverändert heißt unberührt:** Die
+  Nachbarn einer versetzten Fläche wachsen mit und gelten nicht als
+  unverändert; sie belegt *Fläche versetzen* selbst
+  (`faces.pushed_features`). Den Übergang stellt nur aus, wer die
   Änderungsabsicht geometrisch nachgewiesen hat — `resize_hole` über
   `_preserved_exact_features`, und jede exakte Merkmalshandlung über
   `_exact_features_after` (Versetzen, Verdoppeln, Drehen, Entfernen, Senken,

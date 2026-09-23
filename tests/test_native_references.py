@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import math
 from importlib import import_module
 from pathlib import Path
 
@@ -912,20 +913,51 @@ def _side_of(faces, sign: float) -> str:
     )
 
 
+def _blind_bore_into_the_right_side() -> OperationDraft:
+    """Eine Sackbohrung Ø 6, 10 mm tief, mitten in die rechte Seite des 40er Quaders.
+
+    Ein Umbau des exakten Körpers **ohne** Beleg: ``drill_brep_hole`` stellt keine
+    Übergänge aus, und die native Erkennung nummeriert danach neu (gemessen: die
+    Vorderseite hieß danach ``face_2``, die Deckfläche kam unter einem frischen Namen).
+    Geändert ist nur die rechte Seite — sie bekommt die Öffnung, ihr Inhalt fällt von
+    600 auf 571,73 mm²; Deck, Boden, Vorder-, Rück- und linke Seite sind bitgleich.
+    """
+    return OperationDraft(
+        op="drill_brep_hole",
+        inputs=("obj_1",),
+        params={
+            "diameter": 6.0,
+            "x": 20.0,
+            "y": 0.0,
+            "z": 10.0,
+            "nx": 1.0,
+            "ny": 0.0,
+            "nz": 0.0,
+            "depth": 10.0,
+            "compensate": False,
+        },
+    )
+
+
 def test_an_untouched_face_keeps_its_name_through_a_rebuild_without_a_question(
     profile: Profile,
 ) -> None:
     """Eine Fläche, die der Umbau nicht berührt hat, ist dieselbe — gefragt wird nicht.
 
-    Die native Erkennung nummeriert nach jedem Umbau neu; eine unberührte Fläche
-    kommt deshalb meist unter anderem Namen zurück, und eine Zuordnung auf einen
-    anderen Namen galt nicht als Beleg (P1.4c.2). Am Teppichclip
-    (``carpet-corner-clip.step``) fragte Solidon so bei jedem *Fläche versetzen*
-    nach beiden Flächen einer Passung, die niemand angefasst hatte. Gemessen
-    (23.09.2026, ``probe_native_identity.py``): Mitte, Normale und Inhalt solcher
-    Flächen sind nach dem Umbau bitgleich. Dieselbe Geometrie bis auf
-    Rechenrauschen ist ein Beleg — strenger als die Zuordnung, die §21.2 für
+    Die native Erkennung nummeriert nach jedem Umbau neu; eine unberührte Fläche kommt
+    deshalb oft unter anderem Namen zurück, und eine Zuordnung auf einen anderen Namen
+    galt nicht als Beleg (P1.4c.2). Nachgestellt: exakter Quader, Passung auf Deck und
+    Boden, eine Sackbohrung in die rechte Seite — Solidon fragte nach der Deckfläche,
+    die niemand angefasst hatte (Gegenprobe ohne ``_unchanged_continuations``: eine
+    Frage). Gemessen (``probe_native_identity.py``, ``probe_bez2_drill.py``): Mitte,
+    Normale und Inhalt solcher Flächen sind nach dem Umbau bitgleich. Dieselbe Geometrie
+    bis auf Rechenrauschen ist ein Beleg — strenger als die Zuordnung, die §21.2 für
     „ID bleibt“ genügt.
+
+    Bis zum 23.09.2026 stand hier *Fläche versetzen* an der rechten Seite. Seit die
+    Operation ihre Übergänge selbst belegt, fragt sie ohnehin nicht, und die Deckfläche
+    wächst dabei auf 41 mm — sie ist dann nicht unberührt, und der Test prüfte etwas,
+    das nicht mehr stimmte.
     """
     project, history, sources, top, bottom = _box_project(profile)
     before = evaluate(project.document, profile, sources=sources)
@@ -933,16 +965,7 @@ def test_an_untouched_face_keeps_its_name_through_a_rebuild_without_a_question(
     project.document.fits.append(
         Fit(name="deckel", a=FeatureRef("obj_1", top), b=FeatureRef("obj_1", bottom), kind="flush")
     )
-    history.apply(
-        "Seite versetzen",
-        [
-            OperationDraft(
-                op="push_face",
-                inputs=("obj_1",),
-                params={"face": _side_of(faces, 1.0), "distance": 1.0},
-            )
-        ],
-    )
+    history.apply("Sackbohrung", [_blind_bore_into_the_right_side()])
 
     result = evaluate(
         project.document,
@@ -956,22 +979,28 @@ def test_an_untouched_face_keeps_its_name_through_a_rebuild_without_a_question(
     ]
     body = result.scene.objects["obj_1"]
     for name in (top, bottom):
-        assert body.features[name].params["centre"] == pytest.approx(faces[name].params["centre"])
+        assert body.features[name].params["centre"] == pytest.approx(
+            faces[name].params["centre"], abs=1e-9
+        )
+        assert body.features[name].params["normal"] == pytest.approx(
+            faces[name].params["normal"], abs=1e-9
+        )
         assert body.features[name].params["area"] == pytest.approx(faces[name].params["area"])
-    assert body.mesh.volume == pytest.approx(41.0 * 30.0 * 20.0, rel=1e-9)
+    assert body.mesh.volume == pytest.approx(24000.0 - math.pi * 9.0 * 10.0, rel=1e-6)
     assert project.document.fits[0].a == FeatureRef("obj_1", top), "der Bezug bleibt, wie er war"
 
 
-def test_the_found_successor_of_a_moved_face_is_offered_and_taken(profile: Profile) -> None:
-    """Die versetzte Fläche selbst trägt die Passung: gefragt wird, und die Antwort gilt.
+def test_the_found_successor_of_a_changed_face_is_offered_and_taken(profile: Profile) -> None:
+    """Die angebohrte Fläche selbst trägt die Passung: gefragt wird, und die Antwort gilt.
 
-    Exakter Quader, bündige Passung zwischen rechter und linker Seite, dann die
-    rechte um 1 mm versetzt. Die Zuordnung findet die versetzte Fläche eindeutig
-    unter neuem Namen; sie ist nicht unverändert, also wird gefragt (P1.4c.3).
-    Bis zum 23.09.2026 stand genau dieser gefundene Nachfolger nicht unter den
-    Antworten — er galt als vergeben —, und jede Antwort endete in „Die Zuordnung
-    ist nicht mehr gültig": Der alte Name stand noch in der Zuordnung, die er neu
-    bekommen sollte. Eine Sackgasse im einfachsten Weg am exakten Körper.
+    Exakter Quader, bündige Passung zwischen rechter und linker Seite, dann eine
+    Sackbohrung in die rechte. Die Zuordnung findet die angebohrte Fläche eindeutig unter
+    neuem Namen; sie ist nicht unverändert (ihr Inhalt fällt um die Öffnung), und die
+    Bohrung stellt keinen Übergang aus — also wird gefragt (P1.4c.3). Bis zum 23.09.2026
+    stand genau dieser gefundene Nachfolger nicht unter den Antworten — er galt als
+    vergeben —, und jede Antwort endete in „Die Zuordnung ist nicht mehr gültig": Der alte
+    Name stand noch in der Zuordnung, die er neu bekommen sollte. Eine Sackgasse im
+    einfachsten Weg am exakten Körper (Gegenprobe mit dem Stand ``9307a844``).
     """
     project, history, sources, _top, _bottom = _box_project(profile)
     before = evaluate(project.document, profile, sources=sources)
@@ -980,14 +1009,7 @@ def test_the_found_successor_of_a_moved_face_is_offered_and_taken(profile: Profi
     project.document.fits.append(
         Fit(name="seiten", a=FeatureRef("obj_1", right), b=FeatureRef("obj_1", left), kind="flush")
     )
-    history.apply(
-        "Seite versetzen",
-        [
-            OperationDraft(
-                op="push_face", inputs=("obj_1",), params={"face": right, "distance": 1.0}
-            )
-        ],
-    )
+    history.apply("Sackbohrung", [_blind_bore_into_the_right_side()])
     asked: list[list[str]] = []
     shown: dict[str, object] = {}
 
@@ -1000,9 +1022,13 @@ def test_the_found_successor_of_a_moved_face_is_offered_and_taken(profile: Profi
         scene = shown["scene"]
         for candidate in choices:
             feature = scene.objects["obj_1"].features.get(candidate)  # type: ignore[attr-defined]
-            if feature is not None and abs(float(feature.params["centre"][0]) - 21.0) < 1e-6:
+            if (
+                feature is not None
+                and abs(float(feature.params["centre"][0]) - 20.0) < 1e-6
+                and float(feature.params["area"]) > 500.0
+            ):
                 return candidate
-        pytest.fail(f"die versetzte Fläche steht nicht unter den Antworten: {choices}")
+        pytest.fail(f"die angebohrte Seite steht nicht unter den Antworten: {choices}")
 
     result = evaluate(
         project.document, profile, sources=sources, ask=choose, question_context=context
@@ -1011,15 +1037,18 @@ def test_the_found_successor_of_a_moved_face_is_offered_and_taken(profile: Profi
     assert result.complete and not result.blocked_references, [
         (finding.code, str(finding.message)) for finding in result.scene.report.findings
     ]
-    assert len(asked) == 1, "nur die versetzte Fläche wird erfragt, die linke ist unberührt"
+    assert len(asked) == 1, "nur die angebohrte Seite wird erfragt, die linke ist unberührt"
     scene = shown["scene"]
     first = scene.objects["obj_1"].features[asked[0][0]]  # type: ignore[attr-defined]
-    assert float(first.params["centre"][0]) == pytest.approx(21.0), (
+    assert float(first.params["centre"][0]) == pytest.approx(20.0), (
         "der gefundene Nachfolger steht als erste Antwort da"
     )
     body = result.scene.objects["obj_1"]
-    assert float(body.features[right].params["centre"][0]) == pytest.approx(21.0)
-    assert float(body.features[left].params["centre"][0]) == pytest.approx(-20.0)
+    assert float(body.features[right].params["centre"][0]) == pytest.approx(20.0)
+    assert float(body.features[right].params["area"]) == pytest.approx(600.0 - math.pi * 9.0)
+    assert body.features[left].params["centre"] == pytest.approx(
+        faces[left].params["centre"], abs=1e-9
+    )
 
 
 def test_another_producer_version_asks_again(profile: Profile) -> None:

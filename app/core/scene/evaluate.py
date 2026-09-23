@@ -1788,8 +1788,13 @@ def _unchanged(old: Feature, new: Feature) -> bool:
     Jede Lage und Richtung auf :data:`EPS_GEOM` gleich — eine Achse ohne
     Vorzeichen, wie die Zuordnung sie liest —, jede Größe relativ auf
     :data:`EPS_GEOM`, und was eines trägt, trägt auch das andere. Gemessen an
-    ``carpet-corner-clip.step`` und ``build_tray_v3.step`` (23.09.2026): Eine
-    Fläche, die *Fläche versetzen* nicht berührt, kommt bitgleich zurück.
+    ``carpet-corner-clip.step``, ``build_tray_v3.step`` und am exakten Quader mit
+    Sackbohrung (23.09.2026): Eine Fläche, die der Umbau nicht berührt, kommt
+    bitgleich zurück.
+
+    **Unberührt heißt wirklich unberührt.** Versetzt man die rechte Seite eines
+    Quaders, wachsen Deck, Boden, Vorder- und Rückseite um den Versatz mit; sie
+    sind danach andere Flächen, und hier gelten sie nicht als unverändert.
     """
     if old.kind != new.kind:
         return False
@@ -1834,9 +1839,11 @@ def _unchanged_continuations(
 
     Beleg nach P1.4c.2 war nur die Zuordnung auf **denselben** Namen. Die native
     Erkennung nummeriert nach jedem Umbau neu, und eine Fläche, die der Schritt
-    nicht berührt hat, kam unter anderem Namen zurück: Am Teppichclip fragte
-    Solidon bei jedem *Fläche versetzen* nach beiden Flächen einer Passung, die
-    niemand angefasst hatte. Ist der eindeutige Partner bis auf Rechenrauschen
+    nicht berührt hat, kam unter anderem Namen zurück: Nach einer Sackbohrung in
+    die rechte Seite eines exakten Quaders fragte Solidon nach der Deckfläche,
+    auf der eine Passung lag. Gilt für jeden Umbau ohne eigenen Beleg der
+    Operation — *Fläche versetzen* mit gewählter Fläche belegt seine Übergänge
+    selbst (``faces.pushed_features``). Ist der eindeutige Partner bis auf Rechenrauschen
     dieselbe Geometrie (:func:`_unchanged`), ist das ein Beleg — strenger als
     die Zuordnung, die §21.2 für „ID bleibt“ genügt. Der Partner wird wie bei
     der Neuwahl unter dem alten Namen veröffentlicht (``apply_mapping``).
@@ -2290,7 +2297,8 @@ def _with_features(
             # **Was der Umbau nicht berührt hat, trägt seinen Namen weiter.** Die
             # native Erkennung nummeriert neu, und eine unberührte Fläche kam
             # unter anderem Namen zurück — gefragt wurde nach jeder, auf die eine
-            # Passung zeigte. Bitgleich gemessen, ist sie ein Beleg
+            # Passung zeigte, etwa nach einer Sackbohrung in eine andere Seite.
+            # Bitgleich gemessen, ist sie ein Beleg
             # (:func:`_unchanged_continuations`, 23.09.2026).
             exact_entry, matched = _unchanged_continuations(
                 exact_entry, reference_features, unproven, matched
