@@ -116,8 +116,10 @@ def mesh_section_arc(mesh: MeshData, x: float) -> np.ndarray:
     return points[near & ~on_front & ~on_top]
 
 
-def exact_section_arc(solid: Any, x: float) -> np.ndarray:
-    """Dasselbe am exakten Körper, über ``BRepAlgoAPI_Section`` und die Kurven selbst."""
+def exact_section_points(
+    solid: Any, origin: tuple[float, float, float], normal: tuple[float, float, float]
+) -> np.ndarray:
+    """Liest native Schnittkurven ohne vorherige Tessellierung."""
     from OCP.BRepAdaptor import BRepAdaptor_Curve
     from OCP.BRepAlgoAPI import BRepAlgoAPI_Section
     from OCP.gp import gp_Dir, gp_Pln, gp_Pnt
@@ -125,7 +127,7 @@ def exact_section_arc(solid: Any, x: float) -> np.ndarray:
     from OCP.TopExp import TopExp_Explorer
     from OCP.TopoDS import TopoDS
 
-    section = BRepAlgoAPI_Section(solid.shape, gp_Pln(gp_Pnt(x, 0.0, 0.0), gp_Dir(1.0, 0.0, 0.0)))
+    section = BRepAlgoAPI_Section(solid.shape, gp_Pln(gp_Pnt(*origin), gp_Dir(*normal)))
     section.Build()
     found = []
     explorer = TopExp_Explorer(section.Shape(), TopAbs_EDGE)
@@ -136,9 +138,14 @@ def exact_section_arc(solid: Any, x: float) -> np.ndarray:
                 curve.FirstParameter()
                 + (curve.LastParameter() - curve.FirstParameter()) * step / 40
             )
-            found.append((point.Y(), point.Z()))
+            found.append((point.X(), point.Y(), point.Z()))
         explorer.Next()
-    points = np.asarray(found)
+    return np.asarray(found)
+
+
+def exact_section_arc(solid: Any, x: float) -> np.ndarray:
+    """Dasselbe am exakten Körper, über ``BRepAlgoAPI_Section`` und die Kurven selbst."""
+    points = exact_section_points(solid, (x, 0.0, 0.0), (1.0, 0.0, 0.0))[:, 1:]
     on_front = np.abs(points[:, 0] - FRONT_TOP[0]) < 1e-6
     on_top = np.abs(points[:, 1] - FRONT_TOP[1]) < 1e-6
     near = (points[:, 0] < 0.0) & (points[:, 1] > HEIGHT / 2.0)
@@ -709,7 +716,6 @@ def test_a_rounded_rim_carries_the_same_loop_law_on_both_kernels() -> None:
 
     edit = exact_kernel()
     law = RadiusLaw((0.0, 0.5, 1.0), (1.0, 2.5, 1.0))
-    loop = law.as_loop()
     perimeter = (
         2.0 * ((WIDTH - 2 * CHAIN_ROUND) + (DEPTH - 2 * CHAIN_ROUND)) + 2 * math.pi * CHAIN_ROUND
     )
@@ -723,17 +729,51 @@ def test_a_rounded_rim_carries_the_same_loop_law_on_both_kernels() -> None:
         for e in edit.edges_of(solid)
         if abs(e.middle[2] - HEIGHT) < 1e-6 and abs(e.middle[0] + WIDTH / 2.0) < 1e-6
     )
-    exact = as_mesh_data(edit.fillet(solid, 2.5, "named", (edge_key(side),), law=law))
+    exact_solid = edit.fillet(solid, 2.5, "named", (edge_key(side),), law=law)
+    exact = as_mesh_data(exact_solid)
     # Auf der linken Seite (x = -20), vom vorderen Ende y = -10 nach hinten.
-    for mesh, tolerance in ((meshed, 2 * MAX_FACET_SAG), (exact, MAX_FACET_SAG)):
-        for y in (-7.0, 0.0, 7.0):
-            points = np.asarray(
-                mesh.raw.section(plane_origin=(0, y, 0), plane_normal=(0, 1, 0)).vertices
-            )[:, [0, 2]]
+    for y in (-7.0, 0.0, 7.0):
+        share = (y + DEPTH / 2.0 - CHAIN_ROUND) / perimeter
+        # Der symmetrische periodische Hermiteverlauf hat an 0 und 1/2
+        # Nullsteigung: r = 1 + 1,5·(3u² - 2u³), u = 2s. Kein Sollwert
+        # aus RadiusLaw oder einem Kreisfit durch die Ergebnisfacetten.
+        u = 2.0 * share
+        radius = 1.0 + 1.5 * (3.0 * u * u - 2.0 * u * u * u)
+        centre = np.array([-WIDTH / 2.0 + radius, HEIGHT - radius])
+        sections = [
+            (
+                kind,
+                np.asarray(
+                    mesh.raw.section(plane_origin=(0, y, 0), plane_normal=(0, 1, 0)).vertices
+                )[:, [0, 2]],
+                tolerance,
+            )
+            for kind, mesh, tolerance in (
+                ("mesh", meshed, 2 * MAX_FACET_SAG),
+                ("brep_mesh", exact, MAX_FACET_SAG),
+            )
+        ]
+        sections.append(
+            (
+                "brep_curve",
+                exact_section_points(exact_solid, (0.0, y, 0.0), (0.0, 1.0, 0.0))[:, [0, 2]],
+                MAX_FACET_SAG,
+            )
+        )
+        for kind, points, tolerance in sections:
             keep = (points[:, 0] < -5.0) & (points[:, 1] > 10.0)
             keep &= (np.abs(points[:, 0] + WIDTH / 2.0) > 1e-6) & (
                 np.abs(points[:, 1] - HEIGHT) > 1e-6
             )
-            _centre, radius, _worst = fit_circle(points[keep])
-            share = (y + DEPTH / 2.0 - CHAIN_ROUND) / perimeter
-            assert radius == pytest.approx(loop.at(share), abs=tolerance), (y, share)
+            arc = points[keep]
+            assert len(arc) >= 4, (kind, y, share)
+            # Die Zusage begrenzt den Abstand zum Sollkreis. Ein frei gefitteter
+            # Radius kann trotz zulässiger Sehnenabweichung deutlich abweichen;
+            # seine Mitte ist hier bereits durch die beiden Tangentialflächen bestimmt.
+            deviation = np.abs(np.linalg.norm(arc - centre, axis=1) - radius)
+            assert float(deviation.max()) <= tolerance, (kind, y, share, deviation.max())
+            if kind == "brep_curve":
+                # Die native Kurve trägt keine Sehnenabweichung. Hier bleibt
+                # zusätzlich der Radius selbst an seiner bisherigen Grenze geprüft.
+                _centre, measured_radius, _worst = fit_circle(arc)
+                assert measured_radius == pytest.approx(radius, abs=MAX_FACET_SAG), (y, share)
