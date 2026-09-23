@@ -453,6 +453,34 @@ def test_a_contour_touching_only_at_a_corner_is_an_island() -> None:
     assert thin_but_long.is_empty, "10⁻⁷ mm² gemeinsam liegen über der Grenze"
 
 
+def test_a_shared_previous_layer_keeps_support_and_edge_contacts_distinct() -> None:
+    """Vorbereitete Mehrkonturen tragen nur bei gemeinsamer Fläche, auch im Stapel."""
+    from shapely.geometry import MultiPolygon
+    from shapely.geometry import box as shapely_box
+
+    from app.core.slice.analysis import _islands_many
+
+    below = MultiPolygon([shapely_box(0, 0, 10, 10), shapely_box(20, 0, 30, 10)])
+    before = below.wkb
+    edge = shapely_box(10, 5, 12, 7)
+    distant = shapely_box(40, 1, 42, 2)
+    second_edge = shapely_box(5, 10, 6, 11)
+    layers = np.asarray(
+        [
+            MultiPolygon([shapely_box(1, 1, 2, 2), shapely_box(20, 1, 21, 2), edge, distant]),
+            # Der Anker dieser Brücke liegt im Spalt; die genaue gemeinsame
+            # Fläche links und rechts weist sie trotzdem als getragen aus.
+            MultiPolygon([shapely_box(9, 1, 21, 2), second_edge]),
+        ],
+        dtype=object,
+    )
+    islands = _islands_many(layers, np.asarray([below, below], dtype=object))
+
+    assert islands[0].equals(MultiPolygon([edge, distant]))
+    assert islands[1].equals(second_edge)
+    assert below.wkb == before
+
+
 # --- widths ---------------------------------------------------------------------
 
 

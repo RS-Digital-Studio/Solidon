@@ -148,6 +148,10 @@ Robert „Vorschläge beim Slicen dauern ewig"). Drei Stellen, drei Antworten:
   auf den Interpreter-Lock, und sechs Arbeiter waren kaum schneller als
   einer. Die Einzelfunktionen (`_measure`, `_islands`, `minimum_width`,
   `_opening_loss`, `_survives_opening`) sind Blöcke aus einem Element.
+- **Den Vorgänger nur einmal vorbereiten.** `_islands_many` baut den
+  GEOS-Index der Vorgängerschichten vor ihren wiederholten räumlichen
+  Prädikaten auf; tausende Konturen teilen denselben Index. Die Konturen,
+  Randberührungen und Schwelle für gemeinsame Fläche bleiben unverändert.
 - **Die Öffnung zählt, was der Form fehlt.** Die gefaste Aufweitung kann
   Nadeln über die Form hinaus treiben; `_opening_loss` wirft Splitter unter
   `WIDTH_SIMPLIFY` weg und rechnet die Fläche außerhalb (`_protrusion`:

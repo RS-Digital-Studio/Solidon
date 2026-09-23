@@ -2441,6 +2441,10 @@ def _islands_many(shapes: np.ndarray, previous: np.ndarray) -> list[ShapelyPolyg
     result: list[ShapelyPolygon] = [ShapelyPolygon()] * len(shapes)
     if not len(parts):
         return result
+    # Eine Vorgängerschicht trägt oft tausende Konturen. Den räumlichen
+    # Index einmal aufbauen, statt ihn für jedes contains_properly neu zu
+    # erzeugen; die Geometrie und die exakten Prädikate bleiben dieselben.
+    shapely.prepare(previous)
     below = previous[owner]
     touching = shapely.intersects(parts, below)
     anchors = shapely.point_on_surface(parts)

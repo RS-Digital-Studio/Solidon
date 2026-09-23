@@ -42,8 +42,9 @@ AXES: Final[tuple[Vec3, ...]] = (
     (0.0, -1.0, 0.0),
 )
 
-#: Zielgrenze je Projektionsmatrix; eine einzelne größere Lage bleibt einzeln.
-MAX_PROJECTION_VALUES = 1_000_000
+#: Zielgrenze je Projektionsmatrix; daneben liegen Normalen, Höhen und Masken.
+#: Kleine Stapel halten diese Zwischenfelder im Cache. Eine größere Lage bleibt einzeln.
+MAX_PROJECTION_VALUES = 100_000
 
 #: Mehr Eckpunkte sieht Qhull für die Kandidatenrichtungen nicht. Die
 #: Hüllnormalen sind Vorschläge, die die Schichtanalyse danach beurteilt; ob
@@ -312,11 +313,19 @@ def evaluate_directions(
 
 def _heights(verticals: np.ndarray, points: np.ndarray) -> np.ndarray:
     """Je Lage und Punkt die Höhe — ``verticals @ points.T`` ohne BLAS (RM-187)."""
-    return np.asarray(
-        verticals[:, 0, None] * points[None, :, 0]
-        + verticals[:, 1, None] * points[None, :, 1]
-        + verticals[:, 2, None] * points[None, :, 2]
-    )
+    result = np.empty((len(verticals), len(points)))
+    scratch = np.empty(len(points))
+    # Drei Produkte und zwei Summen in derselben Reihenfolge wie beim Bewegen
+    # des Netzes. Nur ein Zwischenfeld je Lage statt mehrerer ganzer Stapel:
+    # Bei dichten Teilkörpern kostet deren Speicherverkehr mehr als die Rechnung.
+    for index, vertical in enumerate(verticals):
+        row = result[index]
+        np.multiply(vertical[0], points[:, 0], out=row)
+        np.multiply(vertical[1], points[:, 1], out=scratch)
+        np.add(row, scratch, out=row)
+        np.multiply(vertical[2], points[:, 2], out=scratch)
+        np.add(row, scratch, out=row)
+    return result
 
 
 def ranked_orientations(

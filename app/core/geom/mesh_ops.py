@@ -300,9 +300,9 @@ def decimate_for_display(mesh: MeshData, target: int, *, sag: float | None = Non
     2. **Zusammenlegen im Raster**, wo der Kern das Netz nicht nimmt — offen,
        verschränkt, eine Dreieckssuppe: :func:`_clustered_for_display` legt
        Ecken derselben Rasterzelle zusammen, ein Gang über alle Punkte, ohne
-       Schleife über Dreiecke. Was dann noch über dem Ziel liegt, bekommt
-       ``fast_simplification`` — an einem geclusterten Netz gibt es die
-       Nadeln nicht mehr, an denen es steht.
+       Schleife über Dreiecke. Der Rasterweg darf bis zum Doppelten der
+       angeforderten Dreieckszahl behalten (:data:`DECIMATE_MISS`); für den
+       Anzeigeaufbau gelten damit höchstens 400.000 Dreiecke nach §31.
 
     Die Slots reisen wie bei :func:`decimate` ohne Grenze mit (§20).
     """

@@ -342,6 +342,29 @@ def test_a_thick_block_is_thick_everywhere() -> None:
     assert min(analysis.known) == pytest.approx(20.0, abs=2.0 * analysis.resolution)
 
 
+def test_inward_traces_finish_at_the_first_gap_or_the_step_limit() -> None:
+    """Verschiedene Austritte werden einmal gezählt; Material hinter einer Lücke nicht."""
+    from types import SimpleNamespace
+
+    filled = np.zeros((6, 6, 3), dtype=bool)
+    filled[1:6, 1, 1] = True
+    filled[3:6, 2, 1] = True
+    filled[1, 2, 1] = True  # hinter der Lücke: gehört nicht zur ersten Wand
+    filled[:, 4, 1] = True  # bleibt bis zur Schrittgrenze im Material
+    body = SimpleNamespace(
+        triangles_center=np.asarray([[5.5, y, 1.0] for y in (1, 2, 3, 4)]),
+        face_normals=np.asarray([[1.0, 0.0, 0.0]] * 4),
+        scale=8.0,
+    )
+    field = maps.SolidField(filled=filled, origin=np.zeros(3), pitch=1.0)
+
+    values = maps._inward_thickness(body, field)
+
+    assert values[:2] == [5.0, 3.0]
+    assert math.isnan(values[2]), "sofort außerhalb bleibt unbekannt statt null"
+    assert values[3] == 10.0, "Skala 8 / Raster 1 plus die zwei Randabfragen"
+
+
 # --- overhang -------------------------------------------------------------------
 
 

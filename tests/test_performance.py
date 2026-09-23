@@ -866,7 +866,15 @@ def knurled_plate() -> MeshData:
                 pattern="knurl_diamond", width=56.0, height=36.0, pitch=1.2, depth=0.5, z=3.0
             ),
             profile=Profile(
-                printer=PrinterProfile(id="test", title="Test", build_volume=(220.0, 220.0, 250.0)),
+                printer=PrinterProfile(
+                    id="test",
+                    title="Test",
+                    build_volume=(220.0, 220.0, 250.0),
+                    # Die knapp 0,25-mm-Rillen brauchen passende Druckbahnen; die feine
+                    # Teilung bleibt gerade die Last dieser Konturprüfung.
+                    nozzle_diameter=0.2,
+                    extrusion_width=0.22,
+                ),
                 material=None,
             ),
             quality="fine",
@@ -897,7 +905,9 @@ def test_the_layer_analysis_survives_a_knurled_surface() -> None:
     unveränderten Befunden. Die Schranke steht deshalb bei acht statt zwölf.
     """
     mesh = knurled_plate()
-    taken = measure("slice_knurl", lambda: slice_body(mesh, 0.2))
+    outcome: list[Any] = []
+    taken = measure("slice_knurl", lambda: outcome.append(slice_body(mesh, 0.2)))
+    assert max(len(layer.contours) for layer in outcome[0].layers) == 2898
     assert taken < 8.0
 
 
@@ -960,33 +970,73 @@ def test_the_orientation_search_over_two_hundred_candidates(profile: Profile) ->
 
 def test_support_aware_auto_split_stays_within_the_orientation_budget(
     profile: Profile,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """T2: drei Nähte mal drei Grundflächen auf exakt 200 000 Dreiecken.
+    """Drei Nähte, beide Stiftseiten und Symmetrie auf exakt 200 000 Dreiecken.
 
     §31 nennt für die verwandte, größere Orientierungssuche zwanzig Sekunden.
     Auto Split darf mit seiner begrenzten Vorauswahl nicht darüber liegen;
     die lokale Marke fängt zusätzlich jede Verschlechterung über ein Viertel.
     Erzeugung und Streckung liegen vor der Uhr, gemessen wird nur die Suche.
+
+    Der frühere Vertrag kannte nur eine Stiftseite: sechs fertige Teilkörper
+    und 18 Schichtbewertungen. Dieser prüft zwölf und 36; die eigene Marke
+    hält den größeren Arbeitsumfang von der historischen Marke getrennt.
     """
+    from app.core.geom import autosplit
+    from app.core.slice import orientation as slice_orientation
+
     mesh = slice_target_mesh()
     raw = mesh.raw.copy()
     raw.apply_scale((4.0, 1.0, 1.0))  # type: ignore[no-untyped-call]
     oversized = MeshData.of(raw)
     assert oversized.triangle_count == 200_000
 
-    taken = measure(_autosplit_support_mark(), lambda: find_plane(oversized, profile))
+    judged: list[tuple[Any, bool, int]] = []
+    support_after_cut = autosplit._support_after_cut
+    orientation_count = 0
+    judge_orientation = slice_orientation.judge
 
+    def tracked_orientation(*args: Any, **kwargs: Any) -> Any:
+        """Zählt echte Schichtbewertungen statt nur angeforderter Kandidaten."""
+        nonlocal orientation_count
+        orientation_count += 1
+        return judge_orientation(*args, **kwargs)
+
+    def tracked_support(*args: Any, **kwargs: Any) -> float:
+        """Erfasst den tatsächlichen Umfang, ohne eine Bewertung zu ersetzen."""
+        judged.append((args[1], kwargs.get("pins_on_b", False), kwargs["orientation_candidates"]))
+        return support_after_cut(*args, **kwargs)
+
+    monkeypatch.setattr(autosplit, "_support_after_cut", tracked_support)
+    monkeypatch.setattr(slice_orientation, "judge", tracked_orientation)
+    outcome: list[Any] = []
+    taken = measure(
+        _autosplit_support_mark(), lambda: outcome.append(find_plane(oversized, profile))
+    )
+
+    assert [pins_on_b for _, pins_on_b, _ in judged] == [False, True] * 3
+    assert {count for _, _, count in judged} == {3}
+    assert len({(one.axis, one.position, one.normal) for one, _, _ in judged}) == 3
+    for first, second in zip(judged[::2], judged[1::2], strict=True):
+        assert first[0] == second[0], "beide Stiftseiten gehören jeweils zur selben Naht"
+    assert orientation_count == 36, "zwölf fertige Teilkörper mit jeweils drei Lagen"
+    assert outcome[0] is not None and outcome[0].symmetric
     assert taken < 20.0, "die T2-Suche bleibt unter dem §31-Budget der Orientierung"
 
 
 def _autosplit_support_mark() -> str:
-    """Trennt die lokale Marke nach tatsächlich verfügbarem Schnittkern."""
+    """Trennt den beidseitigen Suchvertrag und den verfügbaren Schnittkern.
+
+    Die älteren Marken ohne Stiftseitenwahl/Symmetrie bleiben als Historie
+    stehen. Sie bewerteten halb so viele fertige Teilkörper und Lagen.
+    """
     backend = (
         "native"
         if slice_analysis._chain is not None and hasattr(slice_analysis._chain, "plane_segments")
         else "fallback"
     )
-    return f"autosplit_support_200k_{backend}"
+    return f"autosplit_support_200k_both_pin_sides_symmetry_{backend}"
 
 
 @pytest.mark.parametrize(
@@ -994,11 +1044,17 @@ def _autosplit_support_mark() -> str:
     [
         pytest.param(
             SimpleNamespace(plane_segments=object()),
-            "autosplit_support_200k_native",
+            "autosplit_support_200k_both_pin_sides_symmetry_native",
             id="native",
         ),
-        pytest.param(object(), "autosplit_support_200k_fallback", id="without-plane-segments"),
-        pytest.param(None, "autosplit_support_200k_fallback", id="fallback"),
+        pytest.param(
+            object(),
+            "autosplit_support_200k_both_pin_sides_symmetry_fallback",
+            id="without-plane-segments",
+        ),
+        pytest.param(
+            None, "autosplit_support_200k_both_pin_sides_symmetry_fallback", id="fallback"
+        ),
     ],
 )
 def test_auto_split_performance_marks_distinguish_the_slice_backend(
@@ -1369,6 +1425,10 @@ def test_a_boolean_operation_on_two_hundred_thousand_triangles() -> None:
 #: Die Schwelle beschreibt Arbeit, die der Kern tut.
 DISPLAY_TRIANGLES = 200_000
 
+#: Zulässige Größe der tatsächlich gezeichneten Fassung (§31). Der Aufruf
+#: strebt weiter 200.000 an, der Rasterweg darf bis zu 400.000 behalten.
+DISPLAY_MAX_TRIANGLES = 400_000
+
 
 def test_building_the_display_version_of_a_million_triangles() -> None:
     """Was hinter der Zeile „…-Navigation, flüssig bei 1 Mio. Dreiecken" messbar ist.
@@ -1394,10 +1454,18 @@ def test_building_the_display_version_of_a_million_triangles() -> None:
     Wiedereinschalten ist ein eigener Schritt mit Probelauf).
     Diese Marke tritt nicht an ihre Stelle, sie steht daneben.
     """
-    from app.core.geom.mesh_ops import decimate
+    from app.core.geom.mesh_ops import decimate_for_display
 
     mesh = dense_mesh()
-    taken = measure("display_decimate_1m", lambda: decimate(mesh, DISPLAY_TRIANGLES))
+    vertices = mesh.raw.vertices.tobytes()
+    faces = mesh.raw.faces.tobytes()
+    outcome: list[MeshData] = []
+    taken = measure(
+        "display_decimate_1m",
+        lambda: outcome.append(decimate_for_display(mesh, DISPLAY_TRIANGLES)),
+    )
+    assert 0 < outcome[0].triangle_count <= DISPLAY_MAX_TRIANGLES < mesh.triangle_count
+    assert mesh.raw.vertices.tobytes() == vertices and mesh.raw.faces.tobytes() == faces
     assert taken < 30.0, "the target is four seconds (§31); thirty catches an order of magnitude"
 
 

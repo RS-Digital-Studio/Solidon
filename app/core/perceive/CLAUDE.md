@@ -268,10 +268,18 @@ Mitte einer ganzen Zelle: Beim Neuzeichnen kommt dort wieder eine hin.
 `mouths_of` zeichnet die Zellmündungen am Netz nach, `plug_for` baut daraus
 den Stopfen (bündig mit der Trägerebene, bei durchgehenden Zellen auf beiden
 Seiten; um den Zylinder auf dessen **Facetten** gelegt, `Frame.facets`, an
-jeder Facettengrenze geteilt und um einen Saum breiter als die Mündung),
+jeder Facettengrenze konform geteilt — `_split_along`/`_cut_at`, ohne
+Boolesche Rechnung — und um einen Saum breiter als die Mündung, vertieft aber
+nie über die Stirnflächen des Stifts hinaus, `Frame.span`; der Boden einer
+Tasche mit parallelen Wänden nur im Umfang aufgeweitet),
 `field_outline` das `Field` fürs Neuzeichnen — Umriss, Abwicklung und der
 Weg zurück (`Field.placed` biegt das flache Werkzeug um die Achse; `around`
-sagt, ob das Feld einmal herumreicht und der Umriss periodisch gilt). Beides
+sagt, ob das Feld einmal herumreicht und der Umriss periodisch gilt).
+Stopfen und neues Feld lesen denselben Mündungssaum (`_mouth_with_margin`):
+Was bereits gefüllt ist, bleibt keine Aussparung im neuen Feld. Ein
+Schneidwerkzeug durch den Stirnrand endet über dessen gemessener Ebene
+(`Field.placed(beyond=...)`, `_through_the_ends`); ein aufgesetztes endet am
+Feldrand. Beides
 brauchen `remove_feature` und `resize_feature` in `geom/prepare_ops.py`. Den
 Träger findet `carrier_of` über Ebene und Normale beziehungsweise Achse und
 Durchmesser, nie über eine Kennung: Die altert beim Umbenennen.
@@ -601,6 +609,12 @@ keine Vorabschranke; die laufende Rechnung prüft ihr Budget zwischen
 begrenzten Arbeitsstücken. Der vollständige Schichtanalyseweg bleibt davon
 unberührt; das Budget gilt nur der Karte.
 
+Die Wandkarte verfolgt nur Strahlen, die noch Material sehen. Ihre Zentren
+und Normalen werden erst beim Ausscheiden kompakt gespeichert; der erste
+Austritt bestimmt die Schrittzahl. So kosten massive Körper keine erneuten
+Indexkopien je Schritt, und Material hinter einer Lücke zählt weiterhin
+nicht zur ersten Wand. Rasterrundung und Abbruchpunkte bleiben gleich.
+
 ## Die Karte
 
 | Datei | Rolle |
@@ -685,6 +699,12 @@ Merkmalskarte ehrlich färben könnte. `perceive.orphaned`,
 führen deshalb nur zum
 betroffenen Körper und erzeugenden Schritt; eine Karte bleibt aus. Andere
 `perceive.*`-Befunde behalten ihre Merkmalskarte.
+
+Ein Verlust **ohne Verweis** (`perceive.orphaned`, `perceive.mended`) steht
+einmal je Körper und Schritt: bei mehreren im Mehrzahlsatz, die Zahl in
+`values["count"]`, die Kennungen in `values["feature"]`. Ein Verlust **mit**
+Verweis bleibt je Merkmal eine Warnung
+(`referenced_lost`, `generated_lost`).
 
 ## Grenzen
 

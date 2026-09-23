@@ -796,18 +796,27 @@ def _inward_thickness(
     for step in range(steps):
         if cancelled is not None:
             cancelled.raise_if_cancelled()
-        samples = np.multiply(normals[active], field.pitch * (step + 0.5))
-        np.subtract(centres[active], samples, out=samples)
+        samples = np.multiply(normals, field.pitch * (step + 0.5))
+        np.subtract(centres, samples, out=samples)
         np.subtract(samples, field.origin, out=samples)
         np.divide(samples, field.pitch, out=samples)
         np.rint(samples, out=samples)
         indices = samples.astype(int)
         np.clip(indices, 0, upper, out=indices)
         here = field.filled[indices[:, 0], indices[:, 1], indices[:, 2]]
-        active = active[here]
-        if not len(active):
-            break
-        reached[active] += 1.0
+        # Nur beim Austritt kompaktieren. In einem massiven Körper bleiben
+        # fast alle Strahlen lange aktiv; ihre Zentren und Normalen jeden
+        # Schritt über Indizes zu kopieren verdoppelte dort den Aufwand.
+        # Die erreichten Schritte stehen beim ersten Austritt fest.
+        if not here.all():
+            reached[active[~here]] = step
+            active = active[here]
+            if not len(active):
+                break
+            centres = centres[here]
+            normals = normals[here]
+    else:
+        reached[active] = steps
 
     values = reached * field.pitch
     return [float(value) if value > 0.0 else float("nan") for value in values]

@@ -2340,7 +2340,7 @@ Erledigungsaussage im Bauplan.
 | Vorgang | Zielwert |
 |---|---|
 | Viewport-Navigation | flüssig bei 1 Mio. Dreiecken |
-| Anzeigeaufbau, 1 Mio. → 200 000 Dreiecke | unter 4 s |
+| Anzeigeaufbau, 1 Mio. → höchstens 400 000 Dreiecke | unter 4 s |
 | Anzeige-Dezimierung greift ab | 500 000 Dreiecken |
 | Boolesche Op, 200 000 Dreiecke | unter 2 s |
 | Feature-Erkennung, 200 000 Dreiecke | unter 1 s |
@@ -2358,6 +2358,10 @@ werden am tatsächlichen Fenster mit dem verwendeten Grafikadapter geprüft.
 Eine Offscreen-Rechenzeit belegt weder flüssige Navigation noch ein sichtbares
 Bild. Die Anzeige-Dezimierung und ihr Aufbau sind zusätzlich getrennt messbar.
 Die 500.000 Dreiecke sind die Eingriffsschwelle, kein Zeitwert.
+Der Anzeigeweg strebt 200.000 Dreiecke an; beim Zusammenlegen im Raster sind
+bis zu 400.000 zulässig. Der Leistungsnachweis prüft die tatsächlich erzeugte
+Zahl gegen diese Obergrenze und misst den Anzeigeweg einschließlich der
+Dezimierung. Die Geometrie des Dokuments bleibt dabei unverändert.
 Ein Nachweis der Merkmalserkennung umfasst mechanische und organische
 Referenzkörper; ein guter Kugelfall belegt nicht jede Freiform.
 

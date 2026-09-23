@@ -732,6 +732,17 @@ def test_batched_scores_match_physical_rotations_across_batch_boundaries(
     )
     scores = orient.evaluate_directions(body, directions)
     assert [score.direction for score in scores] == directions
+    # Stapeln darf nicht einmal die letzten Stellen der vier Kennzahlen
+    # ändern: Sie entscheiden auch Gleichstände symmetrischer Körper.
+    separate = [orient.evaluate_direction(body, direction) for direction in directions]
+    for actual, single in zip(scores, separate, strict=True):
+        assert tuple(
+            value.hex()
+            for value in (actual.footprint, actual.overhang, actual.height, actual.support)
+        ) == tuple(
+            value.hex()
+            for value in (single.footprint, single.overhang, single.height, single.support)
+        )
     for direction, actual in zip(directions, scores, strict=True):
         physical = apply(body, rotation_to_down(direction))
         normals = np.asarray(physical.raw.face_normals)
@@ -743,6 +754,21 @@ def test_batched_scores_match_physical_rotations_across_batch_boundaries(
         assert actual.footprint == pytest.approx(float(areas[flat].sum()), abs=1e-7)
         assert actual.overhang == pytest.approx(float(areas[downward & ~flat].sum()), abs=1e-7)
         assert actual.height == pytest.approx(physical.bounds.size[2], abs=1e-7)
+
+
+def test_stacked_projections_match_physical_turns_bit_for_bit() -> None:
+    """Die Vorauswahl liest dieselben Höhen wie die tatsächliche Bewegung."""
+    from app.core.geom.orient import _heights
+    from app.core.geom.transform import turned
+
+    points = np.vstack(
+        (np.asarray(plate().raw.vertices), (1e12, -3e-9, -1e12), (-1e12, 7e-9, 1e12))
+    )
+    directions = [(1.0, 2.0, 3.0), (-3.0, 2.0, -1.0), (0.0, 0.0, -1.0)]
+    turns = [rotation_to_down(direction) for direction in directions]
+    actual = _heights(np.asarray([turn[2, :3] for turn in turns]), points)
+    expected = np.asarray([turned(points, turn)[:, 2] for turn in turns])
+    np.testing.assert_array_equal(actual.view(np.uint64), expected.view(np.uint64))
 
 
 def test_a_named_bore_is_carried_exactly_once_when_the_body_is_laid_down(
