@@ -220,8 +220,15 @@ def test_groove_on_each_real_side_keeps_world_location_and_depth(direction, kind
 # Windows: Die Dichtung steht auf dem Nutboden, und nach der Drehung
 # durchdringen sich die beiden Flächen um Nanometer — 5,6e-3 mm³ über
 # 402 mm², das ist die Fließkommarechnung und keine Überschneidung.
-@pytest.mark.parametrize("axis", [(1, 2, 3), (1, 0, 0)])
-def test_selected_opening_is_saved_and_rotated_without_new_guess(profile, axis):
+@pytest.mark.parametrize(
+    ("axis", "angle"),
+    [
+        pytest.param((1, 2, 3), 0.57, id="axis0"),
+        pytest.param((1, 0, 0), 0.57, id="axis1"),
+        pytest.param((1, 2, 3), math.radians(16), id="small-contact"),
+    ],
+)
+def test_selected_opening_is_saved_and_rotated_without_new_guess(profile, axis, angle):
     from test_seal_openings import plate
 
     from app.core.geom.seal import opening_choices
@@ -243,7 +250,7 @@ def test_selected_opening_is_saved_and_rotated_without_new_guess(profile, axis):
     signature = result.answered["opening_signature"]
     assert signature == choices[1].signature
     assert "Kontur" not in signature
-    matrix = trimesh.transformations.rotation_matrix(0.57, axis)
+    matrix = trimesh.transformations.rotation_matrix(angle, axis)
     matrix[:3, 3] = (7, 12, -4)
     raw = entry.mesh.raw.copy()
     raw.apply_transform(matrix)
@@ -263,6 +270,7 @@ def test_selected_opening_is_saved_and_rotated_without_new_guess(profile, axis):
     )
     assert len(asked) == 1
     assert not second.answered
+    assert second.solver is not None and second.solver.strategy in ("direct", "welded")
     before = as_mesh_data(result.outputs[1].mesh).raw.copy()
     before.apply_transform(matrix)
     assert second.outputs[1].mesh.volume == pytest.approx(result.outputs[1].mesh.volume, rel=1e-8)

@@ -651,7 +651,11 @@ def _plausible(mesh: MeshData, allow_empty: bool = False) -> bool:
     """
     if mesh.triangle_count == 0:
         return allow_empty
-    return bool(mesh.raw.is_watertight) and _signed_volume(mesh.raw) > EPS_GEOM
+    # Ein positives Volumen hat keine Mindestgröße aus einer Längentoleranz.
+    # Kontaktreste entfernt bereits ``_native_contact`` anhand der nativen
+    # Rechengrenze; ein echter kleiner Schnitt muss als Messwert erhalten
+    # bleiben. Ob er für eine Passung oder Restwand zählt, prüft der Aufrufer.
+    return bool(mesh.raw.is_watertight) and _signed_volume(mesh.raw) > 0.0
 
 
 def _findings_for(stage: SolverStage) -> list[Finding]:

@@ -563,6 +563,11 @@ Iterieren schnell bleibt (§31).
 
 `tests/test_boolean.py` erzwingt jede Stufe einzeln.
 
+Ein geschlossenes Ergebnis mit positivem Volumen bleibt auch als kleiner
+Messkörper gültig. `EPS_GEOM` ist eine Längentoleranz und kein Mindestvolumen;
+Kontaktreste entscheidet `_native_contact` an der Float64-Rechengrenze.
+Fertigungsspiel und Restwand bewertet anschließend der fachliche Aufrufer.
+
 **Dicht per Index ist noch nicht dicht.** `_kernel` verschweißt seine Ausgabe
 so, wie jeder Slicer sie verschweißen wird (`_tidied`): Eckpunktpaare unter der
 Schweißtoleranz und Dreiecke mit doppeltem Index fallen weg — übernommen nur,
@@ -824,7 +829,10 @@ die gedrehten äußersten Ecken als Umriss mit. `evaluate_directions` misst je
 Lage Standfläche, Überhangfläche, Höhe und den **geschätzten Stützraum**
 `Orientation.support` — Überhangfläche in Projektion mal Höhe über dem Bett;
 die Heuristik ordnet weiter nach `score`, die Suche schneidet zusätzlich die
-Lagen mit der kleinsten Schätzung, siehe `slice/CLAUDE.md`)
+Lagen mit der kleinsten Schätzung, siehe `slice/CLAUDE.md`. Die Projektionen
+rechnen je Lage mit einem wiederverwendeten Zwischenfeld, in derselben
+Reihenfolge wie die tatsächliche Bewegung; die Speichergrenze der Stapel
+verändert keine Kennzahl, auch nicht deren letzte Stelle.)
 
 **Die Nummer eines zerlegten Teils hängt an der Geometrie, nicht am Rauschen.**
 `_loose_parts` ordnet nach Volumen — aber nach dem **gerundeten Verhältnis zum
@@ -1460,8 +1468,10 @@ bleibt das zerrissene Ergebnis stehen und `_deviation_findings` sagt es
 Schwelle aus §31, Beispielbilder, Stellvertreter der Orientierungssuche:
 erst der exakte Kern nach Sehnenfehler (`units.MAX_FACET_SAG` als Start, je
 Schritt vervierfacht), dann das Zusammenlegen im Raster für Netze, die der
-Kern nicht nimmt (`_clustered_for_display`). Keine Zielzahl, keine Messung,
-eine Antwort in rund hundert Millisekunden an 200 000 Dreiecken.
+Kern nicht nimmt (`_clustered_for_display`). Die angeforderte Dreieckszahl ist
+ein Richtwert; der Rasterweg darf bis zum Doppelten behalten. Für die große
+Anzeige sind damit höchstens 400.000 Dreiecke bei einem Richtwert von 200.000
+zulässig (§31). Eine geometrische Abweichung wird hier nicht gemessen.
 **Die Operation hat eine Tür zum Anzeigeweg:** `decimate_mesh(method="fast")`
 ruft `decimate_for_display` und sonst nichts (`_decimated_fast`) — keine
 Messung, ein Befund `mesh.simplified_unmeasured`, der das sagt. Die grobe
@@ -1482,6 +1492,11 @@ Script liegen in `data/fonts/` (SIL OFL, Lizenztexte unter
 `knowledge/data/third_party_licenses/`, Zuordnung in `BUNDLED_FONT_LICENCES`).
 `FONT_STYLES` holt fett und kursiv über `weight` und `style` aus denselben
 Dateien, die ohnehin im Paket liegen.
+
+Matplotlib gehört direkt zum Extra `geom`: `label_ops` liest daraus die
+Schriftkonturen und DejaVu-Dateien, `brep/lettering.py` übernimmt dieselben
+Glyphenpfade als Kurven. `constraints.txt` bindet die Version; installiert
+wird der Bedarf durch `pyproject.toml`, unabhängig von anderen Kernen.
 
 **Nicht jede Familie hat alle vier.** Comfortaa und Dancing Script sind
 *variable* Schriften — eine Datei mit einer Gewichtsachse, die matplotlib nicht

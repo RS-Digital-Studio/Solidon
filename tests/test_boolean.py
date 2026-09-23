@@ -39,6 +39,22 @@ def box(size: float, offset: tuple[float, float, float]) -> MeshData:
     return MeshData.of(body)
 
 
+@pytest.mark.parametrize("size", [0.0001, 0.001, 0.01])
+@pytest.mark.parametrize("offset", [0.0, 1000.0])
+def test_a_small_positive_intersection_does_not_trigger_a_geometric_fallback(
+    size: float, offset: float
+) -> None:
+    """Ein positiver Schnittkörper hat kein Mindestvolumen aus einer Längentoleranz."""
+    first = box(size, (offset, 0.0, 0.0))
+    second = box(size, (offset, 0.0, 0.0))
+
+    outcome = boolean("intersection", [first, second], allow_empty=True, stages=("direct",))
+
+    assert outcome.mesh.is_watertight and outcome.mesh.component_count == 1
+    assert outcome.mesh.volume == pytest.approx(size**3, rel=1e-8, abs=0.0)
+    assert outcome.solver.attempted == ("direct",)
+
+
 @pytest.mark.parametrize("offset", [0.0, 1000.0])
 @pytest.mark.parametrize("angle", [0.0, 37.0])
 def test_a_thin_positive_intersection_is_not_rounded_into_contact(
