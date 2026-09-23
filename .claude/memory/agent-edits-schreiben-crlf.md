@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: feedback
   originSessionId: c8bf1d70-6f46-4992-9b9e-5becddfdbd88
-  modified: 2026-09-06T13:28:20.446Z
+  modified: 2026-09-22T20:24:11.836Z
 ---
 
 Am 06.09.2026 schrieb ein Unteragent Docstrings und Kommentare in 35
@@ -36,3 +36,15 @@ geht es wie oben mit `data.replace(b"\r\n", b"\n")`. Und der Text dieses
 Nachtrags selbst kam zweimal über ein Bash-Heredoc mit echten Zeilenumbrüchen
 statt `\n` in den Backticks an — deutschen Text und Escape-Folgen schreibt das
 Write-Werkzeug, nicht die Shell ([[heredoc-frisst-den-backslash]]).
+
+**Zweiter Nachtrag 22.09.2026 — der Hauptbaum sammelt sie still an.** Vor der
+Durchsicht 0.5.0 standen 309 Dateien mit `i/lf w/crlf` (`git ls-files --eol`),
+und `git status` war trotzdem sauber: Die System-Gitconfig
+(`C:/Program Files/Git/etc/gitconfig`) setzt `core.autocrlf=true`, und
+`text=auto` normalisiert beim Vergleich. Frische Worktrees stehen dagegen auf
+LF — ein Patch von dort passt nicht auf den CRLF-Hauptbaum. Umstellen: alle
+Pfade mit `i/lf` und `w/crlf|w/mixed` byteweise auf LF. Danach zeigt
+`git status` die 309 als `.M`, obwohl `git hash-object` gleich dem Index ist
+und `git diff` leer — weder `update-index --refresh` noch `--really-refresh`
+helfen; `git add --pathspec-from-file=<liste>` erneuert nur die Stat-Einträge
+(gleiche Blobs, nichts gestaged), und der Baum ist sauber.

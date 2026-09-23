@@ -95,9 +95,24 @@ def memory_notes() -> list[Path]:
 
 
 def memory_index() -> set[str]:
-    """Die Dateinamen, auf die ``MEMORY.md`` zeigt."""
+    """Die Dateinamen, auf die ``MEMORY.md`` zeigt — mittelbar über seine Sammelindizes.
+
+    Ein Sammelindex heißt ``index-*.md`` und steht selbst als Zeile in
+    ``MEMORY.md``. Er entstand am 23.09.2026, als der Hauptindex über die
+    Grenze von 17 KB wuchs, ab der die Sitzung ihn nicht mehr vollständig
+    lädt: 39 Messlehren stehen seither wortgleich dort, und der Hauptindex
+    nennt ihre Stichwörter. Eine Erinnerung, die nur dort steht, ist über
+    genau eine Verweisstufe zu finden — tiefer schachtelt kein Index.
+    """
     text = (MEMORY / "MEMORY.md").read_text(encoding="utf-8")
-    return {hit.group(1) for hit in MEMORY_ENTRY.finditer(text)}
+    named = {hit.group(1) for hit in MEMORY_ENTRY.finditer(text)}
+    for sub_index in sorted(name for name in named if name.startswith("index-")):
+        path = MEMORY / sub_index
+        if path.is_file():
+            named |= {
+                hit.group(1) for hit in MEMORY_ENTRY.finditer(path.read_text(encoding="utf-8"))
+            }
+    return named
 
 
 def test_the_plan_and_the_maps_are_both_there() -> None:
